@@ -2163,8 +2163,32 @@ export const usePluginStore = defineStore('plugins', {
 > （`plugins-src/`，`build_plugins.sh` 暂存），桌面端开发态装载后自动进
 > 工具目录。`mw-audit` 以宿主侧中间件落地（落点见 §7.1 v2.9 备注）。E2E：
 > plugin-host 集成测试真实 dlopen 两插件（fetch 打本进程 TCP 的 HTTP 服务，
-> 全离线）；kernel-agent / desktop 单测含审计记录与 JSONL 落盘。下一步④
-> （市场细节打磨）。
+> 全离线）；kernel-agent / desktop 单测含审计记录与 JSONL 落盘。
+>
+> **排期更新（v2.10，2026-09-29）**：新增权威文档
+> `docs/design/Plug-in packaging.md`（插件元数据与打包 v2：LocalizedString
+> 多语言、图标 data URL、author/homepage/license、manifest.json 落盘且
+> dll 文件名不假设、前端 PluginCard 与 Fallback 矩阵、`locowrk new plugin`
+> 脚手架）。**④ 重定义为"插件元数据 v2 + 市场打磨"**，子步骤：
+> ④a plugin-api manifest v2 解析层——可选字段全 `#[serde(default)]`，
+> `abi_version` 保持 1（新增字段只进 manifest JSON，符号约定不动，旧插件
+> 免重编）；SideEffect 解析兼容"字符串"与"tagged"双形态（该文档 §2.1 与
+> §8.1 两处示例自身不一致），序列化维持现行 `{"kind":"…"}` snake_case
+> （describe JSON 不破坏旧插件）；工具级 `display_name` 只放 manifest.json
+> 与投影层，**ToolSpec 不加字段**（模型侧描述保持单语言纯文本）；
+> PluginManifest 追加可选字段属 append-only，合规。→ ④b 数据面：
+> IconLoader（base64 data URL + canonicalize 防路径穿越 + 1MB 上限 + 缓存）、
+> `InstalledPlugin` / `MarketplaceItem` / `plugin_list` 投影扩展、dev 态
+> `plugins/` 补 manifest.json、dll 文件名发现规则改"manifest 为准"、坏
+> manifest 跳过不崩整表。→ ④c 前端 PluginCard：pickLocalized 回退链
+> （精确 → 主语言 → en-US → 任意 → id）、图标 data URL + 首字母兜底 +
+> onerror 隐藏、副作用徽章配色；与原④范围（徽章 / 回退下拉 / 更新按钮）
+> 合并实施。→ ④d Fallback 矩阵全覆盖测试 + 多版本并存/回退回归
+> （1.1.0 → 1.1.1）。→ ④e `locowrk new plugin` 脚手架（kernel-bin 子命令
+> + 模板）。**⑤ 托盘 + 快捷键（发版前）追加发布收尾一项：数据目录
+> `~/.agent-kernel` → `~/.Locowrk`**（用户 2026-09-29 指定；尚无存量用户，
+> 直接改名不做迁移，同步 §11、plugins/README.md 与 `data_root.rs`）。
+> ⑥ WASM 不变。
 >
 > **进度**：① 已完成（§13.1 备注）。② 已完成（v2.8，§7.2 备注）：桌面端
 > `llm/` 模块以 genai 0.6 实现 `LlmService`，`LlmRequest` 携带工具目录快照
@@ -2305,6 +2329,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.9（补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.10（§14 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
