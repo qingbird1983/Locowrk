@@ -5,7 +5,7 @@
 - **项目名 / 仓库名 / 文件夹名**：`Locowrk`（用户指定，三者一致）
 - **定位**：可热插拔、可回退、带桌面端（Tauri 2）的 Rust Agent 内核。"一切皆插件"——模型适配器、工具、会话存储、沙箱、Agent 循环本身都是插件，无特权模块
 - **权威设计文档**：[docs/design/DESIGN.md](docs/design/DESIGN.md)。修改任何核心模块前先读对应章节，不要凭猜测实现；实现与文档冲突时先对齐文档。文档 §8 中的 `agent-kernel/` 指内核 Cargo 工作区，其 crate 命名（`plugin-api`、`cordis-core` 等）沿用文档，对外项目名是 Locowrk
-- **当前进度**：落地路径**阶段四已完成**（Waterfall 插桩 + Scope 隔离，验收叙事跑通：审批插件经 `agent/request` 改写参数、两 Agent 工具视图隔离，见 `cargo run -p kernel-bin -- demo4`）；阶段三（C ABI 插件热插拔，`demo`）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交；下一步**阶段五**（Tauri 2 桌面端脚手架，见 DESIGN.md §14）
+- **当前进度**：落地路径**阶段五已完成**（Tauri 2 桌面端脚手架：`agent_chat` 跑通 + `agent://` 事件流，桌面端能聊天、能看到工具调用，见 desktop/README.md）；阶段四（Waterfall 插桩 + Scope 隔离，`cargo run -p kernel-bin -- demo4`）、阶段三（C ABI 插件热插拔，`demo`）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交；下一步**阶段六**（会话视图 + 审批弹窗，见 DESIGN.md §14）
 
 ## 目录结构
 
@@ -20,7 +20,8 @@ crates/
   session-store/        会话事件日志 / 快照 / 回放 / 补偿
   kernel-bin/           CLI 可执行入口（组装一切）
 plugins-src/            内置插件源码（workspace 成员；tool-echo 为阶段三验收插件）
-desktop/                Tauri 2 + Vue 3 桌面端（阶段五脚手架，目前仅 README）
+desktop/                Tauri 2 + Vue 3 桌面端（src/ 前端 + src-tauri/ 内核组装；src-tauri 是
+                        独立 Cargo 包、不进根 workspace，见根 Cargo.toml 的 exclude）
 plugins/                开发态插件安装目录，布局 plugins/{id}/{version}/（产物已 gitignore）
 config/profile.toml     当前激活的插件组合（阶段七接入）
 ```
@@ -51,7 +52,17 @@ cargo run -p kernel-bin -- demo    # 阶段三：加载 1.2.0 → 激活 1.3.0 �
 cargo run -p kernel-bin -- demo4   # 阶段四：审批插件经 agent/request 改写参数；两 Agent 工具视图隔离
 ```
 
-桌面端命令（`pnpm`/`tauri`）在阶段五脚手架后再补充到本节。
+桌面端（desktop/，Tauri 2 + Vue 3；前置 `pnpm install` 一次、插件产物已构建）：
+
+```bash
+cd desktop && pnpm tauri dev        # 开发模式（窗口 + 热重载）：聊天、观察 tool-echo 工具调用
+cd desktop && pnpm build            # 仅前端：vue-tsc 类型检查 + vite 构建
+cd desktop/src-tauri && cargo test  # 桌面端 Rust 单测（runner 投影 / demo_llm / plugins_root）
+```
+
+注意：`desktop/src-tauri` 被 exclude 在根 workspace 之外，`cargo check` 等要在
+`desktop/src-tauri` 目录下单独执行；其 `generate_context!` 编译期要求 `desktop/dist/`
+存在（先 `pnpm build` 一次）。
 
 ## 架构边界（依赖严格单向，违反即设计错误）
 

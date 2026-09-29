@@ -10,6 +10,9 @@ members = [
     "crates/kernel-bin",
     "plugins-src/tool-echo",
 ]
+# 桌面端是独立 Cargo 包（tauri 脚手架，有自己的 lockfile/构建流程），
+# 不进本 workspace，只经 path 依赖引用内核 crate（DESIGN.md §10.2）。
+exclude = ["desktop/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

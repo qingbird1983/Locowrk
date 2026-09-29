@@ -1814,6 +1814,13 @@ export async function subscribeApprovals(cb: (p: ApprovalRequest) => void) {
 
 **命令走请求-响应，事件走推送。** 不要把流式内容塞进 command 返回值——那会要求前端轮询，浪费 IO。
 
+> **实现备注（阶段五）**：内核尚无 chunk 订阅总线（`kernel.subscribe_chunks()` 留待后续阶段）。
+> 桌面端在轮次循环（`runner.rs`）里把会话日志新增段投影成事件发出：`agent://chunk`
+> （非流式模型每步正文整块推送，真流式后只是 delta 变小、前端累积逻辑不变）、
+> `agent://tool-call`、`agent://tool-result`、`agent://turn-done` 四通道。轮次失败以
+> command reject 收尾、不发 turn-done，避免与成功路径的事件重复。事件出口抽象为
+> `EventSink`，单元测试用收集器替换 Tauri 实现。
+
 ### 12.3 共享状态初始化
 
 ```rust
@@ -1903,6 +1910,12 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 ```
+
+> **实现备注（阶段五）**：本节代码是终态蓝图。阶段五只装配子集：PluginService /
+> LockFile / 市场客户端尚未存在（阶段七），当前为 Context + PluginRegistry + Kernel +
+> 会话表（`HashMap<String, Arc<tokio::sync::Mutex<Session>>>`，命令取会话锁、同会话
+> 串行聊天，std Mutex 只护 map 存取不跨 await）。`agent_approve` 等审批命令随阶段六
+> 审批弹窗一起落地；`plugins/` 目录由 `LOCOWRK_PLUGINS_DIR` 或从 CWD / exe 逐级向上解析。
 
 ---
 

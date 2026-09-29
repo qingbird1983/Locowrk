@@ -1,10 +1,12 @@
 # Rust
 /target
+/desktop/src-tauri/target
 **/*.rs.bk
 
 # Node / Tauri 前端（desktop/ 脚手架后生效）
 node_modules/
 dist/
+/desktop/src-tauri/gen/schemas
 
 # 本地环境与密钥，禁止入库
 .env
