@@ -1,0 +1,18 @@
+[package]
+name = "tool-git"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# 插件产物是动态库（Windows: tool_git.dll，见 plugins/README.md）。
+[lib]
+crate-type = ["cdylib"]
+
+# git 操作经系统 git CLI（argv 直 spawn，无 shell；`--` 分隔防选项注入），
+# 零第三方依赖；serde_json / semver 经 plugin-api re-export。
+[dependencies]
+plugin-api = { workspace = true }
+
+# manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
+# （scripts/build_plugins.sh 按 1.0.0 构建一次并暂存）。

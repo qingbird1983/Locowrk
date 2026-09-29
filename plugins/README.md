@@ -19,7 +19,7 @@ plugins/
 ## 插件源码
 
 插件源码在仓库的 `plugins-src/`（workspace 成员），`plugins/` 只放
-构建产物（已 gitignore）。当前官方内置五件（plugins.md）：
+构建产物（已 gitignore）。当前官方内置八件（plugins.md 第一~三批）：
 
 | 插件 | 版本 | 工具 | 副作用 |
 |---|---|---|---|
@@ -28,6 +28,9 @@ plugins/
 | `tool-fetch` | 1.0.0 | fetch | Pure（GET；SSRF 防线） |
 | `tool-shell` | 1.0.0 | shell | Irreversible（白名单 + denylist） |
 | `tool-edit` | 1.0.0 | edit.replace / edit.lines / edit.diff | Compensable（undo 走 fs.restore） |
+| `tool-git` | 1.0.0 | git.status / git.diff / git.log / git.commit / git.push / git.undo_commit | 读=Pure；commit=Compensable（soft reset 可撤）；push/undo=Irreversible |
+| `memory-sqlite` | 1.0.0 | memory.put / memory.get / memory.list / memory.search / memory.delete / memory.undo | 读=Pure；put/delete=Compensable（条目级还原）；undo=Irreversible |
+| `tool-mcp` | 1.0.0 | mcp.status / mcp.reload + mcp.<server>.<tool>（加载时从 `<数据根>/mcp.json` 发现并冻结） | 管理工具=Pure；远端工具按配置分级，**缺省 Irreversible** |
 
 ```bash
 bash scripts/build_plugins.sh    # 按上表各版本构建并暂存

@@ -1,0 +1,19 @@
+[package]
+name = "memory-sqlite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# 插件产物是动态库（Windows: memory_sqlite.dll，见 plugins/README.md）。
+[lib]
+crate-type = ["cdylib"]
+
+# 本地 SQLite 记忆库（bundled 特性自带源码编译，免系统 sqlite 依赖）；
+# serde_json / semver 经 plugin-api re-export。
+[dependencies]
+plugin-api = { workspace = true }
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
+# （scripts/build_plugins.sh 按 1.0.0 构建一次并暂存）。

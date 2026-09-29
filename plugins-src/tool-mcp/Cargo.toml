@@ -1,0 +1,17 @@
+[package]
+name = "tool-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# 插件产物是动态库（Windows: tool_mcp.dll，见 plugins/README.md）。
+[lib]
+crate-type = ["cdylib"]
+
+# stdio JSON-RPC 子进程桥接，零第三方依赖（serde_json / semver 经
+# plugin-api re-export）。测试用 examples/fake_mcp_server.rs 冒充 MCP
+# server（self-contained，不依赖外部解释器；cargo test 会构建 examples
+# 且不带 test harness，产物名无哈希、路径可确定）。
+[dependencies]
+plugin-api = { workspace = true }

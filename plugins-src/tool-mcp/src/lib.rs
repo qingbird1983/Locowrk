@@ -1,0 +1,173 @@
+//! tool-mcp：官方内置 MCP 桥接插件（plugins.md 第三批 / §五"生态兼容的
+//! 作弊路径"）。
+//!
+//! 架构（plugins.md §五）：读 `<数据根>/mcp.json` → spawn MCP server
+//! 子进程（stdio，newline-delimited JSON-RPC）→ initialize 握手 →
+//! tools/list → 把每个 MCP 工具适配成本地 ToolSpec（`mcp.<server>.<tool>`，
+//! schema 原样透传给模型）。调用时 JSON-RPC → MCP server → 投影返回。
+//!
+//! 安全模型：
+//! - **mcp.json 是用户手写配置，模型不可达**——本插件不提供改配置的
+//!   工具，spawn 什么进程完全由用户决定
+//! - **每个工具的 side_effect 由配置声明，不写默认 Irreversible**
+//!   （§五 安全兜底）；`compensable` 配置值按宁严勿松收紧为
+//!   Irreversible（远端工具没有机械 undo）
+//! - 工具名清洗（`[a-zA-Z0-9_-]` 之外替换 `_`，server 名配置期就限定
+//!   无点）保证 `mcp.<server>.<tool>` 路由无歧义
+//! - 内容上限 1MiB；握手 15s、调用超时按配置（缺省 30s 上限 120s）
+//!
+//! 生命周期：describe 时全量发现并**冻结工具清单**进 manifest；连接由
+//! describe 与 make_state 共享（static 转交），死连接按调用懒重连；
+//! mcp.reload 只重连不增删工具（清单变更需重载插件）。Drop 杀全部子进程。
+//!
+//! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
+
+mod config;
+mod protocol;
+mod registry;
+#[cfg(test)]
+mod tests;
+
+use std::collections::BTreeMap;
+use std::ffi::CString;
+use std::sync::Arc;
+
+use plugin_api::ffi::log_level;
+use plugin_api::manifest::{
+    Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
+};
+use plugin_api::serde_json::{Value, json};
+use plugin_api::tool::{SideEffect, ToolSpec};
+use plugin_api::{HostVtable, PluginState};
+
+use crate::registry::Registry;
+
+/// 双语展示元数据样板（packaging.md §2.2）。
+pub(crate) fn zh_en(zh: &str, en: &str) -> LocalizedString {
+    LocalizedString(BTreeMap::from([
+        ("zh-CN".to_owned(), zh.to_owned()),
+        ("en-US".to_owned(), en.to_owned()),
+    ]))
+}
+
+const PLUGIN_ID: &str = "tool-mcp";
+
+fn plugin_version() -> &'static str {
+    option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")
+}
+
+/// 管理工具（固定）：status 只读；reload 重连（工具清单冻结于加载时）。
+fn management_specs() -> Vec<ToolSpec> {
+    vec![
+        ToolSpec {
+            name: "mcp.status".into(),
+            description: "List the configured MCP servers: connection state, tool count \
+                          and the last connection error (if any), plus config-level \
+                          errors. Pure."
+                .into(),
+            schema: json!({ "type": "object", "properties": {} }),
+            side_effect: SideEffect::Pure,
+        },
+        ToolSpec {
+            name: "mcp.reload".into(),
+            description: "Re-read the MCP config and re-establish every server \
+                          connection. The tool list was frozen when the plugin loaded — \
+                          servers added to mcp.json afterwards only appear after \
+                          reloading the plugin. Pure."
+                .into(),
+            schema: json!({ "type": "object", "properties": {} }),
+            side_effect: SideEffect::Pure,
+        },
+    ]
+}
+
+/// describe 符号的数据源：管理工具 + mcp.json 发现出的全部远端工具
+/// （NUL 结尾 JSON，约定见 plugin-api::ffi）。
+fn describe_manifest() -> CString {
+    let registry = registry::take_or_discover();
+    registry::stash(Arc::clone(&registry));
+    let mut tools = management_specs();
+    tools.extend(registry.tool_specs());
+    let discovered = tools.len() - 2;
+    let manifest = PluginManifest {
+        id: PLUGIN_ID.into(),
+        version: plugin_version().into(),
+        abi_version: plugin_api::PLUGIN_ABI_VERSION,
+        kind: PluginKind::Tool,
+        tools,
+        // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
+        display_name: Some(zh_en("MCP 桥接", "MCP Bridge")),
+        description: Some(LocalizedOrString::Localized(zh_en(
+            &format!("桥接 MCP 生态：本次发现 {discovered} 个远端工具（配置 <数据根>/mcp.json）"),
+            &format!(
+                "Bridges the MCP ecosystem: {discovered} remote tool(s) discovered (config <data root>/mcp.json)"
+            ),
+        ))),
+        icon: Some("assets/icon.svg".into()),
+        author: Some(Author {
+            name: "Locowrk Team".into(),
+            url: None,
+        }),
+        origin: PluginOrigin::Official,
+        homepage: None,
+        license: Some("MIT".into()),
+    };
+    manifest.to_describe_json()
+}
+
+struct McpState {
+    host: *const HostVtable,
+    registry: std::sync::Arc<Registry>,
+}
+
+// SAFETY: host 指向宿主的 'static vtable（只读）；registry 内部自带锁，
+// 连接共享跨线程安全。init 之后 host 指针不再改变。
+unsafe impl Send for McpState {}
+unsafe impl Sync for McpState {}
+
+impl McpState {
+    /// 经宿主 vtable 打日志（与 tool-fs 同款）。
+    fn log(&self, level: u32, msg: &str) {
+        // SAFETY: host 是 init 时宿主交付的 'static vtable 指针
+        unsafe {
+            if let Some(vt) = self.host.as_ref() {
+                vt.log_str(level, msg);
+            }
+        }
+    }
+}
+
+impl PluginState for McpState {
+    fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
+        self.log(log_level::INFO, &format!("tool-mcp: {tool} called"));
+        match tool {
+            "mcp.status" => Ok(json!({
+                "servers": self.registry.status(),
+                "config_errors": self.registry.cfg_errors,
+            })),
+            "mcp.reload" => {
+                self.registry.reload();
+                Ok(json!({
+                    "reloaded": true,
+                    "servers": self.registry.status(),
+                }))
+            }
+            _ => {
+                let rest = tool.strip_prefix("mcp.").ok_or_else(|| {
+                    format!("unknown tool `{tool}` (expected mcp.<server>.<tool>)")
+                })?;
+                let (server, name) = rest.split_once('.').ok_or_else(|| {
+                    format!("unknown tool `{tool}` (expected mcp.<server>.<tool>)")
+                })?;
+                self.registry.call(server, name, args)
+            }
+        }
+    }
+}
+
+fn make_state(host: *const HostVtable) -> Box<dyn PluginState> {
+    let registry = registry::take_or_discover();
+    Box::new(McpState { host, registry })
+}
+
+plugin_api::declare_plugin!(describe_manifest, make_state);

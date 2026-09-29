@@ -2314,13 +2314,50 @@ export const usePluginStore = defineStore('plugins', {
 > edit→fs.restore、SSRF 拒绝环回）；fs_fetch_plugins.rs 随 v1.1.0 契约
 > 与根校验/后门 env 更新。
 >
+> **⑦ 第三批官方内置插件（v2.15，plugins.md §七第三批）**：三件 +
+> 集成测试。**tool-git@1.0.0**：status/diff/log=Pure——porcelain 机读
+> 解析（status `--porcelain=v1 -b --null` 是**全 NUL 字段流**，分支头也
+> 以 NUL 结尾没有换行；log 用 \x1f 字段 / \x1e 记录分隔；空仓库按
+> empty_repo 返回不报错）+ commit=`Compensable{git.undo_commit}`（输出
+> 带新提交哈希；undo=soft reset 前校验 HEAD 仍指向原提交，动过即拒绝
+> 转人工）+ push=Irreversible（远端/分支名字符白名单挡 `-oProxyCommand`
+> 式 argv 注入；文件路径一律 `--` 之后）。git CLI argv 直 spawn 无 shell；
+> 子进程环境剥 GIT_DIR / GIT_WORK_TREE 等重定向变量（`-C` 的允许根校验
+> 不可被环境绕过）+ GIT_TERMINAL_PROMPT=0；repo 参数走 fsutil 允许根，
+> add 相对路径按仓库根解析、canonicalize 后必须在仓库内。测试含本地
+> bare 远端的离线 push 全链路。**memory-sqlite@1.0.0**：跨会话记忆库
+> `<数据根>/memory.sqlite3` 固定路径（无路径参数即无逃逸面），rusqlite
+> bundled（首个第三方重依赖，经 rsproxy 按次镜像拉取）；get/list/search=
+> Pure；put/delete=`Compensable{memory.undo}`——plugins.md §三把本插件
+> 整体标 Pure，按用户"宁严勿松"收紧一档（Compensable 无审批摩擦），
+> undo 整条还原含旧 updated_at；LIKE 通配符转义按字面量；key≤512B /
+> value≤256KiB；会话事件持久化仍归 session-store（§6），插件只做记忆。
+> **tool-mcp@1.0.0**：§五 MCP 桥——读 `<数据根>/mcp.json`（用户手写，
+> 本插件不提供改配置工具）→ spawn stdio JSON-RPC 子进程
+> （newline-delimited，无 Content-Length 帧）→ initialize 握手 +
+> tools/list → 每个远端工具适配成本地 ToolSpec `mcp.<server>.<tool>`
+> （inputSchema 透传；工具名清洗、server 名 [a-z][a-z0-9_-] 且无点防
+> 路由歧义）→ describe 时**冻结工具清单**进 manifest；连接经 static 在
+> describe/make_state 间转交（不重复 spawn），死连接调用时懒重连，
+> mcp.reload 只重连不增删（清单变更需重载插件）；side_effect 由配置
+> 声明**缺省 Irreversible**（§五安全兜底），compensable 收紧为
+> Irreversible（远端无机械 undo）；工具级 isError 作为数据返回
+> （tool-fetch 惯例）；内容 1MiB 上限、握手 15s、调用超时配置化缺省
+> 30s 上限 120s；单 server 配置坏 fail-soft 进 mcp.status 不拖垮整体。
+> 测试替身 examples/fake_mcp_server（echo/boom/slow）——cdylib 无集成
+> 测试目标故 CARGO_BIN_EXE 不可用，且 deps/ 哈希产物与 test-harness
+> 版同名无法区分，example 目标无 harness 且产物名无哈希、路径确定。
+> plugin-host tests/tools_batch3.rs 真实 dlopen 三链路：memory
+> put/undo/delete/undo、git commit→undo→push 本地 bare、mcp 发现+调用
+> （env 须在 load 前就位——describe 阶段完成发现）。
+>
 > **进度**：① 已完成（§13.1 备注）。② 已完成（v2.8，§7.2 备注）：桌面端
 > `llm/` 模块以 genai 0.6 实现 `LlmService`，`LlmRequest` 携带工具目录快照
 > （`ToolSource::list()`），配置读设置面板、保存即生效，model 未配置回落
 > 脚本替身；真窗口 E2E（本机 Ollama 9B）全链路通过——模型按 schema 自选
 > 参数调用 tool-echo 插件、工具结果回传后给最终回答。③ 已完成（v2.9，
 > §7.1 备注）。④ 已完成（④a–④c v2.11，④d/④e v2.12）、⑤ 已完成
-> （v2.13，上注）、⑥ 已完成（第二批官方内置插件 + 安全底线，v2.14，上注）；下一步⑦ WASM（顺延，看需求）→ 或继续 plugins.md 第三批（tool-mcp / memory-sqlite / tool-git）。
+> （v2.13，上注）、⑥ 已完成（第二批官方内置插件 + 安全底线，v2.14，上注）、⑦ 已完成（第三批官方内置插件 tool-git / memory-sqlite / tool-mcp，v2.15，上注）；下一步⑧ WASM（顺延，看需求）。
 
 **阶段一和阶段二是试金石**：如果内核的服务组合和 Effect 撤销链设计干净，后续所有能力都是叠加。**阶段五和阶段六是桌面端的试金石**：如果 Tauri IPC 层能干净地桥接内核事件流，后续插件管理 UI 都是在这个模式上叠加。
 
@@ -2455,6 +2492,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.14（§14 补记阶段八⑥第二批官方内置插件落点（用户排期重排：⑥=plugins.md 第二批，WASM 顺延⑦）+ 同日安全底线（fsutil 允许根 canonicalize 校验、fetch SSRF 防线、fs.restore 判 Irreversible）：tool-fs@1.1.0 写入三件套（write 备份先行 / delete / restore 来源校验）+ kernel-agent compensation.rs（§6.3 补偿执行器，undo 契约 {"call_id","args","output"}、新 undo call_id、账本幂等）+ tool-shell@1.0.0（白名单+denylist+元字符拒绝+无 shell spawn）+ tool-edit@1.0.0（replace/lines/严格 diff，跨插件 undo）+ ctx-compact（agent/request 摘要压缩，切点对齐 User 起点，fail-open，desktop 已注册）；§14 补记阶段八⑤落点：托盘（左键显窗 / 菜单显示主窗口与退出 / 关窗隐藏进托盘）+ tauri-plugin-global-shortcut 全局快捷键切换主窗口（settings.json `shortcut` 字段级缺省 Ctrl+Shift+L、设置面板改键保存即重注册、启动失败降级告警）+ 数据目录改名 ~/.agent-kernel → ~/.Locowrk（直接改名不迁移，§11.3 与三个 README 同步）；§14 补记阶段八④d/④e 落点：Fallback 矩阵收尾——v1 极简 manifest 投影全 None、坏 manifest 不崩已装列表、展示投影跟随 active 指针回归；`locowrk new plugin` 脚手架——scaffold.rs 四件模板（§8.1 全量 v2 manifest + §8.2 占位图标）+ 名称清洗 + plugin-api 路径探测，tmp/ 实测独立 cargo check 通过，service/tests 拆 tests/{mod,lifecycle,fallback}；v2.11 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.15（§14 补记阶段八⑦第三批官方内置插件落点：tool-git@1.0.0（porcelain 机读解析 / commit 可撤销 / push 审批 / GIT_* 环境重定向剥离）+ memory-sqlite@1.0.0（固定路径记忆库，写操作按宁严勿松收紧为 Compensable）+ tool-mcp@1.0.0（mcp.json 加载期发现冻结、缺省 Irreversible、懒重连、fail-soft、examples 测试替身）+ tools_batch3 集成测试；v2.14 补记阶段八⑥第二批官方内置插件落点（用户排期重排：⑥=plugins.md 第二批，WASM 顺延⑦）+ 同日安全底线（fsutil 允许根 canonicalize 校验、fetch SSRF 防线、fs.restore 判 Irreversible）：tool-fs@1.1.0 写入三件套（write 备份先行 / delete / restore 来源校验）+ kernel-agent compensation.rs（§6.3 补偿执行器，undo 契约 {"call_id","args","output"}、新 undo call_id、账本幂等）+ tool-shell@1.0.0（白名单+denylist+元字符拒绝+无 shell spawn）+ tool-edit@1.0.0（replace/lines/严格 diff，跨插件 undo）+ ctx-compact（agent/request 摘要压缩，切点对齐 User 起点，fail-open，desktop 已注册）；§14 补记阶段八⑤落点：托盘（左键显窗 / 菜单显示主窗口与退出 / 关窗隐藏进托盘）+ tauri-plugin-global-shortcut 全局快捷键切换主窗口（settings.json `shortcut` 字段级缺省 Ctrl+Shift+L、设置面板改键保存即重注册、启动失败降级告警）+ 数据目录改名 ~/.agent-kernel → ~/.Locowrk（直接改名不迁移，§11.3 与三个 README 同步）；§14 补记阶段八④d/④e 落点：Fallback 矩阵收尾——v1 极简 manifest 投影全 None、坏 manifest 不崩已装列表、展示投影跟随 active 指针回归；`locowrk new plugin` 脚手架——scaffold.rs 四件模板（§8.1 全量 v2 manifest + §8.2 占位图标）+ 名称清洗 + plugin-api 路径探测，tmp/ 实测独立 cargo check 通过，service/tests 拆 tests/{mod,lifecycle,fallback}；v2.11 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*

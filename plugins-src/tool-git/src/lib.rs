@@ -1,0 +1,277 @@
+//! tool-git：官方内置 Git 操作插件（plugins.md 第三批 / §三）。
+//!
+//! 副作用分级（plugins.md §三，逐项落地）：
+//! - `git.status` / `git.diff` / `git.log` → Pure（只 spawn git 读仓库状态）
+//! - `git.commit` → `Compensable { undo_tool: "git.undo_commit" }`：输出携带
+//!   新提交哈希，undo = `reset --soft HEAD~1`（改动保留在暂存区）
+//! - `git.push` → Irreversible：发布到远端，走审批
+//! - `git.undo_commit` → Irreversible：reset 改写仓库状态；undo 前先校验
+//!   HEAD 仍指向原提交，HEAD 动过即拒绝转人工（与 fs.restore 同理，按
+//!   plugins.md §八"宁可标错成 Irreversible"判级）
+//!
+//! 安全底线：
+//! - `repo` 参数 canonicalize 后校验允许根前缀（fsutil，与 tool-fs 同底座）
+//! - `add` 路径：canonicalize（允许根内 + 仓库内）后才交给 git；相对路径
+//!   按仓库根解析（不是宿主 CWD）
+//! - 远端 / 分支名走字符白名单（挡 `-oProxyCommand` 式 argv 注入）；
+//!   文件路径一律置于 `--` 分隔符之后
+//! - 子进程环境剥掉 GIT_DIR / GIT_WORK_TREE 等重定向变量（proc.rs），
+//!   `git -C` 的路径校验不被环境变量绕过；argv 直 spawn，无 shell
+//!
+//! undo 调用契约（DESIGN §6.3）：内核以 `{"call_id", "args", "output"}` 调
+//! undo_tool——FFI 边界不传 CallCtx，undo 只读原调用 `output` 里的
+//! {repo, commit}。兼容把 output 平铺在 args 顶层的形态（手工排查用）。
+//!
+//! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
+
+mod proc;
+mod read;
+#[cfg(test)]
+mod tests;
+mod write;
+
+use std::collections::BTreeMap;
+use std::ffi::CString;
+use std::path::{Path, PathBuf};
+
+use plugin_api::ffi::log_level;
+use plugin_api::fsutil::{allowed_roots, resolve_existing};
+use plugin_api::manifest::{
+    Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
+};
+use plugin_api::serde_json::{Value, json};
+use plugin_api::tool::{SideEffect, ToolSpec};
+use plugin_api::{HostVtable, PluginState};
+
+/// 双语展示元数据样板（packaging.md §2.2）。
+pub(crate) fn zh_en(zh: &str, en: &str) -> LocalizedString {
+    LocalizedString(BTreeMap::from([
+        ("zh-CN".to_owned(), zh.to_owned()),
+        ("en-US".to_owned(), en.to_owned()),
+    ]))
+}
+
+const PLUGIN_ID: &str = "tool-git";
+
+fn plugin_version() -> &'static str {
+    option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")
+}
+
+/// describe 符号的数据源：manifest JSON（NUL 结尾，约定见 plugin-api::ffi）。
+fn describe_manifest() -> CString {
+    let manifest = PluginManifest {
+        id: PLUGIN_ID.into(),
+        version: plugin_version().into(),
+        abi_version: plugin_api::PLUGIN_ABI_VERSION,
+        kind: PluginKind::Tool,
+        tools: vec![
+            ToolSpec {
+                name: "git.status".into(),
+                description: "Show git working-tree status: current branch, ahead/behind \
+                              vs upstream, and changed entries (x = index status, y = \
+                              worktree status; '??' = untracked, 'A' = staged add, 'M' = \
+                              modified, 'D' = deleted). Args: repo (required)."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" }
+                    },
+                    "required": ["repo"]
+                }),
+                side_effect: SideEffect::Pure,
+            },
+            ToolSpec {
+                name: "git.diff".into(),
+                description: "Show the unified diff of unstaged changes (default) or \
+                              staged changes. Args: repo (required), staged (bool, \
+                              default false), path (optional, restrict the diff to one \
+                              file). Output is capped at 256KiB and flags `truncated`."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" },
+                        "staged": { "type": "boolean", "description": "diff the index instead of the worktree (default false)" },
+                        "path": { "type": "string", "description": "optional path relative to the repo root" }
+                    },
+                    "required": ["repo"]
+                }),
+                side_effect: SideEffect::Pure,
+            },
+            ToolSpec {
+                name: "git.log".into(),
+                description: "List recent commits, newest first. Args: repo (required), \
+                              limit (default 20, max 100), path (optional, only commits \
+                              touching that path). Returns {commits: [{hash, short, \
+                              author, date, subject}]}; empty list for a repo without \
+                              commits."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" },
+                        "limit": { "type": "number", "description": "default 20, max 100" },
+                        "path": { "type": "string", "description": "optional path relative to the repo root" }
+                    },
+                    "required": ["repo"]
+                }),
+                side_effect: SideEffect::Pure,
+            },
+            ToolSpec {
+                name: "git.commit".into(),
+                description: "Stage files and create a commit. Args: repo (required), \
+                              message (required), add (array of paths relative to the \
+                              repo root) OR add_all (bool, stage everything including \
+                              deletions) — exactly one of the two. Returns {commit, \
+                              short}. Undoable via git.undo_commit (soft reset keeps the \
+                              changes staged) as long as HEAD is still the created commit."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" },
+                        "message": { "type": "string", "description": "commit message (first line = subject)" },
+                        "add": { "type": "array", "items": { "type": "string" },
+                                 "description": "paths to stage, relative to the repo root (new files allowed)" },
+                        "add_all": { "type": "boolean",
+                                     "description": "stage all changes including deletions (default false)" }
+                    },
+                    "required": ["repo", "message"]
+                }),
+                side_effect: SideEffect::Compensable {
+                    undo_tool: "git.undo_commit".into(),
+                },
+            },
+            ToolSpec {
+                name: "git.push".into(),
+                description: "Push a branch to a remote. Args: repo (required), remote \
+                              (default 'origin'), branch (required). Irreversible — \
+                              publishing to the remote requires user approval."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" },
+                        "remote": { "type": "string", "description": "remote name, default 'origin'" },
+                        "branch": { "type": "string", "description": "branch name to push, e.g. 'main'" }
+                    },
+                    "required": ["repo", "branch"]
+                }),
+                side_effect: SideEffect::Irreversible,
+            },
+            ToolSpec {
+                name: "git.undo_commit".into(),
+                description: "Undo a previous git.commit by soft-resetting one commit \
+                              (the changes stay staged). Usually invoked by the \
+                              compensation layer, not by the model. Args mirror the \
+                              compensation payload {call_id, args, output}; only \
+                              output.{repo, commit} is used. Refuses when HEAD has moved \
+                              past the recorded commit (manual intervention required). \
+                              Irreversible — it rewrites repository state, so the call \
+                              requires user approval."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "call_id": { "type": "string", "description": "id of the original git.commit call" },
+                        "args": { "type": "object", "description": "original git.commit args" },
+                        "output": { "type": "object",
+                                    "description": "original git.commit result carrying repo/commit" }
+                    }
+                }),
+                side_effect: SideEffect::Irreversible,
+            },
+        ],
+        // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
+        display_name: Some(zh_en("Git 工具", "Git Tools")),
+        description: Some(LocalizedOrString::Localized(zh_en(
+            "Git 操作：状态 / 差异 / 日志 / 提交（可撤销）/ 推送",
+            "Git ops: status / diff / log / commit (undoable) / push",
+        ))),
+        icon: Some("assets/icon.svg".into()),
+        author: Some(Author {
+            name: "Locowrk Team".into(),
+            url: None,
+        }),
+        origin: PluginOrigin::Official,
+        homepage: None,
+        license: Some("MIT".into()),
+    };
+    manifest.to_describe_json()
+}
+
+struct GitState {
+    host: *const HostVtable,
+}
+
+// SAFETY: host 指向宿主的 'static vtable（只读），GitState 自身无可变共享
+// 状态（每次调用独立 spawn git 子进程）；init 之后指针不再改变。
+unsafe impl Send for GitState {}
+unsafe impl Sync for GitState {}
+
+impl GitState {
+    /// 经宿主 vtable 打日志（与 tool-fs 同款）。
+    fn log(&self, level: u32, msg: &str) {
+        // SAFETY: host 是 init 时宿主交付的 'static vtable 指针
+        unsafe {
+            if let Some(vt) = self.host.as_ref() {
+                vt.log_str(level, msg);
+            }
+        }
+    }
+}
+
+impl PluginState for GitState {
+    fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
+        self.log(log_level::INFO, &format!("tool-git: {tool} called"));
+        match tool {
+            "git.status" => read::git_status(&args),
+            "git.diff" => read::git_diff(&args),
+            "git.log" => read::git_log(&args),
+            "git.commit" => write::git_commit(&args),
+            "git.push" => write::git_push(&args),
+            "git.undo_commit" => write::git_undo_commit(&args),
+            other => Err(format!("unknown tool `{other}`")),
+        }
+    }
+}
+
+// ---------- 参数与路径辅助 ----------
+
+pub(crate) fn arg_path(args: &Value) -> Result<String, String> {
+    args.get("repo")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| "missing string field `repo`".to_string())
+}
+
+pub(crate) fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(v) => v
+            .as_u64()
+            .map(|n| n.min(max))
+            .ok_or_else(|| format!("field `{key}` must be a non-negative number")),
+    }
+}
+
+/// repo 参数：canonicalize + 允许根校验（仓库可以是仓库根，也可以是仓库
+/// 内目录——`git -C` 会向上发现 .git）。
+pub(crate) fn resolve_repo(args: &Value) -> Result<PathBuf, String> {
+    let p = arg_path(args)?;
+    let roots = allowed_roots()?;
+    resolve_existing(Path::new(&p), &roots)
+}
+
+/// output.repo 平铺还原用（undo 契约）。
+pub(crate) fn resolve_repo_str(p: &str) -> Result<PathBuf, String> {
+    let roots = allowed_roots()?;
+    resolve_existing(Path::new(p), &roots)
+}
+
+fn make_state(host: *const HostVtable) -> Box<dyn PluginState> {
+    Box::new(GitState { host })
+}
+
+plugin_api::declare_plugin!(describe_manifest, make_state);

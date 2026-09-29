@@ -1,0 +1,381 @@
+//! 端到端集成测试：阶段八⑦第三批官方工具（真实 dlopen）。
+//!
+//! - memory-sqlite 1.0.0：put→覆盖（previous 捕获）→ undo 契约还原、
+//!   delete→undo 整条还原、库文件落在数据根
+//! - tool-git 1.0.0：真实 git 仓库 status/commit→undo_commit 契约、push
+//!   到本地 bare 远端、允许根外仓库拒绝
+//! - tool-mcp 1.0.0：mcp.json → dlopen 后 describe 阶段发现 mcp.fake.*
+//!   工具 → 调用回显 / 工具级错误作为数据 / mcp.status
+//!
+//! 与 tools_batch2.rs 同款模式：测试自建产物暂存到 target/locowrk-test/。
+//! env 是进程级全局，全部用例串行（一把大锁包住整个测试体）。
+
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::{Arc, Mutex, OnceLock};
+
+use plugin_api::{Tool, ToolError};
+use plugin_host::{PluginRegistry, RegistryToolSource};
+use semver::Version;
+use serde_json::{Value, json};
+
+fn build_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn workspace_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("workspace root")
+}
+
+fn artifact_name(plugin_id: &str) -> String {
+    let stem = plugin_id.replace('-', "_");
+    if cfg!(windows) {
+        format!("{stem}.dll")
+    } else if cfg!(target_os = "macos") {
+        format!("lib{stem}.dylib")
+    } else {
+        format!("lib{stem}.so")
+    }
+}
+
+fn build_and_stage(plugin_id: &str, version: &str) -> PathBuf {
+    let _guard = build_lock().lock().unwrap();
+    let status = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+        .args(["build", "-p", plugin_id, "--quiet"])
+        .env("LOCOWRK_PLUGIN_VERSION", version)
+        .status()
+        .expect("spawn cargo");
+    assert!(status.success(), "cargo build -p {plugin_id} failed");
+
+    let src = workspace_dir()
+        .join("target/debug")
+        .join(artifact_name(plugin_id));
+    assert!(src.exists(), "artifact missing at {}", src.display());
+    let dst_dir = workspace_dir()
+        .join("target/locowrk-test")
+        .join(plugin_id)
+        .join(version);
+    std::fs::create_dir_all(&dst_dir).unwrap();
+    let dst = dst_dir.join(artifact_name(plugin_id));
+    std::fs::copy(&src, &dst).unwrap();
+    dst
+}
+
+fn load_activate(plugin_id: &str, version: &str, registry: &Arc<PluginRegistry>) {
+    let ver: Version = version.parse().unwrap();
+    let path = build_and_stage(plugin_id, version);
+    registry.load(plugin_id, &ver, &path).expect("load");
+    registry.activate(plugin_id, &ver).expect("activate");
+}
+
+fn call(tool: &dyn Tool, args: Value) -> Result<Value, ToolError> {
+    let ctx = plugin_api::CallCtx::new();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(tool.call(&ctx, args))
+}
+
+/// env 串行锁：本文件所有用例都动进程级 env。
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn temp_root(tag: &str) -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "locowrk-batch3-{tag}-{}-{nanos}",
+        std::process::id()
+    ))
+}
+
+fn err_msg(e: ToolError) -> String {
+    match e {
+        ToolError::Failed { message, .. } => message,
+        other => other.to_string(),
+    }
+}
+
+fn git(cwd: &std::path::Path, argv: &[&str]) -> String {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(argv)
+        .output()
+        .expect("git spawn failed (is git on PATH?)");
+    assert!(
+        out.status.success(),
+        "git {argv:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[test]
+fn memory_put_overwrite_undo_and_delete_undo_end_to_end() {
+    let _env = env_lock().lock().unwrap();
+    let root = temp_root("mem");
+    std::fs::create_dir_all(&root).unwrap();
+    unsafe { std::env::set_var("LOCOWRK_DATA_DIR", root.display().to_string()) };
+
+    let registry = Arc::new(PluginRegistry::new());
+    load_activate("memory-sqlite", "1.0.0", &registry);
+    let source = RegistryToolSource::new(Arc::clone(&registry));
+
+    // 库文件固定在数据根（模型无路径参数——无逃逸面）
+    let db = root.join("memory.sqlite3");
+
+    let put = |args: Value| {
+        call(source.resolve("memory.put").unwrap().as_ref(), args).expect("memory.put ok")
+    };
+    let get = |key: &str| {
+        call(
+            source.resolve("memory.get").unwrap().as_ref(),
+            json!({ "key": key }),
+        )
+        .expect("memory.get ok")
+    };
+
+    let out1 = put(json!({ "key": "user.lang", "value": "zh", "tags": "pref" }));
+    assert_eq!(out1["created"], json!(true));
+    assert_eq!(get("user.lang")["value"], json!("zh"));
+
+    // 覆盖写携带被覆盖条目 → undo 契约还原
+    let out2 = put(json!({ "key": "user.lang", "value": "en" }));
+    assert_eq!(out2["previous"]["value"], json!("zh"));
+    call(
+        source.resolve("memory.undo").unwrap().as_ref(),
+        json!({ "call_id": "c1", "args": { "key": "user.lang" }, "output": out2 }),
+    )
+    .expect("undo put ok");
+    assert_eq!(get("user.lang")["value"], json!("zh"));
+
+    // delete → undo 整条还原
+    let del = call(
+        source.resolve("memory.delete").unwrap().as_ref(),
+        json!({ "key": "user.lang" }),
+    )
+    .expect("memory.delete ok");
+    assert_eq!(del["deleted"], json!(true));
+    assert_eq!(get("user.lang")["found"], json!(false));
+    call(
+        source.resolve("memory.undo").unwrap().as_ref(),
+        json!({ "call_id": "c2", "args": { "key": "user.lang" }, "output": del }),
+    )
+    .expect("undo delete ok");
+    assert_eq!(get("user.lang")["value"], json!("zh"));
+
+    // 持久化实体在数据根生成
+    assert!(db.is_file(), "memory db expected at {}", db.display());
+
+    unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn git_status_commit_undo_push_end_to_end() {
+    let _env = env_lock().lock().unwrap();
+    let root = temp_root("git");
+    std::fs::create_dir_all(&root).unwrap();
+    unsafe {
+        std::env::set_var("LOCOWRK_DATA_DIR", root.join("data").display().to_string());
+        std::env::set_var(
+            "LOCOWRK_FS_ROOTS",
+            root.canonicalize().unwrap().display().to_string(),
+        );
+    }
+
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-b", "main"]);
+    git(&repo, &["config", "user.name", "Test"]);
+    git(&repo, &["config", "user.email", "test@example.com"]);
+    git(&repo, &["config", "commit.gpgsign", "false"]);
+    std::fs::write(repo.join("a.txt"), "v0\n").unwrap();
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-m", "base"]);
+    let base = git(&repo, &["rev-parse", "HEAD"]).trim().to_string();
+    let repo_str = repo.display().to_string();
+
+    let registry = Arc::new(PluginRegistry::new());
+    load_activate("tool-git", "1.0.0", &registry);
+    let source = RegistryToolSource::new(Arc::clone(&registry));
+
+    // status：干净基线
+    let st = call(
+        source.resolve("git.status").unwrap().as_ref(),
+        json!({ "repo": repo_str }),
+    )
+    .expect("git.status ok");
+    assert_eq!(st["clean"], json!(true));
+    assert_eq!(st["branch"], json!("main"));
+
+    // commit → undo 契约（soft reset：工作区保留、改动留暂存区）
+    std::fs::write(repo.join("b.txt"), "v1\n").unwrap();
+    let out = call(
+        source.resolve("git.commit").unwrap().as_ref(),
+        json!({ "repo": repo_str, "message": "second", "add": ["b.txt"] }),
+    )
+    .expect("git.commit ok");
+    assert_eq!(
+        out["commit"],
+        json!(git(&repo, &["rev-parse", "HEAD"]).trim())
+    );
+    call(
+        source.resolve("git.undo_commit").unwrap().as_ref(),
+        json!({ "call_id": "c1", "args": {}, "output": out }),
+    )
+    .expect("git.undo_commit ok");
+    assert_eq!(git(&repo, &["rev-parse", "HEAD"]).trim(), base);
+    assert!(
+        repo.join("b.txt").is_file(),
+        "soft reset keeps the worktree"
+    );
+    let st = call(
+        source.resolve("git.status").unwrap().as_ref(),
+        json!({ "repo": repo_str }),
+    )
+    .unwrap();
+    assert_eq!(
+        st["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["path"] == json!("b.txt"))
+            .expect("b.txt staged after undo")["x"],
+        json!("A")
+    );
+
+    // push 到本地 bare 远端（离线全链路）
+    let bare = root.join("origin.git");
+    git(&root, &["init", "--bare", &bare.display().to_string()]);
+    git(
+        &repo,
+        &["remote", "add", "origin", &bare.display().to_string()],
+    );
+    let pushed = call(
+        source.resolve("git.push").unwrap().as_ref(),
+        json!({ "repo": repo_str, "branch": "main" }),
+    )
+    .expect("git.push ok");
+    assert_eq!(pushed["pushed"], json!(true));
+    assert!(
+        bare.join("refs").join("heads").join("main").is_file(),
+        "bare remote received main"
+    );
+
+    // 恶意：允许根外的仓库拒绝
+    let outside = temp_root("git-outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    git(&outside, &["init", "-b", "main"]);
+    let err = err_msg(
+        call(
+            source.resolve("git.status").unwrap().as_ref(),
+            json!({ "repo": outside.display().to_string() }),
+        )
+        .unwrap_err(),
+    );
+    assert!(err.contains("outside the allowed roots"), "{err}");
+
+    unsafe {
+        std::env::remove_var("LOCOWRK_DATA_DIR");
+        std::env::remove_var("LOCOWRK_FS_ROOTS");
+    }
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&outside);
+}
+
+#[test]
+fn mcp_bridge_discovers_and_calls_fake_server() {
+    let _env = env_lock().lock().unwrap();
+
+    // example 替身要单独构建（cargo build 默认不含 examples）
+    let status = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+        .args([
+            "build",
+            "-p",
+            "tool-mcp",
+            "--example",
+            "fake_mcp_server",
+            "--quiet",
+        ])
+        .status()
+        .expect("spawn cargo");
+    assert!(status.success(), "build fake_mcp_server failed");
+    let fake = workspace_dir()
+        .join("target/debug/examples")
+        .join(if cfg!(windows) {
+            "fake_mcp_server.exe"
+        } else {
+            "fake_mcp_server"
+        });
+    assert!(fake.is_file(), "fake server missing at {}", fake.display());
+
+    let root = temp_root("mcp");
+    std::fs::create_dir_all(&root).unwrap();
+    unsafe { std::env::set_var("LOCOWRK_DATA_DIR", root.display().to_string()) };
+    std::fs::write(
+        root.join("mcp.json"),
+        json!({
+            "servers": {
+                "fake": {
+                    "command": fake.display().to_string(),
+                    "args": [],
+                    "side_effect": "pure",
+                    "tool_effects": { "boom": "irreversible" }
+                }
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    // env 必须在 load 之前就位：describe 阶段完成发现并冻结工具清单
+    let registry = Arc::new(PluginRegistry::new());
+    load_activate("tool-mcp", "1.0.0", &registry);
+    let source = RegistryToolSource::new(Arc::clone(&registry));
+
+    let tools = source.list_tools();
+    assert!(
+        tools.iter().any(|t| t.name == "mcp.fake.echo"),
+        "echo tool should be discovered, got: {:?}",
+        tools.iter().map(|t| &t.name).collect::<Vec<_>>()
+    );
+    let echo = tools.iter().find(|t| t.name == "mcp.fake.echo").unwrap();
+    assert!(matches!(echo.side_effect, plugin_api::SideEffect::Pure));
+    let boom = tools.iter().find(|t| t.name == "mcp.fake.boom").unwrap();
+    assert!(matches!(
+        boom.side_effect,
+        plugin_api::SideEffect::Irreversible
+    ));
+
+    // 调用：回显 + 工具级错误作为数据（tool-fetch 惯例）
+    let out = call(
+        source.resolve("mcp.fake.echo").unwrap().as_ref(),
+        json!({ "text": "hi" }),
+    )
+    .expect("mcp call ok");
+    assert_eq!(out["content"], json!("echo: hi"));
+    let out = call(source.resolve("mcp.fake.boom").unwrap().as_ref(), json!({}))
+        .expect("tool-level error is data");
+    assert_eq!(out["is_error"], json!(true));
+    assert_eq!(out["content"], json!("boom!"));
+
+    // 管理工具
+    let st =
+        call(source.resolve("mcp.status").unwrap().as_ref(), json!({})).expect("mcp.status ok");
+    assert_eq!(st["servers"][0]["name"], json!("fake"));
+    assert_eq!(st["servers"][0]["connected"], json!(true));
+
+    unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
+    let _ = std::fs::remove_dir_all(&root);
+}
