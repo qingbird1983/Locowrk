@@ -5,13 +5,19 @@ use std::process::ExitCode;
 
 pub fn run() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // locowrk new plugin <name>：生成插件脚手架（packaging.md §8）
+    if args.first().map(String::as_str) == Some("new") {
+        return crate::scaffold::run_new(&args[1..]);
+    }
+
     let subcommand = match args.first().map(String::as_str) {
         Some(sub @ ("demo" | "demo4")) => sub,
         other => {
             eprintln!(
                 "Locowrk CLI — usage:\n  \
                  locowrk demo  [--plugins-root DIR]  # 阶段三验收：加载 1.2.0 → 激活 1.3.0 → 回退 1.2.0\n  \
-                 locowrk demo4 [--plugins-root DIR]  # 阶段四验收：审批插件改写参数；两 Agent 工具视图隔离"
+                 locowrk demo4 [--plugins-root DIR]  # 阶段四验收：审批插件改写参数；两 Agent 工具视图隔离\n  \
+                 locowrk new plugin <name>           # 生成插件脚手架（packaging.md §8）"
             );
             return match other {
                 Some(unknown) => {

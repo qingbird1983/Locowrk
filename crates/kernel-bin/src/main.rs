@@ -13,6 +13,7 @@ mod demo4;
 mod demo4_llm;
 mod echo_llm;
 mod inline_tools;
+mod scaffold;
 mod tool_source;
 
 fn main() {

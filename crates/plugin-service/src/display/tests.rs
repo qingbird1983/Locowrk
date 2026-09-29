@@ -139,3 +139,27 @@ fn map_keys_serialize_sorted_for_stable_wire() {
     let json = serde_json::to_string(&m).unwrap();
     assert_eq!(json, r#"{"en-US":"en","zh-CN":"中"}"#);
 }
+
+/// Fallback 矩阵 §7 行 1/3/4/9：v1 极简 manifest（无任何 v2 展示字段）
+/// → 投影全 None（前端回退 id / 首字母 / 不渲染），origin 缺省 community。
+#[test]
+fn v1_minimal_manifest_projects_all_optional_fields_none() {
+    let dir = temp_dir("v1bare");
+    std::fs::write(
+        dir.join("manifest.json"),
+        r#"{"id":"tool-bare","version":"1.0.0","abi_version":1,"kind":"tool",
+            "tools":[{"name":"t","description":"d","schema":{},"side_effect":"Pure"}]}"#,
+    )
+    .unwrap();
+
+    let d = read_display(&dir, &IconLoader::new());
+    assert!(d.display_name.is_none(), "display_name 缺失 → 前端显示 id");
+    assert!(d.description.is_none(), "description 缺失 → 不渲染描述区");
+    assert!(d.icon.is_none(), "icon 缺失 → 前端首字母兜底");
+    assert!(
+        d.author.is_none() && d.homepage.is_none() && d.license.is_none(),
+        "author/homepage/license 缺失 → 对应信息不渲染"
+    );
+    assert_eq!(d.origin, plugin_api::manifest::PluginOrigin::Community);
+    assert_eq!(d.side_effects, vec!["pure"]);
+}
