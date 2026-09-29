@@ -46,6 +46,7 @@ export default {
     install: "安装",
     installing: "安装中…",
     installedBadge: "已安装",
+    builtinBadge: "内置（随仓库分发，经构建脚本管理）",
     updateAvailable: "可更新到 v{version}",
     update: "更新",
     enable: "启用",

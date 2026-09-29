@@ -47,6 +47,7 @@ export default {
     install: "Install",
     installing: "Installing…",
     installedBadge: "Installed",
+    builtinBadge: "Built-in (ships with the repo, managed via build scripts)",
     updateAvailable: "Update to v{version} available",
     update: "Update",
     enable: "Enable",

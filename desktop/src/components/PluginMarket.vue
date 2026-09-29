@@ -219,7 +219,14 @@ function pickVersion(id: string, versions: string[]): string {
                 {{ t("market.updateAvailable", { version: latestOf(p.id) }) }}
               </span>
 
-              <div class="ml-auto flex items-center gap-2">
+              <!-- 内置插件（开发态直载）：只读展示，不走 lockfile 管理流 -->
+              <span
+                v-if="p.source === 'builtin'"
+                class="ml-auto rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] text-neutral-400"
+              >
+                {{ t("market.builtinBadge") }}
+              </span>
+              <div v-else class="ml-auto flex items-center gap-2">
                 <button
                   class="rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
                   :disabled="store.isBusy(p.id)"

@@ -3,6 +3,8 @@
 //! 包装 `PluginRegistry` 而不替代它；桌面端 UI 只经这里操作插件。
 //! 状态变化经 `broadcast` 推给 UI（§13.4 的 `plugin://state-changed`
 //! 桥接由组装点完成，本 crate 不依赖 Tauri）。
+//! 本文件是写路径编排；查询投影（list_installed / catalog / subscribe）
+//! 在 `service/query.rs`（400 行纪律的职责拆分，非边界拆分）。
 //!
 //! 与文档的两处偏差（见 DESIGN.md §11.2 实现备注）：
 //! - `install` 多一个可选 version 参数（市场卡片可选版本安装，
@@ -12,7 +14,6 @@
 //!   的变更在本架构下都经编排层发生，进程启动的开发态装载发生在
 //!   UI 订阅之前，由 `list_installed` 拉取兜底
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -21,13 +22,14 @@ use plugin_host::PluginRegistry;
 use semver::Version;
 use tokio::sync::broadcast;
 
+mod query;
 mod types;
 
 pub use types::{InstalledPlugin, PluginStateChange};
 
 use crate::installer;
 use crate::lockfile::{InstallSource, LockFile};
-use crate::market::{Market, MarketplaceItem, artifact_file_name};
+use crate::market::{Market, artifact_file_name};
 use types::LogicalUnload;
 
 pub struct PluginService {
@@ -72,15 +74,6 @@ impl PluginService {
 
     fn lockfile_path_of(data_dir: &Path) -> PathBuf {
         data_dir.join("lockfile.json")
-    }
-
-    /// UI 订阅状态变化（§13.4）。
-    pub fn subscribe(&self) -> broadcast::Receiver<PluginStateChange> {
-        self.state_tx.subscribe()
-    }
-
-    pub fn catalog(&self) -> Result<Vec<MarketplaceItem>, String> {
-        self.market.catalog()
     }
 
     /// 市场安装（§11.2）。`version` 缺省取市场 latest。
@@ -274,37 +267,6 @@ impl PluginService {
                 Err(format!("update failed, rolled back: {e}"))
             }
         }
-    }
-
-    /// 已安装列表（§11.4 lockfile 投影 + §5.7 registry 运行态合并）。
-    pub fn list_installed(&self) -> Vec<InstalledPlugin> {
-        let states: HashMap<String, plugin_host::PluginStateSummary> = self
-            .registry
-            .list_states()
-            .into_iter()
-            .map(|s| (s.id.clone(), s))
-            .collect();
-        let lf = self.lockfile.lock().expect("lockfile poisoned");
-        let mut out: Vec<InstalledPlugin> = lf
-            .plugins
-            .values()
-            .map(|e| {
-                let s = states.get(&e.id);
-                InstalledPlugin {
-                    id: e.id.clone(),
-                    version: e.version.to_string(),
-                    enabled: e.enabled,
-                    installed_at: e.installed_at,
-                    source: e.source,
-                    active_version: s.and_then(|s| s.active.as_ref().map(Version::to_string)),
-                    loaded_versions: s
-                        .map(|s| s.loaded.iter().map(Version::to_string).collect())
-                        .unwrap_or_default(),
-                }
-            })
-            .collect();
-        out.sort_by(|a, b| a.id.cmp(&b.id));
-        out
     }
 
     /// 启动对账（§11.2 关键设计）：清 tombstone → 条目与磁盘对账 →

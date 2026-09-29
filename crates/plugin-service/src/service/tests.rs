@@ -307,3 +307,49 @@ async fn update_then_rollback_switches_active_version() {
     // 没有更新版本的 update 报"无新版"
     assert!(svc.update("tool-shout").await.is_err());
 }
+
+/// 开发态直载（不经 install → 无 lockfile 条目）的插件必须出现在
+/// list_installed 投影里，来源标 Builtin（阶段八③用户反馈：工具可用
+/// 但"插件"页看不见）。
+#[tokio::test]
+async fn registry_only_plugins_project_as_builtin() {
+    let vers = staged_versions();
+    if vers.is_empty() {
+        eprintln!("skip: market/tool-shout 未暂存（先跑 scripts/build_market.sh）");
+        return;
+    }
+    let data = temp_dir("builtin");
+    let market_root = temp_dir("builtin-market");
+    let registry = Arc::new(PluginRegistry::new());
+    let ctx = Arc::new(Context::new());
+    let svc = Arc::new(
+        PluginService::open(
+            data,
+            Arc::clone(&registry),
+            ctx,
+            Box::new(LocalDirMarket::new(market_root)),
+        )
+        .unwrap(),
+    );
+
+    // 开发态装载路径：绕过 install，直接 load + activate（desktop 的
+    // plugins/ 目录装载就是这个形态，§11.3 开发态不经 lockfile）
+    let dll = repo_root()
+        .join("market/tool-shout")
+        .join(vers[0].to_string())
+        .join(crate::artifact_file_name("tool-shout"));
+    registry.load("tool-shout", &vers[0], &dll).unwrap();
+    registry.activate("tool-shout", &vers[0]).unwrap();
+
+    let listed = svc.list_installed();
+    assert_eq!(listed.len(), 1, "registry-only 插件应出现在投影里");
+    assert_eq!(listed[0].id, "tool-shout");
+    assert_eq!(
+        listed[0].source,
+        crate::lockfile::InstallSource::Builtin,
+        "无 lockfile 条目 = 内置来源"
+    );
+    assert_eq!(listed[0].version, vers[0].to_string());
+    assert_eq!(listed[0].active_version, Some(vers[0].to_string()));
+    assert!(listed[0].enabled, "active 即 enabled");
+}
