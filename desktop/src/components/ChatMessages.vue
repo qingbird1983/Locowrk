@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useChatStore } from "../stores/chat";
 
+const { t } = useI18n();
 const chat = useChatStore();
 const bottom = ref<HTMLElement | null>(null);
 
@@ -29,8 +31,7 @@ function pretty(v: unknown): string {
         v-if="chat.items.length === 0"
         class="mt-16 text-center text-sm text-neutral-500"
       >
-        发送任意消息开始对话；消息里包含 “echo” 会触发 tool-echo
-        插件的工具调用。
+        {{ t("chat.empty") }}
       </p>
 
       <template v-for="item in chat.items" :key="item.id">
@@ -71,12 +72,14 @@ function pretty(v: unknown): string {
             <span
               class="rounded px-1.5 py-0.5 text-[10px]"
               :class="
-                item.sideEffect === 'pure'
-                  ? 'bg-emerald-900/60 text-emerald-300'
-                  : 'bg-red-900/60 text-red-300'
+                item.sideEffect === 'irreversible'
+                  ? 'bg-red-900/60 text-red-300'
+                  : item.sideEffect === 'compensable'
+                    ? 'bg-amber-900/60 text-amber-300'
+                    : 'bg-emerald-900/60 text-emerald-300'
               "
             >
-              {{ item.sideEffect }}
+              {{ t(`effect.${item.sideEffect}`) }}
             </span>
             <span
               class="ml-auto"
@@ -88,13 +91,19 @@ function pretty(v: unknown): string {
                     : 'text-red-400'
               "
             >
-              {{ item.pending ? "执行中…" : item.ok ? "成功" : "失败" }}
+              {{
+                item.pending
+                  ? t("tool.running")
+                  : item.ok
+                    ? t("tool.success")
+                    : t("tool.failed")
+              }}
             </span>
           </div>
           <div class="space-y-2 px-3 py-2">
             <div>
               <p class="mb-1 text-[10px] uppercase tracking-wider text-neutral-500">
-                参数
+                {{ t("tool.params") }}
               </p>
               <pre
                 class="overflow-x-auto rounded bg-neutral-900/80 p-2 font-mono text-[11px] text-neutral-300"
@@ -103,7 +112,7 @@ function pretty(v: unknown): string {
             </div>
             <div v-if="!item.pending">
               <p class="mb-1 text-[10px] uppercase tracking-wider text-neutral-500">
-                结果
+                {{ t("tool.result") }}
               </p>
               <pre
                 class="overflow-x-auto rounded bg-neutral-900/80 p-2 font-mono text-[11px]"

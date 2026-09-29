@@ -5,7 +5,7 @@
 - **项目名 / 仓库名 / 文件夹名**：`Locowrk`（用户指定，三者一致）
 - **定位**：可热插拔、可回退、带桌面端（Tauri 2）的 Rust Agent 内核。"一切皆插件"——模型适配器、工具、会话存储、沙箱、Agent 循环本身都是插件，无特权模块
 - **权威设计文档**：[docs/design/DESIGN.md](docs/design/DESIGN.md)。修改任何核心模块前先读对应章节，不要凭猜测实现；实现与文档冲突时先对齐文档。文档 §8 中的 `agent-kernel/` 指内核 Cargo 工作区，其 crate 命名（`plugin-api`、`cordis-core` 等）沿用文档，对外项目名是 Locowrk
-- **当前进度**：落地路径**阶段五已完成**（Tauri 2 桌面端脚手架：`agent_chat` 跑通 + `agent://` 事件流，桌面端能聊天、能看到工具调用，见 desktop/README.md）；阶段四（Waterfall 插桩 + Scope 隔离，`cargo run -p kernel-bin -- demo4`）、阶段三（C ABI 插件热插拔，`demo`）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交；下一步**阶段六**（会话视图 + 审批弹窗，见 DESIGN.md §14）
+- **当前进度**：落地路径**阶段六已完成**（会话视图 + 审批弹窗：`agent://approval-request` + `agent_approve` + `ApprovalModal.vue`，全 UI 化操作无需 CLI；文案已接入 vue-i18n，中/英默认中文见 §13.5）；阶段五（Tauri 2 桌面端脚手架，`agent_chat` + `agent://` 事件流）、阶段四（Waterfall 插桩 + Scope 隔离，`cargo run -p kernel-bin -- demo4`）、阶段三（C ABI 插件热插拔，`demo`）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交；下一步**阶段七**（PluginService + 管理命令 + 市场 UI，见 DESIGN.md §14）
 
 ## 目录结构
 

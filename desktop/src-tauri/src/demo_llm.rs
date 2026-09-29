@@ -3,6 +3,7 @@
 //!
 //! 决策规则（无状态，只看投影消息的最后一条）：
 //! - User 消息含 "echo" → 调用 tool-echo 插件的 echo 工具
+//! - User 消息含 "email" / "邮件" → 调用内置 send_email（不可逆，触发审批）
 //! - User 消息不含 → 直接回答（提示怎么触发工具）
 //! - ToolResult → 汇总工具输出作答
 
@@ -47,11 +48,26 @@ impl LlmService for DemoLlm {
                             args: json!({ "text": content }),
                         }],
                     })
+                } else if content.to_lowercase().contains("email") || content.contains("邮件") {
+                    let n = self.next_call.fetch_add(1, Ordering::Relaxed);
+                    Ok(LlmResponse {
+                        content: String::new(),
+                        tool_calls: vec![ToolCallReq {
+                            id: CallId(format!("call-{n}")),
+                            tool: "send_email".into(),
+                            args: json!({
+                                "to": "user@example.com",
+                                "subject": content,
+                                "body": content,
+                            }),
+                        }],
+                    })
                 } else {
                     Ok(LlmResponse {
-                        content: "[演示模型] 收到你的消息。阶段五的模型是脚本替身：\
-                                  发送包含 \"echo\" 的消息可以触发 tool-echo 插件的工具调用，\
-                                  工具卡片会显示在会话里。"
+                        content: "[演示模型] 收到你的消息。阶段六的模型是脚本替身：\
+                                  发送包含 \"echo\" 的消息触发 tool-echo 插件；\
+                                  发送包含 \"email\"（或\"邮件\"）的消息触发 send_email，\
+                                  它是不可逆工具，会弹出审批确认。"
                             .into(),
                         tool_calls: vec![],
                     })

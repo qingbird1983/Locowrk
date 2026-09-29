@@ -1820,6 +1820,12 @@ export async function subscribeApprovals(cb: (p: ApprovalRequest) => void) {
 > `agent://tool-call`、`agent://tool-result`、`agent://turn-done` 四通道。轮次失败以
 > command reject 收尾、不发 turn-done，避免与成功路径的事件重复。事件出口抽象为
 > `EventSink`，单元测试用收集器替换 Tauri 实现。
+>
+> **实现备注（阶段六）**：新增第五通道 `agent://approval-request`（`ApprovalHub`
+> 实现 kernel 的 `ApprovalResolver`，推事件后以 oneshot 挂起等待 `agent_approve`）。
+> 载荷统一 snake_case——本节与 §13.2 示例中的 camelCase 序列化以实现为准；
+> `RiskLevel` 未引入（plugin-api 无此类型），风险度由 `side_effect` 呈现。
+> 审批等待不设超时（工具链上的 Timeout 只包执行、不包审批）。
 
 ### 12.3 共享状态初始化
 
@@ -1914,8 +1920,14 @@ pub fn run() {
 > **实现备注（阶段五）**：本节代码是终态蓝图。阶段五只装配子集：PluginService /
 > LockFile / 市场客户端尚未存在（阶段七），当前为 Context + PluginRegistry + Kernel +
 > 会话表（`HashMap<String, Arc<tokio::sync::Mutex<Session>>>`，命令取会话锁、同会话
-> 串行聊天，std Mutex 只护 map 存取不跨 await）。`agent_approve` 等审批命令随阶段六
-> 审批弹窗一起落地；`plugins/` 目录由 `LOCOWRK_PLUGINS_DIR` 或从 CWD / exe 逐级向上解析。
+> 串行聊天，std Mutex 只护 map 存取不跨 await）。`plugins/` 目录由
+> `LOCOWRK_PLUGINS_DIR` 或从 CWD / exe 逐级向上解析。
+>
+> **实现备注（阶段六）**：`agent_approve` / `list_pending_approvals` 已落地，
+> `AppState` 增加 `approval: Arc<ApprovalHub>`（Kernel 构建时 `with_approval` 挂上）
+> 与共享 `sink: Arc<dyn EventSink>`。工具目录加了组装点内置工具位（`with_builtin`，
+> 内置优先于注册表，防插件顶掉演示替身）；演示工具 `send_email`
+> （`SideEffect::Irreversible`）用于验收审批弹窗，真实实现后续由插件替换。
 
 ---
 
@@ -1991,6 +2003,13 @@ async function decide(req: ApprovalRequest, allowed: boolean) {
 ```
 
 审批结果本身也是一条 `SessionEvent`，写入事件日志，保证可审计。
+
+> **实现备注（阶段六）**：审批门如 §7.1 所述在 Kernel：`ApprovalHub` 实现
+> `ApprovalResolver`，被 Kernel 调用后推 `agent://approval-request` 并挂起等待
+> `agent_approve`；`ApprovalDecided` 与被拒调用的失败 `ToolResult` 都由 Kernel 写入
+> 日志。上例载荷里的 `riskLevel` 未实现（plugin-api 无 `RiskLevel`），风险度由
+> `side_effect` 呈现；字段命名 snake_case（§12.2 阶段六备注）。前端组件为
+> `desktop/src/components/ApprovalModal.vue`，文案全部走 `t()`（§13.5）。
 
 ### 13.3 插件市场的 UI 结构
 
@@ -2205,6 +2224,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.4（新增 §13.5 国际化需求——桌面端中/英双语、默认中文；补记阶段五实现落点：§12.2 事件四通道与 EventSink、§12.3 阶段五状态装配子集）*
+*文档版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注；载荷 snake_case、RiskLevel 以 side_effect 呈现）*
 *最后更新：2026-09-29*
-*前序版本：v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
+*前序版本：v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*

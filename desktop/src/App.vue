@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
+import { useI18n } from "vue-i18n";
+import { useApprovalsStore } from "./stores/approvals";
 import { useChatStore } from "./stores/chat";
+import ApprovalModal from "./components/ApprovalModal.vue";
 import ChatMessages from "./components/ChatMessages.vue";
 import PromptBar from "./components/PromptBar.vue";
 
+const { t } = useI18n();
 const chat = useChatStore();
-onMounted(() => chat.init());
+const approvals = useApprovalsStore();
+onMounted(() => {
+  chat.init();
+  approvals.init();
+});
 </script>
 
 <template>
@@ -15,18 +23,21 @@ onMounted(() => chat.init());
     >
       <div>
         <h1 class="text-sm font-semibold tracking-wide">Locowrk</h1>
-        <p class="text-xs text-neutral-500">
-          阶段五脚手架 · 模型 = 脚本替身 · 工具 = tool-echo 插件
-        </p>
+        <p class="text-xs text-neutral-500">{{ t("app.subtitle") }}</p>
       </div>
       <span
         class="rounded-full px-2.5 py-1 text-xs"
-        :class="chat.running ? 'bg-amber-900/60 text-amber-300' : 'bg-neutral-800 text-neutral-400'"
+        :class="
+          chat.running
+            ? 'bg-amber-900/60 text-amber-300'
+            : 'bg-neutral-800 text-neutral-400'
+        "
       >
-        {{ chat.running ? "运行中…" : "就绪" }}
+        {{ chat.running ? t("status.running") : t("status.ready") }}
       </span>
     </header>
     <ChatMessages />
     <PromptBar />
+    <ApprovalModal />
   </div>
 </template>

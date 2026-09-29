@@ -8,10 +8,9 @@
 //! （前端以 invoke 的 reject 收尾），避免与成功路径的事件重复。
 
 use kernel_agent::Kernel;
-use plugin_api::SideEffect;
 use session_store::{Session, SessionEvent};
 
-use crate::events::{AgentEvent, EventSink};
+use crate::events::{side_effect_str, AgentEvent, EventSink};
 
 /// 单轮 step 上限：防止模型反复发工具调用打转（防御性兜底）。
 pub const MAX_STEPS: u32 = 8;
@@ -90,13 +89,5 @@ fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &d
             }),
             _ => {}
         }
-    }
-}
-
-fn side_effect_str(se: &SideEffect) -> &'static str {
-    match se {
-        SideEffect::Pure => "pure",
-        SideEffect::Compensable { .. } => "compensable",
-        SideEffect::Irreversible => "irreversible",
     }
 }

@@ -38,3 +38,12 @@ export interface TurnDoneEvent {
   session_id: string;
   steps: number;
 }
+
+/** 审批请求载荷（agent://approval-request）。与 events.rs 的
+ * ApprovalRequestPayload 对齐（snake_case 字段）。 */
+export interface ApprovalRequest {
+  request_id: string;
+  tool: string;
+  args: unknown;
+  side_effect: string;
+}

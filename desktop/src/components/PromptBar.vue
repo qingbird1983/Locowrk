@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useChatStore } from "../stores/chat";
 
+const { t } = useI18n();
 const chat = useChatStore();
 const draft = ref("");
 
 function send() {
-  const t = draft.value;
-  if (!t.trim() || chat.running) return;
+  const text = draft.value;
+  if (!text.trim() || chat.running) return;
   draft.value = "";
-  chat.send(t);
+  chat.send(text);
 }
 </script>
 
@@ -19,7 +21,7 @@ function send() {
       <textarea
         v-model="draft"
         rows="1"
-        placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"
+        :placeholder="t('chat.placeholder')"
         class="flex-1 resize-none rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm outline-none placeholder:text-neutral-600 focus:border-emerald-600"
         @keydown.enter.exact.prevent="send"
       />
@@ -28,7 +30,7 @@ function send() {
         :disabled="chat.running || !draft.trim()"
         @click="send"
       >
-        发送
+        {{ t("chat.send") }}
       </button>
     </div>
   </footer>
