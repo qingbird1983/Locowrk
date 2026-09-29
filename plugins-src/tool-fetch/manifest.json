@@ -21,13 +21,13 @@
   "tools": [
     {
       "name": "fetch",
-      "description": "HTTP GET a URL and return status + body (transport errors fail; 4xx/5xx come back as data). Args: url (http/https), max_bytes (default 262144, max 1048576), timeout_secs (default 20, max 60).",
+      "description": "HTTP GET a URL and return status + body (transport errors fail; 4xx/5xx come back as data). Args: url (http/https; private/loopback addresses refused by the SSRF guard, redirects not followed), max_bytes (default 262144, max 1048576), timeout_secs (default 10, max 60).",
       "schema": {
         "type": "object",
         "properties": {
           "url": { "type": "string", "description": "http(s) URL" },
           "max_bytes": { "type": "number", "description": "default 262144, max 1048576" },
-          "timeout_secs": { "type": "number", "description": "request timeout (default 20, max 60)" }
+          "timeout_secs": { "type": "number", "description": "request timeout (default 10, max 60)" }
         },
         "required": ["url"]
       },

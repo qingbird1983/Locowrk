@@ -1,21 +1,32 @@
-//! tool-fs：第一批真实工具插件（plugins.md P0，阶段八③落地）。
+//! tool-fs：官方内置文件工具插件（plugins.md P0；阶段八③第一批落地只读，
+//! 阶段八⑥第二批补写入能力）。
 //!
-//! 只读先行——三个工具全部 `SideEffect::Pure`（plugins.md：
-//! fs.read / fs.list / fs.grep → Pure，随便调，回退免费）：
-//! - `fs.read`：读 UTF-8 文本文件，超过 max_bytes 截断（保护模型上下文）
-//! - `fs.list`：列目录（目录在前，含类型与大小）
-//! - `fs.grep`：大小写不敏感子串搜索；目录递归有深度与结果数上限
+//! 副作用分级（plugins.md §二，关键设计）：
+//! - `fs.read` / `fs.list` / `fs.grep` → Pure，随便调，回退免费
+//! - `fs.write` → `Compensable { undo_tool: "fs.restore" }`，写前备份原内容
+//! - `fs.delete` → Irreversible，走审批（v1 只删文件，不删目录）
+//! - `fs.restore` → Irreversible：恢复会把文件当前内容（可能比备份新）覆盖掉，
+//!   按 plugins.md §八"宁可标错成 Irreversible"判级；补偿执行器（DESIGN
+//!   §6.3）对 Irreversible 的 undo 调用同样过审批门
 //!
-//! fs.write（Compensable，写前备份）/ fs.delete（Irreversible，走审批）
-//! 按排期在第二批；沙箱化（受限根目录）归 tool-sandbox（P2）。当前
-//! 约定传绝对路径——相对路径按宿主进程 CWD 解析，工具描述里已说明。
+//! 备份布局：`<数据根>/backups/tool-fs/<纳秒时间戳>-<pid>/<原文件名>`。
+//! 数据根 = `LOCOWRK_DATA_DIR` 或 HOME 下 `.Locowrk`（权威共享实现在
+//! `plugin_api::fsutil`）。undo 调用契约（§6.3）：内核以
+//! `{"call_id", "args", "output"}` 调 undo_tool——FFI 边界不传 CallCtx，
+//! 工具从原调用的 `output` 里取 {path, backup, existed}。恢复 = 把备份
+//! rename 回原位（备份自消费，重复恢复是 no-op，天然幂等）。
+//!
+//! 安全底线（用户 2026-09-29 指定）：所有路径参数 canonicalize 后校验
+//! 允许根前缀——基座在 `plugin_api::fsutil`（允许根 = LOCOWRK_FS_ROOTS，
+//! 缺省只有数据根）；相对路径按宿主进程 CWD 解析且同样过校验。
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 
+mod read;
+mod write;
+
 use std::collections::BTreeMap;
 use std::ffi::CString;
-use std::io::Read;
-use std::path::PathBuf;
 
 use plugin_api::ffi::log_level;
 use plugin_api::manifest::{
@@ -26,7 +37,7 @@ use plugin_api::tool::{SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
 
 /// 双语展示元数据样板（packaging.md §2.2）。
-fn zh_en(zh: &str, en: &str) -> LocalizedString {
+pub(crate) fn zh_en(zh: &str, en: &str) -> LocalizedString {
     LocalizedString(BTreeMap::from([
         ("zh-CN".to_owned(), zh.to_owned()),
         ("en-US".to_owned(), en.to_owned()),
@@ -34,17 +45,6 @@ fn zh_en(zh: &str, en: &str) -> LocalizedString {
 }
 
 const PLUGIN_ID: &str = "tool-fs";
-
-/// 单文件读取缺省/上限（字节）。上限防一次调用灌爆模型上下文。
-const READ_DEFAULT: u64 = 32 * 1024;
-const READ_MAX: u64 = 1024 * 1024;
-/// grep 默认/上限：结果条数、递归深度、扫描文件数、单行摘录长度。
-const GREP_RESULTS_DEFAULT: u64 = 50;
-const GREP_RESULTS_MAX: u64 = 200;
-const GREP_DEPTH_DEFAULT: u64 = 3;
-const GREP_DEPTH_MAX: u64 = 8;
-const GREP_FILE_MAX: u64 = 1024 * 1024;
-const GREP_LINE_EXCERPT: usize = 200;
 
 fn plugin_version() -> &'static str {
     option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")
@@ -67,7 +67,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute file path" },
+                        "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
                         "max_bytes": { "type": "number",
                                        "description": "cap returned content (default 32768, max 1048576)" }
                     },
@@ -84,7 +84,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute directory path" }
+                        "path": { "type": "string", "description": "absolute directory path (must be inside the allowed workspace roots; defaults to the app data dir)" }
                     },
                     "required": ["path"]
                 }),
@@ -99,7 +99,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute file or directory path" },
+                        "path": { "type": "string", "description": "absolute file or directory path (must be inside the allowed workspace roots; defaults to the app data dir)" },
                         "query": { "type": "string", "description": "case-insensitive substring" },
                         "max_results": { "type": "number", "description": "default 50, max 200" },
                         "max_depth": { "type": "number", "description": "recursion depth, default 3, max 8" }
@@ -108,12 +108,69 @@ fn describe_manifest() -> CString {
                 }),
                 side_effect: SideEffect::Pure,
             },
+            ToolSpec {
+                name: "fs.write".into(),
+                description: "Write a UTF-8 text file (create or overwrite). \
+                              Args: path (absolute), content, create_dirs (bool, default false). \
+                              The previous content, if any, is backed up automatically and the \
+                              result carries {path, bytes, existed, backup}; pass that result \
+                              to fs.restore to undo."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
+                        "content": { "type": "string", "description": "full new file content" },
+                        "create_dirs": { "type": "boolean",
+                                         "description": "create missing parent dirs (default false)" }
+                    },
+                    "required": ["path", "content"]
+                }),
+                side_effect: SideEffect::Compensable {
+                    undo_tool: "fs.restore".into(),
+                },
+            },
+            ToolSpec {
+                name: "fs.delete".into(),
+                description: "Delete a file (directories are rejected in v1). \
+                              Args: path (absolute). Irreversible — no backup is kept, \
+                              the call requires user approval."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" }
+                    },
+                    "required": ["path"]
+                }),
+                side_effect: SideEffect::Irreversible,
+            },
+            ToolSpec {
+                name: "fs.restore".into(),
+                description: "Undo a previous fs.write by restoring its backup (the backup is \
+                              consumed; restoring twice is a no-op). Usually invoked by the \
+                              compensation layer, not by the model. Args mirror the compensation \
+                              payload {call_id, args, output}; only output.{path, backup, existed} \
+                              is used. Irreversible — restoring overwrites the file's current \
+                              content, so the call requires user approval."
+                    .into(),
+                schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "call_id": { "type": "string", "description": "id of the original fs.write call" },
+                        "args": { "type": "object", "description": "original fs.write args" },
+                        "output": { "type": "object",
+                                    "description": "original fs.write result carrying path/backup/existed" }
+                    }
+                }),
+                side_effect: SideEffect::Irreversible,
+            },
         ],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
         display_name: Some(zh_en("文件工具", "File Tools")),
         description: Some(LocalizedOrString::Localized(zh_en(
-            "只读文件操作：读文件 / 列目录 / 搜索文本",
-            "Read-only file ops: read / list / grep",
+            "文件读写与检索：读 / 列目录 / 搜索 / 写（带备份可撤销）/ 删除",
+            "File ops: read / list / grep / write (undoable via backup) / delete",
         ))),
         icon: Some("assets/icon.svg".into()),
         author: Some(Author {
@@ -152,24 +209,27 @@ impl PluginState for FsState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("tool-fs: {tool} called"));
         match tool {
-            "fs.read" => fs_read(&args),
-            "fs.list" => fs_list(&args),
-            "fs.grep" => fs_grep(&args),
+            "fs.read" => read::fs_read(&args),
+            "fs.list" => read::fs_list(&args),
+            "fs.grep" => read::fs_grep(&args),
+            "fs.write" => write::fs_write(&args),
+            "fs.delete" => write::fs_delete(&args),
+            "fs.restore" => write::fs_restore(&args),
             other => Err(format!("unknown tool `{other}`")),
         }
     }
 }
 
-// ---------- 参数辅助 ----------
+// ---------- 参数辅助（read / write 两模块共用） ----------
 
-fn arg_path(args: &Value) -> Result<String, String> {
+pub(crate) fn arg_path(args: &Value) -> Result<String, String> {
     args.get("path")
         .and_then(Value::as_str)
         .map(str::to_string)
         .ok_or_else(|| "missing string field `path`".to_string())
 }
 
-fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
+pub(crate) fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(default),
         Some(v) => {
@@ -179,136 +239,6 @@ fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, Strin
             Ok(n.min(max))
         }
     }
-}
-
-// ---------- fs.read ----------
-
-fn fs_read(args: &Value) -> Result<Value, String> {
-    let path = arg_path(args)?;
-    let max = arg_u64(args, "max_bytes", READ_DEFAULT, READ_MAX)?;
-    let meta = std::fs::metadata(&path).map_err(|e| format!("fs.read `{path}`: {e}"))?;
-    if meta.is_dir() {
-        return Err(format!("fs.read `{path}` is a directory (use fs.list)"));
-    }
-    let file = std::fs::File::open(&path).map_err(|e| format!("fs.read `{path}`: {e}"))?;
-    let mut buf = Vec::new();
-    file.take(max + 1)
-        .read_to_end(&mut buf)
-        .map_err(|e| format!("fs.read `{path}`: {e}"))?;
-    let truncated = buf.len() as u64 > max;
-    buf.truncate(max as usize);
-    Ok(json!({
-        "path": path,
-        "size": meta.len(),
-        "truncated": truncated,
-        "content": String::from_utf8_lossy(&buf).as_ref(),
-    }))
-}
-
-// ---------- fs.list ----------
-
-fn fs_list(args: &Value) -> Result<Value, String> {
-    let path = arg_path(args)?;
-    let rd = std::fs::read_dir(&path).map_err(|e| format!("fs.list `{path}`: {e}"))?;
-    let mut entries: Vec<(bool, Value)> = rd
-        .flatten()
-        .filter_map(|e| {
-            let name = e.file_name().to_string_lossy().into_owned();
-            let ft = e.file_type().ok()?;
-            let kind = if ft.is_dir() {
-                "dir"
-            } else if ft.is_file() {
-                "file"
-            } else {
-                "other"
-            };
-            let size = e.metadata().ok().map(|m| json!(m.len()));
-            Some((
-                ft.is_dir(),
-                json!({ "name": name, "kind": kind, "size": size }),
-            ))
-        })
-        .collect();
-    // 目录在前，其余按名字排（确定性输出，模型好读）
-    entries.sort_by(|a, b| {
-        b.0.cmp(&a.0)
-            .then_with(|| a.1["name"].as_str().cmp(&b.1["name"].as_str()))
-    });
-    let entries: Vec<Value> = entries.into_iter().map(|(_, v)| v).collect();
-    Ok(json!({ "path": path, "entries": entries }))
-}
-
-// ---------- fs.grep ----------
-
-fn fs_grep(args: &Value) -> Result<Value, String> {
-    let path = arg_path(args)?;
-    let query = args
-        .get("query")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "missing string field `query`".to_string())?
-        .to_lowercase();
-    if query.is_empty() {
-        return Err("fs.grep `query` must not be empty".into());
-    }
-    let max_results =
-        arg_u64(args, "max_results", GREP_RESULTS_DEFAULT, GREP_RESULTS_MAX)? as usize;
-    let max_depth = arg_u64(args, "max_depth", GREP_DEPTH_DEFAULT, GREP_DEPTH_MAX)?;
-
-    let mut matches: Vec<Value> = Vec::new();
-    let mut truncated = false;
-    let mut scanned = 0u64;
-    // 迭代栈代替递归：带深度预算的目录遍历
-    let mut stack: Vec<(PathBuf, u64)> = vec![(PathBuf::from(&path), 0)];
-    'outer: while let Some((cur, depth)) = stack.pop() {
-        let Ok(meta) = std::fs::metadata(&cur) else {
-            continue;
-        };
-        if meta.is_dir() {
-            if depth >= max_depth {
-                continue;
-            }
-            let Ok(rd) = std::fs::read_dir(&cur) else {
-                continue;
-            };
-            let mut children: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
-            children.sort();
-            // 倒序入栈：pop 出来仍是名字序
-            for child in children.into_iter().rev() {
-                stack.push((child, depth + 1));
-            }
-            continue;
-        }
-        if meta.len() > GREP_FILE_MAX {
-            continue; // 大文件跳过（二进制/日志），不计入 scanned
-        }
-        scanned += 1;
-        let Ok(bytes) = std::fs::read(&cur) else {
-            continue;
-        };
-        for (i, line) in String::from_utf8_lossy(&bytes).lines().enumerate() {
-            if line.to_lowercase().contains(&query) {
-                let mut text = line.to_string();
-                if text.chars().count() > GREP_LINE_EXCERPT {
-                    text = text.chars().take(GREP_LINE_EXCERPT).collect();
-                }
-                matches.push(json!({
-                    "file": cur.display().to_string(),
-                    "line": i + 1,
-                    "text": text,
-                }));
-                if matches.len() >= max_results {
-                    truncated = true;
-                    break 'outer;
-                }
-            }
-        }
-    }
-    Ok(json!({
-        "query": query,
-        "matches": matches,
-        "truncated": truncated,
-        "scanned": scanned,
-    }))
 }
 
 fn make_state(host: *const HostVtable) -> Box<dyn PluginState> {

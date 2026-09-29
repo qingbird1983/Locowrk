@@ -19,10 +19,18 @@ plugins/
 ## 插件源码
 
 插件源码在仓库的 `plugins-src/`（workspace 成员），`plugins/` 只放
-构建产物（已 gitignore）。以 tool-echo 为例：
+构建产物（已 gitignore）。当前官方内置五件（plugins.md）：
+
+| 插件 | 版本 | 工具 | 副作用 |
+|---|---|---|---|
+| `tool-echo` | 1.2.0 / 1.3.0 | echo | Pure（多版本并存/回退演示） |
+| `tool-fs` | 1.1.0 | fs.read / fs.list / fs.grep / fs.write / fs.delete / fs.restore | 读=Pure；写=Compensable（备份）；delete/restore=Irreversible |
+| `tool-fetch` | 1.0.0 | fetch | Pure（GET；SSRF 防线） |
+| `tool-shell` | 1.0.0 | shell | Irreversible（白名单 + denylist） |
+| `tool-edit` | 1.0.0 | edit.replace / edit.lines / edit.diff | Compensable（undo 走 fs.restore） |
 
 ```bash
-bash scripts/build_plugins.sh    # 以 1.2.0 / 1.3.0 各构建一次并暂存
+bash scripts/build_plugins.sh    # 按上表各版本构建并暂存
 cargo run -p kernel-bin -- demo  # 阶段三验收：升级 → 回退，全程不重启
 ```
 

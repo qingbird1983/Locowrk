@@ -1,18 +1,23 @@
 //! tool-fetch：第一批真实工具插件（plugins.md P0，阶段八③落地）。
 //!
 //! 一个工具 `fetch`（HTTP GET / 网页抓取，`SideEffect::Pure`——plugins.md
-//! 把 GET 归为只读；POST / PUT 属第二批的 tool-http，标 Irreversible）。
+//! 把 GET 归为只读；POST / PUT 属 P1 的 tool-http，标 Irreversible）。
 //!
 //! 行为约定：
 //! - 只接受 http / https（`file:` 等协议直接拒绝）
+//! - **SSRF 防线**（用户 2026-09-29 指定）：内网 / 环回 / 链路本地地址
+//!   一律拒绝（`ssrf.rs`）；重定向**不跟随**（302 → 内网是绕过防线的
+//!   最短路径）；`LOCOWRK_FETCH_ALLOW_PRIVATE=1` 显式放开（本机开发）
 //! - 响应体超过 max_bytes 截断（防一次抓取灌爆模型上下文）
 //! - 4xx / 5xx **不报错**：状态码与响应正文一起返回——对模型来说
 //!   "404 页面说了什么"通常比"调用失败"更有用；传输层错误（DNS /
 //!   超时 / 连接拒绝）才返回 Err
-//! - 默认超时 20s（上限 60s）；重定向跟随上限由 ureq 默认值决定
+//! - 默认超时 10s（上限 60s）
 //!
 //! 阻塞式 ureq 跑在宿主的 spawn_blocking 里（FFI 纪律三，§5.6）。
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
+
+mod ssrf;
 
 use std::collections::BTreeMap;
 use std::ffi::CString;
@@ -41,7 +46,7 @@ const PLUGIN_ID: &str = "tool-fetch";
 const BODY_DEFAULT: u64 = 256 * 1024;
 const BODY_MAX: u64 = 1024 * 1024;
 /// 请求超时缺省/上限（秒）。
-const TIMEOUT_DEFAULT: u64 = 20;
+const TIMEOUT_DEFAULT: u64 = 10;
 const TIMEOUT_MAX: u64 = 60;
 
 fn plugin_version() -> &'static str {
@@ -60,7 +65,7 @@ fn describe_manifest() -> CString {
             description: "Fetch a URL over HTTP GET and return the response body as text. \
                           Only http/https. Returns {url, status, content_type, truncated, body}; \
                           body is capped at max_bytes (default 256KiB). HTTP error statuses \
-                          (4xx/5xx) are returned as data, not failures."
+                          (4xx/5xx) are returned as data, not failures. Private/loopback/link-local hosts are refused by the SSRF guard and redirects are not followed."
                 .into(),
             schema: json!({
                 "type": "object",
@@ -69,7 +74,7 @@ fn describe_manifest() -> CString {
                     "max_bytes": { "type": "number",
                                    "description": "cap returned body (default 262144, max 1048576)" },
                     "timeout_secs": { "type": "number",
-                                      "description": "request timeout (default 20, max 60)" }
+                                      "description": "request timeout (default 10, max 60)" }
                 },
                 "required": ["url"]
             }),
@@ -143,11 +148,16 @@ fn fetch(args: &Value) -> Result<Value, String> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err("fetch only supports http:// and https:// URLs".into());
     }
+    // SSRF 防线：内网/环回/链路本地拒绝（IP 字面量直判，域名解析后逐 IP 判）
+    ssrf::guard(url)?;
     let max = arg_u64(args, "max_bytes", BODY_DEFAULT, BODY_MAX)?;
     let timeout = arg_u64(args, "timeout_secs", TIMEOUT_DEFAULT, TIMEOUT_MAX)?;
 
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(timeout))
+        // 重定向不跟随：302 → 内网是绕过 SSRF 防线的最短路径；3xx 走
+        // Status 错误路径 → 状态码与正文照常返回给模型
+        .redirects(0)
         .build();
     // ureq 对 4xx/5xx 返回 Error::Status(code, response)：正文照读、状态码
     // 进返回值（见模块注释）；只有传输层错误才变成 Err。

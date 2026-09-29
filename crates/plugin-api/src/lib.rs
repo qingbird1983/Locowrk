@@ -11,11 +11,14 @@
 //!   编译成 C 符号，本身不进 ABI。
 //! - `tool`：宿主侧类型（`Tool` / `CallCtx` 等），只活在宿主进程内，
 //!   绝不进入 C ABI（§5.2）。
+//! - `fsutil`：文件类工具的安全基座（允许根 canonicalize 校验 + 写前
+//!   备份），Rust 便利层，不进 ABI 面（阶段八⑥第二批，安全底线）。
 //!
 //! 另外把 `serde_json` / `semver` 原样 re-export 给插件 crate 复用，
 //! 让插件只依赖本 crate 一个依赖即可（§5.3"Rust 是一等公民"）。
 
 pub mod ffi;
+pub mod fsutil;
 pub mod manifest;
 pub mod plugin_side;
 pub mod tool;

@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use cordis_core::Context;
 use kernel_agent::{
-    Audit, CircuitBreaker, JsonlAuditSink, Kernel, LlmService, Middleware, Timeout, ToolSource,
-    Tracing,
+    Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel, LlmService,
+    Middleware, Timeout, ToolSource, Tracing, points,
 };
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use plugin_service::{LocalDirMarket, PluginService};
@@ -76,6 +76,15 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 模型适配器不特殊，也只是服务（§7.2）。阶段八②：genai 三合一适配器，
     // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
     ctx.provide_dyn::<dyn LlmService>(Arc::new(AppLlm::new(Arc::clone(&settings))));
+
+    // ctx-compact（plugins.md 第二批）：agent/request 决策环上的压缩监听
+    // 器——估算 token 超阈值就把早期消息压成单条摘要（fail-open）。直连
+    // LlmService，不经 waterfall 决策环（无递归）。阈值缺省 32k token /
+    // 保留近 8 条；设置面板接线归后续批次。
+    ctx.events.on_waterfall(points::REQUEST, Arc::new(CtxCompact::new(
+        ctx.clone(),
+        CompactConfig::default(),
+    )));
 
     // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。
     // Audit（plugins.md mw-audit）挂在超时/熔断外侧：被拒的调用也留痕；

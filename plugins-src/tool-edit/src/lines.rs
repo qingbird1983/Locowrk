@@ -1,0 +1,73 @@
+//! edit.lines：1-based 闭区间行替换。空 content = 删除该区间。
+//! 严格校验：start ≥ 1、end ≥ start、end ≤ 总行数（不越界不追加——
+//! 追加语义留给 fs.write，编辑工具只改既有行，宁错不猜）。
+
+use std::path::Path;
+
+use plugin_api::fsutil::{allowed_roots, backup_original, resolve_existing};
+use plugin_api::serde_json::{Value, json};
+
+use crate::{load_lines, store_lines};
+
+pub(crate) fn edit_lines(args: &Value) -> Result<Value, String> {
+    let path = args
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing string field `path`".to_string())?;
+    let start = args
+        .get("start_line")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "missing number field `start_line`".to_string())?;
+    let end = args
+        .get("end_line")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "missing number field `end_line`".to_string())?;
+    let content = args
+        .get("content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing string field `content`".to_string())?;
+
+    if start == 0 {
+        return Err("edit.lines `start_line` is 1-based".into());
+    }
+    if end < start {
+        return Err(format!(
+            "edit.lines `end_line` ({end}) must be ≥ `start_line` ({start})"
+        ));
+    }
+    let roots = allowed_roots()?;
+    let resolved = resolve_existing(Path::new(path), &roots)?;
+    let display = resolved.display().to_string();
+    let (_, lines, had_nl) = load_lines(&display)?;
+    let total = lines.len() as u64;
+    if end > total {
+        return Err(format!(
+            "edit.lines `end_line` ({end}) is beyond the last line ({total}) of `{display}`"
+        ));
+    }
+
+    // 备份先行：失败则整体报错，目标不动
+    let backup = backup_original(&resolved, "tool-edit")?;
+    // 换行归一：请求里的 "\r\n" 按行拆掉（写入统一 \n）
+    let new_lines: Vec<String> = if content.is_empty() {
+        Vec::new()
+    } else {
+        content
+            .split('\n')
+            .map(|l| l.strip_suffix('\r').unwrap_or(l).to_owned())
+            .collect()
+    };
+    let replaced = (end - start + 1) as usize;
+    let mut out: Vec<String> = Vec::with_capacity(lines.len() - replaced + new_lines.len());
+    out.extend_from_slice(&lines[..(start - 1) as usize]);
+    out.extend(new_lines);
+    out.extend_from_slice(&lines[end as usize..]);
+    let bytes = store_lines(&display, &out, had_nl)?;
+    Ok(json!({
+        "path": display,
+        "bytes": bytes,
+        "replaced": replaced,
+        "existed": true,
+        "backup": backup.display().to_string(),
+    }))
+}

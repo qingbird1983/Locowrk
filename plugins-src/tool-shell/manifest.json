@@ -1,0 +1,38 @@
+{
+  "id": "tool-shell",
+  "version": "1.0.0",
+  "abi_version": 1,
+  "kind": "tool",
+
+  "display_name": {
+    "zh-CN": "命令终端",
+    "en-US": "Shell"
+  },
+  "description": {
+    "zh-CN": "白名单命令执行：默认仅 ls / cat / grep / git status，全部需审批",
+    "en-US": "Whitelisted command execution: ls / cat / grep / git status by default, all approved"
+  },
+  "icon": "assets/icon.svg",
+
+  "author": { "name": "Locowrk Team" },
+  "origin": "official",
+  "license": "MIT",
+
+  "tools": [
+    {
+      "name": "shell",
+      "description": "Run ONE whitelisted command and return {command, program, exit_code, success, timed_out, truncated, stdout, stderr}. Only a small allowlist is permitted (ls, cat, grep, git status; more via host config); destructive commands (rm, sudo, curl, ...) are on a permanent denylist and refused without approval; pipes, command substitution and shell metacharacters are rejected — pass a single simple command. The tool itself is Irreversible and requires user approval.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string", "description": "single simple command, e.g. \"git status\"; no pipes/semicolons/backticks" },
+          "cwd": { "type": "string", "description": "optional working directory (absolute path, must exist)" },
+          "timeout_secs": { "type": "number", "description": "default 20, max 120" },
+          "max_bytes": { "type": "number", "description": "cap stdout/stderr each (default 65536, max 262144)" }
+        },
+        "required": ["command"]
+      },
+      "side_effect": "Irreversible"
+    }
+  ]
+}

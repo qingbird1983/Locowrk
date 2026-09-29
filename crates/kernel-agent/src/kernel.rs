@@ -102,8 +102,9 @@ pub enum KernelError {
 pub struct Kernel {
     /// 所有服务（含 ToolSource、LlmService）从这里获取。
     ctx: Arc<Context>,
-    /// 中间件链（会话无关）。
-    mw: Arc<Vec<Arc<dyn Middleware>>>,
+    /// 中间件链（会话无关）。compensation.rs 执行 undo 调用时复用同一条链
+    /// （审计/超时/熔断对补偿调用同样生效）。
+    pub(crate) mw: Arc<Vec<Arc<dyn Middleware>>>,
     /// 作用域键：`Some` 时服务查询先查 scoped 层再回退 global（§3.4）。
     scope: Option<ScopeKey>,
     /// 审批决议者；缺省时 Irreversible 调用一律拒绝（fail-safe，纪律 9）。
@@ -142,8 +143,8 @@ impl Kernel {
         self
     }
 
-    /// 作用域感知的 trait 对象服务查询。
-    fn scoped_dyn<T: ?Sized + Service>(&self) -> Result<Arc<T>, CordisError> {
+    /// 作用域感知的 trait 对象服务查询（compensation.rs 解析 undo 工具也走这）。
+    pub(crate) fn scoped_dyn<T: ?Sized + Service>(&self) -> Result<Arc<T>, CordisError> {
         match &self.scope {
             Some(key) => self.ctx.use_dyn_scoped::<T>(key),
             None => self.ctx.use_dyn::<T>(),
@@ -355,7 +356,12 @@ impl Kernel {
     }
 
     /// 审批门：无决议者时 fail-safe 拒绝（纪律 9：不可逆调用前必须审批）。
-    async fn approve(&self, call: &ToolCallReq, spec: &plugin_api::ToolSpec) -> ApprovalDecision {
+    /// compensation.rs 对声明 Irreversible 的 undo 工具同样过这道门。
+    pub(crate) async fn approve(
+        &self,
+        call: &ToolCallReq,
+        spec: &plugin_api::ToolSpec,
+    ) -> ApprovalDecision {
         match &self.approval {
             Some(resolver) => resolver.resolve(call, spec).await,
             None => ApprovalDecision::deny("no approval resolver configured"),

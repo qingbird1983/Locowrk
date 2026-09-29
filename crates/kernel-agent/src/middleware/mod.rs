@@ -5,9 +5,12 @@
 //! 组装次序 Tracing → Timeout → Retry → CircuitBreaker → [Approval] → Tool；
 //! 审批门在 Kernel（§7.2）——决策必须作为 ApprovalDecided 事件进会话日志，
 //! 中间件没有会话句柄（见 `crate::approval`）。
+//! `compact`（ctx-compact，plugins.md 第二批）不是洋葱件——它是
+//! `agent/request` waterfall 监听器，与本套件同住只因同属"中间件类"。
 
 mod audit;
 mod circuit_breaker;
+mod compact;
 mod retry;
 mod timeout;
 mod trace;
@@ -17,6 +20,7 @@ mod tests;
 
 pub use audit::{Audit, AuditEntry, AuditSink, JsonlAuditSink};
 pub use circuit_breaker::CircuitBreaker;
+pub use compact::{CompactConfig, CtxCompact};
 pub use retry::Retry;
 pub use timeout::Timeout;
 pub use trace::Tracing;

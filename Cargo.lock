@@ -864,6 +864,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tool-edit"
+version = "0.1.0"
+dependencies = [
+ "plugin-api",
+]
+
+[[package]]
 name = "tool-fetch"
 version = "0.1.0"
 dependencies = [
@@ -873,6 +880,13 @@ dependencies = [
 
 [[package]]
 name = "tool-fs"
+version = "0.1.0"
+dependencies = [
+ "plugin-api",
+]
+
+[[package]]
+name = "tool-shell"
 version = "0.1.0"
 dependencies = [
  "plugin-api",

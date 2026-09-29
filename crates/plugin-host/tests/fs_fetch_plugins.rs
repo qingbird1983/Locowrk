@@ -86,31 +86,56 @@ fn load_activate(plugin_id: &str, version: &str) -> (Arc<PluginRegistry>, Regist
 
 #[test]
 fn fs_tools_catalog_read_list_grep_roundtrip() {
-    let (_registry, source) = load_activate("tool-fs", "1.0.0");
+    let (_registry, source) = load_activate("tool-fs", "1.1.0");
 
-    // 目录快照：三个工具都在，且全 Pure（plugins.md 只读先行）
-    let names: Vec<String> = source.list_tools().iter().map(|s| s.name.clone()).collect();
-    for expected in ["fs.read", "fs.list", "fs.grep"] {
+    // 目录快照：六个工具，副作用分级符合 plugins.md §二
+    let tools = source.list_tools();
+    for expected in [
+        "fs.read",
+        "fs.list",
+        "fs.grep",
+        "fs.write",
+        "fs.delete",
+        "fs.restore",
+    ] {
         assert!(
-            names.iter().any(|n| n == expected),
-            "缺少 {expected}: {names:?}"
+            tools.iter().any(|s| s.name == expected),
+            "缺少 {expected}: {:?}",
+            tools.iter().map(|s| s.name.clone()).collect::<Vec<_>>()
         );
     }
-    for s in source.list_tools() {
+    let side_of = |name: &str| {
+        tools
+            .iter()
+            .find(|s| s.name == name)
+            .map(|s| s.side_effect.clone())
+    };
+    for name in ["fs.read", "fs.list", "fs.grep"] {
         assert!(
-            matches!(s.side_effect, plugin_api::SideEffect::Pure),
-            "{} 应为 Pure",
-            s.name
+            matches!(side_of(name), Some(plugin_api::SideEffect::Pure)),
+            "{name} 应为 Pure"
+        );
+    }
+    assert!(matches!(
+        side_of("fs.write"),
+        Some(plugin_api::SideEffect::Compensable { undo_tool })
+            if undo_tool == "fs.restore"
+    ));
+    for name in ["fs.delete", "fs.restore"] {
+        assert!(
+            matches!(side_of(name), Some(plugin_api::SideEffect::Irreversible)),
+            "{name} 应为 Irreversible"
         );
     }
 
-    // 准备临时内容目录：一个文件 + 一个子目录
+    // 准备临时内容目录：一个文件 + 一个子目录；它就是本测试的允许根
     let base = std::env::temp_dir().join(format!("locowrk-fs-it-{}", std::process::id()));
     let sub = base.join("sub");
     std::fs::create_dir_all(&sub).unwrap();
     let hello = base.join("hello.txt");
     std::fs::write(&hello, "alpha line\nBETA gamma\nlast\n").unwrap();
     std::fs::write(sub.join("nested.txt"), "deep beta match\n").unwrap();
+    unsafe { std::env::set_var("LOCOWRK_FS_ROOTS", base.display().to_string()) };
 
     // fs.list：目录在前；文件带大小
     let list = call(
@@ -178,6 +203,7 @@ fn fs_tools_catalog_read_list_grep_roundtrip() {
     assert_eq!(grep["matches"].as_array().unwrap().len(), 1);
 
     let _ = std::fs::remove_dir_all(&base);
+    unsafe { std::env::remove_var("LOCOWRK_FS_ROOTS") };
 }
 
 #[test]
@@ -213,9 +239,16 @@ fn serve_once(status_line: &'static str, body: &'static str) -> (u16, std::threa
     (port, handle)
 }
 
+/// fetch 测试共用一把锁：LOCOWRK_FETCH_ALLOW_PRIVATE 是进程级 env，
+/// 并行测试里"设 1"与"验证拒绝"不能同时进行。
+static FETCH_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn fetch_local_http_200_returns_capped_body() {
+    let _env = FETCH_ENV_LOCK.lock().unwrap();
     let (_registry, source) = load_activate("tool-fetch", "1.0.0");
+    // SSRF 防线默认拒绝 127.0.0.1——本机测试显式走后门
+    unsafe { std::env::set_var("LOCOWRK_FETCH_ALLOW_PRIVATE", "1") };
     let (port, server) = serve_once("HTTP/1.1 200 OK", "hello-fetch-body");
 
     let out = call(
@@ -238,7 +271,9 @@ fn fetch_local_http_200_returns_capped_body() {
 
 #[test]
 fn fetch_http_404_is_data_not_error() {
+    let _env = FETCH_ENV_LOCK.lock().unwrap();
     let (_registry, source) = load_activate("tool-fetch", "1.0.0");
+    unsafe { std::env::set_var("LOCOWRK_FETCH_ALLOW_PRIVATE", "1") };
     let (port, server) = serve_once("HTTP/1.1 404 Not Found", "no such page");
 
     let out = call(
@@ -250,4 +285,24 @@ fn fetch_http_404_is_data_not_error() {
 
     assert_eq!(out["status"], 404);
     assert_eq!(out["body"], "no such page");
+}
+
+/// 恶意路径（安全底线）：未设后门时，环回地址在 guard 处被拒，
+/// 请求到不了网络（没有任何 server 应答）。
+#[test]
+fn fetch_ssrf_guard_refuses_loopback() {
+    let _env = FETCH_ENV_LOCK.lock().unwrap();
+    let (_registry, source) = load_activate("tool-fetch", "1.0.0");
+    unsafe { std::env::remove_var("LOCOWRK_FETCH_ALLOW_PRIVATE") };
+
+    let err = call(
+        source.resolve("fetch").unwrap().as_ref(),
+        json!({"url": "http://127.0.0.1:1/"}),
+    )
+    .expect_err("环回地址必须被 SSRF 防线拒绝");
+    let msg = match err {
+        ToolError::Failed { message, .. } => message,
+        other => other.to_string(),
+    };
+    assert!(msg.contains("SSRF guard"), "{msg}");
 }

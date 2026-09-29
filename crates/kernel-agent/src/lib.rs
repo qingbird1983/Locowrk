@@ -11,18 +11,20 @@
 
 mod approval;
 mod chain;
+mod compensation;
 mod kernel;
 mod middleware;
 mod waterfall;
 
 pub use approval::{ApprovalDecision, ApprovalResolver};
 pub use chain::{ToolChain, build_chain};
+pub use compensation::CompensationReport;
 pub use kernel::{
     Kernel, KernelError, LlmError, LlmRequest, LlmResponse, LlmService, StepOutcome, ToolCallReq,
     ToolSource,
 };
 pub use middleware::{
-    Audit, AuditEntry, AuditSink, CircuitBreaker, JsonlAuditSink, Middleware, Next, Retry, Timeout,
-    Tracing,
+    Audit, AuditEntry, AuditSink, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink,
+    Middleware, Next, Retry, Timeout, Tracing,
 };
 pub use waterfall::{RequestErrorPayload, RequestPayload, RetryBudget, points};

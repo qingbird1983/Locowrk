@@ -9,8 +9,8 @@
     "en-US": "File Tools"
   },
   "description": {
-    "zh-CN": "只读文件操作：读文件 / 列目录 / 搜索文本",
-    "en-US": "Read-only file ops: read / list / grep"
+    "zh-CN": "文件读写与检索：读 / 列目录 / 搜索 / 写（带备份可撤销）/ 删除",
+    "en-US": "File ops: read / list / grep / write (undoable via backup) / delete"
   },
   "icon": "assets/icon.svg",
 
@@ -25,7 +25,7 @@
       "schema": {
         "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path" },
+          "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
           "max_bytes": { "type": "number", "description": "default 32768, max 1048576" }
         },
         "required": ["path"]
@@ -38,7 +38,7 @@
       "schema": {
         "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute directory path" }
+          "path": { "type": "string", "description": "absolute directory path (must be inside the allowed workspace roots; defaults to the app data dir)" }
         },
         "required": ["path"]
       },
@@ -50,7 +50,7 @@
       "schema": {
         "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute directory path" },
+          "path": { "type": "string", "description": "absolute directory path (must be inside the allowed workspace roots; defaults to the app data dir)" },
           "query": { "type": "string", "description": "case-insensitive substring" },
           "max_results": { "type": "number", "description": "default 50, max 200" },
           "max_depth": { "type": "number", "description": "recursion depth, default 3, max 8" }
@@ -58,6 +58,45 @@
         "required": ["path", "query"]
       },
       "side_effect": "Pure"
+    },
+    {
+      "name": "fs.write",
+      "description": "Write a UTF-8 text file (create or overwrite). Args: path (absolute), content, create_dirs (bool, default false). The previous content, if any, is backed up automatically and the result carries {path, bytes, existed, backup}; pass that result to fs.restore to undo.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
+          "content": { "type": "string", "description": "full new file content" },
+          "create_dirs": { "type": "boolean", "description": "create missing parent dirs (default false)" }
+        },
+        "required": ["path", "content"]
+      },
+      "side_effect": { "kind": "compensable", "undo_tool": "fs.restore" }
+    },
+    {
+      "name": "fs.delete",
+      "description": "Delete a file (directories are rejected in v1). Args: path (absolute). Irreversible — no backup is kept, the call requires user approval.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" }
+        },
+        "required": ["path"]
+      },
+      "side_effect": "Irreversible"
+    },
+    {
+      "name": "fs.restore",
+      "description": "Undo a previous fs.write by restoring its backup (the backup is consumed; restoring twice is a no-op). Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.{path, backup, existed} is used. Irreversible — restoring overwrites the file's current content, so the call requires user approval.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "call_id": { "type": "string", "description": "id of the original fs.write call" },
+          "args": { "type": "object", "description": "original fs.write args" },
+          "output": { "type": "object", "description": "original fs.write result carrying path/backup/existed" }
+        }
+      },
+      "side_effect": "Irreversible"
     }
   ]
 }
