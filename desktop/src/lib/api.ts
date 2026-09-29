@@ -6,8 +6,10 @@ import type {
   AgentEvent,
   ApprovalRequest,
   InstalledPlugin,
+  LlmUpdate,
   MarketplaceItem,
   PluginStateChange,
+  SettingsView,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
@@ -92,4 +94,22 @@ export function subscribePluginState(
   return listen<PluginStateChange>("plugin://state-changed", (e) =>
     onChange(e.payload),
   ).then((un) => [un]);
+}
+
+// ---- 设置（DESIGN.md §13.1 / §13.5） ----
+
+/** 读设置投影（永不含 API Key 原值）。 */
+export function getSettings(): Promise<SettingsView> {
+  return invoke("settings_get");
+}
+
+/** 部分更新设置，返回最新投影。 */
+export function setSettings(patch: {
+  locale?: string;
+  llm?: LlmUpdate;
+}): Promise<SettingsView> {
+  return invoke("settings_set", {
+    locale: patch.locale ?? null,
+    llm: patch.llm ?? null,
+  });
 }

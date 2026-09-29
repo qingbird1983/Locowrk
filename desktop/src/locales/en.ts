@@ -6,6 +6,7 @@ export default {
   nav: {
     chat: "Chat",
     plugins: "Plugins",
+    settings: "Settings",
   },
   status: {
     ready: "Ready",
@@ -58,6 +59,34 @@ export default {
     emptyDiscover:
       "Market catalog is empty. Run `bash scripts/build_market.sh` at the repo root, then restart the app.",
     emptyInstalled: "Nothing installed yet. Head to the Discover tab.",
+  },
+  settings: {
+    title: "Settings",
+    llmTitle: "LLM configuration",
+    llmHint:
+      "Takes effect once the real model adapter lands (stage 8); chat is still driven by the scripted stub. The API key is stored only in the local data directory and is never echoed back to the UI.",
+    provider: "Provider",
+    model: "Model",
+    baseUrl: "Base URL",
+    baseUrlPlaceholder: "Leave empty to use the provider's default endpoint",
+    apiKey: "API Key",
+    apiKeyPlaceholder: "Not saved",
+    apiKeyKeep: "Saved · leave empty to keep",
+    clearKey: "Clear saved key",
+    save: "Save",
+    saved: "Saved",
+    sessionsTitle: "Session storage location",
+    dataDir: "Data root directory",
+    dataDirHint:
+      "Plugins, the lockfile and settings.json live here. Override with the LOCOWRK_DATA_DIR environment variable (restart required).",
+    sessionsMemory:
+      "Sessions currently live in memory and are cleared on restart; on-disk persistence lands in a later version.",
+    langTitle: "Language / 语言",
+    langSystem: "Follow system",
+    langZh: "中文",
+    langEn: "English",
+    langHint:
+      "Applies immediately and is remembered. \"Follow system\" shows Chinese on zh environments, English otherwise.",
   },
   error: {
     unknown: "Something went wrong",

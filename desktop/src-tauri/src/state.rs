@@ -24,6 +24,7 @@ use crate::demo_llm::DemoLlm;
 use crate::demo_tools::SendEmailTool;
 use crate::events::{forward_plugin_states, EventSink, TauriSink};
 use crate::plugins_root;
+use crate::settings::SettingsStore;
 use crate::tool_source::KernelToolSource;
 
 pub struct AppState {
@@ -41,6 +42,8 @@ pub struct AppState {
     /// session_id → 会话锁。会话在锁内串行聊天（tokio Mutex 可跨 await）；
     /// 外层 std Mutex 只护 map 存取，绝不跨 await 持有。
     pub sessions: Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>,
+    /// 设置存储（§13.1：LLM 配置 / 语言 / 存储位置展示）。
+    pub settings: SettingsStore,
 }
 
 pub fn init_state(app: AppHandle) -> AppState {
@@ -71,9 +74,20 @@ pub fn init_state(app: AppHandle) -> AppState {
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
     let kernel = Arc::new(Kernel::new(ctx.clone(), mw).with_approval(resolver));
 
+    // 数据根绑定一次，插件编排与设置共用（设置文件 settings.json 同目录）。
+    let root = data_dir();
+    let settings = match SettingsStore::open(&root) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("{e}；设置降级到临时目录");
+            let fallback = std::env::temp_dir().join("locowrk-degraded-data");
+            SettingsStore::open(&fallback).expect("settings unavailable even in fallback dir")
+        }
+    };
+
     // 插件编排（§11.2）：数据根缺省 ~/.agent-kernel（LOCOWRK_DATA_DIR
     // 可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。
-    let plugins = match open_plugin_service(&data_dir(), Arc::clone(&registry), &ctx) {
+    let plugins = match open_plugin_service(&root, Arc::clone(&registry), &ctx) {
         Ok(svc) => Arc::new(svc),
         Err(primary_err) => {
             tracing::error!("plugin service init failed: {primary_err}；降级到临时目录");
@@ -110,6 +124,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         approval,
         sink,
         sessions: Mutex::new(HashMap::new()),
+        settings,
     }
 }
 

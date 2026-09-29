@@ -5,12 +5,14 @@
 - **项目名 / 仓库名 / 文件夹名**：`Locowrk`（用户指定，三者一致）
 - **定位**：可热插拔、可回退、带桌面端（Tauri 2）的 Rust Agent 内核。"一切皆插件"——模型适配器、工具、会话存储、沙箱、Agent 循环本身都是插件，无特权模块
 - **权威设计文档**：[docs/design/DESIGN.md](docs/design/DESIGN.md)。修改任何核心模块前先读对应章节，不要凭猜测实现；实现与文档冲突时先对齐文档。文档 §8 中的 `agent-kernel/` 指内核 Cargo 工作区，其 crate 命名（`plugin-api`、`cordis-core` 等）沿用文档，对外项目名是 Locowrk
-- **当前进度**：落地路径**阶段七已完成**（PluginService + 插件管理命令 + 市场 UI：本地目录市场 `market/`（`scripts/build_market.sh` 暂存 tool-shout 双版本）、安装/启停/更新/回退/卸载全 UI 化、`plugin://state-changed` 实时同步；真实窗口 E2E 已验全链含 Windows tombstone 两阶段）；阶段六（审批弹窗，全 UI 化操作无需 CLI）、阶段五（Tauri 2 桌面端脚手架，`agent_chat` + `agent://` 事件流）、阶段四（Waterfall 插桩 + Scope 隔离，`cargo run -p kernel-bin -- demo4`）、阶段三（C ABI 插件热插拔，`demo`）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交；下一步**阶段八**（设置面板 + 快捷键 + 托盘 + WASM 加载器 + i18n 切换入口，见 DESIGN.md §14）
+- **当前进度**：落地路径**阶段八①已完成**（i18n 切换入口 + 最小设置面板：LLM 配置 / 会话存储位置 / 语言切换三块，`settings_get`/`settings_set`，数据根 `settings.json`，API Key 只落盘不出 IPC）；阶段八排期见 DESIGN.md §14 实现备注（下一步②真实 LLM，LLM.md 方案一：genai 统一库封装适配器；参考 docs/design/LLM.md 与 plugins.md）；阶段七（PluginService + 插件管理命令 + 市场 UI，全 UI 化含 Windows tombstone 两阶段 E2E）、阶段六（审批弹窗）、阶段五（Tauri 2 桌面端脚手架）、阶段四（Waterfall 插桩 + Scope 隔离）、阶段三（C ABI 插件热插拔）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交
 
 ## 目录结构
 
 ```
 docs/design/DESIGN.md   权威设计文档（唯一需求来源）
+docs/design/LLM.md      阶段八②参考：三合一 LLM 适配器（方案一 = genai 统一库封装）
+docs/design/plugins.md  阶段八③参考：必备插件清单与落地顺序（P0 四件套起步）
 crates/
   plugin-api/           冻结 ABI 契约（唯一，改动即破坏兼容；ffi/manifest/plugin_side/tool 四模块）
   cordis-core/          Context / Effect / Fiber / Scope / EventBus

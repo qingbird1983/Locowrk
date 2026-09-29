@@ -8,6 +8,8 @@
 //! - `events`：`agent://` 与 `plugin://` 事件通道、EventSink 抽象（§12.2 / §13.4）
 //! - `approval`：审批中心 ApprovalHub——`ApprovalResolver` 的桌面端实现（§13.2）
 //! - `data_root`：安装态数据根与市场目录解析（§11.3）
+//! - `settings`：设置存储——settings.json 于数据根；API Key 只落盘不出
+//!   IPC，投影仅 api_key_set（§13.1 / §13.5）
 //! - `demo_llm`：阶段五脚本模型（真实模型适配器是后续阶段的插件）
 //! - `demo_tools`：阶段六内置演示工具 send_email（不可逆 → 走审批弹窗）
 //! - `plugins_root`：plugins/ 目录解析与插件装载
@@ -24,6 +26,7 @@ mod demo_tools;
 mod events;
 mod plugins_root;
 mod runner;
+mod settings;
 mod state;
 mod tool_source;
 
@@ -53,7 +56,9 @@ pub fn run() {
             commands::plugin_set_enabled,
             commands::plugin_uninstall,
             commands::plugin_rollback,
-            commands::plugin_update
+            commands::plugin_update,
+            commands::settings_get,
+            commands::settings_set
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

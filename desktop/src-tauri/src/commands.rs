@@ -5,6 +5,7 @@ use tauri::State;
 
 use crate::events::ApprovalRequestPayload;
 use crate::runner;
+use crate::settings::{LlmUpdate, SettingsView};
 use crate::state::AppState;
 use plugin_service::{InstalledPlugin, MarketplaceItem};
 
@@ -112,4 +113,24 @@ pub async fn plugin_rollback(
 #[tauri::command]
 pub async fn plugin_update(id: String, state: State<'_, AppState>) -> Result<String, String> {
     state.plugins.update(&id).await.map(|v| v.to_string())
+}
+
+// ---- 设置命令（DESIGN.md §13.1 / §13.5）：薄适配层，校验与落盘全在
+// SettingsStore。返回投影永不含 API Key 原值，只有 api_key_set。 ----
+
+/// 读设置（LLM 配置投影 + 数据根位置 + 语言偏好）。
+#[tauri::command]
+pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, String> {
+    Ok(state.settings.view())
+}
+
+/// 部分更新设置：locale（system/zh-CN/en）与 LLM 字段独立可选，
+/// 缺省字段保持不变；base_url / api_key 传空串 = 清除。
+#[tauri::command]
+pub async fn settings_set(
+    locale: Option<String>,
+    llm: Option<LlmUpdate>,
+    state: State<'_, AppState>,
+) -> Result<SettingsView, String> {
+    state.settings.update(locale, llm)
 }

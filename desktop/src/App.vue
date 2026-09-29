@@ -3,18 +3,22 @@ import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useApprovalsStore } from "./stores/approvals";
 import { useChatStore } from "./stores/chat";
+import { useSettingsStore } from "./stores/settings";
 import ApprovalModal from "./components/ApprovalModal.vue";
 import ChatMessages from "./components/ChatMessages.vue";
 import PluginMarket from "./components/PluginMarket.vue";
 import PromptBar from "./components/PromptBar.vue";
+import SettingsPanel from "./components/SettingsPanel.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
 const approvals = useApprovalsStore();
-const view = ref<"chat" | "plugins">("chat");
+const settings = useSettingsStore();
+const view = ref<"chat" | "plugins" | "settings">("chat");
 onMounted(() => {
   chat.init();
   approvals.init();
+  void settings.init();
 });
 </script>
 
@@ -28,10 +32,10 @@ onMounted(() => {
         <p class="text-xs text-neutral-500">{{ t("app.subtitle") }}</p>
       </div>
       <div class="flex items-center gap-2">
-        <!-- 顶级导航（§13.1）：聊天 / 插件市场 -->
+        <!-- 顶级导航（§13.1）：聊天 / 插件市场 / 设置 -->
         <nav class="flex gap-1 rounded-lg bg-neutral-800/70 p-1">
           <button
-            v-for="key in (['chat', 'plugins'] as const)"
+            v-for="key in (['chat', 'plugins', 'settings'] as const)"
             :key="key"
             class="rounded-md px-3 py-1 text-xs font-medium transition"
             :class="
@@ -62,6 +66,7 @@ onMounted(() => {
       <PromptBar />
     </div>
     <PluginMarket v-if="view === 'plugins'" />
+    <SettingsPanel v-if="view === 'settings'" />
     <ApprovalModal />
   </div>
 </template>

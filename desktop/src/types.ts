@@ -73,3 +73,28 @@ export type PluginStateChange =
   | { type: "enabled_changed"; id: string; enabled: boolean }
   | { type: "uninstalled"; id: string }
   | { type: "active_version_changed"; id: string; version: string };
+
+/** 设置投影（settings_get / settings_set 返回值；camelCase）。API Key
+ * 原值永不出后端，只有 apiKeySet 布尔。 */
+export interface SettingsView {
+  /** "system" | "zh-CN" | "en"；system = 跟随系统语言。 */
+  locale: string;
+  dataDir: string;
+  llm: LlmSettingsView;
+}
+
+export interface LlmSettingsView {
+  provider: string;
+  model: string;
+  baseUrl: string | null;
+  apiKeySet: boolean;
+}
+
+/** 部分更新：字段缺省（undefined）= 保持不变；baseUrl / apiKey 传
+ * 空串 = 清除。 */
+export interface LlmUpdate {
+  provider?: string;
+  model?: string;
+  baseUrl?: string;
+  apiKey?: string;
+}

@@ -1,0 +1,174 @@
+//! 设置存储（DESIGN.md §13.1 设置模块 / §13.5 i18n 持久化）。
+//!
+//! 最小面板三块：LLM 配置（provider/model/base_url/api_key）、会话存储
+//! 位置（只读展示）、语言切换（system/zh-CN/en，缺省跟随系统）。
+//! 持久化在数据根 `settings.json`，与 lockfile.json 同目录；文件在
+//! `%USERPROFILE%\.agent-kernel`，不属于项目文件，API Key 落盘合规
+//! （AGENTS.md 禁的是写进仓库文件）。
+//!
+//! 纪律：**API Key 只进磁盘，不出 IPC**——前端拿到的投影只有
+//! `api_key_set` 布尔；真适配器（LLM.md 方案一）在后端侧读原值。
+
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+use serde::{Deserialize, Serialize};
+
+/// locale 取值：`system`（跟随系统，缺省）/ `zh-CN` / `en`（§13.5）。
+pub const LOCALE_SYSTEM: &str = "system";
+const LOCALES: [&str; 3] = [LOCALE_SYSTEM, "zh-CN", "en"];
+/// LLM.md 方案一：统一适配器按 provider 路由（genai 封装，后续阶段接入）。
+const PROVIDERS: [&str; 3] = ["openai", "anthropic", "ollama"];
+
+const FILE_NAME: &str = "settings.json";
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LlmSettings {
+    pub provider: String,
+    /// 空串 = 未配置。
+    pub model: String,
+    /// None = 用 provider 默认端点。
+    pub base_url: Option<String>,
+    /// 仅落盘，永不出 IPC。
+    pub api_key: Option<String>,
+}
+
+impl Default for LlmSettings {
+    fn default() -> Self {
+        Self {
+            provider: "openai".into(),
+            model: String::new(),
+            base_url: None,
+            api_key: None,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AppSettings {
+    pub locale: String,
+    pub llm: LlmSettings,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            locale: LOCALE_SYSTEM.into(),
+            llm: LlmSettings::default(),
+        }
+    }
+}
+
+/// IPC 投影（settings_get / settings_set 返回值）：无任何秘钥字段。
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsView {
+    pub locale: String,
+    pub data_dir: String,
+    pub llm: LlmSettingsView,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmSettingsView {
+    pub provider: String,
+    pub model: String,
+    pub base_url: Option<String>,
+    pub api_key_set: bool,
+}
+
+/// 部分更新（settings_set 入参）。字段 None = 保持不变；
+/// base_url / api_key 传空串 = 清除（回落默认端点 / 删除已存 Key）。
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LlmUpdate {
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+}
+
+pub struct SettingsStore {
+    root: PathBuf,
+    inner: Mutex<AppSettings>,
+}
+
+impl SettingsStore {
+    /// 打开（不存在则用默认值建文件）；目录建不出来算错误。
+    pub fn open(root: &Path) -> Result<Self, String> {
+        std::fs::create_dir_all(root)
+            .map_err(|e| format!("设置目录创建失败 {}: {e}", root.display()))?;
+        let path = root.join(FILE_NAME);
+        let settings = match std::fs::read(&path) {
+            Ok(bytes) => serde_json::from_slice::<AppSettings>(&bytes)
+                .map_err(|e| format!("settings.json 解析失败: {e}"))?,
+            Err(_) => AppSettings::default(),
+        };
+        Ok(Self {
+            root: root.to_path_buf(),
+            inner: Mutex::new(settings),
+        })
+    }
+
+    pub fn view(&self) -> SettingsView {
+        let s = self.inner.lock().expect("settings poisoned");
+        self.project(&s)
+    }
+
+    /// 校验 → 应用到副本 → 落盘成功才提交内存。返回最新投影。
+    pub fn update(
+        &self,
+        locale: Option<String>,
+        llm: Option<LlmUpdate>,
+    ) -> Result<SettingsView, String> {
+        let mut next = self.inner.lock().expect("settings poisoned").clone();
+        if let Some(loc) = locale {
+            if !LOCALES.contains(&loc.as_str()) {
+                return Err(format!("不支持的语言: {loc}（可选 system / zh-CN / en）"));
+            }
+            next.locale = loc;
+        }
+        if let Some(u) = llm {
+            if let Some(p) = &u.provider {
+                if !PROVIDERS.contains(&p.as_str()) {
+                    return Err(format!(
+                        "不支持的 provider: {p}（可选 openai / anthropic / ollama）"
+                    ));
+                }
+                next.llm.provider = p.clone();
+            }
+            if let Some(m) = u.model {
+                next.llm.model = m;
+            }
+            if let Some(b) = u.base_url {
+                next.llm.base_url = (!b.is_empty()).then_some(b);
+            }
+            if let Some(k) = u.api_key {
+                next.llm.api_key = (!k.is_empty()).then_some(k);
+            }
+        }
+        let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
+        std::fs::write(self.root.join(FILE_NAME), bytes)
+            .map_err(|e| format!("settings.json 写入失败: {e}"))?;
+        *self.inner.lock().expect("settings poisoned") = next;
+        Ok(self.view())
+    }
+
+    fn project(&self, s: &AppSettings) -> SettingsView {
+        SettingsView {
+            locale: s.locale.clone(),
+            data_dir: self.root.display().to_string(),
+            llm: LlmSettingsView {
+                provider: s.llm.provider.clone(),
+                model: s.llm.model.clone(),
+                base_url: s.llm.base_url.clone(),
+                api_key_set: s.llm.api_key.is_some(),
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

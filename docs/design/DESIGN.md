@@ -1957,6 +1957,14 @@ pub fn run() {
 | **插件管理** | 已安装列表、启用/禁用、卸载、回退 | `plugin_list`, `plugin_set_enabled`, `plugin_uninstall`, `plugin_rollback` |
 | **设置** | 模型配置、会话存储、快捷键 | `settings_get`, `settings_set` |
 
+> **实现备注（阶段八·最小设置面板）**：三块落地——LLM 配置（provider
+> openai/anthropic/ollama、model、base_url、api_key）、会话存储位置
+> （只读展示数据根；桌面端会话当前在内存，重启清空，落盘持久化后续接）、
+> 语言切换（§13.5）。存储 = 数据根 `settings.json`（`desktop/src-tauri/
+> src/settings.rs`）；**API Key 只落盘不出 IPC**——命令返回投影仅含
+> `api_key_set` 布尔；`base_url`/`api_key` 传空串 = 清除，字段缺省 =
+> 保持不变。快捷键留待托盘阶段一并接入设置面板。
+
 ### 13.2 审批弹窗的交互设计
 
 这是 Agent 桌面端**最独特**的 UI 需求。当内核遇到 `Irreversible` 工具调用时，会通过 event 推送一个审批请求，前端弹窗让用户决策。
@@ -2119,6 +2127,14 @@ export const usePluginStore = defineStore('plugins', {
 | **阶段七（1-2 周）** | PluginService + 管理命令 + 市场 UI | 安装/卸载/启用/禁用/更新/回退全部可用 |
 | **阶段八（持续）** | 设置面板 + 快捷键 + 托盘 + WASM 加载器 + i18n 切换入口（§13.5） | 完整产品化：界面中/英可切换，默认中文 |
 
+> **实现备注（阶段八·用户排期，2026-09-29）**：步骤顺序——① i18n 切换 +
+> 最小设置面板 → ② 真实 LLM（**LLM.md 方案一**：`genai` 类统一库封装进
+> 适配器，对外只暴露 `LlmService`；三合一 = openai/anthropic/ollama）→
+> ③ 第一批工具（plugins.md：tool-fs 只读 / tool-fetch / mw-audit）→
+> ④ 回头打磨市场细节（副作用徽章、回退下拉、更新按钮）→ ⑤ 托盘 + 快捷键
+> （发版前）→ ⑥ WASM 加载器（独立里程碑，看需求，§5.8）。界面先骨架后
+> 美化（用户指定）：功能按钮接通优先，视觉打磨放最后。
+
 **阶段一和阶段二是试金石**：如果内核的服务组合和 Effect 撤销链设计干净，后续所有能力都是叠加。**阶段五和阶段六是桌面端的试金石**：如果 Tauri IPC 层能干净地桥接内核事件流，后续插件管理 UI 都是在这个模式上叠加。
 
 ---
@@ -2252,6 +2268,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.6（补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.7（补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
