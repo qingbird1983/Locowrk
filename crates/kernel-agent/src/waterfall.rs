@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use plugin_api::ToolSpec;
 use serde::{Deserialize, Serialize};
 use session_store::Message;
 
@@ -26,7 +27,9 @@ pub struct PreStepPayload {
 }
 
 /// `agent/request` 的 payload。`model` / `params` 可被决策环改写——
-/// 审批插件通过该点注入策略参数（§14 阶段四验收）。
+/// 审批插件通过该点注入策略参数（§14 阶段四验收）。`tools` 是工具目录
+/// 快照（LLM.md：适配层负责映射各家格式），`serde(default)` 保持与
+/// 旧决策方互通。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RequestPayload {
     pub messages: Vec<Message>,
@@ -34,6 +37,8 @@ pub struct RequestPayload {
     pub model: Option<String>,
     #[serde(default)]
     pub params: serde_json::Value,
+    #[serde(default)]
+    pub tools: Vec<ToolSpec>,
 }
 
 /// `agent/request-error` 的 payload。

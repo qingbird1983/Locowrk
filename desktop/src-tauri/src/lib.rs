@@ -10,7 +10,9 @@
 //! - `data_root`：安装态数据根与市场目录解析（§11.3）
 //! - `settings`：设置存储——settings.json 于数据根；API Key 只落盘不出
 //!   IPC，投影仅 api_key_set（§13.1 / §13.5）
-//! - `demo_llm`：阶段五脚本模型（真实模型适配器是后续阶段的插件）
+//! - `llm`：真实模型接入（阶段八②，LLM.md 方案一）——genai 三合一
+//!   适配器（openai / anthropic / ollama），由设置面板驱动分发
+//! - `demo_llm`：阶段五脚本模型（现为 llm 模块的未配置回落替身）
 //! - `demo_tools`：阶段六内置演示工具 send_email（不可逆 → 走审批弹窗）
 //! - `plugins_root`：plugins/ 目录解析与插件装载
 //! - `tool_source`：RegistryToolSource → kernel ToolSource 胶水
@@ -24,6 +26,7 @@ mod data_root;
 mod demo_llm;
 mod demo_tools;
 mod events;
+mod llm;
 mod plugins_root;
 mod runner;
 mod settings;

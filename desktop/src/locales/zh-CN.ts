@@ -1,7 +1,8 @@
 // 中文文案（默认语言，DESIGN.md §13.5）。会话内容属于数据，不在此列。
 export default {
   app: {
-    subtitle: "阶段七 · 插件市场 + 热插拔管理 · 模型 = 脚本替身",
+    subtitle: "阶段八 · 真实模型接入 · 当前模型 = {model}",
+    modelFallback: "脚本替身（设置 → LLM 配置）",
   },
   nav: {
     chat: "聊天",
@@ -14,7 +15,7 @@ export default {
   },
   chat: {
     empty:
-      "发送任意消息开始对话。消息里包含 “echo” 触发 tool-echo 插件；包含 “shout”（或“喊”）触发 tool-shout——需要先在「插件」页从市场安装；包含 “email”（或“邮件”）触发 send_email——它是不可逆工具，会弹出审批确认。",
+      "发送任意消息开始对话。模型会按需调用已启用的插件工具（当前目录见工具卡片）；send_email 等不可逆工具会先弹出审批确认。",
     placeholder: "输入消息…（Enter 发送，Shift+Enter 换行）",
     send: "发送",
   },
@@ -61,7 +62,7 @@ export default {
   settings: {
     title: "设置",
     llmTitle: "LLM 配置",
-    llmHint: "阶段八接入真实模型时生效；当前对话仍由脚本替身驱动。API Key 只保存在本机数据目录，不会随界面回显。",
+    llmHint: "保存后立即生效（无需重启）。API Key 只保存在本机数据目录，不会随界面回显。",
     provider: "提供商",
     model: "模型",
     baseUrl: "Base URL",

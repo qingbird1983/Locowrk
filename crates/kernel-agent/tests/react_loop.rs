@@ -70,16 +70,22 @@ struct MapSource;
 impl ToolSource for MapSource {
     async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
         match name {
-            "echo" => Ok(Arc::new(EchoTool {
-                spec: ToolSpec {
-                    name: "echo".into(),
-                    description: "echo back".into(),
-                    schema: json!({}),
-                    side_effect: SideEffect::Pure,
-                },
-            })),
+            "echo" => Ok(Arc::new(EchoTool { spec: echo_spec() })),
             other => Err(ToolError::NotAvailable(other.into())),
         }
+    }
+
+    async fn list(&self) -> Vec<ToolSpec> {
+        vec![echo_spec()]
+    }
+}
+
+fn echo_spec() -> ToolSpec {
+    ToolSpec {
+        name: "echo".into(),
+        description: "echo back".into(),
+        schema: json!({}),
+        side_effect: SideEffect::Pure,
     }
 }
 
@@ -204,4 +210,56 @@ async fn unavailable_tool_fails_step_without_dangling_call() {
     // resolve 先于 ToolCall 落账（§7.2 顺序）：解析失败 = 无悬空调用
     let kinds: Vec<&str> = session.events().iter().map(kind).collect();
     assert_eq!(kinds, vec!["user", "assistant"]);
+}
+
+/// 阶段八②：请求携带工具目录快照——真实模型要看到工具才会调（LLM.md）。
+/// 阶段八②：目录服务缺失时视为空表——纯聊天不要求装配 ToolSource。
+struct RecordingLlm(Mutex<Vec<LlmRequest>>);
+
+#[async_trait]
+impl LlmService for RecordingLlm {
+    async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
+        self.0.lock().unwrap().push(req);
+        Ok(LlmResponse {
+            content: "ok".into(),
+            tool_calls: vec![],
+        })
+    }
+}
+
+#[tokio::test]
+async fn request_carries_tool_catalog() {
+    let ctx = Arc::new(Context::new());
+    let llm = Arc::new(RecordingLlm(Mutex::new(vec![])));
+    ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm) as Arc<dyn LlmService>);
+    ctx.provide_dyn::<dyn ToolSource>(Arc::new(MapSource));
+    let kernel = Kernel::new(Arc::clone(&ctx), vec![]);
+
+    let mut session = Session::new();
+    session.append(SessionEvent::UserMessage {
+        content: "hello".into(),
+    });
+    kernel.step(&mut session).await.unwrap();
+
+    let req = llm.0.lock().unwrap()[0].clone();
+    assert_eq!(req.tools.len(), 1);
+    assert_eq!(req.tools[0].name, "echo");
+    assert_eq!(req.tools[0].side_effect, SideEffect::Pure);
+}
+
+#[tokio::test]
+async fn missing_tool_source_means_empty_catalog() {
+    let ctx = Arc::new(Context::new());
+    let llm = Arc::new(RecordingLlm(Mutex::new(vec![])));
+    ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm) as Arc<dyn LlmService>);
+    let kernel = Kernel::new(Arc::clone(&ctx), vec![]);
+
+    let mut session = Session::new();
+    session.append(SessionEvent::UserMessage {
+        content: "hello".into(),
+    });
+    kernel.step(&mut session).await.unwrap();
+
+    let req = llm.0.lock().unwrap()[0].clone();
+    assert!(req.tools.is_empty());
 }

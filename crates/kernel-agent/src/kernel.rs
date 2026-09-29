@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use cordis_core::{Context, CordisError, ScopeKey, Service, WaterfallDecision};
-use plugin_api::{CallCtx, SideEffect, Tool, ToolError};
+use plugin_api::{CallCtx, SideEffect, Tool, ToolError, ToolSpec};
 use serde_json::Value;
 use session_store::{Message, Session, SessionEvent};
 
@@ -23,10 +23,12 @@ use crate::middleware::Middleware;
 use crate::waterfall::{PreStepPayload, RequestErrorPayload, RequestPayload, RetryBudget, points};
 
 /// LLM 请求：直接复用 session-store 的中立投影，模型适配层再映射各家协议。
-/// `model` / `params` 可被 `agent/request` 决策环改写（§7.2）。
+/// `tools` 是本 step 的工具目录快照（LLM.md：统一 OpenAI 风格，适配器负责
+/// 转成各家格式）；`model` / `params` 可被 `agent/request` 决策环改写（§7.2）。
 #[derive(Debug, Clone, Default)]
 pub struct LlmRequest {
     pub messages: Vec<Message>,
+    pub tools: Vec<ToolSpec>,
     pub model: Option<String>,
     pub params: Value,
 }
@@ -63,6 +65,9 @@ pub trait LlmService: Send + Sync + 'static {
 #[async_trait]
 pub trait ToolSource: Send + Sync + 'static {
     async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError>;
+    /// 全目录快照：主循环每个 step 枚举给 LLM（真实模型要看到工具才会调）。
+    /// 只读枚举不失败——没有目录服务就返回空表，聊天照常。
+    async fn list(&self) -> Vec<ToolSpec>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,8 +157,12 @@ impl Kernel {
         // waterfall: pre-step —— 插件可拒绝/改写用户消息（§7.2）
         let messages = self.waterfall_pre(messages).await?;
 
+        // 工具目录快照随请求发给模型（真实模型要看到工具才会调；目录服务
+        // 缺失时视为空表，纯聊天不要求装配 ToolSource）
+        let tools = self.tool_catalog().await;
+
         // request-error 的 Retry 在 step 内部闭环，受重试预算约束（§7.2）
-        let resp = self.request_with_retry(messages).await?;
+        let resp = self.request_with_retry(messages, tools).await?;
 
         session.append(SessionEvent::AssistantMessage {
             content: resp.content.clone(),
@@ -251,12 +260,18 @@ impl Kernel {
     }
 
     /// `agent/request` 决策环：插件可改 model / params（§14 阶段四验收）。
-    async fn waterfall_request(&self, messages: Vec<Message>) -> Result<LlmRequest, KernelError> {
+    /// tools 随 payload 进决策环（决策方理论上可裁剪目录），出环后进 LlmRequest。
+    async fn waterfall_request(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolSpec>,
+    ) -> Result<LlmRequest, KernelError> {
         let payload = serde_json::to_value(RequestPayload {
             messages,
             model: None,
             // 空对象而非 null：改写环可以直接 entry/or_insert（§7.2）
             params: Value::Object(serde_json::Map::new()),
+            tools,
         })?;
         let out = self.ctx.events.waterfall(points::REQUEST, payload).await;
         match out.decision {
@@ -264,6 +279,7 @@ impl Kernel {
                 let parsed: RequestPayload = serde_json::from_value(out.payload)?;
                 Ok(LlmRequest {
                     messages: parsed.messages,
+                    tools: parsed.tools,
                     model: parsed.model,
                     params: parsed.params,
                 })
@@ -279,14 +295,30 @@ impl Kernel {
         }
     }
 
+    /// 工具目录快照：目录服务缺失 = 空表（纯聊天无需 ToolSource，§7.2）。
+    async fn tool_catalog(&self) -> Vec<ToolSpec> {
+        match self.scoped_dyn::<dyn ToolSource>() {
+            Ok(source) => source.list().await,
+            // 目录没装配就不给模型工具；真调到不存在的工具仍会走
+            // resolve 的 NotAvailable 失败路径，不会静默
+            Err(_) => Vec::new(),
+        }
+    }
+
     /// LLM 请求 + request-error 决策环。`agent/request-error` 返回
     /// `Retry { delay }` 时在 step 内部重试（重新走 request 决策环），
     /// 累计次数 / 累计延迟超预算即失败（§7.2 重试预算）。
-    async fn request_with_retry(&self, messages: Vec<Message>) -> Result<LlmResponse, KernelError> {
+    async fn request_with_retry(
+        &self,
+        messages: Vec<Message>,
+        tools: Vec<ToolSpec>,
+    ) -> Result<LlmResponse, KernelError> {
         let mut retries: u32 = 0;
         let mut total_delay = Duration::ZERO;
         loop {
-            let req = self.waterfall_request(messages.clone()).await?;
+            let req = self
+                .waterfall_request(messages.clone(), tools.clone())
+                .await?;
             let llm = self.scoped_dyn::<dyn LlmService>()?;
             match llm.complete(req).await {
                 Ok(resp) => return Ok(resp),

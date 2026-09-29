@@ -86,4 +86,18 @@ impl RegistryToolSource {
         }
         Err(ToolError::NotAvailable(name.to_string()))
     }
+
+    /// 全目录快照（供 LLM 请求枚举工具）：与 `resolve` 同序——active 实例
+    /// 按 id 排序，同名工具先声明者赢。
+    pub fn list_tools(&self) -> Vec<ToolSpec> {
+        let mut specs: Vec<ToolSpec> = Vec::new();
+        for (_id, inst) in self.registry.active_instances() {
+            for spec in &inst.manifest().tools {
+                if !specs.iter().any(|s| s.name == spec.name) {
+                    specs.push(spec.clone());
+                }
+            }
+        }
+        specs
+    }
 }

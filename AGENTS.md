@@ -5,7 +5,7 @@
 - **项目名 / 仓库名 / 文件夹名**：`Locowrk`（用户指定，三者一致）
 - **定位**：可热插拔、可回退、带桌面端（Tauri 2）的 Rust Agent 内核。"一切皆插件"——模型适配器、工具、会话存储、沙箱、Agent 循环本身都是插件，无特权模块
 - **权威设计文档**：[docs/design/DESIGN.md](docs/design/DESIGN.md)。修改任何核心模块前先读对应章节，不要凭猜测实现；实现与文档冲突时先对齐文档。文档 §8 中的 `agent-kernel/` 指内核 Cargo 工作区，其 crate 命名（`plugin-api`、`cordis-core` 等）沿用文档，对外项目名是 Locowrk
-- **当前进度**：落地路径**阶段八①已完成**（i18n 切换入口 + 最小设置面板：LLM 配置 / 会话存储位置 / 语言切换三块，`settings_get`/`settings_set`，数据根 `settings.json`，API Key 只落盘不出 IPC）；阶段八排期见 DESIGN.md §14 实现备注（下一步②真实 LLM，LLM.md 方案一：genai 统一库封装适配器；参考 docs/design/LLM.md 与 plugins.md）；阶段七（PluginService + 插件管理命令 + 市场 UI，全 UI 化含 Windows tombstone 两阶段 E2E）、阶段六（审批弹窗）、阶段五（Tauri 2 桌面端脚手架）、阶段四（Waterfall 插桩 + Scope 隔离）、阶段三（C ABI 插件热插拔）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交
+- **当前进度**：落地路径**阶段八②已完成**（真实 LLM：桌面端 `llm/` 模块以 genai 0.6 三合一适配器实现 `LlmService`（openai/anthropic/ollama，LLM.md 方案一），`LlmRequest` 携带工具目录快照（`ToolSource::list()`），配置读设置面板、保存即生效，model 未配置回落脚本替身；本机 Ollama 真窗口 E2E 全链路通过）；①（i18n + 最小设置面板）亦已完成；阶段八排期见 DESIGN.md §14 实现备注（下一步③第一批工具：tool-fs 只读 / tool-fetch / mw-audit，参考 docs/design/plugins.md）；阶段七（PluginService + 插件管理命令 + 市场 UI）、阶段六（审批弹窗）、阶段五（Tauri 2 桌面端脚手架）、阶段四（Waterfall 插桩 + Scope 隔离）、阶段三（C ABI 插件热插拔）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交
 
 ## 目录结构
 

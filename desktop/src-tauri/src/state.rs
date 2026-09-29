@@ -20,9 +20,9 @@ use tauri::AppHandle;
 
 use crate::approval::ApprovalHub;
 use crate::data_root;
-use crate::demo_llm::DemoLlm;
 use crate::demo_tools::SendEmailTool;
 use crate::events::{forward_plugin_states, EventSink, TauriSink};
+use crate::llm::AppLlm;
 use crate::plugins_root;
 use crate::settings::SettingsStore;
 use crate::tool_source::KernelToolSource;
@@ -42,8 +42,8 @@ pub struct AppState {
     /// session_id → 会话锁。会话在锁内串行聊天（tokio Mutex 可跨 await）；
     /// 外层 std Mutex 只护 map 存取，绝不跨 await 持有。
     pub sessions: Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>,
-    /// 设置存储（§13.1：LLM 配置 / 语言 / 存储位置展示）。
-    pub settings: SettingsStore,
+    /// 设置存储（§13.1）。Arc 共享给 AppLlm（每请求重读，改动即生效）。
+    pub settings: Arc<SettingsStore>,
 }
 
 pub fn init_state(app: AppHandle) -> AppState {
@@ -59,8 +59,20 @@ pub fn init_state(app: AppHandle) -> AppState {
             .with_builtin(Arc::new(SendEmailTool)),
     ));
 
-    // 模型适配器不特殊，也只是服务（§7.2）。阶段五用脚本替身。
-    ctx.provide_dyn::<dyn LlmService>(Arc::new(DemoLlm::new()));
+    // 数据根绑定一次，设置 / 插件编排 / LLM 配置共用（settings.json 同目录）。
+    let root = data_dir();
+    let settings: Arc<SettingsStore> = Arc::new(match SettingsStore::open(&root) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("{e}；设置降级到临时目录");
+            let fallback = std::env::temp_dir().join("locowrk-degraded-data");
+            SettingsStore::open(&fallback).expect("settings unavailable even in fallback dir")
+        }
+    });
+
+    // 模型适配器不特殊，也只是服务（§7.2）。阶段八②：genai 三合一适配器，
+    // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
+    ctx.provide_dyn::<dyn LlmService>(Arc::new(AppLlm::new(Arc::clone(&settings))));
 
     // 中间件链组装次序（§7.1）：Tracing → Timeout → CircuitBreaker
     let mw: Vec<Arc<dyn Middleware>> = vec![
@@ -73,17 +85,6 @@ pub fn init_state(app: AppHandle) -> AppState {
     let approval = Arc::new(ApprovalHub::new(Arc::clone(&sink)));
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
     let kernel = Arc::new(Kernel::new(ctx.clone(), mw).with_approval(resolver));
-
-    // 数据根绑定一次，插件编排与设置共用（设置文件 settings.json 同目录）。
-    let root = data_dir();
-    let settings = match SettingsStore::open(&root) {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::warn!("{e}；设置降级到临时目录");
-            let fallback = std::env::temp_dir().join("locowrk-degraded-data");
-            SettingsStore::open(&fallback).expect("settings unavailable even in fallback dir")
-        }
-    };
 
     // 插件编排（§11.2）：数据根缺省 ~/.agent-kernel（LOCOWRK_DATA_DIR
     // 可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。

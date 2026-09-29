@@ -26,6 +26,8 @@ plugin-service = { path = "../../crates/plugin-service" }
 session-store = { path = "../../crates/session-store" }
 
 async-trait = "0.1"
+# 三合一模型客户端（LLM.md 方案一）：openai / anthropic / ollama 统一封装
+genai = "0.6"
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

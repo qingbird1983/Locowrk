@@ -26,7 +26,8 @@ pub enum SideEffect {
 }
 
 /// 工具规格：每个工具自带 side_effect，不再有 manifest 级冗余字段（§5.2）。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// （PartialEq 仅供内核 payload 比较；derive 是 trait impl，不影响 C ABI。）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolSpec {
     pub name: String,
     pub description: String,

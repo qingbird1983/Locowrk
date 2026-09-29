@@ -29,7 +29,16 @@ onMounted(() => {
     >
       <div>
         <h1 class="text-sm font-semibold tracking-wide">Locowrk</h1>
-        <p class="text-xs text-neutral-500">{{ t("app.subtitle") }}</p>
+        <!-- 副标题实时反映当前模型（设置改动即生效，§13.1） -->
+        <p class="text-xs text-neutral-500">
+          {{
+            t("app.subtitle", {
+              model:
+                settings.view?.llm.model.trim() ||
+                t("app.modelFallback"),
+            })
+          }}
+        </p>
       </div>
       <div class="flex items-center gap-2">
         <!-- 顶级导航（§13.1）：聊天 / 插件市场 / 设置 -->

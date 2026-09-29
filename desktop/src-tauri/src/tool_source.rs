@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use kernel_agent::ToolSource;
-use plugin_api::{Tool, ToolError};
+use plugin_api::{Tool, ToolError, ToolSpec};
 use plugin_host::RegistryToolSource;
 
 /// 注册表 → 工具目录服务。`resolve` 先查内置表，再委托注册表实现。
@@ -40,5 +40,20 @@ impl ToolSource for KernelToolSource {
             return Ok(Arc::clone(tool));
         }
         self.inner.resolve(name)
+    }
+
+    async fn list(&self) -> Vec<ToolSpec> {
+        // 与 resolve 同优先级：内置替身先出现，插件不得顶掉同名内置
+        let mut specs: Vec<ToolSpec> = self
+            .builtins
+            .iter()
+            .map(|(_, t)| t.spec().clone())
+            .collect();
+        for spec in self.inner.list_tools() {
+            if !specs.iter().any(|s| s.name == spec.name) {
+                specs.push(spec);
+            }
+        }
+        specs
     }
 }

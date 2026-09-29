@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use cordis_core::{Context, ScopeKey, WaterfallListener};
 use kernel_agent::points;
 use kernel_agent::{Kernel, StepOutcome, ToolSource};
-use plugin_api::{Tool, ToolError};
+use plugin_api::{Tool, ToolError, ToolSpec};
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use semver::Version;
 use session_store::{Session, SessionEvent};
@@ -37,6 +37,12 @@ impl ToolSource for CompositeToolSource {
             return Ok(Arc::clone(&self.danger) as Arc<dyn Tool>);
         }
         self.registry.resolve(name).await
+    }
+
+    async fn list(&self) -> Vec<ToolSpec> {
+        let mut specs = self.registry.list().await;
+        specs.push(self.danger.spec().clone());
+        specs
     }
 }
 
@@ -129,6 +135,10 @@ impl ToolSource for ScopeBToolSource {
         } else {
             Err(ToolError::NotAvailable(name.to_string()))
         }
+    }
+
+    async fn list(&self) -> Vec<ToolSpec> {
+        vec![self.echo.spec().clone()]
     }
 }
 

@@ -85,6 +85,10 @@ impl ToolSource for MockSource {
             .map(|t| Arc::clone(t) as Arc<dyn Tool>)
             .ok_or_else(|| ToolError::NotAvailable(name.to_string()))
     }
+
+    async fn list(&self) -> Vec<ToolSpec> {
+        self.tools.values().map(|t| t.spec.clone()).collect()
+    }
 }
 
 /// 按脚本弹出响应；记录收到的请求供断言。

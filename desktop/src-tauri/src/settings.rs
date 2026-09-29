@@ -117,6 +117,12 @@ impl SettingsStore {
         self.project(&s)
     }
 
+    /// 后端专用：LLM 配置全量（含 api_key 原值）——只给模型适配器读，
+    /// 不进任何 IPC 投影。
+    pub fn llm(&self) -> LlmSettings {
+        self.inner.lock().expect("settings poisoned").llm.clone()
+    }
+
     /// 校验 → 应用到副本 → 落盘成功才提交内存。返回最新投影。
     pub fn update(
         &self,

@@ -1,7 +1,8 @@
 // English UI copy (DESIGN.md §13.5). Session content is data, never listed here.
 export default {
   app: {
-    subtitle: "Stage 7 · plugin market + hot-swap management · model = scripted stub",
+    subtitle: "Stage 8 · real model wired · current model = {model}",
+    modelFallback: "scripted stub (Settings → LLM)",
   },
   nav: {
     chat: "Chat",
@@ -14,7 +15,7 @@ export default {
   },
   chat: {
     empty:
-      'Send any message to start. Include "echo" to trigger the tool-echo plugin; include "shout" to trigger tool-shout — install it from the market on the Plugins page first; include "email" to trigger send_email — an irreversible tool that raises an approval dialog.',
+      "Send any message to start. The model calls enabled plugin tools as needed (each call shows as a tool card); irreversible tools such as send_email raise an approval dialog first.",
     placeholder: "Type a message… (Enter to send, Shift+Enter for newline)",
     send: "Send",
   },
@@ -64,7 +65,7 @@ export default {
     title: "Settings",
     llmTitle: "LLM configuration",
     llmHint:
-      "Takes effect once the real model adapter lands (stage 8); chat is still driven by the scripted stub. The API key is stored only in the local data directory and is never echoed back to the UI.",
+      "Applies immediately after saving (no restart). The API key is stored only in the local data directory and is never echoed back to the UI.",
     provider: "Provider",
     model: "Model",
     baseUrl: "Base URL",

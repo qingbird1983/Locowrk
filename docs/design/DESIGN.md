@@ -1076,6 +1076,17 @@ impl Kernel {
 > 次数与延迟，超限即返回 `RetryBudgetExhausted` 错误；`StepOutcome` 不再有
 > `Retry` 变体（对外只剩 `Continue`）。
 
+> **实现落点（v2.8，阶段八②真实模型）**：`LlmRequest` 增加 `tools` 字段
+> （本 step 的工具目录快照，`ToolSpec` 复用 plugin-api 定义），随
+> `agent/request` 决策环进 payload（`serde(default)` 保持与旧决策方互通）——
+> 真实模型要看到工具定义才会发起调用（LLM.md）。相应地 `ToolSource` 增加
+> `list()`：目录服务缺失时视为空表，纯聊天不要求装配 ToolSource，真调到
+> 不存在的工具仍走 `resolve` 的 `NotAvailable` 失败路径。桌面端经 genai
+> 三合一适配器（LLM.md 方案一）实现 openai / anthropic / ollama，配置来自
+> 设置面板（§13.1），每次请求前重读、保存即生效；`ServiceTargetResolver`
+> 按设置的 provider 强制路由（不做模型名前缀魔法），base_url 覆盖端点，
+> api_key 只在后端读取。model 未配置时回落演示替身（开箱即用）。
+
 ---
 
 # 第二部分：工程组织
@@ -2134,6 +2145,12 @@ export const usePluginStore = defineStore('plugins', {
 > ④ 回头打磨市场细节（副作用徽章、回退下拉、更新按钮）→ ⑤ 托盘 + 快捷键
 > （发版前）→ ⑥ WASM 加载器（独立里程碑，看需求，§5.8）。界面先骨架后
 > 美化（用户指定）：功能按钮接通优先，视觉打磨放最后。
+>
+> **进度**：① 已完成（§13.1 备注）。② 已完成（v2.8，§7.2 备注）：桌面端
+> `llm/` 模块以 genai 0.6 实现 `LlmService`，`LlmRequest` 携带工具目录快照
+> （`ToolSource::list()`），配置读设置面板、保存即生效，model 未配置回落
+> 脚本替身；真窗口 E2E（本机 Ollama 9B）全链路通过——模型按 schema 自选
+> 参数调用 tool-echo 插件、工具结果回传后给最终回答。下一步③第一批工具。
 
 **阶段一和阶段二是试金石**：如果内核的服务组合和 Effect 撤销链设计干净，后续所有能力都是叠加。**阶段五和阶段六是桌面端的试金石**：如果 Tauri IPC 层能干净地桥接内核事件流，后续插件管理 UI 都是在这个模式上叠加。
 
@@ -2268,6 +2285,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.7（补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.8（补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*

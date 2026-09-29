@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use kernel_agent::ToolSource;
-use plugin_api::{Tool, ToolError};
+use plugin_api::{Tool, ToolError, ToolSpec};
 use plugin_host::RegistryToolSource;
 
 /// 注册表 → 工具目录服务。`resolve` 直接委托固有方法实现。
@@ -24,5 +24,9 @@ impl KernelToolSource {
 impl ToolSource for KernelToolSource {
     async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
         self.inner.resolve(name)
+    }
+
+    async fn list(&self) -> Vec<ToolSpec> {
+        self.inner.list_tools()
     }
 }
