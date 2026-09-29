@@ -101,6 +101,17 @@ impl Context {
             .ok_or_else(CordisError::service_missing::<T>)
     }
 
+    /// 依赖探针：服务键是否已有提供者（runtime 激活门的依据，§3.3）。
+    pub fn has_service(&self, key: TypeId) -> bool {
+        self.services.contains_key(&key)
+    }
+
+    /// 某 Fiber 当前登记提供的服务键（runtime 建 service_providers 表的
+    /// 来源，§3.3）。账本是唯一记录处（§3.1：Fiber 不维护副本）。
+    pub(crate) fn provided_keys_of(&self, fiber_id: FiberId) -> Vec<TypeId> {
+        self.effects.keys_by_fiber(fiber_id)
+    }
+
     /// 显式撤销某个 Effect（§3.1/§3.2）：先出账、放锁、再执行逆操作。
     /// 重复撤销返回 `EffectNotFound`（两段式消费，幂等）。
     pub async fn revoke(&self, id: EffectId) -> Result<()> {
@@ -127,6 +138,7 @@ impl Context {
     ) -> EffectId {
         self.effects.push(
             current_fiber_id(),
+            key,
             Box::new(Unprovide {
                 key,
                 previous,

@@ -4,6 +4,7 @@
 //! Service for T {}`，§3.1），任何 Send+Sync+'static 类型自动满足，
 //! 测试类型不需要也不能手写 `impl Service`。
 
+use std::any::TypeId;
 use std::sync::Arc;
 
 use super::Context;
@@ -96,4 +97,30 @@ async fn revoke_by_fiber_isolates_interleaved_effects() {
 
     ctx.provide(Counter(42));
     assert_eq!(ctx.use_service::<Counter>().unwrap().0, 42);
+}
+
+#[tokio::test]
+async fn provided_keys_of_reflects_fiber_registrations() {
+    let ctx = Context::new();
+    ctx.provide(Counter(0)); // HOST
+
+    let keys = {
+        let _scope = FiberScope::enter(FiberId(9));
+        ctx.provide(Counter(1));
+        ctx.provide_dyn::<dyn Greeter>(Arc::new(En));
+        ctx.provided_keys_of(FiberId(9))
+    };
+
+    assert_eq!(keys.len(), 2);
+    assert!(keys.contains(&TypeId::of::<Counter>()));
+    assert!(keys.contains(&TypeId::of::<dyn Greeter>()));
+    // HOST 的登记独立（§9.2 交错独立性）
+    assert_eq!(
+        ctx.provided_keys_of(FiberId::HOST),
+        vec![TypeId::of::<Counter>()]
+    );
+
+    // 撤销后账目随账本清空（账本是唯一记录处，§3.1）
+    ctx.revoke_by_fiber(FiberId(9)).await;
+    assert!(ctx.provided_keys_of(FiberId(9)).is_empty());
 }

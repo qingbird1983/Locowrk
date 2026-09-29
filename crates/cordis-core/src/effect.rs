@@ -4,6 +4,7 @@
 //! Disposer 可能回调 `Context`，持锁 await 会死锁（std::sync::Mutex 不可重入）。
 //! 领取即所有权转移（at-most-once）：重复 revoke 得到 `EffectNotFound`，天然幂等。
 
+use std::any::TypeId;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -26,6 +27,8 @@ pub trait Disposer: Send + Sync + 'static {
 pub(crate) struct EffectEntry {
     pub(crate) id: EffectId,
     pub(crate) fiber_id: FiberId,
+    /// 服务键：runtime 反查某 Fiber 提供了哪些服务的依据（§3.3）
+    pub(crate) key: TypeId,
     pub(crate) disposer: Box<dyn Disposer>,
 }
 
@@ -38,7 +41,12 @@ pub(crate) struct EffectLedger {
 
 impl EffectLedger {
     /// 登记一次可逆修改，返回 EffectId。
-    pub(crate) fn push(&self, fiber_id: FiberId, disposer: Box<dyn Disposer>) -> EffectId {
+    pub(crate) fn push(
+        &self,
+        fiber_id: FiberId,
+        key: TypeId,
+        disposer: Box<dyn Disposer>,
+    ) -> EffectId {
         let id = EffectId(self.next.fetch_add(1, Ordering::Relaxed));
         self.inner
             .lock()
@@ -46,6 +54,7 @@ impl EffectLedger {
             .push(EffectEntry {
                 id,
                 fiber_id,
+                key,
                 disposer,
             });
         id
@@ -70,5 +79,18 @@ impl EffectLedger {
             entries.drain(..).partition(|e| e.fiber_id == fiber_id);
         *entries = rest;
         mine.into_iter().map(|e| e.disposer).collect()
+    }
+
+    /// 某 Fiber 当前登记提供的服务键（去重、保持登记顺序）。
+    /// runtime 用它建 service_providers 表（§3.3）；账本是唯一记录处（§3.1）。
+    pub(crate) fn keys_by_fiber(&self, fiber_id: FiberId) -> Vec<TypeId> {
+        let entries = self.inner.lock().expect("effect ledger lock poisoned");
+        let mut keys: Vec<TypeId> = Vec::new();
+        for entry in entries.iter().filter(|e| e.fiber_id == fiber_id) {
+            if !keys.contains(&entry.key) {
+                keys.push(entry.key);
+            }
+        }
+        keys
     }
 }
