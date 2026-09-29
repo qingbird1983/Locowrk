@@ -89,9 +89,18 @@ fn tools_map_to_openai_style() {
 
 #[test]
 fn adapter_kind_follows_provider() {
-    assert!(matches!(adapter_kind("openai"), genai::adapter::AdapterKind::OpenAI));
-    assert!(matches!(adapter_kind("anthropic"), genai::adapter::AdapterKind::Anthropic));
-    assert!(matches!(adapter_kind("ollama"), genai::adapter::AdapterKind::Ollama));
+    assert!(matches!(
+        adapter_kind("openai"),
+        genai::adapter::AdapterKind::OpenAI
+    ));
+    assert!(matches!(
+        adapter_kind("anthropic"),
+        genai::adapter::AdapterKind::Anthropic
+    ));
+    assert!(matches!(
+        adapter_kind("ollama"),
+        genai::adapter::AdapterKind::Ollama
+    ));
 }
 
 /// model 未配置 → 演示替身（开箱即用，不碰网络）。
@@ -123,15 +132,17 @@ async fn configured_model_without_key_fails_fast() {
     }
     let root = temp_root("real-path");
     let store = Arc::new(SettingsStore::open(&root).unwrap());
-    store.update(
-        None,
-        Some(crate::settings::LlmUpdate {
-            provider: Some("openai".into()),
-            model: Some("gpt-4o-mini".into()),
-            base_url: None,
-            api_key: None,
-        }),
-    ).unwrap();
+    store
+        .update(
+            None,
+            Some(crate::settings::LlmUpdate {
+                provider: Some("openai".into()),
+                model: Some("gpt-4o-mini".into()),
+                base_url: None,
+                api_key: None,
+            }),
+        )
+        .unwrap();
     let llm = AppLlm::new(Arc::clone(&store));
 
     let err = llm
@@ -153,8 +164,8 @@ async fn configured_model_without_key_fails_fast() {
 fn empty_call_ids_get_synthesized() {
     use genai::adapter::AdapterKind;
     use genai::chat::{ChatResponse, MessageContent, Usage};
-    use genai::{ModelIden};
     use genai::chat::{ContentPart, ToolCall as GenAiCall};
+    use genai::ModelIden;
 
     let model = || ModelIden::new(AdapterKind::OpenAI, "test-model");
     let response = |calls: Vec<GenAiCall>, text: &str| ChatResponse {

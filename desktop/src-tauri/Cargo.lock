@@ -1978,6 +1978,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "cordis-core",
+ "jiff",
  "plugin-api",
  "serde",
  "serde_json",

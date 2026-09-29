@@ -2,15 +2,19 @@
 # 构建并暂存开发态插件（DESIGN.md §11.3 开发态目录 plugins/{id}/{version}/）。
 #
 # tool-echo 的 manifest 版本来自编译期环境变量 LOCOWRK_PLUGIN_VERSION，
-# 因此按 1.2.0 / 1.3.0 各构建一次，得到多版本并存所需的双产物。
-# kernel-bin 的 demo 与 plugin-host 的集成测试依赖这里的暂存布局。
+# 按 1.2.0 / 1.3.0 各构建一次，得到多版本并存所需的双产物。
+# tool-fs / tool-fetch（阶段八③第一批工具）单版本 1.0.0。
+# kernel-bin 的 demo、plugin-host 的集成测试与桌面端开发态装载
+# 依赖这里的暂存布局。
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
 find_artifact() {
-  for cand in target/debug/tool_echo.dll target/debug/libtool_echo.so target/debug/libtool_echo.dylib; do
+  local id="$1" stem
+  stem="${id//-/_}"
+  for cand in "target/debug/${stem}.dll" "target/debug/lib${stem}.so" "target/debug/lib${stem}.dylib"; do
     if [[ -f "$cand" ]]; then
       printf '%s' "$cand"
       return 0
@@ -20,24 +24,26 @@ find_artifact() {
 }
 
 stage() {
-  local ver="$1"
-  echo "==> build tool-echo $ver"
-  LOCOWRK_PLUGIN_VERSION="$ver" cargo build -p tool-echo --quiet
+  local id="$1" ver="$2"
+  echo "==> build $id $ver"
+  LOCOWRK_PLUGIN_VERSION="$ver" cargo build -p "$id" --quiet
 
   local src
-  if ! src="$(find_artifact)"; then
-    echo "error: plugin artifact not found under target/debug/" >&2
+  if ! src="$(find_artifact "$id")"; then
+    echo "error: $id artifact not found under target/debug/" >&2
     exit 1
   fi
 
-  local dst="plugins/tool-echo/$ver"
+  local dst="plugins/$id/$ver"
   mkdir -p "$dst"
   cp -f "$src" "$dst/"
   echo "    staged -> $dst/$(basename "$src")"
 }
 
-stage 1.2.0
-stage 1.3.0
+stage tool-echo 1.2.0
+stage tool-echo 1.3.0
+stage tool-fs 1.0.0
+stage tool-fetch 1.0.0
 
-echo "done: plugins/tool-echo/{1.2.0,1.3.0}"
+echo "done: plugins/tool-echo/{1.2.0,1.3.0} plugins/tool-fs/1.0.0 plugins/tool-fetch/1.0.0"
 echo "next: cargo run -p kernel-bin -- demo"

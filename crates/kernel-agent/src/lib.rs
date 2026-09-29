@@ -21,5 +21,8 @@ pub use kernel::{
     Kernel, KernelError, LlmError, LlmRequest, LlmResponse, LlmService, StepOutcome, ToolCallReq,
     ToolSource,
 };
-pub use middleware::{CircuitBreaker, Middleware, Next, Retry, Timeout, Tracing};
+pub use middleware::{
+    Audit, AuditEntry, AuditSink, CircuitBreaker, JsonlAuditSink, Middleware, Next, Retry, Timeout,
+    Tracing,
+};
 pub use waterfall::{RequestErrorPayload, RequestPayload, RetryBudget, points};

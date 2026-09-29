@@ -6,6 +6,7 @@
 //! 审批门在 Kernel（§7.2）——决策必须作为 ApprovalDecided 事件进会话日志，
 //! 中间件没有会话句柄（见 `crate::approval`）。
 
+mod audit;
 mod circuit_breaker;
 mod retry;
 mod timeout;
@@ -14,6 +15,7 @@ mod trace;
 #[cfg(test)]
 mod tests;
 
+pub use audit::{Audit, AuditEntry, AuditSink, JsonlAuditSink};
 pub use circuit_breaker::CircuitBreaker;
 pub use retry::Retry;
 pub use timeout::Timeout;
@@ -55,6 +57,17 @@ impl<'a> Next<'a> {
     /// 终点工具名（Tracing / Timeout / 熔断的错误消息要用）。
     pub(crate) fn tool_name(&self) -> &str {
         self.tool.spec().name.as_str()
+    }
+
+    /// 终点工具规格（Audit 记 side_effect 用）。
+    pub(crate) fn tool_spec(&self) -> &plugin_api::ToolSpec {
+        self.tool.spec()
+    }
+
+    /// 本次调用参数（Audit 记录"Agent 到底干了什么"；args 归 Next 所有，
+    /// 只出借用，中间件仍不能改写下游参数）。
+    pub(crate) fn args(&self) -> &Value {
+        &self.args
     }
 
     pub async fn proceed(&self, ctx: &mut CallCtx) -> Result<Value, ToolError> {

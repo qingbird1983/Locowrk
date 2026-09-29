@@ -1,4 +1,4 @@
-//! 中间件套件单测：Tracing / Timeout / Retry / CircuitBreaker。
+//! 中间件套件单测：Tracing / Timeout / Retry / CircuitBreaker / Audit。
 //! 用 mock 工具直连 `Next` 链验证行为（§7.1）。
 
 use std::sync::Arc;
@@ -9,7 +9,10 @@ use async_trait::async_trait;
 use plugin_api::{CallCtx, SideEffect, Tool, ToolError, ToolSpec};
 use serde_json::{Value, json};
 
-use super::{CircuitBreaker, Middleware, Next, Retry, Timeout, Tracing};
+use super::{
+    Audit, AuditEntry, AuditSink, CircuitBreaker, JsonlAuditSink, Middleware, Next, Retry, Timeout,
+    Tracing,
+};
 
 static TOOL_VERSION: semver::Version = semver::Version::new(0, 0, 1);
 
@@ -218,4 +221,79 @@ async fn circuit_breaker_state_is_shared_across_calls() {
         .expect_err("打开状态应快速拒绝");
     assert!(err.to_string().contains("circuit open"), "{err}");
     assert_eq!(calls.load(Ordering::Relaxed), 1, "打开期不到达工具");
+}
+
+// ---------- Audit（plugins.md mw-audit，§7.1 洋葱模型落点）----------
+
+/// 内存出口：捕获记录供断言。
+#[derive(Default, Clone)]
+struct MemSink {
+    entries: Arc<std::sync::Mutex<Vec<AuditEntry>>>,
+}
+
+impl AuditSink for MemSink {
+    fn record(&self, entry: AuditEntry) {
+        self.entries.lock().unwrap().push(entry);
+    }
+}
+
+#[tokio::test]
+async fn audit_records_args_side_effect_and_failure() {
+    let sink = Arc::new(MemSink::default());
+    let mw: Arc<dyn Middleware> = Arc::new(Audit::new(Arc::clone(&sink) as Arc<dyn AuditSink>));
+
+    // Compensable 规格 + 首调必败：失败那次也要留痕，且带参数与副作用等级
+    let tool = MockTool {
+        spec: ToolSpec {
+            name: "mock".into(),
+            description: "mock".into(),
+            schema: json!({}),
+            side_effect: SideEffect::Compensable {
+                undo_tool: "undo_mock".into(),
+            },
+        },
+        calls: AtomicU32::new(0),
+        fail_first: 1,
+        sleep: Duration::ZERO,
+    };
+    let mut ctx = CallCtx::new();
+    let out = Next::new(std::slice::from_ref(&mw), Arc::new(tool), json!({"k": "v"}))
+        .proceed(&mut ctx)
+        .await;
+    assert!(out.is_err(), "fail_first(1) 首调应失败");
+
+    let entries = sink.entries.lock().unwrap().clone();
+    assert_eq!(entries.len(), 1, "一次调用一条记录");
+    let e = &entries[0];
+    assert_eq!(e.tool, "mock");
+    assert_eq!(e.side_effect, "compensable");
+    assert_eq!(e.args["k"], "v");
+    assert!(!e.ok);
+    assert!(e.error.as_deref().unwrap_or("").contains("boom"));
+    assert!(e.call_id.is_none(), "ctx 未设置 call_id 时不出现在记录里");
+    assert!(e.ts.contains('T'), "ts 应是 RFC 3339: {}", e.ts);
+}
+
+#[tokio::test]
+async fn audit_jsonl_sink_writes_parseable_lines() {
+    let dir = std::env::temp_dir().join(format!("locowrk-audit-test-{}", std::process::id()));
+    let file = dir.join("audit.jsonl");
+    let _ = std::fs::remove_file(&file);
+
+    let mw: Arc<dyn Middleware> = Arc::new(Audit::new(Arc::new(JsonlAuditSink::new(&file))));
+    run(Arc::clone(&mw), MockTool::fail_first(0))
+        .await
+        .expect("成功调用不受审计影响");
+
+    let text = std::fs::read_to_string(&file).expect("audit 文件已落盘");
+    let mut lines = text.lines();
+    let v: serde_json::Value =
+        serde_json::from_str(lines.next().expect("至少一行")).expect("JSONL 可解析");
+    assert_eq!(v["tool"], "mock");
+    assert_eq!(v["side_effect"], "pure");
+    assert_eq!(v["ok"].as_bool(), Some(true));
+    assert!(v.get("error").is_none(), "成功记录不带 error 键");
+    assert!(lines.next().is_none(), "一次调用一行");
+
+    let _ = std::fs::remove_file(&file);
 }

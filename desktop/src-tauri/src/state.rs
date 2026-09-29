@@ -12,7 +12,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use cordis_core::Context;
-use kernel_agent::{CircuitBreaker, Kernel, LlmService, Middleware, Timeout, ToolSource, Tracing};
+use kernel_agent::{
+    Audit, CircuitBreaker, JsonlAuditSink, Kernel, LlmService, Middleware, Timeout, ToolSource,
+    Tracing,
+};
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use plugin_service::{LocalDirMarket, PluginService};
 use session_store::Session;
@@ -74,9 +77,14 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
     ctx.provide_dyn::<dyn LlmService>(Arc::new(AppLlm::new(Arc::clone(&settings))));
 
-    // 中间件链组装次序（§7.1）：Tracing → Timeout → CircuitBreaker
+    // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。
+    // Audit（plugins.md mw-audit）挂在超时/熔断外侧：被拒的调用也留痕；
+    // 记录追加写数据根 audit.jsonl（JSONL，只增不改，与会话日志同纪律）。
     let mw: Vec<Arc<dyn Middleware>> = vec![
         Arc::new(Tracing),
+        Arc::new(Audit::new(Arc::new(JsonlAuditSink::new(
+            root.join("audit.jsonl"),
+        )))),
         Arc::new(Timeout::new(Duration::from_secs(30))),
         Arc::new(CircuitBreaker::new(5, Duration::from_secs(30))),
     ];

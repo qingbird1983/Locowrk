@@ -46,7 +46,10 @@ pub fn to_genai_messages(messages: &[Message]) -> Vec<ChatMessage> {
         .iter()
         .map(|m| match m {
             Message::User { content } => ChatMessage::user(content.clone()),
-            Message::Assistant { content, tool_calls } => {
+            Message::Assistant {
+                content,
+                tool_calls,
+            } => {
                 if tool_calls.is_empty() {
                     ChatMessage::assistant(content.clone())
                 } else {
@@ -107,9 +110,9 @@ fn build_client(cfg: &LlmSettings) -> Client {
     // Key：设置优先；未填则不装 resolver，交给 genai 的环境变量解析
     if let Some(key) = &cfg.api_key {
         let key = key.clone();
-        builder = builder.with_auth_resolver(AuthResolver::from_resolver_fn(
-            move |_model_iden| Ok(Some(AuthData::from_single(key.clone()))),
-        ));
+        builder = builder.with_auth_resolver(AuthResolver::from_resolver_fn(move |_model_iden| {
+            Ok(Some(AuthData::from_single(key.clone())))
+        }));
     }
 
     let provider = cfg.provider.clone();
@@ -119,8 +122,7 @@ fn build_client(cfg: &LlmSettings) -> Client {
             if let Some(url) = &base_url {
                 target.endpoint = Endpoint::from_owned(url.clone());
             }
-            target.model =
-                ModelIden::new(adapter_kind(&provider), target.model.model_name.clone());
+            target.model = ModelIden::new(adapter_kind(&provider), target.model.model_name.clone());
             Ok(target)
         },
     ));
@@ -148,7 +150,10 @@ pub(crate) fn map_response(res: ChatResponse, next_call: &AtomicU64) -> LlmRespo
             }
         })
         .collect();
-    LlmResponse { content, tool_calls }
+    LlmResponse {
+        content,
+        tool_calls,
+    }
 }
 
 pub struct GenAiLlm {

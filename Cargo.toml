@@ -10,6 +10,8 @@ members = [
     "crates/kernel-bin",
     "plugins-src/tool-echo",
     "plugins-src/tool-shout",
+    "plugins-src/tool-fs",
+    "plugins-src/tool-fetch",
 ]
 # 桌面端是独立 Cargo 包（tauri 脚手架，有自己的 lockfile/构建流程），
 # 不进本 workspace，只经 path 依赖引用内核 crate（DESIGN.md §10.2）。
@@ -33,6 +35,8 @@ semver = { version = "1", features = ["serde"] }
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+# 审计记录的时间戳（RFC 3339，middleware/audit.rs）
+jiff = "0.2"
 
 # 内部 crate（依赖方向严格单向，见 DESIGN.md §8 依赖图）
 plugin-api = { path = "crates/plugin-api" }

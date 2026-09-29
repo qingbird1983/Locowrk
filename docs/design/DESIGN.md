@@ -967,6 +967,16 @@ pub fn build_chain(mw: Vec<Arc<dyn Middleware>>, tool: Arc<dyn Tool>) -> Service
 > fail-safe 拒绝）。§7.1 链上的 Approval 位保留给未来无会话上下文的独立
 > 调用路径；本阶段链上实装的是 Tracing → Timeout → Retry → CircuitBreaker。
 
+> **审计落点（v2.9，阶段八③）**：plugins.md 的 `mw-audit` 以**宿主侧中间件**
+> 落地（`kernel-agent::middleware::audit`：`AuditEntry` / `AuditSink` /
+> `JsonlAuditSink` / `Audit`）——C ABI 的 `PluginKind::Middleware` 仍是占位
+> 类别（§5.2），中间件插件化（经 FFI 挂链）推迟到 ABI 扩展时再做。链序
+> Tracing → **Audit** → Timeout → CircuitBreaker：审计在超时/熔断外侧，
+> 被拒的调用也留痕；审批拒绝的调用不进链，以 `ApprovalDecided` 事件留在
+> 会话日志。记录为 JSONL 追加写（desktop 数据根 `audit.jsonl`，一行一次
+> 调用，含 args / side_effect / ok / error / 耗时），文件只增不改，与会话
+> 日志同一纪律；单条写失败只告警不上抛。
+
 ### 7.2 Agent 主循环
 
 ```rust
@@ -2146,6 +2156,16 @@ export const usePluginStore = defineStore('plugins', {
 > （发版前）→ ⑥ WASM 加载器（独立里程碑，看需求，§5.8）。界面先骨架后
 > 美化（用户指定）：功能按钮接通优先，视觉打磨放最后。
 >
+> **实现落点（v2.9，③已完成）**：`tool-fs@1.0.0`（`fs.read` / `fs.list` /
+> `fs.grep`，全 `Pure`，只读先行；写入能力第二批按 `Compensable` 备份做）、
+> `tool-fetch@1.0.0`（HTTP GET，`Pure`；4xx/5xx 按数据返回而非报错，传输层
+> 错误才失败；响应体限长防灌爆上下文）——两者都是真 C ABI 插件
+> （`plugins-src/`，`build_plugins.sh` 暂存），桌面端开发态装载后自动进
+> 工具目录。`mw-audit` 以宿主侧中间件落地（落点见 §7.1 v2.9 备注）。E2E：
+> plugin-host 集成测试真实 dlopen 两插件（fetch 打本进程 TCP 的 HTTP 服务，
+> 全离线）；kernel-agent / desktop 单测含审计记录与 JSONL 落盘。下一步④
+> （市场细节打磨）。
+>
 > **进度**：① 已完成（§13.1 备注）。② 已完成（v2.8，§7.2 备注）：桌面端
 > `llm/` 模块以 genai 0.6 实现 `LlmService`，`LlmRequest` 携带工具目录快照
 > （`ToolSource::list()`），配置读设置面板、保存即生效，model 未配置回落
@@ -2285,6 +2305,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.8（补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.9（补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
