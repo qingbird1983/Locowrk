@@ -1135,7 +1135,7 @@ agent-kernel/
 ```
 kernel-bin        → kernel-agent + plugin-service + session-store   （组装点）
 desktop/src-tauri → kernel-agent + plugin-service + session-store   （组装点）
-kernel-agent      → cordis-core + plugin-api
+kernel-agent      → cordis-core + plugin-api + session-store
 plugin-service    → plugin-host + cordis-core
 cordis-core       → plugin-api
 plugin-host       → plugin-api
@@ -1144,7 +1144,7 @@ session-store     → plugin-api
 
 - `plugin-api`：不依赖任何其他 crate
 - `cordis-core`：只依赖 `plugin-api`
-- `kernel-agent`：依赖 `cordis-core` + `plugin-api`
+- `kernel-agent`：依赖 `cordis-core` + `plugin-api` + `session-store`（§7.2 的 `Kernel::step` 直接消费会话日志 `Session`；session-store 不反向依赖 kernel-agent，无环）
 - `plugin-host`：依赖 `plugin-api`
 - `plugin-service`：依赖 `plugin-host` + `cordis-core`
 - `session-store`：只依赖 `plugin-api`

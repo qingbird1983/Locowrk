@@ -47,7 +47,7 @@ Git hooks 在 `.githooks/`（随仓库提交）。本仓库已通过 `git config
 ```
 kernel-bin        → kernel-agent + plugin-service + session-store   （组装点）
 desktop/src-tauri → kernel-agent + plugin-service + session-store   （组装点）
-kernel-agent      → cordis-core + plugin-api
+kernel-agent      → cordis-core + plugin-api + session-store
 plugin-service    → plugin-host + cordis-core
 cordis-core       → plugin-api
 plugin-host       → plugin-api
