@@ -34,6 +34,9 @@ pub struct InstalledPlugin {
     pub active_version: Option<String>,
     /// 本进程已加载的全部版本。
     pub loaded_versions: Vec<String>,
+    /// 展示元数据（packaging.md v2：多语言名 / 描述 / 图标 data URL /
+    /// origin 分组 / 副作用清单）。manifest 缺失时为缺省投影（§7 矩阵）。
+    pub display: crate::display::PluginDisplay,
 }
 
 /// 安装 Effect 的逆操作：逻辑卸载（active 摘除 + graveyard，永不 dlclose）。

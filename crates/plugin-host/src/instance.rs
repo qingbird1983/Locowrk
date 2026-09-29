@@ -11,6 +11,7 @@
 
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use libloading::Library;
@@ -35,10 +36,14 @@ pub struct PluginInstance {
     _lib: Library,
     /// 同实例的并发调用上限（§5.5：适配器持有 permit，实例共享限额）。
     sem: Arc<Semaphore>,
+    /// 加载来源（dll 所在路径）。其父目录是 manifest.json 与图标的
+    /// 定位基础（packaging.md §3.1：每个版本目录自包含）。
+    path: PathBuf,
 }
 
 impl PluginInstance {
     /// loader 专用构造：所有字段已在加载路径上校验完毕。
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         manifest: PluginManifest,
         version: semver::Version,
@@ -47,6 +52,7 @@ impl PluginInstance {
         free: FreeBufFn,
         handle: *mut c_void,
         lib: Library,
+        path: PathBuf,
     ) -> Self {
         Self {
             manifest,
@@ -57,6 +63,7 @@ impl PluginInstance {
             handle,
             _lib: lib,
             sem: Arc::new(Semaphore::new(16)),
+            path,
         }
     }
 
@@ -66,6 +73,11 @@ impl PluginInstance {
 
     pub fn version(&self) -> &semver::Version {
         &self.version
+    }
+
+    /// 加载来源路径（dll 所在位置；父目录即版本目录）。
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     /// manifest 声明的工具规格（名字查找，§5.2）。

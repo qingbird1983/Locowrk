@@ -12,15 +12,26 @@
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 
+use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::io::Read;
 use std::path::PathBuf;
 
 use plugin_api::ffi::log_level;
-use plugin_api::manifest::{PluginKind, PluginManifest};
+use plugin_api::manifest::{
+    Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
+};
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
+
+/// 双语展示元数据样板（packaging.md §2.2）。
+fn zh_en(zh: &str, en: &str) -> LocalizedString {
+    LocalizedString(BTreeMap::from([
+        ("zh-CN".to_owned(), zh.to_owned()),
+        ("en-US".to_owned(), en.to_owned()),
+    ]))
+}
 
 const PLUGIN_ID: &str = "tool-fs";
 
@@ -98,6 +109,20 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
         ],
+        // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
+        display_name: Some(zh_en("文件工具", "File Tools")),
+        description: Some(LocalizedOrString::Localized(zh_en(
+            "只读文件操作：读文件 / 列目录 / 搜索文本",
+            "Read-only file ops: read / list / grep",
+        ))),
+        icon: Some("assets/icon.svg".into()),
+        author: Some(Author {
+            name: "Locowrk Team".into(),
+            url: None,
+        }),
+        origin: PluginOrigin::Official,
+        homepage: None,
+        license: Some("MIT".into()),
     };
     manifest.to_describe_json()
 }

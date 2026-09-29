@@ -38,13 +38,47 @@ stage() {
   local dst="market/$id/$ver"
   mkdir -p "$dst"
   cp -f "$src" "$dst/"
+  # packaging.md v2 全量 manifest（installer / 市场目录都按它解析）+ 图标
   cat > "$dst/manifest.json" <<EOF
 {
   "id": "$id",
   "version": "$ver",
-  "description": "$desc"
+  "abi_version": 1,
+  "kind": "tool",
+
+  "display_name": {
+    "zh-CN": "大小写转换",
+    "en-US": "Shout"
+  },
+  "description": {
+    "zh-CN": "把文本转换成大写输出",
+    "en-US": "$desc"
+  },
+  "icon": "assets/icon.svg",
+
+  "author": { "name": "Locowrk Team" },
+  "origin": "official",
+  "license": "MIT",
+
+  "tools": [
+    {
+      "name": "shout",
+      "description": "shouts text back in uppercase (optionally repeated)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "mode": { "type": "string", "enum": ["plain", "repeat"] }
+        },
+        "required": ["text"]
+      },
+      "side_effect": "Pure"
+    }
+  ]
 }
 EOF
+  mkdir -p "$dst/assets"
+  cp -f "plugins-src/$id/assets/icon.svg" "$dst/assets/icon.svg"
   echo "    staged -> $dst/"
 }
 

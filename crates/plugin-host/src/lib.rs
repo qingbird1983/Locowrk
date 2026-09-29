@@ -6,6 +6,7 @@
 //! - `host_vtable`：宿主能力表（'static，init 交付给插件）
 //! - `registry`：多版本并存 + active 指针 + graveyard（§5.7）
 //! - `adapter`：SabiToolAdapter（FFI → Tool）+ RegistryToolSource（工具目录）
+//! - `icon`：IconLoader（packaging.md §5.2，图标 → data URL + 缓存）
 //! - `error`：LoadError
 //!
 //! 纪律：
@@ -22,12 +23,14 @@
 mod adapter;
 mod error;
 mod host_vtable;
+mod icon;
 mod instance;
 mod loader;
 mod registry;
 
 pub use adapter::{RegistryToolSource, SabiToolAdapter};
 pub use error::LoadError;
+pub use icon::IconLoader;
 pub use instance::PluginInstance;
 pub use loader::DylibLoader;
 pub use registry::{PluginRegistry, PluginStateSummary};

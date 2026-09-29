@@ -11,7 +11,7 @@ use semver::Version;
 
 use super::PluginService;
 use crate::lockfile::LockFile;
-use crate::market::{LocalDirMarket, PackageManifest};
+use crate::market::LocalDirMarket;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -86,16 +86,15 @@ fn service_in(data_dir: PathBuf, market_root: PathBuf) -> Arc<PluginService> {
 fn write_pkg_manifest(market_root: &Path, id: &str, v: &Version, description: &str) {
     let dir = market_root.join(id).join(v.to_string());
     std::fs::create_dir_all(&dir).unwrap();
-    let m = PackageManifest {
-        id: id.to_string(),
-        version: v.to_string(),
-        description: description.to_string(),
-    };
-    std::fs::write(
-        dir.join("manifest.json"),
-        serde_json::to_string_pretty(&m).unwrap(),
-    )
-    .unwrap();
+    // packaging.md v2 全量 manifest（installer/registry 都按它解析）
+    let manifest = format!(
+        r#"{{"id":"{id}","version":"{v}","abi_version":1,"kind":"tool",
+            "display_name":{{"en-US":"Shout"}},
+            "description":{{"en-US":"{description}"}},
+            "origin":"official",
+            "tools":[{{"name":"shout","description":"d","schema":{{}},"side_effect":"Pure"}}]}}"#
+    );
+    std::fs::write(dir.join("manifest.json"), manifest).unwrap();
 }
 
 #[tokio::test]
@@ -173,6 +172,22 @@ async fn full_lifecycle_with_staged_artifact() {
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].active_version, Some(base.to_string()));
     assert!(listed[0].enabled);
+    // 展示投影（packaging.md §5.3）：安装时 manifest.json 随包复制进
+    // 安装目录，list_installed 读出多语言名与 origin 分组
+    assert_eq!(
+        listed[0].display.origin,
+        plugin_api::manifest::PluginOrigin::Official,
+        "暂存 manifest 显式声明 official"
+    );
+    assert_eq!(
+        listed[0]
+            .display
+            .display_name
+            .as_ref()
+            .and_then(|m| m.get("en-US"))
+            .map(String::as_str),
+        Some("Shout")
+    );
 
     // 禁用 → active 摘除；启用 → 恢复
     svc.set_enabled("tool-shout", false).await.unwrap();
@@ -352,4 +367,9 @@ async fn registry_only_plugins_project_as_builtin() {
     assert_eq!(listed[0].version, vers[0].to_string());
     assert_eq!(listed[0].active_version, Some(vers[0].to_string()));
     assert!(listed[0].enabled, "active 即 enabled");
+    // 内置行也走展示投影（registry 记录的装载目录 → manifest.json）
+    assert_eq!(
+        listed[0].display.origin,
+        plugin_api::manifest::PluginOrigin::Official
+    );
 }

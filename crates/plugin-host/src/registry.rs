@@ -8,7 +8,7 @@
 //! - load 的幂等：同 (id, version) 重复加载返回既有实例，不重复 dlopen
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 
 use semver::Version;
@@ -25,6 +25,9 @@ pub struct PluginStateSummary {
     pub active: Option<Version>,
     /// 已加载（仍在 versions 表中）的版本，升序。
     pub loaded: Vec<Version>,
+    /// 展示版本的插件目录（active 优先，否则最后加载的版本；dll 的
+    /// 父目录——manifest.json 与图标的定位基础，packaging.md §3.1）。
+    pub dir: Option<PathBuf>,
 }
 
 /// 多版本注册表（附录 A）。所有方法 `&self`。
@@ -165,6 +168,12 @@ impl PluginRegistry {
         pairs
     }
 
+    /// 指定版本的插件目录（dll 所在目录；展示元数据与图标的定位基础）。
+    pub fn plugin_dir(&self, id: &str, ver: &Version) -> Option<PathBuf> {
+        self.instance(id, ver)
+            .and_then(|i| i.path().parent().map(Path::to_path_buf))
+    }
+
     /// 全部插件的状态摘要（UI 列表用，§5.7 list_states）。
     pub fn list_states(&self) -> Vec<PluginStateSummary> {
         let versions = self.versions.read().expect("versions lock poisoned");
@@ -172,13 +181,22 @@ impl PluginRegistry {
         let mut ids: Vec<_> = versions.keys().cloned().collect();
         ids.sort();
         ids.into_iter()
-            .map(|id| PluginStateSummary {
-                active: active.get(&id).cloned(),
-                loaded: versions
+            .map(|id| {
+                let loaded: Vec<Version> = versions
                     .get(&id)
                     .map(|m| m.keys().cloned().collect())
-                    .unwrap_or_default(),
-                id,
+                    .unwrap_or_default();
+                let shown = active.get(&id).cloned().or_else(|| loaded.last().cloned());
+                let dir = shown.and_then(|v| {
+                    self.instance(&id, &v)
+                        .and_then(|i| i.path().parent().map(Path::to_path_buf))
+                });
+                PluginStateSummary {
+                    active: active.get(&id).cloned(),
+                    loaded,
+                    dir,
+                    id,
+                }
             })
             .collect()
     }

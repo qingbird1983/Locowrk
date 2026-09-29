@@ -7,13 +7,14 @@
 
 use std::path::{Path, PathBuf};
 
+use plugin_api::manifest::PluginManifest;
 use semver::Version;
 
-use crate::market::{PackageManifest, artifact_file_name};
+use crate::market::artifact_file_name;
 
-/// 从市场目录读取并校验一个包：manifest 自洽 + 平台库文件在位。
-/// 返回（源目录, 市场元数据）。
-pub fn verify(src_dir: &Path, id: &str, version: &Version) -> Result<PackageManifest, String> {
+/// 从市场目录读取并校验一个包：manifest 自洽（packaging.md v2 全量
+/// manifest）+ 平台库文件在位。
+pub fn verify(src_dir: &Path, id: &str, version: &Version) -> Result<(), String> {
     if !src_dir.is_dir() {
         return Err(format!("package dir {} missing", src_dir.display()));
     }
@@ -22,17 +23,16 @@ pub fn verify(src_dir: &Path, id: &str, version: &Version) -> Result<PackageMani
         return Err(format!("artifact {} missing", artifact.display()));
     }
     let path = src_dir.join("manifest.json");
-    let raw =
-        std::fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
-    let m: PackageManifest =
-        serde_json::from_str(&raw).map_err(|e| format!("parse {}: {e}", path.display()))?;
+    let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let m =
+        PluginManifest::from_json(&bytes).map_err(|e| format!("parse {}: {e}", path.display()))?;
     if m.id != id || m.version != version.to_string() {
         return Err(format!(
             "manifest mismatch: declared {}@{}, expected {id}@{version}",
             m.id, m.version
         ));
     }
-    Ok(m)
+    Ok(())
 }
 
 /// 把包目录复制到 `install_root/{id}/{version}/`，返回目标目录。

@@ -54,6 +54,44 @@ pub fn dll_name(id: &str) -> String {
     }
 }
 
+/// 版本目录里的动态库发现（packaging.md §3.1："dll 名字由作者决定，
+/// 宿主不假设文件名"）。约定名（`{id_underscored}.dll` 等）优先；没有
+/// 就扫描目录里平台后缀的文件，恰好一个 → 采用，多个 → 视为歧义拒绝
+/// （宁可漏载也不猜），零个 → None 由调用方记日志跳过。
+pub fn find_artifact(ver_dir: &Path, id: &str) -> Option<PathBuf> {
+    let conventional = ver_dir.join(dll_name(id));
+    if conventional.is_file() {
+        return Some(conventional);
+    }
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(ver_dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|ext| {
+                        matches!(ext.to_ascii_lowercase().as_str(), "dll" | "so" | "dylib")
+                    })
+        })
+        .collect();
+    candidates.sort();
+    match candidates.as_slice() {
+        [only] => Some(only.clone()),
+        many => {
+            if many.len() > 1 {
+                tracing::warn!(
+                    plugin = id,
+                    dir = %ver_dir.display(),
+                    "multiple dynamic libraries in version dir, refusing to guess"
+                );
+            }
+            None
+        }
+    }
+}
+
 /// 扫描目录下每个插件目录，取语义化版本最大的版本加载并激活。
 /// 返回成功加载的 (id, version)；单个插件失败只记日志不中断其余。
 pub fn load_all(
@@ -74,11 +112,10 @@ pub fn load_all(
         let Some((ver, ver_dir)) = latest_version(&path) else {
             continue;
         };
-        let dll = ver_dir.join(dll_name(id));
-        if !dll.exists() {
-            tracing::warn!(plugin = id, "artifact missing: {}", dll.display());
+        let Some(dll) = find_artifact(&ver_dir, id) else {
+            tracing::warn!(plugin = id, "artifact not found in {}", ver_dir.display());
             continue;
-        }
+        };
         match registry
             .load(id, &ver, &dll)
             .and_then(|_| registry.activate(id, &ver))

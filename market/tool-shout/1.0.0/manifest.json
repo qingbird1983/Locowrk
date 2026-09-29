@@ -1,5 +1,36 @@
 {
   "id": "tool-shout",
   "version": "1.0.0",
-  "description": "Shouts text back in uppercase. The stage-7 market demo plugin."
+  "abi_version": 1,
+  "kind": "tool",
+
+  "display_name": {
+    "zh-CN": "大小写转换",
+    "en-US": "Shout"
+  },
+  "description": {
+    "zh-CN": "把文本转换成大写输出",
+    "en-US": "Shouts text back in uppercase. The stage-7 market demo plugin."
+  },
+  "icon": "assets/icon.svg",
+
+  "author": { "name": "Locowrk Team" },
+  "origin": "official",
+  "license": "MIT",
+
+  "tools": [
+    {
+      "name": "shout",
+      "description": "shouts text back in uppercase (optionally repeated)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "mode": { "type": "string", "enum": ["plain", "repeat"] }
+        },
+        "required": ["text"]
+      },
+      "side_effect": "Pure"
+    }
+  ]
 }

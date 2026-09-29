@@ -2,34 +2,36 @@
 //!
 //! [`Market`] 是抽象（未来可换 HTTP 实现）；[`LocalDirMarket`] 是阶段七的
 //! 本地目录市场：`market/{id}/{version}/` 下放 `{id 下划线}.{dll|so|dylib}`
-//! 与 `manifest.json`（市场元数据）。真实市场服务出现前，目录即市场。
+//! 与 manifest.json（packaging.md v2 全量 manifest，§3.1）。真实市场服务
+//! 出现前，目录即市场。
+//!
+//! v2 纪律：manifest.json 按 `plugin_api::PluginManifest` 解析并交叉校验
+//! id/version；坏 manifest 的版本目录直接跳过，不让整张市场列表崩
+//! （packaging.md §11 常见坑"列表崩"）。
 
 use std::path::{Path, PathBuf};
 
+use plugin_api::manifest::PluginManifest;
 use semver::Version;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-/// 市场目录条目：一个插件的多版本清单（升序），last = latest。
+use plugin_host::IconLoader;
+
+use crate::display::{PluginDisplay, read_display};
+
+/// 市场目录条目：一个插件的多版本清单（升序），last = latest；
+/// 展示元数据取自 latest 版本目录的 manifest.json。
 #[derive(Debug, Clone, Serialize)]
 pub struct MarketplaceItem {
     pub id: String,
-    pub description: String,
     pub versions: Vec<Version>,
+    pub display: PluginDisplay,
 }
 
 impl MarketplaceItem {
     pub fn latest(&self) -> Option<&Version> {
         self.versions.last()
     }
-}
-
-/// 包内 manifest.json：市场元数据（与 DLL 内嵌 manifest 的 id/version
-/// 在下载时交叉校验，见 [`Market::package`]）。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PackageManifest {
-    pub id: String,
-    pub version: String,
-    pub description: String,
 }
 
 /// 市场抽象：目录发现 + 取回一个具体版本的包（本地市场返回目录路径）。
@@ -43,24 +45,29 @@ pub trait Market: Send + Sync {
 /// 本地目录市场：root = `market/`，布局 `root/{id}/{version}/`。
 pub struct LocalDirMarket {
     root: PathBuf,
+    icons: IconLoader,
 }
 
 impl LocalDirMarket {
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            icons: IconLoader::new(),
+        }
     }
 
     pub fn root(&self) -> &Path {
         &self.root
     }
 
-    fn read_manifest(&self, id: &str, version: &Version) -> Result<PackageManifest, String> {
+    /// 读并交叉校验一个版本的 manifest.json（packaging.md §3.1：包内
+    /// manifest 与目录名必须自洽）。
+    fn read_manifest(&self, id: &str, version: &Version) -> Result<PluginManifest, String> {
         let dir = self.package_dir(id, version);
         let path = dir.join("manifest.json");
-        let raw =
-            std::fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
-        let m: PackageManifest =
-            serde_json::from_str(&raw).map_err(|e| format!("parse {}: {e}", path.display()))?;
+        let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+        let m = PluginManifest::from_json(&bytes)
+            .map_err(|e| format!("parse {}: {e}", path.display()))?;
         if m.id != id || m.version != version.to_string() {
             return Err(format!(
                 "manifest mismatch in {}: declared {}@{}, expected {id}@{version}",
@@ -95,7 +102,6 @@ impl Market for LocalDirMarket {
                 continue;
             };
             let mut versions = Vec::new();
-            let mut description = String::new();
             if let Ok(vers) = std::fs::read_dir(&id_dir) {
                 for v_entry in vers.flatten() {
                     let v_dir = v_entry.path();
@@ -112,21 +118,21 @@ impl Market for LocalDirMarket {
                     if !v_dir.join(artifact_file_name(id)).exists() {
                         continue;
                     }
-                    let Ok(m) = self.read_manifest(id, &v) else {
+                    if self.read_manifest(id, &v).is_err() {
                         continue;
-                    };
-                    if description.is_empty() {
-                        description = m.description;
                     }
                     versions.push(v);
                 }
             }
             versions.sort();
             if !versions.is_empty() {
+                // 卡片展示取 latest 版本的 manifest（市场永远展示最新形象）
+                let display =
+                    read_display(&self.package_dir(id, versions.last().unwrap()), &self.icons);
                 items.push(MarketplaceItem {
                     id: id.to_string(),
-                    description,
                     versions,
+                    display,
                 });
             }
         }

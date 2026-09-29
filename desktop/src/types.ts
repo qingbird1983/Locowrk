@@ -48,14 +48,34 @@ export interface ApprovalRequest {
   side_effect: string;
 }
 
-/** 市场目录条目（plugin_registry_list 返回项；versions 升序，末位 latest）。 */
+/** 市场目录条目（plugin_registry_list 返回项；versions 升序，末位 latest；
+ * display 取自 latest 版本目录的 manifest.json，packaging.md §5.3）。 */
 export interface MarketplaceItem {
   id: string;
-  description: string;
   versions: string[];
+  display: PluginDisplay;
 }
 
-/** 已安装插件（lockfile 投影 + 注册表运行态合并）。 */
+/** 多语言文本：BCP-47 标签 → 文案。渲染经 pickLocalized 回退链。 */
+export type LocalizedMap = Record<string, string>;
+
+/** 插件展示元数据（packaging.md §5.3 投影；manifest.json 缺失时为
+ * 缺省投影：origin = "community"，无图标——UI 首字母兜底）。 */
+export interface PluginDisplay {
+  display_name?: LocalizedMap;
+  description?: LocalizedMap;
+  /** data URL（svg/png/webp）；缺省 = 首字母方块。 */
+  icon?: string;
+  author?: { name: string; url?: string | null };
+  homepage?: string;
+  license?: string;
+  /** "official" | "community"；只影响展示分组，不是信任边界。 */
+  origin: string;
+  /** 副作用去重清单（pure → compensable → irreversible 固定序）。 */
+  side_effects: string[];
+}
+
+/** 已安装插件（lockfile 投影 + 注册表运行态合并 + 展示投影）。 */
 export interface InstalledPlugin {
   id: string;
   version: string;
@@ -64,6 +84,7 @@ export interface InstalledPlugin {
   source: string;
   active_version: string | null;
   loaded_versions: string[];
+  display: PluginDisplay;
 }
 
 /** plugin://state-changed 载荷（plugin-service PluginStateChange 镜像，

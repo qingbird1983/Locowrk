@@ -37,6 +37,13 @@ stage() {
   local dst="plugins/$id/$ver"
   mkdir -p "$dst"
   cp -f "$src" "$dst/"
+  # packaging.md v2：每个版本目录自包含 manifest.json（展示元数据真源，
+  # 目录名与 DLL describe 的版本必须一致，registry 加载时校验）+ assets/
+  sed "0,/\"version\": \"[^\"]*\"/s//\"version\": \"$ver\"/" \
+    "plugins-src/$id/manifest.json" > "$dst/manifest.json"
+  if [[ -d "plugins-src/$id/assets" ]]; then
+    cp -R "plugins-src/$id/assets" "$dst/assets"
+  fi
   echo "    staged -> $dst/$(basename "$src")"
 }
 

@@ -2,9 +2,13 @@
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { usePluginStore } from "../stores/plugins";
+import PluginCard from "./PluginCard.vue";
+import PluginIcon from "./PluginIcon.vue";
+import SideEffectBadges from "./SideEffectBadges.vue";
+import { pickLocalized } from "../lib/i18n-helpers";
 import type { InstalledPlugin } from "../types";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const store = usePluginStore();
 
 const tab = ref<"discover" | "installed">("discover");
@@ -21,20 +25,29 @@ const filteredMarket = computed(() => {
   if (!q) return store.marketplace;
   return store.marketplace.filter(
     (m) =>
-      m.id.toLowerCase().includes(q) || m.description.toLowerCase().includes(q),
+      m.id.toLowerCase().includes(q) ||
+      pickLocalized(m.display.description, locale.value, "")
+        .toLowerCase()
+        .includes(q),
   );
 });
 
-/** 已安装页按分类分组（§13.3）：分类取 id 的第一段（tool-* → tool）。 */
-const groupedInstalled = computed(() => {
-  const groups = new Map<string, InstalledPlugin[]>();
-  for (const p of store.installed) {
-    const cat = p.id.split("-")[0] || p.id;
-    if (!groups.has(cat)) groups.set(cat, []);
-    groups.get(cat)!.push(p);
-  }
-  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+/**
+ * 已安装列表按 origin 分两大类（packaging.md §2.4）：官方内置在前、
+ * 第三方在后。分类只影响展示分组，不是信任边界。
+ */
+const originGroups = computed(() => {
+  const official = store.installed.filter((p) => p.display.origin === "official");
+  const community = store.installed.filter((p) => p.display.origin !== "official");
+  return [
+    { key: "official", list: official },
+    { key: "community", list: community },
+  ].filter((g) => g.list.length > 0);
 });
+
+function displayName(p: { id: string; display: { display_name?: Record<string, string> } }): string {
+  return pickLocalized(p.display.display_name, locale.value, p.id);
+}
 
 function latestOf(id: string): string | undefined {
   const item = store.marketplace.find((m) => m.id === id);
@@ -106,7 +119,7 @@ function pickVersion(id: string, versions: string[]): string {
     </p>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-      <!-- 发现页：卡片网格 -->
+      <!-- 发现页：卡片网格（packaging.md §6.3 PluginCard） -->
       <template v-if="tab === 'discover'">
         <p
           v-if="filteredMarket.length === 0"
@@ -115,25 +128,13 @@ function pickVersion(id: string, versions: string[]): string {
           {{ t("market.emptyDiscover") }}
         </p>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <div
+          <PluginCard
             v-for="item in filteredMarket"
             :key="item.id"
-            class="flex flex-col gap-2 rounded-xl border border-neutral-800 bg-neutral-800/60 p-4"
+            :item="item"
+            :latest="latestOf(item.id)"
           >
-            <div class="flex items-start justify-between gap-2">
-              <h3 class="font-mono text-sm font-semibold text-neutral-100">
-                {{ item.id }}
-              </h3>
-              <span
-                class="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] text-neutral-400"
-              >
-                {{ latestOf(item.id) }}
-              </span>
-            </div>
-            <p class="min-h-8 text-xs leading-relaxed text-neutral-400">
-              {{ item.description }}
-            </p>
-            <div class="mt-auto flex items-center gap-2">
+            <template #actions>
               <select
                 :value="pickVersion(item.id, item.versions)"
                 class="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none"
@@ -163,36 +164,45 @@ function pickVersion(id: string, versions: string[]): string {
                     : t("market.install")
                 }}
               </button>
-            </div>
-          </div>
+            </template>
+          </PluginCard>
         </div>
       </template>
 
-      <!-- 已安装页：按分类分组，每行操作齐全（§13.3） -->
+      <!-- 已安装页：按 origin 分两大类（官方内置 / 第三方），行内操作齐全 -->
       <template v-else>
         <p v-if="store.installed.length === 0" class="text-sm text-neutral-600">
           {{ t("market.emptyInstalled") }}
         </p>
-        <section v-for="[cat, list] in groupedInstalled" :key="cat" class="mb-5">
+        <section
+          v-for="group in originGroups"
+          :key="group.key"
+          class="mb-5"
+        >
           <h3
             class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500"
           >
-            {{ cat }}
+            {{ t(`market.origin_${group.key}`) }}
           </h3>
           <div class="overflow-hidden rounded-xl border border-neutral-800">
             <div
-              v-for="p in list"
+              v-for="p in group.list"
               :key="p.id"
               class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-neutral-800 bg-neutral-800/40 px-4 py-3 last:border-b-0"
             >
+              <PluginIcon :icon="p.display.icon" :id="p.id" size="h-9 w-9" />
               <div class="min-w-40">
-                <p class="font-mono text-sm font-semibold text-neutral-100">
-                  {{ p.id }}
+                <p class="text-sm font-semibold text-neutral-100">
+                  {{ displayName(p) }}
+                  <span class="ml-1 font-mono text-[10px] font-normal text-neutral-600">{{
+                    p.id
+                  }}</span>
                 </p>
                 <p class="text-[11px] text-neutral-500">
                   {{ t("market.versionLabel") }} {{ p.version }}
                 </p>
               </div>
+              <SideEffectBadges :kinds="p.display.side_effects" />
               <!-- 状态徽标：运行中 / 已禁用 -->
               <span
                 class="rounded-full px-2 py-0.5 text-[10px]"

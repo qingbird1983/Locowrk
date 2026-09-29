@@ -1,0 +1,37 @@
+{
+  "id": "tool-fetch",
+  "version": "1.0.0",
+  "abi_version": 1,
+  "kind": "tool",
+
+  "display_name": {
+    "zh-CN": "网页抓取",
+    "en-US": "Web Fetch"
+  },
+  "description": {
+    "zh-CN": "抓取 HTTP(S) 页面正文（限长、限超时）",
+    "en-US": "Fetch an HTTP(S) page body (size-capped, timeout-capped)"
+  },
+  "icon": "assets/icon.svg",
+
+  "author": { "name": "Locowrk Team" },
+  "origin": "official",
+  "license": "MIT",
+
+  "tools": [
+    {
+      "name": "fetch",
+      "description": "HTTP GET a URL and return status + body (transport errors fail; 4xx/5xx come back as data). Args: url (http/https), max_bytes (default 262144, max 1048576), timeout_secs (default 20, max 60).",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "http(s) URL" },
+          "max_bytes": { "type": "number", "description": "default 262144, max 1048576" },
+          "timeout_secs": { "type": "number", "description": "request timeout (default 20, max 60)" }
+        },
+        "required": ["url"]
+      },
+      "side_effect": "Pure"
+    }
+  ]
+}

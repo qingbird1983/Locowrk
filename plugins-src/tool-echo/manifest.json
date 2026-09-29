@@ -1,0 +1,36 @@
+{
+  "id": "tool-echo",
+  "version": "1.3.0",
+  "abi_version": 1,
+  "kind": "tool",
+
+  "display_name": {
+    "zh-CN": "回显",
+    "en-US": "Echo"
+  },
+  "description": {
+    "zh-CN": "把文本原样或变换后回显",
+    "en-US": "Echoes text back, optionally transformed"
+  },
+  "icon": "assets/icon.svg",
+
+  "author": { "name": "Locowrk Team" },
+  "origin": "official",
+  "license": "MIT",
+
+  "tools": [
+    {
+      "name": "echo",
+      "description": "echoes text back, optionally transformed (modes: plain/upper/reverse/panic)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "mode": { "type": "string", "enum": ["plain", "upper", "reverse", "panic"] }
+        },
+        "required": ["text"]
+      },
+      "side_effect": "Pure"
+    }
+  ]
+}

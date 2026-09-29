@@ -31,3 +31,8 @@ plugins/**/*.dylib
 market/**/*.dll
 market/**/*.so
 market/**/*.dylib
+
+# 开发态暂存目录只放构建产物（manifest/图标由脚本从 plugins-src/ 生成，
+# 源头已跟踪，暂存副本不入库）
+plugins/*
+!plugins/README.md

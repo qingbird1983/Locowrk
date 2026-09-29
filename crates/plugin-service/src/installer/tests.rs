@@ -18,13 +18,16 @@ fn temp_dir(tag: &str) -> PathBuf {
     dir
 }
 
-/// 造假市场包。
+/// 造假市场包（packaging.md v2 全量 manifest）。
 fn write_pkg(root: &Path, id: &str, version: &str) {
     let dir = root.join(id).join(version);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("manifest.json"),
-        format!(r#"{{"id":"{id}","version":"{version}","description":"d"}}"#),
+        format!(
+            r#"{{"id":"{id}","version":"{version}","abi_version":1,"kind":"tool",
+                "description":"d","tools":[]}}"#
+        ),
     )
     .unwrap();
     std::fs::write(dir.join(artifact_file_name(id)), b"artifact-bytes").unwrap();
@@ -63,7 +66,7 @@ fn extract_rejects_missing_artifact_or_bad_manifest() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("manifest.json"),
-        r#"{"id":"tool-a","version":"0.1.0","description":"d"}"#,
+        r#"{"id":"tool-a","version":"0.1.0","abi_version":1,"kind":"tool","description":"d","tools":[]}"#,
     )
     .unwrap();
     assert!(extract(&dir, &install_root, "tool-a", &v).is_err());
@@ -73,7 +76,7 @@ fn extract_rejects_missing_artifact_or_bad_manifest() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("manifest.json"),
-        r#"{"id":"tool-b","version":"0.2.0","description":"d"}"#,
+        r#"{"id":"tool-b","version":"0.2.0","abi_version":1,"kind":"tool","description":"d","tools":[]}"#,
     )
     .unwrap();
     std::fs::write(dir.join(artifact_file_name("tool-b")), b"x").unwrap();

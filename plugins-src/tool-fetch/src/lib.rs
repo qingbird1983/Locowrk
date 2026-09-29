@@ -14,15 +14,26 @@
 //! 阻塞式 ureq 跑在宿主的 spawn_blocking 里（FFI 纪律三，§5.6）。
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 
+use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::io::Read;
 use std::time::Duration;
 
 use plugin_api::ffi::log_level;
-use plugin_api::manifest::{PluginKind, PluginManifest};
+use plugin_api::manifest::{
+    Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
+};
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
+
+/// 双语展示元数据样板（packaging.md §2.2）。
+fn zh_en(zh: &str, en: &str) -> LocalizedString {
+    LocalizedString(BTreeMap::from([
+        ("zh-CN".to_owned(), zh.to_owned()),
+        ("en-US".to_owned(), en.to_owned()),
+    ]))
+}
 
 const PLUGIN_ID: &str = "tool-fetch";
 
@@ -64,6 +75,20 @@ fn describe_manifest() -> CString {
             }),
             side_effect: SideEffect::Pure,
         }],
+        // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
+        display_name: Some(zh_en("网页抓取", "Web Fetch")),
+        description: Some(LocalizedOrString::Localized(zh_en(
+            "抓取 HTTP(S) 页面正文（限长、限超时）",
+            "Fetch an HTTP(S) page body (size-capped, timeout-capped)",
+        ))),
+        icon: Some("assets/icon.svg".into()),
+        author: Some(Author {
+            name: "Locowrk Team".into(),
+            url: None,
+        }),
+        origin: PluginOrigin::Official,
+        homepage: None,
+        license: Some("MIT".into()),
     };
     manifest.to_describe_json()
 }

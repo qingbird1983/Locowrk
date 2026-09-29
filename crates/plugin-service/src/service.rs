@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use cordis_core::Context;
-use plugin_host::PluginRegistry;
+use plugin_host::{IconLoader, PluginRegistry};
 use semver::Version;
 use tokio::sync::broadcast;
 
@@ -40,6 +40,8 @@ pub struct PluginService {
     lockfile: Mutex<LockFile>,
     market: Box<dyn Market>,
     state_tx: broadcast::Sender<PluginStateChange>,
+    /// 图标 data URL 缓存（list_installed 每次刷新都投影，不能每次读盘）。
+    icons: IconLoader,
 }
 
 impl PluginService {
@@ -61,6 +63,7 @@ impl PluginService {
             lockfile: Mutex::new(lockfile),
             market,
             state_tx,
+            icons: IconLoader::new(),
         })
     }
 

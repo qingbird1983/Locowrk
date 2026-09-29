@@ -24,7 +24,10 @@ pub use ffi::{
     CallFn, DescribeFn, FreeBufFn, HostVtable, InitFn, SYM_CALL, SYM_DESCRIBE, SYM_FREE, SYM_INIT,
     SYM_SHUTDOWN, ShutdownFn,
 };
-pub use manifest::{ManifestError, PluginKind, PluginManifest};
+pub use manifest::{
+    Author, LocalizedOrString, LocalizedString, ManifestError, PluginKind, PluginManifest,
+    PluginOrigin,
+};
 pub use plugin_side::{PluginState, free_allocated, write_out};
 pub use semver;
 pub use serde_json;
@@ -37,6 +40,30 @@ pub const PLUGIN_ABI_VERSION: u32 = 1;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// docs/design/Plug-in packaging.md §2.1 完整示例（manifest 测试共用；
+    /// 含工具级 display_name 与 manifest 级 reversible 等被忽略的未知字段）。
+    pub const DOC_EXAMPLE: &str = r#"{
+      "id": "tool-shout",
+      "version": "1.1.0",
+      "abi_version": 1,
+      "kind": "tool",
+      "display_name": { "zh-CN": "大小写转换", "en-US": "Shout", "ja-JP": "シャウト" },
+      "description": { "zh-CN": "把文本转换成大写输出", "en-US": "Shouts text back in uppercase" },
+      "icon": "assets/icon.svg",
+      "author": { "name": "Locowrk Team", "url": "https://github.com/locowrk" },
+      "origin": "official",
+      "homepage": "https://github.com/locowrk/plugins/tool-shout",
+      "license": "MIT",
+      "tools": [{
+        "name": "shout",
+        "display_name": { "zh-CN": "转换大写", "en-US": "Shout" },
+        "description": { "zh-CN": "把输入的文本全部转成大写", "en-US": "Convert the input text to uppercase" },
+        "schema": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] },
+        "side_effect": "Pure"
+      }],
+      "reversible": { "kind": "Pure" }
+    }"#;
 
     #[test]
     fn abi_version_is_frozen_at_1() {

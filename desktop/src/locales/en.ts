@@ -48,6 +48,8 @@ export default {
     installing: "Installing…",
     installedBadge: "Installed",
     builtinBadge: "Built-in (ships with the repo, managed via build scripts)",
+    origin_official: "Official",
+    origin_community: "Third-party",
     updateAvailable: "Update to v{version} available",
     update: "Update",
     enable: "Enable",

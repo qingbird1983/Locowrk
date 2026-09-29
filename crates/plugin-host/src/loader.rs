@@ -59,7 +59,14 @@ impl DylibLoader {
         }
 
         Ok(PluginInstance::new(
-            manifest, version, call, shutdown, free, handle, lib,
+            manifest,
+            version,
+            call,
+            shutdown,
+            free,
+            handle,
+            lib,
+            path.to_path_buf(),
         ))
     }
 }

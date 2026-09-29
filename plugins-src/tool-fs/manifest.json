@@ -1,0 +1,63 @@
+{
+  "id": "tool-fs",
+  "version": "1.0.0",
+  "abi_version": 1,
+  "kind": "tool",
+
+  "display_name": {
+    "zh-CN": "文件工具",
+    "en-US": "File Tools"
+  },
+  "description": {
+    "zh-CN": "只读文件操作：读文件 / 列目录 / 搜索文本",
+    "en-US": "Read-only file ops: read / list / grep"
+  },
+  "icon": "assets/icon.svg",
+
+  "author": { "name": "Locowrk Team" },
+  "origin": "official",
+  "license": "MIT",
+
+  "tools": [
+    {
+      "name": "fs.read",
+      "description": "Read a UTF-8 text file. Args: path (string, absolute), max_bytes (number, default 32768, max 1048576). Output is truncated at max_bytes; the response flags `truncated`.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "absolute file path" },
+          "max_bytes": { "type": "number", "description": "default 32768, max 1048576" }
+        },
+        "required": ["path"]
+      },
+      "side_effect": "Pure"
+    },
+    {
+      "name": "fs.list",
+      "description": "List a directory (dirs first, then files, with type and size). Args: path (string, absolute).",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "absolute directory path" }
+        },
+        "required": ["path"]
+      },
+      "side_effect": "Pure"
+    },
+    {
+      "name": "fs.grep",
+      "description": "Case-insensitive substring search over text files in a directory tree. Args: path (absolute), query (string), max_results (default 50, max 200), max_depth (default 3, max 8).",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "absolute directory path" },
+          "query": { "type": "string", "description": "case-insensitive substring" },
+          "max_results": { "type": "number", "description": "default 50, max 200" },
+          "max_depth": { "type": "number", "description": "recursion depth, default 3, max 8" }
+        },
+        "required": ["path", "query"]
+      },
+      "side_effect": "Pure"
+    }
+  ]
+}

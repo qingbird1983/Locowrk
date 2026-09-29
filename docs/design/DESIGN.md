@@ -2194,11 +2194,51 @@ export const usePluginStore = defineStore('plugins', {
 > 直接改名不做迁移，同步 §11、plugins/README.md 与 `data_root.rs`）。
 > ⑥ WASM 不变。
 >
+> **实现落点（v2.11，④a–④c 已完成）**：依 docs/design/Plug-in packaging.md
+> v2.1——
+> **④a 解析层**（plugin-api）：`PluginManifest` 追加 v2 可选字段
+> （display_name / description / icon / author / origin / homepage / license，
+> 全 `serde(default)` 且 None 序列化省略，旧插件 describe 字节不变，
+> `abi_version` 仍为 1）；`LocalizedString`（BTreeMap 底座，`pick` 回退链
+> 精确 → 主语言 → en-US → 任意字典序最小）+ `LocalizedOrString`（v1 字符串 /
+> v2 map 双形态）+ `Author` + `PluginOrigin`（缺省 community，
+> skip_serializing_if 保持 v1 字节）；**SideEffect 解析双形态**（tagged 对象
+> 或大小写不敏感纯字符串；`Compensable` 只收 tagged——undo_tool 只有对象
+> 带得动），序列化维持 `{"kind":…}`；**ToolSpec 宽容解析**：description 兼容
+> 多语言 map（就地 en-US → 任意压平成单语言 String，模型侧目录不做多语言），
+> 除 name 外字段缺失取缺省、**side_effect 缺失按 Irreversible**（宁可标错成
+> 不可逆也不标错成 Pure），工具级 display_name 等未知字段忽略；manifest 级
+> `reversible` 不设字段（副作用模型按工具声明，文档式 manifest 靠未知字段
+> 忽略照常解析）。仓库四插件 describe 全部补 v2 元数据（origin=official
+> 显式声明）。
+> **④b 数据面**：plugin-host 新增 `icon.rs` IconLoader（canonicalize 防路径
+> 穿越 + 1MB 上限 + svg/png/webp 白名单 + DashMap 正负缓存）；`PluginInstance`
+> 记录 dll 路径、`PluginStateSummary` 带展示目录（active 优先，否则最后
+> 加载版本）；plugin-service 新增 `display.rs`（版本目录 manifest.json →
+> `PluginDisplay` 投影，manifest 缺失/损坏降级缺省不崩列表），`InstalledPlugin`
+> / `MarketplaceItem` 带出 display（多语言名/描述/icon data URL/origin/
+> 副作用固定序清单）；market 与 installer 按 v2 全量 manifest 交叉校验，
+> 坏 manifest 版本目录跳过；`origin` 分组后端数据即此（§2.4：缺省 community
+> 防伪造官方徽章，分类非信任边界）。构建脚本暂存 manifest.json（sed 版本号）
+> 与 assets/ 图标；桌面端开发态装载 dll 发现规则改"约定名优先，否则目录内
+> 唯一平台动态库，多库歧义拒绝"（packaging.md §3.1 宿主不假设文件名）。
+> **④c 前端**：`pickLocalized`（与 Rust pick 同链）+ `PluginIcon`（data URL
+> + 首字母兜底 + onerror 隐藏）+ `SideEffectBadges`（§6.4 配色）+ `PluginCard`
+> （发现页卡片）；已安装页按 origin 分"官方内置 / 第三方"两组（官方在前），
+> 行内展示多语言名 + id + 副作用徽章；内置只读行与全部管理操作不变。
+> **测试**：plugin-api 双形态/Fallback 矩阵用例、plugin-host 图标矩阵
+> （缺失/坏格式/超限/穿越/缓存）、plugin-service 展示投影与坏 manifest 跳过、
+> desktop find_artifact 矩阵；plugin-service 暂存固件升级 v2 后全绿。
+> ④d（Fallback 矩阵补全 + 多版本回退回归）与 ④e（`locowrk new plugin`
+> 脚手架）未开始。
+>
 > **进度**：① 已完成（§13.1 备注）。② 已完成（v2.8，§7.2 备注）：桌面端
 > `llm/` 模块以 genai 0.6 实现 `LlmService`，`LlmRequest` 携带工具目录快照
 > （`ToolSource::list()`），配置读设置面板、保存即生效，model 未配置回落
 > 脚本替身；真窗口 E2E（本机 Ollama 9B）全链路通过——模型按 schema 自选
-> 参数调用 tool-echo 插件、工具结果回传后给最终回答。下一步③第一批工具。
+> 参数调用 tool-echo 插件、工具结果回传后给最终回答。③ 已完成（v2.9，
+> §7.1 备注）。④a–④c 已完成（v2.11）；下一步④d/④e → ⑤ 托盘 + 快捷键
+> （含数据目录改名 ~/.Locowrk）→ ⑥ WASM。
 
 **阶段一和阶段二是试金石**：如果内核的服务组合和 Effect 撤销链设计干净，后续所有能力都是叠加。**阶段五和阶段六是桌面端的试金石**：如果 Tauri IPC 层能干净地桥接内核事件流，后续插件管理 UI 都是在这个模式上叠加。
 
@@ -2333,6 +2373,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.10（§14 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.11（§14 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
