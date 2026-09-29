@@ -2183,7 +2183,11 @@ export const usePluginStore = defineStore('plugins', {
 > manifest 跳过不崩整表。→ ④c 前端 PluginCard：pickLocalized 回退链
 > （精确 → 主语言 → en-US → 任意 → id）、图标 data URL + 首字母兜底 +
 > onerror 隐藏、副作用徽章配色；与原④范围（徽章 / 回退下拉 / 更新按钮）
-> 合并实施。→ ④d Fallback 矩阵全覆盖测试 + 多版本并存/回退回归
+> 合并实施。**已安装列表按 `origin` 分两大类**（Plug-in packaging.md §2.4，
+> v2.1 增补）：`official`（官方内置，仓库自带插件显式声明）与
+> `community`（第三方，**缺省值**，预留给未来市场开放；缺省即 community
+> 防伪造官方徽章；分类只影响展示分组，不做信任边界）——④b 投影带出
+> `origin`，④c 分组渲染。→ ④d Fallback 矩阵全覆盖测试 + 多版本并存/回退回归
 > （1.1.0 → 1.1.1）。→ ④e `locowrk new plugin` 脚手架（kernel-bin 子命令
 > + 模板）。**⑤ 托盘 + 快捷键（发版前）追加发布收尾一项：数据目录
 > `~/.agent-kernel` → `~/.Locowrk`**（用户 2026-09-29 指定；尚无存量用户，

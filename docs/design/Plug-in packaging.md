@@ -1,7 +1,7 @@
 # Locowrk 插件元数据与打包设计（v2）
 
 > 配套项目：Locowrk
-> 版本：2.0（在 v1 ABI 基础上扩展元数据，不破坏 ABI）
+> 版本：2.1（在 v1 ABI 基础上扩展元数据，不破坏 ABI；v2.1 增补 `origin` 来源分类）
 
 ---
 
@@ -49,6 +49,7 @@
     "name": "Locowrk Team",
     "url": "https://github.com/locowrk"
   },
+  "origin": "official",
   "homepage": "https://github.com/locowrk/plugins/tool-shout",
   "license": "MIT",
 
@@ -92,6 +93,7 @@
 | `description` | LocalizedString | ⭕ | 缺失时留空 |
 | `icon` | string（相对路径） | ⭕ | 缺失时显示首字母兜底 |
 | `author` | object | ⭕ | 作者信息 |
+| `origin` | string | ⭕ | 来源分类：`official` / `community`，**缺省 `community`** |
 | `homepage` | string | ⭕ | 项目主页 |
 | `license` | string | ⭕ | SPDX 标识 |
 | `tools` | ToolSpec[] | ✅ | 工具列表 |
@@ -115,6 +117,21 @@
 4. 任意一个      → Object.values[0]
 5. 硬回退        → plugin.id
 ```
+
+### 2.4 `origin` 来源分类
+
+**已安装列表按 `origin` 分两大类**：
+
+| 分类 | 取值 | 现状 |
+|---|---|---|
+| 官方内置 | `official` | 仓库自带插件（tool-echo / tool-fs / tool-fetch / tool-shout）显式声明 |
+| 第三方 | `community`（缺省） | **预留给未来**——市场开放第三方作者后启用 |
+
+约束：
+
+- **缺省一律 `community`**：官方标识必须显式声明，不能由缺失推断——防止第三方包伪造"官方内置"徽章（安全默认）
+- `official` 只被仓库自带插件使用；未来若官方插件走市场分发，由签名/渠道校验兜底（本期不做）
+- 宿主不因 `origin` 改变权限或审批行为——分类只影响展示分组，不做信任边界
 
 ---
 
