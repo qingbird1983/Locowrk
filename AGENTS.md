@@ -67,6 +67,10 @@ cd desktop/src-tauri && cargo test  # 桌面端 Rust 单测（runner 投影 / de
 `desktop/src-tauri` 目录下单独执行；其 `generate_context!` 编译期要求 `desktop/dist/`
 存在（先 `pnpm build` 一次）。
 
+网络提示：crates.io 直连超时时，给 cargo 命令加
+`--config 'source.crates-io.replace-with="rsproxy"' --config 'source.rsproxy.registry="sparse+https://rsproxy.cn/index/"'`
+走镜像（命令行级覆盖，勿改全局 ~/.cargo/config.toml）。
+
 ## 架构边界（依赖严格单向，违反即设计错误）
 
 ```
