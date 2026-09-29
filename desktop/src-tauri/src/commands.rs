@@ -1,7 +1,7 @@
 //! Tauri 命令薄适配层（DESIGN.md §10.3 / §12.1）：只做参数转换与状态
 //! 存取，业务逻辑在 runner / approval / kernel，本文件不写一行。
 
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::events::ApprovalRequestPayload;
 use crate::runner;
@@ -124,13 +124,20 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
     Ok(state.settings.view())
 }
 
-/// 部分更新设置：locale（system/zh-CN/en）与 LLM 字段独立可选，
-/// 缺省字段保持不变；base_url / api_key 传空串 = 清除。
+/// 部分更新设置：locale（system/zh-CN/en）、快捷键与 LLM 字段独立可选，
+/// 缺省字段保持不变；base_url / api_key 传空串 = 清除。改键成功后即时
+/// 重注册全局快捷键；注册失败返回 Err（新键已落盘，换键重试即可）。
 #[tauri::command]
 pub async fn settings_set(
     locale: Option<String>,
+    shortcut: Option<String>,
     llm: Option<LlmUpdate>,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
-    state.settings.update(locale, llm)
+    let view = state.settings.update(locale, shortcut.clone(), llm)?;
+    if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
+        crate::tray::apply_shortcut(&app, sc.trim())?;
+    }
+    Ok(view)
 }

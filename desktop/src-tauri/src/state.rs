@@ -5,7 +5,7 @@
 //! 1. `startup_reconcile`——清 tombstone、lockfile 与磁盘对账、恢复
 //!    enabled 插件。必须在加载任何插件之前调用（此时无文件锁）
 //! 2. 开发态装载（`plugins/`，内核开发用，不经 lockfile）
-//! 3. 安装态已由第 1 步恢复完毕（`~/.agent-kernel`，lockfile 管理）
+//! 3. 安装态已由第 1 步恢复完毕（`~/.Locowrk`，lockfile 管理）
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -94,7 +94,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
     let kernel = Arc::new(Kernel::new(ctx.clone(), mw).with_approval(resolver));
 
-    // 插件编排（§11.2）：数据根缺省 ~/.agent-kernel（LOCOWRK_DATA_DIR
+    // 插件编排（§11.2）：数据根缺省 ~/.Locowrk（LOCOWRK_DATA_DIR
     // 可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。
     let plugins = match open_plugin_service(&root, Arc::clone(&registry), &ctx) {
         Ok(svc) => Arc::new(svc),

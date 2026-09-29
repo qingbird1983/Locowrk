@@ -39,7 +39,7 @@ registry 加载时会校验（不一致拒载）。暂存脚本把 `plugins-src/
 
 ## 与安装态的区别
 
-安装态是 `~/.agent-kernel/`（经 PluginService 从市场安装，阶段七落地）；
+安装态是 `~/.Locowrk/`（经 PluginService 从市场安装，阶段七落地）；
 本目录只服务内核开发与测试，不经市场与 lockfile。装进 lockfile 的插件
 由 PluginService 投影展示元数据（读安装目录的 manifest.json），开发态
 插件同样走该投影——registry 记录了装载目录。

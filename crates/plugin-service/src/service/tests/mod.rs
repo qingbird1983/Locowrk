@@ -53,7 +53,7 @@ fn temp_dir(tag: &str) -> PathBuf {
     dir
 }
 
-/// 把暂存版本拷进临时假市场（隔离真实 market/ 与 ~/.agent-kernel）。
+/// 把暂存版本拷进临时假市场（隔离真实 market/ 与 ~/.Locowrk）。
 fn fake_market_from_staged(root: &Path, vers: &[Version]) {
     let src_base = repo_root().join("market").join("tool-shout");
     for v in vers {

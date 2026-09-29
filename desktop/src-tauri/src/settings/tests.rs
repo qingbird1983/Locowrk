@@ -28,6 +28,7 @@ fn update_persists_and_roundtrips() {
         .unwrap()
         .update(
             Some("en".into()),
+            None,
             Some(LlmUpdate {
                 provider: Some("ollama".into()),
                 model: Some("llama3".into()),
@@ -52,6 +53,7 @@ fn api_key_never_leaks_into_view() {
     store
         .update(
             None,
+            None,
             Some(LlmUpdate {
                 api_key: Some("sk-secret-value".into()),
                 ..Default::default()
@@ -71,6 +73,7 @@ fn empty_string_clears_none_keeps() {
     let set = |k: Option<&str>, b: Option<&str>| {
         store
             .update(
+                None,
                 None,
                 Some(LlmUpdate {
                     api_key: k.map(Into::into),
@@ -98,14 +101,42 @@ fn rejects_unknown_provider_and_locale() {
     assert!(store
         .update(
             None,
+            None,
             Some(LlmUpdate {
                 provider: Some("gemini".into()),
                 ..Default::default()
             })
         )
         .is_err());
-    assert!(store.update(Some("fr".into()), None).is_err());
+    assert!(store.update(Some("fr".into()), None, None).is_err());
     // 校验失败不得污染内存态
     assert_eq!(store.view().locale, LOCALE_SYSTEM);
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn shortcut_default_update_and_validation() {
+    let root = temp_root("shortcut");
+    let store = SettingsStore::open(&root).unwrap();
+    // 缺省键位进投影（tray.rs 启动注册读这里）
+    assert_eq!(store.view().shortcut, SHORTCUT_DEFAULT);
+    // 合法键位更新 + 磁盘往返
+    store.update(None, Some("Alt+Space".into()), None).unwrap();
+    assert_eq!(store.view().shortcut, "Alt+Space");
+    assert_eq!(
+        SettingsStore::open(&root).unwrap().view().shortcut,
+        "Alt+Space"
+    );
+    // 旧 settings.json 无 shortcut 字段 → 字段级缺省（不是空串）
+    std::fs::write(root.join(FILE_NAME), r#"{"locale":"zh-CN"}"#).unwrap();
+    let v = SettingsStore::open(&root).unwrap().view();
+    assert_eq!(v.locale, "zh-CN");
+    assert_eq!(v.shortcut, SHORTCUT_DEFAULT);
+    // 非法键位 / 空串：拒绝且不污染内存态
+    assert!(store
+        .update(None, Some("Not A Key!!".into()), None)
+        .is_err());
+    assert!(store.update(None, Some("".into()), None).is_err());
+    assert_eq!(store.view().shortcut, "Alt+Space");
     std::fs::remove_dir_all(&root).ok();
 }

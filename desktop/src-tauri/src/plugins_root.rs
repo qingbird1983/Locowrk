@@ -69,11 +69,9 @@ pub fn find_artifact(ver_dir: &Path, id: &str) -> Option<PathBuf> {
         .map(|e| e.path())
         .filter(|p| {
             p.is_file()
-                && p.extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|ext| {
-                        matches!(ext.to_ascii_lowercase().as_str(), "dll" | "so" | "dylib")
-                    })
+                && p.extension().and_then(|e| e.to_str()).is_some_and(|ext| {
+                    matches!(ext.to_ascii_lowercase().as_str(), "dll" | "so" | "dylib")
+                })
         })
         .collect();
     candidates.sort();

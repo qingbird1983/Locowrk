@@ -229,13 +229,22 @@ fn find_artifact_prefers_conventional_then_single_dynlib() {
     // 约定名在位 → 直接用
     let conventional = dir.join(plugins_root::dll_name("tool-x"));
     std::fs::write(&conventional, b"x").unwrap();
-    assert_eq!(plugins_root::find_artifact(&dir, "tool-x"), Some(conventional));
+    assert_eq!(
+        plugins_root::find_artifact(&dir, "tool-x"),
+        Some(conventional)
+    );
 
     // 只有作者自定义名的唯一动态库 → 采用（manifest 为准的精神：不假设文件名）
-    let custom = dir.join(format!("my-weird-name.{}", if cfg!(windows) { "dll" } else { "so" }));
+    let custom = dir.join(format!(
+        "my-weird-name.{}",
+        if cfg!(windows) { "dll" } else { "so" }
+    ));
     std::fs::remove_file(dir.join(plugins_root::dll_name("tool-x"))).unwrap();
     std::fs::write(&custom, b"x").unwrap();
-    assert_eq!(plugins_root::find_artifact(&dir, "tool-x"), Some(custom.clone()));
+    assert_eq!(
+        plugins_root::find_artifact(&dir, "tool-x"),
+        Some(custom.clone())
+    );
 
     // 两个动态库 → 歧义拒绝
     std::fs::write(dir.join("another.dll"), b"x").unwrap();

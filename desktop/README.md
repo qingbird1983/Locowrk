@@ -27,7 +27,7 @@
     对账 + 恢复 enabled）→ 开发态装载 → 广播转发（§12.3）
   - `events.rs` `agent://` 通道 + EventSink 抽象 + `plugin://state-changed`
     转发器（§13.4）
-  - `data_root.rs` 安装态数据根（缺省 `%USERPROFILE%\.agent-kernel`，
+  - `data_root.rs` 安装态数据根（缺省 `%USERPROFILE%\.Locowrk`，
     `LOCOWRK_DATA_DIR` 可隔离）与市场目录解析（`LOCOWRK_MARKET_DIR` /
     锚点向上找 `market/`）（§11.3）
   - `demo_llm.rs` 脚本模型；`demo_tools.rs` 内置演示工具 `send_email`（不可逆）
@@ -51,7 +51,7 @@ cd src-tauri && cargo test   # 桌面端 Rust 测试
 
 目录定位：开发态 `LOCOWRK_PLUGINS_DIR` 优先（否则锚点向上找 `plugins/`）；
 市场 `LOCOWRK_MARKET_DIR` 优先（否则锚点向上找 `market/`）；安装态数据根
-`LOCOWRK_DATA_DIR` 优先（否则 `%USERPROFILE%\.agent-kernel`）。
+`LOCOWRK_DATA_DIR` 优先（否则 `%USERPROFILE%\.Locowrk`）。
 
 ## 说明
 

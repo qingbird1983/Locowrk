@@ -29,5 +29,5 @@ bash scripts/build_market.sh
 
 两套目录互不重叠（§11.3）：`plugins/` 是内核开发直接装载的开发态，
 `market/` 是"从市场安装"的货源地，安装后落到安装态
-`%USERPROFILE%\.agent-kernel\plugins\`（`LOCOWRK_DATA_DIR` 可覆盖），
+`%USERPROFILE%\.Locowrk\plugins\`（`LOCOWRK_DATA_DIR` 可覆盖），
 由 lockfile 管理、桌面端插件面板操作。

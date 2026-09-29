@@ -1,9 +1,10 @@
 //! 设置存储（DESIGN.md §13.1 设置模块 / §13.5 i18n 持久化）。
 //!
-//! 最小面板三块：LLM 配置（provider/model/base_url/api_key）、会话存储
-//! 位置（只读展示）、语言切换（system/zh-CN/en，缺省跟随系统）。
+//! 最小面板四块：LLM 配置（provider/model/base_url/api_key）、会话存储
+//! 位置（只读展示）、语言切换（system/zh-CN/en，缺省跟随系统）、全局
+//! 快捷键（阶段八⑤，切换主窗口，缺省 Ctrl+Shift+L）。
 //! 持久化在数据根 `settings.json`，与 lockfile.json 同目录；文件在
-//! `%USERPROFILE%\.agent-kernel`，不属于项目文件，API Key 落盘合规
+//! `%USERPROFILE%\.Locowrk`，不属于项目文件，API Key 落盘合规
 //! （AGENTS.md 禁的是写进仓库文件）。
 //!
 //! 纪律：**API Key 只进磁盘，不出 IPC**——前端拿到的投影只有
@@ -13,12 +14,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use tauri_plugin_global_shortcut::Shortcut;
 
 /// locale 取值：`system`（跟随系统，缺省）/ `zh-CN` / `en`（§13.5）。
 pub const LOCALE_SYSTEM: &str = "system";
 const LOCALES: [&str; 3] = [LOCALE_SYSTEM, "zh-CN", "en"];
 /// LLM.md 方案一：统一适配器按 provider 路由（genai 封装，后续阶段接入）。
 const PROVIDERS: [&str; 3] = ["openai", "anthropic", "ollama"];
+/// 全局快捷键缺省值（tray.rs 启动注册用；settings.json `shortcut`）。
+pub const SHORTCUT_DEFAULT: &str = "Ctrl+Shift+L";
 
 const FILE_NAME: &str = "settings.json";
 
@@ -49,13 +53,22 @@ impl Default for LlmSettings {
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
     pub locale: String,
+    /// 全局快捷键（切换主窗口）。字段级缺省：旧 settings.json 无此字段
+    /// 时取 SHORTCUT_DEFAULT，而不是空串。
+    #[serde(default = "default_shortcut")]
+    pub shortcut: String,
     pub llm: LlmSettings,
+}
+
+fn default_shortcut() -> String {
+    SHORTCUT_DEFAULT.into()
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             locale: LOCALE_SYSTEM.into(),
+            shortcut: SHORTCUT_DEFAULT.into(),
             llm: LlmSettings::default(),
         }
     }
@@ -66,6 +79,8 @@ impl Default for AppSettings {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
     pub locale: String,
+    /// 全局快捷键（切换主窗口），如 "Ctrl+Shift+L"。
+    pub shortcut: String,
     pub data_dir: String,
     pub llm: LlmSettingsView,
 }
@@ -123,10 +138,20 @@ impl SettingsStore {
         self.inner.lock().expect("settings poisoned").llm.clone()
     }
 
+    /// 后端专用：全局快捷键（tray.rs 启动注册用）。
+    pub fn shortcut(&self) -> String {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .shortcut
+            .clone()
+    }
+
     /// 校验 → 应用到副本 → 落盘成功才提交内存。返回最新投影。
     pub fn update(
         &self,
         locale: Option<String>,
+        shortcut: Option<String>,
         llm: Option<LlmUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
@@ -135,6 +160,18 @@ impl SettingsStore {
                 return Err(format!("不支持的语言: {loc}（可选 system / zh-CN / en）"));
             }
             next.locale = loc;
+        }
+        if let Some(sc) = shortcut {
+            // 校验用全局快捷键解析器本身（与 tray.rs 注册同一套语义）；
+            // 空串 / 无法识别都拒绝。注册在命令层做（需要 AppHandle）。
+            let sc = sc.trim().to_string();
+            if sc.is_empty() {
+                return Err("快捷键不能为空（示例 Ctrl+Shift+L）".into());
+            }
+            if sc.parse::<Shortcut>().is_err() {
+                return Err(format!("无法识别的快捷键: {sc}（示例 Ctrl+Shift+L）"));
+            }
+            next.shortcut = sc;
         }
         if let Some(u) = llm {
             if let Some(p) = &u.provider {
@@ -165,6 +202,7 @@ impl SettingsStore {
     fn project(&self, s: &AppSettings) -> SettingsView {
         SettingsView {
             locale: s.locale.clone(),
+            shortcut: s.shortcut.clone(),
             data_dir: self.root.display().to_string(),
             llm: LlmSettingsView {
                 provider: s.llm.provider.clone(),

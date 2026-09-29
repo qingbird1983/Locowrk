@@ -91,6 +91,11 @@ export default {
     langEn: "English",
     langHint:
       "Applies immediately and is remembered. \"Follow system\" shows Chinese on zh environments, English otherwise.",
+    shortcutTitle: "Global shortcut",
+    shortcut: "Toggle main window",
+    shortcutPlaceholder: "e.g. Ctrl+Shift+L",
+    shortcutHint:
+      "Applies immediately after saving (no restart). Press it in any app to show/hide the main window. If the key is taken by another program, saving fails — pick another combo.",
   },
   error: {
     unknown: "Something went wrong",

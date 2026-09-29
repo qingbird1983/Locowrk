@@ -52,5 +52,21 @@ export const useSettingsStore = defineStore("settings", {
         this.saving = false;
       }
     },
+    /** 保存全局快捷键（tray 即时重注册；键位被占用时后端报错）。 */
+    async saveShortcut(shortcut: string) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ shortcut });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
   },
 });

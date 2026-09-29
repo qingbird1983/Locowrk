@@ -100,6 +100,8 @@ export type PluginStateChange =
 export interface SettingsView {
   /** "system" | "zh-CN" | "en"；system = 跟随系统语言。 */
   locale: string;
+  /** 全局快捷键（切换主窗口可见性），如 "Ctrl+Shift+L"。 */
+  shortcut: string;
   dataDir: string;
   llm: LlmSettingsView;
 }

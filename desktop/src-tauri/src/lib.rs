@@ -17,6 +17,8 @@
 //! - `plugins_root`：plugins/ 目录解析与插件装载
 //! - `tool_source`：RegistryToolSource → kernel ToolSource 胶水
 //!   （与 kernel-bin 各持一份：依赖图禁止 plugin-host 实现 kernel-agent trait）
+//! - `tray`：系统托盘 + 全局快捷键（阶段八⑤）——左键显窗 / 菜单显窗与
+//!   退出 / 关窗进托盘；快捷键切窗，键位存 settings.json `shortcut`
 //!
 //! 纪律：命令只做参数转换；流式输出走事件推送，不塞 command 返回值（§12.2）。
 
@@ -32,6 +34,7 @@ mod runner;
 mod settings;
 mod state;
 mod tool_source;
+mod tray;
 
 #[cfg(test)]
 mod tests;
@@ -45,8 +48,10 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        .plugin(tray::plugin())
         .setup(|app| {
             app.manage(state::init_state(app.handle().clone()));
+            tray::setup(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

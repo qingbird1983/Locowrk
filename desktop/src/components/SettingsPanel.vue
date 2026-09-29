@@ -8,7 +8,13 @@ const settings = useSettingsStore();
 
 // LLM 表单是投影的本地可编辑副本；apiKey 输入框永远从空开始
 //（原值不出后端），placeholder 按 apiKeySet 提示“留空保持不变”。
-const form = reactive({ provider: "openai", model: "", baseUrl: "", apiKey: "" });
+const form = reactive({
+  provider: "openai",
+  model: "",
+  baseUrl: "",
+  apiKey: "",
+  shortcut: "",
+});
 watch(
   () => settings.view,
   (v) => {
@@ -16,6 +22,7 @@ watch(
     form.provider = v.llm.provider;
     form.model = v.llm.model;
     form.baseUrl = v.llm.baseUrl ?? "";
+    form.shortcut = v.shortcut;
   },
   { immediate: true },
 );
@@ -37,6 +44,10 @@ function saveLlm() {
 
 function clearKey() {
   void settings.saveLlm({ apiKey: "" });
+}
+
+function saveShortcut() {
+  void settings.saveShortcut(form.shortcut.trim());
 }
 </script>
 
@@ -137,6 +148,33 @@ function clearKey() {
         <option value="en">{{ t("settings.langEn") }}</option>
       </select>
       <p class="text-[11px] text-neutral-500">{{ t("settings.langHint") }}</p>
+    </section>
+
+    <!-- 块四：全局快捷键（阶段八⑤：托盘 + 快捷键，保存即重注册） -->
+    <section class="space-y-2 rounded-xl border border-neutral-800 p-4">
+      <h3 class="text-xs font-semibold">{{ t("settings.shortcutTitle") }}</h3>
+      <label class="block space-y-1 text-xs">
+        <span class="text-neutral-400">{{ t("settings.shortcut") }}</span>
+        <input
+          v-model="form.shortcut"
+          type="text"
+          :placeholder="t('settings.shortcutPlaceholder')"
+          class="block w-48 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 font-mono placeholder:text-neutral-600"
+        />
+      </label>
+      <div class="flex items-center gap-2">
+        <button
+          class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="settings.saving"
+          @click="saveShortcut"
+        >
+          {{ t("settings.save") }}
+        </button>
+        <span v-if="settings.savedFlash" class="text-xs text-emerald-400">
+          {{ t("settings.saved") }}
+        </span>
+      </div>
+      <p class="text-[11px] text-neutral-500">{{ t("settings.shortcutHint") }}</p>
     </section>
   </div>
 </template>

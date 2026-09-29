@@ -85,6 +85,11 @@ export default {
     langZh: "中文",
     langEn: "English",
     langHint: "立即生效并记住选择；「跟随系统」时中文环境显示中文，其他显示英文。",
+    shortcutTitle: "全局快捷键",
+    shortcut: "切换主窗口",
+    shortcutPlaceholder: "如 Ctrl+Shift+L",
+    shortcutHint:
+      "保存后立即生效（无需重启）；在任意应用中按下即可显示/隐藏主窗口。键位被其他程序占用时保存会报错，换一个组合即可。",
   },
   error: {
     unknown: "发生错误",

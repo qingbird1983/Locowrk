@@ -106,10 +106,12 @@ export function getSettings(): Promise<SettingsView> {
 /** 部分更新设置，返回最新投影。 */
 export function setSettings(patch: {
   locale?: string;
+  shortcut?: string;
   llm?: LlmUpdate;
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
+    shortcut: patch.shortcut ?? null,
     llm: patch.llm ?? null,
   });
 }
