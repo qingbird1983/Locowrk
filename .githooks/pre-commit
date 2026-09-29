@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# pre-commit：单文件行数上限检查（规则见 AGENTS.md「模块与文件规模纪律」）
+root="$(git rev-parse --show-toplevel)"
+exec bash "$root/scripts/check_length.sh"

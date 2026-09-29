@@ -1,0 +1,3 @@
+# 统一换行处理；bash 脚本强制 LF，防止 Windows 检出 CRLF 导致 hook 执行失败
+* text=auto
+*.sh text eol=lf

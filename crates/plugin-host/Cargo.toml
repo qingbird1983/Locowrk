@@ -1,0 +1,8 @@
+[package]
+name = "plugin-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+plugin-api = { workspace = true }

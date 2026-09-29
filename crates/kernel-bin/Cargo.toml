@@ -1,0 +1,13 @@
+[package]
+name = "kernel-bin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+plugin-api = { workspace = true }
+cordis-core = { workspace = true }
+kernel-agent = { workspace = true }
+plugin-host = { workspace = true }
+plugin-service = { workspace = true }
+session-store = { workspace = true }

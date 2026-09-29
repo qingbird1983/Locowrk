@@ -1,0 +1,37 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/plugin-api",
+    "crates/cordis-core",
+    "crates/kernel-agent",
+    "crates/plugin-host",
+    "crates/plugin-service",
+    "crates/session-store",
+    "crates/kernel-bin",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+
+# 内核核心依赖目录（DESIGN.md §8）。桌面端 tauri/reqwest 等
+# 依赖在 desktop/src-tauri 脚手架（阶段五）时再补充。
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dashmap = "5"
+libloading = "0.8"
+semver = "1"
+thiserror = "1"
+tracing = "0.1"
+
+# 内部 crate（依赖方向严格单向，见 DESIGN.md §8 依赖图）
+plugin-api = { path = "crates/plugin-api" }
+cordis-core = { path = "crates/cordis-core" }
+kernel-agent = { path = "crates/kernel-agent" }
+plugin-host = { path = "crates/plugin-host" }
+plugin-service = { path = "crates/plugin-service" }
+session-store = { path = "crates/session-store" }
