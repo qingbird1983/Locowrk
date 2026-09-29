@@ -5,7 +5,7 @@
 - **项目名 / 仓库名 / 文件夹名**：`Locowrk`（用户指定，三者一致）
 - **定位**：可热插拔、可回退、带桌面端（Tauri 2）的 Rust Agent 内核。"一切皆插件"——模型适配器、工具、会话存储、沙箱、Agent 循环本身都是插件，无特权模块
 - **权威设计文档**：[docs/design/DESIGN.md](docs/design/DESIGN.md)。修改任何核心模块前先读对应章节，不要凭猜测实现；实现与文档冲突时先对齐文档。文档 §8 中的 `agent-kernel/` 指内核 Cargo 工作区，其 crate 命名（`plugin-api`、`cordis-core` 等）沿用文档，对外项目名是 Locowrk
-- **当前进度**：落地路径**阶段三已完成**（C ABI 插件加载，验收叙事跑通：加载 1.2.0 → 激活 1.3.0 → 回退 1.2.0 全程不重启）；下一步**阶段四**（Waterfall 插桩 + Scope 隔离，见 DESIGN.md §14）。阶段一（内核骨架 + 事件日志）、阶段二（Effect 撤销链 + Fiber 六态）已提交
+- **当前进度**：落地路径**阶段四已完成**（Waterfall 插桩 + Scope 隔离，验收叙事跑通：审批插件经 `agent/request` 改写参数、两 Agent 工具视图隔离，见 `cargo run -p kernel-bin -- demo4`）；阶段三（C ABI 插件热插拔，`demo`）、阶段二（Effect 撤销链 + Fiber 六态）、阶段一（内核骨架 + 事件日志）均已提交；下一步**阶段五**（Tauri 2 桌面端脚手架，见 DESIGN.md §14）
 
 ## 目录结构
 
@@ -36,12 +36,20 @@ cargo test           # 全部测试（workspace）
 cargo test -p cordis-core   # 只测某个 crate
 cargo clippy --workspace --all-targets
 cargo fmt
+bash scripts/build_plugins.sh  # 双版本 tool-echo 插件产物暂存到 plugins/（demo/demo4 前置）
 bash scripts/check_length.sh   # 单文件 400 行上限检查（pre-commit 自动执行）
 bash scripts/build_plugins.sh  # 构建 tool-echo 双版本并暂存到 plugins/tool-echo/{1.2.0,1.3.0}/
 cargo run -p kernel-bin -- demo  # 阶段三验收叙事（需先跑上一条）
 ```
 
 Git hooks 在 `.githooks/`（随仓库提交）。本仓库已通过 `git config core.hooksPath .githooks` 启用 pre-commit 检查；重新克隆后需重新执行一次该命令。
+
+验收叙事（前置 `bash scripts/build_plugins.sh`）：
+
+```bash
+cargo run -p kernel-bin -- demo    # 阶段三：加载 1.2.0 → 激活 1.3.0 → 回退 1.2.0，全程不重启
+cargo run -p kernel-bin -- demo4   # 阶段四：审批插件经 agent/request 改写参数；两 Agent 工具视图隔离
+```
 
 桌面端命令（`pnpm`/`tauri`）在阶段五脚手架后再补充到本节。
 

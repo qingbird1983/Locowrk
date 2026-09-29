@@ -14,6 +14,7 @@ use crate::effect::{Disposer, EffectId, EffectLedger};
 use crate::error::{CordisError, Result};
 use crate::event_bus::EventBus;
 use crate::fiber::{FiberId, current_fiber_id};
+use crate::scope::{ScopeKey, ScopedLayers};
 
 /// 服务标记 trait：Send + Sync + 'static 即可，`TypeId` 就是天然服务键，
 /// 不需要 `const KEY`（§3.1）。服务 trait 必须声明 `Send + Sync` 父 trait，
@@ -24,22 +25,38 @@ impl<T: ?Sized + Send + Sync + 'static> Service for T {}
 type ServiceMap = DashMap<TypeId, Arc<dyn Any + Send + Sync>>;
 
 /// 撤销一次服务注册的逆操作：恢复旧值而非删除——否则"覆盖注册后撤销"
-/// 会误删第一次注册的服务（§3.1 关键设计点）。
+/// 会误删第一次注册的服务（§3.1 关键设计点）。`scope` 记录注册落点：
+/// `None` = global 层，`Some` = 某作用域层（§3.4），撤销只动原层。
 struct Unprovide {
     key: TypeId,
     previous: Option<Arc<dyn Any + Send + Sync>>,
-    services: Arc<ServiceMap>,
+    layers: Arc<ScopedLayers<ServiceMap>>,
+    scope: Option<ScopeKey>,
 }
 
 #[async_trait::async_trait]
 impl Disposer for Unprovide {
     async fn dispose(self: Box<Self>) {
-        match self.previous {
-            Some(prev) => {
-                self.services.insert(self.key, prev);
-            }
-            None => {
-                self.services.remove(&self.key);
+        match &self.scope {
+            None => match self.previous {
+                Some(prev) => {
+                    self.layers.global().insert(self.key, prev);
+                }
+                None => {
+                    self.layers.global().remove(&self.key);
+                }
+            },
+            Some(scope) => {
+                // DashMap 的 insert/remove 都是 &self：RefMut 只守分片存活
+                let layer = self.layers.layer_mut(scope);
+                match self.previous {
+                    Some(prev) => {
+                        layer.insert(self.key, prev);
+                    }
+                    None => {
+                        layer.remove(&self.key);
+                    }
+                }
             }
         }
     }
@@ -48,7 +65,8 @@ impl Disposer for Unprovide {
 /// 服务载体 + Effect 账本 + 事件总线（附录 A）。所有能力挂在同一个
 /// `Context` 上，内核没有特权模块。
 pub struct Context {
-    services: Arc<ServiceMap>,
+    /// 服务表载体：global 层 + 按作用域惰性创建的 scoped 层（§3.4）。
+    layers: Arc<ScopedLayers<ServiceMap>>,
     effects: EffectLedger,
     /// 事件总线：内核经 `ctx.events` 访问（§7.2）。
     pub events: EventBus,
@@ -57,53 +75,112 @@ pub struct Context {
 impl Context {
     pub fn new() -> Self {
         Self {
-            services: Arc::new(DashMap::new()),
+            layers: Arc::new(ScopedLayers::new()),
             effects: EffectLedger::default(),
             events: EventBus::new(),
         }
     }
 
-    /// 按具体类型注册服务，返回 EffectId 供撤销（§3.1）。
+    /// 按具体类型注册服务（global 层），返回 EffectId 供撤销（§3.1）。
     pub fn provide<S: Service>(&self, svc: S) -> EffectId {
         let key = TypeId::of::<S>();
         // 捕获旧值：撤销时恢复旧注册而不是直接删除
-        let previous = self.services.insert(key, Arc::new(svc));
-        self.register_effect(key, previous)
+        let previous = self.layers.global().insert(key, Arc::new(svc));
+        self.register_effect(key, previous, None)
     }
 
-    /// 按 trait 对象注册服务：键 = `TypeId::of::<T>()`，T 是 trait 本身。
-    /// 存储具体类型 `Arc<dyn T>`（Sized，可被 downcast），外层包 `Arc<dyn Any>`
-    /// 进表（§3.1）。
+    /// 按 trait 对象注册服务（global 层）：键 = `TypeId::of::<T>()`，
+    /// T 是 trait 本身。存储具体类型 `Arc<dyn T>`（Sized，可被 downcast），
+    /// 外层包 `Arc<dyn Any>` 进表（§3.1）。
     pub fn provide_dyn<T: ?Sized + Service>(&self, svc: Arc<T>) -> EffectId {
         let key = TypeId::of::<T>();
         let previous = self
-            .services
+            .layers
+            .global()
             .insert(key, Arc::new(svc) as Arc<dyn Any + Send + Sync>);
-        self.register_effect(key, previous)
+        self.register_effect(key, previous, None)
     }
 
-    /// 按具体类型查询服务，返回 Arc 快照——调用方只在这一瞬间持有分片
-    /// 读锁，后续长耗时操作不持锁（§3.1）。
+    /// 按具体类型注册到某作用域层（§3.4）：只遮蔽该作用域，其他 Agent
+    /// 与 global 查询不可见。同样走 Effect 账本，可撤销。
+    pub fn provide_scoped<S: Service>(&self, scope: &ScopeKey, svc: S) -> EffectId {
+        let key = TypeId::of::<S>();
+        let previous = self.layers.layer_mut(scope).insert(key, Arc::new(svc));
+        self.register_effect(key, previous, Some(scope.clone()))
+    }
+
+    /// 按 trait 对象注册到某作用域层（§3.4）——两 Agent 工具视图隔离
+    /// 的入口（§14 阶段四验收）。
+    pub fn provide_dyn_scoped<T: ?Sized + Service>(
+        &self,
+        scope: &ScopeKey,
+        svc: Arc<T>,
+    ) -> EffectId {
+        let key = TypeId::of::<T>();
+        let previous = self
+            .layers
+            .layer_mut(scope)
+            .insert(key, Arc::new(svc) as Arc<dyn Any + Send + Sync>);
+        self.register_effect(key, previous, Some(scope.clone()))
+    }
+
+    /// 按具体类型查询服务（global 层），返回 Arc 快照——调用方只在这一
+    /// 瞬间持有分片读锁，后续长耗时操作不持锁（§3.1）。
     pub fn use_service<S: Service>(&self) -> Result<Arc<S>> {
-        self.services
+        self.layers
+            .global()
             .get(&TypeId::of::<S>())
             .and_then(|e| e.value().clone().downcast::<S>().ok())
             .ok_or_else(CordisError::service_missing::<S>)
     }
 
-    /// 按 trait 对象查询服务（§3.1）：内层存储是 `Arc<dyn T>`，
+    /// 按 trait 对象查询服务（global 层，§3.1）：内层存储是 `Arc<dyn T>`，
     /// downcast 成 `Arc<Arc<dyn T>>` 后拆壳克隆。
     pub fn use_dyn<T: ?Sized + Service>(&self) -> Result<Arc<T>> {
-        self.services
+        self.layers
+            .global()
             .get(&TypeId::of::<T>())
             .and_then(|e| e.value().clone().downcast::<Arc<T>>().ok())
             .map(|outer| (*outer).clone())
             .ok_or_else(CordisError::service_missing::<T>)
     }
 
+    /// 作用域内查询（§3.4 use_scoped）：scoped 层命中优先，未命中回退
+    /// global。没有任何 scoped 层时直接走 global，零额外开销（§9.3）。
+    pub fn use_service_scoped<S: Service>(&self, scope: &ScopeKey) -> Result<Arc<S>> {
+        if !self.layers.scoped_is_empty() {
+            let key = TypeId::of::<S>();
+            let hit = self.layers.with_scoped(scope, |l| {
+                l.get(&key)
+                    .and_then(|e| e.value().clone().downcast::<S>().ok())
+            });
+            if let Some(svc) = hit {
+                return Ok(svc);
+            }
+        }
+        self.use_service::<S>()
+    }
+
+    /// 作用域内 trait 对象查询（§3.4）：scoped 命中优先，否则回退 global。
+    pub fn use_dyn_scoped<T: ?Sized + Service>(&self, scope: &ScopeKey) -> Result<Arc<T>> {
+        if !self.layers.scoped_is_empty() {
+            let key = TypeId::of::<T>();
+            let hit = self.layers.with_scoped(scope, |l| {
+                l.get(&key)
+                    .and_then(|e| e.value().clone().downcast::<Arc<T>>().ok())
+                    .map(|outer| (*outer).clone())
+            });
+            if let Some(svc) = hit {
+                return Ok(svc);
+            }
+        }
+        self.use_dyn::<T>()
+    }
+
     /// 依赖探针：服务键是否已有提供者（runtime 激活门的依据，§3.3）。
+    /// 只看 global 层：插件依赖声明是进程级的，作用域层不参与激活门。
     pub fn has_service(&self, key: TypeId) -> bool {
-        self.services.contains_key(&key)
+        self.layers.global().contains_key(&key)
     }
 
     /// 某 Fiber 当前登记提供的服务键（runtime 建 service_providers 表的
@@ -135,6 +212,7 @@ impl Context {
         &self,
         key: TypeId,
         previous: Option<Arc<dyn Any + Send + Sync>>,
+        scope: Option<ScopeKey>,
     ) -> EffectId {
         self.effects.push(
             current_fiber_id(),
@@ -142,7 +220,8 @@ impl Context {
             Box::new(Unprovide {
                 key,
                 previous,
-                services: Arc::clone(&self.services),
+                layers: Arc::clone(&self.layers),
+                scope,
             }),
         )
     }

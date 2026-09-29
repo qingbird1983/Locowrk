@@ -383,6 +383,14 @@ impl<L: Default> ScopedLayers<L> {
 
 **单 Agent 场景下 scoped map 始终为空，开销只有一次 `DashMap` 的空查询。**
 
+> **实现落点（v2.3）**：`ScopedLayers` 不是独立于 Context 的第二张表，而是
+> Context 服务表的**载体**——`layers.global()` 即 §3.1 的服务表，scoped 层
+> 按 `ScopeKey` 惰性创建。注册入口为 `provide` / `provide_dyn`（global）与
+> `provide_scoped` / `provide_dyn_scoped`（scoped），后者同样走 Effect 账本
+> 可撤销；查询入口 `use_service_scoped` / `use_dyn_scoped` 先查 scoped 层、
+> 未命中回退 global。`Kernel::scoped(key)` 使主循环的服务查询作用域化
+> （§14 阶段四"两 Agent 工具视图隔离"的落点）。
+
 ### 3.5 事件总线：四种分发语义
 
 事件总线同时承担协作和拦截两个职责。
@@ -413,6 +421,14 @@ impl EventBus {
     pub async fn waterfall(&self, key: &str, payload: Value) -> WaterfallDecision;
 }
 ```
+
+> **返回值精化（v2.3）**：伪代码让 `waterfall` 只返回 `WaterfallDecision`，
+> 但内核需要**改写后的 payload** 才能继续（§7.2 的 `parse_request`），故实现
+> 返回 `WaterfallOutcome { payload, decision }`：决策环顺序执行，`Continue`
+> 传原 payload、`Replace` 传改写后的、`Reject` / `Retry` 当场短路并作为终态
+> 决策返回；无监听器 = 原样放行。监听器签名 `handle(&key, &payload) ->
+> WaterfallDecision`（借用传入，要改写就克隆返回 `Replace`）；serial 监听器
+> 返回 `bool`（false = 短路），结局为 `SerialOutcome::{Completed, Stopped{at}}`。
 
 **`waterfall` 是"连 Loop 都能热插拔"的工程实现。** 插件可接管三个决策点：
 
@@ -945,6 +961,12 @@ pub fn build_chain(mw: Vec<Arc<dyn Middleware>>, tool: Arc<dyn Tool>) -> Service
 
 审批中间件拦 `Irreversible` 工具，把人机确认做成一个异步点，正好和 Event Sourcing 对上：审批结果本身也是一条事件。
 
+> **审批门位置（v2.3）**：审批决策必须作为 `ApprovalDecided` 事件写入会话
+> 日志，而洋葱中间件没有会话句柄——所以审批门落在 Kernel 的 step 循环里
+> （§7.2 的 `await_approval`，经 `ApprovalResolver` trait 解析，无决议者时
+> fail-safe 拒绝）。§7.1 链上的 Approval 位保留给未来无会话上下文的独立
+> 调用路径；本阶段链上实装的是 Tracing → Timeout → Retry → CircuitBreaker。
+
 ### 7.2 Agent 主循环
 
 ```rust
@@ -1047,6 +1069,12 @@ impl Kernel {
 **顺序很关键**：先写 `ToolCall` 再执行。进程崩在调用中途时，replay 能知道"有一个调用悬空了"，可以做超时回收或补偿；被拒绝的调用则当场以 `denied` 的 `ToolResult` 闭合，不留悬空。
 
 **重试预算**：`agent/request-error` 返回的 `Retry` 决策受内核重试预算约束（同一 step 内累计次数与累计延迟上限，超限转为失败），防止决策点形成无限循环。
+
+> **实现落点（v2.3）**：预算约束要求"同一 step 内累计"，若把 `Retry` 返回给
+> 调用方再重入 step，每次都是新 step、预算无法累计——所以重试在 step 内部
+> 闭环：`Retry { delay }` → sleep → 重新走 request 决策环，局部计数器累计
+> 次数与延迟，超限即返回 `RetryBudgetExhausted` 错误；`StepOutcome` 不再有
+> `Retry` 变体（对外只剩 `Continue`）。
 
 ---
 
@@ -2150,6 +2178,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.2（补记 §5.1 长度/缓冲区协议；修订 v2.0 审查发现的机制性错误、Windows 平台问题与依赖图矛盾）*
+*文档版本：v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）*
 *最后更新：2026-09-29*
-*前序版本：v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
+*前序版本：v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*

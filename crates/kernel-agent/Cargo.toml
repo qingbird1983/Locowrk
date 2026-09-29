@@ -9,7 +9,10 @@ plugin-api = { workspace = true }
 cordis-core = { workspace = true }
 session-store = { workspace = true }
 async-trait = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

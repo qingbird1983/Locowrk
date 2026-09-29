@@ -11,6 +11,7 @@ use super::Context;
 use crate::effect::EffectId;
 use crate::error::CordisError;
 use crate::fiber::{FiberId, FiberScope};
+use crate::scope::ScopeKey;
 
 #[derive(Debug)]
 struct Counter(u32);
@@ -123,4 +124,77 @@ async fn provided_keys_of_reflects_fiber_registrations() {
     // 撤销后账目随账本清空（账本是唯一记录处，§3.1）
     ctx.revoke_by_fiber(FiberId(9)).await;
     assert!(ctx.provided_keys_of(FiberId(9)).is_empty());
+}
+
+// ---- Scope 隔离（§3.4 / §14 阶段四：两 Agent 服务视图隔离） ----
+
+struct Zh;
+impl Greeter for Zh {
+    fn greet(&self) -> String {
+        "你好".into()
+    }
+}
+
+#[tokio::test]
+async fn scoped_service_shadows_only_its_scope() {
+    let ctx = Context::new();
+    ctx.provide_dyn::<dyn Greeter>(Arc::new(En));
+
+    let scope_b = ScopeKey::new();
+    let scope_c = ScopeKey::new();
+    ctx.provide_dyn_scoped::<dyn Greeter>(&scope_b, Arc::new(Zh));
+
+    // 作用域 B 命中 scoped 层（遮蔽 global）
+    assert_eq!(
+        ctx.use_dyn_scoped::<dyn Greeter>(&scope_b).unwrap().greet(),
+        "你好"
+    );
+    // 作用域 C 层不存在 → 回退 global（§3.4 use_scoped 语义）
+    assert_eq!(
+        ctx.use_dyn_scoped::<dyn Greeter>(&scope_c).unwrap().greet(),
+        "hello"
+    );
+    // 无作用域查询与 global 查询不受影响
+    assert_eq!(ctx.use_dyn::<dyn Greeter>().unwrap().greet(), "hello");
+    // 具体类型轨同样成立
+    ctx.provide_scoped(&scope_b, Counter(9));
+    assert_eq!(ctx.use_service_scoped::<Counter>(&scope_b).unwrap().0, 9);
+    assert!(ctx.use_service::<Counter>().is_err());
+}
+
+#[tokio::test]
+async fn scoped_provide_revokes_back_to_global() {
+    let ctx = Context::new();
+    ctx.provide_dyn::<dyn Greeter>(Arc::new(En));
+    let scope_b = ScopeKey::new();
+
+    let id = ctx.provide_dyn_scoped::<dyn Greeter>(&scope_b, Arc::new(Zh));
+    assert_eq!(
+        ctx.use_dyn_scoped::<dyn Greeter>(&scope_b).unwrap().greet(),
+        "你好"
+    );
+
+    // 撤销 scoped 注册：该层键消失，查询回退 global（Unprovide 只动原层）
+    ctx.revoke(id).await.unwrap();
+    assert_eq!(
+        ctx.use_dyn_scoped::<dyn Greeter>(&scope_b).unwrap().greet(),
+        "hello"
+    );
+}
+
+#[tokio::test]
+async fn scoped_overwrite_revoke_restores_previous_scoped_value() {
+    let ctx = Context::new();
+    let scope_b = ScopeKey::new();
+    let first = ctx.provide_scoped(&scope_b, Counter(1));
+    let second = ctx.provide_scoped(&scope_b, Counter(2));
+
+    ctx.revoke(second).await.unwrap();
+    assert_eq!(ctx.use_service_scoped::<Counter>(&scope_b).unwrap().0, 1);
+
+    ctx.revoke(first).await.unwrap();
+    // 层被清空但层容器保留；global 查询不受影响
+    assert!(ctx.use_service_scoped::<Counter>(&scope_b).is_err());
+    ctx.provide(Counter(5));
+    assert_eq!(ctx.use_service_scoped::<Counter>(&scope_b).unwrap().0, 5);
 }

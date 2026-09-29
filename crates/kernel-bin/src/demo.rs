@@ -70,6 +70,12 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
             s.loaded.iter().map(Version::to_string).collect::<Vec<_>>()
         );
     }
+    print_session(&session);
+    Ok(())
+}
+
+/// 打印会话事件全量日志（demo 与 demo4 共用）。
+pub(crate) fn print_session(session: &Session) {
     println!("\nsession log ({} events):", session.len());
     for (seq, e) in session.events().iter().enumerate() {
         println!(
@@ -77,18 +83,16 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
             serde_json::to_string(e).expect("session event serializes")
         );
     }
-    Ok(())
 }
 
 async fn step(kernel: &Kernel, session: &mut Session) -> Result<(), String> {
     match kernel.step(session).await {
         Ok(StepOutcome::Continue) => Ok(()),
-        Ok(StepOutcome::Retry) => Err("unexpected Retry (stage-4 decision point)".into()),
         Err(e) => Err(format!("kernel step: {e}")),
     }
 }
 
-fn load_and_activate(
+pub(crate) fn load_and_activate(
     registry: &PluginRegistry,
     id: &str,
     ver: &Version,
@@ -107,7 +111,7 @@ fn load_and_activate(
         .map_err(|e| format!("load/activate {id}@{ver}: {e}"))
 }
 
-fn dll_name() -> &'static str {
+pub(crate) fn dll_name() -> &'static str {
     if cfg!(windows) {
         "tool_echo.dll"
     } else if cfg!(target_os = "macos") {

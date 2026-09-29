@@ -86,10 +86,12 @@ dependencies = [
  "cordis-core",
  "plugin-api",
  "semver",
+ "serde",
  "serde_json",
  "session-store",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
