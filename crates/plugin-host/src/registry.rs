@@ -15,7 +15,8 @@ use semver::Version;
 
 use crate::error::LoadError;
 use crate::instance::PluginInstance;
-use crate::loader::DylibLoader;
+use crate::loader::{DylibLoader, is_wasm_artifact};
+use crate::wasm::WasmLoader;
 
 /// 单个插件的版本视图（UI 投影的最小形态；订阅广播在 plugin-service）。
 #[derive(Debug, Clone)]
@@ -49,8 +50,9 @@ impl PluginRegistry {
         }
     }
 
-    /// dlopen 加载并登记一个版本。`id` / `ver` 是登记键（开发态来自
-    /// 目录名 plugins/{id}/{ver}/），必须与 manifest 自述一致。
+    /// dlopen/dlopen-wasm 加载并登记一个版本。`id` / `ver` 是登记键
+    /// （开发态来自目录名 plugins/{id}/{ver}/），必须与 manifest 自述
+    /// 一致。`.wasm` 工件走 WasmLoader，其余走 DylibLoader（§5.8）。
     /// 同键重复加载返回既有实例（幂等，§5.7 load）。
     pub fn load(
         &self,
@@ -61,7 +63,11 @@ impl PluginRegistry {
         if let Some(inst) = self.instance(id, ver) {
             return Ok(inst);
         }
-        let inst = Arc::new(DylibLoader::load(path)?);
+        let inst = if is_wasm_artifact(path) {
+            Arc::new(WasmLoader::load(path)?)
+        } else {
+            Arc::new(DylibLoader::load(path)?)
+        };
         let manifest = inst.manifest();
         if manifest.id != id {
             return Err(LoadError::IdMismatch {

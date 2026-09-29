@@ -38,6 +38,8 @@ mod tray;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_plugins_root;
 
 pub fn run() {
     use tauri::Manager;

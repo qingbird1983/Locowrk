@@ -861,6 +861,13 @@ pub struct WasmLoader;    // wasmtime + WASI（未来）
 ```
 
 WASM 的好处：内存安全沙箱、任何能编译到 `wasm32-wasi` 的语言都能写、天然可卸载、跨平台一份产物。代价是性能损失 1.5~3 倍和 WASI 能力限制。**内核只依赖 `PluginLoader` trait，第一版用 `DylibLoader`，把 WASM 作为第二实现预留。**
+>
+> **落地注记（v2.16）**：`WasmLoader` 已实现（plugin-host `wasm/` 模块），
+> registry 按 `.wasm` 扩展名分发，manifest 与 C ABI 同 schema。与本文
+> 草图的两处分野：宿主能力经 **`locowrk.log` 导入**注入（不是 vtable
+> 指针——wasm 拿不到宿主指针），未注入的导入一律实例化失败；同实例
+> 调用经 Mutex 串行（guest 是单线程线性内存），并发语义较 native 收窄。
+> 沙箱与时间预算见 §14 v2.16 上注。
 
 ---
 
@@ -2351,13 +2358,45 @@ export const usePluginStore = defineStore('plugins', {
 > put/undo/delete/undo、git commit→undo→push 本地 bare、mcp 发现+调用
 > （env 须在 load 前就位——describe 阶段完成发现）。
 >
+> **⑧ WASM 加载器（v2.16，§5.8 落地）**：`PluginLoader` trait 兑现 +
+> `WasmLoader` 第二实现（wasmtime 34，feature 只留 cranelift/runtime/std
+> ——不开 wasi/component-model/threads，沙箱面最小）。registry 按 `.wasm`
+> 扩展名分发（其余仍 DylibLoader），manifest/ABI 校验/工具信封与 C ABI
+> 完全同构——**manifest JSON 同 schema、abi_version 同值同义（工具信封
+> 契约版本），变的只是传输层**。WASM ABI（wasm32，指针=i32 线性内存
+> 偏移）：导出 memory / describe（静态 NUL 结尾 JSON，宿主不 free）/
+> alloc / free / init（返回 guest 句柄）/ call（输出经两个 i32 cell
+> 回传）/ shutdown；宿主导入只注入 `locowrk.log`（镜像 host_vtable
+> 分级）——**能力面由宿主枚举**，客户机声明任何其他导入（含 wasi_*）
+> 一律实例化失败。缓冲协议：每次 call 宿主 `alloc` 一块
+> `[0..8)输出格|[8..8+tl)工具名|[8+tl..)args`，用完 free 两次；输出
+> (ptr,len) 谎报越界被拒（先校验界内再拷贝）。沙箱：无 WASI（无文件/
+> 网络/env/时钟）；Store limiter 内存 64MiB / 1 块内存 / 表 4×10000；
+> **epoch interruption** 进程级心跳线程（20ms/格），握手与每次调用共用
+> 同一预算 `LOCOWRK_WASM_TIMEOUT_MS`（缺省 10s 上限 600s）——**已知坑：
+> epoch 开启后 Store 默认 deadline=0，心跳一走 describe/init 即 trap，
+> 加载期必须显式设预算**；deadline 按次调用重置（alloc/call/free 同
+> 窗口，上次耗尽不污染下一次）。host func 闭包返回
+> `Result<_, anyhow::Error>`（WasmRet 约束——`Result<_, Trap>` 不满足
+> IntoFunc）；单参 TypedFunc 直传值、一元组类型才传 tuple。
+> instance.rs 拆 instance/{mod,native}.rs（`PluginBackend` 内部 trait，
+> native Drop 仍是全进程唯一 dlclose 路径；wasm 同实例调用经 Mutex
+> 串行——guest 单线程线性内存，语义收窄接口不变）。desktop
+> `find_artifact` 认 `.wasm`（约定 `{id_underscored}.wasm` 优先于扫描，
+> native 约定名并存时优先；多工件歧义仍拒绝）——开发态自动装载 WASM
+> 插件直达；market 打包/分发 wasm 归后续。测试：WAT 客户机三态单测 9
+> （echo/manifest/side_effect 双形态、错误信封/未知工具/trap 透传、
+> epoch 预算杀死 spin 且下次调用自愈、缺导出点名、无 NUL 拒绝、wasi
+> 导入拒绝、内存超限、registry 分发）+ 集成 wasm_plugins.rs 2（staging
+> 布局、native+wasm 混载同 registry 工具目录共存）。
+>
 > **进度**：① 已完成（§13.1 备注）。② 已完成（v2.8，§7.2 备注）：桌面端
 > `llm/` 模块以 genai 0.6 实现 `LlmService`，`LlmRequest` 携带工具目录快照
 > （`ToolSource::list()`），配置读设置面板、保存即生效，model 未配置回落
 > 脚本替身；真窗口 E2E（本机 Ollama 9B）全链路通过——模型按 schema 自选
 > 参数调用 tool-echo 插件、工具结果回传后给最终回答。③ 已完成（v2.9，
 > §7.1 备注）。④ 已完成（④a–④c v2.11，④d/④e v2.12）、⑤ 已完成
-> （v2.13，上注）、⑥ 已完成（第二批官方内置插件 + 安全底线，v2.14，上注）、⑦ 已完成（第三批官方内置插件 tool-git / memory-sqlite / tool-mcp，v2.15，上注）；下一步⑧ WASM（顺延，看需求）。
+> （v2.13，上注）、⑥ 已完成（第二批官方内置插件 + 安全底线，v2.14，上注）、⑦ 已完成（第三批官方内置插件 tool-git / memory-sqlite / tool-mcp，v2.15，上注）、⑧ 已完成（WASM 加载器，v2.16，上注）。编号阶段至此全部落地，后续看需求与收尾 backlog。
 
 **阶段一和阶段二是试金石**：如果内核的服务组合和 Effect 撤销链设计干净，后续所有能力都是叠加。**阶段五和阶段六是桌面端的试金石**：如果 Tauri IPC 层能干净地桥接内核事件流，后续插件管理 UI 都是在这个模式上叠加。
 
@@ -2492,6 +2531,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.15（§14 补记阶段八⑦第三批官方内置插件落点：tool-git@1.0.0（porcelain 机读解析 / commit 可撤销 / push 审批 / GIT_* 环境重定向剥离）+ memory-sqlite@1.0.0（固定路径记忆库，写操作按宁严勿松收紧为 Compensable）+ tool-mcp@1.0.0（mcp.json 加载期发现冻结、缺省 Irreversible、懒重连、fail-soft、examples 测试替身）+ tools_batch3 集成测试；v2.14 补记阶段八⑥第二批官方内置插件落点（用户排期重排：⑥=plugins.md 第二批，WASM 顺延⑦）+ 同日安全底线（fsutil 允许根 canonicalize 校验、fetch SSRF 防线、fs.restore 判 Irreversible）：tool-fs@1.1.0 写入三件套（write 备份先行 / delete / restore 来源校验）+ kernel-agent compensation.rs（§6.3 补偿执行器，undo 契约 {"call_id","args","output"}、新 undo call_id、账本幂等）+ tool-shell@1.0.0（白名单+denylist+元字符拒绝+无 shell spawn）+ tool-edit@1.0.0（replace/lines/严格 diff，跨插件 undo）+ ctx-compact（agent/request 摘要压缩，切点对齐 User 起点，fail-open，desktop 已注册）；§14 补记阶段八⑤落点：托盘（左键显窗 / 菜单显示主窗口与退出 / 关窗隐藏进托盘）+ tauri-plugin-global-shortcut 全局快捷键切换主窗口（settings.json `shortcut` 字段级缺省 Ctrl+Shift+L、设置面板改键保存即重注册、启动失败降级告警）+ 数据目录改名 ~/.agent-kernel → ~/.Locowrk（直接改名不迁移，§11.3 与三个 README 同步）；§14 补记阶段八④d/④e 落点：Fallback 矩阵收尾——v1 极简 manifest 投影全 None、坏 manifest 不崩已装列表、展示投影跟随 active 指针回归；`locowrk new plugin` 脚手架——scaffold.rs 四件模板（§8.1 全量 v2 manifest + §8.2 占位图标）+ 名称清洗 + plugin-api 路径探测，tmp/ 实测独立 cargo check 通过，service/tests 拆 tests/{mod,lifecycle,fallback}；v2.11 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.16（§14 补记阶段八⑧WASM 加载器落点：PluginLoader trait + WasmLoader（wasmtime 34，.wasm 扩展名分发、manifest 同构、locowrk.log 单导入枚举能力面、Store limiter 64MiB、epoch 时间预算按次重置、宿主 alloc/free 缓冲协议、输出越界拒绝）；instance 拆 mod/native（PluginBackend trait）；desktop find_artifact 认 .wasm；WAT 三态单测 9 + 集成 2；§5.8 落地注记；v2.15 补记阶段八⑦第三批官方内置插件落点：tool-git@1.0.0（porcelain 机读解析 / commit 可撤销 / push 审批 / GIT_* 环境重定向剥离）+ memory-sqlite@1.0.0（固定路径记忆库，写操作按宁严勿松收紧为 Compensable）+ tool-mcp@1.0.0（mcp.json 加载期发现冻结、缺省 Irreversible、懒重连、fail-soft、examples 测试替身）+ tools_batch3 集成测试；v2.14 补记阶段八⑥第二批官方内置插件落点（用户排期重排：⑥=plugins.md 第二批，WASM 顺延⑦）+ 同日安全底线（fsutil 允许根 canonicalize 校验、fetch SSRF 防线、fs.restore 判 Irreversible）：tool-fs@1.1.0 写入三件套（write 备份先行 / delete / restore 来源校验）+ kernel-agent compensation.rs（§6.3 补偿执行器，undo 契约 {"call_id","args","output"}、新 undo call_id、账本幂等）+ tool-shell@1.0.0（白名单+denylist+元字符拒绝+无 shell spawn）+ tool-edit@1.0.0（replace/lines/严格 diff，跨插件 undo）+ ctx-compact（agent/request 摘要压缩，切点对齐 User 起点，fail-open，desktop 已注册）；§14 补记阶段八⑤落点：托盘（左键显窗 / 菜单显示主窗口与退出 / 关窗隐藏进托盘）+ tauri-plugin-global-shortcut 全局快捷键切换主窗口（settings.json `shortcut` 字段级缺省 Ctrl+Shift+L、设置面板改键保存即重注册、启动失败降级告警）+ 数据目录改名 ~/.agent-kernel → ~/.Locowrk（直接改名不迁移，§11.3 与三个 README 同步）；§14 补记阶段八④d/④e 落点：Fallback 矩阵收尾——v1 极简 manifest 投影全 None、坏 manifest 不崩已装列表、展示投影跟随 active 指针回归；`locowrk new plugin` 脚手架——scaffold.rs 四件模板（§8.1 全量 v2 manifest + §8.2 占位图标）+ 名称清洗 + plugin-api 路径探测，tmp/ 实测独立 cargo check 通过，service/tests 拆 tests/{mod,lifecycle,fallback}；v2.11 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*

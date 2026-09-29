@@ -1,4 +1,4 @@
-//! 插件运行实例：dlopen 句柄 + 导出符号 + init 句柄的持有者（§5.5）。
+//! native 后端：dlopen 句柄 + 导出符号 + init 句柄（§5.5，C ABI）。
 //!
 //! 生命周期纪律：
 //! - Drop = shutdown 句柄 → Library drop（dlclose）。这是**全进程唯一**
@@ -11,21 +11,15 @@
 
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use libloading::Library;
 use plugin_api::ffi::{CallFn, FreeBufFn, ShutdownFn};
-use plugin_api::manifest::PluginManifest;
-use plugin_api::{ToolError, ToolSpec};
+use plugin_api::{ToolError, ffi};
 use serde_json::Value;
-use tokio::sync::Semaphore;
 
-/// 一个已加载插件版本。共享形态固定为 `Arc<PluginInstance>`。
-#[derive(Debug)]
-pub struct PluginInstance {
-    manifest: PluginManifest,
-    version: semver::Version,
+use super::PluginBackend;
+
+pub(crate) struct NativeBackend {
     call: CallFn,
     shutdown: ShutdownFn,
     free: FreeBufFn,
@@ -34,64 +28,29 @@ pub struct PluginInstance {
     /// 声明字段序：Drop 先执行 shutdown（显式写在 drop 里），字段随后
     /// 逆析构，`lib` 最后释放代码段——顺序由 Drop impl 保证。
     _lib: Library,
-    /// 同实例的并发调用上限（§5.5：适配器持有 permit，实例共享限额）。
-    sem: Arc<Semaphore>,
-    /// 加载来源（dll 所在路径）。其父目录是 manifest.json 与图标的
-    /// 定位基础（packaging.md §3.1：每个版本目录自包含）。
-    path: PathBuf,
 }
 
-impl PluginInstance {
-    /// loader 专用构造：所有字段已在加载路径上校验完毕。
-    #[allow(clippy::too_many_arguments)]
+impl NativeBackend {
+    /// loader 专用构造：符号已在加载路径上解析并完成 init。
     pub(crate) fn new(
-        manifest: PluginManifest,
-        version: semver::Version,
         call: CallFn,
         shutdown: ShutdownFn,
         free: FreeBufFn,
         handle: *mut c_void,
         lib: Library,
-        path: PathBuf,
     ) -> Self {
         Self {
-            manifest,
-            version,
             call,
             shutdown,
             free,
             handle,
             _lib: lib,
-            sem: Arc::new(Semaphore::new(16)),
-            path,
         }
     }
+}
 
-    pub fn manifest(&self) -> &PluginManifest {
-        &self.manifest
-    }
-
-    pub fn version(&self) -> &semver::Version {
-        &self.version
-    }
-
-    /// 加载来源路径（dll 所在位置；父目录即版本目录）。
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// manifest 声明的工具规格（名字查找，§5.2）。
-    pub fn spec_of(&self, tool: &str) -> Option<ToolSpec> {
-        self.manifest.tools.iter().find(|t| t.name == tool).cloned()
-    }
-
-    pub(crate) fn semaphore(&self) -> Arc<Semaphore> {
-        Arc::clone(&self.sem)
-    }
-
-    /// 同步 FFI 调用（阻塞；调用方必须放在 `spawn_blocking` 内，§5.6 纪律三）。
-    /// 返回码非零时尽力从输出信封取错误消息。
-    pub(crate) fn call_blocking(&self, tool: &str, args: &Value) -> Result<Value, ToolError> {
+impl PluginBackend for NativeBackend {
+    fn call_blocking(&self, tool: &str, args: &Value) -> Result<Value, ToolError> {
         let fail = |message: String| ToolError::Failed {
             tool: tool.to_string(),
             message,
@@ -120,9 +79,7 @@ impl PluginInstance {
         };
         if out.is_null() || out_len == 0 {
             let message = match code {
-                plugin_api::ffi::code::ERR_PANIC => {
-                    "plugin panicked (caught inside plugin)".to_string()
-                }
+                ffi::code::ERR_PANIC => "plugin panicked (caught inside plugin)".to_string(),
                 other => format!("plugin returned code {other} with no output"),
             };
             return Err(fail(message));
@@ -138,7 +95,7 @@ impl PluginInstance {
         let value: Value = serde_json::from_slice(&payload)
             .map_err(|e| fail(format!("plugin output is not json: {e}")))?;
         match code {
-            plugin_api::ffi::code::OK => Ok(value),
+            ffi::code::OK => Ok(value),
             _ => {
                 let message = value
                     .get("error")
@@ -151,12 +108,12 @@ impl PluginInstance {
     }
 }
 
-// SAFETY: Library 是 Send+Sync；符号为纯函数指针；handle 由本实例独占
+// SAFETY: Library 是 Send+Sync；符号为纯函数指针；handle 由本后端独占
 // （只在 call/shutdown 中使用）。并发安全性契约见模块注释。
-unsafe impl Send for PluginInstance {}
-unsafe impl Sync for PluginInstance {}
+unsafe impl Send for NativeBackend {}
+unsafe impl Sync for NativeBackend {}
 
-impl Drop for PluginInstance {
+impl Drop for NativeBackend {
     fn drop(&mut self) {
         let handle = self.handle;
         let shutdown = self.shutdown;

@@ -33,6 +33,8 @@ pub enum LoadError {
     VersionMismatch { expected: String, manifest: String },
     #[error("plugin init failed (describe ok, init returned null or panicked)")]
     InitFailed,
+    #[error("wasm plugin `{path}`: {message}")]
+    Wasm { path: String, message: String },
     #[error("plugin `{0}` is not loaded")]
     NotLoaded(String),
     #[error("plugin `{0}` has no previous version to roll back to")]

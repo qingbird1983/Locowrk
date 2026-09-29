@@ -1,5 +1,6 @@
-//! 桌面端单元测试：runner 的日志投影循环 / demo_llm 决策规则 /
-//! plugins_root 的平台工具函数。事件出口用收集器替换 TauriSink。
+//! 桌面端单元测试：runner 的日志投影循环 / demo_llm 决策规则。
+//! （plugins_root 工件发现用例在 tests_plugins_root.rs。）
+//! 事件出口用收集器替换 TauriSink。
 
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 
@@ -18,7 +19,6 @@ use crate::approval::ApprovalHub;
 use crate::demo_llm::DemoLlm;
 use crate::demo_tools::SendEmailTool;
 use crate::events::{AgentEvent, EventSink};
-use crate::plugins_root;
 use crate::runner::run_turn;
 use crate::tool_source::KernelToolSource;
 
@@ -198,62 +198,6 @@ async fn demo_llm_routes_by_content() {
         .await
         .unwrap();
     assert!(after_tool.content.contains("工具返回"));
-}
-
-#[test]
-fn dll_name_matches_platform() {
-    let name = plugins_root::dll_name("tool-echo");
-    if cfg!(windows) {
-        assert_eq!(name, "tool_echo.dll");
-    } else if cfg!(target_os = "macos") {
-        assert_eq!(name, "libtool_echo.dylib");
-    } else {
-        assert_eq!(name, "libtool_echo.so");
-    }
-}
-
-/// packaging.md §3.1："dll 名字由作者决定，宿主不假设文件名"——约定名
-/// 缺席时扫描目录里唯一 platform 动态库；多个则拒绝猜测。
-#[test]
-fn find_artifact_prefers_conventional_then_single_dynlib() {
-    let dir = std::env::temp_dir().join(format!(
-        "locowrk-find-artifact-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-
-    // 约定名在位 → 直接用
-    let conventional = dir.join(plugins_root::dll_name("tool-x"));
-    std::fs::write(&conventional, b"x").unwrap();
-    assert_eq!(
-        plugins_root::find_artifact(&dir, "tool-x"),
-        Some(conventional)
-    );
-
-    // 只有作者自定义名的唯一动态库 → 采用（manifest 为准的精神：不假设文件名）
-    let custom = dir.join(format!(
-        "my-weird-name.{}",
-        if cfg!(windows) { "dll" } else { "so" }
-    ));
-    std::fs::remove_file(dir.join(plugins_root::dll_name("tool-x"))).unwrap();
-    std::fs::write(&custom, b"x").unwrap();
-    assert_eq!(
-        plugins_root::find_artifact(&dir, "tool-x"),
-        Some(custom.clone())
-    );
-
-    // 两个动态库 → 歧义拒绝
-    std::fs::write(dir.join("another.dll"), b"x").unwrap();
-    assert_eq!(plugins_root::find_artifact(&dir, "tool-x"), None);
-
-    // 一个动态库 + 一个非库文件 → 仍用那个动态库
-    std::fs::remove_file(dir.join("another.dll")).unwrap();
-    std::fs::write(dir.join("manifest.json"), b"{}").unwrap();
-    assert_eq!(plugins_root::find_artifact(&dir, "tool-x"), Some(custom));
 }
 
 // ---- 阶段六：审批门（§13.2 / 纪律 9）----

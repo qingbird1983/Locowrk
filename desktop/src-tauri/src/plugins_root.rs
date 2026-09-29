@@ -54,14 +54,21 @@ pub fn dll_name(id: &str) -> String {
     }
 }
 
-/// 版本目录里的动态库发现（packaging.md §3.1："dll 名字由作者决定，
-/// 宿主不假设文件名"）。约定名（`{id_underscored}.dll` 等）优先；没有
-/// 就扫描目录里平台后缀的文件，恰好一个 → 采用，多个 → 视为歧义拒绝
+/// 版本目录里的加载工件发现（packaging.md §3.1："dll 名字由作者决定，
+/// 宿主不假设文件名"；§5.8 v2.16 起目录里也可以是 `.wasm`）。约定
+/// native 名（`{id_underscored}.dll` 等）优先，其次约定 wasm 名
+/// （`{id_underscored}.wasm`，跨平台单名无 lib 前缀）；都没有就扫描
+/// 目录里平台后缀的文件，恰好一个 → 采用，多个 → 视为歧义拒绝
 /// （宁可漏载也不猜），零个 → None 由调用方记日志跳过。
 pub fn find_artifact(ver_dir: &Path, id: &str) -> Option<PathBuf> {
     let conventional = ver_dir.join(dll_name(id));
     if conventional.is_file() {
         return Some(conventional);
+    }
+    let stem = id.replace('-', "_");
+    let wasm_conventional = ver_dir.join(format!("{stem}.wasm"));
+    if wasm_conventional.is_file() {
+        return Some(wasm_conventional);
     }
     let mut candidates: Vec<PathBuf> = std::fs::read_dir(ver_dir)
         .ok()?
@@ -70,7 +77,10 @@ pub fn find_artifact(ver_dir: &Path, id: &str) -> Option<PathBuf> {
         .filter(|p| {
             p.is_file()
                 && p.extension().and_then(|e| e.to_str()).is_some_and(|ext| {
-                    matches!(ext.to_ascii_lowercase().as_str(), "dll" | "so" | "dylib")
+                    matches!(
+                        ext.to_ascii_lowercase().as_str(),
+                        "dll" | "so" | "dylib" | "wasm"
+                    )
                 })
         })
         .collect();
@@ -82,7 +92,7 @@ pub fn find_artifact(ver_dir: &Path, id: &str) -> Option<PathBuf> {
                 tracing::warn!(
                     plugin = id,
                     dir = %ver_dir.display(),
-                    "multiple dynamic libraries in version dir, refusing to guess"
+                    "multiple loadable artifacts (dynlib/wasm) in version dir, refusing to guess"
                 );
             }
             None

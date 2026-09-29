@@ -15,3 +15,8 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+wasmtime = { workspace = true }
+
+# 测试客机用 WAT 源码即时编译成 wasm 字节码（不要求 wasm32 工具链）
+[dev-dependencies]
+wat = "1"

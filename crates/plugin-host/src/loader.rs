@@ -1,13 +1,15 @@
-//! dlopen 加载器（DESIGN.md §5.1 / §5.4，第一版 `DylibLoader`；
-//! `PluginLoader` trait 抽象留给 §5.8 的 WasmLoader）。
+//! 插件加载器抽象（DESIGN.md §5.8）：`PluginLoader` trait + 第一实现
+//! `DylibLoader`。
 //!
 //! 加载序列：open → describe → manifest 解析 → ABI 校验 → 符号解析
 //! → init。init 之前的任何失败都走"加载即失败"豁免：实例从未交出
 //! 代码指针，Library 随错误 Drop（dlclose）是安全的（§5.6 纪律一）。
+//! WASM 侧的第二实现在 `wasm` 模块；registry 按 `.wasm` 扩展名分发。
 
 use std::ffi::{CStr, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::Arc;
 
 use libloading::{Library, Symbol};
 use plugin_api::manifest::PluginManifest;
@@ -16,6 +18,12 @@ use plugin_api::{PLUGIN_ABI_VERSION, ffi};
 use crate::error::LoadError;
 use crate::host_vtable::host_vtable;
 use crate::instance::PluginInstance;
+
+/// 插件加载器抽象（§5.8）：内核只依赖此 trait，不感知具体加载方式。
+/// `path` 指向加载工件（dll/so/dylib 或 .wasm）。
+pub trait PluginLoader: Send + Sync {
+    fn load(&self, path: &Path) -> Result<Arc<PluginInstance>, LoadError>;
+}
 
 /// 动态库加载器（§5.8 的 `DylibLoader` 实现）。
 pub struct DylibLoader;
@@ -61,14 +69,25 @@ impl DylibLoader {
         Ok(PluginInstance::new(
             manifest,
             version,
-            call,
-            shutdown,
-            free,
-            handle,
-            lib,
+            Box::new(crate::instance::NativeBackend::new(
+                call, shutdown, free, handle, lib,
+            )),
             path.to_path_buf(),
         ))
     }
+}
+
+impl PluginLoader for DylibLoader {
+    fn load(&self, path: &Path) -> Result<Arc<PluginInstance>, LoadError> {
+        Ok(Arc::new(Self::load(path)?))
+    }
+}
+
+/// `.wasm` 工件判别（registry 分发的唯一依据；大小写不敏感）。
+pub(crate) fn is_wasm_artifact(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("wasm"))
 }
 
 /// 调用 describe 并按 NUL 结尾约定截取 JSON 字节（§5.1 长度协议）。
