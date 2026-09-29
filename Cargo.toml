@@ -8,6 +8,7 @@ members = [
     "crates/plugin-service",
     "crates/session-store",
     "crates/kernel-bin",
+    "plugins-src/tool-echo",
 ]
 
 [workspace.package]
@@ -27,6 +28,7 @@ libloading = "0.8"
 semver = { version = "1", features = ["serde"] }
 thiserror = "1"
 tracing = "0.1"
+tracing-subscriber = "0.3"
 
 # 内部 crate（依赖方向严格单向，见 DESIGN.md §8 依赖图）
 plugin-api = { path = "crates/plugin-api" }

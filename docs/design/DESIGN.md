@@ -575,6 +575,13 @@ pub const SYM_SHUTDOWN: &[u8] = b"agent_plugin_shutdown\0";
 pub const SYM_FREE:     &[u8] = b"agent_plugin_free_buffer\0";
 ```
 
+**长度协议补充**（v2.2 实现时确定）：`DescribeFn` 只返回 `*const u8`，无长度
+参数——约定 describe 返回 **NUL 结尾的 UTF-8 JSON**（JSON 文本不含裸 NUL，
+serde 会转义），宿主按 C 字符串读取。同理，call 的输出缓冲由**插件**分配
+（`std::alloc`，对齐 1）、宿主用完必须经该插件的 `agent_plugin_free_buffer`
+释放——两侧可能是不同分配器，禁止跨边界 free；缓冲区约定详见 `plugin-api::ffi`
+的模块注释。
+
 ### 5.2 元数据契约
 
 ```rust
@@ -2143,6 +2150,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.1（含桌面端；修订 v2.0 审查发现的机制性错误、Windows 平台问题与依赖图矛盾）*
+*文档版本：v2.2（补记 §5.1 长度/缓冲区协议；修订 v2.0 审查发现的机制性错误、Windows 平台问题与依赖图矛盾）*
 *最后更新：2026-09-29*
-*前序版本：v2.0（含桌面端）、v1.0（纯内核设计）*
+*前序版本：v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*

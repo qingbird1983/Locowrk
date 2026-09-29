@@ -11,3 +11,9 @@ kernel-agent = { workspace = true }
 plugin-host = { workspace = true }
 plugin-service = { workspace = true }
 session-store = { workspace = true }
+async-trait = { workspace = true }
+semver = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

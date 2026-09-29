@@ -5,23 +5,24 @@
 - **项目名 / 仓库名 / 文件夹名**：`Locowrk`（用户指定，三者一致）
 - **定位**：可热插拔、可回退、带桌面端（Tauri 2）的 Rust Agent 内核。"一切皆插件"——模型适配器、工具、会话存储、沙箱、Agent 循环本身都是插件，无特权模块
 - **权威设计文档**：[docs/design/DESIGN.md](docs/design/DESIGN.md)。修改任何核心模块前先读对应章节，不要凭猜测实现；实现与文档冲突时先对齐文档。文档 §8 中的 `agent-kernel/` 指内核 Cargo 工作区，其 crate 命名（`plugin-api`、`cordis-core` 等）沿用文档，对外项目名是 Locowrk
-- **当前进度**：工作区骨架已建（`cargo check` 通过），处于落地路径**阶段一**（内核骨架 + 事件日志，见 DESIGN.md §14）
+- **当前进度**：落地路径**阶段三已完成**（C ABI 插件加载，验收叙事跑通：加载 1.2.0 → 激活 1.3.0 → 回退 1.2.0 全程不重启）；下一步**阶段四**（Waterfall 插桩 + Scope 隔离，见 DESIGN.md §14）。阶段一（内核骨架 + 事件日志）、阶段二（Effect 撤销链 + Fiber 六态）已提交
 
 ## 目录结构
 
 ```
 docs/design/DESIGN.md   权威设计文档（唯一需求来源）
 crates/
-  plugin-api/           冻结 ABI 契约（唯一，改动即破坏兼容）
+  plugin-api/           冻结 ABI 契约（唯一，改动即破坏兼容；ffi/manifest/plugin_side/tool 四模块）
   cordis-core/          Context / Effect / Fiber / Scope / EventBus
   kernel-agent/         Agent 主循环 / Waterfall / 中间件链
   plugin-host/          dlopen Loader / 多版本 Registry / FFI→Tool 适配
-  plugin-service/       插件安装/卸载/更新编排（CLI 与桌面端共用）
+  plugin-service/       插件安装/卸载/更新编排（CLI 与桌面端共用；阶段七落地）
   session-store/        会话事件日志 / 快照 / 回放 / 补偿
   kernel-bin/           CLI 可执行入口（组装一切）
+plugins-src/            内置插件源码（workspace 成员；tool-echo 为阶段三验收插件）
 desktop/                Tauri 2 + Vue 3 桌面端（阶段五脚手架，目前仅 README）
-plugins/                插件安装目录，布局 plugins/{id}/{version}/（多版本并存）
-config/profile.toml     当前激活的插件组合
+plugins/                开发态插件安装目录，布局 plugins/{id}/{version}/（产物已 gitignore）
+config/profile.toml     当前激活的插件组合（阶段七接入）
 ```
 
 各 crate 的 `lib.rs` 顶部注释列有计划模块和对应 DESIGN.md 章节号。
@@ -36,6 +37,8 @@ cargo test -p cordis-core   # 只测某个 crate
 cargo clippy --workspace --all-targets
 cargo fmt
 bash scripts/check_length.sh   # 单文件 400 行上限检查（pre-commit 自动执行）
+bash scripts/build_plugins.sh  # 构建 tool-echo 双版本并暂存到 plugins/tool-echo/{1.2.0,1.3.0}/
+cargo run -p kernel-bin -- demo  # 阶段三验收叙事（需先跑上一条）
 ```
 
 Git hooks 在 `.githooks/`（随仓库提交）。本仓库已通过 `git config core.hooksPath .githooks` 启用 pre-commit 检查；重新克隆后需重新执行一次该命令。
@@ -55,8 +58,10 @@ session-store     → plugin-api
 ```
 
 （`X → Y` 表示 X 依赖 Y，与 DESIGN.md §8 一致。kernel-agent 与 plugin-host 互不依赖：
-共用的 `Tool` / `CallCtx` 定义在 plugin-api 宿主侧、不进入 C ABI；内核经 `ToolSource`
-服务 trait 解析工具，由 plugin-host 实现并注册进 Context）
+共用的 `Tool` / `CallCtx` 定义在 plugin-api 宿主侧、不进入 C ABI。内核经 `ToolSource`
+服务 trait 解析工具；依赖图禁止 plugin-host 依赖 kernel-agent，故 plugin-host 只提供
+同语义的固有 API（`RegistryToolSource::resolve`），由组装点（kernel-bin 的
+`tool_source.rs`）桥接成该 trait 并注册进 Context）
 
 - `plugin-api` 不依赖任何其他 crate；`cordis-core` 只依赖 `plugin-api`
 - `kernel-bin`（CLI）和 `desktop`（GUI）是仅有的两个组装点，业务逻辑不写在这里

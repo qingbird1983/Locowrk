@@ -19,3 +19,8 @@ Thumbs.db
 # 临时实验文件
 /tmp/
 .zcode/
+
+# 开发态插件产物（二进制不入库；源码在 plugins-src/）
+plugins/**/*.dll
+plugins/**/*.so
+plugins/**/*.dylib

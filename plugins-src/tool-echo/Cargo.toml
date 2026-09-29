@@ -1,0 +1,19 @@
+[package]
+name = "tool-echo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# 插件产物是动态库（Windows: tool_echo.dll，见 plugins/README.md）。
+[lib]
+crate-type = ["cdylib"]
+
+# 插件只依赖冻结契约层：serde_json / semver 经 plugin-api re-export。
+[dependencies]
+plugin-api = { workspace = true }
+
+# manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
+# （scripts/build_plugins.sh 负责按 1.2.0 / 1.3.0 各构建一次）；
+# build.rs 声明 rerun-if-env-changed，变量变更即触发重编，
+# 产出多版本并存所需的双 DLL。
