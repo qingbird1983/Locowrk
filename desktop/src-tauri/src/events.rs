@@ -15,6 +15,7 @@ pub mod channels {
     pub const TOOL_RESULT: &str = "agent://tool-result";
     pub const TURN_DONE: &str = "agent://turn-done";
     pub const APPROVAL_REQUEST: &str = "agent://approval-request";
+    pub const PLUGIN_STATE: &str = "plugin://state-changed";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -78,6 +79,30 @@ pub(crate) fn side_effect_str(se: &SideEffect) -> &'static str {
         SideEffect::Compensable { .. } => "compensable",
         SideEffect::Irreversible => "irreversible",
     }
+}
+
+/// 插件状态广播转发（§13.4）：`plugin://state-changed` 的载荷就是
+/// plugin-service `PluginStateChange` 的序列化形态（自带 `type` 标签），
+/// 不经 AgentEvent 包装。这是组装点胶水——编排层不依赖 Tauri。
+pub fn forward_plugin_states(
+    app: AppHandle,
+    mut rx: tokio::sync::broadcast::Receiver<plugin_service::PluginStateChange>,
+) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match rx.recv().await {
+                Ok(change) => {
+                    if let Err(e) = app.emit(channels::PLUGIN_STATE, &change) {
+                        tracing::warn!("emit {} failed: {e}", channels::PLUGIN_STATE);
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!("plugin state broadcast lagged, {n} changes skipped");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
 }
 
 /// 事件出口抽象：runner 只认它，测试用收集器替换 TauriSink（§10.3 分层）。

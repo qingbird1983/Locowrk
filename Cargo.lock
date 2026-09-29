@@ -239,9 +239,15 @@ dependencies = [
 name = "plugin-service"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "cordis-core",
  "plugin-api",
  "plugin-host",
+ "semver",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -457,6 +463,13 @@ dependencies = [
 
 [[package]]
 name = "tool-echo"
+version = "0.1.0"
+dependencies = [
+ "plugin-api",
+]
+
+[[package]]
+name = "tool-shout"
 version = "0.1.0"
 dependencies = [
  "plugin-api",

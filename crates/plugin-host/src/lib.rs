@@ -15,7 +15,9 @@
 //! - FFI 调用放 `spawn_blocking`，插件与宿主两侧都 `catch_unwind`（纪律 3）
 //! - 在途调用靠 `Arc` 引用计数，drain 时轮询 `Arc::strong_count`（§9.6）
 //!
-//! 阶段七补：状态变化广播（`subscribe` / `PluginStateChange`）等 UI 能力。
+//! UI 状态变化广播落在 plugin-service（编排层，单一广播源）：注册表变更
+//! 在本架构下都经编排层发生，启动期开发态装载发生在 UI 订阅之前，
+//! 由 list_installed 拉取兜底。
 
 mod adapter;
 mod error;

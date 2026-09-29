@@ -198,3 +198,34 @@ async fn scoped_overwrite_revoke_restores_previous_scoped_value() {
     ctx.provide(Counter(5));
     assert_eq!(ctx.use_service_scoped::<Counter>(&scope_b).unwrap().0, 5);
 }
+
+// ---- Context::effect（§3.2 裸原语，宿主侧可逆修改） ----
+
+/// 记录 dispose 次数的逆操作（测试观测用）。
+struct Probe(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+#[async_trait::async_trait]
+impl crate::effect::Disposer for Probe {
+    async fn dispose(self: Box<Self>) {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+#[tokio::test]
+async fn bare_effect_revokes_once_and_is_host_tagged() {
+    use std::sync::atomic::Ordering;
+    let ctx = Context::new();
+    let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let id = ctx.effect(Box::new(Probe(Arc::clone(&hits))));
+
+    // 归宿主 Fiber 名下：revoke_by_fiber(HOST) 能领走它
+    assert_eq!(ctx.revoke_by_fiber(FiberId::HOST).await, 1);
+    assert_eq!(hits.load(Ordering::Relaxed), 1);
+
+    // 两段式消费：重复 revoke 是 EffectNotFound
+    assert!(matches!(
+        ctx.revoke(id).await,
+        Err(CordisError::EffectNotFound { .. })
+    ));
+    assert_eq!(hits.load(Ordering::Relaxed), 1);
+}

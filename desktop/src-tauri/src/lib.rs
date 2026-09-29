@@ -1,11 +1,13 @@
 //! Locowrk 桌面端（DESIGN.md §10 / §12）：Tauri 2 组装点。
 //!
 //! 模块：
-//! - `state`：AppState 组装（Context / PluginRegistry / Kernel / 审批中心 / 会话表）
+//! - `state`：AppState 组装（Context / PluginRegistry / Kernel / 审批中心 /
+//!   会话表 / PluginService）
 //! - `commands`：`#[tauri::command]` 薄适配层（§10.3：不写业务逻辑）
 //! - `runner`：聊天轮次主循环（ReAct step 循环 + 会话日志投影为 UI 事件）
-//! - `events`：`agent://` 事件通道与 EventSink 抽象（§12.2）
+//! - `events`：`agent://` 与 `plugin://` 事件通道、EventSink 抽象（§12.2 / §13.4）
 //! - `approval`：审批中心 ApprovalHub——`ApprovalResolver` 的桌面端实现（§13.2）
+//! - `data_root`：安装态数据根与市场目录解析（§11.3）
 //! - `demo_llm`：阶段五脚本模型（真实模型适配器是后续阶段的插件）
 //! - `demo_tools`：阶段六内置演示工具 send_email（不可逆 → 走审批弹窗）
 //! - `plugins_root`：plugins/ 目录解析与插件装载
@@ -16,6 +18,7 @@
 
 mod approval;
 mod commands;
+mod data_root;
 mod demo_llm;
 mod demo_tools;
 mod events;
@@ -43,7 +46,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::agent_chat,
             commands::agent_approve,
-            commands::list_pending_approvals
+            commands::list_pending_approvals,
+            commands::plugin_list,
+            commands::plugin_registry_list,
+            commands::plugin_install,
+            commands::plugin_set_enabled,
+            commands::plugin_uninstall,
+            commands::plugin_rollback,
+            commands::plugin_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

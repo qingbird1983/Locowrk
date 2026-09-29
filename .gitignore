@@ -26,3 +26,8 @@ Thumbs.db
 plugins/**/*.dll
 plugins/**/*.so
 plugins/**/*.dylib
+
+# 市场插件产物（二进制不入库；源码在 plugins-src/，暂存脚本 scripts/build_market.sh）
+market/**/*.dll
+market/**/*.so
+market/**/*.dylib

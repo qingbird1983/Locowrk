@@ -124,6 +124,15 @@ impl Context {
         self.register_effect(key, previous, Some(scope.clone()))
     }
 
+    /// 登记一次与"提供/撤下服务"无关的可逆修改（§3.2 原语，provide* 是
+    /// 它的特例）。归宿主 Fiber（`FiberId::HOST`）名下，不关联服务键；
+    /// `revoke(id)` 触发逆操作。典型调用方：PluginService 把"安装插件"
+    /// 记成一条以"逻辑卸载"为逆操作的 Effect（§11.2）。
+    pub fn effect(&self, disposer: Box<dyn Disposer>) -> EffectId {
+        self.effects
+            .push(FiberId::HOST, TypeId::of::<()>(), disposer)
+    }
+
     /// 按具体类型查询服务（global 层），返回 Arc 快照——调用方只在这一
     /// 瞬间持有分片读锁，后续长耗时操作不持锁（§3.1）。
     pub fn use_service<S: Service>(&self) -> Result<Arc<S>> {

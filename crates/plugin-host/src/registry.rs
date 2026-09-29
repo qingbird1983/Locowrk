@@ -17,7 +17,7 @@ use crate::error::LoadError;
 use crate::instance::PluginInstance;
 use crate::loader::DylibLoader;
 
-/// 单个插件的版本视图（UI 投影的最小形态；订阅广播等 UI 能力阶段七补）。
+/// 单个插件的版本视图（UI 投影的最小形态；订阅广播在 plugin-service）。
 #[derive(Debug, Clone)]
 pub struct PluginStateSummary {
     pub id: String,

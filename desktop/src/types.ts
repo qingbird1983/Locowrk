@@ -47,3 +47,29 @@ export interface ApprovalRequest {
   args: unknown;
   side_effect: string;
 }
+
+/** 市场目录条目（plugin_registry_list 返回项；versions 升序，末位 latest）。 */
+export interface MarketplaceItem {
+  id: string;
+  description: string;
+  versions: string[];
+}
+
+/** 已安装插件（lockfile 投影 + 注册表运行态合并）。 */
+export interface InstalledPlugin {
+  id: string;
+  version: string;
+  enabled: boolean;
+  installed_at: number;
+  source: string;
+  active_version: string | null;
+  loaded_versions: string[];
+}
+
+/** plugin://state-changed 载荷（plugin-service PluginStateChange 镜像，
+ * type 标签）。 */
+export type PluginStateChange =
+  | { type: "installed"; id: string; version: string }
+  | { type: "enabled_changed"; id: string; enabled: boolean }
+  | { type: "uninstalled"; id: string }
+  | { type: "active_version_changed"; id: string; version: string };

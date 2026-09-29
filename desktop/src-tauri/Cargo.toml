@@ -17,12 +17,12 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 
-# 内核 crate（组装点依赖方向见 AGENTS.md 架构边界；
-# PluginService 是阶段七能力，届时再进依赖）
+# 内核 crate（组装点依赖方向见 AGENTS.md 架构边界）
 cordis-core = { path = "../../crates/cordis-core" }
 kernel-agent = { path = "../../crates/kernel-agent" }
 plugin-api = { path = "../../crates/plugin-api" }
 plugin-host = { path = "../../crates/plugin-host" }
+plugin-service = { path = "../../crates/plugin-service" }
 session-store = { path = "../../crates/session-store" }
 
 async-trait = "0.1"

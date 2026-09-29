@@ -1569,6 +1569,20 @@ impl PluginService {
 
 **关键设计**：安装时通过 `ctx.effect` 注册，`EffectId` 写入 lockfile，用于运行期撤销与审计。**崩溃恢复不依赖 EffectId**——Disposer 是内存闭包，进程重启后不可还原；恢复采用**对账式**：启动时比较 lockfile 与磁盘/注册表的实际状态（lockfile 有而磁盘无 → 清条目；磁盘有而 lockfile 无或已标记删除 → 清目录），配合 `pending_delete` tombstone 完成收尾。
 
+> **实现备注（阶段七）**：本节代码即落地形态，落点 `crates/plugin-service/src/service.rs`。
+> 与文档的四点偏差：① `install` 增加可选 `version` 参数（市场卡片可选版本安装，
+> 缺省 latest）；`plugin_uninstall` 返回 `()` 而非 `bool`（前端不消费该值）。
+> ② 不设独立 `plugin_check_updates` 命令——前端按 §13.3 用目录 latest 对比本地
+> 版本即可。③ §5.7 的 `registry.subscribe()` 折叠为 PluginService 的单一
+> `broadcast` 广播源（注册表变更在本架构下都经编排层发生；启动期开发态装载
+> 发生在 UI 订阅之前，由 `plugin_list` 拉取兜底），桥接到
+> `plugin://state-changed` 的转发器住在组装点 `events.rs`。④ `ctx.effect(...)`
+> 是阶段七为 §3.2 补的公开原语（此前只有 `provide*` 这条特例路径可入账本）：
+> 裸 Effect 归 `FiberId::HOST` 名下、不关联服务键，`LogicalUnload`（逆操作 =
+> 逻辑卸载进 graveyard）由 plugin-service 实现并经它登记。市场客户端当前是
+> `LocalDirMarket`（仓库 `market/` 目录，`scripts/build_market.sh` 暂存
+> tool-shout 双版本），`Market` trait 就绪、HTTP 实现随真实市场服务补。
+
 ### 11.3 插件目录布局
 
 ```
@@ -2020,6 +2034,14 @@ async function decide(req: ApprovalRequest, allowed: boolean) {
 
 更新检测逻辑：只检查已安装且仍在目录中的插件，比较本地版本与 registry 的 latest，仅前向 semver 更新。
 
+> **实现备注（阶段七）**：落点 `desktop/src/components/PluginMarket.vue`（发现/
+> 已安装双页签 + 卡片网格 + 每行启停/更新/回退/卸载）与
+> `desktop/src/stores/plugins.ts`。发现页卡片带版本下拉（选非 latest 安装，
+> 服务于"装旧版 → 更新 → 回退"的全链验收）；已安装页按 id 首段分类分组。
+> 实时同步从简：任何 `plugin://state-changed` 都整表重拉 `plugin_list` +
+> `plugin_registry_list`（本地目录市场与 lockfile 均为毫秒级本地 IO）。
+> 更新检测在前端做数值化 semver 前向比较（§13.3 逻辑），不设独立命令。
+
 ### 13.4 状态实时同步
 
 前端订阅 `plugin://state-changed` 事件，Pinia store 收到后更新列表。这样用户点"安装"后，无需刷新页面，插件状态从 `installed` → `loading` → `active` 的转换会实时反映。
@@ -2059,6 +2081,12 @@ export const usePluginStore = defineStore('plugins', {
   },
 });
 ```
+
+> **实现备注（阶段七）**：通道已落地 `plugin://state-changed`，载荷就是
+> plugin-service `PluginStateChange` 的序列化形态——`type` 标签 +
+> installed / enabled_changed / uninstalled / active_version_changed
+> （`Version` 随 serde 序列化为字符串），不经 `AgentEvent` 包装；转发器在
+> 组装点 `events.rs::forward_plugin_states`（编排层不依赖 Tauri）。
 
 ### 13.5 国际化（i18n）
 
@@ -2224,6 +2252,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注；载荷 snake_case、RiskLevel 以 side_effect 呈现）*
+*文档版本：v2.6（补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
-*前序版本：v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
+*前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*

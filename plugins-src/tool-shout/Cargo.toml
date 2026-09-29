@@ -1,0 +1,17 @@
+[package]
+name = "tool-shout"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# 插件产物是动态库（Windows: tool_shout.dll）。
+[lib]
+crate-type = ["cdylib"]
+
+# 插件只依赖冻结契约层：serde_json / semver 经 plugin-api re-export。
+[dependencies]
+plugin-api = { workspace = true }
+
+# manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
+# （scripts/build_market.sh 按 1.0.0 / 1.1.0 各构建一次，暂存进 market/）。

@@ -1,7 +1,11 @@
-//! 共享状态组装（DESIGN.md §12.3 的阶段五/六子集）。
+//! 共享状态组装（DESIGN.md §12.3）：Context + PluginRegistry + Kernel
+//! （含审批门）+ 会话表 + PluginService（阶段七）。
 //!
-//! PluginService / LockFile / 市场客户端是阶段七能力，本阶段只装配
-//! Context + PluginRegistry + Kernel（含审批门）+ 会话表。
+//! 启动顺序固定（§11.2 对账式恢复 / §12.3 备注）：
+//! 1. `startup_reconcile`——清 tombstone、lockfile 与磁盘对账、恢复
+//!    enabled 插件。必须在加载任何插件之前调用（此时无文件锁）
+//! 2. 开发态装载（`plugins/`，内核开发用，不经 lockfile）
+//! 3. 安装态已由第 1 步恢复完毕（`~/.agent-kernel`，lockfile 管理）
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -10,26 +14,26 @@ use std::time::Duration;
 use cordis_core::Context;
 use kernel_agent::{CircuitBreaker, Kernel, LlmService, Middleware, Timeout, ToolSource, Tracing};
 use plugin_host::{PluginRegistry, RegistryToolSource};
+use plugin_service::{LocalDirMarket, PluginService};
 use session_store::Session;
 use tauri::AppHandle;
 
 use crate::approval::ApprovalHub;
+use crate::data_root;
 use crate::demo_llm::DemoLlm;
 use crate::demo_tools::SendEmailTool;
-use crate::events::{EventSink, TauriSink};
+use crate::events::{forward_plugin_states, EventSink, TauriSink};
 use crate::plugins_root;
 use crate::tool_source::KernelToolSource;
 
 pub struct AppState {
-    /// 阶段七/八的窗口级命令（对话框、多窗口）从这里取句柄；当前
+    /// 阶段八的窗口级命令（对话框、多窗口）从这里取句柄；当前
     /// 事件出口已是共享 sink，字段暂无读取方。
     #[allow(dead_code)]
     pub app: AppHandle,
     pub kernel: Arc<Kernel>,
-    /// 阶段七的插件管理命令（plugin_list / 回退等）从这里读状态；
-    /// 本阶段只在 init 时装载插件，字段暂无读取方。
-    #[allow(dead_code)]
-    pub registry: Arc<PluginRegistry>,
+    /// 插件管理唯一入口（UI 不得直碰 registry，AGENTS.md 架构边界）。
+    pub plugins: Arc<PluginService>,
     /// 审批中心（agent_approve / list_pending_approvals 从这里走）。
     pub approval: Arc<ApprovalHub>,
     /// UI 事件出口（§12.2）：runner 与审批请求共用一个 sink。
@@ -65,10 +69,27 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 决策由 Kernel 写成 ApprovalDecided 事件进日志。
     let approval = Arc::new(ApprovalHub::new(Arc::clone(&sink)));
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
-    let kernel = Arc::new(Kernel::new(ctx, mw).with_approval(resolver));
+    let kernel = Arc::new(Kernel::new(ctx.clone(), mw).with_approval(resolver));
 
-    // 加载 plugins/ 下的工具插件（阶段五只有 tool-echo）。找不到不致命：
-    // 聊天仍可用，工具调用会得到 NotAvailable 的 ToolResult。
+    // 插件编排（§11.2）：数据根缺省 ~/.agent-kernel（LOCOWRK_DATA_DIR
+    // 可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。
+    let plugins = match open_plugin_service(&data_dir(), Arc::clone(&registry), &ctx) {
+        Ok(svc) => Arc::new(svc),
+        Err(primary_err) => {
+            tracing::error!("plugin service init failed: {primary_err}；降级到临时目录");
+            let fallback = std::env::temp_dir().join("locowrk-degraded-data");
+            match open_plugin_service(&fallback, Arc::clone(&registry), &ctx) {
+                Ok(svc) => Arc::new(svc),
+                Err(e) => panic!("plugin service unavailable even in fallback dir: {e}"),
+            }
+        }
+    };
+
+    // 1. 启动对账（任何插件加载之前）
+    if let Err(e) = plugins.startup_reconcile() {
+        tracing::warn!("startup reconcile failed: {e}");
+    }
+    // 2. 开发态装载 plugins/（阶段五逻辑；找不到不致命）
     match plugins_root::resolve() {
         Some(root) => match plugins_root::load_all(&root, &registry) {
             Ok(loaded) if loaded.is_empty() => {
@@ -79,15 +100,47 @@ pub fn init_state(app: AppHandle) -> AppState {
         },
         None => tracing::warn!("plugins/ 目录未找到（可设 LOCOWRK_PLUGINS_DIR）；工具调用将不可用"),
     }
+    // 3. 安装态已在对账中恢复；4. 状态广播转发给 UI（§13.4）
+    forward_plugin_states(app.clone(), plugins.subscribe());
 
     AppState {
         app,
         kernel,
-        registry,
+        plugins,
         approval,
         sink,
         sessions: Mutex::new(HashMap::new()),
     }
+}
+
+fn data_dir() -> std::path::PathBuf {
+    match data_root::resolve_data_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            tracing::warn!("{e}；退回系统临时目录");
+            std::env::temp_dir().join("locowrk-data")
+        }
+    }
+}
+
+fn open_plugin_service(
+    data_dir: &std::path::Path,
+    registry: Arc<PluginRegistry>,
+    ctx: &Arc<Context>,
+) -> Result<PluginService, String> {
+    let market_root =
+        data_root::resolve_market_dir().unwrap_or_else(|| data_dir.join("market-absent"));
+    tracing::info!(
+        data = %data_dir.display(),
+        market = %market_root.display(),
+        "plugin service opening"
+    );
+    PluginService::open(
+        data_dir.to_path_buf(),
+        registry,
+        Arc::clone(ctx),
+        Box::new(LocalDirMarket::new(market_root)),
+    )
 }
 
 impl AppState {

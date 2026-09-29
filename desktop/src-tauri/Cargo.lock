@@ -1812,6 +1812,7 @@ dependencies = [
  "kernel-agent",
  "plugin-api",
  "plugin-host",
+ "plugin-service",
  "semver",
  "serde",
  "serde_json",
@@ -2356,6 +2357,21 @@ dependencies = [
  "semver",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "plugin-service"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "cordis-core",
+ "plugin-api",
+ "plugin-host",
+ "semver",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
 ]
