@@ -101,7 +101,7 @@ export function pluginInstall(id: string, version?: string): Promise<string> {
   return invoke("plugin_install", { id, version: version ?? null });
 }
 
-/** 启用 / 禁用（热插拔）。 */
+/** 启用 / 停用（热插拔）。 */
 export function pluginSetEnabled(id: string, enabled: boolean): Promise<void> {
   return invoke("plugin_set_enabled", { id, enabled });
 }
@@ -156,6 +156,13 @@ export function setSettings(patch: {
     tools: patch.tools ?? null,
     shell: patch.shell ?? null,
   });
+}
+
+// ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----
+
+/** 探测 Ollama 模型上下文窗口（token）；失败 reject（UI 提示手动选择）。 */
+export function llmProbeWindow(baseUrl: string, model: string): Promise<number> {
+  return invoke("llm_probe_window", { baseUrl: baseUrl || null, model });
 }
 
 // ---- 记忆管理（⑪，Context and Memory.md §7.2） ----

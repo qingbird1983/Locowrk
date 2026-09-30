@@ -3,20 +3,31 @@
  * 设置分区：LLM 配置（settings.json `llm` 区，§13.1）。保存即生效，
  * API Key 只落盘不出 IPC——输入框永远从空开始，placeholder 按
  * apiKeySet 提示"留空保持不变"。
+ * S2（清单 §5 信息归属）：模型上下文窗口是模型属性，下拉自上下文管理
+ * 区迁入；Ollama 走 /api/show 自动检测，云端模型查静态档案兜底。
  */
-import { reactive, watch } from "vue";
+import { computed, reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { compactNumber } from "../../lib/format";
+import { profileWindow } from "../../lib/model-profiles";
+import { llmProbeWindow } from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
 
-// 表单是投影的本地可编辑副本
+const PRESETS = [8192, 16384, 32768, 65536, 131072, 200000, 262144, 1048576];
+
+// 表单是投影的本地可编辑副本；窗口用"选项 + 自定义"两段表达
 const form = reactive({
   provider: "openai",
   model: "",
   baseUrl: "",
   apiKey: "",
+  windowChoice: "unset" as string, // "unset" | preset 数字串 | "custom"
+  customWindow: 32768,
+  probing: false,
+  probeError: "",
 });
 watch(
   () => settings.view,
@@ -25,9 +36,44 @@ watch(
     form.provider = v.llm.provider;
     form.model = v.llm.model;
     form.baseUrl = v.llm.baseUrl ?? "";
+    const w = v.llm.windowTokens;
+    form.windowChoice = w == null ? "unset" : String(w);
   },
   { immediate: true },
 );
+
+// 静态档案自动填充：只在"未设置"时命中，不覆盖手动选择/检测值
+watch(
+  () => form.model,
+  (m) => {
+    if (form.windowChoice !== "unset") return;
+    const hit = profileWindow(m);
+    if (hit != null) form.windowChoice = String(hit);
+  },
+);
+
+/** 表单当前生效的窗口（null = 未设置，回落保守保护）。 */
+const formWindow = computed<number | null>(() => {
+  if (form.windowChoice === "unset") return null;
+  if (form.windowChoice === "custom") return form.customWindow || null;
+  const n = Number(form.windowChoice);
+  return Number.isFinite(n) && n > 0 ? n : null;
+});
+
+/** Ollama /api/show 自动检测（读不到 → 错误条提示手动选择）。 */
+async function probeWindow() {
+  if (form.probing || !form.model.trim()) return;
+  form.probing = true;
+  form.probeError = "";
+  try {
+    const n = await llmProbeWindow(form.baseUrl, form.model);
+    form.windowChoice = String(n);
+  } catch (e) {
+    form.probeError = String(e);
+  } finally {
+    form.probing = false;
+  }
+}
 
 function save() {
   void settings.saveLlm({
@@ -35,6 +81,7 @@ function save() {
     model: form.model,
     baseUrl: form.baseUrl, // 空串 = 清除，回落 provider 默认端点
     apiKey: form.apiKey || undefined, // 留空 = 不改动已存 Key
+    windowTokens: formWindow.value, // null = 清除窗口（回落保守保护）
   });
   form.apiKey = "";
 }
@@ -85,6 +132,44 @@ function clearKey() {
         autocomplete="off"
         :placeholder="settings.view?.llm.apiKeySet ? t('settings.apiKeyKeep') : t('settings.apiKeyPlaceholder')"
         class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 placeholder:text-neutral-600"
+      />
+    </label>
+
+    <!-- 上下文窗口（S2 迁入）：压缩阈值的换算基准，档位呈现（§3.5） -->
+    <div class="space-y-1 text-xs">
+      <span class="text-neutral-400">{{ t("settings.window") }}</span>
+      <div class="flex items-center gap-2">
+        <select
+          v-model="form.windowChoice"
+          class="block min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+        >
+          <option value="unset">{{ t("settings.windowUnset") }}</option>
+          <option v-for="p in PRESETS" :key="p" :value="String(p)">
+            {{ compactNumber(p) }}
+          </option>
+          <option value="custom">{{ t("settings.windowCustom") }}</option>
+        </select>
+        <button
+          v-if="form.provider === 'ollama'"
+          class="shrink-0 rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="form.probing"
+          @click="probeWindow"
+        >
+          {{ form.probing ? t("settings.windowProbing") : t("settings.windowDetect") }}
+        </button>
+      </div>
+      <p v-if="form.probeError" class="text-[11px] text-red-300">
+        {{ t("settings.windowDetectFail") }} {{ form.probeError }}
+      </p>
+    </div>
+    <label v-if="form.windowChoice === 'custom'" class="block space-y-1 text-xs">
+      <span class="text-neutral-400">{{ t("settings.windowCustomLabel") }}</span>
+      <input
+        v-model.number="form.customWindow"
+        type="number"
+        min="100"
+        step="1000"
+        class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
       />
     </label>
 

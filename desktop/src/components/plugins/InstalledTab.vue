@@ -106,7 +106,7 @@ function updateAvailableOf(p: InstalledPlugin): boolean {
 
 // ---- ⑩⑥ 批量操作（多选 + 批量栏；批量卸载二次确认列名单，§9.5）----
 
-/** 多选集合（builtin 开发态插件不走 lockfile 管理流，不可选）。 */
+/** 多选集合（内置插件不进批量——不可卸载；停用/启用走行内按钮）。 */
 const selected = ref(new Set<string>());
 /** 二次确认态：true 时批量栏列出将卸载的插件名等确认。 */
 const confirmingUninstall = ref(false);
@@ -211,7 +211,7 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
           :key="p.id"
           class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-neutral-800 bg-neutral-800/40 px-4 py-3 last:border-b-0"
         >
-            <!-- 多选框：builtin 开发态不走管理流，禁用 -->
+            <!-- 多选框：内置插件不进批量（不可卸载，停用/启用走行内按钮） -->
             <input
               v-if="p.source !== 'builtin'"
               type="checkbox"
@@ -233,7 +233,7 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
             </p>
           </div>
           <SideEffectBadges :kinds="p.display.side_effects" />
-          <!-- 状态徽标：运行中 / 已禁用 -->
+          <!-- 状态徽标：运行中 / 已停用 -->
           <span
             class="rounded-full px-2 py-0.5 text-[10px]"
             :class="
@@ -261,13 +261,22 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
             {{ t("market.updateAvailable", { version: latestOf(store.marketplace, p.id) }) }}
           </span>
 
-          <!-- 内置插件（开发态直载）：只读展示，不走 lockfile 管理流 -->
-          <span
-            v-if="p.source === 'builtin'"
-            class="ml-auto rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] text-neutral-400"
-          >
-            {{ t("market.builtinBadge") }}
-          </span>
+          <!-- 内置插件（S2）：随程序分发不给卸载，但可停用/启用——
+               lockfile Builtin 条目持久化，重启不复活停用项 -->
+          <div v-if="p.source === 'builtin'" class="ml-auto flex items-center gap-2">
+            <span
+              class="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] text-neutral-400"
+            >
+              {{ t("market.builtinBadge") }}
+            </span>
+            <button
+              class="rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="store.isBusy(p.id)"
+              @click="store.setEnabled(p.id, !p.enabled)"
+            >
+              {{ p.enabled ? t("market.disable") : t("market.enable") }}
+            </button>
+          </div>
           <div v-else class="ml-auto flex items-center gap-2">
             <button
               class="rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"

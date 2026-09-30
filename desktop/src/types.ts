@@ -183,16 +183,18 @@ export interface MemoryUpdate {
   topK?: number;
 }
 
-/** 工具暴露区投影（⑫）：结构即设置原值。 */
+/** 工具暴露区投影（⑫）：结构即设置原值。S2 起含宿主单次调用超时。 */
 export interface ToolsSettingsView {
   enabled: boolean;
   maxPerRequest: number;
+  callTimeoutSecs: number;
 }
 
 /** 工具暴露区部分更新：字段缺省 = 保持不变。 */
 export interface ToolsUpdate {
   enabled?: boolean;
   maxPerRequest?: number;
+  callTimeoutSecs?: number;
 }
 
 /** shell 治理区投影（S1）：高危命令解锁开关（硬锁类不受影响）。 */
@@ -232,8 +234,7 @@ export interface MemoryRow {
 /** 上下文管理区投影（⑨）：设置原值 + 生效值（阈值绝对数 / 建议百分比）
  * 后端一并算好，前端不做第二套换算。 */
 export interface ContextSettingsView {
-  /** 模型上下文窗口（token）；null = 未设置（后端按 32k 保守保护）。 */
-  windowTokens: number | null;
+  /** 窗口不在本区（S2 迁 llm 区）；窗口未知时后端按 32k 保守保护。 */
   thresholdPct: number;
   /** "sliding_window" | "layered" | "summary_only"。 */
   strategy: string;
@@ -242,10 +243,8 @@ export interface ContextSettingsView {
   suggestedPct: number | null;
 }
 
-/** 上下文管理区部分更新：字段缺省 = 保持不变；windowTokens 传 null =
- * 清除窗口（回落保守保护）。 */
+/** 上下文管理区部分更新（S2 起只含阈值与策略；窗口走 LlmUpdate）。 */
 export interface ContextUpdate {
-  windowTokens?: number | null;
   thresholdPct?: number;
   strategy?: string;
 }
@@ -255,13 +254,17 @@ export interface LlmSettingsView {
   model: string;
   baseUrl: string | null;
   apiKeySet: boolean;
+  /** 模型上下文窗口（token，S2 迁入）；null = 未设置（回落保守保护，
+   * Ollama 可经 /api/show 探测，云端查静态档案或手填）。 */
+  windowTokens: number | null;
 }
 
 /** 部分更新：字段缺省（undefined）= 保持不变；baseUrl / apiKey 传
- * 空串 = 清除。 */
+ * 空串 = 清除；windowTokens 传 null = 清除窗口（回落保守保护）。 */
 export interface LlmUpdate {
   provider?: string;
   model?: string;
   baseUrl?: string;
   apiKey?: string;
+  windowTokens?: number | null;
 }

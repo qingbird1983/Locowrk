@@ -70,6 +70,15 @@ fn fake_market_from_staged(root: &Path, vers: &[Version]) {
 }
 
 fn service_in(data_dir: PathBuf, market_root: PathBuf) -> Arc<PluginService> {
+    service_with_builtin(data_dir, market_root, None)
+}
+
+/// `builtin_root` 非空 = 模拟桌面端的开发态内置目录（S2）。
+fn service_with_builtin(
+    data_dir: PathBuf,
+    market_root: PathBuf,
+    builtin_root: Option<PathBuf>,
+) -> Arc<PluginService> {
     let registry = Arc::new(PluginRegistry::new());
     let ctx = Arc::new(Context::new());
     Arc::new(
@@ -78,6 +87,7 @@ fn service_in(data_dir: PathBuf, market_root: PathBuf) -> Arc<PluginService> {
             registry,
             ctx,
             Box::new(LocalDirMarket::new(market_root)),
+            builtin_root,
         )
         .unwrap(),
     )
@@ -97,5 +107,6 @@ fn write_pkg_manifest(market_root: &Path, id: &str, v: &Version, description: &s
     std::fs::write(dir.join("manifest.json"), manifest).unwrap();
 }
 
+mod builtin;
 mod fallback;
 mod lifecycle;

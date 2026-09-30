@@ -109,6 +109,21 @@ async fn timeout_fires_on_slow_tool() {
 }
 
 #[tokio::test]
+async fn timeout_hot_duration_swaps_without_rebuild() {
+    // S2 宿主可配：共享锁换入新时长，下一次调用即生效
+    let shared = Arc::new(std::sync::RwLock::new(Duration::from_secs(5)));
+    let mw: Arc<dyn Middleware> = Arc::new(Timeout::hot(Arc::clone(&shared)));
+
+    let out = run(Arc::clone(&mw), MockTool::fail_first(0)).await;
+    assert!(out.is_ok(), "默认时长内快调用通过");
+
+    *shared.write().unwrap() = Duration::from_millis(20);
+    let out = run(mw, MockTool::slow(Duration::from_millis(500))).await;
+    let err = out.expect_err("换入短时长后慢调用必须超时");
+    assert!(err.to_string().contains("timed out"), "{err}");
+}
+
+#[tokio::test]
 async fn retry_recovers_after_transient_failure() {
     let mw = Arc::new(Retry::new(3, Duration::from_millis(1)));
     let tool = MockTool::fail_first(2); // 前两次失败，第三次成功

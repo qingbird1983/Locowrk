@@ -20,7 +20,8 @@ use crate::usage::{self, PluginUsageView};
 use plugin_service::{InstalledPlugin, MarketplaceItem};
 
 /// 聊天命令。轮次内容全部经 `agent://` 事件推送（§12.2），返回值只表达
-/// 轮次是否成功收束（返回实际 step 数）。进度条口径从设置取（⑨）。
+/// 轮次是否成功收束（返回实际 step 数）。进度条口径从设置取（⑨）：
+/// 窗口在 llm 区（S2 迁移），阈值 = 窗口 × 百分比。
 #[tauri::command]
 pub async fn agent_chat(
     session_id: String,
@@ -29,10 +30,9 @@ pub async fn agent_chat(
 ) -> Result<u32, String> {
     let session = state.session_lock(&session_id);
     let mut session = session.lock().await;
-    let context = state.settings.context();
     let usage = UsagePolicy {
-        threshold_tokens: context.effective_threshold(),
-        window_tokens: context.window_tokens.unwrap_or(0),
+        threshold_tokens: state.settings.effective_threshold_tokens(),
+        window_tokens: state.settings.effective_window().unwrap_or(0),
     };
     runner::run_turn(
         &state.kernel,
@@ -118,7 +118,7 @@ pub async fn plugin_install(
         .map(|v| v.to_string())
 }
 
-/// 启用 / 禁用（热插拔）。
+/// 启用 / 停用（热插拔）。
 #[tauri::command]
 pub async fn plugin_set_enabled(
     id: String,
@@ -222,13 +222,14 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
     Ok(state.settings.view())
 }
 
-/// 部分更新设置：locale、快捷键、LLM 字段、上下文管理区（⑨）、记忆
-/// 注入区（⑪）、工具暴露区（⑫）与 shell 治理区（S1）独立可选，缺省
-/// 字段保持不变；base_url / api_key 传空串 = 清除；context 的
-/// windowTokens 传 null = 清除窗口（回落保守保护）。改键成功后即时重
-/// 注册全局快捷键；注册失败返回 Err（新键已落盘，换键重试即可）。
-/// 上下文 / 记忆 / 工具暴露改动成功后换入活配置随即生效；shell 解锁
-/// 开关经插件加载前的 env 注入，重启后生效。
+/// 部分更新设置：locale、快捷键、LLM 字段（S2 起含 windowTokens——窗口
+/// 归属模型配置；传 null = 清除，回落保守保护）、上下文管理区（⑨，仅
+/// 阈值+策略）、记忆注入区（⑪）、工具暴露区（⑫，S2 起含单次调用超时）
+/// 与 shell 治理区（S1）独立可选，缺省字段保持不变；base_url / api_key
+/// 传空串 = 清除。改键成功后即时重注册全局快捷键；注册失败返回 Err
+/// （新键已落盘，换键重试即可）。上下文 / 记忆 / 工具暴露 / 超时改动
+/// 成功后换入活配置随即生效；shell 解锁开关经插件加载前的 env 注入，
+/// 重启后生效。
 // 参数 = settings.json 各分区一一对应（§3.2）；Tauri command 的扁平
 // IPC 形状不收拢成结构体。
 #[allow(clippy::too_many_arguments)]
@@ -275,7 +276,23 @@ pub async fn settings_set(
     if let Ok(mut guard) = state.exposure_cfg.write() {
         *guard = ecfg;
     }
+    // S2：宿主超时时长热更新（settings tools 区 callTimeoutSecs）
+    if let Ok(mut guard) = state.timeout_cfg.write() {
+        *guard = state.settings.call_timeout();
+    }
     Ok(view)
+}
+
+// ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取，读不到
+// 由 UI 提示手动选择。业务在 llm/probe.rs。 ----
+
+/// 探测 Ollama 模型的上下文窗口（token）。base_url 空 = 默认端点。
+#[tauri::command]
+pub async fn llm_probe_window(base_url: Option<String>, model: String) -> Result<u64, String> {
+    if model.trim().is_empty() {
+        return Err("模型名为空，无法探测".into());
+    }
+    crate::llm::probe::probe_context_window(base_url.as_deref(), model.trim()).await
 }
 
 // ---- 记忆管理命令（⑪，Context and Memory.md §7.2）：薄适配层，SQL 全在

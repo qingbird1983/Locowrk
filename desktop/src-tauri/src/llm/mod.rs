@@ -4,6 +4,7 @@
 
 mod app_llm;
 mod genai_backend;
+pub mod probe;
 #[cfg(test)]
 mod tests;
 

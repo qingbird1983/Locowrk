@@ -92,3 +92,26 @@ fn find_artifact_accepts_wasm() {
     std::fs::write(&native, b"x").unwrap();
     assert_eq!(plugins_root::find_artifact(&dir, "tool-x"), Some(native));
 }
+
+/// S2：开发态扫描尊重跳过集（lockfile 已接管 / 已停用的内置插件）。
+/// 依赖真实工件（scripts/build_plugins.sh 暂存），缺失时 skip。
+#[test]
+fn load_all_honors_skip_set() {
+    use std::collections::HashSet;
+    use std::sync::Arc;
+
+    let Some(root) = plugins_root::resolve() else {
+        eprintln!("skip: plugins/ 未暂存（先跑 scripts/build_plugins.sh）");
+        return;
+    };
+    let registry = Arc::new(plugin_host::PluginRegistry::new());
+    let loaded = plugins_root::load_all(&root, &registry, &HashSet::new()).unwrap();
+    assert!(!loaded.is_empty(), "无跳过集应能加载内置插件");
+
+    // 全量跳过：一个都不装载
+    let skip: HashSet<String> = loaded.iter().map(|(id, _)| id.clone()).collect();
+    let registry2 = Arc::new(plugin_host::PluginRegistry::new());
+    let loaded2 = plugins_root::load_all(&root, &registry2, &skip).unwrap();
+    assert!(loaded2.is_empty(), "跳过集内的 id 不得装载（{loaded2:?}）");
+    assert!(registry2.list_states().is_empty());
+}

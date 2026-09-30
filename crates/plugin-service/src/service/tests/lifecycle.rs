@@ -5,7 +5,7 @@ async fn reconcile_cleans_tombstones_and_drops_missing_dirs() {
     let data = temp_dir("recon");
     let market_root = temp_dir("recon-market");
 
-    // 预置 lockfile：一条 tombstone（可删目录）+ 一条目录缺失 + 一条禁用的
+    // 预置 lockfile：一条 tombstone（可删目录）+ 一条目录缺失 + 一条停用的
     let locked_dir = data.join("plugins").join("gone");
     std::fs::create_dir_all(&locked_dir).unwrap();
     let missing = data.join("plugins").join("tool-phantom").join("1.0.0");
@@ -43,8 +43,8 @@ async fn reconcile_cleans_tombstones_and_drops_missing_dirs() {
         back.entry("tool-phantom").is_none(),
         "目录缺失的条目应对账清除"
     );
-    assert!(back.entry("tool-disabled").is_some(), "禁用条目保留");
-    // 禁用插件不该被激活
+    assert!(back.entry("tool-disabled").is_some(), "停用条目保留");
+    // 停用插件不该被激活
     assert!(svc.list_installed()[0].active_version.is_none());
 }
 
@@ -92,7 +92,7 @@ async fn full_lifecycle_with_staged_artifact() {
         Some("Shout")
     );
 
-    // 禁用 → active 摘除；启用 → 恢复
+    // 停用 → active 摘除；启用 → 恢复
     svc.set_enabled("tool-shout", false).await.unwrap();
     assert_eq!(svc.list_installed()[0].active_version, None);
     svc.set_enabled("tool-shout", true).await.unwrap();
@@ -117,7 +117,7 @@ async fn full_lifecycle_with_staged_artifact() {
     assert_eq!(
         seen.len(),
         4,
-        "installed/禁用/启用/uninstalled 各一条，实际 {seen:?}"
+        "installed/停用/启用/uninstalled 各一条，实际 {seen:?}"
     );
     assert!(matches!(seen[0], PluginStateChange::Installed { .. }));
     assert!(matches!(
@@ -240,6 +240,7 @@ async fn registry_only_plugins_project_as_builtin() {
             Arc::clone(&registry),
             ctx,
             Box::new(LocalDirMarket::new(market_root)),
+            None,
         )
         .unwrap(),
     );

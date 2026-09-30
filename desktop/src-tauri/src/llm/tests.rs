@@ -142,6 +142,7 @@ async fn configured_model_without_key_fails_fast() {
                 model: Some("gpt-4o-mini".into()),
                 base_url: None,
                 api_key: None,
+                ..Default::default()
             }),
             None,
             None,

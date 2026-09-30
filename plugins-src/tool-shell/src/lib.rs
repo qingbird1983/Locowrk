@@ -57,9 +57,11 @@ fn shell_schema() -> Value {
                                          no pipes/semicolons/backticks" },
             "cwd": { "type": "string",
                      "description": "optional working directory (absolute path, must exist)" },
-            "timeout_secs": { "type": "number", "description": "default 20, max 120" },
+            "timeout_secs": { "type": "number",
+                              "description": "default 20 (env LOCOWRK_SHELL_TIMEOUT), max 120" },
             "max_bytes": { "type": "number",
-                           "description": "cap stdout/stderr each (default 65536, max 262144)" }
+                           "description": "cap stdout/stderr each (default 65536, \
+                                           env LOCOWRK_SHELL_MAX_BYTES, max 262144)" }
         },
         "required": ["command"]
     })
@@ -132,6 +134,8 @@ struct ShellState {
     /// 高危解锁开关（init 读一次；桌面端由设置 shell.unlockRisky 在插件
     /// 加载前注入，改动后重启生效）。
     unlock_risky: bool,
+    /// 超时/输出限长的运行缺省（S2；模型 arg 缺省时取这里，arg 可覆盖）。
+    defaults: exec::RunDefaults,
 }
 
 // SAFETY: host 指向宿主的 'static vtable（只读）；其余字段 init 后不变。
@@ -148,8 +152,9 @@ impl ShellState {
         }
     }
 
-    /// 启动期明示（清单 §2.4）：被清单压制的显式配置与解锁开关状态。
-    fn log_startup_facts(&self) {
+    /// 启动期明示（清单 §2.4）：被清单压制的显式配置、解锁开关状态与
+    /// 环境默认的非法覆盖。
+    fn log_startup_facts(&self, env_warns: &[String]) {
         let suppressed = policy::conflicting_allow(&self.extra_allow);
         if !suppressed.is_empty() {
             self.log(
@@ -168,6 +173,9 @@ impl ShellState {
                  go to user approval instead of being refused",
             );
         }
+        for w in env_warns {
+            self.log(log_level::WARN, w);
+        }
     }
 }
 
@@ -176,11 +184,11 @@ impl PluginState for ShellState {
         match tool {
             "shell" => {
                 self.log(log_level::INFO, "tool-shell: shell called (approval path)");
-                exec::shell_exec(&args, &self.extra_allow, self.unlock_risky)
+                exec::shell_exec(&args, &self.extra_allow, self.unlock_risky, &self.defaults)
             }
             "shell_read" => {
                 self.log(log_level::INFO, "tool-shell: shell_read called (readonly)");
-                exec::shell_read_exec(&args)
+                exec::shell_read_exec(&args, &self.defaults)
             }
             other => Err(format!("unknown tool `{other}`")),
         }
@@ -188,12 +196,14 @@ impl PluginState for ShellState {
 }
 
 fn make_state(host: *const HostVtable) -> Box<dyn PluginState> {
+    let (defaults, env_warns) = exec::RunDefaults::from_env();
     let state = ShellState {
         host,
         extra_allow: policy::extra_allow_from_env(),
         unlock_risky: policy::unlock_risky_from_env(),
+        defaults,
     };
-    state.log_startup_facts();
+    state.log_startup_facts(&env_warns);
     Box::new(state)
 }
 

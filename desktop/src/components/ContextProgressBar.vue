@@ -5,12 +5,14 @@
  * 阶段恒隐藏，挂载点已在会话视图顶部就位）。
  *
  * 分级（Context and Memory.md §3.2.2）：绿 <60% / 黄 60–99% /
- * 红 ≥100%（到压缩阈值）。
+ * 红 ≥100%（到压缩阈值）。S2（§3.5 数字呈现）：右侧增 `≈52K / 256K`
+ * 比例段——窗口未知（0）时只显示百分比。
  */
 import { computed } from "vue";
+import { compactNumber } from "../lib/format";
 
 const props = defineProps<{
-  usage: { used: number; threshold: number } | null;
+  usage: { used: number; threshold: number; windowTokens: number } | null;
 }>();
 
 const pct = computed(() => {
@@ -22,6 +24,12 @@ const tone = computed(() => {
   if (pct.value >= 100) return "bg-red-500";
   if (pct.value >= 60) return "bg-amber-500";
   return "bg-emerald-500";
+});
+
+/** 比例段：`≈52K / 256K`；窗口未知 = 空串（只显示百分比）。 */
+const ratio = computed(() => {
+  if (!props.usage || props.usage.windowTokens <= 0) return "";
+  return `${compactNumber(props.usage.used)} / ${compactNumber(props.usage.windowTokens)}`;
 });
 </script>
 
@@ -36,6 +44,9 @@ const tone = computed(() => {
         :style="{ width: `${pct}%` }"
       />
     </div>
+    <span v-if="ratio" class="shrink-0 text-[var(--lw-text-3)]">
+      {{ ratio }}
+    </span>
     <span class="shrink-0 text-[var(--lw-text-3)]">
       {{ Math.round(pct) }}%
     </span>

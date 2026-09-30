@@ -105,6 +105,36 @@ impl LockFile {
         Ok(())
     }
 
+    /// 内置插件登记（S2，清单 §1）：无条目或版本不同才写（版本随内置根
+    /// 独立升级，每次启动同步）；已有条目保留 `enabled`——重启不得复活
+    /// 被用户停用的插件。返回是否实际改动。
+    pub fn register_builtin(&mut self, id: &str, version: &Version) -> bool {
+        match self.plugins.get_mut(id) {
+            Some(e) if e.source == InstallSource::Builtin && e.version == *version => false,
+            Some(e) if e.source == InstallSource::Builtin => {
+                e.version = version.clone();
+                true
+            }
+            // 无条目（首次启动登记）。
+            None => {
+                self.plugins.insert(
+                    id.to_string(),
+                    InstalledEntry {
+                        id: id.to_string(),
+                        version: version.clone(),
+                        effect_ids: Vec::new(),
+                        installed_at: now_unix(),
+                        enabled: true,
+                        source: InstallSource::Builtin,
+                    },
+                );
+                true
+            }
+            // 已被市场安装接管的条目保持不动（安装态赢过开发态）。
+            Some(_) => false,
+        }
+    }
+
     pub fn set_enabled(&mut self, id: &str, enabled: bool) -> Result<(), String> {
         let entry = self
             .plugins

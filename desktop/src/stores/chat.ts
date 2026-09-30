@@ -2,6 +2,7 @@
 // UI 事件是会话日志的投影（后端 runner.rs），本 store 只消费不生产。
 import { defineStore } from "pinia";
 import { chat, subscribeAgentEvents } from "../lib/api";
+import { compactNumber } from "../lib/format";
 import type { AgentEvent } from "../types";
 
 export type ToolItem = {
@@ -47,8 +48,9 @@ export const useChatStore = defineStore("chat", {
     items: [] as ChatItem[],
     running: false,
     steps: null as number | null,
-    /** 上下文用量（进度条投影；agent://context-usage 驱动）。 */
-    contextUsage: null as { used: number; threshold: number } | null,
+    /** 上下文用量（进度条投影；agent://context-usage 驱动）。windowTokens
+     * 0 = 窗口未设置（比例段隐藏）。 */
+    contextUsage: null as { used: number; threshold: number; windowTokens: number } | null,
     /** 系统消息"查看详情"的内容（id → 文本，如压缩摘要预览）。 */
     noticeDetails: {} as Record<number, string>,
   }),
@@ -91,7 +93,7 @@ export const useChatStore = defineStore("chat", {
           this.steps = e.steps;
           break;
         case "context_usage":
-          this.contextUsage = { used: e.used, threshold: e.threshold };
+          this.contextUsage = { used: e.used, threshold: e.threshold, windowTokens: e.window_tokens ?? 0 };
           break;
         case "context_compacted": {
           // 压缩系统消息（Context 文档 §3.8.3）：[查看详情][撤销]，
@@ -102,7 +104,7 @@ export const useChatStore = defineStore("chat", {
             id,
             kind: "system",
             key: "notice.contextCompacted",
-            params: { saved: saved.toLocaleString(), strategy: e.strategy },
+            params: { saved: compactNumber(saved), strategy: e.strategy },
             actions: ["details", "undo"],
           });
           if (e.summary_preview) this.noticeDetails[id] = e.summary_preview;

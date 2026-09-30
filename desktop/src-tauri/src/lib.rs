@@ -80,6 +80,7 @@ pub fn run() {
             commands::plugin_update,
             commands::settings_get,
             commands::settings_set,
+            commands::llm_probe_window,
             commands::memory_list,
             commands::memory_update,
             commands::memory_delete,

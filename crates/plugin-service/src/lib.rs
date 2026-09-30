@@ -12,12 +12,14 @@
 //! （graveyard，永不 dlclose）再删文件，Windows 文件锁删不掉的走
 //! tombstone，下次启动 `startup_reconcile` 清理。
 
+pub mod builtin;
 pub mod display;
 pub mod installer;
 pub mod lockfile;
 pub mod market;
 pub mod service;
 
+pub use builtin::{dll_name, find_artifact, resolve_latest};
 pub use display::{PluginDisplay, read_display};
 pub use lockfile::{InstallSource, InstalledEntry, LockFile};
 pub use market::{LocalDirMarket, Market, MarketplaceItem, artifact_file_name};

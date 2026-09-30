@@ -19,6 +19,7 @@ const settings = useSettingsStore();
 const form = reactive({
   enabled: true,
   maxPerRequest: 20,
+  callTimeoutSecs: 30,
 });
 
 watch(
@@ -27,6 +28,7 @@ watch(
     if (!v) return;
     form.enabled = v.tools.enabled;
     form.maxPerRequest = v.tools.maxPerRequest;
+    form.callTimeoutSecs = v.tools.callTimeoutSecs;
   },
   { immediate: true },
 );
@@ -50,6 +52,7 @@ function save() {
   void settings.saveTools({
     enabled: form.enabled,
     maxPerRequest: form.maxPerRequest,
+    callTimeoutSecs: form.callTimeoutSecs,
   });
 }
 
@@ -79,6 +82,19 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
         class="block w-32 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
       />
       <span class="text-[11px] text-neutral-600">{{ t("settings.toolsMaxHint") }}</span>
+    </label>
+
+    <!-- S2（清单 §3 约束最小化）：宿主单次工具调用超时可配 -->
+    <label class="block space-y-1 text-xs">
+      <span class="text-neutral-400">{{ t("settings.callTimeout") }}</span>
+      <input
+        v-model.number="form.callTimeoutSecs"
+        type="number"
+        min="5"
+        max="3600"
+        class="block w-32 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+      />
+      <span class="text-[11px] text-neutral-600">{{ t("settings.callTimeoutHint") }}</span>
     </label>
 
     <div class="flex items-center gap-2">

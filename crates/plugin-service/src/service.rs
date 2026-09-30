@@ -22,6 +22,7 @@ use plugin_host::{IconLoader, PluginRegistry};
 use semver::Version;
 use tokio::sync::broadcast;
 
+mod enable;
 mod query;
 mod types;
 
@@ -42,15 +43,20 @@ pub struct PluginService {
     state_tx: broadcast::Sender<PluginStateChange>,
     /// 图标 data URL 缓存（list_installed 每次刷新都投影，不能每次读盘）。
     icons: IconLoader,
+    /// 内置插件根（开发态 `plugins/` 目录，S2）。None = 无内置目录
+    /// （纯安装态部署），Builtin 条目只保留登记不参与启停。
+    builtin_root: Option<PathBuf>,
 }
 
 impl PluginService {
     /// 打开安装态目录并加载 lockfile（目录不存在会按需创建）。
+    /// `builtin_root` 是内置插件根（桌面端传开发态 `plugins/` 目录）。
     pub fn open(
         data_dir: PathBuf,
         registry: Arc<PluginRegistry>,
         ctx: Arc<Context>,
         market: Box<dyn Market>,
+        builtin_root: Option<PathBuf>,
     ) -> Result<Self, String> {
         std::fs::create_dir_all(data_dir.join("plugins"))
             .map_err(|e| format!("create_dir_all {}: {e}", data_dir.display()))?;
@@ -64,6 +70,7 @@ impl PluginService {
             market,
             state_tx,
             icons: IconLoader::new(),
+            builtin_root,
         })
     }
 
@@ -116,45 +123,18 @@ impl PluginService {
         Ok(ver)
     }
 
-    /// 启用 / 禁用（§11.2 set_enabled）。启用 = load（若未加载）+ activate。
-    pub async fn set_enabled(&self, id: &str, enabled: bool) -> Result<(), String> {
-        let ver = {
-            let lf = self.lockfile.lock().expect("lockfile poisoned");
-            lf.entry(id)
-                .ok_or_else(|| format!("plugin {id} not installed"))?
-                .version
-                .clone()
-        };
-        if enabled {
-            let dll = self
-                .install_root()
-                .join(id)
-                .join(ver.to_string())
-                .join(artifact_file_name(id));
-            self.registry
-                .load(id, &ver, &dll)
-                .and_then(|_| self.registry.activate(id, &ver))
-                .map_err(|e| e.to_string())?;
-        } else {
-            self.registry.deactivate(id);
-        }
-        {
-            let mut lf = self.lockfile.lock().expect("lockfile poisoned");
-            lf.set_enabled(id, enabled)?;
-            lf.save(&self.lockfile_path())?;
-        }
-        let _ = self.state_tx.send(PluginStateChange::EnabledChanged {
-            id: id.to_string(),
-            enabled,
-        });
-        Ok(())
-    }
-
     /// 卸载（§11.2）：逻辑卸载 → 撤销 Effect → 物理删除（Windows 文件锁
     /// 删不掉则 tombstone）→ lockfile 移除 → 广播。
     pub async fn uninstall(&self, id: &str) -> Result<(), String> {
         let effect_ids = {
             let mut lf = self.lockfile.lock().expect("lockfile poisoned");
+            // 内置插件随程序分发（S2）：删了下个版本又回来，只许停用。
+            if lf
+                .entry(id)
+                .is_some_and(|e| e.source == InstallSource::Builtin)
+            {
+                return Err(format!("plugin {id} is built in and cannot be uninstalled"));
+            }
             let entry = lf
                 .remove(id)
                 .ok_or_else(|| format!("plugin {id} not installed"))?;
@@ -218,6 +198,19 @@ impl PluginService {
     /// 更新（§11.5）：下载解压到新版本目录 → load + activate；失败时旧
     /// active 指针从未离开，"回滚"只是确认旧指针 + 清理新目录。
     pub async fn update(&self, id: &str) -> Result<Version, String> {
+        {
+            let lf = self.lockfile.lock().expect("lockfile poisoned");
+            // 内置插件随程序分发、版本独立升级（S2 定稿，packaging.md §9.4）：
+            // 不走市场更新；同 id 需要市场版时在发现页显式安装（条目转 Market）。
+            if lf
+                .entry(id)
+                .is_some_and(|e| e.source == InstallSource::Builtin)
+            {
+                return Err(format!(
+                    "plugin {id} is built in; updates ship with the app"
+                ));
+            }
+        }
         let snapshot_ver = {
             let lf = self.lockfile.lock().expect("lockfile poisoned");
             lf.entry(id)
@@ -275,6 +268,10 @@ impl PluginService {
     /// 启动对账（§11.2 关键设计）：清 tombstone → 条目与磁盘对账 →
     /// 恢复 enabled 插件。调用方必须在加载任何插件之前调用
     /// （此时无文件锁，tombstone 才删得掉）。
+    ///
+    /// Builtin 条目（S2）不参与本函数的磁盘对账与恢复：它们住在内置根
+    /// （开发态目录）而非安装根，装载由组装点的开发态扫描负责（扫描
+    /// 尊重 enabled:false——停用的内置插件重启保持停用）。
     pub fn startup_reconcile(&self) -> Result<(), String> {
         let mut lf = self.lockfile.lock().expect("lockfile poisoned");
         lf.pending_delete
@@ -292,11 +289,12 @@ impl PluginService {
             .plugins
             .values()
             .filter(|e| {
-                !self
-                    .install_root()
-                    .join(&e.id)
-                    .join(e.version.to_string())
-                    .is_dir()
+                e.source != InstallSource::Builtin
+                    && !self
+                        .install_root()
+                        .join(&e.id)
+                        .join(e.version.to_string())
+                        .is_dir()
             })
             .map(|e| e.id.clone())
             .collect();
@@ -307,7 +305,7 @@ impl PluginService {
         let restore: Vec<(String, Version)> = lf
             .plugins
             .values()
-            .filter(|e| e.enabled)
+            .filter(|e| e.enabled && e.source != InstallSource::Builtin)
             .map(|e| (e.id.clone(), e.version.clone()))
             .collect();
         for (id, ver) in restore {

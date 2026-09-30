@@ -21,6 +21,63 @@ const OUT_MAX: u64 = 256 * 1024;
 const TIMEOUT_DEFAULT: u64 = 20;
 const TIMEOUT_MAX: u64 = 120;
 
+/// 运行缺省（S2，清单 §3"其他约束给合理默认值随时可调"）：模型 arg 缺省
+/// 时取这里的值；来源 = 内置缺省或环境变量覆盖（init 读一次）。
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RunDefaults {
+    pub(crate) timeout_secs: u64,
+    pub(crate) max_bytes: u64,
+}
+
+impl RunDefaults {
+    /// 环境覆盖：`LOCOWRK_SHELL_TIMEOUT`（秒，1–120）/
+    /// `LOCOWRK_SHELL_MAX_BYTES`（字节，1024–256K）。越上界钳到上限；
+    /// 解析失败/低于下界回落内置缺省并返回告警（清单 §2.4，不静默）。
+    pub(crate) fn from_env() -> (RunDefaults, Vec<String>) {
+        let mut warns = Vec::new();
+        let timeout_secs = match env_u64("LOCOWRK_SHELL_TIMEOUT", TIMEOUT_DEFAULT, 1, TIMEOUT_MAX) {
+            Ok(v) => v,
+            Err(w) => {
+                warns.push(w);
+                TIMEOUT_DEFAULT
+            }
+        };
+        let max_bytes = match env_u64("LOCOWRK_SHELL_MAX_BYTES", OUT_DEFAULT, 1024, OUT_MAX) {
+            Ok(v) => v,
+            Err(w) => {
+                warns.push(w);
+                OUT_DEFAULT
+            }
+        };
+        (
+            RunDefaults {
+                timeout_secs,
+                max_bytes,
+            },
+            warns,
+        )
+    }
+}
+
+/// 单个环境变量的缺省解析：未设 = 内置缺省；越上界钳制；其余错误返回
+/// 告警文案（调用方回落内置缺省并打日志）。
+fn env_u64(var: &str, fallback: u64, min: u64, max: u64) -> Result<u64, String> {
+    let raw = match std::env::var(var) {
+        Err(_) => return Ok(fallback),
+        Ok(raw) => raw,
+    };
+    match raw.trim().parse::<u64>() {
+        Ok(n) if n > max => Ok(max),
+        Ok(n) if n >= min => Ok(n),
+        Ok(_) => Err(format!(
+            "tool-shell: {var}={raw} below minimum {min}; keeping {fallback}"
+        )),
+        Err(_) => Err(format!(
+            "tool-shell: {var}={raw} is not a number; keeping {fallback}"
+        )),
+    }
+}
+
 pub(crate) fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(default),
@@ -50,6 +107,7 @@ pub(crate) fn shell_exec(
     args: &Value,
     extra_allow: &[String],
     unlock_risky: bool,
+    defaults: &RunDefaults,
 ) -> Result<Value, String> {
     let command = args
         .get("command")
@@ -60,12 +118,12 @@ pub(crate) fn shell_exec(
         Decision::Deny { reason } => return Err(reason),
     };
     let cwd = cwd_of(args)?;
-    run(command, program, cargs, args, cwd)
+    run(command, program, cargs, args, cwd, defaults)
 }
 
 /// 只读工具（shell_read）入口：只读表 → 路径校验（fsutil 同源根）→
 /// 执行。路径出根在这里被拒（降级：改用 shell 工具走审批）。
-pub(crate) fn shell_read_exec(args: &Value) -> Result<Value, String> {
+pub(crate) fn shell_read_exec(args: &Value, defaults: &RunDefaults) -> Result<Value, String> {
     let command = args
         .get("command")
         .and_then(Value::as_str)
@@ -76,7 +134,7 @@ pub(crate) fn shell_read_exec(args: &Value) -> Result<Value, String> {
     };
     let cwd = cwd_of(args)?;
     crate::paths::ensure_readonly_scope(&cargs, cwd.as_deref())?;
-    run(command, program, cargs, args, cwd)
+    run(command, program, cargs, args, cwd, defaults)
 }
 
 fn run(
@@ -85,9 +143,10 @@ fn run(
     cargs: Vec<String>,
     args: &Value,
     cwd: Option<PathBuf>,
+    defaults: &RunDefaults,
 ) -> Result<Value, String> {
-    let max_out = arg_u64(args, "max_bytes", OUT_DEFAULT, OUT_MAX)?;
-    let timeout = arg_u64(args, "timeout_secs", TIMEOUT_DEFAULT, TIMEOUT_MAX)?;
+    let max_out = arg_u64(args, "max_bytes", defaults.max_bytes, OUT_MAX)?;
+    let timeout = arg_u64(args, "timeout_secs", defaults.timeout_secs, TIMEOUT_MAX)?;
 
     let mut cmd = Command::new(&program);
     cmd.args(cargs.iter())

@@ -64,6 +64,9 @@ pub struct AppState {
     pub exposure_cfg: Arc<RwLock<ToolExposureConfig>>,
     /// ToolExposure 本体（⑫）：tool_exposure_debug 命令读最近一次截断快照。
     pub exposure: Arc<ToolExposure>,
+    /// 宿主 Timeout 时长（S2）：settings tools 区 callTimeoutSecs 的热换锁，
+    /// Timeout::hot 持有——保存即生效，无需重启。
+    pub timeout_cfg: Arc<RwLock<Duration>>,
 }
 
 pub fn init_state(app: AppHandle) -> AppState {
@@ -161,12 +164,14 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。
     // Audit（plugins.md mw-audit）挂在超时/熔断外侧：被拒的调用也留痕；
     // 记录追加写数据根 audit.jsonl（JSONL，只增不改，与会话日志同纪律）。
+    // S2：超时时长可配（settings tools 区 callTimeoutSecs），共享锁热换入。
+    let timeout_cfg: Arc<RwLock<Duration>> = Arc::new(RwLock::new(settings.call_timeout()));
     let mw: Vec<Arc<dyn Middleware>> = vec![
         Arc::new(Tracing),
         Arc::new(Audit::new(Arc::new(JsonlAuditSink::new(
             root.join("audit.jsonl"),
         )))),
-        Arc::new(Timeout::new(Duration::from_secs(30))),
+        Arc::new(Timeout::hot(Arc::clone(&timeout_cfg))),
         Arc::new(CircuitBreaker::new(5, Duration::from_secs(30))),
     ];
     // 审批门（纪律 9）：Irreversible 工具先经 ApprovalHub 问人，
@@ -177,12 +182,16 @@ pub fn init_state(app: AppHandle) -> AppState {
 
     // 插件编排（§11.2）：数据根缺省 ~/.Locowrk（LOCOWRK_DATA_DIR
     // 可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。
-    let plugins = match open_plugin_service(&root, Arc::clone(&registry), &ctx) {
+    // S2：内置插件根一次解析，服务（启停解析工件）与开发态扫描共用。
+    let builtin_root = plugins_root::resolve();
+    let plugins = match open_plugin_service(&root, Arc::clone(&registry), &ctx, builtin_root.clone())
+    {
         Ok(svc) => Arc::new(svc),
         Err(primary_err) => {
             tracing::error!("plugin service init failed: {primary_err}；降级到临时目录");
             let fallback = std::env::temp_dir().join("locowrk-degraded-data");
-            match open_plugin_service(&fallback, Arc::clone(&registry), &ctx) {
+            match open_plugin_service(&fallback, Arc::clone(&registry), &ctx, builtin_root.clone())
+            {
                 Ok(svc) => Arc::new(svc),
                 Err(e) => panic!("plugin service unavailable even in fallback dir: {e}"),
             }
@@ -193,15 +202,26 @@ pub fn init_state(app: AppHandle) -> AppState {
     if let Err(e) = plugins.startup_reconcile() {
         tracing::warn!("startup reconcile failed: {e}");
     }
-    // 2. 开发态装载 plugins/（阶段五逻辑；找不到不致命）
-    match plugins_root::resolve() {
-        Some(root) => match plugins_root::load_all(&root, &registry) {
-            Ok(loaded) if loaded.is_empty() => {
-                tracing::warn!(dir = %root.display(), "plugins/ 存在但没有加载任何插件")
+    // 2. 开发态装载 plugins/（阶段五逻辑；找不到不致命）。S2：跳过
+    //    lockfile 已接管 / 已停用的 id；装载成功即登记 Builtin 条目——
+    //    停用状态落 lockfile 持久化，重启不复活。
+    match builtin_root {
+        Some(proot) => {
+            let skip: std::collections::HashSet<String> =
+                plugins.dev_scan_skip_ids().into_iter().collect();
+            match plugins_root::load_all(&proot, &registry, &skip) {
+                Ok(loaded) if loaded.is_empty() => {
+                    tracing::warn!(dir = %proot.display(), "plugins/ 存在但没有加载任何插件")
+                }
+                Ok(loaded) => {
+                    for (id, ver) in &loaded {
+                        plugins.register_builtin(id, ver);
+                    }
+                    tracing::info!(dir = %proot.display(), ?loaded, "plugins loaded")
+                }
+                Err(e) => tracing::warn!("plugin scan failed: {e}"),
             }
-            Ok(loaded) => tracing::info!(dir = %root.display(), ?loaded, "plugins loaded"),
-            Err(e) => tracing::warn!("plugin scan failed: {e}"),
-        },
+        }
         None => tracing::warn!("plugins/ 目录未找到（可设 LOCOWRK_PLUGINS_DIR）；工具调用将不可用"),
     }
     // 3. 安装态已在对账中恢复；4. 状态广播转发给 UI（§13.4）
@@ -221,6 +241,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         usage,
         exposure_cfg,
         exposure,
+        timeout_cfg,
     }
 }
 
@@ -238,6 +259,7 @@ fn open_plugin_service(
     data_dir: &std::path::Path,
     registry: Arc<PluginRegistry>,
     ctx: &Arc<Context>,
+    builtin_root: Option<std::path::PathBuf>,
 ) -> Result<PluginService, String> {
     let market_root =
         data_root::resolve_market_dir().unwrap_or_else(|| data_dir.join("market-absent"));
@@ -251,6 +273,7 @@ fn open_plugin_service(
         registry,
         Arc::clone(ctx),
         Box::new(LocalDirMarket::new(market_root)),
+        builtin_root,
     )
 }
 

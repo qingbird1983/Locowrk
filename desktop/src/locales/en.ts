@@ -211,14 +211,20 @@ export default {
     toolsMax: "Max tools per request",
     toolsMaxHint:
       "1–200, default 20; always-exposure tools and the search_tools meta-tool are never cut.",
+    callTimeout: "Per-call tool timeout (seconds)",
+    callTimeoutHint: "Host-enforced cap, applies immediately (5-3600 s).",
     // ⑨ Context management section (real section, replaces shell placeholder)
     contextTitle: "Context management",
     contextHint:
       "Long conversations are auto-compacted as they approach the window limit. Threshold and strategy are adjustable anytime; compaction is undoable.",
-    window: "Model context window",
+    // S2 (audit doc §5): the window is a model property — key moved here
+    window: "Model context window (tokens)",
     windowUnset: "Not set (conservative 32k protection)",
     windowCustom: "Custom…",
     windowCustomLabel: "Window size (tokens)",
+    windowDetect: "Detect",
+    windowProbing: "Detecting…",
+    windowDetectFail: "Detect failed — pick manually:",
     threshold: "Compaction threshold",
     thresholdValue: "Current: {pct}% · {tokens} tokens",
     thresholdSuggest: "ⓘ Suggested {pct}%",

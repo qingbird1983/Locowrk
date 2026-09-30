@@ -43,6 +43,10 @@ pub struct LlmSettings {
     pub base_url: Option<String>,
     /// 仅落盘，永不出 IPC。
     pub api_key: Option<String>,
+    /// 模型上下文窗口（token，S2 迁入——窗口是模型的属性，归属模型配置）。
+    /// None = 未设置（Ollama 可经 /api/show 探测，云端查静态档案或手填），
+    /// 阈值回落 FALLBACK_WINDOW_TOKENS 保守保护。
+    pub window_tokens: Option<u64>,
 }
 
 impl Default for LlmSettings {
@@ -52,6 +56,7 @@ impl Default for LlmSettings {
             model: String::new(),
             base_url: None,
             api_key: None,
+            window_tokens: None,
         }
     }
 }
@@ -118,10 +123,13 @@ pub struct LlmSettingsView {
     pub model: String,
     pub base_url: Option<String>,
     pub api_key_set: bool,
+    /// 模型上下文窗口（S2 迁入；None = 未设置，回落保守保护）。
+    pub window_tokens: Option<u64>,
 }
 
 /// 部分更新（settings_set 入参）。字段 None = 保持不变；
-/// base_url / api_key 传空串 = 清除（回落默认端点 / 删除已存 Key）。
+/// base_url / api_key 传空串 = 清除（回落默认端点 / 删除已存 Key）；
+/// window_tokens 双层 Option：null = 清除（回落保守保护），缺省 = 不变。
 #[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LlmUpdate {
@@ -129,6 +137,7 @@ pub struct LlmUpdate {
     pub model: Option<String>,
     pub base_url: Option<String>,
     pub api_key: Option<String>,
+    pub window_tokens: Option<Option<u64>>,
 }
 
 pub struct SettingsStore {
@@ -137,16 +146,21 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
-    /// 打开（不存在则用默认值建文件）；目录建不出来算错误。
+    /// 打开（不存在则用默认值建文件）；目录建不出来算错误。S2 迁移：
+    /// 旧 `context.windowTokens` 搬到 `llm` 区（信息归属修正——窗口是
+    /// 模型属性）。落盘由下一次任意保存完成，重启重做迁移幂等。
     pub fn open(root: &Path) -> Result<Self, String> {
         std::fs::create_dir_all(root)
             .map_err(|e| format!("设置目录创建失败 {}: {e}", root.display()))?;
         let path = root.join(FILE_NAME);
-        let settings = match std::fs::read(&path) {
+        let mut settings = match std::fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<AppSettings>(&bytes)
                 .map_err(|e| format!("settings.json 解析失败: {e}"))?,
             Err(_) => AppSettings::default(),
         };
+        if settings.llm.window_tokens.is_none() && settings.context.window_tokens.is_some() {
+            settings.llm.window_tokens = settings.context.window_tokens.take();
+        }
         Ok(Self {
             root: root.to_path_buf(),
             inner: Mutex::new(settings),
@@ -187,11 +201,30 @@ impl SettingsStore {
             .clone()
     }
 
+    /// 后端专用：生效窗口（S2 llm 区优先；context 旧字段兜底——正常路径
+    /// open() 迁移后恒为 None）。None = 未设置。
+    pub fn effective_window(&self) -> Option<u64> {
+        let s = self.inner.lock().expect("settings poisoned");
+        s.llm.window_tokens.or(s.context.window_tokens)
+    }
+
+    /// 后端专用：生效阈值绝对值（runner UsagePolicy / ctx-compact 判定
+    /// 同源）。窗口未知回落 FALLBACK_WINDOW_TOKENS 保守保护。
+    pub fn effective_threshold_tokens(&self) -> u64 {
+        let s = self.inner.lock().expect("settings poisoned");
+        let window = s
+            .llm
+            .window_tokens
+            .or(s.context.window_tokens)
+            .unwrap_or(FALLBACK_WINDOW_TOKENS);
+        s.context.effective_threshold(window)
+    }
+
     /// 后端专用：生效压缩配置（ctx-compact 共享锁的内容物）。
     pub fn compact_config(&self) -> CompactConfig {
         let c = self.context();
         CompactConfig {
-            threshold_tokens: c.effective_threshold(),
+            threshold_tokens: self.effective_threshold_tokens(),
             strategy: c.strategy,
         }
     }
@@ -255,9 +288,8 @@ impl SettingsStore {
             if let Some(k) = u.api_key {
                 next.llm.api_key = (!k.is_empty()).then_some(k);
             }
-        }
-        if let Some(u) = context {
             if let Some(w) = u.window_tokens {
+                // S2：窗口归属模型配置。双层 Option：null = 清除。
                 match w {
                     Some(n) if n <= 99 => {
                         return Err(format!(
@@ -267,9 +299,11 @@ impl SettingsStore {
                     Some(n) if n > 100_000_000 => {
                         return Err(format!("上下文窗口过大: {n} token（上限 1 亿）"));
                     }
-                    other => next.context.window_tokens = other,
+                    other => next.llm.window_tokens = other,
                 }
             }
+        }
+        if let Some(u) = context {
             if let Some(pct) = u.threshold_pct {
                 if !(10..=90).contains(&pct) {
                     return Err(format!("压缩阈值 {pct}% 超出范围（10–90，10% 一级）"));
@@ -301,6 +335,16 @@ impl SettingsStore {
                 }
                 next.tools.max_per_request = n;
             }
+            if let Some(secs) = u.call_timeout_secs {
+                if !tools::CALL_TIMEOUT_RANGE.contains(&secs) {
+                    return Err(format!(
+                        "单次工具调用超时 {secs}s 超出范围（{}–{} 秒）",
+                        tools::CALL_TIMEOUT_RANGE.start(),
+                        tools::CALL_TIMEOUT_RANGE.end()
+                    ));
+                }
+                next.tools.call_timeout_secs = secs;
+            }
         }
         if let Some(u) = shell {
             if let Some(e) = u.unlock_risky {
@@ -315,6 +359,8 @@ impl SettingsStore {
     }
 
     fn project(&self, s: &AppSettings) -> SettingsView {
+        // S2：窗口以 llm 区为准（context 旧字段只在迁移前的旧文件里出现）
+        let window = s.llm.window_tokens.or(s.context.window_tokens);
         SettingsView {
             locale: s.locale.clone(),
             shortcut: s.shortcut.clone(),
@@ -324,13 +370,15 @@ impl SettingsStore {
                 model: s.llm.model.clone(),
                 base_url: s.llm.base_url.clone(),
                 api_key_set: s.llm.api_key.is_some(),
+                window_tokens: s.llm.window_tokens,
             },
             context: ContextSettingsView {
-                window_tokens: s.context.window_tokens,
                 threshold_pct: s.context.threshold_pct,
                 strategy: s.context.strategy,
-                threshold_tokens: s.context.effective_threshold(),
-                suggested_pct: s.context.suggested_pct(),
+                threshold_tokens: s
+                    .context
+                    .effective_threshold(window.unwrap_or(FALLBACK_WINDOW_TOKENS)),
+                suggested_pct: s.context.suggested_pct(window),
             },
             memory: MemorySettingsView {
                 enabled: s.memory.enabled,
@@ -339,6 +387,7 @@ impl SettingsStore {
             tools: ToolsSettingsView {
                 enabled: s.tools.enabled,
                 max_per_request: s.tools.max_per_request,
+                call_timeout_secs: s.tools.call_timeout_secs,
             },
             shell: ShellSettingsView {
                 unlock_risky: s.shell.unlock_risky,

@@ -9,6 +9,7 @@ use plugin_host::PluginStateSummary;
 use semver::Version;
 use tokio::sync::broadcast;
 
+use crate::builtin;
 use crate::display::{PluginDisplay, read_display};
 use crate::lockfile::InstallSource;
 use crate::market::MarketplaceItem;
@@ -53,7 +54,7 @@ impl PluginService {
                 let dir = self
                     .registry
                     .plugin_dir(&e.id, &e.version)
-                    .or_else(|| Some(self.install_root().join(&e.id).join(e.version.to_string())));
+                    .or_else(|| self.display_dir_of(&e.id, &e.version, e.source));
                 rows.push((
                     InstalledPlugin {
                         id: e.id.clone(),
@@ -107,5 +108,28 @@ impl PluginService {
             .collect();
         out.sort_by(|a, b| a.id.cmp(&b.id));
         out
+    }
+
+    /// lockfile 条目的展示目录（manifest/图标读取用）：注册表优先，其后
+    /// 按来源回落——市场条目走安装根；内置条目走内置根（停用的内置插件
+    /// 不在注册表里，也必须读得出名字和图标；条目版本目录缺失时取内置
+    /// 根最新版本，插件独立升级会迁移版本目录）。
+    fn display_dir_of(
+        &self,
+        id: &str,
+        version: &Version,
+        source: InstallSource,
+    ) -> Option<PathBuf> {
+        match source {
+            InstallSource::Builtin => {
+                let root = self.builtin_root.as_ref()?;
+                let at_version = root.join(id).join(version.to_string());
+                if at_version.is_dir() {
+                    return Some(at_version);
+                }
+                builtin::resolve_latest(&root.join(id)).map(|(_, dir)| dir)
+            }
+            _ => Some(self.install_root().join(id).join(version.to_string())),
+        }
     }
 }
