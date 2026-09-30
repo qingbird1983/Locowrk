@@ -166,6 +166,29 @@ export interface SettingsView {
   dataDir: string;
   llm: LlmSettingsView;
   context: ContextSettingsView;
+  memory: MemorySettingsView;
+}
+
+/** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。 */
+export interface MemorySettingsView {
+  enabled: boolean;
+  topK: number;
+}
+
+/** 记忆注入区部分更新：字段缺省 = 保持不变。 */
+export interface MemoryUpdate {
+  enabled?: boolean;
+  topK?: number;
+}
+
+/** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。
+ * source = "explicit" | "extracted"（前端按档位渲染人类文案）。 */
+export interface MemoryRow {
+  key: string;
+  value: string;
+  tags: string;
+  source: string;
+  updated_at: number;
 }
 
 /** 上下文管理区投影（⑨）：设置原值 + 生效值（阈值绝对数 / 建议百分比）

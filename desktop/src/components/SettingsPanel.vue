@@ -11,6 +11,7 @@ import { useSettingsStore } from "../stores/settings";
 import ContextSection from "./settings/ContextSection.vue";
 import LanguageSection from "./settings/LanguageSection.vue";
 import LlmSection from "./settings/LlmSection.vue";
+import MemorySection from "./settings/MemorySection.vue";
 import PlaceholderSection from "./settings/PlaceholderSection.vue";
 import SessionsSection from "./settings/SessionsSection.vue";
 import ShortcutSection from "./settings/ShortcutSection.vue";
@@ -35,11 +36,8 @@ const settings = useSettingsStore();
     <!-- ⑨ 上下文管理：窗口 / 阈值滑条 / 策略三档（占位已由真分区替换） -->
     <ContextSection />
 
-    <!-- ⑪ 记忆分区（注入开关 + 管理入口）占位 -->
-    <PlaceholderSection
-      title-key="settings.memoryTitle"
-      hint-key="settings.memoryHint"
-    />
+    <!-- ⑪ 记忆分区：注入开关 + 注入条数（占位已由真分区替换） -->
+    <MemorySection />
 
     <SessionsSection />
     <LanguageSection />

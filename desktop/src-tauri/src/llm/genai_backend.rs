@@ -194,6 +194,11 @@ impl GenAiLlm {
         }
 
         let mut chat_req = ChatRequest::new(to_genai_messages(&req.messages));
+        // 请求级 system prompt（⑪ Memory-Inject 记忆注入走这里；普通聊天为
+        // None）。genai 的 with_system 收 Into<String>。
+        if let Some(sys) = &req.system {
+            chat_req = chat_req.with_system(sys.as_str());
+        }
         if !req.tools.is_empty() {
             chat_req = chat_req.with_tools(to_genai_tools(&req.tools));
         }

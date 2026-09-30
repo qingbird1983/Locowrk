@@ -8,9 +8,11 @@ import type {
   BatchResult,
   ContextUpdate,
   InstalledPlugin,
+  MemoryRow,
   PluginUsageView,
   LlmUpdate,
   MarketplaceItem,
+  MemoryUpdate,
   PluginStateChange,
   SettingsView,
 } from "../types";
@@ -138,11 +140,35 @@ export function setSettings(patch: {
   shortcut?: string;
   llm?: LlmUpdate;
   context?: ContextUpdate;
+  memory?: MemoryUpdate;
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
     shortcut: patch.shortcut ?? null,
     llm: patch.llm ?? null,
     context: patch.context ?? null,
+    memory: patch.memory ?? null,
   });
+}
+
+// ---- 记忆管理（⑪，Context and Memory.md §7.2） ----
+
+/** 列举记忆：query 空 = 全量（新→旧），否则子串过滤。 */
+export function memoryList(query?: string, limit?: number): Promise<MemoryRow[]> {
+  return invoke("memory_list", { query: query ?? null, limit: limit ?? null });
+}
+
+/** 编辑记忆值（只改 value；键不存在后端报错）。 */
+export function memoryUpdate(key: string, value: string): Promise<void> {
+  return invoke("memory_update", { key, value });
+}
+
+/** 删除单条记忆（键不存在后端报错）。 */
+export function memoryDelete(key: string): Promise<void> {
+  return invoke("memory_delete", { key });
+}
+
+/** 清空全部记忆。返回删除条数。 */
+export function memoryClearAll(): Promise<number> {
+  return invoke("memory_clear_all");
 }

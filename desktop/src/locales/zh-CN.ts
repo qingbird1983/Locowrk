@@ -70,8 +70,26 @@ export default {
   },
   memory: {
     search: "搜索记忆…",
-    empty: "还没有可管理的记忆条目。",
-    hint: "记忆的注入与管理将在后续版本开放（当前可经对话让 Agent 记住/查询记忆）。",
+    empty: "还没有记忆。对话里说「记住…」就会出现在这里。",
+    noMatch: "没有匹配的记忆条目。",
+    hint: "记忆跨会话持久保存；注入开关与条数在 设置 → 记忆。每条都可编辑、删除。",
+    source_explicit: "用户显式",
+    source_extracted: "自动提取",
+    edit: "编辑",
+    delete: "删除",
+    deleteConfirm: "确认删除",
+    save: "保存",
+    cancel: "取消",
+    clearAll: "清空全部记忆",
+    clearConfirm: "再点一次确认清空",
+    time: {
+      just_now: "刚刚",
+      minutes: "{n} 分钟前",
+      hours: "{n} 小时前",
+      days: "{n} 天前",
+      weeks: "{n} 周前",
+      months: "{n} 个月前",
+    },
   },
   approval: {
     title: "需要确认",
@@ -151,9 +169,12 @@ export default {
     shortcutPlaceholder: "如 Ctrl+Shift+L",
     shortcutHint:
       "保存后立即生效（无需重启）；在任意应用中按下即可显示/隐藏主窗口。键位被其他程序占用时保存会报错，换一个组合即可。",
-    // 占位分区（⑪/⑫ 落位后随 PlaceholderSection 一并替换为真分区）
+    // ⑪ 记忆分区（真分区，替换壳批次占位）
     memoryTitle: "记忆",
-    memoryHint: "记忆注入开关与管理入口将在后续版本提供。",
+    memoryHint: "相关记忆会自动注入对话（走系统提示，不占压缩空间）；每轮条数可调。",
+    memoryEnabled: "自动注入记忆",
+    memoryTopK: "每轮注入条数",
+    memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
     developerTitle: "开发者选项",
     developerHint: "暴露调试面板（Top-N、分布统计、token 节省估算）将在后续版本提供。",
     // ⑨ 上下文管理分区（真分区，替换壳批次占位）

@@ -5,12 +5,16 @@
 //! 组装次序 Tracing → Timeout → Retry → CircuitBreaker → [Approval] → Tool；
 //! 审批门在 Kernel（§7.2）——决策必须作为 ApprovalDecided 事件进会话日志，
 //! 中间件没有会话句柄（见 `crate::approval`）。
-//! `compact`（ctx-compact，plugins.md 第二批）不是洋葱件——它是
+//! `compact`（ctx-compact，plugins.md 第二批）与 `memory_inject`
+//! （Memory-Inject，Context 文档 §4/§5）都不是洋葱件——它们是
 //! `agent/request` waterfall 监听器，与本套件同住只因同属"中间件类"。
+//! 注册次序（§3.6）：Memory-Inject 在 ctx-compact 之前（记忆是原料、
+//! 压缩是分配预算）；ToolExposure（⑫）落在两者之前。
 
 mod audit;
 mod circuit_breaker;
 mod compact;
+mod memory_inject;
 mod retry;
 mod timeout;
 mod trace;
@@ -24,6 +28,7 @@ pub use compact::{
     CompactConfig, CompactStrategy, CompactionOutcome, CtxCompact, estimate_tokens,
     suggested_threshold,
 };
+pub use memory_inject::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
 pub use retry::Retry;
 pub use timeout::Timeout;
 pub use trace::Tracing;

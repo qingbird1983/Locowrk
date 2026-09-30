@@ -68,13 +68,15 @@ fn exposure_defaults_to_on_demand_and_parses_all_values() {
     }
 
     // 未知值是作者错误：宁可报错也不静默归池（与 side_effect 未知值同策略）
-    assert!(serde_json::from_value::<ToolSpec>(json!({
-        "name": "t",
-        "schema": {},
-        "side_effect": "Pure",
-        "exposure": "sometimes"
-    }))
-    .is_err());
+    assert!(
+        serde_json::from_value::<ToolSpec>(json!({
+            "name": "t",
+            "schema": {},
+            "side_effect": "Pure",
+            "exposure": "sometimes"
+        }))
+        .is_err()
+    );
 }
 
 #[test]

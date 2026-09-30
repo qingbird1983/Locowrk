@@ -10,8 +10,8 @@
 //! 副作用分级（plugins.md §三表格把本插件整体标为 Pure；这里按用户
 //! "宁严勿松"原则对写操作收紧一档——Compensable 不触发审批、无 UX 代价，
 //! 只是回滚时多一条机械可执行的 undo）：
-//! - `memory_get` / `memory_list` / `memory_search` → Pure
-//! - `memory_put` → `Compensable { undo_tool: "memory_undo" }`：输出携带
+//! - `memory_read` / `memory_list` / `memory_search` → Pure
+//! - `memory_write` → `Compensable { undo_tool: "memory_undo" }`：输出携带
 //!   被覆盖的旧条目，undo 精确还原
 //! - `memory_delete` → `Compensable { undo_tool: "memory_undo" }`：输出携带
 //!   被删条目全文，undo 重新插入
@@ -20,7 +20,7 @@
 //!
 //! undo 调用契约（DESIGN §6.3）：内核以 `{"call_id", "args", "output"}` 调
 //! undo_tool——FFI 边界不传 CallCtx，undo 只读原调用 `output` 里的
-//! `previous`（put）或 `previous_entry`（delete）。兼容两种形态：标准契约
+//! `previous`（write）或 `previous_entry`（delete）。兼容两种形态：标准契约
 //! 或把 output 字段平铺在 args 顶层（手工排查用）。
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
@@ -37,7 +37,7 @@ use plugin_api::manifest::{
     Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
 };
 use plugin_api::serde_json::{Value, json};
-use plugin_api::tool::{SideEffect, ToolSpec};
+use plugin_api::tool::{Exposure, SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
 
 /// 双语展示元数据样板（packaging.md §2.2）。
@@ -63,7 +63,7 @@ fn describe_manifest() -> CString {
         kind: PluginKind::Tool,
         tools: vec![
             ToolSpec {
-                name: "memory_put".into(),
+                name: "memory_write".into(),
                 description: "Store a value under a key in the persistent memory database \
                               (survives across sessions). Args: key (required, unique \
                               identifier), value (required, text), tags (optional, short \
@@ -84,10 +84,11 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Compensable {
                     undo_tool: "memory_undo".into(),
                 },
-                exposure: Default::default(),
+                // §4.4 记忆工具面三件套始终可用（⑫ Top-N 截断时不受挤出）
+                exposure: Exposure::Always,
             },
             ToolSpec {
-                name: "memory_get".into(),
+                name: "memory_read".into(),
                 description: "Read one memory entry by exact key. Returns {found, key, \
                               value, tags, updated_at}; found=false when the key is absent."
                     .into(),
@@ -99,7 +100,7 @@ fn describe_manifest() -> CString {
                     "required": ["key"]
                 }),
                 side_effect: SideEffect::Pure,
-                exposure: Default::default(),
+                exposure: Exposure::Always,
             },
             ToolSpec {
                 name: "memory_list".into(),
@@ -135,7 +136,7 @@ fn describe_manifest() -> CString {
                     "required": ["query"]
                 }),
                 side_effect: SideEffect::Pure,
-                exposure: Default::default(),
+                exposure: Exposure::Always,
             },
             ToolSpec {
                 name: "memory_delete".into(),
@@ -157,18 +158,18 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "memory_undo".into(),
-                description: "Undo a previous memory_put or memory_delete by restoring the \
+                description: "Undo a previous memory_write or memory_delete by restoring the \
                               entry captured in its result. Usually invoked by the \
                               compensation layer, not by the model. Args mirror the \
                               compensation payload {call_id, args, output}; only \
-                              output.previous (for put) or output.previous_entry (for \
+                              output.previous (for write) or output.previous_entry (for \
                               delete) is used. Irreversible — restoring overwrites the \
                               entry's current content, so the call requires user approval."
                     .into(),
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "call_id": { "type": "string", "description": "id of the original memory_put / memory_delete call" },
+                        "call_id": { "type": "string", "description": "id of the original memory_write / memory_delete call" },
                         "args": { "type": "object", "description": "original call args" },
                         "output": { "type": "object",
                                     "description": "original call result carrying previous or previous_entry" }
@@ -181,8 +182,8 @@ fn describe_manifest() -> CString {
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
         display_name: Some(zh_en("持久记忆", "Persistent Memory")),
         description: Some(LocalizedOrString::Localized(zh_en(
-            "跨会话持久记忆：存 / 取 / 列举 / 搜索 / 删除（写入可机械撤销）",
-            "Cross-session memory: put / get / list / search / delete (writes undoable)",
+            "跨会话持久记忆：写 / 读 / 列举 / 搜索 / 删除（写入可机械撤销）",
+            "Cross-session memory: write / read / list / search / delete (writes undoable)",
         ))),
         icon: Some("assets/icon.svg".into()),
         author: Some(Author {
@@ -221,8 +222,8 @@ impl PluginState for MemoryState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("memory-sqlite: {tool} called"));
         match tool {
-            "memory_put" => store::memory_put(&args),
-            "memory_get" => store::memory_get(&args),
+            "memory_write" => store::memory_write(&args),
+            "memory_read" => store::memory_read(&args),
             "memory_list" => store::memory_list(&args),
             "memory_search" => store::memory_search(&args),
             "memory_delete" => store::memory_delete(&args),

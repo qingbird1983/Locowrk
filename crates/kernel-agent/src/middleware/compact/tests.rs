@@ -95,6 +95,7 @@ fn request_payload(messages: Vec<Message>) -> Value {
         params: json!({ "temperature": 0.2 }),
         tools: catalog(),
         compacted: None,
+        system: None,
     })
     .unwrap()
 }
@@ -382,6 +383,7 @@ async fn other_waterfall_points_ignored() {
         params: json!({}),
         tools: vec![],
         compacted: None,
+        system: None,
     })
     .unwrap();
     let out = ctx.events.waterfall(points::PRE_STEP, payload).await;

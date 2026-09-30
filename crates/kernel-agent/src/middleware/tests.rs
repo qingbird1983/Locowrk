@@ -195,7 +195,10 @@ impl OkTool {
         Self::named("mock", Arc::new(AtomicU32::new(0)))
     }
     fn named(name: &str, calls: Arc<AtomicU32>) -> Self {
-        Self { calls, spec: spec(name) }
+        Self {
+            calls,
+            spec: spec(name),
+        }
     }
 }
 

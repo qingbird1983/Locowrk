@@ -1,6 +1,6 @@
 {
   "id": "memory-sqlite",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "abi_version": 1,
   "kind": "tool",
 
@@ -9,8 +9,8 @@
     "en-US": "Persistent Memory"
   },
   "description": {
-    "zh-CN": "跨会话持久记忆：存 / 取 / 列举 / 搜索 / 删除（写入可机械撤销）",
-    "en-US": "Cross-session memory: put / get / list / search / delete (writes undoable)"
+    "zh-CN": "跨会话持久记忆：写 / 读 / 列举 / 搜索 / 删除（写入可机械撤销）",
+    "en-US": "Cross-session memory: write / read / list / search / delete (writes undoable)"
   },
   "icon": "assets/icon.svg",
 
@@ -20,7 +20,7 @@
 
   "tools": [
     {
-      "name": "memory_put",
+      "name": "memory_write",
       "description": "Store a value under a key in the persistent memory database (survives across sessions). Args: key (required, unique identifier), value (required, text), tags (optional, short label). Overwrites any existing value; the overwritten entry is returned in `previous` and can be restored via memory_undo. Use it for facts, decisions and user preferences worth remembering; do NOT store secrets or large blobs.",
       "schema": {
         "type": "object",
@@ -31,10 +31,11 @@
         },
         "required": ["key", "value"]
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "memory_undo" }
+      "side_effect": { "kind": "compensable", "undo_tool": "memory_undo" },
+      "exposure": "always"
     },
     {
-      "name": "memory_get",
+      "name": "memory_read",
       "description": "Read one memory entry by exact key. Returns {found, key, value, tags, updated_at}; found=false when the key is absent.",
       "schema": {
         "type": "object",
@@ -43,7 +44,8 @@
         },
         "required": ["key"]
       },
-      "side_effect": "Pure"
+      "side_effect": "Pure",
+      "exposure": "always"
     },
     {
       "name": "memory_list",
@@ -69,7 +71,8 @@
         },
         "required": ["query"]
       },
-      "side_effect": "Pure"
+      "side_effect": "Pure",
+      "exposure": "always"
     },
     {
       "name": "memory_delete",
@@ -85,11 +88,11 @@
     },
     {
       "name": "memory_undo",
-      "description": "Undo a previous memory_put or memory_delete by restoring the entry captured in its result. Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.previous (for put) or output.previous_entry (for delete) is used. Irreversible — restoring overwrites the entry's current content, so the call requires user approval.",
+      "description": "Undo a previous memory_write or memory_delete by restoring the entry captured in its result. Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.previous (for write) or output.previous_entry (for delete) is used. Irreversible — restoring overwrites the entry's current content, so the call requires user approval.",
       "schema": {
         "type": "object",
         "properties": {
-          "call_id": { "type": "string", "description": "id of the original memory_put / memory_delete call" },
+          "call_id": { "type": "string", "description": "id of the original memory_write / memory_delete call" },
           "args": { "type": "object", "description": "original call args" },
           "output": { "type": "object", "description": "original call result carrying previous or previous_entry" }
         }

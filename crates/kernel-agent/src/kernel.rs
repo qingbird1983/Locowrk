@@ -25,13 +25,15 @@ use crate::waterfall::{PreStepPayload, RequestErrorPayload, RequestPayload, Retr
 
 /// LLM 请求：直接复用 session-store 的中立投影，模型适配层再映射各家协议。
 /// `tools` 是本 step 的工具目录快照（LLM.md：统一 OpenAI 风格，适配器负责
-/// 转成各家格式）；`model` / `params` 可被 `agent/request` 决策环改写（§7.2）。
+/// 转成各家格式）；`model` / `params` 可被 `agent/request` 决策环改写（§7.2）；
+/// `system` 是请求级系统提示（⑪ Memory-Inject 走这里，会话日志与压缩不触碰）。
 #[derive(Debug, Clone, Default)]
 pub struct LlmRequest {
     pub messages: Vec<Message>,
     pub tools: Vec<ToolSpec>,
     pub model: Option<String>,
     pub params: Value,
+    pub system: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -278,9 +280,10 @@ impl Kernel {
         }
     }
 
-    /// `agent/request` 决策环：插件可改 model / params（§14 阶段四验收）。
-    /// tools 随 payload 进决策环（决策方理论上可裁剪目录），出环后进 LlmRequest。
-    /// ctx-compact 的压缩结果经 `compacted` 一并带回（kernel 落日志）。
+    /// `agent/request` 决策环：插件可改 model / params / system（记忆注入见
+    /// middleware::memory_inject）。tools 随 payload 进决策环（决策方理论上
+    /// 可裁剪目录），出环后进 LlmRequest；ctx-compact 的压缩结果经
+    /// `compacted` 一并带回（kernel 落日志）。
     async fn waterfall_request(
         &self,
         messages: Vec<Message>,
@@ -293,6 +296,7 @@ impl Kernel {
             params: Value::Object(serde_json::Map::new()),
             tools,
             compacted: None,
+            system: None,
         })?;
         let out = self.ctx.events.waterfall(points::REQUEST, payload).await;
         match out.decision {
@@ -304,6 +308,7 @@ impl Kernel {
                         tools: parsed.tools,
                         model: parsed.model,
                         params: parsed.params,
+                        system: parsed.system,
                     },
                     parsed.compacted,
                 ))

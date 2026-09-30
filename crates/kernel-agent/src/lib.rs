@@ -25,7 +25,7 @@ pub use kernel::{
 };
 pub use middleware::{
     Audit, AuditEntry, AuditSink, CircuitBreaker, CompactConfig, CompactStrategy,
-    CompactionOutcome, CtxCompact, JsonlAuditSink, Middleware, Next, Retry, Timeout, Tracing,
-    estimate_tokens, suggested_threshold,
+    CompactionOutcome, CtxCompact, JsonlAuditSink, MemoryEntry, MemoryInject, MemoryInjectConfig,
+    MemorySource, Middleware, Next, Retry, Timeout, Tracing, estimate_tokens, suggested_threshold,
 };
 pub use waterfall::{RequestErrorPayload, RequestPayload, RetryBudget, points};

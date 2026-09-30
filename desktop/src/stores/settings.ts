@@ -3,7 +3,7 @@
 import { defineStore } from "pinia";
 import { getSettings, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
-import type { ContextUpdate, LlmUpdate, SettingsView } from "../types";
+import type { ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView } from "../types";
 
 export const useSettingsStore = defineStore("settings", {
   state: () => ({
@@ -77,6 +77,23 @@ export const useSettingsStore = defineStore("settings", {
       this.savedFlash = false;
       try {
         this.view = await setSettings({ context });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
+    /** 保存记忆注入区（⑪）：后端校验 + 换入 Memory-Inject 活配置，
+     * 保存即生效（下一轮请求就按新条数注入）。 */
+    async saveMemory(memory: MemoryUpdate) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ memory });
         this.savedFlash = true;
         setTimeout(() => (this.savedFlash = false), 2000);
       } catch (e) {

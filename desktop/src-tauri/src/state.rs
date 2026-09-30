@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use cordis_core::Context;
 use kernel_agent::{
-    points, Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel, LlmService,
-    Middleware, Timeout, ToolSource, Tracing,
+    points, Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel,
+    MemoryInject, MemoryInjectConfig, LlmService, Middleware, Timeout, ToolSource, Tracing,
 };
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use plugin_service::{LocalDirMarket, PluginService};
@@ -26,6 +26,7 @@ use crate::data_root;
 use crate::demo_tools::SendEmailTool;
 use crate::events::{forward_plugin_states, EventSink, TauriSink};
 use crate::llm::AppLlm;
+use crate::memory::MemoryStore;
 use crate::plugins_root;
 use crate::settings::SettingsStore;
 use crate::tool_source::KernelToolSource;
@@ -51,6 +52,10 @@ pub struct AppState {
     /// ctx-compact 的活配置（kernel-agent 侧只认 CompactConfig）。settings_set
     /// 成功后由命令层换入新值——压缩行为随即生效，无需重启。
     pub compact_cfg: Arc<RwLock<CompactConfig>>,
+    /// Memory-Inject 的活配置（⑪，同 compact_cfg 的换入模式）。
+    pub memory_cfg: Arc<RwLock<MemoryInjectConfig>>,
+    /// 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
+    pub memory: Arc<MemoryStore>,
     /// 使用统计写入端（⑩③，usage.sqlite3 宿主自有）。降级模式 = 丢弃。
     pub usage: Arc<UsageRecorder>,
 }
@@ -93,10 +98,28 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
     ctx.provide_dyn::<dyn LlmService>(Arc::new(AppLlm::new(Arc::clone(&settings))));
 
+    // 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
+    // MemoryStore::new 不做 IO（连接按操作开、失败逐次降级），无启动风险。
+    let memory = Arc::new(MemoryStore::new(&root));
+
+    // agent/request 决策环（Context 文档 §3.6，注册次序 = 执行次序）：
+    // Memory-Inject 先、ctx-compact 后——记忆是"原料"，压缩按含注入后的
+    // 总量分配预算；ToolExposure（⑫）落地后排在两者之前。两件共享同一
+    // 模式：配置经 RwLock 注入（kernel-agent 不依赖设置存储），settings_set
+    // 成功后由命令层换入即生效。
+    let memory_cfg: Arc<RwLock<MemoryInjectConfig>> =
+        Arc::new(RwLock::new(settings.memory_inject_config()));
+    ctx.events.on_waterfall(
+        points::REQUEST,
+        Arc::new(MemoryInject::new(
+            crate::memory::memory_source(&memory),
+            Arc::clone(&memory_cfg),
+        )),
+    );
+
     // ctx-compact（Context and Memory.md §3）：agent/request 决策环上的压缩
     // 监听器——三策略配置驱动（阈值 = 窗口 × 百分比，压到阈值 50%），压缩
-    // 结果经 payload 带回 kernel 落 ContextCompacted 事件。配置经共享锁注入
-    // （kernel-agent 不依赖设置存储）：settings_set 成功后换入新配置即生效。
+    // 结果经 payload 带回 kernel 落 ContextCompacted 事件。
     let compact_cfg: Arc<RwLock<CompactConfig>> = Arc::new(RwLock::new(settings.compact_config()));
     ctx.events.on_waterfall(
         points::REQUEST,
@@ -161,6 +184,8 @@ pub fn init_state(app: AppHandle) -> AppState {
         sessions: Mutex::new(HashMap::new()),
         settings,
         compact_cfg,
+        memory_cfg,
+        memory,
         usage,
     }
 }

@@ -56,22 +56,22 @@ fn row_json(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     }))
 }
 
-pub(crate) fn memory_put(args: &Value) -> Result<Value, String> {
+pub(crate) fn memory_write(args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
     let value = arg_str(args, "value")?;
     let tags = args.get("tags").and_then(Value::as_str).unwrap_or("");
     if key.is_empty() {
-        return Err("memory_put: `key` must not be empty".into());
+        return Err("memory_write: `key` must not be empty".into());
     }
     if key.len() > KEY_MAX {
         return Err(format!(
-            "memory_put: `key` is {} bytes, over the {KEY_MAX} limit",
+            "memory_write: `key` is {} bytes, over the {KEY_MAX} limit",
             key.len()
         ));
     }
     if value.len() > VALUE_MAX {
         return Err(format!(
-            "memory_put: `value` is {} bytes, over the {VALUE_MAX} limit",
+            "memory_write: `value` is {} bytes, over the {VALUE_MAX} limit",
             value.len()
         ));
     }
@@ -89,11 +89,11 @@ pub(crate) fn memory_put(args: &Value) -> Result<Value, String> {
                                         updated_at = excluded.updated_at",
         params![key, value, tags, now()],
     )
-    .map_err(|e| format!("memory_put `{key}`: {e}"))?;
+    .map_err(|e| format!("memory_write `{key}`: {e}"))?;
     Ok(json!({ "key": key, "created": previous.is_none(), "previous": previous }))
 }
 
-pub(crate) fn memory_get(args: &Value) -> Result<Value, String> {
+pub(crate) fn memory_read(args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
     let conn = open()?;
     match conn.query_row(
@@ -108,7 +108,7 @@ pub(crate) fn memory_get(args: &Value) -> Result<Value, String> {
             Ok(entry)
         }
         Err(Error::QueryReturnedNoRows) => Ok(json!({ "found": false, "key": key })),
-        Err(e) => Err(format!("memory_get `{key}`: {e}")),
+        Err(e) => Err(format!("memory_read `{key}`: {e}")),
     }
 }
 
@@ -182,9 +182,9 @@ pub(crate) fn memory_undo(args: &Value) -> Result<Value, String> {
     let output = args.get("output").unwrap_or(args);
     let conn = open()?;
     if let Some(prev) = output.get("previous") {
-        // put 的撤销：previous 为 null → 删掉当时新建的 key；否则还原旧条目
+        // write 的撤销：previous 为 null → 删掉当时新建的 key；否则还原旧条目
         let key = output.get("key").and_then(Value::as_str).ok_or_else(|| {
-            "memory_undo: missing `output.key` (pass the original memory_put result)".to_string()
+            "memory_undo: missing `output.key` (pass the original memory_write result)".to_string()
         })?;
         if prev.is_null() {
             let removed = conn
@@ -227,7 +227,7 @@ pub(crate) fn memory_undo(args: &Value) -> Result<Value, String> {
     }
     Err(
         "memory_undo: missing `output.previous` or `output.previous_entry` (pass the original \
-         memory_put / memory_delete result)"
+         memory_write / memory_delete result)"
             .to_string(),
     )
 }

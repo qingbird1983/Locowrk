@@ -117,10 +117,20 @@ fn missing_path_outside_roots_reports_outside_not_os_error() {
     let two_up = sub.join("no_such").join("..").join("..").join("evil.txt");
     let err = resolve_existing(&two_up, &roots).unwrap_err();
     assert!(!err.contains("outside the allowed roots"), "got: {err}");
-    let three_up = sub.join("no_such").join("..").join("..").join("..").join("evil.txt");
+    let three_up = sub
+        .join("no_such")
+        .join("..")
+        .join("..")
+        .join("..")
+        .join("evil.txt");
     let err = resolve_existing(&three_up, &roots).unwrap_err();
     assert!(err.contains("outside the allowed roots"), "got: {err}");
     // fs_write 同一归一：越界写目标在"校验后落盘"前就被拒
-    let write_escape = sub.join("no_such").join("..").join("..").join("..").join("evil.txt");
+    let write_escape = sub
+        .join("no_such")
+        .join("..")
+        .join("..")
+        .join("..")
+        .join("evil.txt");
     assert!(resolve_for_write(&write_escape, &roots).is_err());
 }

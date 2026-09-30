@@ -14,9 +14,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use kernel_agent::{suggested_threshold, CompactConfig, CompactStrategy};
+use kernel_agent::{MemoryInjectConfig, suggested_threshold, CompactConfig, CompactStrategy};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_global_shortcut::Shortcut;
+
+mod memory;
+
+pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate};
 
 /// locale 取值：`system`（跟随系统，缺省）/ `zh-CN` / `en`（§13.5）。
 pub const LOCALE_SYSTEM: &str = "system";
@@ -66,6 +70,8 @@ pub struct AppSettings {
     /// 上下文管理区（⑨）。字段级缺省：旧 settings.json 无此字段时取默认
     /// （窗口未设置 / 阈值 30% / 分层保留）。
     pub context: ContextSettings,
+    /// 记忆注入区（⑪，类型见 `memory` 子模块）。
+    pub memory: MemorySettings,
 }
 
 fn default_shortcut() -> String {
@@ -117,6 +123,7 @@ impl Default for AppSettings {
             shortcut: SHORTCUT_DEFAULT.into(),
             llm: LlmSettings::default(),
             context: ContextSettings::default(),
+            memory: MemorySettings::default(),
         }
     }
 }
@@ -131,6 +138,7 @@ pub struct SettingsView {
     pub data_dir: String,
     pub llm: LlmSettingsView,
     pub context: ContextSettingsView,
+    pub memory: MemorySettingsView,
 }
 
 /// 上下文管理区投影：设置原值 + 生效值（阈值绝对数、建议百分比）
@@ -242,6 +250,15 @@ impl SettingsStore {
         }
     }
 
+    /// 后端专用：记忆注入活配置（MemoryInject 共享锁的内容物，⑪）。
+    pub fn memory_inject_config(&self) -> MemoryInjectConfig {
+        let m = self.inner.lock().expect("settings poisoned").memory.clone();
+        MemoryInjectConfig {
+            enabled: m.enabled,
+            top_k: m.top_k as usize,
+        }
+    }
+
     /// 校验 → 应用到副本 → 落盘成功才提交内存。返回最新投影。
     pub fn update(
         &self,
@@ -249,6 +266,7 @@ impl SettingsStore {
         shortcut: Option<String>,
         llm: Option<LlmUpdate>,
         context: Option<ContextUpdate>,
+        memory: Option<MemoryUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
         if let Some(loc) = locale {
@@ -312,6 +330,17 @@ impl SettingsStore {
                 next.context.strategy = s;
             }
         }
+        if let Some(u) = memory {
+            if let Some(e) = u.enabled {
+                next.memory.enabled = e;
+            }
+            if let Some(k) = u.top_k {
+                if !(1..=20).contains(&k) {
+                    return Err(format!("记忆注入条数 {k} 超出范围（1–20）"));
+                }
+                next.memory.top_k = k;
+            }
+        }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
         std::fs::write(self.root.join(FILE_NAME), bytes)
             .map_err(|e| format!("settings.json 写入失败: {e}"))?;
@@ -336,6 +365,10 @@ impl SettingsStore {
                 strategy: s.context.strategy,
                 threshold_tokens: s.context.effective_threshold(),
                 suggested_pct: s.context.suggested_pct(),
+            },
+            memory: MemorySettingsView {
+                enabled: s.memory.enabled,
+                top_k: s.memory.top_k,
             },
         }
     }

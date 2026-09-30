@@ -10,8 +10,9 @@ use kernel_agent::CompactConfig;
 use session_store::SessionEvent;
 
 use crate::events::ApprovalRequestPayload;
+use crate::memory::MemoryRow;
 use crate::runner::{self, UsagePolicy};
-use crate::settings::{ContextUpdate, LlmUpdate, SettingsView};
+use crate::settings::{ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView};
 use crate::state::AppState;
 use crate::usage::{self, PluginUsageView};
 use plugin_service::{InstalledPlugin, MarketplaceItem};
@@ -219,23 +220,25 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
     Ok(state.settings.view())
 }
 
-/// 部分更新设置：locale、快捷键、LLM 字段与上下文管理区（⑨）独立可选，
-/// 缺省字段保持不变；base_url / api_key 传空串 = 清除；context 的
-/// windowTokens 传 null = 清除窗口（回落保守保护）。改键成功后即时
-/// 重注册全局快捷键；注册失败返回 Err（新键已落盘，换键重试即可）。
-/// 上下文改动成功后换入 ctx-compact 活配置——压缩行为随即生效。
+/// 部分更新设置：locale、快捷键、LLM 字段、上下文管理区（⑨）与记忆
+/// 注入区（⑪）独立可选，缺省字段保持不变；base_url / api_key 传空串 =
+/// 清除；context 的 windowTokens 传 null = 清除窗口（回落保守保护）。
+/// 改键成功后即时重注册全局快捷键；注册失败返回 Err（新键已落盘，换键
+/// 重试即可）。上下文 / 记忆改动成功后换入 ctx-compact / Memory-Inject
+/// 活配置——行为随即生效。
 #[tauri::command]
 pub async fn settings_set(
     locale: Option<String>,
     shortcut: Option<String>,
     llm: Option<LlmUpdate>,
     context: Option<ContextUpdate>,
+    memory: Option<MemoryUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
     let view = state
         .settings
-        .update(locale.clone(), shortcut.clone(), llm, context)?;
+        .update(locale.clone(), shortcut.clone(), llm, context, memory)?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;
     }
@@ -248,5 +251,54 @@ pub async fn settings_set(
     if let Ok(mut guard) = state.compact_cfg.write() {
         *guard = cfg;
     }
+    // ⑪：记忆注入配置热更新（开关/topK 换入共享锁）
+    let mcfg = state.settings.memory_inject_config();
+    if let Ok(mut guard) = state.memory_cfg.write() {
+        *guard = mcfg;
+    }
     Ok(view)
+}
+
+// ---- 记忆管理命令（⑪，Context and Memory.md §7.2）：薄适配层，SQL 全在
+// memory::MemoryStore（memory.sqlite3 归 memory-sqlite 插件所有，宿主只做
+// 管理页访问）。来源徽章 / 时间文案由前端按结构化字段渲染（§8.1）。 ----
+
+/// 列举记忆：query 空 = 全量（新→旧），否则 key/value/tags 子串过滤。
+#[tauri::command]
+pub async fn memory_list(
+    query: Option<String>,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<Vec<MemoryRow>, String> {
+    state
+        .memory
+        .list(query.as_deref().unwrap_or(""), limit.unwrap_or(200))
+}
+
+/// 编辑记忆值（只改 value，键名与来源不动；不存在报错）。
+#[tauri::command]
+pub async fn memory_update(
+    key: String,
+    value: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if !state.memory.update_value(&key, &value)? {
+        return Err(format!("记忆 `{key}` 不存在"));
+    }
+    Ok(())
+}
+
+/// 删除单条记忆（不存在报错，前端据此刷新）。
+#[tauri::command]
+pub async fn memory_delete(key: String, state: State<'_, AppState>) -> Result<(), String> {
+    if !state.memory.delete(&key)? {
+        return Err(format!("记忆 `{key}` 不存在"));
+    }
+    Ok(())
+}
+
+/// 清空全部记忆。返回删除条数（前端提示"已清空 n 条"）。
+#[tauri::command]
+pub async fn memory_clear_all(state: State<'_, AppState>) -> Result<usize, String> {
+    state.memory.clear_all()
 }

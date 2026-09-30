@@ -1,6 +1,6 @@
 //! 端到端集成测试：阶段八⑦第三批官方工具（真实 dlopen）。
 //!
-//! - memory-sqlite 1.1.0：memory_put→覆盖（previous 捕获）→ undo 契约
+//! - memory-sqlite 1.2.0：memory_write→覆盖（previous 捕获）→ undo 契约
 //!   还原、memory_delete→undo 整条还原、库文件落在数据根
 //! - tool-git 1.1.0：真实 git 仓库 git_status/git_commit→undo_commit 契约、
 //!   git_push 到本地 bare 远端、允许根外仓库拒绝
@@ -121,36 +121,36 @@ fn git(cwd: &std::path::Path, argv: &[&str]) -> String {
 }
 
 #[test]
-fn memory_put_overwrite_undo_and_delete_undo_end_to_end() {
+fn memory_write_overwrite_undo_and_delete_undo_end_to_end() {
     let _env = env_lock().lock().unwrap();
     let root = temp_root("mem");
     std::fs::create_dir_all(&root).unwrap();
     unsafe { std::env::set_var("LOCOWRK_DATA_DIR", root.display().to_string()) };
 
     let registry = Arc::new(PluginRegistry::new());
-    load_activate("memory-sqlite", "1.1.0", &registry);
+    load_activate("memory-sqlite", "1.2.0", &registry);
     let source = RegistryToolSource::new(Arc::clone(&registry));
 
     // 库文件固定在数据根（模型无路径参数——无逃逸面）
     let db = root.join("memory.sqlite3");
 
-    let put = |args: Value| {
-        call(source.resolve("memory_put").unwrap().as_ref(), args).expect("memory_put ok")
+    let write = |args: Value| {
+        call(source.resolve("memory_write").unwrap().as_ref(), args).expect("memory_write ok")
     };
     let get = |key: &str| {
         call(
-            source.resolve("memory_get").unwrap().as_ref(),
+            source.resolve("memory_read").unwrap().as_ref(),
             json!({ "key": key }),
         )
-        .expect("memory_get ok")
+        .expect("memory_read ok")
     };
 
-    let out1 = put(json!({ "key": "user.lang", "value": "zh", "tags": "pref" }));
+    let out1 = write(json!({ "key": "user.lang", "value": "zh", "tags": "pref" }));
     assert_eq!(out1["created"], json!(true));
     assert_eq!(get("user.lang")["value"], json!("zh"));
 
     // 覆盖写携带被覆盖条目 → undo 契约还原
-    let out2 = put(json!({ "key": "user.lang", "value": "en" }));
+    let out2 = write(json!({ "key": "user.lang", "value": "en" }));
     assert_eq!(out2["previous"]["value"], json!("zh"));
     call(
         source.resolve("memory_undo").unwrap().as_ref(),

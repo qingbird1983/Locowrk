@@ -72,8 +72,26 @@ export default {
   },
   memory: {
     search: "Search memories…",
-    empty: "No manageable memory entries yet.",
-    hint: "Memory injection and management arrive in a later version (for now the agent can memorize/recall via chat).",
+    empty: "No memories yet. Say \"remember …\" in a chat and it will show up here.",
+    noMatch: "No matching memory entries.",
+    hint: "Memories persist across sessions; injection toggle lives in Settings → Memory. Every entry can be edited or deleted.",
+    source_explicit: "Explicit",
+    source_extracted: "Auto-extracted",
+    edit: "Edit",
+    delete: "Delete",
+    deleteConfirm: "Confirm delete",
+    save: "Save",
+    cancel: "Cancel",
+    clearAll: "Clear all memories",
+    clearConfirm: "Click again to confirm",
+    time: {
+      just_now: "just now",
+      minutes: "{n} min ago",
+      hours: "{n} h ago",
+      days: "{n} d ago",
+      weeks: "{n} wk ago",
+      months: "{n} mo ago",
+    },
   },
   approval: {
     title: "Confirmation required",
@@ -158,9 +176,13 @@ export default {
     shortcutPlaceholder: "e.g. Ctrl+Shift+L",
     shortcutHint:
       "Applies immediately after saving (no restart). Press it in any app to show/hide the main window. If the key is taken by another program, saving fails — pick another combo.",
-    // Placeholder sections (replaced with real sections as ⑪/⑫ land)
+    // ⑪ Memory section (real section, replaces shell placeholder)
     memoryTitle: "Memory",
-    memoryHint: "Memory injection toggle and management entry arrive in a later version.",
+    memoryHint:
+      "Relevant memories are injected into the conversation (via system prompt, outside compaction); per-turn count is adjustable.",
+    memoryEnabled: "Inject memories automatically",
+    memoryTopK: "Entries per turn",
+    memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
     developerTitle: "Developer options",
     developerHint:
       "Exposure debug panel (Top-N, distribution stats, token-savings estimate) arrives in a later version.",

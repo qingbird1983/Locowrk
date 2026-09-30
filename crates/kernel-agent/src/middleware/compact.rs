@@ -117,6 +117,7 @@ impl CtxCompact {
             tools: vec![],
             model,
             params: Value::Object(serde_json::Map::new()),
+            system: None,
         };
         let resp = llm.complete(summary_call).await.ok()?;
         let summary = resp.content.trim().to_string();
