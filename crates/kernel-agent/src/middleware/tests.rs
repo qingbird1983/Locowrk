@@ -158,9 +158,12 @@ struct FailingTool {
 
 impl FailingTool {
     fn new(calls: Arc<AtomicU32>) -> Self {
+        Self::named(calls, "mock")
+    }
+    fn named(calls: Arc<AtomicU32>, name: &str) -> Self {
         Self {
             calls,
-            spec: spec("mock"),
+            spec: spec(name),
         }
     }
 }
@@ -183,12 +186,16 @@ impl Tool for FailingTool {
 }
 
 struct OkTool {
+    calls: Arc<AtomicU32>,
     spec: ToolSpec,
 }
 
 impl OkTool {
     fn new() -> Self {
-        Self { spec: spec("mock") }
+        Self::named("mock", Arc::new(AtomicU32::new(0)))
+    }
+    fn named(name: &str, calls: Arc<AtomicU32>) -> Self {
+        Self { calls, spec: spec(name) }
     }
 }
 
@@ -201,6 +208,7 @@ impl Tool for OkTool {
         &TOOL_VERSION
     }
     async fn call(&self, _ctx: &CallCtx, _args: Value) -> Result<Value, ToolError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
         Ok(json!("fine"))
     }
 }
@@ -222,6 +230,36 @@ async fn circuit_breaker_state_is_shared_across_calls() {
         .expect_err("打开状态应快速拒绝");
     assert!(err.to_string().contains("circuit open"), "{err}");
     assert_eq!(calls.load(Ordering::Relaxed), 1, "打开期不到达工具");
+}
+
+/// 按工具名隔离：a 熔断不连坐从未失败的 b（2026-09 冒烟测试反馈）。
+#[tokio::test]
+async fn circuit_breaker_is_isolated_per_tool() {
+    let mw: Arc<dyn Middleware> = Arc::new(CircuitBreaker::new(2, Duration::from_secs(60)));
+
+    // 工具 a 连续失败 2 次 → a 打开
+    for _ in 0..2 {
+        let _ = run(
+            Arc::clone(&mw),
+            FailingTool::named(Arc::new(AtomicU32::new(0)), "a"),
+        )
+        .await;
+    }
+
+    // 工具 b 从未被调用过 → 不受 a 连坐，真实到达工具
+    let calls_b = Arc::new(AtomicU32::new(0));
+    let out = run(Arc::clone(&mw), OkTool::named("b", Arc::clone(&calls_b))).await;
+    assert!(out.is_ok(), "b 不应被 a 的熔断连坐: {out:?}");
+    assert_eq!(calls_b.load(Ordering::Relaxed), 1, "b 应真实到达工具");
+
+    // a 自身仍处于打开态，快速拒绝
+    let err = run(
+        Arc::clone(&mw),
+        FailingTool::named(Arc::new(AtomicU32::new(0)), "a"),
+    )
+    .await
+    .expect_err("a 应仍被熔断");
+    assert!(err.to_string().contains("circuit open"), "{err}");
 }
 
 // ---------- Audit（plugins.md mw-audit，§7.1 洋葱模型落点）----------

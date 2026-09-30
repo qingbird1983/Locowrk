@@ -67,7 +67,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
+                        "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
                         "max_bytes": { "type": "number",
                                        "description": "cap returned content (default 32768, max 1048576)" }
                     },
@@ -85,7 +85,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute directory path (must be inside the allowed workspace roots; defaults to the app data dir)" }
+                        "path": { "type": "string", "description": "absolute directory path (required; must be inside the allowed workspace roots)" }
                     },
                     "required": ["path"]
                 }),
@@ -101,7 +101,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute file or directory path (must be inside the allowed workspace roots; defaults to the app data dir)" },
+                        "path": { "type": "string", "description": "absolute file or directory path (required; must be inside the allowed workspace roots)" },
                         "query": { "type": "string", "description": "case-insensitive substring" },
                         "max_results": { "type": "number", "description": "default 50, max 200" },
                         "max_depth": { "type": "number", "description": "recursion depth, default 3, max 8" }
@@ -122,7 +122,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
+                        "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
                         "content": { "type": "string", "description": "full new file content" },
                         "create_dirs": { "type": "boolean",
                                          "description": "create missing parent dirs (default false)" }
@@ -143,7 +143,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" }
+                        "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" }
                     },
                     "required": ["path"]
                 }),
