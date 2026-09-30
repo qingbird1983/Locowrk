@@ -25,7 +25,7 @@
       "schema": {
         "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
+          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
           "old_string": { "type": "string", "description": "exact text to find" },
           "new_string": { "type": "string", "description": "replacement text" },
           "replace_all": { "type": "boolean", "description": "replace every occurrence (default false)" }
@@ -40,7 +40,7 @@
       "schema": {
         "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
+          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
           "start_line": { "type": "number", "description": "1-based, inclusive" },
           "end_line": { "type": "number", "description": "1-based, inclusive" },
           "content": { "type": "string", "description": "new text for the range; empty string deletes" }
@@ -55,7 +55,7 @@
       "schema": {
         "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (must be inside the allowed workspace roots; defaults to the app data dir)" },
+          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
           "patch": { "type": "string", "description": "unified diff text" }
         },
         "required": ["path", "patch"]

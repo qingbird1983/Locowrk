@@ -78,7 +78,7 @@ fn describe_manifest() -> CString {
                     "properties": {
                         "path": { "type": "string",
                                   "description": "absolute file path (must be inside the allowed \
-                                                  workspace roots; defaults to the app data dir)" },
+                                                  workspace roots)" },
                         "old_string": { "type": "string", "description": "exact text to find" },
                         "new_string": { "type": "string", "description": "replacement text" },
                         "replace_all": { "type": "boolean",
@@ -102,7 +102,7 @@ fn describe_manifest() -> CString {
                     "properties": {
                         "path": { "type": "string",
                                   "description": "absolute file path (must be inside the allowed \
-                                                  workspace roots; defaults to the app data dir)" },
+                                                  workspace roots)" },
                         "start_line": { "type": "number", "description": "1-based, inclusive" },
                         "end_line": { "type": "number", "description": "1-based, inclusive" },
                         "content": { "type": "string",
@@ -127,7 +127,7 @@ fn describe_manifest() -> CString {
                     "properties": {
                         "path": { "type": "string",
                                   "description": "absolute file path (must be inside the allowed \
-                                                  workspace roots; defaults to the app data dir)" },
+                                                  workspace roots)" },
                         "patch": { "type": "string", "description": "unified diff text" }
                     },
                     "required": ["path", "patch"]
