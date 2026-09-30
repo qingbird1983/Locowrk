@@ -135,3 +135,54 @@
 | profile.toml 设置面板接线 | | 看需求 |
 | 托盘菜单 i18n | | 壳批次 |
 | UI 视觉抛光 | 壳批次 tokens 之后统一做 | ⑬ 后 |
+| tool-http（POST/PUT 通用请求） | plugins.md P1 唯一未做的工具类；tool-fetch 仅 GET（其代码注释已声明 POST/PUT 归本插件） | 看需求 |
+| mw-ratelimit 调用限速 | plugins.md P1.5 中间件：限制单位时间调用次数 | 看需求 |
+| 中间件插件化 | mw-audit / 审批门 / ctx-compact 均为宿主侧形态；C ABI `PluginKind::Middleware` 仍是占位变体，无真插件使用 | 看需求 |
+
+---
+
+## 四、plugins.md 必备插件清单完成度
+
+> 对照《plugins.md》§一总览 19 项逐条核对（2026-09-29，以 plugins-src/ 与
+> 提交记录为准）。**结论：还剩 tool-http / mw-ratelimit 两个未排期，P2 五件
+> 明确后排；其余全部落地。**
+
+### P0 —— 全部 ✅
+
+| 插件 | 状态 | 落点 |
+|---|---|---|
+| llm-openai / llm-ollama | ✅ | v2.8：宿主侧 llm 模块（genai 三合一），非插件形态 |
+| tool-fs | ✅ | v2.9 读三件套 + v2.14 写三件套（write=Compensable{fs.restore} / delete=Irreversible / restore=Irreversible） |
+| tool-shell | ✅ | v2.14（白名单 + denylist 永远赢 + 元字符拒绝，一律 Irreversible） |
+| tool-fetch | ✅ | v2.9（GET-only；SSRF 防线 v2.14 补） |
+
+### P1 —— 差一个 tool-http
+
+| 插件 | 状态 | 落点 |
+|---|---|---|
+| tool-edit | ✅ | v2.14（replace/lines/严格 diff，跨插件 undo） |
+| tool-git | ✅ | v2.15（status/diff/log/commit/push + undo_commit） |
+| tool-http | ⬜ 未排期 | POST/PUT 通用请求；已入收尾 backlog |
+| memory-sqlite | ✅ | v2.15（跨会话记忆；plugins.md 所述"会话持久化"归 session-store——desktop 落盘在 backlog） |
+| memory-vector | ⏸ | → ⑬ 智能层 |
+| ctx-compact | ◐ | v2.14 宿主侧中间件已跑；配置化收口 → ⑨ |
+
+### P1.5 —— 中间件类：宿主侧形态已齐，插件化未做
+
+| 插件 | 状态 | 落点 |
+|---|---|---|
+| mw-approval | ✅ | 阶段四审批门 + 阶段六桌面审批弹窗（宿主侧） |
+| mw-audit | ✅ | v2.9（宿主侧 JSONL 审计） |
+| mw-ratelimit | ⬜ 未排期 | 已入收尾 backlog |
+| （中间件插件化本身） | ⏸ | `PluginKind::Middleware` 仍是占位变体；已入 backlog |
+
+### P2 —— 只做了 tool-mcp，其余后排
+
+| 插件 | 状态 | 说明 |
+|---|---|---|
+| tool-mcp | ✅ | v2.15（mcp.json 加载期发现冻结 + stdio JSON-RPC + side_effect 缺省 Irreversible） |
+| tool-browser | ⏸ | 文档自己建议晚做（fetch + MCP 已覆盖多数场景） |
+| tool-sandbox | ⏸ | shell 容器/WASM 化——注意⑧的 WASM 加载器是插件沙箱，不是 shell 沙箱，两回事 |
+| agent-sub | ⏸ | 子 Agent 调度 |
+| tool-schedule | ⏸ | 定时任务 |
+| tool-notify | ⏸ | 桌面通知 / Webhook 推送 |
