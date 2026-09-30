@@ -107,6 +107,7 @@ impl Kernel {
             call_id: undo_id.clone(),
             tool: undo_tool.clone(),
             args: undo_args.clone(),
+            plugin_id: tool.plugin_id().map(str::to_owned),
             plugin_version: tool.plugin_version().clone(),
             side_effect: tool.spec().side_effect.clone(),
         });

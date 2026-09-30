@@ -32,6 +32,7 @@ fn echo_spec() -> &'static ToolSpec {
         description: "test echo".into(),
         schema: json!({ "type": "object" }),
         side_effect: SideEffect::Pure,
+        exposure: Default::default(),
     })
 }
 
@@ -121,9 +122,17 @@ async fn tool_turn_projects_events_in_log_order() {
     let mut session = Session::new();
     let sink = Collector::default();
 
-    let steps = run_turn(&kernel, &mut session, "s1", "echo 你好".into(), None, &sink)
-        .await
-        .expect("turn ok");
+    let steps = run_turn(
+        &kernel,
+        &mut session,
+        "s1",
+        "echo 你好".into(),
+        None,
+        &sink,
+        None,
+    )
+    .await
+    .expect("turn ok");
     assert_eq!(steps, 2);
 
     let events = sink.events();
@@ -150,9 +159,17 @@ async fn plain_reply_turn_is_single_step() {
     let mut session = Session::new();
     let sink = Collector::default();
 
-    let steps = run_turn(&kernel, &mut session, "s1", "你好".into(), None, &sink)
-        .await
-        .expect("turn ok");
+    let steps = run_turn(
+        &kernel,
+        &mut session,
+        "s1",
+        "你好".into(),
+        None,
+        &sink,
+        None,
+    )
+    .await
+    .expect("turn ok");
     assert_eq!(steps, 1);
 
     let kinds: Vec<&str> = sink.events().iter().map(kind).collect();
@@ -221,9 +238,17 @@ async fn denied_email_closes_result_without_executing() {
     let mut session = Session::new();
     let sink = Collector::default();
 
-    let steps = run_turn(&kernel, &mut session, "s1", "发邮件".into(), None, &sink)
-        .await
-        .expect("turn ok");
+    let steps = run_turn(
+        &kernel,
+        &mut session,
+        "s1",
+        "发邮件".into(),
+        None,
+        &sink,
+        None,
+    )
+    .await
+    .expect("turn ok");
     assert_eq!(steps, 2);
 
     // 决策进日志（纪律 9），被拒调用以失败 ToolResult 闭合、不留悬空
@@ -263,6 +288,7 @@ async fn allowed_email_executes_and_logs_decision() {
         "email 给我".into(),
         None,
         &sink,
+        None,
     )
     .await
     .expect("turn ok");
@@ -301,9 +327,17 @@ async fn approval_hub_roundtrip_through_pending_map() {
         }
     });
 
-    run_turn(&kernel, &mut session, "s1", "发邮件".into(), None, &sink)
-        .await
-        .expect("turn ok");
+    run_turn(
+        &kernel,
+        &mut session,
+        "s1",
+        "发邮件".into(),
+        None,
+        &sink,
+        None,
+    )
+    .await
+    .expect("turn ok");
 
     // 前端收到审批请求事件；轮次以失败 ToolResult 收束而非卡死
     assert!(

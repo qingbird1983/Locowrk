@@ -35,10 +35,14 @@ pub enum SessionEvent {
         tool_calls: Vec<CallId>,
     },
     /// 先写日志再执行（纪律 5）：崩溃后 replay 能识别悬空调用。
+    /// `plugin_id` 是 ⑩ 使用统计的归属键；内置替身 / 旧日志缺省 None
+    /// （serde default 兼容，exposure 文档 §3.4）。
     ToolCall {
         call_id: CallId,
         tool: String,
         args: Value,
+        #[serde(default)]
+        plugin_id: Option<String>,
         plugin_version: Version,
         side_effect: SideEffect,
     },
@@ -94,3 +98,6 @@ pub enum SessionEvent {
         outcome: TurnOutcome,
     },
 }
+
+#[cfg(test)]
+mod tests;

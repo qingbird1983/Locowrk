@@ -6,15 +6,18 @@
 //! 由组装点（kernel-bin / desktop）把它桥接成 `kernel_agent::ToolSource`
 //! 服务注册进 Context——"主循环对 dlopen / Registry 一无所知"不变。
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
-use plugin_api::{CallCtx, Tool, ToolError, ToolSpec};
+use plugin_api::{CallCtx, Exposure, Tool, ToolError, ToolSpec};
 use serde_json::Value;
 use tokio::sync::Semaphore;
 
 use crate::instance::PluginInstance;
 use crate::registry::PluginRegistry;
+
+/// always>10 预算告警只发一次（exposure 文档 §4.1：作者设计失误）。
+static ALWAYS_BUDGET_WARNED: OnceLock<()> = OnceLock::new();
 
 /// 把一个已加载插件实例的某个工具适配成宿主侧 `Tool`（§5.5）。
 pub struct SabiToolAdapter {
@@ -41,6 +44,11 @@ impl Tool for SabiToolAdapter {
 
     fn plugin_version(&self) -> &semver::Version {
         self.inner.version()
+    }
+
+    /// manifest.id 即插件 id（registry 加载时已校验与 lockfile 键一致）。
+    fn plugin_id(&self) -> Option<&str> {
+        Some(self.inner.id())
     }
 
     async fn call(&self, _ctx: &CallCtx, args: Value) -> Result<Value, ToolError> {
@@ -88,16 +96,51 @@ impl RegistryToolSource {
     }
 
     /// 全目录快照（供 LLM 请求枚举工具）：与 `resolve` 同序——active 实例
-    /// 按 id 排序，同名工具先声明者赢。
+    /// 按 id 排序，同名工具先声明者赢。暴露管线直通态（⑩②）：hidden 不进
+    /// 常规目录（只等 ⑫ 检索激活）；always 直通 + on_demand 全暴露，行为
+    /// 与加字段前一致（截断归 ⑫）。always 总数超 10 一次性告警（§4.1）。
     pub fn list_tools(&self) -> Vec<ToolSpec> {
-        let mut specs: Vec<ToolSpec> = Vec::new();
+        let mut specs = Vec::new();
+        let mut always = 0usize;
         for (_id, inst) in self.registry.active_instances() {
-            for spec in &inst.manifest().tools {
-                if !specs.iter().any(|s| s.name == spec.name) {
-                    specs.push(spec.clone());
-                }
-            }
+            let (merged, a) = merge_catalog(specs, inst.manifest().tools.iter().cloned());
+            specs = merged;
+            always += a;
+        }
+        if always > 10 && ALWAYS_BUDGET_WARNED.set(()).is_ok() {
+            tracing::warn!(
+                count = always,
+                "always-exposure tools exceed the 10 budget (exposure doc §4.1) — \
+                 authors should declare on_demand/hidden instead"
+            );
         }
         specs
     }
 }
+
+/// 目录合并纯函数（单测友好）：hidden 剔除、同名先到先得，返回
+/// （合并后的目录，本批 always 计数）。
+fn merge_catalog(
+    existing: Vec<ToolSpec>,
+    incoming: impl Iterator<Item = ToolSpec>,
+) -> (Vec<ToolSpec>, usize) {
+    let mut specs = existing;
+    let mut always = 0usize;
+    for spec in incoming {
+        if matches!(spec.exposure, Exposure::Hidden) {
+            continue;
+        }
+        // always 预算数"实际入目录"的：被同名先声明者顶掉的不计（§4.1）
+        let duplicated = specs.iter().any(|s| s.name == spec.name);
+        if !duplicated {
+            if matches!(spec.exposure, Exposure::Always) {
+                always += 1;
+            }
+            specs.push(spec);
+        }
+    }
+    (specs, always)
+}
+
+#[cfg(test)]
+mod tests;

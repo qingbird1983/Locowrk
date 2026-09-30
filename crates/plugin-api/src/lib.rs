@@ -34,7 +34,7 @@ pub use manifest::{
 pub use plugin_side::{PluginState, free_allocated, write_out};
 pub use semver;
 pub use serde_json;
-pub use tool::{CallCtx, CallId, SideEffect, Tool, ToolError, ToolSpec};
+pub use tool::{CallCtx, CallId, Exposure, SideEffect, Tool, ToolError, ToolSpec};
 
 /// 当前插件 ABI 版本。宿主加载插件时必须严格校验，不一致即拒绝加载；
 /// 唯一例外是"加载即失败"（init 从未执行、无代码指针流出）可立即释放句柄（§5.7）。

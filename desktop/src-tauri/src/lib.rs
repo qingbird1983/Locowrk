@@ -28,6 +28,7 @@ mod data_root;
 mod demo_llm;
 mod demo_tools;
 mod events;
+mod idle;
 mod llm;
 mod plugins_root;
 mod runner;
@@ -35,6 +36,7 @@ mod settings;
 mod state;
 mod tool_source;
 mod tray;
+mod usage;
 
 #[cfg(test)]
 mod tests;
@@ -62,10 +64,13 @@ pub fn run() {
             commands::list_pending_approvals,
             commands::context_undo_compact,
             commands::plugin_list,
+            commands::plugin_list_with_usage,
             commands::plugin_registry_list,
             commands::plugin_install,
             commands::plugin_set_enabled,
+            commands::plugin_batch_set_enabled,
             commands::plugin_uninstall,
+            commands::plugin_batch_uninstall,
             commands::plugin_rollback,
             commands::plugin_update,
             commands::settings_get,

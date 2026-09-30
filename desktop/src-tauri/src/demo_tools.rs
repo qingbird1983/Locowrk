@@ -26,6 +26,7 @@ fn spec() -> &'static ToolSpec {
             "required": ["to", "subject", "body"]
         }),
         side_effect: SideEffect::Irreversible,
+        exposure: Default::default(),
     })
 }
 

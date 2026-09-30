@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::{CallId, SideEffect};
+use super::{CallId, Exposure, SideEffect, ToolSpec};
 
 #[test]
 fn side_effect_json_is_tagged_snake_case() {
@@ -39,4 +39,55 @@ fn call_id_is_transparent_string() {
 #[test]
 fn abi_version_is_frozen_at_1() {
     assert_eq!(crate::PLUGIN_ABI_VERSION, 1);
+}
+
+#[test]
+fn exposure_defaults_to_on_demand_and_parses_all_values() {
+    // 缺省字段 = on_demand（exposure 文档 §4.1：作者不写就当候选池）
+    let without: ToolSpec = serde_json::from_value(json!({
+        "name": "t",
+        "schema": {},
+        "side_effect": "Pure"
+    }))
+    .unwrap();
+    assert_eq!(without.exposure, Exposure::OnDemand);
+
+    for (raw, expected) in [
+        ("always", Exposure::Always),
+        ("on_demand", Exposure::OnDemand),
+        ("hidden", Exposure::Hidden),
+    ] {
+        let spec: ToolSpec = serde_json::from_value(json!({
+            "name": "t",
+            "schema": {},
+            "side_effect": "Pure",
+            "exposure": raw
+        }))
+        .unwrap();
+        assert_eq!(spec.exposure, expected, "exposure = {raw}");
+    }
+
+    // 未知值是作者错误：宁可报错也不静默归池（与 side_effect 未知值同策略）
+    assert!(serde_json::from_value::<ToolSpec>(json!({
+        "name": "t",
+        "schema": {},
+        "side_effect": "Pure",
+        "exposure": "sometimes"
+    }))
+    .is_err());
+}
+
+#[test]
+fn exposure_serializes_snake_case() {
+    let spec = ToolSpec {
+        name: "t".into(),
+        description: String::new(),
+        schema: json!({}),
+        side_effect: SideEffect::Pure,
+        exposure: Exposure::Always,
+    };
+    assert_eq!(
+        serde_json::to_value(&spec).unwrap()["exposure"],
+        json!("always")
+    );
 }

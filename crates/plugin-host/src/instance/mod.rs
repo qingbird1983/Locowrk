@@ -63,6 +63,11 @@ impl PluginInstance {
         &self.manifest
     }
 
+    /// 插件 id（= manifest.id，registry 加载时已校验与请求键一致）。
+    pub fn id(&self) -> &str {
+        &self.manifest.id
+    }
+
     pub fn version(&self) -> &semver::Version {
         &self.version
     }

@@ -158,6 +158,7 @@ impl Registry {
                     description: tool.description.clone(),
                     schema: tool.schema.clone(),
                     side_effect,
+                    exposure: Default::default(),
                 });
             }
         }

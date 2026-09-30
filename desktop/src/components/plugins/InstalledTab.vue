@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * 已安装页（壳批次拆分 + 列表页模式改造）：搜索 + origin 筛选 chips +
- * 分组行内操作。多选批量栏（⑩ 批量卸载等）与闲置徽章（IdleBadge）随
- * ⑩ plugin_list_with_usage 接入。
+ * 已安装页（壳批次拆分 + ⑩ 闲置 UI 接线）：搜索 + origin 筛选 chips +
+ * 闲置筛选 chips（exposure 文档 §9.2，文案同用"多久"）+ 行内 IdleBadge
+ * （§9.1 只显示一句"多久没用"）+ 多选批量栏（§9.5，批量卸载二次确认
+ * 列出插件名）。闲置提示只在用户主动打开本页时出现（§8.8 不弹 toast）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -14,6 +15,7 @@ import {
   updateAvailable,
 } from "../../lib/plugin-helpers";
 import ListPage from "../patterns/ListPage.vue";
+import IdleBadge from "../IdleBadge.vue";
 import PluginIcon from "../PluginIcon.vue";
 import SideEffectBadges from "../SideEffectBadges.vue";
 import type { InstalledPlugin } from "../../types";
@@ -24,14 +26,36 @@ const store = usePluginStore();
 const search = ref("");
 /** 空串 = 全部（含在 chips 首位）。 */
 const originFilter = ref("");
+/** ⑩ 闲置筛选档位（后端 filter_key，嵌套包含）。 */
+const usageFilter = ref("");
 
-const filters = computed(() => [
+const originFilters = computed(() => [
   { key: "", label: t("market.filterAll") },
   { key: "official", label: t("market.origin_official") },
   { key: "community", label: t("market.origin_community") },
 ]);
 
-/** 搜索 + 筛选后的已安装列表。 */
+const usageFilters = computed(() => [
+  { key: "", label: t("market.filterAll") },
+  { key: "active", label: t("market.stateActive") },
+  { key: "disabled", label: t("market.usageDisabled") },
+  { key: "gt1m", label: t("market.idleGt1m") },
+  { key: "gt3m", label: t("market.idleGt3m") },
+  { key: "gt6m", label: t("market.idleGt6m") },
+]);
+
+/** 档位嵌套：选 gt1m 也命中 gt3m/gt6m 的行（时长档位语义）。 */
+function matchesUsageFilter(p: InstalledPlugin): boolean {
+  if (!usageFilter.value) return true;
+  const key = store.usageOf(p.id)?.filter_key;
+  if (usageFilter.value === "active") return !!p.active_version;
+  if (usageFilter.value === "disabled") return !p.enabled;
+  if (!key || key === "recent") return false;
+  const rank = { gt1m: 1, gt3m: 2, gt6m: 3 } as const;
+  return rank[key as keyof typeof rank] >= rank[usageFilter.value as "gt1m" | "gt3m" | "gt6m"];
+}
+
+/** 搜索 + 双排筛选后的已安装列表。 */
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   return store.installed.filter((p) => {
@@ -40,6 +64,7 @@ const filtered = computed(() => {
       if (originFilter.value === "official" && !isOfficial) return false;
       if (originFilter.value === "community" && isOfficial) return false;
     }
+    if (!matchesUsageFilter(p)) return false;
     if (!q) return true;
     return (
       p.id.toLowerCase().includes(q) ||
@@ -63,13 +88,83 @@ const originGroups = computed(() => {
 
 const isEmpty = computed(() => filtered.value.length === 0);
 const emptyText = computed(() =>
-  store.installed.length === 0
-    ? t("market.emptyInstalled")
-    : t("market.noMatch"),
+  store.installed.length === 0 ? t("market.emptyInstalled") : t("market.noMatch"),
+);
+
+/** ⑩ 顶部提示条（§9.3）：超 3 个月没用（含半年档）的计数；[去看看]
+ * 切到对应筛选。§8.8——只在本页静态出现，不弹 toast 不打断聊天。 */
+const staleCount = computed(
+  () =>
+    store.usage.filter(
+      (u) => u.filter_key === "gt3m" || u.filter_key === "gt6m",
+    ).length,
 );
 
 function updateAvailableOf(p: InstalledPlugin): boolean {
   return updateAvailable(store.marketplace, p);
+}
+
+// ---- ⑩⑥ 批量操作（多选 + 批量栏；批量卸载二次确认列名单，§9.5）----
+
+/** 多选集合（builtin 开发态插件不走 lockfile 管理流，不可选）。 */
+const selected = ref(new Set<string>());
+/** 二次确认态：true 时批量栏列出将卸载的插件名等确认。 */
+const confirmingUninstall = ref(false);
+/** 最近一次批量操作的部分失败（§10.2 逐条成败）。 */
+const batchError = ref("");
+
+function toggle(id: string, on: boolean) {
+  if (on) selected.value.add(id);
+  else selected.value.delete(id);
+  selected.value = new Set(selected.value);
+  confirmingUninstall.value = false;
+}
+
+function toggleAll(on: boolean) {
+  if (on) {
+    store.installed
+      .filter((p) => p.source !== "builtin")
+      .forEach((p) => selected.value.add(p.id));
+  } else {
+    selected.value.clear();
+  }
+  selected.value = new Set(selected.value);
+  confirmingUninstall.value = false;
+}
+
+const selectedIds = computed(() =>
+  store.installed.filter((p) => selected.value.has(p.id)).map((p) => p.id),
+);
+const selectedNames = computed(() =>
+  store.installed
+    .filter((p) => selected.value.has(p.id))
+    .map((p) => `${displayName(p, locale.value)} (${p.id})`),
+);
+
+async function runBatch(op: "disable" | "enable" | "uninstall") {
+  const ids = selectedIds.value;
+  if (ids.length === 0) return;
+  if (op !== "uninstall") {
+    batchError.value = "";
+    const res = await store.batchSetEnabled(ids, op === "enable");
+    if (res.failed.length > 0) {
+      batchError.value = t("market.batchPartialFail", { n: res.failed.length }) + " " + res.failed.map((f) => f.id).join(", ");
+    }
+    selected.value = new Set();
+    return;
+  }
+  // 二次确认由批量栏内联完成（§5 弹层规则：审批模态是全局唯一阻塞层）
+  if (!confirmingUninstall.value) {
+    confirmingUninstall.value = true;
+    return;
+  }
+  confirmingUninstall.value = false;
+  batchError.value = "";
+  const res = await store.batchUninstall(ids);
+  if (res.failed.length > 0) {
+    batchError.value = t("market.batchPartialFail", { n: res.failed.length }) + " " + res.failed.map((f) => f.id).join(", ");
+  }
+  selected.value = new Set();
 }
 </script>
 
@@ -77,11 +172,33 @@ function updateAvailableOf(p: InstalledPlugin): boolean {
   <ListPage
     v-model:search="search"
     v-model:filter="originFilter"
+    v-model:sub-filter="usageFilter"
     :search-placeholder="t('market.search')"
-    :filters="filters"
+    :filters="originFilters"
+    :sub-filters="usageFilters"
     :is-empty="isEmpty"
     :empty-text="emptyText"
+    :batching="selected.size > 0"
   >
+    <!-- 顶部提示条（§9.3）：只在主动打开本页时可见，点击切换筛选 -->
+    <button
+      v-if="staleCount > 0 && !usageFilter"
+      class="mb-3 flex w-full items-center gap-2 rounded-xl border border-yellow-900/50 bg-yellow-950/40 px-4 py-2 text-xs text-yellow-200 transition hover:bg-yellow-950/60"
+      @click="usageFilter = 'gt3m'"
+    >
+      <span>💡 {{ t("market.hintIdle", { n: staleCount }) }}</span>
+      <span class="ml-auto font-medium underline underline-offset-2">
+        {{ t("market.hintGo") }}
+      </span>
+    </button>
+
+    <p
+      v-if="batchError"
+      class="mb-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs text-red-300"
+    >
+      {{ batchError }}
+    </p>
+
     <section v-for="group in originGroups" :key="group.key" class="mb-5">
       <h3
         class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500"
@@ -94,6 +211,15 @@ function updateAvailableOf(p: InstalledPlugin): boolean {
           :key="p.id"
           class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-neutral-800 bg-neutral-800/40 px-4 py-3 last:border-b-0"
         >
+            <!-- 多选框：builtin 开发态不走管理流，禁用 -->
+            <input
+              v-if="p.source !== 'builtin'"
+              type="checkbox"
+              class="h-3.5 w-3.5 accent-emerald-600"
+              :checked="selected.has(p.id)"
+              :title="t('market.selectAll')"
+              @change="toggle(p.id, ($event.target as HTMLInputElement).checked)"
+            />
           <PluginIcon :icon="p.display.icon" :id="p.id" size="h-9 w-9" />
           <div class="min-w-40">
             <p class="text-sm font-semibold text-neutral-100">
@@ -126,6 +252,8 @@ function updateAvailableOf(p: InstalledPlugin): boolean {
                   : t("market.stateDisabled")
             }}
           </span>
+          <!-- ⑩ 闲置徽章："多久没用"一句（§9.1 无次数无趋势） -->
+          <IdleBadge :idle="store.usageOf(p.id)?.idle ?? null" />
           <span
             v-if="updateAvailableOf(p)"
             class="rounded-full bg-indigo-900/50 px-2 py-0.5 text-[10px] text-indigo-300"
@@ -189,5 +317,64 @@ function updateAvailableOf(p: InstalledPlugin): boolean {
         </div>
       </div>
     </section>
+
+    <!-- 批量操作栏（#batch 插槽）：全选 + 停用/启用/卸载，卸载二次确认列名 -->
+    <template #batch>
+      <label class="flex items-center gap-1.5 text-xs text-neutral-300">
+        <input
+          type="checkbox"
+          class="h-3.5 w-3.5 accent-emerald-600"
+          :checked="
+            selectedIds.length > 0 &&
+            selectedIds.length ===
+              store.installed.filter((p) => p.source !== 'builtin').length
+          "
+          @change="toggleAll(($event.target as HTMLInputElement).checked)"
+        />
+        {{ t("market.selectAll") }}
+      </label>
+      <span class="text-xs text-neutral-500">
+        {{ t("market.selectedCount", { n: selected.size }) }}
+      </span>
+
+      <template v-if="!confirmingUninstall">
+        <button
+          class="rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700"
+          @click="runBatch('disable')"
+        >
+          {{ t("market.batchDisable") }}
+        </button>
+        <button
+          class="rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700"
+          @click="runBatch('enable')"
+        >
+          {{ t("market.batchEnable") }}
+        </button>
+        <button
+          class="rounded-lg border border-red-800/70 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-900/40"
+          @click="runBatch('uninstall')"
+        >
+          {{ t("market.batchUninstall") }}
+        </button>
+      </template>
+      <div v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        <span class="text-xs text-red-300">
+          {{ t("market.batchUninstallConfirm", { n: selected.size }) }}
+          <span class="text-neutral-300">{{ selectedNames.join("、") }}</span>
+        </span>
+        <button
+          class="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-600"
+          @click="runBatch('uninstall')"
+        >
+          {{ t("market.batchUninstall") }}
+        </button>
+        <button
+          class="rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700"
+          @click="confirmingUninstall = false"
+        >
+          {{ t("common.cancel") }}
+        </button>
+      </div>
+    </template>
   </ListPage>
 </template>

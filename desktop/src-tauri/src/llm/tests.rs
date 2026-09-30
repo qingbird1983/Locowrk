@@ -80,6 +80,7 @@ fn tools_map_to_openai_style() {
         description: "回声工具".into(),
         schema: json!({ "type": "object", "properties": { "text": { "type": "string" } } }),
         side_effect: SideEffect::Pure,
+        exposure: Default::default(),
     }];
     let tools = to_genai_tools(&specs);
     assert_eq!(tools.len(), 1);

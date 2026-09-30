@@ -12,6 +12,7 @@ fn sample() -> PluginManifest {
             description: "echoes text".into(),
             schema: serde_json::json!({"type": "object"}),
             side_effect: SideEffect::Pure,
+            exposure: Default::default(),
         }],
         display_name: None,
         description: None,

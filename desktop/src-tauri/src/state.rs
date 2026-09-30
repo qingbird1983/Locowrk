@@ -29,6 +29,7 @@ use crate::llm::AppLlm;
 use crate::plugins_root;
 use crate::settings::SettingsStore;
 use crate::tool_source::KernelToolSource;
+use crate::usage::{UsageDb, UsageRecorder};
 
 pub struct AppState {
     /// 阶段八的窗口级命令（对话框、多窗口）从这里取句柄；当前
@@ -50,6 +51,8 @@ pub struct AppState {
     /// ctx-compact 的活配置（kernel-agent 侧只认 CompactConfig）。settings_set
     /// 成功后由命令层换入新值——压缩行为随即生效，无需重启。
     pub compact_cfg: Arc<RwLock<CompactConfig>>,
+    /// 使用统计写入端（⑩③，usage.sqlite3 宿主自有）。降级模式 = 丢弃。
+    pub usage: Arc<UsageRecorder>,
 }
 
 pub fn init_state(app: AppHandle) -> AppState {
@@ -67,6 +70,16 @@ pub fn init_state(app: AppHandle) -> AppState {
 
     // 数据根绑定一次，设置 / 插件编排 / LLM 配置共用（settings.json 同目录）。
     let root = data_dir();
+
+    // 使用统计库（⑩③，exposure 文档 §3）：宿主自有 usage.sqlite3，
+    // 5s 批量刷盘。打不开只丢统计，不拦聊天。
+    let usage = match UsageDb::open(&root.join("usage.sqlite3")) {
+        Ok(db) => UsageRecorder::spawn(db),
+        Err(e) => {
+            tracing::warn!("usage db unavailable: {e}；使用统计降级为丢弃");
+            UsageRecorder::disabled()
+        }
+    };
     let settings: Arc<SettingsStore> = Arc::new(match SettingsStore::open(&root) {
         Ok(s) => s,
         Err(e) => {
@@ -148,6 +161,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         sessions: Mutex::new(HashMap::new()),
         settings,
         compact_cfg,
+        usage,
     }
 }
 

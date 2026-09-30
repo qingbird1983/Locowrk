@@ -9,8 +9,12 @@
 //! 失败约定：内核报错 / 超出步数上限时不发 TurnDone，直接返回 Err
 //! （前端以 invoke 的 reject 收尾），避免与成功路径的事件重复。
 
+use std::collections::HashMap;
+
 use kernel_agent::{estimate_tokens, Kernel};
 use session_store::{Session, SessionEvent};
+
+use crate::usage::UsageRecorder;
 
 use crate::events::{side_effect_str, AgentEvent, EventSink};
 
@@ -25,7 +29,8 @@ pub struct UsagePolicy {
     pub window_tokens: u64,
 }
 
-/// 跑完一轮对话，返回实际 step 数。
+/// 跑完一轮对话，返回实际 step 数。`stats` 是 ⑩③ 使用统计写入端
+/// （usage.sqlite3，None = 内置替身测试）。
 pub async fn run_turn(
     kernel: &Kernel,
     session: &mut Session,
@@ -33,6 +38,7 @@ pub async fn run_turn(
     message: String,
     usage: Option<UsagePolicy>,
     sink: &dyn EventSink,
+    stats: Option<&UsageRecorder>,
 ) -> Result<u32, String> {
     session.append(SessionEvent::UserMessage { content: message });
     if let Some(u) = usage {
@@ -45,6 +51,7 @@ pub async fn run_turn(
             return Err(format!("kernel step: {e}"));
         }
         project_new_events(session, before, session_id, sink);
+        record_stats(session, before, stats);
         if let Some(u) = usage {
             emit_usage(session, session_id, u, sink);
         }
@@ -85,6 +92,7 @@ fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &d
                 args,
                 side_effect,
                 plugin_version,
+                ..
             } => sink.emit(&AgentEvent::ToolCall {
                 session_id: session_id.into(),
                 call_id: call_id.0.clone(),
@@ -119,6 +127,32 @@ fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &d
                     strategy: strategy.clone(),
                     summary_preview: summary.chars().take(200).collect(),
                 });
+            }
+            _ => {}
+        }
+    }
+}
+
+/// ⑩③ 使用统计（exposure 文档 §3.3）：ToolResult 闭合时按 (tool,
+/// plugin_id) 记一次成败——ToolCall 先行落日志（纪律 5），被拒/悬空调用
+/// 不计成功。异步通道 + 5s 批量刷盘在 UsageRecorder 内部。
+fn record_stats(session: &Session, from: usize, stats: Option<&UsageRecorder>) {
+    let Some(stats) = stats else { return };
+    let mut pending: HashMap<String, (String, Option<String>)> = HashMap::new();
+    for e in &session.events()[from..] {
+        match e {
+            SessionEvent::ToolCall {
+                call_id,
+                tool,
+                plugin_id,
+                ..
+            } => {
+                pending.insert(call_id.0.clone(), (tool.clone(), plugin_id.clone()));
+            }
+            SessionEvent::ToolResult { call_id, error, .. } => {
+                if let Some((tool, plugin_id)) = pending.remove(&call_id.0) {
+                    stats.record(&tool, plugin_id.as_deref(), error.is_none());
+                }
             }
             _ => {}
         }

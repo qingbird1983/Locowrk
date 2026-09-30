@@ -44,21 +44,29 @@ export default {
     compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",
     compactUndoFailed: "撤销压缩失败：{reason}",
   },
-  // 闲置徽章（IdleBadge）：六级 → 灰/黄/红；有 value+unit 时渲染时长文案
+  // 闲置徽章（IdleBadge，⑩ 接线 exposure 文档 §8.4/§11.3）：后端只给
+  // 结构化 IdleInfo，前端按档位渲染"多久没用"人类文案——永不显示裸天数
   idle: {
+    // 分级名（图例 / unit 缺失时的降级显示）
     fresh: "新启用",
     normal: "正常",
     idle: "开始闲置",
     stale: "长期闲置",
     abandoned: "疑似弃用",
     never_used: "从未使用",
-    unusedFor: "{n} {unit}未使用",
-    unit: {
-      minute: "分钟",
-      hour: "小时",
-      day: "天",
-      week: "周",
-    },
+    // §8.6 文案表
+    today: "今天用过",
+    this_week: "本周用过",
+    last_week: "上周用过",
+    last_month: "上个月用过",
+    month: "{n} 个多月没用了",
+    half_year: "半年多没用了",
+    year: "{n} 年多没用了",
+    // §8.7 从未使用（与"长时间未用"严格区分）+ 试用期保护
+    just_installed: "刚装上",
+    never2w: "装上两周了，还没用过",
+    neverMonths: "装了 {n} 个多月，一次没用过",
+    neverHalfYear: "装了半年多，一次没用过",
   },
   memory: {
     search: "搜索记忆…",
@@ -97,6 +105,23 @@ export default {
     stateDisabled: "已禁用",
     emptyDiscover: "市场目录为空。在仓库根目录运行 bash scripts/build_market.sh 暂存演示插件后重启应用。",
     emptyInstalled: "还没有已安装的插件。去「发现」页安装一个吧。",
+    // ⑩ 闲置 UI（exposure 文档 §8.8/§9.2/§9.3/§9.5）：筛选文案同用"多久"，
+    // 提示只在用户主动打开已安装页时出现，不弹 toast 不打断聊天
+    usageDisabled: "已停用",
+    idleGt1m: "超过 1 个月没用",
+    idleGt3m: "超过 3 个月没用",
+    idleGt6m: "半年以上没用",
+    hintIdle: "有 {n} 个插件超过 3 个月没用了",
+    hintGo: "去看看",
+    selectAll: "全选",
+    selectedCount: "已选 {n} 个",
+    batchDisable: "停用选中",
+    batchEnable: "启用选中",
+    batchUninstall: "卸载选中",
+    batchUninstallConfirm: "确认卸载以下 {n} 个插件？此操作不可恢复：",
+    batchPartialFail: "{n} 项失败：",
+    cancel: "取消",
+    builtinNotSelectable: "内置开发态插件不走批量管理",
   },
   settings: {
     title: "设置",

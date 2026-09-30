@@ -24,6 +24,7 @@ impl DangerTool {
                 description: "删除目标文件（不可逆，触发审批）".into(),
                 schema: json!({"type":"object","properties":{"target":{"type":"string"}}}),
                 side_effect: SideEffect::Irreversible,
+                exposure: Default::default(),
             },
             calls: AtomicU32::new(0),
         }
@@ -72,6 +73,7 @@ impl StubEchoTool {
                 description: "scope-B 进程内 stub（与插件版同名）".into(),
                 schema: json!({}),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
         }
     }

@@ -71,6 +71,7 @@ fn describe_manifest() -> CString {
                 "required": ["command"]
             }),
             side_effect: SideEffect::Irreversible,
+            exposure: Default::default(),
         }],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
         display_name: Some(zh_en("命令终端", "Shell")),

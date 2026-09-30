@@ -2,10 +2,10 @@
 //!
 //! 副作用分级（plugins.md §三，逐项落地）：
 //! - `git_status` / `git_diff` / `git_log` → Pure（只 spawn git 读仓库状态）
-//! - `git_commit` → `Compensable { undo_tool: "git.undo_commit" }`：输出携带
+//! - `git_commit` → `Compensable { undo_tool: "git_undo_commit" }`：输出携带
 //!   新提交哈希，undo = `reset --soft HEAD~1`（改动保留在暂存区）
 //! - `git_push` → Irreversible：发布到远端，走审批
-//! - `git.undo_commit` → Irreversible：reset 改写仓库状态；undo 前先校验
+//! - `git_undo_commit` → Irreversible：reset 改写仓库状态；undo 前先校验
 //!   HEAD 仍指向原提交，HEAD 动过即拒绝转人工（与 fs_restore 同理，按
 //!   plugins.md §八"宁可标错成 Irreversible"判级）
 //!
@@ -80,6 +80,7 @@ fn describe_manifest() -> CString {
                     "required": ["repo"]
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "git_diff".into(),
@@ -98,6 +99,7 @@ fn describe_manifest() -> CString {
                     "required": ["repo"]
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "git_log".into(),
@@ -117,6 +119,7 @@ fn describe_manifest() -> CString {
                     "required": ["repo"]
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "git_commit".into(),
@@ -124,7 +127,7 @@ fn describe_manifest() -> CString {
                               message (required), add (array of paths relative to the \
                               repo root) OR add_all (bool, stage everything including \
                               deletions) — exactly one of the two. Returns {commit, \
-                              short}. Undoable via git.undo_commit (soft reset keeps the \
+                              short}. Undoable via git_undo_commit (soft reset keeps the \
                               changes staged) as long as HEAD is still the created commit."
                     .into(),
                 schema: json!({
@@ -140,8 +143,9 @@ fn describe_manifest() -> CString {
                     "required": ["repo", "message"]
                 }),
                 side_effect: SideEffect::Compensable {
-                    undo_tool: "git.undo_commit".into(),
+                    undo_tool: "git_undo_commit".into(),
                 },
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "git_push".into(),
@@ -159,9 +163,10 @@ fn describe_manifest() -> CString {
                     "required": ["repo", "branch"]
                 }),
                 side_effect: SideEffect::Irreversible,
+                exposure: Default::default(),
             },
             ToolSpec {
-                name: "git.undo_commit".into(),
+                name: "git_undo_commit".into(),
                 description: "Undo a previous git_commit by soft-resetting one commit \
                               (the changes stay staged). Usually invoked by the \
                               compensation layer, not by the model. Args mirror the \
@@ -181,6 +186,7 @@ fn describe_manifest() -> CString {
                     }
                 }),
                 side_effect: SideEffect::Irreversible,
+                exposure: Default::default(),
             },
         ],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
@@ -231,7 +237,7 @@ impl PluginState for GitState {
             "git_log" => read::git_log(&args),
             "git_commit" => write::git_commit(&args),
             "git_push" => write::git_push(&args),
-            "git.undo_commit" => write::git_undo_commit(&args),
+            "git_undo_commit" => write::git_undo_commit(&args),
             other => Err(format!("unknown tool `{other}`")),
         }
     }

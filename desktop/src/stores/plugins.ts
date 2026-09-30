@@ -3,8 +3,11 @@
 // 本地目录市场与 lockfile 都是毫秒级本地 IO，不值得做增量补丁。
 import { defineStore } from "pinia";
 import {
+  pluginBatchSetEnabled,
+  pluginBatchUninstall,
   pluginInstall,
   pluginList,
+  pluginListWithUsage,
   pluginRegistryList,
   pluginRollback,
   pluginSetEnabled,
@@ -12,12 +15,14 @@ import {
   pluginUpdate,
   subscribePluginState,
 } from "../lib/api";
-import type { InstalledPlugin, MarketplaceItem } from "../types";
+import type { InstalledPlugin, MarketplaceItem, PluginUsageView } from "../types";
 
 export const usePluginStore = defineStore("plugins", {
   state: () => ({
     installed: [] as InstalledPlugin[],
     marketplace: [] as MarketplaceItem[],
+    /** ⑩⑤ 使用统计投影（plugin_list_with_usage），按 id join。 */
+    usage: [] as PluginUsageView[],
     /** 正在执行操作的插件 id（按钮转圈、防连点）。 */
     busy: [] as string[],
     /** 最近一次操作失败的提示（组件里红条显示，下一个动作清除）。 */
@@ -32,15 +37,34 @@ export const usePluginStore = defineStore("plugins", {
     },
     async refresh() {
       try {
-        const [installed, marketplace] = await Promise.all([
+        const [installed, marketplace, usage] = await Promise.all([
           pluginList(),
           pluginRegistryList(),
+          pluginListWithUsage(),
         ]);
         this.installed = installed;
         this.marketplace = marketplace;
+        this.usage = usage;
       } catch (e) {
         this.error = String(e);
       }
+    },
+    usageOf(id: string): PluginUsageView | undefined {
+      return this.usage.find((u) => u.id === id);
+    },
+    /** ⑩⑥ 批量停用/启用。 */
+    async batchSetEnabled(ids: string[], enabled: boolean) {
+      this.error = "";
+      const res = await pluginBatchSetEnabled(ids, enabled);
+      await this.refresh();
+      return res;
+    },
+    /** ⑩⑥ 批量卸载（调用方先二次确认列名，§9.5）。 */
+    async batchUninstall(ids: string[]) {
+      this.error = "";
+      const res = await pluginBatchUninstall(ids);
+      await this.refresh();
+      return res;
     },
     async install(id: string, version?: string) {
       await this.run(id, async () => {

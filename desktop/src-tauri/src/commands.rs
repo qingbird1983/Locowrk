@@ -1,6 +1,9 @@
 //! Tauri 命令薄适配层（DESIGN.md §10.3 / §12.1）：只做参数转换与状态
 //! 存取，业务逻辑在 runner / approval / kernel，本文件不写一行。
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::Serialize;
 use tauri::{AppHandle, State};
 
 use kernel_agent::CompactConfig;
@@ -10,6 +13,7 @@ use crate::events::ApprovalRequestPayload;
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{ContextUpdate, LlmUpdate, SettingsView};
 use crate::state::AppState;
+use crate::usage::{self, PluginUsageView};
 use plugin_service::{InstalledPlugin, MarketplaceItem};
 
 /// 聊天命令。轮次内容全部经 `agent://` 事件推送（§12.2），返回值只表达
@@ -34,6 +38,7 @@ pub async fn agent_chat(
         message,
         Some(usage),
         state.sink.as_ref(),
+        Some(state.usage.as_ref()),
     )
     .await
 }
@@ -142,6 +147,67 @@ pub async fn plugin_rollback(
 #[tauri::command]
 pub async fn plugin_update(id: String, state: State<'_, AppState>) -> Result<String, String> {
     state.plugins.update(&id).await.map(|v| v.to_string())
+}
+
+/// 批量操作结果（⑩⑥，exposure 文档 §10.2）：逐条成败，部分失败不回滚。
+#[derive(Debug, Default, Serialize)]
+pub struct BatchFailure {
+    pub id: String,
+    pub error: String,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct BatchResult {
+    pub ok: Vec<String>,
+    pub failed: Vec<BatchFailure>,
+}
+
+/// 带使用统计的已安装列表（⑩⑤）：闲置分级与筛选档位全在后端裁决
+/// （exposure 文档 §10.1——前端不做时间计算）。
+#[tauri::command]
+pub async fn plugin_list_with_usage(
+    state: State<'_, AppState>,
+) -> Result<Vec<PluginUsageView>, String> {
+    let installed = state.plugins.list_installed();
+    let times = state.usage.plugin_times();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    Ok(usage::attach(&installed, now, &times))
+}
+
+/// 批量启用/停用（⑩⑥）。逐条执行，失败项列进 failed，成功项照常生效。
+#[tauri::command]
+pub async fn plugin_batch_set_enabled(
+    ids: Vec<String>,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<BatchResult, String> {
+    let mut result = BatchResult::default();
+    for id in ids {
+        match state.plugins.set_enabled(&id, enabled).await {
+            Ok(()) => result.ok.push(id),
+            Err(error) => result.failed.push(BatchFailure { id, error }),
+        }
+    }
+    Ok(result)
+}
+
+/// 批量卸载（⑩⑥）。逐条执行（graveyard → 撤 Effect → 删目录）。
+#[tauri::command]
+pub async fn plugin_batch_uninstall(
+    ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<BatchResult, String> {
+    let mut result = BatchResult::default();
+    for id in ids {
+        match state.plugins.uninstall(&id).await {
+            Ok(()) => result.ok.push(id),
+            Err(error) => result.failed.push(BatchFailure { id, error }),
+        }
+    }
+    Ok(result)
 }
 
 // ---- 设置命令（DESIGN.md §13.1 / §13.5）：薄适配层，校验与落盘全在

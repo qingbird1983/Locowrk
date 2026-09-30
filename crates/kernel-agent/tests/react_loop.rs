@@ -86,6 +86,7 @@ fn echo_spec() -> ToolSpec {
         description: "echo back".into(),
         schema: json!({}),
         side_effect: SideEffect::Pure,
+        exposure: Default::default(),
     }
 }
 

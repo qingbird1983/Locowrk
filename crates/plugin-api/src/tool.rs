@@ -87,6 +87,21 @@ impl<'de> Deserialize<'de> for SideEffect {
     }
 }
 
+/// 工具暴露声明（exposure 文档 §4.1 层次 1）：在 LLM 工具目录里怎么露面。
+/// manifest JSON / describe 均可缺省（缺省 = 候选池），字段追加零 ABI 破坏，
+/// `PLUGIN_ABI_VERSION` 不动。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Exposure {
+    /// 每次请求都直通暴露（总数 >10 = 作者设计失误，暴露管线加载告警）。
+    Always,
+    /// 进候选池，按热度/检索激活（缺省——作者不写就当候选池处理）。
+    #[default]
+    OnDemand,
+    /// 不进常规目录，只有显式检索（⑫ search_tools）才暴露。
+    Hidden,
+}
+
 /// 工具规格：每个工具自带 side_effect，不再有 manifest 级冗余字段（§5.2）。
 /// （PartialEq 仅供内核 payload 比较；derive 是 trait impl，不影响 C ABI。）
 ///
@@ -101,6 +116,8 @@ pub struct ToolSpec {
     /// JSON Schema。
     pub schema: Value,
     pub side_effect: SideEffect,
+    /// 暴露声明（exposure 文档 §4.1）：缺省 on_demand。
+    pub exposure: Exposure,
 }
 
 impl<'de> Deserialize<'de> for ToolSpec {
@@ -114,6 +131,8 @@ impl<'de> Deserialize<'de> for ToolSpec {
             schema: Value,
             #[serde(default = "default_side_effect")]
             side_effect: SideEffect,
+            #[serde(default)]
+            exposure: Exposure,
         }
         fn default_side_effect() -> SideEffect {
             // 缺失按最保守处理：不可逆 → 调用前必须审批（宁可标错成
@@ -129,6 +148,7 @@ impl<'de> Deserialize<'de> for ToolSpec {
                 .unwrap_or_default(),
             schema: raw.schema,
             side_effect: raw.side_effect,
+            exposure: raw.exposure,
         })
     }
 }
@@ -181,6 +201,12 @@ impl Default for CallCtx {
 pub trait Tool: Send + Sync + 'static {
     fn spec(&self) -> &ToolSpec;
     fn plugin_version(&self) -> &semver::Version;
+    /// 工具所属插件 id（⑩ 使用统计归属用）。内置替身 / 测试 mock 没有
+    /// 插件身份，返回 None。宿主侧 trait，不进 C ABI；带默认实现，
+    /// 既有实现者零改动。
+    fn plugin_id(&self) -> Option<&str> {
+        None
+    }
     async fn call(&self, ctx: &CallCtx, args: Value) -> Result<Value, ToolError>;
 }
 

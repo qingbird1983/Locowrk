@@ -87,6 +87,7 @@ fn describe_manifest() -> CString {
                     "required": ["path", "old_string", "new_string"]
                 }),
                 side_effect: compensable(),
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "edit_lines".into(),
@@ -110,6 +111,7 @@ fn describe_manifest() -> CString {
                     "required": ["path", "start_line", "end_line", "content"]
                 }),
                 side_effect: compensable(),
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "edit_diff".into(),
@@ -131,6 +133,7 @@ fn describe_manifest() -> CString {
                     "required": ["path", "patch"]
                 }),
                 side_effect: compensable(),
+                exposure: Default::default(),
             },
         ],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）

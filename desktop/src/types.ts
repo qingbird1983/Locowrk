@@ -110,6 +110,44 @@ export interface InstalledPlugin {
   display: PluginDisplay;
 }
 
+/** ⑩ 闲置信息（后端 IdleInfo 契约，exposure 文档 §8.5）：后端只给结构化
+ * 数据，前端按档位渲染"多久没用"人类文案（§11）——永不显示裸天数。 */
+export interface IdleInfo {
+  level: "fresh" | "normal" | "idle" | "stale" | "abandoned" | "never_used";
+  value?: number | null;
+  unit?:
+    | "today"
+    | "this_week"
+    | "last_week"
+    | "last_month"
+    | "month"
+    | "half_year"
+    | "year"
+    | "never_used"
+    | "just_installed"
+    | null;
+}
+
+/** plugin_list_with_usage 行（⑩⑤）：按 id join 到已安装列表的增量视图。 */
+export interface PluginUsageView {
+  id: string;
+  enabled: boolean;
+  active: boolean;
+  installed_at: number;
+  first_used_at: number | null;
+  last_used_at: number | null;
+  /** builtin 开发态插件不评估闲置（installed_at 无 lockfile 真源）。 */
+  idle: IdleInfo | null;
+  /** 筛选档位（后端裁决，嵌套：gt3m ⊂ gt1m ⊂ recent）。 */
+  filter_key: "recent" | "gt1m" | "gt3m" | "gt6m" | null;
+}
+
+/** 批量操作结果（⑩⑥）：逐条成败，部分失败不回滚。 */
+export interface BatchResult {
+  ok: string[];
+  failed: { id: string; error: string }[];
+}
+
 /** plugin://state-changed 载荷（plugin-service PluginStateChange 镜像，
  * type 标签）。 */
 export type PluginStateChange =

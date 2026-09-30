@@ -61,6 +61,7 @@ fn catalog() -> Vec<ToolSpec> {
         description: "x".into(),
         schema: json!({ "type": "object" }),
         side_effect: SideEffect::Pure,
+        exposure: Default::default(),
     }]
 }
 

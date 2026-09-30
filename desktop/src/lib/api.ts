@@ -5,8 +5,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AgentEvent,
   ApprovalRequest,
+  BatchResult,
   ContextUpdate,
   InstalledPlugin,
+  PluginUsageView,
   LlmUpdate,
   MarketplaceItem,
   PluginStateChange,
@@ -64,6 +66,24 @@ export function subscribeApprovals(
 /** 已安装列表（lockfile 投影 + 注册表运行态合并）。 */
 export function pluginList(): Promise<InstalledPlugin[]> {
   return invoke("plugin_list");
+}
+
+/** 带使用统计的已安装列表（⑩⑤）：闲置分级后端裁决，按 id join。 */
+export function pluginListWithUsage(): Promise<PluginUsageView[]> {
+  return invoke("plugin_list_with_usage");
+}
+
+/** 批量启用/停用（⑩⑥）：逐条成败，部分失败不回滚。 */
+export function pluginBatchSetEnabled(
+  ids: string[],
+  enabled: boolean,
+): Promise<BatchResult> {
+  return invoke("plugin_batch_set_enabled", { ids, enabled });
+}
+
+/** 批量卸载（⑩⑥）：调用方负责二次确认并列出插件名（§9.5）。 */
+export function pluginBatchUninstall(ids: string[]): Promise<BatchResult> {
+  return invoke("plugin_batch_uninstall", { ids });
 }
 
 /** 市场目录（发现页）。 */

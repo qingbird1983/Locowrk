@@ -74,6 +74,7 @@ fn describe_manifest() -> CString {
                     "required": ["path"]
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "fs_list".into(),
@@ -89,6 +90,7 @@ fn describe_manifest() -> CString {
                     "required": ["path"]
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "fs_grep".into(),
@@ -107,6 +109,7 @@ fn describe_manifest() -> CString {
                     "required": ["path", "query"]
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "fs_write".into(),
@@ -129,6 +132,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Compensable {
                     undo_tool: "fs_restore".into(),
                 },
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "fs_delete".into(),
@@ -144,6 +148,7 @@ fn describe_manifest() -> CString {
                     "required": ["path"]
                 }),
                 side_effect: SideEffect::Irreversible,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "fs_restore".into(),
@@ -164,6 +169,7 @@ fn describe_manifest() -> CString {
                     }
                 }),
                 side_effect: SideEffect::Irreversible,
+                exposure: Default::default(),
             },
         ],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）

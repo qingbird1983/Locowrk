@@ -46,22 +46,29 @@ export default {
       "Compaction undone: full pre-compaction context restored (later turns were rewound too).",
     compactUndoFailed: "Failed to undo compaction: {reason}",
   },
-  // Idle badge (IdleBadge): six levels → gray/yellow/red; with value+unit
-  // the badge renders a human duration string instead of the level name.
+  // Idle badge (IdleBadge, ⑩ wired per exposure doc §8.4/§11.3): backend
+  // sends structured IdleInfo only; the frontend renders human phrasing.
   idle: {
+    // Level names (legend / fallback when unit is missing)
     fresh: "newly enabled",
     normal: "normal",
     idle: "idle",
     stale: "long idle",
     abandoned: "likely abandoned",
     never_used: "never used",
-    unusedFor: "unused for {n} {unit}",
-    unit: {
-      minute: "min",
-      hour: "h",
-      day: "day(s)",
-      week: "week(s)",
-    },
+    // §8.6 phrasing table
+    today: "Used today",
+    this_week: "Used this week",
+    last_week: "Used last week",
+    last_month: "Used last month",
+    month: "Unused for over {n} month(s)",
+    half_year: "Unused for over half a year",
+    year: "Unused for over {n} year(s)",
+    // §8.7 never-used (strictly distinct from long-unused) + trial window
+    just_installed: "Just installed",
+    never2w: "Installed two weeks ago, never used",
+    neverMonths: "Installed over {n} month(s) ago, never used",
+    neverHalfYear: "Installed over half a year ago, never used",
   },
   memory: {
     search: "Search memories…",
@@ -102,7 +109,23 @@ export default {
     emptyDiscover:
       "Market catalog is empty. Run `bash scripts/build_market.sh` at the repo root, then restart the app.",
     emptyInstalled: "Nothing installed yet. Head to the Discover tab.",
-  },
+    // ⑩ idle UI (exposure doc §8.8/§9.2/§9.3/§9.5): filter chips use "how
+    // long" phrasing; hints appear only when the user opens the tab.
+    usageDisabled: "Disabled",
+    idleGt1m: "Unused for over 1 month",
+    idleGt3m: "Unused for over 3 months",
+    idleGt6m: "Unused for over half a year",
+    hintIdle: "{n} plugin(s) unused for over 3 months",
+    hintGo: "Take a look",
+    selectAll: "Select all",
+    selectedCount: "{n} selected",
+    batchDisable: "Disable selected",
+    batchEnable: "Enable selected",
+    batchUninstall: "Uninstall selected",
+    batchUninstallConfirm: "Uninstall these {n} plugins? This cannot be undone:",
+    batchPartialFail: "{n} failed:",
+    cancel: "Cancel",
+    builtinNotSelectable: "Built-in dev plugins are not batch-managed",  },
   settings: {
     title: "Settings",
     llmTitle: "LLM configuration",

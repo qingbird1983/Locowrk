@@ -84,6 +84,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Compensable {
                     undo_tool: "memory_undo".into(),
                 },
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "memory_get".into(),
@@ -98,6 +99,7 @@ fn describe_manifest() -> CString {
                     "required": ["key"]
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "memory_list".into(),
@@ -115,6 +117,7 @@ fn describe_manifest() -> CString {
                     }
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "memory_search".into(),
@@ -132,6 +135,7 @@ fn describe_manifest() -> CString {
                     "required": ["query"]
                 }),
                 side_effect: SideEffect::Pure,
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "memory_delete".into(),
@@ -149,6 +153,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Compensable {
                     undo_tool: "memory_undo".into(),
                 },
+                exposure: Default::default(),
             },
             ToolSpec {
                 name: "memory_undo".into(),
@@ -170,6 +175,7 @@ fn describe_manifest() -> CString {
                     }
                 }),
                 side_effect: SideEffect::Irreversible,
+                exposure: Default::default(),
             },
         ],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）

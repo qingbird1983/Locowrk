@@ -22,6 +22,7 @@ fn spec(name: &str) -> ToolSpec {
         description: "mock".into(),
         schema: json!({}),
         side_effect: SideEffect::Pure,
+        exposure: Default::default(),
     }
 }
 
@@ -251,6 +252,7 @@ async fn audit_records_args_side_effect_and_failure() {
             side_effect: SideEffect::Compensable {
                 undo_tool: "undo_mock".into(),
             },
+            exposure: Default::default(),
         },
         calls: AtomicU32::new(0),
         fail_first: 1,

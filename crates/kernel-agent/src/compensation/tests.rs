@@ -40,6 +40,7 @@ impl UndoTool {
                 description: "test undo".into(),
                 schema: json!({ "type": "object" }),
                 side_effect,
+                exposure: Default::default(),
             },
             calls,
             fail,
@@ -127,6 +128,7 @@ fn push_call(session: &mut Session, call_id: &str, side_effect: SideEffect, ok: 
         call_id: CallId(call_id.into()),
         tool: "fs_write".into(),
         args: json!({ "path": "/tmp/note.txt", "content": "v2" }),
+        plugin_id: None,
         plugin_version: Version::new(1, 1, 0),
         side_effect,
     });

@@ -68,6 +68,7 @@ fn management_specs() -> Vec<ToolSpec> {
                 .into(),
             schema: json!({ "type": "object", "properties": {} }),
             side_effect: SideEffect::Pure,
+            exposure: Default::default(),
         },
         ToolSpec {
             name: "mcp_reload".into(),
@@ -78,6 +79,7 @@ fn management_specs() -> Vec<ToolSpec> {
                 .into(),
             schema: json!({ "type": "object", "properties": {} }),
             side_effect: SideEffect::Pure,
+            exposure: Default::default(),
         },
     ]
 }

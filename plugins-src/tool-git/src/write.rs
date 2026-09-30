@@ -130,13 +130,13 @@ pub(crate) fn git_push(args: &Value) -> Result<Value, String> {
 pub(crate) fn git_undo_commit(args: &Value) -> Result<Value, String> {
     let output = args.get("output").unwrap_or(args);
     let repo_str = output.get("repo").and_then(Value::as_str).ok_or_else(|| {
-        "git.undo_commit: missing `output.repo` (pass the original git_commit result)".to_string()
+        "git_undo_commit: missing `output.repo` (pass the original git_commit result)".to_string()
     })?;
     let commit = output
         .get("commit")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "git.undo_commit: missing `output.commit` (pass the original git_commit result)"
+            "git_undo_commit: missing `output.commit` (pass the original git_commit result)"
                 .to_string()
         })?;
     let repo = resolve_repo_str(repo_str)?;
@@ -144,7 +144,7 @@ pub(crate) fn git_undo_commit(args: &Value) -> Result<Value, String> {
     let head = head_of(&repo)?;
     if head != commit {
         return Err(format!(
-            "git.undo_commit: HEAD has moved ({head} != {commit}); manual intervention required"
+            "git_undo_commit: HEAD has moved ({head} != {commit}); manual intervention required"
         ));
     }
     let out = run_git(&repo, &["reset", "--soft", "HEAD~1"])?;

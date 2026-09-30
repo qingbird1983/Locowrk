@@ -231,10 +231,10 @@ fn git_status_commit_undo_push_end_to_end() {
         json!(git(&repo, &["rev-parse", "HEAD"]).trim())
     );
     call(
-        source.resolve("git.undo_commit").unwrap().as_ref(),
+        source.resolve("git_undo_commit").unwrap().as_ref(),
         json!({ "call_id": "c1", "args": {}, "output": out }),
     )
-    .expect("git.undo_commit ok");
+    .expect("git_undo_commit ok");
     assert_eq!(git(&repo, &["rev-parse", "HEAD"]).trim(), base);
     assert!(
         repo.join("b.txt").is_file(),

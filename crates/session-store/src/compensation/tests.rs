@@ -13,6 +13,7 @@ fn call(seq: &str, effect: SideEffect) -> SessionEvent {
         call_id: CallId(seq.into()),
         tool: format!("tool-{seq}"),
         args: json!({}),
+        plugin_id: None,
         plugin_version: Version::new(0, 1, 0),
         side_effect: effect,
     }

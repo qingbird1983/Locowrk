@@ -61,7 +61,7 @@
     },
     {
       "name": "git_commit",
-      "description": "Stage files and create a commit. Args: repo (required), message (required), add (array of paths relative to the repo root) OR add_all (bool, stage everything including deletions) — exactly one of the two. Returns {commit, short}. Undoable via git.undo_commit (soft reset keeps the changes staged) as long as HEAD is still the created commit.",
+      "description": "Stage files and create a commit. Args: repo (required), message (required), add (array of paths relative to the repo root) OR add_all (bool, stage everything including deletions) — exactly one of the two. Returns {commit, short}. Undoable via git_undo_commit (soft reset keeps the changes staged) as long as HEAD is still the created commit.",
       "schema": {
         "type": "object",
         "properties": {
@@ -72,7 +72,7 @@
         },
         "required": ["repo", "message"]
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "git.undo_commit" }
+      "side_effect": { "kind": "compensable", "undo_tool": "git_undo_commit" }
     },
     {
       "name": "git_push",
@@ -89,7 +89,7 @@
       "side_effect": "Irreversible"
     },
     {
-      "name": "git.undo_commit",
+      "name": "git_undo_commit",
       "description": "Undo a previous git_commit by soft-resetting one commit (the changes stay staged). Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.{repo, commit} is used. Refuses when HEAD has moved past the recorded commit (manual intervention required). Irreversible — it rewrites repository state, so the call requires user approval.",
       "schema": {
         "type": "object",

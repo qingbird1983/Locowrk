@@ -36,6 +36,7 @@ impl MockTool {
                 description: "mock".into(),
                 schema: json!({}),
                 side_effect,
+                exposure: Default::default(),
             },
             calls: AtomicU32::new(0),
             output,

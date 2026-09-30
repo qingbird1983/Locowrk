@@ -13,6 +13,7 @@ fn tool_call(seq: u32) -> SessionEvent {
         call_id: CallId(format!("call-{seq}")),
         tool: "echo".into(),
         args: json!({ "text": "hi" }),
+        plugin_id: None,
         plugin_version: Version::new(0, 1, 0),
         side_effect: SideEffect::Pure,
     }

@@ -8,6 +8,8 @@
  * 约定：
  * - v-model:search 未绑定时搜索框整个隐藏（如记忆页只有搜索没有 chips）。
  * - filters 是完整的 chip 列表（含"全部"项），选中值经 v-model:filter 回传。
+ * - subFilters / v-model:subFilter 是第二排 chips（⑩ 闲置筛选：状态档
+ *   与时长档分离，§9.2）；不传则不渲染第二排。
  * - 批量栏只在 batching 为 true 时渲染（⑩ 批量操作接线；批量卸载需
  *   二次确认并列出插件名）。
  */
@@ -19,12 +21,15 @@ defineProps<{
   searchPlaceholder?: string;
   /** 筛选 chips（含"全部"项）；不传或为空则不渲染 chips 行。 */
   filters?: { key: string; label: string }[];
+  /** 第二排筛选 chips（⑩ 闲置档位）；不传则不渲染。 */
+  subFilters?: { key: string; label: string }[];
   /** 批量操作栏可见性。 */
   batching?: boolean;
 }>();
 
 const search = defineModel<string>("search");
 const filter = defineModel<string>("filter");
+const subFilter = defineModel<string>("subFilter");
 </script>
 
 <template>
@@ -55,6 +60,26 @@ const filter = defineModel<string>("filter");
         :placeholder="searchPlaceholder"
         class="ml-auto w-56 rounded-lg border border-[var(--lw-border-strong)] bg-[var(--lw-surface-1)] px-3 py-1.5 text-xs text-[var(--lw-text-1)] outline-none placeholder:text-[var(--lw-text-4)] focus:border-[var(--lw-text-3)]"
       />
+    </div>
+
+    <!-- 第二排筛选 chips（⑩ 闲置档位）：结构与第一排一致 -->
+    <div
+      v-if="subFilters && subFilters.length > 0"
+      class="flex gap-1 border-b border-[var(--lw-border)] px-5 py-2"
+    >
+      <button
+        v-for="f in subFilters"
+        :key="f.key"
+        class="rounded-full px-3 py-1 text-xs font-medium transition"
+        :class="
+          subFilter === f.key
+            ? 'bg-[var(--lw-surface-2)] text-[var(--lw-text-1)]'
+            : 'text-[var(--lw-text-3)] hover:text-[var(--lw-text-2)]'
+        "
+        @click="subFilter = f.key"
+      >
+        {{ f.label }}
+      </button>
     </div>
 
     <!-- 内容区：空态优先 -->

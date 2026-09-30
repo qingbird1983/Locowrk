@@ -79,6 +79,7 @@ fn describe_manifest() -> CString {
                 "required": ["url"]
             }),
             side_effect: SideEffect::Pure,
+            exposure: Default::default(),
         }],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
         display_name: Some(zh_en("网页抓取", "Web Fetch")),
