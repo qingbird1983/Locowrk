@@ -100,17 +100,17 @@
 | 注入条数可配（约束清单 §3 搭车） | ✅ | settings.json `memory` 区（enabled / topK，缺省开 / 5），共享 RwLock 注入、settings_set 即热换入；设置面板 MemorySection 真分区替换占位 |
 | 记忆管理页 | ✅ | MemoryPage 填充：搜索（防抖）/ 列表（新→旧）/ 行内编辑（不开全局弹层，§5）/ 删除（行内二次确认）/ 清空（底部二次确认，§11.3 一键阻力最小）；每条来源徽章 `SourceBadge`（§3.4 来源族）+ 相对时间（lib/format.ts）；四命令 memory_list/update/delete/clear_all 薄适配 MemoryStore（宿主直读插件库，ALTER 补 source 列迁移旧库） |
 
-### ⑫ 打分截断 + 元工具
+### ⑫ 打分截断 + 元工具（✅ 已完成，提交 da96c6f）
 
 > 详见 DESIGN.md §14 v2.17 ⑫段 + 《Tool exposure strategy and usage
 > statistics.md》§5/§6。
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| EWMA 打分 | ⬜ | decay = exp(-days/7)，半衰期约 5 天 |
-| Top-N 截断 + 调试面板 | ⬜ | N=20 可配；每次请求最大工具数同批可配（约束清单 §3）；开发者选项看暴露分布与节省 token 估算 |
-| 会话内热度 | ⬜ | 会话内 1.0 > 全局 EWMA 0.7 > 检索 0.5，always 满分直通 |
-| search_tools 元工具 | ⬜ | always + Pure 主动拉取兜底；空结果回退 top-10 高频 |
+| EWMA 打分 | ✅ | flush 时读旧分衰减积累：`old × exp(-days/7) + 窗口调用数`（⑩ 预留列开始写入）；GlobalEwma trait = 内核定契约、组装点实现（desktop 读 usage.sqlite3，降级空表 = 退回会话内优先） |
+| Top-N 截断 + 调试面板 | ✅ | ToolExposure 监听器（agent/request 注册最前，§7 链位）；settings.json `tools` 区 enabled/maxPerRequest（缺省 20，1–200）共享 RwLock 热换入；开发者分区（壳批次最后一个占位替换）= 截断设置 + 最近一次暴露快照（打开时拉取不轮询；节省走 §3.5 compactNumber 档位） |
+| 会话内热度 | ✅ | 从 `RequestPayload.messages` 实时数 ToolResult（§3.5"不落盘"——投影日志即会话事实，零新 trait、无跨会话竞态）；会话 1.0 > 全局 0.7，always 直通不占额度；检索 0.5 归 ⑬ |
+| search_tools 元工具 | ✅ | 宿主内置 always+Pure（目录+统计是宿主关切，插件看不到注册表）；关键词检索全目录（name 2 分/desc 1 分 + query 原串照顾中文）截 8 条；空结果回退 top-10 高频 ∩ 目录，统计也空则如实 no_match；**有意扩 API**：RegistryToolSource::list_all_tools 含 hidden（§4.1"显式检索才暴露"的唯一通路，resolve 本就不过滤） |
 
 ### S1 tool-shell 安全分级与进程治理（《Setting and Constrained Optimization.md》§2，2026-09-30 逐项对照源码核对后入库）
 
