@@ -79,6 +79,7 @@
 | 副作用族 | `SideEffectBadges.vue` | pure 青绿 / compensable 黄 / irreversible 红 |
 | 闲置族 | `IdleBadge.vue`（⑩ 已接线 `plugin_list_with_usage`） | fresh/normal 不显示；idle 灰 / stale+never_used 黄 / abandoned 红（exposure 文档 §9.4）；文案表 = locales idle.*（§8.6/§8.7 档位） |
 | 状态族 | InstalledTab 行内 | 运行中绿 / 待激活黄 / 已禁用灰 / 可更新蓝 |
+| 来源族 | `SourceBadge.vue`（⑪ 记忆页行内） | explicit 蓝 / extracted 紫 / 未知灰；文案 = locales memory.source_*（后端只给结构化 source 串，§8.1 纪律） |
 
 - 闲置徽章铁则（exposure 文档 §8.4）：**后端只给结构化 `{level, value, unit}`，前端渲染"多久没用"人类文案**；14 天试用保护由后端裁决。
 - 新徽章先进对应族，不许在页面里裸写 span 徽章。

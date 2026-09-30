@@ -88,16 +88,17 @@
 | 闲置 UI | ✅ | `plugin_list_with_usage`（attach join 投影）+ IdleBadge 契约升级（per-unit 人类文案、never_used 黄档对齐 §9.4）+ 第二排闲置 chips（ListPage `subFilters`）+ 批量栏（全选/停用/启用/卸载，卸载内联二次确认列名）+ 顶部提示条（§9.3 点去看看切筛选）；批量命令 `plugin_batch_set_enabled`/`plugin_batch_uninstall`（BatchResult 逐条成败） |
 | 停用落盘核对 | ✅ | 核对 service.rs `startup_reconcile` 确有 `.filter(|e| e.enabled)`，lockfile `set_enabled` 落盘已在（v2.12）——无需改动 |
 
-### ⑪ 记忆注入 + 记忆管理 UI
+### ⑪ 记忆注入 + 记忆管理 UI（✅ 已完成，提交 d342551）
 
 > 详见 DESIGN.md §14 v2.17 ⑪段 + 《Context and Memory.md》§4/§5。
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| memory-sqlite 插件本体 | ◐ | 已存在（v2.15，1.1.0 起工具名已去点号=memory_get/put/list/search/delete/undo）；⑪ 剩 memory_write/read 命名对齐 + 标 exposure=always |
-| Memory-Inject 中间件 | ⬜ | 读记忆库 top-5 注入 system prompt；链位 ToolExposure → Memory-Inject → ctx-compact；**system prompt 永不压缩**；注入条数可配（settings.json `memory` 区 topK，默认 5——约束清单 §3） |
-| memory.put 同步落盘 | ⬜ | 不走异步队列（"说了记住却没记住"最伤信任） |
-| 记忆管理页 | ⬜ | 搜索/列表/编辑/删除/清空；每条显示来源（explicit/extracted）与时间 |
+| memory-sqlite 插件本体 | ✅ | 1.2.0（d342551）：memory_put/get 改名 **memory_write/memory_read**（§4.4 对齐）+ write/read/search 标 **exposure=always**（⑫ Top-N 截断不挤出）；list/delete/undo 维持 on_demand；写路径核对为同步落盘（连接按调用开、直写、无队列——"说了记住却没记住"不存在） |
+| Memory-Inject 中间件 | ✅ | kernel-agent `middleware/memory_inject.rs`：`MemorySource` trait（内核定契约、组装点实现，与 ApprovalResolver 同模式；不经工具管道——每 step memory_list 会污染使用统计与审计）；注入写 `RequestPayload::system`（新字段，genai 映射 with_system）——**记忆在消息列表之外，"系统提示永不压缩"由结构保证**，会话日志不落注入内容；注册次序 Memory-Inject → ctx-compact（§3.6），ToolExposure（⑫）落地后排最前 |
+| memory.put 同步落盘 | ✅ | 核对即满足（v2.15 起插件就是同步直写）；ROADMAP 旧行描述针对的是"计划中的异步队列"——该队列从未存在 |
+| 注入条数可配（约束清单 §3 搭车） | ✅ | settings.json `memory` 区（enabled / topK，缺省开 / 5），共享 RwLock 注入、settings_set 即热换入；设置面板 MemorySection 真分区替换占位 |
+| 记忆管理页 | ✅ | MemoryPage 填充：搜索（防抖）/ 列表（新→旧）/ 行内编辑（不开全局弹层，§5）/ 删除（行内二次确认）/ 清空（底部二次确认，§11.3 一键阻力最小）；每条来源徽章 `SourceBadge`（§3.4 来源族）+ 相对时间（lib/format.ts）；四命令 memory_list/update/delete/clear_all 薄适配 MemoryStore（宿主直读插件库，ALTER 补 source 列迁移旧库） |
 
 ### ⑫ 打分截断 + 元工具
 
