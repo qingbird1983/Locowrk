@@ -91,3 +91,15 @@ fn exposure_serializes_snake_case() {
         json!("always")
     );
 }
+
+#[test]
+fn valid_tool_name_matches_openai_pattern() {
+    // `^[a-zA-Z0-9_-]+$`：OpenAI 兼容后端的硬约束
+    assert!(super::is_valid_tool_name("fs_read"));
+    assert!(super::is_valid_tool_name("mcp_ctx7_resolve-library-id"));
+    assert!(super::is_valid_tool_name("T9"));
+    assert!(!super::is_valid_tool_name("git.undo_commit"));
+    assert!(!super::is_valid_tool_name("has space"));
+    assert!(!super::is_valid_tool_name("中文"));
+    assert!(!super::is_valid_tool_name(""));
+}

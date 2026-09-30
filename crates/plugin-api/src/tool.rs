@@ -102,6 +102,16 @@ pub enum Exposure {
     Hidden,
 }
 
+/// OpenAI 兼容后端对 tool 名的硬约束：`^[a-zA-Z0-9_-]+$`。带点号等非法名
+/// 会让**整个** chat 请求 400（不是单个工具失败），目录暴露侧必须用它做
+/// 准入检查（plugin-host 在目录合并处剔除并告警）。
+pub fn is_valid_tool_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
 /// 工具规格：每个工具自带 side_effect，不再有 manifest 级冗余字段（§5.2）。
 /// （PartialEq 仅供内核 payload 比较；derive 是 trait impl，不影响 C ABI。）
 ///

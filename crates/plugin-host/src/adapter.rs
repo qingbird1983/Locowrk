@@ -103,9 +103,18 @@ impl RegistryToolSource {
         let mut specs = Vec::new();
         let mut always = 0usize;
         for (_id, inst) in self.registry.active_instances() {
-            let (merged, a) = merge_catalog(specs, inst.manifest().tools.iter().cloned());
+            let (merged, a, invalid) = merge_catalog(specs, inst.manifest().tools.iter().cloned());
             specs = merged;
             always += a;
+            if !invalid.is_empty() {
+                // 非法名不剔除就会让整个 chat 请求 400；剔除只损失该工具
+                tracing::warn!(
+                    plugin = %inst.id(),
+                    names = %invalid.join(", "),
+                    "skipped tool(s) with names outside ^[a-zA-Z0-9_-]+$ \
+                     (OpenAI-compatible backends reject the whole request)"
+                );
+            }
         }
         if always > 10 && ALWAYS_BUDGET_WARNED.set(()).is_ok() {
             tracing::warn!(
@@ -118,15 +127,21 @@ impl RegistryToolSource {
     }
 }
 
-/// 目录合并纯函数（单测友好）：hidden 剔除、同名先到先得，返回
-/// （合并后的目录，本批 always 计数）。
+/// 目录合并纯函数（单测友好）：非法名剔除（名单回报给调用方告警）、
+/// hidden 剔除、同名先到先得，返回（合并后的目录，本批 always 计数，
+/// 非法名清单）。`resolve` 不过滤——补偿等内部按名引用仍可达。
 fn merge_catalog(
     existing: Vec<ToolSpec>,
     incoming: impl Iterator<Item = ToolSpec>,
-) -> (Vec<ToolSpec>, usize) {
+) -> (Vec<ToolSpec>, usize, Vec<String>) {
     let mut specs = existing;
     let mut always = 0usize;
+    let mut invalid = Vec::new();
     for spec in incoming {
+        if !plugin_api::is_valid_tool_name(&spec.name) {
+            invalid.push(spec.name);
+            continue;
+        }
         if matches!(spec.exposure, Exposure::Hidden) {
             continue;
         }
@@ -139,7 +154,7 @@ fn merge_catalog(
             specs.push(spec);
         }
     }
-    (specs, always)
+    (specs, always, invalid)
 }
 
 #[cfg(test)]
