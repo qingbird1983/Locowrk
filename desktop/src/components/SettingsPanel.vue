@@ -14,6 +14,7 @@ import LanguageSection from "./settings/LanguageSection.vue";
 import LlmSection from "./settings/LlmSection.vue";
 import MemorySection from "./settings/MemorySection.vue";
 import SessionsSection from "./settings/SessionsSection.vue";
+import ShellSection from "./settings/ShellSection.vue";
 import ShortcutSection from "./settings/ShortcutSection.vue";
 
 const { t } = useI18n();
@@ -42,6 +43,9 @@ const settings = useSettingsStore();
     <SessionsSection />
     <LanguageSection />
     <ShortcutSection />
+
+    <!-- S1 命令终端治理：高危命令解锁开关（重启生效；硬锁类不受影响） -->
+    <ShellSection />
 
     <!-- ⑫ 开发者分区：工具暴露截断设置 + 最近一次暴露分布 / token 节省估算 -->
     <DeveloperSection />

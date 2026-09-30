@@ -1411,7 +1411,9 @@ dependencies = [
 name = "tool-shell"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "plugin-api",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

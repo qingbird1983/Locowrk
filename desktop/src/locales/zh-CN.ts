@@ -188,6 +188,14 @@ export default {
     memoryEnabled: "自动注入记忆",
     memoryTopK: "每轮注入条数",
     memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
+    // S1 shell 治理分区
+    shellTitle: "命令终端",
+    shellHint:
+      "只读命令（ls / cat / grep / git status|log|diff|show）经 shell_read 免审批执行，且只能访问允许根内的文件；其余白名单命令走 shell 工具、逐条审批。",
+    shellUnlock: "允许 rm / sudo / chmod 等高危命令进入审批（默认直接拒绝）",
+    shellUnlockWarning:
+      "开启后，删除、提权、改权限、写磁盘类命令不再被直接拒绝，而是弹出确认框由你逐条放行——放行责任在你。解释器与网络类命令（python / bash / curl 等）仍然永久禁止，不受此开关影响。",
+    shellRestart: "改动在重启应用后生效。",
     // ⑫ 工具暴露区（开发者选项真分区，替换壳批次占位）
     developerTitle: "开发者选项",
     developerHint: "工具暴露截断（Top-N）设置 + 最近一次请求的暴露分布。",

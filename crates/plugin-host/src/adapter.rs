@@ -114,11 +114,8 @@ impl RegistryToolSource {
         let mut specs = Vec::new();
         let mut always = 0usize;
         for (_id, inst) in self.registry.active_instances() {
-            let (merged, a, invalid) = merge_catalog(
-                specs,
-                inst.manifest().tools.iter().cloned(),
-                include_hidden,
-            );
+            let (merged, a, invalid) =
+                merge_catalog(specs, inst.manifest().tools.iter().cloned(), include_hidden);
             specs = merged;
             always += a;
             if !invalid.is_empty() {

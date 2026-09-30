@@ -12,7 +12,9 @@ use session_store::SessionEvent;
 use crate::events::ApprovalRequestPayload;
 use crate::memory::MemoryRow;
 use crate::runner::{self, UsagePolicy};
-use crate::settings::{ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView, ToolsUpdate};
+use crate::settings::{
+    ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView, ShellUpdate, ToolsUpdate,
+};
 use crate::state::AppState;
 use crate::usage::{self, PluginUsageView};
 use plugin_service::{InstalledPlugin, MarketplaceItem};
@@ -221,11 +223,12 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
 }
 
 /// 部分更新设置：locale、快捷键、LLM 字段、上下文管理区（⑨）、记忆
-/// 注入区（⑪）与工具暴露区（⑫）独立可选，缺省字段保持不变；base_url /
-/// api_key 传空串 = 清除；context 的 windowTokens 传 null = 清除窗口
-/// （回落保守保护）。改键成功后即时重注册全局快捷键；注册失败返回 Err
-/// （新键已落盘，换键重试即可）。上下文 / 记忆 / 工具暴露改动成功后换入
-/// ctx-compact / Memory-Inject / ToolExposure 活配置——行为随即生效。
+/// 注入区（⑪）、工具暴露区（⑫）与 shell 治理区（S1）独立可选，缺省
+/// 字段保持不变；base_url / api_key 传空串 = 清除；context 的
+/// windowTokens 传 null = 清除窗口（回落保守保护）。改键成功后即时重
+/// 注册全局快捷键；注册失败返回 Err（新键已落盘，换键重试即可）。
+/// 上下文 / 记忆 / 工具暴露改动成功后换入活配置随即生效；shell 解锁
+/// 开关经插件加载前的 env 注入，重启后生效。
 // 参数 = settings.json 各分区一一对应（§3.2）；Tauri command 的扁平
 // IPC 形状不收拢成结构体。
 #[allow(clippy::too_many_arguments)]
@@ -237,12 +240,19 @@ pub async fn settings_set(
     context: Option<ContextUpdate>,
     memory: Option<MemoryUpdate>,
     tools: Option<ToolsUpdate>,
+    shell: Option<ShellUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
-    let view = state
-        .settings
-        .update(locale.clone(), shortcut.clone(), llm, context, memory, tools)?;
+    let view = state.settings.update(
+        locale.clone(),
+        shortcut.clone(),
+        llm,
+        context,
+        memory,
+        tools,
+        shell,
+    )?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;
     }

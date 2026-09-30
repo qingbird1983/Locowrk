@@ -3,7 +3,14 @@
 import { defineStore } from "pinia";
 import { getSettings, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
-import type { ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView, ToolsUpdate } from "../types";
+import type {
+  ContextUpdate,
+  LlmUpdate,
+  MemoryUpdate,
+  SettingsView,
+  ShellUpdate,
+  ToolsUpdate,
+} from "../types";
 
 export const useSettingsStore = defineStore("settings", {
   state: () => ({
@@ -111,6 +118,23 @@ export const useSettingsStore = defineStore("settings", {
       this.savedFlash = false;
       try {
         this.view = await setSettings({ tools });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
+    /** 保存 shell 治理区（S1）：高危解锁开关经插件加载前的 env 注入，
+     * 重启后生效（分区文案里说明）。 */
+    async saveShell(shell: ShellUpdate) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ shell });
         this.savedFlash = true;
         setTimeout(() => (this.savedFlash = false), 2000);
       } catch (e) {

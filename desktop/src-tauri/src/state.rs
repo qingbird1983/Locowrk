@@ -110,6 +110,13 @@ pub fn init_state(app: AppHandle) -> AppState {
         }
     });
 
+    // S1（清单 §2.7/§3）：高危解锁开关在插件加载前注入进程 env——
+    // tool-shell 的 init 读一次 `LOCOWRK_SHELL_UNLOCK_RISK`；设置改动
+    // 重启生效（插件 init 只跑一次）。硬锁类不受此开关影响。
+    if settings.shell_unlock_risky() {
+        std::env::set_var("LOCOWRK_SHELL_UNLOCK_RISK", "1");
+    }
+
     // 模型适配器不特殊，也只是服务（§7.2）。阶段八②：genai 三合一适配器，
     // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
     ctx.provide_dyn::<dyn LlmService>(Arc::new(AppLlm::new(Arc::clone(&settings))));

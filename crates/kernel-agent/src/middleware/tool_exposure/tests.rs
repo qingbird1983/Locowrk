@@ -27,10 +27,7 @@ fn spec(name: &str, exposure: Exposure) -> ToolSpec {
 }
 
 fn cfg_lock(enabled: bool, max_tools: usize) -> Arc<RwLock<ToolExposureConfig>> {
-    Arc::new(RwLock::new(ToolExposureConfig {
-        enabled,
-        max_tools,
-    }))
+    Arc::new(RwLock::new(ToolExposureConfig { enabled, max_tools }))
 }
 
 fn listener(ewma: HashMap<String, f64>, cfg: Arc<RwLock<ToolExposureConfig>>) -> ToolExposure {
@@ -125,7 +122,10 @@ async fn session_hot_is_boolean_not_count() {
     // 会话内用过 2 次与 1 次同权重（1.0），不叠加
     let mut messages = messages_with_session_use("t1");
     messages.extend(messages_with_session_use("t1"));
-    let tools = vec![spec("t1", Exposure::OnDemand), spec("t2", Exposure::OnDemand)];
+    let tools = vec![
+        spec("t1", Exposure::OnDemand),
+        spec("t2", Exposure::OnDemand),
+    ];
     let l = listener(HashMap::new(), cfg_lock(true, 2));
     let (_, out) = run(&l, tools, messages).await;
     assert_eq!(out.tools.len(), 2);
@@ -181,7 +181,9 @@ async fn non_request_key_is_noop() {
 #[tokio::test]
 async fn malformed_payload_fails_open() {
     let l = listener(HashMap::new(), cfg_lock(true, 1));
-    let d = l.handle(points::REQUEST, &json!({"messages": "garbage"})).await;
+    let d = l
+        .handle(points::REQUEST, &json!({"messages": "garbage"}))
+        .await;
     assert!(matches!(d, WaterfallDecision::Continue));
 }
 

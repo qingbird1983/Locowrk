@@ -38,7 +38,7 @@ fn update_persists_and_roundtrips() {
             None,
             None,
             None,
-        )
+        None, )
         .unwrap();
     // 重新打开：从磁盘读回，而非内存态
     let v = SettingsStore::open(&root).unwrap().view();
@@ -64,7 +64,7 @@ fn api_key_never_leaks_into_view() {
             None,
             None,
             None,
-        )
+        None, )
         .unwrap();
     let json = serde_json::to_string(&store.view()).unwrap();
     assert!(!json.contains("sk-secret-value"));
@@ -89,7 +89,7 @@ fn empty_string_clears_none_keeps() {
                 None,
                 None,
                 None,
-            )
+            None, )
             .unwrap()
     };
     set(Some("sk-a"), Some("http://x"));
@@ -118,10 +118,10 @@ fn rejects_unknown_provider_and_locale() {
             None,
             None,
             None,
-        )
+        None, )
         .is_err());
     assert!(store
-        .update(Some("fr".into()), None, None, None, None, None)
+        .update(Some("fr".into()), None, None, None, None, None, None, )
         .is_err());
     // 校验失败不得污染内存态
     assert_eq!(store.view().locale, LOCALE_SYSTEM);
@@ -136,7 +136,7 @@ fn shortcut_default_update_and_validation() {
     assert_eq!(store.view().shortcut, SHORTCUT_DEFAULT);
     // 合法键位更新 + 磁盘往返
     store
-        .update(None, Some("Alt+Space".into()), None, None, None, None)
+        .update(None, Some("Alt+Space".into()), None, None, None, None, None, )
         .unwrap();
     assert_eq!(store.view().shortcut, "Alt+Space");
     assert_eq!(
@@ -150,10 +150,10 @@ fn shortcut_default_update_and_validation() {
     assert_eq!(v.shortcut, SHORTCUT_DEFAULT);
     // 非法键位 / 空串：拒绝且不污染内存态
     assert!(store
-        .update(None, Some("Not A Key!!".into()), None, None, None, None)
+        .update(None, Some("Not A Key!!".into()), None, None, None, None, None, )
         .is_err());
     assert!(store
-        .update(None, Some("".into()), None, None, None, None)
+        .update(None, Some("".into()), None, None, None, None, None, )
         .is_err());
     assert_eq!(store.view().shortcut, "Alt+Space");
     std::fs::remove_dir_all(&root).ok();
@@ -195,7 +195,7 @@ fn context_update_math_and_validation() {
             }),
             None,
             None,
-        )
+        None, )
         .unwrap();
     let v = store.view().context;
     assert_eq!(v.window_tokens, Some(128_000));
@@ -219,7 +219,7 @@ fn context_update_math_and_validation() {
             }),
             None,
             None,
-        )
+        None, )
         .unwrap();
     assert_eq!(store.view().context.window_tokens, None);
     assert_eq!(store.view().context.threshold_tokens, 32_000 * 40 / 100);
@@ -235,7 +235,7 @@ fn context_update_math_and_validation() {
             }),
             None,
             None,
-        )
+        None, )
         .is_err());
     assert!(store
         .update(
@@ -248,7 +248,7 @@ fn context_update_math_and_validation() {
             }),
             None,
             None,
-        )
+        None, )
         .is_err());
     assert_eq!(store.view().context.threshold_pct, 40);
     // 磁盘往返
@@ -289,7 +289,7 @@ fn memory_defaults_legacy_compat_and_validation() {
                 top_k: Some(3),
             }),
             None,
-        )
+        None, )
         .unwrap();
     assert!(!store.view().memory.enabled);
     assert_eq!(store.view().memory.top_k, 3);
@@ -312,7 +312,7 @@ fn memory_defaults_legacy_compat_and_validation() {
                 ..Default::default()
             }),
             None,
-        )
+        None, )
         .unwrap();
     assert!(!store.view().memory.enabled);
     assert_eq!(store.view().memory.top_k, 8);
@@ -329,11 +329,12 @@ fn memory_defaults_legacy_compat_and_validation() {
                     ..Default::default()
                 }),
                 None,
-            )
+            None, )
             .is_err());
     }
     assert_eq!(store.view().memory.top_k, 8);
     std::fs::remove_dir_all(&root).ok();
 }
 
+mod shell;
 mod tools;

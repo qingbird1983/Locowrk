@@ -15,6 +15,7 @@ import type {
   MemoryUpdate,
   PluginStateChange,
   SettingsView,
+  ShellUpdate,
   ToolsUpdate,
   ExposureDebug,
 } from "../types";
@@ -144,6 +145,7 @@ export function setSettings(patch: {
   context?: ContextUpdate;
   memory?: MemoryUpdate;
   tools?: ToolsUpdate;
+  shell?: ShellUpdate;
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
@@ -152,6 +154,7 @@ export function setSettings(patch: {
     context: patch.context ?? null,
     memory: patch.memory ?? null,
     tools: patch.tools ?? null,
+    shell: patch.shell ?? null,
   });
 }
 

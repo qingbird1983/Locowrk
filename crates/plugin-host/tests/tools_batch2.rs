@@ -193,9 +193,15 @@ fn shell_whitelist_and_spawn_end_to_end() {
     // 子命令限定：cargo publish 不在条目内
     let err = err_msg(call(shell.as_ref(), json!({ "command": "cargo publish" })).unwrap_err());
     assert!(err.contains("not whitelisted"), "{err}");
-    // denylist：不进审批直接拒
+    // 高危类（S1 三级分类）：默认拒绝、解锁开关才放行进审批
     let err = err_msg(call(shell.as_ref(), json!({ "command": "rm -rf /" })).unwrap_err());
-    assert!(err.contains("denylist"), "{err}");
+    assert!(
+        err.contains("high-risk command, refused by default"),
+        "{err}"
+    );
+    // 硬锁类：永不放行（解锁也救不了）
+    let err = err_msg(call(shell.as_ref(), json!({ "command": "python -c x" })).unwrap_err());
+    assert!(err.contains("permanently locked"), "{err}");
     // 元字符：管道拒绝
     let err = err_msg(call(shell.as_ref(), json!({ "command": "ls | cat" })).unwrap_err());
     assert!(err.contains("metacharacters"), "{err}");
@@ -203,6 +209,55 @@ fn shell_whitelist_and_spawn_end_to_end() {
     assert!(call(shell.as_ref(), json!({ "command": "git push" })).is_err());
 
     unsafe { std::env::remove_var("LOCOWRK_SHELL_ALLOW") };
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn shell_readonly_path_guard_end_to_end() {
+    let _env = env_lock().lock().unwrap();
+    let root = temp_root("shell_ro");
+    let fs_root = root.join("ws");
+    std::fs::create_dir_all(&fs_root).unwrap();
+    std::fs::write(root.join("secret.txt"), "s").unwrap();
+    unsafe {
+        // 只读豁免的硬前提：路径面受 fsutil 允许根约束（与 fs_* 同源）
+        std::env::set_var("LOCOWRK_DATA_DIR", root.join("data"));
+        std::env::set_var("LOCOWRK_FS_ROOTS", &fs_root);
+        std::env::remove_var("LOCOWRK_SHELL_ALLOW");
+    }
+
+    let registry = Arc::new(PluginRegistry::new());
+    load_activate("tool-shell", "1.0.0", &registry);
+    let source = RegistryToolSource::new(Arc::clone(&registry));
+    let shell_read = source.resolve("shell_read").unwrap();
+
+    // 只读表内命令 + cwd 在根内 → 免审批直接跑（git 在任何目录都能 spawn）
+    let out = call(
+        shell_read.as_ref(),
+        json!({ "command": "git status", "cwd": fs_root.display().to_string() }),
+    )
+    .expect("readonly command runs without approval");
+    assert_eq!(out["program"], json!("git"));
+
+    // 路径逃逸：候选 resolve 出根 → 拒绝并引导改用 shell（降级审批）
+    let err = err_msg(
+        call(
+            shell_read.as_ref(),
+            json!({ "command": "git log -- ../secret.txt", "cwd": fs_root.display().to_string() }),
+        )
+        .unwrap_err(),
+    );
+    assert!(err.contains("outside the allowed roots"), "{err}");
+    assert!(err.contains("`shell` tool"), "{err}");
+
+    // 只读表外命令：不进只读面
+    let err = err_msg(call(shell_read.as_ref(), json!({ "command": "git push" })).unwrap_err());
+    assert!(err.contains("not a read-only command"), "{err}");
+
+    unsafe {
+        std::env::remove_var("LOCOWRK_FS_ROOTS");
+        std::env::remove_var("LOCOWRK_DATA_DIR");
+    }
     let _ = std::fs::remove_dir_all(&root);
 }
 

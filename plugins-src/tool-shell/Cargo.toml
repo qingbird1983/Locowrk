@@ -9,9 +9,22 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
-# 纯用 std：白名单策略与进程spawn零第三方依赖；serde_json / semver 经 plugin-api re-export。
+# 策略/路径校验零第三方依赖；serde_json / semver 经 plugin-api re-export。
+# 杀进程树（S1 清单 §2.5）：Unix 用 libc killpg（spawn 时 process_group(0)），
+# Windows 用 windows-sys Job Object（KILL_ON_JOB_CLOSE）。
 [dependencies]
 plugin-api = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
 
 # manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
 # （scripts/build_plugins.sh 按 1.0.0 构建一次并暂存）。

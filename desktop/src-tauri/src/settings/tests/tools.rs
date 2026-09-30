@@ -32,7 +32,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 enabled: Some(false),
                 max_per_request: Some(15),
             }),
-        )
+        None, )
         .unwrap();
     assert!(!store.view().tools.enabled);
     assert_eq!(store.view().tools.max_per_request, 15);
@@ -51,7 +51,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 max_per_request: Some(30),
                 ..Default::default()
             }),
-        )
+        None, )
         .unwrap();
     assert!(!store.view().tools.enabled);
     assert_eq!(store.view().tools.max_per_request, 30);
@@ -68,7 +68,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                     max_per_request: Some(bad),
                     ..Default::default()
                 }),
-            )
+            None, )
             .is_err());
     }
     assert_eq!(store.view().tools.max_per_request, 30);

@@ -121,15 +121,9 @@ fn select(
             (s, score)
         })
         .collect();
-    scored.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut kept: Vec<ToolSpec> = always_specs
-        .iter()
-        .map(|s| (*s).clone())
-        .collect();
+    let mut kept: Vec<ToolSpec> = always_specs.iter().map(|s| (*s).clone()).collect();
     let always: Vec<String> = kept.iter().map(|s| s.name.clone()).collect();
     let mut session_hot = Vec::new();
     let mut global_hot = Vec::new();

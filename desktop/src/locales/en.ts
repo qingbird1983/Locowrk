@@ -196,6 +196,14 @@ export default {
     memoryEnabled: "Inject memories automatically",
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
+    // S1 shell governance section
+    shellTitle: "Shell",
+    shellHint:
+      "Read-only commands (ls / cat / grep / git status|log|diff|show) run via shell_read without approval, and only inside allowed file roots; other whitelisted commands go through the shell tool with per-call approval.",
+    shellUnlock: "Allow rm / sudo / chmod-class high-risk commands to reach approval (refused by default)",
+    shellUnlockWarning:
+      "When enabled, deletion, privilege, permission and disk commands are no longer refused outright — each call opens a confirmation you approve, and the responsibility is yours. Interpreter and network commands (python / bash / curl, ...) stay permanently locked regardless of this switch.",
+    shellRestart: "Takes effect after restarting the app.",
     // ⑫ Tool exposure section (real section, replaces shell placeholder)
     developerTitle: "Developer options",
     developerHint: "Tool exposure truncation (Top-N) settings + last-request exposure breakdown.",

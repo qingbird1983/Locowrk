@@ -1,27 +1,23 @@
-//! 设置存储（DESIGN.md §13.1 设置模块 / §13.5 i18n 持久化）。
-//!
-//! 最小面板四块：LLM 配置（provider/model/base_url/api_key）、会话存储
-//! 位置（只读展示）、语言切换（system/zh-CN/en，缺省跟随系统）、全局
-//! 快捷键（⑤，缺省 Ctrl+Shift+L）；⑨ 上下文管理区；⑪ 记忆注入区；
-//! ⑫ 工具暴露区（Top-N 截断，exposure 文档 §5.3）。
-//! 持久化在数据根 `settings.json`，与 lockfile.json 同目录；文件在
-//! `%USERPROFILE%\.Locowrk`，不属于项目文件，API Key 落盘合规
-//! （AGENTS.md 禁的是写进仓库文件）。
-//!
-//! 纪律：**API Key 只进磁盘，不出 IPC**——前端拿到的投影只有
-//! `api_key_set` 布尔；真适配器（LLM.md 方案一）在后端侧读原值。
+//! 设置存储（DESIGN.md §13.1 / §13.5）。分区：LLM 配置、语言、快捷键、
+//! ⑨ 上下文管理、⑪ 记忆注入、⑫ 工具暴露、S1 shell 治理（高危解锁）。
+//! 持久化在数据根 `settings.json`；API Key 只落盘不出 IPC（投影只有
+//! `api_key_set` 布尔），真适配器在后端侧读原值。
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use kernel_agent::{MemoryInjectConfig, suggested_threshold, CompactConfig, CompactStrategy};
+use kernel_agent::{CompactConfig, MemoryInjectConfig};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_global_shortcut::Shortcut;
 
+mod context;
 mod memory;
+mod shell;
 mod tools;
 
+pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate};
+pub use shell::{ShellSettings, ShellSettingsView, ShellUpdate};
 pub use tools::{ToolsSettings, ToolsSettingsView, ToolsUpdate};
 
 /// locale 取值：`system`（跟随系统，缺省）/ `zh-CN` / `en`（§13.5）。
@@ -76,48 +72,12 @@ pub struct AppSettings {
     pub memory: MemorySettings,
     /// 工具暴露区（⑫，类型见 `tools` 子模块）。
     pub tools: ToolsSettings,
+    /// shell 治理区（S1，类型见 `shell` 子模块）。
+    pub shell: ShellSettings,
 }
 
 fn default_shortcut() -> String {
     SHORTCUT_DEFAULT.into()
-}
-
-/// 上下文管理设置（Context and Memory.md §3 / §6.2）。strategy 与
-/// kernel-agent 的 CompactStrategy 同形（serde snake_case 直接复用）。
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase", default)]
-pub struct ContextSettings {
-    /// 模型上下文窗口（token）。genai 不暴露该元数据 → 用户在设置面板
-    /// 选择；None = 未设置，阈值回落 FALLBACK_WINDOW_TOKENS 保守保护。
-    pub window_tokens: Option<u64>,
-    /// 压缩触发阈值（窗口百分比，10–90）。
-    pub threshold_pct: u32,
-    /// 压缩策略（缺省分层保留）。
-    pub strategy: CompactStrategy,
-}
-
-impl Default for ContextSettings {
-    fn default() -> Self {
-        Self {
-            window_tokens: None,
-            threshold_pct: 30,
-            strategy: CompactStrategy::default(),
-        }
-    }
-}
-
-impl ContextSettings {
-    /// 生效阈值（绝对 token）＝ 窗口 × 百分比 / 100；窗口未知回落
-    /// FALLBACK_WINDOW_TOKENS。压缩判定、进度条、设置面板三处共用一把尺。
-    pub fn effective_threshold(&self) -> u64 {
-        let window = self.window_tokens.unwrap_or(FALLBACK_WINDOW_TOKENS);
-        window * self.threshold_pct as u64 / 100
-    }
-
-    /// 窗口已知时的建议阈值百分比（§3.2.3 动态建议）；未知返回 None。
-    pub fn suggested_pct(&self) -> Option<u32> {
-        self.window_tokens.map(suggested_threshold)
-    }
 }
 
 impl Default for AppSettings {
@@ -129,6 +89,7 @@ impl Default for AppSettings {
             context: ContextSettings::default(),
             memory: MemorySettings::default(),
             tools: ToolsSettings::default(),
+            shell: ShellSettings::default(),
         }
     }
 }
@@ -145,31 +106,10 @@ pub struct SettingsView {
     pub context: ContextSettingsView,
     pub memory: MemorySettingsView,
     pub tools: ToolsSettingsView,
+    pub shell: ShellSettingsView,
 }
 
-/// 上下文管理区投影：设置原值 + 生效值（阈值绝对数、建议百分比）
-/// 一起给出，前端不做第二套换算。
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct ContextSettingsView {
-    pub window_tokens: Option<u64>,
-    pub threshold_pct: u32,
-    pub strategy: CompactStrategy,
-    /// 生效阈值（窗口已知 = 窗口×百分比；未知 = FALLBACK_WINDOW_TOKENS）。
-    pub threshold_tokens: u64,
-    /// 建议阈值百分比（窗口未知 = None，UI 隐藏建议行）。
-    pub suggested_pct: Option<u32>,
-}
-
-/// 上下文管理区部分更新（settings_set 入参）。window_tokens 用双层
-/// Option：null = 清除（回落保守保护），缺省 = 保持不变。
-#[derive(Deserialize, Debug, Default)]
-#[serde(rename_all = "camelCase", default)]
-pub struct ContextUpdate {
-    pub window_tokens: Option<Option<u64>>,
-    pub threshold_pct: Option<u32>,
-    pub strategy: Option<CompactStrategy>,
-}
+/// 上下文管理区部分更新见 `context` 子模块；此文件只保留通用类型。
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -266,6 +206,8 @@ impl SettingsStore {
     }
 
     /// 校验 → 应用到副本 → 落盘成功才提交内存。返回最新投影。
+    // 参数与 settings_set 同形：settings.json 各分区一一对应。
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &self,
         locale: Option<String>,
@@ -274,6 +216,7 @@ impl SettingsStore {
         context: Option<ContextUpdate>,
         memory: Option<MemoryUpdate>,
         tools: Option<ToolsUpdate>,
+        shell: Option<ShellUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
         if let Some(loc) = locale {
@@ -359,6 +302,11 @@ impl SettingsStore {
                 next.tools.max_per_request = n;
             }
         }
+        if let Some(u) = shell {
+            if let Some(e) = u.unlock_risky {
+                next.shell.unlock_risky = e;
+            }
+        }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
         std::fs::write(self.root.join(FILE_NAME), bytes)
             .map_err(|e| format!("settings.json 写入失败: {e}"))?;
@@ -391,6 +339,9 @@ impl SettingsStore {
             tools: ToolsSettingsView {
                 enabled: s.tools.enabled,
                 max_per_request: s.tools.max_per_request,
+            },
+            shell: ShellSettingsView {
+                unlock_risky: s.shell.unlock_risky,
             },
         }
     }

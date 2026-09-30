@@ -168,6 +168,7 @@ export interface SettingsView {
   context: ContextSettingsView;
   memory: MemorySettingsView;
   tools: ToolsSettingsView;
+  shell: ShellSettingsView;
 }
 
 /** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。 */
@@ -192,6 +193,16 @@ export interface ToolsSettingsView {
 export interface ToolsUpdate {
   enabled?: boolean;
   maxPerRequest?: number;
+}
+
+/** shell 治理区投影（S1）：高危命令解锁开关（硬锁类不受影响）。 */
+export interface ShellSettingsView {
+  unlockRisky: boolean;
+}
+
+/** shell 治理区部分更新：字段缺省 = 保持不变；改动重启后生效。 */
+export interface ShellUpdate {
+  unlockRisky?: boolean;
 }
 
 /** 最近一次工具暴露截断快照（tool_exposure_debug；camelCase）。
