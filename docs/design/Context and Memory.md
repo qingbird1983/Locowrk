@@ -1,0 +1,936 @@
+# Locowrk 上下文与记忆管理设计
+
+> 配套项目：Locowrk
+> 版本：1.0
+> 前置文档：《Agent 内核设计》《工具暴露策略与使用统计设计》《Agent 必备插件清单》
+
+---
+
+## 目录
+
+1. [设计目标](#1-设计目标)
+2. [核心概念区分](#2-核心概念区分)
+3. [上下文管理](#3-上下文管理)
+4. [记忆管理](#4-记忆管理)
+5. [协同工作流](#5-协同工作流)
+6. [数据模型](#6-数据模型)
+7. [后端 API](#7-后端-api)
+8. [i18n 处理](#8-i18n-处理)
+9. [落地路径](#9-落地路径)
+10. [常见坑](#10-常见坑)
+11. [设计哲学](#11-设计哲学)
+
+---
+
+## 1. 设计目标
+
+| 目标 | 含义 |
+|---|---|
+| **不崩** | 长对话不因 token 超限而失败 |
+| **不贵** | 控制 Token 消耗，避免二次方级成本爆炸 |
+| **不失忆** | 跨会话能记住用户偏好和项目上下文 |
+| **用户可控** | 阈值可调、策略可选、压缩可撤销 |
+| **透明** | 用户随时知道当前上下文占用和压缩历史 |
+| **可降级** | embedding 模型未就绪时，降级到关键词检索 |
+
+### 非目标
+
+- 不做跨设备记忆同步（第一版）
+- 不做记忆的自动学习（隐式提取放最后）
+- 不做记忆的可视化编辑（只做查看和删除）
+- 不做上下文的多级分层缓存（第一版用扁平结构）
+
+---
+
+## 2. 核心概念区分
+
+**上下文管理和记忆管理是两件事，不是一件事的两个名字。**
+
+| | 上下文管理 | 记忆管理 |
+|---|---|---|
+| **时间尺度** | 当前这一轮请求 | 跨会话、跨天、跨月 |
+| **处理对象** | 当前 Session 的消息历史 | 长期存储的知识和经历 |
+| **核心问题** | "窗口装不下了怎么办" | "下次怎么想起来" |
+| **典型动作** | 压缩、裁剪、摘要 | 存储、检索、注入 |
+| **生命周期** | 会话内 | 永久 |
+| **形态** | 中间件（`ctx-compact`） | 插件（`memory-*`） |
+| **不做的后果** | 长对话直接崩 | Agent 每次都是失忆症 |
+| **优先级** | **P0（立刻做）** | P1（下一步） |
+
+**一句话：上下文管理是"给 LLM 看的这一屏"，记忆管理是"放在书架上的那本书"。**
+
+---
+
+## 3. 上下文管理
+
+### 3.1 为什么需要
+
+#### 3.1.1 二次方级成本
+
+Agent 每一轮请求都要把完整历史重新发一遍。
+
+假设每轮平均产生 1000 token：
+
+| 轮次 | 本轮新增 | 发送给 LLM 的累计 | 累计总消耗 |
+|---|---|---|---|
+| 1 | 1,000 | 1,000 | 1,000 |
+| 5 | 1,000 | 5,000 | 15,000 |
+| 10 | 1,000 | 10,000 | 55,000 |
+| 20 | 1,000 | 20,000 | 210,000 |
+| 50 | 1,000 | 50,000 | 1,275,000 |
+| 100 | 1,000 | 100,000 | 5,050,000 |
+
+**N 轮对话的总消耗是 O(N²)。** 这就是用户体感上"指数级消耗"的原因。
+
+#### 3.1.2 窗口限制
+
+Ollama 上的 7B 模型窗口是 8k token。聊 5 轮工具调用，加上工具 schema，就爆了。爆了之后要么报错，要么被截断，模型开始胡言乱语。
+
+#### 3.1.3 结论
+
+**上下文管理不做，长对话直接不可用。** 这是 P0，不是 P1。
+
+### 3.2 触发阈值
+
+#### 3.2.1 可配置滑条
+
+**档位：10% - 90%，10% 一级。**
+
+```
+┌──────────────────────────────────────────────┐
+│  上下文压缩阈值                                │
+│                                              │
+│  10%  20%  30%  40%  50%  60%  70%  80%  90% │
+│   ●────●────●────●────●────●────●────●────●   │
+│                    ▲                         │
+│                    │                         │
+│                  当前: 40%                    │
+│                                              │
+│  当前模型: deepseek-flash (128k 窗口)         │
+│  触发压缩: 51,200 token                       │
+│                                              │
+│  ⓘ 建议值: 25-35%                             │
+└──────────────────────────────────────────────┘
+```
+
+#### 3.2.2 必须同时显示百分比和绝对 token 数
+
+**百分比是给用户判断的，绝对 token 数是给用户感知的。**
+
+同样 40%，在不同窗口下含义完全不同：
+
+| 模型窗口 | 40% 对应的 token |
+|---|---|
+| Ollama 7B (8k) | 3,200 |
+| GPT-4o (128k) | 51,200 |
+| Claude (200k) | 80,000 |
+| Gemini (1M) | 400,000 |
+
+UI 上必须两行都显示，不然用户会误判。
+
+#### 3.2.3 动态建议值
+
+**窗口越大，建议值越低。** 因为绝对 token 数是二次方增长的。
+
+```rust
+fn suggested_threshold(window_size: u64) -> u32 {
+    match window_size {
+        0..=16_000       => 30,   // 本地小模型
+        16_001..=64_000  => 35,   // 中等窗口
+        64_001..=256_000 => 25,   // 大窗口
+        _                => 15,   // 1M 及以上
+    }
+}
+```
+
+| 场景 | 建议阈值 | 理由 |
+|---|---|---|
+| **本地小模型**（Ollama 7B/8B） | 30% | 窗口本来就小，压缩要早 |
+| **中等窗口**（32k-128k） | 35% | 平衡成本和体验 |
+| **大窗口**（200k+） | 25% | 绝对值太大，压缩要早 |
+| **1M 窗口** | 15% | 20% 时二次方成本已经显著 |
+| **省钱优先** | 15% | 频繁压缩，成本最低 |
+| **质量优先** | 60% | 尽量保留上下文 |
+
+**UI 上的"建议值"应该动态计算，而不是写死。**
+
+#### 3.2.4 下限警告
+
+**阈值不能设得太低。**
+
+每次压缩调 LLM 做摘要，本身也要发一遍当前上下文。如果每 2 轮就压一次，压缩成本会超过节省的成本。
+
+```
+压缩成本 = 发送当前上下文 + 接收摘要
+```
+
+**建议下限：20%。** 再低就得给用户警告：
+
+> ⚠️ 更低的阈值可能导致压缩开销超过节省的成本。
+
+### 3.3 压缩策略
+
+三种策略，用户可选：
+
+| 策略 | 行为 | 信息损失 | 成本 |
+|---|---|---|---|
+| **滑动窗口** | 保留最近 N 轮，丢掉更早的 | 高 | 低（不调 LLM） |
+| **分层保留**（默认） | 系统提示 + 摘要 + 最近 3-5 轮原文 | 低 | 中 |
+| **仅摘要** | 全部压缩成一段摘要 | 中 | 高（要调 LLM） |
+
+#### 3.3.1 滑动窗口
+
+最简单、最快、最省。纯本地裁剪，不调 LLM。
+
+```
+[System Prompt]          ← 保留
+[最近 N 轮原文]           ← 保留
+[本轮用户消息]            ← 保留
+[更早的所有历史]           ← 丢弃
+```
+
+**适用**：本地小模型用户、成本极度敏感、对上下文连续性要求不高。
+
+#### 3.3.2 分层保留（推荐默认）
+
+```
+[System Prompt]          ← 永远完整
+[早期对话摘要]            ← 用 LLM 压缩成一段话
+[最近 3-5 轮原文]         ← 完整保留
+[本轮用户消息]            ← 完整保留
+```
+
+**适用**：绝大多数场景。它是最平衡的。
+
+#### 3.3.3 仅摘要
+
+```
+[System Prompt]
+[全部历史压缩成一段摘要]
+[本轮用户消息]
+```
+
+**适用**：极端长对话、需要保持全局连贯性、不在乎压缩成本。
+
+### 3.4 压缩目标
+
+**不是压到阈值以下，是压到阈值的 50%。**
+
+```rust
+let threshold = window_size * user_threshold_pct / 100;
+let target = threshold / 2;   // 压到一半
+```
+
+**理由**：如果只压到刚好低于阈值，下一轮马上又超了，压缩会变得非常频繁，每次都要调 LLM 做摘要，反而更贵。
+
+**示例**：阈值 40%（51,200 token），触发时压到 25,600 token。给下一轮留足够的缓冲。
+
+### 3.5 执行位置
+
+挂在 `agent/request` waterfall 上。
+
+```rust
+pub struct ContextCompactMiddleware {
+    settings: Arc<SettingsStore>,
+}
+
+#[async_trait]
+impl WaterfallPlugin for ContextCompactMiddleware {
+    async fn on_request(
+        &self,
+        ctx: &Context,
+        req: &mut LlmRequest,
+    ) -> WaterfallDecision {
+        let window_size = ctx.model().window_size().await;
+        let threshold_pct = self.settings.context_threshold();
+        let threshold = window_size * threshold_pct / 100;
+
+        let current = estimate_tokens(&req.messages);
+        if current > threshold {
+            let target = threshold / 2;
+            let strategy = self.settings.compact_strategy();
+            match compact(&mut req.messages, target, strategy).await {
+                Ok(result) => {
+                    ctx.emit("context/compacted", result).await;
+                }
+                Err(e) => {
+                    tracing::warn!("compact failed: {}", e);
+                    // 降级到滑动窗口
+                    fallback_sliding_window(&mut req.messages, target);
+                }
+            }
+        }
+
+        WaterfallDecision::Continue
+    }
+}
+```
+
+### 3.6 中间件顺序
+
+```
+Tracing → ToolExposure → Memory-Inject → ctx-compact → Timeout → LLM
+```
+
+**顺序很重要：**
+
+1. **`ToolExposure`** 先跑——先决定暴露哪些工具，压缩才知道要保留多少空间
+2. **`Memory-Inject`** 次跑——把相关记忆塞进上下文
+3. **`ctx-compact`** 后跑——检查总 token，超了就压
+
+**反过来不行。** 如果先压缩，记忆还没注入，压缩了也没用。
+
+### 3.7 事件记录与撤销
+
+压缩动作写入 `SessionEvent`：
+
+```rust
+SessionEvent::ContextCompacted {
+    from_tokens: u64,
+    to_tokens: u64,
+    strategy: CompactStrategy,
+    summary_preview: String,     // 摘要的前 200 字符
+    ts: i64,
+}
+```
+
+**用户能"回退到压缩前"**——Event Sourcing 的又一次应用。
+
+```rust
+session.rewind_to(compacted_event_seq - 1);
+```
+
+### 3.8 UI 呈现
+
+#### 3.8.1 设置面板
+
+```
+┌─────────────────────────────────────────────┐
+│  上下文管理                                  │
+│                                             │
+│  压缩阈值                                    │
+│  10%  20%  30%  40%  50%  60%  70%  80%  90%│
+│   ○────○────●────○────○────○────○────○────○  │
+│                                             │
+│  当前: 30% · 38,400 token                    │
+│  窗口: 128,000 token                         │
+│                                             │
+│  ⓘ 建议 30-40%                              │
+│     窗口越大，建议值越低                      │
+│                                             │
+│  ─────────────────────────────────────────   │
+│                                             │
+│  压缩策略                                    │
+│  ○ 滑动窗口（只保留最近 N 轮）               │
+│  ● 分层保留（系统提示 + 摘要 + 最近原文）      │
+│  ○ 仅摘要（全部压缩）                        │
+│                                             │
+│  ─────────────────────────────────────────   │
+│                                             │
+│  ☑ 压缩时通知我                              │
+│  ☐ 压缩前先问我                              │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+#### 3.8.2 会话内实时指示
+
+在对话界面顶部或底部，显示进度条：
+
+```
+上下文: ████████░░░░░░░░░░  40%  (51,200 / 128,000)
+                                  ↑ 接近压缩阈值
+```
+
+**颜色分级：**
+- 绿色（< 60% 阈值）
+- 黄色（60-99% 阈值）
+- 红色（≥ 阈值，即将触发）
+
+#### 3.8.3 压缩事件提示
+
+触发压缩时，在会话里插入一条系统消息：
+
+```
+📦 已压缩早期对话，节省 26,000 token
+   [查看详情] [撤销]
+```
+
+"查看详情"展示摘要内容，"撤销"回到压缩前状态。
+
+---
+
+## 4. 记忆管理
+
+### 4.1 两种记忆
+
+| 类型 | 存什么 | 检索方式 | 插件 |
+|---|---|---|---|
+| **事实记忆** | 用户偏好、项目结构、常用路径 | 按 key 精确查 / 按标签查 | `memory-sqlite` |
+| **经历记忆** | 聊过的话题、做过的决策 | 语义相似度检索 | `memory-vector` |
+
+**第一版只做 `memory-sqlite` 就够。** 向量检索是第二版。
+
+### 4.2 事实记忆（memory-sqlite）
+
+#### 4.2.1 数据结构
+
+```sql
+CREATE TABLE memories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    key         TEXT NOT NULL,          -- 如 "user.language_preference"
+    value       TEXT NOT NULL,          -- 如 "Rust"
+    tags        TEXT,                   -- JSON 数组，如 ["preference", "language"]
+    source      TEXT NOT NULL,          -- "explicit" | "extracted"
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL,
+    access_count INTEGER NOT NULL DEFAULT 0,
+    last_accessed_at INTEGER
+);
+
+CREATE INDEX idx_memories_key ON memories(key);
+CREATE INDEX idx_memories_tags ON memories(tags);
+```
+
+#### 4.2.2 写入时机
+
+**第一版只做显式写入。**
+
+用户说"记住：我偏好用 `thiserror` 而不是 `anyhow`"，Agent 调用 `memory_write` 工具：
+
+```json
+{
+  "name": "memory_write",
+  "description": "把一条事实写入长期记忆",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "key": { "type": "string", "description": "唯一标识，如 user.preference.error_lib" },
+      "value": { "type": "string", "description": "要记住的内容" },
+      "tags": { "type": "array", "items": { "type": "string" } }
+    },
+    "required": ["key", "value"]
+  },
+  "side_effect": "Pure",
+  "exposure": "always"
+}
+```
+
+**隐式提取放最后做。** 它容易记一堆没用的东西，反而污染上下文。
+
+#### 4.2.3 检索与注入
+
+在 `agent/request` 里，根据最近用户消息提取 key/tag 候选，查询匹配的记忆。
+
+**第一版用最简单的策略：按 `access_count` + `last_accessed_at` 排序，取 top-5。**
+
+```rust
+async fn inject_memories(
+    db: &SqlitePool,
+    messages: &[Message],
+) -> Vec<Memory> {
+    // 从最近用户消息里提取关键词
+    let query = extract_keywords(messages);
+
+    sqlx::query_as::<_, Memory>(
+        "SELECT * FROM memories
+         WHERE key LIKE ?1 OR tags LIKE ?1
+         ORDER BY access_count DESC, last_accessed_at DESC
+         LIMIT 5"
+    )
+    .bind(format!("%{}%", query))
+    .fetch_all(db).await.unwrap_or_default()
+}
+```
+
+### 4.3 经历记忆（memory-vector）
+
+**第二版再做。**
+
+#### 4.3.1 数据结构
+
+```sql
+CREATE TABLE experiences (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    content     TEXT NOT NULL,          -- 一段经历描述
+    embedding   BLOB NOT NULL,          -- f32 数组的二进制
+    session_id  TEXT NOT NULL,
+    created_at  INTEGER NOT NULL
+);
+```
+
+#### 4.3.2 检索
+
+```rust
+async fn recall_experiences(
+    index: &ExperienceIndex,
+    query: &str,
+    top_k: usize,
+) -> Vec<Experience> {
+    let q_emb = index.model.encode(query).await;
+    index.search(&q_emb, top_k).await
+}
+```
+
+**降级策略**：embedding 模型未加载时，退回到关键词匹配（BM25）。
+
+### 4.4 记忆工具集
+
+给 LLM 暴露三个工具：
+
+| 工具 | 作用 | exposure |
+|---|---|---|
+| `memory_write` | 写入一条记忆 | `always` |
+| `memory_read` | 按 key 读取 | `always` |
+| `memory_search` | 按关键词/语义检索 | `always` |
+
+**这三个工具应该是 `always`** —— 让模型始终能主动存取记忆。
+
+### 4.5 记忆的可视化与删除
+
+设置面板里加一个"记忆"页：
+
+```
+┌─────────────────────────────────────────────┐
+│  长期记忆                                    │
+│                                             │
+│  🔍 搜索记忆...                              │
+│                                             │
+│  user.preference.error_lib                  │
+│    值: 偏好使用 thiserror 而不是 anyhow       │
+│    标签: preference, rust                    │
+│    来源: 用户显式 · 3 天前                    │
+│    [编辑] [删除]                             │
+│                                             │
+│  project.locowrk.structure                  │
+│    值: 内核在 crates/cordis-core             │
+│    标签: project, structure                  │
+│    来源: 用户显式 · 1 周前                    │
+│    [编辑] [删除]                             │
+│                                             │
+│  [清空全部记忆]                              │
+└─────────────────────────────────────────────┘
+```
+
+**用户必须能看到并删除每一条记忆。** 这既是隐私要求，也是信任基础。
+
+---
+
+## 5. 协同工作流
+
+### 5.1 完整流程图
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  agent/request waterfall                                 │
+│                                                         │
+│  ① ToolExposure                                         │
+│     决定本轮暴露哪些工具                                  │
+│                       ↓                                 │
+│  ② Memory-Inject                                        │
+│     从 memory-sqlite / memory-vector 检索相关记忆         │
+│     注入到 system prompt 或消息开头                       │
+│                       ↓                                 │
+│  ③ ctx-compact                                          │
+│     估算 token，超阈值则压缩                              │
+│                       ↓                                 │
+│  ④ 发给 LLM                                             │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│  agent/post-step（对话结束后，异步）                      │
+│                                                         │
+│  ⑤ Memory-Extract（可选，后期）                          │
+│     从本轮对话提取"值得记住的事实"                        │
+│     写入 memory-sqlite                                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 5.2 顺序的理由
+
+**为什么 Memory-Inject 在 ctx-compact 之前？**
+
+因为记忆是"原料"，上下文管理是"分配预算"。原料要先放进来，才知道总量是多少，才能决定怎么压。
+
+**为什么 ToolExposure 最先？**
+
+因为工具 schema 占用的 token 也要计入总量。先确定工具集，再算总 token，才知道要压多少。
+
+### 5.3 冲突处理
+
+**情况 1：记忆太多，压缩又压不掉**
+
+说明记忆检索太宽泛。收窄检索条件（top-3 而不是 top-5），或者按 `access_count` 优先。
+
+**情况 2：压缩把记忆也压掉了**
+
+不应该。`ctx-compact` 必须**保留 `Memory-Inject` 注入的记忆内容**，只压缩历史消息。
+
+**实现**：注入的记忆放在系统提示里，系统提示永远不被压缩。
+
+**情况 3：用户刚写了一条记忆，下一轮请求没带上**
+
+记忆写入是异步的，可能在下一轮请求时还没落盘。用户会感知到"我说了记住，它却没记住"。
+
+**解决**：`memory_write` 工具本身是 `Pure` 的，执行完立即同步写 DB（不走异步队列）。下一轮请求必然读到。
+
+---
+
+## 6. 数据模型
+
+### 6.1 SQLite 表汇总
+
+```sql
+-- 事实记忆
+CREATE TABLE memories (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    key               TEXT NOT NULL,
+    value             TEXT NOT NULL,
+    tags              TEXT,
+    source            TEXT NOT NULL,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL,
+    access_count      INTEGER NOT NULL DEFAULT 0,
+    last_accessed_at  INTEGER
+);
+
+-- 经历记忆（第二版）
+CREATE TABLE experiences (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    content     TEXT NOT NULL,
+    embedding   BLOB NOT NULL,
+    session_id  TEXT NOT NULL,
+    created_at  INTEGER NOT NULL
+);
+
+-- 压缩历史
+CREATE TABLE compaction_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      TEXT NOT NULL,
+    from_tokens     INTEGER NOT NULL,
+    to_tokens       INTEGER NOT NULL,
+    strategy        TEXT NOT NULL,
+    summary_preview TEXT,
+    ts              INTEGER NOT NULL
+);
+
+CREATE INDEX idx_compaction_session ON compaction_history(session_id);
+```
+
+### 6.2 设置项
+
+```rust
+pub struct ContextSettings {
+    pub threshold_pct: u32,           // 10-90，默认 30
+    pub strategy: CompactStrategy,    // 默认 Layered
+    pub notify_on_compact: bool,      // 默认 true
+    pub ask_before_compact: bool,     // 默认 false
+}
+
+pub struct MemorySettings {
+    pub enabled: bool,                // 默认 true
+    pub max_inject_count: usize,      // 默认 5
+    pub auto_extract: bool,           // 默认 false
+}
+```
+
+---
+
+## 7. 后端 API
+
+### 7.1 上下文相关
+
+```rust
+/// 获取当前会话的上下文占用
+#[tauri::command]
+async fn context_usage(session_id: String) -> Result<ContextUsage, String>;
+
+#[derive(Serialize)]
+pub struct ContextUsage {
+    pub current_tokens: u64,
+    pub window_size: u64,
+    pub threshold_tokens: u64,
+    pub threshold_pct: u32,
+    pub percent: f32,
+    pub strategy: CompactStrategy,
+}
+
+/// 获取压缩历史
+#[tauri::command]
+async fn context_compaction_history(
+    session_id: String,
+) -> Result<Vec<CompactionRecord>, String>;
+
+/// 手动触发压缩
+#[tauri::command]
+async fn context_compact_now(session_id: String) -> Result<CompactResult, String>;
+
+/// 撤销最后一次压缩
+#[tauri::command]
+async fn context_undo_compact(session_id: String) -> Result<(), String>;
+```
+
+### 7.2 记忆相关
+
+```rust
+/// 列出记忆
+#[tauri::command]
+async fn memory_list(
+    query: Option<String>,
+    limit: u32,
+) -> Result<Vec<Memory>, String>;
+
+/// 删除记忆
+#[tauri::command]
+async fn memory_delete(id: i64) -> Result<(), String>;
+
+/// 编辑记忆
+#[tauri::command]
+async fn memory_update(id: i64, value: String) -> Result<(), String>;
+
+/// 清空记忆
+#[tauri::command]
+async fn memory_clear_all() -> Result<u32, String>;
+```
+
+### 7.3 设置相关
+
+```rust
+#[tauri::command]
+async fn settings_get_context() -> Result<ContextSettings, String>;
+
+#[tauri::command]
+async fn settings_set_context(settings: ContextSettings) -> Result<(), String>;
+
+#[tauri::command]
+async fn settings_get_memory() -> Result<MemorySettings, String>;
+
+#[tauri::command]
+async fn settings_set_memory(settings: MemorySettings) -> Result<(), String>;
+```
+
+---
+
+## 8. i18n 处理
+
+### 8.1 后端只返回结构化数据
+
+```rust
+pub enum CompactStrategy {
+    SlidingWindow,
+    Layered,
+    SummaryOnly,
+}
+```
+
+**不返回中文文案。** 让前端根据当前 locale 渲染。
+
+### 8.2 前端渲染
+
+```typescript
+// desktop/src/lib/compact-text.ts
+export function renderStrategy(
+  s: CompactStrategy,
+  t: (k: string) => string,
+): string {
+  return t(`compact.strategy.${s.toLowerCase()}`);
+}
+
+export function renderCompactionNotice(
+  from: number,
+  to: number,
+  t: (k: string, p?: any) => string,
+): string {
+  return t('compact.notice', {
+    saved: (from - to).toLocaleString(),
+  });
+}
+```
+
+### 8.3 翻译文件
+
+`locales/zh-CN.json`：
+
+```json
+{
+  "compact": {
+    "title": "上下文管理",
+    "threshold": "压缩阈值",
+    "current": "当前: {pct}% · {tokens} token",
+    "window": "窗口: {tokens} token",
+    "suggest": "建议 {min}-{max}%",
+    "suggest_hint": "窗口越大，建议值越低",
+    "low_warning": "更低的阈值可能导致压缩开销超过节省的成本",
+    "strategy": {
+      "slidingwindow": "滑动窗口（只保留最近 N 轮）",
+      "layered": "分层保留（系统提示 + 摘要 + 最近原文）",
+      "summaryonly": "仅摘要（全部压缩）"
+    },
+    "notice": "已压缩早期对话，节省 {saved} token",
+    "view_detail": "查看详情",
+    "undo": "撤销"
+  },
+  "memory": {
+    "title": "长期记忆",
+    "search": "搜索记忆...",
+    "source": {
+      "explicit": "用户显式",
+      "extracted": "自动提取"
+    },
+    "empty": "还没有记忆",
+    "clear_all": "清空全部记忆"
+  }
+}
+```
+
+`locales/en-US.json`：
+
+```json
+{
+  "compact": {
+    "title": "Context Management",
+    "threshold": "Compaction Threshold",
+    "current": "Current: {pct}% · {tokens} tokens",
+    "window": "Window: {tokens} tokens",
+    "suggest": "Suggested {min}-{max}%",
+    "suggest_hint": "Larger windows suggest lower thresholds",
+    "low_warning": "Lower thresholds may cost more than they save",
+    "strategy": {
+      "slidingwindow": "Sliding window (keep last N turns)",
+      "layered": "Layered (system + summary + recent)",
+      "summaryonly": "Summary only (compress all)"
+    },
+    "notice": "Compacted early messages, saved {saved} tokens",
+    "view_detail": "View details",
+    "undo": "Undo"
+  },
+  "memory": {
+    "title": "Long-term Memory",
+    "search": "Search memories...",
+    "source": {
+      "explicit": "Explicit",
+      "extracted": "Auto-extracted"
+    },
+    "empty": "No memories yet",
+    "clear_all": "Clear all memories"
+  }
+}
+```
+
+---
+
+## 9. 落地路径
+
+### 9.1 阶段划分
+
+| 阶段 | 内容 | 复杂度 | 优先级 |
+|---|---|---|---|
+| 1 | 设置面板加阈值滑条 + token 数显示 | ★ | **立刻** |
+| 2 | `ctx-compact` 中间件（滑动窗口） | ★ | **立刻** |
+| 3 | 会话内实时进度条 | ★ | **立刻** |
+| 4 | 动态建议值（根据窗口大小） | ★ | 高 |
+| 5 | 分层保留策略 + LLM 摘要 | ★★ | 高 |
+| 6 | 压缩事件写入 SessionEvent + 撤销 | ★★ | 高 |
+| 7 | `memory-sqlite` + `memory_write` 工具 | ★★ | 中 |
+| 8 | `Memory-Inject` 中间件 | ★ | 中 |
+| 9 | 记忆管理 UI（列表 + 删除） | ★ | 中 |
+| 10 | `memory-vector` 语义检索 | ★★★ | 低 |
+| 11 | 隐式提取（对话结束后自动） | ★★ | 低 |
+
+### 9.2 关键节点
+
+**阶段 1-3 一天能做完。** 这是最小可用版本，做完你现在的 Ollama 对话不再崩。
+
+**阶段 1-6 两天能做完。** 此时上下文管理功能完整。
+
+**阶段 7-9 两天能做完。** 此时记忆管理功能完整。
+
+**阶段 10-11 单独排期。** 等真实需求出现再做。
+
+### 9.3 现在该做什么
+
+**做阶段 1-3。** 理由：
+
+1. 你刚接上 Ollama，本地模型窗口小，不压缩聊 3 轮就崩
+2. 这是"不做就不可用"的 P0，不是"做了更好"的 P1
+3. 滑条 + 滑动窗口压缩，是投入产出比最高的一组
+
+做完这 3 步，再回来做记忆管理。
+
+---
+
+## 10. 常见坑
+
+| 坑 | 原因 | 解法 |
+|---|---|---|
+| 压缩后模型失忆 | 摘要丢掉了关键信息 | 分层保留，系统提示永不压缩 |
+| 压缩太频繁 | 阈值设太低 | 下限 20%，加警告 |
+| 压缩本身很贵 | 每次调 LLM 做摘要 | 阈值不能太低，或改用滑动窗口 |
+| 压缩后下一轮又超 | 只压到阈值，没留缓冲 | 压到阈值的 50% |
+| 记忆被压缩掉 | 记忆注入了但压缩没保护 | 记忆放在 system prompt，永不压缩 |
+| 用户看不到压缩发生 | 没有 UI 反馈 | 插入系统消息 + 顶部进度条 |
+| 压缩不可撤销 | 没有事件记录 | `ContextCompacted` 事件 + `rewind_to` |
+| token 估算不准 | 用了错误的 tokenizer | 用与当前模型匹配的 tokenizer |
+| 记忆太多污染上下文 | top-k 太大 | 默认 top-5，可配置 |
+| 用户不知道记了什么 | 没有可视化 | 记忆管理页 + 删除按钮 |
+| embedding 模型加载慢 | 阻塞主循环 | 异步加载，未就绪时降级到关键词 |
+| 跨模型压缩失败 | 摘要模型和主模型不一致 | 用主模型做摘要，或允许配置独立摘要模型 |
+
+---
+
+## 11. 设计哲学
+
+### 11.1 上下文是资源，不是垃圾
+
+**压缩不是"清理垃圾"，是"分配预算"。**
+
+用户的历史消息没有"垃圾"——每一条都曾经有意义。压缩的目的是在**有限的窗口**里，让**最重要的信息**留下来。
+
+所以压缩策略的核心不是"丢什么"，是"**留什么**"。
+
+### 11.2 用户要的是"别崩"，不是"精确控制"
+
+绝大多数用户不需要知道 token 数、不需要知道压缩算法、不需要知道阈值。他们只想"别崩"。
+
+所以：
+- **默认值必须开箱即用**（分层保留 + 30% 阈值）
+- **高级选项必须存在但不打扰**（滑条在设置里，不在主界面）
+- **状态必须可见但不抢戏**（进度条在顶部，不弹窗）
+
+**默认值设计得好，90% 的用户永远不会打开这个设置。**
+
+### 11.3 记忆是"用户的东西"
+
+**用户必须能看到、能编辑、能删除每一条记忆。**
+
+这不是隐私合规要求，是信任基础。一个"偷记东西"的 Agent，会让用户不安。
+
+**做法：**
+- 记忆列表默认可见（不用藏）
+- 每条记忆显示来源（显式/自动）
+- 一键清空（不需要二次确认以外的任何阻力）
+- 记忆写入时，可以在会话里显示一条系统消息："已记住：xxx"
+
+### 11.4 透明优于聪明
+
+**用户看到"已压缩早期对话，节省 26,000 token"，比看到"系统已优化性能"更有信任感。**
+
+具体数字、具体动作、具体结果，永远比模糊的"优化"、"智能处理"更让人放心。
+
+这也和 LoCo 的产品哲学一致：**Low Cost Communication 不只是"省钱"，也是"让用户看得清、算得明"。**
+
+### 11.5 退路永远存在
+
+**任何自动动作都要能撤销。**
+
+- 压缩了 → 能撤销回压缩前
+- 记忆写错了 → 能编辑、能删除
+- 阈值调错了 → 随时能改回来
+
+**Event Sourcing 给了这一切一个统一的实现路径。** 所有状态变化都写入日志，所有日志都能回放。这是 Locowrk 的底层能力，不只是给上下文管理用的。
+
+---
+
+*文档版本：v1.0*
+*配套项目：Locowrk*
+*前置文档：《Agent 内核设计》《工具暴露策略与使用统计设计》《Agent 必备插件清单》*

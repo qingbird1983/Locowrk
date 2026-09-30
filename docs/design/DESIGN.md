@@ -2390,13 +2390,114 @@ export const usePluginStore = defineStore('plugins', {
 > 导入拒绝、内存超限、registry 分发）+ 集成 wasm_plugins.rs 2（staging
 > 布局、native+wasm 混载同 registry 工具目录共存）。
 >
+> **排期重排：壳批次 + ⑨–⑬（v2.17，用户 2026-09-29 确认）**：依两份新配套
+> 文档落地——`docs/design/Tool exposure strategy and usage statistics.md`
+> （工具暴露策略与使用统计 v1.0：§4 exposure 三层 / §5 EWMA / §8 闲置
+> 分级 / §9 UI）与 `docs/design/Context and Memory.md`（上下文与记忆管理
+> v1.0：§3 压缩策略 / §4 记忆管理 / §5 协同工作流）。**排序依据**：Context
+> 文档把上下文管理标 P0"不做就不可用"、记忆 P1，且以工具暴露文档为前置；
+> 中间件链序 ToolExposure → Memory-Inject → ctx-compact（先定工具集、
+> 再注入记忆、再按总量压缩）决定 exposure 字段（⑩）先于 Memory-Inject
+> （⑪）、compact 的 system-prompt 保护（⑨）先于⑪；⑫ 打分依赖⑩统计地基；
+> 两文档末段向量/提取均 ★★★ 且共享 embedding 基建，归⑬看需求。**动因**：
+> 功能越多 UI 越乱的根因是缺落位规则——顶层视图 3→5 在即（+记忆页/
+> 开发者面板），⑩ 是最大 UI 变更波（PluginMarket.vue 291 行必拆），故壳
+> 批次先行。
+>
+> **壳批次（UI 骨架，先于⑨）**：skeleton-first 的"骨架"而非"抛光"——壳
+> 只锁结构与规则，内容留给功能批次。① 导航模型定稿：顶层视图集合与命名
+> （对话/插件/记忆/设置），视图数超过 4 时 header pill nav 切侧边栏，
+> 开发者调试面板挂设置内；② 页面模式库：列表页模式（插件页/记忆页共用
+> ——搜索、筛选 chips、多选批量栏、行内徽章、空态；PluginCard 抽通用
+> 模式）、设置分区模式（settings.json 分区 ↔ 面板分区一一对应：llm /
+> context / memory / shortcut，⑨阈值/⑩自动停用/⑪记忆开关都落此模式）、
+> 会话内系统消息模式（压缩通知[查看详情][撤销] / "已记住：xxx" / 审批
+> 结果统一组件）、徽章体系（SideEffectBadges 并入闲置徽章灰/黄/红，
+> exposure 文档 §9.4 配色）、上下文进度条模式；③ 事件→UI 流向图：
+> `agent://` → store → 组件映射表 + command → 面板映射表，功能批次只
+> 扩表；④ 弹层规则：modal（审批）/ 行内展开 / 独立页面的判据一次定死；
+> ⑤ 视觉只定 design tokens（间距/圆角/色板 CSS 变量），不做全面抛光。
+> Vue 文件同受 400 行纪律（PluginMarket 拆分在本批顺带完成）。
+>
+> **⑨ 上下文管理收口（Context 文档 §9 阶段 1–6，P0）**：现状 = compact.rs
+> 已存在（固定 max_tokens 32k + keep_recent 8，分层保留近似形态），本批
+> 改配置驱动。① 开工先定 LlmService 模型窗口来源（genai 未必暴露 → 设置
+> 面板 context window 字段 + 预设表）——阈值按百分比计算的依赖；② 阈值
+> 滑条接线（收尾 backlog 项）+ 百分比与绝对 token 双显示（§3.2.2：40% 在
+> 8k/128k/1M 窗口含义完全不同）+ 下限 20% 警告（压缩成本 = 发送当前上下文
+> + 接收摘要，太低得不偿失）；③ 压缩策略三档——滑动窗口（纯本地不调
+> LLM）/ 分层保留（默认：系统提示 + 摘要 + 最近 3-5 轮原文）/ 仅摘要；
+> 压缩目标 = 阈值的 50% 而非贴线（§3.4，留缓冲防频繁触发）；④ 动态建议
+> 值 suggested_threshold(window)（§3.2.3：窗口越大建议越低——本地小模型
+> 30% / 中等 35% / 大窗 25% / 1M 15%）；⑤ **ContextCompacted 事件进
+> session-store**（from/to tokens、strategy、summary_preview 前 200 字符；
+> serde default 向后兼容旧日志）+ 撤销 rewind_to（Event Sourcing 惯例：
+> 任何自动动作可撤销）；⑥ 会话内实时进度条（事件推送，绿 <60% 阈值 /
+> 黄 60-99% / 红 ≥阈值）+ 压缩系统消息。
+>
+> **⑩ 暴露声明 + 使用统计地基 + 闲置 UI（exposure 文档 §12 阶段 1–6）**：
+> ① ToolSpec/manifest 加 `exposure` 字段（always / on_demand / hidden，
+> 缺省 on_demand；`always` 总数 >10 加载告警=作者设计失误，§4.1）——
+> manifest JSON 可选字段追加，现有 ToolSpec 宽容解析"未知字段忽略、缺省
+> 取默认"，旧插件零破坏，PLUGIN_ABI_VERSION 不动；② always 直通 +
+> on_demand 全暴露（行为暂时零变化，管线就位，截断归⑫）；③
+> SessionEvent::ToolCall 补 plugin_id（现仅 plugin_version；serde default
+> 兼容旧日志）+ **`<数据根>/usage.sqlite3`**（宿主侧自有，与 memory.sqlite3
+> 分离——统计是宿主对插件的观测，不是插件数据）：tool_usage（含
+> ewma_score）/ plugin_usage 两表，ToolResult 后异步更新，5s 批量刷盘
+> （崩溃最多丢 5s，§3.3）；④ IdleLevel 六级 + IdleInfo 结构化输出
+> （level+value+unit）——后端只返回结构化数据不返回文案，前端按 locale
+> 渲染人类尺度"多久没用"（本周/上个月/3 个多月/半年多，§8.4–8.6）；
+> 试用期 14 天保护；NeverUsed（装了 ≥14 天从未用）与长时间未用严格区分
+> （§8.7）；⑤ plugin_list_with_usage 命令 + 前端闲置渲染 + 筛选器（全部/
+> 运行中/已停用/超 1 月/超 3 月/半年，文案同用"多久"）+ 批量操作（批量
+> 卸载二次确认列出插件名，§9.5）；⑥ 闲置提示只在用户主动打开已安装页时
+> 出现，不弹 toast 不打断聊天（§8.8 提示而非自动；自动停用为默认关闭的
+> 设置项归⑬）。已核对现状：lockfile `set_enabled` 落盘已存在
+> （plugin-service/lockfile.rs），仅核对启动只加载 enabled:true。
+>
+> **⑪ 记忆注入 + 记忆管理 UI（Context 文档 §9 阶段 7–9）**：现状 =
+> memory-sqlite@1.0.0 已存在（memory.get/list/search/put/delete/undo），
+> 工具名与文档 memory_write/read/search 对齐 + `exposure: always` 声明
+> （用⑩字段；记忆工具始终可存取，§4.4）。新增：① Memory-Inject 中间件
+> ——读 memory.sqlite3 按最近用户消息关键词检索，access_count +
+> last_accessed_at 排序 top-5（可配）注入 system prompt；链位
+> Tracing → ToolExposure → Memory-Inject → ctx-compact → Timeout
+> （ToolExposure 截断未落地前链位预留）；**ctx-compact 必须保护 system
+> prompt 永不压缩**（§5.3 冲突 2：压缩压掉记忆是 bug）；② memory.put
+> 同步落盘不走异步队列（§5.3 冲突 3："说了记住却没记住"最伤信任）；
+> ③ 记忆管理页（搜索/列表/编辑/删除/清空；每条显示来源 explicit/
+> extracted 与时间，§4.5——能看到并删除每条记忆是信任基础）。数据根
+> memory.sqlite3 的 UI 访问归属实现时对齐：桌面端 command 直读数据根
+> 文件（不碰 PluginRegistry，不违反 §10 UI 边界），落点补记 DESIGN.md。
+>
+> **⑫ 打分截断 + 元工具（exposure 文档 §12 阶段 7–10）**：① tool_usage
+> EWMA 更新（decay = exp(-days/7)，半衰期约 5 天——纯计数会让三个月前的
+> 旧热工具永远压榜，§5.1）；② Top-N 截断（N=20 可配）+ 暴露调试面板
+> （开发者选项：本轮暴露 N/M、always/session_hot/global_hot/retrieval
+> 分布、节省 token 估算，§6.3/§9.6）；③ 会话内热度（从 SessionEvent 实时
+> 算不落盘，会话结束即失效；组合权重：会话内 1.0 > 全局 EWMA 0.7 >
+> 检索 0.5，always 满分直通，§5.3）；④ search_tools 元工具（always +
+> Pure，LLM 主动拉取兜底；空结果回退 top-10 高频，§4.3/§13）。触发时机：
+> 内置 ~26 工具不截断也够用，接首个大 MCP server（+30）前落地正合适；
+> EWMA 数据自⑩开始积累不浪费。
+>
+> **⑬ 智能层（看需求，两文档末段）**：向量检索（exposure 文档阶段 11，
+> embedding 索引 + 未就绪降级 BM25/关键词）、memory-vector 经历记忆
+> （Context 阶段 10）、隐式提取（Context 阶段 11，agent/post-step 异步
+> 提取"值得记住的事实"——容易记垃圾故放最后）、自动停用设置项（exposure
+> 文档阶段 12，默认关闭）。四者共享 embedding 基建，出现真实需求一起排。
+> 收尾 backlog 不变（fs roots 目录选择器、desktop session 持久化、LLM
+> 流式、市场 wasm 打包分发、kv_get 所有权、profile.toml 面板接线、托盘
+> i18n），随批次搭车。
+>
 > **进度**：① 已完成（§13.1 备注）。② 已完成（v2.8，§7.2 备注）：桌面端
 > `llm/` 模块以 genai 0.6 实现 `LlmService`，`LlmRequest` 携带工具目录快照
 > （`ToolSource::list()`），配置读设置面板、保存即生效，model 未配置回落
 > 脚本替身；真窗口 E2E（本机 Ollama 9B）全链路通过——模型按 schema 自选
 > 参数调用 tool-echo 插件、工具结果回传后给最终回答。③ 已完成（v2.9，
 > §7.1 备注）。④ 已完成（④a–④c v2.11，④d/④e v2.12）、⑤ 已完成
-> （v2.13，上注）、⑥ 已完成（第二批官方内置插件 + 安全底线，v2.14，上注）、⑦ 已完成（第三批官方内置插件 tool-git / memory-sqlite / tool-mcp，v2.15，上注）、⑧ 已完成（WASM 加载器，v2.16，上注）。编号阶段至此全部落地，后续看需求与收尾 backlog。
+> （v2.13，上注）、⑥ 已完成（第二批官方内置插件 + 安全底线，v2.14，上注）、⑦ 已完成（第三批官方内置插件 tool-git / memory-sqlite / tool-mcp，v2.15，上注）、⑧ 已完成（WASM 加载器，v2.16，上注）。编号阶段①–⑧全部落地。后续排期（v2.17，上注）：壳批次（UI 骨架）→ ⑨ 上下文管理收口（P0）→ ⑩ 暴露声明 + 使用统计地基 + 闲置 UI → ⑪ 记忆注入 + 记忆管理 UI → ⑫ EWMA 打分截断 + search_tools 元工具 → ⑬ 智能层（向量/隐式提取/自动停用，看需求）；收尾 backlog 随批次搭车。
 
 **阶段一和阶段二是试金石**：如果内核的服务组合和 Effect 撤销链设计干净，后续所有能力都是叠加。**阶段五和阶段六是桌面端的试金石**：如果 Tauri IPC 层能干净地桥接内核事件流，后续插件管理 UI 都是在这个模式上叠加。
 
@@ -2531,6 +2632,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.16（§14 补记阶段八⑧WASM 加载器落点：PluginLoader trait + WasmLoader（wasmtime 34，.wasm 扩展名分发、manifest 同构、locowrk.log 单导入枚举能力面、Store limiter 64MiB、epoch 时间预算按次重置、宿主 alloc/free 缓冲协议、输出越界拒绝）；instance 拆 mod/native（PluginBackend trait）；desktop find_artifact 认 .wasm；WAT 三态单测 9 + 集成 2；§5.8 落地注记；v2.15 补记阶段八⑦第三批官方内置插件落点：tool-git@1.0.0（porcelain 机读解析 / commit 可撤销 / push 审批 / GIT_* 环境重定向剥离）+ memory-sqlite@1.0.0（固定路径记忆库，写操作按宁严勿松收紧为 Compensable）+ tool-mcp@1.0.0（mcp.json 加载期发现冻结、缺省 Irreversible、懒重连、fail-soft、examples 测试替身）+ tools_batch3 集成测试；v2.14 补记阶段八⑥第二批官方内置插件落点（用户排期重排：⑥=plugins.md 第二批，WASM 顺延⑦）+ 同日安全底线（fsutil 允许根 canonicalize 校验、fetch SSRF 防线、fs.restore 判 Irreversible）：tool-fs@1.1.0 写入三件套（write 备份先行 / delete / restore 来源校验）+ kernel-agent compensation.rs（§6.3 补偿执行器，undo 契约 {"call_id","args","output"}、新 undo call_id、账本幂等）+ tool-shell@1.0.0（白名单+denylist+元字符拒绝+无 shell spawn）+ tool-edit@1.0.0（replace/lines/严格 diff，跨插件 undo）+ ctx-compact（agent/request 摘要压缩，切点对齐 User 起点，fail-open，desktop 已注册）；§14 补记阶段八⑤落点：托盘（左键显窗 / 菜单显示主窗口与退出 / 关窗隐藏进托盘）+ tauri-plugin-global-shortcut 全局快捷键切换主窗口（settings.json `shortcut` 字段级缺省 Ctrl+Shift+L、设置面板改键保存即重注册、启动失败降级告警）+ 数据目录改名 ~/.agent-kernel → ~/.Locowrk（直接改名不迁移，§11.3 与三个 README 同步）；§14 补记阶段八④d/④e 落点：Fallback 矩阵收尾——v1 极简 manifest 投影全 None、坏 manifest 不崩已装列表、展示投影跟随 active 指针回归；`locowrk new plugin` 脚手架——scaffold.rs 四件模板（§8.1 全量 v2 manifest + §8.2 占位图标）+ 名称清洗 + plugin-api 路径探测，tmp/ 实测独立 cargo check 通过，service/tests 拆 tests/{mod,lifecycle,fallback}；v2.11 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.17（v2.17 排期重排（用户 2026-09-29 确认）：两份新配套文档入库——docs/design/Tool exposure strategy and usage statistics.md（工具暴露与使用统计）与 docs/design/Context and Memory.md（上下文与记忆管理）；排为壳批次（UI 骨架：导航模型定稿 / 页面模式库 / 事件→UI 流向图 / 弹层规则 / design tokens，PluginMarket 拆分顺带）+ ⑨ 上下文管理收口 P0（LlmService 窗口来源先行 / compact 配置驱动三档策略 / 压到阈值 50% / ContextCompacted 事件 + rewind 撤销 / 实时进度条）+ ⑩ 暴露声明 + 使用统计地基 + 闲置 UI（ToolSpec exposure 字段零破坏追加 / ToolCall 补 plugin_id / usage.sqlite3 宿主自有 5s 刷盘 / IdleLevel 人类尺度文案 / 筛选批量）+ ⑪ 记忆注入 + 记忆管理 UI（Memory-Inject 注 system prompt 永不压缩 / memory.put 同步落盘 / 记忆管理页）+ ⑫ EWMA 打分截断 + search_tools 元工具 + 调试面板 + ⑬ 智能层（向量/隐式提取/自动停用，看需求）；§14 补记阶段八⑧WASM 加载器落点：PluginLoader trait + WasmLoader（wasmtime 34，.wasm 扩展名分发、manifest 同构、locowrk.log 单导入枚举能力面、Store limiter 64MiB、epoch 时间预算按次重置、宿主 alloc/free 缓冲协议、输出越界拒绝）；instance 拆 mod/native（PluginBackend trait）；desktop find_artifact 认 .wasm；WAT 三态单测 9 + 集成 2；§5.8 落地注记；v2.15 补记阶段八⑦第三批官方内置插件落点：tool-git@1.0.0（porcelain 机读解析 / commit 可撤销 / push 审批 / GIT_* 环境重定向剥离）+ memory-sqlite@1.0.0（固定路径记忆库，写操作按宁严勿松收紧为 Compensable）+ tool-mcp@1.0.0（mcp.json 加载期发现冻结、缺省 Irreversible、懒重连、fail-soft、examples 测试替身）+ tools_batch3 集成测试；v2.14 补记阶段八⑥第二批官方内置插件落点（用户排期重排：⑥=plugins.md 第二批，WASM 顺延⑦）+ 同日安全底线（fsutil 允许根 canonicalize 校验、fetch SSRF 防线、fs.restore 判 Irreversible）：tool-fs@1.1.0 写入三件套（write 备份先行 / delete / restore 来源校验）+ kernel-agent compensation.rs（§6.3 补偿执行器，undo 契约 {"call_id","args","output"}、新 undo call_id、账本幂等）+ tool-shell@1.0.0（白名单+denylist+元字符拒绝+无 shell spawn）+ tool-edit@1.0.0（replace/lines/严格 diff，跨插件 undo）+ ctx-compact（agent/request 摘要压缩，切点对齐 User 起点，fail-open，desktop 已注册）；§14 补记阶段八⑤落点：托盘（左键显窗 / 菜单显示主窗口与退出 / 关窗隐藏进托盘）+ tauri-plugin-global-shortcut 全局快捷键切换主窗口（settings.json `shortcut` 字段级缺省 Ctrl+Shift+L、设置面板改键保存即重注册、启动失败降级告警）+ 数据目录改名 ~/.agent-kernel → ~/.Locowrk（直接改名不迁移，§11.3 与三个 README 同步）；§14 补记阶段八④d/④e 落点：Fallback 矩阵收尾——v1 极简 manifest 投影全 None、坏 manifest 不崩已装列表、展示投影跟随 active 指针回归；`locowrk new plugin` 脚手架——scaffold.rs 四件模板（§8.1 全量 v2 manifest + §8.2 占位图标）+ 名称清洗 + plugin-api 路径探测，tmp/ 实测独立 cargo check 通过，service/tests 拆 tests/{mod,lifecycle,fallback}；v2.11 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
