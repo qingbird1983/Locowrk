@@ -14,7 +14,8 @@ use std::time::Duration;
 use cordis_core::Context;
 use kernel_agent::{
     points, Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel,
-    MemoryInject, MemoryInjectConfig, LlmService, Middleware, Timeout, ToolSource, Tracing,
+    MemoryInject, MemoryInjectConfig, LlmService, Middleware, Timeout, ToolExposure,
+    ToolExposureConfig, ToolSource, Tracing,
 };
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use plugin_service::{LocalDirMarket, PluginService};
@@ -28,9 +29,10 @@ use crate::events::{forward_plugin_states, EventSink, TauriSink};
 use crate::llm::AppLlm;
 use crate::memory::MemoryStore;
 use crate::plugins_root;
+use crate::search_tools::SearchToolsTool;
 use crate::settings::SettingsStore;
 use crate::tool_source::KernelToolSource;
-use crate::usage::{UsageDb, UsageRecorder};
+use crate::usage::{UsageDb, UsageEwma, UsageRecorder};
 
 pub struct AppState {
     /// 阶段八的窗口级命令（对话框、多窗口）从这里取句柄；当前
@@ -58,6 +60,10 @@ pub struct AppState {
     pub memory: Arc<MemoryStore>,
     /// 使用统计写入端（⑩③，usage.sqlite3 宿主自有）。降级模式 = 丢弃。
     pub usage: Arc<UsageRecorder>,
+    /// ToolExposure 的活配置（⑫，同 compact_cfg 的换入模式）。
+    pub exposure_cfg: Arc<RwLock<ToolExposureConfig>>,
+    /// ToolExposure 本体（⑫）：tool_exposure_debug 命令读最近一次截断快照。
+    pub exposure: Arc<ToolExposure>,
 }
 
 pub fn init_state(app: AppHandle) -> AppState {
@@ -65,19 +71,12 @@ pub fn init_state(app: AppHandle) -> AppState {
     let registry = Arc::new(PluginRegistry::new());
     let sink: Arc<dyn EventSink> = Arc::new(TauriSink::new(app.clone()));
 
-    // 工具目录：始终提供（哪怕 registry 为空 → resolve 报 NotAvailable，
-    // 错误以失败的 ToolResult 闭合，而不是服务缺失让整步崩掉，§7.2）。
-    // send_email 是阶段六的内置演示替身（不可逆 → 走审批弹窗）。
-    ctx.provide_dyn::<dyn ToolSource>(Arc::new(
-        KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
-            .with_builtin(Arc::new(SendEmailTool)),
-    ));
-
     // 数据根绑定一次，设置 / 插件编排 / LLM 配置共用（settings.json 同目录）。
     let root = data_dir();
 
     // 使用统计库（⑩③，exposure 文档 §3）：宿主自有 usage.sqlite3，
-    // 5s 批量刷盘。打不开只丢统计，不拦聊天。
+    // 5s 批量刷盘。打不开只丢统计，不拦聊天。⑫ 的 EWMA 积累与
+    // search_tools 高频回退也从这里读。
     let usage = match UsageDb::open(&root.join("usage.sqlite3")) {
         Ok(db) => UsageRecorder::spawn(db),
         Err(e) => {
@@ -85,6 +84,23 @@ pub fn init_state(app: AppHandle) -> AppState {
             UsageRecorder::disabled()
         }
     };
+
+    // 工具目录：始终提供（哪怕 registry 为空 → resolve 报 NotAvailable，
+    // 错误以失败的 ToolResult 闭合，而不是服务缺失让整步崩掉，§7.2）。
+    // 内置：send_email 是阶段六的演示替身（不可逆 → 走审批弹窗）；
+    // search_tools（⑫）持有不含自身的全目录视图做检索（含 hidden，§4.1
+    // 显式检索通路）+ usage 做空结果高频回退。
+    let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
+    let search_catalog = Arc::new(
+        KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
+            .with_builtin(Arc::clone(&send_email)),
+    );
+    ctx.provide_dyn::<dyn ToolSource>(Arc::new(
+        KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
+            .with_builtin(send_email)
+            .with_builtin(SearchToolsTool::new(search_catalog, Arc::clone(&usage))),
+    ));
+
     let settings: Arc<SettingsStore> = Arc::new(match SettingsStore::open(&root) {
         Ok(s) => s,
         Err(e) => {
@@ -102,11 +118,20 @@ pub fn init_state(app: AppHandle) -> AppState {
     // MemoryStore::new 不做 IO（连接按操作开、失败逐次降级），无启动风险。
     let memory = Arc::new(MemoryStore::new(&root));
 
-    // agent/request 决策环（Context 文档 §3.6，注册次序 = 执行次序）：
-    // Memory-Inject 先、ctx-compact 后——记忆是"原料"，压缩按含注入后的
-    // 总量分配预算；ToolExposure（⑫）落地后排在两者之前。两件共享同一
-    // 模式：配置经 RwLock 注入（kernel-agent 不依赖设置存储），settings_set
-    // 成功后由命令层换入即生效。
+    // agent/request 决策环（exposure 文档 §7，注册次序 = 执行次序）：
+    // ToolExposure 先（先定暴露面，压缩才知道留多少空间）、Memory-Inject
+    // 次（Context 文档 §3.6：记忆是"原料"）、ctx-compact 最后（压缩按含
+    // 注入后的总量分配预算）。三件共享同一模式：配置经 RwLock 注入
+    // （kernel-agent 不依赖设置存储），settings_set 成功后由命令层换入
+    // 即生效。
+    let exposure_cfg: Arc<RwLock<ToolExposureConfig>> =
+        Arc::new(RwLock::new(settings.exposure_config()));
+    let exposure = Arc::new(ToolExposure::new(
+        UsageEwma::new(Arc::clone(&usage)),
+        Arc::clone(&exposure_cfg),
+    ));
+    ctx.events.on_waterfall(points::REQUEST, Arc::clone(&exposure) as Arc<_>);
+
     let memory_cfg: Arc<RwLock<MemoryInjectConfig>> =
         Arc::new(RwLock::new(settings.memory_inject_config()));
     ctx.events.on_waterfall(
@@ -187,6 +212,8 @@ pub fn init_state(app: AppHandle) -> AppState {
         memory_cfg,
         memory,
         usage,
+        exposure_cfg,
+        exposure,
     }
 }
 

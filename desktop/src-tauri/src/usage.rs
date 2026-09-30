@@ -30,6 +30,19 @@ pub(crate) struct ToolAgg {
     last_ts: i64,
 }
 
+impl ToolAgg {
+    /// 仅测试：跨模块组装聚合增量（字段私有）。
+    #[cfg(test)]
+    pub(crate) fn of(plugin_id: &str, calls: u64, ts: i64) -> ToolAgg {
+        ToolAgg {
+            plugin_id: Some(plugin_id.into()),
+            calls,
+            ok: calls,
+            last_ts: ts,
+        }
+    }
+}
+
 /// sqlite 存取（同步、短事务；调用方负责不持锁跨 await）。
 pub(crate) struct UsageDb {
     conn: Mutex<Connection>,
@@ -92,14 +105,25 @@ impl UsageDb {
         let mut conn = self.conn.lock().expect("usage db poisoned");
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         for (name, agg) in tools {
+            // ⑫ EWMA 积累：读旧分与旧时刻，衰减后加本窗口调用数。
+            // 新行无旧值 → (0.0, 本窗口时刻)（decay=1，纯加法）。
+            let (old_score, old_last): (f64, i64) = tx
+                .query_row(
+                    "SELECT ewma_score, last_used_at FROM tool_usage WHERE tool_name = ?1",
+                    [name.as_str()],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .unwrap_or((0.0, agg.last_ts));
+            let score = update_ewma(old_score, agg.last_ts, old_last, agg.calls);
             tx.execute(
-                "INSERT INTO tool_usage (tool_name, plugin_id, call_count, success_count, last_used_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5)
+                "INSERT INTO tool_usage (tool_name, plugin_id, call_count, success_count, last_used_at, ewma_score)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT(tool_name) DO UPDATE SET
                      call_count = call_count + excluded.call_count,
                      success_count = success_count + excluded.success_count,
-                     last_used_at = excluded.last_used_at",
-                rusqlite::params![name, agg.plugin_id.as_deref().unwrap_or(""), agg.calls as i64, agg.ok as i64, agg.last_ts],
+                     last_used_at = excluded.last_used_at,
+                     ewma_score = excluded.ewma_score",
+                rusqlite::params![name, agg.plugin_id.as_deref().unwrap_or(""), agg.calls as i64, agg.ok as i64, agg.last_ts, score],
             )
             .map_err(|e| format!("tool_usage upsert {name}: {e}"))?;
         }
@@ -134,6 +158,42 @@ impl UsageDb {
         for row in rows {
             let (id, first, last) = row.map_err(|e| e.to_string())?;
             map.insert(id, (first, last));
+        }
+        Ok(map)
+    }
+
+    /// 调用次数最高的工具（⑫ search_tools 空结果回退 top-10 高频，§13）。
+    pub(crate) fn hot_tools(&self, limit: u32) -> Result<Vec<(String, u64)>, String> {
+        let conn = self.conn.lock().expect("usage db poisoned");
+        let mut stmt = conn
+            .prepare(
+                "SELECT tool_name, call_count FROM tool_usage
+                 ORDER BY call_count DESC, tool_name ASC LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([limit], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64)))
+            .map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(out)
+    }
+
+    /// 全表 EWMA 分（⑫ ToolExposure 打分用）。
+    pub(crate) fn ewma_scores(&self) -> Result<HashMap<String, f64>, String> {
+        let conn = self.conn.lock().expect("usage db poisoned");
+        let mut stmt = conn
+            .prepare("SELECT tool_name, ewma_score FROM tool_usage")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, f64>(1)?)))
+            .map_err(|e| e.to_string())?;
+        let mut map = HashMap::new();
+        for row in rows {
+            let (name, score) = row.map_err(|e| e.to_string())?;
+            map.insert(name, score);
         }
         Ok(map)
     }
@@ -198,6 +258,15 @@ impl UsageRecorder {
         Arc::new(UsageRecorder { tx: None, db: None })
     }
 
+    /// 仅测试：不 spawn 后台任务的直连构造（查询方法可用，写入通道关闭）。
+    #[cfg(test)]
+    pub(crate) fn direct(db: UsageDb) -> Arc<UsageRecorder> {
+        Arc::new(UsageRecorder {
+            tx: None,
+            db: Some(Arc::new(db)),
+        })
+    }
+
     /// ToolResult 后异步更新（exposure 文档 §3.3）：只记名字与结果成败。
     pub fn record(&self, tool: &str, plugin_id: Option<&str>, ok: bool) {
         let Some(tx) = &self.tx else { return };
@@ -221,6 +290,34 @@ impl UsageRecorder {
                 Ok(m) => Some(m),
                 Err(e) => {
                     tracing::warn!("usage query: {e}");
+                    None
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    /// 调用次数 top-N（⑫ search_tools 回退用）；降级模式返回空表。
+    pub fn hot_tools(&self, limit: u32) -> Vec<(String, u64)> {
+        self.db
+            .as_ref()
+            .and_then(|db| match db.hot_tools(limit) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    tracing::warn!("usage hot_tools: {e}");
+                    None
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    /// 全表 EWMA 分（⑫ ToolExposure 打分用）；降级模式返回空表。
+    pub fn ewma_scores(&self) -> HashMap<String, f64> {
+        self.db
+            .as_ref()
+            .and_then(|db| match db.ewma_scores() {
+                Ok(m) => Some(m),
+                Err(e) => {
+                    tracing::warn!("usage ewma: {e}");
                     None
                 }
             })
@@ -276,6 +373,11 @@ pub fn attach(
         })
         .collect()
 }
+
+mod ewma;
+
+pub use ewma::UsageEwma;
+use ewma::update_ewma;
 
 #[cfg(test)]
 mod tests;

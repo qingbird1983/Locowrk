@@ -36,6 +36,7 @@ mod llm;
 mod memory;
 mod plugins_root;
 mod runner;
+mod search_tools;
 mod settings;
 mod state;
 mod tool_source;
@@ -82,7 +83,8 @@ pub fn run() {
             commands::memory_list,
             commands::memory_update,
             commands::memory_delete,
-            commands::memory_clear_all
+            commands::memory_clear_all,
+            commands::tool_exposure_debug
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

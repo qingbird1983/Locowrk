@@ -15,6 +15,8 @@ import type {
   MemoryUpdate,
   PluginStateChange,
   SettingsView,
+  ToolsUpdate,
+  ExposureDebug,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
@@ -141,6 +143,7 @@ export function setSettings(patch: {
   llm?: LlmUpdate;
   context?: ContextUpdate;
   memory?: MemoryUpdate;
+  tools?: ToolsUpdate;
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
@@ -148,6 +151,7 @@ export function setSettings(patch: {
     llm: patch.llm ?? null,
     context: patch.context ?? null,
     memory: patch.memory ?? null,
+    tools: patch.tools ?? null,
   });
 }
 
@@ -171,4 +175,9 @@ export function memoryDelete(key: string): Promise<void> {
 /** 清空全部记忆。返回删除条数。 */
 export function memoryClearAll(): Promise<number> {
   return invoke("memory_clear_all");
+}
+
+/** 最近一次工具暴露截断快照（⑫ 开发者面板；打开分区时拉取）。 */
+export function toolExposureDebug(): Promise<ExposureDebug> {
+  return invoke("tool_exposure_debug");
 }

@@ -167,6 +167,7 @@ export interface SettingsView {
   llm: LlmSettingsView;
   context: ContextSettingsView;
   memory: MemorySettingsView;
+  tools: ToolsSettingsView;
 }
 
 /** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。 */
@@ -179,6 +180,32 @@ export interface MemorySettingsView {
 export interface MemoryUpdate {
   enabled?: boolean;
   topK?: number;
+}
+
+/** 工具暴露区投影（⑫）：结构即设置原值。 */
+export interface ToolsSettingsView {
+  enabled: boolean;
+  maxPerRequest: number;
+}
+
+/** 工具暴露区部分更新：字段缺省 = 保持不变。 */
+export interface ToolsUpdate {
+  enabled?: boolean;
+  maxPerRequest?: number;
+}
+
+/** 最近一次工具暴露截断快照（tool_exposure_debug；camelCase）。
+ * savedTokensEstimate 为 chars/4 粗估，前端按 §3.5 档位渲染。 */
+export interface ExposureDebug {
+  enabled: boolean;
+  total: number;
+  exposed: number;
+  always: string[];
+  sessionHot: string[];
+  globalHot: string[];
+  savedTokensEstimate: number;
+  /** 快照时刻（Unix 秒）；0 = 尚未有过请求。 */
+  ts: number;
 }
 
 /** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。

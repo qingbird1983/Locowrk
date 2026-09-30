@@ -1,0 +1,141 @@
+<script setup lang="ts">
+/**
+ * 设置分区：开发者选项（⑫，settings.json `tools` 区 + 暴露调试面板；
+ * exposure 文档 §6.3/§9.6）。上半是截断设置（开关 + 每请求最大工具数，
+ * 保存即热生效）；下半读最近一次请求的暴露快照——只在打开分区时拉取
+ * （§8.8"用户来找"的信息，不推送不轮询），节省 token 按 §3.5 走
+ * compactNumber 档位，不显示机器精度原始值。
+ */
+import { onMounted, reactive, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { toolExposureDebug } from "../../lib/api";
+import { compactNumber } from "../../lib/format";
+import { useSettingsStore } from "../../stores/settings";
+import type { ExposureDebug } from "../../types";
+
+const { t } = useI18n();
+const settings = useSettingsStore();
+
+const form = reactive({
+  enabled: true,
+  maxPerRequest: 20,
+});
+
+watch(
+  () => settings.view,
+  (v) => {
+    if (!v) return;
+    form.enabled = v.tools.enabled;
+    form.maxPerRequest = v.tools.maxPerRequest;
+  },
+  { immediate: true },
+);
+
+const debug = ref<ExposureDebug | null>(null);
+const loading = ref(false);
+
+async function refresh() {
+  loading.value = true;
+  try {
+    debug.value = await toolExposureDebug();
+  } catch {
+    debug.value = null;
+  } finally {
+    loading.value = false;
+  }
+}
+onMounted(() => void refresh());
+
+function save() {
+  void settings.saveTools({
+    enabled: form.enabled,
+    maxPerRequest: form.maxPerRequest,
+  });
+}
+
+/** 快照有效 = 有过至少一次请求（ts 非 0）。 */
+function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
+  return d !== null && d.ts > 0;
+}
+</script>
+
+<template>
+  <section class="space-y-3 rounded-xl border border-neutral-800 p-4">
+    <h3 class="text-xs font-semibold">{{ t("settings.developerTitle") }}</h3>
+    <p class="text-[11px] text-neutral-500">{{ t("settings.developerHint") }}</p>
+
+    <label class="flex cursor-pointer items-center gap-2 text-xs">
+      <input v-model="form.enabled" type="checkbox" class="accent-emerald-500" />
+      <span>{{ t("settings.toolsEnabled") }}</span>
+    </label>
+
+    <label class="block space-y-1 text-xs">
+      <span class="text-neutral-400">{{ t("settings.toolsMax") }}</span>
+      <input
+        v-model.number="form.maxPerRequest"
+        type="number"
+        min="1"
+        max="200"
+        class="block w-32 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+      />
+      <span class="text-[11px] text-neutral-600">{{ t("settings.toolsMaxHint") }}</span>
+    </label>
+
+    <div class="flex items-center gap-2">
+      <button
+        class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+        :disabled="settings.saving"
+        @click="save"
+      >
+        {{ t("settings.save") }}
+      </button>
+      <span v-if="settings.savedFlash" class="text-xs text-emerald-400">
+        {{ t("settings.saved") }}
+      </span>
+    </div>
+
+    <!-- 暴露调试面板：最近一次请求的暴露分布（只读，手动刷新） -->
+    <div class="space-y-2 border-t border-neutral-800 pt-3">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold text-neutral-300">{{ t("developer.panelTitle") }}</span>
+        <button
+          class="rounded-lg border border-neutral-700 px-2 py-1 text-[11px] text-neutral-400 transition hover:bg-neutral-800"
+          :disabled="loading"
+          @click="refresh"
+        >
+          {{ t("developer.refresh") }}
+        </button>
+      </div>
+
+      <p v-if="!hasSnapshot(debug)" class="text-[11px] text-neutral-500">
+        {{ t("developer.empty") }}
+      </p>
+
+      <template v-else-if="debug">
+        <p v-if="!debug.enabled" class="text-[11px] text-amber-400">
+          {{ t("developer.disabled") }}
+        </p>
+        <p class="text-xs">
+          {{ t("developer.exposed", { exposed: debug.exposed, total: debug.total }) }}
+        </p>
+        <ul class="space-y-1 text-[11px] text-neutral-400">
+          <li v-if="debug.always.length">
+            {{ t("developer.always", { n: debug.always.length }) }}:
+            <span class="text-neutral-300">{{ debug.always.join(", ") }}</span>
+          </li>
+          <li v-if="debug.sessionHot.length">
+            {{ t("developer.sessionHot", { n: debug.sessionHot.length }) }}:
+            <span class="text-neutral-300">{{ debug.sessionHot.join(", ") }}</span>
+          </li>
+          <li v-if="debug.globalHot.length">
+            {{ t("developer.globalHot", { n: debug.globalHot.length }) }}:
+            <span class="text-neutral-300">{{ debug.globalHot.join(", ") }}</span>
+          </li>
+        </ul>
+        <p v-if="debug.savedTokensEstimate > 0" class="text-[11px] text-emerald-400">
+          {{ t("developer.saved", { n: compactNumber(debug.savedTokensEstimate) }) }}
+        </p>
+      </template>
+    </div>
+  </section>
+</template>

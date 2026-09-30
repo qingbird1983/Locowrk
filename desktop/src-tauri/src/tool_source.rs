@@ -57,3 +57,22 @@ impl ToolSource for KernelToolSource {
         specs
     }
 }
+
+impl KernelToolSource {
+    /// 全目录含 hidden（⑫ search_tools 检索索引用，exposure 文档 §4.1
+    /// "hidden 只有显式检索才暴露"）：内置工具 + 注册表全量。停用插件
+    /// 不在 active 实例里，天然不在索引（§8.2）。
+    pub fn list_all(&self) -> Vec<ToolSpec> {
+        let mut specs: Vec<ToolSpec> = self
+            .builtins
+            .iter()
+            .map(|(_, t)| t.spec().clone())
+            .collect();
+        for spec in self.inner.list_all_tools() {
+            if !specs.iter().any(|s| s.name == spec.name) {
+                specs.push(spec);
+            }
+        }
+        specs
+    }
+}

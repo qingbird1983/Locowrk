@@ -68,6 +68,19 @@ export default {
     neverMonths: "装了 {n} 个多月，一次没用过",
     neverHalfYear: "装了半年多，一次没用过",
   },
+  // ⑫ 暴露调试面板（开发者选项只读区；与 settings.developer* 分开——
+  // 面板是"用户来找"的信息，不是设置分区本体）
+  developer: {
+    panelTitle: "最近一次暴露分布",
+    refresh: "刷新",
+    empty: "还没有数据——发起一次对话后回来看。",
+    disabled: "截断未启用，当前全量暴露工具目录。",
+    exposed: "本轮暴露 {exposed} / {total} 个工具",
+    always: "always 直通（{n}）",
+    sessionHot: "会话内用过（{n}）",
+    globalHot: "全局高频（{n}）",
+    saved: "节省上下文：约 {n} token",
+  },
   memory: {
     search: "搜索记忆…",
     empty: "还没有记忆。对话里说「记住…」就会出现在这里。",
@@ -175,8 +188,12 @@ export default {
     memoryEnabled: "自动注入记忆",
     memoryTopK: "每轮注入条数",
     memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
+    // ⑫ 工具暴露区（开发者选项真分区，替换壳批次占位）
     developerTitle: "开发者选项",
-    developerHint: "暴露调试面板（Top-N、分布统计、token 节省估算）将在后续版本提供。",
+    developerHint: "工具暴露截断（Top-N）设置 + 最近一次请求的暴露分布。",
+    toolsEnabled: "按热度截断工具目录（Top-N）",
+    toolsMax: "每请求最大工具数",
+    toolsMaxHint: "1–200，缺省 20；always 工具与 search_tools 元工具不受截断影响。",
     // ⑨ 上下文管理分区（真分区，替换壳批次占位）
     contextTitle: "上下文管理",
     contextHint: "长对话接近窗口上限时自动压缩历史；阈值、策略随时可调，压缩可撤销。",

@@ -5,11 +5,13 @@
 //! 组装次序 Tracing → Timeout → Retry → CircuitBreaker → [Approval] → Tool；
 //! 审批门在 Kernel（§7.2）——决策必须作为 ApprovalDecided 事件进会话日志，
 //! 中间件没有会话句柄（见 `crate::approval`）。
-//! `compact`（ctx-compact，plugins.md 第二批）与 `memory_inject`
-//! （Memory-Inject，Context 文档 §4/§5）都不是洋葱件——它们是
-//! `agent/request` waterfall 监听器，与本套件同住只因同属"中间件类"。
-//! 注册次序（§3.6）：Memory-Inject 在 ctx-compact 之前（记忆是原料、
-//! 压缩是分配预算）；ToolExposure（⑫）落在两者之前。
+//! `compact`（ctx-compact，plugins.md 第二批）、`memory_inject`
+//! （Memory-Inject，Context 文档 §4/§5）与 `tool_exposure`（工具暴露
+//! 截断，exposure 文档 §5/§6）都不是洋葱件——它们是 `agent/request`
+//! waterfall 监听器，与本套件同住只因同属"中间件类"。
+//! 注册次序（exposure 文档 §7 / Context 文档 §3.6）：ToolExposure 最前
+//! （先定暴露面，压缩才知道留多少空间）→ Memory-Inject（记忆是原料）→
+//! ctx-compact（压缩分配预算）。
 
 mod audit;
 mod circuit_breaker;
@@ -17,6 +19,7 @@ mod compact;
 mod memory_inject;
 mod retry;
 mod timeout;
+mod tool_exposure;
 mod trace;
 
 #[cfg(test)]
@@ -31,6 +34,7 @@ pub use compact::{
 pub use memory_inject::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
 pub use retry::Retry;
 pub use timeout::Timeout;
+pub use tool_exposure::{ExposureSnapshot, GlobalEwma, ToolExposure, ToolExposureConfig};
 pub use trace::Tracing;
 
 use std::sync::Arc;

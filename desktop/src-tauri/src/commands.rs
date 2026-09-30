@@ -6,13 +6,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use kernel_agent::CompactConfig;
+use kernel_agent::{CompactConfig, ExposureSnapshot};
 use session_store::SessionEvent;
 
 use crate::events::ApprovalRequestPayload;
 use crate::memory::MemoryRow;
 use crate::runner::{self, UsagePolicy};
-use crate::settings::{ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView};
+use crate::settings::{ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView, ToolsUpdate};
 use crate::state::AppState;
 use crate::usage::{self, PluginUsageView};
 use plugin_service::{InstalledPlugin, MarketplaceItem};
@@ -220,12 +220,15 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
     Ok(state.settings.view())
 }
 
-/// 部分更新设置：locale、快捷键、LLM 字段、上下文管理区（⑨）与记忆
-/// 注入区（⑪）独立可选，缺省字段保持不变；base_url / api_key 传空串 =
-/// 清除；context 的 windowTokens 传 null = 清除窗口（回落保守保护）。
-/// 改键成功后即时重注册全局快捷键；注册失败返回 Err（新键已落盘，换键
-/// 重试即可）。上下文 / 记忆改动成功后换入 ctx-compact / Memory-Inject
-/// 活配置——行为随即生效。
+/// 部分更新设置：locale、快捷键、LLM 字段、上下文管理区（⑨）、记忆
+/// 注入区（⑪）与工具暴露区（⑫）独立可选，缺省字段保持不变；base_url /
+/// api_key 传空串 = 清除；context 的 windowTokens 传 null = 清除窗口
+/// （回落保守保护）。改键成功后即时重注册全局快捷键；注册失败返回 Err
+/// （新键已落盘，换键重试即可）。上下文 / 记忆 / 工具暴露改动成功后换入
+/// ctx-compact / Memory-Inject / ToolExposure 活配置——行为随即生效。
+// 参数 = settings.json 各分区一一对应（§3.2）；Tauri command 的扁平
+// IPC 形状不收拢成结构体。
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn settings_set(
     locale: Option<String>,
@@ -233,12 +236,13 @@ pub async fn settings_set(
     llm: Option<LlmUpdate>,
     context: Option<ContextUpdate>,
     memory: Option<MemoryUpdate>,
+    tools: Option<ToolsUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
     let view = state
         .settings
-        .update(locale.clone(), shortcut.clone(), llm, context, memory)?;
+        .update(locale.clone(), shortcut.clone(), llm, context, memory, tools)?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;
     }
@@ -255,6 +259,11 @@ pub async fn settings_set(
     let mcfg = state.settings.memory_inject_config();
     if let Ok(mut guard) = state.memory_cfg.write() {
         *guard = mcfg;
+    }
+    // ⑫：工具暴露配置热更新（开关/每请求最大工具数换入共享锁）
+    let ecfg = state.settings.exposure_config();
+    if let Ok(mut guard) = state.exposure_cfg.write() {
+        *guard = ecfg;
     }
     Ok(view)
 }
@@ -301,4 +310,14 @@ pub async fn memory_delete(key: String, state: State<'_, AppState>) -> Result<()
 #[tauri::command]
 pub async fn memory_clear_all(state: State<'_, AppState>) -> Result<usize, String> {
     state.memory.clear_all()
+}
+
+// ---- 工具暴露调试命令（⑫，exposure 文档 §6.3/§9.6）：开发者选项读最近
+// 一次截断快照。快照由 ToolExposure 在每个 agent/request 上刷新，前端只在
+// 打开面板时拉一次（§8.8"用户来找"的信息，不推送不轮询）。 ----
+
+/// 最近一次请求的工具暴露快照（总数/暴露数/always/会话热/全局热/节省估算）。
+#[tauri::command]
+pub async fn tool_exposure_debug(state: State<'_, AppState>) -> Result<ExposureSnapshot, String> {
+    Ok(state.exposure.snapshot())
 }

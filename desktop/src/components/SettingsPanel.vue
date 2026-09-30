@@ -2,17 +2,17 @@
 /**
  * 设置面板（壳批次后 = 分区容器，docs/design/UI shell and patterns.md
  * §3.2）：settings.json 分区 ↔ 面板分区一一对应——llm / context（⑨）/
- * shortcut / locale（语言）为既有可写区；sessions 只读展示；memory /
- * developer 为占位（⑪/⑫ 落地）。各分区自管表单与保存动作，本文件
- * 只做纵向堆叠与错误条，不写业务。
+ * memory（⑪）/ tools（⑫ 开发者选项，含暴露调试面板）/ shortcut /
+ * locale（语言）为实装区；sessions 只读展示。各分区自管表单与保存
+ * 动作，本文件只做纵向堆叠与错误条，不写业务。
  */
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../stores/settings";
 import ContextSection from "./settings/ContextSection.vue";
+import DeveloperSection from "./settings/DeveloperSection.vue";
 import LanguageSection from "./settings/LanguageSection.vue";
 import LlmSection from "./settings/LlmSection.vue";
 import MemorySection from "./settings/MemorySection.vue";
-import PlaceholderSection from "./settings/PlaceholderSection.vue";
 import SessionsSection from "./settings/SessionsSection.vue";
 import ShortcutSection from "./settings/ShortcutSection.vue";
 
@@ -43,10 +43,7 @@ const settings = useSettingsStore();
     <LanguageSection />
     <ShortcutSection />
 
-    <!-- ⑫ 开发者分区（暴露调试面板：Top-N / 分布 / token 节省估算）占位 -->
-    <PlaceholderSection
-      title-key="settings.developerTitle"
-      hint-key="settings.developerHint"
-    />
+    <!-- ⑫ 开发者分区：工具暴露截断设置 + 最近一次暴露分布 / token 节省估算 -->
+    <DeveloperSection />
   </div>
 </template>

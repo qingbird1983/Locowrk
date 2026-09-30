@@ -100,10 +100,25 @@ impl RegistryToolSource {
     /// 常规目录（只等 ⑫ 检索激活）；always 直通 + on_demand 全暴露，行为
     /// 与加字段前一致（截断归 ⑫）。always 总数超 10 一次性告警（§4.1）。
     pub fn list_tools(&self) -> Vec<ToolSpec> {
+        self.list_impl(false)
+    }
+
+    /// 全目录含 hidden（exposure 文档 §4.1"hidden 只有显式检索才暴露"）：
+    /// search_tools 元工具的检索索引（⑫）专用——hidden 不进常规目录，但
+    /// LLM 主动检索时要找得到。resolve 本就不过滤，找到即可调。
+    pub fn list_all_tools(&self) -> Vec<ToolSpec> {
+        self.list_impl(true)
+    }
+
+    fn list_impl(&self, include_hidden: bool) -> Vec<ToolSpec> {
         let mut specs = Vec::new();
         let mut always = 0usize;
         for (_id, inst) in self.registry.active_instances() {
-            let (merged, a, invalid) = merge_catalog(specs, inst.manifest().tools.iter().cloned());
+            let (merged, a, invalid) = merge_catalog(
+                specs,
+                inst.manifest().tools.iter().cloned(),
+                include_hidden,
+            );
             specs = merged;
             always += a;
             if !invalid.is_empty() {
@@ -116,7 +131,7 @@ impl RegistryToolSource {
                 );
             }
         }
-        if always > 10 && ALWAYS_BUDGET_WARNED.set(()).is_ok() {
+        if !include_hidden && always > 10 && ALWAYS_BUDGET_WARNED.set(()).is_ok() {
             tracing::warn!(
                 count = always,
                 "always-exposure tools exceed the 10 budget (exposure doc §4.1) — \
@@ -128,11 +143,13 @@ impl RegistryToolSource {
 }
 
 /// 目录合并纯函数（单测友好）：非法名剔除（名单回报给调用方告警）、
-/// hidden 剔除、同名先到先得，返回（合并后的目录，本批 always 计数，
-/// 非法名清单）。`resolve` 不过滤——补偿等内部按名引用仍可达。
+/// hidden 按 `include_hidden` 决定去留、同名先到先得，返回（合并后的
+/// 目录，本批 always 计数，非法名清单）。`resolve` 不过滤——补偿等内部
+/// 按名引用仍可达。
 fn merge_catalog(
     existing: Vec<ToolSpec>,
     incoming: impl Iterator<Item = ToolSpec>,
+    include_hidden: bool,
 ) -> (Vec<ToolSpec>, usize, Vec<String>) {
     let mut specs = existing;
     let mut always = 0usize;
@@ -142,7 +159,7 @@ fn merge_catalog(
             invalid.push(spec.name);
             continue;
         }
-        if matches!(spec.exposure, Exposure::Hidden) {
+        if !include_hidden && matches!(spec.exposure, Exposure::Hidden) {
             continue;
         }
         // always 预算数"实际入目录"的：被同名先声明者顶掉的不计（§4.1）

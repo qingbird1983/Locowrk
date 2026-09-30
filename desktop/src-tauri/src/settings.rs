@@ -2,8 +2,8 @@
 //!
 //! 最小面板四块：LLM 配置（provider/model/base_url/api_key）、会话存储
 //! 位置（只读展示）、语言切换（system/zh-CN/en，缺省跟随系统）、全局
-//! 快捷键（阶段八⑤，切换主窗口，缺省 Ctrl+Shift+L）；⑨ 加上下文管理区
-//! （模型窗口 / 压缩阈值 / 压缩策略，Context and Memory.md §3）。
+//! 快捷键（⑤，缺省 Ctrl+Shift+L）；⑨ 上下文管理区；⑪ 记忆注入区；
+//! ⑫ 工具暴露区（Top-N 截断，exposure 文档 §5.3）。
 //! 持久化在数据根 `settings.json`，与 lockfile.json 同目录；文件在
 //! `%USERPROFILE%\.Locowrk`，不属于项目文件，API Key 落盘合规
 //! （AGENTS.md 禁的是写进仓库文件）。
@@ -19,8 +19,10 @@ use serde::{Deserialize, Serialize};
 use tauri_plugin_global_shortcut::Shortcut;
 
 mod memory;
+mod tools;
 
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate};
+pub use tools::{ToolsSettings, ToolsSettingsView, ToolsUpdate};
 
 /// locale 取值：`system`（跟随系统，缺省）/ `zh-CN` / `en`（§13.5）。
 pub const LOCALE_SYSTEM: &str = "system";
@@ -72,6 +74,8 @@ pub struct AppSettings {
     pub context: ContextSettings,
     /// 记忆注入区（⑪，类型见 `memory` 子模块）。
     pub memory: MemorySettings,
+    /// 工具暴露区（⑫，类型见 `tools` 子模块）。
+    pub tools: ToolsSettings,
 }
 
 fn default_shortcut() -> String {
@@ -124,6 +128,7 @@ impl Default for AppSettings {
             llm: LlmSettings::default(),
             context: ContextSettings::default(),
             memory: MemorySettings::default(),
+            tools: ToolsSettings::default(),
         }
     }
 }
@@ -139,6 +144,7 @@ pub struct SettingsView {
     pub llm: LlmSettingsView,
     pub context: ContextSettingsView,
     pub memory: MemorySettingsView,
+    pub tools: ToolsSettingsView,
 }
 
 /// 上下文管理区投影：设置原值 + 生效值（阈值绝对数、建议百分比）
@@ -267,6 +273,7 @@ impl SettingsStore {
         llm: Option<LlmUpdate>,
         context: Option<ContextUpdate>,
         memory: Option<MemoryUpdate>,
+        tools: Option<ToolsUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
         if let Some(loc) = locale {
@@ -341,6 +348,17 @@ impl SettingsStore {
                 next.memory.top_k = k;
             }
         }
+        if let Some(u) = tools {
+            if let Some(e) = u.enabled {
+                next.tools.enabled = e;
+            }
+            if let Some(n) = u.max_per_request {
+                if !(1..=200).contains(&n) {
+                    return Err(format!("每次请求最大工具数 {n} 超出范围（1–200）"));
+                }
+                next.tools.max_per_request = n;
+            }
+        }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
         std::fs::write(self.root.join(FILE_NAME), bytes)
             .map_err(|e| format!("settings.json 写入失败: {e}"))?;
@@ -369,6 +387,10 @@ impl SettingsStore {
             memory: MemorySettingsView {
                 enabled: s.memory.enabled,
                 top_k: s.memory.top_k,
+            },
+            tools: ToolsSettingsView {
+                enabled: s.tools.enabled,
+                max_per_request: s.tools.max_per_request,
             },
         }
     }

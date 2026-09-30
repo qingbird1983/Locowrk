@@ -3,7 +3,7 @@
 import { defineStore } from "pinia";
 import { getSettings, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
-import type { ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView } from "../types";
+import type { ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView, ToolsUpdate } from "../types";
 
 export const useSettingsStore = defineStore("settings", {
   state: () => ({
@@ -94,6 +94,23 @@ export const useSettingsStore = defineStore("settings", {
       this.savedFlash = false;
       try {
         this.view = await setSettings({ memory });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
+    /** 保存工具暴露区（⑫）：后端校验 + 换入 ToolExposure 活配置，
+     * 保存即生效（下一轮请求按新上限截断）。 */
+    async saveTools(tools: ToolsUpdate) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ tools });
         this.savedFlash = true;
         setTimeout(() => (this.savedFlash = false), 2000);
       } catch (e) {

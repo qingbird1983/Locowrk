@@ -70,6 +70,19 @@ export default {
     neverMonths: "Installed over {n} month(s) ago, never used",
     neverHalfYear: "Installed over half a year ago, never used",
   },
+  // ⑫ Exposure debug panel (read-only part of developer options; separate
+  // from settings.developer* — this is "user comes looking" info)
+  developer: {
+    panelTitle: "Last exposure breakdown",
+    refresh: "Refresh",
+    empty: "No data yet — start a chat and come back.",
+    disabled: "Truncation disabled — the full catalog is currently exposed.",
+    exposed: "Exposed {exposed} / {total} tools this request",
+    always: "always passthrough ({n})",
+    sessionHot: "Used this session ({n})",
+    globalHot: "Globally hot ({n})",
+    saved: "Context saved: ~{n} tokens",
+  },
   memory: {
     search: "Search memories…",
     empty: "No memories yet. Say \"remember …\" in a chat and it will show up here.",
@@ -183,9 +196,13 @@ export default {
     memoryEnabled: "Inject memories automatically",
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
+    // ⑫ Tool exposure section (real section, replaces shell placeholder)
     developerTitle: "Developer options",
-    developerHint:
-      "Exposure debug panel (Top-N, distribution stats, token-savings estimate) arrives in a later version.",
+    developerHint: "Tool exposure truncation (Top-N) settings + last-request exposure breakdown.",
+    toolsEnabled: "Truncate tool catalog by heat (Top-N)",
+    toolsMax: "Max tools per request",
+    toolsMaxHint:
+      "1–200, default 20; always-exposure tools and the search_tools meta-tool are never cut.",
     // ⑨ Context management section (real section, replaces shell placeholder)
     contextTitle: "Context management",
     contextHint:

@@ -37,6 +37,7 @@ fn update_persists_and_roundtrips() {
             }),
             None,
             None,
+            None,
         )
         .unwrap();
     // 重新打开：从磁盘读回，而非内存态
@@ -62,6 +63,7 @@ fn api_key_never_leaks_into_view() {
             }),
             None,
             None,
+            None,
         )
         .unwrap();
     let json = serde_json::to_string(&store.view()).unwrap();
@@ -84,6 +86,7 @@ fn empty_string_clears_none_keeps() {
                     base_url: b.map(Into::into),
                     ..Default::default()
                 }),
+                None,
                 None,
                 None,
             )
@@ -114,10 +117,11 @@ fn rejects_unknown_provider_and_locale() {
             }),
             None,
             None,
+            None,
         )
         .is_err());
     assert!(store
-        .update(Some("fr".into()), None, None, None, None)
+        .update(Some("fr".into()), None, None, None, None, None)
         .is_err());
     // 校验失败不得污染内存态
     assert_eq!(store.view().locale, LOCALE_SYSTEM);
@@ -132,7 +136,7 @@ fn shortcut_default_update_and_validation() {
     assert_eq!(store.view().shortcut, SHORTCUT_DEFAULT);
     // 合法键位更新 + 磁盘往返
     store
-        .update(None, Some("Alt+Space".into()), None, None, None)
+        .update(None, Some("Alt+Space".into()), None, None, None, None)
         .unwrap();
     assert_eq!(store.view().shortcut, "Alt+Space");
     assert_eq!(
@@ -146,10 +150,10 @@ fn shortcut_default_update_and_validation() {
     assert_eq!(v.shortcut, SHORTCUT_DEFAULT);
     // 非法键位 / 空串：拒绝且不污染内存态
     assert!(store
-        .update(None, Some("Not A Key!!".into()), None, None, None)
+        .update(None, Some("Not A Key!!".into()), None, None, None, None)
         .is_err());
     assert!(store
-        .update(None, Some("".into()), None, None, None)
+        .update(None, Some("".into()), None, None, None, None)
         .is_err());
     assert_eq!(store.view().shortcut, "Alt+Space");
     std::fs::remove_dir_all(&root).ok();
@@ -190,6 +194,7 @@ fn context_update_math_and_validation() {
                 strategy: Some(kernel_agent::CompactStrategy::SlidingWindow),
             }),
             None,
+            None,
         )
         .unwrap();
     let v = store.view().context;
@@ -213,6 +218,7 @@ fn context_update_math_and_validation() {
                 ..Default::default()
             }),
             None,
+            None,
         )
         .unwrap();
     assert_eq!(store.view().context.window_tokens, None);
@@ -228,6 +234,7 @@ fn context_update_math_and_validation() {
                 ..Default::default()
             }),
             None,
+            None,
         )
         .is_err());
     assert!(store
@@ -239,6 +246,7 @@ fn context_update_math_and_validation() {
                 window_tokens: Some(Some(50)),
                 ..Default::default()
             }),
+            None,
             None,
         )
         .is_err());
@@ -280,6 +288,7 @@ fn memory_defaults_legacy_compat_and_validation() {
                 enabled: Some(false),
                 top_k: Some(3),
             }),
+            None,
         )
         .unwrap();
     assert!(!store.view().memory.enabled);
@@ -302,6 +311,7 @@ fn memory_defaults_legacy_compat_and_validation() {
                 top_k: Some(8),
                 ..Default::default()
             }),
+            None,
         )
         .unwrap();
     assert!(!store.view().memory.enabled);
@@ -318,9 +328,12 @@ fn memory_defaults_legacy_compat_and_validation() {
                     top_k: Some(bad),
                     ..Default::default()
                 }),
+                None,
             )
             .is_err());
     }
     assert_eq!(store.view().memory.top_k, 8);
     std::fs::remove_dir_all(&root).ok();
 }
+
+mod tools;
