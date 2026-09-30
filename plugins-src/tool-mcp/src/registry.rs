@@ -15,7 +15,7 @@ use crate::protocol::McpConn;
 /// 单个 MCP 工具的本地投影（describe 时冻结）。
 #[derive(Debug, Clone)]
 pub(crate) struct LocalTool {
-    /// 清洗后的名字（`mcp.<server>.<tool>` 的尾段，无点）。
+    /// 清洗后的名字（`mcp_<server>_<tool>` 全名的尾段，非空）。
     pub local: String,
     /// MCP server 侧原始名（tools/call 用）。
     pub remote: String,
@@ -27,7 +27,7 @@ pub(crate) struct LocalTool {
 pub(crate) struct ServerEntry {
     pub cfg: ServerCfg,
     pub conn: Option<McpConn>,
-    /// 最近一次连接 / 握手 / 调用传输错误（mcp.status 可见）。
+    /// 最近一次连接 / 握手 / 调用传输错误（mcp_status 可见）。
     pub error: Option<String>,
     pub tools: Vec<LocalTool>,
 }
@@ -105,7 +105,7 @@ impl Registry {
         Ok(())
     }
 
-    /// mcp.reload：全部断开重连（工具缓存保持加载时冻结的版本）。
+    /// mcp_reload：全部断开重连（工具缓存保持加载时冻结的版本）。
     pub(crate) fn reload(&self) {
         let entries: Vec<Arc<Mutex<ServerEntry>>> =
             self.servers.lock().unwrap().values().cloned().collect();
@@ -119,7 +119,7 @@ impl Registry {
         }
     }
 
-    /// mcp.status：连接态 / 工具数 / 最近错误。
+    /// mcp_status：连接态 / 工具数 / 最近错误。
     pub(crate) fn status(&self) -> Vec<Value> {
         let mut rows = Vec::new();
         let mut names: Vec<String> = self.servers.lock().unwrap().keys().cloned().collect();
@@ -152,7 +152,9 @@ impl Registry {
                     Grade::Irreversible => SideEffect::Irreversible,
                 };
                 specs.push(ToolSpec {
-                    name: format!("mcp.{name}.{}", tool.local),
+                    // server 名已由配置校验限定 [a-z0-9-]（无下划线），
+                    // 全名 `mcp_<server>_<local>` 按首个下划线拆回无歧义
+                    name: format!("mcp_{name}_{}", tool.local),
                     description: tool.description.clone(),
                     schema: tool.schema.clone(),
                     side_effect,

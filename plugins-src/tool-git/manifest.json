@@ -1,6 +1,6 @@
 {
   "id": "tool-git",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "abi_version": 1,
   "kind": "tool",
 
@@ -20,7 +20,7 @@
 
   "tools": [
     {
-      "name": "git.status",
+      "name": "git_status",
       "description": "Show git working-tree status: current branch, ahead/behind vs upstream, and changed entries (x = index status, y = worktree status; '??' = untracked, 'A' = staged add, 'M' = modified, 'D' = deleted). Args: repo (required).",
       "schema": {
         "type": "object",
@@ -32,7 +32,7 @@
       "side_effect": "Pure"
     },
     {
-      "name": "git.diff",
+      "name": "git_diff",
       "description": "Show the unified diff of unstaged changes (default) or staged changes. Args: repo (required), staged (bool, default false), path (optional, restrict the diff to one file). Output is capped at 256KiB and flags `truncated`.",
       "schema": {
         "type": "object",
@@ -46,7 +46,7 @@
       "side_effect": "Pure"
     },
     {
-      "name": "git.log",
+      "name": "git_log",
       "description": "List recent commits, newest first. Args: repo (required), limit (default 20, max 100), path (optional, only commits touching that path). Returns {commits: [{hash, short, author, date, subject}]}; empty list for a repo without commits.",
       "schema": {
         "type": "object",
@@ -60,7 +60,7 @@
       "side_effect": "Pure"
     },
     {
-      "name": "git.commit",
+      "name": "git_commit",
       "description": "Stage files and create a commit. Args: repo (required), message (required), add (array of paths relative to the repo root) OR add_all (bool, stage everything including deletions) — exactly one of the two. Returns {commit, short}. Undoable via git.undo_commit (soft reset keeps the changes staged) as long as HEAD is still the created commit.",
       "schema": {
         "type": "object",
@@ -75,7 +75,7 @@
       "side_effect": { "kind": "compensable", "undo_tool": "git.undo_commit" }
     },
     {
-      "name": "git.push",
+      "name": "git_push",
       "description": "Push a branch to a remote. Args: repo (required), remote (default 'origin'), branch (required). Irreversible — publishing to the remote requires user approval.",
       "schema": {
         "type": "object",
@@ -90,13 +90,13 @@
     },
     {
       "name": "git.undo_commit",
-      "description": "Undo a previous git.commit by soft-resetting one commit (the changes stay staged). Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.{repo, commit} is used. Refuses when HEAD has moved past the recorded commit (manual intervention required). Irreversible — it rewrites repository state, so the call requires user approval.",
+      "description": "Undo a previous git_commit by soft-resetting one commit (the changes stay staged). Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.{repo, commit} is used. Refuses when HEAD has moved past the recorded commit (manual intervention required). Irreversible — it rewrites repository state, so the call requires user approval.",
       "schema": {
         "type": "object",
         "properties": {
-          "call_id": { "type": "string", "description": "id of the original git.commit call" },
-          "args": { "type": "object", "description": "original git.commit args" },
-          "output": { "type": "object", "description": "original git.commit result carrying repo/commit" }
+          "call_id": { "type": "string", "description": "id of the original git_commit call" },
+          "args": { "type": "object", "description": "original git_commit args" },
+          "output": { "type": "object", "description": "original git_commit result carrying repo/commit" }
         }
       },
       "side_effect": "Irreversible"

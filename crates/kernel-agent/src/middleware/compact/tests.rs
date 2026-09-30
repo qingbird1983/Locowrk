@@ -57,7 +57,7 @@ impl LlmService for FakeLlm {
 
 fn catalog() -> Vec<ToolSpec> {
     vec![ToolSpec {
-        name: "fs.read".into(),
+        name: "fs_read".into(),
         description: "x".into(),
         schema: json!({ "type": "object" }),
         side_effect: SideEffect::Pure,
@@ -263,7 +263,7 @@ async fn cut_never_splits_tool_call_pairing() {
     let filler = "y".repeat(300);
     let call = crate::kernel::ToolCallReq {
         id: plugin_api::CallId("c1".into()),
-        tool: "fs.read".into(),
+        tool: "fs_read".into(),
         args: json!({}),
     };
     let messages = vec![

@@ -1,6 +1,6 @@
-//! edit.lines：1-based 闭区间行替换。空 content = 删除该区间。
+//! edit_lines：1-based 闭区间行替换。空 content = 删除该区间。
 //! 严格校验：start ≥ 1、end ≥ start、end ≤ 总行数（不越界不追加——
-//! 追加语义留给 fs.write，编辑工具只改既有行，宁错不猜）。
+//! 追加语义留给 fs_write，编辑工具只改既有行，宁错不猜）。
 
 use std::path::Path;
 
@@ -28,11 +28,11 @@ pub(crate) fn edit_lines(args: &Value) -> Result<Value, String> {
         .ok_or_else(|| "missing string field `content`".to_string())?;
 
     if start == 0 {
-        return Err("edit.lines `start_line` is 1-based".into());
+        return Err("edit_lines `start_line` is 1-based".into());
     }
     if end < start {
         return Err(format!(
-            "edit.lines `end_line` ({end}) must be ≥ `start_line` ({start})"
+            "edit_lines `end_line` ({end}) must be ≥ `start_line` ({start})"
         ));
     }
     let roots = allowed_roots()?;
@@ -42,7 +42,7 @@ pub(crate) fn edit_lines(args: &Value) -> Result<Value, String> {
     let total = lines.len() as u64;
     if end > total {
         return Err(format!(
-            "edit.lines `end_line` ({end}) is beyond the last line ({total}) of `{display}`"
+            "edit_lines `end_line` ({end}) is beyond the last line ({total}) of `{display}`"
         ));
     }
 

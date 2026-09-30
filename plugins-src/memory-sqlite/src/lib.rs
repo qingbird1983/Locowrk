@@ -10,12 +10,12 @@
 //! 副作用分级（plugins.md §三表格把本插件整体标为 Pure；这里按用户
 //! "宁严勿松"原则对写操作收紧一档——Compensable 不触发审批、无 UX 代价，
 //! 只是回滚时多一条机械可执行的 undo）：
-//! - `memory.get` / `memory.list` / `memory.search` → Pure
-//! - `memory.put` → `Compensable { undo_tool: "memory.undo" }`：输出携带
+//! - `memory_get` / `memory_list` / `memory_search` → Pure
+//! - `memory_put` → `Compensable { undo_tool: "memory_undo" }`：输出携带
 //!   被覆盖的旧条目，undo 精确还原
-//! - `memory.delete` → `Compensable { undo_tool: "memory.undo" }`：输出携带
+//! - `memory_delete` → `Compensable { undo_tool: "memory_undo" }`：输出携带
 //!   被删条目全文，undo 重新插入
-//! - `memory.undo` → Irreversible：恢复会把当前值覆盖回旧值（与 fs.restore
+//! - `memory_undo` → Irreversible：恢复会把当前值覆盖回旧值（与 fs_restore
 //!   同理，plugins.md §八"宁可标错成 Irreversible"判级）
 //!
 //! undo 调用契约（DESIGN §6.3）：内核以 `{"call_id", "args", "output"}` 调
@@ -63,12 +63,12 @@ fn describe_manifest() -> CString {
         kind: PluginKind::Tool,
         tools: vec![
             ToolSpec {
-                name: "memory.put".into(),
+                name: "memory_put".into(),
                 description: "Store a value under a key in the persistent memory database \
                               (survives across sessions). Args: key (required, unique \
                               identifier), value (required, text), tags (optional, short \
                               label). Overwrites any existing value; the overwritten entry \
-                              is returned in `previous` and can be restored via memory.undo. \
+                              is returned in `previous` and can be restored via memory_undo. \
                               Use it for facts, decisions and user preferences worth \
                               remembering; do NOT store secrets or large blobs."
                     .into(),
@@ -82,11 +82,11 @@ fn describe_manifest() -> CString {
                     "required": ["key", "value"]
                 }),
                 side_effect: SideEffect::Compensable {
-                    undo_tool: "memory.undo".into(),
+                    undo_tool: "memory_undo".into(),
                 },
             },
             ToolSpec {
-                name: "memory.get".into(),
+                name: "memory_get".into(),
                 description: "Read one memory entry by exact key. Returns {found, key, \
                               value, tags, updated_at}; found=false when the key is absent."
                     .into(),
@@ -100,7 +100,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "memory.list".into(),
+                name: "memory_list".into(),
                 description: "List memory entries ordered by key. Args: prefix (optional \
                               key-prefix filter), limit (default 50, max 200), offset \
                               (default 0). Returns {total, entries: [{key, value, tags, \
@@ -117,7 +117,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "memory.search".into(),
+                name: "memory_search".into(),
                 description: "Substring search across keys, values and tags (ASCII \
                               case-insensitive). Args: query (required), limit (default 20, \
                               max 100). Returns {query, matches}. Wildcards in the query are \
@@ -134,10 +134,10 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "memory.delete".into(),
+                name: "memory_delete".into(),
                 description: "Delete one memory entry by exact key. The deleted entry is \
                               returned in `previous_entry` and can be restored via \
-                              memory.undo; deleting a missing key is a no-op."
+                              memory_undo; deleting a missing key is a no-op."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -147,12 +147,12 @@ fn describe_manifest() -> CString {
                     "required": ["key"]
                 }),
                 side_effect: SideEffect::Compensable {
-                    undo_tool: "memory.undo".into(),
+                    undo_tool: "memory_undo".into(),
                 },
             },
             ToolSpec {
-                name: "memory.undo".into(),
-                description: "Undo a previous memory.put or memory.delete by restoring the \
+                name: "memory_undo".into(),
+                description: "Undo a previous memory_put or memory_delete by restoring the \
                               entry captured in its result. Usually invoked by the \
                               compensation layer, not by the model. Args mirror the \
                               compensation payload {call_id, args, output}; only \
@@ -163,7 +163,7 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "call_id": { "type": "string", "description": "id of the original memory.put / memory.delete call" },
+                        "call_id": { "type": "string", "description": "id of the original memory_put / memory_delete call" },
                         "args": { "type": "object", "description": "original call args" },
                         "output": { "type": "object",
                                     "description": "original call result carrying previous or previous_entry" }
@@ -215,12 +215,12 @@ impl PluginState for MemoryState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("memory-sqlite: {tool} called"));
         match tool {
-            "memory.put" => store::memory_put(&args),
-            "memory.get" => store::memory_get(&args),
-            "memory.list" => store::memory_list(&args),
-            "memory.search" => store::memory_search(&args),
-            "memory.delete" => store::memory_delete(&args),
-            "memory.undo" => store::memory_undo(&args),
+            "memory_put" => store::memory_put(&args),
+            "memory_get" => store::memory_get(&args),
+            "memory_list" => store::memory_list(&args),
+            "memory_search" => store::memory_search(&args),
+            "memory_delete" => store::memory_delete(&args),
+            "memory_undo" => store::memory_undo(&args),
             other => Err(format!("unknown tool `{other}`")),
         }
     }

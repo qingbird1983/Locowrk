@@ -10,7 +10,7 @@
 //!       "tool_effects": { "safe_tool": "pure" },
 //!       "timeout_ms": 30000 } } }
 //! ```
-//! 单个 server 配置坏 → 记为配置错误条目（mcp.status 可见），不拖垮整个
+//! 单个 server 配置坏 → 记为配置错误条目（mcp_status 可见），不拖垮整个
 //! 插件（fail-soft）；整个文件坏 → 一条 `config` 错误、零 server。
 
 use std::path::PathBuf;
@@ -82,15 +82,16 @@ fn config_path() -> Result<PathBuf, String> {
     Ok(data_root()?.join("mcp.json"))
 }
 
-/// server 名约束：小写字母开头，`[a-z0-9_-]`，≤32 字符——本地工具名是
-/// `mcp.<server>.<tool>`，名字里不能出现 `.`（路由歧义）也不能为空。
+/// server 名约束：小写字母开头，`[a-z0-9-]`，≤32 字符——本地工具名是
+/// `mcp_<server>_<tool>`（OpenAI 兼容接口只收 `^[a-zA-Z0-9_-]+$`），
+/// server 名不含下划线保证按**首个**下划线拆回 (server, tool) 无歧义。
 fn valid_server_name(name: &str) -> bool {
     let mut chars = name.chars();
     matches!(chars.next(), Some(c) if c.is_ascii_lowercase())
         && name.len() <= 32
         && name
             .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// 工具名清洗：MCP 工具名可能是任意字符串；统一替换非法字符，

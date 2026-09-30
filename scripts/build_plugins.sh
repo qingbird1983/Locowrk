@@ -3,8 +3,8 @@
 #
 # tool-echo 的 manifest 版本来自编译期环境变量 LOCOWRK_PLUGIN_VERSION，
 # 按 1.2.0 / 1.3.0 各构建一次，得到多版本并存所需的双产物。
-# tool-fs 1.1.0（第二批补写入）/ tool-fetch / tool-shell / tool-edit 单版本暂存。
-# 第三批（tool-git / memory-sqlite / tool-mcp）同样单版本暂存；
+# tool-fs 1.2.0（第二批补写入）/ tool-fetch / tool-shell 单版本暂存。
+# 第三批（tool-git / memory-sqlite / tool-mcp，均 1.1.0：工具名去点号）单版本暂存；
 # tool-mcp 的 examples/fake_mcp_server 是测试替身，不进暂存目录。
 # kernel-bin 的 demo、plugin-host 的集成测试与桌面端开发态装载
 # 依赖这里的暂存布局。
@@ -51,13 +51,13 @@ stage() {
 
 stage tool-echo 1.2.0
 stage tool-echo 1.3.0
-stage tool-fs 1.1.0
+stage tool-fs 1.2.0
 stage tool-fetch 1.0.0
 stage tool-shell 1.0.0
-stage tool-edit 1.0.0
-stage tool-git 1.0.0
-stage memory-sqlite 1.0.0
-stage tool-mcp 1.0.0
+stage tool-edit 1.1.0
+stage tool-git 1.1.0
+stage memory-sqlite 1.1.0
+stage tool-mcp 1.1.0
 
-echo "done: plugins/tool-echo/{1.2.0,1.3.0} plugins/tool-fs/1.1.0 plugins/tool-fetch/1.0.0 plugins/tool-shell/1.0.0 plugins/tool-edit/1.0.0 plugins/{tool-git,memory-sqlite,tool-mcp}/1.0.0"
+echo "done: plugins/tool-echo/{1.2.0,1.3.0} plugins/tool-fs/1.2.0 plugins/tool-fetch/1.0.0 plugins/tool-shell/1.0.0 plugins/tool-edit/1.1.0 plugins/{tool-git,memory-sqlite,tool-mcp}/1.1.0"
 echo "next: cargo run -p kernel-bin -- demo"

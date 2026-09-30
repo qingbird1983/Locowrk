@@ -61,17 +61,17 @@ pub(crate) fn memory_put(args: &Value) -> Result<Value, String> {
     let value = arg_str(args, "value")?;
     let tags = args.get("tags").and_then(Value::as_str).unwrap_or("");
     if key.is_empty() {
-        return Err("memory.put: `key` must not be empty".into());
+        return Err("memory_put: `key` must not be empty".into());
     }
     if key.len() > KEY_MAX {
         return Err(format!(
-            "memory.put: `key` is {} bytes, over the {KEY_MAX} limit",
+            "memory_put: `key` is {} bytes, over the {KEY_MAX} limit",
             key.len()
         ));
     }
     if value.len() > VALUE_MAX {
         return Err(format!(
-            "memory.put: `value` is {} bytes, over the {VALUE_MAX} limit",
+            "memory_put: `value` is {} bytes, over the {VALUE_MAX} limit",
             value.len()
         ));
     }
@@ -89,7 +89,7 @@ pub(crate) fn memory_put(args: &Value) -> Result<Value, String> {
                                         updated_at = excluded.updated_at",
         params![key, value, tags, now()],
     )
-    .map_err(|e| format!("memory.put `{key}`: {e}"))?;
+    .map_err(|e| format!("memory_put `{key}`: {e}"))?;
     Ok(json!({ "key": key, "created": previous.is_none(), "previous": previous }))
 }
 
@@ -108,7 +108,7 @@ pub(crate) fn memory_get(args: &Value) -> Result<Value, String> {
             Ok(entry)
         }
         Err(Error::QueryReturnedNoRows) => Ok(json!({ "found": false, "key": key })),
-        Err(e) => Err(format!("memory.get `{key}`: {e}")),
+        Err(e) => Err(format!("memory_get `{key}`: {e}")),
     }
 }
 
@@ -123,19 +123,19 @@ pub(crate) fn memory_list(args: &Value) -> Result<Value, String> {
             params![prefix],
             |r| r.get(0),
         )
-        .map_err(|e| format!("memory.list: {e}"))?;
+        .map_err(|e| format!("memory_list: {e}"))?;
     let mut stmt = conn
         .prepare(
             "SELECT key, value, tags, updated_at FROM memories
              WHERE (?1 = '' OR key LIKE ?1 || '%' ESCAPE '\\')
              ORDER BY key LIMIT ?2 OFFSET ?3",
         )
-        .map_err(|e| format!("memory.list: {e}"))?;
+        .map_err(|e| format!("memory_list: {e}"))?;
     let entries: Vec<Value> = stmt
         .query_map(params![prefix, limit, offset], row_json)
-        .map_err(|e| format!("memory.list: {e}"))?
+        .map_err(|e| format!("memory_list: {e}"))?
         .collect::<Result<_, _>>()
-        .map_err(|e| format!("memory.list: {e}"))?;
+        .map_err(|e| format!("memory_list: {e}"))?;
     Ok(json!({ "total": total, "entries": entries }))
 }
 
@@ -151,12 +151,12 @@ pub(crate) fn memory_search(args: &Value) -> Result<Value, String> {
                 OR tags LIKE ?1 ESCAPE '\\'
              ORDER BY updated_at DESC, key LIMIT ?2",
         )
-        .map_err(|e| format!("memory.search: {e}"))?;
+        .map_err(|e| format!("memory_search: {e}"))?;
     let matches: Vec<Value> = stmt
         .query_map(params![pattern, limit], row_json)
-        .map_err(|e| format!("memory.search: {e}"))?
+        .map_err(|e| format!("memory_search: {e}"))?
         .collect::<Result<_, _>>()
-        .map_err(|e| format!("memory.search: {e}"))?;
+        .map_err(|e| format!("memory_search: {e}"))?;
     Ok(json!({ "query": query, "matches": matches }))
 }
 
@@ -172,7 +172,7 @@ pub(crate) fn memory_delete(args: &Value) -> Result<Value, String> {
         .ok();
     let deleted = conn
         .execute("DELETE FROM memories WHERE key = ?1", params![key])
-        .map_err(|e| format!("memory.delete `{key}`: {e}"))?;
+        .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
     Ok(json!({ "key": key, "deleted": deleted > 0, "previous_entry": previous }))
 }
 
@@ -184,23 +184,23 @@ pub(crate) fn memory_undo(args: &Value) -> Result<Value, String> {
     if let Some(prev) = output.get("previous") {
         // put 的撤销：previous 为 null → 删掉当时新建的 key；否则还原旧条目
         let key = output.get("key").and_then(Value::as_str).ok_or_else(|| {
-            "memory.undo: missing `output.key` (pass the original memory.put result)".to_string()
+            "memory_undo: missing `output.key` (pass the original memory_put result)".to_string()
         })?;
         if prev.is_null() {
             let removed = conn
                 .execute("DELETE FROM memories WHERE key = ?1", params![key])
-                .map_err(|e| format!("memory.undo `{key}`: {e}"))?;
+                .map_err(|e| format!("memory_undo `{key}`: {e}"))?;
             return Ok(json!({ "key": key, "undone": true, "removed": removed > 0 }));
         }
         let value = prev
             .get("value")
             .and_then(Value::as_str)
-            .ok_or_else(|| "memory.undo: previous entry missing `value`".to_string())?;
+            .ok_or_else(|| "memory_undo: previous entry missing `value`".to_string())?;
         let tags = prev.get("tags").and_then(Value::as_str).unwrap_or("");
         let updated_at = prev
             .get("updated_at")
             .and_then(Value::as_i64)
-            .ok_or_else(|| "memory.undo: previous entry missing `updated_at`".to_string())?;
+            .ok_or_else(|| "memory_undo: previous entry missing `updated_at`".to_string())?;
         restore_entry(&conn, key, value, tags, updated_at)?;
         return Ok(json!({ "key": key, "undone": true, "restored": true }));
     }
@@ -212,22 +212,22 @@ pub(crate) fn memory_undo(args: &Value) -> Result<Value, String> {
         let key = entry
             .get("key")
             .and_then(Value::as_str)
-            .ok_or_else(|| "memory.undo: previous_entry missing `key`".to_string())?;
+            .ok_or_else(|| "memory_undo: previous_entry missing `key`".to_string())?;
         let value = entry
             .get("value")
             .and_then(Value::as_str)
-            .ok_or_else(|| "memory.undo: previous_entry missing `value`".to_string())?;
+            .ok_or_else(|| "memory_undo: previous_entry missing `value`".to_string())?;
         let tags = entry.get("tags").and_then(Value::as_str).unwrap_or("");
         let updated_at = entry
             .get("updated_at")
             .and_then(Value::as_i64)
-            .ok_or_else(|| "memory.undo: previous_entry missing `updated_at`".to_string())?;
+            .ok_or_else(|| "memory_undo: previous_entry missing `updated_at`".to_string())?;
         restore_entry(&conn, key, value, tags, updated_at)?;
         return Ok(json!({ "key": key, "undone": true, "restored": true }));
     }
     Err(
-        "memory.undo: missing `output.previous` or `output.previous_entry` (pass the original \
-         memory.put / memory.delete result)"
+        "memory_undo: missing `output.previous` or `output.previous_entry` (pass the original \
+         memory_put / memory_delete result)"
             .to_string(),
     )
 }
@@ -246,6 +246,6 @@ fn restore_entry(
                                         updated_at = excluded.updated_at",
         params![key, value, tags, updated_at],
     )
-    .map_err(|e| format!("memory.undo `{key}`: {e}"))?;
+    .map_err(|e| format!("memory_undo `{key}`: {e}"))?;
     Ok(())
 }

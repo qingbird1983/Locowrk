@@ -1,8 +1,8 @@
 //! 写入能力（阶段八⑥第二批，plugins.md §二）：
-//! - `fs.write` → `Compensable { undo_tool: "fs.restore" }`：**备份先行**——
+//! - `fs_write` → `Compensable { undo_tool: "fs_restore" }`：**备份先行**——
 //!   先把原内容落进备份目录，再写新内容；备份写失败则整体报错、目标不动
-//! - `fs.delete` → Irreversible：只删文件，目录拒绝（v1 从简）
-//! - `fs.restore` → Irreversible：undo 契约 `{"call_id", "args", "output"}`，
+//! - `fs_delete` → Irreversible：只删文件，目录拒绝（v1 从简）
+//! - `fs_restore` → Irreversible：undo 契约 `{"call_id", "args", "output"}`，
 //!   只读 `output` 里的 {path, backup, existed}；恢复 = 备份 rename 回原位
 //!   （备份自消费，重复恢复 no-op，幂等——纪律 7）
 //!
@@ -20,7 +20,7 @@ use plugin_api::serde_json::{Value, json};
 
 use crate::arg_path;
 
-/// fs.write 内容上限（字节）。与 fs.read 的读取上限同量级，防 runaway 写。
+/// fs_write 内容上限（字节）。与 fs_read 的读取上限同量级，防 runaway 写。
 const WRITE_MAX: u64 = 2 * 1024 * 1024;
 
 pub(crate) fn fs_write(args: &Value) -> Result<Value, String> {
@@ -35,7 +35,7 @@ pub(crate) fn fs_write(args: &Value) -> Result<Value, String> {
         .unwrap_or(false);
     if content.len() as u64 > WRITE_MAX {
         return Err(format!(
-            "fs.write content is {} bytes, over the {} limit",
+            "fs_write content is {} bytes, over the {} limit",
             content.len(),
             WRITE_MAX
         ));
@@ -44,7 +44,7 @@ pub(crate) fn fs_write(args: &Value) -> Result<Value, String> {
     let roots = allowed_roots()?;
     let resolved = resolve_for_write(Path::new(&path), &roots)?;
     if resolved.is_dir() {
-        return Err(format!("fs.write `{}` is a directory", resolved.display()));
+        return Err(format!("fs_write `{}` is a directory", resolved.display()));
     }
     let existed = resolved.is_file();
     // 备份先行：备份失败 → 整体失败，目标文件保持原样
@@ -56,11 +56,11 @@ pub(crate) fn fs_write(args: &Value) -> Result<Value, String> {
     if create_dirs {
         if let Some(parent) = resolved.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| format!("fs.write `{}`: create dirs: {e}", resolved.display()))?;
+                .map_err(|e| format!("fs_write `{}`: create dirs: {e}", resolved.display()))?;
         }
     }
     let display = resolved.display().to_string();
-    std::fs::write(&resolved, content).map_err(|e| format!("fs.write `{display}`: {e}"))?;
+    std::fs::write(&resolved, content).map_err(|e| format!("fs_write `{display}`: {e}"))?;
     Ok(json!({
         "path": display,
         "bytes": content.len(),
@@ -75,12 +75,12 @@ pub(crate) fn fs_delete(args: &Value) -> Result<Value, String> {
     let resolved = resolve_existing(Path::new(&path), &roots)?;
     if resolved.is_dir() {
         return Err(format!(
-            "fs.delete `{}` is a directory (v1 deletes files only)",
+            "fs_delete `{}` is a directory (v1 deletes files only)",
             resolved.display()
         ));
     }
     std::fs::remove_file(&resolved)
-        .map_err(|e| format!("fs.delete `{}`: {e}", resolved.display()))?;
+        .map_err(|e| format!("fs_delete `{}`: {e}", resolved.display()))?;
     Ok(json!({ "path": resolved.display().to_string(), "deleted": true }))
 }
 
@@ -89,7 +89,7 @@ pub(crate) fn fs_delete(args: &Value) -> Result<Value, String> {
 pub(crate) fn fs_restore(args: &Value) -> Result<Value, String> {
     let output = args.get("output").unwrap_or(args);
     let path = output.get("path").and_then(Value::as_str).ok_or_else(|| {
-        "fs.restore: missing `output.path` (pass the original fs.write result)".to_string()
+        "fs_restore: missing `output.path` (pass the original fs_write result)".to_string()
     })?;
     let backup = output.get("backup").and_then(Value::as_str);
     let existed = output
@@ -114,7 +114,7 @@ pub(crate) fn fs_restore(args: &Value) -> Result<Value, String> {
         }
         None => {
             if existed {
-                Err("fs.restore: original file existed but the result carries no backup".into())
+                Err("fs_restore: original file existed but the result carries no backup".into())
             } else {
                 // 原本不存在 → 撤销 = 删掉新建的文件；NotFound = 已删（幂等）
                 match std::fs::remove_file(&target) {
@@ -122,7 +122,7 @@ pub(crate) fn fs_restore(args: &Value) -> Result<Value, String> {
                     Err(e) if is_not_found(&e) => Ok(
                         json!({ "path": display, "restored": true, "removed": true, "already": true }),
                     ),
-                    Err(e) => Err(format!("fs.restore `{display}`: {e}")),
+                    Err(e) => Err(format!("fs_restore `{display}`: {e}")),
                 }
             }
         }
@@ -141,7 +141,7 @@ fn verify_backup_provenance(backup: &Path) -> Result<PathBuf, String> {
         Ok(resolved)
     } else {
         Err(format!(
-            "fs.restore: backup `{}` is not a tool-fs backup (must live under the data root)",
+            "fs_restore: backup `{}` is not a tool-fs backup (must live under the data root)",
             resolved.display()
         ))
     }

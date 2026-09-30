@@ -1,4 +1,4 @@
-//! edit.diff：严格 unified diff 应用——上下文行必须精确命中，无 fuzz；
+//! edit_diff：严格 unified diff 应用——上下文行必须精确命中，无 fuzz；
 //! 任一 hunk 不匹配即整体报错、文件不动（备份都还没写）。v1 规则：
 //! 只支持对已存在文件的就地修改（old_start ≥ 1），结尾换行按原文件
 //! 是否带 \n 保留（`\ No newline` 标记忽略）。
@@ -36,7 +36,7 @@ pub(crate) fn edit_diff(args: &Value) -> Result<Value, String> {
 
     let hunks = parse_patch(patch)?;
     if hunks.is_empty() {
-        return Err("edit.diff patch contains no @@ hunks".into());
+        return Err("edit_diff patch contains no @@ hunks".into());
     }
 
     let roots = allowed_roots()?;
@@ -51,13 +51,13 @@ pub(crate) fn edit_diff(args: &Value) -> Result<Value, String> {
         let want = hunk.old_start as usize - 1;
         if want < src {
             return Err(format!(
-                "edit.diff hunk #{} overlaps the previous one",
+                "edit_diff hunk #{} overlaps the previous one",
                 i + 1
             ));
         }
         if want > lines.len() {
             return Err(format!(
-                "edit.diff hunk #{} starts at line {}, beyond the file ({} lines)",
+                "edit_diff hunk #{} starts at line {}, beyond the file ({} lines)",
                 i + 1,
                 hunk.old_start,
                 lines.len()
@@ -72,7 +72,7 @@ pub(crate) fn edit_diff(args: &Value) -> Result<Value, String> {
                     if lines.get(src).map(String::as_str) != Some(text) {
                         let found = lines.get(src).map(String::as_str).unwrap_or("<eof>");
                         return Err(format!(
-                            "edit.diff hunk #{}: expected {op:?} `{text}` at line {}, found `{found}`",
+                            "edit_diff hunk #{}: expected {op:?} `{text}` at line {}, found `{found}`",
                             i + 1,
                             src + 1
                         ));
@@ -111,11 +111,11 @@ fn parse_patch(patch: &str) -> Result<Vec<Hunk>, String> {
                 .next()
                 .and_then(|s| s.trim_start_matches(['-', ' ']).split(',').next())
                 .and_then(|s| s.parse::<u64>().ok())
-                .ok_or_else(|| format!("edit.diff line {line_no}: malformed @@ header `{raw}`"))?;
+                .ok_or_else(|| format!("edit_diff line {line_no}: malformed @@ header `{raw}`"))?;
             if old_start == 0 {
                 return Err(format!(
-                    "edit.diff line {line_no}: old_start 0 (file creation) is not supported; \
-                     use fs.write for new files"
+                    "edit_diff line {line_no}: old_start 0 (file creation) is not supported; \
+                     use fs_write for new files"
                 ));
             }
             if let Some(h) = cur.take() {
@@ -138,7 +138,7 @@ fn parse_patch(patch: &str) -> Result<Vec<Hunk>, String> {
                 continue;
             }
             return Err(format!(
-                "edit.diff line {line_no}: content outside a hunk (`{raw}`)"
+                "edit_diff line {line_no}: content outside a hunk (`{raw}`)"
             ));
         };
         let (op, text) = match raw.chars().next() {
@@ -148,7 +148,7 @@ fn parse_patch(patch: &str) -> Result<Vec<Hunk>, String> {
             Some('\\') => continue, // \ No newline at end of file —— v1 忽略
             _ => {
                 return Err(format!(
-                    "edit.diff line {line_no}: hunk lines must start with ' ', '-' or '+' (`{raw}`)"
+                    "edit_diff line {line_no}: hunk lines must start with ' ', '-' or '+' (`{raw}`)"
                 ));
             }
         };

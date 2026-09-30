@@ -1,10 +1,10 @@
 //! 端到端集成测试：阶段八⑥第二批官方工具（真实 dlopen）。
 //!
-//! - tool-fs 1.1.0：fs.write 备份 → fs.restore 撤销（undo 契约全链路）、
-//!   fs.delete、允许根拒绝
+//! - tool-fs 1.2.0：fs_write 备份 → fs_restore 撤销（undo 契约全链路）、
+//!   fs_delete、允许根拒绝
 //! - tool-shell 1.0.0：白名单放行 / 显式配置扩展 / denylist 与元字符拒绝 /
 //!   真实 spawn（cargo --version）
-//! - tool-edit 1.0.0：edit.replace → 跨插件 fs.restore 撤销
+//! - tool-edit 1.1.0：edit_replace → 跨插件 fs_restore 撤销
 //!
 //! 与 fs_fetch_plugins.rs 同款模式：测试自建产物暂存到 target/locowrk-test/。
 //! env 是进程级全局，全部用例串行（一把大锁包住整个测试体）。
@@ -112,7 +112,7 @@ fn fs_write_backup_restore_delete_end_to_end() {
     unsafe { std::env::set_var("LOCOWRK_DATA_DIR", root.display().to_string()) };
 
     let registry = Arc::new(PluginRegistry::new());
-    load_activate("tool-fs", "1.1.0", &registry);
+    load_activate("tool-fs", "1.2.0", &registry);
     let source = RegistryToolSource::new(Arc::clone(&registry));
 
     let file = root.join("note.txt");
@@ -120,38 +120,38 @@ fn fs_write_backup_restore_delete_end_to_end() {
 
     // 覆盖写：备份进数据根
     let out = call(
-        source.resolve("fs.write").unwrap().as_ref(),
+        source.resolve("fs_write").unwrap().as_ref(),
         json!({ "path": file.display().to_string(), "content": "v2 longer content" }),
     )
-    .expect("fs.write ok");
+    .expect("fs_write ok");
     assert_eq!(out["existed"], json!(true));
     let backup = out["backup"].as_str().expect("backup recorded").to_string();
     assert_eq!(std::fs::read_to_string(&backup).unwrap(), "v1");
 
-    // undo 契约：内核以 {call_id, args, output} 调 fs.restore
+    // undo 契约：内核以 {call_id, args, output} 调 fs_restore
     let undo = json!({
         "call_id": "call-it-1",
         "args": { "path": file.display().to_string(), "content": "v2 longer content" },
         "output": out,
     });
-    call(source.resolve("fs.restore").unwrap().as_ref(), undo.clone()).expect("restore ok");
+    call(source.resolve("fs_restore").unwrap().as_ref(), undo.clone()).expect("restore ok");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "v1");
     assert!(!std::path::Path::new(&backup).exists(), "备份自消费");
     // 幂等：重复恢复 no-op
-    call(source.resolve("fs.restore").unwrap().as_ref(), undo).expect("idempotent restore");
+    call(source.resolve("fs_restore").unwrap().as_ref(), undo).expect("idempotent restore");
 
     // delete（Irreversible 的审批在内核层，这里验证工具本体）
     call(
-        source.resolve("fs.delete").unwrap().as_ref(),
+        source.resolve("fs_delete").unwrap().as_ref(),
         json!({ "path": file.display().to_string() }),
     )
-    .expect("fs.delete ok");
+    .expect("fs_delete ok");
     assert!(!file.exists());
 
     // 恶意：根外写拒绝
     let outside = temp_root("elsewhere").join("x.txt");
     let err = call(
-        source.resolve("fs.write").unwrap().as_ref(),
+        source.resolve("fs_write").unwrap().as_ref(),
         json!({ "path": outside.display().to_string(), "content": "x" }),
     )
     .unwrap_err();
@@ -215,8 +215,8 @@ fn edit_replace_then_cross_plugin_restore() {
 
     // tool-edit 与 tool-fs 同 registry：undo 跨插件解析
     let registry = Arc::new(PluginRegistry::new());
-    load_activate("tool-fs", "1.1.0", &registry);
-    load_activate("tool-edit", "1.0.0", &registry);
+    load_activate("tool-fs", "1.2.0", &registry);
+    load_activate("tool-edit", "1.1.0", &registry);
     let source = RegistryToolSource::new(Arc::clone(&registry));
 
     let file = root.join("app.rs");
@@ -224,24 +224,24 @@ fn edit_replace_then_cross_plugin_restore() {
     std::fs::write(&file, original).unwrap();
 
     let out = call(
-        source.resolve("edit.replace").unwrap().as_ref(),
+        source.resolve("edit_replace").unwrap().as_ref(),
         json!({
             "path": file.display().to_string(),
             "old_string": "todo!()",
             "new_string": "println!(\"hi\");",
         }),
     )
-    .expect("edit.replace ok");
+    .expect("edit_replace ok");
     assert_eq!(out["edits"], json!(1));
     assert!(std::fs::read_to_string(&file).unwrap().contains("println!"));
 
-    // 撤销：edit 的 output 直接喂给 tool-fs 的 fs.restore
+    // 撤销：edit 的 output 直接喂给 tool-fs 的 fs_restore
     let undo = json!({
         "call_id": "call-it-2",
         "args": json!({ "path": file.display().to_string() }),
         "output": out,
     });
-    call(source.resolve("fs.restore").unwrap().as_ref(), undo).expect("cross-plugin restore");
+    call(source.resolve("fs_restore").unwrap().as_ref(), undo).expect("cross-plugin restore");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
 
     unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };

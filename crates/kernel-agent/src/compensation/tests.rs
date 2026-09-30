@@ -110,7 +110,7 @@ fn kernel_with(tools: Vec<Arc<UndoTool>>, approval: Option<FixedResolver>) -> Ke
     k
 }
 
-/// 一条 fs.write 调用事件对；side_effect 由用例指定（plan 按事件声明判级）。
+/// 一条 fs_write 调用事件对；side_effect 由用例指定（plan 按事件声明判级）。
 fn push_write(session: &mut Session, call_id: &str, undo_tool: &str, ok: bool) {
     push_call(
         session,
@@ -125,7 +125,7 @@ fn push_write(session: &mut Session, call_id: &str, undo_tool: &str, ok: bool) {
 fn push_call(session: &mut Session, call_id: &str, side_effect: SideEffect, ok: bool) {
     session.append(SessionEvent::ToolCall {
         call_id: CallId(call_id.into()),
-        tool: "fs.write".into(),
+        tool: "fs_write".into(),
         args: json!({ "path": "/tmp/note.txt", "content": "v2" }),
         plugin_version: Version::new(1, 1, 0),
         side_effect,
@@ -142,14 +142,14 @@ async fn undo_runs_through_chain_and_logs() {
     let calls = recorder();
     let kernel = kernel_with(
         vec![Arc::new(UndoTool::new(
-            "fs.restore",
+            "fs_restore",
             SideEffect::Pure,
             Arc::clone(&calls),
         ))],
         None,
     );
     let mut session = Session::new();
-    push_write(&mut session, "call-1", "fs.restore", true);
+    push_write(&mut session, "call-1", "fs_restore", true);
 
     let mut ledger = CompensatedLedger::default();
     let report = kernel
@@ -165,7 +165,7 @@ async fn undo_runs_through_chain_and_logs() {
     let events = session.events();
     let undo_call = events.iter().any(|e| {
         matches!(e, SessionEvent::ToolCall { call_id, tool, args, .. }
-            if call_id.0 == "call-1-undo" && tool == "fs.restore"
+            if call_id.0 == "call-1-undo" && tool == "fs_restore"
                 && args["call_id"] == json!("call-1")
                 && args["output"]["backup"] == json!("/b/1"))
     });
@@ -188,14 +188,14 @@ async fn ledger_blocks_second_compensation() {
     let calls = recorder();
     let kernel = kernel_with(
         vec![Arc::new(UndoTool::new(
-            "fs.restore",
+            "fs_restore",
             SideEffect::Pure,
             Arc::clone(&calls),
         ))],
         None,
     );
     let mut session = Session::new();
-    push_write(&mut session, "call-1", "fs.restore", true);
+    push_write(&mut session, "call-1", "fs_restore", true);
 
     let mut ledger = CompensatedLedger::default();
     kernel
@@ -224,7 +224,7 @@ async fn irreversible_original_becomes_manual_intervention() {
     let calls = recorder();
     let kernel = kernel_with(
         vec![Arc::new(UndoTool::new(
-            "fs.restore",
+            "fs_restore",
             SideEffect::Pure,
             Arc::clone(&calls),
         ))],
@@ -256,14 +256,14 @@ async fn failed_original_call_is_not_compensated() {
     let calls = recorder();
     let kernel = kernel_with(
         vec![Arc::new(UndoTool::new(
-            "fs.restore",
+            "fs_restore",
             SideEffect::Pure,
             Arc::clone(&calls),
         ))],
         None,
     );
     let mut session = Session::new();
-    push_write(&mut session, "call-1", "fs.restore", false);
+    push_write(&mut session, "call-1", "fs_restore", false);
 
     let mut ledger = CompensatedLedger::default();
     let report = kernel
@@ -279,7 +279,7 @@ async fn failed_undo_closes_result_and_stays_unclaimed() {
     let calls = recorder();
     let kernel = kernel_with(
         vec![Arc::new(UndoTool::with_fail(
-            "fs.restore",
+            "fs_restore",
             SideEffect::Pure,
             Arc::clone(&calls),
             true,
@@ -287,7 +287,7 @@ async fn failed_undo_closes_result_and_stays_unclaimed() {
         None,
     );
     let mut session = Session::new();
-    push_write(&mut session, "call-1", "fs.restore", true);
+    push_write(&mut session, "call-1", "fs_restore", true);
 
     let mut ledger = CompensatedLedger::default();
     let report = kernel
@@ -309,18 +309,18 @@ async fn failed_undo_closes_result_and_stays_unclaimed() {
 
 #[tokio::test]
 async fn irreversible_undo_tool_goes_through_approval() {
-    // fs.restore 判 Irreversible（见 tool-fs write.rs）：无决议者 → fail-safe 拒绝
+    // fs_restore 判 Irreversible（见 tool-fs write.rs）：无决议者 → fail-safe 拒绝
     let calls = recorder();
     let kernel = kernel_with(
         vec![Arc::new(UndoTool::new(
-            "fs.restore",
+            "fs_restore",
             SideEffect::Irreversible,
             Arc::clone(&calls),
         ))],
         None,
     );
     let mut session = Session::new();
-    push_write(&mut session, "call-1", "fs.restore", true);
+    push_write(&mut session, "call-1", "fs_restore", true);
 
     let mut ledger = CompensatedLedger::default();
     let report = kernel
@@ -342,14 +342,14 @@ async fn irreversible_undo_tool_goes_through_approval() {
     let calls = recorder();
     let kernel = kernel_with(
         vec![Arc::new(UndoTool::new(
-            "fs.restore",
+            "fs_restore",
             SideEffect::Irreversible,
             Arc::clone(&calls),
         ))],
         Some(FixedResolver(ApprovalDecision::allow())),
     );
     let mut session = Session::new();
-    push_write(&mut session, "call-1", "fs.restore", true);
+    push_write(&mut session, "call-1", "fs_restore", true);
     let mut ledger = CompensatedLedger::default();
     let report = kernel
         .compensate_after(&mut session, &mut ledger, 0)

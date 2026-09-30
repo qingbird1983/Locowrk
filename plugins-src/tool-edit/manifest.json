@@ -1,6 +1,6 @@
 {
   "id": "tool-edit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "abi_version": 1,
   "kind": "tool",
 
@@ -20,8 +20,8 @@
 
   "tools": [
     {
-      "name": "edit.replace",
-      "description": "Exact string replacement in a text file (the file must exist). Args: path (absolute), old_string (must match exactly once unless replace_all), new_string, replace_all (bool, default false). The original file is backed up automatically; the result carries {path, bytes, edits, backup} for fs.restore to undo.",
+      "name": "edit_replace",
+      "description": "Exact string replacement in a text file (the file must exist). Args: path (absolute), old_string (must match exactly once unless replace_all), new_string, replace_all (bool, default false). The original file is backed up automatically; the result carries {path, bytes, edits, backup} for fs_restore to undo.",
       "schema": {
         "type": "object",
         "properties": {
@@ -32,11 +32,11 @@
         },
         "required": ["path", "old_string", "new_string"]
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "fs.restore" }
+      "side_effect": { "kind": "compensable", "undo_tool": "fs_restore" }
     },
     {
-      "name": "edit.lines",
-      "description": "Replace a 1-based inclusive line range in a text file (the file must exist). Args: path (absolute), start_line, end_line, content (new text for the range; empty content deletes it). The original file is backed up automatically; the result carries {path, bytes, replaced, backup} for fs.restore to undo.",
+      "name": "edit_lines",
+      "description": "Replace a 1-based inclusive line range in a text file (the file must exist). Args: path (absolute), start_line, end_line, content (new text for the range; empty content deletes it). The original file is backed up automatically; the result carries {path, bytes, replaced, backup} for fs_restore to undo.",
       "schema": {
         "type": "object",
         "properties": {
@@ -47,11 +47,11 @@
         },
         "required": ["path", "start_line", "end_line", "content"]
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "fs.restore" }
+      "side_effect": { "kind": "compensable", "undo_tool": "fs_restore" }
     },
     {
-      "name": "edit.diff",
-      "description": "Apply a unified diff to a text file (the file must exist). Args: path (absolute), patch (unified diff text with @@ hunks). Context lines must match exactly — no fuzz; on mismatch the tool errors and the file is untouched. The original file is backed up automatically; the result carries {path, bytes, hunks_applied, backup} for fs.restore to undo.",
+      "name": "edit_diff",
+      "description": "Apply a unified diff to a text file (the file must exist). Args: path (absolute), patch (unified diff text with @@ hunks). Context lines must match exactly — no fuzz; on mismatch the tool errors and the file is untouched. The original file is backed up automatically; the result carries {path, bytes, hunks_applied, backup} for fs_restore to undo.",
       "schema": {
         "type": "object",
         "properties": {
@@ -60,7 +60,7 @@
         },
         "required": ["path", "patch"]
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "fs.restore" }
+      "side_effect": { "kind": "compensable", "undo_tool": "fs_restore" }
     }
   ]
 }

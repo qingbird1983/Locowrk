@@ -44,9 +44,9 @@
 
 ### `tool-fs` 的 SideEffect 分级（关键设计）
 
-- `fs.read` / `fs.list` / `fs.grep` → `Pure`，随便调，回退免费
-- `fs.write` → `Compensable { undo_tool: "fs.restore" }`，写入前自动备份原内容，撤销时恢复
-- `fs.delete` → `Irreversible`，走审批
+- `fs_read` / `fs_list` / `fs_grep` → `Pure`，随便调，回退免费
+- `fs_write` → `Compensable { undo_tool: "fs.restore" }`，写入前自动备份原内容，撤销时恢复
+- `fs_delete` → `Irreversible`，走审批
 
 ### `tool-shell` 的安全策略
 
@@ -71,7 +71,7 @@
 | `memory-vector` | 向量检索（RAG） | `Pure` |
 | `ctx-compact` | 上下文超长时自动压缩 | `Pure`（中间件） |
 
-### `tool-edit` 为什么比 `fs.write` 重要
+### `tool-edit` 为什么比 `fs_write` 重要
 
 Agent 改代码时，整文件重写会：
 

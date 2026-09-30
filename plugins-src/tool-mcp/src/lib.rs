@@ -3,7 +3,7 @@
 //!
 //! 架构（plugins.md §五）：读 `<数据根>/mcp.json` → spawn MCP server
 //! 子进程（stdio，newline-delimited JSON-RPC）→ initialize 握手 →
-//! tools/list → 把每个 MCP 工具适配成本地 ToolSpec（`mcp.<server>.<tool>`，
+//! tools/list → 把每个 MCP 工具适配成本地 ToolSpec（`mcp_<server>_<tool>`，
 //! schema 原样透传给模型）。调用时 JSON-RPC → MCP server → 投影返回。
 //!
 //! 安全模型：
@@ -12,13 +12,14 @@
 //! - **每个工具的 side_effect 由配置声明，不写默认 Irreversible**
 //!   （§五 安全兜底）；`compensable` 配置值按宁严勿松收紧为
 //!   Irreversible（远端工具没有机械 undo）
-//! - 工具名清洗（`[a-zA-Z0-9_-]` 之外替换 `_`，server 名配置期就限定
-//!   无点）保证 `mcp.<server>.<tool>` 路由无歧义
+//! - 工具名清洗（`[a-zA-Z0-9_-]` 之外替换 `_`）+ server 名禁下划线
+//!   保证 `mcp_<server>_<tool>` 路由无歧义（全名即 OpenAI 兼容接口
+//!   要求的 `^[a-zA-Z0-9_-]+$` 字符集）
 //! - 内容上限 1MiB；握手 15s、调用超时按配置（缺省 30s 上限 120s）
 //!
 //! 生命周期：describe 时全量发现并**冻结工具清单**进 manifest；连接由
 //! describe 与 make_state 共享（static 转交），死连接按调用懒重连；
-//! mcp.reload 只重连不增删工具（清单变更需重载插件）。Drop 杀全部子进程。
+//! mcp_reload 只重连不增删工具（清单变更需重载插件）。Drop 杀全部子进程。
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 
@@ -60,7 +61,7 @@ fn plugin_version() -> &'static str {
 fn management_specs() -> Vec<ToolSpec> {
     vec![
         ToolSpec {
-            name: "mcp.status".into(),
+            name: "mcp_status".into(),
             description: "List the configured MCP servers: connection state, tool count \
                           and the last connection error (if any), plus config-level \
                           errors. Pure."
@@ -69,7 +70,7 @@ fn management_specs() -> Vec<ToolSpec> {
             side_effect: SideEffect::Pure,
         },
         ToolSpec {
-            name: "mcp.reload".into(),
+            name: "mcp_reload".into(),
             description: "Re-read the MCP config and re-establish every server \
                           connection. The tool list was frozen when the plugin loaded — \
                           servers added to mcp.json afterwards only appear after \
@@ -141,11 +142,11 @@ impl PluginState for McpState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("tool-mcp: {tool} called"));
         match tool {
-            "mcp.status" => Ok(json!({
+            "mcp_status" => Ok(json!({
                 "servers": self.registry.status(),
                 "config_errors": self.registry.cfg_errors,
             })),
-            "mcp.reload" => {
+            "mcp_reload" => {
                 self.registry.reload();
                 Ok(json!({
                     "reloaded": true,
@@ -153,11 +154,11 @@ impl PluginState for McpState {
                 }))
             }
             _ => {
-                let rest = tool.strip_prefix("mcp.").ok_or_else(|| {
-                    format!("unknown tool `{tool}` (expected mcp.<server>.<tool>)")
+                let rest = tool.strip_prefix("mcp_").ok_or_else(|| {
+                    format!("unknown tool `{tool}` (expected mcp_<server>_<tool>)")
                 })?;
-                let (server, name) = rest.split_once('.').ok_or_else(|| {
-                    format!("unknown tool `{tool}` (expected mcp.<server>.<tool>)")
+                let (server, name) = rest.split_once('_').ok_or_else(|| {
+                    format!("unknown tool `{tool}` (expected mcp_<server>_<tool>)")
                 })?;
                 self.registry.call(server, name, args)
             }

@@ -1,4 +1,4 @@
-//! fs.write / fs.delete / fs.restore 单测（进程内直接调 PluginState 层，
+//! fs_write / fs_delete / fs_restore 单测（进程内直接调 PluginState 层，
 //! 不经 FFI）。涉及 LOCOWRK_DATA_DIR 的用例串行（env 是进程级全局）。
 
 use std::sync::Mutex;

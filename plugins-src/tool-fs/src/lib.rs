@@ -2,10 +2,10 @@
 //! 阶段八⑥第二批补写入能力）。
 //!
 //! 副作用分级（plugins.md §二，关键设计）：
-//! - `fs.read` / `fs.list` / `fs.grep` → Pure，随便调，回退免费
-//! - `fs.write` → `Compensable { undo_tool: "fs.restore" }`，写前备份原内容
-//! - `fs.delete` → Irreversible，走审批（v1 只删文件，不删目录）
-//! - `fs.restore` → Irreversible：恢复会把文件当前内容（可能比备份新）覆盖掉，
+//! - `fs_read` / `fs_list` / `fs_grep` → Pure，随便调，回退免费
+//! - `fs_write` → `Compensable { undo_tool: "fs_restore" }`，写前备份原内容
+//! - `fs_delete` → Irreversible，走审批（v1 只删文件，不删目录）
+//! - `fs_restore` → Irreversible：恢复会把文件当前内容（可能比备份新）覆盖掉，
 //!   按 plugins.md §八"宁可标错成 Irreversible"判级；补偿执行器（DESIGN
 //!   §6.3）对 Irreversible 的 undo 调用同样过审批门
 //!
@@ -59,7 +59,7 @@ fn describe_manifest() -> CString {
         kind: PluginKind::Tool,
         tools: vec![
             ToolSpec {
-                name: "fs.read".into(),
+                name: "fs_read".into(),
                 description: "Read a UTF-8 text file from the local filesystem. \
                               Pass an absolute path. Returns {path, size, truncated, content}; \
                               content is capped at max_bytes (default 32KiB)."
@@ -76,7 +76,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "fs.list".into(),
+                name: "fs_list".into(),
                 description: "List a directory. Pass an absolute path. \
                               Returns {path, entries: [{name, kind: file|dir|other, size}]}; \
                               directories come first, then names sorted."
@@ -91,7 +91,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "fs.grep".into(),
+                name: "fs_grep".into(),
                 description: "Case-insensitive substring search in a text file, or \
                               recursively under a directory. Pass an absolute path. \
                               Returns {query, matches: [{file, line, text}], truncated, scanned}."
@@ -109,12 +109,12 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "fs.write".into(),
+                name: "fs_write".into(),
                 description: "Write a UTF-8 text file (create or overwrite). \
                               Args: path (absolute), content, create_dirs (bool, default false). \
                               The previous content, if any, is backed up automatically and the \
                               result carries {path, bytes, existed, backup}; pass that result \
-                              to fs.restore to undo."
+                              to fs_restore to undo."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -127,11 +127,11 @@ fn describe_manifest() -> CString {
                     "required": ["path", "content"]
                 }),
                 side_effect: SideEffect::Compensable {
-                    undo_tool: "fs.restore".into(),
+                    undo_tool: "fs_restore".into(),
                 },
             },
             ToolSpec {
-                name: "fs.delete".into(),
+                name: "fs_delete".into(),
                 description: "Delete a file (directories are rejected in v1). \
                               Args: path (absolute). Irreversible — no backup is kept, \
                               the call requires user approval."
@@ -146,8 +146,8 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Irreversible,
             },
             ToolSpec {
-                name: "fs.restore".into(),
-                description: "Undo a previous fs.write by restoring its backup (the backup is \
+                name: "fs_restore".into(),
+                description: "Undo a previous fs_write by restoring its backup (the backup is \
                               consumed; restoring twice is a no-op). Usually invoked by the \
                               compensation layer, not by the model. Args mirror the compensation \
                               payload {call_id, args, output}; only output.{path, backup, existed} \
@@ -157,10 +157,10 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "call_id": { "type": "string", "description": "id of the original fs.write call" },
-                        "args": { "type": "object", "description": "original fs.write args" },
+                        "call_id": { "type": "string", "description": "id of the original fs_write call" },
+                        "args": { "type": "object", "description": "original fs_write args" },
                         "output": { "type": "object",
-                                    "description": "original fs.write result carrying path/backup/existed" }
+                                    "description": "original fs_write result carrying path/backup/existed" }
                     }
                 }),
                 side_effect: SideEffect::Irreversible,
@@ -209,12 +209,12 @@ impl PluginState for FsState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("tool-fs: {tool} called"));
         match tool {
-            "fs.read" => read::fs_read(&args),
-            "fs.list" => read::fs_list(&args),
-            "fs.grep" => read::fs_grep(&args),
-            "fs.write" => write::fs_write(&args),
-            "fs.delete" => write::fs_delete(&args),
-            "fs.restore" => write::fs_restore(&args),
+            "fs_read" => read::fs_read(&args),
+            "fs_list" => read::fs_list(&args),
+            "fs_grep" => read::fs_grep(&args),
+            "fs_write" => write::fs_write(&args),
+            "fs_delete" => write::fs_delete(&args),
+            "fs_restore" => write::fs_restore(&args),
             other => Err(format!("unknown tool `{other}`")),
         }
     }

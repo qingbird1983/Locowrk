@@ -1,4 +1,4 @@
-//! edit.replace / edit.lines 单测：正常 / 边界（多重命中、越界）/ 恶意
+//! edit_replace / edit_lines 单测：正常 / 边界（多重命中、越界）/ 恶意
 //! （根外路径拒绝）三态。涉 env 用例串行。
 
 use super::lines::edit_lines;

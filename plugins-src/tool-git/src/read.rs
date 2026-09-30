@@ -115,7 +115,7 @@ fn restrict_path(repo: &Path, p: &str) -> Result<(), String> {
     let roots = plugin_api::fsutil::allowed_roots()?;
     let resolved = resolve_for_write(&full, &roots)?;
     if !resolved.starts_with(repo) {
-        return Err(format!("git.diff: path `{p}` is outside the repository"));
+        return Err(format!("git_diff: path `{p}` is outside the repository"));
     }
     Ok(())
 }

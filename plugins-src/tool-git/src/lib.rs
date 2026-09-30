@@ -1,12 +1,12 @@
 //! tool-git：官方内置 Git 操作插件（plugins.md 第三批 / §三）。
 //!
 //! 副作用分级（plugins.md §三，逐项落地）：
-//! - `git.status` / `git.diff` / `git.log` → Pure（只 spawn git 读仓库状态）
-//! - `git.commit` → `Compensable { undo_tool: "git.undo_commit" }`：输出携带
+//! - `git_status` / `git_diff` / `git_log` → Pure（只 spawn git 读仓库状态）
+//! - `git_commit` → `Compensable { undo_tool: "git.undo_commit" }`：输出携带
 //!   新提交哈希，undo = `reset --soft HEAD~1`（改动保留在暂存区）
-//! - `git.push` → Irreversible：发布到远端，走审批
+//! - `git_push` → Irreversible：发布到远端，走审批
 //! - `git.undo_commit` → Irreversible：reset 改写仓库状态；undo 前先校验
-//!   HEAD 仍指向原提交，HEAD 动过即拒绝转人工（与 fs.restore 同理，按
+//!   HEAD 仍指向原提交，HEAD 动过即拒绝转人工（与 fs_restore 同理，按
 //!   plugins.md §八"宁可标错成 Irreversible"判级）
 //!
 //! 安全底线：
@@ -66,7 +66,7 @@ fn describe_manifest() -> CString {
         kind: PluginKind::Tool,
         tools: vec![
             ToolSpec {
-                name: "git.status".into(),
+                name: "git_status".into(),
                 description: "Show git working-tree status: current branch, ahead/behind \
                               vs upstream, and changed entries (x = index status, y = \
                               worktree status; '??' = untracked, 'A' = staged add, 'M' = \
@@ -82,7 +82,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "git.diff".into(),
+                name: "git_diff".into(),
                 description: "Show the unified diff of unstaged changes (default) or \
                               staged changes. Args: repo (required), staged (bool, \
                               default false), path (optional, restrict the diff to one \
@@ -100,7 +100,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "git.log".into(),
+                name: "git_log".into(),
                 description: "List recent commits, newest first. Args: repo (required), \
                               limit (default 20, max 100), path (optional, only commits \
                               touching that path). Returns {commits: [{hash, short, \
@@ -119,7 +119,7 @@ fn describe_manifest() -> CString {
                 side_effect: SideEffect::Pure,
             },
             ToolSpec {
-                name: "git.commit".into(),
+                name: "git_commit".into(),
                 description: "Stage files and create a commit. Args: repo (required), \
                               message (required), add (array of paths relative to the \
                               repo root) OR add_all (bool, stage everything including \
@@ -144,7 +144,7 @@ fn describe_manifest() -> CString {
                 },
             },
             ToolSpec {
-                name: "git.push".into(),
+                name: "git_push".into(),
                 description: "Push a branch to a remote. Args: repo (required), remote \
                               (default 'origin'), branch (required). Irreversible — \
                               publishing to the remote requires user approval."
@@ -162,7 +162,7 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "git.undo_commit".into(),
-                description: "Undo a previous git.commit by soft-resetting one commit \
+                description: "Undo a previous git_commit by soft-resetting one commit \
                               (the changes stay staged). Usually invoked by the \
                               compensation layer, not by the model. Args mirror the \
                               compensation payload {call_id, args, output}; only \
@@ -174,10 +174,10 @@ fn describe_manifest() -> CString {
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "call_id": { "type": "string", "description": "id of the original git.commit call" },
-                        "args": { "type": "object", "description": "original git.commit args" },
+                        "call_id": { "type": "string", "description": "id of the original git_commit call" },
+                        "args": { "type": "object", "description": "original git_commit args" },
                         "output": { "type": "object",
-                                    "description": "original git.commit result carrying repo/commit" }
+                                    "description": "original git_commit result carrying repo/commit" }
                     }
                 }),
                 side_effect: SideEffect::Irreversible,
@@ -226,11 +226,11 @@ impl PluginState for GitState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("tool-git: {tool} called"));
         match tool {
-            "git.status" => read::git_status(&args),
-            "git.diff" => read::git_diff(&args),
-            "git.log" => read::git_log(&args),
-            "git.commit" => write::git_commit(&args),
-            "git.push" => write::git_push(&args),
+            "git_status" => read::git_status(&args),
+            "git_diff" => read::git_diff(&args),
+            "git_log" => read::git_log(&args),
+            "git_commit" => write::git_commit(&args),
+            "git_push" => write::git_push(&args),
             "git.undo_commit" => write::git_undo_commit(&args),
             other => Err(format!("unknown tool `{other}`")),
         }

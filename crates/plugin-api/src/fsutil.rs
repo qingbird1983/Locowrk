@@ -6,7 +6,7 @@
 //!   `../` 与符号链接逃逸都被 canonicalize 归一后挡在根外（fail-closed）
 //! - 允许根 = `LOCOWRK_FS_ROOTS`（`;` 分隔，桌面端/CLI 启动时设为
 //!   工作区目录），未设置时**只放行数据根**（备份目录在数据根下，
-//!   fs.restore 天然可达）；默认最小暴露，放开必须显式配置
+//!   fs_restore 天然可达）；默认最小暴露，放开必须显式配置
 //! - 写入前备份原内容到数据根 `backups/<plugin>/`，undo 按路径自寻
 
 use std::io::ErrorKind;

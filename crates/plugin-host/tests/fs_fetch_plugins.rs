@@ -86,17 +86,17 @@ fn load_activate(plugin_id: &str, version: &str) -> (Arc<PluginRegistry>, Regist
 
 #[test]
 fn fs_tools_catalog_read_list_grep_roundtrip() {
-    let (_registry, source) = load_activate("tool-fs", "1.1.0");
+    let (_registry, source) = load_activate("tool-fs", "1.2.0");
 
     // 目录快照：六个工具，副作用分级符合 plugins.md §二
     let tools = source.list_tools();
     for expected in [
-        "fs.read",
-        "fs.list",
-        "fs.grep",
-        "fs.write",
-        "fs.delete",
-        "fs.restore",
+        "fs_read",
+        "fs_list",
+        "fs_grep",
+        "fs_write",
+        "fs_delete",
+        "fs_restore",
     ] {
         assert!(
             tools.iter().any(|s| s.name == expected),
@@ -110,18 +110,18 @@ fn fs_tools_catalog_read_list_grep_roundtrip() {
             .find(|s| s.name == name)
             .map(|s| s.side_effect.clone())
     };
-    for name in ["fs.read", "fs.list", "fs.grep"] {
+    for name in ["fs_read", "fs_list", "fs_grep"] {
         assert!(
             matches!(side_of(name), Some(plugin_api::SideEffect::Pure)),
             "{name} 应为 Pure"
         );
     }
     assert!(matches!(
-        side_of("fs.write"),
+        side_of("fs_write"),
         Some(plugin_api::SideEffect::Compensable { undo_tool })
-            if undo_tool == "fs.restore"
+            if undo_tool == "fs_restore"
     ));
-    for name in ["fs.delete", "fs.restore"] {
+    for name in ["fs_delete", "fs_restore"] {
         assert!(
             matches!(side_of(name), Some(plugin_api::SideEffect::Irreversible)),
             "{name} 应为 Irreversible"
@@ -137,9 +137,9 @@ fn fs_tools_catalog_read_list_grep_roundtrip() {
     std::fs::write(sub.join("nested.txt"), "deep beta match\n").unwrap();
     unsafe { std::env::set_var("LOCOWRK_FS_ROOTS", base.display().to_string()) };
 
-    // fs.list：目录在前；文件带大小
+    // fs_list：目录在前；文件带大小
     let list = call(
-        source.resolve("fs.list").unwrap().as_ref(),
+        source.resolve("fs_list").unwrap().as_ref(),
         json!({"path": base}),
     )
     .unwrap();
@@ -150,9 +150,9 @@ fn fs_tools_catalog_read_list_grep_roundtrip() {
     assert_eq!(hello_entry["kind"], "file");
     assert_eq!(hello_entry["size"], 27);
 
-    // fs.read：全量与截断
+    // fs_read：全量与截断
     let read = call(
-        source.resolve("fs.read").unwrap().as_ref(),
+        source.resolve("fs_read").unwrap().as_ref(),
         json!({"path": hello}),
     )
     .unwrap();
@@ -161,25 +161,25 @@ fn fs_tools_catalog_read_list_grep_roundtrip() {
     assert_eq!(read["size"], 27);
 
     let read = call(
-        source.resolve("fs.read").unwrap().as_ref(),
+        source.resolve("fs_read").unwrap().as_ref(),
         json!({"path": hello, "max_bytes": 10}),
     )
     .unwrap();
     assert_eq!(read["truncated"], true);
     assert_eq!(read["content"].as_str().unwrap().len(), 10);
 
-    // fs.read 目录 → 明确报错（不是静默）
+    // fs_read 目录 → 明确报错（不是静默）
     assert!(
         call(
-            source.resolve("fs.read").unwrap().as_ref(),
+            source.resolve("fs_read").unwrap().as_ref(),
             json!({"path": base})
         )
         .is_err()
     );
 
-    // fs.grep：大小写不敏感；file 字段可定位
+    // fs_grep：大小写不敏感；file 字段可定位
     let grep = call(
-        source.resolve("fs.grep").unwrap().as_ref(),
+        source.resolve("fs_grep").unwrap().as_ref(),
         json!({"path": base, "query": "beta"}),
     )
     .unwrap();
@@ -193,9 +193,9 @@ fn fs_tools_catalog_read_list_grep_roundtrip() {
     assert!(matches[0]["file"].as_str().unwrap().ends_with("hello.txt"));
     assert_eq!(matches[0]["text"], "BETA gamma");
 
-    // fs.grep 结果数上限 → truncated
+    // fs_grep 结果数上限 → truncated
     let grep = call(
-        source.resolve("fs.grep").unwrap().as_ref(),
+        source.resolve("fs_grep").unwrap().as_ref(),
         json!({"path": base, "query": "beta", "max_results": 1}),
     )
     .unwrap();

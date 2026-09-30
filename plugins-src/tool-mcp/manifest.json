@@ -1,6 +1,6 @@
 {
   "id": "tool-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "abi_version": 1,
   "kind": "tool",
 
@@ -20,13 +20,13 @@
 
   "tools": [
     {
-      "name": "mcp.status",
+      "name": "mcp_status",
       "description": "List the configured MCP servers: connection state, tool count and the last connection error (if any), plus config-level errors. Pure.",
       "schema": { "type": "object", "properties": {} },
       "side_effect": "Pure"
     },
     {
-      "name": "mcp.reload",
+      "name": "mcp_reload",
       "description": "Re-read the MCP config and re-establish every server connection. The tool list was frozen when the plugin loaded — servers added to mcp.json afterwards only appear after reloading the plugin. Pure.",
       "schema": { "type": "object", "properties": {} },
       "side_effect": "Pure"

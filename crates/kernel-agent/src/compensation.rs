@@ -9,7 +9,7 @@
 //! - undo 调用本身按纪律 5 记日志，用**新的** call_id（`{原id}-undo`）——
 //!   复用原 id 会让会话投影出现两条同 id 的 ToolResult，破坏后续真实模型
 //!   协议（OpenAI 风格 tool_call_id 必须唯一）
-//! - undo 工具若声明 Irreversible（如 fs.restore），照走审批门（纪律 9）
+//! - undo 工具若声明 Irreversible（如 fs_restore），照走审批门（纪律 9）
 
 use std::sync::Arc;
 
@@ -111,7 +111,7 @@ impl Kernel {
             side_effect: tool.spec().side_effect.clone(),
         });
 
-        // undo 工具声明 Irreversible 时照走审批门（纪律 9；fs.restore 即此类）
+        // undo 工具声明 Irreversible 时照走审批门（纪律 9；fs_restore 即此类）
         if matches!(
             tool.spec().side_effect,
             plugin_api::SideEffect::Irreversible

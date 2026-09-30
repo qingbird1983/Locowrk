@@ -1,6 +1,6 @@
 {
   "id": "tool-fs",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "abi_version": 1,
   "kind": "tool",
 
@@ -20,7 +20,7 @@
 
   "tools": [
     {
-      "name": "fs.read",
+      "name": "fs_read",
       "description": "Read a UTF-8 text file. Args: path (string, absolute), max_bytes (number, default 32768, max 1048576). Output is truncated at max_bytes; the response flags `truncated`.",
       "schema": {
         "type": "object",
@@ -33,7 +33,7 @@
       "side_effect": "Pure"
     },
     {
-      "name": "fs.list",
+      "name": "fs_list",
       "description": "List a directory (dirs first, then files, with type and size). Args: path (string, absolute).",
       "schema": {
         "type": "object",
@@ -45,7 +45,7 @@
       "side_effect": "Pure"
     },
     {
-      "name": "fs.grep",
+      "name": "fs_grep",
       "description": "Case-insensitive substring search over text files in a directory tree. Args: path (absolute), query (string), max_results (default 50, max 200), max_depth (default 3, max 8).",
       "schema": {
         "type": "object",
@@ -60,8 +60,8 @@
       "side_effect": "Pure"
     },
     {
-      "name": "fs.write",
-      "description": "Write a UTF-8 text file (create or overwrite). Args: path (absolute), content, create_dirs (bool, default false). The previous content, if any, is backed up automatically and the result carries {path, bytes, existed, backup}; pass that result to fs.restore to undo.",
+      "name": "fs_write",
+      "description": "Write a UTF-8 text file (create or overwrite). Args: path (absolute), content, create_dirs (bool, default false). The previous content, if any, is backed up automatically and the result carries {path, bytes, existed, backup}; pass that result to fs_restore to undo.",
       "schema": {
         "type": "object",
         "properties": {
@@ -71,10 +71,10 @@
         },
         "required": ["path", "content"]
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "fs.restore" }
+      "side_effect": { "kind": "compensable", "undo_tool": "fs_restore" }
     },
     {
-      "name": "fs.delete",
+      "name": "fs_delete",
       "description": "Delete a file (directories are rejected in v1). Args: path (absolute). Irreversible — no backup is kept, the call requires user approval.",
       "schema": {
         "type": "object",
@@ -86,14 +86,14 @@
       "side_effect": "Irreversible"
     },
     {
-      "name": "fs.restore",
-      "description": "Undo a previous fs.write by restoring its backup (the backup is consumed; restoring twice is a no-op). Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.{path, backup, existed} is used. Irreversible — restoring overwrites the file's current content, so the call requires user approval.",
+      "name": "fs_restore",
+      "description": "Undo a previous fs_write by restoring its backup (the backup is consumed; restoring twice is a no-op). Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.{path, backup, existed} is used. Irreversible — restoring overwrites the file's current content, so the call requires user approval.",
       "schema": {
         "type": "object",
         "properties": {
-          "call_id": { "type": "string", "description": "id of the original fs.write call" },
-          "args": { "type": "object", "description": "original fs.write args" },
-          "output": { "type": "object", "description": "original fs.write result carrying path/backup/existed" }
+          "call_id": { "type": "string", "description": "id of the original fs_write call" },
+          "args": { "type": "object", "description": "original fs_write args" },
+          "output": { "type": "object", "description": "original fs_write result carrying path/backup/existed" }
         }
       },
       "side_effect": "Irreversible"

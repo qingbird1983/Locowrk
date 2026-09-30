@@ -61,6 +61,9 @@ fn private_ip_matrix() {
 
 #[test]
 fn guard_denies_localhost_and_ip_literals() {
+    // env 是进程级全局：与设 LOCOWRK_FETCH_ALLOW_PRIVATE 的用例串行，
+    // 否则后门开着时本用例必挂（并行竞态）
+    let _env_lock = ENV_LOCK.lock().unwrap();
     // IP 字面量不需要 DNS
     let err = guard("http://127.0.0.1:6379/").unwrap_err();
     assert!(err.contains("SSRF guard"), "got: {err}");

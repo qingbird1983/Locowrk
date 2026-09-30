@@ -1,18 +1,18 @@
 //! tool-edit：精确代码编辑插件（plugins.md P1，阶段八⑥第二批）。
 //!
-//! 三个工具，全部 `Compensable { undo_tool: "fs.restore" }`——每次编辑前
+//! 三个工具，全部 `Compensable { undo_tool: "fs_restore" }`——每次编辑前
 //! 读原文件生成精确 undo 数据（整文件备份进数据根），撤销统一走 tool-fs
-//! 的 `fs.restore`（跨插件 undo：官方捆绑保证同装；备份布局与恢复契约
+//! 的 `fs_restore`（跨插件 undo：官方捆绑保证同装；备份布局与恢复契约
 //! 见 tool-fs 文档，实现共享 `plugin_api::fsutil`）：
-//! - `edit.replace`：old_string → new_string 精确替换（默认强制唯一命中）
-//! - `edit.lines`：按 1-based 行号区间替换
-//! - `edit.diff`：应用 unified diff（严格精确匹配，无 fuzz）
+//! - `edit_replace`：old_string → new_string 精确替换（默认强制唯一命中）
+//! - `edit_lines`：按 1-based 行号区间替换
+//! - `edit_diff`：应用 unified diff（严格精确匹配，无 fuzz）
 //!
-//! 为什么比 fs.write 重要（plugins.md §三）：整文件重写会丢未预期改动、
+//! 为什么比 fs_write 重要（plugins.md §三）：整文件重写会丢未预期改动、
 //! 浪费 token；编辑类工具让模型只提交 diff。
 //!
 //! 安全底线：路径过 `plugin_api::fsutil` 允许根校验（同 tool-fs）；
-//! 目标文件必须已存在（新建走 fs.write）。
+//! 目标文件必须已存在（新建走 fs_write）。
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 
@@ -57,7 +57,7 @@ fn plugin_version() -> &'static str {
 /// describe 符号的数据源：manifest JSON（NUL 结尾，约定见 plugin-api::ffi）。
 fn describe_manifest() -> CString {
     let compensable = || SideEffect::Compensable {
-        undo_tool: "fs.restore".into(),
+        undo_tool: "fs_restore".into(),
     };
     let manifest = PluginManifest {
         id: PLUGIN_ID.into(),
@@ -66,12 +66,12 @@ fn describe_manifest() -> CString {
         kind: PluginKind::Tool,
         tools: vec![
             ToolSpec {
-                name: "edit.replace".into(),
+                name: "edit_replace".into(),
                 description: "Exact string replacement in a text file (the file must exist). \
                               Args: path (absolute), old_string (must match exactly once unless \
                               replace_all), new_string, replace_all (bool, default false). \
                               The original file is backed up automatically; the result carries \
-                              {path, bytes, edits, backup} for fs.restore to undo."
+                              {path, bytes, edits, backup} for fs_restore to undo."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -89,12 +89,12 @@ fn describe_manifest() -> CString {
                 side_effect: compensable(),
             },
             ToolSpec {
-                name: "edit.lines".into(),
+                name: "edit_lines".into(),
                 description: "Replace a 1-based inclusive line range in a text file (the file \
                               must exist). Args: path (absolute), start_line, end_line, content \
                               (new text for the range; empty content deletes it). \
                               The original file is backed up automatically; the result carries \
-                              {path, bytes, replaced, backup} for fs.restore to undo."
+                              {path, bytes, replaced, backup} for fs_restore to undo."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -112,13 +112,13 @@ fn describe_manifest() -> CString {
                 side_effect: compensable(),
             },
             ToolSpec {
-                name: "edit.diff".into(),
+                name: "edit_diff".into(),
                 description: "Apply a unified diff to a text file (the file must exist). \
                               Args: path (absolute), patch (unified diff text with @@ hunks). \
                               Context lines must match exactly — no fuzz; on mismatch the tool \
                               errors and the file is untouched. The original file is backed up \
                               automatically; the result carries {path, bytes, hunks_applied, \
-                              backup} for fs.restore to undo."
+                              backup} for fs_restore to undo."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -175,9 +175,9 @@ impl PluginState for EditState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("tool-edit: {tool} called"));
         match tool {
-            "edit.replace" => replace::edit_replace(&args),
-            "edit.lines" => lines::edit_lines(&args),
-            "edit.diff" => diff::edit_diff(&args),
+            "edit_replace" => replace::edit_replace(&args),
+            "edit_lines" => lines::edit_lines(&args),
+            "edit_diff" => diff::edit_diff(&args),
             other => Err(format!("unknown tool `{other}`")),
         }
     }

@@ -1,4 +1,4 @@
-//! 只读三件套：fs.read / fs.list / fs.grep（全 Pure——随便调，回退免费）。
+//! 只读三件套：fs_read / fs_list / fs_grep（全 Pure——随便调，回退免费）。
 //!
 //! 安全底线：路径参数先过 `fsutil::resolve_existing`（canonicalize + 允许根
 //! 前缀校验）；目录遍历**跳过符号链接**（read_dir 的 file_type 不跟随，
@@ -28,15 +28,15 @@ pub(crate) fn fs_read(args: &Value) -> Result<Value, String> {
     let max = arg_u64(args, "max_bytes", READ_DEFAULT, READ_MAX)?;
     let resolved = resolve_existing(std::path::Path::new(&path), &allowed_roots()?)?;
     let display = resolved.display().to_string();
-    let meta = std::fs::metadata(&resolved).map_err(|e| format!("fs.read `{display}`: {e}"))?;
+    let meta = std::fs::metadata(&resolved).map_err(|e| format!("fs_read `{display}`: {e}"))?;
     if meta.is_dir() {
-        return Err(format!("fs.read `{display}` is a directory (use fs.list)"));
+        return Err(format!("fs_read `{display}` is a directory (use fs_list)"));
     }
-    let file = std::fs::File::open(&resolved).map_err(|e| format!("fs.read `{display}`: {e}"))?;
+    let file = std::fs::File::open(&resolved).map_err(|e| format!("fs_read `{display}`: {e}"))?;
     let mut buf = Vec::new();
     file.take(max + 1)
         .read_to_end(&mut buf)
-        .map_err(|e| format!("fs.read `{display}`: {e}"))?;
+        .map_err(|e| format!("fs_read `{display}`: {e}"))?;
     let truncated = buf.len() as u64 > max;
     buf.truncate(max as usize);
     Ok(json!({
@@ -51,7 +51,7 @@ pub(crate) fn fs_list(args: &Value) -> Result<Value, String> {
     let path = arg_path(args)?;
     let resolved = resolve_existing(std::path::Path::new(&path), &allowed_roots()?)?;
     let display = resolved.display().to_string();
-    let rd = std::fs::read_dir(&resolved).map_err(|e| format!("fs.list `{display}`: {e}"))?;
+    let rd = std::fs::read_dir(&resolved).map_err(|e| format!("fs_list `{display}`: {e}"))?;
     let mut entries: Vec<(bool, Value)> = rd
         .flatten()
         .filter_map(|e| {
@@ -91,7 +91,7 @@ pub(crate) fn fs_grep(args: &Value) -> Result<Value, String> {
         .ok_or_else(|| "missing string field `query`".to_string())?
         .to_lowercase();
     if query.is_empty() {
-        return Err("fs.grep `query` must not be empty".into());
+        return Err("fs_grep `query` must not be empty".into());
     }
     let max_results =
         arg_u64(args, "max_results", GREP_RESULTS_DEFAULT, GREP_RESULTS_MAX)? as usize;

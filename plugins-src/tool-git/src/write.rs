@@ -17,7 +17,7 @@ pub(crate) fn git_commit(args: &Value) -> Result<Value, String> {
         .and_then(Value::as_str)
         .ok_or_else(|| "missing string field `message`".to_string())?;
     if message.trim().is_empty() {
-        return Err("git.commit: `message` must not be empty".into());
+        return Err("git_commit: `message` must not be empty".into());
     }
     let add_all = args
         .get("add_all")
@@ -33,11 +33,11 @@ pub(crate) fn git_commit(args: &Value) -> Result<Value, String> {
         })
         .unwrap_or_default();
     if add_all && !add.is_empty() {
-        return Err("git.commit: use either `add` or `add_all`, not both".into());
+        return Err("git_commit: use either `add` or `add_all`, not both".into());
     }
     if !add_all && add.is_empty() {
         return Err(
-            "git.commit: nothing to stage — pass `add` (paths) or `add_all`=true".to_string(),
+            "git_commit: nothing to stage — pass `add` (paths) or `add_all`=true".to_string(),
         );
     }
 
@@ -80,7 +80,7 @@ fn ensure_path_in_repo(repo: &Path, p: &str) -> Result<PathBuf, String> {
     let roots = allowed_roots()?;
     let resolved = resolve_for_write(&full, &roots)?;
     if !resolved.starts_with(repo) {
-        return Err(format!("git.commit: path `{p}` is outside the repository"));
+        return Err(format!("git_commit: path `{p}` is outside the repository"));
     }
     Ok(resolved)
 }
@@ -110,7 +110,7 @@ pub(crate) fn git_push(args: &Value) -> Result<Value, String> {
     for (field, name) in [("remote", remote), ("branch", branch)] {
         if !valid_refname(name) {
             return Err(format!(
-                "git.push: `{field}` `{name}` contains unsupported characters"
+                "git_push: `{field}` `{name}` contains unsupported characters"
             ));
         }
     }
@@ -130,13 +130,13 @@ pub(crate) fn git_push(args: &Value) -> Result<Value, String> {
 pub(crate) fn git_undo_commit(args: &Value) -> Result<Value, String> {
     let output = args.get("output").unwrap_or(args);
     let repo_str = output.get("repo").and_then(Value::as_str).ok_or_else(|| {
-        "git.undo_commit: missing `output.repo` (pass the original git.commit result)".to_string()
+        "git.undo_commit: missing `output.repo` (pass the original git_commit result)".to_string()
     })?;
     let commit = output
         .get("commit")
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            "git.undo_commit: missing `output.commit` (pass the original git.commit result)"
+            "git.undo_commit: missing `output.commit` (pass the original git_commit result)"
                 .to_string()
         })?;
     let repo = resolve_repo_str(repo_str)?;

@@ -80,9 +80,9 @@ fn discover_call_grades_reload_and_lazy_reconnect() {
 
     // 规格：echo 继承 server 级 pure，boom 被 tool_effects 收紧为 irreversible
     let specs = reg.tool_specs();
-    let echo = specs.iter().find(|s| s.name == "mcp.fake.echo").unwrap();
+    let echo = specs.iter().find(|s| s.name == "mcp_fake_echo").unwrap();
     assert!(matches!(echo.side_effect, SideEffect::Pure));
-    let boom = specs.iter().find(|s| s.name == "mcp.fake.boom").unwrap();
+    let boom = specs.iter().find(|s| s.name == "mcp_fake_boom").unwrap();
     assert!(matches!(boom.side_effect, SideEffect::Irreversible));
 
     // 调用：文本回显 + 工具级失败作为数据返回（tool-fetch 惯例）
@@ -243,17 +243,17 @@ fn describe_and_make_state_share_discovery() {
         .map(|t| t["name"].as_str().unwrap())
         .collect();
     assert_eq!(names.len(), 5);
-    assert!(names.contains(&"mcp.status"));
-    assert!(names.contains(&"mcp.reload"));
-    assert!(names.contains(&"mcp.fake.echo"));
+    assert!(names.contains(&"mcp_status"));
+    assert!(names.contains(&"mcp_reload"));
+    assert!(names.contains(&"mcp_fake_echo"));
 
     // make_state 接管 static 里的连接（不重复 spawn），host 指针 null 安全
     let state = make_state(std::ptr::null());
     let out =
-        PluginState::call(state.as_ref(), "mcp.fake.echo", json!({ "text": "flow" })).unwrap();
+        PluginState::call(state.as_ref(), "mcp_fake_echo", json!({ "text": "flow" })).unwrap();
     assert_eq!(out["content"], json!("echo: flow"));
     // 管理工具走同一入口
-    let st = PluginState::call(state.as_ref(), "mcp.status", json!({})).unwrap();
+    let st = PluginState::call(state.as_ref(), "mcp_status", json!({})).unwrap();
     assert_eq!(st["servers"][0]["name"], json!("fake"));
 
     drop(state);
