@@ -112,7 +112,7 @@
 | 会话内热度 | ✅ | 从 `RequestPayload.messages` 实时数 ToolResult（§3.5"不落盘"——投影日志即会话事实，零新 trait、无跨会话竞态）；会话 1.0 > 全局 0.7，always 直通不占额度；检索 0.5 归 ⑬ |
 | search_tools 元工具 | ✅ | 宿主内置 always+Pure（目录+统计是宿主关切，插件看不到注册表）；关键词检索全目录（name 2 分/desc 1 分 + query 原串照顾中文）截 8 条；空结果回退 top-10 高频 ∩ 目录，统计也空则如实 no_match；**有意扩 API**：RegistryToolSource::list_all_tools 含 hidden（§4.1"显式检索才暴露"的唯一通路，resolve 本就不过滤） |
 
-### S1 tool-shell 安全分级与进程治理（《Setting and Constrained Optimization.md》§2，2026-09-30 逐项对照源码核对后入库）
+### S1 tool-shell 安全分级与进程治理（✅ 已完成，提交 f0fce64）
 
 > 核对修正三条（排期按修正后事实走）：① 白名单"prog+子命令"两段匹配**机制已在**
 > （policy.rs `decide`，`LOCOWRK_SHELL_ALLOW` 支持 `git log` 形态）——缺的只是默认
@@ -123,12 +123,12 @@
 
 | 项 | 状态 | 说明 |
 |---|---|---|
-| 只读命令免审批分级 | ⬜ | ls/cat/grep 与 git 只读子命令（status/log/diff/show）审批豁免；**必须带参数路径校验**——参数（含相对路径对 cwd 解析）出现允许根外目标 → 降级审批，否则 shell 的 cat 绕过 fsutil 守卫读任意盘文件（现 exec.rs 无任何路径检查）；实现形态批次内定（宿主审批中间件读豁免清单，或插件拆只读工具） |
-| denylist 补齐 | ⬜ | 解释器类主力已在（python/node/bash/cmd/powershell/perl/ruby/php/lua…）；补包装类 xargs/env/find/nice/timeout/nohup/time、网络类 nc/ncat/netcat/telnet/rsync、Windows exec 面 wscript/cscript/mshta/rundll32、macOS osascript |
-| allow∩denylist 启动冲突日志 | ⬜ | init 读 `LOCOWRK_SHELL_ALLOW` 后与 DENYLIST 求交集 → tracing::warn 列出被压制的条目（denylist 仍永远赢不变） |
-| 进程组 kill | ⬜ | 现 `child.kill()` 只杀首进程，孙进程成孤儿（属实）；Windows Job Object（KILL_ON_JOB_CLOSE）/ Unix setpgid + killpg 杀全树 |
-| 截断提示文案 | ⬜ | truncated=true 时输出尾部附"已截断，可缩小范围/换参数重试"提示（机制已在，只补文案） |
-| 高危命令可解锁开关 | ⬜ | rm/sudo/chmod/dd/mkfs 等"用户可判断后果"类：默认拒绝，设置开启后**走审批而非直接放行**；解释器/包装/网络类保持硬锁（清单 §3 三级分类；清单 §2.3 与 §2.7 对 dd/mkfs 归类矛盾，按 §2.7/§3 裁决） |
+| 只读命令免审批分级 | ✅ | **拆只读工具**形态：`shell_read`（Pure）只放 ls/cat/grep + git status\|log\|diff\|show（固定表，不吃 LOCOWRK_SHELL_ALLOW）；路径校验 paths.rs **复用 fsutil allowed_roots（与 fs_* 同源根）**：生效 cwd 出根整条拒、非 flag 候选与 `--flag=值` resolve 出根拒、`-f/…` 贴值形态带分隔符即拒、不存在候选视为模式串放行；拒绝文案引导改用 `shell`（降级审批 = 模型换工具，宿主审批门不变）；plugin-host e2e 新用例覆盖三态 |
+| denylist 补齐 | ✅ | 双清单拆分：`DENY_HARD` 46 项（解释器/网络主力 + **新补包装 xargs/env/find/nice/timeout/nohup/time、网络 nc/ncat/netcat/telnet/rsync、exec 面 wscript/cscript/mshta/rundll32/osascript**）+ `DENY_RISKY` 35 项（高危可解锁）；§2.3 磁盘/系统类 mount/chroot/systemctl 随 §2.7 裁决归高危 |
+| allow∩denylist 启动冲突日志 | ✅ | policy.rs `conflicting_allow`（两级清单求交）+ make_state 里经宿主 vtable 打 warn 点名被压制条目；解锁开关开启也打一条可见 warn（红警告原则）；denylist 永远赢不变 |
+| 进程组 kill | ✅ | Windows：JobGuard（CreateJobObjectW + JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE，spawn 即 assign，Drop/超时 TerminateJobObject）——windows-sys 0.61 需补 Win32_Security feature（CreateJobObjectW 签名引 SECURITY_ATTRIBUTES）；Unix：`Command::process_group(0)` + killpg(SIGKILL)；**正常退出也收尾**（先清场再收管道）——残留孙进程握管道会让 rx 永等，旧代码本就有的悬挂一并修掉 |
+| 截断提示文案 | ✅ | stdout/stderr 截断尾部附"[output truncated at N bytes — narrow the command scope … or raise max_bytes and retry]"（英文，模型面文案与工具 description 同语言） |
+| 高危命令可解锁开关 | ✅ | settings.json 新 `shell` 区 {unlockRisky，缺省 false} → state.rs **插件加载前**写 `LOCOWRK_SHELL_UNLOCK_RISK` env（tool-shell init 读一次，**重启生效**——插件无运行期配置通道，kv_get 尚未开放）；解锁后高危放行，shell 工具 Irreversible，**放行即审批**；硬锁类不受开关影响；ShellSection.vue 设置分区（琥珀红警告 + 重启提示） |
 
 ### S2 设置归属、数字呈现与内置插件禁用（清单 §1/§5/§6/§3 余项）
 
