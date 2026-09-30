@@ -59,19 +59,19 @@
 | design tokens | ✅ | style.css `--lw-*`（表面/文本/语义色/圆角/间距，唯一样式事实源；不做视觉抛光） |
 | PluginMarket.vue 拆分 | ✅ | 291 → 54 行：DiscoverTab/InstalledTab 子组件 + lib/plugin-helpers；check_length.sh 纳入 .vue |
 
-### ⑨ 上下文管理收口（P0）（下一批）
+### ⑨ 上下文管理收口（P0）（✅ 已完成，提交 92f298b）
 
 > 详见 DESIGN.md §14 v2.17 ⑨段 + 《Context and Memory.md》§3。
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| ctx-compact 中间件本体 | ◐ | 已存在（v2.14 固定 32k + keep_recent 8），本批改配置驱动 |
-| 模型窗口来源 | ⬜ | LlmService 拿 context window（设置字段 + 预设表）——开工先做，阈值按百分比算的前置 |
-| 压缩阈值设置面板 | ⬜ | 滑条 + 百分比/绝对 token 双显示 + 下限 20% 警告（原收尾 backlog 项转正） |
-| 压缩策略三档 | ⬜ | 滑动窗口 / 分层保留（默认）/ 仅摘要；压到阈值 50% 留缓冲 |
-| 动态建议值 | ⬜ | 按窗口大小建议（本地 30% / 中等 35% / 大窗 25% / 1M 15%） |
-| ContextCompacted 事件 + 撤销 | ⬜ | 进 session-store（serde default 兼容旧日志）+ rewind_to |
-| 会话内实时进度条 | ⬜ | 绿/黄/红分级事件推送 + 压缩系统消息 |
+| ctx-compact 中间件本体 | ✅ | 配置驱动重写：CompactConfig{threshold_tokens, strategy} 经共享 RwLock 注入，settings_set 成功即热换入 |
+| 模型窗口来源 | ✅ | settings.json `context.windowTokens`（设置字段 + 预设 8k–1M + 自定义；genai 不暴露元数据）；窗口未知回落 32k 保守保护 |
+| 压缩阈值设置面板 | ✅ | ContextSection：滑条 10–90%（10% 一级）+ 百分比/绝对 token 双显示 + <20% 警告 |
+| 压缩策略三档 | ✅ | 滑动窗口（纯本地）/ 分层保留（默认）/ 仅摘要；目标 = 阈值 50%；摘要失败或缺 LlmService 就地降级滑动 |
+| 动态建议值 | ✅ | suggested_threshold(window) 后端分档（30/35/25/15），投影带 suggested_pct；前端表单即时同表换算 |
+| ContextCompacted 事件 + 撤销 | ✅ | 进 session-store（serde default 兼容旧日志；摘要存全文，折叠留尾部 kept_messages）；撤销 = rewind_to + fork 原地换入（会话 id 不变，其后轮次一并回退） |
+| 会话内实时进度条 | ✅ | 每 step 推 agent://context-usage（与压缩同估算口径）→ ContextProgressBar；压缩推 agent://context-compacted → SystemNotice [查看详情][撤销] 真接线 |
 
 ### ⑩ 暴露声明 + 使用统计地基 + 闲置 UI
 
@@ -129,7 +129,7 @@
 | 项 | 说明 | 计划搭车批次 |
 |---|---|---|
 | fs roots 工作区目录选择器 | 桌面端接线 LOCOWRK_FS_ROOTS | 壳批次或⑩ |
-| desktop session 持久化 | 会话事件落盘 | ⑨（ContextCompacted 依赖会话日志） |
+| desktop session 持久化 | 会话事件落盘 | 看需求（⑨ 压缩/撤销在内存会话上已可用；落盘顺带解决撤销 fork 的物理留痕） |
 | LLM 流式输出 | genai 流式 → 事件推送 | 看需求 |
 | 市场 wasm 打包分发 | ⑧⑧ 遗留 | 看需求 |
 | kv_get 所有权协议 | | 看需求 |
@@ -166,7 +166,7 @@
 | tool-http | ⬜ 未排期 | POST/PUT 通用请求；已入收尾 backlog |
 | memory-sqlite | ✅ | v2.15（跨会话记忆；plugins.md 所述"会话持久化"归 session-store——desktop 落盘在 backlog） |
 | memory-vector | ⏸ | → ⑬ 智能层 |
-| ctx-compact | ◐ | v2.14 宿主侧中间件已跑；配置化收口 → ⑨ |
+| ctx-compact | ✅ | v2.19 配置驱动收口（三策略/阈值 50%/事件+撤销，92f298b） |
 
 ### P1.5 —— 中间件类：宿主侧形态已齐，插件化未做
 
