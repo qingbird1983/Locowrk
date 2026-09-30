@@ -41,24 +41,25 @@
 
 ## 二、当前排期（v2.17，2026-09-29 确认）
 
-### 壳批次 —— UI 骨架（下一批，先于⑨）
+### 壳批次 —— UI 骨架（✅ 已完成，提交 a2c82a5）
 
 > 动因：功能越多 UI 越乱的根因是缺落位规则。壳只锁结构与规则，内容留给
-> 功能批次；视觉抛光仍归最后。详见 DESIGN.md §14 v2.17 壳批次段。
+> 功能批次；视觉抛光仍归最后。详见 **docs/design/UI shell and patterns.md**
+> （本批落点文档：模式库 / 流向图 / 弹层规则 / 扩展规则）。
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| 导航模型定稿 | ⬜ | 顶层 4 视图（对话/插件/记忆/设置）；>4 视图时 pill nav 切侧边栏；开发者面板挂设置内 |
-| 列表页模式 | ⬜ | 插件页/记忆页共用：搜索、筛选 chips、多选批量栏、行内徽章、空态 |
-| 设置分区模式 | ⬜ | settings.json 分区 ↔ 面板分区一一对应（llm / context / memory / shortcut） |
-| 会话内系统消息模式 | ⬜ | 压缩通知[查看详情][撤销] / "已记住：xxx" / 审批结果统一组件 |
-| 徽章体系 + 进度条模式 | ⬜ | SideEffectBadges 并入闲置徽章（灰/黄/红） |
-| 事件→UI 流向图 | ⬜ | `agent://` → store → 组件 + command → 面板 映射表，功能批次只扩表 |
-| 弹层规则 | ⬜ | modal（审批）/ 行内展开 / 独立页面 的判据 |
-| design tokens | ⬜ | 间距/圆角/色板 CSS 变量（不做全面抛光） |
-| PluginMarket.vue 拆分 | ⬜ | 现 291 行，400 行纪律必拆 |
+| 导航模型定稿 | ✅ | 顶层 4 视图（对话/插件/记忆/设置）；>4 视图时 pill nav 切侧边栏（届时再评估 router）；开发者面板挂设置内 |
+| 列表页模式 | ✅ | `patterns/ListPage.vue`：插件已安装页（origin chips）+ 记忆页骨架共用；搜索、筛选 chips、批量栏插槽、空态 |
+| 设置分区模式 | ✅ | settings.json 分区 ↔ 面板分区一一对应；llm/sessions/language/shortcut 实装，context/memory/developer 占位（⑨⑪⑫ 同批替换） |
+| 会话内系统消息模式 | ✅ | `chat/SystemNotice.vue` + chat store system 类别（存 i18n key）；压缩通知[查看详情][撤销]/"已记住"/审批结果统一形态 |
+| 徽章体系 + 进度条模式 | ✅ | `IdleBadge.vue`（六级→灰/黄/红，后端只给结构化数据）+ `ContextProgressBar.vue`（绿/黄/红，无数据不渲染），挂载点就位数据随⑨⑩ |
+| 事件→UI 流向图 | ✅ | UI shell and patterns.md §4：`agent://`→store→组件 + command→面板 映射表，功能批次只扩表 |
+| 弹层规则 | ✅ | UI shell and patterns.md §5：modal（审批，全局至多一个）/ 行内展开 / 独立页面 / 默认不弹 判据 |
+| design tokens | ✅ | style.css `--lw-*`（表面/文本/语义色/圆角/间距，唯一样式事实源；不做视觉抛光） |
+| PluginMarket.vue 拆分 | ✅ | 291 → 54 行：DiscoverTab/InstalledTab 子组件 + lib/plugin-helpers；check_length.sh 纳入 .vue |
 
-### ⑨ 上下文管理收口（P0）
+### ⑨ 上下文管理收口（P0）（下一批）
 
 > 详见 DESIGN.md §14 v2.17 ⑨段 + 《Context and Memory.md》§3。
 
@@ -133,7 +134,7 @@
 | 市场 wasm 打包分发 | ⑧⑧ 遗留 | 看需求 |
 | kv_get 所有权协议 | | 看需求 |
 | profile.toml 设置面板接线 | | 看需求 |
-| 托盘菜单 i18n | | 壳批次 |
+| 托盘菜单 i18n | ✅ 已随壳批次完成（a2c82a5：sys-locale 探测，语言改动即时重挂菜单） | — |
 | UI 视觉抛光 | 壳批次 tokens 之后统一做 | ⑬ 后 |
 | tool-http（POST/PUT 通用请求） | plugins.md P1 唯一未做的工具类；tool-fetch 仅 GET（其代码注释已声明 POST/PUT 归本插件） | 看需求 |
 | mw-ratelimit 调用限速 | plugins.md P1.5 中间件：限制单位时间调用次数 | 看需求 |

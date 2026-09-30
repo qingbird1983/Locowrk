@@ -2492,13 +2492,42 @@ export const usePluginStore = defineStore('plugins', {
 > 流式、市场 wasm 打包分发、kv_get 所有权、profile.toml 面板接线、托盘
 > i18n），随批次搭车。
 >
+> **壳批次落点（UI 骨架，v2.18，提交 a2c82a5）**：落地规则文档
+> `docs/design/UI shell and patterns.md`（§2 导航 / §3 模式库 / §4 流向图
+> / §5 弹层规则 / §6 tokens / §7 扩展规则——功能批次照 §七"只扩表不改
+> 骨架"执行；规则没落位的东西先改文档再写码）。代码：`App.vue` 顶层 4
+> 视图定稿（对话/插件/记忆/设置；>4 再切侧边栏并届时评估 vue-router，
+> 现不引入；chat `v-show` 保活，余 `v-if` 按需挂载）；`patterns/ListPage`
+> 列表页模式（chips+搜索头部 → 空态优先内容 → `#batch` 批量栏插槽；
+> 插件-已安装页 origin chips 与记忆页骨架为头两实例）；`chat/SystemNotice`
+> 会话内系统消息模式 + chat store `system` 类别——**存 i18n key 而非渲染
+> 文本**（文案是 UI 不是会话数据，语言切换对历史消息同样生效），
+> `pushNotice()` 是唯一生产入口（⑨ 压缩通知 [查看详情][撤销]、⑪ "已
+> 记住"接入即用，动作只上抛 id 由批次接线）；`IdleBadge`（六级 →
+> fresh/normal 不显示、idle 灰 / stale 黄 / abandoned+never_used 红；
+> 契约 = 后端只给 IdleInfo 结构化 `{level,value,unit}`，前端渲染"多久
+> 没用"）与 `ContextProgressBar`（绿 <60% / 黄 60-99% / 红 ≥阈值；null
+> 整个不渲染）挂载点就位、数据随⑨⑩接；设置面板拆 `settings/` 区组件
+> （settings.json 分区 ↔ 面板分区一一对应：llm/sessions/language/
+> shortcut 实装，context/memory/developer 虚线占位——**占位在对应批次
+> 同批替换，不留永久空壳**）；PluginMarket 291→54 行（DiscoverTab /
+> InstalledTab 子组件 + `lib/plugin-helpers` 纯助手；check_length.sh
+> 纳入 `.vue`）；`style.css` `--lw-*` design tokens（表面三级/文本四级/
+> 语义色五/圆角四/间距五，与 Tailwind 同值，唯一样式事实源，存量组件
+> 不动）。搭车：托盘菜单 i18n——原生菜单无法复用 TS 文案表，tray.rs
+> 自带双语小表，按 settings `locale` 取、`system` 经 sys-locale 探测
+> （zh*→中文），settings_set 改语言成功即 `refresh_menu` 重挂（失败仅
+> 日志）。验证：`pnpm build`（vue-tsc）过、desktop `cargo test` 23 过、
+> check_length OK（最大 .vue = InstalledTab 193 行）。壳不自产数据：
+> 徽章/进度条/批量栏/占位分区的数据接线全部归⑨⑩⑪⑫。
+>
 > **进度**：① 已完成（§13.1 备注）。② 已完成（v2.8，§7.2 备注）：桌面端
 > `llm/` 模块以 genai 0.6 实现 `LlmService`，`LlmRequest` 携带工具目录快照
 > （`ToolSource::list()`），配置读设置面板、保存即生效，model 未配置回落
 > 脚本替身；真窗口 E2E（本机 Ollama 9B）全链路通过——模型按 schema 自选
 > 参数调用 tool-echo 插件、工具结果回传后给最终回答。③ 已完成（v2.9，
 > §7.1 备注）。④ 已完成（④a–④c v2.11，④d/④e v2.12）、⑤ 已完成
-> （v2.13，上注）、⑥ 已完成（第二批官方内置插件 + 安全底线，v2.14，上注）、⑦ 已完成（第三批官方内置插件 tool-git / memory-sqlite / tool-mcp，v2.15，上注）、⑧ 已完成（WASM 加载器，v2.16，上注）。编号阶段①–⑧全部落地。后续排期（v2.17，上注）：壳批次（UI 骨架）→ ⑨ 上下文管理收口（P0）→ ⑩ 暴露声明 + 使用统计地基 + 闲置 UI → ⑪ 记忆注入 + 记忆管理 UI → ⑫ EWMA 打分截断 + search_tools 元工具 → ⑬ 智能层（向量/隐式提取/自动停用，看需求）；收尾 backlog 随批次搭车。
+> （v2.13，上注）、⑥ 已完成（第二批官方内置插件 + 安全底线，v2.14，上注）、⑦ 已完成（第三批官方内置插件 tool-git / memory-sqlite / tool-mcp，v2.15，上注）、⑧ 已完成（WASM 加载器，v2.16，上注）。编号阶段①–⑧全部落地。**v2.17 排期已开跑：壳批次（UI 骨架）已完成（v2.18，上注，提交 a2c82a5）**。下一批 ⑨ 上下文管理收口（P0）→ ⑩ 暴露声明 + 使用统计地基 + 闲置 UI → ⑪ 记忆注入 + 记忆管理 UI → ⑫ EWMA 打分截断 + search_tools 元工具 → ⑬ 智能层（向量/隐式提取/自动停用，看需求）；收尾 backlog 随批次搭车（托盘 i18n 已随壳批次完成）。
 
 **阶段一和阶段二是试金石**：如果内核的服务组合和 Effect 撤销链设计干净，后续所有能力都是叠加。**阶段五和阶段六是桌面端的试金石**：如果 Tauri IPC 层能干净地桥接内核事件流，后续插件管理 UI 都是在这个模式上叠加。
 
@@ -2633,6 +2662,6 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.17（v2.17 排期重排（用户 2026-09-29 确认）：两份新配套文档入库——docs/design/Tool exposure strategy and usage statistics.md（工具暴露与使用统计）与 docs/design/Context and Memory.md（上下文与记忆管理）；排为壳批次（UI 骨架：导航模型定稿 / 页面模式库 / 事件→UI 流向图 / 弹层规则 / design tokens，PluginMarket 拆分顺带）+ ⑨ 上下文管理收口 P0（LlmService 窗口来源先行 / compact 配置驱动三档策略 / 压到阈值 50% / ContextCompacted 事件 + rewind 撤销 / 实时进度条）+ ⑩ 暴露声明 + 使用统计地基 + 闲置 UI（ToolSpec exposure 字段零破坏追加 / ToolCall 补 plugin_id / usage.sqlite3 宿主自有 5s 刷盘 / IdleLevel 人类尺度文案 / 筛选批量）+ ⑪ 记忆注入 + 记忆管理 UI（Memory-Inject 注 system prompt 永不压缩 / memory.put 同步落盘 / 记忆管理页）+ ⑫ EWMA 打分截断 + search_tools 元工具 + 调试面板 + ⑬ 智能层（向量/隐式提取/自动停用，看需求）；进度看板独立 docs/design/ROADMAP.md（完成打钩，每批同步）；§14 补记阶段八⑧WASM 加载器落点：PluginLoader trait + WasmLoader（wasmtime 34，.wasm 扩展名分发、manifest 同构、locowrk.log 单导入枚举能力面、Store limiter 64MiB、epoch 时间预算按次重置、宿主 alloc/free 缓冲协议、输出越界拒绝）；instance 拆 mod/native（PluginBackend trait）；desktop find_artifact 认 .wasm；WAT 三态单测 9 + 集成 2；§5.8 落地注记；v2.15 补记阶段八⑦第三批官方内置插件落点：tool-git@1.0.0（porcelain 机读解析 / commit 可撤销 / push 审批 / GIT_* 环境重定向剥离）+ memory-sqlite@1.0.0（固定路径记忆库，写操作按宁严勿松收紧为 Compensable）+ tool-mcp@1.0.0（mcp.json 加载期发现冻结、缺省 Irreversible、懒重连、fail-soft、examples 测试替身）+ tools_batch3 集成测试；v2.14 补记阶段八⑥第二批官方内置插件落点（用户排期重排：⑥=plugins.md 第二批，WASM 顺延⑦）+ 同日安全底线（fsutil 允许根 canonicalize 校验、fetch SSRF 防线、fs.restore 判 Irreversible）：tool-fs@1.1.0 写入三件套（write 备份先行 / delete / restore 来源校验）+ kernel-agent compensation.rs（§6.3 补偿执行器，undo 契约 {"call_id","args","output"}、新 undo call_id、账本幂等）+ tool-shell@1.0.0（白名单+denylist+元字符拒绝+无 shell spawn）+ tool-edit@1.0.0（replace/lines/严格 diff，跨插件 undo）+ ctx-compact（agent/request 摘要压缩，切点对齐 User 起点，fail-open，desktop 已注册）；§14 补记阶段八⑤落点：托盘（左键显窗 / 菜单显示主窗口与退出 / 关窗隐藏进托盘）+ tauri-plugin-global-shortcut 全局快捷键切换主窗口（settings.json `shortcut` 字段级缺省 Ctrl+Shift+L、设置面板改键保存即重注册、启动失败降级告警）+ 数据目录改名 ~/.agent-kernel → ~/.Locowrk（直接改名不迁移，§11.3 与三个 README 同步）；§14 补记阶段八④d/④e 落点：Fallback 矩阵收尾——v1 极简 manifest 投影全 None、坏 manifest 不崩已装列表、展示投影跟随 active 指针回归；`locowrk new plugin` 脚手架——scaffold.rs 四件模板（§8.1 全量 v2 manifest + §8.2 占位图标）+ 名称清洗 + plugin-api 路径探测，tmp/ 实测独立 cargo check 通过，service/tests 拆 tests/{mod,lifecycle,fallback}；v2.11 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
+*文档版本：v2.18（v2.18 补记壳批次（UI 骨架）落点（提交 a2c82a5）：落地规则文档 docs/design/UI shell and patterns.md（§2 导航模型 / §3 模式库（列表页 / 设置分区 / 会话内系统消息 / 徽章+进度条）/ §4 事件→UI 流向图（功能批次只扩表）/ §5 弹层规则 / §6 design tokens / §7 扩展规则）；代码——App.vue 顶层 4 视图定稿（对话/插件/记忆/设置，>4 再切侧边栏、暂不引 router，chat v-show 保活）、patterns/ListPage 列表页模式（已安装页+记忆页首两实例）、chat/SystemNotice + store system 类别（存 i18n key，pushNotice 唯一生产入口）、IdleBadge（六级→灰/黄/红，IdleInfo 结构化契约）+ ContextProgressBar（绿/黄/红，null 不渲染）、设置面板拆 settings/ 区组件（分区一一对应，context/memory/developer 占位=⑨⑪⑫同批替换）、PluginMarket 291→54 行（DiscoverTab/InstalledTab + plugin-helpers，check_length.sh 纳入 .vue）、style.css --lw-* tokens（唯一样式事实源）；搭车托盘菜单 i18n（sys-locale 探测 + 改语言即时重挂菜单）；验证 pnpm build + desktop cargo test 23 过 + check_length OK；v2.17 排期重排（用户 2026-09-29 确认）：两份新配套文档入库——docs/design/Tool exposure strategy and usage statistics.md（工具暴露与使用统计）与 docs/design/Context and Memory.md（上下文与记忆管理）；排为壳批次（UI 骨架：导航模型定稿 / 页面模式库 / 事件→UI 流向图 / 弹层规则 / design tokens，PluginMarket 拆分顺带）+ ⑨ 上下文管理收口 P0（LlmService 窗口来源先行 / compact 配置驱动三档策略 / 压到阈值 50% / ContextCompacted 事件 + rewind 撤销 / 实时进度条）+ ⑩ 暴露声明 + 使用统计地基 + 闲置 UI（ToolSpec exposure 字段零破坏追加 / ToolCall 补 plugin_id / usage.sqlite3 宿主自有 5s 刷盘 / IdleLevel 人类尺度文案 / 筛选批量）+ ⑪ 记忆注入 + 记忆管理 UI（Memory-Inject 注 system prompt 永不压缩 / memory.put 同步落盘 / 记忆管理页）+ ⑫ EWMA 打分截断 + search_tools 元工具 + 调试面板 + ⑬ 智能层（向量/隐式提取/自动停用，看需求）；进度看板独立 docs/design/ROADMAP.md（完成打钩，每批同步）；§14 补记阶段八⑧WASM 加载器落点：PluginLoader trait + WasmLoader（wasmtime 34，.wasm 扩展名分发、manifest 同构、locowrk.log 单导入枚举能力面、Store limiter 64MiB、epoch 时间预算按次重置、宿主 alloc/free 缓冲协议、输出越界拒绝）；instance 拆 mod/native（PluginBackend trait）；desktop find_artifact 认 .wasm；WAT 三态单测 9 + 集成 2；§5.8 落地注记；v2.15 补记阶段八⑦第三批官方内置插件落点：tool-git@1.0.0（porcelain 机读解析 / commit 可撤销 / push 审批 / GIT_* 环境重定向剥离）+ memory-sqlite@1.0.0（固定路径记忆库，写操作按宁严勿松收紧为 Compensable）+ tool-mcp@1.0.0（mcp.json 加载期发现冻结、缺省 Irreversible、懒重连、fail-soft、examples 测试替身）+ tools_batch3 集成测试；v2.14 补记阶段八⑥第二批官方内置插件落点（用户排期重排：⑥=plugins.md 第二批，WASM 顺延⑦）+ 同日安全底线（fsutil 允许根 canonicalize 校验、fetch SSRF 防线、fs.restore 判 Irreversible）：tool-fs@1.1.0 写入三件套（write 备份先行 / delete / restore 来源校验）+ kernel-agent compensation.rs（§6.3 补偿执行器，undo 契约 {"call_id","args","output"}、新 undo call_id、账本幂等）+ tool-shell@1.0.0（白名单+denylist+元字符拒绝+无 shell spawn）+ tool-edit@1.0.0（replace/lines/严格 diff，跨插件 undo）+ ctx-compact（agent/request 摘要压缩，切点对齐 User 起点，fail-open，desktop 已注册）；§14 补记阶段八⑤落点：托盘（左键显窗 / 菜单显示主窗口与退出 / 关窗隐藏进托盘）+ tauri-plugin-global-shortcut 全局快捷键切换主窗口（settings.json `shortcut` 字段级缺省 Ctrl+Shift+L、设置面板改键保存即重注册、启动失败降级告警）+ 数据目录改名 ~/.agent-kernel → ~/.Locowrk（直接改名不迁移，§11.3 与三个 README 同步）；§14 补记阶段八④d/④e 落点：Fallback 矩阵收尾——v1 极简 manifest 投影全 None、坏 manifest 不崩已装列表、展示投影跟随 active 指针回归；`locowrk new plugin` 脚手架——scaffold.rs 四件模板（§8.1 全量 v2 manifest + §8.2 占位图标）+ 名称清洗 + plugin-api 路径探测，tmp/ 实测独立 cargo check 通过，service/tests 拆 tests/{mod,lifecycle,fallback}；v2.11 补记阶段八④a–④c 落点：plugin-api manifest v2 解析层——LocalizedString/LocalizedOrString/Author/PluginOrigin 追加字段全 serde(default) 且 None 序列化省略、SideEffect 解析双形态而序列化维持 tagged、ToolSpec 宽容解析（description 多语言压平、side_effect 缺失按 Irreversible）、manifest 级 reversible 不设字段；plugin-host IconLoader + PluginInstance dll 路径；plugin-service display.rs 展示投影与 InstalledPlugin/MarketplaceItem 扩展、market/installer 全量 manifest 校验、坏 manifest 跳过；origin 官方内置/第三方分组数据面；前端 pickLocalized/PluginIcon/SideEffectBadges/PluginCard 与 origin 分组渲染；④d/④e 未开始；v2.10 排期更新：④ 重定义为插件元数据 v2 + 市场打磨——依 docs/design/Plug-in packaging.md，含 manifest v2 解析层 / IconLoader / 投影扩展 / PluginCard / Fallback 矩阵 / locowrk new plugin 脚手架；⑤ 追加发布收尾：数据目录 ~/.agent-kernel → ~/.Locowrk；v2.9 补记阶段八③第一批工具落点：§7.1 mw-audit 宿主侧中间件与 JSONL 审计落盘、tool-fs / tool-fetch 真 C ABI 插件与副作用标注；v2.8 补记阶段八②真实模型接入落点：§7.2 LlmRequest 携带工具目录快照与 ToolSource::list()、genai 三合一适配器与设置驱动分发；v2.7 补记阶段八①最小设置面板落点与 API Key 不出 IPC 纪律、阶段八用户排期与 LLM 方案一选型；v2.6 补记阶段七实现落点：§11.2 PluginService 编排与 ctx.effect 原语、市场=本地目录、install 带版本参数、广播收敛到编排层；§13.3 市场 UI 落点、§13.4 plugin://state-changed 载荷）*
 *最后更新：2026-09-29*
 *前序版本：v2.5（补记阶段六实现落点：§12.2 agent://approval-request 通道与 ApprovalHub、§12.3 审批命令装配与内置演示工具、§13.2 审批弹窗实现备注）、v2.4（新增 §13.5 国际化需求）、v2.3（补记阶段四实现落点：§3.4 ScopedLayers 为 Context 服务层载体、§3.5 waterfall 返回值精化为 WaterfallOutcome、§7.1 审批门在 Kernel、§7.2 重试预算 step 内闭环）、v2.2（补记 §5.1 长度/缓冲区协议）、v2.1（含桌面端）、v2.0（含桌面端）、v1.0（纯内核设计）*
