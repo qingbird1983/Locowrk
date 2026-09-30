@@ -91,3 +91,36 @@ fn backup_lands_under_data_root_and_is_readable() {
     unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn missing_path_outside_roots_reports_outside_not_os_error() {
+    // 2026-09 冒烟误读教训：根外且不存在的路径，拒绝理由必须仍是
+    // "outside the allowed roots"，不能长得像读失败的 OS NotFound
+    let root = temp_root("missing-guard");
+    let sub = root.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    let roots = vec![root.canonicalize().unwrap()];
+
+    // 根外且不存在 → 守卫裁决（outside），不透传裸 OS 错误
+    let outside_missing = temp_root("missing-out").join("no_such").join("f.txt");
+    let err = resolve_existing(&outside_missing, &roots).unwrap_err();
+    assert!(err.contains("outside the allowed roots"), "got: {err}");
+
+    // 根内但不存在 → 原样报找不到，不冒充越界
+    let inside_missing = sub.join("no_such_file.txt");
+    let err = resolve_existing(&inside_missing, &roots).unwrap_err();
+    assert!(!err.contains("outside the allowed roots"), "got: {err}");
+
+    // 借不存在组件 + `..` 逃逸：缺失尾部的 `..` 归一后判前缀。
+    // sub/no_such/../.. = root（两级）→ 根内 NotFound；
+    // 再多一级 = root 外 → 必须报 outside（归一前词法检查会漏放）
+    let two_up = sub.join("no_such").join("..").join("..").join("evil.txt");
+    let err = resolve_existing(&two_up, &roots).unwrap_err();
+    assert!(!err.contains("outside the allowed roots"), "got: {err}");
+    let three_up = sub.join("no_such").join("..").join("..").join("..").join("evil.txt");
+    let err = resolve_existing(&three_up, &roots).unwrap_err();
+    assert!(err.contains("outside the allowed roots"), "got: {err}");
+    // fs_write 同一归一：越界写目标在"校验后落盘"前就被拒
+    let write_escape = sub.join("no_such").join("..").join("..").join("..").join("evil.txt");
+    assert!(resolve_for_write(&write_escape, &roots).is_err());
+}

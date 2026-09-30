@@ -1,10 +1,10 @@
 //! 端到端集成测试：阶段八⑥第二批官方工具（真实 dlopen）。
 //!
-//! - tool-fs 1.2.0：fs_write 备份 → fs_restore 撤销（undo 契约全链路）、
+//! - tool-fs 1.2.1：fs_write 备份 → fs_restore 撤销（undo 契约全链路）、
 //!   fs_delete、允许根拒绝
 //! - tool-shell 1.0.0：白名单放行 / 显式配置扩展 / denylist 与元字符拒绝 /
 //!   真实 spawn（cargo --version）
-//! - tool-edit 1.1.0：edit_replace → 跨插件 fs_restore 撤销
+//! - tool-edit 1.1.1：edit_replace → 跨插件 fs_restore 撤销
 //!
 //! 与 fs_fetch_plugins.rs 同款模式：测试自建产物暂存到 target/locowrk-test/。
 //! env 是进程级全局，全部用例串行（一把大锁包住整个测试体）。
@@ -112,7 +112,7 @@ fn fs_write_backup_restore_delete_end_to_end() {
     unsafe { std::env::set_var("LOCOWRK_DATA_DIR", root.display().to_string()) };
 
     let registry = Arc::new(PluginRegistry::new());
-    load_activate("tool-fs", "1.2.0", &registry);
+    load_activate("tool-fs", "1.2.1", &registry);
     let source = RegistryToolSource::new(Arc::clone(&registry));
 
     let file = root.join("note.txt");
@@ -215,8 +215,8 @@ fn edit_replace_then_cross_plugin_restore() {
 
     // tool-edit 与 tool-fs 同 registry：undo 跨插件解析
     let registry = Arc::new(PluginRegistry::new());
-    load_activate("tool-fs", "1.2.0", &registry);
-    load_activate("tool-edit", "1.1.0", &registry);
+    load_activate("tool-fs", "1.2.1", &registry);
+    load_activate("tool-edit", "1.1.1", &registry);
     let source = RegistryToolSource::new(Arc::clone(&registry));
 
     let file = root.join("app.rs");

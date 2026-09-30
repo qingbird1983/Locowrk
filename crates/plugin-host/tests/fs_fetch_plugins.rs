@@ -86,7 +86,7 @@ fn load_activate(plugin_id: &str, version: &str) -> (Arc<PluginRegistry>, Regist
 
 #[test]
 fn fs_tools_catalog_read_list_grep_roundtrip() {
-    let (_registry, source) = load_activate("tool-fs", "1.2.0");
+    let (_registry, source) = load_activate("tool-fs", "1.2.1");
 
     // 目录快照：六个工具，副作用分级符合 plugins.md §二
     let tools = source.list_tools();

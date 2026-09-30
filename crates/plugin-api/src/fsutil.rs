@@ -56,12 +56,19 @@ pub fn allowed_roots() -> Result<Vec<PathBuf>, String> {
 }
 
 /// 已存在路径的规范路径（读 / 列 / 删 / 恢复目标）：canonicalize 会解析
-/// 符号链接与 `..`——解析结果落到允许根外即拒绝。
+/// 符号链接与 `..`——解析结果落到允许根外即拒绝。目标不存在时**裁决理由
+/// 保持一致**：按最深存在祖先归一后判根，根外仍报 outside（拒绝必须可
+/// 识别，不能长得像读失败——2026-09 冒烟测试两度把该报错误读成"守卫被
+/// 绕过"），根内才报原始 NotFound（真找不到）。
 pub fn resolve_existing(path: &Path, roots: &[PathBuf]) -> Result<PathBuf, String> {
-    let resolved = path
-        .canonicalize()
-        .map_err(|e| format!("`{}`: {e}", path.display()))?;
-    ensure_inside(&resolved, roots)
+    match path.canonicalize() {
+        Ok(resolved) => ensure_inside(&resolved, roots),
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            resolve_for_write(path, roots)?;
+            Err(format!("`{}`: {e}", path.display()))
+        }
+        Err(e) => Err(format!("`{}`: {e}", path.display())),
+    }
 }
 
 /// 写目标（可能尚不存在）：从最深存在祖先 canonicalize 后拼回其余组件，
@@ -91,8 +98,15 @@ pub fn resolve_for_write(path: &Path, roots: &[PathBuf]) -> Result<PathBuf, Stri
         }
     };
     let mut resolved = resolved;
+    // 缺失尾部里的 `..`/`.` 必须归一后再判前缀——否则 `root\a\missing\..\..\..\x`
+    // 这类路径词法上仍在根内（骗过 starts_with），OS 解析 `..` 后却落在根外
     for comp in missing.iter().rev() {
-        resolved = resolved.join(comp);
+        let name = comp.to_string_lossy();
+        if name == ".." {
+            resolved.pop();
+        } else if name != "." {
+            resolved.push(comp);
+        }
     }
     ensure_inside(&resolved, roots)
 }
