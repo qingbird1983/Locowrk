@@ -689,6 +689,27 @@ my-plugin/
 
 **解析器必须同时支持两者**，用 `LocalizedOrString` 做分支。
 
+### 9.4 内置插件版本策略（S2 定稿，2026-09-30）
+
+《Setting and Constrained Optimization.md》§1 顺带项的裁决：**方案 B——独立升**
+（插件随仓库自己的节奏 bump 版本号，主程序升级不强制携带版本跳变）。
+
+- **不加 `bundled` 字段**。UI 与服务端的"内置"判定一律看 lockfile 的
+  `source` 字段（`InstallSource::Builtin`，S1 预留枚举本批启用）；
+  manifest 自声明的 `origin` 只管展示分组（official/community），
+  **不作为任何操作门控依据**——防市场插件伪装 official 骗分组。
+- **持久化**：开发态 `plugins/` 扫描每成功装载一个内置插件，服务层
+  `register_builtin` 在 lockfile 写/更 `Builtin` 条目（版本同步，保留
+  `enabled`——重启不复活被停用的插件）；停用的/已被市场接管的 id 由
+  `dev_scan_skip_ids` 给出，启动扫描跳过。
+- **启用取最新**：内置插件启用时从内置根解析**最新**版本（独立升级
+  后条目版本可能滞后），漂移同步回条目。
+- **接管规则**：同 id 从市场显式安装 → lockfile 条目转 `Market`
+  （安装态赢过开发态），开发态扫描让位；卸载市场版后开发态副本在
+  下次启动自然回归。
+- **不给内置插件卸载/更新**（随程序分发，删了下个版本又回来）；
+  版本演进随仓库提交，运行期"回退"依赖 registry 内多版本并存。
+
 ---
 
 ## 十、落地路径

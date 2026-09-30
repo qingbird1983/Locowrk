@@ -130,16 +130,26 @@
 | 截断提示文案 | ✅ | stdout/stderr 截断尾部附"[output truncated at N bytes — narrow the command scope … or raise max_bytes and retry]"（英文，模型面文案与工具 description 同语言） |
 | 高危命令可解锁开关 | ✅ | settings.json 新 `shell` 区 {unlockRisky，缺省 false} → state.rs **插件加载前**写 `LOCOWRK_SHELL_UNLOCK_RISK` env（tool-shell init 读一次，**重启生效**——插件无运行期配置通道，kv_get 尚未开放）；解锁后高危放行，shell 工具 Irreversible，**放行即审批**；硬锁类不受开关影响；ShellSection.vue 设置分区（琥珀红警告 + 重启提示） |
 
-### S2 设置归属、数字呈现与内置插件禁用（清单 §1/§5/§6/§3 余项）
+### S2 设置归属、数字呈现与内置插件停用（清单 §1/§5/§6/§3 余项）
+
+> **✅ 已完成（v2.27，提交 7448737）**——用户命名裁定：所有「禁用」统一改叫「停用」
+> （内置与第三方同一动词，zh `disable`/`stateDisabled` 键值 + 各处注释同步）。
+> ① lockfile 落 `InstallSource::Builtin` 条目（登记保留 enabled，重启不复活停用项）；
+> ② 启用从内置根解析**最新**版本（独立升级，漂移同步回条目）；③ 市场安装同 id
+> 条目转 Market（安装态接管，开发态扫描让位）；④ 窗口字段迁 llm 区（open 读旧
+> 值迁移一次幂等）；⑤ Ollama /api/show 探测 + 静态档案前缀命中 + 手动兜底；
+> ⑥ compactNumber 全接线（阈值预览 ≈51.2K 不再露 52,428.8）；⑦ tool-shell 产物
+> 1.2.0。plugin-service 新 `builtin.rs`/`service/enable.rs`，desktop 新
+> `llm/probe.rs`/`lib/model-profiles.ts`。
 
 | 项 | 状态 | 说明 |
 |---|---|---|
-| 内置插件禁用 | ⬜ | InstalledTab builtin 行加 禁用/启用（不给卸载——随程序分发）；关键现状：builtin 走 `plugins_root::load_all` 直载绕过 lockfile（state.rs），service `set_enabled` 要求 lockfile 条目——落 `InstallSource::Builtin`（枚举已预留未用）持久化 + startup 扫描尊重 enabled:false + 工具候选池过滤；操作门控按 **source**（安装来源）而非 origin（manifest 自声明，防市场插件伪装 official 骗分组；分组展示仍按 origin 不变） |
-| 上下文窗口迁模型配置 | ⬜ | 字段从 ContextSection 迁 LlmSection（provider/model/baseUrl/key 旁）；settings key `context.windowTokens` → llm 侧（读旧值兼容一次）；Ollama `/api/show` 自动提取 + 常见模型静态档案表 + 读不到手动兜底；ContextSection 只留阈值+策略（阈值为百分比不需绝对窗口；未设窗口的 FALLBACK 保守保护保留） |
-| 数字呈现落地 | ⬜ | 出处已定位：ContextSection 预设标签 `toLocaleString`（"262,144 token"）+ 阈值预览 `(262144×20)/100=52,428.8`（:78/:106）；统一 `lib/format.ts` 档位格式化（262144→256K、52,428.8→≈52K）+ ContextProgressBar 增 `≈52K / 256K` 比例段；规范已成文 UI shell doc §3.5 |
-| shell 超时/输出限长默认可配 | ⬜ | `LOCOWRK_SHELL_TIMEOUT` / `LOCOWRK_SHELL_MAX_BYTES` 环境默认（模型 arg 上限 120s/256KB 不变；现硬编码 20s/64KB） |
-| 宿主 Timeout 中间件可配 | ⬜ | state.rs 硬编码 `Timeout::new(30s)` → settings developer 区可调 |
-| 内置插件版本策略定稿 | ⬜ | 方案 B 独立升（清单推荐，同意）；UI 区分 = origin（展示分组）× source（管理门控）双字段已够，**评估后大概率免加 `bundled` 字段**；定稿写进 packaging.md |
+| 内置插件停用 | ✅ | **（用户命名：禁用→停用）**InstalledTab builtin 行加 停用/启用（不给卸载——随程序分发，uninstall/update 服务端拒绝；不进批量多选）；`plugins_root::load_all` 带 skip 集（lockfile 接管 + 已停用），装载成功即 `register_builtin` 落 `InstallSource::Builtin` 条目（版本同步、保留 enabled——重启不复活）；`set_enabled` Builtin 分支从内置根解析最新版本；停用即出工具候选池（`RegistryToolSource::resolve` 只遍历 `active_instances`，deactivate 即过滤）；操作门控按 **source**（lockfile 来源）而非 origin（manifest 自声明）；对账不删 Builtin 条目（内置家不在安装根）；插件端解析下沉 `plugin_service::builtin`（版本/工件发现共享，桌面不再自留副本） |
+| 上下文窗口迁模型配置 | ✅ | settings key `context.windowTokens` → `llm.windowTokens`（open() 读旧值迁移一次，幂等，落盘随下次保存）；**ContextSection 只去掉窗口下拉这一条**（用户裁定：阈值滑条/策略/预览全部原地不动），LlmSection 增窗口下拉（provider/model/baseUrl/key 之后）；Ollama `/api/show` 探测命令 `llm_probe_window`（llm/probe.rs，reqwest json 只加无 TLS 特性——探测走 http，图内 TLS 由 genai 的 reqwest 统一；顶层 context_length 或 model_info `<arch>.context_length` 两代形态 + 5s 超时）；`lib/model-profiles.ts` 静态档案（deepseek/claude/gpt-4o/gemini/llama3.1/qwen2.5 前缀命中）**只在未设置时自动填充**，手动选择永远优先；读不到 UI 错误条提示手动兜底；agent_chat UsagePolicy / compact_config 改用 `effective_window`/`effective_threshold_tokens`（llm 优先、旧字段兜底、未知回落 32k） |
+| 数字呈现落地 | ✅ | `lib/format.ts` `compactNumber`（上批已备好的唯一实现，1024 进位）接线：LlmSection 预设标签（256K 不写 "262,144 token"）、ContextSection 阈值预览（`≈51.2K`——1024 进位的真实值，UI shell doc §3.5 示例已同步改注）、ContextProgressBar 比例段 `≈52K / 256K`（chat store 透传 windowTokens，窗口未知只显百分比）+ 压缩 SystemNotice"已节省"档位化（rider）；组件不自带第二把尺 |
+| shell 超时/输出限长默认可配 | ✅ | `LOCOWRK_SHELL_TIMEOUT`（1–120s）/ `LOCOWRK_SHELL_MAX_BYTES`（1024–256KB）环境默认，init 读一次（RunDefaults::from_env）：越上界钳制、低于下界/非数字回落内置缺省并经宿主 vtable warn（§2.4 不静默）；模型 arg 上限 120s/256KB 不变；tool-shell 产物 1.2.0 |
+| 宿主 Timeout 中间件可配 | ✅ | kernel-agent `Timeout::hot(Arc<RwLock<Duration>>)`（`new` 保留给测试/CLI，DurationSource 两态）；settings.json tools 区 `callTimeoutSecs`（5–3600 缺省 30，state.rs 起共享锁 `timeout_cfg`）；settings_set 热换入即生效；DeveloperSection 增数字输入 |
+| 内置插件版本策略定稿 | ✅ | **方案 B 独立升**（清单推荐，同意）；`bundled` 字段**不加**——source（lockfile 管理门控）× origin（manifest 展示分组）双字段已够；接管/回归/启用取最新等规则成文 packaging.md **§9.4** |
 
 ### ⑬ 智能层（后排，看需求）
 

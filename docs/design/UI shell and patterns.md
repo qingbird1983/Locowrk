@@ -93,16 +93,18 @@
 | ❌ 机器语言 | ✅ 人的语言 |
 |---|---|
 | 262,144 token | 256K |
-| 52,428.8 token | ≈52K |
+| 52,428.8 token | ≈51.2K（compactNumber 按 1024 进位） |
 | 102,400 字节 | 100KB |
 | 1790770863（时间戳） | 3 天前 |
 | 87 个工具 / 20 个暴露 | 已优化 87 → 20 |
 
 - 大数用档位（K/M/G）、小数取整、单位不重复（写 `256K`，不写 `256K token`）。
 - 已对齐先例：IdleBadge 人类文案铁则（§3.4，后端结构化/前端人话）、进度条整数百分比。
-- 已知待改落点（S2 批）：ContextSection 预设标签与阈值预览（`toLocaleString` 产出
-  "52,428.8 token"）、ContextProgressBar 增 `≈52K / 256K` 比例段。
-- 前端统一走一个 format 助手（`lib/format.ts`），组件不许各自手写换算。
+- ✅ S2 已接线：LlmSection 窗口预设（256K）、ContextSection 阈值预览（≈51.2K）、
+  ContextProgressBar 比例段（`≈52K / 256K`，窗口未知时只显示百分比）、
+  压缩 SystemNotice 的"已节省"档位化。
+- 前端统一走一个 format 助手（`lib/format.ts` 的 `compactNumber`），
+  组件不许各自手写换算。
 
 ---
 
