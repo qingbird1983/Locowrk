@@ -2,6 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * design tokens（壳批次，docs/design/UI shell and patterns.md §6）。
+ * tokens 是唯一样式事实源，取值与 Tailwind 调色板同值：存量组件继续用
+ * Tailwind 类不动；新组件优先用 var(--lw-*)；改皮肤只改这里。
+ */
+:root {
+  /* 表面：应用底色 / 面板与输入 / 激活块 */
+  --lw-surface-0: #171717; /* neutral-900 */
+  --lw-surface-1: #262626; /* neutral-800 */
+  --lw-surface-2: #404040; /* neutral-700 */
+  --lw-border: #262626; /* neutral-800 */
+  --lw-border-strong: #404040; /* neutral-700 */
+
+  /* 文本：主 / 次 / 弱 / 最弱 */
+  --lw-text-1: #f5f5f5; /* neutral-100 */
+  --lw-text-2: #a3a3a3; /* neutral-400 */
+  --lw-text-3: #737373; /* neutral-500 */
+  --lw-text-4: #525252; /* neutral-600 */
+
+  /* 语义色：强调 / 成功 / 警告 / 危险 */
+  --lw-accent: #4f46e5; /* indigo-600 */
+  --lw-accent-hover: #6366f1; /* indigo-500 */
+  --lw-ok: #34d399; /* emerald-400 */
+  --lw-warn: #fbbf24; /* amber-400 */
+  --lw-danger: #f87171; /* red-400 */
+
+  /* 圆角：小（输入/徽章内件）/ 中（按钮/卡片）/ 大（气泡/容器）/ 全 */
+  --lw-radius-sm: 0.375rem;
+  --lw-radius-md: 0.5rem;
+  --lw-radius-lg: 0.75rem;
+  --lw-radius-full: 9999px;
+
+  /* 间距（4px 基）：常规只用这五档 */
+  --lw-space-1: 0.25rem;
+  --lw-space-2: 0.5rem;
+  --lw-space-3: 0.75rem;
+  --lw-space-4: 1rem;
+  --lw-space-6: 1.5rem;
+}
+
 html,
 body,
 #app {

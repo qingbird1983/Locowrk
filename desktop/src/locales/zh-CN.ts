@@ -5,8 +5,9 @@ export default {
     modelFallback: "脚本替身（设置 → LLM 配置）",
   },
   nav: {
-    chat: "聊天",
+    chat: "对话",
     plugins: "插件",
+    memory: "记忆",
     settings: "设置",
   },
   status: {
@@ -31,6 +32,35 @@ export default {
     compensable: "可补偿",
     irreversible: "不可逆",
   },
+  // 会话内系统消息（SystemNotice 模式）：文案是 UI 不是会话数据，store
+  // 存 i18n key，渲染期翻译以跟随语言切换。
+  notice: {
+    action: {
+      details: "查看详情",
+      undo: "撤销",
+    },
+  },
+  // 闲置徽章（IdleBadge）：六级 → 灰/黄/红；有 value+unit 时渲染时长文案
+  idle: {
+    fresh: "新启用",
+    normal: "正常",
+    idle: "开始闲置",
+    stale: "长期闲置",
+    abandoned: "疑似弃用",
+    never_used: "从未使用",
+    unusedFor: "{n} {unit}未使用",
+    unit: {
+      minute: "分钟",
+      hour: "小时",
+      day: "天",
+      week: "周",
+    },
+  },
+  memory: {
+    search: "搜索记忆…",
+    empty: "还没有可管理的记忆条目。",
+    hint: "记忆的注入与管理将在后续版本开放（当前可经对话让 Agent 记住/查询记忆）。",
+  },
   approval: {
     title: "需要确认",
     subtitle: "该工具会产生不可逆的副作用，请审阅参数后决定。",
@@ -49,6 +79,8 @@ export default {
     builtinBadge: "内置（随仓库分发，经构建脚本管理）",
     origin_official: "官方内置",
     origin_community: "第三方",
+    filterAll: "全部",
+    noMatch: "没有匹配的条目。",
     updateAvailable: "可更新到 v{version}",
     update: "更新",
     enable: "启用",
@@ -90,6 +122,13 @@ export default {
     shortcutPlaceholder: "如 Ctrl+Shift+L",
     shortcutHint:
       "保存后立即生效（无需重启）；在任意应用中按下即可显示/隐藏主窗口。键位被其他程序占用时保存会报错，换一个组合即可。",
+    // 占位分区（⑨/⑪/⑫ 落位后随 PlaceholderSection 一并替换为真分区）
+    contextTitle: "上下文管理",
+    contextHint: "压缩阈值与策略设置将在后续版本提供。",
+    memoryTitle: "记忆",
+    memoryHint: "记忆注入开关与管理入口将在后续版本提供。",
+    developerTitle: "开发者选项",
+    developerHint: "暴露调试面板（Top-N、分布统计、token 节省估算）将在后续版本提供。",
   },
   error: {
     unknown: "发生错误",

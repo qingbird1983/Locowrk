@@ -147,6 +147,11 @@ impl SettingsStore {
             .clone()
     }
 
+    /// 后端专用：语言偏好（tray.rs 菜单文案用）。
+    pub fn locale(&self) -> String {
+        self.inner.lock().expect("settings poisoned").locale.clone()
+    }
+
     /// 校验 → 应用到副本 → 落盘成功才提交内存。返回最新投影。
     pub fn update(
         &self,

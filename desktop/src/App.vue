@@ -6,6 +6,8 @@ import { useChatStore } from "./stores/chat";
 import { useSettingsStore } from "./stores/settings";
 import ApprovalModal from "./components/ApprovalModal.vue";
 import ChatMessages from "./components/ChatMessages.vue";
+import ContextProgressBar from "./components/ContextProgressBar.vue";
+import MemoryPage from "./components/MemoryPage.vue";
 import PluginMarket from "./components/PluginMarket.vue";
 import PromptBar from "./components/PromptBar.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
@@ -14,7 +16,9 @@ const { t } = useI18n();
 const chat = useChatStore();
 const approvals = useApprovalsStore();
 const settings = useSettingsStore();
-const view = ref<"chat" | "plugins" | "settings">("chat");
+/** 顶层导航定稿（壳批次）：4 视图；>4 时 pill nav 切侧边栏（UI shell
+ * and patterns.md §2）。 */
+const view = ref<"chat" | "plugins" | "memory" | "settings">("chat");
 onMounted(() => {
   chat.init();
   approvals.init();
@@ -41,10 +45,10 @@ onMounted(() => {
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <!-- 顶级导航（§13.1）：聊天 / 插件市场 / 设置 -->
+        <!-- 顶级导航（壳批次定稿）：对话 / 插件 / 记忆 / 设置 -->
         <nav class="flex gap-1 rounded-lg bg-neutral-800/70 p-1">
           <button
-            v-for="key in (['chat', 'plugins', 'settings'] as const)"
+            v-for="key in (['chat', 'plugins', 'memory', 'settings'] as const)"
             :key="key"
             class="rounded-md px-3 py-1 text-xs font-medium transition"
             :class="
@@ -69,12 +73,14 @@ onMounted(() => {
         </span>
       </div>
     </header>
-    <!-- 聊天视图用 v-show 保状态；插件页按需挂载 -->
+    <!-- 聊天视图用 v-show 保状态；其余视图按需挂载 -->
     <div v-show="view === 'chat'" class="flex min-h-0 flex-1 flex-col">
+      <ContextProgressBar :usage="chat.contextUsage" />
       <ChatMessages />
       <PromptBar />
     </div>
     <PluginMarket v-if="view === 'plugins'" />
+    <MemoryPage v-if="view === 'memory'" />
     <SettingsPanel v-if="view === 'settings'" />
     <ApprovalModal />
   </div>

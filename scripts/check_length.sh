@@ -11,7 +11,7 @@ while IFS= read -r f; do
     echo "TOO LONG: $f ($lines lines > $LIMIT) — 按职责拆成子模块后再提交"
     fail=1
   fi
-done < <(find crates desktop -name '*.rs' \
+done < <(find crates desktop \( -name '*.rs' -o -name '*.vue' \) \
   -not -path '*/target/*' -not -path '*/node_modules/*' 2>/dev/null)
 
 if [ "$fail" -eq 0 ]; then

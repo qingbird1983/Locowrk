@@ -2,6 +2,7 @@
 import { nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../stores/chat";
+import SystemNotice from "./chat/SystemNotice.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -22,6 +23,9 @@ function pretty(v: unknown): string {
     return String(v);
   }
 }
+
+/** 系统消息动作（details/undo）：实际行为 ⑨ 接线（rewind_to / 详情）。 */
+function onNoticeAction(_id: string) {}
 </script>
 
 <template>
@@ -121,6 +125,20 @@ function pretty(v: unknown): string {
               >
             </div>
           </div>
+        </div>
+
+        <!-- 会话内系统消息（SystemNotice 模式）：压缩通知/已记住/审批结果 -->
+        <div v-else-if="item.kind === 'system'" class="flex justify-center">
+          <SystemNotice
+            :text="t(item.key, item.params ?? {})"
+            :actions="
+              (item.actions ?? []).map((a) => ({
+                id: a,
+                label: t(`notice.action.${a}`),
+              }))
+            "
+            @action="onNoticeAction"
+          />
         </div>
 
         <!-- 错误条 -->

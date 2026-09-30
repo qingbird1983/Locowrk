@@ -7,6 +7,7 @@ export default {
   nav: {
     chat: "Chat",
     plugins: "Plugins",
+    memory: "Memory",
     settings: "Settings",
   },
   status: {
@@ -31,6 +32,37 @@ export default {
     compensable: "compensable",
     irreversible: "irreversible",
   },
+  // In-chat system messages (SystemNotice pattern): copy is UI, not
+  // session data — the store keeps an i18n key, translated at render time
+  // so locale switches apply to past notices too.
+  notice: {
+    action: {
+      details: "View details",
+      undo: "Undo",
+    },
+  },
+  // Idle badge (IdleBadge): six levels → gray/yellow/red; with value+unit
+  // the badge renders a human duration string instead of the level name.
+  idle: {
+    fresh: "newly enabled",
+    normal: "normal",
+    idle: "idle",
+    stale: "long idle",
+    abandoned: "likely abandoned",
+    never_used: "never used",
+    unusedFor: "unused for {n} {unit}",
+    unit: {
+      minute: "min",
+      hour: "h",
+      day: "day(s)",
+      week: "week(s)",
+    },
+  },
+  memory: {
+    search: "Search memories…",
+    empty: "No manageable memory entries yet.",
+    hint: "Memory injection and management arrive in a later version (for now the agent can memorize/recall via chat).",
+  },
   approval: {
     title: "Confirmation required",
     subtitle:
@@ -50,6 +82,8 @@ export default {
     builtinBadge: "Built-in (ships with the repo, managed via build scripts)",
     origin_official: "Official",
     origin_community: "Third-party",
+    filterAll: "All",
+    noMatch: "No matching entries.",
     updateAvailable: "Update to v{version} available",
     update: "Update",
     enable: "Enable",
@@ -96,6 +130,14 @@ export default {
     shortcutPlaceholder: "e.g. Ctrl+Shift+L",
     shortcutHint:
       "Applies immediately after saving (no restart). Press it in any app to show/hide the main window. If the key is taken by another program, saving fails — pick another combo.",
+    // Placeholder sections (replaced with real sections as ⑨/⑪/⑫ land)
+    contextTitle: "Context management",
+    contextHint: "Compaction threshold and strategy settings arrive in a later version.",
+    memoryTitle: "Memory",
+    memoryHint: "Memory injection toggle and management entry arrive in a later version.",
+    developerTitle: "Developer options",
+    developerHint:
+      "Exposure debug panel (Top-N, distribution stats, token-savings estimate) arrives in a later version.",
   },
   error: {
     unknown: "Something went wrong",

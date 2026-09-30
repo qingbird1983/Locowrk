@@ -1,6 +1,8 @@
 //! 系统托盘与全局快捷键（DESIGN.md §14 阶段八⑤ / §13.1 快捷键）。
 //!
 //! - 托盘：左键单击 = 显示并聚焦主窗口；菜单 = 显示主窗口 / 退出。
+//!   菜单文案按 settings.json `locale` 取表（壳批次 i18n；`system` 经
+//!   sys-locale 探测，zh 开头 → 中文）；语言改动即时重挂菜单。
 //! - 主窗口关闭 = 隐藏进托盘（CloseRequested 拦截）；真退出只走托盘菜单。
 //! - 全局快捷键：settings.json `shortcut`（缺省 `Ctrl+Shift+L`），按下 =
 //!   切换主窗口可见性；设置面板改键后 `apply_shortcut` 即时重注册。
@@ -41,10 +43,43 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+/// 托盘菜单文案表（与前端 locales 同步维护；原生菜单无法复用 TS 表）。
+fn labels(locale: &str) -> (&'static str, &'static str) {
+    let zh = ("显示主窗口", "退出");
+    let en = ("Show main window", "Quit");
+    let resolved = if locale == crate::settings::LOCALE_SYSTEM {
+        sys_locale::get_locale().unwrap_or_default()
+    } else {
+        locale.to_string()
+    };
+    if resolved.starts_with("zh") {
+        zh
+    } else {
+        en
+    }
+}
+
+fn build_menu<R: Runtime>(app: &AppHandle<R>) -> Result<Menu<R>, Box<dyn std::error::Error>> {
+    let (show_label, quit_label) = labels(&app.state::<AppState>().settings.locale());
+    let show = MenuItem::with_id(app, "show", show_label, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
+    Ok(Menu::with_items(app, &[&show, &quit])?)
+}
+
+/// 语言改动后重挂托盘菜单（settings_set 调用；失败仅记日志，不影响保存）。
+pub fn refresh_menu<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(tray) = app.tray_by_id("main") {
+        match build_menu(app) {
+            Ok(menu) => {
+                let _ = tray.set_menu(Some(menu));
+            }
+            Err(e) => tracing::warn!("托盘菜单刷新失败: {e}"),
+        }
+    }
+}
+
 fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
-    let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let menu = build_menu(app)?;
     let mut tray = TrayIconBuilder::with_id("main")
         .menu(&menu)
         .show_menu_on_left_click(false)

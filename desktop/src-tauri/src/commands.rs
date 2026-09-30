@@ -135,9 +135,13 @@ pub async fn settings_set(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
-    let view = state.settings.update(locale, shortcut.clone(), llm)?;
+    let view = state.settings.update(locale.clone(), shortcut.clone(), llm)?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;
+    }
+    // 语言改动 → 托盘菜单即时换文案（失败仅日志，不影响保存结果）
+    if locale.is_some() {
+        crate::tray::refresh_menu(&app);
     }
     Ok(view)
 }
