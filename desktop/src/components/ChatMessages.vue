@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useChatStore } from "../stores/chat";
+import { contextUndoCompact } from "../lib/api";
+import { useChatStore, type SystemItem } from "../stores/chat";
 import SystemNotice from "./chat/SystemNotice.vue";
 
 const { t } = useI18n();
@@ -24,8 +25,27 @@ function pretty(v: unknown): string {
   }
 }
 
-/** 系统消息动作（details/undo）：实际行为 ⑨ 接线（rewind_to / 详情）。 */
-function onNoticeAction(_id: string) {}
+/** 系统消息文本：__raw__ 条渲染原文，其余按 i18n key 翻译。 */
+function noticeText(item: SystemItem): string {
+  if (item.key === "__raw__") return String(item.params?.text ?? "");
+  return t(item.key, item.params ?? {});
+}
+
+/** 系统消息动作（⑨ 接线）：details = 展开详情；undo = 撤销最近一次压缩
+ * （rewind_to 回到压缩前，其后的轮次一并回退，会话 id 不变）。 */
+async function onNoticeAction(item: SystemItem, action: string) {
+  if (action === "details") {
+    const detail = chat.noticeDetails[item.id];
+    if (detail) chat.pushRawSystem(detail);
+  } else if (action === "undo") {
+    try {
+      await contextUndoCompact(chat.sessionId);
+      chat.pushNotice("notice.compactUndone");
+    } catch (err) {
+      chat.pushNotice("notice.compactUndoFailed", { reason: String(err) });
+    }
+  }
+}
 </script>
 
 <template>
@@ -130,14 +150,14 @@ function onNoticeAction(_id: string) {}
         <!-- 会话内系统消息（SystemNotice 模式）：压缩通知/已记住/审批结果 -->
         <div v-else-if="item.kind === 'system'" class="flex justify-center">
           <SystemNotice
-            :text="t(item.key, item.params ?? {})"
+            :text="noticeText(item)"
             :actions="
               (item.actions ?? []).map((a) => ({
                 id: a,
                 label: t(`notice.action.${a}`),
               }))
             "
-            @action="onNoticeAction"
+            @action="(a) => onNoticeAction(item, a)"
           />
         </div>
 

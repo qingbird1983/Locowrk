@@ -20,7 +20,10 @@ mod tests;
 
 pub use audit::{Audit, AuditEntry, AuditSink, JsonlAuditSink};
 pub use circuit_breaker::CircuitBreaker;
-pub use compact::{CompactConfig, CtxCompact};
+pub use compact::{
+    CompactConfig, CompactStrategy, CompactionOutcome, CtxCompact, estimate_tokens,
+    suggested_threshold,
+};
 pub use retry::Retry;
 pub use timeout::Timeout;
 pub use trace::Tracing;

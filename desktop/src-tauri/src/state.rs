@@ -8,13 +8,13 @@
 //! 3. 安装态已由第 1 步恢复完毕（`~/.Locowrk`，lockfile 管理）
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use cordis_core::Context;
 use kernel_agent::{
-    Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel, LlmService,
-    Middleware, Timeout, ToolSource, Tracing, points,
+    points, Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel, LlmService,
+    Middleware, Timeout, ToolSource, Tracing,
 };
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use plugin_service::{LocalDirMarket, PluginService};
@@ -47,6 +47,9 @@ pub struct AppState {
     pub sessions: Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>,
     /// 设置存储（§13.1）。Arc 共享给 AppLlm（每请求重读，改动即生效）。
     pub settings: Arc<SettingsStore>,
+    /// ctx-compact 的活配置（kernel-agent 侧只认 CompactConfig）。settings_set
+    /// 成功后由命令层换入新值——压缩行为随即生效，无需重启。
+    pub compact_cfg: Arc<RwLock<CompactConfig>>,
 }
 
 pub fn init_state(app: AppHandle) -> AppState {
@@ -77,14 +80,15 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
     ctx.provide_dyn::<dyn LlmService>(Arc::new(AppLlm::new(Arc::clone(&settings))));
 
-    // ctx-compact（plugins.md 第二批）：agent/request 决策环上的压缩监听
-    // 器——估算 token 超阈值就把早期消息压成单条摘要（fail-open）。直连
-    // LlmService，不经 waterfall 决策环（无递归）。阈值缺省 32k token /
-    // 保留近 8 条；设置面板接线归后续批次。
-    ctx.events.on_waterfall(points::REQUEST, Arc::new(CtxCompact::new(
-        ctx.clone(),
-        CompactConfig::default(),
-    )));
+    // ctx-compact（Context and Memory.md §3）：agent/request 决策环上的压缩
+    // 监听器——三策略配置驱动（阈值 = 窗口 × 百分比，压到阈值 50%），压缩
+    // 结果经 payload 带回 kernel 落 ContextCompacted 事件。配置经共享锁注入
+    // （kernel-agent 不依赖设置存储）：settings_set 成功后换入新配置即生效。
+    let compact_cfg: Arc<RwLock<CompactConfig>> = Arc::new(RwLock::new(settings.compact_config()));
+    ctx.events.on_waterfall(
+        points::REQUEST,
+        Arc::new(CtxCompact::new(ctx.clone(), Arc::clone(&compact_cfg))),
+    );
 
     // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。
     // Audit（plugins.md mw-audit）挂在超时/熔断外侧：被拒的调用也留痕；
@@ -143,6 +147,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         sink,
         sessions: Mutex::new(HashMap::new()),
         settings,
+        compact_cfg,
     }
 }
 

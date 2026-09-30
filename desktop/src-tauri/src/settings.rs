@@ -2,7 +2,8 @@
 //!
 //! 最小面板四块：LLM 配置（provider/model/base_url/api_key）、会话存储
 //! 位置（只读展示）、语言切换（system/zh-CN/en，缺省跟随系统）、全局
-//! 快捷键（阶段八⑤，切换主窗口，缺省 Ctrl+Shift+L）。
+//! 快捷键（阶段八⑤，切换主窗口，缺省 Ctrl+Shift+L）；⑨ 加上下文管理区
+//! （模型窗口 / 压缩阈值 / 压缩策略，Context and Memory.md §3）。
 //! 持久化在数据根 `settings.json`，与 lockfile.json 同目录；文件在
 //! `%USERPROFILE%\.Locowrk`，不属于项目文件，API Key 落盘合规
 //! （AGENTS.md 禁的是写进仓库文件）。
@@ -13,6 +14,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use kernel_agent::{suggested_threshold, CompactConfig, CompactStrategy};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -23,6 +25,9 @@ const LOCALES: [&str; 3] = [LOCALE_SYSTEM, "zh-CN", "en"];
 const PROVIDERS: [&str; 3] = ["openai", "anthropic", "ollama"];
 /// 全局快捷键缺省值（tray.rs 启动注册用；settings.json `shortcut`）。
 pub const SHORTCUT_DEFAULT: &str = "Ctrl+Shift+L";
+/// 模型窗口未设置时的保守回落：沿用 v2.14 固定 32k 保护（Context 文档
+/// §3.2 的窗口 × 百分比语义要等窗口已知才成立）。
+pub const FALLBACK_WINDOW_TOKENS: u64 = 32_000;
 
 const FILE_NAME: &str = "settings.json";
 
@@ -58,10 +63,51 @@ pub struct AppSettings {
     #[serde(default = "default_shortcut")]
     pub shortcut: String,
     pub llm: LlmSettings,
+    /// 上下文管理区（⑨）。字段级缺省：旧 settings.json 无此字段时取默认
+    /// （窗口未设置 / 阈值 30% / 分层保留）。
+    pub context: ContextSettings,
 }
 
 fn default_shortcut() -> String {
     SHORTCUT_DEFAULT.into()
+}
+
+/// 上下文管理设置（Context and Memory.md §3 / §6.2）。strategy 与
+/// kernel-agent 的 CompactStrategy 同形（serde snake_case 直接复用）。
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ContextSettings {
+    /// 模型上下文窗口（token）。genai 不暴露该元数据 → 用户在设置面板
+    /// 选择；None = 未设置，阈值回落 FALLBACK_WINDOW_TOKENS 保守保护。
+    pub window_tokens: Option<u64>,
+    /// 压缩触发阈值（窗口百分比，10–90）。
+    pub threshold_pct: u32,
+    /// 压缩策略（缺省分层保留）。
+    pub strategy: CompactStrategy,
+}
+
+impl Default for ContextSettings {
+    fn default() -> Self {
+        Self {
+            window_tokens: None,
+            threshold_pct: 30,
+            strategy: CompactStrategy::default(),
+        }
+    }
+}
+
+impl ContextSettings {
+    /// 生效阈值（绝对 token）＝ 窗口 × 百分比 / 100；窗口未知回落
+    /// FALLBACK_WINDOW_TOKENS。压缩判定、进度条、设置面板三处共用一把尺。
+    pub fn effective_threshold(&self) -> u64 {
+        let window = self.window_tokens.unwrap_or(FALLBACK_WINDOW_TOKENS);
+        window * self.threshold_pct as u64 / 100
+    }
+
+    /// 窗口已知时的建议阈值百分比（§3.2.3 动态建议）；未知返回 None。
+    pub fn suggested_pct(&self) -> Option<u32> {
+        self.window_tokens.map(suggested_threshold)
+    }
 }
 
 impl Default for AppSettings {
@@ -70,6 +116,7 @@ impl Default for AppSettings {
             locale: LOCALE_SYSTEM.into(),
             shortcut: SHORTCUT_DEFAULT.into(),
             llm: LlmSettings::default(),
+            context: ContextSettings::default(),
         }
     }
 }
@@ -83,6 +130,31 @@ pub struct SettingsView {
     pub shortcut: String,
     pub data_dir: String,
     pub llm: LlmSettingsView,
+    pub context: ContextSettingsView,
+}
+
+/// 上下文管理区投影：设置原值 + 生效值（阈值绝对数、建议百分比）
+/// 一起给出，前端不做第二套换算。
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextSettingsView {
+    pub window_tokens: Option<u64>,
+    pub threshold_pct: u32,
+    pub strategy: CompactStrategy,
+    /// 生效阈值（窗口已知 = 窗口×百分比；未知 = FALLBACK_WINDOW_TOKENS）。
+    pub threshold_tokens: u64,
+    /// 建议阈值百分比（窗口未知 = None，UI 隐藏建议行）。
+    pub suggested_pct: Option<u32>,
+}
+
+/// 上下文管理区部分更新（settings_set 入参）。window_tokens 用双层
+/// Option：null = 清除（回落保守保护），缺省 = 保持不变。
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ContextUpdate {
+    pub window_tokens: Option<Option<u64>>,
+    pub threshold_pct: Option<u32>,
+    pub strategy: Option<CompactStrategy>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -152,12 +224,31 @@ impl SettingsStore {
         self.inner.lock().expect("settings poisoned").locale.clone()
     }
 
+    /// 后端专用：上下文管理设置快照（runner 进度条 / compact 配置换入用）。
+    pub fn context(&self) -> ContextSettings {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .clone()
+    }
+
+    /// 后端专用：生效压缩配置（ctx-compact 共享锁的内容物）。
+    pub fn compact_config(&self) -> CompactConfig {
+        let c = self.context();
+        CompactConfig {
+            threshold_tokens: c.effective_threshold(),
+            strategy: c.strategy,
+        }
+    }
+
     /// 校验 → 应用到副本 → 落盘成功才提交内存。返回最新投影。
     pub fn update(
         &self,
         locale: Option<String>,
         shortcut: Option<String>,
         llm: Option<LlmUpdate>,
+        context: Option<ContextUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
         if let Some(loc) = locale {
@@ -197,6 +288,30 @@ impl SettingsStore {
                 next.llm.api_key = (!k.is_empty()).then_some(k);
             }
         }
+        if let Some(u) = context {
+            if let Some(w) = u.window_tokens {
+                match w {
+                    Some(n) if n <= 99 => {
+                        return Err(format!(
+                            "上下文窗口过小: {n} token（单位是 token，如 32768）"
+                        ));
+                    }
+                    Some(n) if n > 100_000_000 => {
+                        return Err(format!("上下文窗口过大: {n} token（上限 1 亿）"));
+                    }
+                    other => next.context.window_tokens = other,
+                }
+            }
+            if let Some(pct) = u.threshold_pct {
+                if !(10..=90).contains(&pct) {
+                    return Err(format!("压缩阈值 {pct}% 超出范围（10–90，10% 一级）"));
+                }
+                next.context.threshold_pct = pct;
+            }
+            if let Some(s) = u.strategy {
+                next.context.strategy = s;
+            }
+        }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
         std::fs::write(self.root.join(FILE_NAME), bytes)
             .map_err(|e| format!("settings.json 写入失败: {e}"))?;
@@ -214,6 +329,13 @@ impl SettingsStore {
                 model: s.llm.model.clone(),
                 base_url: s.llm.base_url.clone(),
                 api_key_set: s.llm.api_key.is_some(),
+            },
+            context: ContextSettingsView {
+                window_tokens: s.context.window_tokens,
+                threshold_pct: s.context.threshold_pct,
+                strategy: s.context.strategy,
+                threshold_tokens: s.context.effective_threshold(),
+                suggested_pct: s.context.suggested_pct(),
             },
         }
     }

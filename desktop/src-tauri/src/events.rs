@@ -16,6 +16,10 @@ pub mod channels {
     pub const TURN_DONE: &str = "agent://turn-done";
     pub const APPROVAL_REQUEST: &str = "agent://approval-request";
     pub const PLUGIN_STATE: &str = "plugin://state-changed";
+    /// 上下文用量（⑨）：进度条数据源（used / threshold，同 estimate 口径）。
+    pub const CONTEXT_USAGE: &str = "agent://context-usage";
+    /// 压缩完成（⑨）：前端推 SystemNotice（[查看详情][撤销]）。
+    pub const CONTEXT_COMPACTED: &str = "agent://context-compacted";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -58,6 +62,24 @@ pub enum AgentEvent {
         steps: u32,
     },
     ApprovalRequest(ApprovalRequestPayload),
+    /// 上下文用量（⑨）：每个 step 后推送；used 与压缩判定同一估算口径
+    /// （序列化字节 / 4，kernel_agent::estimate_tokens）。
+    ContextUsage {
+        session_id: String,
+        used: u64,
+        threshold: u64,
+        /// 模型窗口（未知 = 0，前端按"未设置"处理）。
+        window_tokens: u64,
+    },
+    /// 压缩完成（⑨）：summary 只推 200 字符预览（全文在会话日志）。
+    ContextCompacted {
+        session_id: String,
+        from_tokens: u64,
+        to_tokens: u64,
+        /// sliding_window / layered / summary_only（文案前端渲染）。
+        strategy: String,
+        summary_preview: String,
+    },
 }
 
 impl AgentEvent {
@@ -68,6 +90,8 @@ impl AgentEvent {
             AgentEvent::ToolResult { .. } => channels::TOOL_RESULT,
             AgentEvent::TurnDone { .. } => channels::TURN_DONE,
             AgentEvent::ApprovalRequest(_) => channels::APPROVAL_REQUEST,
+            AgentEvent::ContextUsage { .. } => channels::CONTEXT_USAGE,
+            AgentEvent::ContextCompacted { .. } => channels::CONTEXT_COMPACTED,
         }
     }
 }

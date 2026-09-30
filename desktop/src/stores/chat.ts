@@ -47,8 +47,10 @@ export const useChatStore = defineStore("chat", {
     items: [] as ChatItem[],
     running: false,
     steps: null as number | null,
-    /** 上下文用量（进度条投影；⑨ 事件接入前恒 null → 进度条不渲染）。 */
+    /** 上下文用量（进度条投影；agent://context-usage 驱动）。 */
     contextUsage: null as { used: number; threshold: number } | null,
+    /** 系统消息"查看详情"的内容（id → 文本，如压缩摘要预览）。 */
+    noticeDetails: {} as Record<number, string>,
   }),
   actions: {
     async init() {
@@ -88,6 +90,24 @@ export const useChatStore = defineStore("chat", {
           this.running = false;
           this.steps = e.steps;
           break;
+        case "context_usage":
+          this.contextUsage = { used: e.used, threshold: e.threshold };
+          break;
+        case "context_compacted": {
+          // 压缩系统消息（Context 文档 §3.8.3）：[查看详情][撤销]，
+          // 撤销经 context_undo_compact（rewind_to，ChatMessages 接线）
+          const id = nextId++;
+          const saved = Math.max(0, e.from_tokens - e.to_tokens);
+          this.items.push({
+            id,
+            kind: "system",
+            key: "notice.contextCompacted",
+            params: { saved: saved.toLocaleString(), strategy: e.strategy },
+            actions: ["details", "undo"],
+          });
+          if (e.summary_preview) this.noticeDetails[id] = e.summary_preview;
+          break;
+        }
       }
     },
     appendAssistant(delta: string) {
@@ -102,6 +122,16 @@ export const useChatStore = defineStore("chat", {
      * 压缩通知，随后 ⑪ "已记住"）。 */
     pushNotice(key: string, params?: Record<string, unknown>, actions?: string[]) {
       this.items.push({ id: nextId++, kind: "system", key, params, actions });
+    },
+    /** 原文系统条（key = "__raw__"，ChatMessages 按 params.text 渲染）：
+     * 用于"查看详情"展开压缩摘要等内容型陈述。 */
+    pushRawSystem(text: string) {
+      this.items.push({
+        id: nextId++,
+        kind: "system",
+        key: "__raw__",
+        params: { text },
+      });
     },
     async send(text: string) {
       const t = text.trim();

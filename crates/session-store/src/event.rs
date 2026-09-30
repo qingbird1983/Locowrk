@@ -68,6 +68,27 @@ pub enum SessionEvent {
         allowed: bool,
         reason: Option<String>,
     },
+    /// 上下文压缩（Context and Memory.md §3.7）：ctx-compact 在
+    /// `agent/request` 决策环完成压缩后由 kernel 落日志。折叠语义
+    /// （session.rs）：把已累计消息留尾部 `kept_messages` 条，其余替换为
+    /// 一条摘要 User 消息；撤销 = rewind_to(本事件序号)（前缀游标，
+    /// 其后的轮次一并回退）。字段全 `serde(default)`：后续演进向后兼容
+    /// 旧日志。摘要存全文（折叠重建需要）；UI 投影另截前 200 字符。
+    ContextCompacted {
+        #[serde(default)]
+        kept_messages: usize,
+        #[serde(default)]
+        summary: String,
+        #[serde(default)]
+        from_tokens: u64,
+        #[serde(default)]
+        to_tokens: u64,
+        /// sliding_window / layered / summary_only（文案由前端按 locale 渲染）。
+        #[serde(default)]
+        strategy: String,
+        #[serde(default)]
+        ts: i64,
+    },
     TurnEnd {
         turn_id: TurnId,
         outcome: TurnOutcome,

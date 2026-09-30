@@ -6,7 +6,9 @@ export type AgentEvent =
   | ChunkEvent
   | ToolCallEvent
   | ToolResultEvent
-  | TurnDoneEvent;
+  | TurnDoneEvent
+  | ContextUsageEvent
+  | ContextCompactedEvent;
 
 export interface ChunkEvent {
   kind: "chunk";
@@ -37,6 +39,27 @@ export interface TurnDoneEvent {
   kind: "turn_done";
   session_id: string;
   steps: number;
+}
+
+/** 上下文用量（agent://context-usage，⑨）：与压缩判定同一估算口径。 */
+export interface ContextUsageEvent {
+  kind: "context_usage";
+  session_id: string;
+  used: number;
+  threshold: number;
+  /** 模型窗口；0 = 未设置。 */
+  window_tokens: number;
+}
+
+/** 压缩完成（agent://context-compacted，⑨）：summary 只有 200 字符预览
+ * （全文在会话日志），strategy = sliding_window | layered | summary_only。 */
+export interface ContextCompactedEvent {
+  kind: "context_compacted";
+  session_id: string;
+  from_tokens: number;
+  to_tokens: number;
+  strategy: string;
+  summary_preview: string;
 }
 
 /** 审批请求载荷（agent://approval-request）。与 events.rs 的
@@ -104,6 +127,28 @@ export interface SettingsView {
   shortcut: string;
   dataDir: string;
   llm: LlmSettingsView;
+  context: ContextSettingsView;
+}
+
+/** 上下文管理区投影（⑨）：设置原值 + 生效值（阈值绝对数 / 建议百分比）
+ * 后端一并算好，前端不做第二套换算。 */
+export interface ContextSettingsView {
+  /** 模型上下文窗口（token）；null = 未设置（后端按 32k 保守保护）。 */
+  windowTokens: number | null;
+  thresholdPct: number;
+  /** "sliding_window" | "layered" | "summary_only"。 */
+  strategy: string;
+  thresholdTokens: number;
+  /** 建议阈值百分比；null = 窗口未知，UI 隐藏建议行。 */
+  suggestedPct: number | null;
+}
+
+/** 上下文管理区部分更新：字段缺省 = 保持不变；windowTokens 传 null =
+ * 清除窗口（回落保守保护）。 */
+export interface ContextUpdate {
+  windowTokens?: number | null;
+  thresholdPct?: number;
+  strategy?: string;
 }
 
 export interface LlmSettingsView {

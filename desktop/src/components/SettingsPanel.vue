@@ -1,13 +1,14 @@
 <script setup lang="ts">
 /**
  * 设置面板（壳批次后 = 分区容器，docs/design/UI shell and patterns.md
- * §3.2）：settings.json 分区 ↔ 面板分区一一对应——llm / shortcut /
- * locale（语言）为既有可写区；sessions 只读展示；context / memory /
- * developer 为占位（⑨/⑪/⑫ 落地）。各分区自管表单与保存动作，本文件
+ * §3.2）：settings.json 分区 ↔ 面板分区一一对应——llm / context（⑨）/
+ * shortcut / locale（语言）为既有可写区；sessions 只读展示；memory /
+ * developer 为占位（⑪/⑫ 落地）。各分区自管表单与保存动作，本文件
  * 只做纵向堆叠与错误条，不写业务。
  */
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../stores/settings";
+import ContextSection from "./settings/ContextSection.vue";
 import LanguageSection from "./settings/LanguageSection.vue";
 import LlmSection from "./settings/LlmSection.vue";
 import PlaceholderSection from "./settings/PlaceholderSection.vue";
@@ -31,11 +32,8 @@ const settings = useSettingsStore();
 
     <LlmSection />
 
-    <!-- ⑨ 上下文管理分区（压缩阈值滑条 / 策略三档 / 动态建议值）占位 -->
-    <PlaceholderSection
-      title-key="settings.contextTitle"
-      hint-key="settings.contextHint"
-    />
+    <!-- ⑨ 上下文管理：窗口 / 阈值滑条 / 策略三档（占位已由真分区替换） -->
+    <ContextSection />
 
     <!-- ⑪ 记忆分区（注入开关 + 管理入口）占位 -->
     <PlaceholderSection

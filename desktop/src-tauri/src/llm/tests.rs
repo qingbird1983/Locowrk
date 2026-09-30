@@ -142,6 +142,7 @@ async fn configured_model_without_key_fails_fast() {
                 base_url: None,
                 api_key: None,
             }),
+            None,
         )
         .unwrap();
     let llm = AppLlm::new(Arc::clone(&store));

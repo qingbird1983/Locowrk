@@ -102,6 +102,11 @@ impl SessionState {
                     error: error.clone(),
                 });
             }
+            SessionEvent::ContextCompacted {
+                kept_messages,
+                summary,
+                ..
+            } => compact_messages(&mut self.messages, *kept_messages, summary),
             _ => {}
         }
     }
@@ -115,6 +120,23 @@ impl SessionState {
             _ => None,
         })
     }
+}
+
+/// 压缩折叠（Context and Memory.md §3.7）：留尾部 `kept` 条，其余替换为
+/// 一条摘要 User 消息（滑动窗口摘要为空串 → 不留摘要，纯丢早期）。
+/// `kept >= len`（无头部可压）时空操作。apply（快照折叠）与
+/// derive_messages 共用。
+fn compact_messages(messages: &mut Vec<Message>, kept: usize, summary: &str) {
+    let keep = kept.min(messages.len());
+    let head_len = messages.len() - keep;
+    let tail = messages.split_off(head_len);
+    let head = std::mem::take(messages);
+    if !summary.is_empty() && !head.is_empty() {
+        messages.push(Message::User {
+            content: format!("[earlier conversation summarized]\n{summary}"),
+        });
+    }
+    messages.extend(tail);
 }
 
 /// 会话（§4.2）：`log` 只追加；`cursor` 是可见前缀长度；回退只移动游标。
@@ -168,7 +190,9 @@ impl Session {
     }
 
     /// 纯函数投影：只看游标之前的事件（回退后不含已撤销的轮次，§4.2）。
-    /// 两遍：先收集 ToolCall（call_id → tool / args），再拼装消息。
+    /// 两遍：先收集 ToolCall（call_id → tool / args），再单遍累计拼装；
+    /// 途中遇到 ContextCompacted 按压缩折叠改写已累计消息（与 apply 的
+    /// 快照折叠同一语义，`compact_messages`）。
     pub fn derive_messages(&self) -> Vec<Message> {
         let visible = &self.log[..self.cursor.min(self.log.len())];
 
@@ -185,16 +209,16 @@ impl Session {
             }
         }
 
-        visible
-            .iter()
-            .filter_map(|e| match e {
-                SessionEvent::UserMessage { content } => Some(Message::User {
+        let mut messages: Vec<Message> = Vec::new();
+        for e in visible {
+            match e {
+                SessionEvent::UserMessage { content } => messages.push(Message::User {
                     content: content.clone(),
                 }),
                 SessionEvent::AssistantMessage {
                     content,
                     tool_calls,
-                } => Some(Message::Assistant {
+                } => messages.push(Message::Assistant {
                     content: content.clone(),
                     tool_calls: tool_calls
                         .iter()
@@ -214,17 +238,23 @@ impl Session {
                     error,
                 } => {
                     let (tool, args) = backfill(calls.get(call_id));
-                    Some(Message::ToolResult {
+                    messages.push(Message::ToolResult {
                         call_id: call_id.clone(),
                         tool,
                         args,
                         output: output.clone(),
                         error: error.clone(),
-                    })
+                    });
                 }
-                _ => None,
-            })
-            .collect()
+                SessionEvent::ContextCompacted {
+                    kept_messages,
+                    summary,
+                    ..
+                } => compact_messages(&mut messages, *kept_messages, summary),
+                _ => {}
+            }
+        }
+        messages
     }
 
     /// 状态 = fold(自最近快照起的事件)（§4.2 state_at）。

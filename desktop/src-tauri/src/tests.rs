@@ -89,6 +89,8 @@ fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::ToolResult { .. } => "tool_result",
         AgentEvent::TurnDone { .. } => "turn_done",
         AgentEvent::ApprovalRequest(_) => "approval_request",
+        AgentEvent::ContextUsage { .. } => "context_usage",
+        AgentEvent::ContextCompacted { .. } => "context_compacted",
     }
 }
 
@@ -119,7 +121,7 @@ async fn tool_turn_projects_events_in_log_order() {
     let mut session = Session::new();
     let sink = Collector::default();
 
-    let steps = run_turn(&kernel, &mut session, "s1", "echo 你好".into(), &sink)
+    let steps = run_turn(&kernel, &mut session, "s1", "echo 你好".into(), None, &sink)
         .await
         .expect("turn ok");
     assert_eq!(steps, 2);
@@ -148,7 +150,7 @@ async fn plain_reply_turn_is_single_step() {
     let mut session = Session::new();
     let sink = Collector::default();
 
-    let steps = run_turn(&kernel, &mut session, "s1", "你好".into(), &sink)
+    let steps = run_turn(&kernel, &mut session, "s1", "你好".into(), None, &sink)
         .await
         .expect("turn ok");
     assert_eq!(steps, 1);
@@ -219,7 +221,7 @@ async fn denied_email_closes_result_without_executing() {
     let mut session = Session::new();
     let sink = Collector::default();
 
-    let steps = run_turn(&kernel, &mut session, "s1", "发邮件".into(), &sink)
+    let steps = run_turn(&kernel, &mut session, "s1", "发邮件".into(), None, &sink)
         .await
         .expect("turn ok");
     assert_eq!(steps, 2);
@@ -254,9 +256,16 @@ async fn allowed_email_executes_and_logs_decision() {
     let mut session = Session::new();
     let sink = Collector::default();
 
-    run_turn(&kernel, &mut session, "s1", "email 给我".into(), &sink)
-        .await
-        .expect("turn ok");
+    run_turn(
+        &kernel,
+        &mut session,
+        "s1",
+        "email 给我".into(),
+        None,
+        &sink,
+    )
+    .await
+    .expect("turn ok");
 
     assert!(session
         .events()
@@ -292,7 +301,7 @@ async fn approval_hub_roundtrip_through_pending_map() {
         }
     });
 
-    run_turn(&kernel, &mut session, "s1", "发邮件".into(), &sink)
+    run_turn(&kernel, &mut session, "s1", "发邮件".into(), None, &sink)
         .await
         .expect("turn ok");
 

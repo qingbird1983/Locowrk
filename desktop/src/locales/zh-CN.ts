@@ -39,6 +39,10 @@ export default {
       details: "查看详情",
       undo: "撤销",
     },
+    // ⑨ 压缩通知（[查看详情][撤销]，Context 文档 §3.8.3）
+    contextCompacted: "已压缩早期对话，节省 {saved} token",
+    compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",
+    compactUndoFailed: "撤销压缩失败：{reason}",
   },
   // 闲置徽章（IdleBadge）：六级 → 灰/黄/红；有 value+unit 时渲染时长文案
   idle: {
@@ -122,13 +126,27 @@ export default {
     shortcutPlaceholder: "如 Ctrl+Shift+L",
     shortcutHint:
       "保存后立即生效（无需重启）；在任意应用中按下即可显示/隐藏主窗口。键位被其他程序占用时保存会报错，换一个组合即可。",
-    // 占位分区（⑨/⑪/⑫ 落位后随 PlaceholderSection 一并替换为真分区）
-    contextTitle: "上下文管理",
-    contextHint: "压缩阈值与策略设置将在后续版本提供。",
+    // 占位分区（⑪/⑫ 落位后随 PlaceholderSection 一并替换为真分区）
     memoryTitle: "记忆",
     memoryHint: "记忆注入开关与管理入口将在后续版本提供。",
     developerTitle: "开发者选项",
     developerHint: "暴露调试面板（Top-N、分布统计、token 节省估算）将在后续版本提供。",
+    // ⑨ 上下文管理分区（真分区，替换壳批次占位）
+    contextTitle: "上下文管理",
+    contextHint: "长对话接近窗口上限时自动压缩历史；阈值、策略随时可调，压缩可撤销。",
+    window: "模型上下文窗口",
+    windowUnset: "未设置（按 32k 保守保护）",
+    windowCustom: "自定义…",
+    windowCustomLabel: "窗口大小（token）",
+    threshold: "压缩阈值",
+    thresholdValue: "当前：{pct}% · {tokens} token",
+    thresholdSuggest: "ⓘ 建议 {pct}%",
+    thresholdSuggestHint: "（窗口越大，建议值越低）",
+    thresholdLowWarning: "更低的阈值可能导致压缩开销超过节省的成本",
+    strategy: "压缩策略",
+    strategy_sliding_window: "滑动窗口（只保留最近消息，不调用模型）",
+    strategy_layered: "分层保留（摘要 + 最近原文，推荐）",
+    strategy_summary_only: "仅摘要（全部压缩成一段摘要）",
   },
   error: {
     unknown: "发生错误",

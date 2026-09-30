@@ -10,6 +10,8 @@ use plugin_api::ToolSpec;
 use serde::{Deserialize, Serialize};
 use session_store::Message;
 
+use crate::CompactionOutcome;
+
 /// 决策点事件名（§3.5）。
 pub mod points {
     /// 处理用户消息前：插件可拒绝/改写消息。
@@ -29,7 +31,8 @@ pub struct PreStepPayload {
 /// `agent/request` 的 payload。`model` / `params` 可被决策环改写——
 /// 审批插件通过该点注入策略参数（§14 阶段四验收）。`tools` 是工具目录
 /// 快照（LLM.md：适配层负责映射各家格式），`serde(default)` 保持与
-/// 旧决策方互通。
+/// 旧决策方互通。`compacted` 由 ctx-compact 写回（⑨）：kernel 据此落
+/// `ContextCompacted` 事件进会话日志。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RequestPayload {
     pub messages: Vec<Message>,
@@ -39,6 +42,8 @@ pub struct RequestPayload {
     pub params: serde_json::Value,
     #[serde(default)]
     pub tools: Vec<ToolSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compacted: Option<CompactionOutcome>,
 }
 
 /// `agent/request-error` 的 payload。

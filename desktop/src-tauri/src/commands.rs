@@ -3,14 +3,17 @@
 
 use tauri::{AppHandle, State};
 
+use kernel_agent::CompactConfig;
+use session_store::SessionEvent;
+
 use crate::events::ApprovalRequestPayload;
-use crate::runner;
-use crate::settings::{LlmUpdate, SettingsView};
+use crate::runner::{self, UsagePolicy};
+use crate::settings::{ContextUpdate, LlmUpdate, SettingsView};
 use crate::state::AppState;
 use plugin_service::{InstalledPlugin, MarketplaceItem};
 
 /// 聊天命令。轮次内容全部经 `agent://` 事件推送（§12.2），返回值只表达
-/// 轮次是否成功收束（返回实际 step 数）。
+/// 轮次是否成功收束（返回实际 step 数）。进度条口径从设置取（⑨）。
 #[tauri::command]
 pub async fn agent_chat(
     session_id: String,
@@ -19,14 +22,40 @@ pub async fn agent_chat(
 ) -> Result<u32, String> {
     let session = state.session_lock(&session_id);
     let mut session = session.lock().await;
+    let context = state.settings.context();
+    let usage = UsagePolicy {
+        threshold_tokens: context.effective_threshold(),
+        window_tokens: context.window_tokens.unwrap_or(0),
+    };
     runner::run_turn(
         &state.kernel,
         &mut session,
         &session_id,
         message,
+        Some(usage),
         state.sink.as_ref(),
     )
     .await
+}
+
+/// 撤销最近一次上下文压缩（Context and Memory.md §3.7）：rewind_to(压缩
+/// 事件序号) 后 fork 原地换入——前缀游标语义下其后的轮次一并回退，日志
+/// 只追加不删除的纪律由"日志是内存副本"兜底（落盘持久化在收尾 backlog）。
+/// 会话 id 不变，前端无需重新绑定。返回回退点（一般无需使用）。
+#[tauri::command]
+pub async fn context_undo_compact(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    let session = state.session_lock(&session_id);
+    let mut session = session.lock().await;
+    let seq = session.events()[..session.cursor()]
+        .iter()
+        .rposition(|e| matches!(e, SessionEvent::ContextCompacted { .. }))
+        .ok_or_else(|| "没有可撤销的压缩记录".to_string())?;
+    session.rewind_to(seq);
+    *session = session.fork(seq);
+    Ok(seq)
 }
 
 /// 审批决策（§12.1）：回填 `agent://approval-request` 对应的请求。
@@ -124,24 +153,34 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
     Ok(state.settings.view())
 }
 
-/// 部分更新设置：locale（system/zh-CN/en）、快捷键与 LLM 字段独立可选，
-/// 缺省字段保持不变；base_url / api_key 传空串 = 清除。改键成功后即时
+/// 部分更新设置：locale、快捷键、LLM 字段与上下文管理区（⑨）独立可选，
+/// 缺省字段保持不变；base_url / api_key 传空串 = 清除；context 的
+/// windowTokens 传 null = 清除窗口（回落保守保护）。改键成功后即时
 /// 重注册全局快捷键；注册失败返回 Err（新键已落盘，换键重试即可）。
+/// 上下文改动成功后换入 ctx-compact 活配置——压缩行为随即生效。
 #[tauri::command]
 pub async fn settings_set(
     locale: Option<String>,
     shortcut: Option<String>,
     llm: Option<LlmUpdate>,
+    context: Option<ContextUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
-    let view = state.settings.update(locale.clone(), shortcut.clone(), llm)?;
+    let view = state
+        .settings
+        .update(locale.clone(), shortcut.clone(), llm, context)?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;
     }
     // 语言改动 → 托盘菜单即时换文案（失败仅日志，不影响保存结果）
     if locale.is_some() {
         crate::tray::refresh_menu(&app);
+    }
+    // ⑨：压缩配置热更新（阈值/策略/窗口换入共享锁）
+    let cfg: CompactConfig = state.settings.compact_config();
+    if let Ok(mut guard) = state.compact_cfg.write() {
+        *guard = cfg;
     }
     Ok(view)
 }

@@ -5,6 +5,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AgentEvent,
   ApprovalRequest,
+  ContextUpdate,
   InstalledPlugin,
   LlmUpdate,
   MarketplaceItem,
@@ -15,6 +16,12 @@ import type {
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
 export function chat(sessionId: string, message: string): Promise<number> {
   return invoke("agent_chat", { sessionId, message });
+}
+
+/** 撤销最近一次上下文压缩（⑨）：其后的轮次一并回退（前缀游标语义）。
+ * 会话 id 不变。返回回退点。 */
+export function contextUndoCompact(sessionId: string): Promise<number> {
+  return invoke("context_undo_compact", { sessionId });
 }
 
 /** 回填审批决策（§12.1）。与已处理/未知的请求返回 reject。 */
@@ -32,6 +39,8 @@ const CHANNELS = [
   "agent://tool-call",
   "agent://tool-result",
   "agent://turn-done",
+  "agent://context-usage",
+  "agent://context-compacted",
 ] as const;
 
 export function subscribeAgentEvents(
@@ -108,10 +117,12 @@ export function setSettings(patch: {
   locale?: string;
   shortcut?: string;
   llm?: LlmUpdate;
+  context?: ContextUpdate;
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
     shortcut: patch.shortcut ?? null,
     llm: patch.llm ?? null,
+    context: patch.context ?? null,
   });
 }

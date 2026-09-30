@@ -40,6 +40,11 @@ export default {
       details: "View details",
       undo: "Undo",
     },
+    // ⑨ Compaction notice ([View details][Undo], Context doc §3.8.3)
+    contextCompacted: "Compacted earlier messages, saved {saved} tokens",
+    compactUndone:
+      "Compaction undone: full pre-compaction context restored (later turns were rewound too).",
+    compactUndoFailed: "Failed to undo compaction: {reason}",
   },
   // Idle badge (IdleBadge): six levels → gray/yellow/red; with value+unit
   // the badge renders a human duration string instead of the level name.
@@ -130,14 +135,29 @@ export default {
     shortcutPlaceholder: "e.g. Ctrl+Shift+L",
     shortcutHint:
       "Applies immediately after saving (no restart). Press it in any app to show/hide the main window. If the key is taken by another program, saving fails — pick another combo.",
-    // Placeholder sections (replaced with real sections as ⑨/⑪/⑫ land)
-    contextTitle: "Context management",
-    contextHint: "Compaction threshold and strategy settings arrive in a later version.",
+    // Placeholder sections (replaced with real sections as ⑪/⑫ land)
     memoryTitle: "Memory",
     memoryHint: "Memory injection toggle and management entry arrive in a later version.",
     developerTitle: "Developer options",
     developerHint:
       "Exposure debug panel (Top-N, distribution stats, token-savings estimate) arrives in a later version.",
+    // ⑨ Context management section (real section, replaces shell placeholder)
+    contextTitle: "Context management",
+    contextHint:
+      "Long conversations are auto-compacted as they approach the window limit. Threshold and strategy are adjustable anytime; compaction is undoable.",
+    window: "Model context window",
+    windowUnset: "Not set (conservative 32k protection)",
+    windowCustom: "Custom…",
+    windowCustomLabel: "Window size (tokens)",
+    threshold: "Compaction threshold",
+    thresholdValue: "Current: {pct}% · {tokens} tokens",
+    thresholdSuggest: "ⓘ Suggested {pct}%",
+    thresholdSuggestHint: "(larger windows suggest lower thresholds)",
+    thresholdLowWarning: "Lower thresholds may cost more than they save",
+    strategy: "Compaction strategy",
+    strategy_sliding_window: "Sliding window (keep recent messages only, no model call)",
+    strategy_layered: "Layered (summary + recent messages, recommended)",
+    strategy_summary_only: "Summary only (compress everything)",
   },
   error: {
     unknown: "Something went wrong",

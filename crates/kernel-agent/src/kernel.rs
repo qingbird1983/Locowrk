@@ -18,6 +18,7 @@ use plugin_api::{CallCtx, SideEffect, Tool, ToolError, ToolSpec};
 use serde_json::Value;
 use session_store::{Message, Session, SessionEvent};
 
+use crate::CompactionOutcome;
 use crate::approval::{ApprovalDecision, ApprovalResolver};
 use crate::middleware::Middleware;
 use crate::waterfall::{PreStepPayload, RequestErrorPayload, RequestPayload, RetryBudget, points};
@@ -163,7 +164,23 @@ impl Kernel {
         let tools = self.tool_catalog().await;
 
         // request-error 的 Retry 在 step 内部闭环，受重试预算约束（§7.2）
-        let resp = self.request_with_retry(messages, tools).await?;
+        let (resp, compacted) = self.request_with_retry(messages, tools).await?;
+
+        // 压缩先于本轮 assistant 消息落日志（Context and Memory.md §3.7）：
+        // 折叠语义见 session-store；撤销 = rewind_to 本事件。
+        if let Some(c) = compacted {
+            session.append(SessionEvent::ContextCompacted {
+                kept_messages: c.kept_messages,
+                summary: c.summary,
+                from_tokens: c.from_tokens,
+                to_tokens: c.to_tokens,
+                strategy: c.strategy,
+                ts: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0),
+            });
+        }
 
         session.append(SessionEvent::AssistantMessage {
             content: resp.content.clone(),
@@ -262,28 +279,33 @@ impl Kernel {
 
     /// `agent/request` 决策环：插件可改 model / params（§14 阶段四验收）。
     /// tools 随 payload 进决策环（决策方理论上可裁剪目录），出环后进 LlmRequest。
+    /// ctx-compact 的压缩结果经 `compacted` 一并带回（kernel 落日志）。
     async fn waterfall_request(
         &self,
         messages: Vec<Message>,
         tools: Vec<ToolSpec>,
-    ) -> Result<LlmRequest, KernelError> {
+    ) -> Result<(LlmRequest, Option<CompactionOutcome>), KernelError> {
         let payload = serde_json::to_value(RequestPayload {
             messages,
             model: None,
             // 空对象而非 null：改写环可以直接 entry/or_insert（§7.2）
             params: Value::Object(serde_json::Map::new()),
             tools,
+            compacted: None,
         })?;
         let out = self.ctx.events.waterfall(points::REQUEST, payload).await;
         match out.decision {
             WaterfallDecision::Continue | WaterfallDecision::Replace(_) => {
                 let parsed: RequestPayload = serde_json::from_value(out.payload)?;
-                Ok(LlmRequest {
-                    messages: parsed.messages,
-                    tools: parsed.tools,
-                    model: parsed.model,
-                    params: parsed.params,
-                })
+                Ok((
+                    LlmRequest {
+                        messages: parsed.messages,
+                        tools: parsed.tools,
+                        model: parsed.model,
+                        params: parsed.params,
+                    },
+                    parsed.compacted,
+                ))
             }
             WaterfallDecision::Reject(reason) => Err(KernelError::Rejected {
                 point: points::REQUEST,
@@ -308,21 +330,23 @@ impl Kernel {
 
     /// LLM 请求 + request-error 决策环。`agent/request-error` 返回
     /// `Retry { delay }` 时在 step 内部重试（重新走 request 决策环），
-    /// 累计次数 / 累计延迟超预算即失败（§7.2 重试预算）。
+    /// 累计次数 / 累计延迟超预算即失败（§7.2 重试预算）。压缩结果取
+    /// 最后一次成功的决策环产出（重试轮会在原始消息上重压，幂等守卫
+    /// 见 compact.rs；落日志只记一次）。
     async fn request_with_retry(
         &self,
         messages: Vec<Message>,
         tools: Vec<ToolSpec>,
-    ) -> Result<LlmResponse, KernelError> {
+    ) -> Result<(LlmResponse, Option<CompactionOutcome>), KernelError> {
         let mut retries: u32 = 0;
         let mut total_delay = Duration::ZERO;
         loop {
-            let req = self
+            let (req, compacted) = self
                 .waterfall_request(messages.clone(), tools.clone())
                 .await?;
             let llm = self.scoped_dyn::<dyn LlmService>()?;
             match llm.complete(req).await {
-                Ok(resp) => return Ok(resp),
+                Ok(resp) => return Ok((resp, compacted)),
                 Err(e) => {
                     let payload = serde_json::to_value(RequestErrorPayload {
                         error: e.to_string(),

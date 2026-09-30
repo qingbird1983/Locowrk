@@ -50,7 +50,7 @@
 | 面板分区 | settings.json | 状态 |
 |---|---|---|
 | `LlmSection` | `llm` | ✅（既有） |
-| context 分区 | `context`（⑨ 新增） | 占位（虚线框） |
+| `ContextSection` | `context`（⑨） | ✅（窗口预设+自定义 / 阈值滑条双显示 / 策略三档；后端投影带生效值与建议值，前端不做第二套换算） |
 | memory 分区 | `memory`（⑪ 新增） | 占位 |
 | `SessionsSection` | —（只读展示 dataDir） | ✅ |
 | `LanguageSection` | `locale` | ✅（既有） |
@@ -65,8 +65,8 @@
 "Agent 对会话状态的陈述"（压缩通知 / "已记住：xxx" / 审批结果）统一形态：**非气泡、非工具卡，居中窄条 + 可选动作按钮**（如压缩通知的 [查看详情] [撤销]）。
 
 - chat store 的 `system` 类别：存 **i18n key**（`notice.*` 区）而非渲染文本——文案是 UI 不是会话数据，渲染期翻译以跟随语言切换。
-- 动作只上抛 `action(id)`，实际行为由功能批次接线（⑨ 撤销→`rewind_to`，详情→行内展开）。
-- 生产入口唯一：`chat.pushNotice(key, params, actions)`；首个生产者 ⑨ 压缩通知，随后 ⑪ "已记住"。
+- 动作只上抛 `action(id)`，实际行为由宿主接线（⑨ 已接：压缩通知 details→行内展开 / undo→`context_undo_compact`）。
+- 生产入口两个：`chat.pushNotice(key, params, actions)`（i18n key 条）；`chat.pushRawSystem(text)`（**原文条**，`key = "__raw__"`，渲染 `params.text`——只用于"查看详情"展开的内容型陈述，如压缩摘要预览）。首个生产者 ⑨，随后 ⑪ "已记住"。
 
 ### 3.4 徽章体系 + 进度条模式
 
@@ -99,14 +99,15 @@
 | `agent://turn-done` | chat `running=false` | 头部状态徽标 | |
 | `agent://approval-request` | approvals pending 队列 | ApprovalModal（全局） | 启动补拉 `list_pending_approvals` |
 | `plugin://state-changed` | plugins 整表重拉 | PluginMarket 两页签 | 策略：本地 IO 毫秒级，不做增量 |
-| `agent://context-usage`（⑨ 新增） | chat `contextUsage` | ContextProgressBar | |
-| 压缩完成（⑨ 新增，事件名随 ⑨ 定） | chat `pushNotice('notice.contextCompacted', …, ['details','undo'])` | SystemNotice | 撤销经 `rewind_to` |
+| `agent://context-usage`（⑨） | chat `contextUsage` | ContextProgressBar | 每 step 后推送；used 与压缩判定同一估算口径 |
+| `agent://context-compacted`（⑨） | chat `pushNotice('notice.contextCompacted', …, ['details','undo'])` + `noticeDetails` | SystemNotice | 撤销→`context_undo_compact`；详情→`pushRawSystem` |
 
 ### 4.2 命令 → 面板
 
 | 命令 | 调用方 | 返回去向 |
 |---|---|---|
 | `agent_chat` / `agent_approve` / `list_pending_approvals` | chat / approvals store | 内容全走事件，返回值只表达收束状态 |
+| `context_undo_compact`（⑨） | ChatMessages（压缩通知 undo） | 会话 id 不变；结果走 SystemNotice（notice.compactUndone） |
 | `plugin_list` / `plugin_registry_list` | plugins store | PluginMarket |
 | `plugin_install/update/uninstall/rollback/set_enabled` | plugins store | 完成后 state-changed 广播 → 整表重拉 |
 | `settings_get` / `settings_set` | settings store | SettingsPanel 各分区 |

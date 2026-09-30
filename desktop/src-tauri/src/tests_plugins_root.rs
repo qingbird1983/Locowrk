@@ -73,13 +73,19 @@ fn find_artifact_accepts_wasm() {
     // 约定 wasm 名
     let wasm = dir.join("tool-x.wasm");
     std::fs::write(&wasm, b"\0asm").unwrap();
-    assert_eq!(plugins_root::find_artifact(&dir, "tool-x"), Some(wasm.clone()));
+    assert_eq!(
+        plugins_root::find_artifact(&dir, "tool-x"),
+        Some(wasm.clone())
+    );
 
     // 自定义 wasm 名（唯一可装载工件）→ 采用
     let custom = dir.join("guest.wasm");
     std::fs::remove_file(&wasm).unwrap();
     std::fs::write(&custom, b"\0asm").unwrap();
-    assert_eq!(plugins_root::find_artifact(&dir, "tool-x"), Some(custom.clone()));
+    assert_eq!(
+        plugins_root::find_artifact(&dir, "tool-x"),
+        Some(custom.clone())
+    );
 
     // native 与 wasm 并存：native 优先（约定名先查），无歧义不拒绝
     let native = dir.join(plugins_root::dll_name("tool-x"));

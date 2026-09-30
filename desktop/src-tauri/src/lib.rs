@@ -60,6 +60,7 @@ pub fn run() {
             commands::agent_chat,
             commands::agent_approve,
             commands::list_pending_approvals,
+            commands::context_undo_compact,
             commands::plugin_list,
             commands::plugin_registry_list,
             commands::plugin_install,

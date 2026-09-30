@@ -3,7 +3,7 @@
 import { defineStore } from "pinia";
 import { getSettings, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
-import type { LlmUpdate, SettingsView } from "../types";
+import type { ContextUpdate, LlmUpdate, SettingsView } from "../types";
 
 export const useSettingsStore = defineStore("settings", {
   state: () => ({
@@ -60,6 +60,23 @@ export const useSettingsStore = defineStore("settings", {
       this.savedFlash = false;
       try {
         this.view = await setSettings({ shortcut });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
+    /** 保存上下文管理区（⑨）：后端校验 + 换入 ctx-compact 活配置，
+     * 保存即生效。校验失败（阈值出界等）在 error 条显示。 */
+    async saveContext(context: ContextUpdate) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ context });
         this.savedFlash = true;
         setTimeout(() => (this.savedFlash = false), 2000);
       } catch (e) {
