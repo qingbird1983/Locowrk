@@ -39,7 +39,7 @@
 
 ---
 
-## 二、当前排期（v2.17，2026-09-29 确认）
+## 二、当前排期（v2.17，2026-09-29 确认；2026-09-30 增补《Setting and Constrained Optimization.md》逐项核对排期 = S1/S2 两批 + ⑪⑫搭车）
 
 ### 壳批次 —— UI 骨架（✅ 已完成，提交 a2c82a5）
 
@@ -95,7 +95,7 @@
 | 功能 | 状态 | 说明 |
 |---|---|---|
 | memory-sqlite 插件本体 | ◐ | 已存在（v2.15，1.1.0 起工具名已去点号=memory_get/put/list/search/delete/undo）；⑪ 剩 memory_write/read 命名对齐 + 标 exposure=always |
-| Memory-Inject 中间件 | ⬜ | 读记忆库 top-5 注入 system prompt；链位 ToolExposure → Memory-Inject → ctx-compact；**system prompt 永不压缩** |
+| Memory-Inject 中间件 | ⬜ | 读记忆库 top-5 注入 system prompt；链位 ToolExposure → Memory-Inject → ctx-compact；**system prompt 永不压缩**；注入条数可配（settings.json `memory` 区 topK，默认 5——约束清单 §3） |
 | memory.put 同步落盘 | ⬜ | 不走异步队列（"说了记住却没记住"最伤信任） |
 | 记忆管理页 | ⬜ | 搜索/列表/编辑/删除/清空；每条显示来源（explicit/extracted）与时间 |
 
@@ -107,9 +107,38 @@
 | 功能 | 状态 | 说明 |
 |---|---|---|
 | EWMA 打分 | ⬜ | decay = exp(-days/7)，半衰期约 5 天 |
-| Top-N 截断 + 调试面板 | ⬜ | N=20 可配；开发者选项看暴露分布与节省 token 估算 |
+| Top-N 截断 + 调试面板 | ⬜ | N=20 可配；每次请求最大工具数同批可配（约束清单 §3）；开发者选项看暴露分布与节省 token 估算 |
 | 会话内热度 | ⬜ | 会话内 1.0 > 全局 EWMA 0.7 > 检索 0.5，always 满分直通 |
 | search_tools 元工具 | ⬜ | always + Pure 主动拉取兜底；空结果回退 top-10 高频 |
+
+### S1 tool-shell 安全分级与进程治理（《Setting and Constrained Optimization.md》§2，2026-09-30 逐项对照源码核对后入库）
+
+> 核对修正三条（排期按修正后事实走）：① 白名单"prog+子命令"两段匹配**机制已在**
+> （policy.rs `decide`，`LOCOWRK_SHELL_ALLOW` 支持 `git log` 形态）——缺的只是默认
+> 白名单内容与设置 UI 化；② 输出超限**已是截断 + `truncated` 标记**（exec.rs），
+> 不是清单说的"直接拒绝"——只剩提示文案；③ allow∩denylist 冲突**调用时已明确报
+> permanent denylist，非静默**——补的是启动期 warn。前提"fs_* 守卫修好"已满足
+> （7ba8776）。denylist 现 64 项（清单写 ~50）。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| 只读命令免审批分级 | ⬜ | ls/cat/grep 与 git 只读子命令（status/log/diff/show）审批豁免；**必须带参数路径校验**——参数（含相对路径对 cwd 解析）出现允许根外目标 → 降级审批，否则 shell 的 cat 绕过 fsutil 守卫读任意盘文件（现 exec.rs 无任何路径检查）；实现形态批次内定（宿主审批中间件读豁免清单，或插件拆只读工具） |
+| denylist 补齐 | ⬜ | 解释器类主力已在（python/node/bash/cmd/powershell/perl/ruby/php/lua…）；补包装类 xargs/env/find/nice/timeout/nohup/time、网络类 nc/ncat/netcat/telnet/rsync、Windows exec 面 wscript/cscript/mshta/rundll32、macOS osascript |
+| allow∩denylist 启动冲突日志 | ⬜ | init 读 `LOCOWRK_SHELL_ALLOW` 后与 DENYLIST 求交集 → tracing::warn 列出被压制的条目（denylist 仍永远赢不变） |
+| 进程组 kill | ⬜ | 现 `child.kill()` 只杀首进程，孙进程成孤儿（属实）；Windows Job Object（KILL_ON_JOB_CLOSE）/ Unix setpgid + killpg 杀全树 |
+| 截断提示文案 | ⬜ | truncated=true 时输出尾部附"已截断，可缩小范围/换参数重试"提示（机制已在，只补文案） |
+| 高危命令可解锁开关 | ⬜ | rm/sudo/chmod/dd/mkfs 等"用户可判断后果"类：默认拒绝，设置开启后**走审批而非直接放行**；解释器/包装/网络类保持硬锁（清单 §3 三级分类；清单 §2.3 与 §2.7 对 dd/mkfs 归类矛盾，按 §2.7/§3 裁决） |
+
+### S2 设置归属、数字呈现与内置插件禁用（清单 §1/§5/§6/§3 余项）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| 内置插件禁用 | ⬜ | InstalledTab builtin 行加 禁用/启用（不给卸载——随程序分发）；关键现状：builtin 走 `plugins_root::load_all` 直载绕过 lockfile（state.rs），service `set_enabled` 要求 lockfile 条目——落 `InstallSource::Builtin`（枚举已预留未用）持久化 + startup 扫描尊重 enabled:false + 工具候选池过滤；操作门控按 **source**（安装来源）而非 origin（manifest 自声明，防市场插件伪装 official 骗分组；分组展示仍按 origin 不变） |
+| 上下文窗口迁模型配置 | ⬜ | 字段从 ContextSection 迁 LlmSection（provider/model/baseUrl/key 旁）；settings key `context.windowTokens` → llm 侧（读旧值兼容一次）；Ollama `/api/show` 自动提取 + 常见模型静态档案表 + 读不到手动兜底；ContextSection 只留阈值+策略（阈值为百分比不需绝对窗口；未设窗口的 FALLBACK 保守保护保留） |
+| 数字呈现落地 | ⬜ | 出处已定位：ContextSection 预设标签 `toLocaleString`（"262,144 token"）+ 阈值预览 `(262144×20)/100=52,428.8`（:78/:106）；统一 `lib/format.ts` 档位格式化（262144→256K、52,428.8→≈52K）+ ContextProgressBar 增 `≈52K / 256K` 比例段；规范已成文 UI shell doc §3.5 |
+| shell 超时/输出限长默认可配 | ⬜ | `LOCOWRK_SHELL_TIMEOUT` / `LOCOWRK_SHELL_MAX_BYTES` 环境默认（模型 arg 上限 120s/256KB 不变；现硬编码 20s/64KB） |
+| 宿主 Timeout 中间件可配 | ⬜ | state.rs 硬编码 `Timeout::new(30s)` → settings developer 区可调 |
+| 内置插件版本策略定稿 | ⬜ | 方案 B 独立升（清单推荐，同意）；UI 区分 = origin（展示分组）× source（管理门控）双字段已够，**评估后大概率免加 `bundled` 字段**；定稿写进 packaging.md |
 
 ### ⑬ 智能层（后排，看需求）
 
@@ -139,6 +168,8 @@
 | tool-http（POST/PUT 通用请求） | plugins.md P1 唯一未做的工具类；tool-fetch 仅 GET（其代码注释已声明 POST/PUT 归本插件） | 看需求 |
 | mw-ratelimit 调用限速 | plugins.md P1.5 中间件：限制单位时间调用次数 | 看需求 |
 | 中间件插件化 | mw-audit / 审批门 / ctx-compact 均为宿主侧形态；C ABI `PluginKind::Middleware` 仍是占位变体，无真插件使用 | 看需求 |
+| 权限模式四档切换器 | 约束清单 §4（后期）：计划/变更前确认/自动编辑/完全访问，挂会话输入框旁随手切；三类硬底线（路径逃逸/SSRF/ABI 边界）任何档位生效——"完全访问≠无安全" | ⑬ 后看需求 |
+| 会话保留天数可配 | 约束清单 §3 余项（session-store 保留期） | 看需求 |
 
 ---
 
