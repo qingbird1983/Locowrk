@@ -41,7 +41,8 @@
 - 行内容与动作由使用方以默认插槽提供；模式组件不认识业务类型。
 - `v-model:search` 未绑定 → 搜索框整个隐藏；`filters` 未传 → chips 行隐藏。
 - 批量栏内容经 `#batch` 插槽；**批量卸载必须二次确认并列出插件名**（exposure 文档 §9.5）。
-- 实例：插件-已安装页（`plugins/InstalledTab.vue`，筛选 chips = origin 全部/官方/第三方）、记忆页（`MemoryPage.vue`，仅搜索）、⑩ 闲置筛选页（复用同模式加闲置 chips）。
+- 第二排 chips：`subFilters` / `v-model:subFilter`（⑩ 已落地，闲置档位与状态档分离，§9.2）；不传不渲染。
+- 实例：插件-已安装页（`plugins/InstalledTab.vue`，第一排 origin + 第二排闲置档 + 批量栏 + 提示条）、记忆页（`MemoryPage.vue`，仅搜索）。
 
 ### 3.2 设置分区模式（`components/settings/`）
 
@@ -59,6 +60,7 @@
 
 - 每个分区一个自管组件（表单 + 保存动作），容器 `SettingsPanel.vue` 只做堆叠与错误条。
 - 分区落位时：删占位 `PlaceholderSection`，建同名组件 + settings.json 同名分区；**占位必须在功能落地同一批替换**，不留永久空壳。
+- **拆分触发点**（用户 2026-09-30 确认）：单页滚动是现状定稿；分区数 >8 或单分区超 200 行/需要子分组时，才把容器升级为分类导航（先吸顶锚点 chips，再左列+右分区）——改造只落在 `SettingsPanel.vue` 容器，分区组件与 settings.json 一一对应的关系不动。最可能先膨胀的是 developer 分区（⑫ 调试面板 + 自动停用设置项），其出路是设置视图内子页签，不是新顶层视图。
 
 ### 3.3 会话内系统消息模式（`components/chat/SystemNotice.vue`）
 
@@ -75,7 +77,7 @@
 | 族 | 组件/落点 | 配色 |
 |---|---|---|
 | 副作用族 | `SideEffectBadges.vue` | pure 青绿 / compensable 黄 / irreversible 红 |
-| 闲置族 | `IdleBadge.vue`（⑩ 接数据） | fresh/normal 不显示；idle 灰 / stale 黄 / abandoned+never_used 红 |
+| 闲置族 | `IdleBadge.vue`（⑩ 已接线 `plugin_list_with_usage`） | fresh/normal 不显示；idle 灰 / stale+never_used 黄 / abandoned 红（exposure 文档 §9.4）；文案表 = locales idle.*（§8.6/§8.7 档位） |
 | 状态族 | InstalledTab 行内 | 运行中绿 / 待激活黄 / 已禁用灰 / 可更新蓝 |
 
 - 闲置徽章铁则（exposure 文档 §8.4）：**后端只给结构化 `{level, value, unit}`，前端渲染"多久没用"人类文案**；14 天试用保护由后端裁决。
@@ -111,7 +113,8 @@
 | `plugin_list` / `plugin_registry_list` | plugins store | PluginMarket |
 | `plugin_install/update/uninstall/rollback/set_enabled` | plugins store | 完成后 state-changed 广播 → 整表重拉 |
 | `settings_get` / `settings_set` | settings store | SettingsPanel 各分区 |
-| `plugin_list_with_usage`（⑩ 新增） | plugins store | InstalledTab（含 IdleInfo → IdleBadge） |
+| `plugin_list_with_usage`（⑩） | plugins store `usage` | InstalledTab（IdleInfo → IdleBadge；filter_key → 闲置 chips） |
+| `plugin_batch_set_enabled` / `plugin_batch_uninstall`（⑩） | plugins store 批量动作 | InstalledTab 批量栏（卸载二次确认列名，§9.5）；逐条成败 BatchResult |
 | memory 读写命令（⑪ 新增，名随 ⑪ 定） | 新 memory store | MemoryPage；"已记住"走 SystemNotice |
 
 铁则重申：**UI 永不直接操作 PluginRegistry**（只经 PluginService / 宿主命令）；流式内容永远走事件推送，不塞 command 返回值；Tauri command 是薄适配层。

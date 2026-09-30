@@ -73,20 +73,20 @@
 | ContextCompacted 事件 + 撤销 | ✅ | 进 session-store（serde default 兼容旧日志；摘要存全文，折叠留尾部 kept_messages）；撤销 = rewind_to + fork 原地换入（会话 id 不变，其后轮次一并回退） |
 | 会话内实时进度条 | ✅ | 每 step 推 agent://context-usage（与压缩同估算口径）→ ContextProgressBar；压缩推 agent://context-compacted → SystemNotice [查看详情][撤销] 真接线 |
 
-### ⑩ 暴露声明 + 使用统计地基 + 闲置 UI
+### ⑩ 暴露声明 + 使用统计地基 + 闲置 UI（✅ 已完成，提交 f6b1a44；搮车：工具名去点号 9a5d39c）
 
 > 详见 DESIGN.md §14 v2.17 ⑩段 + 《Tool exposure strategy and usage
 > statistics.md》§4/§3/§8。
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| ToolSpec `exposure` 字段 | ⬜ | always/on_demand/hidden 缺省 on_demand；manifest 可选字段追加零破坏，ABI 版本不动；always>10 告警 |
-| 暴露管线（直通态） | ⬜ | always 直通 + on_demand 全暴露，行为暂不变（截断归⑫） |
-| ToolCall 事件补 plugin_id | ⬜ | 现仅有 plugin_version；serde default 兼容旧日志 |
-| usage.sqlite3 统计库 | ⬜ | 宿主侧自有（与 memory.sqlite3 分离）；tool_usage / plugin_usage 两表；5s 批量刷盘 |
-| IdleLevel / IdleInfo | ⬜ | 六级闲置分类；后端只给结构化数据，前端渲染"多久没用"人类文案；14 天试用保护 |
-| 闲置 UI | ⬜ | plugin_list_with_usage 命令 + 筛选器 + 批量操作（批量卸载二次确认列名） |
-| 停用落盘核对 | ⬜ | lockfile set_enabled 已存在（lockfile.rs），仅核对启动只加载 enabled:true |
+| ToolSpec `exposure` 字段 | ✅ | plugin-api `Exposure`（缺省 on_demand）；manifest 可选字段追加零破坏，`PLUGIN_ABI_VERSION` 不动；always>10 在 `RegistryToolSource::list_tools` 一次性告警（`merge_catalog` 纯函数 + 单测，被同名顶掉的不计数） |
+| 暴露管线（直通态） | ✅ | list_tools 剔除 hidden（resolve 不过滤，⑫ 检索激活仍可达）；always 直通 + on_demand 全暴露，行为零变化（截断归⑫） |
+| ToolCall 事件补 plugin_id | ✅ | `Tool` trait 加默认方法 `plugin_id()`（宿主侧非 C ABI，既有实现者零改动；SabiToolAdapter 经 `PluginInstance::id()`=manifest.id 带出）；事件 `#[serde(default)] Option<String>` 兼容旧日志（roundtrip 单测） |
+| usage.sqlite3 统计库 | ✅ | desktop `usage.rs`：两表同 §3.1/§3.2（tool_usage 含 ewma_score 预留列）；runner 投影到 ToolResult 时 `record()` → mpsc → 5s 批量刷盘，全句柄 drop 收尾刷一次；库打不开降级丢弃；隐私只记工具名/插件 id/时间戳 |
+| IdleLevel / IdleInfo | ✅ | desktop `idle.rs`：六级 + 9 档 unit 全按 §8.5–§8.7 表（后端裁决）；classify/filter_key 全表单测；builtin 开发态插件不评估闲置 |
+| 闲置 UI | ✅ | `plugin_list_with_usage`（attach join 投影）+ IdleBadge 契约升级（per-unit 人类文案、never_used 黄档对齐 §9.4）+ 第二排闲置 chips（ListPage `subFilters`）+ 批量栏（全选/停用/启用/卸载，卸载内联二次确认列名）+ 顶部提示条（§9.3 点去看看切筛选）；批量命令 `plugin_batch_set_enabled`/`plugin_batch_uninstall`（BatchResult 逐条成败） |
+| 停用落盘核对 | ✅ | 核对 service.rs `startup_reconcile` 确有 `.filter(|e| e.enabled)`，lockfile `set_enabled` 落盘已在（v2.12）——无需改动 |
 
 ### ⑪ 记忆注入 + 记忆管理 UI
 
@@ -94,7 +94,7 @@
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| memory-sqlite 插件本体 | ◐ | 已存在（v2.15）；本批对齐工具名 + 标 exposure=always |
+| memory-sqlite 插件本体 | ◐ | 已存在（v2.15，1.1.0 起工具名已去点号=memory_get/put/list/search/delete/undo）；⑪ 剩 memory_write/read 命名对齐 + 标 exposure=always |
 | Memory-Inject 中间件 | ⬜ | 读记忆库 top-5 注入 system prompt；链位 ToolExposure → Memory-Inject → ctx-compact；**system prompt 永不压缩** |
 | memory.put 同步落盘 | ⬜ | 不走异步队列（"说了记住却没记住"最伤信任） |
 | 记忆管理页 | ⬜ | 搜索/列表/编辑/删除/清空；每条显示来源（explicit/extracted）与时间 |
