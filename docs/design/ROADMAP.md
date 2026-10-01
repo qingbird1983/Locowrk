@@ -190,7 +190,7 @@
 | 隔离与预算 | ✅ v2.30 d29cd69 | 子会话 = 父转录**可见前缀** fork（复用 ⑨ `Session::fork`/rewind 语义，`{parent}-sub-{n}` 内存投影）；`tools` 缺省 = 继承父全目录、非空 = 严格子集 ∩ 父目录（越权 resolve → NotAvailable → failed 如实闭合）；轮数缺省 8/上限 32、超时缺省 300s/上限 1800s（0 = 不限），越限 status = budget_exhausted / timeout，摘要取子转录尾部不虚构；收束 JSON `{status, summary, turns, tools_used, child_session_id[, error]}`，摘要 4000 字截断 |
 | 审批与事件 | ✅ v2.30 d29cd69 | `ToolCallReq` 增 `session_id`（step_inner 与 CallCtx.session_id 同点填充，12 处构造点补齐）；子内 Irreversible 冒泡父内核同一 ApprovalHub，载荷带 `{parent}-sub-{n}`，ApprovalModal 紫"子 Agent 调用"徽章；派生/收束落父会话日志（subagent_run 的 ToolCall/ToolResult 事件即日志事实）+ 前端 SystemNotice（§4.1 扩表 2 行先行：tool-call → subagentStarted / tool-result → subagentDone + 卡片照常）；子内活动不投影（黑盒） |
 
-### ⑯ tool-sandbox shell 沙箱（⬜ 2026-09-30 排期；**批首先定方案再动码**）
+### ⑯ tool-sandbox shell 沙箱（✅ 已完成，v2.31，提交 dc822d9）
 
 > plugins.md 仅一行定义（"shell 在容器/WASM 里跑"），太薄，不足以直接动码；
 > 且 Windows 开发机无容器保证。方案取舍是本批第一个交付物，落 plugins.md/
@@ -198,8 +198,8 @@
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| 方案定稿 | ⬜ | 候选：① Windows 受限令牌 + JobObject 限额（S1 JobGuard 可复用；网络隔离能力如实分级）② wasmtime WASI 内建命令集（⑧ 加载器技术栈复用，但只能跑 wasm 化命令，非任意原生命令——注意⑧的 WASM 是**插件**沙箱，这是 **shell** 沙箱，两回事）③ 检测 Docker/WSL 走容器（可用性依赖用户环境）；按静态事实写能力矩阵，**不做虚假安全声明**（审计纪律不变） |
-| tool-sandbox 插件本体 | ⬜ | 按定稿方案落地；与 tool-shell 关系 = **并存不替换**（沙箱档位是独立工具，shell 既有白名单/denylist/进程治理纪律原样保留） |
+| 方案定稿 | ✅ v2.31 dc822d9 | 三候选取**① Windows 受限令牌 + JobObject 限额**（② WASI 只能跑 wasm 化命令实用性窄，记录为远期可选内建命令集；③ 容器可用性依赖用户环境，记录为远期可选后端）；能力矩阵落 plugins.md §六：内存/进程数/CPU 占比硬限、剪贴板 UI 限制、无特权受限令牌（DISABLE_MAX_PRIVILEGE + deny Administrators 不可 UAC 提升）、整树治理 ✅；**文件系统与网络不隔离 ❌ 如实分级**（不做虚假安全声明——策略三道闸因此保留，高危无解锁开关引导走 shell） |
+| tool-sandbox 插件本体 | ✅ v2.31 dc822d9 | 单工具 `sandbox_run`（Irreversible 一律审批）：JobObject 限额（mem_mb 缺省 512 / max_procs 64 / cpu_rate 可选硬顶，arg/env 双层缺省钳上限）+ 受限令牌 spawn（CREATE_SUSPENDED → 挂 Job → Resume；令牌不可用降级 job-only，输出 `isolation` 字段如实上报不静默）+ 同源三道闸（LOCOWRK_SANDBOX_ALLOW 扩展、denylist 永远赢）；Unix 对称 pre_exec setrlimit（AS/NPROC/CPU）+ 进程组树治理；与 tool-shell **并存不替换**（其白名单/denylist/进程治理纪律原样保留）；测试 15 例含真跑受限 spawn 全链（含全量限额参数） |
 
 ---
 
@@ -265,7 +265,7 @@
 |---|---|---|
 | tool-mcp | ✅ | v2.15（mcp.json 加载期发现冻结 + stdio JSON-RPC + side_effect 缺省 Irreversible） |
 | tool-browser | ⏸ 最后 | 文档自己建议晚做（fetch + MCP 已覆盖多数场景）；**用户裁定 2026-09-30：五件中排最末** |
-| tool-sandbox | ⬜ 排期⑯ | shell 容器/WASM 化——注意⑧的 WASM 加载器是插件沙箱，不是 shell 沙箱，两回事；批首先定方案 |
+| tool-sandbox | ✅ | ⑯（v2.31，dc822d9）：受限令牌 + JobObject 限额受限档（能力矩阵如实分级，fs/net 不隔离由策略三道闸补偿），定稿见 plugins.md §六 |
 | agent-sub | ✅ | ⑮（v2.30，d29cd69）：kernel-agent `subagent/` 单层调度 + fork 前缀 + 白名单视图 + 审批冒泡，详见 ⑮ 块 |
 | tool-schedule | ✅ | ⑭（v2.29，7dc0139）：宿主内置工具面 + schedule.sqlite3 + 触发引擎，详见 ⑭ 块 |
 | tool-notify | ✅ | ⑭（v2.29，7dc0139）：webhook 插件（SSRF 防线照搬）+ 桌面通知走 vtable 追加槽 |
