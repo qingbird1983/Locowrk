@@ -137,7 +137,9 @@
 | `plugin_list_with_usage`（⑩） | plugins store `usage` | InstalledTab（IdleInfo → IdleBadge；filter_key → 闲置 chips） |
 | `plugin_batch_set_enabled` / `plugin_batch_uninstall`（⑩） | plugins store 批量动作 | InstalledTab 批量栏（卸载二次确认列名，§9.5）；逐条成败 BatchResult |
 | `memory_list/update/delete/clear_all`（⑪） | 新 memory store | MemoryPage；"已记住"走 SystemNotice |
-| `tool_exposure_debug`（⑫） | DeveloperSection 挂载/刷新按钮 | 开发者分区只读面板：暴露分布 + 节省 token 估算（§3.5 compactNumber 档位）；打开分区时拉取，不推送不轮询 |
+| `tool_exposure_debug`（⑫） | DeveloperSection 挂载/刷新按钮 | 开发者分区只读面板：暴露分布（⑬ 起含语义检索入选行）+ 节省 token 估算（§3.5 compactNumber 档位）；打开分区时拉取，不推送不轮询 |
+| `llm_probe_embedding`（⑬） | EmbeddingSection 检测按钮 | 分区内就地显示向量维度 / 错误条；不落盘只探测 |
+| `experience_list/delete/clear_all`（⑬） | MemoryPage 挂载/行内删除/底部清空 | MemoryPage 经历区块（§11.3 可见可删；无编辑语义——自动沉淀原文）；经经历删除走行内二次确认 |
 
 铁则重申：**UI 永不直接操作 PluginRegistry**（只经 PluginService / 宿主命令）；流式内容永远走事件推送，不塞 command 返回值；Tauri command 是薄适配层。
 

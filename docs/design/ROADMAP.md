@@ -151,16 +151,18 @@
 | 宿主 Timeout 中间件可配 | ✅ | kernel-agent `Timeout::hot(Arc<RwLock<Duration>>)`（`new` 保留给测试/CLI，DurationSource 两态）；settings.json tools 区 `callTimeoutSecs`（5–3600 缺省 30，state.rs 起共享锁 `timeout_cfg`）；settings_set 热换入即生效；DeveloperSection 增数字输入 |
 | 内置插件版本策略定稿 | ✅ | **方案 B 独立升**（清单推荐，同意）；`bundled` 字段**不加**——source（lockfile 管理门控）× origin（manifest 展示分组）双字段已够；接管/回归/启用取最新等规则成文 packaging.md **§9.4** |
 
-### ⑬ 智能层（后排，看需求）
+### ⑬ 智能层（✅ 已完成，v2.28，提交 42bcbf9）
 
-> 四项共享 embedding 基建，出现真实需求一起排。
+> 四项共享 embedding 基建一起落地。**可降级是总原则**（§1）：embedding
+> 未配置或端点不可用 = 智能层整体缺席，检索退关键词、经历不写不注入、
+> 提取跳过经历——聊天主链路零影响。
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| 工具向量检索 | ⏸ | embedding 索引，未就绪降级 BM25/关键词 |
-| memory-vector 经历记忆 | ⏸ | 语义检索"聊过什么、做过什么决策" |
-| 隐式记忆提取 | ⏸ | 对话后异步提取事实，易记垃圾故放最后 |
-| 自动停用设置项 | ⏸ | 默认关闭 |
+| 工具向量检索 | ✅ | kernel-agent 新 `tool_retrieval`：`EmbedPort` 契约（内核定契约、组装点实现，同 GlobalEwma 模式）+ 描述向量缓存（键含描述原文，插件换描述即失效）+ 余弦打分；ToolExposure 打分加 `+0.5 × similarity`（§5.3 连续补充信号），**只在目录 > 上限（真的要裁剪）时才打 embedding**；embedding 未配置/失败 = 空表退回两层打分；快照增 `retrieved` 归因（开发者面板同行渲染）；search_tools 元工具同升：语义优先（相似度 floor 0.25 取前 8，一次批量嵌查询+全目录）→ 关键词 → 高频回退链不变 |
+| memory-vector 经历记忆 | ✅ | **宿主侧形态**（同 llm 插件先例：写入要过 embedding 模型，端点+密钥归宿主，插件无运行期配置通道；ROADMAP §四已注记）：desktop `experiences.rs`——experiences.sqlite3（content/embedding BLOB f32-LE/session_id/created_at，§4.3 表结构），余弦检索（全库限 2000 行、**维度不符行跳过 = 换 embedding 模型后旧行自然退役**）；kernel-agent `ExperienceSource` async 契约 → Memory-Inject 并列注入 `<session_experiences>` 块（查询 = 最近一条用户消息；同走 topK 上限）；记忆页增经历区块（可见可删可清空，§11.3 信任基础；无编辑语义——自动沉淀原文） |
+| 隐式记忆提取 | ✅ | settings `memory.autoExtract`（缺省关——"易记垃圾故放最后"）；desktop `extract.rs`：轮次收敛（TurnDone）后 fire-and-forget——本轮消息转录（≤6000 字符）→ LlmService 提取 JSON → ① 事实 ≤3 条（key 清洗 + 强制 `auto.` 命名空间，**永不覆盖用户显式记忆**；source=extracted）写 memory 库（`MemoryStore::write` INSERT..ON CONFLICT）+ ② 经历摘要（≥10 字符，≤500）嵌入落 experiences；parse 剥围栏取 JSON、空 key/value 过滤；任何失败只 warn 不影响聊天；无 UI 通知——结果在记忆页可见（来源徽章"自动提取"） |
+| 自动停用设置项 | ✅ | settings `plugins.autoDisableIdleDays`（0=关 缺省 / 7–365 校验）；desktop `autodisable.rs`：启动 + 设置保存即巡检——距最近使用（从未使用 = 安装时点，与 ⑩ IdleBadge 同口径）≥ N 天的**安装态第三方插件**逐条停用（内置不参与闲置评估，同 ⑩；**只停不启**——关闭不复活已停用项，§8.8 状态切换由用户显式触发）；EmbeddingSection / PluginsSection 新设置分区（§7 扩表）+ §4.2 命令表扩 `llm_probe_embedding`（检测显示向量维度）/ `experience_*` 三命令 |
 
 ---
 
@@ -207,7 +209,7 @@
 | tool-git | ✅ | v2.15（status/diff/log/commit/push + undo_commit） |
 | tool-http | ⬜ 未排期 | POST/PUT 通用请求；已入收尾 backlog |
 | memory-sqlite | ✅ | v2.15（跨会话记忆；plugins.md 所述"会话持久化"归 session-store——desktop 落盘在 backlog） |
-| memory-vector | ⏸ | → ⑬ 智能层 |
+| memory-vector | ✅ | v2.28 **宿主侧形态**（42bcbf9，同 llm 插件宿主侧先例：embedding 端点+密钥归宿主）——experiences.sqlite3 + ExperienceSource 契约，详见 ⑬ 行 |
 | ctx-compact | ✅ | v2.19 配置驱动收口（三策略/阈值 50%/事件+撤销，92f298b） |
 
 ### P1.5 —— 中间件类：宿主侧形态已齐，插件化未做
