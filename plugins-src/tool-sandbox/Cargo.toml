@@ -1,0 +1,34 @@
+[package]
+name = "tool-sandbox"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# 插件产物是动态库（Windows: tool_sandbox.dll，见 plugins/README.md）。
+[lib]
+crate-type = ["cdylib"]
+
+# 策略/执行零第三方依赖；serde_json 经 plugin-api re-export。
+# 受限执行面（⑯ 方案定稿 = 受限令牌 + JobObject 限额）：Windows 用
+# windows-sys（令牌/Job/管道）；Unix 用 libc setrlimit + 进程组
+# （与 tool-shell 同款平台分工）。
+[dependencies]
+plugin-api = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_JobObjects",
+    "Win32_System_Pipes",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
+
+# manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
+# （scripts/build_plugins.sh 按 1.0.0 构建一次并暂存）。
