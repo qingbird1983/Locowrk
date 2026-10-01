@@ -215,11 +215,24 @@
 
 ---
 
+### ⑱ fs roots 工作区目录选择器（✅ 已完成，v2.33，提交 dc2ad87）
+
+> backlog"桌面端接线 LOCOWRK_FS_ROOTS"兑现。fsutil `allowed_roots()` 每次
+> 工具调用读 env（无缓存），因此选择器做成**保存即生效免重启**；目录选择
+> 走 OS 原生对话框，Rust 侧封装（UI shell 文档 §七规则 8）。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| settings `tools.fsRoots` | ✅ v2.33 dc2ad87 | 缺省空 = 仅数据根（与 fsutil 缺省语义一致，旧 settings.json 零迁移）；normalize 校验 trim/去空/去重保序 + 目录存在性 fail-closed（同 fsutil 使用时契约，保存时即报）；env 注入双时机 = 启动 + settings_set tools 区改动即重注入，空表移除 env |
+| DeveloperSection 工作区目录块 | ✅ v2.33 dc2ad87 | `pick_directory` 命令（tauri-plugin-dialog 仅 Rust 侧，无 JS guest/capability）+ 列表增删即存即生效；§3.2 分区表纠偏（memory/developer 占位标记更新为已实现、补 shell 行）+ §七规则 8（原生对话框封装模式） |
+
+---
+
 ## 三、收尾 backlog（随批次搭车）
 
 | 项 | 说明 | 计划搭车批次 |
 |---|---|---|
-| fs roots 工作区目录选择器 | 桌面端接线 LOCOWRK_FS_ROOTS | 壳批次或⑩ |
+| fs roots 工作区目录选择器 | ✅ 已完成（⑱，v2.33，dc2ad87：tools.fsRoots + 保存即生效 env 重注入 + 原生对话框选择器） | — |
 | desktop session 持久化 | 会话事件落盘 | 看需求（⑨ 压缩/撤销在内存会话上已可用；落盘顺带解决撤销 fork 的物理留痕） |
 | LLM 流式输出 | genai 流式 → 事件推送 | 看需求 |
 | 市场 wasm 打包分发 | ⑧⑧ 遗留 | 看需求 |

@@ -53,12 +53,13 @@
 |---|---|---|
 | `LlmSection` | `llm` | ✅（既有） |
 | `ContextSection` | `context`（⑨） | ✅（窗口预设+自定义 / 阈值滑条双显示 / 策略三档；后端投影带生效值与建议值，前端不做第二套换算） |
-| memory 分区 | `memory`（⑪ 新增） | 占位 |
+| `MemorySection` | `memory`（⑪ 新增） | ✅（注入开关 / topK / autoExtract） |
 | `SessionsSection` | —（只读展示 dataDir） | ✅ |
 | `LanguageSection` | `locale` | ✅（既有） |
 | `AppearanceSection` | `appearance`（⑰ 新增） | ✅（theme 三档 dark / light / system，缺省 dark 旧文件零迁移；保存即生效，system 跟随 `prefers-color-scheme`） |
 | `ShortcutSection` | `shortcut` | ✅（既有） |
-| developer 分区 | `developer`（⑫ 新增） | 占位 |
+| `ShellSection` | `shell`（S1） | ✅（高危解锁开关；env 在插件加载前注入，重启生效） |
+| `DeveloperSection` | `tools`（后端区名——前端组件历史叫 developer） | ✅（⑫ 暴露设置 + 调试面板；⑱ 增 `fsRoots` 工作区目录列表：原生对话框选目录，增删即存即生效——fsutil 每次工具调用读 env，免重启；缺省仅数据目录） |
 
 - 每个分区一个自管组件（表单 + 保存动作），容器 `SettingsPanel.vue` 只做堆叠与错误条。
 - 分区落位时：删占位 `PlaceholderSection`，建同名组件 + settings.json 同名分区；**占位必须在功能落地同一批替换**，不留永久空壳。
@@ -215,3 +216,7 @@
    值）再上组件；主题只经 settings `appearance.theme`，组件禁止读
    `prefers-color-scheme`。
 7. 新动效 → 只许 §六三类；新入场形态先改 §六动效规范再实现。
+8. 原生系统对话框（目录 / 文件选择）统一由 Rust command 封装
+   （`pick_directory`；tauri-plugin-dialog 仅 Rust 侧调用，同 notification
+   先例：无 JS guest、无需 capability），前端零新增插件依赖；返回
+   `string | null`（取消 = null），是否采纳由调用分区决定。
