@@ -14,9 +14,9 @@ use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
 use plugin_api::{CallCtx, Exposure, SideEffect, Tool, ToolError, ToolSpec};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use crate::scheduler::store::{Kind, MAX_SCHEDULES, Schedule, ScheduleDb, now_ms};
+use crate::scheduler::store::{now_ms, Kind, Schedule, ScheduleDb, MAX_SCHEDULES};
 
 static VERSION: std::sync::LazyLock<semver::Version> =
     std::sync::LazyLock::new(|| semver::Version::new(1, 0, 0));
@@ -107,9 +107,8 @@ impl Tool for ScheduleCreateTool {
             let at = start_at(&args, now).unwrap_or(now + secs as i64 * 1000);
             (Kind::Interval, at, Some(secs as i64))
         } else {
-            let at = start_at(&args, now).ok_or_else(|| {
-                bad("one of interval_secs / delay_secs / at is required")
-            })?;
+            let at = start_at(&args, now)
+                .ok_or_else(|| bad("one of interval_secs / delay_secs / at is required"))?;
             if at <= now {
                 return Err(bad("`at` is in the past"));
             }
@@ -242,11 +241,7 @@ impl Tool for ScheduleDeleteTool {
             .filter(|s| !s.trim().is_empty())
             .ok_or_else(|| bad("missing string field `id`"))?;
         // 只删本会话的行：跨会话 id 一律 not found（不泄露存在性）
-        let owned = self
-            .db
-            .list_session(&session_id)
-            .iter()
-            .any(|s| s.id == id);
+        let owned = self.db.list_session(&session_id).iter().any(|s| s.id == id);
         if !owned || !self.db.delete(id) {
             return Err(bad("schedule not found in this session"));
         }

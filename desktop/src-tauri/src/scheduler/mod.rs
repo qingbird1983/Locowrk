@@ -16,7 +16,7 @@ mod tools;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use engine::{EngineDeps, spawn};
+pub(crate) use engine::{spawn, EngineDeps};
 pub(crate) use store::ScheduleDb;
 pub(crate) use tools::{ScheduleCreateTool, ScheduleDeleteTool, ScheduleListTool};
 

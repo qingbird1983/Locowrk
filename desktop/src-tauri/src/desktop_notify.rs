@@ -28,9 +28,7 @@ pub fn show(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
 /// 见"略收严，宁多勿漏。
 pub(crate) fn window_attended(app: &AppHandle) -> bool {
     app.get_webview_window("main")
-        .map(|w| {
-            w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false)
-        })
+        .map(|w| w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false))
         .unwrap_or(false)
 }
 

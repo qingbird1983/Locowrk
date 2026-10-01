@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use plugin_api::{CallCtx, Tool, ToolError};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use super::engine::{Target, defer_or_give_up, next_interval_run, resolve_target};
+use super::engine::{defer_or_give_up, next_interval_run, resolve_target, Target};
 use super::store::{Kind, Schedule, ScheduleDb};
 use super::tools::{ScheduleCreateTool, ScheduleDeleteTool, ScheduleListTool};
 
@@ -19,7 +19,11 @@ fn sched(id: &str, kind: Kind, run_at: i64) -> Schedule {
         title: "t".into(),
         prompt: "p".into(),
         run_at,
-        interval_secs: if kind == Kind::Interval { Some(60) } else { None },
+        interval_secs: if kind == Kind::Interval {
+            Some(60)
+        } else {
+            None
+        },
         deferrals: 0,
     }
 }
@@ -29,9 +33,7 @@ fn tmp_db(tag: &str) -> (PathBuf, Arc<ScheduleDb>) {
     let dir = std::env::temp_dir().join(format!("locowrk-sched-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("mkdir");
-    let db = Arc::new(
-        ScheduleDb::open(&dir.join("schedule.sqlite3")).expect("open schedule db"),
-    );
+    let db = Arc::new(ScheduleDb::open(&dir.join("schedule.sqlite3")).expect("open schedule db"));
     (dir, db)
 }
 
@@ -60,7 +62,10 @@ fn create_enforces_cap() {
         db.create(&sched(&format!("s{i}"), Kind::Once, 1)).unwrap();
     }
     let err = db.create(&sched("overflow", Kind::Once, 1)).unwrap_err();
-    assert!(err.contains("full"), "cap error should mention fullness: {err}");
+    assert!(
+        err.contains("full"),
+        "cap error should mention fullness: {err}"
+    );
 }
 
 #[test]
@@ -90,14 +95,22 @@ async fn create_requires_session_and_one_mode() {
     let (_dir, db) = tmp_db("create");
     let tool = ScheduleCreateTool::new(Arc::clone(&db));
 
-    let err = call(tool.as_ref(), &ctx(None), json!({ "prompt": "x", "delay_secs": 5 }))
-        .await
-        .unwrap_err();
+    let err = call(
+        tool.as_ref(),
+        &ctx(None),
+        json!({ "prompt": "x", "delay_secs": 5 }),
+    )
+    .await
+    .unwrap_err();
     assert!(err.to_string().contains("no session context"));
 
-    let err = call(tool.as_ref(), &ctx(Some("desktop-1")), json!({ "prompt": "x" }))
-        .await
-        .unwrap_err();
+    let err = call(
+        tool.as_ref(),
+        &ctx(Some("desktop-1")),
+        json!({ "prompt": "x" }),
+    )
+    .await
+    .unwrap_err();
     assert!(err.to_string().contains("interval_secs"), "{err}");
 
     let err = call(
@@ -145,7 +158,10 @@ async fn create_interval_min_and_defaults() {
     assert_eq!(ok["kind"], "interval");
     let row = &db.list_session("s")[0];
     assert_eq!(row.interval_secs, Some(10));
-    assert!(row.run_at > super::store::now_ms(), "default start = now + interval");
+    assert!(
+        row.run_at > super::store::now_ms(),
+        "default start = now + interval"
+    );
 }
 
 #[tokio::test]
@@ -161,7 +177,9 @@ async fn list_and_delete_are_session_scoped() {
     other.session_id = "desktop-2".into();
     db.create(&other).unwrap();
 
-    let out = call(list.as_ref(), &ctx(Some("desktop-1")), json!({})).await.unwrap();
+    let out = call(list.as_ref(), &ctx(Some("desktop-1")), json!({}))
+        .await
+        .unwrap();
     let ids: Vec<&str> = out["schedules"]
         .as_array()
         .unwrap()
@@ -170,14 +188,22 @@ async fn list_and_delete_are_session_scoped() {
         .collect();
     assert_eq!(ids, vec!["mine"]);
 
-    let err = call(del.as_ref(), &ctx(Some("desktop-1")), json!({ "id": "theirs" }))
-        .await
-        .unwrap_err();
+    let err = call(
+        del.as_ref(),
+        &ctx(Some("desktop-1")),
+        json!({ "id": "theirs" }),
+    )
+    .await
+    .unwrap_err();
     assert!(err.to_string().contains("not found"), "{err}");
 
-    let ok = call(del.as_ref(), &ctx(Some("desktop-1")), json!({ "id": "mine" }))
-        .await
-        .unwrap();
+    let ok = call(
+        del.as_ref(),
+        &ctx(Some("desktop-1")),
+        json!({ "id": "mine" }),
+    )
+    .await
+    .unwrap();
     assert_eq!(ok["deleted"], "mine");
     assert!(db.list_session("desktop-1").is_empty());
 }

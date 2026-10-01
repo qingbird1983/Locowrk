@@ -57,12 +57,7 @@ pub(crate) enum OnDefer {
     SkipSlot(i64),
 }
 
-pub(crate) fn defer_or_give_up(
-    kind: Kind,
-    deferrals: i64,
-    now: i64,
-    interval_ms: i64,
-) -> OnDefer {
+pub(crate) fn defer_or_give_up(kind: Kind, deferrals: i64, now: i64, interval_ms: i64) -> OnDefer {
     let cap = match kind {
         Kind::Once => store::ONCE_MAX_DEFERRALS,
         Kind::Interval => store::INTERVAL_MAX_DEFERRALS,
@@ -96,8 +91,10 @@ pub(crate) struct EngineDeps {
 }
 
 /// 起引擎后台任务（组装点调用；db 打不开 = 不起，调度缺席已降级）。
+/// 组装点 setup 在主线程、没有 tokio 上下文，必须走 tauri 全局运行时
+/// （同 events / usage 先例；裸 tokio::spawn 会 panic "no reactor running"）。
 pub(crate) fn spawn(deps: EngineDeps) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
         loop {
             tick.tick().await;
@@ -172,7 +169,11 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
     .await
     {
         tracing::warn!("scheduled turn {} failed: {e}", sched.id);
-        if let Err(e) = desktop_notify::show(&deps.app, &sched.title, &format!("scheduled turn failed: {e}")) {
+        if let Err(e) = desktop_notify::show(
+            &deps.app,
+            &sched.title,
+            &format!("scheduled turn failed: {e}"),
+        ) {
             tracing::warn!("{e}");
         }
     }
@@ -205,8 +206,11 @@ fn finish(deps: &EngineDeps, sched: &Schedule, now: i64) {
         }
         Kind::Interval => {
             let interval_ms = sched.interval_secs.unwrap_or(0) * 1000;
-            deps.db
-                .reschedule(&sched.id, next_interval_run(now, sched.run_at, interval_ms), 0);
+            deps.db.reschedule(
+                &sched.id,
+                next_interval_run(now, sched.run_at, interval_ms),
+                0,
+            );
         }
     }
 }

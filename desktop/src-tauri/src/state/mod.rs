@@ -223,9 +223,9 @@ pub fn init_state(app: AppHandle) -> AppState {
         RegistryToolSource::new(Arc::clone(&registry)),
     )));
     let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
-    let main_source = with_host_tools(KernelToolSource::new(RegistryToolSource::new(
-        Arc::clone(&registry),
-    )))
+    let main_source = with_host_tools(KernelToolSource::new(RegistryToolSource::new(Arc::clone(
+        &registry,
+    ))))
     .with_builtin(SearchToolsTool::new(
         search_catalog,
         Arc::clone(&usage),
@@ -291,7 +291,9 @@ pub fn init_state(app: AppHandle) -> AppState {
     if days > 0 {
         let plugins2 = Arc::clone(&plugins);
         let usage2 = Arc::clone(&usage);
-        tokio::spawn(async move {
+        // setup 主线程没有 tokio 上下文，后台化走 tauri 全局运行时
+        // （同 events / usage / scheduler-engine 先例）。
+        tauri::async_runtime::spawn(async move {
             crate::autodisable::auto_disable_idle(&plugins2, &usage2, days).await;
         });
     }
