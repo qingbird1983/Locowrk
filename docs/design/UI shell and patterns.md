@@ -122,6 +122,27 @@ mtime 降序，选项文案 = 首条用户消息截断）+「新会话」按钮�
   （搜索/改名/删除会话）归 UI 正式设计阶段，走 §二判据再定去留。
 - 系统时间显示等行内细节沿用 §3.5（相对时间）。
 
+### 3.7 工具调用卡模式（`components/chat/ToolCallCard.vue`，㉑）
+
+工具执行过程（`agent://tool-call` / `tool-result` 的投影）**默认折叠**的
+对话密度铁则——否则一轮多工具调用的会话瞬间被参数/结果 JSON 刷满，正文
+全被挤走。形态对齐主流 Agent 前端：折叠 = 单行摘要 + 展开箭头，点击头部
+展开明细（行内展开，§五第二行判据）。
+
+- **折叠态 = 头部一行**：展开箭头（▸/▾）+ 工具名（mono 琥珀）+ 版本徽章 +
+  副作用徽章 + 参数摘要（`args` 首个原始值截断，`ink-4` truncate，截断用
+  `lib/format.ts` 的 `clip`）+ 状态（运行中 `ink-4` / 成功 emerald /
+  失败 red）。头部整行是 `<button>`，hover `surface-2` 反馈，键盘可达。
+- **展开态 = 明细体**（`v-show`，保 DOM 便宜重放）：参数 / 结果两段 JSON
+  `<pre>`；结果区失败态显示 error 文本（红）。
+- **失败自动展开**：结果到达且 `ok === false` 时展开一次——错误可见性优先
+  于密度；历史重放里的失败卡同规（挂载即检）。用户可手动再折叠。
+- **折叠状态是组件本地 UI 状态**：不入 store、不持久化；切会话 / 重放 /
+  重启回到折叠。列表 `:key` 用条目 id，result 补丁原地更新不重挂组件，
+  当轮内展开态保持。
+- 运行中**不加**脉动/转圈动画（§六动效规范禁常驻动画），状态文案即指示；
+  箭头只换字形，不做旋转过渡。
+
 ---
 
 ## 四、事件→UI 流向图
@@ -133,16 +154,16 @@ mtime 降序，选项文案 = 首条用户消息截断）+「新会话」按钮�
 | 事件 | store | 组件 | 备注 |
 |---|---|---|---|
 | `agent://chunk` | chat `appendAssistant` | ChatMessages 助手气泡 | ⑳ 起真流式：文本 delta 逐段直推（内核 `LlmStreamSink` → 同通道），该步投影的整段 chunk 被抑制（不重复）；无 sink（headless/内核测试）回到整段投影。**注意 channel 数组须含全部事件**（⑳ 搭车修复 `agent://schedule-fired` 缺席的死分支） |
-| `agent://tool-call` | chat push tool 项 | ChatMessages 工具卡 | 先事件后执行（内核侧纪律） |
-| `agent://tool-result` | chat 按 call_id 补丁 | ChatMessages 工具卡结果区 | |
+| `agent://tool-call` | chat push tool 项 | ToolCallCard（§3.7） | 先事件后执行（内核侧纪律）；㉑ 起默认折叠，头部单行摘要 |
+| `agent://tool-result` | chat 按 call_id 补丁 | ToolCallCard 结果区（§3.7） | 失败自动展开一次（§3.7） |
 | `agent://turn-done` | chat `running=false` | 头部状态徽标 | |
 | `agent://approval-request` | approvals pending 队列 | ApprovalModal（全局） | 启动补拉 `list_pending_approvals`；⑮ 起载荷含 `session_id`，非当前会话（子 Agent）调用带标识徽章 |
 | `plugin://state-changed` | plugins 整表重拉 | PluginMarket 两页签 | 策略：本地 IO 毫秒级，不做增量 |
 | `agent://context-usage`（⑨） | chat `contextUsage` | ContextProgressBar | 每 step 后推送；used 与压缩判定同一估算口径 |
 | `agent://context-compacted`（⑨） | chat `pushNotice('notice.contextCompacted', …, ['details','undo'])` + `noticeDetails` | SystemNotice | 撤销→`context_undo_compact`；详情→`pushRawSystem` |
 | `agent://schedule-fired`（⑭） | chat `pushNotice('notice.scheduleFired', …)` | SystemNotice | 定时触发注入轮的告知（无动作按钮，后续助手回复以 chunk 跟进）；窗口不可见/失焦时后端另发系统通知兜底 |
-| `agent://tool-call`（tool=subagent_run，⑮） | chat 工具卡 + `pushNotice('notice.subagentStarted', …)` | ChatMessages 工具卡 + SystemNotice | 派生告知（prompt 摘引）；子 Agent 内部活动不投影（黑盒），其审批请求走 approval-request 行（带标识） |
-| `agent://tool-result`（subagent_run，⑮） | chat 按 call_id 补丁 + `pushNotice('notice.subagentDone', …)` | ChatMessages 工具卡 + SystemNotice | 摘要回父会话（工具结果 JSON 全文在卡内）；异常收束（预算耗尽/超时）同样走通知，如实呈现 |
+| `agent://tool-call`（tool=subagent_run，⑮） | chat 工具卡 + `pushNotice('notice.subagentStarted', …)` | ToolCallCard（§3.7） + SystemNotice | 派生告知（prompt 摘引）；子 Agent 内部活动不投影（黑盒），其审批请求走 approval-request 行（带标识） |
+| `agent://tool-result`（subagent_run，⑮） | chat 按 call_id 补丁 + `pushNotice('notice.subagentDone', …)` | ToolCallCard（§3.7） + SystemNotice | 摘要回父会话（工具结果 JSON 全文在卡内）；异常收束（预算耗尽/超时）同样走通知，如实呈现 |
 
 ### 4.2 命令 → 面板
 

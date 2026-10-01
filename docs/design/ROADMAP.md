@@ -39,7 +39,7 @@
 
 ---
 
-## 二、当前排期（v2.17，2026-09-29 确认；2026-09-30 增补《Setting and Constrained Optimization.md》逐项核对排期 = S1/S2 两批 + ⑪⑫搭车；同日二批增补：P2 四件入排期 = ⑭⑮⑯，tool-browser 用户裁定最后）
+## 二、当前排期（v2.17，2026-09-29 确认；2026-09-30 增补《Setting and Constrained Optimization.md》逐项核对排期 = S1/S2 两批 + ⑪⑫搭车；同日二批增补：P2 四件入排期 = ⑭⑮⑯，tool-browser 用户裁定最后；同日三批增补：㉑ 工具卡折叠 = UI 正式设计阶段先行批）
 
 ### 壳批次 —— UI 骨架（✅ 已完成，提交 a2c82a5）
 
@@ -252,6 +252,20 @@
 | 内核流式契约 | ✅ v2.35 54a97ba | `LlmService::complete_streaming`（缺省回落 complete 整段一次回调）；`LlmStreamSink` delta 出口（返回"是否真消费"，黑盒替身 false）；`StepOutcome::Continue { streamed }` 仅 sink 真消费才置位；无 sink = 纯非流式；child_kernel scoped 换入 NoLlmStreamSink——子内 delta 不泄漏父 UI（⑮ 黑盒保持） |
 | genai 流式 + 桌面接线 | ✅ v2.35 54a97ba | `complete_streaming_with` 走 `exec_chat_stream`（capture_content/capture_tool_calls 聚合正文与工具调用，End 取 captured_content；推理流不进正文）；`StreamChunkSink` 直推 `agent://chunk`；runner 按 streamed 抑制该步整段 chunk——同一正文不出现两遍 |
 | 搭车 | ✅ v2.35 54a97ba | api.ts CHANNELS 补 `agent://schedule-fired`（⑭ 遗留死分支：store 有分支、通道缺席）；§4.1 chunk 行语义升级成文 |
+
+---
+
+### ㉑ 工具调用卡默认折叠（✅ 已完成，v2.36，提交 977853b）
+
+> UI 正式设计阶段首个落点（用户 2026-09-30 指定先做）：对话密度治理——
+> 不然一轮多工具调用的会话瞬间被参数/结果 JSON 刷满，正文被挤走。
+> UI shell 文档 §3.7 先行成文（模式 + §4.1 组件列指向更新）。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| ToolCallCard 模式组件 | ✅ v2.36 977853b | `chat/ToolCallCard.vue`（模式库第二实例）：默认折叠 = 头部单行（▸/▾ + 工具名 + 版本/副作用徽章 + 参数摘要（args 首个原始值 clip 48）+ 状态），整行 button 点击展开参数/结果明细（v-show 保 DOM）；折叠态是组件本地状态，不入 store 不持久化，重放/切会话回折叠 |
+| 失败自动展开 | ✅ v2.36 977853b | `ok === false`（实时到达 pending 翻转 / 历史重放挂载即检）展开一次——错误可见性优先于密度，用户可手动再折叠；运行中不加脉动动画（§六禁常驻动画） |
+| 迁出 + clip 收敛 | ✅ v2.36 977853b | ChatMessages 内联卡（~70 行）迁出换组件（175→101 行）；`clip` 从 chat store 私有助手收敛进 `lib/format.ts`，通知摘要与折叠行参数摘要共用 |
 
 ---
 
