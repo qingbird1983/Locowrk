@@ -72,6 +72,9 @@ pub fn run() {
         // ⑭ 系统通知（tauri-plugin-notification）：Rust 侧 app.notification()
         // 投递，无 JS guest、无需 capability；desktop_notify.rs 统一出口
         .plugin(tauri_plugin_notification::init())
+        // ⑱ 原生目录选择（UI shell 文档 §7 规则 8）：pick_directory 命令
+        // Rust 侧直呼，无 JS guest、无需 capability
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(state::init_state(app.handle().clone()));
             tray::setup(app.handle())?;
@@ -103,7 +106,8 @@ pub fn run() {
             commands::experience_list,
             commands::experience_delete,
             commands::experience_clear_all,
-            commands::tool_exposure_debug
+            commands::tool_exposure_debug,
+            commands::pick_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

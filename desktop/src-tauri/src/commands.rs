@@ -137,6 +137,7 @@ pub async fn settings_set(
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
     let plugins_section_touched = plugins.is_some();
+    let tools_section_touched = tools.is_some();
     let view = state.settings.update(
         locale.clone(),
         appearance,
@@ -174,6 +175,10 @@ pub async fn settings_set(
     // S2：宿主超时时长热更新（settings tools 区 callTimeoutSecs）
     if let Ok(mut guard) = state.timeout_cfg.write() {
         *guard = state.settings.call_timeout();
+    }
+    // ⑱：工作区目录热更新（fsutil 每次工具调用读 env，重注入即生效）
+    if tools_section_touched {
+        crate::state::apply_fs_roots_env(&state.settings);
     }
     // ⑬：embedding 客户端热重建（检索信号/search_tools/经历/提取共用）
     state.reload_embed();
@@ -241,4 +246,19 @@ pub async fn llm_probe_embedding(
 #[tauri::command]
 pub async fn tool_exposure_debug(state: State<'_, AppState>) -> Result<ExposureSnapshot, String> {
     Ok(state.exposure.snapshot())
+}
+
+// ---- 原生目录选择（⑱，UI shell 文档 §7 规则 8）：tauri-plugin-dialog 仅
+// Rust 侧调用（同 notification 先例：无 JS guest、无需 capability）。async
+// 命令跑在异步运行时线程而非主线程，blocking API 安全。取消/关窗 = None，
+// 是否采纳由调用分区决定。 ----
+
+/// 打开 OS 原生目录选择对话框，返回所选目录绝对路径（取消返回 None）。
+#[tauri::command]
+pub async fn pick_directory(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = app.dialog().file().blocking_pick_folder();
+    Ok(picked
+        .and_then(|p| p.into_path().ok())
+        .map(|p| p.display().to_string()))
 }

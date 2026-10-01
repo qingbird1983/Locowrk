@@ -168,8 +168,13 @@ export function setSettings(patch: {
   });
 }
 
-// ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----
+/** 原生目录选择对话框（⑱，UI shell 文档 §7 规则 8）：Rust 侧
+ * tauri-plugin-dialog 封装；取消/关窗返回 null。 */
+export function pickDirectory(): Promise<string | null> {
+  return invoke("pick_directory");
+}
 
+// ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----
 /** 探测 Ollama 模型上下文窗口（token）；失败 reject（UI 提示手动选择）。 */
 export function llmProbeWindow(baseUrl: string, model: string): Promise<number> {
   return invoke("llm_probe_window", { baseUrl: baseUrl || null, model });

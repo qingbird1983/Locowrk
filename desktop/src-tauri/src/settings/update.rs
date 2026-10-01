@@ -145,6 +145,9 @@ impl SettingsStore {
                 }
                 next.tools.call_timeout_secs = secs;
             }
+            if let Some(roots) = u.fs_roots {
+                next.tools.fs_roots = super::tools::normalize_fs_roots(&roots)?;
+            }
         }
         if let Some(u) = shell {
             if let Some(e) = u.unlock_risky {

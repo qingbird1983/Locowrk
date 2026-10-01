@@ -106,6 +106,10 @@ pub fn init_state(app: AppHandle) -> AppState {
     if settings.shell_unlock_risky() {
         std::env::set_var("LOCOWRK_SHELL_UNLOCK_RISK", "1");
     }
+    // ⑱ 工作区目录 env 注入：与上面不同，fsutil 的 allowed_roots() 每次
+    // 工具调用都读 `LOCOWRK_FS_ROOTS`，因此后续 settings_set 保存后由
+    // 命令层重注入即生效，无需重启。
+    apply_fs_roots_env(&settings);
 
     // 模型适配器不特殊，也只是服务（§7.2）。阶段八②：genai 三合一适配器，
     // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
@@ -343,6 +347,18 @@ fn data_dir() -> std::path::PathBuf {
             tracing::warn!("{e}；退回系统临时目录");
             std::env::temp_dir().join("locowrk-data")
         }
+    }
+}
+
+/// ⑱ fs roots env 注入（settings `tools.fs_roots` → `LOCOWRK_FS_ROOTS`，
+/// `;` 分隔同 fsutil 解析约定）：空表 = 移除 env（回落缺省只放行数据根）。
+/// init_state 与 settings_set（tools 区有改动时）各调一次。
+pub fn apply_fs_roots_env(settings: &SettingsStore) {
+    let roots = settings.fs_roots();
+    if roots.is_empty() {
+        std::env::remove_var("LOCOWRK_FS_ROOTS");
+    } else {
+        std::env::set_var("LOCOWRK_FS_ROOTS", roots.join(";"));
     }
 }
 

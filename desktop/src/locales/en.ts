@@ -234,6 +234,12 @@ export default {
       "1–200, default 20; always-exposure tools and the search_tools meta-tool are never cut.",
     callTimeout: "Per-call tool timeout (seconds)",
     callTimeoutHint: "Host-enforced cap, applies immediately (5-3600 s).",
+    // ⑱ Workspace folders (fs roots picker)
+    fsRootsTitle: "Workspace folders",
+    fsRootsHint:
+      "Root folders the tool file surface (files, edit, git, shell) may access; changes apply immediately. Without any, tools can only reach the data directory.",
+    fsRootsAdd: "Add folder…",
+    fsRootsEmpty: "No workspace folders — tools can only reach the data directory.",
     embeddingTitle: "Embedding model (semantic search)",
     embeddingHint:
       "Shared vector model for tool semantic search, experiences and implicit extraction. Leave empty = smart layer absent (auto degrade: tool search falls back to keywords, no experiences); chat is unaffected.",

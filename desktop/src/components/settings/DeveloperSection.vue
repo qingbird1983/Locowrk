@@ -6,9 +6,9 @@
  * （§8.8"用户来找"的信息，不推送不轮询），节省 token 按 §3.5 走
  * compactNumber 档位，不显示机器精度原始值。
  */
-import { onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { toolExposureDebug } from "../../lib/api";
+import { pickDirectory, toolExposureDebug } from "../../lib/api";
 import { compactNumber } from "../../lib/format";
 import { useSettingsStore } from "../../stores/settings";
 import type { ExposureDebug } from "../../types";
@@ -54,6 +54,20 @@ function save() {
     maxPerRequest: form.maxPerRequest,
     callTimeoutSecs: form.callTimeoutSecs,
   });
+}
+
+// ---- ⑱ 工作区目录（fs roots）：增删即存即生效（后端重注入 env，
+// fsutil 每次工具调用读取），不参与上方表单的"保存"按钮。 ----
+const fsRoots = computed(() => settings.view?.tools.fsRoots ?? []);
+
+async function addRoot() {
+  const dir = await pickDirectory();
+  if (!dir || fsRoots.value.includes(dir)) return;
+  await settings.saveTools({ fsRoots: [...fsRoots.value, dir] });
+}
+
+function removeRoot(idx: number) {
+  void settings.saveTools({ fsRoots: fsRoots.value.filter((_, i) => i !== idx) });
 }
 
 /** 快照有效 = 有过至少一次请求（ts 非 0）。 */
@@ -108,6 +122,42 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
       <span v-if="settings.savedFlash" class="text-xs text-emerald-400">
         {{ t("settings.saved") }}
       </span>
+    </div>
+
+    <!-- ⑱ 工作区目录（fs roots）：增删即存即生效，不走上方"保存" -->
+    <div class="space-y-2 border-t border-line pt-3">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold text-ink-2">{{ t("settings.fsRootsTitle") }}</span>
+        <button
+          class="rounded-lg border border-line-strong px-2 py-1 text-[11px] text-ink-3 transition hover:bg-surface-1"
+          :disabled="settings.saving"
+          @click="addRoot"
+        >
+          {{ t("settings.fsRootsAdd") }}
+        </button>
+      </div>
+      <p class="text-[11px] text-ink-5">{{ t("settings.fsRootsHint") }}</p>
+
+      <p v-if="!fsRoots.length" class="text-[11px] text-ink-4">
+        {{ t("settings.fsRootsEmpty") }}
+      </p>
+      <ul v-else class="space-y-1">
+        <li
+          v-for="(root, i) in fsRoots"
+          :key="root"
+          class="flex items-center justify-between gap-2 rounded-lg bg-surface-1 px-2 py-1.5"
+        >
+          <span class="break-all text-[11px] text-ink-2">{{ root }}</span>
+          <button
+            class="shrink-0 rounded px-1.5 text-[11px] text-ink-4 transition hover:bg-surface-2 hover:text-red-400"
+            :disabled="settings.saving"
+            :title="root"
+            @click="removeRoot(i)"
+          >
+            ✕
+          </button>
+        </li>
+      </ul>
     </div>
 
     <!-- 暴露调试面板：最近一次请求的暴露分布（只读，手动刷新） -->
