@@ -13,8 +13,9 @@ use tauri::{AppHandle, State};
 
 use kernel_agent::{CompactConfig, ExposureSnapshot};
 use session_store::SessionEvent;
+use session_store::SessionMeta;
 
-use crate::events::ApprovalRequestPayload;
+use crate::events::{AgentEvent, ApprovalRequestPayload};
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{
     AppearanceUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate, PluginsUpdate,
@@ -47,6 +48,7 @@ pub async fn agent_chat(
         Some(usage),
         state.sink.as_ref(),
         Some(state.usage.as_ref()),
+        Some(&state.sessions_dir),
     )
     .await?;
     // ⑬ 隐式提取（Context 文档 §5.1 ⑤）：开关开启且轮次成功收束后
@@ -59,8 +61,8 @@ pub async fn agent_chat(
 }
 
 /// 撤销最近一次上下文压缩（Context and Memory.md §3.7）：rewind_to(压缩
-/// 事件序号) 后 fork 原地换入——前缀游标语义下其后的轮次一并回退，日志
-/// 只追加不删除的纪律由"日志是内存副本"兜底（落盘持久化在收尾 backlog）。
+/// 事件序号) 后 fork 原地换入——前缀游标语义下其后的轮次一并回退。⑲ 起
+/// 磁盘镜像随 fork 同步重写（滚动备份 `.undo.bak` = 撤销的物理留痕）。
 /// 会话 id 不变，前端无需重新绑定。返回回退点（一般无需使用）。
 #[tauri::command]
 pub async fn context_undo_compact(
@@ -75,7 +77,38 @@ pub async fn context_undo_compact(
         .ok_or_else(|| "没有可撤销的压缩记录".to_string())?;
     session.rewind_to(seq);
     *session = session.fork(seq);
+    crate::session_log::rewrite_after_undo(&state.sessions_dir, &session_id, &session);
     Ok(seq)
+}
+
+// ---- 会话持久化命令（⑲）：列表与全量投影。历史恢复不走事件通道
+// （agent:// 只服务当轮增量，§4.2）。 ----
+
+/// 会话列表（`sessions/` 目录按 mtime 降序；空会话无文件不出现——
+/// 首条消息发出前不创建任何后端状态）。
+#[tauri::command]
+pub async fn session_list(state: State<'_, AppState>) -> Result<Vec<SessionMeta>, String> {
+    Ok(crate::session_log::list(&state.sessions_dir))
+}
+
+/// 会话全量投影：整个日志按 runner 同一映射转 UI 事件序列，前端重放
+/// 恢复气泡/工具卡/系统通知。会话不存在 = 空表（新会话走正常聊天流）。
+#[tauri::command]
+pub async fn session_history(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<AgentEvent>, String> {
+    let Some(lock) = state
+        .sessions
+        .lock()
+        .expect("sessions poisoned")
+        .get(&session_id)
+        .cloned()
+    else {
+        return Ok(Vec::new());
+    };
+    let session = lock.lock().await;
+    Ok(runner::project_events(session.events(), &session_id))
 }
 
 /// 审批决策（§12.1）：回填 `agent://approval-request` 对应的请求。

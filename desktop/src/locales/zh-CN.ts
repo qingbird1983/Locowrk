@@ -19,6 +19,9 @@ export default {
       "发送任意消息开始对话。模型会按需调用已启用的插件工具（当前目录见工具卡片）；send_email 等不可逆工具会先弹出审批确认。",
     placeholder: "输入消息…（Enter 发送，Shift+Enter 换行）",
     send: "发送",
+    // ⑲ 会话切换器（最小功能面，UI shell 文档 §3.6）
+    sessionSwitch: "切换会话",
+    newSession: "新会话",
   },
   tool: {
     params: "参数",

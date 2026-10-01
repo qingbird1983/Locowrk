@@ -63,6 +63,15 @@ export interface ContextCompactedEvent {
   summary_preview: string;
 }
 
+/** 会话列表行（⑲ session_list；mtime 降序）。title = 首条用户消息
+ * 截断（None = 还没有用户消息，选项回退显示 id）。 */
+export interface SessionMeta {
+  id: string;
+  updatedAt: number;
+  events: number;
+  title: string | null;
+}
+
 /** 定时触发（agent://schedule-fired，⑭）：调度引擎注入轮之前告知。 */
 export interface ScheduleFiredEvent {
   kind: "schedule_fired";

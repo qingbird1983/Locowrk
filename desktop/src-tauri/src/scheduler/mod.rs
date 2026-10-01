@@ -50,6 +50,7 @@ pub(crate) fn spawn_engine(
     usage: Arc<UsageRecorder>,
     settings: Arc<SettingsStore>,
     sessions: Arc<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>>,
+    sessions_dir: std::path::PathBuf,
     last_chat: Arc<RwLock<Option<String>>>,
     app: tauri::AppHandle,
 ) {
@@ -60,6 +61,7 @@ pub(crate) fn spawn_engine(
         usage,
         settings,
         sessions,
+        sessions_dir,
         last_chat,
         app,
     });

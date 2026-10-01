@@ -38,6 +38,9 @@ pub struct AppState {
     /// 外层 std Mutex 只护 map 存取，绝不跨 await 持有。Arc 化（⑭）：
     /// 调度引擎持有同一张表（触发目标解析 / 会话锁借用）。
     pub sessions: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>>,
+    /// 会话落盘目录（⑲，`<数据根>/sessions`）：runner 增量镜像 / undo
+    /// 重写 / session_list 与启动恢复共用。
+    pub sessions_dir: std::path::PathBuf,
     /// 最近聊过的会话（⑭）：agent_chat 每轮记一次。调度触发目标解析用
     /// ——调度行绑定的旧会话条目在重启后不存在，落到"活会话"不落僵尸。
     pub last_chat: Arc<RwLock<Option<String>>>,

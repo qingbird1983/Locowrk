@@ -1,9 +1,9 @@
 // 聊天状态（DESIGN.md §10.2：store 管状态，组件只渲染）。
 // UI 事件是会话日志的投影（后端 runner.rs），本 store 只消费不生产。
 import { defineStore } from "pinia";
-import { chat, subscribeAgentEvents } from "../lib/api";
+import { chat, sessionHistory, sessionList, subscribeAgentEvents } from "../lib/api";
 import { compactNumber } from "../lib/format";
-import type { AgentEvent } from "../types";
+import type { AgentEvent, SessionMeta } from "../types";
 
 export type ToolItem = {
   id: number;
@@ -53,6 +53,8 @@ export const useChatStore = defineStore("chat", {
     items: [] as ChatItem[],
     running: false,
     steps: null as number | null,
+    /** 会话列表（⑲，session_list mtime 降序）：切换器数据源。 */
+    sessions: [] as SessionMeta[],
     /** 上下文用量（进度条投影；agent://context-usage 驱动）。windowTokens
      * 0 = 窗口未设置（比例段隐藏）。 */
     contextUsage: null as { used: number; threshold: number; windowTokens: number } | null,
@@ -62,6 +64,41 @@ export const useChatStore = defineStore("chat", {
   actions: {
     async init() {
       await subscribeAgentEvents((e) => this.onEvent(e));
+      // ⑲ 持久化恢复：有历史会话则接最近一条继续（onEvent 重放路径在
+      // switchSession）；全新安装保持生成的新 id。
+      await this.refreshSessions();
+      const latest = this.sessions[0];
+      if (latest) await this.switchSession(latest.id);
+    },
+    /** 拉会话列表（⑲）：init 与每轮收束后刷新。 */
+    async refreshSessions() {
+      try {
+        this.sessions = await sessionList();
+      } catch {
+        /* 列表拉取失败不打断聊天 */
+      }
+    },
+    /** 切换会话（⑲）：清视图 → 全量投影重放（恢复气泡/工具卡/系统
+     * 通知）。运行中不允许切（会话锁内轮次未收束，投影会半截）。 */
+    async switchSession(id: string) {
+      if (id === this.sessionId || this.running) return;
+      this.sessionId = id;
+      this.items = [];
+      this.steps = null;
+      this.contextUsage = null;
+      this.noticeDetails = {};
+      const events = await sessionHistory(id).catch(() => [] as AgentEvent[]);
+      for (const e of events) this.onEvent(e);
+    },
+    /** 新会话（⑲）：前端生成 id 清空视图；首条消息发出前不创建任何
+     * 后端状态（空会话不落盘不进列表，§3.6）。 */
+    newSession() {
+      if (this.running) return;
+      this.sessionId = `desktop-${Date.now()}`;
+      this.items = [];
+      this.steps = null;
+      this.contextUsage = null;
+      this.noticeDetails = {};
     },
     onEvent(e: AgentEvent) {
       switch (e.kind) {
@@ -177,6 +214,8 @@ export const useChatStore = defineStore("chat", {
         this.items.push({ id: nextId++, kind: "error", text: String(err) });
       } finally {
         this.running = false;
+        // ⑲ 新会话首聊后进列表（列表更新不阻塞输入）
+        void this.refreshSessions();
       }
     },
   },

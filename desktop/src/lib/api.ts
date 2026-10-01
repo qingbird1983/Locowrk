@@ -14,6 +14,7 @@ import type {
   MarketplaceItem,
   MemoryUpdate,
   PluginStateChange,
+  SessionMeta,
   SettingsView,
   AppearanceUpdate,
   ShellUpdate,
@@ -166,6 +167,17 @@ export function setSettings(patch: {
     shell: patch.shell ?? null,
     plugins: patch.plugins ?? null,
   });
+}
+
+/** 会话列表（⑲）：sessions/ 目录 mtime 降序；空会话无文件不出现。 */
+export function sessionList(): Promise<SessionMeta[]> {
+  return invoke("session_list");
+}
+
+/** 会话全量投影（⑲）：整个日志按 runner 同一映射转 UI 事件序列，
+ * 前端重放恢复；历史不走 agent:// 事件通道。 */
+export function sessionHistory(sessionId: string): Promise<AgentEvent[]> {
+  return invoke("session_history", { sessionId });
 }
 
 /** 原生目录选择对话框（⑱，UI shell 文档 §7 规则 8）：Rust 侧

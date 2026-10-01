@@ -76,6 +76,13 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 目标、⑮ 子 Agent 快照按同一身份口径。
     let sessions: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
+    let sessions_dir = root.join("sessions");
+    // ⑲ 启动恢复：`sessions/<id>.jsonl` 回放进内存表——必须在调度引擎
+    // （会话消费方）之前；恢复数只进日志。
+    let restored = crate::session_log::restore_all(&sessions_dir, &sessions);
+    if restored > 0 {
+        tracing::info!(restored, dir = %sessions_dir.display(), "sessions restored");
+    }
     let last_chat: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
 
     let settings: Arc<SettingsStore> = Arc::new(match SettingsStore::open(&root) {
@@ -312,6 +319,7 @@ pub fn init_state(app: AppHandle) -> AppState {
             Arc::clone(&usage),
             Arc::clone(&settings),
             Arc::clone(&sessions),
+            sessions_dir.clone(),
             Arc::clone(&last_chat),
             app.clone(),
         );
@@ -324,6 +332,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         approval,
         sink,
         sessions,
+        sessions_dir,
         last_chat,
         settings,
         compact_cfg,

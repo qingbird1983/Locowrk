@@ -10,10 +10,12 @@
 //! （前端以 invoke 的 reject 收尾），避免与成功路径的事件重复。
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use kernel_agent::{estimate_tokens, Kernel};
 use session_store::{Session, SessionEvent};
 
+use crate::session_log;
 use crate::usage::UsageRecorder;
 
 use crate::events::{side_effect_str, AgentEvent, EventSink};
@@ -30,7 +32,10 @@ pub struct UsagePolicy {
 }
 
 /// 跑完一轮对话，返回实际 step 数。`stats` 是 ⑩③ 使用统计写入端
-/// （usage.sqlite3，None = 内置替身测试）。
+/// （usage.sqlite3，None = 内置替身测试）。`log` 是 ⑲ 会话落盘目录
+/// （`<数据根>/sessions`，None = 不落盘，测试路径）——磁盘是日志的镜像，
+/// 用户消息与每个 step 的新增段与投影共用同一游标同步追加。
+#[allow(clippy::too_many_arguments)]
 pub async fn run_turn(
     kernel: &Kernel,
     session: &mut Session,
@@ -39,8 +44,13 @@ pub async fn run_turn(
     usage: Option<UsagePolicy>,
     sink: &dyn EventSink,
     stats: Option<&UsageRecorder>,
+    log: Option<&Path>,
 ) -> Result<u32, String> {
+    let log_start = session.len();
     session.append(SessionEvent::UserMessage { content: message });
+    if let Some(dir) = log {
+        session_log::append_slice(dir, session_id, session, log_start);
+    }
     if let Some(u) = usage {
         emit_usage(session, session_id, u, sink);
     }
@@ -53,6 +63,9 @@ pub async fn run_turn(
             return Err(format!("kernel step: {e}"));
         }
         project_new_events(session, before, session_id, sink);
+        if let Some(dir) = log {
+            session_log::append_slice(dir, session_id, session, before);
+        }
         record_stats(session, before, stats);
         if let Some(u) = usage {
             emit_usage(session, session_id, u, sink);
@@ -77,12 +90,22 @@ pub async fn run_turn(
 
 /// 把日志新增段 `[from..]` 投影成 UI 事件（顺序 = 日志顺序）。
 fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &dyn EventSink) {
-    for e in &session.events()[from..] {
+    for e in project_events(&session.events()[from..], session_id) {
+        sink.emit(&e);
+    }
+}
+
+/// 事件切片 → UI 事件序列（纯函数）。增量投影（run_turn）与 ⑲ 全量恢复
+/// 投影（session_history 命令）共用同一映射——"UI 事件是会话日志的投影"
+/// 的单点实现。
+pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEvent> {
+    let mut out = Vec::new();
+    for e in events {
         match e {
             SessionEvent::AssistantMessage { content, .. } => {
                 // 纯工具调用的 assistant 步正文为空，不发空 chunk
                 if !content.is_empty() {
-                    sink.emit(&AgentEvent::Chunk {
+                    out.push(AgentEvent::Chunk {
                         session_id: session_id.into(),
                         delta: content.clone(),
                     });
@@ -95,7 +118,7 @@ fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &d
                 side_effect,
                 plugin_version,
                 ..
-            } => sink.emit(&AgentEvent::ToolCall {
+            } => out.push(AgentEvent::ToolCall {
                 session_id: session_id.into(),
                 call_id: call_id.0.clone(),
                 tool: tool.clone(),
@@ -107,7 +130,7 @@ fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &d
                 call_id,
                 output,
                 error,
-            } => sink.emit(&AgentEvent::ToolResult {
+            } => out.push(AgentEvent::ToolResult {
                 session_id: session_id.into(),
                 call_id: call_id.0.clone(),
                 ok: error.is_none(),
@@ -122,7 +145,7 @@ fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &d
                 ..
             } => {
                 // 摘要全文在会话日志；UI 只拿 200 字符预览
-                sink.emit(&AgentEvent::ContextCompacted {
+                out.push(AgentEvent::ContextCompacted {
                     session_id: session_id.into(),
                     from_tokens: *from_tokens,
                     to_tokens: *to_tokens,
@@ -133,6 +156,7 @@ fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &d
             _ => {}
         }
     }
+    out
 }
 
 /// ⑩③ 使用统计（exposure 文档 §3.3）：ToolResult 闭合时按 (tool,

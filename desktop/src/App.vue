@@ -10,6 +10,7 @@ import ContextProgressBar from "./components/ContextProgressBar.vue";
 import MemoryPage from "./components/MemoryPage.vue";
 import PluginMarket from "./components/PluginMarket.vue";
 import PromptBar from "./components/PromptBar.vue";
+import SessionSwitcher from "./components/chat/SessionSwitcher.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 
 const { t } = useI18n();
@@ -76,6 +77,7 @@ onMounted(() => {
     <!-- 聊天视图用 v-show 保状态；其余视图按需挂载 -->
     <div v-show="view === 'chat'" class="flex min-h-0 flex-1 flex-col">
       <ContextProgressBar :usage="chat.contextUsage" />
+      <SessionSwitcher />
       <ChatMessages />
       <PromptBar />
     </div>

@@ -69,7 +69,7 @@ impl ToolSource for SingleToolSource {
 
 /// 测试事件收集器。
 #[derive(Clone, Default)]
-struct Collector(Arc<StdMutex<Vec<AgentEvent>>>);
+pub(crate) struct Collector(Arc<StdMutex<Vec<AgentEvent>>>);
 
 impl Collector {
     fn events(&self) -> Vec<AgentEvent> {
@@ -110,7 +110,7 @@ impl ApprovalResolver for FixedResolver {
     }
 }
 
-fn kernel_with_tools() -> Kernel {
+pub(crate) fn kernel_with_tools() -> Kernel {
     let ctx = Arc::new(Context::new());
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(SingleToolSource(Arc::new(EchoTool))));
     ctx.provide_dyn::<dyn LlmService>(Arc::new(DemoLlm::new()));
@@ -130,6 +130,7 @@ async fn tool_turn_projects_events_in_log_order() {
         "echo 你好".into(),
         None,
         &sink,
+        None,
         None,
     )
     .await
@@ -167,6 +168,7 @@ async fn plain_reply_turn_is_single_step() {
         "你好".into(),
         None,
         &sink,
+        None,
         None,
     )
     .await
@@ -247,6 +249,7 @@ async fn denied_email_closes_result_without_executing() {
         None,
         &sink,
         None,
+        None,
     )
     .await
     .expect("turn ok");
@@ -289,6 +292,7 @@ async fn allowed_email_executes_and_logs_decision() {
         "email 给我".into(),
         None,
         &sink,
+        None,
         None,
     )
     .await
@@ -335,6 +339,7 @@ async fn approval_hub_roundtrip_through_pending_map() {
         "发邮件".into(),
         None,
         &sink,
+        None,
         None,
     )
     .await

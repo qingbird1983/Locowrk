@@ -86,6 +86,8 @@ pub(crate) struct EngineDeps {
     pub usage: Arc<UsageRecorder>,
     pub settings: Arc<SettingsStore>,
     pub sessions: Arc<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>>,
+    /// ⑲ 会话落盘目录：触发的轮次与手聊同一镜像（run_turn log 参数）。
+    pub sessions_dir: std::path::PathBuf,
     pub last_chat: Arc<RwLock<Option<String>>>,
     pub app: AppHandle,
 }
@@ -165,6 +167,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         Some(policy),
         deps.sink.as_ref(),
         Some(deps.usage.as_ref()),
+        Some(&deps.sessions_dir),
     )
     .await
     {

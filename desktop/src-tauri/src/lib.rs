@@ -48,6 +48,7 @@ mod plugins_root;
 mod runner;
 mod scheduler;
 mod search_tools;
+mod session_log;
 mod settings;
 mod state;
 mod tool_source;
@@ -58,6 +59,8 @@ mod usage;
 mod tests;
 #[cfg(test)]
 mod tests_plugins_root;
+#[cfg(test)]
+mod tests_session_log;
 
 pub fn run() {
     use tauri::Manager;
@@ -107,7 +110,9 @@ pub fn run() {
             commands::experience_delete,
             commands::experience_clear_all,
             commands::tool_exposure_debug,
-            commands::pick_directory
+            commands::pick_directory,
+            commands::session_list,
+            commands::session_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

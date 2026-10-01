@@ -19,6 +19,9 @@ export default {
       "Send any message to start. The model calls enabled plugin tools as needed (each call shows as a tool card); irreversible tools such as send_email raise an approval dialog first.",
     placeholder: "Type a message… (Enter to send, Shift+Enter for newline)",
     send: "Send",
+    // ⑲ Session switcher (minimal surface, UI shell doc §3.6)
+    sessionSwitch: "Switch session",
+    newSession: "New chat",
   },
   tool: {
     params: "Arguments",

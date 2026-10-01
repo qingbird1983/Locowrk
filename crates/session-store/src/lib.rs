@@ -2,7 +2,7 @@
 //!
 //! 阶段一模块：`event`（SessionEvent 全集）、`session`（追加/投影/回退/fork）、
 //! `snapshot`（schema_version + upcaster 演进）、`compensation`（补偿计划 +
-//! 幂等登记）。
+//! 幂等登记）；⑲ 增 `persist`（JSONL 落盘 / 恢复 / undo 截断重写）。
 //!
 //! 纪律：事件只追加不删除，回退 = 移动游标 + replay；
 //! 补偿工具必须幂等，用 `call_id` 做去重键。
@@ -10,11 +10,15 @@
 mod compensation;
 mod error;
 mod event;
+mod persist;
 mod session;
 mod snapshot;
 
 pub use compensation::{CompensatedLedger, Compensation, plan};
 pub use error::StoreError;
 pub use event::{SessionEvent, TurnId, TurnOutcome};
+pub use persist::{
+    SessionMeta, append_event, list_sessions, load_session, rewrite_log, session_file,
+};
 pub use session::{Message, SNAPSHOT_EVERY, Session, SessionState, ToolCallMsg};
 pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, Snapshot, Upcaster, Upcasters};
