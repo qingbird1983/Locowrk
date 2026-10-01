@@ -197,6 +197,28 @@ export default {
     builtinNotSelectable: "Built-in dev plugins are not batch-managed",  },
   settings: {
     title: "Settings",
+    // ㉔ Settings nav rail (UI shell doc §3.31/§3.32: data-driven index)
+    navSearch: "Search settings",
+    navEmpty: "No matching settings",
+    groups: {
+      prefs: "Preferences",
+      agent: "Agent",
+      capability: "Capabilities & safety",
+      system: "System",
+    },
+    nav: {
+      appearance: "Appearance",
+      language: "Language",
+      shortcut: "Shortcuts",
+      llm: "Model",
+      context: "Context",
+      memory: "Memory",
+      embedding: "Embedding",
+      plugins: "Plugins",
+      shell: "Terminal",
+      tools: "Tools & exposure",
+      sessions: "Sessions & data",
+    },
     llmTitle: "LLM configuration",
     llmHint:
       "Applies immediately after saving (no restart). The API key is stored only in the local data directory and is never echoed back to the UI.",
@@ -308,5 +330,16 @@ export default {
   },
   error: {
     unknown: "Something went wrong",
+  },
+  palette: {
+    title: "Command palette",
+    placeholder: "Search sessions, pages, settings, or commands…",
+    empty: "No matching results",
+    groups: {
+      sessions: "Sessions",
+      pages: "Pages",
+      settings: "Settings",
+      commands: "Commands",
+    },
   },
 } as const;

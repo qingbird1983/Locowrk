@@ -313,7 +313,23 @@
 | 旧导航退役 | ✅ v2.39 | pill nav 与 SessionSwitcher（⑲ 最小面）删除（§3.6 由侧栏取代）；i18n 增 sidebar/window/common 键、nav.plugins 改「扩展」 |
 | shell store + 图标 | ✅ v2.39 | `stores/shell.ts`（目的地 + 侧栏宽/折叠）+ `lib/icons.ts`（原型 sprite 逐字采用的 30 个 glyph 统一组件） |
 
-### ㉔ UI 设计落地③：设置导航轨 + ⌘K 命令面板（⬜ §3.32/§3.15）
+### ㉔ UI 设计落地③：设置导航轨 + ⌘K 命令面板（✅ 已完成，v2.40）
+
+> §3.31/§3.32 设置整页组装与 §3.15 命令面板兑现。实机走查（tauri dev +
+> 截图）：设置整页接管（导航轨四组 + 56px 页头 + 760 列）、轨内点击平滑
+> 滚动 + 页头换标题 + 滚动侦测高亮、⌘K 四组与 Esc 键帽、过滤空态、
+> ⌘K 命中设置分区 → 跳转 + 轨高亮 + 滚动 + 锚点闪烁、轨内搜索命中行
+> 标题（「终端」→ 命令终端）+ 组标签收空隐藏、返回应用后对话视图状态
+> 完好。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 设置索引唯一真源 | ✅ v2.40 | `lib/settings-index.ts`：11 个实装分区 → 4 组（偏好/智能体/能力与安全/系统）声明式索引 `{ id, group, labelKey, icon, searchKeys }`；导航轨、⌘K、SettingsPanel 三处同吃一份——"新增分区忘了加搜索/面板"结构性不可能（Record\<SettingsSectionId, Component\> 类型保证）；「对话」「关于与更新」未实装不发明占位，随各自批次补条目 |
+| 设置导航轨 | ✅ v2.40 | `shell/SettingsNav.vue`：275px `--lw-sidenav-w` + bg-side + 右 1px line；顶部 46px 带 = 拖拽区 + 圆角全搜索框（§3.32 头 = 导航轨顶部）；组标签 11.5px ink-4、项 28px/圆角 8/缩进 12px/hover wash-2/选中 wash-3；搜索匹配分区名 + 分区内行标题（searchKeys 预声明，索引驱动不爬 DOM），组标签随命中收空隐藏 + 「没有匹配的设置」空态；底部固定「‹ 返回应用」 |
+| 设置整页组装 | ✅ v2.40 | `settings/SettingsPage.vue`：导航轨 + 内容区（56px 页头显示当前分区标题 20px/600 + 760 正文列居中 + 分区间 gap 32px）；当前分区由滚动侦测驱动（标题越线换高亮）；SettingsPanel 改按索引渲染全分区堆叠 + data-settings-section 锚；过渡期页头「back」钮退役（DestinationShell back prop 删除） |
+| ⌘K 命令面板 | ✅ v2.40 | `shell/CommandPalette.vue`：Ctrl/⌘+K 全局开关（Esc 关、↑↓ 移动、Enter 执行、mouseenter 跟随、scrollIntoView nearest）；居中弹层 640px/圆角 18/elevated/dialog 阴影/52px 搜索行 + Esc 键帽；四组 = 会话（相对时间 hint）/ 页面 / 设置（「设置 / 分区」hint）/ 命令（新会话、折叠/展开侧栏）；空 query 全量、过滤后高亮回零、组空隐藏、无结果空态 |
+| ⌘K → 设置跳转 | ✅ v2.40 | shell store `settingsFocus {section, nonce}` 载荷：命中设置分区 → 切设置目的地 + SettingsPage 滚到该分区 + 锚点闪烁（`lw-settings-flash` 一次性 wash-3 渐隐，§3.15"闪一下"；重触发用 reflow 复位）；已在本页/跨目的地两路都接（watcher + onMounted 补偿） |
+| i18n | ✅ v2.40 | zh/en 增 settings.nav/groups/navSearch/navEmpty + palette.* 五键组；icons 补 globe 字形（sprite 逐字） |
 
 ### ㉕ UI 设计落地④：对话主区（⬜ §2.7 列宽三轴 / §3.7–3.9 过程组·工具行·思考行 / §3.11 composer 坞 / §6.5 markdown）
 

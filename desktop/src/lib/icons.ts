@@ -35,7 +35,8 @@ export type IconName =
   | "database"
   | "checklist"
   | "undo"
-  | "info";
+  | "info"
+  | "globe";
 
 /** 原型 sprite 的 symbol 内联内容（stroke 属性由外壳 svg 统一给）。 */
 const PATHS: Record<IconName, string> = {
@@ -75,6 +76,8 @@ const PATHS: Record<IconName, string> = {
     '<path d="M3.2 5.4l1.1 1.1 1.9-1.9"/><path d="M9.2 5.4h3.6M3.2 10.6l1.1 1.1 1.9-1.9M9.2 10.6h3.6"/>',
   undo: '<path d="M6.6 4 3.2 7.4l3.4 3.4"/><path d="M3.2 7.4h5.4a3.6 3.6 0 0 1 0 7.2H6.2"/>',
   info: '<circle cx="8" cy="8" r="5.4"/><path d="M8 7.4v3.6M8 5.2v.01"/>',
+  globe:
+    '<circle cx="8" cy="8" r="5.4"/><path d="M2.6 8h10.8M8 2.6c1.7 1.9 1.7 8.9 0 10.8M8 2.6c-1.7 1.9-1.7 8.9 0 10.8"/>',
 };
 
 /** 统一规格的字形组件：<Icon name="sidebar" :size="14" />。 */

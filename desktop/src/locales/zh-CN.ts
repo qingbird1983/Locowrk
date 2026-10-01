@@ -194,6 +194,28 @@ export default {
   },
   settings: {
     title: "设置",
+    // ㉔ 导航轨（UI shell doc §3.31/§3.32：数据驱动索引的轨面文案）
+    navSearch: "搜索设置",
+    navEmpty: "没有匹配的设置",
+    groups: {
+      prefs: "偏好",
+      agent: "智能体",
+      capability: "能力与安全",
+      system: "系统",
+    },
+    nav: {
+      appearance: "外观",
+      language: "语言",
+      shortcut: "快捷键",
+      llm: "模型",
+      context: "上下文",
+      memory: "记忆",
+      embedding: "嵌入",
+      plugins: "插件",
+      shell: "命令终端",
+      tools: "工具与暴露",
+      sessions: "会话与数据",
+    },
     llmTitle: "LLM 配置",
     llmHint: "保存后立即生效（无需重启）。API Key 只保存在本机数据目录，不会随界面回显。",
     provider: "提供商",
@@ -298,5 +320,16 @@ export default {
   },
   error: {
     unknown: "发生错误",
+  },
+  palette: {
+    title: "命令面板",
+    placeholder: "搜索会话、页面、设置或命令…",
+    empty: "没有匹配的结果",
+    groups: {
+      sessions: "会话",
+      pages: "页面",
+      settings: "设置",
+      commands: "命令",
+    },
   },
 } as const;
