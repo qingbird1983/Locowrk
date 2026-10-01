@@ -59,10 +59,13 @@ pub async fn run_turn(
         let before = session.len();
         // ⑭：带会话身份 step——CallCtx.session_id 供内置调度工具绑定
         // 创建会话（§5.2 规划字段；普通 step 保持 None 语义不变）
-        if let Err(e) = kernel.step_as(session, session_id).await {
-            return Err(format!("kernel step: {e}"));
-        }
-        project_new_events(session, before, session_id, sink);
+        let streamed = match kernel.step_as(session, session_id).await {
+            // ⑳：streamed = 本步正文已经 delta 直推（ctx 里 LlmStreamSink
+            // 在册），投影时抑制整段 chunk 防重复
+            Ok(kernel_agent::StepOutcome::Continue { streamed }) => streamed,
+            Err(e) => return Err(format!("kernel step: {e}")),
+        };
+        project_new_events(session, before, session_id, sink, streamed);
         if let Some(dir) = log {
             session_log::append_slice(dir, session_id, session, before);
         }
@@ -89,8 +92,19 @@ pub async fn run_turn(
 }
 
 /// 把日志新增段 `[from..]` 投影成 UI 事件（顺序 = 日志顺序）。
-fn project_new_events(session: &Session, from: usize, session_id: &str, sink: &dyn EventSink) {
+/// `suppress_assistant_chunk`（⑳）：本步正文已经流式 delta 直推时跳过
+/// 整段 chunk，避免同一正文出现两遍。
+fn project_new_events(
+    session: &Session,
+    from: usize,
+    session_id: &str,
+    sink: &dyn EventSink,
+    suppress_assistant_chunk: bool,
+) {
     for e in project_events(&session.events()[from..], session_id) {
+        if suppress_assistant_chunk && matches!(e, AgentEvent::Chunk { .. }) {
+            continue;
+        }
         sink.emit(&e);
     }
 }

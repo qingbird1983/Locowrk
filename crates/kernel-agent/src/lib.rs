@@ -14,6 +14,7 @@ mod chain;
 mod compensation;
 mod kernel;
 mod middleware;
+mod stream;
 mod subagent;
 mod waterfall;
 
@@ -31,5 +32,6 @@ pub use middleware::{
     Middleware, Next, RETRIEVAL_WEIGHT, Retriever, Retry, Timeout, ToolExposure,
     ToolExposureConfig, Tracing, cosine, estimate_tokens, suggested_threshold,
 };
+pub use stream::{LlmStreamSink, NoLlmStreamSink};
 pub use subagent::{FilterToolSource, SubagentGate, SubagentTool};
 pub use waterfall::{RequestErrorPayload, RequestPayload, RetryBudget, points};

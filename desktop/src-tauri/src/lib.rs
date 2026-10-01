@@ -61,6 +61,8 @@ mod tests;
 mod tests_plugins_root;
 #[cfg(test)]
 mod tests_session_log;
+#[cfg(test)]
+mod tests_stream;
 
 pub fn run() {
     use tauri::Manager;

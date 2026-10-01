@@ -53,6 +53,8 @@ const CHANNELS = [
   "agent://turn-done",
   "agent://context-usage",
   "agent://context-compacted",
+  // ⑭ 定时触发（搭车修复：chat store 有处理分支但本表漏列的死分支）
+  "agent://schedule-fired",
 ] as const;
 
 export function subscribeAgentEvents(

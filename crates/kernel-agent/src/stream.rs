@@ -1,0 +1,28 @@
+//! LLM 文本流式通道（⑳，DESIGN §7.2/§12.2）：delta 出口契约与黑盒替身。
+//!
+//! 内核每个 step 调 LLM 时：`LlmStreamSink` 在册 → 走
+//! `LlmService::complete_streaming`（文本 delta 逐段回调）；缺席 → 纯
+//! 非流式（`complete`）。delta 只是实时通道——会话日志与投影只认
+//! `LlmResponse`（返回值），磁盘镜像/审计不受影响。
+
+/// 文本 delta 出口：组装点注册（桌面端实现直推 `agent://chunk`，
+/// runner 抑制该步的整段投影防重复）。
+pub trait LlmStreamSink: Send + Sync + 'static {
+    /// 返回 true = delta 已被真实消费（直推 UI）；false = 黑盒吞掉
+    /// （子内核替身）——内核据此判定 StepOutcome::streamed，被吞掉的
+    /// 轮次仍走整段投影（不过子会话本就不投影，双保险）。
+    fn on_delta(&self, session_id: Option<&str>, delta: &str) -> bool;
+}
+
+/// 黑盒替身（⑮ 子 Agent 语义保持）：`child_kernel` 把它 scoped 换入压制
+/// 全局 sink——子会话内的 delta 不得泄漏到父 UI（子内活动不投影）。
+pub struct NoLlmStreamSink;
+
+impl LlmStreamSink for NoLlmStreamSink {
+    fn on_delta(&self, _: Option<&str>, _: &str) -> bool {
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests;

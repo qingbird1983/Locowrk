@@ -123,6 +123,11 @@ pub fn init_state(app: AppHandle) -> AppState {
     // ⑬：句柄留 AppState 一份给隐式提取（同一实例，不重复注册）。
     let llm: Arc<dyn LlmService> = Arc::new(AppLlm::new(Arc::clone(&settings)));
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
+    // ⑳ 文本 delta 直推通道（同 agent://chunk；runner 抑制流式步骤的
+    // 整段投影防重复，§12.2 流式事件推送）
+    ctx.provide_dyn::<dyn kernel_agent::LlmStreamSink>(Arc::new(
+        crate::events::StreamChunkSink::new(app.clone()),
+    ));
 
     // 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
     // MemoryStore::new 不做 IO（连接按操作开、失败逐次降级），无启动风险。

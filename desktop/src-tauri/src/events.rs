@@ -1,8 +1,9 @@
 //! UI 事件出口（DESIGN.md §12.2）：`agent://` 通道 + EventSink 抽象。
 //!
-//! 纪律：流式输出走事件推送，不塞 command 返回值。阶段五的 LLM 非流式，
-//! 每步正文作为一整块 `agent://chunk` 发出；真实模型接入后同一通道只是
-//! delta 变小，前端累积逻辑不变。
+//! 纪律：流式输出走事件推送，不塞 command 返回值。⑳ 起真实流式：LLM
+//! 文本 delta 经 `StreamChunkSink`（内核 `LlmStreamSink`）逐段直推同一
+//! `agent://chunk` 通道，该步的整段投影被 runner 抑制；无 sink 的路径
+//! （headless / 内核测试）回到整段投影。前端追加逻辑不变。
 
 use plugin_api::SideEffect;
 use serde::Serialize;
@@ -160,6 +161,41 @@ impl EventSink for TauriSink {
     fn emit(&self, event: &AgentEvent) {
         if let Err(e) = self.0.emit(event.channel(), event) {
             tracing::warn!("emit {} failed: {e}", event.channel());
+        }
+    }
+}
+
+/// ⑳ LLM 文本 delta 直推（`LlmStreamSink` 的桌面实现）：与整段投影共用
+/// `agent://chunk` 通道与追加语义——流式步骤的整段投影被 runner 抑制
+/// （StepOutcome::streamed），前端无需区分。带会话身份的 step 才发
+/// （headless / 无身份 step 无 UI 可推）。子 Agent 的 delta 已在内核侧
+/// 被 child_kernel 的 NoLlmStreamSink 压制（黑盒不泄漏）。
+pub struct StreamChunkSink(AppHandle);
+
+impl StreamChunkSink {
+    pub fn new(app: AppHandle) -> Self {
+        Self(app)
+    }
+}
+
+impl kernel_agent::LlmStreamSink for StreamChunkSink {
+    fn on_delta(&self, session_id: Option<&str>, delta: &str) -> bool {
+        let Some(session_id) = session_id else {
+            return false;
+        };
+        if delta.is_empty() {
+            return false;
+        }
+        let event = AgentEvent::Chunk {
+            session_id: session_id.into(),
+            delta: delta.into(),
+        };
+        match self.0.emit(event.channel(), &event) {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::warn!("emit {} failed: {e}", event.channel());
+                false
+            }
         }
     }
 }

@@ -3,6 +3,8 @@
 //! 决策点、工具目录快照、带重试预算的请求闭环。方法都在 `impl Kernel`
 //! 里，本文件不定义新类型；子模块可访问父模块私有字段。
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use cordis_core::WaterfallDecision;
@@ -98,21 +100,41 @@ impl Kernel {
     /// `Retry { delay }` 时在 step 内部重试（重新走 request 决策环），
     /// 累计次数 / 累计延迟超预算即失败（§7.2 重试预算）。压缩结果取
     /// 最后一次成功的决策环产出（重试轮会在原始消息上重压，幂等守卫
-    /// 见 compact.rs；落日志只记一次）。
+    /// 见 compact.rs；落日志只记一次）。⑳：`LlmStreamSink` 在册走流式
+    /// （delta 逐段回调、返回第三值 streamed=true），缺席纯非流式。
+    /// 已知边界：Retry 重试轮的 delta 不回滚——重试仅在 request-error
+    /// 决策环配置时发生，届时上层应考虑清空流式缓冲（桌面端现无该决策）。
     pub(super) async fn request_with_retry(
         &self,
         messages: Vec<Message>,
         tools: Vec<ToolSpec>,
-    ) -> Result<(LlmResponse, Option<CompactionOutcome>), KernelError> {
+        session_id: Option<&str>,
+    ) -> Result<(LlmResponse, Option<CompactionOutcome>, bool), KernelError> {
         let mut retries: u32 = 0;
         let mut total_delay = Duration::ZERO;
+        // ⑳ delta 通道：sink 在册才走 complete_streaming；查询失败 = 无
+        // sink，走 complete（delta 不发给任何人的流式没有意义）。
+        let sink = self.scoped_dyn::<dyn crate::stream::LlmStreamSink>().ok();
         loop {
             let (req, compacted) = self
                 .waterfall_request(messages.clone(), tools.clone())
                 .await?;
             let llm = self.scoped_dyn::<dyn LlmService>()?;
-            match llm.complete(req).await {
-                Ok(resp) => return Ok((resp, compacted)),
+            let streamed = AtomicBool::new(false);
+            let resp = match &sink {
+                Some(sink) => {
+                    let sink = Arc::clone(sink);
+                    let on_delta = |delta: &str| {
+                        if sink.on_delta(session_id, delta) {
+                            streamed.store(true, Ordering::Relaxed);
+                        }
+                    };
+                    llm.complete_streaming(req, &on_delta).await
+                }
+                None => llm.complete(req).await,
+            };
+            match resp {
+                Ok(resp) => return Ok((resp, compacted, streamed.load(Ordering::Relaxed))),
                 Err(e) => {
                     let payload = serde_json::to_value(RequestErrorPayload {
                         error: e.to_string(),

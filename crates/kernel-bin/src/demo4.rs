@@ -144,7 +144,7 @@ impl ToolSource for ScopeBToolSource {
 
 async fn step(kernel: &Kernel, session: &mut Session) -> Result<(), String> {
     match kernel.step(session).await {
-        Ok(StepOutcome::Continue) => Ok(()),
+        Ok(StepOutcome::Continue { .. }) => Ok(()),
         Err(e) => Err(format!("kernel step: {e}")),
     }
 }

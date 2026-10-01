@@ -135,11 +135,11 @@ async fn react_loop_runs_tool_then_final_answer() {
     // 第一步：LLM 要求工具；第二步：看到工具结果后给最终答案
     assert_eq!(
         kernel.step(&mut session).await.unwrap(),
-        StepOutcome::Continue
+        StepOutcome::Continue { streamed: false }
     );
     assert_eq!(
         kernel.step(&mut session).await.unwrap(),
-        StepOutcome::Continue
+        StepOutcome::Continue { streamed: false }
     );
 
     // 事件顺序纪律：AssistantMessage → ToolCall → ToolResult（先写日志再执行）

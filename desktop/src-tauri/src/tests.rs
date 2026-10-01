@@ -72,7 +72,7 @@ impl ToolSource for SingleToolSource {
 pub(crate) struct Collector(Arc<StdMutex<Vec<AgentEvent>>>);
 
 impl Collector {
-    fn events(&self) -> Vec<AgentEvent> {
+    pub(crate) fn events(&self) -> Vec<AgentEvent> {
         self.0.lock().unwrap().clone()
     }
 }
@@ -111,9 +111,17 @@ impl ApprovalResolver for FixedResolver {
 }
 
 pub(crate) fn kernel_with_tools() -> Kernel {
+    kernel_with_tools_streaming(None)
+}
+
+/// 带可选 LlmStreamSink 的同型内核（⑳ 流式抑制测试用）。
+pub(crate) fn kernel_with_tools_streaming(sink: Option<Arc<dyn kernel_agent::LlmStreamSink>>) -> Kernel {
     let ctx = Arc::new(Context::new());
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(SingleToolSource(Arc::new(EchoTool))));
     ctx.provide_dyn::<dyn LlmService>(Arc::new(DemoLlm::new()));
+    if let Some(sink) = sink {
+        ctx.provide_dyn::<dyn kernel_agent::LlmStreamSink>(sink);
+    }
     Kernel::new(ctx, vec![])
 }
 

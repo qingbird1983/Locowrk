@@ -34,6 +34,8 @@ plugin-service = { path = "../../crates/plugin-service" }
 session-store = { path = "../../crates/session-store" }
 
 async-trait = "0.1"
+# ⑳ 流式：genai 的 ChatStream 是 futures::Stream，next() 需要 StreamExt
+futures = "0.3"
 # 三合一模型客户端（LLM.md 方案一）：openai / anthropic / ollama 统一封装
 genai = "0.6"
 # Ollama /api/show 窗口探测（S2）：json 特性；TLS 特性不在此声明——

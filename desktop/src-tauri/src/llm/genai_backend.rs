@@ -8,10 +8,11 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_trait::async_trait;
+use futures::StreamExt;
 use genai::adapter::AdapterKind;
 use genai::chat::{
-    ChatMessage, ChatOptions, ChatRequest, ChatResponse, ContentPart, MessageContent,
-    Tool as GenAiTool, ToolCall as GenAiCall, ToolResponse,
+    ChatMessage, ChatOptions, ChatRequest, ChatResponse, ChatStreamEvent, ContentPart,
+    MessageContent, Tool as GenAiTool, ToolCall as GenAiCall, ToolResponse,
 };
 use genai::resolver::{AuthData, AuthResolver, Endpoint, ServiceTargetResolver};
 use genai::{Client, ModelIden, ServiceTarget};
@@ -134,8 +135,12 @@ fn build_client(cfg: &LlmSettings) -> Client {
 /// 保证 ToolCall / ToolResult 事件关联与补偿去重键可用（§6.3）。
 pub(crate) fn map_response(res: ChatResponse, next_call: &AtomicU64) -> LlmResponse {
     let content = res.first_text().unwrap_or_default().to_string();
-    let tool_calls = res
-        .into_tool_calls()
+    map_parts(content, res.into_tool_calls(), next_call)
+}
+
+/// 正文 + genai 工具调用 → 内核响应（非流式/流式两条路共用的收口）。
+fn map_parts(content: String, calls: Vec<GenAiCall>, next_call: &AtomicU64) -> LlmResponse {
+    let tool_calls = calls
         .into_iter()
         .map(|tc| {
             let id = if tc.call_id.is_empty() {
@@ -176,12 +181,12 @@ impl Default for GenAiLlm {
 }
 
 impl GenAiLlm {
-    /// cfg 由调用方（AppLlm）每次请求前从 SettingsStore 读取。
-    pub async fn complete_with(
-        &self,
+    /// 请求装配（非流式/流式共用）：Key 预检 + 中立投影 → ChatRequest +
+    /// 基础 options（waterfall 可注入的 params 目前只透传 temperature）。
+    fn build_request(
         cfg: &LlmSettings,
-        req: LlmRequest,
-    ) -> Result<LlmResponse, LlmError> {
+        req: &LlmRequest,
+    ) -> Result<(Client, ChatRequest, ChatOptions), LlmError> {
         // 缺 Key 先行报错（genai 的环境变量报错对桌面用户不友好）；
         // ollama 无需 Key
         if let Some(env_name) = env_key_name(&cfg.provider) {
@@ -204,19 +209,75 @@ impl GenAiLlm {
             chat_req = chat_req.with_tools(to_genai_tools(&req.tools));
         }
 
-        // waterfall 改写环可注入的 params 目前只透传 temperature
         let options = req
             .params
             .get("temperature")
             .and_then(|v| v.as_f64())
-            .map(|t| ChatOptions::default().with_temperature(t));
+            .map(|t| ChatOptions::default().with_temperature(t))
+            .unwrap_or_default();
+        Ok((build_client(cfg), chat_req, options))
+    }
 
-        let client = build_client(cfg);
+    /// cfg 由调用方（AppLlm）每次请求前从 SettingsStore 读取。
+    pub async fn complete_with(
+        &self,
+        cfg: &LlmSettings,
+        req: LlmRequest,
+    ) -> Result<LlmResponse, LlmError> {
+        let (client, chat_req, options) = Self::build_request(cfg, &req)?;
         let res = client
-            .exec_chat(cfg.model.as_str(), chat_req, options.as_ref())
+            .exec_chat(cfg.model.as_str(), chat_req, Some(&options))
             .await
             .map_err(|e| LlmError::Backend(format!("{} 调用失败: {e}", cfg.provider)))?;
         Ok(map_response(res, &self.next_call))
+    }
+
+    /// 流式（⑳）：文本 delta 逐段回调 `on_delta`；聚合正文与工具调用取自
+    /// End 事件的 captured_content（genai 在 capture_content /
+    /// capture_tool_calls 开启时聚合，各家适配器一致）。空 delta 不回调。
+    pub async fn complete_streaming_with(
+        &self,
+        cfg: &LlmSettings,
+        req: LlmRequest,
+        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+    ) -> Result<LlmResponse, LlmError> {
+        let (client, chat_req, mut options) = Self::build_request(cfg, &req)?;
+        options = options
+            .with_capture_content(true)
+            .with_capture_tool_calls(true);
+        let mut stream = client
+            .exec_chat_stream(cfg.model.as_str(), chat_req, Some(&options))
+            .await
+            .map_err(|e| LlmError::Backend(format!("{} 流式调用失败: {e}", cfg.provider)))?;
+        while let Some(ev) = stream.stream.next().await {
+            match ev.map_err(|e| LlmError::Backend(format!("{} 流中断: {e}", cfg.provider)))? {
+                ChatStreamEvent::Chunk(c) => {
+                    if !c.content.is_empty() {
+                        on_delta(&c.content);
+                    }
+                }
+                ChatStreamEvent::End(end) => {
+                    // 推理/思考流（ReasoningChunk 等）不进正文，正文以 End
+                    // 的 captured_content 为准
+                    let content = end
+                        .captured_content
+                        .as_ref()
+                        .and_then(|c| c.first_text())
+                        .unwrap_or_default()
+                        .to_string();
+                    let calls = end
+                        .captured_content
+                        .map(MessageContent::into_tool_calls)
+                        .unwrap_or_default();
+                    return Ok(map_parts(content, calls, &self.next_call));
+                }
+                _ => {}
+            }
+        }
+        Err(LlmError::Backend(format!(
+            "{} 流式响应未以 End 事件收束",
+            cfg.provider
+        )))
     }
 }
 

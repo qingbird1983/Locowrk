@@ -77,7 +77,7 @@ async fn request_error_retry_eventually_succeeds() {
     let mut session = user_session();
     let outcome = kernel(&ctx).step(&mut session).await.unwrap();
 
-    assert_eq!(outcome, StepOutcome::Continue);
+    assert_eq!(outcome, StepOutcome::Continue { streamed: false });
     assert_eq!(llm.requests.lock().unwrap().len(), 2, "失败一次 + 重试一次");
     assert!(matches!(
         session.events().last(),

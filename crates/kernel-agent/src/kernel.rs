@@ -64,6 +64,24 @@ pub enum LlmError {
 #[async_trait]
 pub trait LlmService: Send + Sync + 'static {
     async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError>;
+
+    /// 流式完成（⑳）：文本 delta 逐段回调 `on_delta`；完整正文与工具调用
+    /// 仍在返回值（日志/投影只认返回值，delta 只是实时通道）。缺省回落
+    /// `complete` 并把正文一次性回调——未实现流式的适配器（DemoLlm 等）
+    /// 零改动获得流式形状。
+    async fn complete_streaming(
+        &self,
+        req: LlmRequest,
+        // 显式 HRTB：async_trait 会把 `Fn(&str)` 的内层生命周期误绑到本引用上
+        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+    ) -> Result<LlmResponse, LlmError> {
+        let resp = self.complete(req).await?;
+        let content = resp.content.clone();
+        if !content.is_empty() {
+            on_delta(&content);
+        }
+        Ok(resp)
+    }
 }
 
 /// 工具目录服务：kernel-agent 只依赖这个抽象。plugin-host 负责把
@@ -81,7 +99,9 @@ pub trait ToolSource: Send + Sync + 'static {
 pub enum StepOutcome {
     /// 正常完成一步（含工具执行与审批闭合）。
     /// （request-error 的 Retry 在 step 内部闭环受预算约束，不再对外返回。）
-    Continue,
+    /// `streamed`（⑳）：本步 LLM 文本 delta 已经流式通道发出（sink 在册），
+    /// 投影方据此跳过整段 chunk 防重复；false = 无 sink 的纯非流式路径。
+    Continue { streamed: bool },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -171,6 +191,12 @@ impl Kernel {
             &key,
             Arc::new(crate::subagent::FilterToolSource::new(parent_view, allow)),
         );
+        // ⑳ 子内 delta 黑盒压制：scoped 空实现换入，全局 sink 不再可见
+        self.ctx
+            .provide_dyn_scoped::<dyn crate::stream::LlmStreamSink>(
+                &key,
+                Arc::new(crate::stream::NoLlmStreamSink),
+            );
         Ok(Self {
             ctx: Arc::clone(&self.ctx),
             mw: Arc::clone(&self.mw),
@@ -227,7 +253,8 @@ impl Kernel {
         let tools = self.tool_catalog().await;
 
         // request-error 的 Retry 在 step 内部闭环，受重试预算约束（§7.2）
-        let (resp, compacted) = self.request_with_retry(messages, tools).await?;
+        let (resp, compacted, streamed) =
+            self.request_with_retry(messages, tools, session_id).await?;
 
         // 压缩先于本轮 assistant 消息落日志（Context and Memory.md §3.7）：
         // 折叠语义见 session-store；撤销 = rewind_to 本事件。
@@ -321,7 +348,7 @@ impl Kernel {
             });
         }
 
-        Ok(StepOutcome::Continue)
+        Ok(StepOutcome::Continue { streamed })
     }
 
     /// 审批门：无决议者时 fail-safe 拒绝（纪律 9：不可逆调用前必须审批）。
