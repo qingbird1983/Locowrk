@@ -39,7 +39,7 @@
 
 ---
 
-## 二、当前排期（v2.17，2026-09-29 确认；2026-09-30 增补《Setting and Constrained Optimization.md》逐项核对排期 = S1/S2 两批 + ⑪⑫搭车）
+## 二、当前排期（v2.17，2026-09-29 确认；2026-09-30 增补《Setting and Constrained Optimization.md》逐项核对排期 = S1/S2 两批 + ⑪⑫搭车；同日二批增补：P2 四件入排期 = ⑭⑮⑯，tool-browser 用户裁定最后）
 
 ### 壳批次 —— UI 骨架（✅ 已完成，提交 a2c82a5）
 
@@ -164,6 +164,43 @@
 | 隐式记忆提取 | ✅ | settings `memory.autoExtract`（缺省关——"易记垃圾故放最后"）；desktop `extract.rs`：轮次收敛（TurnDone）后 fire-and-forget——本轮消息转录（≤6000 字符）→ LlmService 提取 JSON → ① 事实 ≤3 条（key 清洗 + 强制 `auto.` 命名空间，**永不覆盖用户显式记忆**；source=extracted）写 memory 库（`MemoryStore::write` INSERT..ON CONFLICT）+ ② 经历摘要（≥10 字符，≤500）嵌入落 experiences；parse 剥围栏取 JSON、空 key/value 过滤；任何失败只 warn 不影响聊天；无 UI 通知——结果在记忆页可见（来源徽章"自动提取"） |
 | 自动停用设置项 | ✅ | settings `plugins.autoDisableIdleDays`（0=关 缺省 / 7–365 校验）；desktop `autodisable.rs`：启动 + 设置保存即巡检——距最近使用（从未使用 = 安装时点，与 ⑩ IdleBadge 同口径）≥ N 天的**安装态第三方插件**逐条停用（内置不参与闲置评估，同 ⑩；**只停不启**——关闭不复活已停用项，§8.8 状态切换由用户显式触发）；EmbeddingSection / PluginsSection 新设置分区（§7 扩表）+ §4.2 命令表扩 `llm_probe_embedding`（检测显示向量维度）/ `experience_*` 三命令 |
 
+### ⑭ 触发与推送：tool-schedule + tool-notify（⬜ 2026-09-30 排期，用户确认）
+
+> plugins.md P2 四件入正式排期的第一批（tool-browser 仍后排——用户裁定
+> 最后）。两件合批：调度与推送天然成对（触发时刻的"告知用户"通道就是
+> notify）。生命周期归属先定调：定时器/触发在宿主主循环（tokio time 已
+> 在依赖），插件无后台常驻能力——调度工具面走宿主内置（search_tools 先
+> 例），通知的桌面通道经宿主 vtable 追加槽位。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| tool-schedule 定时任务 | ⬜ | **宿主内置工具面**（调度器/存储/触发都是宿主关切，同 search_tools 归宿主先例）：`schedule_create / schedule_list / schedule_delete` 进工具目录；独立 sqlite 持久化（usage/memory/experiences 三库先例）；一次性 + 周期两型；触发 = 向目标会话注入一轮（SystemNotice 提示，窗口不可见时走同批 notify 通道兜底），会话忙顺延、应用未运行错过的启动补跑一次 |
+| tool-notify 桌面通知/Webhook | ⬜ | webhook 通道 = 插件本体（同 tool-fetch 技术栈与 SSRF 防线纪律：目标解析固定 IP、禁重定向、私网段拒绝——v2.14 防线照搬不复核）；桌面通知通道 = plugin-api 宿主 vtable **末尾追加 notify 槽**（append-only 不破 ABI，`PLUGIN_ABI_VERSION` 不动），Tauri 侧弹系统通知；同一工具按参数选通道 |
+
+### ⑮ agent-sub 子 Agent 调度（⬜ 2026-09-30 排期）
+
+> 形态先定调：**宿主/内核侧**而非 C ABI 插件——子 Agent 要递归跑内核循环，
+> 依赖方向禁止插件依赖 kernel-agent（同 llm / memory-vector 宿主侧先例，
+> 理由不同：这次是循环本体，不是密钥）。v1 收敛为单层串行，不做多 Agent
+> 协作协议。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 子 Agent 工具面 | ⬜ | kernel-agent 新模块（组装点注册内置工具，同 search_tools 形态）：`subagent_run(prompt, tools, budget)`；单层派生（子不可再生子）、串行执行 |
+| 隔离与预算 | ⬜ | 子会话 = 父转录前缀 fork（复用 ⑨ rewind/fork 语义）的内存投影，收束后摘要回父会话；工具视图 = 显式白名单子集（ToolSource 过滤，demo4 双 Agent 视图隔离先例）；轮数/超时预算，越限如实收束返回部分结果 |
+| 审批与事件 | ⬜ | 子内 Irreversible 冒泡同一审批门（审批事件带子 Agent 标识，标严勿松不变）；派生/收束落父会话日志（DESIGN §会话事件本就规划"子 Agent 调度"条目）；UI 走 SystemNotice（§7 扩表） |
+
+### ⑯ tool-sandbox shell 沙箱（⬜ 2026-09-30 排期；**批首先定方案再动码**）
+
+> plugins.md 仅一行定义（"shell 在容器/WASM 里跑"），太薄，不足以直接动码；
+> 且 Windows 开发机无容器保证。方案取舍是本批第一个交付物，落 plugins.md/
+> DESIGN 补记后再写实现。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 方案定稿 | ⬜ | 候选：① Windows 受限令牌 + JobObject 限额（S1 JobGuard 可复用；网络隔离能力如实分级）② wasmtime WASI 内建命令集（⑧ 加载器技术栈复用，但只能跑 wasm 化命令，非任意原生命令——注意⑧的 WASM 是**插件**沙箱，这是 **shell** 沙箱，两回事）③ 检测 Docker/WSL 走容器（可用性依赖用户环境）；按静态事实写能力矩阵，**不做虚假安全声明**（审计纪律不变） |
+| tool-sandbox 插件本体 | ⬜ | 按定稿方案落地；与 tool-shell 关系 = **并存不替换**（沙箱档位是独立工具，shell 既有白名单/denylist/进程治理纪律原样保留） |
+
 ---
 
 ## 三、收尾 backlog（随批次搭车）
@@ -189,8 +226,9 @@
 ## 四、plugins.md 必备插件清单完成度
 
 > 对照《plugins.md》§一总览 19 项逐条核对（2026-09-29，以 plugins-src/ 与
-> 提交记录为准）。**结论：还剩 tool-http / mw-ratelimit 两个未排期，P2 五件
-> 明确后排；其余全部落地。**
+> 提交记录为准）。**结论：还剩 tool-http / mw-ratelimit 两个未排期；P2 五件
+> 于 2026-09-30 用户确认排期 = ⑭（schedule+notify）⑮（agent-sub）⑯
+> （sandbox），tool-browser 用户裁定最后；其余全部落地。**
 
 ### P0 —— 全部 ✅
 
@@ -226,8 +264,8 @@
 | 插件 | 状态 | 说明 |
 |---|---|---|
 | tool-mcp | ✅ | v2.15（mcp.json 加载期发现冻结 + stdio JSON-RPC + side_effect 缺省 Irreversible） |
-| tool-browser | ⏸ | 文档自己建议晚做（fetch + MCP 已覆盖多数场景） |
-| tool-sandbox | ⏸ | shell 容器/WASM 化——注意⑧的 WASM 加载器是插件沙箱，不是 shell 沙箱，两回事 |
-| agent-sub | ⏸ | 子 Agent 调度 |
-| tool-schedule | ⏸ | 定时任务 |
-| tool-notify | ⏸ | 桌面通知 / Webhook 推送 |
+| tool-browser | ⏸ 最后 | 文档自己建议晚做（fetch + MCP 已覆盖多数场景）；**用户裁定 2026-09-30：五件中排最末** |
+| tool-sandbox | ⬜ 排期⑯ | shell 容器/WASM 化——注意⑧的 WASM 加载器是插件沙箱，不是 shell 沙箱，两回事；批首先定方案 |
+| agent-sub | ⬜ 排期⑮ | 子 Agent 调度（宿主/内核侧形态，理由见 ⑭⑮⑯ 排期块） |
+| tool-schedule | ⬜ 排期⑭ | 定时任务（宿主内置工具面） |
+| tool-notify | ⬜ 排期⑭ | 桌面通知 / Webhook 推送 |
