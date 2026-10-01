@@ -1,0 +1,285 @@
+/* ===========================================================================
+ * tokens.css — Locowrk 桌面端 UI 原型 design tokens
+ *
+ * 唯一颜色源 = 中性灰阶（--lw-gray-*）；界面上出现的颜色只有「状态」
+ * （成功 / 警告 / 危险 / 信息 / 紫=子 Agent），没有品牌彩色强调色。
+ * 平面内的结构靠半透明 tonal wash（--lw-wash-1..3）表达，不用边框；
+ * 1px 边框只留给浮层（菜单 / 弹窗 / popover）与 --lw-elevation 发丝环。
+ *
+ * 暗色 = :root 缺省块；亮色 = :root[data-theme="light"] 覆盖同一批变量。
+ * =========================================================================== */
+
+/* --- 1. 中性灰阶（两主题共用，唯一颜色来源） ------------------------------ */
+:root {
+  --lw-gray-0: #ffffff;
+  --lw-gray-50: #f9f9f9;
+  --lw-gray-75: #f3f3f3;
+  --lw-gray-100: #ededed;
+  --lw-gray-300: #afafaf;
+  --lw-gray-500: #5d5d5d;
+  --lw-gray-550: #4f4f4f;
+  --lw-gray-600: #414141;
+  --lw-gray-700: #303030;
+  --lw-gray-750: #282828;
+  --lw-gray-800: #212121;
+  --lw-gray-900: #181818;
+  --lw-gray-1000: #0d0d0d;
+}
+
+/* --- 2. 暗色（缺省块） --------------------------------------------------- */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --lw-bg: #181818;            /* 主页面底 */
+  --lw-bg-side: #000000;       /* 侧栏 / 设置导航栏（暗色下比页面更暗） */
+  --lw-bg-dock: #212121;       /* 工作面板列 */
+  --lw-bg-inset: #0d0d0d;      /* 代码块 / 等宽井 */
+  --lw-bg-secondary: #212121;
+  --lw-bg-tertiary: #282828;
+  --lw-bg-elevated: #212121f5; /* 不透明浮层表面 */
+  --lw-bg-composer: #212121f5;
+
+  --lw-wash-1: rgb(255 255 255/.035);  /* 平面内第一级：卡片、行 */
+  --lw-wash-2: rgb(255 255 255/.06);   /* hover、输入井 */
+  --lw-wash-3: rgb(255 255 255/.08);   /* 更深 / 选中 */
+
+  --lw-ink-1: #ffffff;
+  --lw-ink-2: rgb(255 255 255/.70);
+  --lw-ink-3: rgb(255 255 255/.52);
+  --lw-ink-4: rgb(255 255 255/.38);
+  --lw-ink-5: rgb(255 255 255/.20);
+
+  --lw-line: rgb(255 255 255/.08);
+  --lw-line-subtle: rgb(255 255 255/.05);
+  --lw-line-strong: rgb(255 255 255/.14);
+
+  --lw-accent: #ffffff;
+  --lw-accent-hover: #ededed;
+  --lw-accent-ink: #181818;
+
+  --lw-ok: #40c977;
+  --lw-warn: #ff8549;
+  --lw-danger: #ff6764;
+  --lw-info: #afafaf;
+  --lw-purple: #c27aff;
+
+  --lw-focus: #ffffff;
+  --lw-scrim: rgb(0 0 0/.45);
+
+  --lw-shadow-dialog: 0 16px 48px rgb(0 0 0/.55);
+  --lw-shadow-composer: 0 3px 7.5px #0000000a, 0 0 20px #0000000d;
+  --lw-shadow-raised: 0 1px 2px rgb(0 0 0/.35);
+  --lw-elevation: 0 0 0 .5px rgb(255 255 255/.12);
+  --lw-raised: #282828;
+}
+
+/* --- 3. 亮色 ------------------------------------------------------------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --lw-bg: #ffffff;
+  --lw-bg-side: #f3f3f3;
+  --lw-bg-dock: #fafafa;
+  --lw-bg-inset: #ededed;
+  --lw-bg-secondary: #f9f9f9;
+  --lw-bg-tertiary: #f3f3f3;
+  --lw-bg-elevated: rgb(255 255 255/.70);
+  --lw-bg-composer: #ffffff;
+
+  --lw-wash-1: rgb(26 28 31/.035);
+  --lw-wash-2: rgb(26 28 31/.06);
+  --lw-wash-3: rgb(26 28 31/.08);
+
+  --lw-ink-1: #1a1c1f;
+  --lw-ink-2: rgb(26 28 31/.74);
+  --lw-ink-3: #5d5d5d;
+  --lw-ink-4: #afafaf;
+  --lw-ink-5: rgb(26 28 31/.20);
+
+  --lw-line: rgb(26 28 31/.08);
+  --lw-line-subtle: rgb(26 28 31/.05);
+  --lw-line-strong: rgb(26 28 31/.12);
+
+  --lw-accent: #1a1c1f;
+  --lw-accent-hover: #303030;
+  --lw-accent-ink: #ffffff;
+
+  --lw-ok: #00a240;
+  --lw-warn: #e25507;
+  --lw-danger: #e02e2a;
+  --lw-info: #5d5d5d;
+  --lw-purple: #7c3aed;
+
+  --lw-focus: #1a1c1f;
+  --lw-scrim: rgb(26 28 31/.28);
+
+  --lw-shadow-dialog: 0 16px 48px rgb(0 0 0/.12);
+  --lw-shadow-composer: 0 3px 7.5px #0000000a, 0 0 20px #0000000d;
+  --lw-shadow-raised: 0 1px 2px rgb(0 0 0/.10), 0 0 0 .5px rgb(0 0 0/.04);
+  --lw-elevation: 0 0 0 .5px rgb(26 28 31/.12);
+  --lw-raised: #ffffff;
+}
+
+/* --- 4. 形状与度量（主题无关） ------------------------------------------- */
+:root {
+  --lw-r-3xs: 4px;
+  --lw-r-2xs: 6px;
+  --lw-r-xs: 8px;
+  --lw-r-sm: 10px;
+  --lw-r-md: 12px;
+  --lw-r-md-plus: 14px;
+  --lw-r-lg: 16px;
+  --lw-r-lg-plus: 18px;
+  --lw-r-xl: 20px;
+  --lw-r-full: 9999px;
+
+  --lw-toolbar-h: 46px;      /* 侧栏头 / 会话顶栏 / 工作面板头共用的一条 46px 带 */
+  /* 侧栏宽 = 拖拽后的实时值（JS 写 --lw-sidebar-w）；缺省走 §6.4 的 clamp */
+  --lw-sidebar-w: clamp(240px, 275px, min(520px, calc(100vw - 320px)));
+  --lw-sidebar-min: 240px;
+  --lw-sidebar-default: 275px;
+  --lw-sidebar-max: 520px;
+  --lw-sidenav-w: 275px;     /* 设置导航栏 */
+  --lw-ctl: 28px;            /* 方形图标控件 */
+  --lw-field-h: 38px;
+  --lw-content-max: 820px;   /* 转录正文列 + 输入卡列（两者必须同宽对齐） */
+  --lw-wincontrols: 120px;   /* 46px 带右端留给窗口控制的车道 */
+  --lw-panel-w: 360px;       /* 工作面板实时宽（JS 写）；无固定上限 */
+  --lw-panel-min: 244px;
+  --lw-panel-default: 360px;
+  --lw-main-min: 450px;      /* 主区硬地板：顶到它就折叠侧栏 */
+
+  --motion-fast: 150ms;
+  --motion-normal: 200ms;
+  --motion-slow: 300ms;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* --- 5. 字号阶梯（用法说明，勿新增档位） ---------------------------------
+ * 10.5 / 11 / 11.5 / 12 / 12.5 / 13 / 13.5 / 14 / 15 / 16 / 18 / 20 / 28 px
+ * 字重 400 / 500 / 520 / 560 / 600
+ * 行高 1.2 紧凑行 / 1.3 行标题 / 1.45 界面正文 / 1.55 会话正文 / 1.6 长文
+ * 字距 -0.02em（14px+ 标题）/ 0 / +0.02em（全大写微标签）
+ * ------------------------------------------------------------------------ */
+
+/* --- 6. 基线层 ----------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--lw-bg);
+  color: var(--lw-ink-1);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  transition: background var(--motion-normal) var(--ease-out),
+    color var(--motion-normal) var(--ease-out);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+svg.glyph {
+  display: block;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+svg.glyph--14 { width: 14px; height: 14px; }
+svg.glyph--12 { width: 12px; height: 12px; }
+svg.glyph--20 { width: 20px; height: 20px; }
+
+/* --- 7. 键盘焦点 --------------------------------------------------------- */
+:focus-visible {
+  outline: 1.5px solid color-mix(in oklab, var(--lw-focus) 80%, transparent);
+  outline-offset: 2px;
+}
+
+/* --- 8. 滚动条：静止时不可见，所属区域 hover / 含焦点 / data-scrolling --- */
+.scroll-y {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scroll-y::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scroll-y::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: var(--lw-r-full);
+}
+
+.scroll-y:hover::-webkit-scrollbar-thumb,
+.scroll-y:focus-within::-webkit-scrollbar-thumb,
+.scroll-y[data-scrolling="true"]::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--lw-ink-1) 16%, transparent);
+}
+
+.scroll-y::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--lw-ink-1) 28%, transparent);
+}
+
+.scroll-y:hover {
+  scrollbar-color: color-mix(in oklab, var(--lw-ink-1) 16%, transparent) transparent;
+}
+
+/* --- 9. 动效收敛（三类 + 一条常驻脉冲），减动效一律 0.01ms -------------- */
+@keyframes lw-fade-scale {
+  from { opacity: 0; transform: scale(.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes lw-notice-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes lw-pulse {
+  0%, 100% { opacity: .35; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,649 @@
+/* ===========================================================================
+ * overlays.css — 工作面板内容、浮层（命令面板 / 审批弹窗 / 上下文 / 通知）、
+ *                以及原型切换器（原型自身的壳，不属于产品 UI）
+ *
+ * 目录：1 工作面板内容 / 2 遮罩与对话框 / 3 命令面板 / 4 上下文用量浮层
+ *      5 通知浮层 / 6 原型切换器
+ * =========================================================================== */
+
+/* ===========================================================================
+ * 1. 工作面板内容
+ * =========================================================================== */
+
+/* --- 1.1 统一 diff（S3） ------------------------------------------------- */
+.panel-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--lw-ink-3);
+  overflow: hidden;
+}
+
+.panel-path span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.7;
+  border-radius: var(--lw-r-sm);
+  overflow: hidden;
+}
+
+.diff__head {
+  padding: 8px 10px;
+  color: var(--lw-ink-3);
+  background: var(--lw-wash-1);
+  overflow-wrap: anywhere;
+}
+
+.diff__hunk {
+  padding: 6px 10px;
+  color: var(--lw-ink-4);
+  overflow-wrap: anywhere;
+}
+
+.diff__line {
+  display: flex;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--lw-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff__sign {
+  flex: 0 0 auto;
+  width: 8px;
+  color: var(--lw-ink-4);
+}
+
+.diff__line--add { background: color-mix(in oklab, var(--lw-ok) 8%, transparent); }
+.diff__line--del { background: color-mix(in oklab, var(--lw-danger) 8%, transparent); }
+
+/* --- 1.2 启动器（S4：面板空态） ----------------------------------------- */
+.panel-label {
+  padding: 2px 2px 8px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-4);
+}
+
+.launcher {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.launcher__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-wash-1);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--lw-ink-1);
+  text-align: left;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.launcher__row:hover:not(:disabled) { background: var(--lw-wash-2); }
+
+/* 原型未实现的启动器条目显式禁用：不做假处理，也不伪装成可用 */
+.launcher__row:disabled { cursor: default; opacity: .45; }
+
+.launcher__row .glyph { color: var(--lw-ink-3); }
+
+.launcher__hint {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--lw-ink-4);
+}
+
+/* --- 1.3 面板正文按开关 / 页签切换（类由 prototype.js 维护） ------------ */
+.workpanel__body--launcher,
+.workpanel__body--subagent { display: none; }
+
+/* 页签 = 审阅 / 子 Agent 转录；关掉全部页签 → 启动器空态 */
+html.is-panel-tab-review .workpanel__body--diff { display: block; }
+html.is-panel-tab-subagent .workpanel__body--subagent { display: flex; }
+html.is-panel-empty .workpanel__body--launcher { display: block; }
+html.is-panel-empty .workpanel .tab,
+html.is-panel-empty .panel-path { display: none; }
+html.is-panel-empty .workpanel__body--diff,
+html.is-panel-empty .workpanel__body--subagent { display: none; }
+
+/* 页签条：隐藏被关掉的页签；页签本体是真按钮（可切换） */
+.tab[hidden] { display: none; }
+.tab__glyph { color: var(--lw-ink-3); }
+.tab[aria-selected="true"] .tab__glyph { color: var(--lw-ink-2); }
+
+/* --- 1.4 子 Agent 转录页签正文（§3.16） -------------------------------- */
+.workpanel__body--subagent {
+  flex-direction: column;
+  padding: 6px 12px 0;
+  overflow: hidden;
+}
+
+.subagent-transcript {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 8px;
+}
+
+.subagent-transcript .turn { padding: 2px 0 8px; }
+
+/* 只读面必须自证只读：底部固定说明条，页内没有 composer */
+.readonly-strip {
+  flex: 0 0 auto;
+  margin: 0 -12px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--lw-line-subtle);
+  background: var(--lw-bg-dock);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--lw-ink-4);
+}
+
+.workpanel__body--diff { display: none; }
+html.is-panel-tab-review .workpanel__body--diff { display: block; }
+
+/* ===========================================================================
+ * 2. 遮罩与对话框
+ * =========================================================================== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--lw-scrim);
+  z-index: 120;
+}
+
+.overlay.is-open { display: flex; }
+
+.overlay.is-open > .dialog,
+.overlay.is-open > .palette {
+  animation: lw-fade-scale var(--motion-normal) var(--ease-out) both;
+}
+
+.dialog {
+  width: min(100%, 440px);
+  border-radius: var(--lw-r-lg-plus);
+  padding: 18px;
+  background: var(--lw-bg-elevated);
+  border: 1px solid var(--lw-line);
+  box-shadow: var(--lw-shadow-dialog);
+  backdrop-filter: blur(12px);
+}
+
+/* 批量卸载二次确认（§五：唯一还带遮罩的 Modal——不答就不能做别的事） */
+.dialog--confirm {
+  width: min(100%, 520px);
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 名单/数量/破坏范围一次说清 */
+.confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 190px;
+  overflow: auto;
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-bg-inset);
+  padding: 10px 12px;
+}
+
+.confirm-list__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--lw-ink-2);
+}
+
+.confirm-list__row .confirm-list__id {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--lw-ink-4);
+}
+
+.dialog__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: color-mix(in oklab, var(--lw-danger) 7%, transparent);
+  border-bottom: 1px solid var(--lw-line-subtle);
+}
+
+.dialog__head .glyph { color: var(--lw-danger); margin-top: 1px; }
+
+.dialog__titles { min-width: 0; }
+
+.dialog__title {
+  font-size: 14px;
+  font-weight: 560;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.dialog__sub {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--lw-ink-2);
+}
+
+.dialog__badges {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.dialog__body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog__label {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-4);
+  margin-bottom: 4px;
+}
+
+.dialog__mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--lw-ink-1);
+}
+
+.dialog__pre {
+  margin: 0;
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-bg-inset);
+  padding: 10px 12px;
+  max-height: 190px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--lw-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+/* ===========================================================================
+ * 3. 命令面板
+ * =========================================================================== */
+.palette {
+  width: min(100%, 640px);
+  border-radius: var(--lw-r-lg-plus);
+  background: var(--lw-bg-elevated);
+  border: 1px solid var(--lw-line);
+  box-shadow: var(--lw-shadow-dialog);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+}
+
+.palette__search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--lw-line-subtle);
+}
+
+.palette__search .glyph { color: var(--lw-ink-3); }
+
+.palette__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font-size: 14px;
+}
+
+.palette__input::placeholder { color: var(--lw-ink-4); }
+
+.palette__results {
+  max-height: min(52vh, 420px);
+  overflow: auto;
+  padding: 6px;
+}
+
+.palette__group-label {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-4);
+}
+
+/* ===========================================================================
+ * 4. 上下文用量浮层（锚在输入卡 ◐ 按钮上方，右对齐）
+ * =========================================================================== */
+.ctx-popover {
+  position: absolute;
+  right: 12px;
+  bottom: calc(100% + 8px);
+  width: 360px;
+  z-index: 140;
+  display: none;
+}
+
+.ctx-popover.is-open {
+  display: block;
+  animation: lw-fade-scale var(--motion-normal) var(--ease-out) both;
+}
+
+.ctx-popover__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  font-size: 12.5px;
+  font-weight: 520;
+  color: var(--lw-ink-1);
+}
+
+.ctx-popover__head .kv__v { font-weight: 400; }
+
+.kv {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 8px;
+  font-size: 12.5px;
+  color: var(--lw-ink-2);
+}
+
+.kv + .kv { border-top: 1px solid var(--lw-line-subtle); }
+
+.kv__v {
+  margin-left: auto;
+  color: var(--lw-ink-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ctx-popover__sub {
+  padding: 10px 8px 2px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-4);
+}
+
+/* ===========================================================================
+ * 5. 通知浮层（锚在侧栏页脚铃铛上方）
+ * =========================================================================== */
+.notify-popover {
+  /* 视口固定定位：锚在侧栏页脚铃铛正上方，且不被侧栏的 overflow 裁切 */
+  position: fixed;
+  /* 380px 比 275px 侧栏宽，向右溢出到主面板上——桌面端浮层的常规做法 */
+  left: 8px;
+  bottom: calc(var(--lw-toolbar-h) + 6px);
+  width: 380px;
+  z-index: 140;
+  display: none;
+}
+
+.notify-popover.is-open {
+  display: block;
+  animation: lw-fade-scale var(--motion-normal) var(--ease-out) both;
+}
+
+.notify-popover__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  font-size: 12.5px;
+  font-weight: 520;
+}
+
+.notify-popover__head .icon-btn { margin-left: auto; }
+
+.notify-popover__seg { padding: 2px 4px 8px; }
+
+.notify {
+  display: flex;
+  gap: 8px;
+  border-radius: var(--lw-r-sm);
+  padding: 8px;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.notify:hover { background: var(--lw-wash-2); }
+
+.notify__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lw-ink-1);
+}
+
+.notify__body {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--lw-ink-3);
+}
+
+.notify__time {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--lw-ink-4);
+}
+
+.notify[data-unread="false"] .notify__title { color: var(--lw-ink-2); font-weight: 400; }
+
+.notify[data-unread="false"] .dot { display: none; }
+
+/* 空态：清空 / 未读筛选无结果时不留空白浮层 */
+.notify-empty {
+  padding: 18px 8px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--lw-ink-4);
+}
+
+/* ===========================================================================
+ * 6. 权限模式菜单（§3.11 子件）：composer 贴窗口底，菜单只能向上开
+ * =========================================================================== */
+.perm { position: relative; display: inline-flex; }
+
+.perm-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 128px;
+  display: none;
+  z-index: 150;
+}
+
+.perm-menu.is-open {
+  display: block;
+  animation: lw-fade-scale var(--motion-normal) var(--ease-out) both;
+}
+
+.perm-menu__row {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  width: 100%;
+  border-radius: var(--lw-r-sm);
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--lw-ink-2);
+  text-align: left;
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.perm-menu__row:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+/* 选中只靠行尾 ✓，不用彩色、不用单选圆点 */
+.perm-menu__tick {
+  margin-left: auto;
+  padding-left: 10px;
+  color: var(--lw-ink-2);
+  visibility: hidden;
+}
+
+.perm-menu__row[aria-selected="true"] { color: var(--lw-ink-1); }
+.perm-menu__row[aria-selected="true"] .perm-menu__tick { visibility: visible; }
+
+/* 危险档位的 chip 旁挂 ⓘ：不加色、不加动效 */
+.chip__info { color: var(--lw-ink-4); }
+
+/* ===========================================================================
+ * 7. 原型切换器（原型壳：虚线轮廓 + 原型标签，明确不属于产品 UI）
+ * =========================================================================== */
+
+.proto {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.proto__pill,
+.proto__panel {
+  background: var(--lw-bg-elevated);
+  backdrop-filter: blur(12px);
+  border: 1px dashed color-mix(in oklab, var(--lw-ink-1) 24%, transparent);
+  box-shadow: var(--lw-shadow-dialog);
+}
+
+.proto__pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--lw-r-md-plus);
+  font-size: 11.5px;
+  color: var(--lw-ink-2);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.proto__pill:hover { background: color-mix(in oklab, var(--lw-raised) 88%, var(--lw-ink-1)); }
+
+.proto__tag {
+  border-radius: var(--lw-r-full);
+  padding: 1px 7px;
+  background: var(--lw-wash-3);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-3);
+}
+
+.proto__current { color: var(--lw-ink-1); }
+
+.proto__panel {
+  display: none;
+  width: 356px;
+  padding: 8px;
+  border-radius: var(--lw-r-md-plus);
+}
+
+.proto.is-open .proto__panel {
+  display: block;
+  animation: lw-fade-scale var(--motion-normal) var(--ease-out) both;
+}
+
+.proto__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 8px;
+  font-size: 12px;
+  color: var(--lw-ink-2);
+}
+
+.proto__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.proto__state {
+  border-radius: var(--lw-r-sm);
+  padding: 6px 8px;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--lw-ink-2);
+  text-align: left;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.proto__state:hover { background: var(--lw-wash-2); }
+
+.proto__state[aria-pressed="true"] {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-1);
+}
+
+.proto__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 6px 2px;
+  border-top: 1px solid var(--lw-line-subtle);
+  margin-top: 8px;
+}
+
+.proto__foot-label {
+  font-size: 11.5px;
+  color: var(--lw-ink-3);
+}
+
+.proto__foot .segmented { margin-left: auto; }
+
+.proto__note {
+  padding: 8px 6px 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--lw-ink-4);
+}

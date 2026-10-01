@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-state="s2">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Locowrk · 桌面端 UI 高保真原型</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/shell.css">
+<link rel="stylesheet" href="css/chat.css">
+<link rel="stylesheet" href="css/overlays.css">
+</head>
+<body>
+
+<!--
+  图标精灵：纯内联 SVG，无图标库、无外部请求。
+  统一规格 = 1.5px 描边 + round cap/join + stroke="currentColor"；
+  默认 15px（窗口控制 12px / 侧栏字形 14px）。
+  <symbol> 上的表现属性由 <use> 影子内容继承。
+-->
+<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <symbol id="i-sparkle" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6 9.1 6.3 12.8 7.4 9.1 8.5 8 12.2 6.9 8.5 3.2 7.4 6.9 6.3Z"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 6.4 8 9.8 11.4 6.4"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 4.6 9.8 8 6.4 11.4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.4v9.2M3.4 8h9.2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.1" cy="7.1" r="4"/><path d="M10.1 10.1 13.4 13.4"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="3.2" width="11.2" height="9.6" rx="2"/><path d="M10 3.2v9.6"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="3.2" width="11.2" height="9.6" rx="2"/><path d="M6 3.2v9.6"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.3"/><path d="M8 2.2v1.5M8 12.3v1.5M2.2 8h1.5M12.3 8h1.5M3.9 3.9l1.1 1.1M11 11l1.1 1.1M12.1 3.9 11 5M5 11 3.9 12.1"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 7.4a5.2 5.2 0 0 0-9-3.4"/><path d="M2.8 8.6a5.2 5.2 0 0 0 9 3.4"/><path d="M11.4 2.6v2.2h-2.2M4.6 13.4v-2.2h2.2"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.4"/><path d="M8 5v3.2l2.2 1.3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 11.2V7.6a3.4 3.4 0 0 1 6.8 0v3.6l1.2 1.4H3.4Z"/><path d="M6.6 12.6a1.4 1.4 0 0 0 2.8 0"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.3 4.3 11.7 11.7M11.7 4.3 4.3 11.7"/></symbol>
+  <symbol id="i-min" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 8h8.8"/></symbol>
+  <symbol id="i-max" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="8" height="8" rx="1.2"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="7.4" height="7.4" rx="1.6"/><path d="M10.2 3.2H4.4a1.4 1.4 0 0 0-1.4 1.4v5.8"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.6l2.2 2.2-7.8 7.8-2.8.6.6-2.8Z"/></symbol>
+  <symbol id="i-send-up" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.6V4M4.4 7.6 8 4l3.6 3.6"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.2" y="5.2" width="5.6" height="5.6" rx="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="5.4" width="9.6" height="7.4" rx="2.4"/><circle cx="6.4" cy="9.1" r=".85" fill="currentColor" stroke="none"/><circle cx="9.6" cy="9.1" r=".85" fill="currentColor" stroke="none"/><path d="M8 5.4V3"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 5.2a1.4 1.4 0 0 1 1.4-1.4h2.4l1.4 1.6h4.2a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H4a1.4 1.4 0 0 1-1.4-1.4Z"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="3.2" width="11.2" height="9.6" rx="2"/><path d="M5.4 6.8 7 8.4 5.4 10M8.8 10.4h2"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.8 13.4 12.2H2.6Z"/><path d="M8 6.4v3M8 11.1v.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.6 6.7 11.3 12 5.6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 5.4h9.2M6.6 5.4V3.8h2.8v1.6"/><path d="M4.6 5.4l.6 7.2a1.2 1.2 0 0 0 1.2 1.1h3.2a1.2 1.2 0 0 0 1.2-1.1l.6-7.2"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 2.8v3M9.8 2.8v3"/><path d="M4.4 5.8h7.2v2.4a3.6 3.6 0 0 1-7.2 0Z"/><path d="M8 12v1.6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 2.8h4.2l3 3v7.4H4.4Z"/><path d="M8.6 2.8v3h3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.4"/><path d="M2.6 8h10.8M8 2.6c1.7 1.9 1.7 8.9 0 10.8M8 2.6c-1.7 1.9-1.7 8.9 0 10.8"/></symbol>
+  <symbol id="i-git" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.6" cy="4.2" r="1.7"/><circle cx="4.6" cy="11.8" r="1.7"/><circle cx="11.4" cy="8" r="1.7"/><path d="M4.6 5.9v4.2M6.3 10.6c2.2 0 3.4-1 3.4-2.6"/></symbol>
+  <symbol id="i-checklist" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 5.4l1.1 1.1 1.9-1.9"/><path d="M9.2 5.4h3.6M3.2 10.6l1.1 1.1 1.9-1.9M9.2 10.6h3.6"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 4 3.2 7.4l3.4 3.4"/><path d="M3.2 7.4h5.4a3.6 3.6 0 0 1 0 7.2H6.2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.4"/><path d="M8 7.4v3.6M8 5.2v.01"/></symbol>
+  <symbol id="i-more-vert" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"/></symbol>
+</svg>
+
+<!-- ======================================================================
+     应用外壳：三区域各持一条 46px 头部，合成贯穿窗口的一条带
+     ====================================================================== -->
+<div class="app-shell">
+
+  <!-- ===================== 侧栏 ===================== -->
+  <aside class="sidebar" id="sidebar">
+    <header class="sidebar__header band">
+      <span class="sidebar__brand">
+        <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-1)"><use href="#i-sparkle"/></svg>
+        <span class="sidebar__brand-name">Locowrk</span>
+      </span>
+      <button class="icon-btn" id="sidebarCollapse" type="button" title="收起侧栏" aria-label="收起侧栏" style="margin-left:auto">
+        <svg class="glyph glyph--14" aria-hidden="true"><use href="#i-sidebar"/></svg>
+      </button>
+    </header>
+
+    <div class="sidebar__body scroll-y">
+      <div class="side-label">会话</div>
+      <div class="session-row">
+        <button class="session-row__main" type="button" title="插件市场图标规范"><span class="session-row__title">插件市场图标规范</span></button>
+        <button class="session-row__more" type="button" aria-label="更多操作" title="更多操作"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-dots"/></svg></button>
+      </div>
+      <div class="session-row">
+        <button class="session-row__main" type="button" title="上下文压缩阈值怎么定"><span class="session-row__title">上下文压缩阈值怎么定</span></button>
+        <button class="session-row__more" type="button" aria-label="更多操作" title="更多操作"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-dots"/></svg></button>
+      </div>
+      <div class="session-row">
+        <button class="session-row__main" type="button" title="今天早上的构建失败"><span class="session-row__title">今天早上的构建失败</span></button>
+        <button class="session-row__more" type="button" aria-label="更多操作" title="更多操作"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-dots"/></svg></button>
+      </div>
+
+      <div class="side-label">项目</div>
+
+      <button class="group-row" type="button" aria-expanded="true">
+        <svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+        <svg class="glyph glyph--14" aria-hidden="true"><use href="#i-folder"/></svg>
+        <span class="group-row__name">Locowrk</span>
+        <span class="dot dot--ok" title="项目内有活动会话" style="margin-left:auto"></span>
+      </button>
+      <div class="bucket-label">今天</div>
+      <div class="session-row session-row--in-project" data-selected="true">
+        <button class="session-row__main" type="button" title="重构工具卡折叠逻辑">
+          <span class="dot dot--pulse" title="进行中"></span>
+          <span class="session-row__title">重构工具卡折叠逻辑</span>
+        </button>
+        <button class="session-row__more" type="button" aria-label="更多操作" title="更多操作"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-dots"/></svg></button>
+      </div>
+      <div class="session-row session-row--in-project">
+        <button class="session-row__main" type="button" title="UI 视觉抛光走查"><span class="session-row__title">UI 视觉抛光走查</span></button>
+        <button class="session-row__more" type="button" aria-label="更多操作" title="更多操作"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-dots"/></svg></button>
+      </div>
+      <div class="bucket-label">昨天</div>
+      <div class="session-row session-row--in-project">
+        <button class="session-row__main" type="button" title="fs roots 工作区目录选择器"><span class="session-row__title">fs roots 工作区目录选择器</span></button>
+        <button class="session-row__more" type="button" aria-label="更多操作" title="更多操作"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-dots"/></svg></button>
+      </div>
+      <div class="bucket-label">更早</div>
+      <div class="session-row session-row--in-project">
+        <button class="session-row__main" type="button" title="session 持久化与回放"><span class="session-row__title">session 持久化与回放</span></button>
+        <button class="session-row__more" type="button" aria-label="更多操作" title="更多操作"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-dots"/></svg></button>
+      </div>
+
+      <button class="group-row" type="button" aria-expanded="true" style="margin-top:6px">
+        <svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+        <svg class="glyph glyph--14" aria-hidden="true"><use href="#i-folder"/></svg>
+        <span class="group-row__name">tool-shell</span>
+      </button>
+      <div class="bucket-label">上周</div>
+      <div class="session-row session-row--in-project">
+        <button class="session-row__main" type="button" title="shell_read 只读白名单"><span class="session-row__title">shell_read 只读白名单</span></button>
+        <button class="session-row__more" type="button" aria-label="更多操作" title="更多操作"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-dots"/></svg></button>
+      </div>
+    </div>
+
+    <footer class="sidebar__footer band">
+      <button class="icon-btn" type="button" title="设置" aria-label="设置"><svg class="glyph glyph--14" aria-hidden="true"><use href="#i-settings"/></svg></button>
+      <button class="icon-btn" type="button" title="同步" aria-label="同步"><svg class="glyph glyph--14" aria-hidden="true"><use href="#i-sync"/></svg></button>
+      <button class="icon-btn" type="button" title="定时任务" aria-label="定时任务"><svg class="glyph glyph--14" aria-hidden="true"><use href="#i-clock"/></svg></button>
+      <button class="icon-btn" id="notifyBell" type="button" title="通知" aria-label="通知" aria-expanded="false"><svg class="glyph glyph--14" aria-hidden="true"><use href="#i-bell"/></svg></button>
+      <span class="sidebar__version">v2.37</span>
+    </footer>
+    <!-- 侧栏拖拽柄（§2.3）：8px 热区嵌在右缘，可见提示是 2×32 圆角条 -->
+    <button
+      class="sidebar__grip" id="sidebarGrip" type="button"
+      role="separator" aria-orientation="vertical" aria-label="调整侧栏宽度"
+      aria-valuemin="240" aria-valuemax="520" aria-valuenow="275" aria-valuetext="侧栏宽度 275 像素"
+      data-resize="sidebar"></button>
+  </aside>
+
+  <!-- ===================== 主面板（会话） ===================== -->
+  <main class="main-pane">
+    <div class="topbar">
+      <!-- 折叠按钮的零宽前导槽：展开时 0 宽，标题不跳位 -->
+      <div class="topbar__lead">
+        <button class="icon-btn" id="sidebarExpand" type="button" tabindex="-1" aria-hidden="true" title="展开侧栏" aria-label="展开侧栏">
+          <svg class="glyph glyph--14" aria-hidden="true"><use href="#i-sidebar"/></svg>
+        </button>
+      </div>
+      <div class="topbar__title" title="Locowrk · 重构工具卡折叠逻辑">重构工具卡折叠逻辑</div>
+      <div class="topbar__actions">
+        <div class="action-group">
+          <button class="icon-btn" type="button" title="新建会话" aria-label="新建会话"><svg class="glyph" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <button class="icon-btn" type="button" title="搜索会话" aria-label="搜索会话"><svg class="glyph" aria-hidden="true"><use href="#i-search"/></svg></button>
+        </div>
+        <div class="action-group">
+          <button class="icon-btn" id="panelToggle" type="button" title="切换工作面板" aria-label="切换工作面板" aria-pressed="false"><svg class="glyph" aria-hidden="true"><use href="#i-panel"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="scroller scroll-y" id="scroller">
+      <div class="column">
+
+        <!-- ---------- 首页空态（S1） ---------- -->
+        <div class="home">
+          <!-- 占位标记：Locowrk 自有标记的临时单线云朵（两枚眼睛） -->
+          <svg class="home__mascot" viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 47.5a9.5 9.5 0 0 1-1.4-18.9 13 13 0 0 1 25.2-4.6 10 10 0 0 1 1.7 23.5Z"/>
+            <circle cx="30.6" cy="32.4" r="1.9" fill="currentColor" stroke="none"/>
+            <circle cx="41.4" cy="32.4" r="1.9" fill="currentColor" stroke="none"/>
+          </svg>
+          <h1 class="home__title">今天想在 Locowrk 里做点什么？</h1>
+        </div>
+
+        <!-- ---------- 对话转录（S2 起） ---------- -->
+        <div class="transcript">
+
+          <!-- 用户消息 -->
+          <div class="msg msg-user">
+            <div class="msg-user__bubble">帮我把 tmp/build 的产物清掉，再跑一遍 desktop 的构建；顺手核对 §3.7 工具卡折叠的约束有没有漏项。</div>
+            <div class="msg__actions">
+              <button class="copy-btn" type="button" title="复制" aria-label="复制这条消息"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+              <button class="copy-btn" type="button" title="编辑" aria-label="编辑这条消息"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-edit"/></svg></button>
+              <span class="msg__time">14:32</span>
+            </div>
+          </div>
+
+          <!-- 轮次过程组：处理中（展开） -->
+          <div class="turn">
+            <button class="cv-head turn__header" type="button" aria-expanded="true" data-collapsible="turn">
+              <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+              <span class="cv-head__label">处理中</span>
+              <span class="cv-head__meta">· 1m 6s · 5 个工具</span>
+              <span class="cv-head__meta" style="display:inline-flex;align-items:center;gap:4px">
+                <svg class="glyph glyph--12" aria-hidden="true"><use href="#i-info"/></svg>1 个问题
+              </span>
+              <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+            </button>
+
+            <div class="turn__body">
+              <!-- 思考行（折叠） -->
+              <div class="thinking">
+                <button class="cv-head thinking__header" type="button" aria-expanded="false" data-collapsible="thinking">
+                  <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+                  <span class="thinking__label">思考</span>
+                  <span class="thinking__clip">先读 ToolCallCard.vue 的折叠实现，再逐条比对文档 §3.7 的四条约束：默认折叠、失败自动展开、折叠态不持久化、明细 v-show 保留 DOM。</span>
+                  <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                </button>
+                <div class="thinking__body" hidden>先读 ToolCallCard.vue 的折叠实现，再逐条比对文档 §3.7 的四条约束：默认折叠、失败自动展开、折叠态不持久化、明细 v-show 保留 DOM。
+其中「失败自动展开」需要区分两种到达路径：实时结果（pending 翻转）与历史重放（挂载即失败），两条路径必须同规，否则重放出来的历史卡片会停在折叠态、错误被藏起来。
+下一步：确认 clip 长度与 summary 取值口径，再跑一次 desktop 的类型检查与构建。</div>
+              </div>
+
+              <!-- 活动组：8 次工具操作（展开） -->
+              <div class="activity">
+                <button class="cv-head activity__header" type="button" aria-expanded="true" data-collapsible="activity">
+                  <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+                  <span class="cv-head__label">8 次工具操作</span>
+                  <span class="cv-head__meta">· 包含思考 · 正在处理…</span>
+                  <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                </button>
+
+                <div class="activity__body">
+                  <!-- 2.1 search_tools（纯） -->
+                  <div class="tool">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="search_tools">
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-search"/></svg>
+                        <span class="tool__name">search_tools</span>
+                        <span class="badge badge--micro">纯</span>
+                        <span class="tool-args">{"query":"工具卡 折叠 约束"}</span>
+                        <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail" hidden>
+                      <div><div class="tool__label">参数</div><pre>{ "query": "工具卡 折叠 约束", "top_k": 5 }</pre></div>
+                      <div><div class="tool__label">结果</div><pre>3 个命中：ToolCallCard.vue（0.82）、UI shell and patterns.md §3.7（0.79）、ChatMessages.vue（0.61）</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 2.2 search_tools（第二次） -->
+                  <div class="tool">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="search_tools">
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-search"/></svg>
+                        <span class="tool__name">search_tools</span>
+                        <span class="tool-args">{"query":"sandbox 输出截断 提示"}</span>
+                        <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail" hidden>
+                      <div><div class="tool__label">参数</div><pre>{ "query": "sandbox 输出截断 提示", "top_k": 5 }</pre></div>
+                      <div><div class="tool__label">结果</div><pre>2 个命中：tool-shell（0.71）、tool-sandbox（0.68）</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 2.3 shell_read（运行中，无徽章 = plain） -->
+                  <div class="tool">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="shell_read">
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+                        <span class="tool__name">shell_read</span>
+                        <span class="tool-args">{"cmd":"git status --short","cwd":"F:/Warehouse/AIwork/Locowrk"}</span>
+                        <span class="tool__status"><span class="dot dot--pulse"></span>运行中</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail" hidden>
+                      <div><div class="tool__label">参数</div><pre>{ "cmd": "git status --short", "cwd": "F:/Warehouse/AIwork/Locowrk" }</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 2.4 shell_read（已完成） -->
+                  <div class="tool">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="shell_read">
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+                        <span class="tool__name">shell_read</span>
+                        <span class="tool-args">{"cmd":"git diff --stat"}</span>
+                        <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail" hidden>
+                      <div><div class="tool__label">参数</div><pre>{ "cmd": "git diff --stat" }</pre></div>
+                      <div><div class="tool__label">结果</div><pre>ToolCallCard.vue | 24 ++++++++++--------
+ChatMessages.vue | 18 ++++++++------
+2 files changed, 24 insertions(+), 18 deletions(-)</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 2.5 fs_edit（可补偿，失败）—— 失败自动展开一次（含历史重放挂载即检） -->
+                  <div class="tool">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="true" data-tool="fs_edit" data-fail-open>
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-edit"/></svg>
+                        <span class="tool__name">fs_edit</span>
+                        <span class="badge badge--micro badge--warn">可补偿</span>
+                        <span class="tool-args">{"path":"desktop/src/components/chat/ToolCallCard.vue","op":"replace"}</span>
+                        <span class="tool__status tool__status--fail"><span class="dot dot--danger"></span>失败</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail">
+                      <div><div class="tool__label">参数</div><pre>{ "path": "desktop/src/components/chat/ToolCallCard.vue", "op": "replace", "find": "const expanded = ref(true)" }</pre></div>
+                      <div><div class="tool__label">结果</div><pre class="is-error">未找到匹配文本：目标行在第 18 行，当前为 "const expanded = ref(false);"，已按 insert-before 重试。</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 2.6 fs_edit（已重试成功） -->
+                  <div class="tool">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="fs_edit">
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-edit"/></svg>
+                        <span class="tool__name">fs_edit</span>
+                        <span class="badge badge--micro badge--warn">可补偿</span>
+                        <span class="tool-args">{"path":"desktop/src/components/chat/ToolCallCard.vue","op":"insert-before"}</span>
+                        <span class="tool__diff"><span class="tool__add">+6</span><span class="tool__size">1.1 KB</span></span>
+                        <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail" hidden>
+                      <div><div class="tool__label">参数</div><pre>{ "path": "desktop/src/components/chat/ToolCallCard.vue", "op": "insert-before", "anchor": "const expanded = ref(false);" }</pre></div>
+                      <div><div class="tool__label">结果</div><pre>已插入 6 行（失败自动展开逻辑），文件行数 126 → 132。</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 审批决策卡（内联，§3.17）：写操作触发的「中风险」决策，紧跟触发它的工具行 -->
+                  <section class="permission" role="region" aria-label="需要权限" data-risk="medium" data-permission="fs_edit">
+                    <div class="permission__head">
+                      <span class="permission__title">需要权限</span>
+                      <span class="permission__queue">还有 2 个待处理</span>
+                      <span class="permission__pill">中风险</span>
+                    </div>
+                    <p class="permission__ask">允许 <b>fs_edit</b> 运行吗？</p>
+                    <p class="permission__reason">会修改你工作区里的文件</p>
+                    <div class="permission__args">
+                      <div class="permission__args-head">
+                        <span class="permission__label">输入</span>
+                        <button class="copy-btn" type="button" title="复制输入" aria-label="复制输入"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                      </div>
+                      <pre class="permission__well"><span class="permission__flag">path</span>  desktop/src/components/chat/ToolCallCard.vue
+<span class="permission__flag">op</span>    insert-before
+<span class="permission__cmd">+ watch(() =&gt; !props.item.pending &amp;&amp; props.item.ok === false, …)</span>
+<span class="permission__flag">mode</span>  0644</pre>
+                    </div>
+                    <p class="permission__meta" title="F:/Warehouse/AIwork/Locowrk">项目 F:/Warehouse/AIwork/Locowrk</p>
+                    <div class="permission__acts">
+                      <span class="permission__timeout">若 100 秒内未响应将自动拒绝</span>
+                      <div class="permission__btns">
+                        <button class="btn btn-ghost" type="button" data-decision="deny">拒绝</button>
+                        <button class="btn btn-secondary" type="button" data-decision="session">允许本次对话</button>
+                        <button class="btn btn-primary" type="button" data-decision="once">允许一次</button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- 2.7 sandbox_run（不可逆，已完成） -->
+                  <div class="tool" data-expand="s11">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="sandbox_run">
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+                        <span class="tool__name">sandbox_run</span>
+                        <span class="badge badge--micro badge--danger">不可逆</span>
+                        <span class="tool-args">{"command":"pnpm build","mem_mb":512,"max_procs":64}</span>
+                        <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail" hidden>
+                      <div><div class="tool__label">参数</div><pre>{
+  "command": "pnpm build",
+  "cwd": "F:/Warehouse/AIwork/Locowrk/desktop",
+  "mem_mb": 512,
+  "max_procs": 64
+}</pre></div>
+                      <div><div class="tool__label">结果</div><pre>isolation: job-only（受限令牌不可用，已如实上报）
+vite v5.4.8 building for production...
+✓ 214 modules transformed.
+dist/assets/index-Dq3f1a.css   28.41 kB │ gzip:  6.02 kB
+dist/assets/index-Bx90cc.js   412.77 kB │ gzip: 131.55 kB
+✓ built in 3.42s
+退出码 0 · 用时 4.1s</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 2.8 sandbox_run（第二次） -->
+                  <div class="tool">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="sandbox_run">
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+                        <span class="tool__name">sandbox_run</span>
+                        <span class="badge badge--micro badge--danger">不可逆</span>
+                        <span class="tool-args">{"command":"pnpm test"}</span>
+                        <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail" hidden>
+                      <div><div class="tool__label">参数</div><pre>{ "command": "pnpm test" }</pre></div>
+                      <div><div class="tool__label">结果</div><pre>Test Files  2 passed (2)
+Tests       9 passed (9)
+Duration    1.84s</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 2.9 shell（等待审批：还没跑，所以不计入「8 次工具操作」） -->
+                  <div class="tool">
+                    <div class="tool__row">
+                      <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="shell">
+                        <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+                        <span class="tool__name">shell</span>
+                        <span class="badge badge--micro badge--danger">不可逆</span>
+                        <span class="tool-args">{"command":"rm -rf ./tmp/build"}</span>
+                        <span class="tool__status"><span class="dot dot--pulse"></span>等待审批</span>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                        <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                      </button>
+                      <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    </div>
+                    <div class="tool__detail" hidden>
+                      <div><div class="tool__label">参数</div><pre>{ "command": "rm -rf ./tmp/build", "cwd": "F:/Warehouse/AIwork/Locowrk" }</pre></div>
+                      <div><div class="tool__label">状态</div><pre>尚未执行：审批未决（fail-closed，超时按拒绝收束）。</pre></div>
+                    </div>
+                  </div>
+
+                  <!-- 审批决策卡（内联，§3.17）：高风险 = shell 命令，紧跟触发它的工具行 -->
+                  <section class="permission" role="region" aria-label="需要权限" data-risk="high" data-permission="shell">
+                    <div class="permission__head">
+                      <span class="permission__title">需要权限</span>
+                      <span class="permission__pill">高风险</span>
+                    </div>
+                    <p class="permission__ask">允许 <b>shell</b> 运行吗？</p>
+                    <p class="permission__reason">会修改你工作区里的文件</p>
+                    <div class="permission__args">
+                      <div class="permission__args-head">
+                        <span class="permission__label">输入</span>
+                        <button class="copy-btn" type="button" title="复制输入" aria-label="复制输入"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                      </div>
+                      <pre class="permission__well"><span class="permission__cmd">$ rm -rf ./tmp/build</span>
+<span class="permission__flag">cwd</span>  F:/Warehouse/AIwork/Locowrk
+<span class="permission__flag">shell</span>  powershell -NoProfile -Command
+<span class="permission__flag">timeout</span> 120s</pre>
+                    </div>
+                    <p class="permission__meta" title="F:/Warehouse/AIwork/Locowrk">项目 F:/Warehouse/AIwork/Locowrk</p>
+                    <div class="permission__acts">
+                      <span class="permission__timeout">若 100 秒内未响应将自动拒绝</span>
+                      <div class="permission__btns">
+                        <button class="btn btn-ghost" type="button" data-decision="deny">拒绝</button>
+                        <button class="btn btn-secondary" type="button" data-decision="session">允许本次对话</button>
+                        <button class="btn btn-primary" type="button" data-decision="once">允许一次</button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+
+              <!-- 子 Agent 卡 -->
+              <div class="subagent">
+                <div class="subagent__head">
+                  <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-purple)"><use href="#i-bot"/></svg>
+                  <b>子 Agent 正在工作</b>
+                  <span>· 1 个 subagent · 已完成 0/1 · 36s</span>
+                  <!-- 卡是入口不是终点（§3.10 → §3.16）：点开进入子 Agent 转录页签 -->
+                  <button class="btn btn-ghost permission-open" type="button" data-open-subagent style="margin-left:auto">
+                    <svg class="glyph glyph--12" aria-hidden="true"><use href="#i-bot"/></svg>查看转录
+                  </button>
+                </div>
+                <div class="subagent__graph">
+                  <div class="node">
+                    <div class="node__title">主 Agent</div>
+                    <div class="node__sub">正在协调 1 个委派任务</div>
+                  </div>
+                  <div class="connector" aria-hidden="true"></div>
+                  <div class="node">
+                    <div class="node__title">explorer</div>
+                    <div class="node__tags">
+                      <span class="node__tag">Task(explorer)</span>
+                      <span class="node__tag">24 个步骤</span>
+                    </div>
+                    <div class="node__foot">
+                      <span class="node__model">deepseek-flash · high</span>
+                      <span><span class="dot dot--pulse"></span></span>
+                      <span>运行中</span>
+                      <span>36s</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 系统通知：上下文压缩 -->
+          <div class="notice">
+            <span class="notice__text">已压缩早期对话，节省 ≈51.2K token</span>
+            <span class="notice__acts">
+              <button class="notice__act" type="button">查看详情</button>
+              <button class="notice__act" type="button">撤销</button>
+            </span>
+          </div>
+
+          <!-- 助手消息（markdown 渲染） -->
+          <div class="msg msg-assistant">
+            <div class="md">
+              <p>核对完了，<strong>四条约束里有三条已落地</strong>，一条只在实时路径上成立、重放路径还差一步。折叠态默认行为本身没问题，问题出在错误可见性的到达时机。</p>
+              <ul>
+                <li>默认折叠、明细 <code>v-show</code> 保留 DOM —— 已符合；</li>
+                <li>折叠态不持久化，切会话/重放回到折叠 —— 已符合；</li>
+                <li>失败自动展开 —— 实时路径符合，<strong>历史重放未覆盖</strong>；</li>
+                <li>参数摘要取 <code>args</code> 首个原始值、裁剪 48 字符 —— 已符合。</li>
+              </ul>
+              <p>建议把「是否失败」抽成一个计算属性，让挂载与翻转走同一条判断：</p>
+              <figure class="code-block">
+                <figcaption class="code-block__head">
+                  <span>ts</span>
+                  <button class="copy-btn" type="button" title="复制代码" aria-label="复制代码"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                </figcaption>
+                <pre><code>// 失败自动展开一次：实时结果（pending 翻转）与历史重放（挂载即失败）同规
+watch(
+  () =&gt; !props.item.pending &amp;&amp; props.item.ok === false,
+  (failed) =&gt; { if (failed) expanded.value = true; },
+  { immediate: true },
+);</code></pre>
+              </figure>
+              <p>本轮工具面与用量如下（演示数据，非真实统计）：</p>
+              <table class="md-table">
+                <thead>
+                  <tr><th>工具</th><th>副作用</th><th>调用</th><th>结果</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>search_tools</td><td>纯</td><td>2</td><td>命中 5 条</td></tr>
+                  <tr><td>shell_read</td><td>纯</td><td>2</td><td>1 完成 / 1 运行中</td></tr>
+                  <tr><td>fs_edit</td><td>可补偿</td><td>2</td><td>1 失败后重试成功</td></tr>
+                  <tr><td>sandbox_run</td><td>不可逆</td><td>2</td><td>构建与测试均通过</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="msg__actions">
+              <button class="copy-btn" type="button" title="复制" aria-label="复制这条回复"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+              <button class="copy-btn" type="button" title="编辑" aria-label="编辑这条回复"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-edit"/></svg></button>
+              <span class="msg__time">14:33</span>
+            </div>
+          </div>
+
+          <!-- 错误行 -->
+          <div class="error-row">
+            <svg class="glyph glyph--14" aria-hidden="true"><use href="#i-warn"/></svg>
+            <span>第 5 次工具操作失败：<code>fs_edit</code> 未找到匹配文本（ENOENT 语义不成立，属锚点失配）。已按 <code>insert-before</code> 重试并成功，未阻塞本轮。</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- 输入区 ---------- -->
+    <div class="composer-dock">
+      <div class="composer">
+        <textarea class="composer__input scroll-y" id="composerInput" rows="1" aria-label="输入消息" placeholder="输入 / 使用命令 · @ 引用文件"></textarea>
+        <div class="composer__toolbar">
+          <div class="composer__left">
+            <button class="icon-btn icon-btn--round" type="button" title="添加附件" aria-label="添加附件"><svg class="glyph" aria-hidden="true"><use href="#i-plus"/></svg></button>
+            <button class="chip" type="button" title="智能体" aria-label="智能体">
+              <svg class="glyph glyph--14" aria-hidden="true"><use href="#i-bot"/></svg>
+              <span>智能体</span>
+            </button>
+            <!-- 权限模式 chip + 向上开的菜单（§3.11 子件） -->
+            <span class="perm">
+              <button class="chip" id="permChip" type="button" title="权限模式" aria-label="权限模式：完全访问" aria-haspopup="menu" aria-expanded="false">
+                <span id="permChipLabel">全自动</span>
+                <svg class="glyph glyph--12 chip__info" id="permInfo" title="危险档位：只切审批门的预答策略，不切三类硬底线" aria-hidden="true"><use href="#i-info"/></svg>
+                <svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </button>
+              <div class="perm-menu popover" id="permMenu" role="menu" aria-label="权限模式">
+                <button class="perm-menu__row" type="button" role="menuitemradio" aria-checked="false" data-mode="plan">计划<span class="perm-menu__tick">✓</span></button>
+                <button class="perm-menu__row" type="button" role="menuitemradio" aria-checked="false" data-mode="confirm">变更前确认<span class="perm-menu__tick">✓</span></button>
+                <button class="perm-menu__row" type="button" role="menuitemradio" aria-checked="false" data-mode="autoedit">自动编辑<span class="perm-menu__tick">✓</span></button>
+                <button class="perm-menu__row" type="button" role="menuitemradio" aria-checked="true" aria-selected="true" data-mode="full">完全访问<span class="perm-menu__tick">✓</span></button>
+              </div>
+            </span>
+          </div>
+          <div class="composer__right">
+            <button class="ring-btn" id="ctxBtn" type="button" title="上下文用量" aria-label="上下文用量 14%" aria-expanded="false">
+              <svg class="glyph glyph--14" viewBox="0 0 16 16" fill="none" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                <circle class="ring__track" cx="8" cy="8" r="5.5"/>
+                <circle class="ring__value" cx="8" cy="8" r="5.5" stroke-dasharray="4.84 34.56" transform="rotate(-90 8 8)"/>
+              </svg>
+              <span>14%</span>
+            </button>
+            <button class="chip chip--model" type="button" title="模型与推理档位" aria-label="模型 DeepSeek V4.1 Flash，推理档 high">
+              <svg class="glyph glyph--14" aria-hidden="true"><use href="#i-sparkle"/></svg>
+              <span class="chip__text">DeepSeek V4.1 Flash · high</span>
+              <svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+            </button>
+            <button class="icon-btn" type="button" title="更多能力" aria-label="更多能力"><svg class="glyph" aria-hidden="true"><use href="#i-sparkle"/></svg></button>
+            <button class="send-btn" id="sendBtn" type="button" aria-label="停止生成">
+              <svg class="glyph glyph--14 glyph-stop" aria-hidden="true"><use href="#i-stop"/></svg>
+              <svg class="glyph glyph--14 glyph-send-up" aria-hidden="true"><use href="#i-send-up"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 上下文用量浮层（S7） -->
+        <div class="ctx-popover popover" id="ctxPopover" role="dialog" aria-label="上下文用量">
+          <div class="ctx-popover__head">
+            <span>已用 135.1K tokens</span>
+            <span class="kv__v">14%</span>
+          </div>
+          <div class="kv"><span>上下文窗口</span><span class="kv__v">135.1K / 1M tokens</span><span class="kv__v">14%</span></div>
+          <div class="kv"><span>本轮合计</span><span class="kv__v">135.1K</span></div>
+          <div class="kv"><span>生成速度</span><span class="kv__v">225 tokens/s</span></div>
+          <div class="ctx-popover__sub">模型用量</div>
+          <div class="kv"><span>输入</span><span class="kv__v">8K</span></div>
+          <div class="kv"><span>输出</span><span class="kv__v">5.6K</span></div>
+          <div class="kv"><span>缓存读取</span><span class="kv__v">116.2K</span></div>
+          <div class="kv"><span>缓存命中率</span><span class="kv__v">94%</span></div>
+          <div class="kv"><span>推理</span><span class="kv__v">5.4K</span></div>
+          <div class="ctx-popover__sub">工具上下文</div>
+          <div class="kv"><span>2 种工具 · 4 次调用 · 约 9.5K tokens</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== 工作面板 ===================== -->
+  <section class="workpanel" aria-label="工作面板">
+    <!-- 拖拽柄（§2.5）：10px 热区压在面板左外沿，可见提示是 2×32 圆角条 -->
+    <button
+      class="workpanel__grip" id="panelGrip" type="button"
+      role="separator" aria-orientation="vertical" aria-label="调整工作面板宽度"
+      aria-valuemin="244" aria-valuemax="1000" aria-valuenow="360" aria-valuetext="工作面板宽度 360 像素"
+      data-resize="panel"></button>
+    <header class="workpanel__header band">
+      <div class="workpanel__tabs" role="tablist" aria-label="工作面板页签">
+        <div class="tab" role="tab" aria-selected="true" data-tab="review">
+          <button class="tab__label" type="button" data-tab-select="review" title="审阅">审阅</button>
+          <button class="tab__close" type="button" data-tab-close="review" title="关闭标签页" aria-label="关闭标签页：审阅"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-close"/></svg></button>
+        </div>
+        <div class="tab" role="tab" aria-selected="false" data-tab="subagent">
+          <button class="tab__label" type="button" data-tab-select="subagent" title="ui-designer 的转录">
+            <svg class="glyph glyph--12 tab__glyph" aria-hidden="true"><use href="#i-bot"/></svg>ui-designer
+          </button>
+          <button class="tab__close" type="button" data-tab-close="subagent" title="关闭标签页" aria-label="关闭标签页：ui-designer"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-close"/></svg></button>
+        </div>
+      </div>
+      <button class="icon-btn" type="button" title="新建标签页" aria-label="新建标签页"><svg class="glyph" aria-hidden="true"><use href="#i-plus"/></svg></button>
+      <div class="workpanel__spacer"></div>
+      <button class="icon-btn" id="panelMax" type="button" title="最大化工作面板" aria-label="最大化工作面板" aria-pressed="false"><svg class="glyph" aria-hidden="true"><use href="#i-max"/></svg></button>
+    </header>
+
+    <!-- 正文 A：统一 diff（S3） -->
+    <div class="workpanel__body workpanel__body--diff scroll-y">
+      <div class="panel-path">
+        <svg class="glyph glyph--12" aria-hidden="true"><use href="#i-file"/></svg>
+        <span>desktop/src/components/chat/ToolCallCard.vue</span>
+      </div>
+      <div class="diff">
+        <div class="diff__head">diff --git a/desktop/src/components/chat/ToolCallCard.vue b/desktop/src/components/chat/ToolCallCard.vue</div>
+        <div class="diff__head">index 8f2c1a4..c39d70b 100644</div>
+        <div class="diff__head">--- a/desktop/src/components/chat/ToolCallCard.vue</div>
+        <div class="diff__head">+++ b/desktop/src/components/chat/ToolCallCard.vue</div>
+        <div class="diff__hunk">@@ -18,9 +18,14 @@ const props = defineProps&lt;{ item: ToolItem }&gt;();</div>
+        <div class="diff__line diff__line--del"><span class="diff__sign">-</span><span>const expanded = ref(true);</span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>const expanded = ref(false);</span></div>
+        <div class="diff__line"><span class="diff__sign"> </span><span></span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>// 失败自动展开一次：实时结果与历史重放同规</span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>watch(</span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  () =&gt; !props.item.pending &amp;&amp; props.item.ok === false,</span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  (failed) =&gt; { if (failed) expanded.value = true; },</span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  { immediate: true },</span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>);</span></div>
+        <div class="diff__line"><span class="diff__sign"> </span><span></span></div>
+        <div class="diff__hunk">@@ -52,7 +57,7 @@</div>
+        <div class="diff__line diff__line--del"><span class="diff__sign">-</span><span>  class="max-w-[85%] overflow-hidden rounded-lg border border-line-strong/70 bg-surface-1/40 text-xs"</span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  class="tool-card"</span></div>
+        <div class="diff__line"><span class="diff__sign"> </span><span>&gt;</span></div>
+        <div class="diff__line"><span class="diff__sign"> </span><span>  &lt;button class="tool-card__head" :aria-expanded="expanded" @click="expanded = !expanded"&gt;</span></div>
+        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>    &lt;span class="tool-card__chev"&gt;{{ expanded ? "▾" : "▸" }}&lt;/span&gt;</span></div>
+        <div class="diff__line diff__line--del"><span class="diff__sign">-</span><span>    &lt;span class="w-3 shrink-0 text-ink-4"&gt;{{ expanded ? "▾" : "▸" }}&lt;/span&gt;</span></div>
+      </div>
+    </div>
+
+    <!-- 正文 B：启动器（S4：面板空态） -->
+    <div class="workpanel__body workpanel__body--launcher scroll-y">
+      <div class="panel-label">新建</div>
+      <div class="launcher">
+        <button class="launcher__row" type="button" data-launcher-open="review"><svg class="glyph" aria-hidden="true"><use href="#i-file"/></svg><span>审阅</span><span class="launcher__hint">当前会话的改动</span></button>
+        <button class="launcher__row" type="button" disabled title="本原型未实现该页签"><svg class="glyph" aria-hidden="true"><use href="#i-file"/></svg><span>文件</span><span class="launcher__hint">打开工作区文件</span></button>
+        <button class="launcher__row" type="button" disabled title="本原型未实现该页签"><svg class="glyph" aria-hidden="true"><use href="#i-globe"/></svg><span>浏览器</span><span class="launcher__hint">预览本地页面</span></button>
+        <button class="launcher__row" type="button" data-launcher-open="subagent"><svg class="glyph" aria-hidden="true"><use href="#i-bot"/></svg><span>子 Agent 转录</span><span class="launcher__hint">查看子会话过程</span></button>
+        <button class="launcher__row" type="button" disabled title="插件贡献的页签类型，本原型未实现">
+          <svg class="glyph" aria-hidden="true"><use href="#i-git"/></svg><span>Git 透镜</span>
+          <span class="badge badge--micro">插件</span>
+          <span class="launcher__hint">tool-git</span>
+        </button>
+        <button class="launcher__row" type="button" disabled title="插件贡献的页签类型，本原型未实现">
+          <svg class="glyph" aria-hidden="true"><use href="#i-checklist"/></svg><span>依赖审计</span>
+          <span class="badge badge--micro">插件</span>
+          <span class="launcher__hint">mw-audit</span>
+        </button>
+      </div>
+    </div>
+    <!-- 正文 C：子 Agent 转录页签（§3.16）—— 复用 §3.7–3.9 的同一套行语法 -->
+    <div class="workpanel__body workpanel__body--subagent" data-panel-body="subagent">
+      <div class="subagent-transcript scroll-y" id="subagentTranscript">
+
+        <!-- 已收束的轮次：过程组默认收起 -->
+        <div class="turn">
+          <button class="cv-head turn__header" type="button" aria-expanded="false" data-collapsible="turn">
+            <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+            <span class="cv-head__label">已完成</span>
+            <span class="cv-head__meta">· 41s · 3 个工具</span>
+            <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+            <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </button>
+          <div class="turn__body" hidden>
+            <div class="thinking">
+              <button class="cv-head thinking__header" type="button" aria-expanded="false" data-collapsible="thinking">
+                <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+                <span class="thinking__label">思考</span>
+                <span class="thinking__clip">先定位侧栏与会话顶栏的 46px 带，再核对三处 46px 是否同顶。</span>
+                <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </button>
+              <div class="thinking__body" hidden>先定位侧栏与会话顶栏的 46px 带，再核对三处 46px 是否同顶。
+侧栏头、会话顶栏、工作面板头各自持有一条 46px 头，合起来才是贯穿窗口的一条带——没有独立标题栏。</div>
+            </div>
+            <div class="activity">
+              <button class="cv-head activity__header" type="button" aria-expanded="false" data-collapsible="activity">
+                <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+                <span class="cv-head__label">3 次工具操作</span>
+                <span class="cv-head__meta">· 包含思考</span>
+                <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </button>
+              <div class="activity__body" hidden>
+                <div class="tool">
+                  <div class="tool__row">
+                    <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="fs_read">
+                      <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-file"/></svg>
+                      <span class="tool__name">fs_read</span>
+                      <span class="badge badge--micro">纯</span>
+                      <span class="tool-args">{"path":"docs/design/ui-prototype/css/shell.css"}</span>
+                      <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                    </button>
+                    <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                  </div>
+                  <div class="tool__detail" hidden>
+                    <div><div class="tool__label">参数</div><pre>{ "path": "docs/design/ui-prototype/css/shell.css" }</pre></div>
+                    <div><div class="tool__label">结果</div><pre>读入 1102 行 / 46 KB。</pre></div>
+                  </div>
+                </div>
+                <div class="tool">
+                  <div class="tool__row">
+                    <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="memory_write">
+                      <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-checklist"/></svg>
+                      <span class="tool__name">memory_write</span>
+                      <span class="badge badge--micro badge--warn">可补偿</span>
+                      <span class="tool-args">{"key":"ui.shell.band"}</span>
+                      <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                    </button>
+                    <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                  </div>
+                  <div class="tool__detail" hidden>
+                    <div><div class="tool__label">参数</div><pre>{ "key": "ui.shell.band", "value": "三条 46px 头合成一条带" }</pre></div>
+                    <div><div class="tool__label">结果</div><pre>已写入 1 条记忆。</pre></div>
+                  </div>
+                </div>
+                <div class="tool">
+                  <div class="tool__row">
+                    <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="sandbox_run">
+                      <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+                      <span class="tool__name">sandbox_run</span>
+                      <span class="badge badge--micro badge--danger">不可逆</span>
+                      <span class="tool-args">{"command":"pnpm build"}</span>
+                      <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                    </button>
+                    <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                  </div>
+                  <div class="tool__detail" hidden>
+                    <div><div class="tool__label">参数</div><pre>{ "command": "pnpm build" }</pre></div>
+                    <div><div class="tool__label">结果</div><pre>✓ built in 3.11s（退出码 0）</pre></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 进行中的轮次：过程组运行中默认展开 -->
+        <div class="turn">
+          <button class="cv-head turn__header" type="button" aria-expanded="true" data-collapsible="turn">
+            <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+            <span class="cv-head__label">处理中</span>
+            <span class="cv-head__meta">· 2m 12s · 8 个工具</span>
+            <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+            <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </button>
+          <div class="turn__body">
+            <div class="thinking">
+              <button class="cv-head thinking__header" type="button" aria-expanded="false" data-collapsible="thinking">
+                <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+                <span class="thinking__label">思考</span>
+                <span class="thinking__clip">把拖拽柄抽成一个通用件，两栏共用同一套指针与键盘契约。</span>
+                <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </button>
+              <div class="thinking__body" hidden>把拖拽柄抽成一个通用件，两栏共用同一套指针与键盘契约：
+pointer capture + 方向键 16px 步进 + Home/End 到两端 + 双击复位，左右两栏只在范围与预算上不同。</div>
+            </div>
+            <div class="activity">
+              <button class="cv-head activity__header" type="button" aria-expanded="true" data-collapsible="activity">
+                <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-sparkle"/></svg>
+                <span class="cv-head__label">8 次工具操作</span>
+                <span class="cv-head__meta">· 包含思考 · 正在处理…</span>
+                <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </button>
+              <div class="activity__body">
+                <!-- 写入类工具行带变更统计（§3.8）：+N −M 与产物大小 -->
+                <div class="tool">
+                  <div class="tool__row">
+                    <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="fs_edit">
+                      <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-edit"/></svg>
+                      <span class="tool__name">写入 shell.css</span>
+                      <span class="badge badge--micro badge--warn">可补偿</span>
+                      <span class="tool-args">拖拽柄与 2×32 圆角条</span>
+                      <span class="tool__diff"><span class="tool__add">+277</span><span class="tool__size">7.9 KB</span></span>
+                      <span class="tool__status tool__status--ok"><span class="dot dot--ok"></span>已完成</span>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                    </button>
+                    <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                  </div>
+                  <div class="tool__detail" hidden>
+                    <div><div class="tool__label">参数</div><pre>desktop/src/components/chat/ToolRow.vue · insert-after · 拖拽柄样式</pre></div>
+                    <div><div class="tool__label">变更</div>
+                      <div class="diff">
+                        <div class="diff__hunk">@@ -48,6 +48,12 @@</div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>.tool__grip::after {</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  width: 2px; height: 32px; border-radius: var(--lw-r-full);</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  background: color-mix(in oklab, var(--lw-ink-1) 20%, transparent);</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  opacity: 0;</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>}</span></div>
+                        <div class="diff__line"><span class="diff__sign"> </span><span>/* 拖拽中全局列宽光标 */</span></div>
+                        <div class="diff__line diff__line--del"><span class="diff__sign">-</span><span>  transition: background 150ms ease-out;</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  transition: opacity 150ms var(--ease-out), background 150ms var(--ease-out);</span></div>
+                      </div>
+                    </div>
+                    <div><div class="tool__label">结果</div><pre>写入 1 个文件，+277 / −1 行，产物大小 7.9 KB。</pre></div>
+                  </div>
+                </div>
+
+                <div class="tool">
+                  <div class="tool__row">
+                    <button class="cv-head tool__toggle" type="button" aria-expanded="false" data-tool="fs_edit">
+                      <svg class="glyph glyph--14 tool__icon" aria-hidden="true"><use href="#i-edit"/></svg>
+                      <span class="tool__name">写入 shell.css</span>
+                      <span class="badge badge--micro badge--warn">可补偿</span>
+                      <span class="tool-args">拖拽中禁用选中与列宽光标</span>
+                      <span class="tool__diff"><span class="tool__add">+96</span><span class="tool__del">−4</span><span class="tool__size">2.4 KB</span></span>
+                      <span class="tool__status"><span class="dot dot--pulse"></span>运行中</span>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--collapsed" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                      <svg class="glyph glyph--12 cv-head__chev cv-head__chev--expanded" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                    </button>
+                    <button class="copy-btn tool__copy" type="button" title="复制调用" aria-label="复制调用"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                  </div>
+                  <div class="tool__detail" hidden>
+                    <div><div class="tool__label">参数</div><pre>desktop/src/style.css · append · 拖拽中全局规则</pre></div>
+                    <div><div class="tool__label">变更</div>
+                      <div class="diff">
+                        <div class="diff__hunk">@@ -292,3 +292,9 @@</div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>html[data-sidebar-resizing="true"] *,</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>html[data-work-panel-resizing="true"] * {</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  cursor: col-resize !important;</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>  user-select: none !important;</span></div>
+                        <div class="diff__line diff__line--add"><span class="diff__sign">+</span><span>}</span></div>
+                        <div class="diff__line diff__line--del"><span class="diff__sign">-</span><span>html { cursor: default; }</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 只读面自证：页内没有 composer -->
+      <div class="readonly-strip">子 Agent 由主 Agent 驱动，无法在此输入。</div>
+    </div>
+  </section>
+
+  <!-- ===================== 非对话目的地页（S9：整页接管） ===================== -->
+  <section class="dest-page" aria-label="扩展">
+    <div class="dest-page__inner">
+      <div class="dest-page__head">
+        <h1 class="dest-page__title">扩展</h1>
+        <div class="dest-page__tools">
+          <button class="btn btn-primary" type="button">浏览市场</button>
+          <button class="icon-btn" type="button" title="更多" aria-label="更多"><svg class="glyph" aria-hidden="true"><use href="#i-more-vert"/></svg></button>
+        </div>
+      </div>
+
+      <div class="dest-page__head" style="padding-top:0">
+        <div class="segmented dest-page__tabs" role="tablist" aria-label="扩展分类">
+          <button class="segmented__item" role="tab" aria-selected="true" type="button">已安装 10</button>
+          <button class="segmented__item" role="tab" aria-selected="false" type="button">插件市场 38</button>
+        </div>
+        <div class="field dest-page__search">
+          <svg class="glyph glyph--14" aria-hidden="true" style="color:var(--lw-ink-3)"><use href="#i-search"/></svg>
+          <input type="search" placeholder="搜索插件…" aria-label="搜索插件">
+        </div>
+      </div>
+
+      <div class="dest-page__list">
+        <div class="row-card">
+          <div class="row-card__lead">
+            <span class="plugin-mark"><svg class="glyph" aria-hidden="true"><use href="#i-plug"/></svg></span>
+            <div style="min-width:0">
+              <div class="row-card__name"><span class="row-card__title">回声工具</span><span class="badge badge--ok">内置</span></div>
+              <div class="row-card__id">tool-echo · 1.3.0</div>
+              <div class="row-card__more"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg><span>详情</span><span style="color:var(--lw-ink-4)">· 1 个工具 · 最近使用 2 分钟前</span></div>
+            </div>
+          </div>
+          <div class="row-card__ctrl">
+            <button class="chip" type="button" title="生效范围">全局<svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+            <button class="icon-btn" type="button" title="更多" aria-label="更多"><svg class="glyph" aria-hidden="true"><use href="#i-dots"/></svg></button>
+          </div>
+        </div>
+
+        <div class="row-card">
+          <div class="row-card__lead">
+            <span class="plugin-mark"><svg class="glyph" aria-hidden="true"><use href="#i-terminal"/></svg></span>
+            <div style="min-width:0">
+              <div class="row-card__name"><span class="row-card__title">Shell 执行</span><span class="badge badge--ok">内置</span></div>
+              <div class="row-card__id">tool-shell · 1.2.0</div>
+              <div class="row-card__more"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg><span>详情</span><span style="color:var(--lw-ink-4)">· 2 个工具 · 最近使用 6 分钟前</span></div>
+            </div>
+          </div>
+          <div class="row-card__ctrl">
+            <button class="chip" type="button" title="生效范围">全局<svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+            <button class="icon-btn" type="button" title="更多" aria-label="更多"><svg class="glyph" aria-hidden="true"><use href="#i-dots"/></svg></button>
+          </div>
+        </div>
+
+        <div class="row-card">
+          <div class="row-card__lead">
+            <span class="plugin-mark"><svg class="glyph" aria-hidden="true"><use href="#i-checklist"/></svg></span>
+            <div style="min-width:0">
+              <div class="row-card__name"><span class="row-card__title">记忆存储</span><span class="badge badge--ok">内置</span></div>
+              <div class="row-card__id">memory-sqlite · 1.2.0</div>
+              <div class="row-card__more"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg><span>详情</span><span style="color:var(--lw-ink-4)">· 3 个工具 · 最近使用 1 小时前</span></div>
+            </div>
+          </div>
+          <div class="row-card__ctrl">
+            <button class="chip" type="button" title="生效范围">本项目<svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+            <button class="icon-btn" type="button" title="更多" aria-label="更多"><svg class="glyph" aria-hidden="true"><use href="#i-dots"/></svg></button>
+          </div>
+        </div>
+
+        <div class="row-card">
+          <div class="row-card__lead">
+            <span class="plugin-mark"><svg class="glyph" aria-hidden="true"><use href="#i-bell"/></svg></span>
+            <div style="min-width:0">
+              <div class="row-card__name"><span class="row-card__title">通知推送</span><span class="badge badge--ok">内置</span></div>
+              <div class="row-card__id">tool-notify · 1.0.0</div>
+              <div class="row-card__more"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg><span>详情</span><span style="color:var(--lw-ink-4)">· 1 个工具 · 最近使用 昨天</span></div>
+            </div>
+          </div>
+          <div class="row-card__ctrl">
+            <button class="chip" type="button" title="生效范围">全局<svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+            <button class="icon-btn" type="button" title="更多" aria-label="更多"><svg class="glyph" aria-hidden="true"><use href="#i-dots"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- 窗口控制：浮在 46px 带右端，占 120px 车道 -->
+<div class="wincontrols" aria-label="窗口控制">
+  <button type="button" title="最小化" aria-label="最小化"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-min"/></svg></button>
+  <button type="button" title="最大化" aria-label="最大化"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-max"/></svg></button>
+  <button type="button" title="关闭" aria-label="关闭"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-close"/></svg></button>
+</div>
+
+<!-- ======================================================================
+     通知浮层（S8）：锚在侧栏页脚铃铛上方，视口固定定位以免被侧栏裁切
+     ====================================================================== -->
+<div class="notify-popover popover" id="notifyPopover" role="dialog" aria-label="通知">
+  <div class="notify-popover__head">
+    <span>通知</span>
+    <button class="icon-btn" id="notifyReadAll" type="button" title="全部已读" aria-label="全部已读"><svg class="glyph glyph--14" aria-hidden="true"><use href="#i-check"/></svg></button>
+    <button class="icon-btn" id="notifyClear" type="button" title="清空" aria-label="清空通知"><svg class="glyph glyph--14" aria-hidden="true"><use href="#i-trash"/></svg></button>
+  </div>
+  <div class="notify-popover__seg">
+    <div class="segmented" role="tablist" aria-label="通知筛选">
+      <button class="segmented__item" role="tab" type="button" aria-selected="true">全部</button>
+      <button class="segmented__item" role="tab" type="button" aria-selected="false">未读</button>
+    </div>
+  </div>
+  <div id="notifyList">
+    <div class="notify" data-unread="true">
+      <div style="min-width:0">
+        <div class="notify__title"><span class="dot dot--accent"></span>定时任务已触发</div>
+        <div class="notify__body">「每日构建检查」已在当前会话注入一轮，窗口不可见时已补系统通知。</div>
+        <div class="notify__time">2 分钟前</div>
+      </div>
+    </div>
+    <div class="notify" data-unread="true">
+      <div style="min-width:0">
+        <div class="notify__title"><span class="dot dot--accent"></span>插件更新可用</div>
+        <div class="notify__body">tool-shell 1.2.0 → 1.3.0；停用后重载即生效，旧版本保留可回退。</div>
+        <div class="notify__time">1 小时前</div>
+      </div>
+    </div>
+    <div class="notify" data-unread="false">
+      <div style="min-width:0">
+        <div class="notify__title"><span class="dot dot--accent"></span>上下文已压缩</div>
+        <div class="notify__body">分层摘要替代早期对话，节省 ≈51.2K token；可在会话内撤销。</div>
+        <div class="notify__time">昨天 18:04</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================================
+     命令面板（S5）
+     ====================================================================== -->
+<div class="overlay" id="overlayPalette">
+  <div class="palette" role="dialog" aria-modal="true" aria-label="命令面板">
+    <div class="palette__search">
+      <svg class="glyph" aria-hidden="true"><use href="#i-search"/></svg>
+      <input class="palette__input" id="paletteInput" type="text" placeholder="搜索会话、页面、设置或命令…" aria-label="搜索会话、页面、设置或命令">
+      <span class="keycap">Esc</span>
+    </div>
+    <div class="palette__results scroll-y" id="paletteResults">
+      <div class="palette__group-label">会话</div>
+      <button class="menu-item" type="button" data-palette-item><span>重构工具卡折叠逻辑</span><span class="menu-item__hint">当前会话</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>UI 视觉抛光走查</span><span class="menu-item__hint">今天 11:20</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>上下文压缩阈值怎么定</span><span class="menu-item__hint">昨天</span></button>
+
+      <div class="palette__group-label">页面</div>
+      <button class="menu-item" type="button" data-palette-item><span>对话</span><span class="menu-item__hint">视图 1</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>插件</span><span class="menu-item__hint">视图 2</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>记忆</span><span class="menu-item__hint">视图 3</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>设置</span><span class="menu-item__hint">视图 4</span></button>
+
+      <div class="palette__group-label">设置</div>
+      <button class="menu-item" type="button" data-palette-item><span>外观 · 主题与明暗</span><span class="menu-item__hint">设置 / 外观</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>上下文 · 窗口与阈值</span><span class="menu-item__hint">设置 / 上下文</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>模型 · 预设与窗口</span><span class="menu-item__hint">设置 / 模型</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>工具 · 超时与沙箱</span><span class="menu-item__hint">设置 / 工具</span></button>
+
+      <div class="palette__group-label">命令</div>
+      <button class="menu-item" type="button" data-palette-item><span>新建会话</span><span class="keycap">Ctrl N</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>切换工作面板</span><span class="keycap">Ctrl B</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>切换明暗主题</span><span class="keycap">Ctrl ⇧ L</span></button>
+      <button class="menu-item" type="button" data-palette-item><span>搜索工具</span><span class="keycap">Ctrl K</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================================
+     批量卸载二次确认（S12）—— §五：唯一还带遮罩的 Modal
+     「不答就不能做别的事」只有它满足：名单 / 数量 / 破坏范围一次说清
+     ====================================================================== -->
+<div class="overlay" id="overlayConfirm">
+  <div class="dialog dialog--confirm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="dialog__head">
+      <svg class="glyph" aria-hidden="true"><use href="#i-warn"/></svg>
+      <div class="dialog__titles">
+        <div class="dialog__title" id="confirmTitle">确认卸载 3 个插件？</div>
+        <div class="dialog__sub">卸载会移除它们的工具与中间件；会话里的历史调用记录保留，但工具将不再可用。旧版本产物保留在 plugins/ 下，可回装。</div>
+      </div>
+    </div>
+    <div class="dialog__body">
+      <div>
+        <div class="dialog__label">将卸载（3）</div>
+        <div class="confirm-list">
+          <div class="confirm-list__row"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-plug"/></svg>Git 透镜<span class="confirm-list__id">tool-git · 2 个工具</span></div>
+          <div class="confirm-list__row"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-plug"/></svg>依赖审计<span class="confirm-list__id">mw-audit · 1 个中间件</span></div>
+          <div class="confirm-list__row"><svg class="glyph glyph--12" aria-hidden="true"><use href="#i-plug"/></svg>网页抓取<span class="confirm-list__id">tool-fetch · 1 个工具</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="dialog__label">影响范围</div>
+        <div class="row-card__detail">3 个插件的全部工具会立即从候选池移除；正在运行的一轮不受影响，下一轮起生效。</div>
+      </div>
+    </div>
+    <div class="dialog__foot">
+      <button class="btn btn-ghost" type="button" data-confirm="cancel">取消</button>
+      <button class="btn btn-primary" type="button" data-confirm="uninstall">确认卸载</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================================
+     原型切换器：原型自身的壳（虚线轮廓 + 原型标签），不是产品 UI
+     收起态是一枚小胶囊（不与输入卡重叠）；点开后列出全部状态与明暗切换
+     ====================================================================== -->
+<div class="proto" id="proto">
+  <div class="proto__panel" role="group" aria-label="原型状态切换">
+    <div class="proto__head">
+      <span class="proto__tag">原型</span>
+      <span>状态切换</span>
+      <span id="protoCount" style="margin-left:auto;color:var(--lw-ink-4)">14 个状态</span>
+    </div>
+    <div class="proto__grid" id="protoGrid"></div>
+    <div class="proto__foot">
+      <span class="proto__foot-label">外观</span>
+      <div class="segmented" role="group" aria-label="明暗主题">
+        <button class="segmented__item" type="button" data-theme="light" aria-selected="true">浅色</button>
+        <button class="segmented__item" type="button" data-theme="dark" aria-selected="false">深色</button>
+      </div>
+    </div>
+    <div class="proto__note">S9「扩展」目的地页属后续批次，此处只证明壳层能整页接管。本页为静态原型：产品内的动作（发送、删除等）不产生真实行为，状态与展开/浮层均可用。</div>
+  </div>
+  <button class="proto__pill" id="protoPill" type="button" aria-expanded="false">
+    <span class="proto__tag">原型</span>
+    <span class="proto__current" id="protoCurrent">S2 对话中</span>
+    <svg class="glyph glyph--12" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+  </button>
+</div>
+
+<script src="js/prototype.js"></script>
+</body>
+</html>

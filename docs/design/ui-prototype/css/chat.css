@@ -1,0 +1,907 @@
+/* ===========================================================================
+ * chat.css — 会话主区：转录、过程组、工具行、子 Agent 卡、输入区
+ *
+ * 目录：1 滚动区与列 / 2 首页空态 / 3 消息 / 4 助手 markdown / 5 轮次过程组
+ *      6 思考行 / 7 工具行 / 8 活动组 / 9 子 Agent 卡 / 10 通知与错误
+ *      11 输入区 composer
+ * =========================================================================== */
+
+/* ===========================================================================
+ * 1. 滚动区与列
+ * =========================================================================== */
+.scroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
+  padding: var(--lw-toolbar-h) 24px 0;
+  /* 底部渐隐：内容浮到输入卡下方时淡出（遮罩盖住输入卡预留区） */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 168px),
+    rgb(0 0 0/.25) calc(100% - 128px),
+    transparent calc(100% - 100px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 168px),
+    rgb(0 0 0/.25) calc(100% - 128px),
+    transparent calc(100% - 100px)
+  );
+}
+
+.column {
+  width: min(100%, var(--lw-content-max));
+  margin-inline: auto;
+  padding-bottom: 180px;
+}
+
+/* ===========================================================================
+ * 2. 首页空态
+ * =========================================================================== */
+.home {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-height: calc(100vh - var(--lw-toolbar-h) - 200px);
+}
+
+html[data-state="s1"] .home { display: flex; }
+
+html[data-state="s1"] .transcript { display: none; }
+
+.home__mascot {
+  color: var(--lw-ink-1);
+  width: 72px;
+  height: 72px;
+}
+
+.home__title {
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--lw-ink-1);
+  text-align: center;
+}
+
+/* ===========================================================================
+ * 3. 消息
+ * =========================================================================== */
+.msg {
+  padding: 12px 0;
+}
+
+.msg__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
+.msg:hover .msg__actions,
+.msg:focus-within .msg__actions { opacity: 1; }
+
+.msg__time {
+  font-size: 11px;
+  color: var(--lw-ink-4);
+  margin-left: 4px;
+}
+
+.copy-btn {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lw-r-2xs);
+  color: var(--lw-ink-4);
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.copy-btn:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+/* --- 3.1 用户消息（右对齐气泡） ----------------------------------------- */
+.msg-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.msg-user__bubble {
+  width: fit-content;
+  max-width: min(82%, 600px);
+  border-radius: var(--lw-r-lg-plus);
+  padding: 10px 14px;
+  background: var(--lw-wash-1);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* --- 3.2 助手消息（不是气泡，整列宽） ----------------------------------- */
+.msg-assistant {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--lw-ink-1);
+}
+
+/* ===========================================================================
+ * 4. 助手 markdown 渲染
+ * =========================================================================== */
+.md p {
+  margin: 0 0 12px;
+}
+
+.md > :last-child { margin-bottom: 0; }
+
+.md ul {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.md li {
+  margin-bottom: 4px;
+}
+
+.md strong { font-weight: 560; }
+
+.md a { color: var(--lw-ink-1); text-decoration: underline; text-underline-offset: 2px; }
+
+.md code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--lw-wash-2);
+  border-radius: var(--lw-r-2xs);
+  padding: 1px 5px;
+}
+
+.code-block {
+  margin: 12px 0;
+  border-radius: var(--lw-r-md);
+  background: var(--lw-bg-inset);
+  overflow: hidden;
+}
+
+.code-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 8px 0 12px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-4);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0 12px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--lw-ink-2);
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 12.5px;
+}
+
+.md-table th {
+  background: var(--lw-wash-1);
+  font-weight: 520;
+  color: var(--lw-ink-2);
+  text-align: left;
+}
+
+.md-table th,
+.md-table td {
+  padding: 8px 12px;
+  vertical-align: top;
+}
+
+.md-table tbody td { border-top: 1px solid var(--lw-line-subtle); }
+
+.md-table td:first-child { color: var(--lw-ink-1); }
+
+/* ===========================================================================
+ * 5. 轮次过程组
+ * =========================================================================== */
+.turn {
+  padding: 4px 0 10px;
+}
+
+/* 所有可折叠行的公共形态：hover 填充向列外溢 3px，右侧 chevron 只换字形 */
+.cv-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* <button> 的 width:auto 是 shrink-to-fit，会按内容撑开而不吃父宽——
+     显式给足宽度（含两侧各 3px 外溢）后，内部 flex 项才会正常收缩 */
+  width: calc(100% + 6px);
+  margin-inline: -3px;
+  padding: 5px 7px;
+  border-radius: var(--lw-r-xs);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--lw-ink-2);
+  text-align: left;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.cv-head:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+.cv-head__label {
+  color: var(--lw-ink-1);
+  font-weight: 500;
+}
+
+.cv-head__meta { color: var(--lw-ink-3); }
+
+.cv-head__chev {
+  color: var(--lw-ink-4);
+  margin-left: auto;
+}
+
+.cv-head[aria-expanded="true"] .cv-head__chev--collapsed,
+.cv-head[aria-expanded="false"] .cv-head__chev--expanded { display: none; }
+
+.turn__body {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--lw-line-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+}
+
+/* ===========================================================================
+ * 6. 思考行
+ * =========================================================================== */
+.thinking__header {
+  font-size: 12.5px;
+}
+
+.thinking__label {
+  color: var(--lw-ink-1);
+  font-weight: 500;
+}
+
+.thinking__clip {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--lw-ink-2);
+}
+
+.thinking__body {
+  margin: 4px 0 6px;
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-wash-1);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--lw-ink-2);
+  white-space: pre-wrap;
+}
+
+/* ===========================================================================
+ * 7. 工具行
+ * =========================================================================== */
+.tool__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tool__toggle {
+  /* basis 0 才能被兄弟（复制按钮）挤住；min-width:0 让参数摘要真正省略 */
+  flex: 1 1 0%;
+  width: auto;
+  min-width: 0;
+  font-size: 13px;
+  margin-inline: -3px 0;
+}
+
+.tool__icon { color: var(--lw-ink-3); }
+
+.tool:hover .tool__icon { color: var(--lw-ink-2); }
+
+.tool__name {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--lw-ink-1);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-args {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--lw-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--lw-ink-3);
+}
+
+.tool__status--ok { color: var(--lw-ink-2); }
+.tool__status--fail { color: var(--lw-danger); }
+
+.tool__copy { opacity: 0; }
+.tool:hover .tool__copy,
+.tool:focus-within .tool__copy { opacity: 1; }
+
+.tool__detail {
+  margin: 6px 0 8px;
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-bg-inset);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tool__label {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-4);
+  margin-bottom: 4px;
+}
+
+.tool__detail pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--lw-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.tool__detail pre.is-error { color: var(--lw-danger); }
+
+/* ===========================================================================
+ * 8. 活动组
+ * =========================================================================== */
+.activity__header { font-size: 13px; }
+
+.activity__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 20px;
+  margin: 2px 0 4px;
+}
+
+.activity__body .tool__toggle { margin-inline: 0; }
+
+/* ===========================================================================
+ * 9. 子 Agent 卡
+ * =========================================================================== */
+.subagent {
+  margin: 6px 0;
+  border: 1px solid var(--lw-line-subtle);
+  border-radius: var(--lw-r-md-plus);
+  background: var(--lw-wash-1);
+  padding: 12px 14px;
+}
+
+.subagent__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--lw-ink-2);
+}
+
+.subagent__head b {
+  font-weight: 520;
+  color: var(--lw-ink-1);
+}
+
+.subagent__graph {
+  display: flex;
+  align-items: stretch;
+  margin-top: 12px;
+}
+
+.node {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: var(--lw-r-md);
+  background: var(--lw-raised);
+  box-shadow: var(--lw-elevation);
+  padding: 10px 12px;
+}
+
+.node__title {
+  font-size: 12.5px;
+  font-weight: 520;
+  line-height: 1.3;
+  color: var(--lw-ink-1);
+}
+
+.node__sub {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--lw-ink-3);
+}
+
+.node__tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.node__tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--lw-ink-3);
+}
+
+.node__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--lw-ink-3);
+}
+
+.node__foot .node__model { margin-right: auto; }
+
+/* 连接线：两端各一个小圆点 */
+.connector {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 28px;
+  height: 1px;
+  background: var(--lw-line-strong);
+  position: relative;
+}
+
+.connector::before,
+.connector::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-line-strong);
+}
+
+.connector::before { left: -1px; }
+.connector::after { right: -1px; }
+
+/* ===========================================================================
+ * 10. 系统通知与错误行
+ * =========================================================================== */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 85%;
+  margin: 10px auto;
+  border-radius: var(--lw-r-sm);
+  border: 1px solid var(--lw-line);
+  background: color-mix(in oklab, var(--lw-bg-secondary) 60%, transparent);
+  padding: 6px 16px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--lw-ink-3);
+  animation: lw-notice-in var(--motion-normal) var(--ease-out) both;
+}
+
+.notice__text { min-width: 0; }
+
+.notice__acts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.notice__act {
+  border-radius: var(--lw-r-full);
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--lw-ink-2);
+  background: var(--lw-wash-2);
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.notice__act:hover {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-1);
+}
+
+.error-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  border-radius: var(--lw-r-sm);
+  border: 1px solid color-mix(in oklab, var(--lw-danger) 30%, transparent);
+  background: color-mix(in oklab, var(--lw-danger) 8%, transparent);
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--lw-danger);
+}
+
+/* ===========================================================================
+ * 11. 输入区 composer
+ * =========================================================================== */
+.composer-dock {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 0 24px 16px;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.composer {
+  position: relative;
+  width: min(100%, var(--lw-content-max));
+  margin-inline: auto;
+  border-radius: var(--lw-r-xl);
+  background: var(--lw-bg-composer);
+  box-shadow: var(--lw-shadow-composer);
+  pointer-events: auto;
+}
+
+.composer__input {
+  display: block;
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: none;
+  resize: none;
+  overflow-y: auto;
+  border-radius: var(--lw-r-xl) var(--lw-r-xl) 0 0;
+  padding: 12px 14px 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  max-height: 180px;
+}
+
+.composer__input::placeholder { color: var(--lw-ink-4); }
+
+.composer__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+/* 左组固定不缩；右组可缩——窄窗口下先压模型 chip 的文字，而不是溢出卡片 */
+.composer__left,
+.composer__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.composer__left { flex: 0 0 auto; }
+
+.composer__right {
+  flex: 0 1 auto;
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+/* 固定尺寸控件不参与压缩 */
+.composer__right .icon-btn,
+.composer__right .send-btn,
+.composer__right .ring-btn { flex: 0 0 auto; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 4px 10px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-wash-2);
+  font-size: 12.5px;
+  line-height: 1.2;
+  color: var(--lw-ink-2);
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-1);
+}
+
+.chip .glyph { color: var(--lw-ink-3); }
+
+.chip--model {
+  flex: 0 1 auto;
+  font-size: 12.5px;
+  color: var(--lw-ink-2);
+  max-width: 260px;
+}
+
+.chip--model .chip__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ring-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--lw-ctl);
+  padding: 0 8px;
+  border-radius: var(--lw-r-full);
+  color: var(--lw-ink-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.ring-btn:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+.ring-btn .ring__track { stroke: var(--lw-line-strong); }
+.ring-btn .ring__value { stroke: var(--lw-ink-2); }
+
+.send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--lw-r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--lw-accent);
+  color: var(--lw-accent-ink);
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.send-btn:hover { background: var(--lw-accent-hover); }
+
+.send-btn:active { transform: scale(.96); }
+
+.send-btn:disabled {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-4);
+  cursor: default;
+}
+
+/* 送信图标与停止方块按状态互换（S1 idle+disabled / 其余 = 流式中） */
+.send-btn .glyph-send-up { display: none; }
+
+html[data-state="s1"] .send-btn .glyph-stop { display: none; }
+
+html[data-state="s1"] .send-btn .glyph-send-up { display: block; }
+
+/* ===========================================================================
+ * 12. 审批决策卡（§3.17）：转录流里的内联卡，不是弹窗
+ * =========================================================================== */
+.permission {
+  width: min(100%, var(--lw-content-max));
+  margin: 10px 0;
+  padding: 14px 16px;
+  border-radius: var(--lw-r-md);
+  /* 平面内无边框：风险只靠染底 + 胶囊表达 */
+  background: var(--lw-wash-1);
+}
+
+.permission[data-risk="high"] {
+  background: color-mix(in oklab, var(--lw-danger) 7%, transparent);
+}
+
+.permission[data-risk="medium"] {
+  background: color-mix(in oklab, var(--lw-warn) 7%, transparent);
+}
+
+.permission__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.permission__title {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--lw-ink-1);
+}
+
+.permission__queue {
+  font-size: 10.5px;
+  color: var(--lw-ink-3);
+  flex: 0 0 auto;
+}
+
+.permission__pill {
+  flex: 0 0 auto;
+  border-radius: var(--lw-r-full);
+  padding: 2px 7px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-2);
+}
+
+.permission[data-risk="high"] .permission__pill {
+  background: color-mix(in oklab, var(--lw-danger) 14%, transparent);
+  color: var(--lw-danger);
+}
+
+.permission[data-risk="medium"] .permission__pill {
+  background: color-mix(in oklab, var(--lw-warn) 14%, transparent);
+  color: var(--lw-warn);
+}
+
+.permission__ask {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--lw-ink-2);
+}
+
+.permission__ask b {
+  font-family: var(--font-mono);
+  font-weight: 520;
+  color: var(--lw-ink-1);
+}
+
+.permission__reason {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--lw-ink-3);
+}
+
+.permission__args { margin-top: 10px; }
+
+.permission__args-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.permission__label {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-4);
+}
+
+.permission__args-head .copy-btn { margin-left: auto; }
+
+.permission__well {
+  margin: 0;
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-bg-inset);
+  padding: 10px 12px;
+  max-height: 240px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--lw-ink-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.permission__well .permission__cmd { color: var(--lw-ink-1); }
+.permission__well .permission__flag { color: var(--lw-ink-4); }
+
+.permission__meta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--lw-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission__acts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.permission__timeout {
+  font-size: 10.5px;
+  color: var(--lw-ink-4);
+}
+
+.permission__btns {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ===========================================================================
+ * 13. 写/编辑类工具行的变更统计（§3.8）
+ * =========================================================================== */
+.tool__diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.tool__diff .tool__add { color: var(--lw-ok); }
+.tool__diff .tool__del { color: var(--lw-danger); }
+.tool__diff .tool__size { color: var(--lw-ink-4); }
+
+/* 子 Agent 转录页内的嵌套行不加左侧额外缩进（复用同一套行语法） */
+.subagent-transcript .activity__body { padding-left: 14px; }

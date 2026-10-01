@@ -1,0 +1,902 @@
+/* ===========================================================================
+ * shell.css — 应用外壳 + 通用组件层
+ *
+ * 目录：1 组件层 / 2 外壳骨架 / 3 侧栏 / 4 会话顶栏 / 5 工作面板
+ *      6 窗口控制 / 7 非对话目的地页
+ * 纪律：平面内用 wash 表达层次，1px 边框只出现在浮层；无品牌彩色。
+ * =========================================================================== */
+
+/* ===========================================================================
+ * 1. 组件层
+ * =========================================================================== */
+
+/* --- 1.1 按钮 ------------------------------------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--lw-r-sm);
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.btn:active { transform: scale(.98); }
+
+.btn-primary {
+  background: var(--lw-accent);
+  color: var(--lw-accent-ink);
+}
+
+.btn-primary:hover { background: var(--lw-accent-hover); }
+
+.btn-secondary {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+.btn-secondary:hover { background: var(--lw-wash-3); }
+
+.btn-ghost { color: var(--lw-ink-2); }
+
+.btn-ghost:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+/* --- 1.2 图标按钮 -------------------------------------------------------- */
+.icon-btn {
+  width: var(--lw-ctl);
+  height: var(--lw-ctl);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lw-r-md);
+  color: var(--lw-ink-2);
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.icon-btn:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+.icon-btn:active { transform: scale(.96); }
+
+.icon-btn--round { border-radius: var(--lw-r-full); }
+
+.icon-btn--20 {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--lw-r-2xs);
+}
+
+.icon-btn[aria-pressed="true"] {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-1);
+}
+
+/* 顶层动作组：两个 28px 图标按钮装在一个 12px 圆角的 wash 容器里 */
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--lw-r-md);
+  background: var(--lw-wash-1);
+}
+
+/* --- 1.3 徽章 ------------------------------------------------------------ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--lw-r-full);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-2);
+}
+
+.badge--ok {
+  background: color-mix(in oklab, var(--lw-ok) 16%, transparent);
+  color: var(--lw-ok);
+}
+
+.badge--warn {
+  background: color-mix(in oklab, var(--lw-warn) 16%, transparent);
+  color: var(--lw-warn);
+}
+
+.badge--danger {
+  background: color-mix(in oklab, var(--lw-danger) 16%, transparent);
+  color: var(--lw-danger);
+}
+
+.badge--purple {
+  background: color-mix(in oklab, var(--lw-purple) 16%, transparent);
+  color: var(--lw-purple);
+}
+
+.badge--micro {
+  font-size: 10.5px;
+  padding: 1px 6px;
+}
+
+/* --- 1.4 字段 ------------------------------------------------------------ */
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border-radius: var(--lw-r-sm);
+  padding: 9px 11px;
+  min-height: var(--lw-field-h);
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+  font-size: 13px;
+  transition: background var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font-size: 13px;
+}
+
+.field input::placeholder { color: var(--lw-ink-4); }
+
+.field:focus-within {
+  background: var(--lw-raised);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--lw-accent) 22%, transparent);
+}
+
+/* --- 1.5 开关 ------------------------------------------------------------ */
+.toggle {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-wash-3);
+  box-shadow: inset 0 0 0 1px var(--lw-line-strong);
+  flex: 0 0 auto;
+  transition: background var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-gray-300);
+  transition: transform var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
+}
+
+:root[data-theme="light"] .toggle::after { background: var(--lw-gray-0); }
+
+.toggle[aria-checked="true"] {
+  background: var(--lw-accent);
+  box-shadow: none;
+}
+
+.toggle[aria-checked="true"]::after {
+  transform: translateX(12px);
+  background: var(--lw-accent-ink);
+}
+
+/* --- 1.6 分段控件 -------------------------------------------------------- */
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-wash-2);
+}
+
+.segmented__item {
+  border-radius: var(--lw-r-full);
+  padding: 5px 12px;
+  font-size: 12.5px;
+  line-height: 1.2;
+  color: var(--lw-ink-2);
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.segmented__item:hover { color: var(--lw-ink-1); }
+
+.segmented__item[aria-selected="true"] {
+  background: var(--lw-raised);
+  color: var(--lw-ink-1);
+  box-shadow: var(--lw-shadow-raised);
+}
+
+/* --- 1.7 行卡 ------------------------------------------------------------ */
+.row-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-radius: var(--lw-r-md-plus);
+  background: var(--lw-wash-1);
+  padding: 14px 16px;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.row-card:hover { background: var(--lw-wash-2); }
+
+.row-card__title {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.row-card__detail {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--lw-ink-2);
+}
+
+.row-card__ctrl {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- 1.8 浮层容器（菜单 / 弹窗 / popover 是唯一允许 1px 边框的地方） ----- */
+.popover {
+  border-radius: var(--lw-r-md-plus);
+  background: var(--lw-bg-elevated);
+  border: 1px solid var(--lw-line-subtle);
+  box-shadow: var(--lw-shadow-dialog);
+  backdrop-filter: blur(12px);
+  padding: 5px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border-radius: var(--lw-r-sm);
+  padding: 7px 8px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--lw-ink-1);
+  text-align: left;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.menu-item:hover,
+.menu-item[aria-selected="true"] { background: var(--lw-wash-2); }
+
+.menu-item__hint {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--lw-ink-4);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--lw-line-subtle);
+}
+
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--lw-r-3xs);
+  background: var(--lw-wash-2);
+  box-shadow: var(--lw-elevation);
+  font-size: 10.5px;
+  font-weight: 520;
+  color: var(--lw-ink-3);
+}
+
+.tooltip {
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-raised);
+  box-shadow: var(--lw-shadow-raised);
+  padding: 3px 7px;
+  font-size: 11px;
+  color: var(--lw-ink-2);
+}
+
+/* --- 1.9 状态点 ---------------------------------------------------------- */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--lw-r-full);
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.dot--ok { background: var(--lw-ok); color: var(--lw-ok); }
+.dot--warn { background: var(--lw-warn); color: var(--lw-warn); }
+.dot--danger { background: var(--lw-danger); color: var(--lw-danger); }
+.dot--accent { background: var(--lw-accent); color: var(--lw-accent); }
+
+/* 唯一的常驻动画：运行中脉冲点（1s 无限，减动效降到 0.01ms） */
+.dot--pulse {
+  background: var(--lw-info);
+  color: var(--lw-info);
+  animation: lw-pulse 1s infinite;
+}
+
+/* ===========================================================================
+ * 2. 外壳骨架
+ * =========================================================================== */
+.app-shell {
+  display: flex;
+  height: 100vh;
+  background: var(--lw-bg);
+  isolation: isolate;
+}
+
+/* 三个区域各自拥有 46px 头部，合起来是一条贯穿窗口的带 */
+.band {
+  height: var(--lw-toolbar-h);
+  flex: 0 0 var(--lw-toolbar-h);
+  display: flex;
+  align-items: center;
+}
+
+/* ===========================================================================
+ * 3. 侧栏
+ * =========================================================================== */
+.sidebar {
+  width: var(--lw-sidebar-w);
+  flex: 0 0 auto;
+  background: var(--lw-bg-side);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: width var(--motion-fast) var(--ease-out);
+}
+
+/* 折叠 = 0 宽；子元素固定为记住的宽度，动画期间内容只是被裁掉，不重排挤压 */
+/* 折叠 = 0 宽；子元素固定为记住的宽度（各自的 flex 仍由自身规则决定），
+   动画期间内容只是被裁掉，不重排挤压 */
+.sidebar__header,
+.sidebar__body,
+.sidebar__footer { width: var(--lw-sidebar-w); }
+
+html.is-sidebar-collapsed .sidebar { width: 0; }
+
+/* --- 3.0 侧栏拖拽柄（§2.3）：嵌在右缘，可见提示是 2×32 圆角条 --------- */
+.sidebar__grip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 20;
+  cursor: col-resize;
+  touch-action: none;
+  background: none;
+  border: 0;
+}
+
+/* 折叠态没有可抓的边（展开走顶栏按钮） */
+html.is-sidebar-collapsed .sidebar__grip { display: none; }
+
+.sidebar__grip::after,
+.workpanel__grip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 32px;
+  border-radius: var(--lw-r-full);
+  background: color-mix(in oklab, var(--lw-ink-1) 20%, transparent);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
+}
+
+.sidebar__grip:hover::after,
+.sidebar__grip:focus-visible::after,
+.sidebar__grip:active::after,
+.workpanel__grip:hover::after,
+.workpanel__grip:focus-visible::after,
+.workpanel__grip:active::after,
+html[data-sidebar-resizing="true"] .sidebar__grip::after,
+html[data-work-panel-resizing="true"] .workpanel__grip::after { opacity: 1; }
+
+.sidebar__grip:focus-visible::after,
+.workpanel__grip:focus-visible::after,
+html[data-sidebar-resizing="true"] .sidebar__grip::after,
+html[data-work-panel-resizing="true"] .workpanel__grip::after {
+  background: var(--lw-accent);
+}
+
+/* 圆角条本身就是焦点提示，不画外框（§2.3 / §2.5） */
+.sidebar__grip:focus-visible,
+.workpanel__grip:focus-visible { outline: none; }
+
+/* 拖拽中：全局列宽光标 + 禁止选中（拖过正文不该选到文字） */
+html[data-sidebar-resizing="true"],
+html[data-sidebar-resizing="true"] *,
+html[data-work-panel-resizing="true"],
+html[data-work-panel-resizing="true"] * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.sidebar__header {
+  height: var(--lw-toolbar-h);
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--lw-ink-1);
+}
+
+.sidebar__brand-name {
+  font-size: 13.5px;
+  font-weight: 560;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.sidebar__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+}
+
+.sidebar__footer {
+  height: var(--lw-toolbar-h);
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebar__version {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--lw-ink-4);
+}
+
+/* --- 3.1 分区与分组标题 -------------------------------------------------- */
+.side-label {
+  padding: 14px 8px 4px;
+  font-size: 12px;
+  color: var(--lw-ink-4);
+}
+
+.group-row {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border-radius: var(--lw-r-xs);
+  padding: 0 8px;
+  color: var(--lw-ink-2);
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.group-row:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+.group-row__name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bucket-label {
+  padding: 6px 8px 4px 28px;
+  font-size: 11.5px;
+  color: var(--lw-ink-4);
+}
+
+/* --- 3.2 会话行 ---------------------------------------------------------- */
+.session-row {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: var(--lw-r-xs);
+  padding: 0 4px 0 8px;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.session-row:hover { background: var(--lw-wash-2); }
+
+.session-row[data-selected="true"] { background: var(--lw-wash-3); }
+
+.session-row--in-project { padding-left: 28px; }
+
+.session-row__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.session-row__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--lw-ink-2);
+}
+
+.session-row[data-selected="true"] .session-row__title,
+.session-row:hover .session-row__title { color: var(--lw-ink-1); }
+
+.session-row__more {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lw-r-2xs);
+  color: var(--lw-ink-4);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.session-row:hover .session-row__more,
+.session-row:focus-within .session-row__more { opacity: 1; }
+
+.session-row__more:hover {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-1);
+}
+
+/* ===========================================================================
+ * 4. 会话顶栏（无独立标题栏，它就是 46px 带的中段）
+ * =========================================================================== */
+.main-pane {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--lw-bg);
+}
+
+html[data-state="s9"] .main-pane,
+html[data-state="s9"] .workpanel { display: none; }
+
+.topbar {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  height: var(--lw-toolbar-h);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--lw-bg);
+  z-index: 10;
+}
+
+/* 折叠按钮的零宽前导槽：展开时宽度 0，标题不会跳位 */
+.topbar__lead {
+  width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  transition: width var(--motion-fast) var(--ease-out);
+}
+
+html.is-sidebar-collapsed .topbar__lead { width: var(--lw-ctl); }
+
+.topbar__lead .icon-btn { display: none; }
+
+html.is-sidebar-collapsed .topbar__lead .icon-btn { display: inline-flex; }
+
+.topbar__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar__actions {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: var(--lw-wincontrols);
+  transition: padding-right var(--motion-fast) var(--ease-out);
+}
+
+/* 工作面板打开时，46px 带右端由面板头接管窗口控制车道 */
+html.is-panel-open .topbar__actions { padding-right: 0; }
+
+/* ===========================================================================
+ * 5. 工作面板
+ * =========================================================================== */
+.workpanel {
+  display: none;
+  flex: 0 0 var(--lw-panel-w);
+  width: var(--lw-panel-w);
+  position: relative;
+  background: var(--lw-bg-dock);
+  flex-direction: column;
+  /* 不裁切：左侧 10px 拖拽柄压在面板外沿（§2.5） */
+  overflow: visible;
+}
+html.is-panel-open .workpanel { display: flex; }
+
+/* 最大化：整条 46px 带归它，主面板让位 */
+html.is-panel-max .main-pane { display: none; }
+
+html.is-panel-max .workpanel {
+  display: flex;
+  flex: 1 1 auto;
+  width: auto;
+}
+
+/* 拖拽柄（§2.5）：inset-block:0 / left:-5px / width:10px；可见提示见 3.0 的圆角条 */
+.workpanel__grip {
+  position: absolute;
+  inset-block: 0;
+  left: -5px;
+  width: 10px;
+  z-index: 30;
+  cursor: col-resize;
+  touch-action: none;
+  background: none;
+  border: 0;
+}
+
+.workpanel__header {
+  height: var(--lw-toolbar-h);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--lw-bg-dock);
+  /* 面板恒在窗口最右，46px 带右端的窗口控制车道由它自己留出 */
+  padding-right: var(--lw-wincontrols);
+}
+
+.workpanel__tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--lw-r-sm);
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--lw-ink-2);
+  background: var(--lw-wash-1);
+  max-width: 200px;
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.tab[aria-selected="true"] {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-1);
+}
+
+.tab__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab__close {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lw-r-2xs);
+  color: var(--lw-ink-4);
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.tab__close:hover {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-1);
+}
+
+.workpanel__spacer { flex: 1 1 auto; }
+
+.workpanel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px 16px;
+}
+
+/* ===========================================================================
+ * 6. 窗口控制（浮在 46px 带右端）
+ * =========================================================================== */
+.wincontrols {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: var(--lw-toolbar-h);
+  display: flex;
+  z-index: 80;
+}
+
+.wincontrols button {
+  width: 40px;
+  height: var(--lw-toolbar-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lw-ink-2);
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.wincontrols button:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+/* ===========================================================================
+ * 7. 非对话目的地页（S9：整页接管主面板右侧区域）
+ * =========================================================================== */
+.dest-page {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--lw-bg);
+  overflow-y: auto;
+}
+
+html[data-state="s9"] .dest-page { display: block; }
+
+.dest-page__inner {
+  width: min(100%, 980px);
+  margin-inline: auto;
+  padding: var(--lw-toolbar-h) 24px 40px;
+  padding-right: calc(var(--lw-wincontrols) + 24px);
+}
+
+.dest-page__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 18px;
+}
+
+.dest-page__title {
+  font-size: 20px;
+  font-weight: 560;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-right: auto;
+}
+
+.dest-page__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dest-page__search { width: 240px; }
+
+.dest-page__tabs { margin-bottom: 14px; }
+
+.dest-page__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plugin-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lw-r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-2);
+  flex: 0 0 auto;
+}
+
+.row-card__lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.row-card__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.row-card__id {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--lw-ink-3);
+}
+
+.row-card__more {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--lw-ink-3);
+}
