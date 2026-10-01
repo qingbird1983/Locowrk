@@ -81,6 +81,7 @@ export default {
     always: "always passthrough ({n})",
     sessionHot: "Used this session ({n})",
     globalHot: "Globally hot ({n})",
+    retrieved: "Semantically retrieved ({n})",
     saved: "Context saved: ~{n} tokens",
   },
   memory: {
@@ -97,6 +98,10 @@ export default {
     cancel: "Cancel",
     clearAll: "Clear all memories",
     clearConfirm: "Click again to confirm",
+    experienceTitle: "Experiences",
+    experienceEmpty: "No experiences yet. Turn on \"auto-extract memories\" and each turn will leave a semantically searchable summary.",
+    experienceClear: "Clear all experiences",
+    experienceSession: "session {id}…",
     time: {
       just_now: "just now",
       minutes: "{n} min ago",
@@ -196,6 +201,9 @@ export default {
     memoryEnabled: "Inject memories automatically",
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
+    memoryAutoExtract: "Auto-extract memories after conversations (implicit)",
+    memoryAutoExtractHint:
+      "Off by default. When enabled, each finished turn asynchronously extracts durable facts (badged \"auto-extracted\") and an experience summary (below on the Memory page); experiences also require a configured embedding model.",
     // S1 shell governance section
     shellTitle: "Shell",
     shellHint:
@@ -213,6 +221,24 @@ export default {
       "1–200, default 20; always-exposure tools and the search_tools meta-tool are never cut.",
     callTimeout: "Per-call tool timeout (seconds)",
     callTimeoutHint: "Host-enforced cap, applies immediately (5-3600 s).",
+    embeddingTitle: "Embedding model (semantic search)",
+    embeddingHint:
+      "Shared vector model for tool semantic search, experiences and implicit extraction. Leave empty = smart layer absent (auto degrade: tool search falls back to keywords, no experiences); chat is unaffected.",
+    embeddingModel: "Model name",
+    embeddingBaseUrl: "API endpoint",
+    embeddingBaseUrlHint: "OpenAI-compatible /v1/embeddings; empty falls back to localhost:11434 for Ollama, otherwise the main model endpoint.",
+    embeddingBaseUrlPlaceholder: "http://localhost:11434",
+    embeddingApiKey: "API Key (for cloud embeddings)",
+    embeddingApiKeyPlaceholder: "Leave empty for local Ollama",
+    embeddingDetect: "Detect",
+    embeddingProbing: "Probing…",
+    embeddingDim: "Reachable, vector dim {n}",
+    embeddingDetectFail: "Detect failed:",
+    pluginsTitle: "Plugins",
+    pluginsHint: "Idle auto-disable — never automatic by default (prompt only); enabling means you accept background disabling.",
+    autoDisableDays: "Auto-disable after (days)",
+    autoDisableDaysHint:
+      "0 = off (default); 7-365 days. Applies to installed third-party plugins only (built-ins excluded); disabling the switch never re-enables plugins.",
     // ⑨ Context management section (real section, replaces shell placeholder)
     contextTitle: "Context management",
     contextHint:

@@ -5,8 +5,10 @@ import { getSettings, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
 import type {
   ContextUpdate,
+  EmbeddingUpdate,
   LlmUpdate,
   MemoryUpdate,
+  PluginsUpdate,
   SettingsView,
   ShellUpdate,
   ToolsUpdate,
@@ -118,6 +120,40 @@ export const useSettingsStore = defineStore("settings", {
       this.savedFlash = false;
       try {
         this.view = await setSettings({ tools });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
+    /** 保存 embedding 区（⑬）：后端热重建共享客户端，检索/经历/提取
+     * 随即生效。空串字段语义 = 清除。 */
+    async saveEmbedding(embedding: EmbeddingUpdate) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ embedding });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
+    /** 保存插件管理区（⑬）：自动停用天数（0 = 关）。天数 > 0 时后端
+     * 保存即巡检一遍；关闭不复活已停用插件。 */
+    async savePlugins(plugins: PluginsUpdate) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ plugins });
         this.savedFlash = true;
         setTimeout(() => (this.savedFlash = false), 2000);
       } catch (e) {

@@ -69,7 +69,10 @@ pub fn load_all(
             continue;
         };
         if skip.contains(id) {
-            tracing::info!(plugin = id, "dev scan skipped (lockfile managed or disabled)");
+            tracing::info!(
+                plugin = id,
+                "dev scan skipped (lockfile managed or disabled)"
+            );
             continue;
         }
         let Some((ver, ver_dir)) = plugin_service::builtin::resolve_latest(&path) else {

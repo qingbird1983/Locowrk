@@ -32,6 +32,10 @@ pub struct ShellUpdate {
 impl crate::settings::SettingsStore {
     /// 后端专用：高危解锁开关（state.rs 插件加载前写 env 用）。
     pub(crate) fn shell_unlock_risky(&self) -> bool {
-        self.inner.lock().expect("settings poisoned").shell.unlock_risky
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .shell
+            .unlock_risky
     }
 }

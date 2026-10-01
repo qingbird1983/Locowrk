@@ -25,8 +25,9 @@ pub use kernel::{
 };
 pub use middleware::{
     Audit, AuditEntry, AuditSink, CircuitBreaker, CompactConfig, CompactStrategy,
-    CompactionOutcome, CtxCompact, ExposureSnapshot, GlobalEwma, JsonlAuditSink, MemoryEntry,
-    MemoryInject, MemoryInjectConfig, MemorySource, Middleware, Next, Retry, Timeout, ToolExposure,
-    ToolExposureConfig, Tracing, estimate_tokens, suggested_threshold,
+    CompactionOutcome, CtxCompact, EmbedPort, ExperienceEntry, ExperienceSource, ExposureSnapshot,
+    GlobalEwma, JsonlAuditSink, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource,
+    Middleware, Next, RETRIEVAL_WEIGHT, Retriever, Retry, Timeout, ToolExposure,
+    ToolExposureConfig, Tracing, cosine, estimate_tokens, suggested_threshold,
 };
 pub use waterfall::{RequestErrorPayload, RequestPayload, RetryBudget, points};

@@ -5,12 +5,14 @@
 //! ——先决定暴露多少工具，压缩才知道要保留多少空间（注册次序即执行次序，
 //! 组装点负责本件最先注册）。
 //!
-//! 打分（§5.3）：`1.0 × 会话内用过 + 0.7 × 全局 EWMA`（检索 0.5 归 ⑬
-//! 向量层；always 满分直通不占额度）。会话热度直接从 `payload.messages`
+//! 打分（§5.3）：`1.0 × 会话内用过 + 0.7 × 全局 EWMA + 0.5 × 语义相似`
+//! （always 满分直通不占额度）。会话热度直接从 `payload.messages`
 //! 实时数 `ToolResult`（§3.5"会话内统计不落盘"——投影日志就是会话事实，
 //! 无需会话句柄、无跨会话竞态）；全局热度经 [`GlobalEwma`] trait 由组装点
 //! 提供（desktop 读 usage.sqlite3，同 ApprovalResolver 的"内核定契约、
-//! 组装点实现"模式）。打分失败按 fail-open 放行全目录，不拦聊天。
+//! 组装点实现"模式）。检索信号（⑬，§4.2 层次 2）经 [`Retriever`]——
+//! embedding 未配置 = None，退回两层打分。打分失败按 fail-open 放行
+//! 全目录，不拦聊天。
 //!
 //! hidden 不在本监听器的考虑范围：⑩ 的 `list_tools` 已把它们剔出目录，
 //! 显式检索通路（search_tools 元工具）读全目录索引。
@@ -25,6 +27,7 @@ use serde::Serialize;
 use serde_json::Value;
 use session_store::Message;
 
+use super::tool_retrieval::{RETRIEVAL_WEIGHT, Retriever};
 use crate::waterfall::{RequestPayload, points};
 
 /// 会话内权重（§5.3：本会话用过 → 至少 +1.0，基本稳进）。
@@ -67,6 +70,9 @@ pub struct ExposureSnapshot {
     pub always: Vec<String>,
     pub session_hot: Vec<String>,
     pub global_hot: Vec<String>,
+    /// 靠检索信号（0.5 × 相似度）入选的工具（⑬ 语义层；embedding 未
+    /// 配置时恒空）。相似度是连续补充信号，这里只列贡献 > 0 的入选者。
+    pub retrieved: Vec<String>,
     pub saved_tokens_estimate: u64,
     pub ts: i64,
 }
@@ -77,6 +83,7 @@ struct Selection {
     always: Vec<String>,
     session_hot: Vec<String>,
     global_hot: Vec<String>,
+    retrieved: Vec<String>,
 }
 
 /// 会话内各工具的调用次数：从投影消息数 `ToolResult`（§3.5——调用意图
@@ -97,14 +104,33 @@ fn spec_tokens(specs: &[ToolSpec]) -> u64 {
     serde_json::to_string(specs).map_or(0, |s| s.len() as u64) / 4
 }
 
+/// 检索查询（§4.2：最近 3 条用户消息合并；空会话返回空串 → 调用方跳过）。
+fn retrieval_query(messages: &[Message]) -> String {
+    let mut parts: Vec<&str> = messages
+        .iter()
+        .filter_map(|m| match m {
+            Message::User { content } => Some(content.as_str()),
+            _ => None,
+        })
+        .rev()
+        .take(3)
+        .collect();
+    parts.reverse();
+    let joined = parts.join("\n");
+    // 嵌入输入设上界：查询只是信号源，不是全文检索
+    joined.chars().take(600).collect()
+}
+
 /// 打分选择（§6.2）：always 无条件入选；候选按 `会话 1.0 + 全局 0.7 ×
-/// ewma` 排序取前 `quota = max_tools - always` 个。同分保持目录原序
-/// （stable sort，目录序 = 注册表确定性序）。选中归因：会话用过记
-/// session_hot，否则全局分 > 0 记 global_hot，纯补位的不归组。
+/// ewma + 检索 0.5 × similarity` 排序取前 `quota = max_tools - always`
+/// 个。同分保持目录原序（stable sort，目录序 = 注册表确定性序）。选中
+/// 归因：会话用过记 session_hot，否则全局分 > 0 记 global_hot，否则检索
+/// 分 > 0 记 retrieved，纯补位的不归组。
 fn select(
     catalog: &[ToolSpec],
     session: &HashMap<String, u32>,
     ewma: &HashMap<String, f64>,
+    retrieval: &HashMap<String, f64>,
     max_tools: usize,
 ) -> Selection {
     let (always_specs, candidates): (Vec<&ToolSpec>, Vec<&ToolSpec>) = catalog
@@ -117,7 +143,8 @@ fn select(
         .map(|s| {
             let hit = session.contains_key(&s.name);
             let score = SESSION_WEIGHT * u32::from(hit) as f64
-                + GLOBAL_WEIGHT * ewma.get(&s.name).copied().unwrap_or(0.0);
+                + GLOBAL_WEIGHT * ewma.get(&s.name).copied().unwrap_or(0.0)
+                + RETRIEVAL_WEIGHT * retrieval.get(&s.name).copied().unwrap_or(0.0);
             (s, score)
         })
         .collect();
@@ -127,11 +154,14 @@ fn select(
     let always: Vec<String> = kept.iter().map(|s| s.name.clone()).collect();
     let mut session_hot = Vec::new();
     let mut global_hot = Vec::new();
-    for (spec, score) in scored.into_iter().take(quota) {
+    let mut retrieved = Vec::new();
+    for (spec, _score) in scored.into_iter().take(quota) {
         if session.contains_key(&spec.name) {
             session_hot.push(spec.name.clone());
-        } else if score > 0.0 {
+        } else if ewma.get(&spec.name).copied().unwrap_or(0.0) > 0.0 {
             global_hot.push(spec.name.clone());
+        } else if retrieval.get(&spec.name).copied().unwrap_or(0.0) > 0.0 {
+            retrieved.push(spec.name.clone());
         }
         kept.push(spec.clone());
     }
@@ -140,6 +170,7 @@ fn select(
         always,
         session_hot,
         global_hot,
+        retrieved,
     }
 }
 
@@ -147,14 +178,21 @@ fn select(
 pub struct ToolExposure {
     global: Arc<dyn GlobalEwma>,
     cfg: Arc<RwLock<ToolExposureConfig>>,
+    retrieval: Option<Arc<Retriever>>,
     last: Mutex<Option<ExposureSnapshot>>,
 }
 
 impl ToolExposure {
-    pub fn new(global: Arc<dyn GlobalEwma>, cfg: Arc<RwLock<ToolExposureConfig>>) -> Self {
+    /// `retrieval` = ⑬ 语义检索器（embedding 未配置传 None，退回两层打分）。
+    pub fn new(
+        global: Arc<dyn GlobalEwma>,
+        cfg: Arc<RwLock<ToolExposureConfig>>,
+        retrieval: Option<Arc<Retriever>>,
+    ) -> Self {
         Self {
             global,
             cfg,
+            retrieval,
             last: Mutex::new(None),
         }
     }
@@ -201,7 +239,14 @@ impl WaterfallListener for ToolExposure {
         let session = session_counts(&req.messages);
         let ewma = self.global.ewma_scores();
         let total = req.tools.len();
-        let sel = select(&req.tools, &session, &ewma, cfg.max_tools);
+        // 检索信号只在确实要裁剪时才算（目录 ≤ 上限 = 全保留，无需为一
+        // 个不影响结果的分数多打一次 embedding）；embedding 失败 → 空表
+        // = 退回两层打分（§1 可降级，fail-open）
+        let retrieval = match (&self.retrieval, total > cfg.max_tools) {
+            (Some(r), true) => r.scores(&retrieval_query(&req.messages), &req.tools).await,
+            _ => HashMap::new(),
+        };
+        let sel = select(&req.tools, &session, &ewma, &retrieval, cfg.max_tools);
         let saved = spec_tokens(&req.tools).saturating_sub(spec_tokens(&sel.kept));
         self.record(ExposureSnapshot {
             enabled: true,
@@ -210,6 +255,7 @@ impl WaterfallListener for ToolExposure {
             always: sel.always,
             session_hot: sel.session_hot,
             global_hot: sel.global_hot,
+            retrieved: sel.retrieved,
             saved_tokens_estimate: saved,
             ts: now_secs(),
         });

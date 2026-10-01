@@ -18,6 +18,9 @@ import type {
   ShellUpdate,
   ToolsUpdate,
   ExposureDebug,
+  EmbeddingUpdate,
+  PluginsUpdate,
+  ExperienceRow,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
@@ -142,19 +145,23 @@ export function setSettings(patch: {
   locale?: string;
   shortcut?: string;
   llm?: LlmUpdate;
+  embedding?: EmbeddingUpdate;
   context?: ContextUpdate;
   memory?: MemoryUpdate;
   tools?: ToolsUpdate;
   shell?: ShellUpdate;
+  plugins?: PluginsUpdate;
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
     shortcut: patch.shortcut ?? null,
     llm: patch.llm ?? null,
+    embedding: patch.embedding ?? null,
     context: patch.context ?? null,
     memory: patch.memory ?? null,
     tools: patch.tools ?? null,
     shell: patch.shell ?? null,
+    plugins: patch.plugins ?? null,
   });
 }
 
@@ -163,6 +170,21 @@ export function setSettings(patch: {
 /** 探测 Ollama 模型上下文窗口（token）；失败 reject（UI 提示手动选择）。 */
 export function llmProbeWindow(baseUrl: string, model: string): Promise<number> {
   return invoke("llm_probe_window", { baseUrl: baseUrl || null, model });
+}
+
+// ---- embedding 探测（⑬）：嵌一条测试文本返回向量维度 ----
+
+/** 探测 embedding 端点（不落盘）；失败 reject（UI 提示）。 */
+export function llmProbeEmbedding(
+  baseUrl: string | null,
+  model: string,
+  apiKey?: string,
+): Promise<number> {
+  return invoke("llm_probe_embedding", {
+    baseUrl: baseUrl || null,
+    model,
+    apiKey: apiKey || null,
+  });
 }
 
 // ---- 记忆管理（⑪，Context and Memory.md §7.2） ----
@@ -190,4 +212,21 @@ export function memoryClearAll(): Promise<number> {
 /** 最近一次工具暴露截断快照（⑫ 开发者面板；打开分区时拉取）。 */
 export function toolExposureDebug(): Promise<ExposureDebug> {
   return invoke("tool_exposure_debug");
+}
+
+// ---- 经历记忆（⑬，Context and Memory.md §4.3 宿主侧） ----
+
+/** 列举经历（新→旧）。 */
+export function experienceList(limit?: number): Promise<ExperienceRow[]> {
+  return invoke("experience_list", { limit: limit ?? null });
+}
+
+/** 删除一条经历（不存在后端报错）。 */
+export function experienceDelete(id: number): Promise<void> {
+  return invoke("experience_delete", { id });
+}
+
+/** 清空全部经历。返回删除条数。 */
+export function experienceClearAll(): Promise<number> {
+  return invoke("experience_clear_all");
 }

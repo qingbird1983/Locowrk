@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_OLLAMA_BASE: &str = "http://localhost:11434";

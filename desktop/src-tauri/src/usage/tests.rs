@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use super::{UsageDb, UsageRecorder, attach, update_ewma};
+use super::{attach, update_ewma, UsageDb, UsageRecorder};
 use crate::usage::UsageEwma;
 use kernel_agent::GlobalEwma;
 use plugin_service::{InstallSource, InstalledPlugin};

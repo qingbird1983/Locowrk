@@ -13,6 +13,8 @@
 //! - `memory`：记忆库宿主访问（⑪）——Memory-Inject 检索源（kernel-agent
 //!   MemorySource trait 的桌面实现）+ 记忆管理页存储支撑（memory.sqlite3
 //!   归 memory-sqlite 插件所有，宿主只做管理面访问）
+//! - `experiences`：经历记忆库（⑬，Context 文档 §4.3 宿主侧 memory-vector）
+//!   ——语义检索 experiences.sqlite3，ExperienceSource 契约的桌面实现
 //! - `llm`：真实模型接入（阶段八②，LLM.md 方案一）——genai 三合一
 //!   适配器（openai / anthropic / ollama），由设置面板驱动分发
 //! - `demo_llm`：阶段五脚本模型（现为 llm 模块的未配置回落替身）
@@ -26,11 +28,14 @@
 //! 纪律：命令只做参数转换；流式输出走事件推送，不塞 command 返回值（§12.2）。
 
 mod approval;
+mod autodisable;
 mod commands;
 mod data_root;
 mod demo_llm;
 mod demo_tools;
 mod events;
+mod experiences;
+mod extract;
 mod idle;
 mod llm;
 mod memory;
@@ -81,10 +86,14 @@ pub fn run() {
             commands::settings_get,
             commands::settings_set,
             commands::llm_probe_window,
+            commands::llm_probe_embedding,
             commands::memory_list,
             commands::memory_update,
             commands::memory_delete,
             commands::memory_clear_all,
+            commands::experience_list,
+            commands::experience_delete,
+            commands::experience_clear_all,
             commands::tool_exposure_debug
         ])
         .run(tauri::generate_context!())

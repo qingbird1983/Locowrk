@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use cordis_core::Context;
 use kernel_agent::{
-    points, Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel,
-    MemoryInject, MemoryInjectConfig, LlmService, Middleware, Timeout, ToolExposure,
+    points, Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel, LlmService,
+    MemoryInject, MemoryInjectConfig, Middleware, Retriever, Timeout, ToolExposure,
     ToolExposureConfig, ToolSource, Tracing,
 };
 use plugin_host::{PluginRegistry, RegistryToolSource};
@@ -26,7 +26,8 @@ use crate::approval::ApprovalHub;
 use crate::data_root;
 use crate::demo_tools::SendEmailTool;
 use crate::events::{forward_plugin_states, EventSink, TauriSink};
-use crate::llm::AppLlm;
+use crate::experiences::{ExperienceDb, ExperienceIndex};
+use crate::llm::{AppLlm, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
 use crate::memory::MemoryStore;
 use crate::plugins_root;
 use crate::search_tools::SearchToolsTool;
@@ -67,6 +68,16 @@ pub struct AppState {
     /// 宿主 Timeout 时长（S2）：settings tools 区 callTimeoutSecs 的热换锁，
     /// Timeout::hot 持有——保存即生效，无需重启。
     pub timeout_cfg: Arc<RwLock<Duration>>,
+    /// embedding 共享柄（⑬）：settings embedding 区热换入，检索/经历/提取
+    /// 三处共用；None 内值 = 未配置（智能层缺席，各处自行降级）。
+    pub embed: SharedEmbed,
+    /// 带故障冷却的 EmbedPort 实现（⑬，全宿主共用一个实例——冷却状态
+    /// 不能分散）。
+    pub embed_port: Arc<crate::llm::CooledEmbed>,
+    /// 经历记忆库（⑬）；打不开 = None（经历不写不注入，事实记忆照常）。
+    pub experiences: Option<Arc<ExperienceDb>>,
+    /// LLM 服务句柄（⑬ 隐式提取用；与 ctx 里注册的是同一实例）。
+    pub llm: Arc<dyn LlmService>,
 }
 
 pub fn init_state(app: AppHandle) -> AppState {
@@ -88,20 +99,33 @@ pub fn init_state(app: AppHandle) -> AppState {
         }
     };
 
+    // ⑬ embedding 共享柄：壳先建、settings 就绪后再灌配置（search_tools
+    // 在工具目录期就要持有 port）。未配置 = None 内值（search_tools 退
+    // 关键词、检索信号缺席、经历不写）；settings_set 成功后命令层换入，
+    // 保存即生效。port 全宿主共用一个（冷却状态不分家）。
+    let embed = SharedEmbed::new();
+    let embed_port = embed.port();
+
     // 工具目录：始终提供（哪怕 registry 为空 → resolve 报 NotAvailable，
     // 错误以失败的 ToolResult 闭合，而不是服务缺失让整步崩掉，§7.2）。
     // 内置：send_email 是阶段六的演示替身（不可逆 → 走审批弹窗）；
     // search_tools（⑫）持有不含自身的全目录视图做检索（含 hidden，§4.1
-    // 显式检索通路）+ usage 做空结果高频回退。
+    // 显式检索通路）+ usage 做空结果高频回退 + ⑬ 语义检索（未配置降级
+    // 关键词）。
     let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
     let search_catalog = Arc::new(
         KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
             .with_builtin(Arc::clone(&send_email)),
     );
+    let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(
         KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
             .with_builtin(send_email)
-            .with_builtin(SearchToolsTool::new(search_catalog, Arc::clone(&usage))),
+            .with_builtin(SearchToolsTool::new(
+                search_catalog,
+                Arc::clone(&usage),
+                Some(embed_tool_port),
+            )),
     ));
 
     let settings: Arc<SettingsStore> = Arc::new(match SettingsStore::open(&root) {
@@ -113,6 +137,19 @@ pub fn init_state(app: AppHandle) -> AppState {
         }
     });
 
+    // settings 就绪：按 embedding 区灌入首批配置（llm 区 provider/端点兜底）
+    {
+        let cfg = settings.embedding();
+        let l = settings.llm();
+        embed.set(EmbedClient::from_settings(
+            &cfg,
+            &EmbeddingSettingsLlmView {
+                provider: l.provider,
+                base_url: l.base_url,
+            },
+        ));
+    }
+
     // S1（清单 §2.7/§3）：高危解锁开关在插件加载前注入进程 env——
     // tool-shell 的 init 读一次 `LOCOWRK_SHELL_UNLOCK_RISK`；设置改动
     // 重启生效（插件 init 只跑一次）。硬锁类不受此开关影响。
@@ -122,11 +159,23 @@ pub fn init_state(app: AppHandle) -> AppState {
 
     // 模型适配器不特殊，也只是服务（§7.2）。阶段八②：genai 三合一适配器，
     // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
-    ctx.provide_dyn::<dyn LlmService>(Arc::new(AppLlm::new(Arc::clone(&settings))));
+    // ⑬：句柄留 AppState 一份给隐式提取（同一实例，不重复注册）。
+    let llm: Arc<dyn LlmService> = Arc::new(AppLlm::new(Arc::clone(&settings)));
+    ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
 
     // 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
     // MemoryStore::new 不做 IO（连接按操作开、失败逐次降级），无启动风险。
     let memory = Arc::new(MemoryStore::new(&root));
+
+    // 经历记忆库（⑬）：宿主自有 experiences.sqlite3；打不开只丢经历，
+    // 事实记忆与聊天不受影响。
+    let experiences = match ExperienceDb::open(&root.join("experiences.sqlite3")) {
+        Ok(db) => Some(Arc::new(db)),
+        Err(e) => {
+            tracing::warn!("experiences db unavailable: {e}；经历记忆降级为缺席");
+            None
+        }
+    };
 
     // agent/request 决策环（exposure 文档 §7，注册次序 = 执行次序）：
     // ToolExposure 先（先定暴露面，压缩才知道留多少空间）、Memory-Inject
@@ -136,11 +185,16 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 即生效。
     let exposure_cfg: Arc<RwLock<ToolExposureConfig>> =
         Arc::new(RwLock::new(settings.exposure_config()));
+    let embed_exposure_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
     let exposure = Arc::new(ToolExposure::new(
         UsageEwma::new(Arc::clone(&usage)),
         Arc::clone(&exposure_cfg),
+        // ⑬ 语义检索信号（§4.2 层次 2）：EmbedPort 未配置/失败 = 空表
+        // 退回两层打分（Retriever 内部 fail-open）
+        Some(Arc::new(Retriever::new(embed_exposure_port))),
     ));
-    ctx.events.on_waterfall(points::REQUEST, Arc::clone(&exposure) as Arc<_>);
+    ctx.events
+        .on_waterfall(points::REQUEST, Arc::clone(&exposure) as Arc<_>);
 
     let memory_cfg: Arc<RwLock<MemoryInjectConfig>> =
         Arc::new(RwLock::new(settings.memory_inject_config()));
@@ -148,6 +202,10 @@ pub fn init_state(app: AppHandle) -> AppState {
         points::REQUEST,
         Arc::new(MemoryInject::new(
             crate::memory::memory_source(&memory),
+            experiences
+                .as_ref()
+                .map(|db| ExperienceIndex::new(Arc::clone(db), Arc::clone(&embed_port)))
+                .map(|idx| idx as Arc<dyn kernel_agent::ExperienceSource>),
             Arc::clone(&memory_cfg),
         )),
     );
@@ -184,19 +242,23 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。
     // S2：内置插件根一次解析，服务（启停解析工件）与开发态扫描共用。
     let builtin_root = plugins_root::resolve();
-    let plugins = match open_plugin_service(&root, Arc::clone(&registry), &ctx, builtin_root.clone())
-    {
-        Ok(svc) => Arc::new(svc),
-        Err(primary_err) => {
-            tracing::error!("plugin service init failed: {primary_err}；降级到临时目录");
-            let fallback = std::env::temp_dir().join("locowrk-degraded-data");
-            match open_plugin_service(&fallback, Arc::clone(&registry), &ctx, builtin_root.clone())
-            {
-                Ok(svc) => Arc::new(svc),
-                Err(e) => panic!("plugin service unavailable even in fallback dir: {e}"),
+    let plugins =
+        match open_plugin_service(&root, Arc::clone(&registry), &ctx, builtin_root.clone()) {
+            Ok(svc) => Arc::new(svc),
+            Err(primary_err) => {
+                tracing::error!("plugin service init failed: {primary_err}；降级到临时目录");
+                let fallback = std::env::temp_dir().join("locowrk-degraded-data");
+                match open_plugin_service(
+                    &fallback,
+                    Arc::clone(&registry),
+                    &ctx,
+                    builtin_root.clone(),
+                ) {
+                    Ok(svc) => Arc::new(svc),
+                    Err(e) => panic!("plugin service unavailable even in fallback dir: {e}"),
+                }
             }
-        }
-    };
+        };
 
     // 1. 启动对账（任何插件加载之前）
     if let Err(e) = plugins.startup_reconcile() {
@@ -227,6 +289,18 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 3. 安装态已在对账中恢复；4. 状态广播转发给 UI（§13.4）
     forward_plugin_states(app.clone(), plugins.subscribe());
 
+    // 5. ⑬ 自动停用巡检（exposure 文档 §8.8 唯一例外条款，缺省关）：
+    //    开启后启动时清点一遍闲置超期的第三方插件。spawn 化——逐条
+    //    set_enabled 走插件装载，不阻塞窗口出现。
+    let days = settings.plugins().auto_disable_idle_days;
+    if days > 0 {
+        let plugins2 = Arc::clone(&plugins);
+        let usage2 = Arc::clone(&usage);
+        tokio::spawn(async move {
+            crate::autodisable::auto_disable_idle(&plugins2, &usage2, days).await;
+        });
+    }
+
     AppState {
         app,
         kernel,
@@ -242,6 +316,10 @@ pub fn init_state(app: AppHandle) -> AppState {
         exposure_cfg,
         exposure,
         timeout_cfg,
+        embed,
+        embed_port,
+        experiences,
+        llm,
     }
 }
 
@@ -286,5 +364,28 @@ impl AppState {
             .entry(id.to_string())
             .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(Session::new())))
             .clone()
+    }
+
+    /// ⑬ 隐式提取依赖快照（spawn 用，全部 Arc 克隆）。
+    pub fn extract_deps(&self) -> crate::extract::ExtractDeps {
+        crate::extract::ExtractDeps {
+            llm: Arc::clone(&self.llm),
+            memory: Arc::clone(&self.memory),
+            experiences: self.experiences.clone(),
+            embed: Arc::clone(&self.embed_port),
+        }
+    }
+
+    /// ⑬ settings_set 后重建 embedding 客户端（配置保存即生效）。
+    pub fn reload_embed(&self) {
+        let cfg = self.settings.embedding();
+        let l = self.settings.llm();
+        self.embed.set(EmbedClient::from_settings(
+            &cfg,
+            &EmbeddingSettingsLlmView {
+                provider: l.provider,
+                base_url: l.base_url,
+            },
+        ));
     }
 }

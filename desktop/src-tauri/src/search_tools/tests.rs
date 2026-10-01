@@ -6,11 +6,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use plugin_api::{CallCtx, Exposure, SideEffect, Tool, ToolError, ToolSpec};
 use semver::Version;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use super::{HOT_FALLBACK, KEYWORD_MAX, SearchToolsTool, hot_fallback, keyword_search, spec};
+use super::{hot_fallback, keyword_search, spec, SearchToolsTool, HOT_FALLBACK, KEYWORD_MAX};
 use crate::tool_source::KernelToolSource;
 use crate::usage::UsageRecorder;
+use kernel_agent::EmbedPort;
 use plugin_host::{PluginRegistry, RegistryToolSource};
 
 fn tool_spec(name: &str, desc: &str, exposure: Exposure) -> ToolSpec {
@@ -88,7 +89,11 @@ fn hot_fallback_intersects_catalog_in_hot_order() {
     ];
     let picked = hot_fallback(&catalog, &hot, 10);
     let names: Vec<&str> = picked.iter().map(|s| s.name.as_str()).collect();
-    assert_eq!(names, ["b", "a"], "统计残留的 ghost / gone 不入列，保持热度序");
+    assert_eq!(
+        names,
+        ["b", "a"],
+        "统计残留的 ghost / gone 不入列，保持热度序"
+    );
 }
 
 #[tokio::test]
@@ -96,6 +101,7 @@ async fn call_keyword_match_returns_schema() {
     let tool = SearchToolsTool::new(
         catalog(vec![tool_spec("fs_read", "read a file", Exposure::Always)]),
         recorder(),
+        None,
     );
     let out = tool
         .call(&CallCtx::new(), json!({"query": "read file"}))
@@ -103,7 +109,10 @@ async fn call_keyword_match_returns_schema() {
         .expect("keyword match");
     assert_eq!(out["source"], "keyword_match");
     assert_eq!(out["results"][0]["name"], "fs_read");
-    assert!(out["results"][0]["schema"].is_object(), "带 schema 供下轮调用");
+    assert!(
+        out["results"][0]["schema"].is_object(),
+        "带 schema 供下轮调用"
+    );
 }
 
 #[tokio::test]
@@ -122,14 +131,22 @@ async fn call_falls_back_to_hot_tools_then_no_match() {
     };
     // 直接落库一条 hot 统计（recorder 后台通道未启动，直连 db）
     let mut tools = std::collections::HashMap::new();
-    tools.insert("mem_write".to_string(), crate::usage::ToolAgg::of("memory-sqlite", 7, 1_000));
+    tools.insert(
+        "mem_write".to_string(),
+        crate::usage::ToolAgg::of("memory-sqlite", 7, 1_000),
+    );
     usage_db.flush(&tools, &Default::default()).unwrap();
     let usage = UsageRecorder::direct(usage_db);
 
     // 目录里没有 mem_write 命中关键词 → 回退 top 高频给出 mem_write
     let tool = SearchToolsTool::new(
-        catalog(vec![tool_spec("mem_write", "store a fact", Exposure::OnDemand)]),
+        catalog(vec![tool_spec(
+            "mem_write",
+            "store a fact",
+            Exposure::OnDemand,
+        )]),
         Arc::clone(&usage),
+        None,
     );
     let out = tool
         .call(&CallCtx::new(), json!({"query": "zzz-no-hit"}))
@@ -139,7 +156,7 @@ async fn call_falls_back_to_hot_tools_then_no_match() {
     assert_eq!(out["results"][0]["name"], "mem_write");
 
     // 统计为空 → 如实 no_match，不拿任意工具充数
-    let tool2 = SearchToolsTool::new(catalog(vec![]), recorder());
+    let tool2 = SearchToolsTool::new(catalog(vec![]), recorder(), None);
     let out2 = tool2
         .call(&CallCtx::new(), json!({"query": "zzz-no-hit"}))
         .await
@@ -150,7 +167,7 @@ async fn call_falls_back_to_hot_tools_then_no_match() {
 
 #[tokio::test]
 async fn call_rejects_missing_or_empty_query() {
-    let tool = SearchToolsTool::new(catalog(vec![]), recorder());
+    let tool = SearchToolsTool::new(catalog(vec![]), recorder(), None);
     let err = tool.call(&CallCtx::new(), json!({})).await.unwrap_err();
     assert!(matches!(err, ToolError::Failed { .. }));
     let err2 = tool
@@ -168,4 +185,100 @@ fn spec_is_always_and_pure() {
     assert_eq!(s.name, "search_tools");
     // 回退条数与文档一致（§13 top-10）
     assert_eq!(HOT_FALLBACK, 10);
+}
+
+/// 向量打分纯函数：floor 过滤 + 降序截断。
+#[test]
+fn vector_rank_filters_and_sorts() {
+    let catalog = vec![
+        tool_spec("git_commit", "commit changes", Exposure::OnDemand),
+        tool_spec("http_post", "send request", Exposure::OnDemand),
+        tool_spec("fs_read", "read file", Exposure::OnDemand),
+    ];
+    let desc_vecs = vec![vec![0.9f32], vec![0.4], vec![0.0]];
+    let hits = super::vector_rank(&catalog, &[1.0], &desc_vecs, 8);
+    assert_eq!(
+        hits.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+        ["git_commit", "http_post"]
+    );
+    // max 截断
+    let hits = super::vector_rank(&catalog, &[1.0], &desc_vecs, 1);
+    assert_eq!(hits.len(), 1);
+}
+
+/// 语义优先：embedding 可用时走 vector_match；关键词路径只在降级时走。
+#[tokio::test]
+async fn call_prefers_vector_when_embedder_present() {
+    struct Kw;
+    #[async_trait]
+    impl EmbedPort for Kw {
+        async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
+            Ok(texts
+                .iter()
+                .map(|t| {
+                    if t.contains("rust") {
+                        vec![1.0f32]
+                    } else {
+                        vec![0.0]
+                    }
+                })
+                .collect())
+        }
+    }
+    // 查询与描述都无 "rust"（向量 0 分低于 floor）→ 向量空 → 降级
+    // 关键词命中 fs_read
+    let tool = SearchToolsTool::new(
+        catalog(vec![tool_spec(
+            "fs_read",
+            "read the file",
+            Exposure::OnDemand,
+        )]),
+        recorder(),
+        Some(Arc::new(Kw) as Arc<dyn EmbedPort>),
+    );
+    let out = tool
+        .call(&CallCtx::new(), json!({"query": "read file"}))
+        .await
+        .unwrap();
+    assert_eq!(out["source"], "keyword_match");
+
+    // 描述含 rust → 向量命中优先，不再走关键词
+    let tool = SearchToolsTool::new(
+        catalog(vec![tool_spec(
+            "rust_fmt",
+            "format the rust code",
+            Exposure::OnDemand,
+        )]),
+        recorder(),
+        Some(Arc::new(Kw) as Arc<dyn EmbedPort>),
+    );
+    let out = tool
+        .call(&CallCtx::new(), json!({"query": "make rust nice"}))
+        .await
+        .unwrap();
+    assert_eq!(out["source"], "vector_match");
+    assert_eq!(out["results"][0]["name"], "rust_fmt");
+
+    // 嵌入器失败（Err）→ 降级关键词
+    struct Boom;
+    #[async_trait]
+    impl EmbedPort for Boom {
+        async fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
+            Err("down".into())
+        }
+    }
+    let tool = SearchToolsTool::new(
+        catalog(vec![tool_spec(
+            "fs_read",
+            "read a file",
+            Exposure::OnDemand,
+        )]),
+        recorder(),
+        Some(Arc::new(Boom) as Arc<dyn EmbedPort>),
+    );
+    let out = tool
+        .call(&CallCtx::new(), json!({"query": "read file"}))
+        .await
+        .unwrap();
+    assert_eq!(out["source"], "keyword_match");
 }

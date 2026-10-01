@@ -10,7 +10,10 @@ fn temp_dir(tag: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    std::env::temp_dir().join(format!("locowrk-memstore-{tag}-{nanos}-{}", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "locowrk-memstore-{tag}-{nanos}-{}",
+        std::process::id()
+    ))
 }
 
 #[test]
@@ -67,7 +70,9 @@ fn update_validation_rejects_oversize() {
     let store = MemoryStore::new(&dir);
     assert!(store.update_value("", "v").is_err());
     assert!(store.update_value(&"k".repeat(513), "v").is_err());
-    assert!(store.update_value("k", &"v".repeat(256 * 1024 + 1)).is_err());
+    assert!(store
+        .update_value("k", &"v".repeat(256 * 1024 + 1))
+        .is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

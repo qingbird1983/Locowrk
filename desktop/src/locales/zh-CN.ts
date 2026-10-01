@@ -79,6 +79,7 @@ export default {
     always: "always 直通（{n}）",
     sessionHot: "会话内用过（{n}）",
     globalHot: "全局高频（{n}）",
+    retrieved: "语义检索入选（{n}）",
     saved: "节省上下文：约 {n} token",
   },
   memory: {
@@ -95,6 +96,10 @@ export default {
     cancel: "取消",
     clearAll: "清空全部记忆",
     clearConfirm: "再点一次确认清空",
+    experienceTitle: "经历记忆",
+    experienceEmpty: "还没有经历。开启「对话后自动提取记忆」后，每轮对话会沉淀一段可语义检索的摘要。",
+    experienceClear: "清空全部经历",
+    experienceSession: "会话 {id}…",
     time: {
       just_now: "刚刚",
       minutes: "{n} 分钟前",
@@ -188,6 +193,9 @@ export default {
     memoryEnabled: "自动注入记忆",
     memoryTopK: "每轮注入条数",
     memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
+    memoryAutoExtract: "对话后自动提取记忆（隐式提取）",
+    memoryAutoExtractHint:
+      "默认关。开启后每轮对话结束异步提取值得记住的事实（标「自动提取」）与经历摘要（记忆页下方）；需要已配置 embedding 才会沉淀经历。",
     // S1 shell 治理分区
     shellTitle: "命令终端",
     shellHint:
@@ -202,6 +210,24 @@ export default {
     toolsEnabled: "按热度截断工具目录（Top-N）",
     toolsMax: "每请求最大工具数",
     toolsMaxHint: "1–200，缺省 20；always 工具与 search_tools 元工具不受截断影响。",
+    embeddingTitle: "Embedding 模型（语义检索基建）",
+    embeddingHint:
+      "工具语义检索、经历记忆、隐式提取共用的向量化模型。留空 = 智能层缺席（自动降级：工具检索退关键词、不沉淀经历），聊天不受影响。",
+    embeddingModel: "模型名",
+    embeddingBaseUrl: "API 端点",
+    embeddingBaseUrlHint: "OpenAI 兼容 /v1/embeddings；留空时 Ollama 回本机 11434，其余用上方模型端点。",
+    embeddingBaseUrlPlaceholder: "http://localhost:11434",
+    embeddingApiKey: "API Key（云端 embedding 需要）",
+    embeddingApiKeyPlaceholder: "本地 Ollama 留空",
+    embeddingDetect: "检测",
+    embeddingProbing: "检测中…",
+    embeddingDim: "连通，向量维度 {n}",
+    embeddingDetectFail: "检测失败：",
+    pluginsTitle: "插件管理",
+    pluginsHint: "闲置自动停用——默认永不自动停用（只提示），开启即表示同意后台停用。",
+    autoDisableDays: "自动停用天数",
+    autoDisableDaysHint:
+      "0 = 关闭（缺省）；7–365 天。只作用于安装的第三方插件（内置插件不参与）；关闭不会自动恢复已停用插件。",
     callTimeout: "单次工具调用超时（秒）",
     callTimeoutHint: "宿主强制上限，保存即生效（5–3600 秒）",
     // ⑨ 上下文管理分区（真分区，替换壳批次占位）

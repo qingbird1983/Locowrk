@@ -15,6 +15,7 @@ const settings = useSettingsStore();
 const form = reactive({
   enabled: true,
   topK: 5,
+  autoExtract: false,
 });
 
 watch(
@@ -23,6 +24,7 @@ watch(
     if (!v) return;
     form.enabled = v.memory.enabled;
     form.topK = v.memory.topK;
+    form.autoExtract = v.memory.autoExtract;
   },
   { immediate: true },
 );
@@ -31,6 +33,7 @@ function save() {
   void settings.saveMemory({
     enabled: form.enabled,
     topK: form.topK,
+    autoExtract: form.autoExtract,
   });
 }
 </script>
@@ -56,6 +59,13 @@ function save() {
       />
       <span class="text-[11px] text-neutral-600">{{ t("settings.memoryTopKHint") }}</span>
     </label>
+
+    <!-- ⑬ 隐式提取：缺省关（易记垃圾），开启后回合结束异步提事实+经历 -->
+    <label class="flex cursor-pointer items-center gap-2 text-xs">
+      <input v-model="form.autoExtract" type="checkbox" class="accent-emerald-500" />
+      <span>{{ t("settings.memoryAutoExtract") }}</span>
+    </label>
+    <p class="text-[11px] text-neutral-600">{{ t("settings.memoryAutoExtractHint") }}</p>
 
     <div class="flex items-center gap-2">
       <button

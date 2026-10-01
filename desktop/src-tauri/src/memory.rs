@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use serde::Serialize;
 
 use kernel_agent::{MemoryEntry, MemorySource};
@@ -118,7 +118,10 @@ impl MemoryStore {
         }
         let pattern = format!(
             "%{}%",
-            query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+            query
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
         );
         let mut stmt = conn
             .prepare(
@@ -154,6 +157,29 @@ impl MemoryStore {
             )
             .map_err(|e| format!("memory update `{key}`: {e}"))?;
         Ok(n > 0)
+    }
+
+    /// 写入/覆盖一条记忆（⑬ 隐式提取的落库路径；管理面不用它）。key 是
+    /// 主键——调用方负责命名空间（extract 侧强制 `auto.` 前缀，永不覆盖
+    /// 用户显式记忆）；source = "explicit" | "extracted"。
+    pub fn write(&self, key: &str, value: &str, tags: &str, source: &str) -> Result<(), String> {
+        if key.is_empty() || key.len() > KEY_MAX {
+            return Err(format!("memory key 长度需在 1..={KEY_MAX} 字节"));
+        }
+        if value.len() > VALUE_MAX {
+            return Err(format!("memory value 超过 {VALUE_MAX} 字节上限"));
+        }
+        let conn = self.open_conn()?;
+        conn.execute(
+            "INSERT INTO memories (key, value, tags, updated_at, source) \
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(key) DO UPDATE SET
+                 value = excluded.value, tags = excluded.tags,
+                 updated_at = excluded.updated_at, source = excluded.source",
+            params![key, value, tags, now_secs(), source],
+        )
+        .map(|_| ())
+        .map_err(|e| format!("memory write `{key}`: {e}"))
     }
 
     /// 管理页删除单条。返回 false = 键不存在。

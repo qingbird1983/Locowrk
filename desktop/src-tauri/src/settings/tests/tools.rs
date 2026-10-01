@@ -15,11 +15,7 @@ fn tools_defaults_legacy_compat_and_validation() {
     assert_eq!(store.exposure_config().max_tools, 20);
     assert_eq!(store.call_timeout(), std::time::Duration::from_secs(30));
     // 旧 settings.json 无 tools 区 → 字段级缺省
-    std::fs::write(
-        root.join("settings.json"),
-        r#"{"locale": "zh-CN"}"#,
-    )
-    .unwrap();
+    std::fs::write(root.join("settings.json"), r#"{"locale": "zh-CN"}"#).unwrap();
     let v = SettingsStore::open(&root).unwrap().view().tools;
     assert!(v.enabled);
     assert_eq!(v.max_per_request, 20);
@@ -32,12 +28,15 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
             Some(ToolsUpdate {
                 enabled: Some(false),
                 max_per_request: Some(15),
                 call_timeout_secs: Some(45),
             }),
-        None, )
+            None,
+            None,
+        )
         .unwrap();
     assert!(!store.view().tools.enabled);
     assert_eq!(store.view().tools.max_per_request, 15);
@@ -58,11 +57,14 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
             Some(ToolsUpdate {
                 max_per_request: Some(30),
                 ..Default::default()
             }),
-        None, )
+            None,
+            None,
+        )
         .unwrap();
     assert!(!store.view().tools.enabled);
     assert_eq!(store.view().tools.max_per_request, 30);
@@ -76,11 +78,14 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
+                None,
                 Some(ToolsUpdate {
                     max_per_request: Some(bad),
                     ..Default::default()
                 }),
-            None, )
+                None,
+                None,
+            )
             .is_err());
     }
     assert_eq!(store.view().tools.max_per_request, 30);
@@ -92,11 +97,14 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
+                None,
                 Some(ToolsUpdate {
                     call_timeout_secs: Some(bad),
                     ..Default::default()
                 }),
-            None, )
+                None,
+                None,
+            )
             .is_err());
     }
     assert_eq!(store.view().tools.call_timeout_secs, 45);

@@ -20,6 +20,7 @@ mod memory_inject;
 mod retry;
 mod timeout;
 mod tool_exposure;
+mod tool_retrieval;
 mod trace;
 
 #[cfg(test)]
@@ -31,10 +32,13 @@ pub use compact::{
     CompactConfig, CompactStrategy, CompactionOutcome, CtxCompact, estimate_tokens,
     suggested_threshold,
 };
-pub use memory_inject::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
+pub use memory_inject::{
+    ExperienceEntry, ExperienceSource, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource,
+};
 pub use retry::Retry;
 pub use timeout::Timeout;
 pub use tool_exposure::{ExposureSnapshot, GlobalEwma, ToolExposure, ToolExposureConfig};
+pub use tool_retrieval::{EmbedPort, RETRIEVAL_WEIGHT, Retriever, cosine};
 pub use trace::Tracing;
 
 use std::sync::Arc;

@@ -172,7 +172,9 @@ impl UsageDb {
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map([limit], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64)))
+            .query_map([limit], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))
+            })
             .map_err(|e| e.to_string())?;
         let mut out = Vec::new();
         for row in rows {
@@ -376,8 +378,8 @@ pub fn attach(
 
 mod ewma;
 
-pub use ewma::UsageEwma;
 use ewma::update_ewma;
+pub use ewma::UsageEwma;
 
 #[cfg(test)]
 mod tests;

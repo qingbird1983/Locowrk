@@ -165,22 +165,27 @@ export interface SettingsView {
   shortcut: string;
   dataDir: string;
   llm: LlmSettingsView;
+  embedding: EmbeddingView;
   context: ContextSettingsView;
   memory: MemorySettingsView;
   tools: ToolsSettingsView;
   shell: ShellSettingsView;
+  plugins: PluginsView;
 }
 
-/** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。 */
+/** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。autoExtract =
+ * ⑬ 隐式提取开关（缺省关）。 */
 export interface MemorySettingsView {
   enabled: boolean;
   topK: number;
+  autoExtract: boolean;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
 export interface MemoryUpdate {
   enabled?: boolean;
   topK?: number;
+  autoExtract?: boolean;
 }
 
 /** 工具暴露区投影（⑫）：结构即设置原值。S2 起含宿主单次调用超时。 */
@@ -195,6 +200,31 @@ export interface ToolsUpdate {
   enabled?: boolean;
   maxPerRequest?: number;
   callTimeoutSecs?: number;
+}
+
+/** embedding 模型区投影（⑬ 智能层共享基建）：无秘钥字段。 */
+export interface EmbeddingView {
+  /** 设置原值；null = 未填（后端按 provider 兜底：ollama → 本机 11434）。 */
+  baseUrl: string | null;
+  model: string | null;
+  apiKeySet: boolean;
+}
+
+/** embedding 区部分更新：字段缺省 = 保持不变；传空串 = 清除。 */
+export interface EmbeddingUpdate {
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+}
+
+/** 插件管理区投影（⑬）：自动停用天数（0 = 关闭，缺省）。 */
+export interface PluginsView {
+  autoDisableIdleDays: number;
+}
+
+/** 插件管理区部分更新：字段缺省 = 保持不变。 */
+export interface PluginsUpdate {
+  autoDisableIdleDays?: number;
 }
 
 /** shell 治理区投影（S1）：高危命令解锁开关（硬锁类不受影响）。 */
@@ -216,9 +246,19 @@ export interface ExposureDebug {
   always: string[];
   sessionHot: string[];
   globalHot: string[];
+  /** 靠语义检索信号（0.5 × 相似度）入选的工具（⑬；embedding 未配置恒空）。 */
+  retrieved: string[];
   savedTokensEstimate: number;
   /** 快照时刻（Unix 秒）；0 = 尚未有过请求。 */
   ts: number;
+}
+
+/** 经历记忆条目（⑬ experience_list 返回行；camelCase）。 */
+export interface ExperienceRow {
+  id: number;
+  content: string;
+  sessionId: string;
+  createdAt: number;
 }
 
 /** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。

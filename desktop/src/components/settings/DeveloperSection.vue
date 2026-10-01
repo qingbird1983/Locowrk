@@ -147,6 +147,11 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
             {{ t("developer.globalHot", { n: debug.globalHot.length }) }}:
             <span class="text-neutral-300">{{ debug.globalHot.join(", ") }}</span>
           </li>
+          <!-- ⑬ 语义检索信号入选（embedding 未配置恒空，不渲染该行） -->
+          <li v-if="debug.retrieved.length">
+            {{ t("developer.retrieved", { n: debug.retrieved.length }) }}:
+            <span class="text-neutral-300">{{ debug.retrieved.join(", ") }}</span>
+          </li>
         </ul>
         <p v-if="debug.savedTokensEstimate > 0" class="text-[11px] text-emerald-400">
           {{ t("developer.saved", { n: compactNumber(debug.savedTokensEstimate) }) }}

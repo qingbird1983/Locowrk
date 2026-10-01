@@ -22,9 +22,11 @@ fn shell_defaults_legacy_compat_and_update() {
             None,
             None,
             None,
+            None,
             Some(ShellUpdate {
                 unlock_risky: Some(true),
             }),
+            None,
         )
         .unwrap();
     assert!(store.view().shell.unlock_risky);

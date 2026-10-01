@@ -1,23 +1,26 @@
 //! Tauri 命令薄适配层（DESIGN.md §10.3 / §12.1）：只做参数转换与状态
 //! 存取，业务逻辑在 runner / approval / kernel，本文件不写一行。
 
-use std::time::{SystemTime, UNIX_EPOCH};
+mod memory;
+mod plugins;
 
-use serde::Serialize;
+use std::sync::Arc;
+
+pub use memory::*;
+pub use plugins::*;
+
 use tauri::{AppHandle, State};
 
 use kernel_agent::{CompactConfig, ExposureSnapshot};
 use session_store::SessionEvent;
 
 use crate::events::ApprovalRequestPayload;
-use crate::memory::MemoryRow;
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{
-    ContextUpdate, LlmUpdate, MemoryUpdate, SettingsView, ShellUpdate, ToolsUpdate,
+    ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate, PluginsUpdate, SettingsView,
+    ShellUpdate, ToolsUpdate,
 };
 use crate::state::AppState;
-use crate::usage::{self, PluginUsageView};
-use plugin_service::{InstalledPlugin, MarketplaceItem};
 
 /// 聊天命令。轮次内容全部经 `agent://` 事件推送（§12.2），返回值只表达
 /// 轮次是否成功收束（返回实际 step 数）。进度条口径从设置取（⑨）：
@@ -34,7 +37,7 @@ pub async fn agent_chat(
         threshold_tokens: state.settings.effective_threshold_tokens(),
         window_tokens: state.settings.effective_window().unwrap_or(0),
     };
-    runner::run_turn(
+    let steps = runner::run_turn(
         &state.kernel,
         &mut session,
         &session_id,
@@ -43,7 +46,14 @@ pub async fn agent_chat(
         state.sink.as_ref(),
         Some(state.usage.as_ref()),
     )
-    .await
+    .await?;
+    // ⑬ 隐式提取（Context 文档 §5.1 ⑤）：开关开启且轮次成功收束后
+    // fire-and-forget——本轮消息快照带出会话锁，不阻塞返回值。
+    if state.settings.memory().auto_extract {
+        let turn = crate::extract::turn_messages(&session.derive_messages());
+        crate::extract::spawn_turn_extract(state.extract_deps(), session_id.clone(), turn);
+    }
+    Ok(steps)
 }
 
 /// 撤销最近一次上下文压缩（Context and Memory.md §3.7）：rewind_to(压缩
@@ -87,132 +97,6 @@ pub async fn list_pending_approvals(
     Ok(state.approval.pending())
 }
 
-// ---- 插件管理命令（DESIGN.md §11.1 / §13.3）：薄适配层，业务全在
-// PluginService。install/update 返回生效版本号，前端据此刷新。 ----
-
-/// 已安装列表（lockfile 投影 + 注册表运行态合并）。
-#[tauri::command]
-pub async fn plugin_list(state: State<'_, AppState>) -> Result<Vec<InstalledPlugin>, String> {
-    Ok(state.plugins.list_installed())
-}
-
-/// 市场目录（发现页）。市场目录缺失时为空列表，不是错误。
-#[tauri::command]
-pub async fn plugin_registry_list(
-    state: State<'_, AppState>,
-) -> Result<Vec<MarketplaceItem>, String> {
-    state.plugins.catalog()
-}
-
-/// 从市场安装；`version` 缺省取市场 latest。返回实际安装的版本。
-#[tauri::command]
-pub async fn plugin_install(
-    id: String,
-    version: Option<String>,
-    state: State<'_, AppState>,
-) -> Result<String, String> {
-    state
-        .plugins
-        .install(&id, version.as_deref())
-        .await
-        .map(|v| v.to_string())
-}
-
-/// 启用 / 停用（热插拔）。
-#[tauri::command]
-pub async fn plugin_set_enabled(
-    id: String,
-    enabled: bool,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    state.plugins.set_enabled(&id, enabled).await
-}
-
-/// 卸载：逻辑卸载（graveyard）→ 撤 Effect → 删目录（Windows 文件锁删
-/// 不掉则 tombstone，下次启动清理）。
-#[tauri::command]
-pub async fn plugin_uninstall(id: String, state: State<'_, AppState>) -> Result<(), String> {
-    state.plugins.uninstall(&id).await
-}
-
-/// 回退到指定版本（切 active 指针，旧版本永远保留）。返回回退到的版本。
-#[tauri::command]
-pub async fn plugin_rollback(
-    id: String,
-    version: String,
-    state: State<'_, AppState>,
-) -> Result<String, String> {
-    state.plugins.rollback(&id, &version).await?;
-    Ok(version)
-}
-
-/// 更新到市场 latest（失败自动回滚旧指针）。返回新版本。
-#[tauri::command]
-pub async fn plugin_update(id: String, state: State<'_, AppState>) -> Result<String, String> {
-    state.plugins.update(&id).await.map(|v| v.to_string())
-}
-
-/// 批量操作结果（⑩⑥，exposure 文档 §10.2）：逐条成败，部分失败不回滚。
-#[derive(Debug, Default, Serialize)]
-pub struct BatchFailure {
-    pub id: String,
-    pub error: String,
-}
-
-#[derive(Debug, Default, Serialize)]
-pub struct BatchResult {
-    pub ok: Vec<String>,
-    pub failed: Vec<BatchFailure>,
-}
-
-/// 带使用统计的已安装列表（⑩⑤）：闲置分级与筛选档位全在后端裁决
-/// （exposure 文档 §10.1——前端不做时间计算）。
-#[tauri::command]
-pub async fn plugin_list_with_usage(
-    state: State<'_, AppState>,
-) -> Result<Vec<PluginUsageView>, String> {
-    let installed = state.plugins.list_installed();
-    let times = state.usage.plugin_times();
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    Ok(usage::attach(&installed, now, &times))
-}
-
-/// 批量启用/停用（⑩⑥）。逐条执行，失败项列进 failed，成功项照常生效。
-#[tauri::command]
-pub async fn plugin_batch_set_enabled(
-    ids: Vec<String>,
-    enabled: bool,
-    state: State<'_, AppState>,
-) -> Result<BatchResult, String> {
-    let mut result = BatchResult::default();
-    for id in ids {
-        match state.plugins.set_enabled(&id, enabled).await {
-            Ok(()) => result.ok.push(id),
-            Err(error) => result.failed.push(BatchFailure { id, error }),
-        }
-    }
-    Ok(result)
-}
-
-/// 批量卸载（⑩⑥）。逐条执行（graveyard → 撤 Effect → 删目录）。
-#[tauri::command]
-pub async fn plugin_batch_uninstall(
-    ids: Vec<String>,
-    state: State<'_, AppState>,
-) -> Result<BatchResult, String> {
-    let mut result = BatchResult::default();
-    for id in ids {
-        match state.plugins.uninstall(&id).await {
-            Ok(()) => result.ok.push(id),
-            Err(error) => result.failed.push(BatchFailure { id, error }),
-        }
-    }
-    Ok(result)
-}
-
 // ---- 设置命令（DESIGN.md §13.1 / §13.5）：薄适配层，校验与落盘全在
 // SettingsStore。返回投影永不含 API Key 原值，只有 api_key_set。 ----
 
@@ -223,13 +107,15 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
 }
 
 /// 部分更新设置：locale、快捷键、LLM 字段（S2 起含 windowTokens——窗口
-/// 归属模型配置；传 null = 清除，回落保守保护）、上下文管理区（⑨，仅
-/// 阈值+策略）、记忆注入区（⑪）、工具暴露区（⑫，S2 起含单次调用超时）
-/// 与 shell 治理区（S1）独立可选，缺省字段保持不变；base_url / api_key
-/// 传空串 = 清除。改键成功后即时重注册全局快捷键；注册失败返回 Err
-/// （新键已落盘，换键重试即可）。上下文 / 记忆 / 工具暴露 / 超时改动
-/// 成功后换入活配置随即生效；shell 解锁开关经插件加载前的 env 注入，
-/// 重启后生效。
+/// 归属模型配置；传 null = 清除，回落保守保护）、⑬ embedding 区（端点/
+/// 模型/Key）、上下文管理区（⑨，仅阈值+策略）、记忆注入区（⑪，⑬ 起含
+/// autoExtract）、工具暴露区（⑫，S2 起含单次调用超时）、shell 治理区
+/// （S1）与 ⑬ 插件管理区（自动停用天数）独立可选，缺省字段保持不变；
+/// base_url / api_key 传空串 = 清除。改键成功后即时重注册全局快捷键；
+/// 注册失败返回 Err（新键已落盘，换键重试即可）。上下文 / 记忆 / 工具
+/// 暴露 / 超时 / embedding 改动成功后换入活配置随即生效；shell 解锁开关
+/// 经插件加载前的 env 注入，重启后生效；插件自动停用天数 > 0 时保存即
+/// 巡检一遍（0 = 关闭，不自动恢复任何已停用插件）。
 // 参数 = settings.json 各分区一一对应（§3.2）；Tauri command 的扁平
 // IPC 形状不收拢成结构体。
 #[allow(clippy::too_many_arguments)]
@@ -238,21 +124,26 @@ pub async fn settings_set(
     locale: Option<String>,
     shortcut: Option<String>,
     llm: Option<LlmUpdate>,
+    embedding: Option<EmbeddingUpdate>,
     context: Option<ContextUpdate>,
     memory: Option<MemoryUpdate>,
     tools: Option<ToolsUpdate>,
     shell: Option<ShellUpdate>,
+    plugins: Option<PluginsUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
+    let plugins_section_touched = plugins.is_some();
     let view = state.settings.update(
         locale.clone(),
         shortcut.clone(),
         llm,
+        embedding,
         context,
         memory,
         tools,
         shell,
+        plugins,
     )?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;
@@ -280,6 +171,19 @@ pub async fn settings_set(
     if let Ok(mut guard) = state.timeout_cfg.write() {
         *guard = state.settings.call_timeout();
     }
+    // ⑬：embedding 客户端热重建（检索信号/search_tools/经历/提取共用）
+    state.reload_embed();
+    // ⑬：插件自动停用巡检（缺省关；仅在天数 > 0 时跑，0 不复活已停用项）
+    if plugins_section_touched {
+        let days = state.settings.plugins().auto_disable_idle_days;
+        if days > 0 {
+            let plugins_svc = Arc::clone(&state.plugins);
+            let usage_rec = Arc::clone(&state.usage);
+            tokio::spawn(async move {
+                crate::autodisable::auto_disable_idle(&plugins_svc, &usage_rec, days).await;
+            });
+        }
+    }
     Ok(view)
 }
 
@@ -295,48 +199,34 @@ pub async fn llm_probe_window(base_url: Option<String>, model: String) -> Result
     crate::llm::probe::probe_context_window(base_url.as_deref(), model.trim()).await
 }
 
-// ---- 记忆管理命令（⑪，Context and Memory.md §7.2）：薄适配层，SQL 全在
-// memory::MemoryStore（memory.sqlite3 归 memory-sqlite 插件所有，宿主只做
-// 管理页访问）。来源徽章 / 时间文案由前端按结构化字段渲染（§8.1）。 ----
-
-/// 列举记忆：query 空 = 全量（新→旧），否则 key/value/tags 子串过滤。
+/// 探测 embedding 端点（⑬）：按给定端点/模型嵌一条测试文本，返回向量
+/// 维度（UI 显示"维度 768"之类，失败报 Err 由 UI 提示）。与保存解耦——
+/// 这里只探测不落盘。
 #[tauri::command]
-pub async fn memory_list(
-    query: Option<String>,
-    limit: Option<u32>,
-    state: State<'_, AppState>,
-) -> Result<Vec<MemoryRow>, String> {
-    state
-        .memory
-        .list(query.as_deref().unwrap_or(""), limit.unwrap_or(200))
-}
-
-/// 编辑记忆值（只改 value，键名与来源不动；不存在报错）。
-#[tauri::command]
-pub async fn memory_update(
-    key: String,
-    value: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    if !state.memory.update_value(&key, &value)? {
-        return Err(format!("记忆 `{key}` 不存在"));
+pub async fn llm_probe_embedding(
+    base_url: Option<String>,
+    model: String,
+    api_key: Option<String>,
+) -> Result<usize, String> {
+    if model.trim().is_empty() {
+        return Err("embedding 模型名为空，无法探测".into());
     }
-    Ok(())
-}
-
-/// 删除单条记忆（不存在报错，前端据此刷新）。
-#[tauri::command]
-pub async fn memory_delete(key: String, state: State<'_, AppState>) -> Result<(), String> {
-    if !state.memory.delete(&key)? {
-        return Err(format!("记忆 `{key}` 不存在"));
-    }
-    Ok(())
-}
-
-/// 清空全部记忆。返回删除条数（前端提示"已清空 n 条"）。
-#[tauri::command]
-pub async fn memory_clear_all(state: State<'_, AppState>) -> Result<usize, String> {
-    state.memory.clear_all()
+    let client = crate::llm::EmbedClient {
+        base_url: base_url
+            .unwrap_or_else(|| "http://localhost:11434".into())
+            .trim_end_matches('/')
+            .to_string(),
+        model: model.trim().to_string(),
+        api_key: api_key.filter(|k| !k.is_empty()),
+    };
+    client
+        .embed(&["locowrk probe".to_string()])
+        .await
+        .and_then(|vecs| {
+            vecs.first()
+                .map(|v| v.len())
+                .ok_or_else(|| "embedding 响应为空".into())
+        })
 }
 
 // ---- 工具暴露调试命令（⑫，exposure 文档 §6.3/§9.6）：开发者选项读最近

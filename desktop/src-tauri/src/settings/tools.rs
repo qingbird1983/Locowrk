@@ -56,12 +56,7 @@ pub const CALL_TIMEOUT_RANGE: std::ops::RangeInclusive<u32> = 5..=3600;
 impl crate::settings::SettingsStore {
     /// 后端专用：生效截断配置（ToolExposure 共享锁的内容物，⑫）。
     pub(crate) fn exposure_config(&self) -> ToolExposureConfig {
-        let t = self
-            .inner
-            .lock()
-            .expect("settings poisoned")
-            .tools
-            .clone();
+        let t = self.inner.lock().expect("settings poisoned").tools.clone();
         ToolExposureConfig {
             enabled: t.enabled,
             max_tools: t.max_per_request as usize,

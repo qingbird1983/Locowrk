@@ -6,7 +6,7 @@
 //! 仅为读旧 settings.json（open() 迁移一次到 llm 区），不再进投影
 //! 与更新入参。
 
-use kernel_agent::{CompactStrategy, suggested_threshold};
+use kernel_agent::{suggested_threshold, CompactStrategy};
 use serde::{Deserialize, Serialize};
 
 /// strategy 与 kernel-agent 的 CompactStrategy 同形（serde snake_case
