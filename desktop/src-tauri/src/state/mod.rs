@@ -7,6 +7,10 @@
 //! 2. 开发态装载（`plugins/`，内核开发用，不经 lockfile）
 //! 3. 安装态已由第 1 步恢复完毕（`~/.Locowrk`，lockfile 管理）
 
+mod app_state;
+
+pub use app_state::AppState;
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -35,58 +39,20 @@ use crate::settings::SettingsStore;
 use crate::tool_source::KernelToolSource;
 use crate::usage::{UsageDb, UsageEwma, UsageRecorder};
 
-pub struct AppState {
-    /// 阶段八的窗口级命令（对话框、多窗口）从这里取句柄；当前
-    /// 事件出口已是共享 sink，字段暂无读取方。
-    #[allow(dead_code)]
-    pub app: AppHandle,
-    pub kernel: Arc<Kernel>,
-    /// 插件管理唯一入口（UI 不得直碰 registry，AGENTS.md 架构边界）。
-    pub plugins: Arc<PluginService>,
-    /// 审批中心（agent_approve / list_pending_approvals 从这里走）。
-    pub approval: Arc<ApprovalHub>,
-    /// UI 事件出口（§12.2）：runner 与审批请求共用一个 sink。
-    pub sink: Arc<dyn EventSink>,
-    /// session_id → 会话锁。会话在锁内串行聊天（tokio Mutex 可跨 await）；
-    /// 外层 std Mutex 只护 map 存取，绝不跨 await 持有。
-    pub sessions: Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>,
-    /// 设置存储（§13.1）。Arc 共享给 AppLlm（每请求重读，改动即生效）。
-    pub settings: Arc<SettingsStore>,
-    /// ctx-compact 的活配置（kernel-agent 侧只认 CompactConfig）。settings_set
-    /// 成功后由命令层换入新值——压缩行为随即生效，无需重启。
-    pub compact_cfg: Arc<RwLock<CompactConfig>>,
-    /// Memory-Inject 的活配置（⑪，同 compact_cfg 的换入模式）。
-    pub memory_cfg: Arc<RwLock<MemoryInjectConfig>>,
-    /// 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
-    pub memory: Arc<MemoryStore>,
-    /// 使用统计写入端（⑩③，usage.sqlite3 宿主自有）。降级模式 = 丢弃。
-    pub usage: Arc<UsageRecorder>,
-    /// ToolExposure 的活配置（⑫，同 compact_cfg 的换入模式）。
-    pub exposure_cfg: Arc<RwLock<ToolExposureConfig>>,
-    /// ToolExposure 本体（⑫）：tool_exposure_debug 命令读最近一次截断快照。
-    pub exposure: Arc<ToolExposure>,
-    /// 宿主 Timeout 时长（S2）：settings tools 区 callTimeoutSecs 的热换锁，
-    /// Timeout::hot 持有——保存即生效，无需重启。
-    pub timeout_cfg: Arc<RwLock<Duration>>,
-    /// embedding 共享柄（⑬）：settings embedding 区热换入，检索/经历/提取
-    /// 三处共用；None 内值 = 未配置（智能层缺席，各处自行降级）。
-    pub embed: SharedEmbed,
-    /// 带故障冷却的 EmbedPort 实现（⑬，全宿主共用一个实例——冷却状态
-    /// 不能分散）。
-    pub embed_port: Arc<crate::llm::CooledEmbed>,
-    /// 经历记忆库（⑬）；打不开 = None（经历不写不注入，事实记忆照常）。
-    pub experiences: Option<Arc<ExperienceDb>>,
-    /// LLM 服务句柄（⑬ 隐式提取用；与 ctx 里注册的是同一实例）。
-    pub llm: Arc<dyn LlmService>,
-}
-
 pub fn init_state(app: AppHandle) -> AppState {
     let ctx = Arc::new(Context::new());
     let registry = Arc::new(PluginRegistry::new());
     let sink: Arc<dyn EventSink> = Arc::new(TauriSink::new(app.clone()));
 
+    // ⑭ 桌面通知注入 vtable 槽：必须在任何插件 init 之前（tool-notify
+    // 的 desktop 通道经此投递；见 plugin-host host_vtable 模块注释）。
+    crate::desktop_notify::register_vtable_hook(app.clone());
+
     // 数据根绑定一次，设置 / 插件编排 / LLM 配置共用（settings.json 同目录）。
     let root = data_dir();
+
+    // ⑭ 调度库先开（工具目录构造要持有）；引擎等 kernel 就绪后再起。
+    let schedules = crate::scheduler::open_db(&root);
 
     // 使用统计库（⑩③，exposure 文档 §3）：宿主自有 usage.sqlite3，
     // 5s 批量刷盘。打不开只丢统计，不拦聊天。⑫ 的 EWMA 积累与
@@ -111,14 +77,26 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 内置：send_email 是阶段六的演示替身（不可逆 → 走审批弹窗）；
     // search_tools（⑫）持有不含自身的全目录视图做检索（含 hidden，§4.1
     // 显式检索通路）+ usage 做空结果高频回退 + ⑬ 语义检索（未配置降级
-    // 关键词）。
+    // 关键词）；⑭ 调度三件套（库可用时）——检索目录同样要看到它们。
     let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
-    let search_catalog = Arc::new(
+    let sessions: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    let last_chat: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
+
+    let with_schedule_tools = |src: KernelToolSource| match &schedules {
+        Some(db) => src
+            .with_builtin(crate::scheduler::ScheduleCreateTool::new(Arc::clone(db)))
+            .with_builtin(crate::scheduler::ScheduleListTool::new(Arc::clone(db)))
+            .with_builtin(crate::scheduler::ScheduleDeleteTool::new(Arc::clone(db))),
+        None => src,
+    };
+
+    let search_catalog = Arc::new(with_schedule_tools(
         KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
             .with_builtin(Arc::clone(&send_email)),
-    );
+    ));
     let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
-    ctx.provide_dyn::<dyn ToolSource>(Arc::new(
+    ctx.provide_dyn::<dyn ToolSource>(Arc::new(with_schedule_tools(
         KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
             .with_builtin(send_email)
             .with_builtin(SearchToolsTool::new(
@@ -126,7 +104,7 @@ pub fn init_state(app: AppHandle) -> AppState {
                 Arc::clone(&usage),
                 Some(embed_tool_port),
             )),
-    ));
+    )));
 
     let settings: Arc<SettingsStore> = Arc::new(match SettingsStore::open(&root) {
         Ok(s) => s,
@@ -301,13 +279,29 @@ pub fn init_state(app: AppHandle) -> AppState {
         });
     }
 
+    // 6. ⑭ 调度引擎（库可用时）：1s tick 扫到期任务；启动补跑没有单独
+    //    路径——错过的 run_at 落在过去，第一次 tick 的 due() 天然覆盖。
+    if let Some(db) = &schedules {
+        crate::scheduler::spawn_engine(
+            Arc::clone(db),
+            Arc::clone(&kernel),
+            Arc::clone(&sink),
+            Arc::clone(&usage),
+            Arc::clone(&settings),
+            Arc::clone(&sessions),
+            Arc::clone(&last_chat),
+            app.clone(),
+        );
+    }
+
     AppState {
         app,
         kernel,
         plugins,
         approval,
         sink,
-        sessions: Mutex::new(HashMap::new()),
+        sessions,
+        last_chat,
         settings,
         compact_cfg,
         memory_cfg,
@@ -353,39 +347,4 @@ fn open_plugin_service(
         Box::new(LocalDirMarket::new(market_root)),
         builtin_root,
     )
-}
-
-impl AppState {
-    /// 取（或惰性建）某会话的锁。首聊即用，无需显式建会话。
-    pub fn session_lock(&self, id: &str) -> Arc<tokio::sync::Mutex<Session>> {
-        self.sessions
-            .lock()
-            .expect("sessions poisoned")
-            .entry(id.to_string())
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(Session::new())))
-            .clone()
-    }
-
-    /// ⑬ 隐式提取依赖快照（spawn 用，全部 Arc 克隆）。
-    pub fn extract_deps(&self) -> crate::extract::ExtractDeps {
-        crate::extract::ExtractDeps {
-            llm: Arc::clone(&self.llm),
-            memory: Arc::clone(&self.memory),
-            experiences: self.experiences.clone(),
-            embed: Arc::clone(&self.embed_port),
-        }
-    }
-
-    /// ⑬ settings_set 后重建 embedding 客户端（配置保存即生效）。
-    pub fn reload_embed(&self) {
-        let cfg = self.settings.embedding();
-        let l = self.settings.llm();
-        self.embed.set(EmbedClient::from_settings(
-            &cfg,
-            &EmbeddingSettingsLlmView {
-                provider: l.provider,
-                base_url: l.base_url,
-            },
-        ));
-    }
 }

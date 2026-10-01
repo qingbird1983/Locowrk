@@ -124,6 +124,7 @@
 | `plugin://state-changed` | plugins 整表重拉 | PluginMarket 两页签 | 策略：本地 IO 毫秒级，不做增量 |
 | `agent://context-usage`（⑨） | chat `contextUsage` | ContextProgressBar | 每 step 后推送；used 与压缩判定同一估算口径 |
 | `agent://context-compacted`（⑨） | chat `pushNotice('notice.contextCompacted', …, ['details','undo'])` + `noticeDetails` | SystemNotice | 撤销→`context_undo_compact`；详情→`pushRawSystem` |
+| `agent://schedule-fired`（⑭） | chat `pushNotice('notice.scheduleFired', …)` | SystemNotice | 定时触发注入轮的告知（无动作按钮，后续助手回复以 chunk 跟进）；窗口不可见/失焦时后端另发系统通知兜底 |
 
 ### 4.2 命令 → 面板
 

@@ -92,6 +92,7 @@ fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::ApprovalRequest(_) => "approval_request",
         AgentEvent::ContextUsage { .. } => "context_usage",
         AgentEvent::ContextCompacted { .. } => "context_compacted",
+        AgentEvent::ScheduleFired { .. } => "schedule_fired",
     }
 }
 

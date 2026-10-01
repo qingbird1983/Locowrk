@@ -59,6 +59,7 @@ stage tool-edit 1.1.1
 stage tool-git 1.1.0
 stage memory-sqlite 1.2.0
 stage tool-mcp 1.1.0
+stage tool-notify 1.0.0
 
-echo "done: plugins/tool-echo/{1.2.0,1.3.0} plugins/tool-fs/1.2.1 plugins/tool-fetch/1.0.0 plugins/tool-shell/1.2.0 plugins/tool-edit/1.1.1 plugins/{tool-git,tool-mcp}/1.1.0 plugins/memory-sqlite/1.2.0"
+echo "done: plugins/tool-echo/{1.2.0,1.3.0} plugins/tool-fs/1.2.1 plugins/tool-fetch/1.0.0 plugins/tool-shell/1.2.0 plugins/tool-edit/1.1.1 plugins/{tool-git,tool-mcp}/1.1.0 plugins/memory-sqlite/1.2.0 plugins/tool-notify/1.0.0"
 echo "next: cargo run -p kernel-bin -- demo"

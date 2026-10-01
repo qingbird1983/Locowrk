@@ -9,11 +9,12 @@
 //! 纪律：先写 `ToolCall` 事件再执行工具，进程崩溃后可 replay 识别悬空调用；
 //! 模型适配器不特殊，只是经 `use_dyn::<dyn LlmService>` 获取的服务。
 
+mod request;
+
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
-use cordis_core::{Context, CordisError, ScopeKey, Service, WaterfallDecision};
+use cordis_core::{Context, CordisError, ScopeKey, Service};
 use plugin_api::{CallCtx, SideEffect, Tool, ToolError, ToolSpec};
 use serde_json::Value;
 use session_store::{Message, Session, SessionEvent};
@@ -21,7 +22,7 @@ use session_store::{Message, Session, SessionEvent};
 use crate::CompactionOutcome;
 use crate::approval::{ApprovalDecision, ApprovalResolver};
 use crate::middleware::Middleware;
-use crate::waterfall::{PreStepPayload, RequestErrorPayload, RequestPayload, RetryBudget, points};
+use crate::waterfall::RetryBudget;
 
 /// LLM 请求：直接复用 session-store 的中立投影，模型适配层再映射各家协议。
 /// `tools` 是本 step 的工具目录快照（LLM.md：统一 OpenAI 风格，适配器负责
@@ -155,6 +156,25 @@ impl Kernel {
     }
 
     pub async fn step(&self, session: &mut Session) -> Result<StepOutcome, KernelError> {
+        self.step_inner(session, None).await
+    }
+
+    /// 带 会话身份 的 step（⑭）：`CallCtx.session_id`（§5.2 规划字段）自此
+    /// 真正填充——组装点内置工具（schedule_create 等）据此把调度绑定到
+    /// 创建它的会话。普通 `step` 不带身份（既有 17 处调用方零改动）。
+    pub async fn step_as(
+        &self,
+        session: &mut Session,
+        session_id: &str,
+    ) -> Result<StepOutcome, KernelError> {
+        self.step_inner(session, Some(session_id)).await
+    }
+
+    async fn step_inner(
+        &self,
+        session: &mut Session,
+        session_id: Option<&str>,
+    ) -> Result<StepOutcome, KernelError> {
         // 投影：只看游标之前的消息（回退后不含已撤销轮次，§4.2）
         let messages = session.derive_messages();
 
@@ -240,6 +260,7 @@ impl Kernel {
             // 经中间件链执行
             let mut cctx = CallCtx::new();
             cctx.call_id = Some(call.id.clone());
+            cctx.session_id = session_id.map(str::to_owned);
             let out = crate::chain::ToolChain::new(self.mw.as_slice(), Arc::clone(&tool))
                 .call(&mut cctx, call.args.clone())
                 .await;
@@ -257,132 +278,6 @@ impl Kernel {
         }
 
         Ok(StepOutcome::Continue)
-    }
-
-    /// `agent/pre-step` 决策环：放行 → 取改写后的消息；拒绝/重试 → 报错
-    /// （重试只对请求失败点有意义，§7.2）。
-    async fn waterfall_pre(&self, messages: Vec<Message>) -> Result<Vec<Message>, KernelError> {
-        let payload = serde_json::to_value(PreStepPayload { messages })?;
-        let out = self.ctx.events.waterfall(points::PRE_STEP, payload).await;
-        match out.decision {
-            WaterfallDecision::Continue | WaterfallDecision::Replace(_) => {
-                let parsed: PreStepPayload = serde_json::from_value(out.payload)?;
-                Ok(parsed.messages)
-            }
-            WaterfallDecision::Reject(reason) => Err(KernelError::Rejected {
-                point: points::PRE_STEP,
-                reason: reason.reason,
-            }),
-            WaterfallDecision::Retry { .. } => Err(KernelError::Rejected {
-                point: points::PRE_STEP,
-                reason: "retry is meaningless before the first request".into(),
-            }),
-        }
-    }
-
-    /// `agent/request` 决策环：插件可改 model / params / system（记忆注入见
-    /// middleware::memory_inject）。tools 随 payload 进决策环（决策方理论上
-    /// 可裁剪目录），出环后进 LlmRequest；ctx-compact 的压缩结果经
-    /// `compacted` 一并带回（kernel 落日志）。
-    async fn waterfall_request(
-        &self,
-        messages: Vec<Message>,
-        tools: Vec<ToolSpec>,
-    ) -> Result<(LlmRequest, Option<CompactionOutcome>), KernelError> {
-        let payload = serde_json::to_value(RequestPayload {
-            messages,
-            model: None,
-            // 空对象而非 null：改写环可以直接 entry/or_insert（§7.2）
-            params: Value::Object(serde_json::Map::new()),
-            tools,
-            compacted: None,
-            system: None,
-        })?;
-        let out = self.ctx.events.waterfall(points::REQUEST, payload).await;
-        match out.decision {
-            WaterfallDecision::Continue | WaterfallDecision::Replace(_) => {
-                let parsed: RequestPayload = serde_json::from_value(out.payload)?;
-                Ok((
-                    LlmRequest {
-                        messages: parsed.messages,
-                        tools: parsed.tools,
-                        model: parsed.model,
-                        params: parsed.params,
-                        system: parsed.system,
-                    },
-                    parsed.compacted,
-                ))
-            }
-            WaterfallDecision::Reject(reason) => Err(KernelError::Rejected {
-                point: points::REQUEST,
-                reason: reason.reason,
-            }),
-            WaterfallDecision::Retry { .. } => Err(KernelError::Rejected {
-                point: points::REQUEST,
-                reason: "retry without a failure is meaningless".into(),
-            }),
-        }
-    }
-
-    /// 工具目录快照：目录服务缺失 = 空表（纯聊天无需 ToolSource，§7.2）。
-    async fn tool_catalog(&self) -> Vec<ToolSpec> {
-        match self.scoped_dyn::<dyn ToolSource>() {
-            Ok(source) => source.list().await,
-            // 目录没装配就不给模型工具；真调到不存在的工具仍会走
-            // resolve 的 NotAvailable 失败路径，不会静默
-            Err(_) => Vec::new(),
-        }
-    }
-
-    /// LLM 请求 + request-error 决策环。`agent/request-error` 返回
-    /// `Retry { delay }` 时在 step 内部重试（重新走 request 决策环），
-    /// 累计次数 / 累计延迟超预算即失败（§7.2 重试预算）。压缩结果取
-    /// 最后一次成功的决策环产出（重试轮会在原始消息上重压，幂等守卫
-    /// 见 compact.rs；落日志只记一次）。
-    async fn request_with_retry(
-        &self,
-        messages: Vec<Message>,
-        tools: Vec<ToolSpec>,
-    ) -> Result<(LlmResponse, Option<CompactionOutcome>), KernelError> {
-        let mut retries: u32 = 0;
-        let mut total_delay = Duration::ZERO;
-        loop {
-            let (req, compacted) = self
-                .waterfall_request(messages.clone(), tools.clone())
-                .await?;
-            let llm = self.scoped_dyn::<dyn LlmService>()?;
-            match llm.complete(req).await {
-                Ok(resp) => return Ok((resp, compacted)),
-                Err(e) => {
-                    let payload = serde_json::to_value(RequestErrorPayload {
-                        error: e.to_string(),
-                    })?;
-                    let out = self
-                        .ctx
-                        .events
-                        .waterfall(points::REQUEST_ERROR, payload)
-                        .await;
-                    match out.decision {
-                        WaterfallDecision::Retry { delay } => {
-                            retries += 1;
-                            total_delay += delay;
-                            if retries > self.retry_budget.max_retries
-                                || total_delay > self.retry_budget.max_total_delay
-                            {
-                                return Err(KernelError::RetryBudgetExhausted {
-                                    retries,
-                                    total_delay_ms: total_delay.as_millis() as u64,
-                                    source: e,
-                                });
-                            }
-                            tokio::time::sleep(delay).await;
-                        }
-                        // Continue / Replace / Reject 一律按原错误失败（§7.2）
-                        _ => return Err(e.into()),
-                    }
-                }
-            }
-        }
     }
 
     /// 审批门：无决议者时 fail-safe 拒绝（纪律 9：不可逆调用前必须审批）。

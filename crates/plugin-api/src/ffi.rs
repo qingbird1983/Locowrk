@@ -76,12 +76,21 @@ pub type FreeBufFn = extern "C" fn(ptr: *mut u8, len: usize);
 ///
 /// 追加规则：新增能力只能加在结构体**末尾**（§15.1），插件应容忍
 /// "只拿到前缀字段"的旧宿主——阶段三的全部字段为必填。
+///
+/// 追加史：⑭（v2.29）末尾追加 `notify` 桌面通知槽——append-only 不破
+/// `PLUGIN_ABI_VERSION`。旧插件只读前缀字段（repr(C) 布局前缀兼容）；
+/// 新插件跑旧宿主读越界属版本错配（本仓插件与宿主同源发布）。
 #[repr(C)]
 pub struct HostVtable {
     pub log: extern "C" fn(level: u32, ptr: *const u8, len: usize),
     pub kv_get:
         extern "C" fn(k: *const u8, klen: usize, out: *mut *mut u8, olen: *mut usize) -> i32,
     pub kv_put: extern "C" fn(k: *const u8, klen: usize, v: *const u8, vlen: usize) -> i32,
+    /// 桌面系统通知（⑭）：title/body 都是 UTF-8 字节串，宿主投递系统级
+    /// 通知后返回 `code::OK`；无桌面环境（headless 宿主）返回
+    /// `code::ERR_UNSUPPORTED`，插件把失败如实回给模型，不得静默。
+    pub notify:
+        extern "C" fn(title: *const u8, title_len: usize, body: *const u8, body_len: usize) -> i32,
 }
 
 impl HostVtable {
@@ -91,6 +100,14 @@ impl HostVtable {
     /// `self` 必须是 init 时宿主交付的合法指针。
     pub unsafe fn log_str(&self, level: u32, msg: &str) {
         (self.log)(level, msg.as_ptr(), msg.len());
+    }
+
+    /// 插件侧便捷封装：经 vtable 发桌面通知（⑭）。
+    ///
+    /// # Safety
+    /// `self` 必须是 init 时宿主交付的合法指针。
+    pub unsafe fn notify_str(&self, title: &str, body: &str) -> i32 {
+        (self.notify)(title.as_ptr(), title.len(), body.as_ptr(), body.len())
     }
 }
 

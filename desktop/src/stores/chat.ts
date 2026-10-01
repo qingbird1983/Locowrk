@@ -92,6 +92,11 @@ export const useChatStore = defineStore("chat", {
           this.running = false;
           this.steps = e.steps;
           break;
+        case "schedule_fired":
+          // ⑭ 定时触发：SystemNotice 告知（无动作按钮；触发的助手回复
+          // 以 chunk 跟进。窗口不在位时后端另发系统通知兜底）
+          this.pushNotice("notice.scheduleFired", { title: e.title });
+          break;
         case "context_usage":
           this.contextUsage = { used: e.used, threshold: e.threshold, windowTokens: e.window_tokens ?? 0 };
           break;

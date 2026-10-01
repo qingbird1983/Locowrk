@@ -43,6 +43,8 @@ export default {
     contextCompacted: "已压缩早期对话，节省 {saved} token",
     compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",
     compactUndoFailed: "撤销压缩失败：{reason}",
+    // ⑭ 定时触发（调度引擎注入轮前的告知）
+    scheduleFired: "定时任务触发：{title}",
   },
   // 闲置徽章（IdleBadge，⑩ 接线 exposure 文档 §8.4/§11.3）：后端只给
   // 结构化 IdleInfo，前端按档位渲染"多久没用"人类文案——永不显示裸天数

@@ -264,3 +264,90 @@ async fn missing_tool_source_means_empty_catalog() {
     let req = llm.0.lock().unwrap()[0].clone();
     assert!(req.tools.is_empty());
 }
+
+/// ⑭：`step_as` 填充 `CallCtx.session_id`（§5.2 规划字段首次真正落地；
+/// 普通 `step` 保持 None——既有调用方语义不变）。
+struct ProbeSource {
+    seen: Arc<Mutex<Vec<Option<String>>>>,
+}
+
+#[async_trait]
+impl ToolSource for ProbeSource {
+    async fn resolve(&self, _name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+        Ok(Arc::new(ProbeTool {
+            seen: Arc::clone(&self.seen),
+        }))
+    }
+
+    async fn list(&self) -> Vec<ToolSpec> {
+        vec![echo_spec()]
+    }
+}
+
+struct ProbeTool {
+    seen: Arc<Mutex<Vec<Option<String>>>>,
+}
+
+#[async_trait]
+impl Tool for ProbeTool {
+    fn spec(&self) -> &ToolSpec {
+        // 工具目录按名字分发；这里复用 echo 的规格，名字对 LLM 无意义
+        static PROBE: std::sync::OnceLock<ToolSpec> = std::sync::OnceLock::new();
+        PROBE.get_or_init(|| ToolSpec {
+            name: "probe".into(),
+            description: "record ctx".into(),
+            schema: json!({}),
+            side_effect: SideEffect::Pure,
+            exposure: Default::default(),
+        })
+    }
+
+    fn plugin_version(&self) -> &semver::Version {
+        &TOOL_VERSION
+    }
+
+    async fn call(&self, ctx: &CallCtx, _args: Value) -> Result<Value, ToolError> {
+        self.seen.lock().unwrap().push(ctx.session_id.clone());
+        Ok(json!({}))
+    }
+}
+
+/// 永远要求调 probe（ScriptedLlm 见到工具结果会收敛，两次 step 只调一次）。
+struct ProbeLlm;
+
+#[async_trait]
+impl LlmService for ProbeLlm {
+    async fn complete(&self, _req: LlmRequest) -> Result<LlmResponse, LlmError> {
+        Ok(LlmResponse {
+            content: "probe again".into(),
+            tool_calls: vec![ToolCallReq {
+                id: CallId("call-p".into()),
+                tool: "probe".into(),
+                args: json!({}),
+            }],
+        })
+    }
+}
+
+#[tokio::test]
+async fn step_as_fills_callctx_session_id() {
+    let source = Arc::new(ProbeSource {
+        seen: Arc::new(Mutex::new(vec![])),
+    });
+    let ctx = Arc::new(Context::new());
+    ctx.provide_dyn::<dyn LlmService>(Arc::new(ProbeLlm));
+    ctx.provide_dyn::<dyn ToolSource>(Arc::clone(&source) as Arc<dyn ToolSource>);
+    let kernel = Kernel::new(Arc::clone(&ctx), vec![]);
+
+    let mut session = Session::new();
+    session.append(SessionEvent::UserMessage {
+        content: "probe".into(),
+    });
+    kernel.step(&mut session).await.unwrap();
+    kernel.step_as(&mut session, "desktop-42").await.unwrap();
+
+    let seen = source.seen.lock().unwrap();
+    assert_eq!(seen.len(), 2);
+    assert_eq!(seen[0], None, "plain step carries no session identity");
+    assert_eq!(seen[1].as_deref(), Some("desktop-42"));
+}

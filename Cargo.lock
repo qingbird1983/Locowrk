@@ -1408,6 +1408,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tool-notify"
+version = "0.1.0"
+dependencies = [
+ "plugin-api",
+ "ureq",
+]
+
+[[package]]
 name = "tool-shell"
 version = "0.1.0"
 dependencies = [

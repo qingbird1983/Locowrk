@@ -8,7 +8,8 @@ export type AgentEvent =
   | ToolResultEvent
   | TurnDoneEvent
   | ContextUsageEvent
-  | ContextCompactedEvent;
+  | ContextCompactedEvent
+  | ScheduleFiredEvent;
 
 export interface ChunkEvent {
   kind: "chunk";
@@ -60,6 +61,14 @@ export interface ContextCompactedEvent {
   to_tokens: number;
   strategy: string;
   summary_preview: string;
+}
+
+/** 定时触发（agent://schedule-fired，⑭）：调度引擎注入轮之前告知。 */
+export interface ScheduleFiredEvent {
+  kind: "schedule_fired";
+  session_id: string;
+  schedule_id: string;
+  title: string;
 }
 
 /** 审批请求载荷（agent://approval-request）。与 events.rs 的

@@ -31,6 +31,8 @@ pub async fn agent_chat(
     message: String,
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
+    // ⑭：记最近聊过的会话（调度触发的目标解析兜底用）
+    state.note_chat(&session_id);
     let session = state.session_lock(&session_id);
     let mut session = session.lock().await;
     let usage = UsagePolicy {

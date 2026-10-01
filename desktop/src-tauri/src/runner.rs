@@ -47,7 +47,9 @@ pub async fn run_turn(
 
     for steps in 1..=MAX_STEPS {
         let before = session.len();
-        if let Err(e) = kernel.step(session).await {
+        // ⑭：带会话身份 step——CallCtx.session_id 供内置调度工具绑定
+        // 创建会话（§5.2 规划字段；普通 step 保持 None 语义不变）
+        if let Err(e) = kernel.step_as(session, session_id).await {
             return Err(format!("kernel step: {e}"));
         }
         project_new_events(session, before, session_id, sink);

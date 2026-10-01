@@ -24,6 +24,10 @@
 //!   （与 kernel-bin 各持一份：依赖图禁止 plugin-host 实现 kernel-agent trait）
 //! - `tray`：系统托盘 + 全局快捷键（阶段八⑤）——左键显窗 / 菜单显窗与
 //!   退出 / 关窗进托盘；快捷键切窗，键位存 settings.json `shortcut`
+//! - `scheduler`：⑭ 定时调度——宿主内置 schedule_* 工具面 + 触发引擎
+//!   （schedule.sqlite3；触发 = 注入一轮，忙顺延 / 启动补跑）
+//! - `desktop_notify`：⑭ 桌面系统通知（tool-notify desktop 通道的 vtable
+//!   落点 + 调度触发的窗口不在位兜底）
 //!
 //! 纪律：命令只做参数转换；流式输出走事件推送，不塞 command 返回值（§12.2）。
 
@@ -31,6 +35,7 @@ mod approval;
 mod autodisable;
 mod commands;
 mod data_root;
+mod desktop_notify;
 mod demo_llm;
 mod demo_tools;
 mod events;
@@ -41,6 +46,7 @@ mod llm;
 mod memory;
 mod plugins_root;
 mod runner;
+mod scheduler;
 mod search_tools;
 mod settings;
 mod state;
@@ -63,6 +69,9 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tray::plugin())
+        // ⑭ 系统通知（tauri-plugin-notification）：Rust 侧 app.notification()
+        // 投递，无 JS guest、无需 capability；desktop_notify.rs 统一出口
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             app.manage(state::init_state(app.handle().clone()));
             tray::setup(app.handle())?;

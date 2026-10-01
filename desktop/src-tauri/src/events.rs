@@ -20,6 +20,8 @@ pub mod channels {
     pub const CONTEXT_USAGE: &str = "agent://context-usage";
     /// 压缩完成（⑨）：前端推 SystemNotice（[查看详情][撤销]）。
     pub const CONTEXT_COMPACTED: &str = "agent://context-compacted";
+    /// 定时触发（⑭）：调度引擎向会话注入轮之前推送，前端推 SystemNotice。
+    pub const SCHEDULE_FIRED: &str = "agent://schedule-fired";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -80,6 +82,13 @@ pub enum AgentEvent {
         strategy: String,
         summary_preview: String,
     },
+    /// 定时触发（⑭）：调度引擎注入轮之前告知——SystemNotice 无动作按钮，
+    /// 后续助手回复以 chunk 跟进；窗口不在位时后端另有系统通知兜底。
+    ScheduleFired {
+        session_id: String,
+        schedule_id: String,
+        title: String,
+    },
 }
 
 impl AgentEvent {
@@ -92,6 +101,7 @@ impl AgentEvent {
             AgentEvent::ApprovalRequest(_) => channels::APPROVAL_REQUEST,
             AgentEvent::ContextUsage { .. } => channels::CONTEXT_USAGE,
             AgentEvent::ContextCompacted { .. } => channels::CONTEXT_COMPACTED,
+            AgentEvent::ScheduleFired { .. } => channels::SCHEDULE_FIRED,
         }
     }
 }

@@ -39,3 +39,38 @@ fn kv_put_rejects_null_pointers() {
         code::ERR_BAD_ARGS
     );
 }
+
+/// ⑭ notify 槽：钩子在 → 投递并 OK；钩子不在 → UNSUPPORTED（如实告知，
+/// 插件侧转成工具错误回给模型）。钩子是进程级静态，本用例独占操作它
+/// （先装后卸），其余用例不触碰。
+#[test]
+fn notify_dispatches_via_hook_and_unsupported_without() {
+    let title = c"t";
+    let body = c"b";
+    let call = |t: *const u8, b: *const u8| {
+        host_notify(t, title.to_bytes().len(), b, body.to_bytes().len())
+    };
+    // 卸载残留（理论无，防御未来新增并行用例）
+    *NOTIFY_HOOK.lock().unwrap() = None;
+    assert_eq!(
+        call(title.as_ptr() as *const u8, body.as_ptr() as *const u8),
+        code::ERR_UNSUPPORTED
+    );
+
+    let got = Arc::new(Mutex::new(Vec::<String>::new()));
+    let sink = Arc::clone(&got);
+    set_notify_hook(Arc::new(move |t, b| {
+        sink.lock().unwrap().push(format!("{t}/{b}"));
+    }));
+    assert_eq!(
+        call(title.as_ptr() as *const u8, body.as_ptr() as *const u8),
+        code::OK
+    );
+    assert_eq!(*got.lock().unwrap(), vec!["t/b".to_string()]);
+    assert_eq!(
+        call(std::ptr::null(), body.as_ptr() as *const u8),
+        code::ERR_BAD_ARGS
+    );
+    // 还原：不给其他测试留下全局副作用
+    *NOTIFY_HOOK.lock().unwrap() = None;
+}

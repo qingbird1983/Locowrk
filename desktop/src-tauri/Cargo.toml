@@ -18,6 +18,9 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 # 全局快捷键（阶段八⑤）：settings.json `shortcut` 按下 = 切换主窗口
 tauri-plugin-global-shortcut = "2"
+# ⑭ 系统通知：tool-notify desktop 通道（vtable 槽落点）+ 调度触发兜底；
+# 仅 Rust 侧调用，无 JS guest / capability
+tauri-plugin-notification = "2"
 
 # 内核 crate（组装点依赖方向见 AGENTS.md 架构边界）
 cordis-core = { path = "../../crates/cordis-core" }

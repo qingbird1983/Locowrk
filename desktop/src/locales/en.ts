@@ -45,6 +45,8 @@ export default {
     compactUndone:
       "Compaction undone: full pre-compaction context restored (later turns were rewound too).",
     compactUndoFailed: "Failed to undo compaction: {reason}",
+    // ⑭ Scheduled task fired (announced before the injected turn runs)
+    scheduleFired: "Scheduled task fired: {title}",
   },
   // Idle badge (IdleBadge, ⑩ wired per exposure doc §8.4/§11.3): backend
   // sends structured IdleInfo only; the frontend renders human phrasing.

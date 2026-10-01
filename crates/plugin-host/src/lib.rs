@@ -35,6 +35,7 @@ mod wasm;
 
 pub use adapter::{RegistryToolSource, SabiToolAdapter};
 pub use error::LoadError;
+pub use host_vtable::set_notify_hook;
 pub use icon::IconLoader;
 pub use instance::PluginInstance;
 pub use loader::{DylibLoader, PluginLoader};
