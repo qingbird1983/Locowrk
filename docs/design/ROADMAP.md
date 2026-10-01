@@ -164,7 +164,7 @@
 | 隐式记忆提取 | ✅ | settings `memory.autoExtract`（缺省关——"易记垃圾故放最后"）；desktop `extract.rs`：轮次收敛（TurnDone）后 fire-and-forget——本轮消息转录（≤6000 字符）→ LlmService 提取 JSON → ① 事实 ≤3 条（key 清洗 + 强制 `auto.` 命名空间，**永不覆盖用户显式记忆**；source=extracted）写 memory 库（`MemoryStore::write` INSERT..ON CONFLICT）+ ② 经历摘要（≥10 字符，≤500）嵌入落 experiences；parse 剥围栏取 JSON、空 key/value 过滤；任何失败只 warn 不影响聊天；无 UI 通知——结果在记忆页可见（来源徽章"自动提取"） |
 | 自动停用设置项 | ✅ | settings `plugins.autoDisableIdleDays`（0=关 缺省 / 7–365 校验）；desktop `autodisable.rs`：启动 + 设置保存即巡检——距最近使用（从未使用 = 安装时点，与 ⑩ IdleBadge 同口径）≥ N 天的**安装态第三方插件**逐条停用（内置不参与闲置评估，同 ⑩；**只停不启**——关闭不复活已停用项，§8.8 状态切换由用户显式触发）；EmbeddingSection / PluginsSection 新设置分区（§7 扩表）+ §4.2 命令表扩 `llm_probe_embedding`（检测显示向量维度）/ `experience_*` 三命令 |
 
-### ⑭ 触发与推送：tool-schedule + tool-notify（⬜ 2026-09-30 排期，用户确认）
+### ⑭ 触发与推送：tool-schedule + tool-notify（✅ 已完成，v2.29，提交 7dc0139）
 
 > plugins.md P2 四件入正式排期的第一批（tool-browser 仍后排——用户裁定
 > 最后）。两件合批：调度与推送天然成对（触发时刻的"告知用户"通道就是
@@ -174,8 +174,8 @@
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| tool-schedule 定时任务 | ⬜ | **宿主内置工具面**（调度器/存储/触发都是宿主关切，同 search_tools 归宿主先例）：`schedule_create / schedule_list / schedule_delete` 进工具目录；独立 sqlite 持久化（usage/memory/experiences 三库先例）；一次性 + 周期两型；触发 = 向目标会话注入一轮（SystemNotice 提示，窗口不可见时走同批 notify 通道兜底），会话忙顺延、应用未运行错过的启动补跑一次 |
-| tool-notify 桌面通知/Webhook | ⬜ | webhook 通道 = 插件本体（同 tool-fetch 技术栈与 SSRF 防线纪律：目标解析固定 IP、禁重定向、私网段拒绝——v2.14 防线照搬不复核）；桌面通知通道 = plugin-api 宿主 vtable **末尾追加 notify 槽**（append-only 不破 ABI，`PLUGIN_ABI_VERSION` 不动），Tauri 侧弹系统通知；同一工具按参数选通道 |
+| tool-schedule 定时任务 | ✅ | **宿主内置工具面**：desktop `scheduler/`（store/engine/tools 分文件）——`schedule_create / schedule_list / schedule_delete` 经 `KernelToolSource::with_builtin` 进目录（create=Always+Irreversible 审批即告知，list/delete=Pure 按会话隔离）；独立 schedule.sqlite3（`MAX_SCHEDULES=100` 防失控）；一次性（at/delay_secs）+ 周期（interval_secs ≥10s）两型；绑定会话 = `CallCtx.session_id`（**kernel-agent 新 `step_as` 首次填充 §5.2 规划字段**，runner 聊天路径切换，普通 `step` 语义不变）；触发引擎 1s tick：目标解析 = 调度行会话条目仍存活 → 原地注入，行已不在（重启）→ 落最近聊过的活会话（agent_chat 记 last_chat，**不落僵尸会话**），无活会话 → 30s 顺延等待；会话忙（try_lock 失败）30s 顺延，一次性累计 2h 放弃并系统通知、周期让位 20 次跳槽不追帧；**启动补跑无单独路径**——错过期间的 run_at 落在过去，首次 tick 的 due() 天然覆盖（周期补跑一次后滚 now+interval）；触发先行推 `agent://schedule-fired`（SystemNotice），窗口不可见/失焦再补系统通知兜底 |
+| tool-notify 桌面通知/Webhook | ✅ | plugins-src/tool-notify 1.0.0：一个 `notify` 工具按 `channel` 参数二选一——**webhook 通道** = 插件本体（POST JSON {title,body,source}，tool-fetch SSRF 防线照搬：目标解析全地址逐判、私网/环回/链路本地拒绝、redirects(0)、`LOCOWRK_NOTIFY_ALLOW_PRIVATE=1` 显式后门；**非 2xx = 未送达 = 报错**，不学 fetch 把 4xx 当数据）；**桌面通知通道** = plugin-api `HostVtable` **末尾追加 `notify` 槽**（append-only，`PLUGIN_ABI_VERSION` 不动；repr(C) 前缀兼容旧插件），plugin-host `set_notify_hook` 注入（desktop_notify.rs 注册，headless kernel-bin 返回 ERR_UNSUPPORTED 如实上报）；整体 Irreversible（宁严勿松：webhook 对外发数据，分级是工具级粒度） |
 
 ### ⑮ agent-sub 子 Agent 调度（⬜ 2026-09-30 排期）
 
@@ -267,5 +267,5 @@
 | tool-browser | ⏸ 最后 | 文档自己建议晚做（fetch + MCP 已覆盖多数场景）；**用户裁定 2026-09-30：五件中排最末** |
 | tool-sandbox | ⬜ 排期⑯ | shell 容器/WASM 化——注意⑧的 WASM 加载器是插件沙箱，不是 shell 沙箱，两回事；批首先定方案 |
 | agent-sub | ⬜ 排期⑮ | 子 Agent 调度（宿主/内核侧形态，理由见 ⑭⑮⑯ 排期块） |
-| tool-schedule | ⬜ 排期⑭ | 定时任务（宿主内置工具面） |
-| tool-notify | ⬜ 排期⑭ | 桌面通知 / Webhook 推送 |
+| tool-schedule | ✅ | ⑭（v2.29，7dc0139）：宿主内置工具面 + schedule.sqlite3 + 触发引擎，详见 ⑭ 块 |
+| tool-notify | ✅ | ⑭（v2.29，7dc0139）：webhook 插件（SSRF 防线照搬）+ 桌面通知走 vtable 追加槽 |
