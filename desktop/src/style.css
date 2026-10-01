@@ -96,6 +96,9 @@
   --lw-shadow-composer: 0 3px 7.5px #0000000a, 0 0 20px #0000000d;
   --lw-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.35);
   --lw-elevation: 0 0 0 0.5px rgb(255 255 255 / 0.12);
+  /* 主区列宽双柄（UI shell doc §2.7：暗色更明显 / 亮色刻意更淡） */
+  --lw-conv-handle: rgb(255 255 255 / 0.18);
+  --lw-conv-handle-active: rgb(255 255 255 / 0.32);
 
   /* 实色三元组（tailwind 消费，保透明度修饰符） */
   --lw-rgb-bg: 24 24 24;
@@ -161,6 +164,9 @@
   --lw-shadow-composer: 0 3px 7.5px #0000000a, 0 0 20px #0000000d;
   --lw-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.1), 0 0 0 0.5px rgb(0 0 0 / 0.04);
   --lw-elevation: 0 0 0 0.5px rgb(26 28 31 / 0.12);
+  /* 主区列宽双柄（§2.7：亮色 12%/20%，同一条规则不读成"亮缝"） */
+  --lw-conv-handle: rgb(26 28 31 / 0.12);
+  --lw-conv-handle-active: rgb(26 28 31 / 0.2);
 
   --lw-rgb-bg: 255 255 255;
   --lw-rgb-bg-side: 243 243 243;
@@ -431,4 +437,186 @@
   50% {
     opacity: 1;
   }
+}
+
+/* §2.7 列宽：拖拽中零延迟（列宽必须跟手）；仅程序化改宽（双击复位 /
+   键盘 / 窗口变化）走 §6.6 ④ 的滑动过渡。.conv-w = 列宽消费点公共类
+   （转录列 .column 与 composer 卡）。 */
+[data-chat-root][data-conv-resizing="true"] {
+  cursor: col-resize;
+  user-select: none;
+}
+[data-chat-root][data-conv-resizing="true"] .conv-w {
+  transition: none !important;
+}
+[data-chat-root].conv-anim .conv-w {
+  transition: width var(--dur-base) var(--ease-slide);
+}
+
+/* ===========================================================================
+ * 会话主区基元（UI shell doc §3.7–3.9 / §6.5，㉕；v-html 内容与多组件共用，
+ * 放全局层；组件私有形态在各 .vue 的 scoped 块）
+ * =========================================================================== */
+
+/* 状态点（§3.8 工具行状态前置 6px 圆点） */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-ink-4);
+  flex: 0 0 auto;
+}
+.dot--ok {
+  background: var(--lw-ok);
+}
+.dot--danger {
+  background: var(--lw-danger);
+}
+
+/* 可折叠行公共头形态：hover 填充向列外溢 3px，chevron 只换字形不旋转 */
+.cv-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* <button> 的 width:auto 是 shrink-to-fit——显式给足宽度（含两侧各 3px
+     外溢）后，内部 flex 项才会正常收缩（原型注释原样保留） */
+  width: calc(100% + 6px);
+  margin-inline: -3px;
+  padding: 5px 7px;
+  border-radius: var(--lw-r-xs);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--lw-ink-2);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.cv-head:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+.cv-head__label {
+  color: var(--lw-ink-1);
+  font-weight: 500;
+}
+.cv-head__meta {
+  color: var(--lw-ink-3);
+}
+.cv-head__chev {
+  color: var(--lw-ink-4);
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* 行内复制钮（消息行 hover / 代码块头行） */
+.copy-btn {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lw-r-2xs);
+  color: var(--lw-ink-4);
+  transition: background var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.copy-btn:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+
+/* 助手 markdown（§6.5：段落/列表/行内代码/代码块/表格） */
+.md {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--lw-ink-1);
+  overflow-wrap: anywhere;
+}
+.md p {
+  margin: 0 0 12px;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md ul,
+.md ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+.md li {
+  margin-bottom: 4px;
+}
+.md strong {
+  font-weight: 560;
+}
+.md a {
+  color: var(--lw-ink-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--lw-wash-2);
+  border-radius: var(--lw-r-2xs);
+  padding: 1px 5px;
+}
+.code-block {
+  margin: 12px 0;
+  border-radius: var(--lw-r-md);
+  background: var(--lw-bg-inset);
+  overflow: hidden;
+}
+.code-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 8px 0 12px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--lw-ink-4);
+}
+.code-block pre {
+  margin: 0;
+  padding: 0 12px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--lw-ink-2);
+}
+.md .code-block code {
+  background: none;
+  padding: 0;
+  font-size: 12.5px;
+}
+.md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 12.5px;
+}
+.md th {
+  background: var(--lw-wash-1);
+  font-weight: 520;
+  color: var(--lw-ink-2);
+  text-align: left;
+}
+.md th,
+.md td {
+  padding: 8px 12px;
+  vertical-align: top;
+}
+.md tbody td {
+  border-top: 1px solid var(--lw-line-subtle);
+}
+.md td:first-child {
+  color: var(--lw-ink-1);
+}
+.md blockquote {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--lw-line-strong);
+  color: var(--lw-ink-2);
 }

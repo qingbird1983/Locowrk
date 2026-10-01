@@ -6,6 +6,7 @@ import type {
   AgentEvent,
   ApprovalRequest,
   BatchResult,
+  ChatUpdate,
   ContextUpdate,
   InstalledPlugin,
   MemoryRow,
@@ -156,6 +157,7 @@ export function setSettings(patch: {
   tools?: ToolsUpdate;
   shell?: ShellUpdate;
   plugins?: PluginsUpdate;
+  chat?: ChatUpdate;
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
@@ -168,6 +170,7 @@ export function setSettings(patch: {
     tools: patch.tools ?? null,
     shell: patch.shell ?? null,
     plugins: patch.plugins ?? null,
+    chat: patch.chat ?? null,
   });
 }
 

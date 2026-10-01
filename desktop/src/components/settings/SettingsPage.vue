@@ -17,6 +17,7 @@ import {
 } from "../../lib/settings-index";
 import SettingsNav from "../shell/SettingsNav.vue";
 import AppearanceSection from "./AppearanceSection.vue";
+import ChatSection from "./ChatSection.vue";
 import ContextSection from "./ContextSection.vue";
 import DeveloperSection from "./DeveloperSection.vue";
 import EmbeddingSection from "./EmbeddingSection.vue";
@@ -32,6 +33,7 @@ const SECTION_COMPONENTS: Record<SettingsSectionId, Component> = {
   appearance: AppearanceSection,
   language: LanguageSection,
   shortcut: ShortcutSection,
+  chat: ChatSection,
   llm: LlmSection,
   context: ContextSection,
   memory: MemorySection,

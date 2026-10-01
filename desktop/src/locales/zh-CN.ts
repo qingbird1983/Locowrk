@@ -18,11 +18,30 @@ export default {
     back: "返回应用",
   },
   chat: {
-    empty:
-      "发送任意消息开始对话。模型会按需调用已启用的插件工具（当前目录见工具卡片）；send_email 等不可逆工具会先弹出审批确认。",
-    placeholder: "输入消息…（Enter 发送，Shift+Enter 换行）",
+    empty: "发送任意消息开始对话。模型会按需调用已启用的插件工具；不可逆工具会先请求审批。",
+    placeholder: "输入 / 使用命令 · {'@'} 引用文件",
     send: "发送",
     newSession: "新会话",
+    copyMessage: "复制这条消息",
+    copyCode: "复制代码",
+    stopGeneration: "停止生成",
+    widthAria: "对话宽度 {n} 像素",
+  },
+  // 轮次过程组（UI shell doc §3.7）与思考行（§3.9）的头行状态词
+  turn: {
+    running: "处理中",
+    done: "已完成",
+    toolCount: "{n} 个工具",
+    problemCount: "{n} 个问题",
+    thinking: "思考",
+  },
+  // 上下文用量浮层（UI shell doc §3.12）：分项待后端扩展（§8.2），先出
+  // 已有读数
+  usage: {
+    headlineUsed: "已用 {n} tokens",
+    headlineRemaining: "剩余 {n} tokens",
+    window: "上下文窗口",
+    noWindow: "窗口未设置",
   },
   // 壳骨架（UI shell doc §2.3/§2.4，㉓）
   sidebar: {
@@ -52,6 +71,34 @@ export default {
     running: "执行中…",
     success: "成功",
     failed: "失败",
+    copyCall: "复制调用",
+    pluginBadge: "插件",
+    // 动作名映射（UI shell doc §3.18：工具 id 不许直显，摘要态人话）
+    action: {
+      run: "运行",
+      sandbox: "沙箱运行",
+      read: "读取",
+      list: "列目录",
+      write: "写入",
+      edit: "编辑",
+      delete: "删除",
+      restore: "恢复文件",
+      gitStatus: "查看状态",
+      gitDiff: "查看差异",
+      gitCommit: "提交",
+      git: "Git 操作",
+      memoryWrite: "记住",
+      memorySearch: "检索记忆",
+      searchTools: "检索工具",
+      subagent: "派生",
+      scheduleCreate: "创建定时任务",
+      scheduleList: "查看定时任务",
+      scheduleDelete: "取消定时任务",
+      notify: "发送通知",
+      fetch: "抓取网页",
+      mcpStatus: "查看 MCP 状态",
+      mcp: "MCP：{server} 的 {tool}",
+    },
   },
   effect: {
     pure: "纯",
@@ -207,6 +254,7 @@ export default {
       appearance: "外观",
       language: "语言",
       shortcut: "快捷键",
+      chat: "对话",
       llm: "模型",
       context: "上下文",
       memory: "记忆",
@@ -216,6 +264,16 @@ export default {
       tools: "工具与暴露",
       sessions: "会话与数据",
     },
+    // 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽，㉕）
+    chatTitle: "对话行为",
+    chatWidthTitle: "对话宽度",
+    chatWidthHint:
+      "转录列与输入框同宽（缺省 760，下限 560）。拖拽对话区两侧的边缘也可调；实际宽度还会被主区宽度收窄。",
+    expandToolTitle: "默认展开工具执行过程",
+    enterToSendTitle: "回车发送",
+    usageReadoutTitle: "上下文用量读数",
+    usageReadout_used: "已用",
+    usageReadout_remaining: "剩余",
     llmTitle: "LLM 配置",
     llmHint: "保存后立即生效（无需重启）。API Key 只保存在本机数据目录，不会随界面回显。",
     provider: "提供商",

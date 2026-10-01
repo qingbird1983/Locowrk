@@ -115,7 +115,9 @@ pub(crate) fn kernel_with_tools() -> Kernel {
 }
 
 /// 带可选 LlmStreamSink 的同型内核（⑳ 流式抑制测试用）。
-pub(crate) fn kernel_with_tools_streaming(sink: Option<Arc<dyn kernel_agent::LlmStreamSink>>) -> Kernel {
+pub(crate) fn kernel_with_tools_streaming(
+    sink: Option<Arc<dyn kernel_agent::LlmStreamSink>>,
+) -> Kernel {
     let ctx = Arc::new(Context::new());
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(SingleToolSource(Arc::new(EchoTool))));
     ctx.provide_dyn::<dyn LlmService>(Arc::new(DemoLlm::new()));

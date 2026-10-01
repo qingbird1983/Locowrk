@@ -39,6 +39,7 @@ fn tools_defaults_legacy_compat_and_validation() {
             }),
             None,
             None,
+            None,
         )
         .unwrap();
     assert!(!store.view().tools.enabled);
@@ -68,6 +69,7 @@ fn tools_defaults_legacy_compat_and_validation() {
             }),
             None,
             None,
+            None,
         )
         .unwrap();
     assert!(!store.view().tools.enabled);
@@ -90,6 +92,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 }),
                 None,
                 None,
+                None,
             )
             .is_err());
     }
@@ -108,6 +111,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                     call_timeout_secs: Some(bad),
                     ..Default::default()
                 }),
+                None,
                 None,
                 None,
             )
@@ -129,6 +133,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 fs_roots: Some(vec![format!("  {dir}  "), String::new(), dir.clone()]),
                 ..Default::default()
             }),
+            None,
             None,
             None,
         )
@@ -186,6 +191,7 @@ fn fs_roots_normalize_reject_and_env_injection() {
             }),
             None,
             None,
+            None,
         )
         .unwrap();
     crate::state::apply_fs_roots_env(&store);
@@ -203,6 +209,7 @@ fn fs_roots_normalize_reject_and_env_injection() {
                 fs_roots: Some(Vec::new()),
                 ..Default::default()
             }),
+            None,
             None,
             None,
         )

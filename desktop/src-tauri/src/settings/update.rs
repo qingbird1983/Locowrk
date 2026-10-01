@@ -5,8 +5,9 @@
 //! 校验失败提前返回 Err，不污染内存态（测试 `rejects_*` 系列锁定）。
 
 use super::{
-    AppearanceUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate, PluginsUpdate,
-    SettingsStore, SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME, LOCALES, PROVIDERS,
+    AppearanceUpdate, ChatUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate,
+    PluginsUpdate, SettingsStore, SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME, LOCALES,
+    PROVIDERS,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -26,6 +27,7 @@ impl SettingsStore {
         tools: Option<ToolsUpdate>,
         shell: Option<ShellUpdate>,
         plugins: Option<PluginsUpdate>,
+        chat: Option<ChatUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
         if let Some(loc) = locale {
@@ -164,6 +166,34 @@ impl SettingsStore {
                     ));
                 }
                 next.plugins.auto_disable_idle_days = days;
+            }
+        }
+        if let Some(u) = chat {
+            if let Some(w) = u.content_max_width {
+                if !(super::chat::CONTENT_MAX_WIDTH_MIN..=super::chat::CONTENT_MAX_WIDTH_MAX)
+                    .contains(&w)
+                {
+                    return Err(format!(
+                        "对话宽度 {w}px 超出范围（{}–{}）",
+                        super::chat::CONTENT_MAX_WIDTH_MIN,
+                        super::chat::CONTENT_MAX_WIDTH_MAX
+                    ));
+                }
+                next.chat.content_max_width = Some(w);
+            }
+            if let Some(e) = u.expand_tool_process {
+                next.chat.expand_tool_process = e;
+            }
+            if let Some(e) = u.enter_to_send {
+                next.chat.enter_to_send = e;
+            }
+            if let Some(r) = u.usage_readout {
+                if !super::chat::valid_usage_readout(&r) {
+                    return Err(format!(
+                        "不支持的用量读数口径: {r}（可选 used / remaining）"
+                    ));
+                }
+                next.chat.usage_readout = r;
             }
         }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");

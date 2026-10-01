@@ -39,6 +39,7 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     assert!(!store.view().memory.enabled);
@@ -63,6 +64,7 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     assert!(!store.view().memory.enabled);
@@ -81,6 +83,7 @@ fn memory_defaults_legacy_compat_and_validation() {
                     top_k: Some(bad),
                     ..Default::default()
                 }),
+                None,
                 None,
                 None,
                 None,

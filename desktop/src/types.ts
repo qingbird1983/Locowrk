@@ -194,6 +194,25 @@ export interface SettingsView {
   tools: ToolsSettingsView;
   shell: ShellSettingsView;
   plugins: PluginsView;
+  /** 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好）。 */
+  chat: ChatSettingsView;
+}
+
+/** 对话行为区投影：结构即设置原值。contentMaxWidth null = 未设置（前端按
+ * 缺省 760 渲染）。 */
+export interface ChatSettingsView {
+  contentMaxWidth: number | null;
+  expandToolProcess: boolean;
+  enterToSend: boolean;
+  usageReadout: string;
+}
+
+/** 对话行为区部分更新：字段缺省 = 保持不变。 */
+export interface ChatUpdate {
+  contentMaxWidth?: number;
+  expandToolProcess?: boolean;
+  enterToSend?: boolean;
+  usageReadout?: string;
 }
 
 /** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。autoExtract =

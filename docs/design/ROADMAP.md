@@ -346,7 +346,30 @@
 | ⌘K 入口收敛 | ✅ v2.41 | shell store `openSettings(section?)` 单一入口（CommandPalette 改调）；同分区连跳 = 幂等无操作（板面已在该处） |
 | 文档 | ✅ v2.41 | UI shell v3.4：§3.32 头部增"板面切换模型"段、三/七两条随改、§3.15"闪一下"改板面切换 |
 
-### ㉕ UI 设计落地④：对话主区（⬜ §2.7 列宽三轴 / §3.7–3.9 过程组·工具行·思考行 / §3.11 composer 坞 / §6.5 markdown）
+### ㉕ UI 设计落地④：对话主区（✅ 已完成，v2.42）
+
+> §2.7 列宽三轴双柄 / §3.7–3.9 过程组·工具行·思考行 / §3.11 composer 坞 /
+> §3.12 用量浮层 / §6.5 markdown 兑现；搭车落 §3.2 `ChatSection`（settings
+> `chat` 区，§8.2 预留项）。实机走查（tauri dev + 截图 + settings.json 落盘
+> 取证）：markdown 转录 / 过程组折叠展开 / 工具行中文动作与加工摘要 /
+> 明细块 / 实时轮（用户气泡 + 流式 markdown + 用量环）/ 列宽柄（键盘
+> ±16 / 拖拽实时缩放 + 双柄对称 + composer 同步 + 落盘 / 双击复位 760 /
+> 热区下沿停在 composer 顶）/ 设置「对话」分区四行。走查中修掉两个真实
+> 缺陷：① i18n 占位文案裸 `@` 触发 vue-i18n linked-format 编译崩溃（整页
+> 白屏，`{'@'}` 转义修复）；② 列宽拖拽监听元素级在 capture 失配时随指针
+> 出热区即死（改 window 级监听兜底）。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| settings `chat` 区（后端） | ✅ v2.42 | settings/chat.rs：contentMaxWidth（钳 560–4000）/ expandToolProcess（缺省关）/ enterToSend（缺省开）/ usageReadout（used/remaining）；字段级缺省零迁移；update.rs 校验 + 命令接线 + 测试 3 例（全桌面 93 绿）；前端 types/api/store saveChat + ChatSection 分区（settings-index 新增「对话」条目 + chat 字形） |
+| 列宽三轴双柄 §2.7 | ✅ v2.42 | ConversationWidthHandles：偏好值 settings 唯一真源（`chat.contentMaxWidth`），实战宽 = clamp(偏好, 560, 主区宽−48) 写到对话区根 `--lw-content-max`——转录列/composer/消息正文三处同吃一个变量；双柄中心对称、指针 1px ⇒ 2px；12px 隐形热区（容器 pointer-events:none，下沿 = composer 顶）；2×40 竖条 hover 淡入、拖拽 56px 加深（token conv-handle 暗 18%/亮 12%）；拖拽零延迟（data-conv-resizing 全局锁）+ rAF、程序化改宽走 conv-anim 滑动；键盘 ←/→ 16（Shift 32）方向按 data-side、Home 复位/End 最宽/Esc 取消不落盘/双击复位 760；pointerup 落盘 |
+| 轮次过程组 §3.7 | ✅ v2.42 | TurnProcess.vue：头行 = sparkle + 处理中/已完成 + · 时长（实时轮每秒走字；历史重放无时间戳不虚构）+ · N 个工具（失败 ⓘ N 个问题）+ chevron 只换字形；hover 溢出 3px；展开体左缩进 + 1px 引导线，只含过程项（工具/思考）；连续过程项合成组（ChatTranscript 分组 walk），系统通知/助手正文/错误行是组外兄弟；折叠本地态、默认一律收起（含运行中）；展开/收起 = §6.6 ④ grid-rows 0fr→1fr + 内容 40ms 延后 + 结束摘 overflow |
+| 工具行 §3.8 | ✅ v2.42 | ToolRow.vue 替代 ToolCallCard（卡降级为行，去边框 wash 分层）：折叠单行 = 类目字形 + **中文动作名**（§3.18 映射表 i18n 化，mcp_* 动态拼参；表外回落工具 id + 「插件」徽章）+ 加工参数摘要（lib/tool-summary.ts：命令类剥 cd/bash -lc 只留首命令 + … +N、文件类工作区相对路径、对象类取 prompt/query/url/key 键值不带括号引号、兜底 clip48）+ 写/编辑类变更统计（输出字段尽力提取，取不到不渲染不虚构）+ 状态点（ok 绿点/运行中脉动/失败 danger）；hover 复制调用按钮；展开态 bg-inset 圆角 10 参数/结果原样（失败 error danger 色）；失败自动展开一次（实时与重放同规）；「默认展开工具执行过程」设置只吃实时新发轮次（ts 存在），重放一律折叠 |
+| 思考行 §3.9 | ✅ v2.42 | ThinkingRow.vue：sparkle + 「思考」+ 摘要单行截断（剥 markdown 记号与换行取首句）+ 展开原文 pre-wrap（wash-1 圆角 10、12.5px/1.55）；store 加 `thinking` 条目类型——**数据源（推理流事件）待后端（§8.2 已记），不发明占位事件，通道有了即为消费端** |
+| composer 坞 §3.11 | ✅ v2.42 | Composer.vue 替代 PromptBar：浮起卡片（r-xl、bg-composer、shadow-composer、无边框、`min(100%, var(--lw-content-max))` 与转录列同源不写死）；自适应文本域 1 行起 max-h 180、占位「输入 / 使用命令 · {'@'} 引用文件」；工具条左 = 模型 chip（状态显示，§3.30 选择器前无菜单）；右 = 用量环（dasharray 按 used/window，点开 §3.12 浮层）+ 36px 发送键（空禁用灰/运行中换停止字形禁用——轮次中止后端 §8.2 待接，不假装可点）；Enter 发送（enterToSend 开关，关 = Ctrl+Enter；IME 组合中不发送）/ Shift+Enter 换行；附件 `+` / 权限 chip / 提示词增强随后端批次（§8.2 已记，不发明占位） |
+| 用量浮层 §3.12 | ✅ v2.42 | ContextUsagePopover.vue：环上方右对齐 360px elevated + 1px line（弹层语法）；headline 口径跟 usageReadout（已用/剩余）；窗口行 used/window + %；分项（本轮合计/速度/模型用量/工具上下文）待后端载荷扩展（§8.2 既有行） |
+| markdown §6.5 | ✅ v2.42 | lib/markdown.ts（marked + DOMPurify + 代码块增强：语言标签头行 + 复制钮，figure.code-block 形态）+ style.css 全局 .md 规则（段落/列表/行内代码/代码块 bg-inset 圆角 12 12.5px mono/表格满列宽 wash-1 表头 1px 行线无外框/引用）；助手正文整列宽不再是气泡；消息行动作区（复制 + 时间 HH:MM hover 显形，历史重放无时间戳不显示）；纯文本 pre-wrap 渲染缺口补齐 |
+| 走查修复 | ✅ v2.42 | ① vue-i18n 占位文案裸 `@` = linked 语法 → 消息编译异常整页白屏（新增文案带 `@`/`|`/`{}` 必须转义——纪律入 §7 备忘）；② 列宽拖拽改 window 级 pointermove/up 监听（元素级在 capture 失配时失效）；③ Composer IME 组合中 Enter 不发送 |
 
 ### ㉖ UI 设计落地⑤：审批决策卡 + 会话运营（⬜ §3.17 三键卡（后端：决策枚举/风险档/超时）/ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联）
 

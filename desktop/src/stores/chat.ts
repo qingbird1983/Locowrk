@@ -17,12 +17,19 @@ export type ToolItem = {
   ok: boolean | null;
   output?: unknown;
   error?: string | null;
+  /** 实时到达的时刻（Date.now()）；历史重放无此项（§3.7 时长只在实时
+   * 轮次显示，重放不虚构时序）。 */
+  ts?: number;
+  doneTs?: number;
 };
 
 export type ChatItem =
-  | { id: number; kind: "user"; text: string }
-  | { id: number; kind: "assistant"; text: string }
+  | { id: number; kind: "user"; text: string; ts?: number }
+  | { id: number; kind: "assistant"; text: string; ts?: number }
   | ToolItem
+  /** 思考行（§3.9 模式先行；数据源 = 推理流事件，后端待接入 §8.2——
+   * 本批不发明占位事件，等通道有了这里就是消费端）。 */
+  | { id: number; kind: "thinking"; text: string }
   | { id: number; kind: "error"; text: string }
   /** 会话内系统消息（SystemNotice 模式）：压缩通知 / 已记住 / 审批结果。 */
   | SystemItem;
@@ -55,6 +62,9 @@ export const useChatStore = defineStore("chat", {
     contextUsage: null as { used: number; threshold: number; windowTokens: number } | null,
     /** 系统消息"查看详情"的内容（id → 文本，如压缩摘要预览）。 */
     noticeDetails: {} as Record<number, string>,
+    /** 历史重放中（switchSession / init 恢复）：不记时间戳、工具行不吃
+     * 「默认展开」设置（§3.8 历史重放默认折叠）。 */
+    replaying: false,
   }),
   actions: {
     async init() {
@@ -83,7 +93,12 @@ export const useChatStore = defineStore("chat", {
       this.contextUsage = null;
       this.noticeDetails = {};
       const events = await sessionHistory(id).catch(() => [] as AgentEvent[]);
-      for (const e of events) this.onEvent(e);
+      this.replaying = true;
+      try {
+        for (const e of events) this.onEvent(e);
+      } finally {
+        this.replaying = false;
+      }
     },
     /** 新会话（⑲）：前端生成 id 清空视图；首条消息发出前不创建任何
      * 后端状态（空会话不落盘不进列表，§3.6）。 */
@@ -111,6 +126,7 @@ export const useChatStore = defineStore("chat", {
             pluginVersion: e.plugin_version,
             pending: true,
             ok: null,
+            ...(this.replaying ? {} : { ts: Date.now() }),
           });
           if (e.tool === "subagent_run") {
             // ⑮ 派生告知（SystemNotice）：子 Agent 内部活动不投影（黑盒），
@@ -131,6 +147,7 @@ export const useChatStore = defineStore("chat", {
             item.ok = e.ok;
             item.output = e.output;
             item.error = e.error;
+            if (!this.replaying) item.doneTs = Date.now();
             if (item.tool === "subagent_run") {
               // ⑮ 收束告知：摘要回父会话；预算耗尽/超时/失败在
               // status/summary 里如实呈现（status 详见工具卡结果 JSON）
@@ -178,7 +195,12 @@ export const useChatStore = defineStore("chat", {
       if (last && last.kind === "assistant") {
         last.text += delta;
       } else {
-        this.items.push({ id: nextId++, kind: "assistant", text: delta });
+        this.items.push({
+          id: nextId++,
+          kind: "assistant",
+          text: delta,
+          ...(this.replaying ? {} : { ts: Date.now() }),
+        });
       }
     },
     /** 系统消息入列（SystemNotice 模式的唯一生产入口；首个生产者 ⑨
@@ -199,7 +221,7 @@ export const useChatStore = defineStore("chat", {
     async send(text: string) {
       const t = text.trim();
       if (!t || this.running) return;
-      this.items.push({ id: nextId++, kind: "user", text: t });
+      this.items.push({ id: nextId++, kind: "user", text: t, ts: Date.now() });
       this.running = true;
       this.steps = null;
       try {

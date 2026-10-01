@@ -18,8 +18,8 @@ use session_store::SessionMeta;
 use crate::events::{AgentEvent, ApprovalRequestPayload};
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{
-    AppearanceUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate, PluginsUpdate,
-    SettingsView, ShellUpdate, ToolsUpdate,
+    AppearanceUpdate, ChatUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate,
+    PluginsUpdate, SettingsView, ShellUpdate, ToolsUpdate,
 };
 use crate::state::AppState;
 
@@ -166,6 +166,7 @@ pub async fn settings_set(
     tools: Option<ToolsUpdate>,
     shell: Option<ShellUpdate>,
     plugins: Option<PluginsUpdate>,
+    chat: Option<ChatUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
@@ -182,6 +183,7 @@ pub async fn settings_set(
         tools,
         shell,
         plugins,
+        chat,
     )?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;

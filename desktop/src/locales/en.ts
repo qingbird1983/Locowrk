@@ -19,10 +19,29 @@ export default {
   },
   chat: {
     empty:
-      "Send any message to start. The model calls enabled plugin tools as needed (each call shows as a tool card); irreversible tools such as send_email raise an approval dialog first.",
-    placeholder: "Type a message… (Enter to send, Shift+Enter for newline)",
+      "Send any message to start. The model calls enabled plugin tools as needed; irreversible tools raise an approval request first.",
+    placeholder: "Type / use commands · {'@'} reference files",
     send: "Send",
     newSession: "New chat",
+    copyMessage: "Copy this message",
+    copyCode: "Copy code",
+    stopGeneration: "Stop generating",
+    widthAria: "Conversation width {n} pixels",
+  },
+  // Turn process group (UI shell doc §3.7) and thinking row (§3.9)
+  turn: {
+    running: "Working",
+    done: "Completed",
+    toolCount: "{n} tools",
+    problemCount: "{n} problems",
+    thinking: "Thinking",
+  },
+  // Context usage popover (UI shell doc §3.12); detailed rows pending backend (§8.2)
+  usage: {
+    headlineUsed: "{n} tokens used",
+    headlineRemaining: "{n} tokens remaining",
+    window: "Context window",
+    noWindow: "Window not set",
   },
   // Shell chrome (UI shell doc §2.3/§2.4, batch ㉓)
   sidebar: {
@@ -52,6 +71,34 @@ export default {
     running: "Running…",
     success: "Success",
     failed: "Failed",
+    copyCall: "Copy call",
+    pluginBadge: "plugin",
+    // Human action names (UI shell doc §3.18: tool ids never shown in summary)
+    action: {
+      run: "Run",
+      sandbox: "Sandboxed run",
+      read: "Read",
+      list: "List",
+      write: "Write",
+      edit: "Edit",
+      delete: "Delete",
+      restore: "Restore file",
+      gitStatus: "Show status",
+      gitDiff: "Show diff",
+      gitCommit: "Commit",
+      git: "Git operation",
+      memoryWrite: "Remember",
+      memorySearch: "Search memory",
+      searchTools: "Search tools",
+      subagent: "Spawn",
+      scheduleCreate: "Create schedule",
+      scheduleList: "Show schedules",
+      scheduleDelete: "Cancel schedule",
+      notify: "Send notification",
+      fetch: "Fetch page",
+      mcpStatus: "Show MCP status",
+      mcp: "MCP: {tool} on {server}",
+    },
   },
   effect: {
     pure: "pure",
@@ -210,6 +257,7 @@ export default {
       appearance: "Appearance",
       language: "Language",
       shortcut: "Shortcuts",
+      chat: "Chat",
       llm: "Model",
       context: "Context",
       memory: "Memory",
@@ -219,6 +267,16 @@ export default {
       tools: "Tools & exposure",
       sessions: "Sessions & data",
     },
+    // Chat behavior section (UI shell doc §3.2 ChatSection / §2.7 width, ㉕)
+    chatTitle: "Chat behavior",
+    chatWidthTitle: "Conversation width",
+    chatWidthHint:
+      "Transcript and composer share one width (default 760, minimum 560). Dragging either edge of the conversation also adjusts it; the live width is clamped by the main area.",
+    expandToolTitle: "Expand tool execution by default",
+    enterToSendTitle: "Enter sends",
+    usageReadoutTitle: "Usage readout",
+    usageReadout_used: "Used",
+    usageReadout_remaining: "Remaining",
     llmTitle: "LLM configuration",
     llmHint:
       "Applies immediately after saving (no restart). The API key is stored only in the local data directory and is never echoed back to the UI.",

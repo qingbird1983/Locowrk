@@ -8,7 +8,7 @@ use kernel_agent::LlmStreamSink;
 use session_store::Session;
 
 use crate::runner::run_turn;
-use crate::tests::{Collector, kernel_with_tools_streaming};
+use crate::tests::{kernel_with_tools_streaming, Collector};
 
 /// delta 收集 sink（模拟 StreamChunkSink 直推语义：收到即真消费）。
 #[derive(Clone, Default)]

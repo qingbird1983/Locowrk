@@ -6,17 +6,18 @@ import { useChatStore } from "./stores/chat";
 import { useSettingsStore } from "./stores/settings";
 import { useShellStore } from "./stores/shell";
 import ApprovalModal from "./components/ApprovalModal.vue";
-import ChatMessages from "./components/ChatMessages.vue";
+import ChatTranscript from "./components/ChatTranscript.vue";
+import Composer from "./components/chat/Composer.vue";
 import ContextProgressBar from "./components/ContextProgressBar.vue";
 import MemoryPage from "./components/MemoryPage.vue";
 import PluginMarket from "./components/PluginMarket.vue";
-import PromptBar from "./components/PromptBar.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 import CommandPalette from "./components/shell/CommandPalette.vue";
 import DestinationShell from "./components/shell/DestinationShell.vue";
 import Sidebar from "./components/shell/Sidebar.vue";
 import Topbar from "./components/shell/Topbar.vue";
 import WindowControls from "./components/shell/WindowControls.vue";
+import { ref } from "vue";
 
 /**
  * 壳骨架（UI shell doc §2.1 区域地图 / §2.6 保活规则）：
@@ -32,6 +33,8 @@ const chat = useChatStore();
 const approvals = useApprovalsStore();
 const settings = useSettingsStore();
 const shell = useShellStore();
+/** composer 坞总高：列宽热区下沿（ConversationWidthHandles）的锚。 */
+const composerH = ref(0);
 
 onMounted(() => {
   chat.init();
@@ -50,16 +53,18 @@ onMounted(() => {
     <template v-else>
       <Sidebar />
 
-      <!-- 对话主区：目的地切换时挂起，回来即恢复滚动与在跑的会话 -->
+      <!-- 对话主区：目的地切换时挂起，回来即恢复滚动与在跑的会话。
+           data-chat-root = 列宽覆盖变量与拖拽锁的挂点（§2.7） -->
       <div
+        data-chat-root
         class="relative flex min-w-0 flex-1 flex-col"
         :style="{ display: shell.destination === 'chat' ? '' : 'none' }"
         :inert="shell.destination !== 'chat'"
       >
         <Topbar />
         <ContextProgressBar :usage="chat.contextUsage" />
-        <ChatMessages />
-        <PromptBar />
+        <ChatTranscript :composer-bottom="composerH" />
+        <Composer @height="composerH = $event" />
       </div>
 
       <!-- 非对话目的地：侧栏右侧铺满，按需挂载 -->

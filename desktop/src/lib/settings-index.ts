@@ -16,6 +16,7 @@ export type SettingsSectionId =
   | "appearance"
   | "language"
   | "shortcut"
+  | "chat"
   | "llm"
   | "context"
   | "memory"
@@ -69,6 +70,18 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     labelKey: "settings.nav.shortcut",
     icon: "edit",
     searchKeys: ["settings.shortcutTitle", "settings.shortcut"],
+  },
+  {
+    id: "chat",
+    group: "prefs",
+    labelKey: "settings.nav.chat",
+    icon: "chat",
+    searchKeys: [
+      "settings.chatWidthTitle",
+      "settings.expandToolTitle",
+      "settings.enterToSendTitle",
+      "settings.usageReadoutTitle",
+    ],
   },
   {
     id: "llm",

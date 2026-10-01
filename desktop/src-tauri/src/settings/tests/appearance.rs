@@ -35,6 +35,7 @@ fn appearance_defaults_legacy_compat_and_update() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     let v = SettingsStore::open(&root).unwrap().view().appearance;
@@ -52,6 +53,7 @@ fn rejects_unknown_theme() {
             Some(AppearanceUpdate {
                 theme: Some("sepia".into()),
             }),
+            None,
             None,
             None,
             None,

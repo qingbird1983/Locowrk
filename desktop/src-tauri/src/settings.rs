@@ -11,6 +11,7 @@ use kernel_agent::{CompactConfig, MemoryInjectConfig};
 use serde::{Deserialize, Serialize};
 
 mod appearance;
+mod chat;
 mod context;
 mod embedding;
 mod llm;
@@ -21,6 +22,7 @@ mod tools;
 mod update;
 
 pub use appearance::{AppearanceSettings, AppearanceUpdate, AppearanceView};
+pub use chat::{ChatSettings, ChatUpdate, ChatView};
 pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{LlmSettings, LlmSettingsView, LlmUpdate, PROVIDERS};
@@ -65,6 +67,9 @@ pub struct AppSettings {
     pub shell: ShellSettings,
     /// 插件管理区（⑬ 自动停用；类型见 `plugins` 子模块）。
     pub plugins: PluginsSettings,
+    /// 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好；类型见
+    /// `chat` 子模块）。字段级缺省零迁移。
+    pub chat: ChatSettings,
 }
 
 fn default_shortcut() -> String {
@@ -84,6 +89,7 @@ impl Default for AppSettings {
             tools: ToolsSettings::default(),
             shell: ShellSettings::default(),
             plugins: PluginsSettings::default(),
+            chat: ChatSettings::default(),
         }
     }
 }
@@ -105,6 +111,8 @@ pub struct SettingsView {
     pub tools: ToolsSettingsView,
     pub shell: ShellSettingsView,
     pub plugins: PluginsView,
+    /// 对话行为区（§3.2 ChatSection）。
+    pub chat: ChatView,
 }
 
 pub struct SettingsStore {
@@ -274,6 +282,12 @@ impl SettingsStore {
             },
             plugins: PluginsView {
                 auto_disable_idle_days: s.plugins.auto_disable_idle_days,
+            },
+            chat: ChatView {
+                content_max_width: s.chat.content_max_width,
+                expand_tool_process: s.chat.expand_tool_process,
+                enter_to_send: s.chat.enter_to_send,
+                usage_readout: s.chat.usage_readout.clone(),
             },
         }
     }

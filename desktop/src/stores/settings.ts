@@ -5,6 +5,7 @@ import { getSettings, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
 import { applyThemePref } from "../lib/theme";
 import type {
+  ChatUpdate,
   ContextUpdate,
   EmbeddingUpdate,
   LlmUpdate,
@@ -174,6 +175,19 @@ export const useSettingsStore = defineStore("settings", {
         this.error = String(e);
       } finally {
         this.saving = false;
+      }
+    },
+    /** 保存对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好）：
+     * 列宽 / 默认展开过程 / 回车发送 / 用量读数口径，保存即生效。 */
+    async saveChat(chat: ChatUpdate) {
+      this.error = "";
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ chat });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
       }
     },
     /** 保存 shell 治理区（S1）：高危解锁开关经插件加载前的 env 注入，
