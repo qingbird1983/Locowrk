@@ -2,7 +2,7 @@
 // UI 事件是会话日志的投影（后端 runner.rs），本 store 只消费不生产。
 import { defineStore } from "pinia";
 import { chat, sessionHistory, sessionList, subscribeAgentEvents } from "../lib/api";
-import { compactNumber } from "../lib/format";
+import { clip, compactNumber } from "../lib/format";
 import type { AgentEvent, SessionMeta } from "../types";
 
 export type ToolItem = {
@@ -41,11 +41,6 @@ export type SystemItem = {
 };
 
 let nextId = 1;
-
-/** 通知里长文本的摘引宽度（全文在工具卡/结果 JSON 里）。 */
-function clip(s: string, n: number): string {
-  return s.length > n ? s.slice(0, n) + "…" : s;
-}
 
 export const useChatStore = defineStore("chat", {
   state: () => ({

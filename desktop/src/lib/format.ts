@@ -43,3 +43,9 @@ function short(v: number): string {
   if (Math.abs(v - r) < 1e-9) return String(r);
   return `≈${Math.round(v * 10) / 10}`;
 }
+
+/** 长文本摘引（通知摘要 / 工具卡折叠行参数摘要，§3.7）：截断加省略号，
+ * 全文在展开体里。 */
+export function clip(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}

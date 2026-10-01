@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { contextUndoCompact } from "../lib/api";
 import { useChatStore, type SystemItem } from "../stores/chat";
 import SystemNotice from "./chat/SystemNotice.vue";
+import ToolCallCard from "./chat/ToolCallCard.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -16,14 +17,6 @@ watch(
     bottom.value?.scrollIntoView({ behavior: "smooth" });
   },
 );
-
-function pretty(v: unknown): string {
-  try {
-    return JSON.stringify(v, null, 2);
-  } catch {
-    return String(v);
-  }
-}
 
 /** 系统消息文本：__raw__ 条渲染原文，其余按 i18n key 翻译。 */
 function noticeText(item: SystemItem): string {
@@ -77,75 +70,8 @@ async function onNoticeAction(item: SystemItem, action: string) {
           </div>
         </div>
 
-        <!-- 工具调用卡片（beautifului Tool Chips 形态的 Tailwind 实现） -->
-        <div
-          v-else-if="item.kind === 'tool'"
-          class="max-w-[85%] rounded-lg border border-line-strong/70 bg-surface-1/40 text-xs"
-        >
-          <div
-            class="flex items-center gap-2 border-b border-line-strong/50 px-3 py-2"
-          >
-            <span class="font-mono font-semibold text-amber-400">
-              ⚙ {{ item.tool }}
-            </span>
-            <span
-              class="rounded bg-surface-2/60 px-1.5 py-0.5 text-[10px] text-ink-2"
-            >
-              v{{ item.pluginVersion }}
-            </span>
-            <span
-              class="rounded px-1.5 py-0.5 text-[10px]"
-              :class="
-                item.sideEffect === 'irreversible'
-                  ? 'bg-red-900/60 text-red-300'
-                  : item.sideEffect === 'compensable'
-                    ? 'bg-amber-900/60 text-amber-300'
-                    : 'bg-emerald-900/60 text-emerald-300'
-              "
-            >
-              {{ t(`effect.${item.sideEffect}`) }}
-            </span>
-            <span
-              class="ml-auto"
-              :class="
-                item.pending
-                  ? 'text-ink-4'
-                  : item.ok
-                    ? 'text-emerald-400'
-                    : 'text-red-400'
-              "
-            >
-              {{
-                item.pending
-                  ? t("tool.running")
-                  : item.ok
-                    ? t("tool.success")
-                    : t("tool.failed")
-              }}
-            </span>
-          </div>
-          <div class="space-y-2 px-3 py-2">
-            <div>
-              <p class="mb-1 text-[10px] uppercase tracking-wider text-ink-4">
-                {{ t("tool.params") }}
-              </p>
-              <pre
-                class="overflow-x-auto rounded bg-surface-0/80 p-2 font-mono text-[11px] text-ink-2"
-                >{{ pretty(item.args) }}</pre
-              >
-            </div>
-            <div v-if="!item.pending">
-              <p class="mb-1 text-[10px] uppercase tracking-wider text-ink-4">
-                {{ t("tool.result") }}
-              </p>
-              <pre
-                class="overflow-x-auto rounded bg-surface-0/80 p-2 font-mono text-[11px]"
-                :class="item.ok ? 'text-ink-2' : 'text-red-300'"
-                >{{ item.ok ? pretty(item.output) : item.error }}</pre
-              >
-            </div>
-          </div>
-        </div>
+        <!-- 工具调用卡（§3.7 ToolCallCard 模式，㉑）：默认折叠单行摘要 -->
+        <ToolCallCard v-else-if="item.kind === 'tool'" :item="item" />
 
         <!-- 会话内系统消息（SystemNotice 模式）：压缩通知/已记住/审批结果 -->
         <div v-else-if="item.kind === 'system'" class="flex justify-center">
