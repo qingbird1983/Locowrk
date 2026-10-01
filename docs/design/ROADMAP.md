@@ -331,6 +331,21 @@
 | ⌘K → 设置跳转 | ✅ v2.40 | shell store `settingsFocus {section, nonce}` 载荷：命中设置分区 → 切设置目的地 + SettingsPage 滚到该分区 + 锚点闪烁（`lw-settings-flash` 一次性 wash-3 渐隐，§3.15"闪一下"；重触发用 reflow 复位）；已在本页/跨目的地两路都接（watcher + onMounted 补偿） |
 | i18n | ✅ v2.40 | zh/en 增 settings.nav/groups/navSearch/navEmpty + palette.* 五键组；icons 补 globe 字形（sprite 逐字） |
 
+### ㉔·fix 设置页改分类板面切换（✅ 已完成，v2.41）
+
+> 用户 2026-10-02 裁定：设置页不许是"一整条长滚动页 + 左栏名义跳转"，必须
+> **拆分到每个分类每个板面**。UI shell 文档 §3.32 先行改版（v3.4 板面切换
+> 模型）：右栏同一时刻只渲染当前分区组件，滚动侦测 / 锚点闪烁 / 分区间
+> gap 随之退役；⌘K 命中 = 直接切板面。实机走查（tauri dev + 截图）：轨
+> 点击切板面 + 页头换标题、⌘K「嵌入」直达设置分区板面、轨搜索「终端」
+> 命中切板面、返回应用对话状态完好。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 板面切换模型 | ✅ v2.41 | SettingsPage 重写：右栏一次只渲染 `shell.settingsSection` 指向的分区组件（Record 映射随迁，SettingsPanel 堆叠容器删除）；当前分区放壳 store（重开设置保持上次板面），轨点击 / ⌘K / 轨搜索命中都改写同一份状态，组件纯响应式——滚动定位、scroll-spy、`settings-flash` 锚点闪烁、settingsFocus nonce 载荷全部退役 |
+| ⌘K 入口收敛 | ✅ v2.41 | shell store `openSettings(section?)` 单一入口（CommandPalette 改调）；同分区连跳 = 幂等无操作（板面已在该处） |
+| 文档 | ✅ v2.41 | UI shell v3.4：§3.32 头部增"板面切换模型"段、三/七两条随改、§3.15"闪一下"改板面切换 |
+
 ### ㉕ UI 设计落地④：对话主区（⬜ §2.7 列宽三轴 / §3.7–3.9 过程组·工具行·思考行 / §3.11 composer 坞 / §6.5 markdown）
 
 ### ㉖ UI 设计落地⑤：审批决策卡 + 会话运营（⬜ §3.17 三键卡（后端：决策枚举/风险档/超时）/ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联）

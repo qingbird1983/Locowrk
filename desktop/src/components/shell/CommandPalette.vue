@@ -4,8 +4,8 @@
  * 入口。分组结果 = 会话 / 页面 / 设置 / 命令，形态照原型（.palette /
  * .menu-item）：52px 搜索行 + Esc 键帽、结果 max-h 滚动、11px 组标签、
  * 12.5px 行 + 行尾键帽或所属分区；当前行 wash-2 高亮，↑↓ 移动、Enter
- * 执行、Esc 关闭、mouseenter 跟随。选中「设置」类结果 → 跳设置目的地
- * 并滚到该分区闪一下（shell.focusSettingsSection，§3.32 三）。
+ * 执行、Esc 关闭、mouseenter 跟随。选中「设置」类结果 → 打开设置目的地
+ * 并切到该分区板面（shell.openSettings，§3.32 v3.4 板面切换模型）。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -67,7 +67,7 @@ const allGroups = computed<PaletteGroup[]>(() => {
     key: `settings:${s.id}`,
     label: t(s.labelKey),
     hint: `${t("nav.settings")} / ${t(s.labelKey)}`,
-    run: () => shell.focusSettingsSection(s.id),
+    run: () => shell.openSettings(s.id),
   }));
   const commands: PaletteItem[] = [
     {

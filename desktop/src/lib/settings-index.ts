@@ -2,7 +2,7 @@
  * 设置索引（UI shell doc §3.32 一）：导航轨与 ⌘K 命令面板的唯一真源。
  * 每个分区声明 { id, group, labelKey, icon, searchKeys }，两侧同吃一份——
  * "新增分区忘了加搜索"这类漂移在结构上不可能发生。§3.2 的"settings.json
- * 分区 ↔ 面板分区一一对应"由 SettingsPanel 按本索引渲染机械保证。
+ * 分区 ↔ 面板分区一一对应"由 SettingsPage 按本索引渲染机械保证。
  *
  * searchKeys = 分区内行标题的 i18n key（搜索匹配的是解析后的文案，中英
  * 各自命中；索引驱动，不爬渲染后的 DOM）。
