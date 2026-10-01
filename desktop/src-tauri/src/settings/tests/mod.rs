@@ -29,6 +29,7 @@ fn update_persists_and_roundtrips() {
         .update(
             Some("en".into()),
             None,
+            None,
             Some(LlmUpdate {
                 provider: Some("ollama".into()),
                 model: Some("llama3".into()),
@@ -61,6 +62,7 @@ fn api_key_never_leaks_into_view() {
         .update(
             None,
             None,
+            None,
             Some(LlmUpdate {
                 api_key: Some("sk-secret-value".into()),
                 ..Default::default()
@@ -86,6 +88,7 @@ fn empty_string_clears_none_keeps() {
     let set = |k: Option<&str>, b: Option<&str>| {
         store
             .update(
+                None,
                 None,
                 None,
                 Some(LlmUpdate {
@@ -121,6 +124,7 @@ fn rejects_unknown_provider_and_locale() {
         .update(
             None,
             None,
+            None,
             Some(LlmUpdate {
                 provider: Some("gemini".into()),
                 ..Default::default()
@@ -136,6 +140,7 @@ fn rejects_unknown_provider_and_locale() {
     assert!(store
         .update(
             Some("fr".into()),
+            None,
             None,
             None,
             None,
@@ -161,6 +166,7 @@ fn shortcut_default_update_and_validation() {
     store
         .update(
             None,
+            None,
             Some("Alt+Space".into()),
             None,
             None,
@@ -185,6 +191,7 @@ fn shortcut_default_update_and_validation() {
     assert!(store
         .update(
             None,
+            None,
             Some("Not A Key!!".into()),
             None,
             None,
@@ -197,6 +204,7 @@ fn shortcut_default_update_and_validation() {
         .is_err());
     assert!(store
         .update(
+            None,
             None,
             Some("".into()),
             None,
@@ -212,6 +220,7 @@ fn shortcut_default_update_and_validation() {
     std::fs::remove_dir_all(&root).ok();
 }
 
+mod appearance;
 mod memory;
 mod window;
 

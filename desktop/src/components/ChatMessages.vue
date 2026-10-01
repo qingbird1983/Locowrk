@@ -53,7 +53,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
     <div class="mx-auto flex max-w-3xl flex-col gap-3">
       <p
         v-if="chat.items.length === 0"
-        class="mt-16 text-center text-sm text-neutral-500"
+        class="mt-16 text-center text-sm text-ink-4"
       >
         {{ t("chat.empty") }}
       </p>
@@ -71,7 +71,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
         <!-- 助手消息：左侧气泡 -->
         <div v-else-if="item.kind === 'assistant'" class="flex justify-start">
           <div
-            class="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-neutral-800 px-4 py-2 text-sm"
+            class="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-surface-1 px-4 py-2 text-sm"
           >
             {{ item.text }}
           </div>
@@ -80,16 +80,16 @@ async function onNoticeAction(item: SystemItem, action: string) {
         <!-- 工具调用卡片（beautifului Tool Chips 形态的 Tailwind 实现） -->
         <div
           v-else-if="item.kind === 'tool'"
-          class="max-w-[85%] rounded-lg border border-neutral-700/70 bg-neutral-800/40 text-xs"
+          class="max-w-[85%] rounded-lg border border-line-strong/70 bg-surface-1/40 text-xs"
         >
           <div
-            class="flex items-center gap-2 border-b border-neutral-700/50 px-3 py-2"
+            class="flex items-center gap-2 border-b border-line-strong/50 px-3 py-2"
           >
             <span class="font-mono font-semibold text-amber-400">
               ⚙ {{ item.tool }}
             </span>
             <span
-              class="rounded bg-neutral-700/60 px-1.5 py-0.5 text-[10px] text-neutral-300"
+              class="rounded bg-surface-2/60 px-1.5 py-0.5 text-[10px] text-ink-2"
             >
               v{{ item.pluginVersion }}
             </span>
@@ -109,7 +109,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
               class="ml-auto"
               :class="
                 item.pending
-                  ? 'text-neutral-500'
+                  ? 'text-ink-4'
                   : item.ok
                     ? 'text-emerald-400'
                     : 'text-red-400'
@@ -126,21 +126,21 @@ async function onNoticeAction(item: SystemItem, action: string) {
           </div>
           <div class="space-y-2 px-3 py-2">
             <div>
-              <p class="mb-1 text-[10px] uppercase tracking-wider text-neutral-500">
+              <p class="mb-1 text-[10px] uppercase tracking-wider text-ink-4">
                 {{ t("tool.params") }}
               </p>
               <pre
-                class="overflow-x-auto rounded bg-neutral-900/80 p-2 font-mono text-[11px] text-neutral-300"
+                class="overflow-x-auto rounded bg-surface-0/80 p-2 font-mono text-[11px] text-ink-2"
                 >{{ pretty(item.args) }}</pre
               >
             </div>
             <div v-if="!item.pending">
-              <p class="mb-1 text-[10px] uppercase tracking-wider text-neutral-500">
+              <p class="mb-1 text-[10px] uppercase tracking-wider text-ink-4">
                 {{ t("tool.result") }}
               </p>
               <pre
-                class="overflow-x-auto rounded bg-neutral-900/80 p-2 font-mono text-[11px]"
-                :class="item.ok ? 'text-neutral-300' : 'text-red-300'"
+                class="overflow-x-auto rounded bg-surface-0/80 p-2 font-mono text-[11px]"
+                :class="item.ok ? 'text-ink-2' : 'text-red-300'"
                 >{{ item.ok ? pretty(item.output) : item.error }}</pre
               >
             </div>

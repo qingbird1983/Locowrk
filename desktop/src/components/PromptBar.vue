@@ -16,13 +16,13 @@ function send() {
 </script>
 
 <template>
-  <footer class="border-t border-neutral-800 px-5 py-3">
+  <footer class="border-t border-line px-5 py-3">
     <div class="mx-auto flex max-w-3xl items-end gap-2">
       <textarea
         v-model="draft"
         rows="1"
         :placeholder="t('chat.placeholder')"
-        class="flex-1 resize-none rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm outline-none placeholder:text-neutral-600 focus:border-emerald-600"
+        class="flex-1 resize-none rounded-xl border border-line-strong bg-surface-1 px-3 py-2 text-sm outline-none placeholder:text-ink-5 focus:border-emerald-600"
         @keydown.enter.exact.prevent="send"
       />
       <button

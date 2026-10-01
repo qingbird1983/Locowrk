@@ -37,7 +37,7 @@ const subFilter = defineModel<string>("subFilter");
     <!-- 头部：筛选 chips 在左、搜索框在右（与既有插件页布局一致） -->
     <div
       v-if="search !== undefined || (filters && filters.length > 0)"
-      class="flex items-center gap-2 border-b border-[var(--lw-border)] px-5 py-2"
+      class="flex items-center gap-2 border-b border-line px-5 py-2"
     >
       <div v-if="filters && filters.length > 0" class="flex gap-1">
         <button
@@ -46,8 +46,8 @@ const subFilter = defineModel<string>("subFilter");
           class="rounded-full px-3 py-1 text-xs font-medium transition"
           :class="
             filter === f.key
-              ? 'bg-[var(--lw-surface-2)] text-[var(--lw-text-1)]'
-              : 'text-[var(--lw-text-3)] hover:text-[var(--lw-text-2)]'
+              ? 'bg-surface-2 text-ink-1'
+              : 'text-ink-4 hover:text-ink-3'
           "
           @click="filter = f.key"
         >
@@ -58,14 +58,14 @@ const subFilter = defineModel<string>("subFilter");
         v-if="search !== undefined"
         v-model="search"
         :placeholder="searchPlaceholder"
-        class="ml-auto w-56 rounded-lg border border-[var(--lw-border-strong)] bg-[var(--lw-surface-1)] px-3 py-1.5 text-xs text-[var(--lw-text-1)] outline-none placeholder:text-[var(--lw-text-4)] focus:border-[var(--lw-text-3)]"
+        class="ml-auto w-56 rounded-lg border border-line-strong bg-surface-1 px-3 py-1.5 text-xs text-ink-1 outline-none placeholder:text-ink-5 focus:border-line-strong"
       />
     </div>
 
     <!-- 第二排筛选 chips（⑩ 闲置档位）：结构与第一排一致 -->
     <div
       v-if="subFilters && subFilters.length > 0"
-      class="flex gap-1 border-b border-[var(--lw-border)] px-5 py-2"
+      class="flex gap-1 border-b border-line px-5 py-2"
     >
       <button
         v-for="f in subFilters"
@@ -73,8 +73,8 @@ const subFilter = defineModel<string>("subFilter");
         class="rounded-full px-3 py-1 text-xs font-medium transition"
         :class="
           subFilter === f.key
-            ? 'bg-[var(--lw-surface-2)] text-[var(--lw-text-1)]'
-            : 'text-[var(--lw-text-3)] hover:text-[var(--lw-text-2)]'
+            ? 'bg-surface-2 text-ink-1'
+            : 'text-ink-4 hover:text-ink-3'
         "
         @click="subFilter = f.key"
       >
@@ -84,7 +84,7 @@ const subFilter = defineModel<string>("subFilter");
 
     <!-- 内容区：空态优先 -->
     <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-      <p v-if="isEmpty" class="text-sm text-[var(--lw-text-3)]">
+      <p v-if="isEmpty" class="text-sm text-ink-4">
         {{ emptyText }}
       </p>
       <slot v-else />
@@ -93,7 +93,7 @@ const subFilter = defineModel<string>("subFilter");
     <!-- 批量操作栏：选中非空时固定在底部 -->
     <div
       v-if="batching"
-      class="flex items-center gap-2 border-t border-[var(--lw-border)] bg-[var(--lw-surface-1)]/60 px-5 py-2"
+      class="flex items-center gap-2 border-t border-line bg-surface-1/60 px-5 py-2"
     >
       <slot name="batch" />
     </div>

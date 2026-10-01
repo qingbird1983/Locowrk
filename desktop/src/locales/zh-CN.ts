@@ -189,6 +189,12 @@ export default {
     langZh: "中文",
     langEn: "English",
     langHint: "立即生效并记住选择；「跟随系统」时中文环境显示中文，其他显示英文。",
+    // ⑰ 外观分区：明暗主题三档
+    themeTitle: "外观",
+    themeSystem: "跟随系统",
+    themeLight: "浅色",
+    themeDark: "深色",
+    themeHint: "立即生效并记住选择；「跟随系统」随系统明暗自动切换。",
     shortcutTitle: "全局快捷键",
     shortcut: "切换主窗口",
     shortcutPlaceholder: "如 Ctrl+Shift+L",

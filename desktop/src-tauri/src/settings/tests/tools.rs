@@ -29,6 +29,7 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
             Some(ToolsUpdate {
                 enabled: Some(false),
                 max_per_request: Some(15),
@@ -58,6 +59,7 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
             Some(ToolsUpdate {
                 max_per_request: Some(30),
                 ..Default::default()
@@ -79,6 +81,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
+                None,
                 Some(ToolsUpdate {
                     max_per_request: Some(bad),
                     ..Default::default()
@@ -92,6 +95,7 @@ fn tools_defaults_legacy_compat_and_validation() {
     for bad in [4, 3601] {
         assert!(store
             .update(
+                None,
                 None,
                 None,
                 None,

@@ -92,13 +92,13 @@ function clearKey() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-neutral-800 p-4">
+  <section class="space-y-3 rounded-xl border border-line p-4">
     <h3 class="text-xs font-semibold">{{ t("settings.llmTitle") }}</h3>
-    <p class="text-[11px] text-neutral-500">{{ t("settings.llmHint") }}</p>
+    <p class="text-[11px] text-ink-4">{{ t("settings.llmHint") }}</p>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.provider") }}</span>
-      <select v-model="form.provider" class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5">
+      <span class="text-ink-3">{{ t("settings.provider") }}</span>
+      <select v-model="form.provider" class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5">
         <option value="openai">OpenAI</option>
         <option value="anthropic">Anthropic</option>
         <option value="ollama">Ollama</option>
@@ -106,42 +106,42 @@ function clearKey() {
     </label>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.model") }}</span>
+      <span class="text-ink-3">{{ t("settings.model") }}</span>
       <input
         v-model="form.model"
         type="text"
-        class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
       />
     </label>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.baseUrl") }}</span>
+      <span class="text-ink-3">{{ t("settings.baseUrl") }}</span>
       <input
         v-model="form.baseUrl"
         type="text"
         :placeholder="t('settings.baseUrlPlaceholder')"
-        class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 placeholder:text-neutral-600"
+        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
       />
     </label>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.apiKey") }}</span>
+      <span class="text-ink-3">{{ t("settings.apiKey") }}</span>
       <input
         v-model="form.apiKey"
         type="password"
         autocomplete="off"
         :placeholder="settings.view?.llm.apiKeySet ? t('settings.apiKeyKeep') : t('settings.apiKeyPlaceholder')"
-        class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 placeholder:text-neutral-600"
+        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
       />
     </label>
 
     <!-- 上下文窗口（S2 迁入）：压缩阈值的换算基准，档位呈现（§3.5） -->
     <div class="space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.window") }}</span>
+      <span class="text-ink-3">{{ t("settings.window") }}</span>
       <div class="flex items-center gap-2">
         <select
           v-model="form.windowChoice"
-          class="block min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+          class="block min-w-0 flex-1 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
         >
           <option value="unset">{{ t("settings.windowUnset") }}</option>
           <option v-for="p in PRESETS" :key="p" :value="String(p)">
@@ -151,7 +151,7 @@ function clearKey() {
         </select>
         <button
           v-if="form.provider === 'ollama'"
-          class="shrink-0 rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+          class="shrink-0 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="form.probing"
           @click="probeWindow"
         >
@@ -163,19 +163,19 @@ function clearKey() {
       </p>
     </div>
     <label v-if="form.windowChoice === 'custom'" class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.windowCustomLabel") }}</span>
+      <span class="text-ink-3">{{ t("settings.windowCustomLabel") }}</span>
       <input
         v-model.number="form.customWindow"
         type="number"
         min="100"
         step="1000"
-        class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
       />
     </label>
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
@@ -183,7 +183,7 @@ function clearKey() {
       </button>
       <button
         v-if="settings.view?.llm.apiKeySet"
-        class="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 transition hover:bg-neutral-800"
+        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-3 transition hover:bg-surface-1"
         :disabled="settings.saving"
         @click="clearKey"
       >

@@ -23,7 +23,7 @@ function color(kind: string): string {
     case "irreversible":
       return "bg-red-900/40 text-red-300";
     default:
-      return "bg-neutral-700/60 text-neutral-400";
+      return "bg-surface-2/60 text-ink-3";
   }
 }
 </script>

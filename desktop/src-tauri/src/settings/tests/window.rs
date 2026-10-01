@@ -56,6 +56,7 @@ fn llm_window_update_validation_and_threshold_math() {
         .update(
             None,
             None,
+            None,
             Some(LlmUpdate {
                 window_tokens: Some(Some(128_000)),
                 ..Default::default()
@@ -82,6 +83,7 @@ fn llm_window_update_validation_and_threshold_math() {
         .update(
             None,
             None,
+            None,
             Some(LlmUpdate {
                 window_tokens: Some(None),
                 ..Default::default()
@@ -101,6 +103,7 @@ fn llm_window_update_validation_and_threshold_math() {
         .update(
             None,
             None,
+            None,
             Some(LlmUpdate {
                 window_tokens: Some(Some(50)),
                 ..Default::default()
@@ -117,6 +120,7 @@ fn llm_window_update_validation_and_threshold_math() {
         .update(
             None,
             None,
+            None,
             Some(LlmUpdate {
                 window_tokens: Some(Some(200_000_001)),
                 ..Default::default()
@@ -131,6 +135,7 @@ fn llm_window_update_validation_and_threshold_math() {
         .is_err());
     assert!(store
         .update(
+            None,
             None,
             None,
             None,

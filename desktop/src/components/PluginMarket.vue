@@ -23,7 +23,7 @@ onMounted(() => {
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <!-- 页签 -->
     <div
-      class="flex items-center gap-1 border-b border-neutral-800 px-5 py-2"
+      class="flex items-center gap-1 border-b border-line px-5 py-2"
     >
       <button
         v-for="key in (['discover', 'installed'] as const)"
@@ -31,8 +31,8 @@ onMounted(() => {
         class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
         :class="
           tab === key
-            ? 'bg-neutral-700 text-neutral-100'
-            : 'text-neutral-500 hover:text-neutral-300'
+            ? 'bg-surface-2 text-ink-1'
+            : 'text-ink-4 hover:text-ink-2'
         "
         @click="tab = key"
       >

@@ -196,6 +196,12 @@ export default {
     langEn: "English",
     langHint:
       "Applies immediately and is remembered. \"Follow system\" shows Chinese on zh environments, English otherwise.",
+    // ⑰ Appearance section: light/dark theme
+    themeTitle: "Appearance",
+    themeSystem: "Follow system",
+    themeLight: "Light",
+    themeDark: "Dark",
+    themeHint: "Applies immediately and is remembered. \"Follow system\" tracks your OS light/dark setting.",
     shortcutTitle: "Global shortcut",
     shortcut: "Toggle main window",
     shortcutPlaceholder: "e.g. Ctrl+Shift+L",

@@ -39,9 +39,9 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-neutral-800 p-4">
+  <section class="space-y-3 rounded-xl border border-line p-4">
     <h3 class="text-xs font-semibold">{{ t("settings.memoryTitle") }}</h3>
-    <p class="text-[11px] text-neutral-500">{{ t("settings.memoryHint") }}</p>
+    <p class="text-[11px] text-ink-4">{{ t("settings.memoryHint") }}</p>
 
     <label class="flex cursor-pointer items-center gap-2 text-xs">
       <input v-model="form.enabled" type="checkbox" class="accent-emerald-500" />
@@ -49,15 +49,15 @@ function save() {
     </label>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.memoryTopK") }}</span>
+      <span class="text-ink-3">{{ t("settings.memoryTopK") }}</span>
       <input
         v-model.number="form.topK"
         type="number"
         min="1"
         max="20"
-        class="block w-32 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+        class="block w-32 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
       />
-      <span class="text-[11px] text-neutral-600">{{ t("settings.memoryTopKHint") }}</span>
+      <span class="text-[11px] text-ink-5">{{ t("settings.memoryTopKHint") }}</span>
     </label>
 
     <!-- ⑬ 隐式提取：缺省关（易记垃圾），开启后回合结束异步提事实+经历 -->
@@ -65,11 +65,11 @@ function save() {
       <input v-model="form.autoExtract" type="checkbox" class="accent-emerald-500" />
       <span>{{ t("settings.memoryAutoExtract") }}</span>
     </label>
-    <p class="text-[11px] text-neutral-600">{{ t("settings.memoryAutoExtractHint") }}</p>
+    <p class="text-[11px] text-ink-5">{{ t("settings.memoryAutoExtractHint") }}</p>
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >

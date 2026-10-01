@@ -56,7 +56,7 @@ function pickVersion(id: string, versions: string[]): string {
         <template #actions>
           <select
             :value="pickVersion(item.id, item.versions)"
-            class="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none"
+            class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs text-ink-2 outline-none"
             @change="
               picked.set(item.id, ($event.target as HTMLSelectElement).value)
             "

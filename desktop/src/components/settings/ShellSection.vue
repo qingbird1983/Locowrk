@@ -31,9 +31,9 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-neutral-800 p-4">
+  <section class="space-y-3 rounded-xl border border-line p-4">
     <h3 class="text-xs font-semibold">{{ t("settings.shellTitle") }}</h3>
-    <p class="text-[11px] text-neutral-500">{{ t("settings.shellHint") }}</p>
+    <p class="text-[11px] text-ink-4">{{ t("settings.shellHint") }}</p>
 
     <label class="flex cursor-pointer items-start gap-2 text-xs">
       <input v-model="form.unlockRisky" type="checkbox" class="mt-0.5 accent-emerald-500" />
@@ -42,11 +42,11 @@ function save() {
     <p class="rounded-lg border border-amber-700/50 bg-amber-900/20 p-2 text-[11px] text-amber-300">
       ⚠️ {{ t("settings.shellUnlockWarning") }}
     </p>
-    <p class="text-[11px] text-neutral-600">{{ t("settings.shellRestart") }}</p>
+    <p class="text-[11px] text-ink-5">{{ t("settings.shellRestart") }}</p>
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >

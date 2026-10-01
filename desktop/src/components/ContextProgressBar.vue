@@ -36,18 +36,14 @@ const ratio = computed(() => {
 <template>
   <div v-if="usage" class="flex items-center gap-2 px-5 pt-2 text-[10px]">
     <div
-      class="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--lw-surface-1)]"
+      class="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-1"
     >
-      <div
-        class="h-full rounded-full transition-all"
-        :class="tone"
-        :style="{ width: `${pct}%` }"
-      />
+      <div class="lw-bar-fill h-full rounded-full" :class="tone" :style="{ width: `${pct}%` }" />
     </div>
-    <span v-if="ratio" class="shrink-0 text-[var(--lw-text-3)]">
+    <span v-if="ratio" class="shrink-0 text-ink-4">
       {{ ratio }}
     </span>
-    <span class="shrink-0 text-[var(--lw-text-3)]">
+    <span class="shrink-0 text-ink-4">
       {{ Math.round(pct) }}%
     </span>
   </div>

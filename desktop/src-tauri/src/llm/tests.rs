@@ -137,6 +137,7 @@ async fn configured_model_without_key_fails_fast() {
         .update(
             None,
             None,
+            None,
             Some(crate::settings::LlmUpdate {
                 provider: Some("openai".into()),
                 model: Some("gpt-4o-mini".into()),

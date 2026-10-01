@@ -31,30 +31,30 @@ const meta = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2 rounded-xl border border-neutral-800 bg-neutral-800/60 p-4">
+  <div class="flex flex-col gap-2 rounded-xl border border-line bg-surface-1/60 p-4">
     <div class="flex items-start gap-3">
       <PluginIcon :icon="item.display.icon" :id="item.id" />
       <div class="min-w-0 flex-1">
         <div class="flex items-start justify-between gap-2">
-          <h3 class="truncate text-sm font-semibold text-neutral-100" :title="item.id">
+          <h3 class="truncate text-sm font-semibold text-ink-1" :title="item.id">
             {{ name }}
           </h3>
           <span
             v-if="latest"
-            class="shrink-0 rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] text-neutral-400"
+            class="shrink-0 rounded-full bg-surface-0 px-2 py-0.5 text-[10px] text-ink-3"
           >
             v{{ latest }}
           </span>
         </div>
-        <p class="font-mono text-[10px] text-neutral-600">{{ item.id }}</p>
+        <p class="font-mono text-[10px] text-ink-5">{{ item.id }}</p>
       </div>
     </div>
-    <p v-if="desc" class="min-h-8 text-xs leading-relaxed text-neutral-400">
+    <p v-if="desc" class="min-h-8 text-xs leading-relaxed text-ink-3">
       {{ desc }}
     </p>
     <div class="flex items-center gap-1.5">
       <SideEffectBadges :kinds="item.display.side_effects" />
-      <span v-if="meta" class="ml-auto truncate text-[10px] text-neutral-600">{{ meta }}</span>
+      <span v-if="meta" class="ml-auto truncate text-[10px] text-ink-5">{{ meta }}</span>
     </div>
     <div class="mt-auto flex items-center gap-2">
       <slot name="actions" />

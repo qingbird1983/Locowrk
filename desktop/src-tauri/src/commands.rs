@@ -17,8 +17,8 @@ use session_store::SessionEvent;
 use crate::events::ApprovalRequestPayload;
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{
-    ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate, PluginsUpdate, SettingsView,
-    ShellUpdate, ToolsUpdate,
+    AppearanceUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate, PluginsUpdate,
+    SettingsView, ShellUpdate, ToolsUpdate,
 };
 use crate::state::AppState;
 
@@ -108,22 +108,23 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
     Ok(state.settings.view())
 }
 
-/// 部分更新设置：locale、快捷键、LLM 字段（S2 起含 windowTokens——窗口
-/// 归属模型配置；传 null = 清除，回落保守保护）、⑬ embedding 区（端点/
-/// 模型/Key）、上下文管理区（⑨，仅阈值+策略）、记忆注入区（⑪，⑬ 起含
-/// autoExtract）、工具暴露区（⑫，S2 起含单次调用超时）、shell 治理区
-/// （S1）与 ⑬ 插件管理区（自动停用天数）独立可选，缺省字段保持不变；
-/// base_url / api_key 传空串 = 清除。改键成功后即时重注册全局快捷键；
-/// 注册失败返回 Err（新键已落盘，换键重试即可）。上下文 / 记忆 / 工具
-/// 暴露 / 超时 / embedding 改动成功后换入活配置随即生效；shell 解锁开关
-/// 经插件加载前的 env 注入，重启后生效；插件自动停用天数 > 0 时保存即
-/// 巡检一遍（0 = 关闭，不自动恢复任何已停用插件）。
+/// 部分更新设置：locale、外观区（⑰ 明暗主题）、快捷键、LLM 字段（S2 起
+/// 含 windowTokens——窗口归属模型配置；传 null = 清除，回落保守保护）、
+/// ⑬ embedding 区（端点/模型/Key）、上下文管理区（⑨，仅阈值+策略）、
+/// 记忆注入区（⑪，⑬ 起含 autoExtract）、工具暴露区（⑫，S2 起含单次调用
+/// 超时）、shell 治理区（S1）与 ⑬ 插件管理区（自动停用天数）独立可选，
+/// 缺省字段保持不变；base_url / api_key 传空串 = 清除。改键成功后即时
+/// 重注册全局快捷键；注册失败返回 Err（新键已落盘，换键重试即可）。上下文
+/// / 记忆 / 工具暴露 / 超时 / embedding 改动成功后换入活配置随即生效；
+/// shell 解锁开关经插件加载前的 env 注入，重启后生效；插件自动停用天数
+/// > 0 时保存即巡检一遍（0 = 关闭，不自动恢复任何已停用插件）。
 // 参数 = settings.json 各分区一一对应（§3.2）；Tauri command 的扁平
 // IPC 形状不收拢成结构体。
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn settings_set(
     locale: Option<String>,
+    appearance: Option<AppearanceUpdate>,
     shortcut: Option<String>,
     llm: Option<LlmUpdate>,
     embedding: Option<EmbeddingUpdate>,
@@ -138,6 +139,7 @@ pub async fn settings_set(
     let plugins_section_touched = plugins.is_some();
     let view = state.settings.update(
         locale.clone(),
+        appearance,
         shortcut.clone(),
         llm,
         embedding,

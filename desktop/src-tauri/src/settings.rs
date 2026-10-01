@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use kernel_agent::{CompactConfig, MemoryInjectConfig};
 use serde::{Deserialize, Serialize};
 
+mod appearance;
 mod context;
 mod embedding;
 mod llm;
@@ -19,6 +20,7 @@ mod shell;
 mod tools;
 mod update;
 
+pub use appearance::{AppearanceSettings, AppearanceUpdate, AppearanceView};
 pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{LlmSettings, LlmSettingsView, LlmUpdate, PROVIDERS};
@@ -42,6 +44,9 @@ const FILE_NAME: &str = "settings.json";
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
     pub locale: String,
+    /// 外观区（⑰：明暗主题，类型见 `appearance` 子模块）。字段级缺省：
+    /// 旧 settings.json 无此区时取 dark（与历史行为一致）。
+    pub appearance: AppearanceSettings,
     /// 全局快捷键（切换主窗口）。字段级缺省：旧 settings.json 无此字段
     /// 时取 SHORTCUT_DEFAULT，而不是空串。
     #[serde(default = "default_shortcut")]
@@ -70,6 +75,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             locale: LOCALE_SYSTEM.into(),
+            appearance: AppearanceSettings::default(),
             shortcut: SHORTCUT_DEFAULT.into(),
             llm: LlmSettings::default(),
             embedding: EmbeddingSettings::default(),
@@ -87,6 +93,8 @@ impl Default for AppSettings {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
     pub locale: String,
+    /// 外观区（⑰ 明暗主题）。
+    pub appearance: AppearanceView,
     /// 全局快捷键（切换主窗口），如 "Ctrl+Shift+L"。
     pub shortcut: String,
     pub data_dir: String,
@@ -225,6 +233,9 @@ impl SettingsStore {
         let window = s.llm.window_tokens.or(s.context.window_tokens);
         SettingsView {
             locale: s.locale.clone(),
+            appearance: AppearanceView {
+                theme: s.appearance.theme.clone(),
+            },
             shortcut: s.shortcut.clone(),
             data_dir: self.root.display().to_string(),
             llm: LlmSettingsView {

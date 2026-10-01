@@ -3,6 +3,7 @@
 import { defineStore } from "pinia";
 import { getSettings, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
+import { applyThemePref } from "../lib/theme";
 import type {
   ContextUpdate,
   EmbeddingUpdate,
@@ -30,6 +31,7 @@ export const useSettingsStore = defineStore("settings", {
       try {
         this.view = await getSettings();
         applyLocalePref(this.view.locale);
+        applyThemePref(this.view.appearance.theme);
       } catch (e) {
         this.error = String(e);
       }
@@ -43,6 +45,18 @@ export const useSettingsStore = defineStore("settings", {
       } catch (e) {
         this.error = String(e);
         if (this.view) applyLocalePref(this.view.locale);
+      }
+    },
+    /** 切主题（⑰）：立即生效（lib/theme.ts 写 <html data-theme>），
+     * 成功后以返回投影为准（失败时 select 回滚）。 */
+    async setTheme(theme: string) {
+      this.error = "";
+      try {
+        this.view = await setSettings({ appearance: { theme } });
+        applyThemePref(this.view.appearance.theme);
+      } catch (e) {
+        this.error = String(e);
+        if (this.view) applyThemePref(this.view.appearance.theme);
       }
     },
     /** 保存 LLM 配置；空串字段语义 = 清除（后端 settings.rs）。 */

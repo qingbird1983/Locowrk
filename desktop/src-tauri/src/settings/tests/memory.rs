@@ -30,6 +30,7 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
             Some(MemoryUpdate {
                 enabled: Some(false),
                 top_k: Some(3),
@@ -54,6 +55,7 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
             Some(MemoryUpdate {
                 top_k: Some(8),
                 ..Default::default()
@@ -69,6 +71,7 @@ fn memory_defaults_legacy_compat_and_validation() {
     for bad in [0, 21] {
         assert!(store
             .update(
+                None,
                 None,
                 None,
                 None,

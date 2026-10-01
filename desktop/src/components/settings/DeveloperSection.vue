@@ -63,9 +63,9 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-neutral-800 p-4">
+  <section class="space-y-3 rounded-xl border border-line p-4">
     <h3 class="text-xs font-semibold">{{ t("settings.developerTitle") }}</h3>
-    <p class="text-[11px] text-neutral-500">{{ t("settings.developerHint") }}</p>
+    <p class="text-[11px] text-ink-4">{{ t("settings.developerHint") }}</p>
 
     <label class="flex cursor-pointer items-center gap-2 text-xs">
       <input v-model="form.enabled" type="checkbox" class="accent-emerald-500" />
@@ -73,33 +73,33 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
     </label>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.toolsMax") }}</span>
+      <span class="text-ink-3">{{ t("settings.toolsMax") }}</span>
       <input
         v-model.number="form.maxPerRequest"
         type="number"
         min="1"
         max="200"
-        class="block w-32 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+        class="block w-32 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
       />
-      <span class="text-[11px] text-neutral-600">{{ t("settings.toolsMaxHint") }}</span>
+      <span class="text-[11px] text-ink-5">{{ t("settings.toolsMaxHint") }}</span>
     </label>
 
     <!-- S2（清单 §3 约束最小化）：宿主单次工具调用超时可配 -->
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.callTimeout") }}</span>
+      <span class="text-ink-3">{{ t("settings.callTimeout") }}</span>
       <input
         v-model.number="form.callTimeoutSecs"
         type="number"
         min="5"
         max="3600"
-        class="block w-32 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5"
+        class="block w-32 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
       />
-      <span class="text-[11px] text-neutral-600">{{ t("settings.callTimeoutHint") }}</span>
+      <span class="text-[11px] text-ink-5">{{ t("settings.callTimeoutHint") }}</span>
     </label>
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
@@ -111,11 +111,11 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
     </div>
 
     <!-- 暴露调试面板：最近一次请求的暴露分布（只读，手动刷新） -->
-    <div class="space-y-2 border-t border-neutral-800 pt-3">
+    <div class="space-y-2 border-t border-line pt-3">
       <div class="flex items-center justify-between">
-        <span class="text-xs font-semibold text-neutral-300">{{ t("developer.panelTitle") }}</span>
+        <span class="text-xs font-semibold text-ink-2">{{ t("developer.panelTitle") }}</span>
         <button
-          class="rounded-lg border border-neutral-700 px-2 py-1 text-[11px] text-neutral-400 transition hover:bg-neutral-800"
+          class="rounded-lg border border-line-strong px-2 py-1 text-[11px] text-ink-3 transition hover:bg-surface-1"
           :disabled="loading"
           @click="refresh"
         >
@@ -123,7 +123,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
         </button>
       </div>
 
-      <p v-if="!hasSnapshot(debug)" class="text-[11px] text-neutral-500">
+      <p v-if="!hasSnapshot(debug)" class="text-[11px] text-ink-4">
         {{ t("developer.empty") }}
       </p>
 
@@ -134,23 +134,23 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
         <p class="text-xs">
           {{ t("developer.exposed", { exposed: debug.exposed, total: debug.total }) }}
         </p>
-        <ul class="space-y-1 text-[11px] text-neutral-400">
+        <ul class="space-y-1 text-[11px] text-ink-3">
           <li v-if="debug.always.length">
             {{ t("developer.always", { n: debug.always.length }) }}:
-            <span class="text-neutral-300">{{ debug.always.join(", ") }}</span>
+            <span class="text-ink-2">{{ debug.always.join(", ") }}</span>
           </li>
           <li v-if="debug.sessionHot.length">
             {{ t("developer.sessionHot", { n: debug.sessionHot.length }) }}:
-            <span class="text-neutral-300">{{ debug.sessionHot.join(", ") }}</span>
+            <span class="text-ink-2">{{ debug.sessionHot.join(", ") }}</span>
           </li>
           <li v-if="debug.globalHot.length">
             {{ t("developer.globalHot", { n: debug.globalHot.length }) }}:
-            <span class="text-neutral-300">{{ debug.globalHot.join(", ") }}</span>
+            <span class="text-ink-2">{{ debug.globalHot.join(", ") }}</span>
           </li>
           <!-- ⑬ 语义检索信号入选（embedding 未配置恒空，不渲染该行） -->
           <li v-if="debug.retrieved.length">
             {{ t("developer.retrieved", { n: debug.retrieved.length }) }}:
-            <span class="text-neutral-300">{{ debug.retrieved.join(", ") }}</span>
+            <span class="text-ink-2">{{ debug.retrieved.join(", ") }}</span>
           </li>
         </ul>
         <p v-if="debug.savedTokensEstimate > 0" class="text-[11px] text-emerald-400">

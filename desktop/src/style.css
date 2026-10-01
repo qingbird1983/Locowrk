@@ -3,23 +3,34 @@
 @tailwind utilities;
 
 /*
- * design tokens（壳批次，docs/design/UI shell and patterns.md §6）。
- * tokens 是唯一样式事实源，取值与 Tailwind 调色板同值：存量组件继续用
- * Tailwind 类不动；新组件优先用 var(--lw-*)；改皮肤只改这里。
+ * design tokens + 主题（⑰ 视觉抛光定稿，docs/design/UI shell and patterns.md
+ * §六）。tokens 是唯一样式事实源：暗色 = :root 缺省值，亮色 =
+ * :root[data-theme="light"] 覆盖同一批变量——改皮肤只改这两块。
+ *
+ * 双形态纪律：--lw-*（hex，组件内联 var() 用）与 --lw-rgb-*（三元组，仅
+ * tailwind.config.js 消费，配 rgb(var(--x) / <alpha-value>) 让 bg-x/60 等
+ * 半透明修饰符在两主题下成立）。同名同值，改色两形同改。
  */
-:root {
-  /* 表面：应用底色 / 面板与输入 / 激活块 */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* 表面：页面底 / 面板与输入 / 激活与悬停 / 实心底与禁用 */
   --lw-surface-0: #171717; /* neutral-900 */
   --lw-surface-1: #262626; /* neutral-800 */
   --lw-surface-2: #404040; /* neutral-700 */
-  --lw-border: #262626; /* neutral-800 */
-  --lw-border-strong: #404040; /* neutral-700 */
+  --lw-surface-3: #525252; /* neutral-600 */
 
-  /* 文本：主 / 次 / 弱 / 最弱 */
-  --lw-text-1: #f5f5f5; /* neutral-100 */
-  --lw-text-2: #a3a3a3; /* neutral-400 */
-  --lw-text-3: #737373; /* neutral-500 */
-  --lw-text-4: #525252; /* neutral-600 */
+  /* 线：常规 / 强调 */
+  --lw-line: #262626; /* neutral-800 */
+  --lw-line-strong: #404040; /* neutral-700 */
+
+  /* 文本：亮 → 弱五级 */
+  --lw-ink-1: #f5f5f5; /* neutral-100 */
+  --lw-ink-2: #d4d4d4; /* neutral-300 */
+  --lw-ink-3: #a3a3a3; /* neutral-400 */
+  --lw-ink-4: #737373; /* neutral-500 */
+  --lw-ink-5: #525252; /* neutral-600 */
 
   /* 语义色：强调 / 成功 / 警告 / 危险 */
   --lw-accent: #4f46e5; /* indigo-600 */
@@ -40,10 +51,242 @@
   --lw-space-3: 0.75rem;
   --lw-space-4: 1rem;
   --lw-space-6: 1.5rem;
+
+  /* 动效三档（§六：状态色变 120ms；入场/进度 200ms；标准缓动） */
+  --lw-dur-fast: 120ms;
+  --lw-dur-base: 200ms;
+  --lw-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 三元组：角色 + 中性兜底 + 语义 hue 实用阶（tailwind.config.js 消费） */
+  --lw-rgb-surface-0: 23 23 23;
+  --lw-rgb-surface-1: 38 38 38;
+  --lw-rgb-surface-2: 64 64 64;
+  --lw-rgb-surface-3: 82 82 82;
+  --lw-rgb-ink-1: 245 245 245;
+  --lw-rgb-ink-2: 212 212 212;
+  --lw-rgb-ink-3: 163 163 163;
+  --lw-rgb-ink-4: 115 115 115;
+  --lw-rgb-ink-5: 82 82 82;
+  --lw-rgb-line: 38 38 38;
+  --lw-rgb-line-strong: 64 64 64;
+  --lw-rgb-accent: 79 70 229;
+  --lw-rgb-accent-hover: 99 102 241;
+  --lw-rgb-ok: 52 211 153;
+  --lw-rgb-warn: 251 191 36;
+  --lw-rgb-danger: 248 113 113;
+  --lw-rgb-neutral-100: 245 245 245;
+  --lw-rgb-neutral-300: 212 212 212;
+  --lw-rgb-neutral-400: 163 163 163;
+  --lw-rgb-neutral-500: 115 115 115;
+  --lw-rgb-neutral-600: 82 82 82;
+  --lw-rgb-neutral-700: 64 64 64;
+  --lw-rgb-neutral-800: 38 38 38;
+  --lw-rgb-neutral-900: 23 23 23;
+  --lw-rgb-red-200: 254 202 202;
+  --lw-rgb-red-300: 252 165 165;
+  --lw-rgb-red-400: 248 113 113;
+  --lw-rgb-red-500: 239 68 68;
+  --lw-rgb-red-600: 220 38 38;
+  --lw-rgb-red-700: 185 28 28;
+  --lw-rgb-red-800: 153 27 27;
+  --lw-rgb-red-900: 127 29 29;
+  --lw-rgb-red-950: 69 10 10;
+  --lw-rgb-amber-300: 252 211 77;
+  --lw-rgb-amber-400: 251 191 36;
+  --lw-rgb-amber-500: 245 158 11;
+  --lw-rgb-amber-700: 180 83 9;
+  --lw-rgb-amber-900: 120 53 15;
+  --lw-rgb-yellow-200: 254 240 138;
+  --lw-rgb-yellow-300: 253 224 71;
+  --lw-rgb-yellow-900: 113 63 18;
+  --lw-rgb-yellow-950: 66 32 6;
+  --lw-rgb-emerald-200: 167 243 208;
+  --lw-rgb-emerald-300: 110 231 183;
+  --lw-rgb-emerald-400: 52 211 153;
+  --lw-rgb-emerald-500: 16 185 129;
+  --lw-rgb-emerald-600: 5 150 105;
+  --lw-rgb-emerald-700: 4 120 87;
+  --lw-rgb-emerald-800: 6 95 70;
+  --lw-rgb-emerald-900: 6 78 59;
+  --lw-rgb-indigo-300: 165 180 252;
+  --lw-rgb-indigo-500: 99 102 241;
+  --lw-rgb-indigo-600: 79 70 229;
+  --lw-rgb-indigo-900: 49 46 129;
+  --lw-rgb-sky-300: 125 211 252;
+  --lw-rgb-sky-950: 8 47 73;
+  --lw-rgb-teal-300: 94 234 212;
+  --lw-rgb-teal-900: 19 78 74;
+  --lw-rgb-purple-200: 233 213 255;
+  --lw-rgb-purple-300: 216 180 254;
+  --lw-rgb-purple-900: 88 28 135;
+  --lw-rgb-purple-950: 59 7 100;
 }
 
-html,
-body,
-#app {
-  height: 100%;
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --lw-surface-0: #f5f5f5; /* neutral-100 */
+  --lw-surface-1: #ffffff; /* white */
+  --lw-surface-2: #e5e5e5; /* neutral-200 */
+  --lw-surface-3: #d4d4d4; /* neutral-300 */
+
+  --lw-line: #e5e5e5; /* neutral-200 */
+  --lw-line-strong: #d4d4d4; /* neutral-300 */
+
+  --lw-ink-1: #171717; /* neutral-900 */
+  --lw-ink-2: #404040; /* neutral-700 */
+  --lw-ink-3: #737373; /* neutral-500 */
+  --lw-ink-4: #a3a3a3; /* neutral-400 */
+  --lw-ink-5: #d4d4d4; /* neutral-300 */
+
+  --lw-accent: #4f46e5; /* indigo-600（两主题同值） */
+  --lw-accent-hover: #6366f1; /* indigo-500 */
+  --lw-ok: #059669; /* emerald-600 */
+  --lw-warn: #d97706; /* amber-600 */
+  --lw-danger: #dc2626; /* red-600 */
+
+  --lw-rgb-surface-0: 245 245 245;
+  --lw-rgb-surface-1: 255 255 255;
+  --lw-rgb-surface-2: 229 229 229;
+  --lw-rgb-surface-3: 212 212 212;
+  --lw-rgb-ink-1: 23 23 23;
+  --lw-rgb-ink-2: 64 64 64;
+  --lw-rgb-ink-3: 115 115 115;
+  --lw-rgb-ink-4: 163 163 163;
+  --lw-rgb-ink-5: 212 212 212;
+  --lw-rgb-line: 229 229 229;
+  --lw-rgb-line-strong: 212 212 212;
+  --lw-rgb-accent: 79 70 229;
+  --lw-rgb-accent-hover: 99 102 241;
+  --lw-rgb-ok: 5 150 105;
+  --lw-rgb-warn: 217 119 6;
+  --lw-rgb-danger: 220 38 38;
+  --lw-rgb-neutral-100: 23 23 23;
+  --lw-rgb-neutral-300: 64 64 64;
+  --lw-rgb-neutral-400: 115 115 115;
+  --lw-rgb-neutral-500: 163 163 163;
+  --lw-rgb-neutral-600: 212 212 212;
+  --lw-rgb-neutral-700: 229 229 229;
+  --lw-rgb-neutral-800: 229 229 229;
+  --lw-rgb-neutral-900: 245 245 245;
+  --lw-rgb-red-200: 127 29 29;
+  --lw-rgb-red-300: 185 28 28;
+  --lw-rgb-red-400: 220 38 38;
+  --lw-rgb-red-500: 239 68 68;
+  --lw-rgb-red-600: 220 38 38;
+  --lw-rgb-red-700: 185 28 28;
+  --lw-rgb-red-800: 252 165 165;
+  --lw-rgb-red-900: 254 202 202;
+  --lw-rgb-red-950: 254 226 226;
+  --lw-rgb-amber-300: 180 83 9;
+  --lw-rgb-amber-400: 217 119 6;
+  --lw-rgb-amber-500: 245 158 11;
+  --lw-rgb-amber-700: 252 211 77;
+  --lw-rgb-amber-900: 253 230 138;
+  --lw-rgb-yellow-200: 133 77 14;
+  --lw-rgb-yellow-300: 202 138 4;
+  --lw-rgb-yellow-900: 254 240 138;
+  --lw-rgb-yellow-950: 254 249 195;
+  --lw-rgb-emerald-200: 6 95 70;
+  --lw-rgb-emerald-300: 4 120 87;
+  --lw-rgb-emerald-400: 5 150 105;
+  --lw-rgb-emerald-500: 16 185 129;
+  --lw-rgb-emerald-600: 5 150 105;
+  --lw-rgb-emerald-700: 4 120 87;
+  --lw-rgb-emerald-800: 167 243 208;
+  --lw-rgb-emerald-900: 209 250 229;
+  --lw-rgb-indigo-300: 67 56 202;
+  --lw-rgb-indigo-500: 99 102 241;
+  --lw-rgb-indigo-600: 79 70 229;
+  --lw-rgb-indigo-900: 224 231 255;
+  --lw-rgb-sky-300: 3 105 161;
+  --lw-rgb-sky-950: 224 242 254;
+  --lw-rgb-teal-300: 15 118 110;
+  --lw-rgb-teal-900: 204 251 241;
+  --lw-rgb-purple-200: 107 33 168;
+  --lw-rgb-purple-300: 126 34 206;
+  --lw-rgb-purple-900: 233 213 255;
+  --lw-rgb-purple-950: 243 232 255;
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  /* 主题切换过渡一次（§六：body 底色/文字 200ms） */
+  body {
+    transition:
+      background-color var(--lw-dur-base) var(--lw-ease),
+      color var(--lw-dur-base) var(--lw-ease);
+  }
+
+  /* 交互元素状态色变统一走这里（§六动效①，组件不再散写 transition）；
+   * 组件显式写 Tailwind transition 类时以工具类为准。 */
+  button,
+  [role='button'],
+  input,
+  select,
+  textarea,
+  a {
+    transition-property:
+      background-color, border-color, color, fill, stroke, opacity,
+      box-shadow, text-decoration-color;
+    transition-duration: var(--lw-dur-fast);
+    transition-timing-function: var(--lw-ease);
+  }
+
+  /* prefers-reduced-motion：一切过渡/动画降为 0（§六） */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}
+
+/* Vue 过渡类（§六动效②）：弹窗 = 遮罩淡入 + 面板轻缩放；系统消息 =
+ * 淡入 + 上滑。组件用 <Transition name="lw-modal"> / name="lw-notice"。 */
+.lw-modal-enter-active,
+.lw-modal-leave-active {
+  transition: opacity var(--lw-dur-base) var(--lw-ease);
+}
+.lw-modal-enter-from,
+.lw-modal-leave-to {
+  opacity: 0;
+}
+.lw-modal-panel {
+  transition:
+    transform var(--lw-dur-base) var(--lw-ease),
+    opacity var(--lw-dur-base) var(--lw-ease);
+}
+.lw-modal-enter-from .lw-modal-panel,
+.lw-modal-leave-to .lw-modal-panel {
+  transform: scale(0.96) translateY(4px);
+}
+
+.lw-notice-enter-active {
+  transition:
+    opacity var(--lw-dur-base) var(--lw-ease),
+    transform var(--lw-dur-base) var(--lw-ease);
+}
+.lw-notice-leave-active {
+  transition: opacity var(--lw-dur-fast) var(--lw-ease);
+}
+.lw-notice-enter-from {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.lw-notice-leave-to {
+  opacity: 0;
+}
+
+/* §六动效③：进度增长——进度条填充宽度过渡 */
+.lw-bar-fill {
+  transition: width var(--lw-dur-base) var(--lw-ease);
 }

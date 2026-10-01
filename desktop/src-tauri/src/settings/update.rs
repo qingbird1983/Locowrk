@@ -5,8 +5,8 @@
 //! 校验失败提前返回 Err，不污染内存态（测试 `rejects_*` 系列锁定）。
 
 use super::{
-    ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate, PluginsUpdate, SettingsStore,
-    SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME, LOCALES, PROVIDERS,
+    AppearanceUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate, PluginsUpdate,
+    SettingsStore, SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME, LOCALES, PROVIDERS,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -17,6 +17,7 @@ impl SettingsStore {
     pub fn update(
         &self,
         locale: Option<String>,
+        appearance: Option<AppearanceUpdate>,
         shortcut: Option<String>,
         llm: Option<LlmUpdate>,
         embedding: Option<EmbeddingUpdate>,
@@ -32,6 +33,16 @@ impl SettingsStore {
                 return Err(format!("不支持的语言: {loc}（可选 system / zh-CN / en）"));
             }
             next.locale = loc;
+        }
+        if let Some(u) = appearance {
+            if let Some(theme) = &u.theme {
+                if !super::appearance::valid_theme(theme) {
+                    return Err(format!(
+                        "不支持的主题: {theme}（可选 dark / light / system）"
+                    ));
+                }
+                next.appearance.theme = theme.clone();
+            }
         }
         if let Some(sc) = shortcut {
             // 校验用全局快捷键解析器本身（与 tray.rs 注册同一套语义）；

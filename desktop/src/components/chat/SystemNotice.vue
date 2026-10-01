@@ -17,24 +17,27 @@ defineEmits<{ (e: "action", id: string): void }>();
 </script>
 
 <template>
-  <div class="flex justify-center">
-    <div
-      class="flex max-w-[85%] flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[var(--lw-border)] bg-[var(--lw-surface-1)]/60 px-4 py-1.5 text-xs text-[var(--lw-text-2)]"
-    >
-      <span class="whitespace-pre-wrap">{{ text }}</span>
-      <button
-        v-for="a in actions ?? []"
-        :key="a.id"
-        class="rounded-full px-2 py-0.5 text-[11px] font-medium transition"
-        :class="
-          a.tone === 'primary'
-            ? 'bg-[var(--lw-surface-2)] text-[var(--lw-text-1)] hover:bg-[var(--lw-border-strong)]'
-            : 'text-[var(--lw-accent-hover)] hover:underline'
-        "
-        @click="$emit('action', a.id)"
+  <!-- 入场动效 = §六动效②（淡入 + 上滑；appear 覆盖插入即挂载的场景） -->
+  <Transition name="lw-notice" appear>
+    <div class="flex justify-center">
+      <div
+        class="flex max-w-[85%] flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-line bg-surface-1/60 px-4 py-1.5 text-xs text-ink-3"
       >
-        {{ a.label }}
-      </button>
+        <span class="whitespace-pre-wrap">{{ text }}</span>
+        <button
+          v-for="a in actions ?? []"
+          :key="a.id"
+          class="rounded-full px-2 py-0.5 text-[11px] font-medium transition"
+          :class="
+            a.tone === 'primary'
+              ? 'bg-surface-2 text-ink-1 hover:bg-line-strong'
+              : 'text-accent-hover hover:underline'
+          "
+          @click="$emit('action', a.id)"
+        >
+          {{ a.label }}
+        </button>
+      </div>
     </div>
-  </div>
+  </Transition>
 </template>

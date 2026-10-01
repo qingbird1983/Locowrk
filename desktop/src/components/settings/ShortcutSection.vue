@@ -23,20 +23,20 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-2 rounded-xl border border-neutral-800 p-4">
+  <section class="space-y-2 rounded-xl border border-line p-4">
     <h3 class="text-xs font-semibold">{{ t("settings.shortcutTitle") }}</h3>
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.shortcut") }}</span>
+      <span class="text-ink-3">{{ t("settings.shortcut") }}</span>
       <input
         v-model="form.shortcut"
         type="text"
         :placeholder="t('settings.shortcutPlaceholder')"
-        class="block w-48 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 font-mono placeholder:text-neutral-600"
+        class="block w-48 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 font-mono placeholder:text-ink-5"
       />
     </label>
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
@@ -46,6 +46,6 @@ function save() {
         {{ t("settings.saved") }}
       </span>
     </div>
-    <p class="text-[11px] text-neutral-500">{{ t("settings.shortcutHint") }}</p>
+    <p class="text-[11px] text-ink-4">{{ t("settings.shortcutHint") }}</p>
   </section>
 </template>

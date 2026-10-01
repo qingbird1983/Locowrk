@@ -24,7 +24,7 @@ const label = computed(() => {
 const tone = computed(() => {
   if (props.source === "explicit") return "bg-sky-950/70 text-sky-300";
   if (props.source === "extracted") return "bg-purple-950/70 text-purple-300";
-  return "bg-neutral-800 text-neutral-400";
+  return "bg-surface-1 text-ink-3";
 });
 </script>
 

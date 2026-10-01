@@ -25,7 +25,7 @@ const fallback = computed(() => props.id[0]?.toUpperCase() ?? "?");
 
 <template>
   <div
-    class="grid shrink-0 place-items-center rounded-lg bg-neutral-900/80 text-sm font-semibold text-neutral-400"
+    class="grid shrink-0 place-items-center rounded-lg bg-surface-0/80 text-sm font-semibold text-ink-3"
     :class="sizeClass"
   >
     <img

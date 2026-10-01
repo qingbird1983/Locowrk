@@ -19,7 +19,7 @@ const { t } = useI18n();
 const tone = computed(() => {
   switch (props.idle?.level) {
     case "idle":
-      return "bg-neutral-700/60 text-neutral-300"; // 灰
+      return "bg-surface-2/60 text-ink-2"; // 灰
     case "stale":
     case "never_used":
       return "bg-yellow-900/40 text-yellow-300"; // 黄

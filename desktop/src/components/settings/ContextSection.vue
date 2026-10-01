@@ -54,14 +54,14 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-neutral-800 p-4">
+  <section class="space-y-3 rounded-xl border border-line p-4">
     <h3 class="text-xs font-semibold">{{ t("settings.contextTitle") }}</h3>
-    <p class="text-[11px] text-neutral-500">{{ t("settings.contextHint") }}</p>
+    <p class="text-[11px] text-ink-4">{{ t("settings.contextHint") }}</p>
 
     <!-- 压缩阈值滑条：百分比与绝对 token 双显示（§3.2.2）；绝对数按
          §3.5 档位（≈51.2K），不再露出 52,428.8 这类机器精度 -->
     <div class="space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.threshold") }}</span>
+      <span class="text-ink-3">{{ t("settings.threshold") }}</span>
       <input
         v-model.number="form.thresholdPct"
         type="range"
@@ -70,12 +70,12 @@ function save() {
         step="10"
         class="w-full accent-emerald-500"
       />
-      <p class="text-[var(--lw-text-2)]">
+      <p class="text-ink-3">
         {{ t("settings.thresholdValue", { pct: form.thresholdPct, tokens: compactNumber(thresholdTokens) }) }}
       </p>
-      <p v-if="suggestedPct != null" class="text-[11px] text-neutral-500">
+      <p v-if="suggestedPct != null" class="text-[11px] text-ink-4">
         {{ t("settings.thresholdSuggest", { pct: suggestedPct }) }}
-        <span class="text-neutral-600">{{ t("settings.thresholdSuggestHint") }}</span>
+        <span class="text-ink-5">{{ t("settings.thresholdSuggestHint") }}</span>
       </p>
       <p
         v-if="form.thresholdPct < 20"
@@ -87,7 +87,7 @@ function save() {
 
     <!-- 压缩策略三档（§3.3） -->
     <div class="space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.strategy") }}</span>
+      <span class="text-ink-3">{{ t("settings.strategy") }}</span>
       <label
         v-for="s in STRATEGIES"
         :key="s"
@@ -100,7 +100,7 @@ function save() {
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >

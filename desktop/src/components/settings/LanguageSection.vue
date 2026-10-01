@@ -14,13 +14,13 @@ const localePref = computed({
 </script>
 
 <template>
-  <section class="space-y-2 rounded-xl border border-neutral-800 p-4">
+  <section class="space-y-2 rounded-xl border border-line p-4">
     <h3 class="text-xs font-semibold">{{ t("settings.langTitle") }}</h3>
-    <select v-model="localePref" class="block w-48 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs">
+    <select v-model="localePref" class="block w-48 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs">
       <option value="system">{{ t("settings.langSystem") }}</option>
       <option value="zh-CN">{{ t("settings.langZh") }}</option>
       <option value="en">{{ t("settings.langEn") }}</option>
     </select>
-    <p class="text-[11px] text-neutral-500">{{ t("settings.langHint") }}</p>
+    <p class="text-[11px] text-ink-4">{{ t("settings.langHint") }}</p>
   </section>
 </template>

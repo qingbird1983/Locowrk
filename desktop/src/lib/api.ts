@@ -15,6 +15,7 @@ import type {
   MemoryUpdate,
   PluginStateChange,
   SettingsView,
+  AppearanceUpdate,
   ShellUpdate,
   ToolsUpdate,
   ExposureDebug,
@@ -143,6 +144,7 @@ export function getSettings(): Promise<SettingsView> {
 /** 部分更新设置，返回最新投影。 */
 export function setSettings(patch: {
   locale?: string;
+  appearance?: AppearanceUpdate;
   shortcut?: string;
   llm?: LlmUpdate;
   embedding?: EmbeddingUpdate;
@@ -154,6 +156,7 @@ export function setSettings(patch: {
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
+    appearance: patch.appearance ?? null,
     shortcut: patch.shortcut ?? null,
     llm: patch.llm ?? null,
     embedding: patch.embedding ?? null,

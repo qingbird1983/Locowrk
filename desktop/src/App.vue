@@ -27,14 +27,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-neutral-900 text-neutral-100">
+  <div class="flex h-full flex-col bg-surface-0 text-ink-1">
     <header
-      class="flex items-center justify-between border-b border-neutral-800 px-5 py-3"
+      class="flex items-center justify-between border-b border-line px-5 py-3"
     >
       <div>
         <h1 class="text-sm font-semibold tracking-wide">Locowrk</h1>
         <!-- 副标题实时反映当前模型（设置改动即生效，§13.1） -->
-        <p class="text-xs text-neutral-500">
+        <p class="text-xs text-ink-4">
           {{
             t("app.subtitle", {
               model:
@@ -46,15 +46,15 @@ onMounted(() => {
       </div>
       <div class="flex items-center gap-2">
         <!-- 顶级导航（壳批次定稿）：对话 / 插件 / 记忆 / 设置 -->
-        <nav class="flex gap-1 rounded-lg bg-neutral-800/70 p-1">
+        <nav class="flex gap-1 rounded-lg bg-surface-1/70 p-1">
           <button
             v-for="key in (['chat', 'plugins', 'memory', 'settings'] as const)"
             :key="key"
             class="rounded-md px-3 py-1 text-xs font-medium transition"
             :class="
               view === key
-                ? 'bg-neutral-700 text-neutral-100'
-                : 'text-neutral-500 hover:text-neutral-300'
+                ? 'bg-surface-2 text-ink-1'
+                : 'text-ink-4 hover:text-ink-2'
             "
             @click="view = key"
           >
@@ -66,7 +66,7 @@ onMounted(() => {
           :class="
             chat.running
               ? 'bg-amber-900/60 text-amber-300'
-              : 'bg-neutral-800 text-neutral-400'
+              : 'bg-surface-1 text-ink-3'
           "
         >
           {{ chat.running ? t("status.running") : t("status.ready") }}

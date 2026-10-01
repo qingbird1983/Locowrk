@@ -77,45 +77,45 @@ function clearKey() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-neutral-800 p-4">
+  <section class="space-y-3 rounded-xl border border-line p-4">
     <h3 class="text-xs font-semibold">{{ t("settings.embeddingTitle") }}</h3>
-    <p class="text-[11px] text-neutral-500">{{ t("settings.embeddingHint") }}</p>
+    <p class="text-[11px] text-ink-4">{{ t("settings.embeddingHint") }}</p>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.embeddingModel") }}</span>
+      <span class="text-ink-3">{{ t("settings.embeddingModel") }}</span>
       <input
         v-model="form.model"
         type="text"
         placeholder="nomic-embed-text / text-embedding-3-small"
-        class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 placeholder:text-neutral-600"
+        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
       />
     </label>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.embeddingBaseUrl") }}</span>
+      <span class="text-ink-3">{{ t("settings.embeddingBaseUrl") }}</span>
       <input
         v-model="form.baseUrl"
         type="text"
         :placeholder="fallbackHint(settings.view?.embedding.baseUrl, settings.view?.llm.provider ?? '') || t('settings.embeddingBaseUrlPlaceholder')"
-        class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 placeholder:text-neutral-600"
+        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
       />
-      <span class="text-[11px] text-neutral-600">{{ t("settings.embeddingBaseUrlHint") }}</span>
+      <span class="text-[11px] text-ink-5">{{ t("settings.embeddingBaseUrlHint") }}</span>
     </label>
 
     <label class="block space-y-1 text-xs">
-      <span class="text-neutral-400">{{ t("settings.embeddingApiKey") }}</span>
+      <span class="text-ink-3">{{ t("settings.embeddingApiKey") }}</span>
       <input
         v-model="form.apiKey"
         type="password"
         autocomplete="off"
         :placeholder="settings.view?.embedding.apiKeySet ? t('settings.apiKeyKeep') : t('settings.embeddingApiKeyPlaceholder')"
-        class="block w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 placeholder:text-neutral-600"
+        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
       />
     </label>
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="form.probing"
         @click="probe"
       >
@@ -131,7 +131,7 @@ function clearKey() {
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-neutral-700 px-4 py-1.5 text-xs font-semibold transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
@@ -139,7 +139,7 @@ function clearKey() {
       </button>
       <button
         v-if="settings.view?.embedding.apiKeySet"
-        class="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 transition hover:bg-neutral-800"
+        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-3 transition hover:bg-surface-1"
         :disabled="settings.saving"
         @click="clearKey"
       >

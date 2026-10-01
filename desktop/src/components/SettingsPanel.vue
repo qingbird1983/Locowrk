@@ -3,12 +3,13 @@
  * 设置面板（壳批次后 = 分区容器，docs/design/UI shell and patterns.md
  * §3.2）：settings.json 分区 ↔ 面板分区一一对应——llm / embedding（⑬）/
  * context（⑨）/ memory（⑪ + ⑬ autoExtract）/ tools（⑫ 开发者选项，含
- * 暴露调试面板）/ shortcut / locale（语言）/ plugins（⑬ 自动停用）为
- * 实装区；sessions 只读展示。各分区自管表单与保存动作，本文件只做纵向
- * 堆叠与错误条，不写业务。
+ * 暴露调试面板）/ shortcut / locale（语言）/ appearance（⑰ 主题）/
+ * plugins（⑬ 自动停用）为实装区；sessions 只读展示。各分区自管表单与
+ * 保存动作，本文件只做纵向堆叠与错误条，不写业务。
  */
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../stores/settings";
+import AppearanceSection from "./settings/AppearanceSection.vue";
 import ContextSection from "./settings/ContextSection.vue";
 import DeveloperSection from "./settings/DeveloperSection.vue";
 import EmbeddingSection from "./settings/EmbeddingSection.vue";
@@ -48,6 +49,8 @@ const settings = useSettingsStore();
 
     <SessionsSection />
     <LanguageSection />
+    <!-- ⑰ 外观：明暗主题三档（保存即生效） -->
+    <AppearanceSection />
     <ShortcutSection />
 
     <!-- S1 命令终端治理：高危命令解锁开关（重启生效；硬锁类不受影响） -->

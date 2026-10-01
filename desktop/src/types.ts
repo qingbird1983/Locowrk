@@ -173,6 +173,8 @@ export type PluginStateChange =
 export interface SettingsView {
   /** "system" | "zh-CN" | "en"；system = 跟随系统语言。 */
   locale: string;
+  /** 外观区（⑰）：明暗主题 "dark" | "light" | "system"。 */
+  appearance: AppearanceView;
   /** 全局快捷键（切换主窗口可见性），如 "Ctrl+Shift+L"。 */
   shortcut: string;
   dataDir: string;
@@ -247,6 +249,16 @@ export interface ShellSettingsView {
 /** shell 治理区部分更新：字段缺省 = 保持不变；改动重启后生效。 */
 export interface ShellUpdate {
   unlockRisky?: boolean;
+}
+
+/** 外观区投影（⑰）：明暗主题。生效在前端 lib/theme.ts（§六）。 */
+export interface AppearanceView {
+  theme: string;
+}
+
+/** 外观区部分更新：字段缺省 = 保持不变。 */
+export interface AppearanceUpdate {
+  theme?: string;
 }
 
 /** 最近一次工具暴露截断快照（tool_exposure_debug；camelCase）。
