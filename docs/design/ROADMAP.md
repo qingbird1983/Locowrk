@@ -228,12 +228,26 @@
 
 ---
 
+### ⑲ desktop session 持久化（✅ 已完成，v2.34，提交 a5347c3）
+
+> backlog"desktop session 持久化（落盘顺带解决撤销 fork 的物理留痕）"兑现。
+> 磁盘 = 内存日志的**镜像**（`<数据根>/sessions/<id>.jsonl` 一行一事件）：
+> 追加与投影共用同一游标；undo fork 截断整体重写 + `.undo.bak` 滚动备份。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| session-store persist 模块 | ✅ v2.34 a5347c3 | JSONL 落盘/恢复/undo 重写三件套 + 列表（mtime 降序、首条用户消息截断做标题）；session id 白名单防穿越；坏行跳过计数（崩溃半行不致命）；测试 4 例 |
+| desktop 接线 | ✅ v2.34 a5347c3 | 启动恢复先于调度引擎（调度行绑定的旧会话跨重启存活）；run_turn 增 log 参数增量镜像（手聊/调度两路）；context_undo_compact 后同步重写磁盘；session_list / session_history 命令（历史 = runner 同一投影函数 project_events 全量重放，不走事件通道） |
+| 会话切换器（最小面） | ✅ v2.34 a5347c3 | UI shell 文档 §3.6 先行：chat 头部下拉（首条用户消息截断）+ 新会话；切换 = 全量投影重放恢复气泡/工具卡/系统通知；首聊前不建后端状态；列表运营类 UI（搜索/删除/改名）留给 UI 正式设计阶段 |
+
+---
+
 ## 三、收尾 backlog（随批次搭车）
 
 | 项 | 说明 | 计划搭车批次 |
 |---|---|---|
 | fs roots 工作区目录选择器 | ✅ 已完成（⑱，v2.33，dc2ad87：tools.fsRoots + 保存即生效 env 重注入 + 原生对话框选择器） | — |
-| desktop session 持久化 | 会话事件落盘 | 看需求（⑨ 压缩/撤销在内存会话上已可用；落盘顺带解决撤销 fork 的物理留痕） |
+| desktop session 持久化 | ✅ 已完成（⑲，v2.34，a5347c3：sessions/*.jsonl 镜像 + 启动恢复 + undo 重写备份 + 会话切换器，详见下方 ⑲ 块） | — |
 | LLM 流式输出 | genai 流式 → 事件推送 | 看需求 |
 | 市场 wasm 打包分发 | ⑧⑧ 遗留 | 看需求 |
 | kv_get 所有权协议 | | 看需求 |

@@ -109,6 +109,19 @@
 - 前端统一走一个 format 助手（`lib/format.ts` 的 `compactNumber`），
   组件不许各自手写换算。
 
+### 3.6 会话切换器（chat 视图头，⑲）
+
+会话持久化（⑲）后的最小切换面：**对话视图头部一行**——下拉（`session_list`
+mtime 降序，选项文案 = 首条用户消息截断）+「新会话」按钮。铁则：
+
+- 切换 = `session_history` 拉全量投影在 store **重放**，恢复气泡 / 工具卡 /
+  系统通知三类内容；历史恢复不走 `agent://` 事件（事件只服务当轮增量）。
+- 新会话 = 前端生成 id + 清空视图；**首条消息发出前不创建任何后端状态**
+  （空会话不落盘不进列表）。
+- 切换器是最小功能面（防重启丢历史），不是会话管理页——列表运营类 UI
+  （搜索/改名/删除会话）归 UI 正式设计阶段，走 §二判据再定去留。
+- 系统时间显示等行内细节沿用 §3.5（相对时间）。
+
 ---
 
 ## 四、事件→UI 流向图
@@ -146,6 +159,7 @@
 | `tool_exposure_debug`（⑫） | DeveloperSection 挂载/刷新按钮 | 开发者分区只读面板：暴露分布（⑬ 起含语义检索入选行）+ 节省 token 估算（§3.5 compactNumber 档位）；打开分区时拉取，不推送不轮询 |
 | `llm_probe_embedding`（⑬） | EmbeddingSection 检测按钮 | 分区内就地显示向量维度 / 错误条；不落盘只探测 |
 | `experience_list/delete/clear_all`（⑬） | MemoryPage 挂载/行内删除/底部清空 | MemoryPage 经历区块（§11.3 可见可删；无编辑语义——自动沉淀原文）；经经历删除走行内二次确认 |
+| `session_list` / `session_history`（⑲） | chat store `init` / `switchSession` | 列表（mtime 降序）→ 会话切换器（§3.6）；history = 会话日志**全量投影**（与 runner 增量投影同一函数），前端重放恢复气泡/工具卡/系统通知——历史恢复不走事件通道，`agent://` 事件仍只服务当轮增量 |
 
 铁则重申：**UI 永不直接操作 PluginRegistry**（只经 PluginService / 宿主命令）；流式内容永远走事件推送，不塞 command 返回值；Tauri command 是薄适配层。
 
