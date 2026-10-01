@@ -132,7 +132,7 @@ mtime 降序，选项文案 = 首条用户消息截断）+「新会话」按钮�
 
 | 事件 | store | 组件 | 备注 |
 |---|---|---|---|
-| `agent://chunk` | chat `appendAssistant` | ChatMessages 助手气泡 | |
+| `agent://chunk` | chat `appendAssistant` | ChatMessages 助手气泡 | ⑳ 起真流式：文本 delta 逐段直推（内核 `LlmStreamSink` → 同通道），该步投影的整段 chunk 被抑制（不重复）；无 sink（headless/内核测试）回到整段投影。**注意 channel 数组须含全部事件**（⑳ 搭车修复 `agent://schedule-fired` 缺席的死分支） |
 | `agent://tool-call` | chat push tool 项 | ChatMessages 工具卡 | 先事件后执行（内核侧纪律） |
 | `agent://tool-result` | chat 按 call_id 补丁 | ChatMessages 工具卡结果区 | |
 | `agent://turn-done` | chat `running=false` | 头部状态徽标 | |

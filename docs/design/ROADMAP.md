@@ -242,13 +242,26 @@
 
 ---
 
+### ⑳ LLM 流式输出（✅ 已完成，v2.35，提交 54a97ba）
+
+> backlog"genai 流式 → 事件推送"兑现。通道与前端追加逻辑零改动（壳批次
+> 预留的 delta 语义），改点在内核 delta 出口契约与投影去重。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 内核流式契约 | ✅ v2.35 54a97ba | `LlmService::complete_streaming`（缺省回落 complete 整段一次回调）；`LlmStreamSink` delta 出口（返回"是否真消费"，黑盒替身 false）；`StepOutcome::Continue { streamed }` 仅 sink 真消费才置位；无 sink = 纯非流式；child_kernel scoped 换入 NoLlmStreamSink——子内 delta 不泄漏父 UI（⑮ 黑盒保持） |
+| genai 流式 + 桌面接线 | ✅ v2.35 54a97ba | `complete_streaming_with` 走 `exec_chat_stream`（capture_content/capture_tool_calls 聚合正文与工具调用，End 取 captured_content；推理流不进正文）；`StreamChunkSink` 直推 `agent://chunk`；runner 按 streamed 抑制该步整段 chunk——同一正文不出现两遍 |
+| 搭车 | ✅ v2.35 54a97ba | api.ts CHANNELS 补 `agent://schedule-fired`（⑭ 遗留死分支：store 有分支、通道缺席）；§4.1 chunk 行语义升级成文 |
+
+---
+
 ## 三、收尾 backlog（随批次搭车）
 
 | 项 | 说明 | 计划搭车批次 |
 |---|---|---|
 | fs roots 工作区目录选择器 | ✅ 已完成（⑱，v2.33，dc2ad87：tools.fsRoots + 保存即生效 env 重注入 + 原生对话框选择器） | — |
 | desktop session 持久化 | ✅ 已完成（⑲，v2.34，a5347c3：sessions/*.jsonl 镜像 + 启动恢复 + undo 重写备份 + 会话切换器，详见下方 ⑲ 块） | — |
-| LLM 流式输出 | genai 流式 → 事件推送 | 看需求 |
+| LLM 流式输出 | ✅ 已完成（⑳，v2.35，54a97ba：genai 流式 → delta 直推 + streamed 投影去重 + 子内黑盒压制，详见下方 ⑳ 块） | — |
 | 市场 wasm 打包分发 | ⑧⑧ 遗留 | 看需求 |
 | kv_get 所有权协议 | | 看需求 |
 | profile.toml 设置面板接线 | | 看需求 |
