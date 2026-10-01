@@ -42,6 +42,9 @@ pub struct ToolCallReq {
     pub id: plugin_api::CallId,
     pub tool: String,
     pub args: Value,
+    /// 发起调用的会话（step_inner 填充；LLM 解析产物初始为 None）。
+    /// 审批门（⑮）据此给子 Agent 的 Irreversible 请求打标识。
+    pub session_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -115,6 +118,9 @@ pub struct Kernel {
     approval: Option<Arc<dyn ApprovalResolver>>,
     /// request-error Retry 决策的预算（§7.2）。
     retry_budget: RetryBudget,
+    /// 子 Agent 快照表（⑮）：`Some` 时每步刷新 session_id → 转录前缀，
+    /// `subagent_run` 工具据此 fork 子会话。
+    sub: Option<Arc<crate::subagent::SubagentGate>>,
 }
 
 impl Kernel {
@@ -125,6 +131,7 @@ impl Kernel {
             scope: None,
             approval: None,
             retry_budget: RetryBudget::default(),
+            sub: None,
         }
     }
 
@@ -145,6 +152,34 @@ impl Kernel {
     pub fn with_retry_budget(mut self, budget: RetryBudget) -> Self {
         self.retry_budget = budget;
         self
+    }
+
+    /// 启用子 Agent 调度（⑮）：挂上快照表后，带会话身份的 step（step_as）
+    /// 每步刷新父转录快照，`subagent_run` 工具（组装点注册）才能 fork。
+    pub fn with_subagent(mut self, gate: Arc<crate::subagent::SubagentGate>) -> Self {
+        self.sub = Some(gate);
+        self
+    }
+
+    /// 派生子内核（⑮）：同一 Context / 中间件 / 审批门 / 重试预算，
+    /// 服务查询走全新作用域——工具目录换成父视图的白名单过滤包装
+    /// （子 ⊆ 父；`subagent_run` 硬剔除，单层派生）。
+    pub(crate) fn child_kernel(&self, allow: Vec<String>) -> Result<Self, KernelError> {
+        let parent_view = self.scoped_dyn::<dyn ToolSource>()?;
+        let key = cordis_core::ScopeKey::new();
+        self.ctx.provide_dyn_scoped::<dyn ToolSource>(
+            &key,
+            Arc::new(crate::subagent::FilterToolSource::new(parent_view, allow)),
+        );
+        Ok(Self {
+            ctx: Arc::clone(&self.ctx),
+            mw: Arc::clone(&self.mw),
+            scope: Some(key),
+            approval: self.approval.clone(),
+            retry_budget: self.retry_budget,
+            // 子不再挂快照表：单层派生在目录层已硬剔除，双保险
+            sub: None,
+        })
     }
 
     /// 作用域感知的 trait 对象服务查询（compensation.rs 解析 undo 工具也走这）。
@@ -177,6 +212,12 @@ impl Kernel {
     ) -> Result<StepOutcome, KernelError> {
         // 投影：只看游标之前的消息（回退后不含已撤销轮次，§4.2）
         let messages = session.derive_messages();
+
+        // ⑮ 子 Agent 快照刷新（带会话身份的 step 才刷）：工具执行在
+        // 本步末尾，子 Agent fork 到的前缀含本轮 user 消息与全部已完成轮。
+        if let (Some(gate), Some(id)) = (&self.sub, session_id) {
+            gate.note(id, session);
+        }
 
         // waterfall: pre-step —— 插件可拒绝/改写用户消息（§7.2）
         let messages = self.waterfall_pre(messages).await?;
@@ -216,7 +257,10 @@ impl Kernel {
             Some(self.scoped_dyn::<dyn ToolSource>()?)
         };
 
-        for call in resp.tool_calls {
+        for mut call in resp.tool_calls {
+            // ⑮：调用请求携带会话身份（审批门给子 Agent 打标识用），
+            // 与下方 CallCtx.session_id 同源同点
+            call.session_id = session_id.map(str::to_owned);
             let tool = tools
                 .as_ref()
                 .expect("非空 tool_calls 已解析目录")

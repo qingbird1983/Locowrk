@@ -72,12 +72,15 @@ export interface ScheduleFiredEvent {
 }
 
 /** 审批请求载荷（agent://approval-request）。与 events.rs 的
- * ApprovalRequestPayload 对齐（snake_case 字段）。 */
+ * ApprovalRequestPayload 对齐（snake_case 字段）。session_id（⑮）=
+ * 发起调用的会话；子 Agent 派生的调用带 `{parent}-sub-{n}`，
+ * ApprovalModal 据此打标识徽章。 */
 export interface ApprovalRequest {
   request_id: string;
   tool: string;
   args: unknown;
   side_effect: string;
+  session_id?: string | null;
 }
 
 /** 市场目录条目（plugin_registry_list 返回项；versions 升序，末位 latest；

@@ -64,6 +64,7 @@ impl LlmService for PolicyLlm {
                 id: CallId(format!("a-call-{}", n + 1)),
                 tool: tool.into(),
                 args,
+                session_id: None,
             }],
         })
     }
@@ -97,6 +98,7 @@ impl LlmService for IsolatedLlm {
                 id: CallId(format!("b-call-{}", n + 1)),
                 tool: "echo".into(),
                 args: json!({ "text": "scope-b hello", "mode": "plain" }),
+                session_id: None,
             }],
         })
     }

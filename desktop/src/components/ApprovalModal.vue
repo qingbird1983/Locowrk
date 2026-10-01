@@ -2,10 +2,18 @@
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useApprovalsStore } from "../stores/approvals";
+import { useChatStore } from "../stores/chat";
 import type { ApprovalRequest } from "../types";
 
 const { t } = useI18n();
 const approvals = useApprovalsStore();
+const chat = useChatStore();
+
+// ⑮ 子 Agent 派生的调用（session_id 非当前会话）打标识徽章——
+// 冒泡到同一审批门的请求，用户得知道是谁在要权限
+function isSubagent(req: ApprovalRequest): boolean {
+  return !!req.session_id && req.session_id !== chat.sessionId;
+}
 
 // 点击后到后端回填前的短暂窗口内禁用按钮，防双击重复决策
 const deciding = ref(new Set<string>());
@@ -55,7 +63,14 @@ async function decide(req: ApprovalRequest, allowed: boolean) {
           </p>
         </div>
         <span
-          class="ml-auto rounded bg-red-900/70 px-2 py-0.5 text-[10px] font-medium text-red-200"
+          v-if="isSubagent(req)"
+          class="ml-auto rounded bg-purple-900/70 px-2 py-0.5 text-[10px] font-medium text-purple-200"
+        >
+          {{ t("approval.subagentTag") }}
+        </span>
+        <span
+          class="rounded bg-red-900/70 px-2 py-0.5 text-[10px] font-medium text-red-200"
+          :class="{ 'ml-0': isSubagent(req), 'ml-auto': !isSubagent(req) }"
         >
           {{ t(`effect.${req.side_effect}`) }}
         </span>

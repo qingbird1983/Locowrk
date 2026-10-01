@@ -39,6 +39,7 @@ impl LlmService for ScriptedLlm {
                     id: CallId("call-1".into()),
                     tool: self.wants.into(),
                     args: json!({ "text": "hi" }),
+                    session_id: None,
                 }],
             })
         }
@@ -324,6 +325,7 @@ impl LlmService for ProbeLlm {
                 id: CallId("call-p".into()),
                 tool: "probe".into(),
                 args: json!({}),
+                session_id: None,
             }],
         })
     }

@@ -14,6 +14,7 @@ mod chain;
 mod compensation;
 mod kernel;
 mod middleware;
+mod subagent;
 mod waterfall;
 
 pub use approval::{ApprovalDecision, ApprovalResolver};
@@ -30,4 +31,5 @@ pub use middleware::{
     Middleware, Next, RETRIEVAL_WEIGHT, Retriever, Retry, Timeout, ToolExposure,
     ToolExposureConfig, Tracing, cosine, estimate_tokens, suggested_threshold,
 };
+pub use subagent::{FilterToolSource, SubagentGate, SubagentTool};
 pub use waterfall::{RequestErrorPayload, RequestPayload, RetryBudget, points};

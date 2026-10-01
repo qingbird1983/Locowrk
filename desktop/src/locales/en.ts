@@ -47,6 +47,9 @@ export default {
     compactUndoFailed: "Failed to undo compaction: {reason}",
     // ⑭ Scheduled task fired (announced before the injected turn runs)
     scheduleFired: "Scheduled task fired: {title}",
+    // ⑮ Sub-agent (in-chat notices for subagent_run spawn/finish)
+    subagentStarted: "Sub-agent dispatched: {prompt}",
+    subagentDone: "Sub-agent finished: {summary}",
   },
   // Idle badge (IdleBadge, ⑩ wired per exposure doc §8.4/§11.3): backend
   // sends structured IdleInfo only; the frontend renders human phrasing.
@@ -121,6 +124,8 @@ export default {
     argsLabel: "Arguments",
     deny: "Deny",
     allow: "Allow",
+    // ⑮ Tag for calls spawned by a sub-agent (session_id differs)
+    subagentTag: "Sub-agent call",
   },
   market: {
     discover: "Discover",

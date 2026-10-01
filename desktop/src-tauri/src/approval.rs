@@ -82,6 +82,8 @@ impl ApprovalResolver for ApprovalHub {
             tool: req.tool.clone(),
             args: req.args.clone(),
             side_effect: side_effect_str(&spec.side_effect).to_string(),
+            // ⑮：子 Agent 派生的调用带 {parent}-sub-{n}，前端打标识徽章
+            session_id: req.session_id.clone(),
         };
         let (tx, rx) = oneshot::channel();
         self.pending

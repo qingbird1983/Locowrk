@@ -42,6 +42,11 @@ export type SystemItem = {
 
 let nextId = 1;
 
+/** 通知里长文本的摘引宽度（全文在工具卡/结果 JSON 里）。 */
+function clip(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
 export const useChatStore = defineStore("chat", {
   state: () => ({
     sessionId: `desktop-${Date.now()}`,
@@ -75,6 +80,15 @@ export const useChatStore = defineStore("chat", {
             pending: true,
             ok: null,
           });
+          if (e.tool === "subagent_run") {
+            // ⑮ 派生告知（SystemNotice）：子 Agent 内部活动不投影（黑盒），
+            // 其审批请求走 approval-request 通道并带标识
+            const prompt =
+              typeof (e.args as { prompt?: unknown })?.prompt === "string"
+                ? ((e.args as { prompt: string }).prompt)
+                : "";
+            this.pushNotice("notice.subagentStarted", { prompt: clip(prompt, 80) });
+          }
           break;
         case "tool_result": {
           const item = this.items.find(
@@ -85,6 +99,16 @@ export const useChatStore = defineStore("chat", {
             item.ok = e.ok;
             item.output = e.output;
             item.error = e.error;
+            if (item.tool === "subagent_run") {
+              // ⑮ 收束告知：摘要回父会话；预算耗尽/超时/失败在
+              // status/summary 里如实呈现（status 详见工具卡结果 JSON）
+              const out = (e.output ?? {}) as { summary?: unknown };
+              const summary =
+                e.error ?? (typeof out.summary === "string" ? out.summary : "");
+              if (summary) {
+                this.pushNotice("notice.subagentDone", { summary: clip(summary, 120) });
+              }
+            }
           }
           break;
         }

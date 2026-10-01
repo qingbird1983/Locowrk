@@ -48,6 +48,7 @@ impl LlmService for DemoLlm {
                             id: CallId(format!("call-{n}")),
                             tool: "echo".into(),
                             args: json!({ "text": content }),
+                            session_id: None,
                         }],
                     })
                 } else if content.to_lowercase().contains("shout") || content.contains("喊") {
@@ -65,6 +66,7 @@ impl LlmService for DemoLlm {
                             id: CallId(format!("call-{n}")),
                             tool: "shout".into(),
                             args: json!({ "text": content, "mode": mode }),
+                            session_id: None,
                         }],
                     })
                 } else if content.to_lowercase().contains("email") || content.contains("邮件") {
@@ -79,6 +81,7 @@ impl LlmService for DemoLlm {
                                 "subject": content,
                                 "body": content,
                             }),
+                            session_id: None,
                         }],
                     })
                 } else {

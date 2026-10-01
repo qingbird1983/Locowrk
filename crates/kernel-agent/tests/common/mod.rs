@@ -113,6 +113,7 @@ impl SeqLlm {
                 id: CallId(format!("call-{n}")),
                 tool: tool.to_string(),
                 args: json!({}),
+                session_id: None,
             }],
         })
     }

@@ -45,6 +45,9 @@ export default {
     compactUndoFailed: "撤销压缩失败：{reason}",
     // ⑭ 定时触发（调度引擎注入轮前的告知）
     scheduleFired: "定时任务触发：{title}",
+    // ⑮ 子 Agent（subagent_run 派生/收束的会话内告知）
+    subagentStarted: "已派生子 Agent：{prompt}",
+    subagentDone: "子 Agent 收束：{summary}",
   },
   // 闲置徽章（IdleBadge，⑩ 接线 exposure 文档 §8.4/§11.3）：后端只给
   // 结构化 IdleInfo，前端按档位渲染"多久没用"人类文案——永不显示裸天数
@@ -118,6 +121,8 @@ export default {
     argsLabel: "参数",
     deny: "拒绝",
     allow: "允许执行",
+    // ⑮ 子 Agent 派生的调用标识（session_id 非当前会话时显示）
+    subagentTag: "子 Agent 调用",
   },
   market: {
     discover: "发现",

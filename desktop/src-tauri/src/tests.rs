@@ -345,6 +345,16 @@ async fn approval_hub_roundtrip_through_pending_map() {
         sink.events().iter().any(|e| kind(e) == "approval_request"),
         "approval_request 事件必须推给前端"
     );
+    // ⑮：载荷携带会话身份（子 Agent 派生的调用据此打标识徽章）
+    let payload = sink.events().iter().find_map(|e| match e {
+        AgentEvent::ApprovalRequest(p) => Some(p.clone()),
+        _ => None,
+    });
+    assert_eq!(
+        payload.expect("审批载荷").session_id.as_deref(),
+        Some("s1"),
+        "⑮ 审批载荷带会话身份"
+    );
     assert!(session.events().iter().any(|e| matches!(
         e,
         SessionEvent::ToolResult { error: Some(err), .. } if err.contains("denied by approval")

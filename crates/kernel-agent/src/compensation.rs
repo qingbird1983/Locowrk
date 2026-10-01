@@ -121,6 +121,7 @@ impl Kernel {
                 id: undo_id.clone(),
                 tool: undo_tool.clone(),
                 args: undo_args.clone(),
+                session_id: None,
             };
             let decision = self.approve(&req, tool.spec()).await;
             session.append(SessionEvent::ApprovalDecided {

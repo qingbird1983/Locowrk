@@ -27,12 +27,15 @@ pub mod channels {
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
 /// 同时是 `list_pending_approvals` 的返回项。字段与其他 `agent://` 事件
 /// 一致用 snake_case（§13.2 示例里的 camelCase 以本实现为准）。
+/// `session_id`（⑮）：发起调用的会话——子 Agent 派生的调用带
+/// `{parent}-sub-{n}`，前端据此打"子 Agent"标识徽章。
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalRequestPayload {
     pub request_id: String,
     pub tool: String,
     pub args: Value,
     pub side_effect: String,
+    pub session_id: Option<String>,
 }
 
 /// 推给前端的事件。字段命名与 session-store 事件对齐（snake_case）；

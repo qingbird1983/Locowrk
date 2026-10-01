@@ -54,6 +54,7 @@ impl LlmService for ScriptedLlm {
                 id: CallId(format!("call-{}", n % 3 + 1)),
                 tool: "echo".to_string(),
                 args,
+                session_id: None,
             }],
         })
     }

@@ -267,6 +267,7 @@ async fn cut_never_splits_tool_call_pairing() {
         id: plugin_api::CallId("c1".into()),
         tool: "fs_read".into(),
         args: json!({}),
+        session_id: None,
     };
     let messages = vec![
         Message::User {

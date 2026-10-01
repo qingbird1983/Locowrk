@@ -18,8 +18,8 @@ use std::time::Duration;
 use cordis_core::Context;
 use kernel_agent::{
     points, Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel, LlmService,
-    MemoryInject, MemoryInjectConfig, Middleware, Retriever, Timeout, ToolExposure,
-    ToolExposureConfig, ToolSource, Tracing,
+    MemoryInject, MemoryInjectConfig, Middleware, Retriever, SubagentGate, SubagentTool, Timeout,
+    ToolExposure, ToolExposureConfig, ToolSource, Tracing,
 };
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use plugin_service::{LocalDirMarket, PluginService};
@@ -72,39 +72,11 @@ pub fn init_state(app: AppHandle) -> AppState {
     let embed = SharedEmbed::new();
     let embed_port = embed.port();
 
-    // 工具目录：始终提供（哪怕 registry 为空 → resolve 报 NotAvailable，
-    // 错误以失败的 ToolResult 闭合，而不是服务缺失让整步崩掉，§7.2）。
-    // 内置：send_email 是阶段六的演示替身（不可逆 → 走审批弹窗）；
-    // search_tools（⑫）持有不含自身的全目录视图做检索（含 hidden，§4.1
-    // 显式检索通路）+ usage 做空结果高频回退 + ⑬ 语义检索（未配置降级
-    // 关键词）；⑭ 调度三件套（库可用时）——检索目录同样要看到它们。
-    let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
+    // 会话表（内存）：键 = 前端生成的 session id；⑭ 调度引擎解析触发
+    // 目标、⑮ 子 Agent 快照按同一身份口径。
     let sessions: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let last_chat: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
-
-    let with_schedule_tools = |src: KernelToolSource| match &schedules {
-        Some(db) => src
-            .with_builtin(crate::scheduler::ScheduleCreateTool::new(Arc::clone(db)))
-            .with_builtin(crate::scheduler::ScheduleListTool::new(Arc::clone(db)))
-            .with_builtin(crate::scheduler::ScheduleDeleteTool::new(Arc::clone(db))),
-        None => src,
-    };
-
-    let search_catalog = Arc::new(with_schedule_tools(
-        KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
-            .with_builtin(Arc::clone(&send_email)),
-    ));
-    let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
-    ctx.provide_dyn::<dyn ToolSource>(Arc::new(with_schedule_tools(
-        KernelToolSource::new(RegistryToolSource::new(Arc::clone(&registry)))
-            .with_builtin(send_email)
-            .with_builtin(SearchToolsTool::new(
-                search_catalog,
-                Arc::clone(&usage),
-                Some(embed_tool_port),
-            )),
-    )));
 
     let settings: Arc<SettingsStore> = Arc::new(match SettingsStore::open(&root) {
         Ok(s) => s,
@@ -214,7 +186,52 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 决策由 Kernel 写成 ApprovalDecided 事件进日志。
     let approval = Arc::new(ApprovalHub::new(Arc::clone(&sink)));
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
-    let kernel = Arc::new(Kernel::new(ctx.clone(), mw).with_approval(resolver));
+    // ⑮ 子 Agent 快照表：内核每个带身份的 step 刷新父转录前缀，
+    // subagent_run 工具执行时 fork（单层派生，目录层硬剔除再生）。
+    let gate = Arc::new(SubagentGate::default());
+    let kernel = Arc::new(
+        Kernel::new(ctx.clone(), mw)
+            .with_approval(resolver)
+            .with_subagent(Arc::clone(&gate)),
+    );
+
+    // 工具目录：始终提供（哪怕 registry 为空 → resolve 报 NotAvailable，
+    // 错误以失败的 ToolResult 闭合，而不是服务缺失让整步崩掉，§7.2）。
+    // 内置：send_email 是阶段六的演示替身（不可逆 → 走审批弹窗）；
+    // ⑭ 调度三件套（库可用时）；⑮ subagent_run。目录提供放在 kernel
+    // 创建之后——subagent_run 工具要持有内核 Arc（Kernel → Context →
+    // ToolSource → 工具 → Kernel 组装期有意成环，两侧皆进程级单例）。
+    // search_tools（⑫）持有不含自身的全目录视图做检索（含 hidden，§4.1
+    // 显式检索通路）+ usage 做空结果高频回退 + ⑬ 语义检索（未配置降级
+    // 关键词）。
+    let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
+    let sub_tool: Arc<dyn plugin_api::Tool> =
+        Arc::new(SubagentTool::new(Arc::clone(&kernel), Arc::clone(&gate)));
+    let with_host_tools = |src: KernelToolSource| {
+        let src = src.with_builtin(Arc::clone(&send_email));
+        let src = match &schedules {
+            Some(db) => src
+                .with_builtin(crate::scheduler::ScheduleCreateTool::new(Arc::clone(db)))
+                .with_builtin(crate::scheduler::ScheduleListTool::new(Arc::clone(db)))
+                .with_builtin(crate::scheduler::ScheduleDeleteTool::new(Arc::clone(db))),
+            None => src,
+        };
+        src.with_builtin(Arc::clone(&sub_tool))
+    };
+
+    let search_catalog = Arc::new(with_host_tools(KernelToolSource::new(
+        RegistryToolSource::new(Arc::clone(&registry)),
+    )));
+    let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
+    let main_source = with_host_tools(KernelToolSource::new(RegistryToolSource::new(
+        Arc::clone(&registry),
+    )))
+    .with_builtin(SearchToolsTool::new(
+        search_catalog,
+        Arc::clone(&usage),
+        Some(embed_tool_port),
+    ));
+    ctx.provide_dyn::<dyn ToolSource>(Arc::new(main_source));
 
     // 插件编排（§11.2）：数据根缺省 ~/.Locowrk（LOCOWRK_DATA_DIR
     // 可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。

@@ -147,6 +147,7 @@ pub(crate) fn map_response(res: ChatResponse, next_call: &AtomicU64) -> LlmRespo
                 id: CallId(id),
                 tool: tc.fn_name,
                 args: tc.fn_arguments,
+                session_id: None,
             }
         })
         .collect();

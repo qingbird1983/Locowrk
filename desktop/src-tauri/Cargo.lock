@@ -2485,6 +2485,7 @@ dependencies = [
  "cordis-core",
  "jiff",
  "plugin-api",
+ "semver",
  "serde",
  "serde_json",
  "session-store",
