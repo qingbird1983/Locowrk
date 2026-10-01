@@ -183,7 +183,7 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
     <!-- 顶部提示条（§9.3）：只在主动打开本页时可见，点击切换筛选 -->
     <button
       v-if="staleCount > 0 && !usageFilter"
-      class="mb-3 flex w-full items-center gap-2 rounded-xl border border-yellow-900/50 bg-yellow-950/40 px-4 py-2 text-xs text-yellow-200 transition hover:bg-yellow-950/60"
+      class="mb-3 flex w-full items-center gap-2 rounded-xl bg-warn/10 px-4 py-2 text-xs text-warn transition hover:bg-warn/16"
       @click="usageFilter = 'gt3m'"
     >
       <span>💡 {{ t("market.hintIdle", { n: staleCount }) }}</span>
@@ -194,7 +194,7 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
 
     <p
       v-if="batchError"
-      class="mb-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs text-red-300"
+      class="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger"
     >
       {{ batchError }}
     </p>
@@ -209,13 +209,13 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
         <div
           v-for="p in group.list"
           :key="p.id"
-          class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface-1/40 px-4 py-3 last:border-b-0"
+          class="flex flex-wrap items-center gap-x-4 gap-y-2 bg-wash-1 px-4 py-3"
         >
             <!-- 多选框：内置插件不进批量（不可卸载，停用/启用走行内按钮） -->
             <input
               v-if="p.source !== 'builtin'"
               type="checkbox"
-              class="h-3.5 w-3.5 accent-emerald-600"
+              class="h-3.5 w-3.5 accent-[var(--lw-accent)]"
               :checked="selected.has(p.id)"
               :title="t('market.selectAll')"
               @change="toggle(p.id, ($event.target as HTMLInputElement).checked)"
@@ -238,10 +238,10 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
             class="rounded-full px-2 py-0.5 text-[10px]"
             :class="
               p.active_version
-                ? 'bg-emerald-900/50 text-emerald-300'
+                ? 'bg-ok/16 text-ok'
                 : p.enabled
-                  ? 'bg-amber-900/50 text-amber-300'
-                  : 'bg-surface-2/60 text-ink-3'
+                  ? 'bg-warn/16 text-warn'
+                  : 'bg-wash-3 text-ink-2'
             "
           >
             {{
@@ -256,7 +256,7 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
           <IdleBadge :idle="store.usageOf(p.id)?.idle ?? null" />
           <span
             v-if="updateAvailableOf(p)"
-            class="rounded-full bg-indigo-900/50 px-2 py-0.5 text-[10px] text-indigo-300"
+            class="rounded-full bg-info/16 px-2 py-0.5 text-[10px] text-info"
           >
             {{ t("market.updateAvailable", { version: latestOf(store.marketplace, p.id) }) }}
           </span>
@@ -287,7 +287,7 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
             </button>
             <button
               v-if="updateAvailableOf(p)"
-              class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+              class="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
               :disabled="store.isBusy(p.id)"
               @click="store.update(p.id)"
             >
@@ -316,7 +316,7 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
               </select>
             </template>
             <button
-              class="rounded-lg border border-red-800/70 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-900/40 disabled:cursor-not-allowed disabled:opacity-40"
+              class="rounded-lg text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
               :disabled="store.isBusy(p.id)"
               @click="store.uninstall(p.id)"
             >
@@ -332,7 +332,7 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
       <label class="flex items-center gap-1.5 text-xs text-ink-2">
         <input
           type="checkbox"
-          class="h-3.5 w-3.5 accent-emerald-600"
+          class="h-3.5 w-3.5 accent-[var(--lw-accent)]"
           :checked="
             selectedIds.length > 0 &&
             selectedIds.length ===
@@ -360,19 +360,19 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
           {{ t("market.batchEnable") }}
         </button>
         <button
-          class="rounded-lg border border-red-800/70 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-900/40"
+          class="rounded-lg text-danger transition hover:bg-danger/10"
           @click="runBatch('uninstall')"
         >
           {{ t("market.batchUninstall") }}
         </button>
       </template>
       <div v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <span class="text-xs text-red-300">
+        <span class="text-xs text-danger">
           {{ t("market.batchUninstallConfirm", { n: selected.size }) }}
           <span class="text-ink-2">{{ selectedNames.join("、") }}</span>
         </span>
         <button
-          class="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-600"
+          class="rounded-lg bg-danger px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-danger/85"
           @click="runBatch('uninstall')"
         >
           {{ t("market.batchUninstall") }}

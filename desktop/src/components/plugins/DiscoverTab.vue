@@ -67,13 +67,13 @@ function pickVersion(id: string, versions: string[]): string {
           </select>
           <span
             v-if="store.installed.some((p) => p.id === item.id)"
-            class="ml-auto rounded bg-emerald-900/50 px-2 py-1 text-[10px] text-emerald-300"
+            class="ml-auto rounded bg-ok/16 px-2 py-1 text-[10px] text-ok"
           >
             {{ t("market.installedBadge") }}
           </span>
           <button
             v-else
-            class="ml-auto rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+            class="ml-auto rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="store.isBusy(item.id)"
             @click="store.install(item.id, pickVersion(item.id, item.versions))"
           >

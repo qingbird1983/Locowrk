@@ -82,7 +82,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
     <p class="text-[11px] text-ink-4">{{ t("settings.developerHint") }}</p>
 
     <label class="flex cursor-pointer items-center gap-2 text-xs">
-      <input v-model="form.enabled" type="checkbox" class="accent-emerald-500" />
+      <input v-model="form.enabled" type="checkbox" class="accent-[var(--lw-accent)]" />
       <span>{{ t("settings.toolsEnabled") }}</span>
     </label>
 
@@ -113,13 +113,13 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
         {{ t("settings.save") }}
       </button>
-      <span v-if="settings.savedFlash" class="text-xs text-emerald-400">
+      <span v-if="settings.savedFlash" class="text-xs text-ok">
         {{ t("settings.saved") }}
       </span>
     </div>
@@ -149,7 +149,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
         >
           <span class="break-all text-[11px] text-ink-2">{{ root }}</span>
           <button
-            class="shrink-0 rounded px-1.5 text-[11px] text-ink-4 transition hover:bg-surface-2 hover:text-red-400"
+            class="shrink-0 rounded px-1.5 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-danger"
             :disabled="settings.saving"
             :title="root"
             @click="removeRoot(i)"
@@ -178,7 +178,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
       </p>
 
       <template v-else-if="debug">
-        <p v-if="!debug.enabled" class="text-[11px] text-amber-400">
+        <p v-if="!debug.enabled" class="text-[11px] text-warn">
           {{ t("developer.disabled") }}
         </p>
         <p class="text-xs">
@@ -203,7 +203,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
             <span class="text-ink-2">{{ debug.retrieved.join(", ") }}</span>
           </li>
         </ul>
-        <p v-if="debug.savedTokensEstimate > 0" class="text-[11px] text-emerald-400">
+        <p v-if="debug.savedTokensEstimate > 0" class="text-[11px] text-ok">
           {{ t("developer.saved", { n: compactNumber(debug.savedTokensEstimate) }) }}
         </p>
       </template>

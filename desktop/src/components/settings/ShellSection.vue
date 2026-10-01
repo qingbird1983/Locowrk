@@ -36,27 +36,27 @@ function save() {
     <p class="text-[11px] text-ink-4">{{ t("settings.shellHint") }}</p>
 
     <label class="flex cursor-pointer items-start gap-2 text-xs">
-      <input v-model="form.unlockRisky" type="checkbox" class="mt-0.5 accent-emerald-500" />
+      <input v-model="form.unlockRisky" type="checkbox" class="mt-0.5 accent-[var(--lw-accent)]" />
       <span>{{ t("settings.shellUnlock") }}</span>
     </label>
-    <p class="rounded-lg border border-amber-700/50 bg-amber-900/20 p-2 text-[11px] text-amber-300">
+    <p class="rounded-lg bg-warn/10 p-2 text-[11px] text-warn">
       ⚠️ {{ t("settings.shellUnlockWarning") }}
     </p>
     <p class="text-[11px] text-ink-5">{{ t("settings.shellRestart") }}</p>
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
         {{ t("settings.save") }}
       </button>
-      <span v-if="settings.savedFlash" class="text-xs text-emerald-400">
+      <span v-if="settings.savedFlash" class="text-xs text-ok">
         {{ t("settings.saved") }}
       </span>
     </div>
-    <p v-if="settings.error" class="rounded-lg bg-red-900/40 p-2 text-[11px] text-red-300">
+    <p v-if="settings.error" class="rounded-lg bg-danger/10 p-2 text-[11px] text-danger">
       {{ settings.error }}
     </p>
   </section>

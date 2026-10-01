@@ -31,7 +31,7 @@ const meta = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2 rounded-xl border border-line bg-surface-1/60 p-4">
+  <div class="flex flex-col gap-2 rounded-xl bg-wash-1 p-4">
     <div class="flex items-start gap-3">
       <PluginIcon :icon="item.display.icon" :id="item.id" />
       <div class="min-w-0 flex-1">

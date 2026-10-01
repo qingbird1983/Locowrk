@@ -121,17 +121,17 @@ function clearKey() {
       >
         {{ form.probing ? t("settings.embeddingProbing") : t("settings.embeddingDetect") }}
       </button>
-      <span v-if="form.probeDim > 0" class="text-xs text-emerald-400">
+      <span v-if="form.probeDim > 0" class="text-xs text-ok">
         {{ t("settings.embeddingDim", { n: form.probeDim }) }}
       </span>
     </div>
-    <p v-if="form.probeError" class="text-[11px] text-red-300">
+    <p v-if="form.probeError" class="text-[11px] text-danger">
       {{ t("settings.embeddingDetectFail") }} {{ form.probeError }}
     </p>
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
@@ -145,7 +145,7 @@ function clearKey() {
       >
         {{ t("settings.clearKey") }}
       </button>
-      <span v-if="settings.savedFlash" class="text-xs text-emerald-400">
+      <span v-if="settings.savedFlash" class="text-xs text-ok">
         {{ t("settings.saved") }}
       </span>
     </div>

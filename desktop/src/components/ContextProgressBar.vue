@@ -21,9 +21,9 @@ const pct = computed(() => {
 });
 
 const tone = computed(() => {
-  if (pct.value >= 100) return "bg-red-500";
-  if (pct.value >= 60) return "bg-amber-500";
-  return "bg-emerald-500";
+  if (pct.value >= 100) return "bg-danger";
+  if (pct.value >= 60) return "bg-warn";
+  return "bg-ok";
 });
 
 /** 比例段：`≈52K / 256K`；窗口未知 = 空串（只显示百分比）。 */

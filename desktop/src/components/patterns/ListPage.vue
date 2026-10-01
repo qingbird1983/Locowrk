@@ -93,7 +93,7 @@ const subFilter = defineModel<string>("subFilter");
     <!-- 批量操作栏：选中非空时固定在底部 -->
     <div
       v-if="batching"
-      class="flex items-center gap-2 border-t border-line bg-surface-1/60 px-5 py-2"
+      class="flex items-center gap-2 border-t border-line bg-secondary px-5 py-2"
     >
       <slot name="batch" />
     </div>

@@ -3,228 +3,279 @@
 @tailwind utilities;
 
 /*
- * design tokens + 主题（⑰ 视觉抛光定稿，docs/design/UI shell and patterns.md
- * §六）。tokens 是唯一样式事实源：暗色 = :root 缺省值，亮色 =
- * :root[data-theme="light"] 覆盖同一批变量——改皮肤只改这两块。
+ * design tokens v2（UI 正式设计，docs/design/UI shell and patterns.md §六；
+ * 可执行版本 = docs/design/ui-prototype/css/tokens.css，两处冲突以文档为准：
+ * content-max 760 而非原型的 820；动效 token 用 --dur- 系与 --ease- 系
+ * 四档四缓动，原型 --motion- 系是历史残留）。
  *
- * 双形态纪律：--lw-*（hex，组件内联 var() 用）与 --lw-rgb-*（三元组，仅
- * tailwind.config.js 消费，配 rgb(var(--x) / <alpha-value>) 让 bg-x/60 等
- * 半透明修饰符在两主题下成立）。同名同值，改色两形同改。
+ * 唯一颜色源 = 13 档中性灰阶（--lw-gray-*）+ 状态色；没有品牌彩色强调色，
+ * --lw-accent 暗色 = 白、亮色 = 近黑。平面内分层靠半透明 tonal wash
+ * （--lw-wash-1..3），1px 边框只留给浮层与 --lw-elevation 发丝环。
+ *
+ * 双形态纪律（§6.2）：**实色** token 给 --lw-rgb-* 三元组（tailwind 消费，
+ * 保 bg-x/16 等修饰符）；**自带透明度**的 token（wash / ink-2..5 / line /
+ * elevated 暗色 / composer 暗色）只能整值引用，禁止再加透明度修饰符——
+ * tailwind 对 var() 无法注入 alpha，修饰符会被静默丢弃。
  */
+
+/* --- 1. 中性灰阶（两主题共用，唯一颜色来源） ------------------------------ */
+:root {
+  --lw-gray-0: #ffffff;
+  --lw-gray-50: #f9f9f9;
+  --lw-gray-75: #f3f3f3;
+  --lw-gray-100: #ededed;
+  --lw-gray-300: #afafaf;
+  --lw-gray-500: #5d5d5d;
+  --lw-gray-550: #4f4f4f;
+  --lw-gray-600: #414141;
+  --lw-gray-700: #303030;
+  --lw-gray-750: #282828;
+  --lw-gray-800: #212121;
+  --lw-gray-900: #181818;
+  --lw-gray-1000: #0d0d0d;
+
+  --lw-rgb-gray-0: 255 255 255;
+  --lw-rgb-gray-50: 249 249 249;
+  --lw-rgb-gray-75: 243 243 243;
+  --lw-rgb-gray-100: 237 237 237;
+  --lw-rgb-gray-300: 175 175 175;
+  --lw-rgb-gray-500: 93 93 93;
+  --lw-rgb-gray-550: 79 79 79;
+  --lw-rgb-gray-600: 65 65 65;
+  --lw-rgb-gray-700: 48 48 48;
+  --lw-rgb-gray-750: 40 40 40;
+  --lw-rgb-gray-800: 33 33 33;
+  --lw-rgb-gray-900: 24 24 24;
+  --lw-rgb-gray-1000: 13 13 13;
+}
+
+/* --- 2. 暗色（缺省块） --------------------------------------------------- */
 :root,
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* 表面：页面底 / 面板与输入 / 激活与悬停 / 实心底与禁用 */
-  --lw-surface-0: #171717; /* neutral-900 */
-  --lw-surface-1: #262626; /* neutral-800 */
-  --lw-surface-2: #404040; /* neutral-700 */
-  --lw-surface-3: #525252; /* neutral-600 */
+  /* 表面层级（§6.1 表） */
+  --lw-bg: #181818; /* 主页面底 */
+  --lw-bg-side: #000000; /* 侧栏 / 设置导航轨（向更极端偏离主区一档） */
+  --lw-bg-dock: #212121; /* 工作面板列 */
+  --lw-bg-inset: #0d0d0d; /* 代码块 / mono 井 */
+  --lw-bg-secondary: #212121;
+  --lw-bg-tertiary: #282828;
+  --lw-bg-elevated: #212121f5; /* 浮层实底（自带 alpha） */
+  --lw-bg-composer: #212121f5; /* composer 卡底（自带 alpha） */
+  --lw-raised: #282828; /* 控件"抬起"底 */
 
-  /* 线：常规 / 强调 */
-  --lw-line: #262626; /* neutral-800 */
-  --lw-line-strong: #404040; /* neutral-700 */
+  --lw-wash-1: rgb(255 255 255 / 0.035); /* 卡片、行底 */
+  --lw-wash-2: rgb(255 255 255 / 0.06); /* hover、输入井 */
+  --lw-wash-3: rgb(255 255 255 / 0.08); /* 选中、更深 */
 
-  /* 文本：亮 → 弱五级 */
-  --lw-ink-1: #f5f5f5; /* neutral-100 */
-  --lw-ink-2: #d4d4d4; /* neutral-300 */
-  --lw-ink-3: #a3a3a3; /* neutral-400 */
-  --lw-ink-4: #737373; /* neutral-500 */
-  --lw-ink-5: #525252; /* neutral-600 */
+  --lw-ink-1: #ffffff;
+  --lw-ink-2: rgb(255 255 255 / 0.7);
+  --lw-ink-3: rgb(255 255 255 / 0.52);
+  --lw-ink-4: rgb(255 255 255 / 0.38);
+  --lw-ink-5: rgb(255 255 255 / 0.2);
 
-  /* 语义色：强调 / 成功 / 警告 / 危险 */
-  --lw-accent: #4f46e5; /* indigo-600 */
-  --lw-accent-hover: #6366f1; /* indigo-500 */
-  --lw-ok: #34d399; /* emerald-400 */
-  --lw-warn: #fbbf24; /* amber-400 */
-  --lw-danger: #f87171; /* red-400 */
+  --lw-line: rgb(255 255 255 / 0.08);
+  --lw-line-subtle: rgb(255 255 255 / 0.05);
+  --lw-line-strong: rgb(255 255 255 / 0.14);
 
-  /* 圆角：小（输入/徽章内件）/ 中（按钮/卡片）/ 大（气泡/容器）/ 全 */
-  --lw-radius-sm: 0.375rem;
-  --lw-radius-md: 0.5rem;
-  --lw-radius-lg: 0.75rem;
-  --lw-radius-full: 9999px;
+  --lw-accent: #ffffff;
+  --lw-accent-hover: #ededed;
+  --lw-accent-ink: #181818;
 
-  /* 间距（4px 基）：常规只用这五档 */
-  --lw-space-1: 0.25rem;
-  --lw-space-2: 0.5rem;
-  --lw-space-3: 0.75rem;
-  --lw-space-4: 1rem;
-  --lw-space-6: 1.5rem;
+  --lw-ok: #40c977;
+  --lw-warn: #ff8549;
+  --lw-danger: #ff6764;
+  --lw-info: #afafaf;
+  --lw-purple: #c27aff;
 
-  /* 动效三档（§六：状态色变 120ms；入场/进度 200ms；标准缓动） */
-  --lw-dur-fast: 120ms;
-  --lw-dur-base: 200ms;
-  --lw-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --lw-focus: #ffffff;
+  --lw-scrim: rgb(0 0 0 / 0.45);
 
-  /* 三元组：角色 + 中性兜底 + 语义 hue 实用阶（tailwind.config.js 消费） */
-  --lw-rgb-surface-0: 23 23 23;
-  --lw-rgb-surface-1: 38 38 38;
-  --lw-rgb-surface-2: 64 64 64;
-  --lw-rgb-surface-3: 82 82 82;
-  --lw-rgb-ink-1: 245 245 245;
-  --lw-rgb-ink-2: 212 212 212;
-  --lw-rgb-ink-3: 163 163 163;
-  --lw-rgb-ink-4: 115 115 115;
-  --lw-rgb-ink-5: 82 82 82;
-  --lw-rgb-line: 38 38 38;
-  --lw-rgb-line-strong: 64 64 64;
-  --lw-rgb-accent: 79 70 229;
-  --lw-rgb-accent-hover: 99 102 241;
-  --lw-rgb-ok: 52 211 153;
-  --lw-rgb-warn: 251 191 36;
-  --lw-rgb-danger: 248 113 113;
-  --lw-rgb-neutral-100: 245 245 245;
-  --lw-rgb-neutral-300: 212 212 212;
-  --lw-rgb-neutral-400: 163 163 163;
-  --lw-rgb-neutral-500: 115 115 115;
-  --lw-rgb-neutral-600: 82 82 82;
-  --lw-rgb-neutral-700: 64 64 64;
-  --lw-rgb-neutral-800: 38 38 38;
-  --lw-rgb-neutral-900: 23 23 23;
-  --lw-rgb-red-200: 254 202 202;
-  --lw-rgb-red-300: 252 165 165;
-  --lw-rgb-red-400: 248 113 113;
-  --lw-rgb-red-500: 239 68 68;
-  --lw-rgb-red-600: 220 38 38;
-  --lw-rgb-red-700: 185 28 28;
-  --lw-rgb-red-800: 153 27 27;
-  --lw-rgb-red-900: 127 29 29;
-  --lw-rgb-red-950: 69 10 10;
-  --lw-rgb-amber-300: 252 211 77;
-  --lw-rgb-amber-400: 251 191 36;
-  --lw-rgb-amber-500: 245 158 11;
-  --lw-rgb-amber-700: 180 83 9;
-  --lw-rgb-amber-900: 120 53 15;
-  --lw-rgb-yellow-200: 254 240 138;
-  --lw-rgb-yellow-300: 253 224 71;
-  --lw-rgb-yellow-900: 113 63 18;
-  --lw-rgb-yellow-950: 66 32 6;
-  --lw-rgb-emerald-200: 167 243 208;
-  --lw-rgb-emerald-300: 110 231 183;
-  --lw-rgb-emerald-400: 52 211 153;
-  --lw-rgb-emerald-500: 16 185 129;
-  --lw-rgb-emerald-600: 5 150 105;
-  --lw-rgb-emerald-700: 4 120 87;
-  --lw-rgb-emerald-800: 6 95 70;
-  --lw-rgb-emerald-900: 6 78 59;
-  --lw-rgb-indigo-300: 165 180 252;
-  --lw-rgb-indigo-500: 99 102 241;
-  --lw-rgb-indigo-600: 79 70 229;
-  --lw-rgb-indigo-900: 49 46 129;
-  --lw-rgb-sky-300: 125 211 252;
-  --lw-rgb-sky-950: 8 47 73;
-  --lw-rgb-teal-300: 94 234 212;
-  --lw-rgb-teal-900: 19 78 74;
-  --lw-rgb-purple-200: 233 213 255;
-  --lw-rgb-purple-300: 216 180 254;
-  --lw-rgb-purple-900: 88 28 135;
-  --lw-rgb-purple-950: 59 7 100;
+  --lw-shadow-dialog: 0 16px 48px rgb(0 0 0 / 0.55);
+  --lw-shadow-composer: 0 3px 7.5px #0000000a, 0 0 20px #0000000d;
+  --lw-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.35);
+  --lw-elevation: 0 0 0 0.5px rgb(255 255 255 / 0.12);
+
+  /* 实色三元组（tailwind 消费，保透明度修饰符） */
+  --lw-rgb-bg: 24 24 24;
+  --lw-rgb-bg-side: 0 0 0;
+  --lw-rgb-bg-dock: 33 33 33;
+  --lw-rgb-bg-inset: 13 13 13;
+  --lw-rgb-bg-secondary: 33 33 33;
+  --lw-rgb-bg-tertiary: 40 40 40;
+  --lw-rgb-raised: 40 40 40;
+  --lw-rgb-accent: 255 255 255;
+  --lw-rgb-accent-hover: 237 237 237;
+  --lw-rgb-accent-ink: 24 24 24;
+  --lw-rgb-ok: 64 201 119;
+  --lw-rgb-warn: 255 133 73;
+  --lw-rgb-danger: 255 103 100;
+  --lw-rgb-info: 175 175 175;
+  --lw-rgb-purple: 194 122 255;
+  --lw-rgb-focus: 255 255 255;
 }
 
+/* --- 3. 亮色 ------------------------------------------------------------- */
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --lw-surface-0: #f5f5f5; /* neutral-100 */
-  --lw-surface-1: #ffffff; /* white */
-  --lw-surface-2: #e5e5e5; /* neutral-200 */
-  --lw-surface-3: #d4d4d4; /* neutral-300 */
+  --lw-bg: #ffffff;
+  --lw-bg-side: #f3f3f3;
+  --lw-bg-dock: #fafafa;
+  --lw-bg-inset: #ededed;
+  --lw-bg-secondary: #f9f9f9;
+  --lw-bg-tertiary: #f3f3f3;
+  --lw-bg-elevated: rgb(255 255 255 / 0.7);
+  --lw-bg-composer: #ffffff;
+  --lw-raised: #ffffff;
 
-  --lw-line: #e5e5e5; /* neutral-200 */
-  --lw-line-strong: #d4d4d4; /* neutral-300 */
+  --lw-wash-1: rgb(26 28 31 / 0.035);
+  --lw-wash-2: rgb(26 28 31 / 0.06);
+  --lw-wash-3: rgb(26 28 31 / 0.08);
 
-  --lw-ink-1: #171717; /* neutral-900 */
-  --lw-ink-2: #404040; /* neutral-700 */
-  --lw-ink-3: #737373; /* neutral-500 */
-  --lw-ink-4: #a3a3a3; /* neutral-400 */
-  --lw-ink-5: #d4d4d4; /* neutral-300 */
+  --lw-ink-1: #1a1c1f;
+  --lw-ink-2: rgb(26 28 31 / 0.74);
+  --lw-ink-3: #5d5d5d;
+  --lw-ink-4: #afafaf;
+  --lw-ink-5: rgb(26 28 31 / 0.2);
 
-  --lw-accent: #4f46e5; /* indigo-600（两主题同值） */
-  --lw-accent-hover: #6366f1; /* indigo-500 */
-  --lw-ok: #059669; /* emerald-600 */
-  --lw-warn: #d97706; /* amber-600 */
-  --lw-danger: #dc2626; /* red-600 */
+  --lw-line: rgb(26 28 31 / 0.08);
+  --lw-line-subtle: rgb(26 28 31 / 0.05);
+  --lw-line-strong: rgb(26 28 31 / 0.12);
 
-  --lw-rgb-surface-0: 245 245 245;
-  --lw-rgb-surface-1: 255 255 255;
-  --lw-rgb-surface-2: 229 229 229;
-  --lw-rgb-surface-3: 212 212 212;
-  --lw-rgb-ink-1: 23 23 23;
-  --lw-rgb-ink-2: 64 64 64;
-  --lw-rgb-ink-3: 115 115 115;
-  --lw-rgb-ink-4: 163 163 163;
-  --lw-rgb-ink-5: 212 212 212;
-  --lw-rgb-line: 229 229 229;
-  --lw-rgb-line-strong: 212 212 212;
-  --lw-rgb-accent: 79 70 229;
-  --lw-rgb-accent-hover: 99 102 241;
-  --lw-rgb-ok: 5 150 105;
-  --lw-rgb-warn: 217 119 6;
-  --lw-rgb-danger: 220 38 38;
-  --lw-rgb-neutral-100: 23 23 23;
-  --lw-rgb-neutral-300: 64 64 64;
-  --lw-rgb-neutral-400: 115 115 115;
-  --lw-rgb-neutral-500: 163 163 163;
-  --lw-rgb-neutral-600: 212 212 212;
-  --lw-rgb-neutral-700: 229 229 229;
-  --lw-rgb-neutral-800: 229 229 229;
-  --lw-rgb-neutral-900: 245 245 245;
-  --lw-rgb-red-200: 127 29 29;
-  --lw-rgb-red-300: 185 28 28;
-  --lw-rgb-red-400: 220 38 38;
-  --lw-rgb-red-500: 239 68 68;
-  --lw-rgb-red-600: 220 38 38;
-  --lw-rgb-red-700: 185 28 28;
-  --lw-rgb-red-800: 252 165 165;
-  --lw-rgb-red-900: 254 202 202;
-  --lw-rgb-red-950: 254 226 226;
-  --lw-rgb-amber-300: 180 83 9;
-  --lw-rgb-amber-400: 217 119 6;
-  --lw-rgb-amber-500: 245 158 11;
-  --lw-rgb-amber-700: 252 211 77;
-  --lw-rgb-amber-900: 253 230 138;
-  --lw-rgb-yellow-200: 133 77 14;
-  --lw-rgb-yellow-300: 202 138 4;
-  --lw-rgb-yellow-900: 254 240 138;
-  --lw-rgb-yellow-950: 254 249 195;
-  --lw-rgb-emerald-200: 6 95 70;
-  --lw-rgb-emerald-300: 4 120 87;
-  --lw-rgb-emerald-400: 5 150 105;
-  --lw-rgb-emerald-500: 16 185 129;
-  --lw-rgb-emerald-600: 5 150 105;
-  --lw-rgb-emerald-700: 4 120 87;
-  --lw-rgb-emerald-800: 167 243 208;
-  --lw-rgb-emerald-900: 209 250 229;
-  --lw-rgb-indigo-300: 67 56 202;
-  --lw-rgb-indigo-500: 99 102 241;
-  --lw-rgb-indigo-600: 79 70 229;
-  --lw-rgb-indigo-900: 224 231 255;
-  --lw-rgb-sky-300: 3 105 161;
-  --lw-rgb-sky-950: 224 242 254;
-  --lw-rgb-teal-300: 15 118 110;
-  --lw-rgb-teal-900: 204 251 241;
-  --lw-rgb-purple-200: 107 33 168;
-  --lw-rgb-purple-300: 126 34 206;
-  --lw-rgb-purple-900: 233 213 255;
-  --lw-rgb-purple-950: 243 232 255;
+  --lw-accent: #1a1c1f;
+  --lw-accent-hover: #303030;
+  --lw-accent-ink: #ffffff;
+
+  --lw-ok: #00a240;
+  --lw-warn: #e25507;
+  --lw-danger: #e02e2a;
+  --lw-info: #5d5d5d;
+  --lw-purple: #7c3aed;
+
+  --lw-focus: #1a1c1f;
+  --lw-scrim: rgb(26 28 31 / 0.28);
+
+  --lw-shadow-dialog: 0 16px 48px rgb(0 0 0 / 0.12);
+  --lw-shadow-composer: 0 3px 7.5px #0000000a, 0 0 20px #0000000d;
+  --lw-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.1), 0 0 0 0.5px rgb(0 0 0 / 0.04);
+  --lw-elevation: 0 0 0 0.5px rgb(26 28 31 / 0.12);
+
+  --lw-rgb-bg: 255 255 255;
+  --lw-rgb-bg-side: 243 243 243;
+  --lw-rgb-bg-dock: 250 250 250;
+  --lw-rgb-bg-inset: 237 237 237;
+  --lw-rgb-bg-secondary: 249 249 249;
+  --lw-rgb-bg-tertiary: 243 243 243;
+  --lw-rgb-raised: 255 255 255;
+  --lw-rgb-accent: 26 28 31;
+  --lw-rgb-accent-hover: 48 48 48;
+  --lw-rgb-accent-ink: 255 255 255;
+  --lw-rgb-ok: 0 162 64;
+  --lw-rgb-warn: 226 85 7;
+  --lw-rgb-danger: 224 46 42;
+  --lw-rgb-info: 93 93 93;
+  --lw-rgb-purple: 124 58 237;
+  --lw-rgb-focus: 26 28 31;
 }
 
+/* --- 4. 形状 / 量纲 / 动效 token（主题无关） ------------------------------ */
+:root {
+  /* 形状阶梯（§6.3，禁止裸 px 圆角） */
+  --lw-r-3xs: 4px;
+  --lw-r-2xs: 6px;
+  --lw-r-xs: 8px;
+  --lw-r-sm: 10px;
+  --lw-r-md: 12px;
+  --lw-r-md-plus: 14px;
+  --lw-r-lg: 16px;
+  --lw-r-lg-plus: 18px;
+  --lw-r-xl: 20px;
+  --lw-r-full: 9999px;
+
+  /* 量纲（§6.4） */
+  --lw-toolbar-h: 46px; /* 46px 带：侧栏头 / 会话顶栏 / 工作面板头 */
+  --lw-sidebar-w: clamp(240px, 275px, min(520px, calc(100vw - 320px)));
+  --lw-sidebar-min: 240px;
+  --lw-sidebar-default: 275px;
+  --lw-sidebar-max: 520px;
+  --lw-sidenav-w: 275px; /* 设置导航轨 */
+  --lw-ctl: 28px; /* 方形图标控件唯一尺寸 */
+  --lw-field-h: 38px; /* 一切输入/下拉统一高度 */
+  --lw-content-max: 760px; /* 转录列 + composer 列 + 消息正文宽三者同源（§2.7） */
+  --lw-content-min: 560px;
+  --lw-chat-gutter: 24px; /* 列宽单侧留白；上限 = 主区宽 − 2 × 该值 */
+  --lw-wincontrols: 120px; /* 46px 带右端窗口控制车道 */
+  --lw-panel-min: 244px;
+  --lw-panel-default: 360px;
+  --lw-main-min: 450px; /* 主区硬地板（composer 工具条不折行宽） */
+
+  /* 动效（§6.6 v3.2：四档时长 + 四条缓动；禁止过冲/回弹） */
+  --dur-instant: 90ms;
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-slide: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* 字体（§6.5） */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Microsoft YaHei',
+    sans-serif;
+  --font-mono:
+    ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+}
+
+/* --- 5. 基线层 ----------------------------------------------------------- */
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
   html,
   body,
   #app {
     height: 100%;
   }
 
-  /* 主题切换过渡一次（§六：body 底色/文字 200ms） */
   body {
+    margin: 0;
+    background: var(--lw-bg);
+    color: var(--lw-ink-1);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    /* §6.6 显式禁止：主题切换不给 * 挂全局过渡，只让根容器过渡一次 */
     transition:
-      background-color var(--lw-dur-base) var(--lw-ease),
-      color var(--lw-dur-base) var(--lw-ease);
+      background-color var(--dur-base) var(--ease-standard),
+      color var(--dur-base) var(--ease-standard);
   }
 
-  /* 交互元素状态色变统一走这里（§六动效①，组件不再散写 transition）；
-   * 组件显式写 Tailwind transition 类时以工具类为准。 */
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* §6.6 动效①：状态色变唯一的全局 transition（--dur-fast + --ease-standard） */
   button,
   [role='button'],
   input,
@@ -234,11 +285,22 @@
     transition-property:
       background-color, border-color, color, fill, stroke, opacity,
       box-shadow, text-decoration-color;
-    transition-duration: var(--lw-dur-fast);
-    transition-timing-function: var(--lw-ease);
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-standard);
   }
 
-  /* prefers-reduced-motion：一切过渡/动画降为 0（§六） */
+  /* §6.7 焦点环：不做过渡；字段类控件用软环（组件内写） */
+  :focus-visible {
+    outline: 1.5px solid color-mix(in oklab, var(--lw-focus) 80%, transparent);
+    outline-offset: 2px;
+  }
+
+  /* §3.26 选中样式：单色纪律，不用系统蓝 */
+  ::selection {
+    background: color-mix(in oklab, var(--lw-ink-1) 18%, transparent);
+  }
+
+  /* prefers-reduced-motion：时长归 0.01ms；脉动点整块不显示（§6.6 五） */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -246,15 +308,52 @@
       transition-duration: 0.01ms !important;
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+    .lw-pulse {
+      animation: none !important;
     }
   }
 }
 
-/* Vue 过渡类（§六动效②）：弹窗 = 遮罩淡入 + 面板轻缩放；系统消息 =
- * 淡入 + 上滑。组件用 <Transition name="lw-modal"> / name="lw-notice"。 */
-.lw-modal-enter-active,
+/* --- 6. 滚动条（§6.7）：静止透明，hover / 含焦点 / 滚动中显形 -------------
+ * 用法：滚动容器挂 .scroll-y；滚动中由 JS 置 data-scrolling="true"。 */
+.scroll-y {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scroll-y::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-y::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: var(--lw-r-full);
+}
+.scroll-y:hover::-webkit-scrollbar-thumb,
+.scroll-y:focus-within::-webkit-scrollbar-thumb,
+.scroll-y[data-scrolling='true']::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--lw-ink-1) 16%, transparent);
+}
+.scroll-y::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--lw-ink-1) 28%, transparent);
+}
+.scroll-y:hover {
+  scrollbar-color: color-mix(in oklab, var(--lw-ink-1) 16%, transparent)
+    transparent;
+}
+
+/* --- 7. Vue 过渡类（§6.6 ②③：入场 --dur-base + --ease-out，
+ * 退场 --dur-fast + --ease-in 且距离减半） --------------------------------- */
+.lw-modal-enter-active {
+  transition: opacity var(--dur-base) var(--ease-out);
+}
 .lw-modal-leave-active {
-  transition: opacity var(--lw-dur-base) var(--lw-ease);
+  transition: opacity var(--dur-fast) var(--ease-in);
 }
 .lw-modal-enter-from,
 .lw-modal-leave-to {
@@ -262,21 +361,23 @@
 }
 .lw-modal-panel {
   transition:
-    transform var(--lw-dur-base) var(--lw-ease),
-    opacity var(--lw-dur-base) var(--lw-ease);
+    transform var(--dur-base) var(--ease-out),
+    opacity var(--dur-base) var(--ease-out);
 }
-.lw-modal-enter-from .lw-modal-panel,
-.lw-modal-leave-to .lw-modal-panel {
+.lw-modal-enter-from .lw-modal-panel {
   transform: scale(0.96) translateY(4px);
+}
+.lw-modal-leave-to .lw-modal-panel {
+  transform: scale(0.98);
 }
 
 .lw-notice-enter-active {
   transition:
-    opacity var(--lw-dur-base) var(--lw-ease),
-    transform var(--lw-dur-base) var(--lw-ease);
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
 }
 .lw-notice-leave-active {
-  transition: opacity var(--lw-dur-fast) var(--lw-ease);
+  transition: opacity var(--dur-fast) var(--ease-in);
 }
 .lw-notice-enter-from {
   opacity: 0;
@@ -286,7 +387,38 @@
   opacity: 0;
 }
 
-/* §六动效③：进度增长——进度条填充宽度过渡 */
+/* toast（§3.22）：淡入 + 右侧滑入 8px */
+.lw-toast-enter-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+.lw-toast-leave-active {
+  transition: opacity var(--dur-fast) var(--ease-in);
+}
+.lw-toast-enter-from {
+  opacity: 0;
+  transform: translateX(8px);
+}
+.lw-toast-leave-to {
+  opacity: 0;
+}
+
+/* §6.6 ⑥：进度增长（宽度过渡） */
 .lw-bar-fill {
-  transition: width var(--lw-dur-base) var(--lw-ease);
+  transition: width var(--dur-base) var(--ease-standard);
+}
+
+/* §6.6 ⑧：运行指示点——唯一允许的常驻动画（4px 点，opacity .35↔1，1s） */
+.lw-pulse {
+  animation: lw-pulse 1s ease-in-out infinite;
+}
+@keyframes lw-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
 }

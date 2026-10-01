@@ -19,12 +19,12 @@ const { t } = useI18n();
 const tone = computed(() => {
   switch (props.idle?.level) {
     case "idle":
-      return "bg-surface-2/60 text-ink-2"; // 灰
+      return "bg-wash-3 text-ink-2"; // 中性
     case "stale":
     case "never_used":
-      return "bg-yellow-900/40 text-yellow-300"; // 黄
+      return "bg-warn/16 text-warn"; // 黄
     case "abandoned":
-      return "bg-red-900/40 text-red-300"; // 红
+      return "bg-danger/16 text-danger"; // 红
     default:
       return ""; // fresh / normal：无标记
   }

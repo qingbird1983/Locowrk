@@ -16,11 +16,12 @@ function resolve(pref: ThemePref): "dark" | "light" {
     : "dark";
 }
 
-/** 应用主题偏好（settings.init 与保存动作调用）；未知值回落 dark。 */
+/** 应用主题偏好（settings.init 与保存动作调用）；未知值回落 light
+ * （UI 设计 v3.3：缺省 light，与后端 settings/appearance.rs 缺省一致）。 */
 export function applyThemePref(theme: string): void {
   const pref: ThemePref = PREFS.includes(theme as ThemePref)
     ? (theme as ThemePref)
-    : "dark";
+    : "light";
   // 换档先摘旧监听（dark/light 档不挂监听）
   if (media && mediaHandler) {
     media.removeEventListener("change", mediaHandler);

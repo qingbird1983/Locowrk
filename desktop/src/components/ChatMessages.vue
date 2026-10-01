@@ -52,10 +52,10 @@ async function onNoticeAction(item: SystemItem, action: string) {
       </p>
 
       <template v-for="item in chat.items" :key="item.id">
-        <!-- 用户消息：右侧气泡 -->
+        <!-- 用户消息：右侧气泡（wash 分层；过渡形态，㉔ MessageRow 重写） -->
         <div v-if="item.kind === 'user'" class="flex justify-end">
           <div
-            class="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-emerald-700/80 px-4 py-2 text-sm"
+            class="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-wash-3 px-4 py-2 text-sm"
           >
             {{ item.text }}
           </div>
@@ -64,7 +64,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
         <!-- 助手消息：左侧气泡 -->
         <div v-else-if="item.kind === 'assistant'" class="flex justify-start">
           <div
-            class="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-surface-1 px-4 py-2 text-sm"
+            class="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-wash-1 px-4 py-2 text-sm"
           >
             {{ item.text }}
           </div>
@@ -90,7 +90,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
         <!-- 错误条 -->
         <div
           v-else
-          class="rounded-lg border border-red-800/60 bg-red-950/50 px-3 py-2 text-xs text-red-300"
+          class="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger"
         >
           {{ item.text }}
         </div>

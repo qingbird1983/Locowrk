@@ -31,7 +31,7 @@ onMounted(() => {
         class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
         :class="
           tab === key
-            ? 'bg-surface-2 text-ink-1'
+            ? 'bg-wash-3 text-ink-1'
             : 'text-ink-4 hover:text-ink-2'
         "
         @click="tab = key"
@@ -43,7 +43,7 @@ onMounted(() => {
     <!-- 错误条 -->
     <p
       v-if="store.error"
-      class="border-b border-red-900/50 bg-red-950/50 px-5 py-1.5 text-xs text-red-300"
+      class="border-b border-line bg-danger/10 px-5 py-1.5 text-xs text-danger"
     >
       {{ store.error }}
     </p>

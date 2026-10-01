@@ -22,9 +22,9 @@ const label = computed(() => {
 
 /** 配色：explicit 蓝 / extracted 紫 / 未知灰（与 §3.4 其他族同尺寸）。 */
 const tone = computed(() => {
-  if (props.source === "explicit") return "bg-sky-950/70 text-sky-300";
-  if (props.source === "extracted") return "bg-purple-950/70 text-purple-300";
-  return "bg-surface-1 text-ink-3";
+  if (props.source === "explicit") return "bg-info/16 text-info";
+  if (props.source === "extracted") return "bg-purple/16 text-purple";
+  return "bg-wash-3 text-ink-2";
 });
 </script>
 

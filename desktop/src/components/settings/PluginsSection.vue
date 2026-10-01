@@ -52,13 +52,13 @@ function save() {
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
         {{ t("settings.save") }}
       </button>
-      <span v-if="settings.savedFlash" class="text-xs text-emerald-400">
+      <span v-if="settings.savedFlash" class="text-xs text-ok">
         {{ t("settings.saved") }}
       </span>
     </div>

@@ -49,20 +49,20 @@ function pretty(v: unknown): string {
 
 <template>
   <div
-    class="max-w-[85%] overflow-hidden rounded-lg border border-line-strong/70 bg-surface-1/40 text-xs"
+    class="max-w-[85%] overflow-hidden rounded-lg bg-wash-1 text-xs"
   >
     <!-- 头部整行可点：折叠/展开切换（§3.7；hover 过渡由 base 层统管） -->
     <button
-      class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-2/40"
-      :class="expanded ? 'border-b border-line-strong/50' : ''"
+      class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-wash-2"
+      :class="expanded ? 'border-b border-line-subtle' : ''"
       @click="expanded = !expanded"
     >
       <span class="w-3 shrink-0 text-ink-4">{{ expanded ? "▾" : "▸" }}</span>
-      <span class="shrink-0 font-mono font-semibold text-amber-400">
+      <span class="shrink-0 font-mono font-semibold text-ink-2">
         ⚙ {{ item.tool }}
       </span>
       <span
-        class="shrink-0 rounded bg-surface-2/60 px-1.5 py-0.5 text-[10px] text-ink-2"
+        class="shrink-0 rounded bg-wash-3 px-1.5 py-0.5 text-[10px] text-ink-2"
       >
         v{{ item.pluginVersion }}
       </span>
@@ -70,10 +70,10 @@ function pretty(v: unknown): string {
         class="shrink-0 rounded px-1.5 py-0.5 text-[10px]"
         :class="
           item.sideEffect === 'irreversible'
-            ? 'bg-red-900/60 text-red-300'
+            ? 'bg-danger/16 text-danger'
             : item.sideEffect === 'compensable'
-              ? 'bg-amber-900/60 text-amber-300'
-              : 'bg-emerald-900/60 text-emerald-300'
+              ? 'bg-warn/16 text-warn'
+              : 'bg-wash-3 text-ink-2'
         "
       >
         {{ t(`effect.${item.sideEffect}`) }}
@@ -87,8 +87,8 @@ function pretty(v: unknown): string {
           item.pending
             ? 'text-ink-4'
             : item.ok
-              ? 'text-emerald-400'
-              : 'text-red-400'
+              ? 'text-ok'
+              : 'text-danger'
         "
       >
         {{
@@ -107,7 +107,7 @@ function pretty(v: unknown): string {
           {{ t("tool.params") }}
         </p>
         <pre
-          class="overflow-x-auto rounded bg-surface-0/80 p-2 font-mono text-[11px] text-ink-2"
+          class="overflow-x-auto rounded bg-inset p-2 font-mono text-[11px] text-ink-2"
           >{{ pretty(item.args) }}</pre
         >
       </div>
@@ -116,8 +116,8 @@ function pretty(v: unknown): string {
           {{ t("tool.result") }}
         </p>
         <pre
-          class="overflow-x-auto rounded bg-surface-0/80 p-2 font-mono text-[11px]"
-          :class="item.ok ? 'text-ink-2' : 'text-red-300'"
+          class="overflow-x-auto rounded bg-inset p-2 font-mono text-[11px]"
+          :class="item.ok ? 'text-ink-2' : 'text-danger'"
           >{{ item.ok ? pretty(item.output) : item.error }}</pre
         >
       </div>

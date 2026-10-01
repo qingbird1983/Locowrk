@@ -68,7 +68,7 @@ function save() {
         min="10"
         max="90"
         step="10"
-        class="w-full accent-emerald-500"
+        class="w-full accent-[var(--lw-accent)]"
       />
       <p class="text-ink-3">
         {{ t("settings.thresholdValue", { pct: form.thresholdPct, tokens: compactNumber(thresholdTokens) }) }}
@@ -79,7 +79,7 @@ function save() {
       </p>
       <p
         v-if="form.thresholdPct < 20"
-        class="text-[11px] text-amber-400"
+        class="text-[11px] text-warn"
       >
         ⚠ {{ t("settings.thresholdLowWarning") }}
       </p>
@@ -93,20 +93,20 @@ function save() {
         :key="s"
         class="flex cursor-pointer items-center gap-2 py-0.5"
       >
-        <input v-model="form.strategy" type="radio" :value="s" class="accent-emerald-500" />
+        <input v-model="form.strategy" type="radio" :value="s" class="accent-[var(--lw-accent)]" />
         <span>{{ t(`settings.strategy_${s}`) }}</span>
       </label>
     </div>
 
     <div class="flex items-center gap-2">
       <button
-        class="rounded-lg bg-surface-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="settings.saving"
         @click="save"
       >
         {{ t("settings.save") }}
       </button>
-      <span v-if="settings.savedFlash" class="text-xs text-emerald-400">
+      <span v-if="settings.savedFlash" class="text-xs text-ok">
         {{ t("settings.saved") }}
       </span>
     </div>

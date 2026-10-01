@@ -22,11 +22,11 @@ function send() {
         v-model="draft"
         rows="1"
         :placeholder="t('chat.placeholder')"
-        class="flex-1 resize-none rounded-xl border border-line-strong bg-surface-1 px-3 py-2 text-sm outline-none placeholder:text-ink-5 focus:border-emerald-600"
+        class="flex-1 resize-none rounded-xl bg-wash-2 px-3 py-2 text-sm outline-none placeholder:text-ink-5"
         @keydown.enter.exact.prevent="send"
       />
       <button
-        class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+        class="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="chat.running || !draft.trim()"
         @click="send"
       >

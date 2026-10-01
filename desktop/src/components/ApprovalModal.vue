@@ -42,36 +42,37 @@ async function decide(req: ApprovalRequest, allowed: boolean) {
   <Transition name="lw-modal">
     <div
       v-if="approvals.pending.length > 0"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+      class="fixed inset-0 z-40 flex items-center justify-center px-4 backdrop-blur-sm"
+      style="background: var(--lw-scrim)"
     >
       <div
         v-for="req in approvals.pending"
         :key="req.request_id"
-        class="lw-modal-panel w-full max-w-md overflow-hidden rounded-xl border border-red-900/60 bg-surface-1 shadow-2xl shadow-black/60"
+        class="lw-modal-panel w-full max-w-md overflow-hidden rounded-xl border border-danger/30 bg-elevated shadow-dialog"
         role="alertdialog"
         aria-modal="true"
       >
-        <!-- 头部：风险信号 -->
+        <!-- 头部：风险信号（过渡形态；§3.17 内联决策卡落地后本 Modal 退役） -->
         <div
-          class="flex items-center gap-2 border-b border-red-900/50 bg-red-950/60 px-4 py-3"
+          class="flex items-center gap-2 border-b border-danger/20 bg-danger/10 px-4 py-3"
         >
-          <span class="text-lg text-red-400">⚠</span>
+          <span class="text-lg text-danger">⚠</span>
           <div>
-            <h2 class="text-sm font-semibold text-red-200">
+            <h2 class="text-sm font-semibold text-danger">
               {{ t("approval.title") }}
             </h2>
-            <p class="text-[11px] text-red-300/80">
+            <p class="text-[11px] text-danger/80">
               {{ t("approval.subtitle") }}
             </p>
           </div>
           <span
             v-if="isSubagent(req)"
-            class="ml-auto rounded bg-purple-900/70 px-2 py-0.5 text-[10px] font-medium text-purple-200"
+            class="ml-auto rounded bg-purple/16 px-2 py-0.5 text-[10px] font-medium text-purple"
           >
             {{ t("approval.subagentTag") }}
           </span>
           <span
-            class="rounded bg-red-900/70 px-2 py-0.5 text-[10px] font-medium text-red-200"
+            class="rounded bg-danger/16 px-2 py-0.5 text-[10px] font-medium text-danger"
             :class="{ 'ml-0': isSubagent(req), 'ml-auto': !isSubagent(req) }"
           >
             {{ t(`effect.${req.side_effect}`) }}
@@ -82,7 +83,7 @@ async function decide(req: ApprovalRequest, allowed: boolean) {
         <div class="space-y-3 px-4 py-3 text-xs">
           <div class="flex items-baseline gap-2">
             <span class="text-ink-4">{{ t("approval.toolLabel") }}</span>
-            <code class="font-mono font-semibold text-amber-400">
+            <code class="font-mono font-semibold text-warn">
               {{ req.tool }}
             </code>
           </div>
@@ -91,25 +92,24 @@ async function decide(req: ApprovalRequest, allowed: boolean) {
               {{ t("approval.argsLabel") }}
             </p>
             <pre
-              class="max-h-48 overflow-auto rounded bg-surface-0/80 p-2 font-mono text-[11px] text-ink-2"
+              class="max-h-48 overflow-auto rounded bg-inset p-2 font-mono text-[11px] text-ink-2"
               >{{ pretty(req.args) }}</pre
             >
           </div>
         </div>
 
-        <!-- 决策按钮：允许是危险动作，用红色实心；拒绝是安全默认 -->
-        <div
-          class="flex justify-end gap-2 border-t border-line-strong/60 px-4 py-3"
-        >
+        <!-- 决策按钮：主按钮 = accent（§3.17 纪律：风险由染底与胶囊承载，
+             按钮不承险）；拒绝 = secondary -->
+        <div class="flex justify-end gap-2 border-t border-line px-4 py-3">
           <button
-            class="rounded-lg border border-line-strong px-4 py-1.5 text-xs font-medium text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+            class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-medium text-ink-2 transition hover:bg-wash-3 hover:text-ink-1 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="deciding.has(req.request_id)"
             @click="decide(req, false)"
           >
             {{ t("approval.deny") }}
           </button>
           <button
-            class="rounded-lg bg-red-700 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+            class="rounded-lg bg-accent px-4 py-1.5 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="deciding.has(req.request_id)"
             @click="decide(req, true)"
           >

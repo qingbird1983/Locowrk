@@ -47,14 +47,14 @@ onMounted(() => {
       </div>
       <div class="flex items-center gap-2">
         <!-- 顶级导航（壳批次定稿）：对话 / 插件 / 记忆 / 设置 -->
-        <nav class="flex gap-1 rounded-lg bg-surface-1/70 p-1">
+        <nav class="flex gap-1 rounded-lg bg-wash-2 p-1">
           <button
             v-for="key in (['chat', 'plugins', 'memory', 'settings'] as const)"
             :key="key"
             class="rounded-md px-3 py-1 text-xs font-medium transition"
             :class="
               view === key
-                ? 'bg-surface-2 text-ink-1'
+                ? 'bg-wash-3 text-ink-1'
                 : 'text-ink-4 hover:text-ink-2'
             "
             @click="view = key"
@@ -66,8 +66,8 @@ onMounted(() => {
           class="rounded-full px-2.5 py-1 text-xs"
           :class="
             chat.running
-              ? 'bg-amber-900/60 text-amber-300'
-              : 'bg-surface-1 text-ink-3'
+              ? 'bg-warn/16 text-warn'
+              : 'bg-wash-2 text-ink-3'
           "
         >
           {{ chat.running ? t("status.running") : t("status.ready") }}

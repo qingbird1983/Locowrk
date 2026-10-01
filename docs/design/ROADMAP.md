@@ -283,6 +283,36 @@
 | 自身段口径 | ✅ v2.37 2332d66 | run_child 在 fork+追加任务 prompt 后记 `own_from = child.len()`，`tools_used` / `tail_summary`（含"最后动作"兜底）只扫自身段——父的调用史/旧正文不再混入子的收束汇报 |
 | 回归测试 | ✅ v2.37 2332d66 | `tools_used_ignores_forked_parent_history`：父转录预置 mcp_status 调用，派生后断言 tools_used == ["echo"]、摘要取子自身段 |
 
+### ㉒ UI 设计落地①：design tokens v2 与基线（✅ 已完成，v2.38）
+
+> UI 正式设计阶段（UI shell 文档 v3.3 定稿 + ui-prototype 原型，提交
+> 775b14f）第一个实现批次。批首先落文档（v3.3 已含全部规范），本批兑现
+> §六 tokens 与基线层。用户裁定（2026-10-02）：后端服务前端，缺的功能
+> 后期逐步补，前后端拆分可按需调整。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| tokens v2 | ✅ v2.38 | style.css 按 §6 重写：13 档中性灰阶（唯一颜色源）+ wash 三层（平面内无边框分层）+ 表面层级（bg/side/dock/inset/secondary/tertiary/elevated/composer/raised）+ ink 五级 alpha + 单色 accent（暗=白/亮=近黑）+ 状态五色；形状阶梯 10 档；量纲（toolbar-h 46 / ctl 28 / field-h 38 / content-max 760 三轴同源 / wincontrols 120 / panel/main 地板）；修正原型两处历史残留（820→760、--motion-*→--dur-/--ease- 四档四缓动） |
+| tailwind 角色色 | ✅ v2.38 | 配置只留 §6.1 角色 token：实色走 --lw-rgb-* 三元组（保 /16 修饰符），自带 alpha 的（wash/ink/line/表面亮色）整值 var 引用（修饰符会静默丢弃，禁止使用）；38 阶 hue 映射表收缩到语义色 + boxShadow 三 token（dialog/composer/raised）；过渡别名 surface-0..3 暂留（组件重写批次清除） |
+| hue 类清零 | ✅ v2.38 | 全部 22 个组件的红/琥珀/黄/绿/靛/天/青/紫类清零 → 语义角色类（ok/warn/danger/info/purple/accent/wash）；徽章按 §3.4 配色（该色 16% 底 + 该色字；副作用"纯"徽章按规改中性不给绿）；审批弹窗按钮去红色（风险由染底承载，§3.17 纪律）；`accent-emerald` 原生控件色 → accent |
+| 缺省主题 light | ✅ v2.38 | settings/appearance.rs 缺省 dark→light（§8.3-1 用户裁定：旧文件无 appearance 区随之变亮色属预期，显式存过的值不动）；theme.ts 未知值回落同步 light；测试更新（含"显式 dark 不被迁移"新断言） |
+
+### ㉓ UI 设计落地②：壳骨架（⬜ 46px 带 + 侧栏 + 目的地 + 窗口控制）
+
+> §2 区域地图与导航模型兑现：无边框窗口 + 46px chrome 带（侧栏头/会话
+> 顶栏/窗口控制车道）+ 侧栏（会话时间桶两级列表、折叠/拖宽/持久化、底部
+> 目的地入口）+ 目的地整页接管（对话 hidden+inert 挂起）。会话↔工作区
+> 关联（§8.2）后端未补，侧栏先全量落「会话」组、「项目」组随关联批次
+> 出现；工作面板列、定时/通知入口随各自批次补位。
+
+### ㉔ UI 设计落地③：设置导航轨 + ⌘K 命令面板（⬜ §3.32/§3.15）
+
+### ㉕ UI 设计落地④：对话主区（⬜ §2.7 列宽三轴 / §3.7–3.9 过程组·工具行·思考行 / §3.11 composer 坞 / §6.5 markdown）
+
+### ㉖ UI 设计落地⑤：审批决策卡 + 会话运营（⬜ §3.17 三键卡（后端：决策枚举/风险档/超时）/ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联）
+
+### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）
+
 ---
 
 ## 三、收尾 backlog（随批次搭车）

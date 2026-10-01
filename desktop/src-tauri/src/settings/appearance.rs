@@ -4,8 +4,9 @@
 
 use serde::{Deserialize, Serialize};
 
-/// theme 取值：`dark`（缺省——旧 settings.json 无 appearance 区时行为
-/// 不变）/ `light` / `system`（跟随系统 prefers-color-scheme）。
+/// theme 取值：`light`（缺省——用户 2026-10-01 裁定，旧 settings.json 无
+/// appearance 区时也随之变亮色，属预期；显式存过的值不动）/ `dark` /
+/// `system`（跟随系统 prefers-color-scheme）。
 pub const THEME_DARK: &str = "dark";
 pub const THEME_LIGHT: &str = "light";
 pub const THEME_SYSTEM: &str = "system";
@@ -21,7 +22,7 @@ pub struct AppearanceSettings {
 impl Default for AppearanceSettings {
     fn default() -> Self {
         Self {
-            theme: THEME_DARK.into(),
+            theme: THEME_LIGHT.into(),
         }
     }
 }

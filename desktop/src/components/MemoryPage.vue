@@ -188,7 +188,7 @@ async function clearExperiences() {
     >
       <p
         v-if="loadError"
-        class="mb-2 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs text-red-300"
+        class="mb-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger"
       >
         {{ loadError }}
       </p>
@@ -197,7 +197,7 @@ async function clearExperiences() {
         <li
           v-for="row in entries"
           :key="row.key"
-          class="rounded-xl border border-line bg-surface-1/40 px-4 py-3"
+          class="rounded-xl bg-wash-1 px-4 py-3"
         >
           <!-- 头行：key + 来源徽章 + 时间 + 动作 -->
           <div class="flex items-center gap-2">
@@ -210,7 +210,7 @@ async function clearExperiences() {
             </span>
             <template v-if="editingKey !== row.key">
               <button
-                class="shrink-0 rounded-lg px-2 py-1 text-[11px] text-ink-4 transition hover:bg-surface-2 hover:text-ink-1"
+                class="shrink-0 rounded-lg px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
                 @click="startEdit(row)"
               >
                 {{ t("memory.edit") }}
@@ -219,8 +219,8 @@ async function clearExperiences() {
                 class="shrink-0 rounded-lg px-2 py-1 text-[11px] transition"
                 :class="
                   confirmingDelete === row.key
-                    ? 'bg-red-950/80 text-red-300'
-                    : 'text-ink-4 hover:bg-surface-2 hover:text-red-300'
+                    ? 'bg-danger/16 text-danger'
+                    : 'text-ink-4 hover:bg-wash-2 hover:text-danger'
                 "
                 @click="remove(row)"
               >
@@ -236,18 +236,18 @@ async function clearExperiences() {
             <textarea
               v-model="editValue"
               rows="3"
-              class="mt-2 block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs text-ink-1 outline-none focus:border-line-strong"
+              class="mt-2 block w-full rounded-lg bg-wash-2 px-2 py-1.5 text-xs text-ink-1 outline-none"
             />
             <div class="mt-2 flex items-center gap-2">
               <button
-                class="rounded-lg bg-emerald-800/80 px-3 py-1 text-[11px] font-semibold text-emerald-200 transition hover:bg-emerald-700/80 disabled:cursor-not-allowed disabled:opacity-40"
+                class="rounded-lg bg-accent px-3 py-1 text-[11px] font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="saving"
                 @click="saveEdit"
               >
                 {{ t("memory.save") }}
               </button>
               <button
-                class="rounded-lg px-3 py-1 text-[11px] text-ink-4 transition hover:bg-surface-2"
+                class="rounded-lg px-3 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2"
                 @click="cancelEdit"
               >
                 {{ t("memory.cancel") }}
@@ -283,8 +283,8 @@ async function clearExperiences() {
           class="ml-auto rounded-lg px-3 py-1 text-[11px] transition"
           :class="
             confirmingExpClear
-              ? 'bg-red-950/80 text-red-300'
-              : 'text-ink-4 hover:bg-surface-2 hover:text-red-300'
+              ? 'bg-danger/16 text-danger'
+              : 'text-ink-4 hover:bg-wash-2 hover:text-danger'
           "
           @click="clearExperiences"
         >
@@ -299,7 +299,7 @@ async function clearExperiences() {
         <li
           v-for="row in experiences"
           :key="row.id"
-          class="rounded-xl border border-line bg-surface-1/40 px-4 py-3"
+          class="rounded-xl bg-wash-1 px-4 py-3"
         >
           <div class="flex items-center gap-2">
             <span class="shrink-0 text-[10px] text-ink-5">
@@ -312,8 +312,8 @@ async function clearExperiences() {
               class="ml-auto shrink-0 rounded-lg px-2 py-1 text-[11px] transition"
               :class="
                 confirmingExpDelete === row.id
-                  ? 'bg-red-950/80 text-red-300'
-                  : 'text-ink-4 hover:bg-surface-2 hover:text-red-300'
+                  ? 'bg-danger/16 text-danger'
+                  : 'text-ink-4 hover:bg-wash-2 hover:text-danger'
               "
               @click="removeExperience(row)"
             >
@@ -338,8 +338,8 @@ async function clearExperiences() {
         class="rounded-lg px-3 py-1 text-[11px] transition"
         :class="
           confirmingClear
-            ? 'bg-red-950/80 text-red-300'
-            : 'text-ink-4 hover:bg-surface-2 hover:text-red-300'
+            ? 'bg-danger/16 text-danger'
+            : 'text-ink-4 hover:bg-wash-2 hover:text-danger'
         "
         @click="clearAll"
       >

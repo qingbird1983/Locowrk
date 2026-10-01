@@ -21,7 +21,7 @@ defineEmits<{ (e: "action", id: string): void }>();
   <Transition name="lw-notice" appear>
     <div class="flex justify-center">
       <div
-        class="flex max-w-[85%] flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-line bg-surface-1/60 px-4 py-1.5 text-xs text-ink-3"
+        class="flex max-w-[85%] flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-line bg-wash-1 px-4 py-1.5 text-xs text-ink-3"
       >
         <span class="whitespace-pre-wrap">{{ text }}</span>
         <button
