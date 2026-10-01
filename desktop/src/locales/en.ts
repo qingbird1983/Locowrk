@@ -6,7 +6,7 @@ export default {
   },
   nav: {
     chat: "Chat",
-    plugins: "Plugins",
+    plugins: "Extensions",
     memory: "Memory",
     settings: "Settings",
   },
@@ -14,14 +14,37 @@ export default {
     ready: "Ready",
     running: "Working…",
   },
+  common: {
+    back: "Back to app",
+  },
   chat: {
     empty:
       "Send any message to start. The model calls enabled plugin tools as needed (each call shows as a tool card); irreversible tools such as send_email raise an approval dialog first.",
     placeholder: "Type a message… (Enter to send, Shift+Enter for newline)",
     send: "Send",
-    // ⑲ Session switcher (minimal surface, UI shell doc §3.6)
-    sessionSwitch: "Switch session",
     newSession: "New chat",
+  },
+  // Shell chrome (UI shell doc §2.3/§2.4, batch ㉓)
+  sidebar: {
+    search: "Search chats",
+    searchEmpty: "No matching chats",
+    newChat: "New chat",
+    sessions: "Chats",
+    bucket7: "Last 7 days",
+    bucket14: "Last 14 days",
+    earlier: "Earlier",
+    collapse: "Collapse sidebar",
+    expand: "Expand sidebar",
+    resize: "Resize sidebar",
+    resizeText: "Sidebar width {n} pixels",
+    untitled: "Untitled chat",
+    lockedWhileRunning: "Session is running; switching is paused",
+  },
+  window: {
+    minimize: "Minimize",
+    maximize: "Maximize",
+    restore: "Restore",
+    close: "Close",
   },
   tool: {
     params: "Arguments",

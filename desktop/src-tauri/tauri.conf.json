@@ -13,10 +13,11 @@
     "windows": [
       {
         "title": "Locowrk",
-        "width": 1024,
-        "height": 720,
-        "minWidth": 640,
-        "minHeight": 480
+        "width": 1280,
+        "height": 820,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "decorations": false
       }
     ],
     "security": {

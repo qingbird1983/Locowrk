@@ -1,0 +1,89 @@
+<script setup lang="ts">
+/**
+ * 窗口控制（UI shell doc §2.2-5 / §2.1 窗口控制车道）：浮在 46px 带右端
+ * 120px 车道上的三个平面字形按钮（图标 12px），z-index 1000 恒在最上
+ * （§五阶梯）。无边框窗口（tauri.conf decorations:false）的唯一关闭/极
+ * 大化通路；Mac 不渲染（原生红绿灯）。
+ */
+import { onBeforeUnmount, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Icon } from "../../lib/icons";
+
+const { t } = useI18n();
+const appWindow = getCurrentWindow();
+const maximized = ref(false);
+let unlisten: (() => void) | null = null;
+
+async function refresh() {
+  maximized.value = await appWindow.isMaximized().catch(() => false);
+}
+
+onMounted(async () => {
+  await refresh();
+  unlisten = await appWindow.onResized(() => void refresh());
+});
+
+onBeforeUnmount(() => {
+  unlisten?.();
+});
+</script>
+
+<template>
+  <div
+    class="fixed right-0 top-0 z-[1000] flex h-[var(--lw-toolbar-h)] w-[var(--lw-wincontrols)] bg-page pl-2"
+  >
+    <button
+      class="win-btn"
+      type="button"
+      :title="t('window.minimize')"
+      :aria-label="t('window.minimize')"
+      @click="appWindow.minimize()"
+    >
+      <Icon name="min" :size="12" aria-hidden="true" />
+    </button>
+    <button
+      class="win-btn"
+      type="button"
+      :title="maximized ? t('window.restore') : t('window.maximize')"
+      :aria-label="maximized ? t('window.restore') : t('window.maximize')"
+      @click="appWindow.toggleMaximize().then(refresh)"
+    >
+      <Icon
+        :name="maximized ? 'copy' : 'max'"
+        :size="maximized ? 11 : 12"
+        aria-hidden="true"
+      />
+    </button>
+    <button
+      class="win-btn win-btn--close"
+      type="button"
+      :title="t('window.close')"
+      :aria-label="t('window.close')"
+      @click="appWindow.close()"
+    >
+      <Icon name="close" :size="12" aria-hidden="true" />
+    </button>
+  </div>
+</template>
+
+<style scoped>
+.win-btn {
+  display: inline-flex;
+  height: 100%;
+  min-width: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  color: color-mix(in oklab, var(--lw-ink-1) 55%, transparent);
+}
+.win-btn:hover {
+  color: var(--lw-ink-1);
+  background: var(--lw-wash-2);
+}
+.win-btn--close:hover {
+  color: var(--lw-bg);
+  background: var(--lw-danger);
+}
+</style>

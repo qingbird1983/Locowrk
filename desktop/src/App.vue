@@ -1,25 +1,36 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useApprovalsStore } from "./stores/approvals";
 import { useChatStore } from "./stores/chat";
 import { useSettingsStore } from "./stores/settings";
+import { useShellStore } from "./stores/shell";
 import ApprovalModal from "./components/ApprovalModal.vue";
 import ChatMessages from "./components/ChatMessages.vue";
 import ContextProgressBar from "./components/ContextProgressBar.vue";
 import MemoryPage from "./components/MemoryPage.vue";
 import PluginMarket from "./components/PluginMarket.vue";
 import PromptBar from "./components/PromptBar.vue";
-import SessionSwitcher from "./components/chat/SessionSwitcher.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
+import DestinationShell from "./components/shell/DestinationShell.vue";
+import Sidebar from "./components/shell/Sidebar.vue";
+import Topbar from "./components/shell/Topbar.vue";
+import WindowControls from "./components/shell/WindowControls.vue";
 
+/**
+ * 壳骨架（UI shell doc §2.1 区域地图 / §2.6 保活规则）：
+ * - 目的地一律整页接管 ③④⑤；设置更极端——连侧栏一起接管（§3.32）；
+ * - 对话视图不卸载：切走时 display:none + inert 挂起，回来恢复滚动与
+ *   运行态（hidden 会被 flex 类覆盖，故用内联 display）；
+ * - 其他目的地按需挂载（v-if），离开即卸载；侧栏（非设置目的地）恒显；
+ * - 全局层：审批弹窗 / 窗口控制挂壳根（跨视图）。
+ */
 const { t } = useI18n();
 const chat = useChatStore();
 const approvals = useApprovalsStore();
 const settings = useSettingsStore();
-/** 顶层导航定稿（壳批次）：4 视图；>4 时 pill nav 切侧边栏（UI shell
- * and patterns.md §2）。 */
-const view = ref<"chat" | "plugins" | "memory" | "settings">("chat");
+const shell = useShellStore();
+
 onMounted(() => {
   chat.init();
   approvals.init();
@@ -28,62 +39,45 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-surface-0 text-ink-1">
-    <header
-      class="flex items-center justify-between border-b border-line px-5 py-3"
-    >
-      <div>
-        <h1 class="text-sm font-semibold tracking-wide">Locowrk</h1>
-        <!-- 副标题实时反映当前模型（设置改动即生效，§13.1） -->
-        <p class="text-xs text-ink-4">
-          {{
-            t("app.subtitle", {
-              model:
-                settings.view?.llm.model.trim() ||
-                t("app.modelFallback"),
-            })
-          }}
-        </p>
+  <div class="isolate flex h-full bg-page text-ink-1">
+    <!-- 设置目的地：独立壳模式，整窗接管（§3.32）；返回通路过渡态挂页头 -->
+    <template v-if="shell.destination === 'settings'">
+      <DestinationShell :title="t('nav.settings')" back>
+        <SettingsPanel />
+      </DestinationShell>
+    </template>
+
+    <template v-else>
+      <Sidebar />
+
+      <!-- 对话主区：目的地切换时挂起，回来即恢复滚动与在跑的会话 -->
+      <div
+        class="relative flex min-w-0 flex-1 flex-col"
+        :style="{ display: shell.destination === 'chat' ? '' : 'none' }"
+        :inert="shell.destination !== 'chat'"
+      >
+        <Topbar />
+        <ContextProgressBar :usage="chat.contextUsage" />
+        <ChatMessages />
+        <PromptBar />
       </div>
-      <div class="flex items-center gap-2">
-        <!-- 顶级导航（壳批次定稿）：对话 / 插件 / 记忆 / 设置 -->
-        <nav class="flex gap-1 rounded-lg bg-wash-2 p-1">
-          <button
-            v-for="key in (['chat', 'plugins', 'memory', 'settings'] as const)"
-            :key="key"
-            class="rounded-md px-3 py-1 text-xs font-medium transition"
-            :class="
-              view === key
-                ? 'bg-wash-3 text-ink-1'
-                : 'text-ink-4 hover:text-ink-2'
-            "
-            @click="view = key"
-          >
-            {{ t(`nav.${key}`) }}
-          </button>
-        </nav>
-        <span
-          class="rounded-full px-2.5 py-1 text-xs"
-          :class="
-            chat.running
-              ? 'bg-warn/16 text-warn'
-              : 'bg-wash-2 text-ink-3'
-          "
-        >
-          {{ chat.running ? t("status.running") : t("status.ready") }}
-        </span>
-      </div>
-    </header>
-    <!-- 聊天视图用 v-show 保状态；其余视图按需挂载 -->
-    <div v-show="view === 'chat'" class="flex min-h-0 flex-1 flex-col">
-      <ContextProgressBar :usage="chat.contextUsage" />
-      <SessionSwitcher />
-      <ChatMessages />
-      <PromptBar />
-    </div>
-    <PluginMarket v-if="view === 'plugins'" />
-    <MemoryPage v-if="view === 'memory'" />
-    <SettingsPanel v-if="view === 'settings'" />
+
+      <!-- 非对话目的地：侧栏右侧铺满，按需挂载 -->
+      <DestinationShell
+        v-if="shell.destination === 'plugins'"
+        :title="t('nav.plugins')"
+      >
+        <PluginMarket />
+      </DestinationShell>
+      <DestinationShell
+        v-else-if="shell.destination === 'memory'"
+        :title="t('nav.memory')"
+      >
+        <MemoryPage />
+      </DestinationShell>
+    </template>
+
+    <WindowControls />
     <ApprovalModal />
   </div>
 </template>

@@ -297,13 +297,21 @@
 | hue 类清零 | ✅ v2.38 | 全部 22 个组件的红/琥珀/黄/绿/靛/天/青/紫类清零 → 语义角色类（ok/warn/danger/info/purple/accent/wash）；徽章按 §3.4 配色（该色 16% 底 + 该色字；副作用"纯"徽章按规改中性不给绿）；审批弹窗按钮去红色（风险由染底承载，§3.17 纪律）；`accent-emerald` 原生控件色 → accent |
 | 缺省主题 light | ✅ v2.38 | settings/appearance.rs 缺省 dark→light（§8.3-1 用户裁定：旧文件无 appearance 区随之变亮色属预期，显式存过的值不动）；theme.ts 未知值回落同步 light；测试更新（含"显式 dark 不被迁移"新断言） |
 
-### ㉓ UI 设计落地②：壳骨架（⬜ 46px 带 + 侧栏 + 目的地 + 窗口控制）
+### ㉓ UI 设计落地②：壳骨架（✅ 已完成，v2.39）
 
-> §2 区域地图与导航模型兑现：无边框窗口 + 46px chrome 带（侧栏头/会话
-> 顶栏/窗口控制车道）+ 侧栏（会话时间桶两级列表、折叠/拖宽/持久化、底部
-> 目的地入口）+ 目的地整页接管（对话 hidden+inert 挂起）。会话↔工作区
-> 关联（§8.2）后端未补，侧栏先全量落「会话」组、「项目」组随关联批次
-> 出现；工作面板列、定时/通知入口随各自批次补位。
+> §2 区域地图与导航模型兑现：无边框窗口 + 46px chrome 带 + 侧栏 + 目的地
+> 整页接管。实机自检（tauri dev 截图）：亮色缺省 / 三段带拼装 / 目的地
+> 接管与返回 / 侧栏折叠展开（lead 槽标题零跳变）/ 窗口控制车道全部到位。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 无边框窗口 | ✅ v2.39 | tauri.conf `decorations:false` + 首启 1280×820 / 最小 1024×640（§3.27）；capabilities 显式加窗口控制与 start-dragging 权限 |
+| 46px chrome 带 | ✅ v2.39 | 侧栏头（品牌+折叠）/ 会话顶栏（lead 槽恒挂+标题拖拽区+动作组）/ 窗口控制车道（120px 浮右端 z-1000，min/max/close 平字形按钮 12px 字形，close hover danger 实底）三段等高拼装；`data-tauri-drag-region` 嵌空白段，按钮区不重叠（§2.2） |
+| 侧栏 | ✅ v2.39 | `shell/Sidebar.vue`：搜索（客户端标题过滤）+ 新会话 + 「会话」组（会话↔工作区关联 §8.2 未落地，「项目」组随关联批次出现）+ 时间桶（近 7 天/近 14 天/更早）；选中 wash-3、行 28px/圆角 8/缩进 28；运行中脉动点 + 运行中禁切（行置灰带提示）；底部目的地入口（扩展/记忆/设置，`aria-pressed`）+ 版本号；定时/通知入口随各自批次补位 |
+| 侧栏折叠/拖宽 | ✅ v2.39 | 折叠 = 独立状态宽 0（150ms，展开 ease-out/收起 ease-in，体不卸载保滚动）；拖柄按 §2.3 全套（8px 热区、2×32 圆角条 20% ink hover/聚焦显形、`data-sidebar-resizing` 全局锁光标禁选、setPointerCapture+rAF 节流、拖到最小值以下即折叠、键盘 ←/→ 16px Home/End、双击复位 275、aria separator+valuetext）；宽度 localStorage 持久化（`lib/sidebar-preference.ts`，列宽才走 settings §2.7） |
+| 目的地接管 | ✅ v2.39 | 扩展/记忆 = 侧栏右侧铺满（DestinationShell 56px 页头 20px 标题）；设置 = 整窗接管（§3.32，连侧栏一起）；对话 hidden+inert 挂起不卸载（恢复滚动与运行态）；设置页头过渡期「‹ 返回应用」（㉔ 导航轨落地后归位） |
+| 旧导航退役 | ✅ v2.39 | pill nav 与 SessionSwitcher（⑲ 最小面）删除（§3.6 由侧栏取代）；i18n 增 sidebar/window/common 键、nav.plugins 改「扩展」 |
+| shell store + 图标 | ✅ v2.39 | `stores/shell.ts`（目的地 + 侧栏宽/折叠）+ `lib/icons.ts`（原型 sprite 逐字采用的 30 个 glyph 统一组件） |
 
 ### ㉔ UI 设计落地③：设置导航轨 + ⌘K 命令面板（⬜ §3.32/§3.15）
 

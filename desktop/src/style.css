@@ -300,6 +300,16 @@
     background: color-mix(in oklab, var(--lw-ink-1) 18%, transparent);
   }
 
+  /* §2.3/§2.5 拖拽中：全局强制 col-resize + 禁选（拖过正文不选中），
+   * 根节点 data-sidebar-resizing / data-work-panel-resizing 由拖拽柄置位 */
+  :root[data-sidebar-resizing='true'],
+  :root[data-sidebar-resizing='true'] *,
+  :root[data-work-panel-resizing='true'],
+  :root[data-work-panel-resizing='true'] * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
   /* prefers-reduced-motion：时长归 0.01ms；脉动点整块不显示（§6.6 五） */
   @media (prefers-reduced-motion: reduce) {
     *,

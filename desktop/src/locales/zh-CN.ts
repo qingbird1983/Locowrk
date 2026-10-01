@@ -6,7 +6,7 @@ export default {
   },
   nav: {
     chat: "对话",
-    plugins: "插件",
+    plugins: "扩展",
     memory: "记忆",
     settings: "设置",
   },
@@ -14,14 +14,37 @@ export default {
     ready: "就绪",
     running: "运行中…",
   },
+  common: {
+    back: "返回应用",
+  },
   chat: {
     empty:
       "发送任意消息开始对话。模型会按需调用已启用的插件工具（当前目录见工具卡片）；send_email 等不可逆工具会先弹出审批确认。",
     placeholder: "输入消息…（Enter 发送，Shift+Enter 换行）",
     send: "发送",
-    // ⑲ 会话切换器（最小功能面，UI shell 文档 §3.6）
-    sessionSwitch: "切换会话",
     newSession: "新会话",
+  },
+  // 壳骨架（UI shell doc §2.3/§2.4，㉓）
+  sidebar: {
+    search: "搜索会话",
+    searchEmpty: "没有匹配的会话",
+    newChat: "新会话",
+    sessions: "会话",
+    bucket7: "近 7 天",
+    bucket14: "近 14 天",
+    earlier: "更早",
+    collapse: "收起侧栏",
+    expand: "展开侧栏",
+    resize: "调整侧栏宽度",
+    resizeText: "侧栏宽度 {n} 像素",
+    untitled: "未命名会话",
+    lockedWhileRunning: "会话运行中，暂不能切换",
+  },
+  window: {
+    minimize: "最小化",
+    maximize: "最大化",
+    restore: "还原",
+    close: "关闭",
   },
   tool: {
     params: "参数",
