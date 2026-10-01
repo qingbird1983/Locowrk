@@ -177,7 +177,7 @@
 | tool-schedule 定时任务 | ✅ | **宿主内置工具面**：desktop `scheduler/`（store/engine/tools 分文件）——`schedule_create / schedule_list / schedule_delete` 经 `KernelToolSource::with_builtin` 进目录（create=Always+Irreversible 审批即告知，list/delete=Pure 按会话隔离）；独立 schedule.sqlite3（`MAX_SCHEDULES=100` 防失控）；一次性（at/delay_secs）+ 周期（interval_secs ≥10s）两型；绑定会话 = `CallCtx.session_id`（**kernel-agent 新 `step_as` 首次填充 §5.2 规划字段**，runner 聊天路径切换，普通 `step` 语义不变）；触发引擎 1s tick：目标解析 = 调度行会话条目仍存活 → 原地注入，行已不在（重启）→ 落最近聊过的活会话（agent_chat 记 last_chat，**不落僵尸会话**），无活会话 → 30s 顺延等待；会话忙（try_lock 失败）30s 顺延，一次性累计 2h 放弃并系统通知、周期让位 20 次跳槽不追帧；**启动补跑无单独路径**——错过期间的 run_at 落在过去，首次 tick 的 due() 天然覆盖（周期补跑一次后滚 now+interval）；触发先行推 `agent://schedule-fired`（SystemNotice），窗口不可见/失焦再补系统通知兜底 |
 | tool-notify 桌面通知/Webhook | ✅ | plugins-src/tool-notify 1.0.0：一个 `notify` 工具按 `channel` 参数二选一——**webhook 通道** = 插件本体（POST JSON {title,body,source}，tool-fetch SSRF 防线照搬：目标解析全地址逐判、私网/环回/链路本地拒绝、redirects(0)、`LOCOWRK_NOTIFY_ALLOW_PRIVATE=1` 显式后门；**非 2xx = 未送达 = 报错**，不学 fetch 把 4xx 当数据）；**桌面通知通道** = plugin-api `HostVtable` **末尾追加 `notify` 槽**（append-only，`PLUGIN_ABI_VERSION` 不动；repr(C) 前缀兼容旧插件），plugin-host `set_notify_hook` 注入（desktop_notify.rs 注册，headless kernel-bin 返回 ERR_UNSUPPORTED 如实上报）；整体 Irreversible（宁严勿松：webhook 对外发数据，分级是工具级粒度） |
 
-### ⑮ agent-sub 子 Agent 调度（⬜ 2026-09-30 排期）
+### ⑮ agent-sub 子 Agent 调度（✅ 已完成，v2.30，提交 d29cd69）
 
 > 形态先定调：**宿主/内核侧**而非 C ABI 插件——子 Agent 要递归跑内核循环，
 > 依赖方向禁止插件依赖 kernel-agent（同 llm / memory-vector 宿主侧先例，
@@ -186,9 +186,9 @@
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| 子 Agent 工具面 | ⬜ | kernel-agent 新模块（组装点注册内置工具，同 search_tools 形态）：`subagent_run(prompt, tools, budget)`；单层派生（子不可再生子）、串行执行 |
-| 隔离与预算 | ⬜ | 子会话 = 父转录前缀 fork（复用 ⑨ rewind/fork 语义）的内存投影，收束后摘要回父会话；工具视图 = 显式白名单子集（ToolSource 过滤，demo4 双 Agent 视图隔离先例）；轮数/超时预算，越限如实收束返回部分结果 |
-| 审批与事件 | ⬜ | 子内 Irreversible 冒泡同一审批门（审批事件带子 Agent 标识，标严勿松不变）；派生/收束落父会话日志（DESIGN §会话事件本就规划"子 Agent 调度"条目）；UI 走 SystemNotice（§7 扩表） |
+| 子 Agent 工具面 | ✅ v2.30 d29cd69 | kernel-agent `subagent/` 模块：`SubagentTool`（`subagent_run(prompt, tools?, max_turns?, timeout_secs?)`，Irreversible 宁严勿松 + Always 暴露）+ `SubagentGate` 快照表（内核每个带身份 step 刷新父转录前缀）+ `Kernel::child_kernel` 派生作用域子内核；组装点注册（desktop，同 search_tools 形态；kernel-bin 未接，需时搭车）；单层硬剔除（FilterToolSource 恒剔 subagent_run，白名单显式包含也无效） |
+| 隔离与预算 | ✅ v2.30 d29cd69 | 子会话 = 父转录**可见前缀** fork（复用 ⑨ `Session::fork`/rewind 语义，`{parent}-sub-{n}` 内存投影）；`tools` 缺省 = 继承父全目录、非空 = 严格子集 ∩ 父目录（越权 resolve → NotAvailable → failed 如实闭合）；轮数缺省 8/上限 32、超时缺省 300s/上限 1800s（0 = 不限），越限 status = budget_exhausted / timeout，摘要取子转录尾部不虚构；收束 JSON `{status, summary, turns, tools_used, child_session_id[, error]}`，摘要 4000 字截断 |
+| 审批与事件 | ✅ v2.30 d29cd69 | `ToolCallReq` 增 `session_id`（step_inner 与 CallCtx.session_id 同点填充，12 处构造点补齐）；子内 Irreversible 冒泡父内核同一 ApprovalHub，载荷带 `{parent}-sub-{n}`，ApprovalModal 紫"子 Agent 调用"徽章；派生/收束落父会话日志（subagent_run 的 ToolCall/ToolResult 事件即日志事实）+ 前端 SystemNotice（§4.1 扩表 2 行先行：tool-call → subagentStarted / tool-result → subagentDone + 卡片照常）；子内活动不投影（黑盒） |
 
 ### ⑯ tool-sandbox shell 沙箱（⬜ 2026-09-30 排期；**批首先定方案再动码**）
 
@@ -266,6 +266,6 @@
 | tool-mcp | ✅ | v2.15（mcp.json 加载期发现冻结 + stdio JSON-RPC + side_effect 缺省 Irreversible） |
 | tool-browser | ⏸ 最后 | 文档自己建议晚做（fetch + MCP 已覆盖多数场景）；**用户裁定 2026-09-30：五件中排最末** |
 | tool-sandbox | ⬜ 排期⑯ | shell 容器/WASM 化——注意⑧的 WASM 加载器是插件沙箱，不是 shell 沙箱，两回事；批首先定方案 |
-| agent-sub | ⬜ 排期⑮ | 子 Agent 调度（宿主/内核侧形态，理由见 ⑭⑮⑯ 排期块） |
+| agent-sub | ✅ | ⑮（v2.30，d29cd69）：kernel-agent `subagent/` 单层调度 + fork 前缀 + 白名单视图 + 审批冒泡，详见 ⑮ 块 |
 | tool-schedule | ✅ | ⑭（v2.29，7dc0139）：宿主内置工具面 + schedule.sqlite3 + 触发引擎，详见 ⑭ 块 |
 | tool-notify | ✅ | ⑭（v2.29，7dc0139）：webhook 插件（SSRF 防线照搬）+ 桌面通知走 vtable 追加槽 |

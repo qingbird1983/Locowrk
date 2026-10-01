@@ -120,11 +120,13 @@
 | `agent://tool-call` | chat push tool 项 | ChatMessages 工具卡 | 先事件后执行（内核侧纪律） |
 | `agent://tool-result` | chat 按 call_id 补丁 | ChatMessages 工具卡结果区 | |
 | `agent://turn-done` | chat `running=false` | 头部状态徽标 | |
-| `agent://approval-request` | approvals pending 队列 | ApprovalModal（全局） | 启动补拉 `list_pending_approvals` |
+| `agent://approval-request` | approvals pending 队列 | ApprovalModal（全局） | 启动补拉 `list_pending_approvals`；⑮ 起载荷含 `session_id`，非当前会话（子 Agent）调用带标识徽章 |
 | `plugin://state-changed` | plugins 整表重拉 | PluginMarket 两页签 | 策略：本地 IO 毫秒级，不做增量 |
 | `agent://context-usage`（⑨） | chat `contextUsage` | ContextProgressBar | 每 step 后推送；used 与压缩判定同一估算口径 |
 | `agent://context-compacted`（⑨） | chat `pushNotice('notice.contextCompacted', …, ['details','undo'])` + `noticeDetails` | SystemNotice | 撤销→`context_undo_compact`；详情→`pushRawSystem` |
 | `agent://schedule-fired`（⑭） | chat `pushNotice('notice.scheduleFired', …)` | SystemNotice | 定时触发注入轮的告知（无动作按钮，后续助手回复以 chunk 跟进）；窗口不可见/失焦时后端另发系统通知兜底 |
+| `agent://tool-call`（tool=subagent_run，⑮） | chat 工具卡 + `pushNotice('notice.subagentStarted', …)` | ChatMessages 工具卡 + SystemNotice | 派生告知（prompt 摘引）；子 Agent 内部活动不投影（黑盒），其审批请求走 approval-request 行（带标识） |
+| `agent://tool-result`（subagent_run，⑮） | chat 按 call_id 补丁 + `pushNotice('notice.subagentDone', …)` | ChatMessages 工具卡 + SystemNotice | 摘要回父会话（工具结果 JSON 全文在卡内）；异常收束（预算耗尽/超时）同样走通知，如实呈现 |
 
 ### 4.2 命令 → 面板
 
