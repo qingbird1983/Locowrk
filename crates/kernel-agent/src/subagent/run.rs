@@ -105,6 +105,11 @@ pub(crate) async fn run_child(
 
     let mut child = prefix.fork(prefix.cursor());
     child.append(SessionEvent::UserMessage { content: prompt });
+    // 子"自身"事件从任务 prompt 之后起算：fork 来的父前缀含父的历史
+    // ToolCall/AssistantMessage，收束汇报（tools_used/摘要）只看子内新增
+    // 段——否则父的调用史会被误报成子的工具使用、父的旧正文会被当成
+    // 子的摘要。
+    let own_from = child.len();
 
     let mut turns: u32 = 0;
     let loop_fut = async {
@@ -139,9 +144,9 @@ pub(crate) async fn run_child(
 
     SubagentOutcome {
         status,
-        summary: tail_summary(&child),
+        summary: tail_summary(&child, own_from),
         turns,
-        tools_used: tools_used(&child),
+        tools_used: tools_used(&child, own_from),
         child_session_id: child_id,
         error,
     }
@@ -155,26 +160,27 @@ fn converged(child: &Session) -> bool {
     )
 }
 
-/// 摘要 = 子转录最后一条非空 assistant 正文；没有（纯工具调用步被
-/// 截断/超时）就如实描述最后动作，不虚构进展。
-fn tail_summary(child: &Session) -> String {
-    for e in child.events().iter().rev() {
+/// 摘要 = 子转录**自身段**（`own_from` 之后）最后一条非空 assistant 正文；
+/// 没有（纯工具调用步被截断/超时）就如实描述最后动作，不虚构进展。
+fn tail_summary(child: &Session, own_from: usize) -> String {
+    for e in child.events()[own_from..].iter().rev() {
         if let SessionEvent::AssistantMessage { content, .. } = e {
             if !content.is_empty() {
                 return content.chars().take(SUMMARY_CLIP).collect();
             }
         }
     }
-    match tools_used(child).last() {
+    match tools_used(child, own_from).last() {
         Some(t) => format!("（未产出文本；最后动作：调用 {t}）"),
         None => "（未产出任何内容）".into(),
     }
 }
 
-/// 子内调用过的工具（去重保序）。
-fn tools_used(child: &Session) -> Vec<String> {
+/// 子内调用过的工具（去重保序）——只扫自身段，fork 前缀里父的历史调用
+/// 不算子的使用。
+fn tools_used(child: &Session, own_from: usize) -> Vec<String> {
     let mut used: Vec<String> = Vec::new();
-    for e in child.events() {
+    for e in &child.events()[own_from..] {
         if let SessionEvent::ToolCall { tool, .. } = e {
             if !used.iter().any(|u| u == tool) {
                 used.push(tool.clone());

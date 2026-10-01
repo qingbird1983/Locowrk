@@ -334,6 +334,43 @@ async fn no_session_snapshot_fails_honestly() {
     assert!(out["error"].as_str().unwrap().contains("快照"));
 }
 
+#[tokio::test]
+async fn tools_used_ignores_forked_parent_history() {
+    let echo = Arc::new(MockTool::new("echo", SideEffect::Pure, json!("e")));
+    // 弹出顺序：父派生 → 子调 echo → 子收敛
+    let rig = rig(
+        vec![Arc::clone(&echo)],
+        vec![
+            SeqLlm::ok_text("done"),
+            SeqLlm::call_tool(2, "echo"),
+            sub_call(1, json!({ "prompt": "子任务", "tools": ["echo"] })),
+        ],
+        None,
+    );
+    // 父史：早前轮次调过 mcp_status（fork 前缀会带上这段转录）——
+    // 汇报的 tools_used 只计子内自身的 echo，不把父的调用史算进来
+    // （smoke 实测曾把父的 mcp_status 误报成子的使用）。
+    let mut s = user_session();
+    s.append(SessionEvent::ToolCall {
+        call_id: CallId("old-1".into()),
+        tool: "mcp_status".into(),
+        args: json!({}),
+        plugin_id: None,
+        plugin_version: semver::Version::new(0, 0, 0),
+        side_effect: SideEffect::Pure,
+    });
+    s.append(SessionEvent::ToolResult {
+        call_id: CallId("old-1".into()),
+        output: json!({}),
+        error: None,
+    });
+    rig.kernel.step_as(&mut s, "p1").await.unwrap();
+
+    let out = parent_result(&s);
+    assert_eq!(out["tools_used"], json!(["echo"]), "父前缀历史调用不计入");
+    assert_eq!(out["summary"], json!("done"), "摘要取子自身段正文");
+}
+
 /// 造一条带参的 subagent_run 调用脚本响应。
 fn sub_call(n: usize, args: Value) -> Result<LlmResponse, LlmError> {
     Ok(LlmResponse {
