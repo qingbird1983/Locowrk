@@ -2,7 +2,8 @@
 
 > 壳批次（v2.17 排期，2026-09-29 确认）落点文档。壳只锁**结构与规则**：
 > 导航模型、页面模式库、事件→UI 流向图、弹层规则、design tokens。
-> 内容留给功能批次（⑨–⑫ 只做"往模式里填东西"）；视觉抛光仍归最后。
+> 内容留给功能批次（照 §七 扩表）；视觉抛光（明暗主题 / 动效 / 颜色类
+> 规范）已由 ⑰ 落地，规范见 §六。
 >
 > 实现落点：`desktop/src/`（`components/patterns/` + `components/{chat,
 > plugins,settings}/` + `style.css` tokens）。
@@ -55,6 +56,7 @@
 | memory 分区 | `memory`（⑪ 新增） | 占位 |
 | `SessionsSection` | —（只读展示 dataDir） | ✅ |
 | `LanguageSection` | `locale` | ✅（既有） |
+| `AppearanceSection` | `appearance`（⑰ 新增） | ✅（theme 三档 dark / light / system，缺省 dark 旧文件零迁移；保存即生效，system 跟随 `prefers-color-scheme`） |
 | `ShortcutSection` | `shortcut` | ✅（既有） |
 | developer 分区 | `developer`（⑫ 新增） | 占位 |
 
@@ -161,11 +163,43 @@
 
 ---
 
-## 六、design tokens（`style.css` `:root` `--lw-*`）
+## 六、design tokens + 主题（`style.css`，⑰ 视觉抛光定稿）
 
-- **tokens 是唯一样式事实源**：表面三级 / 文本四级 / 语义色五 / 圆角四档 / 间距五档，取值与 Tailwind 调色板同值。
-- 存量组件继续用 Tailwind 原子类不动；新组件优先用 `var(--lw-*)`；改皮肤只改 `:root` 一处。
-- 壳批次**不做**视觉抛光（明暗主题切换、动效、精调间距归 ⑬ 后统一做）。
+- **tokens 是唯一样式事实源**：表面四级（`surface-0` 页面底 / `1` 面板与
+  输入 / `2` 激活与悬停 / `3` 实心底与禁用）/ 文本五级（`ink-1..5`，亮→弱）/
+  线两级（`line` / `line-strong`）/ 语义色（accent·ok·warn·danger）/
+  圆角四档 / 间距五档 / 动效三档（`dur-fast` 120ms · `dur-base` 200ms ·
+  `ease` 标准缓动）。取值与 Tailwind 调色板同值。
+- **主题切换（⑰ 落地，兑现"改皮肤只改变量块"）**：暗色 = `:root` 缺省值；
+  亮色 = `:root[data-theme="light"]` 覆盖同一批变量。settings.json
+  `appearance.theme = dark | light | system`（缺省 dark，旧文件零迁移）；
+  前端唯一执行者 `lib/theme.ts`：写 `<html data-theme>`，system 档跟随
+  `prefers-color-scheme` 并监听变化——**组件禁止自读媒体查询**。
+  已知近似：原生标题栏跟随系统主题，不随应用切换。
+- **token 双形态**：`--lw-surface-1` 等 hex 形（组件内联 `var()` 直接用）
+  与 `--lw-rgb-*` 三元组形（仅 `tailwind.config.js` 消费，配合
+  `rgb(var(--x) / <alpha-value>)`，让 `bg-x/60` 之类半透明修饰符在两个
+  主题下都成立——三元组是透明度修饰符能工作的前提，不是可选项）。
+  同名同值，改色必须两形同改（style.css 相邻两块）。
+- **组件层颜色类规范（⑰ 起强制）**：
+  - 中性灰阶类（`bg/text/border-neutral-*`）**退出组件层**，换语义角色类
+    （Tailwind `surface-*` / `ink-*` / `line-*`，config 绑同一批变量）：
+    `bg-neutral-900→surface-0`、`bg-neutral-800→surface-1`、
+    `bg-neutral-700→surface-2`、`bg-neutral-600→surface-3`、
+    `text-neutral-100/300/400/500/600→ink-1/2/3/4/5`、
+    `border-neutral-800→line`、`border-neutral-700/600→line-strong`。
+    config 仍重映射 neutral 各阶兜底，漏网类不至于破坏主题。
+  - 语义 hue 类（red / emerald / amber / yellow / indigo / sky / teal /
+    purple）**保留原类名**，由 config 把用到的 (hue,shade) 重映射到
+    `--lw-rgb-<hue>-<shade>`（暗色 = 原调色板值像素级不变，亮色 = 选配的
+    浅色族取值）；只允许映射表已列的组合，新组合先进 config 扩表给两主题
+    取值，再上组件。徽章族（§3.4）配色即走此机制。
+- **动效规范（⑰ 落地）**：只允许三类——① 交互元素 hover/focus 状态色变
+  （`style.css` @layer base 统一 `transition`，120ms，组件不再散写）；
+  ② 入场出现：弹窗 fade+scale、SystemNotice fade+上滑；③ 进度增长：进度条
+  宽度过渡（②③ 200ms）。`prefers-reduced-motion` 一律降为 0；禁止常驻
+  动画、视差、弹跳。主题切换时 body 底色/文字过渡一次（200ms）。
+- **间距**：沿用五档不变；存量不搞批量间距改造，新组件必须取五档之一。
 
 ---
 
@@ -176,3 +210,8 @@
 3. 新交互 → 先过 §五弹层规则；新徽章 → 进 §3.4 对应族。
 4. settings.json 新分区 → §3.2 表加行，占位同批替换。
 5. 改 App 骨架 / 模式组件本身 → 视为规则变更，先改本文件再动码。
+6. 新颜色 → 中性灰一律角色类（§六映射表）；语义 hue 只用 §六映射表内的
+   (hue,shade) 组合，新组合先扩 `tailwind.config.js` 重映射表（两主题都给
+   值）再上组件；主题只经 settings `appearance.theme`，组件禁止读
+   `prefers-color-scheme`。
+7. 新动效 → 只许 §六三类；新入场形态先改 §六动效规范再实现。

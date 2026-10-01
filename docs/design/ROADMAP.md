@@ -201,6 +201,18 @@
 | 方案定稿 | ✅ v2.31 dc822d9 | 三候选取**① Windows 受限令牌 + JobObject 限额**（② WASI 只能跑 wasm 化命令实用性窄，记录为远期可选内建命令集；③ 容器可用性依赖用户环境，记录为远期可选后端）；能力矩阵落 plugins.md §六：内存/进程数/CPU 占比硬限、剪贴板 UI 限制、无特权受限令牌（DISABLE_MAX_PRIVILEGE + deny Administrators 不可 UAC 提升）、整树治理 ✅；**文件系统与网络不隔离 ❌ 如实分级**（不做虚假安全声明——策略三道闸因此保留，高危无解锁开关引导走 shell） |
 | tool-sandbox 插件本体 | ✅ v2.31 dc822d9 | 单工具 `sandbox_run`（Irreversible 一律审批）：JobObject 限额（mem_mb 缺省 512 / max_procs 64 / cpu_rate 可选硬顶，arg/env 双层缺省钳上限）+ 受限令牌 spawn（CREATE_SUSPENDED → 挂 Job → Resume；令牌不可用降级 job-only，输出 `isolation` 字段如实上报不静默）+ 同源三道闸（LOCOWRK_SANDBOX_ALLOW 扩展、denylist 永远赢）；Unix 对称 pre_exec setrlimit（AS/NPROC/CPU）+ 进程组树治理；与 tool-shell **并存不替换**（其白名单/denylist/进程治理纪律原样保留）；测试 15 例含真跑受限 spawn 全链（含全量限额参数） |
 
+### ⑰ UI 视觉抛光（✅ 已完成，v2.32，提交 945e681）
+
+> 壳批次 §六 明言"明暗主题切换、动效、精调间距归 ⑬ 后统一做"；本批兑现。
+> 批首交付 = 先改 UI shell 文档（§六重写为主题/颜色类/动效规范 + §3.2/§七
+> 扩表），再动码。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 明暗主题切换 | ✅ v2.32 945e681 | settings.json 新 `appearance` 区（dark / light / system，缺省 dark 旧文件零迁移）；Rust `settings/appearance.rs` + update 校验 + 2 测试；前端 `lib/theme.ts` 唯一执行者（写 `<html data-theme>`，system 档 matchMedia 监听，组件禁自读媒体查询）；AppearanceSection 三档分段控件挂 Language 之后；style.css 双主题变量块——暗色 = 原调色板值**像素级不变**，亮色逐 token 选配浅色族。已知近似：原生标题栏跟随系统不随应用切换 |
+| 组件层语义颜色类 | ✅ v2.32 945e681 | tailwind.config 把颜色全部绑到 `--lw-rgb-*` 三元组（`rgb(var(--x) / <alpha-value>)` 形态是 47 处 `bg-x/60` 半透明修饰符能工作的前提）；组件 neutral 灰阶类清零 → 语义角色类 `surface-0..3 / ink-1..5 / line(-strong) / accent(-hover)`；语义 hue 38 个实用 (hue,shade) 全部入映射表（暗=原值，亮=浅色族）；token 双形态纪律（hex + 三元组同值同改）入 §六 |
+| 统一动效 | ✅ v2.32 945e681 | §六三类：交互元素 @layer base 统一 transition 120ms；弹窗 fade+scale（`lw-modal`）、SystemNotice 淡入上滑（`lw-notice`）入场、进度条宽度过渡（200ms）；`prefers-reduced-motion` 一律降 0；禁止常驻动画/视差/弹跳入规。间距维持五档不批量改造（抽查无系统性问题） |
+
 ---
 
 ## 三、收尾 backlog（随批次搭车）
@@ -214,7 +226,7 @@
 | kv_get 所有权协议 | | 看需求 |
 | profile.toml 设置面板接线 | | 看需求 |
 | 托盘菜单 i18n | ✅ 已随壳批次完成（a2c82a5：sys-locale 探测，语言改动即时重挂菜单） | — |
-| UI 视觉抛光 | 壳批次 tokens 之后统一做 | ⑬ 后 |
+| UI 视觉抛光 | ✅ 已完成（⑰，v2.32，945e681：明暗主题 + 语义颜色类 + 统一动效；规范落 UI shell 文档 §六） | — |
 | tool-http（POST/PUT 通用请求） | plugins.md P1 唯一未做的工具类；tool-fetch 仅 GET（其代码注释已声明 POST/PUT 归本插件） | 看需求 |
 | mw-ratelimit 调用限速 | plugins.md P1.5 中间件：限制单位时间调用次数 | 看需求 |
 | 中间件插件化 | mw-audit / 审批门 / ctx-compact 均为宿主侧形态；C ABI `PluginKind::Middleware` 仍是占位变体，无真插件使用 | 看需求 |
