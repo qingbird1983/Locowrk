@@ -269,6 +269,22 @@
 
 ---
 
+### ㉑·fix 子代理收束汇报误报父史（✅ 已完成，v2.37，提交 2332d66）
+
+> smoke 实测跟进（用户转来探通报告："tools_used 出现未授权的 mcp_status，
+> 与子的自述矛盾"）。核查结论：**白名单过滤无恙**——FilterToolSource
+> list/resolve 双侧过滤，且 resolve 前置于 ToolCall 事件写入，越权调用
+> NotAvailable 即整步 failed（既有测试 `explicit_whitelist_blocks_unlisted_resolve`
+> 覆盖）；误报根因是 `tools_used`/`tail_summary` 扫了**整个**子转录，
+> 把 fork 前缀里**父的历史调用**算成了子的使用。
+
+| 修复 | 状态 | 说明 |
+|---|---|---|
+| 自身段口径 | ✅ v2.37 2332d66 | run_child 在 fork+追加任务 prompt 后记 `own_from = child.len()`，`tools_used` / `tail_summary`（含"最后动作"兜底）只扫自身段——父的调用史/旧正文不再混入子的收束汇报 |
+| 回归测试 | ✅ v2.37 2332d66 | `tools_used_ignores_forked_parent_history`：父转录预置 mcp_status 调用，派生后断言 tools_used == ["echo"]、摘要取子自身段 |
+
+---
+
 ## 三、收尾 backlog（随批次搭车）
 
 | 项 | 说明 | 计划搭车批次 |
