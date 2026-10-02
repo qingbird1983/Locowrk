@@ -16,6 +16,7 @@ import { MAIN_FLOOR, PANEL_MIN } from "../../lib/work-panel-preference";
 import { clip } from "../../lib/format";
 import { Icon } from "../../lib/icons";
 import SubagentTranscriptTab from "./SubagentTranscriptTab.vue";
+import ReviewTab from "./ReviewTab.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -29,6 +30,10 @@ function onResize() {
 }
 onMounted(() => window.addEventListener("resize", onResize));
 onBeforeUnmount(() => window.removeEventListener("resize", onResize));
+
+const activeTab = computed(() =>
+  wp.tabs.find((t) => t.id === wp.activeTabId) ?? null,
+);
 
 const sidebarW = computed(() => (shell.sidebarCollapsed ? 0 : shell.sidebarWidth));
 const budget = computed(() => Math.max(1, viewport.value - sidebarW.value - MAIN_FLOOR));
@@ -74,8 +79,9 @@ function onKeyDown(e: KeyboardEvent) {
   e.preventDefault();
 }
 
-// ---- 启动器清单（空态，§2.5/§3.14）：当前会话可看的子转录 ----
-const launcherItems = computed(() => {
+// ---- 启动器清单（空态，§2.5/§3.14）：只列已实装页签类型的条目 ----
+/** §3.16 子转录：当前会话收束的 subagent_run。 */
+const subItems = computed(() => {
   const out: { childId: string; title: string }[] = [];
   const seen = new Set<string>();
   for (const item of chat.items) {
@@ -93,8 +99,28 @@ const launcherItems = computed(() => {
   return out;
 });
 
-function openLauncherItem(childId: string, title: string) {
+/** §3.28 审阅：当前会话的 edit_diff 调用（diff 随 args.patch）。 */
+const reviewItems = computed(() => {
+  const out: { callId: string; path: string; diff: string }[] = [];
+  const seen = new Set<string>();
+  for (const item of chat.items) {
+    if (item.kind !== "tool" || item.pending) continue;
+    const tool = item as ToolItem;
+    if (tool.tool !== "edit_diff") continue;
+    const args = tool.args as { path?: unknown; patch?: unknown } | null;
+    if (typeof args?.path !== "string" || typeof args.patch !== "string") continue;
+    if (seen.has(tool.callId)) continue;
+    seen.add(tool.callId);
+    out.push({ callId: tool.callId, path: args.path, diff: args.patch });
+  }
+  return out;
+});
+
+function openSub(childId: string, title: string) {
   wp.openSubTab(childId, title);
+}
+function openReview(item: { callId: string; path: string; diff: string }) {
+  wp.openReviewTab(item.callId, item.path, item.diff);
 }
 </script>
 
@@ -159,25 +185,51 @@ function openLauncherItem(childId: string, title: string) {
       </button>
     </header>
 
-    <!-- 内容：活动页签 / 启动器清单（§3.14：不是空态文案） -->
+    <!-- 内容：活动页签（按类型分派）/ 启动器清单（§3.14：不是空态文案） -->
     <div class="flex min-h-0 flex-1 flex-col">
-      <SubagentTranscriptTab
-        v-if="wp.activeTabId"
-        :key="wp.activeTabId"
-        :child-id="wp.activeTabId"
-      />
+      <template v-if="activeTab">
+        <SubagentTranscriptTab
+          v-if="activeTab.kind === 'subagent'"
+          :key="activeTab.id"
+          :child-id="activeTab.id"
+        />
+        <ReviewTab
+          v-else-if="activeTab.kind === 'review' && activeTab.path && activeTab.diff"
+          :key="activeTab.id"
+          :path="activeTab.path"
+          :diff="activeTab.diff"
+        />
+      </template>
       <div v-else class="scroll-y flex-1 px-2 py-2">
-        <div class="side-label px-1">{{ t("panel.launcher") }}</div>
-        <button
-          v-for="item in launcherItems"
-          :key="item.childId"
-          type="button"
-          class="launcher-row"
-          @click="openLauncherItem(item.childId, item.title)"
-        >
-          <Icon name="bot" :size="14" aria-hidden="true" />
-          <span class="launcher-row__title">{{ item.title }}</span>
-        </button>
+        <template v-if="subItems.length > 0 || reviewItems.length > 0">
+          <template v-if="subItems.length > 0">
+            <div class="side-label px-1">{{ t("panel.launcherSub") }}</div>
+            <button
+              v-for="item in subItems"
+              :key="item.childId"
+              type="button"
+              class="launcher-row"
+              @click="openSub(item.childId, item.title)"
+            >
+              <Icon name="bot" :size="14" aria-hidden="true" />
+              <span class="launcher-row__title">{{ item.title }}</span>
+            </button>
+          </template>
+          <template v-if="reviewItems.length > 0">
+            <div class="side-label px-1">{{ t("panel.launcherReview") }}</div>
+            <button
+              v-for="item in reviewItems"
+              :key="item.callId"
+              type="button"
+              class="launcher-row"
+              :title="item.path"
+              @click="openReview(item)"
+            >
+              <Icon name="file" :size="14" aria-hidden="true" />
+              <span class="launcher-row__title">{{ item.path }}</span>
+            </button>
+          </template>
+        </template>
         <p class="px-2 py-3 text-[12px] leading-relaxed text-ink-4">
           {{ t("panel.launcherHint") }}
         </p>

@@ -40,6 +40,11 @@ const workPanel = useWorkPanelStore();
 function onOpenTranscript(childId: string, title: string) {
   workPanel.openSubTab(childId, clip(title, 24));
 }
+
+/** §3.28：edit_diff 卡「看 diff」开工作面板审阅页签。 */
+function onOpenDiff(callId: string, path: string, diff: string) {
+  workPanel.openReviewTab(callId, path, diff);
+}
 const bottom = ref<HTMLElement | null>(null);
 
 const props = defineProps<{
@@ -191,6 +196,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
                     :awaiting="!!pendingFor(item.callId)"
                     :default-expanded="expandLive && item.ts !== undefined"
                     @open-transcript="onOpenTranscript"
+                    @open-diff="onOpenDiff"
                   />
                   <!-- §3.17 决策卡紧跟触发它的工具行（内联，不是弹窗） -->
                   <PermissionCard

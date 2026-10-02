@@ -165,6 +165,11 @@ export default {
     loading: "转录读取中…",
     missing: "子转录不存在（未落盘或已清理）",
     readonlyNote: "子 Agent 由主 Agent 驱动，无法在此输入。",
+    launcherSub: "子 Agent 转录",
+    launcherReview: "审阅",
+    viewDiff: "看 diff",
+    diffEmpty: "这段 diff 没有可显示的内容",
+    expandLines: "… 展开 {n} 行",
   },
   notice: {
     action: {

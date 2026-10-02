@@ -46,7 +46,8 @@ function pickVersion(id: string, versions: string[]): string {
     :is-empty="filteredMarket.length === 0"
     :empty-text="t('market.emptyDiscover')"
   >
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <!-- §3.29 三列自适应：repeat(auto-fill, minmax(280px, 1fr))，gap 12px -->
+    <div class="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
       <PluginCard
         v-for="item in filteredMarket"
         :key="item.id"

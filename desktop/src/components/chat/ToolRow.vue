@@ -24,9 +24,12 @@ const props = defineProps<{
   awaiting?: boolean;
 }>();
 
-/** §3.10 卡是入口：subagent_run 成功收束且带 child_session_id（v2.37 起
- * output 携带）→ 头行挂「看转录」小钮，宿主据此开 §3.16 工作面板页签。 */
-const emit = defineEmits<{ openTranscript: [childId: string, title: string] }>();
+/** §3.10 卡是入口：subagent_run 收束 → 「看转录」；edit_diff 带 patch →
+ * 「看 diff」（§3.28 审阅页签）。宿主据此开工作面板页签。 */
+const emit = defineEmits<{
+  openTranscript: [childId: string, title: string];
+  openDiff: [callId: string, path: string, diff: string];
+}>();
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -52,6 +55,14 @@ const childId = computed(() => {
 const transcriptTitle = computed(() =>
   String((props.item.args as { prompt?: unknown } | null)?.prompt ?? ""),
 );
+
+/** §3.28 审阅：edit_diff 的 unified diff 随 args.patch，路径随 args.path。 */
+const reviewItem = computed(() => {
+  if (props.item.tool !== "edit_diff" || props.item.pending) return null;
+  const args = props.item.args as { path?: unknown; patch?: unknown } | null;
+  if (typeof args?.path !== "string" || typeof args.patch !== "string") return null;
+  return { callId: props.item.callId, path: args.path, diff: args.patch };
+});
 const actionLabel = computed(() => {
   const a = action.value;
   if (!a) return props.item.tool;
@@ -183,7 +194,7 @@ async function copyCall() {
           class="cv-head__chev"
         />
       </button>
-      <!-- §3.10 卡是入口：看转录（hover 显形，与复制钮同族） -->
+      <!-- §3.10 卡是入口：看转录 / 看 diff（hover 显形，与复制钮同族） -->
       <button
         v-if="childId"
         class="copy-btn tool__copy"
@@ -193,6 +204,16 @@ async function copyCall() {
         @click="childId && emit('openTranscript', childId, transcriptTitle)"
       >
         <Icon name="panel" :size="12" />
+      </button>
+      <button
+        v-if="reviewItem"
+        class="copy-btn tool__copy"
+        type="button"
+        :title="t('panel.viewDiff')"
+        :aria-label="t('panel.viewDiff')"
+        @click="reviewItem && emit('openDiff', reviewItem.callId, reviewItem.path, reviewItem.diff)"
+      >
+        <Icon name="file" :size="12" />
       </button>
       <button
         class="copy-btn tool__copy"

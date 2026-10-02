@@ -11,11 +11,14 @@ import {
 } from "../lib/work-panel-preference";
 
 export interface WorkPanelTab {
-  /** 页签 id = 子会话 id（§3.16 唯一内置页签类型）。 */
+  /** 页签 id：子会话 = childId（§3.16）；审阅 = `rev:<callId>`（§3.28）。 */
   id: string;
-  kind: "subagent";
-  /** 页签名 = 子 Agent + 任务 prompt 截断摘要（⑮ 无 name 参数，不发明）。 */
+  kind: "subagent" | "review";
+  /** 子页签名 = 子 Agent + 任务 prompt 截断；审阅页签名 = 文件路径末段。 */
   title: string;
+  /** 审阅页签数据快照（edit_diff 的 unified diff，进程内跨会话保持）。 */
+  path?: string;
+  diff?: string;
 }
 
 const prefs = loadPanelPrefs();
@@ -65,10 +68,30 @@ export const useWorkPanelStore = defineStore("workPanel", {
       this.persist();
     },
     openSubTab(childId: string, title: string) {
-      if (!this.tabs.some((t) => t.id === childId)) {
-        this.tabs.push({ id: childId, kind: "subagent", title });
+      this.openTab({ id: childId, kind: "subagent", title });
+    },
+    /** 审阅页签（§3.28）：同 callId 重开 = 快照覆盖（文件最新态）。 */
+    openReviewTab(callId: string, path: string, diff: string) {
+      const id = `rev:${callId}`;
+      const idx = this.tabs.findIndex((t) => t.id === id);
+      const tab: WorkPanelTab = {
+        id,
+        kind: "review",
+        title: path.split(/[\\/]/).pop() ?? path,
+        path,
+        diff,
+      };
+      if (idx === -1) this.tabs.push(tab);
+      else this.tabs.splice(idx, 1, tab);
+      this.activeTabId = id;
+      this.open = true;
+      this.persist();
+    },
+    openTab(tab: WorkPanelTab) {
+      if (!this.tabs.some((t) => t.id === tab.id)) {
+        this.tabs.push(tab);
       }
-      this.activeTabId = childId;
+      this.activeTabId = tab.id;
       this.open = true;
       this.persist();
     },

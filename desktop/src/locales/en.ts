@@ -212,6 +212,11 @@ export default {
     loading: "Loading transcript…",
     missing: "Sub-transcript unavailable (not persisted or cleaned up)",
     readonlyNote: "This sub-agent is driven by the main agent; input is not available here.",
+    launcherSub: "Sub-agent transcripts",
+    launcherReview: "Review",
+    viewDiff: "View diff",
+    diffEmpty: "Nothing to show in this diff",
+    expandLines: "… Expand {n} lines",
   },
   developer: {
     hint: "Developer and danger switches. Hidden by default: tap the version number at the sidebar bottom 7 times to unlock.",

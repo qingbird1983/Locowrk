@@ -573,9 +573,9 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 | 前端：面板骨架 | ✅ v2.52 | `stores/work-panel.ts`（开合/宽度/最大化/页签 = **跨会话壳状态**；开合+宽度持久化 `work-panel.v1`，页签进程内不跨重启）+ `WorkPanel.vue`（三栏预算 `clamp(244, 容器−侧栏−450)`，**拖宽顶到预算先折叠侧栏**（地板硬）；拖柄全规格：setPointerCapture + 全局锁 + 2×32 圆角条 + 键盘 16px/Home/End + 双击复位 360 + aria separator（valuemax=预算动态）；头部 = 页签条可关闭 + `+` 回启动器 + 最大化/还原 + 关闭；空态 = **启动器清单**（§3.14：不是空态文案——当前会话可看的子转录 + 指引行；只列已实装条目，插件贡献槽位随插件批次））+ App.vue 挂主区右缘（只对对话目的地）+ Topbar `panel` 开关（独立成组，aria-pressed） |
 | 前端：转录页签 | ✅ v2.52 | `lib/sub-transcript-items.ts`（wire 事件 → chat store 同款 `ChatItem[]` 投影）+ `SubagentTranscriptTab.vue`（**复用 MessageRow/ToolRow/SystemNotice 同一套行组件**——§3.7–3.9 同一心智模型；近似如实记录：平铺过程行，过程组合成组后续批接入）；页签名 = 子 Agent + prompt 截断（⑮ 无 name 参数不发明）；底部固定只读说明（composer 不渲染，自证只读）；入口 = §3.10 工具行头行「看转录」小钮（subagent_run 收束且带 child_session_id）+ 启动器清单 |
 | 修缺陷 | ✅ v2.52 | 走查实机抓到：子任务失败收束（output.status=failed）被通知记成「已完成」——分类只看 ToolResult.ok 没看 output.status；修 `draft_from_event` 按 `status == "completed"` 如实分类 + 回归测试 |
-| 测试 | ✅ v2.52 | kernel-agent +1（`transcript_sink_receives_own_segment`：收束恰好回调一次、自身段 = prompt+回复）；桌面 +2（store 写自身段/覆盖重写/非法 id 跳过）+ 通知分类回归；桌面 110 绿、kernel-agent 全绿、clippy 0 双侧、fmt、check_length、pnpm build |
+| 测试 | ✅ v2.52 | kernel-agent +1（`transcript_sink_receives_own_segment`：收束恰好回调一次、自身段 = prompt+回复）；桌面 +2（store 写自身段/覆盖重写/非法 id 跳过）+ 通知分类回归；桌面 108 绿、kernel-agent 全绿、clippy 0 双侧、fmt、check_length、pnpm build |
 
-验证：cargo test 110+kernel-agent 全绿、clippy 0、fmt、check_length（state/mod.rs 压回 400 整）、pnpm build 过。
+验证：cargo test 108+kernel-agent 全绿（v2.52 行内曾误记 110，v2.53 更正）、clippy 0、fmt、check_length（state/mod.rs 压回 400 整）、pnpm build 过。
 实机走查（tauri dev + CDP 截图 27b-1…27b-8 + 落盘取证）：顶栏开关开面板（缺省 360 + 启动器空态
 + 点外部关）→ 真实轮派生子 Agent（审批「允许一次」）→ **子会话落盘实机发生**
 （`sub-transcripts/desktop-…-sub-1.jsonl` 7 事件，首条 = 任务 prompt，父前缀不带；本轮子内
@@ -584,7 +584,27 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 方向正确）+ 双击复位 → 关页签回启动器 → 关面板/重开（localStorage 持久开合态）→ 通知
 `subagent_failed` 分类缺陷当场抓到当场修。走查设置已还原、走查会话/孤儿转录已清、通知清零。
 
-### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 插件贡献槽位（随插件批次）/ §3.28 diff 视图 / ~~§2.5 骨架~~（✅ v2.52）/ ~~§3.16 子 Agent 转录页签~~（✅ v2.52）/ ~~§3.13 通知浮层~~（✅ v2.51）/ 目的地页整版式 §3.29/§3.31）
+### ㉗·C diff 审阅 + 目的地整版式（✅ 已完成，v2.53）
+
+> 自规划拆批第三子批（收口批）。UI shell 文档 §3.28/§3.29/§3.31/§8.2 先行成文再动码。
+> 本批纯前端（数据源 = `edit_diff` 的 args.patch，零后端改动）。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| §3.28 审阅页签 | ✅ v2.53 | `lib/diff-parse.ts`（unified diff 解析：`---/+++` 头 + `@@` hunk + `+/-/空` 行，容错优先不抛错；`+N −M` 统计与 §3.8 同源；`collapseContext` 折叠上下文 >3 行成中缝）+ `ReviewTab.vue`（工作面板 `rev:<callId>` 页签：文件名头 wash-1（左路径 mono 省略 title 全路径 / 右统计）+ 整行染底 ok/danger 8% + 行首 1px 实色条 + 行号 32px 右对齐 + `… 展开 N 行` 只增不收回 + 只读无 composer）；数据 = `edit_diff` args.patch 快照进页签（同 callId 重开覆盖为最新态）；入口 = 工具行头行「看 diff」小钮 + 启动器「审阅」组 |
+| §3.29 市场卡 | ✅ v2.53 | PluginCard 对齐规范逐值：wash-1 圆角 14、34px 图标块（圆角 8）、标题 14px/500、元信息 11px ink-4（作者 · 版本）、描述 12px 截 3 行（line-clamp）、副作用 chips（复用 §3.4 徽章真实语义）、底部行左 license/origin 右动作区；网格 `repeat(auto-fill, minmax(280px,1fr))` gap 12px；**数据源差异如实记录**：本地市场无安装量/更新时间（不发明），分类 chips 无维度（随分发批次） |
+| §3.31 页头核对 | ✅ v2.53 | 导航轨细则（30px 行/2px 间隙/搜索胶囊/fit-content 返回）㉕·微调① 已兑现零改动；页头 56px/actions 插槽已达标——主按钮与 `…` 菜单留插槽按目的地实装（强加空菜单 = 发明）；**计数页签兑现**：扩展两页签改「发现 N / 已安装 N」（计数 11px ink-4，选中 wash-3 圆角块） |
+| 测试 | ✅ v2.53 | 纯前端批无 Rust 改动；桌面 108 绿、clippy 0、fmt、check_length、pnpm build 过；**更正 v2.52 行的桌面测试数笔误（110→108）** |
+
+验证：桌面 108 绿、clippy 0、fmt、check_length OK、pnpm build 过。
+实机走查（tauri dev + CDP 截图 27c-1…27c-4）：真实轮调 `edit_diff`（可补偿工具直接执行不经审批）
+→ 工具行「看 diff」钮 → 审阅页签（文件名头 +1 −0 / 行号双列 / 上下文原样 / 新增行绿染底+
+行首绿条全对；走查脚本 fsRoots 转义致 diff 实际未落盘——模型如实报告，与产品无关，审阅
+数据来自 args.patch 渲染不受影响）→ 扩展目的地：计数页签「发现 1 / 已安装 11」+ 规范卡片
+网格（280px 自适应/图标块/line-clamp-3）。走查设置已还原（fsRoots=[]）、走查会话与目标
+文件已清。
+
+### ㉗ UI 设计落地⑥：工作面板 + 通知（~~§3.13 通知浮层~~ ✅v2.51 / ~~§2.5 骨架 + §3.16 子转录页签~~ ✅v2.52 / ~~§3.28 diff + §3.29 网格 + §3.31 整版式~~ ✅v2.53 / ⬜ §2.5 插件贡献槽位——**随插件批次（plugin-api 末尾追加），出 UI 排期；UI shell 文档内设计项就此全部落地**）
 
 ---
 
