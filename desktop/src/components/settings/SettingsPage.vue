@@ -83,7 +83,8 @@ function sectionLabel(id: SettingsSectionId): string {
         >
           {{ settings.error }}
         </p>
-        <div class="mx-auto w-full max-w-[var(--lw-content-max)] px-6 py-6">
+        <!-- v3.6：设置正文列独立 token（--lw-settings-max 1024），w-full 随窗收缩 -->
+        <div class="mx-auto w-full max-w-[var(--lw-settings-max)] px-6 py-6">
           <component :is="panel" />
         </div>
       </div>

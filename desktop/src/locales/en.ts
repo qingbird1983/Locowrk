@@ -271,7 +271,7 @@ export default {
     chatTitle: "Chat behavior",
     chatWidthTitle: "Conversation width",
     chatWidthHint:
-      "Transcript and composer share one width (default 760, minimum 560). Dragging either edge of the conversation also adjusts it; the live width is clamped by the main area.",
+      "Transcript and composer share one width (default 760, minimum 560); dragging either conversation edge also works.",
     expandToolTitle: "Expand tool execution by default",
     enterToSendTitle: "Enter sends",
     usageReadoutTitle: "Usage readout",
@@ -310,9 +310,10 @@ export default {
     themeHint: "Applies immediately and is remembered. \"Follow system\" tracks your OS light/dark setting.",
     shortcutTitle: "Global shortcut",
     shortcut: "Toggle main window",
-    shortcutPlaceholder: "e.g. Ctrl+Shift+L",
-    shortcutHint:
-      "Applies immediately after saving (no restart). Press it in any app to show/hide the main window. If the key is taken by another program, saving fails — pick another combo.",
+    shortcutHint: "Re-registers immediately on save; press it in any app to show/hide the main window.",
+    shortcutRowHint: "Click the key button, then press the new combo; Esc cancels. Needs a modifier (or F1–F24).",
+    shortcutRecording: "Press a new key combo…",
+    shortcutRestore: "Restore default",
     // ⑪ Memory section (real section, replaces shell placeholder)
     memoryTitle: "Memory",
     memoryHint:
@@ -322,11 +323,11 @@ export default {
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
     memoryAutoExtract: "Auto-extract memories after conversations (implicit)",
     memoryAutoExtractHint:
-      "Off by default. When enabled, each finished turn asynchronously extracts durable facts (badged \"auto-extracted\") and an experience summary (below on the Memory page); experiences also require a configured embedding model.",
+      "Off by default; extracts durable facts and an experience summary after each turn (needs embedding).",
     // S1 shell governance section
     shellTitle: "Shell",
     shellHint:
-      "Read-only commands (ls / cat / grep / git status{'|'}log{'|'}diff{'|'}show) run via shell_read without approval, and only inside allowed file roots; other whitelisted commands go through the shell tool with per-call approval.",
+      "Read-only commands run via shell_read without approval and only inside allowed roots; the rest go through the shell tool with per-call approval.",
     shellUnlock: "Allow rm / sudo / chmod-class high-risk commands to reach approval (refused by default)",
     shellUnlockWarning:
       "When enabled, deletion, privilege, permission and disk commands are no longer refused outright — each call opens a confirmation you approve, and the responsibility is yours. Interpreter and network commands (python / bash / curl, ...) stay permanently locked regardless of this switch.",
@@ -349,7 +350,7 @@ export default {
     fsRootsEmpty: "No workspace folders — tools can only reach the data directory.",
     embeddingTitle: "Embedding model (semantic search)",
     embeddingHint:
-      "Shared vector model for tool semantic search, experiences and implicit extraction. Leave empty = smart layer absent (auto degrade: tool search falls back to keywords, no experiences); chat is unaffected.",
+      "Shared vector model for tool search, experiences and implicit extraction; empty = smart layer absent, chat unaffected.",
     embeddingModel: "Model name",
     embeddingBaseUrl: "API endpoint",
     embeddingBaseUrlHint: "OpenAI-compatible /v1/embeddings; empty falls back to localhost:11434 for Ollama, otherwise the main model endpoint.",
@@ -365,7 +366,7 @@ export default {
     pluginsHint: "Idle auto-disable — never automatic by default (prompt only); enabling means you accept background disabling.",
     autoDisableDays: "Auto-disable after (days)",
     autoDisableDaysHint:
-      "0 = off (default); 7-365 days. Applies to installed third-party plugins only (built-ins excluded); disabling the switch never re-enables plugins.",
+      "0 = off (default); 7–365 days. Third-party plugins only; switching off never re-enables plugins.",
     // ⑨ Context management section (real section, replaces shell placeholder)
     contextTitle: "Context management",
     contextHint:

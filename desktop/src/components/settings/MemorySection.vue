@@ -60,7 +60,7 @@ function save() {
         type="number"
         min="1"
         max="20"
-        class="w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
+        class="lw-field w-[140px] px-2 py-1.5 text-xs"
       />
     </SettingsRow>
 

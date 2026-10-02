@@ -5,13 +5,14 @@
  * 对话区边缘双柄同写这一份）；保存即生效。
  * 行版式（§3.32·七 v3.5）：左行名右控件；布尔项用 SettingsToggle。
  */
-import { reactive, watch } from "vue";
+import { computed, reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settings";
 import { CHAT_CONTENT_WIDTH_DEFAULT, CHAT_CONTENT_WIDTH_MIN } from "../../lib/chat-width";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import SettingsSaveRow from "./SettingsSaveRow.vue";
+import SettingsSegmented from "./SettingsSegmented.vue";
 import SettingsToggle from "./SettingsToggle.vue";
 
 const { t } = useI18n();
@@ -44,6 +45,11 @@ function save() {
     usageReadout: form.usageReadout,
   });
 }
+
+const readoutOptions = computed(() => [
+  { value: "used", label: t("settings.usageReadout_used") },
+  { value: "remaining", label: t("settings.usageReadout_remaining") },
+]);
 </script>
 
 <template>
@@ -60,7 +66,7 @@ function save() {
         :min="CHAT_CONTENT_WIDTH_MIN"
         :max="4000"
         step="20"
-        class="w-24 rounded-lg border border-line-strong bg-page px-2 py-1 text-xs outline-none"
+        class="lw-field w-24 px-2 py-1 text-xs"
       />
     </SettingsRow>
 
@@ -73,22 +79,11 @@ function save() {
     </SettingsRow>
 
     <SettingsRow :title="t('settings.usageReadoutTitle')">
-      <div class="flex w-fit gap-1 rounded-lg border border-line-strong p-1">
-        <button
-          v-for="o in ['used', 'remaining']"
-          :key="o"
-          type="button"
-          class="rounded-md px-3 py-1 text-xs font-medium"
-          :class="
-            form.usageReadout === o
-              ? 'bg-surface-2 text-ink-1'
-              : 'text-ink-4 hover:text-ink-2'
-          "
-          @click="form.usageReadout = o"
-        >
-          {{ t(`settings.usageReadout_${o}`) }}
-        </button>
-      </div>
+      <SettingsSegmented
+        v-model="form.usageReadout"
+        :options="readoutOptions"
+        :label="t('settings.usageReadoutTitle')"
+      />
     </SettingsRow>
   </SettingsGroup>
 

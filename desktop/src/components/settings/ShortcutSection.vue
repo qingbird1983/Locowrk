@@ -1,49 +1,56 @@
 <script setup lang="ts">
 /**
  * 设置分区：全局快捷键（settings.json `shortcut` 区，保存即重注册）。
+ * v3.6（用户裁定"快捷键可自定义"）：录制式改键（SettingsKeyRecorder）+
+ * 组头「恢复默认」（回落 Ctrl+Shift+L = 后端 SHORTCUT_DEFAULT）。提交走
+ * saveShortcut（后端 parse 校验 + apply_shortcut 即时重注册；键位被占用
+ * 时保存失败、错误条走板面级 settings.error，如实呈现）。
  * 行版式（§3.32·七 v3.5）：左行名右控件。
  */
-import { reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settings";
 import SettingsGroup from "./SettingsGroup.vue";
+import SettingsKeyRecorder from "./SettingsKeyRecorder.vue";
 import SettingsRow from "./SettingsRow.vue";
-import SettingsSaveRow from "./SettingsSaveRow.vue";
+
+/** 与后端 settings.rs SHORTCUT_DEFAULT 一致（恢复默认回落值）。 */
+const SHORTCUT_DEFAULT = "Ctrl+Shift+L";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
 
-const form = reactive({ shortcut: "" });
-watch(
-  () => settings.view,
-  (v) => {
-    if (!v) return;
-    form.shortcut = v.shortcut;
-  },
-  { immediate: true },
-);
+function commit(accelerator: string) {
+  void settings.saveShortcut(accelerator);
+}
 
-function save() {
-  void settings.saveShortcut(form.shortcut.trim());
+function restoreDefault() {
+  void settings.saveShortcut(SHORTCUT_DEFAULT);
 }
 </script>
 
 <template>
-  <SettingsGroup>
+  <SettingsGroup
+    :title="t('settings.shortcutTitle')"
+    :hint="t('settings.shortcutHint')"
+  >
+    <template #action>
+      <button
+        type="button"
+        class="lw-btn px-2 py-1 text-[11px] text-ink-3"
+        :disabled="settings.saving"
+        @click="restoreDefault"
+      >
+        {{ t("settings.shortcutRestore") }}
+      </button>
+    </template>
     <SettingsRow
       :title="t('settings.shortcut')"
-      :hint="t('settings.shortcutHint')"
-      control-id="shortcut-input"
+      :hint="t('settings.shortcutRowHint')"
     >
-      <input
-        id="shortcut-input"
-        v-model="form.shortcut"
-        type="text"
-        :placeholder="t('settings.shortcutPlaceholder')"
-        class="w-44 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-xs placeholder:text-ink-5"
+      <SettingsKeyRecorder
+        :model-value="settings.view?.shortcut ?? SHORTCUT_DEFAULT"
+        @commit="commit"
       />
     </SettingsRow>
   </SettingsGroup>
-
-  <SettingsSaveRow class="mt-3" @save="save" />
 </template>

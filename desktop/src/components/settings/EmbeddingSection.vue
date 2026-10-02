@@ -88,7 +88,7 @@ function clearKey() {
         v-model="form.model"
         type="text"
         placeholder="nomic-embed-text / text-embedding-3-small"
-        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
+        class="lw-field w-full min-w-[140px] px-2 py-1.5 text-xs placeholder:text-ink-5"
       />
     </SettingsRow>
 
@@ -102,7 +102,7 @@ function clearKey() {
         v-model="form.baseUrl"
         type="text"
         :placeholder="fallbackHint(settings.view?.embedding.baseUrl, settings.view?.llm.provider ?? '') || t('settings.embeddingBaseUrlPlaceholder')"
-        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
+        class="lw-field w-full min-w-[140px] px-2 py-1.5 text-xs placeholder:text-ink-5"
       />
     </SettingsRow>
 
@@ -113,7 +113,7 @@ function clearKey() {
         type="password"
         autocomplete="off"
         :placeholder="settings.view?.embedding.apiKeySet ? t('settings.apiKeyKeep') : t('settings.embeddingApiKeyPlaceholder')"
-        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
+        class="lw-field w-full min-w-[140px] px-2 py-1.5 text-xs placeholder:text-ink-5"
       />
     </SettingsRow>
 
@@ -128,7 +128,7 @@ function clearKey() {
       </template>
       <button
         type="button"
-        class="shrink-0 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+        class="lw-btn shrink-0 px-3 py-1.5 text-xs text-ink-2"
         :disabled="form.probing"
         @click="probe"
       >
@@ -141,7 +141,7 @@ function clearKey() {
     <button
       v-if="settings.view?.embedding.apiKeySet"
       type="button"
-      class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-3 transition hover:bg-surface-1"
+      class="lw-btn px-3 py-1.5 text-xs text-ink-3"
       :disabled="settings.saving"
       @click="clearKey"
     >

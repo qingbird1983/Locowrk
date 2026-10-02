@@ -385,6 +385,26 @@
 | 12 分区改行式 | ✅ v2.43 | 外观/语言（就地生效无保存钮）/对话（宽度数字 + 两开关 + 读数分段）/上下文（滑条 wide、当前值·建议·警告走 #detail；策略竖排 radio → 下拉）/快捷键/记忆/插件/命令终端（开关 + 行外警告条与重启提示）/模型/嵌入（文本输入 min-140 自适应、检测行 #detail 报维度或错误）/工具与暴露（三分块：截断行组、fsRoots 行内移除、快照整块）/会话与数据（只读路径整块）；卡内与页头重复的分区 h3 退役 |
 | i18n 修正 | ✅ v2.43 | 新键 embeddingProbeTitle / fsRootsRemove（zh/en）；陈旧文案纠偏：sessionsMemory「会话保存在内存中重启清空」不符 ⑲ 事实 → 「逐事件落盘 sessions/ 重启恢复」；**走查修真实缺陷：shellHint 裸 `\|` 被 vue-i18n 当复数分隔符、面板只显示"log"**（`{'\|'}` 转义；§七规则 11 扩为 @/\|/{}/保留字符必须转义——㉕ `@` 白屏同源第二例） |
 
+### ㉕·微调① 设置页目检：两色控件体系 + 启动白屏核查（✅ 已完成，v2.44）
+
+> 用户 2026-10-03 目检 11 条裁定（同日起进入"一页完全调完再到下一页"节奏，设置页为
+> 第一页）。批首先改 UI shell 文档 v3.6（§3.31 导航轨 / §3.32·七 两色控件体系 /
+> §6.1 阴影例外 / §6.4 `--lw-settings-max` / §7 规则 12 字段类焦点环豁免）再动码。
+> 模型（llm）分区按裁定豁免，待后期单独大改版。实机走查（WebView2 CDP）逐条取证：
+> 行高 30/间隙 2px/搜索胶囊白底距顶 50/返回应用 84px fit-content、列宽 995→窄窗 615
+> 无横溢、分段选中灰片、下拉白面板浅高亮、嵌入输入聚焦无环、明暗两主题自洽。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 导航轨（①②③④） | ✅ v2.44 | 项行高 28→**30**（+2px）+ **项间 2px 间隙**（高亮瓦片不粘连，组内 flex-col gap）；搜索胶囊**移出 46px 带**（带退化为纯拖拽区）自占一行、底 `--lw-bg` 白 + shadow-raised；「‹ 返回应用」宽度按字符内容收缩（`sidenav-item--fit` fit-content，不做整行瓦片） |
+| 正文列（⑤） | ✅ v2.44 | 新量纲 token **`--lw-settings-max: 1024px`**（760 加宽 +34.8% ≥ 1/3）；`w-full max-w` 封顶居中，窗口变窄随窗收缩（CDP 实测 1280→995px、900→615px、无横向溢出） |
+| 分段控件（⑥） | ✅ v2.44 | 新组件 `SettingsSegmented.vue`（radiogroup）：容器 = 白底台面（raised + shadow-raised）圆角 full + p-1；**选中片 = `--lw-bg-side`（左轨的灰）**；外观主题三档 / 对话用量读数二档同批换装 |
+| 下拉（⑦） | ✅ v2.44 | 新组件 `SettingsSelect.vue` 替代原生 select（语言 / 压缩策略；模型页豁免）：触发器白底台面无点击环；弹出面板 teleport 到 body——白底（raised）+ 1px line + 圆角 14 + shadow-raised；选项 hover wash-2、**选中 wash-3（与导航轨统一，吃掉系统蓝高亮）**+ 勾标；多类别组间 1px 发丝线 + 11px 组名；↑↓/Home/End/Enter/Esc 键盘全套 + `aria-activedescendant`；语言 中文↔English 实测互切 |
+| 快捷键可自定义（⑧） | ✅ v2.44 | 新组件 `SettingsKeyRecorder.vue` 录制式改键：点键位钮进录制态 → `e.code` 归一化（免 Shift 符号干扰）→ `Ctrl/Alt/Shift/Meta+主键` 串走既有 `saveShortcut` 即时重注册；纯修饰键等待、Esc 取消、无修饰键且非 F 键拒收；组头右侧「**恢复默认**」（回落 Ctrl+Shift+L）；CDP 真键序录制 Ctrl+Shift+K **settings.json 落盘取证** + 恢复默认回 Ctrl+Shift+L |
+| 控件统一（⑩） | ✅ v2.44 | `.lw-field` / `.lw-btn` 两个全局公共类（style.css）：raised 底 + shadow-raised 微悬浮 + 无边框 + hover `--lw-ctl-hover`（新 token 双形双主题：亮 #f3f3f3 / 暗 #303030）；**字段类聚焦不出环**（§7 规则 12 用户裁定豁免；按钮键盘 :focus-visible 环保留）；对话宽度数字框、记忆/插件/开发者数值框、嵌入三输入、检测/刷新/添加/清除 Key/保存按钮全量换装 |
+| 说明一行封顶（⑨） | ✅ v2.44 | 组说明与行说明超一行文案全量精简（zh/en）：chatWidth / shell（顺带褪掉 `{'\|'}` 转义）/ memoryAutoExtract / embedding / autoDisableDays / shortcut 六处；新键 shortcutRowHint / shortcutRecording / shortcutRestore，删 shortcutPlaceholder |
+| 启动白屏核查（用户追加） | ✅ v2.44 | **根因：窗口默认 `visible:true`，Tauri 在 setup 前即建窗显示——WebView2 初始化 + 前端加载全程露白**（后端 init_state 实测仅 ~40ms 不在华点）；修复 = 窗口 `visible:false` + `backgroundColor` 起步，前端 mounted+2×rAF 首帧后 `show()`+`setFocus()`（capabilities +allow-show/allow-set-focus），Rust 侧 8s 兜底显窗（前端崩溃也不吞窗口）；lib.rs 加 boot 计时日志（builder→setup 668ms→init_state 40ms），前端热启动首帧实测 432ms |
+
 ### ㉖ UI 设计落地⑤：审批决策卡 + 会话运营（⬜ §3.17 三键卡（后端：决策枚举/风险档/超时）/ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联）
 
 ### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）

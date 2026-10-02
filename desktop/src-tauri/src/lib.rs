@@ -67,10 +67,17 @@ mod tests_stream;
 pub fn run() {
     use tauri::Manager;
 
+    // 启动计时（白屏核查 2026-10-02）：main 入口 → setup（≈配置窗口创建点）
+    // → init_state 完成。窗口 visible:false 起步（tauri.conf.json），首帧由
+    // 前端显窗——WebView2 初始化 + 前端加载期间桌面不再露白；前端 8s 未就绪
+    // 则兜底显窗（宁冒白屏风险也不吞窗口，㉕ i18n 白屏先例）。
+    let boot = std::time::Instant::now();
+
     tracing_subscriber::fmt()
         .with_target(true)
         .with_max_level(tracing::Level::INFO)
         .init();
+    tracing::info!("boot: entering builder");
 
     tauri::Builder::default()
         .plugin(tray::plugin())
@@ -80,9 +87,33 @@ pub fn run() {
         // ⑱ 原生目录选择（UI shell 文档 §7 规则 8）：pick_directory 命令
         // Rust 侧直呼，无 JS guest、无需 capability
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
+        .setup(move |app| {
+            tracing::info!(
+                ms = boot.elapsed().as_millis() as u64,
+                "boot: setup entered (config window created, hidden)"
+            );
+            let init = std::time::Instant::now();
             app.manage(state::init_state(app.handle().clone()));
+            tracing::info!(
+                ms = init.elapsed().as_millis() as u64,
+                "boot: init_state done"
+            );
             tray::setup(app.handle())?;
+            // 兜底显窗：前端崩溃 / 白屏异常时窗口不能永远不出现
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(8));
+                if let Some(win) = handle.get_webview_window("main") {
+                    if !win.is_visible().unwrap_or(true) {
+                        let _ = win.show();
+                        tracing::warn!("boot: frontend not ready in 8s, showing window anyway");
+                    }
+                }
+            });
+            tracing::info!(
+                ms = boot.elapsed().as_millis() as u64,
+                "boot: setup done — window hidden until frontend first paint"
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -106,6 +106,9 @@
   --lw-switch-track-hover: rgb(255 255 255 / 0.18);
   --lw-switch-knob: #afafaf;
 
+  /* 两色控件体系（§3.32·七 v3.6）：台面 hover 档（底 = raised + shadow-raised） */
+  --lw-ctl-hover: #303030;
+
   /* 实色三元组（tailwind 消费，保透明度修饰符） */
   --lw-rgb-bg: 24 24 24;
   --lw-rgb-bg-side: 0 0 0;
@@ -123,6 +126,7 @@
   --lw-rgb-info: 175 175 175;
   --lw-rgb-purple: 194 122 255;
   --lw-rgb-focus: 255 255 255;
+  --lw-rgb-ctl-hover: 48 48 48;
 }
 
 /* --- 3. 亮色 ------------------------------------------------------------- */
@@ -179,6 +183,9 @@
   --lw-switch-track-hover: rgb(26 28 31 / 0.18);
   --lw-switch-knob: #ffffff;
 
+  /* 两色控件体系（v3.6，亮色 hover 档） */
+  --lw-ctl-hover: #f3f3f3;
+
   --lw-rgb-bg: 255 255 255;
   --lw-rgb-bg-side: 243 243 243;
   --lw-rgb-bg-dock: 250 250 250;
@@ -195,6 +202,7 @@
   --lw-rgb-info: 93 93 93;
   --lw-rgb-purple: 124 58 237;
   --lw-rgb-focus: 26 28 31;
+  --lw-rgb-ctl-hover: 243 243 243;
 }
 
 /* --- 4. 形状 / 量纲 / 动效 token（主题无关） ------------------------------ */
@@ -222,6 +230,7 @@
   --lw-field-h: 38px; /* 一切输入/下拉统一高度 */
   --lw-content-max: 760px; /* 转录列 + composer 列 + 消息正文宽三者同源（§2.7） */
   --lw-content-min: 560px;
+  --lw-settings-max: 1024px; /* 设置页正文列（§3.31 v3.6：独立于对话列，随窗收缩） */
   --lw-chat-gutter: 24px; /* 列宽单侧留白；上限 = 主区宽 − 2 × 该值 */
   --lw-wincontrols: 120px; /* 46px 带右端窗口控制车道 */
   --lw-panel-min: 244px;
@@ -535,6 +544,35 @@
   background: var(--lw-wash-2);
   color: var(--lw-ink-1);
 }
+
+/* ===========================================================================
+ * 两色控件体系（UI shell doc §3.32·七 v3.6，用户目检裁定）：一切表单控件
+ * 统一"白底台面"——raised 底 + shadow-raised 微悬浮、无边框，hover 走
+ * --lw-ctl-hover；同类特性全局适用（模型分区暂豁免，随其大改版收编）。
+ *   .lw-field = 字段（文本/数值输入、下拉触发器）：聚焦不出环（§7-12 豁免）
+ *   .lw-btn   = 白底动作按钮（探测/刷新/保存/恢复默认）：键盘 :focus-visible
+ *               环保留（点击本就不出环）
+ * =========================================================================== */
+.lw-field,
+.lw-btn {
+  background: var(--lw-raised);
+  box-shadow: var(--lw-shadow-raised);
+  border: 0;
+  border-radius: var(--lw-r-sm);
+}
+.lw-field:hover,
+.lw-btn:hover:not(:disabled) {
+  background: var(--lw-ctl-hover);
+}
+.lw-field:focus,
+.lw-field:focus-visible {
+  outline: none;
+}
+.lw-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+/* 数值输入的原生上下旋钮在白底台面上保持默认字形即可，不另画。 */
 
 /* 助手 markdown（§6.5：段落/列表/行内代码/代码块/表格） */
 .md {

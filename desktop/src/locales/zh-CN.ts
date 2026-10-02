@@ -268,7 +268,7 @@ export default {
     chatTitle: "对话行为",
     chatWidthTitle: "对话宽度",
     chatWidthHint:
-      "转录列与输入框同宽（缺省 760，下限 560）。拖拽对话区两侧的边缘也可调；实际宽度还会被主区宽度收窄。",
+      "转录列与输入框同宽（缺省 760，下限 560）；拖拽对话区两侧边缘也可调。",
     expandToolTitle: "默认展开工具执行过程",
     enterToSendTitle: "回车发送",
     usageReadoutTitle: "上下文用量读数",
@@ -304,9 +304,10 @@ export default {
     themeHint: "立即生效并记住选择；「跟随系统」随系统明暗自动切换。",
     shortcutTitle: "全局快捷键",
     shortcut: "切换主窗口",
-    shortcutPlaceholder: "如 Ctrl+Shift+L",
-    shortcutHint:
-      "保存后立即生效（无需重启）；在任意应用中按下即可显示/隐藏主窗口。键位被其他程序占用时保存会报错，换一个组合即可。",
+    shortcutHint: "保存后立即重注册生效；在任意应用中按下即可显示/隐藏主窗口。",
+    shortcutRowHint: "点击键位按钮后按下新的组合键，Esc 取消；需含修饰键或 F1–F24。",
+    shortcutRecording: "按下新的组合键…",
+    shortcutRestore: "恢复默认",
     // ⑪ 记忆分区（真分区，替换壳批次占位）
     memoryTitle: "记忆",
     memoryHint: "相关记忆会自动注入对话（走系统提示，不占压缩空间）；每轮条数可调。",
@@ -314,12 +315,11 @@ export default {
     memoryTopK: "每轮注入条数",
     memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
     memoryAutoExtract: "对话后自动提取记忆（隐式提取）",
-    memoryAutoExtractHint:
-      "默认关。开启后每轮对话结束异步提取值得记住的事实（标「自动提取」）与经历摘要（记忆页下方）；需要已配置 embedding 才会沉淀经历。",
+    memoryAutoExtractHint: "默认关；每轮对话结束异步提取事实与经历摘要，需已配置 embedding。",
     // S1 shell 治理分区
     shellTitle: "命令终端",
     shellHint:
-      "只读命令（ls / cat / grep / git status{'|'}log{'|'}diff{'|'}show）经 shell_read 免审批执行，且只能访问允许根内的文件；其余白名单命令走 shell 工具、逐条审批。",
+      "只读命令经 shell_read 免审批执行，且只能访问允许根内的文件；其余白名单命令走 shell 工具、逐条审批。",
     shellUnlock: "允许 rm / sudo / chmod 等高危命令进入审批（默认直接拒绝）",
     shellUnlockWarning:
       "开启后，删除、提权、改权限、写磁盘类命令不再被直接拒绝，而是弹出确认框由你逐条放行——放行责任在你。解释器与网络类命令（python / bash / curl 等）仍然永久禁止，不受此开关影响。",
@@ -332,7 +332,7 @@ export default {
     toolsMaxHint: "1–200，缺省 20；always 工具与 search_tools 元工具不受截断影响。",
     embeddingTitle: "Embedding 模型（语义检索基建）",
     embeddingHint:
-      "工具语义检索、经历记忆、隐式提取共用的向量化模型。留空 = 智能层缺席（自动降级：工具检索退关键词、不沉淀经历），聊天不受影响。",
+      "工具语义检索、经历记忆、隐式提取共用的向量化模型；留空 = 智能层缺席，聊天不受影响。",
     embeddingModel: "模型名",
     embeddingBaseUrl: "API 端点",
     embeddingBaseUrlHint: "OpenAI 兼容 /v1/embeddings；留空时 Ollama 回本机 11434，其余用上方模型端点。",
@@ -347,8 +347,7 @@ export default {
     pluginsTitle: "插件管理",
     pluginsHint: "闲置自动停用——默认永不自动停用（只提示），开启即表示同意后台停用。",
     autoDisableDays: "自动停用天数",
-    autoDisableDaysHint:
-      "0 = 关闭（缺省）；7–365 天。只作用于安装的第三方插件（内置插件不参与）；关闭不会自动恢复已停用插件。",
+    autoDisableDaysHint: "0 = 关闭（缺省）；7–365 天。只作用于第三方插件；关闭不会自动恢复已停用插件。",
     callTimeout: "单次工具调用超时（秒）",
     callTimeoutHint: "宿主强制上限，保存即生效（5–3600 秒）",
     // ⑱ 工作区目录（fs roots 选择器）

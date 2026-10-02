@@ -49,7 +49,7 @@ function save() {
         min="0"
         max="365"
         step="1"
-        class="w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
+        class="lw-field w-[140px] px-2 py-1.5 text-xs"
       />
     </SettingsRow>
   </SettingsGroup>

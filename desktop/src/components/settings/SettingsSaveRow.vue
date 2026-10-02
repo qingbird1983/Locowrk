@@ -17,7 +17,7 @@ defineEmits<{ save: [] }>();
 <template>
   <div class="flex items-center gap-2 px-1">
     <button
-      class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
+      class="lw-btn px-4 py-1.5 text-xs font-semibold text-ink-1"
       :disabled="settings.saving"
       @click="$emit('save')"
     >

@@ -15,12 +15,17 @@ import { FALLBACK_WINDOW_TOKENS, suggestedThreshold } from "../../lib/context";
 import { useSettingsStore } from "../../stores/settings";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
+import SettingsSelect from "./SettingsSelect.vue";
 import SettingsSaveRow from "./SettingsSaveRow.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
 
 const STRATEGIES = ["sliding_window", "layered", "summary_only"] as const;
+
+const strategyOptions = computed(() =>
+  STRATEGIES.map((s) => ({ value: s, label: t(`settings.strategy_${s}`) })),
+);
 
 // 表单是投影的本地可编辑副本（S2：只含阈值 + 策略）
 const form = reactive({
@@ -84,17 +89,14 @@ function save() {
       />
     </SettingsRow>
 
-    <!-- 压缩策略三档（§3.3）：互斥多选一用下拉（§3.32·七 v3.5） -->
-    <SettingsRow :title="t('settings.strategy')" control-id="context-strategy">
-      <select
-        id="context-strategy"
+    <!-- 压缩策略三档（§3.3）：互斥多选一用下拉（§3.32·七 v3.5；
+         v3.6 起 = SettingsSelect 白底台面 + 白面板） -->
+    <SettingsRow :title="t('settings.strategy')">
+      <SettingsSelect
         v-model="form.strategy"
-        class="w-44 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
-      >
-        <option v-for="s in STRATEGIES" :key="s" :value="s">
-          {{ t(`settings.strategy_${s}`) }}
-        </option>
-      </select>
+        :entries="strategyOptions"
+        :label="t('settings.strategy')"
+      />
     </SettingsRow>
   </SettingsGroup>
 
