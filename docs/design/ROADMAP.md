@@ -405,6 +405,31 @@
 | 说明一行封顶（⑨） | ✅ v2.44 | 组说明与行说明超一行文案全量精简（zh/en）：chatWidth / shell（顺带褪掉 `{'\|'}` 转义）/ memoryAutoExtract / embedding / autoDisableDays / shortcut 六处；新键 shortcutRowHint / shortcutRecording / shortcutRestore，删 shortcutPlaceholder |
 | 启动白屏核查（用户追加） | ✅ v2.44 | **根因：窗口默认 `visible:true`，Tauri 在 setup 前即建窗显示——WebView2 初始化 + 前端加载全程露白**（后端 init_state 实测仅 ~40ms 不在华点）；修复 = 窗口 `visible:false` + `backgroundColor` 起步，前端 mounted+2×rAF 首帧后 `show()`+`setFocus()`（capabilities +allow-show/allow-set-focus），Rust 侧 8s 兜底显窗（前端崩溃也不吞窗口）；lib.rs 加 boot 计时日志（builder→setup 668ms→init_state 40ms），前端热启动首帧实测 432ms |
 
+### ㉕·微调② 设置页目检第 2 轮 + 冷启动根因与闪屏（✅ 已完成，v2.45）
+
+> 用户 2026-10-03 目检第 2 轮 8 条 + 追问 3 条 + 弹出面板 2 条。冷启动二次核查
+> （用户追问"是不是加载插件"）：**插件无辜**——init_state 含 10 插件装载实测
+> 37–51ms；真凶 = 本机 IPv4 回环每个 TCP 连接被过滤驱动拖 ~2s（curl 实测
+> 127.0.0.1 = 2.02s vs ::1 = 0.02s；机器常驻 clash-verge/mihomo 疑 TUN 钩子）
+> × vite dev 136 模块请求（resource timing：main.ts 单请求卡 25s、71 请求
+> >200ms）→ FCP 31.4–35.5s。批首按纪律先改 UI shell 文档 v3.7 再动码。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| ① 参照字体档案 | ✅ v2.45 | ZCode 源码实测（F:\Warehouse\Github\ZCode，Explore 代理）：无 webfont、Tailwind v4 缺省 sans 栈（Win = Segoe UI / YaHei）、基准 14px 可调 12–20、导航行 14px/400 高 32 圆角 12、组标签 12px/500 前景 40%、图标 lucide 16px stroke-2 全前景；档案入 UI shell 文档 §3.32·七，**是否对齐待用户裁定**（Locowrk 现状 13px/30px/无图标） |
+| ② 分段滑动游标 | ✅ v2.45 | SettingsSegmented 选中片改绝对定位 `--lw-bg-side` 游标（offsetLeft/Width 挂载/换值/换文案/字体就绪四时机校准，首测显形前一帧防开场滑入）+ `.lw-seg-thumb` 150ms ease-out；主题档「跟随系统」→**「系统」**；**动效开关 = Win11 设置 > 辅助功能 > 视觉效果 > 动画效果**（WebView2 读此项，不读老"性能选项"对话框；用户开启后实机确认动效正常） |
+| ③ 数字输入单参 | ✅ v2.45 | `.lw-field-num`（style.css 一处定义 **宽 140 + 高 28**，用户裁定"统一 = 一个参数值"）——对话宽度/每轮注入条数/Top-N/调用超时/闲置天数五处接线，CDP 实测双点 140×28 一致 |
+| ④⑤ 快捷键定宽 | ✅ v2.45 | 录制钮 **160px 内容居中**（键位长短不一按钮恒定）；「恢复默认」组头 #action 与块说明**同一行** + undo 图标 + mr-3 补齐组头 px-1 → 右缘与录制钮对齐（实测同行、rightDelta=0、160/160） |
+| ⑥ 滑块减淡 | ✅ v2.45 | 新 token `--lw-slider-accent`（亮 #a3a3a3 / 暗 #b0b0b0，双形态）替代 accent 直用（accent-color 实测 rgb(163,163,163)） |
+| ⑦ 下拉说明行 | ✅ v2.45 | `SelectFlat.desc`：触发器只显主名，括号说明进面板 11px ink-3；带说明面板 minWidth 224 + **右缘对齐触发器停靠**（实测 rightDelta=0，左缘视口钳制）+ **打开不预置高亮**（activeIndex=-1，hover wash-2 / 键盘首按落选中项才亮）——弹出面板两条用户裁定 |
+| ⑧ 警示气泡 | ✅ v2.45 | 新 `HoverTip.vue`（warn ⚠ 13px + hover 白底气泡 raised+shadow-raised+max-w 280 承载解锁后果与重启提示，纯 CSS hover 显隐实测 visible→hidden）；行下常驻警告条退役（§3.32·七 v3.7 成规） |
+| 组头动作钮 | ✅ v2.45 | 添加目录…/刷新从 11px 小钮提到**标准 28px 高**（px-3 py-1.5 text-xs，与行内控件同规格；用户裁定"按钮怎么这么小"） |
+| 闪屏 + 兜底 | ✅ v2.45 | 新 `public/splash.html` 静态闪屏窗（零脚本内联样式，配置窗口序第一先建先画）+ lib.rs `listen("lw:frontend-ready")`（前端首帧 show 后 emit）关闪屏 + 兜底 8s→**40s**（实测健康冷启动 31.4s + 余量，主窗 hidden 直至首帧）；闪屏截图 + body 文本取证，关闭走事件路径（无兜底警告） |
+| 冷启动根因修复 | ✅ v2.45 | `vite.config.ts` `server.host: "::1"` 只绑 IPv6 回环整体绕开被过滤的 IPv4——**稳态 FCP 31,400–35,500ms → 108–140ms**（120 请求零慢请求、最慢单请求 26ms）；代价 = vite 重启后首回依赖预构建 ~18s 一次性（闪屏兜住）；生产构建无 vite 不受影响 |
+
+验证：vue-tsc+vite 构建过、cargo test/fmt/clippy 绿（lib.rs 闪屏接线后全量重编）、
+check_length OK；CDP 走查逐项数值取证（见各行）+ 亮暗两主题截图 + 闪屏截图。
+
 ### ㉖ UI 设计落地⑤：审批决策卡 + 会话运营（⬜ §3.17 三键卡（后端：决策枚举/风险档/超时）/ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联）
 
 ### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）

@@ -8,6 +8,7 @@
  * 垂直居中、shrink-0、max-w 240、min-h 38 与字段同高）。controlId 给了
  * 就把行名连成 label（点击行名聚焦控件）；wide 放开控件列 240 上限
  * （滑条等宽控件用，参考对象 .settings-font-size 同一逃生口）。
+ * #title-extra（v3.7）：行名尾部挂件（警示气泡 HoverTip 等行内附件）。
  */
 withDefaults(
   defineProps<{
@@ -28,7 +29,7 @@ withDefaults(
         :for="controlId"
         class="block text-[13px] font-medium leading-tight text-ink-1"
       >
-        {{ title }}
+        {{ title }}<slot name="title-extra" />
       </component>
       <p v-if="hint" class="mt-1 text-[11.5px] leading-relaxed text-ink-4">
         {{ hint }}

@@ -24,7 +24,11 @@ const settings = useSettingsStore();
 const STRATEGIES = ["sliding_window", "layered", "summary_only"] as const;
 
 const strategyOptions = computed(() =>
-  STRATEGIES.map((s) => ({ value: s, label: t(`settings.strategy_${s}`) })),
+  STRATEGIES.map((s) => ({
+    value: s,
+    label: t(`settings.strategy_${s}`),
+    desc: t(`settings.strategy_${s}_desc`),
+  })),
 );
 
 // 表单是投影的本地可编辑副本（S2：只含阈值 + 策略）
@@ -85,12 +89,12 @@ function save() {
         min="10"
         max="90"
         step="10"
-        class="w-48 accent-[var(--lw-accent)]"
+        class="w-48 accent-[var(--lw-slider-accent)]"
       />
     </SettingsRow>
 
     <!-- 压缩策略三档（§3.3）：互斥多选一用下拉（§3.32·七 v3.5；
-         v3.6 起 = SettingsSelect 白底台面 + 白面板） -->
+         v3.6 白底台面 + 白面板；v3.7 主名留触发器、说明进面板小字） -->
     <SettingsRow :title="t('settings.strategy')">
       <SettingsSelect
         v-model="form.strategy"

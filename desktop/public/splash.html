@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Locowrk</title>
+    <!--
+      启动闪屏（白屏核查 2026-10-03）：静态零依赖页——冷启动时 WebView2
+      初始化 + vite 模块交付动辄数十秒，主窗 visible:false 藏到首帧，用户
+      双击后长时间"什么都没有"。本页无脚本、内联样式，自己的 webview 一
+      就绪立刻能画；主窗首帧后发 lw:frontend-ready，Rust 侧关本窗。
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #1a1c1f;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+          "Microsoft YaHei", sans-serif;
+        user-select: none;
+        cursor: default;
+        overflow: hidden;
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+      .logo {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: rgba(26, 28, 31, 0.52);
+        font-size: 12px;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: #a3a3a3;
+        animation: lw-boot-pulse 1.1s ease-in-out infinite;
+      }
+      @keyframes lw-boot-pulse {
+        0%,
+        100% {
+          opacity: 0.35;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dot {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="logo">Locowrk</div>
+      <div class="row"><span class="dot"></span><span>正在启动…</span></div>
+    </div>
+  </body>
+</html>

@@ -66,7 +66,7 @@ const readoutOptions = computed(() => [
         :min="CHAT_CONTENT_WIDTH_MIN"
         :max="4000"
         step="20"
-        class="lw-field w-24 px-2 py-1 text-xs"
+        class="lw-field lw-field-num px-2 text-xs"
       />
     </SettingsRow>
 

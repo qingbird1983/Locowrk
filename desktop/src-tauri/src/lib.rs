@@ -65,12 +65,14 @@ mod tests_session_log;
 mod tests_stream;
 
 pub fn run() {
-    use tauri::Manager;
+    use tauri::{Listener, Manager};
 
-    // 启动计时（白屏核查 2026-10-02）：main 入口 → setup（≈配置窗口创建点）
-    // → init_state 完成。窗口 visible:false 起步（tauri.conf.json），首帧由
-    // 前端显窗——WebView2 初始化 + 前端加载期间桌面不再露白；前端 8s 未就绪
-    // 则兜底显窗（宁冒白屏风险也不吞窗口，㉕ i18n 白屏先例）。
+    // 启动计时（白屏核查 2026-10-02/03）：main 入口 → setup（≈配置窗口创建点）
+    // → init_state 完成。主窗 visible:false 起步（tauri.conf.json），首帧由前端
+    // 显窗；splash 闪屏窗（静态 splash.html，零脚本）先创建先出画——冷启动
+    // WebView2 初始化 + vite 模块交付动辄数十秒，用户双击后不再"什么都没有"。
+    // 前端首帧发 `lw:frontend-ready` → 关闪屏；25s 未就绪则兜底（关闪屏 +
+    // 强制显主窗，宁冒白屏风险也不吞窗口，㉕ i18n 白屏先例）。
     let boot = std::time::Instant::now();
 
     tracing_subscriber::fmt()
@@ -90,8 +92,15 @@ pub fn run() {
         .setup(move |app| {
             tracing::info!(
                 ms = boot.elapsed().as_millis() as u64,
-                "boot: setup entered (config window created, hidden)"
+                "boot: setup entered (splash + hidden main created)"
             );
+            // 前端首帧信号：主窗 show() 后 emit，这里关掉闪屏（先行注册防丢）
+            let ready_handle = app.handle().clone();
+            app.listen("lw:frontend-ready", move |_| {
+                if let Some(s) = ready_handle.get_webview_window("splash") {
+                    let _ = s.close();
+                }
+            });
             let init = std::time::Instant::now();
             app.manage(state::init_state(app.handle().clone()));
             tracing::info!(
@@ -99,20 +108,27 @@ pub fn run() {
                 "boot: init_state done"
             );
             tray::setup(app.handle())?;
-            // 兜底显窗：前端崩溃 / 白屏异常时窗口不能永远不出现
+            // 兜底：前端崩溃 / 白屏异常时窗口不能永远不出现（闪屏常驻也骗人）。
+            // 40s = 实测健康冷启动（vite 冷缓存重建 31.4s，2026-10-03）+ 余量；
+            // 更长的加载多半已是异常，交回白屏窗口便于发现问题。
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_secs(8));
+                std::thread::sleep(std::time::Duration::from_secs(40));
                 if let Some(win) = handle.get_webview_window("main") {
                     if !win.is_visible().unwrap_or(true) {
                         let _ = win.show();
-                        tracing::warn!("boot: frontend not ready in 8s, showing window anyway");
+                        if let Some(s) = handle.get_webview_window("splash") {
+                            let _ = s.close();
+                        }
+                        tracing::warn!(
+                            "boot: frontend not ready in 40s, showing main window anyway"
+                        );
                     }
                 }
             });
             tracing::info!(
                 ms = boot.elapsed().as_millis() as u64,
-                "boot: setup done — window hidden until frontend first paint"
+                "boot: setup done — splash up, main hidden until frontend first paint"
             );
             Ok(())
         })

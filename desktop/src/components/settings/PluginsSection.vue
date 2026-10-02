@@ -49,7 +49,7 @@ function save() {
         min="0"
         max="365"
         step="1"
-        class="lw-field w-[140px] px-2 py-1.5 text-xs"
+        class="lw-field lw-field-num px-2 text-xs"
       />
     </SettingsRow>
   </SettingsGroup>

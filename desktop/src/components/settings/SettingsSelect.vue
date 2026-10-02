@@ -13,6 +13,8 @@ import { Icon } from "../../lib/icons";
 export interface SelectFlat {
   value: string;
   label: string;
+  /** 面板内主名下方的淡色说明（触发器只显主名；§3.32·七 v3.7）。 */
+  desc?: string;
 }
 export interface SelectGroup {
   label: string;
@@ -31,7 +33,8 @@ const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 const listId = `lw-select-${Math.random().toString(36).slice(2, 9)}`;
 
 const open = ref(false);
-const activeIndex = ref(0);
+/** 打开时不预置高亮（用户裁定）：hover / 键盘移动才亮，-1 = 无活动项。 */
+const activeIndex = ref(-1);
 const triggerRef = ref<HTMLButtonElement | null>(null);
 const popRef = ref<HTMLDivElement | null>(null);
 const popStyle = ref<Record<string, string>>({});
@@ -53,11 +56,18 @@ function openList(): void {
   const el = triggerRef.value;
   if (!el) return;
   const r = el.getBoundingClientRect();
+  // 带说明行的面板给足最小宽（说明不折成碎行）；纯主名面板随触发器
+  const hasDesc = flat.value.some((o) => o.desc);
+  const minW = hasDesc ? Math.max(Math.round(r.width), 224) : Math.round(r.width);
+  // 面板右缘对齐触发器右缘（右对齐停靠，用户裁定），左缘回钳视口内
+  const left = Math.max(8, Math.min(Math.round(r.right) - minW, window.innerWidth - minW - 8));
   popStyle.value = {
-    left: `${Math.round(r.left)}px`,
+    left: `${left}px`,
     top: `${Math.round(r.bottom + 4)}px`,
-    minWidth: `${Math.round(r.width)}px`,
+    minWidth: `${minW}px`,
+    maxWidth: "320px",
   };
+  activeIndex.value = -1;
   activeIndex.value = Math.max(
     0,
     flat.value.findIndex((o) => o.value === props.modelValue),
@@ -102,10 +112,19 @@ function onOutside(e: PointerEvent): void {
 function move(delta: number): void {
   const n = flat.value.length;
   if (!n) return;
+  // 首次键盘移动落在当前选中项，再按才逐项走
+  if (activeIndex.value === -1) {
+    activeIndex.value = Math.max(
+      0,
+      flat.value.findIndex((o) => o.value === props.modelValue),
+    );
+    return;
+  }
   activeIndex.value = (activeIndex.value + delta + n) % n;
 }
 
 function choose(i: number): void {
+  if (i < 0) return;
   const o = flat.value[i];
   if (!o) return;
   emit("update:modelValue", o.value);
@@ -129,7 +148,7 @@ function onPopKeydown(e: KeyboardEvent): void {
     activeIndex.value = Math.max(0, flat.value.length - 1);
   } else if (e.key === "Enter") {
     e.preventDefault();
-    choose(activeIndex.value);
+    if (activeIndex.value >= 0) choose(activeIndex.value);
   } else if (e.key === "Escape") {
     e.preventDefault();
     e.stopPropagation();
@@ -164,7 +183,7 @@ onBeforeUnmount(close);
       :style="popStyle"
       role="listbox"
       :aria-label="label"
-      :aria-activedescendant="optionId(activeIndex)"
+      :aria-activedescendant="activeIndex >= 0 ? optionId(activeIndex) : undefined"
       tabindex="-1"
       @keydown="onPopKeydown"
     >
@@ -199,7 +218,14 @@ onBeforeUnmount(close);
           @mouseenter="activeIndex = flat.indexOf(o)"
           @click="choose(flat.indexOf(o))"
         >
-          <span class="min-w-0 flex-1 truncate">{{ o.label }}</span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate">{{ o.label }}</span>
+            <span
+              v-if="o.desc"
+              class="mt-0.5 block text-[11px] leading-snug text-ink-3"
+              >{{ o.desc }}</span
+            >
+          </span>
           <Icon
             v-if="o.value === modelValue"
             name="check"

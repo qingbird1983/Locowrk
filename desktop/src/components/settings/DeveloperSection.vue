@@ -101,7 +101,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
             type="number"
             min="1"
             max="200"
-            class="lw-field w-[140px] px-2 py-1.5 text-xs"
+            class="lw-field lw-field-num px-2 text-xs"
           />
         </SettingsRow>
 
@@ -117,7 +117,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
             type="number"
             min="5"
             max="3600"
-            class="lw-field w-[140px] px-2 py-1.5 text-xs"
+            class="lw-field lw-field-num px-2 text-xs"
           />
         </SettingsRow>
       </SettingsGroup>
@@ -133,7 +133,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
       <template #action>
         <button
           type="button"
-          class="lw-btn px-2 py-1 text-[11px] text-ink-3"
+          class="lw-btn px-3 py-1.5 text-xs text-ink-2"
           :disabled="settings.saving"
           @click="addRoot"
         >
@@ -167,7 +167,7 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
       <template #action>
         <button
           type="button"
-          class="lw-btn px-2 py-1 text-[11px] text-ink-3"
+          class="lw-btn px-3 py-1.5 text-xs text-ink-2"
           :disabled="loading"
           @click="refresh"
         >

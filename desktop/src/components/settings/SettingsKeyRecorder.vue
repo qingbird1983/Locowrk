@@ -6,6 +6,7 @@
  * 符号干扰）。纯修饰键按下继续等待；Esc 取消；**无修饰键且非 F 键的组合
  * 拒收继续等**（裸字母/数字做全局热键会吞掉系统输入）。提交由父级落
  * settings.json `shortcut`（即时重注册，占用冲突在后端如实报错）。
+ * v3.7：按钮定宽 160px 内容居中——未来键位长短不一按钮恒定（§3.32·七）。
  */
 import { onBeforeUnmount, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -111,7 +112,7 @@ function onClick(): void {
   <button
     ref="triggerRef"
     type="button"
-    class="lw-btn px-3 py-1.5 font-mono text-xs"
+    class="lw-btn w-40 px-3 py-1.5 text-center font-mono text-xs"
     :class="recording ? 'text-ink-2' : 'text-ink-1'"
     :aria-label="t('settings.shortcut')"
     :aria-pressed="recording"

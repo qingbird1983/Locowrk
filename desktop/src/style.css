@@ -109,6 +109,9 @@
   /* 两色控件体系（§3.32·七 v3.6）：台面 hover 档（底 = raised + shadow-raised） */
   --lw-ctl-hover: #303030;
 
+  /* 滑块填充（§3.32·七 v3.7：单色 accent 直用太黑，减淡一档，全局同类） */
+  --lw-slider-accent: #b0b0b0;
+
   /* 实色三元组（tailwind 消费，保透明度修饰符） */
   --lw-rgb-bg: 24 24 24;
   --lw-rgb-bg-side: 0 0 0;
@@ -127,6 +130,7 @@
   --lw-rgb-purple: 194 122 255;
   --lw-rgb-focus: 255 255 255;
   --lw-rgb-ctl-hover: 48 48 48;
+  --lw-rgb-slider-accent: 176 176 176;
 }
 
 /* --- 3. 亮色 ------------------------------------------------------------- */
@@ -186,6 +190,9 @@
   /* 两色控件体系（v3.6，亮色 hover 档） */
   --lw-ctl-hover: #f3f3f3;
 
+  /* 滑块填充（§3.32·七 v3.7，同暗色 token） */
+  --lw-slider-accent: #a3a3a3;
+
   --lw-rgb-bg: 255 255 255;
   --lw-rgb-bg-side: 243 243 243;
   --lw-rgb-bg-dock: 250 250 250;
@@ -203,6 +210,7 @@
   --lw-rgb-purple: 124 58 237;
   --lw-rgb-focus: 26 28 31;
   --lw-rgb-ctl-hover: 243 243 243;
+  --lw-rgb-slider-accent: 163 163 163;
 }
 
 /* --- 4. 形状 / 量纲 / 动效 token（主题无关） ------------------------------ */
@@ -572,7 +580,21 @@
   cursor: not-allowed;
   opacity: 0.4;
 }
-/* 数值输入的原生上下旋钮在白底台面上保持默认字形即可，不另画。 */
+/* 数值输入（§3.32·七 v3.7 全局唯一参数，用户裁定"统一 = 一个参数值"）：
+ * 宽 140 + 高 28 一处定义；上下点击钮大小随高度，全局一致。
+ * 用法 = class="lw-field lw-field-num px-2 text-xs"（模型分区豁免）。 */
+.lw-field-num {
+  width: 140px;
+  height: 28px;
+}
+
+/* 分段控件滑动游标（§3.32·七 v3.7）：left/width 随选中项迁移；
+ * 首测前由组件保持透明，reduced-motion 由全局归零规则接管 */
+.lw-seg-thumb {
+  transition:
+    left var(--dur-fast) var(--ease-out),
+    width var(--dur-fast) var(--ease-out);
+}
 
 /* 助手 markdown（§6.5：段落/列表/行内代码/代码块/表格） */
 .md {
