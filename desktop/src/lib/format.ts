@@ -49,3 +49,12 @@ function short(v: number): string {
 export function clip(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
+
+/** 时长人类呈现（§3.7 头行 / §3.10 子 Agent 卡共用一把尺）：`36s` /
+ * `1m 6s` / `1h 2m`。 */
+export function formatDuration(ms: number): string {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+  return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+}

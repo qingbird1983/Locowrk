@@ -54,10 +54,9 @@ function toggle(key: string) {
           @click="toggle(w.key)"
         >
           <Icon
-            name="chevronRight"
+            :name="collapsed.has(w.key) ? 'chevronRight' : 'chevronDown'"
             :size="12"
             class="ws-head__chevron"
-            :class="{ 'is-open': !collapsed.has(w.key) }"
             aria-hidden="true"
           />
           <Icon name="folder" :size="14" aria-hidden="true" />
@@ -99,13 +98,15 @@ function toggle(key: string) {
 }
 
 /* 工作区分组头（§2.3）：28px 行 = 12px chevron + 14px 文件夹 + 13px 名 +
- * 可选 6px 状态点；hover wash-2；chevron 展开转 90° */
+ * 可选 6px 状态点；hover wash-2；chevron 只换字形不旋转（§6.6 禁令）。
+ * 行间 2px 垂直间隙（§7-15：高亮瓦片不得粘连，会话行同规） */
 .ws-head {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
   min-height: 28px;
+  margin-top: 2px;
   padding: 0 8px;
   border-radius: var(--lw-r-xs);
   text-align: left;
@@ -116,10 +117,6 @@ function toggle(key: string) {
 .ws-head__chevron {
   flex: 0 0 auto;
   color: var(--lw-ink-4);
-  transition: transform var(--dur-fast) var(--ease-out);
-}
-.ws-head__chevron.is-open {
-  transform: rotate(90deg);
 }
 .ws-head__name {
   min-width: 0;

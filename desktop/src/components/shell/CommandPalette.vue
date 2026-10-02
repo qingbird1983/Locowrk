@@ -12,6 +12,7 @@ import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useShellStore } from "../../stores/shell";
 import { useSettingsStore } from "../../stores/settings";
+import { useWorkPanelStore } from "../../stores/work-panel";
 import { relativeTime } from "../../lib/format";
 import {
   SETTINGS_SECTIONS,
@@ -34,6 +35,8 @@ interface PaletteItem {
   key: string;
   label: string;
   hint?: string;
+  /** 键帽（§3.25：每个快捷键都能在面板里按名字搜到、行尾挂键帽）。 */
+  keys?: string;
   run: () => void;
 }
 interface PaletteGroup {
@@ -77,10 +80,23 @@ const allGroups = computed<PaletteGroup[]>(() => {
     hint: `${t("nav.settings")} / ${t(s.labelKey)}`,
     run: () => shell.openSettings(s.id),
   }));
+  /** 明暗主题切换：system 档先按当前媒体查询解出实效档再翻面。 */
+  function toggleTheme() {
+    const cur = settingsStore.view?.appearance.theme ?? "light";
+    const effective =
+      cur === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : cur;
+    void settingsStore.setTheme(effective === "dark" ? "light" : "dark");
+  }
+
   const commands: PaletteItem[] = [
     {
       key: "cmd:newChat",
       label: t("sidebar.newChat"),
+      keys: "Ctrl N",
       run: () => {
         chat.newSession();
         shell.setDestination("chat");
@@ -88,8 +104,29 @@ const allGroups = computed<PaletteGroup[]>(() => {
     },
     {
       key: "cmd:toggleSidebar",
-      label: shell.sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse"),
+      label: t("palette.cmd.toggleSidebar"),
+      keys: "Ctrl B",
       run: () => shell.toggleSidebar(),
+    },
+    {
+      key: "cmd:togglePanel",
+      label: t("palette.cmd.togglePanel"),
+      keys: "Ctrl J",
+      run: () => {
+        shell.setDestination("chat");
+        useWorkPanelStore().toggle();
+      },
+    },
+    {
+      key: "cmd:openSettings",
+      label: t("palette.cmd.openSettings"),
+      keys: "Ctrl ,",
+      run: () => shell.openSettings(),
+    },
+    {
+      key: "cmd:toggleTheme",
+      label: t("palette.cmd.toggleTheme"),
+      run: toggleTheme,
     },
   ];
   return [
@@ -190,7 +227,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
   <Transition name="lw-modal">
     <div
       v-if="open"
-      class="fixed inset-0 z-[60] flex items-center justify-center px-6"
+      class="fixed inset-0 z-[40] flex items-center justify-center px-6"
       style="background: var(--lw-scrim)"
       @mousedown.self="close"
     >
@@ -230,7 +267,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
               @mouseenter="onItemEnter(globalIndex(group, i))"
             >
               <span class="truncate">{{ item.label }}</span>
-              <span v-if="item.hint" class="palette-item-hint">
+              <span v-if="item.keys" class="keycap">{{ item.keys }}</span>
+              <span v-else-if="item.hint" class="palette-item-hint">
                 {{ item.hint }}
               </span>
             </button>

@@ -17,6 +17,11 @@ export default {
   },
   common: {
     back: "Back to app",
+    cancel: "Cancel",
+  },
+  // Confirm dialog (§五: the only modal with a scrim, ConfirmDialog)
+  confirm: {
+    impact: "Impact",
   },
   chat: {
     homeTitle: "What do you want to do in Locowrk today?",
@@ -25,6 +30,7 @@ export default {
     newSession: "New chat",
     copyMessage: "Copy this message",
     copyCode: "Copy code",
+    replaying: "Restoring session…",
     stopGeneration: "Stop generating",
     widthAria: "Conversation width {n} pixels",
   },
@@ -214,9 +220,22 @@ export default {
     readonlyNote: "This sub-agent is driven by the main agent; input is not available here.",
     launcherSub: "Sub-agent transcripts",
     launcherReview: "Review",
+    launcherSubHint: "Browse the sub-session",
+    launcherReviewHint: "Changes in this session",
     viewDiff: "View diff",
     diffEmpty: "Nothing to show in this diff",
     expandLines: "… Expand {n} lines",
+  },
+  // Sub-agent card (§3.10): honest-data boundary documented in the component
+  subagent: {
+    region: "Sub-agent",
+    working: "Sub-agent is working",
+    done: "Sub-agent finished",
+    count: "{n} subagent(s)",
+    doneCount: "{done}/{n} done",
+    coordinating: "Coordinating {n} delegated task(s)",
+    main: "Main agent",
+    child: "Sub-agent",
   },
   developer: {
     hint: "Developer and danger switches. Hidden by default: tap the version number at the sidebar bottom 7 times to unlock.",
@@ -330,7 +349,11 @@ export default {
     batchDisable: "Disable selected",
     batchEnable: "Enable selected",
     batchUninstall: "Uninstall selected",
-    batchUninstallConfirm: "Uninstall these {n} plugins? This cannot be undone:",
+    batchUninstallConfirm: "Uninstall {n} plugins?",
+    batchUninstallSub: "Uninstalling removes their tools and middleware. Past calls in transcripts are kept, but the tools stop working. Old builds are retained and can be reinstalled.",
+    batchUninstallList: "To uninstall ({n})",
+    batchUninstallImpact: "All tools of {n} plugins leave the candidate pool immediately; the running turn is unaffected, effective next turn.",
+    batchUninstallGo: "Uninstall",
     batchPartialFail: "{n} failed:",
     cancel: "Cancel",
     builtinNotSelectable: "Built-in dev plugins are not batch-managed",  },
@@ -498,6 +521,12 @@ export default {
     title: "Command palette",
     placeholder: "Search sessions, pages, settings, or commands…",
     empty: "No matching results",
+    cmd: {
+      toggleSidebar: "Collapse / expand sidebar",
+      togglePanel: "Toggle work panel",
+      openSettings: "Open settings",
+      toggleTheme: "Toggle light / dark theme",
+    },
     groups: {
       sessions: "Sessions",
       pages: "Pages",

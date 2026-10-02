@@ -19,12 +19,13 @@ import {
 } from "../stores/chat";
 import { useSettingsStore } from "../stores/settings";
 import { useWorkPanelStore } from "../stores/work-panel";
-import { clip } from "../lib/format";
+import { clip, formatDuration } from "../lib/format";
 import { Icon } from "../lib/icons";
 import type { ApprovalRequest } from "../types";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
 import MessageRow from "./chat/MessageRow.vue";
 import PermissionCard from "./chat/PermissionCard.vue";
+import SubagentCard, { type SubagentChild } from "./chat/SubagentCard.vue";
 import SystemNotice from "./chat/SystemNotice.vue";
 import ThinkingRow from "./chat/ThinkingRow.vue";
 import ToolRow from "./chat/ToolRow.vue";
@@ -62,6 +63,8 @@ type TurnBlock = {
   failures: number;
   toolCount: number;
   startTs?: number;
+  /** §3.10 子 Agent 卡数据（组内 subagent_run 调用，卡是 §3.16 入口）。 */
+  subagents: SubagentChild[];
 };
 type Block =
   | TurnBlock
@@ -75,6 +78,23 @@ const blocks = computed<Block[]>(() => {
     if (cur.length === 0) return;
     const tools = cur.filter((i): i is ToolItem => i.kind === "tool");
     const tsList = tools.map((i) => i.ts).filter((v): v is number => v !== undefined);
+    const subagents: SubagentChild[] = [];
+    for (const i of tools) {
+      if (i.tool !== "subagent_run") continue;
+      const childId = (i.output as { child_session_id?: string } | null)
+        ?.child_session_id;
+      // 未收束的调用还没有 child_id（悬空调用先行落事件）——卡里不列空行
+      if (!childId) continue;
+      subagents.push({
+        childId,
+        prompt: clip(String((i.args as { prompt?: unknown } | null)?.prompt ?? ""), 24),
+        status: i.pending ? "running" : i.ok ? "done" : "failed",
+        durationText:
+          i.ts !== undefined && i.doneTs !== undefined
+            ? formatDuration(i.doneTs - i.ts)
+            : undefined,
+      });
+    }
     out.push({
       kind: "turn",
       key: cur[0]!.id,
@@ -83,6 +103,7 @@ const blocks = computed<Block[]>(() => {
       failures: tools.filter((i) => i.ok === false).length,
       toolCount: tools.length,
       startTs: tsList.length > 0 ? Math.min(...tsList) : undefined,
+      subagents,
     });
     cur = [];
   };
@@ -206,6 +227,12 @@ async function onNoticeAction(item: SystemItem, action: string) {
                   />
                 </template>
               </template>
+              <!-- §3.10 子 Agent 卡：组内 subagent_run 的可视形态 + §3.16 入口 -->
+              <SubagentCard
+                v-if="block.subagents.length > 0"
+                :children="block.subagents"
+                @open="onOpenTranscript"
+              />
             </TurnProcess>
           </template>
 

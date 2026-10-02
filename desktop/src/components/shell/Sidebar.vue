@@ -88,7 +88,7 @@ const {
   >
     <div class="flex h-full w-[var(--lw-sidebar-w)] flex-col">
       <!-- 侧栏头（46px 带左段）：品牌 + 折叠按钮，空白处拖拽窗口 -->
-      <header class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-2 pl-4 pr-2">
+      <header class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-2 px-2">
         <span
           class="flex items-center gap-2 text-[13.5px] font-semibold tracking-[-0.02em]"
           data-tauri-drag-region
@@ -161,9 +161,10 @@ const {
         </p>
       </div>
 
-      <!-- 侧栏底：目的地入口 + 版本号（连点解锁开发者选项） -->
+      <!-- 侧栏底：目的地入口 + 版本号（连点解锁开发者选项）；
+           间距对原型（gap 2px / padding 0 8px） -->
       <footer
-        class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-1 px-3"
+        class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-[2px] px-2"
       >
         <button
           v-for="dest in (['plugins', 'memory', 'settings'] as const)"

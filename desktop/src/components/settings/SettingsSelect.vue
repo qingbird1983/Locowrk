@@ -179,7 +179,7 @@ onBeforeUnmount(close);
     <div
       v-if="open"
       ref="popRef"
-      class="fixed z-[80] rounded-[var(--lw-r-md-plus)] border border-line bg-raised py-1 shadow-raised"
+      class="fixed z-[60] rounded-[var(--lw-r-md-plus)] border border-line bg-raised py-1 shadow-raised"
       :style="popStyle"
       role="listbox"
       :aria-label="label"

@@ -2,7 +2,9 @@
 /**
  * 会话顶栏（UI shell doc §2.1 ③ / §2.2）：46px 带中段。折叠按钮的 lead
  * 槽恒挂（展开时宽 0——零宽导致标题零跳变，§2.2-6）；标题段是拖拽区；
- * 右端预留窗口控制 120px 车道（面板未落地前恒预留，§2.2-5）。
+ * 右端窗口控制 120px 车道按 §2.2-5 单一负责：面板关闭时顶栏预留，面板
+ * 打开时让位（padding-right:0，车道由面板头接管）。动作组 = 原型
+ * .action-group 同款 wash-1 圆角容器：新建+搜索一组、面板开关独立一组。
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
@@ -39,8 +41,8 @@ function focusSidebarSearch() {
 
 <template>
   <header
-    class="relative z-10 flex h-[var(--lw-toolbar-h)] shrink-0 items-center bg-page pl-3"
-    style="padding-right: var(--lw-wincontrols)"
+    class="relative z-10 flex h-[var(--lw-toolbar-h)] shrink-0 items-center bg-page pl-3 transition-[padding-right] duration-150"
+    :style="{ paddingRight: workPanel.open ? '0' : 'var(--lw-wincontrols)' }"
     data-tauri-drag-region
   >
     <!-- lead 槽：恒在，展开时宽 0（过渡与侧栏同步，标题不跳变） -->
@@ -72,15 +74,15 @@ function focusSidebarSearch() {
         :title="t('status.running')"
       />
       <span
-        class="min-w-0 truncate text-[13px] font-medium tracking-[-0.01em] text-ink-1"
+        class="min-w-0 truncate text-[14px] font-medium tracking-[-0.02em] text-ink-1"
         :title="title"
         data-tauri-drag-region
         >{{ title }}</span
       >
     </div>
 
-    <!-- 动作组（no-drag）：新建 / 搜索（聚焦侧栏搜索） -->
-    <div class="flex shrink-0 items-center gap-1">
+    <!-- 动作组（no-drag）：新建 / 搜索一组，面板开关独立一组（§2.4） -->
+    <div class="action-group shrink-0">
       <button
         class="ctl"
         type="button"
@@ -99,9 +101,11 @@ function focusSidebarSearch() {
       >
         <Icon name="search" aria-hidden="true" />
       </button>
+    </div>
+    <div class="action-group ml-1.5 shrink-0">
       <!-- 工作面板开关（§2.4/§2.5）：独立成组，只对对话目的地有意义 -->
       <button
-        class="ctl ml-2"
+        class="ctl"
         type="button"
         :aria-pressed="workPanel.open"
         :title="t('panel.title')"
@@ -128,6 +132,16 @@ function focusSidebarSearch() {
 .ctl:hover {
   background: var(--lw-wash-2);
   color: var(--lw-ink-1);
+}
+
+/* 顶层动作组（原型 .action-group）：28px 图标按钮装在 12px 圆角 wash 容器 */
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--lw-r-md);
+  background: var(--lw-wash-1);
 }
 
 /* lead 槽：宽 0 → 28px；展开侧栏时用 --dur-base + ease-out（与侧栏同步），

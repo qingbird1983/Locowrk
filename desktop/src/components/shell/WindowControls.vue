@@ -2,8 +2,9 @@
 /**
  * 窗口控制（UI shell doc §2.2-5 / §2.1 窗口控制车道）：浮在 46px 带右端
  * 120px 车道上的三个平面字形按钮（图标 12px），z-index 1000 恒在最上
- * （§五阶梯）。无边框窗口（tauri.conf decorations:false）的唯一关闭/极
- * 大化通路；Mac 不渲染（原生红绿灯）。
+ * （§五阶梯）。**容器自身透明**——车道底色透出正下方那段带（面板打开时 =
+ * 面板头的 bg-dock，原型 .wincontrols 同款）。无边框窗口（tauri.conf
+ * decorations:false）的唯一关闭/极大化通路；Mac 不渲染（原生红绿灯）。
  */
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -31,7 +32,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="fixed right-0 top-0 z-[1000] flex h-[var(--lw-toolbar-h)] w-[var(--lw-wincontrols)] bg-page pl-2"
+    class="fixed right-0 top-0 z-[1000] flex h-[var(--lw-toolbar-h)] w-[var(--lw-wincontrols)]"
   >
     <button
       class="win-btn"
@@ -56,7 +57,7 @@ onBeforeUnmount(() => {
       />
     </button>
     <button
-      class="win-btn win-btn--close"
+      class="win-btn"
       type="button"
       :title="t('window.close')"
       :aria-label="t('window.close')"
@@ -81,9 +82,5 @@ onBeforeUnmount(() => {
 .win-btn:hover {
   color: var(--lw-ink-1);
   background: var(--lw-wash-2);
-}
-.win-btn--close:hover {
-  color: var(--lw-bg);
-  background: var(--lw-danger);
 }
 </style>

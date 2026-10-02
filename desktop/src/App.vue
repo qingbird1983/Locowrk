@@ -20,6 +20,7 @@ import Sidebar from "./components/shell/Sidebar.vue";
 import ToastStack from "./components/shell/ToastStack.vue";
 import Topbar from "./components/shell/Topbar.vue";
 import WindowControls from "./components/shell/WindowControls.vue";
+import { useGlobalShortcuts } from "./components/shell/use-global-shortcuts";
 import { ref } from "vue";
 
 /**
@@ -41,6 +42,8 @@ const notifications = useNotificationsStore();
 const workPanel = useWorkPanelStore();
 /** composer 坞总高：列宽热区下沿（ConversationWidthHandles）的锚。 */
 const composerH = ref(0);
+// §3.25 落地表：Ctrl+B/J/N/,/[/]（⌘K 与 Ctrl+Shift+L 各自注册，不在此）
+useGlobalShortcuts();
 
 onMounted(() => {
   chat.init();
@@ -71,6 +74,15 @@ onMounted(() => {
         :inert="shell.destination !== 'chat'"
       >
         <Topbar />
+        <!-- §3.23 会话冷切换：重放期间顶栏下方 2px 不定段进度轨 -->
+        <div
+          v-if="chat.replaying"
+          class="replay-track"
+          role="progressbar"
+          :aria-label="t('chat.replaying')"
+        >
+          <div class="replay-track__bar" />
+        </div>
         <ContextProgressBar :usage="chat.contextUsage" />
         <ChatTranscript :composer-bottom="composerH" />
         <Composer @height="composerH = $event" />
@@ -101,3 +113,39 @@ onMounted(() => {
     <CommandPalette />
   </div>
 </template>
+
+<style scoped>
+/* §3.23 会话冷切换进度轨：2px 高、28% 宽不定段 720ms 来回扫 */
+.replay-track {
+  position: relative;
+  height: 2px;
+  flex: 0 0 2px;
+  overflow: hidden;
+  background: transparent;
+}
+.replay-track__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  height: 100%;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-ink-3);
+  animation: lw-indeterminate 720ms ease-in-out infinite alternate;
+}
+@keyframes lw-indeterminate {
+  /* 位移相对 bar 自身宽（28% 轨宽）：-110% 全出左缘 → 400%（=轨宽 112%）全出右缘 */
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+/* §6.6 五：reduced-motion 下运行指示整块不显示 */
+@media (prefers-reduced-motion: reduce) {
+  .replay-track {
+    display: none;
+  }
+}
+</style>

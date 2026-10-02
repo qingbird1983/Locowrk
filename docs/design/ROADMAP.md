@@ -604,7 +604,29 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 网格（280px 自适应/图标块/line-clamp-3）。走查设置已还原（fsRoots=[]）、走查会话与目标
 文件已清。
 
-### ㉗ UI 设计落地⑥：工作面板 + 通知（~~§3.13 通知浮层~~ ✅v2.51 / ~~§2.5 骨架 + §3.16 子转录页签~~ ✅v2.52 / ~~§3.28 diff + §3.29 网格 + §3.31 整版式~~ ✅v2.53 / ⬜ §2.5 插件贡献槽位——**随插件批次（plugin-api 末尾追加），出 UI 排期；UI shell 文档内设计项就此全部落地**）
+### ㉗·C·fix 全壳走查核对与补欠（✅ 已完成，v2.54）
+
+> 用户裁定「原型不可能一比一，实施要比原型更细」——对照原型 HTML + UI shell 文档逐条核对
+> 实现后的修正批，纯前端。UI shell 文档先行 v3.8（§3.11 勘误 + §8.2 三行缓办）。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| §2.2-5 车道交接 | ✅ v2.54 | WindowControls 透明浮层（去 bg-page/pl-2/红 hover）+ Topbar padding-right 随面板开合让位 + 面板头预留 120px（修双车道空洞与按钮被窗控遮挡） |
+| 面板对齐 §6.1/原型 | ✅ v2.54 | `bg-side`→`bg-dock`、删平面内边框×2、页签逐值（圆角 10/wash-1 常态/12.5px/200/close 20×20/bot 仅子 Agent 页签）、拖柄 aria vertical、启动器行 hint；WorkPanel 430 行拆出 `WorkPanelLauncher.vue`（§8.4 规划件） |
+| §3.11 v3.8 勘误 | ✅ v2.54 | 模型 chip 移右组（用量环→模型→发送；文档原文与原型冲突以原型为准），左组固定/右组可缩、模型 chip 唯一收缩项；占位符 12.5px ink-5 |
+| §3.10 子 Agent 卡 | ✅ v2.54 | `SubagentCard.vue`（头行+节点图+查看转录；子内步骤数/模型黑盒不发明、重放无时长不虚构）挂 TurnProcess 组尾；`formatDuration` 入 lib/format |
+| §3.4/§3.16 副作用徽章 | ✅ v2.54 | `lib/side-effect.ts` 映射表自插件源码逐一对出；表外不渲染（宁缺勿假） |
+| §3.25 快捷键 | ✅ v2.54 | `use-global-shortcuts.ts`（B/J/N/,/[/]）+ Composer ↑ 召回 / Esc 浮层栈语义 + ⌘K 命令 5 条带键帽（切主题 system 档先解实效档） |
+| §3.23 加载态 | ✅ v2.54 | 冷切换 2px 不定段进度轨（reduced-motion 不显示）+ 重放期间 composer 锁 |
+| §3.26 选择纪律 | ✅ v2.54 | 全局 user-select:none + 白名单（正文/明细/diff/pre/输入类），白名单内 button 重归不可选 |
+| §五/z-index/杂项 | ✅ v2.54 | 批量卸载升级 ConfirmDialog Modal（原型 S12 逐值；顺手修 `common.cancel` 裸键名）；⌘K 60→40、SettingsSelect 80→60、HoverTip 50→60；遮罩入场 fast；会话行 2px 间隙（§7-15）；ws-head chevron 旋转退役（§6.6 禁令）；侧栏头/页脚 0 8px + gap 2px；闪屏 8s 静态恢复提示 |
+| §8.2 三行缓办 | 📝 落档 | 消息编辑重发（rewind 方案，落地前不渲染编辑钮）/ 恢复面动作化 / 定时任务目的地页 |
+
+验证：vue-tsc+vite 过、check_length OK（WorkPanel 拆件后 356 行）；纯前端批无 Rust 改动。
+实机走查（CDP）：车道交接三态（面板开/关）、面板底色与无边框、composer 右组、⌘K 键帽、
+会话行间隙。
+
+### ㉗ UI 设计落地⑥：工作面板 + 通知（~~§3.13 通知浮层~~ ✅v2.51 / ~~§2.5 骨架 + §3.16 子转录页签~~ ✅v2.52 / ~~§3.28 diff + §3.29 网格 + §3.31 整版式~~ ✅v2.53 / ~~走查核对与补欠~~ ✅v2.54 / ⬜ §2.5 插件贡献槽位——**随插件批次（plugin-api 末尾追加），出 UI 排期；UI shell 文档内设计项就此全部落地**）
 
 ---
 

@@ -13,6 +13,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon, type IconName } from "../../lib/icons";
 import { toolAction, toolArgSummary, toolDiffStats } from "../../lib/tool-summary";
+import { toolSideEffect } from "../../lib/side-effect";
 import type { ToolItem } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 
@@ -47,6 +48,9 @@ watch(
 
 /** 动作名（§3.18 映射表；表外回落工具 id + 「插件」徽章）。 */
 const action = computed(() => toolAction(props.item.tool));
+
+/** 副作用徽章（§3.4/§3.16：纯=中性、可补偿=warn、不可逆=danger；表外不渲染）。 */
+const effect = computed(() => toolSideEffect(props.item.tool));
 
 const childId = computed(() => {
   if (props.item.tool !== "subagent_run" || props.item.pending || !props.item.ok) return null;
@@ -143,6 +147,13 @@ async function copyCall() {
       >
         <Icon :name="glyph" :size="14" class="tool__icon shrink-0" />
         <span class="cv-head__label">{{ actionLabel }}</span>
+        <span
+          v-if="effect"
+          class="badge-micro"
+          :class="`badge-micro--${effect}`"
+        >
+          {{ t(`effect.${effect}`) }}
+        </span>
         <span
           v-if="!action"
           class="shrink-0 rounded bg-wash-3 px-1.5 py-0.5 text-[10px] text-ink-2"
@@ -246,6 +257,29 @@ async function copyCall() {
   display: flex;
   align-items: center;
   gap: 2px;
+}
+/* 副作用徽章（§3.4 副作用族 / 原型 .badge--micro）：纯=中性、可补偿=warn
+ * 16% tint、不可逆=danger 16% tint */
+.badge-micro {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: var(--lw-r-full);
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-2);
+}
+.badge-micro--compensable {
+  background: color-mix(in oklab, var(--lw-warn) 16%, transparent);
+  color: var(--lw-warn);
+}
+.badge-micro--irreversible {
+  background: color-mix(in oklab, var(--lw-danger) 16%, transparent);
+  color: var(--lw-danger);
 }
 .tool__toggle {
   /* basis 0 才能被兄弟（复制按钮）挤住；min-width:0 让参数摘要真正省略 */

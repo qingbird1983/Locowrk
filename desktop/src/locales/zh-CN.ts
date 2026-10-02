@@ -17,6 +17,11 @@ export default {
   },
   common: {
     back: "返回应用",
+    cancel: "取消",
+  },
+  // 确认弹窗（§五 唯一带遮罩 Modal，ConfirmDialog）
+  confirm: {
+    impact: "影响范围",
   },
   chat: {
     homeTitle: "今天想在 Locowrk 里做点什么？",
@@ -25,6 +30,7 @@ export default {
     newSession: "新会话",
     copyMessage: "复制这条消息",
     copyCode: "复制代码",
+    replaying: "会话恢复中…",
     stopGeneration: "停止生成",
     widthAria: "对话宽度 {n} 像素",
   },
@@ -167,9 +173,22 @@ export default {
     readonlyNote: "子 Agent 由主 Agent 驱动，无法在此输入。",
     launcherSub: "子 Agent 转录",
     launcherReview: "审阅",
+    launcherSubHint: "查看子会话过程",
+    launcherReviewHint: "当前会话的改动",
     viewDiff: "看 diff",
     diffEmpty: "这段 diff 没有可显示的内容",
     expandLines: "… 展开 {n} 行",
+  },
+  // 子 Agent 卡（§3.10）：数据诚实边界见组件注释（步骤数/子模型不发明）
+  subagent: {
+    region: "子 Agent",
+    working: "子 Agent 正在工作",
+    done: "子 Agent 已收束",
+    count: "{n} 个 subagent",
+    doneCount: "已完成 {done}/{n}",
+    coordinating: "正在协调 {n} 个委派任务",
+    main: "主 Agent",
+    child: "子 Agent",
   },
   notice: {
     action: {
@@ -325,7 +344,11 @@ export default {
     batchDisable: "停用选中",
     batchEnable: "启用选中",
     batchUninstall: "卸载选中",
-    batchUninstallConfirm: "确认卸载以下 {n} 个插件？此操作不可恢复：",
+    batchUninstallConfirm: "确认卸载 {n} 个插件？",
+    batchUninstallSub: "卸载会移除它们的工具与中间件；会话里的历史调用记录保留，但工具将不再可用。旧版本产物保留，可回装。",
+    batchUninstallList: "将卸载（{n}）",
+    batchUninstallImpact: "{n} 个插件的全部工具会立即从候选池移除；正在运行的一轮不受影响，下一轮起生效。",
+    batchUninstallGo: "确认卸载",
     batchPartialFail: "{n} 项失败：",
     cancel: "取消",
     builtinNotSelectable: "内置开发态插件不走批量管理",
@@ -485,6 +508,12 @@ export default {
     title: "命令面板",
     placeholder: "搜索会话、页面、设置或命令…",
     empty: "没有匹配的结果",
+    cmd: {
+      toggleSidebar: "折叠 / 展开侧栏",
+      togglePanel: "切换工作面板",
+      openSettings: "打开设置",
+      toggleTheme: "切换明暗主题",
+    },
     groups: {
       sessions: "会话",
       pages: "页面",

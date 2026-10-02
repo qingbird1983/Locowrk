@@ -243,11 +243,13 @@ async function commitRename() {
 
 <style scoped>
 /* 会话行（§2.3）：28px、圆角 8、0 8px 内边距、13px、超长省略；选中 =
- * wash-3 填充（禁止左侧色条）；行内缩进让出分组字形宽度 */
+ * wash-3 填充（禁止左侧色条）；行内缩进让出分组字形宽；行间 2px 垂直
+ * 间隙（§7-15：可高亮行的高亮瓦片不得粘连） */
 .session-row {
   display: flex;
   align-items: center;
   min-height: 28px;
+  margin-top: 2px;
   border-radius: var(--lw-r-xs);
   padding: 0 4px 0 28px;
 }

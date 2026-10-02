@@ -334,6 +334,31 @@
     background: color-mix(in oklab, var(--lw-ink-1) 18%, transparent);
   }
 
+  /* §3.26 选择与光标纪律：默认不可选（桌面应用不是网页），白名单才可选
+   * —— 输入类、.selectable、助手正文、用户气泡、思考/工具明细、diff 正文、
+   * pre/code；白名单容器里的 button 重新不可选（复制钮图标不被选进去） */
+  body {
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable],
+  .selectable,
+  .md,
+  .msg-user__bubble,
+  .thinking__body,
+  .tool__detail,
+  .diff-line__text,
+  pre,
+  code {
+    user-select: text;
+  }
+  .md button,
+  .tool__detail button,
+  .selectable button {
+    user-select: none;
+  }
+
   /* §2.3/§2.5 拖拽中：全局强制 col-resize + 禁选（拖过正文不选中），
    * 根节点 data-sidebar-resizing / data-work-panel-resizing 由拖拽柄置位 */
   :root[data-sidebar-resizing='true'],
@@ -391,10 +416,11 @@
     transparent;
 }
 
-/* --- 7. Vue 过渡类（§6.6 ②③：入场 --dur-base + --ease-out，
- * 退场 --dur-fast + --ease-in 且距离减半） --------------------------------- */
+/* --- 7. Vue 过渡类（§6.6 ②③：遮罩只做 opacity 且 --dur-fast 先到，
+ * 面板内容 --dur-base + --ease-out；退场 --dur-fast + --ease-in 且距离减半）
+ * ------------------------------------------------------------------------ */
 .lw-modal-enter-active {
-  transition: opacity var(--dur-base) var(--ease-out);
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 .lw-modal-leave-active {
   transition: opacity var(--dur-fast) var(--ease-in);

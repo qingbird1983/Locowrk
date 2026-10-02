@@ -2,8 +2,9 @@
 /**
  * 已安装页（壳批次拆分 + ⑩ 闲置 UI 接线）：搜索 + origin 筛选 chips +
  * 闲置筛选 chips（exposure 文档 §9.2，文案同用"多久"）+ 行内 IdleBadge
- * （§9.1 只显示一句"多久没用"）+ 多选批量栏（§9.5，批量卸载二次确认
- * 列出插件名）。闲置提示只在用户主动打开本页时出现（§8.8 不弹 toast）。
+ * （§9.1 只显示一句"多久没用"）+ 多选批量栏（§9.5；批量卸载二次确认 =
+ * §五 ConfirmDialog Modal，名单/数量/破坏范围一次说清）。闲置提示只在
+ * 用户主动打开本页时出现（§8.8 不弹 toast）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -15,6 +16,7 @@ import {
   updateAvailable,
 } from "../../lib/plugin-helpers";
 import ListPage from "../patterns/ListPage.vue";
+import ConfirmDialog, { type ConfirmItem } from "../shell/ConfirmDialog.vue";
 import IdleBadge from "../IdleBadge.vue";
 import PluginIcon from "../PluginIcon.vue";
 import SideEffectBadges from "../SideEffectBadges.vue";
@@ -104,11 +106,12 @@ function updateAvailableOf(p: InstalledPlugin): boolean {
   return updateAvailable(store.marketplace, p);
 }
 
-// ---- ⑩⑥ 批量操作（多选 + 批量栏；批量卸载二次确认列名单，§9.5）----
+// ---- ⑩⑥ 批量操作（多选 + 批量栏；批量卸载 = §五 ConfirmDialog Modal，
+// 名单/数量/破坏范围一次说清——v3.8 走查把批量栏内联两步确认升级成 Modal）----
 
 /** 多选集合（内置插件不进批量——不可卸载；停用/启用走行内按钮）。 */
 const selected = ref(new Set<string>());
-/** 二次确认态：true 时批量栏列出将卸载的插件名等确认。 */
+/** 批量卸载确认弹窗开合（§五 唯一带遮罩 Modal）。 */
 const confirmingUninstall = ref(false);
 /** 最近一次批量操作的部分失败（§10.2 逐条成败）。 */
 const batchError = ref("");
@@ -135,10 +138,15 @@ function toggleAll(on: boolean) {
 const selectedIds = computed(() =>
   store.installed.filter((p) => selected.value.has(p.id)).map((p) => p.id),
 );
-const selectedNames = computed(() =>
+/** 确认弹窗名单（名字 + id · 版本，mono 元信息）。 */
+const confirmItems = computed<ConfirmItem[]>(() =>
   store.installed
     .filter((p) => selected.value.has(p.id))
-    .map((p) => `${displayName(p, locale.value)} (${p.id})`),
+    .map((p) => ({
+      id: p.id,
+      name: displayName(p, locale.value),
+      meta: `${p.id} · ${p.version}`,
+    })),
 );
 
 async function runBatch(op: "disable" | "enable" | "uninstall") {
@@ -153,12 +161,15 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
     selected.value = new Set();
     return;
   }
-  // 二次确认由批量栏内联完成（§5 弹层规则：审批模态是全局唯一阻塞层）
-  if (!confirmingUninstall.value) {
-    confirmingUninstall.value = true;
-    return;
-  }
+  // 二次确认走 §五 ConfirmDialog（名单/数量/破坏范围一次说清）
+  confirmingUninstall.value = true;
+}
+
+/** 弹窗里按下「确认卸载」。 */
+async function confirmUninstall() {
   confirmingUninstall.value = false;
+  const ids = selectedIds.value;
+  if (ids.length === 0) return;
   batchError.value = "";
   const res = await store.batchUninstall(ids);
   if (res.failed.length > 0) {
@@ -346,44 +357,36 @@ async function runBatch(op: "disable" | "enable" | "uninstall") {
         {{ t("market.selectedCount", { n: selected.size }) }}
       </span>
 
-      <template v-if="!confirmingUninstall">
-        <button
-          class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
-          @click="runBatch('disable')"
-        >
-          {{ t("market.batchDisable") }}
-        </button>
-        <button
-          class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
-          @click="runBatch('enable')"
-        >
-          {{ t("market.batchEnable") }}
-        </button>
-        <button
-          class="rounded-lg text-danger transition hover:bg-danger/10"
-          @click="runBatch('uninstall')"
-        >
-          {{ t("market.batchUninstall") }}
-        </button>
-      </template>
-      <div v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <span class="text-xs text-danger">
-          {{ t("market.batchUninstallConfirm", { n: selected.size }) }}
-          <span class="text-ink-2">{{ selectedNames.join("、") }}</span>
-        </span>
-        <button
-          class="rounded-lg bg-danger px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-danger/85"
-          @click="runBatch('uninstall')"
-        >
-          {{ t("market.batchUninstall") }}
-        </button>
-        <button
-          class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
-          @click="confirmingUninstall = false"
-        >
-          {{ t("common.cancel") }}
-        </button>
-      </div>
+      <button
+        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
+        @click="runBatch('disable')"
+      >
+        {{ t("market.batchDisable") }}
+      </button>
+      <button
+        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
+        @click="runBatch('enable')"
+      >
+        {{ t("market.batchEnable") }}
+      </button>
+      <button
+        class="rounded-lg text-danger transition hover:bg-danger/10"
+        @click="runBatch('uninstall')"
+      >
+        {{ t("market.batchUninstall") }}
+      </button>
     </template>
+    <!-- 批量卸载二次确认（§五 唯一带遮罩 Modal：名单/数量/破坏范围一次说清） -->
+    <ConfirmDialog
+      :open="confirmingUninstall"
+      :title="t('market.batchUninstallConfirm', { n: selected.size })"
+      :sub="t('market.batchUninstallSub')"
+      :items="confirmItems"
+      :items-label="t('market.batchUninstallList', { n: selected.size })"
+      :impact="t('market.batchUninstallImpact', { n: selected.size })"
+      :confirm-label="t('market.batchUninstallGo')"
+      @confirm="confirmUninstall"
+      @cancel="confirmingUninstall = false"
+    />
   </ListPage>
 </template>

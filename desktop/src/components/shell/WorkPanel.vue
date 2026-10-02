@@ -9,17 +9,15 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useChatStore, type ToolItem } from "../../stores/chat";
 import { useShellStore } from "../../stores/shell";
 import { useWorkPanelStore } from "../../stores/work-panel";
 import { MAIN_FLOOR, PANEL_MIN } from "../../lib/work-panel-preference";
-import { clip } from "../../lib/format";
 import { Icon } from "../../lib/icons";
 import SubagentTranscriptTab from "./SubagentTranscriptTab.vue";
 import ReviewTab from "./ReviewTab.vue";
+import WorkPanelLauncher from "./WorkPanelLauncher.vue";
 
 const { t } = useI18n();
-const chat = useChatStore();
 const shell = useShellStore();
 const wp = useWorkPanelStore();
 
@@ -79,43 +77,7 @@ function onKeyDown(e: KeyboardEvent) {
   e.preventDefault();
 }
 
-// ---- 启动器清单（空态，§2.5/§3.14）：只列已实装页签类型的条目 ----
-/** §3.16 子转录：当前会话收束的 subagent_run。 */
-const subItems = computed(() => {
-  const out: { childId: string; title: string }[] = [];
-  const seen = new Set<string>();
-  for (const item of chat.items) {
-    if (item.kind !== "tool" || item.pending || !item.ok) continue;
-    const tool = item as ToolItem;
-    if (tool.tool !== "subagent_run") continue;
-    const childId = (tool.output as { child_session_id?: string } | null)?.child_session_id;
-    if (!childId || seen.has(childId)) continue;
-    seen.add(childId);
-    out.push({
-      childId,
-      title: clip(String((tool.args as { prompt?: unknown } | null)?.prompt ?? ""), 40),
-    });
-  }
-  return out;
-});
-
-/** §3.28 审阅：当前会话的 edit_diff 调用（diff 随 args.patch）。 */
-const reviewItems = computed(() => {
-  const out: { callId: string; path: string; diff: string }[] = [];
-  const seen = new Set<string>();
-  for (const item of chat.items) {
-    if (item.kind !== "tool" || item.pending) continue;
-    const tool = item as ToolItem;
-    if (tool.tool !== "edit_diff") continue;
-    const args = tool.args as { path?: unknown; patch?: unknown } | null;
-    if (typeof args?.path !== "string" || typeof args.patch !== "string") continue;
-    if (seen.has(tool.callId)) continue;
-    seen.add(tool.callId);
-    out.push({ callId: tool.callId, path: args.path, diff: args.patch });
-  }
-  return out;
-});
-
+// ---- 启动器条目打开（数据与行渲染在 WorkPanelLauncher）----
 function openSub(childId: string, title: string) {
   wp.openSubTab(childId, title);
 }
@@ -126,13 +88,16 @@ function openReview(item: { callId: string; path: string; diff: string }) {
 
 <template>
   <aside
-    class="work-panel relative flex h-full shrink-0 flex-col overflow-hidden bg-side"
+    class="work-panel relative flex h-full shrink-0 flex-col overflow-hidden bg-dock"
     :style="{ width: `${width}px` }"
     :aria-label="t('panel.title')"
   >
-    <!-- 头部：页签条（可关闭）+ 动作（`+` 回启动器 / 最大化 / 关闭面板） -->
+    <!-- 头部：页签条（可关闭）+ 动作（`+` 回启动器 / 最大化 / 关闭面板）。
+         面板恒在窗口最右，46px 带右端的窗口控制车道由它接管（§2.2-5）：
+         padding-right 预留 120px，顶栏同刻让位 -->
     <header
-      class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-1 border-b border-line-subtle px-2"
+      class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-1 px-3"
+      style="padding-right: var(--lw-wincontrols)"
     >
       <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         <button
@@ -144,7 +109,12 @@ function openReview(item: { callId: string; path: string; diff: string }) {
           :title="tab.title"
           @click="wp.activeTabId = tab.id"
         >
-          <Icon name="bot" :size="12" aria-hidden="true" />
+          <Icon
+            v-if="tab.kind === 'subagent'"
+            name="bot"
+            :size="12"
+            aria-hidden="true"
+          />
           <span class="panel-tab__title">{{ tab.title }}</span>
           <span
             class="panel-tab__close"
@@ -185,7 +155,8 @@ function openReview(item: { callId: string; path: string; diff: string }) {
       </button>
     </header>
 
-    <!-- 内容：活动页签（按类型分派）/ 启动器清单（§3.14：不是空态文案） -->
+    <!-- 内容：活动页签（按类型分派）/ 启动器清单（§3.14：不是空态文案；
+         数据与行渲染在 WorkPanelLauncher，§8.4 规划的拆分件） -->
     <div class="flex min-h-0 flex-1 flex-col">
       <template v-if="activeTab">
         <SubagentTranscriptTab
@@ -200,40 +171,11 @@ function openReview(item: { callId: string; path: string; diff: string }) {
           :diff="activeTab.diff"
         />
       </template>
-      <div v-else class="scroll-y flex-1 px-2 py-2">
-        <template v-if="subItems.length > 0 || reviewItems.length > 0">
-          <template v-if="subItems.length > 0">
-            <div class="side-label px-1">{{ t("panel.launcherSub") }}</div>
-            <button
-              v-for="item in subItems"
-              :key="item.childId"
-              type="button"
-              class="launcher-row"
-              @click="openSub(item.childId, item.title)"
-            >
-              <Icon name="bot" :size="14" aria-hidden="true" />
-              <span class="launcher-row__title">{{ item.title }}</span>
-            </button>
-          </template>
-          <template v-if="reviewItems.length > 0">
-            <div class="side-label px-1">{{ t("panel.launcherReview") }}</div>
-            <button
-              v-for="item in reviewItems"
-              :key="item.callId"
-              type="button"
-              class="launcher-row"
-              :title="item.path"
-              @click="openReview(item)"
-            >
-              <Icon name="file" :size="14" aria-hidden="true" />
-              <span class="launcher-row__title">{{ item.path }}</span>
-            </button>
-          </template>
-        </template>
-        <p class="px-2 py-3 text-[12px] leading-relaxed text-ink-4">
-          {{ t("panel.launcherHint") }}
-        </p>
-      </div>
+      <WorkPanelLauncher
+        v-else
+        @open-sub="openSub"
+        @open-review="openReview"
+      />
     </div>
 
     <!-- 拖柄（§2.5）：嵌面板左缘，10px 热区 + 2×32 圆角条提示 -->
@@ -241,7 +183,7 @@ function openReview(item: { callId: string; path: string; diff: string }) {
       class="panel-grip"
       type="button"
       role="separator"
-      aria-orientation="horizontal"
+      aria-orientation="vertical"
       :aria-label="t('panel.resize')"
       :aria-valuemin="PANEL_MIN"
       :aria-valuemax="budget"
@@ -260,9 +202,8 @@ function openReview(item: { callId: string; path: string; diff: string }) {
 </template>
 
 <style scoped>
-.work-panel {
-  border-left: 1px solid var(--lw-line-subtle);
-}
+/* 面板列底 = bg-dock（§6.1 表专token）；平面内无边框——与主区的层次
+ * 靠底色差表达（§6.1 平面内分层铁则，v3.8 走查修正） */
 .ctl {
   display: inline-flex;
   width: var(--lw-ctl);
@@ -278,17 +219,21 @@ function openReview(item: { callId: string; path: string; diff: string }) {
   color: var(--lw-ink-1);
 }
 
-/* 页签（§2.5）：28px 圆角 8、选中 wash-3（高亮瓦片不粘连，§7 规则） */
+/* 页签（原型 .tab）：28px 高、圆角 10、常态 wash-1、选中 wash-3、
+ * max-width 200、字 12.5px；仅子 Agent 页签挂 bot 字形 */
 .panel-tab {
   display: inline-flex;
   height: 28px;
-  max-width: 180px;
+  max-width: 200px;
   flex: 0 0 auto;
   align-items: center;
-  gap: 5px;
-  border-radius: var(--lw-r-md);
-  padding: 0 6px 0 8px;
+  gap: 6px;
+  border-radius: var(--lw-r-sm);
+  padding: 0 4px 0 10px;
+  font-size: 12.5px;
+  line-height: 1.3;
   color: var(--lw-ink-2);
+  background: var(--lw-wash-1);
 }
 .panel-tab:hover {
   background: var(--lw-wash-2);
@@ -302,45 +247,21 @@ function openReview(item: { callId: string; path: string; diff: string }) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 12.5px;
 }
 .panel-tab__close {
   display: inline-flex;
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: var(--lw-r-xs);
+  border-radius: var(--lw-r-2xs);
   color: var(--lw-ink-4);
 }
 .panel-tab__close:hover {
   background: var(--lw-wash-3);
   color: var(--lw-ink-1);
-}
-
-/* 启动器行（§3.14 列表行卡）：图标 + 一句可做的事 */
-.launcher-row {
-  display: flex;
-  width: 100%;
-  min-height: 28px;
-  align-items: center;
-  gap: 8px;
-  border-radius: var(--lw-r-md);
-  padding: 0 8px;
-  color: var(--lw-ink-2);
-  text-align: left;
-}
-.launcher-row:hover {
-  background: var(--lw-wash-2);
-}
-.launcher-row__title {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
 }
 
 /* 拖柄（§2.5）：inset-block 0 / left -5 / width 10 / z-30；提示 2×32
@@ -382,10 +303,5 @@ function openReview(item: { callId: string; path: string; diff: string }) {
 }
 .panel-grip:focus-visible {
   outline: none;
-}
-.side-label {
-  padding: 6px 8px 4px;
-  font-size: 11.5px;
-  color: var(--lw-ink-4);
 }
 </style>

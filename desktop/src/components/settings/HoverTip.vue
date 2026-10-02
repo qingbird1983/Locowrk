@@ -15,7 +15,7 @@ defineProps<{ label?: string }>();
   <span class="group relative ml-1 inline-flex" role="note" :aria-label="label">
     <Icon name="warn" :size="13" class="text-warn" aria-hidden="true" />
     <span
-      class="pointer-events-none invisible absolute left-1/2 top-full z-50 mt-1.5 w-max max-w-[280px] -translate-x-1/2 rounded-[var(--lw-r-sm)] border border-line-subtle bg-raised px-3 py-2 text-left text-[11px] leading-relaxed text-ink-2 opacity-0 shadow-raised transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+      class="pointer-events-none invisible absolute left-1/2 top-full z-60 mt-1.5 w-max max-w-[280px] -translate-x-1/2 rounded-[var(--lw-r-sm)] border border-line-subtle bg-raised px-3 py-2 text-left text-[11px] leading-relaxed text-ink-2 opacity-0 shadow-raised transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
     >
       <slot />
     </span>
