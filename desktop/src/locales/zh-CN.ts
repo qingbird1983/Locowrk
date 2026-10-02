@@ -49,6 +49,7 @@ export default {
     searchEmpty: "没有匹配的会话",
     newChat: "新会话",
     sessions: "会话",
+    projects: "项目",
     bucket7: "近 7 天",
     bucket14: "近 14 天",
     earlier: "更早",
@@ -66,6 +67,8 @@ export default {
       more: "会话操作",
       rename: "重命名",
       export: "导出",
+      moveInto: "移入「{name}」",
+      moveOut: "移出工作区",
       delete: "删除",
       confirmDelete: "确认删除？再点一次执行",
     },
@@ -125,6 +128,9 @@ export default {
     deleted: "会话已删除",
     deleteFailed: "删除失败",
     renameFailed: "重命名失败",
+    movedInto: "已移入工作区",
+    movedOut: "已移出工作区",
+    associateFailed: "工作区关联失败",
   },
   notice: {
     action: {

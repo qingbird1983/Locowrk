@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
  * 侧栏（UI shell doc §2.1 ①② / §2.3 / §3.6）：会话运营 + 目的地入口。
- * - 一级分组 = 「会话」（会话↔工作区关联 §8.2 未落地前全量落这里）；
- *   二级分组 = 时间桶（近 7 天 / 近 14 天 / 更早）。
+ * - 会话树在 SessionGroups（§2.3 两级分组：未关联落「会话」，已关联落
+ *   「项目」→ 工作区 → 时间桶，v2.50 关联落地）。
  * - 搜索框 = 标题前端过滤 + 正文命中（v2.49 `session_search`，命中行带
  *   摘录，mtime 降序限量）。
- * - 行渲染与运营（重命名/导出/删除）在 SessionRow（§3.6 行尾 `…` 菜单）。
  * - 版本号连点 7 次 = 解锁「开发者」设置分区（安卓式，可配置原则
  *   §7-16②；解锁态存 settings.json `developer.unlocked`）。
  * - 折叠/拖宽交互在 use-sidebar-resize（§2.3）；宽度跨重启持久化。
@@ -17,12 +16,11 @@ import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
-import type { SessionMeta } from "../../types";
 import { SIDEBAR_MAX, SIDEBAR_MIN } from "../../lib/sidebar-preference";
 import { useSidebarResize } from "./use-sidebar-resize";
 import { useSessionSearch } from "./use-session-search";
 import { Icon } from "../../lib/icons";
-import SessionRow from "./SessionRow.vue";
+import SessionGroups from "./SessionGroups.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -37,37 +35,13 @@ onMounted(async () => {
   version.value = (await getVersion().catch(() => "")) || "";
 });
 
-// ---- 时间桶（§2.3 二级分组：按最后活动时间，前端即可算） ----
-const DAY = 86_400_000;
-const BUCKETS = [
-  { key: "bucket7", limit: 7 * DAY },
-  { key: "bucket14", limit: 14 * DAY },
-  { key: "earlier", limit: Number.POSITIVE_INFINITY },
-] as const;
-
-function bucketOf(tsSeconds: number): (typeof BUCKETS)[number] {
-  const age = Date.now() - tsSeconds * 1000;
-  return BUCKETS.find((b) => age <= b.limit) ?? BUCKETS[2];
-}
-
+// ---- 分组树（§2.3）：两级分组在 lib/session-groups.ts + SessionGroups ----
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return chat.sessions;
   return chat.sessions.filter((s) =>
     (s.title ?? s.id).toLowerCase().includes(q),
   );
-});
-
-const grouped = computed(() => {
-  const out: { key: string; items: SessionMeta[] }[] = BUCKETS.map((b) => ({
-    key: b.key,
-    items: [],
-  }));
-  for (const s of filtered.value) {
-    const idx = BUCKETS.indexOf(bucketOf(s.updatedAt));
-    out[idx === -1 ? 2 : idx].items.push(s);
-  }
-  return out.filter((g) => g.items.length > 0);
 });
 
 // ---- 正文搜索（v2.49）：防抖/竞态守卫在 use-session-search.ts ----
@@ -177,16 +151,8 @@ const {
           </button>
         </div>
 
-        <div class="side-label">{{ t("sidebar.sessions") }}</div>
-
-        <template v-for="group in grouped" :key="group.key">
-          <div class="bucket-label">{{ t(`sidebar.${group.key}`) }}</div>
-          <SessionRow
-            v-for="s in group.items"
-            :key="s.id"
-            :session="s"
-          />
-        </template>
+        <!-- 会话树（§2.3）：「会话」组 + 「项目」组（工作区→时间桶） -->
+        <SessionGroups :sessions="filtered" />
 
         <!-- 正文命中（v2.49）：标题过滤之后的第二段 -->
         <template v-if="search.trim() && contentHits.length > 0">
@@ -306,11 +272,6 @@ const {
 
 .side-label {
   padding: 10px 8px 4px;
-  font-size: 11.5px;
-  color: var(--lw-ink-4);
-}
-.bucket-label {
-  padding: 6px 8px 2px 28px;
   font-size: 11.5px;
   color: var(--lw-ink-4);
 }

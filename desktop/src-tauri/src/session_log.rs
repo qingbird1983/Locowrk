@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use session_store::Session;
 use session_store::{
     append_event, delete_session, list_sessions, load_session, rewrite_log, search_sessions,
-    session_file, write_title, SessionMeta, SessionSearchHit,
+    session_file, write_title, write_workspace, SessionMeta, SessionSearchHit,
 };
 
 type SessionsMap = Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>>;
@@ -88,6 +88,12 @@ pub fn list(dir: &Path) -> Vec<SessionMeta> {
 /// 自动标题）。内存会话不动——标题只在列表层生效。
 pub fn rename(dir: &Path, session_id: &str, title: &str) -> std::io::Result<()> {
     write_title(dir, session_id, title)
+}
+
+/// 工作区关联（v2.50 §2.3）：写旁车 meta.json `workspace`（None/空 = 移
+/// 出）。内存会话不动——归属只在列表层生效。
+pub fn associate(dir: &Path, session_id: &str, workspace: Option<&str>) -> std::io::Result<()> {
+    write_workspace(dir, session_id, workspace)
 }
 
 /// 删除（v2.49 会话运营）：日志 + 旁车 + undo 备份一并移除（幂等）。

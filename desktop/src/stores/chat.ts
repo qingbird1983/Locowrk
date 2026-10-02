@@ -3,6 +3,7 @@
 import { defineStore } from "pinia";
 import {
   chat,
+  sessionAssociate,
   sessionDelete,
   sessionExport,
   sessionHistory,
@@ -119,6 +120,12 @@ export const useChatStore = defineStore("chat", {
      * 标题），列表层生效。 */
     async renameSession(id: string, title: string) {
       await sessionRename(id, title);
+      await this.refreshSessions();
+    },
+    /** 工作区关联（v2.50 §2.3）：workspace = fsRoots 根目录，null =
+     * 移出；后端校验必须是其一根，列表层生效。 */
+    async associateSession(id: string, workspace: string | null) {
+      await sessionAssociate(id, workspace);
       await this.refreshSessions();
     },
     /** 删除会话（v2.49）：后端忙锁守卫（运行中默认拒绝，开发者开关可

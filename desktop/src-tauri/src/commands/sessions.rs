@@ -20,6 +20,32 @@ pub async fn session_rename(
         .map_err(|e| format!("重命名失败: {e}"))
 }
 
+/// 会话↔工作区关联（v2.50 §2.3）：写旁车 `workspace` 字段；`None`/空 =
+/// 移出。目标必须是当前 fsRoots 之一（后端直读设置校验，不信前端转述）；
+/// 根目录日后从设置移除的，既有归属不追改（侧栏组名取存储路径，组照常
+/// 显示，会话仍可移出）。
+#[tauri::command]
+pub async fn session_associate(
+    session_id: String,
+    workspace: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let ws = workspace
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if let Some(ws) = ws {
+        let roots = state.settings.fs_roots();
+        if !roots.iter().any(|r| r == ws) {
+            return Err(format!(
+                "「{ws}」不在 设置 → 工具 → 工作区目录 里，不能关联"
+            ));
+        }
+    }
+    crate::session_log::associate(&state.sessions_dir, &session_id, ws)
+        .map_err(|e| format!("关联失败: {e}"))
+}
+
 /// 会话删除：忙锁守卫——运行中的会话锁被整轮持有，默认拒绝；开发者开关
 /// `developer.allowDeleteRunningSession`（后端直读设置，不信前端转述）
 /// 放行时强制删（运行轮余段会重建日志文件）。删除后同步剔除内存条目与

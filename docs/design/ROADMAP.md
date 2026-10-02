@@ -520,6 +520,26 @@ check_length OK；CDP 走查逐项数值取证（见各行）+ 亮暗两主题�
 改动的用户设置已还原（approvalTimeoutSecs=100）。缓办：⌘K 会话组接正文搜索（命令面板
 侧消费端，后端命令已就位）；§8.2 会话↔工作区关联（meta 文件已留 `workspace` 字段）。
 
+### ㉖·收尾 会话↔工作区关联（✅ 已完成，v2.50）
+
+> 自规划收尾批：㉖ 排期只剩 §8.2 关联（v2.49 meta 旁车已留 `workspace` 字段）。
+> UI shell 文档 §2.3/§3.6/§8.2 先行成文再动码。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 后端关联 | ✅ v2.50 | session-store persist：`write_workspace`（通用 `write_meta` 合并写入——两字段全空才删旁车文件；**修 v2.49 真实缺陷：`write_title` 空标题删整个旁车文件会连带抹掉已关联 workspace**，改为只清字段，回归测试锁住）；`SessionMeta` +`workspace` 随 `session_list` 透出；`session_associate` 命令后端直读设置校验目标必须是当前 fsRoots 之一（不信前端转述），移出 = null；测试 +2（关联往返+清除 / 改名清空保关联） |
+| 侧栏两级树 | ✅ v2.50 | `lib/session-groups.ts` 纯函数（工作区→时间桶两级组装：组名 = 存储路径末段（`\`/`/` 通吃；根目录移除后组照常显示不静默丢）、工作区组按组内最近活动降序、runningId 传入算组内运行）+ `SessionGroups.vue`（顶层「会话」组 + 「项目」组；工作区头 28px = 12px chevron（展开转 90°）+ 14px 文件夹 + 13px 名 + 可选 6px 运行点，hover wash-2；头行可折叠、折叠键 = workspace 存储路径、持久化进侧栏偏好 `collapsedGroups`（读改写合并，与 shell store 宽/折叠互不覆盖）；嵌套行缩进 56px、桶标签随迁）——Sidebar 分组逻辑迁出保 400 行 |
+| 行尾菜单关联项 | ✅ v2.50 | SessionRow `…` 菜单增「移入工作区」（候选 = 设置 fsRoots，当前归属项置灰 ✓ 前缀）与「移出工作区」（有归属才出现）；toast 反馈 + 失败条；`chat.associateSession` → `sessionAssociate` API |
+| 测试 | ✅ v2.50 | session-store 24 绿（+2）；桌面 103 绿（命令层薄适配无新增，由 session-store 测试与走查覆盖） |
+
+验证：cargo test 103+24 绿、clippy 0（desktop+session-store）、fmt、check_length OK、pnpm build 过。
+实机走查（tauri dev + CDP 截图 26b-1…26b-7 + 落盘取证）：真实轮（deepseek + 8 工具步）建会话 →
+`…` 菜单四项（重命名/导出/移入「Locowrk」/删除）→ 移入 → 「项目」组 + 工作区头 + 嵌套行 +
+toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "F:\\…\\Locowrk"}` →
+头行折叠（嵌套行消失）→ **Page.reload 后折叠态保持**（localStorage 偏好）→ 移出 → 回「会话」组、
+「项目」组消失。搭车：en 补缺的 `settings.nav.developer` 键（zh 有 en 缺，回落键名）。走查
+预置的 fsRoots 已还原（fsRoots=[]），走查会话经 UI 两步删除；上批遗留的走查会话残留一并清理。
+
 ### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）
 
 ---

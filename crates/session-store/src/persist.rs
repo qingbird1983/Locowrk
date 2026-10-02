@@ -100,7 +100,8 @@ pub fn load_session(path: &Path) -> std::io::Result<(Session, usize)> {
 
 /// 会话文件元数据（列表用；`updated_at` = 文件 mtime 的 Unix 秒；
 /// `title` = 首条用户消息截断（切换器选项文案，None = 还没有用户消息），
-/// 截断宽度 [`SESSION_TITLE_CHARS`]）。
+/// 截断宽度 [`SESSION_TITLE_CHARS`]；`workspace` = §2.3 工作区关联
+/// （v2.50，旁车 meta 的透出，None = 未关联））。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMeta {
@@ -108,6 +109,7 @@ pub struct SessionMeta {
     pub updated_at: i64,
     pub events: usize,
     pub title: Option<String>,
+    pub workspace: Option<String>,
 }
 
 /// 列表标题截断宽度（字符）。
@@ -157,8 +159,11 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                     (events, title)
                 })
                 .unwrap_or((0, None));
-            // 重命名标题覆盖自动标题（v2.49）：缺文件 / 无字段时回落
-            let title = read_meta(dir, &id).and_then(|m| m.title).or(title);
+            // 重命名标题覆盖自动标题（v2.49）+ 工作区归属透出（v2.50）：
+            // 旁车一次读，缺文件 / 无字段时各自回落
+            let sidecar = read_meta(dir, &id);
+            let title = sidecar.as_ref().and_then(|m| m.title.clone()).or(title);
+            let workspace = sidecar.and_then(|m| m.workspace);
             Some((
                 modified,
                 SessionMeta {
@@ -166,6 +171,7 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                     updated_at,
                     events,
                     title,
+                    workspace,
                 },
             ))
         })
@@ -200,20 +206,25 @@ fn invalid_id(e: StoreError) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
 }
 
-/// 写重命名标题（v2.49）：trim 后空串 = 删除旁车文件（回落自动标题）；
-/// 非空 = 合并写入（保留 workspace 等既有字段）。
-pub fn write_title(dir: &Path, session_id: &str, title: &str) -> std::io::Result<()> {
+/// 旁车字段写入（合并语义）：读出既有 → 应用更新 → 两字段全空删文件
+/// （回落全自动），否则合并写盘。v2.49 的 `write_title` 空标题**删整个
+/// 文件**，会连带抹掉已关联的 workspace（v2.50 起两字段并存）——改为只
+/// 清字段。
+fn write_meta(
+    dir: &Path,
+    session_id: &str,
+    update: impl FnOnce(&mut SessionMetaFile),
+) -> std::io::Result<()> {
     let path = meta_file(dir, session_id).map_err(invalid_id)?;
-    let t = title.trim();
-    if t.is_empty() {
+    let mut meta = read_meta(dir, session_id).unwrap_or_default();
+    update(&mut meta);
+    if meta.title.is_none() && meta.workspace.is_none() {
         return match std::fs::remove_file(&path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e),
         };
     }
-    let mut meta = read_meta(dir, session_id).unwrap_or_default();
-    meta.title = Some(t.to_string());
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -221,6 +232,29 @@ pub fn write_title(dir: &Path, session_id: &str, title: &str) -> std::io::Result
         &path,
         serde_json::to_vec_pretty(&meta).expect("meta serialize"),
     )
+}
+
+/// 写重命名标题（v2.49）：trim 后空串 = 只清标题字段（回落自动标题，
+/// 保留 workspace 等其余字段）；非空 = 合并写入。
+pub fn write_title(dir: &Path, session_id: &str, title: &str) -> std::io::Result<()> {
+    let t = title.trim().to_string();
+    write_meta(dir, session_id, |m| {
+        m.title = (!t.is_empty()).then_some(t.clone());
+    })
+}
+
+/// 写工作区归属（v2.50 §2.3）：`Some(根目录)` = 关联（trim 后空串视同
+/// 清除）；`None` = 移出。合并写入保留标题；两字段全空时删旁车文件。
+pub fn write_workspace(
+    dir: &Path,
+    session_id: &str,
+    workspace: Option<&str>,
+) -> std::io::Result<()> {
+    let ws = workspace
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    write_meta(dir, session_id, |m| m.workspace = ws)
 }
 
 /// 删除会话的全部磁盘痕迹（v2.49 会话运营）：日志、旁车元数据、undo

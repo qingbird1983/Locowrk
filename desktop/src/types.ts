@@ -66,12 +66,14 @@ export interface ContextCompactedEvent {
 }
 
 /** 会话列表行（⑲ session_list；mtime 降序）。title = 首条用户消息
- * 截断（None = 还没有用户消息，选项回退显示 id）。 */
+ * 截断（None = 还没有用户消息，选项回退显示 id）；workspace = §2.3
+ * 工作区归属（v2.50，旁车 meta 透出，null = 未关联）。 */
 export interface SessionMeta {
   id: string;
   updatedAt: number;
   events: number;
   title: string | null;
+  workspace: string | null;
 }
 
 /** 会话正文搜索命中（v2.49）：mtime 降序限量；snippet = 首处摘录。 */

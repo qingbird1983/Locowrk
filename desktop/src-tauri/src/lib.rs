@@ -166,6 +166,7 @@ pub fn run() {
             commands::session_list,
             commands::session_history,
             commands::session_rename,
+            commands::session_associate,
             commands::session_delete,
             commands::session_search,
             commands::session_export,

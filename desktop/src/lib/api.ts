@@ -212,6 +212,15 @@ export function sessionRename(sessionId: string, title: string): Promise<void> {
   return invoke("session_rename", { sessionId, title });
 }
 
+/** 会话↔工作区关联（v2.50 §2.3）：workspace = fsRoots 根目录，null =
+ * 移出；后端校验必须是其一根。 */
+export function sessionAssociate(
+  sessionId: string,
+  workspace: string | null,
+): Promise<void> {
+  return invoke("session_associate", { sessionId, workspace });
+}
+
 /** 会话删除（v2.49）：忙锁守卫在后端（运行中默认拒绝，开发者开关可
  * 强制）。幂等。 */
 export function sessionDelete(sessionId: string): Promise<void> {

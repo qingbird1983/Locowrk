@@ -14,10 +14,12 @@ export interface SidebarPrefs {
   /** 展开宽度（折叠 ≠ 宽度 0：折叠是独立状态，展开回到记住的宽度）。 */
   width: number;
   collapsed: boolean;
+  /** §2.3 分组头折叠键（v2.50：工作区组 = workspace 存储路径）。 */
+  collapsedGroups: string[];
 }
 
 export function loadSidebarPrefs(): SidebarPrefs {
-  const fallback: SidebarPrefs = { width: SIDEBAR_DEFAULT, collapsed: false };
+  const fallback: SidebarPrefs = { width: SIDEBAR_DEFAULT, collapsed: false, collapsedGroups: [] };
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return fallback;
@@ -26,7 +28,13 @@ export function loadSidebarPrefs(): SidebarPrefs {
       typeof parsed.width === "number" && Number.isFinite(parsed.width)
         ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(parsed.width)))
         : SIDEBAR_DEFAULT;
-    return { width, collapsed: parsed.collapsed === true };
+    return {
+      width,
+      collapsed: parsed.collapsed === true,
+      collapsedGroups: Array.isArray(parsed.collapsedGroups)
+        ? parsed.collapsedGroups.filter((k): k is string => typeof k === "string")
+        : [],
+    };
   } catch {
     return fallback;
   }
@@ -38,4 +46,15 @@ export function saveSidebarPrefs(prefs: SidebarPrefs): void {
   } catch {
     /* 存不下只丢偏好，不影响功能 */
   }
+}
+
+/** §2.3 分组头折叠态（v2.50）：读 / 读改写（与宽/折叠同文件互不覆盖）。 */
+export function loadCollapsedGroups(): Set<string> {
+  return new Set(loadSidebarPrefs().collapsedGroups);
+}
+
+export function saveCollapsedGroups(groups: Set<string>): void {
+  const prefs = loadSidebarPrefs();
+  prefs.collapsedGroups = [...groups];
+  saveSidebarPrefs(prefs);
 }

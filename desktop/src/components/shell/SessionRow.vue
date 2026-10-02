@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * 会话行（UI shell 文档 §2.3/§3.6）：28px 行 + 运行/待决状态点 + 行尾
- * `…` 菜单（仅 hover/选中显形）= 重命名 / 导出 / 删除（两步确认，危险
- * 项 §3.20 规则）；重命名 = 行内编辑（Enter/失焦提交、Esc 取消、空串
- * 取消）。运行中禁切/禁删由「开发者」危险开关可解（可配置原则 §七-16②：
- * 禁止项都有开关）——后端忙锁守卫仍在，开关只解锁尝试。
+ * `…` 菜单（仅 hover/选中显形）= 重命名 / 导出 / 工作区关联（v2.50
+ * §2.3：移入候选 = fsRoots，当前归属置灰打勾；移出）/ 删除（两步确认，
+ * 危险项 §3.20 规则）；重命名 = 行内编辑（Enter/失焦提交、Esc 取消、
+ * 空串取消）。运行中禁切/禁删由「开发者」危险开关可解（可配置原则
+ * §七-16②：禁止项都有开关）——后端忙锁守卫仍在，开关只解锁尝试。
  */
 import { computed, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -14,10 +15,11 @@ import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
 import type { SessionMeta } from "../../types";
+import { workspaceDisplayName } from "../../lib/session-groups";
 import { Icon } from "../../lib/icons";
 import RowMenu, { type RowMenuItem } from "./RowMenu.vue";
 
-const props = defineProps<{ session: SessionMeta }>();
+const props = defineProps<{ session: SessionMeta; nested?: boolean }>();
 const { t } = useI18n();
 const chat = useChatStore();
 const shell = useShellStore();
@@ -51,20 +53,45 @@ const menu = ref<{ x: number; y: number } | null>(null);
 const confirmingDelete = ref(false);
 const moreBtn = ref<HTMLButtonElement | null>(null);
 
-const menuItems = computed<RowMenuItem[]>(() => [
-  { id: "rename", label: t("sidebar.menu.rename") },
-  { id: "export", label: t("sidebar.menu.export") },
-  { id: "sep", label: "", separator: true },
-  {
-    id: "delete",
-    label: confirmingDelete.value
-      ? t("sidebar.menu.confirmDelete")
-      : t("sidebar.menu.delete"),
-    danger: true,
-    disabled: deleteDisabled.value,
-    keepOpen: true,
-  },
-]);
+/** 工作区候选 = 设置 → 工具 → 工作区目录（后端还会校验，前端只是
+ * 把候选收窄到当前配置）。 */
+const fsRoots = computed(() => settings.view?.tools.fsRoots ?? []);
+
+const menuItems = computed<RowMenuItem[]>(() => {
+  const items: RowMenuItem[] = [
+    { id: "rename", label: t("sidebar.menu.rename") },
+    { id: "export", label: t("sidebar.menu.export") },
+  ];
+  if (fsRoots.value.length > 0) {
+    items.push({ id: "sep-ws", label: "", separator: true });
+    for (const root of fsRoots.value) {
+      const current = props.session.workspace === root;
+      items.push({
+        id: `ws:${root}`,
+        label: current
+          ? `✓ ${workspaceDisplayName(root)}`
+          : t("sidebar.menu.moveInto", { name: workspaceDisplayName(root) }),
+        disabled: current,
+      });
+    }
+    if (props.session.workspace) {
+      items.push({ id: "ws:clear", label: t("sidebar.menu.moveOut") });
+    }
+  }
+  items.push(
+    { id: "sep", label: "", separator: true },
+    {
+      id: "delete",
+      label: confirmingDelete.value
+        ? t("sidebar.menu.confirmDelete")
+        : t("sidebar.menu.delete"),
+      danger: true,
+      disabled: deleteDisabled.value,
+      keepOpen: true,
+    },
+  );
+  return items;
+});
 
 function openMenu(e: MouseEvent) {
   confirmingDelete.value = false;
@@ -83,6 +110,19 @@ async function onMenuSelect(id: string) {
   if (id === "rename") {
     closeMenu();
     void startRename();
+  } else if (id.startsWith("ws:")) {
+    // 工作区关联（v2.50 §2.3）：ws:clear = 移出，ws:<路径> = 移入
+    closeMenu();
+    const target = id.slice(3);
+    try {
+      await chat.associateSession(sid, target === "clear" ? null : target);
+      toast.push(
+        "ok",
+        target === "clear" ? t("toast.movedOut") : t("toast.movedInto"),
+      );
+    } catch (e) {
+      toast.push("danger", t("toast.associateFailed"), String(e));
+    }
   } else if (id === "export") {
     closeMenu();
     try {
@@ -136,6 +176,7 @@ async function commitRename() {
 <template>
   <div
     class="session-row"
+    :class="{ 'session-row--nested': nested }"
     :data-selected="isCurrent || undefined"
     :title="session.title ?? session.id"
   >
@@ -215,6 +256,10 @@ async function commitRename() {
 }
 .session-row[data-selected] {
   background: var(--lw-wash-3);
+}
+/* 工作区内的会话（§2.3）：再缩进一档让出分组头字形宽 */
+.session-row--nested {
+  padding-left: 56px;
 }
 .session-row__main {
   display: flex;

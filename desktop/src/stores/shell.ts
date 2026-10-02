@@ -44,7 +44,9 @@ export const useShellStore = defineStore("shell", {
       this.sidebarWidth = Math.round(Math.min(max, Math.max(SIDEBAR_MIN, w)));
     },
     commitSidebarWidth() {
+      // 读改写：保留 SessionGroups 持有的分组头折叠键（v2.50）
       saveSidebarPrefs({
+        ...loadSidebarPrefs(),
         width: this.sidebarWidth,
         collapsed: this.sidebarCollapsed,
       });

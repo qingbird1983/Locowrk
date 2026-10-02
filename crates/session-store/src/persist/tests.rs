@@ -179,3 +179,48 @@ fn search_finds_content_with_snippet_and_respects_limit() {
     assert_eq!(search_sessions(&dir, "不存在的词", 10).len(), 0);
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn workspace_association_roundtrip_and_clear() {
+    let dir = tmp_dir("ws");
+    let path = session_file(&dir, "w1").unwrap();
+    append_event(&path, &user_msg("关联前的消息")).unwrap();
+    // 未关联：列表行 workspace = None
+    assert_eq!(list_sessions(&dir)[0].workspace, None);
+    // 关联 → 列表行透出；标题字段不受影响
+    write_workspace(&dir, "w1", Some("F:\\Warehouse\\AIwork\\Locowrk")).unwrap();
+    let row = &list_sessions(&dir)[0];
+    assert_eq!(
+        row.workspace.as_deref(),
+        Some("F:\\Warehouse\\AIwork\\Locowrk")
+    );
+    assert_eq!(row.title.as_deref(), Some("关联前的消息"));
+    // trim + 空串视同清除
+    write_workspace(&dir, "w1", Some("  ")).unwrap();
+    assert_eq!(list_sessions(&dir)[0].workspace, None);
+    // 两字段全空 → 旁车文件删除（回落全自动）
+    assert!(read_meta(&dir, "w1").is_none());
+    // 非法 id 拒绝
+    assert!(write_workspace(&dir, "../x", Some("F:/ws")).is_err());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn rename_to_empty_preserves_workspace() {
+    let dir = tmp_dir("ws-title");
+    let path = session_file(&dir, "w2").unwrap();
+    append_event(&path, &user_msg("自动标题")).unwrap();
+    write_workspace(&dir, "w2", Some("F:/ws")).unwrap();
+    write_title(&dir, "w2", "手起的名").unwrap();
+    // 改名与关联并存（合并写入）
+    let meta = read_meta(&dir, "w2").unwrap();
+    assert_eq!(meta.title.as_deref(), Some("手起的名"));
+    assert_eq!(meta.workspace.as_deref(), Some("F:/ws"));
+    // 空标题只清标题字段——workspace 保留（v2.49 会整文件删除，v2.50 修）
+    write_title(&dir, "w2", "  ").unwrap();
+    let meta = read_meta(&dir, "w2").unwrap();
+    assert_eq!(meta.title, None);
+    assert_eq!(meta.workspace.as_deref(), Some("F:/ws"));
+    assert_eq!(list_sessions(&dir)[0].workspace.as_deref(), Some("F:/ws"));
+    std::fs::remove_dir_all(&dir).ok();
+}
