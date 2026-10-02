@@ -13,6 +13,7 @@ import { useShellStore } from "../../stores/shell";
 import { useSettingsStore } from "../../stores/settings";
 import {
   SETTINGS_SECTIONS,
+  isSectionVisible,
   type SettingsSectionId,
 } from "../../lib/settings-index";
 import SettingsNav from "../shell/SettingsNav.vue";
@@ -20,6 +21,7 @@ import AppearanceSection from "./AppearanceSection.vue";
 import ChatSection from "./ChatSection.vue";
 import ContextSection from "./ContextSection.vue";
 import DeveloperSection from "./DeveloperSection.vue";
+import ToolsSection from "./ToolsSection.vue";
 import EmbeddingSection from "./EmbeddingSection.vue";
 import LanguageSection from "./LanguageSection.vue";
 import LlmSection from "./LlmSection.vue";
@@ -40,7 +42,8 @@ const SECTION_COMPONENTS: Record<SettingsSectionId, Component> = {
   embedding: EmbeddingSection,
   plugins: PluginsSection,
   shell: ShellSection,
-  tools: DeveloperSection,
+  tools: ToolsSection,
+  developer: DeveloperSection,
   sessions: SessionsSection,
 };
 
@@ -48,7 +51,15 @@ const { t } = useI18n();
 const shell = useShellStore();
 const settings = useSettingsStore();
 
-const current = computed(() => shell.settingsSection);
+/** 当前分区（带 devOnly 守卫）：开发者选项上锁时若持久化/跳转落在此
+ * 分区，回落外观（隐藏 = 三处同隐，面板也不渲染，§3.2 v2.49）。 */
+const current = computed(() => {
+  const meta = SETTINGS_SECTIONS.find((x) => x.id === shell.settingsSection);
+  if (meta && !isSectionVisible(meta, settings.view?.developer.unlocked ?? false)) {
+    return "appearance" as SettingsSectionId;
+  }
+  return shell.settingsSection;
+});
 const panel = computed(() => SECTION_COMPONENTS[current.value]);
 
 function sectionLabel(id: SettingsSectionId): string {

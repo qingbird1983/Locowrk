@@ -44,6 +44,7 @@ fn update_persists_and_roundtrips() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     // 重新打开：从磁盘读回，而非内存态
@@ -75,6 +76,7 @@ fn api_key_never_leaks_into_view() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     let json = serde_json::to_string(&store.view()).unwrap();
@@ -98,6 +100,7 @@ fn empty_string_clears_none_keeps() {
                     base_url: b.map(Into::into),
                     ..Default::default()
                 }),
+                None,
                 None,
                 None,
                 None,
@@ -139,11 +142,13 @@ fn rejects_unknown_provider_and_locale() {
             None,
             None,
             None,
+            None,
         )
         .is_err());
     assert!(store
         .update(
             Some("fr".into()),
+            None,
             None,
             None,
             None,
@@ -181,6 +186,7 @@ fn shortcut_default_update_and_validation() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     assert_eq!(store.view().shortcut, "Alt+Space");
@@ -207,6 +213,7 @@ fn shortcut_default_update_and_validation() {
             None,
             None,
             None,
+            None,
         )
         .is_err());
     assert!(store
@@ -214,6 +221,7 @@ fn shortcut_default_update_and_validation() {
             None,
             None,
             Some("".into()),
+            None,
             None,
             None,
             None,
@@ -233,5 +241,6 @@ mod chat;
 mod memory;
 mod window;
 
+mod developer;
 mod shell;
 mod tools;

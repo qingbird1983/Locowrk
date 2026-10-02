@@ -12,18 +12,24 @@ import { useI18n } from "vue-i18n";
 import { useShellStore } from "../../stores/shell";
 import {
   SETTINGS_GROUPS,
+  isSectionVisible,
   sectionSearchText,
   sectionsByGroup,
   type SettingsSectionId,
 } from "../../lib/settings-index";
+import { useSettingsStore } from "../../stores/settings";
 import { Icon } from "../../lib/icons";
 
 const props = defineProps<{ current: SettingsSectionId }>();
 const emit = defineEmits<{ select: [id: SettingsSectionId] }>();
 const { t } = useI18n();
 const shell = useShellStore();
+const settings = useSettingsStore();
 
 const search = ref("");
+
+/** devOnly 分区（开发者选项）仅在解锁后可见（§3.2，v2.49）。 */
+const devUnlocked = computed(() => settings.view?.developer.unlocked ?? false);
 
 /** 搜索过滤后的组（组内全不命中 → 整组隐藏）。空 query = 全量。 */
 const visibleGroups = computed(() => {
@@ -32,9 +38,10 @@ const visibleGroups = computed(() => {
     group: g,
     sections: sectionsByGroup(g.id).filter(
       (s) =>
-        !q ||
-        sectionSearchText(s, t).includes(q) ||
-        t(s.labelKey).toLowerCase().includes(q),
+        isSectionVisible(s, devUnlocked.value) &&
+        (!q ||
+          sectionSearchText(s, t).includes(q) ||
+          t(s.labelKey).toLowerCase().includes(q)),
     ),
   })).filter((g) => g.sections.length > 0);
 });

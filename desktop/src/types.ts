@@ -74,6 +74,15 @@ export interface SessionMeta {
   title: string | null;
 }
 
+/** 会话正文搜索命中（v2.49）：mtime 降序限量；snippet = 首处摘录。 */
+export interface SessionSearchHit {
+  id: string;
+  title: string | null;
+  snippet: string;
+  matchCount: number;
+  updatedAt: number;
+}
+
 /** 定时触发（agent://schedule-fired，⑭）：调度引擎注入轮之前告知。 */
 export interface ScheduleFiredEvent {
   kind: "schedule_fired";
@@ -115,6 +124,8 @@ export interface ApprovalRequest {
   side_effect: string;
   session_id?: string | null;
   description?: string | null;
+  /** 守夜超时秒数（v2.49）：倒计时数据源；0 = 不限（不渲染倒计时）。 */
+  timeout_secs?: number | null;
 }
 
 /** 市场目录条目（plugin_registry_list 返回项；versions 升序，末位 latest；
@@ -221,6 +232,23 @@ export interface SettingsView {
   plugins: PluginsView;
   /** 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好）。 */
   chat: ChatSettingsView;
+  /** 开发者选项区（v2.49，默认隐藏分区）。 */
+  developer: DeveloperView;
+}
+
+/** 开发者选项区投影（v2.49）：unlocked = 分区可见（安卓式连点版本号
+ * 解锁）；其余是危险开关，缺省全关。 */
+export interface DeveloperView {
+  unlocked: boolean;
+  allowDeleteRunningSession: boolean;
+  allowSwitchRunningSession: boolean;
+}
+
+/** 开发者选项区部分更新：字段缺省 = 保持不变。 */
+export interface DeveloperUpdate {
+  unlocked?: boolean;
+  allowDeleteRunningSession?: boolean;
+  allowSwitchRunningSession?: boolean;
 }
 
 /** 对话行为区投影：结构即设置原值。contentMaxWidth null = 未设置（前端按
@@ -264,6 +292,8 @@ export interface ToolsSettingsView {
   callTimeoutSecs: number;
   fsRoots: string[];
   maxTurnSteps: number;
+  /** 审批等待时长（秒，0 = 不限；v2.49 可配置原则）。 */
+  approvalTimeoutSecs: number;
 }
 
 /** 工具暴露区部分更新：字段缺省 = 保持不变。 */
@@ -273,6 +303,7 @@ export interface ToolsUpdate {
   callTimeoutSecs?: number;
   fsRoots?: string[];
   maxTurnSteps?: number;
+  approvalTimeoutSecs?: number;
 }
 
 /** embedding 模型区投影（⑬ 智能层共享基建）：无秘钥字段。 */

@@ -42,6 +42,7 @@ fn chat_update_persists_and_roundtrips() {
                 enter_to_send: Some(false),
                 usage_readout: Some("remaining".into()),
             }),
+            None,
         )
         .unwrap()
         .chat;
@@ -72,6 +73,7 @@ fn chat_update_persists_and_roundtrips() {
                 enter_to_send: Some(true),
                 usage_readout: None,
             }),
+            None,
         )
         .unwrap()
         .chat;
@@ -103,6 +105,7 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 enter_to_send: None,
                 usage_readout: None,
             }),
+            None,
         )
         .is_err());
     assert!(store
@@ -123,6 +126,7 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 enter_to_send: None,
                 usage_readout: Some("total".into()),
             }),
+            None,
         )
         .is_err());
     // 失败不污染内存态

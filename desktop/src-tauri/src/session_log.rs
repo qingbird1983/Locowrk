@@ -12,7 +12,8 @@ use std::sync::{Arc, Mutex};
 
 use session_store::Session;
 use session_store::{
-    append_event, list_sessions, load_session, rewrite_log, session_file, SessionMeta,
+    append_event, delete_session, list_sessions, load_session, rewrite_log, search_sessions,
+    session_file, write_title, SessionMeta, SessionSearchHit,
 };
 
 type SessionsMap = Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>>;
@@ -81,4 +82,22 @@ pub fn rewrite_after_undo(dir: &Path, session_id: &str, session: &Session) {
 /// 列表（mtime 降序）：直接透出 SessionMeta（Serialize）。
 pub fn list(dir: &Path) -> Vec<SessionMeta> {
     list_sessions(dir)
+}
+
+/// 重命名（v2.49 会话运营）：写旁车 meta.json 标题（trim 后空 = 回落
+/// 自动标题）。内存会话不动——标题只在列表层生效。
+pub fn rename(dir: &Path, session_id: &str, title: &str) -> std::io::Result<()> {
+    write_title(dir, session_id, title)
+}
+
+/// 删除（v2.49 会话运营）：日志 + 旁车 + undo 备份一并移除（幂等）。
+/// 内存条目与调度最近目标的剔除在命令层做（要碰 AppState）。
+pub fn delete(dir: &Path, session_id: &str) -> std::io::Result<bool> {
+    delete_session(dir, session_id)
+}
+
+/// 正文搜索（v2.49 会话搜索）：UserMessage / AssistantMessage 大小写
+/// 不敏感子串扫描，mtime 降序限量。
+pub fn search(dir: &Path, query: &str, limit: usize) -> Vec<SessionSearchHit> {
+    search_sessions(dir, query, limit)
 }

@@ -58,6 +58,17 @@ export default {
     resizeText: "侧栏宽度 {n} 像素",
     untitled: "未命名会话",
     lockedWhileRunning: "会话运行中，暂不能切换",
+    contentHits: "正文命中",
+    devUnlockHint: "连点 7 次进入开发者选项",
+    devUnlockProgress: "再点 {n} 次进入开发者选项",
+    devUnlocked: "已进入开发者选项（设置 → 系统）",
+    menu: {
+      more: "会话操作",
+      rename: "重命名",
+      export: "导出",
+      delete: "删除",
+      confirmDelete: "确认删除？再点一次执行",
+    },
   },
   window: {
     minimize: "最小化",
@@ -108,6 +119,13 @@ export default {
   },
   // 会话内系统消息（SystemNotice 模式）：文案是 UI 不是会话数据，store
   // 存 i18n key，渲染期翻译以跟随语言切换。
+  toast: {
+    exported: "已导出",
+    exportFailed: "导出失败",
+    deleted: "会话已删除",
+    deleteFailed: "删除失败",
+    renameFailed: "重命名失败",
+  },
   notice: {
     action: {
       details: "查看详情",
@@ -153,6 +171,16 @@ export default {
   // ⑫ 暴露调试面板（开发者选项只读区；与 settings.developer* 分开——
   // 面板是"用户来找"的信息，不是设置分区本体）
   developer: {
+    hint: "开发者与危险开关。默认隐藏：侧栏底部版本号连点 7 次解锁。",
+    allowDeleteRunning: "允许删除运行中的会话",
+    allowDeleteRunningHint:
+      "缺省禁止。开启后可强删：运行轮的余段会重建日志文件，转录可能不完整。",
+    allowSwitchRunning: "允许切走运行中的会话",
+    allowSwitchRunningHint:
+      "缺省禁止。开启后半截轮次会掺入新会话转录，收束后切回可补全。",
+    hide: "隐藏开发者选项",
+    hideHint: "锁回隐藏态（危险开关保留原值）；版本号连点 7 次可再次解锁。",
+    hidden: "已隐藏开发者选项",
     panelTitle: "最近一次分发分布",
     refresh: "刷新",
     empty: "还没有数据——发起一次对话后回来看。",
@@ -281,7 +309,10 @@ export default {
       shell: "命令终端",
       tools: "工具与分发",
       sessions: "会话与数据",
+      developer: "开发者",
     },
+    approvalTimeout: "审批等待时长",
+    approvalTimeoutHint: "超时按拒绝收束（fail-closed）；0 = 一直等待",
     // 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽，㉕）
     chatTitle: "对话行为",
     chatWidthTitle: "对话宽度",

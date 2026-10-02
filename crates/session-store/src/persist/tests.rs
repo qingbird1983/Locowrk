@@ -111,3 +111,71 @@ fn list_sessions_orders_by_mtime_desc() {
     assert!(list_sessions(&dir.join("absent")).is_empty());
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn meta_title_overrides_list_and_resets() {
+    let dir = tmp_dir("meta");
+    let path = session_file(&dir, "s1").unwrap();
+    append_event(&path, &user_msg("第一封信")).unwrap();
+    // 无旁车：自动标题 = 首条用户消息
+    assert_eq!(list_sessions(&dir)[0].title.as_deref(), Some("第一封信"));
+    // 重命名覆盖（trim）
+    write_title(&dir, "s1", "  新标题  ").unwrap();
+    assert_eq!(list_sessions(&dir)[0].title.as_deref(), Some("新标题"));
+    assert!(read_meta(&dir, "s1").unwrap().title.is_some());
+    // 空串 = 删旁车回落自动标题
+    write_title(&dir, "s1", "   ").unwrap();
+    assert!(read_meta(&dir, "s1").is_none());
+    assert_eq!(list_sessions(&dir)[0].title.as_deref(), Some("第一封信"));
+    // 非法 id 拒绝
+    assert!(write_title(&dir, "../x", "t").is_err());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn delete_session_removes_all_files_and_is_idempotent() {
+    let dir = tmp_dir("delete");
+    let path = session_file(&dir, "s2").unwrap();
+    append_event(&path, &user_msg("hello")).unwrap();
+    write_title(&dir, "s2", "t").unwrap();
+    // 造一份 undo 备份（rewrite_log 对已存在文件滚动备份）
+    let mut full = Session::new();
+    full.append(user_msg("x"));
+    rewrite_log(&path, &full).unwrap();
+    assert!(dir.join("s2.jsonl.undo.bak").exists());
+
+    assert!(delete_session(&dir, "s2").unwrap());
+    assert!(!session_file(&dir, "s2").unwrap().exists());
+    assert!(!dir.join("s2.meta.json").exists());
+    assert!(!dir.join("s2.jsonl.undo.bak").exists());
+    assert!(list_sessions(&dir).iter().all(|m| m.id != "s2"));
+    // 幂等：再删 Ok(false)
+    assert!(!delete_session(&dir, "s2").unwrap());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn search_finds_content_with_snippet_and_respects_limit() {
+    let dir = tmp_dir("search");
+    for (id, msg) in [
+        ("a", " discussion about rust internals "),
+        ("b", "完全无关的中文内容"),
+        ("c", "another RUST talk and more RUST notes"),
+    ] {
+        let p = session_file(&dir, id).unwrap();
+        append_event(&p, &user_msg(msg)).unwrap();
+    }
+    let hits = search_sessions(&dir, "RUST", 10);
+    assert_eq!(hits.len(), 2, "大小写不敏感，两个会话命中");
+    assert!(
+        hits.iter()
+            .all(|h| h.snippet.to_lowercase().contains("ust"))
+    );
+    let c = hits.iter().find(|h| h.id == "c").unwrap();
+    assert_eq!(c.match_count, 2, "两行消息各命中一次");
+    let limited = search_sessions(&dir, "rust", 1);
+    assert_eq!(limited.len(), 1);
+    assert_eq!(search_sessions(&dir, "  ", 10).len(), 0);
+    assert_eq!(search_sessions(&dir, "不存在的词", 10).len(), 0);
+    std::fs::remove_dir_all(&dir).ok();
+}

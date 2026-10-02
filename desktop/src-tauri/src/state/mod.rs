@@ -44,8 +44,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     let registry = Arc::new(PluginRegistry::new());
     let sink: Arc<dyn EventSink> = Arc::new(TauriSink::new(app.clone()));
 
-    // ⑭ 桌面通知注入 vtable 槽：必须在任何插件 init 之前（tool-notify
-    // 的 desktop 通道经此投递；见 plugin-host host_vtable 模块注释）。
+    // ⑭ 桌面通知注入 vtable 槽：必须先于任何插件 init（tool-notify 通道经此投递）。
     crate::desktop_notify::register_vtable_hook(app.clone());
 
     // 数据根绑定一次，设置 / 插件编排 / LLM 配置共用（settings.json 同目录）。
@@ -198,12 +197,13 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::new(Timeout::hot(Arc::clone(&timeout_cfg))),
         Arc::new(CircuitBreaker::new(5, Duration::from_secs(30))),
     ];
-    // 审批门（纪律 9）：Irreversible 工具先经 ApprovalHub 问人，
-    // 决策由 Kernel 写成 ApprovalDecided 事件进日志。
-    let approval = Arc::new(ApprovalHub::new(Arc::clone(&sink)));
+    // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）
+    let approval = Arc::new(ApprovalHub::with_timeout(
+        Arc::clone(&sink),
+        Duration::from_secs(settings.approval_timeout_secs()),
+    ));
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
-    // ⑮ 子 Agent 快照表：内核每个带身份的 step 刷新父转录前缀，
-    // subagent_run 工具执行时 fork（单层派生，目录层硬剔除再生）。
+    // ⑮ 子 Agent 快照表：每 step 刷新父转录前缀；subagent_run 执行时 fork
     let gate = Arc::new(SubagentGate::default());
     let kernel = Arc::new(
         Kernel::new(ctx.clone(), mw)

@@ -14,6 +14,7 @@ import SettingsPage from "./components/settings/SettingsPage.vue";
 import CommandPalette from "./components/shell/CommandPalette.vue";
 import DestinationShell from "./components/shell/DestinationShell.vue";
 import Sidebar from "./components/shell/Sidebar.vue";
+import ToastStack from "./components/shell/ToastStack.vue";
 import Topbar from "./components/shell/Topbar.vue";
 import WindowControls from "./components/shell/WindowControls.vue";
 import { ref } from "vue";
@@ -45,6 +46,8 @@ onMounted(() => {
 
 <template>
   <div class="isolate flex h-full bg-page text-ink-1">
+    <!-- Toast 栈（§3.22）：全局一次挂载，右下角 -->
+    <ToastStack />
     <!-- 设置目的地：独立壳模式，整窗接管（§3.32 导航轨 + 页头 + 正文列） -->
     <template v-if="shell.destination === 'settings'">
       <SettingsPage />

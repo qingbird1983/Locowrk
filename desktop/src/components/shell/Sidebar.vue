@@ -1,28 +1,34 @@
 <script setup lang="ts">
 /**
- * 侧栏（UI shell doc §2.1 ①② / §2.3）：会话运营 + 目的地入口。
- * - 一级分组 = 「会话」（会话↔工作区关联 §8.2 未落地前全量落这里，
- *   「项目 ▸ 工作区」组随关联批次出现）；二级分组 = 时间桶（近 7 天 /
- *   近 14 天 / 更早，按最后活动时间前端可算）。
- * - 折叠是独立状态（宽 0 / 150ms，体不卸载保滚动位置）；拖拽调宽
- *   240–520、缺省 275，拖到小于最小值即折叠；宽度跨重启持久化。
- * - 底部目的地入口：扩展 / 记忆 / 设置（定时与通知入口随各自批次补位）。
+ * 侧栏（UI shell doc §2.1 ①② / §2.3 / §3.6）：会话运营 + 目的地入口。
+ * - 一级分组 = 「会话」（会话↔工作区关联 §8.2 未落地前全量落这里）；
+ *   二级分组 = 时间桶（近 7 天 / 近 14 天 / 更早）。
+ * - 搜索框 = 标题前端过滤 + 正文命中（v2.49 `session_search`，命中行带
+ *   摘录，mtime 降序限量）。
+ * - 行渲染与运营（重命名/导出/删除）在 SessionRow（§3.6 行尾 `…` 菜单）。
+ * - 版本号连点 7 次 = 解锁「开发者」设置分区（安卓式，可配置原则
+ *   §7-16②；解锁态存 settings.json `developer.unlocked`）。
+ * - 折叠/拖宽交互在 use-sidebar-resize（§2.3）；宽度跨重启持久化。
  */
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { getVersion } from "@tauri-apps/api/app";
-import { useApprovalsStore } from "../../stores/approvals";
 import { useChatStore } from "../../stores/chat";
+import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
+import { useToastStore } from "../../stores/toast";
 import type { SessionMeta } from "../../types";
 import { SIDEBAR_MAX, SIDEBAR_MIN } from "../../lib/sidebar-preference";
 import { useSidebarResize } from "./use-sidebar-resize";
+import { useSessionSearch } from "./use-session-search";
 import { Icon } from "../../lib/icons";
+import SessionRow from "./SessionRow.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
 const shell = useShellStore();
-const approvals = useApprovalsStore();
+const settings = useSettingsStore();
+const toast = useToastStore();
 
 const search = ref("");
 const version = ref("");
@@ -64,18 +70,45 @@ const grouped = computed(() => {
   return out.filter((g) => g.items.length > 0);
 });
 
-// ---- 会话运营（§3.6）----
+// ---- 正文搜索（v2.49）：防抖/竞态守卫在 use-session-search.ts ----
+const { contentHits } = useSessionSearch(search);
+
+const nothingFound = computed(
+  () => filtered.value.length === 0 && contentHits.value.length === 0,
+);
+
+// ---- 会话导航（§3.6）：正文命中行也走这里 ----
 function openSession(id: string) {
-  if (chat.running && id !== chat.sessionId) return; // 运行中禁止切换
+  if (chat.running && id !== chat.sessionId) return; // 运行中禁切（§3.6）
   void chat.switchSession(id);
   shell.setDestination("chat");
 }
-function newChat() {
-  chat.newSession();
-  shell.setDestination("chat");
+
+// ---- 版本号连点解锁开发者选项（§3.2，安卓式 7 连点）----
+let devTaps = 0;
+let lastTapAt = 0;
+
+function onVersionTap() {
+  if (settings.view?.developer.unlocked) return;
+  const now = Date.now();
+  if (now - lastTapAt > 2000) devTaps = 0;
+  lastTapAt = now;
+  devTaps += 1;
+  if (devTaps >= 7) {
+    devTaps = 0;
+    void settings.saveDeveloper({ unlocked: true });
+    toast.push("ok", t("sidebar.devUnlocked"));
+  } else if (devTaps >= 3) {
+    toast.push(
+      "ok",
+      t("sidebar.devUnlockProgress", { n: 7 - devTaps }),
+      undefined,
+      "dev-unlock",
+    );
+  }
 }
 
-// ---- 拖拽调宽（§2.3）：交互在 use-sidebar-resize.ts（指针/键盘/复位），//      状态与持久化在 shell store ----
+// ---- 拖拽调宽（§2.3）：交互在 use-sidebar-resize.ts，状态与持久化在 shell store ----
 const {
   dragging,
   onPointerDown,
@@ -116,7 +149,7 @@ const {
         </button>
       </header>
 
-      <!-- 侧栏体：搜索 / 新会话 + 会话（时间桶） -->
+      <!-- 侧栏体：搜索 / 新会话 + 会话（时间桶 / 正文命中） -->
       <div class="scroll-y min-h-0 flex-1 px-2">
         <div class="flex items-center gap-1.5 px-1 pb-2 pt-1">
           <div class="relative min-w-0 flex-1">
@@ -138,7 +171,7 @@ const {
             type="button"
             :title="t('sidebar.newChat')"
             :aria-label="t('sidebar.newChat')"
-            @click="newChat"
+            @click="chat.newSession(); shell.setDestination('chat')"
           >
             <Icon name="plus" aria-hidden="true" />
           </button>
@@ -148,58 +181,36 @@ const {
 
         <template v-for="group in grouped" :key="group.key">
           <div class="bucket-label">{{ t(`sidebar.${group.key}`) }}</div>
-          <div
+          <SessionRow
             v-for="s in group.items"
             :key="s.id"
-            class="session-row"
-            :data-selected="s.id === chat.sessionId || undefined"
-            :title="s.title ?? s.id"
-          >
-            <button
-              class="session-row__main"
-              type="button"
-              :class="{
-                'cursor-not-allowed opacity-40':
-                  chat.running && s.id !== chat.sessionId,
-              }"
-              :aria-disabled="chat.running && s.id !== chat.sessionId"
-              :title="
-                chat.running && s.id !== chat.sessionId
-                  ? t('sidebar.lockedWhileRunning')
-                  : (s.title ?? s.id)
-              "
-              @click="openSession(s.id)"
-            >
-              <span
-                v-if="chat.running && s.id === chat.sessionId"
-                class="dot dot--pulse"
-                :title="t('status.running')"
-              />
-              <!-- §3.17 卡不在视野内的兜底：本会话有审批未决 → 待决标记 -->
-              <span
-                v-else-if="
-                  approvals.pending.length > 0 && s.id === chat.sessionId
-                "
-                class="dot dot--danger"
-                role="img"
-                :aria-label="t('approval.pendingBadge')"
-                :title="t('approval.pendingBadge')"
-              />
-              <span class="session-row__title">
-                {{ s.title ?? t("sidebar.untitled") }}
-              </span>
-            </button>
-          </div>
+            :session="s"
+          />
         </template>
-        <p
-          v-if="filtered.length === 0"
-          class="px-2 py-4 text-center text-[12px] text-ink-4"
-        >
+
+        <!-- 正文命中（v2.49）：标题过滤之后的第二段 -->
+        <template v-if="search.trim() && contentHits.length > 0">
+          <div class="side-label">{{ t("sidebar.contentHits") }}</div>
+          <button
+            v-for="h in contentHits"
+            :key="h.id"
+            type="button"
+            class="hit-row"
+            :data-selected="h.id === chat.sessionId || undefined"
+            :title="h.snippet"
+            @click="openSession(h.id)"
+          >
+            <span class="hit-row__title">{{ h.title ?? t("sidebar.untitled") }}</span>
+            <span class="hit-row__snippet">{{ h.snippet }}</span>
+          </button>
+        </template>
+
+        <p v-if="nothingFound" class="px-2 py-4 text-center text-[12px] text-ink-4">
           {{ t("sidebar.searchEmpty") }}
         </p>
       </div>
 
-      <!-- 侧栏底：目的地入口 + 版本号（§2.4；定时/通知入口随批次补位） -->
+      <!-- 侧栏底：目的地入口 + 版本号（连点解锁开发者选项） -->
       <footer
         class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-1 px-3"
       >
@@ -219,11 +230,17 @@ const {
             aria-hidden="true"
           />
         </button>
-        <span
+        <button
           v-if="version"
-          class="ml-auto text-[11px] tabular-nums text-ink-4"
-          >v{{ version }}</span
+          type="button"
+          class="version-label ml-auto text-[11px] tabular-nums text-ink-4"
+          :title="
+            settings.view?.developer.unlocked ? t('nav.settings') : t('sidebar.devUnlockHint')
+          "
+          @click="onVersionTap"
         >
+          v{{ version }}
+        </button>
       </footer>
     </div>
 
@@ -298,52 +315,50 @@ const {
   color: var(--lw-ink-4);
 }
 
-/* 会话行：28px、圆角 8、0 8px 内边距、13px、超长省略；选中 = wash-3 填充
- * （禁止左侧色条）；行内缩进让出分组字形宽度 */
-.session-row {
+/* 正文命中行：标题 + 摘录两行（摘录 11.5px ink-4 单行省略） */
+.hit-row {
   display: flex;
-  align-items: center;
   min-height: 28px;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
   border-radius: var(--lw-r-xs);
-  padding: 0 8px 0 28px;
-}
-.session-row:hover {
-  background: var(--lw-wash-2);
-}
-.session-row[data-selected] {
-  background: var(--lw-wash-3);
-}
-.session-row__main {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: 6px;
+  padding: 2px 8px 2px 28px;
   text-align: left;
 }
-.session-row__title {
-  min-width: 0;
-  flex: 1 1 auto;
+.hit-row:hover {
+  background: var(--lw-wash-2);
+}
+.hit-row[data-selected] {
+  background: var(--lw-wash-3);
+}
+.hit-row__title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
   color: var(--lw-ink-2);
 }
-.session-row[data-selected] .session-row__title {
+.hit-row[data-selected] .hit-row__title {
   color: var(--lw-ink-1);
 }
-
-/* 运行指示点（§6.6 ⑧：唯一常驻动画）+ 4px 状态点 */
-.dot {
-  width: 4px;
-  height: 4px;
-  flex: 0 0 auto;
-  border-radius: var(--lw-r-full);
+.hit-row__snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--lw-ink-4);
 }
-.dot--pulse {
-  background: var(--lw-ok);
-  animation: lw-pulse 1s ease-in-out infinite;
+
+/* 版本号（连点解锁开发者选项的锚点） */
+.version-label {
+  border-radius: var(--lw-r-xs);
+  padding: 2px 6px;
+}
+.version-label:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-2);
 }
 
 /* 拖拽柄（§2.3）：8px 热区；可见提示 2×32 圆角条，hover/聚焦/拖拽显形，

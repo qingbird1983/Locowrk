@@ -29,6 +29,7 @@ fn shell_defaults_legacy_compat_and_update() {
             }),
             None,
             None,
+            None,
         )
         .unwrap();
     assert!(store.view().shell.unlock_risky);

@@ -1,46 +1,63 @@
 <script setup lang="ts">
 /**
- * 设置分区：开发者选项（⑫，settings.json `tools` 区 + 暴露调试面板；
- * exposure 文档 §6.3/§9.6）。上半是截断设置（开关 + 每请求最大工具数，
- * 保存即热生效）；下半读最近一次请求的暴露快照——只在打开分区时拉取
- * （§8.8"用户来找"的信息，不推送不轮询），节省 token 按 §3.5 走
- * compactNumber 档位，不显示机器精度原始值。
- * 行版式（§3.32·七 v3.5）：三块组（行组 / 工作区目录 / 快照面板）；
- * 目录列表与快照是天然满宽的块，按宽内容例外整块呈现。
+ * 设置分区：开发者选项（v2.49，UI shell 文档 §3.2 / §七 规则 16②；
+ * settings.json `developer` 区）。**默认隐藏分区**——侧栏版本号连点 7 次
+ * 解锁（安卓式），这里提供锁回按钮；其余是危险开关（界面上写死的禁止项
+ * 的解锁面），缺省全关。⑫ 的暴露调试面板同属开发者信息，自工具与分发
+ * 面板迁入。行版式（§3.32·七 v3.5）。
  */
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { pickDirectory, toolExposureDebug } from "../../lib/api";
+import { toolExposureDebug } from "../../lib/api";
 import { compactNumber } from "../../lib/format";
 import { useSettingsStore } from "../../stores/settings";
+import { useShellStore } from "../../stores/shell";
+import { useToastStore } from "../../stores/toast";
 import type { ExposureDebug } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
-import SettingsSaveRow from "./SettingsSaveRow.vue";
 import SettingsToggle from "./SettingsToggle.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
+const shell = useShellStore();
+const toast = useToastStore();
 
 const form = reactive({
-  enabled: true,
-  maxPerRequest: 20,
-  callTimeoutSecs: 30,
-  maxTurnSteps: 8,
+  allowDeleteRunningSession: false,
+  allowSwitchRunningSession: false,
 });
 
 watch(
   () => settings.view,
   (v) => {
     if (!v) return;
-    form.enabled = v.tools.enabled;
-    form.maxPerRequest = v.tools.maxPerRequest;
-    form.callTimeoutSecs = v.tools.callTimeoutSecs;
-    form.maxTurnSteps = v.tools.maxTurnSteps;
+    form.allowDeleteRunningSession = v.developer.allowDeleteRunningSession;
+    form.allowSwitchRunningSession = v.developer.allowSwitchRunningSession;
   },
   { immediate: true },
 );
 
+function save() {
+  void settings.saveDeveloper({
+    allowDeleteRunningSession: form.allowDeleteRunningSession,
+    allowSwitchRunningSession: form.allowSwitchRunningSession,
+  });
+}
+
+/** 锁回：分区隐藏（危险开关保留原值——重新解锁后仍是原状态，如实告知）。 */
+function hide() {
+  void settings.saveDeveloper({ unlocked: false });
+  toast.push("ok", t("developer.hidden"));
+  shell.setDestination("chat");
+}
+
+/** 快照有效 = 有过至少一次请求（ts 非 0）。 */
+function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
+  return d !== null && d.ts > 0;
+}
+
+// ---- ⑫ 暴露调试面板（自工具与分发面板迁入，v2.49）：打开分区时拉取 ----
 const debug = ref<ExposureDebug | null>(null);
 const loading = ref(false);
 
@@ -55,133 +72,40 @@ async function refresh() {
   }
 }
 onMounted(() => void refresh());
-
-function save() {
-  void settings.saveTools({
-    enabled: form.enabled,
-    maxPerRequest: form.maxPerRequest,
-    callTimeoutSecs: form.callTimeoutSecs,
-    maxTurnSteps: form.maxTurnSteps,
-  });
-}
-
-// ---- ⑱ 工作区目录（fs roots）：增删即存即生效（后端重注入 env，
-// fsutil 每次工具调用读取），不参与上方表单的"保存"按钮。 ----
-const fsRoots = computed(() => settings.view?.tools.fsRoots ?? []);
-
-async function addRoot() {
-  const dir = await pickDirectory();
-  if (!dir || fsRoots.value.includes(dir)) return;
-  await settings.saveTools({ fsRoots: [...fsRoots.value, dir] });
-}
-
-function removeRoot(idx: number) {
-  void settings.saveTools({ fsRoots: fsRoots.value.filter((_, i) => i !== idx) });
-}
-
-/** 快照有效 = 有过至少一次请求（ts 非 0）。 */
-function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
-  return d !== null && d.ts > 0;
-}
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="space-y-3">
-      <SettingsGroup :hint="t('settings.developerHint')">
-        <SettingsRow :title="t('settings.toolsEnabled')">
-          <SettingsToggle v-model="form.enabled" :label="t('settings.toolsEnabled')" />
-        </SettingsRow>
+    <SettingsGroup :hint="t('developer.hint')">
+      <SettingsRow :title="t('developer.allowDeleteRunning')" :hint="t('developer.allowDeleteRunningHint')">
+        <SettingsToggle
+          v-model="form.allowDeleteRunningSession"
+          :label="t('developer.allowDeleteRunning')"
+          @update:model-value="save"
+        />
+      </SettingsRow>
 
-        <SettingsRow
-          :title="t('settings.toolsMax')"
-          :hint="t('settings.toolsMaxHint')"
-          control-id="tools-max"
-        >
-          <input
-            id="tools-max"
-            v-model.number="form.maxPerRequest"
-            type="number"
-            min="1"
-            max="200"
-            class="lw-field lw-field-num px-2 text-xs"
-          />
-        </SettingsRow>
+      <SettingsRow :title="t('developer.allowSwitchRunning')" :hint="t('developer.allowSwitchRunningHint')">
+        <SettingsToggle
+          v-model="form.allowSwitchRunningSession"
+          :label="t('developer.allowSwitchRunning')"
+          @update:model-value="save"
+        />
+      </SettingsRow>
 
-        <!-- S2（清单 §3 约束最小化）：宿主单次工具调用超时可配 -->
-        <SettingsRow
-          :title="t('settings.callTimeout')"
-          :hint="t('settings.callTimeoutHint')"
-          control-id="tools-call-timeout"
-        >
-          <input
-            id="tools-call-timeout"
-            v-model.number="form.callTimeoutSecs"
-            type="number"
-            min="5"
-            max="3600"
-            class="lw-field lw-field-num px-2 text-xs"
-          />
-        </SettingsRow>
-
-        <!-- ㉕·微调③：单轮步数上限（runner 兜底，超过强制收束本轮） -->
-        <SettingsRow
-          :title="t('settings.maxTurnSteps')"
-          :hint="t('settings.maxTurnStepsHint')"
-          control-id="tools-max-turn-steps"
-        >
-          <input
-            id="tools-max-turn-steps"
-            v-model.number="form.maxTurnSteps"
-            type="number"
-            min="1"
-            max="100"
-            class="lw-field lw-field-num px-2 text-xs"
-          />
-        </SettingsRow>
-      </SettingsGroup>
-
-      <SettingsSaveRow @save="save" />
-    </div>
-
-    <!-- ⑱ 工作区目录（fs roots）：增删即存即生效，不走上方"保存" -->
-    <SettingsGroup
-      :title="t('settings.fsRootsTitle')"
-      :hint="t('settings.fsRootsHint')"
-    >
-      <template #action>
+      <SettingsRow :title="t('developer.hide')" :hint="t('developer.hideHint')">
         <button
           type="button"
           class="lw-btn px-3 py-1.5 text-xs text-ink-2"
           :disabled="settings.saving"
-          @click="addRoot"
+          @click="hide"
         >
-          {{ t("settings.fsRootsAdd") }}
+          {{ t("developer.hide") }}
         </button>
-      </template>
-      <p v-if="!fsRoots.length" class="px-1 py-1 text-[11.5px] text-ink-4">
-        {{ t("settings.fsRootsEmpty") }}
-      </p>
-      <div
-        v-for="(root, i) in fsRoots"
-        :key="root"
-        class="flex items-center justify-between gap-2 rounded-[14px] bg-wash-1 px-4 py-2.5"
-      >
-        <span class="min-w-0 break-all text-[11.5px] text-ink-2" :title="root">{{ root }}</span>
-        <button
-          type="button"
-          class="shrink-0 rounded px-1.5 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-danger"
-          :disabled="settings.saving"
-          :aria-label="`${t('settings.fsRootsRemove')} ${root}`"
-          @click="removeRoot(i)"
-        >
-          ✕
-        </button>
-      </div>
+      </SettingsRow>
     </SettingsGroup>
 
-    <!-- 暴露调试面板：最近一次请求的暴露分布（只读，手动刷新）——
-         混合内容按 §3.32·七 整块一卡 -->
+    <!-- ⑫ 暴露调试面板：最近一次请求的暴露分布（只读，手动刷新） -->
     <SettingsGroup :title="t('developer.panelTitle')">
       <template #action>
         <button
@@ -218,7 +142,6 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
               {{ t("developer.globalHot", { n: debug.globalHot.length }) }}:
               <span class="text-ink-2">{{ debug.globalHot.join(", ") }}</span>
             </li>
-            <!-- ⑬ 语义检索信号入选（embedding 未配置恒空，不渲染该行） -->
             <li v-if="debug.retrieved.length">
               {{ t("developer.retrieved", { n: debug.retrieved.length }) }}:
               <span class="text-ink-2">{{ debug.retrieved.join(", ") }}</span>

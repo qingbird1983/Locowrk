@@ -57,6 +57,17 @@ export default {
     resizeText: "Sidebar width {n} pixels",
     untitled: "Untitled chat",
     lockedWhileRunning: "Session is running; switching is paused",
+    contentHits: "Content matches",
+    devUnlockHint: "Tap 7 times to unlock developer options",
+    devUnlockProgress: "{n} more taps to unlock developer options",
+    devUnlocked: "Developer options unlocked (Settings → System)",
+    menu: {
+      more: "Session actions",
+      rename: "Rename",
+      export: "Export",
+      delete: "Delete",
+      confirmDelete: "Confirm delete? Tap again",
+    },
   },
   window: {
     minimize: "Minimize",
@@ -153,7 +164,25 @@ export default {
   },
   // ⑫ Exposure debug panel (read-only part of developer options; separate
   // from settings.developer* — this is "user comes looking" info)
+  toast: {
+    exported: "Exported",
+    exportFailed: "Export failed",
+    deleted: "Session deleted",
+    deleteFailed: "Delete failed",
+    renameFailed: "Rename failed",
+  },
   developer: {
+    hint: "Developer and danger switches. Hidden by default: tap the version number at the sidebar bottom 7 times to unlock.",
+    allowDeleteRunning: "Allow deleting a running session",
+    allowDeleteRunningHint:
+      "Blocked by default. When on, force-delete is allowed: the running turn re-creates the log file and the transcript may be incomplete.",
+    allowSwitchRunning: "Allow switching away from a running session",
+    allowSwitchRunningHint:
+      "Blocked by default. When on, a half-finished turn may interleave into the new session transcript; switch back after it settles to see the rest.",
+    hide: "Hide developer options",
+    hideHint:
+      "Lock this section away again (danger switches keep their values); tap the version 7 times to unlock.",
+    hidden: "Developer options hidden",
     panelTitle: "Last exposure breakdown",
     refresh: "Refresh",
     empty: "No data yet — start a chat and come back.",
@@ -361,6 +390,8 @@ export default {
     maxTurnSteps: "Max steps per turn",
     maxTurnStepsHint:
       "Force-closes the turn after this many tool-call steps (1-100, default 8).",
+    approvalTimeout: "Approval wait timeout (seconds)",
+    approvalTimeoutHint: "Timed-out approvals are denied (fail-closed); 0 = wait forever.",
     // ⑱ Workspace folders (fs roots picker)
     fsRootsTitle: "Workspace folders",
     fsRootsHint:

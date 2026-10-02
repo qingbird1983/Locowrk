@@ -1,7 +1,16 @@
 // 聊天状态（DESIGN.md §10.2：store 管状态，组件只渲染）。
 // UI 事件是会话日志的投影（后端 runner.rs），本 store 只消费不生产。
 import { defineStore } from "pinia";
-import { chat, sessionHistory, sessionList, subscribeAgentEvents } from "../lib/api";
+import {
+  chat,
+  sessionDelete,
+  sessionExport,
+  sessionHistory,
+  sessionList,
+  sessionRename,
+  pickSavePath,
+  subscribeAgentEvents,
+} from "../lib/api";
 import { clip, compactNumber } from "../lib/format";
 import { toolAction } from "../lib/tool-summary";
 import { i18n } from "../i18n";
@@ -105,6 +114,32 @@ export const useChatStore = defineStore("chat", {
       } finally {
         this.replaying = false;
       }
+    },
+    /** 重命名会话（v2.49 §3.6）：后端旁车标题（trim 后空 = 回落自动
+     * 标题），列表层生效。 */
+    async renameSession(id: string, title: string) {
+      await sessionRename(id, title);
+      await this.refreshSessions();
+    },
+    /** 删除会话（v2.49）：后端忙锁守卫（运行中默认拒绝，开发者开关可
+     * 强制）。删的是当前会话 = 回首页空态（newSession 语义，首条消息
+     * 前不产生后端状态）。 */
+    async deleteSession(id: string) {
+      await sessionDelete(id);
+      if (id === this.sessionId) this.newSession();
+      await this.refreshSessions();
+    },
+    /** 导出会话（v2.49）：原生存储对话框 → Markdown 转录；取消 = null。 */
+    async exportSession(id: string): Promise<string | null> {
+      const meta = this.sessions.find((s) => s.id === id);
+      const base =
+        (meta?.title ?? id)
+          .replace(/["\/:*?<>|]/g, "_")
+          .trim()
+          .slice(0, 40) || id;
+      const path = await pickSavePath(`${base}.md`);
+      if (!path) return null;
+      return sessionExport(id, path);
     },
     /** 新会话（⑲）：前端生成 id 清空视图；首条消息发出前不创建任何
      * 后端状态（空会话不落盘不进列表，§3.6）。 */

@@ -39,6 +39,8 @@ pub mod channels {
 /// `{parent}-sub-{n}`，前端据此打"子 Agent"标识徽章。
 /// `description`（㉕·对话区① §3.17）：工具自述（`ToolSpec.description`），
 /// 决策卡理由行的数据源；空描述不带字段语义（None）。
+/// `timeout_secs`（v2.49）：守夜超时秒数，决策卡倒计时的数据源；
+/// 0 = 不限（设置"一直等待"档），卡片不渲染倒计时。
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalRequestPayload {
     pub request_id: String,
@@ -47,6 +49,7 @@ pub struct ApprovalRequestPayload {
     pub side_effect: String,
     pub session_id: Option<String>,
     pub description: Option<String>,
+    pub timeout_secs: u64,
 }
 
 /// 推给前端的事件。字段命名与 session-store 事件对齐（snake_case）；

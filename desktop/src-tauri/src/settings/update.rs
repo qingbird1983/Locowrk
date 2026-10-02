@@ -5,9 +5,9 @@
 //! 校验失败提前返回 Err，不污染内存态（测试 `rejects_*` 系列锁定）。
 
 use super::{
-    AppearanceUpdate, ChatUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate,
-    PluginsUpdate, SettingsStore, SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME, LOCALES,
-    PROVIDERS,
+    AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
+    MemoryUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME,
+    LOCALES, PROVIDERS,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -28,6 +28,7 @@ impl SettingsStore {
         shell: Option<ShellUpdate>,
         plugins: Option<PluginsUpdate>,
         chat: Option<ChatUpdate>,
+        developer: Option<DeveloperUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
         if let Some(loc) = locale {
@@ -160,6 +161,17 @@ impl SettingsStore {
             if let Some(roots) = u.fs_roots {
                 next.tools.fs_roots = super::tools::normalize_fs_roots(&roots)?;
             }
+            if let Some(secs) = u.approval_timeout_secs {
+                // v2.49 可配置原则：审批守夜阈值可调（0 = 不限等待）
+                if !super::tools::APPROVAL_TIMEOUT_RANGE.contains(&secs) {
+                    return Err(format!(
+                        "审批等待时长 {secs}s 非法（0 = 不限，或 {}–{} 秒）",
+                        super::tools::APPROVAL_TIMEOUT_RANGE.start(),
+                        super::tools::APPROVAL_TIMEOUT_RANGE.end()
+                    ));
+                }
+                next.tools.approval_timeout_secs = secs;
+            }
         }
         if let Some(u) = shell {
             if let Some(e) = u.unlock_risky {
@@ -204,6 +216,19 @@ impl SettingsStore {
                     ));
                 }
                 next.chat.usage_readout = r;
+            }
+        }
+        if let Some(u) = developer {
+            // v2.49 开发者选项：布尔开关无范围校验；危险开关缺省全关由
+            // Default 保证，这里只做显式覆盖
+            if let Some(e) = u.unlocked {
+                next.developer.unlocked = e;
+            }
+            if let Some(e) = u.allow_delete_running_session {
+                next.developer.allow_delete_running_session = e;
+            }
+            if let Some(e) = u.allow_switch_running_session {
+                next.developer.allow_switch_running_session = e;
             }
         }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");

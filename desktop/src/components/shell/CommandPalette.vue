@@ -11,13 +11,18 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useShellStore } from "../../stores/shell";
+import { useSettingsStore } from "../../stores/settings";
 import { relativeTime } from "../../lib/format";
-import { SETTINGS_SECTIONS } from "../../lib/settings-index";
+import {
+  SETTINGS_SECTIONS,
+  isSectionVisible,
+} from "../../lib/settings-index";
 import { Icon } from "../../lib/icons";
 
 const { t } = useI18n();
 const chat = useChatStore();
 const shell = useShellStore();
+const settingsStore = useSettingsStore();
 
 const open = ref(false);
 const query = ref("");
@@ -63,7 +68,10 @@ const allGroups = computed<PaletteGroup[]>(() => {
     label: t(key),
     run: () => shell.setDestination(dest),
   }));
-  const settings: PaletteItem[] = SETTINGS_SECTIONS.map((s) => ({
+  const devUnlocked = settingsStore.view?.developer.unlocked ?? false;
+  const settings: PaletteItem[] = SETTINGS_SECTIONS.filter((s) =>
+    isSectionVisible(s, devUnlocked),
+  ).map((s) => ({
     key: `settings:${s.id}`,
     label: t(s.labelKey),
     hint: `${t("nav.settings")} / ${t(s.labelKey)}`,

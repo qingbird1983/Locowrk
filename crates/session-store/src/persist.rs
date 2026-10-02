@@ -11,7 +11,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::StoreError;
 use crate::event::SessionEvent;
@@ -114,7 +114,8 @@ pub struct SessionMeta {
 pub const SESSION_TITLE_CHARS: usize = 40;
 
 /// 列出目录下全部会话（`*.jsonl`，按 mtime 降序）；目录不存在 = 空表。
-/// 单遍扫描：事件数 = 可解析行数，顺带抓首条用户消息做标题。
+/// 单遍扫描：事件数 = 可解析行数，顺带抓首条用户消息做标题；旁车
+/// `<id>.meta.json` 有重命名标题时优先（v2.49 会话运营）。
 pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
@@ -156,6 +157,8 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                     (events, title)
                 })
                 .unwrap_or((0, None));
+            // 重命名标题覆盖自动标题（v2.49）：缺文件 / 无字段时回落
+            let title = read_meta(dir, &id).and_then(|m| m.title).or(title);
             Some((
                 modified,
                 SessionMeta {
@@ -169,6 +172,179 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
         .collect();
     metas.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.id.cmp(&b.1.id)));
     metas.into_iter().map(|(_, m)| m).collect()
+}
+
+/// 会话旁车元数据（`<id>.meta.json`，v2.49 会话运营）：存重命名标题；
+/// `workspace` 留给 §2.3 会话↔工作区关联批次。缺文件 = 全缺省。
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SessionMetaFile {
+    pub title: Option<String>,
+    pub workspace: Option<String>,
+}
+
+/// 旁车元数据路径（id 校验同日志文件；`<id>.jsonl` → `<id>.meta.json`，
+/// 后缀替换只动 `jsonl`，id 内含 `.` 不受影响）。
+fn meta_file(dir: &Path, session_id: &str) -> Result<PathBuf, StoreError> {
+    Ok(session_file(dir, session_id)?.with_extension("meta.json"))
+}
+
+/// 读旁车元数据：缺文件 / 坏 JSON = None（不致命——标题回落自动推导）。
+pub fn read_meta(dir: &Path, session_id: &str) -> Option<SessionMetaFile> {
+    let path = meta_file(dir, session_id).ok()?;
+    let bytes = std::fs::read(path).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+fn invalid_id(e: StoreError) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
+}
+
+/// 写重命名标题（v2.49）：trim 后空串 = 删除旁车文件（回落自动标题）；
+/// 非空 = 合并写入（保留 workspace 等既有字段）。
+pub fn write_title(dir: &Path, session_id: &str, title: &str) -> std::io::Result<()> {
+    let path = meta_file(dir, session_id).map_err(invalid_id)?;
+    let t = title.trim();
+    if t.is_empty() {
+        return match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e),
+        };
+    }
+    let mut meta = read_meta(dir, session_id).unwrap_or_default();
+    meta.title = Some(t.to_string());
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(
+        &path,
+        serde_json::to_vec_pretty(&meta).expect("meta serialize"),
+    )
+}
+
+/// 删除会话的全部磁盘痕迹（v2.49 会话运营）：日志、旁车元数据、undo
+/// 备份。文件缺失一律幂等跳过；返回删除前日志文件是否存在。
+pub fn delete_session(dir: &Path, session_id: &str) -> std::io::Result<bool> {
+    let log = session_file(dir, session_id).map_err(invalid_id)?;
+    let existed = log.exists();
+    let mut bak = log.clone().into_os_string();
+    bak.push(".");
+    bak.push(UNDO_BACKUP_SUFFIX);
+    let meta = meta_file(dir, session_id).map_err(invalid_id)?;
+    for p in [log, meta, PathBuf::from(bak)] {
+        match std::fs::remove_file(&p) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(existed)
+}
+
+/// 正文搜索命中（v2.49 会话搜索）：不区分大小写子串扫 `UserMessage` /
+/// `AssistantMessage` 内容，每会话记命中数与首处摘录。顺序复用
+/// [`list_sessions`]（mtime 降序），取前 `limit` 条。
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSearchHit {
+    pub id: String,
+    pub title: Option<String>,
+    pub snippet: String,
+    pub match_count: usize,
+    pub updated_at: i64,
+}
+
+/// 摘录前后保留的字符数。
+const SNIPPET_CONTEXT_CHARS: usize = 24;
+
+/// 正文搜索；query trim 后空 = 空表。
+pub fn search_sessions(dir: &Path, query: &str, limit: usize) -> Vec<SessionSearchHit> {
+    use std::io::BufRead;
+    let needle: Vec<char> = query.trim().to_lowercase().chars().collect();
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    let mut hits = Vec::new();
+    for meta in list_sessions(dir) {
+        let Ok(path) = session_file(dir, &meta.id) else {
+            continue;
+        };
+        let Ok(file) = std::fs::File::open(&path) else {
+            continue;
+        };
+        let mut count = 0usize;
+        let mut snippet: Option<String> = None;
+        for line in std::io::BufReader::new(file).lines().map_while(Result::ok) {
+            let Ok(ev) = serde_json::from_str::<SessionEvent>(&line) else {
+                continue;
+            };
+            let text = match ev {
+                SessionEvent::UserMessage { content } => content,
+                SessionEvent::AssistantMessage { content, .. } => content,
+                _ => continue,
+            };
+            let folded = ci_fold(&text);
+            let chars: Vec<char> = folded.iter().map(|(c, _)| *c).collect();
+            // 非重叠窗口从左往右数命中；首处命中留摘录
+            let mut at = 0usize;
+            while at + needle.len() <= chars.len() {
+                match chars[at..].windows(needle.len()).position(|w| w == needle) {
+                    Some(rel) => {
+                        let pos = at + rel;
+                        count += 1;
+                        if snippet.is_none() {
+                            snippet = Some(snippet_around(&text, folded[pos].1, &needle));
+                        }
+                        at = pos + needle.len();
+                    }
+                    None => break,
+                }
+            }
+        }
+        if count > 0 {
+            hits.push(SessionSearchHit {
+                id: meta.id.clone(),
+                title: meta.title.clone(),
+                snippet: snippet.unwrap_or_default(),
+                match_count: count,
+                updated_at: meta.updated_at,
+            });
+            if hits.len() >= limit {
+                break;
+            }
+        }
+    }
+    hits
+}
+
+/// 大小写折叠：逐字符小写并记回**原文**字节偏移（`to_lowercase` 可能变长，
+/// 不能直接用折叠串的下标切片原文）。
+fn ci_fold(text: &str) -> Vec<(char, usize)> {
+    let mut folded: Vec<(char, usize)> = Vec::with_capacity(text.len());
+    for (b, c) in text.char_indices() {
+        for lc in c.to_lowercase() {
+            folded.push((lc, b));
+        }
+    }
+    folded
+}
+
+/// 摘录：命中处前后各留 [`SNIPPET_CONTEXT_CHARS`] 字符，两端越界加 `…`，
+/// 换行压成空格（侧栏行单行省略）。
+fn snippet_around(text: &str, byte_start: usize, needle: &[char]) -> String {
+    let start_char = text[..byte_start].chars().count();
+    let all: Vec<char> = text.chars().collect();
+    let from = start_char.saturating_sub(SNIPPET_CONTEXT_CHARS);
+    let to = (start_char + needle.len() + SNIPPET_CONTEXT_CHARS).min(all.len());
+    let mut s: String = all[from..to].iter().collect();
+    if from > 0 {
+        s.insert(0, '…');
+    }
+    if to < all.len() {
+        s.push('…');
+    }
+    s.replace('\n', " ")
 }
 
 #[cfg(test)]

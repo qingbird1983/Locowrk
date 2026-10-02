@@ -24,7 +24,8 @@ export type SettingsSectionId =
   | "plugins"
   | "shell"
   | "tools"
-  | "sessions";
+  | "sessions"
+  | "developer";
 
 export interface SettingsGroup {
   id: SettingsGroupId;
@@ -37,6 +38,9 @@ export interface SettingsSection {
   labelKey: string;
   icon: IconName;
   searchKeys: string[];
+  /** 开发者分区（§3.2）：默认隐藏——解锁态（settings.developer.unlocked）
+   * 才可见；导航轨 / ⌘K / 面板三处同过滤（§七 规则 16②）。 */
+  devOnly?: boolean;
 }
 
 /** §3.32 二：分区 → 四组（偏好 / 智能体 / 能力与安全 / 系统）。组内顺序
@@ -139,7 +143,27 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: "folder",
     searchKeys: ["settings.sessionsTitle", "settings.dataDir"],
   },
+  {
+    id: "developer",
+    group: "system",
+    labelKey: "settings.nav.developer",
+    icon: "terminal",
+    searchKeys: [
+      "developer.allowDeleteRunning",
+      "developer.allowSwitchRunning",
+      "developer.hide",
+    ],
+    devOnly: true,
+  },
 ];
+
+/** 分区可见性：devOnly 分区仅在开发者选项解锁后出现（§3.2）。 */
+export function isSectionVisible(
+  section: SettingsSection,
+  devUnlocked: boolean,
+): boolean {
+  return !section.devOnly || devUnlocked;
+}
 
 /** 分区按组归类（导航轨与面板共用同一份顺序）。 */
 export function sectionsByGroup(groupId: SettingsGroupId): SettingsSection[] {

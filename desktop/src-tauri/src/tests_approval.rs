@@ -323,3 +323,64 @@ async fn timeout_guard_denies_when_unanswered() {
         "超时拒绝的调用以失败 ToolResult 闭合"
     );
 }
+
+/// v2.49 可配置原则：`tools.approvalTimeoutSecs = 0` = 不限——不起守夜
+/// 任务，审批点保持等待直到用户决策（decide 手动收束）；载荷带
+/// `timeout_secs` 给决策卡倒计时。守夜机制本体由
+/// `timeout_guard_denies_when_unanswered` 锁定，这里锁"不限档不超时"。
+#[tokio::test]
+async fn unlimited_timeout_keeps_waiting_for_decision() {
+    let sink = Collector::default();
+    let hub = Arc::new(ApprovalHub::with_timeout(
+        Arc::new(sink.clone()),
+        std::time::Duration::from_secs(0), // 0 = 不限
+    ));
+    let resolver: Arc<dyn ApprovalResolver> = hub.clone();
+    let kernel = kernel_with_email(resolver);
+    let mut session = Session::new();
+
+    // 决策者：300ms 后才放行——若守夜存在早已抢先拒绝
+    let decider = Arc::clone(&hub);
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        loop {
+            if let Some(req) = decider.pending().first().cloned() {
+                decider
+                    .decide(&req.request_id, true, None, None)
+                    .expect("decision accepted");
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    });
+    run_turn(
+        &kernel,
+        &mut session,
+        "s1",
+        "发邮件".into(),
+        None,
+        &sink,
+        None,
+        None,
+        crate::runner::DEFAULT_MAX_STEPS,
+    )
+    .await
+    .expect("turn ok（不限档等待手动决策后收束）");
+
+    // 载荷带 timeout_secs = 0（决策卡不渲染倒计时的依据）
+    let events = sink.events();
+    let req_ev = events
+        .iter()
+        .find(|e| kind(e) == "approval_request")
+        .expect("请求已推");
+    assert!(matches!(req_ev, AgentEvent::ApprovalRequest(p) if p.timeout_secs == 0));
+    // 决策来自用户放行而非超时拒绝
+    assert!(session
+        .events()
+        .iter()
+        .any(|e| matches!(e, SessionEvent::ApprovalDecided { allowed: true, .. })));
+    assert!(!session.events().iter().any(|e| matches!(
+        e,
+        SessionEvent::ApprovalDecided { reason: Some(r), .. } if r.contains("超时自动拒绝")
+    )));
+}

@@ -7,6 +7,7 @@ import { applyThemePref } from "../lib/theme";
 import type {
   ChatUpdate,
   ContextUpdate,
+  DeveloperUpdate,
   EmbeddingUpdate,
   LlmUpdate,
   MemoryUpdate,
@@ -135,6 +136,23 @@ export const useSettingsStore = defineStore("settings", {
       this.savedFlash = false;
       try {
         this.view = await setSettings({ tools });
+        this.savedFlash = true;
+        setTimeout(() => (this.savedFlash = false), 2000);
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
+    /** 保存开发者选项区（v2.49）：解锁态 + 危险开关。解锁 = 隐藏分区
+     * 三处（导航轨/⌘K/面板）立即可见；危险开关保存即被后端命令直读。 */
+    async saveDeveloper(developer: DeveloperUpdate) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      this.savedFlash = false;
+      try {
+        this.view = await setSettings({ developer });
         this.savedFlash = true;
         setTimeout(() => (this.savedFlash = false), 2000);
       } catch (e) {

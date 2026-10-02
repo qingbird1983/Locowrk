@@ -491,7 +491,34 @@ check_length OK；CDP 走查逐项数值取证（见各行）+ 亮暗两主题�
 子 session 的 shell 照问）。缓办：§3.30 模型选择器（settings 只存单 provider+model，
 无模型清单数据源——`llm_list_models` 后端立起前不发明空壳选型器）。
 
-### ㉖ UI 设计落地⑤：会话运营（⬜ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联；~~§3.17 三键卡~~ → 已随 ㉕·对话区① 落地 v2.48）
+### ㉖·对话区② 会话运营 + 开发者选项地基（✅ 已完成，v2.49）
+
+> 用户三条新裁定（2026-10-03）落档：①**DESIGN.md 不再堆补记**——逐批落点补记迁至
+> [CHANGELOG.md](CHANGELOG.md)（本批起生效，本条即其首条）；②**可配置原则**——不确定
+> 数值一律进设置页可调项；界面上写死的禁止项都要有开关（含最危险动作），统一收默认
+> 隐藏的「开发者」分区（安卓式连点版本号 7 次解锁）→ UI shell 文档 §七 规则 16 / §3.2
+> 先行成文再动码。自规划批次 = ㉖ 会话运营（§3.6 行尾菜单四件，后端命令）+ 开发者选项
+> 地基；搭车 = 审批超时可配（§8.3-5 就此裁定闭账）。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 重命名 | ✅ v2.49 | 行内编辑（Enter/失焦提交、Esc 取消、空串不动）；标题存 `<id>.meta.json` 旁车（session-store persist 新 `write_title/read_meta`，列表覆盖自动标题；文件留 `workspace` 字段给 §2.3 关联批次）；session-store 测试 +2 |
+| 删除 | ✅ v2.49 | 菜单内**两步确认**（首点变「确认删除？再点一次执行」，keepOpen 菜单不收）；后端 `session_delete` = 日志+旁车+undo 备份一并移除（幂等）+ **忙锁守卫**（try_lock 失败 = 运行中默认拒绝，`developer.allowDeleteRunningSession` 后端直读设置放行强制）+ 内存条目与调度 last_chat 指针剔除（防僵尸注入轮） |
+| 导出 | ✅ v2.49 | `pick_save_path`（原生存储对话框，§七 规则 8 同族）+ `session_export` = Markdown 转录（`export.rs`：用户/助手标题段 + 工具行/审批记录/压缩引用行，参数与长输出截 400 字标注）；数据 = `runner::project_events` 同一投影（内存优先缺则回读磁盘）；渲染测试 +3 |
+| 搜索 | ✅ v2.49 | 侧栏搜索框 = 标题前端过滤照旧 + 「正文命中」第二段：`session_search` 大小写不敏感子串扫 UserMessage/AssistantMessage（逐字符折叠记回原字节位，`to_lowercase` 变长也不切片错位），摘录 ±24 字符 + 命中数，mtime 降序限量 20（后端缺省 50 上限 200）；防抖 250ms 序号守卫竞态 |
+| 审批超时可配 | ✅ v2.49 | settings `tools.approvalTimeoutSecs`（缺省 100，**0 = 不限**，1–86400 校验出界拒绝）；ApprovalHub 超时改 AtomicU64 ms 热换入（`set_timeout_secs`，settings_set 即生效），0 不起守夜任务；载荷 +`timeout_secs` → 决策卡倒计时读载荷（不限档不渲染行）；测试 +2（settings 三档往返+出界 / 不限档 300ms 不超时+手动收束+载荷断言） |
+| 开发者选项地基 | ✅ v2.49 | settings.json 新 `developer` 区（`unlocked` + 两危险开关，缺省全关零迁移）；**默认隐藏分区**：索引 `devOnly` 标记，导航轨/⌘K/面板三处同过滤（面板持久化落在隐藏分区时回落外观）；解锁 = 侧栏版本号连点 7 次（2s 重计，第 3 次起 toast 进度同 key 原位替换），分区内「隐藏开发者选项」锁回；**禁止项开关**：允许删除/切走运行中会话（前端守卫解锁，后端忙锁仍兜底）；⑫ 暴露调试面板自工具与分发迁入；DeveloperSection 组件名归位（原 DeveloperSection 更名 **ToolsSection**——分区 id 本就是 tools） |
+| 新基础组件 | ✅ v2.49 | `shell/RowMenu.vue`（§3.20 形态：184px/圆角 14/danger 项/先测量再显示/视口翻转/↑↓Enter/Esc 还焦点/keepOpen 两步确认）+ `shell/ToastStack.vue` + `stores/toast.ts`（§3.22：右下栈同屏 3 条排队、状态点不染底、4s hover 暂停、Esc 关栈顶、key 原位替换）+ `shell/SessionRow.vue`（行+状态点+菜单+行内重命名，自 Sidebar 迁出保 400 行） |
+| 测试 | ✅ v2.49 | 桌面 103 绿（+3：unlimited_timeout_keeps_waiting_for_decision / approval_timeout_configurable / developer_defaults_off_roundtrip_and_persist；既有 32 处 update() 调用补 developer 参数）；session-store 22 绿（+3：meta 覆盖与重置 / delete 幂等全清理 / search 命中摘录限量） |
+
+验证：vue-tsc+vite 构建过、cargo test 103+22 绿、clippy 0（desktop+session-store）、fmt、check_length OK。
+实机走查（tauri dev + CDP 截图 26-1…26-11）：行尾菜单三件与分隔线、行内改名落 meta.json
+（`{"title": "走查改名会话", "workspace": null}` 落盘取证）、正文命中 3 条带摘录、两步
+删除（确认文案 → toast「会话已删除」→ jsonl 磁盘消失）、版本号 7 连点（进度 toast「再点
+1 次…」→ 成功 toast）→ 导航轨出现「开发者」（危险开关缺省关 + 调试面板迁入）→ 审批
+等待时长行改 30 落盘取证 → 锁回后轨内消失 + settings.json `unlocked:false`。走查期间
+改动的用户设置已还原（approvalTimeoutSecs=100）。缓办：⌘K 会话组接正文搜索（命令面板
+侧消费端，后端命令已就位）；§8.2 会话↔工作区关联（meta 文件已留 `workspace` 字段）。
 
 ### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）
 

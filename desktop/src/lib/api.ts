@@ -18,12 +18,14 @@ import type {
   SessionMeta,
   SettingsView,
   AppearanceUpdate,
+  DeveloperUpdate,
   ShellUpdate,
   ToolsUpdate,
   ExposureDebug,
   EmbeddingUpdate,
   PluginsUpdate,
   ExperienceRow,
+  SessionSearchHit,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
@@ -176,6 +178,7 @@ export function setSettings(patch: {
   shell?: ShellUpdate;
   plugins?: PluginsUpdate;
   chat?: ChatUpdate;
+  developer?: DeveloperUpdate;
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
@@ -189,6 +192,7 @@ export function setSettings(patch: {
     shell: patch.shell ?? null,
     plugins: patch.plugins ?? null,
     chat: patch.chat ?? null,
+    developer: patch.developer ?? null,
   });
 }
 
@@ -203,10 +207,37 @@ export function sessionHistory(sessionId: string): Promise<AgentEvent[]> {
   return invoke("session_history", { sessionId });
 }
 
+/** 会话重命名（v2.49 §3.6）：旁车 meta.json 标题；空串 = 回落自动标题。 */
+export function sessionRename(sessionId: string, title: string): Promise<void> {
+  return invoke("session_rename", { sessionId, title });
+}
+
+/** 会话删除（v2.49）：忙锁守卫在后端（运行中默认拒绝，开发者开关可
+ * 强制）。幂等。 */
+export function sessionDelete(sessionId: string): Promise<void> {
+  return invoke("session_delete", { sessionId });
+}
+
+/** 会话正文搜索（v2.49）：大小写不敏感子串，mtime 降序限量。 */
+export function sessionSearch(query: string, limit?: number): Promise<SessionSearchHit[]> {
+  return invoke("session_search", { query, limit: limit ?? null });
+}
+
+/** 会话导出 Markdown 转录（v2.49）：path 由 pickSavePath 选定。返回路径。 */
+export function sessionExport(sessionId: string, path: string): Promise<string> {
+  return invoke("session_export", { sessionId, path });
+}
+
 /** 原生目录选择对话框（⑱，UI shell 文档 §7 规则 8）：Rust 侧
  * tauri-plugin-dialog 封装；取消/关窗返回 null。 */
 export function pickDirectory(): Promise<string | null> {
   return invoke("pick_directory");
+}
+
+/** 原生存储对话框（v2.49 会话导出用）：defaultName 建议文件名；
+ * 取消/关窗返回 null。 */
+export function pickSavePath(defaultName: string): Promise<string | null> {
+  return invoke("pick_save_path", { defaultName });
 }
 
 // ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----

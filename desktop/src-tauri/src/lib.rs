@@ -40,6 +40,7 @@ mod demo_tools;
 mod desktop_notify;
 mod events;
 mod experiences;
+mod export;
 mod extract;
 mod idle;
 mod llm;
@@ -163,7 +164,12 @@ pub fn run() {
             commands::tool_exposure_debug,
             commands::pick_directory,
             commands::session_list,
-            commands::session_history
+            commands::session_history,
+            commands::session_rename,
+            commands::session_delete,
+            commands::session_search,
+            commands::session_export,
+            commands::pick_save_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

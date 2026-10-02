@@ -3,23 +3,24 @@
 
 mod memory;
 mod plugins;
+mod sessions;
 
 use std::sync::Arc;
 
 pub use memory::*;
 pub use plugins::*;
+pub use sessions::*;
 
 use tauri::{AppHandle, State};
 
 use kernel_agent::{CompactConfig, ExposureSnapshot};
-use session_store::SessionEvent;
-use session_store::SessionMeta;
+use session_store::{SessionEvent, SessionMeta};
 
 use crate::events::{AgentEvent, ApprovalRequestPayload};
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{
-    AppearanceUpdate, ChatUpdate, ContextUpdate, EmbeddingUpdate, LlmUpdate, MemoryUpdate,
-    PluginsUpdate, SettingsView, ShellUpdate, ToolsUpdate,
+    AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
+    MemoryUpdate, PluginsUpdate, SettingsView, ShellUpdate, ToolsUpdate,
 };
 use crate::state::AppState;
 
@@ -112,7 +113,7 @@ pub async fn session_history(
     Ok(runner::project_events(session.events(), &session_id))
 }
 
-/// 审批决策（§12.1）：回填 `agent://approval-request` 对应的请求。
+// 审批决策（§12.1）：回填 `agent://approval-request` 对应的请求。
 /// `scope = Some("session")` 且放行 = §3.17「允许本次对话」（豁免集记在
 /// ApprovalHub，本会话后续同工具不再问）。与会话锁无交集，决策卡在屏时
 /// 聊天通道仍可安全阻塞等待。
@@ -173,6 +174,7 @@ pub async fn settings_set(
     shell: Option<ShellUpdate>,
     plugins: Option<PluginsUpdate>,
     chat: Option<ChatUpdate>,
+    developer: Option<DeveloperUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
@@ -190,6 +192,7 @@ pub async fn settings_set(
         shell,
         plugins,
         chat,
+        developer,
     )?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;
@@ -217,6 +220,10 @@ pub async fn settings_set(
     if let Ok(mut guard) = state.timeout_cfg.write() {
         *guard = state.settings.call_timeout();
     }
+    // v2.49：审批守夜超时热更新（tools 区 approvalTimeoutSecs，0 = 不限）
+    state
+        .approval
+        .set_timeout_secs(state.settings.approval_timeout_secs());
     // ⑱：工作区目录热更新（fsutil 每次工具调用读 env，重注入即生效）
     if tools_section_touched {
         crate::state::apply_fs_roots_env(&state.settings);
@@ -299,6 +306,26 @@ pub async fn tool_exposure_debug(state: State<'_, AppState>) -> Result<ExposureS
 pub async fn pick_directory(app: AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let picked = app.dialog().file().blocking_pick_folder();
+    Ok(picked
+        .and_then(|p| p.into_path().ok())
+        .map(|p| p.display().to_string()))
+}
+
+/// 打开 OS 原生存储对话框（v2.49 会话导出用，§七 规则 8 同族：仅 Rust
+/// 侧调用）：`default_name` 建议文件名（空 = 不预设），返回所选绝对路径
+/// （取消返回 None）。
+#[tauri::command]
+pub async fn pick_save_path(
+    default_name: String,
+    app: AppHandle,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let mut builder = app.dialog().file();
+    let name = default_name.trim();
+    if !name.is_empty() {
+        builder = builder.set_file_name(name);
+    }
+    let picked = builder.blocking_save_file();
     Ok(picked
         .and_then(|p| p.into_path().ok())
         .map(|p| p.display().to_string()))

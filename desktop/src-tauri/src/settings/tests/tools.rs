@@ -43,6 +43,7 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     assert!(!store.view().tools.enabled);
@@ -74,6 +75,7 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     assert!(!store.view().tools.enabled);
@@ -97,6 +99,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
+                None,
             )
             .is_err());
     }
@@ -115,6 +118,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                     call_timeout_secs: Some(bad),
                     ..Default::default()
                 }),
+                None,
                 None,
                 None,
                 None,
@@ -140,6 +144,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
+                None,
             )
             .is_err());
     }
@@ -159,6 +164,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 fs_roots: Some(vec![format!("  {dir}  "), String::new(), dir.clone()]),
                 ..Default::default()
             }),
+            None,
             None,
             None,
             None,
@@ -227,6 +233,7 @@ fn fs_roots_normalize_reject_and_env_injection() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     crate::state::apply_fs_roots_env(&store);
@@ -247,6 +254,7 @@ fn fs_roots_normalize_reject_and_env_injection() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
     crate::state::apply_fs_roots_env(&store);
@@ -256,5 +264,74 @@ fn fs_roots_normalize_reject_and_env_injection() {
         Some(v) => std::env::set_var("LOCOWRK_FS_ROOTS", v),
         None => std::env::remove_var("LOCOWRK_FS_ROOTS"),
     }
+    std::fs::remove_dir_all(&root).ok();
+}
+
+/// v2.49 可配置原则：审批守夜阈值可调（缺省 100；0 = 不限；出界拒绝且
+/// 不污染内存态；重启持久）。
+#[test]
+fn approval_timeout_configurable() {
+    let root = temp_root("approval-timeout");
+    let store = SettingsStore::open(&root).unwrap();
+    assert_eq!(store.view().tools.approval_timeout_secs, 100);
+    assert_eq!(
+        store.approval_timeout_secs(),
+        100,
+        "后端专用口（ApprovalHub 初值来源）"
+    );
+
+    // 合法三档：100 → 30 → 0（不限）
+    for secs in [30, 0] {
+        store
+            .update(
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(ToolsUpdate {
+                    approval_timeout_secs: Some(secs),
+                    ..Default::default()
+                }),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(store.view().tools.approval_timeout_secs, secs);
+    }
+
+    // 出界拒绝且不污染内存态（86401 > 上限）
+    assert!(store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(ToolsUpdate {
+                approval_timeout_secs: Some(86_401),
+                ..Default::default()
+            }),
+            None,
+            None,
+            None,
+            None,
+        )
+        .is_err());
+    assert_eq!(store.view().tools.approval_timeout_secs, 0);
+
+    // 重启持久
+    drop(store);
+    assert_eq!(
+        SettingsStore::open(&root).unwrap().approval_timeout_secs(),
+        0,
+        "重开软件后不限档不复位"
+    );
     std::fs::remove_dir_all(&root).ok();
 }

@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 mod appearance;
 mod chat;
 mod context;
+mod developer;
 mod embedding;
 mod llm;
 mod memory;
@@ -24,6 +25,7 @@ mod update;
 pub use appearance::{AppearanceSettings, AppearanceUpdate, AppearanceView};
 pub use chat::{ChatSettings, ChatUpdate, ChatView};
 pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
+pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{LlmSettings, LlmSettingsView, LlmUpdate, PROVIDERS};
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate};
@@ -70,6 +72,8 @@ pub struct AppSettings {
     /// 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好；类型见
     /// `chat` 子模块）。字段级缺省零迁移。
     pub chat: ChatSettings,
+    /// 开发者选项区（v2.49，默认隐藏；类型见 `developer` 子模块）。
+    pub developer: DeveloperSettings,
 }
 
 fn default_shortcut() -> String {
@@ -90,6 +94,7 @@ impl Default for AppSettings {
             shell: ShellSettings::default(),
             plugins: PluginsSettings::default(),
             chat: ChatSettings::default(),
+            developer: DeveloperSettings::default(),
         }
     }
 }
@@ -113,6 +118,8 @@ pub struct SettingsView {
     pub plugins: PluginsView,
     /// 对话行为区（§3.2 ChatSection）。
     pub chat: ChatView,
+    /// 开发者选项区（v2.49，默认隐藏分区）。
+    pub developer: DeveloperView,
 }
 
 pub struct SettingsStore {
@@ -236,6 +243,16 @@ impl SettingsStore {
             .clone()
     }
 
+    /// 后端专用：开发者选项区全量（v2.49 危险开关的后端判定用——不信
+    /// 前端转述，命令侧直接读设置）。
+    pub fn developer(&self) -> DeveloperSettings {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .developer
+            .clone()
+    }
+
     fn project(&self, s: &AppSettings) -> SettingsView {
         // S2：窗口以 llm 区为准（context 旧字段只在迁移前的旧文件里出现）
         let window = s.llm.window_tokens.or(s.context.window_tokens);
@@ -277,6 +294,7 @@ impl SettingsStore {
                 call_timeout_secs: s.tools.call_timeout_secs,
                 fs_roots: s.tools.fs_roots.clone(),
                 max_turn_steps: s.tools.max_turn_steps,
+                approval_timeout_secs: s.tools.approval_timeout_secs,
             },
             shell: ShellSettingsView {
                 unlock_risky: s.shell.unlock_risky,
@@ -289,6 +307,11 @@ impl SettingsStore {
                 expand_tool_process: s.chat.expand_tool_process,
                 enter_to_send: s.chat.enter_to_send,
                 usage_readout: s.chat.usage_readout.clone(),
+            },
+            developer: DeveloperView {
+                unlocked: s.developer.unlocked,
+                allow_delete_running_session: s.developer.allow_delete_running_session,
+                allow_switch_running_session: s.developer.allow_switch_running_session,
             },
         }
     }

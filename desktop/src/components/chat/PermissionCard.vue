@@ -11,7 +11,7 @@
  * 动作行（超时秒数文案 + 三键）。风险靠染底 + 胶囊表达（平面内无边框）；
  * 主按钮 = 允许一次（最小授权是默认路径）。决策成功后焦点回 composer。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useApprovalsStore, type ApprovalDecisionKind } from "../../stores/approvals";
 import { useChatStore } from "../../stores/chat";
@@ -85,11 +85,16 @@ async function copyArgs() {
 const workspace = computed(() => settings.view?.tools.fsRoots?.[0] ?? "");
 
 /** 超时倒计时只做显示（§3.17：无进度条动画）——真执行者是后端守夜任务
- * （ApprovalHub 100s fail-closed），前端到点文案切"超时自动拒绝中…"。 */
-const SECONDS = 100;
-const secondsLeft = ref(SECONDS);
+ * （fail-closed）。秒数读载荷 timeout_secs（v2.49 可配置原则：阈值在
+ * 设置页 tools.approvalTimeoutSecs，0 = 不限 → 不渲染倒计时行）。 */
+const limit = computed(() => props.req.timeout_secs ?? 100);
+const secondsLeft = ref(limit.value);
 let timer: number | null = null;
+watch(limit, (v) => {
+  secondsLeft.value = v;
+});
 onMounted(() => {
+  if (limit.value <= 0) return; // 不限：不起倒计时
   timer = window.setInterval(() => {
     if (secondsLeft.value > 0) secondsLeft.value--;
     if (secondsLeft.value === 0 && timer !== null) {
@@ -179,7 +184,7 @@ async function decide(kind: ApprovalDecisionKind) {
 
     <!-- ⑥ 动作行：主按钮 = 允许一次（最小授权是默认路径） -->
     <div class="permission__acts">
-      <span class="permission__timeout">{{ timeoutText }}</span>
+      <span v-if="limit > 0" class="permission__timeout">{{ timeoutText }}</span>
       <div class="permission__btns">
         <button
           class="permission__btn permission__btn--ghost"

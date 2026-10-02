@@ -83,6 +83,16 @@ impl AppState {
         }
     }
 
+    /// v2.49 会话删除后剔除"最近聊过"指针——否则调度兜底会向已删会话
+    /// 注入触发轮（session_lock 惰性重建空会话 = 僵尸复活）。
+    pub fn forget_chat(&self, session_id: &str) {
+        if let Ok(mut g) = self.last_chat.write() {
+            if g.as_deref() == Some(session_id) {
+                *g = None;
+            }
+        }
+    }
+
     /// 取（或惰性建）某会话的锁。首聊即用，无需显式建会话。
     pub fn session_lock(&self, id: &str) -> Arc<tokio::sync::Mutex<Session>> {
         self.sessions
