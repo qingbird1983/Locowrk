@@ -9,6 +9,7 @@ export default {
     plugins: "扩展",
     memory: "记忆",
     settings: "设置",
+    notifications: "通知",
   },
   status: {
     ready: "就绪",
@@ -131,6 +132,23 @@ export default {
     movedInto: "已移入工作区",
     movedOut: "已移出工作区",
     associateFailed: "工作区关联失败",
+  },
+  // 通知浮层（§3.13，v2.51）：记录只存 kind + 参数，标题模板在这里渲染
+  notify: {
+    title: "通知",
+    markAll: "全部已读",
+    clear: "清空",
+    all: "全部",
+    unread: "未读",
+    empty: "没有通知",
+    emptyUnread: "没有未读",
+    noContext: "无关联会话",
+    scheduleFired: "定时任务已触发",
+    subagentDone: "子 Agent 已完成",
+    subagentFailed: "子 Agent 收束失败",
+    contextCompacted: "上下文已压缩",
+    savedTokens: "省下 {n} token",
+    approvalTimeout: "审批超时，已自动拒绝",
   },
   notice: {
     action: {

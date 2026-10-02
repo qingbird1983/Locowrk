@@ -1,13 +1,9 @@
 <script setup lang="ts">
 /**
- * 侧栏（UI shell doc §2.1 ①② / §2.3 / §3.6）：会话运营 + 目的地入口。
- * - 会话树在 SessionGroups（§2.3 两级分组：未关联落「会话」，已关联落
- *   「项目」→ 工作区 → 时间桶，v2.50 关联落地）。
- * - 搜索框 = 标题前端过滤 + 正文命中（v2.49 `session_search`，命中行带
- *   摘录，mtime 降序限量）。
- * - 版本号连点 7 次 = 解锁「开发者」设置分区（安卓式，可配置原则
- *   §7-16②；解锁态存 settings.json `developer.unlocked`）。
- * - 折叠/拖宽交互在 use-sidebar-resize（§2.3）；宽度跨重启持久化。
+ * 侧栏（UI shell doc §2.1 ①② / §2.3 / §3.6）：会话树在 SessionGroups
+ * （§2.3 两级分组）；搜索 = 标题过滤 + 正文命中（v2.49）；通知 = 第 5
+ * 图标 + §3.13 浮层（v2.51）；版本号 7 连点解锁开发者选项（§7-16②）；
+ * 折叠/拖宽在 use-sidebar-resize（§2.3），宽度跨重启持久化。
  */
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -15,21 +11,31 @@ import { getVersion } from "@tauri-apps/api/app";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
-import { useToastStore } from "../../stores/toast";
-import { SIDEBAR_MAX, SIDEBAR_MIN } from "../../lib/sidebar-preference";
+import { useNotificationsStore } from "../../stores/notifications";import { SIDEBAR_MAX, SIDEBAR_MIN } from "../../lib/sidebar-preference";
 import { useSidebarResize } from "./use-sidebar-resize";
+import { useDevUnlock } from "./use-dev-unlock";
+import { useNotificationEntry } from "./use-notification-entry";
 import { useSessionSearch } from "./use-session-search";
 import { Icon } from "../../lib/icons";
 import SessionGroups from "./SessionGroups.vue";
+import NotificationPopover from "./NotificationPopover.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
 const shell = useShellStore();
 const settings = useSettingsStore();
-const toast = useToastStore();
+const notifications = useNotificationsStore();
 
 const search = ref("");
 const version = ref("");
+
+// 通知入口（§2.4 第 5 图标 + §3.13 浮层）：开合与锚定在 composable
+const {
+  open: notifOpen,
+  anchor: notifAnchor,
+  setBtn: setNotifBtn,
+  toggle: toggleNotif,
+} = useNotificationEntry();
 
 onMounted(async () => {
   version.value = (await getVersion().catch(() => "")) || "";
@@ -58,29 +64,8 @@ function openSession(id: string) {
   shell.setDestination("chat");
 }
 
-// ---- 版本号连点解锁开发者选项（§3.2，安卓式 7 连点）----
-let devTaps = 0;
-let lastTapAt = 0;
-
-function onVersionTap() {
-  if (settings.view?.developer.unlocked) return;
-  const now = Date.now();
-  if (now - lastTapAt > 2000) devTaps = 0;
-  lastTapAt = now;
-  devTaps += 1;
-  if (devTaps >= 7) {
-    devTaps = 0;
-    void settings.saveDeveloper({ unlocked: true });
-    toast.push("ok", t("sidebar.devUnlocked"));
-  } else if (devTaps >= 3) {
-    toast.push(
-      "ok",
-      t("sidebar.devUnlockProgress", { n: 7 - devTaps }),
-      undefined,
-      "dev-unlock",
-    );
-  }
-}
+// 版本号连点解锁开发者选项（§3.2，安卓式 7 连点）：逻辑在 use-dev-unlock
+const { onTap: onVersionTap } = useDevUnlock();
 
 // ---- 拖拽调宽（§2.3）：交互在 use-sidebar-resize.ts，状态与持久化在 shell store ----
 const {
@@ -196,6 +181,23 @@ const {
             aria-hidden="true"
           />
         </button>
+        <!-- 通知（§2.4 第 5 图标，popover 非页面 §3.13）；未读 6px accent 点 -->
+        <button
+          :ref="setNotifBtn"
+          class="ctl notif-btn"
+          type="button"
+          :aria-pressed="notifOpen"
+          :title="t('nav.notifications')"
+          :aria-label="t('nav.notifications')"
+          @click="toggleNotif"
+        >
+          <Icon name="bell" :size="15" aria-hidden="true" />
+          <span
+            v-if="notifications.unread > 0"
+            class="notif-badge"
+            aria-hidden="true"
+          />
+        </button>
         <button
           v-if="version"
           type="button"
@@ -209,6 +211,14 @@ const {
         </button>
       </footer>
     </div>
+
+    <!-- 通知浮层（§3.13）：fixed 锚触发钮上方，不受 aside overflow 裁剪 -->
+    <NotificationPopover
+      v-if="notifOpen"
+      :x="notifAnchor.x"
+      :y="notifAnchor.y"
+      @close="notifOpen = false"
+    />
 
     <!-- 拖拽柄（§2.3）：8px 热区嵌右缘，可见提示 = 2×32 圆角条 -->
     <button
@@ -236,9 +246,8 @@ const {
 </template>
 
 <style scoped>
-/* 侧栏宽 = 拖拽后的实时值（JS 写 --lw-sidebar-w）；折叠 = 独立状态宽 0，
- * 体不卸载（内层固定宽保滚动位置与不回流）。展开 --dur-base + ease-out，
- * 收起 --dur-fast + ease-in（§6.6 ②③抽屉）。 */
+/* 侧栏宽 = 拖拽实时值（JS 写 --lw-sidebar-w）；折叠 = 独立状态宽 0、
+ * 体不卸载；展开 base/ease-out，收起 fast/ease-in（§6.6 ②③抽屉） */
 .sidebar {
   flex: 0 0 var(--lw-sidebar-w);
   transition:
@@ -268,6 +277,20 @@ const {
 .ctl:hover {
   background: var(--lw-wash-2);
   color: var(--lw-ink-1);
+}
+
+/* 通知钮未读角标（§3.13）：6px accent 点 */
+.notif-btn {
+  position: relative;
+}
+.notif-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-accent);
 }
 
 .side-label {
@@ -322,8 +345,8 @@ const {
   color: var(--lw-ink-2);
 }
 
-/* 拖拽柄（§2.3）：8px 热区；可见提示 2×32 圆角条，hover/聚焦/拖拽显形，
- * 聚焦与拖拽换 accent，聚焦不画外框（圆角条即焦点提示） */
+/* 拖拽柄（§2.3）：8px 热区；提示 2×32 圆角条 hover/聚焦/拖拽显形，
+ * 聚焦与拖拽换 accent，聚焦不画外框 */
 .sidebar-grip {
   position: absolute;
   top: 0;

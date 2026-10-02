@@ -491,6 +491,19 @@ ok <60% / warn 60–99% / danger ≥阈值；无数据（`null`）整个不渲�
 - **未读 = 状态，用 accent 点表达，不用彩色**（单色纪律）。
 - ⑭ 的「窗口不可见/失焦时后端发系统通知兜底」不变，本浮层是**应用内**的持久记录，
   两者并存不互相替代。
+- **✅ v2.51 数据源（§8.2 落地）**：desktop 自持 `<数据根>/notifications.json`
+  （cap 100 FIFO，坏文件当空表）。入账 = **五类「用户可能错过的事」**：定时触发
+  （`ScheduleFired`，label=调度名）/ 子 Agent 收束成功·失败（`ToolCall`↔`ToolResult`
+  按 call_id 配对出 `subagent_run`）/ 压缩完成（`ContextCompacted`，label=省下的
+  token 数）/ **审批超时自动拒绝**（`ApprovalResolved` 未通过且 reason 以共享常量
+  「超时自动拒绝」前缀命中——常量在 approval.rs，匹配不靠裸字符串抄写）。四类事件
+  全部收拢在 `TauriSink::emit` 一处（纯提取函数 + 配对表 cap 64），ApprovalHub /
+  调度引擎零改动；入账后 emit `lw://notification`（载荷 = 新记录），前端 store
+  订阅刷新，浮层打开时 `notification_list` 拉全量。
+- 行点击 = 单条置读（`notification_read`）+ 有会话归属则跳转该会话；图标钮未读 >0
+  时右上 6px accent 点（与行内未读点同形）。
+- 文案纪律同 §3.3：记录只存 **kind + 参数（调度名 / token 数 / 错误摘要）**，标题
+  模板由前端 i18n 渲染——后端不存文案。
 
 ### 3.14 空态
 
@@ -986,6 +999,7 @@ settings.json 读取或解析失败时**绝不空白页**：给一个居中的�
 | `agent://schedule-fired` | chat `pushNotice('notice.scheduleFired', …)` | §3.3 系统通知 | 窗口不可见/失焦时后端另发系统通知兜底 |
 | `agent://tool-call`（`subagent_run`） | chat 工具行 + `pushNotice('notice.subagentStarted')` | §3.8 + §3.10 + §3.3 | 子内活动不投影（黑盒） |
 | `agent://tool-result`（`subagent_run`） | chat 补丁 + `pushNotice('notice.subagentDone')` | §3.8 + §3.10 + §3.3 | 预算耗尽/超时如实收束 |
+| `lw://notification`（✅ v2.51） | notifications store 收新记录 | §3.13 浮层 + 侧栏图标未读点 | 后端 `TauriSink` 入账五类错过事件后 emit（载荷 = 新记录）；浮层打开时 `notification_list` 拉全量；行点击置读+跳会话 |
 
 ### 4.2 命令 → 面板
 
@@ -1337,7 +1351,7 @@ hover 位移（列表里会造成抖动，只允许变色）· chevron 旋转（
 | 工作面板产物 | §2.5 页签内容 | 工具产物在会话事件里带"可展示产物"描述（diff / 文件路径 / 预览 URL） |
 | 插件 UI 贡献槽位 | 目的地图标 / 面板页签与启动器条目 / 设置分区 / 命令面板命令 | plugin-api **末尾追加**（ABI 兼容）+ manifest 声明 |
 | `agent://context-usage` 载荷扩展 | §3.12 分项（本轮合计 / 生成速度 / 模型用量含缓存 / 工具上下文） | kernel-agent 用量统计 → desktop 事件投影 |
-| 通知记录（应用内持久） | §3.13 | desktop（现有通知是系统级，应用内需自持一份） |
+| 通知记录（应用内持久） | §3.13 | ✅ v2.51：desktop `<数据根>/notifications.json`（cap 100 FIFO）+ `TauriSink` 五类入账（定时触发/子 Agent 收束成败/压缩/审批超时拒绝）+ `lw://notification` 推送 + `notification_list/read_all/read/clear` 命令；⑭ 系统通知兜底并存 |
 | 结果内容字段（富内容） | markdown 代码块/表格已可由正文承载；产物级富内容（图片/文件）待定 | 视工具产物契约 |
 | 子会话转录可观 | §3.16 面板页签 | ①子会话落盘（推荐，复用 `session_history` 重放）或 ②独立事件通道；**不改** ⑮「父转录不掺入子内活动」 |
 | 会话级权限档位 | §3.11 权限 chip（四档） | 会话元数据存档位；审批门读它做预答；三类硬底线不受档位影响 |

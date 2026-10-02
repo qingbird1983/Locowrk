@@ -32,6 +32,10 @@ use tokio::sync::oneshot;
 
 use crate::events::{side_effect_str, AgentEvent, ApprovalRequestPayload, EventSink};
 
+/// 守夜拒绝理由前缀：notifications 提取器按它把超时拒绝识别为
+/// ApprovalTimeout 通知（共享常量，防两处裸字符串抄写漂移）。
+pub const TIMEOUT_REASON_PREFIX: &str = "超时自动拒绝";
+
 /// 审批超时缺省（§3.17 照实机：100 秒未响应自动拒绝）。v2.49 起只是
 /// 测试缺省——生产初值来自设置 `tools.approvalTimeoutSecs`（可配置原则
 /// §七-16①），经 [`ApprovalHub::set_timeout_secs`] 热换入。
@@ -185,7 +189,7 @@ impl ApprovalResolver for ApprovalHub {
                     .remove(&request_id);
                 if let Some(entry) = entry {
                     let _ = entry.tx.send(ApprovalDecision::deny(format!(
-                        "超时自动拒绝（{} 秒未响应，fail-closed）",
+                        "{TIMEOUT_REASON_PREFIX}（{} 秒未响应，fail-closed）",
                         timeout_ms / 1000
                     )));
                 }

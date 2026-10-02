@@ -9,6 +9,7 @@ export default {
     plugins: "Extensions",
     memory: "Memory",
     settings: "Settings",
+    notifications: "Notifications",
   },
   status: {
     ready: "Ready",
@@ -176,6 +177,24 @@ export default {
     movedInto: "Moved to workspace",
     movedOut: "Removed from workspace",
     associateFailed: "Workspace association failed",
+  },
+  // Notification popover (§3.13, v2.51): records store kind + params only,
+  // title templates render here
+  notify: {
+    title: "Notifications",
+    markAll: "Mark all read",
+    clear: "Clear all",
+    all: "All",
+    unread: "Unread",
+    empty: "No notifications",
+    emptyUnread: "Nothing unread",
+    noContext: "No linked chat",
+    scheduleFired: "Scheduled task fired",
+    subagentDone: "Sub-agent finished",
+    subagentFailed: "Sub-agent ended with failure",
+    contextCompacted: "Context compacted",
+    savedTokens: "{n} tokens saved",
+    approvalTimeout: "Approval timed out, denied automatically",
   },
   developer: {
     hint: "Developer and danger switches. Hidden by default: tap the version number at the sidebar bottom 7 times to unlock.",

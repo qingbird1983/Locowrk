@@ -3,6 +3,7 @@ import { onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useApprovalsStore } from "./stores/approvals";
 import { useChatStore } from "./stores/chat";
+import { useNotificationsStore } from "./stores/notifications";
 import { useSettingsStore } from "./stores/settings";
 import { useShellStore } from "./stores/shell";
 import ChatTranscript from "./components/ChatTranscript.vue";
@@ -34,6 +35,7 @@ const chat = useChatStore();
 const approvals = useApprovalsStore();
 const settings = useSettingsStore();
 const shell = useShellStore();
+const notifications = useNotificationsStore();
 /** composer 坞总高：列宽热区下沿（ConversationWidthHandles）的锚。 */
 const composerH = ref(0);
 
@@ -41,6 +43,7 @@ onMounted(() => {
   chat.init();
   approvals.init();
   void settings.init();
+  void notifications.init();
 });
 </script>
 

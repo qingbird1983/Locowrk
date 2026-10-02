@@ -45,6 +45,7 @@ mod extract;
 mod idle;
 mod llm;
 mod memory;
+mod notifications;
 mod plugins_root;
 mod runner;
 mod scheduler;
@@ -170,7 +171,11 @@ pub fn run() {
             commands::session_delete,
             commands::session_search,
             commands::session_export,
-            commands::pick_save_path
+            commands::pick_save_path,
+            commands::notification_list,
+            commands::notification_read_all,
+            commands::notification_read,
+            commands::notification_clear
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

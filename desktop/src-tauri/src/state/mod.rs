@@ -24,7 +24,7 @@ use kernel_agent::{
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use plugin_service::{LocalDirMarket, PluginService};
 use session_store::Session;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::approval::ApprovalHub;
 use crate::data_root;
@@ -50,12 +50,17 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 数据根绑定一次，设置 / 插件编排 / LLM 配置共用（settings.json 同目录）。
     let root = data_dir();
 
+    // 应用内通知记录（§3.13）：manage 给 TauriSink 入账钩子惰性取用。
+    let notifications = Arc::new(crate::notifications::NotificationStore::open(
+        root.join("notifications.json"),
+    ));
+    app.manage(Arc::clone(&notifications));
+
     // ⑭ 调度库先开（工具目录构造要持有）；引擎等 kernel 就绪后再起。
     let schedules = crate::scheduler::open_db(&root);
 
-    // 使用统计库（⑩③，exposure 文档 §3）：宿主自有 usage.sqlite3，
-    // 5s 批量刷盘。打不开只丢统计，不拦聊天。⑫ 的 EWMA 积累与
-    // search_tools 高频回退也从这里读。
+    // 使用统计库（⑩③）：usage.sqlite3，5s 批量刷盘；打不开只丢统计。
+    // ⑫ 的 EWMA 积累与 search_tools 高频回退也从这里读。
     let usage = match UsageDb::open(&root.join("usage.sqlite3")) {
         Ok(db) => UsageRecorder::spawn(db),
         Err(e) => {
@@ -64,20 +69,16 @@ pub fn init_state(app: AppHandle) -> AppState {
         }
     };
 
-    // ⑬ embedding 共享柄：壳先建、settings 就绪后再灌配置（search_tools
-    // 在工具目录期就要持有 port）。未配置 = None 内值（search_tools 退
-    // 关键词、检索信号缺席、经历不写）；settings_set 成功后命令层换入，
-    // 保存即生效。port 全宿主共用一个（冷却状态不分家）。
+    // ⑬ embedding 共享柄：未配置 = None 内值（各处自行降级）；
+    // settings_set 后命令层换入即生效。port 全宿主共用（冷却不分家）。
     let embed = SharedEmbed::new();
     let embed_port = embed.port();
 
-    // 会话表（内存）：键 = 前端生成的 session id；⑭ 调度引擎解析触发
-    // 目标、⑮ 子 Agent 快照按同一身份口径。
+    // 会话表（内存）：键 = session id；⑭ 触发目标 / ⑮ 子快照同口径。
     let sessions: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let sessions_dir = root.join("sessions");
-    // ⑲ 启动恢复：`sessions/<id>.jsonl` 回放进内存表——必须在调度引擎
-    // （会话消费方）之前；恢复数只进日志。
+    // ⑲ 启动恢复：回放进内存表——必须在调度引擎（消费方）之前。
     let restored = crate::session_log::restore_all(&sessions_dir, &sessions);
     if restored > 0 {
         tracing::info!(restored, dir = %sessions_dir.display(), "sessions restored");
@@ -106,9 +107,8 @@ pub fn init_state(app: AppHandle) -> AppState {
         ));
     }
 
-    // S1（清单 §2.7/§3）：高危解锁开关在插件加载前注入进程 env——
-    // tool-shell 的 init 读一次 `LOCOWRK_SHELL_UNLOCK_RISK`；设置改动
-    // 重启生效（插件 init 只跑一次）。硬锁类不受此开关影响。
+    // S1：高危解锁开关插件加载前注入 env（tool-shell init 读一次，
+    // 改动重启生效）；硬锁类不受影响。
     if settings.shell_unlock_risky() {
         std::env::set_var("LOCOWRK_SHELL_UNLOCK_RISK", "1");
     }
@@ -351,6 +351,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         embed_port,
         experiences,
         llm,
+        notifications,
     }
 }
 

@@ -26,6 +26,7 @@ import type {
   PluginsUpdate,
   ExperienceRow,
   SessionSearchHit,
+  NotificationItem,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
@@ -247,6 +248,31 @@ export function pickDirectory(): Promise<string | null> {
  * 取消/关窗返回 null。 */
 export function pickSavePath(defaultName: string): Promise<string | null> {
   return invoke("pick_save_path", { defaultName });
+}
+
+// ---- 应用内通知（v2.51 §3.13）：读 / 全读 / 单读 / 清空 + 推送订阅 ----
+
+export function notificationList(): Promise<NotificationItem[]> {
+  return invoke("notification_list");
+}
+
+export function notificationReadAll(): Promise<number> {
+  return invoke("notification_read_all");
+}
+
+export function notificationRead(id: string): Promise<boolean> {
+  return invoke("notification_read", { id });
+}
+
+export function notificationClear(): Promise<void> {
+  return invoke("notification_clear");
+}
+
+/** 新通知推送（后端 TauriSink 入账后 emit）。 */
+export function subscribeNotificationAdded(
+  onAdded: (item: NotificationItem) => void,
+): Promise<UnlistenFn> {
+  return listen<NotificationItem>("lw://notification", (e) => onAdded(e.payload));
 }
 
 // ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----

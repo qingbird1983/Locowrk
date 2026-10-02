@@ -85,6 +85,27 @@ export interface SessionSearchHit {
   updatedAt: number;
 }
 
+/** 应用内通知类别（§3.13，v2.51）：五类「用户可能错过的事」。 */
+export type NotificationKind =
+  | "schedule_fired"
+  | "subagent_done"
+  | "subagent_failed"
+  | "context_compacted"
+  | "approval_timeout";
+
+/** 单条应用内通知（§3.13，v2.51）：后端 notifications.json 镜像；label
+ * 是类别语义的数据值（调度名 / 省下的 token / 错误摘要），标题模板由
+ * 前端 i18n 渲染。 */
+export interface NotificationItem {
+  id: string;
+  kind: NotificationKind;
+  sessionId: string | null;
+  label: string | null;
+  createdAt: number;
+  read: boolean;
+}
+
+
 /** 定时触发（agent://schedule-fired，⑭）：调度引擎注入轮之前告知。 */
 export interface ScheduleFiredEvent {
   kind: "schedule_fired";

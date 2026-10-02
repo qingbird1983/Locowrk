@@ -194,6 +194,10 @@ impl EventSink for TauriSink {
         if let Err(e) = self.0.emit(event.channel(), event) {
             tracing::warn!("emit {} failed: {e}", event.channel());
         }
+        // §3.13 应用内通知（v2.51）：五类「用户可能错过的事」在唯一事件
+        // 出口处统一入账（提取→落 store→推 lw://notification），ApprovalHub
+        // 与调度引擎零改动。
+        crate::notifications::record_event(&self.0, event);
     }
 }
 

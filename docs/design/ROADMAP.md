@@ -540,7 +540,29 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 「项目」组消失。搭车：en 补缺的 `settings.nav.developer` 键（zh 有 en 缺，回落键名）。走查
 预置的 fsRoots 已还原（fsRoots=[]），走查会话经 UI 两步删除；上批遗留的走查会话残留一并清理。
 
-### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）
+### ㉗·A 通知浮层 + 应用内通知记录（✅ 已完成，v2.51）
+
+> 自规划拆批：㉗ 体量大，拆 A（§3.13 通知）/ B（§2.5 面板 + §3.16 子转录）/ C（§3.28 diff）。
+> UI shell 文档 §3.13/§4.1/§8.2 先行成文再动码。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 后端记录 | ✅ v2.51 | desktop 新 `notifications.rs`：`<数据根>/notifications.json` 自持（cap 100 FIFO，坏文件当空表，变更全量重写）；`NotificationStore`（add/list/mark_all_read/mark_read/clear，list 新→旧，未读由前端计数）；**入账收拢在 `TauriSink::emit` 一处**——`draft_from_event` 纯函数 + call_id→tool 配对表（cap 64）识别五类「错过的事」：`ScheduleFired`（label=调度名）/ `subagent_run` 收束成败（ToolCall↔ToolResult 配对）/ `ContextCompacted`（label=省下 token）/ **审批超时拒绝**（`ApprovalResolved` 未通过且 reason 命中 `approval::TIMEOUT_REASON_PREFIX` 共享常量，手动拒绝不入账）；ApprovalHub 与调度引擎**零改动**；入账后 emit `lw://notification` |
+| 命令 | ✅ v2.51 | `notification_list / read_all / read / clear` 四条薄命令 + `manage(Arc<NotificationStore>)`（TauriSink 经 `try_state` 惰性取用，AppState 同持一份） |
+| 浮层 | ✅ v2.51 | `shell/NotificationPopover.vue`：teleport body + fixed 锚侧栏底 bell 上方（380px 可溢出侧栏，§五 popover 家族 elevated+line+shadow）；头 = 通知 + 全部已读 ✓ + 清空 🗑（空态禁用）；轻量两键分段 全部/未读（未读带计数）；行 = 未读 6px accent 点 + 类别标题（i18n 模板，记录只存 kind+参数）+ 正文（数据参数：调度名/会话标题/省下 token/错误摘要）+ 相对时间（§3.5 共享实现）；行点击 = 置读 + 有会话归属则跳转；点外部/Esc 关 |
+| 侧栏入口 | ✅ v2.51 | bell 第 5 图标（§2.4，popover 非页面）+ 未读 >0 右上 6px accent 点；开合/锚定抽 `use-notification-entry.ts`、版本连点解锁抽 `use-dev-unlock.ts`（Sidebar 保 400 行）；App.vue `notifications.init()`（load 全量 + 订阅推送） |
+| 测试 | ✅ v2.51 | 桌面 106 绿（+3：add/持久 roundtrip/FIFO cap / mark 语义与 clear / 五类提取与配对含负例） |
+
+验证：cargo test 106 绿（+3）、clippy 0、fmt、check_length OK、pnpm build 过。
+实机走查（tauri dev + CDP 截图 27a-1…27a-8 + notifications.json 取证）：空态（「没有通知」+
+全读/清空禁用 + 点外部关）→ 预置 `approvalTimeoutSecs=5` 真实轮：shell 审批不响应 →
+**5s 守夜 fail-closed 拒绝实机发生**（记录条「已拒绝 · 运行」+ 模型如实报告）→ **bell 徽标
+点亮** → 浮层行「审批超时，已自动拒绝 / 请用 shell 工具运行…（会话标题回落）/ 3 分钟前 /
+未读点 / 未读 · 1」→ 盘上 `{"kind":"approval_timeout","sessionId":"desktop-…","read":false}`
+→ 全部已读（徽标/未读点消）→ 未读分段空态 → 清空（盘上 `[]`）。走查设置已还原
+（approvalTimeoutSecs=100），走查会话 UI 两步删除，通知清零。
+
+### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / ~~§3.13 通知浮层~~（✅ v2.51）/ 目的地页整版式 §3.29/§3.31）
 
 ---
 

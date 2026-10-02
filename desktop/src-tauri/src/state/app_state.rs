@@ -55,6 +55,9 @@ pub struct AppState {
     pub memory: Arc<MemoryStore>,
     /// 使用统计写入端（⑩③，usage.sqlite3 宿主自有）。降级模式 = 丢弃。
     pub usage: Arc<UsageRecorder>,
+    /// 应用内通知记录（§3.13，v2.51）：notifications.json 自持，命令层
+    /// 读改；TauriSink 入账钩子经 app.manage 的克隆惰性取用。
+    pub notifications: Arc<crate::notifications::NotificationStore>,
     /// ToolExposure 的活配置（⑫，同 compact_cfg 的换入模式）。
     pub exposure_cfg: Arc<RwLock<ToolExposureConfig>>,
     /// ToolExposure 本体（⑫）：tool_exposure_debug 命令读最近一次截断快照。
