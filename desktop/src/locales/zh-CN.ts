@@ -149,16 +149,16 @@ export default {
   // ⑫ 暴露调试面板（开发者选项只读区；与 settings.developer* 分开——
   // 面板是"用户来找"的信息，不是设置分区本体）
   developer: {
-    panelTitle: "最近一次暴露分布",
+    panelTitle: "最近一次分发分布",
     refresh: "刷新",
     empty: "还没有数据——发起一次对话后回来看。",
-    disabled: "截断未启用，当前全量暴露工具目录。",
-    exposed: "本轮暴露 {exposed} / {total} 个工具",
+    disabled: "截断未启用，当前全量分发工具目录。",
+    exposed: "本轮分发 {exposed} / {total} 个工具",
     always: "always 直通（{n}）",
     sessionHot: "会话内用过（{n}）",
     globalHot: "全局高频（{n}）",
     retrieved: "语义检索入选（{n}）",
-    saved: "节省上下文：约 {n} token",
+    saved: "节省上下文：{n} token",
   },
   memory: {
     search: "搜索记忆…",
@@ -261,7 +261,7 @@ export default {
       embedding: "嵌入",
       plugins: "插件",
       shell: "命令终端",
-      tools: "工具与暴露",
+      tools: "工具与分发",
       sessions: "会话与数据",
     },
     // 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽，㉕）
@@ -326,7 +326,7 @@ export default {
     shellRestart: "改动在重启应用后生效。",
     // ⑫ 工具暴露区（开发者选项真分区，替换壳批次占位）
     developerTitle: "开发者选项",
-    developerHint: "工具暴露截断（Top-N）设置 + 最近一次请求的暴露分布。",
+    developerHint: "工具分发截断（Top-N）设置 + 最近一次请求的分发分布。",
     toolsEnabled: "按热度截断工具目录（Top-N）",
     toolsMax: "每请求最大工具数",
     toolsMaxHint: "1–200，缺省 20；always 工具与 search_tools 元工具不受截断影响。",
@@ -350,6 +350,9 @@ export default {
     autoDisableDaysHint: "0 = 关闭（缺省）；7–365 天。只作用于第三方插件；关闭不会自动恢复已停用插件。",
     callTimeout: "单次工具调用超时（秒）",
     callTimeoutHint: "宿主强制上限，保存即生效（5–3600 秒）",
+    // ㉕·微调③ 单轮步数上限
+    maxTurnSteps: "单轮步数上限",
+    maxTurnStepsHint: "单轮工具调用步数兜底，超过即强制收束本轮（1–100，缺省 8）",
     // ⑱ 工作区目录（fs roots 选择器）
     fsRootsTitle: "工作区目录",
     fsRootsHint:

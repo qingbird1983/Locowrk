@@ -7,11 +7,12 @@ use super::*;
 fn tools_defaults_legacy_compat_and_validation() {
     let root = temp_root("tools");
     let store = SettingsStore::open(&root).unwrap();
-    // 缺省：开 / 20（exposure 文档 §5.3 Top-N）/ 超时 30s（S2）
+    // 缺省：开 / 20（exposure 文档 §5.3 Top-N）/ 超时 30s（S2）/ 步数上限 8
     let v = store.view().tools;
     assert!(v.enabled);
     assert_eq!(v.max_per_request, 20);
     assert_eq!(v.call_timeout_secs, 30);
+    assert_eq!(v.max_turn_steps, 8);
     assert!(v.fs_roots.is_empty(), "缺省无工作区目录（⑱：仅数据根）");
     assert_eq!(store.exposure_config().max_tools, 20);
     assert_eq!(store.call_timeout(), std::time::Duration::from_secs(30));
@@ -21,6 +22,7 @@ fn tools_defaults_legacy_compat_and_validation() {
     assert!(v.enabled);
     assert_eq!(v.max_per_request, 20);
     assert_eq!(v.call_timeout_secs, 30);
+    assert_eq!(v.max_turn_steps, 8);
     // 更新 + 磁盘往返 + 生效配置桥接
     store
         .update(
@@ -35,6 +37,7 @@ fn tools_defaults_legacy_compat_and_validation() {
                 enabled: Some(false),
                 max_per_request: Some(15),
                 call_timeout_secs: Some(45),
+                max_turn_steps: Some(24),
                 ..Default::default()
             }),
             None,
@@ -44,6 +47,7 @@ fn tools_defaults_legacy_compat_and_validation() {
         .unwrap();
     assert!(!store.view().tools.enabled);
     assert_eq!(store.view().tools.max_per_request, 15);
+    assert_eq!(store.view().tools.max_turn_steps, 24);
     assert_eq!(store.view().tools.call_timeout_secs, 45);
     assert_eq!(
         store.call_timeout(),
@@ -118,6 +122,28 @@ fn tools_defaults_legacy_compat_and_validation() {
             .is_err());
     }
     assert_eq!(store.view().tools.call_timeout_secs, 45);
+    // ㉕·微调③：单轮步数上限出界拒绝且不污染内存态
+    for bad in [0, 101] {
+        assert!(store
+            .update(
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(ToolsUpdate {
+                    max_turn_steps: Some(bad),
+                    ..Default::default()
+                }),
+                None,
+                None,
+                None,
+            )
+            .is_err());
+    }
+    assert_eq!(store.view().tools.max_turn_steps, 24);
     // ⑱ fs_roots：存真实存在的目录（拿 temp root 自身），往返 + 去重去空
     let dir = root.display().to_string();
     store

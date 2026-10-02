@@ -58,6 +58,8 @@ mod usage;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_approval;
+#[cfg(test)]
 mod tests_plugins_root;
 #[cfg(test)]
 mod tests_session_log;

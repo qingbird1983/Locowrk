@@ -26,6 +26,7 @@ const form = reactive({
   enabled: true,
   maxPerRequest: 20,
   callTimeoutSecs: 30,
+  maxTurnSteps: 8,
 });
 
 watch(
@@ -35,6 +36,7 @@ watch(
     form.enabled = v.tools.enabled;
     form.maxPerRequest = v.tools.maxPerRequest;
     form.callTimeoutSecs = v.tools.callTimeoutSecs;
+    form.maxTurnSteps = v.tools.maxTurnSteps;
   },
   { immediate: true },
 );
@@ -59,6 +61,7 @@ function save() {
     enabled: form.enabled,
     maxPerRequest: form.maxPerRequest,
     callTimeoutSecs: form.callTimeoutSecs,
+    maxTurnSteps: form.maxTurnSteps,
   });
 }
 
@@ -117,6 +120,22 @@ function hasSnapshot(d: ExposureDebug | null): d is ExposureDebug {
             type="number"
             min="5"
             max="3600"
+            class="lw-field lw-field-num px-2 text-xs"
+          />
+        </SettingsRow>
+
+        <!-- ㉕·微调③：单轮步数上限（runner 兜底，超过强制收束本轮） -->
+        <SettingsRow
+          :title="t('settings.maxTurnSteps')"
+          :hint="t('settings.maxTurnStepsHint')"
+          control-id="tools-max-turn-steps"
+        >
+          <input
+            id="tools-max-turn-steps"
+            v-model.number="form.maxTurnSteps"
+            type="number"
+            min="1"
+            max="100"
             class="lw-field lw-field-num px-2 text-xs"
           />
         </SettingsRow>

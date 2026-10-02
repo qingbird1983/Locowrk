@@ -44,6 +44,7 @@ async fn streamed_step_suppresses_full_chunk() {
         &projection,
         None,
         None,
+        crate::runner::DEFAULT_MAX_STEPS,
     )
     .await
     .expect("turn ok");
@@ -78,6 +79,7 @@ async fn no_sink_keeps_full_chunk_projection() {
         &projection,
         None,
         None,
+        crate::runner::DEFAULT_MAX_STEPS,
     )
     .await
     .expect("turn ok");

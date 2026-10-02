@@ -168,6 +168,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         deps.sink.as_ref(),
         Some(deps.usage.as_ref()),
         Some(&deps.sessions_dir),
+        deps.settings.max_turn_steps(),
     )
     .await
     {

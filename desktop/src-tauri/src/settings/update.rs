@@ -147,6 +147,16 @@ impl SettingsStore {
                 }
                 next.tools.call_timeout_secs = secs;
             }
+            if let Some(steps) = u.max_turn_steps {
+                if !super::tools::MAX_TURN_STEPS_RANGE.contains(&steps) {
+                    return Err(format!(
+                        "单轮步数上限 {steps} 非法（{}–{}）",
+                        super::tools::MAX_TURN_STEPS_RANGE.start(),
+                        super::tools::MAX_TURN_STEPS_RANGE.end()
+                    ));
+                }
+                next.tools.max_turn_steps = steps;
+            }
             if let Some(roots) = u.fs_roots {
                 next.tools.fs_roots = super::tools::normalize_fs_roots(&roots)?;
             }

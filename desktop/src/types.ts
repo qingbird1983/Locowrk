@@ -231,12 +231,14 @@ export interface MemoryUpdate {
 }
 
 /** 工具暴露区投影（⑫）：结构即设置原值。S2 起含宿主单次调用超时；
- * ⑱ 起含 fsRoots 工作区目录（空 = 工具文件面仅数据目录）。 */
+ * ⑱ 起含 fsRoots 工作区目录（空 = 工具文件面仅数据目录）；
+ * ㉕·微调③ 起含单轮步数上限。 */
 export interface ToolsSettingsView {
   enabled: boolean;
   maxPerRequest: number;
   callTimeoutSecs: number;
   fsRoots: string[];
+  maxTurnSteps: number;
 }
 
 /** 工具暴露区部分更新：字段缺省 = 保持不变。 */
@@ -245,6 +247,7 @@ export interface ToolsUpdate {
   maxPerRequest?: number;
   callTimeoutSecs?: number;
   fsRoots?: string[];
+  maxTurnSteps?: number;
 }
 
 /** embedding 模型区投影（⑬ 智能层共享基建）：无秘钥字段。 */

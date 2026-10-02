@@ -49,6 +49,7 @@ pub async fn agent_chat(
         state.sink.as_ref(),
         Some(state.usage.as_ref()),
         Some(&state.sessions_dir),
+        state.settings.max_turn_steps(),
     )
     .await?;
     // ⑬ 隐式提取（Context 文档 §5.1 ⑤）：开关开启且轮次成功收束后

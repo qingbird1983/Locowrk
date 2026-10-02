@@ -254,7 +254,7 @@
 | `ChatSection` | `chat`（🆕 本批新增） | 对话行为偏好：`默认展开工具执行过程`（缺省 **关**，§3.8 折叠铁则）、`回车发送`、`思考过程展示模式`（详细 / 精简）、`上下文用量读数`（剩余 / 已用） |
 | `ShortcutSection` | `shortcut` | ✅ |
 | `ShellSection` | `shell` | ✅（高危解锁开关；重启生效） |
-| `DeveloperSection` | `tools`（含 `fsRoots` 工作区目录） | ✅ |
+| `DeveloperSection` | `tools`（含 `fsRoots` 工作区目录 / `maxTurnSteps` 单轮步数上限，1–100 缺省 8——桌面 runner 兜底阈值，超过强制收束本轮，🆕 微调③） | ✅ |
 | `EmbeddingSection` | `embedding` | ✅ |
 | `PluginsSection` | `plugins` | ✅（自动停用天数 / 调用超时） |
 
@@ -792,7 +792,7 @@ store（跨目的地往返与重启内会话保持）；⌘K 命中设置分区 
 
 - **偏好**：外观（appearance）/ 语言（locale）/ 对话（chat）/ 快捷键（shortcut）
 - **智能体**：模型（llm）/ 上下文（context）/ 记忆（memory）/ 嵌入（embedding）
-- **能力与安全**：插件（plugins）/ 命令终端（shell）/ 工具与暴露（tools）
+- **能力与安全**：插件（plugins）/ 命令终端（shell）/ 工具与分发（tools）（用户 2026-10-02 裁定：设置页展示名去「暴露」字；机制名 exposure 不变）
 - **系统**：会话与数据（dataDir + 保留策略）/ 关于与更新
 
 组标签 11.5px `--lw-ink-4`；实验性分区在项尾挂 `实验`（warn）徽章；

@@ -34,6 +34,7 @@ async fn turn_mirrors_to_disk_and_restores_identically() {
         &sink,
         None,
         Some(&dir),
+        crate::runner::DEFAULT_MAX_STEPS,
     )
     .await
     .expect("turn ok");

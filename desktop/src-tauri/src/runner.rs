@@ -20,8 +20,10 @@ use crate::usage::UsageRecorder;
 
 use crate::events::{side_effect_str, AgentEvent, EventSink};
 
-/// 单轮 step 上限：防止模型反复发工具调用打转（防御性兜底）。
-pub const MAX_STEPS: u32 = 8;
+/// 单轮 step 上限缺省值：防止模型反复发工具调用打转（防御性兜底）。
+/// ㉕·微调③ 起实际值可配（settings `tools.maxTurnSteps`，工具与暴露
+/// 面板），此常量只作缺省与测试取值。
+pub const DEFAULT_MAX_STEPS: u32 = 8;
 
 /// 进度条口径（⑨）：threshold = 窗口 × 百分比（组装点算好），
 /// window_tokens 未知传 0（前端按"未设置"处理）。
@@ -31,7 +33,8 @@ pub struct UsagePolicy {
     pub window_tokens: u64,
 }
 
-/// 跑完一轮对话，返回实际 step 数。`stats` 是 ⑩③ 使用统计写入端
+/// 跑完一轮对话，返回实际 step 数。`max_steps` 是单轮兜底上限（㉕·微调③
+/// settings `tools.maxTurnSteps`，每轮取值）。`stats` 是 ⑩③ 使用统计写入端
 /// （usage.sqlite3，None = 内置替身测试）。`log` 是 ⑲ 会话落盘目录
 /// （`<数据根>/sessions`，None = 不落盘，测试路径）——磁盘是日志的镜像，
 /// 用户消息与每个 step 的新增段与投影共用同一游标同步追加。
@@ -45,6 +48,7 @@ pub async fn run_turn(
     sink: &dyn EventSink,
     stats: Option<&UsageRecorder>,
     log: Option<&Path>,
+    max_steps: u32,
 ) -> Result<u32, String> {
     let log_start = session.len();
     session.append(SessionEvent::UserMessage { content: message });
@@ -55,7 +59,7 @@ pub async fn run_turn(
         emit_usage(session, session_id, u, sink);
     }
 
-    for steps in 1..=MAX_STEPS {
+    for steps in 1..=max_steps.max(1) {
         let before = session.len();
         // ⑭：带会话身份 step——CallCtx.session_id 供内置调度工具绑定
         // 创建会话（§5.2 规划字段；普通 step 保持 None 语义不变）
@@ -88,7 +92,9 @@ pub async fn run_turn(
         }
     }
 
-    Err(format!("超过单轮步数上限（{MAX_STEPS} 步），强制收束"))
+    Err(format!(
+        "超过单轮步数上限（{max_steps} 步），强制收束；可在 设置 → 工具与分发 调高"
+    ))
 }
 
 /// 把日志新增段 `[from..]` 投影成 UI 事件（顺序 = 日志顺序）。

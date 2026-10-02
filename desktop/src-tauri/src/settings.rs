@@ -276,6 +276,7 @@ impl SettingsStore {
                 max_per_request: s.tools.max_per_request,
                 call_timeout_secs: s.tools.call_timeout_secs,
                 fs_roots: s.tools.fs_roots.clone(),
+                max_turn_steps: s.tools.max_turn_steps,
             },
             shell: ShellSettingsView {
                 unlock_risky: s.shell.unlock_risky,

@@ -341,6 +341,10 @@ export default {
       "1–200, default 20; always-exposure tools and the search_tools meta-tool are never cut.",
     callTimeout: "Per-call tool timeout (seconds)",
     callTimeoutHint: "Host-enforced cap, applies immediately (5-3600 s).",
+    // ㉕·微调③ Max steps per turn
+    maxTurnSteps: "Max steps per turn",
+    maxTurnStepsHint:
+      "Force-closes the turn after this many tool-call steps (1-100, default 8).",
     // ⑱ Workspace folders (fs roots picker)
     fsRootsTitle: "Workspace folders",
     fsRootsHint:
