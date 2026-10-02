@@ -169,14 +169,19 @@ pub async fn run_turn_extract(
     let Some((facts, episode)) = parse_reply(&reply.content) else {
         return Err("extract reply is not parseable JSON".into());
     };
-    // ① 事实 → memory（频控 + 命名空间隔离）
+    // ㉘：键位 = 该会话归属的项目根（workspace.rs 单一真源；未归属 = ""）
+    let workspace = deps.memory.scope_of_session(Some(session_id));
+    // ① 事实 → memory（频控 + 命名空间隔离 + 项目键位）
     let mut written = 0usize;
     for (key, value, tags) in facts.into_iter().take(MAX_FACTS) {
         let Some(key) = sanitize_fact_key(&key) else {
             continue;
         };
         let value = clip(&value, FACT_VALUE_MAX_CHARS);
-        match deps.memory.write(&key, &value, &tags, "extracted") {
+        match deps
+            .memory
+            .write(&workspace, &key, &value, &tags, "extracted")
+        {
             Ok(()) => written += 1,
             Err(e) => tracing::warn!("extract memory write failed: {e}"),
         }
@@ -190,7 +195,7 @@ pub async fn run_turn_extract(
                 let episode = clip(&episode, EPISODE_MAX_CHARS);
                 match deps.embed.embed(std::slice::from_ref(&episode)).await {
                     Ok(vecs) if vecs.len() == 1 && !vecs[0].is_empty() => {
-                        match db.insert(&episode, &vecs[0], session_id) {
+                        match db.insert(&episode, &vecs[0], session_id, &workspace) {
                             Ok(()) => episode_saved = true,
                             Err(e) => tracing::warn!("episode insert failed: {e}"),
                         }

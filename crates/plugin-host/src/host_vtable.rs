@@ -36,6 +36,7 @@ static HOST_VTABLE: HostVtable = HostVtable {
     kv_get: host_kv_get,
     kv_put: host_kv_put,
     notify: host_notify,
+    session_context: host_session_context,
 };
 
 /// init 交付给插件的宿主能力表（'static，插件侧可长期持有）。
@@ -120,6 +121,74 @@ extern "C" fn host_notify(
             // 无桌面环境（headless）：如实告知插件，由其回给模型
             None => code::ERR_UNSUPPORTED,
         }
+    })
+    .unwrap_or(code::ERR_PANIC)
+}
+
+// ---- 调用期会话上下文（㉘）------------------------------------------------
+// FFI 边界不传 CallCtx（DESIGN §6.3 同款约束），插件反向查询：适配器在
+// 执行本次 FFI call 的 blocking 线程上预置上下文（thread_local），插件的
+// `session_context` 查询只在该次调用执行期间有效——线程即调用身份。
+
+/// session_id → 项目根（§2.3 工作区）解析器：组装点注入（desktop 读会话
+/// 旁车 meta；headless 不注入 = 插件拿到 UNSUPPORTED 按全局语义回落）。
+type WorkspaceResolver = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
+static WORKSPACE_RESOLVER: Mutex<Option<WorkspaceResolver>> = Mutex::new(None);
+
+/// 组装点注入会话→项目解析器（幂等覆盖；须在首次工具调用前）。
+pub fn set_session_workspace_resolver(resolver: WorkspaceResolver) {
+    *WORKSPACE_RESOLVER
+        .lock()
+        .expect("workspace resolver lock poisoned") = Some(resolver);
+}
+
+/// adapter 调用期解析会话的项目根（解析器缺席 = None，插件回落全局语义）。
+pub(crate) fn workspace_of_session(session_id: &str) -> Option<String> {
+    let hook = WORKSPACE_RESOLVER
+        .lock()
+        .expect("workspace resolver lock poisoned");
+    hook.as_ref().and_then(|f| f(session_id))
+}
+
+thread_local! {
+    /// 当前线程正在执行的 FFI 调用的会话上下文（adapter 预置、结束即清）。
+    static CALL_CONTEXT: std::cell::RefCell<Option<plugin_api::ffi::CallContext>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// 预置 / 清除当前线程的调用上下文（RAII guard，panic 安全）。
+pub(crate) fn call_context_guard(ctx: plugin_api::ffi::CallContext) -> impl Drop {
+    struct Guard;
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CALL_CONTEXT.with(|c| *c.borrow_mut() = None);
+        }
+    }
+    CALL_CONTEXT.with(|c| *c.borrow_mut() = Some(ctx));
+    Guard
+}
+
+extern "C" fn host_session_context(buf: *mut u8, buf_len: usize) -> i32 {
+    std::panic::catch_unwind(|| {
+        if buf.is_null() {
+            return code::ERR_BAD_ARGS;
+        }
+        let ctx = CALL_CONTEXT.with(|c| c.borrow().clone());
+        let Some(ctx) = ctx else {
+            // 非调用期查询（插件后台线程）或 headless：按不可用回落
+            return code::ERR_UNSUPPORTED;
+        };
+        let json = ctx.to_json();
+        let bytes = json.as_bytes();
+        if bytes.len() > buf_len {
+            return code::ERR_BUF_TOO_SMALL;
+        }
+        // SAFETY: 调用契约：插件保证 (buf, buf_len) 可写；本函数先于
+        // 插件读缓冲返回，无别名风险
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, bytes.len());
+        }
+        bytes.len() as i32
     })
     .unwrap_or(code::ERR_PANIC)
 }

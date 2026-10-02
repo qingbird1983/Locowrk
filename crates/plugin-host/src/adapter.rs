@@ -51,7 +51,7 @@ impl Tool for SabiToolAdapter {
         Some(self.inner.id())
     }
 
-    async fn call(&self, _ctx: &CallCtx, args: Value) -> Result<Value, ToolError> {
+    async fn call(&self, ctx: &CallCtx, args: Value) -> Result<Value, ToolError> {
         // 并发限制：permit 与实例绑定（同实例的所有适配器共享限额）
         let _permit = self
             .sem
@@ -65,13 +65,26 @@ impl Tool for SabiToolAdapter {
         let inst = Arc::clone(&self.inner);
         let name = self.spec.name.clone();
         let name_for_task = name.clone();
-        // 同步 FFI 丢到 blocking 池，不阻塞 reactor（§5.6 纪律三）
-        tokio::task::spawn_blocking(move || inst.call_blocking(&name_for_task, &args))
-            .await
-            .map_err(|e| ToolError::Failed {
-                tool: name,
-                message: format!("blocking pool join failed: {e}"),
-            })?
+        let session_id = ctx.session_id.clone();
+        // 同步 FFI 丢到 blocking 池，不阻塞 reactor（§5.6 纪律三）。
+        // ㉘：blocking 线程上预置调用期会话上下文（session_id + 解析出的
+        // 项目根），插件经 vtable `session_context` 反向查询；RAII guard
+        // 保证 panic / 提前返回也清干净。解析器缺席（headless）= None。
+        tokio::task::spawn_blocking(move || {
+            let workspace = session_id
+                .as_deref()
+                .and_then(crate::host_vtable::workspace_of_session);
+            let _guard = crate::host_vtable::call_context_guard(plugin_api::ffi::CallContext {
+                session_id,
+                workspace,
+            });
+            inst.call_blocking(&name_for_task, &args)
+        })
+        .await
+        .map_err(|e| ToolError::Failed {
+            tool: name,
+            message: format!("blocking pool join failed: {e}"),
+        })?
     }
 }
 

@@ -52,10 +52,14 @@ function emptyBuckets(): BucketGroup[] {
   return BUCKETS.map((b) => ({ key: b.key, items: [] }));
 }
 
-/** 把会话列表（一般 mtime 降序）组装成 §2.3 两级树。 */
+/** 把会话列表（一般 mtime 降序）组装成 §2.3 两级树。`fsRoots` = 设置
+ * 里的工作区根目录——§2.3 定义「工作区 = fsRoots 里的一个根目录」，
+ * 已配置但尚无会话归属的根照常成组（空组只渲染头行）；组集合 =
+ * fsRoots ∪ 已关联会话的 workspace（根目录后来移除的组照常显示）。 */
 export function groupSessions(
   sessions: SessionMeta[],
   runningId: string | null,
+  fsRoots: string[] = [],
 ): SessionTree {
   const top = emptyBuckets();
   const wsMap = new Map<string, { group: WorkspaceGroup; latest: number }>();
@@ -82,8 +86,28 @@ export function groupSessions(
     entry.latest = Math.max(entry.latest, s.updatedAt);
     if (s.id === runningId) entry.group.running = true;
   }
+  // 空工作区组（fsRoots 配置了但还没有会话归属）垫后，保持 fsRoots 顺序
+  for (const root of fsRoots) {
+    if (!wsMap.has(root)) {
+      wsMap.set(root, {
+        group: {
+          key: root,
+          name: workspaceDisplayName(root),
+          buckets: [],
+          running: false,
+        },
+        latest: Number.NEGATIVE_INFINITY,
+      });
+    }
+  }
+  // 有会话的组按组内最近活动降序；空组（-Infinity）稳定排在末尾
   const workspaces = [...wsMap.values()]
-    .sort((a, b) => b.latest - a.latest)
+    .sort((a, b) => {
+      if (a.latest === b.latest) return 0;
+      if (a.latest === Number.NEGATIVE_INFINITY) return 1;
+      if (b.latest === Number.NEGATIVE_INFINITY) return -1;
+      return b.latest - a.latest;
+    })
     .map((e) => {
       e.group.buckets = e.group.buckets.filter((b) => b.items.length > 0);
       return e.group;

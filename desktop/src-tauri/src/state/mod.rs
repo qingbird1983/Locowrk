@@ -125,9 +125,10 @@ pub fn init_state(app: AppHandle) -> AppState {
         crate::events::StreamChunkSink::new(app.clone()),
     ));
 
-    // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储；new 不做 IO
-    // （连接按操作开、失败降级），无启动风险。
-    let memory = Arc::new(MemoryStore::new(&root));
+    // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储。㉘ 会话→项目解析器一次构造三处消费（插件调用期上下文/注入键位/经历键位）。
+    let workspace_of = crate::workspace::session_workspace_resolver(root.join("sessions"));
+    plugin_host::set_session_workspace_resolver(Arc::clone(&workspace_of));
+    let memory = Arc::new(MemoryStore::new(&root, Arc::clone(&workspace_of)));
 
     // 经历记忆库（⑬）：experiences.sqlite3；打不开只丢经历。
     let experiences = match ExperienceDb::open(&root.join("experiences.sqlite3")) {
@@ -139,17 +140,14 @@ pub fn init_state(app: AppHandle) -> AppState {
     };
 
     // agent/request 决策环（exposure 文档 §7，注册次序 = 执行次序）：
-    // ToolExposure 先（压缩才知道留多少空间）、Memory-Inject 次、
-    // ctx-compact 最后。三件同模式：配置经 RwLock 注入，settings_set
-    // 后由命令层换入即生效。
+    // ToolExposure → Memory-Inject → ctx-compact，配置经 RwLock 热换入。
     let exposure_cfg: Arc<RwLock<ToolExposureConfig>> =
         Arc::new(RwLock::new(settings.exposure_config()));
     let embed_exposure_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
     let exposure = Arc::new(ToolExposure::new(
         UsageEwma::new(Arc::clone(&usage)),
         Arc::clone(&exposure_cfg),
-        // ⑬ 语义检索信号（§4.2 层次 2）：EmbedPort 未配置/失败 = 空表
-        // 退回两层打分（Retriever 内部 fail-open）
+        // ⑬ 语义检索信号：EmbedPort 未配置/失败 = 空表退回两层打分（fail-open）
         Some(Arc::new(Retriever::new(embed_exposure_port))),
     ));
     ctx.events
@@ -163,7 +161,13 @@ pub fn init_state(app: AppHandle) -> AppState {
             crate::memory::memory_source(&memory),
             experiences
                 .as_ref()
-                .map(|db| ExperienceIndex::new(Arc::clone(db), Arc::clone(&embed_port)))
+                .map(|db| {
+                    ExperienceIndex::new(
+                        Arc::clone(db),
+                        Arc::clone(&embed_port),
+                        Arc::clone(&workspace_of),
+                    )
+                })
                 .map(|idx| idx as Arc<dyn kernel_agent::ExperienceSource>),
             Arc::clone(&memory_cfg),
         )),
@@ -179,9 +183,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     );
 
     // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。
-    // Audit（plugins.md mw-audit）挂在超时/熔断外侧：被拒的调用也留痕；
-    // 记录追加写数据根 audit.jsonl（JSONL，只增不改，与会话日志同纪律）。
-    // S2：超时时长可配（settings tools 区 callTimeoutSecs），共享锁热换入。
+    // Audit 挂外侧（被拒也留痕）；audit.jsonl 只增不改；S2 超时可配热换入。
     let timeout_cfg: Arc<RwLock<Duration>> = Arc::new(RwLock::new(settings.call_timeout()));
     let mw: Vec<Arc<dyn Middleware>> = vec![
         Arc::new(Tracing),
@@ -207,13 +209,11 @@ pub fn init_state(app: AppHandle) -> AppState {
 
     // 工具目录：始终提供（哪怕 registry 为空 → resolve 报 NotAvailable，
     // 错误以失败的 ToolResult 闭合，而不是服务缺失让整步崩掉，§7.2）。
-    // 内置：send_email 是阶段六的演示替身（不可逆 → 走审批弹窗）；
-    // ⑭ 调度三件套（库可用时）；⑮ subagent_run。目录提供放在 kernel
-    // 创建之后——subagent_run 工具要持有内核 Arc（Kernel → Context →
-    // ToolSource → 工具 → Kernel 组装期有意成环，两侧皆进程级单例）。
-    // search_tools（⑫）持有不含自身的全目录视图做检索（含 hidden，§4.1
-    // 显式检索通路）+ usage 做空结果高频回退 + ⑬ 语义检索（未配置降级
-    // 关键词）。
+    // 内置：send_email 是阶段六演示替身（不可逆 → 审批）；⑭ 调度三件套；
+    // ⑮ subagent_run——目录提供在 kernel 之后（subagent_run 持内核 Arc，
+    // Kernel → Context → ToolSource → 工具 → Kernel 组装期有意成环）。
+    // search_tools（⑫）持全目录视图（含 hidden）+ usage 高频回退 +
+    // ⑬ 语义检索（未配置降级关键词）。
     let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
     // §3.16 子转录接收器：子自身段落 sub-transcripts/（§8.2 通路）
     let sub_tx = Arc::new(crate::sub_transcript::SubTranscriptStore::new(

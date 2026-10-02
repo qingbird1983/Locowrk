@@ -22,6 +22,8 @@ pub mod code {
     pub const ERR_BAD_HANDLE: i32 = -5;
     /// 宿主/插件能力未实现（如阶段三的 `kv_get`，见 host_vtable 注释）。
     pub const ERR_UNSUPPORTED: i32 = -6;
+    /// 调用方给的缓冲太小（`session_context` ㉘ 用；调用方换更大缓冲重试）。
+    pub const ERR_BUF_TOO_SMALL: i32 = -7;
 }
 
 /// `HostVtable::log` 的日志级别（语义对齐 tracing）。
@@ -80,6 +82,13 @@ pub type FreeBufFn = extern "C" fn(ptr: *mut u8, len: usize);
 /// 追加史：⑭（v2.29）末尾追加 `notify` 桌面通知槽——append-only 不破
 /// `PLUGIN_ABI_VERSION`。旧插件只读前缀字段（repr(C) 布局前缀兼容）；
 /// 新插件跑旧宿主读越界属版本错配（本仓插件与宿主同源发布）。
+/// ㉘（v2.55）末尾追加 `session_context` 调用期会话上下文槽——FFI 边界
+/// 不传 CallCtx（DESIGN §6.3 undo 契约同款约束），插件要感知"本次调用
+/// 属于哪个会话/项目"（记忆按项目隔离）只能反向查询宿主。**调用期**
+/// 语义：宿主在执行本次 FFI call 的线程上预置上下文，插件在该次 call
+/// 执行期间查询有效；插件自起的后台线程 / 非调用期查询得
+/// `ERR_UNSUPPORTED`（宿主未注入解析器的 headless 宿主同码——插件
+/// 应回落全局语义，不得失败）。
 #[repr(C)]
 pub struct HostVtable {
     pub log: extern "C" fn(level: u32, ptr: *const u8, len: usize),
@@ -91,6 +100,13 @@ pub struct HostVtable {
     /// `code::ERR_UNSUPPORTED`，插件把失败如实回给模型，不得静默。
     pub notify:
         extern "C" fn(title: *const u8, title_len: usize, body: *const u8, body_len: usize) -> i32,
+    /// 调用期会话上下文（㉘）：把当前调用的上下文 JSON 写进**调用方
+    /// （插件）提供的缓冲**——`{"session_id": str|null, "workspace":
+    /// str|null}`（workspace = 会话关联的项目根，未归属为 null）。返回
+    /// 写入字节数（`code::OK`）；缓冲不足返回 `code::ERR_BUF_TOO_SMALL`；
+    /// 非调用期 / 宿主无解析器返回 `code::ERR_UNSUPPORTED`。**不分配、
+    /// 不需要 free**——缓冲归插件，规避 kv_get 卡住的跨分配器所有权问题。
+    pub session_context: extern "C" fn(buf: *mut u8, buf_len: usize) -> i32,
 }
 
 impl HostVtable {
@@ -108,6 +124,51 @@ impl HostVtable {
     /// `self` 必须是 init 时宿主交付的合法指针。
     pub unsafe fn notify_str(&self, title: &str, body: &str) -> i32 {
         (self.notify)(title.as_ptr(), title.len(), body.as_ptr(), body.len())
+    }
+
+    /// 插件侧便捷封装：查询调用期会话上下文（㉘）。`Ok(n)` = JSON 字节
+    /// 数；`Err(code)` = UNSUPPORTED（非调用期 / headless——调用方按全局
+    /// 语义回落）或 BUF_TOO_SMALL（换更大缓冲）。
+    ///
+    /// # Safety
+    /// `self` 必须是 init 时宿主交付的合法指针。
+    pub unsafe fn session_context(&self, buf: &mut [u8]) -> Result<usize, i32> {
+        let n = (self.session_context)(buf.as_mut_ptr(), buf.len());
+        if n >= 0 { Ok(n as usize) } else { Err(n) }
+    }
+}
+
+/// 调用期会话上下文载荷（㉘，`session_context` 槽跨边界以 JSON 传输）。
+/// `workspace` = 会话关联的项目根（§2.3 工作区），未归属为 `None`；
+/// 插件据此把数据按项目隔离（memory-sqlite 首个消费方）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallContext {
+    pub session_id: Option<String>,
+    pub workspace: Option<String>,
+}
+
+impl CallContext {
+    pub fn to_json(&self) -> String {
+        crate::serde_json::json!({
+            "session_id": self.session_id,
+            "workspace": self.workspace,
+        })
+        .to_string()
+    }
+
+    /// 容错解析：坏 JSON / 缺字段返回 `None`（调用方按全局语义回落）。
+    pub fn from_json(bytes: &[u8]) -> Option<Self> {
+        let v: crate::serde_json::Value = crate::serde_json::from_slice(bytes).ok()?;
+        let opt_str = |k: &str| {
+            v.get(k)
+                .and_then(crate::serde_json::Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        };
+        Some(Self {
+            session_id: opt_str("session_id"),
+            workspace: opt_str("workspace"),
+        })
     }
 }
 

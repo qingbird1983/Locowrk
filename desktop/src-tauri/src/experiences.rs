@@ -5,7 +5,9 @@
 //! 有先例）——写入要过 embedding 模型（端点 + 密钥归宿主），插件没有
 //! 运行期配置通道；存储/检索本就是宿主关切（Memory-Inject 经
 //! `ExperienceSource` 契约消费，内核不碰 SQL）。表结构照 §4.3：content
-//! / embedding BLOB / session_id / created_at（f32 小端字节数组）。
+//! / embedding BLOB / session_id / created_at（f32 小端字节数组）；
+//! ㉘ 追加 `workspace` 列（会话归属项目，'' = 未归属）——写入打标、
+//! 检索按键位过滤（Context 文档 §4.6 项目隔离）。
 //!
 //! 模型一致性：检索时维度不符的行直接跳过（换 embedding 模型后旧维度
 //! 行自然退役）；同维不同模型的语义漂移是已知近似，文档已记。
@@ -19,6 +21,7 @@ use kernel_agent::{ExperienceEntry, ExperienceSource};
 use rusqlite::Connection;
 
 use crate::llm::CooledEmbed;
+use crate::workspace::WorkspaceResolver;
 use kernel_agent::EmbedPort;
 
 /// 全库扫描上限：经历库增长是线性的（一回合一条），量级远小于向量库
@@ -32,6 +35,8 @@ pub struct ExperienceRow {
     pub id: i64,
     pub content: String,
     pub session_id: String,
+    /// 项目归属（㉘）：'' = 未归属；管理页透出，注入不带（ExperienceEntry）。
+    pub workspace: String,
     pub created_at: i64,
 }
 
@@ -53,6 +58,8 @@ pub struct ExperienceDb {
 
 impl ExperienceDb {
     /// 开库建表（幂等）。文件损坏/不可写在此报错，由调用方降级。
+    /// ㉘ workspace 列：旧库 pragma 探测后 ALTER 补列，DEFAULT '' 覆盖
+    /// 既有行（旧经历归入未归属键位）。
     pub fn open(path: &Path) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| e.to_string())?;
         conn.execute_batch(
@@ -61,31 +68,62 @@ impl ExperienceDb {
                  content    TEXT NOT NULL,
                  embedding  BLOB NOT NULL,
                  session_id TEXT NOT NULL,
+                 workspace  TEXT NOT NULL DEFAULT '',
                  created_at INTEGER NOT NULL
              );
              CREATE INDEX IF NOT EXISTS idx_experiences_created ON experiences(created_at);",
         )
         .map_err(|e| e.to_string())?;
+        let has_workspace: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('experiences') WHERE name = 'workspace'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if has_workspace == 0 {
+            conn.execute_batch(
+                "ALTER TABLE experiences ADD COLUMN workspace TEXT NOT NULL DEFAULT '';",
+            )
+            .map_err(|e| e.to_string())?;
+        }
         Ok(Self {
             conn: Mutex::new(conn),
         })
     }
 
-    /// 写入一条经历（调用方已做好内容裁剪与频控）。
-    pub fn insert(&self, content: &str, embedding: &[f32], session_id: &str) -> Result<(), String> {
+    /// 写入一条经历（调用方已做好内容裁剪与频控；workspace = 会话归属）。
+    pub fn insert(
+        &self,
+        content: &str,
+        embedding: &[f32],
+        session_id: &str,
+        workspace: &str,
+    ) -> Result<(), String> {
         let conn = self.conn.lock().expect("experiences db poisoned");
         conn.execute(
-            "INSERT INTO experiences (content, embedding, session_id, created_at) \
-             VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![content, vec_to_blob(embedding), session_id, now_secs()],
+            "INSERT INTO experiences (content, embedding, session_id, workspace, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                content,
+                vec_to_blob(embedding),
+                session_id,
+                workspace,
+                now_secs()
+            ],
         )
         .map(|_| ())
         .map_err(|e| e.to_string())
     }
 
-    /// 语义检索：全库（限 SCAN_LIMIT，新→旧）载入、维度匹配行做余弦、
-    /// 取 top-k。向量维度与查询不符的行跳过（换模型后旧行退役）。
-    pub fn search(&self, query: &[f32], top_k: usize) -> Result<Vec<ExperienceRow>, String> {
+    /// 语义检索：**指定键位**（㉘ 项目隔离）限 SCAN_LIMIT（新→旧）载入、
+    /// 维度匹配行做余弦、取 top-k。向量维度与查询不符的行跳过。
+    pub fn search(
+        &self,
+        query: &[f32],
+        top_k: usize,
+        workspace: &str,
+    ) -> Result<Vec<ExperienceRow>, String> {
         if query.is_empty() || top_k == 0 {
             return Ok(Vec::new());
         }
@@ -93,11 +131,11 @@ impl ExperienceDb {
         let mut stmt = conn
             .prepare(
                 "SELECT id, content, session_id, created_at, embedding FROM experiences \
-                 ORDER BY created_at DESC, id DESC LIMIT ?1",
+                 WHERE workspace = ?1 ORDER BY created_at DESC, id DESC LIMIT ?2",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map([SCAN_LIMIT], |r| {
+            .query_map(rusqlite::params![workspace, SCAN_LIMIT], |r| {
                 Ok((
                     r.get::<_, i64>(0)?,
                     r.get::<_, String>(1)?,
@@ -122,6 +160,7 @@ impl ExperienceDb {
                         id,
                         content,
                         session_id,
+                        workspace: workspace.to_string(),
                         created_at,
                     },
                 ));
@@ -131,12 +170,12 @@ impl ExperienceDb {
         Ok(scored.into_iter().take(top_k).map(|(_, r)| r).collect())
     }
 
-    /// 管理页列表（新→旧）。
+    /// 管理页列表（新→旧，全键位）。
     pub fn list_recent(&self, limit: u32) -> Result<Vec<ExperienceRow>, String> {
         let conn = self.conn.lock().expect("experiences db poisoned");
         let mut stmt = conn
             .prepare(
-                "SELECT id, content, session_id, created_at FROM experiences \
+                "SELECT id, content, session_id, workspace, created_at FROM experiences \
                  ORDER BY created_at DESC, id DESC LIMIT ?1",
             )
             .map_err(|e| e.to_string())?;
@@ -146,7 +185,8 @@ impl ExperienceDb {
                     id: r.get(0)?,
                     content: r.get(1)?,
                     session_id: r.get(2)?,
-                    created_at: r.get(3)?,
+                    workspace: r.get(3)?,
+                    created_at: r.get(4)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -205,27 +245,45 @@ fn now_secs() -> i64 {
 
 /// [`ExperienceSource`] 实现：查询过 embedding（共享冷却柄）→ 库内余弦。
 /// embedding 未配置/失败 = 空表降级（实现内部裁决，不向上抛）。
+/// ㉘：召回按键位过滤——session_id 经解析器（workspace.rs 单一真源）
+/// 得项目根，只见该项目的经历。
 pub struct ExperienceIndex {
     db: Arc<ExperienceDb>,
     embed: Arc<CooledEmbed>,
+    workspace_of: WorkspaceResolver,
 }
 
 impl ExperienceIndex {
-    pub fn new(db: Arc<ExperienceDb>, embed: Arc<CooledEmbed>) -> Arc<Self> {
-        Arc::new(Self { db, embed })
+    pub fn new(
+        db: Arc<ExperienceDb>,
+        embed: Arc<CooledEmbed>,
+        workspace_of: WorkspaceResolver,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            db,
+            embed,
+            workspace_of,
+        })
     }
 }
 
 #[async_trait]
 impl ExperienceSource for ExperienceIndex {
-    async fn recall(&self, query: &str, limit: usize) -> Vec<ExperienceEntry> {
+    async fn recall(
+        &self,
+        session_id: Option<&str>,
+        query: &str,
+        limit: usize,
+    ) -> Vec<ExperienceEntry> {
         let Ok(vecs) = self.embed.embed(&[query.to_string()]).await else {
             return Vec::new();
         };
         let Some(q) = vecs.first() else {
             return Vec::new();
         };
-        match self.db.search(q, limit) {
+        let workspace =
+            crate::workspace::scope_key(session_id.and_then(|s| (self.workspace_of)(s)).as_deref());
+        match self.db.search(q, limit, &workspace) {
             Ok(rows) => rows
                 .into_iter()
                 .map(|r| ExperienceEntry {

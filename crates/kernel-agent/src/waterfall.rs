@@ -35,7 +35,9 @@ pub struct PreStepPayload {
 /// `ContextCompacted` 事件进会话日志。`system` 是请求级系统提示（⑪）：
 /// Memory-Inject 把持久记忆写在这里——它在消息列表之外，ctx-compact
 /// 只改写 `messages`，"系统提示永不压缩"（Context 文档 §5.3）由结构保证，
-/// 会话日志也不落注入内容。
+/// 会话日志也不落注入内容。`session_id`（㉘）：本 step 的会话 id——
+/// Memory-Inject 交给宿主检索源做项目隔离（workspace 是宿主概念，内核
+/// 只透传 id，不解释）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RequestPayload {
     pub messages: Vec<Message>,
@@ -49,6 +51,8 @@ pub struct RequestPayload {
     pub compacted: Option<CompactionOutcome>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 /// `agent/request-error` 的 payload。

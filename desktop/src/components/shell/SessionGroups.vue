@@ -14,12 +14,12 @@ import { loadCollapsedGroups, saveCollapsedGroups } from "../../lib/sidebar-pref
 import { Icon } from "../../lib/icons";
 import SessionRow from "./SessionRow.vue";
 
-const props = defineProps<{ sessions: SessionMeta[] }>();
+const props = defineProps<{ sessions: SessionMeta[]; fsRoots: string[] }>();
 const { t } = useI18n();
 const chat = useChatStore();
 
 const tree = computed(() =>
-  groupSessions(props.sessions, chat.running ? chat.sessionId : null),
+  groupSessions(props.sessions, chat.running ? chat.sessionId : null, props.fsRoots),
 );
 
 // 分组头折叠（§2.3）：键 = workspace 存储路径，随偏好持久化
@@ -42,7 +42,8 @@ function toggle(key: string) {
       <SessionRow v-for="s in g.items" :key="s.id" :session="s" />
     </template>
 
-    <!-- 「项目」组：一级 = 工作区（组内最近活动降序），二级 = 时间桶 -->
+    <!-- 「项目」组：一级 = 工作区（组内最近活动降序，fsRoots 空组垫后
+         只渲染头行——组织结构先行，会话经「移入工作区」归位），二级 = 时间桶 -->
     <template v-if="tree.workspaces.length > 0">
       <div class="side-label">{{ t("sidebar.projects") }}</div>
       <div v-for="w in tree.workspaces" :key="w.key">

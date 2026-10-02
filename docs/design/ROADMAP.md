@@ -630,6 +630,36 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 
 ---
 
+## 二·五、㉘ 项目级隔离（2026-10-04 用户指令：「分项目 = 项目级上下文、项目级记忆，不能相互串、相互污染」+「借鉴 PI-Desktop 的项目级实现」+「顺带权限审批一起借鉴」）
+
+> 背景：用户指出侧栏「组织工作区」不可见（v2.50 关联功能休眠——fsRoots 未配置时整段消失），
+> 且归属必须**有语义**：记忆与上下文按项目隔离。UI shell 文档 §2.3 **零改动**（本批全是
+> "实现向规范对齐" + 用户指令的新后端能力，规格落 Context and Memory.md §4.6）。
+
+### ㉘·A 项目记忆隔离 + 侧栏项目段常驻（✅ 已完成，v2.55）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| 侧栏项目段常驻 | ✅ v2.55 | `groupSessions(+fsRoots)`：组集合 = fsRoots ∪ 已关联会话（§2.3 原文「工作区 = fsRoots 里的一个根目录」）；**空组只渲染头行**、有会话组按最近活动降序在前；fsRoots 全空且无关联时段落隐藏（§2.3 零改动，纯实现对表） |
+| FFI 调用期上下文 | ✅ v2.55 | plugin-api `HostVtable` **末尾追加 `session_context` 槽**（append-only 不破 ABI，⑭ notify 先例；插件提供缓冲、宿主写入 JSON、`ERR_BUF_TOO_SMALL`/`ERR_UNSUPPORTED` 语义）+ `CallContext` 载荷；plugin-host 线程本地调用期上下文（adapter 在 blocking 线程预置、RAII 清理）+ `set_session_workspace_resolver` 组装点注入（headless 不注入 = 全局语义回落，⑮/headless 零变化） |
+| 记忆按项目隔离 | ✅ v2.55 | memory-sqlite 1.3.0：主键 `(workspace, key)`（同名 key 跨项目并存不覆盖）、全工具面（write/read/list/search/delete/undo）按键位过滤、undo 快照带 workspace 忠实还原原键位、旧库整表迁移归未归属（插件/宿主双侧等价幂等迁移）；kernel `MemorySource/ExperienceSource` 契约 + `RequestPayload.session_id`（内核只透传 id，workspace 是宿主概念）；desktop `workspace.rs` 解析器单一真源（旁车 meta）三处消费（vtable resolver / 注入键位 / 经历键位）+ experiences `workspace` 列 + extract 打标；管理页透出归属徽章（人的管理面看全量，§4.6） |
+| 隔离规格 | ✅ v2.55 | Context and Memory.md §4.6 成文：严格对称无全局层、键位即主键、注入即隔离、工具面同隔离（"模型看不见的数据才是真隔离"）、管理页豁免、PI-Desktop 借鉴映射 |
+| 测试 | ✅ v2.55 | kernel-agent 56 绿（payload/契约随改）、memory-sqlite 13 绿（+3：跨项目同名并存/按键位删+undo 原键位还原/旧库迁移）、desktop 112 绿（+4：解析器/键位归一/记忆键位隔离/经历键位隔离）、clippy 0 双侧、fmt、check_length、pnpm build 过、插件产物重建（memory-sqlite 1.3.0） |
+
+验证：实机走查（CDP 28a-1…7 + sqlite 落盘取证）：预置 fsRoots → 侧栏「项目」段空组 `Locowrk` 头行渲染 → 行菜单移入成组 + meta 落盘 → **归属会话真实轮 memory_write**：sqlite 行 `workspace=F:\…\Locowrk` 打标、旧冒烟行迁入 `''` 键位 → **未归属新会话 memory_read 同 key = `{"found":false}`**（模型如实报告"可能在别的项目下写的"）→ 归属会话读回 `found:true` → 记忆页归属徽章「项目 Locowrk」/未归属行无徽章。走查会话两步删除、冒烟会话移出、设置还原（fsRoots=[]）、memory.sqlite3 还原迁移前备份（迁移在用户真实数据上留待自然发生）。
+
+### ㉘·B 权限审批借鉴 + 工具围栏（⬜ 排期中——PI-Desktop 映射已做完）
+
+| 项 | 说明（PI-Desktop 对照结论） |
+|---|---|
+| 权限模式四档切换器 | 挂会话输入框旁（收尾 backlog 已有此条）——映射 PI 的 `ask / accept-edits / auto` + 计划（contract）模式；决策表序：合同模式硬拒（只读白名单）> 低险直通 > 模式放行（auto=全部 / accept-edits=仅写类 / ask=全问）> 会话豁免（= 我们的「允许本次对话」，已是 AllowSession 语义）> 决策卡 |
+| 工具围栏跟会话 | PI：containment root = **会话持久化的项目**，不是全局 UI 态（"背景轮免受工作区切换影响"）；Locowrk 落点 = `session_context` 槽已就位，tool-fs / tool-shell(路径类) / tool-sandbox 改读调用期根（回落 env 全局），归属会话围栏 = 其项目根 |
+| 外部路径即审批 | PI：围栏外路径**低风险也要问**（`requires_external_path_permission`，连 auto 档也只给 AllowOnce）；映射到审批决策表加一条路径门 |
+| 审批卡环境行如实 | §3.17 环境行现取 `fsRoots[0]`（v2.48 时的占位）——应显示会话真实归属（payload +workspace），无归属回落现行为 |
+| 插件按项目过滤可见性 | PI："a tool the model can see is a tool it will try"——项目限定的插件对其他项目会话不可见；Locowrk 随插件批次（§2.5 槽位同批） |
+
+---
+
 ## 三、收尾 backlog（随批次搭车）
 
 | 项 | 说明 | 计划搭车批次 |

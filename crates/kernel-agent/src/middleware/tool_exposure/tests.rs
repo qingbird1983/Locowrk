@@ -62,6 +62,7 @@ async fn run(
         tools,
         compacted: None,
         system: None,
+        session_id: None,
     })
     .expect("payload");
     let decision = listener.handle(points::REQUEST, &payload).await;
@@ -172,6 +173,7 @@ async fn non_request_key_is_noop() {
         tools: vec![spec("a", Exposure::OnDemand)],
         compacted: None,
         system: None,
+        session_id: None,
     })
     .expect("payload");
     let d = l.handle(points::PRE_STEP, &payload).await;

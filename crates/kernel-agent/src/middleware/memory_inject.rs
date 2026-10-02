@@ -45,9 +45,13 @@ pub struct MemoryEntry {
 /// 记忆检索源契约：宿主实现（desktop 直读 memory.sqlite3，插件侧
 /// schema；ALTER 迁移同样归宿主）。同步短查询，不跨 await；任何失败
 /// 返回空表（实现内部 warn，不向上抛——注入不值得拦聊天）。
+///
+/// `session_id`（㉘）：本 step 的会话 id——宿主据此把召回限定在该会话
+/// 归属的项目内（项目级记忆隔离，Context 文档 §4.6）；内核不解释
+/// workspace 概念，只透传 id。`None` = 无会话上下文（如测试装配）。
 pub trait MemorySource: Send + Sync + 'static {
     /// 按宿主裁决的相关序（desktop = updated_at 新→旧）取至多 limit 条。
-    fn recall(&self, limit: usize) -> Vec<MemoryEntry>;
+    fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry>;
 }
 
 /// 单条经历记忆（⑬ 语义检索命中；只带注入需要的字段）。
@@ -62,10 +66,16 @@ pub struct ExperienceEntry {
 
 /// 经历记忆检索源契约（⑬，Context 文档 §4.3）：宿主实现 = embedding
 /// 查询向量 + 经历库余弦检索。异步（embedding 要过网络）；未配置
-/// embedding 或检索失败返回空表，实现内部裁决降级。
+/// embedding 或检索失败返回空表，实现内部裁决降级。`session_id`（㉘）
+/// 同 [`MemorySource`]：召回限定在会话归属的项目内。
 #[async_trait]
 pub trait ExperienceSource: Send + Sync + 'static {
-    async fn recall(&self, query: &str, limit: usize) -> Vec<ExperienceEntry>;
+    async fn recall(
+        &self,
+        session_id: Option<&str>,
+        query: &str,
+        limit: usize,
+    ) -> Vec<ExperienceEntry>;
 }
 
 /// 注入参数（settings.json `memory` 区；Context 文档 §6.2 的
@@ -217,7 +227,8 @@ impl WaterfallListener for MemoryInject {
         let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
             return WaterfallDecision::Continue;
         };
-        let entries = self.source.recall(cfg.top_k);
+        // ㉘：把会话 id 交给检索源做项目隔离（宿主裁决 workspace 语义）
+        let entries = self.source.recall(req.session_id.as_deref(), cfg.top_k);
         let mut block = Self::build_block(&entries);
         // 经历块（⑬）：查询 = 最近一条用户消息；检索失败/未配置 = 跳过，
         // 事实记忆照常注入（§4.3 降级）
@@ -232,7 +243,9 @@ impl WaterfallListener for MemoryInject {
                 })
                 .unwrap_or_default();
             if !query.is_empty() {
-                let found = src.recall(query, cfg.top_k).await;
+                let found = src
+                    .recall(req.session_id.as_deref(), query, cfg.top_k)
+                    .await;
                 block = Self::append_block(block, Self::build_experience_block(&found));
             }
         }

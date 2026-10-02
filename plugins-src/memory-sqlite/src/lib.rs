@@ -69,8 +69,10 @@ fn describe_manifest() -> CString {
                               identifier), value (required, text), tags (optional, short \
                               label). Overwrites any existing value; the overwritten entry \
                               is returned in `previous` and can be restored via memory_undo. \
-                              Use it for facts, decisions and user preferences worth \
-                              remembering; do NOT store secrets or large blobs."
+                              Entries are scoped to the current project: the same key in \
+                              another project holds a different value. Use it for facts, \
+                              decisions and user preferences worth remembering; do NOT \
+                              store secrets or large blobs."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -89,8 +91,10 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "memory_read".into(),
-                description: "Read one memory entry by exact key. Returns {found, key, \
-                              value, tags, updated_at}; found=false when the key is absent."
+                description: "Read one memory entry by exact key in the current project. \
+                              Returns {found, key, value, tags, updated_at}; found=false when \
+                              the key is absent here (entries written in other projects or \
+                              without a project are not visible)."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -104,10 +108,11 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "memory_list".into(),
-                description: "List memory entries ordered by key. Args: prefix (optional \
-                              key-prefix filter), limit (default 50, max 200), offset \
-                              (default 0). Returns {total, entries: [{key, value, tags, \
-                              updated_at}]} where total counts ALL matching entries."
+                description: "List memory entries of the current project ordered by key. \
+                              Args: prefix (optional key-prefix filter), limit (default 50, \
+                              max 200), offset (default 0). Returns {total, entries: [{key, \
+                              value, tags, updated_at}]} where total counts ALL matching \
+                              entries in this project."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -122,10 +127,10 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "memory_search".into(),
-                description: "Substring search across keys, values and tags (ASCII \
-                              case-insensitive). Args: query (required), limit (default 20, \
-                              max 100). Returns {query, matches}. Wildcards in the query are \
-                              matched literally."
+                description: "Substring search across keys, values and tags of the current \
+                              project (ASCII case-insensitive). Args: query (required), limit \
+                              (default 20, max 100). Returns {query, matches}. Wildcards in \
+                              the query are matched literally."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -216,18 +221,39 @@ impl MemoryState {
             }
         }
     }
+
+    /// 当前调用的项目键位（㉘）：经 vtable `session_context` 查宿主——
+    /// 返回会话归属的项目根；查询不可用（headless 宿主 / 非调用期 /
+    /// 旧宿主）或未归属时返回 `""`（未归属键位）。缓冲 1KiB 足容纳
+    /// 上下文 JSON；BUF_TOO_SMALL 等异常按未归属回落，不让记忆失败。
+    fn workspace(&self) -> String {
+        // SAFETY: host 是 init 时宿主交付的 'static vtable 指针
+        let vt = match unsafe { self.host.as_ref() } {
+            Some(vt) => vt,
+            None => return String::new(),
+        };
+        let mut buf = [0u8; 1024];
+        // SAFETY: buf 是本栈上合法可写缓冲
+        match unsafe { vt.session_context(&mut buf) } {
+            Ok(n) => plugin_api::ffi::CallContext::from_json(&buf[..n])
+                .and_then(|c| c.workspace)
+                .unwrap_or_default(),
+            Err(_) => String::new(),
+        }
+    }
 }
 
 impl PluginState for MemoryState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("memory-sqlite: {tool} called"));
+        let ws = self.workspace();
         match tool {
-            "memory_write" => store::memory_write(&args),
-            "memory_read" => store::memory_read(&args),
-            "memory_list" => store::memory_list(&args),
-            "memory_search" => store::memory_search(&args),
-            "memory_delete" => store::memory_delete(&args),
-            "memory_undo" => store::memory_undo(&args),
+            "memory_write" => store::memory_write(&ws, &args),
+            "memory_read" => store::memory_read(&ws, &args),
+            "memory_list" => store::memory_list(&ws, &args),
+            "memory_search" => store::memory_search(&ws, &args),
+            "memory_delete" => store::memory_delete(&ws, &args),
+            "memory_undo" => store::memory_undo(&ws, &args),
             other => Err(format!("unknown tool `{other}`")),
         }
     }

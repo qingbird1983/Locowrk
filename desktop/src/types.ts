@@ -390,21 +390,25 @@ export interface ExposureDebug {
   ts: number;
 }
 
-/** 经历记忆条目（⑬ experience_list 返回行；camelCase）。 */
+/** 经历记忆条目（⑬ experience_list 返回行；camelCase）。
+ * workspace = 项目归属（㉘），"" = 未归属。 */
 export interface ExperienceRow {
   id: number;
   content: string;
   sessionId: string;
+  workspace: string;
   createdAt: number;
 }
 
 /** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。
- * source = "explicit" | "extracted"（前端按档位渲染人类文案）。 */
+ * source = "explicit" | "extracted"（前端按档位渲染人类文案）；
+ * workspace = 项目归属（㉘），"" = 未归属。 */
 export interface MemoryRow {
   key: string;
   value: string;
   tags: string;
   source: string;
+  workspace: string;
   updated_at: number;
 }
 

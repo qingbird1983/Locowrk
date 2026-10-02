@@ -50,6 +50,7 @@ impl Kernel {
         &self,
         messages: Vec<Message>,
         tools: Vec<ToolSpec>,
+        session_id: Option<&str>,
     ) -> Result<(LlmRequest, Option<CompactionOutcome>), KernelError> {
         let payload = serde_json::to_value(RequestPayload {
             messages,
@@ -59,6 +60,7 @@ impl Kernel {
             tools,
             compacted: None,
             system: None,
+            session_id: session_id.map(str::to_string),
         })?;
         let out = self.ctx.events.waterfall(points::REQUEST, payload).await;
         match out.decision {
@@ -117,7 +119,7 @@ impl Kernel {
         let sink = self.scoped_dyn::<dyn crate::stream::LlmStreamSink>().ok();
         loop {
             let (req, compacted) = self
-                .waterfall_request(messages.clone(), tools.clone())
+                .waterfall_request(messages.clone(), tools.clone(), session_id)
                 .await?;
             let llm = self.scoped_dyn::<dyn LlmService>()?;
             let streamed = AtomicBool::new(false);

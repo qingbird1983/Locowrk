@@ -25,23 +25,29 @@ pub async fn memory_list(
         .list(query.as_deref().unwrap_or(""), limit.unwrap_or(200))
 }
 
-/// 编辑记忆值（只改 value，键名与来源不动；不存在报错）。
+/// 编辑记忆值（只改 value，键名与来源不动；不存在报错）。㉘：编辑按
+/// 键位 (workspace, key) 定位——workspace 来自管理页行。
 #[tauri::command]
 pub async fn memory_update(
+    workspace: String,
     key: String,
     value: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    if !state.memory.update_value(&key, &value)? {
+    if !state.memory.update_value(&workspace, &key, &value)? {
         return Err(format!("记忆 `{key}` 不存在"));
     }
     Ok(())
 }
 
-/// 删除单条记忆（不存在报错，前端据此刷新）。
+/// 删除单条记忆（按键位；不存在报错，前端据此刷新）。
 #[tauri::command]
-pub async fn memory_delete(key: String, state: State<'_, AppState>) -> Result<(), String> {
-    if !state.memory.delete(&key)? {
+pub async fn memory_delete(
+    workspace: String,
+    key: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if !state.memory.delete(&workspace, &key)? {
         return Err(format!("记忆 `{key}` 不存在"));
     }
     Ok(())

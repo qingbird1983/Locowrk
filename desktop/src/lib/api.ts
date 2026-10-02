@@ -309,14 +309,14 @@ export function memoryList(query?: string, limit?: number): Promise<MemoryRow[]>
   return invoke("memory_list", { query: query ?? null, limit: limit ?? null });
 }
 
-/** 编辑记忆值（只改 value；键不存在后端报错）。 */
-export function memoryUpdate(key: string, value: string): Promise<void> {
-  return invoke("memory_update", { key, value });
+/** 编辑记忆值（只改 value；按 (workspace, key) 键位定位，键不存在后端报错）。 */
+export function memoryUpdate(workspace: string, key: string, value: string): Promise<void> {
+  return invoke("memory_update", { workspace, key, value });
 }
 
-/** 删除单条记忆（键不存在后端报错）。 */
-export function memoryDelete(key: string): Promise<void> {
-  return invoke("memory_delete", { key });
+/** 删除单条记忆（按 (workspace, key) 键位；不存在后端报错）。 */
+export function memoryDelete(workspace: string, key: string): Promise<void> {
+  return invoke("memory_delete", { workspace, key });
 }
 
 /** 清空全部记忆。返回删除条数。 */

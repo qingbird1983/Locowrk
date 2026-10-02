@@ -274,6 +274,7 @@ export default {
     experienceEmpty: "还没有经历。开启「对话后自动提取记忆」后，每轮对话会沉淀一段可语义检索的摘要。",
     experienceClear: "清空全部经历",
     experienceSession: "会话 {id}…",
+    workspace: "项目",
     time: {
       just_now: "刚刚",
       minutes: "{n} 分钟前",

@@ -12,7 +12,7 @@ use serde_json::json;
 struct Fixed(Vec<MemoryEntry>);
 
 impl MemorySource for Fixed {
-    fn recall(&self, limit: usize) -> Vec<MemoryEntry> {
+    fn recall(&self, _session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
         self.0.iter().take(limit).cloned().collect()
     }
 }
@@ -38,6 +38,7 @@ fn payload_value() -> serde_json::Value {
         tools: Vec::new(),
         compacted: None,
         system: None,
+        session_id: None,
     })
     .unwrap()
 }
@@ -178,7 +179,12 @@ struct FixedExp(Vec<ExperienceEntry>);
 
 #[async_trait::async_trait]
 impl ExperienceSource for FixedExp {
-    async fn recall(&self, _query: &str, limit: usize) -> Vec<ExperienceEntry> {
+    async fn recall(
+        &self,
+        _session_id: Option<&str>,
+        _query: &str,
+        limit: usize,
+    ) -> Vec<ExperienceEntry> {
         self.0.iter().take(limit).cloned().collect()
     }
 }

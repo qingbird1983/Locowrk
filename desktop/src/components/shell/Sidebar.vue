@@ -136,8 +136,9 @@ const {
           </button>
         </div>
 
-        <!-- 会话树（§2.3）：「会话」组 + 「项目」组（工作区→时间桶） -->
-        <SessionGroups :sessions="filtered" />
+        <!-- 会话树（§2.3）：「会话」组 + 「项目」组（工作区→时间桶；
+             fsRoots ∪ 已关联 = 组集合，v2.50 关联 + 空组常驻） -->
+        <SessionGroups :sessions="filtered" :fs-roots="settings.view?.tools.fsRoots ?? []" />
 
         <!-- 正文命中（v2.49）：标题过滤之后的第二段 -->
         <template v-if="search.trim() && contentHits.length > 0">

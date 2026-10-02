@@ -96,6 +96,7 @@ fn request_payload(messages: Vec<Message>) -> Value {
         tools: catalog(),
         compacted: None,
         system: None,
+        session_id: None,
     })
     .unwrap()
 }
@@ -385,6 +386,7 @@ async fn other_waterfall_points_ignored() {
         tools: vec![],
         compacted: None,
         system: None,
+        session_id: None,
     })
     .unwrap();
     let out = ctx.events.waterfall(points::PRE_STEP, payload).await;

@@ -278,6 +278,7 @@ export default {
     experienceEmpty: "No experiences yet. Turn on \"auto-extract memories\" and each turn will leave a semantically searchable summary.",
     experienceClear: "Clear all experiences",
     experienceSession: "session {id}…",
+    workspace: "Project",
     time: {
       just_now: "just now",
       minutes: "{n} min ago",

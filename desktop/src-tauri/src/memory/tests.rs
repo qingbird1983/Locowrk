@@ -1,9 +1,11 @@
-//! memory 存储单测：CRUD / 过滤 / 上限校验 / 旧库迁移 / MemorySource 投影。
-//! 全部走临时目录（LOCOWRK_DATA_DIR 无涉——MemoryStore 显式持目录）。
+//! memory 存储单测：CRUD / 过滤 / 上限校验 / 旧库迁移 / 项目键位隔离
+//! （㉘）/ MemorySource 投影。全部走临时目录（LOCOWRK_DATA_DIR 无涉——
+//! MemoryStore 显式持目录）。
 
 use super::MemoryStore;
 use kernel_agent::MemorySource;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 fn temp_dir(tag: &str) -> PathBuf {
     let nanos = std::time::SystemTime::now()
@@ -16,11 +18,16 @@ fn temp_dir(tag: &str) -> PathBuf {
     ))
 }
 
+/// 测试解析器：`ws-session` → 项目根，其余未归属。
+fn test_resolver() -> crate::workspace::WorkspaceResolver {
+    Arc::new(|sid: &str| (sid == "ws-session").then(|| "F:/ws/a".to_string()))
+}
+
 #[test]
 fn crud_roundtrip() {
     let dir = temp_dir("crud");
     // 先手工建"旧版"4 列表（模拟老插件建的库），MemoryStore 首次访问走
-    // ALTER 补 source 列——迁移路径本身被本用例覆盖
+    // 整表重建（workspace 键位 + source 列）——迁移路径本身被本用例覆盖
     std::fs::create_dir_all(&dir).unwrap();
     {
         let conn = rusqlite::Connection::open(dir.join("memory.sqlite3")).unwrap();
@@ -33,31 +40,32 @@ fn crud_roundtrip() {
         )
         .unwrap();
     }
-    let store = MemoryStore::new(&dir);
+    let store = MemoryStore::new(&dir, test_resolver());
 
     let rows = store.list("", 200).unwrap();
-    assert_eq!(rows.len(), 2);
+    assert_eq!(rows.len(), 2, "旧库两行迁入未归属键位");
+    assert!(rows.iter().all(|r| r.workspace.is_empty()));
     assert_eq!(rows[0].key, "b", "新→旧排序");
-    assert_eq!(rows[0].source, "explicit", "旧库 ALTER 补列默认 explicit");
+    assert_eq!(rows[0].source, "explicit", "旧行迁移补 explicit 来源");
     assert_eq!(rows[1].updated_at, 100);
 
     // 经 update 语义没有"新增"，编辑不存在的键返回 false
-    assert!(!store.update_value("ghost", "v1").unwrap());
+    assert!(!store.update_value("", "ghost", "v1").unwrap());
 
     // 过滤：子串命中 value，通配符按字面量
     assert_eq!(store.list("bee", 200).unwrap().len(), 1);
     assert_eq!(store.list("%", 200).unwrap().len(), 0);
 
     // 编辑：只改 value + 时间，key/source 不动
-    assert!(store.update_value("a", "new").unwrap());
+    assert!(store.update_value("", "a", "new").unwrap());
     let rows = store.list("new", 200).unwrap();
     assert_eq!(rows[0].value, "new");
     assert_eq!(rows[0].key, "a");
     assert!(rows[0].updated_at > 100);
 
-    // 删除 + 清空
-    assert!(store.delete("a").unwrap());
-    assert!(!store.delete("a").unwrap(), "重复删除 = 不存在");
+    // 删除 + 清空（全按键位）
+    assert!(store.delete("", "a").unwrap());
+    assert!(!store.delete("", "a").unwrap(), "重复删除 = 不存在");
     assert_eq!(store.clear_all().unwrap(), 1);
     assert!(store.list("", 200).unwrap().is_empty());
 
@@ -67,24 +75,50 @@ fn crud_roundtrip() {
 #[test]
 fn update_validation_rejects_oversize() {
     let dir = temp_dir("validate");
-    let store = MemoryStore::new(&dir);
-    assert!(store.update_value("", "v").is_err());
-    assert!(store.update_value(&"k".repeat(513), "v").is_err());
+    let store = MemoryStore::new(&dir, test_resolver());
+    assert!(store.update_value("", "", "v").is_err());
+    assert!(store.update_value("", &"k".repeat(513), "v").is_err());
     assert!(store
-        .update_value("k", &"v".repeat(256 * 1024 + 1))
+        .update_value("", "k", &"v".repeat(256 * 1024 + 1))
         .is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn recall_is_scoped_by_session_workspace() {
+    let dir = temp_dir("recall-scope");
+    let store = MemoryStore::new(&dir, test_resolver());
+    // 项目键位与未归属键位各一条（同 key，(workspace,key) 主键允许并存）
+    store
+        .write("F:/ws/a", "k", "project-v", "", "explicit")
+        .unwrap();
+    store.write("", "k", "unfiled-v", "", "explicit").unwrap();
+
+    // 归属会话只见项目键位；未归属会话只见未归属键位
+    let got = store.recall(Some("ws-session"), 5);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].value, "project-v");
+    let got = store.recall(Some("other"), 5);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].value, "unfiled-v");
+    let got = store.recall(None, 5);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].value, "unfiled-v");
+
+    // 管理面 list 看全量两行（跨键位）
+    assert_eq!(store.list("", 200).unwrap().len(), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn recall_projects_memory_entries_and_degrades_to_empty() {
     let dir = temp_dir("recall");
-    let store = MemoryStore::new(&dir);
+    let store = MemoryStore::new(&dir, test_resolver());
     std::fs::create_dir_all(&dir).unwrap();
     // 打不开的目录（用文件路径当目录制造失败）→ 空表不 panic
-    let bad = MemoryStore::new(&dir.join("file-not-dir"));
+    let bad = MemoryStore::new(&dir.join("file-not-dir"), test_resolver());
     std::fs::write(dir.join("file-not-dir"), "x").unwrap();
-    assert!(bad.recall(5).is_empty());
+    assert!(bad.recall(None, 5).is_empty());
     {
         let conn = rusqlite::Connection::open(dir.join("memory.sqlite3")).unwrap();
         conn.execute_batch(
@@ -96,7 +130,7 @@ fn recall_projects_memory_entries_and_degrades_to_empty() {
         )
         .unwrap();
     }
-    let got = kernel_agent::MemorySource::recall(&store, 5);
+    let got = store.recall(None, 5);
     assert_eq!(got.len(), 1);
     assert_eq!(got[0].key, "k");
     assert_eq!(got[0].value, "v");
@@ -107,7 +141,7 @@ fn recall_projects_memory_entries_and_degrades_to_empty() {
 #[test]
 fn limit_is_clamped() {
     let dir = temp_dir("limit");
-    let store = MemoryStore::new(&dir);
+    let store = MemoryStore::new(&dir, test_resolver());
     {
         std::fs::create_dir_all(&dir).unwrap();
         let conn = rusqlite::Connection::open(dir.join("memory.sqlite3")).unwrap();

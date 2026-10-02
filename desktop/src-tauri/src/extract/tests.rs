@@ -110,7 +110,8 @@ fn deps_with(llm: FakeLlm) -> (ExtractDeps, Arc<ExperienceDb>, std::path::PathBu
             .as_nanos()
     ));
     std::fs::create_dir_all(&dir).unwrap();
-    let memory = Arc::new(MemoryStore::new(&dir));
+    // 测试解析器：所有会话未归属（键位 ""）
+    let memory = Arc::new(MemoryStore::new(&dir, Arc::new(|_: &str| None::<String>)));
     let db = Arc::new(ExperienceDb::open(&dir.join("experiences.sqlite3")).unwrap());
     // 未配置 embedding 的共享柄 = embed 恒 Err（经历路径降级）
     let embed = SharedEmbed::new();

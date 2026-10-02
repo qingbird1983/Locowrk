@@ -514,6 +514,33 @@ async fn recall_experiences(
 
 **用户必须能看到并删除每一条记忆。** 这既是隐私要求，也是信任基础。
 
+### 4.6 项目级隔离（㉘，用户 2026-10-04 指令："分项目 = 项目级上下文、项目级记忆，不能相互串、相互污染"）
+
+**会话属于哪个项目，就只见哪个项目的记忆。** 归属 = 会话旁车 `workspace` 字段
+（§2.3/UI shell 文档，v2.50 关联），未归属会话 = 独立的"未归属键位"。
+
+* **隔离规则（严格对称）**：每条事实记忆 / 经历带 `workspace`（未归属 = `''`）；
+  写入打标 = 写入会话的归属；读取（注入召回 / memory_read / memory_search /
+  memory_list / 经历语义检索）只见与读取会话归属**完全一致**的行。没有任何
+  "全局记忆"层——未归属不是通配符，是一个独立键位。
+* **键位即主键**：memory.sqlite3 主键 = `(workspace, key)`——同名 key 在不同
+  项目下并存、互不覆盖（覆盖即污染）。旧库（key 单主键）首次访问整表迁移，
+  旧行归入未归属键位；插件侧与宿主侧持等价迁移（探针 + BEGIN IMMEDIATE +
+  二次探针，并发只有一方执行）。
+* **注入即隔离**：Memory-Inject / Experience-Inject 的召回契约带 `session_id`
+  （kernel 只透传 id，workspace 是宿主概念）；宿主解析后按键位过滤。子 Agent
+  会话没有旁车（⑮ 黑盒）→ 落未归属键位——不随父项目走是已知边界（诚实且
+  跨项目零泄漏）。
+* **工具面同隔离**（"模型看不见的数据才是真隔离"）：插件经 HostVtable 末尾
+  追加的 `session_context` 槽（append-only，⑭ notify 先例；调用期线程上下文 +
+  组装点注入解析器，headless 不注入 = 全局语义回落）反向查询本次调用归属，
+  memory-sqlite 全工具面按键位过滤；undo 忠实还原原键位（快照带 workspace）。
+* **管理页是人的管理面**：看全部键位并透出归属（「项目 X」徽章），跨项目可见
+  不算串——隔离针对的是模型上下文，不是管理员。
+* 借鉴来源：PI-Desktop 的项目模型（per-project memory blob + containment 跟
+  会话走 + "memory is prompt-static, no cross-project retrieval surface"）；
+  Locowrk 取"按行打标 + 键位过滤"形态（记忆是行式 KV 而非整块文档）。
+
 ---
 
 ## 5. 协同工作流

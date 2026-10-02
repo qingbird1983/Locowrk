@@ -57,6 +57,7 @@ mod sub_transcript;
 mod tool_source;
 mod tray;
 mod usage;
+mod workspace;
 
 #[cfg(test)]
 mod tests;
