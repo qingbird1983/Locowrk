@@ -9,7 +9,8 @@ export type AgentEvent =
   | TurnDoneEvent
   | ContextUsageEvent
   | ContextCompactedEvent
-  | ScheduleFiredEvent;
+  | ScheduleFiredEvent
+  | UserMessageEvent;
 
 export interface ChunkEvent {
   kind: "chunk";
@@ -78,6 +79,15 @@ export interface ScheduleFiredEvent {
   session_id: string;
   schedule_id: string;
   title: string;
+}
+
+/** 用户消息（㉕·fix）：只在 `session_history` 全量重放出现，重放恢复
+ * 用户气泡；实时轮发送即本地回显、后端不投影该段，故不在 api.ts
+ * CHANNELS 订阅表。 */
+export interface UserMessageEvent {
+  kind: "user_message";
+  session_id: string;
+  content: string;
 }
 
 /** 审批请求载荷（agent://approval-request）。与 events.rs 的

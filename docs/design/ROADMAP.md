@@ -450,6 +450,23 @@ check_length OK；CDP 走查逐项数值取证（见各行）+ 亮暗两主题�
 
 验证：vue-tsc+vite 构建过、cargo test 94 绿（+1）、clippy 0、fmt、check_length OK。
 
+### ㉕·fix 历史会话用户消息重放丢失（✅ 已完成，v2.47）
+
+> 用户实机报障（2026-10-03）：软件重启后历史会话只剩模型回复，用户发的
+> 每一轮都不见。根因 = ⑲ 起 `project_events` 漏投影 `UserMessage`（落
+> `_` 通配被丢）——**落盘一直有**（jsonl 镜像含用户消息，恢复逐条一致
+> 测试早已锁住），实时路径也一直正常（前端发送即本地回显）；丢的只是
+> `session_history` 全量投影这一层。UI shell 文档 §3.6/§4.1 先行补记再动码。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 投影补 `UserMessage` | ✅ v2.47 | `project_events` 新分支 → `AgentEvent::UserMessage{session_id,content}`；实时轮不受影响（run_turn 投影起点在 UserMessage 追加之后，该段只落盘不上通道）——**双气泡即回归** |
+| 通道定位 | ✅ v2.47 | `agent://user-message` 通道**永不 emit、前端有意不订阅**（api.ts CHANNELS 不含；variant 只为 session_history 返回形状服务，channel() 穷尽性所需） |
+| 前端重放 | ✅ v2.47 | types.ts `UserMessageEvent` + chat store `onEvent` `user_message` 分支（重放不记时间戳，同 §3.7 时序纪律） |
+| 测试 | ✅ v2.47 | +1：`history_projection_includes_user_messages`（落盘→启动恢复→全量投影首条=用户消息原样；实时 Collector 不含 UserMessage）；settings 测试补**重开证据**（drop 后重开同一数据根，maxTurnSteps=24 等逐字段读回——步数上限永久保存的硬证明） |
+
+验证：vue-tsc+vite 构建过、cargo test 95 绿（+1）、clippy 0、fmt、check_length OK。
+
 ### ㉖ UI 设计落地⑤：审批决策卡 + 会话运营（⬜ §3.17 三键卡（后端：决策枚举/风险档/超时）/ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联）
 
 ### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）

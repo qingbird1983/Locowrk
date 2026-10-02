@@ -23,6 +23,10 @@ pub mod channels {
     pub const CONTEXT_COMPACTED: &str = "agent://context-compacted";
     /// 定时触发（⑭）：调度引擎向会话注入轮之前推送，前端推 SystemNotice。
     pub const SCHEDULE_FIRED: &str = "agent://schedule-fired";
+    /// 用户消息（㉕·fix）：仅供全量投影（`session_history`）产出——实时轮
+    /// 前端发送即本地回显，runner 不投影该段（防双气泡）。本通道因此
+    /// **永不 emit**，前端也**有意不订阅**（api.ts CHANNELS 不含它）。
+    pub const USER_MESSAGE: &str = "agent://user-message";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -93,6 +97,12 @@ pub enum AgentEvent {
         schedule_id: String,
         title: String,
     },
+    /// 用户消息（㉕·fix）：只在会话日志全量投影出现，重放恢复用户气泡；
+    /// 实时轮不投影（前端本地回显），见 channels::USER_MESSAGE 注释。
+    UserMessage {
+        session_id: String,
+        content: String,
+    },
 }
 
 impl AgentEvent {
@@ -106,6 +116,7 @@ impl AgentEvent {
             AgentEvent::ContextUsage { .. } => channels::CONTEXT_USAGE,
             AgentEvent::ContextCompacted { .. } => channels::CONTEXT_COMPACTED,
             AgentEvent::ScheduleFired { .. } => channels::SCHEDULE_FIRED,
+            AgentEvent::UserMessage { .. } => channels::USER_MESSAGE,
         }
     }
 }

@@ -122,6 +122,15 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
     let mut out = Vec::new();
     for e in events {
         match e {
+            // ㉕·fix：用户消息进投影（此前落 `_` 被丢，重启后历史会话
+            // 只剩模型回复）。实时轮不受影响——run_turn 的投影起点在
+            // UserMessage 追加之后，该段只落盘不上事件通道（前端本地回显）。
+            SessionEvent::UserMessage { content } => {
+                out.push(AgentEvent::UserMessage {
+                    session_id: session_id.into(),
+                    content: content.clone(),
+                });
+            }
             SessionEvent::AssistantMessage { content, .. } => {
                 // 纯工具调用的 assistant 步正文为空，不发空 chunk
                 if !content.is_empty() {

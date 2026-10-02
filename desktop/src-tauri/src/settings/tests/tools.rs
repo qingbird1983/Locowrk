@@ -169,6 +169,15 @@ fn tools_defaults_legacy_compat_and_validation() {
         vec![dir.clone()],
         "trim + 去空 + 去重"
     );
+    // ㉕·fix 重启持久化证据：drop 后重开同一数据根逐字段读回（用户裁定
+    // 语义：步数上限改 20 → 重启/新会话仍按 20，永不自动复位到缺省）
+    drop(store);
+    let reopened = SettingsStore::open(&root).unwrap();
+    let v = reopened.view().tools;
+    assert_eq!(v.max_turn_steps, 24, "重开软件后步数上限不复位");
+    assert_eq!(v.call_timeout_secs, 45);
+    assert_eq!(v.max_per_request, 30);
+    assert_eq!(v.fs_roots, vec![dir.clone()]);
     std::fs::remove_dir_all(&root).ok();
 }
 

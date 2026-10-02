@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use session_store::{Session, SessionEvent};
 
+use crate::events::AgentEvent;
 use crate::runner::run_turn;
 use crate::session_log;
 use crate::tests::{kernel_with_tools, Collector};
@@ -51,6 +52,54 @@ async fn turn_mirrors_to_disk_and_restores_identically() {
     let restored = restored.lock().await;
     assert_eq!(restored.len(), session.len());
     assert_eq!(restored.events(), session.events());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// ㉕·fix 回归：重启后 `session_history` 全量投影必须含用户气泡——
+/// 曾因 `project_events` 漏投影 `UserMessage`（落 `_` 通配），历史会话
+/// 只剩模型回复。实时投影不推用户消息（前端发送即本地回显，防双气泡）。
+#[tokio::test]
+async fn history_projection_includes_user_messages() {
+    let dir = tmp_dir("replay-user");
+    let kernel = kernel_with_tools();
+    let mut session = Session::new();
+    let sink = Collector::default();
+
+    run_turn(
+        &kernel,
+        &mut session,
+        "s-replay",
+        "echo 你好".into(),
+        None,
+        &sink,
+        None,
+        Some(&dir),
+        crate::runner::DEFAULT_MAX_STEPS,
+    )
+    .await
+    .expect("turn ok");
+
+    // 实时投影面：不出现用户消息（本地回显约定，双气泡即回归）
+    assert!(!sink
+        .events()
+        .iter()
+        .any(|e| matches!(e, AgentEvent::UserMessage { .. })));
+
+    // 重启恢复面：全量投影首条 = 用户消息，正文原样
+    let map: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    assert_eq!(session_log::restore_all(&dir, &map), 1);
+    let restored = map.lock().unwrap().get("s-replay").cloned().unwrap();
+    let restored = restored.lock().await;
+    let projected = crate::runner::project_events(restored.events(), "s-replay");
+    assert!(
+        matches!(
+            projected.first(),
+            Some(AgentEvent::UserMessage { content, .. }) if content == "echo 你好"
+        ),
+        "全量投影首条应为用户消息：{:?}",
+        projected.first()
+    );
     std::fs::remove_dir_all(&dir).ok();
 }
 

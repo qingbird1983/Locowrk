@@ -112,6 +112,16 @@ export const useChatStore = defineStore("chat", {
     },
     onEvent(e: AgentEvent) {
       switch (e.kind) {
+        case "user_message":
+          // ㉕·fix 重放恢复用户气泡（此前投影漏 UserMessage，重启后历史
+          // 会话只剩模型回复）。实时轮发送即本地回显，本事件不实时到达。
+          this.items.push({
+            id: nextId++,
+            kind: "user",
+            text: e.content,
+            ...(this.replaying ? {} : { ts: Date.now() }),
+          });
+          break;
         case "chunk":
           this.appendAssistant(e.delta);
           break;

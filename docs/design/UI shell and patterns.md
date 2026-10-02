@@ -320,7 +320,8 @@ ok <60% / warn 60–99% / danger ≥阈值；无数据（`null`）整个不渲�
 ⑲ 的最小切换面（顶栏下拉）**退役**，由 §2.3 的侧栏取代：
 
 - 数据源 `session_list`（mtime 降序 + 首条用户消息截断做标题），前端补工作区归属与时间桶；
-- 切换 = `session_history` 拉全量投影在 store **重放**，恢复气泡 / 工具行 / 系统通知；
+- 切换 = `session_history` 拉全量投影在 store **重放**，恢复**用户气泡** / 助手正文 /
+  工具行 / 系统通知（㉕·fix：投影曾漏 `UserMessage`，重启后历史会话只剩模型回复）；
   **历史恢复不走 `agent://` 事件**（事件只服务当轮增量）；
 - 新会话 = 前端生成 id + 清空视图；**首条消息发出前不创建任何后端状态**；
 - 行尾 `…` 菜单：重命名 / 删除 / 导出（需要后端命令，§8.2）；
@@ -929,6 +930,7 @@ settings.json 读取或解析失败时**绝不空白页**：给一个居中的�
 | 事件 | store | 组件 | 备注 |
 |---|---|---|---|
 | `agent://chunk` | chat `appendAssistant` | §3.7 组内的助手正文 | 真流式：文本 delta 逐段直推；该步投影的整段 chunk 被抑制（不重复）；无 sink 回落整段投影 |
+| `user_message`（投影面专用） | chat push user 项 | §3.2 用户气泡 | **只在 `session_history` 全量重放出现**（㉕·fix）；实时轮发送即本地回显、runner 不投影该段（防双气泡）→ `agent://user-message` 通道永不 emit，**有意不进** api.ts CHANNELS |
 | `agent://tool-call` | chat push tool 项 | §3.8 工具行 | 先事件后执行（内核纪律） |
 | `agent://tool-result` | chat 按 call_id 补丁 | §3.8 结果区 | 失败自动展开一次；相邻同工具合并进 §3.7 |
 | `agent://turn-done` | chat `running=false` | §3.7 头行状态 + composer 发送键复位 | 头行由「处理中」改「已完成」并写时长 |
