@@ -73,14 +73,29 @@ enum LoopEnd {
 }
 
 /// 跑一个子 Agent。`allow` 语义见 FilterToolSource（空 = 继承父全目录）。
+/// [`run_child`] 的入参束（8 参触发 clippy too_many_arguments，收拢）。
+pub(crate) struct ChildRunParams<'a> {
+    pub parent: &'a Kernel,
+    pub gate: &'a SubagentGate,
+    pub parent_session_id: &'a str,
+    pub prompt: String,
+    pub allow: Vec<String>,
+    pub max_turns: u32,
+    pub timeout: Option<Duration>,
+    pub transcript_sink: Option<&'a dyn crate::subagent::SubTranscriptSink>,
+}
+
 pub(crate) async fn run_child(
-    parent: &Kernel,
-    gate: &SubagentGate,
-    parent_session_id: &str,
-    prompt: String,
-    allow: Vec<String>,
-    max_turns: u32,
-    timeout: Option<Duration>,
+    ChildRunParams {
+        parent,
+        gate,
+        parent_session_id,
+        prompt,
+        allow,
+        max_turns,
+        timeout,
+        transcript_sink,
+    }: ChildRunParams<'_>,
 ) -> SubagentOutcome {
     let pre = |error: String| SubagentOutcome {
         status: SubagentStatus::Failed,
@@ -104,12 +119,12 @@ pub(crate) async fn run_child(
     };
 
     let mut child = prefix.fork(prefix.cursor());
-    child.append(SessionEvent::UserMessage { content: prompt });
-    // 子"自身"事件从任务 prompt 之后起算：fork 来的父前缀含父的历史
-    // ToolCall/AssistantMessage，收束汇报（tools_used/摘要）只看子内新增
-    // 段——否则父的调用史会被误报成子的工具使用、父的旧正文会被当成
-    // 子的摘要。
+    // 子"自身"段从任务 prompt **之前**起算：prompt 是子的自有内容（§3.16
+    // 落盘/页签重放以任务开头），fork 来的父前缀（父的历史 ToolCall/
+    // AssistantMessage）被排除——收束汇报（tools_used/摘要）只看子内新增
+    // 段，父的调用史不会被误报成子的工具使用（㋑·fix 同一语义）。
     let own_from = child.len();
+    child.append(SessionEvent::UserMessage { content: prompt });
 
     let mut turns: u32 = 0;
     let loop_fut = async {
@@ -141,6 +156,12 @@ pub(crate) async fn run_child(
         LoopEnd::Timeout => (SubagentStatus::Timeout, None),
         LoopEnd::Step(e) => (SubagentStatus::Failed, Some(e)),
     };
+
+    // §3.16：子自身段交给宿主落盘（可注入；None = 纯黑盒）。fork 失败等
+    // 早退路径 child_session_id 为空，无转录可交。
+    if let Some(sink) = transcript_sink {
+        sink.close(&child_id, own_from, &child);
+    }
 
     SubagentOutcome {
         status,

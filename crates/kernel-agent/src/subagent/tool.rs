@@ -10,7 +10,7 @@ use plugin_api::{CallCtx, Exposure, SideEffect, Tool, ToolError, ToolSpec};
 use serde_json::{Value, json};
 
 use super::run::{self, SubagentOutcome};
-use super::{SubagentGate, filter};
+use super::{SubTranscriptSink, SubagentGate, filter};
 use crate::kernel::Kernel;
 
 /// 组装点固定的版本身份（内置工具无插件版本，占位 0.0.0）。
@@ -22,6 +22,9 @@ pub struct SubagentTool {
     kernel: Arc<Kernel>,
     gate: Arc<SubagentGate>,
     spec: ToolSpec,
+    /// §3.16 子会话转录接收器：宿主可选注入（桌面写 sub-transcripts/）；
+    /// None = 纯黑盒（headless / 未接组装点），行为与 ⑮ 一致。
+    transcript_sink: Option<Arc<dyn SubTranscriptSink>>,
 }
 
 impl SubagentTool {
@@ -30,7 +33,14 @@ impl SubagentTool {
             kernel,
             gate,
             spec: build_spec(),
+            transcript_sink: None,
         }
+    }
+
+    /// 注入子转录接收器（组装点专用；§8.2「子会话落盘」通路）。
+    pub fn with_transcript_sink(mut self, sink: Arc<dyn SubTranscriptSink>) -> Self {
+        self.transcript_sink = Some(sink);
+        self
     }
 }
 
@@ -85,15 +95,16 @@ impl Tool for SubagentTool {
 
         let parsed = parse_args(args).map_err(tool_err)?;
 
-        let outcome: SubagentOutcome = run::run_child(
-            &self.kernel,
-            &self.gate,
+        let outcome: SubagentOutcome = run::run_child(run::ChildRunParams {
+            parent: &self.kernel,
+            gate: &self.gate,
             parent_session_id,
-            parsed.prompt,
-            parsed.allow,
-            parsed.max_turns,
-            parsed.timeout,
-        )
+            prompt: parsed.prompt,
+            allow: parsed.allow,
+            max_turns: parsed.max_turns,
+            timeout: parsed.timeout,
+            transcript_sink: self.transcript_sink.as_deref(),
+        })
         .await;
         Ok(outcome.to_json())
     }

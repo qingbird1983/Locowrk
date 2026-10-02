@@ -562,7 +562,29 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 → 全部已读（徽标/未读点消）→ 未读分段空态 → 清空（盘上 `[]`）。走查设置已还原
 （approvalTimeoutSecs=100），走查会话 UI 两步删除，通知清零。
 
-### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / ~~§3.13 通知浮层~~（✅ v2.51）/ 目的地页整版式 §3.29/§3.31）
+### ㉗·B 工作面板骨架 + 子 Agent 转录页签（✅ 已完成，v2.52）
+
+> 自规划拆批第二子批。UI shell 文档 §2.5/§3.16/§8.2/§4.2 先行成文再动码。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 后端：子会话落盘 | ✅ v2.52 | kernel-agent 新 `SubTranscriptSink` trait（`close(child_id, own_from, &child)`，`SubagentTool::with_transcript_sink` 构造期**可选注入**——headless 不注入维持纯黑盒，⑮ 语义零改动）；`run_child` 收束时把子**自身段**交给宿主（**`own_from` 前移到任务 prompt 之前**——prompt 是子的自有内容，落盘/页签以任务开头；对 tools_used/摘要无影响，⑮ 既有用例全绿佐证）；入参 8 个收拢 `ChildRunParams`（clippy too_many_arguments）；desktop `sub_transcript.rs` 写 `<数据根>/sub-transcripts/<child_id>.jsonl`（id 走 `session_file` 白名单，写前删旧防残留）；不进内存会话表/侧栏列表（`restore_all` 只扫 sessions/）；**子事件零进父日志** |
+| 后端：读取 | ✅ v2.52 | `subagent_transcript(child_id)` 命令 = 盘上 load + 与 `session_history` **同一 `project_events` 全量投影**（前端数据形状与主转录一致；文件缺席如实 Err）；`child_session_id` ⑮ 起就在收束 output 里（v2.37 加的），前端入口现成 |
+| 前端：面板骨架 | ✅ v2.52 | `stores/work-panel.ts`（开合/宽度/最大化/页签 = **跨会话壳状态**；开合+宽度持久化 `work-panel.v1`，页签进程内不跨重启）+ `WorkPanel.vue`（三栏预算 `clamp(244, 容器−侧栏−450)`，**拖宽顶到预算先折叠侧栏**（地板硬）；拖柄全规格：setPointerCapture + 全局锁 + 2×32 圆角条 + 键盘 16px/Home/End + 双击复位 360 + aria separator（valuemax=预算动态）；头部 = 页签条可关闭 + `+` 回启动器 + 最大化/还原 + 关闭；空态 = **启动器清单**（§3.14：不是空态文案——当前会话可看的子转录 + 指引行；只列已实装条目，插件贡献槽位随插件批次））+ App.vue 挂主区右缘（只对对话目的地）+ Topbar `panel` 开关（独立成组，aria-pressed） |
+| 前端：转录页签 | ✅ v2.52 | `lib/sub-transcript-items.ts`（wire 事件 → chat store 同款 `ChatItem[]` 投影）+ `SubagentTranscriptTab.vue`（**复用 MessageRow/ToolRow/SystemNotice 同一套行组件**——§3.7–3.9 同一心智模型；近似如实记录：平铺过程行，过程组合成组后续批接入）；页签名 = 子 Agent + prompt 截断（⑮ 无 name 参数不发明）；底部固定只读说明（composer 不渲染，自证只读）；入口 = §3.10 工具行头行「看转录」小钮（subagent_run 收束且带 child_session_id）+ 启动器清单 |
+| 修缺陷 | ✅ v2.52 | 走查实机抓到：子任务失败收束（output.status=failed）被通知记成「已完成」——分类只看 ToolResult.ok 没看 output.status；修 `draft_from_event` 按 `status == "completed"` 如实分类 + 回归测试 |
+| 测试 | ✅ v2.52 | kernel-agent +1（`transcript_sink_receives_own_segment`：收束恰好回调一次、自身段 = prompt+回复）；桌面 +2（store 写自身段/覆盖重写/非法 id 跳过）+ 通知分类回归；桌面 110 绿、kernel-agent 全绿、clippy 0 双侧、fmt、check_length、pnpm build |
+
+验证：cargo test 110+kernel-agent 全绿、clippy 0、fmt、check_length（state/mod.rs 压回 400 整）、pnpm build 过。
+实机走查（tauri dev + CDP 截图 27b-1…27b-8 + 落盘取证）：顶栏开关开面板（缺省 360 + 启动器空态
++ 点外部关）→ 真实轮派生子 Agent（审批「允许一次」）→ **子会话落盘实机发生**
+（`sub-transcripts/desktop-…-sub-1.jsonl` 7 事件，首条 = 任务 prompt，父前缀不带；本轮子内
+单层硬剔除生效 → 子如实 failed 收束，失败也落盘）→ 启动器出列 → 点开页签（bot 字形 + 截断
+标题 + 任务气泡 + 工具行复用 + 只读说明 + 无 composer）→ 键盘调宽 360→392（ArrowLeft 变宽
+方向正确）+ 双击复位 → 关页签回启动器 → 关面板/重开（localStorage 持久开合态）→ 通知
+`subagent_failed` 分类缺陷当场抓到当场修。走查设置已还原、走查会话/孤儿转录已清、通知清零。
+
+### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 插件贡献槽位（随插件批次）/ §3.28 diff 视图 / ~~§2.5 骨架~~（✅ v2.52）/ ~~§3.16 子 Agent 转录页签~~（✅ v2.52）/ ~~§3.13 通知浮层~~（✅ v2.51）/ 目的地页整版式 §3.29/§3.31）
 
 ---
 

@@ -41,6 +41,9 @@ pub struct AppState {
     /// 会话落盘目录（⑲，`<数据根>/sessions`）：runner 增量镜像 / undo
     /// 重写 / session_list 与启动恢复共用。
     pub sessions_dir: std::path::PathBuf,
+    /// 子会话转录目录（§3.16，`<数据根>/sub-transcripts`）：SubagentTool
+    /// 收束经 SubTranscriptSink 写入，subagent_transcript 命令读出重放。
+    pub sub_transcripts_dir: std::path::PathBuf,
     /// 最近聊过的会话（⑭）：agent_chat 每轮记一次。调度触发目标解析用
     /// ——调度行绑定的旧会话条目在重启后不存在，落到"活会话"不落僵尸。
     pub last_chat: Arc<RwLock<Option<String>>>,

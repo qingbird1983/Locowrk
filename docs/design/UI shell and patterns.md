@@ -171,6 +171,24 @@
   （参考对象里「Git 透镜」「依赖审计」就是这么来的），贡献项带 `插件` 徽章；
 - **面板打开/宽度/页签是跨会话保持的壳状态**，不是某个会话的从属物。
 
+**✅ v2.52 骨架落地（拆批：本批 = 骨架 + §3.16 子 Agent 转录页签这一种内置页签；插件
+贡献槽位随插件批次走 plugin-api 末尾追加，启动器清单只列已实装条目，不发明占位）**：
+
+- **预算**：面板宽 = `clamp(244, 容器宽 − 侧栏宽（折叠算 0）− 450)`，缺省 360；
+  **主区地板 450 是硬的**——拖宽顶到当前预算且侧栏还展开时，**先折叠侧栏**（腾出预算）
+  再继续贴新预算钳制；窗口缩放时实时收口；
+- **拖柄**：`inset-block:0; left:-5px; width:10px; z-30` + 全局锁
+  `data-work-panel-resizing` + `setPointerCapture`；`::after` 2×32 圆角条
+  （`--lw-ink-1` 20%，hover/active/focus/drag 显形，聚焦与拖拽换 `--lw-accent`，
+  聚焦不画外框）；键盘 = `role="separator"` + 方向键 16px + `Home/End` 到预算两端 +
+  双击复位 360；`aria-valuemax` = 当前预算（动态）；
+- **最大化/还原**：最大化 = 宽取当前预算最大（主区保持 450 地板），还原 = 回先前宽度；
+- **壳状态**：开合与宽度持久化进 localStorage 面板偏好（`work-panel.v1`）；页签
+  （进程内）跨会话保持、不跨重启——重启后面板按持久化开合态恢复但页签为空
+  （诚实：子转录文件还在，可从子 Agent 卡/启动器重开）；
+- **入口**：会话顶栏右侧独立成组的开关（`panel` 字形，`aria-pressed`，§2.4）+
+  §3.10 子 Agent 卡上的「看转录」小钮（点卡 = 进页签，卡是入口不是终点）。
+
 ### 2.6 保活与视图规则
 
 | 视图 | 规则 |
@@ -539,6 +557,27 @@ ok <60% / warn 60–99% / danger ≥阈值；无数据（`null`）整个不渲�
   两条通路择一：① **子会话也落盘**再走 `session_history` 重放（推荐：零新事件类型、
   复用重放、跨重启可回看，且不动 ⑮ 的"父转录不掺入"语义）；② 子会话事件走**独立通道**
   只喂面板。推荐 ①。
+
+**✅ v2.52 落地（取推荐 ①，宿主接收器形态，零 ABI 变更）**：
+
+- **落盘**：kernel-agent 新 `SubTranscriptSink` trait（`close(child_id, own_from,
+  &child)`，`SubagentTool` 构造期**可选注入**——headless 不注入 = 维持纯黑盒）；
+  `run_child` 收束时把子**自身段**（`own_from..`，fork 前缀不带）交给宿主；desktop
+  实现写 `<数据根>/sub-transcripts/<child_id>.jsonl`（id 走 `session_file` 白名单
+  校验；写前删旧文件防残留）。**子事件不进父日志**（膨胀归零），⑮"父转录不掺入
+  子内活动"原样不动；
+- **读取**：`subagent_transcript(child_id)` 命令 = 盘上 load + 与 `session_history`
+  **同一 `project_events` 全量投影**（前端数据形状与主转录一致）→ 页签内构造
+  chat store 同款条目数组，**复用 MessageRow / ToolRow 同一套行组件**（§3.7–3.9
+  同一心智模型；近似如实记录：本批平铺过程行、不做过程组合成组——那是 ChatTranscript
+  的 walk 逻辑，后续随面板页签丰富批次接入）；子内 `ApprovalDecided` 同投影成
+  记录条（审批在父侧决策，这里只是记录）；
+- **页签名** = `子 Agent` + 任务 prompt 截断摘要（⑮ `subagent_run` 没有 name 参数，
+  不发明）；bot 字形；可关闭，可多开并存；
+- **只读自证**：页签内不渲染 composer，底部固定一条 `子 Agent 由主 Agent 驱动，
+  无法在此输入。`；
+- **跨重启**：转录文件在，面板页签（进程内）不跨重启——从子 Agent 卡或启动器清单
+  重开即重放（历史会话的子转录同样可看）。
 
 
 ### 3.17 审批决策卡（`components/chat/PermissionCard.vue`）—— 审批**不是弹窗**
@@ -1017,6 +1056,7 @@ settings.json 读取或解析失败时**绝不空白页**：给一个居中的�
 | `llm_probe_window` / `llm_probe_embedding` | 设置分区检测按钮 | 分区内就地显示，不落盘 |
 | `experience_list/delete/clear_all` | 记忆目的地 | 经历区块（可见可删，无编辑语义） |
 | `session_list` / `session_history` | chat store `init` | §2.3 侧栏 + 切换重放（§3.6） |
+| `subagent_transcript`（✅ v2.52） | 工作面板 §3.16 页签 | 工作面板 `SubagentTranscriptTab` 挂载时拉取（盘上 load + 同一投影），只读不订阅 |
 | `pick_directory` | 设置 → 工作区目录 | 原生对话框；返回 `string \| null` |
 
 铁则重申：**UI 永不直接操作 PluginRegistry**（只经 PluginService / 宿主命令）；流式内容
@@ -1353,7 +1393,7 @@ hover 位移（列表里会造成抖动，只允许变色）· chevron 旋转（
 | `agent://context-usage` 载荷扩展 | §3.12 分项（本轮合计 / 生成速度 / 模型用量含缓存 / 工具上下文） | kernel-agent 用量统计 → desktop 事件投影 |
 | 通知记录（应用内持久） | §3.13 | ✅ v2.51：desktop `<数据根>/notifications.json`（cap 100 FIFO）+ `TauriSink` 五类入账（定时触发/子 Agent 收束成败/压缩/审批超时拒绝）+ `lw://notification` 推送 + `notification_list/read_all/read/clear` 命令；⑭ 系统通知兜底并存 |
 | 结果内容字段（富内容） | markdown 代码块/表格已可由正文承载；产物级富内容（图片/文件）待定 | 视工具产物契约 |
-| 子会话转录可观 | §3.16 面板页签 | ①子会话落盘（推荐，复用 `session_history` 重放）或 ②独立事件通道；**不改** ⑮「父转录不掺入子内活动」 |
+| 子会话转录可观 | §3.16 面板页签 | ✅ v2.52：取 ①——kernel-agent `SubTranscriptSink` 可选注入（headless 不注入维持黑盒），desktop 写 `<数据根>/sub-transcripts/<child_id>.jsonl`（只写子自身段），`subagent_transcript(child_id)` 命令同一 `project_events` 重放；**不改** ⑮「父转录不掺入子内活动」 |
 | 会话级权限档位 | §3.11 权限 chip（四档） | 会话元数据存档位；审批门读它做预答；三类硬底线不受档位影响 |
 | 审批决策粒度 | §3.17 三键（拒绝 / 允许本次对话 / 允许一次） | 决策枚举 + 会话级豁免集；现有 `agent_approve` 只有布尔，**需扩** |
 | 审批载荷扩展 | §3.17 风险档 / 理由 / 工作区 / 结构化参数 | 随 `approval-request` 给 `risk` / `reason` / 工作区根 + 工具描述 |

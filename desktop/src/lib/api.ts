@@ -275,6 +275,12 @@ export function subscribeNotificationAdded(
   return listen<NotificationItem>("lw://notification", (e) => onAdded(e.payload));
 }
 
+/** 子 Agent 转录（v2.52 §3.16）：sub-transcripts/<childId> 全量投影，
+ * 与 session_history 同一映射；文件缺席 = reject（页签如实报不可用）。 */
+export function subagentTranscript(childId: string): Promise<AgentEvent[]> {
+  return invoke("subagent_transcript", { childId });
+}
+
 // ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----
 /** 探测 Ollama 模型上下文窗口（token）；失败 reject（UI 提示手动选择）。 */
 export function llmProbeWindow(baseUrl: string, model: string): Promise<number> {

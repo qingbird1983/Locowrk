@@ -196,6 +196,23 @@ export default {
     savedTokens: "{n} tokens saved",
     approvalTimeout: "Approval timed out, denied automatically",
   },
+  // Work panel (§2.5/§3.16, v2.52)
+  panel: {
+    title: "Work panel",
+    launcher: "Launcher",
+    launcherHint:
+      "Sub-agent cards appearing in a chat can be opened here as full transcripts: use the “view transcript” icon on the card, or open from this list.",
+    maximize: "Maximize",
+    restore: "Restore",
+    closePanel: "Close work panel",
+    closeTab: "Close tab",
+    viewTranscript: "View transcript",
+    resize: "Resize work panel",
+    resizeText: "Work panel width {n} pixels",
+    loading: "Loading transcript…",
+    missing: "Sub-transcript unavailable (not persisted or cleaned up)",
+    readonlyNote: "This sub-agent is driven by the main agent; input is not available here.",
+  },
   developer: {
     hint: "Developer and danger switches. Hidden by default: tap the version number at the sidebar bottom 7 times to unlock.",
     allowDeleteRunning: "Allow deleting a running session",

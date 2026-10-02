@@ -6,6 +6,8 @@ import { useChatStore } from "./stores/chat";
 import { useNotificationsStore } from "./stores/notifications";
 import { useSettingsStore } from "./stores/settings";
 import { useShellStore } from "./stores/shell";
+import { useWorkPanelStore } from "./stores/work-panel";
+import WorkPanel from "./components/shell/WorkPanel.vue";
 import ChatTranscript from "./components/ChatTranscript.vue";
 import Composer from "./components/chat/Composer.vue";
 import ContextProgressBar from "./components/ContextProgressBar.vue";
@@ -36,6 +38,7 @@ const approvals = useApprovalsStore();
 const settings = useSettingsStore();
 const shell = useShellStore();
 const notifications = useNotificationsStore();
+const workPanel = useWorkPanelStore();
 /** composer 坞总高：列宽热区下沿（ConversationWidthHandles）的锚。 */
 const composerH = ref(0);
 
@@ -72,6 +75,12 @@ onMounted(() => {
         <ChatTranscript :composer-bottom="composerH" />
         <Composer @height="composerH = $event" />
       </div>
+
+      <!-- 工作面板（§2.5，v2.52）：主区右缘第二展示面，只对对话目的地有
+           意义（§2.4 开关在会话顶栏右侧）；随 chat 区一起挂起/显示 -->
+      <WorkPanel
+        v-if="shell.destination === 'chat' && workPanel.open"
+      />
 
       <!-- 非对话目的地：侧栏右侧铺满，按需挂载 -->
       <DestinationShell

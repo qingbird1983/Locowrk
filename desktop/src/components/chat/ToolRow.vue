@@ -24,6 +24,10 @@ const props = defineProps<{
   awaiting?: boolean;
 }>();
 
+/** §3.10 卡是入口：subagent_run 成功收束且带 child_session_id（v2.37 起
+ * output 携带）→ 头行挂「看转录」小钮，宿主据此开 §3.16 工作面板页签。 */
+const emit = defineEmits<{ openTranscript: [childId: string, title: string] }>();
+
 const { t } = useI18n();
 const settings = useSettingsStore();
 const expanded = ref(props.defaultExpanded ?? false);
@@ -40,6 +44,14 @@ watch(
 
 /** 动作名（§3.18 映射表；表外回落工具 id + 「插件」徽章）。 */
 const action = computed(() => toolAction(props.item.tool));
+
+const childId = computed(() => {
+  if (props.item.tool !== "subagent_run" || props.item.pending || !props.item.ok) return null;
+  return (props.item.output as { child_session_id?: string } | null)?.child_session_id ?? null;
+});
+const transcriptTitle = computed(() =>
+  String((props.item.args as { prompt?: unknown } | null)?.prompt ?? ""),
+);
 const actionLabel = computed(() => {
   const a = action.value;
   if (!a) return props.item.tool;
@@ -170,6 +182,17 @@ async function copyCall() {
           :size="12"
           class="cv-head__chev"
         />
+      </button>
+      <!-- §3.10 卡是入口：看转录（hover 显形，与复制钮同族） -->
+      <button
+        v-if="childId"
+        class="copy-btn tool__copy"
+        type="button"
+        :title="t('panel.viewTranscript')"
+        :aria-label="t('panel.viewTranscript')"
+        @click="childId && emit('openTranscript', childId, transcriptTitle)"
+      >
+        <Icon name="panel" :size="12" />
       </button>
       <button
         class="copy-btn tool__copy"

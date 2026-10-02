@@ -1,11 +1,14 @@
 //! 会话运营命令（v2.49，UI shell 文档 §3.6 行尾 `…` 菜单的后端）：重命名
-//! / 删除 / 搜索 / 导出。薄适配层——文件面在 session_store::persist（经
-//! session_log 薄封装），投影与渲染在 runner / export，这里只接参数。
+//! / 删除 / 搜索 / 导出。§3.16 子转录读取（v2.52）。薄适配层——文件面在
+//! session_store::persist（经 session_log 薄封装），投影与渲染在 runner /
+//! export，这里只接参数。
 
 use tauri::State;
 
-use session_store::SessionSearchHit;
+use session_store::{load_session, session_file, SessionSearchHit};
 
+use crate::events::AgentEvent;
+use crate::runner;
 use crate::state::AppState;
 
 /// 会话重命名：写旁车 `<id>.meta.json` 标题（trim 后空 = 回落自动标题）。
@@ -129,4 +132,24 @@ pub async fn session_export(
     let md = crate::export::render_markdown(&title, &session_id, &events);
     std::fs::write(&path, md).map_err(|e| format!("写入失败 {path}: {e}"))?;
     Ok(path)
+}
+
+/// 子 Agent 转录读取（§3.16，v2.52）：`sub-transcripts/<child_id>.jsonl`
+/// load 后走与 `session_history` **同一** `project_events` 全量投影——
+/// 前端页签的数据形状与主转录一致。文件缺席 = Err（页签如实报不可用）。
+#[tauri::command]
+pub async fn subagent_transcript(
+    child_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<AgentEvent>, String> {
+    let log = session_file(&state.sub_transcripts_dir, &child_id)
+        .map_err(|e| format!("非法子会话 id: {e}"))?;
+    if !log.exists() {
+        return Err(format!("子转录不存在（未落盘或已清理）: {child_id}"));
+    }
+    let (session, skipped) = load_session(&log).map_err(|e| format!("子转录读取失败: {e}"))?;
+    if skipped > 0 {
+        tracing::warn!(child = %child_id, skipped, "sub transcript 坏行跳过");
+    }
+    Ok(runner::project_events(session.events(), &child_id))
 }

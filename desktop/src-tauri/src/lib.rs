@@ -53,6 +53,7 @@ mod search_tools;
 mod session_log;
 mod settings;
 mod state;
+mod sub_transcript;
 mod tool_source;
 mod tray;
 mod usage;
@@ -175,7 +176,8 @@ pub fn run() {
             commands::notification_list,
             commands::notification_read_all,
             commands::notification_read,
-            commands::notification_clear
+            commands::notification_clear,
+            commands::subagent_transcript
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -150,6 +150,22 @@ export default {
     savedTokens: "省下 {n} token",
     approvalTimeout: "审批超时，已自动拒绝",
   },
+  // 工作面板（§2.5/§3.16，v2.52）
+  panel: {
+    title: "工作面板",
+    launcher: "启动器",
+    launcherHint: "对话中出现的子 Agent 卡可在这里查看完整转录：点卡片上的「看转录」图标，或回到这里从清单打开。",
+    maximize: "最大化",
+    restore: "还原",
+    closePanel: "关闭工作面板",
+    closeTab: "关闭页签",
+    viewTranscript: "看转录",
+    resize: "调整工作面板宽度",
+    resizeText: "工作面板宽度 {n} 像素",
+    loading: "转录读取中…",
+    missing: "子转录不存在（未落盘或已清理）",
+    readonlyNote: "子 Agent 由主 Agent 驱动，无法在此输入。",
+  },
   notice: {
     action: {
       details: "查看详情",

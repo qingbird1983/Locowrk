@@ -112,28 +112,24 @@ pub fn init_state(app: AppHandle) -> AppState {
     if settings.shell_unlock_risky() {
         std::env::set_var("LOCOWRK_SHELL_UNLOCK_RISK", "1");
     }
-    // ⑱ 工作区目录 env 注入：与上面不同，fsutil 的 allowed_roots() 每次
-    // 工具调用都读 `LOCOWRK_FS_ROOTS`，因此后续 settings_set 保存后由
+    // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后
     // 命令层重注入即生效，无需重启。
     apply_fs_roots_env(&settings);
 
-    // 模型适配器不特殊，也只是服务（§7.2）。阶段八②：genai 三合一适配器，
-    // 由设置面板驱动（model 未配置时回落演示替身，见 llm/app_llm.rs）。
-    // ⑬：句柄留 AppState 一份给隐式提取（同一实例，不重复注册）。
+    // 模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身）。
+    // ⑬：句柄留 AppState 一份给隐式提取（同一实例）。
     let llm: Arc<dyn LlmService> = Arc::new(AppLlm::new(Arc::clone(&settings)));
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
-    // ⑳ 文本 delta 直推通道（同 agent://chunk；runner 抑制流式步骤的
-    // 整段投影防重复，§12.2 流式事件推送）
+    // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）
     ctx.provide_dyn::<dyn kernel_agent::LlmStreamSink>(Arc::new(
         crate::events::StreamChunkSink::new(app.clone()),
     ));
 
-    // 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
-    // MemoryStore::new 不做 IO（连接按操作开、失败逐次降级），无启动风险。
+    // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储；new 不做 IO
+    // （连接按操作开、失败降级），无启动风险。
     let memory = Arc::new(MemoryStore::new(&root));
 
-    // 经历记忆库（⑬）：宿主自有 experiences.sqlite3；打不开只丢经历，
-    // 事实记忆与聊天不受影响。
+    // 经历记忆库（⑬）：experiences.sqlite3；打不开只丢经历。
     let experiences = match ExperienceDb::open(&root.join("experiences.sqlite3")) {
         Ok(db) => Some(Arc::new(db)),
         Err(e) => {
@@ -143,11 +139,9 @@ pub fn init_state(app: AppHandle) -> AppState {
     };
 
     // agent/request 决策环（exposure 文档 §7，注册次序 = 执行次序）：
-    // ToolExposure 先（先定暴露面，压缩才知道留多少空间）、Memory-Inject
-    // 次（Context 文档 §3.6：记忆是"原料"）、ctx-compact 最后（压缩按含
-    // 注入后的总量分配预算）。三件共享同一模式：配置经 RwLock 注入
-    // （kernel-agent 不依赖设置存储），settings_set 成功后由命令层换入
-    // 即生效。
+    // ToolExposure 先（压缩才知道留多少空间）、Memory-Inject 次、
+    // ctx-compact 最后。三件同模式：配置经 RwLock 注入，settings_set
+    // 后由命令层换入即生效。
     let exposure_cfg: Arc<RwLock<ToolExposureConfig>> =
         Arc::new(RwLock::new(settings.exposure_config()));
     let embed_exposure_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
@@ -221,8 +215,13 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 显式检索通路）+ usage 做空结果高频回退 + ⑬ 语义检索（未配置降级
     // 关键词）。
     let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
-    let sub_tool: Arc<dyn plugin_api::Tool> =
-        Arc::new(SubagentTool::new(Arc::clone(&kernel), Arc::clone(&gate)));
+    // §3.16 子转录接收器：子自身段落 sub-transcripts/（§8.2 通路）
+    let sub_tx = Arc::new(crate::sub_transcript::SubTranscriptStore::new(
+        root.join("sub-transcripts"),
+    ));
+    let sub_tool: Arc<dyn plugin_api::Tool> = Arc::new(
+        SubagentTool::new(Arc::clone(&kernel), Arc::clone(&gate)).with_transcript_sink(sub_tx),
+    );
     let with_host_tools = |src: KernelToolSource| {
         let src = src.with_builtin(Arc::clone(&send_email));
         let src = match &schedules {
@@ -338,6 +337,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         sink,
         sessions,
         sessions_dir,
+        sub_transcripts_dir: root.join("sub-transcripts"),
         last_chat,
         settings,
         compact_cfg,

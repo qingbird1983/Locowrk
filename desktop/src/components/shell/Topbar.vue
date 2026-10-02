@@ -8,11 +8,13 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useShellStore } from "../../stores/shell";
+import { useWorkPanelStore } from "../../stores/work-panel";
 import { Icon } from "../../lib/icons";
 
 const { t } = useI18n();
 const chat = useChatStore();
 const shell = useShellStore();
+const workPanel = useWorkPanelStore();
 
 const title = computed(() => {
   // 首页空态（㉕·对话区①）：无会话打开 = 标题空（§3.14 第一屏）
@@ -96,6 +98,17 @@ function focusSidebarSearch() {
         @click="focusSidebarSearch"
       >
         <Icon name="search" aria-hidden="true" />
+      </button>
+      <!-- 工作面板开关（§2.4/§2.5）：独立成组，只对对话目的地有意义 -->
+      <button
+        class="ctl ml-2"
+        type="button"
+        :aria-pressed="workPanel.open"
+        :title="t('panel.title')"
+        :aria-label="t('panel.title')"
+        @click="workPanel.toggle()"
+      >
+        <Icon name="panel" :size="14" aria-hidden="true" />
       </button>
     </div>
   </header>

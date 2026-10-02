@@ -13,9 +13,11 @@
 
 mod filter;
 mod run;
+mod sink;
 mod tool;
 
 pub use filter::FilterToolSource;
+pub use sink::SubTranscriptSink;
 pub use tool::SubagentTool;
 
 use std::collections::HashMap;

@@ -24,11 +24,15 @@ fn call(tool: &str, id: &str) -> AgentEvent {
 }
 
 fn result(id: &str, ok: bool, error: Option<&str>) -> AgentEvent {
+    result_with(id, ok, json!(null), error)
+}
+
+fn result_with(id: &str, ok: bool, output: serde_json::Value, error: Option<&str>) -> AgentEvent {
     AgentEvent::ToolResult {
         session_id: "s1".into(),
         call_id: id.into(),
         ok,
-        output: json!(null),
+        output,
         error: error.map(Into::into),
     }
 }
@@ -87,11 +91,23 @@ fn mark_read_semantics_and_clear() {
 #[test]
 fn draft_extracts_five_kinds_and_pairing() {
     let mut pending = HashMap::new();
-    // 子 Agent 成功收束：配对出通知
+    // 子 Agent 成功收束：配对出通知（output.status = completed 才算完成）
     assert!(draft_from_event(&call("subagent_run", "c1"), &mut pending).is_none());
-    let d = draft_from_event(&result("c1", true, None), &mut pending).unwrap();
+    let d = draft_from_event(
+        &result_with("c1", true, json!({"status": "completed"}), None),
+        &mut pending,
+    )
+    .unwrap();
     assert_eq!(d.kind, NotificationKind::SubagentDone);
     assert_eq!(d.session_id.as_deref(), Some("s1"));
+    // 工具闭合成功但子任务 failed/预算耗尽 → 如实入账为失败（走查实机抓到）
+    draft_from_event(&call("subagent_run", "c5"), &mut pending);
+    let d = draft_from_event(
+        &result_with("c5", true, json!({"status": "failed"}), None),
+        &mut pending,
+    )
+    .unwrap();
+    assert_eq!(d.kind, NotificationKind::SubagentFailed);
     // 失败收束：kind 换 + 错误摘要进 label
     draft_from_event(&call("subagent_run", "c2"), &mut pending);
     let d = draft_from_event(&result("c2", false, Some("预算耗尽")), &mut pending).unwrap();

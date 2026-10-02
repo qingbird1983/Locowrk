@@ -2704,4 +2704,4 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.51。逐批落点补记已迁至 [CHANGELOG.md](CHANGELOG.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*
+*文档版本：v2.52。逐批落点补记已迁至 [CHANGELOG.md](CHANGELOG.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*

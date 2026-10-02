@@ -215,6 +215,7 @@ pub fn draft_from_event(
             session_id,
             call_id,
             ok,
+            output,
             error,
             ..
         } => {
@@ -222,8 +223,12 @@ pub fn draft_from_event(
             if tool != "subagent_run" {
                 return None;
             }
+            // 工具闭合成功 ≠ 子任务成功：收束汇报 output.status（completed/
+            // budget_exhausted/timeout/failed）才是子任务的真实结局，按它
+            // 如实分类（走查实机抓到：失败收束曾被记成「已完成」）。
+            let completed = output.get("status").and_then(|v| v.as_str()) == Some("completed");
             Some(NotificationDraft {
-                kind: if *ok {
+                kind: if *ok && completed {
                     NotificationKind::SubagentDone
                 } else {
                     NotificationKind::SubagentFailed

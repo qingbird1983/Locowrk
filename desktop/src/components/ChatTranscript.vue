@@ -18,6 +18,8 @@ import {
   type ToolItem,
 } from "../stores/chat";
 import { useSettingsStore } from "../stores/settings";
+import { useWorkPanelStore } from "../stores/work-panel";
+import { clip } from "../lib/format";
 import { Icon } from "../lib/icons";
 import type { ApprovalRequest } from "../types";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
@@ -32,6 +34,12 @@ const { t } = useI18n();
 const chat = useChatStore();
 const settings = useSettingsStore();
 const approvals = useApprovalsStore();
+const workPanel = useWorkPanelStore();
+
+/** §3.10：子 Agent 卡是入口——点「看转录」开工作面板 §3.16 页签。 */
+function onOpenTranscript(childId: string, title: string) {
+  workPanel.openSubTab(childId, clip(title, 24));
+}
 const bottom = ref<HTMLElement | null>(null);
 
 const props = defineProps<{
@@ -182,6 +190,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
                     :item="item"
                     :awaiting="!!pendingFor(item.callId)"
                     :default-expanded="expandLive && item.ts !== undefined"
+                    @open-transcript="onOpenTranscript"
                   />
                   <!-- §3.17 决策卡紧跟触发它的工具行（内联，不是弹窗） -->
                   <PermissionCard
