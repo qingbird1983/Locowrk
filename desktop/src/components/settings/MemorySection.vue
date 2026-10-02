@@ -4,10 +4,15 @@
  * Memory.md §6.2）。开关 + 每轮注入条数（1–20，缺省 5）；保存即生效
  * （后端换入 Memory-Inject 活配置，下一轮请求就按新值注入）。
  * 管理入口在顶层"记忆"页（搜索 / 编辑 / 删除 / 清空）。
+ * 行版式（§3.32·七 v3.5）：布尔项用 SettingsToggle。
  */
 import { reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settings";
+import SettingsGroup from "./SettingsGroup.vue";
+import SettingsRow from "./SettingsRow.vue";
+import SettingsSaveRow from "./SettingsSaveRow.vue";
+import SettingsToggle from "./SettingsToggle.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -39,45 +44,34 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-line p-4">
-    <h3 class="text-xs font-semibold">{{ t("settings.memoryTitle") }}</h3>
-    <p class="text-[11px] text-ink-4">{{ t("settings.memoryHint") }}</p>
+  <SettingsGroup :hint="t('settings.memoryHint')">
+    <SettingsRow :title="t('settings.memoryEnabled')">
+      <SettingsToggle v-model="form.enabled" :label="t('settings.memoryEnabled')" />
+    </SettingsRow>
 
-    <label class="flex cursor-pointer items-center gap-2 text-xs">
-      <input v-model="form.enabled" type="checkbox" class="accent-[var(--lw-accent)]" />
-      <span>{{ t("settings.memoryEnabled") }}</span>
-    </label>
-
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.memoryTopK") }}</span>
+    <SettingsRow
+      :title="t('settings.memoryTopK')"
+      :hint="t('settings.memoryTopKHint')"
+      control-id="memory-topk"
+    >
       <input
+        id="memory-topk"
         v-model.number="form.topK"
         type="number"
         min="1"
         max="20"
-        class="block w-32 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
+        class="w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
       />
-      <span class="text-[11px] text-ink-5">{{ t("settings.memoryTopKHint") }}</span>
-    </label>
+    </SettingsRow>
 
     <!-- ⑬ 隐式提取：缺省关（易记垃圾），开启后回合结束异步提事实+经历 -->
-    <label class="flex cursor-pointer items-center gap-2 text-xs">
-      <input v-model="form.autoExtract" type="checkbox" class="accent-[var(--lw-accent)]" />
-      <span>{{ t("settings.memoryAutoExtract") }}</span>
-    </label>
-    <p class="text-[11px] text-ink-5">{{ t("settings.memoryAutoExtractHint") }}</p>
+    <SettingsRow
+      :title="t('settings.memoryAutoExtract')"
+      :hint="t('settings.memoryAutoExtractHint')"
+    >
+      <SettingsToggle v-model="form.autoExtract" :label="t('settings.memoryAutoExtract')" />
+    </SettingsRow>
+  </SettingsGroup>
 
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="settings.saving"
-        @click="save"
-      >
-        {{ t("settings.save") }}
-      </button>
-      <span v-if="settings.savedFlash" class="text-xs text-ok">
-        {{ t("settings.saved") }}
-      </span>
-    </div>
-  </section>
+  <SettingsSaveRow class="mt-3" @save="save" />
 </template>

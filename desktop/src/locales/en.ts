@@ -295,15 +295,15 @@ export default {
     dataDirHint:
       "Plugins, the lockfile and settings.json live here. Override with the LOCOWRK_DATA_DIR environment variable (restart required).",
     sessionsMemory:
-      "Sessions currently live in memory and are cleared on restart; on-disk persistence lands in a later version.",
-    langTitle: "Language / 语言",
+      "Sessions are appended event-by-event as JSONL under sessions/ in the data directory; the latest session resumes on startup.",
+    langTitle: "Interface language",
     langSystem: "Follow system",
     langZh: "中文",
     langEn: "English",
     langHint:
       "Applies immediately and is remembered. \"Follow system\" shows Chinese on zh environments, English otherwise.",
     // ⑰ Appearance section: light/dark theme
-    themeTitle: "Appearance",
+    themeTitle: "Theme",
     themeSystem: "Follow system",
     themeLight: "Light",
     themeDark: "Dark",
@@ -326,7 +326,7 @@ export default {
     // S1 shell governance section
     shellTitle: "Shell",
     shellHint:
-      "Read-only commands (ls / cat / grep / git status|log|diff|show) run via shell_read without approval, and only inside allowed file roots; other whitelisted commands go through the shell tool with per-call approval.",
+      "Read-only commands (ls / cat / grep / git status{'|'}log{'|'}diff{'|'}show) run via shell_read without approval, and only inside allowed file roots; other whitelisted commands go through the shell tool with per-call approval.",
     shellUnlock: "Allow rm / sudo / chmod-class high-risk commands to reach approval (refused by default)",
     shellUnlockWarning:
       "When enabled, deletion, privilege, permission and disk commands are no longer refused outright — each call opens a confirmation you approve, and the responsibility is yours. Interpreter and network commands (python / bash / curl, ...) stay permanently locked regardless of this switch.",
@@ -345,6 +345,7 @@ export default {
     fsRootsHint:
       "Root folders the tool file surface (files, edit, git, shell) may access; changes apply immediately. Without any, tools can only reach the data directory.",
     fsRootsAdd: "Add folder…",
+    fsRootsRemove: "Remove",
     fsRootsEmpty: "No workspace folders — tools can only reach the data directory.",
     embeddingTitle: "Embedding model (semantic search)",
     embeddingHint:
@@ -359,6 +360,7 @@ export default {
     embeddingProbing: "Probing…",
     embeddingDim: "Reachable, vector dim {n}",
     embeddingDetectFail: "Detect failed:",
+    embeddingProbeTitle: "Connection test",
     pluginsTitle: "Plugins",
     pluginsHint: "Idle auto-disable — never automatic by default (prompt only); enabling means you accept background disabling.",
     autoDisableDays: "Auto-disable after (days)",

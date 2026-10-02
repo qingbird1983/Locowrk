@@ -100,6 +100,12 @@
   --lw-conv-handle: rgb(255 255 255 / 0.18);
   --lw-conv-handle-active: rgb(255 255 255 / 0.32);
 
+  /* 设置行开关（§3.32·七 v3.5：off 轨与 hover 档、off 滑钮；
+     on 轨 = accent、on 滑钮 = accent-ink，不设独立 token） */
+  --lw-switch-track: rgb(255 255 255 / 0.1);
+  --lw-switch-track-hover: rgb(255 255 255 / 0.18);
+  --lw-switch-knob: #afafaf;
+
   /* 实色三元组（tailwind 消费，保透明度修饰符） */
   --lw-rgb-bg: 24 24 24;
   --lw-rgb-bg-side: 0 0 0;
@@ -167,6 +173,11 @@
   /* 主区列宽双柄（§2.7：亮色 12%/20%，同一条规则不读成"亮缝"） */
   --lw-conv-handle: rgb(26 28 31 / 0.12);
   --lw-conv-handle-active: rgb(26 28 31 / 0.2);
+
+  /* 设置行开关（§3.32·七 v3.5，同暗色三 token） */
+  --lw-switch-track: rgb(26 28 31 / 0.1);
+  --lw-switch-track-hover: rgb(26 28 31 / 0.18);
+  --lw-switch-knob: #ffffff;
 
   --lw-rgb-bg: 255 255 255;
   --lw-rgb-bg-side: 243 243 243;

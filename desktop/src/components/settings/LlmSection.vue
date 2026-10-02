@@ -5,6 +5,7 @@
  * apiKeySet 提示"留空保持不变"。
  * S2（清单 §5 信息归属）：模型上下文窗口是模型属性，下拉自上下文管理
  * 区迁入；Ollama 走 /api/show 自动检测，云端模型查静态档案兜底。
+ * 行版式（§3.32·七 v3.5）：左行名右控件，文本输入 min 140 自适应。
  */
 import { computed, reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -12,6 +13,9 @@ import { compactNumber } from "../../lib/format";
 import { profileWindow } from "../../lib/model-profiles";
 import { llmProbeWindow } from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
+import SettingsGroup from "./SettingsGroup.vue";
+import SettingsRow from "./SettingsRow.vue";
+import SettingsSaveRow from "./SettingsSaveRow.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -92,106 +96,101 @@ function clearKey() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-line p-4">
-    <h3 class="text-xs font-semibold">{{ t("settings.llmTitle") }}</h3>
-    <p class="text-[11px] text-ink-4">{{ t("settings.llmHint") }}</p>
-
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.provider") }}</span>
-      <select v-model="form.provider" class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5">
+  <SettingsGroup :hint="t('settings.llmHint')">
+    <SettingsRow :title="t('settings.provider')" control-id="llm-provider">
+      <select
+        id="llm-provider"
+        v-model="form.provider"
+        class="w-44 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
+      >
         <option value="openai">OpenAI</option>
         <option value="anthropic">Anthropic</option>
         <option value="ollama">Ollama</option>
       </select>
-    </label>
+    </SettingsRow>
 
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.model") }}</span>
+    <SettingsRow :title="t('settings.model')" control-id="llm-model">
       <input
+        id="llm-model"
         v-model="form.model"
         type="text"
-        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
+        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
       />
-    </label>
+    </SettingsRow>
 
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.baseUrl") }}</span>
+    <SettingsRow :title="t('settings.baseUrl')" control-id="llm-base-url">
       <input
+        id="llm-base-url"
         v-model="form.baseUrl"
         type="text"
         :placeholder="t('settings.baseUrlPlaceholder')"
-        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
+        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
       />
-    </label>
+    </SettingsRow>
 
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.apiKey") }}</span>
+    <SettingsRow :title="t('settings.apiKey')" control-id="llm-api-key">
       <input
+        id="llm-api-key"
         v-model="form.apiKey"
         type="password"
         autocomplete="off"
         :placeholder="settings.view?.llm.apiKeySet ? t('settings.apiKeyKeep') : t('settings.apiKeyPlaceholder')"
-        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
+        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
       />
-    </label>
+    </SettingsRow>
 
-    <!-- 上下文窗口（S2 迁入）：压缩阈值的换算基准，档位呈现（§3.5） -->
-    <div class="space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.window") }}</span>
-      <div class="flex items-center gap-2">
-        <select
-          v-model="form.windowChoice"
-          class="block min-w-0 flex-1 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
-        >
-          <option value="unset">{{ t("settings.windowUnset") }}</option>
-          <option v-for="p in PRESETS" :key="p" :value="String(p)">
-            {{ compactNumber(p) }}
-          </option>
-          <option value="custom">{{ t("settings.windowCustom") }}</option>
-        </select>
-        <button
-          v-if="form.provider === 'ollama'"
-          class="shrink-0 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
-          :disabled="form.probing"
-          @click="probeWindow"
-        >
-          {{ form.probing ? t("settings.windowProbing") : t("settings.windowDetect") }}
-        </button>
-      </div>
-      <p v-if="form.probeError" class="text-[11px] text-danger">
-        {{ t("settings.windowDetectFail") }} {{ form.probeError }}
-      </p>
-    </div>
-    <label v-if="form.windowChoice === 'custom'" class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.windowCustomLabel") }}</span>
+    <!-- 上下文窗口（S2 迁入）：压缩阈值的换算基准，档位呈现（§3.5）；
+         Ollama 检测钮与下拉同行（控件列 gap-2） -->
+    <SettingsRow :title="t('settings.window')" control-id="llm-window">
+      <select
+        id="llm-window"
+        v-model="form.windowChoice"
+        class="w-44 min-w-0 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
+      >
+        <option value="unset">{{ t("settings.windowUnset") }}</option>
+        <option v-for="p in PRESETS" :key="p" :value="String(p)">
+          {{ compactNumber(p) }}
+        </option>
+        <option value="custom">{{ t("settings.windowCustom") }}</option>
+      </select>
+      <button
+        v-if="form.provider === 'ollama'"
+        type="button"
+        class="shrink-0 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+        :disabled="form.probing"
+        @click="probeWindow"
+      >
+        {{ form.probing ? t("settings.windowProbing") : t("settings.windowDetect") }}
+      </button>
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.windowChoice === 'custom'"
+      :title="t('settings.windowCustomLabel')"
+      control-id="llm-window-custom"
+    >
       <input
+        id="llm-window-custom"
         v-model.number="form.customWindow"
         type="number"
         min="100"
         step="1000"
-        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
+        class="w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
       />
-    </label>
+    </SettingsRow>
+    <p v-if="form.probeError" class="px-1 text-[11px] text-danger">
+      {{ t("settings.windowDetectFail") }} {{ form.probeError }}
+    </p>
+  </SettingsGroup>
 
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="settings.saving"
-        @click="save"
-      >
-        {{ t("settings.save") }}
-      </button>
-      <button
-        v-if="settings.view?.llm.apiKeySet"
-        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-3 transition hover:bg-surface-1"
-        :disabled="settings.saving"
-        @click="clearKey"
-      >
-        {{ t("settings.clearKey") }}
-      </button>
-      <span v-if="settings.savedFlash" class="text-xs text-ok">
-        {{ t("settings.saved") }}
-      </span>
-    </div>
-  </section>
+  <SettingsSaveRow class="mt-3" @save="save">
+    <button
+      v-if="settings.view?.llm.apiKeySet"
+      type="button"
+      class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-3 transition hover:bg-surface-1"
+      :disabled="settings.saving"
+      @click="clearKey"
+    >
+      {{ t("settings.clearKey") }}
+    </button>
+  </SettingsSaveRow>
 </template>

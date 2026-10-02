@@ -3,11 +3,16 @@
  * 设置分区：对话行为（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好）。
  * 列宽偏好走 settings 不走 localStorage（§2.7：随设置同步与备份，拖拽
  * 对话区边缘双柄同写这一份）；保存即生效。
+ * 行版式（§3.32·七 v3.5）：左行名右控件；布尔项用 SettingsToggle。
  */
 import { reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settings";
 import { CHAT_CONTENT_WIDTH_DEFAULT, CHAT_CONTENT_WIDTH_MIN } from "../../lib/chat-width";
+import SettingsGroup from "./SettingsGroup.vue";
+import SettingsRow from "./SettingsRow.vue";
+import SettingsSaveRow from "./SettingsSaveRow.vue";
+import SettingsToggle from "./SettingsToggle.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -42,13 +47,12 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-line p-4">
-    <h3 class="text-xs font-semibold">{{ t("settings.chatTitle") }}</h3>
-
-    <div class="space-y-1">
-      <label class="block text-xs" for="chat-width-input">
-        {{ t("settings.chatWidthTitle") }}
-      </label>
+  <SettingsGroup>
+    <SettingsRow
+      :title="t('settings.chatWidthTitle')"
+      :hint="t('settings.chatWidthHint')"
+      control-id="chat-width-input"
+    >
       <input
         id="chat-width-input"
         v-model.number="form.width"
@@ -56,31 +60,19 @@ function save() {
         :min="CHAT_CONTENT_WIDTH_MIN"
         :max="4000"
         step="20"
-        class="w-28 rounded-lg border border-line bg-page px-2 py-1 text-xs outline-none"
+        class="w-24 rounded-lg border border-line-strong bg-page px-2 py-1 text-xs outline-none"
       />
-      <p class="text-[11px] text-ink-4">{{ t("settings.chatWidthHint") }}</p>
-    </div>
+    </SettingsRow>
 
-    <label class="flex cursor-pointer items-start gap-2 text-xs">
-      <input
-        v-model="form.expandToolProcess"
-        type="checkbox"
-        class="mt-0.5 accent-[var(--lw-accent)]"
-      />
-      <span>{{ t("settings.expandToolTitle") }}</span>
-    </label>
+    <SettingsRow :title="t('settings.expandToolTitle')">
+      <SettingsToggle v-model="form.expandToolProcess" :label="t('settings.expandToolTitle')" />
+    </SettingsRow>
 
-    <label class="flex cursor-pointer items-start gap-2 text-xs">
-      <input
-        v-model="form.enterToSend"
-        type="checkbox"
-        class="mt-0.5 accent-[var(--lw-accent)]"
-      />
-      <span>{{ t("settings.enterToSendTitle") }}</span>
-    </label>
+    <SettingsRow :title="t('settings.enterToSendTitle')">
+      <SettingsToggle v-model="form.enterToSend" :label="t('settings.enterToSendTitle')" />
+    </SettingsRow>
 
-    <div class="space-y-1">
-      <span class="block text-xs">{{ t("settings.usageReadoutTitle") }}</span>
+    <SettingsRow :title="t('settings.usageReadoutTitle')">
       <div class="flex w-fit gap-1 rounded-lg border border-line-strong p-1">
         <button
           v-for="o in ['used', 'remaining']"
@@ -97,22 +89,8 @@ function save() {
           {{ t(`settings.usageReadout_${o}`) }}
         </button>
       </div>
-    </div>
+    </SettingsRow>
+  </SettingsGroup>
 
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="settings.saving"
-        @click="save"
-      >
-        {{ t("settings.save") }}
-      </button>
-      <span v-if="settings.savedFlash" class="text-xs text-ok">
-        {{ t("settings.saved") }}
-      </span>
-    </div>
-    <p v-if="settings.error" class="rounded-lg bg-danger/10 p-2 text-[11px] text-danger">
-      {{ settings.error }}
-    </p>
-  </section>
+  <SettingsSaveRow class="mt-3" @save="save" />
 </template>

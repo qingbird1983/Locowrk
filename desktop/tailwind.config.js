@@ -27,6 +27,12 @@ export default {
         composer: t("bg-composer"),
         raised: t("raised"),
         wash: { 1: t("wash-1"), 2: t("wash-2"), 3: t("wash-3") },
+        // 设置行开关（§3.32·七 v3.5；自带 alpha，禁加修饰符）
+        switch: {
+          track: t("switch-track"),
+          "track-hover": t("switch-track-hover"),
+          knob: t("switch-knob"),
+        },
         // 文本五级（自带 alpha，禁加修饰符）
         ink: { 1: t("ink-1"), 2: t("ink-2"), 3: t("ink-3"), 4: t("ink-4"), 5: t("ink-5") },
         // 线（自带 alpha，禁加修饰符；1px 边框只许浮层用）

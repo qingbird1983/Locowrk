@@ -8,6 +8,9 @@
 import { reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settings";
+import SettingsGroup from "./SettingsGroup.vue";
+import SettingsRow from "./SettingsRow.vue";
+import SettingsSaveRow from "./SettingsSaveRow.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -33,34 +36,23 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-line p-4">
-    <h3 class="text-xs font-semibold">{{ t("settings.pluginsTitle") }}</h3>
-    <p class="text-[11px] text-ink-4">{{ t("settings.pluginsHint") }}</p>
-
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.autoDisableDays") }}</span>
+  <SettingsGroup :hint="t('settings.pluginsHint')">
+    <SettingsRow
+      :title="t('settings.autoDisableDays')"
+      :hint="t('settings.autoDisableDaysHint')"
+      control-id="plugins-auto-disable-days"
+    >
       <input
+        id="plugins-auto-disable-days"
         v-model.number="form.autoDisableIdleDays"
         type="number"
         min="0"
         max="365"
         step="1"
-        class="block w-32 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5"
+        class="w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
       />
-      <span class="text-[11px] text-ink-5">{{ t("settings.autoDisableDaysHint") }}</span>
-    </label>
+    </SettingsRow>
+  </SettingsGroup>
 
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="settings.saving"
-        @click="save"
-      >
-        {{ t("settings.save") }}
-      </button>
-      <span v-if="settings.savedFlash" class="text-xs text-ok">
-        {{ t("settings.saved") }}
-      </span>
-    </div>
-  </section>
+  <SettingsSaveRow class="mt-3" @save="save" />
 </template>

@@ -1,8 +1,14 @@
 <script setup lang="ts">
-/** 设置分区：全局快捷键（settings.json `shortcut` 区，保存即重注册）。 */
+/**
+ * 设置分区：全局快捷键（settings.json `shortcut` 区，保存即重注册）。
+ * 行版式（§3.32·七 v3.5）：左行名右控件。
+ */
 import { reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settings";
+import SettingsGroup from "./SettingsGroup.vue";
+import SettingsRow from "./SettingsRow.vue";
+import SettingsSaveRow from "./SettingsSaveRow.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -23,29 +29,21 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-2 rounded-xl border border-line p-4">
-    <h3 class="text-xs font-semibold">{{ t("settings.shortcutTitle") }}</h3>
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.shortcut") }}</span>
+  <SettingsGroup>
+    <SettingsRow
+      :title="t('settings.shortcut')"
+      :hint="t('settings.shortcutHint')"
+      control-id="shortcut-input"
+    >
       <input
+        id="shortcut-input"
         v-model="form.shortcut"
         type="text"
         :placeholder="t('settings.shortcutPlaceholder')"
-        class="block w-48 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 font-mono placeholder:text-ink-5"
+        class="w-44 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-xs placeholder:text-ink-5"
       />
-    </label>
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="settings.saving"
-        @click="save"
-      >
-        {{ t("settings.save") }}
-      </button>
-      <span v-if="settings.savedFlash" class="text-xs text-ok">
-        {{ t("settings.saved") }}
-      </span>
-    </div>
-    <p class="text-[11px] text-ink-4">{{ t("settings.shortcutHint") }}</p>
-  </section>
+    </SettingsRow>
+  </SettingsGroup>
+
+  <SettingsSaveRow class="mt-3" @save="save" />
 </template>

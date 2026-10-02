@@ -289,14 +289,15 @@ export default {
     sessionsTitle: "会话存储位置",
     dataDir: "数据根目录",
     dataDirHint: "插件、lockfile 与设置文件存放于此；可用环境变量 LOCOWRK_DATA_DIR 覆盖（改后重启生效）。",
-    sessionsMemory: "会话当前保存在内存中，重启后清空；落盘持久化在后续版本接入。",
-    langTitle: "语言 / Language",
+    sessionsMemory:
+      "会话逐事件落盘在数据目录的 sessions/ 子目录（JSONL），重启自动恢复最近会话继续。",
+    langTitle: "界面语言",
     langSystem: "跟随系统",
     langZh: "中文",
     langEn: "English",
     langHint: "立即生效并记住选择；「跟随系统」时中文环境显示中文，其他显示英文。",
     // ⑰ 外观分区：明暗主题三档
-    themeTitle: "外观",
+    themeTitle: "主题",
     themeSystem: "跟随系统",
     themeLight: "浅色",
     themeDark: "深色",
@@ -318,7 +319,7 @@ export default {
     // S1 shell 治理分区
     shellTitle: "命令终端",
     shellHint:
-      "只读命令（ls / cat / grep / git status|log|diff|show）经 shell_read 免审批执行，且只能访问允许根内的文件；其余白名单命令走 shell 工具、逐条审批。",
+      "只读命令（ls / cat / grep / git status{'|'}log{'|'}diff{'|'}show）经 shell_read 免审批执行，且只能访问允许根内的文件；其余白名单命令走 shell 工具、逐条审批。",
     shellUnlock: "允许 rm / sudo / chmod 等高危命令进入审批（默认直接拒绝）",
     shellUnlockWarning:
       "开启后，删除、提权、改权限、写磁盘类命令不再被直接拒绝，而是弹出确认框由你逐条放行——放行责任在你。解释器与网络类命令（python / bash / curl 等）仍然永久禁止，不受此开关影响。",
@@ -342,6 +343,7 @@ export default {
     embeddingProbing: "检测中…",
     embeddingDim: "连通，向量维度 {n}",
     embeddingDetectFail: "检测失败：",
+    embeddingProbeTitle: "连通检测",
     pluginsTitle: "插件管理",
     pluginsHint: "闲置自动停用——默认永不自动停用（只提示），开启即表示同意后台停用。",
     autoDisableDays: "自动停用天数",
@@ -354,6 +356,7 @@ export default {
     fsRootsHint:
       "工具文件面（文件、编辑、git、shell）可访问的根目录；增删即存即生效。未添加时工具仅能访问数据目录。",
     fsRootsAdd: "添加目录…",
+    fsRootsRemove: "移除",
     fsRootsEmpty: "未添加工作区目录——工具仅能访问数据目录。",
     // ⑨ 上下文管理分区（真分区，替换壳批次占位）
     contextTitle: "上下文管理",

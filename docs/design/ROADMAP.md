@@ -371,6 +371,20 @@
 | markdown §6.5 | ✅ v2.42 | lib/markdown.ts（marked + DOMPurify + 代码块增强：语言标签头行 + 复制钮，figure.code-block 形态）+ style.css 全局 .md 规则（段落/列表/行内代码/代码块 bg-inset 圆角 12 12.5px mono/表格满列宽 wash-1 表头 1px 行线无外框/引用）；助手正文整列宽不再是气泡；消息行动作区（复制 + 时间 HH:MM hover 显形，历史重放无时间戳不显示）；纯文本 pre-wrap 渲染缺口补齐 |
 | 走查修复 | ✅ v2.42 | ① vue-i18n 占位文案裸 `@` = linked 语法 → 消息编译异常整页白屏（新增文案带 `@`/`|`/`{}` 必须转义——纪律入 §7 备忘）；② 列宽拖拽改 window 级 pointermove/up 监听（元素级在 capture 失配时失效）；③ Composer IME 组合中 Enter 不发送 |
 
+### ㉕·fix 设置页行版式：左设置名、右设置参数/按钮（✅ 已完成，v2.43）
+
+> 用户 2026-10-02 裁定：设置行 = 左行名、右控件。批首按纪律先改 UI shell 文档
+> §3.32·七（v3.5 行版式规范，参考对象 `.settings-row`/`.settings-toggle` 逐值照搬）
+> 再动码。实机走查（tauri dev + WebView2 CDP 截图，亮/暗双主题）：12 个分区全部
+> 行式落位、开关翻转与 aria、行名 label 聚焦控件、暗色瓦片/开关 token 正确。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 行模式组件 | ✅ v2.43 | `SettingsRow.vue`（行 = 瓦片卡：wash-1 圆角 14、内边距 14/16、左行名 13px/500 + hint + #detail 动态取值、右控件列右对齐 max-w 240 min-h 38、controlId 连 label、wide 逃生口）+ `SettingsGroup.vue`（13px/600 小标题分块 + #action 块级动作 + 行间 gap 6px 代发丝线）+ `SettingsSaveRow.vue`（保存行左对齐 + 已保存闪烁；错误条收敛到板面级一处） |
+| SettingsToggle 开关 | ✅ v2.43 | 32×20 全圆角轨道 + 16px 滑钮（on = translateX(12px)）；新 token `--lw-switch-track(-hover)`/`--lw-switch-knob`（暗 = 白 10%/18% + gray-300 钮，亮 = 近黑 10%/18% + 白钮；on 轨 = accent、on 钮 = accent-ink 不设独立 token）+ tailwind `switch` 角色组；`role="switch"` + aria-checked；`:enabled:hover` 禁用态 hover 不变色；**设置行内布尔项一律开关、复选框退场**（§3.32·七 成规） |
+| 12 分区改行式 | ✅ v2.43 | 外观/语言（就地生效无保存钮）/对话（宽度数字 + 两开关 + 读数分段）/上下文（滑条 wide、当前值·建议·警告走 #detail；策略竖排 radio → 下拉）/快捷键/记忆/插件/命令终端（开关 + 行外警告条与重启提示）/模型/嵌入（文本输入 min-140 自适应、检测行 #detail 报维度或错误）/工具与暴露（三分块：截断行组、fsRoots 行内移除、快照整块）/会话与数据（只读路径整块）；卡内与页头重复的分区 h3 退役 |
+| i18n 修正 | ✅ v2.43 | 新键 embeddingProbeTitle / fsRootsRemove（zh/en）；陈旧文案纠偏：sessionsMemory「会话保存在内存中重启清空」不符 ⑲ 事实 → 「逐事件落盘 sessions/ 重启恢复」；**走查修真实缺陷：shellHint 裸 `\|` 被 vue-i18n 当复数分隔符、面板只显示"log"**（`{'\|'}` 转义；§七规则 11 扩为 @/\|/{}/保留字符必须转义——㉕ `@` 白屏同源第二例） |
+
 ### ㉖ UI 设计落地⑤：审批决策卡 + 会话运营（⬜ §3.17 三键卡（后端：决策枚举/风险档/超时）/ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联）
 
 ### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）

@@ -6,11 +6,15 @@
  * 智能层整体缺席（自动降级：检索退关键词、经历不写不注入），不报错。
  * "检测"按钮嵌一条测试文本验证端点连通并显示向量维度；API Key 只落盘
  * 不出 IPC（同主 Key 纪律）。
+ * 行版式（§3.32·七 v3.5）：检测结果（维度/报错）走行左 #detail。
  */
 import { reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { llmProbeEmbedding } from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
+import SettingsGroup from "./SettingsGroup.vue";
+import SettingsRow from "./SettingsRow.vue";
+import SettingsSaveRow from "./SettingsSaveRow.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -77,77 +81,71 @@ function clearKey() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-line p-4">
-    <h3 class="text-xs font-semibold">{{ t("settings.embeddingTitle") }}</h3>
-    <p class="text-[11px] text-ink-4">{{ t("settings.embeddingHint") }}</p>
-
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.embeddingModel") }}</span>
+  <SettingsGroup :hint="t('settings.embeddingHint')">
+    <SettingsRow :title="t('settings.embeddingModel')" control-id="embedding-model">
       <input
+        id="embedding-model"
         v-model="form.model"
         type="text"
         placeholder="nomic-embed-text / text-embedding-3-small"
-        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
+        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
       />
-    </label>
+    </SettingsRow>
 
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.embeddingBaseUrl") }}</span>
+    <SettingsRow
+      :title="t('settings.embeddingBaseUrl')"
+      :hint="t('settings.embeddingBaseUrlHint')"
+      control-id="embedding-base-url"
+    >
       <input
+        id="embedding-base-url"
         v-model="form.baseUrl"
         type="text"
         :placeholder="fallbackHint(settings.view?.embedding.baseUrl, settings.view?.llm.provider ?? '') || t('settings.embeddingBaseUrlPlaceholder')"
-        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
+        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
       />
-      <span class="text-[11px] text-ink-5">{{ t("settings.embeddingBaseUrlHint") }}</span>
-    </label>
+    </SettingsRow>
 
-    <label class="block space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.embeddingApiKey") }}</span>
+    <SettingsRow :title="t('settings.embeddingApiKey')" control-id="embedding-api-key">
       <input
+        id="embedding-api-key"
         v-model="form.apiKey"
         type="password"
         autocomplete="off"
         :placeholder="settings.view?.embedding.apiKeySet ? t('settings.apiKeyKeep') : t('settings.embeddingApiKeyPlaceholder')"
-        class="block w-full rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 placeholder:text-ink-5"
+        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
       />
-    </label>
+    </SettingsRow>
 
-    <div class="flex items-center gap-2">
+    <SettingsRow :title="t('settings.embeddingProbeTitle')">
+      <template #detail>
+        <p v-if="form.probeDim > 0" class="mt-1 text-xs text-ok">
+          {{ t("settings.embeddingDim", { n: form.probeDim }) }}
+        </p>
+        <p v-if="form.probeError" class="mt-1 text-[11px] text-danger">
+          {{ t("settings.embeddingDetectFail") }} {{ form.probeError }}
+        </p>
+      </template>
       <button
-        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+        type="button"
+        class="shrink-0 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="form.probing"
         @click="probe"
       >
         {{ form.probing ? t("settings.embeddingProbing") : t("settings.embeddingDetect") }}
       </button>
-      <span v-if="form.probeDim > 0" class="text-xs text-ok">
-        {{ t("settings.embeddingDim", { n: form.probeDim }) }}
-      </span>
-    </div>
-    <p v-if="form.probeError" class="text-[11px] text-danger">
-      {{ t("settings.embeddingDetectFail") }} {{ form.probeError }}
-    </p>
+    </SettingsRow>
+  </SettingsGroup>
 
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="settings.saving"
-        @click="save"
-      >
-        {{ t("settings.save") }}
-      </button>
-      <button
-        v-if="settings.view?.embedding.apiKeySet"
-        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-3 transition hover:bg-surface-1"
-        :disabled="settings.saving"
-        @click="clearKey"
-      >
-        {{ t("settings.clearKey") }}
-      </button>
-      <span v-if="settings.savedFlash" class="text-xs text-ok">
-        {{ t("settings.saved") }}
-      </span>
-    </div>
-  </section>
+  <SettingsSaveRow class="mt-3" @save="save">
+    <button
+      v-if="settings.view?.embedding.apiKeySet"
+      type="button"
+      class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-3 transition hover:bg-surface-1"
+      :disabled="settings.saving"
+      @click="clearKey"
+    >
+      {{ t("settings.clearKey") }}
+    </button>
+  </SettingsSaveRow>
 </template>

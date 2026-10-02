@@ -6,12 +6,16 @@
  * 保存即生效（后端换入 ctx-compact 活配置）。
  * S2（清单 §5）：窗口下拉迁模型配置区——阈值为百分比，不需绝对窗口；
  * 预览换算的窗口读 llm 区（未设置回落 FALLBACK 保守保护）。
+ * 行版式（§3.32·七 v3.5）：动态取值（当前值/建议/警告）走行左 #detail。
  */
 import { computed, reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { compactNumber } from "../../lib/format";
 import { FALLBACK_WINDOW_TOKENS, suggestedThreshold } from "../../lib/context";
 import { useSettingsStore } from "../../stores/settings";
+import SettingsGroup from "./SettingsGroup.vue";
+import SettingsRow from "./SettingsRow.vue";
+import SettingsSaveRow from "./SettingsSaveRow.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -54,61 +58,45 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-line p-4">
-    <h3 class="text-xs font-semibold">{{ t("settings.contextTitle") }}</h3>
-    <p class="text-[11px] text-ink-4">{{ t("settings.contextHint") }}</p>
-
-    <!-- 压缩阈值滑条：百分比与绝对 token 双显示（§3.2.2）；绝对数按
-         §3.5 档位（≈51.2K），不再露出 52,428.8 这类机器精度 -->
-    <div class="space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.threshold") }}</span>
+  <SettingsGroup :hint="t('settings.contextHint')">
+    <!-- 压缩阈值滑条：滑条在右（wide 放开 240 上限），当前值/建议/警告
+         走左列 #detail（§3.2.2 双显示，绝对数按 §3.5 档位） -->
+    <SettingsRow :title="t('settings.threshold')" wide>
+      <template #detail>
+        <p class="mt-1 text-xs text-ink-3">
+          {{ t("settings.thresholdValue", { pct: form.thresholdPct, tokens: compactNumber(thresholdTokens) }) }}
+        </p>
+        <p v-if="suggestedPct != null" class="mt-0.5 text-[11px] text-ink-4">
+          {{ t("settings.thresholdSuggest", { pct: suggestedPct }) }}
+          <span class="text-ink-5">{{ t("settings.thresholdSuggestHint") }}</span>
+        </p>
+        <p v-if="form.thresholdPct < 20" class="mt-0.5 text-[11px] text-warn">
+          ⚠ {{ t("settings.thresholdLowWarning") }}
+        </p>
+      </template>
       <input
         v-model.number="form.thresholdPct"
         type="range"
         min="10"
         max="90"
         step="10"
-        class="w-full accent-[var(--lw-accent)]"
+        class="w-48 accent-[var(--lw-accent)]"
       />
-      <p class="text-ink-3">
-        {{ t("settings.thresholdValue", { pct: form.thresholdPct, tokens: compactNumber(thresholdTokens) }) }}
-      </p>
-      <p v-if="suggestedPct != null" class="text-[11px] text-ink-4">
-        {{ t("settings.thresholdSuggest", { pct: suggestedPct }) }}
-        <span class="text-ink-5">{{ t("settings.thresholdSuggestHint") }}</span>
-      </p>
-      <p
-        v-if="form.thresholdPct < 20"
-        class="text-[11px] text-warn"
-      >
-        ⚠ {{ t("settings.thresholdLowWarning") }}
-      </p>
-    </div>
+    </SettingsRow>
 
-    <!-- 压缩策略三档（§3.3） -->
-    <div class="space-y-1 text-xs">
-      <span class="text-ink-3">{{ t("settings.strategy") }}</span>
-      <label
-        v-for="s in STRATEGIES"
-        :key="s"
-        class="flex cursor-pointer items-center gap-2 py-0.5"
+    <!-- 压缩策略三档（§3.3）：互斥多选一用下拉（§3.32·七 v3.5） -->
+    <SettingsRow :title="t('settings.strategy')" control-id="context-strategy">
+      <select
+        id="context-strategy"
+        v-model="form.strategy"
+        class="w-44 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
       >
-        <input v-model="form.strategy" type="radio" :value="s" class="accent-[var(--lw-accent)]" />
-        <span>{{ t(`settings.strategy_${s}`) }}</span>
-      </label>
-    </div>
+        <option v-for="s in STRATEGIES" :key="s" :value="s">
+          {{ t(`settings.strategy_${s}`) }}
+        </option>
+      </select>
+    </SettingsRow>
+  </SettingsGroup>
 
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="settings.saving"
-        @click="save"
-      >
-        {{ t("settings.save") }}
-      </button>
-      <span v-if="settings.savedFlash" class="text-xs text-ok">
-        {{ t("settings.saved") }}
-      </span>
-    </div>
-  </section>
+  <SettingsSaveRow class="mt-3" @save="save" />
 </template>

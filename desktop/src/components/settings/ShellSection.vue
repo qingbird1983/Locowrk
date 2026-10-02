@@ -4,10 +4,15 @@
  * 约束最小化）。高危命令解锁开关——默认 rm/sudo/chmod 等直接拒绝，
  * 开启后改为进审批（仍要点确认，不是直接放行）；解释器/包装/网络类
  * 保持硬锁。开关经插件加载前的 env 注入，重启后生效。
+ * 行版式（§3.32·七 v3.5）：开关行 + 警告/重启提示按 §四 写在行外下方。
  */
 import { reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../../stores/settings";
+import SettingsGroup from "./SettingsGroup.vue";
+import SettingsRow from "./SettingsRow.vue";
+import SettingsSaveRow from "./SettingsSaveRow.vue";
+import SettingsToggle from "./SettingsToggle.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -31,33 +36,17 @@ function save() {
 </script>
 
 <template>
-  <section class="space-y-3 rounded-xl border border-line p-4">
-    <h3 class="text-xs font-semibold">{{ t("settings.shellTitle") }}</h3>
-    <p class="text-[11px] text-ink-4">{{ t("settings.shellHint") }}</p>
+  <SettingsGroup :hint="t('settings.shellHint')">
+    <SettingsRow :title="t('settings.shellUnlock')">
+      <SettingsToggle v-model="form.unlockRisky" :label="t('settings.shellUnlock')" />
+    </SettingsRow>
+  </SettingsGroup>
 
-    <label class="flex cursor-pointer items-start gap-2 text-xs">
-      <input v-model="form.unlockRisky" type="checkbox" class="mt-0.5 accent-[var(--lw-accent)]" />
-      <span>{{ t("settings.shellUnlock") }}</span>
-    </label>
-    <p class="rounded-lg bg-warn/10 p-2 text-[11px] text-warn">
+  <div class="space-y-2 px-1">
+    <p class="rounded-lg bg-warn/10 p-2 text-[11px] leading-relaxed text-warn">
       ⚠️ {{ t("settings.shellUnlockWarning") }}
     </p>
     <p class="text-[11px] text-ink-5">{{ t("settings.shellRestart") }}</p>
-
-    <div class="flex items-center gap-2">
-      <button
-        class="rounded-lg bg-wash-2 px-4 py-1.5 text-xs font-semibold transition hover:bg-wash-3 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="settings.saving"
-        @click="save"
-      >
-        {{ t("settings.save") }}
-      </button>
-      <span v-if="settings.savedFlash" class="text-xs text-ok">
-        {{ t("settings.saved") }}
-      </span>
-    </div>
-    <p v-if="settings.error" class="rounded-lg bg-danger/10 p-2 text-[11px] text-danger">
-      {{ settings.error }}
-    </p>
-  </section>
+    <SettingsSaveRow class="pt-1" @save="save" />
+  </div>
 </template>
