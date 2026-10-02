@@ -113,15 +113,20 @@ pub async fn session_history(
 }
 
 /// 审批决策（§12.1）：回填 `agent://approval-request` 对应的请求。
-/// 与会话锁无交集，审批弹窗打开时聊天通道仍可安全阻塞等待。
+/// `scope = Some("session")` 且放行 = §3.17「允许本次对话」（豁免集记在
+/// ApprovalHub，本会话后续同工具不再问）。与会话锁无交集，决策卡在屏时
+/// 聊天通道仍可安全阻塞等待。
 #[tauri::command]
 pub async fn agent_approve(
     request_id: String,
     allowed: bool,
     reason: Option<String>,
+    scope: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    state.approval.decide(&request_id, allowed, reason)
+    state
+        .approval
+        .decide(&request_id, allowed, reason, scope.as_deref())
 }
 
 /// 未决审批列表（§13.1 审批中心）：前端刷新/重连时补拉。

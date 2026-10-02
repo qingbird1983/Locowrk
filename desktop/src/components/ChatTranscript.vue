@@ -10,11 +10,19 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { contextUndoCompact } from "../lib/api";
-import { useChatStore, type ChatItem, type SystemItem, type ToolItem } from "../stores/chat";
+import { useApprovalsStore } from "../stores/approvals";
+import {
+  useChatStore,
+  type ChatItem,
+  type SystemItem,
+  type ToolItem,
+} from "../stores/chat";
 import { useSettingsStore } from "../stores/settings";
 import { Icon } from "../lib/icons";
+import type { ApprovalRequest } from "../types";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
 import MessageRow from "./chat/MessageRow.vue";
+import PermissionCard from "./chat/PermissionCard.vue";
 import SystemNotice from "./chat/SystemNotice.vue";
 import ThinkingRow from "./chat/ThinkingRow.vue";
 import ToolRow from "./chat/ToolRow.vue";
@@ -23,6 +31,7 @@ import TurnProcess from "./chat/TurnProcess.vue";
 const { t } = useI18n();
 const chat = useChatStore();
 const settings = useSettingsStore();
+const approvals = useApprovalsStore();
 const bottom = ref<HTMLElement | null>(null);
 
 const props = defineProps<{
@@ -81,6 +90,25 @@ const expandLive = computed(
   () => !!settings.view?.chat.expandToolProcess && !chat.replaying,
 );
 
+/** 待决审批按 call_id 索引（request_id == call_id，§3.17 内联卡紧跟
+ * 触发它的工具行）。 */
+const pendingByCall = computed(() => {
+  const m = new Map<string, ApprovalRequest>();
+  for (const p of approvals.pending) m.set(p.request_id, p);
+  return m;
+});
+function pendingFor(callId: string): ApprovalRequest | undefined {
+  return pendingByCall.value.get(callId);
+}
+/** 找不到宿主工具行的待决卡（如调度注入的其他会话轮）兜底挂转录尾——
+ * 不允许决策卡无声消失。 */
+const orphanPending = computed(() =>
+  approvals.pending.filter(
+    (p) =>
+      !chat.items.some((i) => i.kind === "tool" && i.callId === p.request_id),
+  ),
+);
+
 watch(
   () => chat.items.length,
   async () => {
@@ -115,12 +143,27 @@ async function onNoticeAction(item: SystemItem, action: string) {
   <div class="relative min-h-0 flex-1">
     <div class="scroller scroll-y">
       <div class="column conv-w">
-        <p
-          v-if="chat.items.length === 0"
-          class="mt-16 text-center text-sm text-ink-4"
-        >
-          {{ t("chat.empty") }}
-        </p>
+        <!-- 首页空态（§3.14）：吉祥物 + 一行问句，垂直居中于转录区，
+             composer 仍在底部原位（启动落首页，㉕·对话区①） -->
+        <div v-if="chat.items.length === 0" class="home">
+          <svg
+            class="home__mascot"
+            viewBox="0 0 72 72"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M22 47.5a9.5 9.5 0 0 1-1.4-18.9 13 13 0 0 1 25.2-4.6 10 10 0 0 1 1.7 23.5Z"
+            />
+            <circle cx="30.6" cy="32.4" r="1.9" fill="currentColor" stroke="none" />
+            <circle cx="41.4" cy="32.4" r="1.9" fill="currentColor" stroke="none" />
+          </svg>
+          <h1 class="home__title">{{ t("chat.homeTitle") }}</h1>
+        </div>
 
         <template v-for="block in blocks" :key="block.key">
           <!-- 轮次过程组：连续过程项（工具/思考）；组内只有过程 -->
@@ -134,11 +177,19 @@ async function onNoticeAction(item: SystemItem, action: string) {
             >
               <template v-for="item in block.items" :key="item.id">
                 <ThinkingRow v-if="item.kind === 'thinking'" :text="item.text" />
-                <ToolRow
-                  v-else
-                  :item="item"
-                  :default-expanded="expandLive && item.ts !== undefined"
-                />
+                <template v-else>
+                  <ToolRow
+                    :item="item"
+                    :awaiting="!!pendingFor(item.callId)"
+                    :default-expanded="expandLive && item.ts !== undefined"
+                  />
+                  <!-- §3.17 决策卡紧跟触发它的工具行（内联，不是弹窗） -->
+                  <PermissionCard
+                    v-if="pendingFor(item.callId)"
+                    :req="pendingFor(item.callId)!"
+                    :queue="approvals.queueCount"
+                  />
+                </template>
               </template>
             </TurnProcess>
           </template>
@@ -181,6 +232,14 @@ async function onNoticeAction(item: SystemItem, action: string) {
             </div>
           </template>
         </template>
+
+        <!-- 无宿主行的待决卡兜底（§3.17：不允许决策卡无声消失） -->
+        <PermissionCard
+          v-for="req in orphanPending"
+          :key="req.request_id"
+          :req="req"
+          :queue="approvals.queueCount"
+        />
         <div ref="bottom" />
       </div>
     </div>
@@ -220,6 +279,30 @@ async function onNoticeAction(item: SystemItem, action: string) {
   width: min(100%, var(--lw-content-max));
   margin-inline: auto;
   padding-bottom: 180px;
+}
+/* 首页空态（§3.14 / 原型 S1）：单线云朵 + 26px 一行问句（400 / -0.02em），
+ * 垂直居中于转录区；composer 留在底部原位 */
+.home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  /* 顶栏 46 + composer 坞 ≈190 + 底部渐隐 mask 预留 */
+  min-height: calc(100vh - 46px - 236px);
+}
+.home__mascot {
+  width: 72px;
+  height: 72px;
+  color: var(--lw-ink-1);
+}
+.home__title {
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--lw-ink-1);
+  text-align: center;
 }
 .error-row {
   display: flex;

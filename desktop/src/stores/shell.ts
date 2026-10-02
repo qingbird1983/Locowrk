@@ -25,6 +25,9 @@ export const useShellStore = defineStore("shell", {
     sidebarCollapsed: prefs.collapsed,
     /** 设置当前分区（§3.32 板面切换模型；重开设置页保持上次看过的板面）。 */
     settingsSection: "appearance" as SettingsSectionId,
+    /** composer 聚焦令牌（§3.17：决策后焦点回输入框——批完立刻能接着
+     * 打字）。PermissionCard 决策成功后自增，Composer watch 聚焦。 */
+    composerFocusTick: 0,
   }),
   actions: {
     setDestination(dest: Destination) {

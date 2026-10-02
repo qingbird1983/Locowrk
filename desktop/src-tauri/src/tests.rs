@@ -88,6 +88,7 @@ pub(crate) fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::ContextCompacted { .. } => "context_compacted",
         AgentEvent::ScheduleFired { .. } => "schedule_fired",
         AgentEvent::UserMessage { .. } => "user_message",
+        AgentEvent::ApprovalResolved { .. } => "approval_resolved",
     }
 }
 

@@ -120,6 +120,9 @@ fn project_new_events(
 /// 的单点实现。
 pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEvent> {
     let mut out = Vec::new();
+    // ApprovalDecided 只有 call_id（㉕·对话区①）：tool 从同切片的 ToolCall
+    // 按 call_id 找回——ToolCall 先行落日志（纪律 4），同一步内必在决策之前。
+    let mut call_tools: HashMap<String, String> = HashMap::new();
     for e in events {
         match e {
             // ㉕·fix：用户消息进投影（此前落 `_` 被丢，重启后历史会话
@@ -147,14 +150,17 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                 side_effect,
                 plugin_version,
                 ..
-            } => out.push(AgentEvent::ToolCall {
-                session_id: session_id.into(),
-                call_id: call_id.0.clone(),
-                tool: tool.clone(),
-                args: args.clone(),
-                side_effect: side_effect_str(side_effect).into(),
-                plugin_version: plugin_version.to_string(),
-            }),
+            } => {
+                call_tools.insert(call_id.0.clone(), tool.clone());
+                out.push(AgentEvent::ToolCall {
+                    session_id: session_id.into(),
+                    call_id: call_id.0.clone(),
+                    tool: tool.clone(),
+                    args: args.clone(),
+                    side_effect: side_effect_str(side_effect).into(),
+                    plugin_version: plugin_version.to_string(),
+                });
+            }
             SessionEvent::ToolResult {
                 call_id,
                 output,
@@ -180,6 +186,24 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                     to_tokens: *to_tokens,
                     strategy: strategy.clone(),
                     summary_preview: summary.chars().take(200).collect(),
+                });
+            }
+            SessionEvent::ApprovalDecided {
+                call_id,
+                allowed,
+                reason,
+            } => {
+                // ㉕·对话区① §3.17：决策记录条的唯一来源——实时增量与历史
+                // 重放同源，"谁批过什么"重启后也在转录里
+                out.push(AgentEvent::ApprovalResolved {
+                    session_id: session_id.into(),
+                    call_id: call_id.0.clone(),
+                    tool: call_tools
+                        .get(&call_id.0)
+                        .cloned()
+                        .unwrap_or_else(|| call_id.0.clone()),
+                    allowed: *allowed,
+                    reason: reason.clone(),
                 });
             }
             _ => {}

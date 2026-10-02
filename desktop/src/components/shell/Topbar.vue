@@ -14,11 +14,14 @@ const { t } = useI18n();
 const chat = useChatStore();
 const shell = useShellStore();
 
-const title = computed(
-  () =>
+const title = computed(() => {
+  // 首页空态（㉕·对话区①）：无会话打开 = 标题空（§3.14 第一屏）
+  if (chat.items.length === 0) return "";
+  return (
     chat.sessions.find((s) => s.id === chat.sessionId)?.title ??
-    t("sidebar.untitled"),
-);
+    t("sidebar.untitled")
+  );
+});
 
 function focusSidebarSearch() {
   shell.setDestination("chat");

@@ -37,9 +37,15 @@ export function contextUndoCompact(sessionId: string): Promise<number> {
   return invoke("context_undo_compact", { sessionId });
 }
 
-/** 回填审批决策（§12.1）。与已处理/未知的请求返回 reject。 */
-export function approve(requestId: string, allowed: boolean): Promise<void> {
-  return invoke("agent_approve", { requestId, allowed });
+/** 回填审批决策（§12.1 / §3.17）。scope="session" 且放行 = 允许本次对话
+ * （豁免集记在后端 ApprovalHub，本会话后续同工具不再问）。
+ * 与已处理/未知的请求返回 reject（含超时已被后端自动拒绝的请求）。 */
+export function approve(
+  requestId: string,
+  allowed: boolean,
+  scope?: "session",
+): Promise<void> {
+  return invoke("agent_approve", { requestId, allowed, scope: scope ?? null });
 }
 
 /** 未决审批补拉（前端刷新/重连时，事件可能已错过）。 */
@@ -56,6 +62,8 @@ const CHANNELS = [
   "agent://context-compacted",
   // ⑭ 定时触发（搭车修复：chat store 有处理分支但本表漏列的死分支）
   "agent://schedule-fired",
+  // ㉕·对话区①：审批结果投影（决策记录条 + 摘除待决卡）
+  "agent://approval-resolved",
 ] as const;
 
 export function subscribeAgentEvents(
@@ -64,6 +72,16 @@ export function subscribeAgentEvents(
   return Promise.all(
     CHANNELS.map((ch) => listen<AgentEvent>(ch, (e) => onEvent(e.payload))),
   );
+}
+
+/** 审批结果订阅（㉕·对话区①）：approvals store 专用——待决卡摘除；
+ * 决策记录条由 chat store 的全量订阅消费同一通道。 */
+export function subscribeApprovalResolved(
+  onResolved: (e: Extract<AgentEvent, { kind: "approval_resolved" }>) => void,
+): Promise<UnlistenFn[]> {
+  return listen<AgentEvent>("agent://approval-resolved", (e) =>
+    onResolved(e.payload as Extract<AgentEvent, { kind: "approval_resolved" }>),
+  ).then((un) => [un]);
 }
 
 export function subscribeApprovals(

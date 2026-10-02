@@ -18,8 +18,7 @@ export default {
     back: "Back to app",
   },
   chat: {
-    empty:
-      "Send any message to start. The model calls enabled plugin tools as needed; irreversible tools raise an approval request first.",
+    homeTitle: "What do you want to do in Locowrk today?",
     placeholder: "Type / use commands · {'@'} reference files",
     send: "Send",
     newSession: "New chat",
@@ -69,6 +68,7 @@ export default {
     params: "Arguments",
     result: "Result",
     running: "Running…",
+    awaitingApproval: "Awaiting approval",
     success: "Success",
     failed: "Failed",
     copyCall: "Copy call",
@@ -123,6 +123,9 @@ export default {
     // ⑮ Sub-agent (in-chat notices for subagent_run spawn/finish)
     subagentStarted: "Sub-agent dispatched: {prompt}",
     subagentDone: "Sub-agent finished: {summary}",
+    // §3.17 approval decision record rows (projection-only source)
+    approvalAllowed: "Allowed · {action}",
+    approvalDenied: "Denied · {action}",
   },
   // Idle badge (IdleBadge, ⑩ wired per exposure doc §8.4/§11.3): backend
   // sends structured IdleInfo only; the frontend renders human phrasing.
@@ -190,15 +193,28 @@ export default {
     },
   },
   approval: {
-    title: "Confirmation required",
-    subtitle:
-      "This tool has an irreversible side effect. Review the arguments before deciding.",
-    toolLabel: "Tool",
-    argsLabel: "Arguments",
+    // §3.17 inline permission card (ApprovalModal retired; approval is
+    // not a modal)
+    cardTitle: "Permission needed",
+    queue: "{n} more pending",
+    riskHigh: "High risk",
+    riskMedium: "Medium risk",
+    riskLow: "Low risk",
+    askLead: "Allow ",
+    askTail: " to run?",
+    inputLabel: "Input",
+    inputCopy: "Copy input",
+    envProject: "Project {path}",
+    envTemp: "Temporary session",
+    timeoutHint: "Auto-denied in {n} s if unanswered",
+    timeoutNow: "Auto-denying on timeout…",
     deny: "Deny",
-    allow: "Allow",
+    allowSession: "Allow for this chat",
+    allowOnce: "Allow once",
     // ⑮ Tag for calls spawned by a sub-agent (session_id differs)
     subagentTag: "Sub-agent call",
+    decisionFailed: "Failed to submit decision: {reason}",
+    pendingBadge: "Approval awaiting decision",
   },
   market: {
     discover: "Discover",

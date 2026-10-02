@@ -19,6 +19,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
+import { useShellStore } from "../../stores/shell";
 import { Icon } from "../../lib/icons";
 import ContextUsagePopover from "./ContextUsagePopover.vue";
 
@@ -27,6 +28,7 @@ const emit = defineEmits<{ height: [h: number] }>();
 const { t } = useI18n();
 const chat = useChatStore();
 const settings = useSettingsStore();
+const shell = useShellStore();
 
 const draft = ref("");
 const ta = ref<HTMLTextAreaElement | null>(null);
@@ -74,6 +76,14 @@ function onKeydown(e: KeyboardEvent) {
   e.preventDefault();
   send();
 }
+
+// §3.17：审批决策后焦点回 composer——批完立刻能接着打字
+watch(
+  () => shell.composerFocusTick,
+  () => {
+    if (shell.destination === "chat") ta.value?.focus();
+  },
+);
 
 // 坞总高（含底部 16px 内边距）上报：列宽热区下沿要停在 composer 顶部
 let ro: ResizeObserver | null = null;

@@ -10,7 +10,8 @@ export type AgentEvent =
   | ContextUsageEvent
   | ContextCompactedEvent
   | ScheduleFiredEvent
-  | UserMessageEvent;
+  | UserMessageEvent
+  | ApprovalResolvedEvent;
 
 export interface ChunkEvent {
   kind: "chunk";
@@ -90,16 +91,30 @@ export interface UserMessageEvent {
   content: string;
 }
 
+/** 审批结果（㉕·对话区① §3.17）：ApprovalDecided 的投影（agent://
+ * approval-resolved）——决策记录条的唯一来源，实时增量与历史重放同源。
+ * request_id == call_id（同一 CallId），前端据此摘除待决卡。 */
+export interface ApprovalResolvedEvent {
+  kind: "approval_resolved";
+  session_id: string;
+  call_id: string;
+  tool: string;
+  allowed: boolean;
+  reason?: string | null;
+}
+
 /** 审批请求载荷（agent://approval-request）。与 events.rs 的
  * ApprovalRequestPayload 对齐（snake_case 字段）。session_id（⑮）=
  * 发起调用的会话；子 Agent 派生的调用带 `{parent}-sub-{n}`，
- * ApprovalModal 据此打标识徽章。 */
+ * PermissionCard 据此打标识徽章。description（㉕·对话区①）= 工具自述，
+ * 决策卡理由行数据源。 */
 export interface ApprovalRequest {
   request_id: string;
   tool: string;
   args: unknown;
   side_effect: string;
   session_id?: string | null;
+  description?: string | null;
 }
 
 /** 市场目录条目（plugin_registry_list 返回项；versions 升序，末位 latest；

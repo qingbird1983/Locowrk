@@ -3,7 +3,15 @@
 import { defineStore } from "pinia";
 import { chat, sessionHistory, sessionList, subscribeAgentEvents } from "../lib/api";
 import { clip, compactNumber } from "../lib/format";
+import { toolAction } from "../lib/tool-summary";
+import { i18n } from "../i18n";
 import type { AgentEvent, SessionMeta } from "../types";
+
+/** §3.18 动作名（审批记录条用）；表外工具回落工具 id。 */
+function actionLabel(tool: string): string {
+  const a = toolAction(tool);
+  return a ? i18n.global.t(a.key, a.params ?? {}) : tool;
+}
 
 export type ToolItem = {
   id: number;
@@ -69,11 +77,9 @@ export const useChatStore = defineStore("chat", {
   actions: {
     async init() {
       await subscribeAgentEvents((e) => this.onEvent(e));
-      // ⑲ 持久化恢复：有历史会话则接最近一条继续（onEvent 重放路径在
-      // switchSession）；全新安装保持生成的新 id。
+      // ㉕·对话区①（用户裁定）：启动落首页空态——不再自动接最近会话，
+      // 继续哪条由用户从侧栏点开；列表照常拉（侧栏要有内容）。
       await this.refreshSessions();
-      const latest = this.sessions[0];
-      if (latest) await this.switchSession(latest.id);
     },
     /** 拉会话列表（⑲）：init 与每轮收束后刷新。 */
     async refreshSessions() {
@@ -179,6 +185,15 @@ export const useChatStore = defineStore("chat", {
           // ⑭ 定时触发：SystemNotice 告知（无动作按钮；触发的助手回复
           // 以 chunk 跟进。窗口不在位时后端另发系统通知兜底）
           this.pushNotice("notice.scheduleFired", { title: e.title });
+          break;
+        case "approval_resolved":
+          // ㉕·对话区① §3.17 决策记录条：投影唯一来源（实时增量与历史
+          // 重放同源，无双条）；"做过什么决定"是可审计事实。被拒调用的
+          // 失败工具行由 tool_result 分支自理，这里只补审计陈述。
+          this.pushNotice(
+            e.allowed ? "notice.approvalAllowed" : "notice.approvalDenied",
+            { action: actionLabel(e.tool) },
+          );
           break;
         case "context_usage":
           this.contextUsage = { used: e.used, threshold: e.threshold, windowTokens: e.window_tokens ?? 0 };

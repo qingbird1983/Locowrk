@@ -467,7 +467,31 @@ check_length OK；CDP 走查逐项数值取证（见各行）+ 亮暗两主题�
 
 验证：vue-tsc+vite 构建过、cargo test 95 绿（+1）、clippy 0、fmt、check_length OK。
 
-### ㉖ UI 设计落地⑤：审批决策卡 + 会话运营（⬜ §3.17 三键卡（后端：决策枚举/风险档/超时）/ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联）
+### ㉕·对话区① 首屏空态 + §3.17 审批决策卡（✅ 已完成，v2.48）
+
+> 用户裁定（2026-10-02）：对话区按原型 HTML + UI shell 文档**先都完成再细节微调**，
+> 从首屏开始；原型/文档不精确 1:1，明显不合理处自行权衡（不一根筋照搬）；
+> **后端为前端服务——冲突时改后端适配前端**（硬边界，重申）。设置页抛光确立的
+> 细节规范**全局适用**（§七 规则 15 落档）。UI shell 文档 §3.6/§3.17/§七 先行补记再动码。
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 首屏空态 S1 | ✅ v2.48 | **启动落首页**（用户裁定，⑲"重启接最近会话"在 UI 层退役）：`chat.init()` 不再自动 switchSession，列表照常拉；空转录 = §3.14 首页——单线云朵吉祥物 72px + 26px/400/-0.02em 问句垂直居中，composer 原位，顶栏标题空；⌘K/侧栏点开即进会话 |
+| §3.17 内联决策卡 | ✅ v2.48 | `chat/PermissionCard.vue` 六段卡**紧跟宿主工具行**渲染（ChatTranscript 按 `request_id==call_id` 注入；无宿主行兜底挂转录尾）：头行（需要权限+排队数+子 Agent 标识+风险胶囊）/ 提问行（**§3.18 中文动作名**——原型裸工具 id 与纪律冲突，以文档为准）/ 理由行（`ToolSpec.description` 进载荷）/ 参数区（顶层键值行、bg-inset、max-h 240、复制）/ 环境行（fsRoots[0] 或 临时会话）/ 动作行（秒数倒计显示 + 三键，主键=允许一次）；风险染底 `side_effect` 映射缺省按高；决策后焦点回 composer；**ApprovalModal 退役删除** |
+| 后端三件（改后端适配前端） | ✅ v2.48 | ①「允许本次对话」= ApprovalHub 进程内豁免集 `(session_id, tool)` 命中即 resolve 直接放行不再问（Kernel 照写 ApprovalDecided 逐条留审计）；②**超时守夜**：请求置位即 spawn 计时（缺省 100s，测试可注入），抢到移除权 = 未响应 → fail-closed 拒绝（§8.3-5 阈值待裁定）；③载荷 +`description`；`agent_approve` +`scope` |
+| 决策记录条投影 | ✅ v2.48 | `ApprovalDecided` 此前同样落 `_` 通配——`project_events` 新分支 → `agent://approval-resolved`（tool 从同切片 ToolCall 按 call_id 找回），**实时增量与历史重放同源**，"谁批过什么"重启后还在；chat store 消费推 SystemNotice（已允许/已拒绝 · 动作名），approvals store 同通道摘待决卡（超时路径也有兜底）；被拒调用照旧以失败 ToolResult 闭合（失败工具行自动展开） |
+| 搭车 | ✅ v2.48 | ToolRow 状态词「等待审批」（审批未决 ≠ 执行中）；侧栏当前会话行待决 danger 点（§3.17 卡不在视野的兜底）；§七 规则 15（设置页细节规范全局适用：2px 行间隙/字号阶梯/明暗双形态/浮层间距，同一特性全局一套实现） |
+| 测试 | ✅ v2.48 | +2：`session_scope_exempts_same_tool_next_call`（scope=session 放行 → 同会话同工具不再推请求、其他会话照问、豁免放行逐条落 ApprovalDecided）、`timeout_guard_denies_when_unanswered`（短超时守夜 → fail-closed 拒绝落日志 + 失败 ToolResult 闭合）；denied 路径投影断言更新（tool_call → approval_resolved → tool_result） |
+
+验证：vue-tsc+vite 构建过、cargo test 97 绿（+2）、clippy 0、fmt、check_length OK。
+实机走查（tauri dev + CDP 截图）：首屏空态（吉祥物+问句+composer 原位+顶栏空标题）；
+真实轮审批链全通——拒绝 →「已拒绝 · 派生」记录条+子 Agent 收束通知+模型如实报告；
+100s 守夜超时拒绝**实机真实发生**（fail-closed 理由落转录）；切会话再切回重放完整
+恢复用户气泡+记录条（㉕·fix 直接受益证据）；豁免按会话隔离（parent 豁免 subagent_run、
+子 session 的 shell 照问）。缓办：§3.30 模型选择器（settings 只存单 provider+model，
+无模型清单数据源——`llm_list_models` 后端立起前不发明空壳选型器）。
+
+### ㉖ UI 设计落地⑤：会话运营（⬜ §3.6 重命名·删除·导出·搜索（后端命令）/ §8.2 会话↔工作区关联；~~§3.17 三键卡~~ → 已随 ㉕·对话区① 落地 v2.48）
 
 ### ㉗ UI 设计落地⑥：工作面板 + 通知（⬜ §2.5 面板与插件贡献槽位 / §3.16 子 Agent 转录页签（后端：子会话落盘）/ §3.28 diff 视图 / §3.13 通知浮层（后端：应用内通知）/ 目的地页整版式 §3.29/§3.31）
 

@@ -18,7 +18,7 @@ export default {
     back: "返回应用",
   },
   chat: {
-    empty: "发送任意消息开始对话。模型会按需调用已启用的插件工具；不可逆工具会先请求审批。",
+    homeTitle: "今天想在 Locowrk 里做点什么？",
     placeholder: "输入 / 使用命令 · {'@'} 引用文件",
     send: "发送",
     newSession: "新会话",
@@ -69,6 +69,7 @@ export default {
     params: "参数",
     result: "结果",
     running: "执行中…",
+    awaitingApproval: "等待审批",
     success: "成功",
     failed: "失败",
     copyCall: "复制调用",
@@ -121,6 +122,9 @@ export default {
     // ⑮ 子 Agent（subagent_run 派生/收束的会话内告知）
     subagentStarted: "已派生子 Agent：{prompt}",
     subagentDone: "子 Agent 收束：{summary}",
+    // ㉕·对话区① §3.17 审批决策记录条（投影唯一来源：实时与重放同源）
+    approvalAllowed: "已允许 · {action}",
+    approvalDenied: "已拒绝 · {action}",
   },
   // 闲置徽章（IdleBadge，⑩ 接线 exposure 文档 §8.4/§11.3）：后端只给
   // 结构化 IdleInfo，前端按档位渲染"多久没用"人类文案——永不显示裸天数
@@ -188,14 +192,28 @@ export default {
     },
   },
   approval: {
-    title: "需要确认",
-    subtitle: "该工具会产生不可逆的副作用，请审阅参数后决定。",
-    toolLabel: "工具",
-    argsLabel: "参数",
+    // ㉕·对话区① §3.17 内联决策卡（ApprovalModal 退役；审批不是弹窗）
+    cardTitle: "需要权限",
+    queue: "还有 {n} 个待处理",
+    riskHigh: "高风险",
+    riskMedium: "中风险",
+    riskLow: "低风险",
+    askLead: "允许 ",
+    askTail: " 运行吗？",
+    inputLabel: "输入",
+    inputCopy: "复制输入",
+    envProject: "项目 {path}",
+    envTemp: "临时会话",
+    timeoutHint: "若 {n} 秒内未响应将自动拒绝",
+    timeoutNow: "超时自动拒绝中…",
     deny: "拒绝",
-    allow: "允许执行",
+    allowSession: "允许本次对话",
+    allowOnce: "允许一次",
     // ⑮ 子 Agent 派生的调用标识（session_id 非当前会话时显示）
     subagentTag: "子 Agent 调用",
+    decisionFailed: "决策提交失败：{reason}",
+    // 侧栏待决标记（卡不在视野内的兜底）
+    pendingBadge: "有审批等待决策",
   },
   market: {
     discover: "发现",

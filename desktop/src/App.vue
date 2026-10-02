@@ -5,7 +5,6 @@ import { useApprovalsStore } from "./stores/approvals";
 import { useChatStore } from "./stores/chat";
 import { useSettingsStore } from "./stores/settings";
 import { useShellStore } from "./stores/shell";
-import ApprovalModal from "./components/ApprovalModal.vue";
 import ChatTranscript from "./components/ChatTranscript.vue";
 import Composer from "./components/chat/Composer.vue";
 import ContextProgressBar from "./components/ContextProgressBar.vue";
@@ -26,7 +25,8 @@ import { ref } from "vue";
  * - 对话视图不卸载：切走时 display:none + inert 挂起，回来恢复滚动与
  *   运行态（hidden 会被 flex 类覆盖，故用内联 display）；
  * - 其他目的地按需挂载（v-if），离开即卸载；侧栏（非设置目的地）恒显；
- * - 全局层：审批弹窗 / ⌘K 命令面板 / 窗口控制挂壳根（跨视图）。
+ * - 全局层：⌘K 命令面板 / 窗口控制挂壳根（跨视图）。审批是转录内的
+ *   内联决策卡（§3.17，㉕·对话区① 起 ApprovalModal 退役）。
  */
 const { t } = useI18n();
 const chat = useChatStore();
@@ -84,6 +84,5 @@ onMounted(() => {
 
     <WindowControls />
     <CommandPalette />
-    <ApprovalModal />
   </div>
 </template>

@@ -20,6 +20,8 @@ const props = defineProps<{
   item: ToolItem;
   /** 挂载时的默认展开（设置开关 × 实时轮次）；只在挂载时吃一次。 */
   defaultExpanded?: boolean;
+  /** 该调用的审批未决（§3.17）：状态词"等待审批"——还没跑，不是运行中。 */
+  awaiting?: boolean;
 }>();
 
 const { t } = useI18n();
@@ -155,7 +157,9 @@ async function copyCall() {
           />
           {{
             item.pending
-              ? t("tool.running")
+              ? props.awaiting
+                ? t("tool.awaitingApproval")
+                : t("tool.running")
               : item.ok
                 ? t("tool.success")
                 : t("tool.failed")

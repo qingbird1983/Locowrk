@@ -23,6 +23,9 @@ pub mod channels {
     pub const CONTEXT_COMPACTED: &str = "agent://context-compacted";
     /// 定时触发（⑭）：调度引擎向会话注入轮之前推送，前端推 SystemNotice。
     pub const SCHEDULE_FIRED: &str = "agent://schedule-fired";
+    /// 审批结果（㉕·对话区① §3.17）：`ApprovalDecided` 的投影通道——前端
+    /// 渲染"决策记录条"并摘除对应待决卡。
+    pub const APPROVAL_RESOLVED: &str = "agent://approval-resolved";
     /// 用户消息（㉕·fix）：仅供全量投影（`session_history`）产出——实时轮
     /// 前端发送即本地回显，runner 不投影该段（防双气泡）。本通道因此
     /// **永不 emit**，前端也**有意不订阅**（api.ts CHANNELS 不含它）。
@@ -34,6 +37,8 @@ pub mod channels {
 /// 一致用 snake_case（§13.2 示例里的 camelCase 以本实现为准）。
 /// `session_id`（⑮）：发起调用的会话——子 Agent 派生的调用带
 /// `{parent}-sub-{n}`，前端据此打"子 Agent"标识徽章。
+/// `description`（㉕·对话区① §3.17）：工具自述（`ToolSpec.description`），
+/// 决策卡理由行的数据源；空描述不带字段语义（None）。
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalRequestPayload {
     pub request_id: String,
@@ -41,6 +46,7 @@ pub struct ApprovalRequestPayload {
     pub args: Value,
     pub side_effect: String,
     pub session_id: Option<String>,
+    pub description: Option<String>,
 }
 
 /// 推给前端的事件。字段命名与 session-store 事件对齐（snake_case）；
@@ -103,6 +109,17 @@ pub enum AgentEvent {
         session_id: String,
         content: String,
     },
+    /// 审批结果（㉕·对话区① §3.17）：`SessionEvent::ApprovalDecided` 的
+    /// 投影（runner），实时增量与历史重放同一来源——前端渲染"决策记录条"
+    /// （已允许/已拒绝 · 动作名）并摘除待决卡；`tool` 由 runner 从同切片
+    /// 的 `ToolCall` 按 call_id 解析（审批决策卡按它找回宿主工具行）。
+    ApprovalResolved {
+        session_id: String,
+        call_id: String,
+        tool: String,
+        allowed: bool,
+        reason: Option<String>,
+    },
 }
 
 impl AgentEvent {
@@ -117,6 +134,7 @@ impl AgentEvent {
             AgentEvent::ContextCompacted { .. } => channels::CONTEXT_COMPACTED,
             AgentEvent::ScheduleFired { .. } => channels::SCHEDULE_FIRED,
             AgentEvent::UserMessage { .. } => channels::USER_MESSAGE,
+            AgentEvent::ApprovalResolved { .. } => channels::APPROVAL_RESOLVED,
         }
     }
 }

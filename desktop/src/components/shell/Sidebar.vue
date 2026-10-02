@@ -11,6 +11,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { getVersion } from "@tauri-apps/api/app";
+import { useApprovalsStore } from "../../stores/approvals";
 import { useChatStore } from "../../stores/chat";
 import { useShellStore } from "../../stores/shell";
 import type { SessionMeta } from "../../types";
@@ -21,6 +22,7 @@ import { Icon } from "../../lib/icons";
 const { t } = useI18n();
 const chat = useChatStore();
 const shell = useShellStore();
+const approvals = useApprovalsStore();
 
 const search = ref("");
 const version = ref("");
@@ -172,6 +174,16 @@ const {
                 v-if="chat.running && s.id === chat.sessionId"
                 class="dot dot--pulse"
                 :title="t('status.running')"
+              />
+              <!-- §3.17 卡不在视野内的兜底：本会话有审批未决 → 待决标记 -->
+              <span
+                v-else-if="
+                  approvals.pending.length > 0 && s.id === chat.sessionId
+                "
+                class="dot dot--danger"
+                role="img"
+                :aria-label="t('approval.pendingBadge')"
+                :title="t('approval.pendingBadge')"
               />
               <span class="session-row__title">
                 {{ s.title ?? t("sidebar.untitled") }}
