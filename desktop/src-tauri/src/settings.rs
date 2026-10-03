@@ -380,11 +380,16 @@ impl SettingsStore {
                 enter_to_send: s.chat.enter_to_send,
                 usage_readout: s.chat.usage_readout.clone(),
                 auto_title: s.chat.auto_title,
+                cache_stats: s.chat.cache_stats,
+                cache_hit_price: s.chat.cache_hit_price,
+                cache_miss_price: s.chat.cache_miss_price,
             },
             developer: DeveloperView {
                 unlocked: s.developer.unlocked,
                 allow_delete_running_session: s.developer.allow_delete_running_session,
                 allow_switch_running_session: s.developer.allow_switch_running_session,
+                cache_hit_alert: s.developer.cache_hit_alert,
+                cache_hit_alert_percent: s.developer.cache_hit_alert_percent,
             },
         }
     }

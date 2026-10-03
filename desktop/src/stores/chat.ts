@@ -20,6 +20,7 @@ import { clip, compactNumber } from "../lib/format";
 import { toolAction } from "../lib/tool-summary";
 import { i18n } from "../i18n";
 import { useSettingsStore } from "./settings";
+import { useToastStore } from "./toast";
 import type { AgentEvent, SessionMeta } from "../types";
 
 /** §3.18 动作名（审批记录条用）；表外工具回落工具 id。 */
@@ -91,6 +92,19 @@ export type TurnUsage = {
   steps: number;
 };
 
+/** 会话累计用量（M0 观测，KV v2 §7）：llm_usage 事件全会话累计——与
+ * turnUsage（轮级，user_message / send 重置）不同，只在 switchSession /
+ * newSession 重置；实时与重放同源累计，切走切回重建。 */
+export type SessionUsage = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  reasoning: number;
+  total: number;
+  steps: number;
+};
+
 let nextId = 1;
 
 export const useChatStore = defineStore("chat", {
@@ -120,10 +134,45 @@ export const useChatStore = defineStore("chat", {
     modelOverride: null as { providerId: string; model: string } | null,
     /** v2.58 §3.30 本轮用量聚合（null = 本轮尚无供应商报告的用量）。 */
     turnUsage: null as TurnUsage | null,
+    /** M0 观测（KV v2 §7）：会话累计用量——只随会话切换/新建重置，
+     * 实时与重放同源累计。 */
+    sessionUsage: null as SessionUsage | null,
+    /** M0 观测告警已触发标记（每会话至多一次，随会话重置）。 */
+    cacheAlertFired: false,
     /** §3.6 v3.9 项目下新建任务：挂起的归属目标，首聊建会话后消费。 */
     pendingWorkspace: null as string | null,
   }),
   getters: {
+    /** M0 观测（KV v2 §7）：会话累计缓存统计。命中率 = cacheRead /
+     * input（**分母不含 cacheWrite**——纪律 7，加了会把命中率压低）；
+     * 节省 = 命中 × (未命中价 − 命中价)，单价来自设置（元/百万 tokens）。
+     * cacheRead 为 0 = 供应商未报告缓存字段或全 miss → null（行不渲染，
+     * 宁缺勿假）。 */
+    cacheStats(state): {
+      hitRate: number;
+      savings: number;
+      input: number;
+      cacheRead: number;
+      cacheWrite: number;
+      total: number;
+      steps: number;
+    } | null {
+      const u = state.sessionUsage;
+      if (!u || u.input <= 0 || u.cacheRead <= 0) return null;
+      const chat = useSettingsStore().view?.chat ?? null;
+      const delta = chat
+        ? Math.max(0, chat.cacheMissPrice - chat.cacheHitPrice)
+        : 0;
+      return {
+        hitRate: Math.round((u.cacheRead / u.input) * 100),
+        savings: (u.cacheRead * delta) / 1_000_000,
+        input: u.input,
+        cacheRead: u.cacheRead,
+        cacheWrite: u.cacheWrite,
+        total: u.total,
+        steps: u.steps,
+      };
+    },
     /** 当前归属——工作区 chip 与欢迎页问候的**唯一同源真源**（v2.61 用户
      * 裁定「把欢迎语项目名跟对话框下面的项目名关联」）：会话态 = 活动会话
      * 旁车 workspace；首页空态 = 挂起归属。此前问候另有「最近活动会话 /
@@ -178,6 +227,9 @@ export const useChatStore = defineStore("chat", {
           ? { providerId: meta.modelProvider, model: meta.model }
           : null;
       this.turnUsage = null;
+      // M0 观测：会话累计随会话切换重置（重放同源重建），告警标记同理
+      this.sessionUsage = null;
+      this.cacheAlertFired = false;
       this.pendingWorkspace = null; // 挂起归属只属于触发它的那个新会话
       const events = await sessionHistory(id).catch(() => [] as AgentEvent[]);
       this.replaying = true;
@@ -236,6 +288,8 @@ export const useChatStore = defineStore("chat", {
       this.permissionMode = null;
       this.modelOverride = null;
       this.turnUsage = null;
+      this.sessionUsage = null;
+      this.cacheAlertFired = false;
       this.pendingWorkspace = workspace ?? null;
     },
     /** v2.58 §3.30 选择模型：会话内 = 写会话级覆盖（设置不动）；首页
@@ -389,6 +443,21 @@ export const useChatStore = defineStore("chat", {
             u.speed = Math.round((e.output / e.duration_ms) * 1000);
           }
           this.turnUsage = u;
+          // M0 观测（KV v2 §7）：会话累计同步累加——与轮级重置解耦，
+          // 重放同源重建，供命中率/节省/告警消费
+          const su = this.sessionUsage ?? {
+            input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
+            reasoning: 0, total: 0, steps: 0,
+          };
+          su.input += e.input;
+          su.output += e.output;
+          su.cacheRead += e.cache_read;
+          su.cacheWrite += e.cache_write;
+          su.reasoning += e.reasoning;
+          su.total += e.total;
+          su.steps += 1;
+          this.sessionUsage = su;
+          this.checkCacheAlert(su);
           break;
         }
         case "context_compacted": {
@@ -407,6 +476,23 @@ export const useChatStore = defineStore("chat", {
           break;
         }
       }
+    },
+    /** M0 观测告警（KV v2 §7.4，开发者开关缺省关）：会话累计命中率跌破
+     * 阈值时 toast 一次（每会话至多一次）。≥3 步才判——冷启动首请求无
+     * 缓存可命不是断裂；供应商从未报告过缓存字段（cacheRead/cacheWrite
+     * 全 0）不判——未报告 ≠ 命中率塌方，宁缺勿假。 */
+    checkCacheAlert(su: SessionUsage) {
+      if (this.cacheAlertFired || this.replaying) return;
+      const dev = useSettingsStore().view?.developer;
+      if (!dev?.cacheHitAlert) return;
+      if (su.steps < 3 || su.input <= 0) return;
+      if (su.cacheRead + su.cacheWrite <= 0) return;
+      if (su.cacheRead / su.input >= dev.cacheHitAlertPercent / 100) return;
+      this.cacheAlertFired = true;
+      useToastStore().push(
+        "warn",
+        i18n.global.t("usage.cacheAlert", { pct: dev.cacheHitAlertPercent }),
+      );
     },
     appendAssistant(delta: string) {
       const last = this.items[this.items.length - 1];

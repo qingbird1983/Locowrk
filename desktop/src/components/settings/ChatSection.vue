@@ -24,6 +24,9 @@ const form = reactive({
   enterToSend: true,
   usageReadout: "used",
   autoTitle: true,
+  cacheStats: true,
+  cacheHitPrice: 0.02,
+  cacheMissPrice: 1.0,
 });
 
 watch(
@@ -35,6 +38,9 @@ watch(
     form.enterToSend = v.chat.enterToSend;
     form.usageReadout = v.chat.usageReadout;
     form.autoTitle = v.chat.autoTitle;
+    form.cacheStats = v.chat.cacheStats;
+    form.cacheHitPrice = v.chat.cacheHitPrice;
+    form.cacheMissPrice = v.chat.cacheMissPrice;
   },
   { immediate: true },
 );
@@ -46,6 +52,9 @@ function save() {
     enterToSend: form.enterToSend,
     usageReadout: form.usageReadout,
     autoTitle: form.autoTitle,
+    cacheStats: form.cacheStats,
+    cacheHitPrice: form.cacheHitPrice,
+    cacheMissPrice: form.cacheMissPrice,
   });
 }
 
@@ -93,6 +102,46 @@ const readoutOptions = computed(() => [
         v-model="form.usageReadout"
         :options="readoutOptions"
         :label="t('settings.usageReadoutTitle')"
+      />
+    </SettingsRow>
+
+    <!-- M0 观测（KV v2 §7）：缓存命中率/节省显示与单价（元/百万 tokens） -->
+    <SettingsRow
+      :title="t('settings.cacheStatsTitle')"
+      :hint="t('settings.cacheStatsHint')"
+    >
+      <SettingsToggle v-model="form.cacheStats" :label="t('settings.cacheStatsTitle')" />
+    </SettingsRow>
+
+    <SettingsRow
+      :title="t('settings.cacheHitPriceTitle')"
+      :hint="t('settings.cachePriceHint')"
+      control-id="chat-cache-hit-price"
+    >
+      <input
+        id="chat-cache-hit-price"
+        v-model.number="form.cacheHitPrice"
+        type="number"
+        :min="0"
+        :max="10000"
+        step="0.01"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+
+    <SettingsRow
+      :title="t('settings.cacheMissPriceTitle')"
+      :hint="t('settings.cachePriceHint')"
+      control-id="chat-cache-miss-price"
+    >
+      <input
+        id="chat-cache-miss-price"
+        v-model.number="form.cacheMissPrice"
+        type="number"
+        :min="0"
+        :max="10000"
+        step="0.1"
+        class="lw-field lw-field-num px-2 text-xs"
       />
     </SettingsRow>
   </SettingsGroup>

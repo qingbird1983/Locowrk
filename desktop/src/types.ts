@@ -326,6 +326,10 @@ export interface DeveloperView {
   unlocked: boolean;
   allowDeleteRunningSession: boolean;
   allowSwitchRunningSession: boolean;
+  /** 缓存命中率告警（M0 观测，缺省关）。 */
+  cacheHitAlert: boolean;
+  /** 告警阈值（%）。 */
+  cacheHitAlertPercent: number;
 }
 
 /** 开发者选项区部分更新：字段缺省 = 保持不变。 */
@@ -333,6 +337,8 @@ export interface DeveloperUpdate {
   unlocked?: boolean;
   allowDeleteRunningSession?: boolean;
   allowSwitchRunningSession?: boolean;
+  cacheHitAlert?: boolean;
+  cacheHitAlertPercent?: number;
 }
 
 /** 对话行为区投影：结构即设置原值。contentMaxWidth null = 未设置（前端按
@@ -344,6 +350,12 @@ export interface ChatSettingsView {
   usageReadout: string;
   /** 自动会话标题（v2.57，缺省开）。 */
   autoTitle: boolean;
+  /** 缓存命中率/节省显示（M0 观测，缺省开）。 */
+  cacheStats: boolean;
+  /** 缓存命中单价（元/百万 tokens）。 */
+  cacheHitPrice: number;
+  /** 缓存未命中单价（元/百万 tokens）。 */
+  cacheMissPrice: number;
 }
 
 /** 对话行为区部分更新：字段缺省 = 保持不变。 */
@@ -353,6 +365,9 @@ export interface ChatUpdate {
   enterToSend?: boolean;
   usageReadout?: string;
   autoTitle?: boolean;
+  cacheStats?: boolean;
+  cacheHitPrice?: number;
+  cacheMissPrice?: number;
 }
 
 /** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。autoExtract =

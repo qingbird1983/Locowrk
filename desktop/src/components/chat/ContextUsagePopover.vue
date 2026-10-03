@@ -10,8 +10,9 @@
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { compactNumber } from "../../lib/format";
+import { compactNumber, formatMoney } from "../../lib/format";
 import { useChatStore, type ToolItem } from "../../stores/chat";
+import { useSettingsStore } from "../../stores/settings";
 
 const props = defineProps<{
   usage: {
@@ -26,6 +27,7 @@ defineEmits<{ close: [] }>();
 
 const { t } = useI18n();
 const chat = useChatStore();
+const settings = useSettingsStore();
 
 const pct = computed(() =>
   props.usage.windowTokens > 0
@@ -120,6 +122,17 @@ const toolsText = computed(() => {
         </span>
       </div>
     </template>
+
+    <!-- 会话累计（M0 观测 KV v2 §7）：命中率（分母不含 cacheWrite，纪律 7）
+         + 节省估算。chat.cacheStats 为 null = 供应商未报告缓存字段 → 不渲染；
+         chat.cacheStats 设置（用户层，缺省开）控制整行显隐。 -->
+    <div v-if="settings.view?.chat.cacheStats && chat.cacheStats" class="kv">
+      <span>{{ t("usage.sessionCumulative") }}</span>
+      <span class="kv__v">
+        {{ t("usage.cacheHit") }} {{ chat.cacheStats.hitRate }}% ·
+        {{ t("usage.savings") }} {{ formatMoney(chat.cacheStats.savings) }}
+      </span>
+    </div>
 
     <!-- 工具上下文（本轮调用种数/次数 + 目录估算） -->
     <div v-if="toolsText" class="kv">

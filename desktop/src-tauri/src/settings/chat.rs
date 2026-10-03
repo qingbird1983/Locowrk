@@ -15,6 +15,13 @@ pub const USAGE_READOUT_USED: &str = "used";
 /// 上下文用量读数口径：剩余。
 pub const USAGE_READOUT_REMAINING: &str = "remaining";
 const USAGE_READOUTS: [&str; 2] = [USAGE_READOUT_USED, USAGE_READOUT_REMAINING];
+/// 缓存命中单价缺省（元/百万 tokens，deepseek-flash 空闲价；KV v2 §7.2）。
+pub const CACHE_HIT_PRICE_DEFAULT: f64 = 0.02;
+/// 缓存未命中单价缺省（元/百万 tokens）。价差 = 省钱估算的来源（命中约
+/// 为未命中的 1/50）。
+pub const CACHE_MISS_PRICE_DEFAULT: f64 = 1.0;
+/// 单价存取上限（元/百万 tokens）：只防显然离谱的值，真实价格远低于此。
+pub const PRICE_MAX: f64 = 10_000.0;
 
 /// `chat` 区（settings.json）。字段级缺省：旧文件无此区 → 全部缺省
 /// （宽度未设置 / 不默认展开过程 / 回车发送 / 已用口径 / 自动标题开），零迁移。
@@ -34,6 +41,13 @@ pub struct ChatSettings {
     /// 调用生成 ≤25 字标题（替代首条截断）；用户手动重命名过（旁车有
     /// title 字段）永不覆盖。关 = 恢复首条截断。
     pub auto_title: bool,
+    /// 缓存命中率/节省显示（M0 观测，KV v2 §7，缺省开）：用量浮层
+    /// 「会话累计」行的显隐。
+    pub cache_stats: bool,
+    /// 缓存命中单价（元/百万 tokens）：节省估算 = 命中 × (未命中价 − 命中价)。
+    pub cache_hit_price: f64,
+    /// 缓存未命中单价（元/百万 tokens）。
+    pub cache_miss_price: f64,
 }
 
 impl Default for ChatSettings {
@@ -44,6 +58,9 @@ impl Default for ChatSettings {
             enter_to_send: true,
             usage_readout: USAGE_READOUT_USED.into(),
             auto_title: true,
+            cache_stats: true,
+            cache_hit_price: CACHE_HIT_PRICE_DEFAULT,
+            cache_miss_price: CACHE_MISS_PRICE_DEFAULT,
         }
     }
 }
@@ -57,6 +74,9 @@ pub struct ChatView {
     pub enter_to_send: bool,
     pub usage_readout: String,
     pub auto_title: bool,
+    pub cache_stats: bool,
+    pub cache_hit_price: f64,
+    pub cache_miss_price: f64,
 }
 
 /// 部分更新（settings_set 入参）。字段 None = 保持不变。
@@ -68,9 +88,17 @@ pub struct ChatUpdate {
     pub enter_to_send: Option<bool>,
     pub usage_readout: Option<String>,
     pub auto_title: Option<bool>,
+    pub cache_stats: Option<bool>,
+    pub cache_hit_price: Option<f64>,
+    pub cache_miss_price: Option<f64>,
 }
 
 /// 合法性检查（update.rs 校验用）。
 pub fn valid_usage_readout(v: &str) -> bool {
     USAGE_READOUTS.contains(&v)
+}
+
+/// 单价合法性：有限且在 [0, PRICE_MAX]。
+pub fn valid_price(v: f64) -> bool {
+    v.is_finite() && (0.0..=PRICE_MAX).contains(&v)
 }

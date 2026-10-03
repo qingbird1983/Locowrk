@@ -9,7 +9,8 @@
 import { onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { toolExposureDebug } from "../../lib/api";
-import { compactNumber } from "../../lib/format";
+import { compactNumber, formatMoney } from "../../lib/format";
+import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
@@ -22,10 +23,13 @@ const { t } = useI18n();
 const settings = useSettingsStore();
 const shell = useShellStore();
 const toast = useToastStore();
+const chat = useChatStore();
 
 const form = reactive({
   allowDeleteRunningSession: false,
   allowSwitchRunningSession: false,
+  cacheHitAlert: false,
+  cacheHitAlertPercent: 80,
 });
 
 watch(
@@ -34,6 +38,8 @@ watch(
     if (!v) return;
     form.allowDeleteRunningSession = v.developer.allowDeleteRunningSession;
     form.allowSwitchRunningSession = v.developer.allowSwitchRunningSession;
+    form.cacheHitAlert = v.developer.cacheHitAlert;
+    form.cacheHitAlertPercent = v.developer.cacheHitAlertPercent;
   },
   { immediate: true },
 );
@@ -42,6 +48,8 @@ function save() {
   void settings.saveDeveloper({
     allowDeleteRunningSession: form.allowDeleteRunningSession,
     allowSwitchRunningSession: form.allowSwitchRunningSession,
+    cacheHitAlert: form.cacheHitAlert,
+    cacheHitAlertPercent: Math.round(form.cacheHitAlertPercent),
   });
 }
 
@@ -90,6 +98,31 @@ onMounted(() => void refresh());
           v-model="form.allowSwitchRunningSession"
           :label="t('developer.allowSwitchRunning')"
           @update:model-value="save"
+        />
+      </SettingsRow>
+
+      <!-- M0 观测（KV v2 §7.4）：命中率告警开关 + 阈值（缺省关） -->
+      <SettingsRow :title="t('developer.cacheAlertTitle')" :hint="t('developer.cacheAlertHint')">
+        <SettingsToggle
+          v-model="form.cacheHitAlert"
+          :label="t('developer.cacheAlertTitle')"
+          @update:model-value="save"
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        v-if="form.cacheHitAlert"
+        :title="t('developer.cacheAlertPercent')"
+        control-id="dev-cache-alert-percent"
+      >
+        <input
+          id="dev-cache-alert-percent"
+          v-model.number="form.cacheHitAlertPercent"
+          type="number"
+          min="1"
+          max="100"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="save"
         />
       </SettingsRow>
 
@@ -151,6 +184,42 @@ onMounted(() => void refresh());
             {{ t("developer.saved", { n: compactNumber(debug.savedTokensEstimate) }) }}
           </p>
         </template>
+      </div>
+    </SettingsGroup>
+
+    <!-- M0 观测（KV v2 §7）：前缀缓存读数——会话累计（实时/重放同源聚合）
+         + 本轮（turnUsage）。供应商未报告缓存字段 = 行留空态，不虚构。 -->
+    <SettingsGroup :title="t('developer.cacheTitle')" :hint="t('developer.cacheHint')">
+      <div class="space-y-2 rounded-[14px] bg-wash-1 px-4 py-3.5 text-xs">
+        <p v-if="!chat.cacheStats" class="text-[11.5px] text-ink-4">
+          {{ t("developer.cacheEmpty") }}
+        </p>
+        <template v-else>
+          <p>
+            {{ t("developer.cacheHitRate", { pct: chat.cacheStats.hitRate, steps: chat.cacheStats.steps }) }}
+          </p>
+          <p>
+            {{
+              t("developer.cacheHitMiss", {
+                hit: compactNumber(chat.cacheStats.cacheRead),
+                miss: compactNumber(Math.max(0, chat.cacheStats.input - chat.cacheStats.cacheRead)),
+                input: compactNumber(chat.cacheStats.input),
+              })
+            }}
+          </p>
+          <p>
+            {{ t("developer.cacheSavings", { n: formatMoney(chat.cacheStats.savings) }) }}
+          </p>
+        </template>
+        <p v-if="chat.turnUsage" class="text-[11.5px] text-ink-3">
+          {{
+            t("developer.cacheTurn", {
+              input: compactNumber(chat.turnUsage.input),
+              hit: compactNumber(chat.turnUsage.cacheRead),
+              out: compactNumber(chat.turnUsage.output),
+            })
+          }}
+        </p>
       </div>
     </SettingsGroup>
   </div>

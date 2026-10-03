@@ -76,6 +76,10 @@ export default {
     toolsContext: "Tools context",
     toolsKindsCalls: "{kinds} tools · {calls} calls",
     toolsEst: "catalog ~{n} tokens",
+    sessionCumulative: "Session total",
+    savings: "Saved",
+    cacheAlert:
+      "Cache hit rate fell below {pct}% — a prefix break may have occurred (tool-set/system-prompt change or compaction)",
   },
   composer: {
     attach: "Add files or images",
@@ -336,6 +340,18 @@ export default {
     globalHot: "Globally hot ({n})",
     retrieved: "Semantically retrieved ({n})",
     saved: "Context saved: ~{n} tokens",
+    cacheTitle: "Prefix cache readout",
+    cacheHint:
+      "Session cumulative (live/replay aggregated) and current-turn usage; hit-rate denominator excludes cache writes.",
+    cacheEmpty: "Provider has not reported cache fields yet — start a chat and come back.",
+    cacheHitRate: "Session cumulative hit rate: {pct}% ({steps} steps)",
+    cacheHitMiss: "Hit / miss / total input: {hit} / {miss} / {input} tokens",
+    cacheSavings: "Estimated savings at current prices: {n}",
+    cacheTurn: "This turn: in {input} · hit {hit} · out {out}",
+    cacheAlertTitle: "Cache hit-rate alert",
+    cacheAlertHint:
+      "Alert once when the session cumulative hit rate falls below the threshold (at most once per session; judged after 3+ steps — a cold first turn with no cache does not count).",
+    cacheAlertPercent: "Alert threshold (%)",
   },
   memory: {
     search: "Search memories…",
@@ -492,6 +508,11 @@ export default {
     usageReadoutTitle: "Usage readout",
     usageReadout_used: "Used",
     usageReadout_remaining: "Remaining",
+    cacheStatsTitle: "Cache hit-rate display",
+    cacheStatsHint: "Show session cumulative hit rate and price-based savings in the usage popover",
+    cacheHitPriceTitle: "Cache hit price",
+    cacheMissPriceTitle: "Cache miss price",
+    cachePriceHint: "¥ per million tokens for savings estimation (e.g. deepseek-flash off-peak 0.02 / 1.0)",
     llmTitle: "Models",
     llmHint:
       "The API key is stored only in the local data directory and is never echoed back to the UI. Configure multiple provider profiles and switch models from the selector next to the composer; picking inside a session only affects that session.",

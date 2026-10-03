@@ -201,6 +201,28 @@ impl SettingsStore {
             if let Some(a) = u.auto_title {
                 next.chat.auto_title = a;
             }
+            // M0 观测（KV v2 §7）：命中率显示开关 + 节省估算单价
+            if let Some(e) = u.cache_stats {
+                next.chat.cache_stats = e;
+            }
+            if let Some(p) = u.cache_hit_price {
+                if !super::chat::valid_price(p) {
+                    return Err(format!(
+                        "缓存命中单价 {p} 超出范围（0–{}）",
+                        super::chat::PRICE_MAX
+                    ));
+                }
+                next.chat.cache_hit_price = p;
+            }
+            if let Some(p) = u.cache_miss_price {
+                if !super::chat::valid_price(p) {
+                    return Err(format!(
+                        "缓存未命中单价 {p} 超出范围（0–{}）",
+                        super::chat::PRICE_MAX
+                    ));
+                }
+                next.chat.cache_miss_price = p;
+            }
         }
         if let Some(u) = developer {
             // v2.49 开发者选项：布尔开关无范围校验；危险开关缺省全关由
@@ -213,6 +235,16 @@ impl SettingsStore {
             }
             if let Some(e) = u.allow_switch_running_session {
                 next.developer.allow_switch_running_session = e;
+            }
+            // M0 观测：命中率告警开关 + 阈值
+            if let Some(e) = u.cache_hit_alert {
+                next.developer.cache_hit_alert = e;
+            }
+            if let Some(p) = u.cache_hit_alert_percent {
+                if !super::developer::valid_alert_percent(p) {
+                    return Err(format!("缓存命中率告警阈值 {p}% 超出范围（1–100）"));
+                }
+                next.developer.cache_hit_alert_percent = p;
             }
         }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
