@@ -109,7 +109,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <div
       ref="root"
-      class="row-menu"
+      class="row-menu lw-pop-in-down"
       role="menu"
       :style="{ left: `${pos.left}px`, top: `${pos.top}px` }"
       @keydown="onKey"

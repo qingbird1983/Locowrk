@@ -6,7 +6,7 @@ export default {
   },
   nav: {
     chat: "对话",
-    plugins: "扩展",
+    plugins: "插件市场",
     memory: "记忆",
     schedule: "定时",
     settings: "设置",
@@ -25,7 +25,13 @@ export default {
     impact: "影响范围",
   },
   chat: {
-    homeTitle: "今天想在 Locowrk 里做点什么？",
+    // 欢迎页问候（§3.14 v3.9 四态 + 当前索引项目名）
+    greeting: {
+      morning: "上午好，{name}。今天从哪个任务开始？",
+      afternoon: "下午好，{name}。午后适合推进一件具体的事。",
+      evening: "晚上好，{name}。今晚想把什么收尾？",
+      lateNight: "夜深了，{name}。剩下的交给明天也可以。",
+    },
     placeholder: "输入 / 使用命令 · {'@'} 引用文件",
     send: "发送",
     newSession: "新会话",
@@ -65,6 +71,18 @@ export default {
     toolsKindsCalls: "{kinds} 种工具 · {calls} 次调用",
     toolsEst: "目录约 {n} tokens",
   },
+  composer: {
+    attach: "添加文件或图片",
+    attachHint: "路径引用 · 模型经工具读取",
+  },
+  workspace: {
+    title: "项目工作区",
+    chip: "选择文件夹",
+    recent: "最近",
+    pickNew: "选择新项目",
+    none: "不需要项目",
+    switchBusy: "当前会话运行中，这轮结束后再切换项目",
+  },
   model: {
     selector: "选择模型",
     searchPlaceholder: "搜索模型…",
@@ -74,26 +92,32 @@ export default {
     configure: "配置服务",
     switchFailed: "模型切换失败",
   },
-  // 壳骨架（UI shell doc §2.3/§2.4，㉓）
+  // 壳骨架（UI shell doc §2.3/§2.4，㉓；v3.9 项目接管改版）
   sidebar: {
-    search: "搜索会话",
-    searchEmpty: "没有匹配的会话",
-    newChat: "新会话",
-    sessions: "会话",
+    actions: "操作",
+    newTask: "新建任务",
+    searchAll: "搜索",
     projects: "项目",
-    bucket7: "近 7 天",
-    bucket14: "近 14 天",
-    earlier: "更早",
+    toggleAllProjects: "折叠 / 展开所有项目",
+    filter: "筛选",
+    filterAll: "全部",
+    filterRunning: "只看进行中",
+    addProject: "新建项目",
     collapse: "收起侧栏",
     expand: "展开侧栏",
     resize: "调整侧栏宽度",
     resizeText: "侧栏宽度 {n} 像素",
     untitled: "未命名会话",
     lockedWhileRunning: "会话运行中，暂不能切换",
-    contentHits: "正文命中",
     devUnlockHint: "连点 7 次进入开发者选项",
     devUnlockProgress: "再点 {n} 次进入开发者选项",
     devUnlocked: "已进入开发者选项（设置 → 系统）",
+    projectMenu: {
+      more: "项目操作",
+      newTask: "新建任务",
+      reveal: "在文件夹中显示",
+      remove: "移除项目",
+    },
     menu: {
       more: "会话操作",
       rename: "重命名",
@@ -162,6 +186,11 @@ export default {
     movedInto: "已移入工作区",
     movedOut: "已移出工作区",
     associateFailed: "工作区关联失败",
+    projectAdded: "已添加项目",
+    projectAddFailed: "添加项目失败",
+    projectRemoved: "已移除项目",
+    projectRemoveFailed: "移除项目失败",
+    revealFailed: "打开文件管理器失败",
   },
   // 通知浮层（§3.13，v2.51）：记录只存 kind + 参数，标题模板在这里渲染
   notify: {
@@ -351,17 +380,18 @@ export default {
   },
   perm: {
     title: "权限模式",
+    // 名称/描述照抄参考对象（用户 2026-10-04 裁定「名字都一样的写 照抄」）
     short: {
-      plan: "计划",
-      ask: "询问",
+      plan: "计划模式",
+      ask: "变更前确认",
       acceptEdits: "自动编辑",
-      auto: "完全",
+      auto: "完全访问",
     },
     desc: {
-      plan: "只读：写类工具不可见",
-      ask: "非只读动作逐次审批",
-      acceptEdits: "可撤销写类自动放行",
-      auto: "全部放行，硬底线仍生效",
+      plan: "编辑前先出计划。",
+      ask: "改文件前先问我。",
+      acceptEdits: "自动编辑文件。",
+      auto: "减少确认次数。",
     },
     setFailed: "切换失败：{reason}",
   },
@@ -662,6 +692,7 @@ export default {
     },
     groups: {
       sessions: "会话",
+      contentHits: "正文命中",
       pages: "页面",
       settings: "设置",
       commands: "命令",

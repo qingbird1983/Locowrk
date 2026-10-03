@@ -28,6 +28,8 @@ export const useShellStore = defineStore("shell", {
     /** composer 聚焦令牌（§3.17：决策后焦点回输入框——批完立刻能接着
      * 打字）。PermissionCard 决策成功后自增，Composer watch 聚焦。 */
     composerFocusTick: 0,
+    /** 命令面板开合（§3.15 v3.9：侧栏「搜索」行与 Ctrl+K 同流一实例）。 */
+    paletteOpen: false,
   }),
   actions: {
     setDestination(dest: Destination) {
@@ -55,11 +57,12 @@ export const useShellStore = defineStore("shell", {
       this.sidebarCollapsed = !this.sidebarCollapsed;
       this.commitSidebarWidth();
     },
-    /** 拖到小于最小值即折叠（§2.3：把"拖没了"变成明确状态）。 */
-    collapseFromResize() {
-      if (this.sidebarCollapsed) return;
-      this.sidebarCollapsed = true;
-      this.commitSidebarWidth();
+    /** 命令面板（§3.15）：Ctrl+K 与侧栏「搜索」行共用同一开合态。 */
+    openPalette() {
+      this.paletteOpen = true;
+    },
+    closePalette() {
+      this.paletteOpen = false;
     },
     applyViewport() {
       // 视口收窄后旧宽度超上限：实时钳制（不折叠——那是用户手势的事）

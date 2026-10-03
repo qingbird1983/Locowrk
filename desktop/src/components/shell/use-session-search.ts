@@ -1,5 +1,5 @@
-// 会话正文搜索（v2.49 §3.6）：侧栏搜索框防抖 250ms → session_search，
-// 序号守卫竞态（慢响应不覆盖新结果）；query 空 = 立即清空。
+// 会话正文搜索（v2.49 §3.6；v3.9 起挂在命令面板 §3.15）：查询防抖 250ms →
+// session_search，序号守卫竞态（慢响应不覆盖新结果）；query 空 = 立即清空。
 import { ref, watch, type Ref } from "vue";
 import { sessionSearch } from "../../lib/api";
 import type { SessionSearchHit } from "../../types";

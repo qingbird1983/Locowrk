@@ -11,7 +11,7 @@
  * store.setModel（会话内 = 会话级覆盖，首页 = 写设置缺省）；会话覆盖生效
  * 时顶部一行「跟随默认」清除覆盖。
  */
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, Transition } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ProviderView } from "../../types";
 import { Icon } from "../../lib/icons";
@@ -23,6 +23,8 @@ const props = defineProps<{
   override: { providerId: string; model: string } | null;
   /** 启用档（配置页真源；组件内不二次过滤）。 */
   providers: ProviderView[];
+  /** 首页空态 = 向下弹（composer 居中；会话态贴底向上弹，v2.59 用户裁定）。 */
+  dropDown?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -82,7 +84,14 @@ function pick(providerId: string, model: string) {
 </script>
 
 <template>
-  <div ref="container" class="model-selector" role="dialog" :aria-label="t('model.selector')">
+  <Transition :name="props.dropDown ? 'lw-pop-down' : 'lw-pop-up'">
+  <div
+    ref="container"
+    class="model-selector"
+    :class="{ 'model-selector--down': props.dropDown }"
+    role="dialog"
+    :aria-label="t('model.selector')"
+  >
     <div class="ms-search">
       <Icon name="search" :size="13" class="ms-search__icon" />
       <input
@@ -104,8 +113,10 @@ function pick(providerId: string, model: string) {
     </button>
 
     <div class="ms-list scroll-y">
-      <template v-for="g in visible" :key="g.id">
-        <div class="ms-group">{{ g.label }}</div>
+      <template v-for="(g, gi) in visible" :key="g.id">
+        <div class="ms-group" :class="{ 'ms-group--ruled': gi > 0 }">
+          {{ g.label }}
+        </div>
         <button
           v-for="m in g.models"
           :key="`${g.id}:${m}`"
@@ -127,6 +138,7 @@ function pick(providerId: string, model: string) {
       </div>
     </div>
   </div>
+  </Transition>
 </template>
 
 <style scoped>
@@ -143,6 +155,11 @@ function pick(providerId: string, model: string) {
   box-shadow: var(--lw-shadow-dialog);
   z-index: 40;
   overflow: hidden;
+}
+/* 首页空态向下弹（v2.59 用户裁定） */
+.model-selector--down {
+  top: calc(100% + 10px);
+  bottom: auto;
 }
 .ms-search {
   display: flex;
@@ -177,6 +194,12 @@ function pick(providerId: string, model: string) {
   font-size: 11px;
   color: var(--lw-ink-4);
   user-select: none;
+}
+/* v3.9 用户裁定：分组间淡发丝线，两端不到头（inset 12px） */
+.ms-group--ruled {
+  border-top: 1px solid var(--lw-line-subtle);
+  margin: 4px 12px 0;
+  padding: 10px 0 3px;
 }
 .ms-row {
   display: flex;

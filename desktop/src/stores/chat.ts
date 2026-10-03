@@ -118,8 +118,10 @@ export const useChatStore = defineStore("chat", {
     permissionMode: null as "plan" | "ask" | "acceptEdits" | "auto" | null,
     /** v2.58 §3.30 当前会话模型覆盖（null = 跟随设置缺省）。 */
     modelOverride: null as { providerId: string; model: string } | null,
-    /** v2.58 §3.12 本轮用量聚合（null = 本轮尚无供应商报告的用量）。 */
+    /** v2.58 §3.30 本轮用量聚合（null = 本轮尚无供应商报告的用量）。 */
     turnUsage: null as TurnUsage | null,
+    /** §3.6 v3.9 项目下新建任务：挂起的归属目标，首聊建会话后消费。 */
+    pendingWorkspace: null as string | null,
   }),
   actions: {
     async init() {
@@ -157,6 +159,7 @@ export const useChatStore = defineStore("chat", {
           ? { providerId: meta.modelProvider, model: meta.model }
           : null;
       this.turnUsage = null;
+      this.pendingWorkspace = null; // 挂起归属只属于触发它的那个新会话
       const events = await sessionHistory(id).catch(() => [] as AgentEvent[]);
       this.replaying = true;
       try {
@@ -170,6 +173,10 @@ export const useChatStore = defineStore("chat", {
     async renameSession(id: string, title: string) {
       await sessionRename(id, title);
       await this.refreshSessions();
+    },
+    /** §3.11 v3.9 工作区 chip 首页语义：直接改挂起归属（首聊自动关联）。 */
+    setPendingWorkspace(ws: string | null) {
+      this.pendingWorkspace = ws;
     },
     /** 工作区关联（v2.50 §2.3）：workspace = fsRoots 根目录，null =
      * 移出；后端校验必须是其一根，列表层生效。 */
@@ -198,8 +205,9 @@ export const useChatStore = defineStore("chat", {
       return sessionExport(id, path);
     },
     /** 新会话（⑲）：前端生成 id 清空视图；首条消息发出前不创建任何
-     * 后端状态（空会话不落盘不进列表，§3.6）。 */
-    newSession() {
+     * 后端状态（空会话不落盘不进列表，§3.6）。`workspace` = §2.3 v3.9
+     * 「在项目下新建任务」：记账挂起，首条消息建会话后自动关联（§3.6）。 */
+    newSession(workspace?: string | null) {
       if (this.running) return;
       this.sessionId = `desktop-${Date.now()}`;
       this.items = [];
@@ -209,6 +217,7 @@ export const useChatStore = defineStore("chat", {
       this.permissionMode = null;
       this.modelOverride = null;
       this.turnUsage = null;
+      this.pendingWorkspace = workspace ?? null;
     },
     /** v2.58 §3.30 选择模型：会话内 = 写会话级覆盖（设置不动）；首页
      * 空态 = 写设置缺省（切活动档 + 该档模型——"接下来聊什么模型"）。 */
@@ -460,6 +469,13 @@ export const useChatStore = defineStore("chat", {
         this.items.push({ id: nextId++, kind: "error", text: String(err) });
       } finally {
         this.running = false;
+        // §3.6 v3.9 项目下新建任务：首聊已建会话，消费挂起的归属。
+        // 关联失败（轮次失败会话未建成）静默放弃——归属可在行菜单手动补。
+        const ws = this.pendingWorkspace;
+        this.pendingWorkspace = null;
+        if (ws) {
+          await sessionAssociate(this.sessionId, ws).catch(() => {});
+        }
         // ⑲ 新会话首聊后进列表（列表更新不阻塞输入）
         void this.refreshSessions();
       }

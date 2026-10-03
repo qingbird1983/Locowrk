@@ -13,6 +13,14 @@ import "./style.css";
 const t0 = performance.now();
 createApp(App).use(createPinia()).use(i18n).mount("#app");
 
+// 原生右键菜单（WebView2/Chromium 的前进/后退/检查等）与界面无关联（用户
+// 2026-10-04 裁定隐藏）：全局禁用 contextmenu 默认行为；仅输入框/文本域
+// /contenteditable 保留——复制/粘贴还要用。
+document.addEventListener("contextmenu", (e) => {
+  const el = e.target as HTMLElement | null;
+  if (!el?.closest("input, textarea, [contenteditable]")) e.preventDefault();
+});
+
 requestAnimationFrame(() =>
   requestAnimationFrame(async () => {
     console.info(

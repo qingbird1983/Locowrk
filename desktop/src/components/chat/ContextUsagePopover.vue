@@ -78,7 +78,7 @@ const toolsText = computed(() => {
 </script>
 
 <template>
-  <div class="ctx-popover" role="dialog" :aria-label="t('usage.window')">
+  <div class="ctx-popover lw-pop-in-up" role="dialog" :aria-label="t('usage.window')">
     <div class="ctx-popover__head">
       <span>{{ headline }}</span>
       <span v-if="pct !== null" class="kv__v">{{ pct }}%</span>
@@ -128,54 +128,3 @@ const toolsText = computed(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.ctx-popover {
-  position: absolute;
-  right: 8px;
-  bottom: calc(100% + 10px);
-  width: 360px;
-  max-width: calc(100vw - 48px);
-  border-radius: var(--lw-r-md);
-  border: 1px solid var(--lw-line);
-  background: var(--lw-bg-elevated);
-  box-shadow: var(--lw-shadow-dialog);
-  padding: 12px 14px;
-  z-index: 30;
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-.ctx-popover__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 500;
-  color: var(--lw-ink-1);
-}
-.kv {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 7px;
-  border-top: 1px solid var(--lw-line-subtle);
-  color: var(--lw-ink-3);
-}
-.kv--stack {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-.kv__usage {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  color: var(--lw-ink-1);
-  font-variant-numeric: tabular-nums;
-}
-.kv__v {
-  color: var(--lw-ink-1);
-  font-variant-numeric: tabular-nums;
-}
-</style>

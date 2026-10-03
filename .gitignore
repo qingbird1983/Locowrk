@@ -36,3 +36,6 @@ market/**/*.dylib
 # 源头已跟踪，暂存副本不入库）
 plugins/*
 !plugins/README.md
+
+# 用户问题批次工作目录（docs/issue，不入库）
+docs/issue/

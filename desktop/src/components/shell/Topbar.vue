@@ -3,8 +3,9 @@
  * 会话顶栏（UI shell doc §2.1 ③ / §2.2）：46px 带中段。折叠按钮的 lead
  * 槽恒挂（展开时宽 0——零宽导致标题零跳变，§2.2-6）；标题段是拖拽区；
  * 右端窗口控制 120px 车道按 §2.2-5 单一负责：面板关闭时顶栏预留，面板
- * 打开时让位（padding-right:0，车道由面板头接管）。动作组 = 原型
- * .action-group 同款 wash-1 圆角容器：新建+搜索一组、面板开关独立一组。
+ * 打开时让位（padding-right:0，车道由面板头接管）。v3.9（issue #3⑩）：
+ * 新建/搜索钮移除（侧栏顶部动作区已有，重复）；工作面板开关首页空态下
+ * 隐藏、不可展开（§2.4）。
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
@@ -18,25 +19,16 @@ const chat = useChatStore();
 const shell = useShellStore();
 const workPanel = useWorkPanelStore();
 
+/** 首页空态（§3.14 v3.9）：无标题、面板开关隐藏。 */
+const isHome = computed(() => chat.items.length === 0);
+
 const title = computed(() => {
-  // 首页空态（㉕·对话区①）：无会话打开 = 标题空（§3.14 第一屏）
-  if (chat.items.length === 0) return "";
+  if (isHome.value) return "";
   return (
     chat.sessions.find((s) => s.id === chat.sessionId)?.title ??
     t("sidebar.untitled")
   );
 });
-
-function focusSidebarSearch() {
-  shell.setDestination("chat");
-  // 侧栏折叠时先展开，再聚焦其搜索框
-  if (shell.sidebarCollapsed) shell.toggleSidebar();
-  requestAnimationFrame(() => {
-    document
-      .querySelector<HTMLInputElement>('.sidebar input[type="text"]')
-      ?.focus();
-  });
-}
 </script>
 
 <template>
@@ -81,29 +73,9 @@ function focusSidebarSearch() {
       >
     </div>
 
-    <!-- 动作组（no-drag）：新建 / 搜索一组，面板开关独立一组（§2.4） -->
-    <div class="action-group shrink-0">
-      <button
-        class="ctl"
-        type="button"
-        :title="t('sidebar.newChat')"
-        :aria-label="t('sidebar.newChat')"
-        @click="chat.newSession()"
-      >
-        <Icon name="plus" aria-hidden="true" />
-      </button>
-      <button
-        class="ctl"
-        type="button"
-        :title="t('sidebar.search')"
-        :aria-label="t('sidebar.search')"
-        @click="focusSidebarSearch"
-      >
-        <Icon name="search" aria-hidden="true" />
-      </button>
-    </div>
-    <div class="action-group ml-1.5 shrink-0">
-      <!-- 工作面板开关（§2.4/§2.5）：独立成组，只对对话目的地有意义 -->
+    <!-- 动作组（no-drag）：v3.9 只剩面板开关（新建/搜索移除，issue #3）；
+         首页空态下隐藏（issue #10：空白页不可展开右栏） -->
+    <div v-if="!isHome" class="action-group shrink-0">
       <button
         class="ctl"
         type="button"

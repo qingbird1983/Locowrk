@@ -1,21 +1,13 @@
 <script setup lang="ts">
 /**
- * composer 坞（UI shell doc §3.11）：绝对定位浮起卡片（r-xl、bg-composer、
- * shadow-composer、无边框），列宽与转录列同源——宽度 = min(100%,
- * var(--lw-content-max))，覆盖值由 ConversationWidthHandles 写在对话区根，
- * 这里不许写死宽度。滚动区在 composer 高度上做底部渐隐 mask（在
- * ChatTranscript），不盖不透明底带。
- *
- * 上行 = 自适应高度文本域（1 行起，透明无边框，14px/1.45，max-h 180，占位
- * 符 12.5px ink-5）；下行工具条（§3.11 v3.8 勘误：模型 chip 在**右组**）：
- * 右 = 用量环（§3.12 浮层）→ 模型 chip（§3.30 选择器：会话内写覆盖、
- * 首页写缺省）→ 36px 圆形发送键（空闲 accent 实心上箭头 / 空输入禁用灰 /
- * 运行中换停止字形——轮次中止后端待接入 §8.2，停止态暂为禁用，如实呈现）。
- * 左组（附件 + / 权限模式 chip）与提示词增强随后端能力补位，不发明占位
- * 按钮；落地前左组为空、固定不缩。收缩规则 = 左组 flex:0 0 auto、右组
- * flex:0 1 auto，模型 chip 是唯一可收缩项（窄窗先压它的文字）。Enter 发送 /
- * Shift+Enter 换行（enterToSend 开关；关 = Ctrl+Enter 发送）；运行中 Enter
- * 忽略。
+ * composer 坞（UI shell doc §3.11）：浮起卡片（r-xl、bg-composer、
+ * shadow-composer、无边框），列宽与转录列同源（§2.7，不许写死——欢迎页
+ * 空态变体例外，见 §3.11/§3.14）。上行 = 自适应高度文本域；工具条左组 =
+ * 附件 ＋（v2.59：添加文件或图片，路径引用 v1）/ 权限模式 chip；右组 =
+ * 用量环（UsageRing，§3.12）→ 模型 chip（§3.30 选择器：会话内写覆盖、
+ * 首页写缺省）→ 发送键。卡片内底行 = 工作区 chip（WorkspacePicker，项目
+ * 归属随手切）。收缩规则 = 左组固定不缩、右组可缩（模型 chip 先压字）。
+ * Enter 发送 / Shift+Enter 换行（enterToSend 开关）；运行中忽略。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -24,9 +16,11 @@ import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
 import { Icon } from "../../lib/icons";
-import ContextUsagePopover from "./ContextUsagePopover.vue";
+import AttachButton from "./AttachButton.vue";
 import ModelSelector from "./ModelSelector.vue";
 import PermissionModePicker from "./PermissionModePicker.vue";
+import UsageRing from "./UsageRing.vue";
+import WorkspacePicker from "./WorkspacePicker.vue";
 
 const emit = defineEmits<{ height: [h: number] }>();
 
@@ -39,7 +33,7 @@ const toast = useToastStore();
 const draft = ref("");
 const ta = ref<HTMLTextAreaElement | null>(null);
 const dock = ref<HTMLElement | null>(null);
-const showUsage = ref(false), showModels = ref(false);
+const showModels = ref(false);
 /** §3.25：↑（输入框为空时）召回上一条已发送输入。 */
 const lastSent = ref("");
 
@@ -50,8 +44,7 @@ const modelLabel = computed(
   () => chat.modelOverride?.model || settings.view?.llm.model || t("app.modelFallback"),
 );
 const enabledProviders = computed(() => (settings.view?.llm.providers ?? []).filter((p) => p.enabled));
-/** 选择语义（§3.30）：会话内 = 会话级覆盖；首页 = 写设置缺省。写穿失败
- * toast 如实报错（本地状态不滚——store 已回滚）。 */
+/** 选择语义（§3.30）：会话内 = 覆盖；首页 = 写设置缺省；写穿失败如实报错。 */
 function onSelectModel(providerId: string, model: string) {
   chat
     .setModel(providerId, model)
@@ -68,13 +61,12 @@ function onConfigure() {
   shell.openSettings("llm");
 }
 
-// 用量环：r=5.5 周长 ≈34.56；windowTokens 0 = 窗口未设置（环隐藏）
-const pct = computed(() => {
-  const u = chat.contextUsage;
-  if (!u || u.windowTokens <= 0) return 0;
-  return Math.min(100, Math.round((u.used / u.windowTokens) * 100));
-});
-const ringValue = computed(() => (pct.value / 100) * 34.56);
+/** §3.11 v3.9 附件 v1：路径以 `@路径` 引用追加进输入框（模型经 fs 工具
+ * 读取）；已有草稿时空格分隔。图片内容上传待 ㉛ 消息通路。 */
+function onAttach(paths: string[]) {
+  const refs = paths.map((p) => `@${p}`).join(" ");
+  draft.value = draft.value ? `${draft.value} ${refs}` : refs;
+}
 
 function autoResize() {
   const el = ta.value;
@@ -94,12 +86,9 @@ function send() {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  // §3.25：Esc 关当前浮层（本组件持有的是用量浮层），无浮层时把焦点
-  // 从输入框交出（其余浮层的 Esc 各自处理，焦点不在输入框时不会到这里）；
-  // 输入法组合中的 Esc 是取消候选，不抢
+  // §3.25：Esc = 输入框交出焦点（各浮层自持 Esc）；输入法组合中是取消候选
   if (e.key === "Escape" && !e.isComposing) {
-    if (showUsage.value) showUsage.value = false;
-    else ta.value?.blur();
+    ta.value?.blur();
     return;
   }
   // §3.25：↑（输入框为空时）召回上一条输入
@@ -122,7 +111,7 @@ function onKeydown(e: KeyboardEvent) {
   send();
 }
 
-// §3.17：审批决策后焦点回 composer——批完立刻能接着打字
+// §3.17：审批决策后焦点回 composer（批完接着打字）
 watch(
   () => shell.composerFocusTick,
   () => {
@@ -130,7 +119,7 @@ watch(
   },
 );
 
-// 坞总高（含底部 16px 内边距）上报：列宽热区下沿要停在 composer 顶部
+// 坞总高上报：列宽热区下沿要停在 composer 顶部
 let ro: ResizeObserver | null = null;
 onMounted(() => {
   if (dock.value) {
@@ -140,14 +129,6 @@ onMounted(() => {
   }
 });
 onBeforeUnmount(() => ro?.disconnect());
-
-// 浮层外点关闭（§5：小浮层不挂遮罩，点击外部即收）
-function onDocPointerDown(e: PointerEvent) {
-  if (!showUsage.value) return;
-  if (!(dock.value?.contains(e.target as Node) ?? false)) showUsage.value = false;
-}
-onMounted(() => document.addEventListener("pointerdown", onDocPointerDown));
-onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDown));
 </script>
 
 <template>
@@ -165,41 +146,14 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
         @keydown="onKeydown"
       />
       <div class="composer__toolbar">
-        <!-- 左组：权限模式切换器（§3.33，㉘·B 落地）；附件随后端能力补位（§8.2） -->
+        <!-- 左组：附件 ＋（v2.59）+ 权限模式切换器（§3.33） -->
         <div class="composer__left">
+          <AttachButton :drop-down="!chat.items.length" @attach="onAttach" />
           <PermissionModePicker />
         </div>
         <div class="composer__right">
-          <button
-            v-if="chat.contextUsage"
-            class="ring-btn"
-            type="button"
-            :aria-expanded="showUsage"
-            :aria-label="`${t('usage.window')} ${pct}%`"
-            @click="showUsage = !showUsage"
-          >
-            <svg
-              class="glyph"
-              viewBox="0 0 16 16"
-              width="14"
-              height="14"
-              fill="none"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              aria-hidden="true"
-            >
-              <circle class="ring__track" cx="8" cy="8" r="5.5" />
-              <circle
-                class="ring__value"
-                cx="8"
-                cy="8"
-                r="5.5"
-                :stroke-dasharray="`${ringValue} ${34.56 - ringValue}`"
-                transform="rotate(-90 8 8)"
-              />
-            </svg>
-            <span>{{ pct }}%</span>
-          </button>
+          <!-- 用量环（§3.12，自持开合） -->
+          <UsageRing />
           <!-- 模型 chip（§3.30 v2.58）：点开模型选择器浮层 -->
           <div class="chip-anchor">
             <button
@@ -218,6 +172,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
               :default-model="settings.view?.llm.model ?? ''"
               :override="chat.modelOverride"
               :providers="enabledProviders"
+              :drop-down="!chat.items.length"
               @select="onSelectModel"
               @clear="onClearOverride"
               @configure="onConfigure"
@@ -233,18 +188,17 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
             "
             @click="send"
           >
-            <Icon v-if="!chat.running" name="sendUp" :size="14" />
-            <Icon v-else name="stop" :size="14" />
+            <Icon v-if="!chat.running" name="sendUp" :size="18" />
+            <Icon v-else name="stop" :size="18" />
           </button>
         </div>
       </div>
+    </div>
 
-      <ContextUsagePopover
-        v-if="showUsage && chat.contextUsage"
-        :usage="chat.contextUsage"
-        :readout="settings.view?.chat.usageReadout ?? 'used'"
-        @close="showUsage = false"
-      />
+    <!-- 工作区 chip 行（§3.11 v3.9，照参考对象补齐）：项目归属随手切，数据
+         与侧栏项目段同源；**在卡片外、坐在下方暗影层上**（用户裁定） -->
+    <div class="composer__wsrow">
+      <WorkspacePicker :drop-down="!chat.items.length" />
     </div>
   </div>
 </template>
@@ -289,7 +243,18 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 10px 12px 6px;
+}
+/* 工作区 chip 行（§3.11 v3.9 用户裁定）：卡片**外**底行，坐在下方暗影
+ * 层上——宽度与卡同源，dock pointer-events:none 需显式放开 */
+.composer__wsrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, var(--lw-content-max));
+  margin-inline: auto;
+  padding: 6px 14px 0;
+  pointer-events: auto;
 }
 /* 收缩规则（§3.11 v3.8）：左组固定不缩；右组可缩——窄窗口下先压模型
  * chip 的文字，而不是溢出卡片 */
@@ -341,36 +306,18 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
 .chip--model {
   flex: 0 1 auto;
   max-width: 260px;
+  /* v2.59 用户裁定：chip 底色不常显（与权限 chip 同款），hover/展开才显 */
+  background: transparent;
+}
+.chip-anchor:hover .chip--model,
+.chip--model[aria-expanded="true"] {
+  background: var(--lw-wash-2);
 }
 .chip__text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.ring-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: var(--lw-ctl);
-  padding: 0 8px;
-  border-radius: var(--lw-r-full);
-  color: var(--lw-ink-2);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  flex: 0 0 auto;
-  transition: background var(--dur-fast) var(--ease-standard),
-    color var(--dur-fast) var(--ease-standard);
-}
-.ring-btn:hover {
-  background: var(--lw-wash-2);
-  color: var(--lw-ink-1);
-}
-.ring-btn .ring__track {
-  stroke: var(--lw-line-strong);
-}
-.ring-btn .ring__value {
-  stroke: var(--lw-ink-2);
 }
 .send-btn {
   width: 36px;
@@ -393,8 +340,9 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
   transform: scale(0.96);
 }
 .send-btn:disabled {
-  background: var(--lw-wash-3);
-  color: var(--lw-ink-4);
+  /* 禁用态（v2.59 用户裁定「互换一下」）：底加深、箭头变浅——底比箭深 */
+  background: color-mix(in oklab, var(--lw-ink-1) 32%, transparent);
+  color: color-mix(in oklab, var(--lw-ink-1) 6%, transparent);
   cursor: default;
 }
 </style>

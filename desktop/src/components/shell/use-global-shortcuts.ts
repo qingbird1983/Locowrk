@@ -33,7 +33,10 @@ export function useGlobalShortcuts() {
         break;
       case "j":
         e.preventDefault();
-        if (shell.destination === "chat") workPanel.toggle();
+        // §3.14 v3.9（issue #10）：首页空态不可展开工作面板
+        if (shell.destination === "chat" && chat.items.length > 0) {
+          workPanel.toggle();
+        }
         break;
       case "n":
         e.preventDefault();

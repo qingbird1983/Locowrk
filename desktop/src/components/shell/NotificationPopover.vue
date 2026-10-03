@@ -106,7 +106,7 @@ async function onRow(item: NotificationItem) {
   <Teleport to="body">
     <div
       ref="root"
-      class="notif-pop"
+      class="notif-pop lw-pop-in-up"
       role="dialog"
       :aria-label="t('notify.title')"
       :style="{ left: `${pos.left}px`, bottom: `${pos.bottom}px` }"

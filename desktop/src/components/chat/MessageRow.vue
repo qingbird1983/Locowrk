@@ -198,8 +198,8 @@ async function onBodyClick(e: MouseEvent) {
   width: min(82%, 600px);
   border-radius: var(--lw-r-lg-plus);
   padding: 10px 14px;
-  background: var(--lw-surface-1);
-  box-shadow: var(--shadow-raised);
+  background: var(--lw-bg-elevated);
+  box-shadow: var(--lw-shadow-raised);
   font-size: 14px;
   line-height: 1.55;
   resize: none;

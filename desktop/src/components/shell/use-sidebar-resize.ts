@@ -1,7 +1,8 @@
-// 侧栏拖宽交互（UI shell doc §2.3，照参考对象 sidebar-resize.ts）：指针
-// （setPointerCapture + rAF 节流 + 拖到最小值以下即折叠）+ 键盘（←/→
-// 16px、Home/End 两端）+ 双击复位；拖拽中根节点 data-sidebar-resizing
-// 全局锁光标禁选（style.css 基线层）。宽度状态与持久化在 shell store。
+// 侧栏拖宽交互（UI shell doc §2.3，v3.9 修订）：指针（setPointerCapture +
+// rAF 节流，只在 240–520 内自由调宽——拖到最小值钳制停住，不触发折叠）+
+// 键盘（←/→ 16px、Home/End 两端）+ 双击复位；拖拽中根节点
+// data-sidebar-resizing 全局锁光标禁选（style.css 基线层）。折叠只经折叠
+// 按钮 / Ctrl+B 显式触发；宽度状态与持久化在 shell store。
 import { onBeforeUnmount, ref, useTemplateRef } from "vue";
 import { useShellStore } from "../../stores/shell";
 import { SIDEBAR_MAX, SIDEBAR_MIN } from "../../lib/sidebar-preference";
@@ -38,12 +39,8 @@ export function useSidebarResize() {
   function applyDrag() {
     raf = 0;
     const desired = dragStartWidth + (pendingX - dragStartX); // 手柄在右缘：右拖 = 变宽
+    // 低于最小值钳制停住（setSidebarWidth 内也钳）——拖拽不得隐藏侧栏（issue #1）
     shell.setSidebarWidth(desired);
-    // 拖到小于最小值即折叠——"拖没了"是明确状态，不是卡在 240
-    if (desired < SIDEBAR_MIN) {
-      endDrag(false);
-      shell.collapseFromResize();
-    }
   }
 
   function onPointerMove(e: PointerEvent) {

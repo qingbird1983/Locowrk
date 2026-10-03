@@ -1,18 +1,32 @@
 <script setup lang="ts">
 /**
  * 权限模式切换器（UI shell doc §3.33，㉘·B）——composer 左组首位的四档
- * 会话级开关（计划 / 询问 / 自动编辑 / 完全）。裁决权威在后端
- * （DESIGN §7.2 决策表），本组件只写档位（旁车持久 + 即时生效）。
- * 无活动会话（首页空态）不渲染——档位跟着会话走。
+ * 会话级开关。裁决权威在后端（DESIGN §7.2 决策表），本组件只写档位
+ * （旁车持久 + 即时生效）。首页空态照常显示（v2.59 用户裁定）：首页选择
+ * = 写「新会话缺省档」（settings.tools.defaultPermissionMode，与模型 chip
+ * 的首页语义同构）；会话内 = 写会话级覆盖。菜单形态照参考对象照抄
+ * （v2.59 用户裁定）：四行 = 档位图标 + 名称 + 描述，行间淡发丝线，
+ * 选中态**只挂行尾小对勾**（不做整行高亮）；「完全访问」为最危险档，
+ * chip 图标+文字挂橘黄警示色（--lw-warn）。首屏 composer 居中 = 向下弹，
+ * 会话态贴底 = 向上弹（模型选择器同规）。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, Transition } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
-import { Icon } from "../../lib/icons";
+import { Icon, type IconName } from "../../lib/icons";
 
 type Mode = "plan" | "ask" | "acceptEdits" | "auto";
 const MODES: Mode[] = ["plan", "ask", "acceptEdits", "auto"];
+/** 档位图标（照抄参考）：💡计划模式 ✋变更前确认 🛡✓自动编辑 🛡!完全访问 */
+const MODE_ICONS: Record<Mode, IconName> = {
+  plan: "bulb",
+  ask: "hand",
+  acceptEdits: "shieldCheck",
+  auto: "shieldAlert",
+};
+/** 最危险档（chip 警示色判据）。 */
+const RISKIEST: Mode = "auto";
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -21,6 +35,13 @@ const settings = useSettingsStore();
 const open = ref(false);
 const root = ref<HTMLElement | null>(null);
 const errorText = ref("");
+
+/** 会话态 = 活动会话已在盘上（列表里）或正在运行；首页空态反之。 */
+const inSession = computed(
+  () => chat.sessions.some((s) => s.id === chat.sessionId) || chat.running,
+);
+/** 弹出方向：首页 composer 居中 = 向下弹；会话态贴底 = 向上弹。 */
+const dropDown = computed(() => !inSession.value);
 
 /** 当前档 = 会话显式档 → 设置缺省档（与后端 PermissionModeStore 同一回落）。 */
 const current = computed<Mode>(
@@ -31,17 +52,17 @@ const current = computed<Mode>(
 );
 const shortLabel = computed(() => t(`perm.short.${current.value}`));
 
-/** 首页空态不渲染：活动会话已在盘上（列表里）或正在运行。 */
-const visible = computed(
-  () => chat.sessions.some((s) => s.id === chat.sessionId) || chat.running,
-);
-
 async function pick(m: Mode) {
   open.value = false;
   if (m === current.value) return;
   errorText.value = "";
   try {
-    await chat.setPermissionMode(m);
+    if (!inSession.value) {
+      // 首页 = 写新会话缺省档（后端校验四档取值）
+      await settings.saveTools({ defaultPermissionMode: m });
+    } else {
+      await chat.setPermissionMode(m);
+    }
   } catch (err) {
     errorText.value = t("perm.setFailed", { reason: String(err) });
   }
@@ -66,35 +87,52 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="visible" ref="root" class="perm-picker">
+  <div ref="root" class="perm-picker">
     <button
       class="perm-picker__btn"
+      :class="{ 'perm-picker__btn--warn': current === RISKIEST }"
       type="button"
       :aria-expanded="open"
       :aria-label="`${t('perm.title')}: ${shortLabel}`"
       @click="open = !open"
     >
-      <Icon name="shield" :size="14" />
+      <Icon :name="MODE_ICONS[current]" :size="14" />
       <span class="perm-picker__label">{{ shortLabel }}</span>
     </button>
 
-    <!-- 上弹菜单（§3.33：四行 radio，当前档 wash-3 + 勾） -->
-    <div v-if="open" class="perm-picker__menu" role="listbox" :aria-label="t('perm.title')">
-      <button
-        v-for="m in MODES"
-        :key="m"
-        class="perm-picker__row"
-        :class="{ 'perm-picker__row--on': m === current }"
-        type="button"
-        role="option"
-        :aria-selected="m === current"
-        @click="pick(m)"
-      >
-        <span class="perm-picker__mode">{{ t(`perm.short.${m}`) }}</span>
-        <span class="perm-picker__desc">{{ t(`perm.desc.${m}`) }}</span>
-        <Icon v-if="m === current" name="check" :size="14" class="perm-picker__check" />
-      </button>
+    <!-- 档位菜单（照参考对象）：图标+名称+描述，行间发丝线，选中只挂勾 -->
+    <Transition :name="dropDown ? 'lw-pop-down' : 'lw-pop-up'">
+    <div
+      v-if="open"
+      class="perm-picker__menu"
+      :class="{ 'perm-picker__menu--down': dropDown }"
+      role="listbox"
+      :aria-label="t('perm.title')"
+    >
+      <template v-for="(m, i) in MODES" :key="m">
+        <div v-if="i > 0" class="perm-picker__sep" role="separator" />
+        <button
+          class="perm-picker__row"
+          type="button"
+          role="option"
+          :aria-selected="m === current"
+          @click="pick(m)"
+        >
+          <Icon :name="MODE_ICONS[m]" :size="15" class="perm-picker__row-icon" />
+          <span class="perm-picker__row-text">
+            <span class="perm-picker__mode">{{ t(`perm.short.${m}`) }}</span>
+            <span class="perm-picker__desc">{{ t(`perm.desc.${m}`) }}</span>
+          </span>
+          <Icon
+            v-if="m === current"
+            name="check"
+            :size="14"
+            class="perm-picker__check"
+          />
+        </button>
+      </template>
     </div>
+    </Transition>
     <p v-if="errorText" class="perm-picker__error">{{ errorText }}</p>
   </div>
 </template>
@@ -122,6 +160,15 @@ onBeforeUnmount(() => {
   background: var(--lw-wash-3);
   color: var(--lw-ink-1);
 }
+/* 最危险档 = 橘黄警示色（图标+文字，用户裁定） */
+.perm-picker__btn--warn {
+  color: var(--lw-warn);
+}
+.perm-picker__btn--warn:hover,
+.perm-picker__btn--warn[aria-expanded="true"] {
+  background: color-mix(in oklab, var(--lw-warn) 10%, transparent);
+  color: var(--lw-warn);
+}
 .perm-picker__label {
   font-size: 12.5px;
   line-height: 1;
@@ -135,25 +182,38 @@ onBeforeUnmount(() => {
   min-width: 224px;
   padding: 4px;
   border-radius: var(--lw-r-lg);
-  background: var(--lw-surface-2);
+  background: var(--lw-bg-elevated);
   border: 1px solid var(--lw-line);
-  box-shadow: var(--lw-shadow-raised);
+  box-shadow: var(--lw-shadow-dialog);
   z-index: 60;
+}
+/* 首屏 composer 居中：向下弹（v2.59 用户裁定，模型选择器同规） */
+.perm-picker__menu--down {
+  top: calc(100% + 6px);
+  bottom: auto;
 }
 .perm-picker__row {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border-radius: var(--lw-r-md);
   text-align: left;
 }
 .perm-picker__row:hover {
   background: var(--lw-wash-2);
 }
-.perm-picker__row--on {
-  background: var(--lw-wash-3);
+.perm-picker__row-icon {
+  flex: 0 0 auto;
+  color: var(--lw-ink-2);
+}
+.perm-picker__row-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
 }
 .perm-picker__mode {
   font-size: 13px;
@@ -168,11 +228,18 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 选中态只挂行尾小对勾（v2.59 用户裁定：整行高亮不做） */
 .perm-picker__check {
   margin-left: auto;
   align-self: center;
   color: var(--lw-ink-2);
   flex: none;
+}
+/* 行间淡发丝线（两端不到端，§五 弹层质感） */
+.perm-picker__sep {
+  height: 1px;
+  margin: 4px 12px;
+  background: var(--lw-line-subtle);
 }
 
 .perm-picker__error {

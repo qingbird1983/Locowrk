@@ -61,7 +61,7 @@
   --lw-bg-inset: #0d0d0d; /* 代码块 / mono 井 */
   --lw-bg-secondary: #212121;
   --lw-bg-tertiary: #282828;
-  --lw-bg-elevated: #212121f5; /* 浮层实底（自带 alpha） */
+  --lw-bg-elevated: #212121; /* 浮层实底（v3.9 用户裁定：弹层面板不透明） */
   --lw-bg-composer: #212121f5; /* composer 卡底（自带 alpha） */
   --lw-raised: #282828; /* 控件"抬起"底 */
 
@@ -143,7 +143,7 @@
   --lw-bg-inset: #ededed;
   --lw-bg-secondary: #f9f9f9;
   --lw-bg-tertiary: #f3f3f3;
-  --lw-bg-elevated: rgb(255 255 255 / 0.7);
+  --lw-bg-elevated: #ffffff; /* v3.9 用户裁定：弹层面板不透明 */
   --lw-bg-composer: #ffffff;
   --lw-raised: #ffffff;
 
@@ -265,6 +265,56 @@
 }
 
 /* --- 5. 基线层 ----------------------------------------------------------- */
+/* §6.6 ② 弹层滑动过渡（v3.9 用户裁定：弹层面板统一绑滑动动画）：
+ * 向下弹 = -8px→0，向上弹 = +8px→0 + fade；退场反向距离减半（§6.6 ③）。
+ * 用法：<Transition name="lw-pop-down"> / <Transition name="lw-pop-up">。 */
+.lw-pop-down-enter-active,
+.lw-pop-up-enter-active {
+  transition: opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+.lw-pop-down-leave-active,
+.lw-pop-up-leave-active {
+  transition: opacity var(--dur-fast) var(--ease-in),
+    transform var(--dur-fast) var(--ease-in);
+}
+.lw-pop-down-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.lw-pop-down-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.lw-pop-up-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.lw-pop-up-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+/* 挂载动画孪生（父级 v-if 挂载的浮层用——Transition 无内部开关不触发）：
+ * RowMenu（随光标，向下） / 通知与用量 popover（锚上方，向上） */
+@keyframes lw-pop-in-down-kf {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+@keyframes lw-pop-in-up-kf {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.lw-pop-in-down {
+  animation: lw-pop-in-down-kf var(--dur-base) var(--ease-out);
+}
+.lw-pop-in-up {
+  animation: lw-pop-in-up-kf var(--dur-base) var(--ease-out);
+}
+
 @layer base {
   *,
   *::before,
@@ -716,4 +766,25 @@
   padding-left: 12px;
   border-left: 1px solid var(--lw-line-strong);
   color: var(--lw-ink-2);
+}
+
+/* 欢迎页 composer（§3.11 v3.9 / §3.14，issue #10）：首页空态下 composer
+ * 实例被 Teleport 进欢迎页槽位——坞的绝对定位在此上下文不成立，改静态；
+ * 宽度定宽 720（列宽双柄在空态不渲染，"拉宽拉窄"是会话态的能力）。
+ * 全局规则：.composer 属 Composer.vue scoped，宿主组件样式够不着。 */
+#welcome-composer-slot .composer-dock {
+  position: static;
+  width: 100%;
+  padding: 0;
+}
+#welcome-composer-slot .composer {
+  width: min(100%, 720px);
+  /* 双层卡影（§3.11 v3.9，用户裁定尺寸）：0 模糊实底 box-shadow = 扁平
+   * 圆角矩形暗影——三边各露 ~1px、下方 32px；随卡片走，与卡外底行解耦 */
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--lw-ink-1) 7%, transparent),
+    0 32px 0 0 color-mix(in oklab, var(--lw-ink-1) 7%, transparent);
+}
+#welcome-composer-slot .composer__wsrow {
+  width: min(100%, 720px);
 }

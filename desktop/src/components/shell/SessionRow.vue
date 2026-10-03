@@ -246,6 +246,7 @@ async function commitRename() {
  * wash-3 填充（禁止左侧色条）；行内缩进让出分组字形宽；行间 2px 垂直
  * 间隙（§7-15：可高亮行的高亮瓦片不得粘连） */
 .session-row {
+  position: relative;
   display: flex;
   align-items: center;
   min-height: 28px;
@@ -259,9 +260,20 @@ async function commitRename() {
 .session-row[data-selected] {
   background: var(--lw-wash-3);
 }
-/* 工作区内的会话（§2.3）：再缩进一档让出分组头字形宽 */
+/* 项目内的任务行（§2.3 v3.9 issue #9 + 用户裁定）：任务名**不缩进**——
+ * 与项目名文字同一左缘（28px，上下左右对齐）；名前 1px 竖向发丝线挂在
+ * 项目行文件夹字形中心下方（树形引导线，不接横臂） */
 .session-row--nested {
-  padding-left: 56px;
+  padding-left: 28px;
+}
+.session-row--nested::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 15px;
+  width: 1px;
+  background: var(--lw-line-strong);
 }
 .session-row__main {
   display: flex;

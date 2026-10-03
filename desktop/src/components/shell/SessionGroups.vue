@@ -1,26 +1,43 @@
 <script setup lang="ts">
 /**
- * 会话树（UI shell 文档 §2.3）：顶层「会话」组（未关联）+ 「项目」组
- * （一级 = 工作区，头行 12px chevron + 14px 文件夹 + 13px 名 + 可选 6px
- * 运行点，可折叠且折叠态持久化进侧栏偏好；二级 = 时间桶，桶内会话行
- * 缩进一档）。行渲染与运营在 SessionRow（§3.6 行尾 `…` 菜单）。
+ * 会话树（UI shell 文档 §2.3 v3.9 项目接管）：**侧栏只保留项目工作区**
+ * （用户裁定）——组头行 = 标签 + 下三角（点击折叠/展开所有项目，字形随
+ * 状态换形）+ hover 显形「筛选 / 新建项目」；项目行在 ProjectGroup（文件
+ * 夹双态 + ⋯/＋）；无归属会话不进树（⌘K 面板照列全部）。折叠键 =
+ * workspace 存储路径，随侧栏偏好持久化。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
+import { useSettingsStore } from "../../stores/settings";
+import { useToastStore } from "../../stores/toast";
+import { pickDirectory } from "../../lib/api";
 import type { SessionMeta } from "../../types";
 import { groupSessions } from "../../lib/session-groups";
 import { loadCollapsedGroups, saveCollapsedGroups } from "../../lib/sidebar-preference";
 import { Icon } from "../../lib/icons";
-import SessionRow from "./SessionRow.vue";
+import RowMenu, { type RowMenuItem } from "./RowMenu.vue";
+import ProjectGroup from "./ProjectGroup.vue";
 
 const props = defineProps<{ sessions: SessionMeta[]; fsRoots: string[] }>();
 const { t } = useI18n();
 const chat = useChatStore();
+const settings = useSettingsStore();
+const toast = useToastStore();
 
-const tree = computed(() =>
-  groupSessions(props.sessions, chat.running ? chat.sessionId : null, props.fsRoots),
-);
+const runningId = computed(() => (chat.running ? chat.sessionId : null));
+
+// 「只看进行中」筛选（issue #6 筛选图标的最小诚实实现：纯前端过滤）
+const onlyRunning = ref(false);
+const tree = computed(() => {
+  if (!onlyRunning.value) {
+    return groupSessions(props.sessions, runningId.value, props.fsRoots);
+  }
+  const visible = props.sessions.filter((s) => s.id === runningId.value);
+  return groupSessions(visible, runningId.value, props.fsRoots, {
+    includeEmpty: false,
+  });
+});
 
 // 分组头折叠（§2.3）：键 = workspace 存储路径，随偏好持久化
 const collapsed = ref(loadCollapsedGroups());
@@ -31,108 +48,160 @@ function toggle(key: string) {
   collapsed.value = next;
   saveCollapsedGroups(next);
 }
+
+/** 下三角（issue #6）：任一项目展开 → 折叠所有；已全折叠 → 全部展开。 */
+const allCollapsed = computed(
+  () => tree.value.workspaces.length > 0 && tree.value.workspaces.every((w) => collapsed.value.has(w.key)),
+);
+
+function toggleAll() {
+  const next = new Set(collapsed.value);
+  if (allCollapsed.value) {
+    for (const w of tree.value.workspaces) next.delete(w.key);
+  } else {
+    for (const w of tree.value.workspaces) next.add(w.key);
+  }
+  collapsed.value = next;
+  saveCollapsedGroups(next);
+}
+
+// ---- 组头行右缘动作（issue #6）：筛选菜单 + 新建项目 ----
+const filterMenu = ref<{ x: number; y: number } | null>(null);
+
+const filterItems = computed<RowMenuItem[]>(() => [
+  { id: "all", label: t("sidebar.filterAll") },
+  {
+    id: "running",
+    label: onlyRunning.value ? `✓ ${t("sidebar.filterRunning")}` : t("sidebar.filterRunning"),
+  },
+]);
+
+function openFilterMenu(e: MouseEvent) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  filterMenu.value = { x: r.right + 2, y: r.bottom + 2 };
+}
+
+function onFilterSelect(id: string) {
+  filterMenu.value = null;
+  onlyRunning.value = id === "running";
+}
+
+/** 新建项目 = 原生目录选择 → 追加进设置 fsRoots（保存即生效，§2.3）。 */
+async function addProject() {
+  const dir = await pickDirectory();
+  if (!dir || props.fsRoots.includes(dir)) return;
+  try {
+    await settings.saveTools({ fsRoots: [...props.fsRoots, dir] });
+    toast.push("ok", t("toast.projectAdded"));
+  } catch (e) {
+    toast.push("danger", t("toast.projectAddFailed"), String(e));
+  }
+}
 </script>
 
 <template>
   <div>
-    <!-- 顶层「会话」组（未关联会话；v2.50 前全量在此） -->
-    <div class="side-label">{{ t("sidebar.sessions") }}</div>
-    <template v-for="g in tree.top" :key="g.key">
-      <div class="bucket-label">{{ t(`sidebar.${g.key}`) }}</div>
-      <SessionRow v-for="s in g.items" :key="s.id" :session="s" />
-    </template>
-
-    <!-- 「项目」组：一级 = 工作区（组内最近活动降序，fsRoots 空组垫后
-         只渲染头行——组织结构先行，会话经「移入工作区」归位），二级 = 时间桶 -->
-    <template v-if="tree.workspaces.length > 0">
-      <div class="side-label">{{ t("sidebar.projects") }}</div>
-      <div v-for="w in tree.workspaces" :key="w.key">
+    <!-- 「项目」组头行（issue #6）：下三角左对齐紧跟文字；筛选/新建右对齐
+         hover 显形 -->
+    <div class="proj-head">
+      <button
+        type="button"
+        class="proj-head__label"
+        :aria-expanded="!allCollapsed"
+        :title="t('sidebar.toggleAllProjects')"
+        @click="toggleAll"
+      >
+        {{ t("sidebar.projects") }}
+        <Icon
+          :name="allCollapsed ? 'chevronRight' : 'chevronDown'"
+          :size="12"
+          aria-hidden="true"
+        />
+      </button>
+      <span class="proj-head__actions">
         <button
           type="button"
-          class="ws-head"
-          :aria-expanded="!collapsed.has(w.key)"
-          :title="w.key"
-          @click="toggle(w.key)"
+          class="proj-head__btn"
+          :aria-label="t('sidebar.filter')"
+          :title="t('sidebar.filter')"
+          @click="openFilterMenu"
         >
-          <Icon
-            :name="collapsed.has(w.key) ? 'chevronRight' : 'chevronDown'"
-            :size="12"
-            class="ws-head__chevron"
-            aria-hidden="true"
-          />
-          <Icon name="folder" :size="14" aria-hidden="true" />
-          <span class="ws-head__name">{{ w.name }}</span>
-          <span
-            v-if="w.running"
-            class="ws-head__dot"
-            role="img"
-            :aria-label="t('status.running')"
-            :title="t('status.running')"
-          />
+          <Icon name="filter" :size="13" aria-hidden="true" />
         </button>
-        <template v-if="!collapsed.has(w.key)">
-          <template v-for="b in w.buckets" :key="b.key">
-            <div class="bucket-label bucket-label--nested">
-              {{ t(`sidebar.${b.key}`) }}
-            </div>
-            <SessionRow v-for="s in b.items" :key="s.id" :session="s" nested />
-          </template>
-        </template>
-      </div>
-    </template>
+        <button
+          type="button"
+          class="proj-head__btn"
+          :aria-label="t('sidebar.addProject')"
+          :title="t('sidebar.addProject')"
+          @click="addProject"
+        >
+          <Icon name="plus" :size="13" aria-hidden="true" />
+        </button>
+      </span>
+      <RowMenu
+        v-if="filterMenu"
+        :items="filterItems"
+        :x="filterMenu.x"
+        :y="filterMenu.y"
+        @select="onFilterSelect"
+        @close="filterMenu = null"
+      />
+    </div>
+
+    <ProjectGroup
+      v-for="w in tree.workspaces"
+      :key="w.key"
+      :group="w"
+      :collapsed="collapsed.has(w.key)"
+      @toggle="toggle(w.key)"
+    />
   </div>
 </template>
 
 <style scoped>
-.side-label {
-  padding: 10px 8px 4px;
-  font-size: 11.5px;
-  color: var(--lw-ink-4);
-}
-.bucket-label {
-  padding: 6px 8px 2px 28px;
-  font-size: 11.5px;
-  color: var(--lw-ink-4);
-}
-.bucket-label--nested {
-  padding-left: 56px;
-}
-
-/* 工作区分组头（§2.3）：28px 行 = 12px chevron + 14px 文件夹 + 13px 名 +
- * 可选 6px 状态点；hover wash-2；chevron 只换字形不旋转（§6.6 禁令）。
- * 行间 2px 垂直间隙（§7-15：高亮瓦片不得粘连，会话行同规） */
-.ws-head {
+/* 项目组头行（issue #6）：11.5px 标签 + 下三角；右缘动作 hover 显形 */
+.proj-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 28px;
-  margin-top: 2px;
-  padding: 0 8px;
+  padding: 10px 4px 2px 8px;
+}
+.proj-head__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 20px;
+  padding: 0 4px;
   border-radius: var(--lw-r-xs);
-  text-align: left;
-}
-.ws-head:hover {
-  background: var(--lw-wash-2);
-}
-.ws-head__chevron {
-  flex: 0 0 auto;
+  font-size: 11.5px;
   color: var(--lw-ink-4);
 }
-.ws-head__name {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
+.proj-head__label:hover {
+  background: var(--lw-wash-2);
   color: var(--lw-ink-2);
 }
-.ws-head__dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: var(--lw-r-full);
-  background: var(--lw-ok);
+.proj-head__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.proj-head:hover .proj-head__actions,
+.proj-head__actions:focus-within {
+  opacity: 1;
+}
+.proj-head__btn {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lw-r-xs);
+  color: var(--lw-ink-4);
+}
+.proj-head__btn:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
 }
 </style>

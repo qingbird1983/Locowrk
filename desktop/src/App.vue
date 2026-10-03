@@ -9,6 +9,7 @@ import { useShellStore } from "./stores/shell";
 import { useWorkPanelStore } from "./stores/work-panel";
 import WorkPanel from "./components/shell/WorkPanel.vue";
 import ChatTranscript from "./components/ChatTranscript.vue";
+import WelcomeHome from "./components/chat/WelcomeHome.vue";
 import Composer from "./components/chat/Composer.vue";
 import ContextProgressBar from "./components/ContextProgressBar.vue";
 import MemoryPage from "./components/MemoryPage.vue";
@@ -22,7 +23,7 @@ import ToastStack from "./components/shell/ToastStack.vue";
 import Topbar from "./components/shell/Topbar.vue";
 import WindowControls from "./components/shell/WindowControls.vue";
 import { useGlobalShortcuts } from "./components/shell/use-global-shortcuts";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 /**
  * 壳骨架（UI shell doc §2.1 区域地图 / §2.6 保活规则）：
@@ -43,6 +44,13 @@ const notifications = useNotificationsStore();
 const workPanel = useWorkPanelStore();
 /** composer 坞总高：列宽热区下沿（ConversationWidthHandles）的锚。 */
 const composerH = ref(0);
+/** 首页空态（§3.14 v3.9）：转录未渲染欢迎页；composer Teleport 进槽位。 */
+const isHome = computed(() => chat.items.length === 0);
+/** 欢迎页槽位元素（WelcomeHome defineExpose）：Teleport 直接吃元素不走
+ * 选择器——初次挂载整棵树还没插进 document，选择器必扑空；元素就绪前
+ * Teleport 保持 disabled（composer 停在底部坞原位）。 */
+const welcomeRef = ref<{ slotEl: HTMLElement | null } | null>(null);
+const welcomeSlotEl = computed(() => welcomeRef.value?.slotEl ?? null);
 // §3.25 落地表：Ctrl+B/J/N/,/[/]（⌘K 与 Ctrl+Shift+L 各自注册，不在此）
 useGlobalShortcuts();
 
@@ -85,15 +93,23 @@ onMounted(() => {
           <div class="replay-track__bar" />
         </div>
         <ContextProgressBar :usage="chat.contextUsage" />
-        <ChatTranscript :composer-bottom="composerH" />
-        <Composer @height="composerH = $event" />
+        <!-- 首页空态（§3.14 v3.9）= 欢迎页独立形态；composer（单实例）
+             Teleport 进欢迎页槽位，会话态回底部坞——草稿跨形态保留 -->
+        <ChatTranscript v-if="!isHome" :composer-bottom="composerH" />
+        <WelcomeHome v-else ref="welcomeRef" />
+        <Teleport :to="welcomeSlotEl ?? 'body'" :disabled="!isHome || !welcomeSlotEl">
+          <Composer @height="composerH = $event" />
+        </Teleport>
       </div>
 
       <!-- 工作面板（§2.5，v2.52）：主区右缘第二展示面，只对对话目的地有
-           意义（§2.4 开关在会话顶栏右侧）；随 chat 区一起挂起/显示 -->
-      <WorkPanel
-        v-if="shell.destination === 'chat' && workPanel.open"
-      />
+           意义（§2.4 开关在会话顶栏右侧）；随 chat 区一起挂起/显示。
+           开合滑动动画与侧栏统一（§6.6 ②，issue #2） -->
+      <Transition name="wp">
+        <WorkPanel
+          v-if="shell.destination === 'chat' && workPanel.open"
+        />
+      </Transition>
 
       <!-- 非对话目的地：侧栏右侧铺满，按需挂载 -->
       <DestinationShell
@@ -122,6 +138,25 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* §6.6 ② 工作面板抽屉（v3.9 issue #2）：与侧栏统一——宽度驱动滑开，
+ * 开 base/ease-out、收 fast/ease-in；!important 压过内联宽度。transition
+ * 只挂在 enter/leave-active：拖宽与视口变化不动画。 */
+.wp-enter-active {
+  transition:
+    width var(--dur-base) var(--ease-out),
+    opacity var(--dur-base) var(--ease-out);
+}
+.wp-leave-active {
+  transition:
+    width var(--dur-fast) var(--ease-in),
+    opacity var(--dur-fast) var(--ease-in);
+}
+.wp-enter-from,
+.wp-leave-to {
+  width: 0 !important;
+  opacity: 0;
+}
+
 /* §3.23 会话冷切换进度轨：2px 高、28% 宽不定段 720ms 来回扫 */
 .replay-track {
   position: relative;

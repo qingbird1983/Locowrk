@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * 命令面板（UI shell doc §3.15）：Ctrl/⌘+K 打开，唯一的「跳任何地方」
- * 入口。分组结果 = 会话 / 页面 / 设置 / 命令，形态照原型（.palette /
- * .menu-item）：52px 搜索行 + Esc 键帽、结果 max-h 滚动、11px 组标签、
- * 12.5px 行 + 行尾键帽或所属分区；当前行 wash-2 高亮，↑↓ 移动、Enter
- * 执行、Esc 关闭、mouseenter 跟随。选中「设置」类结果 → 打开设置目的地
- * 并切到该分区板面（shell.openSettings，§3.32 v3.4 板面切换模型）。
+ * 命令面板（UI shell doc §3.15）：Ctrl/⌘+K 打开，唯一的「跳任何地方」入口；
+ * v3.9 起侧栏「搜索」行与本面板同流（开合态在 shell store）。分组 = 会话 /
+ * 正文命中（v3.9 自侧栏搜索框并入，§3.6）/ 页面 / 设置 / 命令，形态照原型：
+ * 52px 搜索行 + Esc 键帽、结果 max-h 滚动、11px 组标签、12.5px 行 + 行尾键帽
+ * 或所属分区；当前行 wash-2 高亮，↑↓ 移动、Enter 执行、Esc 关闭、鼠标跟随；
+ * 选中「设置」类结果 → shell.openSettings。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -14,22 +14,25 @@ import { useShellStore } from "../../stores/shell";
 import { useSettingsStore } from "../../stores/settings";
 import { useWorkPanelStore } from "../../stores/work-panel";
 import { relativeTime } from "../../lib/format";
+import { useSessionSearch } from "./use-session-search";
 import {
   SETTINGS_SECTIONS,
   isSectionVisible,
 } from "../../lib/settings-index";
 import { Icon } from "../../lib/icons";
+import { flipEffectiveTheme } from "../../lib/theme";
 
 const { t } = useI18n();
 const chat = useChatStore();
 const shell = useShellStore();
 const settingsStore = useSettingsStore();
 
-const open = ref(false);
 const query = ref("");
 const inputEl = ref<HTMLInputElement | null>(null);
 const resultsEl = ref<HTMLElement | null>(null);
 const highlight = ref(0);
+// 正文命中（v2.49 能力随侧栏搜索框并入，§3.15 v3.9）
+const { contentHits } = useSessionSearch(query);
 
 interface PaletteItem {
   key: string;
@@ -44,7 +47,7 @@ interface PaletteGroup {
   items: PaletteItem[];
 }
 
-/** 四组全量项；过滤在 computed 里做（索引驱动，不爬 DOM）。 */
+/** 全量项；过滤在 computed 里做（索引驱动，不爬 DOM）。 */
 const allGroups = computed<PaletteGroup[]>(() => {
   const sessions: PaletteItem[] = chat.sessions.map((s) => {
     const rt = relativeTime(s.updatedAt);
@@ -59,11 +62,22 @@ const allGroups = computed<PaletteGroup[]>(() => {
       },
     };
   });
+  const bodyHits: PaletteItem[] = contentHits.value.map((h) => ({
+    key: `body:${h.id}`,
+    label: h.title ?? t("sidebar.untitled"),
+    hint: h.snippet,
+    run: () => {
+      if (chat.running && h.id !== chat.sessionId) return;
+      void chat.switchSession(h.id);
+      shell.setDestination("chat");
+    },
+  }));
   const pages: PaletteItem[] = (
     [
       ["chat", "nav.chat"],
       ["plugins", "nav.plugins"],
       ["memory", "nav.memory"],
+      ["schedule", "nav.schedule"],
       ["settings", "nav.settings"],
     ] as const
   ).map(([dest, key]) => ({
@@ -80,22 +94,17 @@ const allGroups = computed<PaletteGroup[]>(() => {
     hint: `${t("nav.settings")} / ${t(s.labelKey)}`,
     run: () => shell.openSettings(s.id),
   }));
-  /** 明暗主题切换：system 档先按当前媒体查询解出实效档再翻面。 */
+  /** 明暗主题切换：实效档解析在 lib/theme（flipEffectiveTheme）。 */
   function toggleTheme() {
-    const cur = settingsStore.view?.appearance.theme ?? "light";
-    const effective =
-      cur === "system"
-        ? window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light"
-        : cur;
-    void settingsStore.setTheme(effective === "dark" ? "light" : "dark");
+    void settingsStore.setTheme(
+      flipEffectiveTheme(settingsStore.view?.appearance.theme ?? "light"),
+    );
   }
 
   const commands: PaletteItem[] = [
     {
-      key: "cmd:newChat",
-      label: t("sidebar.newChat"),
+      key: "cmd:newTask",
+      label: t("sidebar.newTask"),
       keys: "Ctrl N",
       run: () => {
         chat.newSession();
@@ -114,7 +123,8 @@ const allGroups = computed<PaletteGroup[]>(() => {
       keys: "Ctrl J",
       run: () => {
         shell.setDestination("chat");
-        useWorkPanelStore().toggle();
+        // §3.14 v3.9（issue #10）：首页空态不可展开工作面板
+        if (chat.items.length > 0) useWorkPanelStore().toggle();
       },
     },
     {
@@ -129,12 +139,17 @@ const allGroups = computed<PaletteGroup[]>(() => {
       run: toggleTheme,
     },
   ];
-  return [
+  const groups: PaletteGroup[] = [
     { labelKey: "palette.groups.sessions", items: sessions },
+  ];
+  if (query.value.trim() && bodyHits.length > 0)
+    groups.push({ labelKey: "palette.groups.contentHits", items: bodyHits });
+  groups.push(
     { labelKey: "palette.groups.pages", items: pages },
     { labelKey: "palette.groups.settings", items: settings },
     { labelKey: "palette.groups.commands", items: commands },
-  ];
+  );
+  return groups;
 });
 
 const visibleGroups = computed<PaletteGroup[]>(() => {
@@ -186,23 +201,35 @@ function onItemEnter(index: number) {
 function openPalette() {
   query.value = "";
   highlight.value = 0;
-  open.value = true;
+  shell.openPalette();
   void nextTick(() => inputEl.value?.focus());
 }
 
 function close() {
-  open.value = false;
+  shell.closePalette();
 }
+
+// 开合态在 shell store（§3.15 v3.9）：侧栏「搜索」行置位时在此就绪
+watch(
+  () => shell.paletteOpen,
+  (v) => {
+    if (v) {
+      query.value = "";
+      highlight.value = 0;
+      void nextTick(() => inputEl.value?.focus());
+    }
+  },
+);
 
 function onGlobalKeydown(e: KeyboardEvent) {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === "k") {
     e.preventDefault();
-    if (open.value) close();
+    if (shell.paletteOpen) close();
     else openPalette();
     return;
   }
-  if (!open.value) return;
+  if (!shell.paletteOpen) return;
   if (e.key === "Escape") {
     e.preventDefault();
     close();
@@ -226,7 +253,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
 <template>
   <Transition name="lw-modal">
     <div
-      v-if="open"
+      v-if="shell.paletteOpen"
       class="fixed inset-0 z-[40] flex items-center justify-center px-6"
       style="background: var(--lw-scrim)"
       @mousedown.self="close"
@@ -251,10 +278,15 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
         </div>
         <div ref="resultsEl" class="palette-results scroll-y" role="listbox">
           <template
-            v-for="group in visibleGroups"
+            v-for="(group, gi) in visibleGroups"
             :key="group.labelKey"
           >
-            <div class="palette-group-label">{{ t(group.labelKey) }}</div>
+            <div
+              class="palette-group-label"
+              :class="{ 'palette-group-label--ruled': gi > 0 }"
+            >
+              {{ t(group.labelKey) }}
+            </div>
             <button
               v-for="(item, i) in group.items"
               :key="item.key"
@@ -296,7 +328,6 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
   background: var(--lw-bg-elevated);
   border: 1px solid var(--lw-line);
   box-shadow: var(--lw-shadow-dialog);
-  backdrop-filter: blur(12px);
 }
 .palette-search {
   display: flex;
@@ -317,6 +348,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
   letter-spacing: 0.02em;
   color: var(--lw-ink-4);
 }
+/* v3.9 用户裁定：分组间淡发丝线，两端不到头（inset 12px） */
+.palette-group-label--ruled {
+  border-top: 1px solid var(--lw-line-subtle);
+  margin: 4px 12px 0;
+  padding: 8px 0 4px;
+}
 .palette-item {
   display: flex;
   align-items: center;
@@ -336,7 +373,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
 }
 .palette-item-hint {
   margin-left: auto;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
   font-size: 11.5px;
   color: var(--lw-ink-4);
 }

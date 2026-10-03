@@ -119,7 +119,6 @@ const { t } = useI18n();
   background: var(--lw-bg-elevated);
   border: 1px solid var(--lw-line);
   box-shadow: var(--lw-shadow-dialog);
-  backdrop-filter: blur(12px);
 }
 .dialog__head {
   display: flex;

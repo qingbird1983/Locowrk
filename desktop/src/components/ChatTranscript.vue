@@ -207,28 +207,6 @@ async function onNoticeAction(item: SystemItem, action: string) {
   <div class="relative min-h-0 flex-1">
     <div class="scroller scroll-y">
       <div class="column conv-w">
-        <!-- 首页空态（§3.14）：吉祥物 + 一行问句，垂直居中于转录区，
-             composer 仍在底部原位（启动落首页，㉕·对话区①） -->
-        <div v-if="chat.items.length === 0" class="home">
-          <svg
-            class="home__mascot"
-            viewBox="0 0 72 72"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path
-              d="M22 47.5a9.5 9.5 0 0 1-1.4-18.9 13 13 0 0 1 25.2-4.6 10 10 0 0 1 1.7 23.5Z"
-            />
-            <circle cx="30.6" cy="32.4" r="1.9" fill="currentColor" stroke="none" />
-            <circle cx="41.4" cy="32.4" r="1.9" fill="currentColor" stroke="none" />
-          </svg>
-          <h1 class="home__title">{{ t("chat.homeTitle") }}</h1>
-        </div>
-
         <template v-for="block in blocks" :key="block.key">
           <!-- 轮次过程组：连续过程项（工具/思考）；组内只有过程 -->
           <template v-if="block.kind === 'turn'">
@@ -354,30 +332,8 @@ async function onNoticeAction(item: SystemItem, action: string) {
   margin-inline: auto;
   padding-bottom: 180px;
 }
-/* 首页空态（§3.14 / 原型 S1）：单线云朵 + 26px 一行问句（400 / -0.02em），
- * 垂直居中于转录区；composer 留在底部原位 */
-.home {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  /* 顶栏 46 + composer 坞 ≈190 + 底部渐隐 mask 预留 */
-  min-height: calc(100vh - 46px - 236px);
-}
-.home__mascot {
-  width: 72px;
-  height: 72px;
-  color: var(--lw-ink-1);
-}
-.home__title {
-  font-size: 26px;
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  color: var(--lw-ink-1);
-  text-align: center;
-}
+/* 首页空态（§3.14 v3.9）迁去 chat/WelcomeHome（欢迎页独立形态，composer
+ * 随行）；本组件只在会话态挂载 */
 .error-row {
   display: flex;
   align-items: flex-start;

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 /**
- * 侧栏（UI shell doc §2.1 ①② / §2.3 / §3.6）：会话树在 SessionGroups
- * （§2.3 两级分组）；搜索 = 标题过滤 + 正文命中（v2.49）；通知 = 第 5
- * 图标 + §3.13 浮层（v2.51）；版本号 7 连点解锁开发者选项（§7-16②）；
- * 折叠/拖宽在 use-sidebar-resize（§2.3），宽度跨重启持久化。
+ * 侧栏（UI shell doc §2.1 ①② / §2.3 v3.9 项目接管）：顶部动作区三行 =
+ * 新建任务（Ctrl+N）/ 搜索（Ctrl+K 开 §3.15 命令面板——搜全部可操作项）/
+ * 插件市场（原「扩展」上移改名，issue #5⑪）；会话树在 SessionGroups
+ * （项目段接管对话管理，issue #4）；页脚 = 设置/记忆/定时/通知 + 版本号
+ * （issue #12，设置图标 = 齿轮）；版本号 7 连点解锁开发者选项（§7-16②）；
+ * 折叠/拖宽在 use-sidebar-resize（§2.3，v3.9 拖拽不触发折叠）。
  */
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -11,11 +13,11 @@ import { getVersion } from "@tauri-apps/api/app";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
-import { useNotificationsStore } from "../../stores/notifications";import { SIDEBAR_MAX, SIDEBAR_MIN } from "../../lib/sidebar-preference";
+import { useNotificationsStore } from "../../stores/notifications";
+import { SIDEBAR_MAX, SIDEBAR_MIN } from "../../lib/sidebar-preference";
 import { useSidebarResize } from "./use-sidebar-resize";
 import { useDevUnlock } from "./use-dev-unlock";
 import { useNotificationEntry } from "./use-notification-entry";
-import { useSessionSearch } from "./use-session-search";
 import { Icon } from "../../lib/icons";
 import SessionGroups from "./SessionGroups.vue";
 import NotificationPopover from "./NotificationPopover.vue";
@@ -26,7 +28,6 @@ const shell = useShellStore();
 const settings = useSettingsStore();
 const notifications = useNotificationsStore();
 
-const search = ref("");
 const version = ref("");
 
 // 通知入口（§2.4 第 5 图标 + §3.13 浮层）：开合与锚定在 composable
@@ -41,33 +42,19 @@ onMounted(async () => {
   version.value = (await getVersion().catch(() => "")) || "";
 });
 
-// ---- 分组树（§2.3）：两级分组在 lib/session-groups.ts + SessionGroups ----
-const filtered = computed(() => {
-  const q = search.value.trim().toLowerCase();
-  if (!q) return chat.sessions;
-  return chat.sessions.filter((s) =>
-    (s.title ?? s.id).toLowerCase().includes(q),
-  );
-});
-
-// ---- 正文搜索（v2.49）：防抖/竞态守卫在 use-session-search.ts ----
-const { contentHits } = useSessionSearch(search);
-
-const nothingFound = computed(
-  () => filtered.value.length === 0 && contentHits.value.length === 0,
-);
-
-// ---- 会话导航（§3.6）：正文命中行也走这里 ----
-function openSession(id: string) {
-  if (chat.running && id !== chat.sessionId) return; // 运行中禁切（§3.6）
-  void chat.switchSession(id);
+// ---- 顶部动作区（§2.3 v3.9，issue #5⑪）----
+function newTask() {
+  chat.newSession();
   shell.setDestination("chat");
+}
+function openSearch() {
+  shell.openPalette();
 }
 
 // 版本号连点解锁开发者选项（§3.2，安卓式 7 连点）：逻辑在 use-dev-unlock
 const { onTap: onVersionTap } = useDevUnlock();
 
-// ---- 拖拽调宽（§2.3）：交互在 use-sidebar-resize.ts，状态与持久化在 shell store ----
+// ---- 拖拽调宽（§2.3 v3.9）：交互在 use-sidebar-resize.ts，状态与持久化在 shell store ----
 const {
   dragging,
   onPointerDown,
@@ -77,12 +64,15 @@ const {
   onKeyDown,
   onDoubleClick,
 } = useSidebarResize();
+
+const isMarket = computed(() => shell.destination === "plugins");
 </script>
 
 <template>
   <aside
     class="sidebar relative flex h-full flex-col overflow-hidden bg-side"
     :class="{ 'is-collapsed': shell.sidebarCollapsed }"
+    :style="{ '--lw-sidebar-w': `${shell.sidebarWidth}px` }"
     :inert="shell.sidebarCollapsed"
     aria-label="Locowrk"
   >
@@ -108,67 +98,49 @@ const {
         </button>
       </header>
 
-      <!-- 侧栏体：搜索 / 新会话 + 会话（时间桶 / 正文命中） -->
+      <!-- 侧栏体：顶部动作区 + 项目段（v3.9 项目接管，issue #4） -->
       <div class="scroll-y min-h-0 flex-1 px-2">
-        <div class="flex items-center gap-1.5 px-1 pb-2 pt-1">
-          <div class="relative min-w-0 flex-1">
-            <Icon
-              name="search"
-              :size="14"
-              class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-4"
-            />
-            <input
-              v-model="search"
-              type="text"
-              :placeholder="t('sidebar.search')"
-              :aria-label="t('sidebar.search')"
-              class="h-7 w-full rounded-full bg-wash-2 pl-8 pr-2 text-[12.5px] text-ink-1 outline-none placeholder:text-ink-5"
-            />
-          </div>
+        <nav class="flex flex-col gap-[2px] pb-1 pt-1" :aria-label="t('sidebar.actions')">
           <button
-            class="ctl"
             type="button"
-            :title="t('sidebar.newChat')"
-            :aria-label="t('sidebar.newChat')"
-            @click="chat.newSession(); shell.setDestination('chat')"
+            class="action-row"
+            @click="newTask"
           >
             <Icon name="plus" aria-hidden="true" />
+            <span class="action-row__label">{{ t("sidebar.newTask") }}</span>
+            <span class="action-row__keys">Ctrl+N</span>
           </button>
-        </div>
-
-        <!-- 会话树（§2.3）：「会话」组 + 「项目」组（工作区→时间桶；
-             fsRoots ∪ 已关联 = 组集合，v2.50 关联 + 空组常驻） -->
-        <SessionGroups :sessions="filtered" :fs-roots="settings.view?.tools.fsRoots ?? []" />
-
-        <!-- 正文命中（v2.49）：标题过滤之后的第二段 -->
-        <template v-if="search.trim() && contentHits.length > 0">
-          <div class="side-label">{{ t("sidebar.contentHits") }}</div>
           <button
-            v-for="h in contentHits"
-            :key="h.id"
             type="button"
-            class="hit-row"
-            :data-selected="h.id === chat.sessionId || undefined"
-            :title="h.snippet"
-            @click="openSession(h.id)"
+            class="action-row"
+            @click="openSearch"
           >
-            <span class="hit-row__title">{{ h.title ?? t("sidebar.untitled") }}</span>
-            <span class="hit-row__snippet">{{ h.snippet }}</span>
+            <Icon name="search" aria-hidden="true" />
+            <span class="action-row__label">{{ t("sidebar.searchAll") }}</span>
+            <span class="action-row__keys">Ctrl+K</span>
           </button>
-        </template>
+          <button
+            type="button"
+            class="action-row"
+            :aria-pressed="isMarket"
+            @click="shell.setDestination('plugins')"
+          >
+            <Icon name="plug" aria-hidden="true" />
+            <span class="action-row__label">{{ t("nav.plugins") }}</span>
+          </button>
+        </nav>
 
-        <p v-if="nothingFound" class="px-2 py-4 text-center text-[12px] text-ink-4">
-          {{ t("sidebar.searchEmpty") }}
-        </p>
+        <!-- 项目段（§2.3 v3.9）：组集合 = fsRoots ∪ 已关联会话，未归组 -->
+        <SessionGroups :sessions="chat.sessions" :fs-roots="settings.view?.tools.fsRoots ?? []" />
       </div>
 
-      <!-- 侧栏底：目的地入口 + 版本号（连点解锁开发者选项）；
-           间距对原型（gap 2px / padding 0 8px） -->
+      <!-- 侧栏底（issue #12 序：设置/记忆/定时/通知）+ 版本号（连点解锁
+           开发者选项）；间距对原型（gap 2px / padding 0 8px） -->
       <footer
         class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-[2px] px-2"
       >
         <button
-          v-for="dest in (['plugins', 'memory', 'schedule', 'settings'] as const)"
+          v-for="dest in (['settings', 'memory', 'schedule'] as const)"
           :key="dest"
           class="ctl"
           type="button"
@@ -178,7 +150,7 @@ const {
           @click="shell.setDestination(dest)"
         >
           <Icon
-            :name="dest === 'plugins' ? 'plug' : dest === 'memory' ? 'database' : dest === 'schedule' ? 'clock' : 'settings'"
+            :name="dest === 'memory' ? 'database' : dest === 'schedule' ? 'clock' : 'settings'"
             :size="15"
             aria-hidden="true"
           />
@@ -222,7 +194,7 @@ const {
       @close="notifOpen = false"
     />
 
-    <!-- 拖拽柄（§2.3）：8px 热区嵌右缘，可见提示 = 2×32 圆角条 -->
+    <!-- 拖拽柄（§2.3 v3.9）：8px 热区嵌右缘，可见提示 = 2×32 圆角条 -->
     <button
       ref="grip"
       class="sidebar-grip"
@@ -281,6 +253,40 @@ const {
   color: var(--lw-ink-1);
 }
 
+/* 顶部动作区行（§2.3 v3.9）：30px = 15px 字形 + 13px 文案 + 行尾键帽 */
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: var(--lw-r-xs);
+  color: var(--lw-ink-2);
+  text-align: left;
+}
+.action-row:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+.action-row[aria-pressed="true"] {
+  background: var(--lw-wash-3);
+  color: var(--lw-ink-1);
+}
+.action-row__label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.action-row__keys {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--lw-ink-4);
+}
+
 /* 通知钮未读角标（§3.13）：6px accent 点 */
 .notif-btn {
   position: relative;
@@ -295,48 +301,6 @@ const {
   background: var(--lw-accent);
 }
 
-.side-label {
-  padding: 10px 8px 4px;
-  font-size: 11.5px;
-  color: var(--lw-ink-4);
-}
-
-/* 正文命中行：标题 + 摘录两行（摘录 11.5px ink-4 单行省略） */
-.hit-row {
-  display: flex;
-  min-height: 28px;
-  width: 100%;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1px;
-  border-radius: var(--lw-r-xs);
-  padding: 2px 8px 2px 28px;
-  text-align: left;
-}
-.hit-row:hover {
-  background: var(--lw-wash-2);
-}
-.hit-row[data-selected] {
-  background: var(--lw-wash-3);
-}
-.hit-row__title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  color: var(--lw-ink-2);
-}
-.hit-row[data-selected] .hit-row__title {
-  color: var(--lw-ink-1);
-}
-.hit-row__snippet {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11.5px;
-  color: var(--lw-ink-4);
-}
-
 /* 版本号（连点解锁开发者选项的锚点） */
 .version-label {
   border-radius: var(--lw-r-xs);
@@ -347,7 +311,7 @@ const {
   color: var(--lw-ink-2);
 }
 
-/* 拖拽柄（§2.3）：8px 热区；提示 2×32 圆角条 hover/聚焦/拖拽显形，
+/* 拖拽柄（§2.3 v3.9）：8px 热区；提示 2×32 圆角条 hover/聚焦/拖拽显形，
  * 聚焦与拖拽换 accent，聚焦不画外框 */
 .sidebar-grip {
   position: absolute;

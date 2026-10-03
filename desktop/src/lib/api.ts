@@ -231,6 +231,11 @@ export function sessionAssociate(
   return invoke("session_associate", { sessionId, workspace });
 }
 
+/** 在文件管理器中打开项目目录（§2.3 v3.9 项目菜单）：后端校验 fsRoots。 */
+export function revealInExplorer(path: string): Promise<void> {
+  return invoke("reveal_in_explorer", { path });
+}
+
 /** 会话级权限模式（㉘·B §3.33）：写旁车 + 模式存储缓存，即时生效；
  * 四档取值后端校验（plan / ask / acceptEdits / auto）。 */
 export function sessionSetPermissionMode(
@@ -310,6 +315,11 @@ export function sessionTruncateAfter(
  * tauri-plugin-dialog 封装；取消/关窗返回 null。 */
 export function pickDirectory(): Promise<string | null> {
   return invoke("pick_directory");
+}
+
+/** 原生多选文件（§3.11 v3.9 附件按钮 v1）：路径引用，不上传内容。 */
+export function pickFiles(): Promise<string[]> {
+  return invoke("pick_files");
 }
 
 /** 原生存储对话框（v2.49 会话导出用）：defaultName 建议文件名；

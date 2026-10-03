@@ -37,3 +37,15 @@ export function applyThemePref(theme: string): void {
   }
   document.documentElement.dataset.theme = resolve(pref);
 }
+
+/** 实效档翻面（§3.15 ⌘K「切换明暗主题」命令的解析核）：system 档按当前
+ * 媒体查询解出实效档再翻面；纯函数，调不调用方自持。 */
+export function flipEffectiveTheme(current: string): "light" | "dark" {
+  const effective =
+    current === "system"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+      : current;
+  return effective === "dark" ? "light" : "dark";
+}

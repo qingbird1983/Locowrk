@@ -349,6 +349,23 @@ pub async fn pick_save_path(
         .map(|p| p.display().to_string()))
 }
 
+/// 原生多选文件对话框（§3.11 v3.9 composer「＋添加文件或图片」）：仅
+/// Rust 侧调用（§七 规则 8 同族），返回所选绝对路径数组（取消 = 空表）。
+/// 路径由前端以 `@路径` 引用写进输入框——附件随消息上传的消息通路属
+/// ㉛ 排期，当前模型经 fs 工具按路径读取（v1 语义，宁缺勿假）。
+#[tauri::command]
+pub async fn pick_files(app: AppHandle) -> Result<Vec<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = app.dialog().file().blocking_pick_files();
+    let mut out = Vec::new();
+    for p in picked.into_iter().flatten() {
+        if let Ok(path) = p.into_path() {
+            out.push(path.display().to_string());
+        }
+    }
+    Ok(out)
+}
+
 // ---- 应用内通知（v2.51 §3.13）：读 / 全读 / 单读 / 清空，薄适配层 ----
 
 #[tauri::command]

@@ -42,9 +42,18 @@ export type IconName =
   | "server"
   | "refresh"
   | "grip"
-  | "star";
+  | "star"
+  | "folderOpen"
+  | "filter"
+  | "bulb"
+  | "hand"
+  | "shieldCheck"
+  | "shieldAlert"
+  | "paperclip";
 
-/** 原型 sprite 的 symbol 内联内容（stroke 属性由外壳 svg 统一给）。 */
+/** 原型 sprite 的 symbol 内联内容（stroke 属性由外壳 svg 统一给）。
+ * 带 <g transform="scale(.6667)"> 的是 lucide 24-viewBox 原路径缩进 16 格
+ * （描边 2.25×0.6667 ≈ 1.5，视觉重量与本表原生路径一致）。 */
 const PATHS: Record<IconName, string> = {
   sparkle: '<path d="M8 2.6 9.1 6.3 12.8 7.4 9.1 8.5 8 12.2 6.9 8.5 3.2 7.4 6.9 6.3Z"/>',
   chevronDown: '<path d="M4.6 6.4 8 9.8 11.4 6.4"/>',
@@ -54,7 +63,7 @@ const PATHS: Record<IconName, string> = {
   panel: '<rect x="2.4" y="3.2" width="11.2" height="9.6" rx="2"/><path d="M10 3.2v9.6"/>',
   sidebar: '<rect x="2.4" y="3.2" width="11.2" height="9.6" rx="2"/><path d="M6 3.2v9.6"/>',
   settings:
-    '<circle cx="8" cy="8" r="2.3"/><path d="M8 2.2v1.5M8 12.3v1.5M2.2 8h1.5M12.3 8h1.5M3.9 3.9l1.1 1.1M11 11l1.1 1.1M12.1 3.9 11 5M5 11 3.9 12.1"/>',
+    '<g transform="scale(0.6667)" stroke-width="2.25"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>',
   clock: '<circle cx="8" cy="8" r="5.4"/><path d="M8 5v3.2l2.2 1.3"/>',
   bell: '<path d="M4.6 11.2V7.6a3.4 3.4 0 0 1 6.8 0v3.6l1.2 1.4H3.4Z"/><path d="M6.6 12.6a1.4 1.4 0 0 0 2.8 0"/>',
   close: '<path d="M4.3 4.3 11.7 11.7M11.7 4.3 4.3 11.7"/>',
@@ -94,6 +103,19 @@ const PATHS: Record<IconName, string> = {
     '<circle cx="6" cy="4.6" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="4.6" r="1" fill="currentColor" stroke="none"/><circle cx="6" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="6" cy="11.4" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="11.4" r="1" fill="currentColor" stroke="none"/>',
   star:
     '<path d="M8 2.4l1.7 3.4 3.7.5-2.7 2.7.6 3.7L8 11l-3.3 1.7.6-3.7-2.7-2.7 3.7-.5Z"/>',
+  folderOpen:
+    '<g transform="scale(0.6667)" stroke-width="2.25"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></g>',
+  filter: '<path d="M2.8 3.6h10.4L9.6 8.1v3.7l-3.2 1.6V8.1Z"/>',
+  bulb:
+    '<g transform="scale(0.6667)" stroke-width="2.25"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></g>',
+  hand:
+    '<g transform="scale(0.6667)" stroke-width="2.25"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></g>',
+  shieldCheck:
+    '<g transform="scale(0.6667)" stroke-width="2.25"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></g>',
+  paperclip:
+    '<g transform="scale(0.6667)" stroke-width="2.25"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></g>',
+  shieldAlert:
+    '<g transform="scale(0.6667)" stroke-width="2.25"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></g>',
 };
 
 /** 统一规格的字形组件：<Icon name="sidebar" :size="14" />。 */
