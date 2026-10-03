@@ -313,7 +313,7 @@
 | `ShortcutSection` | `shortcut` | ✅ |
 | `ShellSection` | `shell` | ✅（高危解锁开关；重启生效） |
 | `ToolsSection`（v2.49 更名——分区 id 本就是 `tools`，组件名对齐 1:1；原 DeveloperSection） | `tools`（含 `fsRoots` 工作区目录 / `maxTurnSteps` 单轮步数上限 1–100 缺省 8 / `approvalTimeoutSecs` 审批等待时长，0=不限 缺省 100，🆕 v2.49） | ✅ |
-| `DeveloperSection`（🆕 v2.49 开发者选项，**默认隐藏**） | `developer`（`unlocked` 解锁态 / `allowDeleteRunningSession` 运行中会话强制删除 / `allowSwitchRunningSession` 运行中切换会话——危险开关缺省全关） | ✅ |
+| `DeveloperSection`（🆕 v2.49 开发者选项，**默认隐藏**） | `developer`（`unlocked` 解锁态 / `allowDeleteRunningSession` 运行中会话强制删除 / `allowSwitchRunningSession` 运行中切换会话——危险开关缺省全关；🆕 M0：`cacheHitAlert` 命中率告警缺省关 + `cacheHitAlertPercent` 阈值缺省 80 + 「前缀缓存读数」只读面板） | ✅ |
 | `EmbeddingSection` | `embedding` | ✅ |
 | `PluginsSection` | `plugins` | ✅（自动停用天数 / 调用超时） |
 
@@ -576,6 +576,17 @@ derive_messages（不回传供应商），压缩/用量估算不受影响。
 > v4.1（v2.62）：用量快照**随会话持久化**（`SessionEvent::ContextUsage` 落日志，DESIGN
 > §4.1）+ 投影同形——重放恢复用量环与进度条；切会话回来统计不再消失（此前快照只推
 > 实时通道，重放面没有该事件）。
+>
+> v4.3（M0 观测批，《KV Prefix Cache Design v2》§7）：新增**「会话累计」行**——命中率
+> + 按单价估算的节省金额；数据源 = `llm_usage` 事件全会话累计（实时与重放同源，
+> `chat.sessionUsage`，只随会话切换/新建重置）；**命中率分母不含 cacheWrite**（口径
+> 纪律：加了会把命中率整体压低）；供应商未报告缓存字段（cacheRead 全 0）行不渲染
+> （宁缺勿假）；`chat.cacheStats` 设置（用户层，缺省开）控制整行显隐。节省 = 命中
+> × (未命中价 − 命中价)，单价 `chat.cacheHitPrice / cacheMissPrice`（元/百万 tokens，
+> 缺省 0.02 / 1.0）。开发者分区另有「前缀缓存读数」面板（累计命中率/命中·未命中·
+> 总输入/节省/本轮）+ 命中率告警开关（`developer.cacheHitAlert` 缺省关 + 阈值
+> `cacheHitAlertPercent` 缺省 80——累计命中率跌破阈值 toast 一次，每会话至多一次，
+> ≥3 步才判且重放不判：冷启动首轮无缓存不算断裂）。
 
 锚在用量环按钮上方、右对齐，360px 宽 `--lw-bg-elevated` popover。**分项读数**（照参考对象
 实机）：
@@ -588,6 +599,7 @@ derive_messages（不回传供应商），压缩/用量估算不受影响。
 生成速度          225 tokens/s
 模型用量
   输入 8K   输出 5.6K   缓存读取 116.2K   缓存命中率 94%   推理 5.4K
+会话累计          命中率 94% · 节省 ¥1.23
 工具上下文        2 种工具 · 4 次调用 · 约 9.5K tokens
 ```
 
@@ -1708,7 +1720,7 @@ hover 位移（列表里会造成抖动，只允许变色）· chevron 旋转（
 | 审批决策粒度 | §3.17 三键（拒绝 / 允许本次对话 / 允许一次） | 决策枚举 + 会话级豁免集；现有 `agent_approve` 只有布尔，**需扩** |
 | 审批载荷扩展 | §3.17 风险档 / 理由 / 工作区 / 结构化参数 | 随 `approval-request` 给 `risk` / `reason` / 工作区根 + 工具描述 |
 | 审批超时自动拒绝 | §3.17 超时行 | ✅ v2.48 桌面守夜（fail-closed）；阈值可配 ✅ v2.49：`tools.approvalTimeoutSecs`（0=不限，缺省 100），决策卡按载荷 `timeout_secs` 显示倒计时 |
-| 对话行为偏好 | §3.2 `ChatSection` | settings.json 新 `chat` 区（默认展开工具执行过程 / 回车发送 / 思考展示模式 / 用量读数口径 / 自动会话标题 ✅ v2.57：`chat.autoTitle` 缺省开——首轮收束后旁车无标题时一次 LLM 调用生成 ≤25 字标题，写旁车 + `lw://session-title` 推送；手动重命名过的不覆盖）；旧文件字段级缺省零迁移 |
+| 对话行为偏好 | §3.2 `ChatSection` | settings.json 新 `chat` 区（默认展开工具执行过程 / 回车发送 / 思考展示模式 / 用量读数口径 / 自动会话标题 ✅ v2.57：`chat.autoTitle` 缺省开——首轮收束后旁车无标题时一次 LLM 调用生成 ≤25 字标题，写旁车 + `lw://session-title` 推送；手动重命名过的不覆盖；🆕 M0：`cacheStats` 命中率显示缺省开 + `cacheHitPrice/cacheMissPrice` 节省估算单价 缺省 0.02/1.0 元每百万）；旧文件字段级缺省零迁移 |
 | 审批结果进转录 | §3.17 决策后记录条 | 内核本就"审批结果也是一条事件"（DESIGN 纪律 6）→ **投影要把它映射成 §3.3 的系统记录条**，否则历史重放里会少掉"谁批过什么" |
 | 主区列宽偏好 | §2.7 / §3.2 `ChatSection` | settings.json `chat.contentMaxWidth`（缺省 760 / 下限 560）；**不落 localStorage**（要随设置同步与备份）；主区宽由 `ResizeObserver` 实时约束 |
 | 思考过程事件 | §3.9 思考行数据源 | ✅ v2.57：内核 `SessionEvent::Thinking`（DESIGN §4.1，derive_messages 跳过不回传）+ `agent://thinking` 通道（实时 delta 与重放同形，`StepOutcome.reasoned` 抑制同 ⑳）；genai `ReasoningChunk` / `capture_reasoning_content` 为源，headless 无 sink 路径零变化 |
@@ -1880,3 +1892,9 @@ null = greetingBare 不带名；② §2.1/§2.2/§2.5 面板开关**钉窗**—�
 方案被用户复测推翻（主区本身随面板开合收缩，文档流内怎么预留都会被挤动），改
 `position:fixed; right:120px` 零位移，面板头 `padding-right = 车道+40px` 留槽（原
 「关闭面板」钮位置）。*
+
+*文档版本：v4.3（M0 观测批，《KV Prefix Cache Design v2》§7 落地）。§3.12 用量浮层新增
+「会话累计」行（命中率 + 单价节省估算；分母不含 cacheWrite；cacheRead 全 0 不渲染；
+`chat.cacheStats` 显隐）+ §3.2 `ChatSection` 三行（cacheStats / cacheHitPrice /
+cacheMissPrice）+ 开发者分区「前缀缓存读数」面板与命中率告警两行（cacheHitAlert
+缺省关 / cacheHitAlertPercent 缺省 80，重放不判、每会话至多一次）。*
