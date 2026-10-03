@@ -23,6 +23,7 @@ const form = reactive({
   expandToolProcess: false,
   enterToSend: true,
   usageReadout: "used",
+  autoTitle: true,
 });
 
 watch(
@@ -33,6 +34,7 @@ watch(
     form.expandToolProcess = v.chat.expandToolProcess;
     form.enterToSend = v.chat.enterToSend;
     form.usageReadout = v.chat.usageReadout;
+    form.autoTitle = v.chat.autoTitle;
   },
   { immediate: true },
 );
@@ -43,6 +45,7 @@ function save() {
     expandToolProcess: form.expandToolProcess,
     enterToSend: form.enterToSend,
     usageReadout: form.usageReadout,
+    autoTitle: form.autoTitle,
   });
 }
 
@@ -68,6 +71,13 @@ const readoutOptions = computed(() => [
         step="20"
         class="lw-field lw-field-num px-2 text-xs"
       />
+    </SettingsRow>
+
+    <SettingsRow
+      :title="t('settings.autoTitleTitle')"
+      :hint="t('settings.autoTitleHint')"
+    >
+      <SettingsToggle v-model="form.autoTitle" :label="t('settings.autoTitleTitle')" />
     </SettingsRow>
 
     <SettingsRow :title="t('settings.expandToolTitle')">

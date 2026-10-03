@@ -168,7 +168,7 @@ const {
         class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-[2px] px-2"
       >
         <button
-          v-for="dest in (['plugins', 'memory', 'settings'] as const)"
+          v-for="dest in (['plugins', 'memory', 'schedule', 'settings'] as const)"
           :key="dest"
           class="ctl"
           type="button"
@@ -178,7 +178,7 @@ const {
           @click="shell.setDestination(dest)"
         >
           <Icon
-            :name="dest === 'plugins' ? 'plug' : dest === 'memory' ? 'database' : 'settings'"
+            :name="dest === 'plugins' ? 'plug' : dest === 'memory' ? 'database' : dest === 'schedule' ? 'clock' : 'settings'"
             :size="15"
             aria-hidden="true"
           />

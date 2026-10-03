@@ -41,6 +41,7 @@ fn chat_update_persists_and_roundtrips() {
                 expand_tool_process: Some(true),
                 enter_to_send: Some(false),
                 usage_readout: Some("remaining".into()),
+                auto_title: Some(false),
             }),
             None,
         )
@@ -50,6 +51,7 @@ fn chat_update_persists_and_roundtrips() {
     assert!(v.expand_tool_process);
     assert!(!v.enter_to_send);
     assert_eq!(v.usage_readout, "remaining");
+    assert!(!v.auto_title, "显式关闭生效");
     // 磁盘往返
     let v = SettingsStore::open(&root).unwrap().view().chat;
     assert_eq!(v.content_max_width, Some(1000));
@@ -72,6 +74,7 @@ fn chat_update_persists_and_roundtrips() {
                 expand_tool_process: None,
                 enter_to_send: Some(true),
                 usage_readout: None,
+                auto_title: None,
             }),
             None,
         )
@@ -104,6 +107,7 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 expand_tool_process: None,
                 enter_to_send: None,
                 usage_readout: None,
+                auto_title: None,
             }),
             None,
         )
@@ -125,6 +129,7 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 expand_tool_process: None,
                 enter_to_send: None,
                 usage_readout: Some("total".into()),
+                auto_title: None,
             }),
             None,
         )

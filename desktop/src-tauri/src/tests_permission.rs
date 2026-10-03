@@ -10,7 +10,7 @@ use serde_json::json;
 use crate::approval::ApprovalHub;
 use crate::events::AgentEvent;
 use crate::permission_mode::{PermissionMode, PermissionModeStore};
-use crate::tests::{Collector, kind};
+use crate::tests::{kind, Collector};
 
 /// 临时会话目录 + 指定缺省档的存储。
 fn store(tag: &str, default: PermissionMode) -> Arc<PermissionModeStore> {
@@ -65,7 +65,10 @@ fn hub_with_modes(
 async fn auto_mode_allows_without_card() {
     let (hub, sink, _m) = hub_with_modes("auto", PermissionMode::Auto);
     let d = hub
-        .resolve(&req("shell", json!({ "command": "echo hi" })), &spec(SideEffect::Irreversible))
+        .resolve(
+            &req("shell", json!({ "command": "echo hi" })),
+            &spec(SideEffect::Irreversible),
+        )
         .await;
     assert!(d.allowed && d.reason.as_deref() == Some("mode:auto"));
     assert!(sink.events().iter().all(|e| kind(e) != "approval_request"));
@@ -79,7 +82,9 @@ async fn accept_edits_allows_compensable_but_cards_irreversible() {
     let comp = hub
         .resolve(
             &req("fs_write", json!({ "path": "F:/ws/a/x.txt" })),
-            &spec(SideEffect::Compensable { undo_tool: "fs_restore".into() }),
+            &spec(SideEffect::Compensable {
+                undo_tool: "fs_restore".into(),
+            }),
         )
         .await;
     assert!(comp.allowed && comp.reason.as_deref() == Some("mode:acceptEdits"));
@@ -95,7 +100,10 @@ async fn accept_edits_allows_compensable_but_cards_irreversible() {
         }
     });
     let irr = hub
-        .resolve(&req("shell", json!({ "command": "echo hi" })), &spec(SideEffect::Irreversible))
+        .resolve(
+            &req("shell", json!({ "command": "echo hi" })),
+            &spec(SideEffect::Irreversible),
+        )
         .await;
     assert!(!irr.allowed, "自动编辑档不可逆动作仍要问");
     assert!(sink.events().iter().any(|e| kind(e) == "approval_request"));
@@ -106,7 +114,10 @@ async fn accept_edits_allows_compensable_but_cards_irreversible() {
 async fn plan_mode_denies_without_card() {
     let (hub, sink, _m) = hub_with_modes("plan", PermissionMode::Plan);
     let d = hub
-        .resolve(&req("shell", json!({ "command": "echo hi" })), &spec(SideEffect::Irreversible))
+        .resolve(
+            &req("shell", json!({ "command": "echo hi" })),
+            &spec(SideEffect::Irreversible),
+        )
         .await;
     assert!(!d.allowed);
     assert!(d.reason.unwrap_or_default().contains("计划模式只读"));
@@ -166,9 +177,14 @@ async fn external_path_forces_card_even_in_auto() {
 #[test]
 fn scanner_extracts_and_judges_paths() {
     use crate::approval::{extract_windows_abs_paths, is_outside};
-    let toks = extract_windows_abs_paths(r#"cd "F:\ws\a" && type F:\ws\a\x.txt C:\win\system.ini \\srv\share\f"#);
+    let toks = extract_windows_abs_paths(
+        r#"cd "F:\ws\a" && type F:\ws\a\x.txt C:\win\system.ini \\srv\share\f"#,
+    );
     assert_eq!(toks.len(), 4, "{toks:?}");
-    let roots = vec![std::path::PathBuf::from("F:\\ws\\a"), std::path::PathBuf::from("C:\\Users\\x\\.Locowrk")];
+    let roots = vec![
+        std::path::PathBuf::from("F:\\ws\\a"),
+        std::path::PathBuf::from("C:\\Users\\x\\.Locowrk"),
+    ];
     assert!(!is_outside("F:/ws/a/x.txt", &roots));
     assert!(!is_outside("F:\\WS\\A\\sub\\y", &roots), "大小写不敏感");
     assert!(is_outside("C:\\Windows\\system.ini", &roots));
@@ -182,7 +198,10 @@ async fn exemption_still_allows_internal_calls() {
     let (hub, sink, _m) = hub_with_modes("exempt", PermissionMode::Ask);
     hub.decide_seed_for_test("s1", "shell");
     let d = hub
-        .resolve(&req("shell", json!({ "command": "echo hi" })), &spec(SideEffect::Irreversible))
+        .resolve(
+            &req("shell", json!({ "command": "echo hi" })),
+            &spec(SideEffect::Irreversible),
+        )
         .await;
     assert!(d.allowed);
     assert!(sink.events().iter().all(|e| kind(e) != "approval_request"));

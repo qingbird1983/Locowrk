@@ -55,6 +55,7 @@ mod session_log;
 mod settings;
 mod state;
 mod sub_transcript;
+mod title;
 mod tool_source;
 mod tray;
 mod usage;
@@ -177,6 +178,9 @@ pub fn run() {
             commands::session_delete,
             commands::session_search,
             commands::session_export,
+            commands::session_truncate_after,
+            commands::schedule_list,
+            commands::schedule_delete,
             commands::pick_save_path,
             commands::notification_list,
             commands::notification_read_all,

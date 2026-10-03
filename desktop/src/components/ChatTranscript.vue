@@ -118,6 +118,36 @@ const blocks = computed<Block[]>(() => {
   return out;
 });
 
+/** §3.34 可编辑的用户气泡：重放消息（带事件位）或当前最后一条用户消息
+ * （实时发送无事件位的解析口）；运行中全部不可编辑。 */
+const editableUserIds = computed(() => {
+  const ids = new Set<number>();
+  if (chat.running) return ids;
+  let lastUserIdx = -1;
+  chat.items.forEach((it, i) => {
+    if (it.kind === "user") lastUserIdx = i;
+  });
+  chat.items.forEach((it, i) => {
+    if (it.kind !== "user") return;
+    if (it.pos !== undefined || i === lastUserIdx) ids.add(it.id);
+  });
+  return ids;
+});
+
+/** 用户条目的事件位（模板窄化不进嵌套函数，这里集中收窄）。 */
+function userPos(item: ChatItem): number | undefined {
+  return item.kind === "user" ? item.pos : undefined;
+}
+
+/** §3.34 编辑重发：截断失败（运行中/后端拒绝）以系统条如实呈现。 */
+async function onEditResend(pos: number | undefined, text: string) {
+  try {
+    await chat.editResend(pos ?? null, text);
+  } catch (err) {
+    chat.pushNotice("notice.editResendFailed", { reason: String(err) });
+  }
+}
+
 /** 「默认展开工具执行过程」只对实时新发的轮次生效（ts 存在 = 实时）；
  * 历史重放一律折叠（§3.8）。 */
 const expandLive = computed(
@@ -242,6 +272,8 @@ async function onNoticeAction(item: SystemItem, action: string) {
               kind="user"
               :text="block.item.text"
               :ts="block.item.ts"
+              :editable="editableUserIds.has(block.item.id)"
+              @edit="(t: string) => onEditResend(userPos(block.item), t)"
             />
             <MessageRow
               v-else-if="block.item.kind === 'assistant'"

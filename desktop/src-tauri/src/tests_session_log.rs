@@ -160,3 +160,68 @@ fn empty_and_invalid_sessions_are_skipped_on_restore() {
     assert_eq!(s.blocking_lock().len(), 1);
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// v2.57 §3.34 消息编辑重发：truncate_after 定位语义（Some=指定位必须
+/// 是 UserMessage；None=最后一条）+ fork 截断 + 磁盘重写与 `.undo.bak`
+/// 留痕。命令层只做锁与会话表存取，语义在这里锁定。
+#[test]
+fn truncate_after_resolves_pos_and_rewrites_disk() {
+    let dir = tmp_dir("truncate");
+    let sid = "desktop-truncate";
+    // Session 不是 Clone（事件日志语义）：每例重造
+    fn four_events() -> Session {
+        let mut s = Session::new();
+        s.append(SessionEvent::UserMessage {
+            content: "第一问".into(),
+        });
+        s.append(SessionEvent::AssistantMessage {
+            content: "第一答".into(),
+            tool_calls: vec![],
+        });
+        s.append(SessionEvent::UserMessage {
+            content: "第二问".into(),
+        });
+        s.append(SessionEvent::AssistantMessage {
+            content: "第二答".into(),
+            tool_calls: vec![],
+        });
+        s
+    }
+    let s = four_events();
+    let path = session_store::session_file(&dir, sid).unwrap();
+    for e in s.events() {
+        session_store::append_event(&path, e).unwrap();
+    }
+
+    // Some(0)：截掉第一问起的全部（= 清空可见日志）
+    let mut s2 = four_events();
+    assert_eq!(session_log::truncate_after(&mut s2, Some(0)).unwrap(), 0);
+    assert_eq!(s2.len(), 0);
+    // Some(2)：保留第一轮，截掉第二问起的全部
+    let mut s3 = four_events();
+    assert_eq!(session_log::truncate_after(&mut s3, Some(2)).unwrap(), 2);
+    assert_eq!(s3.len(), 2);
+    assert!(matches!(
+        s3.events().last(),
+        Some(SessionEvent::AssistantMessage { content, .. }) if content == "第一答"
+    ));
+    // None：最后一条用户消息（与 Some(2) 等价）
+    let mut s4 = four_events();
+    assert_eq!(session_log::truncate_after(&mut s4, None).unwrap(), 2);
+    assert_eq!(s4.len(), 2);
+    // 非法位：越界 / 不是 UserMessage
+    let mut s5 = four_events();
+    assert!(session_log::truncate_after(&mut s5, Some(99)).is_err());
+    let mut s6 = four_events();
+    assert!(session_log::truncate_after(&mut s6, Some(1)).is_err());
+
+    // 磁盘同步：截断后重写镜像，恢复一致；.undo.bak 留有截断前全文
+    let mut s5 = four_events();
+    session_log::truncate_after(&mut s5, None).unwrap();
+    session_log::rewrite_after_undo(&dir, sid, &s5);
+    let (restored, _) = session_store::load_session(&path).unwrap();
+    assert_eq!(restored.len(), 2);
+    let bak = path.with_file_name(format!("{sid}.jsonl.undo.bak"));
+    let (prev, _) = session_store::load_session(&bak).unwrap();
+    assert_eq!(prev.len(), 4, "备份保留截断前完整日志");
+}

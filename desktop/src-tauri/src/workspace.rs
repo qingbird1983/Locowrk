@@ -40,7 +40,10 @@ fn canon_or_raw(p: &Path) -> String {
 /// `fs_roots = [数据根, 项目工作区]`（围栏跟会话：工具面收缩到项目内，
 /// 数据根保备份/恢复可达）；**未归属会话不下发**（空表 = 插件回落
 /// `LOCOWRK_FS_ROOTS` 既有全局语义，headless 同）。
-pub fn session_context_resolver(sessions_dir: PathBuf, data_root: PathBuf) -> SessionContextResolver {
+pub fn session_context_resolver(
+    sessions_dir: PathBuf,
+    data_root: PathBuf,
+) -> SessionContextResolver {
     Arc::new(move |session_id: &str| {
         let workspace = read_meta(&sessions_dir, session_id).and_then(|m| m.workspace);
         let fs_roots: Vec<String> = match &workspace {

@@ -85,7 +85,13 @@ fn child_kernel_shadows_global_sink() {
         });
         let outcome = child.step_as(&mut session, "p1-sub-1").await.unwrap();
 
-        assert_eq!(outcome, StepOutcome::Continue { streamed: false });
+        assert_eq!(
+            outcome,
+            StepOutcome::Continue {
+                streamed: false,
+                reasoned: false
+            }
+        );
         assert!(sink.0.lock().unwrap().is_empty(), "父 UI 不得收到子 delta");
     });
     // NoLlmStreamSink 本体是空实现（直接锁定契约）

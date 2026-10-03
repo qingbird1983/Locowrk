@@ -82,10 +82,7 @@ impl ApprovalHub {
     }
 
     /// ㉘·B：接会话级权限模式存储（决策表三档门的数据源）。
-    pub fn with_modes(
-        mut self,
-        modes: Arc<crate::permission_mode::PermissionModeStore>,
-    ) -> Self {
+    pub fn with_modes(mut self, modes: Arc<crate::permission_mode::PermissionModeStore>) -> Self {
         self.modes = Some(modes);
         self
     }
@@ -323,8 +320,12 @@ pub(crate) fn command_touches_outside(
 /// 命令文本里的 Windows 绝对路径 token：`X:\…` / `X:/…` / UNC `\\…`。
 /// 分隔符取空格 / 引号 / `;` / `<` `>` `|` `&` / 换行。
 pub(crate) fn extract_windows_abs_paths(cmd: &str) -> Vec<String> {
-    let is_delim =
-        |c: char| matches!(c, ' ' | '\t' | '"' | '\'' | ';' | '<' | '>' | '|' | '&' | '\n' | '\r');
+    let is_delim = |c: char| {
+        matches!(
+            c,
+            ' ' | '\t' | '"' | '\'' | ';' | '<' | '>' | '|' | '&' | '\n' | '\r'
+        )
+    };
     let bytes = cmd.as_bytes();
     let mut out = Vec::new();
     let mut i = 0usize;
@@ -388,8 +389,7 @@ pub(crate) fn is_outside(token: &str, roots: &[PathBuf]) -> bool {
     let norm = |s: &str| -> String {
         let s = s.replace('/', "\\");
         let s = s.strip_prefix("\\\\?\\").unwrap_or(&s);
-        s.trim_end_matches('\\')
-            .to_ascii_lowercase()
+        s.trim_end_matches('\\').to_ascii_lowercase()
     };
     let t = norm(token);
     roots.iter().all(|r| {

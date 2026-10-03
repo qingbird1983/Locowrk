@@ -25,6 +25,7 @@ fn sched(id: &str, kind: Kind, run_at: i64) -> Schedule {
             None
         },
         deferrals: 0,
+        created_ms: 0,
     }
 }
 

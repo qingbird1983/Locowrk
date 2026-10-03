@@ -52,6 +52,26 @@ impl LlmService for AppLlm {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → LLM 配置后走真实模型）");
             return self.demo.complete_streaming(req, on_delta).await;
         }
-        self.real.complete_streaming_with(&cfg, req, on_delta).await
+        self.real
+            .complete_streaming_with(&cfg, req, on_delta, &|_| {})
+            .await
+    }
+
+    /// v2.57 推理通道分发：演示替身走缺省回落（无推理），真实模型把
+    /// genai 的 ReasoningChunk 逐段交给 `on_reasoning`。
+    async fn complete_streaming_reasoning(
+        &self,
+        req: LlmRequest,
+        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+        on_reasoning: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+    ) -> Result<LlmResponse, LlmError> {
+        let cfg = self.settings.llm();
+        if cfg.model.trim().is_empty() {
+            tracing::debug!("LLM model 未配置，走演示替身（设置 → LLM 配置后走真实模型）");
+            return self.demo.complete_streaming(req, on_delta).await;
+        }
+        self.real
+            .complete_streaming_with(&cfg, req, on_delta, on_reasoning)
+            .await
     }
 }

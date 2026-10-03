@@ -232,19 +232,24 @@ impl GenAiLlm {
         Ok(map_response(res, &self.next_call))
     }
 
-    /// 流式（⑳）：文本 delta 逐段回调 `on_delta`；聚合正文与工具调用取自
-    /// End 事件的 captured_content（genai 在 capture_content /
-    /// capture_tool_calls 开启时聚合，各家适配器一致）。空 delta 不回调。
+    /// 流式（⑳）：文本 delta 逐段回调 `on_delta`；v2.57 推理 delta 逐段
+    /// 回调 `on_reasoning`（genai `ReasoningChunk`；`capture_reasoning_content`
+    /// 开启聚合）。聚合正文与工具调用取自 End 事件的 captured_content
+    /// （genai 在 capture_content / capture_tool_calls 开启时聚合，各家
+    /// 适配器一致）。空 delta 不回调。推理全文不在此聚合返回——内核闭包
+    /// 逐段累积（与 captured 同源），被消费与否都不影响落日志。
     pub async fn complete_streaming_with(
         &self,
         cfg: &LlmSettings,
         req: LlmRequest,
         on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+        on_reasoning: &(dyn for<'a> Fn(&'a str) + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         let (client, chat_req, mut options) = Self::build_request(cfg, &req)?;
         options = options
             .with_capture_content(true)
-            .with_capture_tool_calls(true);
+            .with_capture_tool_calls(true)
+            .with_capture_reasoning_content(true);
         let mut stream = client
             .exec_chat_stream(cfg.model.as_str(), chat_req, Some(&options))
             .await
@@ -256,9 +261,14 @@ impl GenAiLlm {
                         on_delta(&c.content);
                     }
                 }
+                ChatStreamEvent::ReasoningChunk(c) => {
+                    if !c.content.is_empty() {
+                        on_reasoning(&c.content);
+                    }
+                }
                 ChatStreamEvent::End(end) => {
-                    // 推理/思考流（ReasoningChunk 等）不进正文，正文以 End
-                    // 的 captured_content 为准
+                    // 推理/思考流已经 on_reasoning 逐段带出，不进正文；
+                    // 正文以 End 的 captured_content 为准
                     let content = end
                         .captured_content
                         .as_ref()

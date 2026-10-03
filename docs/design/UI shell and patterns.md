@@ -415,6 +415,14 @@ ok <60% / warn 60–99% / danger ≥阈值；无数据（`null`）整个不渲�
 （12.5px / 1.55 / `--lw-ink-2`，`--lw-wash-1` 底、圆角 10px）——展开后仍属"过程"，
 不抢正文视线。
 
+**数据源（✅ v2.57）**：内核 `SessionEvent::Thinking`（DESIGN §4.1）——供应商
+reasoning 全文每 step 至多一条，紧贴该步 AssistantMessage 之前；投影 = `agent://thinking`
+通道，**实时 delta 与历史重放同一事件形状**（`{ sessionId, text }`）：实时轮 delta 逐段
+追加到行（append-or-create，语义与正文 chunk 一致），重放每条事件一行；推理已被流式
+消费的 step 不再投影整段（`StepOutcome.reasoned`，同 ⑳ `streamed` 抑制）。推理不进
+derive_messages（不回传供应商），压缩/用量估算不受影响。
+
+
 ### 3.10 子 Agent 卡（`components/chat/SubagentCard.vue`）
 
 ⑮ 的派生与收束在会话内的**唯一可视形态**（子内活动仍为黑盒，不投影）：
@@ -1077,6 +1085,41 @@ DESIGN.md §7.2「权限模式决策表」，本节只定 UI 形态。
   前缀，审计不缺），前端对其**不渲染**决策记录条——工具行本身就是事实，防转录被
   「已允许」刷屏。
 
+### 3.34 消息编辑重发（MessageRow 编辑态，✅ v2.57）
+
+§8.2 缓办行落地。用户气泡 hover 动作区（复制旁）出现**编辑**钮（pencil 12px）：
+
+- **出现条件（宁缺勿假）**：①重放过的消息（`session_history` 投影的 `UserMessage`
+  带事件位 `pos`）；②当前**最后一条**用户消息（本进程实时发送的无事件位，后端按
+  「最后一条用户消息」解析）。两者都不满足（运行中、或本进程发消息后又继续聊过的
+  中间消息）不出钮——不发明半可用的入口；
+- **编辑态**：气泡原位换成自适应文本域（prefill 原文），Enter = 提交重发、
+  Shift+Enter 换行、Esc = 取消还原；运行中不可进入编辑态；
+- **提交 = 截断 + 重发**：`session_truncate_after(session_id, pos?)`——后端忙锁
+  try_lock 守卫（运行中拒绝）、校验截断位是 UserMessage，`rewind_to + fork` 截断
+  （⑨ 先例）+ persist rewrite 物理同步（`.undo.bak` 留痕同 ⑲）；前端本地从该气泡
+  起丢掉条目，随后走**既有 send 通道**重发新文本（本地回显 + 流式，审批/用量/隐式
+  提取全部复用，不开第二条链路）。会话事件只追加不删（纪律 5）在磁盘面的例外同 undo；
+- **已知边界**：被截掉轮次的子 Agent 转录文件（§3.16）留在 `sub-transcripts/` 不追删
+  （零进父日志，UI 无入口引用，无害残留）；`.undo.bak` 只留最近一次。
+
+### 3.35 定时任务目的地页（`components/schedule/SchedulePage.vue`，✅ v2.57）
+
+§2.4 侧栏底第 3 个目的地图标「定时」（clock 15px）——本页兑现 §8.2 缓办行
+（⑭ 后端全在，缺的只是页面）：
+
+- **页头形态**：§2.4 固定形态——20px 标题「定时任务」+ 行内计数（N 条待触发）；
+  无右上主按钮（创建入口是模型工具 `schedule_create`，页面不做编辑器——调度是
+  模型面向，人是读者与裁决者）；
+- **列表行**（ListPage 模式）：徽章（`一次性` / `每 N 分钟/小时`）+ 标题
+  （创建时 prompt 截断）+ prompt 摘要两行 + 目标会话名（侧栏同源标题；会话已删
+  显示 id）+ 下次触发（相对时间，逾期显示「等待会话空闲」如实态）+ 行尾 `…`
+  （删除 = §3.6 同款两步确认，`schedule_delete`）；
+- **空态**：一行说明「定时任务由会话里的模型创建（让它"每天 9 点提醒我"试试）」
+  ——不发明「新建任务」按钮；
+- **数据**：`schedule_list` 命令（全部待触发行，新→旧）；触发/顺延/放弃状态以
+  `run_at` 与 `deferrals` 如实呈现，不发明「暂停/恢复」（后端无此语义，宁缺勿假）。
+
 ## 四、事件→UI 流向图
 
 > 功能批次只**扩表**，不改既有行的路径。
@@ -1457,17 +1500,17 @@ hover 位移（列表里会造成抖动，只允许变色）· chevron 旋转（
 | 审批决策粒度 | §3.17 三键（拒绝 / 允许本次对话 / 允许一次） | 决策枚举 + 会话级豁免集；现有 `agent_approve` 只有布尔，**需扩** |
 | 审批载荷扩展 | §3.17 风险档 / 理由 / 工作区 / 结构化参数 | 随 `approval-request` 给 `risk` / `reason` / 工作区根 + 工具描述 |
 | 审批超时自动拒绝 | §3.17 超时行 | ✅ v2.48 桌面守夜（fail-closed）；阈值可配 ✅ v2.49：`tools.approvalTimeoutSecs`（0=不限，缺省 100），决策卡按载荷 `timeout_secs` 显示倒计时 |
-| 对话行为偏好 | §3.2 `ChatSection` | settings.json 新 `chat` 区（默认展开工具执行过程 / 回车发送 / 思考展示模式 / 用量读数口径）；旧文件字段级缺省零迁移 |
+| 对话行为偏好 | §3.2 `ChatSection` | settings.json 新 `chat` 区（默认展开工具执行过程 / 回车发送 / 思考展示模式 / 用量读数口径 / 自动会话标题 ✅ v2.57：`chat.autoTitle` 缺省开——首轮收束后旁车无标题时一次 LLM 调用生成 ≤25 字标题，写旁车 + `lw://session-title` 推送；手动重命名过的不覆盖）；旧文件字段级缺省零迁移 |
 | 审批结果进转录 | §3.17 决策后记录条 | 内核本就"审批结果也是一条事件"（DESIGN 纪律 6）→ **投影要把它映射成 §3.3 的系统记录条**，否则历史重放里会少掉"谁批过什么" |
 | 主区列宽偏好 | §2.7 / §3.2 `ChatSection` | settings.json `chat.contentMaxWidth`（缺省 760 / 下限 560）；**不落 localStorage**（要随设置同步与备份）；主区宽由 `ResizeObserver` 实时约束 |
-| 思考过程事件 | §3.9 思考行数据源 | LLM 推理内容经事件通道投影（genai reasoning）；事件通道有了 `ThinkingRow` / `chat.thinking` 条目就是消费端（㉕ 模式先行，无占位事件） |
+| 思考过程事件 | §3.9 思考行数据源 | ✅ v2.57：内核 `SessionEvent::Thinking`（DESIGN §4.1，derive_messages 跳过不回传）+ `agent://thinking` 通道（实时 delta 与重放同形，`StepOutcome.reasoned` 抑制同 ⑳）；genai `ReasoningChunk` / `capture_reasoning_content` 为源，headless 无 sink 路径零变化 |
 | 轮次中止 | §3.11 发送键停止态 | `agent_chat` 可中止（会话级取消令牌）；落地前运行中发送键 = 停止字形禁用态（如实呈现，不假装可点） |
 | 消息附件 | §3.11 `+` 按钮 | 上传 / 引用文件注入 prompt；落地前不渲染按钮（不发明占位） |
 | 提示词增强 | §3.11 sparkle | 后端改写草稿的调用；落地前不渲染按钮 |
 | 权限模式档位 | §3.11 `ComposerPermissionChip` | 审批门预答策略（四档）后端语义 + 会话级档位存储；chip 显示"实际生效档位"，语义落地前不出 chip（不显示愿望档位）；随 ㉖ 审批后端 |
-| 消息编辑重发（原型消息行有 `编辑` 钮） | §8.4 MessageRow | 落地前不渲染按钮（不发明占位）。方案 = 用户消息行内编辑 → 提交即"截断到该消息之前 + 以新文本重发"：session-store 已有 `rewind_to + fork` 先例（⑨ `context_undo_compact`），需 desktop 新命令 `session_truncate_after(session_id, 事件位)` + `session_history` 逐项带事件位（投影层加字段），前端编辑器复用 composer 草稿路径；会话事件只追加不删（纪律 5），物理截断走 persist rewrite（`.undo.bak` 留痕同 ⑲） |
+| 消息编辑重发（原型消息行有 `编辑` 钮） | §8.4 MessageRow | ✅ v2.57（§3.34）：投影 `UserMessage` 带事件位 `pos`；新命令 `session_truncate_after(session_id, pos?)`——`None` = 最后一条用户消息（实时轮无事件位的解析口）；rewind_to + fork 截断（⑨ 先例）+ persist rewrite（`.undo.bak` 留痕同 ⑲）；前端本地截断后**复用既有 send 通道**重发（审批/用量/提取零新链路） |
 | 启动恢复面（可操作） | §3.24 | 闪屏 8s 起的静态提示文案已落 `public/splash.html`；「重试 / 打开日志」两动作需 splash 窗持 Tauri capability + 后端 `open_logs_dir` 命令，随桌面启动链路批次补 |
-| 定时任务目的地页 | §2.4 侧栏底「定时」图标 | ⑭ 只有工具面没有目的地页；页面落地前侧栏不出占位图标（§3.2 占位不永久） |
+| 定时任务目的地页 | §2.4 侧栏底「定时」图标 | ✅ v2.57（§3.35）：`schedule_list` / `schedule_delete` 命令（全部待触发行）；页面 = ListPage 行 + 两步确认删除 + 空态引导（创建入口是模型工具，页面不做编辑器） |
 
 **前端独力可做、无需后端**：markdown 渲染、时间桶分组、命令面板、通知浮层形态、侧栏偏好持久化。
 

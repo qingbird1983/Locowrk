@@ -180,6 +180,15 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         ) {
             tracing::warn!("{e}");
         }
+    } else {
+        // v2.57 自动标题（与 agent_chat 同一入口）：触发的轮次也算首轮
+        crate::title::spawn_auto_title(
+            deps.app.clone(),
+            Arc::clone(&deps.settings),
+            deps.sessions_dir.clone(),
+            session_id,
+            session.derive_messages(),
+        );
     }
     finish(deps, &sched, now);
 }

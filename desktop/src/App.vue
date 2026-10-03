@@ -12,6 +12,7 @@ import ChatTranscript from "./components/ChatTranscript.vue";
 import Composer from "./components/chat/Composer.vue";
 import ContextProgressBar from "./components/ContextProgressBar.vue";
 import MemoryPage from "./components/MemoryPage.vue";
+import SchedulePage from "./components/schedule/SchedulePage.vue";
 import PluginMarket from "./components/PluginMarket.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 import CommandPalette from "./components/shell/CommandPalette.vue";
@@ -106,6 +107,12 @@ onMounted(() => {
         :title="t('nav.memory')"
       >
         <MemoryPage />
+      </DestinationShell>
+      <DestinationShell
+        v-else-if="shell.destination === 'schedule'"
+        :title="t('nav.schedule')"
+      >
+        <SchedulePage />
       </DestinationShell>
     </template>
 

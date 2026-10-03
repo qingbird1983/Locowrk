@@ -119,11 +119,7 @@ impl PermissionModeStore {
     }
 
     /// 设置会话档（写穿旁车 + 缓存；旁车失败 = Err，缓存不动）。
-    pub fn set_session_mode(
-        &self,
-        session_id: &str,
-        mode: PermissionMode,
-    ) -> std::io::Result<()> {
+    pub fn set_session_mode(&self, session_id: &str, mode: PermissionMode) -> std::io::Result<()> {
         write_permission_mode(&self.sessions_dir, session_id, Some(mode.as_str()))?;
         self.cache
             .lock()

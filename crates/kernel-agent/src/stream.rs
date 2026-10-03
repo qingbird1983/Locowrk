@@ -12,6 +12,14 @@ pub trait LlmStreamSink: Send + Sync + 'static {
     /// （子内核替身）——内核据此判定 StepOutcome::streamed，被吞掉的
     /// 轮次仍走整段投影（不过子会话本就不投影，双保险）。
     fn on_delta(&self, session_id: Option<&str>, delta: &str) -> bool;
+
+    /// 推理 delta 出口（v2.57，同 on_delta 语义）：供应商 reasoning 逐段
+    /// 回调。默认 false（不消费）——推理照常整段落 `SessionEvent::Thinking`
+    /// 由投影方投出；消费了则内核以 StepOutcome::reasoned 通知投影方抑制。
+    /// 不实现即自动获得"推理只落日志"的保守行为（headless 零变化）。
+    fn on_reasoning(&self, _session_id: Option<&str>, _delta: &str) -> bool {
+        false
+    }
 }
 
 /// 黑盒替身（⑮ 子 Agent 语义保持）：`child_kernel` 把它 scoped 换入压制

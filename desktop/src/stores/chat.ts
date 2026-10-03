@@ -10,8 +10,10 @@ import {
   sessionList,
   sessionRename,
   sessionSetPermissionMode,
+  sessionTruncateAfter,
   pickSavePath,
   subscribeAgentEvents,
+  subscribeSessionTitle,
 } from "../lib/api";
 import { clip, compactNumber } from "../lib/format";
 import { toolAction } from "../lib/tool-summary";
@@ -43,7 +45,15 @@ export type ToolItem = {
 };
 
 export type ChatItem =
-  | { id: number; kind: "user"; text: string; ts?: number }
+  | {
+      id: number;
+      kind: "user";
+      text: string;
+      ts?: number;
+      /** 源事件在会话日志里的位次（§3.34 编辑重发的定位键）。重放消息有；
+       * 实时发送的没有（后端按「最后一条用户消息」解析）。 */
+      pos?: number;
+    }
   | { id: number; kind: "assistant"; text: string; ts?: number }
   | ToolItem
   /** 思考行（§3.9 模式先行；数据源 = 推理流事件，后端待接入 §8.2——
@@ -90,6 +100,8 @@ export const useChatStore = defineStore("chat", {
   actions: {
     async init() {
       await subscribeAgentEvents((e) => this.onEvent(e));
+      // v2.57 自动标题：旁车落盘后推送（侧栏 + 顶栏即时换名）
+      void subscribeSessionTitle((p) => this.applySessionTitle(p.sessionId, p.title));
       // ㉕·对话区①（用户裁定）：启动落首页空态——不再自动接最近会话，
       // 继续哪条由用户从侧栏点开；列表照常拉（侧栏要有内容）。
       await this.refreshSessions();
@@ -184,12 +196,19 @@ export const useChatStore = defineStore("chat", {
         case "user_message":
           // ㉕·fix 重放恢复用户气泡（此前投影漏 UserMessage，重启后历史
           // 会话只剩模型回复）。实时轮发送即本地回显，本事件不实时到达。
+          // pos（v2.57）：编辑重发的定位键随行保存。
           this.items.push({
             id: nextId++,
             kind: "user",
             text: e.content,
+            pos: e.pos,
             ...(this.replaying ? {} : { ts: Date.now() }),
           });
+          break;
+        case "thinking":
+          // v2.57 §3.9：推理行点亮（实时 delta 与重放整段同形，追加到
+          // 末尾思考行或新起一行——连续思考行在 §3.7 过程组里本就成组）
+          this.appendThinking(e.text);
           break;
         case "chunk":
           this.appendAssistant(e.delta);
@@ -290,6 +309,44 @@ export const useChatStore = defineStore("chat", {
           ...(this.replaying ? {} : { ts: Date.now() }),
         });
       }
+    },
+    /** 思考行追加（v2.57 §3.9）：实时 delta / 重放整段共用 append-or-create
+     * ——与 appendAssistant 同构； Thinking 事件在日志里从不相邻（每步后
+     * 必有 AssistantMessage/ToolCall），重放不会误并两条。 */
+    appendThinking(text: string) {
+      if (!text) return;
+      const last = this.items[this.items.length - 1];
+      if (last && last.kind === "thinking") {
+        last.text += text;
+      } else {
+        this.items.push({ id: nextId++, kind: "thinking", text });
+      }
+    },
+    /** 消息编辑重发（v2.57 §3.34）：后端截断到该消息之前 → 本地从该气泡
+     * 起丢条目 → 走既有 send 通道重发（审批/用量/提取零新链路）。
+     * `pos = null` = 当前最后一条用户消息（实时发送无事件位的解析口）。 */
+    async editResend(pos: number | null, text: string) {
+      const t = text.trim();
+      if (!t || this.running) return;
+      await sessionTruncateAfter(this.sessionId, pos);
+      let idx = -1;
+      if (pos === null) {
+        for (let i = this.items.length - 1; i >= 0; i--) {
+          if (this.items[i]!.kind === "user") {
+            idx = i;
+            break;
+          }
+        }
+      } else {
+        idx = this.items.findIndex((i) => i.kind === "user" && i.pos === pos);
+      }
+      if (idx >= 0) this.items.splice(idx);
+      await this.send(t);
+    },
+    /** 自动标题落地（v2.57）：只更新列表层标题（顶栏数据源同源）。 */
+    applySessionTitle(id: string, title: string) {
+      const row = this.sessions.find((s) => s.id === id);
+      if (row) row.title = title;
     },
     /** 系统消息入列（SystemNotice 模式的唯一生产入口；首个生产者 ⑨
      * 压缩通知，随后 ⑪ "已记住"）。 */

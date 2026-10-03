@@ -8,6 +8,7 @@ export default {
     chat: "对话",
     plugins: "扩展",
     memory: "记忆",
+    schedule: "定时",
     settings: "设置",
     notifications: "通知",
   },
@@ -29,6 +30,7 @@ export default {
     send: "发送",
     newSession: "新会话",
     copyMessage: "复制这条消息",
+    editMessage: "编辑并重发",
     copyCode: "复制代码",
     replaying: "会话恢复中…",
     stopGeneration: "停止生成",
@@ -156,6 +158,20 @@ export default {
     savedTokens: "省下 {n} token",
     approvalTimeout: "审批超时，已自动拒绝",
   },
+  // 定时任务目的地页（§3.35，v2.57）
+  schedule: {
+    once: "一次性",
+    everyMinutes: "每 {n} 分钟",
+    everyHours: "每 {n} 小时",
+    empty: "还没有定时任务。在会话里让模型创建一个试试——比如「每天早上 9 点提醒我 standup」。",
+    target: "目标会话",
+    next: "下次触发",
+    waiting: "等待会话空闲",
+    deferred: "已顺延 {n} 次",
+    deferredHint: "会话忙时引擎自动顺延，任务不会丢",
+    delete: "删除",
+    confirmDelete: "确认删除？",
+  },
   // 工作面板（§2.5/§3.16，v2.52）
   panel: {
     title: "工作面板",
@@ -195,6 +211,7 @@ export default {
       details: "查看详情",
       undo: "撤销",
     },
+    editResendFailed: "编辑重发失败：{reason}",
     // ⑨ 压缩通知（[查看详情][撤销]，Context 文档 §3.8.3）
     contextCompacted: "已压缩早期对话，节省 {saved} token",
     compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",
@@ -407,6 +424,8 @@ export default {
     chatWidthTitle: "对话宽度",
     chatWidthHint:
       "转录列与输入框同宽（缺省 760，下限 560）；拖拽对话区两侧边缘也可调。",
+    autoTitleTitle: "自动会话标题",
+    autoTitleHint: "首轮回复后自动生成不超过 25 字的标题；手动重命名过的不覆盖",
     expandToolTitle: "默认展开工具执行过程",
     enterToSendTitle: "回车发送",
     usageReadoutTitle: "上下文用量读数",

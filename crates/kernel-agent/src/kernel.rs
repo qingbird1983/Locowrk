@@ -10,104 +10,30 @@
 //! 模型适配器不特殊，只是经 `use_dyn::<dyn LlmService>` 获取的服务。
 
 mod request;
+mod services;
+
+pub use services::{LlmError, LlmRequest, LlmResponse, LlmService, ToolCallReq, ToolSource};
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use cordis_core::{Context, CordisError, ScopeKey, Service};
-use plugin_api::{CallCtx, SideEffect, Tool, ToolError, ToolSpec};
+use plugin_api::{CallCtx, SideEffect, ToolError};
 use serde_json::Value;
-use session_store::{Message, Session, SessionEvent};
+use session_store::{Session, SessionEvent};
 
 use crate::CompactionOutcome;
 use crate::approval::{ApprovalDecision, ApprovalResolver};
 use crate::middleware::Middleware;
 use crate::waterfall::RetryBudget;
 
-/// LLM 请求：直接复用 session-store 的中立投影，模型适配层再映射各家协议。
-/// `tools` 是本 step 的工具目录快照（LLM.md：统一 OpenAI 风格，适配器负责
-/// 转成各家格式）；`model` / `params` 可被 `agent/request` 决策环改写（§7.2）；
-/// `system` 是请求级系统提示（⑪ Memory-Inject 走这里，会话日志与压缩不触碰）。
-#[derive(Debug, Clone, Default)]
-pub struct LlmRequest {
-    pub messages: Vec<Message>,
-    pub tools: Vec<ToolSpec>,
-    pub model: Option<String>,
-    pub params: Value,
-    pub system: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ToolCallReq {
-    pub id: plugin_api::CallId,
-    pub tool: String,
-    pub args: Value,
-    /// 发起调用的会话（step_inner 填充；LLM 解析产物初始为 None）。
-    /// 审批门（⑮）据此给子 Agent 的 Irreversible 请求打标识。
-    pub session_id: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct LlmResponse {
-    pub content: String,
-    pub tool_calls: Vec<ToolCallReq>,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum LlmError {
-    #[error("llm backend failed: {0}")]
-    Backend(String),
-}
-
-/// 模型适配器不特殊，也只是插件：以 trait 对象服务获取
-/// （插件用 provide_dyn::<dyn LlmService> 注册，§7.2）。
-#[async_trait]
-pub trait LlmService: Send + Sync + 'static {
-    async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError>;
-
-    /// 流式完成（⑳）：文本 delta 逐段回调 `on_delta`；完整正文与工具调用
-    /// 仍在返回值（日志/投影只认返回值，delta 只是实时通道）。缺省回落
-    /// `complete` 并把正文一次性回调——未实现流式的适配器（DemoLlm 等）
-    /// 零改动获得流式形状。
-    async fn complete_streaming(
-        &self,
-        req: LlmRequest,
-        // 显式 HRTB：async_trait 会把 `Fn(&str)` 的内层生命周期误绑到本引用上
-        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
-    ) -> Result<LlmResponse, LlmError> {
-        let resp = self.complete(req).await?;
-        let content = resp.content.clone();
-        if !content.is_empty() {
-            on_delta(&content);
-        }
-        Ok(resp)
-    }
-}
-
-/// 工具目录服务：kernel-agent 只依赖这个抽象。plugin-host 负责把
-/// PluginRegistry 适配成 ToolSource 注册进 Context——主循环对 dlopen /
-/// Registry 一无所知，"工具目录"也只是个服务（§7.2）。
-#[async_trait]
-pub trait ToolSource: Send + Sync + 'static {
-    /// `session_id`（㉘·B）：目录可按会话过滤——计划模式 = 目录级围栏
-    /// （非 Pure 工具不出目录、解析报 NotAvailable），未来"插件按项目
-    /// 过滤可见性"同落点。内核只透传 id，不做任何模式判断。
-    async fn resolve(
-        &self,
-        session_id: Option<&str>,
-        name: &str,
-    ) -> Result<Arc<dyn Tool>, ToolError>;
-    /// 全目录快照：主循环每个 step 枚举给 LLM（真实模型要看到工具才会调）。
-    /// 只读枚举不失败——没有目录服务就返回空表，聊天照常。
-    async fn list(&self, session_id: Option<&str>) -> Vec<ToolSpec>;
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepOutcome {
-    /// 正常完成一步（含工具执行与审批闭合）。
-    /// （request-error 的 Retry 在 step 内部闭环受预算约束，不再对外返回。）
-    /// `streamed`（⑳）：本步 LLM 文本 delta 已流式发出（sink 在册），投影方据此跳过整段 chunk 防重复；false = 无 sink 纯非流式路径。
-    Continue { streamed: bool },
+    /// 正常完成一步（含工具执行与审批闭合）；request-error 的 Retry 在 step 内部
+    /// 闭环受预算约束，不再对外返回。`streamed`（⑳）：本步 LLM 文本 delta 已流式
+    /// 发出（sink 在册），投影方据此跳过整段 chunk 防重复；false = 无 sink 纯非流式。
+    /// `reasoned`（v2.57）：本步推理 delta 已流式发出，投影方据此跳过整段 Thinking
+    /// 投影防重复；false = 推理只落日志（投影方照常投出）。
+    Continue { streamed: bool, reasoned: bool },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -263,8 +189,7 @@ impl Kernel {
         let tools = self.tool_catalog(session_id).await;
 
         // request-error 的 Retry 在 step 内部闭环，受重试预算约束（§7.2）
-        let (resp, compacted, streamed) =
-            self.request_with_retry(messages, tools, session_id).await?;
+        let (resp, compacted, trace) = self.request_with_retry(messages, tools, session_id).await?;
 
         // 压缩先于本轮 assistant 消息落日志（Context and Memory.md §3.7）：
         // 折叠语义见 session-store；撤销 = rewind_to 本事件。
@@ -279,6 +204,15 @@ impl Kernel {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_millis() as i64)
                     .unwrap_or(0),
+            });
+        }
+
+        // 推理先于正文落日志（v2.57）：时序即呈现时序（§3.9 思考行在过程
+        // 组里排在本步工具/正文之前）。derive_messages 跳过本事件——推理
+        // 不回传供应商，压缩与用量估算不受影响。
+        if !trace.reasoning.is_empty() {
+            session.append(SessionEvent::Thinking {
+                text: trace.reasoning.clone(),
             });
         }
 
@@ -376,7 +310,10 @@ impl Kernel {
             });
         }
 
-        Ok(StepOutcome::Continue { streamed })
+        Ok(StepOutcome::Continue {
+            streamed: trace.streamed,
+            reasoned: trace.reasoned,
+        })
     }
 
     /// 审批门：无决议者时 fail-safe（纪律 9：不可逆调用前必须审批）——

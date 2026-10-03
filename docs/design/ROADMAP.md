@@ -662,6 +662,18 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 
 验证：实机走查（CDP 28b-1…7 + 旁车落盘取证）：切换器四档渲染与当前档勾选 → 档位写旁车 `permissionMode:"ask"` → **计划模式实机**（fs_write 被目录围栏拒收、模型如实报告、search_tools 纯工具照常）→ 环境行如实（归属会话 = 「项目 F:\…\Locowrk」；未归属 = 「临时会话」）→ 询问档审批卡三键/中风险胶囊/理由行/倒计时 → **外部路径门实机**（完全档下围栏外命令强制弹卡、只有「拒绝/允许一次」两键、子 Agent 徽章 + 未归属 env 如实）→ 设置页「新会话权限档」下拉行。**走查实抓缺陷已修**：resolve 失败走 `?` 留悬空 tool_calls，下一轮被供应商拒收（"insufficient tool messages"）——内核改为解析失败也以失败 ToolResult 逐调用闭合（纪律 5 另一半），+回归测试；⑮ 两例收束语义随新契约更新（围栏不变：越权工具零执行）。走查会话已删、设置零改动（切换器只写会话旁车）。
 
+### ㉙ 会话运营补全（✅ 已完成，v2.57——功能层规划第二批）
+
+| 项 | 说明 |
+|---|---|
+| thinking 数据源 | ✅ v2.57：`SessionEvent::Thinking`（DESIGN §4.1 新事件，derive_messages 跳过——不回传供应商，压缩/用量不受影响）；`LlmStreamSink` +默认 `on_reasoning`、`LlmService` +默认 `complete_streaming_reasoning`（缺省回落，DemoLlm/headless 零改动）；genai `ReasoningChunk` + `capture_reasoning_content`；`agent://thinking` 通道**实时 delta 与重放整段同形**（`StepOutcome.reasoned` 抑制同 ⑳ streamed），内核闭包累积全文落日志（sink 故障也有整段可投）；v2.42 思考行壳点亮；服务契约拆 `kernel/services.rs`（单文件上限） |
+| 消息编辑重发 | ✅ v2.57（UI shell §3.34 新节）：投影 `UserMessage` 带事件位 `pos`；`session_truncate_after(pos?)` 命令（None = 最后一条用户消息；忙锁 try_lock 守卫；校验截断位是 UserMessage；rewind_to + fork + persist rewrite `.undo.bak` 留痕同 ⑨⑲）——核心提 `session_log::truncate_after` 纯函数；前端 MessageRow 编辑态（Enter 提交/Shift+Enter 换行/Esc 取消）→ 本地截断 → **复用既有 send 通道**重发（审批/用量/提取零新链路）；编辑钮出现条件 = 重放消息或最后一条（宁缺勿假） |
+| LLM 自动会话标题 | ✅ v2.57：`chat.autoTitle` 缺省开（可配置原则 = 开关）；首轮收束后旁车**无 title 字段**（手动重命名过永不覆盖）时一次 LLM 调用生成 ≤25 字标题（净化：去引号/取首行/截断）；agent_chat 与调度引擎两轮收束点同挂；写旁车 + `lw://session-title` 推送（侧栏/顶栏即时换名）；失败静默 |
+| 定时任务目的地页 | ✅ v2.57（UI shell §3.35 新节）：§2.4 侧栏底第 3 图标（clock）兑现；`schedule_list`/`schedule_delete` 命令（store +list_all/+created_ms）；页面 = 徽章（一次性/每 N）+ 标题 + prompt 两行 + 目标会话名 + 下次触发（逾期 = 「等待会话空闲」如实态）+ 顺延次数 + 两步确认删除；空态引导（创建入口是模型工具，页面不做编辑器——宁缺勿假） |
+| 测试 | ✅ v2.57 | workspace 36 套件 318 绿（kernel-agent +1：推理通道 reasoned 置位/Thinking 时序/derive_messages 跳过）；桌面 127 绿（+5：title 纯函数 3 / truncate 语义与磁盘重写 1 / 投影抑制与 pos 1）；clippy 0 双侧、fmt、check_length（kernel.rs 拆 services.rs、state/mod.rs 压行）、pnpm build 过 |
+
+验证：实机走查（CDP 29-1…7 + 落盘取证，真实轮，deepseek-flash 实际流式吐推理）：**思考行实机点亮**（实时推理英文原文进 §3.9 行、单行截断可展开；jsonl 落 `thinking.text` 全文）→ **自动标题实机生成**（两个新会话 meta.title = 「天空为何蓝及一句诗」「瑞利散射与晴空一鹤诗」，顶栏/侧栏同步；编辑重发后的第二轮不覆盖）→ **编辑重发实机**（行内改问句 → 旧气泡与旧轮消失、新问句重发新回复流式；主日志只剩新轮 3 事件、`.undo.bak` 留截断前全文）→ **重放一致**（切走再切回，思考行/编辑后气泡从 session_history 恢复）→ **定时页全链路**（模型 schedule_create 经审批卡允许一次 → 定时目的地行：一次性徽章/标题/prompt/目标会话名/下次触发 13:11 → 两步删除 → 空态；sqlite 归零）→ 设置页「自动会话标题」开关行在场。走查会话已删（行菜单两步）、调度库空、settings 与走查前逐字段一致。
+
 ---
 
 ## 三、收尾 backlog（随批次搭车）
@@ -751,7 +763,7 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 | 批 | 内容 | 规模 |
 |---|---|---|
 | ㉘·B（先动，已排期） | 权限与围栏：PI 决策表序（合同/计划硬拒 > 外部路径门 > 低险直通 > 模式放行 > 会话豁免 > 决策卡）+ 四档切换器挂输入框旁（文档先行补 §3.x 新行）+ 工具围栏读调用期根（session_context 槽已就位：tool-fs / tool-shell 路径类 / tool-sandbox，回落 env 全局）+ 外部路径低险也审 + 审批卡环境行如实（§3.17 占位 fsRoots[0] 纠偏，载荷 +workspace） | 中大型 |
-| ㉙ 会话运营补全 | 消息编辑重发（内核 rewind_to 已有；最小 = 改写→截断→重发，PI 修订分页器后置）+ 定时任务目的地页（⑭ 后端全在，§8.2 缓办行）+ LLM 自动会话标题（PI session-title-summarize，一次性调用 ≤25 字；可配置原则 = 开关，替代首条截断）+ thinking 数据源（供应商推理内容落事件，点亮 v2.42 思考行空壳） | 中 |
+| ㉙ 会话运营补全（✅ v2.57） | 消息编辑重发 + 定时任务目的地页 + LLM 自动会话标题 + thinking 数据源——四件全落（见上方 ㉙ 块） | 中 |
 | ㉚ 模型体系 | llm_list_models 后端（Ollama /api/tags + OpenAI 兼容 /v1/models 探测）→ §3.30 模型选择器（composer 模型 chip 变选择器 + 会话级覆盖，settings 缺省）+ provider 预设档（多 provider 配置管理——模型分区大改版本就"含后端逻辑"，在此一并收）+ 搭车用量明细（PI message-usage：六类 token / cache 率 / tokens per sec 进 ContextUsagePopover） | 大 |
 | ㉛ Composer 三件 | 附件（图片起步；后端消息分段通路，§8.2 新行）+ @ 文件提及（fsRoots 界内枚举）+ 提示词增强（一次性改写 + 超时 + 开关，PI prompt-enhancement）+ 权限 chip（与 ㉘·B 模式切换器同位联动） | 中 |
 | ㉜ 子 Agent 升级 + 队列 | 后台子 Agent（PI Task/TaskWait/TaskList/TaskStop 语义；⑮ 现为同步单层）+ 用户自定义子 Agent 预设（模型/工具面/思考档钉死）+ 运行中队列与插话（PI turn_queue：提示词排队持久、可取消、可插话 steering——热插话先做，持久队列看需求） | 大 |

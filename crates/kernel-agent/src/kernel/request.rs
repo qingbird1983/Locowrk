@@ -17,6 +17,16 @@ use super::{
 };
 use crate::waterfall::{PreStepPayload, RequestErrorPayload, RequestPayload, points};
 
+/// 一次 LLM 请求的流式痕迹（⑳ + v2.57）：文本/推理 delta 是否已被 sink
+/// 真实消费（投影方据此抑制整段投影）、推理全文（内核闭包累积——与
+/// genai captured_reasoning 同源，被消费与否都收集，sink 故障时投影方
+/// 仍能整段补投）。
+pub(super) struct StreamTrace {
+    pub streamed: bool,
+    pub reasoned: bool,
+    pub reasoning: String,
+}
+
 impl Kernel {
     /// `agent/pre-step` 决策环：放行 → 取改写后的消息；拒绝/重试 → 报错
     /// （重试只对请求失败点有意义，§7.2）。
@@ -104,15 +114,16 @@ impl Kernel {
     /// 累计次数 / 累计延迟超预算即失败（§7.2 重试预算）。压缩结果取
     /// 最后一次成功的决策环产出（重试轮会在原始消息上重压，幂等守卫
     /// 见 compact.rs；落日志只记一次）。⑳：`LlmStreamSink` 在册走流式
-    /// （delta 逐段回调、返回第三值 streamed=true），缺席纯非流式。
-    /// 已知边界：Retry 重试轮的 delta 不回滚——重试仅在 request-error
-    /// 决策环配置时发生，届时上层应考虑清空流式缓冲（桌面端现无该决策）。
+    /// （delta 逐段回调）；v2.57 起走 `complete_streaming_reasoning`，
+    /// 推理 delta 同路逐段回调并全文累积。已知边界：Retry 重试轮的
+    /// delta 不回滚——重试仅在 request-error 决策环配置时发生，届时
+    /// 上层应考虑清空流式缓冲（桌面端现无该决策）。
     pub(super) async fn request_with_retry(
         &self,
         messages: Vec<Message>,
         tools: Vec<ToolSpec>,
         session_id: Option<&str>,
-    ) -> Result<(LlmResponse, Option<CompactionOutcome>, bool), KernelError> {
+    ) -> Result<(LlmResponse, Option<CompactionOutcome>, StreamTrace), KernelError> {
         let mut retries: u32 = 0;
         let mut total_delay = Duration::ZERO;
         // ⑳ delta 通道：sink 在册才走 complete_streaming；查询失败 = 无
@@ -124,6 +135,8 @@ impl Kernel {
                 .await?;
             let llm = self.scoped_dyn::<dyn LlmService>()?;
             let streamed = AtomicBool::new(false);
+            let reasoned = AtomicBool::new(false);
+            let reasoning = std::sync::Mutex::new(String::new());
             let resp = match &sink {
                 Some(sink) => {
                     let sink = Arc::clone(sink);
@@ -132,12 +145,31 @@ impl Kernel {
                             streamed.store(true, Ordering::Relaxed);
                         }
                     };
-                    llm.complete_streaming(req, &on_delta).await
+                    let on_reasoning = |delta: &str| {
+                        // 全文照收（guard 只在闭包内持有，不跨 await）：
+                        // 消费失败时投影方还有整段可投
+                        reasoning.lock().expect("reasoning buf").push_str(delta);
+                        if sink.on_reasoning(session_id, delta) {
+                            reasoned.store(true, Ordering::Relaxed);
+                        }
+                    };
+                    llm.complete_streaming_reasoning(req, &on_delta, &on_reasoning)
+                        .await
                 }
                 None => llm.complete(req).await,
             };
             match resp {
-                Ok(resp) => return Ok((resp, compacted, streamed.load(Ordering::Relaxed))),
+                Ok(resp) => {
+                    return Ok((
+                        resp,
+                        compacted,
+                        StreamTrace {
+                            streamed: streamed.load(Ordering::Relaxed),
+                            reasoned: reasoned.load(Ordering::Relaxed),
+                            reasoning: reasoning.into_inner().expect("reasoning buf"),
+                        },
+                    ));
+                }
                 Err(e) => {
                     let payload = serde_json::to_value(RequestErrorPayload {
                         error: e.to_string(),

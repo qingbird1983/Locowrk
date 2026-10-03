@@ -451,6 +451,10 @@ pub enum SessionEvent {
     TurnStart        { turn_id: TurnId, ts: i64 },
     UserMessage      { content: String },
     AssistantChunk   { delta: String },
+    /// 推理内容（v2.57）：供应商返回的 reasoning 全文，每个 LLM step 至多
+    /// 一条、紧贴其 AssistantMessage 之前落日志；derive_messages 跳过
+    /// （推理是过程不是上下文，不回传供应商，压缩与用量估算不受影响）。
+    Thinking         { text: String },
     AssistantMessage { content: String, tool_calls: Vec<CallId> },
     ToolCall         { call_id: CallId, tool: String, args: Value,
                        plugin_version: Version, side_effect: SideEffect },
@@ -2735,4 +2739,4 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.53。逐批落点补记已迁至 [CHANGELOG.md](CHANGELOG.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*
+*文档版本：v2.57。逐批落点补记已迁至 [CHANGELOG.md](CHANGELOG.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*

@@ -63,13 +63,14 @@ pub async fn run_turn(
         let before = session.len();
         // ⑭：带会话身份 step——CallCtx.session_id 供内置调度工具绑定
         // 创建会话（§5.2 规划字段；普通 step 保持 None 语义不变）
-        let streamed = match kernel.step_as(session, session_id).await {
-            // ⑳：streamed = 本步正文已经 delta 直推（ctx 里 LlmStreamSink
-            // 在册），投影时抑制整段 chunk 防重复
-            Ok(kernel_agent::StepOutcome::Continue { streamed }) => streamed,
+        let (streamed, reasoned) = match kernel.step_as(session, session_id).await {
+            // ⑳/v2.57：streamed / reasoned = 本步正文/推理已经 delta 直推
+            // （ctx 里 LlmStreamSink 在册），投影时抑制整段 chunk/Thinking
+            // 防重复
+            Ok(kernel_agent::StepOutcome::Continue { streamed, reasoned }) => (streamed, reasoned),
             Err(e) => return Err(format!("kernel step: {e}")),
         };
-        project_new_events(session, before, session_id, sink, streamed);
+        project_new_events(session, before, session_id, sink, streamed, reasoned);
         if let Some(dir) = log {
             session_log::append_slice(dir, session_id, session, before);
         }
@@ -99,16 +100,22 @@ pub async fn run_turn(
 
 /// 把日志新增段 `[from..]` 投影成 UI 事件（顺序 = 日志顺序）。
 /// `suppress_assistant_chunk`（⑳）：本步正文已经流式 delta 直推时跳过
-/// 整段 chunk，避免同一正文出现两遍。
-fn project_new_events(
+/// 整段 chunk，避免同一正文出现两遍。`suppress_thinking`（v2.57）：推理
+/// delta 已直推时同理跳过整段 Thinking。
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn project_new_events(
     session: &Session,
     from: usize,
     session_id: &str,
     sink: &dyn EventSink,
     suppress_assistant_chunk: bool,
+    suppress_thinking: bool,
 ) {
     for e in project_events(&session.events()[from..], session_id) {
         if suppress_assistant_chunk && matches!(e, AgentEvent::Chunk { .. }) {
+            continue;
+        }
+        if suppress_thinking && matches!(e, AgentEvent::Thinking { .. }) {
             continue;
         }
         sink.emit(&e);
@@ -123,15 +130,26 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
     // ApprovalDecided 只有 call_id（㉕·对话区①）：tool 从同切片的 ToolCall
     // 按 call_id 找回——ToolCall 先行落日志（纪律 4），同一步内必在决策之前。
     let mut call_tools: HashMap<String, String> = HashMap::new();
-    for e in events {
+    for (pos, e) in events.iter().enumerate() {
         match e {
             // ㉕·fix：用户消息进投影（此前落 `_` 被丢，重启后历史会话
             // 只剩模型回复）。实时轮不受影响——run_turn 的投影起点在
             // UserMessage 追加之后，该段只落盘不上事件通道（前端本地回显）。
+            // `pos`（v2.57 §3.34）：消息编辑重发的定位键——session_history
+            // 传全量数组，pos 即绝对事件位。
             SessionEvent::UserMessage { content } => {
                 out.push(AgentEvent::UserMessage {
                     session_id: session_id.into(),
                     content: content.clone(),
+                    pos,
+                });
+            }
+            // 推理（v2.57 §3.9）：投影一行 ThinkingRow；实时轮已被流式
+            // 消费的 step 由 project_new_events 抑制（重放照常产出）。
+            SessionEvent::Thinking { text } => {
+                out.push(AgentEvent::Thinking {
+                    session_id: session_id.into(),
+                    text: text.clone(),
                 });
             }
             SessionEvent::AssistantMessage { content, .. } => {

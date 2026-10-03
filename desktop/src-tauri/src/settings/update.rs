@@ -226,6 +226,9 @@ impl SettingsStore {
                 }
                 next.chat.usage_readout = r;
             }
+            if let Some(a) = u.auto_title {
+                next.chat.auto_title = a;
+            }
         }
         if let Some(u) = developer {
             // v2.49 开发者选项：布尔开关无范围校验；危险开关缺省全关由

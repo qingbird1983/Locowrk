@@ -59,8 +59,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     // ⑭ 调度库先开（工具目录构造要持有）；引擎等 kernel 就绪后再起。
     let schedules = crate::scheduler::open_db(&root);
 
-    // 使用统计库（⑩③）：usage.sqlite3，5s 批量刷盘；打不开只丢统计。
-    // ⑫ 的 EWMA 积累与 search_tools 高频回退也从这里读。
+    // 使用统计库（⑩③）：usage.sqlite3，5s 批量刷盘；打不开只丢统计；⑫ 的 EWMA 积累与 search_tools 高频回退也从这里读。
     let usage = match UsageDb::open(&root.join("usage.sqlite3")) {
         Ok(db) => UsageRecorder::spawn(db),
         Err(e) => {
@@ -111,7 +110,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     if settings.shell_unlock_risky() {
         std::env::set_var("LOCOWRK_SHELL_UNLOCK_RISK", "1");
     }
-    // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后命令层重注入即生效，无需重启。
+    // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后重注入即生效免重启
     apply_fs_roots_env(&settings);
 
     // 模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身）。⑬：句柄留 AppState 一份给隐式提取（同一实例）。
@@ -123,7 +122,8 @@ pub fn init_state(app: AppHandle) -> AppState {
     ));
 
     // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储。㉘ 会话→项目解析器一次构造多处消费：插件调用期上下文（workspace + ㉘·B fs_roots 围栏）/注入键位/经历键位。
-    let session_ctx = crate::workspace::session_context_resolver(sessions_dir.clone(), root.clone());
+    let session_ctx =
+        crate::workspace::session_context_resolver(sessions_dir.clone(), root.clone());
     plugin_host::set_session_context_resolver(Arc::clone(&session_ctx));
     let workspace_of = crate::workspace::workspace_view(Arc::clone(&session_ctx));
     let memory = Arc::new(MemoryStore::new(&root, Arc::clone(&workspace_of)));
@@ -312,7 +312,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         });
     }
 
-    // 6. ⑭ 调度引擎（库可用时）：1s tick 扫到期任务；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑。
+    // 6. ⑭ 调度引擎（库可用时）：1s tick；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑
     if let Some(db) = &schedules {
         crate::scheduler::spawn_engine(
             Arc::clone(db),
@@ -351,6 +351,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         experiences,
         llm,
         notifications,
+        schedules,
     }
 }
 

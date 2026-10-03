@@ -151,6 +151,33 @@ pub async fn session_export(
     Ok(path)
 }
 
+/// 消息编辑重发的截断步（v2.57 §3.34）：把日志截到 `pos` 之前（rewind_to
+/// + fork，⑨ 先例）并物理同步镜像（persist rewrite，`.undo.bak` 留痕同
+/// ⑲）。`pos = None` = 最后一条用户消息（本进程实时发送的消息无事件位，
+/// 由后端解析）。忙锁 try_lock 守卫：运行中拒绝（前端编辑按钮同规禁用）；
+/// 重发由前端走既有 `agent_chat`（审批/用量/提取零新链路）。
+#[tauri::command]
+pub async fn session_truncate_after(
+    session_id: String,
+    pos: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let held = state
+        .sessions
+        .lock()
+        .expect("sessions poisoned")
+        .get(&session_id)
+        .cloned()
+        .ok_or_else(|| "会话不存在（还没有任何消息）".to_string())?;
+    if held.try_lock().is_err() {
+        return Err("会话正在运行，暂不能编辑重发（等这轮结束再试）".into());
+    }
+    let mut session = held.lock().await;
+    crate::session_log::truncate_after(&mut session, pos)?;
+    crate::session_log::rewrite_after_undo(&state.sessions_dir, &session_id, &session);
+    Ok(())
+}
+
 /// 子 Agent 转录读取（§3.16，v2.52）：`sub-transcripts/<child_id>.jsonl`
 /// load 后走与 `session_history` **同一** `project_events` 全量投影——
 /// 前端页签的数据形状与主转录一致。文件缺席 = Err（页签如实报不可用）。

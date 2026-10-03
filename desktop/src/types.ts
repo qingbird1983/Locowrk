@@ -11,7 +11,8 @@ export type AgentEvent =
   | ContextCompactedEvent
   | ScheduleFiredEvent
   | UserMessageEvent
-  | ApprovalResolvedEvent;
+  | ApprovalResolvedEvent
+  | ThinkingEvent;
 
 export interface ChunkEvent {
   kind: "chunk";
@@ -118,11 +119,43 @@ export interface ScheduleFiredEvent {
 
 /** 用户消息（㉕·fix）：只在 `session_history` 全量重放出现，重放恢复
  * 用户气泡；实时轮发送即本地回显、后端不投影该段，故不在 api.ts
- * CHANNELS 订阅表。 */
+ * CHANNELS 订阅表。`pos`（v2.57 §3.34）= 源事件在日志里的位次，消息
+ * 编辑重发（session_truncate_after）的定位键。 */
 export interface UserMessageEvent {
   kind: "user_message";
   session_id: string;
   content: string;
+  pos: number;
+}
+
+/** 推理内容（v2.57 §3.9，agent://thinking / 重放同形）：实时 = 增量
+ * （StreamChunkSink 直推），重放 = 整段（SessionEvent::Thinking 投影）。
+ * 前端 append-or-create，语义与正文 chunk 一致。 */
+export interface ThinkingEvent {
+  kind: "thinking";
+  session_id: string;
+  text: string;
+}
+
+/** 一条待触发调度（v2.57 §3.35，schedule_list 投影）。 */
+export interface SessionSchedule {
+  id: string;
+  sessionId: string;
+  kind: "once" | "interval";
+  title: string;
+  prompt: string;
+  runAtMs: number;
+  intervalSecs: number | null;
+  /** 引擎忙顺延次数（如实呈现等待状态）。 */
+  deferrals: number;
+  createdAtMs: number;
+}
+
+/** 自动会话标题推送（lw://session-title，v2.57）：旁车落盘后通知前端
+ * 更新侧栏与顶栏标题。 */
+export interface SessionTitlePayload {
+  sessionId: string;
+  title: string;
 }
 
 /** 审批结果（㉕·对话区① §3.17）：ApprovalDecided 的投影（agent://
@@ -287,6 +320,8 @@ export interface ChatSettingsView {
   expandToolProcess: boolean;
   enterToSend: boolean;
   usageReadout: string;
+  /** 自动会话标题（v2.57，缺省开）。 */
+  autoTitle: boolean;
 }
 
 /** 对话行为区部分更新：字段缺省 = 保持不变。 */
@@ -295,6 +330,7 @@ export interface ChatUpdate {
   expandToolProcess?: boolean;
   enterToSend?: boolean;
   usageReadout?: string;
+  autoTitle?: boolean;
 }
 
 /** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。autoExtract =

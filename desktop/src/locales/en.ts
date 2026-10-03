@@ -8,6 +8,7 @@ export default {
     chat: "Chat",
     plugins: "Extensions",
     memory: "Memory",
+    schedule: "Scheduled",
     settings: "Settings",
     notifications: "Notifications",
   },
@@ -29,6 +30,7 @@ export default {
     send: "Send",
     newSession: "New chat",
     copyMessage: "Copy this message",
+    editMessage: "Edit and resend",
     copyCode: "Copy code",
     replaying: "Restoring session…",
     stopGeneration: "Stop generating",
@@ -134,6 +136,7 @@ export default {
       details: "View details",
       undo: "Undo",
     },
+    editResendFailed: "Edit & resend failed: {reason}",
     // ⑨ Compaction notice ([View details][Undo], Context doc §3.8.3)
     contextCompacted: "Compacted earlier messages, saved {saved} tokens",
     compactUndone:
@@ -205,6 +208,21 @@ export default {
     defaultPermissionModeHint: "Plan = read-only · Ask = approve each action · Auto-edits = undoable writes run free · Full = allow all; switch per chat next to the input box",
   },
   // Work panel (§2.5/§3.16, v2.52)
+  // Scheduled-tasks destination page (§3.35, v2.57)
+  schedule: {
+    once: "Once",
+    everyMinutes: "Every {n} min",
+    everyHours: "Every {n} h",
+    empty:
+      "No scheduled tasks yet. Ask the model in a chat to create one — e.g. \"remind me about standup at 9am every day\".",
+    target: "Session",
+    next: "Next fire",
+    waiting: "Waiting for the session to idle",
+    deferred: "Deferred {n}×",
+    deferredHint: "The engine defers while the session is busy; the task is not lost",
+    delete: "Delete",
+    confirmDelete: "Confirm delete?",
+  },
   panel: {
     title: "Work panel",
     launcher: "Launcher",
@@ -409,6 +427,9 @@ export default {
     chatWidthTitle: "Conversation width",
     chatWidthHint:
       "Transcript and composer share one width (default 760, minimum 560); dragging either conversation edge also works.",
+    autoTitleTitle: "Auto session titles",
+    autoTitleHint:
+      "Generate a ≤25-char title after the first reply; manually renamed sessions are never overwritten",
     expandToolTitle: "Expand tool execution by default",
     enterToSendTitle: "Enter sends",
     usageReadoutTitle: "Usage readout",

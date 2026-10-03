@@ -14,6 +14,7 @@ fn sections_aggregate_and_order() {
         AgentEvent::UserMessage {
             session_id: "desktop-1".into(),
             content: "帮我发邮件".into(),
+            pos: 0,
         },
         AgentEvent::Chunk {
             session_id: "desktop-1".into(),
@@ -26,6 +27,7 @@ fn sections_aggregate_and_order() {
         AgentEvent::UserMessage {
             session_id: "desktop-1".into(),
             content: "第二问".into(),
+            pos: 3,
         },
     ]);
     assert!(md.starts_with("# 测试会话"));

@@ -58,6 +58,8 @@ pub(crate) struct Schedule {
     /// 周期间隔（秒）；一次性为 None。
     pub interval_secs: Option<i64>,
     pub deferrals: i64,
+    /// 创建时刻（unix 毫秒，v2.57 目的地页排序/展示用）。
+    pub created_ms: i64,
 }
 
 pub(crate) fn now_ms() -> i64 {
@@ -119,7 +121,7 @@ impl ScheduleDb {
                 s.run_at,
                 s.interval_secs,
                 s.deferrals,
-                now_ms(),
+                s.created_ms,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -129,9 +131,19 @@ impl ScheduleDb {
     /// 某会话的待触发调度（schedule_list 用；新→旧按创建时间）。
     pub(crate) fn list_session(&self, session_id: &str) -> Vec<Schedule> {
         self.query(
-            "SELECT id, session_id, kind, title, prompt, run_at, interval_secs, deferrals
+            "SELECT id, session_id, kind, title, prompt, run_at, interval_secs, deferrals, created_at
              FROM schedules WHERE session_id = ?1 ORDER BY created_at DESC, id",
             rusqlite::params![session_id],
+        )
+    }
+
+    /// 全部待触发行，新→旧按创建时间（v2.57 目的地页 `schedule_list` 用；
+    /// 已触发的行不留库——一次性触发即删，证据在会话日志）。
+    pub(crate) fn list_all(&self) -> Vec<Schedule> {
+        self.query(
+            "SELECT id, session_id, kind, title, prompt, run_at, interval_secs, deferrals, created_at
+             FROM schedules ORDER BY created_at DESC, id",
+            [],
         )
     }
 
@@ -139,7 +151,7 @@ impl ScheduleDb {
     /// 就是启动后第一次 tick 的 run_at <= now）。
     pub(crate) fn due(&self, now_ms: i64) -> Vec<Schedule> {
         self.query(
-            "SELECT id, session_id, kind, title, prompt, run_at, interval_secs, deferrals
+            "SELECT id, session_id, kind, title, prompt, run_at, interval_secs, deferrals, created_at
              FROM schedules WHERE run_at <= ?1 ORDER BY run_at, id",
             rusqlite::params![now_ms],
         )
@@ -186,6 +198,7 @@ impl ScheduleDb {
                 run_at: r.get("run_at")?,
                 interval_secs: interval,
                 deferrals: r.get("deferrals")?,
+                created_ms: r.get("created_at")?,
             })
         });
         match rows {

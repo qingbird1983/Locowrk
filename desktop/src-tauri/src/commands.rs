@@ -3,12 +3,14 @@
 
 mod memory;
 mod plugins;
+mod schedule;
 mod sessions;
 
 use std::sync::Arc;
 
 pub use memory::*;
 pub use plugins::*;
+pub use schedule::*;
 pub use sessions::*;
 
 use tauri::{AppHandle, State};
@@ -59,6 +61,15 @@ pub async fn agent_chat(
         let turn = crate::extract::turn_messages(&session.derive_messages());
         crate::extract::spawn_turn_extract(state.extract_deps(), session_id.clone(), turn);
     }
+    // v2.57 自动标题：旁车无手动标题时一次 LLM 调用生成（fire-and-forget，
+    // 消息快照带出会话锁，不阻塞返回值——⑬ extract 同款）
+    crate::title::spawn_auto_title(
+        state.app.clone(),
+        Arc::clone(&state.settings),
+        state.sessions_dir.clone(),
+        session_id.clone(),
+        session.derive_messages(),
+    );
     Ok(steps)
 }
 

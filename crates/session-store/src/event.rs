@@ -29,6 +29,13 @@ pub enum SessionEvent {
     UserMessage {
         content: String,
     },
+    /// 推理内容（v2.57）：供应商 reasoning 全文，每个 LLM step 至多一条、
+    /// 紧贴其 AssistantMessage 之前。derive_messages 跳过（推理是过程不是
+    /// 上下文：不回传供应商，压缩折叠与用量估算不受影响）；投影层把它映成
+    /// §3.9 思考行。旧日志无此变体（serde 天然兼容）。
+    Thinking {
+        text: String,
+    },
     /// 只存 CallId；工具名与参数从 ToolCall 事件回填（§4.2）。
     AssistantMessage {
         content: String,

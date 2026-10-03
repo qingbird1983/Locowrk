@@ -27,6 +27,8 @@ import type {
   ExperienceRow,
   SessionSearchHit,
   NotificationItem,
+  SessionSchedule,
+  SessionTitlePayload,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
@@ -67,6 +69,8 @@ const CHANNELS = [
   "agent://schedule-fired",
   // ㉕·对话区①：审批结果投影（决策记录条 + 摘除待决卡）
   "agent://approval-resolved",
+  // v2.57 §3.9：推理 delta 直推（实时与重放同形，chat store append-or-create）
+  "agent://thinking",
 ] as const;
 
 export function subscribeAgentEvents(
@@ -247,6 +251,15 @@ export function sessionExport(sessionId: string, path: string): Promise<string> 
   return invoke("session_export", { sessionId, path });
 }
 
+/** 消息编辑重发的截断步（v2.57 §3.34）：日志截到 pos 之前（None = 最后
+ * 一条用户消息）；忙锁守卫在后端（运行中拒绝）。重发由调用方走 chat()。 */
+export function sessionTruncateAfter(
+  sessionId: string,
+  pos: number | null,
+): Promise<void> {
+  return invoke("session_truncate_after", { sessionId, pos });
+}
+
 /** 原生目录选择对话框（⑱，UI shell 文档 §7 规则 8）：Rust 侧
  * tauri-plugin-dialog 封装；取消/关窗返回 null。 */
 export function pickDirectory(): Promise<string | null> {
@@ -288,6 +301,27 @@ export function subscribeNotificationAdded(
  * 与 session_history 同一映射；文件缺席 = reject（页签如实报不可用）。 */
 export function subagentTranscript(childId: string): Promise<AgentEvent[]> {
   return invoke("subagent_transcript", { childId });
+}
+
+// ---- 定时任务目的地页（v2.57 §3.35）：⑭ 调度库的页面命令 ----
+
+/** 全部待触发调度（新→旧）；调度库缺席 = 空表。 */
+export function scheduleList(): Promise<SessionSchedule[]> {
+  return invoke("schedule_list");
+}
+
+/** 删除一条调度（返回是否确有此行；已触发被引擎删掉 = false，幂等）。 */
+export function scheduleDelete(id: string): Promise<boolean> {
+  return invoke("schedule_delete", { id });
+}
+
+/** 自动会话标题推送（v2.57）：旁车落盘后通知（chat store 更新侧栏）。 */
+export function subscribeSessionTitle(
+  onTitle: (payload: SessionTitlePayload) => void,
+): Promise<UnlistenFn> {
+  return listen<SessionTitlePayload>("lw://session-title", (e) =>
+    onTitle(e.payload),
+  );
 }
 
 // ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----

@@ -89,3 +89,47 @@ async fn no_sink_keeps_full_chunk_projection() {
         "无 sink 路径整段投影在场"
     );
 }
+
+/// v2.57 §3.9 推理投影：Thinking 事件进全量投影（重放行）；实时路径
+/// `reasoned` 置位时整段被抑制（delta 已直推，不重复）；UserMessage 投影
+/// 带事件位 pos（§3.34 编辑重发的定位键）。
+#[test]
+fn thinking_projects_on_replay_and_suppresses_when_streamed() {
+    use session_store::SessionEvent;
+
+    let mut s = Session::new();
+    s.append(SessionEvent::UserMessage {
+        content: "问".into(),
+    });
+    s.append(SessionEvent::Thinking {
+        text: "想一步".into(),
+    });
+    s.append(SessionEvent::AssistantMessage {
+        content: "答".into(),
+        tool_calls: vec![],
+    });
+
+    // 重放（session_history 全量）：Thinking 行在场；pos = 源事件位
+    let replay = crate::runner::project_events(s.events(), "s1");
+    assert!(replay.iter().any(
+        |e| matches!(e, crate::events::AgentEvent::Thinking { text, .. } if text == "想一步")
+    ));
+    assert!(replay.iter().any(|e| matches!(
+        e,
+        crate::events::AgentEvent::UserMessage { content, pos, .. } if content == "问" && *pos == 0
+    )));
+
+    // 实时（reasoned = true）：整段 Thinking 抑制，其余照旧
+    let sink = Collector::default();
+    crate::runner::project_new_events(&s, 0, "s1", &sink, false, true);
+    assert!(!sink
+        .events()
+        .iter()
+        .any(|e| matches!(e, crate::events::AgentEvent::Thinking { .. })));
+    let sink2 = Collector::default();
+    crate::runner::project_new_events(&s, 0, "s1", &sink2, false, false);
+    assert!(sink2
+        .events()
+        .iter()
+        .any(|e| matches!(e, crate::events::AgentEvent::Thinking { .. })));
+}

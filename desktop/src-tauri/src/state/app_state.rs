@@ -81,6 +81,9 @@ pub struct AppState {
     pub experiences: Option<Arc<ExperienceDb>>,
     /// LLM 服务句柄（⑬ 隐式提取用；与 ctx 里注册的是同一实例）。
     pub llm: Arc<dyn LlmService>,
+    /// 调度库（⑭，schedule.sqlite3）：目的地页 schedule_list / schedule_delete
+    /// 命令与引擎/工具共用同一连接。打不开 = None（调度缺席已降级）。
+    pub schedules: Option<Arc<crate::scheduler::ScheduleDb>>,
 }
 
 impl AppState {

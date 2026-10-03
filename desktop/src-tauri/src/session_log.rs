@@ -10,11 +10,11 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use session_store::Session;
 use session_store::{
     append_event, delete_session, list_sessions, load_session, rewrite_log, search_sessions,
     session_file, write_title, write_workspace, SessionMeta, SessionSearchHit,
 };
+use session_store::{Session, SessionEvent};
 
 type SessionsMap = Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>>;
 
@@ -77,6 +77,33 @@ pub fn rewrite_after_undo(dir: &Path, session_id: &str, session: &Session) {
     if let Err(e) = rewrite_log(&path, session) {
         tracing::warn!(session_id, "session log undo 重写失败: {e}");
     }
+}
+
+/// 消息编辑重发的截断核心（v2.57 §3.34，纯内存）：`pos = Some(p)` 要求
+/// `events[p]` 是 UserMessage 并截到 p 之前；`None` = 最后一条用户消息。
+/// 返回实际截断位。rewind_to + fork（⑨ 前缀游标语义），物理重写由命令层
+/// 调 [`rewrite_after_undo`]。
+pub fn truncate_after(session: &mut Session, pos: Option<usize>) -> Result<usize, String> {
+    let target = match pos {
+        Some(p) => {
+            let n = session.len();
+            if p >= n {
+                return Err(format!("截断位 {p} 越界（日志共 {n} 条事件）"));
+            }
+            if !matches!(session.events()[p], SessionEvent::UserMessage { .. }) {
+                return Err("截断位不是用户消息".into());
+            }
+            p
+        }
+        None => session
+            .events()
+            .iter()
+            .rposition(|e| matches!(e, SessionEvent::UserMessage { .. }))
+            .ok_or_else(|| "会话里没有用户消息可编辑".to_string())?,
+    };
+    session.rewind_to(target);
+    *session = session.fork(target);
+    Ok(target)
 }
 
 /// 列表（mtime 降序）：直接透出 SessionMeta（Serialize）。

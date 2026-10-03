@@ -2,10 +2,12 @@
 /**
  * 消息行（UI shell doc §8.4 MessageRow）：用户消息 = 右对齐气泡（wash-1
  * 底、圆角 lg-plus、14px/1.55 pre-wrap）；助手消息 = 不是气泡、整列宽
- * markdown 正文（§6.5）。行尾动作区（复制 + 时间）hover 才显形；时间只
- * 在实时轮次有（历史重放无时间戳，不虚构时序）。
+ * markdown 正文（§6.5）。行尾动作区（复制 + 编辑 + 时间）hover 才显形；
+ * 时间只在实时轮次有（历史重放无时间戳，不虚构时序）。
+ * 编辑态（v2.57 §3.34）：用户气泡原位换自适应文本域，Enter = 提交重发、
+ * Shift+Enter 换行、Esc = 取消；可编辑性由父层裁决（出现条件见 §3.34）。
  */
-import { computed } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 import { renderMarkdown } from "../../lib/markdown";
@@ -15,7 +17,11 @@ const props = defineProps<{
   text: string;
   /** 实时到达时刻；历史重放无此项 → 动作区只留复制钮。 */
   ts?: number;
+  /** 用户消息可编辑（v2.57 §3.34：重放消息或最后一条；运行中恒 false）。 */
+  editable?: boolean;
 }>();
+
+const emit = defineEmits<{ edit: [newText: string] }>();
 
 const { t } = useI18n();
 
@@ -33,6 +39,53 @@ const html = computed(() =>
     copyCode: t("chat.copyCode"),
   }) : "",
 );
+
+/** 编辑态（组件本地，不持久化）：进入即全选草稿，离开即丢弃。 */
+const editing = ref(false);
+const draft = ref("");
+const box = ref<HTMLTextAreaElement | null>(null);
+
+function startEdit() {
+  if (!props.editable || editing.value) return;
+  draft.value = props.text;
+  editing.value = true;
+  void nextTick(() => {
+    box.value?.focus();
+    box.value?.setSelectionRange(draft.value.length, draft.value.length);
+    autoGrow();
+  });
+}
+
+function cancelEdit() {
+  editing.value = false;
+  draft.value = "";
+}
+
+function submitEdit() {
+  const t2 = draft.value.trim();
+  if (!t2) return;
+  editing.value = false;
+  emit("edit", t2);
+}
+
+function autoGrow() {
+  const el = box.value;
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+}
+
+watch(draft, () => void nextTick(autoGrow));
+
+function onEditKeydown(e: KeyboardEvent) {
+  if (e.key === "Escape") {
+    e.stopPropagation();
+    cancelEdit();
+  } else if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    submitEdit();
+  }
+}
 
 async function copySelf() {
   try {
@@ -58,8 +111,18 @@ async function onBodyClick(e: MouseEvent) {
 
 <template>
   <div class="msg" :class="kind === 'user' ? 'msg-user' : 'msg-assistant'">
-    <!-- 用户消息：右对齐气泡；助手消息：整列宽 markdown -->
-    <div v-if="kind === 'user'" class="msg-user__bubble">{{ text }}</div>
+    <!-- 用户消息：右对齐气泡（编辑态 = 自适应文本域原位替换）；
+        助手消息：整列宽 markdown -->
+    <textarea
+      v-if="editing"
+      ref="box"
+      v-model="draft"
+      class="msg-edit"
+      rows="2"
+      :aria-label="t('chat.editMessage')"
+      @keydown="onEditKeydown"
+    />
+    <div v-else-if="kind === 'user'" class="msg-user__bubble">{{ text }}</div>
     <!-- eslint-disable-next-line vue/no-v-html —— 内容已过 DOMPurify -->
     <div
       v-else
@@ -77,6 +140,16 @@ async function onBodyClick(e: MouseEvent) {
         @click="copySelf"
       >
         <Icon name="copy" :size="12" />
+      </button>
+      <button
+        v-if="editable && !editing"
+        class="copy-btn"
+        type="button"
+        :title="t('chat.editMessage')"
+        :aria-label="t('chat.editMessage')"
+        @click="startEdit"
+      >
+        <Icon name="edit" :size="12" />
       </button>
       <span v-if="timeText" class="msg__time">{{ timeText }}</span>
     </div>
@@ -119,5 +192,18 @@ async function onBodyClick(e: MouseEvent) {
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* 编辑态文本域（§3.34）：气泡同宽同排版，raised 台面 */
+.msg-edit {
+  width: min(82%, 600px);
+  border-radius: var(--lw-r-lg-plus);
+  padding: 10px 14px;
+  background: var(--lw-surface-1);
+  box-shadow: var(--shadow-raised);
+  font-size: 14px;
+  line-height: 1.55;
+  resize: none;
+  outline: none;
+  overflow: hidden;
 }
 </style>

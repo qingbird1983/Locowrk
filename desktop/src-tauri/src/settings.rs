@@ -225,6 +225,11 @@ impl SettingsStore {
         self.inner.lock().expect("settings poisoned").memory.clone()
     }
 
+    /// 后端专用：对话行为区全量（v2.57 自动标题钩子读 auto_title 用）。
+    pub fn chat(&self) -> ChatSettings {
+        self.inner.lock().expect("settings poisoned").chat.clone()
+    }
+
     /// 后端专用：embedding 区全量（⑬ SharedEmbed 构建用）。
     pub fn embedding(&self) -> EmbeddingSettings {
         self.inner
@@ -308,6 +313,7 @@ impl SettingsStore {
                 expand_tool_process: s.chat.expand_tool_process,
                 enter_to_send: s.chat.enter_to_send,
                 usage_readout: s.chat.usage_readout.clone(),
+                auto_title: s.chat.auto_title,
             },
             developer: DeveloperView {
                 unlocked: s.developer.unlocked,

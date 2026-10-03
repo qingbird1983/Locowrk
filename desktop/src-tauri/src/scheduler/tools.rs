@@ -123,6 +123,7 @@ impl Tool for ScheduleCreateTool {
             run_at,
             interval_secs,
             deferrals: 0,
+            created_ms: now,
         };
         self.db.create(&sched).map_err(cap_hint)?;
         Ok(json!({

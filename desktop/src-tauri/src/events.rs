@@ -30,6 +30,9 @@ pub mod channels {
     /// 前端发送即本地回显，runner 不投影该段（防双气泡）。本通道因此
     /// **永不 emit**，前端也**有意不订阅**（api.ts CHANNELS 不含它）。
     pub const USER_MESSAGE: &str = "agent://user-message";
+    /// 推理内容（v2.57 §3.9）：实时 delta 直推（StreamChunkSink）与整段
+    /// 投影（runner）共用；重放经 session_history 不走通道。
+    pub const THINKING: &str = "agent://thinking";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -117,9 +120,20 @@ pub enum AgentEvent {
     },
     /// 用户消息（㉕·fix）：只在会话日志全量投影出现，重放恢复用户气泡；
     /// 实时轮不投影（前端本地回显），见 channels::USER_MESSAGE 注释。
+    /// `pos`（v2.57 §3.34）：源事件在日志里的位次——消息编辑重发（截断）
+    /// 的定位键；实时路径不产出（前端本地回显无 pos）。
     UserMessage {
         session_id: String,
         content: String,
+        pos: usize,
+    },
+    /// 推理内容（v2.57 §3.9）：`SessionEvent::Thinking` 的投影。实时与
+    /// 重放**同一事件形状**：实时 delta 直推（`text` = 增量，StreamChunkSink
+    /// on_reasoning）与整段投影（`text` = 全文，已被流式消费的 step 抑制）
+    /// 都走 append-or-create；重放每条一行。
+    Thinking {
+        session_id: String,
+        text: String,
     },
     /// 审批结果（㉕·对话区① §3.17）：`SessionEvent::ApprovalDecided` 的
     /// 投影（runner），实时增量与历史重放同一来源——前端渲染"决策记录条"
@@ -147,6 +161,7 @@ impl AgentEvent {
             AgentEvent::ScheduleFired { .. } => channels::SCHEDULE_FIRED,
             AgentEvent::UserMessage { .. } => channels::USER_MESSAGE,
             AgentEvent::ApprovalResolved { .. } => channels::APPROVAL_RESOLVED,
+            AgentEvent::Thinking { .. } => channels::THINKING,
         }
     }
 }
@@ -234,6 +249,29 @@ impl kernel_agent::LlmStreamSink for StreamChunkSink {
         let event = AgentEvent::Chunk {
             session_id: session_id.into(),
             delta: delta.into(),
+        };
+        match self.0.emit(event.channel(), &event) {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::warn!("emit {} failed: {e}", event.channel());
+                false
+            }
+        }
+    }
+
+    /// 推理 delta（v2.57）：与正文同形直推 `agent://thinking`，语义与
+    /// on_delta 一致（消费成功 = 该步整段 Thinking 投影被抑制）。子会话
+    /// 的推理同样被 child_kernel 的 NoLlmStreamSink 压制（黑盒不泄漏）。
+    fn on_reasoning(&self, session_id: Option<&str>, delta: &str) -> bool {
+        let Some(session_id) = session_id else {
+            return false;
+        };
+        if delta.is_empty() {
+            return false;
+        }
+        let event = AgentEvent::Thinking {
+            session_id: session_id.into(),
+            text: delta.into(),
         };
         match self.0.emit(event.channel(), &event) {
             Ok(()) => true,

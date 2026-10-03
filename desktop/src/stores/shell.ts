@@ -11,7 +11,7 @@ import {
 } from "../lib/sidebar-preference";
 import type { SettingsSectionId } from "../lib/settings-index";
 
-export type Destination = "chat" | "plugins" | "memory" | "settings";
+export type Destination = "chat" | "plugins" | "memory" | "schedule" | "settings";
 
 const prefs = loadSidebarPrefs();
 

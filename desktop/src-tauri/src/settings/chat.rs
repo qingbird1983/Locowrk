@@ -17,7 +17,7 @@ pub const USAGE_READOUT_REMAINING: &str = "remaining";
 const USAGE_READOUTS: [&str; 2] = [USAGE_READOUT_USED, USAGE_READOUT_REMAINING];
 
 /// `chat` 区（settings.json）。字段级缺省：旧文件无此区 → 全部缺省
-/// （宽度未设置 / 不默认展开过程 / 回车发送 / 已用口径），零迁移。
+/// （宽度未设置 / 不默认展开过程 / 回车发送 / 已用口径 / 自动标题开），零迁移。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ChatSettings {
@@ -30,6 +30,10 @@ pub struct ChatSettings {
     pub enter_to_send: bool,
     /// 上下文用量读数口径（§3.12 浮层 headline：used / remaining）。
     pub usage_readout: String,
+    /// 自动会话标题（v2.57，缺省开）：首轮收束后旁车无标题时一次 LLM
+    /// 调用生成 ≤25 字标题（替代首条截断）；用户手动重命名过（旁车有
+    /// title 字段）永不覆盖。关 = 恢复首条截断。
+    pub auto_title: bool,
 }
 
 impl Default for ChatSettings {
@@ -39,6 +43,7 @@ impl Default for ChatSettings {
             expand_tool_process: false,
             enter_to_send: true,
             usage_readout: USAGE_READOUT_USED.into(),
+            auto_title: true,
         }
     }
 }
@@ -51,6 +56,7 @@ pub struct ChatView {
     pub expand_tool_process: bool,
     pub enter_to_send: bool,
     pub usage_readout: String,
+    pub auto_title: bool,
 }
 
 /// 部分更新（settings_set 入参）。字段 None = 保持不变。
@@ -61,6 +67,7 @@ pub struct ChatUpdate {
     pub expand_tool_process: Option<bool>,
     pub enter_to_send: Option<bool>,
     pub usage_readout: Option<String>,
+    pub auto_title: Option<bool>,
 }
 
 /// 合法性检查（update.rs 校验用）。

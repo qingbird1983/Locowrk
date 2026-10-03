@@ -67,9 +67,7 @@ impl ToolSource for KernelToolSource {
         } else {
             self.inner.resolve(name)?
         };
-        if self.plan_locked(session_id)
-            && !matches!(tool.spec().side_effect, SideEffect::Pure)
-        {
+        if self.plan_locked(session_id) && !matches!(tool.spec().side_effect, SideEffect::Pure) {
             return Err(ToolError::NotAvailable(format!(
                 "{name} 在计划模式下不可用：计划模式只读，写类工具已被目录收起"
             )));
