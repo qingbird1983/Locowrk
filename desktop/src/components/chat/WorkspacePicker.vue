@@ -34,13 +34,9 @@ const inSession = computed(
   () => chat.sessions.some((s) => s.id === chat.sessionId) || chat.running,
 );
 
-/** 当前归属：会话内 = 旁车 workspace；首页 = 挂起归属（首聊后生效）。 */
-const currentWs = computed(() => {
-  if (inSession.value) {
-    return chat.sessions.find((s) => s.id === chat.sessionId)?.workspace ?? null;
-  }
-  return chat.pendingWorkspace;
-});
+/** 当前归属：chat.currentWorkspace 同源真源（v2.61——会话态 = 旁车
+ * workspace；首页 = 挂起归属；与欢迎页问候共用一个 getter，永远同变）。 */
+const currentWs = computed(() => chat.currentWorkspace);
 const currentName = computed(() =>
   currentWs.value ? workspaceDisplayName(currentWs.value) : t("workspace.chip"),
 );

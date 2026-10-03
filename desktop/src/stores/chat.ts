@@ -123,6 +123,25 @@ export const useChatStore = defineStore("chat", {
     /** §3.6 v3.9 项目下新建任务：挂起的归属目标，首聊建会话后消费。 */
     pendingWorkspace: null as string | null,
   }),
+  getters: {
+    /** 当前归属——工作区 chip 与欢迎页问候的**唯一同源真源**（v2.61 用户
+     * 裁定「把欢迎语项目名跟对话框下面的项目名关联」）：会话态 = 活动会话
+     * 旁车 workspace；首页空态 = 挂起归属。此前问候另有「最近活动会话 /
+     * 第一个 fsRoot」回落，chip 显示「选择文件夹」时问候仍挂旧项目名——
+     * 回落退役，两边永远同变。null = 未选项目（chip「选择文件夹」+ 问候
+     * 不带名）。 */
+    currentWorkspace(state): string | null {
+      const inSession =
+        state.sessions.some((s) => s.id === state.sessionId) || state.running;
+      if (inSession) {
+        return (
+          state.sessions.find((s) => s.id === state.sessionId)?.workspace ??
+          null
+        );
+      }
+      return state.pendingWorkspace;
+    },
+  },
   actions: {
     async init() {
       await subscribeAgentEvents((e) => this.onEvent(e));

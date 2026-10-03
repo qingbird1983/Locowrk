@@ -4,20 +4,19 @@
  * 与真实对话状态分离——吉祥物 + 四态问候 + composer（Teleport 槽位）组成
  * 居中偏上的块；composer 定宽 720（§3.11 空态变体，列宽柄不渲染）、
  * 双层卡影（底层深色圆角矩形下沉 14px，浮层底边短于暗影）。问候 = 时段
- * 四态（上午好/下午好/晚上好/夜深了）+ 当前索引项目名（挂起归属 →
- * 当前会话归属 → 最近活动会话归属 → 第一个 fsRoot，§3.14 表；无任何
- * 项目 = 不带名字的问候，v2.60 修复批）。吉祥物
+ * 四态（上午好/下午好/晚上好/夜深了）+ 项目名（chat.currentWorkspace，
+ * 与工作区 chip 同源，v2.61 用户裁定；无项目 = 不带名的 greetingBare）。
+ * 吉祥物
  * 微动效 = 云体浮动 + 周期眨眼，reduced-motion 全停（§6.6 纪律）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
-import { useSettingsStore } from "../../stores/settings";
-import { greetingKey, homeProjectName } from "../../lib/greeting";
+import { workspaceDisplayName } from "../../lib/session-groups";
+import { greetingKey } from "../../lib/greeting";
 
 const { t } = useI18n();
 const chat = useChatStore();
-const settings = useSettingsStore();
 
 /** composer 槽位元素：经 defineExpose 交给 App——Teleport 直接吃元素，
  * 不走 document 选择器（初次挂载整棵树还没插进 document，选择器必扑空）。 */
@@ -26,15 +25,13 @@ defineExpose({ slotEl });
 
 const greeting = computed(() => {
   const key = greetingKey();
-  const name = homeProjectName(
-    chat.sessions,
-    chat.sessionId,
-    settings.view?.tools.fsRoots ?? [],
-    chat.pendingWorkspace,
-  );
-  // 无任何已选项目：不带名字的问候（v2.60 修复批，"Locowrk" 兜底退役）
-  if (!name) return t(`chat.greetingBare.${key}`);
-  return t(`chat.greeting.${key}`, { name });
+  // 项目名 = chat.currentWorkspace（与对话框下面工作区 chip **同一真源**，
+  // v2.61 用户裁定「把欢迎语项目名跟对话框下面的项目名关联」——此前问候
+  // 另有最近会话/fsRoots 回落，chip 显示「选择文件夹」时问候仍挂旧项目名）。
+  // null = 未选项目 → 不带名问候（greetingBare）。
+  const ws = chat.currentWorkspace;
+  if (!ws) return t(`chat.greetingBare.${key}`);
+  return t(`chat.greeting.${key}`, { name: workspaceDisplayName(ws) });
 });
 </script>
 
