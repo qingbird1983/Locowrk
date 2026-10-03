@@ -1,196 +1,225 @@
 <script setup lang="ts">
 /**
- * 设置分区：LLM 配置（settings.json `llm` 区，§13.1）。保存即生效，
- * API Key 只落盘不出 IPC——输入框永远从空开始，placeholder 按
- * apiKeySet 提示"留空保持不变"。
- * S2（清单 §5 信息归属）：模型上下文窗口是模型属性，下拉自上下文管理
- * 区迁入；Ollama 走 /api/show 自动检测，云端模型查静态档案兜底。
- * 行版式（§3.32·七 v3.5）：左行名右控件，文本输入 min 140 自适应。
+ * 设置分区：模型（模型配置页，UI shell 文档 §3.30 ㉚·改版，对齐
+ * PI-Desktop ModelConfigPage；settings.json `llm` 区档位制，DESIGN
+ * §13.1）。三块：默认项（默认模型行 + 更改浮层，选择 = 写设置缺省）→
+ * AI 服务列表（卡片行：字母瓦片/徽章/meta + 开关 + 菜单，行点击进编辑
+ * 模态，拖拽排序落盘）→ 添加/编辑服务大模态（ProviderSetupDialog：
+ * 选服务瓦片格 ↔ 表单双栏）。API Key 只落盘不出 IPC。目录状态行
+ * （models.dev 快照）= 文档记槽位，本页不渲染。
  */
-import { computed, reactive, watch } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { compactNumber } from "../../lib/format";
-import { profileWindow } from "../../lib/model-profiles";
-import { llmProbeWindow } from "../../lib/api";
+import { Icon } from "../../lib/icons";
+import { llmProbeModels, llmProviderReorder } from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
+import { useToastStore } from "../../stores/toast";
+import type { ProviderView } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
-import SettingsSaveRow from "./SettingsSaveRow.vue";
+import ServiceList from "./model/ServiceList.vue";
+import ProviderSetupDialog from "./model/ProviderSetupDialog.vue";
+import DefaultModelMenu from "./model/DefaultModelMenu.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
+const toast = useToastStore();
 
-const PRESETS = [8192, 16384, 32768, 65536, 131072, 200000, 262144, 1048576];
-
-// 表单是投影的本地可编辑副本；窗口用"选项 + 自定义"两段表达
-const form = reactive({
-  provider: "openai",
-  model: "",
-  baseUrl: "",
-  apiKey: "",
-  windowChoice: "unset" as string, // "unset" | preset 数字串 | "custom"
-  customWindow: 32768,
-  probing: false,
-  probeError: "",
-});
-watch(
-  () => settings.view,
-  (v) => {
-    if (!v) return;
-    form.provider = v.llm.provider;
-    form.model = v.llm.model;
-    form.baseUrl = v.llm.baseUrl ?? "";
-    const w = v.llm.windowTokens;
-    form.windowChoice = w == null ? "unset" : String(w);
-  },
-  { immediate: true },
-);
-
-// 静态档案自动填充：只在"未设置"时命中，不覆盖手动选择/检测值
-watch(
-  () => form.model,
-  (m) => {
-    if (form.windowChoice !== "unset") return;
-    const hit = profileWindow(m);
-    if (hit != null) form.windowChoice = String(hit);
-  },
-);
-
-/** 表单当前生效的窗口（null = 未设置，回落保守保护）。 */
-const formWindow = computed<number | null>(() => {
-  if (form.windowChoice === "unset") return null;
-  if (form.windowChoice === "custom") return form.customWindow || null;
-  const n = Number(form.windowChoice);
-  return Number.isFinite(n) && n > 0 ? n : null;
+const llm = computed(() => settings.view?.llm ?? null);
+const providers = computed<ProviderView[]>(() => llm.value?.providers ?? []);
+const enabledProviders = computed(() => providers.value.filter((p) => p.enabled));
+const activeId = computed(() => llm.value?.active ?? "");
+const activeModel = computed(() => llm.value?.model ?? "");
+/** 活动档在启用档里已不可解析（被删/停用）→ 值保留 + 灰注。 */
+const defaultMissing = computed(() => {
+  if (!llm.value || !activeModel.value) return false;
+  return !enabledProviders.value.some((p) => p.id === activeId.value);
 });
 
-/** Ollama /api/show 自动检测（读不到 → 错误条提示手动选择）。 */
-async function probeWindow() {
-  if (form.probing || !form.model.trim()) return;
-  form.probing = true;
-  form.probeError = "";
+// ---- 默认项：更改浮层 ----
+const defaultMenuOpen = ref(false);
+const anchorEl = ref<HTMLElement | null>(null);
+
+async function onSelectDefault(providerId: string, model: string) {
   try {
-    const n = await llmProbeWindow(form.baseUrl, form.model);
-    form.windowChoice = String(n);
+    await settings.saveLlm({ active: providerId, model });
   } catch (e) {
-    form.probeError = String(e);
-  } finally {
-    form.probing = false;
+    toast.push("danger", String(e));
   }
 }
 
-function save() {
-  void settings.saveLlm({
-    provider: form.provider,
-    model: form.model,
-    baseUrl: form.baseUrl, // 空串 = 清除，回落 provider 默认端点
-    apiKey: form.apiKey || undefined, // 留空 = 不改动已存 Key
-    windowTokens: formWindow.value, // null = 清除窗口（回落保守保护）
-  });
-  form.apiKey = "";
-}
+// ---- AI 服务：模态与动作 ----
+/** null = 关；"" = 添加；id = 编辑。 */
+const setupFor = ref<null | string>(null);
+const copyDraft = ref<null | {
+  label: string;
+  kind: string;
+  baseUrl: string | null;
+  models: ProviderView["models"];
+}>(null);
+const editingProvider = computed<ProviderView | null>(() => {
+  if (!setupFor.value) return null;
+  return providers.value.find((p) => p.id === setupFor.value) ?? null;
+});
 
-function clearKey() {
-  void settings.saveLlm({ apiKey: "" });
+function onEdit(p: ProviderView) {
+  copyDraft.value = null;
+  setupFor.value = p.id;
+}
+function onCopy(p: ProviderView) {
+  copyDraft.value = {
+    label: `${p.label} ${t("settings.modelCopySuffix")}`,
+    kind: p.kind,
+    baseUrl: p.baseUrl,
+    models: p.models.map((m) => ({ ...m })),
+  };
+  setupFor.value = "";
+}
+async function onToggle(p: ProviderView) {
+  try {
+    await settings.saveProvider({
+      id: p.id,
+      label: p.label,
+      kind: p.kind,
+      baseUrl: p.baseUrl ?? undefined,
+      model: p.model,
+      windowTokens: p.windowTokens,
+      enabled: !p.enabled,
+      models: p.models,
+    });
+    toast.push(
+      "ok",
+      t(p.enabled ? "settings.modelDisabledToast" : "settings.modelEnabledToast", { name: p.label }),
+    );
+  } catch (e) {
+    toast.push("danger", String(e));
+  }
+}
+async function onMakeDefault(p: ProviderView) {
+  const model = p.models[0]?.id ?? p.model;
+  await onSelectDefault(p.id, model);
+}
+async function onTest(p: ProviderView) {
+  try {
+    const list = await llmProbeModels(p.kind, p.baseUrl, null, p.id);
+    toast.push(
+      list.length > 0 ? "ok" : "danger",
+      list.length > 0 ? t("settings.modelConnected", { n: list.length }) : t("settings.modelProbeEmpty"),
+    );
+  } catch (e) {
+    toast.push("danger", String(e));
+  }
+}
+async function onRemove(p: ProviderView) {
+  try {
+    await settings.deleteProvider(p.id);
+    toast.push("ok", t("settings.modelRemovedToast", { name: p.label }));
+  } catch (e) {
+    toast.push("danger", String(e));
+  }
+}
+async function onReorder(list: ProviderView[]) {
+  try {
+    await llmProviderReorder(list.map((p) => p.id));
+    await settings.refresh();
+  } catch (e) {
+    toast.push("danger", String(e));
+  }
+}
+async function onSaved() {
+  // 模态直调 llmProviderSave，不走 store 动作 → 这里统一刷新视图
+  // （服务行「N 个模型」/默认项清单/下次打开编辑的初值都吃新投影）。
+  await settings.refresh();
+  toast.push("ok", t("settings.modelSavedToast"));
+}
+function closeSetup() {
+  setupFor.value = null;
+  copyDraft.value = null;
 }
 </script>
 
 <template>
-  <SettingsGroup :hint="t('settings.llmHint')">
-    <SettingsRow :title="t('settings.provider')" control-id="llm-provider">
-      <select
-        id="llm-provider"
-        v-model="form.provider"
-        class="w-44 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
-      >
-        <option value="openai">OpenAI</option>
-        <option value="anthropic">Anthropic</option>
-        <option value="ollama">Ollama</option>
-      </select>
-    </SettingsRow>
+  <div class="space-y-6">
+    <!-- 默认项 -->
+    <SettingsGroup :title="t('settings.modelDefaultsGroup')">
+      <SettingsRow :title="t('settings.modelDefaultRow')">
+        <template #detail>
+          <span v-if="activeModel" class="mt-1 flex items-center gap-1.5 text-[12px] text-ink-3">
+            <span>{{ providers.find((p) => p.id === activeId)?.label ?? "—" }}</span>
+            <span aria-hidden>·</span>
+            <span class="font-mono">{{ activeModel }}</span>
+            <span v-if="defaultMissing" class="text-warn">{{ t("settings.modelDefaultMissing") }}</span>
+          </span>
+          <span v-else class="mt-1 block text-[12px] text-ink-4">
+            {{ enabledProviders.length === 0 ? t("settings.modelDefaultNone") : t("settings.modelDefaultUnset") }}
+          </span>
+        </template>
+        <button
+          ref="anchorEl"
+          type="button"
+          class="lw-btn flex items-center gap-1 px-3 py-1.5 text-xs text-ink-1"
+          :disabled="enabledProviders.length === 0"
+          :aria-haspopup="'listbox'"
+          :aria-expanded="defaultMenuOpen"
+          @click="defaultMenuOpen = !defaultMenuOpen"
+        >
+          {{ t("settings.modelDefaultChange") }}
+          <Icon name="chevronDown" :size="13" />
+        </button>
+      </SettingsRow>
+    </SettingsGroup>
 
-    <SettingsRow :title="t('settings.model')" control-id="llm-model">
-      <input
-        id="llm-model"
-        v-model="form.model"
-        type="text"
-        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
+    <!-- AI 服务 -->
+    <SettingsGroup :title="t('settings.modelServicesGroup', { n: providers.length })">
+      <template #action>
+        <button
+          type="button"
+          class="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90"
+          @click="copyDraft = null; setupFor = ''"
+        >
+          <Icon name="plus" :size="13" />
+          {{ t("settings.modelAddService") }}
+        </button>
+      </template>
+
+      <div v-if="providers.length === 0" class="flex flex-col items-center gap-1.5 rounded-[14px] bg-wash-1 px-4 py-8">
+        <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-wash-2 text-ink-4" aria-hidden>
+          <Icon name="server" :size="18" />
+        </span>
+        <p class="text-[13px] font-medium text-ink-2">{{ t("settings.modelEmptyTitle") }}</p>
+        <p class="text-[11.5px] text-ink-4">{{ t("settings.modelEmptyDesc") }}</p>
+      </div>
+      <ServiceList
+        v-else
+        :providers="providers"
+        :active-id="activeId"
+        :busy="setupFor !== null"
+        @edit="onEdit"
+        @make-default="onMakeDefault"
+        @test="onTest"
+        @copy="onCopy"
+        @toggle="onToggle"
+        @remove="onRemove"
+        @reorder="onReorder"
       />
-    </SettingsRow>
+    </SettingsGroup>
 
-    <SettingsRow :title="t('settings.baseUrl')" control-id="llm-base-url">
-      <input
-        id="llm-base-url"
-        v-model="form.baseUrl"
-        type="text"
-        :placeholder="t('settings.baseUrlPlaceholder')"
-        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
-      />
-    </SettingsRow>
+    <DefaultModelMenu
+      v-if="defaultMenuOpen"
+      :providers="providers"
+      :active-id="activeId"
+      :active-model="activeModel"
+      :anchor="anchorEl"
+      @select="onSelectDefault"
+      @close="defaultMenuOpen = false"
+    />
 
-    <SettingsRow :title="t('settings.apiKey')" control-id="llm-api-key">
-      <input
-        id="llm-api-key"
-        v-model="form.apiKey"
-        type="password"
-        autocomplete="off"
-        :placeholder="settings.view?.llm.apiKeySet ? t('settings.apiKeyKeep') : t('settings.apiKeyPlaceholder')"
-        class="w-full min-w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs placeholder:text-ink-5"
-      />
-    </SettingsRow>
-
-    <!-- 上下文窗口（S2 迁入）：压缩阈值的换算基准，档位呈现（§3.5）；
-         Ollama 检测钮与下拉同行（控件列 gap-2） -->
-    <SettingsRow :title="t('settings.window')" control-id="llm-window">
-      <select
-        id="llm-window"
-        v-model="form.windowChoice"
-        class="w-44 min-w-0 rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
-      >
-        <option value="unset">{{ t("settings.windowUnset") }}</option>
-        <option v-for="p in PRESETS" :key="p" :value="String(p)">
-          {{ compactNumber(p) }}
-        </option>
-        <option value="custom">{{ t("settings.windowCustom") }}</option>
-      </select>
-      <button
-        v-if="form.provider === 'ollama'"
-        type="button"
-        class="shrink-0 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="form.probing"
-        @click="probeWindow"
-      >
-        {{ form.probing ? t("settings.windowProbing") : t("settings.windowDetect") }}
-      </button>
-    </SettingsRow>
-    <SettingsRow
-      v-if="form.windowChoice === 'custom'"
-      :title="t('settings.windowCustomLabel')"
-      control-id="llm-window-custom"
-    >
-      <input
-        id="llm-window-custom"
-        v-model.number="form.customWindow"
-        type="number"
-        min="100"
-        step="1000"
-        class="w-[140px] rounded-lg border border-line-strong bg-surface-1 px-2 py-1.5 text-xs"
-      />
-    </SettingsRow>
-    <p v-if="form.probeError" class="px-1 text-[11px] text-danger">
-      {{ t("settings.windowDetectFail") }} {{ form.probeError }}
-    </p>
-  </SettingsGroup>
-
-  <SettingsSaveRow class="mt-3" @save="save">
-    <button
-      v-if="settings.view?.llm.apiKeySet"
-      type="button"
-      class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-3 transition hover:bg-surface-1"
-      :disabled="settings.saving"
-      @click="clearKey"
-    >
-      {{ t("settings.clearKey") }}
-    </button>
-  </SettingsSaveRow>
+    <ProviderSetupDialog
+      v-if="setupFor !== null"
+      :provider="editingProvider"
+      :draft="copyDraft"
+      @close="closeSetup"
+      @saved="onSaved"
+    />
+  </div>
 </template>

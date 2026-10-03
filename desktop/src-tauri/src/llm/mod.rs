@@ -7,6 +7,7 @@
 mod app_llm;
 mod embed;
 mod genai_backend;
+pub mod models;
 pub mod probe;
 #[cfg(test)]
 mod tests;

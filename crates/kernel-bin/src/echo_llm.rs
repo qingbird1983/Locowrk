@@ -56,6 +56,7 @@ impl LlmService for ScriptedLlm {
                 args,
                 session_id: None,
             }],
+            usage: None,
         })
     }
 }

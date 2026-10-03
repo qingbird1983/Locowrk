@@ -7,7 +7,7 @@
 use super::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
     MemoryUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME,
-    LOCALES, PROVIDERS,
+    LOCALES,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -60,37 +60,9 @@ impl SettingsStore {
             next.shortcut = sc;
         }
         if let Some(u) = llm {
-            if let Some(p) = &u.provider {
-                if !PROVIDERS.contains(&p.as_str()) {
-                    return Err(format!(
-                        "不支持的 provider: {p}（可选 openai / anthropic / ollama）"
-                    ));
-                }
-                next.llm.provider = p.clone();
-            }
-            if let Some(m) = u.model {
-                next.llm.model = m;
-            }
-            if let Some(b) = u.base_url {
-                next.llm.base_url = (!b.is_empty()).then_some(b);
-            }
-            if let Some(k) = u.api_key {
-                next.llm.api_key = (!k.is_empty()).then_some(k);
-            }
-            if let Some(w) = u.window_tokens {
-                // S2：窗口归属模型配置。双层 Option：null = 清除。
-                match w {
-                    Some(n) if n <= 99 => {
-                        return Err(format!(
-                            "上下文窗口过小: {n} token（单位是 token，如 32768）"
-                        ));
-                    }
-                    Some(n) if n > 100_000_000 => {
-                        return Err(format!("上下文窗口过大: {n} token（上限 1 亿）"));
-                    }
-                    other => next.llm.window_tokens = other,
-                }
-            }
+            // v2.58 档位制：校验与应用在 LlmConfig::apply_update（平面
+            // 字段映射到目标档，active 切档；失败不污染内存态）
+            next.llm.apply_update(&u)?;
         }
         if let Some(u) = embedding {
             if let Some(b) = u.base_url {

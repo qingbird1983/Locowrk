@@ -66,6 +66,7 @@ impl LlmService for PolicyLlm {
                 args,
                 session_id: None,
             }],
+            usage: None,
         })
     }
 }
@@ -100,6 +101,7 @@ impl LlmService for IsolatedLlm {
                 args: json!({ "text": "scope-b hello", "mode": "plain" }),
                 session_id: None,
             }],
+            usage: None,
         })
     }
 }

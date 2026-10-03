@@ -386,5 +386,6 @@ fn sub_call(n: usize, args: Value) -> Result<LlmResponse, LlmError> {
             args,
             session_id: None,
         }],
+        usage: None,
     })
 }

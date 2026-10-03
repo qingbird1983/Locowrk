@@ -133,3 +133,52 @@ fn thinking_projects_on_replay_and_suppresses_when_streamed() {
         .iter()
         .any(|e| matches!(e, crate::events::AgentEvent::Thinking { .. })));
 }
+
+/// v2.58 §3.12 用量投影：`SessionEvent::LlmUsage` 进全量投影（实时与
+/// 重放同形），全字段如实透传；ContextUsage 载荷带目录估算。
+#[test]
+fn llm_usage_projects_with_all_fields() {
+    use session_store::SessionEvent;
+
+    let mut s = Session::new();
+    s.append(SessionEvent::UserMessage {
+        content: "问".into(),
+    });
+    s.append(SessionEvent::AssistantMessage {
+        content: "答".into(),
+        tool_calls: vec![],
+    });
+    s.append(SessionEvent::LlmUsage {
+        input: 100,
+        output: 20,
+        cache_read: 80,
+        cache_write: 4,
+        reasoning: 5,
+        total: 125,
+        duration_ms: 1234,
+    });
+
+    let replay = crate::runner::project_events(s.events(), "s1");
+    let hit = replay.iter().find_map(|e| match e {
+        crate::events::AgentEvent::LlmUsage {
+            input,
+            output,
+            cache_read,
+            cache_write,
+            reasoning,
+            total,
+            duration_ms,
+            ..
+        } => Some((
+            *input,
+            *output,
+            *cache_read,
+            *cache_write,
+            *reasoning,
+            *total,
+            *duration_ms,
+        )),
+        _ => None,
+    });
+    assert_eq!(hit, Some((100, 20, 80, 4, 5, 125, 1234)));
+}

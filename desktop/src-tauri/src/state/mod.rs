@@ -68,8 +68,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         }
     };
 
-    // ⑬ embedding 共享柄：未配置 = None 内值（各处自行降级）；
-    // settings_set 后命令层换入即生效。port 全宿主共用（冷却不分家）。
+    // ⑬ embedding 共享柄：未配置 = None 内值（各处自行降级）；settings_set 后命令层换入即生效。port 全宿主共用（冷却不分家）。
     let embed = SharedEmbed::new();
     let embed_port = embed.port();
 
@@ -113,8 +112,15 @@ pub fn init_state(app: AppHandle) -> AppState {
     // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后重注入即生效免重启
     apply_fs_roots_env(&settings);
 
-    // 模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身）。⑬：句柄留 AppState 一份给隐式提取（同一实例）。
-    let llm: Arc<dyn LlmService> = Arc::new(AppLlm::new(Arc::clone(&settings)));
+    // v2.58 会话级模型覆盖存储（旁车持久 + 缓存；AppLlm 每请求按 LlmRequest.session_id
+    // 解析覆盖——档位路由 + 模型名）。模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身；⑬ 句柄留 AppState 给隐式提取）。
+    let model_overrides = Arc::new(crate::model_override::ModelOverrideStore::new(
+        sessions_dir.clone(),
+    ));
+    let llm: Arc<dyn LlmService> = Arc::new(AppLlm::with_overrides(
+        Arc::clone(&settings),
+        Arc::clone(&model_overrides),
+    ));
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
     // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）
     ctx.provide_dyn::<dyn kernel_agent::LlmStreamSink>(Arc::new(
@@ -127,11 +133,10 @@ pub fn init_state(app: AppHandle) -> AppState {
     plugin_host::set_session_context_resolver(Arc::clone(&session_ctx));
     let workspace_of = crate::workspace::workspace_view(Arc::clone(&session_ctx));
     let memory = Arc::new(MemoryStore::new(&root, Arc::clone(&workspace_of)));
-    // ㉘·B 会话级权限模式存储（旁车持久 + 缓存；决策表/目录围栏数据源）
     let permission_modes = Arc::new(crate::permission_mode::PermissionModeStore::new(
         sessions_dir.clone(),
         settings.default_permission_mode(),
-    ));
+    )); // ㉘·B 会话级权限模式（旁车持久 + 缓存；决策表/目录围栏数据源）
 
     // 经历记忆库（⑬）：experiences.sqlite3；打不开只丢经历。
     let experiences = match ExperienceDb::open(&root.join("experiences.sqlite3")) {
@@ -175,8 +180,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     );
 
     // ctx-compact（Context and Memory.md §3）：agent/request 决策环上的压缩
-    // 监听器——三策略配置驱动（阈值 = 窗口 × 百分比，压到阈值 50%），压缩
-    // 结果经 payload 带回 kernel 落 ContextCompacted 事件。
+    // 监听器——三策略配置驱动（阈值 = 窗口 × 百分比，压到阈值 50%），压缩结果经 payload 带回 kernel 落 ContextCompacted 事件。
     let compact_cfg: Arc<RwLock<CompactConfig>> = Arc::new(RwLock::new(settings.compact_config()));
     ctx.events.on_waterfall(
         points::REQUEST,
@@ -193,8 +197,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::new(Timeout::hot(Arc::clone(&timeout_cfg))),
         Arc::new(CircuitBreaker::new(5, Duration::from_secs(30))),
     ];
-    // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）。
-    // ㉘·B：接权限模式存储（四档决策表）+ 会话→工作区（环境行/外部路径围栏）
+    // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）。㉘·B：接权限模式存储（四档决策表）+ 会话→工作区（环境行/外部路径围栏）
     let approval = Arc::new(
         ApprovalHub::with_timeout(
             Arc::clone(&sink),
@@ -251,8 +254,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     .with_modes(Arc::clone(&permission_modes));
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(main_source));
 
-    // 插件编排（§11.2）：数据根缺省 ~/.Locowrk（LOCOWRK_DATA_DIR
-    // 可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。
+    // 插件编排（§11.2）：数据根缺省 ~/.Locowrk（LOCOWRK_DATA_DIR可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。
     // S2：内置插件根一次解析，服务（启停解析工件）与开发态扫描共用。
     let builtin_root = plugins_root::resolve();
     let plugins =
@@ -305,8 +307,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     if days > 0 {
         let plugins2 = Arc::clone(&plugins);
         let usage2 = Arc::clone(&usage);
-        // setup 主线程没有 tokio 上下文，后台化走 tauri 全局运行时
-        // （同 events / usage / scheduler-engine 先例）。
+        // setup 主线程没有 tokio 上下文，后台化走 tauri 全局运行时（同 events / usage / scheduler-engine 先例）。
         tauri::async_runtime::spawn(async move {
             crate::autodisable::auto_disable_idle(&plugins2, &usage2, days).await;
         });
@@ -333,6 +334,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         plugins,
         approval,
         permission_modes,
+        model_overrides,
         sink,
         sessions,
         sessions_dir,
@@ -356,13 +358,10 @@ pub fn init_state(app: AppHandle) -> AppState {
 }
 
 fn data_dir() -> std::path::PathBuf {
-    match data_root::resolve_data_dir() {
-        Ok(dir) => dir,
-        Err(e) => {
-            tracing::warn!("{e}；退回系统临时目录");
-            std::env::temp_dir().join("locowrk-data")
-        }
-    }
+    data_root::resolve_data_dir().unwrap_or_else(|e| {
+        tracing::warn!("{e}；退回系统临时目录");
+        std::env::temp_dir().join("locowrk-data")
+    })
 }
 
 /// ⑱ fs roots env 注入（settings `tools.fs_roots` → `LOCOWRK_FS_ROOTS`，

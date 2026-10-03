@@ -23,6 +23,7 @@ impl LlmService for CountingLlm {
         Ok(LlmResponse {
             content: "非流式正文".into(),
             tool_calls: vec![],
+            usage: None,
         })
     }
 
@@ -37,6 +38,7 @@ impl LlmService for CountingLlm {
         Ok(LlmResponse {
             content: "流式正文".into(),
             tool_calls: vec![],
+            usage: None,
         })
     }
 }
@@ -137,6 +139,7 @@ impl LlmService for ReasoningLlm {
         Ok(LlmResponse {
             content: "结论".into(),
             tool_calls: vec![],
+            usage: None,
         })
     }
 
@@ -152,6 +155,7 @@ impl LlmService for ReasoningLlm {
         Ok(LlmResponse {
             content: "结论".into(),
             tool_calls: vec![],
+            usage: None,
         })
     }
 }

@@ -51,6 +51,7 @@ impl LlmService for FakeLlm {
         Ok(LlmResponse {
             content: "SUMMARY-CONTENTS".into(),
             tool_calls: vec![],
+            usage: None,
         })
     }
 }

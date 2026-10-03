@@ -26,11 +26,14 @@ use crate::events::{side_effect_str, AgentEvent, EventSink};
 pub const DEFAULT_MAX_STEPS: u32 = 8;
 
 /// 进度条口径（⑨）：threshold = 窗口 × 百分比（组装点算好），
-/// window_tokens 未知传 0（前端按"未设置"处理）。
+/// window_tokens 未知传 0（前端按"未设置"处理）。`tools_est_tokens`
+/// （v2.58 §3.12）= 本轮实际携带的暴露目录估算（agent_chat 每轮一次
+/// `Kernel::catalog_snapshot` 快照；0 = 目录缺席，前端不渲染估算段）。
 #[derive(Debug, Clone, Copy)]
 pub struct UsagePolicy {
     pub threshold_tokens: u64,
     pub window_tokens: u64,
+    pub tools_est_tokens: u64,
 }
 
 /// 跑完一轮对话，返回实际 step 数。`max_steps` 是单轮兜底上限（㉕·微调③
@@ -152,6 +155,28 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                     text: text.clone(),
                 });
             }
+            // 单步用量（v2.58 §3.12）：实时与重放同形——前端按轮聚合；
+            // 不需要抑制（无 delta 直推对应物）。
+            SessionEvent::LlmUsage {
+                input,
+                output,
+                cache_read,
+                cache_write,
+                reasoning,
+                total,
+                duration_ms,
+            } => {
+                out.push(AgentEvent::LlmUsage {
+                    session_id: session_id.into(),
+                    input: *input,
+                    output: *output,
+                    cache_read: *cache_read,
+                    cache_write: *cache_write,
+                    reasoning: *reasoning,
+                    total: *total,
+                    duration_ms: *duration_ms,
+                });
+            }
             SessionEvent::AssistantMessage { content, .. } => {
                 // 纯工具调用的 assistant 步正文为空，不发空 chunk
                 if !content.is_empty() {
@@ -263,5 +288,17 @@ fn emit_usage(session: &Session, session_id: &str, u: UsagePolicy, sink: &dyn Ev
         used: estimate_tokens(&session.derive_messages()),
         threshold: u.threshold_tokens,
         window_tokens: u.window_tokens,
+        tools_est_tokens: u.tools_est_tokens,
     });
+}
+
+/// 暴露目录估算（v2.58 §3.12 工具上下文行）：目录序列化字节 / 4——与
+/// 消息估算同一把尺（§3.12 的"约 N tokens"）。
+pub async fn catalog_estimate(kernel: &Kernel, session_id: &str) -> u64 {
+    let specs = kernel.catalog_snapshot(Some(session_id)).await;
+    let bytes: usize = specs
+        .iter()
+        .map(|s| serde_json::to_string(s).map(|j| j.len()).unwrap_or(0))
+        .sum();
+    (bytes / 4) as u64
 }

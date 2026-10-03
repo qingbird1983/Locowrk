@@ -94,6 +94,7 @@ async fn transcript_sink_receives_own_segment() {
             args: json!({ "prompt": "落盘任务" }),
             session_id: None,
         }],
+        usage: None,
     });
     let llm = Arc::new(SeqLlm::new(vec![
         SeqLlm::ok_text("父收束"),

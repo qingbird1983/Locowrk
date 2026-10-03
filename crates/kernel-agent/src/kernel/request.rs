@@ -17,14 +17,15 @@ use super::{
 };
 use crate::waterfall::{PreStepPayload, RequestErrorPayload, RequestPayload, points};
 
-/// 一次 LLM 请求的流式痕迹（⑳ + v2.57）：文本/推理 delta 是否已被 sink
+/// 一次 LLM 请求的流式痕迹（⑳ + v2.57/58）：文本/推理 delta 是否已被 sink
 /// 真实消费（投影方据此抑制整段投影）、推理全文（内核闭包累积——与
 /// genai captured_reasoning 同源，被消费与否都收集，sink 故障时投影方
-/// 仍能整段补投）。
+/// 仍能整段补投）、本次请求耗时（v2.58，`LlmUsage` 事件的速度口径）。
 pub(super) struct StreamTrace {
     pub streamed: bool,
     pub reasoned: bool,
     pub reasoning: String,
+    pub duration_ms: u64,
 }
 
 impl Kernel {
@@ -83,6 +84,7 @@ impl Kernel {
                         model: parsed.model,
                         params: parsed.params,
                         system: parsed.system,
+                        session_id: parsed.session_id,
                     },
                     parsed.compacted,
                 ))
@@ -107,6 +109,13 @@ impl Kernel {
             // resolve 的 NotAvailable 失败路径，不会静默
             Err(_) => Vec::new(),
         }
+    }
+
+    /// 目录快照的对外只读口（v2.58）：组装点（桌面端）做「工具上下文」
+    /// 估算用——与请求实际携带的目录同源同过滤（含会话围栏），不是第二
+    /// 真相源。
+    pub async fn catalog_snapshot(&self, session_id: Option<&str>) -> Vec<ToolSpec> {
+        self.tool_catalog(session_id).await
     }
 
     /// LLM 请求 + request-error 决策环。`agent/request-error` 返回
@@ -137,6 +146,7 @@ impl Kernel {
             let streamed = AtomicBool::new(false);
             let reasoned = AtomicBool::new(false);
             let reasoning = std::sync::Mutex::new(String::new());
+            let started = std::time::Instant::now();
             let resp = match &sink {
                 Some(sink) => {
                     let sink = Arc::clone(sink);
@@ -167,6 +177,7 @@ impl Kernel {
                             streamed: streamed.load(Ordering::Relaxed),
                             reasoned: reasoned.load(Ordering::Relaxed),
                             reasoning: reasoning.into_inner().expect("reasoning buf"),
+                            duration_ms: started.elapsed().as_millis() as u64,
                         },
                     ));
                 }

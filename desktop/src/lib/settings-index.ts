@@ -92,7 +92,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     group: "agent",
     labelKey: "settings.nav.llm",
     icon: "bot",
-    searchKeys: ["settings.llmTitle", "settings.provider", "settings.model", "settings.baseUrl", "settings.apiKey"],
+    searchKeys: [
+      "settings.llmTitle",
+      "settings.modelDefaultRow",
+      "settings.modelAddService",
+      "settings.modelChooserGroup",
+      "settings.modelFetchList",
+    ],
   },
   {
     id: "context",

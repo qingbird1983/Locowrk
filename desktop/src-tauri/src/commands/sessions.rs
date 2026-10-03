@@ -66,6 +66,35 @@ pub async fn session_set_permission_mode(
         .map_err(|e| format!("写入失败: {e}"))
 }
 
+/// 会话级模型覆盖（v2.58 §3.30 选择器的后端）：写旁车 `model` +
+/// `model_provider`（成对，重启保持）+ 覆盖存储缓存（下一轮请求即生效，
+/// 运行中可切）。`model` 空 = 清除覆盖（回落设置缺省）。
+#[tauri::command]
+pub async fn session_set_model(
+    session_id: String,
+    provider_id: String,
+    model: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let m = model.trim().to_string();
+    let pair = if m.is_empty() {
+        None
+    } else {
+        let p = provider_id.trim();
+        if p.is_empty() {
+            return Err("模型覆盖需要档位 id（modelProvider）".into());
+        }
+        if state.settings.llm_config().profile(p).is_none() {
+            return Err(format!("档位不存在: {p}"));
+        }
+        Some((p, m.as_str()))
+    };
+    state
+        .model_overrides
+        .set(&session_id, pair)
+        .map_err(|e| format!("写入失败: {e}"))
+}
+
 /// 会话删除：忙锁守卫——运行中的会话锁被整轮持有，默认拒绝；开发者开关
 /// `developer.allowDeleteRunningSession`（后端直读设置，不信前端转述）
 /// 放行时强制删（运行轮余段会重建日志文件）。删除后同步剔除内存条目与

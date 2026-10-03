@@ -12,7 +12,9 @@
 mod request;
 mod services;
 
-pub use services::{LlmError, LlmRequest, LlmResponse, LlmService, ToolCallReq, ToolSource};
+pub use services::{
+    LlmError, LlmRequest, LlmResponse, LlmService, LlmUsage, ToolCallReq, ToolSource,
+};
 
 use std::sync::Arc;
 
@@ -220,6 +222,21 @@ impl Kernel {
             content: resp.content.clone(),
             tool_calls: resp.tool_calls.iter().map(|c| c.id.clone()).collect(),
         });
+
+        // 单步用量（v2.58 §4.1）：紧贴 AssistantMessage 之后落日志——
+        // 供应商报告的真实计数 + 本次请求耗时（生成速度口径）。不报告 =
+        // 不落事件（宁缺勿假）。derive_messages 跳过（过程计量不是上下文）。
+        if let Some(u) = resp.usage {
+            session.append(SessionEvent::LlmUsage {
+                input: u.input,
+                output: u.output,
+                cache_read: u.cache_read,
+                cache_write: u.cache_write,
+                reasoning: u.reasoning,
+                total: u.total,
+                duration_ms: trace.duration_ms,
+            });
+        }
 
         // 惰性解析：无工具调用的 step 不要求装配 ToolSource
         let tools = if resp.tool_calls.is_empty() {

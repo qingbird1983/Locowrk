@@ -45,6 +45,7 @@ mod extract;
 mod idle;
 mod llm;
 mod memory;
+mod model_override;
 mod notifications;
 mod permission_mode;
 mod plugins_root;
@@ -179,8 +180,14 @@ pub fn run() {
             commands::session_search,
             commands::session_export,
             commands::session_truncate_after,
+            commands::session_set_model,
             commands::schedule_list,
             commands::schedule_delete,
+            commands::llm_list_models,
+            commands::llm_probe_models,
+            commands::llm_provider_save,
+            commands::llm_provider_delete,
+            commands::llm_provider_reorder,
             commands::pick_save_path,
             commands::notification_list,
             commands::notification_read_all,

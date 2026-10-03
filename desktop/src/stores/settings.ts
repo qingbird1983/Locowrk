@@ -1,7 +1,7 @@
 // 设置面板状态（§13.1 / §13.5）：投影 + 部分更新动作。
 // 语言切换立即生效（applyLocalePref）并持久化到数据根 settings.json。
 import { defineStore } from "pinia";
-import { getSettings, setSettings } from "../lib/api";
+import { getSettings, llmProviderDelete, llmProviderSave, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
 import { applyThemePref } from "../lib/theme";
 import type {
@@ -12,6 +12,7 @@ import type {
   LlmUpdate,
   MemoryUpdate,
   PluginsUpdate,
+  ProviderInput,
   SettingsView,
   ShellUpdate,
   ToolsUpdate,
@@ -75,6 +76,40 @@ export const useSettingsStore = defineStore("settings", {
         this.error = String(e);
       } finally {
         this.saving = false;
+      }
+    },
+    /** 重拉投影（v2.58 档位命令后刷新 llm 区视图——llm_provider_save/
+     * delete 有自己的返回值，但 SettingsView 是唯一前端真源）。 */
+    async refresh() {
+      try {
+        this.view = await getSettings();
+      } catch (e) {
+        this.error = String(e);
+      }
+    },
+    /** 档位增改（v2.58 档位制）：命令返回全量档位投影，这里以重拉投影
+     * 收口（活动档平面速记一并刷新）。失败进 error 由调用方显示。 */
+    async saveProvider(input: ProviderInput) {
+      this.error = "";
+      try {
+        await llmProviderSave(input);
+        await this.refresh();
+        return true;
+      } catch (e) {
+        this.error = String(e);
+        return false;
+      }
+    },
+    /** 档位删除（删活动档 = 指针落首档）。 */
+    async deleteProvider(id: string) {
+      this.error = "";
+      try {
+        await llmProviderDelete(id);
+        await this.refresh();
+        return true;
+      } catch (e) {
+        this.error = String(e);
+        return false;
       }
     },
     /** 保存全局快捷键（tray 即时重注册；键位被占用时后端报错）。 */

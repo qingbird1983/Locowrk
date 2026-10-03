@@ -118,6 +118,8 @@ impl CtxCompact {
             model,
             params: Value::Object(serde_json::Map::new()),
             system: None,
+            // 压缩摘要不属任何会话轮（会话级模型覆盖不该改写摘要模型）
+            session_id: None,
         };
         let resp = llm.complete(summary_call).await.ok()?;
         let summary = resp.content.trim().to_string();

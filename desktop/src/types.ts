@@ -12,7 +12,8 @@ export type AgentEvent =
   | ScheduleFiredEvent
   | UserMessageEvent
   | ApprovalResolvedEvent
-  | ThinkingEvent;
+  | ThinkingEvent
+  | LlmUsageEvent;
 
 export interface ChunkEvent {
   kind: "chunk";
@@ -45,7 +46,9 @@ export interface TurnDoneEvent {
   steps: number;
 }
 
-/** 上下文用量（agent://context-usage，⑨）：与压缩判定同一估算口径。 */
+/** 上下文用量（agent://context-usage，⑨）：与压缩判定同一估算口径。
+ * toolsEstTokens（v2.58 §3.12）= 本轮实际携带的暴露目录估算（0 = 目录
+ * 缺席），工具上下文行的"约 N tokens"。 */
 export interface ContextUsageEvent {
   kind: "context_usage";
   session_id: string;
@@ -53,6 +56,22 @@ export interface ContextUsageEvent {
   threshold: number;
   /** 模型窗口；0 = 未设置。 */
   window_tokens: number;
+  tools_est_tokens: number;
+}
+
+/** 单步 LLM 用量（v2.58 §3.12，agent://usage / 重放同形）：供应商真实
+ * 计数 + 耗时，前端按轮聚合出「本轮合计 / 生成速度 / 模型用量」。供应商
+ * 不报告的 step 不产生（宁缺勿假）。 */
+export interface LlmUsageEvent {
+  kind: "llm_usage";
+  session_id: string;
+  input: number;
+  output: number;
+  cache_read: number;
+  cache_write: number;
+  reasoning: number;
+  total: number;
+  duration_ms: number;
 }
 
 /** 压缩完成（agent://context-compacted，⑨）：summary 只有 200 字符预览
@@ -77,6 +96,9 @@ export interface SessionMeta {
   workspace: string | null;
   /** ㉘·B 会话级权限模式（null = 取设置缺省档）。 */
   permissionMode: "plan" | "ask" | "acceptEdits" | "auto" | null;
+  /** v2.58 §3.30 会话级模型覆盖（成对；null = 跟随设置缺省）。 */
+  model: string | null;
+  modelProvider: string | null;
 }
 
 /** 会话正文搜索命中（v2.49）：mtime 降序限量；snippet = 首处摘录。 */
@@ -475,7 +497,34 @@ export interface ContextUpdate {
   strategy?: string;
 }
 
+/** provider 档位投影（v2.58 档位制，DESIGN §13.1；无秘钥字段）。 */
+export interface ProviderView {
+  id: string;
+  label: string;
+  /** "openai" | "anthropic" | "ollama"。 */
+  kind: string;
+  baseUrl: string | null;
+  apiKeySet: boolean;
+  model: string;
+  windowTokens: number | null;
+  /** ㉚ 停用档：选择器与 active 回落跳过（配置保留）。 */
+  enabled: boolean;
+  /** 该档已配置模型清单（模型配置页右栏真源）。 */
+  models: ProviderModelView[];
+}
+
+/** 档位内一个已配置模型（㉚；contextWindow null = 跟随静态档案）。 */
+export interface ProviderModelView {
+  id: string;
+  alias: string | null;
+  contextWindow: number | null;
+}
+
 export interface LlmSettingsView {
+  /** 活动档 id（空串 = 无档位）。 */
+  active: string;
+  providers: ProviderView[];
+  /** 活动档平面速记（模型 chip / 上下文区 / 嵌入提示直读）。 */
   provider: string;
   model: string;
   baseUrl: string | null;
@@ -488,9 +537,34 @@ export interface LlmSettingsView {
 /** 部分更新：字段缺省（undefined）= 保持不变；baseUrl / apiKey 传
  * 空串 = 清除；windowTokens 传 null = 清除窗口（回落保守保护）。 */
 export interface LlmUpdate {
+  /** 切活动档（v2.58）；id 必须已存在。 */
+  active?: string;
   provider?: string;
   model?: string;
   baseUrl?: string;
   apiKey?: string;
   windowTokens?: number | null;
+}
+
+/** 档位增改入参（llm_provider_save；id 缺省 = 新建）。apiKey undefined =
+ * 保持已存值（更新时），空串 = 清除；models undefined = 保持已存清单，
+ * 传数组 = 整表替换（原 model 不在清单时后端改指首项）。 */
+export interface ProviderInput {
+  id?: string;
+  label: string;
+  kind: string;
+  baseUrl?: string | null;
+  apiKey?: string;
+  model: string;
+  windowTokens?: number | null;
+  enabled?: boolean;
+  models?: ProviderModelView[];
+}
+
+/** 单档模型清单（llm_list_models 返回组；error = 该档探测失败）。 */
+export interface ProviderModels {
+  id: string;
+  label: string;
+  models: string[];
+  error: string | null;
 }

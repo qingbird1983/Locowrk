@@ -96,6 +96,7 @@ impl LlmService for FakeLlm {
         Ok(LlmResponse {
             content: self.0.lock().unwrap().clone(),
             tool_calls: Vec::new(),
+            usage: None,
         })
     }
 }

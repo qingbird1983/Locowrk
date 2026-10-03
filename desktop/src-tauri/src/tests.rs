@@ -94,6 +94,7 @@ pub(crate) fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::UserMessage { .. } => "user_message",
         AgentEvent::ApprovalResolved { .. } => "approval_resolved",
         AgentEvent::Thinking { .. } => "thinking",
+        AgentEvent::LlmUsage { .. } => "llm_usage",
     }
 }
 

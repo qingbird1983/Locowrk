@@ -22,8 +22,8 @@ pub use approval::{ApprovalDecision, ApprovalResolver};
 pub use chain::{ToolChain, build_chain};
 pub use compensation::CompensationReport;
 pub use kernel::{
-    Kernel, KernelError, LlmError, LlmRequest, LlmResponse, LlmService, StepOutcome, ToolCallReq,
-    ToolSource,
+    Kernel, KernelError, LlmError, LlmRequest, LlmResponse, LlmService, LlmUsage, StepOutcome,
+    ToolCallReq, ToolSource,
 };
 pub use middleware::{
     Audit, AuditEntry, AuditSink, CircuitBreaker, CompactConfig, CompactStrategy,

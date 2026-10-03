@@ -50,6 +50,7 @@ impl LlmService for DemoLlm {
                             args: json!({ "text": content }),
                             session_id: None,
                         }],
+                        usage: None,
                     })
                 } else if content.to_lowercase().contains("shout") || content.contains("喊") {
                     let n = self.next_call.fetch_add(1, Ordering::Relaxed);
@@ -68,6 +69,7 @@ impl LlmService for DemoLlm {
                             args: json!({ "text": content, "mode": mode }),
                             session_id: None,
                         }],
+                        usage: None,
                     })
                 } else if content.to_lowercase().contains("email") || content.contains("邮件") {
                     let n = self.next_call.fetch_add(1, Ordering::Relaxed);
@@ -83,6 +85,7 @@ impl LlmService for DemoLlm {
                             }),
                             session_id: None,
                         }],
+                        usage: None,
                     })
                 } else {
                     Ok(LlmResponse {
@@ -94,6 +97,7 @@ impl LlmService for DemoLlm {
                                   它是不可逆工具，会弹出审批确认。"
                             .into(),
                         tool_calls: vec![],
+                        usage: None,
                     })
                 }
             }
@@ -105,11 +109,13 @@ impl LlmService for DemoLlm {
                 Ok(LlmResponse {
                     content: format!("[演示模型] {body}"),
                     tool_calls: vec![],
+                    usage: None,
                 })
             }
             _ => Ok(LlmResponse {
                 content: "[演示模型] ……（没有可回应用户输入）".into(),
                 tool_calls: vec![],
+                usage: None,
             }),
         }
     }

@@ -227,3 +227,77 @@ fn empty_call_ids_get_synthesized() {
     assert_eq!(out.content, "部分正文");
     assert_eq!(out.tool_calls[0].id, CallId("call-1".into()));
 }
+
+/// v2.58 §3.30 会话级模型覆盖解析：覆盖命中 = 整档换路由（kind/端点/Key
+/// 随档位）+ 模型名替换；未命中会话 / 无注入 = 设置缺省；决策环
+/// `req.model`（waterfall 契约）优先级最高。
+#[test]
+fn effective_cfg_resolves_session_override() {
+    use crate::model_override::ModelOverrideStore;
+    use kernel_agent::LlmRequest;
+
+    let root = temp_root("override-cfg");
+    let store = Arc::new(SettingsStore::open(&root).unwrap());
+    // 活动档 default（openai/m1）+ 第二档 p2（anthropic/m2 自带端点）
+    store
+        .update_llm_config(|cfg| {
+            cfg.providers.push(crate::settings::ProviderProfile {
+                id: "default".into(),
+                label: "default".into(),
+                kind: "openai".into(),
+                model: "m1".into(),
+                enabled: true,
+                ..Default::default()
+            });
+            cfg.providers.push(crate::settings::ProviderProfile {
+                id: "p2".into(),
+                label: "P2".into(),
+                kind: "anthropic".into(),
+                base_url: Some("https://relay.example.com".into()),
+                api_key: Some("sk-2".into()),
+                model: "m2".into(),
+                window_tokens: Some(200_000),
+                enabled: true,
+                models: Vec::new(),
+            });
+            cfg.active = "default".into();
+            Ok(())
+        })
+        .unwrap();
+
+    let dir = temp_root("override-sidecar");
+    let overrides = Arc::new(ModelOverrideStore::new(dir.clone()));
+    let llm = AppLlm::with_overrides(Arc::clone(&store), Arc::clone(&overrides));
+    let req = |sid: Option<&str>, model: Option<&str>| LlmRequest {
+        session_id: sid.map(Into::into),
+        model: model.map(Into::into),
+        ..Default::default()
+    };
+
+    // 未覆盖会话 = 设置缺省（活动档）
+    let cfg = llm.effective_cfg(&req(Some("s1"), None));
+    assert_eq!(
+        (cfg.provider.as_str(), cfg.model.as_str()),
+        ("openai", "m1")
+    );
+
+    // 覆盖命中 = 换档路由 + 模型名
+    overrides.set("s1", Some(("p2", "m2-x"))).unwrap();
+    let cfg = llm.effective_cfg(&req(Some("s1"), None));
+    assert_eq!(cfg.provider, "anthropic");
+    assert_eq!(cfg.model, "m2-x");
+    assert_eq!(cfg.base_url.as_deref(), Some("https://relay.example.com"));
+    assert_eq!(cfg.api_key.as_deref(), Some("sk-2"));
+    assert_eq!(cfg.window_tokens, Some(200_000));
+
+    // 决策环 model 改写压过会话覆盖
+    let cfg = llm.effective_cfg(&req(Some("s1"), Some("m-decision")));
+    assert_eq!(cfg.model, "m-decision");
+
+    // 无注入存储 = 永远缺省（测试路径）
+    let plain = AppLlm::new(Arc::clone(&store));
+    let cfg = plain.effective_cfg(&req(Some("s1"), None));
+    assert_eq!(cfg.model, "m1");
+    std::fs::remove_dir_all(&root).ok();
+    std::fs::remove_dir_all(&dir).ok();
+}

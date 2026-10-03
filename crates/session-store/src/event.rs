@@ -41,6 +41,20 @@ pub enum SessionEvent {
         content: String,
         tool_calls: Vec<CallId>,
     },
+    /// 单步 LLM 用量（v2.58，DESIGN §4.1）：供应商报告的真实 token 计数与
+    /// 耗时，每个 LLM step 至多一条、紧贴其 AssistantMessage 之后。
+    /// derive_messages 跳过（用量是过程计量不是上下文，不回传供应商）；
+    /// 投影层把它映成 §3.12 模型用量明细。供应商不报告 = 不落事件
+    /// （宁缺勿假，不用估算冒充真实计数）。旧日志无此变体（serde 天然兼容）。
+    LlmUsage {
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_write: u64,
+        reasoning: u64,
+        total: u64,
+        duration_ms: u64,
+    },
     /// 先写日志再执行（纪律 5）：崩溃后 replay 能识别悬空调用。
     /// `plugin_id` 是 ⑩ 使用统计的归属键；内置替身 / 旧日志缺省 None
     /// （serde default 兼容，exposure 文档 §3.4）。

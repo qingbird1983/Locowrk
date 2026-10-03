@@ -8,22 +8,24 @@
  *
  * 上行 = 自适应高度文本域（1 行起，透明无边框，14px/1.45，max-h 180，占位
  * 符 12.5px ink-5）；下行工具条（§3.11 v3.8 勘误：模型 chip 在**右组**）：
- * 右 = 用量环（点开 §3.12 浮层）→ 模型 × 状态 chip（§3.30 模型选择器落地
- * 前是状态显示，无菜单）→ 36px 圆形发送键（空闲 accent 实心上箭头 / 空输
- * 入禁用灰 / 运行中换停止字形——轮次中止后端待接入 §8.2，停止态暂为禁用，
- * 如实呈现）。左组（附件 + / 权限模式 chip）与提示词增强（sparkle）随后
- * 端能力补位，不发明占位按钮；落地前左组为空、固定不缩。收缩规则 = 左组
- * flex:0 0 auto、右组 flex:0 1 auto，模型 chip 是唯一可收缩项（窄窗先压
- * 它的文字）。Enter 发送 / Shift+Enter 换行（enterToSend 开关；关 =
- * Ctrl+Enter 发送）；运行中 Enter 忽略。
+ * 右 = 用量环（§3.12 浮层）→ 模型 chip（§3.30 选择器：会话内写覆盖、
+ * 首页写缺省）→ 36px 圆形发送键（空闲 accent 实心上箭头 / 空输入禁用灰 /
+ * 运行中换停止字形——轮次中止后端待接入 §8.2，停止态暂为禁用，如实呈现）。
+ * 左组（附件 + / 权限模式 chip）与提示词增强随后端能力补位，不发明占位
+ * 按钮；落地前左组为空、固定不缩。收缩规则 = 左组 flex:0 0 auto、右组
+ * flex:0 1 auto，模型 chip 是唯一可收缩项（窄窗先压它的文字）。Enter 发送 /
+ * Shift+Enter 换行（enterToSend 开关；关 = Ctrl+Enter 发送）；运行中 Enter
+ * 忽略。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
+import { useToastStore } from "../../stores/toast";
 import { Icon } from "../../lib/icons";
 import ContextUsagePopover from "./ContextUsagePopover.vue";
+import ModelSelector from "./ModelSelector.vue";
 import PermissionModePicker from "./PermissionModePicker.vue";
 
 const emit = defineEmits<{ height: [h: number] }>();
@@ -32,19 +34,39 @@ const { t } = useI18n();
 const chat = useChatStore();
 const settings = useSettingsStore();
 const shell = useShellStore();
+const toast = useToastStore();
 
 const draft = ref("");
 const ta = ref<HTMLTextAreaElement | null>(null);
 const dock = ref<HTMLElement | null>(null);
-const showUsage = ref(false);
+const showUsage = ref(false), showModels = ref(false);
 /** §3.25：↑（输入框为空时）召回上一条已发送输入。 */
 const lastSent = ref("");
 
 const enterToSend = computed(() => settings.view?.chat.enterToSend ?? true);
-/** 模型 chip = 状态显示（显示当前生效模型，不是愿望显示）。 */
+/** 模型 chip = 会话覆盖 ?? 设置缺省（「跟随默认」出口在浮层里，chip 不加
+ * 标记）。enabledProviders = 选择器数据源（已配置清单，停用档不出现）。 */
 const modelLabel = computed(
-  () => settings.view?.llm.model || t("app.modelFallback"),
+  () => chat.modelOverride?.model || settings.view?.llm.model || t("app.modelFallback"),
 );
+const enabledProviders = computed(() => (settings.view?.llm.providers ?? []).filter((p) => p.enabled));
+/** 选择语义（§3.30）：会话内 = 会话级覆盖；首页 = 写设置缺省。写穿失败
+ * toast 如实报错（本地状态不滚——store 已回滚）。 */
+function onSelectModel(providerId: string, model: string) {
+  chat
+    .setModel(providerId, model)
+    .catch((e) => toast.push("danger", t("model.switchFailed"), String(e)));
+}
+
+function onClearOverride() {
+  chat
+    .clearModelOverride()
+    .catch((e) => toast.push("danger", t("model.switchFailed"), String(e)));
+}
+
+function onConfigure() {
+  shell.openSettings("llm");
+}
 
 // 用量环：r=5.5 周长 ≈34.56；windowTokens 0 = 窗口未设置（环隐藏）
 const pct = computed(() => {
@@ -178,11 +200,30 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
             </svg>
             <span>{{ pct }}%</span>
           </button>
-          <!-- 模型 × 状态 chip（§3.11 v3.8 右组）：唯一可收缩的 flex 项 -->
-          <span class="chip chip--model" :title="modelLabel">
-            <Icon name="sparkle" :size="14" class="shrink-0" />
-            <span class="chip__text">{{ modelLabel }}</span>
-          </span>
+          <!-- 模型 chip（§3.30 v2.58）：点开模型选择器浮层 -->
+          <div class="chip-anchor">
+            <button
+              class="chip chip--model"
+              type="button"
+              :aria-expanded="showModels"
+              :aria-label="t('model.selector')"
+              @click="showModels = !showModels"
+            >
+              <Icon name="sparkle" :size="14" class="shrink-0" />
+              <span class="chip__text">{{ modelLabel }}</span>
+              <Icon name="chevronDown" :size="11" class="shrink-0 chip__chevron" />
+            </button>
+            <ModelSelector
+              v-if="showModels"
+              :default-model="settings.view?.llm.model ?? ''"
+              :override="chat.modelOverride"
+              :providers="enabledProviders"
+              @select="onSelectModel"
+              @clear="onClearOverride"
+              @configure="onConfigure"
+              @close="showModels = false"
+            />
+          </div>
           <button
             class="send-btn"
             type="button"
@@ -266,6 +307,19 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
   flex: 0 1 auto;
   margin-left: auto;
   justify-content: flex-end;
+}
+/* §3.30 锚点：模型选择器浮层锚在 chip 上方（右对齐 chip），不随滚动裁切
+ * ——composer 卡片 overflow 可见，浮层 z 高于用量浮层 */
+.chip-anchor {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+.chip-anchor .chip--model {
+  cursor: pointer;
+}
+.chip-anchor .chip__chevron {
+  color: var(--lw-ink-4);
 }
 .chip {
   display: inline-flex;

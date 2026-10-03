@@ -238,6 +238,7 @@ fn shortcut_default_update_and_validation() {
 
 mod appearance;
 mod chat;
+mod llm;
 mod memory;
 mod window;
 

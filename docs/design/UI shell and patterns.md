@@ -509,6 +509,14 @@ derive_messages（不回传供应商），压缩/用量估算不受影响。
 - 数字一律过 §3.5；
 - **后四项需要后端扩展** `agent://context-usage` 载荷（现有只有 used / threshold /
   windowTokens），§8.2 记录为待补。
+- **✅ v2.58 数据源**：内核每 LLM step 落 `SessionEvent::LlmUsage`（DESIGN §4.1：
+  供应商真实计数 + 耗时，紧贴 AssistantMessage 之后；derive_messages 跳过）→
+  `agent://usage` 投影（实时与重放同形，前端按轮聚合——用户消息重置）。
+  「本轮合计」= 本轮 total 累计；「生成速度」= 最后一步 output / duration_ms；
+  「缓存命中率」= cache_read / 输入。工具上下文行 = 本轮调用种数 / 次数（前端
+  自带）+ 暴露目录估算 token（`agent://context-usage` 载荷 +`tools_est_tokens`，
+  agent_chat 每轮一次目录快照）。供应商不报告用量的 step 不落事件——模型用量
+  行整体不渲染（宁缺勿假，不用估算冒充真实计数）。
 
 ### 3.13 通知浮层（`components/shell/NotificationPopover.vue`）
 
@@ -879,6 +887,76 @@ unified diff 全文本随参数走，前端零后端改动即可审阅；git_dif
 - **打开时滚到当前项**（当前项必须可见）；无结果显示一行文案 + 一个 `配置服务` 动作；
 - 服务商列表另有一层"添加 / 编辑服务"的大模态（宽 `min(1030px, 100vw - 48px)`，
   内部用插入式灰底列表 + 可选中卡片网格），但**它属于设置 → 模型目的地**，不在 composer 浮层里。
+
+**✅ v2.58 数据源与选择语义**：清单 = `llm_list_models()`——并行探测全部已存
+provider 档位（Ollama `GET /api/tags`、OpenAI 兼容 `GET {base|api.openai.com}/v1/models`
+Bearer Key，5s 超时，逐组报错不互相阻塞），组标签 = 档位 label；设置表单的
+未保存值用 `llm_probe_models(kind, base_url, api_key?)` 单档探测。选择语义：
+
+- **会话内 = 会话级覆盖**：旁车 `model` + `model_provider`（`session_set_model`），
+  只改本会话、设置不动，运行中可切、下一轮即生效、重启保持；覆盖生效时浮层
+  顶部一行「跟随默认 · {设置模型}」，点击清除覆盖（回到设置缺省）；
+- **首页空态 = 写设置缺省**：无会话可覆盖，选中 = 切换活动档位（跨档时）+ 该
+  档模型——"接下来聊什么模型"在首页就是改默认；
+- chip 文案 = 会话覆盖 ?? 活动档模型；覆盖随会话切换取自 `session_list` 透出
+  （`model`/`modelProvider` 字段）。
+
+**㉚·改版 模型配置页（设置 → 模型；对齐 PI-Desktop ModelConfigPage/ServiceList/
+ProviderSetupDialog/ModelSelectionPanes，控件一律走 §3.32·七 全局规范，禁裸
+select/自造按钮）**——页面三块自上而下：
+
+1. **默认项**：一行卡（§3.32 行版式）——行名「默认模型」、取值 =
+   `{服务名} · {模型名}`（模型名 mono），右侧「更改 ⌄」ghost 钮开锚定浮层
+   （同 composer 选择器形态：搜索 + 按服务分组，组标签 11px ink-4，项 =
+   ✓ + 模型名 mono，打开滚到当前项）。选择 = 写设置缺省（跨档切 `active` +
+   该档 `model`）；**新增服务不抢默认**（现默认仍可解析就保持，直到用户自己
+   换）；默认档被删/停用时值保留显示 + 灰注「服务已停用/已删除」。
+2. **AI 服务 · N**：组头 = 标题 + 计数 + 「＋ 添加服务」实心钮；空态 =
+   server 图标 + 文案 + 添加钮。卡片行列表（可拖拽排序，落盘即存顺序）：
+   左 34px 字母瓦片（wash 底圆角 8、首字母大写、无字母回落 server 字形）→
+   名称 13px/600 + 徽章（默认=success 16% 底；无密钥=warning；已停用=中性）+
+   第二行 meta 11.5px ink-4 = `{baseUrl host} · {N 个模型}`；行右侧 =
+   SettingsToggle（enabled）+ RowMenu（编辑 / 设为默认 / 测试连接 / 复制配置 /
+   删除·两步确认）；**行点击 = 打开编辑模态**。
+3. **目录状态行（槽位，v1 不渲染）**：PI 的「models.dev · N 个模型 · 更新于…
+   ＋ 更新模型目录」依赖远端模型目录快照；Locowrk v1 清单 = 服务自报
+   （llm_list_models/probe）+ 内置静态档案（显示名/窗口徽章），目录快照列为
+   后续批次槽位，不发明假数据。
+
+**添加 / 编辑服务模态**（宽 `min(1030px, 100vw - 48px)` 居中，overlay 点击关、
+保存中阻断；一个模态两个视图）：
+
+- **选服务视图**（添加路径首见 / 表单内「更换」）：标题（添加 AI 服务 / 更换
+  服务）+ 取消；搜索行；分组「用 API KEY 连接」瓦片格 `repeat(auto-fill,
+  minmax(220px, 1fr))`——**自定义端点居首**（+ 字形瓦片，detail = 「任意
+  OpenAI 或 Anthropic 兼容地址」），其后为内置预设瓦片（字母瓦片 + 名称 +
+  baseUrl host detail；搜索 haystack = 名称+id+别名+host）；键盘 ←→↑↓ 网格
+  导航、Enter 选首个命中、↑ 从首行回搜索框；无命中 → 「用自定义端点」动作。
+  （PI 的「用订阅登录」组 = OAuth，Locowrk 无此后端，整组不做，记槽位。）
+- **表单视图**：头 = 标题（添加 / 编辑 AI 服务 / 复制配置）+ 动作（测试连接
+  ghost·仅编辑态；取消 ghost；保存服务 primary，canSave = 名称 ∧ baseUrl ∧
+  已选模型 ≥ 1）。凭据区 = 服务行（字母瓦片 + 名称 + host + 「更换」）→
+  名称（自定义可改；预设跟随预设名）→ baseUrl（自定义可改；预设固定只读）→
+  类型（仅自定义：SettingsSelect openai / anthropic / ollama）→ API 密钥
+  （password；已存时占位「已设置，留空保持」；下方状态行 = ✓ 已连接，发现
+  N 个模型 / 失败摘要）。**双栏选择**（左「该服务的模型」/右「模型设置 N」，
+  见下）。高级设置（headers 等）Locowrk 无对应后端，不做。
+  - 左栏 = 全选框（半态 indeterminate）+ 栏题 + 「获取列表」（↻，探测中转
+    加载态）+ 搜索行；行 = 复选框 + ID（mono，可选中复制）+ 显示名 + 右缘
+    窗口徽章（`1M · 384K`，取自静态档案，缺 = 空白不发明）。空态四形：未探测
+    提示 / 加载中 / 服务无清单 / 获取失败（摘要走状态行与 toast）。
+  - 右栏 = 搜索 + 行列表：拖拽把手 + ID + 别名（有才显）+ 窗口徽章 + 「高级」
+    折叠钮 + ×（移除）；高级展开 = 别名输入 + 上下文窗口（预设档 chips
+    32K/128K/256K/512K/1M/2M + 数字输入，写 `contextWindow`）——PI 的
+    maxTokens/思考档位/能力开关 Locowrk 后端未接，不做，记槽位。栏底 =
+    自定义模型添加行（ID 输入 + 「＋ 添加自定义模型」，重 ID 报已添加）。
+  - **探测**：表单编辑防抖 600ms 自动探测（`llm_probe_models`，密钥留空回落
+    已存值）；「获取列表」跳过防抖立即探；请求带序号，旧响应不覆新。添加路径
+    首次探测成功**自动全选**（≤ 8 个时；更多则不满选 + 提示——数值可配置
+    原则，常量置顶）；用户手动勾选即永久退出自动预选；换服务清空已选重探。
+  - **保存语义**：`models[0]` = 该档默认模型（原 `model` 不在清单时改指首项）；
+    密钥留空 = 保持已存；「复制配置」= 预填 名称+「 副本」/类型/baseUrl/模型，
+    密钥不带。删除走 RowMenu 两步；停用档在选择器与 `active` 回落中被跳过。
 
 ### 3.31 设置导航轨与目的地页头
 
@@ -1492,7 +1570,7 @@ hover 位移（列表里会造成抖动，只允许变色）· chevron 旋转（
 | 会话搜索（标题/正文） | 侧栏搜索 + 命令面板 | ✅ v2.49：`session_search` 正文扫描（标题仍是前端过滤；⌘K 接入随后续批次） |
 | 工作面板产物 | §2.5 页签内容 | ✅ v2.53（最小真身）：`edit_diff` 的 unified diff 随 args.patch 走 → 工作面板审阅页签（§3.28）直接渲染；git_diff 输出与其余产物形态（预览 URL 等）随各自工具批次接入 |
 | 插件 UI 贡献槽位 | 目的地图标 / 面板页签与启动器条目 / 设置分区 / 命令面板命令 | plugin-api **末尾追加**（ABI 兼容）+ manifest 声明 |
-| `agent://context-usage` 载荷扩展 | §3.12 分项（本轮合计 / 生成速度 / 模型用量含缓存 / 工具上下文） | kernel-agent 用量统计 → desktop 事件投影 |
+| `agent://context-usage` 载荷扩展 | §3.12 分项（本轮合计 / 生成速度 / 模型用量含缓存 / 工具上下文） | ✅ v2.58：内核 `SessionEvent::LlmUsage`（每 step 供应商真实计数 + 耗时，derive_messages 跳过）→ `agent://usage` 投影（本轮聚合前端自算）；`context-usage` 载荷 +`tools_est_tokens`（agent_chat 每轮一次目录快照估算） |
 | 通知记录（应用内持久） | §3.13 | ✅ v2.51：desktop `<数据根>/notifications.json`（cap 100 FIFO）+ `TauriSink` 五类入账（定时触发/子 Agent 收束成败/压缩/审批超时拒绝）+ `lw://notification` 推送 + `notification_list/read_all/read/clear` 命令；⑭ 系统通知兜底并存 |
 | 结果内容字段（富内容） | markdown 代码块/表格已可由正文承载；产物级富内容（图片/文件）待定 | 视工具产物契约 |
 | 子会话转录可观 | §3.16 面板页签 | ✅ v2.52：取 ①——kernel-agent `SubTranscriptSink` 可选注入（headless 不注入维持黑盒），desktop 写 `<数据根>/sub-transcripts/<child_id>.jsonl`（只写子自身段），`subagent_transcript(child_id)` 命令同一 `project_events` 重放；**不改** ⑮「父转录不掺入子内活动」 |
@@ -1504,6 +1582,7 @@ hover 位移（列表里会造成抖动，只允许变色）· chevron 旋转（
 | 审批结果进转录 | §3.17 决策后记录条 | 内核本就"审批结果也是一条事件"（DESIGN 纪律 6）→ **投影要把它映射成 §3.3 的系统记录条**，否则历史重放里会少掉"谁批过什么" |
 | 主区列宽偏好 | §2.7 / §3.2 `ChatSection` | settings.json `chat.contentMaxWidth`（缺省 760 / 下限 560）；**不落 localStorage**（要随设置同步与备份）；主区宽由 `ResizeObserver` 实时约束 |
 | 思考过程事件 | §3.9 思考行数据源 | ✅ v2.57：内核 `SessionEvent::Thinking`（DESIGN §4.1，derive_messages 跳过不回传）+ `agent://thinking` 通道（实时 delta 与重放同形，`StepOutcome.reasoned` 抑制同 ⑳）；genai `ReasoningChunk` / `capture_reasoning_content` 为源，headless 无 sink 路径零变化 |
+| 模型清单 + 会话级模型覆盖（§3.30） | composer 模型 chip 选择器 + 模型配置页 | ✅ v2.58：选择器 = **已配置清单**（启用档 × models，离线可用；探测只在设置页）；配置页 = 默认项更改浮层 + AI 服务卡列表（开关/菜单/拖拽 `llm_provider_reorder`）+ 添加·编辑大模态（22 预设瓦片格 + ModelPanes 双栏，`llm_probe_models` 防抖探测）；会话覆盖 = 旁车 `model`+`model_provider` + `session_set_model`；`LlmRequest.session_id` 契约补全使 AppLlm 按会话解析档位路由 + 模型名；provider 档位制（settings `llm` 区 `{active, providers[]}`，旧平面 open 迁移一次幂等）+ `llm_provider_save/delete` + `join_version` 端点归一（/vN 原样、缺段补 /v1） |
 | 轮次中止 | §3.11 发送键停止态 | `agent_chat` 可中止（会话级取消令牌）；落地前运行中发送键 = 停止字形禁用态（如实呈现，不假装可点） |
 | 消息附件 | §3.11 `+` 按钮 | 上传 / 引用文件注入 prompt；落地前不渲染按钮（不发明占位） |
 | 提示词增强 | §3.11 sparkle | 后端改写草稿的调用；落地前不渲染按钮 |

@@ -1,6 +1,7 @@
 //! Tauri 命令薄适配层（DESIGN.md §10.3 / §12.1）：只做参数转换与状态
 //! 存取，业务逻辑在 runner / approval / kernel，本文件不写一行。
 
+mod llm;
 mod memory;
 mod plugins;
 mod schedule;
@@ -8,6 +9,7 @@ mod sessions;
 
 use std::sync::Arc;
 
+pub use llm::*;
 pub use memory::*;
 pub use plugins::*;
 pub use schedule::*;
@@ -42,6 +44,7 @@ pub async fn agent_chat(
     let usage = UsagePolicy {
         threshold_tokens: state.settings.effective_threshold_tokens(),
         window_tokens: state.settings.effective_window().unwrap_or(0),
+        tools_est_tokens: runner::catalog_estimate(&state.kernel, &session_id).await,
     };
     let steps = runner::run_turn(
         &state.kernel,

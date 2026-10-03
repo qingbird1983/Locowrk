@@ -119,6 +119,7 @@ impl SeqLlm {
                 args: json!({}),
                 session_id: None,
             }],
+            usage: None,
         })
     }
 
@@ -126,6 +127,7 @@ impl SeqLlm {
         Ok(LlmResponse {
             content: text.into(),
             tool_calls: vec![],
+            usage: None,
         })
     }
 }

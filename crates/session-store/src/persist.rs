@@ -11,7 +11,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::error::StoreError;
 use crate::event::SessionEvent;
@@ -99,7 +99,8 @@ pub fn load_session(path: &Path) -> std::io::Result<(Session, usize)> {
 
 /// 会话文件元数据（列表用；`updated_at` = mtime Unix 秒；`title` = 首条用户消息截断
 /// （None = 无用户消息），截断宽 [`SESSION_TITLE_CHARS`]；`workspace` = §2.3 工作区关联
-/// （v2.50，None = 未关联）；`permission_mode` = ㉘·B 会话权限模式（None = 取设置缺省））。
+/// （v2.50，None = 未关联）；`permission_mode` = ㉘·B 会话权限模式（None = 取设置缺省）；
+/// `model`/`model_provider` = v2.58 会话级模型覆盖（None = 跟随设置缺省））。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMeta {
@@ -109,6 +110,8 @@ pub struct SessionMeta {
     pub title: Option<String>,
     pub workspace: Option<String>,
     pub permission_mode: Option<String>,
+    pub model: Option<String>,
+    pub model_provider: Option<String>,
 }
 
 /// 列表标题截断宽度（字符）。
@@ -159,11 +162,14 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                 })
                 .unwrap_or((0, None));
             // 重命名标题覆盖自动标题（v2.49）+ 工作区归属透出（v2.50）+
-            // 权限模式透出（㉘·B）：旁车一次读，缺文件 / 无字段时各自回落
+            // 权限模式透出（㉘·B）+ 模型覆盖透出（v2.58）：旁车一次读，
+            // 缺文件 / 无字段时各自回落
             let sidecar = read_meta(dir, &id);
             let title = sidecar.as_ref().and_then(|m| m.title.clone()).or(title);
             let workspace = sidecar.as_ref().and_then(|m| m.workspace.clone());
-            let permission_mode = sidecar.and_then(|m| m.permission_mode);
+            let permission_mode = sidecar.as_ref().and_then(|m| m.permission_mode.clone());
+            let model = sidecar.as_ref().and_then(|m| m.model.clone());
+            let model_provider = sidecar.and_then(|m| m.model_provider);
             Some((
                 modified,
                 SessionMeta {
@@ -173,103 +179,14 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                     title,
                     workspace,
                     permission_mode,
+                    model,
+                    model_provider,
                 },
             ))
         })
         .collect();
     metas.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.id.cmp(&b.1.id)));
     metas.into_iter().map(|(_, m)| m).collect()
-}
-
-/// 会话旁车元数据（`<id>.meta.json`，v2.49 会话运营）：存重命名标题；
-/// `workspace` 留给 §2.3 会话↔工作区关联批次；`permission_mode` 留给
-/// ㉘·B 权限模式。缺文件 = 全缺省。
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(rename_all = "camelCase", default)]
-pub struct SessionMetaFile {
-    pub title: Option<String>,
-    pub workspace: Option<String>,
-    pub permission_mode: Option<String>,
-}
-
-/// 旁车元数据路径（id 校验同日志文件；`<id>.jsonl` → `<id>.meta.json`，
-/// 后缀替换只动 `jsonl`，id 内含 `.` 不受影响）。
-fn meta_file(dir: &Path, session_id: &str) -> Result<PathBuf, StoreError> {
-    Ok(session_file(dir, session_id)?.with_extension("meta.json"))
-}
-
-/// 读旁车元数据：缺文件 / 坏 JSON = None（不致命——标题回落自动推导）。
-pub fn read_meta(dir: &Path, session_id: &str) -> Option<SessionMetaFile> {
-    let path = meta_file(dir, session_id).ok()?;
-    let bytes = std::fs::read(path).ok()?;
-    serde_json::from_slice(&bytes).ok()
-}
-
-fn invalid_id(e: StoreError) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
-}
-
-/// 旁车字段写入（合并语义）：读出既有 → 应用更新 → 全字段空删文件（回落全自动），否则合并写盘。
-/// v2.49 的 `write_title` 空标题**删整个文件**，连带抹掉已关联的 workspace（v2.50 起并存）——改为只清字段。
-fn write_meta(
-    dir: &Path,
-    session_id: &str,
-    update: impl FnOnce(&mut SessionMetaFile),
-) -> std::io::Result<()> {
-    let path = meta_file(dir, session_id).map_err(invalid_id)?;
-    let mut meta = read_meta(dir, session_id).unwrap_or_default();
-    update(&mut meta);
-    if meta.title.is_none() && meta.workspace.is_none() && meta.permission_mode.is_none() {
-        return match std::fs::remove_file(&path) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(e),
-        };
-    }
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(
-        &path,
-        serde_json::to_vec_pretty(&meta).expect("meta serialize"),
-    )
-}
-
-/// 写重命名标题（v2.49）：trim 后空串 = 只清标题字段（回落自动标题，
-/// 保留 workspace 等其余字段）；非空 = 合并写入。
-pub fn write_title(dir: &Path, session_id: &str, title: &str) -> std::io::Result<()> {
-    let t = title.trim().to_string();
-    write_meta(dir, session_id, |m| {
-        m.title = (!t.is_empty()).then_some(t.clone());
-    })
-}
-
-/// 写工作区归属（v2.50 §2.3）：`Some(根目录)` = 关联（trim 后空串视同清除）；`None` = 移出。
-/// 合并写入保留标题；全字段空时删旁车文件。
-pub fn write_workspace(
-    dir: &Path,
-    session_id: &str,
-    workspace: Option<&str>,
-) -> std::io::Result<()> {
-    let ws = workspace
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string);
-    write_meta(dir, session_id, |m| m.workspace = ws)
-}
-
-/// 写会话级权限模式（㉘·B）：`Some(mode)` = 设置（调用方已校验取值）；`None` = 清除（回落设置缺省）。
-/// 合并写入保留其余字段。
-pub fn write_permission_mode(
-    dir: &Path,
-    session_id: &str,
-    mode: Option<&str>,
-) -> std::io::Result<()> {
-    let mode = mode
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string);
-    write_meta(dir, session_id, |m| m.permission_mode = mode)
 }
 
 /// 删除会话的全部磁盘痕迹（v2.49 会话运营）：日志、旁车元数据、undo 备份。
@@ -395,6 +312,14 @@ fn snippet_around(text: &str, byte_start: usize, needle: &[char]) -> String {
     }
     s.replace('\n', " ")
 }
+
+mod meta;
+
+pub use meta::{
+    SessionMetaFile, read_meta, write_model_override, write_permission_mode, write_title,
+    write_workspace,
+};
+use meta::{invalid_id, meta_file};
 
 #[cfg(test)]
 mod tests;

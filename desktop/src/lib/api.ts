@@ -29,6 +29,9 @@ import type {
   NotificationItem,
   SessionSchedule,
   SessionTitlePayload,
+  ProviderInput,
+  ProviderModels,
+  ProviderView,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
@@ -71,6 +74,8 @@ const CHANNELS = [
   "agent://approval-resolved",
   // v2.57 §3.9：推理 delta 直推（实时与重放同形，chat store append-or-create）
   "agent://thinking",
+  // v2.58 §3.12：单步 LLM 用量（实时与重放同形，chat store 按轮聚合）
+  "agent://usage",
 ] as const;
 
 export function subscribeAgentEvents(
@@ -233,6 +238,47 @@ export function sessionSetPermissionMode(
   mode: "plan" | "ask" | "acceptEdits" | "auto",
 ): Promise<void> {
   return invoke("session_set_permission_mode", { sessionId, mode });
+}
+
+/** 会话级模型覆盖（v2.58 §3.30）：成对写旁车 + 缓存，下一轮即生效；
+ * model 空串 = 清除覆盖（回落设置缺省）。 */
+export function sessionSetModel(
+  sessionId: string,
+  providerId: string,
+  model: string,
+): Promise<void> {
+  return invoke("session_set_model", { sessionId, providerId, model });
+}
+
+/** 全部档位的模型清单（§3.30 选择器数据源）：并行探测逐组收口，
+ * 单档失败进 error 不拖垮其它组。 */
+export function llmListModels(): Promise<ProviderModels[]> {
+  return invoke("llm_list_models");
+}
+
+/** 单档模型探测（设置表单未保存值；apiKey 空缺回退档位已存 Key）。 */
+export function llmProbeModels(
+  kind: string,
+  baseUrl: string | null,
+  apiKey: string | null,
+  profileId: string | null,
+): Promise<string[]> {
+  return invoke("llm_probe_models", { kind, baseUrl, apiKey, profileId });
+}
+
+/** 档位增改（v2.58 档位制）：id 缺省 = 新建；返回全量档位投影。 */
+export function llmProviderSave(input: ProviderInput): Promise<ProviderView[]> {
+  return invoke("llm_provider_save", { input });
+}
+
+/** 档位删除：删活动档 = 指针落首档；返回全量档位投影。 */
+export function llmProviderDelete(id: string): Promise<ProviderView[]> {
+  return invoke("llm_provider_delete", { id });
+}
+
+/** 档位排序（§3.30 服务列表拖拽落盘）：按 id 顺序整表重排。 */
+export function llmProviderReorder(ids: string[]): Promise<ProviderView[]> {
+  return invoke("llm_provider_reorder", { ids });
 }
 
 /** 会话删除（v2.49）：忙锁守卫在后端（运行中默认拒绝，开发者开关可

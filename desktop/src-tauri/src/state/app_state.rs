@@ -35,6 +35,9 @@ pub struct AppState {
     /// 会话级权限模式存储（㉘·B）：旁车持久 + 缓存，决策表与目录围栏
     /// 的数据源；session_set_permission_mode 命令写穿。
     pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
+    /// 会话级模型覆盖存储（v2.58 §3.30）：旁车持久 + 缓存；AppLlm 每
+    /// 请求按会话解析，session_set_model 命令写穿。
+    pub model_overrides: Arc<crate::model_override::ModelOverrideStore>,
     /// UI 事件出口（§12.2）：runner 与审批请求共用一个 sink。
     pub sink: Arc<dyn EventSink>,
     /// session_id → 会话锁。会话在锁内串行聊天（tokio Mutex 可跨 await）；

@@ -31,6 +31,7 @@ impl LlmService for ScriptedLlm {
             Ok(LlmResponse {
                 content: "done: echo says hi".into(),
                 tool_calls: vec![],
+                usage: None,
             })
         } else {
             Ok(LlmResponse {
@@ -41,6 +42,7 @@ impl LlmService for ScriptedLlm {
                     args: json!({ "text": "hi" }),
                     session_id: None,
                 }],
+                usage: None,
             })
         }
     }
@@ -235,6 +237,7 @@ impl LlmService for RecordingLlm {
         Ok(LlmResponse {
             content: "ok".into(),
             tool_calls: vec![],
+            usage: None,
         })
     }
 }
@@ -341,6 +344,7 @@ impl LlmService for ProbeLlm {
                 args: json!({}),
                 session_id: None,
             }],
+            usage: None,
         })
     }
 }

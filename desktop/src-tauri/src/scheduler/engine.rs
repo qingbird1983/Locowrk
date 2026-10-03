@@ -156,6 +156,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
     let policy = UsagePolicy {
         threshold_tokens: deps.settings.effective_threshold_tokens(),
         window_tokens: deps.settings.effective_window().unwrap_or(0),
+        tools_est_tokens: runner::catalog_estimate(&deps.kernel, &session_id).await,
     };
     // 失败也照常收尾：一次性删行（重试多半还是错），周期滚到下槽；
     // 错误经系统通知兜底告知（轮内 LLM 报错用户未必在看）。

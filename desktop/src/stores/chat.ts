@@ -9,6 +9,7 @@ import {
   sessionHistory,
   sessionList,
   sessionRename,
+  sessionSetModel,
   sessionSetPermissionMode,
   sessionTruncateAfter,
   pickSavePath,
@@ -18,6 +19,7 @@ import {
 import { clip, compactNumber } from "../lib/format";
 import { toolAction } from "../lib/tool-summary";
 import { i18n } from "../i18n";
+import { useSettingsStore } from "./settings";
 import type { AgentEvent, SessionMeta } from "../types";
 
 /** §3.18 动作名（审批记录条用）；表外工具回落工具 id。 */
@@ -76,6 +78,19 @@ export type SystemItem = {
   actions?: string[];
 };
 
+/** 本轮 LLM 用量聚合（v2.58 §3.12）：llm_usage 事件按轮累计——用户消息
+ * / 发送重置，重放同序重建。speed = 最后一步 output/duration（tokens/s）。 */
+export type TurnUsage = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  reasoning: number;
+  total: number;
+  speed: number | null;
+  steps: number;
+};
+
 let nextId = 1;
 
 export const useChatStore = defineStore("chat", {
@@ -88,7 +103,12 @@ export const useChatStore = defineStore("chat", {
     sessions: [] as SessionMeta[],
     /** 上下文用量（进度条投影；agent://context-usage 驱动）。windowTokens
      * 0 = 窗口未设置（比例段隐藏）。 */
-    contextUsage: null as { used: number; threshold: number; windowTokens: number } | null,
+    contextUsage: null as {
+      used: number;
+      threshold: number;
+      windowTokens: number;
+      toolsEstTokens: number;
+    } | null,
     /** 系统消息"查看详情"的内容（id → 文本，如压缩摘要预览）。 */
     noticeDetails: {} as Record<number, string>,
     /** 历史重放中（switchSession / init 恢复）：不记时间戳、工具行不吃
@@ -96,6 +116,10 @@ export const useChatStore = defineStore("chat", {
     replaying: false,
     /** ㉘·B 当前会话权限模式（null = 未显式设置，显示取设置缺省档）。 */
     permissionMode: null as "plan" | "ask" | "acceptEdits" | "auto" | null,
+    /** v2.58 §3.30 当前会话模型覆盖（null = 跟随设置缺省）。 */
+    modelOverride: null as { providerId: string; model: string } | null,
+    /** v2.58 §3.12 本轮用量聚合（null = 本轮尚无供应商报告的用量）。 */
+    turnUsage: null as TurnUsage | null,
   }),
   actions: {
     async init() {
@@ -126,6 +150,13 @@ export const useChatStore = defineStore("chat", {
       // ㉘·B：档位随会话走（无显式设置 = null，显示取设置缺省）
       this.permissionMode =
         this.sessions.find((s) => s.id === id)?.permissionMode ?? null;
+      // v2.58：模型覆盖随会话走（成对字段，null = 跟随设置缺省）
+      const meta = this.sessions.find((s) => s.id === id);
+      this.modelOverride =
+        meta?.model && meta?.modelProvider
+          ? { providerId: meta.modelProvider, model: meta.model }
+          : null;
+      this.turnUsage = null;
       const events = await sessionHistory(id).catch(() => [] as AgentEvent[]);
       this.replaying = true;
       try {
@@ -176,6 +207,37 @@ export const useChatStore = defineStore("chat", {
       this.contextUsage = null;
       this.noticeDetails = {};
       this.permissionMode = null;
+      this.modelOverride = null;
+      this.turnUsage = null;
+    },
+    /** v2.58 §3.30 选择模型：会话内 = 写会话级覆盖（设置不动）；首页
+     * 空态 = 写设置缺省（切活动档 + 该档模型——"接下来聊什么模型"）。 */
+    async setModel(providerId: string, model: string) {
+      const inSession = this.sessions.some((s) => s.id === this.sessionId);
+      if (!inSession) {
+        await useSettingsStore().saveLlm({ active: providerId, model });
+        return;
+      }
+      const prev = this.modelOverride;
+      this.modelOverride = { providerId, model };
+      try {
+        await sessionSetModel(this.sessionId, providerId, model);
+      } catch (err) {
+        // 写穿失败回滚本地（后端仍按旧模型跑——本地显示必须如实）
+        this.modelOverride = prev;
+        throw err;
+      }
+    },
+    /** v2.58 清除会话模型覆盖（选择器「跟随默认」行）。 */
+    async clearModelOverride() {
+      const prev = this.modelOverride;
+      this.modelOverride = null;
+      try {
+        await sessionSetModel(this.sessionId, "", "");
+      } catch (err) {
+        this.modelOverride = prev;
+        throw err;
+      }
     },
     /** ㉘·B 设置会话权限档（§3.33 切换器）：写穿后端旁车 + 本地即时
      * 生效（下一笔工具调用即按新档裁决，运行中可切）。 */
@@ -197,6 +259,8 @@ export const useChatStore = defineStore("chat", {
           // ㉕·fix 重放恢复用户气泡（此前投影漏 UserMessage，重启后历史
           // 会话只剩模型回复）。实时轮发送即本地回显，本事件不实时到达。
           // pos（v2.57）：编辑重发的定位键随行保存。
+          // v2.58 §3.12：新轮开始——用量聚合重置（重放同序重建）
+          this.turnUsage = null;
           this.items.push({
             id: nextId++,
             kind: "user",
@@ -278,8 +342,27 @@ export const useChatStore = defineStore("chat", {
           );
           break;
         case "context_usage":
-          this.contextUsage = { used: e.used, threshold: e.threshold, windowTokens: e.window_tokens ?? 0 };
+          this.contextUsage = { used: e.used, threshold: e.threshold, windowTokens: e.window_tokens ?? 0, toolsEstTokens: e.tools_est_tokens ?? 0 };
           break;
+        case "llm_usage": {
+          // v2.58 §3.12：按轮累计（speed = 最后一步生成速度）
+          const u = this.turnUsage ?? {
+            input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
+            reasoning: 0, total: 0, speed: null, steps: 0,
+          };
+          u.input += e.input;
+          u.output += e.output;
+          u.cacheRead += e.cache_read;
+          u.cacheWrite += e.cache_write;
+          u.reasoning += e.reasoning;
+          u.total += e.total;
+          u.steps += 1;
+          if (e.duration_ms > 0) {
+            u.speed = Math.round((e.output / e.duration_ms) * 1000);
+          }
+          this.turnUsage = u;
+          break;
+        }
         case "context_compacted": {
           // 压缩系统消息（Context 文档 §3.8.3）：[查看详情][撤销]，
           // 撤销经 context_undo_compact（rewind_to，ChatMessages 接线）
@@ -369,6 +452,7 @@ export const useChatStore = defineStore("chat", {
       this.items.push({ id: nextId++, kind: "user", text: t, ts: Date.now() });
       this.running = true;
       this.steps = null;
+      this.turnUsage = null;
       try {
         await chat(this.sessionId, t);
       } catch (err) {

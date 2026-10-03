@@ -12,11 +12,11 @@ use futures::StreamExt;
 use genai::adapter::AdapterKind;
 use genai::chat::{
     ChatMessage, ChatOptions, ChatRequest, ChatResponse, ChatStreamEvent, ContentPart,
-    MessageContent, Tool as GenAiTool, ToolCall as GenAiCall, ToolResponse,
+    MessageContent, Tool as GenAiTool, ToolCall as GenAiCall, ToolResponse, Usage,
 };
 use genai::resolver::{AuthData, AuthResolver, Endpoint, ServiceTargetResolver};
 use genai::{Client, ModelIden, ServiceTarget};
-use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmService, ToolCallReq};
+use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmService, LlmUsage, ToolCallReq};
 use plugin_api::{CallId, ToolSpec};
 use session_store::Message;
 
@@ -121,7 +121,15 @@ fn build_client(cfg: &LlmSettings) -> Client {
     builder = builder.with_service_target_resolver(ServiceTargetResolver::from_resolver_fn(
         move |mut target: ServiceTarget| {
             if let Some(url) = &base_url {
-                target.endpoint = Endpoint::from_owned(url.clone());
+                // openai / anthropic 适配器的端点须含版本段（genai 只在后面
+                // 追加 `chat/completions` / `messages`）→ `join_version` 归一；
+                // ollama 的路径自带 `api/` 前缀，原样使用。
+                let endpoint = if matches!(provider.as_str(), "openai" | "anthropic") {
+                    crate::llm::models::join_version(url)
+                } else {
+                    url.clone()
+                };
+                target.endpoint = Endpoint::from_owned(endpoint);
             }
             target.model = ModelIden::new(adapter_kind(&provider), target.model.model_name.clone());
             Ok(target)
@@ -135,11 +143,44 @@ fn build_client(cfg: &LlmSettings) -> Client {
 /// 保证 ToolCall / ToolResult 事件关联与补偿去重键可用（§6.3）。
 pub(crate) fn map_response(res: ChatResponse, next_call: &AtomicU64) -> LlmResponse {
     let content = res.first_text().unwrap_or_default().to_string();
-    map_parts(content, res.into_tool_calls(), next_call)
+    let usage = map_usage(&res.usage);
+    map_parts(content, res.into_tool_calls(), next_call, usage)
+}
+
+/// genai 归一化 Usage → 内核 [`LlmUsage`]（v2.58 §3.12 用量明细的数据源）。
+/// None 字段计 0；input/output 全 0 = 供应商没报告有效用量 → None
+/// （内核不落 LlmUsage 事件，宁缺勿假）。
+fn map_usage(u: &Usage) -> Option<LlmUsage> {
+    let input = u.prompt_tokens.unwrap_or(0).max(0) as u64;
+    let output = u.completion_tokens.unwrap_or(0).max(0) as u64;
+    if input == 0 && output == 0 {
+        return None;
+    }
+    let prompt_d = u.prompt_tokens_details.as_ref();
+    let completion_d = u.completion_tokens_details.as_ref();
+    Some(LlmUsage {
+        input,
+        output,
+        cache_read: prompt_d.and_then(|d| d.cached_tokens).unwrap_or(0).max(0) as u64,
+        cache_write: prompt_d
+            .and_then(|d| d.cache_creation_tokens)
+            .unwrap_or(0)
+            .max(0) as u64,
+        reasoning: completion_d
+            .and_then(|d| d.reasoning_tokens)
+            .unwrap_or(0)
+            .max(0) as u64,
+        total: u.total_tokens.unwrap_or(0).max(0) as u64,
+    })
 }
 
 /// 正文 + genai 工具调用 → 内核响应（非流式/流式两条路共用的收口）。
-fn map_parts(content: String, calls: Vec<GenAiCall>, next_call: &AtomicU64) -> LlmResponse {
+fn map_parts(
+    content: String,
+    calls: Vec<GenAiCall>,
+    next_call: &AtomicU64,
+    usage: Option<LlmUsage>,
+) -> LlmResponse {
     let tool_calls = calls
         .into_iter()
         .map(|tc| {
@@ -159,6 +200,7 @@ fn map_parts(content: String, calls: Vec<GenAiCall>, next_call: &AtomicU64) -> L
     LlmResponse {
         content,
         tool_calls,
+        usage,
     }
 }
 
@@ -249,7 +291,8 @@ impl GenAiLlm {
         options = options
             .with_capture_content(true)
             .with_capture_tool_calls(true)
-            .with_capture_reasoning_content(true);
+            .with_capture_reasoning_content(true)
+            .with_capture_usage(true);
         let mut stream = client
             .exec_chat_stream(cfg.model.as_str(), chat_req, Some(&options))
             .await
@@ -279,7 +322,8 @@ impl GenAiLlm {
                         .captured_content
                         .map(MessageContent::into_tool_calls)
                         .unwrap_or_default();
-                    return Ok(map_parts(content, calls, &self.next_call));
+                    let usage = end.captured_usage.as_ref().and_then(map_usage);
+                    return Ok(map_parts(content, calls, &self.next_call, usage));
                 }
                 _ => {}
             }

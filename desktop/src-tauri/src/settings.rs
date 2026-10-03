@@ -27,7 +27,10 @@ pub use chat::{ChatSettings, ChatUpdate, ChatView};
 pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
 pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
-pub use llm::{LlmSettings, LlmSettingsView, LlmUpdate, PROVIDERS};
+pub use llm::{
+    new_profile_id, LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, ProviderInput,
+    ProviderModel, ProviderProfile, ProviderView, PROVIDERS,
+};
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
 pub use shell::{ShellSettings, ShellSettingsView, ShellUpdate};
@@ -55,7 +58,9 @@ pub struct AppSettings {
     /// 时取 SHORTCUT_DEFAULT，而不是空串。
     #[serde(default = "default_shortcut")]
     pub shortcut: String,
-    pub llm: LlmSettings,
+    /// llm 档位区（v2.58 档位制：`{active, providers}`，DESIGN §13.1；
+    /// 生效配置 = `llm()` 平面投影）。旧平面字段 open 迁移为单档 default。
+    pub llm: LlmConfig,
     /// embedding 模型区（⑬ 智能层共享基建；类型见 `embedding` 子模块）。
     pub embedding: EmbeddingSettings,
     /// 上下文管理区（⑨）。字段级缺省：旧 settings.json 无此字段时取默认
@@ -86,7 +91,7 @@ impl Default for AppSettings {
             locale: LOCALE_SYSTEM.into(),
             appearance: AppearanceSettings::default(),
             shortcut: SHORTCUT_DEFAULT.into(),
-            llm: LlmSettings::default(),
+            llm: LlmConfig::default(),
             embedding: EmbeddingSettings::default(),
             context: ContextSettings::default(),
             memory: MemorySettings::default(),
@@ -128,20 +133,40 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
-    /// 打开（不存在则用默认值建文件）；目录建不出来算错误。S2 迁移：
-    /// 旧 `context.windowTokens` 搬到 `llm` 区（信息归属修正——窗口是
-    /// 模型属性）。落盘由下一次任意保存完成，重启重做迁移幂等。
+    /// 打开（不存在则用默认值建文件）；目录建不出来算错误。迁移两条
+    /// （都幂等，落盘由下一次任意保存完成）：S2 旧 `context.windowTokens`
+    /// 搬到 llm 活动档；v2.58 旧平面 llm 区（provider/model/…）包成单档
+    /// `default`（档位制，DESIGN §13.1）。
     pub fn open(root: &Path) -> Result<Self, String> {
         std::fs::create_dir_all(root)
             .map_err(|e| format!("设置目录创建失败 {}: {e}", root.display()))?;
         let path = root.join(FILE_NAME);
         let mut settings = match std::fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice::<AppSettings>(&bytes)
-                .map_err(|e| format!("settings.json 解析失败: {e}"))?,
+            Ok(bytes) => {
+                let mut raw: serde_json::Value = serde_json::from_slice(&bytes)
+                    .map_err(|e| format!("settings.json 解析失败: {e}"))?;
+                llm::migrate_flat_llm(&mut raw);
+                serde_json::from_value::<AppSettings>(raw)
+                    .map_err(|e| format!("settings.json 解析失败: {e}"))?
+            }
             Err(_) => AppSettings::default(),
         };
-        if settings.llm.window_tokens.is_none() && settings.context.window_tokens.is_some() {
-            settings.llm.window_tokens = settings.context.window_tokens.take();
+        if settings.llm.flat().window_tokens.is_none() && settings.context.window_tokens.is_some() {
+            let w = settings.context.window_tokens.take();
+            if settings.llm.providers.is_empty() {
+                // 旧文件连 llm 区都没有：物化缺省档接住窗口（active 同步点亮）
+                settings.llm.providers.push(llm::ProviderProfile {
+                    id: "default".into(),
+                    label: "openai".into(),
+                    kind: "openai".into(),
+                    window_tokens: w,
+                    enabled: true,
+                    ..Default::default()
+                });
+                settings.llm.active = "default".into();
+            } else {
+                settings.llm.providers[0].window_tokens = w;
+            }
         }
         Ok(Self {
             root: root.to_path_buf(),
@@ -154,10 +179,32 @@ impl SettingsStore {
         self.project(&s)
     }
 
-    /// 后端专用：LLM 配置全量（含 api_key 原值）——只给模型适配器读，
-    /// 不进任何 IPC 投影。
+    /// 后端专用：LLM 生效配置全量（含 api_key 原值）——活动档平面投影，
+    /// 只给模型适配器读，不进任何 IPC 投影。
     pub fn llm(&self) -> LlmSettings {
+        self.inner.lock().expect("settings poisoned").llm.flat()
+    }
+
+    /// 后端专用：llm 档位区全量（v2.58 档位命令读写用；含 api_key 原值，
+    /// 不进 IPC 投影）。
+    pub fn llm_config(&self) -> LlmConfig {
         self.inner.lock().expect("settings poisoned").llm.clone()
+    }
+
+    /// 后端专用：llm 区原子改写（v2.58 档位命令：save/delete/切活动档）。
+    /// 落盘成功才提交内存（update 同款顺序）；`apply` 返回 Err = 拒绝
+    /// 且不污染内存态。返回改写后的全量档位区。
+    pub fn update_llm_config(
+        &self,
+        apply: impl FnOnce(&mut LlmConfig) -> Result<(), String>,
+    ) -> Result<LlmConfig, String> {
+        let mut next = self.inner.lock().expect("settings poisoned").clone();
+        apply(&mut next.llm)?;
+        let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
+        std::fs::write(self.root.join(FILE_NAME), bytes)
+            .map_err(|e| format!("settings.json 写入失败: {e}"))?;
+        *self.inner.lock().expect("settings poisoned") = next;
+        Ok(self.llm_config())
     }
 
     /// 后端专用：全局快捷键（tray.rs 启动注册用）。
@@ -183,11 +230,11 @@ impl SettingsStore {
             .clone()
     }
 
-    /// 后端专用：生效窗口（S2 llm 区优先；context 旧字段兜底——正常路径
-    /// open() 迁移后恒为 None）。None = 未设置。
+    /// 后端专用：生效窗口（S2 llm 活动档优先；context 旧字段兜底——正常
+    /// 路径 open() 迁移后恒为 None）。None = 未设置。
     pub fn effective_window(&self) -> Option<u64> {
         let s = self.inner.lock().expect("settings poisoned");
-        s.llm.window_tokens.or(s.context.window_tokens)
+        s.llm.flat().window_tokens.or(s.context.window_tokens)
     }
 
     /// 后端专用：生效阈值绝对值（runner UsagePolicy / ctx-compact 判定
@@ -196,6 +243,7 @@ impl SettingsStore {
         let s = self.inner.lock().expect("settings poisoned");
         let window = s
             .llm
+            .flat()
             .window_tokens
             .or(s.context.window_tokens)
             .unwrap_or(FALLBACK_WINDOW_TOKENS);
@@ -259,8 +307,9 @@ impl SettingsStore {
     }
 
     fn project(&self, s: &AppSettings) -> SettingsView {
-        // S2：窗口以 llm 区为准（context 旧字段只在迁移前的旧文件里出现）
-        let window = s.llm.window_tokens.or(s.context.window_tokens);
+        // S2：窗口以 llm 活动档为准（context 旧字段只在迁移前的旧文件里出现）
+        let flat = s.llm.flat();
+        let window = flat.window_tokens.or(s.context.window_tokens);
         SettingsView {
             locale: s.locale.clone(),
             appearance: AppearanceView {
@@ -269,11 +318,28 @@ impl SettingsStore {
             shortcut: s.shortcut.clone(),
             data_dir: self.root.display().to_string(),
             llm: LlmSettingsView {
-                provider: s.llm.provider.clone(),
-                model: s.llm.model.clone(),
-                base_url: s.llm.base_url.clone(),
-                api_key_set: s.llm.api_key.is_some(),
-                window_tokens: s.llm.window_tokens,
+                active: s.llm.active.clone(),
+                providers: s
+                    .llm
+                    .providers
+                    .iter()
+                    .map(|p| ProviderView {
+                        id: p.id.clone(),
+                        label: p.label.clone(),
+                        kind: p.kind.clone(),
+                        base_url: p.base_url.clone(),
+                        api_key_set: p.api_key.is_some(),
+                        model: p.model.clone(),
+                        window_tokens: p.window_tokens,
+                        enabled: p.enabled,
+                        models: p.models.clone(),
+                    })
+                    .collect(),
+                provider: flat.provider,
+                model: flat.model,
+                base_url: flat.base_url,
+                api_key_set: flat.api_key.is_some(),
+                window_tokens: flat.window_tokens,
             },
             embedding: EmbeddingView {
                 base_url: s.embedding.base_url.clone(),

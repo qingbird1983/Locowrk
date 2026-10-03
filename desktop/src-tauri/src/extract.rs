@@ -163,6 +163,7 @@ pub async fn run_turn_extract(
             model: None,
             params: serde_json::json!({}),
             system: Some(EXTRACT_SYSTEM.into()),
+            session_id: None,
         })
         .await
         .map_err(|e| format!("extract llm call failed: {e}"))?;

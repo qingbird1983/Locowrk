@@ -52,6 +52,7 @@ impl LlmService for CountingLlm {
         Ok(LlmResponse {
             content: "子内正文".into(),
             tool_calls: vec![],
+            usage: None,
         })
     }
 }

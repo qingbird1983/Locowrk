@@ -33,6 +33,8 @@ pub mod channels {
     /// 推理内容（v2.57 §3.9）：实时 delta 直推（StreamChunkSink）与整段
     /// 投影（runner）共用；重放经 session_history 不走通道。
     pub const THINKING: &str = "agent://thinking";
+    /// 单步 LLM 用量（v2.58 §3.12）：runner 投影（实时与重放同形）。
+    pub const LLM_USAGE: &str = "agent://usage";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -95,12 +97,29 @@ pub enum AgentEvent {
     ApprovalRequest(ApprovalRequestPayload),
     /// 上下文用量（⑨）：每个 step 后推送；used 与压缩判定同一估算口径
     /// （序列化字节 / 4，kernel_agent::estimate_tokens）。
+    /// `tools_est_tokens`（v2.58 §3.12）：本轮请求实际携带的暴露目录估算
+    /// （0 = 目录缺席），工具上下文行的"约 N tokens"。
     ContextUsage {
         session_id: String,
         used: u64,
         threshold: u64,
         /// 模型窗口（未知 = 0，前端按"未设置"处理）。
         window_tokens: u64,
+        #[serde(default)]
+        tools_est_tokens: u64,
+    },
+    /// 单步 LLM 用量（v2.58 §3.12）：`SessionEvent::LlmUsage` 的投影，
+    /// 实时与重放同形——前端按轮聚合出「本轮合计 / 生成速度 / 模型用量」。
+    /// 供应商不报告的 step 不产生（宁缺勿假）。
+    LlmUsage {
+        session_id: String,
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_write: u64,
+        reasoning: u64,
+        total: u64,
+        duration_ms: u64,
     },
     /// 压缩完成（⑨）：summary 只推 200 字符预览（全文在会话日志）。
     ContextCompacted {
@@ -162,6 +181,7 @@ impl AgentEvent {
             AgentEvent::UserMessage { .. } => channels::USER_MESSAGE,
             AgentEvent::ApprovalResolved { .. } => channels::APPROVAL_RESOLVED,
             AgentEvent::Thinking { .. } => channels::THINKING,
+            AgentEvent::LlmUsage { .. } => channels::LLM_USAGE,
         }
     }
 }

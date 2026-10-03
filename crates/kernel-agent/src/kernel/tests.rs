@@ -95,6 +95,7 @@ impl LlmService for ScriptedLlm {
         Ok(LlmResponse {
             content: String::new(),
             tool_calls: self.calls.clone(),
+            usage: None,
         })
     }
 }

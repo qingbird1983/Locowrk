@@ -456,6 +456,13 @@ pub enum SessionEvent {
     /// （推理是过程不是上下文，不回传供应商，压缩与用量估算不受影响）。
     Thinking         { text: String },
     AssistantMessage { content: String, tool_calls: Vec<CallId> },
+    /// 单步 LLM 用量（v2.58）：供应商报告的真实 token 计数与耗时，每个
+    /// LLM step 至多一条、紧贴其 AssistantMessage 之后落日志；
+    /// derive_messages 跳过（用量是过程计量不是上下文）。供应商不报告
+    /// 用量 = 不落事件（宁缺勿假，不用估算冒充）。
+    LlmUsage         { input: u64, output: u64, cache_read: u64,
+                       cache_write: u64, reasoning: u64, total: u64,
+                       duration_ms: u64 },
     ToolCall         { call_id: CallId, tool: String, args: Value,
                        plugin_version: Version, side_effect: SideEffect },
     ToolResult       { call_id: CallId, output: Value, error: Option<String> },
@@ -2037,6 +2044,23 @@ pub fn run() {
 > 保持不变。快捷键已接入（阶段八⑤）：settings.json `shortcut`（缺省
 > Ctrl+Shift+L），设置面板「全局快捷键」块可改、保存即时重注册（§14
 > v2.13 备注）。
+>
+> **模型档位制（v2.58，多 provider 配置管理）**：`llm` 区持久态改为
+> `{ active, providers: [{ id, label, kind, base_url, api_key, model,
+> window_tokens }] }`（kind ∈ openai/anthropic/ollama）；生效配置 =
+> 活动档的平面投影，原平面结构与全部消费方（适配器 / embedding 回落 /
+> 探测）零改动。旧平面字段 open 读入时迁移为单档 `default`（一次幂等；
+> 新格式无 `llm.provider` 键，检测安全）。命令：`llm_provider_save`（增改，
+> 新档 id 后端生成）/ `llm_provider_delete`（删活动档 = 指针落首档或空）/
+> `llm_list_models`（并行探测全部档位：Ollama GET `/api/tags`、OpenAI 兼容
+> GET `{base|api.openai.com}/v1/models` Bearer Key，5s 超时逐组报错不互相
+> 阻塞）/ `llm_probe_models`（设置表单未保存值的单档探测）；
+> `settings_set` 的 `llm` 区平面字段映射到活动档 + `active` 切档。档位投影
+> 只带 `api_key_set`——**API Key 只落盘不出 IPC** 纪律照旧。**会话级模型
+> 覆盖** = 旁车 `model` + `model_provider` 字段（§2.3 关联同款合并写），
+> `LlmRequest.session_id`（`RequestPayload` 已有、投影补全）使适配器按
+> 会话解析覆盖：先按 `model_provider` 路由档位，再以覆盖模型名覆盖
+> `model`；waterfall 契约的 `model` 字段（§7.2 决策环改写）优先级最高。
 
 ### 13.2 审批弹窗的交互设计
 
@@ -2739,4 +2763,4 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.57。逐批落点补记已迁至 [CHANGELOG.md](CHANGELOG.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*
+*文档版本：v2.58。逐批落点补记已迁至 [CHANGELOG.md](CHANGELOG.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*

@@ -13,7 +13,9 @@ use session_store::Message;
 /// LLM 请求：直接复用 session-store 的中立投影，模型适配层再映射各家协议。`tools`
 /// 是本 step 的工具目录快照（LLM.md：统一 OpenAI 风格，适配器负责转成各家格式）；
 /// `model` / `params` 可被 `agent/request` 决策环改写（§7.2）；`system` 是请求级系统
-/// 提示（⑪ Memory-Inject 走这里，会话日志与压缩不触碰）。
+/// 提示（⑪ Memory-Inject 走这里，会话日志与压缩不触碰）。`session_id`（v2.58）是
+/// 发起会话的身份（`RequestPayload` 已有，此前投影时丢失）——适配器可按会话解析
+/// 会话级配置（如桌面端的会话模型覆盖）；内核只透传不解释。
 #[derive(Debug, Clone, Default)]
 pub struct LlmRequest {
     pub messages: Vec<Message>,
@@ -21,6 +23,7 @@ pub struct LlmRequest {
     pub model: Option<String>,
     pub params: Value,
     pub system: Option<String>,
+    pub session_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,10 +36,26 @@ pub struct ToolCallReq {
     pub session_id: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+/// 单次 LLM 用量（v2.58）：供应商报告的真实计数（genai Usage 归一化口径）。
+/// `input` 含缓存读取（OpenAI 兼容口径 cached ⊆ prompt，命中率 = cache_read/input）；
+/// `total` = 供应商报告的总量（0 = 未报告）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LlmUsage {
+    pub input: u64,
+    pub output: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    pub reasoning: u64,
+    pub total: u64,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct LlmResponse {
     pub content: String,
     pub tool_calls: Vec<ToolCallReq>,
+    /// 供应商报告的单次用量（v2.58）；内核落 `SessionEvent::LlmUsage`，
+    /// 不报告 = None（宁缺勿假，不用估算冒充真实计数）。
+    pub usage: Option<LlmUsage>,
 }
 
 #[derive(Debug, thiserror::Error)]
