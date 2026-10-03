@@ -141,10 +141,14 @@ impl HostVtable {
 /// 调用期会话上下文载荷（㉘，`session_context` 槽跨边界以 JSON 传输）。
 /// `workspace` = 会话关联的项目根（§2.3 工作区），未归属为 `None`；
 /// 插件据此把数据按项目隔离（memory-sqlite 首个消费方）。
+/// `fs_roots`（㉘·B）= 本次调用的围栏根（宿主侧已 canonicalize）：归属会话为
+/// `[数据根, 项目工作区]`，未归属会话宿主不下发（空表 = 插件回落
+/// `LOCOWRK_FS_ROOTS` 既有全局语义，headless 同）。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CallContext {
     pub session_id: Option<String>,
     pub workspace: Option<String>,
+    pub fs_roots: Vec<String>,
 }
 
 impl CallContext {
@@ -152,6 +156,7 @@ impl CallContext {
         crate::serde_json::json!({
             "session_id": self.session_id,
             "workspace": self.workspace,
+            "fs_roots": self.fs_roots,
         })
         .to_string()
     }
@@ -165,9 +170,21 @@ impl CallContext {
                 .filter(|s| !s.is_empty())
                 .map(str::to_string)
         };
+        let fs_roots = v
+            .get("fs_roots")
+            .and_then(crate::serde_json::Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(crate::serde_json::Value::as_str)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
         Some(Self {
             session_id: opt_str("session_id"),
             workspace: opt_str("workspace"),
+            fs_roots,
         })
     }
 }

@@ -7,7 +7,8 @@
 use std::io::Read;
 use std::path::PathBuf;
 
-use plugin_api::fsutil::{allowed_roots, resolve_existing};
+use plugin_api::HostVtable;
+use plugin_api::fsutil::{effective_roots, resolve_existing};
 use plugin_api::serde_json::{Value, json};
 
 use crate::{arg_path, arg_u64};
@@ -23,10 +24,11 @@ const GREP_DEPTH_MAX: u64 = 8;
 const GREP_FILE_MAX: u64 = 1024 * 1024;
 const GREP_LINE_EXCERPT: usize = 200;
 
-pub(crate) fn fs_read(args: &Value) -> Result<Value, String> {
+pub(crate) fn fs_read(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let path = arg_path(args)?;
     let max = arg_u64(args, "max_bytes", READ_DEFAULT, READ_MAX)?;
-    let resolved = resolve_existing(std::path::Path::new(&path), &allowed_roots()?)?;
+    let roots = unsafe { effective_roots(host) }?;
+    let resolved = resolve_existing(std::path::Path::new(&path), &roots)?;
     let display = resolved.display().to_string();
     let meta = std::fs::metadata(&resolved).map_err(|e| format!("fs_read `{display}`: {e}"))?;
     if meta.is_dir() {
@@ -47,9 +49,10 @@ pub(crate) fn fs_read(args: &Value) -> Result<Value, String> {
     }))
 }
 
-pub(crate) fn fs_list(args: &Value) -> Result<Value, String> {
+pub(crate) fn fs_list(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let path = arg_path(args)?;
-    let resolved = resolve_existing(std::path::Path::new(&path), &allowed_roots()?)?;
+    let roots = unsafe { effective_roots(host) }?;
+    let resolved = resolve_existing(std::path::Path::new(&path), &roots)?;
     let display = resolved.display().to_string();
     let rd = std::fs::read_dir(&resolved).map_err(|e| format!("fs_list `{display}`: {e}"))?;
     let mut entries: Vec<(bool, Value)> = rd
@@ -83,7 +86,7 @@ pub(crate) fn fs_list(args: &Value) -> Result<Value, String> {
     Ok(json!({ "path": display, "entries": entries }))
 }
 
-pub(crate) fn fs_grep(args: &Value) -> Result<Value, String> {
+pub(crate) fn fs_grep(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let path = arg_path(args)?;
     let query = args
         .get("query")
@@ -97,7 +100,8 @@ pub(crate) fn fs_grep(args: &Value) -> Result<Value, String> {
         arg_u64(args, "max_results", GREP_RESULTS_DEFAULT, GREP_RESULTS_MAX)? as usize;
     let max_depth = arg_u64(args, "max_depth", GREP_DEPTH_DEFAULT, GREP_DEPTH_MAX)?;
 
-    let base = resolve_existing(std::path::Path::new(&path), &allowed_roots()?)?;
+    let roots = unsafe { effective_roots(host) }?;
+    let base = resolve_existing(std::path::Path::new(&path), &roots)?;
     let mut matches: Vec<Value> = Vec::new();
     let mut truncated = false;
     let mut scanned = 0u64;

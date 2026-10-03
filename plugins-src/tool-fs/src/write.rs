@@ -12,8 +12,9 @@
 
 use std::path::{Path, PathBuf};
 
+use plugin_api::HostVtable;
 use plugin_api::fsutil::{
-    allowed_roots, backup_original, is_not_found, resolve_existing, resolve_for_write,
+    backup_original, effective_roots, is_not_found, resolve_existing, resolve_for_write,
     restore_via_rename,
 };
 use plugin_api::serde_json::{Value, json};
@@ -23,7 +24,7 @@ use crate::arg_path;
 /// fs_write 内容上限（字节）。与 fs_read 的读取上限同量级，防 runaway 写。
 const WRITE_MAX: u64 = 2 * 1024 * 1024;
 
-pub(crate) fn fs_write(args: &Value) -> Result<Value, String> {
+pub(crate) fn fs_write(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let path = arg_path(args)?;
     let content = args
         .get("content")
@@ -41,7 +42,7 @@ pub(crate) fn fs_write(args: &Value) -> Result<Value, String> {
         ));
     }
     // 纯校验先于任何文件系统改动：越权目标直接拒绝，不留副作用
-    let roots = allowed_roots()?;
+    let roots = unsafe { effective_roots(host) }?;
     let resolved = resolve_for_write(Path::new(&path), &roots)?;
     if resolved.is_dir() {
         return Err(format!("fs_write `{}` is a directory", resolved.display()));
@@ -69,9 +70,9 @@ pub(crate) fn fs_write(args: &Value) -> Result<Value, String> {
     }))
 }
 
-pub(crate) fn fs_delete(args: &Value) -> Result<Value, String> {
+pub(crate) fn fs_delete(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let path = arg_path(args)?;
-    let roots = allowed_roots()?;
+    let roots = unsafe { effective_roots(host) }?;
     let resolved = resolve_existing(Path::new(&path), &roots)?;
     if resolved.is_dir() {
         return Err(format!(
@@ -86,7 +87,7 @@ pub(crate) fn fs_delete(args: &Value) -> Result<Value, String> {
 
 /// undo 入口。容错两种形态：标准契约 `{"output": {...}}`（内核补偿层传的），
 /// 或把 output 字段平铺在 args 顶层（便于手工/直调排查）。
-pub(crate) fn fs_restore(args: &Value) -> Result<Value, String> {
+pub(crate) fn fs_restore(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let output = args.get("output").unwrap_or(args);
     let path = output.get("path").and_then(Value::as_str).ok_or_else(|| {
         "fs_restore: missing `output.path` (pass the original fs_write result)".to_string()
@@ -97,7 +98,7 @@ pub(crate) fn fs_restore(args: &Value) -> Result<Value, String> {
         .and_then(Value::as_bool)
         .unwrap_or(true);
     // 目标可能已不存在（撤销"新建"时）→ resolve_for_write 按最深存在祖先校验
-    let roots = allowed_roots()?;
+    let roots = unsafe { effective_roots(host) }?;
     let target = resolve_for_write(Path::new(path), &roots)?;
     let display = target.display().to_string();
     match backup {
@@ -108,7 +109,7 @@ pub(crate) fn fs_restore(args: &Value) -> Result<Value, String> {
                 // 无数据可搬，伪造它也造不成副作用；存在路径的来源校验在下）
                 return Ok(json!({ "path": display, "restored": true, "already": true }));
             }
-            let bp = verify_backup_provenance(bp)?;
+            let bp = verify_backup_provenance(bp, host)?;
             restore_via_rename(&bp, &target)?;
             Ok(json!({ "path": display, "restored": true, "already": false }))
         }
@@ -131,8 +132,8 @@ pub(crate) fn fs_restore(args: &Value) -> Result<Value, String> {
 
 /// 备份来源校验：必须位于数据根 `backups/` 之下且存在（canonicalize 归一
 /// 后比前缀）。伪造 output 指向任意文件的一律拒绝。
-fn verify_backup_provenance(backup: &Path) -> Result<PathBuf, String> {
-    let resolved = resolve_existing(backup, &allowed_roots()?)?;
+fn verify_backup_provenance(backup: &Path, host: *const HostVtable) -> Result<PathBuf, String> {
+    let resolved = resolve_existing(backup, &unsafe { effective_roots(host) }?)?;
     let vault = plugin_api::fsutil::data_root()?
         .join("backups")
         .canonicalize()

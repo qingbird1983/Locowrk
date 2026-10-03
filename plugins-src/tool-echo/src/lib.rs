@@ -3,8 +3,8 @@
 //! 一个工具 `echo`（SideEffect::Pure）：
 //! - `{"text": "...", "mode": "plain"}` —— 原样回显（全版本）
 //! - `mode = "upper"` —— 转大写（全版本）
-//! - `mode = "reverse"` —— 反转（**1.3.0 起新增**；旧版本报错，
-//!   供"加载 1.2.0 → 激活 1.3.0 → 回退 1.2.0"验收观察行为差异）
+//! - `mode = "reverse"` —— 反转（**0.2.0 起新增**；旧版本报错，
+//!   供"加载 0.1.0 → 激活 0.2.0 → 回退 0.1.0"验收观察行为差异）
 //! - `mode = "panic"` —— 故意 panic，验证插件侧 catch_unwind（纪律 3）
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
@@ -31,8 +31,8 @@ fn zh_en(zh: &str, en: &str) -> LocalizedString {
 }
 
 const PLUGIN_ID: &str = "tool-echo";
-/// reverse 模式自该版本起提供。
-const REVERSE_SINCE: Version = Version::new(1, 3, 0);
+/// reverse 模式自该版本起提供（0.2.0 = 版本基准重置后的第二档，demo 升级叙事用）。
+const REVERSE_SINCE: Version = Version::new(0, 2, 0);
 
 fn plugin_version() -> &'static str {
     option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")

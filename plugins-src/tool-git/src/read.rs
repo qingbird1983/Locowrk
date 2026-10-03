@@ -3,14 +3,15 @@
 
 use std::path::Path;
 
+use plugin_api::HostVtable;
 use plugin_api::fsutil::resolve_for_write;
 use plugin_api::serde_json::{Value, json};
 
 use crate::proc::{require_ok, run_git};
 use crate::{arg_u64, resolve_repo};
 
-pub(crate) fn git_status(args: &Value) -> Result<Value, String> {
-    let repo = resolve_repo(args)?;
+pub(crate) fn git_status(args: &Value, host: *const HostVtable) -> Result<Value, String> {
+    let repo = resolve_repo(args, host)?;
     let out = run_git(&repo, &["status", "--porcelain=v1", "-b", "--null"])?;
     require_ok(&out, "status")?;
     let (branch, ahead, behind, entries) = parse_status(&out.stdout);
@@ -77,8 +78,8 @@ fn parse_status(text: &str) -> (String, Option<u64>, Option<u64>, Vec<Value>) {
     (branch, ahead, behind, entries)
 }
 
-pub(crate) fn git_diff(args: &Value) -> Result<Value, String> {
-    let repo = resolve_repo(args)?;
+pub(crate) fn git_diff(args: &Value, host: *const HostVtable) -> Result<Value, String> {
+    let repo = resolve_repo(args, host)?;
     let staged = args.get("staged").and_then(Value::as_bool).unwrap_or(false);
     let path = args.get("path").and_then(Value::as_str);
 
@@ -88,7 +89,7 @@ pub(crate) fn git_diff(args: &Value) -> Result<Value, String> {
     }
     if let Some(p) = path {
         // 交给 git 的路径必须是仓库内相对路径；绝对/越界路径先校验拒绝
-        restrict_path(&repo, p)?;
+        restrict_path(&repo, p, host)?;
         argv.push("--".into());
         argv.push(p.to_string());
     }
@@ -106,13 +107,13 @@ pub(crate) fn git_diff(args: &Value) -> Result<Value, String> {
 /// diff/log 的 path 限定：canonicalize 后必须仍在仓库内（挡 `../` 逃逸与
 /// 允许根内但仓库外的路径）。文件可能不存在（新增文件的 diff 无从谈起，
 /// 但保持与 add 相同的祖先回退解析逻辑，语义一致）。
-fn restrict_path(repo: &Path, p: &str) -> Result<(), String> {
+fn restrict_path(repo: &Path, p: &str, host: *const HostVtable) -> Result<(), String> {
     let full = if Path::new(p).is_absolute() {
         std::path::PathBuf::from(p)
     } else {
         repo.join(p)
     };
-    let roots = plugin_api::fsutil::allowed_roots()?;
+    let roots = unsafe { plugin_api::fsutil::effective_roots(host) }?;
     let resolved = resolve_for_write(&full, &roots)?;
     if !resolved.starts_with(repo) {
         return Err(format!("git_diff: path `{p}` is outside the repository"));
@@ -123,15 +124,15 @@ fn restrict_path(repo: &Path, p: &str) -> Result<(), String> {
 /// 字段间 \x1f、记录间 \x1e 的机读 log 格式（人读格式含分隔符歧义）。
 const LOG_FORMAT: &str = "--pretty=format:%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1e";
 
-pub(crate) fn git_log(args: &Value) -> Result<Value, String> {
-    let repo = resolve_repo(args)?;
+pub(crate) fn git_log(args: &Value, host: *const HostVtable) -> Result<Value, String> {
+    let repo = resolve_repo(args, host)?;
     let limit = arg_u64(args, "limit", 20, 100)?;
     let path = args.get("path").and_then(Value::as_str);
 
     let limit_s = limit.to_string();
     let mut argv: Vec<&str> = vec!["log", "-n", &limit_s, "--date=iso-strict", LOG_FORMAT];
     if let Some(p) = path {
-        restrict_path(&repo, p)?;
+        restrict_path(&repo, p, host)?;
         argv.push("--");
         argv.push(p);
     }

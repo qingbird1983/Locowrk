@@ -7,8 +7,8 @@
  * 六段（照实机）：头行（需要权限 + 排队数 + 子 Agent 标识 + 风险胶囊）/
  * 提问行（中文动作名，§3.18）/ 理由行（工具自述）/
  * 参数区（顶层键值行，bg-inset、max-h 240 滚动、右上复制）/
- * 环境行（项目工作区 or 临时会话——批准前必须知道在哪跑）/
- * 动作行（超时秒数文案 + 三键）。风险靠染底 + 胶囊表达（平面内无边框）；
+ * 环境行（会话真实归属 → fsRoots[0] → 临时会话——批准前必须知道在哪跑）/
+ * 动作行（超时秒数文案 + 三键；外部路径卡两键）。风险靠染底 + 胶囊表达（平面内无边框）；
  * 主按钮 = 允许一次（最小授权是默认路径）。决策成功后焦点回 composer。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -81,8 +81,14 @@ async function copyArgs() {
   }
 }
 
-/** 环境行（§3.17⑤）：fsRoots 首项 = 项目工作区；空 = 临时会话。 */
-const workspace = computed(() => settings.view?.tools.fsRoots?.[0] ?? "");
+/** 环境行（§3.17⑤，㉘·B 如实三级回落）：载荷 workspace（会话真实归属）
+ * → fsRoots 首项 → 临时会话。 */
+const workspace = computed(
+  () => props.req.workspace || settings.view?.tools.fsRoots?.[0] || "",
+);
+
+/** ㉘·B 外部路径卡：围栏外命令逐次审批、只许一次——不渲染「允许本次对话」。 */
+const isExternal = computed(() => props.req.external === true);
 
 /** 超时倒计时只做显示（§3.17：无进度条动画）——真执行者是后端守夜任务
  * （fail-closed）。秒数读载荷 timeout_secs（v2.49 可配置原则：阈值在
@@ -182,7 +188,8 @@ async function decide(kind: ApprovalDecisionKind) {
       }}
     </p>
 
-    <!-- ⑥ 动作行：主按钮 = 允许一次（最小授权是默认路径） -->
+    <!-- ⑥ 动作行：主按钮 = 允许一次（最小授权是默认路径）；外部路径卡
+         只有「拒绝 / 允许一次」两键（PI 借鉴：围栏外只许一次） -->
     <div class="permission__acts">
       <span v-if="limit > 0" class="permission__timeout">{{ timeoutText }}</span>
       <div class="permission__btns">
@@ -195,6 +202,7 @@ async function decide(kind: ApprovalDecisionKind) {
           {{ t("approval.deny") }}
         </button>
         <button
+          v-if="!isExternal"
           class="permission__btn permission__btn--secondary"
           type="button"
           :disabled="deciding"

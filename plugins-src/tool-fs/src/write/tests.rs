@@ -40,8 +40,11 @@ fn write_overwrite_backup_restore_roundtrip() {
     std::fs::write(&file, "v1").unwrap();
 
     // 覆盖写：existed=true 且备份落进数据根
-    let out = fs_write(&json!({ "path": file.display().to_string(), "content": "v2 longer" }))
-        .expect("write ok");
+    let out = fs_write(
+        &json!({ "path": file.display().to_string(), "content": "v2 longer" }),
+        std::ptr::null(),
+    )
+    .expect("write ok");
     assert_eq!(out["existed"], json!(true));
     assert!(out["backup"].as_str().is_some(), "backup path recorded");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "v2 longer");
@@ -55,14 +58,14 @@ fn write_overwrite_backup_restore_roundtrip() {
     assert_eq!(std::fs::read_to_string(backup).unwrap(), "v1");
 
     // undo：恢复 v1，备份自消费
-    let restored = fs_restore(&undo_payload(&out)).expect("restore ok");
+    let restored = fs_restore(&undo_payload(&out), std::ptr::null()).expect("restore ok");
     assert_eq!(restored["restored"], json!(true));
     assert_eq!(restored["already"], json!(false));
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "v1");
     assert!(!backup.exists(), "backup consumed by rename");
 
     // 重复恢复：no-op 幂等
-    let again = fs_restore(&undo_payload(&out)).expect("idempotent restore");
+    let again = fs_restore(&undo_payload(&out), std::ptr::null()).expect("idempotent restore");
     assert_eq!(again["already"], json!(true));
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "v1");
 
@@ -78,17 +81,18 @@ fn write_new_file_then_restore_removes_it() {
     let file = root.join("fresh.txt");
     let out = fs_write(
         &json!({ "path": file.display().to_string(), "content": "hello", "create_dirs": false }),
+        std::ptr::null(),
     )
     .expect("write ok");
     assert_eq!(out["existed"], json!(false));
     assert!(out["backup"].is_null(), "new file has nothing to back up");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "hello");
 
-    let restored = fs_restore(&undo_payload(&out)).expect("restore ok");
+    let restored = fs_restore(&undo_payload(&out), std::ptr::null()).expect("restore ok");
     assert_eq!(restored["removed"], json!(true));
     assert!(!file.exists(), "undo deletes the created file");
     // 再恢复：已删 → 幂等 no-op
-    let again = fs_restore(&undo_payload(&out)).expect("idempotent");
+    let again = fs_restore(&undo_payload(&out), std::ptr::null()).expect("idempotent");
     assert_eq!(again["already"], json!(true));
 
     let _ = std::fs::remove_dir_all(&root);
@@ -103,41 +107,80 @@ fn write_guards_and_delete_matrix() {
     // 目录写入拒绝；超限拒绝；缺 content 拒绝
     let dir = root.join("adir");
     std::fs::create_dir_all(&dir).unwrap();
-    assert!(fs_write(&json!({ "path": dir.display().to_string(), "content": "x" })).is_err());
     assert!(
-        fs_write(&json!({ "path": root.join("big.txt").display().to_string(),
-        "content": "x".repeat(2 * 1024 * 1024 + 1) }))
+        fs_write(
+            &json!({ "path": dir.display().to_string(), "content": "x" }),
+            std::ptr::null()
+        )
         .is_err()
     );
     assert!(
-        fs_write(&json!({ "path": root.join("nocontent.txt").display().to_string() })).is_err()
+        fs_write(
+            &json!({ "path": root.join("big.txt").display().to_string(),
+        "content": "x".repeat(2 * 1024 * 1024 + 1) }),
+            std::ptr::null()
+        )
+        .is_err()
+    );
+    assert!(
+        fs_write(
+            &json!({ "path": root.join("nocontent.txt").display().to_string() }),
+            std::ptr::null()
+        )
+        .is_err()
     );
 
     // create_dirs=false 时父目录缺失拒绝；true 时创建
     let deep = root.join("a/b/c.txt");
-    assert!(fs_write(&json!({ "path": deep.display().to_string(), "content": "x" })).is_err());
+    assert!(
+        fs_write(
+            &json!({ "path": deep.display().to_string(), "content": "x" }),
+            std::ptr::null()
+        )
+        .is_err()
+    );
     let out = fs_write(
         &json!({ "path": deep.display().to_string(), "content": "x", "create_dirs": true }),
+        std::ptr::null(),
     )
     .expect("create_dirs ok");
     assert!(deep.is_file());
     // 撤销新建 → 文件删除（父目录保留）
-    fs_restore(&undo_payload(&out)).unwrap();
+    fs_restore(&undo_payload(&out), std::ptr::null()).unwrap();
     assert!(!deep.exists());
 
     // delete 矩阵：删文件 ok；删目录 / 删不存在 报错
     let file = root.join("doomed.txt");
     std::fs::write(&file, b"bye").unwrap();
-    let deleted = fs_delete(&json!({ "path": file.display().to_string() })).expect("delete ok");
+    let deleted = fs_delete(
+        &json!({ "path": file.display().to_string() }),
+        std::ptr::null(),
+    )
+    .expect("delete ok");
     assert_eq!(deleted["deleted"], json!(true));
     assert!(!file.exists());
-    assert!(fs_delete(&json!({ "path": dir.display().to_string() })).is_err());
-    assert!(fs_delete(&json!({ "path": file.display().to_string() })).is_err());
+    assert!(
+        fs_delete(
+            &json!({ "path": dir.display().to_string() }),
+            std::ptr::null()
+        )
+        .is_err()
+    );
+    assert!(
+        fs_delete(
+            &json!({ "path": file.display().to_string() }),
+            std::ptr::null()
+        )
+        .is_err()
+    );
 
     // existed=true 但 output 缺 backup → 明确报错，不静默
     assert!(
-        fs_restore(&json!({ "output": { "path": file.display().to_string(),
-        "existed": true } }))
+        fs_restore(
+            &json!({ "output": { "path": file.display().to_string(),
+        "existed": true } }),
+            std::ptr::null()
+        )
         .is_err()
     );
 
@@ -160,18 +203,24 @@ fn outside_root_paths_are_rejected() {
     let outside_str = outside_file.display().to_string();
 
     // 读：canonicalize 成功但在根外 → 拒（不是"找不到"）
-    let err = crate::read::fs_read(&json!({ "path": outside_str })).unwrap_err();
+    let err = crate::read::fs_read(&json!({ "path": outside_str }), std::ptr::null()).unwrap_err();
     assert!(err.contains("outside the allowed roots"), "got: {err}");
     // 写 / 删 / 恢复目标同样拒绝
-    assert!(fs_write(&json!({ "path": outside_str, "content": "x" })).is_err());
-    assert!(fs_delete(&json!({ "path": outside_str })).is_err());
+    assert!(
+        fs_write(
+            &json!({ "path": outside_str, "content": "x" }),
+            std::ptr::null()
+        )
+        .is_err()
+    );
+    assert!(fs_delete(&json!({ "path": outside_str }), std::ptr::null()).is_err());
 
     // restore 的 backup 来源校验：伪造 output 把根外文件当备份 → 拒
     // （根外先被允许根检查拦下；根内非 vault 路径由 provenance 拦下——两道都算拒绝）
     let inside = root.join("victim.txt");
     let forged = json!({ "path": inside.display().to_string(),
                          "backup": outside_str, "existed": true });
-    let err = fs_restore(&json!({ "output": forged })).unwrap_err();
+    let err = fs_restore(&json!({ "output": forged }), std::ptr::null()).unwrap_err();
     assert!(
         err.contains("outside the allowed roots") || err.contains("not a tool-fs backup"),
         "got: {err}"
@@ -181,7 +230,13 @@ fn outside_root_paths_are_rejected() {
 
     // `..` 逃逸：归一后落根外
     let escape = root.join("sub").join("..").join("..").join("evil.txt");
-    assert!(fs_write(&json!({ "path": escape.display().to_string(), "content": "x" })).is_err());
+    assert!(
+        fs_write(
+            &json!({ "path": escape.display().to_string(), "content": "x" }),
+            std::ptr::null()
+        )
+        .is_err()
+    );
 
     unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
     let _ = std::fs::remove_dir_all(&root);

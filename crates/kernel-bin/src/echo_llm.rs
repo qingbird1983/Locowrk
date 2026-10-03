@@ -9,9 +9,9 @@ use plugin_api::CallId;
 use serde_json::json;
 
 /// 按调用次序轮转的三段脚本：
-/// 1. plain 回显（1.2.0 即支持）
-/// 2. reverse 回显（1.3.0 新能力，激活后成功）
-/// 3. 再次 reverse（回退 1.2.0 后应失败——证明回退生效）
+/// 1. plain 回显（0.1.0 即支持）
+/// 2. reverse 回显（0.2.0 新能力，激活后成功）
+/// 3. 再次 reverse（回退 0.1.0 后应失败——证明回退生效）
 pub struct ScriptedLlm {
     step: AtomicUsize,
 }
@@ -40,7 +40,7 @@ impl LlmService for ScriptedLlm {
                 json!({ "text": "Hello, Locowrk!", "mode": "plain" }),
             ),
             1 => (
-                "升级后试试 1.3.0 的 reverse 模式。",
+                "升级后试试 0.2.0 的 reverse 模式。",
                 json!({ "text": "Hello", "mode": "reverse" }),
             ),
             _ => (

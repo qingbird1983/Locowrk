@@ -17,8 +17,10 @@
 //! rename 回原位（备份自消费，重复恢复是 no-op，天然幂等）。
 //!
 //! 安全底线（用户 2026-09-29 指定）：所有路径参数 canonicalize 后校验
-//! 允许根前缀——基座在 `plugin_api::fsutil`（允许根 = LOCOWRK_FS_ROOTS，
-//! 缺省只有数据根）；相对路径按宿主进程 CWD 解析且同样过校验。
+//! 允许根前缀——基座在 `plugin_api::fsutil`；允许根 ㉘·B 起围栏跟会话
+//! （vtable `session_context` 的 fs_roots 优先，未归属回落
+//! LOCOWRK_FS_ROOTS，缺省只有数据根）；相对路径按宿主进程 CWD 解析且
+//! 同样过校验。
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 
@@ -215,12 +217,12 @@ impl PluginState for FsState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("tool-fs: {tool} called"));
         match tool {
-            "fs_read" => read::fs_read(&args),
-            "fs_list" => read::fs_list(&args),
-            "fs_grep" => read::fs_grep(&args),
-            "fs_write" => write::fs_write(&args),
-            "fs_delete" => write::fs_delete(&args),
-            "fs_restore" => write::fs_restore(&args),
+            "fs_read" => read::fs_read(&args, self.host),
+            "fs_list" => read::fs_list(&args, self.host),
+            "fs_grep" => read::fs_grep(&args, self.host),
+            "fs_write" => write::fs_write(&args, self.host),
+            "fs_delete" => write::fs_delete(&args, self.host),
+            "fs_restore" => write::fs_restore(&args, self.host),
             other => Err(format!("unknown tool `{other}`")),
         }
     }

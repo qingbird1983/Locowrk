@@ -80,14 +80,18 @@ impl MockSource {
 
 #[async_trait]
 impl ToolSource for MockSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         self.tools
             .get(name)
             .map(|t| Arc::clone(t) as Arc<dyn Tool>)
             .ok_or_else(|| ToolError::NotAvailable(name.to_string()))
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         self.tools.values().map(|t| t.spec.clone()).collect()
     }
 }

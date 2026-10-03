@@ -16,6 +16,7 @@ import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import SettingsSaveRow from "./SettingsSaveRow.vue";
 import SettingsToggle from "./SettingsToggle.vue";
+import SettingsSelect from "./SettingsSelect.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -26,7 +27,18 @@ const form = reactive({
   callTimeoutSecs: 30,
   maxTurnSteps: 8,
   approvalTimeoutSecs: 100,
+  defaultPermissionMode: "ask" as "plan" | "ask" | "acceptEdits" | "auto",
 });
+
+// ㉘·B 新会话权限档缺省（四档；会话级覆盖挂 composer §3.33 切换器）
+const PERM_MODES = ["plan", "ask", "acceptEdits", "auto"] as const;
+const permModeOptions = computed(() =>
+  PERM_MODES.map((m) => ({
+    value: m,
+    label: t(`perm.short.${m}`),
+    desc: t(`perm.desc.${m}`),
+  })),
+);
 
 watch(
   () => settings.view,
@@ -37,6 +49,7 @@ watch(
     form.callTimeoutSecs = v.tools.callTimeoutSecs;
     form.maxTurnSteps = v.tools.maxTurnSteps;
     form.approvalTimeoutSecs = v.tools.approvalTimeoutSecs;
+    form.defaultPermissionMode = v.tools.defaultPermissionMode ?? "ask";
   },
   { immediate: true },
 );
@@ -48,6 +61,7 @@ function save() {
     callTimeoutSecs: form.callTimeoutSecs,
     maxTurnSteps: form.maxTurnSteps,
     approvalTimeoutSecs: form.approvalTimeoutSecs,
+    defaultPermissionMode: form.defaultPermissionMode,
   });
 }
 
@@ -134,6 +148,19 @@ function removeRoot(idx: number) {
             min="0"
             max="86400"
             class="lw-field lw-field-num px-2 text-xs"
+          />
+        </SettingsRow>
+
+        <!-- ㉘·B 新会话权限档缺省（会话级覆盖存会话旁车，切换器即时生效） -->
+        <SettingsRow
+          :title="t('settings.defaultPermissionMode')"
+          :hint="t('settings.defaultPermissionModeHint')"
+          control-id="tools-perm-mode"
+        >
+          <SettingsSelect
+            v-model="form.defaultPermissionMode"
+            :entries="permModeOptions"
+            :label="t('settings.defaultPermissionMode')"
           />
         </SettingsRow>
       </SettingsGroup>

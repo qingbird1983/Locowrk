@@ -46,6 +46,7 @@ mod idle;
 mod llm;
 mod memory;
 mod notifications;
+mod permission_mode;
 mod plugins_root;
 mod runner;
 mod scheduler;
@@ -63,6 +64,8 @@ mod workspace;
 mod tests;
 #[cfg(test)]
 mod tests_approval;
+#[cfg(test)]
+mod tests_permission;
 #[cfg(test)]
 mod tests_plugins_root;
 #[cfg(test)]
@@ -170,6 +173,7 @@ pub fn run() {
             commands::session_history,
             commands::session_rename,
             commands::session_associate,
+            commands::session_set_permission_mode,
             commands::session_delete,
             commands::session_search,
             commands::session_export,

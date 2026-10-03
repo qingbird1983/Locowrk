@@ -22,11 +22,16 @@ impl KernelToolSource {
 
 #[async_trait]
 impl ToolSource for KernelToolSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    // headless 无会话模式概念（㉘·B）：目录不过滤，语义零变化
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         self.inner.resolve(name)
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         self.inner.list_tools()
     }
 }

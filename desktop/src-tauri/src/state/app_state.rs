@@ -32,6 +32,9 @@ pub struct AppState {
     pub plugins: Arc<PluginService>,
     /// 审批中心（agent_approve / list_pending_approvals 从这里走）。
     pub approval: Arc<ApprovalHub>,
+    /// 会话级权限模式存储（㉘·B）：旁车持久 + 缓存，决策表与目录围栏
+    /// 的数据源；session_set_permission_mode 命令写穿。
+    pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
     /// UI 事件出口（§12.2）：runner 与审批请求共用一个 sink。
     pub sink: Arc<dyn EventSink>,
     /// session_id → 会话锁。会话在锁内串行聊天（tokio Mutex 可跨 await）；

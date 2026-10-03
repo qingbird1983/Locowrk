@@ -1112,6 +1112,37 @@ impl Kernel {
 > 按设置的 provider 强制路由（不做模型名前缀魔法），base_url 覆盖端点，
 > api_key 只在后端读取。model 未配置时回落演示替身（开箱即用）。
 
+> **权限模式决策表（㉘·B，2026-10-04 借鉴 PI-Desktop，用户裁定"顺带权限审批一起借鉴"）**：
+> 档位是**会话级**属性（旁车 `<id>.meta.json` `permission_mode`；缺省取设置
+> `tools.defaultPermissionMode`，新会话缺省 = `ask`）。裁决发生在桌面端
+> `ApprovalResolver` 实现内，内核只多带两件事：
+>
+> ① **`ToolSource` 会话感知**——`resolve` / `list` 增加 `session_id: Option<&str>` 首参。
+> 目录按会话过滤由此成为可能：**计划模式 = 目录级围栏**（非 Pure 工具 `list` 不出、
+> `resolve` 报 `NotAvailable`——"模型看不见的工具才不会去调"，PI 同款结论），
+> 也是未来"插件按项目过滤可见性"的落点。
+>
+> ② **审批 consult 扩到非 Pure**——Kernel 对 `Compensable` 调用同样咨询决议者
+> （`询问` 档语义 = 有 undo 的写类也要问）；**无决议者（headless）时 `Compensable`
+> 照旧放行、`Irreversible` 照旧 fail-safe 拒绝——headless 语义零变化**。Pure 永不
+> 咨询（低险直通，所有档位同）。决策表（序即优先级，先命中先裁决）：
+>
+> | 序 | 门 | 行为 |
+> |---|---|---|
+> | 1 | 计划档 | 非 Pure 一律拒绝、不弹卡（正常路径已被目录过滤，此处纵深防御） |
+> | 2 | 外部路径门 | `shell` / `sandbox_run` 命令文本扫出围栏外绝对路径 → 强制弹卡且**只许一次**（载荷 `external:true`，不进豁免集、`完全` 档也不能跳过） |
+> | 3 | 模式放行 | `完全` = 全放；`自动编辑` = 仅 `Compensable` 放；`询问` = 落到决策卡 |
+> | 4 | 会话豁免 | `(session_id, tool)` 命中 → 放行（「允许本次对话」既有语义） |
+> | 5 | 决策卡 | 弹卡（豁免三键 / 守夜超时等既有语义不变） |
+>
+> 自动放行照写 `ApprovalDecided`（审计不缺；reason 用 `mode:*` 前缀，前端据此不渲染
+> 记录条）。**围栏跟会话**：FFI `CallContext` 追加 `fs_roots` 字段（serde 缺省空表，
+> 向后兼容）——桌面端对**归属会话**下发 `[数据根, 项目工作区]`、未归属会话不下发
+> （插件回落 `LOCOWRK_FS_ROOTS` 既有全局语义，headless 同）；tool-fs / tool-shell
+> （路径类）/ tool-git 经 `fsutil::effective_roots` 取调用期根。结构化路径工具
+> （fs/edit/git）出围栏仍 fail-closed 拒绝（既有契约不变，拒绝文案引导改走 shell 审批路）；
+> 三类硬底线（路径逃逸 / SSRF / ABI 边界）住在插件内，任何档位不削弱。
+
 ---
 
 # 第二部分：工程组织

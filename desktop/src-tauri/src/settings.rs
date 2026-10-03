@@ -295,6 +295,7 @@ impl SettingsStore {
                 fs_roots: s.tools.fs_roots.clone(),
                 max_turn_steps: s.tools.max_turn_steps,
                 approval_timeout_secs: s.tools.approval_timeout_secs,
+                default_permission_mode: s.tools.default_permission_mode.clone(),
             },
             shell: ShellSettingsView {
                 unlock_risky: s.shell.unlock_risky,

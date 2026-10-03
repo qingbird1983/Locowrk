@@ -89,9 +89,10 @@ impl Kernel {
     }
 
     /// 工具目录快照：目录服务缺失 = 空表（纯聊天无需 ToolSource，§7.2）。
-    pub(super) async fn tool_catalog(&self) -> Vec<ToolSpec> {
+    /// ㉘·B：带会话身份（目录可按会话过滤，计划模式 = 非 Pure 不出目录）。
+    pub(super) async fn tool_catalog(&self, session_id: Option<&str>) -> Vec<ToolSpec> {
         match self.scoped_dyn::<dyn ToolSource>() {
-            Ok(source) => source.list().await,
+            Ok(source) => source.list(session_id).await,
             // 目录没装配就不给模型工具；真调到不存在的工具仍会走
             // resolve 的 NotAvailable 失败路径，不会静默
             Err(_) => Vec::new(),

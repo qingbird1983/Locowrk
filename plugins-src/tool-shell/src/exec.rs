@@ -10,6 +10,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use plugin_api::HostVtable;
 use plugin_api::serde_json::{Value, json};
 
 use crate::policy::Decision;
@@ -123,7 +124,11 @@ pub(crate) fn shell_exec(
 
 /// 只读工具（shell_read）入口：只读表 → 路径校验（fsutil 同源根）→
 /// 执行。路径出根在这里被拒（降级：改用 shell 工具走审批）。
-pub(crate) fn shell_read_exec(args: &Value, defaults: &RunDefaults) -> Result<Value, String> {
+pub(crate) fn shell_read_exec(
+    args: &Value,
+    defaults: &RunDefaults,
+    host: *const HostVtable,
+) -> Result<Value, String> {
     let command = args
         .get("command")
         .and_then(Value::as_str)
@@ -133,7 +138,7 @@ pub(crate) fn shell_read_exec(args: &Value, defaults: &RunDefaults) -> Result<Va
         Decision::Deny { reason } => return Err(reason),
     };
     let cwd = cwd_of(args)?;
-    crate::paths::ensure_readonly_scope(&cargs, cwd.as_deref())?;
+    crate::paths::ensure_readonly_scope(&cargs, cwd.as_deref(), host)?;
     run(command, program, cargs, args, cwd, defaults)
 }
 

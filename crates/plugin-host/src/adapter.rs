@@ -69,14 +69,17 @@ impl Tool for SabiToolAdapter {
         // 同步 FFI 丢到 blocking 池，不阻塞 reactor（§5.6 纪律三）。
         // ㉘：blocking 线程上预置调用期会话上下文（session_id + 解析出的
         // 项目根），插件经 vtable `session_context` 反向查询；RAII guard
-        // 保证 panic / 提前返回也清干净。解析器缺席（headless）= None。
+        // 保证 panic / 提前返回也清干净。解析器缺席（headless）= 全缺省。
+        // ㉘·B：解析器一并返回 fs_roots（围栏跟会话）。
         tokio::task::spawn_blocking(move || {
-            let workspace = session_id
+            let ctx = session_id
                 .as_deref()
-                .and_then(crate::host_vtable::workspace_of_session);
+                .map(crate::host_vtable::session_context_of)
+                .unwrap_or_default();
             let _guard = crate::host_vtable::call_context_guard(plugin_api::ffi::CallContext {
-                session_id,
-                workspace,
+                session_id: ctx.session_id,
+                workspace: ctx.workspace,
+                fs_roots: ctx.fs_roots,
             });
             inst.call_blocking(&name_for_task, &args)
         })

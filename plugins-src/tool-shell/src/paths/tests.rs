@@ -73,10 +73,15 @@ fn inside_paths_pass_including_dotdot_normalization() {
             s("missing-pattern"),
         ],
         Some(&env.root),
+        std::ptr::null(),
     );
     assert!(ok.is_ok(), "{ok:?}");
     // `..` 归一后仍在根内（cwd 在子目录，参数回父级）
-    let ok = ensure_readonly_scope(&[s(".."), s("file.txt")], Some(&env.root.join("sub")));
+    let ok = ensure_readonly_scope(
+        &[s(".."), s("file.txt")],
+        Some(&env.root.join("sub")),
+        std::ptr::null(),
+    );
     assert!(ok.is_ok(), "{ok:?}");
 }
 
@@ -84,7 +89,12 @@ fn inside_paths_pass_including_dotdot_normalization() {
 fn relative_escape_is_denied() {
     let _g = ENV_LOCK.lock().unwrap();
     let env = Env::new("rel-escape");
-    let err = ensure_readonly_scope(&[s("../outside/secret.txt")], Some(&env.root)).unwrap_err();
+    let err = ensure_readonly_scope(
+        &[s("../outside/secret.txt")],
+        Some(&env.root),
+        std::ptr::null(),
+    )
+    .unwrap_err();
     assert!(err.contains("outside the allowed roots"), "{err}");
 }
 
@@ -93,11 +103,23 @@ fn absolute_outside_is_denied() {
     let _g = ENV_LOCK.lock().unwrap();
     let env = Env::new("abs-escape");
     let abs = env.outside.join("secret.txt");
-    let err = ensure_readonly_scope(&[abs.display().to_string()], Some(&env.root)).unwrap_err();
+    let err = ensure_readonly_scope(
+        &[abs.display().to_string()],
+        Some(&env.root),
+        std::ptr::null(),
+    )
+    .unwrap_err();
     assert!(err.contains("outside the allowed roots"), "{err}");
     // 绝对路径在根内 → 放行
     let abs_in = env.root.join("file.txt");
-    assert!(ensure_readonly_scope(&[abs_in.display().to_string()], Some(&env.root)).is_ok());
+    assert!(
+        ensure_readonly_scope(
+            &[abs_in.display().to_string()],
+            Some(&env.root),
+            std::ptr::null()
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -105,16 +127,25 @@ fn flag_attached_and_eq_value_forms_are_denied() {
     let _g = ENV_LOCK.lock().unwrap();
     let env = Env::new("flag-forms");
     // 短选项贴值（规则 3：带分隔符即拒，不论存在与否）
-    let err = ensure_readonly_scope(&[s("-f/etc/passwd")], Some(&env.root)).unwrap_err();
+    let err = ensure_readonly_scope(&[s("-f/etc/passwd")], Some(&env.root), std::ptr::null())
+        .unwrap_err();
     assert!(err.contains("path separator"), "{err}");
-    let err = ensure_readonly_scope(&[s("-fC:\\Windows\\win.ini")], Some(&env.root)).unwrap_err();
+    let err = ensure_readonly_scope(
+        &[s("-fC:\\Windows\\win.ini")],
+        Some(&env.root),
+        std::ptr::null(),
+    )
+    .unwrap_err();
     assert!(err.contains("path separator"), "{err}");
     // `--flag=值` 无分隔符逃逸（`..`）：resolve 出根即拒（带分隔符的
     // 值会被上面的规则 3 先拦，这里测的是 = 值校验自己的职责面）
-    let err = ensure_readonly_scope(&[s("--file=..")], Some(&env.root)).unwrap_err();
+    let err =
+        ensure_readonly_scope(&[s("--file=..")], Some(&env.root), std::ptr::null()).unwrap_err();
     assert!(err.contains("outside the allowed roots"), "{err}");
     // 对照：= 值在根内（无分隔符的相对文件）放行
-    assert!(ensure_readonly_scope(&[s("--file=file.txt")], Some(&env.root)).is_ok());
+    assert!(
+        ensure_readonly_scope(&[s("--file=file.txt")], Some(&env.root), std::ptr::null()).is_ok()
+    );
 }
 
 #[test]
@@ -122,7 +153,7 @@ fn cwd_outside_roots_denies_whole_call() {
     let _g = ENV_LOCK.lock().unwrap();
     let env = Env::new("cwd-outside");
     // 裸 ls 列的就是 cwd——cwd 出根整条拒绝，即使没有任何路径参数
-    let err = ensure_readonly_scope(&[], Some(&env.outside)).unwrap_err();
+    let err = ensure_readonly_scope(&[], Some(&env.outside), std::ptr::null()).unwrap_err();
     assert!(err.contains("working directory"), "{err}");
     // 降级文案要教模型换工具
     assert!(err.contains("`shell` tool"), "{err}");

@@ -107,17 +107,14 @@ pub fn init_state(app: AppHandle) -> AppState {
         ));
     }
 
-    // S1：高危解锁开关插件加载前注入 env（tool-shell init 读一次，
-    // 改动重启生效）；硬锁类不受影响。
+    // S1：高危解锁开关插件加载前注入 env（tool-shell init 读一次，改动重启生效）；硬锁类不受影响。
     if settings.shell_unlock_risky() {
         std::env::set_var("LOCOWRK_SHELL_UNLOCK_RISK", "1");
     }
-    // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后
-    // 命令层重注入即生效，无需重启。
+    // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后命令层重注入即生效，无需重启。
     apply_fs_roots_env(&settings);
 
-    // 模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身）。
-    // ⑬：句柄留 AppState 一份给隐式提取（同一实例）。
+    // 模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身）。⑬：句柄留 AppState 一份给隐式提取（同一实例）。
     let llm: Arc<dyn LlmService> = Arc::new(AppLlm::new(Arc::clone(&settings)));
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
     // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）
@@ -125,10 +122,16 @@ pub fn init_state(app: AppHandle) -> AppState {
         crate::events::StreamChunkSink::new(app.clone()),
     ));
 
-    // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储。㉘ 会话→项目解析器一次构造三处消费（插件调用期上下文/注入键位/经历键位）。
-    let workspace_of = crate::workspace::session_workspace_resolver(root.join("sessions"));
-    plugin_host::set_session_workspace_resolver(Arc::clone(&workspace_of));
+    // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储。㉘ 会话→项目解析器一次构造多处消费：插件调用期上下文（workspace + ㉘·B fs_roots 围栏）/注入键位/经历键位。
+    let session_ctx = crate::workspace::session_context_resolver(sessions_dir.clone(), root.clone());
+    plugin_host::set_session_context_resolver(Arc::clone(&session_ctx));
+    let workspace_of = crate::workspace::workspace_view(Arc::clone(&session_ctx));
     let memory = Arc::new(MemoryStore::new(&root, Arc::clone(&workspace_of)));
+    // ㉘·B 会话级权限模式存储（旁车持久 + 缓存；决策表/目录围栏数据源）
+    let permission_modes = Arc::new(crate::permission_mode::PermissionModeStore::new(
+        sessions_dir.clone(),
+        settings.default_permission_mode(),
+    ));
 
     // 经历记忆库（⑬）：experiences.sqlite3；打不开只丢经历。
     let experiences = match ExperienceDb::open(&root.join("experiences.sqlite3")) {
@@ -139,16 +142,14 @@ pub fn init_state(app: AppHandle) -> AppState {
         }
     };
 
-    // agent/request 决策环（exposure 文档 §7，注册次序 = 执行次序）：
-    // ToolExposure → Memory-Inject → ctx-compact，配置经 RwLock 热换入。
+    // agent/request 决策环（exposure 文档 §7，注册次序 = 执行次序）：ToolExposure → Memory-Inject → ctx-compact，配置经 RwLock 热换入。
     let exposure_cfg: Arc<RwLock<ToolExposureConfig>> =
         Arc::new(RwLock::new(settings.exposure_config()));
     let embed_exposure_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
     let exposure = Arc::new(ToolExposure::new(
         UsageEwma::new(Arc::clone(&usage)),
         Arc::clone(&exposure_cfg),
-        // ⑬ 语义检索信号：EmbedPort 未配置/失败 = 空表退回两层打分（fail-open）
-        Some(Arc::new(Retriever::new(embed_exposure_port))),
+        Some(Arc::new(Retriever::new(embed_exposure_port))), // ⑬ 语义信号：未配置 = 空表退回两层打分（fail-open）
     ));
     ctx.events
         .on_waterfall(points::REQUEST, Arc::clone(&exposure) as Arc<_>);
@@ -182,8 +183,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::new(CtxCompact::new(ctx.clone(), Arc::clone(&compact_cfg))),
     );
 
-    // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。
-    // Audit 挂外侧（被拒也留痕）；audit.jsonl 只增不改；S2 超时可配热换入。
+    // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。Audit 挂外侧（被拒也留痕）；audit.jsonl 只增不改；S2 超时可配热换入。
     let timeout_cfg: Arc<RwLock<Duration>> = Arc::new(RwLock::new(settings.call_timeout()));
     let mw: Vec<Arc<dyn Middleware>> = vec![
         Arc::new(Tracing),
@@ -193,11 +193,16 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::new(Timeout::hot(Arc::clone(&timeout_cfg))),
         Arc::new(CircuitBreaker::new(5, Duration::from_secs(30))),
     ];
-    // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）
-    let approval = Arc::new(ApprovalHub::with_timeout(
-        Arc::clone(&sink),
-        Duration::from_secs(settings.approval_timeout_secs()),
-    ));
+    // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）。
+    // ㉘·B：接权限模式存储（四档决策表）+ 会话→工作区（环境行/外部路径围栏）
+    let approval = Arc::new(
+        ApprovalHub::with_timeout(
+            Arc::clone(&sink),
+            Duration::from_secs(settings.approval_timeout_secs()),
+        )
+        .with_modes(Arc::clone(&permission_modes))
+        .with_workspace(Arc::clone(&workspace_of)),
+    );
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
     // ⑮ 子 Agent 快照表：每 step 刷新父转录前缀；subagent_run 执行时 fork
     let gate = Arc::new(SubagentGate::default());
@@ -207,13 +212,9 @@ pub fn init_state(app: AppHandle) -> AppState {
             .with_subagent(Arc::clone(&gate)),
     );
 
-    // 工具目录：始终提供（哪怕 registry 为空 → resolve 报 NotAvailable，
-    // 错误以失败的 ToolResult 闭合，而不是服务缺失让整步崩掉，§7.2）。
-    // 内置：send_email 是阶段六演示替身（不可逆 → 审批）；⑭ 调度三件套；
-    // ⑮ subagent_run——目录提供在 kernel 之后（subagent_run 持内核 Arc，
-    // Kernel → Context → ToolSource → 工具 → Kernel 组装期有意成环）。
-    // search_tools（⑫）持全目录视图（含 hidden）+ usage 高频回退 +
-    // ⑬ 语义检索（未配置降级关键词）。
+    // 工具目录：始终提供（registry 空 → resolve 报 NotAvailable，错误以失败 ToolResult 闭合，§7.2）。
+    // 内置：send_email 演示替身（不可逆 → 审批）；⑭ 调度三件套；⑮ subagent_run（持内核 Arc，组装期有意成环）；
+    // search_tools（⑫）持全目录视图（含 hidden）+ usage 高频回退 + ⑬ 语义检索（未配置降级关键词）。
     let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
     // §3.16 子转录接收器：子自身段落 sub-transcripts/（§8.2 通路）
     let sub_tx = Arc::new(crate::sub_transcript::SubTranscriptStore::new(
@@ -245,7 +246,9 @@ pub fn init_state(app: AppHandle) -> AppState {
         search_catalog,
         Arc::clone(&usage),
         Some(embed_tool_port),
-    ));
+    ))
+    // ㉘·B 计划模式目录围栏（非 Pure 不出目录、resolve 即拒）
+    .with_modes(Arc::clone(&permission_modes));
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(main_source));
 
     // 插件编排（§11.2）：数据根缺省 ~/.Locowrk（LOCOWRK_DATA_DIR
@@ -274,9 +277,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     if let Err(e) = plugins.startup_reconcile() {
         tracing::warn!("startup reconcile failed: {e}");
     }
-    // 2. 开发态装载 plugins/（阶段五逻辑；找不到不致命）。S2：跳过
-    //    lockfile 已接管 / 已停用的 id；装载成功即登记 Builtin 条目——
-    //    停用状态落 lockfile 持久化，重启不复活。
+    // 2. 开发态装载 plugins/（找不到不致命）。S2：跳过 lockfile 已接管/已停用 id；装载即登记 Builtin 条目（停用落 lockfile，重启不复活）。
     match builtin_root {
         Some(proot) => {
             let skip: std::collections::HashSet<String> =
@@ -299,9 +300,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 3. 安装态已在对账中恢复；4. 状态广播转发给 UI（§13.4）
     forward_plugin_states(app.clone(), plugins.subscribe());
 
-    // 5. ⑬ 自动停用巡检（exposure 文档 §8.8 唯一例外条款，缺省关）：
-    //    开启后启动时清点一遍闲置超期的第三方插件。spawn 化——逐条
-    //    set_enabled 走插件装载，不阻塞窗口出现。
+    // 5. ⑬ 自动停用巡检（exposure 文档 §8.8 例外条款，缺省关；spawn 化不阻塞窗口出现）
     let days = settings.plugins().auto_disable_idle_days;
     if days > 0 {
         let plugins2 = Arc::clone(&plugins);
@@ -313,8 +312,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         });
     }
 
-    // 6. ⑭ 调度引擎（库可用时）：1s tick 扫到期任务；启动补跑没有单独
-    //    路径——错过的 run_at 落在过去，第一次 tick 的 due() 天然覆盖。
+    // 6. ⑭ 调度引擎（库可用时）：1s tick 扫到期任务；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑。
     if let Some(db) = &schedules {
         crate::scheduler::spawn_engine(
             Arc::clone(db),
@@ -334,6 +332,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         kernel,
         plugins,
         approval,
+        permission_modes,
         sink,
         sessions,
         sessions_dir,

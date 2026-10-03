@@ -24,6 +24,7 @@ import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { Icon } from "../../lib/icons";
 import ContextUsagePopover from "./ContextUsagePopover.vue";
+import PermissionModePicker from "./PermissionModePicker.vue";
 
 const emit = defineEmits<{ height: [h: number] }>();
 
@@ -142,8 +143,10 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDo
         @keydown="onKeydown"
       />
       <div class="composer__toolbar">
-        <!-- 左组（附件 + / 权限模式 chip）随后端能力补位（§8.2），落地前为空 -->
-        <div class="composer__left" />
+        <!-- 左组：权限模式切换器（§3.33，㉘·B 落地）；附件随后端能力补位（§8.2） -->
+        <div class="composer__left">
+          <PermissionModePicker />
+        </div>
         <div class="composer__right">
           <button
             v-if="chat.contextUsage"

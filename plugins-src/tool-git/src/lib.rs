@@ -35,7 +35,7 @@ use std::ffi::CString;
 use std::path::{Path, PathBuf};
 
 use plugin_api::ffi::log_level;
-use plugin_api::fsutil::{allowed_roots, resolve_existing};
+use plugin_api::fsutil::{effective_roots, resolve_existing};
 use plugin_api::manifest::{
     Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
 };
@@ -232,12 +232,12 @@ impl PluginState for GitState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("tool-git: {tool} called"));
         match tool {
-            "git_status" => read::git_status(&args),
-            "git_diff" => read::git_diff(&args),
-            "git_log" => read::git_log(&args),
-            "git_commit" => write::git_commit(&args),
-            "git_push" => write::git_push(&args),
-            "git_undo_commit" => write::git_undo_commit(&args),
+            "git_status" => read::git_status(&args, self.host),
+            "git_diff" => read::git_diff(&args, self.host),
+            "git_log" => read::git_log(&args, self.host),
+            "git_commit" => write::git_commit(&args, self.host),
+            "git_push" => write::git_push(&args, self.host),
+            "git_undo_commit" => write::git_undo_commit(&args, self.host),
             other => Err(format!("unknown tool `{other}`")),
         }
     }
@@ -264,15 +264,16 @@ pub(crate) fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result
 
 /// repo 参数：canonicalize + 允许根校验（仓库可以是仓库根，也可以是仓库
 /// 内目录——`git -C` 会向上发现 .git）。
-pub(crate) fn resolve_repo(args: &Value) -> Result<PathBuf, String> {
+pub(crate) fn resolve_repo(args: &Value, host: *const HostVtable) -> Result<PathBuf, String> {
     let p = arg_path(args)?;
-    let roots = allowed_roots()?;
+    // ㉘·B：围栏跟会话（vtable session_context 的 fs_roots 优先，env 回落）
+    let roots = unsafe { effective_roots(host) }?;
     resolve_existing(Path::new(&p), &roots)
 }
 
 /// output.repo 平铺还原用（undo 契约）。
-pub(crate) fn resolve_repo_str(p: &str) -> Result<PathBuf, String> {
-    let roots = allowed_roots()?;
+pub(crate) fn resolve_repo_str(p: &str, host: *const HostVtable) -> Result<PathBuf, String> {
+    let roots = unsafe { effective_roots(host) }?;
     resolve_existing(Path::new(p), &roots)
 }
 

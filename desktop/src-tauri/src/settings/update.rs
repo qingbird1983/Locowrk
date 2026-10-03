@@ -172,6 +172,15 @@ impl SettingsStore {
                 }
                 next.tools.approval_timeout_secs = secs;
             }
+            if let Some(mode) = u.default_permission_mode {
+                // ㉘·B 新会话权限档缺省：只收四档合法值（会话级覆盖存旁车）
+                if crate::permission_mode::PermissionMode::parse(&mode).is_none() {
+                    return Err(format!(
+                        "权限档缺省 {mode:?} 非法（plan / ask / acceptEdits / auto）"
+                    ));
+                }
+                next.tools.default_permission_mode = mode;
+            }
         }
         if let Some(u) = shell {
             if let Some(e) = u.unlock_risky {

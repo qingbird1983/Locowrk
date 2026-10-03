@@ -49,6 +49,23 @@ pub async fn session_associate(
         .map_err(|e| format!("关联失败: {e}"))
 }
 
+/// 会话级权限模式（㉘·B，UI shell 文档 §3.33 切换器的后端）：写旁车
+/// `permission_mode`（重启保持）+ 模式存储缓存（即时生效，运行中可切）。
+/// 四档之外取值拒绝（plan / ask / acceptEdits / auto）。
+#[tauri::command]
+pub async fn session_set_permission_mode(
+    session_id: String,
+    mode: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let m = crate::permission_mode::PermissionMode::parse(&mode)
+        .ok_or_else(|| format!("权限档 {mode:?} 非法（plan / ask / acceptEdits / auto）"))?;
+    state
+        .permission_modes
+        .set_session_mode(&session_id, m)
+        .map_err(|e| format!("写入失败: {e}"))
+}
+
 /// 会话删除：忙锁守卫——运行中的会话锁被整轮持有，默认拒绝；开发者开关
 /// `developer.allowDeleteRunningSession`（后端直读设置，不信前端转述）
 /// 放行时强制删（运行轮余段会重建日志文件）。删除后同步剔除内存条目与

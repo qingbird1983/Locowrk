@@ -3,15 +3,16 @@
 
 use std::path::{Path, PathBuf};
 
-use plugin_api::fsutil::{allowed_roots, resolve_for_write};
+use plugin_api::HostVtable;
+use plugin_api::fsutil::resolve_for_write;
 use plugin_api::serde_json::{Value, json};
 
 use crate::proc::{require_ok, run_git};
 use crate::read::head_of;
 use crate::{resolve_repo, resolve_repo_str};
 
-pub(crate) fn git_commit(args: &Value) -> Result<Value, String> {
-    let repo = resolve_repo(args)?;
+pub(crate) fn git_commit(args: &Value, host: *const HostVtable) -> Result<Value, String> {
+    let repo = resolve_repo(args, host)?;
     let message = args
         .get("message")
         .and_then(Value::as_str)
@@ -48,7 +49,7 @@ pub(crate) fn git_commit(args: &Value) -> Result<Value, String> {
         // 纯校验先于任何 git 动作：相对路径按仓库根解析（不是宿主 CWD），
         // canonicalize 后必须仍在仓库内（允许根由 resolve_for_write 把关）
         for p in &add {
-            ensure_path_in_repo(&repo, p)?;
+            ensure_path_in_repo(&repo, p, host)?;
         }
         // `--` 之后的路径不会被当成选项（挡 `-oXxx` 式 argv 注入）
         let mut argv: Vec<&str> = vec!["add", "--"];
@@ -71,13 +72,13 @@ pub(crate) fn git_commit(args: &Value) -> Result<Value, String> {
 
 /// add 路径校验：相对路径按仓库根拼绝对，canonicalize（最深存在祖先回退，
 /// 新文件也允许）后必须仍在仓库内。
-fn ensure_path_in_repo(repo: &Path, p: &str) -> Result<PathBuf, String> {
+fn ensure_path_in_repo(repo: &Path, p: &str, host: *const HostVtable) -> Result<PathBuf, String> {
     let full = if Path::new(p).is_absolute() {
         PathBuf::from(p)
     } else {
         repo.join(p)
     };
-    let roots = allowed_roots()?;
+    let roots = unsafe { plugin_api::fsutil::effective_roots(host) }?;
     let resolved = resolve_for_write(&full, &roots)?;
     if !resolved.starts_with(repo) {
         return Err(format!("git_commit: path `{p}` is outside the repository"));
@@ -97,8 +98,8 @@ fn valid_refname(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '/' | '-' | '_'))
 }
 
-pub(crate) fn git_push(args: &Value) -> Result<Value, String> {
-    let repo = resolve_repo(args)?;
+pub(crate) fn git_push(args: &Value, host: *const HostVtable) -> Result<Value, String> {
+    let repo = resolve_repo(args, host)?;
     let remote = args
         .get("remote")
         .and_then(Value::as_str)
@@ -127,7 +128,7 @@ pub(crate) fn git_push(args: &Value) -> Result<Value, String> {
 /// undo 入口（契约 `{"call_id","args","output"}`）：只读 output.{repo, commit}。
 /// HEAD 已移动（之后又有提交 / reset / checkout）时拒绝——soft reset 只会
 /// 回退"当前 HEAD 的上一条"，对错位提交执行就是改写错误的历史。
-pub(crate) fn git_undo_commit(args: &Value) -> Result<Value, String> {
+pub(crate) fn git_undo_commit(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let output = args.get("output").unwrap_or(args);
     let repo_str = output.get("repo").and_then(Value::as_str).ok_or_else(|| {
         "git_undo_commit: missing `output.repo` (pass the original git_commit result)".to_string()
@@ -139,7 +140,7 @@ pub(crate) fn git_undo_commit(args: &Value) -> Result<Value, String> {
             "git_undo_commit: missing `output.commit` (pass the original git_commit result)"
                 .to_string()
         })?;
-    let repo = resolve_repo_str(repo_str)?;
+    let repo = resolve_repo_str(repo_str, host)?;
 
     let head = head_of(&repo)?;
     if head != commit {

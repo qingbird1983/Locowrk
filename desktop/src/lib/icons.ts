@@ -24,6 +24,7 @@ export type IconName =
   | "edit"
   | "sendUp"
   | "stop"
+  | "shield"
   | "bot"
   | "folder"
   | "terminal"
@@ -60,6 +61,8 @@ const PATHS: Record<IconName, string> = {
   edit: '<path d="M11.2 2.6l2.2 2.2-7.8 7.8-2.8.6.6-2.8Z"/>',
   sendUp: '<path d="M8 12.6V4M4.4 7.6 8 4l3.6 3.6"/>',
   stop: '<rect x="5.2" y="5.2" width="5.6" height="5.6" rx="1.2" fill="currentColor" stroke="none"/>',
+  shield:
+    '<path d="M8 1.8l5.4 2.3v4.1c0 3.6-2.3 6.8-5.4 8-3.1-1.2-5.4-4.4-5.4-8V4.1L8 1.8z" stroke-linejoin="round"/>',
   bot: '<rect x="3.2" y="5.4" width="9.6" height="7.4" rx="2.4"/><circle cx="6.4" cy="9.1" r=".85" fill="currentColor" stroke="none"/><circle cx="9.6" cy="9.1" r=".85" fill="currentColor" stroke="none"/><path d="M8 5.4V3"/>',
   folder:
     '<path d="M2.6 5.2a1.4 1.4 0 0 1 1.4-1.4h2.4l1.4 1.6h4.2a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H4a1.4 1.4 0 0 1-1.4-1.4Z"/>',

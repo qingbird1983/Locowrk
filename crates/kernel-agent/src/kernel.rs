@@ -89,18 +89,24 @@ pub trait LlmService: Send + Sync + 'static {
 /// Registry 一无所知，"工具目录"也只是个服务（§7.2）。
 #[async_trait]
 pub trait ToolSource: Send + Sync + 'static {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError>;
+    /// `session_id`（㉘·B）：目录可按会话过滤——计划模式 = 目录级围栏
+    /// （非 Pure 工具不出目录、解析报 NotAvailable），未来"插件按项目
+    /// 过滤可见性"同落点。内核只透传 id，不做任何模式判断。
+    async fn resolve(
+        &self,
+        session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError>;
     /// 全目录快照：主循环每个 step 枚举给 LLM（真实模型要看到工具才会调）。
     /// 只读枚举不失败——没有目录服务就返回空表，聊天照常。
-    async fn list(&self) -> Vec<ToolSpec>;
+    async fn list(&self, session_id: Option<&str>) -> Vec<ToolSpec>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepOutcome {
     /// 正常完成一步（含工具执行与审批闭合）。
     /// （request-error 的 Retry 在 step 内部闭环受预算约束，不再对外返回。）
-    /// `streamed`（⑳）：本步 LLM 文本 delta 已经流式通道发出（sink 在册），
-    /// 投影方据此跳过整段 chunk 防重复；false = 无 sink 的纯非流式路径。
+    /// `streamed`（⑳）：本步 LLM 文本 delta 已流式发出（sink 在册），投影方据此跳过整段 chunk 防重复；false = 无 sink 纯非流式路径。
     Continue { streamed: bool },
 }
 
@@ -142,6 +148,9 @@ pub struct Kernel {
     /// `subagent_run` 工具据此 fork 子会话。
     sub: Option<Arc<crate::subagent::SubagentGate>>,
 }
+
+#[cfg(test)]
+mod tests;
 
 impl Kernel {
     pub fn new(ctx: Arc<Context>, mw: Vec<Arc<dyn Middleware>>) -> Self {
@@ -249,8 +258,9 @@ impl Kernel {
         let messages = self.waterfall_pre(messages).await?;
 
         // 工具目录快照随请求发给模型（真实模型要看到工具才会调；目录服务
-        // 缺失时视为空表，纯聊天不要求装配 ToolSource）
-        let tools = self.tool_catalog().await;
+        // 缺失时视为空表，纯聊天不要求装配 ToolSource）。㉘·B：带会话身份，
+        // 目录可按会话过滤（计划模式 = 非 Pure 不出目录）
+        let tools = self.tool_catalog(session_id).await;
 
         // request-error 的 Retry 在 step 内部闭环，受重试预算约束（§7.2）
         let (resp, compacted, streamed) =
@@ -288,11 +298,25 @@ impl Kernel {
             // ⑮：调用请求携带会话身份（审批门给子 Agent 打标识用），
             // 与下方 CallCtx.session_id 同源同点
             call.session_id = session_id.map(str::to_owned);
-            let tool = tools
+            // 解析失败（目录围栏拒掉 / 工具不存在）也以失败 ToolResult
+            // 闭合——AssistantMessage 已声明 tool_calls，悬空会让下一轮
+            // 请求被供应商拒收（"insufficient tool messages"，㉘·B 走查实抓）
+            let tool = match tools
                 .as_ref()
                 .expect("非空 tool_calls 已解析目录")
-                .resolve(&call.tool)
-                .await?;
+                .resolve(call.session_id.as_deref(), &call.tool)
+                .await
+            {
+                Ok(t) => t,
+                Err(e) => {
+                    session.append(SessionEvent::ToolResult {
+                        call_id: call.id.clone(),
+                        output: Value::Null,
+                        error: Some(e.to_string()),
+                    });
+                    continue;
+                }
+            };
 
             // 先写日志再执行（纪律 5）：审批与执行都发生在 ToolCall 事件之后；
             // 崩溃后 replay 能识别"执行中崩溃"的悬空调用（§7.2）。
@@ -305,10 +329,14 @@ impl Kernel {
                 side_effect: tool.spec().side_effect.clone(),
             });
 
-            // 不可逆工具先审批；决策本身作为 ApprovalDecided 事件写入日志
-            // （纪律 9）。被拒调用当场以 denied 的 ToolResult 闭合——replay
-            // 只会把"执行中崩溃"视为悬空，被拒调用不留悬空（§7.2）。
-            if matches!(tool.spec().side_effect, SideEffect::Irreversible) {
+            // 非 Pure 调用先过审批门（㉘·B：consult 扩到 Compensable——
+            // `询问` 档语义 = 有 undo 的写类也要问；四档决策表住在决议者
+            // 实现内，内核只透传请求）。无决议者时 fail-safe（纪律 9）：
+            // Irreversible 拒绝，Compensable 照旧放行（有 §6.3 undo 路径，
+            // headless 语义零变化）。决策本身作为 ApprovalDecided 事件写入
+            // 日志。被拒调用当场以 denied 的 ToolResult 闭合——replay 只会
+            // 把"执行中崩溃"视为悬空，被拒调用不留悬空（§7.2）。
+            if !matches!(tool.spec().side_effect, SideEffect::Pure) {
                 let decision = self.approve(&call, tool.spec()).await;
                 session.append(SessionEvent::ApprovalDecided {
                     call_id: call.id.clone(),
@@ -351,8 +379,9 @@ impl Kernel {
         Ok(StepOutcome::Continue { streamed })
     }
 
-    /// 审批门：无决议者时 fail-safe 拒绝（纪律 9：不可逆调用前必须审批）。
-    /// compensation.rs 对声明 Irreversible 的 undo 工具同样过这道门。
+    /// 审批门：无决议者时 fail-safe（纪律 9：不可逆调用前必须审批）——
+    /// Irreversible 拒绝；Compensable 有 §6.3 undo 路径，照旧放行（headless
+    /// 零变化）。compensation.rs 对声明 Irreversible 的 undo 工具同样过这道门。
     pub(crate) async fn approve(
         &self,
         call: &ToolCallReq,
@@ -360,7 +389,12 @@ impl Kernel {
     ) -> ApprovalDecision {
         match &self.approval {
             Some(resolver) => resolver.resolve(call, spec).await,
-            None => ApprovalDecision::deny("no approval resolver configured"),
+            None => match spec.side_effect {
+                SideEffect::Irreversible => {
+                    ApprovalDecision::deny("no approval resolver configured")
+                }
+                _ => ApprovalDecision::allow(),
+            },
         }
     }
 }

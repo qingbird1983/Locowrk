@@ -52,11 +52,15 @@ struct SingleToolSource(Arc<EchoTool>);
 
 #[async_trait]
 impl ToolSource for SingleToolSource {
-    async fn resolve(&self, _name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        _name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         Ok(Arc::clone(&self.0) as Arc<dyn Tool>)
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         vec![echo_spec().clone()]
     }
 }

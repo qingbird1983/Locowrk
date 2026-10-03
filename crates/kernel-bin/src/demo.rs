@@ -1,9 +1,9 @@
-//! 阶段三验收叙事（DESIGN.md §14）：加载 1.2.0 → 激活 1.3.0 →
-//! 回退 1.2.0，全程不重启。经 Kernel 主循环驱动 FFI 工具，
+//! 阶段三验收叙事（DESIGN.md §14）：加载 0.1.0 → 激活 0.2.0 →
+//! 回退 0.1.0，全程不重启。经 Kernel 主循环驱动 FFI 工具，
 //! 会话事件先写日志再执行（纪律 5）。
 //!
 //! 运行前置：`bash scripts/build_plugins.sh`（把双版本产物暂存到
-//! plugins/tool-echo/{1.2.0,1.3.0}/）。
+//! plugins/tool-echo/{0.1.0,0.2.0}/）。
 
 use std::path::Path;
 use std::sync::Arc;
@@ -18,8 +18,8 @@ use crate::echo_llm::ScriptedLlm;
 use crate::tool_source::KernelToolSource;
 
 const PLUGIN_ID: &str = "tool-echo";
-const V12: &str = "1.2.0";
-const V13: &str = "1.3.0";
+const V12: &str = "0.1.0";
+const V13: &str = "0.2.0";
 
 /// 依赖方向总览（§8）：本函数是全仓库唯一同时触碰 kernel-agent 与
 /// plugin-host 的地方（组装点），其余代码各守各的边界。
@@ -42,22 +42,22 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     let v12: Version = V12.parse().unwrap();
     let v13: Version = V13.parse().unwrap();
 
-    // ---- 1) 加载 1.2.0 并激活 ----
+    // ---- 1) 加载 0.1.0 并激活 ----
     load_and_activate(&registry, PLUGIN_ID, &v12, plugins_root)?;
-    banner("phase A: active = 1.2.0");
+    banner("phase A: active = 0.1.0");
     step(&kernel, &mut session).await?;
 
-    // ---- 2) 加载 1.3.0 并激活（多版本并存，切换 = 换指针，微秒级）----
+    // ---- 2) 加载 0.2.0 并激活（多版本并存，切换 = 换指针，微秒级）----
     load_and_activate(&registry, PLUGIN_ID, &v13, plugins_root)?;
-    banner("phase B: active = 1.3.0（升级，旧版本保留）");
+    banner("phase B: active = 0.2.0（升级，旧版本保留）");
     step(&kernel, &mut session).await?;
 
-    // ---- 3) 回退 1.2.0（不重启，reverse 应立刻不可用）----
+    // ---- 3) 回退 0.1.0（不重启，reverse 应立刻不可用）----
     let rolled = registry
         .rollback(PLUGIN_ID)
         .map_err(|e| format!("rollback: {e}"))?;
-    assert_eq!(rolled, v12, "rollback must return to 1.2.0");
-    banner("phase C: rollback -> 1.2.0（不重启）");
+    assert_eq!(rolled, v12, "rollback must return to 0.1.0");
+    banner("phase C: rollback -> 0.1.0（不重启）");
     step(&kernel, &mut session).await?;
 
     // ---- 收尾：注册表状态 + 会话事件全量打印 ----

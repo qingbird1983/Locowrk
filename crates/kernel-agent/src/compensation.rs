@@ -86,7 +86,9 @@ impl Kernel {
                 .push((call_id, "original call not found in session log".into()));
             return;
         };
-        let tool = match source.resolve(&undo_tool).await {
+        // 恢复操作不收会话模式约束（㉘·B）：补偿是 recovery 语义，带会话
+        // 身份会让计划模式挡住 undo——恒 None（绕过目录级会话过滤）
+        let tool = match source.resolve(None, &undo_tool).await {
             Ok(tool) => tool,
             Err(e) => {
                 report

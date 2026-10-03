@@ -30,13 +30,17 @@ struct DynSource(HashMap<String, Arc<dyn Tool>>);
 
 #[async_trait]
 impl ToolSource for DynSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         self.0
             .get(name)
             .cloned()
             .ok_or_else(|| ToolError::NotAvailable(name.to_string()))
     }
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         self.0.values().map(|t| t.spec().clone()).collect()
     }
 }
@@ -164,9 +168,10 @@ async fn subagent_forks_transcript_and_returns_summary() {
 #[tokio::test]
 async fn explicit_whitelist_blocks_unlisted_resolve() {
     let email = Arc::new(MockTool::new("send_email", SideEffect::Pure, json!("m")));
-    // 弹出顺序：父派生（tools 只许 echo）→ 子越权调 send_email → 失败收束
+    // 弹出顺序：父派生（tools 只许 echo）→ 子越权调 send_email（围栏拒解析）
+    // → 子以失败 ToolResult 闭合继续收束（㉘·B：解析失败不再失败整轮）
     let rig = rig(
-        vec![email],
+        vec![email.clone()],
         vec![
             SeqLlm::ok_text("never"),
             SeqLlm::call_tool(2, "send_email"),
@@ -178,12 +183,10 @@ async fn explicit_whitelist_blocks_unlisted_resolve() {
     rig.kernel.step_as(&mut s, "p1").await.unwrap();
 
     let out = parent_result(&s);
-    assert_eq!(out["status"], json!("failed"));
-    let err = out["error"].as_str().unwrap();
-    assert!(
-        err.contains("send_email") && err.contains("not available"),
-        "got {err}"
-    );
+    assert_eq!(out["status"], json!("completed"), "子轮照常收束：{out}");
+    // 围栏可证：越权工具从未执行（resolve 在 ToolCall 落账前被拒）
+    assert_eq!(email.calls(), 0, "白名单外的工具不得执行");
+    assert_eq!(out["tools_used"], json!([]), "越权调用不进 tools_used");
 }
 
 #[tokio::test]
@@ -202,12 +205,14 @@ async fn single_level_hard_block_even_if_allowlisted() {
     let mut s = user_session();
     rig.kernel.step_as(&mut s, "p1").await.unwrap();
 
+    // ㉘·B：解析失败以失败 ToolResult 闭合、子轮继续收束——硬底线不变：
+    // 子的 subagent_run 调用从未解析成功（不可再生子），只是收束语义更诚实
     let out = parent_result(&s);
-    assert_eq!(out["status"], json!("failed"));
-    assert!(
-        out["error"].as_str().unwrap().contains("not available"),
-        "单层硬底线：{}",
-        out["error"]
+    assert_eq!(out["status"], json!("completed"), "子轮照常收束：{out}");
+    assert_eq!(
+        out["tools_used"],
+        json!([]),
+        "单层硬底线：subagent_run 未执行"
     );
 }
 

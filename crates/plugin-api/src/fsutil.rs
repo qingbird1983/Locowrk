@@ -55,6 +55,46 @@ pub fn allowed_roots() -> Result<Vec<PathBuf>, String> {
     Ok(roots)
 }
 
+/// 调用期围栏根（㉘·B）：经 vtable `session_context` 读宿主下发的
+/// `fs_roots`（归属会话 = `[数据根, 项目工作区]`，宿主侧已 canonicalize）。
+/// 非调用期 / headless / 空表 → `None`，调用方回落 [`allowed_roots`]。
+/// 单个根 canonicalize 失败即剔除（宿主给的本就是规范路径，失败 = 根已被
+/// 移除；宁严勿松——少一个根不会扩大攻击面）。
+///
+/// # Safety
+/// `host` 必须是 init 时宿主交付的合法指针（与插件侧日志同契约）。
+pub unsafe fn context_roots(host: *const crate::HostVtable) -> Option<Vec<PathBuf>> {
+    // SAFETY: host 是 init 时宿主交付的 'static vtable 指针（函数 Safety 契约）
+    let vt = unsafe { host.as_ref()? };
+    let mut buf = [0u8; 4096];
+    // SAFETY: 同上——vtable 指针合法即可调用其 extern "C" 成员
+    let n = unsafe { vt.session_context(&mut buf) }.ok()?;
+    let ctx = crate::ffi::CallContext::from_json(&buf[..n])?;
+    if ctx.fs_roots.is_empty() {
+        return None;
+    }
+    let roots: Vec<PathBuf> = ctx
+        .fs_roots
+        .iter()
+        .filter_map(|r| Path::new(r).canonicalize().ok())
+        .collect();
+    (!roots.is_empty()).then_some(roots)
+}
+
+/// 文件围栏的唯一取根入口（㉘·B 起）：调用期根优先（[`context_roots`]，
+/// 围栏跟会话），回落 env 全局（[`allowed_roots`]，未归属 / headless 语义
+/// 与 ㉘·B 之前完全一致）。
+///
+/// # Safety
+/// `host` 必须是 init 时宿主交付的合法指针（透传给 [`context_roots`]）。
+pub unsafe fn effective_roots(host: *const crate::HostVtable) -> Result<Vec<PathBuf>, String> {
+    // SAFETY: Safety 契约由调用方保证（同本函数 doc）
+    if let Some(roots) = unsafe { context_roots(host) } {
+        return Ok(roots);
+    }
+    allowed_roots()
+}
+
 /// 已存在路径的规范路径（读 / 列 / 删 / 恢复目标）：canonicalize 会解析
 /// 符号链接与 `..`——解析结果落到允许根外即拒绝。目标不存在时**裁决理由
 /// 保持一致**：按最深存在祖先归一后判根，根外仍报 outside（拒绝必须可

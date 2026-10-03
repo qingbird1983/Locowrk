@@ -9,6 +9,7 @@ import {
   sessionHistory,
   sessionList,
   sessionRename,
+  sessionSetPermissionMode,
   pickSavePath,
   subscribeAgentEvents,
 } from "../lib/api";
@@ -83,6 +84,8 @@ export const useChatStore = defineStore("chat", {
     /** 历史重放中（switchSession / init 恢复）：不记时间戳、工具行不吃
      * 「默认展开」设置（§3.8 历史重放默认折叠）。 */
     replaying: false,
+    /** ㉘·B 当前会话权限模式（null = 未显式设置，显示取设置缺省档）。 */
+    permissionMode: null as "plan" | "ask" | "acceptEdits" | "auto" | null,
   }),
   actions: {
     async init() {
@@ -108,6 +111,9 @@ export const useChatStore = defineStore("chat", {
       this.steps = null;
       this.contextUsage = null;
       this.noticeDetails = {};
+      // ㉘·B：档位随会话走（无显式设置 = null，显示取设置缺省）
+      this.permissionMode =
+        this.sessions.find((s) => s.id === id)?.permissionMode ?? null;
       const events = await sessionHistory(id).catch(() => [] as AgentEvent[]);
       this.replaying = true;
       try {
@@ -157,6 +163,21 @@ export const useChatStore = defineStore("chat", {
       this.steps = null;
       this.contextUsage = null;
       this.noticeDetails = {};
+      this.permissionMode = null;
+    },
+    /** ㉘·B 设置会话权限档（§3.33 切换器）：写穿后端旁车 + 本地即时
+     * 生效（下一笔工具调用即按新档裁决，运行中可切）。 */
+    async setPermissionMode(mode: "plan" | "ask" | "acceptEdits" | "auto") {
+      this.permissionMode = mode;
+      try {
+        await sessionSetPermissionMode(this.sessionId, mode);
+      } catch (err) {
+        // 写穿失败回滚本地（后端仍按旧档裁决——本地显示必须如实）
+        await this.refreshSessions();
+        this.permissionMode =
+          this.sessions.find((s) => s.id === this.sessionId)?.permissionMode ?? null;
+        throw err;
+      }
     },
     onEvent(e: AgentEvent) {
       switch (e.kind) {

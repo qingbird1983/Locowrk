@@ -648,15 +648,19 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 
 验证：实机走查（CDP 28a-1…7 + sqlite 落盘取证）：预置 fsRoots → 侧栏「项目」段空组 `Locowrk` 头行渲染 → 行菜单移入成组 + meta 落盘 → **归属会话真实轮 memory_write**：sqlite 行 `workspace=F:\…\Locowrk` 打标、旧冒烟行迁入 `''` 键位 → **未归属新会话 memory_read 同 key = `{"found":false}`**（模型如实报告"可能在别的项目下写的"）→ 归属会话读回 `found:true` → 记忆页归属徽章「项目 Locowrk」/未归属行无徽章。走查会话两步删除、冒烟会话移出、设置还原（fsRoots=[]）、memory.sqlite3 还原迁移前备份（迁移在用户真实数据上留待自然发生）。
 
-### ㉘·B 权限审批借鉴 + 工具围栏（⬜ 排期中——PI-Desktop 映射已做完）
+### ㉘·B 权限审批借鉴 + 工具围栏（✅ 已完成，v2.56——PI-Desktop 映射落地；插件按项目过滤可见性随插件批次）
 
-| 项 | 说明（PI-Desktop 对照结论） |
-|---|---|
-| 权限模式四档切换器 | 挂会话输入框旁（收尾 backlog 已有此条）——映射 PI 的 `ask / accept-edits / auto` + 计划（contract）模式；决策表序：合同模式硬拒（只读白名单）> 低险直通 > 模式放行（auto=全部 / accept-edits=仅写类 / ask=全问）> 会话豁免（= 我们的「允许本次对话」，已是 AllowSession 语义）> 决策卡 |
-| 工具围栏跟会话 | PI：containment root = **会话持久化的项目**，不是全局 UI 态（"背景轮免受工作区切换影响"）；Locowrk 落点 = `session_context` 槽已就位，tool-fs / tool-shell(路径类) / tool-sandbox 改读调用期根（回落 env 全局），归属会话围栏 = 其项目根 |
-| 外部路径即审批 | PI：围栏外路径**低风险也要问**（`requires_external_path_permission`，连 auto 档也只给 AllowOnce）；映射到审批决策表加一条路径门 |
-| 审批卡环境行如实 | §3.17 环境行现取 `fsRoots[0]`（v2.48 时的占位）——应显示会话真实归属（payload +workspace），无归属回落现行为 |
-| 插件按项目过滤可见性 | PI："a tool the model can see is a tool it will try"——项目限定的插件对其他项目会话不可见；Locowrk 随插件批次（§2.5 槽位同批） |
+| 项 | 状态 | 说明 |
+|---|---|---|
+| 权限模式四档切换器 | ✅ v2.56 | 会话级四档（计划/询问/自动编辑/完全）挂 composer 左组（UI shell §3.33 新增）；档位写会话旁车 `permission_mode`（重启保持）+ `PermissionModeStore` 缓存即时生效（运行中可切）；设置 `tools.defaultPermissionMode` 只定新会话缺省（工具与分发分区 SettingsSelect）；决策表权威落 DESIGN §7.2 |
+| 决策表序 | ✅ v2.56 | 计划硬拒（纵深防御）> 外部路径门 > 模式放行（完全=全放 / 自动编辑=仅 Compensable，reason `mode:*` 前端不渲染记录条）> 会话豁免（既有语义）> 决策卡；kernel consult 扩到非 Pure（`询问` 档 = 写类也要问），无决议者时 Compensable 照旧放行（headless 零变化） |
+| 工具围栏跟会话 | ✅ v2.56 | `CallContext` +`fs_roots`（归属会话 = [数据根, 项目工作区]；未归属不下发回落 env 全局）；plugin-api `fsutil::effective_roots` 唯一取根入口；tool-fs / tool-shell(路径类) / tool-git 全部改调用期根；desktop `ToolSource` 会话感知（计划模式 = 目录级围栏：非 Pure 不出目录、resolve 即拒） |
+| 外部路径即审批 | ✅ v2.56 | 审批决策表加路径门：`shell` / `sandbox_run` 命令文本扫出围栏外 Windows 绝对路径（盘符/UNC、分量边界、大小写归一）→ 强制弹卡且只许一次（连完全档与豁免都不能跳过），载荷 `external:true` 前端只渲染两键 |
+| 审批卡环境行如实 | ✅ v2.56 | 载荷 +`workspace`（会话真实归属，旁车真源）；§3.17 环境行三级回落：归属 → fsRoots[0] → 临时会话；子 Agent 冒泡调用无旁车 = 未归属如实显示（文档边界） |
+| 插件版本基准重置 | ✅ v2.56 | 全部插件重置 0.1.0 起步（packaging.md §9.4·补，2026-10-04 用户裁定）：小迭代 +0.0.1、大改版 +0.1.0 经用户确认；tool-echo 双档 0.1.0/0.2.0（demo 升级回退叙事），kernel-bin demo/e2e 夹具随改；锁文件旧 1.x 版本由 `resolve_latest` 取内置根可用目录天然回退 |
+| 测试 | ✅ v2.56 | workspace 36 套件绿（kernel-agent +2：consult 扩围/resolve 失败闭合；subagent 2 例更新到新契约）；桌面 122 绿（+10：permission_mode 存储 3 / 决策表 5 / 外部路径扫描 1 / e2e 随改）；clippy 0 双侧、fmt、check_length、pnpm build 过、插件产物重建（10 插件 0.1.0） |
+
+验证：实机走查（CDP 28b-1…7 + 旁车落盘取证）：切换器四档渲染与当前档勾选 → 档位写旁车 `permissionMode:"ask"` → **计划模式实机**（fs_write 被目录围栏拒收、模型如实报告、search_tools 纯工具照常）→ 环境行如实（归属会话 = 「项目 F:\…\Locowrk」；未归属 = 「临时会话」）→ 询问档审批卡三键/中风险胶囊/理由行/倒计时 → **外部路径门实机**（完全档下围栏外命令强制弹卡、只有「拒绝/允许一次」两键、子 Agent 徽章 + 未归属 env 如实）→ 设置页「新会话权限档」下拉行。**走查实抓缺陷已修**：resolve 失败走 `?` 留悬空 tool_calls，下一轮被供应商拒收（"insufficient tool messages"）——内核改为解析失败也以失败 ToolResult 逐调用闭合（纪律 5 另一半），+回归测试；⑮ 两例收束语义随新契约更新（围栏不变：越权工具零执行）。走查会话已删、设置零改动（切换器只写会话旁车）。
 
 ---
 
@@ -726,3 +730,37 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 | agent-sub | ✅ | ⑮（v2.30，d29cd69）：kernel-agent `subagent/` 单层调度 + fork 前缀 + 白名单视图 + 审批冒泡，详见 ⑮ 块 |
 | tool-schedule | ✅ | ⑭（v2.29，7dc0139）：宿主内置工具面 + schedule.sqlite3 + 触发引擎，详见 ⑭ 块 |
 | tool-notify | ✅ | ⑭（v2.29，7dc0139）：webhook 插件（SSRF 防线照搬）+ 桌面通知走 vtable 追加槽 |
+
+---
+
+## 五、功能层排期（2026-10-04 规划：UI shell 文档内设计项已全部落地（㉗·C），转入功能面——PI-Desktop 全功能面借鉴盘点 + 既有欠账合并）
+
+> 盘点基准：PI-Desktop（F:\Warehouse\Github\PI-Desktop）源码与 spec 共 54 处。
+> 取舍原则照旧：后端服务前端、不发明占位、已有等价实现不重复借、tool-browser
+> 仍压轴（2026-09-30 用户裁定）。批首照例文档先行（新增设计项成文，不改既有规格）。
+
+### 已有等价实现（不重复借）
+
+⑲ 会话持久化 / ⑨ 压缩三策略 / ⑳ 流式 / ㉗·A 通知 / ㉗·B 工作面板 + 子转录页签 /
+㉗·C diff 审阅页签（数据源弱于 PI 的"工具执行期留底"，加固见 ㉝ 搭车）/ v2.49 会话
+搜索 + 导出（PI 反而没有导出）/ ⑫ search_tools ≈ PI ToolSearch 按需检索 /
+⑭ 定时触发引擎（缺目的地页，见 ㉙）/ ⑮ 子 Agent 单层同步（升级见 ㉜）。
+
+### 建议批次（顺序待用户拍板）
+
+| 批 | 内容 | 规模 |
+|---|---|---|
+| ㉘·B（先动，已排期） | 权限与围栏：PI 决策表序（合同/计划硬拒 > 外部路径门 > 低险直通 > 模式放行 > 会话豁免 > 决策卡）+ 四档切换器挂输入框旁（文档先行补 §3.x 新行）+ 工具围栏读调用期根（session_context 槽已就位：tool-fs / tool-shell 路径类 / tool-sandbox，回落 env 全局）+ 外部路径低险也审 + 审批卡环境行如实（§3.17 占位 fsRoots[0] 纠偏，载荷 +workspace） | 中大型 |
+| ㉙ 会话运营补全 | 消息编辑重发（内核 rewind_to 已有；最小 = 改写→截断→重发，PI 修订分页器后置）+ 定时任务目的地页（⑭ 后端全在，§8.2 缓办行）+ LLM 自动会话标题（PI session-title-summarize，一次性调用 ≤25 字；可配置原则 = 开关，替代首条截断）+ thinking 数据源（供应商推理内容落事件，点亮 v2.42 思考行空壳） | 中 |
+| ㉚ 模型体系 | llm_list_models 后端（Ollama /api/tags + OpenAI 兼容 /v1/models 探测）→ §3.30 模型选择器（composer 模型 chip 变选择器 + 会话级覆盖，settings 缺省）+ provider 预设档（多 provider 配置管理——模型分区大改版本就"含后端逻辑"，在此一并收）+ 搭车用量明细（PI message-usage：六类 token / cache 率 / tokens per sec 进 ContextUsagePopover） | 大 |
+| ㉛ Composer 三件 | 附件（图片起步；后端消息分段通路，§8.2 新行）+ @ 文件提及（fsRoots 界内枚举）+ 提示词增强（一次性改写 + 超时 + 开关，PI prompt-enhancement）+ 权限 chip（与 ㉘·B 模式切换器同位联动） | 中 |
+| ㉜ 子 Agent 升级 + 队列 | 后台子 Agent（PI Task/TaskWait/TaskList/TaskStop 语义；⑮ 现为同步单层）+ 用户自定义子 Agent 预设（模型/工具面/思考档钉死）+ 运行中队列与插话（PI turn_queue：提示词排队持久、可取消、可插话 steering——热插话先做，持久队列看需求） | 大 |
+| ㉝ 插件生态批 | plugin-api 贡献槽位（§2.5，工具已通；命令/主题随批定）+ tool-http（P1 唯一欠账）+ mw-ratelimit + Skills 技能包（PI user_skills：SKILL.md + Skill 工具 + 斜杠调用；宿主侧/插件形态批内定）+ 搭车审阅快照加固（PI review.rs：写类工具执行期于工作区外留底图 + 哈希守卫回滚，增强现 edit_diff args 单点） | 大 |
+| 杂项随批搭车 | 会话保留天数可配 / 长任务 keep-awake / ask 结构化提问工具（PI asktool 问卡，模型主动向用户发问）/ 启动恢复面动作化 / profile.toml 接线 / kv_get 协议 / 市场 wasm 分发 | 小 |
+
+### 明确不借（阶段理由）
+
+语音输入与实时语音 / 多端加密同步（WebDAV）/ 远程 host（SSH 隧道）/ MCP 市场 + OAuth
+（tool-mcp 本地 mcp.json 已覆盖起步场景）/ 浏览器预览面板（随 tool-browser 压轴批再议）/
+嵌入式终端 / 编辑器（VS Code）集成 / 遥测（PI 也没有，同取"无"）/ Worker 全会话编排器
+（㉜ 的远期形态，先不做）。

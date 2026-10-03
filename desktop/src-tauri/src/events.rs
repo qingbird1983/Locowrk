@@ -41,6 +41,11 @@ pub mod channels {
 /// 决策卡理由行的数据源；空描述不带字段语义（None）。
 /// `timeout_secs`（v2.49）：守夜超时秒数，决策卡倒计时的数据源；
 /// 0 = 不限（设置"一直等待"档），卡片不渲染倒计时。
+/// `workspace`（㉘·B §3.17）：会话真实归属——决策卡环境行"这条将在哪儿
+/// 跑"的数据源（此前恒取 fsRoots[0] 是占位）；未归属 None（前端回落
+/// fsRoots[0] / "临时会话"）。
+/// `external`（㉘·B）：外部路径门命中——围栏外命令逐次审批、只许一次，
+/// 前端据此**不渲染**「允许本次对话」。
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalRequestPayload {
     pub request_id: String,
@@ -50,6 +55,10 @@ pub struct ApprovalRequestPayload {
     pub session_id: Option<String>,
     pub description: Option<String>,
     pub timeout_secs: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+    pub external: bool,
 }
 
 /// 推给前端的事件。字段命名与 session-store 事件对齐（snake_case）；

@@ -130,24 +130,29 @@ extern "C" fn host_notify(
 // 执行本次 FFI call 的 blocking 线程上预置上下文（thread_local），插件的
 // `session_context` 查询只在该次调用执行期间有效——线程即调用身份。
 
-/// session_id → 项目根（§2.3 工作区）解析器：组装点注入（desktop 读会话
-/// 旁车 meta；headless 不注入 = 插件拿到 UNSUPPORTED 按全局语义回落）。
-type WorkspaceResolver = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
-static WORKSPACE_RESOLVER: Mutex<Option<WorkspaceResolver>> = Mutex::new(None);
+/// session_id → 会话上下文解析器（㉘·B 扩展）：返回项目根 + 本次调用的
+/// 围栏根。组装点注入（desktop 读会话旁车 meta + fsRoots；headless 不注入
+/// = 插件拿到 UNSUPPORTED 按全局语义回落）。
+type SessionContextResolver = Arc<dyn Fn(&str) -> plugin_api::ffi::CallContext + Send + Sync>;
+static SESSION_CONTEXT_RESOLVER: Mutex<Option<SessionContextResolver>> = Mutex::new(None);
 
-/// 组装点注入会话→项目解析器（幂等覆盖；须在首次工具调用前）。
-pub fn set_session_workspace_resolver(resolver: WorkspaceResolver) {
-    *WORKSPACE_RESOLVER
+/// 组装点注入会话→上下文解析器（幂等覆盖；须在首次工具调用前）。
+/// 返回的 `CallContext` 描述该会话的调用期身份：`workspace`（未归属
+/// None）与 `fs_roots`（归属会话 = [数据根, 项目工作区]；未归属给空表，
+/// 插件回落 env 全局语义）。
+pub fn set_session_context_resolver(resolver: SessionContextResolver) {
+    *SESSION_CONTEXT_RESOLVER
         .lock()
-        .expect("workspace resolver lock poisoned") = Some(resolver);
+        .expect("session context resolver lock poisoned") = Some(resolver);
 }
 
-/// adapter 调用期解析会话的项目根（解析器缺席 = None，插件回落全局语义）。
-pub(crate) fn workspace_of_session(session_id: &str) -> Option<String> {
-    let hook = WORKSPACE_RESOLVER
+/// adapter 调用期解析会话上下文（解析器缺席 = 全缺省 CallContext，插件
+/// 按全局语义回落）。
+pub(crate) fn session_context_of(session_id: &str) -> plugin_api::ffi::CallContext {
+    let hook = SESSION_CONTEXT_RESOLVER
         .lock()
-        .expect("workspace resolver lock poisoned");
-    hook.as_ref().and_then(|f| f(session_id))
+        .expect("session context resolver lock poisoned");
+    hook.as_ref().map(|f| f(session_id)).unwrap_or_default()
 }
 
 thread_local! {

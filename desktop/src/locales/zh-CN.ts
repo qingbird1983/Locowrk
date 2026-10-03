@@ -307,6 +307,24 @@ export default {
     decisionFailed: "决策提交失败：{reason}",
     // 侧栏待决标记（卡不在视野内的兜底）
     pendingBadge: "有审批等待决策",
+    // ㉘·B 外部路径卡（只有两键的说明）
+    externalHint: "目标在工作区围栏外，只能逐次允许",
+  },
+  perm: {
+    title: "权限模式",
+    short: {
+      plan: "计划",
+      ask: "询问",
+      acceptEdits: "自动编辑",
+      auto: "完全",
+    },
+    desc: {
+      plan: "只读：写类工具不可见",
+      ask: "非只读动作逐次审批",
+      acceptEdits: "可撤销写类自动放行",
+      auto: "全部放行，硬底线仍生效",
+    },
+    setFailed: "切换失败：{reason}",
   },
   market: {
     discover: "发现",
@@ -381,6 +399,8 @@ export default {
       developer: "开发者",
     },
     approvalTimeout: "审批等待时长",
+    defaultPermissionMode: "新会话权限档",
+    defaultPermissionModeHint: "计划=只读 · 询问=逐次审批 · 自动编辑=可撤销写自动放行 · 完全=全部放行；会话内可在输入框旁随时切换",
     approvalTimeoutHint: "超时按拒绝收束（fail-closed）；0 = 一直等待",
     // 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽，㉕）
     chatTitle: "对话行为",

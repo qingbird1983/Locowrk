@@ -37,16 +37,20 @@ impl FilterToolSource {
 
 #[async_trait]
 impl ToolSource for FilterToolSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         if !self.permitted(name) {
             return Err(ToolError::NotAvailable(name.to_string()));
         }
-        self.inner.resolve(name).await
+        self.inner.resolve(session_id, name).await
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, session_id: Option<&str>) -> Vec<ToolSpec> {
         let mut specs = Vec::new();
-        for spec in self.inner.list().await {
+        for spec in self.inner.list(session_id).await {
             if self.permitted(&spec.name) {
                 specs.push(spec);
             }

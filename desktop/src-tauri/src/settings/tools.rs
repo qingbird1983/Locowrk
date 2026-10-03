@@ -20,7 +20,8 @@ use crate::runner;
 /// step 兜底阈值可配，原硬编码；每轮开跑时取值，保存即对下一轮生效）。
 /// approval_timeout_secs 缺省 100（v2.49 可配置原则 §七-16①：审批守夜
 /// 阈值不写死——原 APPROVAL_TIMEOUT 常量；0 = 一直等待，保存即热换入
-/// ApprovalHub）。
+/// ApprovalHub）。default_permission_mode 缺省 "ask"（㉘·B：新会话
+/// 权限档缺省，会话级可覆盖并存旁车）。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ToolsSettings {
@@ -35,6 +36,9 @@ pub struct ToolsSettings {
     pub max_turn_steps: u32,
     /// 审批等待时长（秒，0 = 不限）：超时按拒绝收束（fail-closed）。
     pub approval_timeout_secs: u64,
+    /// ㉘·B 新会话权限档缺省（"plan" / "ask" / "acceptEdits" / "auto"）；
+    /// 会话级覆盖存旁车（PermissionModeStore）。
+    pub default_permission_mode: String,
 }
 
 impl Default for ToolsSettings {
@@ -46,6 +50,7 @@ impl Default for ToolsSettings {
             fs_roots: Vec::new(),
             max_turn_steps: runner::DEFAULT_MAX_STEPS,
             approval_timeout_secs: 100,
+            default_permission_mode: "ask".into(),
         }
     }
 }
@@ -60,6 +65,7 @@ pub struct ToolsSettingsView {
     pub fs_roots: Vec<String>,
     pub max_turn_steps: u32,
     pub approval_timeout_secs: u64,
+    pub default_permission_mode: String,
 }
 
 /// 工具暴露区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -72,6 +78,7 @@ pub struct ToolsUpdate {
     pub fs_roots: Option<Vec<String>>,
     pub max_turn_steps: Option<u32>,
     pub approval_timeout_secs: Option<u64>,
+    pub default_permission_mode: Option<String>,
 }
 
 /// call_timeout_secs 合法区间（秒）：下限避开 0（等同关超时），上限覆盖
@@ -155,5 +162,19 @@ impl crate::settings::SettingsStore {
             .tools
             .fs_roots
             .clone()
+    }
+
+    /// 后端专用：新会话权限档缺省（㉘·B，PermissionModeStore 热换入）。
+    /// 未知值回落 Ask（手改 settings.json 不致命）。
+    pub fn default_permission_mode(&self) -> crate::permission_mode::PermissionMode {
+        let s = self
+            .inner
+            .lock()
+            .expect("settings poisoned")
+            .tools
+            .default_permission_mode
+            .clone();
+        crate::permission_mode::PermissionMode::parse(&s)
+            .unwrap_or(crate::permission_mode::PermissionMode::Ask)
     }
 }

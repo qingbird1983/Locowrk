@@ -74,6 +74,8 @@ export interface SessionMeta {
   events: number;
   title: string | null;
   workspace: string | null;
+  /** ㉘·B 会话级权限模式（null = 取设置缺省档）。 */
+  permissionMode: "plan" | "ask" | "acceptEdits" | "auto" | null;
 }
 
 /** 会话正文搜索命中（v2.49）：mtime 降序限量；snippet = 首处摘录。 */
@@ -149,6 +151,10 @@ export interface ApprovalRequest {
   description?: string | null;
   /** 守夜超时秒数（v2.49）：倒计时数据源；0 = 不限（不渲染倒计时）。 */
   timeout_secs?: number | null;
+  /** ㉘·B：会话真实归属——决策卡环境行数据源（null = 前端回落 fsRoots[0]/临时会话）。 */
+  workspace?: string | null;
+  /** ㉘·B：外部路径门命中——卡上不渲染「允许本次对话」。 */
+  external?: boolean;
 }
 
 /** 市场目录条目（plugin_registry_list 返回项；versions 升序，末位 latest；
@@ -317,6 +323,8 @@ export interface ToolsSettingsView {
   maxTurnSteps: number;
   /** 审批等待时长（秒，0 = 不限；v2.49 可配置原则）。 */
   approvalTimeoutSecs: number;
+  /** ㉘·B 新会话权限档缺省。 */
+  defaultPermissionMode: "plan" | "ask" | "acceptEdits" | "auto";
 }
 
 /** 工具暴露区部分更新：字段缺省 = 保持不变。 */
@@ -327,6 +335,7 @@ export interface ToolsUpdate {
   fsRoots?: string[];
   maxTurnSteps?: number;
   approvalTimeoutSecs?: number;
+  defaultPermissionMode?: "plan" | "ask" | "acceptEdits" | "auto";
 }
 
 /** embedding 模型区投影（⑬ 智能层共享基建）：无秘钥字段。 */

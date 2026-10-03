@@ -69,14 +69,18 @@ struct MapSource;
 
 #[async_trait]
 impl ToolSource for MapSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         match name {
             "echo" => Ok(Arc::new(EchoTool { spec: echo_spec() })),
             other => Err(ToolError::NotAvailable(other.into())),
         }
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         vec![echo_spec()]
     }
 }
@@ -203,15 +207,15 @@ async fn unavailable_tool_fails_step_without_dangling_call() {
         content: "call ghost".into(),
     });
 
-    let err = kernel.step(&mut session).await.unwrap_err();
-    assert!(matches!(
-        err,
-        kernel_agent::KernelError::Tool(ToolError::NotAvailable(_))
-    ));
+    // ㉘·B 起解析失败不再失败整轮：以失败 ToolResult 闭合该调用（悬空的
+    // tool_calls 会让下一轮请求被供应商拒收），步骤继续收束
+    kernel
+        .step(&mut session)
+        .await
+        .expect("turn ok（resolve 失败闭合而非失败整轮）");
 
-    // resolve 先于 ToolCall 落账（§7.2 顺序）：解析失败 = 无悬空调用
     let kinds: Vec<&str> = session.events().iter().map(kind).collect();
-    assert_eq!(kinds, vec!["user", "assistant"]);
+    assert_eq!(kinds, vec!["user", "assistant", "tool_result"]);
 }
 
 /// 阶段八②：请求携带工具目录快照——真实模型要看到工具才会调（LLM.md）。
@@ -274,13 +278,17 @@ struct ProbeSource {
 
 #[async_trait]
 impl ToolSource for ProbeSource {
-    async fn resolve(&self, _name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        _name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         Ok(Arc::new(ProbeTool {
             seen: Arc::clone(&self.seen),
         }))
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         vec![echo_spec()]
     }
 }

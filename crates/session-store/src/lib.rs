@@ -19,8 +19,8 @@ pub use error::StoreError;
 pub use event::{SessionEvent, TurnId, TurnOutcome};
 pub use persist::{
     SessionMeta, SessionMetaFile, SessionSearchHit, append_event, delete_session, list_sessions,
-    load_session, read_meta, rewrite_log, search_sessions, session_file, write_title,
-    write_workspace,
+    load_session, read_meta, rewrite_log, search_sessions, session_file, write_permission_mode,
+    write_title, write_workspace,
 };
 pub use session::{Message, SNAPSHOT_EVERY, Session, SessionState, ToolCallMsg};
 pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, Snapshot, Upcaster, Upcasters};

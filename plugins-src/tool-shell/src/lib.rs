@@ -188,7 +188,7 @@ impl PluginState for ShellState {
             }
             "shell_read" => {
                 self.log(log_level::INFO, "tool-shell: shell_read called (readonly)");
-                exec::shell_read_exec(&args, &self.defaults)
+                exec::shell_read_exec(&args, &self.defaults, self.host)
             }
             other => Err(format!("unknown tool `{other}`")),
         }

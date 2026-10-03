@@ -222,6 +222,15 @@ export function sessionAssociate(
   return invoke("session_associate", { sessionId, workspace });
 }
 
+/** 会话级权限模式（㉘·B §3.33）：写旁车 + 模式存储缓存，即时生效；
+ * 四档取值后端校验（plan / ask / acceptEdits / auto）。 */
+export function sessionSetPermissionMode(
+  sessionId: string,
+  mode: "plan" | "ask" | "acceptEdits" | "auto",
+): Promise<void> {
+  return invoke("session_set_permission_mode", { sessionId, mode });
+}
+
 /** 会话删除（v2.49）：忙锁守卫在后端（运行中默认拒绝，开发者开关可
  * 强制）。幂等。 */
 export function sessionDelete(sessionId: string): Promise<void> {

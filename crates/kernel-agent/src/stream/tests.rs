@@ -20,10 +20,14 @@ struct EmptySource;
 
 #[async_trait]
 impl ToolSource for EmptySource {
-    async fn resolve(&self, name: &str) -> Result<StdArc<dyn plugin_api::Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        name: &str,
+    ) -> Result<StdArc<dyn plugin_api::Tool>, ToolError> {
         Err(ToolError::NotAvailable(name.into()))
     }
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         Vec::new()
     }
 }

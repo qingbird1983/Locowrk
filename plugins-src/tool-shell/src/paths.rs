@@ -19,12 +19,18 @@
 
 use std::path::{Path, PathBuf};
 
-use plugin_api::fsutil::allowed_roots;
+use plugin_api::HostVtable;
+use plugin_api::fsutil::effective_roots;
 
 /// 校验只读命令的路径面。`args` = 切词后的参数（不含程序名），
 /// `cwd` = 显式工作目录（已确认存在）。
-pub(crate) fn ensure_readonly_scope(args: &[String], cwd: Option<&Path>) -> Result<(), String> {
-    let roots = allowed_roots()?;
+pub(crate) fn ensure_readonly_scope(
+    args: &[String],
+    cwd: Option<&Path>,
+    host: *const HostVtable,
+) -> Result<(), String> {
+    // ㉘·B：围栏跟会话（vtable session_context 的 fs_roots 优先，env 回落）
+    let roots = unsafe { effective_roots(host) }?;
     let eff_cwd: PathBuf = match cwd {
         Some(dir) => dir.to_path_buf(),
         None => std::env::current_dir()

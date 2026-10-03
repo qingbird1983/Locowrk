@@ -201,6 +201,8 @@ export default {
     contextCompacted: "Context compacted",
     savedTokens: "{n} tokens saved",
     approvalTimeout: "Approval timed out, denied automatically",
+    defaultPermissionMode: "Default permission mode",
+    defaultPermissionModeHint: "Plan = read-only · Ask = approve each action · Auto-edits = undoable writes run free · Full = allow all; switch per chat next to the input box",
   },
   // Work panel (§2.5/§3.16, v2.52)
   panel: {
@@ -307,10 +309,28 @@ export default {
     deny: "Deny",
     allowSession: "Allow for this chat",
     allowOnce: "Allow once",
+    // ㉘·B external-path card (two buttons only)
+    externalHint: "Target is outside the workspace fence; one-time approval only",
     // ⑮ Tag for calls spawned by a sub-agent (session_id differs)
     subagentTag: "Sub-agent call",
     decisionFailed: "Failed to submit decision: {reason}",
     pendingBadge: "Approval awaiting decision",
+  },
+  perm: {
+    title: "Permission mode",
+    short: {
+      plan: "Plan",
+      ask: "Ask",
+      acceptEdits: "Auto-edits",
+      auto: "Full",
+    },
+    desc: {
+      plan: "Read-only: write tools hidden",
+      ask: "Approve every non-read action",
+      acceptEdits: "Undoable writes run free",
+      auto: "Allow all; hard floors stay",
+    },
+    setFailed: "Switch failed: {reason}",
   },
   market: {
     discover: "Discover",

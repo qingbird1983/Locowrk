@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # 构建并暂存开发态插件（DESIGN.md §11.3 开发态目录 plugins/{id}/{version}/）。
 #
-# tool-echo 的 manifest 版本来自编译期环境变量 LOCOWRK_PLUGIN_VERSION，
-# 按 1.2.0 / 1.3.0 各构建一次，得到多版本并存所需的双产物。
-# tool-fs 1.2.1（守卫裁决消息一致性）/ tool-fetch / tool-shell 单版本暂存。
-# 第三批（tool-git / tool-mcp 1.1.0；memory-sqlite 1.2.0 = ⑪ 工具名对齐
-# memory_write/memory_read + 记忆工具面 exposure=always）单版本暂存；
+# 版本基准（packaging.md §9.4·补，2026-10-04 用户裁定）：全部插件重置
+# 0.1.0 起步，小迭代 +0.0.1，大改版 +0.1.0（经用户确认）。tool-echo 的
+# manifest 版本来自编译期环境变量 LOCOWRK_PLUGIN_VERSION，按 0.1.0 /
+# 0.2.0 各构建一次，得到多版本并存（demo 升级/回退叙事）所需的双产物；
+# 其余插件单版本 0.1.0 暂存。
 # tool-mcp 的 examples/fake_mcp_server 是测试替身，不进暂存目录。
 # kernel-bin 的 demo、plugin-host 的集成测试与桌面端开发态装载
 # 依赖这里的暂存布局。
@@ -50,17 +50,17 @@ stage() {
   echo "    staged -> $dst/$(basename "$src")"
 }
 
-stage tool-echo 1.2.0
-stage tool-echo 1.3.0
-stage tool-fs 1.2.1
-stage tool-fetch 1.0.0
-stage tool-shell 1.2.0
-stage tool-edit 1.1.1
-stage tool-git 1.1.0
-stage memory-sqlite 1.3.0
-stage tool-mcp 1.1.0
-stage tool-notify 1.0.0
-stage tool-sandbox 1.0.0
+stage tool-echo 0.1.0
+stage tool-echo 0.2.0
+stage tool-fs 0.1.0
+stage tool-fetch 0.1.0
+stage tool-shell 0.1.0
+stage tool-edit 0.1.0
+stage tool-git 0.1.0
+stage memory-sqlite 0.1.0
+stage tool-mcp 0.1.0
+stage tool-notify 0.1.0
+stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{1.2.0,1.3.0} plugins/tool-fs/1.2.1 plugins/tool-fetch/1.0.0 plugins/tool-shell/1.2.0 plugins/tool-edit/1.1.1 plugins/{tool-git,tool-mcp}/1.1.0 plugins/memory-sqlite/1.3.0 plugins/tool-notify/1.0.0 plugins/tool-sandbox/1.0.0"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + 其余 9 插件 0.1.0（版本基准重置见 packaging.md §9.4·补）"
 echo "next: cargo run -p kernel-bin -- demo"

@@ -224,6 +224,10 @@ pub async fn settings_set(
     state
         .approval
         .set_timeout_secs(state.settings.approval_timeout_secs());
+    // ㉘·B：新会话权限档缺省热更新（tools 区 defaultPermissionMode）
+    state
+        .permission_modes
+        .set_default(state.settings.default_permission_mode());
     // ⑱：工作区目录热更新（fsutil 每次工具调用读 env，重注入即生效）
     if tools_section_touched {
         crate::state::apply_fs_roots_env(&state.settings);

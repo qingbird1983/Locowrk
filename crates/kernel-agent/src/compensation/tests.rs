@@ -75,7 +75,11 @@ struct UndoSource(Vec<Arc<UndoTool>>);
 
 #[async_trait]
 impl ToolSource for UndoSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         self.0
             .iter()
             .find(|t| t.spec.name == name)
@@ -83,7 +87,7 @@ impl ToolSource for UndoSource {
             .ok_or_else(|| ToolError::NotAvailable(name.to_string()))
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         self.0.iter().map(|t| t.spec.clone()).collect()
     }
 }

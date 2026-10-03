@@ -4,18 +4,25 @@
 //!
 //! 组装点内置工具（如阶段六演示用 send_email）优先于插件注册表：
 //! 同名冲突时内置版本赢，插件不能用演示替身的名字顶掉它。
+//! ㉘·B：`resolve` / `list` 带会话身份——**计划模式 = 目录级围栏**（非
+//! Pure 工具对模型不可见、解析即拒），由 [`PermissionModeStore`] 按会话
+//! 裁决；未接模式存储时不过滤（与 kernel-bin 桥同形）。
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use kernel_agent::ToolSource;
-use plugin_api::{Tool, ToolError, ToolSpec};
+use plugin_api::{SideEffect, Tool, ToolError, ToolSpec};
 use plugin_host::RegistryToolSource;
+
+use crate::permission_mode::{PermissionMode, PermissionModeStore};
 
 /// 注册表 → 工具目录服务。`resolve` 先查内置表，再委托注册表实现。
 pub struct KernelToolSource {
     builtins: Vec<(String, Arc<dyn Tool>)>,
     inner: RegistryToolSource,
+    /// ㉘·B 会话级权限模式（计划模式目录围栏）；None = 不过滤。
+    modes: Option<Arc<PermissionModeStore>>,
 }
 
 impl KernelToolSource {
@@ -23,6 +30,7 @@ impl KernelToolSource {
         Self {
             builtins: Vec::new(),
             inner,
+            modes: None,
         }
     }
 
@@ -31,18 +39,45 @@ impl KernelToolSource {
         self.builtins.push((tool.spec().name.clone(), tool));
         self
     }
+
+    /// ㉘·B：接会话级权限模式存储（计划模式目录围栏的数据源）。
+    pub fn with_modes(mut self, modes: Arc<PermissionModeStore>) -> Self {
+        self.modes = Some(modes);
+        self
+    }
+
+    /// 计划模式且该会话命中 = 只放行 Pure 工具（"模型看不见的工具才
+    /// 不会去调"；调到了也被 resolve 拒掉，双保险）。
+    fn plan_locked(&self, session_id: Option<&str>) -> bool {
+        self.modes
+            .as_ref()
+            .is_some_and(|m| m.mode_of(session_id) == PermissionMode::Plan)
+    }
 }
 
 #[async_trait]
 impl ToolSource for KernelToolSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
-        if let Some((_, tool)) = self.builtins.iter().find(|(n, _)| n == name) {
-            return Ok(Arc::clone(tool));
+    async fn resolve(
+        &self,
+        session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
+        let tool = if let Some((_, tool)) = self.builtins.iter().find(|(n, _)| n == name) {
+            Arc::clone(tool)
+        } else {
+            self.inner.resolve(name)?
+        };
+        if self.plan_locked(session_id)
+            && !matches!(tool.spec().side_effect, SideEffect::Pure)
+        {
+            return Err(ToolError::NotAvailable(format!(
+                "{name} 在计划模式下不可用：计划模式只读，写类工具已被目录收起"
+            )));
         }
-        self.inner.resolve(name)
+        Ok(tool)
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, session_id: Option<&str>) -> Vec<ToolSpec> {
         // 与 resolve 同优先级：内置替身先出现，插件不得顶掉同名内置
         let mut specs: Vec<ToolSpec> = self
             .builtins
@@ -54,6 +89,9 @@ impl ToolSource for KernelToolSource {
                 specs.push(spec);
             }
         }
+        if self.plan_locked(session_id) {
+            specs.retain(|s| matches!(s.side_effect, SideEffect::Pure));
+        }
         specs
     }
 }
@@ -61,7 +99,8 @@ impl ToolSource for KernelToolSource {
 impl KernelToolSource {
     /// 全目录含 hidden（⑫ search_tools 检索索引用，exposure 文档 §4.1
     /// "hidden 只有显式检索才暴露"）：内置工具 + 注册表全量。停用插件
-    /// 不在 active 实例里，天然不在索引（§8.2）。
+    /// 不在 active 实例里，天然不在索引（§8.2）。不做会话过滤——检索
+    /// 索引是人的查询面，执行侧由 resolve 的计划围栏兜底。
     pub fn list_all(&self) -> Vec<ToolSpec> {
         let mut specs: Vec<ToolSpec> = self
             .builtins

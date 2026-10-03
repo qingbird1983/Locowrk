@@ -21,7 +21,7 @@ use crate::inline_tools::{DangerTool, StubEchoTool};
 use crate::tool_source::KernelToolSource;
 
 const PLUGIN_ID: &str = "tool-echo";
-const V13: &str = "1.3.0";
+const V13: &str = "0.2.0";
 
 /// 全局工具目录 = FFI 插件注册表 + 宿主进程内工具的复合。
 /// 组装点职责：多个工具来源在目录层复合，主循环对此无感知。
@@ -32,15 +32,19 @@ struct CompositeToolSource {
 
 #[async_trait]
 impl ToolSource for CompositeToolSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         if name == "danger" {
             return Ok(Arc::clone(&self.danger) as Arc<dyn Tool>);
         }
-        self.registry.resolve(name).await
+        self.registry.resolve(session_id, name).await
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
-        let mut specs = self.registry.list().await;
+    async fn list(&self, session_id: Option<&str>) -> Vec<ToolSpec> {
+        let mut specs = self.registry.list(session_id).await;
         specs.push(self.danger.spec().clone());
         specs
     }
@@ -63,7 +67,7 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     let listener = Arc::clone(&plugin) as Arc<dyn WaterfallListener>;
     ctx.events.on_waterfall(points::REQUEST, listener);
 
-    // 全局加载并激活 tool-echo 1.3.0（含 upper / reverse）
+    // 全局加载并激活 tool-echo 0.2.0（含 upper / reverse）
     let v13: Version = V13.parse().unwrap();
     load_and_activate(&registry, PLUGIN_ID, &v13, plugins_root)?;
 
@@ -129,7 +133,11 @@ struct ScopeBToolSource {
 
 #[async_trait]
 impl ToolSource for ScopeBToolSource {
-    async fn resolve(&self, name: &str) -> Result<Arc<dyn Tool>, ToolError> {
+    async fn resolve(
+        &self,
+        _session_id: Option<&str>,
+        name: &str,
+    ) -> Result<Arc<dyn Tool>, ToolError> {
         if name == "echo" {
             Ok(Arc::clone(&self.echo) as Arc<dyn Tool>)
         } else {
@@ -137,7 +145,7 @@ impl ToolSource for ScopeBToolSource {
         }
     }
 
-    async fn list(&self) -> Vec<ToolSpec> {
+    async fn list(&self, _session_id: Option<&str>) -> Vec<ToolSpec> {
         vec![self.echo.spec().clone()]
     }
 }
