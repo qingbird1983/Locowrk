@@ -4,7 +4,8 @@
  * 120px 车道上的三个平面字形按钮（图标 12px），z-index 1000 恒在最上
  * （§五阶梯）。**容器自身透明**——车道底色透出正下方那段带（面板打开时 =
  * 面板头的 bg-dock，原型 .wincontrols 同款）。无边框窗口（tauri.conf
- * decorations:false）的唯一关闭/极大化通路；Mac 不渲染（原生红绿灯）。
+ * decorations:false）的唯一关闭/极大化通路；关闭钮 hover 红底白字形
+ * （v2.60 修复批，Windows 标准配置 #c42b1c）；Mac 不渲染（原生红绿灯）。
  */
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -57,7 +58,7 @@ onBeforeUnmount(() => {
       />
     </button>
     <button
-      class="win-btn"
+      class="win-btn win-btn--close"
       type="button"
       :title="t('window.close')"
       :aria-label="t('window.close')"
@@ -82,5 +83,16 @@ onBeforeUnmount(() => {
 .win-btn:hover {
   color: var(--lw-ink-1);
   background: var(--lw-wash-2);
+}
+/* 关闭钮（v2.60 修复批用户裁定）：Windows 标准配置——hover 红底白字形
+ * （Win11 #c42b1c），按下加深一档 */
+.win-btn--close:hover,
+.win-btn--close:focus-visible {
+  background: #c42b1c;
+  color: #fff;
+}
+.win-btn--close:active {
+  background: #b12a1c;
+  color: #fff;
 }
 </style>

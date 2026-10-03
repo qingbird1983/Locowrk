@@ -11,7 +11,7 @@
  * store.setModel（会话内 = 会话级覆盖，首页 = 写设置缺省）；会话覆盖生效
  * 时顶部一行「跟随默认」清除覆盖。
  */
-import { computed, nextTick, onMounted, ref, Transition } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, Transition } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ProviderView } from "../../types";
 import { Icon } from "../../lib/icons";
@@ -67,8 +67,14 @@ const visible = computed(() => {
     .filter((g) => g.models.length > 0);
 });
 
-// v-if 挂载即打开：滚到当前项（当前项必须可见，§3.30）
+// v-if 挂载即打开：滚到当前项（当前项必须可见，§3.30）；挂载期 Esc 收口
+// （外点关闭由 Composer 锚点监听——走查实抓：本浮层曾是五弹层中唯一
+// 无外点/Esc 收口的）
+function onDocKeydown(e: KeyboardEvent) {
+  if (e.key === "Escape") emit("close");
+}
 onMounted(() => {
+  document.addEventListener("keydown", onDocKeydown);
   query.value = "";
   void nextTick(() => {
     container.value
@@ -76,6 +82,7 @@ onMounted(() => {
       ?.scrollIntoView({ block: "center" });
   });
 });
+onBeforeUnmount(() => document.removeEventListener("keydown", onDocKeydown));
 
 function pick(providerId: string, model: string) {
   emit("select", providerId, model);

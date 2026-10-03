@@ -25,12 +25,19 @@ export default {
     impact: "Impact",
   },
   chat: {
-    // Welcome greeting (§3.14 v3.9: four time-of-day states + indexed project name)
+    // Welcome greeting (§3.14 v3.9: four time-of-day states + indexed project
+    // name; v2.60: greetingBare = no-project variant, project name hidden)
     greeting: {
       morning: "Good morning, {name}. Which task shall we start today?",
       afternoon: "Good afternoon, {name}. A good time to push one concrete thing forward.",
       evening: "Good evening, {name}. What do you want to wrap up tonight?",
       lateNight: "It's late, {name}. The rest can wait until tomorrow.",
+    },
+    greetingBare: {
+      morning: "Good morning. Which task shall we start today?",
+      afternoon: "Good afternoon. A good time to push one concrete thing forward.",
+      evening: "Good evening. What do you want to wrap up tonight?",
+      lateNight: "It's late. The rest can wait until tomorrow.",
     },
     placeholder: "Type / use commands · {'@'} reference files",
     send: "Send",
@@ -281,7 +288,6 @@ export default {
       "Sub-agent cards appearing in a chat can be opened here as full transcripts: use the “view transcript” icon on the card, or open from this list.",
     maximize: "Maximize",
     restore: "Restore",
-    closePanel: "Close work panel",
     closeTab: "Close tab",
     viewTranscript: "View transcript",
     resize: "Resize work panel",

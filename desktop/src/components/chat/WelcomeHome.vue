@@ -4,8 +4,9 @@
  * 与真实对话状态分离——吉祥物 + 四态问候 + composer（Teleport 槽位）组成
  * 居中偏上的块；composer 定宽 720（§3.11 空态变体，列宽柄不渲染）、
  * 双层卡影（底层深色圆角矩形下沉 14px，浮层底边短于暗影）。问候 = 时段
- * 四态（上午好/下午好/晚上好/夜深了）+ 当前索引项目名（当前会话归属 →
- * 最近活动会话归属 → 第一个 fsRoot → 兜底 Locowrk，§3.14 表）。吉祥物
+ * 四态（上午好/下午好/晚上好/夜深了）+ 当前索引项目名（挂起归属 →
+ * 当前会话归属 → 最近活动会话归属 → 第一个 fsRoot，§3.14 表；无任何
+ * 项目 = 不带名字的问候，v2.60 修复批）。吉祥物
  * 微动效 = 云体浮动 + 周期眨眼，reduced-motion 全停（§6.6 纪律）。
  */
 import { computed, ref } from "vue";
@@ -24,13 +25,16 @@ const slotEl = ref<HTMLElement | null>(null);
 defineExpose({ slotEl });
 
 const greeting = computed(() => {
-  const name =
-    homeProjectName(
-      chat.sessions,
-      chat.sessionId,
-      settings.view?.tools.fsRoots ?? [],
-    ) ?? "Locowrk";
-  return t(`chat.greeting.${greetingKey()}`, { name });
+  const key = greetingKey();
+  const name = homeProjectName(
+    chat.sessions,
+    chat.sessionId,
+    settings.view?.tools.fsRoots ?? [],
+    chat.pendingWorkspace,
+  );
+  // 无任何已选项目：不带名字的问候（v2.60 修复批，"Locowrk" 兜底退役）
+  if (!name) return t(`chat.greetingBare.${key}`);
+  return t(`chat.greeting.${key}`, { name });
 });
 </script>
 

@@ -104,10 +104,11 @@ onMounted(() => {
 
       <!-- 工作面板（§2.5，v2.52）：主区右缘第二展示面，只对对话目的地有
            意义（§2.4 开关在会话顶栏右侧）；随 chat 区一起挂起/显示。
-           开合滑动动画与侧栏统一（§6.6 ②，issue #2） -->
+           开合滑动动画与侧栏统一（§6.6 ②，issue #2）。首页空态不渲染
+           （v2.60 修复批：会话态开面板切回首屏必须收起——空态锁右栏） -->
       <Transition name="wp">
         <WorkPanel
-          v-if="shell.destination === 'chat' && workPanel.open"
+          v-if="shell.destination === 'chat' && !isHome && workPanel.open"
         />
       </Transition>
 

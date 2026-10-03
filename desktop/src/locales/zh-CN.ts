@@ -25,12 +25,19 @@ export default {
     impact: "影响范围",
   },
   chat: {
-    // 欢迎页问候（§3.14 v3.9 四态 + 当前索引项目名）
+    // 欢迎页问候（§3.14 v3.9 四态 + 当前索引项目名；v2.60：greetingBare =
+    // 无任何已选项目时的不带名变体——项目名隐藏，"Locowrk" 兜底退役）
     greeting: {
       morning: "上午好，{name}。今天从哪个任务开始？",
       afternoon: "下午好，{name}。午后适合推进一件具体的事。",
       evening: "晚上好，{name}。今晚想把什么收尾？",
       lateNight: "夜深了，{name}。剩下的交给明天也可以。",
+    },
+    greetingBare: {
+      morning: "上午好，今天从哪个任务开始？",
+      afternoon: "下午好，午后适合推进一件具体的事。",
+      evening: "晚上好，今晚想把什么收尾？",
+      lateNight: "夜深了，剩下的交给明天也可以。",
     },
     placeholder: "输入 / 使用命令 · {'@'} 引用文件",
     send: "发送",
@@ -230,7 +237,6 @@ export default {
     launcherHint: "对话中出现的子 Agent 卡可在这里查看完整转录：点卡片上的「看转录」图标，或回到这里从清单打开。",
     maximize: "最大化",
     restore: "还原",
-    closePanel: "关闭工作面板",
     closeTab: "关闭页签",
     viewTranscript: "看转录",
     resize: "调整工作面板宽度",

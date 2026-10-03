@@ -697,6 +697,29 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 
 ---
 
+### ㉟ 走查修复批：欢迎页/顶栏/工作面板/composer 十三条（✅ 已完成，v2.60——用户 2026-10-04 逐条裁定，纯前端批）
+
+| 项 | 落地 |
+|---|---|
+| ① 无项目问候不带名 | ✅ v2.60：无任何已选项目 = greetingBare 变体（"晚上好，今晚想把什么收尾？"），旧 "Locowrk" 兜底退役（lib/greeting.ts `homeProjectName` 返回 null → `chat.greetingBare.*`，zh/en 四态全配） |
+| ② 新建任务即时跟切 | ✅ v2.60：`homeProjectName` 挂起归属最优先——项目行 ＋ / 工作区 chip 选中的项目立刻反映进欢迎页问候（此前只读旁车/会话归属，问候滞留旧项目） |
+| ③ 首屏收右栏 | ✅ v2.60：App.vue WorkPanel `v-if` 增 `!isHome`——会话态开面板切回首屏即收起，回会话再恢复（空态锁右栏补全） |
+| ④ 发送键浅箭头 | ✅ v2.60：禁用态 = 浅色箭头（白 92%，两主题一致）+ 退灰底（ink 18%）——旧 ink 混色暗主题浅底浅箭不可读 |
+| ⑤ 项目 chip 移顶栏 | ✅ v2.60：会话态 WorkspacePicker 以 iconOnly 变体挂顶栏标题前（纯文件夹图标，点击下弹菜单）；composer 底行只剩首页形态（Topbar + WorkspacePicker `iconOnly` prop） |
+| ⑥ 标题固定宽度 | ✅ v2.60：顶栏标题 max-width 360px + truncate，长标题尾部省略（面板开合截断宽度稳定不跳） |
+| ⑦ 弹层全部上滑 | ✅ v2.60：会话态附件/权限/模型实测上滑（既有语义核实）；**修回 v2.59 UsageRing 拆分时截丢的 ContextUsagePopover 整块 `<style scoped>`**（用量浮层失去定位/实底在工具条里平铺——本批走查实抓）；搭车修实抓缺陷：模型选择器是五弹层中唯一无外点/Esc 收口的 → Composer 锚点 pointerdown + 选择器 Esc 补齐（实机验证外点/Esc/双击 chip 三路收口） |
+| ⑧ 面板开关裸钮不移位 | ✅ v2.60：action-group wash 底容器去除（裸 .ctl）；顶栏恒预留 `--lw-wincontrols` 车道（原面板打开时 padding-right 归零使开关右跳 120px）——开合前后开关相对主区右缘恒 120px（实测） |
+| ⑨ 面板头去关闭钮 | ✅ v2.60：WorkPanel 头部「关闭面板」钮退役（开合统一走顶栏开关，i18n `panel.closePanel` 删）；最大化图标换斜对角双箭头（lucide maximize-2 缩 16 格，新图标 `maxDiag`） |
+| ⑩ 关闭钮红底 | ✅ v2.60：窗口关闭钮 hover `#c42b1c` 白字形 / active 加深一档（Win11 标准配置；实测 hover bg rgb(196,43,28)） |
+| ⑪ 最大化盖对话区 | ✅ v2.60：`toggleMaximized` 吃 `fullBudget = 视口 − 侧栏宽`（主区地板 450 最大化态不保）——侧栏展开实测 1040=1280−240、折叠实测 1280 满窗口；面板 `z-20` 压过 composer 坞 z-12/列宽柄 z-11（覆盖态浮层残影不透出）；aria-valuemax 随最大化切换 |
+| ⑫ 列宽柄留白 | ✅ v2.60：柄位公式 −6px → −16px（柄 12px 全落列外 + 4px 空隙），提示条与正文实测 9px 间距 |
+| ⑬ 正文对齐 | ✅ v2.60：转录滚动区 `scrollbar-gutter: stable both-edges` 对称预留——转录列与 composer 列同以主区中线居中（旧右缘单侧留槽使正文整体左偏 ≈5px；实测两列 left/right 逐像素相等） |
+| 测试 | ✅ v2.60 | 桌面 141 绿（纯前端批零 Rust 改动）、vue-tsc+vite 过、check_length OK、pnpm build 过 |
+
+验证：实机走查（CDP 260-1…12-13 + 截图，tauri dev）：无项目问候 nameless/带项目问候/项目 ＋ 即时跟切（greeting+chip 双证）/会话态开面板→新建任务回首屏面板收起/发送键禁用态白箭 rgba(255,255,255,.92)/顶栏项目图标+下弹菜单（wsrow 退场）/长标题 360px 省略/三弹层上滑 + ctx-popover 规则在场/开关无底色 + 120px 恒定偏移/面板头两钮（启动器+斜对角最大化）无关闭/关闭钮 hover 红底/最大化 1040 与 1280 双态/柄距正文 9px/两列 left=283 right=1237 零偏差。走查会话已删（含 ㉞ 残留「共存测试一：定时探针触发」）、fsRoots 还原空、schedule 库空、settings 其余零改动。
+
+---
+
 ## 三、收尾 backlog（随批次搭车）
 
 | 项 | 说明 | 计划搭车批次 |

@@ -52,9 +52,11 @@ const liveWidth = computed(() => {
 const maxWidth = computed(() =>
   Math.max(CHAT_CONTENT_WIDTH_MIN, areaWidth.value - CHAT_CONTENT_WIDTH_GUTTER * 2),
 );
-/** 柄位置 = max(0, (主区宽 − 列宽) / 2 − 6px)，左右中心对称。 */
+/** 柄位置 = max(0, (主区宽 − 列宽) / 2 − 16px)，左右中心对称。16 = 柄宽
+ * 12px 全部落到列外 + 4px 空隙——可见提示条与正文之间留白（v2.60 修复批
+ * 用户裁定「跟正文贴到一起」），不再骑在列缘上。 */
 const handlePos = computed(() =>
-  Math.max(0, (areaWidth.value - liveWidth.value) / 2 - 6),
+  Math.max(0, (areaWidth.value - liveWidth.value) / 2 - 16),
 );
 
 function chatRoot(): HTMLElement | null {

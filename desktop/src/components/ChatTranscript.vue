@@ -308,7 +308,10 @@ async function onNoticeAction(item: SystemItem, action: string) {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  /* both-edges（v2.60 修复批）：滚动条槽两侧对称预留——转录列与 composer
+   * 列同以主区中线居中，正文不再整体左偏（旧 stable 只在右缘留槽，列中心
+   * 左移半个槽宽） */
+  scrollbar-gutter: stable both-edges;
   overflow-anchor: none;
   padding: 8px 24px 0;
   /* 底部渐隐：内容浮到输入卡下方时淡出（遮罩盖住 composer 预留区） */

@@ -37,6 +37,17 @@ const showModels = ref(false);
 /** §3.25：↑（输入框为空时）召回上一条已发送输入。 */
 const lastSent = ref("");
 
+// 模型浮层外点关闭（走查实抓缺陷：选择器是五个弹层里唯一没有外点/Esc
+// 收口的——脚本化点击后浮层长挂不落）。锚 = chip-anchor（触发钮 + 浮层
+// 同容器，与权限/工作区 chip 的 root.contains 同一语义）。
+const modelAnchor = ref<HTMLElement | null>(null);
+function onDocPointerDown(e: PointerEvent) {
+  if (!showModels.value) return;
+  if (!(modelAnchor.value?.contains(e.target as Node) ?? false)) {
+    showModels.value = false;
+  }
+}
+
 const enterToSend = computed(() => settings.view?.chat.enterToSend ?? true);
 /** 模型 chip = 会话覆盖 ?? 设置缺省（「跟随默认」出口在浮层里，chip 不加
  * 标记）。enabledProviders = 选择器数据源（已配置清单，停用档不出现）。 */
@@ -122,13 +133,17 @@ watch(
 // 坞总高上报：列宽热区下沿要停在 composer 顶部
 let ro: ResizeObserver | null = null;
 onMounted(() => {
+  document.addEventListener("pointerdown", onDocPointerDown);
   if (dock.value) {
     ro = new ResizeObserver(() => emit("height", dock.value?.offsetHeight ?? 0));
     ro.observe(dock.value);
     emit("height", dock.value.offsetHeight);
   }
 });
-onBeforeUnmount(() => ro?.disconnect());
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", onDocPointerDown);
+  ro?.disconnect();
+});
 </script>
 
 <template>
@@ -155,7 +170,7 @@ onBeforeUnmount(() => ro?.disconnect());
           <!-- 用量环（§3.12，自持开合） -->
           <UsageRing />
           <!-- 模型 chip（§3.30 v2.58）：点开模型选择器浮层 -->
-          <div class="chip-anchor">
+          <div ref="modelAnchor" class="chip-anchor">
             <button
               class="chip chip--model"
               type="button"
@@ -196,8 +211,10 @@ onBeforeUnmount(() => ro?.disconnect());
     </div>
 
     <!-- 工作区 chip 行（§3.11 v3.9，照参考对象补齐）：项目归属随手切，数据
-         与侧栏项目段同源；**在卡片外、坐在下方暗影层上**（用户裁定） -->
-    <div class="composer__wsrow">
+         与侧栏项目段同源；**在卡片外、坐在下方暗影层上**（用户裁定）。
+         v2.60 修复批：会话态移到顶栏标题前（纯图标，Topbar 接线）——这里
+         只剩首页空态形态 -->
+    <div v-if="!chat.items.length" class="composer__wsrow">
       <WorkspacePicker :drop-down="!chat.items.length" />
     </div>
   </div>
@@ -340,9 +357,10 @@ onBeforeUnmount(() => ro?.disconnect());
   transform: scale(0.96);
 }
 .send-btn:disabled {
-  /* 禁用态（v2.59 用户裁定「互换一下」）：底加深、箭头变浅——底比箭深 */
-  background: color-mix(in oklab, var(--lw-ink-1) 32%, transparent);
-  color: color-mix(in oklab, var(--lw-ink-1) 6%, transparent);
+  /* 禁用态（v2.60 修复批用户裁定「箭头要变成浅色」）：浅色箭头 + 退灰底
+   * ——白箭在两主题都落在灰底上可辨（旧 ink 混色在暗主题浅底浅箭不可读） */
+  background: color-mix(in oklab, var(--lw-ink-1) 18%, transparent);
+  color: rgb(255 255 255 / 92%);
   cursor: default;
 }
 </style>

@@ -4,7 +4,8 @@
  * = 容器宽 − 侧栏宽（折叠算 0）− 主区地板 450（硬的：拖宽顶到预算先折叠
  * 侧栏再贴新预算钳制）；拖柄 = setPointerCapture + 全局锁 + ::after 圆角
  * 条 + 键盘 16px/Home/End + 双击复位 360 + aria separator（valuemax=预算
- * 动态）；头部 = 页签条（可关闭）+ `+`（回启动器）+ 最大化/还原 + 关闭；
+ * 动态）；头部 = 页签条（可关闭）+ `+`（回启动器）+ 最大化/还原（v2.60：
+ * 斜对角箭头图标；关闭面板钮退役——开合统一走顶栏开关，v2.60 修复批）；
  * 空态 = 启动器清单（只列已实装条目：§3.16 当前会话可看的子转录）。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
@@ -34,8 +35,14 @@ const activeTab = computed(() =>
 );
 
 const sidebarW = computed(() => (shell.sidebarCollapsed ? 0 : shell.sidebarWidth));
+/** 常态预算：主区保地板 450（§2.5）。 */
 const budget = computed(() => Math.max(1, viewport.value - sidebarW.value - MAIN_FLOOR));
-const width = computed(() => wp.clampTo(budget.value));
+/** 最大化预算（v2.60 修复批）：顶到侧栏左缘直接覆盖对话区——侧栏折叠 =
+ * 满窗口，侧栏展开 = 视口 − 侧栏宽（主区地板在最大化态不保）。 */
+const fullBudget = computed(() => Math.max(1, viewport.value - sidebarW.value));
+const width = computed(() =>
+  wp.maximized ? fullBudget.value : wp.clampTo(budget.value),
+);
 
 // ---- 拖柄（§2.5）----
 const dragging = ref(false);
@@ -88,7 +95,7 @@ function openReview(item: { callId: string; path: string; diff: string }) {
 
 <template>
   <aside
-    class="work-panel relative flex h-full shrink-0 flex-col overflow-hidden bg-dock"
+    class="work-panel relative z-20 flex h-full shrink-0 flex-col overflow-hidden bg-dock"
     :style="{ width: `${width}px` }"
     :aria-label="t('panel.title')"
   >
@@ -140,18 +147,9 @@ function openReview(item: { callId: string; path: string; diff: string }) {
         type="button"
         :title="wp.maximized ? t('panel.restore') : t('panel.maximize')"
         :aria-label="wp.maximized ? t('panel.restore') : t('panel.maximize')"
-        @click="wp.toggleMaximized(budget)"
+        @click="wp.toggleMaximized(fullBudget)"
       >
-        <Icon name="max" :size="13" aria-hidden="true" />
-      </button>
-      <button
-        class="ctl"
-        type="button"
-        :title="t('panel.closePanel')"
-        :aria-label="t('panel.closePanel')"
-        @click="wp.setOpen(false)"
-      >
-        <Icon name="close" :size="13" aria-hidden="true" />
+        <Icon name="maxDiag" :size="13" aria-hidden="true" />
       </button>
     </header>
 
@@ -186,7 +184,7 @@ function openReview(item: { callId: string; path: string; diff: string }) {
       aria-orientation="vertical"
       :aria-label="t('panel.resize')"
       :aria-valuemin="PANEL_MIN"
-      :aria-valuemax="budget"
+      :aria-valuemax="wp.maximized ? fullBudget : budget"
       :aria-valuenow="width"
       :aria-valuetext="t('panel.resizeText', { n: width })"
       :data-dragging="dragging ? '' : undefined"
@@ -203,7 +201,9 @@ function openReview(item: { callId: string; path: string; diff: string }) {
 
 <style scoped>
 /* 面板列底 = bg-dock（§6.1 表专token）；平面内无边框——与主区的层次
- * 靠底色差表达（§6.1 平面内分层铁则，v3.8 走查修正） */
+ * 靠底色差表达（§6.1 平面内分层铁则，v3.8 走查修正）。z-20 = 压过对话区
+ * 的浮起 composer 坞（z-12）/列宽柄（z-11）——v2.60 最大化直接覆盖对话区
+ * 时浮层残影不再透出（常态开面板无水平重叠，此 z 只在覆盖态生效） */
 .ctl {
   display: inline-flex;
   width: var(--lw-ctl);

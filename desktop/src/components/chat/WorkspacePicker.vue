@@ -6,7 +6,9 @@
  * 菜单 = 「最近」组 + 选择新项目（pick_directory → fsRoots）/ 不需要项目
  * （清除归属）；会话内选择 = `session_associate`，首页 = 写挂起归属
  * （首聊自动关联，与项目行 ＋ 同一语义）。首屏向下弹、会话态向上弹
- * （与权限/模型弹层同规）。
+ * （与权限/模型弹层同规）。v2.60 修复批：`iconOnly` 变体 = 会话态顶栏
+ * 标题前的纯图标触发钮（项目 chip 自 composer 底行移来，只显示图标，
+ * 菜单下弹）。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -17,7 +19,7 @@ import { pickDirectory } from "../../lib/api";
 import { workspaceDisplayName } from "../../lib/session-groups";
 import { Icon, type IconName } from "../../lib/icons";
 
-const props = defineProps<{ dropDown?: boolean }>();
+const props = defineProps<{ dropDown?: boolean; iconOnly?: boolean }>();
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -115,7 +117,20 @@ const chipIcon: IconName = "folder";
 
 <template>
   <div ref="root" class="ws-picker">
+    <!-- iconOnly 变体（v2.60 修复批）：顶栏标题前的纯图标触发钮 -->
     <button
+      v-if="props.iconOnly"
+      class="ws-picker__icon-btn"
+      type="button"
+      :aria-expanded="open"
+      :aria-label="t('workspace.title')"
+      :title="currentWs ?? t('workspace.title')"
+      @click="toggle"
+    >
+      <Icon :name="chipIcon" :size="15" aria-hidden="true" />
+    </button>
+    <button
+      v-else
       class="ws-picker__chip"
       type="button"
       :aria-expanded="open"
@@ -177,6 +192,21 @@ const chipIcon: IconName = "folder";
 <style scoped>
 .ws-picker {
   position: relative;
+}
+/* iconOnly 变体（v2.60）：顶栏 §3.19 方形图标控件规格，无底色 hover 才显 */
+.ws-picker__icon-btn {
+  display: inline-flex;
+  width: var(--lw-ctl);
+  height: var(--lw-ctl);
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lw-r-md);
+  color: var(--lw-ink-2);
+}
+.ws-picker__icon-btn:hover,
+.ws-picker__icon-btn[aria-expanded="true"] {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
 }
 .ws-picker__chip {
   display: inline-flex;

@@ -19,6 +19,7 @@ export type IconName =
   | "close"
   | "min"
   | "max"
+  | "maxDiag"
   | "dots"
   | "copy"
   | "edit"
@@ -69,6 +70,9 @@ const PATHS: Record<IconName, string> = {
   close: '<path d="M4.3 4.3 11.7 11.7M11.7 4.3 4.3 11.7"/>',
   min: '<path d="M3.6 8h8.8"/>',
   max: '<rect x="4" y="4" width="8" height="8" rx="1.2"/>',
+  // 斜对角双箭头最大化（v2.60 修复批用户裁定，lucide maximize-2 缩 16 格）
+  maxDiag:
+    '<path d="M10 2h4v4M6 14H2v-4M14 2 9.4 6.6M2 14l4.6-4.6"/>',
   dots: '<circle cx="4" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/>',
   copy: '<rect x="6" y="6" width="7.4" height="7.4" rx="1.6"/><path d="M10.2 3.2H4.4a1.4 1.4 0 0 0-1.4 1.4v5.8"/>',
   edit: '<path d="M11.2 2.6l2.2 2.2-7.8 7.8-2.8.6.6-2.8Z"/>',
