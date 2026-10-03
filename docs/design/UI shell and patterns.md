@@ -573,6 +573,10 @@ derive_messages（不回传供应商），压缩/用量估算不受影响。
 
 ### 3.12 上下文用量浮层（`components/chat/ContextUsagePopover.vue`）
 
+> v4.1（v2.62）：用量快照**随会话持久化**（`SessionEvent::ContextUsage` 落日志，DESIGN
+> §4.1）+ 投影同形——重放恢复用量环与进度条；切会话回来统计不再消失（此前快照只推
+> 实时通道，重放面没有该事件）。
+
 锚在用量环按钮上方、右对齐，360px 宽 `--lw-bg-elevated` popover。**分项读数**（照参考对象
 实机）：
 

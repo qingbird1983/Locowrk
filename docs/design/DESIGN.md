@@ -463,6 +463,13 @@ pub enum SessionEvent {
     LlmUsage         { input: u64, output: u64, cache_read: u64,
                        cache_write: u64, reasoning: u64, total: u64,
                        duration_ms: u64 },
+    /// 上下文用量快照（v2.62）：轮次前与每个 step 后各一条，口径与实时
+    /// 推送同源（estimate_tokens）。derive_messages 跳过（过程计量不是
+    /// 上下文，不回传供应商）；投影层映成 `agent://context-usage`——
+    /// 重放恢复用量环（此前只推实时通道，切会话回来统计即消失）。
+    /// 字段 serde(default) 向后兼容旧日志。
+    ContextUsage     { used: u64, threshold: u64, window_tokens: u64,
+                       tools_est_tokens: u64 },
     ToolCall         { call_id: CallId, tool: String, args: Value,
                        plugin_version: Version, side_effect: SideEffect },
     ToolResult       { call_id: CallId, output: Value, error: Option<String> },

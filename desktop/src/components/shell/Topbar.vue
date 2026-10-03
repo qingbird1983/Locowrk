@@ -83,19 +83,23 @@ const title = computed(() => {
     <!-- 面板开关（v2.61 用户裁定「展开右栏还是被挤跑」）：**fixed 钉窗**，
          不在会随面板开合收缩的文档流里——右缘 120px（= 窗口控制车道左缘）
          恒定，开合零位移；面板打开时正好落进面板头为它预留的槽位（原
-         「关闭面板」钮的位置，§2.5 v2.60），[+][⤢] 在它左侧。首页空态隐藏 -->
-    <button
-      v-if="!isHome"
-      class="ctl panel-toggle"
-      type="button"
-      :aria-pressed="workPanel.open"
-      :title="t('panel.title')"
-      :aria-label="t('panel.title')"
-      @click="workPanel.toggle()"
-    >
-      <Icon name="panel" :size="14" aria-hidden="true" />
-    </button>
+         「关闭面板」钮的位置，§2.5 v2.60），[+][⤢] 在它左侧。首页空态隐藏。
+         **渲染为组件第二根**（v2.61·fix）：header 自身是 z-10 层叠上下文，
+         钉在它里面会被 z-20 的工作面板整个盖住（用户报「按钮不见了」）——
+         挪到 data-chat-root 直属（z-auto，不设层叠上下文），按钮自己的
+         z-30 才真正压过面板。 -->
   </header>
+  <button
+    v-if="!isHome"
+    class="ctl panel-toggle"
+    type="button"
+    :aria-pressed="workPanel.open"
+    :title="t('panel.title')"
+    :aria-label="t('panel.title')"
+    @click="workPanel.toggle()"
+  >
+    <Icon name="panel" :size="14" aria-hidden="true" />
+  </button>
 </template>
 
 <style scoped>
@@ -116,7 +120,8 @@ const title = computed(() => {
 
 /* 面板开关钉窗（v2.61）：fixed 相对窗口——top = (46−28)/2，right = 车道
  * 120px；z-30 压过工作面板（z-20）落在其预留槽位上。目的地切走时随
- * data-chat-root display:none 一起消失 */
+ * data-chat-root display:none 一起消失。注意它必须是组件第二根——header
+ * （relative z-10）是层叠上下文，钉在里面整体只有 z-10，会被面板盖住 */
 .panel-toggle {
   position: fixed;
   top: 9px;

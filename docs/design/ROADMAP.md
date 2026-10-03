@@ -717,6 +717,8 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 | 测试 | ✅ v2.60 | 桌面 141 绿（纯前端批零 Rust 改动）、vue-tsc+vite 过、check_length OK、pnpm build 过 |
 | ⑭ 问候语同源（v2.61 复测单①） | ✅ v2.61：用户复测「还是不灵敏」——v2.60 索引链的「最近活动会话/第一个 fsRoot」回落与 chip 不同源（挂起归属清空后 chip=「选择文件夹」问候仍挂旧项目）。修 = chat store 新 getter **`currentWorkspace`**（会话态旁车 / 首页挂起归属），chip 与 WelcomeHome 同吃一个真源，`homeProjectName` 回落链退役；实测选 A→同变 A、新建任务→chip 空 + 问候不带名、选 B→同变 B |
 | ⑮ 面板开关钉窗（v2.61 复测单②） | ✅ v2.61：用户复测「展开右栏还是被挤跑」——v2.60 恒预留车道只对消 120px 车道，主区自身随面板收缩文档流内必被挤动。修 = 开关 `position:fixed; top:9px; right:120px; z-30` **零位移**，Topbar/面板头 `padding-right = 车道+40px` 留槽（原「关闭面板」钮位置，⑨ 裁定闭环）；实测开合前后 left=1132/top=9 逐像素不变、与 [+][⤢] 无重叠 |
+| ⑯ 钉窗开关层叠修正（v2.62 复测单③） | ✅ v2.62：用户复测「右栏一展开开关就不见了、没有按钮收起」——开关虽 fixed 仍在顶栏 header（relative z-10）层叠上下文内，整份只有 z-10，被 z-20 面板整体盖住（此前 JS `.click()` 验证绕过命中测试没抓到）。修 = Topbar 改双根、开关作为组件第二根挂 data-chat-root 直属（z-auto），自身 z-30 真压过面板；验证升级为真实命中测试（elementFromPoint + CDP 真实鼠标点击收起，皆 PASS） |
+| ⑰ 上下文统计持久化（v2.62 复测单④） | ✅ v2.62：用户复测「新会话首条消息有用量显示，退出再进就没了」——用量快照只推实时通道不落日志，重放面无此事件。修 = 照 LlmUsage 先例：session-store 新 **`SessionEvent::ContextUsage`**（serde(default) 向后兼容；derive_messages 跳过），run_turn 轮次前 + 每 step 后各落一条（record_usage 自带落盘与实时单发，下轮窗口越过不重发；收敛判据读 last() 在追加前），project_events 重放同形——前端重放期恢复用量环/进度条；回归测试 `context_usage_persists_and_replays`（+1，桌面 142 绿） |
 
 验证：实机走查（CDP 260-1…12-13 + 截图，tauri dev）：无项目问候 nameless/带项目问候/项目 ＋ 即时跟切（greeting+chip 双证）/会话态开面板→新建任务回首屏面板收起/发送键禁用态白箭 rgba(255,255,255,.92)/顶栏项目图标+下弹菜单（wsrow 退场）/长标题 360px 省略/三弹层上滑 + ctx-popover 规则在场/开关无底色 + 120px 恒定偏移/面板头两钮（启动器+斜对角最大化）无关闭/关闭钮 hover 红底/最大化 1040 与 1280 双态/柄距正文 9px/两列 left=283 right=1237 零偏差。v2.61 复测（CDP）：场景 A 同源三步（选 A/新建任务/选 B 两边逐次同变）+ 场景 B 钉窗零位移；走查会话已清（含一个 LLM 流式挂起轮次随进程终止后盘上删除）、fsRoots 还原空、settings 其余零改动。
 

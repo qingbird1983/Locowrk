@@ -59,7 +59,7 @@ pub async fn run_turn(
         session_log::append_slice(dir, session_id, session, log_start);
     }
     if let Some(u) = usage {
-        emit_usage(session, session_id, u, sink);
+        record_usage(session, session_id, u, sink, log);
     }
 
     for steps in 1..=max_steps.max(1) {
@@ -78,15 +78,18 @@ pub async fn run_turn(
             session_log::append_slice(dir, session_id, session, before);
         }
         record_stats(session, before, stats);
-        if let Some(u) = usage {
-            emit_usage(session, session_id, u, sink);
-        }
 
-        // 收敛判据：本步 assistant 没有再发工具调用 → 轮次结束
+        // 收敛判据：本步 assistant 没有再发工具调用 → 轮次结束（在追加
+        // 用量快照之前读 last()——快照不是消息，不能影响收敛判定）
         let done = matches!(
             session.events().last(),
             Some(SessionEvent::AssistantMessage { tool_calls, .. }) if tool_calls.is_empty()
         );
+        if let Some(u) = usage {
+            // v2.62：快照落日志 + 实时投影（自带 append_slice 与单发，
+            // 下一轮投影窗口 before 已越过本事件，不会重发）
+            record_usage(session, session_id, u, sink, log);
+        }
         if done {
             sink.emit(&AgentEvent::TurnDone {
                 session_id: session_id.into(),
@@ -175,6 +178,21 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                     reasoning: *reasoning,
                     total: *total,
                     duration_ms: *duration_ms,
+                });
+            }
+            SessionEvent::ContextUsage {
+                used,
+                threshold,
+                window_tokens,
+                tools_est_tokens,
+            } => {
+                // v2.62：用量快照重放同形——切会话回来用量环恢复
+                out.push(AgentEvent::ContextUsage {
+                    session_id: session_id.into(),
+                    used: *used,
+                    threshold: *threshold,
+                    window_tokens: *window_tokens,
+                    tools_est_tokens: *tools_est_tokens,
                 });
             }
             SessionEvent::AssistantMessage { content, .. } => {
@@ -282,10 +300,29 @@ fn record_stats(session: &Session, from: usize, stats: Option<&UsageRecorder>) {
 }
 
 /// 进度条口径与压缩判定同源：折叠后的消息用 kernel_agent::estimate_tokens。
-fn emit_usage(session: &Session, session_id: &str, u: UsagePolicy, sink: &dyn EventSink) {
+/// v2.62：快照**落会话日志**（SessionEvent::ContextUsage）+ 实时单发投影
+/// ——重放经 project_events 同形恢复用量环（此前只推实时通道，切会话
+/// 回来统计即消失）。下一轮投影窗口 `before` 已越过本事件，不会重发。
+fn record_usage(
+    session: &mut Session,
+    session_id: &str,
+    u: UsagePolicy,
+    sink: &dyn EventSink,
+    log: Option<&Path>,
+) {
+    let used = estimate_tokens(&session.derive_messages());
+    session.append(SessionEvent::ContextUsage {
+        used,
+        threshold: u.threshold_tokens,
+        window_tokens: u.window_tokens,
+        tools_est_tokens: u.tools_est_tokens,
+    });
+    if let Some(dir) = log {
+        session_log::append_slice(dir, session_id, session, session.len() - 1);
+    }
     sink.emit(&AgentEvent::ContextUsage {
         session_id: session_id.into(),
-        used: estimate_tokens(&session.derive_messages()),
+        used,
         threshold: u.threshold_tokens,
         window_tokens: u.window_tokens,
         tools_est_tokens: u.tools_est_tokens,

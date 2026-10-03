@@ -225,3 +225,72 @@ fn truncate_after_resolves_pos_and_rewrites_disk() {
     let (prev, _) = session_store::load_session(&bak).unwrap();
     assert_eq!(prev.len(), 4, "备份保留截断前完整日志");
 }
+
+/// v2.62 §3.12 上下文统计持久化：run_turn（带 UsagePolicy + log）把
+/// `SessionEvent::ContextUsage` 落日志（轮次前 + 每 step 后各一条），
+/// 重启恢复后全量投影含同形事件且逐字段透传——切会话回来用量环恢复
+/// （此前快照只推实时通道，重放面没有该事件，切回来统计即消失）。
+#[tokio::test]
+async fn context_usage_persists_and_replays() {
+    let dir = tmp_dir("ctx-usage");
+    let kernel = kernel_with_tools();
+    let mut session = Session::new();
+    let sink = Collector::default();
+
+    run_turn(
+        &kernel,
+        &mut session,
+        "s-ctx",
+        "echo 你好".into(),
+        Some(crate::runner::UsagePolicy {
+            threshold_tokens: 8000,
+            window_tokens: 32000,
+            tools_est_tokens: 512,
+        }),
+        &sink,
+        None,
+        Some(&dir),
+        crate::runner::DEFAULT_MAX_STEPS,
+    )
+    .await
+    .expect("turn ok");
+
+    // 实时面：进度条数据源照常推送
+    assert!(sink
+        .events()
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ContextUsage { .. })));
+
+    // 重启恢复面：全量投影含同形快照（轮次前 + 每 step 后 ≥ 2 条）
+    let map: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    assert_eq!(session_log::restore_all(&dir, &map), 1);
+    let restored = map.lock().unwrap().get("s-ctx").cloned().unwrap();
+    let restored = restored.lock().await;
+    let projected = crate::runner::project_events(restored.events(), "s-ctx");
+    let hits: Vec<&AgentEvent> = projected
+        .iter()
+        .filter(|e| matches!(e, AgentEvent::ContextUsage { .. }))
+        .collect();
+    assert!(
+        hits.len() >= 2,
+        "轮次前 + 每 step 后各一条快照，实际 {} 条",
+        hits.len()
+    );
+    match hits.last() {
+        Some(AgentEvent::ContextUsage {
+            used,
+            threshold,
+            window_tokens,
+            tools_est_tokens,
+            ..
+        }) => {
+            assert_eq!(*threshold, 8000);
+            assert_eq!(*window_tokens, 32000);
+            assert_eq!(*tools_est_tokens, 512);
+            assert!(*used > 0, "估认真发生");
+        }
+        other => panic!("末条投影应为 ContextUsage：{:?}", other.is_none()),
+    }
+    std::fs::remove_dir_all(&dir).ok();
+}

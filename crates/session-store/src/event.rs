@@ -55,6 +55,22 @@ pub enum SessionEvent {
         total: u64,
         duration_ms: u64,
     },
+    /// 上下文用量快照（v2.62，§3.12 进度条数据源持久化）：轮次前与每个
+    /// step 后各一条，口径与实时推送同源（kernel_agent::estimate_tokens）。
+    /// derive_messages 跳过（用量是过程计量不是上下文，不回传供应商）；
+    /// 投影层映成 `agent://context-usage`——重放恢复用量环（此前只推实时
+    /// 通道，切会话回来统计即消失）。字段全 `serde(default)`（向后兼容
+    /// 旧日志，ContextCompacted 同款）。旧日志无此变体。
+    ContextUsage {
+        #[serde(default)]
+        used: u64,
+        #[serde(default)]
+        threshold: u64,
+        #[serde(default)]
+        window_tokens: u64,
+        #[serde(default)]
+        tools_est_tokens: u64,
+    },
     /// 先写日志再执行（纪律 5）：崩溃后 replay 能识别悬空调用。
     /// `plugin_id` 是 ⑩ 使用统计的归属键；内置替身 / 旧日志缺省 None
     /// （serde default 兼容，exposure 文档 §3.4）。
