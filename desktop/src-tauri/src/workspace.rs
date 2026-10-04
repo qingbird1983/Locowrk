@@ -3,9 +3,9 @@
 //! 权威数据 = 会话旁车 `<id>.meta.json` 的 `workspace` 字段（§2.3 关联，
 //! v2.50 落地）。desktop 消费同一份解析：
 //! ① `plugin_host::set_session_context_resolver`——FFI 调用期上下文
-//!    （workspace + ㉘·B `fs_roots` 围栏根），memory-sqlite / tool-fs /
-//!    tool-shell(路径类) / tool-git 等插件经 vtable `session_context`
-//!    反向查询；
+//!    （workspace + `fs_roots` 调用期围栏根；㉘·C 起围栏 = 全局声明根、
+//!    让路给权限档），memory-sqlite / tool-fs / tool-shell(路径类) /
+//!    tool-git / tool-edit 等插件经 vtable `session_context` 反向查询；
 //! ② `workspace_view`（workspace-only 投影）——`MemoryStore` /
 //!    `ExperienceIndex` 召回键位过滤 + `ApprovalHub` 环境行数据源。
 //!
@@ -36,19 +36,26 @@ fn canon_or_raw(p: &Path) -> String {
         .into_owned()
 }
 
-/// 组装点构造：绑死会话目录与数据根。**归属会话**下发
-/// `fs_roots = [数据根, 项目工作区]`（围栏跟会话：工具面收缩到项目内，
-/// 数据根保备份/恢复可达）；**未归属会话不下发**（空表 = 插件回落
-/// `LOCOWRK_FS_ROOTS` 既有全局语义，headless 同）。
+/// 组装点构造：绑死会话目录、数据根与设置侧 fsRoots 供给（保存即生效，
+/// 读当前值）。**㉘·C 围栏让路**（用户裁定"权限选择一等公民，其它阻挡
+/// 全部让路"）：**归属会话**下发 `fs_roots = [数据根] ∪ settings.fsRoots`
+/// （全局声明根，所有权限档位一致——不再按归属收窄为 `[数据根, 项目
+/// 工作区]`；工作区归属只决定记忆键位/环境行/侧栏，不构成权限墙）；
+/// **未归属会话不下发**（空表 = 插件回落 `LOCOWRK_FS_ROOTS` 同一集合，
+/// headless 同）。出声明根仍由插件 fail-closed 拒绝（文案自描述，v2.66
+/// 先例）+ 越界门兜底 shell 命令。
 pub fn session_context_resolver(
     sessions_dir: PathBuf,
     data_root: PathBuf,
+    fs_roots_of: std::sync::Arc<dyn Fn() -> Vec<String> + Send + Sync>,
 ) -> SessionContextResolver {
     Arc::new(move |session_id: &str| {
         let workspace = read_meta(&sessions_dir, session_id).and_then(|m| m.workspace);
         let fs_roots: Vec<String> = match &workspace {
             Some(ws) if !ws.is_empty() => {
-                vec![canon_or_raw(&data_root), canon_or_raw(Path::new(ws))]
+                let mut roots = vec![canon_or_raw(&data_root)];
+                roots.extend((fs_roots_of)().iter().map(|r| canon_or_raw(Path::new(r))));
+                roots
             }
             _ => Vec::new(),
         };

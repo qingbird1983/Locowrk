@@ -208,8 +208,10 @@ export interface ApprovalRequest {
   timeout_secs?: number | null;
   /** ㉘·B：会话真实归属——决策卡环境行数据源（null = 前端回落 fsRoots[0]/临时会话）。 */
   workspace?: string | null;
-  /** ㉘·B：外部路径门命中——卡上不渲染「允许本次对话」。 */
+  /** ㉘·B 越界门 / ㉘·C 隐私门命中——硬门卡不渲染「允许本次对话」。 */
   external?: boolean;
+  /** ㉘·C 隐私门类别键（privacy.rs 清单；i18n `approval.sensitive.<key>`）。 */
+  sensitive?: string | null;
 }
 
 /** 市场目录条目（plugin_registry_list 返回项；versions 升序，末位 latest；

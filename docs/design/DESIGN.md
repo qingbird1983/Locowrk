@@ -1140,26 +1140,32 @@ impl Kernel {
 > `resolve` 报 `NotAvailable`——"模型看不见的工具才不会去调"，PI 同款结论），
 > 也是未来"插件按项目过滤可见性"的落点。
 >
-> ② **审批 consult 扩到非 Pure**——Kernel 对 `Compensable` 调用同样咨询决议者
-> （`询问` 档语义 = 有 undo 的写类也要问）；**无决议者（headless）时 `Compensable`
-> 照旧放行、`Irreversible` 照旧 fail-safe 拒绝——headless 语义零变化**。Pure 永不
-> 咨询（低险直通，所有档位同）。决策表（序即优先级，先命中先裁决）：
+> ② **审批 consult 全量（㉘·C 修订；㉘·B 原文为"扩到非 Pure"）**——决议者在场时
+> **每次工具调用都过决策表**（含 Pure：隐私门要能拦住 `shell_read` 读 `.ssh`）；
+> 只读直通由决策表自己放行（reason `mode:pure`，审计照写、前端不渲染）。**无决议者
+> （headless）语义零变化**：Pure / `Compensable` 照旧放行、`Irreversible` 照旧
+> fail-safe 拒绝，不产生 consult。决策表（序即优先级，先命中先裁决）：
 >
 > | 序 | 门 | 行为 |
 > |---|---|---|
 > | 1 | 计划档 | 非 Pure 一律拒绝、不弹卡（正常路径已被目录过滤，此处纵深防御） |
-> | 2 | 外部路径门 | `shell` / `sandbox_run` 命令文本扫出围栏外绝对路径 → 强制弹卡且**只许一次**（载荷 `external:true`，不进豁免集、`完全` 档也不能跳过） |
-> | 3 | 模式放行 | `完全` = 全放；`自动编辑` = 仅 `Compensable` 放；`询问` = 落到决策卡 |
+> | 2 | 硬门（隐私 + 越界） | **隐私门**：凭据/隐私目标 → 强制弹卡，载荷 `sensitive`（类别键）：凭据目录/文件（`.ssh`、`.aws`、`.gnupg`、`.kube`、`.git-credentials`、`.netrc`、`.docker/config.json`、浏览器凭据库）、凭据库/转储命令（`vaultcmd`、`mimikatz`、`sekurlsa`、lsass minidump 类）、毁灭性命令（`format X:`、`mkfs`、`diskpart`、`cipher /w`、`vssadmin delete`、`bcdedit`、`dd … of=/dev/`、fork bomb、盘根/家目录递归强删）；**越界门**（㉘·B 外部路径门，围栏改全局声明根后 = 越出声明根才触发）：`shell` / `sandbox_run` 命令文本扫出全局声明根外绝对路径 → 强制弹卡，载荷 `external:true`。两门都**只许一次**（不进豁免集、`完全` 档也不能跳过——用户裁定"最危险的触及用户隐私的或本地隐私的有拦截"）。清单住桌面端 `privacy.rs`，启发式宁漏勿错杀（漏报由档位兜底：`询问` 档非 Pure 本来就卡），`.env` 不拦（开发日常，ZCode 同款；未来可配开关） |
+> | 3 | 模式放行（一等公民，㉘·C 用户裁定） | `完全` = 全放、基本零弹窗（硬门除外）；`自动编辑` = 仅 `Compensable` 放；`询问` = 非 Pure 落到决策卡；`计划` + Pure = 直通放行（只读调研，reason `mode:plan-readonly`） |
 > | 4 | 会话豁免 | `(session_id, tool)` 命中 → 放行（「允许本次对话」既有语义） |
-> | 5 | 决策卡 | 弹卡（豁免三键 / 守夜超时等既有语义不变） |
+> | 5 | 决策卡 | 弹卡（豁免三键 / 硬门两键 / 守夜超时等既有语义不变） |
 >
 > 自动放行照写 `ApprovalDecided`（审计不缺；reason 用 `mode:*` 前缀，前端据此不渲染
-> 记录条）。**围栏跟会话**：FFI `CallContext` 追加 `fs_roots` 字段（serde 缺省空表，
-> 向后兼容）——桌面端对**归属会话**下发 `[数据根, 项目工作区]`、未归属会话不下发
-> （插件回落 `LOCOWRK_FS_ROOTS` 既有全局语义，headless 同）；tool-fs / tool-shell
-> （路径类）/ tool-git 经 `fsutil::effective_roots` 取调用期根。结构化路径工具
-> （fs/edit/git）出围栏仍 fail-closed 拒绝（既有契约不变，拒绝文案引导改走 shell 审批路）；
-> 三类硬底线（路径逃逸 / SSRF / ABI 边界）住在插件内，任何档位不削弱。
+> 记录条）。**围栏让路给权限档（㉘·C 用户裁定"权限选择一等公民；其它阻挡全部让路"；
+> ZCode 借鉴：其 path-policy 自述"有意不硬拦 workspaceRoot 之外的路径"——位置不设
+> 墙、只设审批门，最宽档之上只留 always-ask 硬钉）**：FFI `CallContext.fs_roots`
+> 统一下发**全局声明根** `[数据根] ∪ settings.fsRoots`（所有档位一致，不再按会话
+> 归属收窄为 `[数据根, 项目工作区]`；未归属不下发回落 env 同一集合，headless 同）。
+> **会话工作区归属不再构成权限墙**——它只决定记忆键位（㉘·A）、审批卡环境行、侧栏
+> 项目归属；跨项目浏览在声明根内畅通，出声明根由结构化路径工具 fail-closed 拒绝
+> （拒绝文案自描述列出生效根 + 指引到设置加根，v2.66 先例）+ 越界门兜底 shell 命令。
+> tool-fs / tool-shell（路径类）/ tool-git / tool-edit（v2.66 纳入）经
+> `fsutil::effective_roots` 取调用期根。计划档的写入约束照旧走目录级围栏（非 Pure
+> 不出目录）。三类硬底线（路径逃逸 / SSRF / ABI 边界）住在插件内，任何档位不削弱。
 
 ---
 

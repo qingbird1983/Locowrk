@@ -49,8 +49,10 @@ pub mod channels {
 /// `workspace`（㉘·B §3.17）：会话真实归属——决策卡环境行"这条将在哪儿
 /// 跑"的数据源（此前恒取 fsRoots[0] 是占位）；未归属 None（前端回落
 /// fsRoots[0] / "临时会话"）。
-/// `external`（㉘·B）：外部路径门命中——围栏外命令逐次审批、只许一次，
-/// 前端据此**不渲染**「允许本次对话」。
+/// `external`（㉘·B）：越界门命中——命令越出全局声明根，逐次审批、只许
+/// 一次，前端据此**不渲染**「允许本次对话」。
+/// `sensitive`（㉘·C）：隐私门命中——类别键（`privacy.rs` 清单，前端
+/// i18n `approval.sensitive.<key>`），与 `external` 同款两键卡。
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalRequestPayload {
     pub request_id: String,
@@ -64,6 +66,8 @@ pub struct ApprovalRequestPayload {
     pub workspace: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not", default)]
     pub external: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sensitive: Option<String>,
 }
 
 /// 推给前端的事件。字段命名与 session-store 事件对齐（snake_case）；

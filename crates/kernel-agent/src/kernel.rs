@@ -280,14 +280,15 @@ impl Kernel {
                 side_effect: tool.spec().side_effect.clone(),
             });
 
-            // 非 Pure 调用先过审批门（㉘·B：consult 扩到 Compensable——
-            // `询问` 档语义 = 有 undo 的写类也要问；四档决策表住在决议者
-            // 实现内，内核只透传请求）。无决议者时 fail-safe（纪律 9）：
-            // Irreversible 拒绝，Compensable 照旧放行（有 §6.3 undo 路径，
-            // headless 语义零变化）。决策本身作为 ApprovalDecided 事件写入
-            // 日志。被拒调用当场以 denied 的 ToolResult 闭合——replay 只会
-            // 把"执行中崩溃"视为悬空，被拒调用不留悬空（§7.2）。
-            if !matches!(tool.spec().side_effect, SideEffect::Pure) {
+            // 决策表在决议者实现内，内核只透传请求（㉘·B 起 consult 扩到
+            // Compensable；㉘·C 起决议者在场 = 全量 consult，含 Pure——隐私
+            // 门要能拦住 shell_read 读 `.ssh`，只读直通由决策表自己放行）。
+            // 无决议者时 fail-safe（纪律 9）且语义不变：Irreversible 拒绝，
+            // Pure/Compensable 照旧放行不 consult（headless 零变化）。决策
+            // 本身作为 ApprovalDecided 事件写入日志。被拒调用当场以 denied
+            // 的 ToolResult 闭合——replay 只会把"执行中崩溃"视为悬空，被拒
+            // 调用不留悬空（§7.2）。
+            if self.approval.is_some() || !matches!(tool.spec().side_effect, SideEffect::Pure) {
                 let decision = self.approve(&call, tool.spec()).await;
                 session.append(SessionEvent::ApprovalDecided {
                     call_id: call.id.clone(),

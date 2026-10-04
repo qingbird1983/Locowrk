@@ -673,6 +673,19 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 
 验证：静态取证（audit.jsonl / 会话旁车 / settings / DLL 构建时间 vs ㉘·B 提交时间）+ 全量测试；实机复验待应用重启载入 0.1.1 产物后重试——此后第一次越界拒绝即自带围栏根清单，内嵌 Agent 据此可直接列出归属工作区。
 
+### ㉘·C 权限档一等公民：围栏让路 + 隐私门（✅ 已完成，v2.67——用户裁定「权限选择是一等公民，其它阻挡全部让路；完全访问基本零弹窗，仅最危险的隐私/本地隐私有拦截」，参照 ZCode 规则设计）
+
+| 项 | 说明 |
+|---|---|
+| 围栏让路 | ✅ v2.67：`CallContext.fs_roots` 统一下发**全局声明根** `[数据根] ∪ settings.fsRoots`（resolver 增 fsRoots 供给闭包，保存即生效），所有权限档位一致、不再按归属收窄为 `[数据根, 项目工作区]`——会话工作区归属不再构成权限墙（跨项目浏览在声明根内畅通，出声明根仍由插件 fail-closed 拒绝 + 文案自描述列根指引设置加根）。直接消除 v2.66 报障场景：已选 AAA 工作区问 Locowrk 文件夹不再被拒 |
+| consult 全量 | ✅ v2.67：kernel-agent 决策环 `if self.approval.is_some() ‖ 非 Pure` ——决议者在场 = **每次调用都过决策表（含 Pure）**，隐私门才能拦住 `shell_read` 读 `.ssh`；只读直通由决策表放行（reason `mode:pure` / `mode:plan-readonly`，前端不渲染记录条）；headless 无决议者语义零变化（Pure/Compensable 静默放行、Irreversible fail-safe 拒） |
+| 决策表重排 | ✅ v2.67（DESIGN §7.2 重写）：①计划档非 Pure 硬拒 → ②**硬门**（隐私 + 越界，强制两键卡、不进豁免集、完全档也跳不过）→ ③模式放行（完全=全放基本零弹窗 / 自动编辑=Compensable / 询问=非 Pure 卡 / Pure 直通）→ ④会话豁免 → ⑤决策卡。越界门围栏改读 `CallContext.fs_roots` 与插件围栏同源（声明根内命令不再弹卡） |
+| 隐私门 v1 | ✅ v2.67：新 `desktop privacy.rs` 纯函数扫描（宁漏勿错杀——漏报由档位兜底）：凭据目录 `.ssh/.aws/.gnupg/.kube`（组件边界）、`.git-credentials/.netrc`、`.docker/config.json`、浏览器凭据库（厂商目录限定）、系统凭据库/转储命令（`vaultcmd/mimikatz/sekurlsa/lsass dump`）、毁灭性命令（`format x:/mkfs/diskpart/cipher /w/vssadmin delete/bcdedit/dd of=/dev//fork bomb/盘根递归强删`）；**`.env` 不拦**（开发日常，ZCode 同款）；文件体字段（content/patch）跳过防误伤。命中载荷 `sensitive:<类别>` |
+| ZCode 借鉴记录 | ✅ v2.67：侦察其源码（`core/src/permission/`）——**无路径围栏**（path-policy 自述有意不硬拦）、yolo 之上仅 alwaysAsk 工具钉 + 交互类必问、决策序「阻断类全在放行类前」；采纳其骨架（模式一等公民 + 最宽档只留 always-ask 硬钉），补其自认缺口（凭据/毁灭命令清单为桌面端最小集） |
+| 前端 | ✅ v2.67：PermissionCard 硬门提示行（越界 warn 行 + 隐私类别行 `触及隐私或高危目标：{kind}`，`approval.sensitive.*` 10 类别 zh/en）、两键判据 `external ‖ sensitive`；四档菜单描述（完全 = 「全部放行，基本不再弹窗；仅越界/隐私拦截」）+ 设置行 hint 同步；types.ts 载荷镜像 +sensitive |
+| 插件版本 | ✅ v2.67：tool-{fs, shell, git, edit} 0.1.1 → 0.1.2（fsutil 拒绝文案改「全局声明根 + 指引设置加根」，v2.66 的「围栏跟会话归属」措辞过时；fsutil 为四件静态链接依赖，同批重建） |
+| 测试 | ✅ v2.67：kernel-agent 70 绿（+2：Pure 决议者在场被 consult 可拒 / headless Pure 静默零审批事件）；桌面 166 绿（+10：隐私门 6 + 隐私卡/Pure 直通/越界门含声明根内放行 3 + 围栏保存即生效 1）；workspace 全绿、clippy 0 双侧、fmt、pnpm build 过、check_length 报告 4 文件超建议值（三问自检保留：kernel/tests.rs 测试单主题、PermissionCard 卡单组件、approval.rs 决策表单职责、state/mod.rs 组装点） |
+
 ### ㉙ 会话运营补全（✅ 已完成，v2.57——功能层规划第二批）
 
 | 项 | 说明 |

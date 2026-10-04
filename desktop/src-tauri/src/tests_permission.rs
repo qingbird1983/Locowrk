@@ -124,25 +124,50 @@ async fn plan_mode_denies_without_card() {
     assert!(sink.events().iter().all(|e| kind(e) != "approval_request"));
 }
 
-/// 决策表② 外部路径门：`完全` 档下围栏外命令仍强制弹卡（豁免也拦不住），
-/// 载荷 external=true 且带会话 workspace（环境行如实）。
+/// 决策表② 越界门：`完全` 档下越出全局声明根的命令仍强制弹卡（豁免也
+/// 拦不住），载荷 external=true 且带会话 workspace（环境行如实）；
+/// 声明根内的命令不弹卡（㉘·C 围栏让路——跨项目畅通）。
 #[tokio::test]
 async fn external_path_forces_card_even_in_auto() {
     let sink = Collector::default();
     let modes = store("external", PermissionMode::Auto);
     let sessions = std::env::temp_dir().join("lw-perm-ext-sessions");
     let _ = std::fs::create_dir_all(sessions.join("ws"));
-    // 归属 s1 → 工作区；fs_roots 在解析器里感知，这里手工构造视图
+    // 归属 s1 → 工作区；围栏 = 全局声明根（数据根 + fsRoots），resolver 手工构造
     let ws_path = sessions.join("ws").canonicalize().unwrap();
-    let resolver: crate::workspace::WorkspaceResolver =
-        Arc::new(move |sid: &str| (sid == "s1").then(|| ws_path.to_string_lossy().into_owned()));
+    let ws_clone = ws_path.clone();
+    let resolver: crate::workspace::SessionContextResolver = Arc::new(move |sid: &str| {
+        let attributed = sid == "s1";
+        plugin_api::ffi::CallContext {
+            session_id: Some(sid.to_string()),
+            workspace: attributed.then(|| ws_clone.to_string_lossy().into_owned()),
+            fs_roots: if attributed {
+                vec![ws_clone.to_string_lossy().into_owned()]
+            } else {
+                Vec::new()
+            },
+        }
+    });
     let hub = Arc::new(
         ApprovalHub::with_timeout(Arc::new(sink.clone()), std::time::Duration::ZERO)
             .with_modes(Arc::clone(&modes))
             .with_workspace(Arc::clone(&resolver)),
     );
-    // 先种豁免：模拟此前「允许本次对话」已发生——external 门必须无视它
+    // 先种豁免：模拟此前「允许本次对话」已发生——越界门必须无视它
     hub.decide_seed_for_test("s1", "shell");
+
+    // 声明根内（工作区自身）：不弹卡，`完全` 档直接放行
+    let inside = ws_path.to_string_lossy().replace('\\', "/");
+    let d = hub
+        .resolve(
+            &req(
+                "shell",
+                json!({ "command": format!("type {inside}/a.txt") }),
+            ),
+            &spec(SideEffect::Irreversible),
+        )
+        .await;
+    assert!(d.allowed, "声明根内命令在完全档直接放行（围栏让路）");
 
     let decider = Arc::clone(&hub);
     tokio::spawn(async move {
@@ -171,6 +196,70 @@ async fn external_path_forces_card_even_in_auto() {
     assert!(p.external, "载荷必须标 external");
     assert!(p.workspace.as_deref().is_some(), "载荷带会话真实工作区");
     assert!(hub.pending().is_empty());
+}
+
+/// 决策表② 隐私门：`完全` 档下触及凭据目标（含 Pure 只读工具）仍强制
+/// 弹卡——privacy.rs 清单压过模式放行与豁免，载荷带类别键。
+#[tokio::test]
+async fn privacy_gate_forces_card_even_in_auto_and_pure() {
+    let sink = Collector::default();
+    let modes = store("privacy", PermissionMode::Auto);
+    let hub = Arc::new(
+        ApprovalHub::with_timeout(Arc::new(sink.clone()), std::time::Duration::ZERO)
+            .with_modes(Arc::clone(&modes)),
+    );
+    // 豁免已发生也拦不住
+    hub.decide_seed_for_test("s1", "shell_read");
+
+    let decider = Arc::clone(&hub);
+    tokio::spawn(async move {
+        loop {
+            if let Some(r) = decider.pending().first().cloned() {
+                assert_eq!(r.sensitive.as_deref(), Some("ssh"));
+                let _ = decider.decide(&r.request_id, false, None, None);
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        }
+    });
+    // Pure 工具（决策表③ 原本直通）也被隐私门拦下
+    let d = hub
+        .resolve(
+            &req("shell_read", json!({ "path": "C:/Users/x/.ssh/id_rsa" })),
+            &spec(SideEffect::Pure),
+        )
+        .await;
+    assert!(!d.allowed, "隐私卡被拒收束（测试决断者拒绝）");
+    let p = sink.events().iter().find_map(|e| match e {
+        AgentEvent::ApprovalRequest(p) => Some(p.clone()),
+        _ => None,
+    });
+    let p = p.expect("privacy card emitted");
+    assert_eq!(p.sensitive.as_deref(), Some("ssh"), "载荷带类别键");
+    assert!(!p.external, "隐私门 ≠ 越界门");
+    assert!(hub.pending().is_empty());
+}
+
+/// 决策表③ 只读直通（㉘·C 新面）：Pure 在任何档位（含询问/计划）不经卡
+/// 直通，reason mode:pure / mode:plan-readonly。
+#[tokio::test]
+async fn pure_tools_pass_through_all_modes() {
+    for (tag, mode, reason) in [
+        ("pure-ask", PermissionMode::Ask, "mode:pure"),
+        ("pure-plan", PermissionMode::Plan, "mode:plan-readonly"),
+        ("pure-accept", PermissionMode::AcceptEdits, "mode:pure"),
+    ] {
+        let (hub, sink, _m) = hub_with_modes(tag, mode);
+        let d = hub
+            .resolve(
+                &req("fs_read", json!({ "path": "F:/ws/a/x.txt" })),
+                &spec(SideEffect::Pure),
+            )
+            .await;
+        assert!(d.allowed, "{tag}: Pure 直通");
+        assert_eq!(d.reason.as_deref(), Some(reason), "{tag}");
+        assert!(sink.events().iter().all(|e| kind(e) != "approval_request"));
+    }
 }
 
 /// 扫描器单元：盘符/UNC 提取、分量边界、围栏内外判定。

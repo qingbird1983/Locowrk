@@ -431,8 +431,21 @@ export default {
     decisionFailed: "决策提交失败：{reason}",
     // 侧栏待决标记（卡不在视野内的兜底）
     pendingBadge: "有审批等待决策",
-    // ㉘·B 外部路径卡（只有两键的说明）
-    externalHint: "目标在工作区围栏外，只能逐次允许",
+    // ㉘·B 越界门 / ㉘·C 隐私门（硬门卡只有两键的说明）
+    externalHint: "目标在已声明工作区根之外，只能逐次允许",
+    sensitiveLead: "触及隐私或高危目标：{kind}",
+    sensitive: {
+      ssh: "SSH 凭据目录",
+      aws: "AWS 凭据目录",
+      gpg: "GPG 密钥环",
+      kube: "Kubernetes 集群凭据",
+      creds_file: "凭据文件（.git-credentials / .netrc）",
+      docker: "Docker registry 凭据",
+      browser: "浏览器凭据库（登录数据 / Cookie）",
+      os_store: "系统凭据库访问",
+      cred_dump: "凭据转储工具",
+      catastrophic: "毁灭性命令（格式化 / 整盘删除等）",
+    },
   },
   perm: {
     title: "权限模式",
@@ -444,10 +457,10 @@ export default {
       auto: "完全访问",
     },
     desc: {
-      plan: "编辑前先出计划。",
+      plan: "只读调研，写类工具收起。",
       ask: "改文件前先问我。",
       acceptEdits: "自动编辑文件。",
-      auto: "减少确认次数。",
+      auto: "全部放行，基本不再弹窗；仅越界/隐私拦截。",
     },
     setFailed: "切换失败：{reason}",
   },
@@ -525,7 +538,7 @@ export default {
     },
     approvalTimeout: "审批等待时长",
     defaultPermissionMode: "新会话权限档",
-    defaultPermissionModeHint: "计划=只读 · 询问=逐次审批 · 自动编辑=可撤销写自动放行 · 完全=全部放行；会话内可在输入框旁随时切换",
+    defaultPermissionModeHint: "计划=只读 · 询问=逐次审批 · 自动编辑=可撤销写自动放行 · 完全=全部放行仅越界/隐私拦截；会话内可在输入框旁随时切换",
     approvalTimeoutHint: "超时按拒绝收束（fail-closed）；0 = 一直等待",
     // 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽，㉕）
     chatTitle: "对话行为",

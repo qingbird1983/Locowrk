@@ -127,9 +127,13 @@ pub fn init_state(app: AppHandle) -> AppState {
         crate::events::StreamChunkSink::new(app.clone()),
     ));
 
-    // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储。㉘ 会话→项目解析器一次构造多处消费：插件调用期上下文（workspace + ㉘·B fs_roots 围栏）/注入键位/经历键位。
+    // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储。㉘ 会话→项目解析器一次构造多处消费：插件调用期上下文（workspace + fs_roots 围栏）/注入键位/经历键位。㉘·C 围栏让路：fs_roots = 全局声明根（fsRoots 供给闭包读当前设置，保存即生效）。
+    let fs_roots_of = {
+        let s = Arc::clone(&settings);
+        Arc::new(move || s.fs_roots()) as Arc<dyn Fn() -> Vec<String> + Send + Sync>
+    };
     let session_ctx =
-        crate::workspace::session_context_resolver(sessions_dir.clone(), root.clone());
+        crate::workspace::session_context_resolver(sessions_dir.clone(), root.clone(), fs_roots_of);
     plugin_host::set_session_context_resolver(Arc::clone(&session_ctx));
     let workspace_of = crate::workspace::workspace_view(Arc::clone(&session_ctx));
     let memory = Arc::new(MemoryStore::new(&root, Arc::clone(&workspace_of)));
@@ -197,14 +201,14 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::new(Timeout::hot(Arc::clone(&timeout_cfg))),
         Arc::new(CircuitBreaker::new(5, Duration::from_secs(30))),
     ];
-    // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）。㉘·B：接权限模式存储（四档决策表）+ 会话→工作区（环境行/外部路径围栏）
+    // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）。㉘·B：接权限模式存储（四档决策表）+ 会话→上下文（环境行/越界门围栏；㉘·C 起传全量 resolver 与插件围栏同源）
     let approval = Arc::new(
         ApprovalHub::with_timeout(
             Arc::clone(&sink),
             Duration::from_secs(settings.approval_timeout_secs()),
         )
         .with_modes(Arc::clone(&permission_modes))
-        .with_workspace(Arc::clone(&workspace_of)),
+        .with_workspace(Arc::clone(&session_ctx)),
     );
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
     // ⑮ 子 Agent 快照表：每 step 刷新父转录前缀；subagent_run 执行时 fork

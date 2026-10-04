@@ -50,6 +50,7 @@ mod notifications;
 mod organize;
 mod permission_mode;
 mod plugins_root;
+mod privacy;
 mod runner;
 mod scheduler;
 mod search_tools;

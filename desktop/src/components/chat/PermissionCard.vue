@@ -87,8 +87,17 @@ const workspace = computed(
   () => props.req.workspace || settings.view?.tools.fsRoots?.[0] || "",
 );
 
-/** ㉘·B 外部路径卡：围栏外命令逐次审批、只许一次——不渲染「允许本次对话」。 */
+/** ㉘·B 越界门 / ㉘·C 隐私门：硬门卡逐次审批、只许一次——不渲染「允许
+ * 本次对话」（模式放行与豁免都跳不过硬门）。 */
 const isExternal = computed(() => props.req.external === true);
+/** 隐私门类别键 → i18n 文案（未知键裸显兜底）。 */
+const sensitiveLabel = computed(() => {
+  const key = props.req.sensitive;
+  if (!key) return "";
+  const path = `approval.sensitive.${key}`;
+  return t(path) === path ? key : t(path);
+});
+const isHardGate = computed(() => isExternal.value || sensitiveLabel.value !== "");
 
 /** 超时倒计时只做显示（§3.17：无进度条动画）——真执行者是后端守夜任务
  * （fail-closed）。秒数读载荷 timeout_secs（v2.49 可配置原则：阈值在
@@ -151,9 +160,15 @@ async function decide(kind: ApprovalDecisionKind) {
       <span class="permission__pill">{{ riskLabel }}</span>
     </div>
 
-    <!-- ② 提问行 / ③ 理由行 -->
+    <!-- ② 提问行 / ③ 理由行 + ㉘·C 硬门提示行（越界 / 隐私，warn 色） -->
     <p class="permission__ask">
       {{ t("approval.askLead") }}<b>{{ actionName }}</b>{{ t("approval.askTail") }}
+    </p>
+    <p v-if="isExternal" class="permission__hardgate">
+      {{ t("approval.externalHint") }}
+    </p>
+    <p v-if="sensitiveLabel" class="permission__hardgate">
+      {{ t("approval.sensitiveLead", { kind: sensitiveLabel }) }}
     </p>
     <p v-if="req.description" class="permission__reason">{{ req.description }}</p>
 
@@ -202,7 +217,7 @@ async function decide(kind: ApprovalDecisionKind) {
           {{ t("approval.deny") }}
         </button>
         <button
-          v-if="!isExternal"
+          v-if="!isHardGate"
           class="permission__btn permission__btn--secondary"
           type="button"
           :disabled="deciding"
@@ -293,6 +308,15 @@ async function decide(kind: ApprovalDecisionKind) {
   font-size: 12px;
   line-height: 1.45;
   color: var(--lw-ink-3);
+}
+
+/* ㉘·C 硬门提示行（越界 / 隐私）：warn 色小字，压在理由行上方 */
+.permission__hardgate {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--lw-warn);
 }
 
 .permission__args {

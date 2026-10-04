@@ -268,7 +268,7 @@ export default {
     savedTokens: "{n} tokens saved",
     approvalTimeout: "Approval timed out, denied automatically",
     defaultPermissionMode: "Default permission mode",
-    defaultPermissionModeHint: "Plan = read-only · Ask = approve each action · Auto-edits = undoable writes run free · Full = allow all; switch per chat next to the input box",
+    defaultPermissionModeHint: "Plan = read-only · Ask = approve each action · Auto-edits = undoable writes run free · Full = allow nearly all, only outside-roots & privacy ask; switch per chat next to the input box",
   },
   // Work panel (§2.5/§3.16, v2.52)
   // Scheduled-tasks destination page (§3.35, v2.57)
@@ -435,8 +435,21 @@ export default {
     deny: "Deny",
     allowSession: "Allow for this chat",
     allowOnce: "Allow once",
-    // ㉘·B external-path card (two buttons only)
-    externalHint: "Target is outside the workspace fence; one-time approval only",
+    // ㉘·B outside-roots gate / ㉘·C privacy gate (two buttons only)
+    externalHint: "Target is outside the declared workspace roots; one-time approval only",
+    sensitiveLead: "Touches a privacy-sensitive or high-risk target: {kind}",
+    sensitive: {
+      ssh: "SSH credentials directory",
+      aws: "AWS credentials directory",
+      gpg: "GPG keyring",
+      kube: "Kubernetes cluster credentials",
+      creds_file: "Credential files (.git-credentials / .netrc)",
+      docker: "Docker registry credentials",
+      browser: "Browser credential store (logins / cookies)",
+      os_store: "OS credential store access",
+      cred_dump: "Credential dumping tool",
+      catastrophic: "Destructive command (format / whole-disk delete)",
+    },
     // ⑮ Tag for calls spawned by a sub-agent (session_id differs)
     subagentTag: "Sub-agent call",
     decisionFailed: "Failed to submit decision: {reason}",
@@ -454,7 +467,7 @@ export default {
       plan: "Read-only: write tools hidden",
       ask: "Approve every non-read action",
       acceptEdits: "Undoable writes run free",
-      auto: "Allow all; hard floors stay",
+      auto: "Allow nearly all; only outside-roots & privacy ask",
     },
     setFailed: "Switch failed: {reason}",
   },

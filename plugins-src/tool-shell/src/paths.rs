@@ -41,11 +41,12 @@ pub(crate) fn ensure_readonly_scope(
         .map_err(|e| downgrade(&format!("shell_read `cwd` cannot be resolved: {e}")))?;
     if !in_roots(&eff_cwd, &roots) {
         // 自描述（同 fsutil::ensure_inside——2026-10-04 实机走查：旧文案把
-        // 归属会话也引去设 env，模型据此误报"零个工作区"）
+        // 归属会话也引去设 env，模型据此误报"零个工作区"；㉘·C 起围栏 =
+        // 全局声明根，与权限档无关）
         return Err(downgrade(&format!(
-            "working directory is outside the allowed roots for this call: {} (the \
-             fence follows the session's attributed workspace; LOCOWRK_FS_ROOTS is \
-             only the fallback)",
+            "working directory is outside the allowed roots for this call: {} \
+             (allowed roots = the workspace roots declared in settings plus the \
+             data root)",
             display_roots(&roots)
         )));
     }
@@ -95,8 +96,8 @@ fn in_roots(p: &Path, roots: &[PathBuf]) -> bool {
 fn downgrade(what: &str) -> String {
     format!(
         "{what} — refused by the read-only tool; re-run the same command via the \
-         `shell` tool (it requires user approval), or adjust the allowed roots \
-         (session workspace attribution or LOCOWRK_FS_ROOTS)"
+         `shell` tool (it requires user approval), or add the missing root to \
+         the workspace roots in settings"
     )
 }
 

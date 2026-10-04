@@ -1,10 +1,11 @@
 //! 审批中心后端（DESIGN.md §13.2 / §12.1 / 纪律 9）：`ApprovalResolver`
 //! 的桌面端实现。
 //!
-//! Kernel 在执行 `Irreversible` 工具前调用 `resolve`（§7.1 审批门）；
-//! 这里把请求作为 `agent://approval-request` 事件推给前端，然后挂起等待
-//! `agent_approve` 命令回填决策。请求/等待不进会话日志——日志里的
-//! `ApprovalDecided` 由 Kernel 写（纪律 9），本模块只负责"问人"。
+//! Kernel 对每次工具调用咨询 `resolve`（㉘·C：决议者在场 = 全量 consult，
+//! 含 Pure；§7.1 审批门）；这里按 §7.2 决策表裁决——命中弹卡就把请求作为
+//! `agent://approval-request` 事件推给前端，挂起等待 `agent_approve` 命令
+//! 回填决策。请求/等待不进会话日志——日志里的 `ApprovalDecided` 由
+//! Kernel 写（纪律 9），本模块只负责"问人"与自动放行。
 //!
 //! ㉕·对话区①（UI shell doc §3.17，后端为前端服务）两件桌面策略：
 //! - **「允许本次对话」豁免集**：`(session_id, tool)` 命中即 `resolve`
@@ -58,8 +59,9 @@ pub struct ApprovalHub {
     /// ㉘·B 会话级权限模式存储（DESIGN §7.2 决策表）。None = 决策表退化
     /// 为既有"豁免 → 决策卡"两步（旧测试 / 最小组装）。
     modes: Option<Arc<crate::permission_mode::PermissionModeStore>>,
-    /// ㉘·B 会话→工作区：环境行"如实"数据源 + 外部路径门的围栏来源。
-    workspace_of: Option<crate::workspace::WorkspaceResolver>,
+    /// ㉘·B 会话→调用期上下文：环境行"如实"数据源（`.workspace`）+ 硬门
+    /// （越界）的围栏来源（`.fs_roots`，㉘·C 起与插件围栏同源 = 全局声明根）。
+    ctx_of: Option<crate::workspace::SessionContextResolver>,
 }
 
 impl ApprovalHub {
@@ -77,7 +79,7 @@ impl ApprovalHub {
             exempt: Mutex::new(HashSet::new()),
             timeout_ms: AtomicU64::new(timeout.as_millis() as u64),
             modes: None,
-            workspace_of: None,
+            ctx_of: None,
         }
     }
 
@@ -87,9 +89,11 @@ impl ApprovalHub {
         self
     }
 
-    /// ㉘·B：接会话→工作区解析器（环境行 + 外部路径围栏）。
-    pub fn with_workspace(mut self, ws: crate::workspace::WorkspaceResolver) -> Self {
-        self.workspace_of = Some(ws);
+    /// ㉘·B：接会话→调用期上下文解析器（环境行 + 硬门围栏；㉘·C 起传全量
+    /// `SessionContextResolver` 而非 workspace-only 视图——越界门要与插件
+    /// 围栏同源）。
+    pub fn with_workspace(mut self, ctx: crate::workspace::SessionContextResolver) -> Self {
+        self.ctx_of = Some(ctx);
         self
     }
 
@@ -164,31 +168,51 @@ impl ApprovalHub {
 #[async_trait]
 impl ApprovalResolver for ApprovalHub {
     async fn resolve(&self, req: &ToolCallReq, spec: &ToolSpec) -> ApprovalDecision {
-        // ㉘·B 决策表（DESIGN §7.2，序即优先级）：①计划档硬拒 ②外部路径门
-        // ③模式放行 ④会话豁免 ⑤决策卡。modes 缺席 = 退化为④⑤（旧行为）。
+        // ㉘·C 决策表（DESIGN §7.2，序即优先级）：①计划档硬拒 ②硬门（隐私
+        // + 越界）③模式放行（一等公民）④会话豁免 ⑤决策卡。modes 缺席 =
+        // 退化为④⑤（旧行为；kernel-bin 桥不装配决策表）。
         let mode = self
             .modes
             .as_ref()
             .map(|m| m.mode_of(req.session_id.as_deref()));
-        if mode == Some(crate::permission_mode::PermissionMode::Plan) {
+        if mode == Some(crate::permission_mode::PermissionMode::Plan)
+            && !matches!(spec.side_effect, plugin_api::SideEffect::Pure)
+        {
             // 正常路径已被目录级围栏挡住（非 Pure 不出目录），此处纵深防御
             return ApprovalDecision::deny("计划模式只读：不可写/不可逆调用一律拒绝");
         }
 
-        // ② 外部路径门：围栏外命令逐次审批、只许一次（连 `完全` 档与豁免
-        // 都不能跳过——PI requires_external_path_permission 同语义）
-        let external = match (&self.modes, &self.workspace_of) {
-            (Some(_), ws) => command_touches_outside(
+        // ② 硬门：隐私门（privacy.rs 清单，任何档位都拦——完全访问也不例外，
+        // 用户裁定"最危险的触及用户隐私的或本地隐私的有拦截"）+ 越界门
+        // （㉘·B 外部路径门；围栏改全局声明根后 = 越出声明根才触发）。
+        // 命中即强制弹卡且只许一次（不进豁免集、模式放行被跳过）。
+        let sensitive = match &self.modes {
+            Some(_) => crate::privacy::check(&req.tool, &req.args),
+            None => None,
+        };
+        let external = match (&self.modes, &self.ctx_of) {
+            (Some(_), ctx) => command_touches_outside(
                 &req.tool,
                 &req.args,
                 req.session_id.as_deref(),
-                ws.as_ref(),
+                ctx.as_ref(),
             ),
             _ => false,
         };
-        if !external {
-            // ③ 模式放行（审计 reason 带 mode: 前缀，前端据此不渲染记录条）
+        if sensitive.is_none() && !external {
+            // ③ 模式放行（一等公民，㉘·C；审计 reason 带 mode: 前缀，前端
+            // 据此不渲染记录条）。只读直通 = 所有档位（隐私门已在上面临过）。
             use crate::permission_mode::PermissionMode as PM;
+            if matches!(spec.side_effect, plugin_api::SideEffect::Pure) {
+                return ApprovalDecision {
+                    allowed: true,
+                    reason: Some(if mode == Some(PM::Plan) {
+                        "mode:plan-readonly".into()
+                    } else {
+                        "mode:pure".into()
+                    }),
+                };
+            }
             match mode {
                 Some(PM::Auto) => {
                     return ApprovalDecision {
@@ -220,9 +244,9 @@ impl ApprovalResolver for ApprovalHub {
         }
 
         let workspace = self
-            .workspace_of
+            .ctx_of
             .as_ref()
-            .and_then(|ws| req.session_id.as_deref().and_then(|sid| ws(sid)));
+            .and_then(|ctx| req.session_id.as_deref().and_then(|sid| ctx(sid).workspace));
         let request = ApprovalRequestPayload {
             request_id: req.id.0.clone(),
             tool: req.tool.clone(),
@@ -234,9 +258,10 @@ impl ApprovalResolver for ApprovalHub {
             description: (!spec.description.is_empty()).then(|| spec.description.clone()),
             // v2.49：决策卡倒计时数据源（0 = 不限，卡片不渲染倒计时）
             timeout_secs: self.timeout_secs(),
-            // ㉘·B：环境行如实 + 外部路径卡（前端藏「允许本次对话」）
+            // ㉘·B/㉘·C：环境行如实 + 硬门两键卡（前端藏「允许本次对话」）
             workspace,
             external,
+            sensitive: sensitive.map(str::to_string),
         };
         let (tx, rx) = oneshot::channel();
         self.pending
@@ -284,19 +309,20 @@ impl ApprovalResolver for ApprovalHub {
     }
 }
 
-// ---- ㉘·B 外部路径门（启发式命令扫描）--------------------------------------
+// ---- 硬门·越界（㉘·B 外部路径门，启发式命令扫描）---------------------------
 
-/// 命令类工具（`shell` / `sandbox_run`）的命令文本是否触及围栏外绝对
-/// 路径。结构化路径工具（fs/edit/git）不走这里——它们在插件内对出围栏
-/// 路径 fail-closed 拒绝（既有契约，拒绝文案引导改走 shell 审批路）。
-/// 启发式：只识别 Windows 绝对路径形态（盘符 `X:\`·`X:/` 与 UNC `\\…`）；
-/// 扫不出绝对路径 = 视为围栏内——漏报在 `询问` 档仍有弹卡兜底（shell 本
-/// 就是 Irreversible），宁漏勿错杀。
+/// 命令类工具（`shell` / `sandbox_run`）的命令文本是否触及全局声明根之外
+/// 的绝对路径（㉘·C 起围栏 = 全局声明根，与插件侧 fsutil 同源——声明根内
+/// 跨项目畅通不弹卡）。结构化路径工具（fs/edit/git）不走这里——它们在
+/// 插件内对出围栏路径 fail-closed 拒绝（既有契约，拒绝文案引导改走 shell
+/// 审批路）。启发式：只识别 Windows 绝对路径形态（盘符 `X:\`·`X:/` 与
+/// UNC `\\…`）；扫不出绝对路径 = 视为围栏内——漏报在 `询问` 档仍有弹卡
+/// 兜底（shell 本就是 Irreversible），宁漏勿错杀。
 pub(crate) fn command_touches_outside(
     tool: &str,
     args: &serde_json::Value,
     session_id: Option<&str>,
-    ws: Option<&crate::workspace::WorkspaceResolver>,
+    ctx: Option<&crate::workspace::SessionContextResolver>,
 ) -> bool {
     if !matches!(tool, "shell" | "sandbox_run") {
         return false;
@@ -309,7 +335,7 @@ pub(crate) fn command_touches_outside(
     if tokens.is_empty() {
         return false;
     }
-    let roots = scan_roots(session_id, ws);
+    let roots = scan_roots(session_id, ctx);
     // 围栏空（连数据根都判不出）= 无法判定，宁可问一次
     if roots.is_empty() {
         return true;
@@ -353,21 +379,24 @@ fn rest_starts_unc(cmd: &str, i: usize) -> bool {
     cmd[i..].starts_with("\\\\")
 }
 
-/// 扫描围栏（与插件侧 fsutil 语义逐值对齐）：归属会话 = `[数据根, 项目
-/// 工作区]`（围栏跟会话）；未归属 = env 全局（数据根 + `LOCOWRK_FS_ROOTS`，
-/// 即 `fsutil::allowed_roots` 同源）。
+/// 扫描围栏（与插件侧 fsutil 语义逐值对齐，㉘·C）：会话上下文带 `fs_roots`
+/// （= 全局声明根 `[数据根] ∪ settings.fsRoots`，`workspace.rs` resolver
+/// 下发）就用它；空（未归属/headless）回落 env 全局（数据根 +
+/// `LOCOWRK_FS_ROOTS`，即 `fsutil::allowed_roots` 同源）——同一集合。
 pub(crate) fn scan_roots(
     session_id: Option<&str>,
-    ws: Option<&crate::workspace::WorkspaceResolver>,
+    ctx: Option<&crate::workspace::SessionContextResolver>,
 ) -> Vec<PathBuf> {
     let data_root = plugin_api::fsutil::data_root()
         .ok()
         .map(|p| Path::new(&p).to_path_buf());
-    if let (Some(ws), Some(sid)) = (ws, session_id) {
-        if let Some(w) = ws(sid).filter(|s| !s.is_empty()) {
-            let mut roots: Vec<PathBuf> = data_root.into_iter().collect();
-            roots.push(PathBuf::from(&w));
-            return roots;
+    if let (Some(ctx), Some(sid)) = (ctx, session_id) {
+        let fs_roots = ctx(sid).fs_roots;
+        if !fs_roots.is_empty() {
+            return data_root
+                .into_iter()
+                .chain(fs_roots.iter().map(PathBuf::from))
+                .collect();
         }
     }
     let mut roots: Vec<PathBuf> = data_root.into_iter().collect();

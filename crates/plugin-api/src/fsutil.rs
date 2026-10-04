@@ -183,12 +183,13 @@ fn ensure_inside(resolved: &Path, roots: &[PathBuf]) -> Result<PathBuf, String> 
         Ok(resolved.to_path_buf())
     } else {
         // 拒绝必须自描述（2026-10-04 实机走查：内嵌 Agent 试遍围栏外路径后
-        // 误报"零个工作区"——旧文案只教人去设 env，而归属会话的围栏来自
-        // 会话旁车，env 根本不生效）：报错要列出本次调用实际生效的根。
+        // 误报"零个工作区"——旧文案只教人去设 env）：报错列出本次调用实际
+        // 生效的根。㉘·C 起围栏 = 全局声明根（数据根 + 设置里的工作区根，
+        // 与权限档无关），文案照实说并指路设置加根。
         Err(format!(
-            "path `{}` is outside the allowed roots for this call: {} — the fence \
-             follows the session's attributed workspace (LOCOWRK_FS_ROOTS is only \
-             the fallback for unattributed sessions); list one of those roots to browse it",
+            "path `{}` is outside the allowed roots for this call: {} — allowed \
+             roots are the workspace roots declared in settings (fsRoots) plus \
+             the data root; add the missing root in settings to browse it",
             resolved.display(),
             display_roots(roots)
         ))

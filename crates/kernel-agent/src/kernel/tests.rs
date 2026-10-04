@@ -1,6 +1,7 @@
 //! 审批门 consult 范围测试（㉘·B）：非 Pure（含 Compensable）都过决议者；
 //! 无决议者时 Compensable 照旧放行、Irreversible fail-safe 拒绝（headless
-//! 零变化）。目录/审批全用进程内假件，不走 FFI。
+//! 零变化）。㉘·C：决议者在场 = Pure 也过决策表（隐私门要能拦住只读工具
+//! 读凭据），headless 的 Pure 照旧静默放行。目录/审批全用进程内假件，不走 FFI。
 
 use std::sync::{Arc, Mutex};
 
@@ -168,6 +169,42 @@ async fn resolver_is_consulted_for_compensable_too() {
     );
 }
 
+/// ㉘·C：决议者在场 = Pure 也被 consult（隐私门要能拦住只读工具读凭据）；
+/// deny 时 Pure 调用同样以 denied ToolResult 闭合、落 ApprovalDecided。
+#[tokio::test]
+async fn resolver_is_consulted_for_pure_when_present() {
+    let resolver = Arc::new(RecordingResolver {
+        decisions: ApprovalDecision::deny("privacy gate"),
+        consulted: Mutex::new(Vec::new()),
+    });
+    let ctx = Arc::new(Context::new());
+    ctx.provide_dyn::<dyn ToolSource>(Arc::new(ProbeSource(specs())));
+    ctx.provide_dyn::<dyn LlmService>(Arc::new(ScriptedLlm {
+        calls: vec![call("c1", "fs_read")],
+    }));
+    let kernel = Kernel::new(ctx, vec![]).with_approval(resolver.clone() as Arc<_>);
+    let mut session = Session::new();
+    kernel.step_as(&mut session, "s1").await.expect("turn ok");
+
+    assert_eq!(
+        resolver.consulted.lock().unwrap().clone(),
+        vec!["fs_read".to_string()],
+        "Pure 调用也过决策表"
+    );
+    assert!(session.events().iter().any(|e| {
+        matches!(e, SessionEvent::ToolResult { error: Some(err), .. }
+                if err.contains("denied by approval: privacy gate"))
+    }));
+    assert_eq!(
+        session
+            .events()
+            .iter()
+            .filter(|e| matches!(e, SessionEvent::ApprovalDecided { allowed: false, .. }))
+            .count(),
+        1
+    );
+}
+
 /// 无决议者（headless）：Compensable 照旧放行执行、Irreversible fail-safe
 /// 拒绝——headless 语义零变化（纪律 9）。
 #[tokio::test]
@@ -190,6 +227,33 @@ async fn no_resolver_compensable_runs_irreversible_denied() {
         matches!(e, SessionEvent::ToolResult { error: Some(err), .. }
             if err.contains("no approval resolver configured"))
     }));
+}
+
+/// 无决议者（headless）：Pure 照旧静默放行——不 consult、不落
+/// ApprovalDecided（㉘·C 的 headless 面保持）。
+#[tokio::test]
+async fn no_resolver_pure_runs_without_consult() {
+    let ctx = Arc::new(Context::new());
+    ctx.provide_dyn::<dyn ToolSource>(Arc::new(ProbeSource(specs())));
+    ctx.provide_dyn::<dyn LlmService>(Arc::new(ScriptedLlm {
+        calls: vec![call("c1", "fs_read")],
+    }));
+    let kernel = Kernel::new(ctx, vec![]);
+    let mut session = Session::new();
+    kernel.step_as(&mut session, "s1").await.expect("turn ok");
+
+    let ran = session.events().iter().any(|e| {
+        matches!(e, SessionEvent::ToolResult { output, error: None, .. }
+            if output.get("ran").and_then(Value::as_str) == Some("fs_read"))
+    });
+    assert!(ran, "无决议者时 Pure 照旧放行执行");
+    assert!(
+        !session
+            .events()
+            .iter()
+            .any(|e| matches!(e, SessionEvent::ApprovalDecided { .. })),
+        "headless Pure 不产生审批事件"
+    );
 }
 
 /// resolve 失败（目录围栏拒掉 / 工具不存在）以失败 ToolResult 闭合该调用、
