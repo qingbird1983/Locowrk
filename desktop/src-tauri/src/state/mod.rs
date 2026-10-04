@@ -319,11 +319,25 @@ pub fn init_state(app: AppHandle) -> AppState {
 
     // M2 记忆树影子运行编排器：记录员客户端 = 设置路由的 genai 直呼；
     // ㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）。
+    // 整理事件推送闭包在此组装（M3 §3.37③）：emit 调用只落在本模块——
+    // 桌面单测不引用 state，tauri 运行时符号（及其窗口栈 tao）就不会进
+    // 测试二进制；无 v6 清单的进程链接 tao 后 comctl32 缺
+    // SetWindowSubclass/TaskDialogIndirect，加载即 ENTRYPOINT_NOT_FOUND。
+    let organizer_notifier: crate::organize::OrganizeNotifier = {
+        let app = app.clone();
+        std::sync::Arc::new(move |event, payload| {
+            use tauri::Emitter;
+            if let Err(e) = app.emit(event, payload) {
+                tracing::warn!("{event} 推送失败: {e}");
+            }
+        })
+    };
     let organizer = crate::organize::build_organizer(
         Arc::clone(&settings),
         sessions_dir.clone(),
         Arc::clone(&workspace_of),
         root.clone(),
+        organizer_notifier,
     );
     // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
 

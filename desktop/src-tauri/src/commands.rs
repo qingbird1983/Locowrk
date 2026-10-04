@@ -44,7 +44,11 @@ pub async fn agent_chat(
     // 建会话即写旁车——先于本轮任何注入 / 围栏 / 提取。旧时序（轮次收束
     // 后才 session_associate）让首轮注入落在未归属键位、还被 M1 预取缓存
     // 整场（Glance-main 会话引用 Locowrk 旧记忆的实机事故根因）。
-    if let Some(ws) = workspace.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(ws) = workspace
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         crate::commands::sessions::ensure_associatable(&state.settings.fs_roots(), ws)?;
         crate::session_log::associate(&state.sessions_dir, &session_id, Some(ws))
             .map_err(|e| format!("关联失败: {e}"))?;

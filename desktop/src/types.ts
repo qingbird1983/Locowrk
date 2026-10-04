@@ -539,6 +539,68 @@ export interface TreeOrganizeRecord {
   durationMs: number;
 }
 
+// ---- 记忆树只读呈现（M3 §3.37，Memory-KV Roadmap） ----
+
+/** 树投影清单行（memory_tree_sessions；会话切换器数据源）。 */
+export interface TreeSummaryView {
+  workspace: string;
+  sessionId: string;
+  bundleCount: number;
+  bundledUntil: number;
+  pending: boolean;
+  pausedAuto: boolean;
+  updatedMs: number;
+}
+
+/** 一捆（只读：L0 标题 / L1 摘要 / L2 事件区间；source 如实 recorder|rule）。 */
+export interface TreeBundleView {
+  bundleId: string;
+  title: string;
+  summary: string;
+  source: string;
+  pending: boolean;
+  createdAt: number;
+  eventFrom: number;
+  eventTo: number;
+}
+
+/** 选中会话的捆清单（memory_tree_bundles；投影缺/坏 = exists=false）。 */
+export interface TreeBundlesView {
+  exists: boolean;
+  workspace: string;
+  sessionId: string;
+  bundledUntil: number;
+  pausedAuto: boolean;
+  bundles: TreeBundleView[];
+}
+
+/** 原文切片行（与记录员材料同形；index = 会话日志事件位）。 */
+export type TreeOriginalKind = "user" | "assistant" | "tool_call" | "tool_result";
+export interface TreeOriginalItem {
+  index: number;
+  kind: TreeOriginalKind;
+  text: string;
+}
+
+/** 整理收束推送（lw://organize-done；手动/自动/恢复三路同源）。 */
+export interface OrganizeDonePayload {
+  sessionId: string;
+  users: number;
+  bundles: number;
+  mode: "recorder" | "rule";
+  status: "ok" | "degraded";
+  reason: string;
+}
+
+/** 熔断翻转推送（lw://organize-paused；仅翻转瞬间发）。 */
+export interface OrganizePausedPayload {
+  sessionId: string;
+  rebounds: number;
+  k: number;
+  m: number;
+}
+
+
 /** 经历记忆条目（⑬ experience_list 返回行；camelCase）。
  * workspace = 项目归属（㉘），"" = 未归属。 */
 export interface ExperienceRow {

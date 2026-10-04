@@ -60,6 +60,19 @@ pub struct PendingHit {
     pub session_id: String,
 }
 
+/// 树投影清单项（M3 只读呈现：记忆页会话切换器数据源）。
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TreeSummary {
+    pub workspace: String,
+    pub session_id: String,
+    pub bundle_count: usize,
+    pub bundled_until: usize,
+    pub pending: bool,
+    pub paused_auto: bool,
+    /// 投影文件 mtime（毫秒）；取不到 = 0（排序垫底，不阻塞列表）。
+    pub updated_ms: i64,
+}
+
 /// 树投影存储句柄（`root` = 数据根）。
 #[derive(Debug, Clone)]
 pub struct TreeStore {
@@ -118,8 +131,58 @@ impl TreeStore {
     /// scope 目录是 workspace 的有损编码，真名从投影内读回。
     pub fn scan_pending(&self) -> Vec<PendingHit> {
         let mut hits = Vec::new();
+        for (tree, session_id) in self.scan_all() {
+            if tree.pending.is_some() {
+                hits.push(PendingHit {
+                    workspace: tree.workspace,
+                    session_id,
+                });
+            }
+        }
+        hits
+    }
+
+    /// 全量扫描（M3 只读呈现）：树清单按更新时间降序（mtime；同刻按
+    /// session_id 稳定序）。坏投影跳过不阻塞列表——投影可丢的总原则。
+    pub fn scan_trees(&self) -> Vec<TreeSummary> {
+        let mut out: Vec<(TreeSummary, String)> = Vec::new();
+        for (tree, session_id) in self.scan_all() {
+            out.push((
+                TreeSummary {
+                    bundle_count: tree.bundles.len(),
+                    bundled_until: tree.bundled_until,
+                    pending: tree.pending.is_some(),
+                    paused_auto: tree.paused_auto,
+                    workspace: tree.workspace,
+                    session_id: session_id.clone(),
+                    updated_ms: 0,
+                },
+                session_id,
+            ));
+        }
+        // mtime 在第二遍补：scan_all 逐文件读过，路径在这里已不可得——
+        // 直接重取（清单页低频打开，IO 成本可忽略）。
+        for (summary, session_id) in out.iter_mut() {
+            let path = self
+                .root
+                .join(scope_dir(&summary.workspace))
+                .join(format!("{session_id}.json"));
+            summary.updated_ms = mtime_ms(&path);
+        }
+        let mut list: Vec<TreeSummary> = out.into_iter().map(|(s, _)| s).collect();
+        list.sort_by(|a, b| {
+            b.updated_ms
+                .cmp(&a.updated_ms)
+                .then_with(|| a.session_id.cmp(&b.session_id))
+        });
+        list
+    }
+
+    /// 共享扫描骨架：逐 scope 逐文件解析，产出 (树, 会话 id)。
+    fn scan_all(&self) -> Vec<(MemoryTree, String)> {
+        let mut out = Vec::new();
         let Ok(entries) = std::fs::read_dir(&self.root) else {
-            return hits;
+            return out;
         };
         for scope in entries.flatten() {
             let Ok(files) = std::fs::read_dir(scope.path()) else {
@@ -136,16 +199,21 @@ impl TreeStore {
                 let Ok(tree) = serde_json::from_slice::<MemoryTree>(&bytes) else {
                     continue; // 坏投影不阻塞扫描
                 };
-                if tree.pending.is_some() {
-                    hits.push(PendingHit {
-                        workspace: tree.workspace,
-                        session_id: id.to_string(),
-                    });
-                }
+                out.push((tree, id.to_string()));
             }
         }
-        hits
+        out
     }
+}
+
+/// 文件 mtime → Unix 毫秒；取不到 = 0。
+fn mtime_ms(path: &Path) -> i64 {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -211,6 +279,31 @@ mod tests {
         let hits = store.scan_pending();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].session_id, "sess-1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_trees_lists_all_sorted_by_recency() {
+        let dir = std::env::temp_dir().join(format!("mt-test-list-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = TreeStore::new(&dir);
+        store.save(&sample("ws-a", "sess-1")).unwrap();
+        let mut clean = MemoryTree::new("ws-b", "sess-2");
+        clean.bundled_until = 7;
+        store.save(&clean).unwrap();
+        let list = store.scan_trees();
+        assert_eq!(list.len(), 2, "有在途与无在途的树都进清单");
+        assert!(list[0].updated_ms >= list[1].updated_ms, "按更新时间降序");
+        let pending = list.iter().find(|s| s.session_id == "sess-1").unwrap();
+        let clean = list.iter().find(|s| s.session_id == "sess-2").unwrap();
+        assert_eq!(pending.bundle_count, 1, "占位捆计入捆数");
+        assert!(pending.pending);
+        assert_eq!(clean.bundled_until, 7);
+        assert!(!clean.pending);
+        // 坏投影文件跳过
+        let scope = store.root.join(scope_dir("ws-a"));
+        std::fs::write(scope.join("bad.json"), b"{ not json").unwrap();
+        assert_eq!(store.scan_trees().len(), 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

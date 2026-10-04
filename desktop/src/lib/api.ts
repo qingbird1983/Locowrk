@@ -33,6 +33,11 @@ import type {
   ProviderModels,
   ProviderView,
   TreeDebug,
+  TreeSummaryView,
+  TreeBundlesView,
+  TreeOriginalItem,
+  OrganizeDonePayload,
+  OrganizePausedPayload,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。
@@ -443,6 +448,48 @@ export function organizeNow(sessionId: string): Promise<void> {
 /** 记忆树影子运行观测（M2 §3.36③；开发者面板打开时拉取）。 */
 export function memoryTreeView(sessionId: string): Promise<TreeDebug> {
   return invoke("memory_tree_view", { sessionId });
+}
+
+// ---- 记忆树只读呈现（M3 §3.37④；直读投影，不占会话锁） ----
+
+/** 树投影清单（会话切换器数据源，最近更新降序）。 */
+export function memoryTreeSessions(): Promise<TreeSummaryView[]> {
+  return invoke("memory_tree_sessions");
+}
+
+/** 选中会话的捆清单（投影缺/坏 = exists=false，前端走空态）。 */
+export function memoryTreeBundles(
+  sessionId: string,
+  workspace: string,
+): Promise<TreeBundlesView> {
+  return invoke("memory_tree_bundles", { sessionId, workspace });
+}
+
+/** 捆原文切片（与记录员材料同形；会话已删/捆不存在 = reject）。 */
+export function memoryTreeOriginal(
+  sessionId: string,
+  workspace: string,
+  bundleId: string,
+): Promise<TreeOriginalItem[]> {
+  return invoke("memory_tree_original", { sessionId, workspace, bundleId });
+}
+
+/** 整理收束推送（§3.37③；chat store 换 SystemNotice，非当前会话忽略）。 */
+export function subscribeOrganizeDone(
+  onDone: (payload: OrganizeDonePayload) => void,
+): Promise<UnlistenFn> {
+  return listen<OrganizeDonePayload>("lw://organize-done", (e) =>
+    onDone(e.payload),
+  );
+}
+
+/** 熔断翻转推送（仅 paused_auto 翻转瞬间发）。 */
+export function subscribeOrganizePaused(
+  onPaused: (payload: OrganizePausedPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<OrganizePausedPayload>("lw://organize-paused", (e) =>
+    onPaused(e.payload),
+  );
 }
 
 // ---- 经历记忆（⑬，Context and Memory.md §4.3 宿主侧） ----

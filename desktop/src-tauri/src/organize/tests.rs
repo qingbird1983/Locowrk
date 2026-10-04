@@ -99,6 +99,7 @@ fn organizer(
         client,
         resolver(),
         root.to_path_buf(),
+        std::sync::Arc::new(|_, _| {}), // 哑通知（不触 emit）
     ))
 }
 
@@ -250,5 +251,59 @@ async fn recovery_gives_up_when_session_file_deleted() {
     let tree = tree_at(&root, org.settings.as_ref(), "s-gone");
     assert!(tree.pending.is_none()); // 占位撤除
     assert_eq!(tree.history[0].status, "aborted");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
+async fn view_bundles_and_original_read_from_disk() {
+    let root = temp_root("view");
+    let settings = settings_with(serde_json::json!({}), &root);
+    let org = organizer(&root, settings, FakeClient::new(vec![Ok(good_reply())]));
+    assert!(org.tree_sessions().is_empty(), "空数据根 = 空清单");
+
+    // 会话落盘 + 手动整理（M3 视图数据源 = 磁盘，与内存会话无关）
+    let sessions_dir = root.join("sessions");
+    std::fs::create_dir_all(&sessions_dir).unwrap();
+    let session = session();
+    crate::session_log::append_slice(&sessions_dir, "s-view", &session, 0);
+    let disk_path = session_store::session_file(&sessions_dir, "s-view").unwrap();
+    let (disk, _) = session_store::load_session(&disk_path).unwrap();
+    let task = org.plan_manual(&disk, "s-view").expect("发起成功");
+    org.clone().run_task(task).await;
+
+    // 清单：一树两捆，mtime 有值
+    let list = org.tree_sessions();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].session_id, "s-view");
+    assert_eq!(list[0].bundle_count, 2);
+    assert!(list[0].updated_ms > 0);
+    assert!(!list[0].pending);
+
+    // 捆清单：数值序 b1、b2（BTreeMap 字典序会把 b10 排到 b2 前）
+    let view = org.tree_bundles("s-view", r"F:\ws\demo");
+    assert!(view.exists);
+    assert_eq!(view.bundles.len(), 2);
+    // 占位捆消耗 b1，记录员真捆从 b2 起
+    assert_eq!(view.bundles[0].bundle_id, "b2");
+    assert_eq!(view.bundles[0].title, "话题一");
+    assert_eq!(view.bundles[0].source, "recorder");
+    assert!(!view.bundles[0].pending);
+    assert_eq!(view.bundles[0].event_from, 0);
+    assert_eq!(view.bundles[0].event_to, 1);
+    assert!(
+        !org.tree_bundles("s-none", r"F:\ws\demo").exists,
+        "缺树 = 空态"
+    );
+
+    // 原文切片与记录员材料同形（捆 b1 = 事件 0..=1 一问一答）
+    let orig = org
+        .tree_original("s-view", r"F:\ws\demo", "b2")
+        .expect("原文可读");
+    assert_eq!(orig.len(), 2);
+    assert_eq!(orig[0].text, "第0轮问题");
+    assert_eq!(orig[0].kind, memory_tree::MaterialKind::User);
+    assert_eq!(orig[1].kind, memory_tree::MaterialKind::Assistant);
+    assert!(org.tree_original("s-view", r"F:\ws\demo", "b9").is_err());
+    assert!(org.tree_original("s-none", r"F:\ws\demo", "b1").is_err());
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -18,6 +18,7 @@ import {
   type ToolItem,
 } from "../stores/chat";
 import { useSettingsStore } from "../stores/settings";
+import { useShellStore } from "../stores/shell";
 import { useWorkPanelStore } from "../stores/work-panel";
 import { clip, formatDuration } from "../lib/format";
 import { Icon } from "../lib/icons";
@@ -187,9 +188,12 @@ function noticeText(item: SystemItem): string {
   return t(item.key, item.params ?? {});
 }
 
-/** 系统消息动作（⑨ 接线）：details = 展开详情；undo = 撤销最近一次压缩。 */
+/** 系统消息动作（⑨ 接线）：details = 展开详情；undo = 撤销最近一次压缩；
+ * view（M3 §3.37③）= 跳记忆页看整理产物（记忆树区块）。 */
 async function onNoticeAction(item: SystemItem, action: string) {
-  if (action === "details") {
+  if (action === "view") {
+    useShellStore().setDestination("memory");
+  } else if (action === "details") {
     const detail = chat.noticeDetails[item.id];
     if (detail) chat.pushRawSystem(detail);
   } else if (action === "undo") {

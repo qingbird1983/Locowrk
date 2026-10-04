@@ -19,6 +19,7 @@ export default {
   common: {
     back: "Back to app",
     cancel: "Cancel",
+    refresh: "Refresh",
   },
   // Confirm dialog (§五: the only modal with a scrim, ConfirmDialog)
   confirm: {
@@ -77,6 +78,9 @@ export default {
     toolsKindsCalls: "{kinds} tools · {calls} calls",
     toolsEst: "catalog ~{n} tokens",
     sessionCumulative: "Session total",
+    treeRow: "Memory tree",
+    treeBundlesShort: "{n} bundles",
+    treeTail: "unorganized tail ≈{n} tokens",
     savings: "Saved",
     cacheAlert:
       "Cache hit rate fell below {pct}% — a prefix break may have occurred (tool-set/system-prompt change or compaction)",
@@ -192,11 +196,17 @@ export default {
     action: {
       details: "View details",
       undo: "Undo",
+      view: "View",
     },
     editResendFailed: "Edit & resend failed: {reason}",
     // ⑨ Compaction notice ([View details][Undo], Context doc §3.8.3)
     contextCompacted: "Compacted earlier messages, saved {saved} tokens",
     organizeRequested: "Organize requested (shadow run: running in the background, chat unaffected).",
+    organizeDone: "📦 Organized {users} turns into {bundles} bundles",
+    organizeDoneDegraded:
+      "📦 Organized {users} turns into {bundles} bundles (recorder unavailable, fell back to rule split)",
+    organizePaused:
+      "Auto organize paused for this session ({rebounds} consecutive rebounds hit the breaker m={m}); /organize runs it manually and resets.",
     compactUndone:
       "Compaction undone: full pre-compaction context restored (later turns were rewound too).",
     compactUndoFailed: "Failed to undo compaction: {reason}",
@@ -409,6 +419,26 @@ export default {
     workspace: "Project",
     // ㉘·A·fix two-tier memory: '' keyspace = global preference tier
     globalTier: "Global preference",
+    // M3 §3.37① dual blocks: facts label + read-only tree section
+    factsTitle: "Memory (facts)",
+    treeTitle: "Memory tree (episodes)",
+    treeReadOnly: "Read-only · shadow run",
+    treeEmpty:
+      "No organized bundles yet. /organize or automatic triggers archive sessions here as bundles.",
+    treeSearch: "Search bundle titles or summaries…",
+    treeSessionLabel: "Session",
+    treeSessionCount: "{n} bundles",
+    viewOriginal: "View original",
+    hideOriginal: "Hide original",
+    originalLoading: "Loading original…",
+    originalFailed: "Failed to load original: {reason}",
+    sourceRecorder: "Recorder",
+    sourceRule: "Rule split",
+    sourcePlaceholder: "Organizing",
+    kindUser: "User",
+    kindAssistant: "Assistant",
+    kindToolCall: "Tool call",
+    kindToolResult: "Tool result",
     time: {
       just_now: "just now",
       minutes: "{n} min ago",

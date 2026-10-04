@@ -19,6 +19,7 @@ export default {
   common: {
     back: "返回应用",
     cancel: "取消",
+    refresh: "刷新",
   },
   // 确认弹窗（§五 唯一带遮罩 Modal，ConfirmDialog）
   confirm: {
@@ -78,6 +79,10 @@ export default {
     toolsKindsCalls: "{kinds} 种工具 · {calls} 次调用",
     toolsEst: "目录约 {n} tokens",
     sessionCumulative: "会话累计",
+    // M3 §3.37② 未整理尾巴行（有树才渲染）
+    treeRow: "记忆树",
+    treeBundlesShort: "{n} 捆",
+    treeTail: "未整理尾巴 ≈{n} tokens",
     savings: "节省",
     cacheAlert:
       "缓存命中率跌破 {pct}%——可能发生了前缀断裂（工具集/系统提示变化或压缩）",
@@ -271,11 +276,18 @@ export default {
     action: {
       details: "查看详情",
       undo: "撤销",
+      view: "查看",
     },
     editResendFailed: "编辑重发失败：{reason}",
     // ⑨ 压缩通知（[查看详情][撤销]，Context 文档 §3.8.3）
     contextCompacted: "已压缩早期对话，节省 {saved} token",
     organizeRequested: "已发起整理（影子运行：后台进行，不影响当前对话）。",
+    // M3 §3.37③：整理收束 / 熔断翻转（lw://organize-done / -paused）
+    organizeDone: "📦 已整理 {users} 轮为 {bundles} 捆",
+    organizeDoneDegraded:
+      "📦 已整理 {users} 轮为 {bundles} 捆（记录员不可用，已转规则切分）",
+    organizePaused:
+      "本会话自动整理已暂停（连续 {rebounds} 次反弹达到熔断阈值 m={m}）；/整理 可手动整理并复位。",
     compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",
     compactUndoFailed: "撤销压缩失败：{reason}",
     // ⑭ 定时触发（调度引擎注入轮前的告知）
@@ -401,6 +413,25 @@ export default {
     workspace: "项目",
     // ㉘·A·fix 双层记忆：'' 键位 = 全局偏好层
     globalTier: "全局偏好",
+    // M3 §3.37① 双区块：事实库标签 + 记忆树只读区块
+    factsTitle: "记忆库（事实）",
+    treeTitle: "记忆树（情景）",
+    treeReadOnly: "只读 · 影子运行",
+    treeEmpty: "还没有整理记录。/整理 或自动触发整理后，会话会按「捆」归档在这里。",
+    treeSearch: "搜索捆标题或摘要…",
+    treeSessionLabel: "会话",
+    treeSessionCount: "{n} 捆",
+    viewOriginal: "看原文",
+    hideOriginal: "收起原文",
+    originalLoading: "加载原文…",
+    originalFailed: "原文读取失败：{reason}",
+    sourceRecorder: "记录员",
+    sourceRule: "规则切分",
+    sourcePlaceholder: "整理中",
+    kindUser: "用户",
+    kindAssistant: "助手",
+    kindToolCall: "工具调用",
+    kindToolResult: "工具结果",
     time: {
       just_now: "刚刚",
       minutes: "{n} 分钟前",

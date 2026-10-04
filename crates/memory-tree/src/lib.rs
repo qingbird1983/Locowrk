@@ -26,11 +26,11 @@ pub mod trigger;
 
 pub use bundle::{BundleDraft, BundleId, EventId, MemoryBundle};
 pub use index::EventToBundleIndex;
-pub use material::{MaterialItem, build_items, transcript, user_count};
+pub use material::{MaterialItem, MaterialKind, build_items, transcript, user_count};
 pub use recorder::{
     RecorderClient, RecorderError, RecorderUsage, family_of, main_prompt, parse_drafts,
     recorder_prompt, rule_split_drafts,
 };
-pub use storage::TreeStore;
+pub use storage::{TreeStore, TreeSummary};
 pub use tree::{MemoryTree, OrganizeRecord, PendingTask, ReboundDecision, ReboundState};
 pub use trigger::{AnchorSource, OrganizeReason, Pacing, TriggerInput, should_auto_organize};

@@ -12,6 +12,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
+use serde::Serialize;
+
 use memory_tree::{
     build_items, family_of, parse_drafts, recorder_prompt, rule_split_drafts, should_auto_organize,
     AnchorSource, MaterialItem, MemoryTree, OrganizeReason, OrganizeRecord, Pacing,
@@ -25,8 +27,39 @@ use crate::workspace::WorkspaceResolver;
 mod client;
 mod debug;
 mod recovery;
+mod view;
 pub use client::AppLlmRecorder;
 pub use debug::TreeDebug;
+pub use view::{OriginalItem, TreeBundlesView, TreeSummaryView};
+
+/// `lw://organize-done` 载荷（M3 §3.37③：整理收束系统消息，三路同源）。
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizeDoneEvent {
+    pub session_id: String,
+    pub users: u64,
+    pub bundles: usize,
+    /// recorder | rule（rule = 降级，前端走如实文案）。
+    pub mode: String,
+    /// ok | degraded。
+    pub status: String,
+    pub reason: String,
+}
+
+/// `lw://organize-paused` 载荷：仅在熔断翻转瞬间发（§3.37③）。
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizePausedEvent {
+    pub session_id: String,
+    pub rebounds: u32,
+    pub k: u32,
+    pub m: u32,
+}
+
+/// 整理事件推送窄接口（state 组装点用 `AppHandle::emit` 实现，测试传哑
+/// 闭包可断言）。隔离 tauri 运行时符号——编排器本体不触 emit，测试
+/// 二进制就不会被拉进窗口栈（tao，见 state/mod.rs 组装点注释）。
+pub type OrganizeNotifier = Arc<dyn Fn(&'static str, serde_json::Value) + Send + Sync>;
 
 /// 轮次收束后的整理编排器（AppState 持有 Arc；spawn 用 Arc receiver）。
 pub struct Organizer {
@@ -37,6 +70,8 @@ pub struct Organizer {
     tree_store: TreeStore,
     /// 会话级在途去重（进程内；跨重启由投影 pending 字段守卫）。
     inflight: StdMutex<HashSet<String>>,
+    /// 整理系统消息推送（M3 §3.37③；测试传哑闭包 = 静默）。
+    notifier: OrganizeNotifier,
 }
 
 /// 决策产物：管道输入（材料项克隆自触发瞬间的会话日志——事件流
@@ -70,6 +105,7 @@ impl Organizer {
         client: Arc<dyn RecorderClient>,
         workspace_of: WorkspaceResolver,
         data_root: PathBuf,
+        notifier: OrganizeNotifier,
     ) -> Self {
         Self {
             settings,
@@ -78,6 +114,45 @@ impl Organizer {
             workspace_of,
             tree_store: TreeStore::new(&data_root),
             inflight: StdMutex::new(HashSet::new()),
+            notifier,
+        }
+    }
+
+    /// 整理收束系统消息（§3.37③）：三路（手动/自动/恢复）同源。
+    fn notify_done(
+        &self,
+        session_id: &str,
+        users: u64,
+        bundles: usize,
+        mode: &str,
+        status: &str,
+        reason: OrganizeReason,
+    ) {
+        let ev = OrganizeDoneEvent {
+            session_id: session_id.into(),
+            users,
+            bundles,
+            mode: mode.into(),
+            status: status.into(),
+            reason: reason.as_str().into(),
+        };
+        match serde_json::to_value(&ev) {
+            Ok(v) => (self.notifier)("lw://organize-done", v),
+            Err(e) => tracing::warn!("organize-done 序列化失败: {e}"),
+        }
+    }
+
+    /// 熔断翻转告知（§3.37③ 如实）。
+    fn notify_paused(&self, session_id: &str, rebounds: u32, k: u32, m: u32) {
+        let ev = OrganizePausedEvent {
+            session_id: session_id.into(),
+            rebounds,
+            k,
+            m,
+        };
+        match serde_json::to_value(&ev) {
+            Ok(v) => (self.notifier)("lw://organize-paused", v),
+            Err(e) => tracing::warn!("organize-paused 序列化失败: {e}"),
         }
     }
 
@@ -162,6 +237,13 @@ impl Organizer {
         {
             tracing::warn!(session = %session_id, "整理反弹熔断：暂停本会话自动整理（/整理 不受限）");
             self.tree_store.save(&tree).ok();
+            // plan_auto 在 paused_auto 已置位时早退，走到这里即翻转瞬间
+            self.notify_paused(
+                session_id,
+                tree.rebound.count,
+                dev.organize_rebound_k,
+                dev.organize_rebound_m,
+            );
             return None;
         }
         self.tree_store.save(&tree).ok();
@@ -322,6 +404,14 @@ impl Organizer {
                         );
                         tree.note_organized(task.users_total);
                         self.tree_store.save(&tree)?;
+                        self.notify_done(
+                            &task.session_id,
+                            task.users_total,
+                            n,
+                            "recorder",
+                            "ok",
+                            task.reason,
+                        );
                         return Ok(("recorder".into(), "ok".into(), n, usage));
                     }
                     Err(e) => {
@@ -352,6 +442,14 @@ impl Organizer {
         tree.note_organized(task.users_total);
         self.tree_store.save(&tree)?;
         tracing::warn!(session = %task.session_id, "记录员不可用（{last_err}），已降级规则切分");
+        self.notify_done(
+            &task.session_id,
+            task.users_total,
+            n,
+            "rule",
+            "degraded",
+            task.reason,
+        );
         Ok((
             "rule".into(),
             "degraded".into(),
@@ -365,12 +463,14 @@ impl Organizer {
 mod tests;
 
 /// 组装点构造（state/init_state 调用）：记录员客户端 = 设置路由的 genai
-/// 直呼；㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）。
+/// 直呼；㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）；
+/// 事件推送闭包由 state 组装（emit 调用留在 state/mod.rs，见其注释）。
 pub fn build_organizer(
     settings: Arc<SettingsStore>,
     sessions_dir: PathBuf,
     workspace_of: WorkspaceResolver,
     data_root: PathBuf,
+    notifier: OrganizeNotifier,
 ) -> Arc<Organizer> {
     Arc::new(Organizer::new(
         Arc::clone(&settings),
@@ -378,5 +478,6 @@ pub fn build_organizer(
         Arc::new(AppLlmRecorder::new(settings)),
         workspace_of,
         data_root,
+        notifier,
     ))
 }

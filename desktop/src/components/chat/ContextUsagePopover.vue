@@ -8,11 +8,13 @@
  * 目录估算（context-usage 载荷 toolsEstTokens，0 = 目录缺席不渲染）。
  * headline 口径跟设置 usageReadout（已用 / 剩余）。数字一律过 §3.5。
  */
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { compactNumber, formatMoney } from "../../lib/format";
+import { memoryTreeView } from "../../lib/api";
 import { useChatStore, type ToolItem } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
+import type { TreeDebug } from "../../types";
 
 const props = defineProps<{
   usage: {
@@ -48,6 +50,31 @@ const windowText = computed(() => {
     return `${compactNumber(props.usage.used)} tokens · ${t("usage.noWindow")}`;
   }
   return `${compactNumber(props.usage.used)} / ${compactNumber(props.usage.windowTokens)} tokens`;
+});
+
+// M3 §3.37②「未整理尾巴」行：浮层打开时拉一次树投影（打开拉取不轮询，
+// ⑫ 同款）；树存在且捆数 > 0 才渲染——影子期大多数会话没有树，不为零
+// 状态造行；窗口未知（0）省略 %（增量档本就不依赖窗口，诚实呈现）。
+const tree = ref<TreeDebug | null>(null);
+onMounted(() => {
+  const sid = chat.sessionId;
+  if (!sid) return;
+  memoryTreeView(sid)
+    .then((t) => {
+      if (chat.sessionId === sid) tree.value = t;
+    })
+    .catch(() => {});
+});
+
+const treeText = computed(() => {
+  const info = tree.value;
+  if (!info || !info.exists || info.bundleCount === 0) return null;
+  const tail = t("usage.treeTail", { n: compactNumber(info.tailTokensEst) });
+  const pct =
+    info.windowTokens > 0
+      ? ` ${Math.min(100, Math.round((info.tailTokensEst / info.windowTokens) * 100))}%`
+      : "";
+  return { bundles: info.bundleCount, text: tail + pct };
 });
 
 /** 本轮合计：优先供应商报告 total（0 = 未报告回退输入+输出+写入）。 */
@@ -138,6 +165,14 @@ const toolsText = computed(() => {
     <div v-if="toolsText" class="kv">
       <span>{{ t("usage.toolsContext") }}</span>
       <span class="kv__v">{{ toolsText }}</span>
+    </div>
+
+    <!-- 记忆树：已整理捆数 + 未整理尾巴估算（M3 §3.37②；有树才渲染） -->
+    <div v-if="treeText" class="kv">
+      <span>{{ t("usage.treeRow") }}</span>
+      <span class="kv__v">
+        {{ t("usage.treeBundlesShort", { n: treeText.bundles }) }} · {{ treeText.text }}
+      </span>
     </div>
   </div>
 </template>

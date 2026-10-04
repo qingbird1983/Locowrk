@@ -199,6 +199,9 @@ pub fn run() {
             commands::notification_clear,
             commands::organize_now,
             commands::memory_tree_view,
+            commands::memory_tree_sessions,
+            commands::memory_tree_bundles,
+            commands::memory_tree_original,
             commands::subagent_transcript
         ])
         .run(tauri::generate_context!())
