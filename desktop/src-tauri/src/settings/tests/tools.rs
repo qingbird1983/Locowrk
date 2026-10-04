@@ -335,3 +335,47 @@ fn approval_timeout_configurable() {
     );
     std::fs::remove_dir_all(&root).ok();
 }
+
+/// M1（KV v2 §4.2）：工具集会话钉死——缺省开 / 旧文件字段级缺省 /
+/// 更新往返 / exposure_config 桥接。
+#[test]
+fn pin_session_roundtrip_and_legacy_compat() {
+    let root = temp_root("pin-session");
+    let store = SettingsStore::open(&root).unwrap();
+    assert!(store.view().tools.pin_session, "缺省开（前缀纪律缺省收紧）");
+    assert!(store.exposure_config().pin_session, "生效配置桥接");
+
+    // 旧 settings.json 无 pinSession 字段 → 字段级缺省
+    std::fs::write(root.join(FILE_NAME), r#"{"locale": "zh-CN"}"#).unwrap();
+    let store = SettingsStore::open(&root).unwrap();
+    assert!(store.view().tools.pin_session);
+
+    // 关闭 + 磁盘往返
+    store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(ToolsUpdate {
+                pin_session: Some(false),
+                ..Default::default()
+            }),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(!store.view().tools.pin_session);
+    assert!(!store.exposure_config().pin_session);
+    drop(store);
+    assert!(
+        !SettingsStore::open(&root).unwrap().view().tools.pin_session,
+        "重开软件后逐字段读回"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}

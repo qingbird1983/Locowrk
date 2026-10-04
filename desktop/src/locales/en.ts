@@ -352,6 +352,14 @@ export default {
     cacheAlertHint:
       "Alert once when the session cumulative hit rate falls below the threshold (at most once per session; judged after 3+ steps — a cold first turn with no cache does not count).",
     cacheAlertPercent: "Alert threshold (%)",
+    prefixTitle: "Prefix discipline",
+    prefixHint: "A byte-stable request prefix is what makes prompt caching cheap (KV v2 §4/§5). Changes apply immediately but invalidate the current session's cache once.",
+    pinSession: "Pin tool set per session",
+    pinSessionHint:
+      "The exposed tool set is decided at the session's first request and reused, keeping the tools block byte-stable; use search_tools to pull more. Off = re-rank every turn (hit rate drops; for A/B experiments).",
+    stabilityRounds: "Stability period (turns)",
+    stabilityRoundsHint:
+      "After a compaction/organization settlement, no prefix-changing operations for the next N user turns (1-10) so the new prefix settles into cache.",
   },
   memory: {
     search: "Search memories…",

@@ -65,6 +65,7 @@ fn llm_window_update_validation_and_threshold_math() {
             Some(ContextUpdate {
                 threshold_pct: Some(40),
                 strategy: Some(kernel_agent::CompactStrategy::SlidingWindow),
+                ..Default::default()
             }),
             None,
             None,
@@ -165,5 +166,78 @@ fn llm_window_update_validation_and_threshold_math() {
     let v = SettingsStore::open(&root).unwrap().view().context;
     assert_eq!(v.threshold_pct, 40);
     assert_eq!(v.strategy, kernel_agent::CompactStrategy::SlidingWindow);
+    std::fs::remove_dir_all(&root).ok();
+}
+
+/// M1（KV v2 §6.4）：稳定期轮数——缺省 3 / 校验 1–10 / 生效配置桥接 /
+/// 磁盘往返。缺省值与缺省档测试同源（context_defaults 之外单列本键的
+/// 生命周期）。
+#[test]
+fn stability_rounds_roundtrip_and_validation() {
+    let root = temp_root("stability-rounds");
+    let store = SettingsStore::open(&root).unwrap();
+    assert_eq!(
+        store.view().context.stability_rounds,
+        3,
+        "缺省 3（KV v2 §6.4）"
+    );
+    assert_eq!(store.compact_config().stability_rounds, 3, "生效配置桥接");
+
+    // 合法更新 + 磁盘往返
+    store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(ContextUpdate {
+                stability_rounds: Some(5),
+                ..Default::default()
+            }),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    assert_eq!(store.view().context.stability_rounds, 5);
+    assert_eq!(store.compact_config().stability_rounds, 5);
+    // 出界拒绝且不污染内存态（0 与 11 都拒）
+    for bad in [0u32, 11] {
+        assert!(store
+            .update(
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(ContextUpdate {
+                    stability_rounds: Some(bad),
+                    ..Default::default()
+                }),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .is_err());
+    }
+    assert_eq!(store.view().context.stability_rounds, 5);
+
+    drop(store);
+    assert_eq!(
+        SettingsStore::open(&root)
+            .unwrap()
+            .view()
+            .context
+            .stability_rounds,
+        5,
+        "重开软件后逐字段读回"
+    );
     std::fs::remove_dir_all(&root).ok();
 }

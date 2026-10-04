@@ -313,7 +313,7 @@
 | `ShortcutSection` | `shortcut` | ✅ |
 | `ShellSection` | `shell` | ✅（高危解锁开关；重启生效） |
 | `ToolsSection`（v2.49 更名——分区 id 本就是 `tools`，组件名对齐 1:1；原 DeveloperSection） | `tools`（含 `fsRoots` 工作区目录 / `maxTurnSteps` 单轮步数上限 1–100 缺省 8 / `approvalTimeoutSecs` 审批等待时长，0=不限 缺省 100，🆕 v2.49） | ✅ |
-| `DeveloperSection`（🆕 v2.49 开发者选项，**默认隐藏**） | `developer`（`unlocked` 解锁态 / `allowDeleteRunningSession` 运行中会话强制删除 / `allowSwitchRunningSession` 运行中切换会话——危险开关缺省全关；🆕 M0：`cacheHitAlert` 命中率告警缺省关 + `cacheHitAlertPercent` 阈值缺省 80 + 「前缀缓存读数」只读面板） | ✅ |
+| `DeveloperSection`（🆕 v2.49 开发者选项，**默认隐藏**） | `developer`（`unlocked` 解锁态 / `allowDeleteRunningSession` 运行中会话强制删除 / `allowSwitchRunningSession` 运行中切换会话——危险开关缺省全关；🆕 M0：`cacheHitAlert` 命中率告警缺省关 + `cacheHitAlertPercent` 阈值缺省 80 + 「前缀缓存读数」只读面板；🆕 M1：`tools.pinSession` 工具集会话钉死缺省开 + `context.stabilityRounds` 稳定期轮数 1–10 缺省 3——两键 JSON 分属 tools/context 区，UI 行同挂开发者分区，KV v2 §9 开发者层级） | ✅ |
 | `EmbeddingSection` | `embedding` | ✅ |
 | `PluginsSection` | `plugins` | ✅（自动停用天数 / 调用超时） |
 
@@ -1898,3 +1898,10 @@ null = greetingBare 不带名；② §2.1/§2.2/§2.5 面板开关**钉窗**—�
 `chat.cacheStats` 显隐）+ §3.2 `ChatSection` 三行（cacheStats / cacheHitPrice /
 cacheMissPrice）+ 开发者分区「前缀缓存读数」面板与命中率告警两行（cacheHitAlert
 缺省关 / cacheHitAlertPercent 缺省 80，重放不判、每会话至多一次）。*
+
+*文档版本：v4.4（M1 前缀纪律批，《KV Prefix Cache Design v2》§4.2/§6.4/§9 落地）。
+§3.2 开发者分区（DeveloperSection）新增**前缀纪律两行**（键 JSON 分属 tools/context
+区、UI 行同挂开发者分区——KV v2 §9 开发者层级；行版式 §3.32·七）：**工具集会话
+钉死**（`tools.pinSession`，缺省开——关 = 恢复每轮 Top-N 旧行为，实验对比用）+
+**稳定期轮数**（`context.stabilityRounds`，数字 1–10 缺省 3——结算后 N 轮不触发
+改前缀操作）。*

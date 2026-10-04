@@ -20,8 +20,15 @@
 //! 或检索失败都跳过经历块，事实记忆照常注入（§4.3 降级策略：语义层
 //! 缺席不拖垮注入）。kernel 每 step 从会话重建 payload，`system` 恒从
 //! None 起算，天然无重复注入。
+//!
+//! 会话级预取（KV v2 纪律 2，M1）：逐轮动态检索是缓存头号杀手——记忆库
+//! 中途写入、经历检索查询（最近用户消息）逐轮变化，都会改写 system 前缀
+//! 使命中归零。带会话身份的请求在**首次注入时检索一次并缓存块文本**，
+//! 后续轮复用同一字节；`memory_write` 中途写入不再改写本会话前缀。
+//! top_k 配置变更 = 显式变更，重算接受失效。无会话身份 = 每轮检索
+//! （一次性进程等价会话，headless 语义不变）。
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use async_trait::async_trait;
 use cordis_core::{WaterfallDecision, WaterfallListener};
@@ -99,11 +106,51 @@ impl Default for MemoryInjectConfig {
 /// 顶爆窗口；超长截断并标注（全文在记忆管理页可看）。
 const VALUE_INJECT_MAX_CHARS: usize = 500;
 
+/// 预取缓存上限（FIFO 驱逐最旧会话）：与 ToolExposure 钉死表同款保险丝。
+const PREFETCH_CAP: usize = 128;
+
+/// 一个会话的预取块（None = 首查即无记忆，也缓存避免每轮重查）。
+#[derive(Debug, Clone)]
+struct PrefetchEntry {
+    block: Option<String>,
+    top_k: usize,
+}
+
+/// 会话 → 预取块表（FIFO 驱逐）。
+#[derive(Default)]
+struct Prefetch {
+    map: std::collections::HashMap<String, PrefetchEntry>,
+    order: std::collections::VecDeque<String>,
+}
+
+impl Prefetch {
+    /// 命中且 top_k 未变才复用（top_k 变更 = 显式配置变更，重算）。
+    fn get(&self, id: &str, top_k: usize) -> Option<Option<String>> {
+        self.map
+            .get(id)
+            .filter(|e| e.top_k == top_k)
+            .map(|e| e.block.clone())
+    }
+
+    fn insert(&mut self, id: String, entry: PrefetchEntry) {
+        if !self.map.contains_key(&id) {
+            self.order.push_back(id.clone());
+            if self.order.len() > PREFETCH_CAP {
+                if let Some(old) = self.order.pop_front() {
+                    self.map.remove(&old);
+                }
+            }
+        }
+        self.map.insert(id, entry);
+    }
+}
+
 /// 挂在 `agent/request` 上的记忆注入监听器。
 pub struct MemoryInject {
     source: Arc<dyn MemorySource>,
     experiences: Option<Arc<dyn ExperienceSource>>,
     cfg: Arc<RwLock<MemoryInjectConfig>>,
+    prefetch: Mutex<Prefetch>,
 }
 
 impl MemoryInject {
@@ -118,6 +165,7 @@ impl MemoryInject {
             source,
             experiences,
             cfg,
+            prefetch: Mutex::new(Prefetch::default()),
         }
     }
 
@@ -227,11 +275,30 @@ impl WaterfallListener for MemoryInject {
         let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
             return WaterfallDecision::Continue;
         };
+        // 会话级预取命中（KV v2 纪律 2）：复用首次注入的块文本——记忆库
+        // 中途写入 / 经历查询变化都不再改写本会话的 system 前缀。缓存的
+        // "无记忆"态直通（与非预取路径的决策语义逐轮一致）
+        if let Some(id) = req.session_id.as_deref() {
+            let cached = self
+                .prefetch
+                .lock()
+                .expect("memory prefetch poisoned")
+                .get(id, cfg.top_k);
+            match cached {
+                Some(Some(block)) => {
+                    req.system = Self::append_block(req.system.take(), Some(block));
+                    return super::replace_decision(req);
+                }
+                Some(None) => return WaterfallDecision::Continue,
+                None => {}
+            }
+        }
         // ㉘：把会话 id 交给检索源做项目隔离（宿主裁决 workspace 语义）
         let entries = self.source.recall(req.session_id.as_deref(), cfg.top_k);
         let mut block = Self::build_block(&entries);
         // 经历块（⑬）：查询 = 最近一条用户消息；检索失败/未配置 = 跳过，
-        // 事实记忆照常注入（§4.3 降级）
+        // 事实记忆照常注入（§4.3 降级）。预取纪律下本查询只在会话首次
+        // 注入时执行一次——锁定的是"会话开始时的经历"，后续轮不再变化。
         if let Some(src) = &self.experiences {
             let query = req
                 .messages
@@ -249,6 +316,19 @@ impl WaterfallListener for MemoryInject {
                 block = Self::append_block(block, Self::build_experience_block(&found));
             }
         }
+        // 首次注入结果入缓存（None 也缓存：无记忆会话不做每轮空查）
+        if let Some(id) = req.session_id.clone() {
+            self.prefetch
+                .lock()
+                .expect("memory prefetch poisoned")
+                .insert(
+                    id,
+                    PrefetchEntry {
+                        block: block.clone(),
+                        top_k: cfg.top_k,
+                    },
+                );
+        }
         let Some(block) = block else {
             return WaterfallDecision::Continue;
         };
@@ -256,10 +336,7 @@ impl WaterfallListener for MemoryInject {
         // 未来若有其他决策方先写 system 也不覆盖
         req.system = Self::append_block(req.system.take(), Some(block));
         // to_value 失败按 fail-open 放行（与 ctx-compact 同纪律）
-        match serde_json::to_value(&req) {
-            Ok(v) => WaterfallDecision::Replace(v),
-            Err(_) => WaterfallDecision::Continue,
-        }
+        super::replace_decision(req)
     }
 }
 

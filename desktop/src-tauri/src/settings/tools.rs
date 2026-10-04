@@ -39,6 +39,9 @@ pub struct ToolsSettings {
     /// ㉘·B 新会话权限档缺省（"plan" / "ask" / "acceptEdits" / "auto"）；
     /// 会话级覆盖存旁车（PermissionModeStore）。
     pub default_permission_mode: String,
+    /// 工具集会话钉死（KV v2 §4.2，缺省开）：暴露集会话首次请求确定并
+    /// 缓存，tools 块逐字节稳定保前缀缓存；关 = 恢复每轮 Top-N 旧行为。
+    pub pin_session: bool,
 }
 
 impl Default for ToolsSettings {
@@ -51,6 +54,7 @@ impl Default for ToolsSettings {
             max_turn_steps: runner::DEFAULT_MAX_STEPS,
             approval_timeout_secs: 100,
             default_permission_mode: "ask".into(),
+            pin_session: true,
         }
     }
 }
@@ -66,6 +70,7 @@ pub struct ToolsSettingsView {
     pub max_turn_steps: u32,
     pub approval_timeout_secs: u64,
     pub default_permission_mode: String,
+    pub pin_session: bool,
 }
 
 /// 工具暴露区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -79,6 +84,7 @@ pub struct ToolsUpdate {
     pub max_turn_steps: Option<u32>,
     pub approval_timeout_secs: Option<u64>,
     pub default_permission_mode: Option<String>,
+    pub pin_session: Option<bool>,
 }
 
 /// call_timeout_secs 合法区间（秒）：下限避开 0（等同关超时），上限覆盖
@@ -122,6 +128,7 @@ impl crate::settings::SettingsStore {
         ToolExposureConfig {
             enabled: t.enabled,
             max_tools: t.max_per_request as usize,
+            pin_session: t.pin_session,
         }
     }
 

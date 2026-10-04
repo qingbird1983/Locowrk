@@ -15,7 +15,7 @@
 //! 切点纪律：压缩边界必须落在 User 消息之前——把 Assistant(tool_calls) 与
 //! 它的 ToolResult 拆到摘要两侧会破坏真实模型协议（tool_call_id 配对）。
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use async_trait::async_trait;
 use cordis_core::{Context, WaterfallDecision, WaterfallListener};
@@ -63,10 +63,14 @@ pub fn suggested_threshold(window_tokens: u64) -> u32 {
 
 /// 压缩参数（⑨ 起配置驱动）。`threshold_tokens` 是绝对阈值——组装点由
 /// 窗口 × 百分比算出（窗口未知回落 32k 保守保护，与 v2.14 行为一致）。
+/// `stability_rounds`（KV v2 §6.4，缺省 3）：结算后 N 个用户轮内不再触发
+/// 压缩——结算 = 计划内大失效，新前缀需要 N 轮纯追加尽快落盘，二次压缩
+/// 只会烧钱（稳定期纪律；1–10 可调，开发者分区）。
 #[derive(Debug, Clone)]
 pub struct CompactConfig {
     pub threshold_tokens: u64,
     pub strategy: CompactStrategy,
+    pub stability_rounds: u32,
 }
 
 impl Default for CompactConfig {
@@ -74,7 +78,39 @@ impl Default for CompactConfig {
         Self {
             threshold_tokens: 32_000,
             strategy: CompactStrategy::default(),
+            stability_rounds: 3,
         }
+    }
+}
+
+/// 稳定期账本上限（FIFO 驱逐）：与 ToolExposure 钉死表同款保险丝。
+const STABILITY_CAP: usize = 128;
+
+/// 稳定期账本：会话 → 结算时 payload 的用户消息数（轮次锚点）。当前
+/// 用户轮数 − 结算轮数 ≤ N = 稳定期内（0 = 结算当轮的后续 step）。
+#[derive(Default)]
+struct Stability {
+    map: std::collections::HashMap<Option<String>, usize>,
+    order: std::collections::VecDeque<Option<String>>,
+}
+
+impl Stability {
+    fn in_period(&self, id: &Option<String>, users_now: usize, rounds: u32) -> bool {
+        self.map
+            .get(id)
+            .is_some_and(|settled| users_now.saturating_sub(*settled) <= rounds as usize)
+    }
+
+    fn record(&mut self, id: Option<String>, settled_users: usize) {
+        if !self.map.contains_key(&id) {
+            self.order.push_back(id.clone());
+            if self.order.len() > STABILITY_CAP {
+                if let Some(old) = self.order.pop_front() {
+                    self.map.remove(&old);
+                }
+            }
+        }
+        self.map.insert(id, settled_users);
     }
 }
 
@@ -94,11 +130,16 @@ pub struct CompactionOutcome {
 pub struct CtxCompact {
     ctx: Arc<Context>,
     cfg: Arc<RwLock<CompactConfig>>,
+    stability: Mutex<Stability>,
 }
 
 impl CtxCompact {
     pub fn new(ctx: Arc<Context>, cfg: Arc<RwLock<CompactConfig>>) -> Self {
-        Self { ctx, cfg }
+        Self {
+            ctx,
+            cfg,
+            stability: Mutex::new(Stability::default()),
+        }
     }
 
     /// 摘要直连 LlmService（不经决策环，无递归）；任何一步失败返回 None。
@@ -149,6 +190,18 @@ impl WaterfallListener for CtxCompact {
         if from_tokens <= cfg.threshold_tokens {
             return WaterfallDecision::Continue;
         }
+        // 稳定期纪律（KV v2 §6.4）：结算后 N 个用户轮内不再触发——新前缀
+        // 尽快落盘，二次压缩只烧钱不省空间（结算后已低于阈值，越线说明
+        // 用户又加了 N 轮新内容）
+        let users_now = user_count(&req.messages);
+        if self
+            .stability
+            .lock()
+            .expect("compact stability poisoned")
+            .in_period(&req.session_id, users_now, cfg.stability_rounds)
+        {
+            return WaterfallDecision::Continue;
+        }
         let target = (cfg.threshold_tokens / 2).max(1);
         let cut = cut_point(&req.messages, cfg.strategy, target);
         if cut == 0 {
@@ -187,12 +240,15 @@ impl WaterfallListener for CtxCompact {
         };
         req.messages = compacted;
         req.compacted = Some(outcome);
+        // 结算入稳定期账本：锚点 = 结算后 payload 的用户轮数（后续 step
+        // 同轮 diff 0，之后每轮 +1，越过 N 才放行下一次结算）
+        self.stability
+            .lock()
+            .expect("compact stability poisoned")
+            .record(req.session_id.clone(), user_count(&req.messages));
         // Replace 是逐跳改写：终态决策仍是 Continue，改写结果在 payload 里
         // （cordis-core::waterfall 语义）。to_value 失败按 fail-open 放行。
-        match serde_json::to_value(&req) {
-            Ok(v) => WaterfallDecision::Replace(v),
-            Err(_) => WaterfallDecision::Continue,
-        }
+        super::replace_decision(req)
     }
 }
 
@@ -200,6 +256,14 @@ impl WaterfallListener for CtxCompact {
 /// 低估，宁早压不爆仓）。runner 进度条与压缩判定共用同一把尺。
 pub fn estimate_tokens(messages: &[Message]) -> u64 {
     messages.iter().map(estimate_one).sum()
+}
+
+/// 用户消息数（稳定期的轮次锚点：每条 User 消息 = 一个新轮的开端）。
+fn user_count(messages: &[Message]) -> usize {
+    messages
+        .iter()
+        .filter(|m| matches!(m, Message::User { .. }))
+        .count()
 }
 
 fn estimate_one(m: &Message) -> u64 {

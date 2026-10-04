@@ -56,12 +56,14 @@
 
 ---
 
-### M1 · 前缀纪律兑现 ⬜
+### M1 · 前缀纪律兑现 ✅（v2.64，ec0c64f）
 
 **目标**：兑现 KV v2 §4/§5 的组装纪律（现网 ToolExposure 每轮 Top-N 是头号杀手，必须先钉死，否则 M4 的树模式 A/B 数据全部失真）。
 
-**落点**：
-- kernel-agent：system stable/dynamic 分段梳理；动态信息（日期等）移消息尾部追加区；**工具 schema 不镜像进 system**
+**落账**：三中间件同批兑现——ToolExposure **会话钉死**（首请求确定暴露集缓存于会话侧，后续轮按名字序从当前目录回映射；围栏收紧 = 交集，`tools.pinSession` 开发者开关缺省开，关 = 恢复每轮 Top-N）；Memory-Inject **会话级预取**（带会话身份的请求首次注入时检索一次并缓存块文本，`memory_write` 中途写入 / 经历查询逐轮变化不再改写 system 前缀；top_k 变更重算；None 身份回落逐轮）；ctx-compact **稳定期**（结算后 N 个用户轮内不再触发，轮次锚点 = 用户消息数，`context.stabilityRounds` 1–10 缺省 3）。现状核查：tools 只走请求 `tools` 字段不进 system ✅、system 无日期等动态注入 ✅（纪律 1/3/5 现网本就合规，本批只加回归护栏）。两开关 UI 同挂开发者分区（JSON 分属 tools/context 区，UI shell v4.4）。**走查实抓存量缺陷修复（v2.58 起）**：runner 收敛判据读 `events().last()`——LlmUsage 紧贴 assistant 落日志后 last() 恒为 LlmUsage，报告用量的供应商**每轮多跑一步**（请求以 assistant 结尾，DeepSeek thinking 模式 400 拒收，每轮尾部假 error 项）；改从尾部找最近一条 AssistantMessage 判 tool_calls + 回归 2 例。测试：kernel-agent 68 绿（+7：钉死 3 / 预取 4，含**相邻轮请求前缀逐字节一致**集成断言）、桌面 148 绿（+2 收敛回归 + 2 设置键）；实机走查（CDP，真实轮 deepseek-flash）：memory_write 审批通过真实写入后，turn2 命中率仍 93.8%（预取失效 = 从第 0 字节全灭）、turn3 93.4%、累计 93.9%，全程 0 error 项；开发者分区两行渲染 + 开关/数值往返落盘；走查会话已删、memory.sqlite3/experiences.sqlite3/usage.sqlite3/notifications.json/settings.json 全部还原走查前备份、应用已重启干净实例。
+
+**落点（模块级，动手前细化文件清单）**：
+- kernel-agent：system stable/dynamic 分段梳理；动态信息（日期等）移消息尾部追加区；**工具 schema 不镜像进 system**（本批核查：现网本就合规，不虚改）
 - kernel-agent ToolExposure：exposure 决策改为**会话首步计算一次 + 会话侧缓存**，后续轮复用；`tools.pinSession` 开关（开发者，缺省开）
 - Memory-Inject 对照纪律 2 核查：确认/改造成会话级预取一次（会话内字节不变）
 - 稳定期纪律：结算后 N 轮（缺省 3）不触发改前缀操作

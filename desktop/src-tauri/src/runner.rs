@@ -79,11 +79,18 @@ pub async fn run_turn(
         }
         record_stats(session, before, stats);
 
-        // 收敛判据：本步 assistant 没有再发工具调用 → 轮次结束（在追加
-        // 用量快照之前读 last()——快照不是消息，不能影响收敛判定）
+        // 收敛判据：本步 assistant 没有再发工具调用 → 轮次结束。从尾部
+        // 找**最近一条 AssistantMessage**再判 tool_calls——不能只看
+        // last()：v2.58 起 LlmUsage 紧贴 assistant 之后落日志（内核
+        // step_inner），报告用量的供应商下 last() 恒为 LlmUsage，轮次
+        // 永不收敛、每轮多跑一步（请求以 assistant 结尾，DeepSeek
+        // thinking 模式直接 400 拒收，每轮尾部假 error——M1 走查实抓）。
         let done = matches!(
-            session.events().last(),
-            Some(SessionEvent::AssistantMessage { tool_calls, .. }) if tool_calls.is_empty()
+            session.events().iter().rev().find_map(|e| match e {
+                SessionEvent::AssistantMessage { tool_calls, .. } => Some(tool_calls.is_empty()),
+                _ => None,
+            }),
+            Some(true)
         );
         if let Some(u) = usage {
             // v2.62：快照落日志 + 实时投影（自带 append_slice 与单发，

@@ -44,8 +44,19 @@ pub use trace::Tracing;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use cordis_core::WaterfallDecision;
 use plugin_api::{CallCtx, Tool, ToolError};
+use serde::Serialize;
 use serde_json::Value;
+
+/// waterfall 监听器的 Replace 收口（to_value 失败按 fail-open 放行）——
+/// ToolExposure / Memory-Inject / ctx-compact 三个 request 监听器共用。
+pub(crate) fn replace_decision(req: impl Serialize) -> WaterfallDecision {
+    match serde_json::to_value(&req) {
+        Ok(v) => WaterfallDecision::Replace(v),
+        Err(_) => WaterfallDecision::Continue,
+    }
+}
 
 /// 类 tower 洋葱模型：`handle` 做前置/后置，`next.proceed(ctx)` 进入下一层，
 /// 最内层是工具本体。`proceed` 可重复调用（重试件依赖这一点）。

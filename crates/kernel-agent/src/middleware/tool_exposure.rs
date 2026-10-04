@@ -16,6 +16,11 @@
 //!
 //! hidden 不在本监听器的考虑范围：⑩ 的 `list_tools` 已把它们剔出目录，
 //! 显式检索通路（search_tools 元工具）读全目录索引。
+//!
+//! 会话钉死（KV v2 §4.2，M1）：Top-N 逐轮重算会让 tools 块逐轮变化——
+//! 前缀缓存从 tools 位置起全灭（头号杀手）。`pin_session` 开（缺省）时
+//! 暴露集在会话首次请求确定并缓存，后续轮复用；`search_tools` 元工具
+//! 按需拉取不改变已暴露集；权限模式切换改变目录 = 显式变更，接受失效。
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
@@ -43,11 +48,16 @@ pub trait GlobalEwma: Send + Sync + 'static {
 }
 
 /// 截断参数（settings.json `tools` 区）：enabled 停用 = 全目录直通（行为
-/// 与 ⑩ 直通态一致）；max_tools = 每请求暴露上限 N（§5.3，缺省 20）。
+/// 与 ⑩ 直通态一致）；max_tools = 每请求暴露上限 N（§5.3，缺省 20）；
+/// pin_session（KV v2 §4.2，缺省开）= 暴露集会话钉死——首次请求确定并
+/// 缓存，后续轮复用不再逐轮重算（tools 块逐字节稳定，前缀缓存不灭）；
+/// 关闭 = 恢复每轮 Top-N 旧行为（实验对比用）。钉死只作用于带会话身份
+/// 的请求（桌面端全程带；无身份 = 每轮重算，一次性进程等价会话）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolExposureConfig {
     pub enabled: bool,
     pub max_tools: usize,
+    pub pin_session: bool,
 }
 
 impl Default for ToolExposureConfig {
@@ -55,7 +65,48 @@ impl Default for ToolExposureConfig {
         Self {
             enabled: true,
             max_tools: 20,
+            pin_session: true,
         }
+    }
+}
+
+/// 钉死缓存上限（FIFO 驱逐最旧会话）：桌面长开进程的会话数量级有限，
+/// 128 只是防无界增长的保险丝。
+const PIN_CAP: usize = 128;
+
+/// 一次钉死的选择：名字序（重建暴露集的顺序）+ 归因组（后续轮快照照抄
+/// 建立时的归因——钉死后归因不再变化）。
+#[derive(Debug, Clone)]
+struct PinnedSelection {
+    names: Vec<String>,
+    always: Vec<String>,
+    session_hot: Vec<String>,
+    global_hot: Vec<String>,
+    retrieved: Vec<String>,
+}
+
+/// 会话 → 钉死选择表（FIFO 驱逐）。
+#[derive(Default)]
+struct SessionPins {
+    map: HashMap<String, PinnedSelection>,
+    order: std::collections::VecDeque<String>,
+}
+
+impl SessionPins {
+    fn get(&self, id: &str) -> Option<&PinnedSelection> {
+        self.map.get(id)
+    }
+
+    fn insert(&mut self, id: String, sel: PinnedSelection) {
+        if !self.map.contains_key(&id) {
+            self.order.push_back(id.clone());
+            if self.order.len() > PIN_CAP {
+                if let Some(old) = self.order.pop_front() {
+                    self.map.remove(&old);
+                }
+            }
+        }
+        self.map.insert(id, sel);
     }
 }
 
@@ -180,6 +231,7 @@ pub struct ToolExposure {
     cfg: Arc<RwLock<ToolExposureConfig>>,
     retrieval: Option<Arc<Retriever>>,
     last: Mutex<Option<ExposureSnapshot>>,
+    pins: Mutex<SessionPins>,
 }
 
 impl ToolExposure {
@@ -194,6 +246,7 @@ impl ToolExposure {
             cfg,
             retrieval,
             last: Mutex::new(None),
+            pins: Mutex::new(SessionPins::default()),
         }
     }
 
@@ -236,6 +289,41 @@ impl WaterfallListener for ToolExposure {
             });
             return WaterfallDecision::Continue;
         }
+        // 会话钉死命中（KV v2 §4.2）：按建立时的名字序从当前目录回映射——
+        // 目录未变 = 逐字节同序同 spec（前缀稳定）；目录被围栏收紧（计划
+        // 模式）或插件中途移除 = 交集，显式变更接受失效。归因组照抄建立
+        // 时（钉死后归因不再变化）。
+        if cfg.pin_session {
+            if let Some(id) = req.session_id.as_deref() {
+                let pinned = self
+                    .pins
+                    .lock()
+                    .expect("exposure pins poisoned")
+                    .get(id)
+                    .cloned();
+                if let Some(pinned) = pinned {
+                    let kept: Vec<ToolSpec> = pinned
+                        .names
+                        .iter()
+                        .filter_map(|n| req.tools.iter().find(|s| &s.name == n).cloned())
+                        .collect();
+                    let saved = spec_tokens(&req.tools).saturating_sub(spec_tokens(&kept));
+                    self.record(ExposureSnapshot {
+                        enabled: true,
+                        total: req.tools.len(),
+                        exposed: kept.len(),
+                        always: pinned.always,
+                        session_hot: pinned.session_hot,
+                        global_hot: pinned.global_hot,
+                        retrieved: pinned.retrieved,
+                        saved_tokens_estimate: saved,
+                        ts: now_secs(),
+                    });
+                    req.tools = kept;
+                    return super::replace_decision(req);
+                }
+            }
+        }
         let session = session_counts(&req.messages);
         let ewma = self.global.ewma_scores();
         let total = req.tools.len();
@@ -252,19 +340,30 @@ impl WaterfallListener for ToolExposure {
             enabled: true,
             total,
             exposed: sel.kept.len(),
-            always: sel.always,
-            session_hot: sel.session_hot,
-            global_hot: sel.global_hot,
-            retrieved: sel.retrieved,
+            always: sel.always.clone(),
+            session_hot: sel.session_hot.clone(),
+            global_hot: sel.global_hot.clone(),
+            retrieved: sel.retrieved.clone(),
             saved_tokens_estimate: saved,
             ts: now_secs(),
         });
-        req.tools = sel.kept;
-        // to_value 失败按 fail-open 放行（与 Memory-Inject / ctx-compact 同纪律）
-        match serde_json::to_value(&req) {
-            Ok(v) => WaterfallDecision::Replace(v),
-            Err(_) => WaterfallDecision::Continue,
+        // 钉死开且带会话身份：首次选择入缓存，后续轮直接复用（§4.2）
+        if cfg.pin_session {
+            if let Some(id) = req.session_id.clone() {
+                self.pins.lock().expect("exposure pins poisoned").insert(
+                    id,
+                    PinnedSelection {
+                        names: sel.kept.iter().map(|s| s.name.clone()).collect(),
+                        always: sel.always,
+                        session_hot: sel.session_hot,
+                        global_hot: sel.global_hot,
+                        retrieved: sel.retrieved,
+                    },
+                );
+            }
         }
+        req.tools = sel.kept;
+        super::replace_decision(req)
     }
 }
 

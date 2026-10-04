@@ -30,6 +30,8 @@ const form = reactive({
   allowSwitchRunningSession: false,
   cacheHitAlert: false,
   cacheHitAlertPercent: 80,
+  pinSession: true,
+  stabilityRounds: 3,
 });
 
 watch(
@@ -40,6 +42,9 @@ watch(
     form.allowSwitchRunningSession = v.developer.allowSwitchRunningSession;
     form.cacheHitAlert = v.developer.cacheHitAlert;
     form.cacheHitAlertPercent = v.developer.cacheHitAlertPercent;
+    // M1 前缀纪律两键：JSON 分属 tools/context 区，UI 行同挂本分区
+    form.pinSession = v.tools.pinSession;
+    form.stabilityRounds = v.context.stabilityRounds;
   },
   { immediate: true },
 );
@@ -50,6 +55,18 @@ function save() {
     allowSwitchRunningSession: form.allowSwitchRunningSession,
     cacheHitAlert: form.cacheHitAlert,
     cacheHitAlertPercent: Math.round(form.cacheHitAlertPercent),
+  });
+}
+
+/** 工具集会话钉死（KV v2 §4.2）：写 tools 区。 */
+function savePin() {
+  void settings.saveTools({ pinSession: form.pinSession });
+}
+
+/** 稳定期轮数（KV v2 §6.4）：写 context 区（1–10，出界后端拒绝）。 */
+function saveStability() {
+  void settings.saveContext({
+    stabilityRounds: Math.round(form.stabilityRounds),
   });
 }
 
@@ -221,6 +238,33 @@ onMounted(() => void refresh());
           }}
         </p>
       </div>
+    </SettingsGroup>
+
+    <!-- M1 前缀纪律（KV v2 §4.2/§6.4/§9 开发者层级）：钉死开关 + 稳定期轮数。
+         键 JSON 分属 tools/context 区，UI 行同挂本分区（文档先行 v4.4）。 -->
+    <SettingsGroup :title="t('developer.prefixTitle')" :hint="t('developer.prefixHint')">
+      <SettingsRow :title="t('developer.pinSession')" :hint="t('developer.pinSessionHint')">
+        <SettingsToggle
+          v-model="form.pinSession"
+          :label="t('developer.pinSession')"
+          @update:model-value="savePin"
+        />
+      </SettingsRow>
+      <SettingsRow
+        :title="t('developer.stabilityRounds')"
+        :hint="t('developer.stabilityRoundsHint')"
+        control-id="dev-stability-rounds"
+      >
+        <input
+          id="dev-stability-rounds"
+          v-model.number="form.stabilityRounds"
+          type="number"
+          min="1"
+          max="10"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveStability"
+        />
+      </SettingsRow>
     </SettingsGroup>
   </div>
 </template>

@@ -398,6 +398,8 @@ export interface ToolsSettingsView {
   approvalTimeoutSecs: number;
   /** ㉘·B 新会话权限档缺省。 */
   defaultPermissionMode: "plan" | "ask" | "acceptEdits" | "auto";
+  /** 工具集会话钉死（KV v2 §4.2，缺省开）。 */
+  pinSession: boolean;
 }
 
 /** 工具暴露区部分更新：字段缺省 = 保持不变。 */
@@ -409,6 +411,7 @@ export interface ToolsUpdate {
   maxTurnSteps?: number;
   approvalTimeoutSecs?: number;
   defaultPermissionMode?: "plan" | "ask" | "acceptEdits" | "auto";
+  pinSession?: boolean;
 }
 
 /** embedding 模型区投影（⑬ 智能层共享基建）：无秘钥字段。 */
@@ -501,6 +504,8 @@ export interface ContextSettingsView {
   thresholdPct: number;
   /** "sliding_window" | "layered" | "summary_only"。 */
   strategy: string;
+  /** 稳定期轮数（KV v2 §6.4，1–10，缺省 3）。 */
+  stabilityRounds: number;
   thresholdTokens: number;
   /** 建议阈值百分比；null = 窗口未知，UI 隐藏建议行。 */
   suggestedPct: number | null;
@@ -510,6 +515,7 @@ export interface ContextSettingsView {
 export interface ContextUpdate {
   thresholdPct?: number;
   strategy?: string;
+  stabilityRounds?: number;
 }
 
 /** provider 档位投影（v2.58 档位制，DESIGN §13.1；无秘钥字段）。 */

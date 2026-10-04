@@ -27,7 +27,20 @@ fn spec(name: &str, exposure: Exposure) -> ToolSpec {
 }
 
 fn cfg_lock(enabled: bool, max_tools: usize) -> Arc<RwLock<ToolExposureConfig>> {
-    Arc::new(RwLock::new(ToolExposureConfig { enabled, max_tools }))
+    Arc::new(RwLock::new(ToolExposureConfig {
+        enabled,
+        max_tools,
+        ..ToolExposureConfig::default()
+    }))
+}
+
+/// 钉死关闭（KV v2 §4.2 实验对比档）。
+fn cfg_lock_unpinned(enabled: bool, max_tools: usize) -> Arc<RwLock<ToolExposureConfig>> {
+    Arc::new(RwLock::new(ToolExposureConfig {
+        enabled,
+        max_tools,
+        pin_session: false,
+    }))
 }
 
 fn listener(ewma: HashMap<String, f64>, cfg: Arc<RwLock<ToolExposureConfig>>) -> ToolExposure {
@@ -55,6 +68,16 @@ async fn run(
     tools: Vec<ToolSpec>,
     messages: Vec<Message>,
 ) -> (WaterfallDecision, RequestPayload) {
+    run_session(listener, tools, messages, None).await
+}
+
+/// 带会话身份的请求（M1 钉死只作用于带身份的会话）。
+async fn run_session(
+    listener: &ToolExposure,
+    tools: Vec<ToolSpec>,
+    messages: Vec<Message>,
+    session_id: Option<&str>,
+) -> (WaterfallDecision, RequestPayload) {
     let payload = serde_json::to_value(RequestPayload {
         messages,
         model: None,
@@ -62,7 +85,7 @@ async fn run(
         tools,
         compacted: None,
         system: None,
-        session_id: None,
+        session_id: session_id.map(str::to_string),
     })
     .expect("payload");
     let decision = listener.handle(points::REQUEST, &payload).await;
@@ -255,4 +278,104 @@ async fn no_retriever_keeps_legacy_scoring() {
     assert!(matches!(decision, WaterfallDecision::Replace(_)));
     assert_eq!(out.tools.len(), 1);
     assert!(l.snapshot().retrieved.is_empty());
+}
+
+// ---- M1 会话钉死（KV v2 §4.2）----
+
+/// 钉死后暴露集跨轮冻结：第 2 轮会话内用过了未入选工具（旧行为会换它
+/// 上位），tools 块仍与第 1 轮逐字节一致；关掉开关恢复每轮 Top-N。
+#[tokio::test]
+async fn pin_freezes_exposed_set_across_rounds() {
+    let tools = vec![
+        spec("a1", Exposure::OnDemand),
+        spec("a2", Exposure::OnDemand),
+        spec("a3", Exposure::OnDemand),
+    ];
+    let ewma: HashMap<String, f64> = [("a1".into(), 5.0), ("a2".into(), 1.0)].into();
+    let l = listener(ewma, cfg_lock(true, 2));
+
+    // 第 1 轮：无会话使用，按全局热度入选 a1、a2
+    let (_, out1) = run_session(&l, tools.clone(), Vec::new(), Some("s1")).await;
+    let names1: Vec<&str> = out1.tools.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names1, vec!["a1", "a2"]);
+
+    // 第 2 轮：会话内用过了 a3——钉死 keeps a1、a2（字节也一致）
+    let (_, out2) = run_session(
+        &l,
+        tools.clone(),
+        messages_with_session_use("a3"),
+        Some("s1"),
+    )
+    .await;
+    let names2: Vec<&str> = out2.tools.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names2, vec!["a1", "a2"]);
+    assert_eq!(
+        serde_json::to_string(&out1.tools).unwrap(),
+        serde_json::to_string(&out2.tools).unwrap(),
+        "钉死会话 tools 块必须逐字节稳定（前缀缓存不灭）"
+    );
+
+    // 对照：钉死关闭 = 恢复每轮 Top-N，a3 靠会话热度上位（对照监听器
+    // 无全局热度表，a1/a2 得分归零，a3 的会话 1.0 排最前）
+    let l2 = ToolExposure::new(
+        Arc::new(Fixed(HashMap::new())),
+        cfg_lock_unpinned(true, 2),
+        None,
+    );
+    let (_, _) = run_session(&l2, tools.clone(), Vec::new(), Some("s1")).await;
+    let (_, legacy) = run_session(&l2, tools, messages_with_session_use("a3"), Some("s1")).await;
+    let names_legacy: Vec<&str> = legacy.tools.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names_legacy, vec!["a3", "a1"], "关闭钉死恢复旧行为");
+}
+
+/// 钉死集与当前目录取交集：目录被围栏收紧（计划模式）不复活已出目录的
+/// 工具——显式变更接受失效，恢复后钉死序不变。
+#[tokio::test]
+async fn pinned_set_intersects_shrunk_catalog() {
+    let tools = vec![
+        spec("a1", Exposure::OnDemand),
+        spec("a2", Exposure::OnDemand),
+        spec("a3", Exposure::OnDemand),
+    ];
+    let ewma: HashMap<String, f64> = [("a1".into(), 5.0)].into();
+    let l = listener(ewma, cfg_lock(true, 2));
+    let (_, out1) = run_session(&l, tools, Vec::new(), Some("s1")).await;
+    assert_eq!(
+        out1.tools
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["a1", "a2"]
+    );
+
+    // 围栏收紧：目录只剩 a1、a3 → 钉死集 ∩ 目录 = [a1]
+    let fenced = vec![
+        spec("a1", Exposure::OnDemand),
+        spec("a3", Exposure::OnDemand),
+    ];
+    let (_, out2) = run_session(&l, fenced, Vec::new(), Some("s1")).await;
+    let names: Vec<&str> = out2.tools.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names, vec!["a1"], "出目录的工具不复活");
+}
+
+/// 无会话身份（headless 一次性进程）不钉死：保持每轮 Top-N 旧行为。
+#[tokio::test]
+async fn sessionless_requests_keep_legacy_per_round() {
+    let tools = vec![
+        spec("a1", Exposure::OnDemand),
+        spec("a2", Exposure::OnDemand),
+        spec("a3", Exposure::OnDemand),
+    ];
+    let l = listener(HashMap::new(), cfg_lock(true, 2));
+    let (_, r1) = run(&l, tools.clone(), Vec::new()).await;
+    let (_, r2) = run(&l, tools, messages_with_session_use("a3")).await;
+    assert_eq!(
+        r1.tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+        vec!["a1", "a2"]
+    );
+    assert_eq!(
+        r2.tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+        vec!["a3", "a1"],
+        "无身份 = 逐轮重算（与钉死前行为一致）"
+    );
 }

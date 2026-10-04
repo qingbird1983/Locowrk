@@ -7,7 +7,7 @@
 use super::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
     MemoryUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME,
-    LOCALES,
+    LOCALES, STABILITY_ROUNDS_RANGE,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -85,6 +85,16 @@ impl SettingsStore {
             if let Some(s) = u.strategy {
                 next.context.strategy = s;
             }
+            if let Some(n) = u.stability_rounds {
+                if !STABILITY_ROUNDS_RANGE.contains(&n) {
+                    return Err(format!(
+                        "稳定期轮数 {n} 超出范围（{}–{}）",
+                        STABILITY_ROUNDS_RANGE.start(),
+                        STABILITY_ROUNDS_RANGE.end()
+                    ));
+                }
+                next.context.stability_rounds = n;
+            }
         }
         if let Some(u) = memory {
             if let Some(e) = u.enabled {
@@ -152,6 +162,10 @@ impl SettingsStore {
                     ));
                 }
                 next.tools.default_permission_mode = mode;
+            }
+            if let Some(pin) = u.pin_session {
+                // KV v2 §4.2 工具集会话钉死（无范围校验，布尔开关）
+                next.tools.pin_session = pin;
             }
         }
         if let Some(u) = shell {

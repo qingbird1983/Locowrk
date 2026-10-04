@@ -86,6 +86,7 @@ fn config(threshold: u64, strategy: CompactStrategy) -> Arc<RwLock<CompactConfig
     Arc::new(RwLock::new(CompactConfig {
         threshold_tokens: threshold,
         strategy,
+        ..CompactConfig::default()
     }))
 }
 
@@ -357,6 +358,7 @@ async fn config_changes_take_effect_without_rebuild() {
     *cfg.write().unwrap() = CompactConfig {
         threshold_tokens: 400,
         strategy: CompactStrategy::Layered,
+        ..CompactConfig::default()
     };
     let payload = run(&ctx, cfg, Some(llm.clone()), long_transcript(6)).await;
     let req: RequestPayload = serde_json::from_value(payload).unwrap();
@@ -393,3 +395,5 @@ async fn other_waterfall_points_ignored() {
     let out = ctx.events.waterfall(points::PRE_STEP, payload).await;
     assert_eq!(out.decision, WaterfallDecision::Continue);
 }
+
+mod stability;

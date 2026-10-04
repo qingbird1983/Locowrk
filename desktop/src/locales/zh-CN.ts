@@ -344,6 +344,14 @@ export default {
     cacheAlertHint:
       "会话累计命中率跌破阈值时提醒一次（每会话至多一次；≥3 步才判——冷启动首轮无缓存不算）。",
     cacheAlertPercent: "告警阈值（%）",
+    prefixTitle: "前缀纪律",
+    prefixHint: "请求前缀逐字节稳定是前缀缓存省钱的前提（KV v2 §4/§5）。改动会即时生效，但会让当前会话缓存失效一次。",
+    pinSession: "工具集会话钉死",
+    pinSessionHint:
+      "暴露集在会话首次请求确定并复用，tools 块逐字节稳定；需要新工具用 search_tools 拉取。关闭 = 恢复每轮按热度重选（缓存命中率会掉，实验对比用）。",
+    stabilityRounds: "稳定期轮数",
+    stabilityRoundsHint:
+      "压缩/整理结算后的 N 个用户轮内不再触发改前缀的操作（1–10），让新前缀尽快落盘。",
   },
   memory: {
     search: "搜索记忆…",

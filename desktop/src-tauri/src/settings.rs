@@ -1,8 +1,7 @@
 //! 设置存储（DESIGN.md §13.1 / §13.5）。分区：LLM 配置、⑬ embedding 模型、
 //! 语言、快捷键、⑨ 上下文管理、⑪ 记忆注入、⑫ 工具暴露、S1 shell 治理
 //! （高危解锁）、⑬ 插件管理（自动停用）。持久化在数据根 `settings.json`；
-//! API Key 只落盘不出 IPC（投影只有 `api_key_set` 布尔），真适配器在后端
-//! 侧读原值。
+//! API Key 只落盘不出 IPC（投影只有 `api_key_set` 布尔），真适配器在后端侧读原值。
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -24,7 +23,7 @@ mod update;
 
 pub use appearance::{AppearanceSettings, AppearanceUpdate, AppearanceView};
 pub use chat::{ChatSettings, ChatUpdate, ChatView};
-pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
+pub use context::{ContextSettings, ContextSettingsView, ContextUpdate, STABILITY_ROUNDS_RANGE};
 pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{
@@ -230,8 +229,7 @@ impl SettingsStore {
             .clone()
     }
 
-    /// 后端专用：生效窗口（S2 llm 活动档优先；context 旧字段兜底——正常
-    /// 路径 open() 迁移后恒为 None）。None = 未设置。
+    /// 后端专用：生效窗口（S2 llm 活动档优先；context 旧字段兜底——正常路径 open() 迁移后恒为 None）。None = 未设置。
     pub fn effective_window(&self) -> Option<u64> {
         let s = self.inner.lock().expect("settings poisoned");
         s.llm.flat().window_tokens.or(s.context.window_tokens)
@@ -256,6 +254,7 @@ impl SettingsStore {
         CompactConfig {
             threshold_tokens: self.effective_threshold_tokens(),
             strategy: c.strategy,
+            stability_rounds: c.stability_rounds,
         }
     }
 
@@ -349,6 +348,7 @@ impl SettingsStore {
             context: ContextSettingsView {
                 threshold_pct: s.context.threshold_pct,
                 strategy: s.context.strategy,
+                stability_rounds: s.context.stability_rounds,
                 threshold_tokens: s
                     .context
                     .effective_threshold(window.unwrap_or(FALLBACK_WINDOW_TOKENS)),
@@ -367,6 +367,7 @@ impl SettingsStore {
                 max_turn_steps: s.tools.max_turn_steps,
                 approval_timeout_secs: s.tools.approval_timeout_secs,
                 default_permission_mode: s.tools.default_permission_mode.clone(),
+                pin_session: s.tools.pin_session,
             },
             shell: ShellSettingsView {
                 unlock_risky: s.shell.unlock_risky,

@@ -21,6 +21,9 @@ pub struct ContextSettings {
     pub threshold_pct: u32,
     /// 压缩策略（缺省分层保留）。
     pub strategy: CompactStrategy,
+    /// 稳定期轮数（KV v2 §6.4，缺省 3，合法 1–10）：结算后 N 个用户轮
+    /// 内不再触发压缩——新前缀尽快落盘，二次压缩只烧钱。
+    pub stability_rounds: u32,
 }
 
 impl Default for ContextSettings {
@@ -29,6 +32,7 @@ impl Default for ContextSettings {
             window_tokens: None,
             threshold_pct: 30,
             strategy: CompactStrategy::default(),
+            stability_rounds: 3,
         }
     }
 }
@@ -54,6 +58,8 @@ impl ContextSettings {
 pub struct ContextSettingsView {
     pub threshold_pct: u32,
     pub strategy: CompactStrategy,
+    /// 稳定期轮数（KV v2 §6.4，1–10，缺省 3）。
+    pub stability_rounds: u32,
     /// 生效阈值（窗口已知 = 窗口×百分比；未知 = FALLBACK_WINDOW_TOKENS）。
     pub threshold_tokens: u64,
     /// 建议阈值百分比（窗口未知 = None，UI 隐藏建议行）。
@@ -67,4 +73,9 @@ pub struct ContextSettingsView {
 pub struct ContextUpdate {
     pub threshold_pct: Option<u32>,
     pub strategy: Option<CompactStrategy>,
+    pub stability_rounds: Option<u32>,
 }
+
+/// stability_rounds 合法区间（KV v2 §9 可调项总表）：1–10。下限 1 保住
+/// "结算当轮不二次结算"的最低纪律，上限 10 防稳定期变成禁压。
+pub const STABILITY_ROUNDS_RANGE: std::ops::RangeInclusive<u32> = 1..=10;
