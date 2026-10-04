@@ -73,20 +73,22 @@
 
 ---
 
-### M2 · 记忆树地基（影子运行） ⬜
+### M2 · 记忆树地基（影子运行） ✅（v2.65）
 
 **目标**：树只写不接管——现网会话照常 ctx-compact + memory-sqlite，树并行记账，验证整理质量与工程件（树 v2 §11.2 阶段 1）。
 
-**落点**：
-- 新 crate `crates/memory-tree`：MemoryBundle / MemoryTree / EventToBundleIndex / 树存储（**(workspace, session)** 键位，对齐 28·A）
-- 阈值触发（复用现网 10–90% 滑条 + 占用锚点优先 LlmUsage）+ **`/整理` 手动命令**
-- 异步记录员：`prompts/{main,recorder}/{default,claude,deepseek,qwen}.md` 两层目录 + 模型匹配 + 会话级预取纪律；**摘要逐字保留用户指令**（§5.6）
-- 占位捆持久化 + 崩溃恢复（重启重投 / 整树重建兜底）
-- 降级规则切分（复用 ctx-compact 切点逻辑）+ 反弹熔断 k/m
-- 设置：记录员模型行（同主模型 ▾）、整理节奏批量/增量、增量块 X
-- 整理节奏/锚点/记录员成本进开发者可观测
+**落账**：新 crate `crates/memory-tree`（bundle / tree / index / trigger / material / recorder / storage 七模块 + prompts 两层目录 8 文件编译期内嵌，33 测试）——MemoryBundle（L0/L1/L2 + pending/source 追加字段）、EventToBundleIndex、触发纯函数（批量阈值 / 增量块，锚点优先 LlmUsage 估算兜底）、记录员输出校验（**切分区间必须按材料项完整铺满**，垃圾整批拒绝转规则切分）、规则切分（复用 ctx-compact「切点落在 User 之前」纪律不拆工具对）、(workspace, session) 键位原子存储（scope 编码 + 坏投影当不存在，整树重建兜底）。desktop `organize/` 编排（mod / client / debug / recovery 四文件）：决策（plan_auto / plan_manual，含反弹熔断账本）与执行（超时 × 重试 → 校验 → 降级 → 落树）分离，记录员客户端按档位路由（recorder_provider 整档换 / 模型名覆盖 / 同主模型，未配置报错走降级不落演示替身）；轮次收束钩子挂 agent_chat + 调度引擎双入口（fire-and-forget）；启动 `recover_pending` 重投（会话已删 = 终局放弃记 aborted，尾巴留原文流）。**影子纪律**：请求组装零改动，记录员调用直呼 GenAiLlm 不进会话日志（盘证 llm_usage 每轮恰好 1 条）。`/整理`（composer 前端拦截 = SystemNotice 反馈不建气泡）+ `organize_now` / `memory_tree_view` 命令；设置键：memory 区三键（organizePacing / organizeChunkTokens / recorderModel+recorderProvider，**空串 = 清除**——走查实抓双层 Option 的 null 在 serde_json 里与字段缺失不可区分、清除语义失效，弃用改约定）+ developer 区五键（熔断 k/m / 记录员超时 × 重试 / 规则切分块）+ settings.rs `project()` 拆 view.rs 守门禁。UI shell v4.5 先行（§3.36 新节）。测试：memory-tree 33 + 桌面 156（+9：organize 全链路 7 + 设置往返 2）绿、workspace 361 绿、clippy 0 双侧、pnpm build 过。实机走查（CDP，真实轮 deepseek-flash）：/整理 拦截反馈 → 真实记录员 2.1–11.5s 整理（**捆 b3 summary 把用户指令「永远用 pnpm 不要用 npm」引号原文逐字保留 = §5.6 实证**，真实 memory_write 工具往返如实记录）→ 增量自动触发（reason=incremental_chunk，7 轮长回答堆过 10K，6 捆 / 游标 34 / recorder ok）→ 批量阈值触发（窗口临时 16000，anchor 3596 ≥ 3200 → reason=threshold）→ 反弹熔断（k=1 内再触发 rebound=1=m → paused=true 跳过整理）→ 手动 /整理 不受限复位 → 崩溃重投（杀进程 → 构造 pending 投影 → 重启日志「重投在途整理任务」→ recorder ok、占位 b9 撤除换真捆）→ 降级（bogus 记录员模型 API 400 → mode=rule/status=degraded、捆照建游标照推）→ 开发者面板 / 模型区记录员行 / 记忆区节奏行全渲染 → 命中率无回退（92.6% / 81.1% / 92.5%，记录员独立调用不进会话流）。**预置隐患记录**：`LlmUpdate.window_tokens` 的「null = 清除」（v2.40）同款双层 Option 缺陷，待单独批修。走查会话已删（走查前旧会话还原）、memory-tree/ 投影已清、settings / memory / experiences / usage / notifications 五文件字节还原、应用重启干净实例。
 
-**验收**：真实长会话阈值自动整理 + `/整理` 即时整理；捆标题/摘要人工抽查（含用户指令逐字保留）；杀进程后在途任务重投；记录员不可用降级规则切分；影子运行期间现网命中率无回退。
+**落点**：
+- 新 crate `crates/memory-tree`：MemoryBundle / MemoryTree / EventToBundleIndex / 树存储（**(workspace, session)** 键位，对齐 28·A）✅
+- 阈值触发（复用现网 10–90% 滑条 + 占用锚点优先 LlmUsage）+ **`/整理` 手动命令** ✅
+- 异步记录员：`prompts/{main,recorder}/{default,claude,deepseek,qwen}.md` 两层目录 + 模型匹配 + 会话级预取纪律；**摘要逐字保留用户指令**（§5.6）✅（提示词内嵌逐字保留纪律，走查实证）
+- 占位捆持久化 + 崩溃恢复（重启重投 / 整树重建兜底）✅
+- 降级规则切分（复用 ctx-compact 切点逻辑）+ 反弹熔断 k/m ✅
+- 设置：记录员模型行（同主模型 ▾）、整理节奏批量/增量、增量块 X ✅
+- 整理节奏/锚点/记录员成本进开发者可观测 ✅（memory_tree_view 只读面板）
+
+**验收**：真实长会话阈值自动整理 ✅ + `/整理` 即时整理 ✅；捆标题/摘要人工抽查（含用户指令逐字保留）✅；杀进程后在途任务重投 ✅；记录员不可用降级规则切分 ✅；影子运行期间现网命中率无回退 ✅。
 
 ---
 

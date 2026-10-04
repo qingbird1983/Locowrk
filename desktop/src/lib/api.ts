@@ -32,6 +32,7 @@ import type {
   ProviderInput,
   ProviderModels,
   ProviderView,
+  TreeDebug,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
@@ -426,6 +427,16 @@ export function memoryClearAll(): Promise<number> {
 /** 最近一次工具暴露截断快照（⑫ 开发者面板；打开分区时拉取）。 */
 export function toolExposureDebug(): Promise<ExposureDebug> {
   return invoke("tool_exposure_debug");
+}
+
+/** 手动整理（M2 `/整理`）：立即整理当前未整理尾巴（发起即返回，后台跑）。 */
+export function organizeNow(sessionId: string): Promise<void> {
+  return invoke("organize_now", { sessionId });
+}
+
+/** 记忆树影子运行观测（M2 §3.36③；开发者面板打开时拉取）。 */
+export function memoryTreeView(sessionId: string): Promise<TreeDebug> {
+  return invoke("memory_tree_view", { sessionId });
 }
 
 // ---- 经历记忆（⑬，Context and Memory.md §4.3 宿主侧） ----

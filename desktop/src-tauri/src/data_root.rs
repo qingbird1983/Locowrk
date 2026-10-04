@@ -47,3 +47,24 @@ pub fn resolve_market_dir() -> Option<PathBuf> {
 fn is_market_root(p: &Path) -> bool {
     p.join("tool-shout").is_dir()
 }
+
+/// 数据根解析（state/init_state 调用）：LOCOWRK_DATA_DIR 优先，失败退
+/// 系统临时目录（组装点先警告再降级，聊天不受影响）。
+pub fn data_dir() -> std::path::PathBuf {
+    resolve_data_dir().unwrap_or_else(|e| {
+        tracing::warn!("{e}；退回系统临时目录");
+        std::env::temp_dir().join("locowrk-data")
+    })
+}
+
+/// ⑱ fs roots env 注入（settings `tools.fs_roots` → `LOCOWRK_FS_ROOTS`，
+/// `;` 分隔同 fsutil 解析约定）：空表 = 移除 env（回落缺省只放行数据根）。
+/// init_state 与 settings_set（tools 区有改动时）各调一次。
+pub fn apply_fs_roots_env(settings: &crate::settings::SettingsStore) {
+    let roots = settings.fs_roots();
+    if roots.is_empty() {
+        std::env::remove_var("LOCOWRK_FS_ROOTS");
+    } else {
+        std::env::set_var("LOCOWRK_FS_ROOTS", roots.join(";"));
+    }
+}

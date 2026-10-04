@@ -7,6 +7,7 @@ members = [
     "crates/plugin-host",
     "crates/plugin-service",
     "crates/session-store",
+    "crates/memory-tree",
     "crates/kernel-bin",
     "plugins-src/tool-echo",
     "plugins-src/tool-shout",

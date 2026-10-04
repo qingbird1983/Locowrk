@@ -14,3 +14,5 @@ mod tests;
 
 pub use app_llm::AppLlm;
 pub use embed::{CooledEmbed, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
+/// 记录员等旁路调用按设置档直呼适配器（organize/client.rs；M2）
+pub use genai_backend::GenAiLlm;

@@ -53,6 +53,7 @@ pub(crate) fn spawn_engine(
     sessions_dir: std::path::PathBuf,
     last_chat: Arc<RwLock<Option<String>>>,
     app: tauri::AppHandle,
+    organizer: Arc<crate::organize::Organizer>,
 ) {
     spawn(EngineDeps {
         db,
@@ -64,5 +65,6 @@ pub(crate) fn spawn_engine(
         sessions_dir,
         last_chat,
         app,
+        organizer,
     });
 }

@@ -330,6 +330,16 @@ export interface DeveloperView {
   cacheHitAlert: boolean;
   /** 告警阈值（%）。 */
   cacheHitAlertPercent: number;
+  /** 记忆树反弹熔断 k（M2，§5.5：整理后 k 个用户轮内再触发 = 反弹）。 */
+  organizeReboundK: number;
+  /** 反弹熔断 m（连续 m 次 → 暂停本会话自动整理）。 */
+  organizeReboundM: number;
+  /** 记录员单次调用超时（秒）。 */
+  recorderTimeoutSecs: number;
+  /** 记录员重试次数（仍失败 → 规则切分降级）。 */
+  recorderMaxRetries: number;
+  /** 规则切分块（token，5K–50K 缺省 20K）。 */
+  ruleChunkTokens: number;
 }
 
 /** 开发者选项区部分更新：字段缺省 = 保持不变。 */
@@ -339,6 +349,11 @@ export interface DeveloperUpdate {
   allowSwitchRunningSession?: boolean;
   cacheHitAlert?: boolean;
   cacheHitAlertPercent?: number;
+  organizeReboundK?: number;
+  organizeReboundM?: number;
+  recorderTimeoutSecs?: number;
+  recorderMaxRetries?: number;
+  ruleChunkTokens?: number;
 }
 
 /** 对话行为区投影：结构即设置原值。contentMaxWidth null = 未设置（前端按
@@ -376,6 +391,13 @@ export interface MemorySettingsView {
   enabled: boolean;
   topK: number;
   autoExtract: boolean;
+  /** 记忆树整理节奏（M2：batch 批量 / incremental 增量，树 v2 §4.3）。 */
+  organizePacing: string;
+  /** 增量块 X（token，增量档触发线，10K–200K 缺省 50K）。 */
+  organizeChunkTokens: number;
+  /** 会话记录员模型（树 v2 §5.2；null = 同主模型）。 */
+  recorderModel: string | null;
+  recorderProvider: string | null;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -383,6 +405,11 @@ export interface MemoryUpdate {
   enabled?: boolean;
   topK?: number;
   autoExtract?: boolean;
+  organizePacing?: string;
+  organizeChunkTokens?: number;
+  /** 空串 = 清除（回落同主模型）。 */
+  recorderModel?: string;
+  recorderProvider?: string;
 }
 
 /** 工具暴露区投影（⑫）：结构即设置原值。S2 起含宿主单次调用超时；
@@ -473,6 +500,41 @@ export interface ExposureDebug {
   savedTokensEstimate: number;
   /** 快照时刻（Unix 秒）；0 = 尚未有过请求。 */
   ts: number;
+}
+
+
+/** 记忆树影子运行观测（M2 §3.36③；memory_tree_view 命令载荷）。 */
+export interface TreeDebug {
+  exists: boolean;
+  workspace: string;
+  sessionId: string;
+  bundledUntil: number;
+  bundleCount: number;
+  tailEvents: number;
+  tailTokensEst: number;
+  anchorTokens: number;
+  anchorSource: "llm_usage" | "estimate";
+  thresholdPct: number;
+  windowTokens: number;
+  pacing: "batch" | "incremental";
+  chunkTokens: number;
+  pausedAuto: boolean;
+  reboundCount: number;
+  pending: { from: number; to: number; attempts: number } | null;
+  history: TreeOrganizeRecord[];
+}
+
+export interface TreeOrganizeRecord {
+  ts: number;
+  reason: string;
+  mode: string;
+  status: string;
+  from: number;
+  to: number;
+  bundles: number;
+  recorderInput: number;
+  recorderOutput: number;
+  durationMs: number;
 }
 
 /** 经历记忆条目（⑬ experience_list 返回行；camelCase）。

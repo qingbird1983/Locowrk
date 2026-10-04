@@ -10,6 +10,24 @@ use serde::{Deserialize, Serialize};
 /// KV v2 §7.4）。
 pub const CACHE_HIT_ALERT_PERCENT_DEFAULT: u8 = 80;
 
+// ---- M2 记忆树整理（树 v2 §15 开发者层级可调项；Memory-KV Roadmap）----
+
+/// 反弹熔断 k 缺省（§5.5：整理后 k 个用户轮内再触发 = 反弹）。
+pub const ORGANIZE_REBOUND_K_DEFAULT: u32 = 3;
+/// 反弹熔断 m 缺省（连续 m 次反弹 → 暂停本会话自动整理）。
+pub const ORGANIZE_REBOUND_M_DEFAULT: u32 = 3;
+/// 熔断 k/m 合法区间（1–10）。
+pub const ORGANIZE_REBOUND_RANGE: std::ops::RangeInclusive<u32> = 1..=10;
+/// 记录员单次调用超时缺省（秒）。
+pub const RECORDER_TIMEOUT_SECS_DEFAULT: u64 = 60;
+pub const RECORDER_TIMEOUT_SECS_RANGE: std::ops::RangeInclusive<u64> = 10..=600;
+/// 记录员重试次数缺省（仍失败 → 规则切分降级，§5.4）。
+pub const RECORDER_MAX_RETRIES_DEFAULT: u32 = 3;
+pub const RECORDER_MAX_RETRIES_RANGE: std::ops::RangeInclusive<u32> = 0..=10;
+/// 规则切分块缺省与合法区间（§15：5K–50K 缺省 20K）。
+pub const RULE_CHUNK_TOKENS_DEFAULT: u64 = 20_000;
+pub const RULE_CHUNK_TOKENS_RANGE: std::ops::RangeInclusive<u64> = 5_000..=50_000;
+
 /// 开发者选项设置（settings.json `developer` 区，字段级缺省零迁移）。
 /// Default = 全关是语义要求：分区隐藏 + 禁止项保持写死语义（阈值是唯一
 /// 带非零缺省的字段，只在告警开启后有意义）。
@@ -31,6 +49,16 @@ pub struct DeveloperSettings {
     pub cache_hit_alert: bool,
     /// 告警阈值（%）。
     pub cache_hit_alert_percent: u8,
+    /// 记忆树反弹熔断 k（§5.5，1–10 缺省 3）。
+    pub organize_rebound_k: u32,
+    /// 记忆树反弹熔断 m（连续 m 次 → 暂停自动整理，1–10 缺省 3）。
+    pub organize_rebound_m: u32,
+    /// 记录员单次调用超时（秒，10–600 缺省 60）。
+    pub recorder_timeout_secs: u64,
+    /// 记录员重试次数（0–10 缺省 3；仍失败 → 规则切分）。
+    pub recorder_max_retries: u32,
+    /// 规则切分块（token，5K–50K 缺省 20K）。
+    pub rule_chunk_tokens: u64,
 }
 
 impl Default for DeveloperSettings {
@@ -41,6 +69,11 @@ impl Default for DeveloperSettings {
             allow_switch_running_session: false,
             cache_hit_alert: false,
             cache_hit_alert_percent: CACHE_HIT_ALERT_PERCENT_DEFAULT,
+            organize_rebound_k: ORGANIZE_REBOUND_K_DEFAULT,
+            organize_rebound_m: ORGANIZE_REBOUND_M_DEFAULT,
+            recorder_timeout_secs: RECORDER_TIMEOUT_SECS_DEFAULT,
+            recorder_max_retries: RECORDER_MAX_RETRIES_DEFAULT,
+            rule_chunk_tokens: RULE_CHUNK_TOKENS_DEFAULT,
         }
     }
 }
@@ -54,6 +87,11 @@ pub struct DeveloperView {
     pub allow_switch_running_session: bool,
     pub cache_hit_alert: bool,
     pub cache_hit_alert_percent: u8,
+    pub organize_rebound_k: u32,
+    pub organize_rebound_m: u32,
+    pub recorder_timeout_secs: u64,
+    pub recorder_max_retries: u32,
+    pub rule_chunk_tokens: u64,
 }
 
 /// 部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -65,6 +103,11 @@ pub struct DeveloperUpdate {
     pub allow_switch_running_session: Option<bool>,
     pub cache_hit_alert: Option<bool>,
     pub cache_hit_alert_percent: Option<u8>,
+    pub organize_rebound_k: Option<u32>,
+    pub organize_rebound_m: Option<u32>,
+    pub recorder_timeout_secs: Option<u64>,
+    pub recorder_max_retries: Option<u32>,
+    pub rule_chunk_tokens: Option<u64>,
 }
 
 /// 合法性检查（update.rs 校验用）：阈值 1–100。

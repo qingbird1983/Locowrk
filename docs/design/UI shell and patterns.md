@@ -305,7 +305,8 @@
 |---|---|---|
 | `LlmSection` | `llm` | ✅ 既有（+ 窗口下拉） |
 | `ContextSection` | `context` | ✅（阈值/策略/建议值；前端不做第二套换算） |
-| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract） |
+| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X） |
+| `LlmSection` | `llm` | ✅（v4.5 起默认项组内增**会话记录员**行——同主模型 ▾，树 v2 §5.2） |
 | `SessionsSection` | —（只读 dataDir） | ✅ |
 | `LanguageSection` | `locale` | ✅ |
 | `AppearanceSection` | `appearance` | ✅（theme 三档；**缺省 `light`**，用户 2026-10-01 裁定） |
@@ -1330,6 +1331,49 @@ DESIGN.md §7.2「权限模式决策表」，本节只定 UI 形态。
 - **数据**：`schedule_list` 命令（全部待触发行，新→旧）；触发/顺延/放弃状态以
   `run_at` 与 `deferrals` 如实呈现，不发明「暂停/恢复」（后端无此语义，宁缺勿假）。
 
+### 3.36 记忆树影子运行（M2）：/整理 命令 + 设置行 + 开发者观测（✅ v2.65）
+
+**影子运行口径先行**：树只写不接管——对话组装零改动（现网照常 ctx-compact +
+memory-sqlite），全部 UI 面向 = 一条斜杠命令 + 两处设置行 + 开发者观测面板。
+树视图 / 整理系统消息 / 「未整理尾巴」指示器属 M3，本批不渲染。
+
+**① 斜杠命令 `/整理`（别名 `/organize`）**：
+
+- composer 输入 `/整理` 或 `/organize` 回车 = **前端拦截**，不进对话流、不建
+  用户气泡——手动命令是元操作不是会话内容；`/org` 前缀等模糊形式不拦（宁缺
+  勿假，误触整理比打错字更烦）；
+- 行为：`organize_now` 命令立即整理当前未整理尾巴（等价于把阈值临时降到当前
+  占用；树 v2 §4.1）；运行中会话输入 = 静默忽略（与空输入同路）；
+- 反馈：发起后转录追加一条 SystemNotice「已发起整理（后台进行）」——影子期
+  完成通知不进对话（M3 才挂 📦 系统消息），结果看开发者观测面板或记忆页
+  （M3）；手动整理不受反弹熔断限制（§5.5 原文），且会把熔断态复位
+  （用户显式重来 = 重新信任记录员）。
+
+**② 设置行（键 JSON 各归其区，UI 按 §3.32·七 行版式）**：
+
+- **记忆区（`MemorySection`）新两行**：**整理节奏**（SettingsSegmented 批量 /
+  增量，缺省批量；树 v2 §4.3）+ **增量块 X**（`.lw-field-num` 10K–200K 缺省
+  50K，仅增量档显示）；`memory.organizePacing` / `memory.organizeChunkTokens`；
+- **模型区（`LlmSection`）默认项组内一行**：**会话记录员**（SettingsSelect：
+  「同主模型」+ 已启用服务的模型清单，选中 = `memory.recorderModel` +
+  `memory.recorderProvider`，清空回落 = 同主模型；树 v2 §5.2——记录员是
+  「给他配个模型」的角色，不做 provider 档位编辑）；
+- **上下文区阈值滑条行说明补一句**：此滑条同时作为记忆树整理触发阈值
+  （复用现网滑条，树 v2 §4.1——单旋钮裁定，不发明第二把尺）。
+
+**③ 开发者分区「记忆树（影子运行）」组**：
+
+- **可调项行**（树 v2 §15 开发者层级）：反弹熔断 k / m（1–10 缺省 3/3，
+  `developer.organizeReboundK/M`）+ 记录员超时秒 × 重试（缺省 60s × 3，
+  `developer.recorderTimeoutSecs` / `recorderMaxRetries`）+ 规则切分块
+  （5K–50K 缺省 20K，`developer.ruleChunkTokens`）；
+- **观测面板**（只读，打开分区拉一次 + 手动刷新，⑫ 暴露面板同款不轮询）：
+  `memory_tree_view` 命令按当前会话返回——捆数 / 已整理游标（事件位）/ 尾巴
+  事件数与估算 token / 占用锚点（真实 input 优先、估算兜底，锚点来源如实
+  标注）/ 阈值% 与节奏 / 反弹计数与熔断暂停态 / 在途任务（含重投次数）/
+  最近整理记录（时间·原因·模式 recorder|rule·捆数·记录员 token 与耗时·
+  状态，最近 10 条）。无会话或树未建 = 空态一行，不发明数据。
+
 ## 四、事件→UI 流向图
 
 > 功能批次只**扩表**，不改既有行的路径。
@@ -1370,6 +1414,7 @@ DESIGN.md §7.2「权限模式决策表」，本节只定 UI 形态。
 | `session_list` / `session_history` | chat store `init` | §2.3 侧栏 + 切换重放（§3.6） |
 | `subagent_transcript`（✅ v2.52） | 工作面板 §3.16 页签 | 工作面板 `SubagentTranscriptTab` 挂载时拉取（盘上 load + 同一投影），只读不订阅 |
 | `pick_directory` | 设置 → 工作区目录 | 原生对话框；返回 `string \| null` |
+| `organize_now` / `memory_tree_view`（✅ v2.65 M2） | chat store `/整理` 拦截；开发者分区观测面板 | 发起即返回（异步整理，结果经树文件落盘）；面板打开时拉取不轮询（⑫ 同款） |
 
 铁则重申：**UI 永不直接操作 PluginRegistry**（只经 PluginService / 宿主命令）；流式内容
 永远走事件推送，不塞 command 返回值；Tauri command 是薄适配层。
@@ -1905,3 +1950,11 @@ cacheMissPrice）+ 开发者分区「前缀缓存读数」面板与命中率告�
 钉死**（`tools.pinSession`，缺省开——关 = 恢复每轮 Top-N 旧行为，实验对比用）+
 **稳定期轮数**（`context.stabilityRounds`，数字 1–10 缺省 3——结算后 N 轮不触发
 改前缀操作）。*
+
+*文档版本：v4.5（M2 记忆树地基批，《Memory Tree Design v2》影子运行落地）。新增
+§3.36：**斜杠命令 `/整理`**（composer 前端拦截，不进对话流；手动整理不受熔断限制
+且复位熔断态）+ **设置行三处**（记忆区整理节奏/增量块 X；模型区默认项组内会话
+记录员行——同主模型 ▾；上下文区阈值行说明补"同时作为记忆树整理触发阈值"）+
+**开发者分区「记忆树（影子运行）」组**（可调项 k/m/超时/重试/规则切分块 + 只读
+观测面板，`memory_tree_view` 打开拉取不轮询）。影子期对话组装零改动，树视图与
+整理系统消息属 M3。*

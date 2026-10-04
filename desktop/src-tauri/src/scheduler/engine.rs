@@ -90,6 +90,8 @@ pub(crate) struct EngineDeps {
     pub sessions_dir: std::path::PathBuf,
     pub last_chat: Arc<RwLock<Option<String>>>,
     pub app: AppHandle,
+    /// M2 记忆树影子运行：调度触发的轮次与手聊同一整理钩子。
+    pub organizer: Arc<crate::organize::Organizer>,
 }
 
 /// 起引擎后台任务（组装点调用；db 打不开 = 不起，调度缺席已降级）。
@@ -187,9 +189,11 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
             deps.app.clone(),
             Arc::clone(&deps.settings),
             deps.sessions_dir.clone(),
-            session_id,
+            session_id.clone(),
             session.derive_messages(),
         );
+        // M2 记忆树影子运行：轮次收束后旁路触发判定（同 agent_chat）
+        deps.organizer.after_turn(&session, &session_id);
     }
     finish(deps, &sched, now);
 }

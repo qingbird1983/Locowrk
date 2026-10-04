@@ -48,7 +48,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     crate::desktop_notify::register_vtable_hook(app.clone());
 
     // 数据根绑定一次，设置 / 插件编排 / LLM 配置共用（settings.json 同目录）。
-    let root = data_dir();
+    let root = data_root::data_dir();
 
     // 应用内通知记录（§3.13）：manage 给 TauriSink 入账钩子惰性取用。
     let notifications = Arc::new(crate::notifications::NotificationStore::open(
@@ -110,7 +110,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         std::env::set_var("LOCOWRK_SHELL_UNLOCK_RISK", "1");
     }
     // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后重注入即生效免重启
-    apply_fs_roots_env(&settings);
+    crate::data_root::apply_fs_roots_env(&settings);
 
     // v2.58 会话级模型覆盖存储（旁车持久 + 缓存；AppLlm 每请求按 LlmRequest.session_id
     // 解析覆盖——档位路由 + 模型名）。模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身；⑬ 句柄留 AppState 给隐式提取）。
@@ -313,6 +313,16 @@ pub fn init_state(app: AppHandle) -> AppState {
         });
     }
 
+    // M2 记忆树影子运行编排器：记录员客户端 = 设置路由的 genai 直呼；
+    // ㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）。
+    let organizer = crate::organize::build_organizer(
+        Arc::clone(&settings),
+        sessions_dir.clone(),
+        Arc::clone(&workspace_of),
+        root.clone(),
+    );
+    // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
+
     // 6. ⑭ 调度引擎（库可用时）：1s tick；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑
     if let Some(db) = &schedules {
         crate::scheduler::spawn_engine(
@@ -325,8 +335,11 @@ pub fn init_state(app: AppHandle) -> AppState {
             sessions_dir.clone(),
             Arc::clone(&last_chat),
             app.clone(),
+            Arc::clone(&organizer),
         );
     }
+    // 在途整理任务重投（后台，不阻塞窗口出现）
+    organizer.recover_pending();
 
     AppState {
         app,
@@ -354,25 +367,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         llm,
         notifications,
         schedules,
-    }
-}
-
-fn data_dir() -> std::path::PathBuf {
-    data_root::resolve_data_dir().unwrap_or_else(|e| {
-        tracing::warn!("{e}；退回系统临时目录");
-        std::env::temp_dir().join("locowrk-data")
-    })
-}
-
-/// ⑱ fs roots env 注入（settings `tools.fs_roots` → `LOCOWRK_FS_ROOTS`，
-/// `;` 分隔同 fsutil 解析约定）：空表 = 移除 env（回落缺省只放行数据根）。
-/// init_state 与 settings_set（tools 区有改动时）各调一次。
-pub fn apply_fs_roots_env(settings: &SettingsStore) {
-    let roots = settings.fs_roots();
-    if roots.is_empty() {
-        std::env::remove_var("LOCOWRK_FS_ROOTS");
-    } else {
-        std::env::set_var("LOCOWRK_FS_ROOTS", roots.join(";"));
+        organizer,
     }
 }
 

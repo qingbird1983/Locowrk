@@ -18,6 +18,7 @@ import type { ExposureDebug } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import SettingsToggle from "./SettingsToggle.vue";
+import MemoryTreePanel from "./MemoryTreePanel.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -32,6 +33,11 @@ const form = reactive({
   cacheHitAlertPercent: 80,
   pinSession: true,
   stabilityRounds: 3,
+  organizeReboundK: 3,
+  organizeReboundM: 3,
+  recorderTimeoutSecs: 60,
+  recorderMaxRetries: 3,
+  ruleChunkTokens: 20_000,
 });
 
 watch(
@@ -45,6 +51,12 @@ watch(
     // M1 前缀纪律两键：JSON 分属 tools/context 区，UI 行同挂本分区
     form.pinSession = v.tools.pinSession;
     form.stabilityRounds = v.context.stabilityRounds;
+    // M2 记忆树整理（树 v2 §15 开发者层级）
+    form.organizeReboundK = v.developer.organizeReboundK;
+    form.organizeReboundM = v.developer.organizeReboundM;
+    form.recorderTimeoutSecs = v.developer.recorderTimeoutSecs;
+    form.recorderMaxRetries = v.developer.recorderMaxRetries;
+    form.ruleChunkTokens = v.developer.ruleChunkTokens;
   },
   { immediate: true },
 );
@@ -69,6 +81,18 @@ function saveStability() {
     stabilityRounds: Math.round(form.stabilityRounds),
   });
 }
+
+/** M2 记忆树整理可调项：全写 developer 区（出界后端拒绝）。 */
+function saveOrganize() {
+  void settings.saveDeveloper({
+    organizeReboundK: Math.round(form.organizeReboundK),
+    organizeReboundM: Math.round(form.organizeReboundM),
+    recorderTimeoutSecs: Math.round(form.recorderTimeoutSecs),
+    recorderMaxRetries: Math.round(form.recorderMaxRetries),
+    ruleChunkTokens: Math.round(form.ruleChunkTokens),
+  });
+}
+
 
 /** 锁回：分区隐藏（危险开关保留原值——重新解锁后仍是原状态，如实告知）。 */
 function hide() {
@@ -266,5 +290,68 @@ onMounted(() => void refresh());
         />
       </SettingsRow>
     </SettingsGroup>
+
+    <!-- M2 记忆树影子运行（树 v2 §15 开发者层级）：可调项行；观测面板
+         拆 MemoryTreePanel（§3.36③，随 M3/M4 独立演进不牵动危险开关） -->
+    <SettingsGroup :title="t('developer.organizeTitle')" :hint="t('developer.organizeHint')">
+      <SettingsRow :title="t('developer.reboundK')" :hint="t('developer.reboundKHint')" control-id="dev-organize-k">
+        <input
+          id="dev-organize-k"
+          v-model.number="form.organizeReboundK"
+          type="number"
+          min="1"
+          max="10"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveOrganize"
+        />
+      </SettingsRow>
+      <SettingsRow :title="t('developer.reboundM')" :hint="t('developer.reboundMHint')" control-id="dev-organize-m">
+        <input
+          id="dev-organize-m"
+          v-model.number="form.organizeReboundM"
+          type="number"
+          min="1"
+          max="10"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveOrganize"
+        />
+      </SettingsRow>
+      <SettingsRow :title="t('developer.recorderTimeout')" :hint="t('developer.recorderTimeoutHint')" control-id="dev-recorder-timeout">
+        <input
+          id="dev-recorder-timeout"
+          v-model.number="form.recorderTimeoutSecs"
+          type="number"
+          min="10"
+          max="600"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveOrganize"
+        />
+      </SettingsRow>
+      <SettingsRow :title="t('developer.recorderRetries')" :hint="t('developer.recorderRetriesHint')" control-id="dev-recorder-retries">
+        <input
+          id="dev-recorder-retries"
+          v-model.number="form.recorderMaxRetries"
+          type="number"
+          min="0"
+          max="10"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveOrganize"
+        />
+      </SettingsRow>
+      <SettingsRow :title="t('developer.ruleChunk')" :hint="t('developer.ruleChunkHint')" control-id="dev-rule-chunk">
+        <input
+          id="dev-rule-chunk"
+          v-model.number="form.ruleChunkTokens"
+          type="number"
+          min="5000"
+          max="50000"
+          step="1000"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveOrganize"
+        />
+      </SettingsRow>
+    </SettingsGroup>
+
+    <MemoryTreePanel />
   </div>
 </template>

@@ -82,6 +82,10 @@ function save() {
         <p v-if="form.thresholdPct < 20" class="mt-0.5 text-[11px] text-warn">
           ⚠ {{ t("settings.thresholdLowWarning") }}
         </p>
+        <!-- M2：阈值滑条复用为记忆树整理触发（单旋钮裁定，树 v2 §4.1） -->
+        <p class="mt-0.5 text-[11px] text-ink-4">
+          {{ t("settings.thresholdOrganizeHint") }}
+        </p>
       </template>
       <input
         v-model.number="form.thresholdPct"

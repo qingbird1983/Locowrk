@@ -12,6 +12,7 @@ import { useSettingsStore } from "../../stores/settings";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import SettingsSaveRow from "./SettingsSaveRow.vue";
+import SettingsSegmented from "./SettingsSegmented.vue";
 import SettingsToggle from "./SettingsToggle.vue";
 
 const { t } = useI18n();
@@ -21,7 +22,15 @@ const form = reactive({
   enabled: true,
   topK: 5,
   autoExtract: false,
+  organizePacing: "batch",
+  organizeChunkTokens: 50_000,
 });
+
+// M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
+const pacingOptions = [
+  { value: "batch", label: t("settings.organizePacingBatch") },
+  { value: "incremental", label: t("settings.organizePacingIncremental") },
+];
 
 watch(
   () => settings.view,
@@ -30,6 +39,8 @@ watch(
     form.enabled = v.memory.enabled;
     form.topK = v.memory.topK;
     form.autoExtract = v.memory.autoExtract;
+    form.organizePacing = v.memory.organizePacing;
+    form.organizeChunkTokens = v.memory.organizeChunkTokens;
   },
   { immediate: true },
 );
@@ -39,6 +50,8 @@ function save() {
     enabled: form.enabled,
     topK: form.topK,
     autoExtract: form.autoExtract,
+    organizePacing: form.organizePacing,
+    organizeChunkTokens: Math.round(form.organizeChunkTokens),
   });
 }
 </script>
@@ -70,6 +83,34 @@ function save() {
       :hint="t('settings.memoryAutoExtractHint')"
     >
       <SettingsToggle v-model="form.autoExtract" :label="t('settings.memoryAutoExtract')" />
+    </SettingsRow>
+
+    <!-- M2 记忆树整理（树 v2 §4.3/§15）：节奏二档 + 增量块 X（增量档显示） -->
+    <SettingsRow
+      :title="t('settings.organizePacing')"
+      :hint="t('settings.organizePacingHint')"
+    >
+      <SettingsSegmented
+        v-model="form.organizePacing"
+        :options="pacingOptions"
+        :label="t('settings.organizePacing')"
+      />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.organizePacing === 'incremental'"
+      :title="t('settings.organizeChunk')"
+      :hint="t('settings.organizeChunkHint')"
+      control-id="memory-organize-chunk"
+    >
+      <input
+        id="memory-organize-chunk"
+        v-model.number="form.organizeChunkTokens"
+        type="number"
+        min="10000"
+        max="200000"
+        step="5000"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
     </SettingsRow>
   </SettingsGroup>
 

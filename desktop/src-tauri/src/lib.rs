@@ -47,6 +47,7 @@ mod llm;
 mod memory;
 mod model_override;
 mod notifications;
+mod organize;
 mod permission_mode;
 mod plugins_root;
 mod runner;
@@ -195,6 +196,8 @@ pub fn run() {
             commands::notification_read_all,
             commands::notification_read,
             commands::notification_clear,
+            commands::organize_now,
+            commands::memory_tree_view,
             commands::subagent_transcript
         ])
         .run(tauri::generate_context!())

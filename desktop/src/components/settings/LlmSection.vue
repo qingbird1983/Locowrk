@@ -17,6 +17,7 @@ import { useToastStore } from "../../stores/toast";
 import type { ProviderView } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
+import SettingsSelect from "./SettingsSelect.vue";
 import ServiceList from "./model/ServiceList.vue";
 import ProviderSetupDialog from "./model/ProviderSetupDialog.vue";
 import DefaultModelMenu from "./model/DefaultModelMenu.vue";
@@ -46,6 +47,36 @@ async function onSelectDefault(providerId: string, model: string) {
   } catch (e) {
     toast.push("danger", String(e));
   }
+}
+
+// ---- M2 会话记录员（树 v2 §5.2）：同主模型 ▾ + 已启用服务的模型清单 ----
+const RECORDER_SEP = "::";
+const recorderValue = computed(() => {
+  const m = settings.view?.memory;
+  if (!m?.recorderModel || !m.recorderProvider) return "";
+  return `${m.recorderProvider}${RECORDER_SEP}${m.recorderModel}`;
+});
+const recorderOptions = computed(() => [
+  { value: "", label: t("settings.modelDefaultSame") },
+  ...enabledProviders.value.flatMap((p) =>
+    (p.models.length > 0 ? p.models.map((x) => x.id) : [p.model].filter(Boolean)).map((id) => ({
+      value: `${p.id}${RECORDER_SEP}${id}`,
+      label: `${p.label} · ${id}`,
+    })),
+  ),
+]);
+
+function onRecorderChange(value: string) {
+  // 空选 = 同主模型：两键都传空串清除（后端约定，见 MemoryUpdate）
+  if (!value) {
+    void settings.saveMemory({ recorderModel: "", recorderProvider: "" });
+    return;
+  }
+  const [providerId, model] = value.split(RECORDER_SEP);
+  void settings.saveMemory({
+    recorderModel: model ?? "",
+    recorderProvider: providerId ?? "",
+  });
 }
 
 // ---- AI 服务：模态与动作 ----
@@ -166,6 +197,19 @@ function closeSetup() {
           {{ t("settings.modelDefaultChange") }}
           <Icon name="chevronDown" :size="13" />
         </button>
+      </SettingsRow>
+
+      <!-- M2 会话记录员（§5.2）：清空 = 同主模型；清单来自已启用服务档 -->
+      <SettingsRow
+        :title="t('settings.recorderModel')"
+        :hint="t('settings.recorderModelHint')"
+      >
+        <SettingsSelect
+          :model-value="recorderValue"
+          :entries="recorderOptions"
+          :label="t('settings.recorderModel')"
+          @update:model-value="onRecorderChange"
+        />
       </SettingsRow>
     </SettingsGroup>
 

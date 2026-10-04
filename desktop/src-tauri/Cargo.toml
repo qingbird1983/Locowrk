@@ -28,6 +28,7 @@ tauri-plugin-dialog = "2"
 # 内核 crate（组装点依赖方向见 AGENTS.md 架构边界）
 cordis-core = { path = "../../crates/cordis-core" }
 kernel-agent = { path = "../../crates/kernel-agent" }
+memory-tree = { path = "../../crates/memory-tree" }
 plugin-api = { path = "../../crates/plugin-api" }
 plugin-host = { path = "../../crates/plugin-host" }
 plugin-service = { path = "../../crates/plugin-service" }

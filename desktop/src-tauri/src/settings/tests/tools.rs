@@ -236,7 +236,7 @@ fn fs_roots_normalize_reject_and_env_injection() {
             None,
         )
         .unwrap();
-    crate::state::apply_fs_roots_env(&store);
+    crate::data_root::apply_fs_roots_env(&store);
     assert_eq!(std::env::var("LOCOWRK_FS_ROOTS").unwrap(), dir);
     store
         .update(
@@ -257,7 +257,7 @@ fn fs_roots_normalize_reject_and_env_injection() {
             None,
         )
         .unwrap();
-    crate::state::apply_fs_roots_env(&store);
+    crate::data_root::apply_fs_roots_env(&store);
     assert!(std::env::var("LOCOWRK_FS_ROOTS").is_err(), "空表移除 env");
 
     match prev {

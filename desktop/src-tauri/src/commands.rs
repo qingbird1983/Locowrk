@@ -3,6 +3,7 @@
 
 mod llm;
 mod memory;
+mod organize;
 mod plugins;
 mod schedule;
 mod sessions;
@@ -11,6 +12,7 @@ use std::sync::Arc;
 
 pub use llm::*;
 pub use memory::*;
+pub use organize::*;
 pub use plugins::*;
 pub use schedule::*;
 pub use sessions::*;
@@ -73,6 +75,9 @@ pub async fn agent_chat(
         session_id.clone(),
         session.derive_messages(),
     );
+    // M2 记忆树影子运行：轮次收束后旁路触发判定（阈值/增量档；只写
+    // memory-tree/ 投影，不改请求组装）
+    state.organizer.after_turn(&session, &session_id);
     Ok(steps)
 }
 
@@ -244,7 +249,7 @@ pub async fn settings_set(
         .set_default(state.settings.default_permission_mode());
     // ⑱：工作区目录热更新（fsutil 每次工具调用读 env，重注入即生效）
     if tools_section_touched {
-        crate::state::apply_fs_roots_env(&state.settings);
+        crate::data_root::apply_fs_roots_env(&state.settings);
     }
     // ⑬：embedding 客户端热重建（检索信号/search_tools/经历/提取共用）
     state.reload_embed();

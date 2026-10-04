@@ -2642,6 +2642,7 @@ dependencies = [
  "futures",
  "genai",
  "kernel-agent",
+ "memory-tree",
  "plugin-api",
  "plugin-host",
  "plugin-service",
@@ -2730,6 +2731,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "memory-tree"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "session-store",
+ "tracing",
 ]
 
 [[package]]

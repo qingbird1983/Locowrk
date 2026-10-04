@@ -109,6 +109,32 @@ impl SettingsStore {
             if let Some(a) = u.auto_extract {
                 next.memory.auto_extract = a;
             }
+            // M2 记忆树整理三键（树 v2 §4.3/§5.2/§15）：节奏白名单 +
+            // 增量块区间 + 记录员模型（空串按清除处理，回落同主模型）
+            if let Some(p) = u.organize_pacing {
+                if !super::memory::ORGANIZE_PACING_VALUES.contains(&p.as_str()) {
+                    return Err(format!("整理节奏 {p:?} 非法（可选 batch / incremental）"));
+                }
+                next.memory.organize_pacing = p;
+            }
+            if let Some(n) = u.organize_chunk_tokens {
+                if !super::memory::ORGANIZE_CHUNK_TOKENS_RANGE.contains(&n) {
+                    return Err(format!(
+                        "增量块 {n} 超出范围（{}–{} token）",
+                        super::memory::ORGANIZE_CHUNK_TOKENS_RANGE.start(),
+                        super::memory::ORGANIZE_CHUNK_TOKENS_RANGE.end()
+                    ));
+                }
+                next.memory.organize_chunk_tokens = n;
+            }
+            // 记录员模型（空串 = 清除，回落同主模型；与 base_url/api_key
+            // 同约定——双层 Option 的 null 在 JSON 里无法表达清除）
+            if let Some(m) = u.recorder_model {
+                next.memory.recorder_model = (!m.trim().is_empty()).then_some(m);
+            }
+            if let Some(p) = u.recorder_provider {
+                next.memory.recorder_provider = (!p.trim().is_empty()).then_some(p);
+            }
         }
         if let Some(u) = tools {
             if let Some(e) = u.enabled {
@@ -259,6 +285,50 @@ impl SettingsStore {
                     return Err(format!("缓存命中率告警阈值 {p}% 超出范围（1–100）"));
                 }
                 next.developer.cache_hit_alert_percent = p;
+            }
+            // M2 记忆树整理（树 v2 §15 开发者层级）：熔断 k/m / 超时 /
+            // 重试 / 规则切分块
+            if let Some(k) = u.organize_rebound_k {
+                if !super::developer::ORGANIZE_REBOUND_RANGE.contains(&k) {
+                    return Err(format!("反弹熔断 k {k} 超出范围（1–10）"));
+                }
+                next.developer.organize_rebound_k = k;
+            }
+            if let Some(m) = u.organize_rebound_m {
+                if !super::developer::ORGANIZE_REBOUND_RANGE.contains(&m) {
+                    return Err(format!("反弹熔断 m {m} 超出范围（1–10）"));
+                }
+                next.developer.organize_rebound_m = m;
+            }
+            if let Some(secs) = u.recorder_timeout_secs {
+                if !super::developer::RECORDER_TIMEOUT_SECS_RANGE.contains(&secs) {
+                    return Err(format!(
+                        "记录员超时 {secs}s 超出范围（{}–{} 秒）",
+                        super::developer::RECORDER_TIMEOUT_SECS_RANGE.start(),
+                        super::developer::RECORDER_TIMEOUT_SECS_RANGE.end()
+                    ));
+                }
+                next.developer.recorder_timeout_secs = secs;
+            }
+            if let Some(n) = u.recorder_max_retries {
+                if !super::developer::RECORDER_MAX_RETRIES_RANGE.contains(&n) {
+                    return Err(format!(
+                        "记录员重试次数 {n} 超出范围（{}–{}）",
+                        super::developer::RECORDER_MAX_RETRIES_RANGE.start(),
+                        super::developer::RECORDER_MAX_RETRIES_RANGE.end()
+                    ));
+                }
+                next.developer.recorder_max_retries = n;
+            }
+            if let Some(n) = u.rule_chunk_tokens {
+                if !super::developer::RULE_CHUNK_TOKENS_RANGE.contains(&n) {
+                    return Err(format!(
+                        "规则切分块 {n} 超出范围（{}–{} token）",
+                        super::developer::RULE_CHUNK_TOKENS_RANGE.start(),
+                        super::developer::RULE_CHUNK_TOKENS_RANGE.end()
+                    ));
+                }
+                next.developer.rule_chunk_tokens = n;
             }
         }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");

@@ -15,6 +15,7 @@ import {
   pickSavePath,
   subscribeAgentEvents,
   subscribeSessionTitle,
+  organizeNow,
 } from "../lib/api";
 import { clip, compactNumber } from "../lib/format";
 import { toolAction } from "../lib/tool-summary";
@@ -563,6 +564,17 @@ export const useChatStore = defineStore("chat", {
     async send(text: string) {
       const t = text.trim();
       if (!t || this.running) return;
+      // M2 斜杠命令 /整理（UI shell §3.36①）：前端拦截——元操作不进对话
+      // 流、不建用户气泡；手动整理不受反弹熔断限制且复位熔断态（后端）。
+      if (t === "/整理" || t === "/organize") {
+        this.pushNotice("notice.organizeRequested");
+        try {
+          await organizeNow(this.sessionId);
+        } catch (err) {
+          this.pushRawSystem(String(err));
+        }
+        return;
+      }
       this.items.push({ id: nextId++, kind: "user", text: t, ts: Date.now() });
       this.running = true;
       this.steps = null;
