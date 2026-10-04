@@ -36,6 +36,14 @@ pub struct MemoryBundle {
     /// recorder / rule / placeholder。
     #[serde(default)]
     pub source: String,
+    /// 最近一次被 memory_expand 的时刻（Unix 毫秒；None = 从未展开）。
+    /// M4 惰性加载记账：自动收起（§8.3）按它挑「最早展开」。
+    #[serde(default)]
+    pub expanded_at: Option<i64>,
+    /// 收起时刻（Unix 毫秒；None = 未收起）：组装侧把该捆已展开的工具
+    /// 结果替换为收起桩（§8.3 空间急救；再次 expand 自动解除）。
+    #[serde(default)]
+    pub collapsed_at: Option<i64>,
 }
 
 /// 记录员（或规则切分）的一条产出：系统校验后才落成捆。
@@ -68,7 +76,28 @@ impl MemoryBundle {
             token_count: 0,
             pending: false,
             source: source.to_string(),
+            expanded_at: None,
+            collapsed_at: None,
         }
+    }
+
+    /// memory_expand 记账（M4）：刷新展开时刻并解除收起（§8.3「再次展开
+    /// 自动解除收起」）。占位捆忽略（不可展开）。
+    pub fn mark_expanded(&mut self, now_ms: i64) {
+        if self.pending {
+            return;
+        }
+        self.expanded_at = Some(now_ms);
+        self.collapsed_at = None;
+    }
+
+    /// memory_collapse 记账（M4 §8.3）：置收起时刻（保留 expanded_at 作
+    /// 展开史——自动收起挑选只看未收起者）。占位捆 / 从未展开 = 忽略。
+    pub fn mark_collapsed(&mut self, now_ms: i64) {
+        if self.pending || self.expanded_at.is_none() {
+            return;
+        }
+        self.collapsed_at = Some(now_ms);
     }
 }
 

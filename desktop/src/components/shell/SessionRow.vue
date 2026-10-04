@@ -62,6 +62,21 @@ const menuItems = computed<RowMenuItem[]>(() => {
     { id: "rename", label: t("sidebar.menu.rename") },
     { id: "export", label: t("sidebar.menu.export") },
   ];
+  // M4 §3.38①：整理模式切换——标签按生效档渲染（显式档 ∪ 开发者缺省
+  // 档推算），切换即时生效（下一次请求按新档组装）。
+  const organizerMode =
+    props.session.organizer ??
+    (settings.view?.developer.defaultOrganizer === "tree" ? "tree" : "legacy");
+  items.push(
+    { id: "sep-org", label: "", separator: true },
+    {
+      id: "organizer:toggle",
+      label:
+        organizerMode === "tree"
+          ? t("sidebar.menu.organizerLegacy")
+          : t("sidebar.menu.organizerTree"),
+    },
+  );
   if (fsRoots.value.length > 0) {
     items.push({ id: "sep-ws", label: "", separator: true });
     for (const root of fsRoots.value) {
@@ -122,6 +137,23 @@ async function onMenuSelect(id: string) {
       );
     } catch (e) {
       toast.push("danger", t("toast.associateFailed"), String(e));
+    }
+  } else if (id === "organizer:toggle") {
+    // M4 §3.38①：整理模式两态切换（显式写旁车，不再跟随缺省档）
+    closeMenu();
+    const current =
+      props.session.organizer ??
+      (settings.view?.developer.defaultOrganizer === "tree" ? "tree" : "legacy");
+    try {
+      await chat.setOrganizer(sid, current === "tree" ? "legacy" : "tree");
+      toast.push(
+        "ok",
+        current === "tree"
+          ? t("toast.organizerLegacy")
+          : t("toast.organizerTree"),
+      );
+    } catch (e) {
+      toast.push("danger", t("toast.organizerFailed"), String(e));
     }
   } else if (id === "export") {
     closeMenu();

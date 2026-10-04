@@ -24,12 +24,22 @@ const form = reactive({
   autoExtract: false,
   organizePacing: "batch",
   organizeChunkTokens: 50_000,
+  tailStrategy: "boundary",
+  tailWindowTurns: 5,
+  collapseEnabled: false,
+  collapseThresholdPct: 80,
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
 const pacingOptions = [
   { value: "batch", label: t("settings.organizePacingBatch") },
   { value: "incremental", label: t("settings.organizePacingIncremental") },
+];
+
+// M4 尾巴策略二档（树 v2 §7.2：A 边界结算缺省 / B 固定窗口实验档）
+const tailOptions = [
+  { value: "boundary", label: t("settings.tailStrategyBoundary") },
+  { value: "window", label: t("settings.tailStrategyWindow") },
 ];
 
 watch(
@@ -41,6 +51,10 @@ watch(
     form.autoExtract = v.memory.autoExtract;
     form.organizePacing = v.memory.organizePacing;
     form.organizeChunkTokens = v.memory.organizeChunkTokens;
+    form.tailStrategy = v.memory.tailStrategy;
+    form.tailWindowTurns = v.memory.tailWindowTurns;
+    form.collapseEnabled = v.memory.collapseEnabled;
+    form.collapseThresholdPct = v.memory.collapseThresholdPct;
   },
   { immediate: true },
 );
@@ -52,6 +66,10 @@ function save() {
     autoExtract: form.autoExtract,
     organizePacing: form.organizePacing,
     organizeChunkTokens: Math.round(form.organizeChunkTokens),
+    tailStrategy: form.tailStrategy,
+    tailWindowTurns: Math.round(form.tailWindowTurns),
+    collapseEnabled: form.collapseEnabled,
+    collapseThresholdPct: Math.round(form.collapseThresholdPct),
   });
 }
 </script>
@@ -109,6 +127,58 @@ function save() {
         min="10000"
         max="200000"
         step="5000"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+
+    <!-- M4 尾巴策略（树 v2 §7.2，只作用树模式会话）：A 边界结算缺省 /
+         B 固定窗口实验档；窗口档显示 N（1–20 缺省 5） -->
+    <SettingsRow
+      :title="t('settings.tailStrategy')"
+      :hint="t('settings.tailStrategyHint')"
+    >
+      <SettingsSegmented
+        v-model="form.tailStrategy"
+        :options="tailOptions"
+        :label="t('settings.tailStrategy')"
+      />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.tailStrategy === 'window'"
+      :title="t('settings.tailWindow')"
+      :hint="t('settings.tailWindowHint')"
+      control-id="memory-tail-window"
+    >
+      <input
+        id="memory-tail-window"
+        v-model.number="form.tailWindowTurns"
+        type="number"
+        min="1"
+        max="20"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+
+    <!-- M4 memory_collapse（§8.3 缺省关——空间急救不是省钱）；开启时
+         显示自动收起阈值（50–95% 缺省 80） -->
+    <SettingsRow
+      :title="t('settings.collapseEnabled')"
+      :hint="t('settings.collapseEnabledHint')"
+    >
+      <SettingsToggle v-model="form.collapseEnabled" :label="t('settings.collapseEnabled')" />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.collapseEnabled"
+      :title="t('settings.collapseThreshold')"
+      :hint="t('settings.collapseThresholdHint')"
+      control-id="memory-collapse-threshold"
+    >
+      <input
+        id="memory-collapse-threshold"
+        v-model.number="form.collapseThresholdPct"
+        type="number"
+        min="50"
+        max="95"
         class="lw-field lw-field-num px-2 text-xs"
       />
     </SettingsRow>

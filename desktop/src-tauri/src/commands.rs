@@ -72,6 +72,7 @@ pub async fn agent_chat(
         Some(state.usage.as_ref()),
         Some(&state.sessions_dir),
         state.settings.max_turn_steps(),
+        Some(&state.tree_assembler),
     )
     .await?;
     // ⑬ 隐式提取（Context 文档 §5.1 ⑤）：开关开启且轮次成功收束后
@@ -265,6 +266,10 @@ pub async fn settings_set(
     state
         .permission_modes
         .set_default(state.settings.default_permission_mode());
+    // M4：未显式设置会话的缺省整理模式热更新（developer 区 defaultOrganizer）
+    state
+        .organizer_modes
+        .set_default(state.settings.default_organizer());
     // ⑱：工作区目录热更新（fsutil 每次工具调用读 env，重注入即生效）
     if tools_section_touched {
         crate::data_root::apply_fs_roots_env(&state.settings);

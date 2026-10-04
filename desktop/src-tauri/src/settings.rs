@@ -31,7 +31,7 @@ pub use llm::{
     new_profile_id, LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, ProviderInput,
     ProviderModel, ProviderProfile, ProviderView, PROVIDERS,
 };
-pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate};
+pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
 pub use shell::{ShellSettings, ShellSettingsView, ShellUpdate};
 pub use tools::{ToolsSettings, ToolsSettingsView, ToolsUpdate};
@@ -304,6 +304,29 @@ impl SettingsStore {
             .expect("settings poisoned")
             .developer
             .clone()
+    }
+
+    /// 后端专用：尾巴组装配置（M4 树会话组装源 + 溢出整理触发用）——
+    /// 策略（A 边界结算缺省 / B 固定窗口）+ 窗口轮数。
+    pub fn tail_config(&self) -> (crate::settings::memory::TailStrategy, u32) {
+        let m = self.memory();
+        (
+            crate::settings::memory::TailStrategy::parse(&m.tail_strategy),
+            m.tail_window_turns,
+        )
+    }
+
+    /// 后端专用：collapse 配置（M4 §8.3 空间急救）——开关 + 自动收起
+    /// 占用阈值（%）。
+    pub fn collapse_config(&self) -> (bool, u8) {
+        let m = self.memory();
+        (m.collapse_enabled, m.collapse_threshold_pct)
+    }
+
+    /// 后端专用：未显式设置会话的缺省整理模式（M4 §3.38① 开发者档）。
+    pub fn default_organizer(&self) -> crate::organizer_mode::OrganizerMode {
+        crate::organizer_mode::OrganizerMode::parse(&self.developer().default_organizer)
+            .unwrap_or_default()
     }
 }
 

@@ -54,6 +54,7 @@ pub(crate) fn spawn_engine(
     last_chat: Arc<RwLock<Option<String>>>,
     app: tauri::AppHandle,
     organizer: Arc<crate::organize::Organizer>,
+    tree_assembler: Arc<crate::organize::TreeAssembler>,
 ) {
     spawn(EngineDeps {
         db,
@@ -66,5 +67,6 @@ pub(crate) fn spawn_engine(
         last_chat,
         app,
         organizer,
+        tree_assembler,
     });
 }

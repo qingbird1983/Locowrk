@@ -40,7 +40,9 @@ pub struct UsagePolicy {
 /// settings `tools.maxTurnSteps`，每轮取值）。`stats` 是 ⑩③ 使用统计写入端
 /// （usage.sqlite3，None = 内置替身测试）。`log` 是 ⑲ 会话落盘目录
 /// （`<数据根>/sessions`，None = 不落盘，测试路径）——磁盘是日志的镜像，
-/// 用户消息与每个 step 的新增段与投影共用同一游标同步追加。
+/// 用户消息与每个 step 的新增段与投影共用同一游标同步追加。`tree`（M4
+/// §3.38②）= 树组装器在场时用量环按组装后口径（目录 + 尾巴）估算，None =
+/// 全量历史估算（kernel-bin / 测试路径）。
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn(
     kernel: &Kernel,
@@ -52,6 +54,7 @@ pub async fn run_turn(
     stats: Option<&UsageRecorder>,
     log: Option<&Path>,
     max_steps: u32,
+    tree: Option<&crate::organize::TreeAssembler>,
 ) -> Result<u32, String> {
     let log_start = session.len();
     session.append(SessionEvent::UserMessage { content: message });
@@ -59,7 +62,7 @@ pub async fn run_turn(
         session_log::append_slice(dir, session_id, session, log_start);
     }
     if let Some(u) = usage {
-        record_usage(session, session_id, u, sink, log);
+        record_usage(session, session_id, u, sink, log, tree);
     }
 
     for steps in 1..=max_steps.max(1) {
@@ -95,7 +98,7 @@ pub async fn run_turn(
         if let Some(u) = usage {
             // v2.62：快照落日志 + 实时投影（自带 append_slice 与单发，
             // 下一轮投影窗口 before 已越过本事件，不会重发）
-            record_usage(session, session_id, u, sink, log);
+            record_usage(session, session_id, u, sink, log, tree);
         }
         if done {
             sink.emit(&AgentEvent::TurnDone {
@@ -316,8 +319,16 @@ fn record_usage(
     u: UsagePolicy,
     sink: &dyn EventSink,
     log: Option<&Path>,
+    tree: Option<&crate::organize::TreeAssembler>,
 ) {
-    let used = estimate_tokens(&session.derive_messages());
+    // M4 §3.38②：树会话 = 组装后口径（目录 + 尾巴），如实反映模型实际
+    // 看到的上下文；legacy / 组装器缺席 = 全量历史估算（口径不变）。
+    let used = match tree {
+        Some(t) => t
+            .context_tokens(session, session_id)
+            .unwrap_or_else(|| estimate_tokens(&session.derive_messages())),
+        None => estimate_tokens(&session.derive_messages()),
+    };
     session.append(SessionEvent::ContextUsage {
         used,
         threshold: u.threshold_tokens,

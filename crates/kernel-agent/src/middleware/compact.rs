@@ -181,6 +181,12 @@ impl WaterfallListener for CtxCompact {
         if req.compacted.is_some() {
             return WaterfallDecision::Continue;
         }
+        // M4 树会话不压缩（树 v2 §11.2 阶段 2）：`tree_directory` Some =
+        // 树会话（含空串）——组装已由树侧完成（目录 + 尾巴切片），压缩
+        // 语义由整理边界承担，二次压缩只会在尾巴上再打一刀。
+        if req.tree_directory.is_some() {
+            return WaterfallDecision::Continue;
+        }
         let cfg = self
             .cfg
             .read()

@@ -13,7 +13,7 @@ use super::{StoreError, session_file};
 
 /// 会话旁车元数据（`<id>.meta.json`，v2.49 会话运营）：存重命名标题；
 /// `workspace` 留给 §2.3 会话↔工作区关联批次；`permission_mode` 留给
-/// ㉘·B 权限模式。缺文件 = 全缺省。
+/// ㉘·B 权限模式；`organizer` 留给 M4 整理模式切流。缺文件 = 全缺省。
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SessionMetaFile {
@@ -24,6 +24,9 @@ pub struct SessionMetaFile {
     /// （档位 id + 模型名），None = 跟随设置缺省。
     pub model: Option<String>,
     pub model_provider: Option<String>,
+    /// 会话级整理模式（M4 §3.38①）：`"legacy"` | `"tree"`；None = 未显式
+    /// 选择，跟随开发者缺省档（desktop `developer.defaultOrganizer`）。
+    pub organizer: Option<String>,
 }
 
 /// 旁车元数据路径（id 校验同日志文件；`<id>.jsonl` → `<id>.meta.json`，
@@ -58,6 +61,7 @@ fn write_meta(
         && meta.permission_mode.is_none()
         && meta.model.is_none()
         && meta.model_provider.is_none()
+        && meta.organizer.is_none()
     {
         return match std::fs::remove_file(&path) {
             Ok(()) => Ok(()),
@@ -130,4 +134,14 @@ pub fn write_model_override(
             m.model = None;
         }
     })
+}
+
+/// 写会话级整理模式（M4 §3.38①）：`Some("legacy" | "tree")` = 设置（调用方
+/// 已校验取值）；`None` = 清除（跟随开发者缺省档）。合并写入保留其余字段。
+pub fn write_organizer(dir: &Path, session_id: &str, mode: Option<&str>) -> std::io::Result<()> {
+    let mode = mode
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    write_meta(dir, session_id, |m| m.organizer = mode)
 }

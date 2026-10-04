@@ -17,6 +17,8 @@ fn bundle(id: &str, range: (EventId, EventId)) -> MemoryBundle {
         token_count: 0,
         pending: false,
         source: "recorder".into(),
+        expanded_at: None,
+        collapsed_at: None,
     }
 }
 
@@ -130,4 +132,41 @@ fn bundle_ids_skip_past_max() {
     t.apply_organized(vec![bundle("b3", (0, 1))], 1, record("ok"));
     let task = t.insert_placeholder(2, 3, 1).unwrap();
     assert_eq!(task.placeholder_id.0, "b4");
+}
+
+#[test]
+fn expand_collapse_lifecycle_and_auto_pick() {
+    let mut t = MemoryTree::new("ws", "s1");
+    t.apply_organized(
+        vec![bundle("b1", (0, 4)), bundle("b2", (5, 9))],
+        9,
+        record("ok"),
+    );
+
+    // 未展开不可收起；展开后可收起；再展开解除收起
+    assert!(!t.mark_collapsed("b1", 10), "从未展开不可收");
+    assert!(!t.mark_expanded("nope", 10), "未知捆拒绝");
+    assert!(t.mark_expanded("b2", 10));
+    assert!(t.mark_expanded("b1", 20));
+    assert_eq!(t.oldest_expanded().as_deref(), Some("b2"), "最早展开优先");
+    assert!(t.mark_collapsed("b2", 30));
+    assert!(t.bundles["b2"].collapsed_at.is_some());
+    assert_eq!(t.oldest_expanded().as_deref(), Some("b1"), "已收起不再入选");
+    assert!(t.mark_expanded("b2", 40), "再展开解除收起");
+    assert!(t.bundles["b2"].collapsed_at.is_none());
+    assert!(t.collapsed_ids().is_empty());
+
+    // 占位捆不可展开 / 收起
+    let task = t.insert_placeholder(20, 29, 50).unwrap();
+    assert!(!t.mark_expanded(&task.placeholder_id.0, 60));
+    assert!(!t.mark_collapsed(&task.placeholder_id.0, 60));
+}
+
+#[test]
+fn bundle_fields_serde_default_backcompat() {
+    // 旧投影文件无 expanded_at / collapsed_at 字段 = None（零迁移）
+    let raw = r#"{"bundle_id":"b1","parent":null,"children":[],"title":"t","title_edited_by_user":false,"summary":"s","summary_edited_by_user":false,"event_range":[0,1],"created_at":1,"keywords":[],"token_count":0,"pending":false,"source":"recorder"}"#;
+    let b: MemoryBundle = serde_json::from_str(raw).unwrap();
+    assert_eq!(b.expanded_at, None);
+    assert_eq!(b.collapsed_at, None);
 }

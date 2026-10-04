@@ -4,6 +4,7 @@ import { defineStore } from "pinia";
 import {
   chat,
   sessionAssociate,
+  sessionSetOrganizer,
   sessionDelete,
   sessionExport,
   sessionHistory,
@@ -275,6 +276,12 @@ export const useChatStore = defineStore("chat", {
      * 移出；后端校验必须是其一根，列表层生效。 */
     async associateSession(id: string, workspace: string | null) {
       await sessionAssociate(id, workspace);
+      await this.refreshSessions();
+    },
+    /** 会话整理模式（M4 §3.38①）：legacy | tree；"" = 清除显式档
+     * （跟随开发者缺省档）。下一次请求按新档组装，列表刷新生效档。 */
+    async setOrganizer(id: string, mode: "legacy" | "tree" | "") {
+      await sessionSetOrganizer(id, mode);
       await this.refreshSessions();
     },
     /** 删除会话（v2.49）：后端忙锁守卫（运行中默认拒绝，开发者开关可

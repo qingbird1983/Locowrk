@@ -133,6 +133,32 @@ fn meta_title_overrides_list_and_resets() {
 }
 
 #[test]
+fn meta_organizer_roundtrip_and_projection() {
+    let dir = tmp_dir("organizer");
+    let path = session_file(&dir, "s1").unwrap();
+    append_event(&path, &user_msg("hello")).unwrap();
+    // 无旁车 = None（跟随开发者缺省档）
+    assert!(list_sessions(&dir)[0].organizer.is_none());
+    // 设置 / 列表投影
+    write_organizer(&dir, "s1", Some("tree")).unwrap();
+    assert_eq!(list_sessions(&dir)[0].organizer.as_deref(), Some("tree"));
+    assert_eq!(
+        read_meta(&dir, "s1").unwrap().organizer.as_deref(),
+        Some("tree")
+    );
+    // 空串 = 清除；合并写保留既有字段
+    write_title(&dir, "s1", "标题").unwrap();
+    write_organizer(&dir, "s1", Some("  ")).unwrap();
+    let meta = read_meta(&dir, "s1").unwrap();
+    assert!(meta.organizer.is_none());
+    assert_eq!(meta.title.as_deref(), Some("标题"));
+    // 全字段空 = 删旁车文件
+    write_title(&dir, "s1", "").unwrap();
+    assert!(read_meta(&dir, "s1").is_none());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn delete_session_removes_all_files_and_is_idempotent() {
     let dir = tmp_dir("delete");
     let path = session_file(&dir, "s2").unwrap();

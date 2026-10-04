@@ -21,15 +21,23 @@ use memory_tree::{
 };
 use session_store::{Session, SessionEvent};
 
+use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 use crate::settings::SettingsStore;
+use crate::settings::TailStrategy;
 use crate::workspace::WorkspaceResolver;
 
+use assemble::window_start_event;
+
+mod assemble;
 mod client;
 mod debug;
 mod recovery;
+mod tree_tools;
 mod view;
+pub use assemble::TreeAssembler;
 pub use client::AppLlmRecorder;
 pub use debug::TreeDebug;
+pub use tree_tools::{MemoryCollapseTool, MemoryExpandTool};
 pub use view::{OriginalItem, TreeBundlesView, TreeSummaryView};
 
 /// `lw://organize-done` 载荷（M3 §3.37③：整理收束系统消息，三路同源）。
@@ -68,6 +76,8 @@ pub struct Organizer {
     client: Arc<dyn RecorderClient>,
     workspace_of: WorkspaceResolver,
     tree_store: TreeStore,
+    /// 会话整理模式（M4 切流：溢出整理 / 自动收起只作用树会话）。
+    modes: Arc<OrganizerModeStore>,
     /// 会话级在途去重（进程内；跨重启由投影 pending 字段守卫）。
     inflight: StdMutex<HashSet<String>>,
     /// 整理系统消息推送（M3 §3.37③；测试传哑闭包 = 静默）。
@@ -105,6 +115,7 @@ impl Organizer {
         client: Arc<dyn RecorderClient>,
         workspace_of: WorkspaceResolver,
         data_root: PathBuf,
+        modes: Arc<OrganizerModeStore>,
         notifier: OrganizeNotifier,
     ) -> Self {
         Self {
@@ -113,6 +124,7 @@ impl Organizer {
             client,
             workspace_of,
             tree_store: TreeStore::new(&data_root),
+            modes,
             inflight: StdMutex::new(HashSet::new()),
             notifier,
         }
@@ -214,6 +226,30 @@ impl Organizer {
         let dev = self.settings.developer();
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let mut tree = self.load_tree(&workspace, session_id);
+        // M4 模式 B 溢出整理（§3.38②）：树会话 + 固定窗口档，窗口滑出的
+        // 孤儿轮（bundled_until < 窗口起点）既不在尾巴也不在目录，必须及时
+        // 归捆——例行维护：**先于熔断判定**（熔断暂停的是阈值/增量烧钱信号，
+        // 不是固定节奏）且**不记反弹**（管道按 reason 跳过 note_organized）。
+        if self.modes.mode_of(Some(session_id)) == OrganizerMode::Tree
+            && self.settings.tail_config().0 == TailStrategy::Window
+            && tree.pending.is_none()
+        {
+            let start = window_start_event(session.events(), mem.tail_window_turns);
+            if tree.bundled_until < start && start > 0 {
+                let events = session.events();
+                let items = build_items(&events[tree.bundled_until..start], tree.bundled_until);
+                if !items.is_empty() {
+                    let users_total = memory_tree::user_count(session.events());
+                    return Some(TaskPayload {
+                        session_id: session_id.to_string(),
+                        workspace,
+                        items,
+                        users_total,
+                        reason: OrganizeReason::WindowOverflow,
+                    });
+                }
+            }
+        }
         if tree.paused_auto || tree.pending.is_some() {
             return None;
         }
@@ -230,7 +266,7 @@ impl Organizer {
             tail_tokens,
             tail_events: items.len(),
         })?;
-        // 反弹熔断（§5.5）：连续 m 次反弹 → 暂停自动整理并跳过本次
+        // 反弹熔断（§5.5）：连续 m 次反弹 → 暂停本会话自动整理并跳过本次
         let users_total = memory_tree::user_count(session.events());
         if tree.on_auto_trigger(users_total, dev.organize_rebound_k, dev.organize_rebound_m)
             == ReboundDecision::Pause
@@ -286,8 +322,45 @@ impl Organizer {
     /// 轮次收束钩子（agent_chat / 调度引擎在锁内调用）：判定通过即后台
     /// 整理，不阻塞返回值（extract / title 同款 fire-and-forget）。
     pub fn after_turn(self: &Arc<Self>, session: &Session, session_id: &str) {
+        // M4 自动收起（§8.3 空间急救）：先于整理判定——泄压不依赖触发。
+        self.auto_collapse(session, session_id);
         if let Some(task) = self.plan_auto(session, session_id) {
             self.spawn(task);
+        }
+    }
+
+    /// 自动收起（M4 §8.3，缺省关）：树会话 + collapse 开启 + 占用 ≥ 阈值
+    /// → 收起最早展开的捆（一次一个，逐步泄压）。窗口未知不猜口径；
+    /// legacy 会话零参与。
+    fn auto_collapse(&self, session: &Session, session_id: &str) {
+        if self.modes.mode_of(Some(session_id)) != OrganizerMode::Tree {
+            return;
+        }
+        let (enabled, threshold_pct) = self.settings.collapse_config();
+        if !enabled {
+            return;
+        }
+        let Some(window) = self.settings.effective_window() else {
+            return;
+        };
+        if window == 0 {
+            return;
+        }
+        let (anchor, _) = Self::anchor(session);
+        if anchor.saturating_mul(100) < window.saturating_mul(threshold_pct as u64) {
+            return;
+        }
+        let workspace = (self.workspace_of)(session_id).unwrap_or_default();
+        let mut tree = self.load_tree(&workspace, session_id);
+        let Some(id) = tree.oldest_expanded() else {
+            return;
+        };
+        tree.mark_collapsed(&id, now_ms());
+        if self.tree_store.save(&tree).is_ok() {
+            tracing::info!(
+                session = %session_id, bundle = %id,
+                "自动收起（占用 {anchor} / {window} ≥ {threshold_pct}%）"
+            );
         }
     }
 
@@ -402,7 +475,11 @@ impl Organizer {
                                 elapsed_ms(&started),
                             ),
                         );
-                        tree.note_organized(task.users_total);
+                        // 溢出整理（模式 B 例行维护）不碰反弹基线——§5.5
+                        // 只度量「整理后占用立刻再超」的烧钱信号
+                        if !matches!(task.reason, OrganizeReason::WindowOverflow) {
+                            tree.note_organized(task.users_total);
+                        }
                         self.tree_store.save(&tree)?;
                         self.notify_done(
                             &task.session_id,
@@ -439,7 +516,10 @@ impl Organizer {
                 elapsed_ms(&started),
             ),
         );
-        tree.note_organized(task.users_total);
+        // 溢出整理不碰反弹基线（同上）
+        if !matches!(task.reason, OrganizeReason::WindowOverflow) {
+            tree.note_organized(task.users_total);
+        }
         self.tree_store.save(&tree)?;
         tracing::warn!(session = %task.session_id, "记录员不可用（{last_err}），已降级规则切分");
         self.notify_done(
@@ -464,12 +544,14 @@ mod tests;
 
 /// 组装点构造（state/init_state 调用）：记录员客户端 = 设置路由的 genai
 /// 直呼；㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）；
-/// 事件推送闭包由 state 组装（emit 调用留在 state/mod.rs，见其注释）。
+/// 事件推送闭包由 state 组装（emit 调用留在 state/mod.rs，见其注释）；
+/// M4 起持整理模式存储（溢出整理 / 自动收起的会话门控）。
 pub fn build_organizer(
     settings: Arc<SettingsStore>,
     sessions_dir: PathBuf,
     workspace_of: WorkspaceResolver,
     data_root: PathBuf,
+    modes: Arc<OrganizerModeStore>,
     notifier: OrganizeNotifier,
 ) -> Arc<Organizer> {
     Arc::new(Organizer::new(
@@ -478,6 +560,7 @@ pub fn build_organizer(
         Arc::new(AppLlmRecorder::new(settings)),
         workspace_of,
         data_root,
+        modes,
         notifier,
     ))
 }

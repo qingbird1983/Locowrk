@@ -293,6 +293,10 @@ impl WaterfallListener for ToolExposure {
         // 目录未变 = 逐字节同序同 spec（前缀稳定）；目录被围栏收紧（计划
         // 模式）或插件中途移除 = 交集，显式变更接受失效。归因组照抄建立
         // 时（钉死后归因不再变化）。
+        // M4 补口（走查实抓）：目录**放宽**时新增的 always 工具（如会话
+        // 中途切记忆树模式，memory_expand 进目录）无条件保留、追加在尾部
+        // ——钉死钉的是 on_demand 截断决策，always 直通是 ⑩ 语义；尾部
+        // 追加不破旧前缀（一次性显式失效，M4 §3.38①「切换即时生效」）。
         if cfg.pin_session {
             if let Some(id) = req.session_id.as_deref() {
                 let pinned = self
@@ -302,11 +306,16 @@ impl WaterfallListener for ToolExposure {
                     .get(id)
                     .cloned();
                 if let Some(pinned) = pinned {
-                    let kept: Vec<ToolSpec> = pinned
+                    let mut kept: Vec<ToolSpec> = pinned
                         .names
                         .iter()
                         .filter_map(|n| req.tools.iter().find(|s| &s.name == n).cloned())
                         .collect();
+                    for s in req.tools.iter().filter(|s| {
+                        matches!(s.exposure, Exposure::Always) && !pinned.names.contains(&s.name)
+                    }) {
+                        kept.push(s.clone());
+                    }
                     let saved = spec_tokens(&req.tools).saturating_sub(spec_tokens(&kept));
                     self.record(ExposureSnapshot {
                         enabled: true,

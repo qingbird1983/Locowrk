@@ -82,7 +82,9 @@ export default {
     // M3 §3.37② 未整理尾巴行（有树才渲染）
     treeRow: "记忆树",
     treeBundlesShort: "{n} 捆",
-    treeTail: "未整理尾巴 ≈{n} tokens",
+    expandRow: "记忆展开",
+    expandCalls: "本会话 {n} 次",
+    treeTail: "未整理尾巴 {n} tokens",
     savings: "节省",
     cacheAlert:
       "缓存命中率跌破 {pct}%——可能发生了前缀断裂（工具集/系统提示变化或压缩）",
@@ -140,6 +142,8 @@ export default {
       export: "导出",
       moveInto: "移入「{name}」",
       moveOut: "移出工作区",
+      organizerTree: "切换为记忆树整理",
+      organizerLegacy: "切换为标准整理",
       delete: "删除",
       confirmDelete: "确认删除？再点一次执行",
     },
@@ -194,6 +198,9 @@ export default {
   // 会话内系统消息（SystemNotice 模式）：文案是 UI 不是会话数据，store
   // 存 i18n key，渲染期翻译以跟随语言切换。
   toast: {
+    organizerTree: "已切换为记忆树整理（下一次对话生效）。",
+    organizerLegacy: "已切换为标准整理（下一次对话生效）。",
+    organizerFailed: "整理模式切换失败",
     exported: "已导出",
     exportFailed: "导出失败",
     deleted: "会话已删除",
@@ -374,6 +381,10 @@ export default {
     recorderRetries: "记录员重试次数",
     recorderRetriesHint: "仍失败自动降级规则切分（0–10 次）。",
     ruleChunk: "规则切分块",
+    defaultOrganizer: "会话缺省整理模式",
+    defaultOrganizerHint: "未显式选择过的会话的生效档：标准 = 全量历史 + 压缩；记忆树 = L0 目录 + 未整理尾巴（树模式实验）。",
+    organizerLegacy: "标准",
+    organizerTree: "记忆树",
     ruleChunkHint: "5K–50K token，缺省 20K；按用户消息边界机械切分。",
     treePanelTitle: "记忆树读数（当前会话）",
     treeEmpty: "当前会话还没有记忆树投影（触发整理后出现）。",
@@ -723,6 +734,16 @@ export default {
     organizePacingIncremental: "增量",
     organizeChunk: "增量块 X",
     organizeChunkHint: "10K–200K token，缺省 50K；仅增量档生效。",
+    tailStrategy: "尾巴策略",
+    tailStrategyHint: "树模式会话的未整理尾巴口径：边界结算 = 自上次整理以来的全部原文，两次整理之间缓存全程命中（缺省）；固定窗口 = 最近 N 轮，窗口更小但每轮滑动按未命中价重付。",
+    tailStrategyBoundary: "边界结算",
+    tailStrategyWindow: "固定窗口",
+    tailWindow: "固定窗口轮数",
+    tailWindowHint: "最近 N 轮保留完整原文（1–20，缺省 5）；窗口滑出的轮次自动整理进记忆树目录。",
+    collapseEnabled: "暴露 memory_collapse 工具",
+    collapseEnabledHint: "缺省关。收起已展开的捆可释放窗口空间，但会改写请求前缀（一次计划外缓存失效）——空间急救工具，不是省钱工具。",
+    collapseThreshold: "自动收起阈值",
+    collapseThresholdHint: "轮次收束后占用 ≥ 此值时自动收起最早展开的捆（50–95%，缺省 80）。",
     recorderModel: "会话记录员",
     recorderModelHint: "负责把对话整理成捆的后台角色；默认同主模型，想省钱可换便宜的。",
     // S1 shell 治理分区

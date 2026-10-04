@@ -135,6 +135,37 @@ impl SettingsStore {
             if let Some(p) = u.recorder_provider {
                 next.memory.recorder_provider = (!p.trim().is_empty()).then_some(p);
             }
+            // M4 尾巴策略 + collapse（树 v2 §7.2/§8.3/§15）：策略白名单 +
+            // 窗口轮数区间 + 收起阈值区间
+            if let Some(p) = u.tail_strategy {
+                if !super::memory::TAIL_STRATEGY_VALUES.contains(&p.as_str()) {
+                    return Err(format!("尾巴策略 {p:?} 非法（可选 boundary / window）"));
+                }
+                next.memory.tail_strategy = p;
+            }
+            if let Some(n) = u.tail_window_turns {
+                if !super::memory::TAIL_WINDOW_TURNS_RANGE.contains(&n) {
+                    return Err(format!(
+                        "固定窗口 {n} 超出范围（{}–{} 轮）",
+                        super::memory::TAIL_WINDOW_TURNS_RANGE.start(),
+                        super::memory::TAIL_WINDOW_TURNS_RANGE.end()
+                    ));
+                }
+                next.memory.tail_window_turns = n;
+            }
+            if let Some(e) = u.collapse_enabled {
+                next.memory.collapse_enabled = e;
+            }
+            if let Some(p) = u.collapse_threshold_pct {
+                if !super::memory::COLLAPSE_THRESHOLD_PCT_RANGE.contains(&p) {
+                    return Err(format!(
+                        "自动收起阈值 {p}% 超出范围（{}–{}%）",
+                        super::memory::COLLAPSE_THRESHOLD_PCT_RANGE.start(),
+                        super::memory::COLLAPSE_THRESHOLD_PCT_RANGE.end()
+                    ));
+                }
+                next.memory.collapse_threshold_pct = p;
+            }
         }
         if let Some(u) = tools {
             if let Some(e) = u.enabled {
@@ -329,6 +360,13 @@ impl SettingsStore {
                     ));
                 }
                 next.developer.rule_chunk_tokens = n;
+            }
+            // M4 会话缺省整理模式（树 v2 §15 开发者层级）：白名单
+            if let Some(p) = u.default_organizer {
+                if !super::developer::DEFAULT_ORGANIZER_VALUES.contains(&p.as_str()) {
+                    return Err(format!("会话缺省整理模式 {p:?} 非法（可选 legacy / tree）"));
+                }
+                next.developer.default_organizer = p;
             }
         }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");

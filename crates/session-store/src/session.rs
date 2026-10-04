@@ -126,6 +126,70 @@ impl SessionState {
 /// 一条摘要 User 消息（滑动窗口摘要为空串 → 不留摘要，纯丢早期）。
 /// `kept >= len`（无头部可压）时空操作。apply（快照折叠）与
 /// derive_messages 共用。
+/// 事件切片 → 消息投影（`derive_messages` / `derive_messages_from` 共用
+/// 单点实现，两遍：ToolCall 索引 → 拼装；M4 自 derive_messages 抽出）。
+fn project_messages(events: &[SessionEvent]) -> Vec<Message> {
+    let mut calls: HashMap<&CallId, (&str, &Value)> = HashMap::new();
+    for e in events {
+        if let SessionEvent::ToolCall {
+            call_id,
+            tool,
+            args,
+            ..
+        } = e
+        {
+            calls.insert(call_id, (tool.as_str(), args));
+        }
+    }
+
+    let mut messages: Vec<Message> = Vec::new();
+    for e in events {
+        match e {
+            SessionEvent::UserMessage { content } => messages.push(Message::User {
+                content: content.clone(),
+            }),
+            SessionEvent::AssistantMessage {
+                content,
+                tool_calls,
+            } => messages.push(Message::Assistant {
+                content: content.clone(),
+                tool_calls: tool_calls
+                    .iter()
+                    .map(|id| {
+                        let (tool, args) = backfill(calls.get(id));
+                        ToolCallMsg {
+                            id: id.clone(),
+                            tool,
+                            args,
+                        }
+                    })
+                    .collect(),
+            }),
+            SessionEvent::ToolResult {
+                call_id,
+                output,
+                error,
+            } => {
+                let (tool, args) = backfill(calls.get(call_id));
+                messages.push(Message::ToolResult {
+                    call_id: call_id.clone(),
+                    tool,
+                    args,
+                    output: output.clone(),
+                    error: error.clone(),
+                });
+            }
+            SessionEvent::ContextCompacted {
+                kept_messages,
+                summary,
+                ..
+            } => compact_messages(&mut messages, *kept_messages, summary),
+            _ => {}
+        }
+    }
+    messages
+}
+
 fn compact_messages(messages: &mut Vec<Message>, kept: usize, summary: &str) {
     let keep = kept.min(messages.len());
     let head_len = messages.len() - keep;
@@ -194,67 +258,19 @@ impl Session {
     /// 途中遇到 ContextCompacted 按压缩折叠改写已累计消息（与 apply 的
     /// 快照折叠同一语义，`compact_messages`）。
     pub fn derive_messages(&self) -> Vec<Message> {
-        let visible = &self.log[..self.cursor.min(self.log.len())];
+        let end = self.cursor.min(self.log.len());
+        project_messages(&self.log[..end])
+    }
 
-        let mut calls: HashMap<&CallId, (&str, &Value)> = HashMap::new();
-        for e in visible {
-            if let SessionEvent::ToolCall {
-                call_id,
-                tool,
-                args,
-                ..
-            } = e
-            {
-                calls.insert(call_id, (tool.as_str(), args));
-            }
-        }
-
-        let mut messages: Vec<Message> = Vec::new();
-        for e in visible {
-            match e {
-                SessionEvent::UserMessage { content } => messages.push(Message::User {
-                    content: content.clone(),
-                }),
-                SessionEvent::AssistantMessage {
-                    content,
-                    tool_calls,
-                } => messages.push(Message::Assistant {
-                    content: content.clone(),
-                    tool_calls: tool_calls
-                        .iter()
-                        .map(|id| {
-                            let (tool, args) = backfill(calls.get(id));
-                            ToolCallMsg {
-                                id: id.clone(),
-                                tool,
-                                args,
-                            }
-                        })
-                        .collect(),
-                }),
-                SessionEvent::ToolResult {
-                    call_id,
-                    output,
-                    error,
-                } => {
-                    let (tool, args) = backfill(calls.get(call_id));
-                    messages.push(Message::ToolResult {
-                        call_id: call_id.clone(),
-                        tool,
-                        args,
-                        output: output.clone(),
-                        error: error.clone(),
-                    });
-                }
-                SessionEvent::ContextCompacted {
-                    kept_messages,
-                    summary,
-                    ..
-                } => compact_messages(&mut messages, *kept_messages, summary),
-                _ => {}
-            }
-        }
-        messages
+    /// 树会话尾巴投影（M4 记忆树切流）：从事件下标 `from` 起跑同一投影
+    /// （`[from..cursor)`）——`[0..from)` 已归捆进记忆树目录，请求只带
+    /// 未整理尾巴。切在半轮上由调用方兜底前进到 User 边界（内核组装侧
+    /// 职责）；切片内恰有 ContextCompacted 时 clamp 已由
+    /// [`compact_messages`] 保证（最多把切片折叠到摘要为止，不越界）。
+    pub fn derive_messages_from(&self, from: usize) -> Vec<Message> {
+        let end = self.cursor.min(self.log.len());
+        let from = from.min(end);
+        project_messages(&self.log[from..end])
     }
 
     /// 状态 = fold(自最近快照起的事件)（§4.2 state_at）。

@@ -99,6 +99,8 @@ export interface SessionMeta {
   /** v2.58 §3.30 会话级模型覆盖（成对；null = 跟随设置缺省）。 */
   model: string | null;
   modelProvider: string | null;
+  /** M4 §3.38 会话级整理模式（null = 跟随开发者缺省档）。 */
+  organizer: "legacy" | "tree" | null;
 }
 
 /** 会话正文搜索命中（v2.49）：mtime 降序限量；snippet = 首处摘录。 */
@@ -342,6 +344,8 @@ export interface DeveloperView {
   recorderMaxRetries: number;
   /** 规则切分块（token，5K–50K 缺省 20K）。 */
   ruleChunkTokens: number;
+  /** M4 §3.38 会话缺省整理模式（未显式设置会话的生效档；M5 数据裁决后切用户层）。 */
+  defaultOrganizer: string;
 }
 
 /** 开发者选项区部分更新：字段缺省 = 保持不变。 */
@@ -356,6 +360,7 @@ export interface DeveloperUpdate {
   recorderTimeoutSecs?: number;
   recorderMaxRetries?: number;
   ruleChunkTokens?: number;
+  defaultOrganizer?: string;
 }
 
 /** 对话行为区投影：结构即设置原值。contentMaxWidth null = 未设置（前端按
@@ -400,6 +405,14 @@ export interface MemorySettingsView {
   /** 会话记录员模型（树 v2 §5.2；null = 同主模型）。 */
   recorderModel: string | null;
   recorderProvider: string | null;
+  /** M4 尾巴策略（boundary = A 边界结算缺省 / window = B 固定窗口）。 */
+  tailStrategy: string;
+  /** 固定窗口 N 轮（窗口档生效，1–20 缺省 5）。 */
+  tailWindowTurns: number;
+  /** memory_collapse 暴露开关（§8.3 缺省关）。 */
+  collapseEnabled: boolean;
+  /** 自动收起占用阈值（collapse 开启时生效，50–95% 缺省 80）。 */
+  collapseThresholdPct: number;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -412,6 +425,10 @@ export interface MemoryUpdate {
   /** 空串 = 清除（回落同主模型）。 */
   recorderModel?: string;
   recorderProvider?: string;
+  tailStrategy?: string;
+  tailWindowTurns?: number;
+  collapseEnabled?: boolean;
+  collapseThresholdPct?: number;
 }
 
 /** 工具暴露区投影（⑫）：结构即设置原值。S2 起含宿主单次调用超时；

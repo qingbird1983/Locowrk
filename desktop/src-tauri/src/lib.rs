@@ -48,6 +48,7 @@ mod memory;
 mod model_override;
 mod notifications;
 mod organize;
+mod organizer_mode;
 mod permission_mode;
 mod plugins_root;
 mod privacy;
@@ -76,6 +77,8 @@ mod tests_plugins_root;
 mod tests_session_log;
 #[cfg(test)]
 mod tests_stream;
+#[cfg(test)]
+mod tests_tree_gate;
 
 pub fn run() {
     use tauri::{Listener, Manager};
@@ -184,6 +187,7 @@ pub fn run() {
             commands::session_export,
             commands::session_truncate_after,
             commands::session_set_model,
+            commands::session_set_organizer,
             commands::reveal_in_explorer,
             commands::schedule_list,
             commands::schedule_delete,

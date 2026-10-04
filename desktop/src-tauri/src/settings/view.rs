@@ -67,6 +67,10 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             organize_chunk_tokens: s.memory.organize_chunk_tokens,
             recorder_model: s.memory.recorder_model.clone(),
             recorder_provider: s.memory.recorder_provider.clone(),
+            tail_strategy: s.memory.tail_strategy.clone(),
+            tail_window_turns: s.memory.tail_window_turns,
+            collapse_enabled: s.memory.collapse_enabled,
+            collapse_threshold_pct: s.memory.collapse_threshold_pct,
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,
@@ -105,6 +109,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             recorder_timeout_secs: s.developer.recorder_timeout_secs,
             recorder_max_retries: s.developer.recorder_max_retries,
             rule_chunk_tokens: s.developer.rule_chunk_tokens,
+            default_organizer: s.developer.default_organizer.clone(),
         },
     }
 }

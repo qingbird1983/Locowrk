@@ -15,7 +15,39 @@ use kernel_agent::ToolSource;
 use plugin_api::{SideEffect, Tool, ToolError, ToolSpec};
 use plugin_host::RegistryToolSource;
 
+use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 use crate::permission_mode::{PermissionMode, PermissionModeStore};
+
+/// M4 树工具（memory_expand / memory_collapse）的会话门控数据源。
+pub struct TreeToolGate {
+    modes: Arc<OrganizerModeStore>,
+    /// memory_collapse 暴露开关（settings `memory.collapseEnabled`，保存即
+    /// 读当前值；缺省关——§8.3 宁缺勿假）。
+    collapse_enabled: Arc<dyn Fn() -> bool + Send + Sync>,
+}
+
+impl TreeToolGate {
+    pub fn new(
+        modes: Arc<OrganizerModeStore>,
+        collapse_enabled: Arc<dyn Fn() -> bool + Send + Sync>,
+    ) -> Self {
+        Self {
+            modes,
+            collapse_enabled,
+        }
+    }
+
+    /// 工具对该会话是否可见/可解析：expand 树会话常驻；collapse 树会话 +
+    /// 开关开启。
+    fn allows(&self, session_id: Option<&str>, name: &str) -> bool {
+        let tree = self.modes.mode_of(session_id) == OrganizerMode::Tree;
+        match name {
+            "memory_expand" => tree,
+            "memory_collapse" => tree && (self.collapse_enabled)(),
+            _ => true,
+        }
+    }
+}
 
 /// 注册表 → 工具目录服务。`resolve` 先查内置表，再委托注册表实现。
 pub struct KernelToolSource {
@@ -23,6 +55,8 @@ pub struct KernelToolSource {
     inner: RegistryToolSource,
     /// ㉘·B 会话级权限模式（计划模式目录围栏）；None = 不过滤。
     modes: Option<Arc<PermissionModeStore>>,
+    /// M4 树工具会话门控；None = 无树工具（kernel-bin 桥同形）。
+    tree_gate: Option<Arc<TreeToolGate>>,
 }
 
 impl KernelToolSource {
@@ -31,6 +65,7 @@ impl KernelToolSource {
             builtins: Vec::new(),
             inner,
             modes: None,
+            tree_gate: None,
         }
     }
 
@@ -43,6 +78,13 @@ impl KernelToolSource {
     /// ㉘·B：接会话级权限模式存储（计划模式目录围栏的数据源）。
     pub fn with_modes(mut self, modes: Arc<PermissionModeStore>) -> Self {
         self.modes = Some(modes);
+        self
+    }
+
+    /// M4：接树工具门控（memory_expand / memory_collapse 按会话整理模式
+    /// 过滤；legacy 会话目录不含、解析即拒——双保险）。
+    pub fn with_tree_gate(mut self, gate: Arc<TreeToolGate>) -> Self {
+        self.tree_gate = Some(gate);
         self
     }
 
@@ -72,6 +114,13 @@ impl ToolSource for KernelToolSource {
                 "{name} 在计划模式下不可用：计划模式只读，写类工具已被目录收起"
             )));
         }
+        if let Some(gate) = &self.tree_gate {
+            if !gate.allows(session_id, name) {
+                return Err(ToolError::NotAvailable(format!(
+                    "{name} 不可用：仅记忆树整理模式的会话可调（任务行菜单可切换）"
+                )));
+            }
+        }
         Ok(tool)
     }
 
@@ -81,6 +130,11 @@ impl ToolSource for KernelToolSource {
             .builtins
             .iter()
             .map(|(_, t)| t.spec().clone())
+            .filter(|s| {
+                self.tree_gate
+                    .as_ref()
+                    .is_none_or(|g| g.allows(session_id, &s.name))
+            })
             .collect();
         for spec in self.inner.list_tools() {
             if !specs.iter().any(|s| s.name == spec.name) {

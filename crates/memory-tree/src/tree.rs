@@ -168,6 +168,8 @@ impl MemoryTree {
             token_count: 0,
             pending: true,
             source: "placeholder".into(),
+            expanded_at: None,
+            collapsed_at: None,
         };
         self.bundles.insert(id.0.clone(), bundle);
         let task = PendingTask {
@@ -246,6 +248,53 @@ impl MemoryTree {
         self.paused_auto = false;
         self.rebound.count = 0;
         self.rebound.users_at_last = users_now;
+    }
+
+    /// memory_expand 记账（M4 §8.2）：捆不存在 / 占位 = false。
+    pub fn mark_expanded(&mut self, id: &str, now_ms: i64) -> bool {
+        match self.bundles.get_mut(id) {
+            Some(b) if !b.pending => {
+                b.mark_expanded(now_ms);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// memory_collapse 记账（M4 §8.3）：捆不存在 / 占位 / 从未展开 = false
+    /// （收起只对已展开捆有意义——没展开过就没有可收的内容）。
+    pub fn mark_collapsed(&mut self, id: &str, now_ms: i64) -> bool {
+        match self.bundles.get_mut(id) {
+            Some(b) if !b.pending => {
+                b.mark_collapsed(now_ms);
+                b.collapsed_at.is_some()
+            }
+            _ => false,
+        }
+    }
+
+    /// 当前收起中的捆 id（组装侧把它们的 expand 结果换收起桩；插入序 =
+    /// BTreeMap 序，组装侧自排）。
+    pub fn collapsed_ids(&self) -> Vec<String> {
+        self.bundles
+            .values()
+            .filter(|b| b.collapsed_at.is_some())
+            .map(|b| b.bundle_id.0.clone())
+            .collect()
+    }
+
+    /// 最早展开且未收起的捆 id（自动收起 §8.3「收起最老展开」；并列按 id
+    /// 序稳定）。None = 没有可收的。
+    pub fn oldest_expanded(&self) -> Option<String> {
+        self.bundles
+            .values()
+            .filter(|b| b.expanded_at.is_some() && b.collapsed_at.is_none())
+            .min_by(|a, b| {
+                a.expanded_at
+                    .cmp(&b.expanded_at)
+                    .then_with(|| a.bundle_id.cmp(&b.bundle_id))
+            })
+            .map(|b| b.bundle_id.0.clone())
     }
 }
 

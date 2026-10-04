@@ -73,6 +73,31 @@ pub async fn session_set_permission_mode(
         .map_err(|e| format!("写入失败: {e}"))
 }
 
+/// 会话级整理模式（M4 §3.38①⑦，树 v2 §11.2 阶段 2）：写旁车 `organizer`
+/// + 模式存储缓存——下一次请求按新档组装（即时生效，事件流零改动）。
+/// `mode` = "legacy" | "tree"；空串 = 清除显式档（跟随开发者缺省档）。
+#[tauri::command]
+pub async fn session_set_organizer(
+    session_id: String,
+    mode: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let m = mode.trim();
+    if m.is_empty() {
+        state
+            .organizer_modes
+            .clear_session_mode(&session_id)
+            .map_err(|e| format!("写入失败: {e}"))?;
+        return Ok(());
+    }
+    let mode = crate::organizer_mode::OrganizerMode::parse(m)
+        .ok_or_else(|| format!("整理模式 {m:?} 非法（legacy / tree）"))?;
+    state
+        .organizer_modes
+        .set_session_mode(&session_id, mode)
+        .map_err(|e| format!("写入失败: {e}"))
+}
+
 /// 会话级模型覆盖（v2.58 §3.30 选择器的后端）：写旁车 `model` +
 /// `model_provider`（成对，重启保持）+ 覆盖存储缓存（下一轮请求即生效，
 /// 运行中可切）。`model` 空 = 清除覆盖（回落设置缺省）。

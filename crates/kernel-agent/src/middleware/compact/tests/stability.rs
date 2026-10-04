@@ -50,6 +50,7 @@ async fn stability_period_suppresses_settlements_after_compaction() {
             compacted: None,
             system: None,
             session_id: Some("s1".into()),
+            tree_directory: None,
         })
         .unwrap();
         match compact.handle(points::REQUEST, &payload).await {

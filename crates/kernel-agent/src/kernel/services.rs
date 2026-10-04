@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use plugin_api::{Tool, ToolError, ToolSpec};
 use serde_json::Value;
-use session_store::Message;
+use session_store::{Message, SessionEvent};
 
 /// LLM 请求：直接复用 session-store 的中立投影，模型适配层再映射各家协议。`tools`
 /// 是本 step 的工具目录快照（LLM.md：统一 OpenAI 风格，适配器负责转成各家格式）；
@@ -117,4 +117,70 @@ pub trait ToolSource: Send + Sync + 'static {
     /// 全目录快照：主循环每个 step 枚举给 LLM（真实模型要看到工具才会调）。
     /// 只读枚举不失败——没有目录服务就返回空表，聊天照常。
     async fn list(&self, session_id: Option<&str>) -> Vec<ToolSpec>;
+}
+
+/// 树会话组装计划（M4 记忆树切流，树 v2 §7）：宿主实现返回；`None` =
+/// legacy 会话（组装零变化）。内核据此把请求消息切片到未整理尾巴，并把
+/// L0 目录交给 `agent/request` 链追加到 system 尾部。
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TreePlan {
+    /// L0 目录块全文（使用说明 + `- b2: 标题` 清单；空串 = 尚无捆）。
+    /// 只增不改纪律（占位捆不进目录）归宿主生成侧保证。
+    pub directory: String,
+    /// 尾巴起点（会话事件下标，排他游标语义——`[0..from)` 已归捆）。
+    /// 模式 B = `max(bundled_until, 窗口起点)`（宿主算好）。
+    pub tail_from_event: usize,
+    /// 收起中的捆 id（§8.3 空间急救）：组装侧把这些捆已展开的工具结果
+    /// 替换为收起桩（协议配对保全，事件流零改动）。
+    pub collapsed_bundles: Vec<String>,
+}
+
+/// 树会话组装源（树 v2 §11.2 阶段 2）：宿主提供实现（desktop 读
+/// memory-tree 投影 + 会话旁车 organizer 档），headless / 未注册 = 全局
+/// legacy 语义不变。内核只透传会话 id，不解释 organizer 概念——与
+/// MemorySource 同款"内核定契约、组装点实现"模式。
+#[async_trait]
+pub trait TreeContextSource: Send + Sync + 'static {
+    async fn plan(&self, session_id: &str) -> Option<TreePlan>;
+}
+
+/// 尾巴起点兜底（M4 §3.38②）：从 `from` 起找第一条 User 消息事件——
+/// 整理切点纪律保证落在 User 之前，但记录员切分不硬校验，尾巴起点落在
+/// 半轮上时（Assistant / ToolResult 开头 = 协议非法）前进到下一条 User。
+/// 被跳过的事件已在树目录覆盖范围内；None = 尾巴内没有 User（空表组装）。
+pub fn tail_user_start(events: &[SessionEvent], from: usize) -> Option<usize> {
+    events
+        .iter()
+        .enumerate()
+        .skip(from)
+        .find_map(|(i, e)| matches!(e, SessionEvent::UserMessage { .. }).then_some(i))
+}
+
+/// 收起桩替换（M4 §8.3）：`collapsed` 中各捆的 memory_expand 工具结果
+/// 替换为桩文本——不删事件、不拆 tool_calls ↔ ToolResult 配对（真实模型
+/// 协议要求 id 成对），只把内容从"已发送历史"里换成一句说明。
+pub fn collapse_expanded(mut messages: Vec<Message>, collapsed: &[String]) -> Vec<Message> {
+    if collapsed.is_empty() {
+        return messages;
+    }
+    for m in &mut messages {
+        if let Message::ToolResult {
+            tool, args, output, ..
+        } = m
+        {
+            if tool != "memory_expand" {
+                continue;
+            }
+            let Some(id) = args.get("bundle_id").and_then(Value::as_str) else {
+                continue;
+            };
+            if collapsed.iter().any(|c| c == id) {
+                *output = Value::String(format!(
+                    "[memory bundle {id} collapsed to save context window; \
+                     call memory_expand again if you need it]"
+                ));
+            }
+        }
+    }
+    messages
 }

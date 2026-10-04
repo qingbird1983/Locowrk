@@ -86,6 +86,7 @@ async fn run_session(
         compacted: None,
         system: None,
         session_id: session_id.map(str::to_string),
+        tree_directory: None,
     })
     .expect("payload");
     let decision = listener.handle(points::REQUEST, &payload).await;
@@ -197,6 +198,7 @@ async fn non_request_key_is_noop() {
         compacted: None,
         system: None,
         session_id: None,
+        tree_directory: None,
     })
     .expect("payload");
     let d = l.handle(points::PRE_STEP, &payload).await;
@@ -356,6 +358,42 @@ async fn pinned_set_intersects_shrunk_catalog() {
     let (_, out2) = run_session(&l, fenced, Vec::new(), Some("s1")).await;
     let names: Vec<&str> = out2.tools.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(names, vec!["a1"], "出目录的工具不复活");
+}
+
+/// M4 补口（走查实抓）：目录**放宽**时新增的 always 工具（会话中途切
+/// 记忆树模式，memory_expand 进目录）无条件保留、追加在尾部——旧集
+/// 逐字节保留（前缀缓存不灭），always 直通不受钉死名单约束。
+#[tokio::test]
+async fn pinned_set_appends_new_always_tools_on_catalog_growth() {
+    let tools = vec![
+        spec("a1", Exposure::OnDemand),
+        spec("a2", Exposure::OnDemand),
+    ];
+    let ewma: HashMap<String, f64> = [("a1".into(), 5.0)].into();
+    let l = listener(ewma, cfg_lock(true, 2));
+    let (_, out1) = run_session(&l, tools, Vec::new(), Some("s1")).await;
+    assert_eq!(
+        out1.tools
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["a1", "a2"]
+    );
+
+    // 目录放宽：新增 always 的 expand（切树模式）→ [a1, a2, expand]
+    let grown = vec![
+        spec("a1", Exposure::OnDemand),
+        spec("a2", Exposure::OnDemand),
+        spec("expand", Exposure::Always),
+    ];
+    let (_, out2) = run_session(&l, grown, Vec::new(), Some("s1")).await;
+    let names: Vec<&str> = out2.tools.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names, vec!["a1", "a2", "expand"], "always 新工具追加尾部");
+    assert!(
+        serde_json::to_string(&out2.tools[..2]).unwrap()
+            == serde_json::to_string(&out1.tools).unwrap(),
+        "旧集逐字节保留（尾部追加不破前缀）"
+    );
 }
 
 /// 无会话身份（headless 一次性进程）不钉死：保持每轮 Top-N 旧行为。

@@ -99,6 +99,10 @@ fn organizer(
         client,
         resolver(),
         root.to_path_buf(),
+        Arc::new(crate::organizer_mode::OrganizerModeStore::new(
+            root.join("sessions"),
+            crate::organizer_mode::OrganizerMode::Legacy,
+        )),
         std::sync::Arc::new(|_, _| {}), // 哑通知（不触 emit）
     ))
 }
@@ -305,5 +309,179 @@ async fn view_bundles_and_original_read_from_disk() {
     assert_eq!(orig[1].kind, memory_tree::MaterialKind::Assistant);
     assert!(org.tree_original("s-view", r"F:\ws\demo", "b9").is_err());
     assert!(org.tree_original("s-none", r"F:\ws\demo", "b1").is_err());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// ---- M4 按会话切流：模式 B 溢出整理（不记反弹 / 熔断不受限）+ 自动收起 ----
+
+use crate::organizer_mode::OrganizerMode as Mode;
+
+/// 树模式编排器（organizer() 辅助硬编码 Legacy，溢出/收起要 Tree 档）。
+fn tree_organizer(
+    root: &std::path::Path,
+    settings: Arc<SettingsStore>,
+    client: Arc<dyn RecorderClient>,
+) -> Arc<Organizer> {
+    Arc::new(Organizer::new(
+        settings,
+        root.join("sessions"),
+        client,
+        resolver(),
+        root.to_path_buf(),
+        Arc::new(crate::organizer_mode::OrganizerModeStore::new(
+            root.join("sessions"),
+            Mode::Tree,
+        )),
+        std::sync::Arc::new(|_, _| {}),
+    ))
+}
+
+/// 十二轮会话（溢出窗口的孤儿轮素材）。
+fn long_session() -> Session {
+    let mut s = Session::new();
+    for i in 0..12 {
+        s.append(SessionEvent::UserMessage {
+            content: format!("第{i}轮问题"),
+        });
+        s.append(SessionEvent::AssistantMessage {
+            content: format!("第{i}轮回答"),
+            tool_calls: vec![],
+        });
+    }
+    s
+}
+
+#[tokio::test]
+async fn window_overflow_organizes_orphans_without_rebound() {
+    let root = temp_root("overflow");
+    let settings = settings_with(
+        serde_json::json!({
+            "memory": {"tailStrategy": "window", "tailWindowTurns": 1},
+            "developer": {"organizeReboundK": 1, "organizeReboundM": 1}
+        }),
+        &root,
+    );
+    let client = FakeClient::new(vec![Ok(good_reply()), Ok(good_reply())]);
+    let org = tree_organizer(&root, Arc::clone(&settings), client);
+
+    // 轮 1：bundled_until=0 < 窗口起点（22）→ 溢出整理只归孤儿 [0..22)
+    let s = long_session();
+    let task = org.plan_auto(&s, "s-ov").expect("孤儿轮在场应触发溢出整理");
+    assert_eq!(task.reason, memory_tree::OrganizeReason::WindowOverflow);
+    assert_eq!(task.items.first().unwrap().event, 0);
+    assert_eq!(
+        task.items.last().unwrap().event,
+        21,
+        "只归窗口滑出的部分，最后一轮留尾巴"
+    );
+    org.clone().run_task(task).await;
+    let tree = tree_at(&root, org.settings.as_ref(), "s-ov");
+    assert_eq!(tree.bundled_until, 22, "游标推进到窗口起点");
+    assert_eq!(tree.rebound.users_at_last, 0, "溢出整理不碰反弹基线");
+    assert!(!tree.paused_auto);
+
+    // 轮 2：窗口再滑一行——但本轮只有既有 24 事件（无新轮），窗口起点
+    // 仍在 22 = 游标处，不触发
+    assert!(org.plan_auto(&s, "s-ov").is_none(), "无新孤儿不触发");
+
+    // 加一轮：窗口起点滑到 24 > 游标 22 → 再溢出（连续第 2 次也不熔断——
+    // k/m 只惩罚阈值/增量档的烧钱反弹）
+    let mut s2 = s;
+    s2.append(SessionEvent::UserMessage {
+        content: "第12轮问题".into(),
+    });
+    s2.append(SessionEvent::AssistantMessage {
+        content: "第12轮回答".into(),
+        tool_calls: vec![],
+    });
+    let task = org.plan_auto(&s2, "s-ov").expect("新孤儿再触发");
+    assert_eq!(task.reason, memory_tree::OrganizeReason::WindowOverflow);
+    org.clone().run_task(task).await;
+    let tree = tree_at(&root, org.settings.as_ref(), "s-ov");
+    assert_eq!(tree.bundled_until, 24);
+    assert!(!tree.paused_auto, "溢出整理永不触发熔断");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
+async fn overflow_respects_pending_and_legacy_mode() {
+    let root = temp_root("ovgates");
+    let settings = settings_with(
+        serde_json::json!({"memory": {"tailStrategy": "window", "tailWindowTurns": 1}}),
+        &root,
+    );
+    let client = FakeClient::new(vec![]);
+    let org = tree_organizer(&root, Arc::clone(&settings), client);
+    let s = long_session();
+
+    // 在途任务占位：溢出让位（单写者）
+    let mut tree = memory_tree::MemoryTree::new(r"F:\ws\demo", "s-ov2");
+    tree.insert_placeholder(0, 5, 1).unwrap();
+    memory_tree::TreeStore::new(&root).save(&tree).unwrap();
+    assert!(org.plan_auto(&s, "s-ov2").is_none(), "在途任务期间不触发");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
+async fn auto_collapse_relieves_oldest_expanded() {
+    let root = temp_root("autocollapse");
+    let settings = settings_with(
+        serde_json::json!({
+            "context": {"windowTokens": 1000},
+            "memory": {"collapseEnabled": true, "collapseThresholdPct": 50}
+        }),
+        &root,
+    );
+    let client = FakeClient::new(vec![]);
+    let org = tree_organizer(&root, Arc::clone(&settings), client);
+
+    // 树 + 两个已展开捆（b2 更早展开）
+    let mut tree = memory_tree::MemoryTree::new(r"F:\ws\demo", "s-ac");
+    let d1 = vec![memory_tree::sanitize_draft("捆一", "摘要一", (0, 1)).unwrap()];
+    let bundles = tree.build_bundles(&d1, "recorder", 1);
+    tree.apply_organized(
+        bundles,
+        1,
+        memory_tree::OrganizeRecord {
+            ts: 1,
+            reason: "manual".into(),
+            mode: "recorder".into(),
+            status: "ok".into(),
+            from: 0,
+            to: 1,
+            bundles: 1,
+            recorder_input: 0,
+            recorder_output: 0,
+            duration_ms: 1,
+        },
+    );
+    tree.mark_expanded("b1", 100);
+    memory_tree::TreeStore::new(&root).save(&tree).unwrap();
+
+    // 占用未达阈值：不收
+    let mut session = long_session();
+    session.events().iter().for_each(|_| {});
+    org.after_turn(&session, "s-ac");
+    let t = tree_at(&root, org.settings.as_ref(), "s-ac");
+    assert!(t.bundles["b1"].collapsed_at.is_none(), "占用低不收");
+
+    // 用量锚点来自最后一条 LlmUsage（600 / 1000 = 60% ≥ 50%）→ 收起 b1
+    session.append(SessionEvent::LlmUsage {
+        input: 600,
+        output: 10,
+        cache_read: 0,
+        cache_write: 0,
+        reasoning: 0,
+        total: 610,
+        duration_ms: 1,
+    });
+    org.after_turn(&session, "s-ac");
+    let t = tree_at(&root, org.settings.as_ref(), "s-ac");
+    assert!(t.bundles["b1"].collapsed_at.is_some(), "过阈值收起最早展开");
+    assert_eq!(t.oldest_expanded(), None);
+
+    // legacy 会话零参与
+    let legacy_org = organizer(&root, Arc::clone(&settings), FakeClient::new(vec![]));
+    legacy_org.after_turn(&session, "s-legacy");
     let _ = std::fs::remove_dir_all(&root);
 }

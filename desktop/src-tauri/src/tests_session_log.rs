@@ -36,6 +36,7 @@ async fn turn_mirrors_to_disk_and_restores_identically() {
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
     )
     .await
     .expect("turn ok");
@@ -75,6 +76,7 @@ async fn history_projection_includes_user_messages() {
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
     )
     .await
     .expect("turn ok");
@@ -251,6 +253,7 @@ async fn context_usage_persists_and_replays() {
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
     )
     .await
     .expect("turn ok");

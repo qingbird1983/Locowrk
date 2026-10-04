@@ -235,3 +235,34 @@ fn compaction_event_serializes_roundtrip() {
     let back: SessionEvent = serde_json::from_value(v).unwrap();
     assert_eq!(back, e);
 }
+
+#[test]
+fn derive_from_offsets_to_the_tree_tail() {
+    let mut s = Session::new();
+    s.append(SessionEvent::UserMessage {
+        content: "early".into(),
+    });
+    s.append(SessionEvent::AssistantMessage {
+        content: "early reply".into(),
+        tool_calls: vec![],
+    });
+    s.append(SessionEvent::UserMessage {
+        content: "tail question".into(),
+    });
+    s.append(SessionEvent::AssistantMessage {
+        content: "tail reply".into(),
+        tool_calls: vec![],
+    });
+
+    // 尾巴投影 = [from..] 同一映射；全量投影不受影响
+    let tail = s.derive_messages_from(2);
+    assert_eq!(tail.len(), 2);
+    assert!(matches!(&tail[0], crate::Message::User { content } if content == "tail question"));
+    assert_eq!(s.derive_messages().len(), 4);
+
+    // from 越界 clamp 到长度 = 空表；from 超过游标（回退态）同样安全
+    assert!(s.derive_messages_from(99).is_empty());
+    s.rewind_to(2);
+    assert_eq!(s.derive_messages_from(0).len(), 2, "游标裁剪语义不变");
+    assert!(s.derive_messages_from(2).is_empty());
+}

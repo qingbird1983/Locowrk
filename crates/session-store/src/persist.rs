@@ -100,7 +100,8 @@ pub fn load_session(path: &Path) -> std::io::Result<(Session, usize)> {
 /// 会话文件元数据（列表用；`updated_at` = mtime Unix 秒；`title` = 首条用户消息截断
 /// （None = 无用户消息），截断宽 [`SESSION_TITLE_CHARS`]；`workspace` = §2.3 工作区关联
 /// （v2.50，None = 未关联）；`permission_mode` = ㉘·B 会话权限模式（None = 取设置缺省）；
-/// `model`/`model_provider` = v2.58 会话级模型覆盖（None = 跟随设置缺省））。
+/// `model`/`model_provider` = v2.58 会话级模型覆盖（None = 跟随设置缺省）；
+/// `organizer` = M4 会话整理模式（None = 跟随开发者缺省档））。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMeta {
@@ -112,6 +113,7 @@ pub struct SessionMeta {
     pub permission_mode: Option<String>,
     pub model: Option<String>,
     pub model_provider: Option<String>,
+    pub organizer: Option<String>,
 }
 
 /// 列表标题截断宽度（字符）。
@@ -162,14 +164,15 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                 })
                 .unwrap_or((0, None));
             // 重命名标题覆盖自动标题（v2.49）+ 工作区归属透出（v2.50）+
-            // 权限模式透出（㉘·B）+ 模型覆盖透出（v2.58）：旁车一次读，
-            // 缺文件 / 无字段时各自回落
+            // 权限模式透出（㉘·B）+ 模型覆盖透出（v2.58）+ 整理模式透出
+            // （M4）：旁车一次读，缺文件 / 无字段时各自回落
             let sidecar = read_meta(dir, &id);
             let title = sidecar.as_ref().and_then(|m| m.title.clone()).or(title);
             let workspace = sidecar.as_ref().and_then(|m| m.workspace.clone());
             let permission_mode = sidecar.as_ref().and_then(|m| m.permission_mode.clone());
             let model = sidecar.as_ref().and_then(|m| m.model.clone());
-            let model_provider = sidecar.and_then(|m| m.model_provider);
+            let model_provider = sidecar.as_ref().and_then(|m| m.model_provider.clone());
+            let organizer = sidecar.and_then(|m| m.organizer);
             Some((
                 modified,
                 SessionMeta {
@@ -181,6 +184,7 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                     permission_mode,
                     model,
                     model_provider,
+                    organizer,
                 },
             ))
         })
@@ -316,8 +320,8 @@ fn snippet_around(text: &str, byte_start: usize, needle: &[char]) -> String {
 mod meta;
 
 pub use meta::{
-    SessionMetaFile, read_meta, write_model_override, write_permission_mode, write_title,
-    write_workspace,
+    SessionMetaFile, read_meta, write_model_override, write_organizer, write_permission_mode,
+    write_title, write_workspace,
 };
 use meta::{invalid_id, meta_file};
 

@@ -99,6 +99,7 @@ fn request_payload(messages: Vec<Message>) -> Value {
         compacted: None,
         system: None,
         session_id: None,
+        tree_directory: None,
     })
     .unwrap()
 }
@@ -390,6 +391,7 @@ async fn other_waterfall_points_ignored() {
         compacted: None,
         system: None,
         session_id: None,
+        tree_directory: None,
     })
     .unwrap();
     let out = ctx.events.waterfall(points::PRE_STEP, payload).await;

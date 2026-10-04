@@ -141,6 +141,22 @@ pub fn init_state(app: AppHandle) -> AppState {
         sessions_dir.clone(),
         settings.default_permission_mode(),
     )); // ㉘·B 会话级权限模式（旁车持久 + 缓存；决策表/目录围栏数据源）
+        // M4 会话级整理模式（树 v2 §11.2 阶段 2）：旁车 `organizer` 持久 +
+        // 缓存写穿；未显式设置会话跟随开发者缺省档（settings_set 热换）。
+    let organizer_modes = Arc::new(crate::organizer_mode::OrganizerModeStore::new(
+        sessions_dir.clone(),
+        settings.default_organizer(),
+    ));
+    // M4 树会话组装器（§3.38②）：TreeContextSource 注册进内核服务表——
+    // legacy 会话返回 None（组装零变化），树会话 = L0 目录 + 未整理尾巴。
+    let tree_assembler = Arc::new(crate::organize::TreeAssembler::new(
+        Arc::clone(&organizer_modes),
+        Arc::clone(&settings),
+        Arc::clone(&workspace_of),
+        memory_tree::TreeStore::new(&root),
+        sessions_dir.clone(),
+    ));
+    ctx.provide_dyn::<dyn kernel_agent::TreeContextSource>(Arc::clone(&tree_assembler) as Arc<_>);
 
     // 经历记忆库（⑬）：experiences.sqlite3；打不开只丢经历。
     let experiences = match ExperienceDb::open(&root.join("experiences.sqlite3")) {
@@ -181,6 +197,14 @@ pub fn init_state(app: AppHandle) -> AppState {
                 .map(|idx| idx as Arc<dyn kernel_agent::ExperienceSource>),
             Arc::clone(&memory_cfg),
         )),
+    );
+
+    // M4 树目录注入（§3.38②）：Memory-Inject 之后、ctx-compact 之前——
+    // 目录排在记忆块之后（树 v2 §7.1 [2]→[3]）；ctx-compact 见树会话标记
+    // 即跳过（树会话不压缩，压缩语义由整理边界承担）。
+    ctx.events.on_waterfall(
+        points::REQUEST,
+        Arc::new(kernel_agent::TreeDirectoryInject) as Arc<_>,
     );
 
     // ctx-compact（Context and Memory.md §3）：agent/request 决策环上的压缩
@@ -246,6 +270,17 @@ pub fn init_state(app: AppHandle) -> AppState {
         RegistryToolSource::new(Arc::clone(&registry)),
     )));
     let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
+    // M4 树工具（§3.38③④）：expand 树会话常驻（exposure=always）、collapse
+    // 开关开启才进目录（§8.3 缺省关）——门控在 KernelToolSource 列表/解析
+    // 双侧（legacy 会话不可见不可调）。不进 search_catalog 索引（会话级
+    // 工具，人的检索面不含）。
+    let tree_gate = Arc::new(crate::tool_source::TreeToolGate::new(
+        Arc::clone(&organizer_modes),
+        {
+            let s = Arc::clone(&settings);
+            Arc::new(move || s.memory().collapse_enabled)
+        },
+    ));
     let main_source = with_host_tools(KernelToolSource::new(RegistryToolSource::new(Arc::clone(
         &registry,
     ))))
@@ -254,6 +289,18 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::clone(&usage),
         Some(embed_tool_port),
     ))
+    .with_builtin(crate::organize::MemoryExpandTool::new(
+        memory_tree::TreeStore::new(&root),
+        Arc::clone(&workspace_of),
+        Arc::clone(&organizer_modes),
+        sessions_dir.clone(),
+    ))
+    .with_builtin(crate::organize::MemoryCollapseTool::new(
+        memory_tree::TreeStore::new(&root),
+        Arc::clone(&workspace_of),
+        Arc::clone(&organizer_modes),
+    ))
+    .with_tree_gate(tree_gate)
     // ㉘·B 计划模式目录围栏（非 Pure 不出目录、resolve 即拒）
     .with_modes(Arc::clone(&permission_modes));
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(main_source));
@@ -337,6 +384,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         sessions_dir.clone(),
         Arc::clone(&workspace_of),
         root.clone(),
+        Arc::clone(&organizer_modes),
         organizer_notifier,
     );
     // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
@@ -354,6 +402,7 @@ pub fn init_state(app: AppHandle) -> AppState {
             Arc::clone(&last_chat),
             app.clone(),
             Arc::clone(&organizer),
+            Arc::clone(&tree_assembler),
         );
     }
     // 在途整理任务重投（后台，不阻塞窗口出现）
@@ -365,7 +414,9 @@ pub fn init_state(app: AppHandle) -> AppState {
         plugins,
         approval,
         permission_modes,
+        organizer_modes,
         model_overrides,
+        tree_assembler,
         sink,
         sessions,
         sessions_dir,

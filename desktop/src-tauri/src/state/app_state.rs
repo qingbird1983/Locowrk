@@ -38,6 +38,12 @@ pub struct AppState {
     /// 会话级模型覆盖存储（v2.58 §3.30）：旁车持久 + 缓存；AppLlm 每
     /// 请求按会话解析，session_set_model 命令写穿。
     pub model_overrides: Arc<crate::model_override::ModelOverrideStore>,
+    /// 会话级整理模式存储（M4 §3.38①）：旁车持久 + 缓存；未显式设置
+    /// 会话跟随开发者缺省档，session_set_organizer 命令写穿。
+    pub organizer_modes: Arc<crate::organizer_mode::OrganizerModeStore>,
+    /// 树会话组装器（M4 §3.38②）：TreeContextSource 实现（同时注册进
+    /// 内核服务表）；run_turn 用量口径按组装后估算消费。
+    pub tree_assembler: Arc<crate::organize::TreeAssembler>,
     /// UI 事件出口（§12.2）：runner 与审批请求共用一个 sink。
     pub sink: Arc<dyn EventSink>,
     /// session_id → 会话锁。会话在锁内串行聊天（tokio Mutex 可跨 await）；

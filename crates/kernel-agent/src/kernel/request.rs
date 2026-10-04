@@ -54,14 +54,17 @@ impl Kernel {
     }
 
     /// `agent/request` 决策环：插件可改 model / params / system（记忆注入见
-    /// middleware::memory_inject）。tools 随 payload 进决策环（决策方理论上
-    /// 可裁剪目录），出环后进 LlmRequest；ctx-compact 的压缩结果经
-    /// `compacted` 一并带回（kernel 落日志）。
+    /// middleware::memory_inject；树目录见 middleware::tree_context）。tools 随
+    /// payload 进决策环（决策方理论上可裁剪目录），出环后进 LlmRequest；
+    /// ctx-compact 的压缩结果经 `compacted` 一并带回（kernel 落日志）。
+    /// `tree_directory`（M4）：Some = 树会话标记 + L0 目录文本（见
+    /// RequestPayload 文档）。
     async fn waterfall_request(
         &self,
         messages: Vec<Message>,
         tools: Vec<ToolSpec>,
         session_id: Option<&str>,
+        tree_directory: Option<String>,
     ) -> Result<(LlmRequest, Option<CompactionOutcome>), KernelError> {
         let payload = serde_json::to_value(RequestPayload {
             messages,
@@ -72,6 +75,7 @@ impl Kernel {
             compacted: None,
             system: None,
             session_id: session_id.map(str::to_string),
+            tree_directory,
         })?;
         let out = self.ctx.events.waterfall(points::REQUEST, payload).await;
         match out.decision {
@@ -132,6 +136,7 @@ impl Kernel {
         messages: Vec<Message>,
         tools: Vec<ToolSpec>,
         session_id: Option<&str>,
+        tree_directory: Option<String>,
     ) -> Result<(LlmResponse, Option<CompactionOutcome>, StreamTrace), KernelError> {
         let mut retries: u32 = 0;
         let mut total_delay = Duration::ZERO;
@@ -140,7 +145,12 @@ impl Kernel {
         let sink = self.scoped_dyn::<dyn crate::stream::LlmStreamSink>().ok();
         loop {
             let (req, compacted) = self
-                .waterfall_request(messages.clone(), tools.clone(), session_id)
+                .waterfall_request(
+                    messages.clone(),
+                    tools.clone(),
+                    session_id,
+                    tree_directory.clone(),
+                )
                 .await?;
             let llm = self.scoped_dyn::<dyn LlmService>()?;
             let streamed = AtomicBool::new(false);

@@ -305,7 +305,7 @@
 |---|---|---|
 | `LlmSection` | `llm` | ✅ 既有（+ 窗口下拉） |
 | `ContextSection` | `context` | ✅（阈值/策略/建议值；前端不做第二套换算） |
-| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X） |
+| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：**尾巴策略**（边界结算 / 固定窗口，缺省边界结算）+ **固定窗口 N**（1–20 缺省 5，窗口档显示）+ **memory_collapse 暴露**（缺省关）+ **自动收起阈值**（50–95% 缺省 80，collapse 开启时显示）） |
 | `LlmSection` | `llm` | ✅（v4.5 起默认项组内增**会话记录员**行——同主模型 ▾，树 v2 §5.2） |
 | `SessionsSection` | —（只读 dataDir） | ✅ |
 | `LanguageSection` | `locale` | ✅ |
@@ -314,7 +314,7 @@
 | `ShortcutSection` | `shortcut` | ✅ |
 | `ShellSection` | `shell` | ✅（高危解锁开关；重启生效） |
 | `ToolsSection`（v2.49 更名——分区 id 本就是 `tools`，组件名对齐 1:1；原 DeveloperSection） | `tools`（含 `fsRoots` 工作区目录 / `maxTurnSteps` 单轮步数上限 1–100 缺省 8 / `approvalTimeoutSecs` 审批等待时长，0=不限 缺省 100，🆕 v2.49） | ✅ |
-| `DeveloperSection`（🆕 v2.49 开发者选项，**默认隐藏**） | `developer`（`unlocked` 解锁态 / `allowDeleteRunningSession` 运行中会话强制删除 / `allowSwitchRunningSession` 运行中切换会话——危险开关缺省全关；🆕 M0：`cacheHitAlert` 命中率告警缺省关 + `cacheHitAlertPercent` 阈值缺省 80 + 「前缀缓存读数」只读面板；🆕 M1：`tools.pinSession` 工具集会话钉死缺省开 + `context.stabilityRounds` 稳定期轮数 1–10 缺省 3——两键 JSON 分属 tools/context 区，UI 行同挂开发者分区，KV v2 §9 开发者层级） | ✅ |
+| `DeveloperSection`（🆕 v2.49 开发者选项，**默认隐藏**） | `developer`（`unlocked` 解锁态 / `allowDeleteRunningSession` 运行中会话强制删除 / `allowSwitchRunningSession` 运行中切换会话——危险开关缺省全关；🆕 M0：`cacheHitAlert` 命中率告警缺省关 + `cacheHitAlertPercent` 阈值缺省 80 + 「前缀缓存读数」只读面板；🆕 M1：`tools.pinSession` 工具集会话钉死缺省开 + `context.stabilityRounds` 稳定期轮数 1–10 缺省 3——两键 JSON 分属 tools/context 区，UI 行同挂开发者分区，KV v2 §9 开发者层级；🆕 M4：`developer.defaultOrganizer` **会话缺省整理模式**（legacy / tree，缺省 legacy——树 v2 §15「会话缺省 organizer」，阶段 3 数据裁决后才切用户层）） | ✅ |
 | `EmbeddingSection` | `embedding` | ✅ |
 | `PluginsSection` | `plugins` | ✅（自动停用天数 / 调用超时） |
 
@@ -407,6 +407,11 @@ ok <60% / warn 60–99% / danger ≥阈值；无数据（`null`）整个不渲�
   当前归属项置灰打勾）与「移出工作区」（有归属才出现）；归属存旁车 meta `workspace`
   字段，`session_list` 透出，侧栏 §2.3 一级分组据此成组（v3.9：无归属 = 「未分组」组，
   顶层「会话」组退役）；后端校验目标必须是当前 fsRoots 之一。
+- **整理模式切换（v4.7 M4，§3.38）**：行尾 `…` 菜单增一项「切换为记忆树整理」/
+  「切换为标准整理」（两态互斥，当前生效档不打勾不做整行高亮——§3.33 权限菜单同款
+  纪律）；生效档 = 旁车 meta `organizer`，**未显式设置过的会话跟随开发者缺省档**
+  （`developer.defaultOrganizer`，缺省 legacy——标签按生效档而非旁车字段渲染）；
+  切换即时生效（下一次请求按新档组装，事件流零改动——树是投影，随时可拨回）。
 - **v3.9 修订（issue 批 #4⑤）**：时间桶标签与侧栏搜索框退役——组内任务按最近活动直排；
   「搜索」入口 = §3.15 命令面板（标题过滤 + 正文命中 `session_search` 并入面板，
   v2.49 能力不丢）；「新会话」更名「新建任务」；**在项目下新建任务**（§2.3 项目行 ＋）
@@ -616,6 +621,11 @@ derive_messages（不回传供应商），压缩/用量估算不受影响。
   自带）+ 暴露目录估算 token（`agent://context-usage` 载荷 +`tools_est_tokens`，
   agent_chat 每轮一次目录快照）。供应商不报告用量的 step 不落事件——模型用量
   行整体不渲染（宁缺勿假，不用估算冒充真实计数）。
+- **v4.7（M4）树会话口径**：`used` = **组装后**（目录 + 尾巴 + 本轮）的估算，不再
+  用全量历史——树会话的进度环 / 百分比如实反映模型实际看到的上下文（legacy
+  会话口径不变）；「记忆展开 N 次」行：当前转录里 `memory_expand` 工具行计数
+  （前端自带，> 0 才渲染）——召回质量埋点（§3.38⑥，该找到的信息模型有没有去
+  展开，实验判据④的数据面）。
 
 ### 3.13 通知浮层（`components/shell/NotificationPopover.vue`）
 
@@ -1448,7 +1458,72 @@ memory-sqlite），全部 UI 面向 = 一条斜杠命令 + 两处设置行 + 开
 - `memory_tree_original(sessionId, workspace, bundleId)`：投影定位捆 → 磁盘
   会话日志切片 → 材料行 `{index, kind, text}`（与记录员材料同形同源函数）。
 
-## 四、事件→UI 流向图
+### 3.38 按会话切流（M4）：会话整理模式 + 树模式组装（✅ v2.70）
+
+> 树 v2 §11.2 阶段 2：树模式成为**会话级可选项**，A/B 数据开始积累。组装语义
+> 以《Memory Tree Design v2》§7/§8 为准，本节只落 UI 与命令面；**影子纪律解除
+> 范围 = 仅显式切到树模式的会话**——legacy 会话（含全部老会话，旁车无字段 =
+> 跟随缺省 legacy）组装零变化。
+
+**① 会话整理模式（`organizer: legacy | tree`）**：
+
+- 持久层 = 会话旁车 `<id>.meta.json` `organizer` 字段（§3.6 行菜单「切换为记忆树
+  整理 / 切换为标准整理」写入）；**未显式设置过的会话跟随开发者缺省档**
+  （`developer.defaultOrganizer` 缺省 legacy，§3.2 开发者分区）——与权限模式
+  ㉘·B 同款「只存显式选择」语义，缺省热换对未选择会话保持生效；
+- 老会话零迁移（旁车无字段 = legacy）；切换即时生效（下一次请求按新档组装），
+  事件流零改动——树是投影，随时拨回；
+- `session_list` 透出 `organizer` 字段（`session_meta` 投影），行菜单标签按
+  **生效档**渲染（旁车字段 ∪ 缺省档推算）。
+
+**② 树模式组装语义（后端，ContextAssembler）**——请求形状 = 树 v2 §7.1：
+
+- **system 尾部挂「记忆树目录」**：L0 标题清单（`- b2: 标题` 行，创建序），+
+  一句英文使用说明（`memory_expand(bundle_id, level)` 指引）。**目录只增不改**
+  （纪律 3）：新捆追加在清单末尾；占位捆（整理在途）不进目录（防止占位行
+  出现又消失 = 隐性前缀改写）；用户编辑标题（M5）= 显式变更接受失效；
+- **消息 = 未整理尾巴**，二档尾巴策略（树 v2 §7.2，§3.2 记忆区设置行）：
+  - **A 边界结算（缺省）**：尾巴 = 自上次整理以来的全部原文（`bundled_until`
+    排他游标切片）；两次整理之间组装纯追加（前缀缓存全程命中），每次整理 =
+    一次计划内大失效；切点落在 User 之前由整理侧纪律保证，组装侧兜底**前进到
+    尾巴内第一条 User 消息**（防协议非法的半轮开头）；
+  - **B 固定窗口（实验档）**：尾巴 = `max(bundled_until, 最近 N 轮起点)`——
+    窗口滑出的「孤儿轮」由**溢出整理**（reason=window_overflow）及时归捆进
+    目录，绝不静默丢失；溢出整理是例行维护，**不记反弹**（§5.5 熔断只惩罚
+    「整理后占用立刻再超」的烧钱信号，不惩罚模式 B 的固定节奏）；
+- **树会话不跑 ctx-compact**（§11.2 阶段 2 原文）：压缩语义由整理边界承担，
+  请求标记为树会话后 ctx-compact 直接跳过（双压缩打架防线）；
+- **用量口径**：`agent://context-usage` 的 `used` = 组装后估算（§3.12 v4.7）。
+
+**③ memory_expand（树会话目录常驻，exposure=always，Pure）**：
+
+- schema 照树 v2 §8.2：`{bundle_id, level: 1|2}`；level=1 返回标题+摘要
+  （~200 token），level=2 返回该捆完整原文（材料行同形渲染为文本）；
+- **展开 = 工具结果追加进会话历史**——append-only，前缀缓存安全；展开过的捆
+  随下次整理自然归档（§8.2）；
+- 目录可见性 = 会话门控：legacy 会话的工具目录**不含** expand / collapse（组装
+  点列表过滤 + resolve 双保险，㉘·B 计划围栏同款）；未知捆 = 如实失败 ToolResult。
+
+**④ memory_collapse（缺省不暴露，宁缺勿假——树 v2 §8.3 裁定）**：
+
+- 设置开关（§3.2 记忆区，缺省关）开启后进树会话目录（Compensable——收起改写
+  未来前缀 = 一次计划外缓存失效，它省的是窗口空间不是钱，当省钱工具用是 §16
+  头号误区）；语义 = 该捆已展开的工具结果**替换为收起桩文本**（协议配对保全，
+  不删事件——事件流 append-only 纪律不破）；再次 expand 自动解除收起；
+- **自动收起**（开启时显示阈值行，缺省 80%）：轮次收束后占用 ≥ 阈值 → 收起
+  最早展开的捆（一次一个，逐步泄压；空间急救定位，非例行操作）。
+
+**⑤ 护栏（树 v2 §11.2 两内置，全部既有机制复用）**：记录员连续失败 → 规则切分
+接管（§5.4 降级，树会话永不失控）；整理反弹熔断 k/m 树会话照常（§5.5，模式 B
+溢出整理除外——见②）。headless（CLI）不装配树组装源 = 全局 legacy 语义不变。
+
+**⑥ 召回质量埋点**：用量浮层「记忆展开 N 次」行（§3.12 v4.7，前端从当前转录
+工具行统计）——实验判据④「该找到的信息可找到」的数据面；人工出题抽查仍按
+路线表 §四 执行。
+
+**⑦ 新命令一件**（§4.2 扩表）：`session_set_organizer(sessionId, mode?)`——
+`mode` = "legacy" | "tree" | 缺省（清除旁车字段 = 跟随缺省档）；旁车写穿 +
+即时生效。
 
 ## 四、事件→UI 流向图
 
@@ -1496,6 +1571,7 @@ memory-sqlite），全部 UI 面向 = 一条斜杠命令 + 两处设置行 + 开
 | `memory_tree_sessions`（✅ M3 §3.37④） | 记忆页树区块挂载/刷新 | 树投影目录扫描；会话切换器数据源 |
 | `memory_tree_bundles`（✅ M3 §3.37④） | 记忆页树区块（选中会话变化/刷新） | 直读投影文件，不占会话锁；捆列表渲染 |
 | `memory_tree_original`（✅ M3 §3.37④） | 记忆页树区块 `[看原文]` | 磁盘会话日志切片，与记录员材料同形；行内只读展开 |
+| `session_set_organizer`（✅ M4 §3.38⑦） | 侧栏任务行 `…` 菜单 | 旁车 `organizer` 写穿（mode 缺省 = 清除跟随缺省档）；即时生效，事件流零改动 |
 
 铁则重申：**UI 永不直接操作 PluginRegistry**（只经 PluginService / 宿主命令）；流式内容
 永远走事件推送，不塞 command 返回值；Tauri command 是薄适配层。
@@ -2032,7 +2108,16 @@ cacheMissPrice）+ 开发者分区「前缀缓存读数」面板与命中率告�
 **稳定期轮数**（`context.stabilityRounds`，数字 1–10 缺省 3——结算后 N 轮不触发
 改前缀操作）。*
 
-*文档版本：v4.6（M3 只读呈现批，《Memory Tree Design v2》§12）。新增
+*文档版本：v4.7（M4 按会话切流批，《Memory Tree Design v2》§7/§8/§11.2 阶段 2）。
+新增 §3.38：**会话整理模式**（旁车 `organizer: legacy|tree`，未显式设置跟随开发者
+缺省档 `developer.defaultOrganizer`；任务行 `…` 菜单切换，即时生效事件流零改动）
++ **树模式组装**（system 尾部挂 L0 目录只增不改 + 尾巴二档策略 A 边界结算缺省 /
+B 固定窗口实验档 + 树会话跳过 ctx-compact + 用量环按组装后口径）+ **memory_expand**
+（树会话 exposure=always，Pure，展开 = 工具结果追加缓存安全）+ **memory_collapse**
+（缺省不暴露；开关开启后 Compensable，收起 = 桩文本替换保协议配对；自动收起阈值
+缺省 80%）+ 召回埋点浮层行。扩表：§3.2 记忆区四行 + 开发者缺省档、§3.6 菜单
+整理模式项、§3.12 树会话用量口径、§4.2 `session_set_organizer`。legacy 会话与
+headless 组装零变化。上一版 v4.6（M3 只读呈现批
 §3.37：**记忆页双区块**（「记忆库（事实）」= 现有列表只加区块头；新区块
 「记忆树（情景）」= 会话切换器 + 捆列表只读展开/看原文/本地搜索，看原文与
 记录员材料同形同源）+ **上下文指示器「未整理尾巴」行**（浮层打开拉取一次，

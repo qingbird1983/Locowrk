@@ -22,6 +22,7 @@ mod timeout;
 mod tool_exposure;
 mod tool_retrieval;
 mod trace;
+mod tree_context;
 
 #[cfg(test)]
 mod tests;
@@ -40,6 +41,7 @@ pub use timeout::Timeout;
 pub use tool_exposure::{ExposureSnapshot, GlobalEwma, ToolExposure, ToolExposureConfig};
 pub use tool_retrieval::{EmbedPort, RETRIEVAL_WEIGHT, Retriever, cosine};
 pub use trace::Tracing;
+pub use tree_context::TreeDirectoryInject;
 
 use std::sync::Arc;
 

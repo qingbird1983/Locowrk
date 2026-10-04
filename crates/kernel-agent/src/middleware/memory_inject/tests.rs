@@ -41,6 +41,7 @@ fn payload_value() -> serde_json::Value {
         compacted: None,
         system: None,
         session_id: None,
+        tree_directory: None,
     })
     .unwrap()
 }

@@ -39,6 +39,10 @@ fn memory_defaults_legacy_compat_and_validation() {
                 organize_chunk_tokens: None,
                 recorder_model: None,
                 recorder_provider: None,
+                tail_strategy: None,
+                tail_window_turns: None,
+                collapse_enabled: None,
+                collapse_threshold_pct: None,
             }),
             None,
             None,
@@ -130,6 +134,10 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 organize_chunk_tokens: Some(80_000),
                 recorder_model: Some("deepseek-flash".into()),
                 recorder_provider: Some("p1".into()),
+                tail_strategy: None,
+                tail_window_turns: None,
+                collapse_enabled: None,
+                collapse_threshold_pct: None,
             }),
             None,
             None,
@@ -208,5 +216,115 @@ fn organize_keys_roundtrip_validation_and_bridge() {
         )
         .unwrap();
     assert!(store.view().memory.recorder_model.is_none());
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
+    let root = temp_root("tail");
+    let store = SettingsStore::open(&root).unwrap();
+    // 缺省 = A 边界结算 / 窗口 5 / collapse 关 / 阈值 80
+    let v = store.view().memory;
+    assert_eq!(v.tail_strategy, "boundary");
+    assert_eq!(v.tail_window_turns, 5);
+    assert!(!v.collapse_enabled);
+    assert_eq!(v.collapse_threshold_pct, 80);
+
+    // 往返：B 固定窗口 + 窗口 12 + collapse 开 + 阈值 90
+    store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(MemoryUpdate {
+                tail_strategy: Some("window".into()),
+                tail_window_turns: Some(12),
+                collapse_enabled: Some(true),
+                collapse_threshold_pct: Some(90),
+                ..Default::default()
+            }),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    let v = store.view().memory;
+    assert_eq!(v.tail_strategy, "window");
+    assert_eq!(v.tail_window_turns, 12);
+    assert!(v.collapse_enabled);
+    assert_eq!(v.collapse_threshold_pct, 90);
+    // 持久化
+    let reopened = SettingsStore::open(&root).unwrap();
+    assert_eq!(reopened.view().memory.tail_strategy, "window");
+    assert_eq!(reopened.view().memory.tail_window_turns, 12);
+
+    // 校验：策略白名单 / 窗口区间 / 阈值区间
+    let err = store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(MemoryUpdate {
+                tail_strategy: Some("bogus".into()),
+                ..Default::default()
+            }),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+    assert!(err.contains("尾巴策略"), "{err}");
+    let err = store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(MemoryUpdate {
+                tail_window_turns: Some(0),
+                ..Default::default()
+            }),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+    assert!(err.contains("固定窗口"), "{err}");
+    let err = store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(MemoryUpdate {
+                collapse_threshold_pct: Some(30),
+                ..Default::default()
+            }),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+    assert!(err.contains("自动收起阈值"), "{err}");
+    // 出界不污染内存态
+    assert_eq!(store.view().memory.tail_window_turns, 12);
     std::fs::remove_dir_all(&root).ok();
 }

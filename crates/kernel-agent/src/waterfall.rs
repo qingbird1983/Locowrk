@@ -37,7 +37,12 @@ pub struct PreStepPayload {
 /// 只改写 `messages`，"系统提示永不压缩"（Context 文档 §5.3）由结构保证，
 /// 会话日志也不落注入内容。`session_id`（㉘）：本 step 的会话 id——
 /// Memory-Inject 交给宿主检索源做项目隔离（workspace 是宿主概念，内核
-/// 只透传 id，不解释）。
+/// 只透传 id，不解释）。`tree_directory`（M4 记忆树切流）：**Some = 树
+/// 会话**（含空串 = 尚无捆）——内核组装侧已把 `messages` 切到未整理尾巴，
+/// 本字段携带 L0 目录文本，链上 TreeDirectoryInject 把它追加到 system
+/// 尾部（Memory-Inject 之后 = 目录在记忆块后，树 v2 §7.1 组装次序）；
+/// ctx-compact 见 Some 即跳过（树会话不压缩，压缩语义由整理边界承担）；
+/// None = legacy 会话，组装零变化。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RequestPayload {
     pub messages: Vec<Message>,
@@ -53,6 +58,8 @@ pub struct RequestPayload {
     pub system: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tree_directory: Option<String>,
 }
 
 /// `agent/request-error` 的 payload。

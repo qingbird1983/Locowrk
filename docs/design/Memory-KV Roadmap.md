@@ -29,7 +29,7 @@
 | M1 | 前缀纪律兑现 | stable/dynamic 分段 + 工具集会话钉死 + 记忆预取确认 | 建议在 M0 后（立刻可见命中率变化） | tools.pinSession 等开关逐项关回 |
 | M2 | 记忆树地基 | 树 crate + 记录员 + /整理 + 降级 + 崩恢复（影子运行：只写不接管） | M0 | 删投影重来，零损失 |
 | M3 | 只读呈现 ✅ v2.69 | 记忆页树视图（只读）+ 指示器 + 整理通知 | M2 | UI 开关隐藏 |
-| M4 | 按会话切流 | 旁车 organizer mode + ContextAssembler + 尾巴模式 A/B + 护栏 | M0–M3 | 会话级 mode 拨回 legacy，老会话天然兼容 |
+| M4 | 按会话切流 ✅ v2.70 | 旁车 organizer mode + ContextAssembler + 尾巴模式 A/B + 护栏 | M0–M3 | 会话级 mode 拨回 legacy，老会话天然兼容 |
 | M5 | 数据裁决与剔除 | 缺省切 tree、ctx-compact 降级化、向量层关缺省 | M4 数据积累 | 全部保留为降级路径，可回拨 |
 | M6 | 差异化完善（可并行） | 断裂诊断 / Anthropic 断点 / 标题模糊匹配 / 项目 L0 联合视图 | 各自独立 | 各自独立开关 |
 
@@ -112,20 +112,22 @@
 
 ---
 
-### M4 · 按会话切流 ⬜
+### M4 · 按会话切流 ✅（2026-10-05，v2.70，提交哈希见 CHANGELOG）
 
 **目标**：树模式成为会话级可选项，A/B 数据开始积累（树 v2 §11.2 阶段 2）。
 
+**落账**：UI shell v4.7 先行（§3.38 新节 + §3.2/§3.6/§3.12/§4.2 扩表）。**会话整理模式**：旁车 `<id>.meta.json` `organizer: legacy|tree`（session-store `write_organizer`，`session_list` 透出；`session_set_organizer` 命令写穿 + `OrganizerModeStore` 缓存即时生效）——**未显式设置会话跟随开发者缺省档**（`developer.defaultOrganizer` 缺省 legacy，保存即热换，permission_mode ㉘·B 同款「只存显式选择」）；任务行 `…` 菜单「切换为记忆树整理 / 切换为标准整理」按**生效档**渲染标签，切换即时生效、事件流零改动。**树模式组装**（树 v2 §7.1）：kernel-agent 新 `TreeContextSource` 契约（内核定契约、组装点实现，headless 不注册 = legacy 语义不变）——`step_inner` 按计划把消息切片到未整理尾巴（`Session::derive_messages_from` 带偏移投影；切点半轮时兜底前进到第一条 User 防协议非法），`tree_directory` 随 `RequestPayload` 进决策环、新中间件 **TreeDirectoryInject**（注册序 ToolExposure → Memory-Inject → TreeDirectoryInject → ctx-compact）把 L0 目录追加到 system 尾部——**目录格式 = 稳定头行 + 追加清单行、无闭合标签**（kernel 测试实抓：闭合标签随追加移动破坏字节前缀，违反纪律 3）；占位捆不进目录；**树会话 ctx-compact 直接跳过**（`tree_directory` Some 即标记，压缩语义由整理边界承担）。**尾巴二档**（§7.2）：A 边界结算缺省（`bundled_until` 排他游标）；B 固定窗口实验档 = `max(bundled_until, 最近 N 轮起点)`，窗口滑出的孤儿轮由**溢出整理**（reason=window_overflow）及时归捆、先于熔断判定且**不记反弹**（例行维护非烧钱信号）——防「孤儿轮既不在目录也不在尾巴」的静默丢失。**memory_expand / memory_collapse**（宿主内置工具，§8）：expand Pure + exposure=always（level 1 摘要 / 2 原文材料同形，展开 = 工具结果追加缓存安全；`expanded_at` 记账投影）；collapse Compensable + Hidden、**设置开关缺省关**（§8.3 宁缺勿假），收起 = expand 结果换桩文本（协议配对保全）；目录可见性会话门控双保险（KernelToolSource 列表过滤 + resolve 拒，legacy 不可见不可调）；**自动收起**（阈值缺省 80%）挂在 after_turn：占用 ≥ 阈值收起最早展开捆、一次一个。**用量口径**：树会话 `agent://context-usage` 的 used = 组装后估算（目录 + 尾巴），不再报全量历史。**召回埋点**：用量浮层「记忆展开 N 次」行（前端从转录工具行统计，>0 才渲染）。**走查实抓缺陷修复 ×2**：①目录闭合标签破坏前缀（见上，设计格式修正 + kernel 回归）；②**M1 钉死集不吸纳新增 always 工具**——会话中途切树模式后 memory_expand 被「按建立时名单回映射」丢弃（模型如实报告「没有这个工具」并用 search_tools 三次验证），修 = 回映射时目录内 always 工具无条件保留、追加尾部（旧集逐字节保留 = 前缀不破；钉死钉的是 on_demand 截断决策，always 直通是 ⑩ 语义）+ 回归测试。**测试**：memory-tree 36 绿（+2 展开收起生命周期/serde 兼容）、session-store 26 绿（+2）、kernel-agent 82 绿（+8：切片/目录次序/半轮兜底/收起桩/树会话跳压缩/legacy 零变化/目录前缀/钉死吸纳）、desktop 187 绿（+19：模式存储 2/组装计划 5/工具 3/溢出与自动收起 3/设置 3/门控组装 3）、workspace 39 套件全绿、clippy 0 双侧、fmt、pnpm build 过；check_length 报告 9 文件超建议值（三问自检皆「是」保留：5 个 v2.66–69 已裁定 + kernel/tests.rs 单主题测试、organize/mod.rs 整理编排单职责、organize/tests.rs 同、state/mod.rs 组装点）。**实机走查（CDP 真实轮 deepseek，主模型兼任记录员）**：新会话 → 行菜单切树（toast + 旁车 `organizer:"tree"` 盘证）→ 真实轮 jsonl 全量事件照常（组装不改日志）→ `/整理` recorder ok 1 捆 → 📦 通知条在场 → **树目录进请求实证**（模型原话「对话开头给我的目录只有一行」）→ 诱导 memory_expand 真实调用（补口修复后模型原话「我错了，memory_expand 确实存在」+ b2 摘要如实转述）→ 用量浮层「记忆树 1 捆 · 未整理尾巴 ≈3.4K tokens 0%（单 ≈）」+「**记忆展开：本会话 1 次**」→ 用量环按组装后口径（used ≈3.2K ≪ 全量）→ **命中率数据**：树模式稳态 94–96%（切模式/切工具集瞬间一次计划内失效 0% 后回落），legacy 并行会话 95%/93% 无回退 → 切走切回重放一致（33→33 items）→ 尾巴策略 window 落盘往返 → 开发者缺省档 tree 落盘 → 新会话缺省生效（菜单标签「切换为标准整理」）→ 缺省切回 legacy **热换翻转**（未选择会话标签即时翻转）→ legacy 会话工具目录无 expand/collapse（门控 ✓）。走查清理：走查会话 5 个已删（行菜单误触把用户旧会话 organizer 置 tree 已当场还原字段）、memory-tree 走查投影已删、usage/notifications/schedule 还原备份、settings 差异仅本批 5 个新键（值=缺省，字段级缺省零迁移）、memory/experiences 逐字节未动、developer.unlocked 已锁回、应用重启干净实例。**已知边界（记档）**：模式 B 溢出整理单测覆盖未实机走查（触发链路同 M2 已验）；钉死集与切模式的目录放宽交互依赖补口（回归已锁）。
+
 **落点**：
 
-* 会话旁车 meta +`organizer: legacy | tree`（缺省 legacy，老会话零迁移）；会话缺省档进开发者设置
-* `ContextAssembler`（新 crate 或 kernel-agent 模块）：目录（L0 只增不改）+ 尾巴策略 **A 边界结算（缺省）/ B 固定窗口** + 本轮消息；树会话**不注册 ctx-compact**
-* 护栏：记录员连续失败 → 规则切分接管；反弹熔断树会话生效
-* `memory_expand` 暴露（树会话，exposure=always）；`memory_collapse` 开关（缺省关）
-* 设置行落地（§15 可调项总表的用户层项：尾巴策略/窗口 N/增量块/collapse）
-* 召回质量埋点（memory_expand 调用统计进用量面板）
+* 会话旁车 meta +`organizer: legacy | tree`（缺省 legacy，老会话零迁移）；会话缺省档进开发者设置 ✅
+* `ContextAssembler`（kernel-agent `TreeContextSource` + TreeDirectoryInject）：目录（L0 只增不改）+ 尾巴策略 **A 边界结算（缺省）/ B 固定窗口** + 本轮消息；树会话**不注册 ctx-compact**（运行时跳过）✅
+* 护栏：记录员连续失败 → 规则切分接管（M2 既有）；反弹熔断树会话生效；模式 B 溢出整理不记反弹 ✅
+* `memory_expand` 暴露（树会话，exposure=always）；`memory_collapse` 开关（缺省关，含自动收起阈值）✅
+* 设置行落地（§15 可调项总表的用户层项：尾巴策略/窗口 N/增量块/collapse）✅
+* 召回质量埋点（memory_expand 调用统计进用量面板）✅
 
-**验收**：树会话与 legacy 会话并行互不干扰；老会话重放/切走切回一致；模式 A 命中率显著高于模式 B（走查数据记录）；树会话命中率不低于 legacy 基线；实验判据五项（命中率/成本/记录员开销/召回抽查/反弹次数）开始出数。
+**验收**：树会话与 legacy 会话并行互不干扰 ✅；老会话重放/切走切回一致 ✅；模式 A 命中率显著高于模式 B（走查数据记录）——**模式 B 未实机对比（记档：A 档稳态 94–96% 达标，B 留实验期真实使用数据）**；树会话命中率不低于 legacy 基线 ✅（94–96% vs 93–95%）；实验判据五项（命中率/成本/记录员开销/召回抽查/反弹次数）开始出数 ✅（命中率与节省已入浮层与开发者面板；记录员开销在 M2 台账；反弹计数在投影台账）。
 
 ---
 

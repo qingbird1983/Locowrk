@@ -17,6 +17,7 @@ import { useToastStore } from "../../stores/toast";
 import type { ExposureDebug } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
+import SettingsSegmented from "./SettingsSegmented.vue";
 import SettingsToggle from "./SettingsToggle.vue";
 import MemoryTreePanel from "./MemoryTreePanel.vue";
 
@@ -38,7 +39,14 @@ const form = reactive({
   recorderTimeoutSecs: 60,
   recorderMaxRetries: 3,
   ruleChunkTokens: 20_000,
+  defaultOrganizer: "legacy",
 });
+
+// M4 会话缺省整理模式二档（树 v2 §15 开发者层级；M5 数据裁决后切用户层）
+const organizerOptions = [
+  { value: "legacy", label: t("developer.organizerLegacy") },
+  { value: "tree", label: t("developer.organizerTree") },
+];
 
 watch(
   () => settings.view,
@@ -57,6 +65,7 @@ watch(
     form.recorderTimeoutSecs = v.developer.recorderTimeoutSecs;
     form.recorderMaxRetries = v.developer.recorderMaxRetries;
     form.ruleChunkTokens = v.developer.ruleChunkTokens;
+    form.defaultOrganizer = v.developer.defaultOrganizer;
   },
   { immediate: true },
 );
@@ -90,6 +99,7 @@ function saveOrganize() {
     recorderTimeoutSecs: Math.round(form.recorderTimeoutSecs),
     recorderMaxRetries: Math.round(form.recorderMaxRetries),
     ruleChunkTokens: Math.round(form.ruleChunkTokens),
+    defaultOrganizer: form.defaultOrganizer,
   });
 }
 
@@ -348,6 +358,18 @@ onMounted(() => void refresh());
           step="1000"
           class="lw-field lw-field-num px-2 text-xs"
           @change="saveOrganize"
+        />
+      </SettingsRow>
+      <!-- M4 §3.38①：未显式设置会话的缺省整理模式（保存即热换） -->
+      <SettingsRow
+        :title="t('developer.defaultOrganizer')"
+        :hint="t('developer.defaultOrganizerHint')"
+      >
+        <SettingsSegmented
+          :model-value="form.defaultOrganizer"
+          :options="organizerOptions"
+          :label="t('developer.defaultOrganizer')"
+          @update:model-value="(v: string) => { form.defaultOrganizer = v; saveOrganize(); }"
         />
       </SettingsRow>
     </SettingsGroup>

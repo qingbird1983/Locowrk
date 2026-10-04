@@ -50,6 +50,10 @@ pub enum OrganizeReason {
     IncrementalChunk,
     Manual,
     Recovery,
+    /// 模式 B 固定窗口的孤儿轮归档（M4 §3.38②）：窗口滑出的轮次既不在
+    /// 尾巴也不在目录，必须及时归捆——例行维护，**不记反弹**（§5.5 熔断
+    /// 只惩罚「整理后占用立刻再超」的烧钱信号）。
+    WindowOverflow,
 }
 
 impl OrganizeReason {
@@ -59,6 +63,7 @@ impl OrganizeReason {
             Self::IncrementalChunk => "incremental_chunk",
             Self::Manual => "manual",
             Self::Recovery => "recovery",
+            Self::WindowOverflow => "window_overflow",
         }
     }
 }

@@ -104,6 +104,14 @@ const toolsText = computed(() => {
     (est > 0 ? ` · ${t("usage.toolsEst", { n: compactNumber(est) })}` : "")
   );
 });
+
+/** M4 §3.38⑥ 召回质量埋点：本会话 memory_expand 调用次数（前端从转录
+ * 工具行统计，> 0 才渲染——该找到的信息模型有没有去展开，实验判据④）。 */
+const expandCalls = computed(() =>
+  chat.items.filter(
+    (i): i is ToolItem => i.kind === "tool" && i.tool === "memory_expand",
+  ).length,
+);
 </script>
 
 <template>
@@ -173,6 +181,12 @@ const toolsText = computed(() => {
       <span class="kv__v">
         {{ t("usage.treeBundlesShort", { n: treeText.bundles }) }} · {{ treeText.text }}
       </span>
+    </div>
+
+    <!-- 记忆展开次数（M4 §3.38⑥ 召回埋点；有展开才渲染） -->
+    <div v-if="expandCalls > 0" class="kv">
+      <span>{{ t("usage.expandRow") }}</span>
+      <span class="kv__v">{{ t("usage.expandCalls", { n: expandCalls }) }}</span>
     </div>
   </div>
 </template>

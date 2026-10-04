@@ -14,6 +14,7 @@ mod services;
 
 pub use services::{
     LlmError, LlmRequest, LlmResponse, LlmService, LlmUsage, ToolCallReq, ToolSource,
+    TreeContextSource, TreePlan, collapse_expanded, tail_user_start,
 };
 
 use std::sync::Arc;
@@ -173,8 +174,27 @@ impl Kernel {
         session: &mut Session,
         session_id: Option<&str>,
     ) -> Result<StepOutcome, KernelError> {
-        // 投影：只看游标之前的消息（回退后不含已撤销轮次，§4.2）
-        let messages = session.derive_messages();
+        // 投影：只看游标之前的消息（回退后不含已撤销轮次，§4.2）。
+        // M4 树会话切流（树 v2 §11.2 阶段 2）：组装源在册且会话为树模式 →
+        // 消息切片到未整理尾巴（起点兜底前进到 User 边界防半轮开头）+
+        // 展开过的收起捆换桩文本，L0 目录交决策环挂 system 尾部。legacy
+        // 会话 / 组装源未注册（headless）= 全量投影零变化。
+        let mut messages = session.derive_messages();
+        let mut tree_directory: Option<String> = None;
+        if let Some(id) = session_id {
+            if let Ok(source) = self.scoped_dyn::<dyn TreeContextSource>() {
+                if let Some(plan) = source.plan(id).await {
+                    let end = session.len();
+                    let from =
+                        tail_user_start(session.events(), plan.tail_from_event).unwrap_or(end);
+                    messages = collapse_expanded(
+                        session.derive_messages_from(from),
+                        &plan.collapsed_bundles,
+                    );
+                    tree_directory = Some(plan.directory);
+                }
+            }
+        }
 
         // ⑮ 子 Agent 快照刷新（带会话身份的 step 才刷）：工具执行在
         // 本步末尾，子 Agent fork 到的前缀含本轮 user 消息与全部已完成轮。
@@ -191,7 +211,9 @@ impl Kernel {
         let tools = self.tool_catalog(session_id).await;
 
         // request-error 的 Retry 在 step 内部闭环，受重试预算约束（§7.2）
-        let (resp, compacted, trace) = self.request_with_retry(messages, tools, session_id).await?;
+        let (resp, compacted, trace) = self
+            .request_with_retry(messages, tools, session_id, tree_directory)
+            .await?;
 
         // 压缩先于本轮 assistant 消息落日志（Context and Memory.md §3.7）：
         // 折叠语义见 session-store；撤销 = rewind_to 本事件。

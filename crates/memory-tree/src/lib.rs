@@ -24,7 +24,7 @@ pub mod storage;
 pub mod tree;
 pub mod trigger;
 
-pub use bundle::{BundleDraft, BundleId, EventId, MemoryBundle};
+pub use bundle::{BundleDraft, BundleId, EventId, MemoryBundle, sanitize_draft};
 pub use index::EventToBundleIndex;
 pub use material::{MaterialItem, MaterialKind, build_items, transcript, user_count};
 pub use recorder::{
