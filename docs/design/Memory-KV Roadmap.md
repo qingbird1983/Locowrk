@@ -6,7 +6,7 @@
 
 > **与主路线表的关系**：`docs/design/ROADMAP.md` 主表**不列本专项**（用户裁定：不污染主路线表）；本专项各批完成时勾**本表**，`docs/design/CHANGELOG.md` 照常逐批落账，DESIGN / UI shell 规范正文随批修订。
 
-> **设计依据**：《Memory Tree Design v2》《KV Prefix Cache Design v2》。实施与文档冲突时**先回到 v2 文档对齐**，不凭猜测实现、不改文档迁就实现。
+> **设计依据**：《Memory Tree Design v2》《KV Prefix Cache Design v2》《Memory File-ization Design v1.1》（F 轨）。实施与文档冲突时**先回到 v2 文档对齐**，不凭猜测实现、不改文档迁就实现。
 
 ---
 
@@ -32,6 +32,14 @@
 | M4 | 按会话切流 ✅ v2.70 | 旁车 organizer mode + ContextAssembler + 尾巴模式 A/B + 护栏 | M0–M3 | 会话级 mode 拨回 legacy，老会话天然兼容 |
 | M5 | 数据裁决与剔除 | 缺省切 tree、ctx-compact 降级化、向量层关缺省 | M4 数据积累 | 全部保留为降级路径，可回拨 |
 | M6 | 差异化完善（可并行） | 断裂诊断 / Anthropic 断点 / 标题模糊匹配 / 项目 L0 联合视图 | 各自独立 | 各自独立开关 |
+
+### 记忆文件化轨（F 轨，2026-10-05 立项，设计 v1.1 定稿；与 M 轨并行互不等待）
+
+| 阶段 | 名称 | 一句话 | 依赖 | 回退方式 |
+|---|---|---|---|---|
+| F1 | 双写与导出 | memory_write / 整理收束双写 .md + 首启导出存量；组装零变化 | 设计 v1.1 定稿 | 删 `~/.Locowrk/memory/` 零损失 |
+| F2 | 人的编辑面 | reconcile（人编辑 md 生效）+ 记忆页「打开文件夹」+ `<repo>/.Locowrk/` 交接（gitignore + handoff/requirements 注入组装） | F1 | 总开关关闭 |
+| F3 | 主动记忆 | autoExtract 缺省开 + handoff 收束更新 + 提示词主动指引 | F1（F2 的编辑面更好但非硬依赖） | 开关可退 |
 
 **总回退原则**：树是投影、组装是投影、事件流唯一真相源——任何阶段验证失败都只拆投影，不动原文。M5 之前不存在不可逆动作。
 
@@ -154,6 +162,29 @@
 | M6.2 Anthropic 断点 ⬜ | stable 段末 ephemeral 断点 + 末消息增量锚点 + skipCacheWrite（KV v2 §8.3/纪律 6） | 有 Anthropic provider 需求时 |
 | M6.3 标题模糊匹配 ⬜ | L0 标题向量 top-5（树 v2 §10.2，阶段末可选） | M4、向量基建保留 |
 | M6.4 项目 L0 联合视图 ⬜ | 记忆页项目维度跨会话捆视图 + 模糊匹配候选池（树 v2 §11.4） | M4 |
+
+---
+
+### F 轨 · 记忆文件化（《Memory File-ization Design v1.1》，与 M 轨并行）
+
+**定位**：记忆从「sqlite 机器索引」升级为「双层存储」——.md 是人类层与权威编辑面（人可查可读可写），sqlite/投影保留为机器索引（召回快路径）；布局 = `~/.Locowrk/memory/`（全局 + 项目缓存记忆，上下文拼装源）+ `<repo>/.Locowrk/`（交接层：handoff / requirements / notes，自动引导 gitignore）。**主动记忆原则**（用户方向②）：模型主动记录不等提醒。
+
+#### F1 · 双写与导出 ⬜
+
+* 布局落地：`memory_write`（含提取路径）双写 `global/` 与 `projects/<可读名-短哈希>/facts/`；`memory_delete` 同步删文件；整理收束双写 `tree.md`（每捆一节 + range 隐性指针）；MEMORY.md 索引跟随
+* 首启导出：存量 sqlite 事实 → md（幂等，md 已存在不覆盖）；树 L0/L1 → tree.md
+* 总开关（用户·记忆设置，缺省开）+ 首启导出无 UI 干扰；组装/插件契约零变化
+* 验收：真实轮 memory_write 后 md 文件在场且内容正确；存量导出幂等重跑不重复；关开关回纯 sqlite
+
+#### F2 · 人的编辑面 ⬜
+
+* reconcile：启动 + 记忆页打开 + 手动命令——diff 文件 ↔ 索引以文件为准回写（冲突保留双方 + 时间戳）
+* 记忆页「打开文件夹」（reveal_in_explorer 现成）；管理页编辑/删除同步写文件
+* `<repo>/.Locowrk/` 引导：首次创建自动补 .gitignore + handoff/requirements/notes 注入组装（M1 预取缓存键含 mtime）
+
+#### F3 · 主动记忆 ⬜
+
+* `memory.autoExtract` 缺省改开（已裁定④）；handoff 收束自动更新（已裁定③，仅 `.Locowrk/` 内 + 首次创建 toast）；注入块尾主动记忆指引（「永远/以后都」升格 global、重要决定当场记）
 
 ---
 
