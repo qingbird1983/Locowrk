@@ -125,6 +125,64 @@ fn row_json(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     }))
 }
 
+/// 带 `workspace` 列的行（双层记忆：读/搜/列的结果带层标 scope）。
+fn row_scoped_json(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
+    let ws: String = r.get(4)?;
+    let mut v = row_json(r)?;
+    if let Value::Object(map) = &mut v {
+        map.insert(
+            "scope".into(),
+            json!(if ws.is_empty() { "global" } else { "project" }),
+        );
+    }
+    Ok(v)
+}
+
+/// 键位内存在性探测（delete 的全局/项目归属裁决用）。
+fn exists(conn: &Connection, ws: &str, key: &str) -> Result<bool, String> {
+    let n: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM memories WHERE workspace = ?1 AND key = ?2",
+            params![ws, key],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
+    Ok(n > 0)
+}
+
+/// 写入键位裁决（Context 文档 §4.6 双层记忆）：缺省 = 当前项目；显式
+/// `"global"` = 全局偏好层（`''`）；未归属会话缺省写**拒绝**（没有项目
+/// 的"项目记忆"不许落地污染全局层——先归属，或显式升格为偏好）；
+/// headless 无会话上下文 = `''` 单一宇宙（旧行为）。
+fn write_scope(ctx: &super::WsCtx, scope_arg: Option<&Value>) -> Result<String, String> {
+    let want_global = match scope_arg {
+        None | Some(Value::Null) => false,
+        Some(v) => match v.as_str() {
+            Some("project") => false,
+            Some("global") => true,
+            other => {
+                return Err(format!(
+                    "memory_write: `scope` must be \"project\" or \"global\", got {other:?}"
+                ));
+            }
+        },
+    };
+    Ok(match ctx {
+        super::WsCtx::Headless => String::new(),
+        super::WsCtx::Project(_) if want_global => String::new(),
+        super::WsCtx::Project(ws) => ws.clone(),
+        super::WsCtx::Unattributed if want_global => String::new(),
+        super::WsCtx::Unattributed => {
+            return Err(
+                "memory_write: this session has no project — ask the user to associate one \
+                 first, or pass scope=\"global\" to save a user preference that applies in \
+                 every project"
+                    .into(),
+            );
+        }
+    })
+}
+
 /// undo 契约载荷里的整行快照（含 workspace——undo 忠实还原原键位）。
 fn row_with_workspace_json(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     Ok(json!({
@@ -136,10 +194,11 @@ fn row_with_workspace_json(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     }))
 }
 
-pub(crate) fn memory_write(ws: &str, args: &Value) -> Result<Value, String> {
+pub(crate) fn memory_write(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
     let value = arg_str(args, "value")?;
     let tags = args.get("tags").and_then(Value::as_str).unwrap_or("");
+    let ws = write_scope(ctx, args.get("scope"))?;
     if key.is_empty() {
         return Err("memory_write: `key` must not be empty".into());
     }
@@ -172,17 +231,21 @@ pub(crate) fn memory_write(ws: &str, args: &Value) -> Result<Value, String> {
         params![ws, key, value, tags, now()],
     )
     .map_err(|e| format!("memory_write `{key}`: {e}"))?;
-    Ok(json!({ "key": key, "created": previous.is_none(), "previous": previous }))
+    let scope = json!(if ws.is_empty() { "global" } else { "project" });
+    Ok(json!({ "key": key, "scope": scope, "created": previous.is_none(), "previous": previous }))
 }
 
-pub(crate) fn memory_read(ws: &str, args: &Value) -> Result<Value, String> {
+pub(crate) fn memory_read(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
     let conn = open()?;
+    // 归属会话：项目键位优先，未命中回落全局偏好层；未归属/headless 的
+    // 当前键位本来就是 ''（IN ('', '') 恒等）
     match conn.query_row(
-        "SELECT key, value, tags, updated_at FROM memories \
-         WHERE workspace = ?1 AND key = ?2",
-        params![ws, key],
-        row_json,
+        "SELECT key, value, tags, updated_at, workspace FROM memories \
+         WHERE key = ?2 AND workspace IN (?1, '') \
+         ORDER BY (workspace = ?1) DESC LIMIT 1",
+        params![ctx.scope(), key],
+        row_scoped_json,
     ) {
         Ok(mut entry) => {
             if let Value::Object(map) = &mut entry {
@@ -195,80 +258,114 @@ pub(crate) fn memory_read(ws: &str, args: &Value) -> Result<Value, String> {
     }
 }
 
-pub(crate) fn memory_list(ws: &str, args: &Value) -> Result<Value, String> {
+pub(crate) fn memory_list(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let prefix = args.get("prefix").and_then(Value::as_str).unwrap_or("");
     let limit = arg_u64(args, "limit", 50, 200)?;
     let offset = arg_u64(args, "offset", 0, u64::MAX)?;
     let conn = open()?;
+    // 双层：本项目键位 ∪ 全局偏好层（未归属/headless 两条件重合 = 只 ''）
+    let filter = "WHERE (workspace = ?1 OR workspace = '') \
+                  AND (?2 = '' OR key LIKE ?2 || '%' ESCAPE '\\')";
     let total: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM memories
-             WHERE workspace = ?1 AND (?2 = '' OR key LIKE ?2 || '%' ESCAPE '\\')",
-            params![ws, prefix],
+            &format!("SELECT COUNT(*) FROM memories {filter}"),
+            params![ctx.scope(), prefix],
             |r| r.get(0),
         )
         .map_err(|e| format!("memory_list: {e}"))?;
     let mut stmt = conn
-        .prepare(
-            "SELECT key, value, tags, updated_at FROM memories
-             WHERE workspace = ?1 AND (?2 = '' OR key LIKE ?2 || '%' ESCAPE '\\')
-             ORDER BY key LIMIT ?3 OFFSET ?4",
-        )
+        .prepare(&format!(
+            "SELECT key, value, tags, updated_at, workspace FROM memories {filter}
+             ORDER BY key LIMIT ?3 OFFSET ?4"
+        ))
         .map_err(|e| format!("memory_list: {e}"))?;
     let entries: Vec<Value> = stmt
-        .query_map(params![ws, prefix, limit, offset], row_json)
+        .query_map(params![ctx.scope(), prefix, limit, offset], row_scoped_json)
         .map_err(|e| format!("memory_list: {e}"))?
         .collect::<Result<_, _>>()
         .map_err(|e| format!("memory_list: {e}"))?;
     Ok(json!({ "total": total, "entries": entries }))
 }
 
-pub(crate) fn memory_search(ws: &str, args: &Value) -> Result<Value, String> {
+pub(crate) fn memory_search(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let query = arg_str(args, "query")?;
     let limit = arg_u64(args, "limit", 20, 100)?;
     let pattern = format!("%{}%", escape_like(&query));
     let conn = open()?;
     let mut stmt = conn
         .prepare(
-            "SELECT key, value, tags, updated_at FROM memories
-             WHERE workspace = ?1
+            "SELECT key, value, tags, updated_at, workspace FROM memories
+             WHERE (workspace = ?1 OR workspace = '')
                 AND (key LIKE ?2 ESCAPE '\\' OR value LIKE ?2 ESCAPE '\\'
                      OR tags LIKE ?2 ESCAPE '\\')
              ORDER BY updated_at DESC, key LIMIT ?3",
         )
         .map_err(|e| format!("memory_search: {e}"))?;
     let matches: Vec<Value> = stmt
-        .query_map(params![ws, pattern, limit], row_json)
+        .query_map(params![ctx.scope(), pattern, limit], row_scoped_json)
         .map_err(|e| format!("memory_search: {e}"))?
         .collect::<Result<_, _>>()
         .map_err(|e| format!("memory_search: {e}"))?;
     Ok(json!({ "query": query, "matches": matches }))
 }
 
-pub(crate) fn memory_delete(ws: &str, args: &Value) -> Result<Value, String> {
+pub(crate) fn memory_delete(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
     let conn = open()?;
-    let previous = conn
-        .query_row(
-            "SELECT workspace, key, value, tags, updated_at FROM memories \
-             WHERE workspace = ?1 AND key = ?2",
-            params![ws, key],
-            row_with_workspace_json,
-        )
-        .ok();
-    let deleted = conn
-        .execute(
+    // 双层纪律（Context 文档 §4.6）：'' 键位 = 全局偏好层，聊天工具删除只
+    // 对 headless 开放（其单一宇宙本就是 ''）；桌面会话（归属/未归属）
+    // 删全局行一律拒绝——全局偏好的增删是人的操作，走记忆管理页。
+    if let super::WsCtx::Headless = ctx {
+        let previous = conn
+            .query_row(
+                "SELECT workspace, key, value, tags, updated_at FROM memories \
+                 WHERE workspace = '' AND key = ?1",
+                params![key],
+                row_with_workspace_json,
+            )
+            .ok();
+        let deleted = conn
+            .execute(
+                "DELETE FROM memories WHERE workspace = '' AND key = ?1",
+                params![key],
+            )
+            .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
+        return Ok(json!({ "key": key, "deleted": deleted > 0, "previous_entry": previous }));
+    }
+    let ws = ctx.scope();
+    let in_project = !ws.is_empty() && exists(&conn, ws, &key)?;
+    if in_project {
+        let previous = conn
+            .query_row(
+                "SELECT workspace, key, value, tags, updated_at FROM memories \
+                 WHERE workspace = ?1 AND key = ?2",
+                params![ws, key],
+                row_with_workspace_json,
+            )
+            .ok();
+        conn.execute(
             "DELETE FROM memories WHERE workspace = ?1 AND key = ?2",
             params![ws, key],
         )
         .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
-    Ok(json!({ "key": key, "deleted": deleted > 0, "previous_entry": previous }))
+        return Ok(json!({ "key": key, "deleted": true, "previous_entry": previous }));
+    }
+    if exists(&conn, "", &key)? {
+        return Err(format!(
+            "memory_delete `{key}`: exists only as a global user preference — global \
+             entries are managed from the human memory management page, not deletable \
+             from chat"
+        ));
+    }
+    Ok(json!({ "key": key, "deleted": false, "previous_entry": null }))
 }
 
 /// undo 入口。容错两种形态：标准契约 `{"output": {...}}`（内核补偿层传的），
 /// 或把 output 字段平铺在 args 顶层（便于手工/直调排查）。快照载荷带
-/// `workspace` 时忠实还原原键位；旧载荷（无 workspace）回落当前会话键位。
-pub(crate) fn memory_undo(ws: &str, args: &Value) -> Result<Value, String> {
+/// `workspace` 时忠实还原原键位；旧载荷（无 workspace）回落当前会话键位
+/// （未归属/headless = `''`）。补偿是审批后的机械还原，不受全局禁删约束。
+pub(crate) fn memory_undo(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
+    let ws = ctx.scope().to_string();
     let output = args.get("output").unwrap_or(args);
     let conn = open()?;
     if let Some(prev) = output.get("previous") {
@@ -294,7 +391,10 @@ pub(crate) fn memory_undo(ws: &str, args: &Value) -> Result<Value, String> {
             .get("updated_at")
             .and_then(Value::as_i64)
             .ok_or_else(|| "memory_undo: previous entry missing `updated_at`".to_string())?;
-        let at_ws = prev.get("workspace").and_then(Value::as_str).unwrap_or(ws);
+        let at_ws = prev
+            .get("workspace")
+            .and_then(Value::as_str)
+            .unwrap_or(ws.as_str());
         restore_entry(&conn, at_ws, key, value, tags, updated_at)?;
         return Ok(json!({ "key": key, "undone": true, "restored": true }));
     }
@@ -316,7 +416,10 @@ pub(crate) fn memory_undo(ws: &str, args: &Value) -> Result<Value, String> {
             .get("updated_at")
             .and_then(Value::as_i64)
             .ok_or_else(|| "memory_undo: previous_entry missing `updated_at`".to_string())?;
-        let at_ws = entry.get("workspace").and_then(Value::as_str).unwrap_or(ws);
+        let at_ws = entry
+            .get("workspace")
+            .and_then(Value::as_str)
+            .unwrap_or(ws.as_str());
         restore_entry(&conn, at_ws, key, value, tags, updated_at)?;
         return Ok(json!({ "key": key, "undone": true, "restored": true }));
     }

@@ -88,25 +88,48 @@ fn update_validation_rejects_oversize() {
 fn recall_is_scoped_by_session_workspace() {
     let dir = temp_dir("recall-scope");
     let store = MemoryStore::new(&dir, test_resolver());
-    // 项目键位与未归属键位各一条（同 key，(workspace,key) 主键允许并存）
+    // 项目键位与全局层各一条（同 key，(workspace,key) 主键允许并存）
     store
         .write("F:/ws/a", "k", "project-v", "", "explicit")
         .unwrap();
-    store.write("", "k", "unfiled-v", "", "explicit").unwrap();
+    store.write("", "k", "global-v", "", "explicit").unwrap();
 
-    // 归属会话只见项目键位；未归属会话只见未归属键位
+    // 双层（㉘·A·fix）：归属会话 = 项目行 ∪ 全局行；未归属会话只见全局层
     let got = store.recall(Some("ws-session"), 5);
-    assert_eq!(got.len(), 1);
-    assert_eq!(got[0].value, "project-v");
-    let got = store.recall(Some("other"), 5);
-    assert_eq!(got.len(), 1);
-    assert_eq!(got[0].value, "unfiled-v");
-    let got = store.recall(None, 5);
-    assert_eq!(got.len(), 1);
-    assert_eq!(got[0].value, "unfiled-v");
+    assert_eq!(got.len(), 2);
+    let mut scopes: Vec<&str> = got.iter().map(|e| e.scope.as_str()).collect();
+    scopes.sort();
+    assert_eq!(scopes, vec!["global", "project"]);
+    assert!(got.iter().any(|e| e.value == "project-v"));
+    assert!(got.iter().any(|e| e.value == "global-v"));
+
+    // 未归属 / 无会话：只落全局层，别的项目行不可见
+    for sid in [Some("other"), None] {
+        let got = store.recall(sid, 5);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].value, "global-v");
+        assert_eq!(got[0].scope, "global");
+    }
 
     // 管理面 list 看全量两行（跨键位）
     assert_eq!(store.list("", 200).unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn scope_id_and_context_line_follow_attribution() {
+    let dir = temp_dir("scope-id");
+    let store = MemoryStore::new(&dir, test_resolver());
+    // 归属会话：键位身份 = 项目根；上下文行 = 当前项目工作区
+    assert_eq!(store.scope_id(Some("ws-session")), "F:/ws/a");
+    let line = store.context_line(Some("ws-session")).unwrap();
+    assert!(line.contains("F:/ws/a"), "{line}");
+    assert!(line.contains("this project"), "{line}");
+    // 未归属 / 无会话：空键位 + 无上下文行（不注入）
+    assert_eq!(store.scope_id(Some("other")), "");
+    assert_eq!(store.scope_id(None), "");
+    assert!(store.context_line(Some("other")).is_none());
+    assert!(store.context_line(None).is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

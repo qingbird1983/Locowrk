@@ -686,6 +686,22 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 | 插件版本 | ✅ v2.67：tool-{fs, shell, git, edit} 0.1.1 → 0.1.2（fsutil 拒绝文案改「全局声明根 + 指引设置加根」，v2.66 的「围栏跟会话归属」措辞过时；fsutil 为四件静态链接依赖，同批重建） |
 | 测试 | ✅ v2.67：kernel-agent 70 绿（+2：Pure 决议者在场被 consult 可拒 / headless Pure 静默零审批事件）；桌面 166 绿（+10：隐私门 6 + 隐私卡/Pure 直通/越界门含声明根内放行 3 + 围栏保存即生效 1）；workspace 全绿、clippy 0 双侧、fmt、pnpm build 过、check_length 报告 4 文件超建议值（三问自检保留：kernel/tests.rs 测试单主题、PermissionCard 卡单组件、approval.rs 决策表单职责、state/mod.rs 组装点） |
 
+### ㉘·A·fix 双层记忆模型 + 归属先行 + 工作区可见注入（✅ 已完成，v2.68——用户实机报障「选了 Glance-main 它却分析了 Locowrk，工作区没起到作用吗？」并裁定「跨会话记忆要关闭——全局记忆记用户喜好偏好全局起作用，项目记忆不能跨项目读到」）
+
+| 项 | 说明 |
+|---|---|
+| 取证 | ✅ 磁盘取证（会话 jsonl 170 事件 + meta 旁车 + memory.sqlite3）：归属本身全程正确（Glance-main 旁车、围栏拒绝 F:\ 根、声明根全可读、mode:pure 记录 = v2.67 内核在跑）；真凶两个——①**归属时序缝**：首聊挂起归属在轮次收束后才 sessionAssociate（chat.ts finally 块），首轮 Memory-Inject 落在未归属键位（''），旧 smoke-test 记忆被注入且被 M1 会话级预取**整场缓存**；②**工作区对模型不可见**：工作区只是权限边界，模型思考原话「I don't know the path」，"看下这个项目"只能靠旧记忆猜，猜了记忆足迹最大的 Locowrk |
+| 双层记忆模型（用户裁定） | ✅ Context 文档 §4.6 重写：**全局层（''）**= 用户喜好偏好（如"永远用 pnpm"），对一切会话可见；**项目层 (workspace,key)** = 项目记录，绝不跨项目可读。召回 = 本项目 ∪ 全局层，条目带层标（`scope: "project"\|"global"`，注入渲染 `- [global] key = …`）。**未归属会话缺省项目写拒绝**（没有项目的"项目记忆"不许落地污染全局层，报错指引先归属或 scope="global"）；`memory_write` 显式 `scope="global"` 升格；**全局行聊天工具禁删**（memory_delete 只作用本项目键位，删全局 = 管理页专属——人的操作）；headless（无会话身份）保持 '' 单一宇宙旧行为（plugin-host 测试装配/kernel-bin 直调不受扰——判据 = 无 session_id 即 headless 等价，v2.64 ToolExposure 同款，WsCtx::from_parts 纯函数 + 测试）；经历不设全局层维持严格本项目 |
+| 插件 memory-sqlite 0.1.1 | ✅（小迭代 +0.0.1）：workspace() 二值回落 → **WsCtx 三态**（Headless / Unattributed / Project——adapter 无解析器时预置的全缺省 CallContext 曾被误判 Unattributed，实抓于 plugin-host 端到端测试）；write +scope；read 项目优先未命中回落全局（带层标）；list/search = 项目 ∪ 全局逐行带层标；delete 全局禁删 + headless 例外；undo 忠实还原不受禁删约束（补偿是审批后的机械还原）；manifest 描述/schema 全部同步双层语义；18 测试绿（+5：双层写路径/未归属拒绝/读回落与项目优先/全局禁删/三态纯函数） |
+| 归属先行 | ✅ `agent_chat` +`workspace` 参数：首聊挂起归属（chat.pendingWorkspace）随请求带入，后端 `ensure_associatable`（与 session_associate 共用一条 fsRoots 防线）+ 建会话即写旁车——**先于首轮任何注入/围栏/提取**；前端 chat() 第三参 + send 流程提前消费 pendingWorkspace（finally 块的收束后 sessionAssociate 退役）；搭车：未归属会话**隐式提取跳过**（autoExtract 的项目事实不许污染全局层） |
+| 工作区可见注入 | ✅ MemorySource 新 `context_line`（缺省 None）：归属会话注入块头部 `<workspace_context>Current project workspace: {根} — "this project" 指这里，先列/读它，不要按旧记忆猜路径</workspace_context>`；**零记忆也注入**（此前零记忆 = 完全不注入，归属会话对自身项目一无所知）；MemorySource 新 `scope_id`（缺省空串）：M1 预取缓存键 = `(session_id, scope_id)`——会话中途改归属 = 换键自动重算，键位不变逐字节复用（M1 前缀纪律不破） |
+| 内核 kernel-agent | ✅ MemoryEntry +`scope` 字段（空串不标层，旧装配零负担）；memory_inject 中间件：缓存键并键位 + 上下文行进块（与记忆/经历同缓存同失效）；74 测试绿（+4：scope 换键重算/上下文行零记忆注入/上下文行随块冻结/层标渲染） |
+| 管理页 | ✅ 记忆行归属徽章补 '' 态：「全局偏好」（i18n memory.globalTier，zh/en）——'' 不再是无标注的悬空行；经历区维持原样（无全局层） |
+| 数据清理 | ✅ memory.sqlite3 四条走查残留（test.smoke.2025.host-plugin / test.coexist.2025.{r1,findings,r3}，v2.62 前后冒烟探针）备份后删除（`memory.sqlite3.bak-20261004`）——全局层清零起步，不再有毒记忆可漏 |
+| 测试 | ✅ v2.68：kernel-agent 74 绿（+4）；memory-sqlite 18 绿（+5）；plugin-host 全绿（端到端走真 vtable，WsCtx 三态判据在此实抓）；桌面 167 绿（+1：scope_id/context_line 随归属 + 召回双层断言重写）；workspace 39 套件全绿；clippy 0 双侧、fmt、pnpm build 过、插件产物重建；check_length 报告 5 文件超建议值（三问自检保留：两测试文件单主题、PermissionCard 卡单组件、approval.rs 决策表单职责、commands.rs 薄适配入口） |
+
+验证：静态取证（jsonl 逐事件复盘 + meta 旁车 + memory.sqlite3 键位盘点 + LLM 深思原文）+ 全量测试；实机复验待应用重启（载 0.1.1 记忆插件 + 新内核）后重试原实验：Glance-main 项目下新会话问「看下这个项目」——应直接列 Glance-main（上下文行在场），旧记忆零引用（全局层已清空）；模型写"永远用 pnpm"应落全局层（scope 标 global），其它项目可读；未归属会话 memory_write 应被拒并指引归属。LLM 流中断报错（error decoding response body）= DeepSeek 侧流式传输中断（网络/代理层瞬时故障），内核如实上浮、日志收束干净（170 事件无半截写入），重发即可、非缺陷。
+
 ### ㉙ 会话运营补全（✅ 已完成，v2.57——功能层规划第二批）
 
 | 项 | 说明 |

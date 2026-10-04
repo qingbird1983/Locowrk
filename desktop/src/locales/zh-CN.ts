@@ -399,6 +399,8 @@ export default {
     experienceClear: "清空全部经历",
     experienceSession: "会话 {id}…",
     workspace: "项目",
+    // ㉘·A·fix 双层记忆：'' 键位 = 全局偏好层
+    globalTier: "全局偏好",
     time: {
       just_now: "刚刚",
       minutes: "{n} 分钟前",

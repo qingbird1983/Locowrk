@@ -11,10 +11,11 @@
 //! 由 `ensure_workspace_schema` 整表重建进未归属键位（与插件侧迁移
 //! 等价幂等，先跑谁都一样）。
 //!
-//! **项目隔离（Context 文档 §4.6）**：注入召回只取与会话归属一致的键位
-//! （`scope_key` 归一，`''` = 未归属）；管理页是人的管理面，看全部并
-//! 透出归属。降级纪律：打不开 = 检索降级空表（仅告警一次，注入不拦
-//! 聊天）+ 管理命令报错给 UI；不在启动路径上 panic。
+//! **项目隔离 + 双层记忆（Context 文档 §4.6，㉘·A·fix）**：注入召回 =
+//! 会话归属键位 ∪ 全局层（`''` = 用户喜好偏好，对一切会话可见；未归属
+//! 会话只落在全局层）；管理页是人的管理面，看全部并透出归属。降级纪律：
+//! 打不开 = 检索降级空表（仅告警一次，注入不拦聊天）+ 管理命令报错给
+//! UI；不在启动路径上 panic。
 
 use std::path::{Path, PathBuf};
 use std::sync::{atomic::AtomicBool, Arc};
@@ -228,12 +229,16 @@ impl MemoryStore {
 
     fn recall_quiet(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryRow> {
         let ws = self.scope_of_session(session_id);
+        // 双层记忆（Context 文档 §4.6，㉘·A·fix）：项目键位 ∪ 全局层（''，
+        // 用户喜好偏好）——归属会话两层都见；未归属会话只落在全局层
+        // （?1 = '' 时两条件重合），任何别的项目行不可见。
         let recalled: Result<Vec<MemoryRow>, String> = (|| {
             let conn = self.open_conn()?;
             let mut stmt = conn
                 .prepare(
                     "SELECT workspace, key, value, tags, source, updated_at FROM memories
-                     WHERE workspace = ?1 ORDER BY updated_at DESC, key LIMIT ?2",
+                     WHERE workspace = ?1 OR workspace = ''
+                     ORDER BY updated_at DESC, key LIMIT ?2",
                 )
                 .map_err(|e| format!("memory recall: {e}"))?;
             let rows = stmt
@@ -310,7 +315,10 @@ fn now_secs() -> i64 {
 }
 
 /// Memory-Inject 的检索源（注册进 agent/request 决策环）。㉘：按会话
-/// 归属的项目键位过滤（workspace.rs 解析；未归属只见未归属记忆）。
+/// 归属的项目键位 ∪ 全局层过滤（workspace.rs 解析；未归属只见全局层）。
+/// ㉘·A·fix 另供两件：`scope_id`（预取缓存键成分——归属变更自动重算）
+/// 与 `context_line`（归属会话告知模型当前项目根，"看下这个项目"不再
+/// 靠旧记忆猜路径）。
 impl MemorySource for MemoryStore {
     fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
         self.recall_quiet(session_id, limit)
@@ -320,8 +328,29 @@ impl MemorySource for MemoryStore {
                 value: r.value,
                 tags: r.tags,
                 updated_at: r.updated_at,
+                scope: if r.workspace.is_empty() {
+                    "global".into()
+                } else {
+                    "project".into()
+                },
             })
             .collect()
+    }
+
+    fn scope_id(&self, session_id: Option<&str>) -> String {
+        self.scope_of_session(session_id)
+    }
+
+    fn context_line(&self, session_id: Option<&str>) -> Option<String> {
+        let ws = self.scope_of_session(session_id);
+        if ws.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "Current project workspace: {ws} — \"this project\" in the user's \
+             message refers to this directory; list/read it first, do not guess \
+             other paths from old memories."
+        ))
     }
 }
 

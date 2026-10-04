@@ -37,8 +37,18 @@ use crate::state::AppState;
 pub async fn agent_chat(
     session_id: String,
     message: String,
+    workspace: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
+    // ㉘·A·fix 归属先行：首聊挂起归属（chat.pendingWorkspace）随请求带入，
+    // 建会话即写旁车——先于本轮任何注入 / 围栏 / 提取。旧时序（轮次收束
+    // 后才 session_associate）让首轮注入落在未归属键位、还被 M1 预取缓存
+    // 整场（Glance-main 会话引用 Locowrk 旧记忆的实机事故根因）。
+    if let Some(ws) = workspace.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        crate::commands::sessions::ensure_associatable(&state.settings.fs_roots(), ws)?;
+        crate::session_log::associate(&state.sessions_dir, &session_id, Some(ws))
+            .map_err(|e| format!("关联失败: {e}"))?;
+    }
     // ⑭：记最近聊过的会话（调度触发的目标解析兜底用）
     state.note_chat(&session_id);
     let session = state.session_lock(&session_id);
@@ -62,7 +72,11 @@ pub async fn agent_chat(
     .await?;
     // ⑬ 隐式提取（Context 文档 §5.1 ⑤）：开关开启且轮次成功收束后
     // fire-and-forget——本轮消息快照带出会话锁，不阻塞返回值。
-    if state.settings.memory().auto_extract {
+    // ㉘·A·fix：未归属会话不提取——`''` 键位现在是全局偏好层，自动
+    // 提取的项目事实不许污染它。
+    if state.settings.memory().auto_extract
+        && !state.memory.scope_of_session(Some(&session_id)).is_empty()
+    {
         let turn = crate::extract::turn_messages(&session.derive_messages());
         crate::extract::spawn_turn_extract(state.extract_deps(), session_id.clone(), turn);
     }

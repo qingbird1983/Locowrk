@@ -67,19 +67,24 @@ fn describe_manifest() -> CString {
                 description: "Store a value under a key in the persistent memory database \
                               (survives across sessions). Args: key (required, unique \
                               identifier), value (required, text), tags (optional, short \
-                              label). Overwrites any existing value; the overwritten entry \
-                              is returned in `previous` and can be restored via memory_undo. \
-                              Entries are scoped to the current project: the same key in \
-                              another project holds a different value. Use it for facts, \
-                              decisions and user preferences worth remembering; do NOT \
-                              store secrets or large blobs."
+                              label), scope (optional: \"project\" default | \"global\" for \
+                              user preferences that apply across ALL projects, e.g. \"always \
+                              use pnpm\"). Overwrites any existing value; the overwritten \
+                              entry is returned in `previous` and can be restored via \
+                              memory_undo. Project entries are scoped to the current project: \
+                              the same key in another project holds a different value. An \
+                              unassociated session cannot write project memories (associate a \
+                              project first, or pass scope=\"global\"). Use it for facts, \
+                              decisions and user preferences worth remembering; do NOT store \
+                              secrets or large blobs."
                     .into(),
                 schema: json!({
                     "type": "object",
                     "properties": {
                         "key": { "type": "string", "description": "unique identifier, max 512 bytes; use dotted namespaces like `user.language`" },
                         "value": { "type": "string", "description": "text to store, max 256KiB" },
-                        "tags": { "type": "string", "description": "optional short label, searchable" }
+                        "tags": { "type": "string", "description": "optional short label, searchable" },
+                        "scope": { "type": "string", "enum": ["project", "global"], "description": "project (default) = current project only; global = user preference visible in every project" }
                     },
                     "required": ["key", "value"]
                 }),
@@ -91,10 +96,10 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "memory_read".into(),
-                description: "Read one memory entry by exact key in the current project. \
-                              Returns {found, key, value, tags, updated_at}; found=false when \
-                              the key is absent here (entries written in other projects or \
-                              without a project are not visible)."
+                description: "Read one memory entry by exact key. Looks in the current \
+                              project first, then falls back to global user preferences. \
+                              Returns {found, key, value, tags, updated_at, scope: \
+                              \"project\"|\"global\"}; found=false when absent from both."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -108,11 +113,12 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "memory_list".into(),
-                description: "List memory entries of the current project ordered by key. \
-                              Args: prefix (optional key-prefix filter), limit (default 50, \
-                              max 200), offset (default 0). Returns {total, entries: [{key, \
-                              value, tags, updated_at}]} where total counts ALL matching \
-                              entries in this project."
+                description: "List memory entries of the current project plus global user \
+                              preferences, ordered by key; each entry carries scope \
+                              (\"project\"|\"global\"). Args: prefix (optional key-prefix \
+                              filter), limit (default 50, max 200), offset (default 0). \
+                              Returns {total, entries: [{key, value, tags, updated_at, \
+                              scope}]} where total counts ALL matching entries."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -128,9 +134,11 @@ fn describe_manifest() -> CString {
             ToolSpec {
                 name: "memory_search".into(),
                 description: "Substring search across keys, values and tags of the current \
-                              project (ASCII case-insensitive). Args: query (required), limit \
-                              (default 20, max 100). Returns {query, matches}. Wildcards in \
-                              the query are matched literally."
+                              project plus global user preferences (ASCII case-insensitive). \
+                              Args: query (required), limit (default 20, max 100). Returns \
+                              {query, matches: [{key, value, tags, updated_at, scope}]} — \
+                              scope tells project records from global preferences. Wildcards \
+                              in the query are matched literally."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -145,9 +153,11 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "memory_delete".into(),
-                description: "Delete one memory entry by exact key. The deleted entry is \
-                              returned in `previous_entry` and can be restored via \
-                              memory_undo; deleting a missing key is a no-op."
+                description: "Delete one memory entry by exact key from the CURRENT project \
+                              scope only. Global user preferences cannot be deleted here — \
+                              they are managed from the human memory management page. The \
+                              deleted entry is returned in `previous_entry` and can be \
+                              restored via memory_undo; deleting a missing key is a no-op."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -222,23 +232,60 @@ impl MemoryState {
         }
     }
 
-    /// 当前调用的项目键位（㉘）：经 vtable `session_context` 查宿主——
-    /// 返回会话归属的项目根；查询不可用（headless 宿主 / 非调用期 /
-    /// 旧宿主）或未归属时返回 `""`（未归属键位）。缓冲 1KiB 足容纳
-    /// 上下文 JSON；BUF_TOO_SMALL 等异常按未归属回落，不让记忆失败。
-    fn workspace(&self) -> String {
+    /// 当前调用的键位上下文（㉘·A·fix 双层记忆）：经 vtable
+    /// `session_context` 查宿主。**三态**——查询不可用（headless 宿主 /
+    /// 非调用期 / 旧宿主）= [`WsCtx::Headless`]（`''` 单一宇宙，旧行为
+    /// 不变）；查询可用但会话未归属（含子 Agent 冒泡）=
+    /// [`WsCtx::Unattributed`]（只见全局层、缺省项目写拒绝）；否则
+    /// [`WsCtx::Project`]（归属项目根）。缓冲 1KiB 足容纳上下文 JSON。
+    fn ctx(&self) -> WsCtx {
         // SAFETY: host 是 init 时宿主交付的 'static vtable 指针
         let vt = match unsafe { self.host.as_ref() } {
             Some(vt) => vt,
-            None => return String::new(),
+            None => return WsCtx::Headless,
         };
         let mut buf = [0u8; 1024];
         // SAFETY: buf 是本栈上合法可写缓冲
         match unsafe { vt.session_context(&mut buf) } {
-            Ok(n) => plugin_api::ffi::CallContext::from_json(&buf[..n])
-                .and_then(|c| c.workspace)
-                .unwrap_or_default(),
-            Err(_) => String::new(),
+            Ok(n) => match plugin_api::ffi::CallContext::from_json(&buf[..n]) {
+                Some(c) => WsCtx::from_parts(c.session_id, c.workspace),
+                None => WsCtx::Headless,
+            },
+            Err(_) => WsCtx::Headless,
+        }
+    }
+}
+
+/// 调用期键位上下文（三态；store 各工具据此裁决读写键位与全局层纪律，
+/// Context 文档 §4.6 双层记忆模型）。
+pub(crate) enum WsCtx {
+    /// headless / 查询不可用：`''` 单一宇宙（旧行为，等价"全局层"）。
+    Headless,
+    /// 桌面调用但会话未归属：只见全局层；缺省项目写拒绝（没有项目的
+    /// "项目记忆"不许落地污染全局层）。
+    Unattributed,
+    /// 归属项目根：读写本项目键位；显式 `scope="global"` 升格为偏好。
+    Project(String),
+}
+
+impl WsCtx {
+    /// 从 FFI 上下文裁决键位（纯函数，可测）：有项目根 = Project；
+    /// 无项目根但**有会话身份** = Unattributed（桌面归属缝/子 Agent 冒泡）；
+    /// 无会话身份 = Headless（一次性进程等价 headless，v2.64 ToolExposure
+    /// 同判据——plugin-host 测试装配与 kernel-bin 直调都落此态）。
+    pub(crate) fn from_parts(session_id: Option<String>, workspace: Option<String>) -> WsCtx {
+        match workspace {
+            Some(ws) if !ws.is_empty() => WsCtx::Project(ws),
+            _ if session_id.as_deref().map(str::is_empty) == Some(false) => WsCtx::Unattributed,
+            _ => WsCtx::Headless,
+        }
+    }
+
+    /// 本会话的"当前项目键位"（未归属 / headless = `''`）。
+    fn scope(&self) -> &str {
+        match self {
+            WsCtx::Project(ws) => ws,
+            _ => "",
         }
     }
 }
@@ -246,14 +293,14 @@ impl MemoryState {
 impl PluginState for MemoryState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("memory-sqlite: {tool} called"));
-        let ws = self.workspace();
+        let ctx = self.ctx();
         match tool {
-            "memory_write" => store::memory_write(&ws, &args),
-            "memory_read" => store::memory_read(&ws, &args),
-            "memory_list" => store::memory_list(&ws, &args),
-            "memory_search" => store::memory_search(&ws, &args),
-            "memory_delete" => store::memory_delete(&ws, &args),
-            "memory_undo" => store::memory_undo(&ws, &args),
+            "memory_write" => store::memory_write(&ctx, &args),
+            "memory_read" => store::memory_read(&ctx, &args),
+            "memory_list" => store::memory_list(&ctx, &args),
+            "memory_search" => store::memory_search(&ctx, &args),
+            "memory_delete" => store::memory_delete(&ctx, &args),
+            "memory_undo" => store::memory_undo(&ctx, &args),
             other => Err(format!("unknown tool `{other}`")),
         }
     }

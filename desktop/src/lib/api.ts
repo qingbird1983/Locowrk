@@ -35,9 +35,15 @@ import type {
   TreeDebug,
 } from "../types";
 
-/** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。 */
-export function chat(sessionId: string, message: string): Promise<number> {
-  return invoke("agent_chat", { sessionId, message });
+/** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。
+ * workspace = 首聊挂起归属（㉘·A·fix 归属先行）：后端建会话即写旁车，
+ * 先于首轮注入/围栏/提取——不再等轮次收束后才关联。 */
+export function chat(
+  sessionId: string,
+  message: string,
+  workspace?: string | null,
+): Promise<number> {
+  return invoke("agent_chat", { sessionId, message, workspace: workspace ?? null });
 }
 
 /** 撤销最近一次上下文压缩（⑨）：其后的轮次一并回退（前缀游标语义）。

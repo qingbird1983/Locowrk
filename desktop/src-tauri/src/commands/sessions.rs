@@ -23,6 +23,18 @@ pub async fn session_rename(
         .map_err(|e| format!("重命名失败: {e}"))
 }
 
+/// 归属目标校验（后端直读设置，不信前端转述）：必须在当前 fsRoots 里。
+/// `session_associate` 与 `agent_chat` 的归属先行（㉘·A·fix）共用一条防线。
+pub(crate) fn ensure_associatable(roots: &[String], ws: &str) -> Result<(), String> {
+    if roots.iter().any(|r| r == ws) {
+        Ok(())
+    } else {
+        Err(format!(
+            "「{ws}」不在 设置 → 工具 → 工作区目录 里，不能关联"
+        ))
+    }
+}
+
 /// 会话↔工作区关联（v2.50 §2.3）：写旁车 `workspace` 字段；`None`/空 =
 /// 移出。目标必须是当前 fsRoots 之一（后端直读设置校验，不信前端转述）；
 /// 根目录日后从设置移除的，既有归属不追改（侧栏组名取存储路径，组照常
@@ -38,12 +50,7 @@ pub async fn session_associate(
         .map(str::trim)
         .filter(|s| !s.is_empty());
     if let Some(ws) = ws {
-        let roots = state.settings.fs_roots();
-        if !roots.iter().any(|r| r == ws) {
-            return Err(format!(
-                "「{ws}」不在 设置 → 工具 → 工作区目录 里，不能关联"
-            ));
-        }
+        ensure_associatable(&state.settings.fs_roots(), ws)?;
     }
     crate::session_log::associate(&state.sessions_dir, &session_id, ws)
         .map_err(|e| format!("关联失败: {e}"))

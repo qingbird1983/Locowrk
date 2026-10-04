@@ -579,20 +579,18 @@ export const useChatStore = defineStore("chat", {
       this.running = true;
       this.steps = null;
       this.turnUsage = null;
+      // §3.6 v3.9 项目下新建任务：挂起归属随首轮请求带入（㉘·A·fix 归属
+      // 先行）——后端建会话即写旁车，首轮注入/围栏/提取就在正确键位上；
+      // 旧时序（轮次收束后才 sessionAssociate）有首查键位缝，已退役。
+      const ws = this.pendingWorkspace;
+      this.pendingWorkspace = null;
       try {
-        await chat(this.sessionId, t);
+        await chat(this.sessionId, t, ws);
       } catch (err) {
         // 失败轮次不发 turn_done（后端约定），在这里收尾
         this.items.push({ id: nextId++, kind: "error", text: String(err) });
       } finally {
         this.running = false;
-        // §3.6 v3.9 项目下新建任务：首聊已建会话，消费挂起的归属。
-        // 关联失败（轮次失败会话未建成）静默放弃——归属可在行菜单手动补。
-        const ws = this.pendingWorkspace;
-        this.pendingWorkspace = null;
-        if (ws) {
-          await sessionAssociate(this.sessionId, ws).catch(() => {});
-        }
         // ⑲ 新会话首聊后进列表（列表更新不阻塞输入）
         void this.refreshSessions();
       }

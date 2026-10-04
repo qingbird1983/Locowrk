@@ -25,8 +25,9 @@
 //! 中途写入、经历检索查询（最近用户消息）逐轮变化，都会改写 system 前缀
 //! 使命中归零。带会话身份的请求在**首次注入时检索一次并缓存块文本**，
 //! 后续轮复用同一字节；`memory_write` 中途写入不再改写本会话前缀。
-//! top_k 配置变更 = 显式变更，重算接受失效。无会话身份 = 每轮检索
-//! （一次性进程等价会话，headless 语义不变）。
+//! top_k 配置变更 = 显式变更，重算接受失效。缓存键 = `(session_id,
+//! scope_id)`（㉘·A·fix）：键位不变逐字节复用，会话改归属自动重算。
+//! 无会话身份 = 每轮检索（一次性进程等价会话，headless 语义不变）。
 
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -47,6 +48,9 @@ pub struct MemoryEntry {
     pub tags: String,
     /// 更新时间（Unix 秒）；当前仅随条目透出，排序由宿主实现裁决。
     pub updated_at: i64,
+    /// 层标（㉘·A·fix 双层记忆，Context 文档 §4.6）：`"global"`（用户偏好，
+    /// 全项目可见）| `"project"`（本项目记录）；空串 = 不标层（旧行为）。
+    pub scope: String,
 }
 
 /// 记忆检索源契约：宿主实现（desktop 直读 memory.sqlite3，插件侧
@@ -59,6 +63,22 @@ pub struct MemoryEntry {
 pub trait MemorySource: Send + Sync + 'static {
     /// 按宿主裁决的相关序（desktop = updated_at 新→旧）取至多 limit 条。
     fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry>;
+
+    /// 会话的键位身份（㉘·A·fix）：预取缓存键 = `(session_id, scope_id)`。
+    /// 会话中途改归属 = 换键 = 首查重算（键位不变则逐字节复用，M1 纪律
+    /// 不破）。缺省空串 = 不参与键（旧行为，装配测试零负担）。
+    fn scope_id(&self, session_id: Option<&str>) -> String {
+        let _ = session_id;
+        String::new()
+    }
+
+    /// 注入块头部的工作区上下文行（㉘·A·fix）：归属会话告知模型"当前项目
+    /// 在哪"，让它不再靠旧记忆猜路径。逐会话稳定、同吃预取缓存。缺省
+    /// `None` = 不带行（未归属/headless）。
+    fn context_line(&self, session_id: Option<&str>) -> Option<String> {
+        let _ = session_id;
+        None
+    }
 }
 
 /// 单条经历记忆（⑬ 语义检索命中；只带注入需要的字段）。
@@ -186,8 +206,13 @@ impl MemoryInject {
              when relevant to this conversation.\n",
         );
         for e in entries {
+            let tier = if e.scope.is_empty() {
+                String::new()
+            } else {
+                format!("[{}] ", e.scope)
+            };
             lines.push_str(&format!(
-                "- {} = {}{}\n",
+                "- {tier}{} = {}{}\n",
                 e.key,
                 clip(&e.value),
                 tag_suffix(&e.tags)
@@ -275,15 +300,20 @@ impl WaterfallListener for MemoryInject {
         let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
             return WaterfallDecision::Continue;
         };
-        // 会话级预取命中（KV v2 纪律 2）：复用首次注入的块文本——记忆库
-        // 中途写入 / 经历查询变化都不再改写本会话的 system 前缀。缓存的
-        // "无记忆"态直通（与非预取路径的决策语义逐轮一致）
-        if let Some(id) = req.session_id.as_deref() {
+        // ㉘·A·fix：缓存键并上键位身份——会话中途改归属 = 换键 = 重算；
+        // 键位不变则命中同一字节（M1 纪律不破）。scope_id 逐请求查询
+        // （desktop = 旁车一次读取，与围栏/审批同成本档）。
+        let scope = self.source.scope_id(req.session_id.as_deref());
+        let prefetch_key = req
+            .session_id
+            .as_deref()
+            .map(|id| format!("{id}\u{1}{scope}"));
+        if let Some(key) = &prefetch_key {
             let cached = self
                 .prefetch
                 .lock()
                 .expect("memory prefetch poisoned")
-                .get(id, cfg.top_k);
+                .get(key, cfg.top_k);
             match cached {
                 Some(Some(block)) => {
                     req.system = Self::append_block(req.system.take(), Some(block));
@@ -293,9 +323,15 @@ impl WaterfallListener for MemoryInject {
                 None => {}
             }
         }
+        // 工作区上下文行（㉘·A·fix）：归属会话先告知"当前项目在哪"——
+        // 即使零记忆也注入（块 = 上下文行 ∪ 记忆 ∪ 经历）。
+        let mut block = self
+            .source
+            .context_line(req.session_id.as_deref())
+            .map(|line| format!("<workspace_context>\n{line}\n</workspace_context>"));
         // ㉘：把会话 id 交给检索源做项目隔离（宿主裁决 workspace 语义）
         let entries = self.source.recall(req.session_id.as_deref(), cfg.top_k);
-        let mut block = Self::build_block(&entries);
+        block = Self::append_block(block, Self::build_block(&entries));
         // 经历块（⑬）：查询 = 最近一条用户消息；检索失败/未配置 = 跳过，
         // 事实记忆照常注入（§4.3 降级）。预取纪律下本查询只在会话首次
         // 注入时执行一次——锁定的是"会话开始时的经历"，后续轮不再变化。
@@ -316,13 +352,13 @@ impl WaterfallListener for MemoryInject {
                 block = Self::append_block(block, Self::build_experience_block(&found));
             }
         }
-        // 首次注入结果入缓存（None 也缓存：无记忆会话不做每轮空查）
-        if let Some(id) = req.session_id.clone() {
+        // 首次注入结果入缓存（None 也缓存：无块会话不做每轮空查）
+        if let Some(key) = prefetch_key {
             self.prefetch
                 .lock()
                 .expect("memory prefetch poisoned")
                 .insert(
-                    id,
+                    key,
                     PrefetchEntry {
                         block: block.clone(),
                         top_k: cfg.top_k,

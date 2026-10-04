@@ -309,6 +309,7 @@ impl MemorySource for DriftingMemory {
             value: n.to_string(),
             tags: String::new(),
             updated_at: 0,
+            scope: String::new(),
         }]
     }
 }

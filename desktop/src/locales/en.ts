@@ -407,6 +407,8 @@ export default {
     experienceClear: "Clear all experiences",
     experienceSession: "session {id}…",
     workspace: "Project",
+    // ㉘·A·fix two-tier memory: '' keyspace = global preference tier
+    globalTier: "Global preference",
     time: {
       just_now: "just now",
       minutes: "{n} min ago",
