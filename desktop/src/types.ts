@@ -413,6 +413,8 @@ export interface MemorySettingsView {
   collapseEnabled: boolean;
   /** 自动收起占用阈值（collapse 开启时生效，50–95% 缺省 80）。 */
   collapseThresholdPct: number;
+  /** F1 记忆文件化总开关（缺省开；关 = 回纯 sqlite 不再读写 md）。 */
+  files: boolean;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -429,6 +431,7 @@ export interface MemoryUpdate {
   tailWindowTurns?: number;
   collapseEnabled?: boolean;
   collapseThresholdPct?: number;
+  files?: boolean;
 }
 
 /** 工具暴露区投影（⑫）：结构即设置原值。S2 起含宿主单次调用超时；

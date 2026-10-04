@@ -728,6 +728,8 @@ export default {
     memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
     memoryAutoExtract: "对话后自动提取记忆（隐式提取）",
     memoryAutoExtractHint: "默认关；每轮对话结束异步提取事实与经历摘要，需已配置 embedding。",
+    memoryFiles: "记忆文件化",
+    memoryFilesHint: "把记忆同步写入 ~/.Locowrk/memory/ 下的 Markdown 文件（人可查可读可写）；关闭后仅存数据库。",
     organizePacing: "记忆树整理节奏",
     organizePacingHint: "批量 = 达阈值一次整理整段尾巴；增量 = 尾巴每满一块就整理（树 v2 §4.3）。",
     organizePacingBatch: "批量",

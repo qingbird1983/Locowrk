@@ -37,7 +37,7 @@
 
 | 阶段 | 名称 | 一句话 | 依赖 | 回退方式 |
 |---|---|---|---|---|
-| F1 | 双写与导出 | memory_write / 整理收束双写 .md + 首启导出存量；组装零变化 | 设计 v1.1 定稿 | 删 `~/.Locowrk/memory/` 零损失 |
+| F1 | 双写与导出 ✅ v2.71 | memory_write / 整理收束双写 .md + 首启导出存量；组装零变化 | 设计 v1.1 定稿 | 删 `~/.Locowrk/memory/` 零损失 |
 | F2 | 人的编辑面 | reconcile（人编辑 md 生效）+ 记忆页「打开文件夹」+ `<repo>/.Locowrk/` 交接（gitignore + handoff/requirements 注入组装） | F1 | 总开关关闭 |
 | F3 | 主动记忆 | autoExtract 缺省开 + handoff 收束更新 + 提示词主动指引 | F1（F2 的编辑面更好但非硬依赖） | 开关可退 |
 
@@ -169,12 +169,12 @@
 
 **定位**：记忆从「sqlite 机器索引」升级为「双层存储」——.md 是人类层与权威编辑面（人可查可读可写），sqlite/投影保留为机器索引（召回快路径）；布局 = `~/.Locowrk/memory/`（全局 + 项目缓存记忆，上下文拼装源）+ `<repo>/.Locowrk/`（交接层：handoff / requirements / notes，自动引导 gitignore）。**主动记忆原则**（用户方向②）：模型主动记录不等提醒。
 
-#### F1 · 双写与导出 ⬜
+#### F1 · 双写与导出 ✅（2026-10-05，v2.71）
 
-* 布局落地：`memory_write`（含提取路径）双写 `global/` 与 `projects/<可读名-短哈希>/facts/`；`memory_delete` 同步删文件；整理收束双写 `tree.md`（每捆一节 + range 隐性指针）；MEMORY.md 索引跟随
-* 首启导出：存量 sqlite 事实 → md（幂等，md 已存在不覆盖）；树 L0/L1 → tree.md
-* 总开关（用户·记忆设置，缺省开）+ 首启导出无 UI 干扰；组装/插件契约零变化
-* 验收：真实轮 memory_write 后 md 文件在场且内容正确；存量导出幂等重跑不重复；关开关回纯 sqlite
+**落账**：设计 v1.1 定稿 + F 轨立项同批先行（e9db32b，用户裁定四点全按推荐）。**共享布局 `plugin_api::memlayout`**（新模块，插件与宿主同一份实现）：项目文件夹 = `<可读名>-<fnv 短哈希>`（已裁定②）、key 文件名安全（Windows 保留名防护）、fact frontmatter（name / description / type / source / **workspace 原值** / updated——身份落盘供 F2 reconcile 读回）、MEMORY.md 索引一文件一行、总开关 env（缺省开）。**插件三落点双写**（memory-sqlite 0.1.1→0.1.2 小迭代）：write / delete / undo（还原→写、撤销删→删）sqlite 成功后 best-effort 同步 md，**失败不破契约**——输出 `md_warning` 字段如实。**宿主四点同步**：提取 write / 管理页 update·delete·clear。**tree.md 整理收束双写**：会话 `##` 小节（旁车标题）+ 捆 `###` 数值序 + range 隐性指针 + **人改保护**（文件新于全部投影不覆盖）+ 未归属落 `_unaffiliated`；Organizer 三个落树点后同步。**首启导出**：后台幂等（已有文件跳过，人编辑永不被覆盖；tree.md 人改保护同款）；零数据零目录。**总开关** `memory.files`（缺省开）+ 记忆设置行（UI shell v4.8）+ 插件 env 热换。**搭车修复 M4 竞态（走查实抓）**：整理管线落树前重载最新投影（两路）——收起可在记录员调用期间落盘，旧快照回写抹掉 collapsed_at。测试：plugin-api 27（+5）、memory-sqlite 20（+1）、memory-tree 37（+1）、desktop 193（+6）全绿、clippy 0 双侧、pnpm build 过。实机走查（CDP 真实轮）：memory_write 过审批卡 → facts md + 索引落盘 → /整理 → tree.md（三捆 recorder 产出）→ 设置行往返 → probe 行重启首启导出 facts=1 trees=0（幂等证明）。走查清理全还原（会话/行/memory 目录/投影/settings 字节）。
+
+* F1 双写与导出：布局落地（memory_write/整理收束双写 + MEMORY.md 索引）；首启导出（幂等，md 已存在不覆盖）；总开关 + 组装/插件契约零变化 ✅
+* 验收：真实轮 memory_write 后 md 文件在场且内容正确 ✅；存量导出幂等重跑不重复 ✅（trees=0 证明）；关开关回纯 sqlite ✅（单测锁 + 实机往返落盘）
 
 #### F2 · 人的编辑面 ⬜
 

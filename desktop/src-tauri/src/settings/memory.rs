@@ -28,6 +28,10 @@ pub const TAIL_WINDOW_TURNS_RANGE: std::ops::RangeInclusive<u32> = 1..=20;
 pub const COLLAPSE_THRESHOLD_PCT_DEFAULT: u8 = 80;
 pub const COLLAPSE_THRESHOLD_PCT_RANGE: std::ops::RangeInclusive<u8> = 50..=95;
 
+/// F1 记忆文件化总开关缺省（《Memory File-ization Design》§7 已裁定：
+/// 关 = 回纯 sqlite，md 不再读写；缺省开——md 是人类层，写失败不破契约）。
+pub const FILES_DEFAULT: bool = true;
+
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TailStrategy {
@@ -72,6 +76,8 @@ pub struct MemorySettings {
     pub collapse_enabled: bool,
     /// 自动收起占用阈值（collapse 开启时生效，50–95% 缺省 80）。
     pub collapse_threshold_pct: u8,
+    /// 记忆文件化总开关（F1 §7 缺省开）：关 = 回纯 sqlite，md 不再读写。
+    pub files: bool,
 }
 
 impl Default for MemorySettings {
@@ -88,6 +94,7 @@ impl Default for MemorySettings {
             tail_window_turns: TAIL_WINDOW_TURNS_DEFAULT,
             collapse_enabled: false,
             collapse_threshold_pct: COLLAPSE_THRESHOLD_PCT_DEFAULT,
+            files: FILES_DEFAULT,
         }
     }
 }
@@ -107,6 +114,7 @@ pub struct MemorySettingsView {
     pub tail_window_turns: u32,
     pub collapse_enabled: bool,
     pub collapse_threshold_pct: u8,
+    pub files: bool,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -127,4 +135,5 @@ pub struct MemoryUpdate {
     pub tail_window_turns: Option<u32>,
     pub collapse_enabled: Option<bool>,
     pub collapse_threshold_pct: Option<u8>,
+    pub files: Option<bool>,
 }

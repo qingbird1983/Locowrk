@@ -111,6 +111,11 @@ pub fn init_state(app: AppHandle) -> AppState {
     }
     // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后重注入即生效免重启
     crate::data_root::apply_fs_roots_env(&settings);
+    // F1 记忆文件化总开关（settings_set 热换在 commands.rs）：关 = 插件侧
+    // 双写整体跳过（env 缺省未设 = 开，与 memlayout::files_enabled 对齐）。
+    if !settings.memory().files {
+        std::env::set_var("LOCOWRK_MEMORY_FILES", "0");
+    }
 
     // v2.58 会话级模型覆盖存储（旁车持久 + 缓存；AppLlm 每请求按 LlmRequest.session_id
     // 解析覆盖——档位路由 + 模型名）。模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身；⑬ 句柄留 AppState 给隐式提取）。
@@ -136,7 +141,17 @@ pub fn init_state(app: AppHandle) -> AppState {
         crate::workspace::session_context_resolver(sessions_dir.clone(), root.clone(), fs_roots_of);
     plugin_host::set_session_context_resolver(Arc::clone(&session_ctx));
     let workspace_of = crate::workspace::workspace_view(Arc::clone(&session_ctx));
-    let memory = Arc::new(MemoryStore::new(&root, Arc::clone(&workspace_of)));
+    // F1 人类层（文件化设计 §3）：md 句柄 + 总开关闭包——MemoryStore 四条
+    // 宿主写路径（提取 write / 管理页 update·delete·clear）成功后同步 md。
+    let memory_files = Arc::new(crate::memory_files::MemoryFiles::new(&root));
+    let files_on = {
+        let s = Arc::clone(&settings);
+        Arc::new(move || s.memory().files) as Arc<dyn Fn() -> bool + Send + Sync>
+    };
+    let memory = Arc::new(
+        MemoryStore::new(&root, Arc::clone(&workspace_of))
+            .with_files(Arc::clone(&memory_files), Arc::clone(&files_on)),
+    );
     let permission_modes = Arc::new(crate::permission_mode::PermissionModeStore::new(
         sessions_dir.clone(),
         settings.default_permission_mode(),
@@ -407,6 +422,16 @@ pub fn init_state(app: AppHandle) -> AppState {
     }
     // 在途整理任务重投（后台，不阻塞窗口出现）
     organizer.recover_pending();
+
+    // F1 首启导出（文件化设计 §6）：存量 sqlite 事实 → md（文件已在 =
+    // 跳过，人编辑不动）+ 各工作区 tree.md（人改保护）——后台线程幂等。
+    crate::memory_files::spawn_initial_export(
+        Arc::clone(&memory),
+        memory_tree::TreeStore::new(&root),
+        (*memory_files).clone(),
+        sessions_dir.clone(),
+        Arc::clone(&files_on),
+    );
 
     AppState {
         app,

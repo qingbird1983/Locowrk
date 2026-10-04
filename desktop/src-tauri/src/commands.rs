@@ -218,6 +218,7 @@ pub async fn settings_set(
 ) -> Result<SettingsView, String> {
     let plugins_section_touched = plugins.is_some();
     let tools_section_touched = tools.is_some();
+    let memory_section_touched = memory.is_some();
     let view = state.settings.update(
         locale.clone(),
         appearance,
@@ -273,6 +274,18 @@ pub async fn settings_set(
     // ⑱：工作区目录热更新（fsutil 每次工具调用读 env，重注入即生效）
     if tools_section_touched {
         crate::data_root::apply_fs_roots_env(&state.settings);
+    }
+    // F1：记忆文件化总开关热更新（插件侧 memlayout 每次写前读 env，保存
+    // 即生效；宿主侧 MemoryStore/导出走 files_on 闭包本就实时）。
+    if memory_section_touched {
+        std::env::set_var(
+            "LOCOWRK_MEMORY_FILES",
+            if state.settings.memory().files {
+                "1"
+            } else {
+                "0"
+            },
+        );
     }
     // ⑬：embedding 客户端热重建（检索信号/search_tools/经历/提取共用）
     state.reload_embed();

@@ -166,6 +166,9 @@ impl SettingsStore {
                 }
                 next.memory.collapse_threshold_pct = p;
             }
+            if let Some(e) = u.files {
+                next.memory.files = e;
+            }
         }
         if let Some(u) = tools {
             if let Some(e) = u.enabled {

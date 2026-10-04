@@ -182,3 +182,67 @@ fn limit_is_clamped() {
     assert_eq!(store.list("", 1).unwrap().len(), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ---- F1 人类层双写（《Memory File-ization Design》§3）----
+
+fn wired(dir: &std::path::Path, on: bool) -> MemoryStore {
+    let files = Arc::new(crate::memory_files::MemoryFiles::new(dir));
+    let flag: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || on);
+    MemoryStore::new(dir, test_resolver()).with_files(files, flag)
+}
+
+#[test]
+fn host_writes_sync_md_human_layer() {
+    let dir = temp_dir("md-sync");
+    let store = wired(&dir, true);
+    let ws = "F:/ws/a";
+    store
+        .write(ws, "db.choice", "sqlite", "", "explicit")
+        .unwrap();
+    let md = dir
+        .join("memory")
+        .join("projects")
+        .join(plugin_api::memlayout::project_dir_name(ws))
+        .join("facts")
+        .join("db.choice.md");
+    assert!(md.exists(), "提取/宿主写路径同步 md");
+    // 管理页编辑同步
+    store.update_value(ws, "db.choice", "postgres").unwrap();
+    assert!(std::fs::read_to_string(&md).unwrap().contains("postgres"));
+    // 管理页删除同步
+    store.delete(ws, "db.choice").unwrap();
+    assert!(!md.exists());
+    // 清空同步（全局层）
+    store.write("", "pref.x", "y", "", "explicit").unwrap();
+    let g = dir.join("memory").join("global").join("pref.x.md");
+    assert!(g.exists());
+    store.clear_all().unwrap();
+    assert!(!g.exists(), "清空逐条删 md");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn files_switch_off_keeps_pure_sqlite() {
+    let dir = temp_dir("md-off");
+    let store = wired(&dir, false);
+    store.write("F:/ws/b", "k", "v", "", "explicit").unwrap();
+    assert!(!dir.join("memory").exists(), "总开关关 = 不写 md");
+    let rows = store.export_rows().unwrap();
+    assert_eq!(rows.len(), 1, "sqlite 照常");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn export_rows_covers_both_scopes() {
+    let dir = temp_dir("md-export");
+    let store = wired(&dir, true);
+    store.write("", "g1", "v", "", "explicit").unwrap();
+    store.write("F:/ws/a", "p1", "v", "", "extracted").unwrap();
+    let rows = store.export_rows().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().any(|r| r.workspace.is_empty() && r.key == "g1"));
+    assert!(rows
+        .iter()
+        .any(|r| r.workspace == "F:/ws/a" && r.source == "extracted"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

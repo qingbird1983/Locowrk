@@ -76,6 +76,8 @@ pub struct Organizer {
     client: Arc<dyn RecorderClient>,
     workspace_of: WorkspaceResolver,
     tree_store: TreeStore,
+    /// F1 人类层：整理落树后同步项目 tree.md（人读面，文件化设计 §3）。
+    files: crate::memory_files::MemoryFiles,
     /// 会话整理模式（M4 切流：溢出整理 / 自动收起只作用树会话）。
     modes: Arc<OrganizerModeStore>,
     /// 会话级在途去重（进程内；跨重启由投影 pending 字段守卫）。
@@ -124,6 +126,7 @@ impl Organizer {
             client,
             workspace_of,
             tree_store: TreeStore::new(&data_root),
+            files: crate::memory_files::MemoryFiles::new(&data_root),
             modes,
             inflight: StdMutex::new(HashSet::new()),
             notifier,
@@ -357,10 +360,28 @@ impl Organizer {
         };
         tree.mark_collapsed(&id, now_ms());
         if self.tree_store.save(&tree).is_ok() {
+            self.sync_tree_md(&workspace);
             tracing::info!(
                 session = %session_id, bundle = %id,
                 "自动收起（占用 {anchor} / {window} ≥ {threshold_pct}%）"
             );
+        }
+    }
+
+    /// F1 tree.md 同步（文件化设计 §3：整理收束 → 更新人读层）：投影保存
+    /// 成功后重建该项目 tree.md（读全部投影 + 旁车标题，人改保护在写侧）。
+    /// 纯人类层——失败只 warn，总开关关 = 跳过。
+    fn sync_tree_md(&self, workspace: &str) {
+        if !self.settings.memory().files {
+            return;
+        }
+        if let Err(e) = crate::memory_files::sync_workspace_tree_md(
+            &self.files,
+            &self.tree_store,
+            &self.sessions_dir,
+            workspace,
+        ) {
+            tracing::warn!("tree.md 同步失败（{workspace}）: {e}");
         }
     }
 
@@ -459,6 +480,10 @@ impl Organizer {
                 Ok(Err(e)) => last_err = e,
                 Ok(Ok((raw, usage))) => match parse_drafts(&raw, &task.items) {
                     Ok(drafts) => {
+                        // 单写者补漏（走查实抓 F1 暴露的 M4 竞态）：收起可在
+                        // 记录员调用期间落盘——重载最新投影再产出，防旧快照
+                        // 回写抹掉 collapsed_at（占位捆已持久化，重载即在）。
+                        tree = self.load_tree(&task.workspace, &task.session_id);
                         let bundles = tree.build_bundles(&drafts, "recorder", now_ms());
                         let n = bundles.len();
                         tree.apply_organized(
@@ -481,6 +506,7 @@ impl Organizer {
                             tree.note_organized(task.users_total);
                         }
                         self.tree_store.save(&tree)?;
+                        self.sync_tree_md(&task.workspace);
                         self.notify_done(
                             &task.session_id,
                             task.users_total,
@@ -498,7 +524,9 @@ impl Organizer {
                 },
             }
         }
-        // 降级：规则切分（§5.4，复用 ctx-compact「切点落在 User 之前」纪律）
+        // 降级：规则切分（§5.4，复用 ctx-compact「切点落在 User 之前」纪律）。
+        // 重载同上——降级路径同样不得用旧快照回写。
+        tree = self.load_tree(&task.workspace, &task.session_id);
         let drafts = rule_split_drafts(&task.items, dev.rule_chunk_tokens);
         let bundles = tree.build_bundles(&drafts, "rule", now_ms());
         let n = bundles.len();
@@ -521,6 +549,7 @@ impl Organizer {
             tree.note_organized(task.users_total);
         }
         self.tree_store.save(&tree)?;
+        self.sync_tree_md(&task.workspace);
         tracing::warn!(session = %task.session_id, "记录员不可用（{last_err}），已降级规则切分");
         self.notify_done(
             &task.session_id,

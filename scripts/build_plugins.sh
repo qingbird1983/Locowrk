@@ -63,10 +63,13 @@ stage tool-git 0.1.2
 # 0.1.1（2026-10-04，小迭代 +0.0.1）：双层记忆（㉘·A·fix）——memory_write
 # +scope="global"（全局偏好层）；读/搜/列 = 项目 ∪ 全局并带层标；未归属
 # 会话缺省写拒绝；全局行聊天工具禁删（管理页专属）；headless 语义不变
-stage memory-sqlite 0.1.1
+# 0.1.2（2026-10-05，小迭代 +0.0.1）：F1 记忆文件化——write/delete/undo
+# 三落点成功后双写 ~/.Locowrk/memory/ 人类层 md（失败只带 md_warning
+# 字段不破契约；总开关 env LOCOWRK_MEMORY_FILES=0 整体跳过）
+stage memory-sqlite 0.1.2
 stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-{fs,shell,edit,git} 0.1.2（围栏让路文案）+ 其余 0.1.0（memory-sqlite 0.1.1 双层记忆）"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-{fs,shell,edit,git} 0.1.2（围栏让路文案）+ 其余 0.1.0（memory-sqlite 0.1.2 文件化双写）"
 echo "next: cargo run -p kernel-bin -- demo"

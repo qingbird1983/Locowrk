@@ -13,6 +13,8 @@
 //!   绝不进入 C ABI（§5.2）。
 //! - `fsutil`：文件类工具的安全基座（允许根 canonicalize 校验 + 写前
 //!   备份），Rust 便利层，不进 ABI 面（阶段八⑥第二批，安全底线）。
+//! - `memlayout`：记忆文件化布局（F1，《Memory File-ization Design》
+//!   v1.1）——md 人类层的路径/格式/索引，插件与宿主共用一份实现。
 //!
 //! 另外把 `serde_json` / `semver` 原样 re-export 给插件 crate 复用，
 //! 让插件只依赖本 crate 一个依赖即可（§5.3"Rust 是一等公民"）。
@@ -20,6 +22,7 @@
 pub mod ffi;
 pub mod fsutil;
 pub mod manifest;
+pub mod memlayout;
 pub mod plugin_side;
 pub mod tool;
 

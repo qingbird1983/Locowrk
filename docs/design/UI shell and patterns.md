@@ -305,7 +305,7 @@
 |---|---|---|
 | `LlmSection` | `llm` | ✅ 既有（+ 窗口下拉） |
 | `ContextSection` | `context` | ✅（阈值/策略/建议值；前端不做第二套换算） |
-| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：**尾巴策略**（边界结算 / 固定窗口，缺省边界结算）+ **固定窗口 N**（1–20 缺省 5，窗口档显示）+ **memory_collapse 暴露**（缺省关）+ **自动收起阈值**（50–95% 缺省 80，collapse 开启时显示）） |
+| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：**尾巴策略**（边界结算 / 固定窗口，缺省边界结算）+ **固定窗口 N**（1–20 缺省 5，窗口档显示）+ **memory_collapse 暴露**（缺省关）+ **自动收起阈值**（50–95% 缺省 80，collapse 开启时显示）；F1 v4.8 起另挂**记忆文件化**开关行（缺省开，关 = 回纯 sqlite 不再读写 md）） |
 | `LlmSection` | `llm` | ✅（v4.5 起默认项组内增**会话记录员**行——同主模型 ▾，树 v2 §5.2） |
 | `SessionsSection` | —（只读 dataDir） | ✅ |
 | `LanguageSection` | `locale` | ✅ |
@@ -2108,6 +2108,10 @@ cacheMissPrice）+ 开发者分区「前缀缓存读数」面板与命中率告�
 **稳定期轮数**（`context.stabilityRounds`，数字 1–10 缺省 3——结算后 N 轮不触发
 改前缀操作）。*
 
+*文档版本：v4.8（F1 记忆文件化批，《Memory File-ization Design》v1.1 §6 F1）。
+§3.2 记忆分区新增**记忆文件化**开关行（`memory.files`，缺省开——关 = 回纯
+sqlite，md 不再读写；hint 说明落点 `~/.Locowrk/memory/`）。本批其余为后端能力
+（md 双写 / 首启导出 / tree.md 同步），组装与页面零变化。上一版
 *文档版本：v4.7（M4 按会话切流批，《Memory Tree Design v2》§7/§8/§11.2 阶段 2）。
 新增 §3.38：**会话整理模式**（旁车 `organizer: legacy|tree`，未显式设置跟随开发者
 缺省档 `developer.defaultOrganizer`；任务行 `…` 菜单切换，即时生效事件流零改动）

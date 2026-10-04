@@ -181,26 +181,62 @@ impl TreeStore {
     /// 共享扫描骨架：逐 scope 逐文件解析，产出 (树, 会话 id)。
     fn scan_all(&self) -> Vec<(MemoryTree, String)> {
         let mut out = Vec::new();
-        let Ok(entries) = std::fs::read_dir(&self.root) else {
+        for scope in self.list_scopes() {
+            for (tree, id) in self.scan_scope(&scope) {
+                out.push((tree, id));
+            }
+        }
+        out
+    }
+
+    /// 单工作区扫描（F1 tree.md 同步/导出用）：产出 (树, 会话 id, 投影
+    /// mtime 毫秒)——mtime 给人改保护（tree.md 新于全部投影 = 跳过重建）
+    /// 与稳定排序。
+    pub fn scan_workspace(&self, workspace: &str) -> Vec<(MemoryTree, String, i64)> {
+        let scope = self.root.join(scope_dir(workspace));
+        let mut out: Vec<(MemoryTree, String, i64)> = self
+            .scan_scope(&scope)
+            .into_iter()
+            .map(|(t, id)| {
+                let path = scope.join(format!("{id}.json"));
+                (t, id, mtime_ms(&path))
+            })
+            .collect();
+        out.sort_by(|a, b| a.1.cmp(&b.1));
+        out
+    }
+
+    /// scope 目录清单（scan_all 骨架提取）。
+    fn list_scopes(&self) -> Vec<std::path::PathBuf> {
+        let mut out = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&self.root) {
+            for scope in entries.flatten() {
+                if scope.path().is_dir() {
+                    out.push(scope.path());
+                }
+            }
+        }
+        out
+    }
+
+    /// 单 scope 解析：产出 (树, 会话 id)。坏投影跳过不阻塞扫描。
+    fn scan_scope(&self, scope: &Path) -> Vec<(MemoryTree, String)> {
+        let mut out = Vec::new();
+        let Ok(files) = std::fs::read_dir(scope) else {
             return out;
         };
-        for scope in entries.flatten() {
-            let Ok(files) = std::fs::read_dir(scope.path()) else {
+        for f in files.flatten() {
+            let name = f.file_name();
+            let Some(id) = name.to_str().and_then(|s| s.strip_suffix(".json")) else {
                 continue;
             };
-            for f in files.flatten() {
-                let name = f.file_name();
-                let Some(id) = name.to_str().and_then(|s| s.strip_suffix(".json")) else {
-                    continue;
-                };
-                let Ok(bytes) = std::fs::read(f.path()) else {
-                    continue;
-                };
-                let Ok(tree) = serde_json::from_slice::<MemoryTree>(&bytes) else {
-                    continue; // 坏投影不阻塞扫描
-                };
-                out.push((tree, id.to_string()));
-            }
+            let Ok(bytes) = std::fs::read(f.path()) else {
+                continue;
+            };
+            let Ok(tree) = serde_json::from_slice::<MemoryTree>(&bytes) else {
+                continue; // 坏投影不阻塞扫描
+            };
+            out.push((tree, id.to_string()));
         }
         out
     }
@@ -279,6 +315,21 @@ mod tests {
         let hits = store.scan_pending();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].session_id, "sess-1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_workspace_lists_single_scope_with_mtime() {
+        let dir = std::env::temp_dir().join(format!("mt-test-ws-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = TreeStore::new(&dir);
+        store.save(&sample("ws-a", "sess-2")).unwrap();
+        store.save(&sample("ws-a", "sess-1")).unwrap();
+        store.save(&sample("ws-b", "sess-3")).unwrap();
+        let rows = store.scan_workspace("ws-a");
+        assert_eq!(rows.len(), 2, "只取本工作区");
+        assert_eq!(rows[0].1, "sess-1", "会话 id 稳定序");
+        assert!(rows.iter().all(|r| r.2 > 0), "mtime 在场");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

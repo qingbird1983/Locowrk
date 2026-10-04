@@ -64,6 +64,12 @@ pub struct MemoryStore {
     workspace_of: WorkspaceResolver,
     /// 检索失败只告警一次（每 step 都 recall，别刷日志）。
     warned: AtomicBool,
+    /// F1 人类层（md 双写，文件化设计 §3）：sqlite 为真源，四条宿主写
+    /// 路径（提取 write / 管理页 update·delete·clear）成功后同步 md；
+    /// 未接线（单测）= 纯 sqlite。
+    files: Option<Arc<crate::memory_files::MemoryFiles>>,
+    /// 文件化总开关（settings `memory.files` 闭包；缺省无接线 = 恒关）。
+    files_on: Arc<dyn Fn() -> bool + Send + Sync>,
 }
 
 impl MemoryStore {
@@ -72,6 +78,39 @@ impl MemoryStore {
             dir: dir.to_path_buf(),
             workspace_of,
             warned: AtomicBool::new(false),
+            files: None,
+            files_on: Arc::new(|| false),
+        }
+    }
+
+    /// 接线人类层（state 组装点调用）：md 句柄 + 总开关闭包。
+    pub fn with_files(
+        mut self,
+        files: Arc<crate::memory_files::MemoryFiles>,
+        on: Arc<dyn Fn() -> bool + Send + Sync>,
+    ) -> Self {
+        self.files = Some(files);
+        self.files_on = on;
+        self
+    }
+
+    /// 双写一条事实 md（失败只 warn——人类层降级不破契约）。
+    fn md_write(&self, ws: &str, key: &str, value: &str, tags: &str, source: &str, at: i64) {
+        let (Some(files), true) = (self.files.as_ref(), (self.files_on)()) else {
+            return;
+        };
+        if let Err(e) = files.write_fact(ws, key, value, tags, source, at) {
+            tracing::warn!("记忆 md 同步失败 `{key}`: {e}");
+        }
+    }
+
+    /// 同步删除一条事实 md。
+    fn md_delete(&self, ws: &str, key: &str) {
+        let (Some(files), true) = (self.files.as_ref(), (self.files_on)()) else {
+            return;
+        };
+        if let Err(e) = files.delete_fact(ws, key) {
+            tracing::warn!("记忆 md 删除同步失败 `{key}`: {e}");
         }
     }
 
@@ -175,6 +214,27 @@ impl MemoryStore {
                 params![workspace, key, value, now],
             )
             .map_err(|e| format!("memory update `{key}`: {e}"))?;
+        if n > 0 {
+            // F1：编辑后按行现值同步 md（取 tags/source/updated_at 真值）
+            let row = conn
+                .query_row(
+                    "SELECT value, tags, source, updated_at FROM memories \
+                     WHERE workspace = ?1 AND key = ?2",
+                    params![workspace, key],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, i64>(3)?,
+                        ))
+                    },
+                )
+                .ok();
+            if let Some((v, tags, source, at)) = row {
+                self.md_write(workspace, key, &v, &tags, &source, at);
+            }
+        }
         Ok(n > 0)
     }
 
@@ -196,16 +256,19 @@ impl MemoryStore {
             return Err(format!("memory value 超过 {VALUE_MAX} 字节上限"));
         }
         let conn = self.open_conn()?;
+        let at = now_secs();
         conn.execute(
             "INSERT INTO memories (workspace, key, value, tags, updated_at, source) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(workspace, key) DO UPDATE SET
                  value = excluded.value, tags = excluded.tags,
                  updated_at = excluded.updated_at, source = excluded.source",
-            params![workspace, key, value, tags, now_secs(), source],
+            params![workspace, key, value, tags, at, source],
         )
         .map(|_| ())
-        .map_err(|e| format!("memory write `{key}`: {e}"))
+        .map_err(|e| format!("memory write `{key}`: {e}"))?;
+        self.md_write(workspace, key, value, tags, source, at);
+        Ok(())
     }
 
     /// 管理页删除单条（按键位）。返回 false = 不存在。
@@ -217,14 +280,50 @@ impl MemoryStore {
                 params![workspace, key],
             )
             .map_err(|e| format!("memory delete `{key}`: {e}"))?;
+        if n > 0 {
+            self.md_delete(workspace, key);
+        }
         Ok(n > 0)
     }
 
     /// 管理页清空（§11.3 一键清空，UI 只加一次确认；全键位）。返回条数。
     pub fn clear_all(&self) -> Result<usize, String> {
         let conn = self.open_conn()?;
-        conn.execute("DELETE FROM memories", [])
-            .map_err(|e| format!("memory clear: {e}"))
+        // F1：先收键位清单，删库后逐条同步删 md
+        let keys: Vec<(String, String)> = {
+            let mut stmt = conn
+                .prepare("SELECT workspace, key FROM memories")
+                .map_err(|e| format!("memory clear: {e}"))?;
+            let it = stmt
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                .map_err(|e| format!("memory clear: {e}"))?;
+            it.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("memory clear: {e}"))?
+        };
+        let n = conn
+            .execute("DELETE FROM memories", [])
+            .map_err(|e| format!("memory clear: {e}"))?;
+        for (ws, key) in keys {
+            self.md_delete(&ws, &key);
+        }
+        Ok(n)
+    }
+
+    /// 首启导出全量行（F1；无管理页 200 条上限，出界防护 10 万行）。
+    pub fn export_rows(&self) -> Result<Vec<MemoryRow>, String> {
+        let conn = self.open_conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT workspace, key, value, tags, source, updated_at FROM memories
+                 ORDER BY workspace, key LIMIT 100000",
+            )
+            .map_err(|e| format!("memory export: {e}"))?;
+        let rows = stmt
+            .query_map([], Self::row)
+            .map_err(|e| format!("memory export: {e}"))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| format!("memory export: {e}"))?;
+        Ok(rows)
     }
 
     fn recall_quiet(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryRow> {

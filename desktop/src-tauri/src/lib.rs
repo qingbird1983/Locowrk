@@ -45,6 +45,7 @@ mod extract;
 mod idle;
 mod llm;
 mod memory;
+mod memory_files;
 mod model_override;
 mod notifications;
 mod organize;

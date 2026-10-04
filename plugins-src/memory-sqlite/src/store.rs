@@ -223,16 +223,22 @@ pub(crate) fn memory_write(ctx: &super::WsCtx, args: &Value) -> Result<Value, St
             row_with_workspace_json,
         )
         .ok();
+    let at = now();
     conn.execute(
         "INSERT INTO memories (workspace, key, value, tags, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5)
          ON CONFLICT(workspace, key) DO UPDATE SET value = excluded.value,
              tags = excluded.tags, updated_at = excluded.updated_at",
-        params![ws, key, value, tags, now()],
+        params![ws, key, value, tags, at],
     )
     .map_err(|e| format!("memory_write `{key}`: {e}"))?;
     let scope = json!(if ws.is_empty() { "global" } else { "project" });
-    Ok(json!({ "key": key, "scope": scope, "created": previous.is_none(), "previous": previous }))
+    let mut out =
+        json!({ "key": key, "scope": scope, "created": previous.is_none(), "previous": previous });
+    if let Some(w) = mdsync::sync_write(&ws, &key, &value, tags, at) {
+        out["md_warning"] = json!(w);
+    }
+    Ok(out)
 }
 
 pub(crate) fn memory_read(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
@@ -330,7 +336,13 @@ pub(crate) fn memory_delete(ctx: &super::WsCtx, args: &Value) -> Result<Value, S
                 params![key],
             )
             .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
-        return Ok(json!({ "key": key, "deleted": deleted > 0, "previous_entry": previous }));
+        let mut out = json!({ "key": key, "deleted": deleted > 0, "previous_entry": previous });
+        if deleted > 0 {
+            if let Some(w) = mdsync::sync_delete("", &key) {
+                out["md_warning"] = json!(w);
+            }
+        }
+        return Ok(out);
     }
     let ws = ctx.scope();
     let in_project = !ws.is_empty() && exists(&conn, ws, &key)?;
@@ -348,7 +360,11 @@ pub(crate) fn memory_delete(ctx: &super::WsCtx, args: &Value) -> Result<Value, S
             params![ws, key],
         )
         .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
-        return Ok(json!({ "key": key, "deleted": true, "previous_entry": previous }));
+        let mut out = json!({ "key": key, "deleted": true, "previous_entry": previous });
+        if let Some(w) = mdsync::sync_delete(ws, &key) {
+            out["md_warning"] = json!(w);
+        }
+        return Ok(out);
     }
     if exists(&conn, "", &key)? {
         return Err(format!(
@@ -380,7 +396,13 @@ pub(crate) fn memory_undo(ctx: &super::WsCtx, args: &Value) -> Result<Value, Str
                     params![ws, key],
                 )
                 .map_err(|e| format!("memory_undo `{key}`: {e}"))?;
-            return Ok(json!({ "key": key, "undone": true, "removed": removed > 0 }));
+            let mut out = json!({ "key": key, "undone": true, "removed": removed > 0 });
+            if removed > 0 {
+                if let Some(w) = mdsync::sync_delete(&ws, key) {
+                    out["md_warning"] = json!(w);
+                }
+            }
+            return Ok(out);
         }
         let value = prev
             .get("value")
@@ -396,7 +418,11 @@ pub(crate) fn memory_undo(ctx: &super::WsCtx, args: &Value) -> Result<Value, Str
             .and_then(Value::as_str)
             .unwrap_or(ws.as_str());
         restore_entry(&conn, at_ws, key, value, tags, updated_at)?;
-        return Ok(json!({ "key": key, "undone": true, "restored": true }));
+        let mut out = json!({ "key": key, "undone": true, "restored": true });
+        if let Some(w) = mdsync::sync_write(at_ws, key, value, tags, updated_at) {
+            out["md_warning"] = json!(w);
+        }
+        return Ok(out);
     }
     if let Some(entry) = output.get("previous_entry") {
         // delete 的撤销：条目缺失（本来就不存在）→ no-op；否则整条还原
@@ -421,7 +447,11 @@ pub(crate) fn memory_undo(ctx: &super::WsCtx, args: &Value) -> Result<Value, Str
             .and_then(Value::as_str)
             .unwrap_or(ws.as_str());
         restore_entry(&conn, at_ws, key, value, tags, updated_at)?;
-        return Ok(json!({ "key": key, "undone": true, "restored": true }));
+        let mut out = json!({ "key": key, "undone": true, "restored": true });
+        if let Some(w) = mdsync::sync_write(at_ws, key, value, tags, updated_at) {
+            out["md_warning"] = json!(w);
+        }
+        return Ok(out);
     }
     Err(
         "memory_undo: missing `output.previous` or `output.previous_entry` (pass the original \
@@ -449,4 +479,55 @@ fn restore_entry(
     )
     .map_err(|e| format!("memory_undo `{key}`: {e}"))?;
     Ok(())
+}
+
+/// F1 人类层双写（《Memory File-ization Design》§3）：sqlite 写/删成功后
+/// 同步 `<数据根>/memory/` 下的 md。**失败不破契约**——sqlite 是召回真源，
+/// md 是人读面；失败只以 `md_warning` 字段如实带回（F2 reconcile 可修复），
+/// 总开关关 = 完全跳过。
+mod mdsync {
+    use plugin_api::memlayout::{self, FactEntry};
+
+    fn sync(f: impl FnOnce() -> Result<(), String>) -> Option<String> {
+        f().err().map(|e| format!("md sync failed: {e}"))
+    }
+
+    pub(super) fn sync_write(
+        ws: &str,
+        key: &str,
+        value: &str,
+        tags: &str,
+        at: i64,
+    ) -> Option<String> {
+        if !memlayout::files_enabled() {
+            return None;
+        }
+        let Ok(root) = memlayout::memory_root() else {
+            return Some("md sync failed: data root unavailable".into());
+        };
+        sync(|| {
+            memlayout::write_fact(
+                &root,
+                &FactEntry {
+                    workspace: ws,
+                    key,
+                    value,
+                    tags,
+                    source: "explicit",
+                    updated_at: at,
+                },
+            )
+            .map(|_| ())
+        })
+    }
+
+    pub(super) fn sync_delete(ws: &str, key: &str) -> Option<String> {
+        if !memlayout::files_enabled() {
+            return None;
+        }
+        let Ok(root) = memlayout::memory_root() else {
+            return Some("md sync failed: data root unavailable".into());
+        };
+        sync(|| memlayout::delete_fact(&root, ws, key).map(|_| ()))
+    }
 }

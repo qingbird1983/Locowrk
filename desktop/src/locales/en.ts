@@ -735,6 +735,9 @@ export default {
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
     memoryAutoExtract: "Auto-extract memories after conversations (implicit)",
+    memoryFiles: "Memory files",
+    memoryFilesHint:
+      "Also store memories as Markdown under ~/.Locowrk/memory/ (human-readable and editable); off = database only.",
     organizePacing: "Memory tree pacing",
     organizePacingHint:
       "Batch = organize the whole tail at the threshold; incremental = organize each time the tail fills a chunk (Tree v2 §4.3).",
