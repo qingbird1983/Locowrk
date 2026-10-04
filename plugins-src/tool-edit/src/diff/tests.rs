@@ -6,7 +6,14 @@ use std::path::Path;
 
 use super::edit_diff;
 use crate::testutil::ENV_LOCK;
+use plugin_api::HostVtable;
 use plugin_api::serde_json::json;
+
+/// 直呼函数的单测没有调用期 vtable——空指针 = 回落 env 全局围栏（与
+/// 未接围栏前的语义一致）。
+fn no_host() -> *const HostVtable {
+    std::ptr::null()
+}
 
 fn temp_root(tag: &str) -> std::path::PathBuf {
     let nanos = std::time::SystemTime::now()
@@ -48,7 +55,7 @@ fn multi_hunk_apply_with_trailing_newline() {
  fn e() {}
 +fn f() {}
 ";
-    let out = edit_diff(&json!({ "path": path, "patch": patch })).expect("apply ok");
+    let out = edit_diff(&json!({ "path": path, "patch": patch }), no_host()).expect("apply ok");
     assert_eq!(out["hunks_applied"], json!(2));
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
@@ -80,7 +87,7 @@ fn mismatch_rejects_whole_patch_without_touching_file() {
 -delta
 +BETA
 ";
-    let err = edit_diff(&json!({ "path": path, "patch": bad_context })).unwrap_err();
+    let err = edit_diff(&json!({ "path": path, "patch": bad_context }), no_host()).unwrap_err();
     assert!(err.contains("expected"), "got: {err}");
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
@@ -89,7 +96,7 @@ fn mismatch_rejects_whole_patch_without_touching_file() {
     );
 
     // 正确 patch 应用成功
-    edit_diff(&json!({ "path": path, "patch": patch })).expect("正确 patch 应用成功");
+    edit_diff(&json!({ "path": path, "patch": patch }), no_host()).expect("正确 patch 应用成功");
 
     unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
     let _ = std::fs::remove_dir_all(&root);
@@ -98,15 +105,33 @@ fn mismatch_rejects_whole_patch_without_touching_file() {
 #[test]
 fn malformed_patches_are_rejected() {
     // 无 hunk
-    assert!(edit_diff(&json!({ "path": "/x", "patch": "--- a\n+++ b\n" })).is_err());
+    assert!(
+        edit_diff(
+            &json!({ "path": "/x", "patch": "--- a\n+++ b\n" }),
+            no_host()
+        )
+        .is_err()
+    );
     // old_start 0（建新文件）
-    let err = edit_diff(&json!({ "path": "/x", "patch": "@@ -0,0 +1,1 @@\n+x\n" })).unwrap_err();
+    let err = edit_diff(
+        &json!({ "path": "/x", "patch": "@@ -0,0 +1,1 @@\n+x\n" }),
+        no_host(),
+    )
+    .unwrap_err();
     assert!(err.contains("not supported"), "got: {err}");
     // hunk 外内容
-    let err = edit_diff(&json!({ "path": "/x", "patch": "hello\n@@ -1 +1 @@\n" })).unwrap_err();
+    let err = edit_diff(
+        &json!({ "path": "/x", "patch": "hello\n@@ -1 +1 @@\n" }),
+        no_host(),
+    )
+    .unwrap_err();
     assert!(err.contains("outside a hunk"), "got: {err}");
     // 越界起始
-    let err = edit_diff(&json!({ "path": "/x", "patch": "@@ -9 +9 @@\n+x\n" })).is_err();
+    let err = edit_diff(
+        &json!({ "path": "/x", "patch": "@@ -9 +9 @@\n+x\n" }),
+        no_host(),
+    )
+    .is_err();
     assert!(err);
     // \\ No newline 标记不炸
     let parsed = super::parse_patch(

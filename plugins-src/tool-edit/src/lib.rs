@@ -11,7 +11,8 @@
 //! 为什么比 fs_write 重要（plugins.md §三）：整文件重写会丢未预期改动、
 //! 浪费 token；编辑类工具让模型只提交 diff。
 //!
-//! 安全底线：路径过 `plugin_api::fsutil` 允许根校验（同 tool-fs）；
+//! 安全底线：路径过 `plugin_api::fsutil` 允许根校验（同 tool-fs，调用期
+//! 围栏跟会话——vtable session_context 优先，env `LOCOWRK_FS_ROOTS` 回落）；
 //! 目标文件必须已存在（新建走 fs_write）。
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
@@ -178,9 +179,9 @@ impl PluginState for EditState {
     fn call(&self, tool: &str, args: Value) -> Result<Value, String> {
         self.log(log_level::INFO, &format!("tool-edit: {tool} called"));
         match tool {
-            "edit_replace" => replace::edit_replace(&args),
-            "edit_lines" => lines::edit_lines(&args),
-            "edit_diff" => diff::edit_diff(&args),
+            "edit_replace" => replace::edit_replace(&args, self.host),
+            "edit_lines" => lines::edit_lines(&args, self.host),
+            "edit_diff" => diff::edit_diff(&args, self.host),
             other => Err(format!("unknown tool `{other}`")),
         }
     }

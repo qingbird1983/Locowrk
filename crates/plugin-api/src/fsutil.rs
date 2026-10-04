@@ -182,11 +182,30 @@ fn ensure_inside(resolved: &Path, roots: &[PathBuf]) -> Result<PathBuf, String> 
     if roots.iter().any(|r| resolved.starts_with(r)) {
         Ok(resolved.to_path_buf())
     } else {
+        // 拒绝必须自描述（2026-10-04 实机走查：内嵌 Agent 试遍围栏外路径后
+        // 误报"零个工作区"——旧文案只教人去设 env，而归属会话的围栏来自
+        // 会话旁车，env 根本不生效）：报错要列出本次调用实际生效的根。
         Err(format!(
-            "path `{}` is outside the allowed roots (set LOCOWRK_FS_ROOTS to grant a workspace)",
-            resolved.display()
+            "path `{}` is outside the allowed roots for this call: {} — the fence \
+             follows the session's attributed workspace (LOCOWRK_FS_ROOTS is only \
+             the fallback for unattributed sessions); list one of those roots to browse it",
+            resolved.display(),
+            display_roots(roots)
         ))
     }
+}
+
+/// 围栏根的展示形（报错自描述用）：去 Windows verbatim `\\?\` 前缀
+/// （canonicalize 产物，原样出现会干扰阅读），逐根反引号括起。
+pub fn display_roots(roots: &[PathBuf]) -> String {
+    let items: Vec<String> = roots
+        .iter()
+        .map(|r| {
+            let s = r.to_string_lossy();
+            format!("`{}`", s.strip_prefix(r"\\?\").unwrap_or(&s))
+        })
+        .collect();
+    format!("[{}]", items.join(", "))
 }
 
 /// rename 恢复的共享原语（同卷原子；跨卷 EXDEV 回退 copy + remove）。

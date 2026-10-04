@@ -4,12 +4,13 @@
 
 use std::path::Path;
 
-use plugin_api::fsutil::{allowed_roots, backup_original, resolve_existing};
+use plugin_api::HostVtable;
+use plugin_api::fsutil::{backup_original, effective_roots, resolve_existing};
 use plugin_api::serde_json::{Value, json};
 
 use crate::{load_lines, store_lines};
 
-pub(crate) fn edit_lines(args: &Value) -> Result<Value, String> {
+pub(crate) fn edit_lines(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let path = args
         .get("path")
         .and_then(Value::as_str)
@@ -35,7 +36,8 @@ pub(crate) fn edit_lines(args: &Value) -> Result<Value, String> {
             "edit_lines `end_line` ({end}) must be ≥ `start_line` ({start})"
         ));
     }
-    let roots = allowed_roots()?;
+    // SAFETY: host 是 init 时宿主交付的 'static vtable 指针（EditState 同契约）
+    let roots = unsafe { effective_roots(host) }?;
     let resolved = resolve_existing(Path::new(path), &roots)?;
     let display = resolved.display().to_string();
     let (_, lines, had_nl) = load_lines(&display)?;

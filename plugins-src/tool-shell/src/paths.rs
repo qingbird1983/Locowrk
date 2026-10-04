@@ -20,7 +20,7 @@
 use std::path::{Path, PathBuf};
 
 use plugin_api::HostVtable;
-use plugin_api::fsutil::effective_roots;
+use plugin_api::fsutil::{display_roots, effective_roots};
 
 /// 校验只读命令的路径面。`args` = 切词后的参数（不含程序名），
 /// `cwd` = 显式工作目录（已确认存在）。
@@ -40,10 +40,14 @@ pub(crate) fn ensure_readonly_scope(
         .canonicalize()
         .map_err(|e| downgrade(&format!("shell_read `cwd` cannot be resolved: {e}")))?;
     if !in_roots(&eff_cwd, &roots) {
-        return Err(downgrade(
-            "working directory is outside the allowed roots (LOCOWRK_FS_ROOTS, \
-             default = data root)",
-        ));
+        // 自描述（同 fsutil::ensure_inside——2026-10-04 实机走查：旧文案把
+        // 归属会话也引去设 env，模型据此误报"零个工作区"）
+        return Err(downgrade(&format!(
+            "working directory is outside the allowed roots for this call: {} (the \
+             fence follows the session's attributed workspace; LOCOWRK_FS_ROOTS is \
+             only the fallback)",
+            display_roots(&roots)
+        )));
     }
     for token in args {
         if let Some(rest) = token.strip_prefix('-') {
@@ -91,7 +95,8 @@ fn in_roots(p: &Path, roots: &[PathBuf]) -> bool {
 fn downgrade(what: &str) -> String {
     format!(
         "{what} — refused by the read-only tool; re-run the same command via the \
-         `shell` tool (it requires user approval), or adjust LOCOWRK_FS_ROOTS"
+         `shell` tool (it requires user approval), or adjust the allowed roots \
+         (session workspace attribution or LOCOWRK_FS_ROOTS)"
     )
 }
 

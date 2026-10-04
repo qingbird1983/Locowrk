@@ -52,15 +52,17 @@ stage() {
 
 stage tool-echo 0.1.0
 stage tool-echo 0.2.0
-stage tool-fs 0.1.0
+# 0.1.1（2026-10-04，小迭代 +0.0.1）：围栏拒绝自描述（fsutil ensure_inside
+# 报错列出生效根）+ tool-edit 纳入调用期围栏（㉘·B 漏网补口）
+stage tool-fs 0.1.1
 stage tool-fetch 0.1.0
-stage tool-shell 0.1.0
-stage tool-edit 0.1.0
-stage tool-git 0.1.0
+stage tool-shell 0.1.1
+stage tool-edit 0.1.1
+stage tool-git 0.1.1
 stage memory-sqlite 0.1.0
 stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + 其余 9 插件 0.1.0（版本基准重置见 packaging.md §9.4·补）"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-{fs,shell,edit,git} 0.1.1（围栏自描述/漏网补口）+ 其余 0.1.0"
 echo "next: cargo run -p kernel-bin -- demo"

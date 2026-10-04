@@ -662,6 +662,17 @@ toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "
 
 验证：实机走查（CDP 28b-1…7 + 旁车落盘取证）：切换器四档渲染与当前档勾选 → 档位写旁车 `permissionMode:"ask"` → **计划模式实机**（fs_write 被目录围栏拒收、模型如实报告、search_tools 纯工具照常）→ 环境行如实（归属会话 = 「项目 F:\…\Locowrk」；未归属 = 「临时会话」）→ 询问档审批卡三键/中风险胶囊/理由行/倒计时 → **外部路径门实机**（完全档下围栏外命令强制弹卡、只有「拒绝/允许一次」两键、子 Agent 徽章 + 未归属 env 如实）→ 设置页「新会话权限档」下拉行。**走查实抓缺陷已修**：resolve 失败走 `?` 留悬空 tool_calls，下一轮被供应商拒收（"insufficient tool messages"）——内核改为解析失败也以失败 ToolResult 逐调用闭合（纪律 5 另一半），+回归测试；⑮ 两例收束语义随新契约更新（围栏不变：越权工具零执行）。走查会话已删、设置零改动（切换器只写会话旁车）。
 
+### ㉘·B·fix 围栏拒绝自描述 + tool-edit 纳入会话围栏（✅ 已完成，v2.66——用户实机报障「选了工作区 Agent 仍报零个工作区」）
+
+| 项 | 说明 |
+|---|---|
+| 围栏拒绝自描述 | ✅ v2.66：fsutil `ensure_inside`（tool-fs / tool-git / tool-edit 共用拒点）与 tool-shell `paths.rs` cwd 拒绝的报错改为**列出本次调用实际生效的围栏根**（新 `fsutil::display_roots`，去 Windows verbatim `\\?\` 展示形），并注明「围栏跟会话归属工作区，`LOCOWRK_FS_ROOTS` 只是未归属回落」——旧文案只教人去设 env，归属会话下是死胡同（诊断取证：audit.jsonl 时间戳证明 15:05 探测发生时会话已归属 `F:\Warehouse\AAA`，围栏 [数据根, AAA] 全程正确生效，被拒的 F:\ / C:\Users / F:\projects / 进程 cwd 全在围栏外；「零个工作区」是内嵌 Agent 无法发现围栏所致的误报） |
+| tool-edit 补口 | ✅ v2.66：㉘·B 漏网——`edit_replace` / `edit_lines` / `edit_diff`（写入面）此前仍用 env-only `allowed_roots()`，不随会话围栏收缩（归属会话下可编辑 fsRoots 全局根内任意文件，比会话围栏宽）；三工具改 `effective_roots(host)`（lib.rs 分发传 `self.host`），与 tool-fs / tool-git 同语义 |
+| 插件版本 | ✅ v2.66：tool-{fs, shell, git, edit} 0.1.0 → 0.1.1（小迭代 +0.0.1，packaging.md §9.4·补）+ `build_plugins.sh` 重建暂存；其余插件行为不变不动 |
+| 测试 | ✅ v2.66：plugin-api 22 + tool-fs 16 + tool-shell 9 + tool-git 10 + tool-edit 5 绿（直呼函数的单测传空 host = `context_roots` None 回落 env，与改造前语义一致）；plugin-host 集成 37 绿；workspace 361 绿、桌面 156 绿、clippy 0 双侧、fmt、check_length OK |
+
+验证：静态取证（audit.jsonl / 会话旁车 / settings / DLL 构建时间 vs ㉘·B 提交时间）+ 全量测试；实机复验待应用重启载入 0.1.1 产物后重试——此后第一次越界拒绝即自带围栏根清单，内嵌 Agent 据此可直接列出归属工作区。
+
 ### ㉙ 会话运营补全（✅ 已完成，v2.57——功能层规划第二批）
 
 | 项 | 说明 |

@@ -3,10 +3,11 @@
 
 use std::path::Path;
 
-use plugin_api::fsutil::{allowed_roots, backup_original, resolve_existing};
+use plugin_api::HostVtable;
+use plugin_api::fsutil::{backup_original, effective_roots, resolve_existing};
 use plugin_api::serde_json::{Value, json};
 
-pub(crate) fn edit_replace(args: &Value) -> Result<Value, String> {
+pub(crate) fn edit_replace(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let path = args
         .get("path")
         .and_then(Value::as_str)
@@ -27,7 +28,10 @@ pub(crate) fn edit_replace(args: &Value) -> Result<Value, String> {
     if old.is_empty() {
         return Err("edit_replace `old_string` must not be empty".into());
     }
-    let roots = allowed_roots()?;
+    // ㉘·B 补口（2026-10-04 实机走查发现 v2.56 漏网）：编辑类也是路径类
+    // 写面，围栏跟会话（vtable session_context 优先，env 回落）
+    // SAFETY: host 是 init 时宿主交付的 'static vtable 指针（EditState 同契约）
+    let roots = unsafe { effective_roots(host) }?;
     let resolved = resolve_existing(Path::new(path), &roots)?;
     let display = resolved.display().to_string();
     let content =
