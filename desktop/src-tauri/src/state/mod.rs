@@ -148,9 +148,15 @@ pub fn init_state(app: AppHandle) -> AppState {
         let s = Arc::clone(&settings);
         Arc::new(move || s.memory().files) as Arc<dyn Fn() -> bool + Send + Sync>
     };
+    // F2 交接注入（repo_context.rs）：归属会话注入 <repo>/.Locowrk/ 交接段
+    let repo_on = {
+        let s = Arc::clone(&settings);
+        Arc::new(move || s.memory().repo_context) as Arc<dyn Fn() -> bool + Send + Sync>
+    };
     let memory = Arc::new(
         MemoryStore::new(&root, Arc::clone(&workspace_of))
-            .with_files(Arc::clone(&memory_files), Arc::clone(&files_on)),
+            .with_files(Arc::clone(&memory_files), Arc::clone(&files_on))
+            .with_repo_context(Arc::clone(&repo_on)),
     );
     let permission_modes = Arc::new(crate::permission_mode::PermissionModeStore::new(
         sessions_dir.clone(),
@@ -423,14 +429,19 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 在途整理任务重投（后台，不阻塞窗口出现）
     organizer.recover_pending();
 
-    // F1 首启导出（文件化设计 §6）：存量 sqlite 事实 → md（文件已在 =
-    // 跳过，人编辑不动）+ 各工作区 tree.md（人改保护）——后台线程幂等。
+    // F1 首启导出（文件化设计 §6）+ F2 启动 reconcile（先对账再补缺）：
+    // 后台线程幂等，总开关关 = 什么都不做。
+    let roots_on = {
+        let s = Arc::clone(&settings);
+        Arc::new(move || s.fs_roots()) as Arc<dyn Fn() -> Vec<String> + Send + Sync>
+    };
     crate::memory_files::spawn_initial_export(
         Arc::clone(&memory),
         memory_tree::TreeStore::new(&root),
         (*memory_files).clone(),
         sessions_dir.clone(),
         Arc::clone(&files_on),
+        roots_on,
     );
 
     AppState {
@@ -451,6 +462,8 @@ pub fn init_state(app: AppHandle) -> AppState {
         compact_cfg,
         memory_cfg,
         memory,
+        memory_files,
+        memory_files_on: files_on,
         usage,
         exposure_cfg,
         exposure,

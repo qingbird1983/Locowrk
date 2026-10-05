@@ -20,6 +20,10 @@ use std::path::{Path, PathBuf};
 
 use crate::fsutil;
 
+mod sync;
+
+pub use sync::{ParsedFact, mtime_ms, parse_fact, read_marker, write_marker};
+
 /// md 根目录名（数据根下）。
 const DIR_NAME: &str = "memory";
 /// 总开关 env：宿主在 settings `memory.files = false` 时注入 `"0"`；
@@ -218,12 +222,7 @@ fn parse_description(text: &str) -> Option<String> {
             break;
         }
         if let Some(v) = line.strip_prefix("description: ") {
-            let v = v.trim();
-            let un = v
-                .strip_prefix('"')
-                .and_then(|s| s.strip_suffix('"'))
-                .unwrap_or(v);
-            return Some(un.replace("\\\"", "\"").replace("\\\\", "\\"));
+            return Some(sync::yaml_unquote(v));
         }
     }
     None
@@ -255,12 +254,15 @@ pub fn refresh_index(root: &Path, workspace: &str) -> Result<(), String> {
     lines.sort();
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("memory 目录创建失败 {}: {e}", dir.display()))?;
-    std::fs::write(&index_path, format!("# 记忆索引\n\n{}\n", lines.join("\n")))
-        .map_err(|e| format!("memory 索引写入失败 {}: {e}", index_path.display()))
+    sync::atomic_write(
+        &index_path,
+        &format!("# 记忆索引\n\n{}\n", lines.join("\n")),
+    )
+    .map_err(|e| format!("memory 索引写入失败 {}: {e}", index_path.display()))
 }
 
-/// 写一条事实 md（目录惰性建 + 刷新该键位索引）。幂等覆盖——调用方保证
-/// sqlite 已是真源。返回值 = 文件路径（日志/测试用）。
+/// 写一条事实 md（目录惰性建 + **冲突备份** + 刷新该键位索引）。幂等
+/// 覆盖——调用方保证 sqlite 已是真源。返回值 = 文件路径（日志/测试用）。
 pub fn write_fact(root: &Path, e: &FactEntry) -> Result<PathBuf, String> {
     let rel = fact_rel_path(e.workspace, e.key);
     let path = root.join(&rel);
@@ -269,20 +271,30 @@ pub fn write_fact(root: &Path, e: &FactEntry) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("memory 路径异常: {}", rel.display()))?;
     std::fs::create_dir_all(dir)
         .map_err(|err| format!("memory 目录创建失败 {}: {err}", dir.display()))?;
-    std::fs::write(&path, e.render())
+    // F2 冲突保护：文件带未合并的人工编辑 → 先备份再写（保留双方）
+    sync::stash_human_edit(root, &rel, e)?;
+    sync::atomic_write(&path, &e.render())
         .map_err(|err| format!("memory md 写入失败 {}: {err}", path.display()))?;
+    if let Some(ms) = sync::mtime_ms(&path) {
+        let _ = sync::write_marker(root, &rel, ms);
+    }
     refresh_index(root, e.workspace)?;
     Ok(path)
 }
 
-/// 删一条事实 md + 刷新索引。文件不存在 = Ok(false)（幂等）。
+/// 删一条事实 md + 删标记 + 刷新索引。文件不存在 = Ok(false)（幂等）。
 pub fn delete_fact(root: &Path, workspace: &str, key: &str) -> Result<bool, String> {
-    let path = root.join(fact_rel_path(workspace, key));
+    let rel = fact_rel_path(workspace, key);
+    let path = root.join(&rel);
     match std::fs::remove_file(&path) {
         Ok(()) => {}
-        Err(e) if fsutil::is_not_found(&e) => return Ok(false),
+        Err(e) if fsutil::is_not_found(&e) => {
+            sync::remove_marker(root, &rel);
+            return Ok(false);
+        }
         Err(e) => return Err(format!("memory md 删除失败 {}: {e}", path.display())),
     }
+    sync::remove_marker(root, &rel);
     refresh_index(root, workspace)?;
     Ok(true)
 }

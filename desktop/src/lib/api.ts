@@ -10,6 +10,7 @@ import type {
   ContextUpdate,
   InstalledPlugin,
   MemoryRow,
+  ReconcileSummary,
   PluginUsageView,
   LlmUpdate,
   MarketplaceItem,
@@ -442,6 +443,16 @@ export function memoryDelete(workspace: string, key: string): Promise<void> {
 /** 清空全部记忆。返回删除条数。 */
 export function memoryClearAll(): Promise<number> {
   return invoke("memory_clear_all");
+}
+
+/** F2 reconcile：diff 记忆文件 ↔ 索引，以文件为准回写（文件层关 = 零计数）。 */
+export function memoryReconcile(): Promise<ReconcileSummary> {
+  return invoke("memory_reconcile");
+}
+
+/** F2 人的编辑面入口：打开（必要时先建）记忆人类层目录。 */
+export function memoryRevealFolder(): Promise<void> {
+  return invoke("memory_reveal_folder");
 }
 
 /** 最近一次工具暴露截断快照（⑫ 开发者面板；打开分区时拉取）。 */

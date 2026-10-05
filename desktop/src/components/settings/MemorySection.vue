@@ -29,6 +29,7 @@ const form = reactive({
   collapseEnabled: false,
   collapseThresholdPct: 80,
   files: true,
+  repoContext: true,
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
@@ -57,6 +58,7 @@ watch(
     form.collapseEnabled = v.memory.collapseEnabled;
     form.collapseThresholdPct = v.memory.collapseThresholdPct;
     form.files = v.memory.files;
+    form.repoContext = v.memory.repoContext;
   },
   { immediate: true },
 );
@@ -73,6 +75,7 @@ function save() {
     collapseEnabled: form.collapseEnabled,
     collapseThresholdPct: Math.round(form.collapseThresholdPct),
     files: form.files,
+    repoContext: form.repoContext,
   });
 }
 </script>
@@ -109,6 +112,15 @@ function save() {
     <!-- F1 记忆文件化（文件化设计 §7）：关 = 回纯 sqlite，md 不再读写 -->
     <SettingsRow :title="t('settings.memoryFiles')" :hint="t('settings.memoryFilesHint')">
       <SettingsToggle v-model="form.files" :label="t('settings.memoryFiles')" />
+    </SettingsRow>
+    <SettingsRow
+      :title="t('settings.memoryRepoContext')"
+      :hint="t('settings.memoryRepoContextHint')"
+    >
+      <SettingsToggle
+        v-model="form.repoContext"
+        :label="t('settings.memoryRepoContext')"
+      />
     </SettingsRow>
 
     <!-- M2 记忆树整理（树 v2 §4.3/§15）：节奏二档 + 增量块 X（增量档显示） -->

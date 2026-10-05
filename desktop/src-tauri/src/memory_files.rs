@@ -227,18 +227,40 @@ pub fn run_initial_export(
     Ok((facts, trees))
 }
 
-/// 首启导出入口（state 组装点调用）：后台线程 fire-and-forget；总开关
-/// 关 = 什么都不做（回纯 sqlite）。
+/// 首启对账 + 导出入口（state 组装点调用）：后台线程 fire-and-forget；
+/// 总开关关 = 什么都不做（回纯 sqlite）。
+///
+/// 顺序纪律：**先 reconcile 再导出**——reconcile 以文件为准（人删的文件
+/// 把行删掉），导出只补"行在文件缺"的洞；反过来导出先行会把人删的文件
+/// 按旧索引写回来。
 pub fn spawn_initial_export(
     memory: std::sync::Arc<MemoryStore>,
     tree_store: TreeStore,
     files: MemoryFiles,
     sessions_dir: PathBuf,
     files_on: std::sync::Arc<dyn Fn() -> bool + Send + Sync>,
+    roots_on: std::sync::Arc<dyn Fn() -> Vec<String> + Send + Sync>,
 ) {
     std::thread::spawn(move || {
         if !files_on() {
             return;
+        }
+        let mut known = roots_on();
+        match memory.all_workspaces() {
+            Ok(ws) => known.extend(ws),
+            Err(e) => tracing::warn!("记忆 reconcile 键位枚举失败: {e}"),
+        }
+        match crate::memory_reconcile::run(&memory, &files, &known) {
+            Ok(s) if s.has_action() => tracing::info!(
+                created = s.created,
+                updated = s.updated,
+                healed = s.healed,
+                deleted = s.deleted,
+                warnings = s.warnings,
+                "记忆文件启动对账完成"
+            ),
+            Ok(_) => {}
+            Err(e) => tracing::warn!("记忆文件启动对账失败: {e}"),
         }
         match run_initial_export(&memory, &tree_store, &files, &sessions_dir) {
             Ok((0, 0)) => {}

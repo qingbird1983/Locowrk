@@ -68,6 +68,10 @@ pub struct AppState {
     pub memory_cfg: Arc<RwLock<MemoryInjectConfig>>,
     /// 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
     pub memory: Arc<MemoryStore>,
+    /// 记忆人类层句柄（F1/F2）：reconcile 与「打开文件夹」命令的数据源。
+    pub memory_files: Arc<crate::memory_files::MemoryFiles>,
+    /// 文件化总开关闭包（同 state 组装的 files_on；命令层判定空转）。
+    pub memory_files_on: Arc<dyn Fn() -> bool + Send + Sync>,
     /// 使用统计写入端（⑩③，usage.sqlite3 宿主自有）。降级模式 = 丢弃。
     pub usage: Arc<UsageRecorder>,
     /// 应用内通知记录（§3.13，v2.51）：notifications.json 自持，命令层

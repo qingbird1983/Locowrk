@@ -72,6 +72,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             collapse_enabled: s.memory.collapse_enabled,
             collapse_threshold_pct: s.memory.collapse_threshold_pct,
             files: s.memory.files,
+            repo_context: s.memory.repo_context,
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,

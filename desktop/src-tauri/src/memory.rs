@@ -18,7 +18,7 @@
 //! UI；不在启动路径上 panic。
 
 use std::path::{Path, PathBuf};
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::time::Duration;
 
 use rusqlite::{params, Connection};
@@ -29,8 +29,8 @@ use kernel_agent::{MemoryEntry, MemorySource};
 use crate::workspace::{scope_key, WorkspaceResolver};
 
 /// 与 memory-sqlite 插件同限：key 主键不能无限长，value 防 runaway 写。
-const KEY_MAX: usize = 512;
-const VALUE_MAX: usize = 256 * 1024;
+pub(crate) const KEY_MAX: usize = 512;
+pub(crate) const VALUE_MAX: usize = 256 * 1024;
 /// 管理页单次列举上限（页内滚动不分页，200 条对"用户的笔记"足够）。
 const LIST_MAX: u32 = 200;
 
@@ -70,6 +70,10 @@ pub struct MemoryStore {
     files: Option<Arc<crate::memory_files::MemoryFiles>>,
     /// 文件化总开关（settings `memory.files` 闭包；缺省无接线 = 恒关）。
     files_on: Arc<dyn Fn() -> bool + Send + Sync>,
+    /// F2 交接注入开关（settings `memory.repoContext` 闭包；缺省恒关）。
+    repo_on: Arc<dyn Fn() -> bool + Send + Sync>,
+    /// 已引导过的仓库（每进程每仓库一次 ensure_layout，幂等也兜底防抖）。
+    repo_ensured: Mutex<std::collections::HashSet<PathBuf>>,
 }
 
 impl MemoryStore {
@@ -80,7 +84,27 @@ impl MemoryStore {
             warned: AtomicBool::new(false),
             files: None,
             files_on: Arc::new(|| false),
+            repo_on: Arc::new(|| false),
+            repo_ensured: Mutex::new(std::collections::HashSet::new()),
         }
+    }
+
+    /// 接线交接注入（F2，state 组装点调用）：settings `memory.repoContext`
+    /// 闭包——归属会话注入 `<repo>/.Locowrk/` 交接段 + 引导建目录。
+    pub fn with_repo_context(mut self, on: Arc<dyn Fn() -> bool + Send + Sync>) -> Self {
+        self.repo_on = on;
+        self
+    }
+
+    /// 会话的仓库根（归属路径 = 交接面落点）。未归属 / 非目录 = None。
+    fn repo_root(&self, session_id: Option<&str>) -> Option<PathBuf> {
+        let sid = session_id?;
+        let ws = (self.workspace_of)(sid)?;
+        if ws.is_empty() {
+            return None;
+        }
+        let repo = PathBuf::from(&ws);
+        repo.is_dir().then_some(repo)
     }
 
     /// 接线人类层（state 组装点调用）：md 句柄 + 总开关闭包。
@@ -326,6 +350,83 @@ impl MemoryStore {
         Ok(rows)
     }
 
+    // ---- F2 reconcile 专用（memory_reconcile.rs）：索引向文件对齐的
+    // 直写 SQL——**绝不走** write/delete 常规路径（那会反向同步 md，覆盖
+    // 人的文件）；上限校验同常规路径，超限 Err 由调用方计警告跳过。 ----
+
+    /// 一个键位的全部行（reconcile 删除判定用；无上限——reconcile 是
+    /// 全量对账，出界防护同 export）。
+    pub fn reconcile_rows(&self, workspace: &str) -> Result<Vec<MemoryRow>, String> {
+        let conn = self.open_conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT workspace, key, value, tags, source, updated_at FROM memories
+                 WHERE workspace = ?1 ORDER BY key LIMIT 100000",
+            )
+            .map_err(|e| format!("memory reconcile rows: {e}"))?;
+        let rows = stmt
+            .query_map(params![workspace], Self::row)
+            .map_err(|e| format!("memory reconcile rows: {e}"))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| format!("memory reconcile rows: {e}"))?;
+        Ok(rows)
+    }
+
+    /// 以文件内容覆盖/新建一行（文件为准；tags/source 由调用方裁决）。
+    pub fn reconcile_upsert(
+        &self,
+        workspace: &str,
+        key: &str,
+        value: &str,
+        tags: &str,
+        source: &str,
+        at: i64,
+    ) -> Result<(), String> {
+        if key.is_empty() || key.len() > KEY_MAX {
+            return Err(format!("memory key 长度需在 1..={KEY_MAX} 字节"));
+        }
+        if value.len() > VALUE_MAX {
+            return Err(format!("memory value 超过 {VALUE_MAX} 字节上限"));
+        }
+        let conn = self.open_conn()?;
+        conn.execute(
+            "INSERT INTO memories (workspace, key, value, tags, updated_at, source) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(workspace, key) DO UPDATE SET
+                 value = excluded.value, tags = excluded.tags,
+                 updated_at = excluded.updated_at, source = excluded.source",
+            params![workspace, key, value, tags, at, source],
+        )
+        .map(|_| ())
+        .map_err(|e| format!("memory reconcile upsert `{key}`: {e}"))
+    }
+
+    /// 删除一行（人删了文件——单文件手势）。
+    pub fn reconcile_delete(&self, workspace: &str, key: &str) -> Result<bool, String> {
+        let conn = self.open_conn()?;
+        let n = conn
+            .execute(
+                "DELETE FROM memories WHERE workspace = ?1 AND key = ?2",
+                params![workspace, key],
+            )
+            .map_err(|e| format!("memory reconcile delete `{key}`: {e}"))?;
+        Ok(n > 0)
+    }
+
+    /// 全部键位清单（reconcile 的 scope 枚举 ∪ fsRoots 作反查候选）。
+    pub fn all_workspaces(&self) -> Result<Vec<String>, String> {
+        let conn = self.open_conn()?;
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT workspace FROM memories ORDER BY workspace")
+            .map_err(|e| format!("memory workspaces: {e}"))?;
+        let rows = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(|e| format!("memory workspaces: {e}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("memory workspaces: {e}"))?;
+        Ok(rows)
+    }
+
     fn recall_quiet(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryRow> {
         let ws = self.scope_of_session(session_id);
         // 双层记忆（Context 文档 §4.6，㉘·A·fix）：项目键位 ∪ 全局层（''，
@@ -437,7 +538,21 @@ impl MemorySource for MemoryStore {
     }
 
     fn scope_id(&self, session_id: Option<&str>) -> String {
-        self.scope_of_session(session_id)
+        let base = self.scope_of_session(session_id);
+        // F2：交接文件 mtime 指纹进预取缓存键（设计 §2.2）——人改文件 =
+        // 显式变更自动重算；开关关 / 无交接面 = 空指纹不参与键。
+        if !(self.repo_on)() {
+            return base;
+        }
+        let fp = self
+            .repo_root(session_id)
+            .map(|repo| crate::repo_context::fingerprint(&repo))
+            .unwrap_or_default();
+        if fp.is_empty() {
+            base
+        } else {
+            format!("{base}\u{1}repo:{fp}")
+        }
     }
 
     fn context_line(&self, session_id: Option<&str>) -> Option<String> {
@@ -450,6 +565,26 @@ impl MemorySource for MemoryStore {
              message refers to this directory; list/read it first, do not guess \
              other paths from old memories."
         ))
+    }
+
+    /// F2 交接段（文件化设计 §2.2）：归属会话注入 `<repo>/.Locowrk/`
+    /// 交接面。首次调用顺手引导建目录（幂等，每仓库一次）；开关关 /
+    /// 未归属 / 非目录 = None（组装零变化）。内文随 mtime 进 scope_id
+    /// （见上），M1 预取纪律不破。
+    fn repo_context(&self, session_id: Option<&str>) -> Option<String> {
+        if !(self.repo_on)() {
+            return None;
+        }
+        let repo = self.repo_root(session_id)?;
+        {
+            let mut set = self.repo_ensured.lock().expect("repo ensured poisoned");
+            if set.insert(repo.clone()) {
+                if let Err(e) = crate::repo_context::ensure_layout(&repo) {
+                    tracing::warn!("交接目录引导失败 {}: {e}", repo.display());
+                }
+            }
+        }
+        crate::repo_context::build(&repo)
     }
 }
 

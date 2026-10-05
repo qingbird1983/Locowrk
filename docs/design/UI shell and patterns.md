@@ -305,7 +305,7 @@
 |---|---|---|
 | `LlmSection` | `llm` | ✅ 既有（+ 窗口下拉） |
 | `ContextSection` | `context` | ✅（阈值/策略/建议值；前端不做第二套换算） |
-| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：**尾巴策略**（边界结算 / 固定窗口，缺省边界结算）+ **固定窗口 N**（1–20 缺省 5，窗口档显示）+ **memory_collapse 暴露**（缺省关）+ **自动收起阈值**（50–95% 缺省 80，collapse 开启时显示）；F1 v4.8 起另挂**记忆文件化**开关行（缺省开，关 = 回纯 sqlite 不再读写 md）） |
+| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：**尾巴策略**（边界结算 / 固定窗口，缺省边界结算）+ **固定窗口 N**（1–20 缺省 5，窗口档显示）+ **memory_collapse 暴露**（缺省关）+ **自动收起阈值**（50–95% 缺省 80，collapse 开启时显示）；F1 v4.8 起另挂**记忆文件化**开关行（缺省开，关 = 回纯 sqlite 不再读写 md）；F2 v4.9 起再挂**交接注入**开关行（`memory.repoContext` 缺省开——归属会话注入 `<repo>/.Locowrk/` 交接段，关 = 不建目录不注入）） |
 | `LlmSection` | `llm` | ✅（v4.5 起默认项组内增**会话记录员**行——同主模型 ▾，树 v2 §5.2） |
 | `SessionsSection` | —（只读 dataDir） | ✅ |
 | `LanguageSection` | `locale` | ✅ |
@@ -314,7 +314,7 @@
 | `ShortcutSection` | `shortcut` | ✅ |
 | `ShellSection` | `shell` | ✅（高危解锁开关；重启生效） |
 | `ToolsSection`（v2.49 更名——分区 id 本就是 `tools`，组件名对齐 1:1；原 DeveloperSection） | `tools`（含 `fsRoots` 工作区目录 / `maxTurnSteps` 单轮步数上限 1–100 缺省 8 / `approvalTimeoutSecs` 审批等待时长，0=不限 缺省 100，🆕 v2.49） | ✅ |
-| `DeveloperSection`（🆕 v2.49 开发者选项，**默认隐藏**） | `developer`（`unlocked` 解锁态 / `allowDeleteRunningSession` 运行中会话强制删除 / `allowSwitchRunningSession` 运行中切换会话——危险开关缺省全关；🆕 M0：`cacheHitAlert` 命中率告警缺省关 + `cacheHitAlertPercent` 阈值缺省 80 + 「前缀缓存读数」只读面板；🆕 M1：`tools.pinSession` 工具集会话钉死缺省开 + `context.stabilityRounds` 稳定期轮数 1–10 缺省 3——两键 JSON 分属 tools/context 区，UI 行同挂开发者分区，KV v2 §9 开发者层级；🆕 M4：`developer.defaultOrganizer` **会话缺省整理模式**（legacy / tree，缺省 legacy——树 v2 §15「会话缺省 organizer」，阶段 3 数据裁决后才切用户层）） | ✅ |
+| `DeveloperSection`（🆕 v2.49 开发者选项，**默认隐藏**） | `developer`（`unlocked` 解锁态 / `allowDeleteRunningSession` 运行中会话强制删除 / `allowSwitchRunningSession` 运行中切换会话——危险开关缺省全关；🆕 M0：`cacheHitAlert` 命中率告警缺省关 + `cacheHitAlertPercent` 阈值缺省 80 + 「前缀缓存读数」只读面板；🆕 M1：`tools.pinSession` 工具集会话钉死缺省开 + `context.stabilityRounds` 稳定期轮数 1–10 缺省 3——两键 JSON 分属 tools/context 区，UI 行同挂开发者分区，KV v2 §9 开发者层级；🆕 M4：`developer.defaultOrganizer` **会话缺省整理模式**（legacy / tree，缺省 legacy——树 v2 §15「会话缺省 organizer」，阶段 3 数据裁决后才切用户层）；🆕 F2 v4.9：**记忆文件合并**动作行（手动触发 reconcile，结果 toast 如实报计数）） | ✅ |
 | `EmbeddingSection` | `embedding` | ✅ |
 | `PluginsSection` | `plugins` | ✅（自动停用天数 / 调用超时） |
 
@@ -1402,7 +1402,11 @@ memory-sqlite），全部 UI 面向 = 一条斜杠命令 + 两处设置行 + 开
 
 - **区块一「记忆库（事实）」**：现有 memory-sqlite 列表整体（ListPage 搜索 +
   行内编辑 + 删除 + 清空，行为零变化），只加区块头标题——向用户挑明这是
-  「事实层」，与情景层分开；
+  「事实层」，与情景层分开；**F2 v4.9 起区块头右侧挂「打开文件夹」动作**
+  （`memory_reveal_folder`——打开 `~/.Locowrk/memory/`，目录不存在先建空目录；
+  这是人的编辑面入口：直接改 .md 即改记忆，下次进本页生效），且**页面挂载时
+  先跑一次 `memory_reconcile` 再拉列表**（人改 md = 打开记忆页即生效，设计
+  §3 读写路径表）；
 - **区块二「记忆树（情景）」**（新组件 `components/memory/TreeSection.vue`，
   自持状态不牵动事实区）：
   - **会话选择**：树按 (workspace, session) 键位存储（对齐 ㉘·A），区块顶部
@@ -1572,6 +1576,8 @@ memory-sqlite），全部 UI 面向 = 一条斜杠命令 + 两处设置行 + 开
 | `memory_tree_bundles`（✅ M3 §3.37④） | 记忆页树区块（选中会话变化/刷新） | 直读投影文件，不占会话锁；捆列表渲染 |
 | `memory_tree_original`（✅ M3 §3.37④） | 记忆页树区块 `[看原文]` | 磁盘会话日志切片，与记录员材料同形；行内只读展开 |
 | `session_set_organizer`（✅ M4 §3.38⑦） | 侧栏任务行 `…` 菜单 | 旁车 `organizer` 写穿（mode 缺省 = 清除跟随缺省档）；即时生效，事件流零改动 |
+| `memory_reconcile`（✅ F2 v4.9） | 记忆页挂载 + 开发者「记忆文件合并」动作 | diff 文件 ↔ 索引以文件为准回写（文件化设计 §3）；返回计数供 toast；总开关关 = 空转 |
+| `memory_reveal_folder`（✅ F2 v4.9） | 记忆页区块头「打开文件夹」 | 打开/创建 `~/.Locowrk/memory/`——人的编辑面入口，不经 fsRoots 白名单（自有数据根非用户仓库） |
 
 铁则重申：**UI 永不直接操作 PluginRegistry**（只经 PluginService / 宿主命令）；流式内容
 永远走事件推送，不塞 command 返回值；Tauri command 是薄适配层。
@@ -2108,6 +2114,13 @@ cacheMissPrice）+ 开发者分区「前缀缓存读数」面板与命中率告�
 **稳定期轮数**（`context.stabilityRounds`，数字 1–10 缺省 3——结算后 N 轮不触发
 改前缀操作）。*
 
+*文档版本：v4.9（F2 人的编辑面批，《Memory File-ization Design》v1.1 §6 F2）。
+§3.37① 记忆库区块头加「打开文件夹」动作（`memory_reveal_folder`）+ 页面挂载先
+reconcile 再拉列表（人改 md 打开即生效）；§3.2 记忆分区加**交接注入**开关行
+（`memory.repoContext` 缺省开）+ 开发者分区加**记忆文件合并**动作行（手动
+reconcile，计数 toast）；§4.2 补 `memory_reconcile` / `memory_reveal_folder` 两命令。
+本批其余为后端能力（reconcile 引擎 / `.Locowrk/` 引导与 `<repo_context>` 注入 /
+M1 预取键含文件 mtime），组装形态零变化。上一版
 *文档版本：v4.8（F1 记忆文件化批，《Memory File-ization Design》v1.1 §6 F1）。
 §3.2 记忆分区新增**记忆文件化**开关行（`memory.files`，缺省开——关 = 回纯
 sqlite，md 不再读写；hint 说明落点 `~/.Locowrk/memory/`）。本批其余为后端能力

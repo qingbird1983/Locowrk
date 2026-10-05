@@ -117,3 +117,87 @@ fn enabled_from_env_semantics() {
     assert!(enabled_from(Some("1")));
     assert!(!enabled_from(Some("0")), "仅 \"0\" = 关");
 }
+
+// ---- F2 同步机械件：标记 / 解析 / 冲突备份 ----
+
+fn tmp_root(tag: &str) -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!("memlayout-f2-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    root
+}
+
+#[test]
+fn write_fact_records_sync_marker_and_delete_removes_it() {
+    let root = tmp_root("marker");
+    write_fact(&root, &entry("", "m.k", "v")).unwrap();
+    let rel = fact_rel_path("", "m.k");
+    let m = read_marker(&root, &rel).expect("标记随写落盘");
+    assert_eq!(m, mtime_ms(&root.join(&rel)).unwrap(), "标记 = 落笔 mtime");
+    delete_fact(&root, "", "m.k").unwrap();
+    assert!(read_marker(&root, &rel).is_none(), "删除随行删标记");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn parse_fact_roundtrips_frontmatter_and_falls_back_to_body() {
+    let text = entry("ws", "k\"1", "line1\nline2").render();
+    let p = parse_fact(&text);
+    assert_eq!(p.name.as_deref(), Some("k\"1"), "引号反转义");
+    assert_eq!(p.workspace.as_deref(), Some("ws"));
+    assert_eq!(p.source.as_deref(), Some("explicit"));
+    assert_eq!(p.updated_at, Some(1728100000));
+    assert_eq!(p.body, "line1\nline2");
+    let bare = parse_fact("# 标题\n\n正文");
+    assert_eq!(bare.name, None, "无 frontmatter = 无名");
+    assert_eq!(bare.body, "# 标题\n\n正文", "全文即正文");
+}
+
+#[test]
+fn human_edit_before_model_write_is_backed_up_not_lost() {
+    let root = tmp_root("stash");
+    write_fact(&root, &entry("", "k", "model v1")).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(25));
+    let rel = fact_rel_path("", "k");
+    // 人直接改文件（正文换掉，frontmatter 保留旧 updated）
+    std::fs::write(
+        root.join(&rel),
+        "---\nname: \"k\"\ndescription: \"d\"\nmetadata:\n  type: fact\n  source: \"explicit\"\n  workspace: \"\"\n  updated: 1728100000\n---\n\nhuman edit\n",
+    )
+    .unwrap();
+    // 模型随后同键写入 → 冲突备份，主键 = 时间戳新者（模型）
+    let p = write_fact(&root, &entry("", "k", "model v2")).unwrap();
+    let main = std::fs::read_to_string(&p).unwrap();
+    assert!(main.contains("model v2"), "主键文件 = 新者");
+    let backups: Vec<String> = std::fs::read_dir(root.join("global"))
+        .unwrap()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".md"))
+        .filter(|e| e.file_name().to_string_lossy() != "k.md")
+        .filter(|e| e.file_name().to_string_lossy() != "MEMORY.md")
+        .map(|e| std::fs::read_to_string(e.path()).unwrap())
+        .collect();
+    assert_eq!(backups.len(), 1, "恰好一份人工备份");
+    let parsed = parse_fact(&backups[0]);
+    assert!(
+        parsed
+            .name
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with("k · 人工编辑备份 "),
+        "备份键自描述：{:?}",
+        parsed.name
+    );
+    assert_eq!(parsed.body.trim_end(), "human edit", "人的版本保全");
+    // 同内容重复写不再产生备份
+    write_fact(&root, &entry("", "k", "model v2")).unwrap();
+    let backups2 = std::fs::read_dir(root.join("global"))
+        .unwrap()
+        .flatten()
+        .filter(|e| {
+            let n = e.file_name().to_string_lossy().into_owned();
+            n.ends_with(".md") && n != "k.md" && n != "MEMORY.md"
+        })
+        .count();
+    assert_eq!(backups2, 1, "内容相同 = 无冲突");
+    let _ = std::fs::remove_dir_all(&root);
+}

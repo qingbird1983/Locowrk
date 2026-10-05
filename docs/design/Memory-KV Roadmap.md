@@ -38,7 +38,7 @@
 | 阶段 | 名称 | 一句话 | 依赖 | 回退方式 |
 |---|---|---|---|---|
 | F1 | 双写与导出 ✅ v2.71 | memory_write / 整理收束双写 .md + 首启导出存量；组装零变化 | 设计 v1.1 定稿 | 删 `~/.Locowrk/memory/` 零损失 |
-| F2 | 人的编辑面 | reconcile（人编辑 md 生效）+ 记忆页「打开文件夹」+ `<repo>/.Locowrk/` 交接（gitignore + handoff/requirements 注入组装） | F1 | 总开关关闭 |
+| F2 | 人的编辑面 ✅ v2.72 | reconcile（人编辑 md 生效）+ 记忆页「打开文件夹」+ `<repo>/.Locowrk/` 交接（gitignore + handoff/requirements 注入组装） | F1 | 总开关关闭 |
 | F3 | 主动记忆 | autoExtract 缺省开 + handoff 收束更新 + 提示词主动指引 | F1（F2 的编辑面更好但非硬依赖） | 开关可退 |
 
 **总回退原则**：树是投影、组装是投影、事件流唯一真相源——任何阶段验证失败都只拆投影，不动原文。M5 之前不存在不可逆动作。
@@ -176,11 +176,13 @@
 * F1 双写与导出：布局落地（memory_write/整理收束双写 + MEMORY.md 索引）；首启导出（幂等，md 已存在不覆盖）；总开关 + 组装/插件契约零变化 ✅
 * 验收：真实轮 memory_write 后 md 文件在场且内容正确 ✅；存量导出幂等重跑不重复 ✅（trees=0 证明）；关开关回纯 sqlite ✅（单测锁 + 实机往返落盘）
 
-#### F2 · 人的编辑面 ⬜
+#### F2 · 人的编辑面 ✅（2026-10-05，v2.72）
 
-* reconcile：启动 + 记忆页打开 + 手动命令——diff 文件 ↔ 索引以文件为准回写（冲突保留双方 + 时间戳）
-* 记忆页「打开文件夹」（reveal_in_explorer 现成）；管理页编辑/删除同步写文件
-* `<repo>/.Locowrk/` 引导：首次创建自动补 .gitignore + handoff/requirements/notes 注入组装（M1 预取缓存键含 mtime）
+**落账**：**memlayout 拆目录模块**（mod.rs 布局 + sync.rs 同步机械件）——per-file mtime 标记（`.sync/<rel>.ts`，写删随行）、**原子写**（临时文件 + 同目录 rename，md/索引/标记并发不再撕裂）、`parse_fact`（frontmatter 宽松读回，name 权威）、**写路径冲突保护**（stash_human_edit：标记在而 mtime 已变且内容 ≠ 新渲染 = 人改未合并 → 先另存 `<key> · 人工编辑备份 <millis>` 再落新值——保留双方、时间戳新者占主键，设计 §3 同步纪律）。**reconcile 引擎**（desktop `memory_reconcile.rs` 新）：判定矩阵 = 内容等价（尾空白不敏感）补标记零噪声（人格式化不改写）/ 索引先行（标记 == mtime 而内容漂移 = 历史 md 同步失败）从索引愈合文件 / 文件为准更新·新增（tags·source 沿行，frontmatter updated 优先）/ 行在文件缺且标记在 = 人删单文件 → 删行刷索引 / scope 目录整体缺席 = 复位手势不删行（首启导出按索引重建）；人建的无 frontmatter 文件按项目目录名反查（known = fsRoots ∪ sqlite 键位）；MemoryStore 专用 `reconcile_*` 直写 SQL **绝不反向同步 md**。触发 = 启动（**先 reconcile 再导出**，顺序反了会把人删文件按旧索引写回）+ 记忆页挂载 + 开发者手动。**`<repo>/.Locowrk/` 引导与注入**（desktop `repo_context.rs` 新）：ensure_layout 幂等（建目录 + requirements.md 模板 + `.git` 存在时 `.gitignore` 追加一行——用户方向①「主动加入 git 排除」）；注入段 = requirements 全文（截 2000 字符）+ handoff 全文 + notes/ 文件名清单（按需用文件工具读），全空 = 一行提示段；kernel `MemorySource::repo_context` 缺省 None（headless 组装零变化），MemoryInject 在 `<workspace_context>` 之后、记忆块之前包 `<repo_context>`；**M1 预取兼容 = 指纹进 scope_id**（requirements/handoff/notes 的 mtime 签名）——人改文件 = 显式变更自动重算，键不变逐字节复用。**总开关** `memory.repoContext`（缺省开，记忆设置行）。**UI（shell v4.9）**：记忆页区块头「打开文件夹」（`memory_reveal_folder`，自有数据根不经 fsRoots 白名单）+ 挂载先 reconcile 再拉列表；开发者分区「记忆文件化」组「立即合并」按钮 + 上次合并计数行 + toast。**搭车**：`open_in_explorer` 自 reveal_in_explorer 抽出共用。测试：plugin-api 30（+3 标记/解析/冲突备份）、desktop 200（+7：reconcile 引擎 5 / repo_context 2）、kernel-agent 84（+2 注入次序/缺省零变化）绿、workspace 39 套件全绿、clippy 0 双侧、fmt、pnpm build 过、插件 memory-sqlite 0.1.2→0.1.3 重建（memlayout 副本带标记+stash+原子写）。**实机走查（CDP 真实轮 deepseek）**：挂起归属首轮 → `.Locowrk/` + requirements 模板 + `.gitignore` 行落盘 + 模型首轮即如实转述注入段（「requirements 由用户主编辑、模型只读、目前只有一行注释」）→ 人改 requirements 加金线 BAZ-42 → **模型禁用工具纯凭注入段逐字引用金线**（指纹失效重算实证）→ memory_write 过审批卡落 md → 人改 md 正文 → 记忆页挂载 reconcile 列表即显人改值（3 次重挂 3/3 确定性）→ **冲突 stash 实机**：人改未合并窗口内模型同键覆盖 → 主键 = 模型新值 + `f2.walkthrough…1791166959826.md` 备份文件保全人的版本 → 记忆页两行并存（备份按 frontmatter name 吸呐为独立行、正文保全）→ 「打开文件夹」开资源管理器无错 → 开发者「立即合并」toast 计数 + 上次合并行渲染。走查清理：会话删、记忆行删归零、`~/.Locowrk/memory/` 移除、tmp 仓库删、settings 字节还原；**记档**：usage.sqlite3 工具级聚合计数器含走查增量（无会话归因不可外科删除，EWMA 衰减无害）；首轮记忆页挂载断言一次 NOT-FOUND 为环境干扰（实时窗口被切到设置页），三复验干净。**已知边界（记档）**：tree.md reconcile（人改标题/摘要回写投影 + title_edited_by_user）随 M5 编辑面同一批落地——避免两处编辑回写实现；MEMORY.md 并发刷新以原子写缓解撕裂，语义收敛靠 reconcile。
+
+* reconcile：启动 + 记忆页打开 + 手动命令——diff 文件 ↔ 索引以文件为准回写（冲突保留双方 + 时间戳）✅（写路径 stash + reconcile 吸呐备份）
+* 记忆页「打开文件夹」；管理页编辑/删除同步写文件 ✅（F1 已落，本批加入口）
+* `<repo>/.Locowrk/` 引导：首次创建自动补 .gitignore + handoff/requirements/notes 注入组装（M1 预取缓存键含 mtime）✅（notes 只注清单，全文按需工具读）
 
 #### F3 · 主动记忆 ⬜
 

@@ -31,6 +31,9 @@ pub const COLLAPSE_THRESHOLD_PCT_RANGE: std::ops::RangeInclusive<u8> = 50..=95;
 /// F1 记忆文件化总开关缺省（《Memory File-ization Design》§7 已裁定：
 /// 关 = 回纯 sqlite，md 不再读写；缺省开——md 是人类层，写失败不破契约）。
 pub const FILES_DEFAULT: bool = true;
+/// F2 交接注入缺省（设计 §7：开）——归属会话注入 `<repo>/.Locowrk/`
+/// 交接段；关 = 不建目录不注入。
+pub const REPO_CONTEXT_DEFAULT: bool = true;
 
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +81,8 @@ pub struct MemorySettings {
     pub collapse_threshold_pct: u8,
     /// 记忆文件化总开关（F1 §7 缺省开）：关 = 回纯 sqlite，md 不再读写。
     pub files: bool,
+    /// 交接注入（F2 §7 缺省开）：归属会话注入 `<repo>/.Locowrk/` 交接段。
+    pub repo_context: bool,
 }
 
 impl Default for MemorySettings {
@@ -95,6 +100,7 @@ impl Default for MemorySettings {
             collapse_enabled: false,
             collapse_threshold_pct: COLLAPSE_THRESHOLD_PCT_DEFAULT,
             files: FILES_DEFAULT,
+            repo_context: REPO_CONTEXT_DEFAULT,
         }
     }
 }
@@ -115,6 +121,7 @@ pub struct MemorySettingsView {
     pub collapse_enabled: bool,
     pub collapse_threshold_pct: u8,
     pub files: bool,
+    pub repo_context: bool,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -136,4 +143,5 @@ pub struct MemoryUpdate {
     pub collapse_enabled: Option<bool>,
     pub collapse_threshold_pct: Option<u8>,
     pub files: Option<bool>,
+    pub repo_context: Option<bool>,
 }

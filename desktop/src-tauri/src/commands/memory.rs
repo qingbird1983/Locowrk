@@ -59,6 +59,30 @@ pub async fn memory_clear_all(state: State<'_, AppState>) -> Result<usize, Strin
     state.memory.clear_all()
 }
 
+/// F2 reconcile（文件化设计 §3/§7）：diff 记忆文件 ↔ 索引，以文件为准
+/// 回写。触发 = 启动（后台）+ 记忆页挂载 + 开发者手动按钮；总开关关 =
+/// 空转零计数。
+#[tauri::command]
+pub async fn memory_reconcile(
+    state: State<'_, AppState>,
+) -> Result<crate::memory_reconcile::ReconcileSummary, String> {
+    if !(state.memory_files_on)() {
+        return Ok(Default::default());
+    }
+    let mut known = state.settings.fs_roots();
+    known.extend(state.memory.all_workspaces()?);
+    crate::memory_reconcile::run(&state.memory, &state.memory_files, &known)
+}
+
+/// F2 人的编辑面入口：打开（必要时先建）记忆人类层目录。自有数据根，
+/// 不经 fsRoots 白名单（那是用户仓库的防线）。
+#[tauri::command]
+pub async fn memory_reveal_folder(state: State<'_, AppState>) -> Result<(), String> {
+    let dir = state.memory_files.root().to_path_buf();
+    std::fs::create_dir_all(&dir).map_err(|e| format!("memory 目录创建失败: {e}"))?;
+    super::sessions::open_in_explorer(&dir.to_string_lossy())
+}
+
 // ---- 经历记忆命令（⑬，Context 文档 §4.3 / §11.3"用户必须能看到并删除
 // 每一条记忆"）：experiences.sqlite3 宿主自有，薄适配到 ExperienceDb。
 // 语义检索的命中注入不经命令（Memory-Inject 直连），这里只服务管理页。 ----

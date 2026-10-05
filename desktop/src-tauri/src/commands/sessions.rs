@@ -259,16 +259,8 @@ pub async fn subagent_transcript(
     Ok(runner::project_events(session.events(), &child_id))
 }
 
-/// 在系统文件管理器中打开项目目录（§2.3 v3.9 项目菜单「在文件夹中显示」）：
-/// 路径必须是当前 fsRoots 之一（后端直读设置校验，不信前端转述——与
-/// `session_associate` 同一防线），不给任意路径开执行面。
-#[tauri::command]
-pub async fn reveal_in_explorer(path: String, state: State<'_, AppState>) -> Result<(), String> {
-    let p = path.trim();
-    let roots = state.settings.fs_roots();
-    if !roots.iter().any(|r| r == p) {
-        return Err(format!("「{p}」不在 设置 → 工具 → 工作区目录 里，拒绝打开"));
-    }
+/// 跨平台打开目录（reveal_in_explorer / memory_reveal_folder 共用壳）。
+pub fn open_in_explorer(p: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer")
@@ -291,4 +283,17 @@ pub async fn reveal_in_explorer(path: String, state: State<'_, AppState>) -> Res
             .map_err(|e| format!("打开文件管理器失败: {e}"))?;
     }
     Ok(())
+}
+
+/// 在系统文件管理器中打开项目目录（§2.3 v3.9 项目菜单「在文件夹中显示」）：
+/// 路径必须是当前 fsRoots 之一（后端直读设置校验，不信前端转述——与
+/// `session_associate` 同一防线），不给任意路径开执行面。
+#[tauri::command]
+pub async fn reveal_in_explorer(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let p = path.trim();
+    let roots = state.settings.fs_roots();
+    if !roots.iter().any(|r| r == p) {
+        return Err(format!("「{p}」不在 设置 → 工具 → 工作区目录 里，拒绝打开"));
+    }
+    open_in_explorer(p)
 }

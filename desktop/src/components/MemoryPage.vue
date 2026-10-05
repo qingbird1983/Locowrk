@@ -25,6 +25,8 @@ import {
   memoryClearAll,
   memoryDelete,
   memoryList,
+  memoryReconcile,
+  memoryRevealFolder,
   memoryUpdate,
 } from "../lib/api";
 import type { ExperienceRow, MemoryRow } from "../types";
@@ -73,10 +75,24 @@ watch(search, (v, old) => {
   timer = setTimeout(() => void load(), 300);
 });
 
-onMounted(() => {
+// F2：挂载先 reconcile（人改 .md 打开本页即生效——文件为准回写索引；
+// 文件层关 = 后端零计数空转），再拉列表让事实区直接反映合并结果。
+onMounted(async () => {
+  try {
+    await memoryReconcile();
+  } catch {
+    // 对账失败不拦页面（列表照常展示索引现状）
+  }
   void load();
   void loadExperiences();
 });
+
+/** 打开记忆人类层目录（~/.Locowrk/memory/）——人的编辑面入口。 */
+function openFolder() {
+  void memoryRevealFolder().catch((e) => {
+    loadError.value = String(e);
+  });
+}
 
 function startEdit(row: MemoryRow) {
   editingKey.value = rowId(row);
@@ -191,11 +207,19 @@ async function clearExperiences() {
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <!-- M3 §3.37① 双区块之一：事实库区块头（在 ListPage 外，空列表也
-         显示——双区块口径一致；现有列表行为零变化） -->
-    <div class="border-b border-line px-5 pb-2 pt-3">
+         显示——双区块口径一致；现有列表行为零变化）。F2 v4.9：右侧挂
+         「打开文件夹」——人的编辑面入口。 -->
+    <div class="flex items-center border-b border-line px-5 pb-2 pt-3">
       <h3 class="text-xs font-semibold text-ink-1">
         {{ t("memory.factsTitle") }}
       </h3>
+      <button
+        class="ml-auto rounded-lg px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
+        :title="t('memory.openFolderHint')"
+        @click="openFolder"
+      >
+        {{ t("memory.openFolder") }}
+      </button>
     </div>
     <ListPage
       v-model:search="search"

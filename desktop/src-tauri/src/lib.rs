@@ -46,6 +46,7 @@ mod idle;
 mod llm;
 mod memory;
 mod memory_files;
+mod memory_reconcile;
 mod model_override;
 mod notifications;
 mod organize;
@@ -53,6 +54,7 @@ mod organizer_mode;
 mod permission_mode;
 mod plugins_root;
 mod privacy;
+mod repo_context;
 mod runner;
 mod scheduler;
 mod search_tools;
@@ -172,6 +174,8 @@ pub fn run() {
             commands::memory_update,
             commands::memory_delete,
             commands::memory_clear_all,
+            commands::memory_reconcile,
+            commands::memory_reveal_folder,
             commands::experience_list,
             commands::experience_delete,
             commands::experience_clear_all,

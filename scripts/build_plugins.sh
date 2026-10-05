@@ -66,10 +66,13 @@ stage tool-git 0.1.2
 # 0.1.2（2026-10-05，小迭代 +0.0.1）：F1 记忆文件化——write/delete/undo
 # 三落点成功后双写 ~/.Locowrk/memory/ 人类层 md（失败只带 md_warning
 # 字段不破契约；总开关 env LOCOWRK_MEMORY_FILES=0 整体跳过）
-stage memory-sqlite 0.1.2
+# 0.1.3（2026-10-05，小迭代 +0.0.1）：F2 同步机械件——memlayout 写路径
+# 带 per-file mtime 标记 + 冲突备份（人改 md 未合并时同键写入保留双方）
+# + 原子写防撕裂
+stage memory-sqlite 0.1.3
 stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-{fs,shell,edit,git} 0.1.2（围栏让路文案）+ 其余 0.1.0（memory-sqlite 0.1.2 文件化双写）"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-{fs,shell,edit,git} 0.1.2（围栏让路文案）+ 其余 0.1.0（memory-sqlite 0.1.3 F2 同步机械件）"
 echo "next: cargo run -p kernel-bin -- demo"

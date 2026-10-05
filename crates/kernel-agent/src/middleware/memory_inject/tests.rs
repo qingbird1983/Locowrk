@@ -387,6 +387,8 @@ struct Scoped {
     per_call: std::sync::atomic::AtomicUsize,
     scope: std::sync::Mutex<String>,
     line: std::sync::Mutex<Option<String>>,
+    /// F2 交接段内文（Some = 有交接面）。
+    repo: std::sync::Mutex<Option<String>>,
 }
 
 impl Scoped {
@@ -396,6 +398,7 @@ impl Scoped {
             per_call: std::sync::atomic::AtomicUsize::new(1),
             scope: std::sync::Mutex::new(String::new()),
             line: std::sync::Mutex::new(None),
+            repo: std::sync::Mutex::new(None),
         }
     }
 
@@ -417,6 +420,10 @@ impl MemorySource for Scoped {
 
     fn context_line(&self, _session_id: Option<&str>) -> Option<String> {
         self.line.lock().unwrap().clone()
+    }
+
+    fn repo_context(&self, _session_id: Option<&str>) -> Option<String> {
+        self.repo.lock().unwrap().clone()
     }
 }
 
@@ -464,6 +471,39 @@ async fn context_line_injected_even_without_memories() {
     assert!(out.contains("<workspace_context>"));
     assert!(out.contains("F:\\AI\\Glance-main"));
     assert!(!out.contains("<persistent_memory>"));
+}
+
+/// 交接段（F2 §2.2）：归属会话在 workspace_context 之后、记忆块之前
+/// 注入 `<repo_context>`；无交接面（None）零出现，组装零变化。
+#[tokio::test]
+async fn repo_context_injected_after_workspace_line() {
+    let src = Arc::new(Scoped::new());
+    src.per_call.store(0, std::sync::atomic::Ordering::SeqCst); // 零记忆
+    *src.line.lock().unwrap() = Some("Current project workspace: F:\\p".into());
+    *src.repo.lock().unwrap() = Some("requirements / handoff / notes listing".into());
+    let inject = inject(
+        src as std::sync::Arc<dyn MemorySource>,
+        cfg_lock(MemoryInjectConfig::default()),
+    );
+    let out = run_session(&inject, "s1").await.unwrap().system.unwrap();
+    let ws = out.find("</workspace_context>").expect("工作区行在");
+    let repo = out.find("<repo_context>").expect("交接段在");
+    let mem = out.find("<persistent_memory>").unwrap_or(usize::MAX);
+    assert!(ws < repo, "交接段紧随工作区行之后");
+    assert!(repo < mem, "交接段先于记忆块（无记忆时 mem 不存在）");
+    assert!(out.contains("requirements / handoff / notes listing"));
+}
+
+#[tokio::test]
+async fn no_repo_context_by_default() {
+    let src = Arc::new(Scoped::new());
+    *src.line.lock().unwrap() = Some("Current project workspace: F:\\p".into());
+    let inject = inject(
+        src as std::sync::Arc<dyn MemorySource>,
+        cfg_lock(MemoryInjectConfig::default()),
+    );
+    let out = run_session(&inject, "s1").await.unwrap().system.unwrap();
+    assert!(!out.contains("<repo_context>"), "缺省实现 = 无交接段");
 }
 
 /// 归属会话的记忆块带层标（双层记忆：全局 = 用户偏好 / 项目 = 本项目）。

@@ -376,6 +376,14 @@ export default {
     pinSessionHint:
       "The exposed tool set is decided at the session's first request and reused, keeping the tools block byte-stable; use search_tools to pull more. Off = re-rank every turn (hit rate drops; for A/B experiments).",
     stabilityRounds: "Stability period (turns)",
+    filesTitle: "Memory files",
+    filesHint: "Markdown is the authoritative edit surface (human-readable and editable); sqlite is the machine index.",
+    reconcileTitle: "Merge memory files",
+    reconcileHint: "Merge manual edits under ~/.Locowrk/memory/ into the memory index now (runs automatically when you open the memory page; files win, conflicts keep both).",
+    reconcileRun: "Merge now",
+    reconcileRunning: "Merging…",
+    reconcileDone: "Merged: +{created} ~{updated} -{deleted} healed {healed}",
+    reconcileLast: "Last merge: scanned {scanned} · created {created} · updated {updated} · deleted {deleted} · healed {healed} · warnings {warnings}",
     organizeTitle: "Memory tree (shadow run)",
     organizeHint: "Write-only, never takes over: only memory-tree/ projections; request assembly untouched.",
     reboundK: "Refill breaker k",
@@ -432,6 +440,8 @@ export default {
     globalTier: "Global preference",
     // M3 §3.37① dual blocks: facts label + read-only tree section
     factsTitle: "Memory (facts)",
+    openFolder: "Open folder",
+    openFolderHint: "Open ~/.Locowrk/memory/ — edit the .md files to edit memories; takes effect when you reopen this page",
     treeTitle: "Memory tree (episodes)",
     treeReadOnly: "Read-only · shadow run",
     treeEmpty:

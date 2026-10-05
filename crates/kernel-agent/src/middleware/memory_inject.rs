@@ -79,6 +79,17 @@ pub trait MemorySource: Send + Sync + 'static {
         let _ = session_id;
         None
     }
+
+    /// 仓库交接段内文（F2，文件化设计 §2.2）：归属会话的
+    /// `<repo>/.Locowrk/` 交接面（requirements 全文 + handoff 全文 +
+    /// notes/ 清单）。宿主实现；缺省 `None` = 无交接面（headless / 未
+    /// 归属 / 开关关），组装零变化。段文本随文件 mtime 进 `scope_id`
+    /// 缓存键（实现侧负责）——人改文件 = 显式变更自动重算，键不变逐
+    /// 字节复用（M1 纪律不破）。
+    fn repo_context(&self, session_id: Option<&str>) -> Option<String> {
+        let _ = session_id;
+        None
+    }
 }
 
 /// 单条经历记忆（⑬ 语义检索命中；只带注入需要的字段）。
@@ -324,11 +335,18 @@ impl WaterfallListener for MemoryInject {
             }
         }
         // 工作区上下文行（㉘·A·fix）：归属会话先告知"当前项目在哪"——
-        // 即使零记忆也注入（块 = 上下文行 ∪ 记忆 ∪ 经历）。
+        // 即使零记忆也注入（块 = 上下文行 ∪ 交接段 ∪ 记忆 ∪ 经历）。
         let mut block = self
             .source
             .context_line(req.session_id.as_deref())
             .map(|line| format!("<workspace_context>\n{line}\n</workspace_context>"));
+        // 交接段（F2 §2.2）：与工作区行同族，紧随其后；内文宿主给定。
+        if let Some(repo) = self.source.repo_context(req.session_id.as_deref()) {
+            block = Self::append_block(
+                block,
+                Some(format!("<repo_context>\n{repo}\n</repo_context>")),
+            );
+        }
         // ㉘：把会话 id 交给检索源做项目隔离（宿主裁决 workspace 语义）
         let entries = self.source.recall(req.session_id.as_deref(), cfg.top_k);
         block = Self::append_block(block, Self::build_block(&entries));

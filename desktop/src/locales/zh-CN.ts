@@ -370,6 +370,14 @@ export default {
     pinSessionHint:
       "暴露集在会话首次请求确定并复用，tools 块逐字节稳定；需要新工具用 search_tools 拉取。关闭 = 恢复每轮按热度重选（缓存命中率会掉，实验对比用）。",
     stabilityRounds: "稳定期轮数",
+    filesTitle: "记忆文件化",
+    filesHint: "md 是权威编辑面（人可查可读可写），sqlite 是机器索引。",
+    reconcileTitle: "记忆文件合并",
+    reconcileHint: "立即把 ~/.Locowrk/memory/ 下的人工编辑合并进记忆索引（平时打开记忆页自动执行；以文件为准，冲突保留双方）。",
+    reconcileRun: "立即合并",
+    reconcileRunning: "合并中…",
+    reconcileDone: "合并完成：新增 {created} · 更新 {updated} · 删除 {deleted} · 愈合 {healed}",
+    reconcileLast: "上次合并：扫描 {scanned} · 新增 {created} · 更新 {updated} · 删除 {deleted} · 愈合 {healed} · 警告 {warnings}",
     organizeTitle: "记忆树（影子运行）",
     organizeHint: "树只写不接管：只落 memory-tree/ 投影，对话组装零改动。",
     reboundK: "反弹熔断 k",
@@ -426,6 +434,8 @@ export default {
     globalTier: "全局偏好",
     // M3 §3.37① 双区块：事实库标签 + 记忆树只读区块
     factsTitle: "记忆库（事实）",
+    openFolder: "打开文件夹",
+    openFolderHint: "打开 ~/.Locowrk/memory/ ——直接编辑 .md 即改记忆，重进本页生效",
     treeTitle: "记忆树（情景）",
     treeReadOnly: "只读 · 影子运行",
     treeEmpty: "还没有整理记录。/整理 或自动触发整理后，会话会按「捆」归档在这里。",
@@ -730,6 +740,9 @@ export default {
     memoryAutoExtractHint: "默认关；每轮对话结束异步提取事实与经历摘要，需已配置 embedding。",
     memoryFiles: "记忆文件化",
     memoryFilesHint: "把记忆同步写入 ~/.Locowrk/memory/ 下的 Markdown 文件（人可查可读可写）；关闭后仅存数据库。",
+    memoryRepoContext: "交接注入",
+    memoryRepoContextHint:
+      "归属项目的会话注入仓库 .Locowrk/ 交接文件（requirements / handoff / notes 清单）；首次自动建目录并加入 .gitignore。",
     organizePacing: "记忆树整理节奏",
     organizePacingHint: "批量 = 达阈值一次整理整段尾巴；增量 = 尾巴每满一块就整理（树 v2 §4.3）。",
     organizePacingBatch: "批量",

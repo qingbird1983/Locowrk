@@ -8,7 +8,8 @@
  */
 import { onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { toolExposureDebug } from "../../lib/api";
+import { memoryReconcile, toolExposureDebug } from "../../lib/api";
+import type { ReconcileSummary } from "../../types";
 import { compactNumber, formatMoney } from "../../lib/format";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
@@ -109,6 +110,32 @@ function hide() {
   void settings.saveDeveloper({ unlocked: false });
   toast.push("ok", t("developer.hidden"));
   shell.setDestination("chat");
+}
+
+// ---- F2 记忆文件合并（reconcile 手动触发；平时记忆页挂载自动跑） ----
+const reconciling = ref(false);
+const reconcileResult = ref<ReconcileSummary | null>(null);
+
+async function runReconcile() {
+  if (reconciling.value) return;
+  reconciling.value = true;
+  try {
+    reconcileResult.value = await memoryReconcile();
+    const r = reconcileResult.value;
+    toast.push(
+      "ok",
+      t("developer.reconcileDone", {
+        created: r.created,
+        updated: r.updated,
+        deleted: r.deleted,
+        healed: r.healed,
+      }),
+    );
+  } catch (e) {
+    toast.push("danger", String(e));
+  } finally {
+    reconciling.value = false;
+  }
 }
 
 /** 快照有效 = 有过至少一次请求（ts 非 0）。 */
@@ -303,6 +330,23 @@ onMounted(() => void refresh());
 
     <!-- M2 记忆树影子运行（树 v2 §15 开发者层级）：可调项行；观测面板
          拆 MemoryTreePanel（§3.36③，随 M3/M4 独立演进不牵动危险开关） -->
+    <SettingsGroup :title="t('developer.filesTitle')" :hint="t('developer.filesHint')">
+      <SettingsRow :title="t('developer.reconcileTitle')" :hint="t('developer.reconcileHint')">
+        <button
+          class="lw-btn rounded-lg px-3 py-1 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="reconciling"
+          @click="runReconcile"
+        >
+          {{ reconciling ? t("developer.reconcileRunning") : t("developer.reconcileRun") }}
+        </button>
+      </SettingsRow>
+      <p
+        v-if="reconcileResult"
+        class="px-4 pb-1 text-[11px] text-ink-4"
+      >
+        {{ t("developer.reconcileLast", { ...reconcileResult }) }}
+      </p>
+    </SettingsGroup>
     <SettingsGroup :title="t('developer.organizeTitle')" :hint="t('developer.organizeHint')">
       <SettingsRow :title="t('developer.reboundK')" :hint="t('developer.reboundKHint')" control-id="dev-organize-k">
         <input
