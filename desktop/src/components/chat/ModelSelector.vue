@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 模型选择器浮层（UI shell 文档 §3.30）：锚在模型 chip 上方（composer
- * 贴底向上开），宽 min(320px, 100vw-32px)、最大高 min(420px, 60vh) 滚动；
+ * 贴底向上开），宽 min(280px, 100vw-32px)（v2.90 目检裁定收窄；对话态/
+ * 首页空态同一实例同尺寸）、最大高 min(420px, 60vh) 滚动；
  * 顶部搜索字段（§3.19 形态）；结果按服务商档位分组（组标签 11px ink-4
  * 不可点，项 12.5px + 右侧 ✓ 当前项，hover wash-2），打开时滚到当前项；
  * 无结果显示文案 + 「配置服务」动作。
@@ -67,7 +68,9 @@ const visible = computed(() => {
     .filter((g) => g.models.length > 0);
 });
 
-// v-if 挂载即打开：滚到当前项（当前项必须可见，§3.30）；挂载期 Esc 收口
+// v-if 挂载即打开：滚到当前项（当前项必须可见，§3.30）。**只滚弹窗内部
+// 清单**（手设 scrollTop）——scrollIntoView 会连祖先滚动容器一起滚，把
+// 整个界面拖动（用户目检实抓「点击后整个内容上移」）；挂载期 Esc 收口
 // （外点关闭由 Composer 锚点监听——走查实抓：本浮层曾是五弹层中唯一
 // 无外点/Esc 收口的）
 function onDocKeydown(e: KeyboardEvent) {
@@ -77,9 +80,13 @@ onMounted(() => {
   document.addEventListener("keydown", onDocKeydown);
   query.value = "";
   void nextTick(() => {
-    container.value
-      ?.querySelector('[data-current="true"]')
-      ?.scrollIntoView({ block: "center" });
+    const list = container.value?.querySelector<HTMLElement>(".ms-list");
+    const cur = container.value?.querySelector<HTMLElement>('[data-current="true"]');
+    if (list && cur) {
+      // 手动居中：目标行中线对齐清单中线（等价 block:center，但绝不外溢）
+      const target = cur.offsetTop - list.offsetTop - list.clientHeight / 2 + cur.offsetHeight / 2;
+      list.scrollTop = Math.max(0, target);
+    }
   });
 });
 onBeforeUnmount(() => document.removeEventListener("keydown", onDocKeydown));
@@ -153,14 +160,14 @@ function pick(providerId: string, model: string) {
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
-  width: min(320px, calc(100vw - 32px));
+  width: min(280px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
-  border-radius: var(--lw-r-md);
+  border-radius: var(--lw-r-md-plus);
   border: 1px solid var(--lw-line);
   background: var(--lw-bg-elevated);
-  box-shadow: var(--lw-shadow-dialog);
-  z-index: 40;
+  box-shadow: var(--lw-shadow-pop);
+  z-index: var(--lw-z-pop);
   overflow: hidden;
 }
 /* 首页空态向下弹（v2.59 用户裁定） */

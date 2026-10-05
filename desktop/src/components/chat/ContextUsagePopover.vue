@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 上下文用量浮层（UI shell doc §3.12）：锚在用量环按钮上方、右对齐，
+ * 上下文用量浮层（UI shell doc §3.12）：锚在用量环按钮上方、**按环几何
+ * 居中**（视口钳 8px；v2.90 用户裁定「按上下文圆环居中上滑出」），
  * 360px elevated popover。分项读数照参考对象——v2.58 数据源落地：
  * 「本轮合计 / 生成速度 / 模型用量（输入/输出/缓存读取/命中率/推理/写入）」
  * 来自 agent://usage 按轮聚合（chat.turnUsage，供应商不报告 = 行整体不
@@ -31,6 +32,12 @@ const { t } = useI18n();
 const chat = useChatStore();
 const settings = useSettingsStore();
 
+// 位置（v2.90 用户裁定「按上下文圆环居中上滑出」）：量实际尺寸后按锚环
+// 几何中心落 left（视口钳 8px）——不用 transform:translateX(-50%)，会和
+// lw-pop-up 的 transform 过渡互踩；CSS 的 right:8px 只是无量测时的兜底
+const el = ref<HTMLElement | null>(null);
+const leftPx = ref<number | null>(null);
+
 const pct = computed(() =>
   props.usage.windowTokens > 0
     ? Math.round((props.usage.used / props.usage.windowTokens) * 100)
@@ -57,6 +64,16 @@ const windowText = computed(() => {
 // 状态造行；窗口未知（0）省略 %（增量档本就不依赖窗口，诚实呈现）。
 const tree = ref<TreeDebug | null>(null);
 onMounted(() => {
+  // 居中量测（同步量 offsetWidth 即触发布局，mounted 时已在 DOM）
+  const p = el.value;
+  const host = p?.offsetParent as HTMLElement | null;
+  if (p && host) {
+    const hostRect = host.getBoundingClientRect();
+    const w = p.offsetWidth;
+    const center = hostRect.left + hostRect.width / 2;
+    const vpLeft = Math.max(8, Math.min(center - w / 2, window.innerWidth - w - 8));
+    leftPx.value = vpLeft - hostRect.left;
+  }
   const sid = chat.sessionId;
   if (!sid) return;
   memoryTreeView(sid)
@@ -115,8 +132,15 @@ const expandCalls = computed(() =>
 </script>
 
 <template>
-  <!-- 进退场由挂载点 Transition 接管（标准 §二①） -->
-  <div class="ctx-popover" role="dialog" :aria-label="t('usage.window')">
+  <!-- 进退场由挂载点 Transition 接管（标准 §二①）；left 由挂载量测写入
+       （锚环几何中心 + 视口钳制），right:8px 为量测前兜底 -->
+  <div
+    ref="el"
+    class="ctx-popover"
+    role="dialog"
+    :aria-label="t('usage.window')"
+    :style="leftPx !== null ? { left: `${leftPx}px`, right: 'auto' } : undefined"
+  >
     <div class="ctx-popover__head">
       <span>{{ headline }}</span>
       <span v-if="pct !== null" class="kv__v">{{ pct }}%</span>
