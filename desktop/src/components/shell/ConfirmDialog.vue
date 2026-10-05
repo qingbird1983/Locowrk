@@ -44,7 +44,7 @@ const { t } = useI18n();
     <Transition name="lw-modal">
       <div
         v-if="open"
-        class="fixed inset-0 z-[40] flex items-center justify-center px-6"
+        class="fixed inset-0 z-[var(--lw-z-modal)] flex items-center justify-center px-6"
         style="background: var(--lw-scrim)"
         @mousedown.self="emit('cancel')"
       >

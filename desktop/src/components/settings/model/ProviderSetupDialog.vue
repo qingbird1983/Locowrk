@@ -229,17 +229,21 @@ const kindOptions = computed(() => [
 
 <template>
   <Teleport to="body">
-    <div
-      class="fixed inset-0 z-[46] flex items-center justify-center bg-ink-1/25 px-6"
-      role="presentation"
-      @click="!saving && emit('close')"
-    >
+    <!-- 模态族统一形态（标准 §二①④）：--lw-scrim 遮罩 + lw-modal 过渡
+         （遮罩淡入 / 面板缩放缓冲）+ z=模态档 -->
+    <Transition name="lw-modal">
       <div
-        class="flex max-h-[92vh] w-[min(1030px,100vw-48px)] flex-col overflow-hidden rounded-[var(--lw-r-lg)] bg-elevated p-5 shadow-[var(--lw-shadow-dialog)]"
-        role="dialog"
-        aria-modal="true"
-        @click.stop
+        class="fixed inset-0 z-[var(--lw-z-modal)] flex items-center justify-center px-6"
+        style="background: var(--lw-scrim)"
+        role="presentation"
+        @click="!saving && emit('close')"
       >
+        <div
+          class="lw-modal-panel flex max-h-[92vh] w-[min(1030px,100vw-48px)] flex-col overflow-hidden rounded-[var(--lw-r-lg)] bg-elevated p-5 shadow-[var(--lw-shadow-dialog)]"
+          role="dialog"
+          aria-modal="true"
+          @click.stop
+        >
         <!-- 选服务视图 -->
         <template v-if="chooserOpen">
           <div class="mb-3 flex shrink-0 items-center">
@@ -380,7 +384,8 @@ const kindOptions = computed(() => [
             />
           </div>
         </template>
+        </div>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 </template>

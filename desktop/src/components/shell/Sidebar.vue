@@ -186,13 +186,18 @@ const isMarket = computed(() => shell.destination === "plugins");
       </footer>
     </div>
 
-    <!-- 通知浮层（§3.13）：fixed 锚触发钮上方，不受 aside overflow 裁剪 -->
-    <NotificationPopover
-      v-if="notifOpen"
-      :x="notifAnchor.x"
-      :y="notifAnchor.y"
-      @close="notifOpen = false"
-    />
+    <!-- 通知浮层（§3.13）：fixed 锚触发钮上方；Teleport 出 aside 裁剪 +
+         Transition 接管进退场（标准 §二① 禁止无退场） -->
+    <Teleport to="body">
+      <Transition name="lw-pop-up">
+        <NotificationPopover
+          v-if="notifOpen"
+          :x="notifAnchor.x"
+          :y="notifAnchor.y"
+          @close="notifOpen = false"
+        />
+      </Transition>
+    </Teleport>
 
     <!-- 拖拽柄（§2.3 v3.9）：8px 热区嵌右缘，可见提示 = 2×32 圆角条 -->
     <button
@@ -221,11 +226,12 @@ const isMarket = computed(() => shell.destination === "plugins");
 
 <style scoped>
 /* 侧栏宽 = 拖拽实时值（JS 写 --lw-sidebar-w）；折叠 = 独立状态宽 0、
- * 体不卸载；展开 base/ease-out，收起 fast/ease-in（§6.6 ②③抽屉） */
+ * 体不卸载；展开 base + --ease-spring（前端标准 §二① 侧滑弹簧收尾），
+ * 收起 fast/ease-in 不回弹（§6.6 ②③抽屉） */
 .sidebar {
   flex: 0 0 var(--lw-sidebar-w);
   transition:
-    flex-basis var(--dur-base) var(--ease-out),
+    flex-basis var(--dur-base) var(--ease-spring),
     opacity var(--dur-base) var(--ease-out);
 }
 .sidebar.is-collapsed {

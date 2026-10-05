@@ -169,14 +169,17 @@ async function decide(kind: ApprovalDecisionKind) {
           >
             <Icon name="chevronDown" :size="12" />
           </button>
-          <button
-            v-if="showScope"
-            class="approval-card__scope-item"
-            type="button"
-            @click="decide('session')"
-          >
-            {{ t("approval.allowSession") }}
-          </button>
+          <!-- 「允许本次对话」上弹单项：进退场由 Transition 接管（标准 §二①） -->
+          <Transition name="lw-pop-up">
+            <button
+              v-if="showScope"
+              class="approval-card__scope-item"
+              type="button"
+              @click="decide('session')"
+            >
+              {{ t("approval.allowSession") }}
+            </button>
+          </Transition>
         </div>
         <button
           v-else
@@ -342,7 +345,8 @@ async function decide(kind: ApprovalDecisionKind) {
   opacity: 0.4;
 }
 
-/* 「允许本次对话」上弹单项（锚在分体钮上） */
+/* 「允许本次对话」上弹单项（锚在分体钮上）：浮层唯一式 = elevated 面 +
+ * 1px line 围边 + 微弱悬浮影 + 圆角 14（标准 §二③） */
 .approval-card__scope-item {
   position: absolute;
   right: 0;
@@ -350,9 +354,10 @@ async function decide(kind: ApprovalDecisionKind) {
   white-space: nowrap;
   height: 30px;
   padding: 0 12px;
-  border-radius: var(--lw-r-md);
+  border-radius: var(--lw-r-md-plus);
+  border: 1px solid var(--lw-line);
   background: var(--lw-bg-elevated);
-  box-shadow: var(--lw-shadow-raised);
+  box-shadow: var(--lw-shadow-pop);
   font-size: 12px;
   color: var(--lw-ink-1);
   z-index: 1;

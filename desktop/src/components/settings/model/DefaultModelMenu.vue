@@ -91,13 +91,15 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div
-      ref="popEl"
-      class="fixed z-[45] w-[min(320px,calc(100vw-32px))] overflow-hidden rounded-[var(--lw-r-lg)] bg-elevated shadow-[var(--lw-shadow-raised)]"
-      :style="style"
-      role="listbox"
-      :aria-label="t('settings.modelDefaultChange')"
-    >
+    <!-- 弹出面板动效（标准 §二①：滑动弹出 + 缓冲收尾，禁止硬切） -->
+    <Transition name="lw-pop-down">
+      <div
+        ref="popEl"
+        class="fixed z-[var(--lw-z-pop)] w-[min(320px,calc(100vw-32px))] overflow-hidden rounded-[var(--lw-r-md-plus)] border border-line bg-elevated shadow-[var(--lw-shadow-pop)]"
+        :style="style"
+        role="listbox"
+        :aria-label="t('settings.modelDefaultChange')"
+      >
       <div class="flex h-10 items-center gap-2 border-b border-line-subtle px-3">
         <Icon name="search" :size="13" class="shrink-0 text-ink-4" />
         <input
@@ -134,6 +136,7 @@ onBeforeUnmount(() => {
           </button>
         </template>
       </div>
-    </div>
+      </div>
+    </Transition>
   </Teleport>
 </template>

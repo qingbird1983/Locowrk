@@ -103,14 +103,15 @@ async function onRow(item: NotificationItem) {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      ref="root"
-      class="notif-pop lw-pop-in-up"
-      role="dialog"
-      :aria-label="t('notify.title')"
-      :style="{ left: `${pos.left}px`, bottom: `${pos.bottom}px` }"
-    >
+  <!-- 不自带 Teleport：挂载点用 <Teleport><Transition name="lw-pop-up">
+       包裹（进退场由此生效，标准 §二① 禁止无退场） -->
+  <div
+    ref="root"
+    class="notif-pop"
+    role="dialog"
+    :aria-label="t('notify.title')"
+    :style="{ left: `${pos.left}px`, bottom: `${pos.bottom}px` }"
+  >
       <div class="notif-pop__head">
         <span class="notif-pop__title">{{ t("notify.title") }}</span>
         <button
@@ -175,22 +176,22 @@ async function onRow(item: NotificationItem) {
           {{ filter === "all" ? t("notify.empty") : t("notify.emptyUnread") }}
         </p>
       </div>
-    </div>
-  </Teleport>
+  </div>
 </template>
 
 <style scoped>
-/* §五 popover 家族：elevated 面 + 1px line + dialog 阴影；fixed 锚触发钮 */
+/* §五 popover 家族（前端标准 §二③）：elevated 面 + 1px line 围边 + 微弱
+ * 悬浮影 + 圆角 14；fixed 锚触发钮，进退场由挂载点 Transition 接管 */
 .notif-pop {
   position: fixed;
   width: 380px;
   max-width: calc(100vw - 16px);
-  border-radius: var(--lw-r-md);
+  border-radius: var(--lw-r-md-plus);
   border: 1px solid var(--lw-line);
   background: var(--lw-bg-elevated);
-  box-shadow: var(--lw-shadow-dialog);
+  box-shadow: var(--lw-shadow-pop);
   padding: 10px 12px;
-  z-index: 60;
+  z-index: var(--lw-z-pop);
   font-size: 12.5px;
   line-height: 1.45;
 }

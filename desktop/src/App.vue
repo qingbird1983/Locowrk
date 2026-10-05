@@ -143,12 +143,13 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* §6.6 ② 工作面板抽屉（v3.9 issue #2）：与侧栏统一——宽度驱动滑开，
- * 开 base/ease-out、收 fast/ease-in；!important 压过内联宽度。transition
- * 只挂在 enter/leave-active：拖宽与视口变化不动画。 */
+/* §6.6 ② 工作面板抽屉（v3.9 issue #2；弹簧收尾 = 前端标准 §二① 动效
+ * 矩阵裁定）：宽度驱动滑开，开 base + --ease-spring、收 fast/ease-in 不
+ * 回弹；!important 压过内联宽度。transition 只挂在 enter/leave-active：
+ * 拖宽与视口变化不动画。 */
 .wp-enter-active {
   transition:
-    width var(--dur-base) var(--ease-out),
+    width var(--dur-base) var(--ease-spring),
     opacity var(--dur-base) var(--ease-out);
 }
 .wp-leave-active {

@@ -233,14 +233,19 @@ async function commitRename() {
         <Icon name="dots" :size="13" aria-hidden="true" />
       </button>
     </template>
-    <RowMenu
-      v-if="menu"
-      :items="menuItems"
-      :x="menu.x"
-      :y="menu.y"
-      @select="onMenuSelect"
-      @close="closeMenu"
-    />
+    <!-- 菜单进退场（标准 §二①）：Teleport 出 aside 裁剪 + Transition 接管 -->
+    <Teleport to="body">
+      <Transition name="lw-pop-down">
+        <RowMenu
+          v-if="menu"
+          :items="menuItems"
+          :x="menu.x"
+          :y="menu.y"
+          @select="onMenuSelect"
+          @close="closeMenu"
+        />
+      </Transition>
+    </Teleport>
   </div>
 </template>
 

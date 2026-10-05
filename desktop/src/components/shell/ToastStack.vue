@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * Toast 栈（UI shell 文档 §3.22）：窗口右下，同屏最多 3 条超出排队；
- * 左侧 6px 状态点（不整条染底）；自动消失 4s、hover 暂停计时；入场 =
- * 淡入 + 右侧滑入 8px。挂 body 级一次（App.vue）。
+ * Toast 栈（UI shell 文档 §3.22 + 前端标准 §二①）：水平居中、垂直居中
+ * 偏上一小段；同屏最多 3 条超出排队；左侧 6px 状态点（不整条染底）；自动
+ * 消失 4s、hover 暂停计时；入场 = 上方 -8px 滑入缓冲，退场 = 收回淡出
+ * （TransitionGroup，离开项移动类管重排）。挂 body 级一次（App.vue）。
  */
 import { onBeforeUnmount, onMounted, watch } from "vue";
 import { useToastStore } from "../../stores/toast";
@@ -55,39 +56,45 @@ onBeforeUnmount(() => {
       role="status"
       aria-live="polite"
     >
-      <div
-        v-for="t in toasts.visible"
-        :key="t.id"
-        class="toast"
-        :data-tone="t.tone"
-        data-testid="toast"
-        @mouseenter="stop(t.id)"
-        @mouseleave="start(t.id)"
-      >
-        <span class="toast__dot" aria-hidden="true" />
-        <div class="min-w-0 flex-1">
-          <p class="toast__title">{{ t.title }}</p>
-          <p v-if="t.body" class="toast__body" :title="t.body">{{ t.body }}</p>
-        </div>
-        <button
-          type="button"
-          class="toast__close"
-          :aria-label="'关闭'"
-          @click="toasts.dismiss(t.id)"
+      <!-- 退场 = 收回淡出（标准 §二①：toast 必须有退场），move 类管重排 -->
+      <TransitionGroup name="toast">
+        <div
+          v-for="t in toasts.visible"
+          :key="t.id"
+          class="toast"
+          :data-tone="t.tone"
+          data-testid="toast"
+          @mouseenter="stop(t.id)"
+          @mouseleave="start(t.id)"
         >
-          ✕
-        </button>
-      </div>
+          <span class="toast__dot" aria-hidden="true" />
+          <div class="min-w-0 flex-1">
+            <p class="toast__title">{{ t.title }}</p>
+            <p v-if="t.body" class="toast__body" :title="t.body">{{ t.body }}</p>
+          </div>
+          <button
+            type="button"
+            class="toast__close"
+            :aria-label="'关闭'"
+            @click="toasts.dismiss(t.id)"
+          >
+            ✕
+          </button>
+        </div>
+      </TransitionGroup>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
+/* 位置（用户裁定）：水平居中、垂直居中偏上一小段（视线焦点区——不挡
+ * composer、不顶标题）；宽度统一 min(420px, 100vw−32px) */
 .toast-stack {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 50;
+  top: 40vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--lw-z-toast);
   display: flex;
   width: min(420px, calc(100vw - 32px));
   flex-direction: column;
@@ -99,26 +106,31 @@ onBeforeUnmount(() => {
   gap: 10px;
   min-width: 280px;
   padding: 12px 14px;
-  border-radius: var(--lw-r-lg);
+  border-radius: var(--lw-r-md-plus);
   background: var(--lw-bg-elevated);
   border: 1px solid var(--lw-line);
-  box-shadow: var(--lw-shadow-dialog);
-  animation: toast-in var(--dur-base) var(--ease-out);
+  box-shadow: var(--lw-shadow-pop);
 }
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.toast-enter-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
 }
-@media (prefers-reduced-motion: reduce) {
-  .toast {
-    animation: none;
-  }
+.toast-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.toast-leave-active {
+  transition:
+    opacity var(--dur-fast) var(--ease-in),
+    transform var(--dur-fast) var(--ease-in);
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.toast-move {
+  transition: transform var(--dur-base) var(--ease-out);
 }
 .toast__dot {
   width: 6px;

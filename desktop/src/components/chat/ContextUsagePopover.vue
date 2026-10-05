@@ -115,7 +115,8 @@ const expandCalls = computed(() =>
 </script>
 
 <template>
-  <div class="ctx-popover lw-pop-in-up" role="dialog" :aria-label="t('usage.window')">
+  <!-- 进退场由挂载点 Transition 接管（标准 §二①） -->
+  <div class="ctx-popover" role="dialog" :aria-label="t('usage.window')">
     <div class="ctx-popover__head">
       <span>{{ headline }}</span>
       <span v-if="pct !== null" class="kv__v">{{ pct }}%</span>
@@ -199,12 +200,12 @@ const expandCalls = computed(() =>
   bottom: calc(100% + 10px);
   width: 360px;
   max-width: calc(100vw - 48px);
-  border-radius: var(--lw-r-md);
+  border-radius: var(--lw-r-md-plus);
   border: 1px solid var(--lw-line);
   background: var(--lw-bg-elevated);
-  box-shadow: var(--lw-shadow-dialog);
+  box-shadow: var(--lw-shadow-pop);
   padding: 12px 14px;
-  z-index: 30;
+  z-index: var(--lw-z-pop);
   font-size: 12.5px;
   line-height: 1.45;
 }

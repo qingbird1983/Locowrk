@@ -73,12 +73,15 @@ onBeforeUnmount(() => {
       </svg>
       <span>{{ pct }}%</span>
     </button>
-    <ContextUsagePopover
-      v-if="show && chat.contextUsage"
-      :usage="chat.contextUsage"
-      :readout="settings.view?.chat.usageReadout ?? 'used'"
-      @close="show = false"
-    />
+    <!-- 浮层进退场（标准 §二①）：退场由 Transition 接管（禁止无退场） -->
+    <Transition name="lw-pop-up">
+      <ContextUsagePopover
+        v-if="show && chat.contextUsage"
+        :usage="chat.contextUsage"
+        :readout="settings.view?.chat.usageReadout ?? 'used'"
+        @close="show = false"
+      />
+    </Transition>
   </div>
 </template>
 

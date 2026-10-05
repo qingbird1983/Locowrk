@@ -183,17 +183,19 @@ onBeforeUnmount(close);
   </button>
 
   <Teleport to="body">
-    <div
-      v-if="open"
-      ref="popRef"
-      class="fixed z-[60] rounded-[var(--lw-r-md-plus)] border border-line bg-raised py-1 shadow-raised"
-      :style="popStyle"
-      role="listbox"
-      :aria-label="label"
-      :aria-activedescendant="activeIndex >= 0 ? optionId(activeIndex) : undefined"
-      tabindex="-1"
-      @keydown="onPopKeydown"
-    >
+    <!-- 弹出面板动效（标准 §二①：滑动弹出 + 缓冲收尾，禁止硬切） -->
+    <Transition name="lw-pop-down">
+      <div
+        v-if="open"
+        ref="popRef"
+        class="fixed z-[var(--lw-z-pop)] rounded-[var(--lw-r-md-plus)] border border-line bg-raised py-1 shadow-[var(--lw-shadow-pop)]"
+        :style="popStyle"
+        role="listbox"
+        :aria-label="label"
+        :aria-activedescendant="activeIndex >= 0 ? optionId(activeIndex) : undefined"
+        tabindex="-1"
+        @keydown="onPopKeydown"
+      >
       <template v-for="(entry, gi) in entries" :key="'options' in entry ? entry.label : entry.value">
         <!-- 组间发丝线 + 组名（仅分组条目渲染；首组无线） -->
         <div
@@ -241,6 +243,7 @@ onBeforeUnmount(close);
           />
         </button>
       </template>
-    </div>
+      </div>
+    </Transition>
   </Teleport>
 </template>

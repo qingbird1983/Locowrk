@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
  * 行尾 `…` / 右键菜单（UI shell 文档 §3.20）：min-width 184、宽随内容、
- * padding 5px、圆角 14、bg-elevated + shadow-dialog、z-60；项 7px 8px、
- * 12.5px、圆角 10、hover wash-2；危险项整行 danger 字色 + hover danger
- * 10% 底、图标继承字色；先测量再显示（visibility:hidden 开局，不在视口
- * 原点闪帧）、超出视口翻转限位；Esc 关闭并把焦点还给触发控件（父组件
- * 在 close 后聚焦触发钮）；↑/↓ 移动焦点、Enter 执行。Teleport 挂 body。
+ * padding 5px、圆角 14、bg-elevated + 1px line 围边 + 微弱悬浮影、z=浮层
+ * 档；项 7px 8px、12.5px、圆角 10、hover wash-2；危险项整行 danger 字色 +
+ * hover danger 16% 底、图标继承字色；先测量再显示（visibility:hidden 开
+ * 局，不在视口原点闪帧）、超出视口翻转限位；Esc 关闭并把焦点还给触发控
+ * 件（父组件在 close 后聚焦触发钮）；↑/↓ 移动焦点、Enter 执行。进退场
+ * 动画由挂载点的 Teleport + Transition 接管（本组件根 = 单元素）。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 
@@ -106,14 +107,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      ref="root"
-      class="row-menu lw-pop-in-down"
-      role="menu"
-      :style="{ left: `${pos.left}px`, top: `${pos.top}px` }"
-      @keydown="onKey"
-    >
+  <!-- 不自带 Teleport：挂载点用 <Teleport><Transition name="lw-pop-down">
+       包裹（组件根保持单元素，Transition 才接得住进退场——退场动画由此
+       生效，标准 §二① 禁止无退场） -->
+  <div
+    ref="root"
+    class="row-menu"
+    role="menu"
+    :style="{ left: `${pos.left}px`, top: `${pos.top}px` }"
+    @keydown="onKey"
+  >
       <template v-for="item in items" :key="item.id">
         <div v-if="item.separator" class="row-menu__sep" role="separator" />
         <button
@@ -131,22 +134,21 @@ onBeforeUnmount(() => {
           {{ item.label }}
         </button>
       </template>
-    </div>
-  </Teleport>
+  </div>
 </template>
 
 <style scoped>
 .row-menu {
   position: fixed;
-  z-index: 60;
+  z-index: var(--lw-z-pop);
   visibility: hidden; /* 先测量再显示（§3.20）：避免在视口原点闪一帧 */
   min-width: 184px;
   width: max-content;
   padding: 5px;
   border-radius: var(--lw-r-md-plus); /* §3.20 圆角 14 */
   background: var(--lw-bg-elevated);
-  border: 1px solid var(--lw-line-subtle);
-  box-shadow: var(--lw-shadow-dialog);
+  border: 1px solid var(--lw-line);
+  box-shadow: var(--lw-shadow-pop);
 }
 .row-menu__item {
   display: block;
@@ -167,7 +169,7 @@ onBeforeUnmount(() => {
 }
 .row-menu__item--danger:hover,
 .row-menu__item--danger:focus-visible {
-  background: color-mix(in oklab, var(--lw-danger) 10%, transparent);
+  background: color-mix(in oklab, var(--lw-danger) 16%, transparent);
 }
 .row-menu__item--disabled {
   color: var(--lw-ink-5);
