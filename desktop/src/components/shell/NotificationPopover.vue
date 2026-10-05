@@ -15,6 +15,7 @@ import { useShellStore } from "../../stores/shell";
 import { compactNumber, relativeTime } from "../../lib/format";
 import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
+import SettingsSegmented from "../settings/SettingsSegmented.vue";
 import type { NotificationItem } from "../../types";
 
 /** 触发钮的视口坐标（左上角）。 */
@@ -26,6 +27,15 @@ const chat = useChatStore();
 const shell = useShellStore();
 
 const filter = ref<"all" | "unread">("all");
+/** 分段控件选项：未读计数并进标签（store.unread > 0 才带）。 */
+const segOptions = computed(() => [
+  { value: "all", label: t("notify.all") },
+  {
+    value: "unread",
+    label:
+      store.unread > 0 ? `${t("notify.unread")} · ${store.unread}` : t("notify.unread"),
+  },
+]);
 const filtered = computed(() =>
   filter.value === "all" ? store.items : store.items.filter((i) => !i.read),
 );
@@ -139,26 +149,14 @@ async function onRow(item: NotificationItem) {
         </HoverTip>
       </div>
 
-      <div class="notif-pop__seg" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="filter === 'all'"
-          :data-on="filter === 'all' || undefined"
-          @click="filter = 'all'"
-        >
-          {{ t("notify.all") }}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="filter === 'unread'"
-          :data-on="filter === 'unread' || undefined"
-          @click="filter = 'unread'"
-        >
-          {{ t("notify.unread") }}<template v-if="store.unread > 0"> · {{ store.unread }}</template>
-        </button>
-      </div>
+      <!-- 分段控件唯一实现（批⑦：内联 seg 退役，全局同型一律 SettingsSegmented） -->
+      <SettingsSegmented
+        class="mt-2"
+        :model-value="filter"
+        :options="segOptions"
+        :label="t('notify.title')"
+        @update:model-value="filter = $event as 'all' | 'unread'"
+      />
 
       <div class="notif-pop__list">
         <button
@@ -223,30 +221,6 @@ async function onRow(item: NotificationItem) {
 }
 .notif-pop__act:disabled {
   opacity: 0.4;
-}
-
-/* 轻量两键分段（§3.13）：胶囊内 wash 选中 */
-.notif-pop__seg {
-  display: inline-flex;
-  gap: var(--lw-gap-2);
-  margin-top: var(--lw-gap-8);
-  padding: var(--lw-gap-2);
-  border-radius: var(--lw-r-full);
-  background: var(--lw-wash-2);
-}
-.notif-pop__seg button {
-  border-radius: var(--lw-r-full);
-  padding: var(--lw-gap-2) var(--lw-gap-10);
-  font-size: var(--lw-fs-12);
-  color: var(--lw-ink-3);
-}
-.notif-pop__seg button:hover {
-  color: var(--lw-ink-1);
-}
-.notif-pop__seg button[data-on] {
-  background: var(--lw-bg-elevated);
-  color: var(--lw-ink-1);
-  box-shadow: var(--lw-shadow-raised);
 }
 
 .notif-pop__list {
