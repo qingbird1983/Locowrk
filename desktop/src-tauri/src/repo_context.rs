@@ -12,7 +12,7 @@ use std::path::Path;
 /// 交接目录名（仓库根下）。
 pub const DIR: &str = ".Locowrk";
 const REQUIREMENTS: &str = "requirements.md";
-const HANDOFF: &str = "handoff.md";
+pub const HANDOFF: &str = "handoff.md";
 const NOTES: &str = "notes";
 /// 注入段单文件上限（字符）——超长截断标注，全文在仓库里人可看可改。
 const FILE_CHARS: usize = 2000;

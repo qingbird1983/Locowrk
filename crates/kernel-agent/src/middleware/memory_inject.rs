@@ -140,6 +140,23 @@ const VALUE_INJECT_MAX_CHARS: usize = 500;
 /// 预取缓存上限（FIFO 驱逐最旧会话）：与 ToolExposure 钉死表同款保险丝。
 const PREFETCH_CAP: usize = 128;
 
+/// 主动记忆指引（F3，《Memory File-ization Design》§4）：随注入块尾追加
+/// （设计缺省"随注入块"，无独立开关）。**无条件注入**（中间件启用即带）
+/// ——主动记忆的本意就是零记忆的新会话也要知道"该自己记"，指引缺席 =
+/// 主动原则落空；静态文本与块同吃预取缓存（M1 纪律不破）。memory 注入
+/// 关（`memory.enabled=false` / top_k=0）= 整块含指引一起缺席。
+const GUIDANCE_BLOCK: &str = "<memory_guidance>\n\
+     Proactive memory: you are expected to maintain memory yourself — do not \
+     wait to be asked.\n\
+     - When the user states a lasting preference or standing instruction \
+     (\"always ...\", \"from now on ...\"), save it immediately with \
+     memory_write using scope=\"global\" so it applies across all projects.\n\
+     - When an important decision is made or a durable project fact is \
+     established, record it on the spot with memory_write (project scope) \
+     instead of deferring to session end.\n\
+     - Prefer updating an existing key over creating near-duplicates.\n\
+     </memory_guidance>";
+
 /// 一个会话的预取块（None = 首查即无记忆，也缓存避免每轮重查）。
 #[derive(Debug, Clone)]
 struct PrefetchEntry {
@@ -370,6 +387,9 @@ impl WaterfallListener for MemoryInject {
                 block = Self::append_block(block, Self::build_experience_block(&found));
             }
         }
+        // 主动记忆指引（F3 §4）：随注入块尾——静态文本，与块同吃预取
+        // 缓存；无条件注入（见 GUIDANCE_BLOCK 注释的"零记忆也要知道"）。
+        block = Self::append_block(block, Some(GUIDANCE_BLOCK.to_string()));
         // 首次注入结果入缓存（None 也缓存：无块会话不做每轮空查）
         if let Some(key) = prefetch_key {
             self.prefetch

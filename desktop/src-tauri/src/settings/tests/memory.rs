@@ -13,6 +13,9 @@ fn memory_defaults_legacy_compat_and_validation() {
     let v = store.view().memory;
     assert!(v.enabled);
     assert_eq!(v.top_k, 5);
+    // F3 缺省裁定：autoExtract 翻开（④）+ handoff 收束更新开（③）
+    assert!(v.auto_extract);
+    assert!(v.handoff_update);
     // memory_inject_config 桥接（MemoryInject 共享锁内容物）
     let cfg = store.memory_inject_config();
     assert!(cfg.enabled);
@@ -45,6 +48,7 @@ fn memory_defaults_legacy_compat_and_validation() {
                 collapse_threshold_pct: None,
                 files: None,
                 repo_context: None,
+                handoff_update: None,
             }),
             None,
             None,
@@ -142,6 +146,7 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 collapse_threshold_pct: None,
                 files: None,
                 repo_context: None,
+                handoff_update: None,
             }),
             None,
             None,

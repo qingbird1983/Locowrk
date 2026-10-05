@@ -305,7 +305,7 @@
 |---|---|---|
 | `LlmSection` | `llm` | ✅ 既有（+ 窗口下拉） |
 | `ContextSection` | `context` | ✅（阈值/策略/建议值；前端不做第二套换算） |
-| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：**尾巴策略**（边界结算 / 固定窗口，缺省边界结算）+ **固定窗口 N**（1–20 缺省 5，窗口档显示）+ **memory_collapse 暴露**（缺省关）+ **自动收起阈值**（50–95% 缺省 80，collapse 开启时显示）；F1 v4.8 起另挂**记忆文件化**开关行（缺省开，关 = 回纯 sqlite 不再读写 md）；F2 v4.9 起再挂**交接注入**开关行（`memory.repoContext` 缺省开——归属会话注入 `<repo>/.Locowrk/` 交接段，关 = 不建目录不注入）） |
+| `MemorySection` | `memory` | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：**尾巴策略**（边界结算 / 固定窗口，缺省边界结算）+ **固定窗口 N**（1–20 缺省 5，窗口档显示）+ **memory_collapse 暴露**（缺省关）+ **自动收起阈值**（50–95% 缺省 80，collapse 开启时显示）；F1 v4.8 起另挂**记忆文件化**开关行（缺省开，关 = 回纯 sqlite 不再读写 md）；F2 v4.9 起再挂**交接注入**开关行（`memory.repoContext` 缺省开——归属会话注入 `<repo>/.Locowrk/` 交接段，关 = 不建目录不注入）；F3 v4.10 起再挂**交接更新**开关行（`memory.handoffUpdate` 缺省开——归属会话轮次收束后后台自动更新 `<repo>/.Locowrk/handoff.md`，仅写该文件；未归属会话跳过），且 **autoExtract 缺省改开**（已裁定④，主动记忆；旧行为关 = 显式保存 false 不受影响）） |
 | `LlmSection` | `llm` | ✅（v4.5 起默认项组内增**会话记录员**行——同主模型 ▾，树 v2 §5.2） |
 | `SessionsSection` | —（只读 dataDir） | ✅ |
 | `LanguageSection` | `locale` | ✅ |
@@ -1552,6 +1552,7 @@ memory-sqlite），全部 UI 面向 = 一条斜杠命令 + 两处设置行 + 开
 | `lw://notification`（✅ v2.51） | notifications store 收新记录 | §3.13 浮层 + 侧栏图标未读点 | 后端 `TauriSink` 入账五类错过事件后 emit（载荷 = 新记录）；浮层打开时 `notification_list` 拉全量；行点击置读+跳会话 |
 | `lw://organize-done`（✅ M3 §3.37③） | chat store | §3.3 系统通知「📦 已整理 N 轮为 M 捆 [查看]」 | 手动/自动/恢复三路收束同源 emit；degraded 走降级文案；`[查看]` = 跳记忆页；非当前会话忽略 |
 | `lw://organize-paused`（✅ M3 §3.37③） | chat store | §3.3 系统通知（熔断如实告知） | 仅 paused_auto 翻转瞬间发；文案带 m 与 `/整理` 指引；非当前会话忽略 |
+| `lw://handoff-created`（✅ F3 v4.10） | toast store | §3.22 toast「已创建交接文件」 | 归属会话轮次收束后台更新**首次创建** `<repo>/.Locowrk/handoff.md` 时发（载荷 `{repo, path}`；已有文件更新不发生——只告知一次，宁勿扰）；点击指引 = 打开记忆页/仓库由用户自取，toast 不做动作 |
 
 ### 4.2 命令 → 面板
 
@@ -2114,7 +2115,12 @@ cacheMissPrice）+ 开发者分区「前缀缓存读数」面板与命中率告�
 **稳定期轮数**（`context.stabilityRounds`，数字 1–10 缺省 3——结算后 N 轮不触发
 改前缀操作）。*
 
-*文档版本：v4.9（F2 人的编辑面批，《Memory File-ization Design》v1.1 §6 F2）。
+*文档版本：v4.10（F3 主动记忆批，《Memory File-ization Design》v1.1 §6 F3 / §4）。
+§3.2 记忆分区加**交接更新**开关行（`memory.handoffUpdate` 缺省开）+ autoExtract
+缺省改开（UI 行不变，仅缺省翻转）；§4.1 加 `lw://handoff-created` 事件行（首次
+创建 handoff.md → §3.22 toast 如实告知一次）。主动记忆指引文案属内核注入块尾
+（`<memory_guidance>`），随记忆注入块无独立开关（设计 §4「随注入块」），非 UI 项。
+上一版 *文档版本：v4.9（F2 人的编辑面批，《Memory File-ization Design》v1.1 §6 F2）。
 §3.37① 记忆库区块头加「打开文件夹」动作（`memory_reveal_folder`）+ 页面挂载先
 reconcile 再拉列表（人改 md 打开即生效）；§3.2 记忆分区加**交接注入**开关行
 （`memory.repoContext` 缺省开）+ 开发者分区加**记忆文件合并**动作行（手动

@@ -15,6 +15,7 @@ import {
   sessionTruncateAfter,
   pickSavePath,
   subscribeAgentEvents,
+  subscribeHandoffCreated,
   subscribeSessionTitle,
   subscribeOrganizeDone,
   subscribeOrganizePaused,
@@ -200,6 +201,14 @@ export const useChatStore = defineStore("chat", {
       await subscribeAgentEvents((e) => this.onEvent(e));
       // v2.57 自动标题：旁车落盘后推送（侧栏 + 顶栏即时换名）
       void subscribeSessionTitle((p) => this.applySessionTitle(p.sessionId, p.title));
+      // F3：交接文件首次创建 → toast 如实告知一次（已有文件的更新不发生）
+      void subscribeHandoffCreated((p) => {
+        useToastStore().push(
+          "ok",
+          i18n.global.t("toast.handoffCreatedTitle"),
+          i18n.global.t("toast.handoffCreatedBody", { path: p.path }),
+        );
+      });
       // M3 §3.37③：整理收束 / 熔断翻转 → SystemNotice（非当前会话忽略，
       // 树文件本身是持久记录；「查看」动作跳记忆页，接线在 ChatTranscript）
       void subscribeOrganizeDone((p) => {

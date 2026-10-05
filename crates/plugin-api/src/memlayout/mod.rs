@@ -22,7 +22,7 @@ use crate::fsutil;
 
 mod sync;
 
-pub use sync::{ParsedFact, mtime_ms, parse_fact, read_marker, write_marker};
+pub use sync::{ParsedFact, atomic_write, mtime_ms, parse_fact, read_marker, write_marker};
 
 /// md 根目录名（数据根下）。
 const DIR_NAME: &str = "memory";

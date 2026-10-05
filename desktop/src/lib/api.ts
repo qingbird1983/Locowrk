@@ -30,6 +30,7 @@ import type {
   NotificationItem,
   SessionSchedule,
   SessionTitlePayload,
+  HandoffCreatedPayload,
   ProviderInput,
   ProviderModels,
   ProviderView,
@@ -399,6 +400,16 @@ export function subscribeSessionTitle(
 ): Promise<UnlistenFn> {
   return listen<SessionTitlePayload>("lw://session-title", (e) =>
     onTitle(e.payload),
+  );
+}
+
+/** F3 handoff 首建推送（UI shell §4.1）：首次创建 .Locowrk/handoff.md →
+ * toast 如实告知一次（已有文件的更新不发生）。 */
+export function subscribeHandoffCreated(
+  onCreated: (payload: HandoffCreatedPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<HandoffCreatedPayload>("lw://handoff-created", (e) =>
+    onCreated(e.payload),
   );
 }
 

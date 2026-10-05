@@ -21,7 +21,7 @@ const settings = useSettingsStore();
 const form = reactive({
   enabled: true,
   topK: 5,
-  autoExtract: false,
+  autoExtract: true,
   organizePacing: "batch",
   organizeChunkTokens: 50_000,
   tailStrategy: "boundary",
@@ -30,6 +30,7 @@ const form = reactive({
   collapseThresholdPct: 80,
   files: true,
   repoContext: true,
+  handoffUpdate: true,
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
@@ -59,6 +60,7 @@ watch(
     form.collapseThresholdPct = v.memory.collapseThresholdPct;
     form.files = v.memory.files;
     form.repoContext = v.memory.repoContext;
+    form.handoffUpdate = v.memory.handoffUpdate;
   },
   { immediate: true },
 );
@@ -76,6 +78,7 @@ function save() {
     collapseThresholdPct: Math.round(form.collapseThresholdPct),
     files: form.files,
     repoContext: form.repoContext,
+    handoffUpdate: form.handoffUpdate,
   });
 }
 </script>
@@ -101,7 +104,7 @@ function save() {
       />
     </SettingsRow>
 
-    <!-- ⑬ 隐式提取：缺省关（易记垃圾），开启后回合结束异步提事实+经历 -->
+    <!-- ⑬ 隐式提取（F3 起缺省开，已裁定④）：回合结束异步提事实+经历 -->
     <SettingsRow
       :title="t('settings.memoryAutoExtract')"
       :hint="t('settings.memoryAutoExtractHint')"
@@ -120,6 +123,16 @@ function save() {
       <SettingsToggle
         v-model="form.repoContext"
         :label="t('settings.memoryRepoContext')"
+      />
+    </SettingsRow>
+    <!-- F3 handoff 收束更新（文件化设计 §4 已裁定③）：归属会话后台维护交接 -->
+    <SettingsRow
+      :title="t('settings.memoryHandoffUpdate')"
+      :hint="t('settings.memoryHandoffUpdateHint')"
+    >
+      <SettingsToggle
+        v-model="form.handoffUpdate"
+        :label="t('settings.memoryHandoffUpdate')"
       />
     </SettingsRow>
 

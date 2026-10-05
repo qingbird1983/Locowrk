@@ -109,6 +109,9 @@ impl SettingsStore {
             if let Some(a) = u.auto_extract {
                 next.memory.auto_extract = a;
             }
+            if let Some(h) = u.handoff_update {
+                next.memory.handoff_update = h;
+            }
             // M2 记忆树整理三键（树 v2 §4.3/§5.2/§15）：节奏白名单 +
             // 增量块区间 + 记录员模型（空串按清除处理，回落同主模型）
             if let Some(p) = u.organize_pacing {

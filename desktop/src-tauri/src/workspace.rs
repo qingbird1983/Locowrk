@@ -81,5 +81,14 @@ pub fn scope_key(workspace: Option<&str>) -> String {
         .to_string()
 }
 
+/// 会话 → 仓库根（F3 handoff 收束更新落点）：同一份旁车真源——归属
+/// workspace 非空且目录存在才算数；未归属 / 目录已删 = None（跳过更新）。
+pub fn repo_root_of(sessions_dir: &Path, session_id: &str) -> Option<PathBuf> {
+    let ws = read_meta(sessions_dir, session_id).and_then(|m| m.workspace)?;
+    (!ws.is_empty())
+        .then_some(PathBuf::from(&ws))
+        .filter(|p| p.is_dir())
+}
+
 #[cfg(test)]
 mod tests;

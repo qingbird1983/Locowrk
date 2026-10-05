@@ -177,6 +177,14 @@ export interface SessionSchedule {
 
 /** 自动会话标题推送（lw://session-title，v2.57）：旁车落盘后通知前端
  * 更新侧栏与顶栏标题。 */
+/** F3 handoff 首建推送：归属会话轮次收束后首次创建 .Locowrk/handoff.md。 */
+export interface HandoffCreatedPayload {
+  /** 仓库根（绝对路径）。 */
+  repo: string;
+  /** handoff.md 全路径。 */
+  path: string;
+}
+
 export interface SessionTitlePayload {
   sessionId: string;
   title: string;
@@ -393,7 +401,7 @@ export interface ChatUpdate {
 }
 
 /** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。autoExtract =
- * ⑬ 隐式提取开关（缺省关）。 */
+ * ⑬ 隐式提取开关（F3 起缺省开——已裁定④，主动记忆）。 */
 export interface MemorySettingsView {
   enabled: boolean;
   topK: number;
@@ -417,6 +425,8 @@ export interface MemorySettingsView {
   files: boolean;
   /** F2 交接注入（缺省开）：归属会话注入仓库 .Locowrk/ 交接段。 */
   repoContext: boolean;
+  /** F3 handoff 收束更新（缺省开）：归属会话轮次收束后后台维护交接文件。 */
+  handoffUpdate: boolean;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -435,6 +445,7 @@ export interface MemoryUpdate {
   collapseThresholdPct?: number;
   files?: boolean;
   repoContext?: boolean;
+  handoffUpdate?: boolean;
 }
 
 /** F2 reconcile 结果（memory_reconcile 命令返回；计数如实透出）。 */

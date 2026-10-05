@@ -50,7 +50,8 @@ use null if the exchange was trivial.\n\
 - Never invent facts. Keys are short ASCII identifiers like user.language or project.db_choice.";
 
 /// 轮次转录（给 LLM 的提取输入）：User / Assistant 正文 + 工具调用痕迹。
-fn build_transcript(turn: &[Message]) -> String {
+/// F3 handoff 收束更新复用同一转录口径。
+pub(crate) fn build_transcript(turn: &[Message]) -> String {
     let mut lines: Vec<String> = Vec::new();
     let mut budget = TRANSCRIPT_MAX_CHARS;
     for m in turn {

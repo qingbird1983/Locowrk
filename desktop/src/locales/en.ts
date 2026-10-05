@@ -260,6 +260,8 @@ export default {
     renameFailed: "Rename failed",
     movedInto: "Moved to workspace",
     movedOut: "Removed from workspace",
+    handoffCreatedTitle: "Handoff file created",
+    handoffCreatedBody: "{path} was generated for the first time after this turn; view and edit it in the repo.",
     associateFailed: "Workspace association failed",
     projectAdded: "Project added",
     projectAddFailed: "Failed to add project",
@@ -745,6 +747,12 @@ export default {
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
     memoryAutoExtract: "Auto-extract memories after conversations (implicit)",
+    memoryRepoContext: "Handoff injection",
+    memoryRepoContextHint:
+      "Associated sessions receive the repo's .Locowrk/ handoff files (requirements / handoff / notes listing); the directory is created and git-ignored on first use.",
+    memoryHandoffUpdate: "Handoff auto-update",
+    memoryHandoffUpdateHint:
+      "After each turn, associated sessions update .Locowrk/handoff.md in the background (progress / next steps); only that file is written, and unchanged content is not written.",
     memoryFiles: "Memory files",
     memoryFilesHint:
       "Also store memories as Markdown under ~/.Locowrk/memory/ (human-readable and editable); off = database only.",
@@ -769,7 +777,7 @@ export default {
     recorderModelHint:
       "The background role that bundles conversations; defaults to the main model. Pick a cheaper one to save cost.",
     memoryAutoExtractHint:
-      "Off by default; extracts durable facts and an experience summary after each turn (needs embedding).",
+      "On by default (proactive memory); extracts durable facts and an experience summary after each turn (experiences need embedding).",
     // S1 shell governance section
     shellTitle: "Shell",
     shellHint:

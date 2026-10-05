@@ -34,6 +34,9 @@ pub const FILES_DEFAULT: bool = true;
 /// F2 交接注入缺省（设计 §7：开）——归属会话注入 `<repo>/.Locowrk/`
 /// 交接段；关 = 不建目录不注入。
 pub const REPO_CONTEXT_DEFAULT: bool = true;
+/// F3 handoff 收束更新缺省（设计 §7 已裁定③：开）——归属会话轮次收束后
+/// 后台更新 `<repo>/.Locowrk/handoff.md`；写边界 = 仅此一个文件。
+pub const HANDOFF_UPDATE_DEFAULT: bool = true;
 
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,8 +57,9 @@ impl TailStrategy {
 }
 
 /// 记忆注入设置。top_k 缺省 5（约束清单 §3"注入条数可配"）；
-/// auto_extract（⑬ 隐式记忆提取）缺省关——"易记垃圾"，文档明说放最后
-/// 且默认不自动记，开启后回合结束异步提取事实/经历。
+/// auto_extract（⑬ 隐式记忆提取）缺省**开**（F3 已裁定④——v2.68 双层
+/// 隔离已解除"污染"顾虑，主动记忆 = 模型主动记录不等提醒；旧文件未写字段
+/// 自动随缺省翻开，显式保存过 false 的不受影响）。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct MemorySettings {
@@ -83,6 +87,9 @@ pub struct MemorySettings {
     pub files: bool,
     /// 交接注入（F2 §7 缺省开）：归属会话注入 `<repo>/.Locowrk/` 交接段。
     pub repo_context: bool,
+    /// handoff 收束更新（F3 §7 已裁定③缺省开）：归属会话轮次收束后后台
+    /// 更新 `<repo>/.Locowrk/handoff.md`（仅写该文件；未归属跳过）。
+    pub handoff_update: bool,
 }
 
 impl Default for MemorySettings {
@@ -90,7 +97,7 @@ impl Default for MemorySettings {
         Self {
             enabled: true,
             top_k: 5,
-            auto_extract: false,
+            auto_extract: true,
             organize_pacing: ORGANIZE_PACING_DEFAULT.into(),
             organize_chunk_tokens: ORGANIZE_CHUNK_TOKENS_DEFAULT,
             recorder_model: None,
@@ -101,6 +108,7 @@ impl Default for MemorySettings {
             collapse_threshold_pct: COLLAPSE_THRESHOLD_PCT_DEFAULT,
             files: FILES_DEFAULT,
             repo_context: REPO_CONTEXT_DEFAULT,
+            handoff_update: HANDOFF_UPDATE_DEFAULT,
         }
     }
 }
@@ -122,6 +130,7 @@ pub struct MemorySettingsView {
     pub collapse_threshold_pct: u8,
     pub files: bool,
     pub repo_context: bool,
+    pub handoff_update: bool,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -144,4 +153,5 @@ pub struct MemoryUpdate {
     pub collapse_threshold_pct: Option<u8>,
     pub files: Option<bool>,
     pub repo_context: Option<bool>,
+    pub handoff_update: Option<bool>,
 }

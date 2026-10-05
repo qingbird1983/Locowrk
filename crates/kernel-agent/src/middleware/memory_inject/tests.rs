@@ -114,18 +114,24 @@ async fn disabled_or_zero_top_k_is_noop() {
     }
 }
 
+/// 空记忆会话（F3 起）：指引块单独注入——主动记忆的本意就是零记忆的
+/// 新会话也要知道"该自己记"，不该等攒出第一条记忆才被告知。
 #[tokio::test]
-async fn empty_recall_is_noop() {
+async fn empty_recall_still_gets_guidance() {
     let inject = inject(
         std::sync::Arc::new(Fixed(Vec::new())),
         cfg_lock(MemoryInjectConfig::default()),
     );
-    assert!(run(&inject, points::REQUEST).await.is_none());
+    let out = run(&inject, points::REQUEST).await.expect("指引块单独成块");
+    let system = out.system.unwrap();
+    assert!(system.contains("<memory_guidance>"));
+    assert!(system.contains("scope=\"global\""));
+    assert!(!system.contains("<persistent_memory>"), "零记忆无事实块");
 }
 
 #[tokio::test]
 async fn long_values_truncated_with_marker() {
-    let long = "x".repeat(600);
+    let long = "z".repeat(600); // 指引块文本含 x（"expected"），计数填充换 z
     let inject = inject(
         std::sync::Arc::new(Fixed(vec![entry("big", &long)])),
         cfg_lock(MemoryInjectConfig::default()),
@@ -133,8 +139,8 @@ async fn long_values_truncated_with_marker() {
     let out = run(&inject, points::REQUEST).await.unwrap();
     let system = out.system.unwrap();
     assert!(system.contains("…(truncated)"));
-    // 恰好 500 个 x + 标记，而不是 600 个
-    assert_eq!(system.matches('x').count(), 500);
+    // 恰好 500 个 z + 标记，而不是 600 个
+    assert_eq!(system.matches('z').count(), 500);
 }
 
 #[tokio::test]
@@ -362,7 +368,8 @@ async fn top_k_change_recomputes_prefetch() {
     );
 }
 
-/// 首查即无记忆也缓存（None 块入缓存）：空记忆会话不做每轮空查。
+/// 首查即无记忆也缓存（指引块入缓存）：空记忆会话不做每轮空查，
+/// 且指引块跨轮逐字节一致（F3：指引随块同吃预取）。
 #[tokio::test]
 async fn empty_recall_prefetched_too() {
     let src = Arc::new(Counting::new(0));
@@ -370,11 +377,16 @@ async fn empty_recall_prefetched_too() {
         src.clone() as std::sync::Arc<dyn MemorySource>,
         cfg_lock(MemoryInjectConfig::default()),
     );
-    for _ in 0..3 {
-        assert!(
-            run_session(&inject, "s1").await.is_none(),
-            "无记忆 = 不注入"
-        );
+    let first = run_session(&inject, "s1")
+        .await
+        .expect("指引块随中间件启用注入")
+        .system;
+    for _ in 0..2 {
+        let out = run_session(&inject, "s1")
+            .await
+            .expect("指引块跨轮复用")
+            .system;
+        assert_eq!(first, out, "指引块与记忆块同拍冻结");
     }
     assert_eq!(src.count(), 1, "空结果也只查一次");
 }
@@ -520,6 +532,36 @@ async fn scoped_entries_render_tier_prefix() {
     let out = run(&inject, points::REQUEST).await.unwrap().system.unwrap();
     assert!(out.contains("- [global] user.lang = zh-CN"));
     assert!(out.contains("- [project] arch.note = uses pnpm"));
+}
+
+/// 主动记忆指引（F3 §4）：随注入块尾——在事实块与经历块之后；
+/// 「永远/以后都」升格 global 与"重要决定当场记"的指引语义在场。
+#[tokio::test]
+async fn guidance_appended_at_block_tail() {
+    let inject = MemoryInject::new(
+        std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
+        Some(std::sync::Arc::new(FixedExp(vec![exp(
+            "chose rusqlite",
+            0,
+        )]))),
+        cfg_lock(MemoryInjectConfig::default()),
+    );
+    // 经历检索的 query 来自最近用户消息（payload_value 无消息 = 跳过经历块）
+    match inject
+        .handle(points::REQUEST, &payload_with_user("向量库选型"))
+        .await
+    {
+        WaterfallDecision::Replace(v) => {
+            let out: RequestPayload = serde_json::from_value(v).unwrap();
+            let out = out.system.unwrap();
+            let mem = out.find("<persistent_memory>").expect("事实块在");
+            let exp = out.find("<session_experiences>").expect("经历块在");
+            let guide = out.find("<memory_guidance>").expect("指引块在");
+            assert!(mem < exp && exp < guide, "指引在注入块尾");
+            assert!(out.contains("from now on"), "升格 global 的触发示例在场");
+        }
+        _ => panic!("expected replace"),
+    }
 }
 
 /// 上下文行随块进预取缓存：跨轮逐字节一致、检索与行查询同拍冻结。

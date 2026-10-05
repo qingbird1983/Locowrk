@@ -94,6 +94,15 @@ pub async fn agent_chat(
         session_id.clone(),
         session.derive_messages(),
     );
+    // F3 handoff 收束更新（设计 §4 已裁定③）：归属会话后台维护
+    // <repo>/.Locowrk/handoff.md（fire-and-forget，同款快照纪律）
+    crate::handoff::spawn_handoff_update(
+        state.app.clone(),
+        Arc::clone(&state.settings),
+        state.sessions_dir.clone(),
+        session_id.clone(),
+        session.derive_messages(),
+    );
     // M2 记忆树影子运行：轮次收束后旁路触发判定（阈值/增量档；只写
     // memory-tree/ 投影，不改请求组装）
     state.organizer.after_turn(&session, &session_id);

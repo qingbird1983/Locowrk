@@ -39,6 +39,7 @@ mod demo_llm;
 mod demo_tools;
 mod desktop_notify;
 mod events;
+mod handoff;
 mod experiences;
 mod export;
 mod extract;

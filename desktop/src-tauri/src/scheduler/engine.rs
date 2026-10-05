@@ -195,6 +195,14 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
             session_id.clone(),
             session.derive_messages(),
         );
+        // F3 handoff 收束更新（与 agent_chat 同一入口）
+        crate::handoff::spawn_handoff_update(
+            deps.app.clone(),
+            Arc::clone(&deps.settings),
+            deps.sessions_dir.clone(),
+            session_id.clone(),
+            session.derive_messages(),
+        );
         // M2 记忆树影子运行：轮次收束后旁路触发判定（同 agent_chat）
         deps.organizer.after_turn(&session, &session_id);
     }

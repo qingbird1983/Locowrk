@@ -208,6 +208,8 @@ export default {
     renameFailed: "重命名失败",
     movedInto: "已移入工作区",
     movedOut: "已移出工作区",
+    handoffCreatedTitle: "已创建交接文件",
+    handoffCreatedBody: "本轮结束后首次生成了 {path}，可在仓库中查看与修改。",
     associateFailed: "工作区关联失败",
     projectAdded: "已添加项目",
     projectAddFailed: "添加项目失败",
@@ -737,12 +739,16 @@ export default {
     memoryTopK: "每轮注入条数",
     memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
     memoryAutoExtract: "对话后自动提取记忆（隐式提取）",
-    memoryAutoExtractHint: "默认关；每轮对话结束异步提取事实与经历摘要，需已配置 embedding。",
+    memoryAutoExtractHint:
+      "默认开（主动记忆）；每轮对话结束异步提取值得记的事实与经历摘要（经历需已配置 embedding）。",
     memoryFiles: "记忆文件化",
     memoryFilesHint: "把记忆同步写入 ~/.Locowrk/memory/ 下的 Markdown 文件（人可查可读可写）；关闭后仅存数据库。",
     memoryRepoContext: "交接注入",
     memoryRepoContextHint:
       "归属项目的会话注入仓库 .Locowrk/ 交接文件（requirements / handoff / notes 清单）；首次自动建目录并加入 .gitignore。",
+    memoryHandoffUpdate: "交接收束更新",
+    memoryHandoffUpdateHint:
+      "归属项目的会话每轮收束后后台更新 .Locowrk/handoff.md（进展 / 下一步）；只写该文件，内容未变不落盘。",
     organizePacing: "记忆树整理节奏",
     organizePacingHint: "批量 = 达阈值一次整理整段尾巴；增量 = 尾巴每满一块就整理（树 v2 §4.3）。",
     organizePacingBatch: "批量",
