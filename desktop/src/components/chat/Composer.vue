@@ -444,8 +444,10 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .send-btn {
-  width: 36px;
-  height: 36px;
+  /* 32px（v2.94 目检裁定：36 偏大收一档）；字形 18 = 尺寸阶梯发送键特例
+   * （勾⑥），stop 方块字形已重绘放大（icons.ts，占格 35%→50%） */
+  width: 32px;
+  height: 32px;
   border-radius: var(--lw-r-full);
   display: inline-flex;
   align-items: center;
