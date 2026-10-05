@@ -178,14 +178,12 @@ const isMarket = computed(() => shell.destination === "plugins");
             />
           </button>
         </HoverTip>
+        <!-- 版本号气泡 = 版本值本身（v2.91 目检纠错：旧原生 title 是「设置/
+             解锁提示」语义残留；连点解锁的提示走点击后的 toast，不进气泡） -->
         <HoverTip
           class="ml-auto"
-          :text="
-            settings.view?.developer.unlocked ? t('nav.settings') : t('sidebar.devUnlockHint')
-          "
-          :label="
-            settings.view?.developer.unlocked ? t('nav.settings') : t('sidebar.devUnlockHint')
-          "
+          :text="t('sidebar.versionTip', { v: version })"
+          :label="t('sidebar.versionTip', { v: version })"
         >
           <button
             v-if="version"

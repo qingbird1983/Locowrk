@@ -173,6 +173,7 @@ export default {
     resizeText: "侧栏宽度 {n} 像素",
     untitled: "未命名会话",
     lockedWhileRunning: "会话运行中，暂不能切换",
+    versionTip: "版本 v{v}",
     devUnlockHint: "连点 7 次进入开发者选项",
     devUnlockProgress: "再点 {n} 次进入开发者选项",
     devUnlocked: "已进入开发者选项（设置 → 系统）",

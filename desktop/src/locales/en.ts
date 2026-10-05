@@ -171,6 +171,7 @@ export default {
     resizeText: "Sidebar width {n} pixels",
     untitled: "Untitled chat",
     lockedWhileRunning: "Session is running; switching is paused",
+    versionTip: "Version v{v}",
     devUnlockHint: "Tap 7 times to unlock developer options",
     devUnlockProgress: "{n} more taps to unlock developer options",
     devUnlocked: "Developer options unlocked (Settings → System)",
