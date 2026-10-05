@@ -322,7 +322,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
 <style scoped>
 .palette {
   display: flex;
-  max-height: min(60vh, 480px);
+  /* 中上（标准 §二①②）：顶缘 14vh + 面板最高 56vh ⇒ 视觉重心 ≈42vh；
+   * 上限同时按视口比例封顶，矮窗口（480px 上限时）重心不会被拖回中间 */
+  max-height: min(56vh, 440px);
   width: min(100%, 640px);
   flex-direction: column;
   overflow: hidden;
