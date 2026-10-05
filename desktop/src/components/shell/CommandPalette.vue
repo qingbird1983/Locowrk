@@ -253,11 +253,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
 <template>
   <Transition name="lw-modal">
     <!-- ⌘K = 居中偏上弹出 + 统一遮罩（用户 2026-10-06 裁定，标准 §二①）；
-         z = 模态档（前端标准 §二⑭ 阶梯） -->
+         14vh + 面板最高 60vh ⇒ 视觉重心 ≈44vh（居中偏上）；z = 模态档 -->
     <div
       v-if="shell.paletteOpen"
-      class="fixed inset-0 z-[var(--lw-z-modal)] flex items-start px-6"
-      style="background: var(--lw-scrim); padding-top: 22vh"
+      class="fixed inset-0 z-[var(--lw-z-modal)] flex items-start justify-center px-6"
+      style="background: var(--lw-scrim); padding-top: 14vh"
       @mousedown.self="close"
     >
       <div
