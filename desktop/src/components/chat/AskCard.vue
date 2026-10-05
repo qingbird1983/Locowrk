@@ -201,20 +201,20 @@ const timeoutPct = computed(() =>
  * 语义），本组件只管内容版式。 */
 .ask-card {
   position: relative;
-  padding: 12px 14px 10px;
+  padding: var(--lw-gap-12) var(--lw-gap-14) var(--lw-gap-10);
 }
 
 /* 徽标行：子 Agent / 排队数，只在存在时出现 */
 .ask-card__flags {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  font-size: 10.5px;
+  gap: var(--lw-gap-8);
+  margin-bottom: var(--lw-gap-4);
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-3);
 }
 .ask-card__sub {
-  padding: 1px 8px;
+  padding: 1px var(--lw-gap-8); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
   border-radius: var(--lw-r-full);
   background: color-mix(in oklab, var(--lw-purple) 16%, transparent);
   color: var(--lw-purple);
@@ -222,7 +222,7 @@ const timeoutPct = computed(() =>
 
 /* 问题即卡头（参考图：无标题行） */
 .ask-card__question {
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   font-weight: 600;
   line-height: 1.55;
   color: var(--lw-ink-1);
@@ -232,18 +232,18 @@ const timeoutPct = computed(() =>
 
 .ask-card__options {
   list-style: none;
-  margin: 8px 0 0;
+  margin: var(--lw-gap-8) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--lw-gap-2);
 }
 .ask-card__opt {
   width: 100%;
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: var(--lw-gap-10);
+  padding: var(--lw-gap-8) var(--lw-gap-10);
   border-radius: var(--lw-r-sm);
   text-align: left;
   transition: background var(--dur-fast) var(--ease-standard);
@@ -266,7 +266,7 @@ const timeoutPct = computed(() =>
   justify-content: center;
   border-radius: var(--lw-r-sm);
   background: var(--lw-wash-3);
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   font-weight: 600;
   color: var(--lw-ink-2);
 }
@@ -278,16 +278,16 @@ const timeoutPct = computed(() =>
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 1px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
 }
 .ask-card__opt-label {
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   line-height: 1.45;
   color: var(--lw-ink-1);
   overflow-wrap: anywhere;
 }
 .ask-card__opt-desc {
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   line-height: 1.45;
   color: var(--lw-ink-3);
   overflow-wrap: anywhere;
@@ -300,18 +300,18 @@ const timeoutPct = computed(() =>
 
 /* 底行（参考图）：无框自由输入 + 右下跳过 */
 .ask-card__custom {
-  margin-top: 9px;
+  margin-top: 9px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值9,§二⑬) */
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
 }
 .ask-card__input {
   flex: 1;
   min-width: 0;
   height: 30px;
-  padding: 0 2px;
+  padding: 0 var(--lw-gap-2);
   background: transparent;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-1);
 }
 .ask-card__input:focus {
@@ -323,11 +323,11 @@ const timeoutPct = computed(() =>
 .ask-card__send {
   flex: 0 0 auto;
   height: 28px;
-  padding: 0 12px;
+  padding: 0 var(--lw-gap-12);
   border-radius: var(--lw-r-sm);
   background: var(--lw-accent);
   color: var(--lw-accent-ink);
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   font-weight: 600;
 }
 .ask-card__send:hover:not(:disabled) {
@@ -342,11 +342,11 @@ const timeoutPct = computed(() =>
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   height: 26px;
-  padding: 0 8px;
+  padding: 0 var(--lw-gap-8);
   border-radius: var(--lw-r-sm);
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-3);
   transition: background var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);
@@ -359,16 +359,16 @@ const timeoutPct = computed(() =>
   opacity: 0.4;
 }
 .ask-card__keycap {
-  font-size: 9.5px;
-  padding: 0 4px;
+  font-size: var(--lw-fs-10);
+  padding: 0 var(--lw-gap-4);
   border-radius: var(--lw-r-3xs);
   background: var(--lw-wash-3);
   color: var(--lw-ink-3);
 }
 
 .ask-card__error {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: var(--lw-gap-6);
+  font-size: var(--lw-fs-12);
   color: var(--lw-danger);
 }
 

@@ -271,9 +271,9 @@ async function commitRename() {
   display: flex;
   align-items: center;
   min-height: 28px;
-  margin-top: 2px;
+  margin-top: var(--lw-gap-2);
   border-radius: var(--lw-r-xs);
-  padding: 0 4px 0 28px;
+  padding: 0 var(--lw-gap-4) 0 28px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值28,§二⑬) */
 }
 .session-row:hover {
   background: var(--lw-wash-2);
@@ -285,7 +285,7 @@ async function commitRename() {
  * 与项目名文字同一左缘（28px，上下左右对齐）；名前 1px 竖向发丝线挂在
  * 项目行文件夹字形中心下方（树形引导线，不接横臂） */
 .session-row--nested {
-  padding-left: 28px;
+  padding-left: 28px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值28,§二⑬) */
 }
 .session-row--nested::before {
   content: "";
@@ -301,7 +301,7 @@ async function commitRename() {
   min-width: 0;
   flex: 1 1 auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   text-align: left;
 }
 .session-row__title {
@@ -310,7 +310,7 @@ async function commitRename() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   color: var(--lw-ink-2);
 }
 .session-row[data-selected] .session-row__title {
@@ -346,10 +346,10 @@ async function commitRename() {
   width: 100%;
   min-width: 0;
   height: 22px;
-  padding: 0 6px;
+  padding: 0 var(--lw-gap-6);
   border-radius: var(--lw-r-xs);
   background: var(--lw-bg-inset);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-1);
 }
 /* 运行指示点（§6.6 ⑧：唯一常驻动画）+ 4px 状态点 */

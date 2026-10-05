@@ -109,7 +109,7 @@ onBeforeUnmount(() => {
   bottom: calc(100% + 8px);
   left: 0;
   min-width: 224px;
-  padding: 4px;
+  padding: var(--lw-gap-4);
   border-radius: var(--lw-r-lg);
   background: var(--lw-bg-elevated);
   border: 1px solid var(--lw-line);
@@ -123,9 +123,9 @@ onBeforeUnmount(() => {
 .attach__row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--lw-gap-10);
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--lw-gap-8) var(--lw-gap-10);
   border-radius: var(--lw-r-md);
   text-align: left;
 }
@@ -141,16 +141,16 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--lw-gap-2);
 }
 .attach__mode {
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   font-weight: 500;
   color: var(--lw-ink-1);
   white-space: nowrap;
 }
 .attach__desc {
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
   overflow: hidden;
   text-overflow: ellipsis;

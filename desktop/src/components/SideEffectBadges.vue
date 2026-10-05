@@ -33,7 +33,7 @@ function color(kind: string): string {
   <span
     v-for="k in kinds"
     :key="k"
-    class="rounded-full px-2 py-0.5 text-[10px] font-medium"
+    class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-10)] font-medium"
     :class="color(k)"
   >
     {{ label(k) }}

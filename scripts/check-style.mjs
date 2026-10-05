@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * 前端统一标准机械门禁——模板维度（《Front-end Design Guidelines.md》v2.0 §六）。
+ * 前端统一标准机械门禁——模板维度（《Front-end Design Guidelines.md》v2.1 §六）。
  * CSS 声明维度由 stylelint 负责（desktop/stylelint.config.cjs）；本脚本只查
  * stylelint 看不到的 template class/内联样式：
  *   一级判错 = tailwind 内建圆角类（rounded-sm/md/lg/xl/2xl/3xl、rounded-[..px]、裸 rounded）
  *   —— 必须写 rounded-[var(--lw-r-*)]；rounded-full 与 --lw-r-full 同值，放行。
+ *   任意 px 字号 text-[..px] 同为一级判错（v2.87 起 --lw-fs-* 令牌已建齐、
+ *   全站迁移完成——标准 §二⑫/§五；特例走上一行 lw-waive 注释凭证）。
  *
  * 用法：node scripts/check-style.mjs            全量报告（不拦截）
  *       node scripts/check-style.mjs --staged   暂存 .vue 判错 = 退出 1（pre-commit）
@@ -17,10 +19,12 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const staged = process.argv.includes("--staged");
 
+// [名称, 正则, 级别]：error = 一级判错；warn = 二级报告（收敛清单）
 const RULES = [
-  ["tailwind内建圆角", /\brounded-(?:sm|md|lg|xl|2xl|3xl)\b/g],
-  ["tailwind任意px圆角", /\brounded-\[\d+m?px\]/g],
-  ["tailwind裸rounded", /(^|[\s"'`])rounded(?=[\s"'`])/g],
+  ["tailwind内建圆角", /\brounded-(?:sm|md|lg|xl|2xl|3xl)\b/g, "error"],
+  ["tailwind任意px圆角", /\brounded-\[\d+m?px\]/g, "error"],
+  ["tailwind裸rounded", /(^|[\s"'`])rounded(?=[\s"'`])/g, "error"],
+  ["tailwind任意px字号", /\btext-\[\d+(?:\.\d+)?px\]/g, "error"],
 ];
 
 function listFiles() {
@@ -46,11 +50,20 @@ for (const file of files) {
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.includes("lw-waive")) continue;
-    for (const [name, re] of RULES) {
+    // 豁免 = 本行起向上 3 行内含 lw-waive（容纳模板里唯一的合法注释位：
+    // HTML 注释不能写进标签内，跨标签多行时注释离 class 行可隔 1-2 行）
+    let waived = false;
+    for (let j = Math.max(0, i - 3); j <= i; j++) {
+      if (lines[j].includes("lw-waive")) {
+        waived = true;
+        break;
+      }
+    }
+    if (waived) continue;
+    for (const [name, re, level] of RULES) {
       re.lastIndex = 0;
       for (const m of line.matchAll(re)) {
-        hits.push({ rel: file.slice(root.length + 1), line: i + 1, name, text: line.trim().slice(0, 90) });
+        hits.push({ rel: file.slice(root.length + 1), line: i + 1, name, level, text: line.trim().slice(0, 90) });
       }
     }
   }
@@ -58,10 +71,16 @@ for (const file of files) {
 
 const scope = staged ? "暂存 .vue（一级判错=提交被拒）" : "全量（收敛工作清单）";
 console.log(`== check-style · 模板维度 · ${scope} · ${files.length} 文件 ==`);
+const errors = hits.filter((v) => v.level === "error");
+const warns = hits.filter((v) => v.level === "warn");
+for (const v of errors) console.log(`  ✗ ${v.rel}:${v.line} [${v.name}] ${v.text}`);
+for (const v of warns) console.log(`  ⚠ ${v.rel}:${v.line} [${v.name}] ${v.text}`);
 if (hits.length) {
-  for (const v of hits) console.log(`  ✗ ${v.rel}:${v.line} [${v.name}] ${v.text}`);
-  console.log(`判错：${hits.length} 处（自发明一律判错——标准 §零.0）。改用 rounded-[var(--lw-r-*)]；豁免先登记标准 §七 + /* lw-waive: 理由 */。`);
+  const parts = [];
+  if (errors.length) parts.push(`判错 ${errors.length} 处（自发明一律判错——标准 §零.0；改用 rounded-[var(--lw-r-*)]，豁免先登记标准 §七 + /* lw-waive: 理由 */）`);
+  if (warns.length) parts.push(`二级报告 ${warns.length} 处（任意 px 字号→text-[length:var(--lw-fs-*)]，标准 §二⑫，±0.5px 吸附；迁移完成后本项翻判错）`);
+  console.log(parts.join("；") + "。");
 } else {
   console.log("  干净。");
 }
-if (staged && hits.length) process.exit(1);
+if (staged && errors.length) process.exit(1);

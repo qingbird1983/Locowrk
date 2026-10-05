@@ -34,7 +34,7 @@ const ratio = computed(() => {
 </script>
 
 <template>
-  <div v-if="usage" class="flex items-center gap-2 px-5 pt-2 text-[10px]">
+  <div v-if="usage" class="flex items-center gap-2 px-5 pt-2 text-[length:var(--lw-fs-10)]">
     <div
       class="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-1"
     >

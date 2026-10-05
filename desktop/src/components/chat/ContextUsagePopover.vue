@@ -204,9 +204,9 @@ const expandCalls = computed(() =>
   border: 1px solid var(--lw-line);
   background: var(--lw-bg-elevated);
   box-shadow: var(--lw-shadow-pop);
-  padding: 12px 14px;
+  padding: var(--lw-gap-12) var(--lw-gap-14);
   z-index: var(--lw-z-pop);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   line-height: 1.45;
 }
 .ctx-popover__head {
@@ -220,21 +220,21 @@ const expandCalls = computed(() =>
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 7px;
+  gap: var(--lw-gap-8);
+  margin-top: var(--lw-gap-8);
+  padding-top: 7px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
   border-top: 1px solid var(--lw-line-subtle);
   color: var(--lw-ink-3);
 }
 .kv--stack {
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--lw-gap-4);
 }
 .kv__usage {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: var(--lw-gap-4) var(--lw-gap-12);
   color: var(--lw-ink-1);
   font-variant-numeric: tabular-nums;
 }

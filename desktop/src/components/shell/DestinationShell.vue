@@ -17,6 +17,7 @@ defineProps<{ title: string }>();
       class="flex h-14 shrink-0 items-center gap-3 px-6"
       style="padding-right: var(--lw-wincontrols)"
     >
+      <!-- lw-waive: §二⑫ 页面页头标题特例（20px 暂定，报编号翻案） -->
       <h1
         class="shrink-0 text-[20px] font-semibold tracking-[-0.02em] text-ink-1"
       >

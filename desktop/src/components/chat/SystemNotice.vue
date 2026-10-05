@@ -27,7 +27,7 @@ defineEmits<{ (e: "action", id: string): void }>();
         <button
           v-for="a in actions ?? []"
           :key="a.id"
-          class="rounded-full px-2 py-0.5 text-[11px] font-medium transition"
+          class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-11)] font-medium transition"
           :class="
             a.tone === 'primary'
               ? 'bg-surface-2 text-ink-1 hover:bg-line-strong'

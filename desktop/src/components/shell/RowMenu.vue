@@ -144,7 +144,7 @@ onBeforeUnmount(() => {
   visibility: hidden; /* 先测量再显示（§3.20）：避免在视口原点闪一帧 */
   min-width: 184px;
   width: max-content;
-  padding: 5px;
+  padding: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   border-radius: var(--lw-r-md-plus); /* §3.20 圆角 14 */
   background: var(--lw-bg-elevated);
   border: 1px solid var(--lw-line);
@@ -153,10 +153,10 @@ onBeforeUnmount(() => {
 .row-menu__item {
   display: block;
   width: 100%;
-  padding: 7px 8px;
+  padding: 7px var(--lw-gap-8); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
   border-radius: var(--lw-r-md);
   text-align: left;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-1);
 }
 .row-menu__item:hover,
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
 }
 .row-menu__sep {
   height: 1px;
-  margin: 5px 6px;
+  margin: 5px var(--lw-gap-6); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   background: var(--lw-line-subtle);
 }
 </style>

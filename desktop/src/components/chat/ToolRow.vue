@@ -157,7 +157,7 @@ async function copyCall() {
         </span>
         <span
           v-if="!action"
-          class="shrink-0 rounded-[var(--lw-r-3xs)] bg-wash-3 px-1.5 py-0.5 text-[10px] text-ink-2"
+          class="shrink-0 rounded-[var(--lw-r-3xs)] bg-wash-3 px-1.5 py-0.5 text-[length:var(--lw-fs-10)] text-ink-2"
         >
           {{ t("tool.pluginBadge") }}
         </span>
@@ -261,7 +261,7 @@ async function copyCall() {
 .tool__row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--lw-gap-2);
 }
 /* 副作用徽章（§3.4 副作用族 / 原型 .badge--micro）：纯=中性、可补偿=warn
  * 16% tint、不可逆=danger 16% tint */
@@ -270,8 +270,8 @@ async function copyCall() {
   flex: 0 0 auto;
   align-items: center;
   border-radius: var(--lw-r-full);
-  padding: 1px 6px;
-  font-size: 10.5px;
+  padding: 1px var(--lw-gap-6); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
+  font-size: var(--lw-fs-11);
   font-weight: 500;
   line-height: 1.4;
   white-space: nowrap;
@@ -291,7 +291,7 @@ async function copyCall() {
   flex: 1 1 0%;
   width: auto;
   min-width: 0;
-  margin-inline: -3px 0;
+  margin-inline: -3px 0; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(负margin-3,§二⑬) */
 }
 .tool__icon {
   color: var(--lw-ink-3);
@@ -303,7 +303,7 @@ async function copyCall() {
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -312,13 +312,13 @@ async function copyCall() {
 .tool__diff {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
 }
 .tool__add {
   color: var(--lw-ok);
@@ -332,9 +332,9 @@ async function copyCall() {
 .tool__status {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-3);
 }
 .tool__status--ok {
@@ -352,24 +352,24 @@ async function copyCall() {
   opacity: 1;
 }
 .tool__detail {
-  margin: 6px 0 8px;
+  margin: var(--lw-gap-6) 0 var(--lw-gap-8);
   border-radius: var(--lw-r-sm);
   background: var(--lw-bg-inset);
-  padding: 10px 12px;
+  padding: var(--lw-gap-10) var(--lw-gap-12);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--lw-gap-10);
 }
 .tool__label {
-  font-size: 10.5px;
+  font-size: var(--lw-fs-11);
   letter-spacing: 0.02em;
   color: var(--lw-ink-4);
-  margin-bottom: 4px;
+  margin-bottom: var(--lw-gap-4);
 }
 .tool__detail pre {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   line-height: 1.55;
   color: var(--lw-ink-2);
   white-space: pre-wrap;

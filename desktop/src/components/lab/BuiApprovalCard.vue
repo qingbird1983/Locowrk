@@ -273,12 +273,12 @@ function prevQuestion() {
 }
 
 .bui-approval__open-btn {
-  padding: 8px 12px;
+  padding: var(--lw-gap-8) var(--lw-gap-12);
   border: 0;
   border-radius: var(--lw-r-xs);
   background: var(--lw-bg-elevated);
   color: var(--lw-ink-1);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   font-weight: 500;
   box-shadow: var(--lw-shadow-raised);
   cursor: pointer;
@@ -302,7 +302,7 @@ function prevQuestion() {
 }
 
 .bui-approval__pad {
-  padding: 14px;
+  padding: var(--lw-gap-14);
   animation: bui-fade-up var(--dur-slow) var(--ease-out) both;
 }
 
@@ -310,11 +310,11 @@ function prevQuestion() {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--lw-gap-12);
 }
 
 .bui-approval__question {
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   font-weight: 500;
   color: var(--lw-ink-1);
 }
@@ -344,16 +344,16 @@ function prevQuestion() {
 .bui-approval__options {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 8px;
+  gap: var(--lw-gap-2);
+  margin-top: var(--lw-gap-8);
 }
 
 .bui-approval__option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 -6px;
-  padding: 4px 6px;
+  gap: var(--lw-gap-8);
+  margin: 0 -6px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(负margin,§二⑬) */
+  padding: var(--lw-gap-4) var(--lw-gap-6);
   border: 0;
   border-radius: var(--lw-r-xs);
   background: transparent;
@@ -411,7 +411,7 @@ function prevQuestion() {
 }
 
 .bui-approval__option-label {
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   color: var(--lw-ink-2);
   transition: color var(--dur-base) var(--ease-standard);
 }
@@ -423,9 +423,9 @@ function prevQuestion() {
 .bui-approval__custom {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 -6px;
-  padding: 4px 6px;
+  gap: var(--lw-gap-8);
+  margin: 0 -6px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(负margin,§二⑬) */
+  padding: var(--lw-gap-4) var(--lw-gap-6);
   border-radius: var(--lw-r-xs);
   transition: background-color var(--dur-instant) var(--ease-standard);
   cursor: text;
@@ -449,7 +449,7 @@ function prevQuestion() {
   border: 0;
   background: transparent;
   color: var(--lw-ink-1);
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   outline: none;
 }
 
@@ -461,13 +461,13 @@ function prevQuestion() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px;
+  padding: var(--lw-gap-14);
 }
 
 .bui-approval__pager {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
 }
 
 .bui-approval__pager-btn {
@@ -499,7 +499,7 @@ function prevQuestion() {
 .bui-approval__dots {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--lw-gap-4);
 }
 
 .bui-approval__dot {
@@ -535,7 +535,7 @@ function prevQuestion() {
   height: 28px;
   align-items: center;
   justify-content: center;
-  margin-right: -2px;
+  margin-right: -2px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(负margin,§二⑬) */
   padding: 0;
   border: 0;
   border-radius: var(--lw-r-xs);
@@ -564,7 +564,7 @@ function prevQuestion() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
 }
 
 .bui-approval__sent-check {
@@ -580,19 +580,19 @@ function prevQuestion() {
 }
 
 .bui-approval__sent-text {
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   font-weight: 500;
   color: var(--lw-ink-1);
   animation: bui-fade-up var(--dur-slow) var(--ease-out) 100ms both;
 }
 
 .bui-approval__start-over {
-  margin-top: 4px;
+  margin-top: var(--lw-gap-4);
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--lw-ink-2);
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   font-weight: 500;
   cursor: pointer;
 }

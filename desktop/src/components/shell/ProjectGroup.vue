@@ -158,11 +158,11 @@ async function onMenuSelect(id: string) {
 .ws-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   width: 100%;
   min-height: 28px;
-  margin-top: 2px;
-  padding: 0 4px 0 8px;
+  margin-top: var(--lw-gap-2);
+  padding: 0 var(--lw-gap-4) 0 var(--lw-gap-8);
   border-radius: var(--lw-r-xs);
   text-align: left;
 }
@@ -175,7 +175,7 @@ async function onMenuSelect(id: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   color: var(--lw-ink-2);
 }
 .ws-head__dot {
@@ -188,7 +188,7 @@ async function onMenuSelect(id: string) {
 .ws-head__actions {
   display: inline-flex;
   align-items: center;
-  gap: 1px;
+  gap: 1px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
   flex: 0 0 auto;
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);

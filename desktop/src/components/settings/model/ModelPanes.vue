@@ -166,10 +166,10 @@ watch(() => props.available, () => (expandedId.value = null));
           :aria-label="t('settings.modelSelectAllVisible')"
           @change="toggleVisible(($event.target as HTMLInputElement).checked)"
         />
-        <h4 class="text-[12.5px] font-semibold text-ink-1">{{ t("settings.modelAvailable") }}</h4>
+        <h4 class="text-[length:var(--lw-fs-12half)] font-semibold text-ink-1">{{ t("settings.modelAvailable") }}</h4>
         <button
           type="button"
-          class="ml-auto flex items-center gap-1 rounded-[var(--lw-r-xs)] px-2 py-1 text-[11.5px] text-ink-2 transition hover:bg-wash-2 disabled:opacity-50"
+          class="ml-auto flex items-center gap-1 rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-12)] text-ink-2 transition hover:bg-wash-2 disabled:opacity-50"
           :disabled="disabled || probeState === 'loading'"
           @click="emit('fetch')"
         >
@@ -181,21 +181,21 @@ watch(() => props.available, () => (expandedId.value = null));
         <Icon name="search" :size="13" class="shrink-0 text-ink-4" />
         <input
           v-model="availQuery"
-          class="w-full bg-transparent text-[12.5px] text-ink-1 outline-none placeholder:text-ink-5"
+          class="w-full bg-transparent text-[length:var(--lw-fs-12half)] text-ink-1 outline-none placeholder:text-ink-5"
           :placeholder="t('settings.modelSearchId')"
           spellcheck="false"
           autocomplete="off"
         />
       </div>
       <div class="mt-2 min-h-0 flex-1 overflow-y-auto">
-        <p v-if="probeState === 'idle'" class="px-1 py-4 text-[12px] leading-relaxed text-ink-4">
+        <p v-if="probeState === 'idle'" class="px-1 py-4 text-[length:var(--lw-fs-12)] leading-relaxed text-ink-4">
           {{ t("settings.modelAvailIdle") }}
         </p>
         <p v-else-if="probeState === 'error' && props.available.length === 0"
-           class="px-1 py-4 text-[12px] text-danger">
+           class="px-1 py-4 text-[length:var(--lw-fs-12)] text-danger">
           {{ t("settings.modelAvailError") }}
         </p>
-        <p v-else-if="availRows.length === 0" class="px-1 py-4 text-[12px] text-ink-4">
+        <p v-else-if="availRows.length === 0" class="px-1 py-4 text-[length:var(--lw-fs-12)] text-ink-4">
           {{
             probeState === "loading"
               ? t("settings.modelProbing")
@@ -214,9 +214,9 @@ watch(() => props.available, () => (expandedId.value = null));
                 :disabled="disabled"
                 @change="toggle(id)"
               />
-              <span class="min-w-0 flex-1 select-text truncate font-mono text-[12px] text-ink-1">{{ id }}</span>
-              <span v-if="displayName(id)" class="shrink-0 text-[11px] text-ink-4">{{ displayName(id) }}</span>
-              <span v-if="windowBadge(id)" class="shrink-0 text-[10.5px] tabular-nums text-ink-4">
+              <span class="min-w-0 flex-1 select-text truncate font-mono text-[length:var(--lw-fs-12)] text-ink-1">{{ id }}</span>
+              <span v-if="displayName(id)" class="shrink-0 text-[length:var(--lw-fs-11)] text-ink-4">{{ displayName(id) }}</span>
+              <span v-if="windowBadge(id)" class="shrink-0 text-[length:var(--lw-fs-11)] tabular-nums text-ink-4">
                 {{ windowBadge(id) }}
               </span>
             </label>
@@ -228,15 +228,15 @@ watch(() => props.available, () => (expandedId.value = null));
     <!-- 右栏：模型设置 -->
     <div class="flex min-h-0 flex-col rounded-[var(--lw-r-md)] bg-wash-1 p-3">
       <div class="flex items-center gap-2">
-        <h4 class="text-[12.5px] font-semibold text-ink-1">{{ t("settings.modelChosen") }}</h4>
-        <span v-if="chosen.length" class="rounded-full bg-wash-2 px-1.5 text-[10.5px] tabular-nums text-ink-3">
+        <h4 class="text-[length:var(--lw-fs-12half)] font-semibold text-ink-1">{{ t("settings.modelChosen") }}</h4>
+        <span v-if="chosen.length" class="rounded-full bg-wash-2 px-1.5 text-[length:var(--lw-fs-11)] tabular-nums text-ink-3">
           {{ chosen.length }}
         </span>
         <div v-if="chosen.length" class="ml-auto flex h-7 w-36 items-center gap-1.5 rounded-[var(--lw-r-xs)] bg-wash-2 px-2">
           <Icon name="search" :size="12" class="shrink-0 text-ink-4" />
           <input
             v-model="chosenQuery"
-            class="w-full bg-transparent text-[11.5px] text-ink-1 outline-none placeholder:text-ink-5"
+            class="w-full bg-transparent text-[length:var(--lw-fs-12)] text-ink-1 outline-none placeholder:text-ink-5"
             :placeholder="t('settings.modelSearchChosen')"
             spellcheck="false"
             autocomplete="off"
@@ -244,10 +244,10 @@ watch(() => props.available, () => (expandedId.value = null));
         </div>
       </div>
       <div class="mt-2 min-h-0 flex-1 overflow-y-auto">
-        <p v-if="chosen.length === 0" class="px-1 py-4 text-[12px] text-ink-4">
+        <p v-if="chosen.length === 0" class="px-1 py-4 text-[length:var(--lw-fs-12)] text-ink-4">
           {{ t("settings.modelChosenEmpty") }}
         </p>
-        <p v-else-if="chosenRows.length === 0" class="px-1 py-4 text-[12px] text-ink-4">
+        <p v-else-if="chosenRows.length === 0" class="px-1 py-4 text-[length:var(--lw-fs-12)] text-ink-4">
           {{ t("settings.modelNoMatch") }}
         </p>
         <ul v-else class="space-y-1">
@@ -270,14 +270,14 @@ watch(() => props.available, () => (expandedId.value = null));
               >
                 <Icon name="grip" :size="13" />
               </button>
-              <span class="min-w-0 flex-1 select-text truncate font-mono text-[12px] text-ink-1">{{ m.id }}</span>
-              <span v-if="m.alias?.trim()" class="shrink-0 text-[11px] text-ink-4">{{ m.alias }}</span>
-              <span class="shrink-0 text-[10.5px] tabular-nums text-ink-4">
+              <span class="min-w-0 flex-1 select-text truncate font-mono text-[length:var(--lw-fs-12)] text-ink-1">{{ m.id }}</span>
+              <span v-if="m.alias?.trim()" class="shrink-0 text-[length:var(--lw-fs-11)] text-ink-4">{{ m.alias }}</span>
+              <span class="shrink-0 text-[length:var(--lw-fs-11)] tabular-nums text-ink-4">
                 {{ formatLimitShort(m.contextWindow ?? profileWindow(m.id)) }}
               </span>
               <button
                 type="button"
-                class="rounded-[var(--lw-r-3xs)] px-1.5 py-0.5 text-[11px] text-ink-3 hover:bg-wash-3 hover:text-ink-1"
+                class="rounded-[var(--lw-r-3xs)] px-1.5 py-0.5 text-[length:var(--lw-fs-11)] text-ink-3 hover:bg-wash-3 hover:text-ink-1"
                 :aria-expanded="expandedId === m.id"
                 @click="expandedId = expandedId === m.id ? null : m.id"
               >
@@ -295,24 +295,24 @@ watch(() => props.available, () => (expandedId.value = null));
             </div>
             <div v-if="expandedId === m.id" class="space-y-2 border-t border-line-subtle px-2.5 py-2">
               <label class="flex items-center gap-2">
-                <span class="w-16 shrink-0 text-[11px] text-ink-4">{{ t("settings.modelAlias") }}</span>
+                <span class="w-16 shrink-0 text-[length:var(--lw-fs-11)] text-ink-4">{{ t("settings.modelAlias") }}</span>
                 <input
                   :value="m.alias ?? ''"
-                  class="lw-field h-7 w-full flex-1 px-2 text-[12px]"
+                  class="lw-field h-7 w-full flex-1 px-2 text-[length:var(--lw-fs-12)]"
                   spellcheck="false"
                   :placeholder="t('settings.modelAliasPlaceholder')"
                   @input="updateChosen(m.id, { alias: ($event.target as HTMLInputElement).value || null })"
                 />
               </label>
               <div class="flex items-start gap-2">
-                <span class="w-16 shrink-0 pt-1 text-[11px] text-ink-4">{{ t("settings.modelWindow") }}</span>
+                <span class="w-16 shrink-0 pt-1 text-[length:var(--lw-fs-11)] text-ink-4">{{ t("settings.modelWindow") }}</span>
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap gap-1">
                     <button
                       v-for="p in WINDOW_PRESETS"
                       :key="p.tokens"
                       type="button"
-                      class="rounded-full px-2 py-0.5 text-[10.5px] transition"
+                      class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-11)] transition"
                       :class="
                         m.contextWindow === p.tokens
                           ? 'bg-accent text-accent-ink'
@@ -344,11 +344,11 @@ watch(() => props.available, () => (expandedId.value = null));
         </ul>
       </div>
       <div class="mt-2 border-t border-line-subtle pt-2">
-        <p class="mb-1.5 text-[11px] text-ink-4">{{ t("settings.modelCustom") }}</p>
+        <p class="mb-1.5 text-[length:var(--lw-fs-11)] text-ink-4">{{ t("settings.modelCustom") }}</p>
         <div class="flex gap-1.5">
           <input
             v-model="customId"
-            class="lw-field h-8 min-w-0 flex-1 px-2 font-mono text-[12px]"
+            class="lw-field h-8 min-w-0 flex-1 px-2 font-mono text-[length:var(--lw-fs-12)]"
             :placeholder="t('settings.modelCustomPlaceholder')"
             spellcheck="false"
             autocomplete="off"
@@ -357,7 +357,7 @@ watch(() => props.available, () => (expandedId.value = null));
           />
           <button
             type="button"
-            class="lw-btn flex h-8 shrink-0 items-center gap-1 px-2.5 text-[11.5px] text-ink-1"
+            class="lw-btn flex h-8 shrink-0 items-center gap-1 px-2.5 text-[length:var(--lw-fs-12)] text-ink-1"
             :disabled="disabled"
             @click="addCustom"
           >
@@ -365,7 +365,7 @@ watch(() => props.available, () => (expandedId.value = null));
             {{ t("settings.modelCustomAdd") }}
           </button>
         </div>
-        <p v-if="customError" class="mt-1 text-[11px] text-danger">{{ customError }}</p>
+        <p v-if="customError" class="mt-1 text-[length:var(--lw-fs-11)] text-danger">{{ customError }}</p>
       </div>
     </div>
   </div>

@@ -122,7 +122,7 @@ function clearKey() {
         <p v-if="form.probeDim > 0" class="mt-1 text-xs text-ok">
           {{ t("settings.embeddingDim", { n: form.probeDim }) }}
         </p>
-        <p v-if="form.probeError" class="mt-1 text-[11px] text-danger">
+        <p v-if="form.probeError" class="mt-1 text-[length:var(--lw-fs-11)] text-danger">
           {{ t("settings.embeddingDetectFail") }} {{ form.probeError }}
         </p>
       </template>

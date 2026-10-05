@@ -75,7 +75,7 @@ const greeting = computed(() => {
   align-items: center;
   justify-content: center;
   min-height: 0;
-  padding: 0 24px;
+  padding: 0 var(--lw-gap-24);
 }
 /* 垂直上移（issue #10）：视觉重心偏上，不是正中 */
 .welcome__inner {
@@ -83,7 +83,7 @@ const greeting = computed(() => {
   width: 100%;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 22px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值22,§二⑬) */
   transform: translateY(-7vh);
 }
 .welcome__mascot {
@@ -117,7 +117,7 @@ const greeting = computed(() => {
   }
 }
 .welcome__title {
-  font-size: 26px;
+  font-size: 26px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 豁免§二⑫:欢迎标题特例 */
   font-weight: 400;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -129,7 +129,7 @@ const greeting = computed(() => {
 .welcome__composer {
   position: relative;
   width: min(100%, 720px);
-  margin-top: 10px;
+  margin-top: var(--lw-gap-10);
 }
 .welcome__composer-slot {
   position: relative;

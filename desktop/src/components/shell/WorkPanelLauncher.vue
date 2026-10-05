@@ -104,7 +104,7 @@ const reviewItems = computed(() => {
         </HoverTip>
       </template>
     </template>
-    <p class="px-2 py-3 text-[12px] leading-relaxed text-ink-4">
+    <p class="px-2 py-3 text-[length:var(--lw-fs-12)] leading-relaxed text-ink-4">
       {{ t("panel.launcherHint") }}
     </p>
   </div>
@@ -116,17 +116,17 @@ const reviewItems = computed(() => {
 .launcher {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--lw-gap-6);
 }
 .launcher-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--lw-gap-10);
   width: 100%;
   border-radius: var(--lw-r-sm);
   background: var(--lw-wash-1);
-  padding: 10px 12px;
-  font-size: 13px;
+  padding: var(--lw-gap-10) var(--lw-gap-12);
+  font-size: var(--lw-fs-13);
   color: var(--lw-ink-1);
   text-align: left;
 }
@@ -151,12 +151,12 @@ const reviewItems = computed(() => {
   white-space: nowrap;
   margin-left: auto;
   text-align: right;
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 .side-label {
-  padding: 6px 8px 4px;
-  font-size: 11.5px;
+  padding: var(--lw-gap-6) var(--lw-gap-8) var(--lw-gap-4);
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 </style>

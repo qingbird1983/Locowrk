@@ -212,7 +212,7 @@ async function confirmUninstall() {
 
     <section v-for="group in originGroups" :key="group.key" class="mb-5">
       <h3
-        class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-4"
+        class="mb-2 text-[length:var(--lw-fs-10)] font-semibold uppercase tracking-wider text-ink-4"
       >
         {{ t(`market.origin_${group.key}`) }}
       </h3>
@@ -235,18 +235,18 @@ async function confirmUninstall() {
           <div class="min-w-40">
             <p class="text-sm font-semibold text-ink-1">
               {{ displayName(p, locale) }}
-              <span class="ml-1 font-mono text-[10px] font-normal text-ink-5">{{
+              <span class="ml-1 font-mono text-[length:var(--lw-fs-10)] font-normal text-ink-5">{{
                 p.id
               }}</span>
             </p>
-            <p class="text-[11px] text-ink-4">
+            <p class="text-[length:var(--lw-fs-11)] text-ink-4">
               {{ t("market.versionLabel") }} {{ p.version }}
             </p>
           </div>
           <SideEffectBadges :kinds="p.display.side_effects" />
           <!-- 状态徽标：运行中 / 已停用 -->
           <span
-            class="rounded-full px-2 py-0.5 text-[10px]"
+            class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-10)]"
             :class="
               p.active_version
                 ? 'bg-ok/16 text-ok'
@@ -267,7 +267,7 @@ async function confirmUninstall() {
           <IdleBadge :idle="store.usageOf(p.id)?.idle ?? null" />
           <span
             v-if="updateAvailableOf(p)"
-            class="rounded-full bg-info/16 px-2 py-0.5 text-[10px] text-info"
+            class="rounded-full bg-info/16 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-info"
           >
             {{ t("market.updateAvailable", { version: latestOf(store.marketplace, p.id) }) }}
           </span>
@@ -276,7 +276,7 @@ async function confirmUninstall() {
                lockfile Builtin 条目持久化，重启不复活停用项 -->
           <div v-if="p.source === 'builtin'" class="ml-auto flex items-center gap-2">
             <span
-              class="rounded-full bg-surface-0 px-2 py-0.5 text-[10px] text-ink-3"
+              class="rounded-full bg-surface-0 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-3"
             >
               {{ t("market.builtinBadge") }}
             </span>

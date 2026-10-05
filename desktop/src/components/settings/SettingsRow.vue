@@ -27,11 +27,11 @@ withDefaults(
       <component
         :is="controlId ? 'label' : 'div'"
         :for="controlId"
-        class="block text-[13px] font-medium leading-tight text-ink-1"
+        class="block text-[length:var(--lw-fs-13)] font-medium leading-tight text-ink-1"
       >
         {{ title }}<slot name="title-extra" />
       </component>
-      <p v-if="hint" class="mt-1 text-[11.5px] leading-relaxed text-ink-4">
+      <p v-if="hint" class="mt-1 text-[length:var(--lw-fs-12)] leading-relaxed text-ink-4">
         {{ hint }}
       </p>
       <slot name="detail" />

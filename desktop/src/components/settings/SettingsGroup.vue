@@ -18,8 +18,8 @@ withDefaults(
   <section class="space-y-2">
     <div v-if="title || hint || $slots.action" class="flex items-end justify-between gap-5 px-1">
       <div class="min-w-0">
-        <h3 v-if="title" class="text-[13px] font-semibold text-ink-1">{{ title }}</h3>
-        <p v-if="hint" class="mt-0.5 text-[11.5px] leading-relaxed text-ink-4">
+        <h3 v-if="title" class="text-[length:var(--lw-fs-13)] font-semibold text-ink-1">{{ title }}</h3>
+        <p v-if="hint" class="mt-0.5 text-[length:var(--lw-fs-12)] leading-relaxed text-ink-4">
           {{ hint }}
         </p>
       </div>

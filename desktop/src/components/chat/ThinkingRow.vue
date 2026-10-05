@@ -61,7 +61,7 @@ const summary = computed(() => {
 
 <style scoped>
 .thinking__header {
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
 }
 .thinking__clip {
   flex: 1 1 auto;
@@ -72,11 +72,11 @@ const summary = computed(() => {
   color: var(--lw-ink-2);
 }
 .thinking__body {
-  margin: 4px 0 6px;
+  margin: var(--lw-gap-4) 0 var(--lw-gap-6);
   border-radius: var(--lw-r-sm);
   background: var(--lw-wash-1);
-  padding: 10px 12px;
-  font-size: 12.5px;
+  padding: var(--lw-gap-10) var(--lw-gap-12);
+  font-size: var(--lw-fs-12half);
   line-height: 1.55;
   color: var(--lw-ink-2);
   white-space: pre-wrap;

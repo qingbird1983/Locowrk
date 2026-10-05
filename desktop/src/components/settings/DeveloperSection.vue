@@ -230,18 +230,18 @@ onMounted(() => void refresh());
         </button>
       </template>
       <div class="space-y-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5">
-        <p v-if="!hasSnapshot(debug)" class="text-[11.5px] text-ink-4">
+        <p v-if="!hasSnapshot(debug)" class="text-[length:var(--lw-fs-12)] text-ink-4">
           {{ t("developer.empty") }}
         </p>
 
         <template v-else-if="debug">
-          <p v-if="!debug.enabled" class="text-[11.5px] text-warn">
+          <p v-if="!debug.enabled" class="text-[length:var(--lw-fs-12)] text-warn">
             {{ t("developer.disabled") }}
           </p>
           <p class="text-xs">
             {{ t("developer.exposed", { exposed: debug.exposed, total: debug.total }) }}
           </p>
-          <ul class="space-y-1 text-[11.5px] text-ink-3">
+          <ul class="space-y-1 text-[length:var(--lw-fs-12)] text-ink-3">
             <li v-if="debug.always.length">
               {{ t("developer.always", { n: debug.always.length }) }}:
               <span class="text-ink-2">{{ debug.always.join(", ") }}</span>
@@ -259,7 +259,7 @@ onMounted(() => void refresh());
               <span class="text-ink-2">{{ debug.retrieved.join(", ") }}</span>
             </li>
           </ul>
-          <p v-if="debug.savedTokensEstimate > 0" class="text-[11.5px] text-ok">
+          <p v-if="debug.savedTokensEstimate > 0" class="text-[length:var(--lw-fs-12)] text-ok">
             {{ t("developer.saved", { n: compactNumber(debug.savedTokensEstimate) }) }}
           </p>
         </template>
@@ -270,7 +270,7 @@ onMounted(() => void refresh());
          + 本轮（turnUsage）。供应商未报告缓存字段 = 行留空态，不虚构。 -->
     <SettingsGroup :title="t('developer.cacheTitle')" :hint="t('developer.cacheHint')">
       <div class="space-y-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5 text-xs">
-        <p v-if="!chat.cacheStats" class="text-[11.5px] text-ink-4">
+        <p v-if="!chat.cacheStats" class="text-[length:var(--lw-fs-12)] text-ink-4">
           {{ t("developer.cacheEmpty") }}
         </p>
         <template v-else>
@@ -290,7 +290,7 @@ onMounted(() => void refresh());
             {{ t("developer.cacheSavings", { n: formatMoney(chat.cacheStats.savings) }) }}
           </p>
         </template>
-        <p v-if="chat.turnUsage" class="text-[11.5px] text-ink-3">
+        <p v-if="chat.turnUsage" class="text-[length:var(--lw-fs-12)] text-ink-3">
           {{
             t("developer.cacheTurn", {
               input: compactNumber(chat.turnUsage.input),
@@ -334,7 +334,7 @@ onMounted(() => void refresh());
     <SettingsGroup :title="t('developer.filesTitle')" :hint="t('developer.filesHint')">
       <SettingsRow :title="t('developer.reconcileTitle')" :hint="t('developer.reconcileHint')">
         <button
-          class="lw-btn rounded-[var(--lw-r-xs)] px-3 py-1 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          class="lw-btn rounded-[var(--lw-r-xs)] px-3 py-1 text-[length:var(--lw-fs-11)] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="reconciling"
           @click="runReconcile"
         >
@@ -343,7 +343,7 @@ onMounted(() => void refresh());
       </SettingsRow>
       <p
         v-if="reconcileResult"
-        class="px-4 pb-1 text-[11px] text-ink-4"
+        class="px-4 pb-1 text-[length:var(--lw-fs-11)] text-ink-4"
       >
         {{ t("developer.reconcileLast", { ...reconcileResult }) }}
       </p>

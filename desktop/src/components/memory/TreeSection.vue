@@ -166,15 +166,15 @@ function sourceLabel(source: string): string {
       <h3 class="text-xs font-semibold text-ink-1">
         {{ t("memory.treeTitle") }}
       </h3>
-      <span class="text-[10px] text-ink-5">{{ t("memory.treeReadOnly") }}</span>
+      <span class="text-[length:var(--lw-fs-10)] text-ink-5">{{ t("memory.treeReadOnly") }}</span>
       <span
         v-if="sessions && sessions.length > 0"
-        class="text-[10px] text-ink-5"
+        class="text-[length:var(--lw-fs-10)] text-ink-5"
       >
         {{ sessions.length }}
       </span>
       <button
-        class="ml-auto rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
+        class="ml-auto rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
         @click="loadSessions"
       >
         {{ t("common.refresh") }}
@@ -188,7 +188,7 @@ function sourceLabel(source: string): string {
       <!-- 空态：不发明数据（影子期大多数会话还没有树） -->
       <p
         v-if="sessions !== null && sessions.length === 0"
-        class="mt-2 text-[11px] text-ink-5"
+        class="mt-2 text-[length:var(--lw-fs-11)] text-ink-5"
       >
         {{ t("memory.treeEmpty") }}
       </p>
@@ -196,7 +196,7 @@ function sourceLabel(source: string): string {
       <template v-else-if="sessions && sessions.length > 0">
         <!-- 会话切换器 + 本地搜索 -->
         <div class="mt-2 flex items-center gap-2">
-          <label class="shrink-0 text-[10px] text-ink-5">
+          <label class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
             {{ t("memory.treeSessionLabel") }}
           </label>
           <select
@@ -217,7 +217,7 @@ function sourceLabel(source: string): string {
         <!-- 捆列表（只读：展开摘要 / 看原文） -->
         <p
           v-if="filtered.length === 0"
-          class="mt-2 text-[11px] text-ink-5"
+          class="mt-2 text-[length:var(--lw-fs-11)] text-ink-5"
         >
           {{ t("memory.noMatch") }}
         </p>
@@ -232,7 +232,7 @@ function sourceLabel(source: string): string {
               class="flex w-full items-center gap-2 text-left"
               @click="toggleExpand(b)"
             >
-              <span class="w-3 shrink-0 font-mono text-[10px] text-ink-5">
+              <span class="w-3 shrink-0 font-mono text-[length:var(--lw-fs-10)] text-ink-5">
                 {{ expanded.has(b.bundleId) ? "▾" : "▸" }}
               </span>
               <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink-1">
@@ -240,11 +240,11 @@ function sourceLabel(source: string): string {
               </span>
               <span
                 v-if="b.pending"
-                class="shrink-0 rounded-full bg-wash-3 px-2 py-0.5 text-[10px] text-ink-4"
+                class="shrink-0 rounded-full bg-wash-3 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
               >
                 {{ sourceLabel(b.source) }}
               </span>
-              <span class="shrink-0 text-[10px] text-ink-5">
+              <span class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
                 {{ timeText(b.createdAt) }}
               </span>
             </button>
@@ -256,7 +256,7 @@ function sourceLabel(source: string): string {
               </p>
               <div class="mt-1.5 flex items-center gap-2 pl-5">
                 <span
-                  class="rounded-full px-2 py-0.5 text-[10px]"
+                  class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-10)]"
                   :class="
                     b.source === 'recorder'
                       ? 'bg-wash-3 text-ink-4'
@@ -273,13 +273,13 @@ function sourceLabel(source: string): string {
                 <p
                   v-for="row in originalRows(b.bundleId)"
                   :key="row.index"
-                  class="break-words text-[11px] leading-relaxed"
+                  class="break-words text-[length:var(--lw-fs-11)] leading-relaxed"
                   :class="
                     row.kind === 'user'
                       ? 'text-ink-1'
                       : row.kind === 'assistant'
                         ? 'text-ink-3'
-                        : 'font-mono text-[10px] text-ink-5'
+                        : 'font-mono text-[length:var(--lw-fs-10)] text-ink-5'
                   "
                 >
                   <span class="mr-1.5 select-none text-ink-5">
@@ -289,7 +289,7 @@ function sourceLabel(source: string): string {
               </div>
               <p
                 v-else-if="originalErrors.has(b.bundleId)"
-                class="mt-2 pl-5 text-[11px] text-danger"
+                class="mt-2 pl-5 text-[length:var(--lw-fs-11)] text-danger"
               >
                 {{
                   t("memory.originalFailed", {
@@ -297,7 +297,7 @@ function sourceLabel(source: string): string {
                   })
                 }}
               </p>
-              <p v-else class="mt-2 pl-5 text-[11px] text-ink-5">
+              <p v-else class="mt-2 pl-5 text-[length:var(--lw-fs-11)] text-ink-5">
                 {{ t("memory.originalLoading") }}
               </p>
             </template>

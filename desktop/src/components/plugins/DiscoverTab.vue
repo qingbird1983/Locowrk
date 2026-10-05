@@ -68,7 +68,7 @@ function pickVersion(id: string, versions: string[]): string {
           </select>
           <span
             v-if="store.installed.some((p) => p.id === item.id)"
-            class="ml-auto rounded-[var(--lw-r-3xs)] bg-ok/16 px-2 py-1 text-[10px] text-ok"
+            class="ml-auto rounded-[var(--lw-r-3xs)] bg-ok/16 px-2 py-1 text-[length:var(--lw-fs-10)] text-ok"
           >
             {{ t("market.installedBadge") }}
           </span>

@@ -99,7 +99,7 @@ const isCustom = (o: ServiceOption) => o.id === CUSTOM_SERVICE;
       <input
         ref="searchEl"
         v-model="query"
-        class="w-full bg-transparent text-[13px] text-ink-1 outline-none placeholder:text-ink-5"
+        class="w-full bg-transparent text-[length:var(--lw-fs-13)] text-ink-1 outline-none placeholder:text-ink-5"
         :placeholder="t('settings.modelSearchService')"
         :disabled="disabled"
         autocomplete="off"
@@ -112,7 +112,7 @@ const isCustom = (o: ServiceOption) => o.id === CUSTOM_SERVICE;
     <div ref="gridEl" class="min-h-0 flex-1 overflow-y-auto pb-1">
       <p
         v-if="visible.length === 0"
-        class="px-1 py-6 text-center text-[12.5px] text-ink-4"
+        class="px-1 py-6 text-center text-[length:var(--lw-fs-12half)] text-ink-4"
       >
         {{ t("settings.modelNoServiceMatch") }}
         <button
@@ -125,7 +125,7 @@ const isCustom = (o: ServiceOption) => o.id === CUSTOM_SERVICE;
         </button>
       </p>
       <template v-else>
-        <h4 class="mb-2 px-1 text-[12.5px] font-semibold text-ink-2">
+        <h4 class="mb-2 px-1 text-[length:var(--lw-fs-12half)] font-semibold text-ink-2">
           {{ t("settings.modelChooserGroup") }}
         </h4>
         <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
@@ -142,15 +142,15 @@ const isCustom = (o: ServiceOption) => o.id === CUSTOM_SERVICE;
             @keydown="onTileKey"
           >
             <span
-              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--lw-r-xs)] bg-wash-2 text-[14px] font-semibold text-ink-2"
+              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--lw-r-xs)] bg-wash-2 text-[length:var(--lw-fs-14)] font-semibold text-ink-2"
               aria-hidden
             >
               <Icon v-if="isCustom(o)" name="plus" :size="14" />
               <template v-else>{{ letter(o.name) }}</template>
             </span>
             <span class="min-w-0">
-              <span class="block truncate text-[13px] font-medium text-ink-1">{{ o.name }}</span>
-              <span class="block truncate text-[11px] text-ink-4">
+              <span class="block truncate text-[length:var(--lw-fs-13)] font-medium text-ink-1">{{ o.name }}</span>
+              <span class="block truncate text-[length:var(--lw-fs-11)] text-ink-4">
                 {{ isCustom(o) ? t("settings.presetCustomDesc") : o.endpoint }}
               </span>
             </span>

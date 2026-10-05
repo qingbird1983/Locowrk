@@ -38,7 +38,7 @@ onMounted(() => {
       >
         <!-- §3.31 计数页签：文案 + 计数（11px ink-4） -->
         {{ t(`market.${key}`) }}
-        <span class="ml-1 text-[11px] text-ink-4">{{
+        <span class="ml-1 text-[length:var(--lw-fs-11)] text-ink-4">{{
           key === "discover" ? store.marketplace.length : store.installed.length
         }}</span>
       </button>

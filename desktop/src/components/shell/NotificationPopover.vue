@@ -193,15 +193,15 @@ async function onRow(item: NotificationItem) {
   border: 1px solid var(--lw-line);
   background: var(--lw-bg-elevated);
   box-shadow: var(--lw-shadow-pop);
-  padding: 10px 12px;
+  padding: var(--lw-gap-10) var(--lw-gap-12);
   z-index: var(--lw-z-pop);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   line-height: 1.45;
 }
 .notif-pop__head {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--lw-gap-2);
   color: var(--lw-ink-1);
 }
 .notif-pop__title {
@@ -228,16 +228,16 @@ async function onRow(item: NotificationItem) {
 /* 轻量两键分段（§3.13）：胶囊内 wash 选中 */
 .notif-pop__seg {
   display: inline-flex;
-  gap: 2px;
-  margin-top: 8px;
-  padding: 2px;
+  gap: var(--lw-gap-2);
+  margin-top: var(--lw-gap-8);
+  padding: var(--lw-gap-2);
   border-radius: var(--lw-r-full);
   background: var(--lw-wash-2);
 }
 .notif-pop__seg button {
   border-radius: var(--lw-r-full);
-  padding: 2px 10px;
-  font-size: 11.5px;
+  padding: var(--lw-gap-2) var(--lw-gap-10);
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-3);
 }
 .notif-pop__seg button:hover {
@@ -250,16 +250,16 @@ async function onRow(item: NotificationItem) {
 }
 
 .notif-pop__list {
-  margin-top: 6px;
+  margin-top: var(--lw-gap-6);
   max-height: min(420px, 50vh);
   overflow-y: auto;
 }
 .notif-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   width: 100%;
-  padding: 6px 8px;
+  padding: var(--lw-gap-6) var(--lw-gap-8);
   border-radius: var(--lw-r-xs);
   text-align: left;
 }
@@ -270,7 +270,7 @@ async function onRow(item: NotificationItem) {
   width: 6px;
   height: 6px;
   flex: 0 0 auto;
-  margin-top: 5px;
+  margin-top: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   border-radius: var(--lw-r-full);
   background: var(--lw-accent);
 }
@@ -279,31 +279,31 @@ async function onRow(item: NotificationItem) {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 1px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
 }
 .notif-row__title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-2);
 }
 .notif-row__body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-3);
 }
 .notif-row__time {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
 }
 .notif-pop__empty {
-  padding: 14px 8px;
+  padding: var(--lw-gap-14) var(--lw-gap-8);
   text-align: center;
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 </style>

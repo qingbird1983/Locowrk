@@ -121,7 +121,7 @@ const metaText = computed(() => {
 
 <style scoped>
 .turn {
-  padding: 4px 0 10px;
+  padding: var(--lw-gap-4) 0 var(--lw-gap-10);
 }
 .turn__grid {
   display: grid;
@@ -148,8 +148,8 @@ const metaText = computed(() => {
    * 不缩进、无引导线，扁平直排 */
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  margin-top: 2px;
+  gap: 1px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
+  margin-top: var(--lw-gap-2);
   transition: opacity var(--dur-fast) var(--ease-in);
 }
 .turn__grid.is-open .turn__body {

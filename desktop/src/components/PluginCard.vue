@@ -43,10 +43,10 @@ const licenseText = computed(
         <PluginIcon :icon="item.display.icon" :id="item.id" size="h-full w-full" />
       </div>
       <div class="min-w-0 flex-1">
-        <h3 class="truncate text-[14px] font-medium text-ink-1" :title="item.id">
+        <h3 class="truncate text-[length:var(--lw-fs-14)] font-medium text-ink-1" :title="item.id">
           {{ name }}
         </h3>
-        <p v-if="meta" class="truncate text-[11px] text-ink-4">{{ meta }}</p>
+        <p v-if="meta" class="truncate text-[length:var(--lw-fs-11)] text-ink-4">{{ meta }}</p>
       </div>
     </div>
     <p
@@ -63,7 +63,7 @@ const licenseText = computed(
     </div>
     <div class="mt-auto flex items-center gap-2 pt-1">
       <span
-        class="truncate rounded-[var(--lw-r-3xs)] px-1.5 py-0.5 text-[10px] text-ink-4"
+        class="truncate rounded-[var(--lw-r-3xs)] px-1.5 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
         :title="licenseText"
       >
         {{ licenseText }}
@@ -80,10 +80,10 @@ const licenseText = computed(
   display: flex;
   min-height: 100%;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   border-radius: var(--lw-r-lg);
   background: var(--lw-wash-1);
-  padding: 14px 16px;
+  padding: var(--lw-gap-14) var(--lw-gap-16);
 }
 .market-card__icon {
   display: flex;

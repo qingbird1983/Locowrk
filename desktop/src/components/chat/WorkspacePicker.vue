@@ -213,9 +213,9 @@ const chipIcon: IconName = "folder";
 .ws-picker__chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   height: 24px;
-  padding: 0 8px;
+  padding: 0 var(--lw-gap-8);
   border-radius: var(--lw-r-md);
   color: var(--lw-ink-3);
   transition: background var(--dur-fast) var(--ease-standard),
@@ -227,7 +227,7 @@ const chipIcon: IconName = "folder";
   color: var(--lw-ink-1);
 }
 .ws-picker__label {
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   line-height: 1;
   max-width: 180px;
   overflow: hidden;
@@ -240,7 +240,7 @@ const chipIcon: IconName = "folder";
   bottom: calc(100% + 6px);
   left: 0;
   min-width: 216px;
-  padding: 4px;
+  padding: var(--lw-gap-4);
   border-radius: var(--lw-r-lg);
   background: var(--lw-bg-elevated);
   border: 1px solid var(--lw-line);
@@ -252,16 +252,16 @@ const chipIcon: IconName = "folder";
   bottom: auto;
 }
 .ws-picker__group {
-  padding: 6px 10px 3px;
-  font-size: 11px;
+  padding: var(--lw-gap-6) var(--lw-gap-10) 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
 }
 .ws-picker__row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 9px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值9,§二⑬) */
   width: 100%;
-  padding: 7px 10px;
+  padding: 7px var(--lw-gap-10); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
   border-radius: var(--lw-r-md);
   text-align: left;
 }
@@ -282,7 +282,7 @@ const chipIcon: IconName = "folder";
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-1);
 }
 .ws-picker__check {
@@ -293,7 +293,7 @@ const chipIcon: IconName = "folder";
 /* 组间淡发丝线（两端不到端，§五 弹层质感） */
 .ws-picker__sep {
   height: 1px;
-  margin: 4px 12px;
+  margin: var(--lw-gap-4) var(--lw-gap-12);
   background: var(--lw-line-subtle);
 }
 </style>

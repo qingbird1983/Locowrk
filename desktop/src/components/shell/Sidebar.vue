@@ -81,7 +81,7 @@ const isMarket = computed(() => shell.destination === "plugins");
       <!-- 侧栏头（46px 带左段）：品牌 + 折叠按钮，空白处拖拽窗口 -->
       <header class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-2 px-2">
         <span
-          class="flex items-center gap-2 text-[13.5px] font-semibold tracking-[-0.02em]"
+          class="flex items-center gap-2 text-[length:var(--lw-fs-13)] font-semibold tracking-[-0.02em]"
           data-tauri-drag-region
         >
           <Icon name="sparkle" :size="14" />
@@ -102,7 +102,7 @@ const isMarket = computed(() => shell.destination === "plugins");
 
       <!-- 侧栏体：顶部动作区 + 项目段（v3.9 项目接管，issue #4） -->
       <div class="scroll-y min-h-0 flex-1 px-2">
-        <nav class="flex flex-col gap-[2px] pb-1 pt-1" :aria-label="t('sidebar.actions')">
+        <nav class="flex flex-col gap-[var(--lw-gap-2)] pb-1 pt-1" :aria-label="t('sidebar.actions')">
           <button
             type="button"
             class="action-row"
@@ -139,7 +139,7 @@ const isMarket = computed(() => shell.destination === "plugins");
       <!-- 侧栏底（issue #12 序：设置/记忆/定时/通知）+ 版本号（连点解锁
            开发者选项）；间距对原型（gap 2px / padding 0 8px） -->
       <footer
-        class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-[2px] px-2"
+        class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-[var(--lw-gap-2)] px-2"
       >
         <HoverTip
           v-for="dest in (['settings', 'memory', 'schedule'] as const)"
@@ -190,7 +190,7 @@ const isMarket = computed(() => shell.destination === "plugins");
           <button
             v-if="version"
             type="button"
-            class="version-label ml-auto text-[11px] tabular-nums text-ink-4"
+            class="version-label ml-auto text-[length:var(--lw-fs-11)] tabular-nums text-ink-4"
             @click="onVersionTap"
           >
             v{{ version }}
@@ -276,10 +276,10 @@ const isMarket = computed(() => shell.destination === "plugins");
 .action-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   width: 100%;
   min-height: 30px;
-  padding: 0 8px;
+  padding: 0 var(--lw-gap-8);
   border-radius: var(--lw-r-xs);
   color: var(--lw-ink-2);
   text-align: left;
@@ -298,11 +298,11 @@ const isMarket = computed(() => shell.destination === "plugins");
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
 }
 .action-row__keys {
   flex: 0 0 auto;
-  font-size: 10.5px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
 }
 
@@ -323,7 +323,7 @@ const isMarket = computed(() => shell.destination === "plugins");
 /* 版本号（连点解锁开发者选项的锚点） */
 .version-label {
   border-radius: var(--lw-r-xs);
-  padding: 2px 6px;
+  padding: var(--lw-gap-2) var(--lw-gap-6);
 }
 .version-label:hover {
   background: var(--lw-wash-2);

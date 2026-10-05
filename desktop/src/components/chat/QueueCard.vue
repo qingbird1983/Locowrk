@@ -120,20 +120,20 @@ function resume() {
 /* 卡面（底色/圆角/暗影）由 Composer.dock-cards 容器统一持有（贴合柱面
  * 语义），本组件只管内容版式。 */
 .queue-card {
-  padding: 8px 10px 6px 14px;
+  padding: var(--lw-gap-8) var(--lw-gap-10) var(--lw-gap-6) var(--lw-gap-14);
 }
 
 .queue-card__head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
 }
 .queue-card__toggle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   height: 26px;
-  padding: 0 6px;
+  padding: 0 var(--lw-gap-6);
   border-radius: var(--lw-r-sm);
   transition: background var(--dur-fast) var(--ease-standard);
 }
@@ -141,7 +141,7 @@ function resume() {
   background: var(--lw-wash-2);
 }
 .queue-card__title {
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   font-weight: 600;
   color: var(--lw-ink-1);
 }
@@ -153,14 +153,14 @@ function resume() {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--lw-gap-4);
 }
 .queue-card__resume {
   height: 24px;
-  padding: 0 10px;
+  padding: 0 var(--lw-gap-10);
   border-radius: var(--lw-r-sm);
   background: var(--lw-wash-3);
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-1);
 }
 .queue-card__resume:hover {
@@ -204,15 +204,15 @@ function resume() {
 .queue-card__rows {
   list-style: none;
   margin: 0;
-  padding: 2px 0 4px;
+  padding: var(--lw-gap-2) 0 var(--lw-gap-4);
   display: flex;
   flex-direction: column;
 }
 .queue-card__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 4px 3px 6px;
+  gap: var(--lw-gap-8);
+  padding: 3px var(--lw-gap-4) 3px var(--lw-gap-6); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
   border-radius: var(--lw-r-sm);
 }
 .queue-card__row:hover {
@@ -221,7 +221,7 @@ function resume() {
 .queue-card__line {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   line-height: 1.5;
   color: var(--lw-ink-2);
   overflow: hidden;

@@ -13,19 +13,19 @@ const settings = useSettingsStore();
 <template>
   <div class="space-y-3">
     <div class="rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5">
-      <p class="text-[13px] font-medium leading-tight text-ink-1">
+      <p class="text-[length:var(--lw-fs-13)] font-medium leading-tight text-ink-1">
         {{ t("settings.dataDir") }}
       </p>
-      <p class="mt-1 text-[11.5px] leading-relaxed text-ink-4">
+      <p class="mt-1 text-[length:var(--lw-fs-12)] leading-relaxed text-ink-4">
         {{ t("settings.dataDirHint") }}
       </p>
       <code
-        class="mt-2 block overflow-x-auto rounded-[var(--lw-r-3xs)] bg-inset px-2 py-1.5 font-mono text-[11px] text-ink-2"
+        class="mt-2 block overflow-x-auto rounded-[var(--lw-r-3xs)] bg-inset px-2 py-1.5 font-mono text-[length:var(--lw-fs-11)] text-ink-2"
       >
         {{ settings.view?.dataDir ?? "…" }}
       </code>
     </div>
-    <p class="px-1 text-[11.5px] leading-relaxed text-ink-4">
+    <p class="px-1 text-[length:var(--lw-fs-12)] leading-relaxed text-ink-4">
       {{ t("settings.sessionsMemory") }}
     </p>
   </div>

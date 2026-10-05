@@ -122,17 +122,17 @@ const durationText = computed(() => {
 <style scoped>
 /* 卡容器（§3.10）：1px line-subtle（浮层语法豁免）+ 圆角 14 + wash-1 */
 .subagent {
-  margin: 6px 0;
+  margin: var(--lw-gap-6) 0;
   border: 1px solid var(--lw-line-subtle);
   border-radius: var(--lw-r-md-plus);
   background: var(--lw-wash-1);
-  padding: 12px 14px;
+  padding: var(--lw-gap-12) var(--lw-gap-14);
 }
 .subagent__head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
+  gap: var(--lw-gap-6);
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-2);
 }
 .subagent__head b {
@@ -142,12 +142,12 @@ const durationText = computed(() => {
 .head-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--lw-gap-4);
   margin-left: auto;
   flex: 0 0 auto;
   border-radius: var(--lw-r-sm);
-  padding: 3px 8px;
-  font-size: 12px;
+  padding: 3px var(--lw-gap-8); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-2);
 }
 .head-btn:hover {
@@ -159,21 +159,21 @@ const durationText = computed(() => {
 .subagent__graph {
   display: flex;
   align-items: stretch;
-  margin-top: 12px;
+  margin-top: var(--lw-gap-12);
 }
 .node-col {
   display: flex;
   min-width: 0;
   flex: 1 1 0;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--lw-gap-6);
 }
 .node {
   min-width: 0;
   border-radius: var(--lw-r-md);
   background: var(--lw-raised);
   box-shadow: var(--lw-elevation);
-  padding: 10px 12px;
+  padding: var(--lw-gap-10) var(--lw-gap-12);
   text-align: left;
 }
 .subagent__graph > .node {
@@ -189,33 +189,33 @@ button.node--child:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   font-weight: 520;
   line-height: 1.3;
   color: var(--lw-ink-1);
 }
 .node__sub {
-  margin-top: 3px;
-  font-size: 11.5px;
+  margin-top: 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-3);
 }
 .node__tags {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 4px;
+  gap: var(--lw-gap-6);
+  margin-top: var(--lw-gap-4);
 }
 .node__tag {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-3);
 }
 .node__foot {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  font-size: 11.5px;
+  gap: var(--lw-gap-6);
+  margin-top: var(--lw-gap-6);
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-3);
 }
 .node__open {

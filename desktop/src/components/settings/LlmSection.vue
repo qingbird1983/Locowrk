@@ -165,13 +165,13 @@ function closeSetup() {
     <SettingsGroup :title="t('settings.modelDefaultsGroup')">
       <SettingsRow :title="t('settings.modelDefaultRow')">
         <template #detail>
-          <span v-if="activeModel" class="mt-1 flex items-center gap-1.5 text-[12px] text-ink-3">
+          <span v-if="activeModel" class="mt-1 flex items-center gap-1.5 text-[length:var(--lw-fs-12)] text-ink-3">
             <span>{{ providers.find((p) => p.id === activeId)?.label ?? "—" }}</span>
             <span aria-hidden>·</span>
             <span class="font-mono">{{ activeModel }}</span>
             <span v-if="defaultMissing" class="text-warn">{{ t("settings.modelDefaultMissing") }}</span>
           </span>
-          <span v-else class="mt-1 block text-[12px] text-ink-4">
+          <span v-else class="mt-1 block text-[length:var(--lw-fs-12)] text-ink-4">
             {{ enabledProviders.length === 0 ? t("settings.modelDefaultNone") : t("settings.modelDefaultUnset") }}
           </span>
         </template>
@@ -197,7 +197,7 @@ function closeSetup() {
       >
         <template #detail>
           <span
-            class="mt-1 block text-[12px]"
+            class="mt-1 block text-[length:var(--lw-fs-12)]"
             :class="recorderProvider && recorderModel ? 'text-ink-3' : 'text-ink-4'"
           >
             {{ recorderLabel }}
@@ -235,8 +235,8 @@ function closeSetup() {
         <span class="flex h-10 w-10 items-center justify-center rounded-[var(--lw-r-md)] bg-wash-2 text-ink-4" aria-hidden>
           <Icon name="server" :size="18" />
         </span>
-        <p class="text-[13px] font-medium text-ink-2">{{ t("settings.modelEmptyTitle") }}</p>
-        <p class="text-[11.5px] text-ink-4">{{ t("settings.modelEmptyDesc") }}</p>
+        <p class="text-[length:var(--lw-fs-13)] font-medium text-ink-2">{{ t("settings.modelEmptyTitle") }}</p>
+        <p class="text-[length:var(--lw-fs-12)] text-ink-4">{{ t("settings.modelEmptyDesc") }}</p>
       </div>
       <ServiceList
         v-else

@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
   position: absolute;
   inset-inline: 0;
   bottom: 0;
-  padding: 0 24px 16px;
+  padding: 0 var(--lw-gap-24) var(--lw-gap-16);
   z-index: 12;
   pointer-events: none;
 }
@@ -354,30 +354,30 @@ onBeforeUnmount(() => {
   resize: none;
   overflow-y: auto;
   border-radius: var(--lw-r-xl) var(--lw-r-xl) 0 0;
-  padding: 12px 14px 4px;
-  font-size: 14px;
+  padding: var(--lw-gap-12) var(--lw-gap-14) var(--lw-gap-4);
+  font-size: var(--lw-fs-14);
   line-height: 1.45;
   max-height: 180px;
 }
 .composer__input::placeholder {
   color: var(--lw-ink-5);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
 }
 .composer__toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px 6px;
+  gap: var(--lw-gap-8);
+  padding: var(--lw-gap-10) var(--lw-gap-12) var(--lw-gap-6);
 }
 /* 工作区 chip 行（§3.11 v3.9 用户裁定）：卡片**外**底行，坐在下方暗影
  * 层上——宽度与卡同源，dock pointer-events:none 需显式放开 */
 .composer__wsrow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   width: min(100%, var(--lw-content-max));
   margin-inline: auto;
-  padding: 6px 14px 0;
+  padding: var(--lw-gap-6) var(--lw-gap-14) 0;
   pointer-events: auto;
 }
 /* 收缩规则（§3.11 v3.8）：左组固定不缩；右组可缩——窄窗口下先压模型
@@ -386,7 +386,7 @@ onBeforeUnmount(() => {
 .composer__right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   min-width: 0;
 }
 .composer__left {
@@ -413,13 +413,13 @@ onBeforeUnmount(() => {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   min-width: 0;
   height: 28px;
-  padding: 4px 10px;
+  padding: var(--lw-gap-4) var(--lw-gap-10);
   border-radius: var(--lw-r-full);
   background: var(--lw-wash-2);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   line-height: 1.2;
   color: var(--lw-ink-2);
   white-space: nowrap;

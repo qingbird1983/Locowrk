@@ -241,7 +241,7 @@ async function decide(kind: ApprovalDecisionKind) {
  * 语义），本组件只管内容版式。 */
 .approval-card {
   position: relative;
-  padding: 10px 14px 11px;
+  padding: var(--lw-gap-10) var(--lw-gap-14) 11px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值11,§二⑬) */
   /* 不设 overflow:hidden——「允许本次对话」上弹单项要冒出卡顶；
    * 守夜 2px 细条在卡界内（bottom:0），无需裁切 */
 }
@@ -249,7 +249,7 @@ async function decide(kind: ApprovalDecisionKind) {
 .approval-card__head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 7px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
   min-width: 0;
 }
 .approval-card__icon {
@@ -258,7 +258,7 @@ async function decide(kind: ApprovalDecisionKind) {
 }
 .approval-card__title {
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   font-weight: 600;
   color: var(--lw-ink-1);
   overflow: hidden;
@@ -267,13 +267,13 @@ async function decide(kind: ApprovalDecisionKind) {
 }
 .approval-card__queue {
   flex: 0 0 auto;
-  font-size: 10.5px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-3);
 }
 .approval-card__sub {
   flex: 0 0 auto;
-  font-size: 10.5px;
-  padding: 1px 8px;
+  font-size: var(--lw-fs-11);
+  padding: 1px var(--lw-gap-8); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
   border-radius: var(--lw-r-full);
   background: color-mix(in oklab, var(--lw-purple) 16%, transparent);
   color: var(--lw-purple);
@@ -284,17 +284,17 @@ async function decide(kind: ApprovalDecisionKind) {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
 }
 .approval-card__btn {
   height: var(--lw-ctl);
-  padding: 0 12px;
+  padding: 0 var(--lw-gap-12);
   border-radius: var(--lw-r-md);
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   transition: background var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);
 }
@@ -310,8 +310,8 @@ async function decide(kind: ApprovalDecisionKind) {
   color: var(--lw-ink-1);
 }
 .approval-card__keycap {
-  font-size: 9.5px;
-  padding: 0 4px;
+  font-size: var(--lw-fs-10);
+  padding: 0 var(--lw-gap-4);
   border-radius: var(--lw-r-3xs);
   background: var(--lw-wash-3);
   color: var(--lw-ink-3);
@@ -336,7 +336,7 @@ async function decide(kind: ApprovalDecisionKind) {
 }
 .approval-card__split-chev {
   height: var(--lw-ctl);
-  padding: 0 6px;
+  padding: 0 var(--lw-gap-6);
   border-radius: 0 var(--lw-r-md) var(--lw-r-md) 0;
   background: var(--lw-accent);
   color: var(--lw-accent-ink);
@@ -360,12 +360,12 @@ async function decide(kind: ApprovalDecisionKind) {
   bottom: calc(100% + 6px);
   white-space: nowrap;
   height: 30px;
-  padding: 0 12px;
+  padding: 0 var(--lw-gap-12);
   border-radius: var(--lw-r-md-plus);
   border: 1px solid var(--lw-line);
   background: var(--lw-bg-elevated);
   box-shadow: var(--lw-shadow-pop);
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-1);
   z-index: 1;
 }
@@ -376,9 +376,9 @@ async function decide(kind: ApprovalDecisionKind) {
 /* 参数预览（参考图）：裸行 mono 单行省略（无底色盒），完整参数在转录
  * 工具行里 */
 .approval-card__preview {
-  margin-top: 7px;
+  margin-top: 7px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   line-height: 1.5;
   color: var(--lw-ink-3);
   overflow: hidden;
@@ -387,16 +387,16 @@ async function decide(kind: ApprovalDecisionKind) {
 }
 
 .approval-card__meta {
-  margin-top: 6px;
+  margin-top: var(--lw-gap-6);
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--lw-gap-10);
   min-width: 0;
 }
 .approval-card__desc {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   line-height: 1.45;
   color: var(--lw-ink-3);
   overflow: hidden;
@@ -406,7 +406,7 @@ async function decide(kind: ApprovalDecisionKind) {
 .approval-card__env {
   flex: 0 1 auto;
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -416,16 +416,16 @@ async function decide(kind: ApprovalDecisionKind) {
 }
 
 .approval-card__hardgate {
-  margin-top: 4px;
-  font-size: 11.5px;
+  margin-top: var(--lw-gap-4);
+  font-size: var(--lw-fs-12);
   font-weight: 500;
   line-height: 1.45;
   color: var(--lw-warn);
 }
 
 .approval-card__error {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: var(--lw-gap-6);
+  font-size: var(--lw-fs-12);
   color: var(--lw-danger);
 }
 

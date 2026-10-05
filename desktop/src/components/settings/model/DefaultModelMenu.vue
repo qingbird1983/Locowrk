@@ -107,7 +107,7 @@ onBeforeUnmount(() => {
         <Icon name="search" :size="13" class="shrink-0 text-ink-4" />
         <input
           v-model="query"
-          class="w-full bg-transparent text-[12.5px] text-ink-1 outline-none placeholder:text-ink-5"
+          class="w-full bg-transparent text-[length:var(--lw-fs-12half)] text-ink-1 outline-none placeholder:text-ink-5"
           :placeholder="t('settings.modelFilterModels')"
           autofocus
           spellcheck="false"
@@ -127,15 +127,15 @@ onBeforeUnmount(() => {
           <span class="w-4 shrink-0 text-accent">
             <Icon v-if="activeId === ''" name="check" :size="12" />
           </span>
-          <span class="min-w-0 flex-1 truncate text-[12.5px] text-ink-1">{{ props.noneLabel }}</span>
+          <span class="min-w-0 flex-1 truncate text-[length:var(--lw-fs-12half)] text-ink-1">{{ props.noneLabel }}</span>
         </button>
-        <p v-if="visible.length === 0" class="px-2 py-4 text-center text-[12px] text-ink-4">
+        <p v-if="visible.length === 0" class="px-2 py-4 text-center text-[length:var(--lw-fs-12)] text-ink-4">
           {{ t("settings.modelNoMatch") }}
         </p>
         <template v-for="(r, i) in visible" :key="`${r.providerId}:${r.model}`">
           <p
             v-if="i === 0 || visible[i - 1].providerId !== r.providerId"
-            class="px-2 pb-1 pt-2 text-[11px] text-ink-4"
+            class="px-2 pb-1 pt-2 text-[length:var(--lw-fs-11)] text-ink-4"
           >
             {{ r.label }}
           </p>
@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
             <span class="w-4 shrink-0 text-accent">
               <Icon v-if="isCurrent(r)" name="check" :size="12" />
             </span>
-            <span class="min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink-1">{{ r.model }}</span>
+            <span class="min-w-0 flex-1 truncate font-mono text-[length:var(--lw-fs-12half)] text-ink-1">{{ r.model }}</span>
           </button>
         </template>
       </div>

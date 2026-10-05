@@ -425,7 +425,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
    * 左移半个槽宽） */
   scrollbar-gutter: stable both-edges;
   overflow-anchor: none;
-  padding: 8px 24px 0;
+  padding: var(--lw-gap-8) var(--lw-gap-24) 0;
   /* 底部渐隐：内容浮到输入卡下方时淡出（遮罩盖住 composer 预留区）。
    * 渐隐色 = --lw-mask-fade 令牌（§六标准：.vue 禁字面色） */
   -webkit-mask-image: linear-gradient(
@@ -446,20 +446,20 @@ async function onNoticeAction(item: SystemItem, action: string) {
 .column {
   width: min(100%, var(--lw-content-max));
   margin-inline: auto;
-  padding-bottom: 180px;
+  padding-bottom: 180px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值180,§二⑬) */
 }
 /* 首页空态（§3.14 v3.9）迁去 chat/WelcomeHome（欢迎页独立形态，composer
  * 随行）；本组件只在会话态挂载 */
 .error-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin: 8px 0;
+  gap: var(--lw-gap-8);
+  margin: var(--lw-gap-8) 0;
   border-radius: var(--lw-r-sm);
   border: 1px solid color-mix(in oklab, var(--lw-danger) 30%, transparent);
   background: color-mix(in oklab, var(--lw-danger) 8%, transparent);
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: var(--lw-gap-8) var(--lw-gap-12);
+  font-size: var(--lw-fs-12);
   line-height: 1.45;
   color: var(--lw-danger);
 }
@@ -469,9 +469,9 @@ async function onNoticeAction(item: SystemItem, action: string) {
 .flow-error-row {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
-  padding: 2px 0;
-  font-size: 12px;
+  gap: 7px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
+  padding: var(--lw-gap-2) 0;
+  font-size: var(--lw-fs-12);
   line-height: 1.5;
   color: var(--lw-ink-2);
 }
@@ -482,7 +482,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
 }
 .decision-row > svg {
   color: var(--lw-ok);
-  margin-top: 2px;
+  margin-top: var(--lw-gap-2);
 }
 .decision-row.is-denied > svg,
 .flow-error-row > svg {

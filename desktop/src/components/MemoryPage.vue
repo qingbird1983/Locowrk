@@ -220,7 +220,7 @@ async function clearExperiences() {
         :label="t('memory.openFolderHint')"
       >
         <button
-          class="ml-auto rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
+          class="ml-auto rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
           @click="openFolder"
         >
           {{ t("memory.openFolder") }}
@@ -259,25 +259,25 @@ async function clearExperiences() {
               :text="row.workspace"
               :label="row.workspace"
             >
-              <span class="shrink-0 text-[10px] text-ink-5">
+              <span class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
                 {{ t("memory.workspace") }} {{ workspaceDisplayName(row.workspace) }}
               </span>
             </HoverTip>
-            <span v-else class="shrink-0 text-[10px] text-ink-5">
+            <span v-else class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
               {{ t("memory.globalTier") }}
             </span>
-            <span class="shrink-0 text-[10px] text-ink-5">
+            <span class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
               {{ timeText(row) }}
             </span>
             <template v-if="editingKey !== rowId(row)">
               <button
-                class="shrink-0 rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
+                class="shrink-0 rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
                 @click="startEdit(row)"
               >
                 {{ t("memory.edit") }}
               </button>
               <button
-                class="shrink-0 rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] transition"
+                class="shrink-0 rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] transition"
                 :class="
                   confirmingDelete === rowId(row)
                     ? 'bg-danger/16 text-danger'
@@ -303,14 +303,14 @@ async function clearExperiences() {
             />
             <div class="mt-2 flex items-center gap-2">
               <button
-                class="rounded-[var(--lw-r-xs)] bg-accent px-3 py-1 text-[11px] font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+                class="rounded-[var(--lw-r-xs)] bg-accent px-3 py-1 text-[length:var(--lw-fs-11)] font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="saving"
                 @click="saveEdit"
               >
                 {{ t("memory.save") }}
               </button>
               <button
-                class="rounded-[var(--lw-r-xs)] px-3 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2"
+                class="rounded-[var(--lw-r-xs)] px-3 py-1 text-[length:var(--lw-fs-11)] text-ink-4 transition hover:bg-wash-2"
                 @click="cancelEdit"
               >
                 {{ t("memory.cancel") }}
@@ -323,7 +323,7 @@ async function clearExperiences() {
             <p class="mt-1 whitespace-pre-wrap break-words text-xs text-ink-3">
               {{ row.value }}
             </p>
-            <p v-if="row.tags" class="mt-1 text-[10px] text-ink-5">
+            <p v-if="row.tags" class="mt-1 text-[length:var(--lw-fs-10)] text-ink-5">
               {{ row.tags }}
             </p>
           </template>
@@ -342,12 +342,12 @@ async function clearExperiences() {
         <h3 class="text-xs font-semibold text-ink-1">
           {{ t("memory.experienceTitle") }}
         </h3>
-        <span class="text-[10px] text-ink-5">
+        <span class="text-[length:var(--lw-fs-10)] text-ink-5">
           {{ experiences?.length ?? 0 }}
         </span>
         <button
           v-if="(experiences?.length ?? 0) > 0"
-          class="ml-auto rounded-[var(--lw-r-xs)] px-3 py-1 text-[11px] transition"
+          class="ml-auto rounded-[var(--lw-r-xs)] px-3 py-1 text-[length:var(--lw-fs-11)] transition"
           :class="
             confirmingExpClear
               ? 'bg-danger/16 text-danger'
@@ -359,7 +359,7 @@ async function clearExperiences() {
         </button>
       </div>
 
-      <p v-if="(experiences?.length ?? 0) === 0" class="mt-2 text-[11px] text-ink-5">
+      <p v-if="(experiences?.length ?? 0) === 0" class="mt-2 text-[length:var(--lw-fs-11)] text-ink-5">
         {{ t("memory.experienceEmpty") }}
       </p>
       <ul v-else class="mt-2 space-y-2">
@@ -369,10 +369,10 @@ async function clearExperiences() {
           class="rounded-[var(--lw-r-md)] bg-wash-1 px-4 py-3"
         >
           <div class="flex items-center gap-2">
-            <span class="shrink-0 text-[10px] text-ink-5">
+            <span class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
               {{ expTimeText(row) }}
             </span>
-            <span class="truncate font-mono text-[10px] text-ink-5">
+            <span class="truncate font-mono text-[length:var(--lw-fs-10)] text-ink-5">
               {{ t("memory.experienceSession", { id: row.sessionId.slice(0, 8) }) }}
             </span>
             <HoverTip
@@ -381,12 +381,12 @@ async function clearExperiences() {
               :text="row.workspace"
               :label="row.workspace"
             >
-              <span class="shrink-0 text-[10px] text-ink-5">
+              <span class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
                 {{ t("memory.workspace") }} {{ workspaceDisplayName(row.workspace) }}
               </span>
             </HoverTip>
             <button
-              class="ml-auto shrink-0 rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] transition"
+              class="ml-auto shrink-0 rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] transition"
               :class="
                 confirmingExpDelete === row.id
                   ? 'bg-danger/16 text-danger'
@@ -412,7 +412,7 @@ async function clearExperiences() {
     <div class="flex items-center gap-2 border-t border-line px-5 py-2">
       <button
         v-if="!isEmpty"
-        class="rounded-[var(--lw-r-xs)] px-3 py-1 text-[11px] transition"
+        class="rounded-[var(--lw-r-xs)] px-3 py-1 text-[length:var(--lw-fs-11)] transition"
         :class="
           confirmingClear
             ? 'bg-danger/16 text-danger'
@@ -422,7 +422,7 @@ async function clearExperiences() {
       >
         {{ confirmingClear ? t("memory.clearConfirm") : t("memory.clearAll") }}
       </button>
-      <p class="ml-auto text-[11px] text-ink-5">{{ t("memory.hint") }}</p>
+      <p class="ml-auto text-[length:var(--lw-fs-11)] text-ink-5">{{ t("memory.hint") }}</p>
     </div>
   </div>
 </template>

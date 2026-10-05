@@ -336,36 +336,36 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
 .palette-search {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--lw-gap-10);
   height: 52px;
   flex-shrink: 0;
-  padding: 0 14px;
+  padding: 0 var(--lw-gap-14);
   border-bottom: 1px solid var(--lw-line-subtle);
 }
 .palette-results {
   max-height: min(52vh, 420px);
-  padding: 6px;
+  padding: var(--lw-gap-6);
 }
 .palette-group-label {
-  padding: 8px 10px 4px;
-  font-size: 11px;
+  padding: var(--lw-gap-8) var(--lw-gap-10) var(--lw-gap-4);
+  font-size: var(--lw-fs-11);
   letter-spacing: 0.02em;
   color: var(--lw-ink-4);
 }
 /* v3.9 用户裁定：分组间淡发丝线，两端不到头（inset 12px） */
 .palette-group-label--ruled {
   border-top: 1px solid var(--lw-line-subtle);
-  margin: 4px 12px 0;
-  padding: 8px 0 4px;
+  margin: var(--lw-gap-4) var(--lw-gap-12) 0;
+  padding: var(--lw-gap-8) 0 var(--lw-gap-4);
 }
 .palette-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   width: 100%;
   border-radius: var(--lw-r-xs);
-  padding: 7px 8px;
-  font-size: 12.5px;
+  padding: 7px var(--lw-gap-8); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
+  font-size: var(--lw-fs-12half);
   line-height: 1.3;
   color: var(--lw-ink-1);
   text-align: left;
@@ -382,7 +382,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
   text-overflow: ellipsis;
   white-space: nowrap;
   flex-shrink: 1;
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 .keycap {
@@ -392,10 +392,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
   min-width: 20px;
   height: 18px;
   flex-shrink: 0;
-  padding: 0 5px;
+  padding: 0 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   border-radius: var(--lw-r-3xs);
   background: var(--lw-wash-2);
-  font-size: 10.5px;
+  font-size: var(--lw-fs-11);
   font-weight: 520;
   color: var(--lw-ink-3);
 }

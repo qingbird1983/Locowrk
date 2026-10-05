@@ -239,7 +239,7 @@ const kindOptions = computed(() => [
         @click="!saving && emit('close')"
       >
         <div
-          class="lw-modal-panel flex max-h-[92vh] w-[min(1030px,100vw-48px)] flex-col overflow-hidden rounded-[var(--lw-r-lg)] bg-elevated p-5 shadow-[var(--lw-shadow-dialog)]"
+          class="lw-modal-panel flex max-h-[92vh] w-[min(1030px,100vw-48px)] flex-col overflow-hidden rounded-[var(--lw-r-lg-plus)] bg-elevated p-5 shadow-[var(--lw-shadow-dialog)]"
           role="dialog"
           aria-modal="true"
           @click.stop
@@ -247,7 +247,7 @@ const kindOptions = computed(() => [
         <!-- 选服务视图 -->
         <template v-if="chooserOpen">
           <div class="mb-3 flex shrink-0 items-center">
-            <h3 class="text-[15px] font-semibold text-ink-1">
+            <h3 class="text-[length:var(--lw-fs-14)] font-semibold text-ink-1">
               {{ props.provider ? t("settings.modelChangeService") : t("settings.modelAddTitle") }}
             </h3>
             <button
@@ -264,7 +264,7 @@ const kindOptions = computed(() => [
         <!-- 表单视图 -->
         <template v-else>
           <div class="mb-4 flex shrink-0 items-center gap-2">
-            <h3 class="text-[15px] font-semibold text-ink-1">
+            <h3 class="text-[length:var(--lw-fs-14)] font-semibold text-ink-1">
               {{
                 props.provider
                   ? t("settings.modelEditTitle")
@@ -307,18 +307,18 @@ const kindOptions = computed(() => [
             <div class="mb-4 grid grid-cols-2 gap-4">
               <div class="col-span-2 flex items-center gap-2.5 rounded-[var(--lw-r-md)] bg-wash-1 px-3 py-2.5">
                 <span
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--lw-r-xs)] bg-wash-2 text-[14px] font-semibold text-ink-2"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--lw-r-xs)] bg-wash-2 text-[length:var(--lw-fs-14)] font-semibold text-ink-2"
                   aria-hidden
                 >{{ letter(resolvedName) }}</span>
                 <span class="min-w-0">
-                  <span class="block truncate text-[13px] font-medium text-ink-1">
+                  <span class="block truncate text-[length:var(--lw-fs-13)] font-medium text-ink-1">
                     {{ resolvedName || t("settings.presetCustom") }}
                   </span>
-                  <span class="block truncate text-[11px] text-ink-4">{{ endpoint(resolvedBaseUrl) }}</span>
+                  <span class="block truncate text-[length:var(--lw-fs-11)] text-ink-4">{{ endpoint(resolvedBaseUrl) }}</span>
                 </span>
                 <button
                   type="button"
-                  class="lw-btn ml-auto px-2.5 py-1 text-[11.5px] text-ink-1"
+                  class="lw-btn ml-auto px-2.5 py-1 text-[length:var(--lw-fs-12)] text-ink-1"
                   @click="choosing = true"
                 >
                   {{ t("settings.modelReplace") }}
@@ -326,25 +326,25 @@ const kindOptions = computed(() => [
               </div>
 
               <label v-if="isCustom" class="flex items-center gap-2">
-                <span class="w-20 shrink-0 text-[12px] text-ink-3">{{ t("settings.modelName") }}</span>
+                <span class="w-20 shrink-0 text-[length:var(--lw-fs-12)] text-ink-3">{{ t("settings.modelName") }}</span>
                 <input
                   v-model="name"
-                  class="lw-field h-9 min-w-0 flex-1 px-2.5 text-[12.5px]"
+                  class="lw-field h-9 min-w-0 flex-1 px-2.5 text-[length:var(--lw-fs-12half)]"
                   spellcheck="false"
                 />
               </label>
               <label v-if="isCustom" class="flex items-center gap-2">
-                <span class="w-20 shrink-0 text-[12px] text-ink-3">Base URL</span>
+                <span class="w-20 shrink-0 text-[length:var(--lw-fs-12)] text-ink-3">Base URL</span>
                 <input
                   v-model="baseUrl"
-                  class="lw-field h-9 min-w-0 flex-1 px-2.5 font-mono text-[12px]"
+                  class="lw-field h-9 min-w-0 flex-1 px-2.5 font-mono text-[length:var(--lw-fs-12)]"
                   placeholder="https://example.com/v1"
                   spellcheck="false"
                   autocomplete="off"
                 />
               </label>
               <label v-if="isCustom" class="flex items-center gap-2">
-                <span class="w-20 shrink-0 text-[12px] text-ink-3">{{ t("settings.modelKind") }}</span>
+                <span class="w-20 shrink-0 text-[length:var(--lw-fs-12)] text-ink-3">{{ t("settings.modelKind") }}</span>
                 <SettingsSelect
                   v-model="kind"
                   class="flex-1"
@@ -353,23 +353,23 @@ const kindOptions = computed(() => [
                 />
               </label>
               <label class="col-span-2 flex items-center gap-2" :class="isCustom ? '' : 'mt-1'">
-                <span class="w-20 shrink-0 text-[12px] text-ink-3">API Key</span>
+                <span class="w-20 shrink-0 text-[length:var(--lw-fs-12)] text-ink-3">API Key</span>
                 <input
                   v-model="apiKey"
                   type="password"
-                  class="lw-field h-9 min-w-0 flex-1 px-2.5 font-mono text-[12px]"
+                  class="lw-field h-9 min-w-0 flex-1 px-2.5 font-mono text-[length:var(--lw-fs-12)]"
                   :placeholder="props.provider?.apiKeySet ? t('settings.modelKeyKeep') : 'sk-…'"
                   autocomplete="off"
                 />
               </label>
               <p
                 v-if="probeState === 'ready' && available.length > 0"
-                class="col-span-2 flex items-center gap-1 text-[11.5px] text-ok"
+                class="col-span-2 flex items-center gap-1 text-[length:var(--lw-fs-12)] text-ok"
               >
                 <Icon name="check" :size="13" />
                 {{ t("settings.modelConnected", { n: available.length }) }}
               </p>
-              <p v-else-if="probeState === 'error' && probeError" class="col-span-2 truncate text-[11.5px] text-danger">
+              <p v-else-if="probeState === 'error' && probeError" class="col-span-2 truncate text-[length:var(--lw-fs-12)] text-danger">
                 {{ probeError }}
               </p>
             </div>

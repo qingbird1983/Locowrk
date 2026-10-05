@@ -161,13 +161,13 @@ async function onBodyClick(e: MouseEvent) {
 
 <style scoped>
 .msg {
-  padding: 12px 0;
+  padding: var(--lw-gap-12) 0;
 }
 .msg__actions {
   display: flex;
   align-items: center;
-  gap: 2px;
-  margin-top: 2px;
+  gap: var(--lw-gap-2);
+  margin-top: var(--lw-gap-2);
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
@@ -176,9 +176,9 @@ async function onBodyClick(e: MouseEvent) {
   opacity: 1;
 }
 .msg__time {
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
-  margin-left: 4px;
+  margin-left: var(--lw-gap-4);
 }
 .msg-user {
   display: flex;
@@ -189,9 +189,9 @@ async function onBodyClick(e: MouseEvent) {
   width: fit-content;
   max-width: min(82%, 600px);
   border-radius: var(--lw-r-lg-plus);
-  padding: 10px 14px;
+  padding: var(--lw-gap-10) var(--lw-gap-14);
   background: var(--lw-wash-1);
-  font-size: 14px;
+  font-size: var(--lw-fs-14);
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -200,10 +200,10 @@ async function onBodyClick(e: MouseEvent) {
 .msg-edit {
   width: min(82%, 600px);
   border-radius: var(--lw-r-lg-plus);
-  padding: 10px 14px;
+  padding: var(--lw-gap-10) var(--lw-gap-14);
   background: var(--lw-bg-elevated);
   box-shadow: var(--lw-shadow-raised);
-  font-size: 14px;
+  font-size: var(--lw-fs-14);
   line-height: 1.55;
   resize: none;
   outline: none;

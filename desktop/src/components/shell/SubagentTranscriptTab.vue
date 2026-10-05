@@ -37,10 +37,10 @@ const noticeText = computed(() => t("panel.readonlyNote"));
 <template>
   <div class="subtab flex min-h-0 flex-1 flex-col">
     <div class="scroll-y min-h-0 flex-1 px-3 py-2">
-      <p v-if="state === 'loading'" class="px-1 py-4 text-center text-[12px] text-ink-4">
+      <p v-if="state === 'loading'" class="px-1 py-4 text-center text-[length:var(--lw-fs-12)] text-ink-4">
         {{ t("panel.loading") }}
       </p>
-      <div v-else-if="state === 'missing'" class="px-1 py-4 text-center text-[12px] text-ink-4">
+      <div v-else-if="state === 'missing'" class="px-1 py-4 text-center text-[length:var(--lw-fs-12)] text-ink-4">
         {{ t("panel.missing") }}
       </div>
       <template v-else>
@@ -60,7 +60,7 @@ const noticeText = computed(() => t("panel.readonlyNote"));
     </div>
     <!-- 只读自证（§3.16）：composer 不渲染，固定说明条 -->
     <div
-      class="shrink-0 border-t border-line-subtle px-3 py-2 text-[11.5px] text-ink-4"
+      class="shrink-0 border-t border-line-subtle px-3 py-2 text-[length:var(--lw-fs-12)] text-ink-4"
     >
       {{ noticeText }}
     </div>

@@ -77,7 +77,7 @@ async function onDelete(row: SessionSchedule) {
 
 <template>
   <div class="px-6 py-4">
-    <p v-if="loadError" class="mb-3 text-[12px] text-danger">{{ loadError }}</p>
+    <p v-if="loadError" class="mb-3 text-[length:var(--lw-fs-12)] text-danger">{{ loadError }}</p>
 
     <!-- 空态（§3.35）：一行引导，不发明「新建任务」按钮 -->
     <div v-if="isEmpty" class="schedule-empty">
@@ -95,7 +95,7 @@ async function onDelete(row: SessionSchedule) {
         <div class="min-w-0 flex-1">
           <div class="flex min-w-0 items-center gap-2">
             <span class="schedule-badge">{{ badgeText(row) }}</span>
-            <span class="truncate text-[13px] text-ink-1">{{ row.title || clip(row.prompt, 40) }}</span>
+            <span class="truncate text-[length:var(--lw-fs-13)] text-ink-1">{{ row.title || clip(row.prompt, 40) }}</span>
             <HoverTip
               :text="t('schedule.deferredHint', { n: row.deferrals })"
               :label="t('schedule.deferredHint', { n: row.deferrals })"
@@ -103,7 +103,7 @@ async function onDelete(row: SessionSchedule) {
             >
               <span
                 v-if="row.deferrals > 0"
-                class="shrink-0 text-[11px] text-warn"
+                class="shrink-0 text-[length:var(--lw-fs-11)] text-warn"
               >
                 {{ t("schedule.deferred", { n: row.deferrals }) }}
               </span>
@@ -143,26 +143,26 @@ async function onDelete(row: SessionSchedule) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 72px 0;
+  gap: var(--lw-gap-10);
+  padding: 72px 0; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值72,§二⑬) */
   text-align: center;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-4);
 }
 .schedule-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--lw-gap-12);
   border-radius: var(--lw-r-md);
   background: var(--lw-wash-1);
-  padding: 10px 14px;
+  padding: var(--lw-gap-10) var(--lw-gap-14);
 }
 .schedule-badge {
   flex: 0 0 auto;
   border-radius: var(--lw-r-full);
   background: var(--lw-wash-3);
-  padding: 1px 8px;
-  font-size: 11px;
+  padding: 1px 8px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-3);
 }
 .schedule-prompt {
@@ -170,23 +170,23 @@ async function onDelete(row: SessionSchedule) {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  margin-top: 2px;
-  font-size: 12.5px;
+  margin-top: var(--lw-gap-2);
+  font-size: var(--lw-fs-12half);
   line-height: 1.45;
   color: var(--lw-ink-3);
 }
 .schedule-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  font-size: 11.5px;
+  gap: var(--lw-gap-4);
+  margin-top: var(--lw-gap-4);
+  font-size: var(--lw-fs-12);
 }
 .row-ctl {
   flex: 0 0 auto;
   border-radius: var(--lw-r-xs);
-  padding: 3px 8px;
-  font-size: 11.5px;
+  padding: 3px 8px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 .row-ctl:hover {

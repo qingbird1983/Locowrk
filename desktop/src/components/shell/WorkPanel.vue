@@ -237,10 +237,10 @@ function openReview(item: { callId: string; path: string; diff: string }) {
   max-width: 200px;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   border-radius: var(--lw-r-sm);
-  padding: 0 4px 0 10px;
-  font-size: 12.5px;
+  padding: 0 var(--lw-gap-4) 0 var(--lw-gap-10);
+  font-size: var(--lw-fs-12half);
   line-height: 1.3;
   color: var(--lw-ink-2);
   background: var(--lw-wash-1);
@@ -257,7 +257,7 @@ function openReview(item: { callId: string; path: string; diff: string }) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
 }
 .panel-tab__close {
   display: inline-flex;

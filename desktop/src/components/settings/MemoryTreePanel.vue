@@ -58,7 +58,7 @@ function relTime(ts: number): string {
       </button>
     </SettingsRow>
     <div class="space-y-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5 text-xs">
-      <p v-if="!tree" class="text-[11.5px] text-ink-4">
+      <p v-if="!tree" class="text-[length:var(--lw-fs-12)] text-ink-4">
         {{ t("developer.treeEmpty") }}
       </p>
       <template v-else>
@@ -85,11 +85,11 @@ function relTime(ts: number): string {
           {{ t("developer.treePending", { from: tree.pending.from, to: tree.pending.to, attempts: tree.pending.attempts }) }}
         </p>
         <div v-if="tree.history.length" class="pt-1">
-          <p class="text-[11.5px] font-medium text-ink-3">{{ t("developer.treeHistory") }}</p>
+          <p class="text-[length:var(--lw-fs-12)] font-medium text-ink-3">{{ t("developer.treeHistory") }}</p>
           <p
             v-for="r in tree.history.slice(-5).reverse()"
             :key="r.ts"
-            class="mt-1 text-[11px] leading-relaxed text-ink-4"
+            class="mt-1 text-[length:var(--lw-fs-11)] leading-relaxed text-ink-4"
           >
             {{
               t("developer.treeHistoryRow", {

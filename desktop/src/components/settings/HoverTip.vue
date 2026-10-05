@@ -115,7 +115,7 @@ async function place(): Promise<void> {
   z-index: var(--lw-z-tooltip);
   width: max-content;
   max-width: 280px;
-  padding: 6px 10px;
+  padding: var(--lw-gap-6) var(--lw-gap-10);
   border-radius: var(--lw-r-sm);
   border: 1px solid var(--lw-line-subtle);
   background: var(--lw-bg-elevated);

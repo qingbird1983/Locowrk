@@ -31,24 +31,24 @@ import BuiRecommendationCard from "./BuiRecommendationCard.vue";
 .lab-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--lw-gap-10);
 }
 .lab-panel__hint {
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-3);
 }
 .lab-panel__grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--lw-gap-16);
 }
 .lab-panel__cell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--lw-gap-6);
 }
 .lab-panel__name {
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   font-weight: 600;
   color: var(--lw-ink-2);
 }

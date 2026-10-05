@@ -171,9 +171,9 @@ function pick(providerId: string, model: string) {
 .ms-search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 10px 10px 6px;
-  padding: 0 10px;
+  gap: var(--lw-gap-6);
+  margin: var(--lw-gap-10) var(--lw-gap-10) var(--lw-gap-6);
+  padding: 0 var(--lw-gap-10);
   height: 30px;
   border-radius: var(--lw-r-full);
   background: var(--lw-wash-1);
@@ -185,7 +185,7 @@ function pick(providerId: string, model: string) {
   border: none;
   outline: none;
   background: transparent;
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-1);
 }
 .ms-search__input::placeholder {
@@ -194,30 +194,30 @@ function pick(providerId: string, model: string) {
 .ms-list {
   max-height: min(420px, 60vh);
   overflow-y: auto;
-  padding: 2px 6px 8px;
+  padding: var(--lw-gap-2) var(--lw-gap-6) var(--lw-gap-8);
 }
 .ms-group {
-  padding: 10px 8px 3px;
-  font-size: 11px;
+  padding: var(--lw-gap-10) var(--lw-gap-8) 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
   user-select: none;
 }
 /* v3.9 用户裁定：分组间淡发丝线，两端不到头（inset 12px） */
 .ms-group--ruled {
   border-top: 1px solid var(--lw-line-subtle);
-  margin: 4px 12px 0;
-  padding: 10px 0 3px;
+  margin: var(--lw-gap-4) var(--lw-gap-12) 0;
+  padding: var(--lw-gap-10) 0 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
 }
 .ms-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   width: 100%;
-  padding: 0 8px;
+  padding: 0 var(--lw-gap-8);
   height: 30px;
   border-radius: var(--lw-r-xs);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-1);
   text-align: left;
 }
@@ -225,9 +225,9 @@ function pick(providerId: string, model: string) {
   background: var(--lw-wash-2);
 }
 .ms-row--default {
-  margin: 0 6px 4px;
+  margin: 0 var(--lw-gap-6) var(--lw-gap-4);
   color: var(--lw-ink-3);
-  gap: 6px;
+  gap: var(--lw-gap-6);
 }
 .ms-row--default:hover {
   color: var(--lw-ink-1);
@@ -247,13 +247,13 @@ function pick(providerId: string, model: string) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  padding: 16px 10px;
-  font-size: 12px;
+  gap: var(--lw-gap-6);
+  padding: var(--lw-gap-16) var(--lw-gap-10);
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 .ms-configure {
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-accent);
 }
 .ms-configure:hover {

@@ -94,12 +94,12 @@ onBeforeUnmount(() => {
 .ring-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--lw-gap-4);
   height: var(--lw-ctl);
-  padding: 0 8px;
+  padding: 0 var(--lw-gap-8);
   border-radius: var(--lw-r-full);
   color: var(--lw-ink-2);
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
   transition: background var(--dur-fast) var(--ease-standard),

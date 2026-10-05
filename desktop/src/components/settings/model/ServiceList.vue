@@ -108,7 +108,7 @@ const host = (u: string | null) => hostOf(u);
       @drop.prevent="onDrop(p)"
     >
       <span
-        class="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[var(--lw-r-xs)] bg-wash-2 text-[13px] font-semibold text-ink-2"
+        class="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[var(--lw-r-xs)] bg-wash-2 text-[length:var(--lw-fs-13)] font-semibold text-ink-2"
         aria-hidden
       >
         <Icon v-if="!letter(p.label)" name="server" :size="14" />
@@ -116,21 +116,21 @@ const host = (u: string | null) => hostOf(u);
       </span>
       <span class="min-w-0 flex-1">
         <span class="flex items-center gap-1.5">
-          <span class="truncate text-[13px] font-medium text-ink-1">{{ p.label }}</span>
+          <span class="truncate text-[length:var(--lw-fs-13)] font-medium text-ink-1">{{ p.label }}</span>
           <span
             v-if="p.id === activeId"
-            class="rounded-full bg-ok/16 px-1.5 py-px text-[10px] font-medium text-ok"
+            class="rounded-full bg-ok/16 px-1.5 py-px text-[length:var(--lw-fs-10)] font-medium text-ok"
           >{{ t("settings.modelBadgeDefault") }}</span>
           <span
             v-if="!p.apiKeySet && p.kind !== 'ollama'"
-            class="rounded-full bg-warn/16 px-1.5 py-px text-[10px] font-medium text-warn"
+            class="rounded-full bg-warn/16 px-1.5 py-px text-[length:var(--lw-fs-10)] font-medium text-warn"
           >{{ t("settings.modelBadgeNoKey") }}</span>
           <span
             v-if="!p.enabled"
-            class="rounded-full bg-wash-3 px-1.5 py-px text-[10px] font-medium text-ink-3"
+            class="rounded-full bg-wash-3 px-1.5 py-px text-[length:var(--lw-fs-10)] font-medium text-ink-3"
           >{{ t("settings.modelBadgeDisabled") }}</span>
         </span>
-        <span class="mt-0.5 block truncate text-[11.5px] text-ink-4">
+        <span class="mt-0.5 block truncate text-[length:var(--lw-fs-12)] text-ink-4">
           {{ host(p.baseUrl) || "—" }} · {{ t("settings.modelCount", { n: p.models.length }) }}
         </span>
       </span>

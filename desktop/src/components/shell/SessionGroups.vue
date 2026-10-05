@@ -175,16 +175,16 @@ async function addProject() {
 .proj-head {
   display: flex;
   align-items: center;
-  padding: 10px 4px 2px 8px;
+  padding: var(--lw-gap-10) var(--lw-gap-4) var(--lw-gap-2) var(--lw-gap-8);
 }
 .proj-head__label {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
   min-height: 20px;
-  padding: 0 4px;
+  padding: 0 var(--lw-gap-4);
   border-radius: var(--lw-r-xs);
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 .proj-head__label:hover {
@@ -194,7 +194,7 @@ async function addProject() {
 .proj-head__actions {
   display: inline-flex;
   align-items: center;
-  gap: 1px;
+  gap: 1px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
   margin-left: auto;
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);

@@ -205,7 +205,7 @@ onBeforeUnmount(close);
         />
         <p
           v-if="'options' in entry"
-          class="px-3 pb-1 pt-1.5 text-[11px] text-ink-4"
+          class="px-3 pb-1 pt-1.5 text-[length:var(--lw-fs-11)] text-ink-4"
         >
           {{ entry.label }}
         </p>
@@ -231,7 +231,7 @@ onBeforeUnmount(close);
             <span class="block truncate">{{ o.label }}</span>
             <span
               v-if="o.desc"
-              class="mt-0.5 block text-[11px] leading-snug text-ink-3"
+              class="mt-0.5 block text-[length:var(--lw-fs-11)] leading-snug text-ink-3"
               >{{ o.desc }}</span
             >
           </span>

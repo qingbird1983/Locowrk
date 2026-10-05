@@ -203,7 +203,7 @@ function removeRoot(idx: number) {
           {{ t("settings.fsRootsAdd") }}
         </button>
       </template>
-      <p v-if="!fsRoots.length" class="px-1 py-1 text-[11.5px] text-ink-4">
+      <p v-if="!fsRoots.length" class="px-1 py-1 text-[length:var(--lw-fs-12)] text-ink-4">
         {{ t("settings.fsRootsEmpty") }}
       </p>
       <div
@@ -212,11 +212,11 @@ function removeRoot(idx: number) {
         class="flex items-center justify-between gap-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-2.5"
       >
         <HoverTip :text="root" :label="root" class="min-w-0">
-          <span class="min-w-0 break-all text-[11.5px] text-ink-2">{{ root }}</span>
+          <span class="min-w-0 break-all text-[length:var(--lw-fs-12)] text-ink-2">{{ root }}</span>
         </HoverTip>
         <button
           type="button"
-          class="shrink-0 rounded-[var(--lw-r-3xs)] px-1.5 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-danger"
+          class="shrink-0 rounded-[var(--lw-r-3xs)] px-1.5 text-[length:var(--lw-fs-11)] text-ink-4 transition hover:bg-wash-2 hover:text-danger"
           :disabled="settings.saving"
           :aria-label="`${t('settings.fsRootsRemove')} ${root}`"
           @click="removeRoot(i)"

@@ -65,7 +65,7 @@ const label = computed(() => {
 <template>
   <span
     v-if="idle && tone"
-    class="rounded-full px-2 py-0.5 text-[10px] font-medium"
+    class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-10)] font-medium"
     :class="tone"
   >
     {{ label }}

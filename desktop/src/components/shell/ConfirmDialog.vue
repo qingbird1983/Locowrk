@@ -123,81 +123,81 @@ const { t } = useI18n();
 .dialog__head {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: var(--lw-gap-12);
+  padding: var(--lw-gap-14) var(--lw-gap-16);
   background: color-mix(in oklab, var(--lw-danger) 7%, transparent);
   border-bottom: 1px solid var(--lw-line-subtle);
 }
 .dialog__title {
-  font-size: 14px;
+  font-size: var(--lw-fs-14);
   font-weight: 560;
   letter-spacing: -0.02em;
   line-height: 1.3;
   color: var(--lw-ink-1);
 }
 .dialog__sub {
-  margin: 3px 0 0;
-  font-size: 12px;
+  margin: 3px 0 0; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  font-size: var(--lw-fs-12);
   line-height: 1.45;
   color: var(--lw-ink-2);
 }
 .dialog__body {
-  padding: 16px;
+  padding: var(--lw-gap-16);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--lw-gap-12);
 }
 .dialog__label {
-  font-size: 10.5px;
+  font-size: var(--lw-fs-11);
   letter-spacing: 0.02em;
   color: var(--lw-ink-4);
-  margin-bottom: 4px;
+  margin-bottom: var(--lw-gap-4);
 }
 .confirm-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   max-height: 190px;
   overflow: auto;
   border-radius: var(--lw-r-sm);
   background: var(--lw-bg-inset);
-  padding: 10px 12px;
+  padding: var(--lw-gap-10) var(--lw-gap-12);
 }
 .confirm-list__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
+  gap: var(--lw-gap-8);
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-2);
 }
 .confirm-list__id {
   margin-left: auto;
   flex: 0 0 auto;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 .dialog__impact {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   line-height: 1.45;
   color: var(--lw-ink-2);
 }
 .dialog__foot {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 0 16px 16px;
+  gap: var(--lw-gap-8);
+  padding: 0 var(--lw-gap-16) var(--lw-gap-16);
 }
 
 /* 按钮（§3.19 三变体） */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   border-radius: var(--lw-r-sm);
-  padding: 7px 12px;
-  font-size: 13px;
+  padding: 7px var(--lw-gap-12); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
+  font-size: var(--lw-fs-13);
   font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;

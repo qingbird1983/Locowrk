@@ -77,7 +77,7 @@ function onSelect(id: SettingsSectionId) {
     <div class="scroll-y min-h-0 flex-1 px-3 pb-2">
       <template v-for="{ group, sections } in visibleGroups" :key="group.id">
         <div class="sidenav-group-label">{{ t(group.labelKey) }}</div>
-        <div class="flex flex-col gap-[2px]">
+        <div class="flex flex-col gap-[var(--lw-gap-2)]">
           <button
             v-for="s in sections"
             :key="s.id"
@@ -121,28 +121,28 @@ function onSelect(id: SettingsSectionId) {
 .sidenav-search {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   height: var(--lw-ctl);
-  padding: 0 10px;
+  padding: 0 var(--lw-gap-10);
   border-radius: var(--lw-r-full);
   /* v3.6 两色体系：轨灰上的白胶囊 + 微悬浮阴影（§3.32·七） */
   background: var(--lw-bg);
   box-shadow: var(--lw-shadow-raised);
 }
 .sidenav-group-label {
-  padding: 14px 12px 4px;
-  font-size: 11.5px;
+  padding: var(--lw-gap-14) var(--lw-gap-12) var(--lw-gap-4);
+  font-size: var(--lw-fs-12);
   color: var(--lw-ink-4);
 }
 .sidenav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   width: 100%;
   height: 30px; /* v3.6：28→30（用户裁定 +2px） */
-  padding: 0 8px 0 12px;
+  padding: 0 var(--lw-gap-8) 0 var(--lw-gap-12);
   border-radius: var(--lw-r-xs);
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   color: var(--lw-ink-1);
   text-align: left;
   transition: background var(--dur-fast) var(--ease-out),

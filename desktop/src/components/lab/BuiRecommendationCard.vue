@@ -144,18 +144,18 @@ function choose(index: number) {
 }
 
 .bui-rc__body {
-  padding: 12px;
+  padding: var(--lw-gap-12);
 }
 
 .bui-rc__title {
-  font-size: 13px;
+  font-size: var(--lw-fs-13);
   font-weight: 600;
   color: var(--lw-ink-1);
 }
 
 .bui-rc__desc {
-  margin: 6px 0 0;
-  font-size: 12.5px;
+  margin: var(--lw-gap-6) 0 0;
+  font-size: var(--lw-fs-12half);
   line-height: 1.55;
   color: var(--lw-ink-2);
   min-height: 40px;
@@ -163,11 +163,11 @@ function choose(index: number) {
 }
 
 .bui-rc__param {
-  padding: 1px 4px;
+  padding: 1px 4px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
   border-radius: var(--lw-r-3xs);
   background: color-mix(in oklab, var(--lw-purple) 12%, transparent);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-purple);
 }
 
@@ -186,14 +186,14 @@ function choose(index: number) {
 
 .bui-rc__alts-body {
   overflow: hidden;
-  padding: 8px;
+  padding: var(--lw-gap-8);
   border-top: 1px solid var(--lw-line);
   background: var(--lw-bg-inset);
 }
 
 .bui-rc__alts-label {
-  margin: 0 0 6px;
-  font-size: 11px;
+  margin: 0 0 var(--lw-gap-6);
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-3);
 }
 
@@ -201,13 +201,13 @@ function choose(index: number) {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
+  gap: var(--lw-gap-10);
+  padding: var(--lw-gap-6) var(--lw-gap-8);
   border: 0;
   border-radius: var(--lw-r-xs);
   background: transparent;
   color: var(--lw-ink-1);
-  font-size: 12px;
+  font-size: var(--lw-fs-12);
   text-align: left;
   cursor: pointer;
   transition: background-color var(--dur-instant) var(--ease-standard);
@@ -218,13 +218,13 @@ function choose(index: number) {
 }
 
 .bui-rc__alt + .bui-rc__alt {
-  margin-top: 2px;
+  margin-top: var(--lw-gap-2);
 }
 
 .bui-rc__alt-bars {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: var(--lw-gap-2);
   flex-shrink: 0;
 }
 
@@ -246,7 +246,7 @@ function choose(index: number) {
 
 .bui-rc__alt-label {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-3);
 }
 
@@ -254,7 +254,7 @@ function choose(index: number) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: var(--lw-gap-10) var(--lw-gap-12);
   border-top: 1px solid var(--lw-line);
   background: var(--lw-bg-inset);
 }
@@ -262,13 +262,13 @@ function choose(index: number) {
 .bui-rc__meter {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
 }
 
 .bui-rc__meter-bars {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: var(--lw-gap-2);
 }
 
 .bui-rc__meter-bar {
@@ -280,24 +280,24 @@ function choose(index: number) {
 }
 
 .bui-rc__meter-label {
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   color: var(--lw-ink-2);
 }
 
 .bui-rc__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lw-gap-8);
 }
 
 .bui-rc__alt-btn {
   height: 30px;
-  padding: 0 11px;
+  padding: 0 11px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值11,§二⑬) */
   border: 0;
   border-radius: var(--lw-r-xs);
   background: var(--lw-bg-elevated);
   color: var(--lw-ink-1);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   font-weight: 500;
   box-shadow: var(--lw-shadow-raised);
   cursor: pointer;
@@ -312,12 +312,12 @@ function choose(index: number) {
 
 .bui-rc__accept {
   height: 30px;
-  padding: 0 14px;
+  padding: 0 var(--lw-gap-14);
   border: 0;
   border-radius: var(--lw-r-xs);
   background: var(--lw-ink-1);
   color: var(--lw-bg-elevated);
-  font-size: 12.5px;
+  font-size: var(--lw-fs-12half);
   font-weight: 500;
   box-shadow: inset 0 1px 0 color-mix(in oklab, var(--lw-bg-elevated) 14%, transparent);
   cursor: pointer;

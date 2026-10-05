@@ -30,7 +30,7 @@ const tone = computed(() => {
 
 <template>
   <span
-    class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] leading-none"
+    class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[length:var(--lw-fs-10)] leading-none"
     :class="tone"
   >
     {{ label }}

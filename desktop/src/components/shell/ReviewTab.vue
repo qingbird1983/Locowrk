@@ -29,7 +29,7 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
   <div class="scroll-y min-h-0 flex-1 px-3 py-2">
     <div
       v-if="parsed.hunks.length === 0"
-      class="px-1 py-4 text-center text-[12px] text-ink-4"
+      class="px-1 py-4 text-center text-[length:var(--lw-fs-12)] text-ink-4"
     >
       {{ t("panel.diffEmpty") }}
     </div>
@@ -83,11 +83,11 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--lw-gap-8);
   border-radius: var(--lw-r-md);
   background: var(--lw-wash-1);
-  padding: 12px 14px;
-  font-size: 12px;
+  padding: var(--lw-gap-12) var(--lw-gap-14);
+  font-size: var(--lw-fs-12);
 }
 .diff-head__path {
   min-width: 0;
@@ -100,9 +100,9 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
 .diff-head__stats {
   flex: 0 0 auto;
   display: inline-flex;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
 }
 
 /* 行（§3.28）：整行染底 8% + 行首 1px 实色条 + 行号 32px 右对齐 mono */
@@ -111,7 +111,7 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
   align-items: baseline;
   min-height: 20px;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--lw-fs-12);
   line-height: 20px;
   color: var(--lw-ink-2);
 }
@@ -126,9 +126,9 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
 .diff-line__no {
   width: 32px;
   flex: 0 0 auto;
-  padding-right: 4px;
+  padding-right: var(--lw-gap-4);
   text-align: right;
-  font-size: 10.5px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
   user-select: none;
 }
@@ -137,15 +137,15 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
   flex: 1 1 auto;
   white-space: pre-wrap;
   word-break: break-all;
-  padding-right: 8px;
+  padding-right: var(--lw-gap-8);
 }
 
 .diff-expand {
   display: block;
   width: 100%;
-  padding: 2px 0;
+  padding: var(--lw-gap-2) 0;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   color: var(--lw-ink-4);
   background: var(--lw-wash-1);
 }
