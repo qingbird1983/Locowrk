@@ -19,6 +19,7 @@ import {
 } from "../../lib/settings-index";
 import { useSettingsStore } from "../../stores/settings";
 import { Icon } from "../../lib/icons";
+import SearchInput from "../patterns/SearchInput.vue";
 
 const props = defineProps<{ current: SettingsSectionId }>();
 const emit = defineEmits<{ select: [id: SettingsSectionId] }>();
@@ -58,18 +59,16 @@ function onSelect(id: SettingsSectionId) {
       <div class="h-full w-full" data-tauri-drag-region />
     </header>
 
-    <!-- 搜索胶囊（v3.6：自占一行在 46px 带之下；白/主底 + 微悬浮阴影） -->
+    <!-- 搜索胶囊（v3.6：自占一行在 46px 带之下；raised 皮 = 灰轨上的白
+         胶囊 + 微悬浮影——唯一搜索形态 SearchInput 的 raised 语境皮） -->
     <div class="px-3 pb-2 pt-1">
-      <div class="sidenav-search min-w-0">
-        <Icon name="search" :size="14" class="text-ink-4" />
-        <input
-          v-model="search"
-          type="text"
-          :placeholder="t('settings.navSearch')"
-          :aria-label="t('settings.navSearch')"
-          class="min-w-0 flex-1 bg-transparent text-xs text-ink-1 outline-none placeholder:text-ink-4"
-        />
-      </div>
+      <SearchInput
+        v-model="search"
+        :placeholder="t('settings.navSearch')"
+        :label="t('settings.navSearch')"
+        surface="raised"
+        class="min-w-0"
+      />
     </div>
 
     <!-- 分组列表：组标签 11.5px ink-4；项 30px 行圆角 8，选中 wash-3；
@@ -117,17 +116,6 @@ function onSelect(id: SettingsSectionId) {
 .sidenav {
   width: var(--lw-sidenav-w);
   border-right: 1px solid var(--lw-line);
-}
-.sidenav-search {
-  display: flex;
-  align-items: center;
-  gap: var(--lw-gap-6);
-  height: var(--lw-ctl);
-  padding: 0 var(--lw-gap-10);
-  border-radius: var(--lw-r-full);
-  /* v3.6 两色体系：轨灰上的白胶囊 + 微悬浮阴影（§3.32·七） */
-  background: var(--lw-bg);
-  box-shadow: var(--lw-shadow-raised);
 }
 .sidenav-group-label {
   padding: var(--lw-gap-14) var(--lw-gap-12) var(--lw-gap-4);

@@ -16,6 +16,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, Transition } from 
 import { useI18n } from "vue-i18n";
 import type { ProviderView } from "../../types";
 import { Icon } from "../../lib/icons";
+import SearchInput from "../patterns/SearchInput.vue";
 
 const props = defineProps<{
   /** 设置缺省模型（活动档平面投影）。 */
@@ -106,15 +107,12 @@ function pick(providerId: string, model: string) {
     role="dialog"
     :aria-label="t('model.selector')"
   >
-    <div class="ms-search">
-      <Icon name="search" :size="14" class="ms-search__icon" />
-      <input
-        v-model="query"
-        type="text"
-        class="ms-search__input"
-        :placeholder="t('model.searchPlaceholder')"
-      />
-    </div>
+    <SearchInput
+      v-model="query"
+      class="mx-2.5 mt-2.5 mb-1.5"
+      :placeholder="t('model.searchPlaceholder')"
+      :label="t('model.searchPlaceholder')"
+    />
 
     <button
       v-if="override"
@@ -174,29 +172,6 @@ function pick(providerId: string, model: string) {
 .model-selector--down {
   top: calc(100% + 10px);
   bottom: auto;
-}
-.ms-search {
-  display: flex;
-  align-items: center;
-  gap: var(--lw-gap-6);
-  margin: var(--lw-gap-10) var(--lw-gap-10) var(--lw-gap-6);
-  padding: 0 var(--lw-gap-10);
-  height: 30px;
-  border-radius: var(--lw-r-full);
-  background: var(--lw-wash-1);
-  color: var(--lw-ink-4);
-}
-.ms-search__input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: var(--lw-fs-12half);
-  color: var(--lw-ink-1);
-}
-.ms-search__input::placeholder {
-  color: var(--lw-ink-5);
 }
 .ms-list {
   max-height: min(420px, 60vh);

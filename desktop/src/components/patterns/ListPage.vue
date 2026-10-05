@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchInput from "./SearchInput.vue";
 /**
  * 列表页模式（壳批次，docs/design/UI shell and patterns.md §3.1）：
  * 一切"条目集合"页面（插件已安装页 / 记忆页 / 后续 ⑩ 闲置筛选页）共用
@@ -54,11 +55,11 @@ const subFilter = defineModel<string>("subFilter");
           {{ f.label }}
         </button>
       </div>
-      <input
+      <SearchInput
         v-if="search !== undefined"
         v-model="search"
         :placeholder="searchPlaceholder"
-        class="ml-auto w-56 rounded-[var(--lw-r-xs)] border border-line-strong bg-surface-1 px-3 py-1.5 text-xs text-ink-1 outline-none placeholder:text-ink-5 focus:border-line-strong"
+        class="ml-auto w-56"
       />
     </div>
 

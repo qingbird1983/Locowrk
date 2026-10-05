@@ -9,6 +9,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../../lib/icons";
+import SearchInput from "../../patterns/SearchInput.vue";
 import type { ProviderView } from "../../../types";
 
 const props = defineProps<{
@@ -31,6 +32,7 @@ const query = ref("");
 const popEl = ref<HTMLElement | null>(null);
 const listEl = ref<HTMLElement | null>(null);
 const style = ref<Record<string, string>>({});
+const searchInput = ref<InstanceType<typeof SearchInput> | null>(null);
 
 interface Row {
   providerId: string;
@@ -82,9 +84,15 @@ onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
   await nextTick();
   place();
-  // 打开滚到当前项（必须可见）
-  const cur = listEl.value?.querySelector("[aria-selected='true']");
-  cur?.scrollIntoView({ block: "center" });
+  // 打开聚焦搜索 + 滚到当前项（必须可见；手设 scrollTop——scrollIntoView
+  // 会连祖先滚动容器一起滚，模型设置页目检实抓过整页上移）
+  searchInput.value?.focus();
+  const list = listEl.value;
+  const cur = list?.querySelector("[aria-selected='true']");
+  if (list instanceof HTMLElement && cur instanceof HTMLElement) {
+    const top = cur.offsetTop - list.offsetTop - list.clientHeight / 2 + cur.offsetHeight / 2;
+    list.scrollTop = Math.max(0, top);
+  }
 });
 onBeforeUnmount(() => {
   document.removeEventListener("mousedown", onDocMouseDown);

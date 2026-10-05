@@ -19,7 +19,7 @@ import {
   SETTINGS_SECTIONS,
   isSectionVisible,
 } from "../../lib/settings-index";
-import { Icon } from "../../lib/icons";
+import SearchInput from "../patterns/SearchInput.vue";
 import { flipEffectiveTheme } from "../../lib/theme";
 
 const { t } = useI18n();
@@ -28,7 +28,7 @@ const shell = useShellStore();
 const settingsStore = useSettingsStore();
 
 const query = ref("");
-const inputEl = ref<HTMLInputElement | null>(null);
+const searchInput = ref<InstanceType<typeof SearchInput> | null>(null);
 const resultsEl = ref<HTMLElement | null>(null);
 const highlight = ref(0);
 // 正文命中（v2.49 能力随侧栏搜索框并入，§3.15 v3.9）
@@ -202,7 +202,7 @@ function openPalette() {
   query.value = "";
   highlight.value = 0;
   shell.openPalette();
-  void nextTick(() => inputEl.value?.focus());
+  void nextTick(() => searchInput.value?.focus());
 }
 
 function close() {
@@ -216,7 +216,7 @@ watch(
     if (v) {
       query.value = "";
       highlight.value = 0;
-      void nextTick(() => inputEl.value?.focus());
+      void nextTick(() => searchInput.value?.focus());
     }
   },
 );
@@ -267,14 +267,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
         :aria-label="t('palette.title')"
       >
         <div class="palette-search">
-          <Icon name="search" :size="14" class="shrink-0 text-ink-3" />
-          <input
-            ref="inputEl"
+          <SearchInput
+            ref="searchInput"
             v-model="query"
-            type="text"
             :placeholder="t('palette.placeholder')"
-            :aria-label="t('palette.placeholder')"
-            class="min-w-0 flex-1 bg-transparent text-sm text-ink-1 outline-none placeholder:text-ink-4"
+            :label="t('palette.placeholder')"
           />
           <span class="keycap">Esc</span>
         </div>
