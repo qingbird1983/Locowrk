@@ -81,5 +81,9 @@ const summary = computed(() => {
   color: var(--lw-ink-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* 框约束（v2.97 目检裁定：思考内容可以很长，展开体封顶框内滚动，
+   * 不整段铺开）；220px 与工具明细 pre 同族同值 */
+  max-height: 220px;
+  overflow-y: auto;
 }
 </style>

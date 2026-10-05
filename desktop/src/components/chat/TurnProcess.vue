@@ -8,8 +8,9 @@
  *   L0 = 整轮收束：无简介内容，只留耗时一行 + 发丝线分割（历史重放无
  *        时间戳 = 只有发丝线，诚实呈现）；有失败加一枚 warn 小点。
  * 相位由父层给（live 动作执行中 / replied 模型回话中 / done 整轮收束），
- * 相位边沿驱动自动收缩：live→replied 收 L1、→done 收 L0——只收不放，
- * 用户点击仍可逐层展开（L0 行 → L1 头 → L2 体 → 单动作 L3）。
+ * 相位变化全映射落层（live→2 / replied→1 / done→0，不搞边沿配对——
+ * running 瞬时翻假后层级必须能自愈，见下方 watcher 注释）；用户点击仍
+ * 可逐层展开（L0 行 → L1 头 → L2 体 → 单动作 L3）。
  * 折叠是本地 UI 状态：不入 store、不持久化。「默认展开工具执行过程」
  * 开关 = done 组挂载初值（L0 / L1），运行相位不吃开关。时长只在实时
  * 轮次有（历史重放无时间戳，不虚构时序）。
@@ -45,15 +46,16 @@ function initialLevel(): 0 | 1 | 2 {
   return props.defaultExpanded ? 1 : 0;
 }
 
-// 相位边沿 = 自动收缩时机（只收不放）：live→replied 收 L1；→done 收 L0
-// （整轮收束即整块收缩，用户已展开的也被收——规格即如此）；done→live
-// （崩溃重投出新动作）重新展开到 L2。
+// 相位变化 = 全映射落层（不搞边沿配对）：live→2 / replied→1 / done→0。
+// 走查实抓（v2.97 白屏）：running 在轮界/重建时会瞬时翻假，全员先被打
+// 回 done（L0 发丝线），随后的 done→replied/live 若依赖「prev===live」
+// 之类边沿配对就永远卡在 L0——任务还在跑、转录却只剩发丝线 = 用户眼中
+// 的白屏。任何相位变化都直接落到规格层，层级自愈；用户手动开合只在相
+// 位稳定期间有效，下次相位变化再归位。
 watch(
   () => props.phase,
-  (p, prev) => {
-    if (p === "replied" && prev === "live") level.value = 1;
-    else if (p === "done" && prev !== "done") level.value = 0;
-    else if (p === "live" && prev !== "live") level.value = 2;
+  (p) => {
+    level.value = p === "live" ? 2 : p === "replied" ? 1 : 0;
   },
 );
 

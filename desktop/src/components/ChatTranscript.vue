@@ -114,7 +114,15 @@ const blocks = computed<Block[]>(() => {
       kind: "turn",
       key: cur[0]!.id,
       items: cur,
-      running: tools.some((i) => i.pending),
+      // 组在跑 = 有 pending 工具，或末尾思考行还在流（§3.9：实时 ts 在、
+      // 回复/工具到达即收口 doneTs——不并入的话思考阶段相位= replied，
+      // 思考行被折叠藏住，v2.97 走查实抓）
+      running:
+        tools.some((i) => i.pending) ||
+        cur.some(
+          (i) =>
+            i.kind === "thinking" && i.ts !== undefined && i.doneTs === undefined,
+        ),
       failures: tools.filter((i) => i.ok === false).length,
       toolCount: tools.length,
       hasProcess: cur.some((i) => i.kind === "tool" || i.kind === "thinking"),
