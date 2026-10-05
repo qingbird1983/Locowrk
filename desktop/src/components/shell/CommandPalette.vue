@@ -267,7 +267,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
         :aria-label="t('palette.title')"
       >
         <div class="palette-search">
-          <Icon name="search" :size="15" class="shrink-0 text-ink-3" />
+          <Icon name="search" :size="14" class="shrink-0 text-ink-3" />
           <input
             ref="inputEl"
             v-model="query"

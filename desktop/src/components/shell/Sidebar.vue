@@ -155,7 +155,7 @@ const isMarket = computed(() => shell.destination === "plugins");
           >
             <Icon
               :name="dest === 'memory' ? 'database' : dest === 'schedule' ? 'clock' : 'settings'"
-              :size="15"
+              :size="14"
               aria-hidden="true"
             />
           </button>
@@ -170,7 +170,7 @@ const isMarket = computed(() => shell.destination === "plugins");
             :aria-label="t('nav.notifications')"
             @click="toggleNotif"
           >
-            <Icon name="bell" :size="15" aria-hidden="true" />
+            <Icon name="bell" :size="14" aria-hidden="true" />
             <span
               v-if="notifications.unread > 0"
               class="notif-badge"

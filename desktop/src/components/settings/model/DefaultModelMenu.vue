@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
         :aria-label="t('settings.modelDefaultChange')"
       >
       <div class="flex h-10 items-center gap-2 border-b border-line-subtle px-3">
-        <Icon name="search" :size="13" class="shrink-0 text-ink-4" />
+        <Icon name="search" :size="14" class="shrink-0 text-ink-4" />
         <input
           v-model="query"
           class="w-full bg-transparent text-[length:var(--lw-fs-12half)] text-ink-1 outline-none placeholder:text-ink-5"

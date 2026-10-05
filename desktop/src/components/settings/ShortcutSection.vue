@@ -44,7 +44,7 @@ function restoreDefault() {
         :disabled="settings.saving"
         @click="restoreDefault"
       >
-        <Icon name="undo" :size="13" class="text-ink-3" aria-hidden="true" />
+        <Icon name="undo" :size="14" class="text-ink-3" aria-hidden="true" />
         {{ t("settings.shortcutRestore") }}
       </button>
     </template>

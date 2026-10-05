@@ -134,7 +134,7 @@ function openReview(item: { callId: string; path: string; diff: string }) {
               :aria-label="t('panel.closeTab')"
               @click.stop="wp.closeTab(tab.id)"
             >
-              <Icon name="close" :size="10" aria-hidden="true" />
+              <Icon name="close" :size="12" aria-hidden="true" />
             </span>
           </button>
         </HoverTip>
@@ -158,7 +158,7 @@ function openReview(item: { callId: string; path: string; diff: string }) {
           :aria-label="wp.maximized ? t('panel.restore') : t('panel.maximize')"
           @click="wp.toggleMaximized(fullBudget)"
         >
-          <Icon name="maxDiag" :size="13" aria-hidden="true" />
+          <Icon name="maxDiag" :size="14" aria-hidden="true" />
         </button>
       </HoverTip>
     </header>

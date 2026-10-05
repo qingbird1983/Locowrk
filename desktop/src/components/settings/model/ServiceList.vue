@@ -146,7 +146,7 @@ const host = (u: string | null) => hostOf(u);
           :aria-label="t('settings.modelRowActions')"
           @click="openMenu(p, $event)"
         >
-          <Icon name="dots" :size="15" />
+          <Icon name="dots" :size="14" />
         </button>
       </span>
     </li>

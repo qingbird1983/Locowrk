@@ -366,7 +366,7 @@ const kindOptions = computed(() => [
                 v-if="probeState === 'ready' && available.length > 0"
                 class="col-span-2 flex items-center gap-1 text-[length:var(--lw-fs-12)] text-ok"
               >
-                <Icon name="check" :size="13" />
+                <Icon name="check" :size="14" />
                 {{ t("settings.modelConnected", { n: available.length }) }}
               </p>
               <p v-else-if="probeState === 'error' && probeError" class="col-span-2 truncate text-[length:var(--lw-fs-12)] text-danger">

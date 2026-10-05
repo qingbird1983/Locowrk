@@ -185,7 +185,7 @@ function closeSetup() {
           @click="defaultMenuOpen = !defaultMenuOpen"
         >
           {{ t("settings.modelDefaultChange") }}
-          <Icon name="chevronDown" :size="13" />
+          <Icon name="chevronDown" :size="14" />
         </button>
       </SettingsRow>
 
@@ -213,7 +213,7 @@ function closeSetup() {
           @click="recorderMenuOpen = !recorderMenuOpen"
         >
           {{ t("settings.modelDefaultChange") }}
-          <Icon name="chevronDown" :size="13" />
+          <Icon name="chevronDown" :size="14" />
         </button>
       </SettingsRow>
     </SettingsGroup>
@@ -226,7 +226,7 @@ function closeSetup() {
           class="flex items-center gap-1.5 rounded-[var(--lw-r-xs)] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90"
           @click="copyDraft = null; setupFor = ''"
         >
-          <Icon name="plus" :size="13" />
+          <Icon name="plus" :size="14" />
           {{ t("settings.modelAddService") }}
         </button>
       </template>

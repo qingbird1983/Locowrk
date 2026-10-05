@@ -113,7 +113,7 @@ async function onMenuSelect(id: string) {
             :aria-label="t('sidebar.projectMenu.newTask')"
             @click="newTask"
           >
-            <Icon name="plus" :size="13" aria-hidden="true" />
+            <Icon name="plus" :size="14" aria-hidden="true" />
           </button>
         </HoverTip>
         <HoverTip :text="t('sidebar.projectMenu.more')">
@@ -123,7 +123,7 @@ async function onMenuSelect(id: string) {
             :aria-label="t('sidebar.projectMenu.more')"
             @click="openMenu"
           >
-            <Icon name="dots" :size="13" aria-hidden="true" />
+            <Icon name="dots" :size="14" aria-hidden="true" />
           </button>
         </HoverTip>
       </span>

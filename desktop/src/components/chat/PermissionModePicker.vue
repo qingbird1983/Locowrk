@@ -118,7 +118,7 @@ onBeforeUnmount(() => {
           :aria-selected="m === current"
           @click="pick(m)"
         >
-          <Icon :name="MODE_ICONS[m]" :size="15" class="perm-picker__row-icon" />
+          <Icon :name="MODE_ICONS[m]" :size="14" class="perm-picker__row-icon" />
           <span class="perm-picker__row-text">
             <span class="perm-picker__mode">{{ t(`perm.short.${m}`) }}</span>
             <span class="perm-picker__desc">{{ t(`perm.desc.${m}`) }}</span>

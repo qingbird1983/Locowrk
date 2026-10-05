@@ -131,7 +131,7 @@ async function addProject() {
             :aria-label="t('sidebar.filter')"
             @click="openFilterMenu"
           >
-            <Icon name="filter" :size="13" aria-hidden="true" />
+            <Icon name="filter" :size="14" aria-hidden="true" />
           </button>
         </HoverTip>
         <HoverTip :text="t('sidebar.addProject')">
@@ -141,7 +141,7 @@ async function addProject() {
             :aria-label="t('sidebar.addProject')"
             @click="addProject"
           >
-            <Icon name="plus" :size="13" aria-hidden="true" />
+            <Icon name="plus" :size="14" aria-hidden="true" />
           </button>
         </HoverTip>
       </span>

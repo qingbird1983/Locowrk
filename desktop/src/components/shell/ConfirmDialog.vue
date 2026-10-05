@@ -55,7 +55,7 @@ const { t } = useI18n();
           :aria-label="title"
         >
           <div class="dialog__head">
-            <Icon name="warn" :size="15" class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
+            <Icon name="warn" :size="14" class="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
             <div class="min-w-0">
               <div class="dialog__title">{{ title }}</div>
               <p v-if="sub" class="dialog__sub">{{ sub }}</p>

@@ -248,7 +248,7 @@ onBeforeUnmount(() => {
             >
               <Icon name="sparkle" :size="14" class="shrink-0" />
               <span class="chip__text">{{ modelLabel }}</span>
-              <Icon name="chevronDown" :size="11" class="shrink-0 chip__chevron" />
+              <Icon name="chevronDown" :size="12" class="shrink-0 chip__chevron" />
             </button>
             <ModelSelector
               v-if="showModels"

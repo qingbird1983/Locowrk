@@ -114,8 +114,8 @@
 ### ⑪ 图标
 
 - 外壳已统一：16 viewBox · 1.5 描边 · round cap/join · currentColor（`lib/icons.ts`）。
-- 尺寸阶梯 = **12 / 14 / 16** 三档 + 发送键 18 特例（暂定·勾⑥）；10/11/13/15/20 就近吸附（现状 8 种）。
-- 7 枚 24 格缩编 hack 路径（settings/folderOpen/bulb/hand/shieldCheck/paperclip/shieldAlert）重绘为 16 格原生（收敛批，视觉不变）。
+- 尺寸阶梯 = **12 / 14 / 16** 三档 + 发送键 18 特例（暂定·勾⑥）；10/11/13/15/20 就近吸附（现状 8 种）。缺省尺寸 14（v2.88 吸附归档）。空态图形（§二⑩ 可选小图形，如日程页 20px 时钟）不入本阶梯。
+- 7 枚 24 格缩编 hack 路径（settings/folderOpen/bulb/hand/shieldCheck/paperclip/shieldAlert）已重绘为 16 格原生（v2.88 坐标 ×2/3 确定性缩放，无 transform 包裹、视觉不变）。
 - 例外（非图标，不入体系）：WelcomeHome 吉祥物 = 插画；UsageRing = 数据仪表。
 
 ### ⑫ 字号阶梯（现状 107 处裸 px、10 种值，最大洞）

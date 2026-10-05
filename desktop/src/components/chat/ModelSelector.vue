@@ -100,7 +100,7 @@ function pick(providerId: string, model: string) {
     :aria-label="t('model.selector')"
   >
     <div class="ms-search">
-      <Icon name="search" :size="13" class="ms-search__icon" />
+      <Icon name="search" :size="14" class="ms-search__icon" />
       <input
         v-model="query"
         type="text"
@@ -133,7 +133,7 @@ function pick(providerId: string, model: string) {
           @click="pick(g.id, m)"
         >
           <span class="ms-row__name">{{ m }}</span>
-          <Icon v-if="m === effective()" name="check" :size="13" class="ms-row__check" />
+          <Icon v-if="m === effective()" name="check" :size="14" class="ms-row__check" />
         </button>
       </template>
 

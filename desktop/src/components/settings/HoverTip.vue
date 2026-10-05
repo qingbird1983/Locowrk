@@ -90,7 +90,7 @@ async function place(): Promise<void> {
     @focusin="show"
     @focusout="hide"
   >
-    <Icon v-if="icon" name="warn" :size="13" class="text-warn" aria-hidden="true" />
+    <Icon v-if="icon" name="warn" :size="14" class="text-warn" aria-hidden="true" />
     <slot v-else />
   </span>
   <Teleport to="body">

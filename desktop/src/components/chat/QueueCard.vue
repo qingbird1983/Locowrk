@@ -83,7 +83,7 @@ function resume() {
             :aria-label="t('queue.clearAll')"
             @click="clearAll"
           >
-            <Icon name="trash" :size="15" />
+            <Icon name="trash" :size="14" />
           </button>
         </HoverTip>
         <HoverTip :text="t('queue.sendNowHint')">

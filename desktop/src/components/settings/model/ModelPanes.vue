@@ -173,12 +173,12 @@ watch(() => props.available, () => (expandedId.value = null));
           :disabled="disabled || probeState === 'loading'"
           @click="emit('fetch')"
         >
-          <Icon name="refresh" :size="13" :class="probeState === 'loading' ? 'animate-none' : ''" />
+          <Icon name="refresh" :size="14" :class="probeState === 'loading' ? 'animate-none' : ''" />
           {{ probeState === "loading" ? t("settings.modelProbing") : t("settings.modelFetchList") }}
         </button>
       </div>
       <div class="mt-2 flex h-8 items-center gap-2 rounded-[var(--lw-r-xs)] bg-wash-2 px-2.5">
-        <Icon name="search" :size="13" class="shrink-0 text-ink-4" />
+        <Icon name="search" :size="14" class="shrink-0 text-ink-4" />
         <input
           v-model="availQuery"
           class="w-full bg-transparent text-[length:var(--lw-fs-12half)] text-ink-1 outline-none placeholder:text-ink-5"
@@ -268,7 +268,7 @@ watch(() => props.available, () => (expandedId.value = null));
                 @dragstart="dragId = m.id"
                 @dragend="dragId = null; overIndex = -1"
               >
-                <Icon name="grip" :size="13" />
+                <Icon name="grip" :size="14" />
               </button>
               <span class="min-w-0 flex-1 select-text truncate font-mono text-[length:var(--lw-fs-12)] text-ink-1">{{ m.id }}</span>
               <span v-if="m.alias?.trim()" class="shrink-0 text-[length:var(--lw-fs-11)] text-ink-4">{{ m.alias }}</span>

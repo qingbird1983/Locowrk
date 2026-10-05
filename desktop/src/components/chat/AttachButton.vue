@@ -58,7 +58,7 @@ onBeforeUnmount(() => {
         :aria-label="t('composer.attach')"
         @click="open = !open"
       >
-        <Icon name="plus" :size="15" aria-hidden="true" />
+        <Icon name="plus" :size="14" aria-hidden="true" />
       </button>
     </HoverTip>
 
@@ -70,7 +70,7 @@ onBeforeUnmount(() => {
         role="menu"
       >
         <button class="attach__row" type="button" role="menuitem" @click="pick">
-          <Icon name="paperclip" :size="15" class="attach__row-icon" aria-hidden="true" />
+          <Icon name="paperclip" :size="14" class="attach__row-icon" aria-hidden="true" />
           <span class="attach__row-text">
             <span class="attach__mode">{{ t("composer.attach") }}</span>
             <span class="attach__desc">{{ t("composer.attachHint") }}</span>

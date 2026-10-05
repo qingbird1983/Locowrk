@@ -124,7 +124,7 @@ const chipIcon: IconName = "folder";
         :aria-label="t('workspace.title')"
         @click="toggle"
       >
-        <Icon :name="chipIcon" :size="15" aria-hidden="true" />
+        <Icon :name="chipIcon" :size="14" aria-hidden="true" />
       </button>
       <button
         v-else
@@ -162,7 +162,7 @@ const chipIcon: IconName = "folder";
             :aria-selected="ws === currentWs"
             @click="choose(ws)"
           >
-            <Icon name="folder" :size="15" class="ws-picker__row-icon" aria-hidden="true" />
+            <Icon name="folder" :size="14" class="ws-picker__row-icon" aria-hidden="true" />
             <span class="ws-picker__name">{{ workspaceDisplayName(ws) }}</span>
             <Icon
               v-if="ws === currentWs"
@@ -174,7 +174,7 @@ const chipIcon: IconName = "folder";
         </HoverTip>
         <div class="ws-picker__sep" role="separator" />
         <button class="ws-picker__row" type="button" role="option" @click="addAndChoose">
-          <Icon name="folderOpen" :size="15" class="ws-picker__row-icon" aria-hidden="true" />
+          <Icon name="folderOpen" :size="14" class="ws-picker__row-icon" aria-hidden="true" />
           <span class="ws-picker__name">{{ t("workspace.pickNew") }}</span>
         </button>
         <button
@@ -183,7 +183,7 @@ const chipIcon: IconName = "folder";
           role="option"
           @click="choose(null)"
         >
-          <Icon name="close" :size="15" class="ws-picker__row-icon" aria-hidden="true" />
+          <Icon name="close" :size="14" class="ws-picker__row-icon" aria-hidden="true" />
           <span class="ws-picker__name">{{ t("workspace.none") }}</span>
         </button>
       </div>

@@ -242,7 +242,7 @@ async function commitRename() {
           :aria-label="t('sidebar.menu.more')"
           @click="openMenu"
         >
-          <Icon name="dots" :size="13" aria-hidden="true" />
+          <Icon name="dots" :size="14" aria-hidden="true" />
         </button>
       </HoverTip>
     </template>
