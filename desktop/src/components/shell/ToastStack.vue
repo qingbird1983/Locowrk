@@ -87,9 +87,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 位置（用户裁定 + 2026-10-06 目检两轮修正）：水平居中、垂直 30vh（中上：
- * 顶缘 30vh + 气泡高 ~60px ⇒ 重心 ≈33vh）；宽度 min(320px, 100vw−32px)
- * （目检两轮裁定 420→360 仍长，320 定档） */
+/* 位置（用户裁定 + 2026-10-06 目检三轮修正）：水平居中、垂直 30vh（中上：
+ * 顶缘 30vh + 气泡高 ~60px ⇒ 重心 ≈33vh）；宽度 min(260px, 100vw−32px)
+ * （用户裁定值 260） */
 .toast-stack {
   position: fixed;
   top: 30vh;
@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
   transform: translateX(-50%);
   z-index: var(--lw-z-toast);
   display: flex;
-  width: min(320px, calc(100vw - 32px));
+  width: min(260px, calc(100vw - 32px));
   flex-direction: column;
   gap: 8px;
 }
