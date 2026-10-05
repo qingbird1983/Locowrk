@@ -17,6 +17,9 @@ const props = defineProps<{
   activeId: string;
   activeModel: string;
   anchor: HTMLElement | null;
+  /** 提供时列表顶部常驻一档「跟随缺省」行（activeId="" 选中；选中回传
+   * select("", "")）——记录员档复用本菜单用（模型选择器全站唯一实现）。 */
+  noneLabel?: string;
 }>();
 const emit = defineEmits<{
   select: [providerId: string, model: string];
@@ -112,6 +115,20 @@ onBeforeUnmount(() => {
         />
       </div>
       <div ref="listEl" class="max-h-[min(420px,60vh)] overflow-y-auto p-1.5">
+        <!-- 「跟随缺省」常驻档（noneLabel 提供时）：不吃搜索过滤 -->
+        <button
+          v-if="props.noneLabel"
+          type="button"
+          role="option"
+          class="mb-0.5 flex w-full items-center gap-2 rounded-[var(--lw-r-sm)] px-2 py-1.5 text-left transition hover:bg-wash-2"
+          :aria-selected="activeId === ''"
+          @click="emit('select', '', ''); emit('close')"
+        >
+          <span class="w-4 shrink-0 text-accent">
+            <Icon v-if="activeId === ''" name="check" :size="12" />
+          </span>
+          <span class="min-w-0 flex-1 truncate text-[12.5px] text-ink-1">{{ props.noneLabel }}</span>
+        </button>
         <p v-if="visible.length === 0" class="px-2 py-4 text-center text-[12px] text-ink-4">
           {{ t("settings.modelNoMatch") }}
         </p>

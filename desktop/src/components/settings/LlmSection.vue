@@ -17,7 +17,6 @@ import { useToastStore } from "../../stores/toast";
 import type { ProviderView } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
-import SettingsSelect from "./SettingsSelect.vue";
 import ServiceList from "./model/ServiceList.vue";
 import ProviderSetupDialog from "./model/ProviderSetupDialog.vue";
 import DefaultModelMenu from "./model/DefaultModelMenu.vue";
@@ -49,34 +48,25 @@ async function onSelectDefault(providerId: string, model: string) {
   }
 }
 
-// ---- M2 会话记录员（树 v2 §5.2）：同主模型 ▾ + 已启用服务的模型清单 ----
-const RECORDER_SEP = "::";
-const recorderValue = computed(() => {
-  const m = settings.view?.memory;
-  if (!m?.recorderModel || !m.recorderProvider) return "";
-  return `${m.recorderProvider}${RECORDER_SEP}${m.recorderModel}`;
+// ---- M2 会话记录员（树 v2 §5.2）：与主模型同款更改浮层（模型选择器
+// 全站唯一实现——原 SettingsSelect 第二套形态，用户目检判同类多套）。
+// 空选 = 跟随主模型：两键都传空串清除（后端约定，见 MemoryUpdate）。
+const recorderMenuOpen = ref(false);
+const recorderAnchorEl = ref<HTMLElement | null>(null);
+const recorderProvider = computed(() => settings.view?.memory?.recorderProvider ?? "");
+const recorderModel = computed(() => settings.view?.memory?.recorderModel ?? "");
+const recorderLabel = computed(() => {
+  if (!recorderProvider.value || !recorderModel.value) return t("settings.modelDefaultSame");
+  const p = providers.value.find((x) => x.id === recorderProvider.value);
+  return `${p?.label ?? "—"} · ${recorderModel.value}`;
 });
-const recorderOptions = computed(() => [
-  { value: "", label: t("settings.modelDefaultSame") },
-  ...enabledProviders.value.flatMap((p) =>
-    (p.models.length > 0 ? p.models.map((x) => x.id) : [p.model].filter(Boolean)).map((id) => ({
-      value: `${p.id}${RECORDER_SEP}${id}`,
-      label: `${p.label} · ${id}`,
-    })),
-  ),
-]);
 
-function onRecorderChange(value: string) {
-  // 空选 = 同主模型：两键都传空串清除（后端约定，见 MemoryUpdate）
-  if (!value) {
-    void settings.saveMemory({ recorderModel: "", recorderProvider: "" });
-    return;
-  }
-  const [providerId, model] = value.split(RECORDER_SEP);
-  void settings.saveMemory({
-    recorderModel: model ?? "",
-    recorderProvider: providerId ?? "",
-  });
+function onSelectRecorder(providerId: string, model: string) {
+  void settings.saveMemory(
+    providerId && model
+      ? { recorderModel: model, recorderProvider: providerId }
+      : { recorderModel: "", recorderProvider: "" },
+  );
 }
 
 // ---- AI 服务：模态与动作 ----
@@ -199,17 +189,32 @@ function closeSetup() {
         </button>
       </SettingsRow>
 
-      <!-- M2 会话记录员（§5.2）：清空 = 同主模型；清单来自已启用服务档 -->
+      <!-- M2 会话记录员（§5.2）：与主模型行同款「当前值 + 更改」结构，
+           清单 = 同一个 DefaultModelMenu（+「跟随主模型」常驻档） -->
       <SettingsRow
         :title="t('settings.recorderModel')"
         :hint="t('settings.recorderModelHint')"
       >
-        <SettingsSelect
-          :model-value="recorderValue"
-          :entries="recorderOptions"
-          :label="t('settings.recorderModel')"
-          @update:model-value="onRecorderChange"
-        />
+        <template #detail>
+          <span
+            class="mt-1 block text-[12px]"
+            :class="recorderProvider && recorderModel ? 'text-ink-3' : 'text-ink-4'"
+          >
+            {{ recorderLabel }}
+          </span>
+        </template>
+        <button
+          ref="recorderAnchorEl"
+          type="button"
+          class="lw-btn flex items-center gap-1 px-3 py-1.5 text-xs text-ink-1"
+          :disabled="enabledProviders.length === 0"
+          :aria-haspopup="'listbox'"
+          :aria-expanded="recorderMenuOpen"
+          @click="recorderMenuOpen = !recorderMenuOpen"
+        >
+          {{ t("settings.modelDefaultChange") }}
+          <Icon name="chevronDown" :size="13" />
+        </button>
       </SettingsRow>
     </SettingsGroup>
 
@@ -256,6 +261,18 @@ function closeSetup() {
       :anchor="anchorEl"
       @select="onSelectDefault"
       @close="defaultMenuOpen = false"
+    />
+
+    <!-- 记录员更改浮层：与主模型同一实现；空 active = 「跟随主模型」档选中 -->
+    <DefaultModelMenu
+      v-if="recorderMenuOpen"
+      :providers="providers"
+      :active-id="recorderProvider"
+      :active-model="recorderModel"
+      :anchor="recorderAnchorEl"
+      :none-label="t('settings.modelDefaultSame')"
+      @select="onSelectRecorder"
+      @close="recorderMenuOpen = false"
     />
 
     <ProviderSetupDialog
