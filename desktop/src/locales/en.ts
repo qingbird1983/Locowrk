@@ -335,8 +335,6 @@ export default {
     contextCompacted: "Context compacted",
     savedTokens: "{n} tokens saved",
     approvalTimeout: "Approval timed out, denied automatically",
-    defaultPermissionMode: "Default permission mode",
-    defaultPermissionModeHint: "Plan = read-only · Ask = approve each action · Auto-edits = undoable writes run free · Full = allow nearly all, only outside-roots & privacy ask; switch per chat next to the input box",
   },
   // Work panel (§2.5/§3.16, v2.52)
   // Scheduled-tasks destination page (§3.35, v2.57)
@@ -390,11 +388,9 @@ export default {
   developer: {
     hint: "Developer and danger switches. Hidden by default: tap the version number at the sidebar bottom 7 times to unlock.",
     allowDeleteRunning: "Allow deleting a running session",
-    allowDeleteRunningHint:
-      "Blocked by default. When on, force-delete is allowed: the running turn re-creates the log file and the transcript may be incomplete.",
+    allowDeleteRunningHint: "Blocked by default; deleting may leave the transcript incomplete.",
     allowSwitchRunning: "Allow switching away from a running session",
-    allowSwitchRunningHint:
-      "Blocked by default. When on, a half-finished turn may interleave into the new session transcript; switch back after it settles to see the rest.",
+    allowSwitchRunningHint: "Blocked by default; an unfinished turn may spill into the new session.",
     hide: "Hide developer options",
     hideHint:
       "Lock this section away again (danger switches keep their values); tap the version 7 times to unlock.",
@@ -410,27 +406,24 @@ export default {
     retrieved: "Semantically retrieved ({n})",
     saved: "Context saved: ~{n} tokens",
     cacheTitle: "Prefix cache readout",
-    cacheHint:
-      "Session cumulative (live/replay aggregated) and current-turn usage; hit-rate denominator excludes cache writes.",
+    cacheHint: "Session totals and per-turn usage; hit rate excludes cache writes.",
     cacheEmpty: "Provider has not reported cache fields yet — start a chat and come back.",
     cacheHitRate: "Session cumulative hit rate: {pct}% ({steps} steps)",
     cacheHitMiss: "Hit / miss / total input: {hit} / {miss} / {input} tokens",
     cacheSavings: "Estimated savings at current prices: {n}",
     cacheTurn: "This turn: in {input} · hit {hit} · out {out}",
     cacheAlertTitle: "Cache hit-rate alert",
-    cacheAlertHint:
-      "Alert once when the session cumulative hit rate falls below the threshold (at most once per session; judged after 3+ steps — a cold first turn with no cache does not count).",
+    cacheAlertHint: "Alerts once per session when the hit rate falls below the threshold.",
     cacheAlertPercent: "Alert threshold (%)",
     prefixTitle: "Prefix discipline",
-    prefixHint: "A byte-stable request prefix is what makes prompt caching cheap (KV v2 §4/§5). Changes apply immediately but invalidate the current session's cache once.",
+    prefixHint: "A stable request prefix keeps the cache; changes rebuild it once.",
     pinSession: "Pin tool set per session",
-    pinSessionHint:
-      "The exposed tool set is decided at the session's first request and reused, keeping the tools block byte-stable; use search_tools to pull more. Off = re-rank every turn (hit rate drops; for A/B experiments).",
+    pinSessionHint: "Tool list fixed per session; search_tools finds new ones; off lowers hit rate.",
     stabilityRounds: "Stability period (turns)",
     filesTitle: "Memory files",
     filesHint: "Markdown is the authoritative edit surface (human-readable and editable); sqlite is the machine index.",
     reconcileTitle: "Merge memory files",
-    reconcileHint: "Merge manual edits under ~/.Locowrk/memory/ into the memory index now (runs automatically when you open the memory page; files win, conflicts keep both).",
+    reconcileHint: "Merges manual edits into the index; runs when the memory page opens.",
     reconcileRun: "Merge now",
     reconcileRunning: "Merging…",
     reconcileDone: "Merged: +{created} ~{updated} -{deleted} healed {healed}",
@@ -447,7 +440,7 @@ export default {
     recorderRetriesHint: "Falls back to rule splitting after failures (0–10).",
     ruleChunk: "Rule-split chunk",
     defaultOrganizer: "Default session organizer",
-    defaultOrganizerHint: "Effective mode for sessions that never chose: standard = full history + compaction; memory tree = L0 directory + unorganized tail (experimental).",
+    defaultOrganizerHint: "Which organizer sessions use when they never chose one.",
     organizerLegacy: "Standard",
     organizerTree: "Memory tree",
     ruleChunkHint: "5K–50K tokens, default 20K; mechanical split at user-message boundaries.",
@@ -465,8 +458,7 @@ export default {
     treePending: "Pending task: events #{from}–#{to} (redispatched {attempts}×)",
     treeHistory: "Recent organizes",
     treeHistoryRow: "{time} · {reason} · {mode} · {status} · {bundles} bundles · in {input} / out {output} · {ms}ms",
-    stabilityRoundsHint:
-      "After a compaction/organization settlement, no prefix-changing operations for the next N user turns (1-10) so the new prefix settles into cache.",
+    stabilityRoundsHint: "For N turns after compaction the prefix stays untouched (1–10).",
   },
   memory: {
     search: "Search memories…",
@@ -666,8 +658,7 @@ export default {
     cacheMissPriceTitle: "Cache miss price",
     cachePriceHint: "¥ per million tokens for savings estimation (e.g. deepseek-flash off-peak 0.02 / 1.0)",
     llmTitle: "Models",
-    llmHint:
-      "The API key is stored only in the local data directory and is never echoed back to the UI. Configure multiple provider profiles and switch models from the selector next to the composer; picking inside a session only affects that session.",
+    llmHint: "API keys stay local; add multiple providers and switch models anytime.",
     provider: "Provider",
     provActive: "Default",
     provSetActive: "Set default",
@@ -676,8 +667,7 @@ export default {
     provDeleteConfirm: "Confirm delete",
     provAdd: "Add provider profile",
     provEmpty: "No provider profile yet — add one (key + model) to switch models from the selector next to the composer.",
-    provFormHint:
-      "A profile = one provider configuration (kind / endpoint / key / model / context window). “Fetch list” probes the models the endpoint offers (falls back to the stored key when left empty).",
+    provFormHint: "Fill in endpoint and key, then “Fetch list” for available models.",
     provLabel: "Profile name",
     provNoModel: "no model selected",
     provFetch: "Fetch list",
@@ -768,8 +758,7 @@ export default {
     dataDir: "Data root directory",
     dataDirHint:
       "Plugins, the lockfile and settings.json live here. Override with the LOCOWRK_DATA_DIR environment variable (restart required).",
-    sessionsMemory:
-      "Sessions are appended event-by-event as JSONL under sessions/ in the data directory; the latest session resumes on startup.",
+    sessionsMemory: "Sessions live in the data directory; the latest resumes on startup.",
     langTitle: "Interface language",
     langSystem: "Follow system",
     langZh: "中文",
@@ -790,50 +779,42 @@ export default {
     shortcutRestore: "Restore default",
     // ⑪ Memory section (real section, replaces shell placeholder)
     memoryTitle: "Memory",
-    memoryHint:
-      "Relevant memories are injected into the conversation (via system prompt, outside compaction); per-turn count is adjustable.",
+    memoryHint: "Relevant memories are auto-injected; the per-turn count is adjustable.",
     memoryEnabled: "Inject memories automatically",
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
     memoryAutoExtract: "Auto-extract memories after conversations (implicit)",
     memoryRepoContext: "Handoff injection",
-    memoryRepoContextHint:
-      "Associated sessions receive the repo's .Locowrk/ handoff files (requirements / handoff / notes listing); the directory is created and git-ignored on first use.",
+    memoryRepoContextHint: "Project sessions inject repo handoff files, created on first use.",
     memoryHandoffUpdate: "Handoff auto-update",
-    memoryHandoffUpdateHint:
-      "After each turn, associated sessions update .Locowrk/handoff.md in the background (progress / next steps); only that file is written, and unchanged content is not written.",
+    memoryHandoffUpdateHint: "Updates the handoff file each turn; unchanged content is skipped.",
     memoryFiles: "Memory files",
-    memoryFilesHint:
-      "Also store memories as Markdown under ~/.Locowrk/memory/ (human-readable and editable); off = database only.",
+    memoryFilesHint: "Memories are also saved as Markdown files you can view and edit.",
     organizePacing: "Memory tree pacing",
-    organizePacingHint:
-      "Batch = organize the whole tail at the threshold; incremental = organize each time the tail fills a chunk (Tree v2 §4.3).",
+    organizePacingHint: "Batch organizes at a threshold; incremental per filled chunk.",
     organizePacingBatch: "Batch",
     organizePacingIncremental: "Incremental",
     organizeChunk: "Incremental chunk X",
     organizeChunkHint: "10K–200K tokens, default 50K; incremental pacing only.",
     tailStrategy: "Tail strategy",
-    tailStrategyHint: "How the unorganized tail is kept in tree-mode sessions: boundary = everything since the last organize, cache fully hit between organizes (default); window = last N turns, smaller context but the sliding window re-pays at miss price each turn.",
+    tailStrategyHint: "Boundary (default) preserves cache; window keeps the last N turns.",
     tailStrategyBoundary: "Boundary",
     tailStrategyWindow: "Fixed window",
     tailWindow: "Window turns",
-    tailWindowHint: "Keep the last N turns verbatim (1–20, default 5); turns that slide out are organized into the memory tree automatically.",
+    tailWindowHint: "Keeps the last N turns (1–20, default 5); older ones get organized.",
     collapseEnabled: "Expose memory_collapse tool",
-    collapseEnabledHint: "Off by default. Collapsing frees window space but rewrites the request prefix (a planned cache miss) — a space relief tool, not a cost saver.",
+    collapseEnabledHint: "Off by default; collapsing frees space but causes one cache miss.",
     collapseThreshold: "Auto-collapse threshold",
     collapseThresholdHint: "When occupancy reaches this after a turn, collapse the oldest expanded bundle (50–95%, default 80).",
     recorderModel: "Session recorder",
     recorderModelHint:
       "The background role that bundles conversations; defaults to the main model. Pick a cheaper one to save cost.",
-    memoryAutoExtractHint:
-      "On by default (proactive memory); extracts durable facts and an experience summary after each turn (experiences need embedding).",
+    memoryAutoExtractHint: "On by default; memorable content is extracted after each turn.",
     // S1 shell governance section
     shellTitle: "Shell",
-    shellHint:
-      "Read-only commands run via shell_read without approval and only inside allowed roots; the rest go through the shell tool with per-call approval.",
+    shellHint: "Read-only commands run without approval inside workspace folders; the rest ask.",
     shellUnlock: "Allow rm / sudo / chmod-class high-risk commands to reach approval (refused by default)",
-    shellUnlockWarning:
-      "When enabled, deletion, privilege, permission and disk commands are no longer refused outright — each call opens a confirmation you approve, and the responsibility is yours. Interpreter and network commands (python / bash / curl, ...) stay permanently locked regardless of this switch.",
+    shellUnlockWarning: "Each call asks for your approval; python and curl-class commands stay locked.",
     shellRestart: "Takes effect after restarting the app.",
     // ⑫ Tool exposure section (real section, replaces shell placeholder)
     developerTitle: "Developer options",
@@ -850,19 +831,19 @@ export default {
       "Force-closes the turn after this many tool-call steps (1-100, default 8).",
     approvalTimeout: "Approval wait timeout (seconds)",
     approvalTimeoutHint: "Timed-out approvals are denied (fail-closed); 0 = wait forever.",
+    defaultPermissionMode: "Default permission mode",
+    defaultPermissionModeHint: "Default mode for new chats; switch anytime next to the input box",
     // v4.11 §3.39① ask_user watchdog
     askTimeout: "Choice wait timeout (seconds)",
     askTimeoutHint: "Timed-out choice cards are skipped (the turn keeps going); 0 = wait forever.",
     // ⑱ Workspace folders (fs roots picker)
     fsRootsTitle: "Workspace folders",
-    fsRootsHint:
-      "Root folders the tool file surface (files, edit, git, shell) may access; changes apply immediately. Without any, tools can only reach the data directory.",
+    fsRootsHint: "Folders tools may access, applied instantly; empty = data directory only.",
     fsRootsAdd: "Add folder…",
     fsRootsRemove: "Remove",
     fsRootsEmpty: "No workspace folders — tools can only reach the data directory.",
     embeddingTitle: "Embedding model (semantic search)",
-    embeddingHint:
-      "Shared vector model for tool search, experiences and implicit extraction; empty = smart layer absent, chat unaffected.",
+    embeddingHint: "Shared by semantic search and extraction; empty does not affect chat.",
     embeddingModel: "Model name",
     embeddingBaseUrl: "API endpoint",
     embeddingBaseUrlHint: "OpenAI-compatible /v1/embeddings; empty falls back to localhost:11434 for Ollama, otherwise the main model endpoint.",
@@ -875,14 +856,12 @@ export default {
     embeddingDetectFail: "Detect failed:",
     embeddingProbeTitle: "Connection test",
     pluginsTitle: "Plugins",
-    pluginsHint: "Idle auto-disable — never automatic by default (prompt only); enabling means you accept background disabling.",
+    pluginsHint: "Off by default; enabled means idle plugins get disabled automatically.",
     autoDisableDays: "Auto-disable after (days)",
-    autoDisableDaysHint:
-      "0 = off (default); 7–365 days. Third-party plugins only; switching off never re-enables plugins.",
+    autoDisableDaysHint: "0 = off; 7–365 days, third-party plugins only.",
     // ⑨ Context management section (real section, replaces shell placeholder)
     contextTitle: "Context management",
-    contextHint:
-      "Long conversations are auto-compacted as they approach the window limit. Threshold and strategy are adjustable anytime; compaction is undoable.",
+    contextHint: "Long chats are compacted automatically; adjustable and undoable.",
     // S2 (audit doc §5): the window is a model property — key moved here
     window: "Model context window (tokens)",
     windowUnset: "Not set (conservative 32k protection)",
