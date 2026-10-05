@@ -49,14 +49,54 @@ export default {
     replaying: "Restoring session…",
     stopGeneration: "Stop generating",
     widthAria: "Conversation width {n} pixels",
+    // v4.11 §3.39: send-button state machine + queue + back-to-latest
+    placeholderQueue: "AI is working — your message will be queued",
+    queueAdd: "Queue message",
+    backToLatest: "Back to latest",
   },
   // Turn process group (UI shell doc §3.7) and thinking row (§3.9)
   turn: {
     running: "Working",
     done: "Completed",
+    stopped: "Stopped",
     toolCount: "{n} tools",
     problemCount: "{n} problems",
     thinking: "Thinking",
+    thinkingFor: "for {s}s",
+  },
+  // ask_user choice card (v4.11 §3.39①): blocking question, answered in dock
+  ask: {
+    cardTitle: "Your choice",
+    queue: "{n} more pending",
+    skip: "Skip",
+    customPlaceholder: "Or type a custom reply…",
+    send: "Send",
+    submitFailed: "Submit failed: {reason}",
+    timeoutHint: "Auto-skips in {n}s if unanswered",
+  },
+  // Queued-message card (v4.11 §3.39②): auto-drains one per finished turn
+  queue: {
+    cardTitle: "{n} queued",
+    resume: "Resume",
+    sendNow: "Send now",
+    sendNowHint: "Stop the current run and send this now",
+    remove: "Remove queued message",
+    clearAll: "Clear queue",
+    emptyPreview: "(empty message)",
+  },
+  // [Lab] beautiful-ui-vue port strings (lab component; keep or drop with the experiment)
+  bui: {
+    openApproval: "Open approval",
+    answersSent: "Answers sent",
+    startOver: "Start over",
+    dismiss: "Dismiss",
+    customPlaceholder: "Type something…",
+    customAnswer: "Custom answer",
+    prev: "Previous",
+    next: "Next",
+    gotoQuestion: "Go to question {n}",
+    sendAnswers: "Send answers",
+    nextQuestion: "Next question",
   },
   // Context usage popover (UI shell doc §3.12); detailed rows pending backend (§8.2)
   usage: {
@@ -222,6 +262,9 @@ export default {
     // §3.17 approval decision record rows (projection-only source)
     approvalAllowed: "Allowed · {action}",
     approvalDenied: "Denied · {action}",
+    // LLM.md v3.0: transport retry / step cap
+    llmRetried: "Provider temporarily unresponsive, retried automatically (attempt {attempt})",
+    turnCapped: "Turn step limit reached ({steps} steps), ending the turn here — send \"continue\" to resume, or raise the limit in Settings → Tools & Dispatch",
   },
   // Idle badge (IdleBadge, ⑩ wired per exposure doc §8.4/§11.3): backend
   // sends structured IdleInfo only; the frontend renders human phrasing.
@@ -801,6 +844,9 @@ export default {
       "Force-closes the turn after this many tool-call steps (1-100, default 8).",
     approvalTimeout: "Approval wait timeout (seconds)",
     approvalTimeoutHint: "Timed-out approvals are denied (fail-closed); 0 = wait forever.",
+    // v4.11 §3.39① ask_user watchdog
+    askTimeout: "Choice wait timeout (seconds)",
+    askTimeoutHint: "Timed-out choice cards are skipped (the turn keeps going); 0 = wait forever.",
     // ⑱ Workspace folders (fs roots picker)
     fsRootsTitle: "Workspace folders",
     fsRootsHint:

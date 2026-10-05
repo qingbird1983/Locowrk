@@ -100,6 +100,12 @@ pub struct AppState {
     /// 记忆树影子运行编排器（M2）：轮次收束钩子 / `/整理` / 启动重投 /
     /// 开发者观测的数据源；只写 memory-tree/ 投影，不改请求组装。
     pub organizer: Arc<crate::organize::Organizer>,
+    /// 停止标记注册表（v4.11 §3.39④）：run_turn 进场登记 RAII 守卫、
+    /// 收束自动注销；agent_stop 命令置位（流式 delta 点 + 步间边界消费）。
+    pub stop_flags: Arc<crate::stop::StopFlags>,
+    /// ask_user 选择卡中心（v4.11 §3.39①）：ask_respond / ask_snooze /
+    /// list_pending_asks 命令入口；agent_stop 经 skip_session 同步收束。
+    pub ask: Arc<crate::ask::AskHub>,
 }
 
 impl AppState {

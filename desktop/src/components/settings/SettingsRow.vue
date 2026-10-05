@@ -22,7 +22,7 @@ withDefaults(
 </script>
 
 <template>
-  <div class="flex items-center justify-between gap-6 rounded-[14px] bg-wash-1 px-4 py-3.5">
+  <div class="flex items-center justify-between gap-6 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5">
     <div class="min-w-0 flex-1">
       <component
         :is="controlId ? 'label' : 'div'"

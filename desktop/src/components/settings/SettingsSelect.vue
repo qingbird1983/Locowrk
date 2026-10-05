@@ -74,13 +74,20 @@ function openList(): void {
   );
   open.value = true;
   void nextTick(() => {
-    // 底部放不下就向上翻（渲染后量实际高度）
+    // 渲染后量实际尺寸再校正（首帧按触发器宽预估先落位防跳；但内容可把
+    // 面板撑宽到 maxWidth——记录员的模型清单就比触发器宽，按预估宽右对
+    // 齐会向右越界被窗口裁切，实抓于设置·会话记录员下拉）：横向 = 真右
+    // 对齐 + 双向视口钳制；纵向 = 底部放不下向上翻。
     const pop = popRef.value;
     if (pop) {
+      const w = pop.offsetWidth;
       const h = pop.offsetHeight;
-      if (r.bottom + 4 + h > window.innerHeight && r.top - h - 4 >= 0) {
-        popStyle.value = { ...popStyle.value, top: `${Math.round(r.top - h - 4)}px` };
+      const left = Math.max(8, Math.min(Math.round(r.right) - w, window.innerWidth - w - 8));
+      let top = Math.round(r.bottom + 4);
+      if (top + h > window.innerHeight && r.top - h - 4 >= 0) {
+        top = Math.round(r.top - h - 4);
       }
+      popStyle.value = { ...popStyle.value, left: `${left}px`, top: `${top}px` };
       pop.focus();
     }
   });

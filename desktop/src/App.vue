@@ -2,6 +2,7 @@
 import { onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useApprovalsStore } from "./stores/approvals";
+import { useAsksStore } from "./stores/asks";
 import { useChatStore } from "./stores/chat";
 import { useNotificationsStore } from "./stores/notifications";
 import { useSettingsStore } from "./stores/settings";
@@ -32,12 +33,14 @@ import { computed, ref } from "vue";
  * - 对话视图不卸载：切走时 display:none + inert 挂起，回来恢复滚动与
  *   运行态（hidden 会被 flex 类覆盖，故用内联 display）；
  * - 其他目的地按需挂载（v-if），离开即卸载；侧栏（非设置目的地）恒显；
- * - 全局层：⌘K 命令面板 / 窗口控制挂壳根（跨视图）。审批是转录内的
- *   内联决策卡（§3.17，㉕·对话区① 起 ApprovalModal 退役）。
+ * - 全局层：⌘K 命令面板 / 窗口控制挂壳根（跨视图）。审批与 ask 选择卡
+ *   是 composer 坞内的决策卡（§3.17/§3.39①，v4.11 迁坞；决策后即隐，
+ *   对话流零气泡）。
  */
 const { t } = useI18n();
 const chat = useChatStore();
 const approvals = useApprovalsStore();
+const asks = useAsksStore();
 const settings = useSettingsStore();
 const shell = useShellStore();
 const notifications = useNotificationsStore();
@@ -57,6 +60,7 @@ useGlobalShortcuts();
 onMounted(() => {
   chat.init();
   approvals.init();
+  void asks.init();
   void settings.init();
   void notifications.init();
 });

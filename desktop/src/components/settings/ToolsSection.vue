@@ -27,6 +27,7 @@ const form = reactive({
   callTimeoutSecs: 30,
   maxTurnSteps: 8,
   approvalTimeoutSecs: 100,
+  askTimeoutSecs: 300,
   defaultPermissionMode: "ask" as "plan" | "ask" | "acceptEdits" | "auto",
 });
 
@@ -49,6 +50,7 @@ watch(
     form.callTimeoutSecs = v.tools.callTimeoutSecs;
     form.maxTurnSteps = v.tools.maxTurnSteps;
     form.approvalTimeoutSecs = v.tools.approvalTimeoutSecs;
+    form.askTimeoutSecs = v.tools.askTimeoutSecs;
     form.defaultPermissionMode = v.tools.defaultPermissionMode ?? "ask";
   },
   { immediate: true },
@@ -61,6 +63,7 @@ function save() {
     callTimeoutSecs: form.callTimeoutSecs,
     maxTurnSteps: form.maxTurnSteps,
     approvalTimeoutSecs: form.approvalTimeoutSecs,
+    askTimeoutSecs: form.askTimeoutSecs,
     defaultPermissionMode: form.defaultPermissionMode,
   });
 }
@@ -151,6 +154,22 @@ function removeRoot(idx: number) {
           />
         </SettingsRow>
 
+        <!-- v4.11 §3.39① 可配置原则：ask_user 选择守夜（0 = 不限） -->
+        <SettingsRow
+          :title="t('settings.askTimeout')"
+          :hint="t('settings.askTimeoutHint')"
+          control-id="tools-ask-timeout"
+        >
+          <input
+            id="tools-ask-timeout"
+            v-model.number="form.askTimeoutSecs"
+            type="number"
+            min="0"
+            max="86400"
+            class="lw-field lw-field-num px-2 text-xs"
+          />
+        </SettingsRow>
+
         <!-- ㉘·B 新会话权限档缺省（会话级覆盖存会话旁车，切换器即时生效） -->
         <SettingsRow
           :title="t('settings.defaultPermissionMode')"
@@ -189,12 +208,12 @@ function removeRoot(idx: number) {
       <div
         v-for="(root, i) in fsRoots"
         :key="root"
-        class="flex items-center justify-between gap-2 rounded-[14px] bg-wash-1 px-4 py-2.5"
+        class="flex items-center justify-between gap-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-2.5"
       >
         <span class="min-w-0 break-all text-[11.5px] text-ink-2" :title="root">{{ root }}</span>
         <button
           type="button"
-          class="shrink-0 rounded px-1.5 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-danger"
+          class="shrink-0 rounded-[var(--lw-r-3xs)] px-1.5 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-danger"
           :disabled="settings.saving"
           :aria-label="`${t('settings.fsRootsRemove')} ${root}`"
           @click="removeRoot(i)"

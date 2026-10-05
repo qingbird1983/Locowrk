@@ -17,7 +17,7 @@ pub const DEFAULT_ANTHROPIC_BASE: &str = "https://api.anthropic.com/v1";
 
 /// 端点版本段归一（㉚ 预设表解锁智谱 /v4、方舟 /v3 等非 /v1 端点）：
 /// 末段已是 `/v<数字>` 原样返回，否则补 `/v1`——⑬「base_url 不含 /v1」
-/// 的旧约定由此泛化为含不含都收。聊天（genai Endpoint 整体替换，openai /
+/// 的旧约定由此泛化为含不含都收。聊天（兼容客户端端点归一，openai /
 /// anthropic 两 kind）与清单探测同吃此函数，两端约定不再漂移。
 pub fn join_version(base: &str) -> String {
     let base = base.trim().trim_end_matches('/');

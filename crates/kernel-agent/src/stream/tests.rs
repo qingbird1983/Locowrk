@@ -45,10 +45,10 @@ impl LlmService for CountingLlm {
     async fn complete_streaming(
         &self,
         _req: LlmRequest,
-        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         self.streaming_calls.fetch_add(1, Ordering::Relaxed);
-        on_delta("子内 delta");
+        let _ = on_delta("子内 delta");
         Ok(LlmResponse {
             content: "子内正文".into(),
             tool_calls: vec![],

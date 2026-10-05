@@ -93,7 +93,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <div
       ref="popEl"
-      class="fixed z-[45] w-[min(320px,calc(100vw-32px))] overflow-hidden rounded-2xl bg-elevated shadow-[var(--lw-shadow-raised)]"
+      class="fixed z-[45] w-[min(320px,calc(100vw-32px))] overflow-hidden rounded-[var(--lw-r-lg)] bg-elevated shadow-[var(--lw-shadow-raised)]"
       :style="style"
       role="listbox"
       :aria-label="t('settings.modelDefaultChange')"
@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             role="option"
-            class="flex w-full items-center gap-2 rounded-[10px] px-2 py-1.5 text-left transition hover:bg-wash-2"
+            class="flex w-full items-center gap-2 rounded-[var(--lw-r-sm)] px-2 py-1.5 text-left transition hover:bg-wash-2"
             :aria-selected="isCurrent(r)"
             @click="emit('select', r.providerId, r.model); emit('close')"
           >

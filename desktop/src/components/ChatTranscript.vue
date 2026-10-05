@@ -1,13 +1,16 @@
 <script setup lang="ts">
 /**
- * 会话转录（UI shell doc §8.4 ChatTranscript，由 ChatMessages.vue 拆出）：
- * 滚动区（overscroll contain / scrollbar-gutter stable / overflow-anchor
- * none）+ 列（宽 = --lw-content-max 覆盖值，§2.7 三处同源）+ 底部渐隐
- * mask（内容浮到输入卡下方时淡出，不盖不透明底带）。条目按 §3.7 分组：
- * 连续的过程项（工具行 / 思考行）合成轮次过程组；系统通知、助手正文、
- * 错误行是组的兄弟节点——组折起来不藏结论。
+ * 会话转录（UI shell doc §8.4 ChatTranscript）：滚动区（overscroll contain /
+ * scrollbar-gutter stable / overflow-anchor none）+ 列（宽 = --lw-content-max
+ * 覆盖值，§2.7 三处同源）+ 底部渐隐 mask。条目按 §3.7 v4.11 分组：连续的
+ * 过程项（工具行 / 思考行 / 决策记录行 / 错误行）合成轮次过程组，组内扁平
+ * 左对齐（裁定⑪）；纯决策/错误无过程项时不套组壳直接平铺。助手正文与系统
+ * 通知是组的兄弟节点。
+ *
+ * v4.11：审批卡迁坞（Composer 槽位，§3.17），转录里只剩决策记录行；
+ * ⑤⑨ 跟随滚动（默认贴底，用户上滚即让位）+ 回到底部钮（坞上方）。
  */
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { contextUndoCompact } from "../lib/api";
 import { useApprovalsStore } from "../stores/approvals";
@@ -21,11 +24,10 @@ import { useSettingsStore } from "../stores/settings";
 import { useShellStore } from "../stores/shell";
 import { useWorkPanelStore } from "../stores/work-panel";
 import { clip, formatDuration } from "../lib/format";
+import { toolAction } from "../lib/tool-summary";
 import { Icon } from "../lib/icons";
-import type { ApprovalRequest } from "../types";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
 import MessageRow from "./chat/MessageRow.vue";
-import PermissionCard from "./chat/PermissionCard.vue";
 import SubagentCard, { type SubagentChild } from "./chat/SubagentCard.vue";
 import SystemNotice from "./chat/SystemNotice.vue";
 import ThinkingRow from "./chat/ThinkingRow.vue";
@@ -38,6 +40,12 @@ const settings = useSettingsStore();
 const approvals = useApprovalsStore();
 const workPanel = useWorkPanelStore();
 
+/** §3.18 动作名（决策记录行用）；表外工具回落工具 id。 */
+function actionLabel(tool: string): string {
+  const a = toolAction(tool);
+  return a ? t(a.key, a.params ?? {}) : tool;
+}
+
 /** §3.10：子 Agent 卡是入口——点「看转录」开工作面板 §3.16 页签。 */
 function onOpenTranscript(childId: string, title: string) {
   workPanel.openSubTab(childId, clip(title, 24));
@@ -47,15 +55,18 @@ function onOpenTranscript(childId: string, title: string) {
 function onOpenDiff(callId: string, path: string, diff: string) {
   workPanel.openReviewTab(callId, path, diff);
 }
-const bottom = ref<HTMLElement | null>(null);
 
 const props = defineProps<{
   /** composer 坞总高（px）：列宽热区下沿 + 底部渐隐 mask 的锚。 */
   composerBottom: number;
 }>();
 
-/** 过程项（§3.7 组内只有过程）：工具行 / 思考行。 */
-type ProcessItem = Extract<ChatItem, { kind: "tool" | "thinking" }>;
+/** 过程项（§3.7 v4.11 组内都是扁平行）：工具行 / 思考行 / 决策记录 /
+ * 错误行。 */
+type ProcessItem = Extract<
+  ChatItem,
+  { kind: "tool" | "thinking" | "decision" | "error" }
+>;
 type TurnBlock = {
   kind: "turn";
   key: number;
@@ -63,6 +74,8 @@ type TurnBlock = {
   running: boolean;
   failures: number;
   toolCount: number;
+  /** 组内有真过程（工具/思考）= 套组壳；纯决策/错误行平铺不套壳。 */
+  hasProcess: boolean;
   startTs?: number;
   /** §3.10 子 Agent 卡数据（组内 subagent_run 调用，卡是 §3.16 入口）。 */
   subagents: SubagentChild[];
@@ -71,7 +84,7 @@ type Block =
   | TurnBlock
   | { kind: "single"; key: number; item: Exclude<ChatItem, ProcessItem> };
 
-/** 连续过程项（工具/思考）合成一组；其余条目各自为兄弟节点。 */
+/** 连续过程项合成一组；其余条目各自为兄弟节点。 */
 const blocks = computed<Block[]>(() => {
   const out: Block[] = [];
   let cur: ProcessItem[] = [];
@@ -103,14 +116,21 @@ const blocks = computed<Block[]>(() => {
       running: tools.some((i) => i.pending),
       failures: tools.filter((i) => i.ok === false).length,
       toolCount: tools.length,
+      hasProcess: cur.some((i) => i.kind === "tool" || i.kind === "thinking"),
       startTs: tsList.length > 0 ? Math.min(...tsList) : undefined,
       subagents,
     });
     cur = [];
   };
   for (const item of chat.items) {
-    if (item.kind === "tool" || item.kind === "thinking") cur.push(item);
-    else {
+    if (
+      item.kind === "tool" ||
+      item.kind === "thinking" ||
+      item.kind === "decision" ||
+      item.kind === "error"
+    ) {
+      cur.push(item);
+    } else {
       flush();
       out.push({ kind: "single", key: item.id, item });
     }
@@ -149,36 +169,76 @@ async function onEditResend(pos: number | undefined, text: string) {
   }
 }
 
-/** 「默认展开工具执行过程」只对实时新发的轮次生效（ts 存在 = 实时）；
- * 历史重放一律折叠（§3.8）。 */
-const expandLive = computed(
-  () => !!settings.view?.chat.expandToolProcess && !chat.replaying,
-);
+/** 「默认展开工具执行过程」v4.11 覆盖重放（裁定②：所有过程组含历史
+ * 一律默认折叠，开关是唯一的展开缺省）。 */
+const expandDefault = computed(() => !!settings.view?.chat.expandToolProcess);
 
-/** 待决审批按 call_id 索引（request_id == call_id，§3.17 内联卡紧跟
- * 触发它的工具行）。 */
+/** 「已停止」只标最新过程组（stopRequested 轮次收束后保持到下次发送）。 */
+const lastProcessKey = computed(() => {
+  for (let i = blocks.value.length - 1; i >= 0; i--) {
+    const b = blocks.value[i]!;
+    if (b.kind === "turn" && b.hasProcess) return b.key;
+  }
+  return null;
+});
+function isStoppedBlock(key: number): boolean {
+  return chat.stopRequested && key === lastProcessKey.value;
+}
+
+/** 待决审批按 call_id 索引（工具行「等待审批」状态词的数据源；决策卡
+ * 本体在 composer 坞，§3.17 v4.11）。 */
 const pendingByCall = computed(() => {
-  const m = new Map<string, ApprovalRequest>();
-  for (const p of approvals.pending) m.set(p.request_id, p);
+  const m = new Map<string, boolean>();
+  for (const p of approvals.pending) m.set(p.request_id, true);
   return m;
 });
-function pendingFor(callId: string): ApprovalRequest | undefined {
-  return pendingByCall.value.get(callId);
+function isAwaiting(callId: string): boolean {
+  return pendingByCall.value.has(callId);
 }
-/** 找不到宿主工具行的待决卡（如调度注入的其他会话轮）兜底挂转录尾——
- * 不允许决策卡无声消失。 */
-const orphanPending = computed(() =>
-  approvals.pending.filter(
-    (p) =>
-      !chat.items.some((i) => i.kind === "tool" && i.callId === p.request_id),
-  ),
-);
 
+// ---- §3.39③⑤ 跟随滚动 + 回到底部（v4.11 裁定⑨）----
+// 默认贴底：任何条目变化（含流式 delta）都滚到底；用户上滚（距底
+// > 48px）即让位，回到底部钮在 composer 坞上方伺服。
+const scroller = ref<HTMLElement | null>(null);
+const following = ref(true);
+const BOTTOM_EPSILON = 48;
+function onScroll() {
+  const el = scroller.value;
+  if (!el) return;
+  following.value =
+    el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_EPSILON;
+}
+async function scrollToBottom(smooth = false) {
+  await nextTick();
+  const el = scroller.value;
+  if (!el) return;
+  el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+}
+function resumeFollow() {
+  following.value = true;
+  void scrollToBottom(true);
+}
+// watch(chat.items)（隐式深）：流式 delta 改写末条文本也触发——跟随滚动
+// 不只看条目数。运行中即时贴底（流式平滑滚动会脱拍），静止变化平滑。
+watch(chat.items, () => {
+  if (following.value) void scrollToBottom(!chat.running);
+});
 watch(
-  () => chat.items.length,
-  async () => {
-    await nextTick();
-    bottom.value?.scrollIntoView({ behavior: "smooth" });
+  () => chat.sessionId,
+  () => {
+    following.value = true;
+    void scrollToBottom();
+  },
+);
+onMounted(() => void scrollToBottom());
+// 切回对话目的地（§2.6 display:none 挂起）时视口尺寸曾不可用，回来自动贴底
+watch(
+  () => useShellStore().destination,
+  (d) => {
+    if (d === "chat") {
+      following.value = true;
+      void scrollToBottom();
+    }
   },
 );
 
@@ -209,35 +269,53 @@ async function onNoticeAction(item: SystemItem, action: string) {
 
 <template>
   <div class="relative min-h-0 flex-1">
-    <div class="scroller scroll-y">
+    <div ref="scroller" class="scroller scroll-y" @scroll.passive="onScroll">
       <div class="column conv-w">
         <template v-for="block in blocks" :key="block.key">
-          <!-- 轮次过程组：连续过程项（工具/思考）；组内只有过程 -->
+          <!-- 轮次过程组：连续过程项扁平直排（§3.7 v4.11 裁定⑪ 同一左缘）；
+               纯决策/错误（无工具/思考）不套组壳直接平铺 -->
           <template v-if="block.kind === 'turn'">
             <TurnProcess
+              v-if="block.hasProcess"
               :running="block.running"
+              :stopped="isStoppedBlock(block.key)"
               :tool-count="block.toolCount"
               :failures="block.failures"
               :start-ts="block.startTs"
-              :default-expanded="expandLive && block.startTs !== undefined"
+              :default-expanded="expandDefault"
             >
               <template v-for="item in block.items" :key="item.id">
                 <ThinkingRow v-if="item.kind === 'thinking'" :text="item.text" />
-                <template v-else>
-                  <ToolRow
-                    :item="item"
-                    :awaiting="!!pendingFor(item.callId)"
-                    :default-expanded="expandLive && item.ts !== undefined"
-                    @open-transcript="onOpenTranscript"
-                    @open-diff="onOpenDiff"
+                <ToolRow
+                  v-else-if="item.kind === 'tool'"
+                  :item="item"
+                  :awaiting="isAwaiting(item.callId)"
+                  :default-expanded="expandDefault"
+                  @open-transcript="onOpenTranscript"
+                  @open-diff="onOpenDiff"
+                />
+                <!-- §3.7 v4.11 决策记录行：无卡片底，组内平铺（裁定①） -->
+                <div
+                  v-else-if="item.kind === 'decision'"
+                  class="decision-row"
+                  :class="{ 'is-denied': !item.allowed }"
+                >
+                  <Icon
+                    :name="item.allowed ? 'check' : 'warn'"
+                    :size="12"
+                    class="shrink-0"
                   />
-                  <!-- §3.17 决策卡紧跟触发它的工具行（内联，不是弹窗） -->
-                  <PermissionCard
-                    v-if="pendingFor(item.callId)"
-                    :req="pendingFor(item.callId)!"
-                    :queue="approvals.queueCount"
-                  />
-                </template>
+                  <span>{{
+                    t(item.allowed ? "notice.approvalAllowed" : "notice.approvalDenied", {
+                      action: actionLabel(item.tool),
+                    })
+                  }}</span>
+                </div>
+                <!-- 错误行同样入组平铺（裁定①：失败通知去卡片底） -->
+                <div v-else class="flow-error-row">
+                  <Icon name="warn" :size="12" class="shrink-0" />
+                  <span>{{ item.text }}</span>
+                </div>
               </template>
               <!-- §3.10 子 Agent 卡：组内 subagent_run 的可视形态 + §3.16 入口 -->
               <SubagentCard
@@ -246,6 +324,30 @@ async function onNoticeAction(item: SystemItem, action: string) {
                 @open="onOpenTranscript"
               />
             </TurnProcess>
+            <template v-else>
+              <template v-for="item in block.items" :key="item.id">
+                <div
+                  v-if="item.kind === 'decision'"
+                  class="decision-row"
+                  :class="{ 'is-denied': !item.allowed }"
+                >
+                  <Icon
+                    :name="item.allowed ? 'check' : 'warn'"
+                    :size="12"
+                    class="shrink-0"
+                  />
+                  <span>{{
+                    t(item.allowed ? "notice.approvalAllowed" : "notice.approvalDenied", {
+                      action: actionLabel(item.tool),
+                    })
+                  }}</span>
+                </div>
+                <div v-else-if="item.kind === 'error'" class="error-row">
+                  <Icon name="warn" :size="14" class="shrink-0" />
+                  <span>{{ item.text }}</span>
+                </div>
+              </template>
+            </template>
           </template>
 
           <template v-else>
@@ -280,25 +382,25 @@ async function onNoticeAction(item: SystemItem, action: string) {
                 @action="(a: string) => onNoticeAction(block.item as SystemItem, a)"
               />
             </div>
-
-            <!-- 错误行（§3.7：错误行也是组的兄弟节点） -->
-            <div v-else-if="block.item.kind === 'error'" class="error-row">
-              <Icon name="warn" :size="14" class="shrink-0" />
-              <span>{{ block.item.text }}</span>
-            </div>
           </template>
         </template>
-
-        <!-- 无宿主行的待决卡兜底（§3.17：不允许决策卡无声消失） -->
-        <PermissionCard
-          v-for="req in orphanPending"
-          :key="req.request_id"
-          :req="req"
-          :queue="approvals.queueCount"
-        />
-        <div ref="bottom" />
       </div>
     </div>
+
+    <!-- §3.39③⑤ 回到底部（v4.11）：用户上滚让位后伺服，坞上方居中 -->
+    <Transition name="lw-pop-up">
+      <button
+        v-if="!following"
+        class="back-bottom"
+        type="button"
+        :aria-label="t('chat.backToLatest')"
+        :title="t('chat.backToLatest')"
+        :style="{ bottom: `${props.composerBottom + 12}px` }"
+        @click="resumeFollow"
+      >
+        <Icon name="chevronDown" :size="14" />
+      </button>
+    </Transition>
 
     <!-- 列宽双柄：容器下沿停在 composer 顶部（§2.7） -->
     <ConversationWidthHandles :bottom="props.composerBottom" />
@@ -318,19 +420,20 @@ async function onNoticeAction(item: SystemItem, action: string) {
   scrollbar-gutter: stable both-edges;
   overflow-anchor: none;
   padding: 8px 24px 0;
-  /* 底部渐隐：内容浮到输入卡下方时淡出（遮罩盖住 composer 预留区） */
+  /* 底部渐隐：内容浮到输入卡下方时淡出（遮罩盖住 composer 预留区）。
+   * 渐隐色 = --lw-mask-fade 令牌（§六标准：.vue 禁字面色） */
   -webkit-mask-image: linear-gradient(
     to bottom,
-    #000 0,
-    #000 calc(100% - 168px),
-    rgb(0 0 0 / 0.25) calc(100% - 128px),
+    var(--lw-mask-fade) 0,
+    var(--lw-mask-fade) calc(100% - 168px),
+    color-mix(in oklab, var(--lw-mask-fade) 25%, transparent) calc(100% - 128px),
     transparent calc(100% - 100px)
   );
   mask-image: linear-gradient(
     to bottom,
-    #000 0,
-    #000 calc(100% - 168px),
-    rgb(0 0 0 / 0.25) calc(100% - 128px),
+    var(--lw-mask-fade) 0,
+    var(--lw-mask-fade) calc(100% - 168px),
+    color-mix(in oklab, var(--lw-mask-fade) 25%, transparent) calc(100% - 128px),
     transparent calc(100% - 100px)
   );
 }
@@ -353,5 +456,57 @@ async function onNoticeAction(item: SystemItem, action: string) {
   font-size: 12px;
   line-height: 1.45;
   color: var(--lw-danger);
+}
+/* §3.7 v4.11（裁定①）：组内平铺行——决策记录 / 错误，无卡片底，扁平
+ * 左对齐（与工具行/思考行同一左缘）；ok=check 墨绿、denied/error=warn 红 */
+.decision-row,
+.flow-error-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--lw-ink-2);
+}
+.decision-row span,
+.flow-error-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.decision-row > svg {
+  color: var(--lw-ok);
+  margin-top: 2px;
+}
+.decision-row.is-denied > svg,
+.flow-error-row > svg {
+  color: var(--lw-danger);
+}
+.decision-row.is-denied,
+.flow-error-row {
+  color: var(--lw-danger);
+}
+/* §3.39③ 回到底部钮：32px 圆钮，composer 坞上方居中（bottom 动态 =
+ * 坞高 + 12px）；z 高于渐隐 mask */
+.back-bottom {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-bg-elevated);
+  box-shadow: var(--lw-shadow-raised);
+  color: var(--lw-ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 13;
+  transition: background var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.back-bottom:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
 }
 </style>

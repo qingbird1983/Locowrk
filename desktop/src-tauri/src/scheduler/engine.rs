@@ -94,6 +94,9 @@ pub(crate) struct EngineDeps {
     pub organizer: Arc<crate::organize::Organizer>,
     /// M4 树组装器：触发的轮次与手聊同一用量口径（组装后估算）。
     pub tree_assembler: Arc<crate::organize::TreeAssembler>,
+    /// v4.11 停止生成：调度触发的轮次与手聊同一停止面（发送键停止对
+    /// 调度轮同样生效）。
+    pub stop_flags: Arc<crate::stop::StopFlags>,
 }
 
 /// 起引擎后台任务（组装点调用；db 打不开 = 不起，调度缺席已降级）。
@@ -175,6 +178,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         Some(&deps.sessions_dir),
         deps.settings.max_turn_steps(),
         Some(&deps.tree_assembler),
+        Some(&deps.stop_flags),
     )
     .await
     {

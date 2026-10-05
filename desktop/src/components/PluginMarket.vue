@@ -28,7 +28,7 @@ onMounted(() => {
       <button
         v-for="key in (['discover', 'installed'] as const)"
         :key="key"
-        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+        class="rounded-[var(--lw-r-xs)] px-3 py-1.5 text-xs font-medium transition"
         :class="
           tab === key
             ? 'bg-wash-3 text-ink-1'

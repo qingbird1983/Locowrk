@@ -89,10 +89,10 @@ onBeforeUnmount(() => {
 .win-btn--close:hover,
 .win-btn--close:focus-visible {
   background: #c42b1c;
-  color: #fff;
+  color: #fff; /* stylelint-disable-line declaration-property-value-allowed-list -- 豁免§七:Win11关闭钮白字形(v2.60⑩) */
 }
 .win-btn--close:active {
   background: #b12a1c;
-  color: #fff;
+  color: #fff; /* stylelint-disable-line declaration-property-value-allowed-list -- 豁免§七:Win11关闭钮白字形(v2.60⑩) */
 }
 </style>

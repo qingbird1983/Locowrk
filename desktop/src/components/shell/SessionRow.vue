@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
  * 会话行（UI shell 文档 §2.3/§3.6）：28px 行 + 运行/待决状态点 + 行尾
- * `…` 菜单（仅 hover/选中显形）= 重命名 / 导出 / 工作区关联（v2.50
- * §2.3：移入候选 = fsRoots，当前归属置灰打勾；移出）/ 删除（两步确认，
- * 危险项 §3.20 规则）；重命名 = 行内编辑（Enter/失焦提交、Esc 取消、
- * 空串取消）。运行中禁切/禁删由「开发者」危险开关可解（可配置原则
- * §七-16②：禁止项都有开关）——后端忙锁守卫仍在，开关只解锁尝试。
+ * `…` 菜单（仅 hover/选中显形）= 重命名 / 导出 / 整理模式切换（M4）/
+ * 删除（两步确认，危险项 §3.20 规则）；重命名 = 行内编辑（Enter/失焦
+ * 提交、Esc 取消、空串取消）。v4.11 裁定③：会话移入其它项目功能退役
+ * （归属只在首聊挂起与「项目下新建任务」两处产生；session_associate
+ * 命令保留后端，侧栏不再有入口）。运行中禁切/禁删由「开发者」危险开关
+ * 可解（可配置原则 §七-16②：禁止项都有开关）——后端忙锁守卫仍在，
+ * 开关只解锁尝试。
  */
 import { computed, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -15,7 +17,6 @@ import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
 import type { SessionMeta } from "../../types";
-import { workspaceDisplayName } from "../../lib/session-groups";
 import { Icon } from "../../lib/icons";
 import RowMenu, { type RowMenuItem } from "./RowMenu.vue";
 
@@ -53,10 +54,6 @@ const menu = ref<{ x: number; y: number } | null>(null);
 const confirmingDelete = ref(false);
 const moreBtn = ref<HTMLButtonElement | null>(null);
 
-/** 工作区候选 = 设置 → 工具 → 工作区目录（后端还会校验，前端只是
- * 把候选收窄到当前配置）。 */
-const fsRoots = computed(() => settings.view?.tools.fsRoots ?? []);
-
 const menuItems = computed<RowMenuItem[]>(() => {
   const items: RowMenuItem[] = [
     { id: "rename", label: t("sidebar.menu.rename") },
@@ -77,22 +74,9 @@ const menuItems = computed<RowMenuItem[]>(() => {
           : t("sidebar.menu.organizerTree"),
     },
   );
-  if (fsRoots.value.length > 0) {
-    items.push({ id: "sep-ws", label: "", separator: true });
-    for (const root of fsRoots.value) {
-      const current = props.session.workspace === root;
-      items.push({
-        id: `ws:${root}`,
-        label: current
-          ? `✓ ${workspaceDisplayName(root)}`
-          : t("sidebar.menu.moveInto", { name: workspaceDisplayName(root) }),
-        disabled: current,
-      });
-    }
-    if (props.session.workspace) {
-      items.push({ id: "ws:clear", label: t("sidebar.menu.moveOut") });
-    }
-  }
+  // v4.11 用户裁定：**移除「移入其它项目」**——归属只在首聊挂起时确定
+  // （工作区 chip / 项目行 ＋），会后改挂造成注入键位/记忆隔离的困惑面；
+  // session_associate 命令保留（后端契约不动），仅菜单不再出口。
   items.push(
     { id: "sep", label: "", separator: true },
     {
@@ -125,19 +109,6 @@ async function onMenuSelect(id: string) {
   if (id === "rename") {
     closeMenu();
     void startRename();
-  } else if (id.startsWith("ws:")) {
-    // 工作区关联（v2.50 §2.3）：ws:clear = 移出，ws:<路径> = 移入
-    closeMenu();
-    const target = id.slice(3);
-    try {
-      await chat.associateSession(sid, target === "clear" ? null : target);
-      toast.push(
-        "ok",
-        target === "clear" ? t("toast.movedOut") : t("toast.movedInto"),
-      );
-    } catch (e) {
-      toast.push("danger", t("toast.associateFailed"), String(e));
-    }
   } else if (id === "organizer:toggle") {
     // M4 §3.38①：整理模式两态切换（显式写旁车，不再跟随缺省档）
     closeMenu();

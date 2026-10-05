@@ -99,7 +99,7 @@ const host = (u: string | null) => hostOf(u);
     <li
       v-for="p in providers"
       :key="p.id"
-      class="flex cursor-pointer items-center gap-3 rounded-[14px] bg-wash-1 px-4 py-3 transition hover:bg-wash-2"
+      class="flex cursor-pointer items-center gap-3 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3 transition hover:bg-wash-2"
       :class="[!p.enabled ? 'opacity-55' : '', dragId === p.id ? 'opacity-50' : '']"
       :draggable="!busy"
       :aria-label="p.label"
@@ -108,7 +108,7 @@ const host = (u: string | null) => hostOf(u);
       @drop.prevent="onDrop(p)"
     >
       <span
-        class="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-wash-2 text-[13px] font-semibold text-ink-2"
+        class="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[var(--lw-r-xs)] bg-wash-2 text-[13px] font-semibold text-ink-2"
         aria-hidden
       >
         <Icon v-if="!letter(p.label)" name="server" :size="14" />
@@ -142,7 +142,7 @@ const host = (u: string | null) => hostOf(u);
         />
         <button
           type="button"
-          class="rounded-md p-1.5 text-ink-4 transition hover:bg-wash-3 hover:text-ink-1"
+          class="rounded-[var(--lw-r-2xs)] p-1.5 text-ink-4 transition hover:bg-wash-3 hover:text-ink-1"
           :aria-label="t('settings.modelRowActions')"
           @click="openMenu(p, $event)"
         >

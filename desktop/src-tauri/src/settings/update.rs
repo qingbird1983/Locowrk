@@ -220,6 +220,17 @@ impl SettingsStore {
                 }
                 next.tools.approval_timeout_secs = secs;
             }
+            if let Some(secs) = u.ask_timeout_secs {
+                // v4.11 §3.39①：ask_user 守夜时长可调（0 = 不限等待）
+                if !super::tools::ASK_TIMEOUT_RANGE.contains(&secs) {
+                    return Err(format!(
+                        "选择等待时长 {secs}s 非法（0 = 不限，或 {}–{} 秒）",
+                        super::tools::ASK_TIMEOUT_RANGE.start(),
+                        super::tools::ASK_TIMEOUT_RANGE.end()
+                    ));
+                }
+                next.tools.ask_timeout_secs = secs;
+            }
             if let Some(mode) = u.default_permission_mode {
                 // ㉘·B 新会话权限档缺省：只收四档合法值（会话级覆盖存旁车）
                 if crate::permission_mode::PermissionMode::parse(&mode).is_none() {

@@ -228,7 +228,7 @@ onMounted(() => void refresh());
           {{ t("developer.refresh") }}
         </button>
       </template>
-      <div class="space-y-2 rounded-[14px] bg-wash-1 px-4 py-3.5">
+      <div class="space-y-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5">
         <p v-if="!hasSnapshot(debug)" class="text-[11.5px] text-ink-4">
           {{ t("developer.empty") }}
         </p>
@@ -268,7 +268,7 @@ onMounted(() => void refresh());
     <!-- M0 观测（KV v2 §7）：前缀缓存读数——会话累计（实时/重放同源聚合）
          + 本轮（turnUsage）。供应商未报告缓存字段 = 行留空态，不虚构。 -->
     <SettingsGroup :title="t('developer.cacheTitle')" :hint="t('developer.cacheHint')">
-      <div class="space-y-2 rounded-[14px] bg-wash-1 px-4 py-3.5 text-xs">
+      <div class="space-y-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5 text-xs">
         <p v-if="!chat.cacheStats" class="text-[11.5px] text-ink-4">
           {{ t("developer.cacheEmpty") }}
         </p>
@@ -333,7 +333,7 @@ onMounted(() => void refresh());
     <SettingsGroup :title="t('developer.filesTitle')" :hint="t('developer.filesHint')">
       <SettingsRow :title="t('developer.reconcileTitle')" :hint="t('developer.reconcileHint')">
         <button
-          class="lw-btn rounded-lg px-3 py-1 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          class="lw-btn rounded-[var(--lw-r-xs)] px-3 py-1 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="reconciling"
           @click="runReconcile"
         >

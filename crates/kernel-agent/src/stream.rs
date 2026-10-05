@@ -20,6 +20,15 @@ pub trait LlmStreamSink: Send + Sync + 'static {
     fn on_reasoning(&self, _session_id: Option<&str>, _delta: &str) -> bool {
         false
     }
+
+    /// 中止查询（v4.11 停止生成）：组装点实现按会话查中止标记；内核在
+    /// LLM 适配器的**每个 delta 回调点**把 `on_delta`/`on_reasoning` 闭包的
+    /// 返回值（= 本方法）交给适配器流循环——true = 用户请求停止，适配器
+    /// 尽快结束本次调用（已收到的部分正文原样返回，不虚构结尾）。默认
+    /// false：headless / 未装配停止面的路径零变化。
+    fn should_stop(&self, _session_id: Option<&str>) -> bool {
+        false
+    }
 }
 
 /// 黑盒替身（⑮ 子 Agent 语义保持）：`child_kernel` 把它 scoped 换入压制

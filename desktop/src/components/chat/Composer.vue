@@ -1,24 +1,35 @@
 <script setup lang="ts">
 /**
- * composer 坞（UI shell doc §3.11）：浮起卡片（r-xl、bg-composer、
+ * composer 坞（UI shell doc §3.11 v4.11）：浮起卡片（r-xl、bg-composer、
  * shadow-composer、无边框），列宽与转录列同源（§2.7，不许写死——欢迎页
  * 空态变体例外，见 §3.11/§3.14）。上行 = 自适应高度文本域；工具条左组 =
  * 附件 ＋（v2.59：添加文件或图片，路径引用 v1）/ 权限模式 chip；右组 =
  * 用量环（UsageRing，§3.12）→ 模型 chip（§3.30 选择器：会话内写覆盖、
  * 首页写缺省）→ 发送键。卡片内底行 = 工作区 chip（WorkspacePicker，项目
  * 归属随手切）。收缩规则 = 左组固定不缩、右组可缩（模型 chip 先压字）。
- * Enter 发送 / Shift+Enter 换行（enterToSend 开关）；运行中忽略。
+ * Enter 发送 / Shift+Enter 换行（enterToSend 开关）。
+ *
+ * v4.11 坞内层叠（自下而上）：输入卡 → 审批/ask 卡（§3.17/§3.39① 决策后
+ * 即隐、对话流零气泡）→ 排队卡（§3.39②）→ 回到底部钮（§3.39③，
+ * ChatTranscript 按 composer 高度定位）。发送键状态机：运行中 + 空草稿 =
+ * 停止方块（可点）；运行中 + 有草稿 = 发送箭头（入队）；重放 = 禁用。
+ * Esc 链（§3.25/§3.39⑤）：跳过 ask → 拒绝审批 → 停止 → 交出焦点。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useApprovalsStore } from "../../stores/approvals";
+import { useAsksStore } from "../../stores/asks";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
 import { Icon } from "../../lib/icons";
+import AskCard from "./AskCard.vue";
 import AttachButton from "./AttachButton.vue";
 import ModelSelector from "./ModelSelector.vue";
+import PermissionCard from "./PermissionCard.vue";
 import PermissionModePicker from "./PermissionModePicker.vue";
+import QueueCard from "./QueueCard.vue";
 import UsageRing from "./UsageRing.vue";
 import WorkspacePicker from "./WorkspacePicker.vue";
 
@@ -29,6 +40,8 @@ const chat = useChatStore();
 const settings = useSettingsStore();
 const shell = useShellStore();
 const toast = useToastStore();
+const approvals = useApprovalsStore();
+const asks = useAsksStore();
 
 const draft = ref("");
 const ta = ref<HTMLTextAreaElement | null>(null);
@@ -47,6 +60,16 @@ function onDocPointerDown(e: PointerEvent) {
     showModels.value = false;
   }
 }
+
+/** 坞内决策卡：一次只渲染队首（队列数在卡头如实显示）。 */
+const firstApproval = computed(() => approvals.pending[0] ?? null);
+const firstAsk = computed(() => asks.pending[0] ?? null);
+/** 贴合柱面（§3.11 v4.11 参考图）：有任一坞卡时输入卡顶角改方角——
+ * 卡与输入卡同底色零间隙，方角相接才是一根完整面（圆角会在接缝两角
+ * 留透空缺口）。 */
+const stacked = computed(
+  () => !!(firstApproval.value || firstAsk.value || chat.queue.length),
+);
 
 const enterToSend = computed(() => settings.view?.chat.enterToSend ?? true);
 /** 模型 chip = 会话覆盖 ?? 设置缺省（「跟随默认」出口在浮层里，chip 不加
@@ -87,18 +110,50 @@ function autoResize() {
 }
 watch(draft, () => void nextTick(autoResize));
 
-function send() {
+/**
+ * 发送入口统一走 chat.submit（§3.39②：运行中 = 入队，收束后自动派发；
+ * /整理 前端拦截也在 store 内）。草稿清空 + 召回记录不变。
+ */
+function submit() {
   const text = draft.value;
-  if (!text.trim() || chat.running) return;
+  if (!text.trim()) return;
   draft.value = "";
   lastSent.value = text;
-  chat.send(text);
+  chat.submit(text);
   void nextTick(autoResize);
 }
 
+/** 发送键状态机（§3.11 v4.11）：运行中 + 空草稿 = 停止；其余 = 发送/入队。 */
+const stopArmed = computed(() => chat.running && draft.value.trim() === "");
+function onSendClick() {
+  if (stopArmed.value) {
+    chat.stop();
+    return;
+  }
+  submit();
+}
+
 function onKeydown(e: KeyboardEvent) {
-  // §3.25：Esc = 输入框交出焦点（各浮层自持 Esc）；输入法组合中是取消候选
+  // §3.25/§3.39⑤ Esc 链：跳过 ask → 拒绝审批 → 停止 → 交出焦点；
+  // 模型浮层开着时 Esc 归它（自持收口），这里不抢。输入法组合中是取消候选。
   if (e.key === "Escape" && !e.isComposing) {
+    if (showModels.value) return;
+    const ask = asks.pending[0];
+    if (ask) {
+      void asks.skip(ask.request_id).catch(() => {});
+      return;
+    }
+    const approval = approvals.pending[0];
+    if (approval) {
+      approvals
+        .decide(approval, "deny")
+        .catch((err) => toast.push("danger", t("approval.decisionFailed"), String(err)));
+      return;
+    }
+    if (chat.running) {
+      chat.stop();
+      return;
+    }
     ta.value?.blur();
     return;
   }
@@ -119,7 +174,7 @@ function onKeydown(e: KeyboardEvent) {
     : e.ctrlKey || e.metaKey;
   if (!sendKey) return;
   e.preventDefault();
-  send();
+  submit();
 }
 
 // §3.17：审批决策后焦点回 composer（批完接着打字）
@@ -148,8 +203,21 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="dock" class="composer-dock">
+    <!-- 坞内卡片层（§3.11 v4.11 自下而上：输入卡 → 审批/ask → 排队卡）；
+         决策卡决策后即隐（后端仍留审计与折叠记录行），对话流零气泡 -->
+    <div class="dock-cards conv-w">
+      <PermissionCard
+        v-if="firstApproval"
+        :req="firstApproval"
+        :queue="approvals.queueCount"
+      />
+      <AskCard v-if="firstAsk" :req="firstAsk" :queue="asks.queueCount" />
+      <QueueCard v-if="chat.queue.length" />
+    </div>
+
     <div
       class="composer conv-w"
+      :class="{ 'composer--stacked': stacked }"
       :style="{ pointerEvents: chat.replaying ? 'none' : undefined }"
     >
       <textarea
@@ -157,7 +225,7 @@ onBeforeUnmount(() => {
         v-model="draft"
         rows="1"
         class="composer__input scroll-y"
-        :placeholder="t('chat.placeholder')"
+        :placeholder="chat.running ? t('chat.placeholderQueue') : t('chat.placeholder')"
         @keydown="onKeydown"
       />
       <div class="composer__toolbar">
@@ -194,17 +262,23 @@ onBeforeUnmount(() => {
               @close="showModels = false"
             />
           </div>
+          <!-- 发送键状态机（§3.11 v4.11）：运行中+空草稿 = 停止方块（可点）；
+               运行中+有草稿 = 发送箭头（入队）；重放 = 禁用 -->
           <button
             class="send-btn"
             type="button"
-            :disabled="!draft.trim() || chat.running"
+            :disabled="chat.replaying || (!chat.running && !draft.trim())"
             :aria-label="
-              chat.running ? t('chat.stopGeneration') : t('chat.send')
+              stopArmed
+                ? t('chat.stopGeneration')
+                : chat.running
+                  ? t('chat.queueAdd')
+                  : t('chat.send')
             "
-            @click="send"
+            @click="onSendClick"
           >
-            <Icon v-if="!chat.running" name="sendUp" :size="18" />
-            <Icon v-else name="stop" :size="18" />
+            <Icon v-if="stopArmed" name="stop" :size="18" />
+            <Icon v-else name="sendUp" :size="18" />
           </button>
         </div>
       </div>
@@ -229,6 +303,32 @@ onBeforeUnmount(() => {
   z-index: 12;
   pointer-events: none;
 }
+/* 坞内卡片层（§3.11 v4.11）：三卡与输入卡**贴合堆叠**——用户裁定参考
+ * ZCode 原话「卡片是覆盖在对话框上向上延伸的」「类似空白对话框下暗影
+ * 像上伸展」：同底色、零间隙，连成一根向上伸展的柱面（卡片本体不再
+ * 自带圆角/底色/暗影，由本容器统一持有）。影各元素同款 composer 暗影
+ * （兄弟后绘覆盖接缝，视觉 = 整柱一圈暗影）；首卡承顶部圆角；发丝线
+ * 只在做卡叠卡时出现。宽度与输入卡同源（conv-w 消费点：宽度规则须落
+ * 在本组件——v2.74·fix 实抓缺宽度规则使三卡吃到坞全宽 933 vs 列 724）；
+ * min-width:0 防 flex 子项被内容 min-content 顶宽。 */
+.dock-cards {
+  width: min(100%, var(--lw-content-max));
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+}
+.dock-cards > * {
+  min-width: 0;
+  background: var(--lw-bg-composer);
+  box-shadow: var(--lw-shadow-composer);
+}
+.dock-cards > :first-child {
+  border-radius: var(--lw-r-xl) var(--lw-r-xl) 0 0;
+}
+.dock-cards > * + * {
+  border-top: 1px solid var(--lw-line-subtle);
+}
 .composer {
   position: relative;
   width: min(100%, var(--lw-content-max));
@@ -237,6 +337,13 @@ onBeforeUnmount(() => {
   background: var(--lw-bg-composer);
   box-shadow: var(--lw-shadow-composer);
   pointer-events: auto;
+}
+/* 贴合柱面：上方有坞卡时顶角方角化（见 stacked 注），底角保持圆角 */
+.composer--stacked {
+  border-radius: 0 0 var(--lw-r-xl) var(--lw-r-xl);
+}
+.composer--stacked .composer__input {
+  border-radius: 0;
 }
 .composer__input {
   display: block;
@@ -360,7 +467,7 @@ onBeforeUnmount(() => {
   /* 禁用态（v2.60 修复批用户裁定「箭头要变成浅色」）：浅色箭头 + 退灰底
    * ——白箭在两主题都落在灰底上可辨（旧 ink 混色在暗主题浅底浅箭不可读） */
   background: color-mix(in oklab, var(--lw-ink-1) 18%, transparent);
-  color: rgb(255 255 255 / 92%);
+  color: var(--lw-send-disabled);
   cursor: default;
 }
 </style>

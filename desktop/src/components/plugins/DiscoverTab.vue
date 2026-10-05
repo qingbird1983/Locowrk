@@ -57,7 +57,7 @@ function pickVersion(id: string, versions: string[]): string {
         <template #actions>
           <select
             :value="pickVersion(item.id, item.versions)"
-            class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs text-ink-2 outline-none"
+            class="rounded-[var(--lw-r-3xs)] border border-line-strong bg-surface-0 px-2 py-1 text-xs text-ink-2 outline-none"
             @change="
               picked.set(item.id, ($event.target as HTMLSelectElement).value)
             "
@@ -68,13 +68,13 @@ function pickVersion(id: string, versions: string[]): string {
           </select>
           <span
             v-if="store.installed.some((p) => p.id === item.id)"
-            class="ml-auto rounded bg-ok/16 px-2 py-1 text-[10px] text-ok"
+            class="ml-auto rounded-[var(--lw-r-3xs)] bg-ok/16 px-2 py-1 text-[10px] text-ok"
           >
             {{ t("market.installedBadge") }}
           </span>
           <button
             v-else
-            class="ml-auto rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+            class="ml-auto rounded-[var(--lw-r-xs)] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="store.isBusy(item.id)"
             @click="store.install(item.id, pickVersion(item.id, item.versions))"
           >

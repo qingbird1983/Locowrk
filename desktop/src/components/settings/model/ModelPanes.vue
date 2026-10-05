@@ -154,7 +154,7 @@ watch(() => props.available, () => (expandedId.value = null));
 <template>
   <div class="grid min-h-0 flex-1 grid-cols-2 gap-4">
     <!-- 左栏：该服务的模型 -->
-    <div class="flex min-h-0 flex-col rounded-xl bg-wash-1 p-3">
+    <div class="flex min-h-0 flex-col rounded-[var(--lw-r-md)] bg-wash-1 p-3">
       <div class="flex items-center gap-2">
         <input
           v-if="availRows.length > 0"
@@ -169,7 +169,7 @@ watch(() => props.available, () => (expandedId.value = null));
         <h4 class="text-[12.5px] font-semibold text-ink-1">{{ t("settings.modelAvailable") }}</h4>
         <button
           type="button"
-          class="ml-auto flex items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] text-ink-2 transition hover:bg-wash-2 disabled:opacity-50"
+          class="ml-auto flex items-center gap-1 rounded-[var(--lw-r-xs)] px-2 py-1 text-[11.5px] text-ink-2 transition hover:bg-wash-2 disabled:opacity-50"
           :disabled="disabled || probeState === 'loading'"
           @click="emit('fetch')"
         >
@@ -177,7 +177,7 @@ watch(() => props.available, () => (expandedId.value = null));
           {{ probeState === "loading" ? t("settings.modelProbing") : t("settings.modelFetchList") }}
         </button>
       </div>
-      <div class="mt-2 flex h-8 items-center gap-2 rounded-lg bg-wash-2 px-2.5">
+      <div class="mt-2 flex h-8 items-center gap-2 rounded-[var(--lw-r-xs)] bg-wash-2 px-2.5">
         <Icon name="search" :size="13" class="shrink-0 text-ink-4" />
         <input
           v-model="availQuery"
@@ -205,7 +205,7 @@ watch(() => props.available, () => (expandedId.value = null));
         <ul v-else class="space-y-0.5">
           <li v-for="id in availRows" :key="id">
             <label
-              class="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-wash-2"
+              class="flex cursor-pointer items-center gap-2 rounded-[var(--lw-r-xs)] px-1.5 py-1.5 hover:bg-wash-2"
             >
               <input
                 type="checkbox"
@@ -226,13 +226,13 @@ watch(() => props.available, () => (expandedId.value = null));
     </div>
 
     <!-- 右栏：模型设置 -->
-    <div class="flex min-h-0 flex-col rounded-xl bg-wash-1 p-3">
+    <div class="flex min-h-0 flex-col rounded-[var(--lw-r-md)] bg-wash-1 p-3">
       <div class="flex items-center gap-2">
         <h4 class="text-[12.5px] font-semibold text-ink-1">{{ t("settings.modelChosen") }}</h4>
         <span v-if="chosen.length" class="rounded-full bg-wash-2 px-1.5 text-[10.5px] tabular-nums text-ink-3">
           {{ chosen.length }}
         </span>
-        <div v-if="chosen.length" class="ml-auto flex h-7 w-36 items-center gap-1.5 rounded-lg bg-wash-2 px-2">
+        <div v-if="chosen.length" class="ml-auto flex h-7 w-36 items-center gap-1.5 rounded-[var(--lw-r-xs)] bg-wash-2 px-2">
           <Icon name="search" :size="12" class="shrink-0 text-ink-4" />
           <input
             v-model="chosenQuery"
@@ -254,7 +254,7 @@ watch(() => props.available, () => (expandedId.value = null));
           <li
             v-for="m in chosenRows"
             :key="m.id"
-            class="rounded-lg bg-wash-2"
+            class="rounded-[var(--lw-r-xs)] bg-wash-2"
             :class="dragId === m.id ? 'opacity-50' : ''"
             @dragover.prevent="overIndex = chosen.indexOf(m)"
             @drop.prevent="onDrop(m.id)"
@@ -277,7 +277,7 @@ watch(() => props.available, () => (expandedId.value = null));
               </span>
               <button
                 type="button"
-                class="rounded px-1.5 py-0.5 text-[11px] text-ink-3 hover:bg-wash-3 hover:text-ink-1"
+                class="rounded-[var(--lw-r-3xs)] px-1.5 py-0.5 text-[11px] text-ink-3 hover:bg-wash-3 hover:text-ink-1"
                 :aria-expanded="expandedId === m.id"
                 @click="expandedId = expandedId === m.id ? null : m.id"
               >
@@ -285,7 +285,7 @@ watch(() => props.available, () => (expandedId.value = null));
               </button>
               <button
                 type="button"
-                class="rounded p-0.5 text-ink-4 hover:bg-wash-3 hover:text-danger"
+                class="rounded-[var(--lw-r-3xs)] p-0.5 text-ink-4 hover:bg-wash-3 hover:text-danger"
                 :aria-label="t('settings.modelRemove')"
                 :disabled="disabled"
                 @click="removeChosen(m.id)"

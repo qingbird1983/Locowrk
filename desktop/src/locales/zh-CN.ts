@@ -49,14 +49,54 @@ export default {
     replaying: "会话恢复中…",
     stopGeneration: "停止生成",
     widthAria: "对话宽度 {n} 像素",
+    // v4.11 §3.39：发送键状态机 + 排队 + 回到底部
+    placeholderQueue: "AI 正在执行，输入将排队…",
+    queueAdd: "排队发送",
+    backToLatest: "回到最新消息",
   },
   // 轮次过程组（UI shell doc §3.7）与思考行（§3.9）的头行状态词
   turn: {
     running: "处理中",
     done: "已完成",
+    stopped: "已停止",
     toolCount: "{n} 个工具",
     problemCount: "{n} 个问题",
     thinking: "思考",
+    thinkingFor: "持续了 {s} 秒",
+  },
+  // ask_user 选择卡（v4.11 §3.39①）：模型反向提问，composer 坞内作答
+  ask: {
+    cardTitle: "任务选择",
+    queue: "还有 {n} 个待答",
+    skip: "跳过",
+    customPlaceholder: "或输入自定义回复…",
+    send: "发送",
+    submitFailed: "提交失败：{reason}",
+    timeoutHint: "{n} 秒内未作答将自动跳过",
+  },
+  // 追加消息排队卡（v4.11 §3.39②）：运行中发送排队等待，收束后自动派发
+  queue: {
+    cardTitle: "{n} 条排队中",
+    resume: "继续",
+    sendNow: "立即发送",
+    sendNowHint: "停止当前任务并立即发送这条",
+    remove: "删除排队消息",
+    clearAll: "清空排队",
+    emptyPreview: "（空白消息）",
+  },
+  // 【实验室】beautiful-ui-vue 移植验证件文案（lab 组件，去留随实验定）
+  bui: {
+    openApproval: "打开审批",
+    answersSent: "已提交",
+    startOver: "重新填写",
+    dismiss: "收起",
+    customPlaceholder: "输入自定义回答…",
+    customAnswer: "自定义回答",
+    prev: "上一题",
+    next: "下一题",
+    gotoQuestion: "去第 {n} 题",
+    sendAnswers: "提交回答",
+    nextQuestion: "下一题",
   },
   // 上下文用量浮层（UI shell doc §3.12）：分项待后端扩展（§8.2），先出
   // 已有读数
@@ -307,6 +347,9 @@ export default {
     // ㉕·对话区① §3.17 审批决策记录条（投影唯一来源：实时与重放同源）
     approvalAllowed: "已允许 · {action}",
     approvalDenied: "已拒绝 · {action}",
+    // LLM.md v3.0：传输重试 / 步数到顶
+    llmRetried: "供应商暂时无响应，已自动重试（第 {attempt} 次）",
+    turnCapped: "已达单轮步数上限（{steps} 步），本轮在此收束——发「继续」可接着跑；也可在 设置 → 工具与分发 调高上限",
   },
   // 闲置徽章（IdleBadge，⑩ 接线 exposure 文档 §8.4/§11.3）：后端只给
   // 结构化 IdleInfo，前端按档位渲染"多久没用"人类文案——永不显示裸天数
@@ -596,6 +639,9 @@ export default {
     defaultPermissionMode: "新会话权限档",
     defaultPermissionModeHint: "计划=只读 · 询问=逐次审批 · 自动编辑=可撤销写自动放行 · 完全=全部放行仅越界/隐私拦截；会话内可在输入框旁随时切换",
     approvalTimeoutHint: "超时按拒绝收束（fail-closed）；0 = 一直等待",
+    // v4.11 §3.39① ask_user 选择卡守夜
+    askTimeout: "选择等待时长",
+    askTimeoutHint: "「任务选择」卡超时按跳过收束（轮次不挂死）；0 = 一直等待",
     // 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽，㉕）
     chatTitle: "对话行为",
     chatWidthTitle: "对话宽度",

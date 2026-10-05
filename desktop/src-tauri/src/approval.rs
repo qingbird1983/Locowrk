@@ -163,6 +163,30 @@ impl ApprovalHub {
         let _ = entry.tx.send(decision);
         Ok(())
     }
+
+    /// 停止生成 / 会话收尾（v4.11 §3.39④）：该会话（含子 Agent
+    /// `{parent}-sub-{n}`）全部待决按**拒绝**收束（fail-closed，与超时
+    /// 守夜同向）——不留悬空卡，也不让停止后的轮次继续挂在审批上。
+    /// Kernel 照写 `ApprovalDecided`（纪律 9），转录决策记录不缺审计。
+    pub fn deny_session(&self, session_id: &str, reason: &str) {
+        let prefix = format!("{session_id}-sub-");
+        let mut map = self.pending.lock().expect("approval pending poisoned");
+        let ids: Vec<String> = map
+            .iter()
+            .filter(|(_, p)| {
+                p.request
+                    .session_id
+                    .as_deref()
+                    .is_some_and(|sid| sid == session_id || sid.starts_with(&prefix))
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in ids {
+            if let Some(entry) = map.remove(&id) {
+                let _ = entry.tx.send(ApprovalDecision::deny(reason.to_string()));
+            }
+        }
+    }
 }
 
 #[async_trait]

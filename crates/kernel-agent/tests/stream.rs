@@ -30,11 +30,11 @@ impl LlmService for CountingLlm {
     async fn complete_streaming(
         &self,
         _req: LlmRequest,
-        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         self.streaming_calls.fetch_add(1, Ordering::Relaxed);
-        on_delta("流");
-        on_delta("式");
+        let _ = on_delta("流");
+        let _ = on_delta("式");
         Ok(LlmResponse {
             content: "流式正文".into(),
             tool_calls: vec![],
@@ -146,12 +146,12 @@ impl LlmService for ReasoningLlm {
     async fn complete_streaming_reasoning(
         &self,
         _req: LlmRequest,
-        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
-        on_reasoning: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
+        on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
-        on_reasoning("想");
-        on_reasoning("一步");
-        on_delta("结");
+        let _ = on_reasoning("想");
+        let _ = on_reasoning("一步");
+        let _ = on_delta("结");
         Ok(LlmResponse {
             content: "结论".into(),
             tool_calls: vec![],

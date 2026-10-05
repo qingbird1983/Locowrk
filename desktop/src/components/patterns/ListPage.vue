@@ -58,7 +58,7 @@ const subFilter = defineModel<string>("subFilter");
         v-if="search !== undefined"
         v-model="search"
         :placeholder="searchPlaceholder"
-        class="ml-auto w-56 rounded-lg border border-line-strong bg-surface-1 px-3 py-1.5 text-xs text-ink-1 outline-none placeholder:text-ink-5 focus:border-line-strong"
+        class="ml-auto w-56 rounded-[var(--lw-r-xs)] border border-line-strong bg-surface-1 px-3 py-1.5 text-xs text-ink-1 outline-none placeholder:text-ink-5 focus:border-line-strong"
       />
     </div>
 

@@ -18,7 +18,10 @@ fn repo_root_requires_associated_existing_dir() {
     let repo = dir.join("repo");
     std::fs::create_dir_all(&repo).unwrap();
     session_store::write_workspace(&dir, "s2", Some(repo.to_str().unwrap())).unwrap();
-    assert_eq!(crate::workspace::repo_root_of(&dir, "s2").as_deref(), Some(repo.as_path()));
+    assert_eq!(
+        crate::workspace::repo_root_of(&dir, "s2").as_deref(),
+        Some(repo.as_path())
+    );
 }
 
 // ---- material：当前内容 + 转录 ----
@@ -46,12 +49,21 @@ fn sanitize_rejects_unchanged_and_empty() {
 #[test]
 fn sanitize_strips_one_markdown_fence() {
     let raw = "```markdown\n## Current state\n- done\n```\n";
-    assert_eq!(sanitize_content(raw).as_deref(), Some("## Current state\n- done"));
+    assert_eq!(
+        sanitize_content(raw).as_deref(),
+        Some("## Current state\n- done")
+    );
     // 无尾围栏（被截断的输出）也要能剥头
     let raw = "```\n## Next steps\n- ship";
-    assert_eq!(sanitize_content(raw).as_deref(), Some("## Next steps\n- ship"));
+    assert_eq!(
+        sanitize_content(raw).as_deref(),
+        Some("## Next steps\n- ship")
+    );
     // 无围栏原样通过
-    assert_eq!(sanitize_content("## Current state\n- ok").as_deref(), Some("## Current state\n- ok"));
+    assert_eq!(
+        sanitize_content("## Current state\n- ok").as_deref(),
+        Some("## Current state\n- ok")
+    );
 }
 
 #[test]

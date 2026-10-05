@@ -12,7 +12,7 @@ const settings = useSettingsStore();
 
 <template>
   <div class="space-y-3">
-    <div class="rounded-[14px] bg-wash-1 px-4 py-3.5">
+    <div class="rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5">
       <p class="text-[13px] font-medium leading-tight text-ink-1">
         {{ t("settings.dataDir") }}
       </p>
@@ -20,7 +20,7 @@ const settings = useSettingsStore();
         {{ t("settings.dataDirHint") }}
       </p>
       <code
-        class="mt-2 block overflow-x-auto rounded bg-inset px-2 py-1.5 font-mono text-[11px] text-ink-2"
+        class="mt-2 block overflow-x-auto rounded-[var(--lw-r-3xs)] bg-inset px-2 py-1.5 font-mono text-[11px] text-ink-2"
       >
         {{ settings.view?.dataDir ?? "…" }}
       </code>

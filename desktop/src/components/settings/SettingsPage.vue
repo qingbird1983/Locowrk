@@ -90,7 +90,7 @@ function sectionLabel(id: SettingsSectionId): string {
       <div class="scroll-y min-h-0 flex-1">
         <p
           v-if="settings.error"
-          class="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger"
+          class="rounded-[var(--lw-r-xs)] bg-danger/10 px-3 py-2 text-xs text-danger"
         >
           {{ settings.error }}
         </p>

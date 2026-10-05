@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// LLM.md 方案一：统一适配器按 provider 路由（genai 封装）。
+/// LLM.md v3.0：统一适配器按 provider 路由（自建 OpenAI 兼容客户端）。
 pub const PROVIDERS: [&str; 3] = ["openai", "anthropic", "ollama"];
 
 /// 档位内一个已配置模型（㉚ 模型配置页）。`context_window` None =

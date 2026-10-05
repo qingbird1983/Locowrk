@@ -55,6 +55,7 @@ pub(crate) fn spawn_engine(
     app: tauri::AppHandle,
     organizer: Arc<crate::organize::Organizer>,
     tree_assembler: Arc<crate::organize::TreeAssembler>,
+    stop_flags: Arc<crate::stop::StopFlags>,
 ) {
     spawn(EngineDeps {
         db,
@@ -68,5 +69,6 @@ pub(crate) fn spawn_engine(
         app,
         organizer,
         tree_assembler,
+        stop_flags,
     });
 }

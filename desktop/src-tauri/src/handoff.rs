@@ -51,9 +51,7 @@ fn material(current: &str, transcript: &str) -> String {
     } else {
         current.to_string()
     };
-    format!(
-        "--- current handoff.md ---\n{current}\n\n--- finished turn ---\n{transcript}"
-    )
+    format!("--- current handoff.md ---\n{current}\n\n--- finished turn ---\n{transcript}")
 }
 
 /// 产出净化（纯函数）：trim → `UNCHANGED` / 空 = None（不写）→ 剥一层
@@ -120,7 +118,9 @@ async fn update(
         return Err("turn has no user message".into());
     }
     let transcript = crate::extract::build_transcript(&turn);
-    let handoff_path = repo.join(crate::repo_context::DIR).join(crate::repo_context::HANDOFF);
+    let handoff_path = repo
+        .join(crate::repo_context::DIR)
+        .join(crate::repo_context::HANDOFF);
     let current = std::fs::read_to_string(&handoff_path).unwrap_or_default();
     let req = kernel_agent::LlmRequest {
         messages: vec![Message::User {

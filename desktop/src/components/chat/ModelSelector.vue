@@ -216,7 +216,7 @@ function pick(providerId: string, model: string) {
   width: 100%;
   padding: 0 8px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--lw-r-xs);
   font-size: 12.5px;
   color: var(--lw-ink-1);
   text-align: left;

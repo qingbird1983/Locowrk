@@ -10,19 +10,19 @@ use async_trait::async_trait;
 use kernel_agent::LlmRequest;
 use session_store::Message;
 
-use crate::llm::GenAiLlm;
+use crate::llm::CompatLlm;
 use crate::settings::{LlmSettings, SettingsStore};
 
 pub struct AppLlmRecorder {
     settings: Arc<SettingsStore>,
-    real: GenAiLlm,
+    real: CompatLlm,
 }
 
 impl AppLlmRecorder {
     pub fn new(settings: Arc<SettingsStore>) -> Self {
         Self {
             settings,
-            real: GenAiLlm::new(),
+            real: CompatLlm::new(),
         }
     }
 

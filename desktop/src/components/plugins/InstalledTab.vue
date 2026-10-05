@@ -194,7 +194,7 @@ async function confirmUninstall() {
     <!-- 顶部提示条（§9.3）：只在主动打开本页时可见，点击切换筛选 -->
     <button
       v-if="staleCount > 0 && !usageFilter"
-      class="mb-3 flex w-full items-center gap-2 rounded-xl bg-warn/10 px-4 py-2 text-xs text-warn transition hover:bg-warn/16"
+      class="mb-3 flex w-full items-center gap-2 rounded-[var(--lw-r-md)] bg-warn/10 px-4 py-2 text-xs text-warn transition hover:bg-warn/16"
       @click="usageFilter = 'gt3m'"
     >
       <span>💡 {{ t("market.hintIdle", { n: staleCount }) }}</span>
@@ -205,7 +205,7 @@ async function confirmUninstall() {
 
     <p
       v-if="batchError"
-      class="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger"
+      class="mb-3 rounded-[var(--lw-r-xs)] bg-danger/10 px-3 py-2 text-xs text-danger"
     >
       {{ batchError }}
     </p>
@@ -216,7 +216,7 @@ async function confirmUninstall() {
       >
         {{ t(`market.origin_${group.key}`) }}
       </h3>
-      <div class="overflow-hidden rounded-xl border border-line">
+      <div class="overflow-hidden rounded-[var(--lw-r-md)] border border-line">
         <div
           v-for="p in group.list"
           :key="p.id"
@@ -281,7 +281,7 @@ async function confirmUninstall() {
               {{ t("market.builtinBadge") }}
             </span>
             <button
-              class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+              class="rounded-[var(--lw-r-xs)] border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
               :disabled="store.isBusy(p.id)"
               @click="store.setEnabled(p.id, !p.enabled)"
             >
@@ -290,7 +290,7 @@ async function confirmUninstall() {
           </div>
           <div v-else class="ml-auto flex items-center gap-2">
             <button
-              class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+              class="rounded-[var(--lw-r-xs)] border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
               :disabled="store.isBusy(p.id)"
               @click="store.setEnabled(p.id, !p.enabled)"
             >
@@ -298,7 +298,7 @@ async function confirmUninstall() {
             </button>
             <button
               v-if="updateAvailableOf(p)"
-              class="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+              class="rounded-[var(--lw-r-xs)] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
               :disabled="store.isBusy(p.id)"
               @click="store.update(p.id)"
             >
@@ -306,7 +306,7 @@ async function confirmUninstall() {
             </button>
             <template v-if="rollbackTargets(p).length > 0">
               <select
-                class="rounded border border-line-strong bg-surface-0 px-2 py-1.5 text-xs text-ink-2 outline-none"
+                class="rounded-[var(--lw-r-3xs)] border border-line-strong bg-surface-0 px-2 py-1.5 text-xs text-ink-2 outline-none"
                 @change="
                   store.rollback(
                     p.id,
@@ -327,7 +327,7 @@ async function confirmUninstall() {
               </select>
             </template>
             <button
-              class="rounded-lg text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
+              class="rounded-[var(--lw-r-xs)] text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
               :disabled="store.isBusy(p.id)"
               @click="store.uninstall(p.id)"
             >
@@ -358,19 +358,19 @@ async function confirmUninstall() {
       </span>
 
       <button
-        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
+        class="rounded-[var(--lw-r-xs)] border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
         @click="runBatch('disable')"
       >
         {{ t("market.batchDisable") }}
       </button>
       <button
-        class="rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
+        class="rounded-[var(--lw-r-xs)] border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-surface-2"
         @click="runBatch('enable')"
       >
         {{ t("market.batchEnable") }}
       </button>
       <button
-        class="rounded-lg text-danger transition hover:bg-danger/10"
+        class="rounded-[var(--lw-r-xs)] text-danger transition hover:bg-danger/10"
         @click="runBatch('uninstall')"
       >
         {{ t("market.batchUninstall") }}

@@ -13,7 +13,28 @@ export type AgentEvent =
   | UserMessageEvent
   | ApprovalResolvedEvent
   | ThinkingEvent
-  | LlmUsageEvent;
+  | LlmUsageEvent
+  | AskUserEvent
+  | AskResolvedEvent
+  | LlmRetryEvent
+  | TurnCappedEvent;
+
+/** 传输重试（LLM.md v3.0，agent://llm-retry）：兼容客户端重试前通知——
+ * 清空本步未完成的流式缓冲（重试轮 delta 从零重建同一气泡）+ 状态行。 */
+export interface LlmRetryEvent {
+  kind: "llm_retry";
+  session_id: string;
+  attempt: number;
+  delay_ms: number;
+}
+
+/** 单轮步数到顶（LLM.md v3.0 同批，agent://turn-capped）：TurnDone 后
+ * 如实告知（不再硬报错）。 */
+export interface TurnCappedEvent {
+  kind: "turn_capped";
+  session_id: string;
+  steps: number;
+}
 
 export interface ChunkEvent {
   kind: "chunk";
@@ -200,6 +221,33 @@ export interface ApprovalResolvedEvent {
   tool: string;
   allowed: boolean;
   reason?: string | null;
+}
+
+/** ask_user 选择卡请求（v4.11 §3.39①，agent://ask-user）：模型反向提问，
+ * composer 坞内渲染选择卡；应答经 ask_respond 回填。session_id（⑮）=
+ * 发起调用的会话（子 Agent 派生带 `{parent}-sub-{n}`，卡头打徽章）。
+ * timeout_secs = 守夜秒数（0 = 不限，卡不渲染倒计时）。 */
+export interface AskOption {
+  label: string;
+  description?: string | null;
+}
+
+export interface AskUserEvent {
+  kind: "ask_user";
+  session_id?: string | null;
+  request_id: string;
+  question: string;
+  options: AskOption[];
+  multi_select: boolean;
+  timeout_secs: number;
+}
+
+/** 选择收束（v4.11 §3.39①，agent://ask-resolved）：应答/跳过/超时/停止
+ * 四路同源摘卡信号。 */
+export interface AskResolvedEvent {
+  kind: "ask_resolved";
+  session_id?: string | null;
+  request_id: string;
 }
 
 /** 审批请求载荷（agent://approval-request）。与 events.rs 的
@@ -469,6 +517,8 @@ export interface ToolsSettingsView {
   maxTurnSteps: number;
   /** 审批等待时长（秒，0 = 不限；v2.49 可配置原则）。 */
   approvalTimeoutSecs: number;
+  /** ask_user 选择等待时长（秒，0 = 不限；§3.39① 可配置原则）。 */
+  askTimeoutSecs: number;
   /** ㉘·B 新会话权限档缺省。 */
   defaultPermissionMode: "plan" | "ask" | "acceptEdits" | "auto";
   /** 工具集会话钉死（KV v2 §4.2，缺省开）。 */
@@ -483,6 +533,7 @@ export interface ToolsUpdate {
   fsRoots?: string[];
   maxTurnSteps?: number;
   approvalTimeoutSecs?: number;
+  askTimeoutSecs?: number;
   defaultPermissionMode?: "plan" | "ask" | "acceptEdits" | "auto";
   pinSession?: boolean;
 }

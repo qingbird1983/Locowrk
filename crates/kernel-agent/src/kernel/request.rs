@@ -19,7 +19,7 @@ use crate::waterfall::{PreStepPayload, RequestErrorPayload, RequestPayload, poin
 
 /// 一次 LLM 请求的流式痕迹（⑳ + v2.57/58）：文本/推理 delta 是否已被 sink
 /// 真实消费（投影方据此抑制整段投影）、推理全文（内核闭包累积——与
-/// genai captured_reasoning 同源，被消费与否都收集，sink 故障时投影方
+/// 供应商 reasoning 流同源，被消费与否都收集，sink 故障时投影方
 /// 仍能整段补投）、本次请求耗时（v2.58，`LlmUsage` 事件的速度口径）。
 pub(super) struct StreamTrace {
     pub streamed: bool,
@@ -130,7 +130,8 @@ impl Kernel {
     /// （delta 逐段回调）；v2.57 起走 `complete_streaming_reasoning`，
     /// 推理 delta 同路逐段回调并全文累积。已知边界：Retry 重试轮的
     /// delta 不回滚——重试仅在 request-error 决策环配置时发生，届时
-    /// 上层应考虑清空流式缓冲（桌面端现无该决策）。
+    /// 上层应考虑清空流式缓冲（桌面端的传输重试在适配器内自带重置，
+    /// LLM.md v3.0；本决策环留给插件）。
     pub(super) async fn request_with_retry(
         &self,
         messages: Vec<Message>,
@@ -160,18 +161,22 @@ impl Kernel {
             let resp = match &sink {
                 Some(sink) => {
                     let sink = Arc::clone(sink);
-                    let on_delta = |delta: &str| {
+                    // 回调返回值 = sink.should_stop()（v4.11 停止生成）：适配器
+                    // 流循环收到 true 即尽快收束本次调用（部分正文原样返回）。
+                    let on_delta = |delta: &str| -> bool {
                         if sink.on_delta(session_id, delta) {
                             streamed.store(true, Ordering::Relaxed);
                         }
+                        sink.should_stop(session_id)
                     };
-                    let on_reasoning = |delta: &str| {
+                    let on_reasoning = |delta: &str| -> bool {
                         // 全文照收（guard 只在闭包内持有，不跨 await）：
                         // 消费失败时投影方还有整段可投
                         reasoning.lock().expect("reasoning buf").push_str(delta);
                         if sink.on_reasoning(session_id, delta) {
                             reasoned.store(true, Ordering::Relaxed);
                         }
+                        sink.should_stop(session_id)
                     };
                     llm.complete_streaming_reasoning(req, &on_delta, &on_reasoning)
                         .await

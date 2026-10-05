@@ -1,20 +1,33 @@
 <script setup lang="ts">
 /**
- * 思考行（UI shell doc §3.9）：sparkle + 「思考」 + 正文单行截断（剥掉
- * markdown 记号与多余换行，只留纯文本首句）；点击展开为完整文本（12.5px
- * / 1.55 / ink-2，wash-1 底圆角 10）——展开后仍属"过程"，不抢正文视线。
- * 展开态原文照原样呈现（不篡改事实），摘要态才是人话。
+ * 思考行（UI shell doc §3.9，v4.11 照 ZCode 过程流基准）：sparkle +
+ * 「思考」+ 时长（`持续了 N 秒`——实时轮记 ts、下一条过程项到达时收口
+ * doneTs；历史重放无时间戳 = 回落首句摘要单行截断，不虚构时长）；点击
+ * 展开为完整文本（12.5px / 1.55 / ink-2，wash-1 底圆角 10）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 
-const props = defineProps<{ text: string }>();
+const props = defineProps<{
+  text: string;
+  /** 实时到达时刻（Date.now()）；历史重放无此项 → 回落首句摘要。 */
+  ts?: number;
+  /** 下一条过程项到达时刻（chat store 收口）；缺 = 还在思考中。 */
+  doneTs?: number;
+}>();
 const { t } = useI18n();
 const expanded = ref(false);
 
-/** 摘要态：剥 markdown 记号（**、`）与换行，取首段有内容的句子。 */
+/** 摘要态：有实时时戳 = 时长；否则剥 markdown 记号取首句。 */
 const summary = computed(() => {
+  if (props.ts !== undefined) {
+    const sec = Math.max(
+      1,
+      Math.round(((props.doneTs ?? Date.now()) - props.ts) / 1000),
+    );
+    return t("turn.thinkingFor", { s: sec });
+  }
   const flat = props.text
     .replace(/[*`_#>]/g, "")
     .split(/\n+/)

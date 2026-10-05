@@ -235,7 +235,7 @@ const kindOptions = computed(() => [
       @click="!saving && emit('close')"
     >
       <div
-        class="flex max-h-[92vh] w-[min(1030px,100vw-48px)] flex-col overflow-hidden rounded-2xl bg-elevated p-5 shadow-[var(--lw-shadow-dialog)]"
+        class="flex max-h-[92vh] w-[min(1030px,100vw-48px)] flex-col overflow-hidden rounded-[var(--lw-r-lg)] bg-elevated p-5 shadow-[var(--lw-shadow-dialog)]"
         role="dialog"
         aria-modal="true"
         @click.stop
@@ -289,7 +289,7 @@ const kindOptions = computed(() => [
               </button>
               <button
                 type="button"
-                class="rounded-lg bg-accent px-3.5 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90 disabled:opacity-40"
+                class="rounded-[var(--lw-r-xs)] bg-accent px-3.5 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90 disabled:opacity-40"
                 :disabled="!canSave"
                 @click="save"
               >
@@ -301,9 +301,9 @@ const kindOptions = computed(() => [
           <div class="min-h-0 flex-1 overflow-y-auto">
             <!-- 凭据区 -->
             <div class="mb-4 grid grid-cols-2 gap-4">
-              <div class="col-span-2 flex items-center gap-2.5 rounded-xl bg-wash-1 px-3 py-2.5">
+              <div class="col-span-2 flex items-center gap-2.5 rounded-[var(--lw-r-md)] bg-wash-1 px-3 py-2.5">
                 <span
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-wash-2 text-[14px] font-semibold text-ink-2"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--lw-r-xs)] bg-wash-2 text-[14px] font-semibold text-ink-2"
                   aria-hidden
                 >{{ letter(resolvedName) }}</span>
                 <span class="min-w-0">

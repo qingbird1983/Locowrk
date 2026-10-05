@@ -571,7 +571,7 @@ impl Organizer {
 #[cfg(test)]
 mod tests;
 
-/// 组装点构造（state/init_state 调用）：记录员客户端 = 设置路由的 genai
+/// 组装点构造（state/init_state 调用）：记录员客户端 = 设置路由的兼容
 /// 直呼；㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）；
 /// 事件推送闭包由 state 组装（emit 调用留在 state/mod.rs，见其注释）；
 /// M4 起持整理模式存储（溢出整理 / 自动收起的会话门控）。

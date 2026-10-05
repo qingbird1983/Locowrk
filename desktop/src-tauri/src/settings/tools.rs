@@ -32,7 +32,7 @@ pub struct ToolsSettings {
     /// tool-edit / tool-git / tool-shell 的允许根。存的是用户选择的原始
     /// 路径（canonicalize 归 fsutil 使用时做）。
     pub fs_roots: Vec<String>,
-    /// 单轮步数上限（runner 兜底：超过强制收束本轮并报错）。
+    /// 单轮步数上限（runner 兜底：到顶自动收束本轮并如实告知，LLM.md v3.0）。
     pub max_turn_steps: u32,
     /// 审批等待时长（秒，0 = 不限）：超时按拒绝收束（fail-closed）。
     pub approval_timeout_secs: u64,
@@ -42,6 +42,9 @@ pub struct ToolsSettings {
     /// 工具集会话钉死（KV v2 §4.2，缺省开）：暴露集会话首次请求确定并
     /// 缓存，tools 块逐字节稳定保前缀缓存；关 = 恢复每轮 Top-N 旧行为。
     pub pin_session: bool,
+    /// v4.11 §3.39① 选择卡守夜（秒，0 = 不限）：`ask_user` 超时按跳过
+    /// 收束——轮次不永久挂死；卡内首次交互可续期（snooze）。
+    pub ask_timeout_secs: u64,
 }
 
 impl Default for ToolsSettings {
@@ -55,6 +58,7 @@ impl Default for ToolsSettings {
             approval_timeout_secs: 100,
             default_permission_mode: "ask".into(),
             pin_session: true,
+            ask_timeout_secs: 300,
         }
     }
 }
@@ -71,6 +75,7 @@ pub struct ToolsSettingsView {
     pub approval_timeout_secs: u64,
     pub default_permission_mode: String,
     pub pin_session: bool,
+    pub ask_timeout_secs: u64,
 }
 
 /// 工具暴露区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -85,6 +90,7 @@ pub struct ToolsUpdate {
     pub approval_timeout_secs: Option<u64>,
     pub default_permission_mode: Option<String>,
     pub pin_session: Option<bool>,
+    pub ask_timeout_secs: Option<u64>,
 }
 
 /// call_timeout_secs 合法区间（秒）：下限避开 0（等同关超时），上限覆盖
@@ -99,6 +105,9 @@ pub const MAX_TURN_STEPS_RANGE: std::ops::RangeInclusive<u32> = 1..=100;
 /// v2.49 审批等待时长合法区间（秒）：0 = 不限（可配置原则——不为用户
 /// 做死限定，决策卡不渲染倒计时）；1–86400 = 一天封顶。
 pub const APPROVAL_TIMEOUT_RANGE: std::ops::RangeInclusive<u64> = 0..=86_400;
+
+/// v4.11 选择卡守夜合法区间（秒）：0 = 不限（同审批口径）；1–86400。
+pub const ASK_TIMEOUT_RANGE: std::ops::RangeInclusive<u64> = 0..=86_400;
 
 /// ⑱ fs_roots 归一化 + 存在性校验：去首尾空白、丢空段、按首次出现去重；
 /// 任何目录不存在即拒绝（与 fsutil `allowed_roots()` 的 fail-closed 同
@@ -159,6 +168,15 @@ impl crate::settings::SettingsStore {
             .expect("settings poisoned")
             .tools
             .approval_timeout_secs
+    }
+
+    /// 后端专用：选择卡守夜超时秒数（v4.11 §3.39①，AskHub 热换入；0 = 不限）。
+    pub fn ask_timeout_secs(&self) -> u64 {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .tools
+            .ask_timeout_secs
     }
 
     /// 后端专用：工作区目录快照（⑱ env 注入 / 重注入用）。

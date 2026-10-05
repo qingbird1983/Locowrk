@@ -35,14 +35,15 @@ plugin-service = { path = "../../crates/plugin-service" }
 session-store = { path = "../../crates/session-store" }
 
 async-trait = "0.1"
-# ⑳ 流式：genai 的 ChatStream 是 futures::Stream，next() 需要 StreamExt
+# ⑳ 流式 / LLM.md v3.0 SSE：resp.bytes_stream() 的 next() 需要 StreamExt
 futures = "0.3"
-# 三合一模型客户端（LLM.md 方案一）：openai / anthropic / ollama 统一封装
-genai = "0.6"
-# Ollama /api/show 窗口探测（S2）：json 特性；TLS 特性不在此声明——
-# 探测目标为本地/局域网 Ollama（http），TLS 由依赖图里 genai 的 reqwest
-# 统一编译，探测请求随图内实际能力走
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
+# 自建 OpenAI 兼容客户端（LLM.md v3.0，genai 已退役）：default-tls 原由
+# genai 依赖图带入，删后须显式声明；stream = bytes_stream() 的 SSE 拉流
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "default-tls",
+    "stream",
+] }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -63,7 +63,7 @@ const licenseText = computed(
     </div>
     <div class="mt-auto flex items-center gap-2 pt-1">
       <span
-        class="truncate rounded px-1.5 py-0.5 text-[10px] text-ink-4"
+        class="truncate rounded-[var(--lw-r-3xs)] px-1.5 py-0.5 text-[10px] text-ink-4"
         :title="licenseText"
       >
         {{ licenseText }}

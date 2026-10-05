@@ -118,18 +118,36 @@ pub fn init_state(app: AppHandle) -> AppState {
     }
 
     // v2.58 会话级模型覆盖存储（旁车持久 + 缓存；AppLlm 每请求按 LlmRequest.session_id
-    // 解析覆盖——档位路由 + 模型名）。模型适配器也只是服务（§7.2，genai 三合一；未配置回落演示替身；⑬ 句柄留 AppState 给隐式提取）。
+    // 解析覆盖——档位路由 + 模型名）。模型适配器也只是服务（§7.2，自建
+    // OpenAI 兼容客户端 LLM.md v3.0；未配置回落演示替身；⑬ 句柄留 AppState 给隐式提取）。
+    // v4.11 停止标记先建（LLM.md v3.0 重试面同柄：重试等待轮询停止 +
+    // 重试通知经组装闭包 emit，AppHandle 不进 llm 模块——v2.66 同款）。
+    let stop_flags = Arc::new(crate::stop::StopFlags::default());
+    let llm_notify = {
+        let app = app.clone();
+        Arc::new(move |sid: &str, attempt: u32, delay_ms: u64| {
+            let event = crate::events::AgentEvent::LlmRetry {
+                session_id: sid.to_string(),
+                attempt,
+                delay_ms,
+            };
+            if let Err(e) = tauri::Emitter::emit(&app, event.channel(), &event) {
+                tracing::warn!("emit {} failed: {e}", event.channel());
+            }
+        }) as crate::llm::RetryNotify
+    };
     let model_overrides = Arc::new(crate::model_override::ModelOverrideStore::new(
         sessions_dir.clone(),
     ));
-    let llm: Arc<dyn LlmService> = Arc::new(AppLlm::with_overrides(
-        Arc::clone(&settings),
-        Arc::clone(&model_overrides),
-    ));
+    let llm: Arc<dyn LlmService> = Arc::new(
+        AppLlm::with_overrides(Arc::clone(&settings), Arc::clone(&model_overrides))
+            .with_retry_surface(Arc::clone(&stop_flags), llm_notify),
+    );
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
-    // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）
+    // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）；v4.11 §3.39④
+    // 停止标记注册表同柄——delta 回调点逐段查询，命中即带部分正文收束。
     ctx.provide_dyn::<dyn kernel_agent::LlmStreamSink>(Arc::new(
-        crate::events::StreamChunkSink::new(app.clone()),
+        crate::events::StreamChunkSink::new(app.clone(), Arc::clone(&stop_flags)),
     ));
 
     // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储。㉘ 会话→项目解析器一次构造多处消费：插件调用期上下文（workspace + fs_roots 围栏）/注入键位/经历键位。㉘·C 围栏让路：fs_roots = 全局声明根（fsRoots 供给闭包读当前设置，保存即生效）。
@@ -256,6 +274,11 @@ pub fn init_state(app: AppHandle) -> AppState {
         .with_workspace(Arc::clone(&session_ctx)),
     );
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
+    // v4.11 §3.39① ask_user 选择卡中心：与审批同款机械件（oneshot + 守夜），
+    // 超时初值取设置（0 = 不限；settings_set 热换）。Pure + always：不走
+    // 审批门、常驻目录。
+    let ask_hub = Arc::new(crate::ask::AskHub::new(Arc::clone(&sink)));
+    ask_hub.set_timeout_secs(settings.ask_timeout_secs());
     // ⑮ 子 Agent 快照表：每 step 刷新父转录前缀；subagent_run 执行时 fork
     let gate = Arc::new(SubagentGate::default());
     let kernel = Arc::new(
@@ -275,6 +298,9 @@ pub fn init_state(app: AppHandle) -> AppState {
     let sub_tool: Arc<dyn plugin_api::Tool> = Arc::new(
         SubagentTool::new(Arc::clone(&kernel), Arc::clone(&gate)).with_transcript_sink(sub_tx),
     );
+    // v4.11 §3.39① ask_user 内置工具（Pure + always，见 ask_hub 处注释）
+    let ask_tool: Arc<dyn plugin_api::Tool> =
+        Arc::new(crate::ask::AskUserTool::new(Arc::clone(&ask_hub)));
     let with_host_tools = |src: KernelToolSource| {
         let src = src.with_builtin(Arc::clone(&send_email));
         let src = match &schedules {
@@ -285,6 +311,7 @@ pub fn init_state(app: AppHandle) -> AppState {
             None => src,
         };
         src.with_builtin(Arc::clone(&sub_tool))
+            .with_builtin(Arc::clone(&ask_tool))
     };
 
     let search_catalog = Arc::new(with_host_tools(KernelToolSource::new(
@@ -385,7 +412,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         });
     }
 
-    // M2 记忆树影子运行编排器：记录员客户端 = 设置路由的 genai 直呼；
+    // M2 记忆树影子运行编排器：记录员客户端 = 设置路由的兼容客户端直呼；
     // ㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）。
     // 整理事件推送闭包在此组装（M3 §3.37③）：emit 调用只落在本模块——
     // 桌面单测不引用 state，tauri 运行时符号（及其窗口栈 tao）就不会进
@@ -424,6 +451,7 @@ pub fn init_state(app: AppHandle) -> AppState {
             app.clone(),
             Arc::clone(&organizer),
             Arc::clone(&tree_assembler),
+            Arc::clone(&stop_flags),
         );
     }
     // 在途整理任务重投（后台，不阻塞窗口出现）
@@ -475,6 +503,8 @@ pub fn init_state(app: AppHandle) -> AppState {
         notifications,
         schedules,
         organizer,
+        stop_flags,
+        ask: ask_hub,
     }
 }
 

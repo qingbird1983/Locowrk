@@ -1,6 +1,7 @@
 //! Tauri 命令薄适配层（DESIGN.md §10.3 / §12.1）：只做参数转换与状态
 //! 存取，业务逻辑在 runner / approval / kernel，本文件不写一行。
 
+mod ask;
 mod llm;
 mod memory;
 mod organize;
@@ -10,6 +11,7 @@ mod sessions;
 
 use std::sync::Arc;
 
+pub use ask::*;
 pub use llm::*;
 pub use memory::*;
 pub use organize::*;
@@ -73,6 +75,7 @@ pub async fn agent_chat(
         Some(&state.sessions_dir),
         state.settings.max_turn_steps(),
         Some(&state.tree_assembler),
+        Some(&state.stop_flags),
     )
     .await?;
     // ⑬ 隐式提取（Context 文档 §5.1 ⑤）：开关开启且轮次成功收束后
@@ -107,6 +110,18 @@ pub async fn agent_chat(
     // memory-tree/ 投影，不改请求组装）
     state.organizer.after_turn(&session, &session_id);
     Ok(steps)
+}
+
+/// 停止生成（v4.11 §3.39④）：三路同收——① 停止标记置位（流式 delta 点
+/// 带部分正文收束 + runner 步间边界 TurnDone）；② 挂起的审批卡 fail-closed
+/// 拒绝（与守夜超时同方向，留 ApprovalDecided 审计）；③ 该会话全部待决
+/// ask 卡按跳过收束。幂等：轮未在跑 = 各路空转。
+#[tauri::command]
+pub async fn agent_stop(session_id: String, state: State<'_, AppState>) -> Result<(), String> {
+    state.stop_flags.request(&session_id);
+    state.approval.deny_session(&session_id, "用户停止了任务");
+    state.ask.skip_session(&session_id);
+    Ok(())
 }
 
 /// 撤销最近一次上下文压缩（Context and Memory.md §3.7）：rewind_to(压缩
@@ -272,6 +287,10 @@ pub async fn settings_set(
     state
         .approval
         .set_timeout_secs(state.settings.approval_timeout_secs());
+    // v4.11 §3.39①：ask_user 守夜时长热更新（tools 区 askTimeoutSecs，0 = 不限）
+    state
+        .ask
+        .set_timeout_secs(state.settings.ask_timeout_secs());
     // ㉘·B：新会话权限档缺省热更新（tools 区 defaultPermissionMode）
     state
         .permission_modes

@@ -6,11 +6,13 @@
 //! ⑨ 起每个 step 后补推 `agent://context-usage`（进度条数据源，
 //! 与压缩判定同一估算口径）。
 //!
-//! 失败约定：内核报错 / 超出步数上限时不发 TurnDone，直接返回 Err
-//! （前端以 invoke 的 reject 收尾），避免与成功路径的事件重复。
+//! 失败约定：内核报错时不发 TurnDone，直接返回 Err（前端以 invoke 的
+//! reject 收尾），避免与成功路径的事件重复。步数到顶不是失败（LLM.md
+//! v3.0 同批）：TurnDone 正常收束 + TurnCapped 如实告知。
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use kernel_agent::{estimate_tokens, Kernel};
 use session_store::{Session, SessionEvent};
@@ -42,7 +44,10 @@ pub struct UsagePolicy {
 /// （`<数据根>/sessions`，None = 不落盘，测试路径）——磁盘是日志的镜像，
 /// 用户消息与每个 step 的新增段与投影共用同一游标同步追加。`tree`（M4
 /// §3.38②）= 树组装器在场时用量环按组装后口径（目录 + 尾巴）估算，None =
-/// 全量历史估算（kernel-bin / 测试路径）。
+/// 全量历史估算（kernel-bin / 测试路径）。`stop`（v4.11 §3.39④）= 停止
+/// 标记注册表（None = 无停止面，headless/测试）：进场登记 RAII 守卫、
+/// 所有收束路径自动注销；step 边界查到置位即按 TurnDone 收束（流式内的
+/// 截断在 LLM 适配器 delta 回调点，更早）。
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn(
     kernel: &Kernel,
@@ -55,7 +60,9 @@ pub async fn run_turn(
     log: Option<&Path>,
     max_steps: u32,
     tree: Option<&crate::organize::TreeAssembler>,
+    stop: Option<&Arc<crate::stop::StopFlags>>,
 ) -> Result<u32, String> {
+    let _stop_guard = stop.map(|f| f.guard(session_id));
     let log_start = session.len();
     session.append(SessionEvent::UserMessage { content: message });
     if let Some(dir) = log {
@@ -66,6 +73,17 @@ pub async fn run_turn(
     }
 
     for steps in 1..=max_steps.max(1) {
+        // 停止生成（§3.39④）：步间边界检查——流式内的截断发生在 LLM 适配器
+        // （delta 回调点，本步已带部分正文收束）；这里兜住"工具跑完后不再
+        // 开下一步"。收束 = TurnDone 正常闭环（前端头行按 stopRequested
+        // 显示「已停止」，不加系统气泡）。
+        if stop.is_some_and(|f| f.is_stopped(session_id)) {
+            sink.emit(&AgentEvent::TurnDone {
+                session_id: session_id.into(),
+                steps,
+            });
+            return Ok(steps);
+        }
         let before = session.len();
         // ⑭：带会话身份 step——CallCtx.session_id 供内置调度工具绑定
         // 创建会话（§5.2 规划字段；普通 step 保持 None 语义不变）
@@ -109,9 +127,18 @@ pub async fn run_turn(
         }
     }
 
-    Err(format!(
-        "超过单轮步数上限（{max_steps} 步），强制收束；可在 设置 → 工具与分发 调高"
-    ))
+    // 步数到顶：不再硬报错掐断（LLM.md v3.0 同批裁定）——正常 TurnDone
+    // 收束 + TurnCapped 如实告知，已完成的工具成果与转录都保留，用户发
+    // 「继续」即可接着跑；调高上限见 设置 → 工具与分发。
+    sink.emit(&AgentEvent::TurnDone {
+        session_id: session_id.into(),
+        steps: max_steps.max(1),
+    });
+    sink.emit(&AgentEvent::TurnCapped {
+        session_id: session_id.into(),
+        steps: max_steps.max(1),
+    });
+    Ok(max_steps.max(1))
 }
 
 /// 把日志新增段 `[from..]` 投影成 UI 事件（顺序 = 日志顺序）。

@@ -96,6 +96,10 @@ pub(crate) fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::ApprovalResolved { .. } => "approval_resolved",
         AgentEvent::Thinking { .. } => "thinking",
         AgentEvent::LlmUsage { .. } => "llm_usage",
+        AgentEvent::AskUser { .. } => "ask_user",
+        AgentEvent::AskResolved { .. } => "ask_resolved",
+        AgentEvent::LlmRetry { .. } => "llm_retry",
+        AgentEvent::TurnCapped { .. } => "turn_capped",
     }
 }
 
@@ -133,6 +137,7 @@ async fn tool_turn_projects_events_in_log_order() {
         None,
         crate::runner::DEFAULT_MAX_STEPS,
         None,
+        None,
     )
     .await
     .expect("turn ok");
@@ -156,15 +161,16 @@ async fn tool_turn_projects_events_in_log_order() {
     assert!(delta.contains("工具返回"));
 }
 
-/// ㉕·微调③：单轮步数上限按调用方配置收束（settings tools.maxTurnSteps
-/// 的消费端契约）——第 1 步未收敛即报错，报错带配置值，不发 TurnDone。
+/// 单轮步数上限按调用方配置收束（settings tools.maxTurnSteps 的消费端
+/// 契约；LLM.md v3.0 同批改约）——第 1 步未收敛即到顶：不再 Err 硬掐，
+/// TurnDone 正常收束 + TurnCapped 如实告知，已完成的工具成果保留。
 #[tokio::test]
 async fn step_cap_force_closes_with_configured_limit() {
     let kernel = kernel_with_tools();
     let mut session = Session::new();
     let sink = Collector::default();
 
-    let err = run_turn(
+    let steps = run_turn(
         &kernel,
         &mut session,
         "s1",
@@ -175,14 +181,14 @@ async fn step_cap_force_closes_with_configured_limit() {
         None,
         1,
         None,
+        None,
     )
     .await
-    .expect_err("上限内未收敛必须强制收束");
-    assert!(err.contains("1 步"), "报错携带配置值：{err}");
-    assert!(!sink
-        .events()
-        .iter()
-        .any(|e| matches!(e, AgentEvent::TurnDone { .. })));
+    .expect("到顶按正常收束返回");
+    assert_eq!(steps, 1);
+    let kinds: Vec<&str> = sink.events().iter().map(|e| kind(e)).collect();
+    assert!(kinds.contains(&"turn_done"), "正常 TurnDone 收束：{kinds:?}");
+    assert!(kinds.contains(&"turn_capped"), "TurnCapped 如实告知：{kinds:?}");
 }
 
 #[tokio::test]
@@ -201,6 +207,7 @@ async fn plain_reply_turn_is_single_step() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
     )
     .await
@@ -303,6 +310,7 @@ async fn usage_reporting_provider_converges_on_final_text_step() {
         None,
         crate::runner::DEFAULT_MAX_STEPS,
         None,
+        None,
     )
     .await
     .expect("轮次必须正常收束");
@@ -374,6 +382,7 @@ async fn usage_reporting_provider_still_loops_for_tool_calls() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
     )
     .await

@@ -156,7 +156,7 @@ async function copyCall() {
         </span>
         <span
           v-if="!action"
-          class="shrink-0 rounded bg-wash-3 px-1.5 py-0.5 text-[10px] text-ink-2"
+          class="shrink-0 rounded-[var(--lw-r-3xs)] bg-wash-3 px-1.5 py-0.5 text-[10px] text-ink-2"
         >
           {{ t("tool.pluginBadge") }}
         </span>

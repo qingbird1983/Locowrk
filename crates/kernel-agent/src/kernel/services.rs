@@ -36,7 +36,7 @@ pub struct ToolCallReq {
     pub session_id: Option<String>,
 }
 
-/// 单次 LLM 用量（v2.58）：供应商报告的真实计数（genai Usage 归一化口径）。
+/// 单次 LLM 用量（v2.58）：供应商报告的真实计数（OpenAI 兼容口径，各家
 /// `input` 含缓存读取（OpenAI 兼容口径 cached ⊆ prompt，命中率 = cache_read/input）；
 /// `total` = 供应商报告的总量（0 = 未报告）。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -71,18 +71,20 @@ pub trait LlmService: Send + Sync + 'static {
     async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError>;
 
     /// 流式完成（⑳）：文本 delta 逐段回调 `on_delta`；完整正文与工具调用仍在
-    /// 返回值（日志/投影只认返回值，delta 只是实时通道）。缺省回落 `complete`
-    /// 并把正文一次性回调——未实现流式的适配器（DemoLlm 等）零改动获得流式形状。
+    /// 返回值（日志/投影只认返回值，delta 只是实时通道）。**回调返回 `true` =
+    /// 用户请求停止（v4.11）**——适配器应尽快结束本次调用（部分正文原样返回，
+    /// 不虚构结尾、不再产出工具调用）。缺省回落 `complete` 并把正文一次性回调
+    /// ——未实现流式的适配器（DemoLlm 等）零改动获得流式形状。
     async fn complete_streaming(
         &self,
         req: LlmRequest,
         // 显式 HRTB：async_trait 会把 `Fn(&str)` 的内层生命周期误绑到本引用上
-        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         let resp = self.complete(req).await?;
         let content = resp.content.clone();
         if !content.is_empty() {
-            on_delta(&content);
+            let _ = on_delta(&content);
         }
         Ok(resp)
     }
@@ -93,8 +95,8 @@ pub trait LlmService: Send + Sync + 'static {
     async fn complete_streaming_reasoning(
         &self,
         req: LlmRequest,
-        on_delta: &(dyn for<'a> Fn(&'a str) + Send + Sync),
-        on_reasoning: &(dyn for<'a> Fn(&'a str) + Send + Sync),
+        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
+        on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         let _ = on_reasoning;
         self.complete_streaming(req, on_delta).await

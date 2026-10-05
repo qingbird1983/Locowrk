@@ -75,6 +75,37 @@ export function listPendingApprovals(): Promise<ApprovalRequest[]> {
   return invoke("list_pending_approvals");
 }
 
+/** 停止生成（§3.39④）：后端三路同收——停止标记置位（流式带部分正文
+ * 收束）+ 挂起审批 fail-closed 拒绝 + 待决 ask 卡按跳过收束。幂等。 */
+export function agentStop(sessionId: string): Promise<void> {
+  return invoke("agent_stop", { sessionId });
+}
+
+/** 回填 ask_user 应答（§3.39①）：answer = 选择 + 自由补充；skip = 跳过。
+ * 请求已收束（超时/停止/重复应答）= reject，前端据此摘卡。 */
+export function askRespond(
+  requestId: string,
+  answer: { kind: "answer"; labels: string[]; note?: string } | { kind: "skip" },
+): Promise<void> {
+  return invoke("ask_respond", {
+    requestId,
+    answer:
+      answer.kind === "answer"
+        ? { kind: "answer", labels: answer.labels, note: answer.note ?? "" }
+        : { kind: "skip", reason: null },
+  });
+}
+
+/** ask 卡内首次交互续期：摘除本次守夜（打字不被超时吞）。幂等。 */
+export function askSnooze(requestId: string): Promise<void> {
+  return invoke("ask_snooze", { requestId });
+}
+
+/** 未决 ask 补拉（挂载/重连/刷新时）。 */
+export function listPendingAsks(): Promise<AgentEvent[]> {
+  return invoke("list_pending_asks");
+}
+
 const CHANNELS = [
   "agent://chunk",
   "agent://tool-call",
@@ -90,6 +121,12 @@ const CHANNELS = [
   "agent://thinking",
   // v2.58 §3.12：单步 LLM 用量（实时与重放同形，chat store 按轮聚合）
   "agent://usage",
+  // v4.11 §3.39①：ask_user 选择卡（请求 + 四路同源收束，asks store 消费）
+  "agent://ask-user",
+  "agent://ask-resolved",
+  // LLM.md v3.0：传输重试（流式重置）+ 单轮步数到顶告知
+  "agent://llm-retry",
+  "agent://turn-capped",
 ] as const;
 
 export function subscribeAgentEvents(

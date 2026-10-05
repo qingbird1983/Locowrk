@@ -174,14 +174,14 @@ function sourceLabel(source: string): string {
         {{ sessions.length }}
       </span>
       <button
-        class="ml-auto rounded-lg px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
+        class="ml-auto rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
         @click="loadSessions"
       >
         {{ t("common.refresh") }}
       </button>
     </div>
 
-    <p v-if="loadError" class="mt-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
+    <p v-if="loadError" class="mt-2 rounded-[var(--lw-r-xs)] bg-danger/10 px-3 py-2 text-xs text-danger">
       {{ loadError }}
     </p>
 
@@ -201,7 +201,7 @@ function sourceLabel(source: string): string {
           </label>
           <select
             v-model="selected"
-            class="min-w-0 flex-1 rounded-lg border border-line-strong bg-surface-1 px-2 py-1 text-xs text-ink-1 outline-none"
+            class="min-w-0 flex-1 rounded-[var(--lw-r-xs)] border border-line-strong bg-surface-1 px-2 py-1 text-xs text-ink-1 outline-none"
           >
             <option v-for="s in sessions" :key="keyOf(s)" :value="keyOf(s)">
               {{ optionText(s) }}
@@ -210,7 +210,7 @@ function sourceLabel(source: string): string {
           <input
             v-model="search"
             :placeholder="t('memory.treeSearch')"
-            class="w-48 shrink-0 rounded-lg border border-line-strong bg-surface-1 px-3 py-1 text-xs text-ink-1 outline-none placeholder:text-ink-5 focus:border-line-strong"
+            class="w-48 shrink-0 rounded-[var(--lw-r-xs)] border border-line-strong bg-surface-1 px-3 py-1 text-xs text-ink-1 outline-none placeholder:text-ink-5 focus:border-line-strong"
           />
         </div>
 
@@ -225,7 +225,7 @@ function sourceLabel(source: string): string {
           <li
             v-for="b in filtered"
             :key="b.bundleId"
-            class="rounded-xl bg-wash-1 px-4 py-3"
+            class="rounded-[var(--lw-r-md)] bg-wash-1 px-4 py-3"
           >
             <!-- 头行：折叠 + L0 标题 + 来源 + 时间 -->
             <button

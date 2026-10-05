@@ -82,6 +82,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             fs_roots: s.tools.fs_roots.clone(),
             max_turn_steps: s.tools.max_turn_steps,
             approval_timeout_secs: s.tools.approval_timeout_secs,
+            ask_timeout_secs: s.tools.ask_timeout_secs,
             default_permission_mode: s.tools.default_permission_mode.clone(),
             pin_session: s.tools.pin_session,
         },

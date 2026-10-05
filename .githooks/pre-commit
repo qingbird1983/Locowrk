@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
-# pre-commit：单文件行数上限检查（规则见 AGENTS.md「模块与文件规模纪律」）
+# pre-commit：①单文件行数上限检查（规则见 AGENTS.md「模块与文件规模纪律」）
+#            ②前端统一标准一级判错（规则见《Front-end Design Guidelines.md》§六
+#              ——用户 2026-10-06 裁定「自发明一律判错」）：
+#              · stylelint = CSS 声明维度（颜色/圆角/阴影/时长，desktop/stylelint.config.cjs）
+#              · check-style.mjs = 模板维度（tailwind 圆角类）
 root="$(git rev-parse --show-toplevel)"
-exec bash "$root/scripts/check_length.sh"
+bash "$root/scripts/check_length.sh" || exit 1
+
+staged_vue="$(git diff --cached --name-only --diff-filter=ACM | grep '\.vue$' || true)"
+fail=0
+if [ -n "$staged_vue" ]; then
+  rel="$(echo "$staged_vue" | sed 's#^desktop/##')"
+  (cd "$root/desktop" && pnpm exec stylelint $rel) || fail=1
+  node "$root/scripts/check-style.mjs" --staged || fail=1
+fi
+exit $fail

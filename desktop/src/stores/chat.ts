@@ -3,6 +3,7 @@
 import { defineStore } from "pinia";
 import {
   chat,
+  agentStop,
   sessionAssociate,
   sessionSetOrganizer,
   sessionDelete,
@@ -22,17 +23,11 @@ import {
   organizeNow,
 } from "../lib/api";
 import { clip, compactNumber } from "../lib/format";
-import { toolAction } from "../lib/tool-summary";
 import { i18n } from "../i18n";
+import { useAsksStore } from "./asks";
 import { useSettingsStore } from "./settings";
 import { useToastStore } from "./toast";
 import type { AgentEvent, SessionMeta } from "../types";
-
-/** §3.18 动作名（审批记录条用）；表外工具回落工具 id。 */
-function actionLabel(tool: string): string {
-  const a = toolAction(tool);
-  return a ? i18n.global.t(a.key, a.params ?? {}) : tool;
-}
 
 export type ToolItem = {
   id: number;
@@ -62,12 +57,26 @@ export type ChatItem =
        * 实时发送的没有（后端按「最后一条用户消息」解析）。 */
       pos?: number;
     }
-  | { id: number; kind: "assistant"; text: string; ts?: number }
+  | {
+      id: number;
+      kind: "assistant";
+      text: string;
+      ts?: number;
+    }
   | ToolItem
-  /** 思考行（§3.9 模式先行；数据源 = 推理流事件，后端待接入 §8.2——
-   * 本批不发明占位事件，等通道有了这里就是消费端）。 */
-  | { id: number; kind: "thinking"; text: string }
+  /** 思考行（§3.9，v4.11 记账时长）：实时 delta 起点记 ts、下一条过程项
+   * 到达时收口 doneTs（`持续了 N 秒`）；历史重放整段无时戳 → 首句摘要。 */
+  | {
+      id: number;
+      kind: "thinking";
+      text: string;
+      ts?: number;
+      doneTs?: number;
+    }
   | { id: number; kind: "error"; text: string }
+  /** 审批决策记录行（§3.7 v4.11 裁定①）：无卡片底，折叠进过程组为
+   * 平铺行（无组时回落兄弟节点）；已允许/已拒绝都是可审计事实。 */
+  | { id: number; kind: "decision"; tool: string; allowed: boolean }
   /** 会话内系统消息（SystemNotice 模式）：压缩通知 / 已记住 / 审批结果。 */
   | SystemItem;
 
@@ -146,6 +155,17 @@ export const useChatStore = defineStore("chat", {
     cacheAlertFired: false,
     /** §3.6 v3.9 项目下新建任务：挂起的归属目标，首聊建会话后消费。 */
     pendingWorkspace: null as string | null,
+    /** v4.11 §3.39④ 本轮已请求停止（过程组头行显示「已停止」）；轮次
+     * 收束复位。前端记忆，不进会话日志。 */
+    stopRequested: false,
+    /** v4.11 §3.39② 运行中排队（前端态，不入会话日志）：autoDrain =
+     * 当前轮收束后自动派发；手动停止/轮次出错置 false，用户恢复。 */
+    queue: [] as { id: number; text: string }[],
+    queueDraining: true,
+    /** v4.11 §3.39② 正在派发队首（防重入；收束回调里消费）。 */
+    dispatching: false,
+    /** §3.39② 「立即发送」的打断目标：当前轮被停止收束后立即发送。 */
+    preempt: null as string | null,
   }),
   getters: {
     /** M0 观测（KV v2 §7）：会话累计缓存统计。命中率 = cacheRead /
@@ -249,6 +269,12 @@ export const useChatStore = defineStore("chat", {
       this.steps = null;
       this.contextUsage = null;
       this.noticeDetails = {};
+      // §3.39②：队列是会话级 UI 态，切会话即清（诚实——预览不跨会话漂移）
+      this.queue = [];
+      this.preempt = null;
+      this.stopRequested = false;
+      this.dispatching = false;
+      this.queueDraining = true;
       // ㉘·B：档位随会话走（无显式设置 = null，显示取设置缺省）
       this.permissionMode =
         this.sessions.find((s) => s.id === id)?.permissionMode ?? null;
@@ -323,6 +349,11 @@ export const useChatStore = defineStore("chat", {
       this.steps = null;
       this.contextUsage = null;
       this.noticeDetails = {};
+      this.queue = [];
+      this.preempt = null;
+      this.stopRequested = false;
+      this.dispatching = false;
+      this.queueDraining = true;
       this.permissionMode = null;
       this.modelOverride = null;
       this.turnUsage = null;
@@ -398,6 +429,7 @@ export const useChatStore = defineStore("chat", {
           this.appendAssistant(e.delta);
           break;
         case "tool_call":
+          this.settleThinking();
           this.items.push({
             id: nextId++,
             kind: "tool",
@@ -446,6 +478,8 @@ export const useChatStore = defineStore("chat", {
         case "turn_done":
           this.running = false;
           this.steps = e.steps;
+          // §3.39②：轮次收束 → 消费打断目标 / 自动派发队首
+          void this.dispatchQueue();
           break;
         case "schedule_fired":
           // ⑭ 定时触发：SystemNotice 告知（无动作按钮；触发的助手回复
@@ -453,13 +487,36 @@ export const useChatStore = defineStore("chat", {
           this.pushNotice("notice.scheduleFired", { title: e.title });
           break;
         case "approval_resolved":
-          // ㉕·对话区① §3.17 决策记录条：投影唯一来源（实时增量与历史
-          // 重放同源，无双条）；"做过什么决定"是可审计事实。被拒调用的
-          // 失败工具行由 tool_result 分支自理，这里只补审计陈述。
-          this.pushNotice(
-            e.allowed ? "notice.approvalAllowed" : "notice.approvalDenied",
-            { action: actionLabel(e.tool) },
-          );
+          // §3.7 v4.11（裁定①）：决策记录 = 过程组内的平铺行（无卡片底、
+          // 无独立气泡；被拒调用的失败工具行由 tool_result 分支自理）。
+          // 投影唯一来源（实时增量与历史重放同源，无双条）。
+          this.items.push({
+            id: nextId++,
+            kind: "decision",
+            tool: e.tool,
+            allowed: e.allowed,
+          });
+          break;
+        case "ask_user":
+          // §3.39①：选择卡走 composer 坞（asks store），对话流零气泡。
+          // ask 事件不进会话日志（与审批请求同纪律），重放不会出现。
+          useAsksStore().push(e);
+          break;
+        case "ask_resolved":
+          // 四路同源摘卡（应答/跳过/超时/停止）
+          useAsksStore().resolve(e.request_id);
+          break;
+        case "llm_retry":
+          // LLM.md v3.0 传输重试：清掉本步未完成的流式缓冲（重试轮 delta
+          // 从零重建同一气泡），平铺状态行如实告知（不吓人也不装没事）
+          this.resetAssistant();
+          if (!this.replaying) {
+            this.pushNotice("notice.llmRetried", { attempt: e.attempt });
+          }
+          break;
+        case "turn_capped":
+          // 单轮步数到顶（不再硬报错）：如实告知 + 「继续」指引
+          this.pushNotice("notice.turnCapped", { steps: e.steps });
           break;
         case "context_usage":
           this.contextUsage = { used: e.used, threshold: e.threshold, windowTokens: e.window_tokens ?? 0, toolsEstTokens: e.tools_est_tokens ?? 0 };
@@ -533,6 +590,7 @@ export const useChatStore = defineStore("chat", {
       );
     },
     appendAssistant(delta: string) {
+      this.settleThinking();
       const last = this.items[this.items.length - 1];
       if (last && last.kind === "assistant") {
         last.text += delta;
@@ -545,8 +603,25 @@ export const useChatStore = defineStore("chat", {
         });
       }
     },
+    /** 流式重置（LLM.md v3.0）：传输重试前清空末尾未完成的流式正文——
+     * 重试轮的 delta 从零重建同一气泡。末项不是流式正文时无事可做。 */
+    resetAssistant() {
+      const last = this.items[this.items.length - 1];
+      if (last && last.kind === "assistant") {
+        last.text = "";
+      }
+    },
+    /** 思考行收口（§3.9 v4.11）：下一条过程项到达时，给末尾仍在"思考中"
+     * 的行补 doneTs（`持续了 N 秒`）。重放条目无 ts，天然空转。 */
+    settleThinking() {
+      if (this.replaying) return;
+      const last = this.items[this.items.length - 1];
+      if (last && last.kind === "thinking" && last.ts !== undefined && last.doneTs === undefined) {
+        last.doneTs = Date.now();
+      }
+    },
     /** 思考行追加（v2.57 §3.9）：实时 delta / 重放整段共用 append-or-create
-     * ——与 appendAssistant 同构； Thinking 事件在日志里从不相邻（每步后
+     * ——与 appendAssistant 同构；Thinking 事件在日志里从不相邻（每步后
      * 必有 AssistantMessage/ToolCall），重放不会误并两条。 */
     appendThinking(text: string) {
       if (!text) return;
@@ -554,7 +629,12 @@ export const useChatStore = defineStore("chat", {
       if (last && last.kind === "thinking") {
         last.text += text;
       } else {
-        this.items.push({ id: nextId++, kind: "thinking", text });
+        this.items.push({
+          id: nextId++,
+          kind: "thinking",
+          text,
+          ...(this.replaying ? {} : { ts: Date.now() }),
+        });
       }
     },
     /** 消息编辑重发（v2.57 §3.34）：后端截断到该消息之前 → 本地从该气泡
@@ -601,17 +681,9 @@ export const useChatStore = defineStore("chat", {
     async send(text: string) {
       const t = text.trim();
       if (!t || this.running) return;
-      // M2 斜杠命令 /整理（UI shell §3.36①）：前端拦截——元操作不进对话
-      // 流、不建用户气泡；手动整理不受反弹熔断限制且复位熔断态（后端）。
-      if (t === "/整理" || t === "/organize") {
-        this.pushNotice("notice.organizeRequested");
-        try {
-          await organizeNow(this.sessionId);
-        } catch (err) {
-          this.pushRawSystem(String(err));
-        }
-        return;
-      }
+      this.stopRequested = false;
+      // §3.39②：手动发送恢复自动派发（停止/出错后的暂停态由用户解）
+      this.queueDraining = true;
       this.items.push({ id: nextId++, kind: "user", text: t, ts: Date.now() });
       this.running = true;
       this.steps = null;
@@ -624,12 +696,105 @@ export const useChatStore = defineStore("chat", {
       try {
         await chat(this.sessionId, t, ws);
       } catch (err) {
-        // 失败轮次不发 turn_done（后端约定），在这里收尾
+        // 失败轮次不发 turn_done（后端约定），在这里收尾；§3.39② 队列
+        // 转暂停（恢复键由用户按，失败后不打连发）
         this.items.push({ id: nextId++, kind: "error", text: String(err) });
+        this.queueDraining = false;
       } finally {
         this.running = false;
         // ⑲ 新会话首聊后进列表（列表更新不阻塞输入）
         void this.refreshSessions();
+        // §3.39②：轮次收束（成功/失败）→ 消费打断目标 / 自动派发
+        void this.dispatchQueue();
+      }
+    },
+    // ---- §3.39 停止与排队（v4.11）----
+
+    /** 统一提交口（composer Enter/发送键）：斜杠命令拦截 → 空闲直发，
+     * 运行中入队（§3.39②）。 */
+    async submit(text: string) {
+      const t = text.trim();
+      if (!t) return;
+      // M2 斜杠命令 /整理（UI shell §3.36①）：前端拦截——元操作不进对话
+      // 流、不建用户气泡；手动整理不受反弹熔断限制且复位熔断态（后端）。
+      if (t === "/整理" || t === "/organize") {
+        this.pushNotice("notice.organizeRequested");
+        try {
+          await organizeNow(this.sessionId);
+        } catch (err) {
+          this.pushRawSystem(String(err));
+        }
+        return;
+      }
+      if (this.running) {
+        this.queue.push({ id: nextId++, text: t });
+        return;
+      }
+      await this.send(t);
+    },
+    /** 停止生成（§3.39④）：后端流式截断 + 待决卡 fail-closed；队列转
+     * 暂停（draining=false），「已停止」头行由 stopRequested 驱动。 */
+    async stop() {
+      if (!this.running) return;
+      this.stopRequested = true;
+      this.queueDraining = false;
+      try {
+        await agentStop(this.sessionId);
+      } catch (err) {
+        // 命令失败如实回滚（轮次仍在跑，不停留在假停止态）
+        this.stopRequested = false;
+        if (this.queue.length > 0) this.queueDraining = true;
+        this.pushRawSystem(String(err));
+      }
+    },
+    /** 删除一条排队消息。 */
+    removeQueued(id: number) {
+      this.queue = this.queue.filter((q) => q.id !== id);
+    },
+    /** 排队卡头垃圾桶（§3.39② v4.11 参考图）：一键清空全部排队。 */
+    clearQueue() {
+      this.queue = [];
+    },
+    /** 「立即发送」= 打断通道（§3.39②）：移出队列 → 停止当前轮 →
+     * 收束后立即发送该条（其余保持排队）。空闲时直接发。 */
+    async sendQueuedNow(id: number) {
+      const idx = this.queue.findIndex((q) => q.id === id);
+      if (idx < 0) return;
+      const [item] = this.queue.splice(idx, 1);
+      if (this.running) {
+        this.preempt = item.text;
+        await this.stop();
+      } else {
+        await this.send(item.text);
+      }
+    },
+    /** 恢复自动派发（暂停态的「继续」键）。 */
+    resumeDrain() {
+      this.queueDraining = true;
+      void this.dispatchQueue();
+    },
+    /** 轮次收束后的派发口：先消费打断目标，再逐条自动派发队首（一条
+     * 一轮——send 收束后再进下一轮）。 */
+    async dispatchQueue() {
+      if (this.dispatching) return;
+      if (this.preempt && !this.running) {
+        this.dispatching = true;
+        const text = this.preempt;
+        this.preempt = null;
+        try {
+          await this.send(text);
+        } finally {
+          this.dispatching = false;
+        }
+      }
+      while (!this.running && this.queueDraining && this.queue.length > 0) {
+        this.dispatching = true;
+        const head = this.queue.shift()!;
+        try {
+          await this.send(head.text);
+        } finally {
+          this.dispatching = false;
+        }
       }
     },
   },

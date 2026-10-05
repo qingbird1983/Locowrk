@@ -18,6 +18,8 @@ import { Icon } from "../../lib/icons";
 
 const props = defineProps<{
   running: boolean;
+  /** v4.11 §3.39④：本轮被用户停止（收束后头行「已停止」，重放恒否）。 */
+  stopped?: boolean;
   toolCount: number;
   failures: number;
   /** 组内最早的过程项时刻；undefined = 历史重放（不显示时长）。 */
@@ -90,7 +92,7 @@ const metaText = computed(() => {
     >
       <Icon name="sparkle" :size="14" class="shrink-0 text-ink-3" />
       <span class="cv-head__label">
-        {{ running ? t("turn.running") : t("turn.done") }}
+        {{ running ? t("turn.running") : stopped ? t("turn.stopped") : t("turn.done") }}
       </span>
       <span class="cv-head__meta">{{ metaText }}</span>
       <span
@@ -123,6 +125,10 @@ const metaText = computed(() => {
 }
 .turn__grid {
   display: grid;
+  /* v2.74·fix（目检实抓，CDP 实测 body 1693 vs 容器 560）：隐式 auto 列轨
+   * 按内容 max-content 撑轨越界——列宽必须显式钉死容器；min-width:0 兜
+   * settled 态 overflow:visible 的自动最小尺寸。 */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 0fr;
   transition: grid-template-rows var(--dur-fast) var(--ease-in);
 }
@@ -134,12 +140,12 @@ const metaText = computed(() => {
   overflow: visible;
 }
 .turn__body {
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   opacity: 0;
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid var(--lw-line-subtle);
+  /* v4.11 用户裁定（照 ZCode 过程流基准）：展开体与头行同一左缘——
+   * 不缩进、无引导线，扁平直排 */
   display: flex;
   flex-direction: column;
   gap: 1px;

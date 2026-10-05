@@ -57,7 +57,7 @@ function relTime(ts: number): string {
         {{ t("developer.refresh") }}
       </button>
     </SettingsRow>
-    <div class="space-y-2 rounded-[14px] bg-wash-1 px-4 py-3.5 text-xs">
+    <div class="space-y-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-3.5 text-xs">
       <p v-if="!tree" class="text-[11.5px] text-ink-4">
         {{ t("developer.treeEmpty") }}
       </p>

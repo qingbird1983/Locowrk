@@ -15,7 +15,7 @@
 //!   归 memory-sqlite 插件所有，宿主只做管理面访问）
 //! - `experiences`：经历记忆库（⑬，Context 文档 §4.3 宿主侧 memory-vector）
 //!   ——语义检索 experiences.sqlite3，ExperienceSource 契约的桌面实现
-//! - `llm`：真实模型接入（阶段八②，LLM.md 方案一）——genai 三合一
+//! - `llm`：真实模型接入（阶段八②，LLM.md v3.0）——自建 OpenAI 兼容统一客户端
 //!   适配器（openai / anthropic / ollama），由设置面板驱动分发
 //! - `demo_llm`：阶段五脚本模型（现为 llm 模块的未配置回落替身）
 //! - `demo_tools`：阶段六内置演示工具 send_email（不可逆 → 走审批弹窗）
@@ -32,6 +32,7 @@
 //! 纪律：命令只做参数转换；流式输出走事件推送，不塞 command 返回值（§12.2）。
 
 mod approval;
+mod ask;
 mod autodisable;
 mod commands;
 mod data_root;
@@ -39,10 +40,10 @@ mod demo_llm;
 mod demo_tools;
 mod desktop_notify;
 mod events;
-mod handoff;
 mod experiences;
 mod export;
 mod extract;
+mod handoff;
 mod idle;
 mod llm;
 mod memory;
@@ -62,6 +63,7 @@ mod search_tools;
 mod session_log;
 mod settings;
 mod state;
+mod stop;
 mod sub_transcript;
 mod title;
 mod tool_source;
@@ -155,6 +157,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::agent_chat,
             commands::agent_approve,
+            commands::agent_stop,
+            commands::ask_respond,
+            commands::ask_snooze,
+            commands::list_pending_asks,
             commands::list_pending_approvals,
             commands::context_undo_compact,
             commands::plugin_list,

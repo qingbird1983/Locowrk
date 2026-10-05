@@ -218,7 +218,7 @@ function closeSetup() {
       <template #action>
         <button
           type="button"
-          class="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90"
+          class="flex items-center gap-1.5 rounded-[var(--lw-r-xs)] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90"
           @click="copyDraft = null; setupFor = ''"
         >
           <Icon name="plus" :size="13" />
@@ -226,8 +226,8 @@ function closeSetup() {
         </button>
       </template>
 
-      <div v-if="providers.length === 0" class="flex flex-col items-center gap-1.5 rounded-[14px] bg-wash-1 px-4 py-8">
-        <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-wash-2 text-ink-4" aria-hidden>
+      <div v-if="providers.length === 0" class="flex flex-col items-center gap-1.5 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-8">
+        <span class="flex h-10 w-10 items-center justify-center rounded-[var(--lw-r-md)] bg-wash-2 text-ink-4" aria-hidden>
           <Icon name="server" :size="18" />
         </span>
         <p class="text-[13px] font-medium text-ink-2">{{ t("settings.modelEmptyTitle") }}</p>

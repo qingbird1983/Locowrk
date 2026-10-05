@@ -5,6 +5,8 @@
 //! `agent://chunk` 通道，该步的整段投影被 runner 抑制；无 sink 的路径
 //! （headless / 内核测试）回到整段投影。前端追加逻辑不变。
 
+use std::sync::Arc;
+
 use plugin_api::SideEffect;
 use serde::Serialize;
 use serde_json::Value;
@@ -35,6 +37,15 @@ pub mod channels {
     pub const THINKING: &str = "agent://thinking";
     /// 单步 LLM 用量（v2.58 §3.12）：runner 投影（实时与重放同形）。
     pub const LLM_USAGE: &str = "agent://usage";
+    /// 任务选择请求（v4.11 §3.39①）：`ask_user` 工具反向请求——前端渲染
+    /// composer 坞内选择卡，应答经 `ask_respond` 回填。
+    pub const ASK_USER: &str = "agent://ask-user";
+    /// 选择收束（v4.11 §3.39①）：应答/跳过/超时/停止四路同源——前端摘卡。
+    pub const ASK_RESOLVED: &str = "agent://ask-resolved";
+    /// 传输重试（LLM.md v3.0）：兼容客户端重试前推——前端重置流式缓冲。
+    pub const LLM_RETRY: &str = "agent://llm-retry";
+    /// 单轮步数到顶（LLM.md v3.0 同批）：TurnDone 后如实告知（不硬报错）。
+    pub const TURN_CAPPED: &str = "agent://turn-capped";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -169,6 +180,46 @@ pub enum AgentEvent {
         allowed: bool,
         reason: Option<String>,
     },
+    /// 任务选择请求（v4.11 §3.39①）：`ask_user` 工具的卡片载荷。不进会话
+    /// 日志（工具调用/结果本身在日志里，卡片只是"问人"的实时通道——与
+    /// ApprovalRequest 同款纪律）。`timeout_secs` = 守夜秒数（0 = 不限）。
+    AskUser {
+        session_id: Option<String>,
+        request_id: String,
+        question: String,
+        options: Vec<AskOptionPayload>,
+        multi_select: bool,
+        timeout_secs: u64,
+    },
+    /// 选择收束（v4.11 §3.39①）：应答/跳过/超时/停止都发——前端据此摘卡。
+    AskResolved {
+        session_id: Option<String>,
+        request_id: String,
+    },
+    /// 传输重试（LLM.md v3.0）：兼容客户端重试前通知——前端清空本步未
+    /// 完成的流式缓冲（重试轮 delta 从零重建同一气泡）并显示状态行。
+    /// 只在已推过 delta 的重试发生（纯等待型重试对用户不可见）。
+    LlmRetry {
+        session_id: String,
+        /// 第几次重试（从 1 计）。
+        attempt: u32,
+        /// 本次等待毫秒（退避/Retry-After 结果，状态行展示用）。
+        delay_ms: u64,
+    },
+    /// 单轮步数到顶（LLM.md v3.0 同批）：runner 不再硬报错，正常 TurnDone
+    /// 收束后发本事件——前端推 SystemNotice 如实告知 + 指引发「继续」。
+    TurnCapped {
+        session_id: String,
+        steps: u32,
+    },
+}
+
+/// `ask_user` 的选项载荷（§3.39①）：label 必填，description 可选。
+#[derive(Debug, Clone, Serialize)]
+pub struct AskOptionPayload {
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 impl AgentEvent {
@@ -186,6 +237,10 @@ impl AgentEvent {
             AgentEvent::ApprovalResolved { .. } => channels::APPROVAL_RESOLVED,
             AgentEvent::Thinking { .. } => channels::THINKING,
             AgentEvent::LlmUsage { .. } => channels::LLM_USAGE,
+            AgentEvent::AskUser { .. } => channels::ASK_USER,
+            AgentEvent::AskResolved { .. } => channels::ASK_RESOLVED,
+            AgentEvent::LlmRetry { .. } => channels::LLM_RETRY,
+            AgentEvent::TurnCapped { .. } => channels::TURN_CAPPED,
         }
     }
 }
@@ -254,11 +309,13 @@ impl EventSink for TauriSink {
 /// （StepOutcome::streamed），前端无需区分。带会话身份的 step 才发
 /// （headless / 无身份 step 无 UI 可推）。子 Agent 的 delta 已在内核侧
 /// 被 child_kernel 的 NoLlmStreamSink 压制（黑盒不泄漏）。
-pub struct StreamChunkSink(AppHandle);
+/// v4.11：持有停止标记注册表——`should_stop` 按会话查询，流式循环的
+/// delta 回调点据此截断（停止生成 §3.39④）。
+pub struct StreamChunkSink(AppHandle, Arc<crate::stop::StopFlags>);
 
 impl StreamChunkSink {
-    pub fn new(app: AppHandle) -> Self {
-        Self(app)
+    pub fn new(app: AppHandle, stop_flags: Arc<crate::stop::StopFlags>) -> Self {
+        Self(app, stop_flags)
     }
 }
 
@@ -304,5 +361,11 @@ impl kernel_agent::LlmStreamSink for StreamChunkSink {
                 false
             }
         }
+    }
+
+    /// 停止查询（v4.11 §3.39④）：按会话查 `StopFlags`——流式循环的
+    /// delta 回调点返回 true 即截断（已收到的部分正文原样收束）。
+    fn should_stop(&self, session_id: Option<&str>) -> bool {
+        session_id.is_some_and(|sid| self.1.is_stopped(sid))
     }
 }
