@@ -87,16 +87,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 位置（用户裁定）：水平居中、垂直居中偏上一小段（视线焦点区——不挡
- * composer、不顶标题）；宽度统一 min(420px, 100vw−32px) */
+/* 位置（用户裁定 + 2026-10-06 目检修正）：水平居中、垂直居中偏上的上部
+ * （40vh 被读成「正居中」，提至 30vh）；宽度统一 min(360px, 100vw−32px)
+ * （目检裁定 420 过长） */
 .toast-stack {
   position: fixed;
-  top: 40vh;
+  top: 30vh;
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--lw-z-toast);
   display: flex;
-  width: min(420px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 32px));
   flex-direction: column;
   gap: 8px;
 }
