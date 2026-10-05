@@ -21,6 +21,7 @@ import SettingsRow from "./SettingsRow.vue";
 import SettingsSegmented from "./SettingsSegmented.vue";
 import SettingsToggle from "./SettingsToggle.vue";
 import MemoryTreePanel from "./MemoryTreePanel.vue";
+import LabPanel from "../lab/LabPanel.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -419,5 +420,8 @@ onMounted(() => void refresh());
     </SettingsGroup>
 
     <MemoryTreePanel />
+
+    <!-- 【实验室】形态库试挂（beautiful-ui-vue 移植件，目检用，随实验去留） -->
+    <LabPanel />
   </div>
 </template>

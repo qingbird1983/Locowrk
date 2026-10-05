@@ -86,6 +86,12 @@ export default {
   },
   // 【实验室】beautiful-ui-vue 移植验证件文案（lab 组件，去留随实验定）
   bui: {
+    rc: {
+      defaultTitle: "要我下这单补货吗？",
+      otherOptions: "其它选项",
+      alternatives: "其它方案",
+      accepted: "已采纳",
+    },
     openApproval: "打开审批",
     answersSent: "已提交",
     startOver: "重新填写",

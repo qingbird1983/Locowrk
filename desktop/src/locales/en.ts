@@ -86,6 +86,12 @@ export default {
   },
   // [Lab] beautiful-ui-vue port strings (lab component; keep or drop with the experiment)
   bui: {
+    rc: {
+      defaultTitle: "Want me to place this restock order?",
+      otherOptions: "Other options",
+      alternatives: "Alternatives",
+      accepted: "Accepted",
+    },
     openApproval: "Open approval",
     answersSent: "Answers sent",
     startOver: "Start over",
