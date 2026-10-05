@@ -77,10 +77,12 @@ async function place(): Promise<void> {
 </script>
 
 <template>
+  <!-- 锚点 span 不设 position（气泡是 Teleport+fixed，不依赖它）——触发件
+       自带 fixed/absolute（如钉窗按钮）时定位语义不被破坏，测量其真实位置 -->
   <span
     ref="anchor"
     v-bind="$attrs"
-    class="relative inline-flex"
+    class="inline-flex"
     role="note"
     :aria-label="label"
     @mouseenter="show"
@@ -119,7 +121,7 @@ async function place(): Promise<void> {
   background: var(--lw-bg-elevated);
   box-shadow: var(--lw-shadow-raised);
   color: var(--lw-ink-2);
-  font-size: 11px;
+  font-size: var(--lw-fs-11);
   line-height: 1.5;
   text-align: left;
   pointer-events: none;

@@ -95,9 +95,11 @@ const title = computed(() => {
          挪到 data-chat-root 直属（z-auto，不设层叠上下文），按钮自己的
          z-30 才真正压过面板。 -->
   </header>
-  <HoverTip v-if="!isHome" :text="t('panel.title')">
+  <!-- 钉窗定位挂在 HoverTip 包裹层（fixed 后测量的才是真实位置——挂在
+       按钮上时 span 在文档流原点，气泡锚点跑偏，目检实抓） -->
+  <HoverTip v-if="!isHome" class="panel-toggle" :text="t('panel.title')">
     <button
-      class="ctl panel-toggle"
+      class="ctl"
       type="button"
       :aria-pressed="workPanel.open"
       :aria-label="t('panel.title')"
