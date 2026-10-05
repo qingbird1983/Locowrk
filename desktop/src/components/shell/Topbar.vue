@@ -79,7 +79,7 @@ const title = computed(() => {
       </HoverTip>
       <HoverTip class="min-w-0" :text="title" :label="title">
         <span
-          class="title-text min-w-0 truncate text-[14px] font-medium tracking-[-0.02em] text-ink-1"
+          class="title-text min-w-0 truncate text-[length:var(--lw-fs-14)] font-medium tracking-[-0.02em] text-ink-1"
           data-tauri-drag-region
           >{{ title }}</span
         >
@@ -95,9 +95,10 @@ const title = computed(() => {
          挪到 data-chat-root 直属（z-auto，不设层叠上下文），按钮自己的
          z-30 才真正压过面板。 -->
   </header>
-  <!-- 钉窗定位挂在 HoverTip 包裹层（fixed 后测量的才是真实位置——挂在
-       按钮上时 span 在文档流原点，气泡锚点跑偏，目检实抓） -->
-  <HoverTip v-if="!isHome" class="panel-toggle" :text="t('panel.title')">
+  <!-- 钉窗定位挂在 HoverTip 包裹层（fixed 后测量的才是真实位置）。类是
+       全局 .lw-panel-toggle（style.css）：scoped 属性进不了多根组件内部，
+       scoped 规则落不到包裹 span 上（v2.85 实抓：开关因此掉出钉窗位） -->
+  <HoverTip v-if="!isHome" class="lw-panel-toggle" :text="t('panel.title')">
     <button
       class="ctl"
       type="button"
@@ -126,16 +127,8 @@ const title = computed(() => {
   color: var(--lw-ink-1);
 }
 
-/* 面板开关钉窗（v2.61）：fixed 相对窗口——top = (46−28)/2，right = 车道
- * 120px；z-30 压过工作面板（z-20）落在其预留槽位上。目的地切走时随
- * data-chat-root display:none 一起消失。注意它必须是组件第二根——header
- * （relative z-10）是层叠上下文，钉在里面整体只有 z-10，会被面板盖住 */
-.panel-toggle {
-  position: fixed;
-  top: 9px;
-  right: var(--lw-wincontrols);
-  z-index: 30;
-}
+/* 面板开关钉窗规则已上收为全局类 .lw-panel-toggle（style.css）——scoped
+ * 属性进不了多根组件（HoverTip）内部，规则必须放全局才能落到包裹层 */
 
 /* 标题固定宽度上限（v2.60 修复批）：长标题在此截断省略，不再横贯整条带 */
 .title-text {
