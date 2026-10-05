@@ -186,6 +186,69 @@ function isStoppedBlock(key: number): boolean {
   return chat.stopRequested && key === lastProcessKey.value;
 }
 
+// ---- 四层折叠状态机（v2.96 用户裁定：L3 最新动作流式 / L2 动作折行 /
+// L1 组头 / L0 耗时+发丝线）----
+/** 组相位：live = 本组有动作在跑；replied = 动作完、模型回话中（含同轮
+ * 被新动作块接替的靠前组）；done = 整轮收束（running 结束全员 done）。 */
+type GroupPhase = "live" | "replied" | "done";
+const phaseByKey = computed(() => {
+  const m = new Map<number, GroupPhase>();
+  if (!chat.running) {
+    for (const b of blocks.value) {
+      if (b.kind === "turn" && b.hasProcess) m.set(b.key, "done");
+    }
+    return m;
+  }
+  const proc = blocks.value.filter(
+    (b): b is TurnBlock => b.kind === "turn" && b.hasProcess,
+  );
+  proc.forEach((b) => {
+    if (b.running) m.set(b.key, "live");
+    // 动作已完：最后一组 = 模型正在回话；靠前组 = 已被后续动作块接替——
+    // 两者同收 L1（replied），整轮 running 结束再一起进 done
+    else m.set(b.key, "replied");
+  });
+  return m;
+});
+
+/** L3 聚焦 = live 组里最后一个 pending 工具（流式中的动作）。 */
+function focusToolId(b: TurnBlock): number | null {
+  if (!b.running) return null;
+  for (let i = b.items.length - 1; i >= 0; i--) {
+    const it = b.items[i]!;
+    if (it.kind === "tool" && it.pending) return it.id;
+  }
+  return null;
+}
+
+/** 复制钮收敛（用户裁定）：只出现在用户消息与每轮最终汇报/总结之下——
+ * 判据 = 该助手条目到下一个用户消息之间再无任何过程项（工具/思考/决策/
+ * 错误）；任务执行中间的简短回话后面跟着动作，不给复制钮。 */
+const finalAssistantIds = computed(() => {
+  const ids = new Set<number>();
+  const items = chat.items;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]!;
+    if (it.kind !== "assistant") continue;
+    let followed = false;
+    for (let j = i + 1; j < items.length; j++) {
+      const n = items[j]!;
+      if (n.kind === "user") break;
+      if (
+        n.kind === "tool" ||
+        n.kind === "thinking" ||
+        n.kind === "decision" ||
+        n.kind === "error"
+      ) {
+        followed = true;
+        break;
+      }
+    }
+    if (!followed) ids.add(it.id);
+  }
+  return ids;
+});
+
 /** 待决审批按 call_id 索引（工具行「等待审批」状态词的数据源；决策卡
  * 本体在 composer 坞，§3.17 v4.11）。 */
 const pendingByCall = computed(() => {
@@ -283,6 +346,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
               :tool-count="block.toolCount"
               :failures="block.failures"
               :start-ts="block.startTs"
+              :phase="phaseByKey.get(block.key) ?? 'done'"
               :default-expanded="expandDefault"
             >
               <template v-for="item in block.items" :key="item.id">
@@ -292,6 +356,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
                   :item="item"
                   :awaiting="isAwaiting(item.callId)"
                   :default-expanded="expandDefault"
+                  :live-focus="focusToolId(block) === item.id"
                   @open-transcript="onOpenTranscript"
                   @open-diff="onOpenDiff"
                 />
@@ -365,6 +430,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
               kind="assistant"
               :text="block.item.text"
               :ts="block.item.ts"
+              :copyable="finalAssistantIds.has(block.item.id)"
             />
 
             <!-- 会话内系统消息（SystemNotice 模式）：组外兄弟节点 -->
@@ -447,6 +513,11 @@ async function onNoticeAction(item: SystemItem, action: string) {
   width: min(100%, var(--lw-content-max));
   margin-inline: auto;
   padding-bottom: 180px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值180,§二⑬) */
+}
+/* 四层折叠（v2.96）：动作块与随后的简短回话行距收紧——原链 10+12=22px，
+ * 收为 6+4=10px（跨组件兄弟选择器：两组件根都带本层 data-v） */
+.turn + .msg {
+  padding-top: var(--lw-gap-4);
 }
 /* 首页空态（§3.14 v3.9）迁去 chat/WelcomeHome（欢迎页独立形态，composer
  * 随行）；本组件只在会话态挂载 */

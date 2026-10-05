@@ -13,14 +13,20 @@ import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import { renderMarkdown } from "../../lib/markdown";
 
-const props = defineProps<{
-  kind: "user" | "assistant";
-  text: string;
-  /** 实时到达时刻；历史重放无此项 → 动作区只留复制钮。 */
-  ts?: number;
-  /** 用户消息可编辑（v2.57 §3.34：重放消息或最后一条；运行中恒 false）。 */
-  editable?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    kind: "user" | "assistant";
+    text: string;
+    /** 实时到达时刻；历史重放无此项 → 动作区只留复制钮。 */
+    ts?: number;
+    /** 用户消息可编辑（v2.57 §3.34：重放消息或最后一条；运行中恒 false）。 */
+    editable?: boolean;
+    /** 复制钮（v2.96 用户裁定）：只在用户消息与每轮最终汇报/总结之下出现
+     * （缺省 true = 用户消息）；任务中间的简短回话由父层传 false 关掉。 */
+    copyable?: boolean;
+  }>(),
+  { copyable: true },
+);
 
 const emit = defineEmits<{ edit: [newText: string] }>();
 
@@ -133,7 +139,7 @@ async function onBodyClick(e: MouseEvent) {
     />
 
     <div class="msg__actions">
-      <HoverTip :text="t('chat.copyMessage')">
+      <HoverTip v-if="copyable" :text="t('chat.copyMessage')">
         <button
           class="copy-btn"
           type="button"

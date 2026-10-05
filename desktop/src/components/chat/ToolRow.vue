@@ -24,6 +24,9 @@ const props = defineProps<{
   defaultExpanded?: boolean;
   /** 该调用的审批未决（§3.17）：状态词"等待审批"——还没跑，不是运行中。 */
   awaiting?: boolean;
+  /** 四层折叠 L3（v2.96 用户裁定）：该行是本轮最新在跑的动作 = 展开
+   * 流式明细；翻 false 即收回 L2。用户手动开合仍自由，下次翻转再同步。 */
+  liveFocus?: boolean;
 }>();
 
 /** §3.10 卡是入口：subagent_run 收束 → 「看转录」；edit_diff 带 patch →
@@ -45,6 +48,15 @@ watch(
     if (failed) expanded.value = true;
   },
   { immediate: true },
+);
+
+// L3 聚焦（四层折叠）：liveFocus 翻转直接驱动展开/收回——最新在跑动作
+// 展开流式明细，跑完被下一动作接替即收回为 L2 折叠行
+watch(
+  () => props.liveFocus,
+  (v) => {
+    expanded.value = !!v;
+  },
 );
 
 /** 动作名（§3.18 映射表；表外回落工具 id + 「插件」徽章）。 */
