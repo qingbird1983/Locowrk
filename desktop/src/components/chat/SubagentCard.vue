@@ -24,6 +24,7 @@ export interface SubagentChild {
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 
 const props = defineProps<{ children: SubagentChild[] }>();
 const emit = defineEmits<{ open: [childId: string, prompt: string] }>();
@@ -77,36 +78,41 @@ const durationText = computed(() => {
       <div class="node-col">
         <template v-for="child in children" :key="child.childId">
           <div class="connector" aria-hidden="true" />
-          <button
-            class="node node--child"
-            type="button"
-            :title="t('panel.viewTranscript')"
-            @click="emit('open', child.childId, child.prompt)"
+          <HoverTip
+            class="w-full"
+            :text="t('panel.viewTranscript')"
+            :label="t('panel.viewTranscript')"
           >
-            <div class="node__title">{{ child.prompt || t("subagent.child") }}</div>
-            <div class="node__tags">
-              <span class="node__tag">subagent_run</span>
-            </div>
-            <div class="node__foot">
-              <span
-                class="dot"
-                :class="{
-                  'dot--run': child.status === 'running',
-                  'dot--ok': child.status === 'done',
-                  'dot--fail': child.status === 'failed',
-                }"
-              />
-              <span>{{
-                child.status === "running"
-                  ? t("tool.running")
-                  : child.status === "done"
-                    ? t("turn.done")
-                    : t("tool.failed")
-              }}</span>
-              <span v-if="child.durationText">{{ child.durationText }}</span>
-              <span class="node__open">{{ t("panel.viewTranscript") }}</span>
-            </div>
-          </button>
+            <button
+              class="node node--child"
+              type="button"
+              @click="emit('open', child.childId, child.prompt)"
+            >
+              <div class="node__title">{{ child.prompt || t("subagent.child") }}</div>
+              <div class="node__tags">
+                <span class="node__tag">subagent_run</span>
+              </div>
+              <div class="node__foot">
+                <span
+                  class="dot"
+                  :class="{
+                    'dot--run': child.status === 'running',
+                    'dot--ok': child.status === 'done',
+                    'dot--fail': child.status === 'failed',
+                  }"
+                />
+                <span>{{
+                  child.status === "running"
+                    ? t("tool.running")
+                    : child.status === "done"
+                      ? t("turn.done")
+                      : t("tool.failed")
+                }}</span>
+                <span v-if="child.durationText">{{ child.durationText }}</span>
+                <span class="node__open">{{ t("panel.viewTranscript") }}</span>
+              </div>
+            </button>
+          </HoverTip>
         </template>
       </div>
     </div>

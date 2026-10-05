@@ -17,6 +17,7 @@ import { useChatStore } from "../../stores/chat";
 import { useShellStore } from "../../stores/shell";
 import { useWorkPanelStore } from "../../stores/work-panel";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import WorkspacePicker from "../chat/WorkspacePicker.vue";
 
 const { t } = useI18n();
@@ -48,16 +49,17 @@ const title = computed(() => {
       :class="shell.sidebarCollapsed ? 'lead--open' : ''"
       :aria-hidden="!shell.sidebarCollapsed"
     >
-      <button
-        class="ctl"
-        type="button"
-        :title="t('sidebar.expand')"
-        :aria-label="t('sidebar.expand')"
-        :tabindex="shell.sidebarCollapsed ? 0 : -1"
-        @click="shell.toggleSidebar()"
-      >
-        <Icon name="sidebar" :size="14" aria-hidden="true" />
-      </button>
+      <HoverTip :text="t('sidebar.expand')">
+        <button
+          class="ctl"
+          type="button"
+          :aria-label="t('sidebar.expand')"
+          :tabindex="shell.sidebarCollapsed ? 0 : -1"
+          @click="shell.toggleSidebar()"
+        >
+          <Icon name="sidebar" :size="14" aria-hidden="true" />
+        </button>
+      </HoverTip>
     </div>
 
     <!-- 标题段（拖拽区）：项目归属图标（v2.60，会话态）→ 运行点 → 标题。
@@ -67,17 +69,21 @@ const title = computed(() => {
       data-tauri-drag-region
     >
       <WorkspacePicker v-if="!isHome" icon-only :drop-down="true" />
-      <span
+      <HoverTip
         v-if="chat.running"
-        class="mx-0.5 h-1 w-1 shrink-0 rounded-full bg-ok lw-pulse"
-        :title="t('status.running')"
-      />
-      <span
-        class="title-text min-w-0 truncate text-[14px] font-medium tracking-[-0.02em] text-ink-1"
-        :title="title"
-        data-tauri-drag-region
-        >{{ title }}</span
+        class="shrink-0"
+        :text="t('status.running')"
+        :label="t('status.running')"
       >
+        <span class="mx-0.5 h-1 w-1 shrink-0 rounded-full bg-ok lw-pulse" />
+      </HoverTip>
+      <HoverTip class="min-w-0" :text="title" :label="title">
+        <span
+          class="title-text min-w-0 truncate text-[14px] font-medium tracking-[-0.02em] text-ink-1"
+          data-tauri-drag-region
+          >{{ title }}</span
+        >
+      </HoverTip>
     </div>
 
     <!-- 面板开关（v2.61 用户裁定「展开右栏还是被挤跑」）：**fixed 钉窗**，
@@ -89,17 +95,17 @@ const title = computed(() => {
          挪到 data-chat-root 直属（z-auto，不设层叠上下文），按钮自己的
          z-30 才真正压过面板。 -->
   </header>
-  <button
-    v-if="!isHome"
-    class="ctl panel-toggle"
-    type="button"
-    :aria-pressed="workPanel.open"
-    :title="t('panel.title')"
-    :aria-label="t('panel.title')"
-    @click="workPanel.toggle()"
-  >
-    <Icon name="panel" :size="14" aria-hidden="true" />
-  </button>
+  <HoverTip v-if="!isHome" :text="t('panel.title')">
+    <button
+      class="ctl panel-toggle"
+      type="button"
+      :aria-pressed="workPanel.open"
+      :aria-label="t('panel.title')"
+      @click="workPanel.toggle()"
+    >
+      <Icon name="panel" :size="14" aria-hidden="true" />
+    </button>
+  </HoverTip>
 </template>
 
 <style scoped>

@@ -16,6 +16,7 @@ import type { SessionMeta } from "../../types";
 import { groupSessions } from "../../lib/session-groups";
 import { loadCollapsedGroups, saveCollapsedGroups } from "../../lib/sidebar-preference";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import RowMenu, { type RowMenuItem } from "./RowMenu.vue";
 import ProjectGroup from "./ProjectGroup.vue";
 
@@ -104,39 +105,45 @@ async function addProject() {
     <!-- 「项目」组头行（issue #6）：下三角左对齐紧跟文字；筛选/新建右对齐
          hover 显形 -->
     <div class="proj-head">
-      <button
-        type="button"
-        class="proj-head__label"
-        :aria-expanded="!allCollapsed"
-        :title="t('sidebar.toggleAllProjects')"
-        @click="toggleAll"
+      <HoverTip
+        :text="t('sidebar.toggleAllProjects')"
+        :label="t('sidebar.toggleAllProjects')"
       >
-        {{ t("sidebar.projects") }}
-        <Icon
-          :name="allCollapsed ? 'chevronRight' : 'chevronDown'"
-          :size="12"
-          aria-hidden="true"
-        />
-      </button>
+        <button
+          type="button"
+          class="proj-head__label"
+          :aria-expanded="!allCollapsed"
+          @click="toggleAll"
+        >
+          {{ t("sidebar.projects") }}
+          <Icon
+            :name="allCollapsed ? 'chevronRight' : 'chevronDown'"
+            :size="12"
+            aria-hidden="true"
+          />
+        </button>
+      </HoverTip>
       <span class="proj-head__actions">
-        <button
-          type="button"
-          class="proj-head__btn"
-          :aria-label="t('sidebar.filter')"
-          :title="t('sidebar.filter')"
-          @click="openFilterMenu"
-        >
-          <Icon name="filter" :size="13" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          class="proj-head__btn"
-          :aria-label="t('sidebar.addProject')"
-          :title="t('sidebar.addProject')"
-          @click="addProject"
-        >
-          <Icon name="plus" :size="13" aria-hidden="true" />
-        </button>
+        <HoverTip :text="t('sidebar.filter')">
+          <button
+            type="button"
+            class="proj-head__btn"
+            :aria-label="t('sidebar.filter')"
+            @click="openFilterMenu"
+          >
+            <Icon name="filter" :size="13" aria-hidden="true" />
+          </button>
+        </HoverTip>
+        <HoverTip :text="t('sidebar.addProject')">
+          <button
+            type="button"
+            class="proj-head__btn"
+            :aria-label="t('sidebar.addProject')"
+            @click="addProject"
+          >
+            <Icon name="plus" :size="13" aria-hidden="true" />
+          </button>
+        </HoverTip>
       </span>
       <!-- 菜单进退场（标准 §二①）：Teleport 出 aside 裁剪 + Transition 接管 -->
       <Teleport to="body">

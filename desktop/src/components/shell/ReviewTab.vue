@@ -8,6 +8,7 @@
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import HoverTip from "../settings/HoverTip.vue";
 import { collapseContext, parseUnifiedDiff } from "../../lib/diff-parse";
 
 const props = defineProps<{ path: string; diff: string }>();
@@ -35,7 +36,9 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
     <template v-else>
       <!-- 文件名头（§3.28）：wash-1 底，左路径 mono / 右统计 -->
       <div class="diff-head">
-        <span class="diff-head__path" :title="props.path">{{ fileName }}</span>
+        <HoverTip class="min-w-0" :text="props.path" :label="props.path">
+          <span class="diff-head__path">{{ fileName }}</span>
+        </HoverTip>
         <span class="diff-head__stats">
           <span class="text-ok">+{{ parsed.added }}</span>
           <span class="text-danger">−{{ parsed.removed }}</span>

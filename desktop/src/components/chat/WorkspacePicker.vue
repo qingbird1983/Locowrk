@@ -18,6 +18,7 @@ import { useToastStore } from "../../stores/toast";
 import { pickDirectory } from "../../lib/api";
 import { workspaceDisplayName } from "../../lib/session-groups";
 import { Icon, type IconName } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 
 const props = defineProps<{ dropDown?: boolean; iconOnly?: boolean }>();
 
@@ -114,29 +115,29 @@ const chipIcon: IconName = "folder";
 <template>
   <div ref="root" class="ws-picker">
     <!-- iconOnly 变体（v2.60 修复批）：顶栏标题前的纯图标触发钮 -->
-    <button
-      v-if="props.iconOnly"
-      class="ws-picker__icon-btn"
-      type="button"
-      :aria-expanded="open"
-      :aria-label="t('workspace.title')"
-      :title="currentWs ?? t('workspace.title')"
-      @click="toggle"
-    >
-      <Icon :name="chipIcon" :size="15" aria-hidden="true" />
-    </button>
-    <button
-      v-else
-      class="ws-picker__chip"
-      type="button"
-      :aria-expanded="open"
-      :aria-label="t('workspace.title')"
-      :title="currentWs ?? t('workspace.title')"
-      @click="toggle"
-    >
-      <Icon :name="chipIcon" :size="14" aria-hidden="true" />
-      <span class="ws-picker__label">{{ currentName }}</span>
-    </button>
+    <HoverTip :text="currentWs ?? t('workspace.title')">
+      <button
+        v-if="props.iconOnly"
+        class="ws-picker__icon-btn"
+        type="button"
+        :aria-expanded="open"
+        :aria-label="t('workspace.title')"
+        @click="toggle"
+      >
+        <Icon :name="chipIcon" :size="15" aria-hidden="true" />
+      </button>
+      <button
+        v-else
+        class="ws-picker__chip"
+        type="button"
+        :aria-expanded="open"
+        :aria-label="t('workspace.title')"
+        @click="toggle"
+      >
+        <Icon :name="chipIcon" :size="14" aria-hidden="true" />
+        <span class="ws-picker__label">{{ currentName }}</span>
+      </button>
+    </HoverTip>
 
     <Transition :name="props.dropDown ? 'lw-pop-down' : 'lw-pop-up'">
       <div
@@ -147,25 +148,30 @@ const chipIcon: IconName = "folder";
         :aria-label="t('workspace.title')"
       >
         <div class="ws-picker__group">{{ t("workspace.recent") }}</div>
-        <button
+        <HoverTip
           v-for="ws in candidates"
           :key="ws"
-          class="ws-picker__row"
-          type="button"
-          role="option"
-          :aria-selected="ws === currentWs"
-          :title="ws"
-          @click="choose(ws)"
+          class="w-full"
+          :text="ws"
+          :label="ws"
         >
-          <Icon name="folder" :size="15" class="ws-picker__row-icon" aria-hidden="true" />
-          <span class="ws-picker__name">{{ workspaceDisplayName(ws) }}</span>
-          <Icon
-            v-if="ws === currentWs"
-            name="check"
-            :size="14"
-            class="ws-picker__check"
-          />
-        </button>
+          <button
+            class="ws-picker__row"
+            type="button"
+            role="option"
+            :aria-selected="ws === currentWs"
+            @click="choose(ws)"
+          >
+            <Icon name="folder" :size="15" class="ws-picker__row-icon" aria-hidden="true" />
+            <span class="ws-picker__name">{{ workspaceDisplayName(ws) }}</span>
+            <Icon
+              v-if="ws === currentWs"
+              name="check"
+              :size="14"
+              class="ws-picker__check"
+            />
+          </button>
+        </HoverTip>
         <div class="ws-picker__sep" role="separator" />
         <button class="ws-picker__row" type="button" role="option" @click="addAndChoose">
           <Icon name="folderOpen" :size="15" class="ws-picker__row-icon" aria-hidden="true" />

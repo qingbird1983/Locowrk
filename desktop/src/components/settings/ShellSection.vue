@@ -42,7 +42,7 @@ function save() {
   <SettingsGroup :hint="t('settings.shellHint')">
     <SettingsRow :title="t('settings.shellUnlock')">
       <template #title-extra>
-        <HoverTip :label="t('settings.shellUnlock')">
+        <HoverTip icon :label="t('settings.shellUnlock')">
           <p class="text-warn">{{ t("settings.shellUnlockWarning") }}</p>
           <p class="mt-1 text-ink-3">{{ t("settings.shellRestart") }}</p>
         </HoverTip>

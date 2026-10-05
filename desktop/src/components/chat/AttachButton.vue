@@ -12,6 +12,7 @@ import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { pickFiles } from "../../lib/api";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 
 const props = defineProps<{ dropDown?: boolean }>();
 const emit = defineEmits<{ attach: [paths: string[]] }>();
@@ -49,16 +50,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="root" class="attach">
-    <button
-      class="attach__btn"
-      type="button"
-      :aria-expanded="open"
-      :aria-label="t('composer.attach')"
-      :title="t('composer.attach')"
-      @click="open = !open"
-    >
-      <Icon name="plus" :size="15" aria-hidden="true" />
-    </button>
+    <HoverTip :text="t('composer.attach')">
+      <button
+        class="attach__btn"
+        type="button"
+        :aria-expanded="open"
+        :aria-label="t('composer.attach')"
+        @click="open = !open"
+      >
+        <Icon name="plus" :size="15" aria-hidden="true" />
+      </button>
+    </HoverTip>
 
     <Transition :name="dropDown ? 'lw-pop-down' : 'lw-pop-up'">
       <div

@@ -14,6 +14,7 @@ import { useNotificationsStore } from "../../stores/notifications";
 import { useShellStore } from "../../stores/shell";
 import { compactNumber, relativeTime } from "../../lib/format";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import type { NotificationItem } from "../../types";
 
 /** 触发钮的视口坐标（左上角）。 */
@@ -114,26 +115,28 @@ async function onRow(item: NotificationItem) {
   >
       <div class="notif-pop__head">
         <span class="notif-pop__title">{{ t("notify.title") }}</span>
-        <button
-          class="notif-pop__act"
-          type="button"
-          :title="t('notify.markAll')"
-          :aria-label="t('notify.markAll')"
-          :disabled="store.unread === 0"
-          @click="store.markAllRead()"
-        >
-          <Icon name="check" :size="14" aria-hidden="true" />
-        </button>
-        <button
-          class="notif-pop__act"
-          type="button"
-          :title="t('notify.clear')"
-          :aria-label="t('notify.clear')"
-          :disabled="store.items.length === 0"
-          @click="store.clear()"
-        >
-          <Icon name="trash" :size="14" aria-hidden="true" />
-        </button>
+        <HoverTip :text="t('notify.markAll')">
+          <button
+            class="notif-pop__act"
+            type="button"
+            :aria-label="t('notify.markAll')"
+            :disabled="store.unread === 0"
+            @click="store.markAllRead()"
+          >
+            <Icon name="check" :size="14" aria-hidden="true" />
+          </button>
+        </HoverTip>
+        <HoverTip :text="t('notify.clear')">
+          <button
+            class="notif-pop__act"
+            type="button"
+            :aria-label="t('notify.clear')"
+            :disabled="store.items.length === 0"
+            @click="store.clear()"
+          >
+            <Icon name="trash" :size="14" aria-hidden="true" />
+          </button>
+        </HoverTip>
       </div>
 
       <div class="notif-pop__seg" role="tablist">

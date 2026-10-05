@@ -15,6 +15,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import ListPage from "./patterns/ListPage.vue";
 import SourceBadge from "./SourceBadge.vue";
+import HoverTip from "./settings/HoverTip.vue";
 import TreeSection from "./memory/TreeSection.vue";
 import { relativeTime } from "../lib/format";
 import { workspaceDisplayName } from "../lib/session-groups";
@@ -213,13 +214,18 @@ async function clearExperiences() {
       <h3 class="text-xs font-semibold text-ink-1">
         {{ t("memory.factsTitle") }}
       </h3>
-      <button
-        class="ml-auto rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
-        :title="t('memory.openFolderHint')"
-        @click="openFolder"
+      <HoverTip
+        class="ml-auto"
+        :text="t('memory.openFolderHint')"
+        :label="t('memory.openFolderHint')"
       >
-        {{ t("memory.openFolder") }}
-      </button>
+        <button
+          class="ml-auto rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
+          @click="openFolder"
+        >
+          {{ t("memory.openFolder") }}
+        </button>
+      </HoverTip>
     </div>
     <ListPage
       v-model:search="search"
@@ -247,13 +253,16 @@ async function clearExperiences() {
             </span>
             <SourceBadge :source="row.source" />
             <!-- ㉘·A·fix 双层记忆：'' = 全局偏好层，显式标层 -->
-            <span
+            <HoverTip
               v-if="row.workspace"
-              class="shrink-0 text-[10px] text-ink-5"
-              :title="row.workspace"
+              class="shrink-0"
+              :text="row.workspace"
+              :label="row.workspace"
             >
-              {{ t("memory.workspace") }} {{ workspaceDisplayName(row.workspace) }}
-            </span>
+              <span class="shrink-0 text-[10px] text-ink-5">
+                {{ t("memory.workspace") }} {{ workspaceDisplayName(row.workspace) }}
+              </span>
+            </HoverTip>
             <span v-else class="shrink-0 text-[10px] text-ink-5">
               {{ t("memory.globalTier") }}
             </span>
@@ -366,13 +375,16 @@ async function clearExperiences() {
             <span class="truncate font-mono text-[10px] text-ink-5">
               {{ t("memory.experienceSession", { id: row.sessionId.slice(0, 8) }) }}
             </span>
-            <span
+            <HoverTip
               v-if="row.workspace"
-              class="shrink-0 text-[10px] text-ink-5"
-              :title="row.workspace"
+              class="shrink-0"
+              :text="row.workspace"
+              :label="row.workspace"
             >
-              {{ t("memory.workspace") }} {{ workspaceDisplayName(row.workspace) }}
-            </span>
+              <span class="shrink-0 text-[10px] text-ink-5">
+                {{ t("memory.workspace") }} {{ workspaceDisplayName(row.workspace) }}
+              </span>
+            </HoverTip>
             <button
               class="ml-auto shrink-0 rounded-[var(--lw-r-xs)] px-2 py-1 text-[11px] transition"
               :class="

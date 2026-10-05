@@ -12,6 +12,7 @@ import { scheduleDelete, scheduleList } from "../../lib/api";
 import { useChatStore } from "../../stores/chat";
 import { clip } from "../../lib/format";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import type { SessionSchedule } from "../../types";
 
 const { t } = useI18n();
@@ -95,13 +96,18 @@ async function onDelete(row: SessionSchedule) {
           <div class="flex min-w-0 items-center gap-2">
             <span class="schedule-badge">{{ badgeText(row) }}</span>
             <span class="truncate text-[13px] text-ink-1">{{ row.title || clip(row.prompt, 40) }}</span>
-            <span
-              v-if="row.deferrals > 0"
-              class="shrink-0 text-[11px] text-warn"
-              :title="t('schedule.deferredHint', { n: row.deferrals })"
+            <HoverTip
+              :text="t('schedule.deferredHint', { n: row.deferrals })"
+              :label="t('schedule.deferredHint', { n: row.deferrals })"
+              class="shrink-0"
             >
-              {{ t("schedule.deferred", { n: row.deferrals }) }}
-            </span>
+              <span
+                v-if="row.deferrals > 0"
+                class="shrink-0 text-[11px] text-warn"
+              >
+                {{ t("schedule.deferred", { n: row.deferrals }) }}
+              </span>
+            </HoverTip>
           </div>
           <p class="schedule-prompt">{{ row.prompt }}</p>
           <p class="schedule-meta">
@@ -112,16 +118,21 @@ async function onDelete(row: SessionSchedule) {
             <span class="text-ink-3">{{ nextFireText(row) }}</span>
           </p>
         </div>
-        <button
-          class="row-ctl"
-          type="button"
-          :class="{ 'row-ctl--danger': confirmingDelete === row.id }"
-          :title="confirmingDelete === row.id ? t('schedule.confirmDelete') : t('schedule.delete')"
-          @click="onDelete(row)"
-          @blur="confirmingDelete = null"
+        <HoverTip
+          :text="confirmingDelete === row.id ? t('schedule.confirmDelete') : t('schedule.delete')"
+          :label="confirmingDelete === row.id ? t('schedule.confirmDelete') : t('schedule.delete')"
+          class="shrink-0"
         >
-          {{ confirmingDelete === row.id ? t("schedule.confirmDelete") : t("schedule.delete") }}
-        </button>
+          <button
+            class="row-ctl"
+            type="button"
+            :class="{ 'row-ctl--danger': confirmingDelete === row.id }"
+            @click="onDelete(row)"
+            @blur="confirmingDelete = null"
+          >
+            {{ confirmingDelete === row.id ? t("schedule.confirmDelete") : t("schedule.delete") }}
+          </button>
+        </HoverTip>
       </li>
     </ul>
   </div>

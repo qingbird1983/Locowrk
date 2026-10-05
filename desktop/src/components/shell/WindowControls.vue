@@ -11,6 +11,7 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 
 const { t } = useI18n();
 const appWindow = getCurrentWindow();
@@ -35,37 +36,43 @@ onBeforeUnmount(() => {
   <div
     class="fixed right-0 top-0 z-[1000] flex h-[var(--lw-toolbar-h)] w-[var(--lw-wincontrols)]"
   >
-    <button
-      class="win-btn"
-      type="button"
-      :title="t('window.minimize')"
-      :aria-label="t('window.minimize')"
-      @click="appWindow.minimize()"
+    <HoverTip class="flex-1 h-full" :text="t('window.minimize')">
+      <button
+        class="win-btn"
+        type="button"
+        :aria-label="t('window.minimize')"
+        @click="appWindow.minimize()"
+      >
+        <Icon name="min" :size="12" aria-hidden="true" />
+      </button>
+    </HoverTip>
+    <HoverTip
+      class="flex-1 h-full"
+      :text="maximized ? t('window.restore') : t('window.maximize')"
     >
-      <Icon name="min" :size="12" aria-hidden="true" />
-    </button>
-    <button
-      class="win-btn"
-      type="button"
-      :title="maximized ? t('window.restore') : t('window.maximize')"
-      :aria-label="maximized ? t('window.restore') : t('window.maximize')"
-      @click="appWindow.toggleMaximize().then(refresh)"
-    >
-      <Icon
-        :name="maximized ? 'copy' : 'max'"
-        :size="maximized ? 11 : 12"
-        aria-hidden="true"
-      />
-    </button>
-    <button
-      class="win-btn win-btn--close"
-      type="button"
-      :title="t('window.close')"
-      :aria-label="t('window.close')"
-      @click="appWindow.close()"
-    >
-      <Icon name="close" :size="12" aria-hidden="true" />
-    </button>
+      <button
+        class="win-btn"
+        type="button"
+        :aria-label="maximized ? t('window.restore') : t('window.maximize')"
+        @click="appWindow.toggleMaximize().then(refresh)"
+      >
+        <Icon
+          :name="maximized ? 'copy' : 'max'"
+          :size="maximized ? 11 : 12"
+          aria-hidden="true"
+        />
+      </button>
+    </HoverTip>
+    <HoverTip class="flex-1 h-full" :text="t('window.close')">
+      <button
+        class="win-btn win-btn--close"
+        type="button"
+        :aria-label="t('window.close')"
+        @click="appWindow.close()"
+      >
+        <Icon name="close" :size="12" aria-hidden="true" />
+      </button>
+    </HoverTip>
   </div>
 </template>
 

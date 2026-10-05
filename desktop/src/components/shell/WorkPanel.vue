@@ -14,6 +14,7 @@ import { useShellStore } from "../../stores/shell";
 import { useWorkPanelStore } from "../../stores/work-panel";
 import { MAIN_FLOOR, PANEL_MIN } from "../../lib/work-panel-preference";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import SubagentTranscriptTab from "./SubagentTranscriptTab.vue";
 import ReviewTab from "./ReviewTab.vue";
 import WorkPanelLauncher from "./WorkPanelLauncher.vue";
@@ -107,50 +108,59 @@ function openReview(item: { callId: string; path: string; diff: string }) {
       style="padding-right: calc(var(--lw-wincontrols) + 40px)"
     >
       <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-        <button
+        <HoverTip
           v-for="tab in wp.tabs"
           :key="tab.id"
-          type="button"
-          class="panel-tab"
-          :data-active="wp.activeTabId === tab.id || undefined"
-          :title="tab.title"
-          @click="wp.activeTabId = tab.id"
+          class="shrink-0"
+          :text="tab.title"
+          :label="tab.title"
         >
-          <Icon
-            v-if="tab.kind === 'subagent'"
-            name="bot"
-            :size="12"
-            aria-hidden="true"
-          />
-          <span class="panel-tab__title">{{ tab.title }}</span>
-          <span
-            class="panel-tab__close"
-            role="button"
-            :aria-label="t('panel.closeTab')"
-            @click.stop="wp.closeTab(tab.id)"
+          <button
+            type="button"
+            class="panel-tab"
+            :data-active="wp.activeTabId === tab.id || undefined"
+            @click="wp.activeTabId = tab.id"
           >
-            <Icon name="close" :size="10" aria-hidden="true" />
-          </span>
-        </button>
+            <Icon
+              v-if="tab.kind === 'subagent'"
+              name="bot"
+              :size="12"
+              aria-hidden="true"
+            />
+            <span class="panel-tab__title">{{ tab.title }}</span>
+            <span
+              class="panel-tab__close"
+              role="button"
+              :aria-label="t('panel.closeTab')"
+              @click.stop="wp.closeTab(tab.id)"
+            >
+              <Icon name="close" :size="10" aria-hidden="true" />
+            </span>
+          </button>
+        </HoverTip>
       </div>
-      <button
-        class="ctl"
-        type="button"
-        :title="t('panel.launcher')"
-        :aria-label="t('panel.launcher')"
-        @click="wp.activeTabId = null"
+      <HoverTip :text="t('panel.launcher')">
+        <button
+          class="ctl"
+          type="button"
+          :aria-label="t('panel.launcher')"
+          @click="wp.activeTabId = null"
+        >
+          <Icon name="plus" aria-hidden="true" />
+        </button>
+      </HoverTip>
+      <HoverTip
+        :text="wp.maximized ? t('panel.restore') : t('panel.maximize')"
       >
-        <Icon name="plus" aria-hidden="true" />
-      </button>
-      <button
-        class="ctl"
-        type="button"
-        :title="wp.maximized ? t('panel.restore') : t('panel.maximize')"
-        :aria-label="wp.maximized ? t('panel.restore') : t('panel.maximize')"
-        @click="wp.toggleMaximized(fullBudget)"
-      >
-        <Icon name="maxDiag" :size="13" aria-hidden="true" />
-      </button>
+        <button
+          class="ctl"
+          type="button"
+          :aria-label="wp.maximized ? t('panel.restore') : t('panel.maximize')"
+          @click="wp.toggleMaximized(fullBudget)"
+        >
+          <Icon name="maxDiag" :size="13" aria-hidden="true" />
+        </button>
+      </HoverTip>
     </header>
 
     <!-- 内容：活动页签（按类型分派）/ 启动器清单（§3.14：不是空态文案；

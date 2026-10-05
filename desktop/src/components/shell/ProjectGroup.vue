@@ -16,6 +16,7 @@ import { useToastStore } from "../../stores/toast";
 import { revealInExplorer } from "../../lib/api";
 import type { WorkspaceGroup } from "../../lib/session-groups";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import RowMenu, { type RowMenuItem } from "./RowMenu.vue";
 import SessionRow from "./SessionRow.vue";
 
@@ -86,7 +87,6 @@ async function onMenuSelect(id: string) {
       type="button"
       class="ws-head"
       :aria-expanded="!collapsed"
-      :title="group.key"
       @click="emit('toggle')"
     >
       <Icon
@@ -94,34 +94,38 @@ async function onMenuSelect(id: string) {
         :size="14"
         aria-hidden="true"
       />
-      <span class="ws-head__name">{{ group.name }}</span>
-      <span
-        v-if="group.running"
-        class="ws-head__dot"
-        role="img"
-        :aria-label="t('status.running')"
-        :title="t('status.running')"
-      />
+      <HoverTip class="flex-auto min-w-0" :text="group.key" :label="group.key">
+        <span class="ws-head__name">{{ group.name }}</span>
+      </HoverTip>
+      <HoverTip v-if="group.running" :text="t('status.running')">
+        <span
+          class="ws-head__dot"
+          role="img"
+          :aria-label="t('status.running')"
+        />
+      </HoverTip>
       <!-- hover 显形动作（issue #8）：＋ 新建任务 / ⋯ 项目菜单；不冒泡 -->
       <span class="ws-head__actions" @click.stop>
-        <button
-          type="button"
-          class="ws-head__btn"
-          :aria-label="t('sidebar.projectMenu.newTask')"
-          :title="t('sidebar.projectMenu.newTask')"
-          @click="newTask"
-        >
-          <Icon name="plus" :size="13" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          class="ws-head__btn"
-          :aria-label="t('sidebar.projectMenu.more')"
-          :title="t('sidebar.projectMenu.more')"
-          @click="openMenu"
-        >
-          <Icon name="dots" :size="13" aria-hidden="true" />
-        </button>
+        <HoverTip :text="t('sidebar.projectMenu.newTask')">
+          <button
+            type="button"
+            class="ws-head__btn"
+            :aria-label="t('sidebar.projectMenu.newTask')"
+            @click="newTask"
+          >
+            <Icon name="plus" :size="13" aria-hidden="true" />
+          </button>
+        </HoverTip>
+        <HoverTip :text="t('sidebar.projectMenu.more')">
+          <button
+            type="button"
+            class="ws-head__btn"
+            :aria-label="t('sidebar.projectMenu.more')"
+            @click="openMenu"
+          >
+            <Icon name="dots" :size="13" aria-hidden="true" />
+          </button>
+        </HoverTip>
       </span>
     </button>
     <template v-if="!collapsed">

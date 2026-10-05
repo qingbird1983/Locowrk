@@ -188,7 +188,7 @@
 | 欢迎页 composer 定宽 720 | 首屏空态特例 | UI shell §3.11/§3.14 |
 | 吉祥物 / UsageRing 内联 svg | 插画/仪表，非图标 | §二⑪ |
 | 模型设置区 tailwind 豁免 | **待收敛**（v2.58 遗留，收敛批清除后本行删除） | style.css:640 |
-| 守夜倒计时条 ×2（PermissionCard/AskCard）+ 队列行 li（QueueCard）保留原生 title | 包裹层会抢走 `position:absolute` 细条的定位锚点 / 压缩 `li` 全宽点击区——HoverTip 化必破版式 | 批③（2026-10-06）静态复核 |
+| 守夜倒计时条 ×2（PermissionCard/AskCard）+ 队列行 li（QueueCard）+ toast 正文溢出提示（ToastStack）保留原生 title | 包裹层会抢走 `position:absolute` 细条的定位锚点 / 压缩 `li` 全宽点击区 / 整条气泡包 HoverTip 破坏 flex 布局——HoverTip 化必破版式 | 批③（2026-10-06）静态复核 |
 
 ## 八、七个暂定值（缺省按推荐生效，报编号即翻案）
 

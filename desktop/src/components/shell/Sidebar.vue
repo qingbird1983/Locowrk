@@ -19,6 +19,7 @@ import { useSidebarResize } from "./use-sidebar-resize";
 import { useDevUnlock } from "./use-dev-unlock";
 import { useNotificationEntry } from "./use-notification-entry";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import SessionGroups from "./SessionGroups.vue";
 import NotificationPopover from "./NotificationPopover.vue";
 
@@ -87,15 +88,16 @@ const isMarket = computed(() => shell.destination === "plugins");
           <span data-tauri-drag-region>Locowrk</span>
         </span>
         <div class="h-full min-w-0 flex-1" data-tauri-drag-region />
-        <button
-          class="ctl"
-          type="button"
-          :title="t('sidebar.collapse')"
-          :aria-label="t('sidebar.collapse')"
-          @click="shell.toggleSidebar()"
-        >
-          <Icon name="sidebar" :size="14" aria-hidden="true" />
-        </button>
+        <HoverTip :text="t('sidebar.collapse')">
+          <button
+            class="ctl"
+            type="button"
+            :aria-label="t('sidebar.collapse')"
+            @click="shell.toggleSidebar()"
+          >
+            <Icon name="sidebar" :size="14" aria-hidden="true" />
+          </button>
+        </HoverTip>
       </header>
 
       <!-- 侧栏体：顶部动作区 + 项目段（v3.9 项目接管，issue #4） -->
@@ -139,50 +141,61 @@ const isMarket = computed(() => shell.destination === "plugins");
       <footer
         class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-[2px] px-2"
       >
-        <button
+        <HoverTip
           v-for="dest in (['settings', 'memory', 'schedule'] as const)"
           :key="dest"
-          class="ctl"
-          type="button"
-          :aria-pressed="shell.destination === dest"
-          :title="t(`nav.${dest}`)"
-          :aria-label="t(`nav.${dest}`)"
-          @click="shell.setDestination(dest)"
+          :text="t(`nav.${dest}`)"
         >
-          <Icon
-            :name="dest === 'memory' ? 'database' : dest === 'schedule' ? 'clock' : 'settings'"
-            :size="15"
-            aria-hidden="true"
-          />
-        </button>
+          <button
+            class="ctl"
+            type="button"
+            :aria-pressed="shell.destination === dest"
+            :aria-label="t(`nav.${dest}`)"
+            @click="shell.setDestination(dest)"
+          >
+            <Icon
+              :name="dest === 'memory' ? 'database' : dest === 'schedule' ? 'clock' : 'settings'"
+              :size="15"
+              aria-hidden="true"
+            />
+          </button>
+        </HoverTip>
         <!-- 通知（§2.4 第 5 图标，popover 非页面 §3.13）；未读 6px accent 点 -->
-        <button
-          :ref="setNotifBtn"
-          class="ctl notif-btn"
-          type="button"
-          :aria-pressed="notifOpen"
-          :title="t('nav.notifications')"
-          :aria-label="t('nav.notifications')"
-          @click="toggleNotif"
-        >
-          <Icon name="bell" :size="15" aria-hidden="true" />
-          <span
-            v-if="notifications.unread > 0"
-            class="notif-badge"
-            aria-hidden="true"
-          />
-        </button>
-        <button
-          v-if="version"
-          type="button"
-          class="version-label ml-auto text-[11px] tabular-nums text-ink-4"
-          :title="
+        <HoverTip :text="t('nav.notifications')">
+          <button
+            :ref="setNotifBtn"
+            class="ctl notif-btn"
+            type="button"
+            :aria-pressed="notifOpen"
+            :aria-label="t('nav.notifications')"
+            @click="toggleNotif"
+          >
+            <Icon name="bell" :size="15" aria-hidden="true" />
+            <span
+              v-if="notifications.unread > 0"
+              class="notif-badge"
+              aria-hidden="true"
+            />
+          </button>
+        </HoverTip>
+        <HoverTip
+          class="ml-auto"
+          :text="
             settings.view?.developer.unlocked ? t('nav.settings') : t('sidebar.devUnlockHint')
           "
-          @click="onVersionTap"
+          :label="
+            settings.view?.developer.unlocked ? t('nav.settings') : t('sidebar.devUnlockHint')
+          "
         >
-          v{{ version }}
-        </button>
+          <button
+            v-if="version"
+            type="button"
+            class="version-label ml-auto text-[11px] tabular-nums text-ink-4"
+            @click="onVersionTap"
+          >
+            v{{ version }}
+          </button>
+        </HoverTip>
       </footer>
     </div>
 

@@ -12,6 +12,7 @@ import { computed, reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { pickDirectory } from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
+import HoverTip from "./HoverTip.vue";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import SettingsSaveRow from "./SettingsSaveRow.vue";
@@ -210,7 +211,9 @@ function removeRoot(idx: number) {
         :key="root"
         class="flex items-center justify-between gap-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-2.5"
       >
-        <span class="min-w-0 break-all text-[11.5px] text-ink-2" :title="root">{{ root }}</span>
+        <HoverTip :text="root" :label="root" class="min-w-0">
+          <span class="min-w-0 break-all text-[11.5px] text-ink-2">{{ root }}</span>
+        </HoverTip>
         <button
           type="button"
           class="shrink-0 rounded-[var(--lw-r-3xs)] px-1.5 text-[11px] text-ink-4 transition hover:bg-wash-2 hover:text-danger"

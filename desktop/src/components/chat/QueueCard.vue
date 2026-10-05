@@ -16,6 +16,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -75,24 +76,26 @@ function resume() {
         >
           {{ t("queue.resume") }}
         </button>
-        <button
-          class="queue-card__iconbtn"
-          type="button"
-          :title="t('queue.clearAll')"
-          :aria-label="t('queue.clearAll')"
-          @click="clearAll"
-        >
-          <Icon name="trash" :size="15" />
-        </button>
-        <button
-          class="queue-card__go"
-          type="button"
-          :title="t('queue.sendNowHint')"
-          :aria-label="t('queue.sendNow')"
-          @click="sendHead"
-        >
-          <Icon name="sendUp" :size="14" />
-        </button>
+        <HoverTip :text="t('queue.clearAll')">
+          <button
+            class="queue-card__iconbtn"
+            type="button"
+            :aria-label="t('queue.clearAll')"
+            @click="clearAll"
+          >
+            <Icon name="trash" :size="15" />
+          </button>
+        </HoverTip>
+        <HoverTip :text="t('queue.sendNowHint')">
+          <button
+            class="queue-card__go"
+            type="button"
+            :aria-label="t('queue.sendNow')"
+            @click="sendHead"
+          >
+            <Icon name="sendUp" :size="14" />
+          </button>
+        </HoverTip>
       </div>
     </div>
     <ul v-show="open" class="queue-card__rows">

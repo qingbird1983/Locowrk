@@ -18,6 +18,7 @@ import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
 import type { SessionMeta } from "../../types";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import RowMenu, { type RowMenuItem } from "./RowMenu.vue";
 
 const props = defineProps<{ session: SessionMeta; nested?: boolean }>();
@@ -181,7 +182,6 @@ async function commitRename() {
     class="session-row"
     :class="{ 'session-row--nested': nested }"
     :data-selected="isCurrent || undefined"
-    :title="session.title ?? session.id"
   >
     <input
       v-if="renaming"
@@ -200,38 +200,51 @@ async function commitRename() {
         type="button"
         :class="{ 'cursor-not-allowed opacity-40': switchLocked }"
         :aria-disabled="switchLocked"
-        :title="
-          switchLocked ? t('sidebar.lockedWhileRunning') : (session.title ?? session.id)
-        "
         @click="open"
       >
-        <span
+        <HoverTip
           v-if="chat.running && isCurrent"
-          class="dot dot--pulse"
-          :title="t('status.running')"
-        />
+          :text="t('status.running')"
+          :label="t('status.running')"
+        >
+          <span class="dot dot--pulse" />
+        </HoverTip>
         <!-- §3.17 卡不在视野内的兜底：本会话有审批未决 → 待决标记 -->
-        <span
+        <HoverTip
           v-else-if="approvals.pending.length > 0 && isCurrent"
-          class="dot dot--danger"
-          role="img"
-          :aria-label="t('approval.pendingBadge')"
-          :title="t('approval.pendingBadge')"
-        />
-        <span class="session-row__title">
-          {{ session.title ?? t("sidebar.untitled") }}
-        </span>
+          :text="t('approval.pendingBadge')"
+        >
+          <span
+            class="dot dot--danger"
+            role="img"
+            :aria-label="t('approval.pendingBadge')"
+          />
+        </HoverTip>
+        <HoverTip
+          class="flex-auto min-w-0"
+          :text="
+            switchLocked ? t('sidebar.lockedWhileRunning') : (session.title ?? session.id)
+          "
+          :label="
+            switchLocked ? t('sidebar.lockedWhileRunning') : (session.title ?? session.id)
+          "
+        >
+          <span class="session-row__title">
+            {{ session.title ?? t("sidebar.untitled") }}
+          </span>
+        </HoverTip>
       </button>
-      <button
-        ref="moreBtn"
-        type="button"
-        class="session-row__more"
-        :aria-label="t('sidebar.menu.more')"
-        :title="t('sidebar.menu.more')"
-        @click="openMenu"
-      >
-        <Icon name="dots" :size="13" aria-hidden="true" />
-      </button>
+      <HoverTip :text="t('sidebar.menu.more')">
+        <button
+          ref="moreBtn"
+          type="button"
+          class="session-row__more"
+          :aria-label="t('sidebar.menu.more')"
+          @click="openMenu"
+        >
+          <Icon name="dots" :size="13" aria-hidden="true" />
+        </button>
+      </HoverTip>
     </template>
     <!-- 菜单进退场（标准 §二①）：Teleport 出 aside 裁剪 + Transition 接管 -->
     <Teleport to="body">

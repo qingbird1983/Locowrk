@@ -14,6 +14,7 @@ import {
 } from "../../stores/chat";
 import { clip } from "../../lib/format";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 
 const emit = defineEmits<{
   openSub: [childId: string, title: string];
@@ -81,22 +82,26 @@ const reviewItems = computed(() => {
       </template>
       <template v-if="reviewItems.length > 0">
         <div class="side-label px-1">{{ t("panel.launcherReview") }}</div>
-        <button
+        <HoverTip
           v-for="item in reviewItems"
           :key="item.callId"
-          type="button"
-          class="launcher-row"
-          :title="item.path"
-          @click="emit('openReview', item)"
+          :text="item.path"
+          :label="item.path"
         >
-          <Icon name="file" :size="14" aria-hidden="true" />
-          <span class="launcher-row__title">{{
-            item.path.split(/[\\/]/).pop() ?? item.path
-          }}</span>
-          <span class="launcher-row__hint">{{
-            t("panel.launcherReviewHint")
-          }}</span>
-        </button>
+          <button
+            type="button"
+            class="launcher-row"
+            @click="emit('openReview', item)"
+          >
+            <Icon name="file" :size="14" aria-hidden="true" />
+            <span class="launcher-row__title">{{
+              item.path.split(/[\\/]/).pop() ?? item.path
+            }}</span>
+            <span class="launcher-row__hint">{{
+              t("panel.launcherReviewHint")
+            }}</span>
+          </button>
+        </HoverTip>
       </template>
     </template>
     <p class="px-2 py-3 text-[12px] leading-relaxed text-ink-4">

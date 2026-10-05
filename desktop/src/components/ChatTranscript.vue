@@ -26,6 +26,7 @@ import { useWorkPanelStore } from "../stores/work-panel";
 import { clip, formatDuration } from "../lib/format";
 import { toolAction } from "../lib/tool-summary";
 import { Icon } from "../lib/icons";
+import HoverTip from "./settings/HoverTip.vue";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
 import MessageRow from "./chat/MessageRow.vue";
 import SubagentCard, { type SubagentChild } from "./chat/SubagentCard.vue";
@@ -388,19 +389,24 @@ async function onNoticeAction(item: SystemItem, action: string) {
     </div>
 
     <!-- §3.39③⑤ 回到底部（v4.11）：用户上滚让位后伺服，坞上方居中 -->
-    <Transition name="lw-pop-up">
-      <button
-        v-if="!following"
-        class="back-bottom"
-        type="button"
-        :aria-label="t('chat.backToLatest')"
-        :title="t('chat.backToLatest')"
-        :style="{ bottom: `${props.composerBottom + 12}px` }"
-        @click="resumeFollow"
-      >
-        <Icon name="chevronDown" :size="14" />
-      </button>
-    </Transition>
+    <HoverTip
+      class="!static"
+      :text="t('chat.backToLatest')"
+      :label="t('chat.backToLatest')"
+    >
+      <Transition name="lw-pop-up">
+        <button
+          v-if="!following"
+          class="back-bottom"
+          type="button"
+          :aria-label="t('chat.backToLatest')"
+          :style="{ bottom: `${props.composerBottom + 12}px` }"
+          @click="resumeFollow"
+        >
+          <Icon name="chevronDown" :size="14" />
+        </button>
+      </Transition>
+    </HoverTip>
 
     <!-- 列宽双柄：容器下沿停在 composer 顶部（§2.7） -->
     <ConversationWidthHandles :bottom="props.composerBottom" />

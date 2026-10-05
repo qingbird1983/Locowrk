@@ -20,6 +20,7 @@ import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { Icon } from "../../lib/icons";
 import { toolAction, toolArgSummary } from "../../lib/tool-summary";
+import HoverTip from "../settings/HoverTip.vue";
 import type { ApprovalRequest } from "../../types";
 
 const props = defineProps<{
@@ -128,9 +129,11 @@ async function decide(kind: ApprovalDecisionKind) {
     <!-- ① 头行：✋ + 权限请求：动作名 + 徽章 + 动作右置（参考图版式） -->
     <div class="approval-card__head">
       <Icon name="hand" :size="14" class="approval-card__icon" />
-      <span class="approval-card__title" :title="req.tool">
-        {{ t("approval.cardTitle") }}：{{ actionName }}
-      </span>
+      <HoverTip class="min-w-0" :text="req.tool" :label="req.tool">
+        <span class="approval-card__title">
+          {{ t("approval.cardTitle") }}：{{ actionName }}
+        </span>
+      </HoverTip>
       <span v-if="queue > 0" class="approval-card__queue">
         {{ t("approval.queue", { n: queue }) }}
       </span>
@@ -194,18 +197,22 @@ async function decide(kind: ApprovalDecisionKind) {
     </div>
 
     <!-- ② 参数预览：单行省略 mono（完整参数在转录工具行里） -->
-    <div class="approval-card__preview" :title="argPreview">{{ argPreview }}</div>
+    <HoverTip class="w-full" :text="argPreview" :label="argPreview">
+      <div class="approval-card__preview">{{ argPreview }}</div>
+    </HoverTip>
 
     <!-- ③ 元信息行：工具自述 + 环境归属（11px） -->
     <p class="approval-card__meta">
       <span v-if="req.description" class="approval-card__desc">{{ req.description }}</span>
-      <span class="approval-card__env" :title="workspace || undefined">
-        {{
-          workspace
-            ? t("approval.envProject", { path: workspace })
-            : t("approval.envTemp")
-        }}
-      </span>
+      <HoverTip class="min-w-0" :text="workspace || undefined" :label="workspace || undefined">
+        <span class="approval-card__env">
+          {{
+            workspace
+              ? t("approval.envProject", { path: workspace })
+              : t("approval.envTemp")
+          }}
+        </span>
+      </HoverTip>
     </p>
 
     <!-- ㉘·C 硬门提示行（越界 / 隐私，warn 色） -->

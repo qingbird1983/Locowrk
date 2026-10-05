@@ -10,6 +10,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import { renderMarkdown } from "../../lib/markdown";
 
 const props = defineProps<{
@@ -132,25 +133,27 @@ async function onBodyClick(e: MouseEvent) {
     />
 
     <div class="msg__actions">
-      <button
-        class="copy-btn"
-        type="button"
-        :title="t('chat.copyMessage')"
-        :aria-label="t('chat.copyMessage')"
-        @click="copySelf"
-      >
-        <Icon name="copy" :size="12" />
-      </button>
-      <button
-        v-if="editable && !editing"
-        class="copy-btn"
-        type="button"
-        :title="t('chat.editMessage')"
-        :aria-label="t('chat.editMessage')"
-        @click="startEdit"
-      >
-        <Icon name="edit" :size="12" />
-      </button>
+      <HoverTip :text="t('chat.copyMessage')">
+        <button
+          class="copy-btn"
+          type="button"
+          :aria-label="t('chat.copyMessage')"
+          @click="copySelf"
+        >
+          <Icon name="copy" :size="12" />
+        </button>
+      </HoverTip>
+      <HoverTip :text="t('chat.editMessage')">
+        <button
+          v-if="editable && !editing"
+          class="copy-btn"
+          type="button"
+          :aria-label="t('chat.editMessage')"
+          @click="startEdit"
+        >
+          <Icon name="edit" :size="12" />
+        </button>
+      </HoverTip>
       <span v-if="timeText" class="msg__time">{{ timeText }}</span>
     </div>
   </div>

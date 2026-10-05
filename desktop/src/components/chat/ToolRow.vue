@@ -12,6 +12,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon, type IconName } from "../../lib/icons";
+import HoverTip from "../settings/HoverTip.vue";
 import { toolAction, toolArgSummary, toolDiffStats } from "../../lib/tool-summary";
 import { toolSideEffect } from "../../lib/side-effect";
 import type { ToolItem } from "../../stores/chat";
@@ -138,11 +139,11 @@ async function copyCall() {
 <template>
   <div class="tool">
     <div class="tool__row">
+      <HoverTip class="flex-1 min-w-0" :text="argText" :label="argText">
       <button
         class="cv-head tool__toggle"
         type="button"
         :aria-expanded="expanded"
-        :title="argText"
         @click="expanded = !expanded"
       >
         <Icon :name="glyph" :size="14" class="tool__icon shrink-0" />
@@ -205,36 +206,40 @@ async function copyCall() {
           class="cv-head__chev"
         />
       </button>
+      </HoverTip>
       <!-- §3.10 卡是入口：看转录 / 看 diff（hover 显形，与复制钮同族） -->
-      <button
-        v-if="childId"
-        class="copy-btn tool__copy"
-        type="button"
-        :title="t('panel.viewTranscript')"
-        :aria-label="t('panel.viewTranscript')"
-        @click="childId && emit('openTranscript', childId, transcriptTitle)"
-      >
-        <Icon name="panel" :size="12" />
-      </button>
-      <button
-        v-if="reviewItem"
-        class="copy-btn tool__copy"
-        type="button"
-        :title="t('panel.viewDiff')"
-        :aria-label="t('panel.viewDiff')"
-        @click="reviewItem && emit('openDiff', reviewItem.callId, reviewItem.path, reviewItem.diff)"
-      >
-        <Icon name="file" :size="12" />
-      </button>
-      <button
-        class="copy-btn tool__copy"
-        type="button"
-        :title="t('tool.copyCall')"
-        :aria-label="t('tool.copyCall')"
-        @click="copyCall"
-      >
-        <Icon name="copy" :size="12" />
-      </button>
+      <HoverTip :text="t('panel.viewTranscript')">
+        <button
+          v-if="childId"
+          class="copy-btn tool__copy"
+          type="button"
+          :aria-label="t('panel.viewTranscript')"
+          @click="childId && emit('openTranscript', childId, transcriptTitle)"
+        >
+          <Icon name="panel" :size="12" />
+        </button>
+      </HoverTip>
+      <HoverTip :text="t('panel.viewDiff')">
+        <button
+          v-if="reviewItem"
+          class="copy-btn tool__copy"
+          type="button"
+          :aria-label="t('panel.viewDiff')"
+          @click="reviewItem && emit('openDiff', reviewItem.callId, reviewItem.path, reviewItem.diff)"
+        >
+          <Icon name="file" :size="12" />
+        </button>
+      </HoverTip>
+      <HoverTip :text="t('tool.copyCall')">
+        <button
+          class="copy-btn tool__copy"
+          type="button"
+          :aria-label="t('tool.copyCall')"
+          @click="copyCall"
+        >
+          <Icon name="copy" :size="12" />
+        </button>
+      </HoverTip>
     </div>
     <!-- 展开态 = 诚实面：参数原样 / 结果原样 / 失败 error 文本（danger） -->
     <div v-show="expanded" class="tool__detail">
