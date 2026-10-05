@@ -452,15 +452,18 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--lw-accent);
-  color: var(--lw-accent-ink);
+  /* 底/字互换（v2.94 目检裁定）：accent-ink 底 + accent 字——反转单色钮 */
+  background: var(--lw-accent-ink);
+  color: var(--lw-accent);
   flex: 0 0 auto;
   transition: background var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard),
     transform var(--dur-instant) var(--ease-standard);
 }
 .send-btn:hover:not(:disabled) {
-  background: var(--lw-accent-hover);
+  /* 主实心的 accent-hover 是 accent 底专用；本钮底已换 accent-ink，hover
+   * 向 accent 混 10% 微移（同族唯一特例，随本裁定生效） */
+  background: color-mix(in oklab, var(--lw-accent-ink) 90%, var(--lw-accent));
 }
 .send-btn:active:not(:disabled) {
   transform: scale(0.96);
