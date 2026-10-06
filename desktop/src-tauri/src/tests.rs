@@ -397,7 +397,7 @@ async fn usage_reporting_provider_still_loops_for_tool_calls() {
     assert!(
         sink.events()
             .iter()
-            .any(|e| matches!(e, AgentEvent::TurnDone { steps: 2, .. })),
+            .any(|e| matches!(e, AgentEvent::TurnDone { steps: Some(2), .. })),
         "工具轮收束发 TurnDone(2)"
     );
 }

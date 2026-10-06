@@ -2,12 +2,15 @@
  * 长消息折叠状态机（组件规格「Line Clamp with Fade Mask」，MessageRow
  * 专用）：超过 N 行（设置 chat.foldLines，3–20 缺省 5）收起——max-height
  * 钉行高 × N + 渐变遮罩 + 文字下方圆形展开钮。要点：
+ * - **覆盖面（v2.101 用户裁定）**：只折用户消息（主聊天的与派给子代理
+ *   的任务提示都算）——模型输出（主聊天正文与子代理工作显示）恒完整
+ *   展示，不接本状态机；设置开关关闭同样整体旁路；
  * - max-height 是唯一可过渡的收口（height:auto 不能过渡）；transition 只
  *   在动画期挂（animating）——none 不是可插值值，常态挂着会在挂载/收束跳变；
  * - 展开动画结束即解除上限（超长消息钉死 2000px 类近似会截断，落实测全高）；
  * - 测量：clamp 高度变了先落样式再测（同拍测的是未夹紧的布局），折叠态
  *   比对 scrollHeight 与 clientHeight（容差 2px 吃亚像素取整）；
- * - live（流式尾随）与编辑态不折：强制展开，收束/退出编辑才折回。
+ * - 编辑态不折：强制展开，退出编辑才折回。
  * 复制不受影响：恒复制全文（MessageRow 职责）。
  */
 import {
@@ -27,7 +30,6 @@ const ANIM_MS = 200;
 
 export function useMessageFold(
   contentEl: Ref<HTMLElement | null>,
-  live: Ref<boolean>,
   editing: Ref<boolean>,
 ) {
   const settings = useSettingsStore();
@@ -40,9 +42,9 @@ export function useMessageFold(
 
   const foldOn = computed(() => settings.view?.chat.foldLongMessages ?? true);
   const foldLines = computed(() => settings.view?.chat.foldLines ?? 5);
-  /** 展开判定：用户点开 / 流式尾随 / 编辑中 / 折叠开关关闭。 */
+  /** 展开判定：用户点开 / 编辑中 / 折叠开关关闭。 */
   const isOpen = computed(
-    () => !foldOn.value || expanded.value || live.value || editing.value,
+    () => !foldOn.value || expanded.value || editing.value,
   );
 
   function lineHeightOf(el: HTMLElement): number {
@@ -76,7 +78,7 @@ export function useMessageFold(
   });
 
   const showFold = computed(
-    () => foldOn.value && overflowing.value && !live.value && !editing.value,
+    () => foldOn.value && overflowing.value && !editing.value,
   );
 
   function settle() {
@@ -115,14 +117,6 @@ export function useMessageFold(
       collapseAnim(el);
     }
   }
-
-  // 流式收束（live 翻假）：从全开高度平滑折回 N 行——与手动收起同一动画
-  watch(live, (v, prev) => {
-    if (prev && !v && foldOn.value) {
-      const el = contentEl.value;
-      if (el) collapseAnim(el);
-    }
-  });
 
   let ro: ResizeObserver | null = null;
   watch(contentEl, (el, prev) => {

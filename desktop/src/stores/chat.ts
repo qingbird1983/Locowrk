@@ -53,6 +53,10 @@ export type ChatItem =
       kind: "user";
       text: string;
       ts?: number;
+      /** 本轮收束时刻（v2.101，turn_done 的轮界事件投影）：第 0 层计时行
+       * 重放读数（「已工作 N 分 N 秒」）的终点；缺省 = 旧日志无（不虚构）。
+       * 调度轮没有用户消息，计时行本就无从起算，不受影响。 */
+      endTs?: number;
       /** 源事件在会话日志里的位次（§3.34 编辑重发的定位键）。重放消息有；
        * 实时发送的没有（后端按「最后一条用户消息」解析）。 */
       pos?: number;
@@ -409,7 +413,8 @@ export const useChatStore = defineStore("chat", {
         case "user_message":
           // ㉕·fix 重放恢复用户气泡（此前投影漏 UserMessage，重启后历史
           // 会话只剩模型回复）。实时轮发送即本地回显，本事件不实时到达。
-          // pos（v2.57）：编辑重发的定位键随行保存。
+          // pos（v2.57）：编辑重发的定位键随行保存。ts（v2.101）：轮起点
+          // 时刻随重放到达（旧日志无 → 不虚构，计时行诚实省略读数）。
           // v2.58 §3.12：新轮开始——用量聚合重置（重放同序重建）
           this.turnUsage = null;
           this.items.push({
@@ -417,7 +422,7 @@ export const useChatStore = defineStore("chat", {
             kind: "user",
             text: e.content,
             pos: e.pos,
-            ...(this.replaying ? {} : { ts: Date.now() }),
+            ...(e.ts != null ? { ts: e.ts } : this.replaying ? {} : { ts: Date.now() }),
           });
           break;
         case "thinking":
@@ -477,7 +482,20 @@ export const useChatStore = defineStore("chat", {
         }
         case "turn_done":
           this.running = false;
-          this.steps = e.steps;
+          // steps（v2.101 起可选）：TurnEnd 的重放投影不带，保留 null 如实
+          this.steps = e.steps ?? this.steps;
+          // v2.101：轮收束时刻挂在最后一条用户消息上（第 0 层计时行重放
+          // 读数终点）。调度轮没有用户消息——找不到就跳过，不虚构；
+          // endTs 已有（该轮已记过）不覆盖。
+          if (e.ts != null) {
+            for (let i = this.items.length - 1; i >= 0; i--) {
+              const it = this.items[i]!;
+              if (it.kind === "user") {
+                if (it.endTs === undefined) it.endTs = e.ts;
+                break;
+              }
+            }
+          }
           // §3.39②：轮次收束 → 消费打断目标 / 自动派发队首
           void this.dispatchQueue();
           break;

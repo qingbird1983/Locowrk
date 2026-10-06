@@ -133,6 +133,11 @@ pub enum SessionEvent {
     TurnEnd {
         turn_id: TurnId,
         outcome: TurnOutcome,
+        /// 收束时刻（Unix 毫秒，v2.101 起写入）：与 [`SessionEvent::TurnStart`]
+        /// 的起点一对，重放复原轮计时行读数（「已工作 N 分 N 秒」）。
+        /// 0 = 旧日志无（serde default 兼容），投影按缺失处理不虚构。
+        #[serde(default)]
+        ts: i64,
     },
 }
 

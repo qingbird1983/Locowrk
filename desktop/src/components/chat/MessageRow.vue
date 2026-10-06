@@ -6,9 +6,10 @@
  * 时间只在实时轮次有（历史重放无时间戳，不虚构时序）。
  * 编辑态（v2.57 §3.34）：用户气泡原位换自适应文本域，Enter = 提交重发、
  * Shift+Enter 换行、Esc = 取消；可编辑性由父层裁决（出现条件见 §3.34）。
- * 长消息折叠（组件规格「Line Clamp with Fade Mask」）：fold-zone 夹紧 +
- * 渐变遮罩 + 文字下方居中圆形展开钮，状态机在 use-message-fold.ts；复制
- * 钮在其下方且不受折叠影响（恒复制全文）。
+ * 长消息折叠（组件规格「Line Clamp with Fade Mask」+ v2.101 裁定收窄：
+ * 只折用户消息，模型正文——主聊天与子代理工作显示——不折，助手分支不
+ * 接测量体）：fold-zone 夹紧 + 渐变遮罩 + 文字下方居中圆形展开钮，状态
+ * 机在 use-message-fold.ts；复制钮在其下方且不受折叠影响（恒复制全文）。
  */
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -28,8 +29,6 @@ const props = withDefaults(
     /** 复制钮（v2.96 用户裁定）：只在用户消息与每轮最终汇报/总结之下出现
      * （缺省 true = 用户消息）；任务中间的简短回话由父层传 false 关掉。 */
     copyable?: boolean;
-    /** 流式尾随（本轮正在生成的正文）：强制展开不折叠，收束才折回。 */
-    live?: boolean;
   }>(),
   { copyable: true },
 );
@@ -100,10 +99,12 @@ function onEditKeydown(e: KeyboardEvent) {
   }
 }
 
-// 长消息折叠：折叠测量体（用户 = 气泡内文 / 助手 = md 正文）
+// 长消息折叠（v2.101 裁定：只折用户消息——主聊天的与派给子代理的任务
+// 提示都算；模型输出（主聊天正文与子代理工作显示）恒完整展示，助手分
+// 支不再接折叠测量体）。测量体 = 气泡内文
 const contentEl = ref<HTMLElement | null>(null);
 const { isOpen, overflowing, showFold, foldStyle, animating, onToggleFold } =
-  useMessageFold(contentEl, computed(() => !!props.live), editing);
+  useMessageFold(contentEl, editing);
 
 async function copySelf() {
   try {
@@ -154,17 +155,7 @@ async function onBodyClick(e: MouseEvent) {
       <div v-if="overflowing" class="fold-mask" :class="{ 'is-open': isOpen }" />
     </div>
     <!-- eslint-disable-next-line vue/no-v-html —— 内容已过 DOMPurify -->
-    <div v-else class="fold-wrap">
-      <div
-        ref="contentEl"
-        class="md fold-zone"
-        :class="{ 'is-anim': animating }"
-        :style="foldStyle"
-        v-html="html"
-        @click="onBodyClick"
-      />
-      <div v-if="overflowing" class="fold-mask" :class="{ 'is-open': isOpen }" />
-    </div>
+    <div v-else class="md" v-html="html" @click="onBodyClick" />
 
     <!-- 折叠钮（规格：文字下方居中 8px、24×24 圆形；复制/编辑/时间行
         在其下方 = 「复制按钮位于展开/收起按钮下方」） -->
@@ -261,10 +252,8 @@ async function onBodyClick(e: MouseEvent) {
   overflow: hidden;
 }
 
-/* ---- 长消息折叠（Line Clamp with Fade Mask）---- */
-/* 遮罩落点 = 内容局部底色：气泡 wash-1 / 助手正文 = 页面底（--lw-fold-fade
- * 可被外层覆盖——子 Agent 转录页签盖 --lw-bg-dock）。§六：.vue 禁字面色 */
-.fold-wrap,
+/* ---- 长消息折叠（Line Clamp with Fade Mask，只折用户消息）---- */
+/* 遮罩落点 = 气泡底色（wash-1）。§六：.vue 禁字面色 */
 .msg-user__bubble {
   position: relative;
 }
@@ -289,9 +278,6 @@ async function onBodyClick(e: MouseEvent) {
 }
 .msg-user__bubble .fold-mask {
   background: linear-gradient(to bottom, transparent, var(--lw-wash-1));
-}
-.fold-wrap .fold-mask {
-  background: linear-gradient(to bottom, transparent, var(--lw-fold-fade, var(--lw-bg)));
 }
 .fold-row {
   display: flex;

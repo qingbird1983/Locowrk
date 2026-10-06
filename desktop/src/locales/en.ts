@@ -655,7 +655,8 @@ export default {
     expandToolTitle: "Expand tool execution by default",
     enterToSendTitle: "Enter sends",
     foldMessagesTitle: "Fold long messages",
-    foldMessagesHint: "Overlong messages collapse with a fade mask; click to expand",
+    foldMessagesHint:
+      "Long user messages collapse; click to expand (model replies stay full)",
     foldLinesTitle: "Folded lines",
     foldLinesHint: "Collapse beyond this many lines (3–20, default 5)",
     usageReadoutTitle: "Usage readout",

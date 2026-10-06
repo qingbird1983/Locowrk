@@ -15,7 +15,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use kernel_agent::{estimate_tokens, Kernel};
-use session_store::{Session, SessionEvent};
+use session_store::{Session, SessionEvent, TurnId, TurnOutcome};
 
 use crate::session_log;
 use crate::usage::UsageRecorder;
@@ -64,6 +64,18 @@ pub async fn run_turn(
 ) -> Result<u32, String> {
     let _stop_guard = stop.map(|f| f.guard(session_id));
     let log_start = session.len();
+    // 轮界事件（§4.1 设计，v2.101 起真正写入）：TurnStart 供重放复原计时
+    // 起点（配给紧随的 UserMessage），TurnEnd（各收束路径）供冻结读数——
+    // 此前日志里没有任何时刻，切会话/重启后计时行只剩发丝线（目检①）。
+    let turn_id = TurnId(
+        session
+            .events()
+            .iter()
+            .filter(|e| matches!(e, SessionEvent::TurnStart { .. }))
+            .count() as u64
+            + 1,
+    );
+    session.append(SessionEvent::TurnStart { turn_id, ts: now_ms() });
     session.append(SessionEvent::UserMessage { content: message });
     if let Some(dir) = log {
         session_log::append_slice(dir, session_id, session, log_start);
@@ -78,10 +90,15 @@ pub async fn run_turn(
         // 开下一步"。收束 = TurnDone 正常闭环（前端头行按 stopRequested
         // 显示「已停止」，不加系统气泡）。
         if stop.is_some_and(|f| f.is_stopped(session_id)) {
-            sink.emit(&AgentEvent::TurnDone {
-                session_id: session_id.into(),
+            finish_turn(
+                session,
+                log,
+                session_id,
+                turn_id,
+                TurnOutcome::Completed,
+                Some(sink),
                 steps,
-            });
+            );
             return Ok(steps);
         }
         let before = session.len();
@@ -92,7 +109,21 @@ pub async fn run_turn(
             // （ctx 里 LlmStreamSink 在册），投影时抑制整段 chunk/Thinking
             // 防重复
             Ok(kernel_agent::StepOutcome::Continue { streamed, reasoned }) => (streamed, reasoned),
-            Err(e) => return Err(format!("kernel step: {e}")),
+            Err(e) => {
+                // 轮以失败收束也要落日志（TurnOutcome::Failed）——重放才
+                // 知道轮停在哪儿；TurnDone 照失败约定不发（前端以 invoke
+                // 的 reject 收尾，避免与成功路径的事件重复）
+                finish_turn(
+                    session,
+                    log,
+                    session_id,
+                    turn_id,
+                    TurnOutcome::Failed,
+                    None,
+                    steps,
+                );
+                return Err(format!("kernel step: {e}"));
+            }
         };
         project_new_events(session, before, session_id, sink, streamed, reasoned);
         if let Some(dir) = log {
@@ -119,10 +150,15 @@ pub async fn run_turn(
             record_usage(session, session_id, u, sink, log, tree);
         }
         if done {
-            sink.emit(&AgentEvent::TurnDone {
-                session_id: session_id.into(),
+            finish_turn(
+                session,
+                log,
+                session_id,
+                turn_id,
+                TurnOutcome::Completed,
+                Some(sink),
                 steps,
-            });
+            );
             return Ok(steps);
         }
     }
@@ -130,15 +166,55 @@ pub async fn run_turn(
     // 步数到顶：不再硬报错掐断（LLM.md v3.0 同批裁定）——正常 TurnDone
     // 收束 + TurnCapped 如实告知，已完成的工具成果与转录都保留，用户发
     // 「继续」即可接着跑；调高上限见 设置 → 工具与分发。
-    sink.emit(&AgentEvent::TurnDone {
-        session_id: session_id.into(),
-        steps: max_steps.max(1),
-    });
+    finish_turn(
+        session,
+        log,
+        session_id,
+        turn_id,
+        TurnOutcome::Completed,
+        Some(sink),
+        max_steps.max(1),
+    );
     sink.emit(&AgentEvent::TurnCapped {
         session_id: session_id.into(),
         steps: max_steps.max(1),
     });
     Ok(max_steps.max(1))
+}
+
+/// 轮收束（v2.101）：TurnEnd 落日志（§4.1 轮界事件，带收束时刻）+ 磁盘
+/// 同步 + TurnDone 投影（`sink = None` = 内核失败路径按约定不发）。重放
+/// 由 [`project_events`] 把 TurnEnd 映成带时刻的 TurnDone——切会话/重启
+/// 后计时行读数（「已工作 N 分 N 秒」）可复原。
+fn finish_turn(
+    session: &mut Session,
+    log: Option<&Path>,
+    session_id: &str,
+    turn_id: TurnId,
+    outcome: TurnOutcome,
+    sink: Option<&dyn EventSink>,
+    steps: u32,
+) {
+    let ts = now_ms();
+    session.append(SessionEvent::TurnEnd { turn_id, outcome, ts });
+    if let Some(dir) = log {
+        session_log::append_slice(dir, session_id, session, session.len() - 1);
+    }
+    if let Some(sink) = sink {
+        sink.emit(&AgentEvent::TurnDone {
+            session_id: session_id.into(),
+            steps: Some(steps),
+            ts: Some(ts),
+        });
+    }
+}
+
+/// Unix 毫秒（轮界事件时间戳）。
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
 }
 
 /// 把日志新增段 `[from..]` 投影成 UI 事件（顺序 = 日志顺序）。
@@ -173,18 +249,24 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
     // ApprovalDecided 只有 call_id（㉕·对话区①）：tool 从同切片的 ToolCall
     // 按 call_id 找回——ToolCall 先行落日志（纪律 4），同一步内必在决策之前。
     let mut call_tools: HashMap<String, String> = HashMap::new();
+    // TurnStart.ts 配给紧随的 UserMessage（v2.101）：重放计时起点。消息
+    // 编辑重发截断留下的孤儿 TurnStart 会被下一个 TurnStart 覆盖（自愈，
+    // 不会把旧轮的起点错配给新轮）。
+    let mut turn_ts: Option<i64> = None;
     for (pos, e) in events.iter().enumerate() {
         match e {
+            SessionEvent::TurnStart { ts, .. } => turn_ts = Some(*ts),
             // ㉕·fix：用户消息进投影（此前落 `_` 被丢，重启后历史会话
             // 只剩模型回复）。实时轮不受影响——run_turn 的投影起点在
             // UserMessage 追加之后，该段只落盘不上事件通道（前端本地回显）。
             // `pos`（v2.57 §3.34）：消息编辑重发的定位键——session_history
-            // 传全量数组，pos 即绝对事件位。
+            // 传全量数组，pos 即绝对事件位。`ts`（v2.101）：轮起点时刻。
             SessionEvent::UserMessage { content } => {
                 out.push(AgentEvent::UserMessage {
                     session_id: session_id.into(),
                     content: content.clone(),
                     pos,
+                    ts: turn_ts.take().filter(|t| *t != 0),
                 });
             }
             // 推理（v2.57 §3.9）：投影一行 ThinkingRow；实时轮已被流式
@@ -302,6 +384,16 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                         .unwrap_or_else(|| call_id.0.clone()),
                     allowed: *allowed,
                     reason: reason.clone(),
+                });
+            }
+            SessionEvent::TurnEnd { ts, .. } => {
+                // 轮界收束（v2.101）：映成带时刻的 TurnDone——重放据此冻结
+                // 计时行读数。steps 日志未记录 = 不带（宁缺勿假）；旧日志
+                // 无此事件，重放行为不变。
+                out.push(AgentEvent::TurnDone {
+                    session_id: session_id.into(),
+                    steps: None,
+                    ts: (*ts != 0).then_some(*ts),
                 });
             }
             _ => {}

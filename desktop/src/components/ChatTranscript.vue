@@ -205,6 +205,8 @@ type TurnView = {
   userItem?: Extract<ChatItem, { kind: "user" }>;
   /** 轮起点 = 用户消息实时时刻（计时行读数起点；undefined = 无从计时）。 */
   startTs?: number;
+  /** 轮收束时刻（v2.101，turn_done 轮界事件投影——重放读数终点）。 */
+  endTs?: number;
   running: boolean;
   inner: Block[];
   /** 容器外尾块（构造保证只剩 single——最终报告 + 其后系统条目）。 */
@@ -226,6 +228,7 @@ const turnViews = computed<TurnView[]>(() => {
       key: cur.key,
       userItem: cur.userItem,
       startTs: cur.userItem?.ts,
+      endTs: cur.userItem?.endTs,
       running: false, // 最后一轮在收尾处统一回填
       inner: cur.blocks.slice(0, i),
       tail: cur.blocks.slice(i) as Extract<Block, { kind: "single" }>[],
@@ -306,15 +309,6 @@ const finalAssistantIds = computed(() => {
     if (!followed) ids.add(it.id);
   }
   return ids;
-});
-
-/** 流式尾随的助手条目（本轮正在生成的正文）：长文折叠对它不生效（强制
- * 展开），收束（running 翻假）才按规格折回 N 行。 */
-const liveAssistantId = computed(() => {
-  if (!chat.running) return null;
-  const items = chat.items;
-  const last = items[items.length - 1];
-  return last && last.kind === "assistant" ? last.id : null;
 });
 
 /** 待决审批按 call_id 索引（工具行「等待审批」状态词的数据源；决策卡
@@ -420,6 +414,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
           <div class="turn-box">
             <TurnTimerLine
               :start-ts="turn.startTs"
+              :end-ts="turn.endTs"
               :running="turn.running"
               :aria-expanded="turnBoxOpen(turn.key, turn.running)"
               @click="toggleTurnBox(turn.key, turn.running)"
@@ -478,14 +473,13 @@ async function onNoticeAction(item: SystemItem, action: string) {
                 </template>
 
                 <!-- 模型简短回复（容器内，无复制钮——复制钮只随最终报告）；
-                     流式尾随 live：长文折叠对生成中的正文不生效，收束才折 -->
+                     模型正文不参与长消息折叠（v2.101 裁定，按 kind 判定） -->
                 <MessageRow
                   v-else-if="block.item.kind === 'assistant'"
                   kind="assistant"
                   :text="block.item.text"
                   :ts="block.item.ts"
                   :copyable="finalAssistantIds.has(block.item.id)"
-                  :live="block.item.id === liveAssistantId"
                 />
                 <!-- 会话内系统消息（SystemNotice 模式）：组外兄弟节点 -->
                 <div
@@ -515,7 +509,6 @@ async function onNoticeAction(item: SystemItem, action: string) {
               :text="block.item.text"
               :ts="block.item.ts"
               :copyable="finalAssistantIds.has(block.item.id)"
-              :live="block.item.id === liveAssistantId"
             />
             <div
               v-else-if="block.item.kind === 'system'"

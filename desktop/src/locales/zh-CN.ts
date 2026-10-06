@@ -658,7 +658,7 @@ export default {
     expandToolTitle: "默认展开工具执行过程",
     enterToSendTitle: "回车发送",
     foldMessagesTitle: "长消息折叠",
-    foldMessagesHint: "超长消息与回复自动收起，点按钮展开",
+    foldMessagesHint: "用户消息超长自动收起，点按钮展开（模型回复不折叠）",
     foldLinesTitle: "折叠行数",
     foldLinesHint: "超过该行数自动收起（3–20 行，缺省 5）",
     usageReadoutTitle: "上下文用量读数",

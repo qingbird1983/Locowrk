@@ -64,7 +64,11 @@ export interface ToolResultEvent {
 export interface TurnDoneEvent {
   kind: "turn_done";
   session_id: string;
-  steps: number;
+  /** step 数。v2.101 起可选：TurnEnd 的重放投影不带（日志未记录 step
+   * 数，宁缺勿假）；实时路径恒有。 */
+  steps?: number;
+  /** 收束时刻 Unix 毫秒（v2.101，轮界事件投影）；缺省 = 旧日志无（不虚构）。 */
+  ts?: number;
 }
 
 /** 上下文用量（agent://context-usage，⑨）：与压缩判定同一估算口径。
@@ -171,6 +175,8 @@ export interface UserMessageEvent {
   session_id: string;
   content: string;
   pos: number;
+  /** 轮起点时刻（v2.101，TurnStart 配对投影）；缺省 = 旧日志无（不虚构）。 */
+  ts?: number;
 }
 
 /** 推理内容（v2.57 §3.9，agent://thinking / 重放同形）：实时 = 增量

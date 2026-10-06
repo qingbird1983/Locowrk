@@ -66,11 +66,3 @@ const noticeText = computed(() => t("panel.readonlyNote"));
     </div>
   </div>
 </template>
-
-<style scoped>
-/* 长消息折叠遮罩的局部底色（MessageRow 的助手遮罩缺省淡到页面底
- * --lw-bg；本页签坐工作面板列，底 = bg-dock——变量覆盖成局部同色） */
-.subtab {
-  --lw-fold-fade: var(--lw-bg-dock);
-}
-</style>

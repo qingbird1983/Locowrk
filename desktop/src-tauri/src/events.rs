@@ -107,7 +107,14 @@ pub enum AgentEvent {
     },
     TurnDone {
         session_id: String,
-        steps: u32,
+        /// step 数。v2.101 起可选：TurnEnd 的重放投影不带（日志未记录
+        /// step 数，宁缺勿假）；实时路径恒有。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        steps: Option<u32>,
+        /// 收束时刻 Unix 毫秒（v2.101，SessionEvent::TurnEnd 投影 / 实时
+        /// 同源）；None = 旧日志无轮界事件（前端不虚构读数）。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        ts: Option<i64>,
     },
     ApprovalRequest(ApprovalRequestPayload),
     /// 上下文用量（⑨）：每个 step 后推送；used 与压缩判定同一估算口径
@@ -160,6 +167,10 @@ pub enum AgentEvent {
         session_id: String,
         content: String,
         pos: usize,
+        /// 轮起点时刻（v2.101，SessionEvent::TurnStart.ts 配对投影）；
+        /// None = 旧日志无轮界事件（前端不虚构读数）。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        ts: Option<i64>,
     },
     /// 推理内容（v2.57 §3.9）：`SessionEvent::Thinking` 的投影。实时与
     /// 重放**同一事件形状**：实时 delta 直推（`text` = 增量，StreamChunkSink

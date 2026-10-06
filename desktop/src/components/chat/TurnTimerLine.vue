@@ -3,8 +3,9 @@
  * 轮计时行（v2.99「第 0 层」用户裁定）：任务容器的常驻头部——随用户
  * 消息开启，「⏱ 工作中 0 分 1 秒」起表；整轮收束读数冻结为「✓ 已工作
  * N 分 N 秒」且容器收缩后它是唯一残留（点击逐层重开），发丝线在文字
- * 下方。历史重放无时间戳 = 无读数（只剩发丝线，不虚构时序），调度注入
- * 轮同理。
+ * 下方。v2.101 起轮界时刻落会话日志（TurnStart/TurnEnd），重放复原
+ * 读数；旧日志无时刻 = 无读数（只剩发丝线，不虚构时序），调度注入轮
+ * 同理（无从起算）。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -13,6 +14,8 @@ import { Icon } from "../../lib/icons";
 const props = defineProps<{
   /** 轮起点 = 用户消息实时时刻；undefined = 无从计时（诚实省略读数）。 */
   startTs?: number;
+  /** 轮收束时刻（v2.101，重放读数终点；实时收束走本地 finishedAt）。 */
+  endTs?: number;
   /** 当轮是否在跑（收束即冻结读数）。 */
   running: boolean;
 }>();
@@ -48,10 +51,12 @@ onBeforeUnmount(() => {
   if (timer !== null) window.clearInterval(timer);
 });
 
-/** 本地化分秒读数（裁定示例「工作中 0 分 1 秒」——分位恒显示）。 */
+/** 本地化分秒读数（裁定示例「工作中 0 分 1 秒」——分位恒显示）。
+ * 终点优先级：本地收束戳（实时）> 重放 endTs（v2.101 轮界事件）> 走表。 */
 const text = computed(() => {
   if (props.startTs === undefined) return "";
-  const end = finishedAt.value ?? (props.running ? now.value : null);
+  const end =
+    finishedAt.value ?? props.endTs ?? (props.running ? now.value : null);
   if (end === null) return "";
   const sec = Math.max(0, Math.round((end - props.startTs) / 1000));
   const m = Math.floor(sec / 60);
