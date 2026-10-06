@@ -132,7 +132,7 @@ const isMarket = computed(() => shell.destination === "plugins");
           </button>
         </nav>
 
-        <!-- 项目段（§2.3 v3.9）：组集合 = fsRoots ∪ 已关联会话，未归组 -->
+        <!-- 项目段（§2.3 v4.12）：组集合 = fsRoots（归属不在 fsRoots 的组不进树） -->
         <SessionGroups :sessions="chat.sessions" :fs-roots="settings.view?.tools.fsRoots ?? []" />
       </div>
 

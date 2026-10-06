@@ -67,7 +67,8 @@ async function onMenuSelect(id: string) {
       toast.push("danger", t("toast.revealFailed"), String(e));
     }
   } else if (id === "remove") {
-    // 移除项目 = 从 fsRoots 移除（会话与既有归属不动，组照常显示）
+    // 移除项目 = 从 fsRoots 移除：组随之从侧栏消失（v2.113——归属不在
+    // fsRoots 的组不进树）；会话与既有归属数据不动，重新添加同目录整组恢复
     const rest = (settings.view?.tools.fsRoots ?? []).filter(
       (r) => r !== props.group.key,
     );

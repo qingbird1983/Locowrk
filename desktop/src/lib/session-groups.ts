@@ -10,7 +10,7 @@ import type { SessionMeta } from "../types";
 export interface WorkspaceGroup {
   /** 折叠键 = workspace 存储路径（§2.3 头行可折叠，键随路径稳定）。 */
   key: string;
-  /** 显示名 = 存储路径末段——根目录后来从设置移除的组照常显示。 */
+  /** 显示名 = 存储路径末段。 */
   name: string;
   /** 组内任务（最近活动降序）。 */
   items: SessionMeta[];
@@ -20,8 +20,9 @@ export interface WorkspaceGroup {
 
 export interface SessionTree {
   /** 「项目」组：有会话的按组内最近活动降序，fsRoots 空组垫后保配置序。
-   * 无归属会话不进侧栏树（用户 2026-10-04 裁定：项目工作区全权接管；
-   * ⌘K 面板照列全部会话，行菜单可移入项目归位）。 */
+   * 无归属、或归属不在 fsRoots（项目已移除，v2.113）的会话不进侧栏树
+   * （用户裁定：项目工作区全权接管；⌘K 面板照列全部会话，行菜单可移入
+   * 项目归位）。 */
   workspaces: WorkspaceGroup[];
 }
 
@@ -37,8 +38,10 @@ export interface GroupOptions {
 
 /** 把会话列表（一般 mtime 降序）组装成 §2.3 项目树。`fsRoots` = 设置里的
  * 工作区根目录——§2.3 定义「工作区 = fsRoots 里的一个根目录」，已配置但
- * 尚无会话归属的根照常成组（空组只渲染头行）；组集合 = fsRoots ∪ 已关联
- * 会话的 workspace（根目录后来移除的组照常显示）。 */
+ * 尚无会话归属的根照常成组（空组只渲染头行）；**组集合 = fsRoots**——
+ * 归属不在 fsRoots 的会话不进树（v2.113 用户裁定「移除项目无效」修复：
+ * 旧规则「根目录移除的组照常显示」使移除动作看起来无效；归属数据本身
+ * 不动，重新添加同目录即整组恢复，⌘K 照列全部会话）。 */
 export function groupSessions(
   sessions: SessionMeta[],
   runningId: string | null,
@@ -50,6 +53,9 @@ export function groupSessions(
   const wsMap = new Map<string, WorkspaceGroup>();
   for (const s of byRecency) {
     if (!s.workspace) continue; // 项目工作区全权接管：无归属不进树
+    // 项目已移除（不在 fsRoots）：组不进树（v2.113，见函数头注——归属
+    // 数据不动，重新添加同目录整组恢复）
+    if (!fsRoots.includes(s.workspace)) continue;
     let g = wsMap.get(s.workspace);
     if (!g) {
       g = {
