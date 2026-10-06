@@ -130,6 +130,23 @@ impl SeqLlm {
             usage: None,
         })
     }
+
+    /// 带用量报告的文本响应（内核会紧贴 assistant 落 `LlmUsage` 事件——
+    /// 收敛判据不得只看 `events().last()` 的回归道具）。
+    pub fn ok_text_with_usage(text: &str) -> Result<LlmResponse, LlmError> {
+        Ok(LlmResponse {
+            content: text.into(),
+            tool_calls: vec![],
+            usage: Some(kernel_agent::LlmUsage {
+                input: 10,
+                output: 5,
+                cache_read: 0,
+                cache_write: 0,
+                reasoning: 0,
+                total: 15,
+            }),
+        })
+    }
 }
 
 #[async_trait]

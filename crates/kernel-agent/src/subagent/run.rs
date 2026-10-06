@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use session_store::{Session, SessionEvent};
+use session_store::{Session, SessionEvent, TurnId, TurnOutcome};
 
 use super::SubagentGate;
 use crate::kernel::Kernel;
@@ -124,6 +124,13 @@ pub(crate) async fn run_child(
     // AssistantMessage）被排除——收束汇报（tools_used/摘要）只看子内新增
     // 段，父的调用史不会被误报成子的工具使用（㋑·fix 同一语义）。
     let own_from = child.len();
+    // 轮界时刻与主对话同款（v2.101）：子转录文件此前没有任何时刻，页签
+    // 计时行按「无时刻不虚构」只剩发丝线（v2.107 目检实抓）。子只有任务
+    // prompt 一个用户轮，turn_id 恒 1（fork 前缀里的父 TurnStart 不算子的）。
+    child.append(SessionEvent::TurnStart {
+        turn_id: TurnId(1),
+        ts: now_ms(),
+    });
     child.append(SessionEvent::UserMessage { content: prompt });
 
     let mut turns: u32 = 0;
@@ -150,6 +157,20 @@ pub(crate) async fn run_child(
         None => loop_fut.await,
     };
 
+    // 收束即落 TurnEnd（四路径全覆盖，同主对话 finish_turn 纪律）：预算
+    // 到顶是优雅收束（Completed，同主对话步数到顶），超时/步失败如实
+    // Failed——重放才知道轮停在哪，计时行据此冻结读数。outcome 先算
+    // （Copy），status 匹配要搬走 Step 的错误串。
+    let outcome = match end {
+        LoopEnd::Converged | LoopEnd::Budget => TurnOutcome::Completed,
+        LoopEnd::Timeout | LoopEnd::Step(_) => TurnOutcome::Failed,
+    };
+    child.append(SessionEvent::TurnEnd {
+        turn_id: TurnId(1),
+        outcome,
+        ts: now_ms(),
+    });
+
     let (status, error) = match end {
         LoopEnd::Converged => (SubagentStatus::Completed, None),
         LoopEnd::Budget => (SubagentStatus::BudgetExhausted, None),
@@ -173,12 +194,28 @@ pub(crate) async fn run_child(
     }
 }
 
-/// 收敛判据（同桌面 runner）：最后一条 assistant 不再带工具调用。
+/// 收敛判据（同桌面 runner，v2.64 修法）：从尾部找**最近一条**
+/// AssistantMessage 判 tool_calls——不能只看 last()：报告用量的供应商
+/// step 后 last() 恒为 LlmUsage（内核紧贴 assistant 落），子循环永不
+/// 收敛、白跑到轮数上限，多余的一步还可能吃到 thinking 模型对 assistant
+/// 结尾请求的 400（盘证：现网子代理收束 status 恒 budget_exhausted/failed）。
 fn converged(child: &Session) -> bool {
     matches!(
-        child.events().last(),
-        Some(SessionEvent::AssistantMessage { tool_calls, .. }) if tool_calls.is_empty()
+        child.events().iter().rev().find_map(|e| match e {
+            SessionEvent::AssistantMessage { tool_calls, .. } => Some(tool_calls.is_empty()),
+            _ => None,
+        }),
+        Some(true)
     )
+}
+
+/// Unix 毫秒（kernel.rs ContextCompacted 同款口径；时钟不可用 = 0，
+/// 投影按缺失处理不虚构）。
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 /// 摘要 = 子转录**自身段**（`own_from` 之后）最后一条非空 assistant 正文；
