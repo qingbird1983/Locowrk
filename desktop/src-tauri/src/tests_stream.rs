@@ -216,7 +216,10 @@ fn turn_boundaries_project_timestamps_for_replay() {
     assert!(
         replay.iter().any(|e| matches!(
             e,
-            crate::events::AgentEvent::UserMessage { ts: Some(1_000), .. }
+            crate::events::AgentEvent::UserMessage {
+                ts: Some(1_000),
+                ..
+            }
         )),
         "UserMessage 应带上 TurnStart 的轮起点：{replay:?}"
     );
@@ -238,9 +241,9 @@ fn turn_boundaries_project_timestamps_for_replay() {
         content: "旧".into(),
     });
     let replay_old = crate::runner::project_events(old.events(), "s1");
-    assert!(replay_old.iter().any(
-        |e| matches!(e, crate::events::AgentEvent::UserMessage { ts: None, .. })
-    ));
+    assert!(replay_old
+        .iter()
+        .any(|e| matches!(e, crate::events::AgentEvent::UserMessage { ts: None, .. })));
 }
 
 /// v2.101：run_turn 把轮界事件写进日志（此前 §4.1 已定义但从未写入，

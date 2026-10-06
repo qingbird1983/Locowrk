@@ -75,7 +75,10 @@ pub async fn run_turn(
             .count() as u64
             + 1,
     );
-    session.append(SessionEvent::TurnStart { turn_id, ts: now_ms() });
+    session.append(SessionEvent::TurnStart {
+        turn_id,
+        ts: now_ms(),
+    });
     session.append(SessionEvent::UserMessage { content: message });
     if let Some(dir) = log {
         session_log::append_slice(dir, session_id, session, log_start);
@@ -196,7 +199,11 @@ fn finish_turn(
     steps: u32,
 ) {
     let ts = now_ms();
-    session.append(SessionEvent::TurnEnd { turn_id, outcome, ts });
+    session.append(SessionEvent::TurnEnd {
+        turn_id,
+        outcome,
+        ts,
+    });
     if let Some(dir) = log {
         session_log::append_slice(dir, session_id, session, session.len() - 1);
     }
