@@ -27,6 +27,8 @@ const form = reactive({
   cacheStats: true,
   cacheHitPrice: 0.02,
   cacheMissPrice: 1.0,
+  foldLongMessages: true,
+  foldLines: 5,
 });
 
 watch(
@@ -41,6 +43,8 @@ watch(
     form.cacheStats = v.chat.cacheStats;
     form.cacheHitPrice = v.chat.cacheHitPrice;
     form.cacheMissPrice = v.chat.cacheMissPrice;
+    form.foldLongMessages = v.chat.foldLongMessages;
+    form.foldLines = v.chat.foldLines;
   },
   { immediate: true },
 );
@@ -55,6 +59,8 @@ function save() {
     cacheStats: form.cacheStats,
     cacheHitPrice: form.cacheHitPrice,
     cacheMissPrice: form.cacheMissPrice,
+    foldLongMessages: form.foldLongMessages,
+    foldLines: form.foldLines,
   });
 }
 
@@ -95,6 +101,29 @@ const readoutOptions = computed(() => [
 
     <SettingsRow :title="t('settings.enterToSendTitle')">
       <SettingsToggle v-model="form.enterToSend" :label="t('settings.enterToSendTitle')" />
+    </SettingsRow>
+
+    <!-- 长消息折叠（组件规格「Line Clamp with Fade Mask」）：开关 + 行数 -->
+    <SettingsRow
+      :title="t('settings.foldMessagesTitle')"
+      :hint="t('settings.foldMessagesHint')"
+    >
+      <SettingsToggle v-model="form.foldLongMessages" :label="t('settings.foldMessagesTitle')" />
+    </SettingsRow>
+
+    <SettingsRow
+      :title="t('settings.foldLinesTitle')"
+      :hint="t('settings.foldLinesHint')"
+      control-id="chat-fold-lines"
+    >
+      <input
+        id="chat-fold-lines"
+        v-model.number="form.foldLines"
+        type="number"
+        :min="3"
+        :max="20"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
     </SettingsRow>
 
     <SettingsRow :title="t('settings.usageReadoutTitle')">

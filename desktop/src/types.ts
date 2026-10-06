@@ -434,6 +434,10 @@ export interface ChatSettingsView {
   cacheHitPrice: number;
   /** 缓存未命中单价（元/百万 tokens）。 */
   cacheMissPrice: number;
+  /** 长消息折叠（缺省开）：超过 foldLines 行收起 + 遮罩 + 展开钮。 */
+  foldLongMessages: boolean;
+  /** 长消息折叠行数（3–20，缺省 5）。 */
+  foldLines: number;
 }
 
 /** 对话行为区部分更新：字段缺省 = 保持不变。 */
@@ -446,6 +450,8 @@ export interface ChatUpdate {
   cacheStats?: boolean;
   cacheHitPrice?: number;
   cacheMissPrice?: number;
+  foldLongMessages?: boolean;
+  foldLines?: number;
 }
 
 /** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。autoExtract =

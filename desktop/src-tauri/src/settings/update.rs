@@ -263,57 +263,7 @@ impl SettingsStore {
             }
         }
         if let Some(u) = chat {
-            if let Some(w) = u.content_max_width {
-                if !(super::chat::CONTENT_MAX_WIDTH_MIN..=super::chat::CONTENT_MAX_WIDTH_MAX)
-                    .contains(&w)
-                {
-                    return Err(format!(
-                        "对话宽度 {w}px 超出范围（{}–{}）",
-                        super::chat::CONTENT_MAX_WIDTH_MIN,
-                        super::chat::CONTENT_MAX_WIDTH_MAX
-                    ));
-                }
-                next.chat.content_max_width = Some(w);
-            }
-            if let Some(e) = u.expand_tool_process {
-                next.chat.expand_tool_process = e;
-            }
-            if let Some(e) = u.enter_to_send {
-                next.chat.enter_to_send = e;
-            }
-            if let Some(r) = u.usage_readout {
-                if !super::chat::valid_usage_readout(&r) {
-                    return Err(format!(
-                        "不支持的用量读数口径: {r}（可选 used / remaining）"
-                    ));
-                }
-                next.chat.usage_readout = r;
-            }
-            if let Some(a) = u.auto_title {
-                next.chat.auto_title = a;
-            }
-            // M0 观测（KV v2 §7）：命中率显示开关 + 节省估算单价
-            if let Some(e) = u.cache_stats {
-                next.chat.cache_stats = e;
-            }
-            if let Some(p) = u.cache_hit_price {
-                if !super::chat::valid_price(p) {
-                    return Err(format!(
-                        "缓存命中单价 {p} 超出范围（0–{}）",
-                        super::chat::PRICE_MAX
-                    ));
-                }
-                next.chat.cache_hit_price = p;
-            }
-            if let Some(p) = u.cache_miss_price {
-                if !super::chat::valid_price(p) {
-                    return Err(format!(
-                        "缓存未命中单价 {p} 超出范围（0–{}）",
-                        super::chat::PRICE_MAX
-                    ));
-                }
-                next.chat.cache_miss_price = p;
-            }
+            super::chat::apply_update(&mut next.chat, u)?;
         }
         if let Some(u) = developer {
             // v2.49 开发者选项：布尔开关无范围校验；危险开关缺省全关由

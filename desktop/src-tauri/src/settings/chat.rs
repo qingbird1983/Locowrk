@@ -22,6 +22,10 @@ pub const CACHE_HIT_PRICE_DEFAULT: f64 = 0.02;
 pub const CACHE_MISS_PRICE_DEFAULT: f64 = 1.0;
 /// 单价存取上限（元/百万 tokens）：只防显然离谱的值，真实价格远低于此。
 pub const PRICE_MAX: f64 = 10_000.0;
+/// 长消息折叠行数下限（组件规格 §六：3 行）。
+pub const FOLD_LINES_MIN: u32 = 3;
+/// 长消息折叠行数上限（组件规格 §六：20 行）。
+pub const FOLD_LINES_MAX: u32 = 20;
 
 /// `chat` 区（settings.json）。字段级缺省：旧文件无此区 → 全部缺省
 /// （宽度未设置 / 不默认展开过程 / 回车发送 / 已用口径 / 自动标题开），零迁移。
@@ -48,6 +52,11 @@ pub struct ChatSettings {
     pub cache_hit_price: f64,
     /// 缓存未命中单价（元/百万 tokens）。
     pub cache_miss_price: f64,
+    /// 长消息折叠（组件规格「Line Clamp with Fade Mask」，缺省开）：用户
+    /// 消息与助手长文超过 `fold_lines` 行自动收起（渐变遮罩 + 圆形展开钮）。
+    pub fold_long_messages: bool,
+    /// 长消息折叠行数（3–20，缺省 5）。
+    pub fold_lines: u32,
 }
 
 impl Default for ChatSettings {
@@ -61,6 +70,8 @@ impl Default for ChatSettings {
             cache_stats: true,
             cache_hit_price: CACHE_HIT_PRICE_DEFAULT,
             cache_miss_price: CACHE_MISS_PRICE_DEFAULT,
+            fold_long_messages: true,
+            fold_lines: 5,
         }
     }
 }
@@ -77,6 +88,8 @@ pub struct ChatView {
     pub cache_stats: bool,
     pub cache_hit_price: f64,
     pub cache_miss_price: f64,
+    pub fold_long_messages: bool,
+    pub fold_lines: u32,
 }
 
 /// 部分更新（settings_set 入参）。字段 None = 保持不变。
@@ -91,6 +104,8 @@ pub struct ChatUpdate {
     pub cache_stats: Option<bool>,
     pub cache_hit_price: Option<f64>,
     pub cache_miss_price: Option<f64>,
+    pub fold_long_messages: Option<bool>,
+    pub fold_lines: Option<u32>,
 }
 
 /// 合法性检查（update.rs 校验用）。
@@ -101,4 +116,68 @@ pub fn valid_usage_readout(v: &str) -> bool {
 /// 单价合法性：有限且在 [0, PRICE_MAX]。
 pub fn valid_price(v: f64) -> bool {
     v.is_finite() && (0.0..=PRICE_MAX).contains(&v)
+}
+
+/// 折叠行数合法性（组件规格 §六：3–20 行）。
+pub fn valid_fold_lines(v: u32) -> bool {
+    (FOLD_LINES_MIN..=FOLD_LINES_MAX).contains(&v)
+}
+
+/// chat 区部分更新（update.rs 编排调用）：本区校验与落值收敛在区模块内，
+/// 编排层只留一行转发。
+pub fn apply_update(next: &mut ChatSettings, u: ChatUpdate) -> Result<(), String> {
+    if let Some(w) = u.content_max_width {
+        if !(CONTENT_MAX_WIDTH_MIN..=CONTENT_MAX_WIDTH_MAX).contains(&w) {
+            return Err(format!(
+                "对话宽度 {w}px 超出范围（{CONTENT_MAX_WIDTH_MIN}–{CONTENT_MAX_WIDTH_MAX}）"
+            ));
+        }
+        next.content_max_width = Some(w);
+    }
+    if let Some(e) = u.expand_tool_process {
+        next.expand_tool_process = e;
+    }
+    if let Some(e) = u.enter_to_send {
+        next.enter_to_send = e;
+    }
+    if let Some(r) = u.usage_readout {
+        if !valid_usage_readout(&r) {
+            return Err(format!(
+                "不支持的用量读数口径: {r}（可选 used / remaining）"
+            ));
+        }
+        next.usage_readout = r;
+    }
+    if let Some(a) = u.auto_title {
+        next.auto_title = a;
+    }
+    // M0 观测（KV v2 §7）：命中率显示开关 + 节省估算单价
+    if let Some(e) = u.cache_stats {
+        next.cache_stats = e;
+    }
+    if let Some(p) = u.cache_hit_price {
+        if !valid_price(p) {
+            return Err(format!("缓存命中单价 {p} 超出范围（0–{PRICE_MAX}）"));
+        }
+        next.cache_hit_price = p;
+    }
+    if let Some(p) = u.cache_miss_price {
+        if !valid_price(p) {
+            return Err(format!("缓存未命中单价 {p} 超出范围（0–{PRICE_MAX}）"));
+        }
+        next.cache_miss_price = p;
+    }
+    // 长消息折叠（组件规格）：开关 + 行数（3–20）
+    if let Some(e) = u.fold_long_messages {
+        next.fold_long_messages = e;
+    }
+    if let Some(n) = u.fold_lines {
+        if !valid_fold_lines(n) {
+            return Err(format!(
+                "折叠行数 {n} 超出范围（{FOLD_LINES_MIN}–{FOLD_LINES_MAX}）"
+            ));
+        }
+        next.fold_lines = n;
+    }
+    Ok(())
 }

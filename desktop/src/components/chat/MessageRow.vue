@@ -6,12 +6,16 @@
  * 时间只在实时轮次有（历史重放无时间戳，不虚构时序）。
  * 编辑态（v2.57 §3.34）：用户气泡原位换自适应文本域，Enter = 提交重发、
  * Shift+Enter 换行、Esc = 取消；可编辑性由父层裁决（出现条件见 §3.34）。
+ * 长消息折叠（组件规格「Line Clamp with Fade Mask」）：fold-zone 夹紧 +
+ * 渐变遮罩 + 文字下方居中圆形展开钮，状态机在 use-message-fold.ts；复制
+ * 钮在其下方且不受折叠影响（恒复制全文）。
  */
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import { renderMarkdown } from "../../lib/markdown";
+import { useMessageFold } from "./use-message-fold";
 
 const props = withDefaults(
   defineProps<{
@@ -24,6 +28,8 @@ const props = withDefaults(
     /** 复制钮（v2.96 用户裁定）：只在用户消息与每轮最终汇报/总结之下出现
      * （缺省 true = 用户消息）；任务中间的简短回话由父层传 false 关掉。 */
     copyable?: boolean;
+    /** 流式尾随（本轮正在生成的正文）：强制展开不折叠，收束才折回。 */
+    live?: boolean;
   }>(),
   { copyable: true },
 );
@@ -94,6 +100,11 @@ function onEditKeydown(e: KeyboardEvent) {
   }
 }
 
+// 长消息折叠：折叠测量体（用户 = 气泡内文 / 助手 = md 正文）
+const contentEl = ref<HTMLElement | null>(null);
+const { isOpen, overflowing, showFold, foldStyle, animating, onToggleFold } =
+  useMessageFold(contentEl, computed(() => !!props.live), editing);
+
 async function copySelf() {
   try {
     await navigator.clipboard.writeText(props.text);
@@ -119,7 +130,7 @@ async function onBodyClick(e: MouseEvent) {
 <template>
   <div class="msg" :class="kind === 'user' ? 'msg-user' : 'msg-assistant'">
     <!-- 用户消息：右对齐气泡（编辑态 = 自适应文本域原位替换）；
-        助手消息：整列宽 markdown -->
+        助手消息：整列宽 markdown。折叠 = fold-zone 夹紧 + 渐变遮罩 -->
     <textarea
       v-if="editing"
       ref="box"
@@ -129,14 +140,48 @@ async function onBodyClick(e: MouseEvent) {
       :aria-label="t('chat.editMessage')"
       @keydown="onEditKeydown"
     />
-    <div v-else-if="kind === 'user'" class="msg-user__bubble">{{ text }}</div>
-    <!-- eslint-disable-next-line vue/no-v-html —— 内容已过 DOMPurify -->
     <div
-      v-else
-      class="md"
-      v-html="html"
-      @click="onBodyClick"
-    />
+      v-else-if="kind === 'user'"
+      class="msg-user__bubble"
+      :class="{ 'is-clamped': overflowing }"
+    >
+      <div
+        ref="contentEl"
+        class="fold-zone"
+        :class="{ 'is-anim': animating }"
+        :style="foldStyle"
+      >{{ text }}</div>
+      <div v-if="overflowing" class="fold-mask" :class="{ 'is-open': isOpen }" />
+    </div>
+    <!-- eslint-disable-next-line vue/no-v-html —— 内容已过 DOMPurify -->
+    <div v-else class="fold-wrap">
+      <div
+        ref="contentEl"
+        class="md fold-zone"
+        :class="{ 'is-anim': animating }"
+        :style="foldStyle"
+        v-html="html"
+        @click="onBodyClick"
+      />
+      <div v-if="overflowing" class="fold-mask" :class="{ 'is-open': isOpen }" />
+    </div>
+
+    <!-- 折叠钮（规格：文字下方居中 8px、24×24 圆形；复制/编辑/时间行
+        在其下方 = 「复制按钮位于展开/收起按钮下方」） -->
+    <div v-if="showFold" class="fold-row">
+      <HoverTip :text="isOpen ? t('chat.collapseMessage') : t('chat.expandMessage')">
+        <button
+          class="fold-btn"
+          :class="{ 'is-open': isOpen }"
+          type="button"
+          :aria-label="isOpen ? t('chat.collapseMessage') : t('chat.expandMessage')"
+          :aria-expanded="isOpen"
+          @click="onToggleFold"
+        >
+          <Icon name="chevronDown" :size="14" />
+        </button>
+      </HoverTip>
+    </div>
 
     <div class="msg__actions">
       <HoverTip v-if="copyable" :text="t('chat.copyMessage')">
@@ -214,5 +259,73 @@ async function onBodyClick(e: MouseEvent) {
   resize: none;
   outline: none;
   overflow: hidden;
+}
+
+/* ---- 长消息折叠（Line Clamp with Fade Mask）---- */
+/* 遮罩落点 = 内容局部底色：气泡 wash-1 / 助手正文 = 页面底（--lw-fold-fade
+ * 可被外层覆盖——子 Agent 转录页签盖 --lw-bg-dock）。§六：.vue 禁字面色 */
+.fold-wrap,
+.msg-user__bubble {
+  position: relative;
+}
+.msg-user__bubble.is-clamped {
+  overflow: hidden;
+}
+.fold-zone.is-anim {
+  transition: max-height var(--dur-base) var(--ease-out);
+}
+.fold-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+.fold-mask.is-open {
+  opacity: 0;
+}
+.msg-user__bubble .fold-mask {
+  background: linear-gradient(to bottom, transparent, var(--lw-wash-1));
+}
+.fold-wrap .fold-mask {
+  background: linear-gradient(to bottom, transparent, var(--lw-fold-fade, var(--lw-bg)));
+}
+.fold-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: var(--lw-gap-8);
+}
+.fold-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-bg);
+  box-shadow: var(--lw-shadow-raised);
+  color: var(--lw-ink-3);
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+.fold-btn:hover {
+  color: var(--lw-ink-1);
+}
+.fold-btn :deep(svg) {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+/* 悬停微动效（规格 §三）：折叠态箭头下移 2px（向下展开），展开态上移 */
+.fold-btn:hover :deep(svg) {
+  transform: translateY(2px);
+}
+.fold-btn.is-open :deep(svg) {
+  transform: rotate(180deg);
+}
+/* rotate(180) 后局部 +Y 朝屏幕上方：translateY(2px) = 上移 2px */
+.fold-btn.is-open:hover :deep(svg) {
+  transform: rotate(180deg) translateY(2px);
 }
 </style>

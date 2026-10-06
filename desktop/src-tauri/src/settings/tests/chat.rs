@@ -22,6 +22,9 @@ fn chat_defaults_and_legacy_compat() {
         v.cache_miss_price,
         super::super::chat::CACHE_MISS_PRICE_DEFAULT
     );
+    // 长消息折叠缺省：开 + 5 行
+    assert!(v.fold_long_messages);
+    assert_eq!(v.fold_lines, 5);
     // 旧 settings.json 无 chat 区 → 字段级缺省，零迁移
     std::fs::write(root.join("settings.json"), r#"{"locale": "zh-CN"}"#).unwrap();
     let v = SettingsStore::open(&root).unwrap().view().chat;
@@ -55,6 +58,8 @@ fn chat_update_persists_and_roundtrips() {
                 cache_stats: Some(false),
                 cache_hit_price: Some(0.01),
                 cache_miss_price: Some(2.0),
+                fold_long_messages: Some(false),
+                fold_lines: Some(12),
             }),
             None,
         )
@@ -68,12 +73,15 @@ fn chat_update_persists_and_roundtrips() {
     assert!(!v.cache_stats);
     assert_eq!(v.cache_hit_price, 0.01);
     assert_eq!(v.cache_miss_price, 2.0);
+    assert!(!v.fold_long_messages, "显式关闭生效");
+    assert_eq!(v.fold_lines, 12);
     // 磁盘往返
     let v = SettingsStore::open(&root).unwrap().view().chat;
     assert_eq!(v.content_max_width, Some(1000));
     assert_eq!(v.usage_readout, "remaining");
     assert_eq!(v.cache_hit_price, 0.01);
     assert_eq!(v.cache_miss_price, 2.0);
+    assert_eq!(v.fold_lines, 12);
     // 部分更新：None 字段保持不变
     let v = store
         .update(
@@ -96,6 +104,8 @@ fn chat_update_persists_and_roundtrips() {
                 cache_stats: None,
                 cache_hit_price: None,
                 cache_miss_price: None,
+                fold_long_messages: None,
+                fold_lines: None,
             }),
             None,
         )
@@ -132,6 +142,8 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 cache_stats: None,
                 cache_hit_price: None,
                 cache_miss_price: None,
+                fold_long_messages: None,
+                fold_lines: None,
             }),
             None,
         )
@@ -157,6 +169,8 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 cache_stats: None,
                 cache_hit_price: None,
                 cache_miss_price: None,
+                fold_long_messages: None,
+                fold_lines: None,
             }),
             None,
         )
@@ -192,6 +206,8 @@ fn chat_rejects_invalid_price_and_keeps_state() {
                     cache_stats: None,
                     cache_hit_price: hit,
                     cache_miss_price: miss,
+                    fold_long_messages: None,
+                    fold_lines: None,
                 }),
                 None,
             )
@@ -231,9 +247,55 @@ fn chat_rejects_invalid_price_and_keeps_state() {
                 cache_stats: None,
                 cache_hit_price: Some(0.0),
                 cache_miss_price: Some(super::super::chat::PRICE_MAX),
+                fold_long_messages: None,
+                fold_lines: None,
             }),
             None,
         )
         .unwrap();
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn chat_rejects_bad_fold_lines_and_keeps_state() {
+    let root = temp_root("chat-fold-invalid");
+    let store = SettingsStore::open(&root).unwrap();
+    let reject = |n: Option<u32>| {
+        store
+            .update(
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(ChatUpdate {
+                    content_max_width: None,
+                    expand_tool_process: None,
+                    enter_to_send: None,
+                    usage_readout: None,
+                    auto_title: None,
+                    cache_stats: None,
+                    cache_hit_price: None,
+                    cache_miss_price: None,
+                    fold_long_messages: None,
+                    fold_lines: n,
+                }),
+                None,
+            )
+            .is_err()
+    };
+    assert!(reject(Some(2)), "低于下限拒绝");
+    assert!(reject(Some(21)), "高于上限拒绝");
+    // 拒绝不污染内存态：缺省仍是 5
+    assert_eq!(store.view().chat.fold_lines, 5);
+    // 边界值合法
+    assert!(!reject(Some(3)));
+    assert!(!reject(Some(20)));
+    assert_eq!(store.view().chat.fold_lines, 20);
     std::fs::remove_dir_all(&root).ok();
 }
