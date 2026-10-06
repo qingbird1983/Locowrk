@@ -13,8 +13,6 @@
  * - stopRequested：「已停止」只标最新过程组；页签恒 false；
  * - editableIds：可编辑用户气泡集合（§3.34）；页签只读不传；
  * - noticeAction：系统条动作上抛（撤销压缩/查看详情等）；页签不接。
- * - timerReadout：计时行读数显示（v2.105 目检裁定：页签传 false 只留
- *   发丝线——快照不显示「工作中/已工作」计时读数）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -41,9 +39,6 @@ const props = defineProps<{
   stopRequested?: boolean;
   /** 可编辑用户气泡 id 集（§3.34；缺省 = 全只读）。 */
   editableIds?: Set<number>;
-  /** 第 0 层计时行读数显示（v2.105 裁定：子代理转录页签传 false 只留
-   * 发丝线；缺省 true = 主对话原样）。 */
-  timerReadout?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -335,7 +330,6 @@ function noticeText(item: SystemItem): string {
         :start-ts="turn.startTs"
         :end-ts="turn.endTs"
         :running="turn.running"
-        :show-readout="timerReadout"
         :aria-expanded="turnBoxOpen(turn.key, turn.running)"
         @click="toggleTurnBox(turn.key, turn.running)"
       />

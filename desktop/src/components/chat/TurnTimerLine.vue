@@ -5,8 +5,7 @@
  * N 分 N 秒」且容器收缩后它是唯一残留（点击逐层重开），发丝线在文字
  * 下方。v2.101 起轮界时刻落会话日志（TurnStart/TurnEnd），重放复原
  * 读数；旧日志无时刻 = 无读数（只剩发丝线，不虚构时序），调度注入轮
- * 同理（无从起算）。v2.105 起读数显示可关（showReadout）——子代理转
- * 录页签只留发丝线。
+ * 同理（无从起算）。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -19,10 +18,6 @@ const props = defineProps<{
   endTs?: number;
   /** 当轮是否在跑（收束即冻结读数）。 */
   running: boolean;
-  /** 读数（图标+文字）显示开关（v2.105 目检裁定：子代理转录页签只留
-   * 发丝线——快照不显示「工作中/已工作」计时读数）。缺省 true = 主对话
-   * 原样。 */
-  showReadout?: boolean;
 }>();
 const emit = defineEmits<{ click: [] }>();
 const { t, locale } = useI18n();
@@ -68,20 +63,17 @@ const text = computed(() => {
   const s = sec % 60;
   return locale.value === "zh-CN" ? `${m} 分 ${s} 秒` : `${m}m ${s}s`;
 });
-
-/** 读数显示（缺省开；页签快照传 false = 只剩发丝线）。 */
-const readout = computed(() => props.showReadout ?? true);
 </script>
 
 <template>
   <button class="turn-timer" type="button" @click="emit('click')">
     <Icon
-      v-if="readout && startTs !== undefined"
+      v-if="startTs !== undefined"
       :name="running ? 'clock' : 'check'"
       :size="12"
       class="shrink-0 text-ink-4"
     />
-    <span v-if="readout && text">{{
+    <span v-if="text">{{
       running ? t("turn.working", { t: text }) : t("turn.worked", { t: text })
     }}</span>
   </button>

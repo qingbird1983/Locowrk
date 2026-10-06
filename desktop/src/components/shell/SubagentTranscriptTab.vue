@@ -6,10 +6,10 @@
  * TranscriptFlow（v2.104 用户裁定：子代理工作过程的分层折叠消息流 =
  * 主对话整个流程原样复用——任务容器/动作块相位/复制钮判据全同形）。
  * 只读差异：不传 editableIds（无编辑）、running/stopRequested 不传
- * （快照 = 历史重放同形）、timerReadout=false（v2.105 裁定：计时行只
- * 留发丝线，不显示「工作中/已工作」读数）、审批决策行不投影（v2.105
- * 裁定：与主对话 v2.98 同规全隐藏）、系统条动作不上接。底部固定只读
- * 说明——只读面必须自证，不然用户以为能插话。
+ * （快照 = 历史重放同形——计时行恒冻结态「✓ 已工作」，与主对话重放
+ * 同形）、审批决策行不投影（v2.105 裁定：与主对话 v2.98 同规全隐藏）、
+ * 系统条动作不上接。底部固定只读说明——只读面必须自证，不然用户以为
+ * 能插话。
  */
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -46,7 +46,7 @@ const noticeText = computed(() => t("panel.readonlyNote"));
       <div v-else-if="state === 'missing'" class="px-1 py-4 text-center text-[length:var(--lw-fs-12)] text-ink-4">
         {{ t("panel.missing") }}
       </div>
-      <TranscriptFlow v-else :items="items" :timer-readout="false" />
+      <TranscriptFlow v-else :items="items" />
     </div>
     <!-- 只读自证（§3.16）：composer 不渲染，固定说明条 -->
     <div
