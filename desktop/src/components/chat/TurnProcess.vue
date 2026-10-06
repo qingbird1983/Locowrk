@@ -1,26 +1,25 @@
 <script setup lang="ts">
 /**
- * 轮次过程组（UI shell doc §3.7 + v2.96 四层折叠状态机，v2.98 修订）：
- * 一轮动作块有四层形态——
- *   L3 = 单个动作的展开明细（ToolRow，只由用户点开——v2.98 裁定「永远
- *        不要替用户展开 3 层」，运行中与失败都不自动展开）；
- *   L2 = 组体展开、动作各折一行（本组件 grid-rows 开合）；
- *   L1 = 组头行（sparkle + 状态词 + · 时长 + · N 个工具 + chevron）；
- *   L0 = 整轮收束：无简介内容，只留耗时一行 + 发丝线分割（历史重放无
- *        时间戳 = 只有发丝线，诚实呈现）；失败不加任何标记（v2.98 裁定
- *        去脏标——整轮耗时足够）。
- * 相位由父层给（live 动作执行中 / replied 模型回话中 / done 整轮收束），
- * 相位变化全映射落层（live→2 / replied→1 / done→0，不搞边沿配对——
- * running 瞬时翻假后层级必须能自愈，见下方 watcher 注释）；live 相位
- * 贯穿动作间隙（v2.98 裁定：折叠只由「模型回复出现」触发）。用户点击
- * 仍可逐层展开（L0 行 → L1 头 → L2 体 → 单动作 L3）。
+ * 动作块（UI shell doc §3.7 + 四层折叠 v2.96→v2.99 修订）——任务容器内
+ * 的块级单元，三种形态（用户裁定「层层折叠」）：
+ *   L3 = 正在执行：完全展开、流式显示（无组头，chrome 由容器计时行承担；
+ *        思考行流式即展开，ThinkingRow streaming 驱动）；
+ *   L2 = 动作完成且模型出简短回复：半折叠为一行摘要（sparkle + 已完成
+ *        + · 耗时 + · N 个工具）；
+ *   L1 = 下一个动作开始 / 整轮收束：全折叠为一行极简摘要（动作名串联，
+ *        失败时附 · N 个问题）。
+ * 容器整体（计时行 + 全部动作块 + 简短回复）在 ChatTranscript 的
+ * .turn-box：收束后收缩为「✓ 已工作 + 发丝线」一行，点击逐层重开。
+ * 相位由父层给（live / replied / done），相位变化全映射落层（live→2，
+ * 其余→1，不搞边沿配对——running 瞬时翻假后层级必须能自愈，v2.97 教训）。
  * 折叠是本地 UI 状态：不入 store、不持久化。「默认展开工具执行过程」
- * 开关 = done 组挂载初值（L0 / L1），运行相位不吃开关。时长只在实时
- * 轮次有（历史重放无时间戳，不虚构时序）。
+ * 开关 = 非执行块的挂载初值。时长只在实时轮次有（历史重放无时间戳，
+ * 不虚构时序）。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
+import { clip } from "../../lib/format";
 
 const props = withDefaults(
   defineProps<{
@@ -28,9 +27,11 @@ const props = withDefaults(
     stopped?: boolean;
     toolCount: number;
     failures: number;
+    /** L1 极简摘要：块内动作名（去重保序，父层算好）。 */
+    names?: string[];
     /** 组内最早的过程项时刻；undefined = 历史重放（不显示时长）。 */
     startTs?: number;
-    /** 组相位（父层按四层状态机计算）：live / replied / done。 */
+    /** 块相位（父层按四层状态机计算）：live / replied / done。 */
     phase: "live" | "replied" | "done";
     defaultExpanded?: boolean;
   }>(),
@@ -39,30 +40,26 @@ const props = withDefaults(
 
 const { t } = useI18n();
 
-/** 执行中 = live 相位（父层状态机唯一真源，v2.98 起不再单传 running）：
- * 头行「执行中」与时长走表都吃它——动作间隙相位不变，时长不再被间隙
- * 打断冻结。 */
+/** 执行中 = live 相位（父层状态机唯一真源）：组体常开、无组头，时长
+ * 走表也吃它——动作间隙相位不变，走表不被间隙打断冻结（v2.98）。 */
 const running = computed(() => props.phase === "live");
 
-/** 当前层：0（耗时行+发丝线）/ 1（组头）/ 2（组体展开）。L3 在 ToolRow。 */
-const level = ref<[0, 1, 2][number]>(initialLevel());
+/** 当前层：1（组头）/ 2（组体展开）。L0 在 TurnTimerLine（v2.99 迁出）。 */
+const level = ref<[1, 2][number]>(initialLevel());
 
-function initialLevel(): 0 | 1 | 2 {
+function initialLevel(): 1 | 2 {
   if (props.phase === "live") return 2;
-  if (props.phase === "replied") return 1;
-  return props.defaultExpanded ? 1 : 0;
+  return props.defaultExpanded ? 2 : 1;
 }
 
-// 相位变化 = 全映射落层（不搞边沿配对）：live→2 / replied→1 / done→0。
-// 走查实抓（v2.97 白屏）：running 在轮界/重建时会瞬时翻假，全员先被打
-// 回 done（L0 发丝线），随后的 done→replied/live 若依赖「prev===live」
-// 之类边沿配对就永远卡在 L0——任务还在跑、转录却只剩发丝线 = 用户眼中
-// 的白屏。任何相位变化都直接落到规格层，层级自愈；用户手动开合只在相
-// 位稳定期间有效，下次相位变化再归位。
+// 相位变化 = 全映射落层：live→2（组体常开）/ 其余→1（折为组头）。不搞
+// 边沿配对——running 在轮界/重建时会瞬时翻假，全员先被打回折叠态，随后
+// 的翻转若依赖「prev===live」之类配对就永远卡死（v2.97 白屏教训）；任何
+// 相位变化都直接落到规格层，层级自愈。
 watch(
   () => props.phase,
   (p) => {
-    level.value = p === "live" ? 2 : p === "replied" ? 1 : 0;
+    level.value = p === "live" ? 2 : 1;
   },
 );
 
@@ -77,10 +74,9 @@ function onTransitionEnd(e: TransitionEvent) {
   if (level.value === 2) settled.value = true;
 }
 
-// 运行中的头行时长每秒走字（运行结束停在收束时刻）。挂载边沿不造收束
-// 戳（重放无 ts 本就无时长；实时已收束组重挂诚实省略）；startTs 晚到
-// （思考先行、工具后到）也要起表；相位瞬时翻假后回 live（v2.97 实抓
-// running 会瞬时翻假）清戳恢复走表，真实收束（done 后不回 live）戳保持。
+// 执行中的头行时长每秒走字（收束停在收束时刻）。挂载边沿不造收束戳
+// （重放无 ts 本就无时长）；startTs 晚到也要起表；相位瞬时翻假后回 live
+// 清戳恢复走表，真实收束（不回 live）戳保持。
 const now = ref(Date.now());
 const finishedAt = ref<number | null>(null);
 let timer: number | null = null;
@@ -126,80 +122,67 @@ const metaText = computed(() => {
   ].filter(Boolean);
   return `· ${parts.join(" · ")}`;
 });
+
+/** L1 极简摘要（裁定示例「读取 + 分析」）：动作名串联，超长截断。 */
+const minimalText = computed(() =>
+  props.names && props.names.length > 0
+    ? clip(props.names.join(" + "), 32)
+    : t("turn.done"),
+);
 </script>
 
 <template>
   <div class="turn">
-    <!-- L0：整轮收束——只留耗时统计，下发丝线分割；点击展开到 L1。
-         历史重放无时间戳 = 行内无字（诚实呈现），发丝线仍可点；
-         失败不加任何标记（v2.98 裁定去脏标，耗时足够） -->
+    <!-- L2 摘要行 / L1 极简行（live 无此行——组体全展开，chrome 在容器
+         计时行）；点击开合组体 -->
     <button
-      v-if="level === 0"
-      class="turn-zero"
+      v-if="phase !== 'live'"
+      class="cv-head"
       type="button"
-      :aria-expanded="false"
-      @click="level = 1"
+      :aria-expanded="level === 2"
+      @click="onToggle"
     >
-      <span v-if="durationText" class="turn-zero__dur">{{ durationText }}</span>
+      <Icon name="sparkle" :size="14" class="shrink-0 text-ink-3" />
+      <span class="cv-head__label">
+        {{
+          stopped
+            ? t("turn.stopped")
+            : phase === "done"
+              ? minimalText
+              : t("turn.done")
+        }}
+      </span>
+      <span v-if="phase === 'replied'" class="cv-head__meta">{{
+        metaText
+      }}</span>
+      <span
+        v-if="failures > 0"
+        class="cv-head__meta inline-flex items-center gap-1"
+      >
+        <Icon name="info" :size="12" />
+        {{ t("turn.problemCount", { n: failures }) }}
+      </span>
+      <Icon
+        :name="level === 2 ? 'chevronDown' : 'chevronRight'"
+        :size="12"
+        class="cv-head__chev"
+      />
     </button>
-    <template v-else>
-      <button
-        class="cv-head"
-        type="button"
-        :aria-expanded="level === 2"
-        @click="onToggle"
-      >
-        <Icon name="sparkle" :size="14" class="shrink-0 text-ink-3" />
-        <span class="cv-head__label">
-          {{ running ? t("turn.running") : stopped ? t("turn.stopped") : t("turn.done") }}
-        </span>
-        <span class="cv-head__meta">{{ metaText }}</span>
-        <span
-          v-if="failures > 0"
-          class="cv-head__meta inline-flex items-center gap-1"
-        >
-          <Icon name="info" :size="12" />
-          {{ t("turn.problemCount", { n: failures }) }}
-        </span>
-        <Icon
-          :name="level === 2 ? 'chevronDown' : 'chevronRight'"
-          :size="12"
-          class="cv-head__chev"
-        />
-      </button>
-      <!-- §6.6 ④：grid-rows 0fr→1fr 滑动；内容 opacity 展开延后 40ms -->
-      <div
-        class="turn__grid"
-        :class="{ 'is-open': level === 2, 'is-settled': settled }"
-        @transitionend="onTransitionEnd"
-      >
-        <div class="turn__body"><slot /></div>
-      </div>
-    </template>
+    <!-- §6.6 ④：grid-rows 0fr→1fr 滑动；内容 opacity 展开延后 40ms -->
+    <div
+      class="turn__grid"
+      :class="{ 'is-open': level === 2, 'is-settled': settled }"
+      @transitionend="onTransitionEnd"
+    >
+      <div class="turn__body"><slot /></div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .turn {
-  padding: var(--lw-gap-4) 0 var(--lw-gap-6);
-}
-/* L0 行：整行点击热区；有字显字、无字只剩发丝线（行高由线距兜住） */
-.turn-zero {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: var(--lw-gap-2);
-  padding: var(--lw-gap-2) 0 var(--lw-gap-6);
-  border-bottom: 1px solid var(--lw-line-subtle);
-  text-align: left;
-}
-.turn-zero__dur {
-  font-size: var(--lw-fs-11);
-  color: var(--lw-ink-3);
-  font-variant-numeric: tabular-nums;
-}
-.turn-zero:hover .turn-zero__dur {
-  color: var(--lw-ink-2);
+  /* 垂直间距全由容器兄弟选择器给（v2.99 间距裁定：8/8/12px） */
+  padding: 0;
 }
 .turn__grid {
   display: grid;

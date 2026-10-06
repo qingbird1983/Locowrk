@@ -3,10 +3,12 @@
  * 会话转录（UI shell doc §8.4 ChatTranscript）：滚动区（overscroll contain /
  * scrollbar-gutter stable / overflow-anchor none）+ 列（宽 = --lw-content-max
  * 覆盖值，§2.7 三处同源）+ 底部渐隐 mask。条目按 §3.7 v4.11 分组：连续的
- * 过程项（工具行 / 思考行 / 错误行）合成轮次过程组，组内扁平左对齐
- * （裁定⑪）；纯错误无过程项时不套组壳直接平铺。助手正文与系统通知是组
- * 的兄弟节点。审批决策记录行不渲染（v2.98 裁定：每步「已允许 ×」反馈
- * 全隐藏；store 仍留痕，子 Agent 转录页照常）。
+ * 过程项（工具行 / 思考行 / 错误行）合成动作块，组内扁平左对齐（裁定⑪）。
+ * v2.99 任务容器（「第 0 层」裁定）：每条用户消息开启一轮——容器头部 =
+ * 轮计时行（工作中/已工作 + 发丝线），容器内 = 动作块（L3 全展开 / L2
+ * 摘要行 / L1 极简行，层层折叠）+ 模型简短回复（无复制钮）；整轮收束后
+ * 容器收缩为计时行，模型最终报告（有复制钮）在容器外。审批决策记录行不
+ * 渲染（v2.98 裁定；store 仍留痕，子 Agent 转录页照常）。
  *
  * v4.11：审批卡迁坞（Composer 槽位，§3.17），转录里只剩决策记录行；
  * ⑤⑨ 跟随滚动（默认贴底，用户上滚即让位）+ 回到底部钮（坞上方）。
@@ -25,6 +27,7 @@ import { useSettingsStore } from "../stores/settings";
 import { useShellStore } from "../stores/shell";
 import { useWorkPanelStore } from "../stores/work-panel";
 import { clip, formatDuration } from "../lib/format";
+import { toolAction } from "../lib/tool-summary";
 import { Icon } from "../lib/icons";
 import HoverTip from "./settings/HoverTip.vue";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
@@ -34,6 +37,7 @@ import SystemNotice from "./chat/SystemNotice.vue";
 import ThinkingRow from "./chat/ThinkingRow.vue";
 import ToolRow from "./chat/ToolRow.vue";
 import TurnProcess from "./chat/TurnProcess.vue";
+import TurnTimerLine from "./chat/TurnTimerLine.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -65,6 +69,8 @@ type TurnBlock = {
   items: ProcessItem[];
   failures: number;
   toolCount: number;
+  /** L1 极简摘要用：块内动作名（§3.18 中文动作名，去重保序）。 */
+  names: string[];
   /** 组内有真过程（工具/思考）= 套组壳；纯错误行平铺不套壳。 */
   hasProcess: boolean;
   startTs?: number;
@@ -82,7 +88,17 @@ const blocks = computed<Block[]>(() => {
   const flush = () => {
     if (cur.length === 0) return;
     const tools = cur.filter((i): i is ToolItem => i.kind === "tool");
-    const tsList = tools.map((i) => i.ts).filter((v): v is number => v !== undefined);
+    // 计时起点 = 组内最早的过程项时刻（工具与思考都算；错误行无时戳）
+    const tsList = cur
+      .map((i) => ("ts" in i ? i.ts : undefined))
+      .filter((v): v is number => v !== undefined);
+    // L1 极简摘要：块内动作名去重保序（§3.18 中文动作名，表外回落工具 id）
+    const names: string[] = [];
+    for (const i of tools) {
+      const a = toolAction(i.tool);
+      const label = a ? t(a.key, a.params ?? {}) : i.tool;
+      if (!names.includes(label)) names.push(label);
+    }
     const subagents: SubagentChild[] = [];
     for (const i of tools) {
       if (i.tool !== "subagent_run") continue;
@@ -106,7 +122,9 @@ const blocks = computed<Block[]>(() => {
       items: cur,
       failures: tools.filter((i) => i.ok === false).length,
       toolCount: tools.length,
+      names: names,
       hasProcess: cur.some((i) => i.kind === "tool" || i.kind === "thinking"),
+      // 组内最早的过程项时刻（工具与思考都算——计时从思考开始）
       startTs: tsList.length > 0 ? Math.min(...tsList) : undefined,
       subagents,
     });
@@ -176,29 +194,92 @@ function isStoppedBlock(key: number): boolean {
   return chat.stopRequested && key === lastProcessKey.value;
 }
 
-// ---- 四层折叠状态机（v2.96 用户裁定；v2.98 修订：L3 永不自动展开）----
-/** 组相位：live = 本轮仍在累积的执行组（条目流末位的组）——动作间隙
- * （上一步已完、下一步未到）也保持 live，折叠只由「模型回复出现」触发
- * （v2.98 裁定：过程组在每步之间不得闪合；原按 pending/思考流判定，
- * LLM 往返间隙相位跌回 replied，每步之间折叠又弹开）；replied = 组已被
- * 回复闭合（含同轮被新动作块接替的靠前组）；done = 整轮收束（running
- * 结束全员 done）。 */
+// ---- 任务容器（v2.99「第 0 层」用户裁定）----
+/** 每条用户消息开启一轮：容器内 = 轮计时行 + 该轮全部动作块与简短回复
+ * （执行中恒展开）；容器外尾块 = 轮末尾连续的非过程块（最终报告 + 其后
+ * 系统条目）——容器收缩后仍可见、最终报告有复制钮。调度注入轮没有实时
+ * 用户消息 → 过程块自成一轮（计时行无读数，只剩发丝线，不虚构起点）。 */
+type TurnView = {
+  /** 容器身份 = 用户消息条目 id（调度轮 = 首个过程组键）。 */
+  key: number;
+  userItem?: Extract<ChatItem, { kind: "user" }>;
+  /** 轮起点 = 用户消息实时时刻（计时行读数起点；undefined = 无从计时）。 */
+  startTs?: number;
+  running: boolean;
+  inner: Block[];
+  /** 容器外尾块（构造保证只剩 single——最终报告 + 其后系统条目）。 */
+  tail: Extract<Block, { kind: "single" }>[];
+};
+const turnViews = computed<TurnView[]>(() => {
+  const views: TurnView[] = [];
+  let cur: {
+    key: number;
+    userItem?: Extract<ChatItem, { kind: "user" }>;
+    blocks: Block[];
+  } | null = null;
+  const close = () => {
+    if (!cur) return;
+    // 尾块 = 末尾连续的非过程块；过程块一旦再现（调度轮续作）即归还容器
+    let i = cur.blocks.length;
+    while (i > 0 && cur.blocks[i - 1]!.kind === "single") i--;
+    views.push({
+      key: cur.key,
+      userItem: cur.userItem,
+      startTs: cur.userItem?.ts,
+      running: false, // 最后一轮在收尾处统一回填
+      inner: cur.blocks.slice(0, i),
+      tail: cur.blocks.slice(i) as Extract<Block, { kind: "single" }>[],
+    });
+    cur = null;
+  };
+  for (const block of blocks.value) {
+    if (block.kind === "single" && block.item.kind === "user") {
+      close();
+      cur = { key: block.key, userItem: block.item, blocks: [] };
+    } else {
+      if (!cur) cur = { key: block.key, blocks: [] };
+      cur.blocks.push(block);
+    }
+  }
+  close();
+  if (views.length > 0) views[views.length - 1]!.running = chat.running;
+  return views;
+});
+
+/** 容器开合覆盖：缺省 = 执行中开、收束即收缩为计时行；点击即覆盖
+ * （收束后可重开看全程，执行中也可手动收起）。 */
+const turnBoxOverride = ref(new Map<number, boolean>());
+function turnBoxOpen(key: number, running: boolean): boolean {
+  return turnBoxOverride.value.get(key) ?? running;
+}
+function toggleTurnBox(key: number, running: boolean) {
+  const m = new Map(turnBoxOverride.value);
+  m.set(key, !(turnBoxOverride.value.get(key) ?? running));
+  turnBoxOverride.value = m;
+}
+
+/** 组相位（v2.99 层层折叠）：live = L3 执行中（组体全展开、无组头）；
+ * replied = L2 回复已到（半折叠为一行摘要，仅当仍是当轮末位过程组）；
+ * done = L1 已被下一动作接替 / 整轮收束（极简一行）。判定按轮内序列：
+ * 末位块 = live（尚无回复）；末位过程组（回复已落在其后）= replied；
+ * 其余全部 done。 */
 type GroupPhase = "live" | "replied" | "done";
 const phaseByKey = computed(() => {
   const m = new Map<number, GroupPhase>();
-  const bs = blocks.value;
-  if (!chat.running) {
-    for (const b of bs) {
-      if (b.kind === "turn" && b.hasProcess) m.set(b.key, "done");
+  for (const turn of turnViews.value) {
+    const seq = [...turn.inner, ...turn.tail];
+    const lastKey = seq[seq.length - 1]?.key;
+    let lastProcKey: number | null = null;
+    for (const b of seq) {
+      if (b.kind === "turn" && b.hasProcess) lastProcKey = b.key;
     }
-    return m;
-  }
-  // 累积组 = 条目流末位块（其后尚无任何兄弟条目）；末位若是回复/系统
-  // 消息，说明本轮各组都已闭合，全员 replied
-  const lastKey = bs[bs.length - 1]?.key;
-  for (const b of bs) {
-    if (b.kind !== "turn" || !b.hasProcess) continue;
-    m.set(b.key, b.key === lastKey ? "live" : "replied");
+    for (const b of seq) {
+      if (b.kind !== "turn" || !b.hasProcess) continue;
+      if (!turn.running) m.set(b.key, "done");
+      else if (b.key === lastKey) m.set(b.key, "live");
+      else if (b.key === lastProcKey) m.set(b.key, "replied");
+      else m.set(b.key, "done");
+    }
   }
   return m;
 });
@@ -313,70 +394,117 @@ async function onNoticeAction(item: SystemItem, action: string) {
   <div class="relative min-h-0 flex-1">
     <div ref="scroller" class="scroller scroll-y" @scroll.passive="onScroll">
       <div class="column conv-w">
-        <template v-for="block in blocks" :key="block.key">
-          <!-- 轮次过程组：连续过程项扁平直排（§3.7 v4.11 裁定⑪ 同一左缘）；
-               纯决策/错误（无工具/思考）不套组壳直接平铺 -->
-          <template v-if="block.kind === 'turn'">
-            <TurnProcess
-              v-if="block.hasProcess"
-              :stopped="isStoppedBlock(block.key)"
-              :tool-count="block.toolCount"
-              :failures="block.failures"
-              :start-ts="block.startTs"
-              :phase="phaseByKey.get(block.key) ?? 'done'"
-              :default-expanded="expandDefault"
-            >
-              <template v-for="item in block.items" :key="item.id">
-                <ThinkingRow v-if="item.kind === 'thinking'" :text="item.text" />
-                <ToolRow
-                  v-else-if="item.kind === 'tool'"
-                  :item="item"
-                  :awaiting="isAwaiting(item.callId)"
-                  :default-expanded="expandDefault"
-                  @open-transcript="onOpenTranscript"
-                  @open-diff="onOpenDiff"
+        <template v-for="turn of turnViews" :key="turn.key">
+          <!-- 用户消息（容器外，§3.34 可编辑；复制钮常态有） -->
+          <MessageRow
+            v-if="turn.userItem"
+            kind="user"
+            :text="turn.userItem.text"
+            :ts="turn.userItem.ts"
+            :editable="editableUserIds.has(turn.userItem.id)"
+            @edit="(t: string) => turn.userItem && onEditResend(userPos(turn.userItem), t)"
+          />
+
+          <!-- 任务容器（第 0 层，v2.99 裁定）：计时行常驻头部（工作中/已
+               工作 + 发丝线），执行中内容全开；收束收缩为计时行，点击重开
+               逐层看全程。最终报告与其后系统条目在容器外尾段 -->
+          <div class="turn-box">
+            <TurnTimerLine
+              :start-ts="turn.startTs"
+              :running="turn.running"
+              :aria-expanded="turnBoxOpen(turn.key, turn.running)"
+              @click="toggleTurnBox(turn.key, turn.running)"
+            />
+            <template v-if="turnBoxOpen(turn.key, turn.running)">
+              <template v-for="block in turn.inner" :key="block.key">
+                <!-- 动作块：L3 执行中全展开（无组头）/ L2 摘要行 / L1 极简
+                     行（折叠形态由相位机给，TurnProcess 内部落层） -->
+                <template v-if="block.kind === 'turn'">
+                  <TurnProcess
+                    v-if="block.hasProcess"
+                    :stopped="isStoppedBlock(block.key)"
+                    :tool-count="block.toolCount"
+                    :failures="block.failures"
+                    :names="block.names"
+                    :start-ts="block.startTs"
+                    :phase="phaseByKey.get(block.key) ?? 'done'"
+                    :default-expanded="expandDefault"
+                  >
+                    <template v-for="item in block.items" :key="item.id">
+                      <ThinkingRow
+                        v-if="item.kind === 'thinking'"
+                        :text="item.text"
+                        :ts="item.ts"
+                        :done-ts="item.doneTs"
+                      />
+                      <ToolRow
+                        v-else-if="item.kind === 'tool'"
+                        :item="item"
+                        :awaiting="isAwaiting(item.callId)"
+                        :default-expanded="expandDefault"
+                        @open-transcript="onOpenTranscript"
+                        @open-diff="onOpenDiff"
+                      />
+                      <!-- 错误行入组平铺（裁定①：失败通知去卡片底） -->
+                      <div v-else class="flow-error-row">
+                        <Icon name="warn" :size="12" class="shrink-0" />
+                        <span>{{ item.text }}</span>
+                      </div>
+                    </template>
+                    <!-- §3.10 子 Agent 卡：组内 subagent_run 的可视形态 + §3.16 入口 -->
+                    <SubagentCard
+                      v-if="block.subagents.length > 0"
+                      :children="block.subagents"
+                      @open="onOpenTranscript"
+                    />
+                  </TurnProcess>
+                  <template v-else>
+                    <template v-for="item in block.items" :key="item.id">
+                      <div v-if="item.kind === 'error'" class="error-row">
+                        <Icon name="warn" :size="14" class="shrink-0" />
+                        <span>{{ item.text }}</span>
+                      </div>
+                    </template>
+                  </template>
+                </template>
+
+                <!-- 模型简短回复（容器内，无复制钮——复制钮只随最终报告） -->
+                <MessageRow
+                  v-else-if="block.item.kind === 'assistant'"
+                  kind="assistant"
+                  :text="block.item.text"
+                  :ts="block.item.ts"
+                  :copyable="finalAssistantIds.has(block.item.id)"
                 />
-                <!-- 错误行入组平铺（裁定①：失败通知去卡片底） -->
-                <div v-else class="flow-error-row">
-                  <Icon name="warn" :size="12" class="shrink-0" />
-                  <span>{{ item.text }}</span>
-                </div>
-              </template>
-              <!-- §3.10 子 Agent 卡：组内 subagent_run 的可视形态 + §3.16 入口 -->
-              <SubagentCard
-                v-if="block.subagents.length > 0"
-                :children="block.subagents"
-                @open="onOpenTranscript"
-              />
-            </TurnProcess>
-            <template v-else>
-              <template v-for="item in block.items" :key="item.id">
-                <div v-if="item.kind === 'error'" class="error-row">
-                  <Icon name="warn" :size="14" class="shrink-0" />
-                  <span>{{ item.text }}</span>
+                <!-- 会话内系统消息（SystemNotice 模式）：组外兄弟节点 -->
+                <div
+                  v-else-if="block.item.kind === 'system'"
+                  class="flex justify-center"
+                >
+                  <SystemNotice
+                    :text="noticeText(block.item as SystemItem)"
+                    :actions="
+                      (block.item.actions ?? []).map((a) => ({
+                        id: a,
+                        label: t(`notice.action.${a}`),
+                      }))
+                    "
+                    @action="(a: string) => onNoticeAction(block.item as SystemItem, a)"
+                  />
                 </div>
               </template>
             </template>
-          </template>
+          </div>
 
-          <template v-else>
+          <!-- 容器外尾块：最终报告（复制钮只在此）与其后系统条目 -->
+          <template v-for="block in turn.tail" :key="block.key">
             <MessageRow
-              v-if="block.item.kind === 'user'"
-              kind="user"
-              :text="block.item.text"
-              :ts="block.item.ts"
-              :editable="editableUserIds.has(block.item.id)"
-              @edit="(t: string) => onEditResend(userPos(block.item), t)"
-            />
-            <MessageRow
-              v-else-if="block.item.kind === 'assistant'"
+              v-if="block.item.kind === 'assistant'"
               kind="assistant"
               :text="block.item.text"
               :ts="block.item.ts"
               :copyable="finalAssistantIds.has(block.item.id)"
             />
-
-            <!-- 会话内系统消息（SystemNotice 模式）：组外兄弟节点 -->
             <div
               v-else-if="block.item.kind === 'system'"
               class="flex justify-center"
@@ -457,10 +585,27 @@ async function onNoticeAction(item: SystemItem, action: string) {
   margin-inline: auto;
   padding-bottom: 180px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值180,§二⑬) */
 }
-/* 四层折叠（v2.96）：动作块与随后的简短回话行距收紧——原链 10+12=22px，
- * 收为 6+4=10px（跨组件兄弟选择器：两组件根都带本层 data-v） */
+/* 任务容器（v2.99「第 0 层」）：计时行常驻头部 + 动作块/简短回复；收束
+ * 收缩为计时行，最终报告在容器外——容器↔报告 16px（--lk-space-4 换算） */
+.turn-box {
+  padding-bottom: var(--lw-gap-16);
+}
+/* 间距（v2.99 用户裁定：--lk-space-2=8px、--lk-space-3=12px 换算）：动作
+ * 块之间与动作块↔简短回复 8px，简短回复→下一动作块 12px。跨组件兄弟选
+ * 择器（组件根都带本层 data-v）；.turn 垂直 padding 已归零，间距全由这
+ * 里给。计时行→首块同 8px（计时行自带 6px 下 padding + 2px 补足） */
 .turn + .msg {
-  padding-top: var(--lw-gap-4);
+  padding-top: var(--lw-gap-8);
+}
+.msg + .turn {
+  padding-top: var(--lw-gap-12);
+}
+.turn + .turn {
+  padding-top: var(--lw-gap-8);
+}
+.turn-timer + .turn,
+.turn-timer + .msg {
+  padding-top: var(--lw-gap-2);
 }
 /* 首页空态（§3.14 v3.9）迁去 chat/WelcomeHome（欢迎页独立形态，composer
  * 随行）；本组件只在会话态挂载 */

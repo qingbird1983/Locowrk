@@ -54,9 +54,10 @@ export default {
     queueAdd: "排队发送",
     backToLatest: "回到最新消息",
   },
-  // 轮次过程组（UI shell doc §3.7）与思考行（§3.9）的头行状态词
+  // 轮计时行（容器头部）与动作块折叠行（UI shell doc §3.7 / §3.9）
   turn: {
-    running: "处理中",
+    working: "工作中 {t}",
+    worked: "已工作 {t}",
     done: "已完成",
     stopped: "已停止",
     toolCount: "{n} 个工具",

@@ -54,9 +54,10 @@ export default {
     queueAdd: "Queue message",
     backToLatest: "Back to latest",
   },
-  // Turn process group (UI shell doc §3.7) and thinking row (§3.9)
+  // Turn timer row (container header) and action-block folded rows
   turn: {
-    running: "Working",
+    working: "Working {t}",
+    worked: "Worked {t}",
     done: "Completed",
     stopped: "Stopped",
     toolCount: "{n} tools",
