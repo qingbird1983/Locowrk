@@ -3,9 +3,10 @@
  * 会话转录（UI shell doc §8.4 ChatTranscript）：滚动区（overscroll contain /
  * scrollbar-gutter stable / overflow-anchor none）+ 列（宽 = --lw-content-max
  * 覆盖值，§2.7 三处同源）+ 底部渐隐 mask。条目按 §3.7 v4.11 分组：连续的
- * 过程项（工具行 / 思考行 / 决策记录行 / 错误行）合成轮次过程组，组内扁平
- * 左对齐（裁定⑪）；纯决策/错误无过程项时不套组壳直接平铺。助手正文与系统
- * 通知是组的兄弟节点。
+ * 过程项（工具行 / 思考行 / 错误行）合成轮次过程组，组内扁平左对齐
+ * （裁定⑪）；纯错误无过程项时不套组壳直接平铺。助手正文与系统通知是组
+ * 的兄弟节点。审批决策记录行不渲染（v2.98 裁定：每步「已允许 ×」反馈
+ * 全隐藏；store 仍留痕，子 Agent 转录页照常）。
  *
  * v4.11：审批卡迁坞（Composer 槽位，§3.17），转录里只剩决策记录行；
  * ⑤⑨ 跟随滚动（默认贴底，用户上滚即让位）+ 回到底部钮（坞上方）。
@@ -24,7 +25,6 @@ import { useSettingsStore } from "../stores/settings";
 import { useShellStore } from "../stores/shell";
 import { useWorkPanelStore } from "../stores/work-panel";
 import { clip, formatDuration } from "../lib/format";
-import { toolAction } from "../lib/tool-summary";
 import { Icon } from "../lib/icons";
 import HoverTip from "./settings/HoverTip.vue";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
@@ -41,12 +41,6 @@ const settings = useSettingsStore();
 const approvals = useApprovalsStore();
 const workPanel = useWorkPanelStore();
 
-/** §3.18 动作名（决策记录行用）；表外工具回落工具 id。 */
-function actionLabel(tool: string): string {
-  const a = toolAction(tool);
-  return a ? t(a.key, a.params ?? {}) : tool;
-}
-
 /** §3.10：子 Agent 卡是入口——点「看转录」开工作面板 §3.16 页签。 */
 function onOpenTranscript(childId: string, title: string) {
   workPanel.openSubTab(childId, clip(title, 24));
@@ -62,20 +56,16 @@ const props = defineProps<{
   composerBottom: number;
 }>();
 
-/** 过程项（§3.7 v4.11 组内都是扁平行）：工具行 / 思考行 / 决策记录 /
- * 错误行。 */
-type ProcessItem = Extract<
-  ChatItem,
-  { kind: "tool" | "thinking" | "decision" | "error" }
->;
+/** 过程项（§3.7 v4.11 组内都是扁平行）：工具行 / 思考行 / 错误行。
+ * 决策记录行 v2.98 全隐藏，不入组。 */
+type ProcessItem = Extract<ChatItem, { kind: "tool" | "thinking" | "error" }>;
 type TurnBlock = {
   kind: "turn";
   key: number;
   items: ProcessItem[];
-  running: boolean;
   failures: number;
   toolCount: number;
-  /** 组内有真过程（工具/思考）= 套组壳；纯决策/错误行平铺不套壳。 */
+  /** 组内有真过程（工具/思考）= 套组壳；纯错误行平铺不套壳。 */
   hasProcess: boolean;
   startTs?: number;
   /** §3.10 子 Agent 卡数据（组内 subagent_run 调用，卡是 §3.16 入口）。 */
@@ -114,15 +104,6 @@ const blocks = computed<Block[]>(() => {
       kind: "turn",
       key: cur[0]!.id,
       items: cur,
-      // 组在跑 = 有 pending 工具，或末尾思考行还在流（§3.9：实时 ts 在、
-      // 回复/工具到达即收口 doneTs——不并入的话思考阶段相位= replied，
-      // 思考行被折叠藏住，v2.97 走查实抓）
-      running:
-        tools.some((i) => i.pending) ||
-        cur.some(
-          (i) =>
-            i.kind === "thinking" && i.ts !== undefined && i.doneTs === undefined,
-        ),
       failures: tools.filter((i) => i.ok === false).length,
       toolCount: tools.length,
       hasProcess: cur.some((i) => i.kind === "tool" || i.kind === "thinking"),
@@ -132,10 +113,11 @@ const blocks = computed<Block[]>(() => {
     cur = [];
   };
   for (const item of chat.items) {
+    // v2.98 裁定：审批决策记录行（「已允许 ×」每步反馈）全隐藏
+    if (item.kind === "decision") continue;
     if (
       item.kind === "tool" ||
       item.kind === "thinking" ||
-      item.kind === "decision" ||
       item.kind === "error"
     ) {
       cur.push(item);
@@ -194,44 +176,37 @@ function isStoppedBlock(key: number): boolean {
   return chat.stopRequested && key === lastProcessKey.value;
 }
 
-// ---- 四层折叠状态机（v2.96 用户裁定：L3 最新动作流式 / L2 动作折行 /
-// L1 组头 / L0 耗时+发丝线）----
-/** 组相位：live = 本组有动作在跑；replied = 动作完、模型回话中（含同轮
- * 被新动作块接替的靠前组）；done = 整轮收束（running 结束全员 done）。 */
+// ---- 四层折叠状态机（v2.96 用户裁定；v2.98 修订：L3 永不自动展开）----
+/** 组相位：live = 本轮仍在累积的执行组（条目流末位的组）——动作间隙
+ * （上一步已完、下一步未到）也保持 live，折叠只由「模型回复出现」触发
+ * （v2.98 裁定：过程组在每步之间不得闪合；原按 pending/思考流判定，
+ * LLM 往返间隙相位跌回 replied，每步之间折叠又弹开）；replied = 组已被
+ * 回复闭合（含同轮被新动作块接替的靠前组）；done = 整轮收束（running
+ * 结束全员 done）。 */
 type GroupPhase = "live" | "replied" | "done";
 const phaseByKey = computed(() => {
   const m = new Map<number, GroupPhase>();
+  const bs = blocks.value;
   if (!chat.running) {
-    for (const b of blocks.value) {
+    for (const b of bs) {
       if (b.kind === "turn" && b.hasProcess) m.set(b.key, "done");
     }
     return m;
   }
-  const proc = blocks.value.filter(
-    (b): b is TurnBlock => b.kind === "turn" && b.hasProcess,
-  );
-  proc.forEach((b) => {
-    if (b.running) m.set(b.key, "live");
-    // 动作已完：最后一组 = 模型正在回话；靠前组 = 已被后续动作块接替——
-    // 两者同收 L1（replied），整轮 running 结束再一起进 done
-    else m.set(b.key, "replied");
-  });
+  // 累积组 = 条目流末位块（其后尚无任何兄弟条目）；末位若是回复/系统
+  // 消息，说明本轮各组都已闭合，全员 replied
+  const lastKey = bs[bs.length - 1]?.key;
+  for (const b of bs) {
+    if (b.kind !== "turn" || !b.hasProcess) continue;
+    m.set(b.key, b.key === lastKey ? "live" : "replied");
+  }
   return m;
 });
 
-/** L3 聚焦 = live 组里最后一个 pending 工具（流式中的动作）。 */
-function focusToolId(b: TurnBlock): number | null {
-  if (!b.running) return null;
-  for (let i = b.items.length - 1; i >= 0; i--) {
-    const it = b.items[i]!;
-    if (it.kind === "tool" && it.pending) return it.id;
-  }
-  return null;
-}
-
 /** 复制钮收敛（用户裁定）：只出现在用户消息与每轮最终汇报/总结之下——
- * 判据 = 该助手条目到下一个用户消息之间再无任何过程项（工具/思考/决策/
- * 错误）；任务执行中间的简短回话后面跟着动作，不给复制钮。 */
+ * 判据 = 该助手条目到下一个用户消息之间再无任何过程项（工具/思考/错误；
+ * 决策记录行已隐藏不参与判据）；任务执行中间的简短回话后面跟着动作，
+ * 不给复制钮。 */
 const finalAssistantIds = computed(() => {
   const ids = new Set<number>();
   const items = chat.items;
@@ -242,12 +217,7 @@ const finalAssistantIds = computed(() => {
     for (let j = i + 1; j < items.length; j++) {
       const n = items[j]!;
       if (n.kind === "user") break;
-      if (
-        n.kind === "tool" ||
-        n.kind === "thinking" ||
-        n.kind === "decision" ||
-        n.kind === "error"
-      ) {
+      if (n.kind === "tool" || n.kind === "thinking" || n.kind === "error") {
         followed = true;
         break;
       }
@@ -349,7 +319,6 @@ async function onNoticeAction(item: SystemItem, action: string) {
           <template v-if="block.kind === 'turn'">
             <TurnProcess
               v-if="block.hasProcess"
-              :running="block.running"
               :stopped="isStoppedBlock(block.key)"
               :tool-count="block.toolCount"
               :failures="block.failures"
@@ -364,28 +333,10 @@ async function onNoticeAction(item: SystemItem, action: string) {
                   :item="item"
                   :awaiting="isAwaiting(item.callId)"
                   :default-expanded="expandDefault"
-                  :live-focus="focusToolId(block) === item.id"
                   @open-transcript="onOpenTranscript"
                   @open-diff="onOpenDiff"
                 />
-                <!-- §3.7 v4.11 决策记录行：无卡片底，组内平铺（裁定①） -->
-                <div
-                  v-else-if="item.kind === 'decision'"
-                  class="decision-row"
-                  :class="{ 'is-denied': !item.allowed }"
-                >
-                  <Icon
-                    :name="item.allowed ? 'check' : 'warn'"
-                    :size="12"
-                    class="shrink-0"
-                  />
-                  <span>{{
-                    t(item.allowed ? "notice.approvalAllowed" : "notice.approvalDenied", {
-                      action: actionLabel(item.tool),
-                    })
-                  }}</span>
-                </div>
-                <!-- 错误行同样入组平铺（裁定①：失败通知去卡片底） -->
+                <!-- 错误行入组平铺（裁定①：失败通知去卡片底） -->
                 <div v-else class="flow-error-row">
                   <Icon name="warn" :size="12" class="shrink-0" />
                   <span>{{ item.text }}</span>
@@ -400,23 +351,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
             </TurnProcess>
             <template v-else>
               <template v-for="item in block.items" :key="item.id">
-                <div
-                  v-if="item.kind === 'decision'"
-                  class="decision-row"
-                  :class="{ 'is-denied': !item.allowed }"
-                >
-                  <Icon
-                    :name="item.allowed ? 'check' : 'warn'"
-                    :size="12"
-                    class="shrink-0"
-                  />
-                  <span>{{
-                    t(item.allowed ? "notice.approvalAllowed" : "notice.approvalDenied", {
-                      action: actionLabel(item.tool),
-                    })
-                  }}</span>
-                </div>
-                <div v-else-if="item.kind === 'error'" class="error-row">
+                <div v-if="item.kind === 'error'" class="error-row">
                   <Icon name="warn" :size="14" class="shrink-0" />
                   <span>{{ item.text }}</span>
                 </div>
@@ -542,9 +477,8 @@ async function onNoticeAction(item: SystemItem, action: string) {
   line-height: 1.45;
   color: var(--lw-danger);
 }
-/* §3.7 v4.11（裁定①）：组内平铺行——决策记录 / 错误，无卡片底，扁平
- * 左对齐（与工具行/思考行同一左缘）；ok=check 墨绿、denied/error=warn 红 */
-.decision-row,
+/* §3.7 组内平铺错误行：无卡片底，扁平左对齐（与工具行/思考行同一左缘）；
+ * 决策记录行已全隐藏（v2.98 裁定），其平铺样式随之退役 */
 .flow-error-row {
   display: flex;
   align-items: flex-start;
@@ -552,23 +486,13 @@ async function onNoticeAction(item: SystemItem, action: string) {
   padding: var(--lw-gap-2) 0;
   font-size: var(--lw-fs-12);
   line-height: 1.5;
-  color: var(--lw-ink-2);
+  color: var(--lw-danger);
 }
-.decision-row span,
 .flow-error-row span {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.decision-row > svg {
-  color: var(--lw-ok);
-  margin-top: var(--lw-gap-2);
-}
-.decision-row.is-denied > svg,
 .flow-error-row > svg {
-  color: var(--lw-danger);
-}
-.decision-row.is-denied,
-.flow-error-row {
   color: var(--lw-danger);
 }
 /* §3.39③ 回到底部钮：32px 圆钮，composer 坞上方居中（bottom 动态 =

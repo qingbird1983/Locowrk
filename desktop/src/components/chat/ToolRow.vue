@@ -5,11 +5,11 @@
  * 点），禁止裸显工具 id（§3.18）；写/编辑类行尾带变更统计；hover 才出现
  * 复制按钮。展开态 = 明细块（bg-inset 圆角 10，参数/结果两段原样）。
  *
- * 默认一律收起（含运行中，用户裁定）；唯一例外 = 失败自动展开一次（实时
- * 到达与历史重放挂载同规，错误可见性优先）。defaultExpanded（设置「默认
- * 展开工具执行过程」）只对实时新发轮次生效，重放不吃。
+ * 默认一律收起（v2.98 裁定：永远不替用户展开 3 层——运行中与失败都不
+ * 自动展开，失败态由行内红色状态点 +「失败」词呈现，点开才看明细）。
+ * defaultExpanded（设置「默认展开工具执行过程」）= 挂载初值。
  */
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon, type IconName } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
@@ -20,13 +20,10 @@ import { useSettingsStore } from "../../stores/settings";
 
 const props = defineProps<{
   item: ToolItem;
-  /** 挂载时的默认展开（设置开关 × 实时轮次）；只在挂载时吃一次。 */
+  /** 挂载时的默认展开（设置开关）；只在挂载时吃一次。 */
   defaultExpanded?: boolean;
   /** 该调用的审批未决（§3.17）：状态词"等待审批"——还没跑，不是运行中。 */
   awaiting?: boolean;
-  /** 四层折叠 L3（v2.96 用户裁定）：该行是本轮最新在跑的动作 = 展开
-   * 流式明细；翻 false 即收回 L2。用户手动开合仍自由，下次翻转再同步。 */
-  liveFocus?: boolean;
 }>();
 
 /** §3.10 卡是入口：subagent_run 收束 → 「看转录」；edit_diff 带 patch →
@@ -39,25 +36,6 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const settings = useSettingsStore();
 const expanded = ref(props.defaultExpanded ?? false);
-
-// 失败自动展开一次：实时结果到达（pending 翻转）与历史重放（挂载即失败）
-// 同规；用户随后可手动折叠（手动切换后 watch 不再覆盖——failed 只翻转一次）。
-watch(
-  () => !props.item.pending && props.item.ok === false,
-  (failed) => {
-    if (failed) expanded.value = true;
-  },
-  { immediate: true },
-);
-
-// L3 聚焦（四层折叠）：liveFocus 翻转直接驱动展开/收回——最新在跑动作
-// 展开流式明细，跑完被下一动作接替即收回为 L2 折叠行
-watch(
-  () => props.liveFocus,
-  (v) => {
-    expanded.value = !!v;
-  },
-);
 
 /** 动作名（§3.18 映射表；表外回落工具 id + 「插件」徽章）。 */
 const action = computed(() => toolAction(props.item.tool));

@@ -1,16 +1,19 @@
 <script setup lang="ts">
 /**
- * 轮次过程组（UI shell doc §3.7 + v2.96 四层折叠状态机，用户裁定）：
+ * 轮次过程组（UI shell doc §3.7 + v2.96 四层折叠状态机，v2.98 修订）：
  * 一轮动作块有四层形态——
- *   L3 = 最新单个动作展开流式（ToolRow liveFocus，由父层驱动）；
+ *   L3 = 单个动作的展开明细（ToolRow，只由用户点开——v2.98 裁定「永远
+ *        不要替用户展开 3 层」，运行中与失败都不自动展开）；
  *   L2 = 组体展开、动作各折一行（本组件 grid-rows 开合）；
  *   L1 = 组头行（sparkle + 状态词 + · 时长 + · N 个工具 + chevron）；
  *   L0 = 整轮收束：无简介内容，只留耗时一行 + 发丝线分割（历史重放无
- *        时间戳 = 只有发丝线，诚实呈现）；有失败加一枚 warn 小点。
+ *        时间戳 = 只有发丝线，诚实呈现）；失败不加任何标记（v2.98 裁定
+ *        去脏标——整轮耗时足够）。
  * 相位由父层给（live 动作执行中 / replied 模型回话中 / done 整轮收束），
  * 相位变化全映射落层（live→2 / replied→1 / done→0，不搞边沿配对——
- * running 瞬时翻假后层级必须能自愈，见下方 watcher 注释）；用户点击仍
- * 可逐层展开（L0 行 → L1 头 → L2 体 → 单动作 L3）。
+ * running 瞬时翻假后层级必须能自愈，见下方 watcher 注释）；live 相位
+ * 贯穿动作间隙（v2.98 裁定：折叠只由「模型回复出现」触发）。用户点击
+ * 仍可逐层展开（L0 行 → L1 头 → L2 体 → 单动作 L3）。
  * 折叠是本地 UI 状态：不入 store、不持久化。「默认展开工具执行过程」
  * 开关 = done 组挂载初值（L0 / L1），运行相位不吃开关。时长只在实时
  * 轮次有（历史重放无时间戳，不虚构时序）。
@@ -21,7 +24,6 @@ import { Icon } from "../../lib/icons";
 
 const props = withDefaults(
   defineProps<{
-    running: boolean;
     /** v4.11 §3.39④：本轮被用户停止（收束后头行「已停止」，重放恒否）。 */
     stopped?: boolean;
     toolCount: number;
@@ -36,6 +38,11 @@ const props = withDefaults(
 );
 
 const { t } = useI18n();
+
+/** 执行中 = live 相位（父层状态机唯一真源，v2.98 起不再单传 running）：
+ * 头行「执行中」与时长走表都吃它——动作间隙相位不变，时长不再被间隙
+ * 打断冻结。 */
+const running = computed(() => props.phase === "live");
 
 /** 当前层：0（耗时行+发丝线）/ 1（组头）/ 2（组体展开）。L3 在 ToolRow。 */
 const level = ref<[0, 1, 2][number]>(initialLevel());
@@ -70,20 +77,30 @@ function onTransitionEnd(e: TransitionEvent) {
   if (level.value === 2) settled.value = true;
 }
 
-// 运行中的头行时长每秒走字（运行结束停在收束时刻）
+// 运行中的头行时长每秒走字（运行结束停在收束时刻）。挂载边沿不造收束
+// 戳（重放无 ts 本就无时长；实时已收束组重挂诚实省略）；startTs 晚到
+// （思考先行、工具后到）也要起表；相位瞬时翻假后回 live（v2.97 实抓
+// running 会瞬时翻假）清戳恢复走表，真实收束（done 后不回 live）戳保持。
 const now = ref(Date.now());
 const finishedAt = ref<number | null>(null);
 let timer: number | null = null;
 watch(
-  () => props.running,
-  (r, prev) => {
-    if (prev && !r && finishedAt.value === null) finishedAt.value = Date.now();
-    if (r && props.startTs !== undefined && timer === null) {
-      now.value = Date.now();
-      timer = window.setInterval(() => (now.value = Date.now()), 1000);
-    } else if (!r && timer !== null) {
-      window.clearInterval(timer);
-      timer = null;
+  [running, () => props.startTs],
+  ([r, ts], prev) => {
+    if (r && ts !== undefined) {
+      if (prev !== undefined) finishedAt.value = null;
+      if (timer === null) {
+        now.value = Date.now();
+        timer = window.setInterval(() => (now.value = Date.now()), 1000);
+      }
+    } else {
+      if (prev !== undefined && prev[0] && finishedAt.value === null) {
+        finishedAt.value = Date.now();
+      }
+      if (timer !== null) {
+        window.clearInterval(timer);
+        timer = null;
+      }
     }
   },
   { immediate: true },
@@ -94,7 +111,7 @@ onBeforeUnmount(() => {
 
 const durationText = computed(() => {
   if (props.startTs === undefined) return "";
-  const end = finishedAt.value ?? (props.running ? now.value : null);
+  const end = finishedAt.value ?? (running.value ? now.value : null);
   if (end === null) return "";
   const sec = Math.max(0, Math.round((end - props.startTs) / 1000));
   if (sec < 60) return `${sec}s`;
@@ -114,7 +131,8 @@ const metaText = computed(() => {
 <template>
   <div class="turn">
     <!-- L0：整轮收束——只留耗时统计，下发丝线分割；点击展开到 L1。
-         历史重放无时间戳 = 行内无字（诚实呈现），发丝线仍可点 -->
+         历史重放无时间戳 = 行内无字（诚实呈现），发丝线仍可点；
+         失败不加任何标记（v2.98 裁定去脏标，耗时足够） -->
     <button
       v-if="level === 0"
       class="turn-zero"
@@ -123,11 +141,6 @@ const metaText = computed(() => {
       @click="level = 1"
     >
       <span v-if="durationText" class="turn-zero__dur">{{ durationText }}</span>
-      <span
-        v-if="failures > 0"
-        class="turn-zero__warn"
-        :title="t('turn.problemCount', { n: failures })"
-      />
     </button>
     <template v-else>
       <button
@@ -187,13 +200,6 @@ const metaText = computed(() => {
 }
 .turn-zero:hover .turn-zero__dur {
   color: var(--lw-ink-2);
-}
-/* 失败小点：非简介内容的最小状态标记（详观点开） */
-.turn-zero__warn {
-  width: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
-  height: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
-  border-radius: var(--lw-r-full);
-  background: var(--lw-warn);
 }
 .turn__grid {
   display: grid;
