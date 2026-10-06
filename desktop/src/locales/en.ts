@@ -267,12 +267,6 @@ export default {
     compactUndoFailed: "Failed to undo compaction: {reason}",
     // ⑭ Scheduled task fired (announced before the injected turn runs)
     scheduleFired: "Scheduled task fired: {title}",
-    // ⑮ Sub-agent (in-chat notices for subagent_run spawn/finish)
-    subagentStarted: "Sub-agent dispatched: {prompt}",
-    subagentDone: "Sub-agent finished: {summary}",
-    // §3.17 approval decision record rows (projection-only source)
-    approvalAllowed: "Allowed · {action}",
-    approvalDenied: "Denied · {action}",
     // LLM.md v3.0: transport retry / step cap
     llmRetried: "Provider temporarily unresponsive, retried automatically (attempt {attempt})",
     turnCapped: "Turn step limit reached ({steps} steps), ending the turn here — send \"continue\" to resume, or raise the limit in Settings → Tools & Dispatch",

@@ -352,12 +352,6 @@ export default {
     compactUndoFailed: "撤销压缩失败：{reason}",
     // ⑭ 定时触发（调度引擎注入轮前的告知）
     scheduleFired: "定时任务触发：{title}",
-    // ⑮ 子 Agent（subagent_run 派生/收束的会话内告知）
-    subagentStarted: "已派生子 Agent：{prompt}",
-    subagentDone: "子 Agent 收束：{summary}",
-    // ㉕·对话区① §3.17 审批决策记录条（投影唯一来源：实时与重放同源）
-    approvalAllowed: "已允许 · {action}",
-    approvalDenied: "已拒绝 · {action}",
     // LLM.md v3.0：传输重试 / 步数到顶
     llmRetried: "供应商暂时无响应，已自动重试（第 {attempt} 次）",
     turnCapped: "已达单轮步数上限（{steps} 步），本轮在此收束——发「继续」可接着跑；也可在 设置 → 工具与分发 调高上限",

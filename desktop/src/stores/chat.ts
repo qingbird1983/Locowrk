@@ -22,7 +22,7 @@ import {
   subscribeOrganizePaused,
   organizeNow,
 } from "../lib/api";
-import { clip, compactNumber } from "../lib/format";
+import { compactNumber } from "../lib/format";
 import { i18n } from "../i18n";
 import { useAsksStore } from "./asks";
 import { useSettingsStore } from "./settings";
@@ -447,15 +447,8 @@ export const useChatStore = defineStore("chat", {
             ok: null,
             ...(this.replaying ? {} : { ts: Date.now() }),
           });
-          if (e.tool === "subagent_run") {
-            // ⑮ 派生告知（SystemNotice）：子 Agent 内部活动不投影（黑盒），
-            // 其审批请求走 approval-request 通道并带标识
-            const prompt =
-              typeof (e.args as { prompt?: unknown })?.prompt === "string"
-                ? ((e.args as { prompt: string }).prompt)
-                : "";
-            this.pushNotice("notice.subagentStarted", { prompt: clip(prompt, 80) });
-          }
+          // ⑮ 派生不再发「已派生子 Agent」告知条（v2.105 目检裁定：两条
+          // 状态盒退役，简洁状态收进动作名后——TranscriptFlow L1 极简行）
           break;
         case "tool_result": {
           const item = this.items.find(
@@ -467,16 +460,8 @@ export const useChatStore = defineStore("chat", {
             item.output = e.output;
             item.error = e.error;
             if (!this.replaying) item.doneTs = Date.now();
-            if (item.tool === "subagent_run") {
-              // ⑮ 收束告知：摘要回父会话；预算耗尽/超时/失败在
-              // status/summary 里如实呈现（status 详见工具卡结果 JSON）
-              const out = (e.output ?? {}) as { summary?: unknown };
-              const summary =
-                e.error ?? (typeof out.summary === "string" ? out.summary : "");
-              if (summary) {
-                this.pushNotice("notice.subagentDone", { summary: clip(summary, 120) });
-              }
-            }
+            // ⑮ 收束不再发「子 Agent 收束」告知条（v2.105 目检裁定，同上
+            // ——状态与摘要看工具行明细 / 子代理卡 / 转录页签）
           }
           break;
         }

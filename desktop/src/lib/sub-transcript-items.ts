@@ -5,8 +5,9 @@
  * 同形**补齐：用户消息带事件位与轮起点时刻（v2.101）、思考行整段落项
  * （无时戳 = 首句摘要形态）、轮收束时刻挂最后一条用户消息（第 0 层计时
  * 行读数终点）、悬空 tool_call 如实挂 pending（与重放一致）。只读一次性
- * 投影：数据来自全量重放（整段 chunk，无流式时序）。审批在父侧决策，
- * 子转录里只是记录（系统条形态照旧 = 审计面保留）。
+ * 投影：数据来自全量重放（整段 chunk，无流式时序）。审批决策记录行
+ * （已允许/已拒绝）随主对话 v2.98 同规**全隐藏**（v2.105 目检裁定：页签
+ * = 主对话消息流原样，系统条审计形态退役），不投影。
  */
 import type { AgentEvent } from "../types";
 import type { ChatItem, ToolItem } from "../stores/chat";
@@ -80,14 +81,9 @@ export function projectSubTranscript(events: AgentEvent[]): ChatItem[] {
         if (lastUser && lastUser.endTs === undefined) lastUser.endTs = e.ts;
         break;
       }
-      // 审批在父侧决策，子转录里只是记录（记录条形态照旧）
+      // 审批决策记录行（已允许/已拒绝）：随主对话 v2.98 同规全隐藏
+      // （v2.105 目检裁定），不再以系统条形态保留
       case "approval_resolved":
-        items.push({
-          id: id++,
-          kind: "system",
-          key: e.allowed ? "notice.approvalAllowed" : "notice.approvalDenied",
-          params: { action: e.tool },
-        });
         break;
       default:
         break; // usage / schedule_fired 等：页签不渲染

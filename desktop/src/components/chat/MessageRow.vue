@@ -290,8 +290,12 @@ async function onBodyClick(e: MouseEvent) {
   opacity: 0;
 }
 /* 悬浮圆钮（v2.103 裁定：右下角右下角右下角）：气泡内右下、浮在表面
- * ——折叠态压遮罩、展开态压末行文字；恰落在右下直角上 */
-.fold-btn-pos {
+ * ——折叠态压遮罩、展开态压末行文字；恰落在右下直角上。
+ * v2.105 目检实抓（左下角根因）：类经 $attrs 落在 HoverTip 锚点上，但
+ * HoverTip 是双根组件（锚点 + Teleport 气泡）——多根子组件不继承父级
+ * scoped 属性，`.fold-btn-pos[data-v-*]` 从未匹配上（v2.102 起定位一直
+ * 没生效，恒左下角流内）；:deep 放开作用域约束才真正命中锚点 */
+.msg-user__bubble :deep(.fold-btn-pos) {
   position: absolute;
   right: var(--lw-gap-6);
   bottom: var(--lw-gap-6);
