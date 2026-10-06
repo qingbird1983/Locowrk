@@ -40,9 +40,8 @@ export const useWorkPanelStore = defineStore("workPanel", {
       savePanelPrefs({ open: this.open, width: this.width });
     },
     setOpen(v: boolean) {
-      // §3.40②·5（v2.111 V2 规格）：任何宽度都可合法开（v2.110 的 ≥1400
-      // 钳制随「按钮永不冻结」退役）；overlay 档（400–799）互斥——开右栏
-      // 把左栏挂瞬态折叠（不落盘，回宽自动恢复），关右栏解除瞬态。
+      // §3.40④（v2.112）：任何宽度都可合法开；overlay 带（400–799）互斥
+      // ——开右栏把左栏挂瞬态折叠（不落盘，关右栏自动解除恢复）
       this.open = v;
       if (window.innerWidth < BREAKPOINT_MD) {
         useShellStore().setPanelExclusiveFold(v);

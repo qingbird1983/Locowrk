@@ -299,11 +299,7 @@ export default {
     delete: "删除",
     confirmDelete: "确认删除？",
   },
-  // 三栏响应式（§3.40，v2.111：过窄界 = 400 = 应用 minWidth；文案给出路）
-  narrow: {
-    title: "窗口过窄",
-    hint: "Locowrk 需要 ≥400px 宽度才能使用，请加宽窗口后继续。",
-  },
+  // 工作面板（§2.5/§3.16，v2.52）
   panel: {
     title: "工作面板",
     launcher: "启动器",

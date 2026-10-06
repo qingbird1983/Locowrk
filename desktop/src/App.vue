@@ -25,7 +25,6 @@ import Topbar from "./components/shell/Topbar.vue";
 import WindowControls from "./components/shell/WindowControls.vue";
 import { useGlobalShortcuts } from "./components/shell/use-global-shortcuts";
 import { useResponsiveShell } from "./components/shell/use-responsive-shell";
-import { Icon } from "./lib/icons";
 import { computed, ref } from "vue";
 
 /**
@@ -146,15 +145,9 @@ onMounted(() => {
         @click="dismissOverlay()"
       />
 
-      <!-- §3.40① 窗口过窄（<400px）：整窗提示层，不允许使用；z-50 低于
-           窗口控制车道（z-1000，最小化/关闭仍可用）。临界 = 真·技术临界
-           （主区地板 450 已不可保），文案给出路。应用 minWidth 400 下仅
-           浏览器开发态可达，照规格实现不裁剪 -->
-      <div v-if="shell.tooNarrow" class="narrow-veil" role="alert">
-        <Icon name="warn" :size="28" aria-hidden="true" />
-        <p class="narrow-veil__title">{{ t("narrow.title") }}</p>
-        <p class="narrow-veil__hint">{{ t("narrow.hint") }}</p>
-      </div>
+      <!-- §3.40① v2.112：无过窄提示层——应用 minWidth 400 硬限位即是
+           保证，「窗口已经限制了，还要警告什么」（v2.109 的 narrow-veil
+           与 narrow.* 文案键退役） -->
 
       <!-- 非对话目的地：侧栏右侧铺满，按需挂载 -->
       <DestinationShell
@@ -231,33 +224,8 @@ onMounted(() => {
   }
 }
 
-/* §3.40① 窗口过窄提示层（<400px）：整窗覆盖 bg-page，z-50 低于窗口控制
- * 车道；文案居中，warn 字形 + 标题 + 指引（出路 = 加宽窗口） */
-.narrow-veil {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--lw-gap-8);
-  background: var(--lw-bg);
-  color: var(--lw-ink-2);
-  padding: var(--lw-gap-8);
-  text-align: center;
-}
-.narrow-veil__title {
-  font-size: var(--lw-fs-14);
-  font-weight: 600;
-  color: var(--lw-ink-1);
-}
-.narrow-veil__hint {
-  max-width: 360px;
-  font-size: var(--lw-fs-12half);
-  line-height: 1.6;
-  color: var(--lw-ink-3);
-}
+/* §3.40① v2.112：窗口过窄提示层退役——minWidth 400 硬限位即是保证，
+ * 不再有任何「过窄警告」（用户裁定原文落档 §3.40 节首） */
 
 /* §3.23 会话冷切换进度轨：2px 高、28% 宽不定段 720ms 来回扫 */
 .replay-track {

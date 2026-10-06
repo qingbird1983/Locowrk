@@ -351,10 +351,6 @@ export default {
     delete: "Delete",
     confirmDelete: "Confirm delete?",
   },
-  narrow: {
-    title: "Window too narrow",
-    hint: "Locowrk needs at least 400px of width. Widen the window to continue.",
-  },
   panel: {
     title: "Work panel",
     launcher: "Launcher",
