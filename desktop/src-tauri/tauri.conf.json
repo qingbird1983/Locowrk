@@ -26,7 +26,7 @@
         "label": "main",
         "width": 1280,
         "height": 820,
-        "minWidth": 1024,
+        "minWidth": 400,
         "minHeight": 640,
         "decorations": false,
         "visible": false,

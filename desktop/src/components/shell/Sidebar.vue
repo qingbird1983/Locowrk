@@ -72,7 +72,7 @@ const isMarket = computed(() => shell.destination === "plugins");
 <template>
   <aside
     class="sidebar relative flex h-full flex-col overflow-hidden bg-side"
-    :class="{ 'is-collapsed': shell.sidebarCollapsed }"
+    :class="{ 'is-collapsed': shell.sidebarCollapsed, 'is-overlay': shell.overlayMode }"
     :style="{ '--lw-sidebar-w': `${shell.sidebarWidth}px` }"
     :inert="shell.sidebarCollapsed"
     aria-label="Locowrk"
@@ -262,6 +262,22 @@ const isMarket = computed(() => shell.destination === "plugins");
 .sidebar.is-collapsed .sidebar__inner {
   transform: translateX(-100%);
   transition: transform var(--dur-fast) var(--ease-in);
+}
+
+/* §3.40① overlay 档（400–799，v2.111 V2 规格）：浮层 fixed 出文档流覆盖
+ * 主内容不挤压，最大宽 = 窗口 2/3；动画走 translateX/opacity（折叠态的
+ * 收起由上方通用 .is-collapsed 规则承担：inner 滑走 + 整体透明 +
+ * pointer-events none，出流元素宽不归零）。z-26 压遮罩 z-25，让右上
+ * 钉窗钮 z-30 与窗口控制车道 z-1000 */
+.sidebar.is-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 26;
+  flex-basis: auto;
+  width: min(var(--lw-sidebar-w), 66.67vw);
+  box-shadow: var(--lw-shadow-raised);
 }
 
 /* 28px 方形图标控件（§3.19） */

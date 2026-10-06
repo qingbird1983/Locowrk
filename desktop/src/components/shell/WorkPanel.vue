@@ -41,9 +41,13 @@ const budget = computed(() => Math.max(1, viewport.value - sidebarW.value - MAIN
 /** 最大化预算（v2.60 修复批）：顶到侧栏左缘直接覆盖对话区——侧栏折叠 =
  * 满窗口，侧栏展开 = 视口 − 侧栏宽（主区地板在最大化态不保）。 */
 const fullBudget = computed(() => Math.max(1, viewport.value - sidebarW.value));
-const width = computed(() =>
-  wp.maximized ? fullBudget.value : wp.clampTo(budget.value),
-);
+/** §3.40① overlay 档（400–799，v2.111 V2 规格）：浮层不挤压主内容，
+ * 主区地板预算不适用——宽 = min(偏好宽, 窗口 2/3)（规格 §四 上限）。 */
+const overlayMax = computed(() => Math.max(1, Math.floor((viewport.value * 2) / 3)));
+const width = computed(() => {
+  if (shell.overlayMode) return Math.min(wp.width, overlayMax.value);
+  return wp.maximized ? fullBudget.value : wp.clampTo(budget.value);
+});
 
 // ---- 拖柄（§2.5）----
 const dragging = ref(false);
@@ -97,6 +101,7 @@ function openReview(item: { callId: string; path: string; diff: string }) {
 <template>
   <aside
     class="work-panel relative z-20 flex h-full shrink-0 flex-col overflow-hidden bg-dock"
+    :class="{ 'is-overlay': shell.overlayMode }"
     :style="{ width: `${width}px` }"
     :aria-label="t('panel.title')"
   >
@@ -214,6 +219,21 @@ function openReview(item: { callId: string; path: string; diff: string }) {
  * 靠底色差表达（§6.1 平面内分层铁则，v3.8 走查修正）。z-20 = 压过对话区
  * 的浮起 composer 坞（z-12）/列宽柄（z-11）——v2.60 最大化直接覆盖对话区
  * 时浮层残影不再透出（常态开面板无水平重叠，此 z 只在覆盖态生效） */
+
+/* §3.40① overlay 档（400–799，v2.111 V2 规格）：浮层 fixed 贴右缘出文档
+ * 流（宽由 JS 钳 min(偏好宽, 2/3 视口)）；进退场仍走 App 的 wp-* Transition
+ * ——出流元素上宽度动画无重排代价，translateX(100%) 视觉即滑出。
+ * z-26 压遮罩 z-25，让右上钉窗钮 z-30（其让位车道照常浮在头部上） */
+.work-panel.is-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 26;
+  flex: 0 0 auto;
+  box-shadow: var(--lw-shadow-raised);
+}
+
 .ctl {
   display: inline-flex;
   width: var(--lw-ctl);

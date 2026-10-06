@@ -51,6 +51,19 @@ const workPanel = useWorkPanelStore();
 const composerH = ref(0);
 /** 首页空态（§3.14 v3.9）：转录未渲染欢迎页；composer Teleport 进槽位。 */
 const isHome = computed(() => chat.items.length === 0);
+/** §3.40④ overlay 遮罩（v2.111）：overlay 档且有浮层开着（互斥保证至多
+ * 一个）；设置目的地整窗接管、侧栏不渲染，不挂遮罩。 */
+const overlayMask = computed(
+  () =>
+    shell.overlayMode &&
+    shell.destination !== "settings" &&
+    (!shell.sidebarCollapsed || workPanel.open),
+);
+/** 遮罩点击收起当前浮层（面板优先——互斥下两者不会同开，顺序只是防御）。 */
+function dismissOverlay() {
+  if (workPanel.open) workPanel.setOpen(false);
+  else shell.toggleSidebar();
+}
 /** 欢迎页槽位元素（WelcomeHome defineExpose）：Teleport 直接吃元素不走
  * 选择器——初次挂载整棵树还没插进 document，选择器必扑空；元素就绪前
  * Teleport 保持 disabled（composer 停在底部坞原位）。 */
@@ -114,23 +127,29 @@ onMounted(() => {
            意义（§2.4 开关在会话顶栏右侧）；随 chat 区一起挂起/显示。
            开合滑动动画与侧栏统一（§6.6 ②，issue #2）。首页空态不渲染
            （v2.60 修复批：会话态开面板切回首屏必须收起——空态锁右栏）。
-           §3.40（v2.110 修正）：视口门控保留为启动首帧兜底——open 开意图
-           已保证只在 ≥1400px 时写入（断点折叠消费 + setOpen 钳制），
-           回宽不自动展开，重开须再点开关（§3.40②·2 非对称裁定） -->
+           §3.40④（v2.111）：任何宽度可开——push 档停靠挤压、overlay 档
+           （400–799）fixed 浮层贴右缘（互斥由 setOpen 收口），右栏永不
+           自动展开（②·3 非对称裁定） -->
       <Transition name="wp">
         <WorkPanel
-          v-if="
-            shell.destination === 'chat' &&
-            !isHome &&
-            workPanel.open &&
-            shell.viewportRightOk
-          "
+          v-if="shell.destination === 'chat' && !isHome && workPanel.open"
         />
       </Transition>
 
-      <!-- §3.40① 窗口过窄（<800px）：整窗提示层，不允许使用；z 低于
-           窗口控制车道（z-1000，最小化/关闭仍可用）。应用 minWidth 1024
-           下仅浏览器开发态可达，照规格实现不裁剪 -->
+      <!-- §3.40④ overlay 遮罩（400–799 档）：浮层以外区域点击收起当前
+           浮层（v2.111）。互斥保证至多一个浮层开着；z-25 压对话区顶栏
+           z-10、让浮层 z-26 / 右上钉窗钮 z-30 / 窗口控制车道 z-1000 -->
+      <div
+        v-if="overlayMask"
+        class="overlay-mask"
+        aria-hidden="true"
+        @click="dismissOverlay()"
+      />
+
+      <!-- §3.40① 窗口过窄（<400px）：整窗提示层，不允许使用；z-50 低于
+           窗口控制车道（z-1000，最小化/关闭仍可用）。临界 = 真·技术临界
+           （主区地板 450 已不可保），文案给出路。应用 minWidth 400 下仅
+           浏览器开发态可达，照规格实现不裁剪 -->
       <div v-if="shell.tooNarrow" class="narrow-veil" role="alert">
         <Icon name="warn" :size="28" aria-hidden="true" />
         <p class="narrow-veil__title">{{ t("narrow.title") }}</p>
@@ -188,8 +207,32 @@ onMounted(() => {
   transform: translateX(100%);
 }
 
-/* §3.40① 窗口过窄提示层（<800px）：整窗覆盖 bg-page，z-50 低于窗口控制
- * 车道；文案居中，warn 字形 + 标题 + 指引 */
+/* §3.40④ overlay 遮罩（400–799 档，v2.111）：浮层以外整面捕获点击收起。
+ * z-25：压对话区顶栏 z-10，让浮层 z-26、右上钉窗钮 z-30、窗口控制车道
+ * z-1000——浮层开着时右上角面板钮永远可点（换边走互斥收口）。淡入 fast */
+.overlay-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: var(--lw-scrim);
+  animation: lw-mask-in var(--dur-fast) var(--ease-out);
+}
+@keyframes lw-mask-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay-mask {
+    animation: none;
+  }
+}
+
+/* §3.40① 窗口过窄提示层（<400px）：整窗覆盖 bg-page，z-50 低于窗口控制
+ * 车道；文案居中，warn 字形 + 标题 + 指引（出路 = 加宽窗口） */
 .narrow-veil {
   position: fixed;
   inset: 0;

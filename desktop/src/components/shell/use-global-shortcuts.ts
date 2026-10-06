@@ -33,13 +33,9 @@ export function useGlobalShortcuts() {
         break;
       case "j":
         e.preventDefault();
-        // §3.14 v3.9（issue #10）：首页空态不可展开工作面板
-        // §3.40②·4（v2.109）：<1400px 视口不展开（与面板钮禁用同规）
-        if (
-          shell.destination === "chat" &&
-          chat.items.length > 0 &&
-          shell.viewportRightOk
-        ) {
+        // §3.14 v3.9（issue #10）：首页空态不可展开工作面板（页面语义）。
+        // §3.40④（v2.111）：任何宽度可开——overlay 档互斥由 setOpen 收口
+        if (shell.destination === "chat" && chat.items.length > 0) {
           workPanel.toggle();
         }
         break;

@@ -353,10 +353,9 @@ export default {
   },
   narrow: {
     title: "Window too narrow",
-    hint: "Locowrk needs at least 800px of width. Widen the window to continue.",
+    hint: "Locowrk needs at least 400px of width. Widen the window to continue.",
   },
   panel: {
-    tooNarrowHint: "Not enough width: the panel needs ≥1400px to open (auto-collapse on small windows is intentional).",
     title: "Work panel",
     launcher: "Launcher",
     launcherHint:

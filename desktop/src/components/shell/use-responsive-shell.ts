@@ -1,19 +1,21 @@
 /**
- * 三栏响应式断点源（UI shell §3.40，v2.109「非对称级联折叠」）：监听窗口
- * 宽并把三个视口旗标写入 shell store。左栏手动位（manualSidebarCollapsed）
- * **永不**被断点改写——收窄折叠 ≠ 用户折叠。唯一例外是右栏开意图（§3.40②·2，
- * v2.110 目检修正）：跌破 1400px 的瞬间消费掉 workPanel.open（持久化落
- * false），回宽**不**自动展开——这是 ②·3 非对称产品裁定的硬兑现，不是
- * 疏漏，禁止改回「记忆意图、回宽恢复」。断点：
- * - ≥1400（xl）三栏可全开（右栏仍需手动展开——§3.40②·3 非对称裁定）
- * - ≥1100（lg）右栏级联折叠，左栏照常
- * - ≥800（md） 左栏也级联折叠
- * - <800（sm） 窗口过窄提示层（应用 minWidth 1024 下仅浏览器开发态可达）
+ * 三栏响应式断点源（UI shell §3.40，v2.111 V2 规格）：监听窗口宽把视口
+ * 旗标（overlayMode/tooNarrow）写入 shell store，**永不碰任何持久化状态**
+ * ——按钮可用性与断点解耦（§3.40 开头评审尺度：限制不碰「能不能用」）。
+ * 只做三件模式事：
+ * 1. 写旗标（overlay 400–799 / 过窄 <400）；
+ * 2. 入 overlay 时双开保左收右——右栏 open 落 false **持久化**（开意图
+ *    消费，§3.40②·2），回宽**不**自动弹回——这是「右栏永不自动展开」
+ *    非对称裁定（②·3）在 800 界的实现手段，不是疏漏，禁止改回
+ *    「记忆意图、回宽恢复」；
+ * 3. 出 overlay 时解除左栏互斥瞬态折叠（自动折叠自动恢复，②·1）。
+ * v2.109 的级联折叠（<1400 收右栏、<1100 收左栏）与挂载清悬空 open 退役
+ * ——open 在任何宽度都是合法状态。
  */
 import { onBeforeUnmount, onMounted } from "vue";
 import { useShellStore } from "../../stores/shell";
 import { useWorkPanelStore } from "../../stores/work-panel";
-import { BREAKPOINT_XL } from "../../lib/breakpoints";
+import { BREAKPOINT_MD } from "../../lib/breakpoints";
 
 export function useResponsiveShell() {
   const shell = useShellStore();
@@ -23,10 +25,15 @@ export function useResponsiveShell() {
 
   function apply() {
     raf = 0;
-    shell.applyViewportWidth(pendingW);
-    // 右栏开意图被断点折叠消费（挂载首校准也走这里：窄窗口启动时清掉
-    // 旧 localStorage 里的悬空 open=true）
-    if (pendingW < BREAKPOINT_XL && workPanel.open) workPanel.setOpen(false);
+    const w = pendingW;
+    shell.applyViewportWidth(w);
+    if (w < BREAKPOINT_MD) {
+      // 入 overlay（挂载首校准同规）：双开保左收右，右栏开意图被消费
+      if (workPanel.open && !shell.sidebarCollapsed) workPanel.setOpen(false);
+    } else if (shell.overlaySidebarFold) {
+      // 出 overlay：互斥瞬态折叠解除（左栏自动恢复——「之前是自动折叠的」）
+      shell.setPanelExclusiveFold(false);
+    }
   }
   function onResize() {
     pendingW = window.innerWidth;

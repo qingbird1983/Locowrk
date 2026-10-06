@@ -9,7 +9,8 @@ import {
   PANEL_DEFAULT,
   PANEL_MIN,
 } from "../lib/work-panel-preference";
-import { BREAKPOINT_XL } from "../lib/breakpoints";
+import { BREAKPOINT_MD } from "../lib/breakpoints";
+import { useShellStore } from "./shell";
 
 export interface WorkPanelTab {
   /** 页签 id：子会话 = childId（§3.16）；审阅 = `rev:<callId>`（§3.28）。 */
@@ -39,10 +40,13 @@ export const useWorkPanelStore = defineStore("workPanel", {
       savePanelPrefs({ open: this.open, width: this.width });
     },
     setOpen(v: boolean) {
-      // §3.40②·2（v2.110 目检修正）：开意图只在视口放得下时成立——<1400px
-      // 的程序化开面板（看转录/审阅入口）不得落悬空 open=true，否则回宽
-      // 会自动弹开（右栏永不自动展开，非对称裁定的硬兑现）
-      this.open = v && window.innerWidth >= BREAKPOINT_XL;
+      // §3.40②·5（v2.111 V2 规格）：任何宽度都可合法开（v2.110 的 ≥1400
+      // 钳制随「按钮永不冻结」退役）；overlay 档（400–799）互斥——开右栏
+      // 把左栏挂瞬态折叠（不落盘，回宽自动恢复），关右栏解除瞬态。
+      this.open = v;
+      if (window.innerWidth < BREAKPOINT_MD) {
+        useShellStore().setPanelExclusiveFold(v);
+      }
       this.persist();
     },
     toggle() {

@@ -44,16 +44,15 @@ const title = computed(() => {
     data-tauri-drag-region
   >
     <!-- lead 槽：恒在，展开时宽 0（过渡与侧栏同步，标题不跳变）。
-         md 档视口不允许展开侧栏（§3.40），展开钮一并隐藏 -->
+         §3.40④（v2.111）：左栏切换钮任何宽度可用——合 = 这里的展开钮，
+         开 = 侧栏头内收起钮，任何时刻恰有一个可见可点 -->
     <div
       class="lead flex items-center overflow-hidden"
-      :class="shell.sidebarCollapsed && shell.viewportLeftOk ? 'lead--open' : ''"
-      :aria-hidden="!shell.sidebarCollapsed || !shell.viewportLeftOk"
+      :class="shell.sidebarCollapsed ? 'lead--open' : ''"
+      :aria-hidden="!shell.sidebarCollapsed"
+      :inert="!shell.sidebarCollapsed"
     >
-      <HoverTip
-        v-if="shell.viewportLeftOk"
-        :text="t('sidebar.expand')"
-      >
+      <HoverTip :text="t('sidebar.expand')">
         <button
           class="ctl"
           type="button"
@@ -93,20 +92,17 @@ const title = computed(() => {
   </header>
   <!-- 右上角面板开关钉窗（§3.40④；v2.61 钉窗语义）。fixed 定位挂在全局类
        .lw-topbar-toggles（style.css）——scoped 属性进不了多根组件内部
-       （v2.85/v2.61 先例）。面板钮首页空态隐藏（§2.4）且 md 档视口禁用
-       （§3.40②·4，气泡如实告知）。z-30 压过工作面板 z-20，header/面板头
-       让位车道 +40px。左栏不设顶栏开关（v2.110 目检裁定）：收放走侧栏
-       右缘拖柄 / Ctrl+B / ⌘K / lead 槽展开钮既有机制 -->
+       （v2.85/v2.61 先例）。面板钮首页空态隐藏（§2.4 页面语义，非宽度
+       限制）；任何 ≥400px 宽度可点（v2.111：<1400 禁用态退役——断点只
+       决定展开模式，overlay 档自动互斥收左栏）。z-30 压过工作面板
+       z-20/浮层 z-26，header/面板头让位车道 +40px。左栏不设顶栏开关
+       （v2.110 目检裁定） -->
   <div class="lw-topbar-toggles">
-    <HoverTip
-      v-if="!isHome"
-      :text="shell.viewportRightOk ? t('panel.title') : t('panel.tooNarrowHint')"
-    >
+    <HoverTip v-if="!isHome" :text="t('panel.title')">
       <button
         class="ctl"
         type="button"
-        :disabled="!shell.viewportRightOk"
-        :aria-pressed="workPanel.open && shell.viewportRightOk"
+        :aria-pressed="workPanel.open"
         :aria-label="t('panel.title')"
         @click="workPanel.toggle()"
       >
