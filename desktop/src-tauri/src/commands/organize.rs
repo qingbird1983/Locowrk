@@ -1,12 +1,12 @@
 //! 记忆树影子运行命令（M2，UI shell §3.36）：`/整理` 发起入口 + 开发者
-//! 观测面板数据源；M3（§3.37④）只读呈现三命令（清单 / 捆清单 / 原文切片
+//! 观测面板数据源；M3（§3.37④）只读呈现三命令（清单 / 章节清单 / 原文切片
 //! ——直读投影文件，不占会话锁）。薄适配层——决策与管道全在 organize
 //! 模块；会话锁只在 `organize_now` / `memory_tree_view` 内短暂持有，
 //! 整理本体后台跑不占锁。
 
 use tauri::State;
 
-use crate::organize::{OriginalItem, TreeBundlesView, TreeDebug, TreeSummaryView};
+use crate::organize::{OriginalItem, TreeChaptersView, TreeDebug, TreeSummaryView};
 
 use crate::state::AppState;
 
@@ -40,25 +40,25 @@ pub async fn memory_tree_sessions(
     Ok(state.organizer.tree_sessions())
 }
 
-/// 选中会话的捆清单（M3 §3.37④）：直读投影文件，不要求会话在内存。
+/// 选中会话的章节清单（M3 §3.37④）：直读投影文件，不要求会话在内存。
 #[tauri::command]
-pub async fn memory_tree_bundles(
+pub async fn memory_tree_chapters(
     session_id: String,
     workspace: String,
     state: State<'_, AppState>,
-) -> Result<TreeBundlesView, String> {
-    Ok(state.organizer.tree_bundles(&session_id, &workspace))
+) -> Result<TreeChaptersView, String> {
+    Ok(state.organizer.tree_chapters(&session_id, &workspace))
 }
 
-/// 捆原文切片（M3 §3.37④）：与记录员材料同形（build_items 同源函数）。
+/// 章节原文切片（M3 §3.37④）：与记忆管理器材料同形（build_items 同源函数）。
 #[tauri::command]
 pub async fn memory_tree_original(
     session_id: String,
     workspace: String,
-    bundle_id: String,
+    chapter_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<OriginalItem>, String> {
     state
         .organizer
-        .tree_original(&session_id, &workspace, &bundle_id)
+        .tree_original(&session_id, &workspace, &chapter_id)
 }

@@ -10,6 +10,8 @@
 
 > 前置文档：《Agent 内核设计》《上下文与记忆管理设计》《KV Prefix Cache Design v2》
 
+> **术语注（2026-10-06，v2.108 术语统一批）**：项目术语按用户指令统一——数据结构 `MemoryBundle`→`MemoryChapter`（`BundleId`→`ChapterId`、`BundleDraft`→`ChapterDraft`、`build_bundles`→`build_chapters`、`EventToBundleIndex`→`EventToChapterIndex`、模块 `bundle`→`chapter`、`recorder`→`manager`），UI 文案「捆」→「章节」、「记录员」→「记忆管理器」。**本文正文的历史措辞与「捆稻草」比喻保留原貌**——比喻只在设计哲学语境使用（§1 等），新行文一律用「章节／记忆管理器」。以下**落盘契约不变，旧数据零迁移**：①树投影 JSON 旧字段 `bundles`/`bundled_until`/`bundle_id`/`recorder_input`/`recorder_output` 经 serde alias 双读（新文件写 `chapters` 等新名）；②树节点 id 值空间 `b1、b2…` 不变（不透明数据）；③`source`/`mode` 的 `recorder|rule|placeholder` 数据词汇不变（UI 显示层映射「记忆管理器／规则切分」）；④设置键 `recorderModel`/`recorderProvider`/`recorderTimeoutSecs`/`recorderMaxRetries` 沿用历史名（Rust 字段已改名，serde rename 保持键稳定）；⑤tree.md 盘面「`### bN · 标题`」指针格式不变；⑥`memory_expand`/`memory_collapse` 工具参数与目录说明同步改 `chapter_id`／章节措辞（模型可见契约随请求刷新，无存量兼容问题）。
+
 ---
 
 ## 目录

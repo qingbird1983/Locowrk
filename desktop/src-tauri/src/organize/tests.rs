@@ -1,4 +1,4 @@
-//! organize 单测：影子编排全链路——记录员成功 / 垃圾输出降级规则切分 /
+//! organize 单测：影子编排全链路——记忆管理器成功 / 垃圾输出降级规则切分 /
 //! 增量触发 / 反弹熔断 / 崩溃重投（会话在盘）/ 会话已删放弃。设置经临时
 //! 目录 settings.json 直写（serde 缺省补齐其余字段，绕开 settings_set
 //! 校验以便用极小触发阈值）。
@@ -7,13 +7,13 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use async_trait::async_trait;
-use memory_tree::{OrganizeReason, RecorderClient, RecorderUsage, TreeStore};
+use memory_tree::{MemoryManagerClient, MemoryManagerUsage, OrganizeReason, TreeStore};
 use session_store::{Session, SessionEvent};
 
 use super::Organizer;
 use crate::settings::SettingsStore;
 
-/// 脚本化假记录员：按序返回原始回复（Ok 文本 / Err 借口）。
+/// 脚本化假记忆管理器：按序返回原始回复（Ok 文本 / Err 借口）。
 struct FakeClient {
     responses: StdMutex<VecDeque<Result<String, String>>>,
 }
@@ -27,13 +27,13 @@ impl FakeClient {
 }
 
 #[async_trait]
-impl RecorderClient for FakeClient {
+impl MemoryManagerClient for FakeClient {
     async fn complete(
         &self,
         _system: &str,
         _user: &str,
         _model: Option<&str>,
-    ) -> Result<(String, RecorderUsage), String> {
+    ) -> Result<(String, MemoryManagerUsage), String> {
         self.responses
             .lock()
             .unwrap()
@@ -42,7 +42,7 @@ impl RecorderClient for FakeClient {
             .map(|raw| {
                 (
                     raw,
-                    RecorderUsage {
+                    MemoryManagerUsage {
                         input: 100,
                         output: 40,
                     },
@@ -83,7 +83,7 @@ fn session() -> Session {
     s
 }
 
-/// 合法铺满 6 项材料的记录员输出（两捆）。
+/// 合法铺满 6 项材料的记忆管理器输出（两章节）。
 fn good_reply() -> String {
     r#"[{"title":"话题一","summary":"摘要一。","event_range":[0,1]},{"title":"话题二","summary":"摘要二。","event_range":[2,5]}]"#.into()
 }
@@ -91,7 +91,7 @@ fn good_reply() -> String {
 fn organizer(
     root: &std::path::Path,
     settings: Arc<SettingsStore>,
-    client: Arc<dyn RecorderClient>,
+    client: Arc<dyn MemoryManagerClient>,
 ) -> Arc<Organizer> {
     Arc::new(Organizer::new(
         settings,
@@ -127,12 +127,12 @@ async fn manual_organize_records_recorder_bundles() {
     assert_eq!(task.reason, OrganizeReason::Manual);
     org.clone().run_task(task).await;
     let tree = tree_at(&root, org.settings.as_ref(), "s-manual");
-    assert_eq!(tree.bundles.len(), 2);
-    assert_eq!(tree.bundled_until, 6);
+    assert_eq!(tree.chapters.len(), 2);
+    assert_eq!(tree.chaptered_until, 6);
     assert!(tree.pending.is_none());
     assert_eq!(tree.history[0].mode, "recorder");
     assert_eq!(tree.history[0].status, "ok");
-    assert_eq!(tree.history[0].recorder_input, 100);
+    assert_eq!(tree.history[0].manager_input, 100);
     assert_eq!(tree.rebound.users_at_last, 3);
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -141,7 +141,7 @@ async fn manual_organize_records_recorder_bundles() {
 async fn garbage_recorder_output_degrades_to_rule_split() {
     let root = temp_root("degrade");
     let settings = settings_with(serde_json::json!({}), &root);
-    // 记录员连续回垃圾（超重试次数），随后管道降级规则切分
+    // 记忆管理器连续回垃圾（超重试次数），随后管道降级规则切分
     let junk = vec![Ok("我不会".into()); 4];
     let org = organizer(&root, settings, FakeClient::new(junk));
     let session = session();
@@ -150,10 +150,10 @@ async fn garbage_recorder_output_degrades_to_rule_split() {
     let tree = tree_at(&root, org.settings.as_ref(), "s-rule");
     assert_eq!(tree.history[0].mode, "rule");
     assert_eq!(tree.history[0].status, "degraded");
-    assert_eq!(tree.bundled_until, 6); // 游标照样推进（尾巴已捆）
-                                       // 规则切分铺满全部材料
+    assert_eq!(tree.chaptered_until, 6); // 游标照样推进（尾巴已章节）
+                                         // 规则切分铺满全部材料
     let covered: usize = tree
-        .bundles
+        .chapters
         .values()
         .map(|b| b.event_range.1 - b.event_range.0 + 1)
         .sum();
@@ -236,7 +236,7 @@ async fn crash_recovery_redispatches_pending_task() {
     org.clone().run_task(task).await;
     let tree = tree_at(&root, org.settings.as_ref(), "s-crash");
     assert!(tree.pending.is_none());
-    assert_eq!(tree.bundled_until, 6);
+    assert_eq!(tree.chaptered_until, 6);
     assert_eq!(tree.history[0].reason, "recovery");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -275,31 +275,31 @@ async fn view_bundles_and_original_read_from_disk() {
     let task = org.plan_manual(&disk, "s-view").expect("发起成功");
     org.clone().run_task(task).await;
 
-    // 清单：一树两捆，mtime 有值
+    // 清单：一树两章节，mtime 有值
     let list = org.tree_sessions();
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].session_id, "s-view");
-    assert_eq!(list[0].bundle_count, 2);
+    assert_eq!(list[0].chapter_count, 2);
     assert!(list[0].updated_ms > 0);
     assert!(!list[0].pending);
 
-    // 捆清单：数值序 b1、b2（BTreeMap 字典序会把 b10 排到 b2 前）
-    let view = org.tree_bundles("s-view", r"F:\ws\demo");
+    // 章节清单：数值序 b1、b2（BTreeMap 字典序会把 b10 排到 b2 前）
+    let view = org.tree_chapters("s-view", r"F:\ws\demo");
     assert!(view.exists);
-    assert_eq!(view.bundles.len(), 2);
-    // 占位捆消耗 b1，记录员真捆从 b2 起
-    assert_eq!(view.bundles[0].bundle_id, "b2");
-    assert_eq!(view.bundles[0].title, "话题一");
-    assert_eq!(view.bundles[0].source, "recorder");
-    assert!(!view.bundles[0].pending);
-    assert_eq!(view.bundles[0].event_from, 0);
-    assert_eq!(view.bundles[0].event_to, 1);
+    assert_eq!(view.chapters.len(), 2);
+    // 占位章节消耗 b1，记忆管理器真章节从 b2 起
+    assert_eq!(view.chapters[0].chapter_id, "b2");
+    assert_eq!(view.chapters[0].title, "话题一");
+    assert_eq!(view.chapters[0].source, "recorder");
+    assert!(!view.chapters[0].pending);
+    assert_eq!(view.chapters[0].event_from, 0);
+    assert_eq!(view.chapters[0].event_to, 1);
     assert!(
-        !org.tree_bundles("s-none", r"F:\ws\demo").exists,
+        !org.tree_chapters("s-none", r"F:\ws\demo").exists,
         "缺树 = 空态"
     );
 
-    // 原文切片与记录员材料同形（捆 b1 = 事件 0..=1 一问一答）
+    // 原文切片与记忆管理器材料同形（章节 b1 = 事件 0..=1 一问一答）
     let orig = org
         .tree_original("s-view", r"F:\ws\demo", "b2")
         .expect("原文可读");
@@ -320,7 +320,7 @@ use crate::organizer_mode::OrganizerMode as Mode;
 fn tree_organizer(
     root: &std::path::Path,
     settings: Arc<SettingsStore>,
-    client: Arc<dyn RecorderClient>,
+    client: Arc<dyn MemoryManagerClient>,
 ) -> Arc<Organizer> {
     Arc::new(Organizer::new(
         settings,
@@ -364,7 +364,7 @@ async fn window_overflow_organizes_orphans_without_rebound() {
     let client = FakeClient::new(vec![Ok(good_reply()), Ok(good_reply())]);
     let org = tree_organizer(&root, Arc::clone(&settings), client);
 
-    // 轮 1：bundled_until=0 < 窗口起点（22）→ 溢出整理只归孤儿 [0..22)
+    // 轮 1：chaptered_until=0 < 窗口起点（22）→ 溢出整理只归孤儿 [0..22)
     let s = long_session();
     let task = org.plan_auto(&s, "s-ov").expect("孤儿轮在场应触发溢出整理");
     assert_eq!(task.reason, memory_tree::OrganizeReason::WindowOverflow);
@@ -376,7 +376,7 @@ async fn window_overflow_organizes_orphans_without_rebound() {
     );
     org.clone().run_task(task).await;
     let tree = tree_at(&root, org.settings.as_ref(), "s-ov");
-    assert_eq!(tree.bundled_until, 22, "游标推进到窗口起点");
+    assert_eq!(tree.chaptered_until, 22, "游标推进到窗口起点");
     assert_eq!(tree.rebound.users_at_last, 0, "溢出整理不碰反弹基线");
     assert!(!tree.paused_auto);
 
@@ -398,7 +398,7 @@ async fn window_overflow_organizes_orphans_without_rebound() {
     assert_eq!(task.reason, memory_tree::OrganizeReason::WindowOverflow);
     org.clone().run_task(task).await;
     let tree = tree_at(&root, org.settings.as_ref(), "s-ov");
-    assert_eq!(tree.bundled_until, 24);
+    assert_eq!(tree.chaptered_until, 24);
     assert!(!tree.paused_auto, "溢出整理永不触发熔断");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -435,12 +435,12 @@ async fn auto_collapse_relieves_oldest_expanded() {
     let client = FakeClient::new(vec![]);
     let org = tree_organizer(&root, Arc::clone(&settings), client);
 
-    // 树 + 两个已展开捆（b2 更早展开）
+    // 树 + 两个已展开章节（b2 更早展开）
     let mut tree = memory_tree::MemoryTree::new(r"F:\ws\demo", "s-ac");
-    let d1 = vec![memory_tree::sanitize_draft("捆一", "摘要一", (0, 1)).unwrap()];
-    let bundles = tree.build_bundles(&d1, "recorder", 1);
+    let d1 = vec![memory_tree::sanitize_draft("章节一", "摘要一", (0, 1)).unwrap()];
+    let chapters = tree.build_chapters(&d1, "recorder", 1);
     tree.apply_organized(
-        bundles,
+        chapters,
         1,
         memory_tree::OrganizeRecord {
             ts: 1,
@@ -449,9 +449,9 @@ async fn auto_collapse_relieves_oldest_expanded() {
             status: "ok".into(),
             from: 0,
             to: 1,
-            bundles: 1,
-            recorder_input: 0,
-            recorder_output: 0,
+            chapters: 1,
+            manager_input: 0,
+            manager_output: 0,
             duration_ms: 1,
         },
     );
@@ -463,7 +463,7 @@ async fn auto_collapse_relieves_oldest_expanded() {
     session.events().iter().for_each(|_| {});
     org.after_turn(&session, "s-ac");
     let t = tree_at(&root, org.settings.as_ref(), "s-ac");
-    assert!(t.bundles["b1"].collapsed_at.is_none(), "占用低不收");
+    assert!(t.chapters["b1"].collapsed_at.is_none(), "占用低不收");
 
     // 用量锚点来自最后一条 LlmUsage（600 / 1000 = 60% ≥ 50%）→ 收起 b1
     session.append(SessionEvent::LlmUsage {
@@ -477,7 +477,10 @@ async fn auto_collapse_relieves_oldest_expanded() {
     });
     org.after_turn(&session, "s-ac");
     let t = tree_at(&root, org.settings.as_ref(), "s-ac");
-    assert!(t.bundles["b1"].collapsed_at.is_some(), "过阈值收起最早展开");
+    assert!(
+        t.chapters["b1"].collapsed_at.is_some(),
+        "过阈值收起最早展开"
+    );
     assert_eq!(t.oldest_expanded(), None);
 
     // legacy 会话零参与

@@ -474,7 +474,7 @@ fn tail_plan(tail_from: usize, directory: &str, collapsed: &[&str]) -> TreePlan 
     TreePlan {
         directory: directory.into(),
         tail_from_event: tail_from,
-        collapsed_bundles: collapsed.iter().map(|s| s.to_string()).collect(),
+        collapsed_chapters: collapsed.iter().map(|s| s.to_string()).collect(),
     }
 }
 
@@ -507,7 +507,7 @@ async fn tree_session_slices_to_tail_and_appends_directory() {
         "s1",
         tail_plan(
             2,
-            "[memory tree] Earlier turns are organized below (oldest first); call memory_expand(bundle_id, level=1|2) to read one.\n- b2: 缓存讨论",
+            "[memory tree] Earlier turns are organized below (oldest first); call memory_expand(chapter_id, level=1|2) to read one.\n- b2: 缓存讨论",
             &[],
         ),
     )));
@@ -554,7 +554,7 @@ async fn tree_session_midturn_boundary_advances_to_next_user() {
     let ctx = Arc::new(Context::new());
     ctx.provide_dyn::<dyn TreeContextSource>(Arc::new(FakeTrees::with(
         "s1",
-        // 切点落在助手消息上（记录员切分不硬校验的兜底场景）
+        // 切点落在助手消息上（记忆管理器切分不硬校验的兜底场景）
         tail_plan(1, "", &[]),
     )));
     let (kernel, spy) = echo_kernel(&ctx);
@@ -599,11 +599,11 @@ async fn tree_session_collapsed_expand_results_become_stubs() {
         content: String::new(),
         tool_calls: vec![CallId("c1".into()), CallId("c2".into())],
     });
-    for (cid, bundle) in [("c1", "b1"), ("c2", "b2")] {
+    for (cid, chapter) in [("c1", "b1"), ("c2", "b2")] {
         s.append(SessionEvent::ToolCall {
             call_id: CallId(cid.into()),
             tool: "memory_expand".into(),
-            args: json!({ "bundle_id": bundle, "level": 1 }),
+            args: json!({ "chapter_id": chapter, "level": 1 }),
             plugin_id: None,
             plugin_version: Version::new(0, 1, 0),
             side_effect: SideEffect::Pure,
@@ -625,15 +625,15 @@ async fn tree_session_collapsed_expand_results_become_stubs() {
         } = m
         {
             assert_eq!(tool, "memory_expand");
-            let id = args["bundle_id"].as_str().unwrap();
+            let id = args["chapter_id"].as_str().unwrap();
             if id == "b2" {
                 assert!(
                     output.as_str().unwrap().contains("collapsed"),
-                    "收起捆的结果换成桩文本"
+                    "收起章节的结果换成桩文本"
                 );
                 stubbed += 1;
             } else {
-                assert!(output.is_object(), "未收起捆原样保留");
+                assert!(output.is_object(), "未收起章节原样保留");
             }
         }
     }
@@ -740,13 +740,13 @@ async fn legacy_sessions_keep_full_assembly() {
 
 #[tokio::test]
 async fn directory_growth_keeps_system_prefix() {
-    // 只增不改（纪律 3）：捆 b3 追加后，旧 system 必须是新 system 的字节前缀
+    // 只增不改（纪律 3）：章节 b3 追加后，旧 system 必须是新 system 的字节前缀
     let ctx = Arc::new(Context::new());
     ctx.provide_dyn::<dyn TreeContextSource>(Arc::new(FakeTrees::with(
         "s1",
         tail_plan(
             1,
-            "[memory tree] Earlier turns are organized below.\n- b2: 旧捆",
+            "[memory tree] Earlier turns are organized below.\n- b2: 旧章节",
             &[],
         ),
     )));
@@ -770,7 +770,7 @@ async fn directory_growth_keeps_system_prefix() {
         "s1",
         tail_plan(
             1,
-            "[memory tree] Earlier turns are organized below.\n- b2: 旧捆\n- b3: 新捆",
+            "[memory tree] Earlier turns are organized below.\n- b2: 旧章节\n- b3: 新章节",
             &[],
         ),
     )));
@@ -812,7 +812,7 @@ fn tail_user_start_and_collapse_helpers() {
     let msgs = vec![session_store::Message::ToolResult {
         call_id: CallId("c1".into()),
         tool: "memory_expand".into(),
-        args: json!({ "bundle_id": "b9" }),
+        args: json!({ "chapter_id": "b9" }),
         output: json!({ "summary": "x" }),
         error: None,
     }];

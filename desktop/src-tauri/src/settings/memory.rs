@@ -2,11 +2,11 @@
 //! 开关 + 注入条数 + ⑬ 隐式提取开关）：设置原值 / IPC 投影 / 部分更新。
 //! 校验与应用逻辑在 settings.rs 的 `update` / `memory_inject_config`。
 //! M2（Memory-KV Roadmap）起追加记忆树整理三键：整理节奏 / 增量块 X /
-//! 会话记录员模型（《Memory Tree Design v2》§4.3 / §5.2，§15 可调项）。
+//! 记忆管理器模型（《Memory Tree Design v2》§4.3 / §5.2，§15 可调项）。
 
 use serde::{Deserialize, Serialize};
 
-/// 整理节奏缺省（§4.3 批量档：记录员看得全、切分质量好）。
+/// 整理节奏缺省（§4.3 批量档：记忆管理器看得全、切分质量好）。
 pub const ORGANIZE_PACING_DEFAULT: &str = "batch";
 /// 增量块 X 缺省与合法区间（§15：10K–200K 缺省 50K）。
 pub const ORGANIZE_CHUNK_TOKENS_DEFAULT: u64 = 50_000;
@@ -70,10 +70,13 @@ pub struct MemorySettings {
     pub organize_pacing: String,
     /// 增量块 X（token，增量档触发线）。
     pub organize_chunk_tokens: u64,
-    /// 记录员模型（§5.2：None/空 = 同主模型）；与 recorder_provider
-    /// 成对（v2.58 档位制下模型归属服务档）。
-    pub recorder_model: Option<String>,
-    pub recorder_provider: Option<String>,
+    /// 记忆管理器模型（§5.2：None/空 = 同主模型）；与 memory_manager_provider
+    /// 成对（v2.58 档位制下模型归属服务档）。**持久化键沿用历史名
+    /// recorderModel/recorderProvider**（设置文件兼容，术语注见设计文档）。
+    #[serde(rename = "recorderModel")]
+    pub memory_manager_model: Option<String>,
+    #[serde(rename = "recorderProvider")]
+    pub memory_manager_provider: Option<String>,
     /// 尾巴策略（M4 §3.38②：boundary = A 边界结算缺省 / window = B 固定
     /// 窗口实验档；只作用于树模式会话）。
     pub tail_strategy: String,
@@ -100,8 +103,8 @@ impl Default for MemorySettings {
             auto_extract: true,
             organize_pacing: ORGANIZE_PACING_DEFAULT.into(),
             organize_chunk_tokens: ORGANIZE_CHUNK_TOKENS_DEFAULT,
-            recorder_model: None,
-            recorder_provider: None,
+            memory_manager_model: None,
+            memory_manager_provider: None,
             tail_strategy: TAIL_STRATEGY_DEFAULT.into(),
             tail_window_turns: TAIL_WINDOW_TURNS_DEFAULT,
             collapse_enabled: false,
@@ -122,8 +125,10 @@ pub struct MemorySettingsView {
     pub auto_extract: bool,
     pub organize_pacing: String,
     pub organize_chunk_tokens: u64,
-    pub recorder_model: Option<String>,
-    pub recorder_provider: Option<String>,
+    #[serde(rename = "recorderModel")]
+    pub memory_manager_model: Option<String>,
+    #[serde(rename = "recorderProvider")]
+    pub memory_manager_provider: Option<String>,
     pub tail_strategy: String,
     pub tail_window_turns: u32,
     pub collapse_enabled: bool,
@@ -134,7 +139,7 @@ pub struct MemorySettingsView {
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
-/// recorder_model / recorder_provider 传**空串 = 清除**（回落同主模型）
+/// memory_manager_model / memory_manager_provider 传**空串 = 清除**（回落同主模型）
 /// ——与 base_url/api_key 同约定（双层 Option 的 null 在 serde_json 里
 /// 与"字段缺失"不可区分，无法表达清除）。
 #[derive(Deserialize, Debug, Default)]
@@ -145,8 +150,10 @@ pub struct MemoryUpdate {
     pub auto_extract: Option<bool>,
     pub organize_pacing: Option<String>,
     pub organize_chunk_tokens: Option<u64>,
-    pub recorder_model: Option<String>,
-    pub recorder_provider: Option<String>,
+    #[serde(rename = "recorderModel")]
+    pub memory_manager_model: Option<String>,
+    #[serde(rename = "recorderProvider")]
+    pub memory_manager_provider: Option<String>,
     pub tail_strategy: Option<String>,
     pub tail_window_turns: Option<u32>,
     pub collapse_enabled: Option<bool>,

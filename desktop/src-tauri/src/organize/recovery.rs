@@ -1,11 +1,11 @@
 //! 崩溃恢复（§5.3，自 organize/mod.rs 拆出守 400 行纪律）：启动扫描
-//! 投影里的在途整理任务并重投——任务与占位捆随会话持久化（§5.3 契约），
+//! 投影里的在途整理任务并重投——任务与占位章节随会话持久化（§5.3 契约），
 //! 材料从磁盘会话日志重读；会话已删 = 任务终局放弃（占位撤除，尾巴
 //! 留在原文流里，原文无损）。
 
 use std::sync::Arc;
 
-use memory_tree::{build_items, OrganizeReason, RecorderUsage};
+use memory_tree::{build_items, MemoryManagerUsage, OrganizeReason};
 
 use super::{Organizer, TaskPayload};
 
@@ -35,7 +35,7 @@ impl Organizer {
                     pending.from,
                     pending.to,
                     0,
-                    RecorderUsage::default(),
+                    MemoryManagerUsage::default(),
                     0,
                 ));
                 self.tree_store.save(&tree).ok();
@@ -51,7 +51,7 @@ impl Organizer {
                 pending.from,
                 pending.to,
                 0,
-                RecorderUsage::default(),
+                MemoryManagerUsage::default(),
                 0,
             ));
             self.tree_store.save(&tree).ok();

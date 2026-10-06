@@ -5,11 +5,11 @@
 //!
 //! 目录格式 = **稳定头行 + 追加清单行**（无闭合标签——闭合标签会随追加
 //! 移动，破坏「目录只增不改」的字节前缀纪律，kernel 测试实证后定稿）。
-//! 占位捆（整理在途）不进目录：占位行出现又消失 = 隐性前缀改写。
+//! 占位章节（整理在途）不进目录：占位行出现又消失 = 隐性前缀改写。
 //!
-//! 尾巴二档（§7.2）：A 边界结算（缺省）= `bundled_until` 排他游标切片；
-//! B 固定窗口 = `max(bundled_until, 最近 N 轮起点)`——窗口滑出的孤儿轮由
-//! organize 侧溢出整理（reason=window_overflow）及时归捆，绝不静默丢失。
+//! 尾巴二档（§7.2）：A 边界结算（缺省）= `chaptered_until` 排他游标切片；
+//! B 固定窗口 = `max(chaptered_until, 最近 N 轮起点)`——窗口滑出的孤儿轮由
+//! organize 侧溢出整理（reason=window_overflow）及时归章节，绝不静默丢失。
 //!
 //! `context_tokens`（§3.38② 用量口径）：树会话的用量环按组装后估算
 //! （目录 + 尾巴），不再用全量历史——runner `record_usage` 消费。
@@ -31,11 +31,11 @@ use crate::workspace::WorkspaceResolver;
 
 /// 目录头行（稳定字节——追加清单行不改它）。
 const DIRECTORY_HEADER: &str = "[memory tree] Earlier turns of this conversation were \
-organized into bundles (oldest first). Each line below is a table-of-contents entry; \
-to read a bundle, call memory_expand(bundle_id, level=1 for its summary or 2 for \
+organized into chapters (oldest first). Each line below is a table-of-contents entry; \
+to read a chapter, call memory_expand(chapter_id, level=1 for its summary or 2 for \
 its full transcript).";
 
-/// 捆 id 数值序（`b2` < `b10`——BTreeMap 字典序会倒，M3 view 同款排序）。
+/// 章节 id 数值序（`b2` < `b10`——BTreeMap 字典序会倒，M3 view 同款排序）。
 fn numeric_id(id: &str) -> u64 {
     id.strip_prefix('b')
         .and_then(|s| s.parse::<u64>().ok())
@@ -60,22 +60,22 @@ pub(crate) fn window_start_event(events: &[SessionEvent], turns: u32) -> usize {
     }
 }
 
-/// 目录文本：非占位且完全在尾巴边界之前的捆，按创建序排清单。
-/// 只增不改的支撑：捆集合单调增长、id 不复用、标题稳定（M5 用户编辑 =
+/// 目录文本：非占位且完全在尾巴边界之前的章节，按创建序排清单。
+/// 只增不改的支撑：章节集合单调增长、id 不复用、标题稳定（M5 用户编辑 =
 /// 显式变更接受失效）。
 fn directory_text(tree: &MemoryTree, before_event: usize) -> String {
-    let mut rows: Vec<&memory_tree::MemoryBundle> = tree
-        .bundles
+    let mut rows: Vec<&memory_tree::MemoryChapter> = tree
+        .chapters
         .values()
         .filter(|b| !b.pending && b.event_range.1 < before_event)
         .collect();
-    rows.sort_by_key(|b| (b.created_at, numeric_id(&b.bundle_id.0)));
+    rows.sort_by_key(|b| (b.created_at, numeric_id(&b.chapter_id.0)));
     if rows.is_empty() {
         return String::new();
     }
     let mut out = String::from(DIRECTORY_HEADER);
     for b in rows {
-        out.push_str(&format!("\n- {}: {}", b.bundle_id.0, b.title));
+        out.push_str(&format!("\n- {}: {}", b.chapter_id.0, b.title));
     }
     out
 }
@@ -130,15 +130,15 @@ impl TreeAssembler {
         let (strategy, turns) = self.settings.tail_config();
         match strategy {
             TailStrategy::Boundary => {
-                let dir = directory_text(tree, tree.bundled_until);
-                (tree.bundled_until, dir)
+                let dir = directory_text(tree, tree.chaptered_until);
+                (tree.chaptered_until, dir)
             }
             TailStrategy::Window => {
                 let start = match disk {
                     Some(events) => window_start_event(events, turns),
                     None => window_start_event(&self.disk_events(&tree.session_id), turns),
                 };
-                let from = tree.bundled_until.max(start);
+                let from = tree.chaptered_until.max(start);
                 let dir = directory_text(tree, from);
                 (from, dir)
             }
@@ -178,7 +178,7 @@ impl TreeContextSource for TreeAssembler {
         Some(TreePlan {
             directory,
             tail_from_event: from,
-            collapsed_bundles: tree.collapsed_ids(),
+            collapsed_chapters: tree.collapsed_ids(),
         })
     }
 }

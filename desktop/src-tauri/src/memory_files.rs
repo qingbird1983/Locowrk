@@ -106,9 +106,9 @@ impl MemoryFiles {
     }
 }
 
-/// tree.md 渲染（设计 §2.1：每捆一节 + 摘要 + 隐性指针注释；会话小节
-/// 分组）。会话 = `##`、捆 = `###`（捆号数值序——BTreeMap 字典序会把
-/// b10 排到 b2 前，M3 同纪律）。占位捆不进人读层（宁缺勿假）。
+/// tree.md 渲染（设计 §2.1：每章节一节 + 摘要 + 隐性指针注释；会话小节
+/// 分组）。会话 = `##`、章节 = `###`（章节号数值序——BTreeMap 字典序会把
+/// b10 排到 b2 前，M3 同纪律）。占位章节不进人读层（宁缺勿假）。
 pub fn render_tree_md(workspace: &str, sessions: &[(String, String, &MemoryTree)]) -> String {
     let heading = if workspace.is_empty() {
         "未归属会话".to_string()
@@ -121,13 +121,13 @@ pub fn render_tree_md(workspace: &str, sessions: &[(String, String, &MemoryTree)
         heading
     ));
     for (sid, title, tree) in sessions {
-        let mut bundles: Vec<&memory_tree::MemoryBundle> =
-            tree.bundles.values().filter(|b| !b.pending).collect();
-        if bundles.is_empty() {
+        let mut chapters: Vec<&memory_tree::MemoryChapter> =
+            tree.chapters.values().filter(|b| !b.pending).collect();
+        if chapters.is_empty() {
             continue;
         }
-        bundles.sort_by_key(|b| {
-            b.bundle_id
+        chapters.sort_by_key(|b| {
+            b.chapter_id
                 .0
                 .strip_prefix('b')
                 .and_then(|n| n.parse::<u64>().ok())
@@ -140,8 +140,12 @@ pub fn render_tree_md(workspace: &str, sessions: &[(String, String, &MemoryTree)
                 TREE_TITLE_CHARS
             )
         ));
-        for b in bundles {
-            out.push_str(&format!("\n### {} · {}\n\n", b.bundle_id.0, b.title.trim()));
+        for b in chapters {
+            out.push_str(&format!(
+                "\n### {} · {}\n\n",
+                b.chapter_id.0,
+                b.title.trim()
+            ));
             out.push_str(b.summary.trim());
             out.push_str("\n\n");
             out.push_str(&format!(
@@ -154,7 +158,7 @@ pub fn render_tree_md(workspace: &str, sessions: &[(String, String, &MemoryTree)
 }
 
 /// 单工作区同步：读投影 + 旁车标题 → 渲染 → 带人改保护落盘。返回是否
-/// 真的写入。全部树都无实捆（影子期尾巴会话）= 跳过。
+/// 真的写入。全部树都无实章节（影子期尾巴会话）= 跳过。
 pub fn sync_workspace_tree_md(
     files: &MemoryFiles,
     store: &TreeStore,
@@ -162,10 +166,10 @@ pub fn sync_workspace_tree_md(
     workspace: &str,
 ) -> Result<bool, String> {
     let rows = store.scan_workspace(workspace);
-    let has_real_bundle = rows
+    let has_real_chapter = rows
         .iter()
-        .any(|(t, _, _)| t.bundles.values().any(|b| !b.pending));
-    if !has_real_bundle {
+        .any(|(t, _, _)| t.chapters.values().any(|b| !b.pending));
+    if !has_real_chapter {
         return Ok(false);
     }
     let titles: std::collections::HashMap<String, String> = crate::session_log::list(sessions_dir)

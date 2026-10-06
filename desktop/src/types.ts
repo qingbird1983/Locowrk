@@ -400,9 +400,9 @@ export interface DeveloperView {
   organizeReboundK: number;
   /** 反弹熔断 m（连续 m 次 → 暂停本会话自动整理）。 */
   organizeReboundM: number;
-  /** 记录员单次调用超时（秒）。 */
+  /** 记忆管理器单次调用超时（秒）。 */
   recorderTimeoutSecs: number;
-  /** 记录员重试次数（仍失败 → 规则切分降级）。 */
+  /** 记忆管理器重试次数（仍失败 → 规则切分降级）。 */
   recorderMaxRetries: number;
   /** 规则切分块（token，5K–50K 缺省 20K）。 */
   ruleChunkTokens: number;
@@ -470,7 +470,7 @@ export interface MemorySettingsView {
   organizePacing: string;
   /** 增量块 X（token，增量档触发线，10K–200K 缺省 50K）。 */
   organizeChunkTokens: number;
-  /** 会话记录员模型（树 v2 §5.2；null = 同主模型）。 */
+  /** 记忆管理器模型（树 v2 §5.2；null = 同主模型）。 */
   recorderModel: string | null;
   recorderProvider: string | null;
   /** M4 尾巴策略（boundary = A 边界结算缺省 / window = B 固定窗口）。 */
@@ -617,8 +617,8 @@ export interface TreeDebug {
   exists: boolean;
   workspace: string;
   sessionId: string;
-  bundledUntil: number;
-  bundleCount: number;
+  chapteredUntil: number;
+  chapterCount: number;
   tailEvents: number;
   tailTokensEst: number;
   anchorTokens: number;
@@ -640,9 +640,10 @@ export interface TreeOrganizeRecord {
   status: string;
   from: number;
   to: number;
-  bundles: number;
-  recorderInput: number;
-  recorderOutput: number;
+  chapters: number;
+  /** wire = snake_case（OrganizeRecord 无 camelCase 改名，历史兼容）。 */
+  manager_input: number;
+  manager_output: number;
   durationMs: number;
 }
 
@@ -652,16 +653,16 @@ export interface TreeOrganizeRecord {
 export interface TreeSummaryView {
   workspace: string;
   sessionId: string;
-  bundleCount: number;
-  bundledUntil: number;
+  chapterCount: number;
+  chapteredUntil: number;
   pending: boolean;
   pausedAuto: boolean;
   updatedMs: number;
 }
 
-/** 一捆（只读：L0 标题 / L1 摘要 / L2 事件区间；source 如实 recorder|rule）。 */
-export interface TreeBundleView {
-  bundleId: string;
+/** 一章节（只读：L0 标题 / L1 摘要 / L2 事件区间；source 如实 recorder|rule）。 */
+export interface TreeChapterView {
+  chapterId: string;
   title: string;
   summary: string;
   source: string;
@@ -671,17 +672,17 @@ export interface TreeBundleView {
   eventTo: number;
 }
 
-/** 选中会话的捆清单（memory_tree_bundles；投影缺/坏 = exists=false）。 */
-export interface TreeBundlesView {
+/** 选中会话的章节清单（memory_tree_chapters；投影缺/坏 = exists=false）。 */
+export interface TreeChaptersView {
   exists: boolean;
   workspace: string;
   sessionId: string;
-  bundledUntil: number;
+  chapteredUntil: number;
   pausedAuto: boolean;
-  bundles: TreeBundleView[];
+  chapters: TreeChapterView[];
 }
 
-/** 原文切片行（与记录员材料同形；index = 会话日志事件位）。 */
+/** 原文切片行（与记忆管理器材料同形；index = 会话日志事件位）。 */
 export type TreeOriginalKind = "user" | "assistant" | "tool_call" | "tool_result";
 export interface TreeOriginalItem {
   index: number;
@@ -693,7 +694,7 @@ export interface TreeOriginalItem {
 export interface OrganizeDonePayload {
   sessionId: string;
   users: number;
-  bundles: number;
+  chapters: number;
   mode: "recorder" | "rule";
   status: "ok" | "degraded";
   reason: string;

@@ -113,7 +113,7 @@ impl SettingsStore {
                 next.memory.handoff_update = h;
             }
             // M2 记忆树整理三键（树 v2 §4.3/§5.2/§15）：节奏白名单 +
-            // 增量块区间 + 记录员模型（空串按清除处理，回落同主模型）
+            // 增量块区间 + 记忆管理器模型（空串按清除处理，回落同主模型）
             if let Some(p) = u.organize_pacing {
                 if !super::memory::ORGANIZE_PACING_VALUES.contains(&p.as_str()) {
                     return Err(format!("整理节奏 {p:?} 非法（可选 batch / incremental）"));
@@ -130,13 +130,13 @@ impl SettingsStore {
                 }
                 next.memory.organize_chunk_tokens = n;
             }
-            // 记录员模型（空串 = 清除，回落同主模型；与 base_url/api_key
+            // 记忆管理器模型（空串 = 清除，回落同主模型；与 base_url/api_key
             // 同约定——双层 Option 的 null 在 JSON 里无法表达清除）
-            if let Some(m) = u.recorder_model {
-                next.memory.recorder_model = (!m.trim().is_empty()).then_some(m);
+            if let Some(m) = u.memory_manager_model {
+                next.memory.memory_manager_model = (!m.trim().is_empty()).then_some(m);
             }
-            if let Some(p) = u.recorder_provider {
-                next.memory.recorder_provider = (!p.trim().is_empty()).then_some(p);
+            if let Some(p) = u.memory_manager_provider {
+                next.memory.memory_manager_provider = (!p.trim().is_empty()).then_some(p);
             }
             // M4 尾巴策略 + collapse（树 v2 §7.2/§8.3/§15）：策略白名单 +
             // 窗口轮数区间 + 收起阈值区间
@@ -301,25 +301,25 @@ impl SettingsStore {
                 }
                 next.developer.organize_rebound_m = m;
             }
-            if let Some(secs) = u.recorder_timeout_secs {
-                if !super::developer::RECORDER_TIMEOUT_SECS_RANGE.contains(&secs) {
+            if let Some(secs) = u.memory_manager_timeout_secs {
+                if !super::developer::MANAGER_TIMEOUT_SECS_RANGE.contains(&secs) {
                     return Err(format!(
-                        "记录员超时 {secs}s 超出范围（{}–{} 秒）",
-                        super::developer::RECORDER_TIMEOUT_SECS_RANGE.start(),
-                        super::developer::RECORDER_TIMEOUT_SECS_RANGE.end()
+                        "记忆管理器超时 {secs}s 超出范围（{}–{} 秒）",
+                        super::developer::MANAGER_TIMEOUT_SECS_RANGE.start(),
+                        super::developer::MANAGER_TIMEOUT_SECS_RANGE.end()
                     ));
                 }
-                next.developer.recorder_timeout_secs = secs;
+                next.developer.memory_manager_timeout_secs = secs;
             }
-            if let Some(n) = u.recorder_max_retries {
-                if !super::developer::RECORDER_MAX_RETRIES_RANGE.contains(&n) {
+            if let Some(n) = u.memory_manager_max_retries {
+                if !super::developer::MANAGER_MAX_RETRIES_RANGE.contains(&n) {
                     return Err(format!(
-                        "记录员重试次数 {n} 超出范围（{}–{}）",
-                        super::developer::RECORDER_MAX_RETRIES_RANGE.start(),
-                        super::developer::RECORDER_MAX_RETRIES_RANGE.end()
+                        "记忆管理器重试次数 {n} 超出范围（{}–{}）",
+                        super::developer::MANAGER_MAX_RETRIES_RANGE.start(),
+                        super::developer::MANAGER_MAX_RETRIES_RANGE.end()
                     ));
                 }
-                next.developer.recorder_max_retries = n;
+                next.developer.memory_manager_max_retries = n;
             }
             if let Some(n) = u.rule_chunk_tokens {
                 if !super::developer::RULE_CHUNK_TOKENS_RANGE.contains(&n) {

@@ -1,6 +1,6 @@
-//! 捆（MemoryBundle，树 v2 §3/§17）：L0 标题 / L1 摘要 / L2 事件引用，
+//! 章节（MemoryChapter，树 v2 §3/§17）：L0 标题 / L1 摘要 / L2 事件引用，
 //! 原文一个字不存。`pending` / `source` 是实现追加字段（serde default，
-//! 旧投影文件兼容）——`pending` 标占位捆（§5.3 异步整理期），`source`
+//! 旧投影文件兼容）——`pending` 标占位章节（§5.3 异步整理期），`source`
 //! 标生成方式（recorder / rule / placeholder，质量抽查与 A/B 用）。
 
 use serde::{Deserialize, Serialize};
@@ -10,15 +10,17 @@ pub type EventId = usize;
 
 /// 树节点标识（`b1`、`b2` …顺序分配；root 见 `tree::ROOT_ID`）。
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct BundleId(pub String);
+pub struct ChapterId(pub String);
 
-/// 一捆：标签 + 摘要 + 指向原文的事件区间。
+/// 一章节：标签 + 摘要 + 指向原文的事件区间。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MemoryBundle {
-    pub bundle_id: BundleId,
-    pub parent: Option<BundleId>,
-    pub children: Vec<BundleId>,
-    /// L0（~10 token；记录员生成或规则切分取首条用户消息前 20 字）。
+pub struct MemoryChapter {
+    /// **落盘兼容**：字段改名 bundle_id → chapter_id，旧投影走 alias 读回。
+    #[serde(alias = "bundle_id")]
+    pub chapter_id: ChapterId,
+    pub parent: Option<ChapterId>,
+    pub children: Vec<ChapterId>,
+    /// L0（~10 token；记忆管理器生成或规则切分取首条用户消息前 20 字）。
     pub title: String,
     pub title_edited_by_user: bool,
     /// L1（~200 token；用户编辑后 `summary_edited_by_user` 置真，自动层
@@ -30,7 +32,7 @@ pub struct MemoryBundle {
     pub created_at: i64,
     pub keywords: Vec<String>,
     pub token_count: u32,
-    /// 占位捆（任务在途，§5.3）：记录员产出后整捆替换。
+    /// 占位章节（任务在途，§5.3）：记忆管理器产出后整章节替换。
     #[serde(default)]
     pub pending: bool,
     /// recorder / rule / placeholder。
@@ -40,15 +42,15 @@ pub struct MemoryBundle {
     /// M4 惰性加载记账：自动收起（§8.3）按它挑「最早展开」。
     #[serde(default)]
     pub expanded_at: Option<i64>,
-    /// 收起时刻（Unix 毫秒；None = 未收起）：组装侧把该捆已展开的工具
+    /// 收起时刻（Unix 毫秒；None = 未收起）：组装侧把该章节已展开的工具
     /// 结果替换为收起桩（§8.3 空间急救；再次 expand 自动解除）。
     #[serde(default)]
     pub collapsed_at: Option<i64>,
 }
 
-/// 记录员（或规则切分）的一条产出：系统校验后才落成捆。
+/// 记忆管理器（或规则切分）的一条产出：系统校验后才落成章节。
 #[derive(Debug, Clone, PartialEq)]
-pub struct BundleDraft {
+pub struct ChapterDraft {
     pub title: String,
     pub summary: String,
     pub event_range: (EventId, EventId),
@@ -56,14 +58,14 @@ pub struct BundleDraft {
 
 /// 标题硬上限：提示词要 10–20 字，校验层放宽到 40 防截断误杀。
 pub const TITLE_MAX_CHARS: usize = 40;
-/// 摘要硬上限（200 字是给记录员的软约束，这里是防垃圾灌爆的硬钳）。
+/// 摘要硬上限（200 字是给记忆管理器的软约束，这里是防垃圾灌爆的硬钳）。
 pub const SUMMARY_MAX_CHARS: usize = 2000;
 
-impl MemoryBundle {
-    /// 从草稿落捆（调用方已校验区间合法性）。
-    pub fn from_draft(id: BundleId, draft: &BundleDraft, source: &str, now_ms: i64) -> Self {
+impl MemoryChapter {
+    /// 从草稿落章节（调用方已校验区间合法性）。
+    pub fn from_draft(id: ChapterId, draft: &ChapterDraft, source: &str, now_ms: i64) -> Self {
         Self {
-            bundle_id: id,
+            chapter_id: id,
             parent: None,
             children: Vec::new(),
             title: draft.title.clone(),
@@ -82,7 +84,7 @@ impl MemoryBundle {
     }
 
     /// memory_expand 记账（M4）：刷新展开时刻并解除收起（§8.3「再次展开
-    /// 自动解除收起」）。占位捆忽略（不可展开）。
+    /// 自动解除收起」）。占位章节忽略（不可展开）。
     pub fn mark_expanded(&mut self, now_ms: i64) {
         if self.pending {
             return;
@@ -92,7 +94,7 @@ impl MemoryBundle {
     }
 
     /// memory_collapse 记账（M4 §8.3）：置收起时刻（保留 expanded_at 作
-    /// 展开史——自动收起挑选只看未收起者）。占位捆 / 从未展开 = 忽略。
+    /// 展开史——自动收起挑选只看未收起者）。占位章节 / 从未展开 = 忽略。
     pub fn mark_collapsed(&mut self, now_ms: i64) {
         if self.pending || self.expanded_at.is_none() {
             return;
@@ -107,13 +109,13 @@ pub fn sanitize_draft(
     title: &str,
     summary: &str,
     range: (EventId, EventId),
-) -> Option<BundleDraft> {
+) -> Option<ChapterDraft> {
     let title = title.trim();
     let summary = summary.trim();
     if title.is_empty() || summary.is_empty() || range.0 > range.1 {
         return None;
     }
-    Some(BundleDraft {
+    Some(ChapterDraft {
         title: title.chars().take(TITLE_MAX_CHARS).collect(),
         summary: summary.chars().take(SUMMARY_MAX_CHARS).collect(),
         event_range: range,
@@ -141,7 +143,7 @@ mod tests {
     #[test]
     fn bundle_from_draft_marks_source() {
         let d = sanitize_draft("标题", "摘要", (3, 9)).unwrap();
-        let b = MemoryBundle::from_draft(BundleId("b1".into()), &d, "recorder", 42);
+        let b = MemoryChapter::from_draft(ChapterId("b1".into()), &d, "recorder", 42);
         assert_eq!(b.event_range, (3, 9));
         assert_eq!(b.source, "recorder");
         assert!(!b.pending);

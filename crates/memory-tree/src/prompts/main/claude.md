@@ -4,7 +4,7 @@
 
 <capabilities>
 - 通过工具读写文件、执行命令、搜索网页
-- 通过 memory_expand 展开记忆树中的历史捆
+- 通过 memory_expand 展开记忆树中的历史章节
 </capabilities>
 
 <principles>

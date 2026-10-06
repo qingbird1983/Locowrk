@@ -18,12 +18,12 @@ pub const ORGANIZE_REBOUND_K_DEFAULT: u32 = 3;
 pub const ORGANIZE_REBOUND_M_DEFAULT: u32 = 3;
 /// 熔断 k/m 合法区间（1–10）。
 pub const ORGANIZE_REBOUND_RANGE: std::ops::RangeInclusive<u32> = 1..=10;
-/// 记录员单次调用超时缺省（秒）。
-pub const RECORDER_TIMEOUT_SECS_DEFAULT: u64 = 60;
-pub const RECORDER_TIMEOUT_SECS_RANGE: std::ops::RangeInclusive<u64> = 10..=600;
-/// 记录员重试次数缺省（仍失败 → 规则切分降级，§5.4）。
-pub const RECORDER_MAX_RETRIES_DEFAULT: u32 = 3;
-pub const RECORDER_MAX_RETRIES_RANGE: std::ops::RangeInclusive<u32> = 0..=10;
+/// 记忆管理器单次调用超时缺省（秒）。
+pub const MANAGER_TIMEOUT_SECS_DEFAULT: u64 = 60;
+pub const MANAGER_TIMEOUT_SECS_RANGE: std::ops::RangeInclusive<u64> = 10..=600;
+/// 记忆管理器重试次数缺省（仍失败 → 规则切分降级，§5.4）。
+pub const MANAGER_MAX_RETRIES_DEFAULT: u32 = 3;
+pub const MANAGER_MAX_RETRIES_RANGE: std::ops::RangeInclusive<u32> = 0..=10;
 /// 规则切分块缺省与合法区间（§15：5K–50K 缺省 20K）。
 pub const RULE_CHUNK_TOKENS_DEFAULT: u64 = 20_000;
 pub const RULE_CHUNK_TOKENS_RANGE: std::ops::RangeInclusive<u64> = 5_000..=50_000;
@@ -58,10 +58,13 @@ pub struct DeveloperSettings {
     pub organize_rebound_k: u32,
     /// 记忆树反弹熔断 m（连续 m 次 → 暂停自动整理，1–10 缺省 3）。
     pub organize_rebound_m: u32,
-    /// 记录员单次调用超时（秒，10–600 缺省 60）。
-    pub recorder_timeout_secs: u64,
-    /// 记录员重试次数（0–10 缺省 3；仍失败 → 规则切分）。
-    pub recorder_max_retries: u32,
+    /// 记忆管理器单次调用超时（秒，10–600 缺省 60）；重试次数（0–10 缺省
+    /// 3，仍失败 → 规则切分）。**持久化键沿用历史名 recorderTimeoutSecs/
+    /// recorderMaxRetries**（设置文件兼容；术语注见《Memory Tree Design v2》）。
+    #[serde(rename = "recorderTimeoutSecs")]
+    pub memory_manager_timeout_secs: u64,
+    #[serde(rename = "recorderMaxRetries")]
+    pub memory_manager_max_retries: u32,
     /// 规则切分块（token，5K–50K 缺省 20K）。
     pub rule_chunk_tokens: u64,
     /// 会话缺省整理模式（M4 §3.38①：未显式设置会话的生效档；M5 数据
@@ -79,8 +82,8 @@ impl Default for DeveloperSettings {
             cache_hit_alert_percent: CACHE_HIT_ALERT_PERCENT_DEFAULT,
             organize_rebound_k: ORGANIZE_REBOUND_K_DEFAULT,
             organize_rebound_m: ORGANIZE_REBOUND_M_DEFAULT,
-            recorder_timeout_secs: RECORDER_TIMEOUT_SECS_DEFAULT,
-            recorder_max_retries: RECORDER_MAX_RETRIES_DEFAULT,
+            memory_manager_timeout_secs: MANAGER_TIMEOUT_SECS_DEFAULT,
+            memory_manager_max_retries: MANAGER_MAX_RETRIES_DEFAULT,
             rule_chunk_tokens: RULE_CHUNK_TOKENS_DEFAULT,
             default_organizer: DEFAULT_ORGANIZER_DEFAULT.into(),
         }
@@ -98,8 +101,10 @@ pub struct DeveloperView {
     pub cache_hit_alert_percent: u8,
     pub organize_rebound_k: u32,
     pub organize_rebound_m: u32,
-    pub recorder_timeout_secs: u64,
-    pub recorder_max_retries: u32,
+    #[serde(rename = "recorderTimeoutSecs")]
+    pub memory_manager_timeout_secs: u64,
+    #[serde(rename = "recorderMaxRetries")]
+    pub memory_manager_max_retries: u32,
     pub rule_chunk_tokens: u64,
     pub default_organizer: String,
 }
@@ -115,8 +120,10 @@ pub struct DeveloperUpdate {
     pub cache_hit_alert_percent: Option<u8>,
     pub organize_rebound_k: Option<u32>,
     pub organize_rebound_m: Option<u32>,
-    pub recorder_timeout_secs: Option<u64>,
-    pub recorder_max_retries: Option<u32>,
+    #[serde(rename = "recorderTimeoutSecs")]
+    pub memory_manager_timeout_secs: Option<u64>,
+    #[serde(rename = "recorderMaxRetries")]
+    pub memory_manager_max_retries: Option<u32>,
     pub rule_chunk_tokens: Option<u64>,
     pub default_organizer: Option<String>,
 }

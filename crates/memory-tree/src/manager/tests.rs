@@ -56,19 +56,19 @@ fn parse_rejects_gaps_overlap_and_out_of_range() {
     let gap = r#"[{"title":"a","summary":"s","event_range":[0,1]},{"title":"b","summary":"s","event_range":[3,5]}]"#;
     assert!(matches!(
         parse_drafts(gap, &items()),
-        Err(RecorderError::Coverage(_))
+        Err(MemoryManagerError::Coverage(_))
     ));
 
     let short = r#"[{"title":"a","summary":"s","event_range":[0,3]}]"#;
     assert!(matches!(
         parse_drafts(short, &items()),
-        Err(RecorderError::Coverage(_))
+        Err(MemoryManagerError::Coverage(_))
     ));
 
     let overlap = r#"[{"title":"a","summary":"s","event_range":[0,3]},{"title":"b","summary":"s","event_range":[2,5]}]"#;
     assert!(matches!(
         parse_drafts(overlap, &items()),
-        Err(RecorderError::Coverage(_))
+        Err(MemoryManagerError::Coverage(_))
     ));
 }
 
@@ -76,19 +76,19 @@ fn parse_rejects_gaps_overlap_and_out_of_range() {
 fn parse_rejects_garbage_and_empty_entries() {
     assert_eq!(
         parse_drafts("我觉得挺好看的", &items()),
-        Err(RecorderError::NoJson)
+        Err(MemoryManagerError::NoJson)
     );
     let empty_title = r#"[{"title":"  ","summary":"s","event_range":[0,5]}]"#;
     assert!(matches!(
         parse_drafts(empty_title, &items()),
-        Err(RecorderError::BadEntry(_))
+        Err(MemoryManagerError::BadEntry(_))
     ));
     assert!(parse_drafts("[]", &items()).is_err());
 }
 
 #[test]
 fn rule_split_respects_user_boundaries_and_fills_all() {
-    // chunk 极小：每条 User 边界断捆；结果必须铺满全部材料项
+    // chunk 极小：每条 User 边界断章节；结果必须铺满全部材料项
     let drafts = rule_split_drafts(&items(), 1);
     assert_eq!(drafts.len(), 3);
     assert_eq!(drafts[0].event_range, (0, 1));
@@ -108,7 +108,7 @@ fn rule_split_big_chunk_makes_single_bundle() {
 #[test]
 fn rule_split_never_splits_tool_pairing() {
     // 用户消息后跟一长串工具往返（无 User 边界）：预算超时也只能等到
-    // 下一处 User 才断——捆内不出现半截工具对
+    // 下一处 User 才断——章节内不出现半截工具对
     let events = vec![
         SessionEvent::UserMessage {
             content: "开头".into(),
@@ -137,7 +137,7 @@ fn rule_split_never_splits_tool_pairing() {
     let its = build_items(&events, 0);
     let drafts = rule_split_drafts(&its, 1);
     assert_eq!(drafts.len(), 2);
-    // 第一捆必须覆盖到 User(下标3) 之前——工具对（下标 1–2）完整在内
+    // 第一章节必须覆盖到 User(下标3) 之前——工具对（下标 1–2）完整在内
     assert_eq!(drafts[0].event_range, (its[0].event, its[2].event));
     assert_eq!(drafts[1].event_range, (its[3].event, its[3].event));
     assert_eq!(its[3].kind, MaterialKind::User);
@@ -149,10 +149,10 @@ fn prompt_family_matching_and_verbatim_clause_present() {
     assert_eq!(family_of("DeepSeek-V4"), "deepseek");
     assert_eq!(family_of("qwen3-max"), "qwen");
     assert_eq!(family_of("gpt-x"), "default");
-    // §5.6 逐字保留纪律在所有记录员提示词里
+    // §5.6 逐字保留纪律在所有记忆管理器提示词里
     for f in ["default", "claude", "deepseek", "qwen"] {
         assert!(
-            recorder_prompt(f).contains("逐字保留"),
+            manager_prompt(f).contains("逐字保留"),
             "recorder/{f}.md 缺逐字保留纪律"
         );
         assert!(!main_prompt(f).is_empty());

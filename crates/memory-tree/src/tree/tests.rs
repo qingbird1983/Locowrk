@@ -1,13 +1,13 @@
-//! tree 单测：占位捆生命周期 / 反弹熔断 k/m / 历史封顶。
+//! tree 单测：占位章节生命周期 / 反弹熔断 k/m / 历史封顶。
 
 use super::*;
 
-fn bundle(id: &str, range: (EventId, EventId)) -> MemoryBundle {
-    MemoryBundle {
-        bundle_id: BundleId(id.into()),
+fn chapter(id: &str, range: (EventId, EventId)) -> MemoryChapter {
+    MemoryChapter {
+        chapter_id: ChapterId(id.into()),
         parent: None,
         children: Vec::new(),
-        title: format!("捆{id}"),
+        title: format!("章节{id}"),
         title_edited_by_user: false,
         summary: "摘要".into(),
         summary_edited_by_user: false,
@@ -30,9 +30,9 @@ fn record(status: &str) -> OrganizeRecord {
         status: status.into(),
         from: 0,
         to: 9,
-        bundles: 1,
-        recorder_input: 100,
-        recorder_output: 50,
+        chapters: 1,
+        manager_input: 100,
+        manager_output: 50,
         duration_ms: 10,
     }
 }
@@ -41,17 +41,17 @@ fn record(status: &str) -> OrganizeRecord {
 fn placeholder_then_apply_replaces_and_advances() {
     let mut t = MemoryTree::new("ws", "s1");
     let task = t.insert_placeholder(10, 19, 5).expect("任务可建");
-    assert_eq!(t.bundle_count(), 1);
-    assert!(t.bundles[&task.placeholder_id.0].pending);
+    assert_eq!(t.chapter_count(), 1);
+    assert!(t.chapters[&task.placeholder_id.0].pending);
 
     t.apply_organized(
-        vec![bundle("b1", (10, 14)), bundle("b2", (15, 19))],
+        vec![chapter("b1", (10, 14)), chapter("b2", (15, 19))],
         19,
         record("ok"),
     );
     assert!(t.pending.is_none());
-    assert_eq!(t.bundle_count(), 2); // 占位捆已撤
-    assert_eq!(t.bundled_until, 20);
+    assert_eq!(t.chapter_count(), 2); // 占位章节已撤
+    assert_eq!(t.chaptered_until, 20);
     assert_eq!(t.history.len(), 1);
 }
 
@@ -68,8 +68,8 @@ fn drop_pending_removes_placeholder_keeps_cursor() {
     let task = t.insert_placeholder(0, 4, 1).unwrap();
     t.drop_pending(record("aborted"));
     assert!(t.pending.is_none());
-    assert!(!t.bundles.contains_key(&task.placeholder_id.0));
-    assert_eq!(t.bundled_until, 0); // 游标不动，尾巴留待下次
+    assert!(!t.chapters.contains_key(&task.placeholder_id.0));
+    assert_eq!(t.chaptered_until, 0); // 游标不动，尾巴留待下次
 }
 
 #[test]
@@ -127,9 +127,9 @@ fn history_is_capped() {
 }
 
 #[test]
-fn bundle_ids_skip_past_max() {
+fn chapter_ids_skip_past_max() {
     let mut t = MemoryTree::new("ws", "s1");
-    t.apply_organized(vec![bundle("b3", (0, 1))], 1, record("ok"));
+    t.apply_organized(vec![chapter("b3", (0, 1))], 1, record("ok"));
     let task = t.insert_placeholder(2, 3, 1).unwrap();
     assert_eq!(task.placeholder_id.0, "b4");
 }
@@ -138,25 +138,25 @@ fn bundle_ids_skip_past_max() {
 fn expand_collapse_lifecycle_and_auto_pick() {
     let mut t = MemoryTree::new("ws", "s1");
     t.apply_organized(
-        vec![bundle("b1", (0, 4)), bundle("b2", (5, 9))],
+        vec![chapter("b1", (0, 4)), chapter("b2", (5, 9))],
         9,
         record("ok"),
     );
 
     // 未展开不可收起；展开后可收起；再展开解除收起
     assert!(!t.mark_collapsed("b1", 10), "从未展开不可收");
-    assert!(!t.mark_expanded("nope", 10), "未知捆拒绝");
+    assert!(!t.mark_expanded("nope", 10), "未知章节拒绝");
     assert!(t.mark_expanded("b2", 10));
     assert!(t.mark_expanded("b1", 20));
     assert_eq!(t.oldest_expanded().as_deref(), Some("b2"), "最早展开优先");
     assert!(t.mark_collapsed("b2", 30));
-    assert!(t.bundles["b2"].collapsed_at.is_some());
+    assert!(t.chapters["b2"].collapsed_at.is_some());
     assert_eq!(t.oldest_expanded().as_deref(), Some("b1"), "已收起不再入选");
     assert!(t.mark_expanded("b2", 40), "再展开解除收起");
-    assert!(t.bundles["b2"].collapsed_at.is_none());
+    assert!(t.chapters["b2"].collapsed_at.is_none());
     assert!(t.collapsed_ids().is_empty());
 
-    // 占位捆不可展开 / 收起
+    // 占位章节不可展开 / 收起
     let task = t.insert_placeholder(20, 29, 50).unwrap();
     assert!(!t.mark_expanded(&task.placeholder_id.0, 60));
     assert!(!t.mark_collapsed(&task.placeholder_id.0, 60));
@@ -165,8 +165,35 @@ fn expand_collapse_lifecycle_and_auto_pick() {
 #[test]
 fn bundle_fields_serde_default_backcompat() {
     // 旧投影文件无 expanded_at / collapsed_at 字段 = None（零迁移）
-    let raw = r#"{"bundle_id":"b1","parent":null,"children":[],"title":"t","title_edited_by_user":false,"summary":"s","summary_edited_by_user":false,"event_range":[0,1],"created_at":1,"keywords":[],"token_count":0,"pending":false,"source":"recorder"}"#;
-    let b: MemoryBundle = serde_json::from_str(raw).unwrap();
+    let raw = r#"{"chapter_id":"b1","parent":null,"children":[],"title":"t","title_edited_by_user":false,"summary":"s","summary_edited_by_user":false,"event_range":[0,1],"created_at":1,"keywords":[],"token_count":0,"pending":false,"source":"recorder"}"#;
+    let b: MemoryChapter = serde_json::from_str(raw).unwrap();
     assert_eq!(b.expanded_at, None);
     assert_eq!(b.collapsed_at, None);
+}
+
+#[test]
+fn old_projection_with_bundle_era_keys_loads_via_aliases() {
+    // 术语统一（2026-10-06）前的投影 JSON：bundles / bundled_until /
+    // bundle_id / recorder_input / recorder_output 旧键名必须经 serde
+    // alias 读回，绝不因改名丢历史（坏投影当不存在 = 数据丢失，禁止）。
+    let raw = r#"{
+        "schema_version": 1,
+        "workspace": "ws",
+        "session_id": "s1",
+        "root": "root",
+        "bundles": {
+            "b1": {"bundle_id":"b1","parent":null,"children":[],"title":"旧章节","title_edited_by_user":false,"summary":"旧摘要","summary_edited_by_user":false,"event_range":[0,3],"created_at":1,"keywords":[],"token_count":0,"source":"recorder"}
+        },
+        "bundled_until": 4,
+        "history": [
+            {"ts":1,"reason":"manual","mode":"recorder","status":"ok","from":0,"to":3,"bundles":2,"recorder_input":120,"recorder_output":60,"duration_ms":9}
+        ]
+    }"#;
+    let t: MemoryTree = serde_json::from_str(raw).unwrap();
+    assert_eq!(t.chapters.len(), 1, "bundles 旧键读回 chapters");
+    assert_eq!(t.chapters["b1"].chapter_id.0, "b1", "bundle_id 旧键读回");
+    assert_eq!(t.chaptered_until, 4, "bundled_until 旧键读回");
+    assert_eq!(t.history[0].chapters, 2, "台账 bundles 旧键读回");
+    assert_eq!(t.history[0].manager_input, 120, "recorder_input 旧键读回");
+    assert_eq!(t.history[0].manager_output, 60, "recorder_output 旧键读回");
 }

@@ -18,8 +18,8 @@ pub struct TreeDebug {
     pub exists: bool,
     pub workspace: String,
     pub session_id: String,
-    pub bundled_until: usize,
-    pub bundle_count: usize,
+    pub chaptered_until: usize,
+    pub chapter_count: usize,
     pub tail_events: usize,
     pub tail_tokens_est: u64,
     pub anchor_tokens: u64,
@@ -49,15 +49,15 @@ impl Organizer {
         let mem = self.settings.memory();
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let tree = self.load_tree(&workspace, session_id);
-        let items = build_items(session.events(), tree.bundled_until);
+        let items = build_items(session.events(), tree.chaptered_until);
         let (anchor_tokens, anchor_source) = Self::anchor(session);
         let pacing = Pacing::parse(&mem.organize_pacing);
         TreeDebug {
             exists: self.tree_store.load(&workspace, session_id).is_some(),
             workspace,
             session_id: session_id.to_string(),
-            bundled_until: tree.bundled_until,
-            bundle_count: tree.bundle_count(),
+            chaptered_until: tree.chaptered_until,
+            chapter_count: tree.chapter_count(),
             tail_events: items.len(),
             tail_tokens_est: items.iter().map(|i| i.tokens).sum(),
             anchor_tokens,

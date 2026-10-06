@@ -65,15 +65,15 @@ fn record(to: usize) -> memory_tree::OrganizeRecord {
         status: "ok".into(),
         from: 0,
         to,
-        bundles: 1,
-        recorder_input: 0,
-        recorder_output: 0,
+        chapters: 1,
+        manager_input: 0,
+        manager_output: 0,
         duration_ms: 1,
     }
 }
 
 /// 前置：十二轮会话写盘（模式 B 窗口起点要读盘）+ 前 20 个事件（十轮）
-/// 归捆 b1（bundled_until = 20）——尾巴只剩最后两轮。
+/// 归章节 b1（chaptered_until = 20）——尾巴只剩最后两轮。
 fn seed_tree(root: &std::path::Path, ws: &str, session_id: &str) {
     let session = long_session();
     let dir = root.join("sessions");
@@ -84,9 +84,9 @@ fn seed_tree(root: &std::path::Path, ws: &str, session_id: &str) {
     )
     .unwrap();
     let mut tree = memory_tree::MemoryTree::new(ws, session_id);
-    let drafts = vec![memory_tree::sanitize_draft("捆一", "摘要一", (0, 19)).unwrap()];
-    let bundles = tree.build_bundles(&drafts, "recorder", 1);
-    tree.apply_organized(bundles, 19, record(19));
+    let drafts = vec![memory_tree::sanitize_draft("章节一", "摘要一", (0, 19)).unwrap()];
+    let chapters = tree.build_chapters(&drafts, "recorder", 1);
+    tree.apply_organized(chapters, 19, record(19));
     memory_tree::TreeStore::new(root).save(&tree).unwrap();
 }
 
@@ -101,7 +101,7 @@ async fn legacy_sessions_plan_none_and_context_none() {
 }
 
 #[tokio::test]
-async fn tree_mode_a_slices_at_bundled_until_and_lists_directory() {
+async fn tree_mode_a_slices_at_chaptered_until_and_lists_directory() {
     let root = temp_root("modea");
     let sid = "s1";
     let ws = r"F:\ws\demo";
@@ -113,11 +113,11 @@ async fn tree_mode_a_slices_at_bundled_until_and_lists_directory() {
     );
 
     let plan = asm.plan(sid).await.expect("树会话有计划");
-    assert_eq!(plan.tail_from_event, 20, "A 档 = bundled_until 排他游标");
+    assert_eq!(plan.tail_from_event, 20, "A 档 = chaptered_until 排他游标");
     assert!(plan.directory.starts_with("[memory tree]"), "稳定头行");
-    assert!(plan.directory.contains("- b1: 捆一"), "捆清单行");
+    assert!(plan.directory.contains("- b1: 章节一"), "章节清单行");
     assert!(!plan.directory.contains("</"), "无闭合标签（追加不破前缀）");
-    assert!(plan.collapsed_bundles.is_empty());
+    assert!(plan.collapsed_chapters.is_empty());
 
     // 组装后口径 = 目录 + 尾巴四条消息，显著小于全量二十四条
     let s = long_session();
@@ -128,7 +128,7 @@ async fn tree_mode_a_slices_at_bundled_until_and_lists_directory() {
 }
 
 #[tokio::test]
-async fn tree_mode_b_window_floors_at_bundled_until() {
+async fn tree_mode_b_window_floors_at_chaptered_until() {
     let root = temp_root("modeb");
     let sid = "s1";
     let ws = r"F:\ws\demo";
@@ -141,7 +141,7 @@ async fn tree_mode_b_window_floors_at_bundled_until() {
         ),
         OrganizerMode::Tree,
     );
-    // 窗口 1 轮：起点 = 最后一条 User（事件 22）；bundled_until=20 → from=22
+    // 窗口 1 轮：起点 = 最后一条 User（事件 22）；chaptered_until=20 → from=22
     let plan = asm.plan(sid).await.expect("计划在场");
     assert_eq!(plan.tail_from_event, 22, "窗口起点在游标之后取窗口起点");
 
@@ -155,7 +155,7 @@ async fn tree_mode_b_window_floors_at_bundled_until() {
         OrganizerMode::Tree,
     );
     let plan5 = asm5.plan(sid).await.expect("计划在场");
-    assert_eq!(plan5.tail_from_event, 20, "max(bundled_until, 窗口起点)");
+    assert_eq!(plan5.tail_from_event, 20, "max(chaptered_until, 窗口起点)");
 }
 
 #[tokio::test]
@@ -174,7 +174,7 @@ async fn pending_bundles_never_enter_directory() {
         OrganizerMode::Tree,
     );
     let plan = asm.plan(sid).await.expect("计划在场");
-    assert!(!plan.directory.contains("对话 #"), "占位捆不进目录");
+    assert!(!plan.directory.contains("对话 #"), "占位章节不进目录");
     assert!(plan.directory.contains("b1"));
 }
 
@@ -196,7 +196,7 @@ async fn collapsed_ids_flow_into_plan() {
     );
     let plan = asm.plan(sid).await.expect("计划在场");
     assert_eq!(
-        plan.collapsed_bundles,
+        plan.collapsed_chapters,
         vec!["b1".to_string()],
         "收起清单随计划交给内核"
     );

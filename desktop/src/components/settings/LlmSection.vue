@@ -48,14 +48,14 @@ async function onSelectDefault(providerId: string, model: string) {
   }
 }
 
-// ---- M2 会话记录员（树 v2 §5.2）：与主模型同款更改浮层（模型选择器
+// ---- M2 记忆管理器（树 v2 §5.2）：与主模型同款更改浮层（模型选择器
 // 全站唯一实现——原 SettingsSelect 第二套形态，用户目检判同类多套）。
 // 空选 = 跟随主模型：两键都传空串清除（后端约定，见 MemoryUpdate）。
-const recorderMenuOpen = ref(false);
-const recorderAnchorEl = ref<HTMLElement | null>(null);
+const managerMenuOpen = ref(false);
+const managerAnchorEl = ref<HTMLElement | null>(null);
 const recorderProvider = computed(() => settings.view?.memory?.recorderProvider ?? "");
 const recorderModel = computed(() => settings.view?.memory?.recorderModel ?? "");
-const recorderLabel = computed(() => {
+const managerLabel = computed(() => {
   if (!recorderProvider.value || !recorderModel.value) return t("settings.modelDefaultSame");
   const p = providers.value.find((x) => x.id === recorderProvider.value);
   return `${p?.label ?? "—"} · ${recorderModel.value}`;
@@ -189,28 +189,28 @@ function closeSetup() {
         </button>
       </SettingsRow>
 
-      <!-- M2 会话记录员（§5.2）：与主模型行同款「当前值 + 更改」结构，
+      <!-- M2 记忆管理器（§5.2）：与主模型行同款「当前值 + 更改」结构，
            清单 = 同一个 DefaultModelMenu（+「跟随主模型」常驻档） -->
       <SettingsRow
-        :title="t('settings.recorderModel')"
-        :hint="t('settings.recorderModelHint')"
+        :title="t('settings.memoryManagerModel')"
+        :hint="t('settings.memoryManagerModelHint')"
       >
         <template #detail>
           <span
             class="mt-1 block text-[length:var(--lw-fs-12)]"
             :class="recorderProvider && recorderModel ? 'text-ink-3' : 'text-ink-4'"
           >
-            {{ recorderLabel }}
+            {{ managerLabel }}
           </span>
         </template>
         <button
-          ref="recorderAnchorEl"
+          ref="managerAnchorEl"
           type="button"
           class="lw-btn flex items-center gap-1 px-3 py-1.5 text-xs text-ink-1"
           :disabled="enabledProviders.length === 0"
           :aria-haspopup="'listbox'"
-          :aria-expanded="recorderMenuOpen"
-          @click="recorderMenuOpen = !recorderMenuOpen"
+          :aria-expanded="managerMenuOpen"
+          @click="managerMenuOpen = !managerMenuOpen"
         >
           {{ t("settings.modelDefaultChange") }}
           <Icon name="chevronDown" :size="14" />
@@ -263,16 +263,16 @@ function closeSetup() {
       @close="defaultMenuOpen = false"
     />
 
-    <!-- 记录员更改浮层：与主模型同一实现；空 active = 「跟随主模型」档选中 -->
+    <!-- 记忆管理器更改浮层：与主模型同一实现；空 active = 「跟随主模型」档选中 -->
     <DefaultModelMenu
-      v-if="recorderMenuOpen"
+      v-if="managerMenuOpen"
       :providers="providers"
       :active-id="recorderProvider"
       :active-model="recorderModel"
-      :anchor="recorderAnchorEl"
+      :anchor="managerAnchorEl"
       :none-label="t('settings.modelDefaultSame')"
       @select="onSelectRecorder"
-      @close="recorderMenuOpen = false"
+      @close="managerMenuOpen = false"
     />
 
     <ProviderSetupDialog

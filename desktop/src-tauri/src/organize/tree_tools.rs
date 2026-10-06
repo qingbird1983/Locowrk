@@ -42,20 +42,20 @@ fn expand_spec() -> &'static ToolSpec {
     static SPEC: OnceLock<ToolSpec> = OnceLock::new();
     SPEC.get_or_init(|| ToolSpec {
         name: "memory_expand".into(),
-        description: "Expand a bundle of this session's memory tree — older turns that were \
-                      organized out of the visible context. Pass the bundle_id from the table \
-                      of contents. level=1 returns the bundle's summary (~200 tokens); level=2 \
+        description: "Expand a chapter of this session's memory tree — older turns that were \
+                      organized out of the visible context. Pass the chapter_id from the table \
+                      of contents. level=1 returns the chapter's summary (~200 tokens); level=2 \
                       returns its full original transcript. The result is appended to the \
                       conversation and stays visible."
             .into(),
         schema: json!({
             "type": "object",
             "properties": {
-                "bundle_id": { "type": "string", "description": "bundle id from the memory tree directory (e.g. \"b2\")" },
+                "chapter_id": { "type": "string", "description": "chapter id from the memory tree directory (e.g. \"b2\")" },
                 "level": { "type": "integer", "minimum": 1, "maximum": 2,
                            "description": "1=summary, 2=full transcript" }
             },
-            "required": ["bundle_id", "level"]
+            "required": ["chapter_id", "level"]
         }),
         side_effect: SideEffect::Pure,
         exposure: Exposure::Always,
@@ -118,11 +118,11 @@ impl Tool for MemoryExpandTool {
                 "本会话不是记忆树整理模式（可在任务行菜单切换）",
             ));
         }
-        let bundle_id = args
-            .get("bundle_id")
+        let chapter_id = args
+            .get("chapter_id")
             .and_then(Value::as_str)
             .filter(|s| !s.trim().is_empty())
-            .ok_or_else(|| failed("memory_expand", "缺少 bundle_id".into()))?;
+            .ok_or_else(|| failed("memory_expand", "缺少 chapter_id".into()))?;
         let level = args.get("level").and_then(Value::as_u64).unwrap_or(1);
         if !(1..=2).contains(&level) {
             return Err(failed(
@@ -134,22 +134,22 @@ impl Tool for MemoryExpandTool {
         let tree = self
             .load_tree(&workspace, &session_id)
             .map_err(|e| failed("memory_expand", e))?;
-        let bundle = tree
-            .bundles
-            .get(bundle_id)
+        let chapter = tree
+            .chapters
+            .get(chapter_id)
             .filter(|b| !b.pending)
             .ok_or_else(|| {
                 failed(
                     "memory_expand",
-                    format!("捆 {bundle_id} 不存在（或整理在途）"),
+                    format!("章节 {chapter_id} 不存在（或整理在途）"),
                 )
             })?;
 
         let content = if level == 1 {
             json!({
-                "bundle_id": bundle_id,
-                "title": bundle.title,
-                "summary": bundle.summary,
+                "chapter_id": chapter_id,
+                "title": chapter.title,
+                "summary": chapter.summary,
             })
         } else {
             // level=2：原文切片（M3 view 同源：磁盘日志按 event_range 切，
@@ -159,25 +159,25 @@ impl Tool for MemoryExpandTool {
             let (session, _) = session_store::load_session(&path)
                 .map_err(|e| failed("memory_expand", format!("会话日志不可读: {e}")))?;
             let events = session.events();
-            let (from, to) = bundle.event_range;
+            let (from, to) = chapter.event_range;
             if from >= events.len() {
                 return Err(failed(
                     "memory_expand",
-                    format!("捆 {bundle_id} 区间越界（会话日志已截断？）"),
+                    format!("章节 {chapter_id} 区间越界（会话日志已截断？）"),
                 ));
             }
             let end = (to + 1).min(events.len());
             let items = build_items(&events[from..end], from);
             json!({
-                "bundle_id": bundle_id,
-                "title": bundle.title,
+                "chapter_id": chapter_id,
+                "title": chapter.title,
                 "transcript": transcript(&items),
             })
         };
 
         // 展开记账（解除收起 §8.3；写投影失败只影响自动收起的挑选，不拦读）
         let mut tree = tree;
-        tree.mark_expanded(bundle_id, now_ms());
+        tree.mark_expanded(chapter_id, now_ms());
         if let Err(e) = self.tree_store.save(&tree) {
             tracing::warn!("expanded_at 记账失败: {e}");
         }
@@ -191,18 +191,18 @@ fn collapse_spec() -> &'static ToolSpec {
     static SPEC: OnceLock<ToolSpec> = OnceLock::new();
     SPEC.get_or_init(|| ToolSpec {
         name: "memory_collapse".into(),
-        description: "Collapse an expanded bundle: its previously expanded content is replaced \
+        description: "Collapse an expanded chapter: its previously expanded content is replaced \
                       by a stub in the conversation to free context window space. NOTE: this \
                       rewrites the prompt prefix (a planned cache miss) — use it to relieve \
-                      window pressure, not to save cost. The bundle stays listed in the memory \
+                      window pressure, not to save cost. The chapter stays listed in the memory \
                       tree; call memory_expand to bring it back."
             .into(),
         schema: json!({
             "type": "object",
             "properties": {
-                "bundle_id": { "type": "string", "description": "bundle id previously expanded" }
+                "chapter_id": { "type": "string", "description": "chapter id previously expanded" }
             },
-            "required": ["bundle_id"]
+            "required": ["chapter_id"]
         }),
         side_effect: SideEffect::Compensable {
             undo_tool: "memory_expand".into(),
@@ -253,28 +253,28 @@ impl Tool for MemoryCollapseTool {
                 "本会话不是记忆树整理模式（可在任务行菜单切换）",
             ));
         }
-        let bundle_id = args
-            .get("bundle_id")
+        let chapter_id = args
+            .get("chapter_id")
             .and_then(Value::as_str)
             .filter(|s| !s.trim().is_empty())
-            .ok_or_else(|| failed("memory_collapse", "缺少 bundle_id".into()))?;
+            .ok_or_else(|| failed("memory_collapse", "缺少 chapter_id".into()))?;
         let workspace = (self.workspace_of)(&session_id).unwrap_or_default();
         let mut tree = self
             .tree_store
             .load(&workspace, &session_id)
             .unwrap_or_else(|| memory_tree::MemoryTree::new(&workspace, &session_id));
-        if !tree.mark_collapsed(bundle_id, now_ms()) {
+        if !tree.mark_collapsed(chapter_id, now_ms()) {
             return Err(failed(
                 "memory_collapse",
-                format!("捆 {bundle_id} 不存在或从未展开（无可收内容）"),
+                format!("章节 {chapter_id} 不存在或从未展开（无可收内容）"),
             ));
         }
         self.tree_store
             .save(&tree)
             .map_err(|e| failed("memory_collapse", e))?;
         Ok(json!({
-            "collapsed": bundle_id,
-            "note": "bundle content replaced by a stub in context; memory_expand brings it back"
+            "collapsed": chapter_id,
+            "note": "chapter content replaced by a stub in context; memory_expand brings it back"
         }))
     }
 }

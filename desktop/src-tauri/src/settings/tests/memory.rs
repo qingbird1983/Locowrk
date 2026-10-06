@@ -40,8 +40,8 @@ fn memory_defaults_legacy_compat_and_validation() {
                 auto_extract: Some(true),
                 organize_pacing: None,
                 organize_chunk_tokens: None,
-                recorder_model: None,
-                recorder_provider: None,
+                memory_manager_model: None,
+                memory_manager_provider: None,
                 tail_strategy: None,
                 tail_window_turns: None,
                 collapse_enabled: None,
@@ -111,18 +111,18 @@ fn memory_defaults_legacy_compat_and_validation() {
     std::fs::remove_dir_all(&root).ok();
 }
 
-// ---- M2 记忆树整理三键（树 v2 §4.3/§5.2/§15）：节奏 / 增量块 / 记录员 ----
+// ---- M2 记忆树整理三键（树 v2 §4.3/§5.2/§15）：节奏 / 增量块 / 记忆管理器 ----
 
 #[test]
 fn organize_keys_roundtrip_validation_and_bridge() {
     let root = temp_root("memory-organize");
     let store = SettingsStore::open(&root).unwrap();
-    // 缺省：batch / 50K / 记录员未配（同主模型）
+    // 缺省：batch / 50K / 记忆管理器未配（同主模型）
     let v = store.view().memory;
     assert_eq!(v.organize_pacing, "batch");
     assert_eq!(v.organize_chunk_tokens, 50_000);
-    assert!(v.recorder_model.is_none());
-    assert!(v.recorder_provider.is_none());
+    assert!(v.memory_manager_model.is_none());
+    assert!(v.memory_manager_provider.is_none());
     // 更新 + 磁盘往返（重开读回 = 永久保存的硬证明）
     store
         .update(
@@ -138,8 +138,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 auto_extract: None,
                 organize_pacing: Some("incremental".into()),
                 organize_chunk_tokens: Some(80_000),
-                recorder_model: Some("deepseek-flash".into()),
-                recorder_provider: Some("p1".into()),
+                memory_manager_model: Some("deepseek-flash".into()),
+                memory_manager_provider: Some("p1".into()),
                 tail_strategy: None,
                 tail_window_turns: None,
                 collapse_enabled: None,
@@ -160,8 +160,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
     let v = store.view().memory;
     assert_eq!(v.organize_pacing, "incremental");
     assert_eq!(v.organize_chunk_tokens, 80_000);
-    assert_eq!(v.recorder_model.as_deref(), Some("deepseek-flash"));
-    assert_eq!(v.recorder_provider.as_deref(), Some("p1"));
+    assert_eq!(v.memory_manager_model.as_deref(), Some("deepseek-flash"));
+    assert_eq!(v.memory_manager_provider.as_deref(), Some("p1"));
     // 校验：节奏白名单 / 增量块区间
     let err = store
         .update(
@@ -203,7 +203,7 @@ fn organize_keys_roundtrip_validation_and_bridge() {
         )
         .unwrap_err();
     assert!(err.contains("增量块"), "{err}");
-    // 记录员模型传空串 = 清除（回落同主模型）
+    // 记忆管理器模型传空串 = 清除（回落同主模型）
     store
         .update(
             None,
@@ -213,8 +213,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             Some(MemoryUpdate {
-                recorder_model: Some(String::new()),
-                recorder_provider: Some(String::new()),
+                memory_manager_model: Some(String::new()),
+                memory_manager_provider: Some(String::new()),
                 ..Default::default()
             }),
             None,
@@ -224,7 +224,7 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
         )
         .unwrap();
-    assert!(store.view().memory.recorder_model.is_none());
+    assert!(store.view().memory.memory_manager_model.is_none());
     std::fs::remove_dir_all(&root).ok();
 }
 

@@ -1,20 +1,20 @@
 <script setup lang="ts">
 /**
  * 记忆树（情景）区块（M3，UI shell §3.37①）：只读呈现树投影——会话
- * 切换器（memory_tree_sessions 扫描，最近更新降序）+ 捆列表（展开看
+ * 切换器（memory_tree_sessions 扫描，最近更新降序）+ 章节列表（展开看
  * L1 摘要 / 看原文）+ 本地搜索。零写操作（编辑/删除属 M5）；看原文与
- * 记录员材料同形同源（memory_tree_original，build_items 同一函数）。
+ * 记忆管理器材料同形同源（memory_tree_original，build_items 同一函数）。
  * 自持状态不牵动事实区；打开拉取不轮询（⑫/§3.36③ 同款）。
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { memoryTreeBundles, memoryTreeOriginal, memoryTreeSessions } from "../../lib/api";
+import { memoryTreeChapters, memoryTreeOriginal, memoryTreeSessions } from "../../lib/api";
 import { relativeTime } from "../../lib/format";
 import { workspaceDisplayName } from "../../lib/session-groups";
 import { useChatStore } from "../../stores/chat";
 import type {
-  TreeBundleView,
-  TreeBundlesView,
+  TreeChapterView,
+  TreeChaptersView,
   TreeOriginalItem,
   TreeSummaryView,
 } from "../../types";
@@ -24,14 +24,14 @@ const chat = useChatStore();
 
 const sessions = ref<TreeSummaryView[] | null>(null); // null = 加载中
 const selected = ref(""); // `${workspace}\u0000${sessionId}`
-const bundles = ref<TreeBundlesView | null>(null);
+const chapters = ref<TreeChaptersView | null>(null);
 const loadError = ref("");
 const search = ref("");
 
 /** 展开态（本地保持，切换会话重置；§3.28 只增不收回惯例的反面——
  * 换会话是换数据源，重置才诚实）。 */
 const expanded = ref<Set<string>>(new Set());
-/** 原文缓存：bundleId → 行（或错误文案）；只增不收回。 */
+/** 原文缓存：chapterId → 行（或错误文案）；只增不收回。 */
 const originals = ref<Map<string, TreeOriginalItem[]>>(new Map());
 const originalErrors = ref<Map<string, string>>(new Map());
 
@@ -40,12 +40,12 @@ function keyOf(s: TreeSummaryView): string {
 }
 
 /** 会话标题（侧栏同源；树在、会话已删 = 回退 id 前缀）。 */
-/** 选择器行：标题 · 项目 · N 捆（未归属跳过项目段，不留空段）。 */
+/** 选择器行：标题 · 项目 · N 章节（未归属跳过项目段，不留空段）。 */
 function optionText(s: TreeSummaryView): string {
   const parts = [titleOf(s)];
   const ws = workspaceDisplayName(s.workspace);
   if (ws) parts.push(ws);
-  parts.push(t("memory.treeSessionCount", { n: s.bundleCount }));
+  parts.push(t("memory.treeSessionCount", { n: s.chapterCount }));
   return parts.join(" · ");
 }
 
@@ -56,7 +56,7 @@ function titleOf(s: TreeSummaryView): string {
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
-  const list = bundles.value?.bundles ?? [];
+  const list = chapters.value?.chapters ?? [];
   if (!q) return list;
   return list.filter(
     (b) =>
@@ -70,7 +70,7 @@ async function loadSessions() {
     sessions.value = await memoryTreeSessions();
     const list = sessions.value;
     if (list.length === 0) {
-      bundles.value = null;
+      chapters.value = null;
       return;
     }
     // 缺省选中 = 当前会话（有树时），否则列表首项（§3.37①）
@@ -90,10 +90,10 @@ async function loadBundles() {
   originals.value = new Map();
   originalErrors.value = new Map();
   try {
-    bundles.value = await memoryTreeBundles(s.sessionId, s.workspace);
+    chapters.value = await memoryTreeChapters(s.sessionId, s.workspace);
   } catch (e) {
     loadError.value = String(e);
-    bundles.value = null;
+    chapters.value = null;
   }
 }
 
@@ -101,27 +101,27 @@ watch(selected, loadBundles);
 
 onMounted(loadSessions);
 
-function toggleExpand(b: TreeBundleView) {
+function toggleExpand(b: TreeChapterView) {
   const next = new Set(expanded.value);
-  if (next.has(b.bundleId)) {
-    next.delete(b.bundleId);
+  if (next.has(b.chapterId)) {
+    next.delete(b.chapterId);
   } else {
-    next.add(b.bundleId);
+    next.add(b.chapterId);
     void loadOriginal(b);
   }
   expanded.value = next;
 }
 
-async function loadOriginal(b: TreeBundleView) {
-  if (originals.value.has(b.bundleId) || originalErrors.value.has(b.bundleId))
+async function loadOriginal(b: TreeChapterView) {
+  if (originals.value.has(b.chapterId) || originalErrors.value.has(b.chapterId))
     return;
   const s = sessions.value?.find((x) => keyOf(x) === selected.value);
   if (!s) return;
   try {
-    const rows = await memoryTreeOriginal(s.sessionId, s.workspace, b.bundleId);
-    originals.value.set(b.bundleId, rows);
+    const rows = await memoryTreeOriginal(s.sessionId, s.workspace, b.chapterId);
+    originals.value.set(b.chapterId, rows);
   } catch (e) {
-    originalErrors.value.set(b.bundleId, String(e));
+    originalErrors.value.set(b.chapterId, String(e));
   }
 }
 
@@ -151,7 +151,7 @@ function originalRows(id: string): TreeOriginalItem[] {
 function sourceLabel(source: string): string {
   return t(
     source === "recorder"
-      ? "memory.sourceRecorder"
+      ? "memory.sourceMemoryManager"
       : source === "rule"
         ? "memory.sourceRule"
         : "memory.sourcePlaceholder",
@@ -214,7 +214,7 @@ function sourceLabel(source: string): string {
           />
         </div>
 
-        <!-- 捆列表（只读：展开摘要 / 看原文） -->
+        <!-- 章节列表（只读：展开摘要 / 看原文） -->
         <p
           v-if="filtered.length === 0"
           class="mt-2 text-[length:var(--lw-fs-11)] text-ink-5"
@@ -224,7 +224,7 @@ function sourceLabel(source: string): string {
         <ul v-else class="mt-2 space-y-2">
           <li
             v-for="b in filtered"
-            :key="b.bundleId"
+            :key="b.chapterId"
             class="rounded-[var(--lw-r-md)] bg-wash-1 px-4 py-3"
           >
             <!-- 头行：折叠 + L0 标题 + 来源 + 时间 -->
@@ -233,7 +233,7 @@ function sourceLabel(source: string): string {
               @click="toggleExpand(b)"
             >
               <span class="w-3 shrink-0 font-mono text-[length:var(--lw-fs-10)] text-ink-5">
-                {{ expanded.has(b.bundleId) ? "▾" : "▸" }}
+                {{ expanded.has(b.chapterId) ? "▾" : "▸" }}
               </span>
               <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink-1">
                 {{ b.title }}
@@ -250,7 +250,7 @@ function sourceLabel(source: string): string {
             </button>
 
             <!-- 展开体：L1 摘要全文 + 来源徽章 + 原文 -->
-            <template v-if="expanded.has(b.bundleId)">
+            <template v-if="expanded.has(b.chapterId)">
               <p class="mt-1.5 whitespace-pre-wrap break-words pl-5 text-xs text-ink-3">
                 {{ b.summary }}
               </p>
@@ -268,10 +268,10 @@ function sourceLabel(source: string): string {
                 </span>
               </div>
 
-              <!-- 原文切片（与记录员材料同形；只读行渲染） -->
-              <div v-if="originals.has(b.bundleId)" class="mt-2 space-y-1 pl-5">
+              <!-- 原文切片（与记忆管理器材料同形；只读行渲染） -->
+              <div v-if="originals.has(b.chapterId)" class="mt-2 space-y-1 pl-5">
                 <p
-                  v-for="row in originalRows(b.bundleId)"
+                  v-for="row in originalRows(b.chapterId)"
                   :key="row.index"
                   class="break-words text-[length:var(--lw-fs-11)] leading-relaxed"
                   :class="
@@ -288,12 +288,12 @@ function sourceLabel(source: string): string {
                 </p>
               </div>
               <p
-                v-else-if="originalErrors.has(b.bundleId)"
+                v-else-if="originalErrors.has(b.chapterId)"
                 class="mt-2 pl-5 text-[length:var(--lw-fs-11)] text-danger"
               >
                 {{
                   t("memory.originalFailed", {
-                    reason: originalErrors.get(b.bundleId),
+                    reason: originalErrors.get(b.chapterId),
                   })
                 }}
               </p>

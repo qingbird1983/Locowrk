@@ -3,7 +3,7 @@
 //! 本模块只在轮次收束后旁路观察会话日志，产物只落 `memory-tree/` 投影。
 //!
 //! 结构：`plan_auto` / `plan_manual`（同步决策，可测——含触发判定与反弹
-//! 裁决，会写占位捆与熔断账本进投影文件）→ `run_task`（异步管道：记录员
+//! 裁决，会写占位章节与熔断账本进投影文件）→ `run_task`（异步管道：记忆管理器
 //! 调用 × 超时重试 → 输出校验 → 不合规转规则切分 → 落树）。调用方持有
 //! 会话锁时传 `&Session`（命令层 / agent_chat / 调度引擎三入口同形）。
 
@@ -15,9 +15,9 @@ use std::time::Duration;
 use serde::Serialize;
 
 use memory_tree::{
-    build_items, family_of, parse_drafts, recorder_prompt, rule_split_drafts, should_auto_organize,
-    AnchorSource, MaterialItem, MemoryTree, OrganizeReason, OrganizeRecord, Pacing,
-    ReboundDecision, RecorderClient, RecorderUsage, TreeStore, TriggerInput,
+    build_items, family_of, manager_prompt, parse_drafts, rule_split_drafts, should_auto_organize,
+    AnchorSource, MaterialItem, MemoryManagerClient, MemoryManagerUsage, MemoryTree,
+    OrganizeReason, OrganizeRecord, Pacing, ReboundDecision, TreeStore, TriggerInput,
 };
 use session_store::{Session, SessionEvent};
 
@@ -35,10 +35,10 @@ mod recovery;
 mod tree_tools;
 mod view;
 pub use assemble::TreeAssembler;
-pub use client::AppLlmRecorder;
+pub use client::AppLlmMemoryManager;
 pub use debug::TreeDebug;
 pub use tree_tools::{MemoryCollapseTool, MemoryExpandTool};
-pub use view::{OriginalItem, TreeBundlesView, TreeSummaryView};
+pub use view::{OriginalItem, TreeChaptersView, TreeSummaryView};
 
 /// `lw://organize-done` 载荷（M3 §3.37③：整理收束系统消息，三路同源）。
 #[derive(Serialize, Clone)]
@@ -46,7 +46,7 @@ pub use view::{OriginalItem, TreeBundlesView, TreeSummaryView};
 pub struct OrganizeDoneEvent {
     pub session_id: String,
     pub users: u64,
-    pub bundles: usize,
+    pub chapters: usize,
     /// recorder | rule（rule = 降级，前端走如实文案）。
     pub mode: String,
     /// ok | degraded。
@@ -73,7 +73,7 @@ pub type OrganizeNotifier = Arc<dyn Fn(&'static str, serde_json::Value) + Send +
 pub struct Organizer {
     settings: Arc<SettingsStore>,
     sessions_dir: PathBuf,
-    client: Arc<dyn RecorderClient>,
+    client: Arc<dyn MemoryManagerClient>,
     workspace_of: WorkspaceResolver,
     tree_store: TreeStore,
     /// F1 人类层：整理落树后同步项目 tree.md（人读面，文件化设计 §3）。
@@ -97,7 +97,7 @@ pub(crate) struct TaskPayload {
 }
 
 /// 管道收束台账（run_task 返回值，观测日志用）。
-type Outcome = (String, String, usize, RecorderUsage);
+type Outcome = (String, String, usize, MemoryManagerUsage);
 
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
@@ -114,7 +114,7 @@ impl Organizer {
     pub fn new(
         settings: Arc<SettingsStore>,
         sessions_dir: PathBuf,
-        client: Arc<dyn RecorderClient>,
+        client: Arc<dyn MemoryManagerClient>,
         workspace_of: WorkspaceResolver,
         data_root: PathBuf,
         modes: Arc<OrganizerModeStore>,
@@ -138,7 +138,7 @@ impl Organizer {
         &self,
         session_id: &str,
         users: u64,
-        bundles: usize,
+        chapters: usize,
         mode: &str,
         status: &str,
         reason: OrganizeReason,
@@ -146,7 +146,7 @@ impl Organizer {
         let ev = OrganizeDoneEvent {
             session_id: session_id.into(),
             users,
-            bundles,
+            chapters,
             mode: mode.into(),
             status: status.into(),
             reason: reason.as_str().into(),
@@ -203,8 +203,8 @@ impl Organizer {
         status: &str,
         from: usize,
         to: usize,
-        bundles: usize,
-        usage: RecorderUsage,
+        chapters: usize,
+        usage: MemoryManagerUsage,
         duration_ms: u64,
     ) -> OrganizeRecord {
         OrganizeRecord {
@@ -214,9 +214,9 @@ impl Organizer {
             status: status.into(),
             from,
             to,
-            bundles,
-            recorder_input: usage.input,
-            recorder_output: usage.output,
+            chapters,
+            manager_input: usage.input,
+            manager_output: usage.output,
             duration_ms,
         }
     }
@@ -230,17 +230,17 @@ impl Organizer {
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let mut tree = self.load_tree(&workspace, session_id);
         // M4 模式 B 溢出整理（§3.38②）：树会话 + 固定窗口档，窗口滑出的
-        // 孤儿轮（bundled_until < 窗口起点）既不在尾巴也不在目录，必须及时
-        // 归捆——例行维护：**先于熔断判定**（熔断暂停的是阈值/增量烧钱信号，
+        // 孤儿轮（chaptered_until < 窗口起点）既不在尾巴也不在目录，必须及时
+        // 归章节——例行维护：**先于熔断判定**（熔断暂停的是阈值/增量烧钱信号，
         // 不是固定节奏）且**不记反弹**（管道按 reason 跳过 note_organized）。
         if self.modes.mode_of(Some(session_id)) == OrganizerMode::Tree
             && self.settings.tail_config().0 == TailStrategy::Window
             && tree.pending.is_none()
         {
             let start = window_start_event(session.events(), mem.tail_window_turns);
-            if tree.bundled_until < start && start > 0 {
+            if tree.chaptered_until < start && start > 0 {
                 let events = session.events();
-                let items = build_items(&events[tree.bundled_until..start], tree.bundled_until);
+                let items = build_items(&events[tree.chaptered_until..start], tree.chaptered_until);
                 if !items.is_empty() {
                     let users_total = memory_tree::user_count(session.events());
                     return Some(TaskPayload {
@@ -256,7 +256,7 @@ impl Organizer {
         if tree.paused_auto || tree.pending.is_some() {
             return None;
         }
-        let items = build_items(session.events(), tree.bundled_until);
+        let items = build_items(session.events(), tree.chaptered_until);
         let tail_tokens: u64 = items.iter().map(|i| i.tokens).sum();
         let (anchor_tokens, anchor_source) = Self::anchor(session);
         let reason = should_auto_organize(&TriggerInput {
@@ -306,7 +306,7 @@ impl Organizer {
         if tree.pending.is_some() {
             return Err("已有整理任务在途".into());
         }
-        let items = build_items(session.events(), tree.bundled_until);
+        let items = build_items(session.events(), tree.chaptered_until);
         if items.is_empty() {
             return Err("没有可整理的尾巴".into());
         }
@@ -333,7 +333,7 @@ impl Organizer {
     }
 
     /// 自动收起（M4 §8.3，缺省关）：树会话 + collapse 开启 + 占用 ≥ 阈值
-    /// → 收起最早展开的捆（一次一个，逐步泄压）。窗口未知不猜口径；
+    /// → 收起最早展开的章节（一次一个，逐步泄压）。窗口未知不猜口径；
     /// legacy 会话零参与。
     fn auto_collapse(&self, session: &Session, session_id: &str) {
         if self.modes.mode_of(Some(session_id)) != OrganizerMode::Tree {
@@ -362,7 +362,7 @@ impl Organizer {
         if self.tree_store.save(&tree).is_ok() {
             self.sync_tree_md(&workspace);
             tracing::info!(
-                session = %session_id, bundle = %id,
+                session = %session_id, chapter = %id,
                 "自动收起（占用 {anchor} / {window} ≥ {threshold_pct}%）"
             );
         }
@@ -426,8 +426,8 @@ impl Organizer {
             .expect("inflight poisoned")
             .remove(&task.session_id);
         match outcome {
-            Ok((mode, status, bundles, usage)) => tracing::info!(
-                session = %task.session_id, %mode, %status, bundles,
+            Ok((mode, status, chapters, usage)) => tracing::info!(
+                session = %task.session_id, %mode, %status, chapters,
                 input = usage.input, output = usage.output,
                 ms = elapsed_ms(&started), "整理收束"
             ),
@@ -435,7 +435,7 @@ impl Organizer {
         }
     }
 
-    /// 管道本体：占位捆持久化 → 记录员（超时 × 重试）→ 校验 → 降级规则
+    /// 管道本体：占位章节持久化 → 记忆管理器（超时 × 重试）→ 校验 → 降级规则
     /// 切分 → 落树。占位先落盘（崩在任意点 = 重启重投，§5.3）。
     async fn pipeline(
         self: &Arc<Self>,
@@ -448,7 +448,7 @@ impl Organizer {
         let from = task.items.first().unwrap().event;
         let to = task.items.last().unwrap().event;
         // pending 在位 = 本次运行正是它的执行者（崩溃重投，§5.3）——直接
-        // 续跑；否则登记占位捆并落盘（此后任意点崩溃都可重投）。
+        // 续跑；否则登记占位章节并落盘（此后任意点崩溃都可重投）。
         if tree.pending.is_none() {
             if tree.insert_placeholder(from, to, now_ms()).is_none() {
                 return Err("占位登记失败（并发整理）".into());
@@ -456,19 +456,22 @@ impl Organizer {
             self.tree_store.save(&tree)?;
         }
 
-        // 记录员调用：模型家族匹配提示词（§6.2；未配记录员模型 = 主模型），
+        // 记忆管理器调用：模型家族匹配提示词（§6.2；未配记忆管理器模型 = 主模型），
         // 超时 + 重试（§5.4）
         let model = mem
-            .recorder_model
+            .memory_manager_model
             .clone()
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| self.settings.llm().model);
-        let system = recorder_prompt(family_of(&model));
+        let system = manager_prompt(family_of(&model));
         let user = memory_tree::transcript(&task.items);
-        let model_override = mem.recorder_model.clone().filter(|s| !s.trim().is_empty());
-        let timeout = Duration::from_secs(dev.recorder_timeout_secs.max(1));
+        let model_override = mem
+            .memory_manager_model
+            .clone()
+            .filter(|s| !s.trim().is_empty());
+        let timeout = Duration::from_secs(dev.memory_manager_timeout_secs.max(1));
         let mut last_err = String::new();
-        for _attempt in 0..=dev.recorder_max_retries {
+        for _attempt in 0..=dev.memory_manager_max_retries {
             match tokio::time::timeout(
                 timeout,
                 self.client
@@ -476,18 +479,18 @@ impl Organizer {
             )
             .await
             {
-                Err(_) => last_err = "记录员超时".into(),
+                Err(_) => last_err = "记忆管理器超时".into(),
                 Ok(Err(e)) => last_err = e,
                 Ok(Ok((raw, usage))) => match parse_drafts(&raw, &task.items) {
                     Ok(drafts) => {
                         // 单写者补漏（走查实抓 F1 暴露的 M4 竞态）：收起可在
-                        // 记录员调用期间落盘——重载最新投影再产出，防旧快照
-                        // 回写抹掉 collapsed_at（占位捆已持久化，重载即在）。
+                        // 记忆管理器调用期间落盘——重载最新投影再产出，防旧快照
+                        // 回写抹掉 collapsed_at（占位章节已持久化，重载即在）。
                         tree = self.load_tree(&task.workspace, &task.session_id);
-                        let bundles = tree.build_bundles(&drafts, "recorder", now_ms());
-                        let n = bundles.len();
+                        let chapters = tree.build_chapters(&drafts, "recorder", now_ms());
+                        let n = chapters.len();
                         tree.apply_organized(
-                            bundles,
+                            chapters,
                             to,
                             Self::record(
                                 task.reason,
@@ -528,10 +531,10 @@ impl Organizer {
         // 重载同上——降级路径同样不得用旧快照回写。
         tree = self.load_tree(&task.workspace, &task.session_id);
         let drafts = rule_split_drafts(&task.items, dev.rule_chunk_tokens);
-        let bundles = tree.build_bundles(&drafts, "rule", now_ms());
-        let n = bundles.len();
+        let chapters = tree.build_chapters(&drafts, "rule", now_ms());
+        let n = chapters.len();
         tree.apply_organized(
-            bundles,
+            chapters,
             to,
             Self::record(
                 task.reason,
@@ -540,7 +543,7 @@ impl Organizer {
                 from,
                 to,
                 n,
-                RecorderUsage::default(),
+                MemoryManagerUsage::default(),
                 elapsed_ms(&started),
             ),
         );
@@ -550,7 +553,7 @@ impl Organizer {
         }
         self.tree_store.save(&tree)?;
         self.sync_tree_md(&task.workspace);
-        tracing::warn!(session = %task.session_id, "记录员不可用（{last_err}），已降级规则切分");
+        tracing::warn!(session = %task.session_id, "记忆管理器不可用（{last_err}），已降级规则切分");
         self.notify_done(
             &task.session_id,
             task.users_total,
@@ -563,7 +566,7 @@ impl Organizer {
             "rule".into(),
             "degraded".into(),
             n,
-            RecorderUsage::default(),
+            MemoryManagerUsage::default(),
         ))
     }
 }
@@ -571,7 +574,7 @@ impl Organizer {
 #[cfg(test)]
 mod tests;
 
-/// 组装点构造（state/init_state 调用）：记录员客户端 = 设置路由的兼容
+/// 组装点构造（state/init_state 调用）：记忆管理器客户端 = 设置路由的兼容
 /// 直呼；㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）；
 /// 事件推送闭包由 state 组装（emit 调用留在 state/mod.rs，见其注释）；
 /// M4 起持整理模式存储（溢出整理 / 自动收起的会话门控）。
@@ -586,7 +589,7 @@ pub fn build_organizer(
     Arc::new(Organizer::new(
         Arc::clone(&settings),
         sessions_dir,
-        Arc::new(AppLlmRecorder::new(settings)),
+        Arc::new(AppLlmMemoryManager::new(settings)),
         workspace_of,
         data_root,
         modes,

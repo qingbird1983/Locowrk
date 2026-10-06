@@ -177,7 +177,7 @@ impl Kernel {
         // 投影：只看游标之前的消息（回退后不含已撤销轮次，§4.2）。
         // M4 树会话切流（树 v2 §11.2 阶段 2）：组装源在册且会话为树模式 →
         // 消息切片到未整理尾巴（起点兜底前进到 User 边界防半轮开头）+
-        // 展开过的收起捆换桩文本，L0 目录交决策环挂 system 尾部。legacy
+        // 展开过的收起章节换桩文本，L0 目录交决策环挂 system 尾部。legacy
         // 会话 / 组装源未注册（headless）= 全量投影零变化。
         let mut messages = session.derive_messages();
         let mut tree_directory: Option<String> = None;
@@ -189,7 +189,7 @@ impl Kernel {
                         tail_user_start(session.events(), plan.tail_from_event).unwrap_or(end);
                     messages = collapse_expanded(
                         session.derive_messages_from(from),
-                        &plan.collapsed_bundles,
+                        &plan.collapsed_chapters,
                     );
                     tree_directory = Some(plan.directory);
                 }

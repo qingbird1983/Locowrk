@@ -1,5 +1,5 @@
-//! 记录员材料（§4.4「交给记录员什么」）：事件切片 → 带行号标记的转录
-//! 文本。行号 = **材料项下标**（0 起，逐项连续）——记录员按它切分，
+//! 记忆管理器材料（§4.4「交给记忆管理器什么」）：事件切片 → 带行号标记的转录
+//! 文本。行号 = **材料项下标**（0 起，逐项连续）——记忆管理器按它切分，
 //! 系统再翻回事件位存 `event_range`（流内过程事件如 LlmUsage 不进材料，
 //! 直接用事件位做切分空间会被它们打碎连续性）。
 //!
@@ -9,9 +9,9 @@
 use serde::{Deserialize, Serialize};
 use session_store::SessionEvent;
 
-use crate::bundle::EventId;
+use crate::chapter::EventId;
 
-/// 工具参数 / 结果在材料里的截断宽度（记录员只需要轮廓，原文在流里）。
+/// 工具参数 / 结果在材料里的截断宽度（记忆管理器只需要轮廓，原文在流里）。
 const TOOL_CLIP: usize = 400;
 /// 助手正文的截断宽度（用户消息永不截——逐字保留纪律 §5.6）。
 const ASSISTANT_CLIP: usize = 6000;
@@ -28,7 +28,7 @@ pub enum MaterialKind {
 /// 一条材料项：`event` 是它在会话日志里的绝对位（L2 引用的锚点）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct MaterialItem {
-    /// 材料内下标（0 起）——记录员的切分空间。
+    /// 材料内下标（0 起）——记忆管理器的切分空间。
     pub index: usize,
     /// 会话日志事件位。
     pub event: EventId,

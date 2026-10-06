@@ -40,8 +40,8 @@ fn dev_update_full(
             cache_hit_alert_percent: alert_percent,
             organize_rebound_k: None,
             organize_rebound_m: None,
-            recorder_timeout_secs: None,
-            recorder_max_retries: None,
+            memory_manager_timeout_secs: None,
+            memory_manager_max_retries: None,
             rule_chunk_tokens: None,
             default_organizer: None,
         }),
@@ -132,8 +132,8 @@ fn organize_developer_keys_roundtrip_and_validation() {
     let v = store.view().developer;
     assert_eq!(v.organize_rebound_k, 3);
     assert_eq!(v.organize_rebound_m, 3);
-    assert_eq!(v.recorder_timeout_secs, 60);
-    assert_eq!(v.recorder_max_retries, 3);
+    assert_eq!(v.memory_manager_timeout_secs, 60);
+    assert_eq!(v.memory_manager_max_retries, 3);
     assert_eq!(v.rule_chunk_tokens, 20_000);
     // 更新 + 磁盘往返
     store
@@ -157,8 +157,8 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 cache_hit_alert_percent: None,
                 organize_rebound_k: Some(5),
                 organize_rebound_m: Some(2),
-                recorder_timeout_secs: Some(120),
-                recorder_max_retries: Some(1),
+                memory_manager_timeout_secs: Some(120),
+                memory_manager_max_retries: Some(1),
                 rule_chunk_tokens: Some(30_000),
                 default_organizer: None,
             }),
@@ -169,22 +169,23 @@ fn organize_developer_keys_roundtrip_and_validation() {
     let v = store.view().developer;
     assert_eq!(v.organize_rebound_k, 5);
     assert_eq!(v.organize_rebound_m, 2);
-    assert_eq!(v.recorder_timeout_secs, 120);
-    assert_eq!(v.recorder_max_retries, 1);
+    assert_eq!(v.memory_manager_timeout_secs, 120);
+    assert_eq!(v.memory_manager_max_retries, 1);
     assert_eq!(v.rule_chunk_tokens, 30_000);
     // 校验：k/m 1–10、超时 10–600、重试 0–10、规则切分块 5K–50K
     for (field, val, keyword) in [
         ("organize_rebound_k", 11, "反弹熔断 k"),
         ("organize_rebound_m", 0, "反弹熔断 m"),
-        ("recorder_timeout_secs", 5, "记录员超时"),
-        ("recorder_max_retries", 11, "记录员重试"),
+        ("memory_manager_timeout_secs", 5, "记忆管理器超时"),
+        ("memory_manager_max_retries", 11, "记忆管理器重试"),
         ("rule_chunk_tokens", 1_000, "规则切分块"),
     ] {
         let u = DeveloperUpdate {
             organize_rebound_k: (field == "organize_rebound_k").then_some(val),
             organize_rebound_m: (field == "organize_rebound_m").then_some(val),
-            recorder_timeout_secs: (field == "recorder_timeout_secs").then_some(val as u64),
-            recorder_max_retries: (field == "recorder_max_retries").then_some(val),
+            memory_manager_timeout_secs: (field == "memory_manager_timeout_secs")
+                .then_some(val as u64),
+            memory_manager_max_retries: (field == "memory_manager_max_retries").then_some(val),
             rule_chunk_tokens: (field == "rule_chunk_tokens").then_some(val as u64),
             ..Default::default()
         };

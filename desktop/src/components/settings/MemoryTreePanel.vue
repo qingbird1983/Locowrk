@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 开发者分区 · 记忆树观测面板（M2 §3.36③）：当前会话的树投影读数——
- * 捆数/游标、未整理尾巴、占用锚点（真实上报/字符估算如实标注）、反弹
+ * 章节数/游标、未整理尾巴、占用锚点（真实上报/字符估算如实标注）、反弹
  * 计数与熔断态、在途任务、最近整理记录。只读：打开拉一次 + 手动刷新
  * （⑫ 暴露面板同款，不推送不轮询）。自 DeveloperSection 拆出（三问
  * ③：面板随 M3/M4 独立演进，与危险开关互不牵动）。
@@ -62,7 +62,7 @@ function relTime(ts: number): string {
         {{ t("developer.treeEmpty") }}
       </p>
       <template v-else>
-        <p>{{ t("developer.treeBundles", { n: tree.bundleCount, cursor: tree.bundledUntil }) }}</p>
+        <p>{{ t("developer.treeChapters", { n: tree.chapterCount, cursor: tree.chapteredUntil }) }}</p>
         <p>{{ t("developer.treeTail", { events: tree.tailEvents, tokens: compactNumber(tree.tailTokensEst) }) }}</p>
         <p>
           {{
@@ -95,11 +95,11 @@ function relTime(ts: number): string {
               t("developer.treeHistoryRow", {
                 time: relTime(r.ts),
                 reason: r.reason,
-                mode: r.mode,
+                mode: r.mode === "recorder" ? t("developer.modeMemoryManager") : t("developer.modeRule"),
                 status: r.status,
-                bundles: r.bundles,
-                input: compactNumber(r.recorderInput),
-                output: compactNumber(r.recorderOutput),
+                chapters: r.chapters,
+                input: compactNumber(r.manager_input),
+                output: compactNumber(r.manager_output),
                 ms: r.durationMs,
               })
             }}

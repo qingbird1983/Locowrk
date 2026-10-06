@@ -65,8 +65,8 @@ pub struct PendingHit {
 pub struct TreeSummary {
     pub workspace: String,
     pub session_id: String,
-    pub bundle_count: usize,
-    pub bundled_until: usize,
+    pub chapter_count: usize,
+    pub chaptered_until: usize,
     pub pending: bool,
     pub paused_auto: bool,
     /// 投影文件 mtime（毫秒）；取不到 = 0（排序垫底，不阻塞列表）。
@@ -149,8 +149,8 @@ impl TreeStore {
         for (tree, session_id) in self.scan_all() {
             out.push((
                 TreeSummary {
-                    bundle_count: tree.bundles.len(),
-                    bundled_until: tree.bundled_until,
+                    chapter_count: tree.chapters.len(),
+                    chaptered_until: tree.chaptered_until,
                     pending: tree.pending.is_some(),
                     paused_auto: tree.paused_auto,
                     workspace: tree.workspace,
@@ -310,7 +310,7 @@ mod tests {
         let store = TreeStore::new(&dir);
         store.save(&sample("ws-a", "sess-1")).unwrap();
         let mut clean = MemoryTree::new("ws-a", "sess-2");
-        clean.bundled_until = 3;
+        clean.chaptered_until = 3;
         store.save(&clean).unwrap();
         let hits = store.scan_pending();
         assert_eq!(hits.len(), 1);
@@ -340,16 +340,16 @@ mod tests {
         let store = TreeStore::new(&dir);
         store.save(&sample("ws-a", "sess-1")).unwrap();
         let mut clean = MemoryTree::new("ws-b", "sess-2");
-        clean.bundled_until = 7;
+        clean.chaptered_until = 7;
         store.save(&clean).unwrap();
         let list = store.scan_trees();
         assert_eq!(list.len(), 2, "有在途与无在途的树都进清单");
         assert!(list[0].updated_ms >= list[1].updated_ms, "按更新时间降序");
         let pending = list.iter().find(|s| s.session_id == "sess-1").unwrap();
         let clean = list.iter().find(|s| s.session_id == "sess-2").unwrap();
-        assert_eq!(pending.bundle_count, 1, "占位捆计入捆数");
+        assert_eq!(pending.chapter_count, 1, "占位章节计入章节数");
         assert!(pending.pending);
-        assert_eq!(clean.bundled_until, 7);
+        assert_eq!(clean.chaptered_until, 7);
         assert!(!clean.pending);
         // 坏投影文件跳过
         let scope = store.root.join(scope_dir("ws-a"));

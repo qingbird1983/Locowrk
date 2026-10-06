@@ -36,7 +36,7 @@ import type {
   ProviderView,
   TreeDebug,
   TreeSummaryView,
-  TreeBundlesView,
+  TreeChaptersView,
   TreeOriginalItem,
   OrganizeDonePayload,
   OrganizePausedPayload,
@@ -525,21 +525,21 @@ export function memoryTreeSessions(): Promise<TreeSummaryView[]> {
   return invoke("memory_tree_sessions");
 }
 
-/** 选中会话的捆清单（投影缺/坏 = exists=false，前端走空态）。 */
-export function memoryTreeBundles(
+/** 选中会话的章节清单（投影缺/坏 = exists=false，前端走空态）。 */
+export function memoryTreeChapters(
   sessionId: string,
   workspace: string,
-): Promise<TreeBundlesView> {
-  return invoke("memory_tree_bundles", { sessionId, workspace });
+): Promise<TreeChaptersView> {
+  return invoke("memory_tree_chapters", { sessionId, workspace });
 }
 
-/** 捆原文切片（与记录员材料同形；会话已删/捆不存在 = reject）。 */
+/** 章节原文切片（与记忆管理器材料同形；会话已删/章节不存在 = reject）。 */
 export function memoryTreeOriginal(
   sessionId: string,
   workspace: string,
-  bundleId: string,
+  chapterId: string,
 ): Promise<TreeOriginalItem[]> {
-  return invoke("memory_tree_original", { sessionId, workspace, bundleId });
+  return invoke("memory_tree_original", { sessionId, workspace, chapterId });
 }
 
 /** 整理收束推送（§3.37③；chat store 换 SystemNotice，非当前会话忽略）。 */

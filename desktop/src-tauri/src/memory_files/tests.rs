@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use memory_tree::{BundleDraft, MemoryTree, OrganizeRecord, TreeStore};
+use memory_tree::{ChapterDraft, MemoryTree, OrganizeRecord, TreeStore};
 use session_store::{Session, SessionEvent};
 
 use super::*;
@@ -23,24 +23,24 @@ fn resolver() -> crate::workspace::WorkspaceResolver {
     Arc::new(|_: &str| None)
 }
 
-/// 两捆实树（b1 区间 0–3、b2 区间 4–9，草稿倒序给出以证渲染按捆号排序）。
+/// 两章节实树（b1 区间 0–3、b2 区间 4–9，草稿倒序给出以证渲染按章节号排序）。
 fn real_tree(ws: &str, sid: &str) -> MemoryTree {
     let mut t = MemoryTree::new(ws, sid);
     let drafts = vec![
-        BundleDraft {
-            title: "第一捆标题".into(),
+        ChapterDraft {
+            title: "第一章节标题".into(),
             summary: "摘要一".into(),
             event_range: (0, 3),
         },
-        BundleDraft {
-            title: "第二捆标题".into(),
+        ChapterDraft {
+            title: "第二章节标题".into(),
             summary: "摘要二".into(),
             event_range: (4, 9),
         },
     ];
-    let bundles = t.build_bundles(&drafts, "recorder", 1000);
+    let chapters = t.build_chapters(&drafts, "recorder", 1000);
     t.apply_organized(
-        bundles,
+        chapters,
         9,
         OrganizeRecord {
             ts: 1000,
@@ -49,9 +49,9 @@ fn real_tree(ws: &str, sid: &str) -> MemoryTree {
             status: "ok".into(),
             from: 0,
             to: 9,
-            bundles: 2,
-            recorder_input: 0,
-            recorder_output: 0,
+            chapters: 2,
+            manager_input: 0,
+            manager_output: 0,
             duration_ms: 0,
         },
     );
@@ -62,16 +62,16 @@ fn real_tree(ws: &str, sid: &str) -> MemoryTree {
 fn render_tree_md_groups_sessions_and_skips_pending() {
     let ws = r"F:\proj\Render";
     let mut t = real_tree(ws, "s1");
-    t.insert_placeholder(10, 12, 2000).expect("占位捆");
+    t.insert_placeholder(10, 12, 2000).expect("占位章节");
     let md = render_tree_md(ws, &[("s1".into(), "我的会话".into(), &t)]);
     assert!(
         md.contains("# 记忆树 · Render-"),
         "标题带项目 md 目录名：{md}"
     );
     assert!(md.contains("## 我的会话"), "会话小节（旁车标题）");
-    assert!(md.contains("### b1 · 第一捆标题"));
-    assert!(md.contains("### b2 · 第二捆标题"));
-    assert!(!md.contains("b3"), "占位捆不进人读层：{md}");
+    assert!(md.contains("### b1 · 第一章节标题"));
+    assert!(md.contains("### b2 · 第二章节标题"));
+    assert!(!md.contains("b3"), "占位章节不进人读层：{md}");
     assert!(md.contains("<!-- range: 0-3 · source: recorder · session: s1 -->"));
     // 无标题会话回落 sid
     let md2 = render_tree_md(ws, &[("s9".into(), String::new(), &t)]);
@@ -80,7 +80,7 @@ fn render_tree_md_groups_sessions_and_skips_pending() {
     let mut only_pending = MemoryTree::new(ws, "s2");
     only_pending.insert_placeholder(0, 4, 3000).unwrap();
     let md3 = render_tree_md(ws, &[("s2".into(), "空".into(), &only_pending)]);
-    assert!(!md3.contains("###"), "全占位不渲染捆节");
+    assert!(!md3.contains("###"), "全占位不渲染章节节");
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn sync_writes_tree_md_and_guards_human_edits() {
     let sessions_dir = root.join("sessions");
     std::fs::create_dir_all(&sessions_dir).unwrap();
 
-    // 无实捆（纯占位/无投影）= 跳过
+    // 无实章节（纯占位/无投影）= 跳过
     let mut pending_only = MemoryTree::new(r"F:\proj\Sync", "s-empty");
     pending_only.insert_placeholder(0, 4, 1000).unwrap();
     store.save(&pending_only).unwrap();

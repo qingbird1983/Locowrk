@@ -371,7 +371,7 @@ onMounted(() => void refresh());
           @change="saveOrganize"
         />
       </SettingsRow>
-      <SettingsRow :title="t('developer.recorderTimeout')" :hint="t('developer.recorderTimeoutHint')" control-id="dev-recorder-timeout">
+      <SettingsRow :title="t('developer.memoryManagerTimeout')" :hint="t('developer.memoryManagerTimeoutHint')" control-id="dev-recorder-timeout">
         <input
           id="dev-recorder-timeout"
           v-model.number="form.recorderTimeoutSecs"
@@ -382,7 +382,7 @@ onMounted(() => void refresh());
           @change="saveOrganize"
         />
       </SettingsRow>
-      <SettingsRow :title="t('developer.recorderRetries')" :hint="t('developer.recorderRetriesHint')" control-id="dev-recorder-retries">
+      <SettingsRow :title="t('developer.memoryManagerRetries')" :hint="t('developer.memoryManagerRetriesHint')" control-id="dev-recorder-retries">
         <input
           id="dev-recorder-retries"
           v-model.number="form.recorderMaxRetries"

@@ -1,4 +1,4 @@
-//! MemoryTree（树 v2 §2/§17）：捆表、已整理游标、在途任务、反弹熔断与
+//! MemoryTree（树 v2 §2/§17）：章节表、已整理游标、在途任务、反弹熔断与
 //! 整理历史。**树是投影**——只存 `event_range` 引用与生成文本，可随时
 //! 删除重建（§1.3）。本结构即落盘 JSON 的形状（storage 原子写）。
 
@@ -6,24 +6,24 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::bundle::{BundleDraft, BundleId, EventId, MemoryBundle};
+use crate::chapter::{ChapterDraft, ChapterId, EventId, MemoryChapter};
 
-/// 根标识（M2 产出的捆都是顶层：parent = None；层级留字段，§16 深度
+/// 根标识（M2 产出的章节都是顶层：parent = None；层级留字段，§16 深度
 /// 上限 3 是 M4+ 组装器的约束）。
 pub const ROOT_ID: &str = "root";
-/// 投影文件版本（字段演进全走 serde default，见 bundle/tree 追加字段）。
+/// 投影文件版本（字段演进全走 serde default，见 chapter/tree 追加字段）。
 pub const SCHEMA_VERSION: u32 = 1;
 /// 整理历史上限（FIFO，防投影文件随使用无限膨胀）。
 const HISTORY_CAP: usize = 20;
 
-/// 在途整理任务（§5.3 异步 + 崩溃恢复）：任务与占位捆随树持久化，
+/// 在途整理任务（§5.3 异步 + 崩溃恢复）：任务与占位章节随树持久化，
 /// 重启后 storage 扫描重投；`attempts` 记重投次数（观测用，管道自身
-/// 恒定收束——记录员失败落规则切分）。
+/// 恒定收束——记忆管理器失败落规则切分）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PendingTask {
     pub from: EventId,
     pub to: EventId,
-    pub placeholder_id: BundleId,
+    pub placeholder_id: ChapterId,
     pub created_at: i64,
     #[serde(default)]
     pub attempts: u32,
@@ -40,7 +40,10 @@ pub struct ReboundState {
 }
 
 /// 一次整理的台账（开发者观测面板数据源；mode = recorder|rule，status
-/// = ok|failed|aborted，token 为记录员用量——规则切分为 0）。
+/// = ok|failed|aborted，token 为记忆管理器用量——规则切分为 0）。
+/// **落盘兼容**：chapters/manager_input/manager_output 的旧名 bundles/
+/// recorder_input/recorder_output 走 serde alias 读回；mode/status 里的
+/// "recorder" 是数据词汇本批不改（见设计文档术语注）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OrganizeRecord {
     pub ts: i64,
@@ -49,12 +52,12 @@ pub struct OrganizeRecord {
     pub status: String,
     pub from: EventId,
     pub to: EventId,
-    #[serde(default)]
-    pub bundles: usize,
-    #[serde(default)]
-    pub recorder_input: u64,
-    #[serde(default)]
-    pub recorder_output: u64,
+    #[serde(default, alias = "bundles")]
+    pub chapters: usize,
+    #[serde(default, alias = "recorder_input")]
+    pub manager_input: u64,
+    #[serde(default, alias = "recorder_output")]
+    pub manager_output: u64,
     #[serde(default)]
     pub duration_ms: u64,
 }
@@ -64,11 +67,15 @@ pub struct MemoryTree {
     pub schema_version: u32,
     pub workspace: String,
     pub session_id: String,
-    pub root: BundleId,
-    pub bundles: BTreeMap<String, MemoryBundle>,
-    /// 已整理游标（排他）：事件 `[0..bundled_until)` 已归捆；尾巴 =
-    /// 其后的内容事件。
-    pub bundled_until: EventId,
+    pub root: ChapterId,
+    /// **落盘兼容**：字段改名 bundles → chapters，旧投影走 alias 读回
+    /// （新文件写 chapters；树节点 id 值空间 `b{n}` 不变，见术语注）。
+    #[serde(alias = "bundles")]
+    pub chapters: BTreeMap<String, MemoryChapter>,
+    /// 已整理游标（排他）：事件 `[0..chaptered_until)` 已归章节；尾巴 =
+    /// 其后的内容事件。旧名 bundled_until 走 alias 读回。
+    #[serde(alias = "bundled_until")]
+    pub chaptered_until: EventId,
     #[serde(default)]
     pub pending: Option<PendingTask>,
     #[serde(default)]
@@ -95,9 +102,9 @@ impl MemoryTree {
             schema_version: SCHEMA_VERSION,
             workspace: workspace.to_string(),
             session_id: session_id.to_string(),
-            root: BundleId(ROOT_ID.into()),
-            bundles: BTreeMap::new(),
-            bundled_until: 0,
+            root: ChapterId(ROOT_ID.into()),
+            chapters: BTreeMap::new(),
+            chaptered_until: 0,
             pending: None,
             rebound: ReboundState::default(),
             paused_auto: false,
@@ -105,9 +112,9 @@ impl MemoryTree {
         }
     }
 
-    /// 下一个捆编号（`b{max+1}`：按既有编号取最大，容忍未来可能的删除）。
-    fn next_bundle_seq(&self) -> u64 {
-        self.bundles
+    /// 下一个章节编号（`b{max+1}`：按既有编号取最大，容忍未来可能的删除）。
+    fn next_chapter_seq(&self) -> u64 {
+        self.chapters
             .keys()
             .filter_map(|k| k.strip_prefix('b')?.parse::<u64>().ok())
             .max()
@@ -115,21 +122,21 @@ impl MemoryTree {
             + 1
     }
 
-    /// 草稿 → 捆（id 顺序分配；区间合法性由调用方校验——parse_drafts /
+    /// 草稿 → 章节（id 顺序分配；区间合法性由调用方校验——parse_drafts /
     /// rule_split 产物）。
-    pub fn build_bundles(
+    pub fn build_chapters(
         &self,
-        drafts: &[BundleDraft],
+        drafts: &[ChapterDraft],
         source: &str,
         now_ms: i64,
-    ) -> Vec<MemoryBundle> {
-        let base = self.next_bundle_seq();
+    ) -> Vec<MemoryChapter> {
+        let base = self.next_chapter_seq();
         drafts
             .iter()
             .enumerate()
             .map(|(i, d)| {
-                MemoryBundle::from_draft(
-                    BundleId(format!("b{}", base + i as u64)),
+                MemoryChapter::from_draft(
+                    ChapterId(format!("b{}", base + i as u64)),
                     d,
                     source,
                     now_ms,
@@ -138,11 +145,11 @@ impl MemoryTree {
             .collect()
     }
 
-    pub fn bundle_count(&self) -> usize {
-        self.bundles.len()
+    pub fn chapter_count(&self) -> usize {
+        self.chapters.len()
     }
 
-    /// 建占位捆 + 登记在途任务（§5.3：对话不等整理，占位先行）。
+    /// 建占位章节 + 登记在途任务（§5.3：对话不等整理，占位先行）。
     /// 已有在途任务 = 拒绝（单写者纪律，§16「并发写没加锁」的解法）。
     pub fn insert_placeholder(
         &mut self,
@@ -153,9 +160,9 @@ impl MemoryTree {
         if self.pending.is_some() || from > to {
             return None;
         }
-        let id = BundleId(format!("b{}", self.next_bundle_seq()));
-        let bundle = MemoryBundle {
-            bundle_id: id.clone(),
+        let id = ChapterId(format!("b{}", self.next_chapter_seq()));
+        let chapter = MemoryChapter {
+            chapter_id: id.clone(),
             parent: None,
             children: Vec::new(),
             title: format!("对话 #{from}-{to}"),
@@ -171,7 +178,7 @@ impl MemoryTree {
             expanded_at: None,
             collapsed_at: None,
         };
-        self.bundles.insert(id.0.clone(), bundle);
+        self.chapters.insert(id.0.clone(), chapter);
         let task = PendingTask {
             from,
             to,
@@ -183,21 +190,21 @@ impl MemoryTree {
         Some(task)
     }
 
-    /// 收束一次整理（记录员或规则切分的产物）：撤占位捆、落真捆、推进
+    /// 收束一次整理（记忆管理器或规则切分的产物）：撤占位章节、落真章节、推进
     /// 游标、记台账。
     pub fn apply_organized(
         &mut self,
-        bundles: Vec<MemoryBundle>,
+        chapters: Vec<MemoryChapter>,
         to: EventId,
         record: OrganizeRecord,
     ) {
         if let Some(task) = self.pending.take() {
-            self.bundles.remove(&task.placeholder_id.0);
+            self.chapters.remove(&task.placeholder_id.0);
         }
-        for b in bundles {
-            self.bundles.insert(b.bundle_id.0.clone(), b);
+        for b in chapters {
+            self.chapters.insert(b.chapter_id.0.clone(), b);
         }
-        self.bundled_until = self.bundled_until.max(to + 1);
+        self.chaptered_until = self.chaptered_until.max(to + 1);
         self.push_history(record);
     }
 
@@ -205,7 +212,7 @@ impl MemoryTree {
     /// 原文无损——尾巴留在流里，下次触发重新覆盖。
     pub fn drop_pending(&mut self, record: OrganizeRecord) {
         if let Some(task) = self.pending.take() {
-            self.bundles.remove(&task.placeholder_id.0);
+            self.chapters.remove(&task.placeholder_id.0);
         }
         self.push_history(record);
     }
@@ -243,16 +250,16 @@ impl MemoryTree {
         self.rebound.users_at_last = users_now;
     }
 
-    /// 手动 `/整理`：复位熔断（用户显式重来 = 重新信任记录员，§3.36①）。
+    /// 手动 `/整理`：复位熔断（用户显式重来 = 重新信任记忆管理器，§3.36①）。
     pub fn mark_manual(&mut self, users_now: u64) {
         self.paused_auto = false;
         self.rebound.count = 0;
         self.rebound.users_at_last = users_now;
     }
 
-    /// memory_expand 记账（M4 §8.2）：捆不存在 / 占位 = false。
+    /// memory_expand 记账（M4 §8.2）：章节不存在 / 占位 = false。
     pub fn mark_expanded(&mut self, id: &str, now_ms: i64) -> bool {
-        match self.bundles.get_mut(id) {
+        match self.chapters.get_mut(id) {
             Some(b) if !b.pending => {
                 b.mark_expanded(now_ms);
                 true
@@ -261,10 +268,10 @@ impl MemoryTree {
         }
     }
 
-    /// memory_collapse 记账（M4 §8.3）：捆不存在 / 占位 / 从未展开 = false
-    /// （收起只对已展开捆有意义——没展开过就没有可收的内容）。
+    /// memory_collapse 记账（M4 §8.3）：章节不存在 / 占位 / 从未展开 = false
+    /// （收起只对已展开章节有意义——没展开过就没有可收的内容）。
     pub fn mark_collapsed(&mut self, id: &str, now_ms: i64) -> bool {
-        match self.bundles.get_mut(id) {
+        match self.chapters.get_mut(id) {
             Some(b) if !b.pending => {
                 b.mark_collapsed(now_ms);
                 b.collapsed_at.is_some()
@@ -273,28 +280,28 @@ impl MemoryTree {
         }
     }
 
-    /// 当前收起中的捆 id（组装侧把它们的 expand 结果换收起桩；插入序 =
+    /// 当前收起中的章节 id（组装侧把它们的 expand 结果换收起桩；插入序 =
     /// BTreeMap 序，组装侧自排）。
     pub fn collapsed_ids(&self) -> Vec<String> {
-        self.bundles
+        self.chapters
             .values()
             .filter(|b| b.collapsed_at.is_some())
-            .map(|b| b.bundle_id.0.clone())
+            .map(|b| b.chapter_id.0.clone())
             .collect()
     }
 
-    /// 最早展开且未收起的捆 id（自动收起 §8.3「收起最老展开」；并列按 id
+    /// 最早展开且未收起的章节 id（自动收起 §8.3「收起最老展开」；并列按 id
     /// 序稳定）。None = 没有可收的。
     pub fn oldest_expanded(&self) -> Option<String> {
-        self.bundles
+        self.chapters
             .values()
             .filter(|b| b.expanded_at.is_some() && b.collapsed_at.is_none())
             .min_by(|a, b| {
                 a.expanded_at
                     .cmp(&b.expanded_at)
-                    .then_with(|| a.bundle_id.cmp(&b.bundle_id))
+                    .then_with(|| a.chapter_id.cmp(&b.chapter_id))
             })
-            .map(|b| b.bundle_id.0.clone())
+            .map(|b| b.chapter_id.0.clone())
     }
 }
 

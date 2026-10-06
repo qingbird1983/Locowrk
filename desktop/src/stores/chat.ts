@@ -241,7 +241,7 @@ export const useChatStore = defineStore("chat", {
           p.status === "degraded"
             ? "notice.organizeDoneDegraded"
             : "notice.organizeDone",
-          { users: p.users, bundles: p.bundles },
+          { users: p.users, chapters: p.chapters },
           p.status === "degraded" ? undefined : ["view"],
         );
       });
