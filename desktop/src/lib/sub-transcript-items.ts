@@ -1,9 +1,12 @@
 /**
- * 子转录投影（UI shell 文档 §3.16，v2.52）：`subagent_transcript` 的 wire
- * 事件序列 → chat store 同款 `ChatItem[]`——页签复用 MessageRow / ToolRow
- * **同一套行组件**（§3.7–3.9 同一心智模型）。只读一次性投影：数据来自
- * 全量重放（整段 chunk，无流式时序）。近似如实记录：平铺过程行，不做
- * §3.7 过程组合成组（ChatTranscript 的 walk 逻辑，后续批次接入）。
+ * 子转录投影（UI shell 文档 §3.16，v2.52；v2.104 对齐）：`subagent_transcript`
+ * 的 wire 事件序列 → chat store 同款 `ChatItem[]`——页签经共享核心
+ * TranscriptFlow 渲染（主对话整个流程原样复用），投影按**主对话历史重放
+ * 同形**补齐：用户消息带事件位与轮起点时刻（v2.101）、思考行整段落项
+ * （无时戳 = 首句摘要形态）、轮收束时刻挂最后一条用户消息（第 0 层计时
+ * 行读数终点）、悬空 tool_call 如实挂 pending（与重放一致）。只读一次性
+ * 投影：数据来自全量重放（整段 chunk，无流式时序）。审批在父侧决策，
+ * 子转录里只是记录（系统条形态照旧 = 审计面保留）。
  */
 import type { AgentEvent } from "../types";
 import type { ChatItem, ToolItem } from "../stores/chat";
@@ -14,8 +17,23 @@ export function projectSubTranscript(events: AgentEvent[]): ChatItem[] {
   for (const e of events) {
     switch (e.kind) {
       case "user_message":
-        items.push({ id: id++, kind: "user", text: e.content });
+        items.push({
+          id: id++,
+          kind: "user",
+          text: e.content,
+          pos: e.pos,
+          ...(e.ts != null ? { ts: e.ts } : {}),
+        });
         break;
+      case "thinking": {
+        // v2.104 对齐主对话重放：整段落项，append-or-create（连续思考
+        // 在 §3.7 过程组里本就成组）；无时戳 = 首句摘要形态
+        if (!e.text) break;
+        const last = items[items.length - 1];
+        if (last?.kind === "thinking") last.text += e.text;
+        else items.push({ id: id++, kind: "thinking", text: e.text });
+        break;
+      }
       case "chunk": {
         // 纯工具调用步正文为空（投影不发空 chunk）；连续段并入上一条
         if (!e.delta) break;
@@ -33,7 +51,8 @@ export function projectSubTranscript(events: AgentEvent[]): ChatItem[] {
           args: e.args,
           sideEffect: e.side_effect,
           pluginVersion: e.plugin_version,
-          pending: false,
+          // 与主对话重放同形：结果未落（崩溃截断）如实挂 pending
+          pending: true,
           ok: null,
         });
         break;
@@ -49,6 +68,18 @@ export function projectSubTranscript(events: AgentEvent[]): ChatItem[] {
         }
         break;
       }
+      case "turn_done": {
+        // v2.101 对齐：轮收束时刻挂最后一条用户消息（计时行读数终点；
+        // 已记不覆盖，旧日志无时刻不虚构）
+        if (e.ts == null) break;
+        const lastUser = [...items]
+          .reverse()
+          .find(
+            (i): i is Extract<ChatItem, { kind: "user" }> => i.kind === "user",
+          );
+        if (lastUser && lastUser.endTs === undefined) lastUser.endTs = e.ts;
+        break;
+      }
       // 审批在父侧决策，子转录里只是记录（记录条形态照旧）
       case "approval_resolved":
         items.push({
@@ -59,7 +90,7 @@ export function projectSubTranscript(events: AgentEvent[]): ChatItem[] {
         });
         break;
       default:
-        break; // turn_done / usage / schedule_fired 等：页签不渲染
+        break; // usage / schedule_fired 等：页签不渲染
     }
   }
   return items;
