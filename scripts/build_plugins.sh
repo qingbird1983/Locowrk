@@ -55,11 +55,21 @@ stage tool-echo 0.2.0
 # 0.1.2（2026-10-04，小迭代 +0.0.1）：拒绝文案随 ㉘·C 围栏让路更新——
 # 围栏 = 全局声明根（数据根 + 设置 fsRoots，与权限档无关），报错列生效根
 # 并指引到设置加根（v2.66 的"围栏跟会话归属"措辞过时）
-stage tool-fs 0.1.2
+# 0.1.3（2026-10-06，小迭代 +0.0.1）：fs_read 升 exposure always——
+# edit_replace 0.2.0 的「fs_read 重读 → 逐字复制 old_string」闭环配套
+# （v2.114，docs/design/edit_replace.md 评估：fs_read 留在 on_demand 时
+# 重读闭环可能断在半路）
+stage tool-fs 0.1.3
 stage tool-fetch 0.1.0
 stage tool-shell 0.1.2
-stage tool-edit 0.1.2
 stage tool-git 0.1.2
+# 0.2.0（2026-10-06，大改版 +0.1.0 经用户确认）：edit_replace 升级——
+# 精确零命中后容错匹配（行尾空白 / CRLF / BOM 归一，缩进·大小写·编辑
+# 距离不做）+ match_type/byte_range 如实回报 + 多重命中列行号的结构化
+# 报错 + 原子写（临时文件+rename）+ exposure 翻 always（编辑首选；
+# Timo 实测教训 = on_demand 截断下模型根本用不上它，退而整文件重写）。
+# 设计文档 docs/design/edit_replace.md；工具描述与 edit_diff 互指优先级
+stage tool-edit 0.2.0
 # 0.1.1（2026-10-04，小迭代 +0.0.1）：双层记忆（㉘·A·fix）——memory_write
 # +scope="global"（全局偏好层）；读/搜/列 = 项目 ∪ 全局并带层标；未归属
 # 会话缺省写拒绝；全局行聊天工具禁删（管理页专属）；headless 语义不变
@@ -74,5 +84,5 @@ stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-{fs,shell,edit,git} 0.1.2（围栏让路文案）+ 其余 0.1.0（memory-sqlite 0.1.3 F2 同步机械件）"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit 0.2.0（edit_replace 容错匹配+always）+ tool-fs 0.1.3（fs_read always）+ 其余见上注释"
 echo "next: cargo run -p kernel-bin -- demo"

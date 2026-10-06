@@ -4,9 +4,13 @@
 //! 读原文件生成精确 undo 数据（整文件备份进数据根），撤销统一走 tool-fs
 //! 的 `fs_restore`（跨插件 undo：官方捆绑保证同装；备份布局与恢复契约
 //! 见 tool-fs 文档，实现共享 `plugin_api::fsutil`）：
-//! - `edit_replace`：old_string → new_string 精确替换（默认强制唯一命中）
+//! - `edit_replace`：old_string → new_string 替换——**编辑首选**，exposure
+//!   always（v2.114，设计文档 docs/design/edit_replace.md：精确零命中后
+//!   容错匹配行尾空白/CRLF/BOM；Timo 实测教训 = on_demand 截断下模型
+//!   根本用不上它，退而整文件重写）。唯一性仍是安全底线。
 //! - `edit_lines`：按 1-based 行号区间替换
-//! - `edit_diff`：应用 unified diff（严格精确匹配，无 fuzz）
+//! - `edit_diff`：应用 unified diff（严格精确匹配，无 fuzz）——结构性
+//!   大改次选，description 与 edit_replace 互指优先级
 //!
 //! 为什么比 fs_write 重要（plugins.md §三）：整文件重写会丢未预期改动、
 //! 浪费 token；编辑类工具让模型只提交 diff。
@@ -39,7 +43,7 @@ use plugin_api::manifest::{
     Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
 };
 use plugin_api::serde_json::{Value, json};
-use plugin_api::tool::{SideEffect, ToolSpec};
+use plugin_api::tool::{Exposure, SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
 
 fn zh_en(zh: &str, en: &str) -> LocalizedString {
@@ -68,11 +72,19 @@ fn describe_manifest() -> CString {
         tools: vec![
             ToolSpec {
                 name: "edit_replace".into(),
-                description: "Exact string replacement in a text file (the file must exist). \
-                              Args: path (absolute), old_string (must match exactly once unless \
-                              replace_all), new_string, replace_all (bool, default false). \
-                              The original file is backed up automatically; the result carries \
-                              {path, bytes, edits, backup} for fs_restore to undo."
+                description: "Replace a string in a text file (the file must exist). PREFERRED \
+                              editing tool for most edits: copy old_string character-for-\
+                              character from fs_read output; fall back to edit_diff only for \
+                              structural changes across many places, edit_lines only with known \
+                              line numbers. Args: path (absolute), old_string (must match exactly \
+                              once unless replace_all), new_string, replace_all (bool, default \
+                              false). If the exact match fails, a tolerant pass retries ignoring \
+                              line-ending (CRLF/LF), trailing-whitespace and BOM differences — \
+                              the result reports match_type so you can tell; uniqueness is \
+                              always enforced (multi-match errors list candidate lines). The \
+                              original file is backed up automatically; the result carries \
+                              {path, bytes, edits, match_type, byte_range, backup} for \
+                              fs_restore to undo."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -88,7 +100,7 @@ fn describe_manifest() -> CString {
                     "required": ["path", "old_string", "new_string"]
                 }),
                 side_effect: compensable(),
-                exposure: Default::default(),
+                exposure: Exposure::Always,
             },
             ToolSpec {
                 name: "edit_lines".into(),
@@ -117,11 +129,12 @@ fn describe_manifest() -> CString {
             ToolSpec {
                 name: "edit_diff".into(),
                 description: "Apply a unified diff to a text file (the file must exist). \
-                              Args: path (absolute), patch (unified diff text with @@ hunks). \
-                              Context lines must match exactly — no fuzz; on mismatch the tool \
-                              errors and the file is untouched. The original file is backed up \
-                              automatically; the result carries {path, bytes, hunks_applied, \
-                              backup} for fs_restore to undo."
+                              Prefer edit_replace for most edits; use this only for structural \
+                              changes across many places. Args: path (absolute), patch (unified \
+                              diff text with @@ hunks). Context lines must match exactly — no \
+                              fuzz; on mismatch the tool errors and the file is untouched. The \
+                              original file is backed up automatically; the result carries \
+                              {path, bytes, hunks_applied, backup} for fs_restore to undo."
                     .into(),
                 schema: json!({
                     "type": "object",

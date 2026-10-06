@@ -35,7 +35,7 @@ use plugin_api::manifest::{
     Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
 };
 use plugin_api::serde_json::{Value, json};
-use plugin_api::tool::{SideEffect, ToolSpec};
+use plugin_api::tool::{Exposure, SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
 
 /// 双语展示元数据样板（packaging.md §2.2）。
@@ -64,7 +64,8 @@ fn describe_manifest() -> CString {
                 name: "fs_read".into(),
                 description: "Read a UTF-8 text file from the local filesystem. \
                               Pass an absolute path. Returns {path, size, truncated, content}; \
-                              content is capped at max_bytes (default 32KiB)."
+                              content is capped at max_bytes (default 32KiB). Read before \
+                              edit_replace so old_string can be copied character-for-character."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -76,7 +77,7 @@ fn describe_manifest() -> CString {
                     "required": ["path"]
                 }),
                 side_effect: SideEffect::Pure,
-                exposure: Default::default(),
+                exposure: Exposure::Always,
             },
             ToolSpec {
                 name: "fs_list".into(),

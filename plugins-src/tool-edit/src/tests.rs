@@ -90,6 +90,108 @@ fn replace_matrix() {
 }
 
 #[test]
+fn replace_fuzzy_matrix() {
+    let _g = ENV_LOCK.lock().unwrap();
+    let root = temp_root("fuzzy");
+    unsafe { std::env::set_var("LOCOWRK_DATA_DIR", &root) };
+    let path = root.join("win.rs");
+    std::fs::create_dir_all(&root).unwrap();
+    let p = path.display().to_string();
+
+    // 精确优先：完全一致时 match_type=exact
+    std::fs::write(&path, "aaa\n").unwrap();
+    let out = edit_replace(
+        &json!({ "path": p, "old_string": "aaa", "new_string": "b" }),
+        no_host(),
+    )
+    .unwrap();
+    assert_eq!(out["match_type"], json!("exact"));
+    assert_eq!(out["byte_range"], json!([0, 3]));
+
+    // CRLF 文件 + LF old_string → 模糊命中；new_string 行尾适配成 CRLF
+    std::fs::write(&path, "fn a() {\r\n    old();\r\n}\r\n").unwrap();
+    let out = edit_replace(
+        &json!({ "path": p, "old_string": "fn a() {\n    old();\n}",
+                 "new_string": "fn a() {\n    new();\n}" }),
+        no_host(),
+    )
+    .unwrap();
+    assert_eq!(out["match_type"], json!("fuzzy"));
+    assert_eq!(out["edits"], json!(1));
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "fn a() {\r\n    new();\r\n}\r\n"
+    );
+
+    // 行尾空白：old 跨行、文件行带尾随空格 → 精确失败、模糊命中；
+    // 尾随空格属于命中区域的「不可见尾部」，随替换一起被换掉
+    std::fs::write(&path, "let x = 1;   \nlet y = 2;\n").unwrap();
+    let out = edit_replace(
+        &json!({ "path": p, "old_string": "let x = 1;\nlet y = 2;",
+                 "new_string": "let x = 0;\nlet y = 0;" }),
+        no_host(),
+    )
+    .unwrap();
+    assert_eq!(out["match_type"], json!("fuzzy"));
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "let x = 0;\nlet y = 0;\n"
+    );
+
+    // BOM：old 头部带 BOM（从旧读取结果照抄的残迹）而文件没有 → 模糊命中
+    std::fs::write(&path, "hello\n").unwrap();
+    let out = edit_replace(
+        &json!({ "path": p, "old_string": "\u{feff}hello", "new_string": "hi" }),
+        no_host(),
+    )
+    .unwrap();
+    assert_eq!(out["match_type"], json!("fuzzy"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "hi\n");
+
+    // 缩进不放宽：多行 old 行首空白差异不容错（精确与容错都失败）
+    std::fs::write(&path, "fn a() {\n        old();\n}\n").unwrap();
+    assert!(
+        edit_replace(
+            &json!({ "path": p, "old_string": "fn a() {\n    old();\n}", "new_string": "x" }),
+            no_host()
+        )
+        .is_err()
+    );
+
+    // 模糊多重候选：报错列出候选行号（每处都有行尾差异，精确零命中）
+    std::fs::write(&path, "a \nb \na\t\nb\t\n").unwrap();
+    let err = edit_replace(
+        &json!({ "path": p, "old_string": "a\nb\n", "new_string": "z" }),
+        no_host(),
+    )
+    .unwrap_err();
+    assert!(
+        err.contains("matches 2 times") && err.contains("lines 1, 3"),
+        "got: {err}"
+    );
+
+    // replace_all=true 模糊全换（new 带 LF 保持 LF——文件是 LF 风格）
+    let out = edit_replace(
+        &json!({ "path": p, "old_string": "a\nb\n", "new_string": "z\n", "replace_all": true }),
+        no_host(),
+    )
+    .unwrap();
+    assert_eq!(out["edits"], json!(2));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "z\nz\n");
+
+    // 全都找不到：报错教下一步（fs_read 重读逐字复制）
+    let err = edit_replace(
+        &json!({ "path": p, "old_string": "nope", "new_string": "x" }),
+        no_host(),
+    )
+    .unwrap_err();
+    assert!(err.contains("fs_read"), "got: {err}");
+
+    unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn lines_matrix() {
     let _g = ENV_LOCK.lock().unwrap();
     let root = temp_root("lines");
