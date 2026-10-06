@@ -12,6 +12,8 @@
  *
  * v4.11：审批卡迁坞（Composer 槽位，§3.17），转录里只剩决策记录行；
  * ⑤⑨ 跟随滚动（默认贴底，用户上滚即让位）+ 回到底部钮（坞上方）。
+ * v2.102：最近一条用户消息置顶钉（sticky，模型工作消息增长不把它挤出
+ * 视口）。
  */
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -162,6 +164,16 @@ const editableUserIds = computed(() => {
     if (it.pos !== undefined || i === lastUserIdx) ids.add(it.id);
   });
   return ids;
+});
+
+/** v2.102 置顶钉：最近一条用户消息（最新轮的开头）sticky 常驻转录列
+ * 顶端——模型工作消息增长不再把它挤出视口；新轮开始钉随新消息迁移。 */
+const pinnedUserId = computed(() => {
+  for (let i = chat.items.length - 1; i >= 0; i--) {
+    const it = chat.items[i]!;
+    if (it.kind === "user") return it.id;
+  }
+  return null;
 });
 
 /** 用户条目的事件位（模板窄化不进嵌套函数，这里集中收窄）。 */
@@ -398,13 +410,15 @@ async function onNoticeAction(item: SystemItem, action: string) {
     <div ref="scroller" class="scroller scroll-y" @scroll.passive="onScroll">
       <div class="column conv-w">
         <template v-for="turn of turnViews" :key="turn.key">
-          <!-- 用户消息（容器外，§3.34 可编辑；复制钮常态有） -->
+          <!-- 用户消息（容器外，§3.34 可编辑；复制钮常态有；最近一条
+               v2.102 起置顶钉在转录列顶端） -->
           <MessageRow
             v-if="turn.userItem"
             kind="user"
             :text="turn.userItem.text"
             :ts="turn.userItem.ts"
             :editable="editableUserIds.has(turn.userItem.id)"
+            :pinned="turn.userItem.id === pinnedUserId"
             @edit="(t: string) => turn.userItem && onEditResend(userPos(turn.userItem), t)"
           />
 

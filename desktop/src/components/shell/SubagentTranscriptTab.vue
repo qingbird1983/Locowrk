@@ -5,6 +5,8 @@
  * project_events，跨重启可回看），渲染复用 MessageRow / ToolRow 同一套
  * 行组件（§3.7–3.9 同一心智模型；近似：平铺过程行，过程组合成组后续批
  * 接入）。底部固定只读说明——只读面必须自证，不然用户以为能插话。
+ * v2.102 同逻辑：折叠遮罩/气泡内悬浮钮/右下直角气泡经 MessageRow 自动
+ * 同形；最新任务提示置顶钉（sticky）+ 宿主面盖 bg-dock。
  */
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -32,11 +34,21 @@ onMounted(async () => {
 });
 
 const noticeText = computed(() => t("panel.readonlyNote"));
+
+/** v2.102 同逻辑：最新任务提示（最后一条用户消息）同样置顶钉在本页签
+ * 顶端；折叠遮罩/悬浮钮/直角气泡经 MessageRow 自动同形。 */
+const pinnedUserId = computed(() => {
+  for (let i = items.value.length - 1; i >= 0; i--) {
+    const it = items.value[i]!;
+    if (it.kind === "user") return it.id;
+  }
+  return null;
+});
 </script>
 
 <template>
   <div class="subtab flex min-h-0 flex-1 flex-col">
-    <div class="scroll-y min-h-0 flex-1 px-3 py-2">
+    <div class="subtab-scroll scroll-y min-h-0 flex-1 px-3 py-2">
       <p v-if="state === 'loading'" class="px-1 py-4 text-center text-[length:var(--lw-fs-12)] text-ink-4">
         {{ t("panel.loading") }}
       </p>
@@ -49,6 +61,7 @@ const noticeText = computed(() => t("panel.readonlyNote"));
             v-if="item.kind === 'user' || item.kind === 'assistant'"
             :kind="item.kind"
             :text="item.text"
+            :pinned="item.kind === 'user' && item.id === pinnedUserId"
           />
           <ToolRow v-else-if="item.kind === 'tool'" :item="item" />
           <SystemNotice
@@ -66,3 +79,11 @@ const noticeText = computed(() => t("panel.readonlyNote"));
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 置顶钉与折叠遮罩的宿主面 = 本面板列底（bg-dock），覆盖 MessageRow
+ * 缺省 --lw-bg——主聊天与页签两处宿主各归其位（v2.102） */
+.subtab-scroll {
+  --lw-msg-host: var(--lw-bg-dock);
+}
+</style>
