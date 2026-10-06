@@ -8,12 +8,11 @@
  * Shift+Enter 换行、Esc = 取消；可编辑性由父层裁决（出现条件见 §3.34）。
  * 长消息折叠（组件规格「Line Clamp with Fade Mask」+ v2.101 裁定收窄：
  * 只折用户消息，模型正文——主聊天与子代理工作显示——不折，助手分支不
- * 接测量体）：fold-zone 夹紧 + 渐变遮罩 + 圆形展开钮悬浮在气泡内中下
- * （v2.102 裁定：钮在气泡里浮于文字表面），状态机在 use-message-fold.ts；
+ * 接测量体）：fold-zone 夹紧 + 渐变遮罩 + 圆形展开钮悬浮在气泡内右下角
+ * （v2.103 裁定），状态机在 use-message-fold.ts；
  * 复制/编辑/时间行在气泡下方且不受折叠影响（恒复制全文）。
- * 置顶钉（v2.102 裁定）：最近一条用户消息由父层判 pinned——sticky 常驻
- * 转录列顶端，模型工作消息增长不把它挤出视口；不透明底随宿主面
- * （--lw-msg-host，缺省 --lw-bg；子代理页签盖 bg-dock）。
+ * 遮罩方向（v2.103 目检裁定）：底部基本不透明（完全盖住文字）、渐渐往
+ * 上渐渐透明（文字渐渐透出）——两层同形渐变叠出气泡实际表面色。
  */
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -33,9 +32,6 @@ const props = withDefaults(
     /** 复制钮（v2.96 用户裁定）：只在用户消息与每轮最终汇报/总结之下出现
      * （缺省 true = 用户消息）；任务中间的简短回话由父层传 false 关掉。 */
     copyable?: boolean;
-    /** 置顶钉（v2.102）：最近一条用户消息 sticky 常驻转录列顶端，父层
-     * （ChatTranscript / 子代理转录页签）判定传入。 */
-    pinned?: boolean;
   }>(),
   { copyable: true },
 );
@@ -136,10 +132,7 @@ async function onBodyClick(e: MouseEvent) {
 </script>
 
 <template>
-  <div
-    class="msg"
-    :class="[kind === 'user' ? 'msg-user' : 'msg-assistant', { 'is-pinned': pinned }]"
-  >
+  <div class="msg" :class="kind === 'user' ? 'msg-user' : 'msg-assistant'">
     <!-- 用户消息：右对齐气泡（编辑态 = 自适应文本域原位替换）；
         助手消息：整列宽 markdown。折叠 = fold-zone 夹紧 + 渐变遮罩 -->
     <textarea
@@ -163,8 +156,8 @@ async function onBodyClick(e: MouseEvent) {
         :style="foldStyle"
       >{{ text }}</div>
       <div v-if="showFold" class="fold-mask" :class="{ 'is-open': isOpen }" />
-      <!-- 悬浮圆钮（v2.102 裁定）：气泡内中下、浮在文字表面——折叠态压在
-          渐变遮罩上，展开态压在末行文字上；tips 走 Teleport 不受气泡裁剪 -->
+      <!-- 悬浮圆钮（v2.103 裁定：气泡内右下角、浮在文字表面——折叠态压
+          在渐变遮罩上，展开态压在末行文字上；tips 走 Teleport 不受裁剪 -->
       <HoverTip
         v-if="showFold"
         class="fold-btn-pos"
@@ -267,22 +260,13 @@ async function onBodyClick(e: MouseEvent) {
   overflow: hidden;
 }
 
-/* ---- 置顶钉（v2.102 裁定）---- */
-/* 最近一条用户消息 sticky 常驻转录列顶端：模型工作消息增长不把它挤出
- * 视口。不透明底 = 宿主面（主聊天区 --lw-bg），后继内容从其下方滑过被
- * 遮住；子代理转录页签经 --lw-msg-host 盖 bg-dock */
-.msg.is-pinned {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--lw-msg-host, var(--lw-bg));
-}
-
 /* ---- 长消息折叠（Line Clamp with Fade Mask，只折用户消息）---- */
-/* 遮罩双层背景：wash-1 渐变叠宿主实底。目标色必须是气泡的实际表面色
- * （半透明 wash-1 叠宿主面）——单层 fade 到 wash-1 因目标色近乎全透明
- * 而不可见（v2.102 目检实抓）。宿主面可被 --lw-msg-host 覆盖。
- * §六：.vue 禁字面色 */
+/* 遮罩 = 两层同形渐变（v2.103 目检裁定方向）：上层 wash-1、下层宿主实
+ * 底，都从顶部透明渐到底部不透明——底部叠出气泡的实际表面色（wash-1
+ * 半透明叠宿主面）完全盖住文字，往上两层同步渐透明、文字渐渐透出。
+ * 单层 fade 到 wash-1 目标色近乎全透明 = 看不见（v2.102 实抓）；第二层
+ * 用实底色块则整块盖死文字无渐透（v2.103 实抓）。宿主面可被
+ * --lw-msg-host 覆盖（子代理转录页签 = bg-dock）。§六：.vue 禁字面色 */
 .msg-user__bubble.is-clamped {
   overflow: hidden;
 }
@@ -300,18 +284,17 @@ async function onBodyClick(e: MouseEvent) {
   transition: opacity var(--dur-base) var(--ease-out);
   background:
     linear-gradient(to bottom, transparent, var(--lw-wash-1)),
-    var(--lw-msg-host, var(--lw-bg));
+    linear-gradient(to bottom, transparent, var(--lw-msg-host, var(--lw-bg)));
 }
 .fold-mask.is-open {
   opacity: 0;
 }
-/* 悬浮圆钮（v2.102 裁定）：气泡内中下、浮在表面——绝对定位于气泡，
- * 折叠态压遮罩、展开态压末行文字 */
+/* 悬浮圆钮（v2.103 裁定：右下角右下角右下角）：气泡内右下、浮在表面
+ * ——折叠态压遮罩、展开态压末行文字；恰落在右下直角上 */
 .fold-btn-pos {
   position: absolute;
-  left: 50%;
+  right: var(--lw-gap-6);
   bottom: var(--lw-gap-6);
-  transform: translateX(-50%);
   z-index: 2;
 }
 .fold-btn {

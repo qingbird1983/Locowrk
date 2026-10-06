@@ -6,7 +6,7 @@
  * 行组件（§3.7–3.9 同一心智模型；近似：平铺过程行，过程组合成组后续批
  * 接入）。底部固定只读说明——只读面必须自证，不然用户以为能插话。
  * v2.102 同逻辑：折叠遮罩/气泡内悬浮钮/右下直角气泡经 MessageRow 自动
- * 同形；最新任务提示置顶钉（sticky）+ 宿主面盖 bg-dock。
+ * 同形；遮罩宿主面盖 bg-dock。
  */
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -34,16 +34,6 @@ onMounted(async () => {
 });
 
 const noticeText = computed(() => t("panel.readonlyNote"));
-
-/** v2.102 同逻辑：最新任务提示（最后一条用户消息）同样置顶钉在本页签
- * 顶端；折叠遮罩/悬浮钮/直角气泡经 MessageRow 自动同形。 */
-const pinnedUserId = computed(() => {
-  for (let i = items.value.length - 1; i >= 0; i--) {
-    const it = items.value[i]!;
-    if (it.kind === "user") return it.id;
-  }
-  return null;
-});
 </script>
 
 <template>
@@ -61,7 +51,6 @@ const pinnedUserId = computed(() => {
             v-if="item.kind === 'user' || item.kind === 'assistant'"
             :kind="item.kind"
             :text="item.text"
-            :pinned="item.kind === 'user' && item.id === pinnedUserId"
           />
           <ToolRow v-else-if="item.kind === 'tool'" :item="item" />
           <SystemNotice
@@ -81,8 +70,8 @@ const pinnedUserId = computed(() => {
 </template>
 
 <style scoped>
-/* 置顶钉与折叠遮罩的宿主面 = 本面板列底（bg-dock），覆盖 MessageRow
- * 缺省 --lw-bg——主聊天与页签两处宿主各归其位（v2.102） */
+/* 折叠遮罩的宿主面 = 本面板列底（bg-dock），覆盖 MessageRow 缺省
+ * --lw-bg——遮罩渐变底部要叠出气泡的真实表面色（v2.102） */
 .subtab-scroll {
   --lw-msg-host: var(--lw-bg-dock);
 }
