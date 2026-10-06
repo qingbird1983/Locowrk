@@ -60,6 +60,12 @@ stage tool-echo 0.2.0
 # （v2.114，docs/design/edit_replace.md 评估：fs_read 留在 on_demand 时
 # 重读闭环可能断在半路）
 stage tool-fs 0.1.3
+# 0.1.4（2026-10-06，小迭代 +0.0.1）：发现性补丁（exposure 文档 §4.4，
+# 真实模型实测反馈）——fs_grep 升 always（模型的眼睛；实测绕行 shell grep
+# 的根因，全库零引用的最孤儿）+ fs_restore 升 always（全部四个改文件工具
+# 的唯一撤销路径，意外时刻最不可能探索）+ fs_restore 描述改写（删「usually
+# invoked by the compensation layer」劝退措辞，明确可拿原调用三件套手动自救）
+stage tool-fs 0.1.4
 stage tool-fetch 0.1.0
 stage tool-shell 0.1.2
 stage tool-git 0.1.2
@@ -84,5 +90,5 @@ stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit 0.2.0（edit_replace 容错匹配+always）+ tool-fs 0.1.3（fs_read always）+ 其余见上注释"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit 0.2.0 + tool-fs/{0.1.3,0.1.4}（fs_grep/fs_restore always）+ 其余见上注释"
 echo "next: cargo run -p kernel-bin -- demo"

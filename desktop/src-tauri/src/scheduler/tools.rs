@@ -146,7 +146,8 @@ fn list_spec() -> &'static ToolSpec {
             .into(),
         schema: json!({ "type": "object", "properties": {} }),
         side_effect: SideEffect::Pure,
-        exposure: Exposure::OnDemand,
+        // Always（发现性补丁 §4.4）：能 schedule_create 就能查看自己建了什么
+        exposure: Exposure::Always,
     })
 }
 

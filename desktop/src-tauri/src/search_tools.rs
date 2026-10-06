@@ -9,7 +9,9 @@
 //! 1 分，query 原串参与匹配以照顾中文），仍空回退 top-10 高频（§13 坑）。
 //!
 //! 返回 name + description + schema，LLM 下一轮即可调用——resolve 不过滤
-//! （⑩②），被截断目录挤出的工具照样可达。
+//! （⑩②），被截断目录挤出的工具照样可达。结果另附 `catalog`：结果之外
+//! 的全目录工具**名**（发现性补丁 §4.4——名字是廉价 token，schema 才是
+//! 大头；一次检索后全目录名字留在转录里全会话有效）。
 
 use std::sync::{Arc, OnceLock};
 
@@ -33,10 +35,14 @@ fn spec() -> &'static ToolSpec {
     static SPEC: OnceLock<ToolSpec> = OnceLock::new();
     SPEC.get_or_init(|| ToolSpec {
         name: "search_tools".into(),
-        description: "Search the available tool catalog (semantic search with keyword \
-                      fallback). Call this when you are unsure whether a tool exists for \
-                      the task; results include name, description and schema so you can \
-                      call them on your next turn."
+        description: "Search the FULL tool catalog (semantic search with keyword fallback). \
+                      The tools in your context are only the high-frequency subset; \
+                      low-frequency tools (undo/restore, line-range edits, content search, \
+                      git, schedules, ...) stay outside it. Call this BEFORE hand-rolling \
+                      a workaround such as shell pipelines or repeated file reads. Results \
+                      carry name/description/schema and are immediately callable next turn; \
+                      the `catalog` field additionally lists every other tool name in the \
+                      full catalog, so nothing stays invisible."
             .into(),
         schema: json!({
             "type": "object",
@@ -152,6 +158,17 @@ fn render(specs: &[ToolSpec]) -> Vec<Value> {
         .collect()
 }
 
+/// 结果之外的全目录名索引（发现性补丁 §4.4）：只给名字不给 schema——
+/// 名字是廉价 token，schema 才是大头；保持目录序，模型看到名字即可
+/// 按名再次精确检索（resolve 不过滤，看到即可调用）。
+fn remaining_names(catalog: &[ToolSpec], rendered: &[ToolSpec]) -> Vec<String> {
+    catalog
+        .iter()
+        .filter(|s| !rendered.iter().any(|r| r.name == s.name))
+        .map(|s| s.name.clone())
+        .collect()
+}
+
 /// 元工具本体：持有全目录视图（不含自身）、使用统计与可选嵌入器。
 pub struct SearchToolsTool {
     catalog: Arc<KernelToolSource>,
@@ -212,6 +229,7 @@ impl Tool for SearchToolsTool {
                             "query": query,
                             "source": "vector_match",
                             "results": render(&matched),
+                            "catalog": remaining_names(&catalog, &matched),
                         }));
                     }
                 }
@@ -224,6 +242,7 @@ impl Tool for SearchToolsTool {
                 "query": query,
                 "source": "keyword_match",
                 "results": render(&matched),
+                "catalog": remaining_names(&catalog, &matched),
             }));
         }
         // 空结果回退 top-10 高频（§13）；统计为空 = 没有可推荐的高频，
@@ -238,12 +257,15 @@ impl Tool for SearchToolsTool {
                 "query": query,
                 "source": "no_match",
                 "results": [],
+                // results 空 → 名字索引即全目录（发现性不断：模型仍能看名识工具）
+                "catalog": remaining_names(&catalog, &[]),
             }));
         }
         Ok(json!({
             "query": query,
             "source": "hot_fallback",
             "results": render(&hot),
+            "catalog": remaining_names(&catalog, &hot),
         }))
     }
 }

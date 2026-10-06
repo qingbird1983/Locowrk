@@ -203,13 +203,15 @@ impl Session {
 
 | 值 | 含义 | 典型工具 |
 |---|---|---|
-| `always` | 每次请求都暴露 | `fs_read`、`fs_list`、`search_tools` |
-| `on_demand` | 进候选池，按热度/检索激活 | `fs_write`、`git_commit`、`http_post` |
-| `hidden` | 只有显式检索才暴露 | 危险工具、低频工具 |
+| `always` | 每次请求都暴露 | `fs_read`、`fs_grep`、`edit_replace`、`fs_restore`、`search_tools` |
+| `on_demand` | 进候选池，按热度/检索激活 | `fs_write`、`edit_lines`、`git_commit` |
+| `hidden` | 只有显式检索才暴露 | 危险工具、低频工具（现网唯一实例：`memory_collapse`） |
 
 **默认值**：`on_demand`。作者不写，就当候选池处理。
 
-**约束**：`always` 总数不超过 10 个。超过就在加载时告警——这是作者的设计失误。
+**约束**：`always` 总数不超过 16 个（2026-10-06 由 10 上调——语义分层裁定后
+读侧/编辑/撤销族整体入 `always`，见 §4.4）。再超仍在加载时一次性告警——
+那是作者的设计失误信号。
 
 ### 4.2 层次 2：语义检索（embedding）
 
@@ -250,7 +252,7 @@ let candidates = index.search(&query, 15).await;
 ```json
 {
   "name": "search_tools",
-  "description": "搜索可用工具。当你不确定是否有工具能完成任务时调用",
+  "description": "搜索完整工具目录。你上下文里的工具清单只是高频子集；动手绕行（shell 管道、反复读文件）之前先在这里查",
   "schema": {
     "type": "object",
     "properties": {
@@ -262,11 +264,67 @@ let candidates = index.search(&query, 15).await;
 }
 ```
 
-返回匹配的工具列表（名字 + 描述 + schema）。LLM 拿到后，下一轮就能调用这些工具。
+返回匹配的工具列表（名字 + 描述 + schema），另附 `catalog` 字段：结果之外的
+全目录工具**名**（只给名字不给 schema——名字是廉价 token，schema 才是大头）。
+LLM 拿到后，下一轮就能调用这些工具；全目录名字留在转录里，全会话有效。
 
 **这个机制是兜底。** 前两层没覆盖的工具，LLM 可以主动发现。
 
 **Claude Tool Search / Cursor skill 机制，本质都是这个思路。**
+
+### 4.4 发现性补丁（2026-10-06，真实模型实测反馈）
+
+**实测教训**（Timo 打地鼠会话，用户转述测试反馈）：模型想检索文件内容时
+手写 shell grep 被拒，退回多次单文件读取——`fs_grep` 全程不在可见清单里，
+且模型从没想过 search_tools。失败是**静默**的：不表现为「找不到工具」，
+表现为「多花轮次 + 更差的替代品」，这类损耗不会自己浮出水面。
+
+诊断：这是**发现性**问题，不是暴露量问题。失败模式有二，召回率再高也救
+不了——①**不知道该搜**（没有触发信号）；②**想搜的时机不对**（等意识到
+缺工具时已经绕完路）。另有一个结构缺陷放大二者：
+
+**三道发现之门与断点**：
+1. **进 Top-N 暴露集**——冷启动零信号时打分全同分，stable sort 按目录
+   注册序补位（= 抽签）；`pin_session` 使截断结果全会话冻结，会话中期的
+   绕行信号无法把被截工具浮上来（跨会话 EWMA 可以，当次会话不行）。
+2. **被可见工具的 description 交叉引用**——引用图原本有断点：`fs_grep`
+   / `fs_list` / `fs_delete` 全库零引用（最常用的内容检索恰是最孤儿；
+   `fs_restore` 被 fs_write/edit_replace/edit_lines/edit_diff 四处引用，
+   `edit_lines` 被 edit_replace 引用，线索本不缺）。
+3. **模型自发调用 search_tools**——没有任何信号告诉模型「可见清单是
+   子集」，触发时机全靠运气。
+
+**四条补丁（按 ROI；①②③落地，④离线审计不新建遥测）**：
+
+1. **初始清单自述不完整**（成本一行字）：search_tools description 明说
+   「你看到的是高频子集」，触发时机从「不确定工具是否存在」提前到
+   「想绕行之前」。直接杀死失败模式①。
+2. **语义分层，不按频率分层**：兜底/撤销类工具的存在价值就在意外时刻，
+   而意外时刻最不可能停下来探索——
+   - `fs_restore` 恒暴露：它是**全部四个**改文件工具（fs_write /
+     edit_replace / edit_lines / edit_diff，皆 Compensable）的唯一撤销
+     路径，整个编辑族的安全叙事压在它的可见性上；描述同步改写——删去
+     「Usually invoked by the compensation layer, not by the model」的
+     劝退措辞，明确模型可拿原调用的 {call_id, args, output} 手动自救。
+   - `fs_grep` 恒暴露：读侧三件（read/list/grep）是模型的眼睛，内容
+     检索是编码循环的一等操作；Pure 零风险、schema ≈120 token，消的是
+     实测中代价最高的绕行模式。描述补「别用 shell grep 管道」指引。
+   - `schedule_list` 恒暴露：能 `schedule_create` 就能查看自己建了什么
+     （创建/查看不对称是同类毛病）。
+   - `edit_lines` / `fs_delete` / `fs_list` 维持 on_demand（真低频，符合
+     分层本意）。随批 always 预算 10 → 16（§4.1）。
+3. **search_tools 结果附全目录名索引**：`catalog` 字段只给名字不给
+   schema——约 30 个名字 ≈150 token，一次检索后留在转录里全会话有效；
+   resolve 本就不过滤（⑩②），看到名字即可调用。命中/降级/落空三条
+   返回路径都带。
+4. **埋点不新建**：search_tools 调用（含 query 与 no_match）与 shell
+   调用（含完整命令）本就落会话 jsonl，离线审计即可量化「检索调用率 /
+   空命中率 / grep 型绕行」，数据够再谈下一步。
+
+**明确不做**：全量铺开工具（上下文成本 + 选择噪声，且失败模式不在暴露
+量上）；为会话中期发现去动 `pin_session` 做动态重排——tools 块逐轮变化
+= 前缀缓存从 tools 位置起全灭（M1 纪律），用缓存代价换发现性是亏本
+买卖，按需发现交给 search_tools 正是现管设计。
 
 ---
 

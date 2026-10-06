@@ -185,6 +185,70 @@ fn spec_is_always_and_pure() {
     assert_eq!(s.name, "search_tools");
     // 回退条数与文档一致（§13 top-10）
     assert_eq!(HOT_FALLBACK, 10);
+    // 发现性补丁（§4.4）：description 自述「可见清单是子集」+ catalog 索引
+    assert!(
+        s.description.contains("subset"),
+        "自述不完整是发现性第一补丁"
+    );
+    assert!(s.description.contains("catalog"));
+}
+
+/// 名字索引纯函数：排除已渲染项、保持目录序。
+#[test]
+fn remaining_names_excludes_rendered_keeps_catalog_order() {
+    let cat = vec![
+        tool_spec("fs_read", "read", Exposure::Always),
+        tool_spec("fs_grep", "grep", Exposure::Always),
+        tool_spec("git_commit", "commit", Exposure::OnDemand),
+    ];
+    let rendered = vec![tool_spec("fs_grep", "grep", Exposure::Always)];
+    assert_eq!(
+        super::remaining_names(&cat, &rendered),
+        ["fs_read", "git_commit"]
+    );
+    assert_eq!(super::remaining_names(&cat, &cat), Vec::<String>::new());
+}
+
+/// keyword 命中路径：catalog 列出结果之外的其余工具名（只给名字）。
+#[tokio::test]
+async fn call_attaches_catalog_index_next_to_results() {
+    let tool = SearchToolsTool::new(
+        catalog(vec![
+            tool_spec("fs_read", "read a file", Exposure::Always),
+            tool_spec("fs_grep", "search file content", Exposure::Always),
+        ]),
+        recorder(),
+        None,
+    );
+    let out = tool
+        .call(&CallCtx::new(), json!({"query": "read"}))
+        .await
+        .unwrap();
+    assert_eq!(out["source"], "keyword_match");
+    assert_eq!(out["results"][0]["name"], "fs_read");
+    let names = out["catalog"].as_array().unwrap();
+    assert_eq!(names.len(), 1, "只剩未命中的工具名");
+    assert_eq!(names[0], "fs_grep");
+}
+
+/// no_match 路径：results 空，catalog 即全目录——检索落空也不断发现性。
+#[tokio::test]
+async fn no_match_still_lists_full_catalog_names() {
+    let tool = SearchToolsTool::new(
+        catalog(vec![tool_spec(
+            "fs_grep",
+            "search file content",
+            Exposure::OnDemand,
+        )]),
+        recorder(),
+        None,
+    );
+    let out = tool
+        .call(&CallCtx::new(), json!({"query": "zzz-no-hit"}))
+        .await
+        .unwrap();
+    assert_eq!(out["source"], "no_match");
+    assert_eq!(out["catalog"][0], "fs_grep");
 }
 
 /// 向量打分纯函数：floor 过滤 + 降序截断。

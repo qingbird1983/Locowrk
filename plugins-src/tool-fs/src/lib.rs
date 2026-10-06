@@ -99,7 +99,10 @@ fn describe_manifest() -> CString {
                 name: "fs_grep".into(),
                 description: "Case-insensitive substring search in a text file, or \
                               recursively under a directory. Pass an absolute path. \
-                              Returns {query, matches: [{file, line, text}], truncated, scanned}."
+                              Returns {query, matches: [{file, line, text}], truncated, scanned}. \
+                              Use this instead of shell grep/findstr pipelines for content \
+                              search — it is scoped to the workspace roots and returns \
+                              structured matches."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -112,7 +115,7 @@ fn describe_manifest() -> CString {
                     "required": ["path", "query"]
                 }),
                 side_effect: SideEffect::Pure,
-                exposure: Default::default(),
+                exposure: Exposure::Always,
             },
             ToolSpec {
                 name: "fs_write".into(),
@@ -155,10 +158,11 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "fs_restore".into(),
-                description: "Undo a previous fs_write by restoring its backup (the backup is \
-                              consumed; restoring twice is a no-op). Usually invoked by the \
-                              compensation layer, not by the model. Args mirror the compensation \
-                              payload {call_id, args, output}; only output.{path, backup, existed} \
+                description: "Undo a previous fs_write / edit_replace / edit_lines / edit_diff \
+                              by restoring its automatic backup (the backup is consumed; \
+                              restoring twice is a no-op). Either the compensation layer or \
+                              you can invoke it: pass the original call's {call_id, args, \
+                              output} from the transcript; only output.{path, backup, existed} \
                               is used. Irreversible — restoring overwrites the file's current \
                               content, so the call requires user approval."
                     .into(),
@@ -172,7 +176,7 @@ fn describe_manifest() -> CString {
                     }
                 }),
                 side_effect: SideEffect::Irreversible,
-                exposure: Default::default(),
+                exposure: Exposure::Always,
             },
         ],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）

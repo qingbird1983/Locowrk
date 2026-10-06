@@ -16,7 +16,8 @@ use tokio::sync::Semaphore;
 use crate::instance::PluginInstance;
 use crate::registry::PluginRegistry;
 
-/// always>10 预算告警只发一次（exposure 文档 §4.1：作者设计失误）。
+/// always>16 预算告警只发一次（exposure 文档 §4.1；2026-10-06 由 10 上调
+/// ——语义分层裁定后读侧/编辑/撤销族整体入 always，见 §4.4）。
 static ALWAYS_BUDGET_WARNED: OnceLock<()> = OnceLock::new();
 
 /// 把一个已加载插件实例的某个工具适配成宿主侧 `Tool`（§5.5）。
@@ -114,7 +115,7 @@ impl RegistryToolSource {
     /// 全目录快照（供 LLM 请求枚举工具）：与 `resolve` 同序——active 实例
     /// 按 id 排序，同名工具先声明者赢。暴露管线直通态（⑩②）：hidden 不进
     /// 常规目录（只等 ⑫ 检索激活）；always 直通 + on_demand 全暴露，行为
-    /// 与加字段前一致（截断归 ⑫）。always 总数超 10 一次性告警（§4.1）。
+    /// 与加字段前一致（截断归 ⑫）。always 总数超 16 一次性告警（§4.1）。
     pub fn list_tools(&self) -> Vec<ToolSpec> {
         self.list_impl(false)
     }
@@ -144,10 +145,10 @@ impl RegistryToolSource {
                 );
             }
         }
-        if !include_hidden && always > 10 && ALWAYS_BUDGET_WARNED.set(()).is_ok() {
+        if !include_hidden && always > 16 && ALWAYS_BUDGET_WARNED.set(()).is_ok() {
             tracing::warn!(
                 count = always,
-                "always-exposure tools exceed the 10 budget (exposure doc §4.1) — \
+                "always-exposure tools exceed the 16 budget (exposure doc §4.1) — \
                  authors should declare on_demand/hidden instead"
             );
         }
