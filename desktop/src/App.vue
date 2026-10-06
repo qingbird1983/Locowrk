@@ -24,6 +24,8 @@ import ToastStack from "./components/shell/ToastStack.vue";
 import Topbar from "./components/shell/Topbar.vue";
 import WindowControls from "./components/shell/WindowControls.vue";
 import { useGlobalShortcuts } from "./components/shell/use-global-shortcuts";
+import { useResponsiveShell } from "./components/shell/use-responsive-shell";
+import { Icon } from "./lib/icons";
 import { computed, ref } from "vue";
 
 /**
@@ -56,6 +58,8 @@ const welcomeRef = ref<{ slotEl: HTMLElement | null } | null>(null);
 const welcomeSlotEl = computed(() => welcomeRef.value?.slotEl ?? null);
 // §3.25 落地表：Ctrl+B/J/N/,/[/]（⌘K 与 Ctrl+Shift+L 各自注册，不在此）
 useGlobalShortcuts();
+// §3.40（v2.109）：视口断点旗标源——只读窗口写 store，不碰持久化状态
+useResponsiveShell();
 
 onMounted(() => {
   chat.init();
@@ -109,12 +113,28 @@ onMounted(() => {
       <!-- 工作面板（§2.5，v2.52）：主区右缘第二展示面，只对对话目的地有
            意义（§2.4 开关在会话顶栏右侧）；随 chat 区一起挂起/显示。
            开合滑动动画与侧栏统一（§6.6 ②，issue #2）。首页空态不渲染
-           （v2.60 修复批：会话态开面板切回首屏必须收起——空态锁右栏） -->
+           （v2.60 修复批：会话态开面板切回首屏必须收起——空态锁右栏）。
+           §3.40（v2.109）：视口门控——workPanel.open 是用户手动意图，
+           < 1400px 按断点级联折叠且永不改写意图，回到 ≥1400 恢复 -->
       <Transition name="wp">
         <WorkPanel
-          v-if="shell.destination === 'chat' && !isHome && workPanel.open"
+          v-if="
+            shell.destination === 'chat' &&
+            !isHome &&
+            workPanel.open &&
+            shell.viewportRightOk
+          "
         />
       </Transition>
+
+      <!-- §3.40① 窗口过窄（<800px）：整窗提示层，不允许使用；z 低于
+           窗口控制车道（z-1000，最小化/关闭仍可用）。应用 minWidth 1024
+           下仅浏览器开发态可达，照规格实现不裁剪 -->
+      <div v-if="shell.tooNarrow" class="narrow-veil" role="alert">
+        <Icon name="warn" :size="28" aria-hidden="true" />
+        <p class="narrow-veil__title">{{ t("narrow.title") }}</p>
+        <p class="narrow-veil__hint">{{ t("narrow.hint") }}</p>
+      </div>
 
       <!-- 非对话目的地：侧栏右侧铺满，按需挂载 -->
       <DestinationShell
@@ -150,17 +170,49 @@ onMounted(() => {
 .wp-enter-active {
   transition:
     width var(--dur-base) var(--ease-spring),
+    transform var(--dur-base) var(--ease-spring),
     opacity var(--dur-base) var(--ease-out);
 }
 .wp-leave-active {
   transition:
     width var(--dur-fast) var(--ease-in),
+    transform var(--dur-fast) var(--ease-in),
     opacity var(--dur-fast) var(--ease-in);
 }
 .wp-enter-from,
 .wp-leave-to {
   width: 0 !important;
   opacity: 0;
+  /* §3.40③：宽度收缩同时内容向右滑出（视觉滑出而非挤压重排） */
+  transform: translateX(100%);
+}
+
+/* §3.40① 窗口过窄提示层（<800px）：整窗覆盖 bg-page，z-50 低于窗口控制
+ * 车道；文案居中，warn 字形 + 标题 + 指引 */
+.narrow-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lw-gap-8);
+  background: var(--lw-bg);
+  color: var(--lw-ink-2);
+  padding: var(--lw-gap-8);
+  text-align: center;
+}
+.narrow-veil__title {
+  font-size: var(--lw-fs-14);
+  font-weight: 600;
+  color: var(--lw-ink-1);
+}
+.narrow-veil__hint {
+  max-width: 360px;
+  font-size: var(--lw-fs-12half);
+  line-height: 1.6;
+  color: var(--lw-ink-3);
 }
 
 /* §3.23 会话冷切换进度轨：2px 高、28% 宽不定段 720ms 来回扫 */

@@ -300,7 +300,12 @@ export default {
     confirmDelete: "确认删除？",
   },
   // 工作面板（§2.5/§3.16，v2.52）
+  narrow: {
+    title: "窗口过窄",
+    hint: "Locowrk 需要 ≥800px 宽度才能使用，请加宽窗口后继续。",
+  },
   panel: {
+    tooNarrowHint: "窗口宽度不足：右栏需要 ≥1400px 才能展开（当前为小窗辅助面，自动收起是有意设计）。",
     title: "工作面板",
     launcher: "启动器",
     launcherHint: "对话中出现的子 Agent 卡可在这里查看完整转录：点卡片上的「看转录」图标，或回到这里从清单打开。",

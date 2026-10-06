@@ -105,7 +105,7 @@ function openReview(item: { callId: string; path: string; diff: string }) {
          padding-right 预留 120px，顶栏同刻让位 -->
     <header
       class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-1 px-3"
-      style="padding-right: calc(var(--lw-wincontrols) + 40px)"
+      style="padding-right: calc(var(--lw-wincontrols) + 72px)"
     >
       <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         <HoverTip

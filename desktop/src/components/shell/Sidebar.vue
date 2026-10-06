@@ -77,7 +77,7 @@ const isMarket = computed(() => shell.destination === "plugins");
     :inert="shell.sidebarCollapsed"
     aria-label="Locowrk"
   >
-    <div class="flex h-full w-[var(--lw-sidebar-w)] flex-col">
+    <div class="sidebar__inner flex h-full w-[var(--lw-sidebar-w)] flex-col">
       <!-- 侧栏头（46px 带左段）：品牌 + 折叠按钮，空白处拖拽窗口 -->
       <header class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-2 px-2">
         <span
@@ -252,6 +252,16 @@ const isMarket = computed(() => shell.destination === "plugins");
   transition:
     flex-basis var(--dur-fast) var(--ease-in),
     opacity var(--dur-fast) var(--ease-in);
+}
+
+/* §3.40③（v2.109）：内容层 translateX 滑出——宽度收缩裁剪 + 内容同步滑
+ * 动，视觉是「滑走」而非「挤压重排」；时长缓动与 aside 折叠同速对齐 */
+.sidebar__inner {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.sidebar.is-collapsed .sidebar__inner {
+  transform: translateX(-100%);
+  transition: transform var(--dur-fast) var(--ease-in);
 }
 
 /* 28px 方形图标控件（§3.19） */

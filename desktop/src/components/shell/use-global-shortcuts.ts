@@ -34,7 +34,12 @@ export function useGlobalShortcuts() {
       case "j":
         e.preventDefault();
         // §3.14 v3.9（issue #10）：首页空态不可展开工作面板
-        if (shell.destination === "chat" && chat.items.length > 0) {
+        // §3.40②·4（v2.109）：<1400px 视口不展开（与面板钮禁用同规）
+        if (
+          shell.destination === "chat" &&
+          chat.items.length > 0 &&
+          shell.viewportRightOk
+        ) {
           workPanel.toggle();
         }
         break;

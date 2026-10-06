@@ -40,16 +40,20 @@ const title = computed(() => {
 <template>
   <header
     class="relative z-10 flex h-[var(--lw-toolbar-h)] shrink-0 items-center bg-page pl-3"
-    style="padding-right: calc(var(--lw-wincontrols) + 40px)"
+    style="padding-right: calc(var(--lw-wincontrols) + 72px)"
     data-tauri-drag-region
   >
-    <!-- lead 槽：恒在，展开时宽 0（过渡与侧栏同步，标题不跳变） -->
+    <!-- lead 槽：恒在，展开时宽 0（过渡与侧栏同步，标题不跳变）。
+         md 档视口不允许展开侧栏（§3.40），展开钮一并隐藏 -->
     <div
       class="lead flex items-center overflow-hidden"
-      :class="shell.sidebarCollapsed ? 'lead--open' : ''"
-      :aria-hidden="!shell.sidebarCollapsed"
+      :class="shell.sidebarCollapsed && shell.viewportLeftOk ? 'lead--open' : ''"
+      :aria-hidden="!shell.sidebarCollapsed || !shell.viewportLeftOk"
     >
-      <HoverTip :text="t('sidebar.expand')">
+      <HoverTip
+        v-if="shell.viewportLeftOk"
+        :text="t('sidebar.expand')"
+      >
         <button
           class="ctl"
           type="button"
@@ -86,29 +90,42 @@ const title = computed(() => {
       </HoverTip>
     </div>
 
-    <!-- 面板开关（v2.61 用户裁定「展开右栏还是被挤跑」）：**fixed 钉窗**，
-         不在会随面板开合收缩的文档流里——右缘 120px（= 窗口控制车道左缘）
-         恒定，开合零位移；面板打开时正好落进面板头为它预留的槽位（原
-         「关闭面板」钮的位置，§2.5 v2.60），[+][⤢] 在它左侧。首页空态隐藏。
-         **渲染为组件第二根**（v2.61·fix）：header 自身是 z-10 层叠上下文，
-         钉在它里面会被 z-20 的工作面板整个盖住（用户报「按钮不见了」）——
-         挪到 data-chat-root 直属（z-auto，不设层叠上下文），按钮自己的
-         z-30 才真正压过面板。 -->
   </header>
-  <!-- 钉窗定位挂在 HoverTip 包裹层（fixed 后测量的才是真实位置）。类是
-       全局 .lw-panel-toggle（style.css）：scoped 属性进不了多根组件内部，
-       scoped 规则落不到包裹 span 上（v2.85 实抓：开关因此掉出钉窗位） -->
-  <HoverTip v-if="!isHome" class="lw-panel-toggle" :text="t('panel.title')">
-    <button
-      class="ctl"
-      type="button"
-      :aria-pressed="workPanel.open"
-      :aria-label="t('panel.title')"
-      @click="workPanel.toggle()"
+  <!-- 右上角双钮钉窗组（§3.40④，v2.61 钉窗语义扩为两钮一组）：[侧栏][面板]。
+       fixed 定位挂在全局类 .lw-topbar-toggles（style.css）——scoped 属性进
+       不了多根组件内部（v2.85/v2.61 先例）。侧栏钮恒显（含首页）；面板钮
+       首页空态隐藏（§2.4）且 md 档视口禁用（§3.40②·4，气泡如实告知）。
+       z-30 压过工作面板 z-20，header/面板头让位车道 +72px -->
+  <div class="lw-topbar-toggles">
+    <HoverTip
+      :text="shell.sidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')"
     >
-      <Icon name="panel" :size="14" aria-hidden="true" />
-    </button>
-  </HoverTip>
+      <button
+        class="ctl"
+        type="button"
+        :aria-pressed="!shell.sidebarCollapsed"
+        :aria-label="shell.sidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')"
+        @click="shell.toggleSidebar()"
+      >
+        <Icon name="sidebar" :size="14" aria-hidden="true" />
+      </button>
+    </HoverTip>
+    <HoverTip
+      v-if="!isHome"
+      :text="shell.viewportRightOk ? t('panel.title') : t('panel.tooNarrowHint')"
+    >
+      <button
+        class="ctl"
+        type="button"
+        :disabled="!shell.viewportRightOk"
+        :aria-pressed="workPanel.open && shell.viewportRightOk"
+        :aria-label="t('panel.title')"
+        @click="workPanel.toggle()"
+      >
+        <Icon name="panel" :size="14" aria-hidden="true" />
+      </button>
+    </HoverTip>
+  </div>
 </template>
 
 <style scoped>
@@ -127,8 +144,8 @@ const title = computed(() => {
   color: var(--lw-ink-1);
 }
 
-/* 面板开关钉窗规则已上收为全局类 .lw-panel-toggle（style.css）——scoped
- * 属性进不了多根组件（HoverTip）内部，规则必须放全局才能落到包裹层 */
+/* 钉窗定位已上收为全局类 .lw-topbar-toggles（style.css，§3.40④）——
+ * scoped 属性进不了多根组件（HoverTip）内部，规则必须放全局才能落到包裹层 */
 
 /* 标题固定宽度上限（v2.60 修复批）：长标题在此截断省略，不再横贯整条带 */
 .title-text {

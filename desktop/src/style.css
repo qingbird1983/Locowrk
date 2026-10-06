@@ -356,15 +356,25 @@
   animation: lw-pop-in-up-kf var(--dur-base) var(--ease-out);
 }
 
-/* 面板开关钉窗（v2.61 用户裁定「展开右栏不被挤跑」；目检修正⑦挪到
- * HoverTip 包裹层——气泡锚点量的才是 fixed 后的真实位置）。**全局类**：
- * Topbar 的 scoped 属性进不了多根组件内部，scoped 规则落不到包裹 span 上
- * （v2.85 实抓，开关因此掉出钉窗位）。z-30 压过工作面板 z-20 落其预留槽 */
-.lw-panel-toggle {
+/* 顶栏右上角双钮钉窗组（§3.40④，v2.109：v2.61 钉窗语义扩为两钮一组，
+ * [侧栏][面板]；目检修正⑦先例——scoped 规则进不了多根组件内部，**全局
+ * 类**承载定位）。z-30 压过工作面板 z-20 落其预留槽；固定 top 9px / 右缘
+ * = 窗口控制车道，面板开合零位移。面板钮在 md 档（<1400px）禁用，
+ * 降透明度 + 去 hover 底（§3.40②·4） */
+.lw-topbar-toggles {
   position: fixed;
   top: 9px;
   right: var(--lw-wincontrols);
   z-index: 30;
+  display: flex;
+  gap: 4px;
+}
+.lw-topbar-toggles .ctl:disabled {
+  opacity: 0.45;
+}
+.lw-topbar-toggles .ctl:disabled:hover {
+  background: transparent;
+  color: var(--lw-ink-2);
 }
 
 @layer base {
