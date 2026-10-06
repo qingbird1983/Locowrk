@@ -9,6 +9,7 @@ import {
   PANEL_DEFAULT,
   PANEL_MIN,
 } from "../lib/work-panel-preference";
+import { BREAKPOINT_XL } from "../lib/breakpoints";
 
 export interface WorkPanelTab {
   /** 页签 id：子会话 = childId（§3.16）；审阅 = `rev:<callId>`（§3.28）。 */
@@ -38,7 +39,10 @@ export const useWorkPanelStore = defineStore("workPanel", {
       savePanelPrefs({ open: this.open, width: this.width });
     },
     setOpen(v: boolean) {
-      this.open = v;
+      // §3.40②·2（v2.110 目检修正）：开意图只在视口放得下时成立——<1400px
+      // 的程序化开面板（看转录/审阅入口）不得落悬空 open=true，否则回宽
+      // 会自动弹开（右栏永不自动展开，非对称裁定的硬兑现）
+      this.open = v && window.innerWidth >= BREAKPOINT_XL;
       this.persist();
     },
     toggle() {
@@ -84,16 +88,14 @@ export const useWorkPanelStore = defineStore("workPanel", {
       if (idx === -1) this.tabs.push(tab);
       else this.tabs.splice(idx, 1, tab);
       this.activeTabId = id;
-      this.open = true;
-      this.persist();
+      this.setOpen(true);
     },
     openTab(tab: WorkPanelTab) {
       if (!this.tabs.some((t) => t.id === tab.id)) {
         this.tabs.push(tab);
       }
       this.activeTabId = tab.id;
-      this.open = true;
-      this.persist();
+      this.setOpen(true);
     },
     closeTab(id: string) {
       const idx = this.tabs.findIndex((t) => t.id === id);

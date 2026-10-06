@@ -102,10 +102,10 @@ function openReview(item: { callId: string; path: string; diff: string }) {
   >
     <!-- 头部：页签条（可关闭）+ 动作（`+` 回启动器 / 最大化 / 关闭面板）。
          面板恒在窗口最右，46px 带右端的窗口控制车道由它接管（§2.2-5）：
-         padding-right 预留 120px，顶栏同刻让位 -->
+         padding-right = 车道 + 40px 顶栏开关钮位，顶栏同刻让位 -->
     <header
       class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-1 px-3"
-      style="padding-right: calc(var(--lw-wincontrols) + 72px)"
+      style="padding-right: calc(var(--lw-wincontrols) + 40px)"
     >
       <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         <HoverTip

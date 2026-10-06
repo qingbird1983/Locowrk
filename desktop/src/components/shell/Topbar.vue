@@ -40,7 +40,7 @@ const title = computed(() => {
 <template>
   <header
     class="relative z-10 flex h-[var(--lw-toolbar-h)] shrink-0 items-center bg-page pl-3"
-    style="padding-right: calc(var(--lw-wincontrols) + 72px)"
+    style="padding-right: calc(var(--lw-wincontrols) + 40px)"
     data-tauri-drag-region
   >
     <!-- lead 槽：恒在，展开时宽 0（过渡与侧栏同步，标题不跳变）。
@@ -91,25 +91,13 @@ const title = computed(() => {
     </div>
 
   </header>
-  <!-- 右上角双钮钉窗组（§3.40④，v2.61 钉窗语义扩为两钮一组）：[侧栏][面板]。
-       fixed 定位挂在全局类 .lw-topbar-toggles（style.css）——scoped 属性进
-       不了多根组件内部（v2.85/v2.61 先例）。侧栏钮恒显（含首页）；面板钮
-       首页空态隐藏（§2.4）且 md 档视口禁用（§3.40②·4，气泡如实告知）。
-       z-30 压过工作面板 z-20，header/面板头让位车道 +72px -->
+  <!-- 右上角面板开关钉窗（§3.40④；v2.61 钉窗语义）。fixed 定位挂在全局类
+       .lw-topbar-toggles（style.css）——scoped 属性进不了多根组件内部
+       （v2.85/v2.61 先例）。面板钮首页空态隐藏（§2.4）且 md 档视口禁用
+       （§3.40②·4，气泡如实告知）。z-30 压过工作面板 z-20，header/面板头
+       让位车道 +40px。左栏不设顶栏开关（v2.110 目检裁定）：收放走侧栏
+       右缘拖柄 / Ctrl+B / ⌘K / lead 槽展开钮既有机制 -->
   <div class="lw-topbar-toggles">
-    <HoverTip
-      :text="shell.sidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')"
-    >
-      <button
-        class="ctl"
-        type="button"
-        :aria-pressed="!shell.sidebarCollapsed"
-        :aria-label="shell.sidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')"
-        @click="shell.toggleSidebar()"
-      >
-        <Icon name="sidebar" :size="14" aria-hidden="true" />
-      </button>
-    </HoverTip>
     <HoverTip
       v-if="!isHome"
       :text="shell.viewportRightOk ? t('panel.title') : t('panel.tooNarrowHint')"
