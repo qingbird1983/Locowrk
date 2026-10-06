@@ -54,7 +54,10 @@ pub fn build_payload(model: &str, req: &LlmRequest, stream: bool) -> Value {
 fn message_value(m: &Message) -> Value {
     match m {
         Message::User { content } => json!({ "role": "user", "content": content }),
-        Message::Assistant { content, tool_calls } => {
+        Message::Assistant {
+            content,
+            tool_calls,
+        } => {
             if tool_calls.is_empty() {
                 json!({ "role": "assistant", "content": content })
             } else {
@@ -72,7 +75,12 @@ fn message_value(m: &Message) -> Value {
                 })
             }
         }
-        Message::ToolResult { call_id, output, error, .. } => {
+        Message::ToolResult {
+            call_id,
+            output,
+            error,
+            ..
+        } => {
             let content = match error {
                 Some(e) => json!({ "error": e }).to_string(),
                 None => output.to_string(),
@@ -119,7 +127,10 @@ impl StreamAcc {
         if let Some(u) = chunk.get("usage") {
             self.usage = parse_usage(u).or(self.usage.take());
         }
-        let Some(choice) = chunk.get("choices").and_then(Value::as_array).and_then(|c| c.first())
+        let Some(choice) = chunk
+            .get("choices")
+            .and_then(Value::as_array)
+            .and_then(|c| c.first())
         else {
             return Delta::None;
         };
@@ -198,10 +209,19 @@ impl StreamAcc {
                     serde_json::from_str(&acc.args)
                         .unwrap_or_else(|_| Value::String(acc.args.clone()))
                 };
-                ToolCallReq { id: CallId(id), tool: acc.name, args, session_id: None }
+                ToolCallReq {
+                    id: CallId(id),
+                    tool: acc.name,
+                    args,
+                    session_id: None,
+                }
             })
             .collect();
-        LlmResponse { content: self.content, tool_calls, usage: self.usage }
+        LlmResponse {
+            content: self.content,
+            tool_calls,
+            usage: self.usage,
+        }
     }
 }
 

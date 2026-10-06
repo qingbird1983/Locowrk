@@ -40,7 +40,11 @@ pub struct RetryHooks {
 ///（重置判定）、以及 stream_options 修复提示（网关点名拒绝时去掉重发）。
 enum AttemptError {
     Fatal(String),
-    Retryable { failure: Failure, emitted: bool, repair_stream_options: bool },
+    Retryable {
+        failure: Failure,
+        emitted: bool,
+        repair_stream_options: bool,
+    },
 }
 
 pub struct CompatLlm {
@@ -58,7 +62,12 @@ impl CompatLlm {
     /// 表）——ollama 落到 `/v1`（官方 OpenAI 兼容端点），智谱 /v4、方舟
     /// /v3 原样保留。
     pub(super) fn endpoint(cfg: &LlmSettings) -> String {
-        let base = match cfg.base_url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        let base = match cfg
+            .base_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             Some(u) => u.to_string(),
             None => match cfg.provider.as_str() {
                 "anthropic" => DEFAULT_ANTHROPIC_BASE.to_string(),
@@ -71,11 +80,7 @@ impl CompatLlm {
 
     /// 鉴权头：openai = Bearer；anthropic = x-api-key + anthropic-version
     /// （官方兼容层两种都收，双带最稳）；ollama 无鉴权。
-    fn auth(
-        req: reqwest::RequestBuilder,
-        cfg: &LlmSettings,
-        key: &str,
-    ) -> reqwest::RequestBuilder {
+    fn auth(req: reqwest::RequestBuilder, cfg: &LlmSettings, key: &str) -> reqwest::RequestBuilder {
         match cfg.provider.as_str() {
             "anthropic" => req
                 .header("x-api-key", key)
@@ -143,7 +148,11 @@ impl CompatLlm {
             {
                 Ok(resp) => return Ok(resp),
                 Err(AttemptError::Fatal(msg)) => return Err(LlmError::Backend(msg)),
-                Err(AttemptError::Retryable { failure, emitted, repair_stream_options }) => {
+                Err(AttemptError::Retryable {
+                    failure,
+                    emitted,
+                    repair_stream_options,
+                }) => {
                     // stream_options 被网关点名拒绝：立即去字段重发，不算
                     // 失败、不走退避（每次尝试只修一次）
                     if repair_stream_options && !drop_stream_options {
@@ -184,7 +193,9 @@ impl CompatLlm {
         drop_stream_options: bool,
     ) -> Result<LlmResponse, AttemptError> {
         let broken = || AttemptError::Retryable {
-            failure: Failure::Transient { retry_after_ms: None },
+            failure: Failure::Transient {
+                retry_after_ms: None,
+            },
             emitted: false,
             repair_stream_options: false,
         };
@@ -252,7 +263,9 @@ impl CompatLlm {
                     // 空闲看门狗：零事件超 180s = 断流（可重试），正常
                     // 吐字不限总时长
                     return Err(AttemptError::Retryable {
-                        failure: Failure::Transient { retry_after_ms: None },
+                        failure: Failure::Transient {
+                            retry_after_ms: None,
+                        },
                         emitted,
                         repair_stream_options: false,
                     });
@@ -264,7 +277,9 @@ impl CompatLlm {
                 }
                 Some(Err(_)) => {
                     return Err(AttemptError::Retryable {
-                        failure: Failure::Transient { retry_after_ms: None },
+                        failure: Failure::Transient {
+                            retry_after_ms: None,
+                        },
                         emitted,
                         repair_stream_options: false,
                     });
@@ -308,7 +323,9 @@ impl CompatLlm {
             return Ok(acc.finish(&self.next_call));
         }
         Err(AttemptError::Retryable {
-            failure: Failure::Transient { retry_after_ms: None },
+            failure: Failure::Transient {
+                retry_after_ms: None,
+            },
             emitted,
             repair_stream_options: false,
         })

@@ -91,8 +91,18 @@ fn payload_assembles_openai_shapes() {
         output: serde_json::Value::Null,
         error: Some("plugin crashed".into()),
     }];
-    let p = build_payload("m", &LlmRequest { messages: err_msgs, ..Default::default() }, false);
-    assert!(p["messages"][0]["content"].as_str().unwrap().contains("plugin crashed"));
+    let p = build_payload(
+        "m",
+        &LlmRequest {
+            messages: err_msgs,
+            ..Default::default()
+        },
+        false,
+    );
+    assert!(p["messages"][0]["content"]
+        .as_str()
+        .unwrap()
+        .contains("plugin crashed"));
     // 非流式：无 stream_options；无工具目录：无 tools 字段
     assert!(p.get("stream_options").is_none());
     assert!(p.get("tools").is_none());
@@ -108,9 +118,7 @@ fn stream_acc_assembles_deltas_and_tool_calls() {
     let mut acc = StreamAcc::new();
     let chunk = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
 
-    let d = acc.apply(&chunk(
-        r#"{"choices":[{"delta":{"content":"你"}}]}"#,
-    ));
+    let d = acc.apply(&chunk(r#"{"choices":[{"delta":{"content":"你"}}]}"#));
     assert_eq!(d, super::wire::Delta::Content("你".into()));
     acc.apply(&chunk(r#"{"choices":[{"delta":{"content":"好"}}]}"#));
 
@@ -149,7 +157,9 @@ fn reasoning_deltas_route_to_reasoning() {
     let mut acc = StreamAcc::new();
     let chunk = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
     assert_eq!(
-        acc.apply(&chunk(r#"{"choices":[{"delta":{"reasoning_content":"思考"}}]}"#)),
+        acc.apply(&chunk(
+            r#"{"choices":[{"delta":{"reasoning_content":"思考"}}]}"#
+        )),
         super::wire::Delta::Reasoning("思考".into())
     );
     assert_eq!(
@@ -170,7 +180,10 @@ fn usage_maps_cache_and_reasoning_fields() {
             "prompt_tokens_details":{"cached_tokens":80},"completion_tokens_details":{"reasoning_tokens":12}}"#,
     ))
     .unwrap();
-    assert_eq!((u.input, u.output, u.cache_read, u.reasoning, u.total), (100, 20, 80, 12, 120));
+    assert_eq!(
+        (u.input, u.output, u.cache_read, u.reasoning, u.total),
+        (100, 20, 80, 12, 120)
+    );
 
     let u = parse_usage(&v(
         r#"{"prompt_tokens":100,"completion_tokens":20,"prompt_cache_hit_tokens":90,"prompt_cache_miss_tokens":10}"#,
@@ -178,7 +191,10 @@ fn usage_maps_cache_and_reasoning_fields() {
     .unwrap();
     assert_eq!(u.cache_read, 90);
 
-    assert_eq!(parse_usage(&v(r#"{"prompt_tokens":0,"completion_tokens":0}"#)), None);
+    assert_eq!(
+        parse_usage(&v(r#"{"prompt_tokens":0,"completion_tokens":0}"#)),
+        None
+    );
 }
 
 // ---------- sse：分帧 ----------
@@ -210,10 +226,18 @@ fn classify_follows_status_and_body() {
     assert!(matches!(retry::classify_status(403, ""), Failure::Fatal(_)));
     assert!(matches!(
         retry::classify_status(429, "rate limited"),
-        Failure::RateLimit { retry_after_ms: None }
+        Failure::RateLimit {
+            retry_after_ms: None
+        }
     ));
-    assert!(matches!(retry::classify_status(502, ""), Failure::Transient { .. }));
-    assert!(matches!(retry::classify_status(408, ""), Failure::Transient { .. }));
+    assert!(matches!(
+        retry::classify_status(502, ""),
+        Failure::Transient { .. }
+    ));
+    assert!(matches!(
+        retry::classify_status(408, ""),
+        Failure::Transient { .. }
+    ));
     // 400 + 上下文超限语义 → fatal（重试不会变小）
     assert!(matches!(
         retry::classify_status(400, "maximum context length exceeded"),
@@ -239,10 +263,16 @@ fn backoff_curves_match_policy() {
     assert_eq!(d, 2_000);
     let d = retry::rate_limit_delay_ms(3, None, 0.0);
     assert_eq!(d, 8_000);
-    assert_eq!(retry::rate_limit_delay_ms(20, None, 1.0), retry::RATE_LIMIT_MAX_MS);
+    assert_eq!(
+        retry::rate_limit_delay_ms(20, None, 1.0),
+        retry::RATE_LIMIT_MAX_MS
+    );
     // 服务器声明优先（封顶 30s）
     assert_eq!(retry::rate_limit_delay_ms(1, Some(5_000), 0.0), 5_000);
-    assert_eq!(retry::rate_limit_delay_ms(1, Some(999_999), 0.0), retry::RATE_LIMIT_MAX_MS);
+    assert_eq!(
+        retry::rate_limit_delay_ms(1, Some(999_999), 0.0),
+        retry::RATE_LIMIT_MAX_MS
+    );
     // 瞬时：1/2/4/8/8...
     assert_eq!(retry::transient_delay_ms(1, None), 1_000);
     assert_eq!(retry::transient_delay_ms(2, None), 2_000);

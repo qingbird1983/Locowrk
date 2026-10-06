@@ -187,8 +187,14 @@ async fn step_cap_force_closes_with_configured_limit() {
     .expect("到顶按正常收束返回");
     assert_eq!(steps, 1);
     let kinds: Vec<&str> = sink.events().iter().map(|e| kind(e)).collect();
-    assert!(kinds.contains(&"turn_done"), "正常 TurnDone 收束：{kinds:?}");
-    assert!(kinds.contains(&"turn_capped"), "TurnCapped 如实告知：{kinds:?}");
+    assert!(
+        kinds.contains(&"turn_done"),
+        "正常 TurnDone 收束：{kinds:?}"
+    );
+    assert!(
+        kinds.contains(&"turn_capped"),
+        "TurnCapped 如实告知：{kinds:?}"
+    );
 }
 
 #[tokio::test]
