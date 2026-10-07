@@ -130,7 +130,7 @@ const { t } = useI18n();
 }
 .dialog__title {
   font-size: var(--lw-fs-14);
-  font-weight: 560;
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.3;
   color: var(--lw-ink-1);

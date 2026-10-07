@@ -13,6 +13,10 @@ import "./style.css";
 const t0 = performance.now();
 createApp(App).use(createPinia()).use(i18n).mount("#app");
 
+// shiki 高亮后台预热（§6.5 v4.16）：动态 import 不阻塞首帧，
+// 首个报告渲染时通常已就绪；未就绪时代码块降级单色、流式重渲自愈。
+import("./lib/highlight").then((m) => m.warmupHighlighter());
+
 // 原生右键菜单（WebView2/Chromium 的前进/后退/检查等）与界面无关联（用户
 // 2026-10-04 裁定隐藏）：全局禁用 contextmenu 默认行为；仅输入框/文本域
 // /contenteditable 保留——复制/粘贴还要用。

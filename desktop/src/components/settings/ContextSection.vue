@@ -17,6 +17,7 @@ import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import SettingsSelect from "./SettingsSelect.vue";
 import SettingsSaveRow from "./SettingsSaveRow.vue";
+import SettingsToggle from "./SettingsToggle.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -35,6 +36,7 @@ const strategyOptions = computed(() =>
 const form = reactive({
   thresholdPct: 30,
   strategy: "layered",
+  usageBar: true,
 });
 
 watch(
@@ -43,6 +45,7 @@ watch(
     if (!v) return;
     form.thresholdPct = v.context.thresholdPct;
     form.strategy = v.context.strategy;
+    form.usageBar = v.context.usageBar;
   },
   { immediate: true },
 );
@@ -62,6 +65,7 @@ function save() {
   void settings.saveContext({
     thresholdPct: form.thresholdPct,
     strategy: form.strategy,
+    usageBar: form.usageBar,
   });
 }
 </script>
@@ -105,6 +109,15 @@ function save() {
         :entries="strategyOptions"
         :label="t('settings.strategy')"
       />
+    </SettingsRow>
+
+    <!-- 上下文用量进度条显隐（§3.4 v4.18：用户裁定加进上下文分区；
+         布尔项一律开关 §3.32·七） -->
+    <SettingsRow :title="t('settings.usageBar')">
+      <template #detail>
+        <p class="mt-1 text-xs text-ink-3">{{ t("settings.usageBarHint") }}</p>
+      </template>
+      <SettingsToggle v-model="form.usageBar" :label="t('settings.usageBar')" />
     </SettingsRow>
   </SettingsGroup>
 

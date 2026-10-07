@@ -693,6 +693,21 @@
 | 测试与走查 | ✅ vue-tsc 0、pnpm build 过、check_length OK（纯前端批）；实机走查 ✅ CDP 第二实例真实轮 ×3 + 重放：改造前截图 ×5 vs 改造后 ×8（含子代理「步数到顶」枚举翻译、实时脉动+流式思考、原始数据展开）；栅格对齐 CDP 测量逐像素一致；自检口径记档：结构面零裸 JSON，内容载体（代码块/匹配行/命令输出）例外系 §四渲染表明令 |
 
 ---
+### v2.120 · Typography 排版标准（ZCode 体系采纳，纯前端批）
+
+| 项 | 落点 |
+|---|---|
+| 调查结论 | ✅ ZCode 桌面端无定制字体/无打包字体文件（拉丁 Segoe UI、中文雅黑）——观感全部来自排版纪律；CSS 逐字符 fallback 天然实现「中英不同字体」 |
+| UI shell 文档先行 | ✅ v4.16：§6.1 ink 语义重写（正文非极值原则）+ §6.5 排版节全节重写（标准主体）+ §3.2·微调 ZCode 档案处补 2026-10-07 采纳注 |
+| ① mono 栈补 CJK | ✅ `--font-mono` generic monospace 前接 YaHei UI/YaHei/PingFang SC/Noto Sans CJK SC（ZCode 同款；根治代码块中文注释掉宋体） |
+| ② 正文非极值 | ✅ ink-1 暗 #ffffff→#ededed（gray-100）、亮 #1a1c1f→#414141（gray-750）= ZCode neutral-200/700 同档；accent 保持极值拉开一档；ink-2..5 五级不动 |
+| ③ 字重收敛三档 | ✅ 400/500/600（520/560 伪精确值退役，渲染零变化）；th 520→500 表头去伪粗；ConfirmDialog/CommandPalette 随收 |
+| ④ shiki 语法高亮 | ✅ 新 lib/highlight.ts（惰性单例+25 语言预载+按需动态加载+LRU 300）；github-light/dark 双主题 defaultColor:false CSS 变量模式（主题切换零重渲染）；底色保持 bg-inset 灰阶纪律；增强阶段接线不过 DOMPurify；main.ts 预热 |
+| 度量对齐 | ✅ md 标题层级表定稿（此前浏览器缺省裸奔：h1 18/600、h2 16/600、h3-h6 同字号只靠字重 600/500/400）；行高 1.625；中文断行 pretty+auto-phrase；表格 14、行内 code 12、代码块 14 |
+| 验证 | ✅ headless Edge + vite 独立验证页 CDP 实测：亮暗双主题 19 断言全过（含 shiki 双主题 token 色、无语言降级、mono CJK fallback）；截图 tmp/w416-dark.png / w416-light.png；门禁 vue-tsc 0、pnpm build 过、lint:style 0、check_length OK |
+| 已知边界 | 记档：语言未预载首帧降级自愈 / --font-scale 缩放为规划描述实现固定 px / dist 含语言 chunk 按需加载 |
+
+---
 
 ## 三、收尾 backlog（随批次搭车）
 

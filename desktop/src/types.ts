@@ -749,6 +749,8 @@ export interface ContextSettingsView {
   strategy: string;
   /** 稳定期轮数（KV v2 §6.4，1–10，缺省 3）。 */
   stabilityRounds: number;
+  /** 上下文用量进度条显隐（v4.18，缺省开）。 */
+  usageBar: boolean;
   thresholdTokens: number;
   /** 建议阈值百分比；null = 窗口未知，UI 隐藏建议行。 */
   suggestedPct: number | null;
@@ -759,6 +761,7 @@ export interface ContextUpdate {
   thresholdPct?: number;
   strategy?: string;
   stabilityRounds?: number;
+  usageBar?: boolean;
 }
 
 /** provider 档位投影（v2.58 档位制，DESIGN §13.1；无秘钥字段）。 */

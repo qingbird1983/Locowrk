@@ -24,8 +24,10 @@ pub struct ContextSettings {
     /// 稳定期轮数（KV v2 §6.4，缺省 3，合法 1–10）：结算后 N 个用户轮
     /// 内不再触发压缩——新前缀尽快落盘，二次压缩只烧钱。
     pub stability_rounds: u32,
+    /// 上下文用量进度条显隐（UI shell §3.4 v4.18，缺省开）：关掉后会话
+    /// 顶栏下方的进度条整根不渲染（读数仍走用量浮层）。
+    pub usage_bar: bool,
 }
-
 impl Default for ContextSettings {
     fn default() -> Self {
         Self {
@@ -33,6 +35,7 @@ impl Default for ContextSettings {
             threshold_pct: 30,
             strategy: CompactStrategy::default(),
             stability_rounds: 3,
+            usage_bar: true,
         }
     }
 }
@@ -60,6 +63,8 @@ pub struct ContextSettingsView {
     pub strategy: CompactStrategy,
     /// 稳定期轮数（KV v2 §6.4，1–10，缺省 3）。
     pub stability_rounds: u32,
+    /// 上下文用量进度条显隐（v4.18，缺省开）。
+    pub usage_bar: bool,
     /// 生效阈值（窗口已知 = 窗口×百分比；未知 = FALLBACK_WINDOW_TOKENS）。
     pub threshold_tokens: u64,
     /// 建议阈值百分比（窗口未知 = None，UI 隐藏建议行）。
@@ -74,6 +79,7 @@ pub struct ContextUpdate {
     pub threshold_pct: Option<u32>,
     pub strategy: Option<CompactStrategy>,
     pub stability_rounds: Option<u32>,
+    pub usage_bar: Option<bool>,
 }
 
 /// stability_rounds 合法区间（KV v2 §9 可调项总表）：1–10。下限 1 保住

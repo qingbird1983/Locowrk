@@ -60,18 +60,24 @@ watch(
   () => props.phase,
   (p) => {
     level.value = p === "live" ? 2 : 1;
+    if (p !== "live") settled.value = false;
   },
 );
 
 function onToggle() {
   level.value = level.value === 2 ? 1 : 2;
+  // 收起即恢复裁剪（w121 修复）：is-settled 若带进收起态，0fr 盒高 0 但
+  // 内容溢出且 opacity 0 仍参与命中——透明点击盾压在后续行的组头上，
+  // 表现为「必须先展开上面的组才能点到下面的组」
+  if (level.value === 1) settled.value = false;
 }
 
-/** 展开动画结束后才摘 overflow（否则聚焦环/引导线被裁）。 */
+/** 展开动画结束后才摘 overflow（否则聚焦环/引导线被裁）；收起动画结束
+ * 一并归还（对称收口，兜住未经 onToggle 的收起路径）。 */
 const settled = ref(false);
 function onTransitionEnd(e: TransitionEvent) {
   if (e.propertyName !== "grid-template-rows") return;
-  if (level.value === 2) settled.value = true;
+  settled.value = level.value === 2;
 }
 
 // 执行中的头行时长每秒走字（收束停在收束时刻）。挂载边沿不造收束戳
@@ -219,6 +225,12 @@ const minimalText = computed(() =>
 }
 .turn__grid.is-settled .turn__body {
   overflow: visible;
+}
+/* 收起态组体不得参与命中（w121 防御层）：内容 opacity 0 仍会命中测试，
+ * 一旦 overflow 因任何路径残留 visible，就是压在后续行上的透明点击盾
+ * ——不可见的内容永远不该拦点击 */
+.turn__grid:not(.is-open) .turn__body {
+  pointer-events: none;
 }
 .turn__body {
   min-width: 0;

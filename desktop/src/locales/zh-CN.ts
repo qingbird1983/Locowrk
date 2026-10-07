@@ -386,6 +386,10 @@ export default {
     delete: "删除",
     confirmDelete: "确认删除？",
   },
+  // 会话顶栏（§2.1 ③，v4.18）：子代理入口（有 subagent_run 活动才显示）
+  topbar: {
+    subagents: "子代理",
+  },
   // 工作面板（§2.5/§3.16，v2.52）
   panel: {
     title: "工作面板",
@@ -971,6 +975,9 @@ export default {
     strategy_layered_desc: "摘要 + 最近原文，推荐",
     strategy_summary_only: "仅摘要",
     strategy_summary_only_desc: "全部压缩成一段摘要",
+    // v4.18（§3.4）：上下文用量进度条显隐
+    usageBar: "上下文用量进度条",
+    usageBarHint: "会话区顶部的细进度条，显示当前上下文占用；读数详情见输入框用量环。",
   },
   error: {
     unknown: "发生错误",

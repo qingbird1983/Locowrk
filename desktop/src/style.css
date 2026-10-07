@@ -69,7 +69,7 @@
   --lw-wash-2: rgb(255 255 255 / 0.06); /* hover、输入井 */
   --lw-wash-3: rgb(255 255 255 / 0.08); /* 选中、更深 */
 
-  --lw-ink-1: #ffffff;
+  --lw-ink-1: #ededed; /* v4.16 正文非极值（原 #ffffff）：ZCode 暗色正文 = neutral-200，不刺眼且与纯白 accent 拉开一档 */
   --lw-ink-2: rgb(255 255 255 / 0.7);
   --lw-ink-3: rgb(255 255 255 / 0.52);
   --lw-ink-4: rgb(255 255 255 / 0.38);
@@ -99,7 +99,7 @@
      停用态发送字形（v2.60「浅箭头」裁定的令牌化，亮色改墨色保对比） */
   --lw-mask-fade: #000000;
   --lw-send-disabled: rgb(255 255 255 / 92%);
-  --lw-shadow-composer: 0 3px 7.5px #0000000a, 0 0 20px #0000000d;
+  --lw-shadow-composer: 0 3px 7.5px #0000000a; /* v4.18：0 0 20px 晕影层退役（外围白雾观感），轮廓改由 composer 1px 发丝线承载 */
   --lw-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.35);
   --lw-elevation: 0 0 0 0.5px rgb(255 255 255 / 0.12);
   /* 主区列宽双柄（UI shell doc §2.7：暗色更明显 / 亮色刻意更淡） */
@@ -157,7 +157,7 @@
   --lw-wash-2: rgb(26 28 31 / 0.06);
   --lw-wash-3: rgb(26 28 31 / 0.08);
 
-  --lw-ink-1: #1a1c1f;
+  --lw-ink-1: #414141; /* v4.16 正文非极值（原 #1a1c1f）：ZCode 亮色正文 = neutral-700 */
   --lw-ink-2: rgb(26 28 31 / 0.74);
   --lw-ink-3: #5d5d5d;
   --lw-ink-4: #afafaf;
@@ -184,7 +184,7 @@
   --lw-shadow-pop: 0 2px 6px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.12);
   --lw-mask-fade: #000000;
   --lw-send-disabled: rgb(26 28 31 / 38%);
-  --lw-shadow-composer: 0 3px 7.5px #0000000a, 0 0 20px #0000000d;
+  --lw-shadow-composer: 0 3px 7.5px #0000000a; /* v4.18：0 0 20px 晕影层退役（外围白雾观感），轮廓改由 composer 1px 发丝线承载 */
   --lw-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.1), 0 0 0 0.5px rgb(0 0 0 / 0.04);
   --lw-elevation: 0 0 0 0.5px rgb(26 28 31 / 0.12);
   /* 主区列宽双柄（§2.7：亮色 12%/20%，同一条规则不读成"亮缝"） */
@@ -296,13 +296,15 @@
   --lw-gap-16: 16px;
   --lw-gap-24: 24px;
 
-  /* 字体（§6.5） */
+  /* 字体（§6.5）。等宽栈在 generic monospace 之前显式接 CJK——Windows 的
+   * Consolas 不含中文字形，漏接时代码块中文注释会掉宋体（ZCode 同款补法）。 */
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Microsoft YaHei',
     sans-serif;
   --font-mono:
-    ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas,
-    'Liberation Mono', monospace;
+    ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', 'Microsoft YaHei UI', 'Microsoft YaHei',
+    'PingFang SC', 'Noto Sans CJK SC', monospace;
 }
 
 /* --- 5. 基线层 ----------------------------------------------------------- */
@@ -689,6 +691,21 @@
   background: var(--lw-wash-2);
   color: var(--lw-ink-1);
 }
+/* 复制反馈（§3.7 v4.18）：成功后字形换对勾 ≈1.6s 再还原——.is-copied 由
+ * lib/use-copy.ts 落（Vue 钮走 ref / v-html 委托钮走 DOM class），对勾
+ * 统一 ok 绿；代码块钮双 SVG 预置（markdown.ts），此处只切显示 */
+.copy-btn.is-copied {
+  color: var(--lw-ok);
+}
+.copy-btn .copy-btn__ok {
+  display: none;
+}
+.copy-btn.is-copied .copy-btn__ic {
+  display: none;
+}
+.copy-btn.is-copied .copy-btn__ok {
+  display: inline;
+}
 
 /* ===========================================================================
  * 两色控件体系（UI shell doc §3.32·七 v3.6，用户目检裁定）：一切表单控件
@@ -733,18 +750,56 @@
     width var(--dur-fast) var(--ease-out);
 }
 
-/* 助手 markdown（§6.5：段落/列表/行内代码/代码块/表格） */
+/* 助手 markdown（§6.5：段落/列表/行内代码/代码块/表格；v4.16 排版标准） */
 .md {
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.625;
   color: var(--lw-ink-1);
   overflow-wrap: anywhere;
+  /* 中文按词组断行 + 避免孤字尾行（Chromium 支持时启用，§6.5） */
+  text-wrap: pretty;
+}
+@supports (word-break: auto-phrase) {
+  .md {
+    word-break: auto-phrase;
+  }
+}
+/* Markdown 标题层级（§6.5 v4.16 表）：h1/h2 唯一加大加粗两级，
+ * h3–h6 与正文同字号、只靠字重分级（600/500/400）。 */
+.md h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 20px 0 12px;
+}
+.md h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 18px 0 10px;
+}
+.md h3,
+.md h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 14px 0 8px;
+}
+.md h5 {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 14px 0 8px;
+}
+.md h6 {
+  font-size: 14px;
+  font-weight: 400;
+  margin: 14px 0 8px;
 }
 .md p {
   margin: 0 0 12px;
 }
 .md > :last-child {
   margin-bottom: 0;
+}
+.md > :first-child {
+  margin-top: 0;
 }
 /* v4.11 裁定⑪（v2.74·fix 目检收口）：markdown 列表不再整段右移——每一行
  * 与段落同一左缘。无序圆点退役；有序数字 list-style-position: inside 随
@@ -762,7 +817,8 @@
   margin-bottom: 4px;
 }
 .md strong {
-  font-weight: 560;
+  /* §6.5 字重三档收敛（v4.16）：600（Chromium 匹配到雅黑 700 字形，与旧 560 渲染一致） */
+  font-weight: 600;
 }
 .md a {
   color: var(--lw-ink-1);
@@ -771,7 +827,7 @@
 }
 .md code {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 12px;
   background: var(--lw-wash-2);
   border-radius: var(--lw-r-2xs);
   padding: 1px 5px;
@@ -788,7 +844,7 @@
   justify-content: space-between;
   height: 32px;
   padding: 0 8px 0 12px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.02em;
   color: var(--lw-ink-4);
 }
@@ -801,24 +857,34 @@
   overflow-wrap: anywhere;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--lw-ink-2);
 }
 .md .code-block code {
   background: none;
   padding: 0;
-  font-size: 12.5px;
+  font-size: 14px;
+}
+/* shiki 双主题（§6.5 v4.16）：defaultColor:false 输出双轨 CSS 变量，
+ * 主题切换纯 CSS 零重渲染；代码块底保持 --lw-bg-inset（灰阶纪律）。 */
+.shiki,
+.shiki span {
+  color: var(--shiki-light);
+}
+[data-theme='dark'] .shiki,
+[data-theme='dark'] .shiki span {
+  color: var(--shiki-dark);
 }
 .md table {
   width: 100%;
   border-collapse: collapse;
   margin: 12px 0;
-  font-size: 12.5px;
+  font-size: 14px;
 }
 .md th {
   background: var(--lw-wash-1);
-  font-weight: 520;
+  font-weight: 500;
   color: var(--lw-ink-2);
   text-align: left;
 }

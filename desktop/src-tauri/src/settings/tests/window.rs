@@ -174,6 +174,44 @@ fn llm_window_update_validation_and_threshold_math() {
     std::fs::remove_dir_all(&root).ok();
 }
 
+/// v4.18（UI shell §3.4）：上下文用量进度条显隐——缺省开 / 更新关 /
+/// 磁盘往返（旧文件缺字段走 serde 容器级 default = 开，零迁移）。
+#[test]
+fn context_usage_bar_default_and_roundtrip() {
+    let root = temp_root("context-usage-bar");
+    let store = SettingsStore::open(&root).unwrap();
+    assert!(store.view().context.usage_bar, "缺省开");
+
+    store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(ContextUpdate {
+                usage_bar: Some(false),
+                ..Default::default()
+            }),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(!store.view().context.usage_bar, "关闭生效");
+
+    drop(store);
+    assert!(
+        !SettingsStore::open(&root).unwrap().view().context.usage_bar,
+        "重开软件后逐字段读回"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
 /// M1（KV v2 §6.4）：稳定期轮数——缺省 3 / 校验 1–10 / 生效配置桥接 /
 /// 磁盘往返。缺省值与缺省档测试同源（context_defaults 之外单列本键的
 /// 生命周期）。

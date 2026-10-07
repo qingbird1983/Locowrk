@@ -19,6 +19,7 @@ import { useWorkPanelStore } from "../../stores/work-panel";
 import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import WorkspacePicker from "../chat/WorkspacePicker.vue";
+import SubagentsMenu from "./SubagentsMenu.vue";
 
 const { t } = useI18n();
 const chat = useChatStore();
@@ -87,6 +88,8 @@ const title = computed(() => {
           >{{ title }}</span
         >
       </HoverTip>
+      <!-- 子代理入口（§2.1 ③ v4.18）：标题后；无 subagent_run 活动整件不渲染 -->
+      <SubagentsMenu />
     </div>
 
   </header>

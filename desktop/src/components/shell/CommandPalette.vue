@@ -393,7 +393,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onGlobalKeydown));
   border-radius: var(--lw-r-3xs);
   background: var(--lw-wash-2);
   font-size: var(--lw-fs-11);
-  font-weight: 520;
+  font-weight: 500;
   color: var(--lw-ink-3);
 }
 </style>

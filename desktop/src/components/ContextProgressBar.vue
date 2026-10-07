@@ -6,7 +6,8 @@
  *
  * 分级（Context and Memory.md §3.2.2）：绿 <60% / 黄 60–99% /
  * 红 ≥100%（到压缩阈值）。S2（§3.5 数字呈现）：右侧增 `≈52K / 256K`
- * 比例段——窗口未知（0）时只显示百分比。
+ * 比例段——窗口未知（0）时只显示百分比。高度 3px（v4.18 用户裁定，
+ * 原 4px 收细一档）；显隐开关 context.usageBar 在挂载点裁决（App.vue）。
  */
 import { computed } from "vue";
 import { compactNumber } from "../lib/format";
@@ -36,7 +37,7 @@ const ratio = computed(() => {
 <template>
   <div v-if="usage" class="flex items-center gap-2 px-5 pt-2 text-[length:var(--lw-fs-10)]">
     <div
-      class="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-1"
+      class="h-[3px] min-w-0 flex-1 overflow-hidden rounded-full bg-surface-1"
     >
       <div class="lw-bar-fill h-full rounded-full" :class="tone" :style="{ width: `${pct}%` }" />
     </div>

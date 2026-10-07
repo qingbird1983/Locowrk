@@ -96,6 +96,9 @@ impl SettingsStore {
                 }
                 next.context.stability_rounds = n;
             }
+            if let Some(v) = u.usage_bar {
+                next.context.usage_bar = v;
+            }
         }
         if let Some(u) = memory {
             if let Some(e) = u.enabled {

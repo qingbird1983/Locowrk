@@ -322,12 +322,17 @@ onBeforeUnmount(() => {
   min-width: 0;
   background: var(--lw-bg-composer);
   box-shadow: var(--lw-shadow-composer);
+  /* v4.18：1px 发丝线轮廓（--lw-shadow-composer 的 20px 晕影层退役，
+   * 卡面轮廓改由发丝线承载——用户裁定「白雾看得迷糊」） */
+  border: 1px solid var(--lw-line);
 }
 .dock-cards > :first-child {
   border-radius: var(--lw-r-xl) var(--lw-r-xl) 0 0;
 }
 .dock-cards > * + * {
-  border-top: 1px solid var(--lw-line-subtle);
+  /* v4.18：接缝 = 上卡下边与下卡上边 -1px 叠边（恒 1px 不重线），
+   * 替代旧 border-top 接缝线——各卡自带全边框后旧法会叠出 2px */
+  margin-top: -1px;
 }
 .composer {
   position: relative;
@@ -336,10 +341,13 @@ onBeforeUnmount(() => {
   border-radius: var(--lw-r-xl);
   background: var(--lw-bg-composer);
   box-shadow: var(--lw-shadow-composer);
+  border: 1px solid var(--lw-line);
   pointer-events: auto;
 }
-/* 贴合柱面：上方有坞卡时顶角方角化（见 stacked 注），底角保持圆角 */
+/* 贴合柱面：上方有坞卡时顶角方角化（见 stacked 注），底角保持圆角；
+ * -1px 外边距把卡列底边与本卡顶边叠成 1px（同 .dock-cards > * + *） */
 .composer--stacked {
+  margin-top: -1px;
   border-radius: 0 0 var(--lw-r-xl) var(--lw-r-xl);
 }
 .composer--stacked .composer__input {

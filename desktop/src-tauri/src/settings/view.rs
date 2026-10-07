@@ -54,6 +54,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             threshold_pct: s.context.threshold_pct,
             strategy: s.context.strategy,
             stability_rounds: s.context.stability_rounds,
+            usage_bar: s.context.usage_bar,
             threshold_tokens: s
                 .context
                 .effective_threshold(window.unwrap_or(FALLBACK_WINDOW_TOKENS)),

@@ -58,6 +58,8 @@ const overlayMask = computed(
     shell.destination !== "settings" &&
     (!shell.sidebarCollapsed || workPanel.open),
 );
+/** §3.4 v4.18：上下文用量进度条显隐（context.usageBar，缺省开）。 */
+const showUsageBar = computed(() => settings.view?.context.usageBar ?? true);
 /** 遮罩点击收起当前浮层（面板优先——互斥下两者不会同开，顺序只是防御）。 */
 function dismissOverlay() {
   if (workPanel.open) workPanel.setOpen(false);
@@ -112,7 +114,7 @@ onMounted(() => {
         >
           <div class="replay-track__bar" />
         </div>
-        <ContextProgressBar :usage="chat.contextUsage" />
+        <ContextProgressBar v-if="showUsageBar" :usage="chat.contextUsage" />
         <!-- 首页空态（§3.14 v3.9）= 欢迎页独立形态；composer（单实例）
              Teleport 进欢迎页槽位，会话态回底部坞——草稿跨形态保留 -->
         <ChatTranscript v-if="!isHome" :composer-bottom="composerH" />

@@ -438,6 +438,10 @@ export default {
     delete: "Delete",
     confirmDelete: "Confirm delete?",
   },
+  // Topbar（§2.1 ③，v4.18）：sub-agent entry (shown only while subagent_run activity exists)
+  topbar: {
+    subagents: "Sub-agents",
+  },
   panel: {
     title: "Work panel",
     launcher: "Launcher",
@@ -982,6 +986,10 @@ export default {
     strategy_layered_desc: "Summary + recent messages, recommended",
     strategy_summary_only: "Summary only",
     strategy_summary_only_desc: "Compress everything into one summary",
+    // v4.18（§3.4）：context usage bar visibility
+    usageBar: "Context usage bar",
+    usageBarHint:
+      "Thin bar at the top of the chat area showing context usage; details live in the usage ring by the composer.",
   },
   error: {
     unknown: "Something went wrong",

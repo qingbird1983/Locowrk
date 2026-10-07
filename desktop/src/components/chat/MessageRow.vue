@@ -22,6 +22,7 @@ import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import { renderMarkdown } from "../../lib/markdown";
+import { useCopyFeedback } from "../../lib/use-copy";
 import { useMessageFold } from "./use-message-fold";
 
 const props = withDefaults(
@@ -112,12 +113,12 @@ const contentEl = ref<HTMLElement | null>(null);
 const { isOpen, overflowing, showFold, foldStyle, animating, onToggleFold } =
   useMessageFold(contentEl, editing);
 
+// 复制反馈（§3.7 v4.18）：成功后字形换对勾 ≈1.6s（消息钮走 ref、
+// 代码块委托钮走 DOM class，同一 composable）
+const { copiedId, copyWithFeedback, flashDom } = useCopyFeedback();
+
 async function copySelf() {
-  try {
-    await navigator.clipboard.writeText(props.text);
-  } catch {
-    /* 剪贴板不可用不打断 */
-  }
+  await copyWithFeedback(props.text, "msg");
 }
 
 /** 代码块头行的复制按钮挂在 v-html 里，事件在容器上委托。 */
@@ -128,6 +129,7 @@ async function onBodyClick(e: MouseEvent) {
   const code = fig?.querySelector("pre code")?.textContent ?? "";
   try {
     await navigator.clipboard.writeText(code);
+    flashDom(target);
   } catch {
     /* 剪贴板不可用不打断 */
   }
@@ -193,11 +195,12 @@ async function onBodyClick(e: MouseEvent) {
       <HoverTip v-if="copyable" :text="t('chat.copyMessage')">
         <button
           class="copy-btn"
+          :class="{ 'is-copied': copiedId === 'msg' }"
           type="button"
           :aria-label="t('chat.copyMessage')"
           @click="copySelf"
         >
-          <Icon name="copy" :size="12" />
+          <Icon :name="copiedId === 'msg' ? 'check' : 'copy'" :size="12" />
         </button>
       </HoverTip>
       <HoverTip :text="t('chat.editMessage')">

@@ -12,6 +12,7 @@ import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 import { renderMarkdown } from "../../lib/markdown";
 import { toolDetail } from "../../lib/tool-detail";
+import { useCopyFeedback } from "../../lib/use-copy";
 import { useSettingsStore } from "../../stores/settings";
 import type { ToolItem } from "../../stores/chat";
 
@@ -51,6 +52,9 @@ const codeHtml = computed(() => {
   return renderMarkdown(parts.join("\n\n"), { copyCode: t("tool.copyCode") });
 });
 
+// 复制反馈（§3.7 v4.18）：代码块委托钮走 DOM class、复制调用钮走 ref
+const { copiedId, copyWithFeedback, flashDom } = useCopyFeedback();
+
 async function onCodeClick(e: MouseEvent) {
   const target = (e.target as HTMLElement).closest?.(".copy-btn");
   if (!target) return;
@@ -58,6 +62,7 @@ async function onCodeClick(e: MouseEvent) {
   const code = fig?.querySelector("pre code")?.textContent ?? "";
   try {
     await navigator.clipboard.writeText(code);
+    flashDom(target);
   } catch {
     /* 剪贴板不可用不打断 */
   }
@@ -78,11 +83,7 @@ const rawJson = computed(() => {
 });
 
 async function copyCall() {
-  try {
-    await navigator.clipboard.writeText(rawJson.value);
-  } catch {
-    /* 剪贴板不可用不打断 */
-  }
+  await copyWithFeedback(rawJson.value, "call");
 }
 </script>
 
@@ -138,8 +139,13 @@ async function copyCall() {
         <Icon :name="showRaw ? 'chevronDown' : 'chevronRight'" :size="12" />
         {{ t("tool.rawData") }}
       </button>
-      <button class="tdetail__entry" type="button" @click="copyCall">
-        <Icon name="copy" :size="12" />
+      <button
+        class="tdetail__entry"
+        :class="{ 'is-copied': copiedId === 'call' }"
+        type="button"
+        @click="copyCall"
+      >
+        <Icon :name="copiedId === 'call' ? 'check' : 'copy'" :size="12" />
         {{ t("tool.copyCall") }}
       </button>
     </div>
@@ -276,6 +282,11 @@ async function copyCall() {
 .tdetail__entry:hover {
   background: var(--lw-wash-2);
   color: var(--lw-ink-1);
+}
+/* 复制反馈（§3.7 v4.18）：复制调用成功 = 字形换对勾（icons name 已换）
+ * + ok 绿驻留 ≈1.6s；排在 :hover 后靠源序取胜（同特异性） */
+.tdetail__entry.is-copied {
+  color: var(--lw-ok);
 }
 .tdetail__raw {
   color: var(--lw-ink-2);
