@@ -27,11 +27,6 @@ pub const MANAGER_MAX_RETRIES_RANGE: std::ops::RangeInclusive<u32> = 0..=10;
 /// 规则切分块缺省与合法区间（§15：5K–50K 缺省 20K）。
 pub const RULE_CHUNK_TOKENS_DEFAULT: u64 = 20_000;
 pub const RULE_CHUNK_TOKENS_RANGE: std::ops::RangeInclusive<u64> = 5_000..=50_000;
-/// 会话缺省整理模式缺省值（M4 树 v2 §15「会话缺省 organizer」：阶段 2 =
-/// 开发者层，缺省 legacy；阶段 3 数据裁决后才切用户层）。
-pub const DEFAULT_ORGANIZER_DEFAULT: &str = "legacy";
-/// 合法值（未知值保存时拒绝）。
-pub const DEFAULT_ORGANIZER_VALUES: [&str; 2] = ["legacy", "tree"];
 
 /// 开发者选项设置（settings.json `developer` 区，字段级缺省零迁移）。
 /// Default = 全关是语义要求：分区隐藏 + 禁止项保持写死语义（阈值是唯一
@@ -67,9 +62,6 @@ pub struct DeveloperSettings {
     pub memory_manager_max_retries: u32,
     /// 规则切分块（token，5K–50K 缺省 20K）。
     pub rule_chunk_tokens: u64,
-    /// 会话缺省整理模式（M4 §3.38①：未显式设置会话的生效档；M5 数据
-    /// 裁决后切用户层）。
-    pub default_organizer: String,
 }
 
 impl Default for DeveloperSettings {
@@ -85,7 +77,6 @@ impl Default for DeveloperSettings {
             memory_manager_timeout_secs: MANAGER_TIMEOUT_SECS_DEFAULT,
             memory_manager_max_retries: MANAGER_MAX_RETRIES_DEFAULT,
             rule_chunk_tokens: RULE_CHUNK_TOKENS_DEFAULT,
-            default_organizer: DEFAULT_ORGANIZER_DEFAULT.into(),
         }
     }
 }
@@ -106,7 +97,6 @@ pub struct DeveloperView {
     #[serde(rename = "recorderMaxRetries")]
     pub memory_manager_max_retries: u32,
     pub rule_chunk_tokens: u64,
-    pub default_organizer: String,
 }
 
 /// 部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -125,7 +115,6 @@ pub struct DeveloperUpdate {
     #[serde(rename = "recorderMaxRetries")]
     pub memory_manager_max_retries: Option<u32>,
     pub rule_chunk_tokens: Option<u64>,
-    pub default_organizer: Option<String>,
 }
 
 /// 合法性检查（update.rs 校验用）：阈值 1–100。

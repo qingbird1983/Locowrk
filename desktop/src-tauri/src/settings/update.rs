@@ -116,6 +116,18 @@ impl SettingsStore {
             if let Some(h) = u.handoff_update {
                 next.memory.handoff_update = h;
             }
+            // M5 会话缺省整理模式（树 v2 §15 用户层级，自 developer 区迁入）：
+            // 白名单校验，未显式设置过的会话跟随此档热换
+            if let Some(p) = u.default_organizer {
+                if !super::memory::DEFAULT_ORGANIZER_VALUES.contains(&p.as_str()) {
+                    return Err(format!("会话缺省整理模式 {p:?} 非法（可选 legacy / tree）"));
+                }
+                next.memory.default_organizer = p;
+            }
+            // M5 experiences/向量层开关（树 v2 §10.3 缺省关）
+            if let Some(e) = u.experiences {
+                next.memory.experiences = e;
+            }
             // M2 记忆树整理三键（树 v2 §4.3/§5.2/§15）：节奏白名单 +
             // 增量块区间 + 记忆管理器模型（空串按清除处理，回落同主模型）
             if let Some(p) = u.organize_pacing {
@@ -334,13 +346,6 @@ impl SettingsStore {
                     ));
                 }
                 next.developer.rule_chunk_tokens = n;
-            }
-            // M4 会话缺省整理模式（树 v2 §15 开发者层级）：白名单
-            if let Some(p) = u.default_organizer {
-                if !super::developer::DEFAULT_ORGANIZER_VALUES.contains(&p.as_str()) {
-                    return Err(format!("会话缺省整理模式 {p:?} 非法（可选 legacy / tree）"));
-                }
-                next.developer.default_organizer = p;
             }
         }
         if let Some(u) = thinking {

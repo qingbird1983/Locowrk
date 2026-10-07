@@ -16,10 +16,19 @@ fn memory_defaults_legacy_compat_and_validation() {
     // F3 缺省裁定：autoExtract 翻开（④）+ handoff 收束更新开（③）
     assert!(v.auto_extract);
     assert!(v.handoff_update);
+    // M5 阶段 3 裁定：缺省整理模式 = tree（用户层 memory 区）+
+    // 经历记忆缺省关（树 v2 §10.3 向量层关缺省）
+    assert_eq!(v.default_organizer, "tree");
+    assert!(!v.experiences);
+    assert!(matches!(
+        store.default_organizer(),
+        crate::organizer_mode::OrganizerMode::Tree
+    ));
     // memory_inject_config 桥接（MemoryInject 共享锁内容物）
     let cfg = store.memory_inject_config();
     assert!(cfg.enabled);
     assert_eq!(cfg.top_k, 5);
+    assert!(!cfg.experiences, "经历注入开关随配置桥接（缺省关）");
     // 旧 settings.json 无 memory 字段 → 字段级缺省，不解析失败
     std::fs::write(root.join(FILE_NAME), r#"{"locale":"zh-CN"}"#).unwrap();
     let v = SettingsStore::open(&root).unwrap().view().memory;
@@ -49,6 +58,8 @@ fn memory_defaults_legacy_compat_and_validation() {
                 files: None,
                 repo_context: None,
                 handoff_update: None,
+                default_organizer: None,
+                experiences: None,
             }),
             None,
             None,
@@ -150,6 +161,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 files: None,
                 repo_context: None,
                 handoff_update: None,
+                default_organizer: None,
+                experiences: None,
             }),
             None,
             None,
@@ -346,5 +359,47 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
     assert!(err.contains("自动收起阈值"), "{err}");
     // 出界不污染内存态
     assert_eq!(store.view().memory.tail_window_turns, 12);
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn m5_default_organizer_and_experiences_roundtrip() {
+    let root = temp_root("m5keys");
+    let store = SettingsStore::open(&root).unwrap();
+    // 切 legacy + 开经历：磁盘往返 + default_organizer() 访问器随行 +
+    // 注入配置桥接 experiences
+    store
+        .update(
+            None, None, None, None, None, None,
+            Some(MemoryUpdate {
+                default_organizer: Some("legacy".into()),
+                experiences: Some(true),
+                ..Default::default()
+            }),
+            None, None, None, None, None, None,
+        )
+        .unwrap();
+    let reopened = SettingsStore::open(&root).unwrap();
+    let v = reopened.view().memory;
+    assert_eq!(v.default_organizer, "legacy");
+    assert!(v.experiences);
+    assert!(matches!(
+        reopened.default_organizer(),
+        crate::organizer_mode::OrganizerMode::Legacy
+    ));
+    assert!(reopened.memory_inject_config().experiences);
+    // 非法档拒绝且不污染内存态（M4 白名单语义平移到 memory 区）
+    let err = store
+        .update(
+            None, None, None, None, None, None,
+            Some(MemoryUpdate {
+                default_organizer: Some("bogus".into()),
+                ..Default::default()
+            }),
+            None, None, None, None, None, None,
+        )
+        .unwrap_err();
+    assert!(err.contains("整理模式"), "{err}");
+    assert_eq!(store.view().memory.default_organizer, "legacy");
     std::fs::remove_dir_all(&root).ok();
 }

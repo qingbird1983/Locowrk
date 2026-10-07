@@ -38,6 +38,18 @@ pub const REPO_CONTEXT_DEFAULT: bool = true;
 /// 后台更新 `<repo>/.Locowrk/handoff.md`；写边界 = 仅此一个文件。
 pub const HANDOFF_UPDATE_DEFAULT: bool = true;
 
+/// 会话缺省整理模式缺省值（M5 阶段 3 裁定：**tree**——树 v2 §11.2 阶段 3
+/// 「缺省切 tree」，键自 developer 区迁入用户层；legacy 老会话按旁车显式档
+/// 永久兼容，未显式设置过的会话跟随此档热换）。
+pub const DEFAULT_ORGANIZER_DEFAULT: &str = "tree";
+/// 合法缺省整理模式值（未知值保存时拒绝，读取时回落缺省）。
+pub const DEFAULT_ORGANIZER_VALUES: [&str; 2] = ["legacy", "tree"];
+/// experiences/向量层开关缺省（M5，树 v2 §10.3 方向性裁定：**关缺省**
+/// ——记忆召回走「索引注入 + 懒加载」，零向量纯索引式生产可用；关 =
+/// 轮后经历提取与注入块经历段都停，已有经历数据保留。SharedEmbed 基建
+/// 同时服务 search_tools 语义检索，那部分与本开关无关、另行决策）。
+pub const EXPERIENCES_DEFAULT: bool = false;
+
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TailStrategy {
@@ -93,6 +105,12 @@ pub struct MemorySettings {
     /// handoff 收束更新（F3 §7 已裁定③缺省开）：归属会话轮次收束后后台
     /// 更新 `<repo>/.Locowrk/handoff.md`（仅写该文件；未归属跳过）。
     pub handoff_update: bool,
+    /// 会话缺省整理模式（M5 阶段 3：legacy | tree，缺省 tree——未显式
+    /// 设置过的会话跟随此档；持久键 defaultOrganizer）。
+    pub default_organizer: String,
+    /// 经历记忆开关（M5 §10.3 缺省关）：关 = 轮后经历提取与注入块经历段
+    /// 都停；不碰 search_tools / 工具暴露的嵌入基建。
+    pub experiences: bool,
 }
 
 impl Default for MemorySettings {
@@ -112,6 +130,8 @@ impl Default for MemorySettings {
             files: FILES_DEFAULT,
             repo_context: REPO_CONTEXT_DEFAULT,
             handoff_update: HANDOFF_UPDATE_DEFAULT,
+            default_organizer: DEFAULT_ORGANIZER_DEFAULT.into(),
+            experiences: EXPERIENCES_DEFAULT,
         }
     }
 }
@@ -136,6 +156,8 @@ pub struct MemorySettingsView {
     pub files: bool,
     pub repo_context: bool,
     pub handoff_update: bool,
+    pub default_organizer: String,
+    pub experiences: bool,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -161,4 +183,6 @@ pub struct MemoryUpdate {
     pub files: Option<bool>,
     pub repo_context: Option<bool>,
     pub handoff_update: Option<bool>,
+    pub default_organizer: Option<String>,
+    pub experiences: Option<bool>,
 }

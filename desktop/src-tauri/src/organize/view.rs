@@ -46,6 +46,9 @@ pub struct ChapterView {
     pub created_at: i64,
     pub event_from: usize,
     pub event_to: usize,
+    /// 用户编辑标记（M5 纪律 5：真 = 自动层永不覆盖该字段，UI 挂「手动」徽章）。
+    pub title_edited_by_user: bool,
+    pub summary_edited_by_user: bool,
 }
 
 /// 原文切片行：与记忆管理器材料同形同源（build_items）——看原文 = 看记忆管理器
@@ -118,6 +121,8 @@ impl Organizer {
                 created_at: b.created_at,
                 event_from: b.event_range.0,
                 event_to: b.event_range.1,
+                title_edited_by_user: b.title_edited_by_user,
+                summary_edited_by_user: b.summary_edited_by_user,
             })
             .collect();
         TreeChaptersView {

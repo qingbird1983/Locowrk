@@ -303,6 +303,36 @@ impl MemoryTree {
             })
             .map(|b| b.chapter_id.0.clone())
     }
+
+    /// 用户编辑章节标题/摘要（M5 编辑面，§14 纪律 5）：改动即打「手动」
+    /// 标记，自动层此后永不覆盖该字段。占位章节 = false（在途产物不可编辑）。
+    pub fn edit_chapter(&mut self, id: &str, title: Option<&str>, summary: Option<&str>) -> bool {
+        let Some(b) = self.chapters.get_mut(id) else {
+            return false;
+        };
+        if b.pending {
+            return false;
+        }
+        if let Some(t) = title {
+            b.title = t.trim().to_string();
+            b.title_edited_by_user = true;
+        }
+        if let Some(s) = summary {
+            b.summary = s.trim().to_string();
+            b.summary_edited_by_user = true;
+        }
+        true
+    }
+
+    /// 用户删除章节（M5 §12.1「删除捆，不影响原文」）：仅从投影摘除——
+    /// 游标不动（被删区间停留在已整理侧，不再进目录/尾巴 = 有意不可见；
+    /// 整树重建兜底会重新生成，投影语义）。占位章节拒删（等收束）。
+    pub fn remove_chapter(&mut self, id: &str) -> bool {
+        match self.chapters.get(id) {
+            Some(b) if !b.pending => self.chapters.remove(id).is_some(),
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]

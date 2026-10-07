@@ -197,3 +197,39 @@ fn old_projection_with_bundle_era_keys_loads_via_aliases() {
     assert_eq!(t.history[0].manager_input, 120, "recorder_input 旧键读回");
     assert_eq!(t.history[0].manager_output, 60, "recorder_output 旧键读回");
 }
+
+#[test]
+fn edit_chapter_marks_manual_and_rejects_pending() {
+    let mut t = MemoryTree::new("ws", "s1");
+    t.insert_placeholder(10, 19, 5).expect("任务可建");
+    // 占位章节不可编辑（在途产物等收束）
+    let pid = t.pending.as_ref().unwrap().placeholder_id.0.clone();
+    assert!(!t.edit_chapter(&pid, Some("新题"), None));
+
+    t.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"));
+    assert!(t.edit_chapter("b1", Some("  人改标题  "), Some("人改摘要")));
+    let b = &t.chapters["b1"];
+    assert_eq!(b.title, "人改标题"); // trim 落值
+    assert!(b.title_edited_by_user);
+    assert!(b.summary_edited_by_user);
+    // 只改标题不动摘要标记
+    let mut t2 = MemoryTree::new("ws", "s1");
+    t2.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"));
+    assert!(t2.edit_chapter("b1", Some("只改题"), None));
+    assert!(!t2.chapters["b1"].summary_edited_by_user);
+    assert!(!t2.edit_chapter("bX", Some("不存在"), None));
+}
+
+#[test]
+fn remove_chapter_keeps_cursor_and_rejects_pending() {
+    let mut t = MemoryTree::new("ws", "s1");
+    t.insert_placeholder(10, 19, 5).expect("任务可建");
+    let pid = t.pending.as_ref().unwrap().placeholder_id.0.clone();
+    assert!(!t.remove_chapter(&pid)); // 占位拒删
+
+    t.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"));
+    assert!(t.remove_chapter("b1"));
+    assert_eq!(t.chapter_count(), 0);
+    assert_eq!(t.chaptered_until, 20); // 游标不动：被删区间留在已整理侧
+    assert!(!t.remove_chapter("b1")); // 再删 = false
+}

@@ -117,11 +117,14 @@ pub trait ExperienceSource: Send + Sync + 'static {
 }
 
 /// 注入参数（settings.json `memory` 区；Context 文档 §6.2 的
-/// max_inject_count，缺省 5——约束清单 §3"注入条数可配"）。
+/// max_inject_count，缺省 5——约束清单 §3"注入条数可配"）。M5 起
+/// `experiences` 随行（树 v2 §10.3 向量层关缺省）：false = 经历段整体
+/// 跳过（检索器在组装点仍可注册，开关在注入处裁决——保存即热换）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryInjectConfig {
     pub enabled: bool,
     pub top_k: usize,
+    pub experiences: bool,
 }
 
 impl Default for MemoryInjectConfig {
@@ -129,6 +132,7 @@ impl Default for MemoryInjectConfig {
         Self {
             enabled: true,
             top_k: 5,
+            experiences: false,
         }
     }
 }
@@ -367,24 +371,27 @@ impl WaterfallListener for MemoryInject {
         // ㉘：把会话 id 交给检索源做项目隔离（宿主裁决 workspace 语义）
         let entries = self.source.recall(req.session_id.as_deref(), cfg.top_k);
         block = Self::append_block(block, Self::build_block(&entries));
-        // 经历块（⑬）：查询 = 最近一条用户消息；检索失败/未配置 = 跳过，
-        // 事实记忆照常注入（§4.3 降级）。预取纪律下本查询只在会话首次
-        // 注入时执行一次——锁定的是"会话开始时的经历"，后续轮不再变化。
-        if let Some(src) = &self.experiences {
-            let query = req
-                .messages
-                .iter()
-                .rev()
-                .find_map(|m| match m {
-                    Message::User { content } => Some(content.as_str()),
-                    _ => None,
-                })
-                .unwrap_or_default();
-            if !query.is_empty() {
-                let found = src
-                    .recall(req.session_id.as_deref(), query, cfg.top_k)
-                    .await;
-                block = Self::append_block(block, Self::build_experience_block(&found));
+        // 经历块（⑬）：查询 = 最近一条用户消息；检索失败/未配置/开关关
+        // （M5 §10.3 缺省关）= 跳过，事实记忆照常注入（§4.3 降级）。预取
+        // 纪律下本查询只在会话首次注入时执行一次——锁定的是"会话开始时
+        // 的经历"，后续轮不再变化。
+        if cfg.experiences {
+            if let Some(src) = &self.experiences {
+                let query = req
+                    .messages
+                    .iter()
+                    .rev()
+                    .find_map(|m| match m {
+                        Message::User { content } => Some(content.as_str()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                if !query.is_empty() {
+                    let found = src
+                        .recall(req.session_id.as_deref(), query, cfg.top_k)
+                        .await;
+                    block = Self::append_block(block, Self::build_experience_block(&found));
+                }
             }
         }
         // 主动记忆指引（F3 §4）：随注入块尾——静态文本，与块同吃预取

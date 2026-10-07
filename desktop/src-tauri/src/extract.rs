@@ -35,6 +35,9 @@ pub struct ExtractDeps {
     /// 经历库（embedding 未配置时组装点给 None——只提事实）。
     pub experiences: Option<Arc<ExperienceDb>>,
     pub embed: Arc<CooledEmbed>,
+    /// 经历记忆开关快照（M5 `memory.experiences` 缺省关，树 v2 §10.3）：
+    /// false = 本轮跳过经历提取（事实提取不受影响；逐轮快照 = 热换）。
+    pub experiences_enabled: bool,
 }
 
 /// 提取提示词（LLM 面，英文与工具描述同语言）：只要 JSON、宁缺勿滥。
@@ -188,22 +191,25 @@ pub async fn run_turn_extract(
             Err(e) => tracing::warn!("extract memory write failed: {e}"),
         }
     }
-    // ② 经历 → embedding → experiences（embedding 未配置/失败 = 跳过）
+    // ② 经历 → embedding → experiences（开关关/embedding 未配置/失败 =
+    // 跳过；M5 §10.3 经历向量层缺省关）
     let mut episode_saved = false;
-    if let Some(db) = &deps.experiences {
-        if let Some(episode) = episode {
-            let char_count = episode.chars().count();
-            if char_count >= EPISODE_MIN_CHARS {
-                let episode = clip(&episode, EPISODE_MAX_CHARS);
-                match deps.embed.embed(std::slice::from_ref(&episode)).await {
-                    Ok(vecs) if vecs.len() == 1 && !vecs[0].is_empty() => {
-                        match db.insert(&episode, &vecs[0], session_id, &workspace) {
-                            Ok(()) => episode_saved = true,
-                            Err(e) => tracing::warn!("episode insert failed: {e}"),
+    if deps.experiences_enabled {
+        if let Some(db) = &deps.experiences {
+            if let Some(episode) = episode {
+                let char_count = episode.chars().count();
+                if char_count >= EPISODE_MIN_CHARS {
+                    let episode = clip(&episode, EPISODE_MAX_CHARS);
+                    match deps.embed.embed(std::slice::from_ref(&episode)).await {
+                        Ok(vecs) if vecs.len() == 1 && !vecs[0].is_empty() => {
+                            match db.insert(&episode, &vecs[0], session_id, &workspace) {
+                                Ok(()) => episode_saved = true,
+                                Err(e) => tracing::warn!("episode insert failed: {e}"),
+                            }
                         }
-                    }
-                    Ok(_) | Err(_) => {
-                        tracing::warn!("episode embedding unavailable; episode skipped")
+                        Ok(_) | Err(_) => {
+                            tracing::warn!("episode embedding unavailable; episode skipped")
+                        }
                     }
                 }
             }

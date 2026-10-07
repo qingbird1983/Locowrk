@@ -62,3 +62,36 @@ pub async fn memory_tree_original(
         .organizer
         .tree_original(&session_id, &workspace, &chapter_id)
 }
+
+/// 编辑章节标题/摘要（M5 §3.37 编辑面；直读直写投影文件，不占会话锁、
+/// 不要求会话在内存）。title/summary 独立可选，只动提供的那个。
+#[tauri::command]
+pub async fn memory_tree_edit_chapter(
+    session_id: String,
+    workspace: String,
+    chapter_id: String,
+    title: Option<String>,
+    summary: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.organizer.tree_edit_chapter(
+        &workspace,
+        &session_id,
+        &chapter_id,
+        title.as_deref(),
+        summary.as_deref(),
+    )
+}
+
+/// 删除章节（M5 §3.37 编辑面；两步确认在前端——后端只认结果）。
+#[tauri::command]
+pub async fn memory_tree_delete_chapter(
+    session_id: String,
+    workspace: String,
+    chapter_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state
+        .organizer
+        .tree_delete_chapter(&workspace, &session_id, &chapter_id)
+}

@@ -544,6 +544,37 @@ export function memoryTreeOriginal(
   return invoke("memory_tree_original", { sessionId, workspace, chapterId });
 }
 
+// ---- 记忆树编辑面（M5 §3.37；树是投影——只动投影不碰原文） ----
+
+/** 编辑章节标题/摘要（两字段独立可选；pending 占位 = reject）。 */
+export function memoryTreeEditChapter(
+  sessionId: string,
+  workspace: string,
+  chapterId: string,
+  patch: { title?: string; summary?: string },
+): Promise<void> {
+  return invoke("memory_tree_edit_chapter", {
+    sessionId,
+    workspace,
+    chapterId,
+    title: patch.title ?? null,
+    summary: patch.summary ?? null,
+  });
+}
+
+/** 删除章节（不影响原文；被删区间停留已整理侧 = 有意不可见）。 */
+export function memoryTreeDeleteChapter(
+  sessionId: string,
+  workspace: string,
+  chapterId: string,
+): Promise<void> {
+  return invoke("memory_tree_delete_chapter", {
+    sessionId,
+    workspace,
+    chapterId,
+  });
+}
+
 /** 整理收束推送（§3.37③；chat store 换 SystemNotice，非当前会话忽略）。 */
 export function subscribeOrganizeDone(
   onDone: (payload: OrganizeDonePayload) => void,

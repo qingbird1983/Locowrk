@@ -64,7 +64,7 @@ const menuItems = computed<RowMenuItem[]>(() => {
   // 档推算），切换即时生效（下一次请求按新档组装）。
   const organizerMode =
     props.session.organizer ??
-    (settings.view?.developer.defaultOrganizer === "tree" ? "tree" : "legacy");
+    (settings.view?.memory.defaultOrganizer === "legacy" ? "legacy" : "tree");
   items.push(
     { id: "sep-org", label: "", separator: true },
     {
@@ -115,7 +115,7 @@ async function onMenuSelect(id: string) {
     closeMenu();
     const current =
       props.session.organizer ??
-      (settings.view?.developer.defaultOrganizer === "tree" ? "tree" : "legacy");
+      (settings.view?.memory.defaultOrganizer === "legacy" ? "legacy" : "tree");
     try {
       await chat.setOrganizer(sid, current === "tree" ? "legacy" : "tree");
       toast.push(

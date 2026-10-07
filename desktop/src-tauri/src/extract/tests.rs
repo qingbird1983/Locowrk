@@ -122,6 +122,7 @@ fn deps_with(llm: FakeLlm) -> (ExtractDeps, Arc<ExperienceDb>, std::path::PathBu
             memory,
             experiences: Some(db.clone()),
             embed: embed.port(),
+            experiences_enabled: true, // 本夹具专测 embed 故障降级，开关置开
         },
         db,
         dir,

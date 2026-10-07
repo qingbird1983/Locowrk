@@ -49,6 +49,7 @@ mod llm;
 mod memory;
 mod memory_files;
 mod memory_reconcile;
+mod memory_tree_reconcile;
 mod model_override;
 mod notifications;
 mod organize;
@@ -219,6 +220,8 @@ pub fn run() {
             commands::memory_tree_sessions,
             commands::memory_tree_chapters,
             commands::memory_tree_original,
+            commands::memory_tree_edit_chapter,
+            commands::memory_tree_delete_chapter,
             commands::subagent_transcript
         ])
         .run(tauri::generate_context!())

@@ -43,7 +43,6 @@ fn dev_update_full(
             memory_manager_timeout_secs: None,
             memory_manager_max_retries: None,
             rule_chunk_tokens: None,
-            default_organizer: None,
         }),
         None,
     )
@@ -161,7 +160,6 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 memory_manager_timeout_secs: Some(120),
                 memory_manager_max_retries: Some(1),
                 rule_chunk_tokens: Some(30_000),
-                default_organizer: None,
             }),
             None,
         )
@@ -213,66 +211,3 @@ fn organize_developer_keys_roundtrip_and_validation() {
     std::fs::remove_dir_all(&root).ok();
 }
 
-#[test]
-fn default_organizer_roundtrip_and_whitelist() {
-    let root = temp_root("orgmode");
-    let store = SettingsStore::open(&root).unwrap();
-    assert_eq!(store.view().developer.default_organizer, "legacy");
-    store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(DeveloperUpdate {
-                default_organizer: Some("tree".into()),
-                ..Default::default()
-            }),
-            None,
-        )
-        .unwrap();
-    assert_eq!(store.view().developer.default_organizer, "tree");
-    assert_eq!(
-        SettingsStore::open(&root)
-            .unwrap()
-            .view()
-            .developer
-            .default_organizer,
-        "tree",
-        "持久化"
-    );
-    let err = store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(DeveloperUpdate {
-                default_organizer: Some("bogus".into()),
-                ..Default::default()
-            }),
-            None,
-        )
-        .unwrap_err();
-    assert!(err.contains("整理模式"), "{err}");
-    assert_eq!(
-        store.view().developer.default_organizer,
-        "tree",
-        "拒绝不污染"
-    );
-    std::fs::remove_dir_all(&root).ok();
-}

@@ -493,3 +493,66 @@ async fn auto_collapse_relieves_oldest_expanded() {
     legacy_org.after_turn(&session, "s-legacy");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[tokio::test]
+async fn edit_chapter_updates_projection_and_marks_manual() {
+    let root = temp_root("edit");
+    let settings = settings_with(serde_json::json!({}), &root);
+    let org = organizer(&root, settings, FakeClient::new(vec![Ok(good_reply())]));
+    let session = session();
+    let task = org.plan_manual(&session, "s-edit").expect("发起成功");
+    org.clone().run_task(task).await;
+
+    // 编辑标题+摘要 → 投影更新 + 手动标记 + tree.md 同步（人读层在盘）
+    org.tree_edit_chapter(
+        r"F:\ws\demo",
+        "s-edit",
+        "b2",
+        Some("  人改标题  "),
+        Some("人改摘要"),
+    )
+    .unwrap();
+    let tree = tree_at(&root, org.settings.as_ref(), "s-edit");
+    let b2 = tree.chapters.get("b2").unwrap();
+    assert_eq!(b2.title, "人改标题");
+    assert_eq!(b2.summary, "人改摘要");
+    assert!(b2.title_edited_by_user);
+    assert!(b2.summary_edited_by_user);
+    let ws_dir = plugin_api::memlayout::project_dir_name(r"F:\ws\demo");
+    assert!(root
+        .join("memory/projects")
+        .join(ws_dir)
+        .join("tree.md")
+        .exists(),
+        "编辑后 tree.md 已重建");
+
+    // 校验拒绝：超上限标题 / 空+空 / 占位章节
+    assert!(org
+        .tree_edit_chapter(r"F:\ws\demo", "s-edit", "b2", Some(&"标".repeat(41)), None)
+        .is_err());
+    assert!(org
+        .tree_edit_chapter(r"F:\ws\demo", "s-edit", "b2", Some("  "), Some(" "))
+        .is_err());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
+async fn delete_chapter_removes_projection_keeps_cursor() {
+    let root = temp_root("delete");
+    let settings = settings_with(serde_json::json!({}), &root);
+    let org = organizer(&root, settings, FakeClient::new(vec![Ok(good_reply())]));
+    let session = session();
+    let task = org.plan_manual(&session, "s-del").expect("发起成功");
+    org.clone().run_task(task).await;
+
+    org.tree_delete_chapter(r"F:\ws\demo", "s-del", "b2").unwrap();
+    let tree = tree_at(&root, org.settings.as_ref(), "s-del");
+    assert_eq!(tree.chapters.len(), 1, "b2 已摘除");
+    assert!(tree.chapters.contains_key("b3"));
+    assert_eq!(tree.chaptered_until, 6, "游标不动：被删区间停留已整理侧");
+    // 再删不存在章节 = Err
+    assert!(org
+        .tree_delete_chapter(r"F:\ws\demo", "s-del", "b2")
+        .is_err());
+    let _ = std::fs::remove_dir_all(&root);
+}

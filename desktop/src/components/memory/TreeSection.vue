@@ -1,14 +1,20 @@
 <script setup lang="ts">
 /**
- * 记忆树（情景）区块（M3，UI shell §3.37①）：只读呈现树投影——会话
- * 切换器（memory_tree_sessions 扫描，最近更新降序）+ 章节列表（展开看
- * L1 摘要 / 看原文）+ 本地搜索。零写操作（编辑/删除属 M5）；看原文与
- * 记忆管理器材料同形同源（memory_tree_original，build_items 同一函数）。
+ * 记忆树（情景）区块（M3 §3.37① + M5 编辑面）：会话切换器 + 章节列表
+ * （展开看 L1 摘要 / 看原文）+ 内联编辑标题/摘要 + 两步删除捆 + 本地搜索。
+ * 编辑只动投影（树是投影，原文一个字不改；纪律 5：用户编辑打「手动」
+ * 标记，自动层此后永不覆盖）；看原文与记录员材料同形同源。
  * 自持状态不牵动事实区；打开拉取不轮询（⑫/§3.36③ 同款）。
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { memoryTreeChapters, memoryTreeOriginal, memoryTreeSessions } from "../../lib/api";
+import {
+  memoryTreeChapters,
+  memoryTreeDeleteChapter,
+  memoryTreeEditChapter,
+  memoryTreeOriginal,
+  memoryTreeSessions,
+} from "../../lib/api";
 import { relativeTime } from "../../lib/format";
 import { workspaceDisplayName } from "../../lib/session-groups";
 import { useChatStore } from "../../stores/chat";
@@ -34,6 +40,12 @@ const expanded = ref<Set<string>>(new Set());
 /** 原文缓存：chapterId → 行（或错误文案）；只增不收回。 */
 const originals = ref<Map<string, TreeOriginalItem[]>>(new Map());
 const originalErrors = ref<Map<string, string>>(new Map());
+
+/** 内联编辑态（M5）：{章节, 字段, 草稿}；null = 未在编辑。 */
+const editing = ref<{ id: string; field: "title" | "summary"; value: string } | null>(null);
+const editError = ref("");
+/** 两步删除确认（§3.6 行菜单同惯例）：记章节 id，再点同钮才真删。 */
+const confirmingDelete = ref("");
 
 function keyOf(s: TreeSummaryView): string {
   return `${s.workspace}\u0000${s.sessionId}`;
@@ -86,6 +98,9 @@ async function loadBundles() {
   const s = sessions.value?.find((x) => keyOf(x) === selected.value);
   if (!s) return;
   loadError.value = "";
+  editing.value = null;
+  editError.value = "";
+  confirmingDelete.value = "";
   expanded.value = new Set();
   originals.value = new Map();
   originalErrors.value = new Map();
@@ -122,6 +137,66 @@ async function loadOriginal(b: TreeChapterView) {
     originals.value.set(b.chapterId, rows);
   } catch (e) {
     originalErrors.value.set(b.chapterId, String(e));
+  }
+}
+
+// ---- 编辑面（M5）：内联编辑 + 两步删除；只动投影，成功后就地更新 ----
+
+function startEdit(b: TreeChapterView, field: "title" | "summary") {
+  editError.value = "";
+  confirmingDelete.value = "";
+  editing.value = {
+    id: b.chapterId,
+    field,
+    value: field === "title" ? b.title : b.summary,
+  };
+}
+
+function cancelEdit() {
+  editing.value = null;
+  editError.value = "";
+}
+
+async function saveEdit() {
+  const e = editing.value;
+  const s = sessions.value?.find((x) => keyOf(x) === selected.value);
+  if (!e || !s) return;
+  const patch =
+    e.field === "title" ? { title: e.value } : { summary: e.value };
+  try {
+    await memoryTreeEditChapter(s.sessionId, s.workspace, e.id, patch);
+    const b = chapters.value?.chapters.find((c) => c.chapterId === e.id);
+    if (b) {
+      if (e.field === "title") {
+        b.title = e.value.trim();
+        b.titleEditedByUser = true;
+      } else {
+        b.summary = e.value.trim();
+        b.summaryEditedByUser = true;
+      }
+    }
+    editing.value = null;
+    editError.value = "";
+  } catch (err) {
+    editError.value = String(err);
+  }
+}
+
+async function removeChapter(b: TreeChapterView) {
+  const s = sessions.value?.find((x) => keyOf(x) === selected.value);
+  if (!s) return;
+  if (confirmingDelete.value !== b.chapterId) {
+    confirmingDelete.value = b.chapterId;
+    return;
+  }
+  confirmingDelete.value = "";
+  try {
+    await memoryTreeDeleteChapter(s.sessionId, s.workspace, b.chapterId);
+    const list = chapters.value;
+    if (list)
+      list.chapters = list.chapters.filter((c) => c.chapterId !== b.chapterId);
+  } catch (err) {
+    editError.value = String(err);
   }
 }
 
@@ -166,7 +241,7 @@ function sourceLabel(source: string): string {
       <h3 class="text-xs font-semibold text-ink-1">
         {{ t("memory.treeTitle") }}
       </h3>
-      <span class="text-[length:var(--lw-fs-10)] text-ink-5">{{ t("memory.treeReadOnly") }}</span>
+      <span class="text-[length:var(--lw-fs-10)] text-ink-5">{{ t("memory.treeHint") }}</span>
       <span
         v-if="sessions && sessions.length > 0"
         class="text-[length:var(--lw-fs-10)] text-ink-5"
@@ -239,6 +314,13 @@ function sourceLabel(source: string): string {
                 {{ b.title }}
               </span>
               <span
+                v-if="b.titleEditedByUser"
+                class="shrink-0 rounded-full bg-wash-3 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
+                :title="t('memory.treeManual')"
+              >
+                {{ t("memory.treeManual") }}
+              </span>
+              <span
                 v-if="b.pending"
                 class="shrink-0 rounded-full bg-wash-3 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
               >
@@ -249,56 +331,155 @@ function sourceLabel(source: string): string {
               </span>
             </button>
 
-            <!-- 展开体：L1 摘要全文 + 来源徽章 + 原文 -->
+            <!-- 展开体：编辑态 / L1 摘要 + 来源徽章 + 操作行 + 原文 -->
             <template v-if="expanded.has(b.chapterId)">
-              <p class="mt-1.5 whitespace-pre-wrap break-words pl-5 text-xs text-ink-3">
-                {{ b.summary }}
-              </p>
-              <div class="mt-1.5 flex items-center gap-2 pl-5">
-                <span
-                  class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-10)]"
-                  :class="
-                    b.source === 'recorder'
-                      ? 'bg-wash-3 text-ink-4'
-                      : 'bg-warn/16 text-warn'
-                  "
-                  :title="b.source"
-                >
-                  {{ sourceLabel(b.source) }}
-                </span>
-              </div>
-
-              <!-- 原文切片（与记忆管理器材料同形；只读行渲染） -->
-              <div v-if="originals.has(b.chapterId)" class="mt-2 space-y-1 pl-5">
-                <p
-                  v-for="row in originalRows(b.chapterId)"
-                  :key="row.index"
-                  class="break-words text-[length:var(--lw-fs-11)] leading-relaxed"
-                  :class="
-                    row.kind === 'user'
-                      ? 'text-ink-1'
-                      : row.kind === 'assistant'
-                        ? 'text-ink-3'
-                        : 'font-mono text-[length:var(--lw-fs-10)] text-ink-5'
-                  "
-                >
-                  <span class="mr-1.5 select-none text-ink-5">
-                    [{{ row.index }}] {{ kindLabel(row.kind) }}：
-                  </span>{{ row.text }}
-                </p>
-              </div>
-              <p
-                v-else-if="originalErrors.has(b.chapterId)"
-                class="mt-2 pl-5 text-[length:var(--lw-fs-11)] text-danger"
+              <!-- 编辑标题（M5 内联编辑态） -->
+              <div
+                v-if="editing?.id === b.chapterId && editing.field === 'title'"
+                class="mt-1.5 pl-5"
               >
-                {{
-                  t("memory.originalFailed", {
-                    reason: originalErrors.get(b.chapterId),
-                  })
-                }}
-              </p>
-              <p v-else class="mt-2 pl-5 text-[length:var(--lw-fs-11)] text-ink-5">
-                {{ t("memory.originalLoading") }}
+                <input
+                  v-model="editing.value"
+                  maxlength="40"
+                  class="w-full rounded-[var(--lw-r-xs)] border border-line-strong bg-surface-1 px-2 py-1 text-xs text-ink-1 outline-none focus:border-line-strong"
+                  @keyup.enter="saveEdit"
+                  @keyup.esc="cancelEdit"
+                />
+                <div class="mt-1 flex items-center gap-2">
+                  <button
+                    class="rounded-[var(--lw-r-xs)] bg-accent px-2.5 py-0.5 text-[length:var(--lw-fs-11)] text-accent-ink"
+                    @click="saveEdit"
+                  >
+                    {{ t("memory.save") }}
+                  </button>
+                  <button
+                    class="text-[length:var(--lw-fs-11)] text-ink-4 hover:text-ink-1"
+                    @click="cancelEdit"
+                  >
+                    {{ t("memory.cancel") }}
+                  </button>
+                </div>
+              </div>
+              <!-- 编辑摘要（M5 内联编辑态） -->
+              <div
+                v-else-if="
+                  editing?.id === b.chapterId && editing.field === 'summary'
+                "
+                class="mt-1.5 pl-5"
+              >
+                <textarea
+                  v-model="editing.value"
+                  rows="5"
+                  class="w-full resize-y rounded-[var(--lw-r-xs)] border border-line-strong bg-surface-1 px-2 py-1 text-xs leading-relaxed text-ink-1 outline-none focus:border-line-strong"
+                ></textarea>
+                <div class="mt-1 flex items-center gap-2">
+                  <button
+                    class="rounded-[var(--lw-r-xs)] bg-accent px-2.5 py-0.5 text-[length:var(--lw-fs-11)] text-accent-ink"
+                    @click="saveEdit"
+                  >
+                    {{ t("memory.save") }}
+                  </button>
+                  <button
+                    class="text-[length:var(--lw-fs-11)] text-ink-4 hover:text-ink-1"
+                    @click="cancelEdit"
+                  >
+                    {{ t("memory.cancel") }}
+                  </button>
+                </div>
+              </div>
+              <!-- 查看态：摘要全文 + 来源/手动徽章 + 操作行 -->
+              <template v-else>
+                <p class="mt-1.5 whitespace-pre-wrap break-words pl-5 text-xs text-ink-3">
+                  {{ b.summary }}
+                </p>
+                <div class="mt-1.5 flex items-center gap-2 pl-5">
+                  <span
+                    class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-10)]"
+                    :class="
+                      b.source === 'recorder'
+                        ? 'bg-wash-3 text-ink-4'
+                        : 'bg-warn/16 text-warn'
+                    "
+                    :title="b.source"
+                  >
+                    {{ sourceLabel(b.source) }}
+                  </span>
+                  <span
+                    v-if="b.summaryEditedByUser"
+                    class="rounded-full bg-wash-3 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
+                    :title="t('memory.treeManual')"
+                  >
+                    {{ t("memory.treeManual") }}
+                  </span>
+                  <template v-if="!b.pending">
+                    <button
+                      class="text-[length:var(--lw-fs-11)] text-ink-4 transition hover:text-ink-1"
+                      @click.stop="startEdit(b, 'title')"
+                    >
+                      {{ t("memory.treeEditTitle") }}
+                    </button>
+                    <button
+                      class="text-[length:var(--lw-fs-11)] text-ink-4 transition hover:text-ink-1"
+                      @click.stop="startEdit(b, 'summary')"
+                    >
+                      {{ t("memory.treeEditSummary") }}
+                    </button>
+                    <button
+                      class="text-[length:var(--lw-fs-11)] transition"
+                      :class="
+                        confirmingDelete === b.chapterId
+                          ? 'text-danger'
+                          : 'text-ink-4 hover:text-danger'
+                      "
+                      @click.stop="removeChapter(b)"
+                    >
+                      {{
+                        confirmingDelete === b.chapterId
+                          ? t("memory.treeConfirmDelete")
+                          : t("memory.treeDelete")
+                      }}
+                    </button>
+                  </template>
+                </div>
+
+                <!-- 原文切片（与记忆管理器材料同形；只读行渲染） -->
+                <div v-if="originals.has(b.chapterId)" class="mt-2 space-y-1 pl-5">
+                  <p
+                    v-for="row in originalRows(b.chapterId)"
+                    :key="row.index"
+                    class="break-words text-[length:var(--lw-fs-11)] leading-relaxed"
+                    :class="
+                      row.kind === 'user'
+                        ? 'text-ink-1'
+                        : row.kind === 'assistant'
+                          ? 'text-ink-3'
+                          : 'font-mono text-[length:var(--lw-fs-10)] text-ink-5'
+                    "
+                  >
+                    <span class="mr-1.5 select-none text-ink-5">
+                      [{{ row.index }}] {{ kindLabel(row.kind) }}：
+                    </span>{{ row.text }}
+                  </p>
+                </div>
+                <p
+                  v-else-if="originalErrors.has(b.chapterId)"
+                  class="mt-2 pl-5 text-[length:var(--lw-fs-11)] text-danger"
+                >
+                  {{
+                    t("memory.originalFailed", {
+                      reason: originalErrors.get(b.chapterId),
+                    })
+                  }}
+                </p>
+                <p v-else class="mt-2 pl-5 text-[length:var(--lw-fs-11)] text-ink-5">
+                  {{ t("memory.originalLoading") }}
+                </p>
+              </template>
+              <p
+                v-if="editError"
+                class="mt-1 pl-5 text-[length:var(--lw-fs-11)] text-danger"
+              >
+                {{ t("memory.treeEditFailed", { reason: editError }) }}
               </p>
             </template>
           </li>

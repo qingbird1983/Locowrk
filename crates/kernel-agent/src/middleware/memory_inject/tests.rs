@@ -85,6 +85,7 @@ async fn top_k_limits_entries() {
         cfg_lock(MemoryInjectConfig {
             enabled: true,
             top_k: 2,
+            ..MemoryInjectConfig::default()
         }),
     );
     let out = run(&inject, points::REQUEST).await.unwrap();
@@ -99,11 +100,12 @@ async fn disabled_or_zero_top_k_is_noop() {
     for cfg in [
         MemoryInjectConfig {
             enabled: false,
-            top_k: 5,
+            ..MemoryInjectConfig::default()
         },
         MemoryInjectConfig {
             enabled: true,
             top_k: 0,
+            ..MemoryInjectConfig::default()
         },
     ] {
         let inject = inject(
@@ -221,7 +223,10 @@ async fn experiences_injected_when_source_present() {
             "chose rusqlite",
             1_700_000_000,
         )]))),
-        cfg_lock(MemoryInjectConfig::default()),
+        cfg_lock(MemoryInjectConfig {
+            experiences: true,
+            ..MemoryInjectConfig::default()
+        }),
     );
     match inject
         .handle(points::REQUEST, &payload_with_user("向量库选型"))
@@ -252,10 +257,39 @@ async fn experiences_skipped_when_absent_or_no_query() {
     let inject = MemoryInject::new(
         std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
         Some(std::sync::Arc::new(FixedExp(vec![exp("x", 0)]))),
-        cfg_lock(MemoryInjectConfig::default()),
+        cfg_lock(MemoryInjectConfig {
+            experiences: true,
+            ..MemoryInjectConfig::default()
+        }),
     );
     let out = run(&inject, points::REQUEST).await.unwrap();
     assert!(!out.system.unwrap().contains("<session_experiences>"));
+}
+
+#[tokio::test]
+async fn experiences_skipped_when_switch_off() {
+    // M5 §10.3 向量层关缺省：源在、query 在、开关关 = 不检索不注入
+    //（缺省档 experiences=false 即本语义，无需覆盖字段）
+    let inject = MemoryInject::new(
+        std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
+        Some(std::sync::Arc::new(FixedExp(vec![exp(
+            "chose rusqlite",
+            1_700_000_000,
+        )]))),
+        cfg_lock(MemoryInjectConfig::default()),
+    );
+    match inject
+        .handle(points::REQUEST, &payload_with_user("向量库选型"))
+        .await
+    {
+        WaterfallDecision::Replace(v) => {
+            let req: RequestPayload = serde_json::from_value(v).unwrap();
+            let system = req.system.unwrap();
+            assert!(system.contains("<persistent_memory>"));
+            assert!(!system.contains("<session_experiences>"));
+        }
+        _ => panic!("expected replace"),
+    }
 }
 
 #[test]
@@ -351,6 +385,7 @@ async fn top_k_change_recomputes_prefetch() {
     let cfg = cfg_lock(MemoryInjectConfig {
         enabled: true,
         top_k: 5,
+        ..MemoryInjectConfig::default()
     });
     let inject = inject(src.clone() as std::sync::Arc<dyn MemorySource>, cfg.clone());
     let _ = run_session(&inject, "s1").await.unwrap();
@@ -544,7 +579,10 @@ async fn guidance_appended_at_block_tail() {
             "chose rusqlite",
             0,
         )]))),
-        cfg_lock(MemoryInjectConfig::default()),
+        cfg_lock(MemoryInjectConfig {
+            experiences: true,
+            ..MemoryInjectConfig::default()
+        }),
     );
     // 经历检索的 query 来自最近用户消息（payload_value 无消息 = 跳过经历块）
     match inject

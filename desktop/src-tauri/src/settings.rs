@@ -280,11 +280,13 @@ impl SettingsStore {
     }
 
     /// 后端专用：记忆注入活配置（MemoryInject 共享锁的内容物，⑪）。
+    /// M5 起 `experiences` 随行——注入侧每请求读锁，保存即热换（免重建）。
     pub fn memory_inject_config(&self) -> MemoryInjectConfig {
         let m = self.inner.lock().expect("settings poisoned").memory.clone();
         MemoryInjectConfig {
             enabled: m.enabled,
             top_k: m.top_k as usize,
+            experiences: m.experiences,
         }
     }
 
@@ -343,9 +345,10 @@ impl SettingsStore {
         (m.collapse_enabled, m.collapse_threshold_pct)
     }
 
-    /// 后端专用：未显式设置会话的缺省整理模式（M4 §3.38① 开发者档）。
+    /// 后端专用：未显式设置会话的缺省整理模式（M5 阶段 3 起用户层
+    /// memory 区，缺省 tree——阶段 2 曾在 developer 区，键已退役）。
     pub fn default_organizer(&self) -> crate::organizer_mode::OrganizerMode {
-        crate::organizer_mode::OrganizerMode::parse(&self.developer().default_organizer)
+        crate::organizer_mode::OrganizerMode::parse(&self.memory().default_organizer)
             .unwrap_or_default()
     }
 }

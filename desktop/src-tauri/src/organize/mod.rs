@@ -31,6 +31,7 @@ use assemble::window_start_event;
 mod assemble;
 mod client;
 mod debug;
+mod edit;
 mod recovery;
 mod tree_tools;
 mod view;

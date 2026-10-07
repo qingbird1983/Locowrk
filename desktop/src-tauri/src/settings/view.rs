@@ -75,6 +75,8 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             files: s.memory.files,
             repo_context: s.memory.repo_context,
             handoff_update: s.memory.handoff_update,
+            default_organizer: s.memory.default_organizer.clone(),
+            experiences: s.memory.experiences,
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,
@@ -116,7 +118,6 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             memory_manager_timeout_secs: s.developer.memory_manager_timeout_secs,
             memory_manager_max_retries: s.developer.memory_manager_max_retries,
             rule_chunk_tokens: s.developer.rule_chunk_tokens,
-            default_organizer: s.developer.default_organizer.clone(),
         },
         thinking: super::ThinkingView {
             language: s.thinking.language.clone(),

@@ -61,7 +61,8 @@ pub async fn memory_clear_all(state: State<'_, AppState>) -> Result<usize, Strin
 
 /// F2 reconcile（文件化设计 §3/§7）：diff 记忆文件 ↔ 索引，以文件为准
 /// 回写。触发 = 启动（后台）+ 记忆页挂载 + 开发者手动按钮；总开关关 =
-/// 空转零计数。
+/// 空转零计数。M5 起同跑 tree.md 人改对账（编辑面另一半）——计数并入
+/// scanned / updated（捆标题/摘要回写也是"文件为准的更新"）。
 #[tauri::command]
 pub async fn memory_reconcile(
     state: State<'_, AppState>,
@@ -71,7 +72,12 @@ pub async fn memory_reconcile(
     }
     let mut known = state.settings.fs_roots();
     known.extend(state.memory.all_workspaces()?);
-    crate::memory_reconcile::run(&state.memory, &state.memory_files, &known)
+    let mut sum = crate::memory_reconcile::run(&state.memory, &state.memory_files, &known)?;
+    let tree = crate::memory_tree_reconcile::run(&state.tree_store, &state.memory_files, &known);
+    sum.scanned += tree.scanned;
+    sum.updated += tree.titles + tree.summaries;
+    sum.warnings += tree.warnings;
+    Ok(sum)
 }
 
 /// F2 人的编辑面入口：打开（必要时先建）记忆人类层目录。自有数据根，

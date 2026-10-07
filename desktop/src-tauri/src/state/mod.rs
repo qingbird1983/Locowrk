@@ -188,11 +188,13 @@ pub fn init_state(app: AppHandle) -> AppState {
     ));
     // M4 树会话组装器（§3.38②）：TreeContextSource 注册进内核服务表——
     // legacy 会话返回 None（组装零变化），树会话 = L0 目录 + 未整理尾巴。
+    // M5 起存储句柄收敛为 AppState 单例（便宜克隆），组装点共用。
+    let tree_store = memory_tree::TreeStore::new(&root);
     let tree_assembler = Arc::new(crate::organize::TreeAssembler::new(
         Arc::clone(&organizer_modes),
         Arc::clone(&settings),
         Arc::clone(&workspace_of),
-        memory_tree::TreeStore::new(&root),
+        tree_store.clone(),
         sessions_dir.clone(),
     ));
     ctx.provide_dyn::<dyn kernel_agent::TreeContextSource>(Arc::clone(&tree_assembler) as Arc<_>);
@@ -348,13 +350,13 @@ pub fn init_state(app: AppHandle) -> AppState {
         Some(embed_tool_port),
     ))
     .with_builtin(crate::organize::MemoryExpandTool::new(
-        memory_tree::TreeStore::new(&root),
+        tree_store.clone(),
         Arc::clone(&workspace_of),
         Arc::clone(&organizer_modes),
         sessions_dir.clone(),
     ))
     .with_builtin(crate::organize::MemoryCollapseTool::new(
-        memory_tree::TreeStore::new(&root),
+        tree_store.clone(),
         Arc::clone(&workspace_of),
         Arc::clone(&organizer_modes),
     ))
@@ -475,7 +477,7 @@ pub fn init_state(app: AppHandle) -> AppState {
     };
     crate::memory_files::spawn_initial_export(
         Arc::clone(&memory),
-        memory_tree::TreeStore::new(&root),
+        tree_store.clone(),
         (*memory_files).clone(),
         sessions_dir.clone(),
         Arc::clone(&files_on),
@@ -513,6 +515,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         notifications,
         schedules,
         organizer,
+        tree_store,
         stop_flags,
         ask: ask_hub,
     }

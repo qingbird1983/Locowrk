@@ -100,6 +100,9 @@ pub struct AppState {
     /// 记忆树影子运行编排器（M2）：轮次收束钩子 / `/整理` / 启动重投 /
     /// 开发者观测的数据源；只写 memory-tree/ 投影，不改请求组装。
     pub organizer: Arc<crate::organize::Organizer>,
+    /// 树投影存储句柄（M5 收敛：组装点原来四处各建一份，这里单例共享
+    /// ——便宜克隆句柄，命令层 tree.md 对账也用它）。
+    pub tree_store: memory_tree::TreeStore,
     /// 停止标记注册表（v4.11 §3.39④）：run_turn 进场登记 RAII 守卫、
     /// 收束自动注销；agent_stop 命令置位（流式 delta 点 + 步间边界消费）。
     pub stop_flags: Arc<crate::stop::StopFlags>,
@@ -137,13 +140,15 @@ impl AppState {
             .clone()
     }
 
-    /// ⑬ 隐式提取依赖快照（spawn 用，全部 Arc 克隆）。
+    /// ⑬ 隐式提取依赖快照（spawn 用，全部 Arc 克隆）。经历开关随快照
+    /// 走（M5 `memory.experiences` 逐轮读取 = 保存即热换）。
     pub fn extract_deps(&self) -> crate::extract::ExtractDeps {
         crate::extract::ExtractDeps {
             llm: Arc::clone(&self.llm),
             memory: Arc::clone(&self.memory),
             experiences: self.experiences.clone(),
             embed: Arc::clone(&self.embed_port),
+            experiences_enabled: self.settings.memory().experiences,
         }
     }
 

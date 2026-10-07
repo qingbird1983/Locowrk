@@ -415,8 +415,6 @@ export interface DeveloperView {
   recorderMaxRetries: number;
   /** 规则切分块（token，5K–50K 缺省 20K）。 */
   ruleChunkTokens: number;
-  /** M4 §3.38 会话缺省整理模式（未显式设置会话的生效档；M5 数据裁决后切用户层）。 */
-  defaultOrganizer: string;
 }
 
 /** 开发者选项区部分更新：字段缺省 = 保持不变。 */
@@ -431,7 +429,6 @@ export interface DeveloperUpdate {
   recorderTimeoutSecs?: number;
   recorderMaxRetries?: number;
   ruleChunkTokens?: number;
-  defaultOrganizer?: string;
 }
 
 /** 对话行为区投影：结构即设置原值。contentMaxWidth null = 未设置（前端按
@@ -496,6 +493,10 @@ export interface MemorySettingsView {
   repoContext: boolean;
   /** F3 handoff 收束更新（缺省开）：归属会话轮次收束后后台维护交接文件。 */
   handoffUpdate: boolean;
+  /** M5 会话缺省整理模式（未显式设置会话跟随此档；缺省 tree——阶段 3 裁定）。 */
+  defaultOrganizer: string;
+  /** M5 经历记忆开关（缺省关，树 v2 §10.3 向量层关缺省观察一个版本）。 */
+  experiences: boolean;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -515,6 +516,8 @@ export interface MemoryUpdate {
   files?: boolean;
   repoContext?: boolean;
   handoffUpdate?: boolean;
+  defaultOrganizer?: string;
+  experiences?: boolean;
 }
 
 /** F2 reconcile 结果（memory_reconcile 命令返回；计数如实透出）。 */
@@ -669,7 +672,8 @@ export interface TreeSummaryView {
   updatedMs: number;
 }
 
-/** 一章节（只读：L0 标题 / L1 摘要 / L2 事件区间；source 如实 recorder|rule）。 */
+/** 一章节（L0 标题 / L1 摘要 / L2 事件区间；source 如实 recorder|rule）。
+ * M5 起可编辑：*EditedByUser = 用户改过（自动层永不覆盖，UI 挂「手动」徽章）。 */
 export interface TreeChapterView {
   chapterId: string;
   title: string;
@@ -679,6 +683,8 @@ export interface TreeChapterView {
   createdAt: number;
   eventFrom: number;
   eventTo: number;
+  titleEditedByUser: boolean;
+  summaryEditedByUser: boolean;
 }
 
 /** 选中会话的章节清单（memory_tree_chapters；投影缺/坏 = exists=false）。 */

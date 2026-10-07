@@ -31,6 +31,8 @@ const form = reactive({
   files: true,
   repoContext: true,
   handoffUpdate: true,
+  defaultOrganizer: "tree",
+  experiences: false,
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
@@ -43,6 +45,12 @@ const pacingOptions = [
 const tailOptions = [
   { value: "boundary", label: t("settings.tailStrategyBoundary") },
   { value: "window", label: t("settings.tailStrategyWindow") },
+];
+
+// M5 缺省整理方式二档（树 v2 §11.2 阶段 3：缺省 tree，自开发者区迁入）
+const organizerOptions = [
+  { value: "legacy", label: t("settings.organizerLegacy") },
+  { value: "tree", label: t("settings.organizerTree") },
 ];
 
 watch(
@@ -61,6 +69,8 @@ watch(
     form.files = v.memory.files;
     form.repoContext = v.memory.repoContext;
     form.handoffUpdate = v.memory.handoffUpdate;
+    form.defaultOrganizer = v.memory.defaultOrganizer;
+    form.experiences = v.memory.experiences;
   },
   { immediate: true },
 );
@@ -79,6 +89,8 @@ function save() {
     files: form.files,
     repoContext: form.repoContext,
     handoffUpdate: form.handoffUpdate,
+    defaultOrganizer: form.defaultOrganizer,
+    experiences: form.experiences,
   });
 }
 </script>
@@ -112,6 +124,15 @@ function save() {
       <SettingsToggle v-model="form.autoExtract" :label="t('settings.memoryAutoExtract')" />
     </SettingsRow>
 
+    <!-- M5 经历记忆（树 v2 §10.3 缺省关：向量层关缺省观察一个版本；
+         关 = 轮后经历提取与注入块经历段都停，已有数据保留） -->
+    <SettingsRow
+      :title="t('settings.experiences')"
+      :hint="t('settings.experiencesHint')"
+    >
+      <SettingsToggle v-model="form.experiences" :label="t('settings.experiences')" />
+    </SettingsRow>
+
     <!-- F1 记忆文件化（文件化设计 §7）：关 = 回纯 sqlite，md 不再读写 -->
     <SettingsRow :title="t('settings.memoryFiles')" :hint="t('settings.memoryFilesHint')">
       <SettingsToggle v-model="form.files" :label="t('settings.memoryFiles')" />
@@ -133,6 +154,19 @@ function save() {
       <SettingsToggle
         v-model="form.handoffUpdate"
         :label="t('settings.memoryHandoffUpdate')"
+      />
+    </SettingsRow>
+
+    <!-- M5 缺省整理方式（树 v2 §11.2 阶段 3：缺省记忆树，未显式设置
+         的会话跟随此档热换；自开发者区迁入用户层） -->
+    <SettingsRow
+      :title="t('settings.defaultOrganizer')"
+      :hint="t('settings.defaultOrganizerHint')"
+    >
+      <SettingsSegmented
+        v-model="form.defaultOrganizer"
+        :options="organizerOptions"
+        :label="t('settings.defaultOrganizer')"
       />
     </SettingsRow>
 

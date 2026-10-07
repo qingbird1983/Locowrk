@@ -266,6 +266,17 @@ pub fn spawn_initial_export(
             Ok(_) => {}
             Err(e) => tracing::warn!("记忆文件启动对账失败: {e}"),
         }
+        // M5：tree.md 人改对账（编辑面另一半）——先于导出跑，人改的
+        // 标题/摘要回写投影后，导出的人改保护自然放行重建。
+        let tree_sum = crate::memory_tree_reconcile::run(&tree_store, &files, &known);
+        if tree_sum.has_action() {
+            tracing::info!(
+                titles = tree_sum.titles,
+                summaries = tree_sum.summaries,
+                warnings = tree_sum.warnings,
+                "tree.md 启动对账完成"
+            );
+        }
         match run_initial_export(&memory, &tree_store, &files, &sessions_dir) {
             Ok((0, 0)) => {}
             Ok((f, t)) => tracing::info!(facts = f, trees = t, "记忆文件化首启导出完成"),
