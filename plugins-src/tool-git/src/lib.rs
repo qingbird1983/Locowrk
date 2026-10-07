@@ -7,7 +7,8 @@
 //! - `git_push` → Irreversible：发布到远端，走审批
 //! - `git_undo_commit` → Irreversible：reset 改写仓库状态；undo 前先校验
 //!   HEAD 仍指向原提交，HEAD 动过即拒绝转人工（与 fs_restore 同理，按
-//!   plugins.md §八"宁可标错成 Irreversible"判级）
+//!   plugins.md §八"宁可标错成 Irreversible"判级）；根提交无父，显式拒绝
+//!   并在报错里给出路（真实测试 2026-10-06 P0-2：隐性失败让模型反复尝试）
 //!
 //! 安全底线：
 //! - `repo` 参数 canonicalize 后校验允许根前缀（fsutil，与 tool-fs 同底座）
@@ -128,7 +129,9 @@ fn describe_manifest() -> CString {
                               repo root) OR add_all (bool, stage everything including \
                               deletions) — exactly one of the two. Returns {commit, \
                               short}. Undoable via git_undo_commit (soft reset keeps the \
-                              changes staged) as long as HEAD is still the created commit."
+                              changes staged) as long as HEAD is still the created \
+                              commit — except the repo's ROOT (first) commit, which has \
+                              no parent and cannot be undone this way."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -168,13 +171,15 @@ fn describe_manifest() -> CString {
             ToolSpec {
                 name: "git_undo_commit".into(),
                 description: "Undo a previous git_commit by soft-resetting one commit \
-                              (the changes stay staged). Usually invoked by the \
-                              compensation layer, not by the model. Args mirror the \
-                              compensation payload {call_id, args, output}; only \
-                              output.{repo, commit} is used. Refuses when HEAD has moved \
-                              past the recorded commit (manual intervention required). \
-                              Irreversible — it rewrites repository state, so the call \
-                              requires user approval."
+                              (the changes stay staged). Can be called directly after a \
+                              mistaken commit. Args mirror the compensation payload \
+                              {call_id, args, output}; only output.{repo, commit} is \
+                              used. Refuses when HEAD has moved past the recorded commit \
+                              (manual intervention required), and refuses the repo's \
+                              ROOT commit (no parent to reset to — the error names the \
+                              manual way out). Rewrites repository state: classified \
+                              Irreversible, so approval follows the session's permission \
+                              mode (asked by default, auto-approved in full-access mode)."
                     .into(),
                 schema: json!({
                     "type": "object",

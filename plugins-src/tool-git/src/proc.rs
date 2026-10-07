@@ -108,21 +108,26 @@ pub(crate) fn run_git(repo: &Path, argv: &[&str]) -> Result<GitOut, String> {
     })
 }
 
-/// 非零退出 / 超时 → 统一格式 Err（带 stderr 最后一行，模型可读）。
+/// 非零退出 / 超时 → 统一格式 Err。git 的关键信息几乎都在 stderr 末尾
+/// （如 push 无远端的 fatal 两行 + 说明两行），只取最后一行会把真正的原因
+/// 截掉（真实测试 2026-10-06 P1-1：模型只看到 "and the repository exists."），
+/// 这里保留**最后 6 条非空行**，既给足上下文又不灌满审批卡。
+const ERROR_TAIL_LINES: usize = 6;
+
 pub(crate) fn require_ok(out: &GitOut, what: &str) -> Result<(), String> {
     if out.timed_out {
         return Err(format!("git {what}: timed out after {TIMEOUT_SECS}s"));
     }
     if out.code != Some(0) {
-        // git 的报错末尾常带空行：取最后一条非空行，模型才看得到原因
-        let tail = out
+        let mut tail: Vec<&str> = out
             .stderr
             .lines()
             .rev()
-            .find(|l| !l.trim().is_empty())
-            .unwrap_or("")
-            .to_string();
-        return Err(format!("git {what} failed: {tail}"));
+            .filter(|l| !l.trim().is_empty())
+            .take(ERROR_TAIL_LINES)
+            .collect();
+        tail.reverse();
+        return Err(format!("git {what} failed: {}", tail.join("\n")));
     }
     Ok(())
 }

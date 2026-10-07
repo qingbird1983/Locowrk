@@ -367,7 +367,7 @@
 
 ### ㉕·fix 历史会话用户消息重放丢失（✅ 已完成，v2.47）
 
-> 用户实机报障（2026-10-03）：软件重启后历史会话只剩模型回复，用户发的 每一轮都不见。根因 = ⑲ 起 `project_events` 漏投影 `UserMessage`（落 `\_` 通配被丢）——**落盘一直有**（jsonl 镜像含用户消息，恢复逐条一致 测试早已锁住），实时路径也一直正常（前端发送即本地回显）；丢的只是 `session_history` 全量投影这一层。UI shell 文档 §3.6/§4.1 先行补记再动码。
+> 用户实机报障（2026-10-03）：软件重启后历史会话只剩模型回复，用户发的 每一轮都不见。根因 = ⑲ 起 `project_events` 漏投影 `UserMessage`（落 `\\\_` 通配被丢）——**落盘一直有**（jsonl 镜像含用户消息，恢复逐条一致 测试早已锁住），实时路径也一直正常（前端发送即本地回显）；丢的只是 `session_history` 全量投影这一层。UI shell 文档 §3.6/§4.1 先行补记再动码。
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
@@ -395,7 +395,7 @@
 
 ### ㉖·对话区② 会话运营 + 开发者选项地基（✅ 已完成，v2.49）
 
-> 用户三条新裁定（2026-10-03）落档：①**[DESIGN.md](http://DESIGN.md) 不再堆补记**——逐批落点补记迁至 [CHANGELOG.md](CHANGELOG.md)（本批起生效，本条即其首条）；②**可配置原则**——不确定 数值一律进设置页可调项；界面上写死的禁止项都要有开关（含最危险动作），统一收默认 隐藏的「开发者」分区（安卓式连点版本号 7 次解锁）→ UI shell 文档 §七 规则 16 / §3.2 先行成文再动码。自规划批次 = ㉖ 会话运营（§3.6 行尾菜单四件，后端命令）+ 开发者选项 地基；搭车 = 审批超时可配（§8.3-5 就此裁定闭账）。
+> 用户三条新裁定（2026-10-03）落档：①\*\*[DESIGN.md](http://DESIGN.md) 不再堆补记\*\*——逐批落点补记迁至 [CHANGELOG.md](CHANGELOG.md)（本批起生效，本条即其首条）；②**可配置原则**——不确定 数值一律进设置页可调项；界面上写死的禁止项都要有开关（含最危险动作），统一收默认 隐藏的「开发者」分区（安卓式连点版本号 7 次解锁）→ UI shell 文档 §七 规则 16 / §3.2 先行成文再动码。自规划批次 = ㉖ 会话运营（§3.6 行尾菜单四件，后端命令）+ 开发者选项 地基；搭车 = 审批超时可配（§8.3-5 就此裁定闭账）。
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
@@ -421,7 +421,7 @@
 | 行尾菜单关联项 | ✅ v2.50 | SessionRow … 菜单增「移入工作区」（候选 = 设置 fsRoots，当前归属项置灰 ✓ 前缀）与「移出工作区」（有归属才出现）；toast 反馈 + 失败条；chat.associateSession → sessionAssociate API |
 | 测试 | ✅ v2.50 | session-store 24 绿（+2）；桌面 103 绿（命令层薄适配无新增，由 session-store 测试与走查覆盖） |
 
-验证：cargo test 103+24 绿、clippy 0（desktop+session-store）、fmt、check_length OK、pnpm build 过。 实机走查（tauri dev + CDP 截图 26b-1…26b-7 + 落盘取证）：真实轮（deepseek + 8 工具步）建会话 → `…` 菜单四项（重命名/导出/移入「Locowrk」/删除）→ 移入 → 「项目」组 + 工作区头 + 嵌套行 + toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "F:\\\\…\\\\Locowrk"}` → 头行折叠（嵌套行消失）→ **Page.reload 后折叠态保持**（localStorage 偏好）→ 移出 → 回「会话」组、 「项目」组消失。搭车：en 补缺的 `settings.nav.developer` 键（zh 有 en 缺，回落键名）。走查 预置的 fsRoots 已还原（fsRoots=\[\]），走查会话经 UI 两步删除；上批遗留的走查会话残留一并清理。
+验证：cargo test 103+24 绿、clippy 0（desktop+session-store）、fmt、check_length OK、pnpm build 过。 实机走查（tauri dev + CDP 截图 26b-1…26b-7 + 落盘取证）：真实轮（deepseek + 8 工具步）建会话 → `…` 菜单四项（重命名/导出/移入「Locowrk」/删除）→ 移入 → 「项目」组 + 工作区头 + 嵌套行 + toast「已移入工作区」，meta.json 落盘 `{"title": null, "workspace": "F:\\\\\\\\…\\\\\\\\Locowrk"}` → 头行折叠（嵌套行消失）→ **Page.reload 后折叠态保持**（localStorage 偏好）→ 移出 → 回「会话」组、 「项目」组消失。搭车：en 补缺的 `settings.nav.developer` 键（zh 有 en 缺，回落键名）。走查 预置的 fsRoots 已还原（fsRoots=\[\]），走查会话经 UI 两步删除；上批遗留的走查会话残留一并清理。
 
 ### ㉗·A 通知浮层 + 应用内通知记录（✅ 已完成，v2.51）
 
@@ -435,7 +435,7 @@
 | 侧栏入口 | ✅ v2.51 | bell 第 5 图标（§2.4，popover 非页面）+ 未读 >0 右上 6px accent 点；开合/锚定抽 use-notification-entry.ts、版本连点解锁抽 use-dev-unlock.ts（Sidebar 保 400 行）；App.vue notifications.init()（load 全量 + 订阅推送） |
 | 测试 | ✅ v2.51 | 桌面 106 绿（+3：add/持久 roundtrip/FIFO cap / mark 语义与 clear / 五类提取与配对含负例） |
 
-验证：cargo test 106 绿（+3）、clippy 0、fmt、check_length OK、pnpm build 过。 实机走查（tauri dev + CDP 截图 27a-1…27a-8 + notifications.json 取证）：空态（「没有通知」+ 全读/清空禁用 + 点外部关）→ 预置 `approvalTimeoutSecs=5` 真实轮：shell 审批不响应 → **5s 守夜 fail-closed 拒绝实机发生**（记录条「已拒绝 · 运行」+ 模型如实报告）→ **bell 徽标 点亮** → 浮层行「审批超时，已自动拒绝 / 请用 shell 工具运行…（会话标题回落）/ 3 分钟前 / 未读点 / 未读 · 1」→ 盘上 `{"kind":"approval_timeout","sessionId":"desktop-…","read":false}` → 全部已读（徽标/未读点消）→ 未读分段空态 → 清空（盘上 `\[\]`）。走查设置已还原 （approvalTimeoutSecs=100），走查会话 UI 两步删除，通知清零。
+验证：cargo test 106 绿（+3）、clippy 0、fmt、check_length OK、pnpm build 过。 实机走查（tauri dev + CDP 截图 27a-1…27a-8 + notifications.json 取证）：空态（「没有通知」+ 全读/清空禁用 + 点外部关）→ 预置 `approvalTimeoutSecs=5` 真实轮：shell 审批不响应 → **5s 守夜 fail-closed 拒绝实机发生**（记录条「已拒绝 · 运行」+ 模型如实报告）→ **bell 徽标 点亮** → 浮层行「审批超时，已自动拒绝 / 请用 shell 工具运行…（会话标题回落）/ 3 分钟前 / 未读点 / 未读 · 1」→ 盘上 `{"kind":"approval_timeout","sessionId":"desktop-…","read":false}` → 全部已读（徽标/未读点消）→ 未读分段空态 → 清空（盘上 `\\\[\\\]`）。走查设置已还原 （approvalTimeoutSecs=100），走查会话 UI 两步删除，通知清零。
 
 ### ㉗·B 工作面板骨架 + 子 Agent 转录页签（✅ 已完成，v2.52）
 
@@ -504,7 +504,7 @@
 | 隔离规格 | ✅ v2.55 | Context and Memory.md §4.6 成文：严格对称无全局层、键位即主键、注入即隔离、工具面同隔离（"模型看不见的数据才是真隔离"）、管理页豁免、PI-Desktop 借鉴映射 |
 | 测试 | ✅ v2.55 | kernel-agent 56 绿（payload/契约随改）、memory-sqlite 13 绿（+3：跨项目同名并存/按键位删+undo 原键位还原/旧库迁移）、desktop 112 绿（+4：解析器/键位归一/记忆键位隔离/经历键位隔离）、clippy 0 双侧、fmt、check_length、pnpm build 过、插件产物重建（memory-sqlite 1.3.0） |
 
-验证：实机走查（CDP 28a-1…7 + sqlite 落盘取证）：预置 fsRoots → 侧栏「项目」段空组 `Locowrk` 头行渲染 → 行菜单移入成组 + meta 落盘 → **归属会话真实轮 memory_write**：sqlite 行 `workspace=F:\\…\\Locowrk` 打标、旧冒烟行迁入 `''` 键位 → **未归属新会话 memory_read 同 key = `{"found":false}`**（模型如实报告"可能在别的项目下写的"）→ 归属会话读回 `found:true` → 记忆页归属徽章「项目 Locowrk」/未归属行无徽章。走查会话两步删除、冒烟会话移出、设置还原（fsRoots=\[\]）、memory.sqlite3 还原迁移前备份（迁移在用户真实数据上留待自然发生）。
+验证：实机走查（CDP 28a-1…7 + sqlite 落盘取证）：预置 fsRoots → 侧栏「项目」段空组 `Locowrk` 头行渲染 → 行菜单移入成组 + meta 落盘 → **归属会话真实轮 memory_write**：sqlite 行 `workspace=F:\\\\…\\\\Locowrk` 打标、旧冒烟行迁入 `''` 键位 → **未归属新会话 memory_read 同 key = `{"found":false}`**（模型如实报告"可能在别的项目下写的"）→ 归属会话读回 `found:true` → 记忆页归属徽章「项目 Locowrk」/未归属行无徽章。走查会话两步删除、冒烟会话移出、设置还原（fsRoots=\[\]）、memory.sqlite3 还原迁移前备份（迁移在用户真实数据上留待自然发生）。
 
 ### ㉘·B 权限审批借鉴 + 工具围栏（✅ 已完成，v2.56——PI-Desktop 映射落地；插件按项目过滤可见性随插件批次）
 
@@ -620,17 +620,17 @@
 
 验证：实机走查（CDP 260-1…12-13 + 截图，tauri dev）：无项目问候 nameless/带项目问候/项目 ＋ 即时跟切（greeting+chip 双证）/会话态开面板→新建任务回首屏面板收起/发送键禁用态白箭 rgba(255,255,255,.92)/顶栏项目图标+下弹菜单（wsrow 退场）/长标题 360px 省略/三弹层上滑 + ctx-popover 规则在场/开关无底色 + 120px 恒定偏移/面板头两钮（启动器+斜对角最大化）无关闭/关闭钮 hover 红底/最大化 1040 与 1280 双态/柄距正文 9px/两列 left=283 right=1237 零偏差。v2.61 复测（CDP）：场景 A 同源三步（选 A/新建任务/选 B 两边逐次同变）+ 场景 B 钉窗零位移；走查会话已清（含一个 LLM 流式挂起轮次随进程终止后盘上删除）、fsRoots 还原空、settings 其余零改动。
 
-### ㊱ 消息流 v4.11 十一条：停止/排队/坞卡/折叠（✅ 已完成，v2.74，提交 25275ce——用户 2026-10-05 逐条裁定，功能逻辑参照 F:\Warehouse\Github\ZCode；UI shell 文档先行 v4.11：§3.7/§3.9/§3.11/§3.17 重写 + §3.39 新节 + §3.25 Esc 链 + §4.1/§4.2 扩表）
+### ㊱ 消息流 v4.11 十一条：停止/排队/坞卡/折叠（✅ 已完成，v2.74，提交 25275ce——用户 2026-10-05 逐条裁定，功能逻辑参照 F:\\Warehouse\\Github\\ZCode；UI shell 文档先行 v4.11：§3.7/§3.9/§3.11/§3.17 重写 + §3.39 新节 + §3.25 Esc 链 + §4.1/§4.2 扩表）
 
 | 项 | 落地 |
 |---|---|
-| ① 决策/失败通知去卡片底 | ✅：chat store `approval_resolved` 投影改 `decision` 条目（无卡片底），ChatTranscript 过程组内平铺 12px 行（ok=check `--lw-ok` / denied=warn `--lw-danger`）；错误行同准入组；纯决策/错误（无工具/思考）不套组壳直接平铺；SystemNotice 审批气泡退役 |
+| ① 决策/失败通知去卡片底 | ✅：chat store approval_resolved 投影改 decision 条目（无卡片底），ChatTranscript 过程组内平铺 12px 行（ok=check --lw-ok / denied=warn --lw-danger）；错误行同准入组；纯决策/错误（无工具/思考）不套组壳直接平铺；SystemNotice 审批气泡退役 |
 | ② 过程组默认全折叠 | ✅：expandToolProcess 开关覆盖重放（旧「实时才吃设置」退役）；「已停止」新状态词入组头（仅最新组，stopRequested 驱动） |
 | ③ 会话移入其它项目退役 | ✅：SessionRow 菜单 ws: 段删除（归属只由首聊挂起/项目下新建产生；session_associate 命令后端保留） |
 | ④ 权限卡坞化 | ✅：PermissionCard 重写紧凑三段坞卡（头行 动作名+风险胶囊+徽章+右置动作〔拒绝 Esc 键帽｜允许一次｜chevron 上弹「允许本次对话」，硬门两键〕/ 参数单行 mono 预览 / 元信息行）渲染进 Composer 坞槽（决策后即隐、对话流零气泡；orphan 兜底退役）；守夜倒计时=卡底 2px 细条 |
 | ⑤ 回到底部 | ✅：ChatTranscript 32px 圆钮（坞上方 12px，lw-pop-up） |
-| ⑥ 发送键=停止 | ✅：后端停止链——`stop.rs` StopFlags 注册表（RAII 守卫进 run_turn）+ `LlmStreamSink::should_stop`（回调签名回 bool，genai 流循环命中即带部分正文收束）+ runner 步间边界 TurnDone + `agent_stop` 命令三路同收（标记置位/审批 fail-closed 拒绝/ask 跳过）；前端 stopRequested→「已停止」头行 |
-| ⑦ ask_user 选择卡 | ✅：desktop 新 `ask.rs`（AskHub oneshot+守夜+`ask_snooze` 摘除 + AskUserTool Pure+always 常驻）+ `agent://ask-user`/`ask-resolved` 通道 + AskCard（字母瓦片选项/单选即提交/多选+自由输入/首次交互续期）+ `tools.askTimeoutSecs`（0=不限，缺省 300，设置行+热换+校验） |
+| ⑥ 发送键=停止 | ✅：后端停止链——stop.rs StopFlags 注册表（RAII 守卫进 run_turn）+ LlmStreamSink::should_stop（回调签名回 bool，genai 流循环命中即带部分正文收束）+ runner 步间边界 TurnDone + agent_stop 命令三路同收（标记置位/审批 fail-closed 拒绝/ask 跳过）；前端 stopRequested→「已停止」头行 |
+| ⑦ ask_user 选择卡 | ✅：desktop 新 ask.rs（AskHub oneshot+守夜+ask_snooze 摘除 + AskUserTool Pure+always 常驻）+ agent://ask-user/ask-resolved 通道 + AskCard（字母瓦片选项/单选即提交/多选+自由输入/首次交互续期）+ tools.askTimeoutSecs（0=不限，缺省 300，设置行+热换+校验） |
 | ⑧ 排队卡 | ✅：前端 UI 态队列（不入会话日志）——QueueCard（两行预览/立即发送=抢占〔移出→停止→重发〕/删除/暂停续跑）+ turn_done 自动派发一条一轮 + 停止/出错转暂停 |
 | ⑨ 跟随滚动 | ✅：默认贴底 48px 窗口，watch(chat.items) 隐式深（流式 delta 也跟）；用户上滚让位 |
 | ⑩ 嵌套内容换行 | ✅：markdown 代码块 pre-wrap+anywhere（旧横滚）；决策/错误行 span anywhere；tool 明细/思考体既有 pre-wrap 核实 |
@@ -641,16 +641,16 @@
 
 ---
 
-### ㊲ LLM 兼容层重构：genai 退役 + 自建 OpenAI 兼容客户端 + 传输韧性（✅ 已完成，v2.75——用户 2026-10-05 裁定：「llm 兼容层全删、参照 PI-Desktop 重构、不打补丁式修」+「重试不设次数上限，半次失败都不可接受」；LLM.md 文档先行 v2.x→v3.0）
+### ㊲ LLM 兼容层重构：genai 退役 + 自建 OpenAI 兼容客户端 + 传输韧性（✅ 已完成，v2.75——用户 2026-10-05 裁定：「llm 兼容层全删、参照 PI-Desktop 重构、不打补丁式修」+「重试不设次数上限，半次失败都不可接受」；[LLM.md](http://LLM.md) 文档先行 v2.x→v3.0）
 
 | 项 | 落地 |
 |---|---|
-| ① genai 全删 | ✅：`llm/genai_backend.rs` 删除 + `genai = "0.6"` 依赖退役（desktop/src-tauri 唯一依赖点；内核 crate 零 genai）；TLS/stream 特性显式补进 reqwest（原靠 genai 依赖图带入，不补则 HTTPS 全断）；AppLlm/AppLlmRecorder 换 CompatLlm |
-| ② 一条线协议 | ✅：线上只有 OpenAI Chat Completions（`{base}/chat/completions` + SSE）——kind 只决定鉴权头（openai=Bearer / anthropic=x-api-key+anthropic-version 双带 / ollama=无）与端点归一（join_version 沿用：智谱 /v4、方舟 /v3 原样，ollama 落 /v1 官方兼容端点）；22 预设全兼容；非流式 complete = 同一管道聚合（无第二形状）；不发 max_tokens 派生限额（PI 同款教训：兼容网关拒收该类字段） |
-| ③ 传输韧性重试 | ✅：错误分类（401/403 鉴权 fatal / 429 限流 / 408·5xx·网络·断流瞬时 / 400·413+上下文超限语义 fatal 带指引 / 其余 4xx fatal 带报文片段）+ 退避（限流 2s×2 指数+25% 抖动封顶 30s；瞬时 1/2/4/8s 封顶 8s；服务器 retry-after-ms/Retry-After 优先同封顶）+ **重试不设次数上限**（用户裁定：瞬时故障一直重试到成功或用户停止；单次等待封顶不存在无限等）+ 180s 零事件看门狗（断流可重试，长输出不限总时长）+ 重试等待 200ms 步进轮询停止标记 |
-| ④ 流式重置 | ✅：已推 delta 的重试先发 `agent://llm-retry`（attempt/delay_ms，组装闭包 emit——AppHandle 不进 llm 模块，v2.66 同款）→ 前端 resetAssistant 清本步流式缓冲 + `notice.llmRetried` 平铺状态行；重试轮 delta 从零重建同一气泡；重放不受影响（投影只认返回值）；纯等待型重试零通知（用户不可见） |
-| ⑤ 步数到顶优雅收束 | ✅：runner 不再 Err 硬掐——TurnDone 正常收束 + 新 `agent://turn-capped` 如实告知（`notice.turnCapped`：「发『继续』可接着跑；设置 → 工具与分发可调高」）；已完成的工具成果全保留；契约测试随新语义更新 |
-| ⑥ 线上件 | ✅：`llm/` 新四模块——`wire.rs`（请求装配/SSE chunk 解析/工具调用按 index 分片累积/空 call_id 补号/usage 映射含 OpenAI cached_tokens·DeepSeek prompt_cache_hit_tokens·reasoning_tokens，全 0=None 宁缺勿假）+ `sse.rs`（行缓冲分帧/注释跳过/[DONE] 立即派发/EOF 冲刷）+ `retry.rs`（分类+退避纯函数）+ `client.rs`（CompatLlm 重试循环/停止部分正文收束/stream_options 400 修复性去字段重发一次） |
+| ① genai 全删 | ✅：llm/genai_backend.rs 删除 + genai = "0.6" 依赖退役（desktop/src-tauri 唯一依赖点；内核 crate 零 genai）；TLS/stream 特性显式补进 reqwest（原靠 genai 依赖图带入，不补则 HTTPS 全断）；AppLlm/AppLlmRecorder 换 CompatLlm |
+| ② 一条线协议 | ✅：线上只有 OpenAI Chat Completions（{base}/chat/completions + SSE）——kind 只决定鉴权头（openai=Bearer / anthropic=x-api-key+anthropic-version 双带 / ollama=无）与端点归一（join_version 沿用：智谱 /v4、方舟 /v3 原样，ollama 落 /v1 官方兼容端点）；22 预设全兼容；非流式 complete = 同一管道聚合（无第二形状）；不发 max_tokens 派生限额（PI 同款教训：兼容网关拒收该类字段） |
+| ③ 传输韧性重试 | ✅：错误分类（401/403 鉴权 fatal / 429 限流 / 408·5xx·网络·断流瞬时 / 400·413+上下文超限语义 fatal 带指引 / 其余 4xx fatal 带报文片段）+ 退避（限流 2s×2 指数+25% 抖动封顶 30s；瞬时 1/2/4/8s 封顶 8s；服务器 retry-after-ms/Retry-After 优先同封顶）+ 重试不设次数上限（用户裁定：瞬时故障一直重试到成功或用户停止；单次等待封顶不存在无限等）+ 180s 零事件看门狗（断流可重试，长输出不限总时长）+ 重试等待 200ms 步进轮询停止标记 |
+| ④ 流式重置 | ✅：已推 delta 的重试先发 agent://llm-retry（attempt/delay_ms，组装闭包 emit——AppHandle 不进 llm 模块，v2.66 同款）→ 前端 resetAssistant 清本步流式缓冲 + notice.llmRetried 平铺状态行；重试轮 delta 从零重建同一气泡；重放不受影响（投影只认返回值）；纯等待型重试零通知（用户不可见） |
+| ⑤ 步数到顶优雅收束 | ✅：runner 不再 Err 硬掐——TurnDone 正常收束 + 新 agent://turn-capped 如实告知（notice.turnCapped：「发『继续』可接着跑；设置 → 工具与分发可调高」）；已完成的工具成果全保留；契约测试随新语义更新 |
+| ⑥ 线上件 | ✅：llm/ 新四模块——wire.rs（请求装配/SSE chunk 解析/工具调用按 index 分片累积/空 call_id 补号/usage 映射含 OpenAI cached_tokens·DeepSeek prompt_cache_hit_tokens·reasoning_tokens，全 0=None 宁缺勿假）+ sse.rs（行缓冲分帧/注释跳过/\[DONE\] 立即派发/EOF 冲刷）+ retry.rs（分类+退避纯函数）+ client.rs（CompatLlm 重试循环/停止部分正文收束/stream_options 400 修复性去字段重发一次） |
 
 验证：desktop 213 绿（+llm 全新 13 测试：payload 形状/分片累积/补号/推理分流/usage 三形态/SSE 跨块分帧/分类表/退避曲线/端点归一/演示回落/缺 Key 快速失败/会话覆盖；步数到顶契约测试随新语义更新）、workspace 398 绿、clippy 0 双侧、fmt、pnpm build 过、check_length 12 文件超建议值（llm/tests.rs 425 新增入列——单一测试职责不拆，其余历批已裁定）。genai 源/依赖/锁文件零残留（grep 全仓 0 命中，Cargo.lock 无 genai）。已知边界（记档）：①Anthropic 走官方 OpenAI 兼容层（原生 /v1/messages 不再用）——兼容层不暴露的扩展字段（如 thinking 签名）宁缺勿假；②Ollama 走 /v1 兼容端点（原生 /api/chat NDJSON 不再用）；③HTTP-date 形态的 Retry-After 不解析（回落退避曲线，极少见）；④重试等待期间停止=空收束（前端「已停止」已示，不虚构结尾）。**实机走查待做**（真实轮 deepseek：正常轮/构造 429 重试/断流恢复/停止语义/步数到顶新文案）。
 
@@ -658,11 +658,41 @@
 
 | 批次 | 状态 | 说明 |
 |---|---|---|
-| 术语统一（Bundle→Chapter / 捆→章节 / 记录员→记忆管理器） | ✅ v2.108 | memory-tree 模块与 desktop organize 管线全量改名；落盘契约不动（serde alias 双读、`b{n}` id、`recorder`/`rule` 数据词汇、设置键、tree.md 指针格式）；「捆稻草」比喻只在设计哲学语境保留；详见《Memory Tree Design v2》术语注 |
+| 术语统一（Bundle→Chapter / 捆→章节 / 记录员→记忆管理器） | ✅ v2.108 | memory-tree 模块与 desktop organize 管线全量改名；落盘契约不动（serde alias 双读、b{n} id、recorder/rule 数据词汇、设置键、tree.md 指针格式）；「捆稻草」比喻只在设计哲学语境保留；详见《Memory Tree Design v2》术语注 |
 | 三栏响应式（非对称级联折叠） | ✅ v2.109 | 断点 1400/1100/800 级联折叠；左栏 >1100 自动展开（手动折叠优先）、右栏永不自动展开；<800 窗口过窄整窗提示；UI shell §3.40 |
-| ㊳·fix 目检修正（单钮 + 右栏意图消费） | ✅ v2.110 | 顶栏钉窗收拢单钮（左栏开关退役——规格「右上角切换按钮」只指右栏；车道 +72→+40px）；右栏开意图被断点折叠消费（<1400 即落 false 持久化）+ work-panel `setOpen` 视口钳制（程序化入口不落悬空 open）——回宽永不自动展开，修 v2.109「回宽恢复」违规；断点常量下沉 lib/breakpoints.ts；§3.40 ②·4 违规条款重写 |
-| ㊳·fix② V2 规格（按钮永不冻结 + push/overlay 双模式） | ✅ v2.111（部分被 v2.112 口述定稿覆盖：级联回归、警告层退役） | **断点只决定展开模式、永不决定按钮可用性**（用户限制评审尺度落档 §3.40 头）：v2.109 级联折叠退役（<1400 右栏、<1100 左栏不再自动折叠），两切换钮任何 ≥400px 宽度可见可点；断点改 1100/800/400——800–1399 push 双栏可共存、400–799 **overlay 浮层**（fixed 出流 + 最大宽 2/3 视口 + 左右互斥 + 遮罩点击收起；互斥方向不对称：开右栏挤左栏 = 瞬态旗标回宽自恢复，开左栏挤右栏 = 意图消费不回弹——**右栏意图消费点随级联退役移到 800 界**，非对称裁定原样保留）；过窄界 800→400 + 应用 minWidth 1024→400（窄窗使用是用户自由，600px 真实可用）；`viewportLeftOk/viewportRightOk` 旗标退役、`overlayMode/tooNarrow/overlaySidebarFold` 新三态；互斥收口在 `toggleSidebar()`/`setOpen()` 两个唯一写入口（Ctrl+B/J/钮/⌘K/程序化入口零旁路）；§3.40 全节重写 |
-| ㊳·fix③ 口述定稿（收缩级联 + overlay 展开带 + 警告层退役） | ✅ v2.112 | 用户口述「拉窄右栏先收、继续拉小左栏收、到 800 两栏全收只剩主会话区、主区最小限位 400、到 400 取消警告——窗口已经限制了还要警告什么、400~800 展开是悬浮式」：级联沿触发挥复（跨 1400 右栏收+意图消费不回弹 / 跨 1100 左栏瞬态 sidebarAutoFold 回升自展开 / 跨 800 进带全收），带内手动展开不被回弹（沿触发否则按钮可用是假的）；narrow-veil/tooNarrow 旗标/narrow.* 文案键整体退役；`overlaySidebarOpen` 浮层展开态 + `sidebarCollapsed` 分档 getter + `toggleSidebar` 分档（级联折叠时展开 = 推翻级联）；用户报「主会话区放到下面、侧栏流在上面」根修 = 级联回归后 800 以下侧栏永不可 Dock；§3.40 v2.112 重写（口述原文落档节首）；CDP 22/22 + 450/600 截图 |
+| ㊳·fix 目检修正（单钮 + 右栏意图消费） | ✅ v2.110 | 顶栏钉窗收拢单钮（左栏开关退役——规格「右上角切换按钮」只指右栏；车道 +72→+40px）；右栏开意图被断点折叠消费（<1400 即落 false 持久化）+ work-panel setOpen 视口钳制（程序化入口不落悬空 open）——回宽永不自动展开，修 v2.109「回宽恢复」违规；断点常量下沉 lib/breakpoints.ts；§3.40 ②·4 违规条款重写 |
+| ㊳·fix② V2 规格（按钮永不冻结 + push/overlay 双模式） | ✅ v2.111（部分被 v2.112 口述定稿覆盖：级联回归、警告层退役） | 断点只决定展开模式、永不决定按钮可用性（用户限制评审尺度落档 §3.40 头）：v2.109 级联折叠退役（<1400 右栏、<1100 左栏不再自动折叠），两切换钮任何 ≥400px 宽度可见可点；断点改 1100/800/400——800–1399 push 双栏可共存、400–799 overlay 浮层（fixed 出流 + 最大宽 2/3 视口 + 左右互斥 + 遮罩点击收起；互斥方向不对称：开右栏挤左栏 = 瞬态旗标回宽自恢复，开左栏挤右栏 = 意图消费不回弹——右栏意图消费点随级联退役移到 800 界，非对称裁定原样保留）；过窄界 800→400 + 应用 minWidth 1024→400（窄窗使用是用户自由，600px 真实可用）；viewportLeftOk/viewportRightOk 旗标退役、overlayMode/tooNarrow/overlaySidebarFold 新三态；互斥收口在 toggleSidebar()/setOpen() 两个唯一写入口（Ctrl+B/J/钮/⌘K/程序化入口零旁路）；§3.40 全节重写 |
+| ㊳·fix③ 口述定稿（收缩级联 + overlay 展开带 + 警告层退役） | ✅ v2.112 | 用户口述「拉窄右栏先收、继续拉小左栏收、到 800 两栏全收只剩主会话区、主区最小限位 400、到 400 取消警告——窗口已经限制了还要警告什么、400\~800 展开是悬浮式」：级联沿触发挥复（跨 1400 右栏收+意图消费不回弹 / 跨 1100 左栏瞬态 sidebarAutoFold 回升自展开 / 跨 800 进带全收），带内手动展开不被回弹（沿触发否则按钮可用是假的）；narrow-veil/tooNarrow 旗标/narrow.\* 文案键整体退役；overlaySidebarOpen 浮层展开态 + sidebarCollapsed 分档 getter + toggleSidebar 分档（级联折叠时展开 = 推翻级联）；用户报「主会话区放到下面、侧栏流在上面」根修 = 级联回归后 800 以下侧栏永不可 Dock；§3.40 v2.112 重写（口述原文落档节首）；CDP 22/22 + 450/600 截图 |
+
+### ㊴ 工具层真实测试复测批 + 思考语言设置（✅ 已完成，v2.116——用户 2026-10-06 两份文档：《BUG/Tool Layer Issues Todo List》（整轮工具复测产物）+《NEW/language of thought.md》规格）
+
+| 项 | 落地 |
+|---|---|
+| P0-1 fetch SideEffect 标错 | ✅ Pure → Irreversible（GET 也对外发起网络请求：服务端留痕、URL 可能带敏感 token；描述补「不是只读查询」；plugins.md §二表同步；tool-fetch 0.1.1） |
+| P0-2 git_undo_commit 根提交 | ✅ 三选一裁定取方向①显式拒绝（直面「隐性失败让模型反复尝试」）：`rev-list --parents -n 1` 判父，报错明说 ROOT commit 系设计限制 + 给 `git update-ref -d HEAD` via shell 出路（需用户同意）；git_commit/git_undo_commit 描述写明例外（tool-git 0.1.3；方向②③记档不取） |
+| P1-1 git 报错截断 | ✅ require_ok 保留 stderr 末 6 条非空行（原只取末行——push 无远端的 fatal 主因在前两行被截掉，模型只见 "and the repository exists."；共享 helper 全 git 工具受益） |
+| P2-1 schedule 多模式 | ✅ 互斥校验落地：描述承诺 exactly one of、旧实现静默优先级 interval > at > delay——多模式同给显式拒绝列字段；start_at 双锚点歧义路徠除（interval 首跑恒 now+N） |
+| P2-2 memory_undo 描述失实 | ✅ 删「usually invoked by the compensation layer」劝退措辞（v2.115 fs_restore 同款裁定）+ 审批说法改「跟随会话权限档」（决策表实况：完全档 Irreversible 放行不出卡）；git_undo_commit 同款措辞一并修（memory-sqlite 0.1.4） |
+| 环境事实 2：shell 是 Unix coreutils | ✅ 根因探明 = tool-shell 无 shell 直 spawn + PATH 解析（非「跑在 Git Bash 里」）；shell/shell_read 描述写明「用 Unix 风格命令，cmd 内建（dir/del/copy、`rmdir /s /q`）不存在」（tool-shell 0.1.3）；跨平台策略维持现状、单独排期记档 |
+| 环境事实 1：出站网络非全通 | ✅ 长期文档 docs/design/BUG/环境已知限制.md（LLM/fetch/未来市场三方影响 + 排查口诀「先怀疑网络别怪工具」+ 国内外二分对照；代理配置不做记档） |
+| 思考语言设置（NEW 规格全项落地） | ✅ 设置项非插件非中间件：settings.json 新 `thinking` 区（follow_ui 缺省 / zh-CN / en-US / none；serde default 零迁移；白名单校验）+ 模型配置「默认项」组 SettingsSelect 四档行 + 保存 toast「已保存。新设置将在下个会话生效。」（同值重选不提示）；宿主内置 waterfall 监听器 ThinkingLanguageInject 注册在 TreeDirectoryInject 之后 = **system 真尾部**；**会话内锁死**（前缀缓存红线）：session_id 首请求解析并 FIFO 128 缓存（M1 同款），中途改设置当前会话不变、新会话用新配置；跟随界面 = settings.locale + `system` 档 sys-locale 解析 OS 语言；模板 prompts/thinking_language/{zh-CN,en-US,none}.md 编译期 include_str!（memory-tree 同款；适配记录：文档的 llm.toml/运行时读文件改随本项目 settings.json/编译期内嵌惯例） |
+| 搭车：organize auto_collapse flaky 根修 | ✅ 必现化后定位 = 测试自身竞速（after_turn 触发的整理任务经 tauri::async_runtime 独立 runtime 与测试读盘竞速，降级重建章节抹 collapsed_at）；夹具 thresholdPct 90 抬整理线（收起/整理两阈值独立）；全集连跑两遍稳定，已记档 4 例 flaky 之一闭账 |
+| 测试与产物 | ✅ workspace 全套件绿、desktop 224 绿（+5 thinking_language）×2 稳定复跑、tool-git 11 绿（+1 根提交拒绝）、scheduler 9 绿（互斥拒绝）、clippy 0 双侧、fmt、check_length 零新增超限、pnpm build、四插件产物重建（build_plugins.sh 注释记档）。实机走查 ✅ CDP 第二实例：新行渲染/四档下拉/保存 toast/落盘往返 + 注入 trace 实证（hint_len=33 had_system=true）；**边界记档**：deepseek-flash CoT 语言不服从软指示（thinking 落盘恒英文）且模型自述不可信——效果评估只看 thinking 落盘 |
+
+
+### ㊵ 工具执行过程展示重构（✅ 已完成，v2.117——用户 2026-10-07《NEW/Tool Execution Process Display.md》规划；纯前端批）
+
+| 项 | 落地 |
+|---|---|
+| 五列栅格行（红线：列必须对齐） | ✅ 新 ProcessRow.vue 共享列轨（CSS Grid 20/64/1fr/80/24px = 图标/类型/描述/状态/三角），思考行 + 工具行同吃；类型词 tool.type.* 十六档 + 图标分派（icons 新增 brain/gitBranch）；状态克制（脉动+弱化词 / 时长或弱对勾 / 失败 danger 唯一高亮）；三角 hover 淡入恒占位不位移；CDP 测量实证：同组各行五列左缘逐像素一致 |
+| 明细人话渲染（红线：不展示原始 JSON） | ✅ 新 lib/tool-detail.ts（按工具类型定制视图模型）+ ToolDetailView.vue：fs_read=代码块组件复用（.md renderMarkdown 围栏注入）/ fs_list=字形列表 / fs_grep=匹配列表 / shell=命令+退出码+mono 输出 / fetch=状态码+摘要 / edit 系=编辑处数+匹配方式枚举翻译 / memory·schedule=标签值行 / subagent=标签值行 / git 与表外=键值兜底；字段名中文标签、枚举中文（budget_exhausted→步数到顶）、字节带单位、时间相对化、路径相对化（剥 Windows 扩展前缀——走查实抓）；「原始数据 ▸」默认收起（+复制调用文本钮）——摘要人话→明细人话→原始数据兜底三层 |
+| 子代理紧凑行（红线：不要卡片） | ✅ SubagentCard.vue 大卡片退役删除；subagent_run = 五列栅格一行，展开 = 任务/状态/轮次/工具/摘要标签值缩进行（竖线层级）+「查看完整对话」文本钮 → §3.16 转录页签（⑮ 黑盒边界不变，父侧拿不到不渲染）；行上悬浮钮与副作用徽章退役进明细；组外错误行去卡片底 |
+| 折叠逻辑与状态机 | ✅ 零改动（§3.7 相位机 / 默认一律收起含失败态 v2.98 / 默认展开开关） |
+| 文档 | ✅ UI shell v4.13（§3.7 过程行形态 / §3.8 重写 / §3.9 / §3.10 紧凑行 / §3.18 三层呈现 / §四流向表 / 组件清单）+ CHANGELOG v2.117 |
+| 跟进：层级间距与颜色规格（v4.14，同日口头规格） | ✅ v2.118：三层间距统一 8px（flex+gap，垂直 margin 全撤，旧 8/8/12 退役）；颜色两档明度——层 1 主色 ink-1、层 2+3 统一次要色 ink-2（文字图标同色）；三层背景透明；语义色与计时行 chrome 例外；CDP 实测五处 gap=8px + 两档颜色实测命中（截图 tmp/w117-shots/v414-layers.png） |
+| 测试与走查 | ✅ vue-tsc 0、pnpm build 过、check_length OK（纯前端批）；实机走查 ✅ CDP 第二实例真实轮 ×3 + 重放：改造前截图 ×5 vs 改造后 ×8（含子代理「步数到顶」枚举翻译、实时脉动+流式思考、原始数据展开）；栅格对齐 CDP 测量逐像素一致；自检口径记档：结构面零裸 JSON，内容载体（代码块/匹配行/命令输出）例外系 §四渲染表明令 |
+
+---
 
 ## 三、收尾 backlog（随批次搭车）
 

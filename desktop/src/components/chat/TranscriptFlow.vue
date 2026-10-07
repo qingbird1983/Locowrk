@@ -19,11 +19,9 @@ import { useI18n } from "vue-i18n";
 import type { ChatItem, SystemItem, ToolItem } from "../../stores/chat";
 import { useApprovalsStore } from "../../stores/approvals";
 import { useSettingsStore } from "../../stores/settings";
-import { clip, formatDuration } from "../../lib/format";
 import { toolAction } from "../../lib/tool-summary";
 import { Icon } from "../../lib/icons";
 import MessageRow from "./MessageRow.vue";
-import SubagentCard, { type SubagentChild } from "./SubagentCard.vue";
 import SystemNotice from "./SystemNotice.vue";
 import ThinkingRow from "./ThinkingRow.vue";
 import ToolRow from "./ToolRow.vue";
@@ -66,8 +64,6 @@ type TurnBlock = {
   /** 组内有真过程（工具/思考）= 套组壳；纯错误行平铺不套壳。 */
   hasProcess: boolean;
   startTs?: number;
-  /** §3.10 子 Agent 卡数据（组内 subagent_run 调用，卡是 §3.16 入口）。 */
-  subagents: SubagentChild[];
 };
 type Block =
   | TurnBlock
@@ -103,23 +99,6 @@ const blocks = computed<Block[]>(() => {
           : base;
       if (!names.includes(label)) names.push(label);
     }
-    const subagents: SubagentChild[] = [];
-    for (const i of tools) {
-      if (i.tool !== "subagent_run") continue;
-      const childId = (i.output as { child_session_id?: string } | null)
-        ?.child_session_id;
-      // 未收束的调用还没有 child_id（悬空调用先行落事件）——卡里不列空行
-      if (!childId) continue;
-      subagents.push({
-        childId,
-        prompt: clip(String((i.args as { prompt?: unknown } | null)?.prompt ?? ""), 24),
-        status: i.pending ? "running" : i.ok ? "done" : "failed",
-        durationText:
-          i.ts !== undefined && i.doneTs !== undefined
-            ? formatDuration(i.doneTs - i.ts)
-            : undefined,
-      });
-    }
     out.push({
       kind: "turn",
       key: cur[0]!.id,
@@ -130,7 +109,6 @@ const blocks = computed<Block[]>(() => {
       hasProcess: cur.some((i) => i.kind === "tool" || i.kind === "thinking"),
       // 组内最早的过程项时刻（工具与思考都算——计时从思考开始）
       startTs: tsList.length > 0 ? Math.min(...tsList) : undefined,
-      subagents,
     });
     cur = [];
   };
@@ -369,12 +347,8 @@ function noticeText(item: SystemItem): string {
                   <span>{{ item.text }}</span>
                 </div>
               </template>
-              <!-- §3.10 子 Agent 卡：组内 subagent_run 的可视形态 + §3.16 入口 -->
-              <SubagentCard
-                v-if="block.subagents.length > 0"
-                :children="block.subagents"
-                @open="(id, title) => emit('openTranscript', id, title)"
-              />
+              <!-- v4.13：SubagentCard 大卡片退役——subagent_run 就是组内一列
+                   工具行（§3.10 紧凑行），入口在行明细「查看完整对话」 -->
             </TurnProcess>
             <template v-else>
               <template v-for="item in block.items" :key="item.id">
@@ -396,7 +370,7 @@ function noticeText(item: SystemItem): string {
             :copyable="finalAssistantIds.has(block.item.id)"
           />
           <!-- 会话内系统消息（SystemNotice 模式）：组外兄弟节点 -->
-          <div v-else-if="block.item.kind === 'system'" class="flex justify-center">
+          <div v-else-if="block.item.kind === 'system'" class="sys-row flex justify-center">
             <SystemNotice
               :text="noticeText(block.item as SystemItem)"
               :actions="
@@ -421,7 +395,7 @@ function noticeText(item: SystemItem): string {
         :ts="block.item.ts"
         :copyable="finalAssistantIds.has(block.item.id)"
       />
-      <div v-else-if="block.item.kind === 'system'" class="flex justify-center">
+      <div v-else-if="block.item.kind === 'system'" class="sys-row flex justify-center">
         <SystemNotice
           :text="noticeText(block.item as SystemItem)"
           :actions="
@@ -439,38 +413,65 @@ function noticeText(item: SystemItem): string {
 
 <style scoped>
 /* 任务容器（v2.99「第 0 层」）：计时行常驻头部 + 动作块/简短回复；收束
- * 收缩为计时行，最终报告在容器外——容器↔报告 16px（--lk-space-4 换算） */
+ * 收缩为计时行，最终报告在容器外——容器↔报告间距归兄弟规则（v4.15 用户
+ * 裁定 12px：全 8px 分不出最终报告起头；旧 16px 容器底 padding + 报告自
+ * 带 12px = 28px 退役） */
 .turn-box {
-  padding-bottom: var(--lw-gap-16);
+  padding-bottom: 0;
 }
-/* 间距（v2.99 用户裁定：--lk-space-2=8px、--lk-space-3=12px 换算）：动作
- * 块之间与动作块↔简短回复 8px，简短回复→下一动作块 12px。跨组件兄弟选
- * 择器（组件根都带本层 data-v）；.turn 垂直 padding 已归零，间距全由这
- * 里给。计时行→首块同 8px（计时行自带 6px 下 padding + 2px 补足） */
+/* 间距（v4.14 用户裁定：三层间距统一 8px——动作块之间、动作块↔过渡文本、
+ * 过渡文本→下一动作块全部同值；旧 8/8/12 三值退役。跨组件兄弟选择器
+ * （组件根都带本层 data-v）；.turn 垂直 padding 已归零，间距全由这
+ * 里给。计时行属容器 chrome（第 0 层），不在三层之列，保持 2px）。
+ * 简短回复 .msg--brief 自身 padding 归零（2026-10-07：隐藏时间行占位 +
+ * 自带 12px padding 与此处 8px 双重计算，实际间距曾达 24-30px）——相邻
+ * 对在这里补全：简短↔简短、简短/动作块↔系统条目双向。 */
 .turn + .msg {
   padding-top: var(--lw-gap-8);
 }
 .msg + .turn {
-  padding-top: var(--lw-gap-12);
+  padding-top: var(--lw-gap-8);
 }
 .turn + .turn {
+  padding-top: var(--lw-gap-8);
+}
+.msg + .msg,
+.msg + .sys-row,
+.sys-row + .msg,
+.sys-row + .sys-row,
+.turn + .sys-row,
+.sys-row + .turn {
   padding-top: var(--lw-gap-8);
 }
 .turn-timer + .turn,
 .turn-timer + .msg {
   padding-top: var(--lw-gap-2);
 }
+.turn-timer + .sys-row {
+  padding-top: var(--lw-gap-2);
+}
+/* 容器（第 0 层）↔ 容器外尾块（最终报告 / 其后系统条目）= 12px（v4.15
+ * 用户裁定：节奏整体 8px，唯此处加大一档让最终报告的起头可分辨）；下一
+ * 轮用户消息紧跟容器时同规 */
+.turn-box + .msg,
+.turn-box + .sys-row {
+  padding-top: var(--lw-gap-12);
+}
 .error-row {
   display: flex;
   align-items: flex-start;
-  gap: var(--lw-gap-8);
-  margin: var(--lw-gap-8) 0;
-  border-radius: var(--lw-r-sm);
-  border: 1px solid color-mix(in oklab, var(--lw-danger) 30%, transparent);
-  background: color-mix(in oklab, var(--lw-danger) 8%, transparent);
-  padding: var(--lw-gap-8) var(--lw-gap-12);
+  gap: 7px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值7,§二⑬) */
+  padding: var(--lw-gap-2) 0;
   font-size: var(--lw-fs-12);
-  line-height: 1.45;
+  line-height: 1.5;
+  color: var(--lw-danger);
+}
+/* v4.13 与组内平铺错误行同形（去卡片底——红线「不要卡片」）；与栅格行同一左缘 */
+.error-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.error-row > svg {
   color: var(--lw-danger);
 }
 /* §3.7 组内平铺错误行：无卡片底，扁平左对齐（与工具行/思考行同一左缘）；

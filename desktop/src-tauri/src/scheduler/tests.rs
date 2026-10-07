@@ -123,6 +123,27 @@ async fn create_requires_session_and_one_mode() {
     .unwrap_err();
     assert!(err.to_string().contains("past"), "{err}");
 
+    // 多模式同给 = 显式拒绝（真实测试 2026-10-06 P2-1：旧实现静默优先级
+    // interval > at > delay，模型以为的语义与落库行为分叉）。at 给未来
+    // 时刻，证明拒绝发生在互斥校验而不是时刻检查。
+    let err = call(
+        tool.as_ref(),
+        &ctx(Some("desktop-1")),
+        json!({ "prompt": "x", "delay_secs": 5, "at": 4102444800000i64 }),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.to_string().contains("exactly ONE"), "{err}");
+    let err = call(
+        tool.as_ref(),
+        &ctx(Some("desktop-1")),
+        json!({ "prompt": "x", "interval_secs": 30, "delay_secs": 5 }),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.to_string().contains("exactly ONE"), "{err}");
+    assert_eq!(db.list_session("desktop-1").len(), 0, "拒绝不留行");
+
     let ok = call(
         tool.as_ref(),
         &ctx(Some("desktop-1")),

@@ -20,6 +20,7 @@ import SettingsRow from "./SettingsRow.vue";
 import ServiceList from "./model/ServiceList.vue";
 import ProviderSetupDialog from "./model/ProviderSetupDialog.vue";
 import DefaultModelMenu from "./model/DefaultModelMenu.vue";
+import SettingsSelect from "./SettingsSelect.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -67,6 +68,29 @@ function onSelectRecorder(providerId: string, model: string) {
       ? { recorderModel: model, recorderProvider: providerId }
       : { recorderModel: "", recorderProvider: "" },
   );
+}
+
+// ---- 思考语言（docs/design/NEW/language of thought.md）：reasoning 用的
+// 语言。会话首请求锁死（前缀缓存红线），中途修改保存后提示「下个会话
+// 生效」；同值重选不保存不提示。
+const thinkingPref = computed({
+  get: () => settings.view?.thinking?.language ?? "follow_ui",
+  set: (v: string) => void onThinkingChange(v),
+});
+const thinkingOptions = computed(() => [
+  { value: "follow_ui", label: t("settings.thinkingFollowUi") },
+  { value: "zh-CN", label: t("settings.thinkingZh") },
+  { value: "en-US", label: t("settings.thinkingEn") },
+  { value: "none", label: t("settings.thinkingNone") },
+]);
+async function onThinkingChange(v: string) {
+  if (v === thinkingPref.value) return;
+  try {
+    await settings.saveThinking({ language: v });
+    toast.push("ok", t("settings.thinkingSavedToast"));
+  } catch (e) {
+    toast.push("danger", String(e));
+  }
 }
 
 // ---- AI 服务：模态与动作 ----
@@ -215,6 +239,19 @@ function closeSetup() {
           {{ t("settings.modelDefaultChange") }}
           <Icon name="chevronDown" :size="14" />
         </button>
+      </SettingsRow>
+
+      <!-- 思考语言：模型 reasoning 的语言；会话内锁死（前缀缓存红线），
+           修改保存即提示下个会话生效 -->
+      <SettingsRow
+        :title="t('settings.thinkingLanguage')"
+        :hint="t('settings.thinkingHint')"
+      >
+        <SettingsSelect
+          v-model="thinkingPref"
+          :entries="thinkingOptions"
+          :label="t('settings.thinkingLanguage')"
+        />
       </SettingsRow>
     </SettingsGroup>
 

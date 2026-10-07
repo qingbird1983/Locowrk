@@ -384,6 +384,15 @@ export interface SettingsView {
   chat: ChatSettingsView;
   /** 开发者选项区（v2.49，默认隐藏分区）。 */
   developer: DeveloperView;
+  /** 思考语言区（docs/design/NEW/language of thought.md）：reasoning 用的
+   * 语言；会话首请求锁死，中途修改只影响新会话。 */
+  thinking: ThinkingView;
+}
+
+/** 思考语言区投影。 */
+export interface ThinkingView {
+  /** follow_ui（缺省，跟随界面）| zh-CN | en-US | none。 */
+  language: string;
 }
 
 /** 开发者选项区投影（v2.49）：unlocked = 分区可见（安卓式连点版本号

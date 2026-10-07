@@ -1,7 +1,8 @@
 //! tool-fetch：第一批真实工具插件（plugins.md P0，阶段八③落地）。
 //!
-//! 一个工具 `fetch`（HTTP GET / 网页抓取，`SideEffect::Pure`——plugins.md
-//! 把 GET 归为只读；POST / PUT 属 P1 的 tool-http，标 Irreversible）。
+//! 一个工具 `fetch`（HTTP GET / 网页抓取，`SideEffect::Irreversible`——
+//! 2026-10-06 真实测试复测裁定：GET 也对外发起网络请求（服务端留痕、
+//! URL 可能带敏感 token），"只读"标法与事实不符；plugins.md 同步改）。
 //!
 //! 行为约定：
 //! - 只接受 http / https（`file:` 等协议直接拒绝）
@@ -65,7 +66,11 @@ fn describe_manifest() -> CString {
             description: "Fetch a URL over HTTP GET and return the response body as text. \
                           Only http/https. Returns {url, status, content_type, truncated, body}; \
                           body is capped at max_bytes (default 256KiB). HTTP error statuses \
-                          (4xx/5xx) are returned as data, not failures. Private/loopback/link-local hosts are refused by the SSRF guard and redirects are not followed."
+                          (4xx/5xx) are returned as data, not failures. Private/loopback/link-local hosts are refused by the SSRF guard and redirects are not followed. \
+                          Performs an outbound network request to the target host (the visit \
+                          shows up in its server logs; the URL may carry sensitive tokens) — \
+                          classified Irreversible, so approval follows the session's \
+                          permission mode; it is not a read-only lookup."
                 .into(),
             schema: json!({
                 "type": "object",
@@ -78,7 +83,7 @@ fn describe_manifest() -> CString {
                 },
                 "required": ["url"]
             }),
-            side_effect: SideEffect::Pure,
+            side_effect: SideEffect::Irreversible,
             exposure: Default::default(),
         }],
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）

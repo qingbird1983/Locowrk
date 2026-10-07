@@ -28,7 +28,7 @@ use crate::events::{AgentEvent, ApprovalRequestPayload};
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
-    MemoryUpdate, PluginsUpdate, SettingsView, ShellUpdate, ToolsUpdate,
+    MemoryUpdate, PluginsUpdate, SettingsView, ShellUpdate, ThinkingUpdate, ToolsUpdate,
 };
 use crate::state::AppState;
 
@@ -237,6 +237,7 @@ pub async fn settings_set(
     plugins: Option<PluginsUpdate>,
     chat: Option<ChatUpdate>,
     developer: Option<DeveloperUpdate>,
+    thinking: Option<ThinkingUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
@@ -256,6 +257,7 @@ pub async fn settings_set(
         plugins,
         chat,
         developer,
+        thinking,
     )?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;

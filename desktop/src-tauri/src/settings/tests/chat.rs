@@ -62,6 +62,7 @@ fn chat_update_persists_and_roundtrips() {
                 fold_lines: Some(12),
             }),
             None,
+            None,
         )
         .unwrap()
         .chat;
@@ -108,6 +109,7 @@ fn chat_update_persists_and_roundtrips() {
                 fold_lines: None,
             }),
             None,
+            None,
         )
         .unwrap()
         .chat;
@@ -146,6 +148,7 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 fold_lines: None,
             }),
             None,
+            None,
         )
         .is_err());
     assert!(store
@@ -172,6 +175,7 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 fold_long_messages: None,
                 fold_lines: None,
             }),
+            None,
             None,
         )
         .is_err());
@@ -209,6 +213,7 @@ fn chat_rejects_invalid_price_and_keeps_state() {
                     fold_long_messages: None,
                     fold_lines: None,
                 }),
+                None,
                 None,
             )
             .is_err()
@@ -251,6 +256,7 @@ fn chat_rejects_invalid_price_and_keeps_state() {
                 fold_lines: None,
             }),
             None,
+            None,
         )
         .unwrap();
     std::fs::remove_dir_all(&root).ok();
@@ -285,6 +291,7 @@ fn chat_rejects_bad_fold_lines_and_keeps_state() {
                     fold_long_messages: None,
                     fold_lines: n,
                 }),
+                None,
                 None,
             )
             .is_err()

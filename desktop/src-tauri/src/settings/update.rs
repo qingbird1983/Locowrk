@@ -6,8 +6,8 @@
 
 use super::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
-    MemoryUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate, ToolsUpdate, FILE_NAME,
-    LOCALES, STABILITY_ROUNDS_RANGE,
+    MemoryUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate, ThinkingUpdate,
+    ToolsUpdate, FILE_NAME, LOCALES, STABILITY_ROUNDS_RANGE, THINKING_LANGUAGE_VALUES,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -29,6 +29,7 @@ impl SettingsStore {
         plugins: Option<PluginsUpdate>,
         chat: Option<ChatUpdate>,
         developer: Option<DeveloperUpdate>,
+        thinking: Option<ThinkingUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
         if let Some(loc) = locale {
@@ -338,6 +339,18 @@ impl SettingsStore {
                 }
                 next.developer.default_organizer = p;
             }
+        }
+        if let Some(u) = thinking {
+            // 思考语言（docs/design/NEW/language of thought.md）：白名单
+            // 校验。会话内锁死由注入侧缓存保证——中途改这里不影响已开
+            // 会话的 system 前缀，新会话才吃新值。
+            if !THINKING_LANGUAGE_VALUES.contains(&u.language.as_str()) {
+                return Err(format!(
+                    "思考语言 {:?} 非法（可选 follow_ui / zh-CN / en-US / none）",
+                    u.language
+                ));
+            }
+            next.thinking.language = u.language;
         }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
         std::fs::write(self.root.join(FILE_NAME), bytes)

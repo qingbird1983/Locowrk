@@ -98,6 +98,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       "settings.modelAddService",
       "settings.modelChooserGroup",
       "settings.modelFetchList",
+      "settings.thinkingLanguage",
     ],
   },
   {

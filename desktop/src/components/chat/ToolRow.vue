@@ -1,22 +1,22 @@
 <script setup lang="ts">
 /**
- * 工具行（UI shell doc §3.8）——原「工具调用卡」降级为行：去掉卡片边框，
- * 用 wash 分层。折叠态 = 单行（字形 + 中文动作名 + 加工后参数摘要 + 状态
- * 点），禁止裸显工具 id（§3.18）；写/编辑类行尾带变更统计；hover 才出现
- * 复制按钮。展开态 = 明细块（bg-inset 圆角 10，参数/结果两段原样）。
- *
- * 默认一律收起（v2.98 裁定：永远不替用户展开 3 层——运行中与失败都不
- * 自动展开，失败态由行内红色状态点 +「失败」词呈现，点开才看明细）。
- * defaultExpanded（设置「默认展开工具执行过程」）= 挂载初值。
+ * 工具行（UI shell doc §3.8 v4.13，《Tool Execution Process Display》）：
+ * 五列栅格行（ProcessRow 共享列轨）+ 展开明细（缩进竖线子行 = 明细视图
+ * ToolDetailView + subagent 标签值行）。状态克制：成功弱化（时长或弱对勾），
+ * 失败才高亮（danger 叉 + 红「失败」）；默认一律收起（v2.98，含失败态）。
+ * subagent_run = §3.10 紧凑行（大卡片 SubagentCard 已退役）：展开为
+ * 任务/状态/轮次/工具/摘要标签值行 + 「查看完整对话」入口（不虚构——父侧
+ * 拿不到的字段不渲染，⑮ 黑盒边界不变）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { Icon, type IconName } from "../../lib/icons";
-import HoverTip from "../settings/HoverTip.vue";
-import { toolAction, toolArgSummary, toolDiffStats } from "../../lib/tool-summary";
-import { toolSideEffect } from "../../lib/side-effect";
+import { Icon } from "../../lib/icons";
+import ProcessRow from "./ProcessRow.vue";
+import ToolDetailView from "./ToolDetailView.vue";
+import { toolDiffStats } from "../../lib/tool-summary";
+import { toolKind, toolDescribe } from "../../lib/tool-detail";
+import { formatDuration } from "../../lib/format";
 import type { ToolItem } from "../../stores/chat";
-import { useSettingsStore } from "../../stores/settings";
 
 const props = defineProps<{
   item: ToolItem;
@@ -26,72 +26,24 @@ const props = defineProps<{
   awaiting?: boolean;
 }>();
 
-/** §3.10 卡是入口：subagent_run 收束 → 「看转录」；edit_diff 带 patch →
- * 「看 diff」（§3.28 审阅页签）。宿主据此开工作面板页签。 */
+/** §3.10 入口（subagent 转录页签）与 §3.28（edit_diff 审阅页签）。 */
 const emit = defineEmits<{
   openTranscript: [childId: string, title: string];
   openDiff: [callId: string, path: string, diff: string];
 }>();
 
 const { t } = useI18n();
-const settings = useSettingsStore();
 const expanded = ref(props.defaultExpanded ?? false);
+/** 明细懒挂载（v-if+v-show 组合）：多数步骤从不展开，不为它们在挂载期
+ * 跑 marked/DOMPurify、建整棵隐藏大 DOM（步数多的轮次流式/重放/展开
+ * 都背着这些隐藏子树卡）；首次展开一次性渲染，此后保 DOM 秒开。 */
+const everExpanded = ref(props.defaultExpanded ?? false);
 
-/** 动作名（§3.18 映射表；表外回落工具 id + 「插件」徽章）。 */
-const action = computed(() => toolAction(props.item.tool));
+const kind = computed(() => toolKind(props.item.tool));
+const typeLabel = computed(() => t(`tool.type.${kind.value.type}`));
+const desc = computed(() => toolDescribe(props.item.tool, props.item.args));
 
-/** 副作用徽章（§3.4/§3.16：纯=中性、可补偿=warn、不可逆=danger；表外不渲染）。 */
-const effect = computed(() => toolSideEffect(props.item.tool));
-
-const childId = computed(() => {
-  if (props.item.tool !== "subagent_run" || props.item.pending || !props.item.ok) return null;
-  return (props.item.output as { child_session_id?: string } | null)?.child_session_id ?? null;
-});
-const transcriptTitle = computed(() =>
-  String((props.item.args as { prompt?: unknown } | null)?.prompt ?? ""),
-);
-
-/** §3.28 审阅：edit_diff 的 unified diff 随 args.patch，路径随 args.path。 */
-const reviewItem = computed(() => {
-  if (props.item.tool !== "edit_diff" || props.item.pending) return null;
-  const args = props.item.args as { path?: unknown; patch?: unknown } | null;
-  if (typeof args?.path !== "string" || typeof args.patch !== "string") return null;
-  return { callId: props.item.callId, path: args.path, diff: args.patch };
-});
-const actionLabel = computed(() => {
-  const a = action.value;
-  if (!a) return props.item.tool;
-  return t(a.key, a.params ?? {});
-});
-
-/** 摘要态字形按工具类目分派（表外回落 check）。 */
-const glyph = computed<IconName>(() => {
-  const tool = props.item.tool;
-  if (tool === "shell" || tool === "shell_read" || tool === "sandbox_run")
-    return "terminal";
-  if (tool.startsWith("fs_") || tool.startsWith("edit_")) return "file";
-  if (tool.startsWith("memory_")) return "database";
-  if (tool === "search_tools") return "search";
-  if (tool === "subagent_run") return "bot";
-  if (tool.startsWith("schedule_")) return "clock";
-  if (tool === "notify") return "bell";
-  if (tool === "fetch") return "globe";
-  if (tool.startsWith("mcp_")) return "plug";
-  return "check";
-});
-
-const argText = computed(() =>
-  toolArgSummary(
-    props.item.tool,
-    props.item.args,
-    [
-      settings.view?.dataDir ?? "",
-      ...(settings.view?.tools.fsRoots ?? []),
-    ].filter(Boolean),
-  ),
-);
-
-/** 写/编辑类折叠行尾的变更统计（取不到字段就不渲染整块，不虚构）。 */
+/** 写/编辑类行描述尾的变更统计（取不到不渲染，不虚构）。 */
 const diff = computed(() =>
   props.item.pending ? {} : toolDiffStats(props.item.output),
 );
@@ -102,213 +54,103 @@ const hasDiff = computed(
     diff.value.size !== undefined,
 );
 
-function pretty(v: unknown): string {
-  try {
-    return JSON.stringify(v, null, 2);
-  } catch {
-    return String(v);
-  }
-}
+/** 实时轮时长（重放无时间戳不虚构）。 */
+const durationText = computed(() =>
+  props.item.ts !== undefined && props.item.doneTs !== undefined
+    ? formatDuration(props.item.doneTs - props.item.ts)
+    : "",
+);
 
-/** 复制调用：明细态原文（参数 + 结果 / 错误）。 */
-async function copyCall() {
-  const payload = {
-    tool: props.item.tool,
-    args: props.item.args,
-    ...(props.item.ok ? { result: props.item.output } : {}),
-    ...(props.item.error ? { error: props.item.error } : {}),
-  };
-  try {
-    await navigator.clipboard.writeText(pretty(payload));
-  } catch {
-    /* 剪贴板不可用不打断 */
-  }
+const statusWord = computed(() => {
+  if (props.item.pending) return props.awaiting ? t("tool.awaitingApproval") : t("tool.running");
+  if (props.item.ok) return "";
+  return t("tool.failed");
+});
+
+/** §3.28 审阅：edit_diff 的 unified diff 随 args.patch，路径随 args.path。 */
+const reviewItem = computed(() => {
+  if (props.item.tool !== "edit_diff" || props.item.pending) return null;
+  const args = props.item.args as { path?: unknown; patch?: unknown } | null;
+  if (typeof args?.path !== "string" || typeof args.patch !== "string") return null;
+  return { callId: props.item.callId, path: args.path, diff: args.patch };
+});
+
+function onToggle() {
+  expanded.value = !expanded.value;
+  if (expanded.value) everExpanded.value = true;
 }
 </script>
 
 <template>
   <div class="tool">
-    <div class="tool__row">
-      <HoverTip class="flex-1 min-w-0" :text="argText" :label="argText">
-      <button
-        class="cv-head tool__toggle"
-        type="button"
-        :aria-expanded="expanded"
-        @click="expanded = !expanded"
-      >
-        <Icon :name="glyph" :size="14" class="tool__icon shrink-0" />
-        <span class="cv-head__label">{{ actionLabel }}</span>
-        <span
-          v-if="effect"
-          class="badge-micro"
-          :class="`badge-micro--${effect}`"
-        >
-          {{ t(`effect.${effect}`) }}
-        </span>
-        <span
-          v-if="!action"
-          class="shrink-0 rounded-[var(--lw-r-3xs)] bg-wash-3 px-1.5 py-0.5 text-[length:var(--lw-fs-10)] text-ink-2"
-        >
-          {{ t("tool.pluginBadge") }}
-        </span>
-        <span class="tool-args">{{ argText }}</span>
-        <span
-          v-if="hasDiff"
-          class="tool__diff"
-        >
+    <ProcessRow
+      :icon="kind.icon"
+      :type="typeLabel"
+      :expanded="expanded"
+      :title="desc"
+      @toggle="onToggle"
+    >
+      <template #desc>
+        <span class="tool__desc">{{ desc }}</span>
+        <span v-if="hasDiff" class="tool__diff">
           <template v-if="diff.added !== undefined || diff.removed !== undefined">
             <span class="tool__add">+{{ diff.added ?? 0 }}</span>
             <span class="tool__del">−{{ diff.removed ?? 0 }}</span>
           </template>
           <span v-if="diff.size" class="tool__size">{{ diff.size }}</span>
         </span>
-        <span
-          class="tool__status"
-          :class="
-            item.pending
-              ? ''
-              : item.ok
-                ? 'tool__status--ok'
-                : 'tool__status--fail'
-          "
-        >
-          <span
-            class="dot"
-            :class="{
-              'dot--ok': !item.pending && item.ok,
-              'dot--danger': !item.pending && item.ok === false,
-              'lw-pulse': item.pending,
-            }"
-          />
-          {{
-            item.pending
-              ? props.awaiting
-                ? t("tool.awaitingApproval")
-                : t("tool.running")
-              : item.ok
-                ? t("tool.success")
-                : t("tool.failed")
-          }}
-        </span>
-        <Icon
-          :name="expanded ? 'chevronDown' : 'chevronRight'"
-          :size="12"
-          class="cv-head__chev"
-        />
+      </template>
+      <template #status>
+        <!-- 克制（§3.8）：进行中 = 脉动点 + 弱化词；完成 = 时长或弱对勾；
+             失败 = danger 叉 + 红词（唯一高亮态） -->
+        <template v-if="item.pending">
+          <span class="dot lw-pulse" />
+          <span>{{ statusWord }}</span>
+        </template>
+        <template v-else-if="item.ok">
+          <span v-if="durationText">{{ durationText }}</span>
+          <Icon v-else name="check" :size="12" />
+        </template>
+        <template v-else>
+          <Icon name="close" :size="11" class="tool__fail-icon" />
+          <span class="tool__fail">{{ statusWord }}</span>
+        </template>
+      </template>
+    </ProcessRow>
+
+    <!-- 展开体 = 缩进 + 左竖线的子行（不换布局；懒挂载 + v-show 保 DOM，
+         首开后收展零重渲染） -->
+    <div v-if="everExpanded" v-show="expanded" class="tool__sub">
+      <ToolDetailView :item="item" @open-transcript="(id, title) => emit('openTranscript', id, title)" />
+      <!-- edit_diff 审阅入口（§3.28）：明细动作行的文本钮 -->
+      <button
+        v-if="reviewItem"
+        class="tool__review"
+        type="button"
+        @click="reviewItem && emit('openDiff', reviewItem.callId, reviewItem.path, reviewItem.diff)"
+      >
+        <Icon name="file" :size="12" />
+        {{ t("panel.viewDiff") }}
       </button>
-      </HoverTip>
-      <!-- §3.10 卡是入口：看转录 / 看 diff（hover 显形，与复制钮同族） -->
-      <HoverTip :text="t('panel.viewTranscript')">
-        <button
-          v-if="childId"
-          class="copy-btn tool__copy"
-          type="button"
-          :aria-label="t('panel.viewTranscript')"
-          @click="childId && emit('openTranscript', childId, transcriptTitle)"
-        >
-          <Icon name="panel" :size="12" />
-        </button>
-      </HoverTip>
-      <HoverTip :text="t('panel.viewDiff')">
-        <button
-          v-if="reviewItem"
-          class="copy-btn tool__copy"
-          type="button"
-          :aria-label="t('panel.viewDiff')"
-          @click="reviewItem && emit('openDiff', reviewItem.callId, reviewItem.path, reviewItem.diff)"
-        >
-          <Icon name="file" :size="12" />
-        </button>
-      </HoverTip>
-      <HoverTip :text="t('tool.copyCall')">
-        <button
-          class="copy-btn tool__copy"
-          type="button"
-          :aria-label="t('tool.copyCall')"
-          @click="copyCall"
-        >
-          <Icon name="copy" :size="12" />
-        </button>
-      </HoverTip>
-    </div>
-    <!-- 展开态 = 诚实面：参数原样 / 结果原样 / 失败 error 文本（danger） -->
-    <div v-show="expanded" class="tool__detail">
-      <div>
-        <div class="tool__label">{{ t("tool.params") }}</div>
-        <pre>{{ pretty(item.args) }}</pre>
-      </div>
-      <div v-if="!item.pending">
-        <div class="tool__label">{{ t("tool.result") }}</div>
-        <pre :class="{ 'is-error': item.ok === false }">{{
-          item.ok ? pretty(item.output) : item.error
-        }}</pre>
-      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.tool__row {
+.tool {
+  /* v4.14：层 2 行 ↔ 层 3 明细 = 8px，父容器 flex+gap 给间距（margin 撤） */
   display: flex;
-  align-items: center;
-  gap: var(--lw-gap-2);
-}
-/* 副作用徽章（§3.4 副作用族 / 原型 .badge--micro）：纯=中性、可补偿=warn
- * 16% tint、不可逆=danger 16% tint */
-.badge-micro {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  border-radius: var(--lw-r-full);
-  padding: 1px var(--lw-gap-6); /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
-  font-size: var(--lw-fs-11);
-  font-weight: 500;
-  line-height: 1.4;
-  white-space: nowrap;
-  background: var(--lw-wash-3);
-  color: var(--lw-ink-2);
-}
-.badge-micro--compensable {
-  background: color-mix(in oklab, var(--lw-warn) 16%, transparent);
-  color: var(--lw-warn);
-}
-.badge-micro--irreversible {
-  background: color-mix(in oklab, var(--lw-danger) 16%, transparent);
-  color: var(--lw-danger);
-}
-.tool__toggle {
-  /* basis 0 才能被兄弟（复制按钮）挤住；min-width:0 让参数摘要真正省略 */
-  flex: 1 1 0%;
-  width: auto;
+  flex-direction: column;
+  gap: var(--lw-gap-8);
   min-width: 0;
-  margin-inline: -3px 0; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(负margin-3,§二⑬) */
-}
-.tool__icon {
-  color: var(--lw-ink-3);
-}
-.tool:hover .tool__icon {
-  color: var(--lw-ink-2);
-}
-.tool-args {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: var(--lw-fs-12half);
-  color: var(--lw-ink-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .tool__diff {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--lw-gap-6);
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
+  margin-left: var(--lw-gap-6);
   font-family: var(--font-mono);
-  font-size: var(--lw-fs-12);
+  font-size: var(--lw-fs-11);
 }
 .tool__add {
   color: var(--lw-ok);
@@ -317,57 +159,41 @@ async function copyCall() {
   color: var(--lw-danger);
 }
 .tool__size {
-  color: var(--lw-ink-4);
-}
-.tool__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
-  flex: 0 0 auto;
-  font-size: var(--lw-fs-12);
-  color: var(--lw-ink-3);
-}
-.tool__status--ok {
   color: var(--lw-ink-2);
 }
-.tool__status--fail {
+.tool__fail-icon {
   color: var(--lw-danger);
 }
-.tool__copy {
-  opacity: 0;
-  flex: 0 0 auto;
+.tool__fail {
+  color: var(--lw-danger);
 }
-.tool:hover .tool__copy,
-.tool:focus-within .tool__copy {
-  opacity: 1;
+/* 运行脉动点 = 层 2 状态字形，跟随次要色（全局 .dot 底 ink-4） */
+.tool :deep(.dot) {
+  background: var(--lw-ink-2);
 }
-.tool__detail {
-  margin: var(--lw-gap-6) 0 var(--lw-gap-8);
-  border-radius: var(--lw-r-sm);
-  background: var(--lw-bg-inset);
-  padding: var(--lw-gap-10) var(--lw-gap-12);
+/* 展开体：缩进 12px + 左竖线（层级语法，保留）；垂直间距由父级 gap 给 */
+.tool__sub {
+  margin-left: var(--lw-gap-12);
+  padding-left: var(--lw-gap-12);
+  border-left: 1px solid var(--lw-line-subtle);
   display: flex;
   flex-direction: column;
-  gap: var(--lw-gap-10);
+  gap: var(--lw-gap-8);
 }
-.tool__label {
+.tool__review {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值4,§二⑬) */
+  align-self: flex-start;
+  padding: 2px 4px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值2/4,§二⑬) */
+  border-radius: var(--lw-r-2xs);
   font-size: var(--lw-fs-11);
-  letter-spacing: 0.02em;
-  color: var(--lw-ink-4);
-  margin-bottom: var(--lw-gap-4);
-}
-.tool__detail pre {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--lw-fs-12);
-  line-height: 1.55;
   color: var(--lw-ink-2);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: 220px;
-  overflow: auto;
+  transition: background var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
 }
-.tool__detail pre.is-error {
-  color: var(--lw-danger);
+.tool__review:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
 }
 </style>

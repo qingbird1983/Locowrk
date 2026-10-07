@@ -45,6 +45,7 @@ fn dev_update_full(
             rule_chunk_tokens: None,
             default_organizer: None,
         }),
+        None,
     )
 }
 
@@ -162,6 +163,7 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 rule_chunk_tokens: Some(30_000),
                 default_organizer: None,
             }),
+            None,
         )
         .unwrap();
     drop(store);
@@ -203,6 +205,7 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 None,
                 None,
                 Some(u),
+                None,
             )
             .unwrap_err();
         assert!(err.contains(keyword), "{field}: {err}");
@@ -232,6 +235,7 @@ fn default_organizer_roundtrip_and_whitelist() {
                 default_organizer: Some("tree".into()),
                 ..Default::default()
             }),
+            None,
         )
         .unwrap();
     assert_eq!(store.view().developer.default_organizer, "tree");
@@ -261,6 +265,7 @@ fn default_organizer_roundtrip_and_whitelist() {
                 default_organizer: Some("bogus".into()),
                 ..Default::default()
             }),
+            None,
         )
         .unwrap_err();
     assert!(err.contains("整理模式"), "{err}");

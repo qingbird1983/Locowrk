@@ -11,6 +11,9 @@
  * 接测量体）：fold-zone 夹紧 + 渐变遮罩 + 圆形展开钮悬浮在气泡内右下角
  * （v2.103 裁定），状态机在 use-message-fold.ts；
  * 复制/编辑/时间行在气泡下方且不受折叠影响（恒复制全文）。
+ * 简短回复（copyable=false 的助手条目）整个动作区不渲染——隐藏时间行
+ * opacity 0 却常驻占位，曾把组内 8px 间距节奏撑大（2026-10-07 用户裁定
+ * 取消）；复制/编辑/时间只随用户消息与最终报告。
  * 遮罩方向（v2.103 目检裁定）：底部基本不透明（完全盖住文字）、渐渐往
  * 上渐渐透明（文字渐渐透出）——两层同形渐变叠出气泡实际表面色。
  */
@@ -132,7 +135,13 @@ async function onBodyClick(e: MouseEvent) {
 </script>
 
 <template>
-  <div class="msg" :class="kind === 'user' ? 'msg-user' : 'msg-assistant'">
+  <div
+    class="msg"
+    :class="[
+      kind === 'user' ? 'msg-user' : 'msg-assistant',
+      { 'msg--brief': kind === 'assistant' && !copyable },
+    ]"
+  >
     <!-- 用户消息：右对齐气泡（编辑态 = 自适应文本域原位替换）；
         助手消息：整列宽 markdown。折叠 = fold-zone 夹紧 + 渐变遮罩 -->
     <textarea
@@ -178,7 +187,9 @@ async function onBodyClick(e: MouseEvent) {
     <!-- eslint-disable-next-line vue/no-v-html —— 内容已过 DOMPurify -->
     <div v-else class="md" v-html="html" @click="onBodyClick" />
 
-    <div class="msg__actions">
+    <!-- 动作区只在有内容时渲染：简短回复（copyable=false 且不可编辑）
+         整行不渲染——隐藏时间行占位是组内间距虚高的成因之一 -->
+    <div v-if="copyable || editable" class="msg__actions">
       <HoverTip v-if="copyable" :text="t('chat.copyMessage')">
         <button
           class="copy-btn"
@@ -208,6 +219,13 @@ async function onBodyClick(e: MouseEvent) {
 <style scoped>
 .msg {
   padding: var(--lw-gap-12) 0;
+}
+/* 简短回复（copyable=false 的助手条目）：自身垂直间距归零，兄弟间距全
+ * 交父级（TranscriptFlow 兄弟选择器，v4.14 8px 节奏）——自带 12px padding
+ * 与父级 8px 双重计算曾把间距撑到 24-30px。须排在 .msg 之后（同特异性
+ * 靠源序取胜；.turn + .msg 等父级规则特异性更高，padding-top 仍归父级） */
+.msg--brief {
+  padding: 0;
 }
 .msg__actions {
   display: flex;

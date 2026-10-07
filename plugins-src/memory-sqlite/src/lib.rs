@@ -174,12 +174,14 @@ fn describe_manifest() -> CString {
             ToolSpec {
                 name: "memory_undo".into(),
                 description: "Undo a previous memory_write or memory_delete by restoring the \
-                              entry captured in its result. Usually invoked by the \
-                              compensation layer, not by the model. Args mirror the \
-                              compensation payload {call_id, args, output}; only \
-                              output.previous (for write) or output.previous_entry (for \
-                              delete) is used. Irreversible — restoring overwrites the \
-                              entry's current content, so the call requires user approval."
+                              entry captured in its result. Can be invoked directly after \
+                              a mistaken write/delete. Args mirror the compensation \
+                              payload {call_id, args, output}; only output.previous (for \
+                              write) or output.previous_entry (for delete) is used. \
+                              Restoring overwrites the entry's current content with the \
+                              old value — classified Irreversible, so approval follows \
+                              the session's permission mode (asked by default, \
+                              auto-approved in full-access mode)."
                     .into(),
                 schema: json!({
                     "type": "object",

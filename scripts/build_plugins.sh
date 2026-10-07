@@ -66,9 +66,23 @@ stage tool-fs 0.1.3
 # 的唯一撤销路径，意外时刻最不可能探索）+ fs_restore 描述改写（删「usually
 # invoked by the compensation layer」劝退措辞，明确可拿原调用三件套手动自救）
 stage tool-fs 0.1.4
-stage tool-fetch 0.1.0
-stage tool-shell 0.1.2
-stage tool-git 0.1.2
+# 0.1.1（2026-10-06，小迭代 +0.0.1）：fetch 副作用分级纠正（真实测试复测
+# P0-1）——Pure → Irreversible（GET 也对外发起网络请求，服务端留痕、URL
+# 可能带敏感 token，"只读"标法与事实不符）；描述同步如实（plugins.md §三
+# 表格一并改）
+stage tool-fetch 0.1.1
+# 0.1.3（2026-10-06，小迭代 +0.0.1）：环境事实写进双工具描述（真实测试
+# 复测·事实 2）——无 shell 直 spawn 经 PATH 解析，Windows 上 PATH 通常是
+# Git 的 Unix coreutils：用 Unix 风格命令，cmd 内建（dir/del/rmdir /s /q）
+# 不存在
+stage tool-shell 0.1.3
+# 0.1.3（2026-10-06，小迭代 +0.0.1）：① 根提交显式拒绝（P0-2：此前
+# `reset --soft HEAD~1` 隐性失败、报错晦涩，模型反复尝试；现在
+# rev-list --parents 判父后拒绝并给出 update-ref 出路）+
+# git_commit/git_undo_commit 描述同步；② require_ok 保留 stderr 末 6 条
+# 非空行（P1-1：只取末行把 git push 无远端的 fatal 主因截掉，模型只见
+# "and the repository exists."）
+stage tool-git 0.1.3
 # 0.2.0（2026-10-06，大改版 +0.1.0 经用户确认）：edit_replace 升级——
 # 精确零命中后容错匹配（行尾空白 / CRLF / BOM 归一，缩进·大小写·编辑
 # 距离不做）+ match_type/byte_range 如实回报 + 多重命中列行号的结构化
@@ -85,10 +99,14 @@ stage tool-edit 0.2.0
 # 0.1.3（2026-10-05，小迭代 +0.0.1）：F2 同步机械件——memlayout 写路径
 # 带 per-file mtime 标记 + 冲突备份（人改 md 未合并时同键写入保留双方）
 # + 原子写防撕裂
-stage memory-sqlite 0.1.3
+# 0.1.4（2026-10-06，小迭代 +0.0.1）：memory_undo 描述与行为对齐（真实
+# 测试复测 P2-2）——删「usually invoked by the compensation layer」劝退
+# 措辞（v2.115 在 fs_restore 上同款裁定），审批说法改「跟随会话权限档」
+# （完全档直接放行不出卡，写死 requires approval 与事实不符）
+stage memory-sqlite 0.1.4
 stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit 0.2.0 + tool-fs/{0.1.3,0.1.4}（fs_grep/fs_restore always）+ 其余见上注释"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit 0.2.0 + tool-fs/{0.1.3,0.1.4} + tool-fetch 0.1.1 + tool-shell 0.1.3 + tool-git 0.1.3 + memory-sqlite 0.1.4（工具层复测批）+ 其余见上注释"
 echo "next: cargo run -p kernel-bin -- demo"

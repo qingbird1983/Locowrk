@@ -100,19 +100,45 @@ impl Tool for ScheduleCreateTool {
         };
         let now = now_ms();
         let interval_secs = opt_num(&args, "interval_secs")?;
+        let delay_secs = opt_num(&args, "delay_secs")?;
+        let at = opt_num(&args, "at")?;
+        // 模式互斥校验（真实测试 2026-10-06 P2-1）：描述承诺 exactly one of，
+        // 旧实现是静默优先级（interval > at > delay）——多模式同给时模型以为
+        // 的语义与落库行为分叉。显式拒绝，不猜优先级。
+        let provided: Vec<&str> = [
+            ("interval_secs", interval_secs.is_some()),
+            ("delay_secs", delay_secs.is_some()),
+            ("at", at.is_some()),
+        ]
+        .iter()
+        .filter(|(_, present)| *present)
+        .map(|(name, _)| *name)
+        .collect();
+        if provided.len() != 1 {
+            return Err(bad(&match provided.is_empty() {
+                true => "one of interval_secs / delay_secs / at is required".into(),
+                false => format!(
+                    "pass exactly ONE of interval_secs / delay_secs / at (got {})",
+                    provided.join(" + ")
+                ),
+            }));
+        }
         let (kind, run_at, interval_secs) = if let Some(secs) = interval_secs {
             if !(10..=31_536_000).contains(&secs) {
                 return Err(bad("interval_secs must be 10..=31536000"));
             }
-            let at = start_at(&args, now).unwrap_or(now + secs as i64 * 1000);
-            (Kind::Interval, at, Some(secs as i64))
+            (Kind::Interval, now + secs as i64 * 1000, Some(secs as i64))
         } else {
-            let at = start_at(&args, now)
-                .ok_or_else(|| bad("one of interval_secs / delay_secs / at is required"))?;
-            if at <= now {
-                return Err(bad("`at` is in the past"));
+            let run_at = match at {
+                Some(ms) => ms as i64,
+                None => now + delay_secs.unwrap_or(0) as i64 * 1000,
+            };
+            if run_at <= now {
+                return Err(bad(
+                    "`at` is in the past (or `delay_secs` is 0); pass a future time",
+                ));
             }
-            (Kind::Once, at, None)
+            (Kind::Once, run_at, None)
         };
         let sched = Schedule {
             id: new_id(),
@@ -290,15 +316,4 @@ fn opt_num(args: &Value, key: &str) -> Result<Option<u64>, ToolError> {
             .map(|n| Some(n as u64))
             .ok_or_else(|| bad(&format!("field `{key}` must be a non-negative integer"))),
     }
-}
-
-/// 一次性/周期首跑时刻：`at`（毫秒）优先，其次 `delay_secs`；都无 = None。
-fn start_at(args: &Value, now: i64) -> Option<i64> {
-    if let Some(at) = opt_num(args, "at").ok().flatten() {
-        return Some(at as i64);
-    }
-    opt_num(args, "delay_secs")
-        .ok()
-        .flatten()
-        .map(|secs| now + secs as i64 * 1000)
 }

@@ -38,7 +38,7 @@
 | `llm-openai` / `llm-ollama` | 真实模型适配 | `Pure` | — |
 | `tool-fs` | 读/写/列目录/搜索文件 | 读=`Pure`，写=`Compensable` | — |
 | `tool-shell` | 执行命令 | **`Irreversible`** | — |
-| `tool-fetch` | HTTP GET / 网页抓取 | `Pure` | — |
+| `tool-fetch` | HTTP GET / 网页抓取 | `Irreversible`（2026-10-06 真实测试复测裁定：GET 也对外发起网络请求，服务端留痕、URL 可能带敏感 token，"只读"标法与事实不符；原 `Pure` 作废） | — |
 
 **这四个是地基。** 把 `tool-echo` 换成这四个，Agent 立刻从"能聊天"变成"能干活"。
 

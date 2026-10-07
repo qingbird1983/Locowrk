@@ -240,6 +240,7 @@ export function setSettings(patch: {
   plugins?: PluginsUpdate;
   chat?: ChatUpdate;
   developer?: DeveloperUpdate;
+  thinking?: { language: string };
 }): Promise<SettingsView> {
   return invoke("settings_set", {
     locale: patch.locale ?? null,
@@ -254,6 +255,7 @@ export function setSettings(patch: {
     plugins: patch.plugins ?? null,
     chat: patch.chat ?? null,
     developer: patch.developer ?? null,
+    thinking: patch.thinking ?? null,
   });
 }
 

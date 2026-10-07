@@ -18,6 +18,7 @@ mod llm;
 mod memory;
 mod plugins;
 mod shell;
+mod thinking;
 mod tools;
 mod update;
 mod view;
@@ -34,6 +35,9 @@ pub use llm::{
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
 pub use shell::{ShellSettings, ShellSettingsView, ShellUpdate};
+pub use thinking::{
+    ThinkingSettings, ThinkingUpdate, ThinkingView, THINKING_LANGUAGE_VALUES, THINKING_NONE,
+};
 pub use tools::{ToolsSettings, ToolsSettingsView, ToolsUpdate};
 
 /// locale 取值：`system`（跟随系统，缺省）/ `zh-CN` / `en`（§13.5）。
@@ -79,6 +83,9 @@ pub struct AppSettings {
     pub chat: ChatSettings,
     /// 开发者选项区（v2.49，默认隐藏；类型见 `developer` 子模块）。
     pub developer: DeveloperSettings,
+    /// 思考语言区（docs/design/NEW/language of thought.md；类型见
+    /// `thinking` 子模块）。缺省 follow_ui，旧 settings.json 无此区零迁移。
+    pub thinking: ThinkingSettings,
 }
 
 fn default_shortcut() -> String {
@@ -100,6 +107,7 @@ impl Default for AppSettings {
             plugins: PluginsSettings::default(),
             chat: ChatSettings::default(),
             developer: DeveloperSettings::default(),
+            thinking: ThinkingSettings::default(),
         }
     }
 }
@@ -125,6 +133,8 @@ pub struct SettingsView {
     pub chat: ChatView,
     /// 开发者选项区（v2.49，默认隐藏分区）。
     pub developer: DeveloperView,
+    /// 思考语言区（docs/design/NEW/language of thought.md）。
+    pub thinking: ThinkingView,
 }
 
 pub struct SettingsStore {
@@ -219,6 +229,16 @@ impl SettingsStore {
     /// 后端专用：语言偏好（tray.rs 菜单文案用）。
     pub fn locale(&self) -> String {
         self.inner.lock().expect("settings poisoned").locale.clone()
+    }
+
+    /// 后端专用：思考语言档（thinking_language 注入侧按会话首请求解析用）。
+    pub fn thinking_language(&self) -> String {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .thinking
+            .language
+            .clone()
     }
 
     /// 后端专用：上下文管理设置快照（runner 进度条 / compact 配置换入用）。

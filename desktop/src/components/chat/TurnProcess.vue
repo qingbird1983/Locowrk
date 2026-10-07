@@ -132,7 +132,7 @@ const minimalText = computed(() =>
 </script>
 
 <template>
-  <div class="turn">
+  <div class="turn" :class="{ 'is-open': level === 2 }">
     <!-- L2 摘要行 / L1 极简行（live 无此行——组体全展开，chrome 在容器
          计时行）；点击开合组体 -->
     <button
@@ -142,7 +142,7 @@ const minimalText = computed(() =>
       :aria-expanded="level === 2"
       @click="onToggle"
     >
-      <Icon name="sparkle" :size="14" class="shrink-0 text-ink-3" />
+      <Icon name="sparkle" :size="14" class="shrink-0 text-ink-1" />
       <span class="cv-head__label">
         {{
           stopped
@@ -181,8 +181,28 @@ const minimalText = computed(() =>
 
 <style scoped>
 .turn {
-  /* 垂直间距全由容器兄弟选择器给（v2.99 间距裁定：8/8/12px） */
+  /* v4.14 三层间距统一 8px：父容器 flex+gap 给间距（层 1 头行 ↔ 层 2 组体），
+   * 不用 margin；垂直 padding 全零，跨组件兄弟间距在 TranscriptFlow。
+   * gap 只在展开态给——折叠态 grid 收为 0 高，常驻 gap 会留下 8px 死空间
+   * 垫在头行下，把「折叠层↔简短回复 8px」撑成 16px（2026-10-07 用户裁定
+   * 收紧）；收/展瞬间 gap 8px 直落/直起，滑体动画不受影响 */
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   padding: 0;
+}
+.turn.is-open {
+  gap: var(--lw-gap-8);
+}
+/* v4.14 第 1 层主色：头行整线 ink-1（字形/标签/meta/三角同色） */
+.turn .cv-head {
+  color: var(--lw-ink-1);
+}
+.turn .cv-head__meta {
+  color: var(--lw-ink-1);
+}
+.turn .cv-head__chev {
+  color: var(--lw-ink-1);
 }
 .turn__grid {
   display: grid;
@@ -206,11 +226,10 @@ const minimalText = computed(() =>
   overflow: hidden;
   opacity: 0;
   /* v4.11 用户裁定（照 ZCode 过程流基准）：展开体与头行同一左缘——
-   * 不缩进、无引导线，扁平直排 */
+   * 不缩进、无引导线，扁平直排；v4.14 行距统一 8px（层 2 步骤项之间） */
   display: flex;
   flex-direction: column;
-  gap: 1px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值1,§二⑬) */
-  margin-top: var(--lw-gap-2);
+  gap: var(--lw-gap-8);
   transition: opacity var(--dur-fast) var(--ease-in);
 }
 .turn__grid.is-open .turn__body {

@@ -186,6 +186,27 @@ fn undo_refuses_when_head_has_moved() {
 }
 
 #[test]
+fn undo_refuses_root_commit_explicitly() {
+    let _g = ENV_LOCK.lock().unwrap();
+    let root = temp_root("undo-root");
+    let repo = init_repo(&root, "r7");
+
+    // 仓库的第一条提交 = 根提交（无父）：此前 `reset --soft HEAD~1` 隐性
+    // 失败（git 报错晦涩，模型反复尝试）；现在必须显式拒绝并给出路
+    std::fs::write(repo.join("a.txt"), "v0\n").unwrap();
+    let out = write::git_commit(
+        &json!({ "repo": s(&repo), "message": "root", "add": ["a.txt"] }),
+        std::ptr::null(),
+    )
+    .unwrap();
+    let err = write::git_undo_commit(&json!({ "output": out }), std::ptr::null()).unwrap_err();
+    assert!(err.contains("ROOT commit"), "got: {err}");
+    assert!(err.contains("update-ref"), "got: {err}");
+    // 拒绝是无操作：HEAD 仍在根提交
+    assert_eq!(git(&repo, &["rev-parse", "HEAD"]).trim(), out["commit"]);
+}
+
+#[test]
 fn push_to_local_bare_remote() {
     let _g = ENV_LOCK.lock().unwrap();
     let root = temp_root("push");

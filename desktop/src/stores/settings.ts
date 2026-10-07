@@ -196,6 +196,21 @@ export const useSettingsStore = defineStore("settings", {
         this.saving = false;
       }
     },
+    /** 保存思考语言（docs/design/NEW/language of thought.md）：落盘即
+     * 成功——当前会话的 system 前缀已锁死不受影响，「下个会话生效」
+     * 的提示由调用方（LlmSection）负责。 */
+    async saveThinking(thinking: { language: string }) {
+      if (this.saving) return;
+      this.error = "";
+      this.saving = true;
+      try {
+        this.view = await setSettings({ thinking });
+      } catch (e) {
+        this.error = String(e);
+      } finally {
+        this.saving = false;
+      }
+    },
     /** 保存 embedding 区（⑬）：后端热重建共享客户端，检索/经历/提取
      * 随即生效。空串字段语义 = 清除。 */
     async saveEmbedding(embedding: EmbeddingUpdate) {

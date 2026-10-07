@@ -148,6 +148,20 @@ pub(crate) fn git_undo_commit(args: &Value, host: *const HostVtable) -> Result<V
             "git_undo_commit: HEAD has moved ({head} != {commit}); manual intervention required"
         ));
     }
+    // 根提交无父：`reset --soft HEAD~1` 没有目标。此前隐性失败（git 的
+    // 报错晦涩），模型会反复尝试（真实测试 2026-10-06 P0-2）——显式拒绝
+    // 并给出路：真要丢掉根提交，走 shell 的 update-ref（需用户同意）。
+    let parents = run_git(&repo, &["rev-list", "--parents", "-n", "1", commit])?;
+    require_ok(&parents, "rev-list")?;
+    if parents.stdout.split_whitespace().count() < 2 {
+        return Err(format!(
+            "git_undo_commit: {commit} is the ROOT commit (no parent) — it cannot be \
+             undone by this tool; that is a design limit, not an error on your side. \
+             If dropping it is really needed, ask the user first, then run \
+             `git update-ref -d HEAD` via the shell tool with explicit approval \
+             (the files stay staged)."
+        ));
+    }
     let out = run_git(&repo, &["reset", "--soft", "HEAD~1"])?;
     require_ok(&out, "reset")?;
     Ok(json!({ "undone": true, "commit": commit }))

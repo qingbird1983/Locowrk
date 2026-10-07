@@ -246,6 +246,16 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::new(kernel_agent::TreeDirectoryInject) as Arc<_>,
     );
 
+    // 思考语言（docs/design/NEW/language of thought.md）：TreeDirectoryInject
+    // 之后注册 = system 真尾部（目录之后、会话历史之前）；会话首请求解析
+    // 并锁死（前缀缓存红线 §5）——中途改设置当前会话不变，新会话用新配置。
+    ctx.events.on_waterfall(
+        points::REQUEST,
+        Arc::new(crate::thinking_language::ThinkingLanguageInject::new(
+            Arc::clone(&settings),
+        )),
+    );
+
     // ctx-compact（Context and Memory.md §3）：agent/request 决策环上的压缩
     // 监听器——三策略配置驱动（阈值 = 窗口 × 百分比，压到阈值 50%），压缩结果经 payload 带回 kernel 落 ContextCompacted 事件。
     let compact_cfg: Arc<RwLock<CompactConfig>> = Arc::new(RwLock::new(settings.compact_config()));

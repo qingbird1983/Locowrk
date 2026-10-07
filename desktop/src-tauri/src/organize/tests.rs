@@ -425,9 +425,14 @@ async fn overflow_respects_pending_and_legacy_mode() {
 #[tokio::test]
 async fn auto_collapse_relieves_oldest_expanded() {
     let root = temp_root("autocollapse");
+    // thresholdPct 90：把「自动整理」触发阈值抬到本测锚点之上——本测
+    // 只验收起，若 600/1000 也过整理线，after_turn 会经 tauri::async_
+    // runtime（独立全局 runtime，不受测试单线程 tokio 约束）派生整理
+    // 任务，FakeClient 空队列秒失败走规则降级、重建章节抹掉 collapsed_
+    // at 回写，与本测读盘竞速（真实 flaky 根因，2026-10-06 定位）。
     let settings = settings_with(
         serde_json::json!({
-            "context": {"windowTokens": 1000},
+            "context": {"windowTokens": 1000, "thresholdPct": 90},
             "memory": {"collapseEnabled": true, "collapseThresholdPct": 50}
         }),
         &root,

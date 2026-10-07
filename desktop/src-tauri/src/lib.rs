@@ -65,6 +65,7 @@ mod settings;
 mod state;
 mod stop;
 mod sub_transcript;
+mod thinking_language;
 mod title;
 mod tool_source;
 mod tray;

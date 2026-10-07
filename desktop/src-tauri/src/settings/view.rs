@@ -117,5 +117,8 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             rule_chunk_tokens: s.developer.rule_chunk_tokens,
             default_organizer: s.developer.default_organizer.clone(),
         },
+        thinking: super::ThinkingView {
+            language: s.thinking.language.clone(),
+        },
     }
 }

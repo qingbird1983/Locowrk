@@ -86,6 +86,10 @@ fn describe_manifest() -> CString {
                               refused unless the host unlock switch is on — they then still \
                               require user approval. Pipes, command substitution and shell \
                               metacharacters are rejected — pass a single simple command. \
+                              Commands run WITHOUT a shell: the first word is spawned \
+                              directly via PATH. On Windows hosts PATH usually resolves \
+                              to Unix coreutils (Git's usr/bin) — use Unix-style commands; \
+                              cmd builtins (dir, del, copy, `rmdir /s /q`) do not exist. \
                               For read-only work prefer `shell_read` (no approval needed)."
                     .into(),
                 schema: shell_schema(),
@@ -101,7 +105,11 @@ fn describe_manifest() -> CString {
                               the optional cwd argument; anything resolving outside is \
                               refused: re-run the same command via the `shell` tool, which \
                               asks the user for approval. No pipes, no command \
-                              substitution, no shell metacharacters."
+                              substitution, no shell metacharacters. Commands run WITHOUT \
+                              a shell: the first word is spawned directly via PATH. On \
+                              Windows hosts PATH usually resolves to Unix coreutils \
+                              (Git's usr/bin) — use Unix-style commands; cmd builtins \
+                              (dir, del, copy, `rmdir /s /q`) do not exist."
                     .into(),
                 schema: shell_schema(),
                 side_effect: SideEffect::Pure,
