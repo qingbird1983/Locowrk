@@ -321,6 +321,13 @@ export function sessionSetModel(
   return invoke("session_set_model", { sessionId, providerId, model });
 }
 
+/** 会话级推理档位（批 B §5.2）：写旁车 thinking_level + 缓存，下一请求即
+ * 生效；level 空串 = 清除（模型走自家缺省档）。语义档由后端校验，档位
+ * 在当前模型梯子里没有写法时由解析链 clamp（就近降档/剥除）。 */
+export function sessionSetThinking(sessionId: string, level: string): Promise<void> {
+  return invoke("session_set_thinking", { sessionId, level });
+}
+
 /** 全部档位的模型清单（§3.30 选择器数据源）：并行探测逐组收口，
  * 单档失败进 error 不拖垮其它组。 */
 export function llmListModels(): Promise<ProviderModels[]> {

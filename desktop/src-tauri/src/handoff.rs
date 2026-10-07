@@ -127,6 +127,8 @@ async fn update(
             content: material(&current, &transcript),
         }],
         system: Some(HANDOFF_SYSTEM.into()),
+        // 辅助调用标记（批 B §5.4）：推理档降到方言最低档、不发 max_tokens
+        params: serde_json::json!({ "aux": true }),
         ..Default::default()
     };
     let resp = AppLlm::new(Arc::clone(settings))

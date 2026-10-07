@@ -30,7 +30,8 @@ pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{
     new_profile_id, synthesize_view, synthesize_view_raw, LlmConfig, LlmSettings, LlmSettingsView,
-    LlmUpdate, ProviderInput, ProviderModel, ProviderProfile, ProviderView, PROVIDERS,
+    LlmUpdate, ProviderInput, ProviderModel, ProviderModelView, ProviderProfile, ProviderView,
+    PROVIDERS,
 };
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};

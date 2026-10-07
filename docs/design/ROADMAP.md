@@ -722,6 +722,22 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.128 · 批 B 推理档位 + 输出钳制 + G1 闸（LLM 能力轨第二批 + 候补 G1 随批，D3/D5 按推荐落档）
+
+| 项 | 落点 |
+|---|---|
+| 方言即数据 | ✅ 新 `llm/dialect.rs`：6 方言 × 语义档 → body patch 纯函数（单测锁形状）；DeepSeek 官方归一表；映射不了不发；别名表三元组（host, 供应商键, 方言）——deepseek/glm/qwen/openai_effort/anthropic_effort 五家带方言 |
+| 会话档位 | ✅ 旁车 `thinking_level` + `ModelOverrideStore` 双字段缓存 + 新命令 `session_set_thinking`（八语义档校验）；`SessionMeta.thinkingLevel` 透出 |
+| 解析链 | ✅ `AppLlm::prepare`：档位 → 方言 clamp（就近降档/剥除）→ `params["thinking_level"]`（内核零改动）；**辅助降档** = 四调用点 `params["aux"]=true` → 方言最低档 + 不发 max_tokens（记录员直呼点就地解析） |
+| 输出钳制 | ✅ D5 窄修订：`WireCaps`（钉死值 + 生效窗口）→ 预检钳制 `min(钉死, ctx−est−1000)` 下限 1024；未钉死不发送；400 点名 max_tokens 剥字段重发一次 |
+| G1 length 闸 | ✅（候补 G1 随批）`finish_reason==length` → Fatal 如实报错、工具不执行、截断消息不入史 |
+| UI | ✅ composer 档位循环钮（[默认→...梯子] 循环，会话级，首页/无梯子隐藏）+ 两模型菜单行 ✨/👁 徽章；ModelPanes 梯子改方言可发送口径（§5.1） |
+| §5.5 复测 | ✅ 走查第一项：deepseek-flash 真轮 8 次工具调用不回传 reasoning **零 400**——义务未被供应商执行，**维持现状不实现回传**（记档复核结论 + PI 回退方案记档） |
+| 实机走查 | ✅ deepseek 真实轮 6 轮（隔离数据根 + 复制真 Key + fsRoots 换 scratch）：循环钮真点默认→disabled→low→high；按轮归属 thinking 4+2→**0**→1→1；autoTitle 辅助降档两标题生成；G1 两轮实锤（钉死 1024 → UI 截断文案 + failed + 不入史）；旁车档位落盘。走查脚本教训记档：settings 手改只认 camelCase / 直改文件须重启 / jsonl 标签小写。数据根已清，脚本/截图留 tmp/v128-walk/ |
+| 门禁 | ✅ clippy --all-targets 0、fmt、desktop 270 绿（+12：dialect 9/wire 2/override 1）、vue-tsc 0、pnpm build 过、lint:style 0 |
+| 文档 | ✅ LLM.md v3.2（请求装配批 B 两节 + 流式 G1 + §5.5 结论）+ UI shell v4.22 + 阶段计划勾批 B + D3/D5 裁定落档 + CHANGELOG v2.128 |
+
+---
 ### v2.127 · 批 A 模型能力目录（LLM 能力轨第一批：《Model Capability and Multimodal Phase Plan》A 批，D1 按推荐落档 = models.dev 快照）
 
 | 项 | 落点 |

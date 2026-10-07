@@ -9,6 +9,7 @@ pub mod catalog;
 mod catalog_match;
 mod client;
 pub mod diagnose;
+mod dialect;
 mod embed;
 pub mod models;
 pub mod probe;
@@ -20,4 +21,5 @@ mod wire;
 
 pub use app_llm::{AppLlm, RetryNotify};
 pub use client::CompatLlm;
+pub use dialect::dialect_of;
 pub use embed::{CooledEmbed, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};

@@ -78,6 +78,29 @@ const modelLabel = computed(
   () => chat.modelOverride?.model || settings.view?.llm.model || t("app.modelFallback"),
 );
 const enabledProviders = computed(() => (settings.view?.llm.providers ?? []).filter((p) => p.enabled));
+
+/** 批 B 推理档位循环钮（供应商稿 §5.3，D3 裁定 = 循环钮）：梯子 = 当前
+ * 模型的可发送档位（方言口径，模型选择器数据同一来源）；档位是会话级
+ * 属性 → 首页空态隐藏；梯子空（无方言模型）同样隐藏。循环 = [默认,
+ * ...梯子]，默认 = 不发档位字段（模型走自家缺省）。 */
+const thinkingLadder = computed<string[]>(() => {
+  const pid = chat.modelOverride?.providerId || settings.view?.llm.active;
+  const model = chat.modelOverride?.model || settings.view?.llm.model || "";
+  const p = (settings.view?.llm.providers ?? []).find((x) => x.id === pid);
+  return p?.models.find((m) => m.id === model)?.reasoningLadder ?? [];
+});
+const thinkingCycle = computed(() => [null, ...thinkingLadder.value]);
+const thinkingIndex = computed(() =>
+  thinkingCycle.value.findIndex((l) => l === chat.thinkingLevel),
+);
+const inSession = computed(() => chat.sessions.some((x) => x.id === chat.sessionId));
+const showThinking = computed(() => inSession.value && thinkingLadder.value.length > 0);
+const thinkingLabel = computed(() => chat.thinkingLevel ?? t("model.thinkingDefault"));
+function cycleThinking() {
+  if (!showThinking.value) return;
+  const next = thinkingCycle.value[(thinkingIndex.value + 1) % thinkingCycle.value.length];
+  chat.setThinking(next).catch((e) => toast.push("danger", String(e)));
+}
 /** 选择语义（§3.30）：会话内 = 覆盖；首页 = 写设置缺省；写穿失败如实报错。 */
 function onSelectModel(providerId: string, model: string) {
   chat
@@ -237,6 +260,18 @@ onBeforeUnmount(() => {
         <div class="composer__right">
           <!-- 用量环（§3.12，自持开合） -->
           <UsageRing />
+          <!-- 推理档位循环钮（批 B §5.3 D3 循环钮）：会话级档位循环
+               [默认 → ...梯子]，点击下一档、tooltip 当前档 -->
+          <button
+            v-if="showThinking"
+            type="button"
+            class="chip chip--thinking"
+            :aria-label="t('model.thinkingCycle', { level: thinkingLabel })"
+            @click="cycleThinking"
+          >
+            <Icon name="sparkle" :size="12" class="shrink-0" :class="chat.thinkingLevel ? 'text-accent' : ''" />
+            <span class="chip__text">{{ thinkingLabel }}</span>
+          </button>
           <!-- 模型 chip（§3.30 v2.58）：点开模型选择器浮层 -->
           <div ref="modelAnchor" class="chip-anchor">
             <button
@@ -414,6 +449,15 @@ onBeforeUnmount(() => {
 }
 .chip-anchor .chip--model {
   cursor: pointer;
+}
+/* 推理档位循环钮（批 B §5.3）：模型 chip 同族小号；有档时字形点亮 */
+.chip--thinking {
+  cursor: pointer;
+  flex: none;
+  color: var(--lw-ink-3);
+}
+.chip--thinking:enabled:hover {
+  color: var(--lw-ink-1);
 }
 .chip-anchor .chip__chevron {
   color: var(--lw-ink-4);

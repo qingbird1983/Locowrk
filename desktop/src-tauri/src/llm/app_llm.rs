@@ -19,8 +19,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmService};
+use serde_json::Value;
 
 use super::client::{CompatLlm, RetryHooks};
+use super::dialect;
+use super::wire::WireCaps;
 use crate::demo_llm::DemoLlm;
 use crate::model_override::ModelOverrideStore;
 use crate::settings::{LlmSettings, SettingsStore};
@@ -143,18 +146,67 @@ impl AppLlm {
         }
         cfg
     }
+
+    /// 批 B 请求计划：生效配置 + 模型能力上限（钉死 max_output / 生效窗口）
+    /// 与推理档位落 params。会话旁车 thinking_level 经方言 clamp（就近降档
+    /// 或剥除）；`params["aux"]=true`（辅助调用标记）则取方言最低档。内核
+    /// 零改动——params 是 opaque Value（§7.2 决策环同通道）。
+    fn prepare(&self, mut req: LlmRequest) -> (LlmRequest, LlmSettings, WireCaps) {
+        let cfg = self.effective_cfg(&req);
+        // 模型行能力（settings 钉死面）：按生效模型名在活动/覆盖档的
+        // models 里找；窗口 = 模型行 context_window ?? 档位 window_tokens
+        let mut caps = WireCaps::default();
+        let llm_cfg = self.settings.llm_config();
+        let profile = req
+            .session_id
+            .as_deref()
+            .and_then(|sid| self.overrides.as_ref().and_then(|o| o.get(sid)))
+            .and_then(|(pid, _)| llm_cfg.profile(&pid))
+            .or_else(|| llm_cfg.active_profile());
+        if let Some(p) = profile {
+            let row = p.models.iter().find(|m| m.id == cfg.model);
+            // settings 只存用户钉死值（save 时打 source=user），有值即钉死
+            caps.max_output = row.and_then(|m| m.max_output);
+            caps.ctx_window = row.and_then(|m| m.context_window).or(p.window_tokens);
+        }
+        // 推理档位解析：辅助降档优先（aux 标记），否则会话旁车档
+        let dialect = dialect::dialect_of(cfg.base_url.as_deref());
+        let aux = req
+            .params
+            .get("aux")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        // 辅助调用不发送 max_tokens（§5.4 宁缺勿假；ZCode 发 min(5000,max)
+        // 的做法记档不跟）
+        if aux {
+            caps.max_output = None;
+        }
+        let level = if aux {
+            dialect.aux_level().map(str::to_string)
+        } else {
+            req.session_id
+                .as_deref()
+                .and_then(|sid| self.overrides.as_ref().and_then(|o| o.get_thinking(sid)))
+                .and_then(|lvl| dialect.clamp(&lvl).map(str::to_string))
+        };
+        if let Some(lvl) = level {
+            req.params["thinking_level"] = Value::String(lvl);
+        }
+        (req, cfg, caps)
+    }
 }
 
 #[async_trait]
 impl LlmService for AppLlm {
     async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
         self.diagnose(&req);
-        let cfg = self.effective_cfg(&req);
+        let (req, cfg, caps) = self.prepare(req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
             return self.demo.complete(req).await;
         }
-        self.real.complete_with(&cfg, req).await
+        let _ = super::wire::check_modalities(&req);
+        self.real.complete_with(&cfg, caps, req).await
     }
 
     /// ⑳ 流式分发：同 complete 的设置驱动——未配置走演示替身（缺省实现
@@ -165,14 +217,14 @@ impl LlmService for AppLlm {
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         self.diagnose(&req);
-        let cfg = self.effective_cfg(&req);
+        let (req, cfg, caps) = self.prepare(req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
             return self.demo.complete_streaming(req, on_delta).await;
         }
         let hooks = self.hooks(req.session_id.as_deref());
         self.real
-            .complete_streaming_with(&cfg, req, on_delta, &|_| false, hooks.as_ref())
+            .complete_streaming_with(&cfg, caps, req, on_delta, &|_| false, hooks.as_ref())
             .await
     }
 
@@ -185,14 +237,14 @@ impl LlmService for AppLlm {
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         self.diagnose(&req);
-        let cfg = self.effective_cfg(&req);
+        let (req, cfg, caps) = self.prepare(req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
             return self.demo.complete_streaming(req, on_delta).await;
         }
         let hooks = self.hooks(req.session_id.as_deref());
         self.real
-            .complete_streaming_with(&cfg, req, on_delta, on_reasoning, hooks.as_ref())
+            .complete_streaming_with(&cfg, caps, req, on_delta, on_reasoning, hooks.as_ref())
             .await
     }
 }

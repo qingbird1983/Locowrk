@@ -114,6 +114,8 @@ pub struct SessionMeta {
     pub model: Option<String>,
     pub model_provider: Option<String>,
     pub organizer: Option<String>,
+    /// 会话级推理档位（批 B）；None = 未设置。
+    pub thinking_level: Option<String>,
 }
 
 /// 列表标题截断宽度（字符）。
@@ -172,7 +174,8 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
             let permission_mode = sidecar.as_ref().and_then(|m| m.permission_mode.clone());
             let model = sidecar.as_ref().and_then(|m| m.model.clone());
             let model_provider = sidecar.as_ref().and_then(|m| m.model_provider.clone());
-            let organizer = sidecar.and_then(|m| m.organizer);
+            let organizer = sidecar.as_ref().and_then(|m| m.organizer.clone());
+            let thinking_level = sidecar.and_then(|m| m.thinking_level);
             Some((
                 modified,
                 SessionMeta {
@@ -185,6 +188,7 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                     model,
                     model_provider,
                     organizer,
+                    thinking_level,
                 },
             ))
         })
@@ -320,7 +324,8 @@ fn snippet_around(text: &str, byte_start: usize, needle: &[char]) -> String {
 mod meta;
 
 pub use meta::{
-    SessionMetaFile, read_meta, write_model_override, write_organizer, write_permission_mode,
+    SessionMetaFile, read_meta, write_model_override, write_organizer,
+    write_permission_mode, write_thinking_level,
     write_title, write_workspace,
 };
 use meta::{invalid_id, meta_file};

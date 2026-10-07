@@ -12,6 +12,7 @@ import {
   sessionList,
   sessionRename,
   sessionSetModel,
+  sessionSetThinking,
   sessionSetPermissionMode,
   sessionTruncateAfter,
   pickSavePath,
@@ -150,6 +151,8 @@ export const useChatStore = defineStore("chat", {
     permissionMode: null as "plan" | "ask" | "acceptEdits" | "auto" | null,
     /** v2.58 §3.30 当前会话模型覆盖（null = 跟随设置缺省）。 */
     modelOverride: null as { providerId: string; model: string } | null,
+    /** 批 B 会话级推理档位（null = 未设置，模型走自家缺省）。 */
+    thinkingLevel: null as string | null,
     /** v2.58 §3.30 本轮用量聚合（null = 本轮尚无供应商报告的用量）。 */
     turnUsage: null as TurnUsage | null,
     /** M0 观测（KV v2 §7）：会话累计用量——只随会话切换/新建重置，
@@ -288,6 +291,7 @@ export const useChatStore = defineStore("chat", {
         meta?.model && meta?.modelProvider
           ? { providerId: meta.modelProvider, model: meta.model }
           : null;
+      this.thinkingLevel = meta?.thinkingLevel ?? null;
       this.turnUsage = null;
       // M0 观测：会话累计随会话切换重置（重放同源重建），告警标记同理
       this.sessionUsage = null;
@@ -360,6 +364,7 @@ export const useChatStore = defineStore("chat", {
       this.queueDraining = true;
       this.permissionMode = null;
       this.modelOverride = null;
+      this.thinkingLevel = null;
       this.turnUsage = null;
       this.sessionUsage = null;
       this.cacheAlertFired = false;
@@ -391,6 +396,18 @@ export const useChatStore = defineStore("chat", {
         await sessionSetModel(this.sessionId, "", "");
       } catch (err) {
         this.modelOverride = prev;
+        throw err;
+      }
+    },
+    /** 批 B §5.2 设置会话推理档位（循环钮）：写旁车 + 缓存，下一请求即
+     * 生效；level null = 清除（模型走自家缺省）。失败回滚本地。 */
+    async setThinking(level: string | null) {
+      const prev = this.thinkingLevel;
+      this.thinkingLevel = level;
+      try {
+        await sessionSetThinking(this.sessionId, level ?? "");
+      } catch (err) {
+        this.thinkingLevel = prev;
         throw err;
       }
     },

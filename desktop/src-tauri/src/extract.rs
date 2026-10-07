@@ -165,7 +165,7 @@ pub async fn run_turn_extract(
             }],
             tools: Vec::new(),
             model: None,
-            params: serde_json::json!({}),
+            params: serde_json::json!({ "aux": true }),
             system: Some(EXTRACT_SYSTEM.into()),
             session_id: None,
         })

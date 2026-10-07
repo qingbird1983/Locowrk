@@ -14,12 +14,13 @@ use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmService};
 
 use crate::settings::LlmSettings;
 
+use super::dialect::{self, Dialect};
 use super::models::{
     join_version, DEFAULT_ANTHROPIC_BASE, DEFAULT_OLLAMA_BASE, DEFAULT_OPENAI_BASE,
 };
 use super::retry::{self, Failure};
 use super::sse::{SseEvent, SseParser};
-use super::wire::{build_payload, Delta, StreamAcc};
+use super::wire::{build_payload, Delta, StreamAcc, WireCaps};
 
 /// 连接建立上限（流式总时长不设限——长输出合法）。
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -44,6 +45,9 @@ enum AttemptError {
         failure: Failure,
         emitted: bool,
         repair_stream_options: bool,
+        /// 400 报文点名 max_tokens：剥字段重发一次（D5 窄修订的网关兼容
+        /// 逃生舱，与 stream_options 同款先例）。
+        repair_max_tokens: bool,
     },
 }
 
@@ -120,9 +124,10 @@ impl CompatLlm {
     pub async fn complete_with(
         &self,
         cfg: &LlmSettings,
+        caps: WireCaps,
         req: LlmRequest,
     ) -> Result<LlmResponse, LlmError> {
-        self.complete_streaming_with(cfg, req, &|_| false, &|_| false, None)
+        self.complete_streaming_with(cfg, caps, req, &|_| false, &|_| false, None)
             .await
     }
 
@@ -132,18 +137,30 @@ impl CompatLlm {
     pub async fn complete_streaming_with(
         &self,
         cfg: &LlmSettings,
+        caps: WireCaps,
         req: LlmRequest,
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         hooks: Option<&RetryHooks>,
     ) -> Result<LlmResponse, LlmError> {
         Self::key_check(cfg)?;
+        let dialect = dialect::dialect_of(cfg.base_url.as_deref());
         let mut attempt: u32 = 0;
         let mut drop_stream_options = false;
+        let mut drop_max_tokens = false;
         loop {
             attempt += 1;
             match self
-                .attempt_stream(cfg, &req, on_delta, on_reasoning, drop_stream_options)
+                .attempt_stream(
+                    cfg,
+                    dialect,
+                    caps,
+                    &req,
+                    on_delta,
+                    on_reasoning,
+                    drop_stream_options,
+                    drop_max_tokens,
+                )
                 .await
             {
                 Ok(resp) => return Ok(resp),
@@ -152,11 +169,17 @@ impl CompatLlm {
                     failure,
                     emitted,
                     repair_stream_options,
+                    repair_max_tokens,
                 }) => {
-                    // stream_options 被网关点名拒绝：立即去字段重发，不算
-                    // 失败、不走退避（每次尝试只修一次）
+                    // stream_options / max_tokens 被网关点名拒绝：立即去字段
+                    // 重发，不算失败、不走退避（各自每次尝试只修一次——D5
+                    // 窄修订的网关兼容逃生舱，与 stream_options 同款先例）
                     if repair_stream_options && !drop_stream_options {
                         drop_stream_options = true;
+                        continue;
+                    }
+                    if repair_max_tokens && !drop_max_tokens {
+                        drop_max_tokens = true;
                         continue;
                     }
                     let delay = match &failure {
@@ -184,13 +207,17 @@ impl CompatLlm {
 
     /// 单次尝试：POST + SSE 流循环。返回 Retryable 的分类（含 Retry-After
     /// 解析）与「已推 delta」标记。
+    #[allow(clippy::too_many_arguments)]
     async fn attempt_stream(
         &self,
         cfg: &LlmSettings,
+        dialect: Dialect,
+        caps: WireCaps,
         req: &LlmRequest,
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         drop_stream_options: bool,
+        drop_max_tokens: bool,
     ) -> Result<LlmResponse, AttemptError> {
         let broken = || AttemptError::Retryable {
             failure: Failure::Transient {
@@ -198,17 +225,24 @@ impl CompatLlm {
             },
             emitted: false,
             repair_stream_options: false,
+            repair_max_tokens: false,
         };
         let client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
             .map_err(|e| AttemptError::Fatal(format!("HTTP 客户端构建失败: {e}")))?;
-        let mut payload = build_payload(&cfg.model, req, true);
+        let mut payload = build_payload(&cfg.model, req, true, dialect, &caps);
         if drop_stream_options {
             payload
                 .as_object_mut()
                 .expect("build_payload 产出 object")
                 .remove("stream_options");
+        }
+        if drop_max_tokens {
+            payload
+                .as_object_mut()
+                .expect("build_payload 产出 object")
+                .remove("max_tokens");
         }
         let key = cfg.api_key.clone().unwrap_or_default();
         let resp = Self::auth(client.post(Self::endpoint(cfg)), cfg, &key)
@@ -232,6 +266,10 @@ impl CompatLlm {
                     repair_stream_options: status.as_u16() == 400
                         && !drop_stream_options
                         && body.contains("stream_options"),
+                    repair_max_tokens: status.as_u16() == 400
+                        && !drop_max_tokens
+                        && payload.get("max_tokens").is_some()
+                        && body.contains("max_tokens"),
                     emitted: false,
                     failure: merge_retry_after(f, retry_after),
                 }),
@@ -268,6 +306,7 @@ impl CompatLlm {
                         },
                         emitted,
                         repair_stream_options: false,
+                        repair_max_tokens: false,
                     });
                 }
             };
@@ -282,6 +321,7 @@ impl CompatLlm {
                         },
                         emitted,
                         repair_stream_options: false,
+                        repair_max_tokens: false,
                     });
                 }
                 None => {}
@@ -317,6 +357,13 @@ impl CompatLlm {
             }
         }
 
+        // G1 Turn Commit length 闸（可靠性稿 §13，随批 B）：finish_reason
+        // = length = 输出在 max_tokens 处被截断——截断不收束（按 Fatal 如实
+        // 报错而非当完整轮次）、工具不执行（部分 tool_calls 一律丢弃）、
+        // 截断消息不入史（错误路径不落 AssistantMessage）。
+        if acc.finish_reason() == Some("length") {
+            return Err(AttemptError::Fatal("模型输出在最大输出上限处被截断（finish_reason=length），本轮按未完成收束：部分结果与未完成的工具调用不执行不保存。可在 设置 → 模型 调大该模型的「最大输出」后重试".into()));
+        }
         // 收束判据：[DONE] 或 finish_reason 到场才算完整；供应商中途断流
         // （半截正文 / 空收束）按可重试断流处理，不当成功
         if done || acc.finish_reason().is_some() {
@@ -328,6 +375,7 @@ impl CompatLlm {
             },
             emitted,
             repair_stream_options: false,
+            repair_max_tokens: false,
         })
     }
 

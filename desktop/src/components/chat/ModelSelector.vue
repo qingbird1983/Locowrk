@@ -50,6 +50,16 @@ const pricingOf = (providerId: string, model: string): string => {
     ?.models.find((m) => m.id === model);
   return formatPricingShort(hit?.pricing ?? null);
 };
+/** 模型行能力徽章（批 B §5.3）：✨ = 有推理梯子（可调档）、👁 = 图像输入。 */
+const modelCaps = (providerId: string, model: string) => {
+  const m = props.providers
+    .find((p) => p.id === providerId)
+    ?.models.find((x) => x.id === model);
+  return {
+    thinking: (m?.reasoningLadder?.length ?? 0) > 0,
+    vision: m?.supportsImage != null ? m.supportsImage : (m?.inputModalities ?? []).includes("image"),
+  };
+};
 
 interface Group {
   id: string;
@@ -147,6 +157,12 @@ function pick(providerId: string, model: string) {
           @click="pick(g.id, m)"
         >
           <span class="ms-row__name">{{ m }}</span>
+          <span v-if="modelCaps(g.id, m).thinking" class="ms-row__cap" :aria-label="t('model.badgeThinking')">
+            <Icon name="sparkle" :size="11" />
+          </span>
+          <span v-if="modelCaps(g.id, m).vision" class="ms-row__cap" :aria-label="t('model.badgeVision')">
+            <Icon name="eye" :size="11" />
+          </span>
           <span v-if="pricingOf(g.id, m)" class="ms-row__price">{{ pricingOf(g.id, m) }}</span>
           <Icon v-if="m === effective()" name="check" :size="14" class="ms-row__check" />
         </button>
@@ -236,6 +252,11 @@ function pick(providerId: string, model: string) {
   font-size: var(--lw-fs-11);
   color: var(--lw-ink-5);
   font-variant-numeric: tabular-nums;
+}
+.ms-row__cap {
+  flex: none;
+  display: inline-flex;
+  color: var(--lw-ink-4);
 }
 .ms-row__check {
   color: var(--lw-ink-1);

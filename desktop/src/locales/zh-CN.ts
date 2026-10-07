@@ -154,6 +154,10 @@ export default {
   model: {
     selector: "选择模型",
     searchPlaceholder: "搜索模型…",
+    thinkingDefault: "默认",
+    thinkingCycle: "推理档位：{level}（点击切换）",
+    badgeThinking: "支持推理档位调节",
+    badgeVision: "支持图像输入",
     followDefault: "跟随默认 · {model}",
     loading: "正在拉取模型清单…",
     empty: "没有可用的模型清单",

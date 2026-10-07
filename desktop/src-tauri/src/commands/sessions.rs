@@ -127,6 +127,34 @@ pub async fn session_set_model(
         .map_err(|e| format!("写入失败: {e}"))
 }
 
+/// 语义档位全集（批 B 推理档）：方言表只映射这些值，表外一律拒收
+/// （宁缺勿假——发一个方言映射不了的档位等于没发）。
+const THINKING_LEVELS: [&str; 8] = [
+    "disabled", "minimal", "low", "medium", "high", "xhigh", "max", "enabled",
+];
+
+/// 会话级推理档位（批 B，供应商稿 §5.2）：写旁车 `thinking_level` + 缓存，
+/// 下一请求即生效；`level` 空串 = 清除（模型走自家缺省档）。档位在当前
+/// 模型梯子里没有对应写法时由解析链 clamp（就近降档/剥除），这里只校验
+/// 语义档合法。
+#[tauri::command]
+pub async fn session_set_thinking(
+    session_id: String,
+    level: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let l = level.trim().to_string();
+    if !l.is_empty() && !THINKING_LEVELS.contains(&l.as_str()) {
+        return Err(format!(
+            "未知推理档位: {l}（可选 disabled/minimal/low/medium/high/xhigh/max/enabled）"
+        ));
+    }
+    state
+        .model_overrides
+        .set_thinking(&session_id, if l.is_empty() { None } else { Some(&l) })
+        .map_err(|e| format!("写入失败: {e}"))
+}
+
 /// 会话删除：忙锁守卫——运行中的会话锁被整轮持有，默认拒绝；开发者开关
 /// `developer.allowDeleteRunningSession`（后端直读设置，不信前端转述）
 /// 放行时强制删（运行轮余段会重建日志文件）。删除后同步剔除内存条目与

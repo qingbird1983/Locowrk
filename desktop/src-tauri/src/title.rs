@@ -111,6 +111,8 @@ async fn generate(
         messages: vec![Message::User {
             content: format!("请为下面这段对话生成一个不超过{TITLE_MAX_CHARS}个字的标题。只输出标题本身：不要引号、句号，不要任何前后缀说明。\n\n{material}"),
         }],
+        // 辅助调用标记（批 B §5.4）：推理档降到方言最低档、不发 max_tokens
+        params: serde_json::json!({ "aux": true }),
         ..Default::default()
     };
     let resp = AppLlm::new(Arc::clone(settings))

@@ -9,6 +9,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../../lib/icons";
+import { hasImageInput } from "../../../lib/model-catalog";
 import SearchInput from "../../patterns/SearchInput.vue";
 import { formatPricingShort } from "../../../lib/model-catalog";
 import type { ProviderModelPricing, ProviderView } from "../../../types";
@@ -64,6 +65,16 @@ const visible = computed(() => {
   );
 });
 const isCurrent = (r: Row) => r.providerId === props.activeId && r.model === props.activeModel;
+/** 能力徽章（批 B §5.3）：✨ 推理梯子 / 👁 图像输入（数据 = 档位模型行）。 */
+const capsOf = (r: Row) => {
+  const m = props.providers
+    .find((p) => p.id === r.providerId)
+    ?.models.find((x) => x.id === r.model);
+  return {
+    thinking: (m?.reasoningLadder?.length ?? 0) > 0,
+    vision: m ? hasImageInput(m) : false,
+  };
+};
 
 function place() {
   const a = props.anchor;
@@ -166,6 +177,12 @@ onBeforeUnmount(() => {
               <Icon v-if="isCurrent(r)" name="check" :size="12" />
             </span>
             <span class="min-w-0 flex-1 truncate font-mono text-[length:var(--lw-fs-12half)] text-ink-1">{{ r.model }}</span>
+            <span v-if="capsOf(r).thinking" class="shrink-0 text-ink-4" :aria-label="t('model.badgeThinking')">
+              <Icon name="sparkle" :size="11" />
+            </span>
+            <span v-if="capsOf(r).vision" class="shrink-0 text-ink-4" :aria-label="t('model.badgeVision')">
+              <Icon name="eye" :size="11" />
+            </span>
             <span
               v-if="formatPricingShort(r.pricing)"
               class="shrink-0 text-[length:var(--lw-fs-11)] tabular-nums text-ink-5"

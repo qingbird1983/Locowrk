@@ -1,8 +1,9 @@
 # LLM 接入设计（阶段八②参考）
 
-> 版本行：v3.1（2026-10-08）——批 A 模型能力目录（models.dev 快照 + 匹配 +
-> 合成投影）落 §6；v3.0（2026-10-05）**方案一（genai 统一库）退役**，改为
-> 自建 OpenAI 兼容统一客户端。v2.x = genai 三合一（历史见 CHANGELOG）。
+> 版本行：v3.2（2026-10-08）——批 B 推理档位（方言即数据）+ 输出预检钳制
+> （D5 窄修订）+ G1 length 闸落 §7；§6 补 §5.5 复测结论。v3.1 批 A 目录；
+> v3.0（2026-10-05）**方案一（genai 统一库）退役**，改为自建 OpenAI 兼容
+> 统一客户端。v2.x = genai 三合一（历史见 CHANGELOG）。
 
 ## 核心理念：一个接口，一条线格式
 
@@ -32,8 +33,19 @@ kind 只决定**鉴权头与端点归一**，不再决定请求/响应形状。�
 - `tools`：OpenAI 风格 `{type:"function", function:{name, description,
   parameters}}`；空目录不携带字段。
 - `temperature`：仅当决策环 params 显式携带才发。
-- **不主动发送派生限额字段**（`max_tokens` 等）——留供应商缺省，从根上避免
-  "派生输出限额被兼容网关拒绝"这一类失败（PI 同款教训）。
+- **推理档位（批 B，方言即数据）**：`params["thinking_level"]`（语义档）→
+  `llm/dialect.rs` 按 baseUrl 定位预设方言写字段——openai/anthropic =
+  `reasoning_effort`、GLM = `thinking:{type}`、Qwen = `enable_thinking`、
+  DeepSeek = `thinking:{type}` + `reasoning_effort` 双字段（官方归一
+  minimal→low、medium/high→high、xhigh/ultra→max）。映射不了的档位不发。
+  档位来源 = 会话旁车（composer 循环钮，clamp 就近降档/剥除）或辅助调用
+  标记（`params["aux"]=true` → 方言最低档，title/handoff/extract/记录员）。
+  无方言预设（openrouter 等）不发任何字段。
+- **max_tokens（D5 窄修订，v2.75「不发派生限额」的窄开口）**：仅当用户在
+  模型行钉死「最大输出」才发送，且发送前预检钳制
+  `min(钉死, ctx − estimate_tokens − 1000)`（下限 1024，估用吃满不钳负——
+  留给上下文溢出语义）；目录值只展示永不发送；400 报文点名 max_tokens 时
+  剥字段重发一次（stream_options 同款先例）。
 - 缺 Key 先行报错（友好文案指引设置页）；openai/anthropic 保留环境变量逃生舱
   （`OPENAI_API_KEY`/`ANTHROPIC_API_KEY`）。
 
@@ -59,6 +71,9 @@ kind 只决定**鉴权头与端点归一**，不再决定请求/响应形状。�
   累积的部分正文原样收束（Ok、无工具调用、无用量，不虚构结尾）。
 - 流意外结束（连接断 / 无 `[DONE]` / 空收束）：按可重试的流失败处理（见下），
   不当成功。
+- **G1 length 闸（批 B，可靠性稿 §13）**：`finish_reason=length` = 输出在
+  max_tokens 处被截断——按 Fatal 如实报错（本轮未完成收束），部分
+  tool_calls 一律不执行，截断消息不入史；文案指引调大「最大输出」。
 
 ## 传输韧性（PI-Desktop 同款，掐断问题的根治）
 
@@ -121,6 +136,11 @@ kind 只决定**鉴权头与端点归一**，不再决定请求/响应形状。�
   medium/high/xhigh/max/enabled；toggle+effort 并存时 enabled 冗余不出现
   ——deepseek 梯子 = disabled/low/high/max；toggle 独占才有 enabled——GLM）。
   批 A 只投影展示，批 B 接预设方言后成为档位选择器的数据源。
+- **§5.5 思考回传复测结论（2026-10-08 实机）**：DeepSeek 官方文档要求带
+  tools 时回传历史 `reasoning_content`（否则 400）——deepseek-flash 真轮
+  8 次工具调用不回传**零 400**，义务未被供应商执行，**维持现状不实现回传**；
+  若将来收紧，配对来源现成（Thinking 事件紧贴 AssistantMessage），PI 占位
+  回退 `[reasoning not retained]` 记档。
 - **价格**：目录 USD 原值如实展示（选择器行缀 / 详情行），只作参考不进任何
   计算；与会话累计估算（`chat.cacheHitPrice/cacheMissPrice`，CNY 手填）两套
   口径并存互不替换。

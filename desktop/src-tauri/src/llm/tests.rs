@@ -10,9 +10,10 @@ use session_store::{Message, ToolCallMsg};
 
 use super::app_llm::AppLlm;
 use super::client::CompatLlm;
+use super::dialect::Dialect;
 use super::retry::{self, Failure};
 use super::sse::{SseEvent, SseParser};
-use super::wire::{build_payload, parse_usage, StreamAcc};
+use super::wire::{build_payload, parse_usage, StreamAcc, WireCaps};
 use crate::settings::SettingsStore;
 
 fn temp_root(tag: &str) -> std::path::PathBuf {
@@ -63,7 +64,13 @@ fn payload_assembles_openai_shapes() {
         params: json!({ "temperature": 0.3 }),
         ..Default::default()
     };
-    let p = build_payload("test-model", &req, true);
+    let p = build_payload(
+        "test-model",
+        &req,
+        true,
+        Dialect::None,
+        &WireCaps::default(),
+    );
     assert_eq!(p["model"], "test-model");
     assert_eq!(p["stream"], true);
     assert_eq!(p["stream_options"]["include_usage"], true);
@@ -98,6 +105,8 @@ fn payload_assembles_openai_shapes() {
             ..Default::default()
         },
         false,
+        Dialect::None,
+        &WireCaps::default(),
     );
     assert!(p["messages"][0]["content"]
         .as_str()
@@ -453,4 +462,92 @@ fn effective_cfg_resolves_session_override() {
     assert_eq!(cfg.model, "m1");
     std::fs::remove_dir_all(&root).ok();
     std::fs::remove_dir_all(&dir).ok();
+}
+
+// ---- 批 B：推理档位落 payload + max_tokens 预检钳制 ----
+
+#[test]
+fn payload_carries_dialect_thinking_fields() {
+    let req = LlmRequest {
+        params: json!({ "thinking_level": "low" }),
+        ..Default::default()
+    };
+    // deepseek_thinking：thinking enabled + reasoning_effort 双字段
+    let p = build_payload(
+        "m",
+        &req,
+        true,
+        Dialect::DeepseekThinking,
+        &WireCaps::default(),
+    );
+    assert_eq!(p["thinking"], json!({ "type": "enabled" }));
+    assert_eq!(p["reasoning_effort"], "low");
+
+    // 无方言（None）：不发任何档位字段（宁缺勿假）
+    let p = build_payload("m", &req, true, Dialect::None, &WireCaps::default());
+    assert!(p.get("thinking").is_none());
+    assert!(p.get("reasoning_effort").is_none());
+
+    // 档位在方言表没有写法：字段缺席
+    let req_bad = LlmRequest {
+        params: json!({ "thinking_level": "enabled" }),
+        ..Default::default()
+    };
+    let p = build_payload(
+        "m",
+        &req_bad,
+        true,
+        Dialect::DeepseekThinking,
+        &WireCaps::default(),
+    );
+    assert!(p.get("thinking").is_none());
+    assert!(p.get("reasoning_effort").is_none());
+
+    // 无档位：不发（模型走自家缺省）
+    let req_none = LlmRequest::default();
+    let p = build_payload(
+        "m",
+        &req_none,
+        true,
+        Dialect::DeepseekThinking,
+        &WireCaps::default(),
+    );
+    assert!(p.get("thinking").is_none());
+}
+
+#[test]
+fn max_tokens_only_when_pinned_and_preflight_clamped() {
+    let req = LlmRequest {
+        messages: vec![Message::User {
+            content: "hi".into(),
+        }],
+        ..Default::default()
+    };
+    // 未钉死：不发（v2.75 纪律不变）
+    let p = build_payload("m", &req, true, Dialect::None, &WireCaps::default());
+    assert!(p.get("max_tokens").is_none());
+
+    // 钉死 + 无窗口 = 原值发送
+    let caps = WireCaps {
+        max_output: Some(5_000),
+        ctx_window: None,
+    };
+    let p = build_payload("m", &req, true, Dialect::None, &caps);
+    assert_eq!(p["max_tokens"], 5_000);
+
+    // 钉死 + 窗口充裕 = min(钉死, ctx − 估用 − 1000)；est 小 → 钉死赢
+    let caps = WireCaps {
+        max_output: Some(5_000),
+        ctx_window: Some(100_000),
+    };
+    let p = build_payload("m", &req, true, Dialect::None, &caps);
+    assert_eq!(p["max_tokens"], 5_000);
+
+    // 窗口紧张 = 钳到余量；最低 1024（不钳到负数，留给溢出语义）
+    let caps = WireCaps {
+        max_output: Some(5_000),
+        ctx_window: Some(2_000),
+    };
+    let p = build_payload("m", &req, true, Dialect::None, &caps);
+    assert_eq!(p["max_tokens"], 1_024);
 }

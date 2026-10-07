@@ -73,15 +73,22 @@ impl memory_tree::MemoryManagerClient for AppLlmMemoryManager {
             }],
             tools: vec![],
             model: None,
-            params: serde_json::Value::Object(serde_json::Map::new()),
+            // 辅助调用标记（批 B §5.4）：推理档降到方言最低档、不发 max_tokens
+            params: serde_json::json!({ "aux": true }),
             system: Some(system.to_string()),
             // 记忆管理器调用不属于任何会话轮：会话级模型覆盖 / 调度绑定都
             // 不该波及它（ctx-compact 摘要调用同款约定）
             session_id: None,
         };
+        // 记录员直呼 CompatLlm（绕过 AppLlm.prepare）：辅助降档在此就地解析
+        //（方言最低档；无方言 = 不发档位字段）
+        let mut req = req;
+        if let Some(lvl) = crate::llm::dialect_of(cfg.base_url.as_deref()).aux_level() {
+            req.params["thinking_level"] = serde_json::Value::String(lvl.into());
+        }
         let resp = self
             .real
-            .complete_with(&cfg, req)
+            .complete_with(&cfg, Default::default(), req)
             .await
             .map_err(|e| e.to_string())?;
         let usage = resp

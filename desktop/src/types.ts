@@ -126,6 +126,8 @@ export interface SessionMeta {
   modelProvider: string | null;
   /** M4 §3.38 会话级整理模式（null = 跟随开发者缺省档）。 */
   organizer: "legacy" | "tree" | null;
+  /** 批 B 会话级推理档位（null = 未设置，模型走自家缺省）。 */
+  thinkingLevel: string | null;
 }
 
 /** 会话正文搜索命中（v2.49）：mtime 降序限量；snippet = 首处摘录。 */

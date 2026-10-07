@@ -7,37 +7,47 @@ use std::collections::HashMap;
 
 use super::catalog::{CatalogModel, CatalogSnapshot};
 
-/// 预设 host → models.dev 供应商键（供应商稿 §4.3「预设别名表」）。键 =
-/// 预设 baseUrl 的 host[:port]（与 lib/provider-presets.ts 对齐，测试
-/// 锁两边）。快照里没有的供应商（百川/零一）不进表——匹配回落 None
-/// 如实未知。
-const PRESET_HOST_PROVIDER: &[(&str, &str)] = &[
-    ("api.deepseek.com", "deepseek"),
-    ("open.bigmodel.cn", "zhipuai"),
-    ("api.z.ai", "zai"),
-    ("api.moonshot.cn", "moonshotai"),
-    ("api.minimaxi.com", "minimax"),
-    ("api.siliconflow.cn", "siliconflow-cn"),
-    ("ark.cn-beijing.volces.com", "volcengine"),
-    ("dashscope.aliyuncs.com", "alibaba-cn"),
-    ("api.xiaomimimo.com", "xiaomi"),
-    ("api.openai.com", "openai"),
-    ("api.anthropic.com", "anthropic"),
-    ("openrouter.ai", "openrouter"),
-    ("api.groq.com", "groq"),
-    ("api.x.ai", "xai"),
-    ("api.mistral.ai", "mistral"),
-    ("api.together.xyz", "togetherai"),
-    ("api.fireworks.ai", "fireworks-ai"),
-    ("integrate.api.nvidia.com", "nvidia"),
-    ("inference.baseten.co", "baseten"),
-    ("api.cerebras.ai", "cerebras"),
-    ("router.huggingface.co", "huggingface"),
-    ("generativelanguage.googleapis.com", "google"),
-    ("api.stepfun.com", "stepfun"),
-    ("localhost:1234", "lmstudio"),
-    ("127.0.0.1:1234", "lmstudio"),
+/// 预设 host → (models.dev 供应商键, 推理方言)（供应商稿 §4.3「预设别名
+/// 表」+ §3.2 方言接线）。键 = 预设 baseUrl 的 host[:port]（与
+/// lib/provider-presets.ts 对齐，测试锁两边）。快照里没有的供应商（百川/
+/// 零一）不进供应商列——匹配回落 None 如实未知；方言列 `""` = 无梯子
+/// （openrouter 等「目录补」预设宁缺勿假，批 B 不发明兼容写法）。
+const PRESET_HOST_PROVIDER: &[(&str, &str, &str)] = &[
+    ("api.deepseek.com", "deepseek", "deepseek_thinking"),
+    ("open.bigmodel.cn", "zhipuai", "glm_thinking"),
+    ("api.z.ai", "zai", "glm_thinking"),
+    ("api.moonshot.cn", "moonshotai", ""),
+    ("api.minimaxi.com", "minimax", ""),
+    ("api.siliconflow.cn", "siliconflow-cn", ""),
+    ("ark.cn-beijing.volces.com", "volcengine", ""),
+    ("dashscope.aliyuncs.com", "alibaba-cn", "qwen_enable"),
+    ("api.xiaomimimo.com", "xiaomi", ""),
+    ("api.openai.com", "openai", "openai_effort"),
+    ("api.anthropic.com", "anthropic", "anthropic_effort"),
+    ("openrouter.ai", "openrouter", ""),
+    ("api.groq.com", "groq", ""),
+    ("api.x.ai", "xai", ""),
+    ("api.mistral.ai", "mistral", ""),
+    ("api.together.xyz", "togetherai", ""),
+    ("api.fireworks.ai", "fireworks-ai", ""),
+    ("integrate.api.nvidia.com", "nvidia", ""),
+    ("inference.baseten.co", "baseten", ""),
+    ("api.cerebras.ai", "cerebras", ""),
+    ("router.huggingface.co", "huggingface", ""),
+    ("generativelanguage.googleapis.com", "google", ""),
+    ("api.stepfun.com", "stepfun", ""),
+    ("localhost:1234", "lmstudio", ""),
+    ("127.0.0.1:1234", "lmstudio", ""),
 ];
+
+/// host → 预设方言（批 B 推理档位接线；None = 不在预设表 = 无梯子）。
+pub fn dialect_of_host(host: &str) -> Option<&'static str> {
+    PRESET_HOST_PROVIDER
+        .iter()
+        .find(|(h, _, _)| *h == host)
+        .map(|(_, _, d)| *d)
+        .filter(|d| !d.is_empty())
+}
 
 /// 供应商定位打分：`(score, host_exact)`，score 0 = 未定位。
 fn provider_score(
@@ -45,7 +55,7 @@ fn provider_score(
     provider_key: &str,
     api_index: &HashMap<&str, &str>,
 ) -> (u32, bool) {
-    for (host, key) in PRESET_HOST_PROVIDER {
+    for (host, key, _) in PRESET_HOST_PROVIDER {
         if *key == provider_key && *host == base_host {
             return (100, true);
         }

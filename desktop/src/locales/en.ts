@@ -152,6 +152,10 @@ export default {
   model: {
     selector: "Select model",
     searchPlaceholder: "Search models…",
+    thinkingDefault: "Default",
+    thinkingCycle: "Reasoning level: {level} (click to change)",
+    badgeThinking: "Adjustable reasoning level",
+    badgeVision: "Supports image input",
     followDefault: "Follow default · {model}",
     loading: "Fetching model list…",
     empty: "No model list available",

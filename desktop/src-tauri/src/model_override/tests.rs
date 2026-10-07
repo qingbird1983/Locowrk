@@ -55,3 +55,26 @@ fn partial_sidecar_fields_are_ignored() {
     assert_eq!(store.get("s2"), None);
     fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn thinking_level_roundtrips_and_clears_independently() {
+    let dir = temp_dir("thinking");
+    let store = ModelOverrideStore::new(dir.clone());
+    assert_eq!(store.get_thinking("s3"), None);
+    store.set_thinking("s3", Some("high")).unwrap();
+    assert_eq!(store.get_thinking("s3"), Some("high".into()));
+    // 重启（新 store）读回
+    let reopened = ModelOverrideStore::new(dir.clone());
+    assert_eq!(reopened.get_thinking("s3"), Some("high".into()));
+    // 与模型覆盖互不干扰
+    store.set("s3", Some(("p", "m"))).unwrap();
+    assert_eq!(store.get_thinking("s3"), Some("high".into()));
+    // 空串 = 清除
+    store.set_thinking("s3", Some("")).unwrap();
+    assert_eq!(store.get_thinking("s3"), None);
+    // 旁车里仍有 model 字段（合并写保留）
+    let reopened = ModelOverrideStore::new(dir.clone());
+    assert_eq!(reopened.get("s3"), Some(("p".into(), "m".into())));
+    assert_eq!(reopened.get_thinking("s3"), None);
+    fs::remove_dir_all(&dir).ok();
+}

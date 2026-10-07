@@ -141,7 +141,7 @@ fn alias_table_keys_exist_in_bundled_snapshot() {
     let s = parse_str(&text, CatalogSource::Bundled).expect("快照应可解析");
     let providers: std::collections::HashSet<&str> =
         s.models.keys().map(|(p, _)| p.as_str()).collect();
-    for (host, key) in PRESET_HOST_PROVIDER {
+    for (host, key, _) in PRESET_HOST_PROVIDER {
         assert!(
             providers.contains(key),
             "别名表 {host} → {key} 在快照里不存在（models.dev 改名？更新映射表）"

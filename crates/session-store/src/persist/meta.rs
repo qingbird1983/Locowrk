@@ -27,6 +27,10 @@ pub struct SessionMetaFile {
     /// 会话级整理模式（M4 §3.38①）：`"legacy"` | `"tree"`；None = 未显式
     /// 选择，跟随开发者缺省档（desktop `developer.defaultOrganizer`）。
     pub organizer: Option<String>,
+    /// 会话级推理档位（批 B，供应商稿 §5.2）：语义档
+    /// disabled/minimal/low/medium/high/xhigh/max/enabled；None = 未设置
+    /// （请求不带档位字段，模型走自家缺省）。
+    pub thinking_level: Option<String>,
 }
 
 /// 旁车元数据路径（id 校验同日志文件；`<id>.jsonl` → `<id>.meta.json`，
@@ -62,6 +66,7 @@ fn write_meta(
         && meta.model.is_none()
         && meta.model_provider.is_none()
         && meta.organizer.is_none()
+        && meta.thinking_level.is_none()
     {
         return match std::fs::remove_file(&path) {
             Ok(()) => Ok(()),
@@ -134,6 +139,17 @@ pub fn write_model_override(
             m.model = None;
         }
     })
+}
+
+/// 写会话级推理档位（批 B）：`Some(level)` = 设置（调用方已校验语义档）；
+/// `None` / 空串 = 清除（模型缺省档）。合并写入保留其余字段。
+pub fn write_thinking_level(
+    dir: &Path,
+    session_id: &str,
+    level: Option<&str>,
+) -> std::io::Result<()> {
+    let lvl = level.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    write_meta(dir, session_id, |m| m.thinking_level = lvl)
 }
 
 /// 写会话级整理模式（M4 §3.38①）：`Some("legacy" | "tree")` = 设置（调用方

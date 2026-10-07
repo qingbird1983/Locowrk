@@ -8,12 +8,37 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::{json, Value};
 use session_store::Message;
 
-use kernel_agent::{LlmRequest, LlmResponse, LlmUsage, ToolCallReq};
+use kernel_agent::{estimate_tokens, LlmRequest, LlmResponse, LlmUsage, ToolCallReq};
 use plugin_api::{CallId, ToolSpec};
 
+use super::dialect::Dialect;
+
+/// 模型能力上限（批 B，AppLlm 按 settings 钉死面解析后传入；profile 级
+/// 拿不到 = 全 None，行为与 v2.75 一致——不发明派生限额）。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WireCaps {
+    /// 用户钉死最大输出（ProviderModel.max_output；仅用户值，目录值不发）。
+    pub max_output: Option<u64>,
+    /// 生效上下文窗口（模型行 context_window ?? 档位 window_tokens）。
+    pub ctx_window: Option<u64>,
+}
+
+/// 预检钳制下限：估用已吃掉空间时不钳到负数，留给上下文溢出语义接管。
+const MIN_MAX_TOKENS: u64 = 1024;
+/// 预检钳制的安全余量（供应商稿 §6）。
+const CLAMP_HEADROOM: i64 = 1000;
+
 /// 请求装配（LLM.md「请求装配」节）：中立投影直转；`stream_options` 只在
-/// 流式携带；**不发 max_tokens 等派生限额**（避免兼容网关拒绝，PI 同款教训）。
-pub fn build_payload(model: &str, req: &LlmRequest, stream: bool) -> Value {
+/// 流式携带；**max_tokens 只在用户钉死值在场时发送 + 预检钳制**
+/// `min(钉死, ctx − 估用 − 1000)`（供应商稿 §6 窄修订，D5 裁定）；推理
+/// 档位按方言写字段（`dialect.patch`，映射不了不发）。
+pub fn build_payload(
+    model: &str,
+    req: &LlmRequest,
+    stream: bool,
+    dialect: Dialect,
+    caps: &WireCaps,
+) -> Value {
     let mut messages: Vec<Value> = Vec::with_capacity(req.messages.len() + 1);
     if let Some(sys) = &req.system {
         messages.push(json!({ "role": "system", "content": sys }));
@@ -45,7 +70,39 @@ pub fn build_payload(model: &str, req: &LlmRequest, stream: bool) -> Value {
     if let Some(t) = req.params.get("temperature").and_then(Value::as_f64) {
         payload["temperature"] = json!(t);
     }
+    // 推理档位（批 B）：params["thinking_level"]（会话旁车 clamp 后落进来；
+    // 辅助降档同字段）→ 方言字段。映射不了 = 不发（宁缺勿假，记一行日志）。
+    if let Some(level) = req.params.get("thinking_level").and_then(Value::as_str) {
+        match dialect.patch(level) {
+            Some(fields) => {
+                let obj = payload.as_object_mut().expect("payload object");
+                for (k, v) in fields {
+                    obj.insert(k.to_string(), v);
+                }
+            }
+            None => {
+                tracing::debug!(dialect = ?dialect, level, "推理档位无方言写法，不发送");
+            }
+        }
+    }
+    // 输出上限（D5 窄修订）：只有用户钉死值才发送；发送前预检钳制
+    if let Some(pinned) = caps.max_output {
+        let est = estimate_tokens(&req.messages) as i64;
+        let max_tokens = match caps.ctx_window {
+            Some(ctx) => (pinned as i64).min(ctx as i64 - est - CLAMP_HEADROOM),
+            None => pinned as i64,
+        };
+        payload["max_tokens"] = json!(max_tokens.max(MIN_MAX_TOKENS as i64) as u64);
+    }
     payload
+}
+
+/// 发送前能力门控（供应商稿 §7 第二道防线；上传侧第一道在批 D 前端）：
+/// 请求 content parts 的模态 ⊆ 模型 input_modalities。批 D 落地前
+/// `Message::User.content` 是纯文本 String（构造上恒过）——检查点先立起
+/// 来，D 批 ContentPart 落地后在此填模态比对。
+pub fn check_modalities(_req: &LlmRequest) -> Result<(), String> {
+    Ok(())
 }
 
 /// 中立投影 → 线上消息。Assistant 的正文 + 工具调用合成一条消息（协议要求

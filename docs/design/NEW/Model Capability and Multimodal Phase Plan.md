@@ -15,7 +15,7 @@
 | 批 | 名称 | 一句话 | 规模感 | 依赖 |
 |---|---|---|---|---|
 | **A** ✅（v2.127，2026-10-08） | 模型能力目录 | models.dev 快照接入 + 打分匹配 + source 钉死 + 能力投影到 UI | 大（新模块 + 快照资源） | 无 |
-| **B** | 推理档位 + 输出钳制 | 方言数据表 + 会话档位持久化 + composer 档位钮 + maxOutput 预检钳制 + 辅助降档 + 发送门控 | 大 | A（梯子/模态数据） |
+| **B** ✅（v2.128，2026-10-08） | 推理档位 + 输出钳制 | 方言数据表 + 会话档位持久化 + composer 档位钮 + maxOutput 预检钳制 + 辅助降档 + 发送门控 | 大 | A（梯子/模态数据） |
 | **C** | 连接与安全 | keyring 迁移 + 自定义请求头 + 端点扫描 + 逐模型测试 + 网络代理 | 中 | 无（可插在 A/B 间） |
 | **D** | 多模态地基 | ContentPart + wire 编码 + AssetStore + 上传链路 + 渲染 + 估算 | **最大**（内核穿透） | A/B（模态数据 + 钳制公式） |
 | **E** | 多模态进阶 | 查看器 + 工具结果投影 + 多模态工具 + 降级链 | 中 | D |
@@ -52,7 +52,7 @@
 
 ---
 
-### 批 B — 推理档位 + 输出钳制
+### 批 B — 推理档位 + 输出钳制 ✅（v2.128，2026-10-08 完成）
 
 **目标**：两个用户旋钮（推理档 + 输出上限）全链路，方言即数据。
 
@@ -71,6 +71,8 @@
 **落点**：`llm/dialect.rs`（新）、`llm/wire.rs`、`app_llm.rs`、`model_override.rs`、`commands/sessions.rs`、`organize/client.rs`（记录员）、session 标题/handoff 调用点、`ModelSelector.vue`、`DefaultModelMenu.vue`。
 
 **走查要点**：deepseek-flash 真轮带工具复测思考回传（§5.5，第一项）；deepseek-flash 档位 disabled/low/high/max 切换 → 抓包/日志盘证 `thinking.type` + `reasoning_effort` 双字段落盘（官方归一：medium→high）；GLM 真轮 disabled/enabled；clamp：切到无梯子模型 → 档位剥除不发；输出钳制：钉死 max_output 小值 → 抓包核 `max_tokens`；辅助调用抓包核低档（DeepSeek 现在思考可关，标题/记录员降档真实生效）。
+
+**落成记录（2026-10-08，v2.128）**：dialect.rs 6 方言纯函数 + 别名表三元组；会话旁车 thinking_level + session_set_thinking；AppLlm::prepare 解析链（clamp + aux 降档，内核零改动）；wire 预检钳制 + 400 剥字段重试 + G1 length 闸（候补 G1 随批兑现）；composer 循环钮 + 菜单 ✨/👁 徽章。**§5.5 复测结论（走查第一项）**：deepseek-flash 真轮 8 次工具调用不回传 reasoning_content **零 400**——回传义务未被供应商执行，维持现状不实现回传（记档复核结论）。**实机走查**：循环钮真点 默认→disabled→low→high；按轮归属 thinking 4+2→**0**→1→1（disabled 真关/high 真开）；autoTitle 辅助降档两标题生成；G1 两轮实锤（钉死 1024 长输出 → UI 截断文案 + outcome=failed + 不入史）；旁车档位落盘。留待：GLM 真轮 disabled/enabled、anthropic_effort 实机核实（无 Key）。
 
 ---
 
@@ -170,9 +172,9 @@
 |---|---|---|---|
 | D1 | 档案库源 = models.dev 快照 | 推荐 | **已采纳**（用户指令开始执行，按推荐落档 2026-10-08；批 A 兑现） |
 | D2 | 单线纪律维持（多模态输入侧走兼容层；原生 thinking budget / 图像输出 / 原生 PDF 另批） | 推荐 | **待裁** |
-| D3 | thinking 控件 = 循环钮（vs PI 滑杆） | 循环钮 | **待裁** |
+| D3 | thinking 控件 = 循环钮（vs PI 滑杆） | 循环钮 | **已采纳**（批 B 兑现，2026-10-08） |
 | D4 | 工具结果图片投影 = 挪下一条 user 消息（vs 仅文本占位） | 投影 | **待裁** |
-| D5 | max_tokens 窄修订 = 用户钉死值才发送 + 预检钳制（v2.75 措辞修订） | 采纳 | **待裁** |
+| D5 | max_tokens 窄修订 = 用户钉死值才发送 + 预检钳制（v2.75 措辞修订） | 采纳 | **已采纳**（批 B 兑现，2026-10-08） |
 | D6 | 网络代理进批 C | 进 | **待裁** |
 | D7 | keyring（Credential Manager 优先）+ 惰性迁移 | 确认 | **待裁** |
 | — | 缓办记档：OAuth 订阅账号 / 目录借池 / 用户自编辑档位映射 / aux 发 max_tokens / 视觉备用自动切换 / 图像转码 | — | 已记 |
