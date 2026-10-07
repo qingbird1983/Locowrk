@@ -33,13 +33,15 @@ mod client;
 mod debug;
 mod edit;
 mod recovery;
+mod search_titles;
 mod tree_tools;
 mod view;
 pub use assemble::TreeAssembler;
 pub use client::AppLlmMemoryManager;
 pub use debug::TreeDebug;
+pub use search_titles::SearchTitlesTool;
 pub use tree_tools::{MemoryCollapseTool, MemoryExpandTool};
-pub use view::{OriginalItem, TreeChaptersView, TreeSummaryView};
+pub use view::{OriginalItem, ProjectChapterView, TreeChaptersView, TreeSummaryView};
 
 /// `lw://organize-done` 载荷（M3 §3.37③：整理收束系统消息，三路同源）。
 #[derive(Serialize, Clone)]

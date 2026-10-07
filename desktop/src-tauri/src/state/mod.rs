@@ -139,9 +139,12 @@ pub fn init_state(app: AppHandle) -> AppState {
     let model_overrides = Arc::new(crate::model_override::ModelOverrideStore::new(
         sessions_dir.clone(),
     ));
+    // M6.1 前缀断裂诊断账本：AppLlm 与命令层共享同一实例。
+    let llm_diagnoser = Arc::new(crate::llm::diagnose::Diagnoser::default());
     let llm: Arc<dyn LlmService> = Arc::new(
         AppLlm::with_overrides(Arc::clone(&settings), Arc::clone(&model_overrides))
-            .with_retry_surface(Arc::clone(&stop_flags), llm_notify),
+            .with_retry_surface(Arc::clone(&stop_flags), llm_notify)
+            .with_diagnoser(Arc::clone(&llm_diagnoser)),
     );
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
     // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）；v4.11 §3.39④
@@ -360,6 +363,12 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::clone(&workspace_of),
         Arc::clone(&organizer_modes),
     ))
+    .with_builtin(crate::organize::SearchTitlesTool::new(
+        tree_store.clone(),
+        Arc::clone(&workspace_of),
+        Arc::clone(&organizer_modes),
+        Some(embed_port.clone() as Arc<dyn kernel_agent::EmbedPort>),
+    ))
     .with_tree_gate(tree_gate)
     // ㉘·B 计划模式目录围栏（非 Pure 不出目录、resolve 即拒）
     .with_modes(Arc::clone(&permission_modes));
@@ -499,6 +508,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         sub_transcripts_dir: root.join("sub-transcripts"),
         last_chat,
         settings,
+        llm_diagnoser,
         compact_cfg,
         memory_cfg,
         memory,

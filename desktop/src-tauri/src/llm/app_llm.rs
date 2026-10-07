@@ -39,6 +39,8 @@ pub struct AppLlm {
     stop: Option<Arc<crate::stop::StopFlags>>,
     /// 重试通知（流式重置）；None = 不通知。
     notify_retry: Option<RetryNotify>,
+    /// 前缀断裂诊断（M6.1）：开关开时每 step 记分块 hash 链；命令层读。
+    diagnoser: Arc<super::diagnose::Diagnoser>,
 }
 
 impl AppLlm {
@@ -50,6 +52,7 @@ impl AppLlm {
             real: CompatLlm::new(),
             stop: None,
             notify_retry: None,
+            diagnoser: Arc::new(super::diagnose::Diagnoser::default()),
         }
     }
 
@@ -65,7 +68,15 @@ impl AppLlm {
             real: CompatLlm::new(),
             stop: None,
             notify_retry: None,
+            diagnoser: Arc::new(super::diagnose::Diagnoser::default()),
         }
+    }
+
+    /// 组装点注入外部诊断账本（M6.1：AppState 持同一线程安全句柄供
+    /// 命令层读取——不经 dyn LlmService downcast）。
+    pub fn with_diagnoser(mut self, diagnoser: Arc<super::diagnose::Diagnoser>) -> Self {
+        self.diagnoser = diagnoser;
+        self
     }
 
     /// 组装点注入重试面（停止标记 + 通知出口）。链在 with_overrides 后。
@@ -77,6 +88,31 @@ impl AppLlm {
         self.stop = Some(stop);
         self.notify_retry = Some(notify);
         self
+    }
+
+    /// M6.1 断裂诊断：开关开且带会话身份才记（一次性请求纪律 6 不写
+    /// 缓存，记了也无意义）；失败静默不拦请求。
+    fn diagnose(&self, req: &LlmRequest) {
+        if !self.settings.developer().cache_diagnostics {
+            return;
+        }
+        if let Some(r) = self.diagnoser.record(req) {
+            if !r.healthy() {
+                tracing::info!(
+                    session = ?req.session_id, step = r.step,
+                    breaks = ?r.breaks,
+                    "前缀缓存断裂（M6.1 诊断）"
+                );
+            }
+        }
+    }
+
+    /// 面板数据源：会话最近一步诊断。
+    pub fn last_diagnosis(
+        &self,
+        session_id: &str,
+    ) -> Option<super::diagnose::BreakReport> {
+        self.diagnoser.last_of(session_id)
     }
 
     /// 本请求的重试钩子：会话身份 + 停止标记 + 通知出口齐备才生效。
@@ -120,6 +156,7 @@ impl AppLlm {
 #[async_trait]
 impl LlmService for AppLlm {
     async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
+        self.diagnose(&req);
         let cfg = self.effective_cfg(&req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
@@ -135,6 +172,7 @@ impl LlmService for AppLlm {
         req: LlmRequest,
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
+        self.diagnose(&req);
         let cfg = self.effective_cfg(&req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
@@ -154,6 +192,7 @@ impl LlmService for AppLlm {
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
+        self.diagnose(&req);
         let cfg = self.effective_cfg(&req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");

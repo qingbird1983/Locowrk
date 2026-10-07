@@ -112,6 +112,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             allow_delete_running_session: s.developer.allow_delete_running_session,
             allow_switch_running_session: s.developer.allow_switch_running_session,
             cache_hit_alert: s.developer.cache_hit_alert,
+            cache_diagnostics: s.developer.cache_diagnostics,
             cache_hit_alert_percent: s.developer.cache_hit_alert_percent,
             organize_rebound_k: s.developer.organize_rebound_k,
             organize_rebound_m: s.developer.organize_rebound_m,

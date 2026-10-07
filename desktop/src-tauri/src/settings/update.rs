@@ -297,6 +297,10 @@ impl SettingsStore {
             if let Some(e) = u.cache_hit_alert {
                 next.developer.cache_hit_alert = e;
             }
+            // M6.1 前缀断裂诊断开关（缺省关）
+            if let Some(e) = u.cache_diagnostics {
+                next.developer.cache_diagnostics = e;
+            }
             if let Some(p) = u.cache_hit_alert_percent {
                 if !super::developer::valid_alert_percent(p) {
                     return Err(format!("缓存命中率告警阈值 {p}% 超出范围（1–100）"));

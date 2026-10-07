@@ -179,6 +179,7 @@ pub fn run() {
             commands::settings_set,
             commands::llm_probe_window,
             commands::llm_probe_embedding,
+            commands::llm_cache_diagnose,
             commands::memory_list,
             commands::memory_update,
             commands::memory_delete,
@@ -220,6 +221,7 @@ pub fn run() {
             commands::memory_tree_sessions,
             commands::memory_tree_chapters,
             commands::memory_tree_original,
+            commands::memory_tree_project,
             commands::memory_tree_edit_chapter,
             commands::memory_tree_delete_chapter,
             commands::subagent_transcript

@@ -229,3 +229,14 @@ fn project_providers(cfg: &crate::settings::LlmConfig) -> Vec<ProviderView> {
         })
         .collect()
 }
+
+/// 前缀断裂诊断（M6.1，KV v2 §7.4）：会话最近一步 LLM 请求的分块 hash
+/// 链比对结果（breaks 空 = 前缀健康纯追加）。开关
+/// `developer.cacheDiagnostics` 关时 AppLlm 不记录 = 恒 None。
+#[tauri::command]
+pub async fn llm_cache_diagnose(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<Option<crate::llm::diagnose::BreakReport>, String> {
+    Ok(state.llm_diagnoser.last_of(&session_id))
+}

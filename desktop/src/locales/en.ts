@@ -503,6 +503,14 @@ export default {
     cacheSavings: "Estimated savings at current prices: {n}",
     cacheTurn: "This turn: in {input} · hit {hit} · out {out}",
     cacheAlertTitle: "Cache hit-rate alert",
+    // M6.1 break diagnostics (KV v2 §7.4)
+    cacheDiagnostics: "Prefix break diagnostics",
+    cacheDiagnosticsHint:
+      "Fingerprint each request in blocks and compare with the previous turn to locate which block broke cache; off by default.",
+    cacheDiagTitle: "Latest step diagnosis",
+    cacheDiagEmpty: "No records yet (run a conversation with this on).",
+    cacheDiagHealthy: "Step {step}: prefix healthy, pure append ({n} messages).",
+    cacheDiagBroken: "Step {step} broke at: {blocks}.",
     cacheAlertHint: "Alerts once per session when the hit rate falls below the threshold.",
     cacheAlertPercent: "Alert threshold (%)",
     prefixTitle: "Prefix discipline",
@@ -583,6 +591,11 @@ export default {
     treeDelete: "Delete chapter",
     treeConfirmDelete: "Confirm delete?",
     treeManual: "Manual",
+    // M6.4 project-wide view
+    viewSession: "Sessions",
+    viewProject: "Project",
+    projectEmpty: "No chapters across sessions in this project yet.",
+    projectOpenHint: "View original & edit → open its session",
     treeEditFailed: "Save failed: {reason}",
     viewOriginal: "View original",
     hideOriginal: "Hide original",

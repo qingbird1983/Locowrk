@@ -34,10 +34,27 @@ pub struct TreeChaptersView {
     pub chapters: Vec<ChapterView>,
 }
 
+/// 项目联合视图行（M6.4）：跨会话捆平铺 + 会话标注。
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct ChapterView {
+pub struct ProjectChapterView {
+    pub session_id: String,
+    /// 旁车标题（会话已删 = 空串，前端回落 id 前缀）。
+    pub session_title: String,
     pub chapter_id: String,
+    pub title: String,
+    pub summary: String,
+    pub source: String,
+    pub title_edited_by_user: bool,
+    pub summary_edited_by_user: bool,
+    pub created_at: i64,
+    pub event_from: usize,
+    pub event_to: usize,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterView {    pub chapter_id: String,
     pub title: String,
     pub summary: String,
     /// recorder / rule / placeholder（来源如实，M3 只读不隐藏降级产物）。
@@ -62,6 +79,48 @@ pub struct OriginalItem {
 }
 
 impl Organizer {
+    /// 项目级 L0 联合视图（M6.4，树 v2 §11.4）：该项目**跨会话**全部捆
+    /// 平铺（会话标注 + 章节序）。memory_search_titles 工具的候选池与此
+    /// 同一数据源（scan_workspace）。
+    pub fn tree_project(&self, workspace: &str) -> Vec<ProjectChapterView> {
+        let titles: std::collections::HashMap<String, String> =
+            crate::session_log::list(&self.sessions_dir)
+                .into_iter()
+                .filter_map(|m| m.title.map(|t| (m.id, t)))
+                .collect();
+        let mut rows = self.tree_store.scan_workspace(workspace);
+        // 最近活动会话优先（scan_workspace 已按 mtime 降序，稳定即可）
+        let mut out = Vec::new();
+        for (tree, session_id, _) in rows.drain(..) {
+            let session_title = titles.get(&session_id).cloned().unwrap_or_default();
+            let mut chapters: Vec<&memory_tree::MemoryChapter> =
+                tree.chapters.values().filter(|b| !b.pending).collect();
+            chapters.sort_by_key(|b| {
+                b.chapter_id
+                    .0
+                    .strip_prefix('b')
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(u64::MAX)
+            });
+            for b in chapters {
+                out.push(ProjectChapterView {
+                    session_id: session_id.clone(),
+                    session_title: session_title.clone(),
+                    chapter_id: b.chapter_id.0.clone(),
+                    title: b.title.clone(),
+                    summary: b.summary.clone(),
+                    source: b.source.clone(),
+                    title_edited_by_user: b.title_edited_by_user,
+                    summary_edited_by_user: b.summary_edited_by_user,
+                    created_at: b.created_at,
+                    event_from: b.event_range.0,
+                    event_to: b.event_range.1,
+                });
+            }
+        }
+        out
+    }
+
     /// 树投影清单（会话切换器数据源，最近更新降序）。
     pub fn tree_sessions(&self) -> Vec<TreeSummaryView> {
         self.tree_store

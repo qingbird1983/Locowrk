@@ -6,6 +6,7 @@ import type {
   AgentEvent,
   ApprovalRequest,
   BatchResult,
+  CacheBreakReport,
   ChatUpdate,
   ContextUpdate,
   InstalledPlugin,
@@ -37,6 +38,7 @@ import type {
   TreeDebug,
   TreeSummaryView,
   TreeChaptersView,
+  ProjectChapterView,
   TreeOriginalItem,
   OrganizeDonePayload,
   OrganizePausedPayload,
@@ -515,6 +517,11 @@ export function organizeNow(sessionId: string): Promise<void> {
   return invoke("organize_now", { sessionId });
 }
 
+/** 前缀断裂诊断（M6.1；会话最近一步 hash 链比对，开关关 = null）。 */
+export function llmCacheDiagnose(sessionId: string): Promise<CacheBreakReport | null> {
+  return invoke("llm_cache_diagnose", { sessionId });
+}
+
 /** 记忆树影子运行观测（M2 §3.36③；开发者面板打开时拉取）。 */
 export function memoryTreeView(sessionId: string): Promise<TreeDebug> {
   return invoke("memory_tree_view", { sessionId });
@@ -542,6 +549,11 @@ export function memoryTreeOriginal(
   chapterId: string,
 ): Promise<TreeOriginalItem[]> {
   return invoke("memory_tree_original", { sessionId, workspace, chapterId });
+}
+
+/** 项目级 L0 联合视图（M6.4；跨会话捆平铺，最近活动会话优先）。 */
+export function memoryTreeProject(workspace: string): Promise<ProjectChapterView[]> {
+  return invoke("memory_tree_project", { workspace });
 }
 
 // ---- 记忆树编辑面（M5 §3.37；树是投影——只动投影不碰原文） ----

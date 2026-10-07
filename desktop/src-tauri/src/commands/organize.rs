@@ -6,7 +6,9 @@
 
 use tauri::State;
 
-use crate::organize::{OriginalItem, TreeChaptersView, TreeDebug, TreeSummaryView};
+use crate::organize::{
+    OriginalItem, ProjectChapterView, TreeChaptersView, TreeDebug, TreeSummaryView,
+};
 
 use crate::state::AppState;
 
@@ -61,6 +63,16 @@ pub async fn memory_tree_original(
     state
         .organizer
         .tree_original(&session_id, &workspace, &chapter_id)
+}
+
+/// 项目级 L0 联合视图（M6.4 §11.4）：该项目跨会话全部捆平铺（会话标注，
+/// 最近活动会话优先）。记忆页「按项目」档数据源。
+#[tauri::command]
+pub async fn memory_tree_project(
+    workspace: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ProjectChapterView>, String> {
+    Ok(state.organizer.tree_project(&workspace))
 }
 
 /// 编辑章节标题/摘要（M5 §3.37 编辑面；直读直写投影文件，不占会话锁、

@@ -6,6 +6,7 @@
 
 mod app_llm;
 mod client;
+pub mod diagnose;
 mod embed;
 pub mod models;
 pub mod probe;

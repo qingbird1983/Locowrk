@@ -403,6 +403,8 @@ export interface DeveloperView {
   allowSwitchRunningSession: boolean;
   /** 缓存命中率告警（M0 观测，缺省关）。 */
   cacheHitAlert: boolean;
+  /** 前缀断裂诊断（M6.1，缺省关）：开 = AppLlm 每 step 记分块 hash 链。 */
+  cacheDiagnostics: boolean;
   /** 告警阈值（%）。 */
   cacheHitAlertPercent: number;
   /** 记忆树反弹熔断 k（M2，§5.5：整理后 k 个用户轮内再触发 = 反弹）。 */
@@ -423,6 +425,7 @@ export interface DeveloperUpdate {
   allowDeleteRunningSession?: boolean;
   allowSwitchRunningSession?: boolean;
   cacheHitAlert?: boolean;
+  cacheDiagnostics?: boolean;
   cacheHitAlertPercent?: number;
   organizeReboundK?: number;
   organizeReboundM?: number;
@@ -518,6 +521,15 @@ export interface MemoryUpdate {
   handoffUpdate?: boolean;
   defaultOrganizer?: string;
   experiences?: boolean;
+}
+
+/** 前缀断裂诊断报告（M6.1，llm_cache_diagnose；breaks 空 = 健康纯追加）。 */
+export interface CacheBreakReport {
+  step: number;
+  breaks: string[];
+  prevMessages: number;
+  messages: number;
+  tsMs: number;
 }
 
 /** F2 reconcile 结果（memory_reconcile 命令返回；计数如实透出）。 */
@@ -695,6 +707,21 @@ export interface TreeChaptersView {
   chapteredUntil: number;
   pausedAuto: boolean;
   chapters: TreeChapterView[];
+}
+
+/** 项目联合视图行（M6.4，memory_tree_project；跨会话捆平铺 + 会话标注）。 */
+export interface ProjectChapterView {
+  sessionId: string;
+  sessionTitle: string;
+  chapterId: string;
+  title: string;
+  summary: string;
+  source: string;
+  titleEditedByUser: boolean;
+  summaryEditedByUser: boolean;
+  createdAt: number;
+  eventFrom: number;
+  eventTo: number;
 }
 
 /** 原文切片行（与记忆管理器材料同形；index = 会话日志事件位）。 */

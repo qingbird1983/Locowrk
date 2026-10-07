@@ -47,6 +47,10 @@ pub struct DeveloperSettings {
     /// 每会话至多一次；≥3 个 LLM 步才判——冷启动首请求无缓存可命，
     /// 首轮低命中率不是断裂。
     pub cache_hit_alert: bool,
+    /// 前缀断裂诊断（M6.1，KV v2 §7.4 缺省关）：开启后每 step 在 AppLlm
+    /// 出口算分块 hash 链与上轮比对（几次 hash 计算，无额外请求），
+    /// `llm_cache_diagnose` 命令读最近一步诊断。
+    pub cache_diagnostics: bool,
     /// 告警阈值（%）。
     pub cache_hit_alert_percent: u8,
     /// 记忆树反弹熔断 k（§5.5，1–10 缺省 3）。
@@ -71,6 +75,7 @@ impl Default for DeveloperSettings {
             allow_delete_running_session: false,
             allow_switch_running_session: false,
             cache_hit_alert: false,
+            cache_diagnostics: false,
             cache_hit_alert_percent: CACHE_HIT_ALERT_PERCENT_DEFAULT,
             organize_rebound_k: ORGANIZE_REBOUND_K_DEFAULT,
             organize_rebound_m: ORGANIZE_REBOUND_M_DEFAULT,
@@ -89,6 +94,7 @@ pub struct DeveloperView {
     pub allow_delete_running_session: bool,
     pub allow_switch_running_session: bool,
     pub cache_hit_alert: bool,
+    pub cache_diagnostics: bool,
     pub cache_hit_alert_percent: u8,
     pub organize_rebound_k: u32,
     pub organize_rebound_m: u32,
@@ -107,6 +113,7 @@ pub struct DeveloperUpdate {
     pub allow_delete_running_session: Option<bool>,
     pub allow_switch_running_session: Option<bool>,
     pub cache_hit_alert: Option<bool>,
+    pub cache_diagnostics: Option<bool>,
     pub cache_hit_alert_percent: Option<u8>,
     pub organize_rebound_k: Option<u32>,
     pub organize_rebound_m: Option<u32>,

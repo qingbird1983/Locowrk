@@ -18,6 +18,7 @@ import {
 import { relativeTime } from "../../lib/format";
 import { workspaceDisplayName } from "../../lib/session-groups";
 import { useChatStore } from "../../stores/chat";
+import ProjectTree from "./ProjectTree.vue";
 import type {
   TreeChapterView,
   TreeChaptersView,
@@ -33,6 +34,8 @@ const selected = ref(""); // `${workspace}\u0000${sessionId}`
 const chapters = ref<TreeChaptersView | null>(null);
 const loadError = ref("");
 const search = ref("");
+/** 视图档位（M6.4）：会话（默认，可编辑）| 项目（跨会话联合只读）。 */
+const viewMode = ref<"session" | "project">("session");
 
 /** 展开态（本地保持，切换会话重置；§3.28 只增不收回惯例的反面——
  * 换会话是换数据源，重置才诚实）。 */
@@ -49,6 +52,25 @@ const confirmingDelete = ref("");
 
 function keyOf(s: TreeSummaryView): string {
   return `${s.workspace}\u0000${s.sessionId}`;
+}
+
+/** 当前选中会话的项目归属（M6.4 项目档数据源键位）。 */
+const currentWorkspace = computed(
+  () =>
+    sessions.value?.find((x) => keyOf(x) === selected.value)?.workspace ?? "",
+);
+
+/** 项目档点捆 → 切回会话档并展开该捆（编辑/删除在会话档单点复用）。 */
+async function openInSession(sessionId: string, chapterId: string) {
+  const target = sessions.value?.find((x) => x.sessionId === sessionId);
+  if (target) {
+    viewMode.value = "session";
+    selected.value = keyOf(target);
+    await loadBundles();
+  }
+  expanded.value = new Set([chapterId]);
+  const b = chapters.value?.chapters.find((c) => c.chapterId === chapterId);
+  if (b) void loadOriginal(b);
 }
 
 /** 会话标题（侧栏同源；树在、会话已删 = 回退 id 前缀）。 */
@@ -248,12 +270,29 @@ function sourceLabel(source: string): string {
       >
         {{ sessions.length }}
       </span>
-      <button
-        class="ml-auto rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
-        @click="loadSessions"
-      >
-        {{ t("common.refresh") }}
-      </button>
+      <div class="ml-auto flex items-center gap-1">
+        <!-- M6.4 视图档位：会话 | 项目 -->
+        <button
+          class="rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] transition"
+          :class="viewMode === 'session' ? 'bg-wash-3 text-ink-1' : 'text-ink-4 hover:text-ink-1'"
+          @click="viewMode = 'session'"
+        >
+          {{ t("memory.viewSession") }}
+        </button>
+        <button
+          class="rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] transition"
+          :class="viewMode === 'project' ? 'bg-wash-3 text-ink-1' : 'text-ink-4 hover:text-ink-1'"
+          @click="viewMode = 'project'"
+        >
+          {{ t("memory.viewProject") }}
+        </button>
+        <button
+          class="rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] text-ink-4 transition hover:bg-wash-2 hover:text-ink-1"
+          @click="loadSessions"
+        >
+          {{ t("common.refresh") }}
+        </button>
+      </div>
     </div>
 
     <p v-if="loadError" class="mt-2 rounded-[var(--lw-r-xs)] bg-danger/10 px-3 py-2 text-xs text-danger">
@@ -289,7 +328,15 @@ function sourceLabel(source: string): string {
           />
         </div>
 
-        <!-- 章节列表（只读：展开摘要 / 看原文） -->
+        <!-- M6.4 项目档：跨会话联合视图（只读，点捆跳会话档） -->
+        <ProjectTree
+          v-if="viewMode === 'project'"
+          :workspace="currentWorkspace"
+          :search="search"
+          @open="openInSession"
+        />
+        <!-- 会话档：章节列表（展开摘要 / 看原文 / 编辑 / 删除） -->
+        <template v-else>
         <p
           v-if="filtered.length === 0"
           class="mt-2 text-[length:var(--lw-fs-11)] text-ink-5"
@@ -484,6 +531,7 @@ function sourceLabel(source: string): string {
             </template>
           </li>
         </ul>
+        </template>
       </template>
   </div>
 </template>

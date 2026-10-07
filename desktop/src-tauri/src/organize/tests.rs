@@ -556,3 +556,65 @@ async fn delete_chapter_removes_projection_keeps_cursor() {
         .is_err());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[tokio::test]
+async fn project_view_flattens_across_sessions() {
+    let root = temp_root("projview");
+    let settings = settings_with(serde_json::json!({}), &root);
+    // 两个会话各整理一次（同一项目键位）
+    let org = organizer(
+        &root,
+        settings.clone(),
+        FakeClient::new(vec![Ok(good_reply()), Ok(good_reply())]),
+    );
+    let session = session();
+    let t1 = org.plan_manual(&session, "s-p1").expect("发起成功");
+    org.clone().run_task(t1).await;
+    let t2 = org.plan_manual(&session, "s-p2").expect("发起成功");
+    org.clone().run_task(t2).await;
+
+    let rows = org.tree_project(r"F:\ws\demo");
+    assert_eq!(rows.len(), 4, "两会话 × 两捆平铺");
+    // 会话标注在场；编辑过的打手动标记
+    assert!(rows.iter().all(|r| r.session_id.starts_with("s-p")));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
+async fn search_titles_requires_tree_session_and_falls_back_to_keyword() {
+    let root = temp_root("titles");
+    let settings = settings_with(serde_json::json!({}), &root);
+    let org = organizer(&root, settings, FakeClient::new(vec![Ok(good_reply())]));
+    let session = session();
+    let task = org.plan_manual(&session, "s-st").expect("发起成功");
+    org.clone().run_task(task).await;
+
+    let modes = Arc::new(crate::organizer_mode::OrganizerModeStore::new(
+        root.join("sessions"),
+        crate::organizer_mode::OrganizerMode::Legacy,
+    ));
+    // s-st 显式切树（工具门控按生效档；夹具缺省 legacy）
+    modes.set_session_mode("s-st", crate::organizer_mode::OrganizerMode::Tree).unwrap();
+    let tool = crate::organize::SearchTitlesTool::new(
+        memory_tree::TreeStore::new(&root),
+        resolver(),
+        modes,
+        None, // embedding 缺席 = 关键词降级
+    );
+    use plugin_api::{CallCtx, Tool as _};
+    let mut ctx = CallCtx::new();
+    ctx.session_id = Some("s-st".into());
+    // 语义缺席 → 关键词 contains 命中且 match_mode 如实
+    let out = tool
+        .call(&ctx, serde_json::json!({"query": "话题一"}))
+        .await
+        .expect("可调用");
+    assert_eq!(out["match_mode"], "keyword");
+    assert_eq!(out["hits"].as_array().unwrap().len(), 1);
+    assert_eq!(out["hits"][0]["title"], "话题一");
+    // legacy 会话调用 = 门控拒绝
+    let mut ctx2 = CallCtx::new();
+    ctx2.session_id = Some("s-legacy".into());
+    assert!(tool.call(&ctx2, serde_json::json!({"query": "x"})).await.is_err());
+    let _ = std::fs::remove_dir_all(&root);
+}

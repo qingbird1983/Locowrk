@@ -8,8 +8,8 @@
  */
 import { onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { memoryReconcile, toolExposureDebug } from "../../lib/api";
-import type { ReconcileSummary } from "../../types";
+import { llmCacheDiagnose, memoryReconcile, toolExposureDebug } from "../../lib/api";
+import type { CacheBreakReport, ReconcileSummary } from "../../types";
 import { compactNumber, formatMoney } from "../../lib/format";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
@@ -32,6 +32,7 @@ const form = reactive({
   allowDeleteRunningSession: false,
   allowSwitchRunningSession: false,
   cacheHitAlert: false,
+  cacheDiagnostics: false,
   cacheHitAlertPercent: 80,
   pinSession: true,
   stabilityRounds: 3,
@@ -49,6 +50,7 @@ watch(
     form.allowDeleteRunningSession = v.developer.allowDeleteRunningSession;
     form.allowSwitchRunningSession = v.developer.allowSwitchRunningSession;
     form.cacheHitAlert = v.developer.cacheHitAlert;
+    form.cacheDiagnostics = v.developer.cacheDiagnostics;
     form.cacheHitAlertPercent = v.developer.cacheHitAlertPercent;
     // M1 前缀纪律两键：JSON 分属 tools/context 区，UI 行同挂本分区
     form.pinSession = v.tools.pinSession;
@@ -68,6 +70,7 @@ function save() {
     allowDeleteRunningSession: form.allowDeleteRunningSession,
     allowSwitchRunningSession: form.allowSwitchRunningSession,
     cacheHitAlert: form.cacheHitAlert,
+    cacheDiagnostics: form.cacheDiagnostics,
     cacheHitAlertPercent: Math.round(form.cacheHitAlertPercent),
   });
 }
@@ -106,6 +109,8 @@ function hide() {
 // ---- F2 记忆文件合并（reconcile 手动触发；平时记忆页挂载自动跑） ----
 const reconciling = ref(false);
 const reconcileResult = ref<ReconcileSummary | null>(null);
+/** M6.1 断裂诊断：面板打开拉一次（当前会话最近一步），不轮询。 */
+const diag = ref<CacheBreakReport | null>(null);
 
 async function runReconcile() {
   if (reconciling.value) return;
@@ -146,6 +151,14 @@ async function refresh() {
     debug.value = null;
   } finally {
     loading.value = false;
+  }
+  // M6.1 断裂诊断：开关开才拉（关 = 后端没记，拉了也是 null）
+  if (form.cacheDiagnostics && chat.sessionId) {
+    try {
+      diag.value = await llmCacheDiagnose(chat.sessionId);
+    } catch {
+      diag.value = null;
+    }
   }
 }
 onMounted(() => void refresh());
@@ -289,12 +302,47 @@ onMounted(() => void refresh());
             })
           }}
         </p>
+        <!-- M6.1 断裂诊断（打开分区拉一次）：最近一步 hash 链比对 -->
+        <div
+          v-if="form.cacheDiagnostics"
+          class="mt-2 border-t border-line pt-2"
+        >
+          <p class="text-[length:var(--lw-fs-12)] font-medium text-ink-2">
+            {{ t("developer.cacheDiagTitle") }}
+          </p>
+          <p v-if="!diag" class="mt-1 text-[length:var(--lw-fs-12)] text-ink-4">
+            {{ t("developer.cacheDiagEmpty") }}
+          </p>
+          <template v-else>
+            <p
+              class="mt-1"
+              :class="diag.breaks.length ? 'text-warn' : 'text-ink-3'"
+            >
+              {{
+                diag.breaks.length
+                  ? t("developer.cacheDiagBroken", { step: diag.step, blocks: diag.breaks.join(", ") })
+                  : t("developer.cacheDiagHealthy", { step: diag.step, n: diag.messages })
+              }}
+            </p>
+          </template>
+        </div>
       </div>
     </SettingsGroup>
 
     <!-- M1 前缀纪律（KV v2 §4.2/§6.4/§9 开发者层级）：钉死开关 + 稳定期轮数。
          键 JSON 分属 tools/context 区，UI 行同挂本分区（文档先行 v4.4）。 -->
     <SettingsGroup :title="t('developer.prefixTitle')" :hint="t('developer.prefixHint')">
+      <!-- M6.1 断裂诊断开关（KV v2 §7.4，缺省关） -->
+      <SettingsRow
+        :title="t('developer.cacheDiagnostics')"
+        :hint="t('developer.cacheDiagnosticsHint')"
+      >
+        <SettingsToggle
+          v-model="form.cacheDiagnostics"
+          :label="t('developer.cacheDiagnostics')"
+          @update:model-value="save"
+        />
+      </SettingsRow>
       <SettingsRow :title="t('developer.pinSession')" :hint="t('developer.pinSessionHint')">
         <SettingsToggle
           v-model="form.pinSession"
