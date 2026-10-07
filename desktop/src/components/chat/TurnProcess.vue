@@ -10,11 +10,13 @@
  *        失败时附 · N 个问题）。
  * 容器整体（计时行 + 全部动作块 + 简短回复）在 ChatTranscript 的
  * .turn-box：收束后收缩为「✓ 已工作 + 发丝线」一行，点击逐层重开。
- * 相位由父层给（live / replied / done），相位变化全映射落层（live→2，
- * 其余→1，不搞边沿配对——running 瞬时翻假后层级必须能自愈，v2.97 教训）。
- * 折叠是本地 UI 状态：不入 store、不持久化。「默认展开工具执行过程」
- * 开关 = 非执行块的挂载初值。时长只在实时轮次有（历史重放无时间戳，
- * 不虚构时序）。
+ * 相位由父层给（live / replied / done），相位 / 开关变化都丢弃手动覆盖、
+ * 全映射落规格层（不搞边沿配对——running 瞬时翻假后层级必须能自愈，
+ * v2.97 教训）。折叠是本地 UI 状态：不入 store、不持久化。「折叠工具执
+ * 行过程」开关（v4.20 语义反转，缺省关）= 非执行块的规格层，保存即时
+ * 生效（已挂载组随开关重落规格层）：关 = 展开（唯一被默认折叠的层是
+ * 工具明细）、开 = 折叠为一行摘要。时长只在实时轮次有（历史
+ * 重放无时间戳，不虚构时序）。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -44,32 +46,34 @@ const { t } = useI18n();
  * 走表也吃它——动作间隙相位不变，走表不被间隙打断冻结（v2.98）。 */
 const running = computed(() => props.phase === "live");
 
-/** 当前层：1（组头）/ 2（组体展开）。L0 在 TurnTimerLine（v2.99 迁出）。 */
-const level = ref<[1, 2][number]>(initialLevel());
-
-function initialLevel(): 1 | 2 {
-  if (props.phase === "live") return 2;
-  return props.defaultExpanded ? 2 : 1;
-}
-
-// 相位变化 = 全映射落层：live→2（组体常开）/ 其余→1（折为组头）。不搞
-// 边沿配对——running 在轮界/重建时会瞬时翻假，全员先被打回折叠态，随后
-// 的翻转若依赖「prev===live」之类配对就永远卡死（v2.97 白屏教训）；任何
-// 相位变化都直接落到规格层，层级自愈。
-watch(
-  () => props.phase,
-  (p) => {
-    level.value = p === "live" ? 2 : 1;
-    if (p !== "live") settled.value = false;
-  },
+/** 规格层 = live 恒开（组体常开）；非执行块按开关（关 = 展开、开 = 折叠）。
+ * computed：开关保存即时生效——已挂载组也随开关重落规格层（v4.20 实机
+ * 走查裁定：「不追溯」让开关看起来没生效）。 */
+const specLevel = computed<1 | 2>(() =>
+  props.phase === "live" ? 2 : props.defaultExpanded ? 2 : 1,
 );
 
+/** 当前层：1（组头）/ 2（组体展开）。L0 在 TurnTimerLine（v2.99 迁出）。
+ * 手动开合覆盖优先；无覆盖时跟随规格层。 */
+const manual = ref<1 | 2 | null>(null);
+const level = computed<1 | 2>(() => manual.value ?? specLevel.value);
+
+// 相位 / 开关变化 = 丢弃手动覆盖、全映射落规格层。不搞边沿配对——running
+// 在轮界/重建时会瞬时翻假，配对式恢复会永远卡死（v2.97 白屏教训）；v4.20
+// 起开关翻转同规：全局缺省变了，覆盖作废、重落规格层，层级自愈。
+watch([() => props.phase, () => props.defaultExpanded], () => {
+  manual.value = null;
+});
+
+// 收起即恢复裁剪（w121 修复）：is-settled 若带进收起态，0fr 盒高 0 但
+// 内容溢出且 opacity 0 仍参与命中——透明点击盾压在后续行的组头上，
+// 表现为「必须先展开上面的组才能点到下面的组」
+watch(level, (v) => {
+  if (v === 1) settled.value = false;
+});
+
 function onToggle() {
-  level.value = level.value === 2 ? 1 : 2;
-  // 收起即恢复裁剪（w121 修复）：is-settled 若带进收起态，0fr 盒高 0 但
-  // 内容溢出且 opacity 0 仍参与命中——透明点击盾压在后续行的组头上，
-  // 表现为「必须先展开上面的组才能点到下面的组」
-  if (level.value === 1) settled.value = false;
+  manual.value = level.value === 2 ? 1 : 2;
 }
 
 /** 展开动画结束后才摘 overflow（否则聚焦环/引导线被裁）；收起动画结束

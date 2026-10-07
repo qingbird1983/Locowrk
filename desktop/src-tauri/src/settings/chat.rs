@@ -28,15 +28,16 @@ pub const FOLD_LINES_MIN: u32 = 3;
 pub const FOLD_LINES_MAX: u32 = 20;
 
 /// `chat` 区（settings.json）。字段级缺省：旧文件无此区 → 全部缺省
-/// （宽度未设置 / 不默认展开过程 / 回车发送 / 已用口径 / 自动标题开），零迁移。
+/// （宽度未设置 / 过程组展开仅明细收起 / 回车发送 / 已用口径 / 自动标题开），零迁移。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ChatSettings {
     /// 主对话区列宽偏好（§2.7）。None = 未设置（前端按缺省 760 渲染）。
     pub content_max_width: Option<u32>,
-    /// 新发轮次的工具行默认展开（§3.8 折叠铁则的唯一例外开关，缺省关；
-    /// 用户手动切过的单元当轮内不被默认态覆盖）。
-    pub expand_tool_process: bool,
+    /// 折叠工具执行过程（v4.20 改名+语义反转，缺省关 = 过程组默认展开、
+    /// 唯一被默认折叠的层是工具明细；开 = 过程组折叠为一行摘要 = 完整折叠
+    /// 三层。旧 `expandToolProcess` 键退役 = 幻影键，字段级缺省零迁移）。
+    pub collapse_tool_process: bool,
     /// 回车发送（缺省开；关 = Enter 换行、Ctrl+Enter 发送）。
     pub enter_to_send: bool,
     /// 上下文用量读数口径（§3.12 浮层 headline：used / remaining）。
@@ -63,7 +64,7 @@ impl Default for ChatSettings {
     fn default() -> Self {
         Self {
             content_max_width: None,
-            expand_tool_process: false,
+            collapse_tool_process: false,
             enter_to_send: true,
             usage_readout: USAGE_READOUT_USED.into(),
             auto_title: true,
@@ -81,7 +82,7 @@ impl Default for ChatSettings {
 #[serde(rename_all = "camelCase")]
 pub struct ChatView {
     pub content_max_width: Option<u32>,
-    pub expand_tool_process: bool,
+    pub collapse_tool_process: bool,
     pub enter_to_send: bool,
     pub usage_readout: String,
     pub auto_title: bool,
@@ -97,7 +98,7 @@ pub struct ChatView {
 #[serde(rename_all = "camelCase", default)]
 pub struct ChatUpdate {
     pub content_max_width: Option<u32>,
-    pub expand_tool_process: Option<bool>,
+    pub collapse_tool_process: Option<bool>,
     pub enter_to_send: Option<bool>,
     pub usage_readout: Option<String>,
     pub auto_title: Option<bool>,
@@ -134,8 +135,8 @@ pub fn apply_update(next: &mut ChatSettings, u: ChatUpdate) -> Result<(), String
         }
         next.content_max_width = Some(w);
     }
-    if let Some(e) = u.expand_tool_process {
-        next.expand_tool_process = e;
+    if let Some(e) = u.collapse_tool_process {
+        next.collapse_tool_process = e;
     }
     if let Some(e) = u.enter_to_send {
         next.enter_to_send = e;

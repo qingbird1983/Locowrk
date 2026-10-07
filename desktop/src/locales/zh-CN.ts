@@ -754,7 +754,9 @@ export default {
       "转录列与输入框同宽（缺省 760，下限 560）；拖拽对话区两侧边缘也可调。",
     autoTitleTitle: "自动会话标题",
     autoTitleHint: "首轮回复后自动生成不超过 25 字的标题；手动重命名过的不覆盖",
-    expandToolTitle: "默认展开工具执行过程",
+    collapseToolTitle: "折叠工具执行过程",
+    collapseToolHint:
+      "开启后每轮收束即收缩为计时行，执行过程折叠为一行摘要；关闭时轮次保持展开，仅工具明细收起",
     enterToSendTitle: "回车发送",
     foldMessagesTitle: "长消息折叠",
     foldMessagesHint: "用户消息超长自动收起，点按钮展开（模型回复不折叠）",

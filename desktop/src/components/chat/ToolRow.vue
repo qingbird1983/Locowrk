@@ -3,8 +3,8 @@
  * 工具行（UI shell doc §3.8 v4.13，《Tool Execution Process Display》）：
  * 五列栅格行（ProcessRow 共享列轨）+ 展开明细（缩进竖线子行 = 明细视图
  * ToolDetailView + subagent 标签值行）。状态克制：成功弱化（时长或弱对勾），
- * 失败才高亮（danger 叉 + 红「失败」）；默认一律收起（v2.98，含失败态）。
- * subagent_run = §3.10 紧凑行（大卡片 SubagentCard 已退役）：展开为
+ * 失败才高亮（danger 叉 + 红「失败」）；明细恒默认收起（v2.98，v4.20 起
+ * 不接设置开关——开关只作用过程组）。subagent_run = §3.10 紧凑行（大卡片 SubagentCard 已退役）：展开为
  * 任务/状态/轮次/工具/摘要标签值行 + 「查看完整对话」入口（不虚构——父侧
  * 拿不到的字段不渲染，⑮ 黑盒边界不变）。
  */
@@ -20,8 +20,6 @@ import type { ToolItem } from "../../stores/chat";
 
 const props = defineProps<{
   item: ToolItem;
-  /** 挂载时的默认展开（设置开关）；只在挂载时吃一次。 */
-  defaultExpanded?: boolean;
   /** 该调用的审批未决（§3.17）：状态词"等待审批"——还没跑，不是运行中。 */
   awaiting?: boolean;
 }>();
@@ -33,11 +31,12 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const expanded = ref(props.defaultExpanded ?? false);
+/** 明细恒默认收起（v4.20：设置开关只作用过程组，明细不再接开关）。 */
+const expanded = ref(false);
 /** 明细懒挂载（v-if+v-show 组合）：多数步骤从不展开，不为它们在挂载期
  * 跑 marked/DOMPurify、建整棵隐藏大 DOM（步数多的轮次流式/重放/展开
  * 都背着这些隐藏子树卡）；首次展开一次性渲染，此后保 DOM 秒开。 */
-const everExpanded = ref(props.defaultExpanded ?? false);
+const everExpanded = ref(false);
 
 const kind = computed(() => toolKind(props.item.tool));
 const typeLabel = computed(() => t(`tool.type.${kind.value.type}`));

@@ -752,7 +752,9 @@ export default {
     autoTitleTitle: "Auto session titles",
     autoTitleHint:
       "Generate a ≤25-char title after the first reply; manually renamed sessions are never overwritten",
-    expandToolTitle: "Expand tool execution by default",
+    collapseToolTitle: "Collapse tool execution",
+    collapseToolHint:
+      "When on, finished turns shrink to a timer line and each process folds to a summary line; when off, turns stay expanded and only tool details fold",
     enterToSendTitle: "Enter sends",
     foldMessagesTitle: "Fold long messages",
     foldMessagesHint:

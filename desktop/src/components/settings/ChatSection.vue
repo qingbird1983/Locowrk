@@ -20,7 +20,7 @@ const settings = useSettingsStore();
 
 const form = reactive({
   width: CHAT_CONTENT_WIDTH_DEFAULT,
-  expandToolProcess: false,
+  collapseToolProcess: false,
   enterToSend: true,
   usageReadout: "used",
   autoTitle: true,
@@ -36,7 +36,7 @@ watch(
   (v) => {
     if (!v) return;
     form.width = v.chat.contentMaxWidth ?? CHAT_CONTENT_WIDTH_DEFAULT;
-    form.expandToolProcess = v.chat.expandToolProcess;
+    form.collapseToolProcess = v.chat.collapseToolProcess;
     form.enterToSend = v.chat.enterToSend;
     form.usageReadout = v.chat.usageReadout;
     form.autoTitle = v.chat.autoTitle;
@@ -52,7 +52,7 @@ watch(
 function save() {
   void settings.saveChat({
     contentMaxWidth: Math.round(form.width),
-    expandToolProcess: form.expandToolProcess,
+    collapseToolProcess: form.collapseToolProcess,
     enterToSend: form.enterToSend,
     usageReadout: form.usageReadout,
     autoTitle: form.autoTitle,
@@ -95,8 +95,14 @@ const readoutOptions = computed(() => [
       <SettingsToggle v-model="form.autoTitle" :label="t('settings.autoTitleTitle')" />
     </SettingsRow>
 
-    <SettingsRow :title="t('settings.expandToolTitle')">
-      <SettingsToggle v-model="form.expandToolProcess" :label="t('settings.expandToolTitle')" />
+    <SettingsRow
+      :title="t('settings.collapseToolTitle')"
+      :hint="t('settings.collapseToolHint')"
+    >
+      <SettingsToggle
+        v-model="form.collapseToolProcess"
+        :label="t('settings.collapseToolTitle')"
+      />
     </SettingsRow>
 
     <SettingsRow :title="t('settings.enterToSendTitle')">

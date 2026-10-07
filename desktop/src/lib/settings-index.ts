@@ -82,7 +82,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: "chat",
     searchKeys: [
       "settings.chatWidthTitle",
-      "settings.expandToolTitle",
+      "settings.collapseToolTitle",
       "settings.enterToSendTitle",
       "settings.usageReadoutTitle",
     ],

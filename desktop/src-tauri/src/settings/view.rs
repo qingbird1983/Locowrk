@@ -97,7 +97,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
         },
         chat: ChatView {
             content_max_width: s.chat.content_max_width,
-            expand_tool_process: s.chat.expand_tool_process,
+            collapse_tool_process: s.chat.collapse_tool_process,
             enter_to_send: s.chat.enter_to_send,
             usage_readout: s.chat.usage_readout.clone(),
             auto_title: s.chat.auto_title,

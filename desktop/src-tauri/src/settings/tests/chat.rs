@@ -9,7 +9,7 @@ fn chat_defaults_and_legacy_compat() {
     let store = SettingsStore::open(&root).unwrap();
     let v = store.view().chat;
     assert_eq!(v.content_max_width, None); // None = 前端按缺省 760 渲染
-    assert!(!v.expand_tool_process);
+    assert!(!v.collapse_tool_process);
     assert!(v.enter_to_send);
     assert_eq!(v.usage_readout, "used");
     // M0 观测缺省：显示开 + deepseek-flash 空闲价（0.02 / 1.0 元每百万）
@@ -30,6 +30,14 @@ fn chat_defaults_and_legacy_compat() {
     let v = SettingsStore::open(&root).unwrap().view().chat;
     assert_eq!(v.content_max_width, None);
     assert!(v.enter_to_send);
+    // v4.20：旧 expandToolProcess 键退役 = 幻影键——旧文件读得进、新键走缺省
+    std::fs::write(
+        root.join("settings.json"),
+        r#"{"chat": {"expandToolProcess": true}}"#,
+    )
+    .unwrap();
+    let v = SettingsStore::open(&root).unwrap().view().chat;
+    assert!(!v.collapse_tool_process, "退役键幻影化：折叠开关走缺省关");
     std::fs::remove_dir_all(&root).ok();
 }
 
@@ -51,7 +59,7 @@ fn chat_update_persists_and_roundtrips() {
             None,
             Some(ChatUpdate {
                 content_max_width: Some(1000),
-                expand_tool_process: Some(true),
+                collapse_tool_process: Some(true),
                 enter_to_send: Some(false),
                 usage_readout: Some("remaining".into()),
                 auto_title: Some(false),
@@ -67,7 +75,7 @@ fn chat_update_persists_and_roundtrips() {
         .unwrap()
         .chat;
     assert_eq!(v.content_max_width, Some(1000));
-    assert!(v.expand_tool_process);
+    assert!(v.collapse_tool_process);
     assert!(!v.enter_to_send);
     assert_eq!(v.usage_readout, "remaining");
     assert!(!v.auto_title, "显式关闭生效");
@@ -98,7 +106,7 @@ fn chat_update_persists_and_roundtrips() {
             None,
             Some(ChatUpdate {
                 content_max_width: None,
-                expand_tool_process: None,
+                collapse_tool_process: None,
                 enter_to_send: Some(true),
                 usage_readout: None,
                 auto_title: None,
@@ -137,7 +145,7 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
             None,
             Some(ChatUpdate {
                 content_max_width: Some(200),
-                expand_tool_process: None,
+                collapse_tool_process: None,
                 enter_to_send: None,
                 usage_readout: None,
                 auto_title: None,
@@ -165,7 +173,7 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
             None,
             Some(ChatUpdate {
                 content_max_width: None,
-                expand_tool_process: None,
+                collapse_tool_process: None,
                 enter_to_send: None,
                 usage_readout: Some("total".into()),
                 auto_title: None,
@@ -203,7 +211,7 @@ fn chat_rejects_invalid_price_and_keeps_state() {
                 None,
                 Some(ChatUpdate {
                     content_max_width: None,
-                    expand_tool_process: None,
+                    collapse_tool_process: None,
                     enter_to_send: None,
                     usage_readout: None,
                     auto_title: None,
@@ -245,7 +253,7 @@ fn chat_rejects_invalid_price_and_keeps_state() {
             None,
             Some(ChatUpdate {
                 content_max_width: None,
-                expand_tool_process: None,
+                collapse_tool_process: None,
                 enter_to_send: None,
                 usage_readout: None,
                 auto_title: None,
@@ -281,7 +289,7 @@ fn chat_rejects_bad_fold_lines_and_keeps_state() {
                 None,
                 Some(ChatUpdate {
                     content_max_width: None,
-                    expand_tool_process: None,
+                    collapse_tool_process: None,
                     enter_to_send: None,
                     usage_readout: None,
                     auto_title: None,

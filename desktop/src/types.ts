@@ -438,7 +438,8 @@ export interface DeveloperUpdate {
  * 缺省 760 渲染）。 */
 export interface ChatSettingsView {
   contentMaxWidth: number | null;
-  expandToolProcess: boolean;
+  /** 折叠工具执行过程（v4.20 语义反转，缺省关 = 过程组展开仅明细收起）。 */
+  collapseToolProcess: boolean;
   enterToSend: boolean;
   usageReadout: string;
   /** 自动会话标题（v2.57，缺省开）。 */
@@ -458,7 +459,7 @@ export interface ChatSettingsView {
 /** 对话行为区部分更新：字段缺省 = 保持不变。 */
 export interface ChatUpdate {
   contentMaxWidth?: number;
-  expandToolProcess?: boolean;
+  collapseToolProcess?: boolean;
   enterToSend?: boolean;
   usageReadout?: string;
   autoTitle?: boolean;

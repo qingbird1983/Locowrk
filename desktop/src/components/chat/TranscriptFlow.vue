@@ -135,9 +135,10 @@ function userPos(item: ChatItem): number | undefined {
   return item.kind === "user" ? item.pos : undefined;
 }
 
-/** 「默认展开工具执行过程」v4.11 覆盖重放（裁定②：所有过程组含历史
- * 一律默认折叠，开关是唯一的展开缺省）。 */
-const expandDefault = computed(() => !!settings.view?.chat.expandToolProcess);
+/** 「折叠工具执行过程」（v4.20 改名+语义反转）：开 = 过程组默认折叠为
+ * 一行摘要（完整折叠三层）；关（缺省）= 过程组默认展开（行可见）——唯一
+ * 被默认折叠的层是工具明细（层 3，恒收起，不再接开关）。实时/重放同口径。 */
+const expandDefault = computed(() => !settings.view?.chat.collapseToolProcess);
 
 /** 「已停止」只标最新过程组（stopRequested 轮次收束后保持到下次发送）。 */
 const lastProcessKey = computed(() => {
@@ -208,15 +209,21 @@ const turnViews = computed<TurnView[]>(() => {
   return views;
 });
 
-/** 容器开合覆盖：缺省 = 执行中开、收束即收缩为计时行；点击即覆盖
- * （收束后可重开看全程，执行中也可手动收起）。 */
+/** 容器开合覆盖：手动点击优先。缺省 = 执行中恒开；收束后按「折叠工具
+ * 执行过程」开关（v4.20 实机走查裁定补线：容器是第 0 层，不接开关则
+ * 关档下轮次照样收缩成计时行，开关形同虚设）——关（缺省）= 容器保持
+ * 展开整个轮次直接可见、唯一折叠的是工具明细；开 = 收缩为计时行（点击
+ * 重开）。开关即时生效：已挂容器随保存重渲染。 */
 const turnBoxOverride = ref(new Map<number, boolean>());
+function turnBoxDefault(running: boolean): boolean {
+  return running || !settings.view?.chat.collapseToolProcess;
+}
 function turnBoxOpen(key: number, running: boolean): boolean {
-  return turnBoxOverride.value.get(key) ?? running;
+  return turnBoxOverride.value.get(key) ?? turnBoxDefault(running);
 }
 function toggleTurnBox(key: number, running: boolean) {
   const m = new Map(turnBoxOverride.value);
-  m.set(key, !(turnBoxOverride.value.get(key) ?? running));
+  m.set(key, !turnBoxOpen(key, running));
   turnBoxOverride.value = m;
 }
 
@@ -337,7 +344,6 @@ function noticeText(item: SystemItem): string {
                   v-else-if="item.kind === 'tool'"
                   :item="item"
                   :awaiting="isAwaiting(item.callId)"
-                  :default-expanded="expandDefault"
                   @open-transcript="(id, title) => emit('openTranscript', id, title)"
                   @open-diff="(callId, path, diff) => emit('openDiff', callId, path, diff)"
                 />
