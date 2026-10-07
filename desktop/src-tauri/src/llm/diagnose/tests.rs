@@ -2,7 +2,7 @@
 //! 无会话身份跳过。
 
 use kernel_agent::LlmRequest;
-use plugin_api::{Exposure, SideEffect, ToolSpec};
+use plugin_api::ToolSpec;
 use session_store::Message;
 
 use super::Diagnoser;
@@ -48,7 +48,9 @@ fn pure_append_is_healthy() {
 fn memory_block_change_is_located_to_sub_block() {
     let d = Diagnoser::default();
     let _ = d.record(&req(SYS_V1, &["hi"], "s2"));
-    let r = d.record(&req(SYS_V2_MEMORY_CHANGED, &["hi", "x"], "s2")).unwrap();
+    let r = d
+        .record(&req(SYS_V2_MEMORY_CHANGED, &["hi", "x"], "s2"))
+        .unwrap();
     assert_eq!(r.breaks, vec!["<persistent_memory>"], "定位到记忆子块");
     assert!(!r.breaks.iter().any(|b| b == "base"), "base 未动不误报");
 }
@@ -85,5 +87,8 @@ fn anonymous_requests_are_skipped() {
     let mut r = req(SYS_V1, &["hi"], "");
     r.session_id = None;
     assert!(d.record(&r).is_none());
-    assert!(d.record(&req(SYS_V1, &["hi"], "")).is_none(), "空串身份同跳过");
+    assert!(
+        d.record(&req(SYS_V1, &["hi"], "")).is_none(),
+        "空串身份同跳过"
+    );
 }

@@ -519,12 +519,13 @@ async fn edit_chapter_updates_projection_and_marks_manual() {
     assert!(b2.title_edited_by_user);
     assert!(b2.summary_edited_by_user);
     let ws_dir = plugin_api::memlayout::project_dir_name(r"F:\ws\demo");
-    assert!(root
-        .join("memory/projects")
-        .join(ws_dir)
-        .join("tree.md")
-        .exists(),
-        "编辑后 tree.md 已重建");
+    assert!(
+        root.join("memory/projects")
+            .join(ws_dir)
+            .join("tree.md")
+            .exists(),
+        "编辑后 tree.md 已重建"
+    );
 
     // 校验拒绝：超上限标题 / 空+空 / 占位章节
     assert!(org
@@ -545,7 +546,8 @@ async fn delete_chapter_removes_projection_keeps_cursor() {
     let task = org.plan_manual(&session, "s-del").expect("发起成功");
     org.clone().run_task(task).await;
 
-    org.tree_delete_chapter(r"F:\ws\demo", "s-del", "b2").unwrap();
+    org.tree_delete_chapter(r"F:\ws\demo", "s-del", "b2")
+        .unwrap();
     let tree = tree_at(&root, org.settings.as_ref(), "s-del");
     assert_eq!(tree.chapters.len(), 1, "b2 已摘除");
     assert!(tree.chapters.contains_key("b3"));
@@ -594,7 +596,9 @@ async fn search_titles_requires_tree_session_and_falls_back_to_keyword() {
         crate::organizer_mode::OrganizerMode::Legacy,
     ));
     // s-st 显式切树（工具门控按生效档；夹具缺省 legacy）
-    modes.set_session_mode("s-st", crate::organizer_mode::OrganizerMode::Tree).unwrap();
+    modes
+        .set_session_mode("s-st", crate::organizer_mode::OrganizerMode::Tree)
+        .unwrap();
     let tool = crate::organize::SearchTitlesTool::new(
         memory_tree::TreeStore::new(&root),
         resolver(),
@@ -615,6 +619,9 @@ async fn search_titles_requires_tree_session_and_falls_back_to_keyword() {
     // legacy 会话调用 = 门控拒绝
     let mut ctx2 = CallCtx::new();
     ctx2.session_id = Some("s-legacy".into());
-    assert!(tool.call(&ctx2, serde_json::json!({"query": "x"})).await.is_err());
+    assert!(tool
+        .call(&ctx2, serde_json::json!({"query": "x"}))
+        .await
+        .is_err());
     let _ = std::fs::remove_dir_all(&root);
 }

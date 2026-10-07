@@ -370,13 +370,23 @@ fn m5_default_organizer_and_experiences_roundtrip() {
     // 注入配置桥接 experiences
     store
         .update(
-            None, None, None, None, None, None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             Some(MemoryUpdate {
                 default_organizer: Some("legacy".into()),
                 experiences: Some(true),
                 ..Default::default()
             }),
-            None, None, None, None, None, None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .unwrap();
     let reopened = SettingsStore::open(&root).unwrap();
@@ -391,12 +401,22 @@ fn m5_default_organizer_and_experiences_roundtrip() {
     // 非法档拒绝且不污染内存态（M4 白名单语义平移到 memory 区）
     let err = store
         .update(
-            None, None, None, None, None, None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             Some(MemoryUpdate {
                 default_organizer: Some("bogus".into()),
                 ..Default::default()
             }),
-            None, None, None, None, None, None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .unwrap_err();
     assert!(err.contains("整理模式"), "{err}");

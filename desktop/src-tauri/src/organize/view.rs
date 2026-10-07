@@ -54,7 +54,8 @@ pub struct ProjectChapterView {
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct ChapterView {    pub chapter_id: String,
+pub struct ChapterView {
+    pub chapter_id: String,
     pub title: String,
     pub summary: String,
     /// recorder / rule / placeholder（来源如实，M3 只读不隐藏降级产物）。

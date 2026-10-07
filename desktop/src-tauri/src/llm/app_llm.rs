@@ -107,14 +107,6 @@ impl AppLlm {
         }
     }
 
-    /// 面板数据源：会话最近一步诊断。
-    pub fn last_diagnosis(
-        &self,
-        session_id: &str,
-    ) -> Option<super::diagnose::BreakReport> {
-        self.diagnoser.last_of(session_id)
-    }
-
     /// 本请求的重试钩子：会话身份 + 停止标记 + 通知出口齐备才生效。
     fn hooks(&self, session_id: Option<&str>) -> Option<RetryHooks> {
         let sid = session_id?;

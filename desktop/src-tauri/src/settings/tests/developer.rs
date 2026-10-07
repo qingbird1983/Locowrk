@@ -212,4 +212,3 @@ fn organize_developer_keys_roundtrip_and_validation() {
     }
     std::fs::remove_dir_all(&root).ok();
 }
-

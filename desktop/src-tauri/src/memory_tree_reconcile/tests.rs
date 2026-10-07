@@ -38,12 +38,16 @@ fn tree_with(ws: &str, sid: &str, ranges: &[(u64, u64)]) -> MemoryTree {
         .map(|(i, &(a, b))| {
             let title = format!("自动标题{}", i + 1);
             let summary = format!("自动摘要{}", i + 1);
-            let draft = memory_tree::sanitize_draft(&title, &summary, (a as usize, b as usize))
-                .unwrap();
+            let draft =
+                memory_tree::sanitize_draft(&title, &summary, (a as usize, b as usize)).unwrap();
             MemoryChapter::from_draft(ChapterId(format!("b{}", i + 1)), &draft, "recorder", 1)
         })
         .collect();
-    t.apply_organized(chapters, ranges.last().map(|r| r.1).unwrap_or(0) as usize, record());
+    t.apply_organized(
+        chapters,
+        ranges.last().map(|r| r.1).unwrap_or(0) as usize,
+        record(),
+    );
     t
 }
 
@@ -51,7 +55,9 @@ fn tree_with(ws: &str, sid: &str, ranges: &[(u64, u64)]) -> MemoryTree {
 fn md_text(rows: &[(&str, &str, &str, u64, u64, &str)]) -> String {
     let mut out = String::from("# 记忆树 · 测试\n\n> 由整理系统生成的人读层\n");
     for (sid, title, summary, a, b, source) in rows {
-        out.push_str(&format!("\n## 会话{sid}\n\n### b1 · {title}\n\n{summary}\n\n"));
+        out.push_str(&format!(
+            "\n## 会话{sid}\n\n### b1 · {title}\n\n{summary}\n\n"
+        ));
         out.push_str(&format!(
             "<!-- range: {a}-{b} · source: {source} · session: {sid} -->\n"
         ));
@@ -116,7 +122,14 @@ fn machine_fresh_file_is_skipped() {
     let p = write_md(
         &root,
         ws,
-        &md_text(&[("sess1", "不该吸呐的题", "不该吸呐的摘要", 10, 19, "recorder")]),
+        &md_text(&[(
+            "sess1",
+            "不该吸呐的题",
+            "不该吸呐的摘要",
+            10,
+            19,
+            "recorder",
+        )]),
     );
     store.save(&tree_with(ws, "sess1", &[(10, 19)])).unwrap();
     let _ = p;
@@ -140,7 +153,9 @@ fn structural_changes_are_ignored_not_deleted() {
     let files = MemoryFiles::new(&root);
     // 人删了 b2 小节 + b1 的 range 被改坏：对账不删捆、坏区间忽略
     let mut text = md_text(&[("sess1", "人改标题", "摘要", 10, 14, "recorder")]);
-    text.push_str("\n### b2 · 孤儿小节\n\n无指针\n\n<!-- range: 99-100 · source: rule · session: sess1 -->\n");
+    text.push_str(
+        "\n### b2 · 孤儿小节\n\n无指针\n\n<!-- range: 99-100 · source: rule · session: sess1 -->\n",
+    );
     let p = write_md(&root, ws, &text);
     bump_forward(&p, 2);
 
@@ -148,7 +163,11 @@ fn structural_changes_are_ignored_not_deleted() {
     assert_eq!(sum.titles, 1); // 只有 b1 标题吸呐
     let t = store.load(ws, "sess1").unwrap();
     assert_eq!(t.chapters.len(), 2, "结构改动不删捆");
-    let b1 = t.chapters.values().find(|b| b.chapter_id.0 == "b1").unwrap();
+    let b1 = t
+        .chapters
+        .values()
+        .find(|b| b.chapter_id.0 == "b1")
+        .unwrap();
     assert_eq!(b1.title, "人改标题");
 }
 

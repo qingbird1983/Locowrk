@@ -123,9 +123,11 @@ fn reconcile_one(
         let mut tree = tree;
         let mut dirty = false;
         for s in list {
-            let Some(b) = tree.chapters.values_mut().find(|b| {
-                b.event_range == s.range && !b.pending
-            }) else {
+            let Some(b) = tree
+                .chapters
+                .values_mut()
+                .find(|b| b.event_range == s.range && !b.pending)
+            else {
                 continue; // 区间对不上/占位：忽略（人删投影或结构改动）
             };
             if b.title != s.title {
@@ -165,10 +167,7 @@ fn parse_sections(text: &str) -> Vec<ParsedSection> {
         if let Some(rest) = trimmed.strip_prefix("### ") {
             // 新小节头：`### b3 · 标题`
             let title = rest.split_once('·').map(|(_, t)| t.trim()).unwrap_or("");
-            cur = Some((
-                title.to_string(),
-                Vec::new(),
-            ));
+            cur = Some((title.to_string(), Vec::new()));
             continue;
         }
         if trimmed.starts_with("<!-- range:") {

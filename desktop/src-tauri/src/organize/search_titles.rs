@@ -14,9 +14,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use kernel_agent::{EmbedPort, cosine};
+use kernel_agent::{cosine, EmbedPort};
 use plugin_api::{CallCtx, Exposure, SideEffect, Tool, ToolError, ToolSpec};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use memory_tree::TreeStore;
 
@@ -130,16 +130,18 @@ impl Tool for SearchTitlesTool {
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .ok_or_else(|| {
-                ToolError::Failed {
-                    tool: "memory_search_titles".into(),
-                    message: "缺少 query".into(),
-                }
+            .ok_or_else(|| ToolError::Failed {
+                tool: "memory_search_titles".into(),
+                message: "缺少 query".into(),
             })?;
         let workspace = (self.workspace_of)(&session_id).unwrap_or_default();
         let cands = self.candidates(&workspace);
         if cands.is_empty() {
-            let mode = if self.embed.is_some() { "semantic" } else { "keyword" };
+            let mode = if self.embed.is_some() {
+                "semantic"
+            } else {
+                "keyword"
+            };
             return Ok(json!({ "match_mode": mode, "hits": [] }));
         }
 

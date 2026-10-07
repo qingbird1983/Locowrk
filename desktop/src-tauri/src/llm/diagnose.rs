@@ -83,13 +83,13 @@ fn slice_system(system: &str) -> Vec<(String, u64)> {
 impl StepChain {
     pub fn capture(req: &LlmRequest) -> Self {
         Self {
-            system_sub: req
-                .system
-                .as_deref()
-                .map(slice_system)
-                .unwrap_or_default(),
+            system_sub: req.system.as_deref().map(slice_system).unwrap_or_default(),
             tools: hash_tools(&req.tools),
-            messages: req.messages.iter().map(|m| hash_str(&message_text(m))).collect(),
+            messages: req
+                .messages
+                .iter()
+                .map(|m| hash_str(&message_text(m)))
+                .collect(),
         }
     }
 }
@@ -124,11 +124,7 @@ pub struct Diagnoser {
 impl Diagnoser {
     fn fifo_push(map: &mut HashMap<String, (StepChain, u64)>, key: String, val: (StepChain, u64)) {
         if map.len() >= 128 && !map.contains_key(&key) {
-            let oldest = map
-                .keys()
-                .next()
-                .cloned()
-                .expect("len checked non-empty");
+            let oldest = map.keys().next().cloned().expect("len checked non-empty");
             map.remove(&oldest);
         }
         map.insert(key, val);
@@ -143,8 +139,11 @@ impl Diagnoser {
         let mut breaks = Vec::new();
         if let Some((p, _)) = prev.get(session_id) {
             // system 子块：按名字配对比（块出现/消失也算断）
-            let cur: HashMap<&str, u64> =
-                chain.system_sub.iter().map(|(n, h)| (n.as_str(), *h)).collect();
+            let cur: HashMap<&str, u64> = chain
+                .system_sub
+                .iter()
+                .map(|(n, h)| (n.as_str(), *h))
+                .collect();
             let old: HashMap<&str, u64> =
                 p.system_sub.iter().map(|(n, h)| (n.as_str(), *h)).collect();
             for (name, h) in &cur {
@@ -178,7 +177,10 @@ impl Diagnoser {
         let report = BreakReport {
             step,
             breaks,
-            prev_messages: prev.get(session_id).map(|(c, _)| c.messages.len()).unwrap_or(0),
+            prev_messages: prev
+                .get(session_id)
+                .map(|(c, _)| c.messages.len())
+                .unwrap_or(0),
             messages: chain.messages.len(),
             ts_ms: now_ms(),
         };
