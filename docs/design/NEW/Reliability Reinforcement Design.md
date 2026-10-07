@@ -412,7 +412,7 @@ git.log   = "*"
 git.diff  = "*"
 ```
 
-**未来如果要加 `git show`，只需加一行 `git.show = "\*"`。**
+**未来如果要加 `git show`，只需加一行 `git.show = "\\\*"`。**
 
 ### 6.6 和审批系统的衔接
 
@@ -632,7 +632,7 @@ fi
 **步骤**：
 
 1. `fs_read` 返回 `revision`（内容哈希）
-2. `fs_write` / `edit\_\*` 加 `expected_revision` 参数
+2. `fs_write` / `edit\\\_\\\*` 加 `expected_revision` 参数
 3. 执行前校验 revision
 4. 不一致时返回友好错误
 5. 用打地鼠那个文件测试：读→改→在外部改→再改
@@ -740,4 +740,24 @@ fi
 
 ---
 
-*文档版本：v1.0* *配套项目：Locowrk* *关联文档：《Agent 内核设计》《记忆树设计》《LLM 客户端与调度层设计》* *灵感来源：Kiso 的因果链思路*
+---
+
+## 13\. 与 LLM 能力轨的对照（v1.1 增补，2026-10-07）
+
+> 本章是对七机制的现状核查与调优裁定——与《模型供应商配置与能力探测设计 v2.0》《多模态支持设计 v2.0》（批 A–F）**无硬冲突**，六处调优如下。排期落点见《Model Capability and Multimodal Phase Plan》候补批 G。
+
+| 机制 | Locowrk 现状核查 | 调优裁定 |
+|---|---|---|
+| Turn Commit | draft/commit 分离已是结构现状：流式 delta 只进 UI 不落盘不执行，AssistantMessage 在 step 收束后才写（v2.35）。真缺口只有一个：wire.rs:137 已捕获 finish_reason，但 client.rs:322 把「finish_reason 到场」一律当完整——length 截断带部分 tool_calls 会被执行 | 只补 length 闸（截断不收束、工具不执行、如实提示），随批 B 落地（maxOutput 预检钳制会提高截断概率，闸要先于/同批有）；committed 落事件走 serde(default) 家法。与 DeepSeek 思考回传（供应商稿 §5.5）协同：截断消息不入史 → 无残缺 reasoning 需回传 |
+| Unknown Effect | Started/Receipt 配对已存在 = ToolCall/ToolResult 事件对（纪律 5 先写日志再执行；v2.56 已闭合解析失败的悬空调用） | 不新增 ToolExecutionStarted/Receipt 双轨事件——复用现有对，只补三件：崩溃恢复扫描（有 Call 无 Result → uncertain）、uncertain UI、用户决定事件（新事件一个，serde default）。批 D 的 ToolResult.output 携带 asset → receipt 载荷天然兼容 |
+| In-Band Summary | 实测 compact.rs:149：摘要 = 单条 user 消息包 <transcript>，不复用前缀——差距属实。但：①压缩是低频事件（阈值+稳定期），且压缩本身就重建前缀（计划内失效），摘要调用的 miss 是同一计划内事件的一部分，"1/50"按高频场景推算不成立；②in-band 复用全历史会引入 DeepSeek reasoning 回传义务与批 D 图片重发，复杂度大于收益；③记录员（tree 整理）是独立组合，本就不该 in-band | 记档为 legacy ctx-compact 的可选优化（P2），不单独立批；批 B 顺带复核形状。范围永不扩展到记录员/树会话（tree 会话本就跳过 ctx-compact） |
+| Revision Guard | 纯 tool-fs 插件层改动，与 LLM 轨零交集；mtime+size 快路径与 M1 缓存指纹思想同源；asset 存储的 sha256 内容寻址（批 D）是同一思想在媒体上的实例 | 可随时并行插批；read 返回 revision 时注意批 E read_image 返回 asset 引用同样带 revision（实现时对齐） |
+| 只读证明 | 与 v2.26 三级分类（硬锁/高危/白名单）+ shell_read 固定表共存 | 解析器作为 shell_read 白名单之上的证明层；硬锁/围栏/unlockRisky/外部路径门全保留（doc §6.6 已含此意，明确化） |
+| 子 Agent 独立验收 | ⑮ own-segment 口径（v2.37）不受影响（验收发生在父会话）；批 F 给子代理模型档/回退链 | 验收调用吃批 B 辅助降档语义；verified_status 事件字段 serde default；随批 F 同批 |
+| 内核行数门禁 | 已有 scripts/check_length.sh（单文件 400 三问自检） | crate 级软上限是补充不是重复——tokei 一行脚本挂 check_length 旁，超限输出提醒即可 |
+
+**补充裁定**：新增 SessionEvent 字段/变体全部 serde(default)（老 jsonl 零迁移，家法）；本轮 DeepSeek 文档核查（供应商稿 §5.5）与本设计 Turn Commit 的"截断不 commit"互相成全——截断的 assistant 消息不进历史，思考回传规则天然满足。
+
+---
+
+*文档版本：v1.1（2026-10-07，增补 §13 与 LLM 能力轨对照）* *配套项目：Locowrk* *关联文档：《Agent 内核设计》《记忆树设计》《LLM 客户端与调度层设计》《Model Capability and Multimodal Phase Plan》* *灵感来源：Kiso 的因果链思路*
