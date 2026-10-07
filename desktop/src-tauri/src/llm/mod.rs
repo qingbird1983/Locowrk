@@ -5,6 +5,8 @@
 //! 工具语义检索 / 经历记忆 / 隐式提取的共享基建。
 
 mod app_llm;
+pub mod catalog;
+mod catalog_match;
 mod client;
 pub mod diagnose;
 mod embed;

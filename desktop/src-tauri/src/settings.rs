@@ -29,8 +29,8 @@ pub use context::{ContextSettings, ContextSettingsView, ContextUpdate, STABILITY
 pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{
-    new_profile_id, LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, ProviderInput,
-    ProviderModel, ProviderProfile, ProviderView, PROVIDERS,
+    new_profile_id, synthesize_view, synthesize_view_raw, LlmConfig, LlmSettings, LlmSettingsView,
+    LlmUpdate, ProviderInput, ProviderModel, ProviderProfile, ProviderView, PROVIDERS,
 };
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};

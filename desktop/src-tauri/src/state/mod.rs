@@ -493,6 +493,21 @@ pub fn init_state(app: AppHandle) -> AppState {
         roots_on,
     );
 
+    // 批 A 模型能力目录：随包快照路径解析（打包 = 资源目录；开发态 =
+    // crate 根兜底），惰性加载在首次访问（不进启动路径）。
+    let catalog_bundled = app
+        .path()
+        .resolve(
+            "resources/models.dev/api.json",
+            tauri::path::BaseDirectory::Resource,
+        )
+        .ok()
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/models.dev/api.json")
+        });
+    let catalog = Arc::new(crate::llm::catalog::CatalogStore::new(catalog_bundled));
+
     AppState {
         app,
         kernel,
@@ -528,6 +543,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         tree_store,
         stop_flags,
         ask: ask_hub,
+        catalog,
     }
 }
 

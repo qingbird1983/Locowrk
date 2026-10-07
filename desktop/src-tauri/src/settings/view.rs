@@ -5,8 +5,8 @@
 use std::path::Path;
 
 use super::{
-    AppSettings, AppearanceView, ChatView, ContextSettingsView, DeveloperView, EmbeddingView,
-    LlmSettingsView, MemorySettingsView, PluginsView, ProviderView, SettingsView,
+    synthesize_view, AppSettings, AppearanceView, ChatView, ContextSettingsView, DeveloperView,
+    EmbeddingView, LlmSettingsView, MemorySettingsView, PluginsView, ProviderView, SettingsView,
     ShellSettingsView, ToolsSettingsView, FALLBACK_WINDOW_TOKENS,
 };
 
@@ -36,7 +36,9 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
                     model: p.model.clone(),
                     window_tokens: p.window_tokens,
                     enabled: p.enabled,
-                    models: p.models.clone(),
+                    // 无目录铺底（钉死面原样、能力未知）；命令层 enrich
+                    // 挂 models.dev 数据（批 A）——本函数保持纯投影。
+                    models: p.models.iter().map(|m| synthesize_view(m, None)).collect(),
                 })
                 .collect(),
             provider: flat.provider,

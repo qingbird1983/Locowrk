@@ -722,6 +722,21 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.127 · 批 A 模型能力目录（LLM 能力轨第一批：《Model Capability and Multimodal Phase Plan》A 批，D1 按推荐落档 = models.dev 快照）
+
+| 项 | 落点 |
+|---|---|
+| 快照资源 | ✅ `resources/models.dev/api.json` 5.34MB 随包（tauri bundle.resources）+ `llm/catalog.rs` CatalogStore 惰性加载（缺文件/坏 JSON = 空目录如实不 panic）+ 在线刷新只进内存永不落盘 |
+| 匹配 | ✅ 新 `llm/catalog_match.rs`：预设 host 别名表 +100 / 快照 api host 精确·后缀 +80 / 归一化 id 两遍扫（先原样后归一）；**借池不做**（无定位 = None）；别名表 × 快照守卫测试（实抓 together→togetherai） |
+| 合成投影 | ✅ `ProviderModelView` = 钉死面 ∪ 目录（sources 逐字段 user/catalog/None）；`ProviderModel` +max_output/max_output_source/supports_image（serde 字段级缺省 + 旧文件幻影测试）；**目录数据永不落 settings**（前端 save 剥 sources=catalog 派生值 + 后端 serde 边界丢弃双保险）；五出口统一 enrich（settings_get/set + 档位三命令） |
+| 命令 | ✅ `llm_catalog_status` / `llm_catalog_refresh` / `llm_lookup_model`（自定义模型添加时就地升级）+ `open_external_url`（https 白名单壳，零新依赖） |
+| 梯子归一化 | ✅ toggle+effort 并存 enabled 冗余不出现（deepseek = disabled/low/high/max）；toggle 独占补 enabled（GLM）；none→disabled；未知值保序追加——批 A 只投影展示，批 B 接方言 |
+| UI | ✅ 模型目录组转正（状态行 + 刷新钮）；编辑模态右栏视觉徽章（新 eye 图标）+ ctx·max 徽章 + 高级区扩容（最大输出钉死/图像输入三态/梯子只读 chips/价格行 +「编辑即钉死」info 悬浮）；sources=null 行自动合并（未命中落定全未知防回环）；价格三处（composer 选择器/默认浮层/详情行，USD 原值如实）；预设 22→27 家（Google/百川/零一/阶跃/LM Studio）+ docsUrl/local + 「获取 API Key ↗」 |
+| 实机走查 | ✅ CDP 独立数据根 **18/18 PASS**（种子 DeepSeek 档无 Key，目录面离线全验）：状态行/刷新 30s/徽章/梯子/价格/悬停钉死提示/32K 钉死落盘（目录派生零落盘）/重开并存/自定义模型就地升级（v4-pro 真值 $0.66/$1.98）；**实抓修复 ×3**（刷新超时 10s→30s：5.3MB 载荷代理链路 10.2s 撞死；addCustom 预填标 user 挡合并：预填只写值不标来源；归一化多变体裁决吃 HashMap 随机序：三级确定性裁决 5 连跑验证）；数据根已清，脚本/截图留 tmp/v127-walk/ |
+| 测试 | ✅ desktop 258 绿（+19：catalog 8 / catalog_match 9 / settings 钉死往返+合成 2）；clippy --all-targets 0、fmt、vue-tsc 0、pnpm build 过、lint:style 0 |
+| 文档 | ✅ LLM.md v3.1（§6 模型能力目录）+ UI shell v4.21（§3.30 四处 + 版本条）+ 阶段计划勾批 A + CHANGELOG v2.127 |
+
+---
 
 ## 三、收尾 backlog（随批次搭车）
 

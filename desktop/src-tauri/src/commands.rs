@@ -204,10 +204,13 @@ pub async fn list_pending_approvals(
 // ---- 设置命令（DESIGN.md §13.1 / §13.5）：薄适配层，校验与落盘全在
 // SettingsStore。返回投影永不含 API Key 原值，只有 api_key_set。 ----
 
-/// 读设置（LLM 配置投影 + 数据根位置 + 语言偏好）。
+/// 读设置（LLM 配置投影 + 数据根位置 + 语言偏好）。批 A：llm 档位模型
+/// 清单挂目录合成（settings 钉死值 ∪ models.dev，目录只进内存）。
 #[tauri::command]
 pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, String> {
-    Ok(state.settings.view())
+    let mut view = state.settings.view();
+    enrich_with_catalog(&state.catalog, &mut view.llm);
+    Ok(view)
 }
 
 /// 部分更新设置：locale、外观区（⑰ 明暗主题）、快捷键、LLM 字段（S2 起
@@ -330,6 +333,8 @@ pub async fn settings_set(
             });
         }
     }
+    let mut view = view;
+    enrich_with_catalog(&state.catalog, &mut view.llm);
     Ok(view)
 }
 

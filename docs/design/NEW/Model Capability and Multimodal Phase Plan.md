@@ -4,7 +4,7 @@
 > 版本：1.0（2026-10-07）
 > 上游设计：《模型供应商配置与能力探测设计 v2.0》《多模态支持设计 v2.0》
 > 参照调查：PI-Desktop（F:\Warehouse\Github\PI-Desktop）、ZCode（F:\Warehouse\Github\ZCode）模型配置全量调查（2026-10-07）
-> 状态：**待用户裁定后动码**——裁定表见 §四
+> 状态：**执行中**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；批 A 已完成（v2.127）
 
 ---
 
@@ -14,7 +14,7 @@
 
 | 批 | 名称 | 一句话 | 规模感 | 依赖 |
 |---|---|---|---|---|
-| **A** | 模型能力目录 | models.dev 快照接入 + 打分匹配 + source 钉死 + 能力投影到 UI | 大（新模块 + 快照资源） | 无 |
+| **A** ✅（v2.127，2026-10-08） | 模型能力目录 | models.dev 快照接入 + 打分匹配 + source 钉死 + 能力投影到 UI | 大（新模块 + 快照资源） | 无 |
 | **B** | 推理档位 + 输出钳制 | 方言数据表 + 会话档位持久化 + composer 档位钮 + maxOutput 预检钳制 + 辅助降档 + 发送门控 | 大 | A（梯子/模态数据） |
 | **C** | 连接与安全 | keyring 迁移 + 自定义请求头 + 端点扫描 + 逐模型测试 + 网络代理 | 中 | 无（可插在 A/B 间） |
 | **D** | 多模态地基 | ContentPart + wire 编码 + AssetStore + 上传链路 + 渲染 + 估算 | **最大**（内核穿透） | A/B（模态数据 + 钳制公式） |
@@ -28,7 +28,7 @@
 
 ## 二、批次卡片
 
-### 批 A — 模型能力目录
+### 批 A — 模型能力目录 ✅（v2.127，2026-10-08 完成）
 
 **目标**：能力数据地基。模型配置页从"只有名字"升级为"有窗口/输出/模态/梯子/价格"。
 
@@ -47,6 +47,8 @@
 **落点**：`settings/llm.rs`（ProviderModel 新字段）、`llm/catalog*.rs`（新）、`commands/llm.rs`、`desktop/src/lib/model-catalog.ts`（新类型）、`lib/provider-presets.ts`、`ModelPanes.vue`、`ServiceChooser.vue`、`LlmSection.vue`、`tauri.conf.json`。
 
 **走查要点**：deepseek/zhipu/openai 三家真 Key 拉列表 → 目录元数据命中（窗口/价格/模态徽章）；手改窗口 → 刷新目录不被覆盖（钉死）；自定义模型 id → 就地升级；断网 → 快照兜底。
+
+**落成记录（2026-10-08，v2.127）**：快照 5.34MB 随包（226 供应商 / ~5300 模型，2026-10-08 抓取）+ tauri `bundle.resources`；`llm/catalog.rs`（CatalogStore 惰性加载/在线刷新只进内存/裁剪投影/梯子归一化——toggle+effort 并存时 enabled 冗余不出现）+ `llm/catalog_match.rs`（预设 host 别名表 +100 / 快照 api host +80 / 归一化 id 两遍扫先原样后归一；**借池不做**，无定位即 None）；命令三件 + `settings/llm.rs::synthesize_view` 合成投影（sources 逐字段 user/catalog/None；ProviderModel 新增 max_output/max_output_source/supports_image 钉死面，目录数据永不落 settings——前端 save 剥 sources=catalog 派生值）；ModelPanes 高级区（最大输出钉死/图像输入三态/梯子只读 chips/价格行 +「编辑即钉死」info 悬浮）+ 右栏行视觉徽章（eye）+ ctx·max 徽章；自定义模型添加即查目录就地升级 + sources=null 行自动合并（未命中落定全未知防回环）；预设 22→27 家（Google/百川/零一/阶跃/LM Studio）+ docsUrl/local + 「获取 API Key ↗」（`open_external_url` 只放行 https）；价格展示三处（composer 选择器/默认项浮层/编辑模态详情行，USD 原值如实）。**实机走查（2026-10-08，CDP 独立数据根，目录数据离线可验）18/18 PASS**——状态行/在线刷新（30s）/徽章/梯子/价格/悬停钉死提示/32K 钉死落盘/重开 user+catalog 并存/自定义模型就地升级（v4-pro 真值 $0.66/$1.98 + 纯文本如实）。**实抓修复 ×2 + 调优 ×1**：刷新超时 10s→30s（5.3MB 载荷代理链路 10.2s 撞死）；addCustom 静态预填标 user 挡住目录合并（预填只写值不标来源）。**留待真 Key**：三家拉列表 + 断网快照兜底（目录面离线已全验）。门禁：clippy 0 / fmt / 测试绿（desktop 258 = +19）/ vue-tsc 0 / build / lint:style。
 
 ---
 
@@ -166,7 +168,7 @@
 
 | # | 裁定点 | 推荐 | 状态 |
 |---|---|---|---|
-| D1 | 档案库源 = models.dev 快照 | 推荐 | **待裁** |
+| D1 | 档案库源 = models.dev 快照 | 推荐 | **已采纳**（用户指令开始执行，按推荐落档 2026-10-08；批 A 兑现） |
 | D2 | 单线纪律维持（多模态输入侧走兼容层；原生 thinking budget / 图像输出 / 原生 PDF 另批） | 推荐 | **待裁** |
 | D3 | thinking 控件 = 循环钮（vs PI 滑杆） | 循环钮 | **待裁** |
 | D4 | 工具结果图片投影 = 挪下一条 user 消息（vs 仅文本占位） | 投影 | **待裁** |

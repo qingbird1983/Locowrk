@@ -1,8 +1,8 @@
 # LLM 接入设计（阶段八②参考）
 
-> 版本行：v3.0（2026-10-05）——**方案一（genai 统一库）退役**，改为自建 OpenAI
-> 兼容统一客户端（用户裁定："现在的 llm 兼容层全删、参照 PI-Desktop 重构、
-> 不打补丁式修"）。v2.x = genai 三合一（历史见 CHANGELOG）。
+> 版本行：v3.1（2026-10-08）——批 A 模型能力目录（models.dev 快照 + 匹配 +
+> 合成投影）落 §6；v3.0（2026-10-05）**方案一（genai 统一库）退役**，改为
+> 自建 OpenAI 兼容统一客户端。v2.x = genai 三合一（历史见 CHANGELOG）。
 
 ## 核心理念：一个接口，一条线格式
 
@@ -96,3 +96,31 @@ kind 只决定**鉴权头与端点归一**，不再决定请求/响应形状。�
 
 沿用 v2.58：`LlmUsage` 为供应商报告的真实计数；命中率分母 = input（含缓存
 读，M1 前缀缓存纪律同源）。重试轮的用量只计成功那次（失败请求供应商不计量）。
+
+## 模型能力目录（批 A，v3.1 增补）
+
+**能力数据的燃料 = models.dev 快照**（供应商稿 v2.0 §4；D1 裁定：快照路线）。
+
+- **三源两优先级**：随包快照（`desktop/src-tauri/resources/models.dev/api.json`
+  ≈5.3MB，`bundle.resources` 打包，惰性加载不进启动路径）→ 在线刷新
+  （设置页按钮，10s 超时，**只进内存永不落盘**）；用户钉死值（settings
+  `llm.providers[].models[]` 的 `maxOutput`/`supportsImage`/`contextWindow`）
+  恒最高。合并优先级：用户钉死 > 在线刷新 > 内置快照 > 缺省（未知如实）。
+- **匹配**（`llm/catalog_match.rs`，PI 打分制无正则）：预设 host 别名表
+  +100 → 快照 `api` host 精确/后缀 +80 → 归一化模型 id 精确命中（剥
+  `-latest`/日期戳/`@region`/路径前缀）。**无供应商定位 = 无匹配**——中转站
+  跨发布商"借池"不做（记档），宁缺勿假。别名表 × 随包快照有守卫测试
+  （models.dev 改名即红）。
+- **合成投影**（`settings/llm.rs::synthesize_view`）：IPC 的
+  `ProviderModelView` = settings 钉死面 ∪ 目录（`sources` 逐字段标记
+  user/catalog/None）；settings 只存钉死值，**目录数据永不落 settings**——
+  前端保存时剥除 sources=catalog 的派生值（ProviderSetupDialog.save）。
+- **命令三件**：`llm_catalog_status` / `llm_catalog_refresh` /
+  `llm_lookup_model`（自定义模型添加时就地升级）。
+- **梯子归一化**：目录 `reasoning_options` → 语义档（disabled/minimal/low/
+  medium/high/xhigh/max/enabled；toggle+effort 并存时 enabled 冗余不出现
+  ——deepseek 梯子 = disabled/low/high/max；toggle 独占才有 enabled——GLM）。
+  批 A 只投影展示，批 B 接预设方言后成为档位选择器的数据源。
+- **价格**：目录 USD 原值如实展示（选择器行缀 / 详情行），只作参考不进任何
+  计算；与会话累计估算（`chat.cacheHitPrice/cacheMissPrice`，CNY 手填）两套
+  口径并存互不替换。

@@ -8,13 +8,14 @@
  * 选服务瓦片格 ↔ 表单双栏）。API Key 只落盘不出 IPC。目录状态行
  * （models.dev 快照）= 文档记槽位，本页不渲染。
  */
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
-import { llmProbeModels, llmProviderReorder } from "../../lib/api";
+import { llmCatalogRefresh, llmCatalogStatus, llmProbeModels, llmProviderReorder } from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
 import { useToastStore } from "../../stores/toast";
-import type { ProviderView } from "../../types";
+import { relativeTime } from "../../lib/format";
+import type { CatalogStatus, ProviderView } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import ServiceList from "./model/ServiceList.vue";
@@ -90,6 +91,37 @@ async function onThinkingChange(v: string) {
     toast.push("ok", t("settings.thinkingSavedToast"));
   } catch (e) {
     toast.push("danger", String(e));
+  }
+}
+
+// ---- 模型目录（批 A，供应商稿 §4.5）：models.dev 快照状态 + 手动刷新
+// （只进内存，永不落盘；失败旧数据保留）。 ----
+const catalogStatus = ref<CatalogStatus | null>(null);
+const catalogRefreshing = ref(false);
+onMounted(() => {
+  llmCatalogStatus()
+    .then((s) => (catalogStatus.value = s))
+    .catch(() => (catalogStatus.value = null));
+});
+const catalogDetail = computed(() => {
+  if (!catalogStatus.value) return t("settings.catalogLoading");
+  const src = t(
+    catalogStatus.value.source === "bundled"
+      ? "settings.catalogSourceBundled"
+      : "settings.catalogSourceRefreshed",
+  );
+  const rt = relativeTime(catalogStatus.value.updatedMs / 1000);
+  return `${src} · ${t("settings.catalogModelsCount", { n: catalogStatus.value.models })} · ${t(`memory.time.${rt.key}`, { n: rt.n })}`;
+});
+async function refreshCatalog() {
+  catalogRefreshing.value = true;
+  try {
+    catalogStatus.value = await llmCatalogRefresh();
+    toast.push("ok", t("settings.catalogRefreshedToast", { n: catalogStatus.value.models }));
+  } catch (e) {
+    toast.push("danger", t("settings.catalogRefreshFailToast", { msg: String(e) }));
+  } finally {
+    catalogRefreshing.value = false;
   }
 }
 
@@ -252,6 +284,24 @@ function closeSetup() {
           :entries="thinkingOptions"
           :label="t('settings.thinkingLanguage')"
         />
+      </SettingsRow>
+    </SettingsGroup>
+
+    <!-- 模型目录（批 A）：快照状态行 + 刷新按钮 -->
+    <SettingsGroup :title="t('settings.catalogTitle')">
+      <SettingsRow :title="t('settings.catalogRow')" :hint="t('settings.catalogHint')">
+        <template #detail>
+          <span class="mt-1 block text-[length:var(--lw-fs-12)] text-ink-4">{{ catalogDetail }}</span>
+        </template>
+        <button
+          type="button"
+          class="lw-btn flex items-center gap-1 px-3 py-1.5 text-xs text-ink-1"
+          :disabled="catalogRefreshing"
+          @click="refreshCatalog"
+        >
+          <Icon name="refresh" :size="14" />
+          {{ catalogRefreshing ? t("settings.catalogRefreshing") : t("settings.catalogRefresh") }}
+        </button>
       </SettingsRow>
     </SettingsGroup>
 

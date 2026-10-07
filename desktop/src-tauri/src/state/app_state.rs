@@ -112,6 +112,9 @@ pub struct AppState {
     /// ask_user 选择卡中心（v4.11 §3.39①）：ask_respond / ask_snooze /
     /// list_pending_asks 命令入口；agent_stop 经 skip_session 同步收束。
     pub ask: Arc<crate::ask::AskHub>,
+    /// 模型能力目录（批 A，供应商稿 §4）：随包快照惰性加载 + 在线刷新
+    /// 只进内存；`llm_catalog_*` 命令与 llm 投影合成（enrich）共用。
+    pub catalog: Arc<crate::llm::catalog::CatalogStore>,
 }
 
 impl AppState {

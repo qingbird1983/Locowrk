@@ -297,3 +297,39 @@ pub async fn reveal_in_explorer(path: String, state: State<'_, AppState>) -> Res
     }
     open_in_explorer(p)
 }
+
+/// 打开外部网页链接（批 A「如何获取 API Key ↗」= 预设供应商文档）：只放
+/// 行 https、无空白/控制字符、限长——不给任意协议/命令注入开执行面；
+/// shell 套路同 `open_in_explorer`（explorer / open / xdg-open）。
+#[tauri::command]
+pub async fn open_external_url(url: String) -> Result<(), String> {
+    let u = url.trim();
+    if !u.starts_with("https://") {
+        return Err("只允许打开 https 链接".into());
+    }
+    if u.len() > 500 || u.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("链接形状不合法，拒绝打开".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(u)
+            .spawn()
+            .map_err(|e| format!("打开链接失败: {e}"))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(u)
+            .spawn()
+            .map_err(|e| format!("打开链接失败: {e}"))?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(u)
+            .spawn()
+            .map_err(|e| format!("打开链接失败: {e}"))?;
+    }
+    Ok(())
+}

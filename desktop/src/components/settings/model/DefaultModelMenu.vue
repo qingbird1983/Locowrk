@@ -10,7 +10,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../../lib/icons";
 import SearchInput from "../../patterns/SearchInput.vue";
-import type { ProviderView } from "../../../types";
+import { formatPricingShort } from "../../../lib/model-catalog";
+import type { ProviderModelPricing, ProviderView } from "../../../types";
 
 const props = defineProps<{
   providers: ProviderView[];
@@ -38,14 +39,21 @@ interface Row {
   providerId: string;
   label: string;
   model: string;
+  /** models.dev 目录价（USD 原值；无目录数据 = null 不渲染，批 A §4.6）。 */
+  pricing: ProviderModelPricing | null;
 }
 /** 组 = 启用档；档无 models 清单时回落其单 model（不发明空组）。 */
 const rows = computed<Row[]>(() =>
   props.providers
     .filter((p) => p.enabled)
     .flatMap((p) => {
-      const models = p.models.length > 0 ? p.models.map((m) => m.id) : p.model ? [p.model] : [];
-      return models.map((model) => ({ providerId: p.id, label: p.label, model }));
+      const models =
+        p.models.length > 0
+          ? p.models.map((m) => ({ id: m.id, pricing: m.pricing }))
+          : p.model
+            ? [{ id: p.model, pricing: null }]
+            : [];
+      return models.map((m) => ({ providerId: p.id, label: p.label, model: m.id, pricing: m.pricing }));
     }),
 );
 const visible = computed(() => {
@@ -158,6 +166,10 @@ onBeforeUnmount(() => {
               <Icon v-if="isCurrent(r)" name="check" :size="12" />
             </span>
             <span class="min-w-0 flex-1 truncate font-mono text-[length:var(--lw-fs-12half)] text-ink-1">{{ r.model }}</span>
+            <span
+              v-if="formatPricingShort(r.pricing)"
+              class="shrink-0 text-[length:var(--lw-fs-11)] tabular-nums text-ink-5"
+            >{{ formatPricingShort(r.pricing) }}</span>
           </button>
         </template>
       </div>

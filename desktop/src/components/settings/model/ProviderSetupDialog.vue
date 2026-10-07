@@ -13,7 +13,8 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { llmProviderSave } from "../../../lib/api";
+import { llmProviderSave, openExternalUrl } from "../../../lib/api";
+import { emptyModelRow } from "../../../lib/model-catalog";
 import { Icon } from "../../../lib/icons";
 import {
   CUSTOM_SERVICE,
@@ -115,7 +116,7 @@ function maybeAutoPick() {
   if (props.provider || props.draft || touched.value) return;
   if (probeState.value !== "ready" || models.value.length > 0) return;
   if (available.value.length === 0 || available.value.length > AUTO_PICK_MAX) return;
-  models.value = available.value.map((id) => ({ id, alias: null, contextWindow: null }));
+  models.value = available.value.map((id) => emptyModelRow(id));
 }
 
 function onChosenUpdate(next: ProviderModelView[]) {
@@ -165,7 +166,20 @@ async function save() {
   saving.value = true;
   try {
     // models 首项 = 该档默认模型（后端同规则兜底）；窗口随默认模型走。
-    const first = models.value[0];
+    // 批 A：目录派生值（sources = catalog）不落 settings——剥除后端只存
+    // 钉死面；sources = null（客户端行未命中目录）原样发。
+    const persistable = models.value.map((m) => ({
+      ...m,
+      contextWindow: m.sources?.window === "catalog" ? null : m.contextWindow,
+      maxOutput: m.sources?.maxOutput === "catalog" ? null : m.maxOutput,
+      maxOutputSource: null,
+      supportsImage: m.sources?.modalities === "catalog" ? null : m.supportsImage,
+      inputModalities: [],
+      reasoningLadder: [],
+      toolCall: null,
+      pricing: null,
+    }));
+    const first = persistable[0];
     const input: ProviderInput = {
       id: props.provider?.id,
       label: resolvedName.value.trim(),
@@ -176,7 +190,7 @@ async function save() {
       baseUrl: resolvedBaseUrl.value,
       model: first.id,
       windowTokens: first.contextWindow,
-      models: models.value,
+      models: persistable,
     };
     if (apiKey.value.trim()) input.apiKey = apiKey.value.trim();
     await llmProviderSave(input);
@@ -358,9 +372,24 @@ const kindOptions = computed(() => [
                   v-model="apiKey"
                   type="password"
                   class="lw-field h-9 min-w-0 flex-1 px-2.5 font-mono text-[length:var(--lw-fs-12)]"
-                  :placeholder="props.provider?.apiKeySet ? t('settings.modelKeyKeep') : 'sk-…'"
+                  :placeholder="
+                    preset?.local
+                      ? t('settings.modelKeyLocalHint')
+                      : props.provider?.apiKeySet
+                        ? t('settings.modelKeyKeep')
+                        : 'sk-…'
+                  "
                   autocomplete="off"
                 />
+                <button
+                  v-if="preset?.docsUrl"
+                  type="button"
+                  class="flex shrink-0 items-center gap-0.5 text-[length:var(--lw-fs-12)] text-accent hover:underline"
+                  @click="openExternalUrl(preset.docsUrl)"
+                >
+                  {{ t("settings.modelKeyHow") }}
+                  <Icon name="globe" :size="12" />
+                </button>
               </label>
               <p
                 v-if="probeState === 'ready' && available.length > 0"
@@ -378,6 +407,8 @@ const kindOptions = computed(() => [
               :available="available"
               :probe-state="probeState"
               :chosen="models"
+              :kind="kind"
+              :base-url="resolvedBaseUrl"
               :disabled="saving"
               @fetch="probe"
               @update="onChosenUpdate"

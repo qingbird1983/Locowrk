@@ -33,6 +33,8 @@ import type {
   SessionTitlePayload,
   HandoffCreatedPayload,
   ProviderInput,
+  CatalogModelInfo,
+  CatalogStatus,
   ProviderModels,
   ProviderView,
   TreeDebug,
@@ -323,6 +325,32 @@ export function sessionSetModel(
  * 单档失败进 error 不拖垮其它组。 */
 export function llmListModels(): Promise<ProviderModels[]> {
   return invoke("llm_list_models");
+}
+
+/** 模型能力目录状态（批 A）：快照 bundled / 在线刷新 refreshed；首访
+ * 惰性加载随包快照。 */
+export function llmCatalogStatus(): Promise<CatalogStatus> {
+  return invoke("llm_catalog_status");
+}
+
+/** 在线刷新 models.dev 目录（只进内存，永不落盘；失败抛 Err 旧数据保留）。 */
+export function llmCatalogRefresh(): Promise<CatalogStatus> {
+  return invoke("llm_catalog_refresh");
+}
+
+/** 单模型目录查询（供应商稿 §4.5）：供应商定位 + 归一化 id 精确命中；
+ * null = 能力未知（不借池不猜）。 */
+export function llmLookupModel(
+  kind: string,
+  baseUrl: string | null,
+  model: string,
+): Promise<CatalogModelInfo | null> {
+  return invoke("llm_lookup_model", { kind, baseUrl, model });
+}
+
+/** 打开外部网页链接（批 A「如何获取 API Key ↗」）；后端只放行 https。 */
+export function openExternalUrl(url: string): Promise<void> {
+  return invoke("open_external_url", { url });
 }
 
 /** 单档模型探测（设置表单未保存值；apiKey 空缺回退档位已存 Key）。 */

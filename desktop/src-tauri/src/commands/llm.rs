@@ -1,13 +1,16 @@
 //! LLM 档位与模型清单命令（v2.58，DESIGN §13.1 档位制）：探测（选择器
-//! 数据源）+ 档位增删改。命令薄适配——校验在 settings/llm.rs，HTTP 在
-//! llm/models.rs。
+//! 数据源）+ 档位增删改 + 模型能力目录三件（批 A：状态/刷新/单模型查
+//! 询）。命令薄适配——校验在 settings/llm.rs，HTTP 在 llm/models.rs，
+//! 目录数据在 llm/catalog.rs，合成在 settings/llm.rs `synthesize_view`。
 
 use serde::Serialize;
 use tauri::State;
 
+use crate::llm::catalog::{CatalogStatus, CatalogStore};
 use crate::llm::models;
 use crate::settings::{
-    new_profile_id, ProviderInput, ProviderModel, ProviderProfile, ProviderView, PROVIDERS,
+    new_profile_id, LlmSettingsView, ProviderInput, ProviderModel, ProviderProfile, ProviderView,
+    PROVIDERS,
 };
 use crate::state::AppState;
 
@@ -20,6 +23,21 @@ pub struct ProviderModelsView {
     pub label: String,
     pub models: Vec<String>,
     pub error: Option<String>,
+}
+
+/// settings 钉死值 ∪ 目录 = IPC 合成视图（批 A）。settings_get / 档位
+/// 命令返回统一走这里——目录数据只进内存不落 settings。
+pub fn enrich_with_catalog(catalog: &CatalogStore, llm_view: &mut LlmSettingsView) {
+    for p in &mut llm_view.providers {
+        p.models = p
+            .models
+            .iter()
+            .map(|m| {
+                let hit = catalog.lookup_model(&p.kind, p.base_url.as_deref(), &m.id);
+                crate::settings::synthesize_view_raw(m, hit.as_ref())
+            })
+            .collect();
+    }
 }
 
 /// 全部已存档位的模型清单（并行探测，5s 超时逐组收口）。
@@ -133,6 +151,7 @@ pub fn llm_provider_save(
         profile.enabled = input.enabled.unwrap_or(profile.enabled);
         // models：None = 保持已存清单；Some = 整表替换——trim、按小写去重
         // 保序；原 model 不在清单时改指首项（save 首项 = 该档默认模型）。
+        // 目录派生字段在 IPC 边界已被 serde 丢弃，这里只收钉死面。
         if let Some(list) = &input.models {
             let mut seen = std::collections::HashSet::new();
             let mut models_out = Vec::new();
@@ -145,6 +164,9 @@ pub fn llm_provider_save(
                     id: mid,
                     alias: m.alias.clone(),
                     context_window: m.context_window,
+                    max_output: m.max_output,
+                    max_output_source: m.max_output.as_ref().map(|_| "user".to_string()),
+                    supports_image: m.supports_image,
                 });
             }
             if !models_out.iter().any(|m| m.id == profile.model) {
@@ -166,7 +188,7 @@ pub fn llm_provider_save(
         }
         Ok(())
     })?;
-    Ok(project_providers(&cfg))
+    Ok(project_providers(&state.catalog, &cfg))
 }
 
 /// 档位删除。删的是活动档 = 指针落首档或空。返回全量档位投影。
@@ -189,7 +211,7 @@ pub fn llm_provider_delete(
         }
         Ok(())
     })?;
-    Ok(project_providers(&cfg))
+    Ok(project_providers(&state.catalog, &cfg))
 }
 
 /// 档位排序（§3.30 服务列表拖拽落盘）：按传入 id 顺序整表重排。
@@ -210,10 +232,13 @@ pub fn llm_provider_reorder(
         cfg.providers = next;
         Ok(())
     })?;
-    Ok(project_providers(&cfg))
+    Ok(project_providers(&state.catalog, &cfg))
 }
 
-fn project_providers(cfg: &crate::settings::LlmConfig) -> Vec<ProviderView> {
+fn project_providers(
+    catalog: &CatalogStore,
+    cfg: &crate::settings::LlmConfig,
+) -> Vec<ProviderView> {
     cfg.providers
         .iter()
         .map(|p| ProviderView {
@@ -225,9 +250,42 @@ fn project_providers(cfg: &crate::settings::LlmConfig) -> Vec<ProviderView> {
             model: p.model.clone(),
             window_tokens: p.window_tokens,
             enabled: p.enabled,
-            models: p.models.clone(),
+            models: p
+                .models
+                .iter()
+                .map(|m| {
+                    let hit = catalog.lookup_model(&p.kind, p.base_url.as_deref(), &m.id);
+                    crate::settings::synthesize_view(m, hit.as_ref())
+                })
+                .collect(),
         })
         .collect()
+}
+
+// ---- 模型能力目录（批 A，供应商稿 §4.5）----
+/// 目录状态（首访惰性加载随包快照）。
+#[tauri::command]
+pub fn llm_catalog_status(state: State<'_, AppState>) -> CatalogStatus {
+    state.catalog.snapshot().status()
+}
+
+/// 在线刷新 models.dev（只进内存，永不落盘；失败旧快照原样保留）。
+#[tauri::command]
+pub async fn llm_catalog_refresh(state: State<'_, AppState>) -> Result<CatalogStatus, String> {
+    state.catalog.refresh().await
+}
+
+/// 单模型目录查询（供应商定位 → 归一化 id 精确命中；None = 能力未知）。
+#[tauri::command]
+pub fn llm_lookup_model(
+    kind: String,
+    base_url: Option<String>,
+    model: String,
+    state: State<'_, AppState>,
+) -> Option<crate::llm::catalog::CatalogModel> {
+    state
+        .catalog
+        .lookup_model(&kind, base_url.as_deref(), &model)
 }
 
 /// 前缀断裂诊断（M6.1，KV v2 §7.4）：会话最近一步 LLM 请求的分块 hash

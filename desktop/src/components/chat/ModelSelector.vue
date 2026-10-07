@@ -15,6 +15,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, Transition } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ProviderView } from "../../types";
+import { formatPricingShort } from "../../lib/model-catalog";
 import { Icon } from "../../lib/icons";
 import SearchInput from "../patterns/SearchInput.vue";
 
@@ -41,6 +42,14 @@ const query = ref("");
 const container = ref<HTMLElement | null>(null);
 
 const effective = () => props.override?.model ?? props.defaultModel;
+
+/** models.dev 目录价（USD 原值，批 A §4.6）：行尾缀，无数据不渲染。 */
+const pricingOf = (providerId: string, model: string): string => {
+  const hit = props.providers
+    .find((p) => p.id === providerId)
+    ?.models.find((m) => m.id === model);
+  return formatPricingShort(hit?.pricing ?? null);
+};
 
 interface Group {
   id: string;
@@ -138,6 +147,7 @@ function pick(providerId: string, model: string) {
           @click="pick(g.id, m)"
         >
           <span class="ms-row__name">{{ m }}</span>
+          <span v-if="pricingOf(g.id, m)" class="ms-row__price">{{ pricingOf(g.id, m) }}</span>
           <Icon v-if="m === effective()" name="check" :size="14" class="ms-row__check" />
         </button>
       </template>
@@ -219,6 +229,12 @@ function pick(providerId: string, model: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ms-row__price {
+  flex: none;
+  font-size: var(--lw-fs-11);
+  color: var(--lw-ink-5);
   font-variant-numeric: tabular-nums;
 }
 .ms-row__check {

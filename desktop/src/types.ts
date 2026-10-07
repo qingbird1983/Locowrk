@@ -814,11 +814,65 @@ export interface ProviderView {
   models: ProviderModelView[];
 }
 
-/** 档位内一个已配置模型（㉚；contextWindow null = 跟随静态档案）。 */
+/** 每百万 token 单价（USD 原值如实；目录缺分量 = null 不冒充 0）。 */
+export interface ProviderModelPricing {
+  input: number | null;
+  output: number | null;
+  cacheRead: number | null;
+}
+
+/** 字段来源：`"user"` = 用户钉死（编辑即落 settings，刷新不覆盖）；
+ * `"catalog"` = 跟随 models.dev；null = 未知（如实标注）。 */
+export type ModelFieldSource = "user" | "catalog" | null;
+
+/** 字段来源标记（批 A，供应商稿 §4.5 SourcesView）。 */
+export interface ProviderModelSources {
+  window: ModelFieldSource;
+  maxOutput: ModelFieldSource;
+  modalities: ModelFieldSource;
+  reasoning: ModelFieldSource;
+}
+
+/** 档位内一个已配置模型（㉚；批 A 起为目录合成视图：钉死值 ∪ models.dev，
+ * 目录部分只进内存——保存时 sources 为 catalog 的派生值由前端剥除）。 */
 export interface ProviderModelView {
   id: string;
   alias: string | null;
   contextWindow: number | null;
+  /** 用户钉死最大输出（token）；null = 跟随目录 / 不发。 */
+  maxOutput: number | null;
+  maxOutputSource: string | null;
+  /** 用户钉死图像输入（tri-state：null = 随目录 / 纯文本缺省）。 */
+  supportsImage: boolean | null;
+  /** 展示用有效模态（未知 = ["text"]）。 */
+  inputModalities: string[];
+  /** 归一化推理梯子（空 = 隐藏档位选择器）。 */
+  reasoningLadder: string[];
+  toolCall: boolean | null;
+  pricing: ProviderModelPricing | null;
+  /** 后端投影恒带对象；null = 客户端新建行、待目录合并（ModelPanes 哨兵）。 */
+  sources: ProviderModelSources | null;
+}
+
+/** 模型能力目录状态（llm_catalog_status；快照 bundled / 在线刷新 refreshed）。 */
+export interface CatalogStatus {
+  source: "bundled" | "refreshed";
+  updatedMs: number;
+  providers: number;
+  models: number;
+}
+
+/** 单模型目录查询结果（llm_lookup_model 命中时）。 */
+export interface CatalogModelInfo {
+  providerKey: string;
+  modelId: string;
+  displayName: string | null;
+  contextWindow: number | null;
+  maxOutput: number | null;
+  inputModalities: string[];
+  reasoningOptions: string[];
+  toolCall: boolean | null;
+  pricing: ProviderModelPricing | null;
 }
 
 export interface LlmSettingsView {

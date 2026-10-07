@@ -4,16 +4,28 @@
  * ModelSelectionPanes）：左「该服务的模型」= 全选框（半态）+ 获取列表 +
  * 搜索 + 复选行（ID mono 可选中复制 + 显示名 + 右缘窗口徽章，取自静态
  * 档案，缺省空白不发明）；右「模型设置 N」= 搜索 + 拖拽行（把手 + ID +
- * 别名 + 窗口徽章 + 高级折叠 + ×）+ 高级展开（别名 + 上下文窗口预设档
- * chips + 数字输入）+ 自定义模型添加行（重 ID 报已添加）。
+ * 别名 + ctx·max 徽章 + 视觉徽章 + 高级折叠 + ×）+ 高级展开（别名 + 上
+ * 下文窗口 + 最大输出 + 图像输入钉死 + 只读推理梯子 + 价格行，均带
+ * 「跟随 models.dev，编辑即钉死」提示）+ 自定义模型添加行（重 ID 报已
+ * 添加；添加即查目录就地升级——批 A）。目录合并：sources 为 null 的行
+ * （客户端新建）自动查目录补齐，未命中落定全未知形态防回环。
  * 探测/防抖在父组件（ProviderSetupDialog），这里只摆清单与选中态。
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { llmLookupModel } from "../../../lib/api";
 import { Icon } from "../../../lib/icons";
+import {
+  catalogHitToRow,
+  emptyModelRow,
+  formatPricingShort,
+  hasImageInput,
+  markRowUnknown,
+} from "../../../lib/model-catalog";
 import { formatLimitShort, WINDOW_PRESETS } from "../../../lib/provider-presets";
 import { profileWindow } from "../../../lib/model-profiles";
 import type { ProviderModelView } from "../../../types";
+import HoverTip from "../HoverTip.vue";
 
 const props = defineProps<{
   /** 探测到的可用模型 id（空 = 未探测/无清单）。 */
@@ -22,6 +34,9 @@ const props = defineProps<{
   probeState: "idle" | "loading" | "ready" | "error";
   /** 已选清单（右栏真源，父组件持久）。 */
   chosen: ProviderModelView[];
+  /** 表单 kind + baseUrl（目录匹配的供应商定位输入）。 */
+  kind: string;
+  baseUrl: string;
   disabled?: boolean;
 }>();
 const emit = defineEmits<{
@@ -38,6 +53,8 @@ const customError = ref("");
 const expandedId = ref<string | null>(null);
 const dragId = ref<string | null>(null);
 const overIndex = ref(-1);
+/** 在途目录合并（防重复请求 + 合并回环）。 */
+const mergingIds = new Set<string>();
 
 const selectedSet = computed(() => new Set(props.chosen.map((m) => m.id.toLowerCase())));
 
@@ -71,6 +88,49 @@ const windowBadge = (id: string): string => {
   const hit = props.chosen.find((m) => m.id.toLowerCase() === id.toLowerCase());
   return formatLimitShort(hit?.contextWindow ?? profileWindow(id));
 };
+/** 右栏行 ctx·max 徽章（目录合成值直读，钉死/目录一视同仁）。 */
+const limitBadge = (m: ProviderModelView): string => {
+  const parts: string[] = [];
+  const ctx = formatLimitShort(m.contextWindow ?? profileWindow(m.id));
+  if (ctx) parts.push(ctx);
+  const max = formatLimitShort(m.maxOutput);
+  if (max) parts.push(max);
+  return parts.join(" · ");
+};
+
+/** 目录合并：sources 为 null（客户端新建）的行查目录就地升级。 */
+async function mergeCatalog(ids: string[]) {
+  ids.forEach((id) => mergingIds.add(id.toLowerCase()));
+  try {
+    const hits = await Promise.all(
+      ids.map((id) =>
+        llmLookupModel(props.kind, props.baseUrl || null, id).catch(() => null),
+      ),
+    );
+    const byId = new Map(ids.map((id, i) => [id.toLowerCase(), hits[i]]));
+    emit(
+      "update",
+      props.chosen.map((m) => {
+        const hit = byId.get(m.id.toLowerCase());
+        if (hit === undefined) return m;
+        return hit ? catalogHitToRow(m, hit) : markRowUnknown(m);
+      }),
+    );
+  } finally {
+    ids.forEach((id) => mergingIds.delete(id.toLowerCase()));
+  }
+}
+
+watch(
+  () => props.chosen,
+  (rows) => {
+    const need = rows
+      .filter((m) => m.sources === null && !mergingIds.has(m.id.toLowerCase()))
+      .map((m) => m.id);
+    if (need.length > 0) void mergeCatalog(need);
+  },
+  { immediate: true },
+);
 
 function toggle(id: string) {
   const key = id.toLowerCase();
@@ -78,7 +138,7 @@ function toggle(id: string) {
     emit("update", props.chosen.filter((m) => m.id.toLowerCase() !== key));
     return;
   }
-  emit("update", [...props.chosen, { id, alias: null, contextWindow: null }]);
+  emit("update", [...props.chosen, emptyModelRow(id)]);
 }
 
 function toggleVisible(select: boolean) {
@@ -89,7 +149,7 @@ function toggleVisible(select: boolean) {
   }
   const additions = availRows.value
     .filter((i) => !selectedSet.value.has(i.toLowerCase()))
-    .map((id) => ({ id, alias: null, contextWindow: null }));
+    .map((id) => emptyModelRow(id));
   emit("update", [...props.chosen, ...additions]);
 }
 
@@ -110,6 +170,19 @@ function updateChosen(id: string, patch: Partial<ProviderModelView>) {
   );
 }
 
+/** 钉死编辑：写值的同时把对应来源标成 user（编辑即钉死，供应商稿 §4.1）。 */
+function pinEdit(id: string, patch: Partial<ProviderModelView>) {
+  const src: Partial<ProviderModelView["sources"]> = {};
+  if ("contextWindow" in patch) src.window = "user";
+  if ("maxOutput" in patch) src.maxOutput = "user";
+  if ("supportsImage" in patch) src.modalities = "user";
+  const first = props.chosen.find((m) => m.id === id);
+  updateChosen(id, {
+    ...patch,
+    sources: { ...(first?.sources ?? { window: null, maxOutput: null, modalities: null, reasoning: null }), ...src },
+  } as Partial<ProviderModelView>);
+}
+
 function removeChosen(id: string) {
   emit("update", props.chosen.filter((m) => m.id !== id));
   if (expandedId.value === id) expandedId.value = null;
@@ -128,7 +201,7 @@ function onDrop(targetId: string) {
   emit("update", next);
 }
 
-/** 手工 id 落右栏即刻展开（PI 同款）；重 id 报已添加。 */
+/** 手工 id 落右栏即刻展开（PI 同款）+ 查目录就地升级（批 A）；重 id 报已添加。 */
 function addCustom() {
   const id = customId.value.trim();
   if (!id) return;
@@ -137,11 +210,13 @@ function addCustom() {
     return;
   }
   const known = props.available.find((i) => i.toLowerCase() === id.toLowerCase());
+  const row = emptyModelRow(known ?? id);
+  // 静态档案窗口预填（v2.58 行为保留）：只写值、不标来源——sources 保持
+  // null 让目录合并接管（走查实抓：标 user 会挡住合并，梯子/价格/模态全
+  // 缺席）；目录命中以目录值为准（比静态表准），未命中预填值存盘即钉死。
   const win = profileWindow(known ?? id);
-  emit("update", [
-    ...props.chosen,
-    { id: known ?? id, alias: null, contextWindow: win },
-  ]);
+  if (win) row.contextWindow = win;
+  emit("update", [...props.chosen, row]);
   expandedId.value = known ?? id;
   customId.value = "";
   customError.value = "";
@@ -272,8 +347,11 @@ watch(() => props.available, () => (expandedId.value = null));
               </button>
               <span class="min-w-0 flex-1 select-text truncate font-mono text-[length:var(--lw-fs-12)] text-ink-1">{{ m.id }}</span>
               <span v-if="m.alias?.trim()" class="shrink-0 text-[length:var(--lw-fs-11)] text-ink-4">{{ m.alias }}</span>
+              <span v-if="hasImageInput(m)" class="shrink-0 text-ink-4" :title="t('settings.modelVisionBadge')">
+                <Icon name="eye" :size="12" />
+              </span>
               <span class="shrink-0 text-[length:var(--lw-fs-11)] tabular-nums text-ink-4">
-                {{ formatLimitShort(m.contextWindow ?? profileWindow(m.id)) }}
+                {{ limitBadge(m) }}
               </span>
               <button
                 type="button"
@@ -305,7 +383,17 @@ watch(() => props.available, () => (expandedId.value = null));
                 />
               </label>
               <div class="flex items-start gap-2">
-                <span class="w-16 shrink-0 pt-1 text-[length:var(--lw-fs-11)] text-ink-4">{{ t("settings.modelWindow") }}</span>
+                <span class="flex w-16 shrink-0 items-center gap-0.5 pt-1 text-[length:var(--lw-fs-11)] text-ink-4">
+                  {{ t("settings.modelWindow") }}
+                  <HoverTip
+                    v-if="m.sources?.window === 'catalog'"
+                    class="text-ink-5"
+                    :text="t('settings.modelFollowCatalog')"
+                    :label="t('settings.modelFollowCatalog')"
+                  >
+                    <Icon name="info" :size="12" />
+                  </HoverTip>
+                </span>
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap gap-1">
                     <button
@@ -319,7 +407,7 @@ watch(() => props.available, () => (expandedId.value = null));
                           : 'bg-wash-3 text-ink-3 hover:text-ink-1'
                       "
                       :aria-pressed="m.contextWindow === p.tokens"
-                      @click="updateChosen(m.id, { contextWindow: p.tokens })"
+                      @click="pinEdit(m.id, { contextWindow: p.tokens })"
                     >
                       {{ p.label }}
                     </button>
@@ -332,12 +420,85 @@ watch(() => props.available, () => (expandedId.value = null));
                     class="lw-field lw-field-num mt-1.5"
                     :placeholder="t('settings.modelWindowPlaceholder')"
                     @change="
-                      updateChosen(m.id, {
+                      pinEdit(m.id, {
                         contextWindow: Number(($event.target as HTMLInputElement).value) || null,
                       })
                     "
                   />
                 </div>
+              </div>
+              <!-- 最大输出（批 A 钉死值；批 B 起钉死值才随请求发送+预检钳制） -->
+              <div class="flex items-center gap-2">
+                <span class="flex w-16 shrink-0 items-center gap-0.5 text-[length:var(--lw-fs-11)] text-ink-4">
+                  {{ t("settings.modelMaxOutput") }}
+                  <HoverTip
+                    class="text-ink-5"
+                    :text="t('settings.modelFollowCatalog')"
+                    :label="t('settings.modelFollowCatalog')"
+                  >
+                    <Icon name="info" :size="12" />
+                  </HoverTip>
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  inputmode="numeric"
+                  :value="m.maxOutput ?? ''"
+                  class="lw-field lw-field-num"
+                  :placeholder="m.sources?.maxOutput === 'catalog' ? t('settings.modelFromCatalog') : t('settings.modelMaxOutputPlaceholder')"
+                  @change="
+                    pinEdit(m.id, {
+                      maxOutput: Number(($event.target as HTMLInputElement).value) || null,
+                    })
+                  "
+                />
+              </div>
+              <!-- 图像输入（tri-state 钉死：None 随目录 / 纯文本缺省） -->
+              <label class="flex items-center gap-2">
+                <span class="flex w-16 shrink-0 items-center gap-0.5 text-[length:var(--lw-fs-11)] text-ink-4">
+                  {{ t("settings.modelImageInput") }}
+                  <HoverTip
+                    v-if="m.sources?.modalities === 'catalog'"
+                    class="text-ink-5"
+                    :text="t('settings.modelFollowCatalog')"
+                    :label="t('settings.modelFollowCatalog')"
+                  >
+                    <Icon name="info" :size="12" />
+                  </HoverTip>
+                </span>
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5 accent-[var(--lw-accent)]"
+                  :checked="hasImageInput(m)"
+                  :disabled="disabled"
+                  @change="
+                    pinEdit(m.id, {
+                      supportsImage: ($event.target as HTMLInputElement).checked,
+                    })
+                  "
+                />
+                <span v-if="m.sources?.modalities === null" class="text-[length:var(--lw-fs-11)] text-ink-5">
+                  {{ t("settings.modelModalityUnknown") }}
+                </span>
+              </label>
+              <!-- 推理梯子（只读；预设方言接线随批 B） -->
+              <div v-if="m.reasoningLadder.length > 0" class="flex items-start gap-2">
+                <span class="w-16 shrink-0 pt-1 text-[length:var(--lw-fs-11)] text-ink-4">{{ t("settings.modelLadder") }}</span>
+                <div class="flex min-w-0 flex-1 flex-wrap gap-1">
+                  <span
+                    v-for="lvl in m.reasoningLadder"
+                    :key="lvl"
+                    class="rounded-full bg-wash-3 px-2 py-0.5 font-mono text-[length:var(--lw-fs-11)] text-ink-3"
+                  >{{ lvl }}</span>
+                </div>
+              </div>
+              <!-- 价格（models.dev USD 原值如实，只作参考不进计算） -->
+              <div v-if="formatPricingShort(m.pricing)" class="flex items-center gap-2">
+                <span class="w-16 shrink-0 text-[length:var(--lw-fs-11)] text-ink-4">{{ t("settings.modelPricing") }}</span>
+                <span class="text-[length:var(--lw-fs-11)] tabular-nums text-ink-3">
+                  {{ formatPricingShort(m.pricing) }}
+                  <span class="text-ink-5">/ {{ t("settings.modelPricingUnit") }}</span>
+                </span>
               </div>
             </div>
           </li>
