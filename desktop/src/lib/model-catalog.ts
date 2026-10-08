@@ -27,6 +27,7 @@ export function emptyModelRow(id: string): ProviderModelView {
     maxOutput: null,
     maxOutputSource: null,
     supportsImage: null,
+  availableForSubagents: null,
     inputModalities: [],
     reasoningLadder: [],
     toolCall: null,

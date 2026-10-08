@@ -4,6 +4,7 @@
 mod ask;
 mod assets;
 mod llm;
+mod llm_import;
 mod memory;
 mod organize;
 mod plugins;
@@ -15,6 +16,7 @@ use std::sync::Arc;
 pub use ask::*;
 pub use assets::*;
 pub use llm::*;
+pub use llm_import::*;
 pub use memory::*;
 pub use organize::*;
 pub use plugins::*;

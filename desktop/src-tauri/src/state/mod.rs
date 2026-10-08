@@ -158,12 +158,15 @@ pub fn init_state(app: AppHandle) -> AppState {
     let catalog = Arc::new(crate::llm::catalog::CatalogStore::new(catalog_bundled));
     // 批 D 资产存储：`<数据根>/assets/` 内容寻址（wire 编码字节源 + GC 根）
     let assets = Arc::new(crate::assets::AssetStore::new(root.join("assets")));
-    let llm: Arc<dyn LlmService> = Arc::new(
+    // 批 F：AppLlm 保具体类型句柄——子代理模型面工厂（SubagentLlm 内层）
+    // 与全局服务共用同一实例。
+    let app_llm = Arc::new(
         AppLlm::with_overrides(Arc::clone(&settings), Arc::clone(&model_overrides))
             .with_retry_surface(Arc::clone(&stop_flags), llm_notify)
             .with_diagnoser(Arc::clone(&llm_diagnoser))
             .with_multimodal(Arc::clone(&assets), Arc::clone(&catalog)),
     );
+    let llm: Arc<dyn LlmService> = Arc::clone(&app_llm) as Arc<dyn LlmService>;
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
     // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）；v4.11 §3.39④
     // 停止标记注册表同柄——delta 回调点逐段查询，命中即带部分正文收束。
@@ -328,8 +331,27 @@ pub fn init_state(app: AppHandle) -> AppState {
     let sub_tx = Arc::new(crate::sub_transcript::SubTranscriptStore::new(
         root.join("sub-transcripts"),
     ));
+    // 批 F 子代理模型面工厂：每子 run 造一个 SubagentLlm（钉档 + 可用标
+    // 记池的终端错误回退链）+ 报告句柄；链空 = 纯透传零行为变化。
+    let child_model_factory: kernel_agent::ChildModelFactory = {
+        let llm = Arc::clone(&app_llm);
+        let settings = Arc::clone(&settings);
+        let catalog = Arc::clone(&catalog);
+        Arc::new(move || {
+            let report = Arc::new(kernel_agent::ChildModelReport::default());
+            let service: Arc<dyn LlmService> = Arc::new(crate::llm::SubagentLlm::new(
+                Arc::clone(&llm),
+                Arc::clone(&settings),
+                Arc::clone(&catalog),
+                Arc::clone(&report),
+            ));
+            kernel_agent::ChildModelHandle { service, report }
+        })
+    };
     let sub_tool: Arc<dyn plugin_api::Tool> = Arc::new(
-        SubagentTool::new(Arc::clone(&kernel), Arc::clone(&gate)).with_transcript_sink(sub_tx),
+        SubagentTool::new(Arc::clone(&kernel), Arc::clone(&gate))
+            .with_transcript_sink(Arc::clone(&sub_tx) as Arc<dyn kernel_agent::SubTranscriptSink>)
+            .with_child_model_factory(child_model_factory),
     );
     // v4.11 §3.39① ask_user 内置工具（Pure + always，见 ask_hub 处注释）
     let ask_tool: Arc<dyn plugin_api::Tool> =
@@ -361,6 +383,12 @@ pub fn init_state(app: AppHandle) -> AppState {
         )
     });
     let read_image_tool = crate::media::ReadImageTool::new(Arc::clone(&assets), media_limits);
+    // G5 子代理独立验收（Pure + OnDemand）：读子转录 + 验收 LLM 调用（辅
+    // 助降档）。与全局服务同一 AppLlm 实例。
+    let verify_tool: Arc<dyn plugin_api::Tool> = Arc::new(crate::subagent_verify::SubagentVerifyTool::new(
+        Arc::clone(&llm),
+        root.join("sub-transcripts"),
+    ));
     let with_host_tools = |src: KernelToolSource| {
         let src = src
             .with_builtin(Arc::clone(&send_email))
@@ -379,6 +407,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         };
         src.with_builtin(Arc::clone(&sub_tool))
             .with_builtin(Arc::clone(&ask_tool))
+            .with_builtin(Arc::clone(&verify_tool))
     };
 
     let search_catalog = Arc::new(with_host_tools(KernelToolSource::new(

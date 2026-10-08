@@ -68,6 +68,7 @@ mod settings;
 mod state;
 mod stop;
 mod sub_transcript;
+mod subagent_verify;
 mod thinking_language;
 mod title;
 mod tool_source;
@@ -225,6 +226,8 @@ pub fn run() {
             commands::llm_catalog_status,
             commands::llm_catalog_refresh,
             commands::llm_lookup_model,
+            commands::llm_import_scan,
+            commands::llm_import_apply,
             commands::open_external_url,
             commands::pick_save_path,
             commands::notification_list,

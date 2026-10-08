@@ -49,6 +49,8 @@ import type {
   TreeOriginalItem,
   OrganizeDonePayload,
   OrganizePausedPayload,
+  ImportApplyReport,
+  ImportScanOutcome,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。
@@ -418,6 +420,16 @@ export function llmProbeModels(
   profileId: string | null,
 ): Promise<ProbeOutcome> {
   return invoke("llm_probe_models", { kind, baseUrl, apiKey, profileId });
+}
+
+/** 导入面板扫描（批 F）：四源纯读预览；候选不带 Key（hasKey 布尔）。 */
+export function llmImportScan(): Promise<ImportScanOutcome> {
+  return invoke("llm_import_scan");
+}
+
+/** 导入选中项：新档追加落盘；返回逐条结果（导入/跳过带因）。 */
+export function llmImportApply(ids: string[]): Promise<ImportApplyReport> {
+  return invoke("llm_import_apply", { ids });
 }
 
 /** 逐模型连通测试（§8.3）：最小请求 ping，五分类错误 + 延迟如实。 */

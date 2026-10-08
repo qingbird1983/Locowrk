@@ -362,6 +362,7 @@ fn synthesize_view_pins_win_over_catalog() {
             output: Some(0.6),
             cache_read: Some(0.003),
         }),
+        family: Some("deepseek".into()),
     };
     // 无钉死 = 目录全量跟随（sources.catalog）
     let pm = ProviderModel {
@@ -494,4 +495,69 @@ fn network_proxy_validation_and_normalization() {
         .as_deref(),
         Some("http://a:1")
     );
+}
+
+/// 批 F 子代理钉档：合法钉档落盘 / 空 provider_id = 清除 / 指向不存在
+/// 档位拒收不污染内存态（v2.65「空串 = 清除」约定同款）。
+#[test]
+fn subagent_pin_update_validates_and_clears() {
+    use crate::settings::{LlmConfig, LlmUpdate, ProviderProfile, SubagentPin};
+    let mut cfg = LlmConfig {
+        active: "p1".into(),
+        providers: vec![ProviderProfile {
+            id: "p1".into(),
+            label: "DeepSeek".into(),
+            kind: "openai".into(),
+            model: "deepseek-flash".into(),
+            enabled: true,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    // 合法钉档
+    cfg.apply_update(&LlmUpdate {
+        subagent: Some(SubagentPin {
+            provider_id: "p1".into(),
+            model: "deepseek-v4-pro".into(),
+            thinking_level: Some("high".into()),
+        }),
+        ..Default::default()
+    })
+    .unwrap();
+    let pin = cfg.subagent.clone().expect("pin set");
+    assert_eq!(pin.model, "deepseek-v4-pro");
+    assert_eq!(pin.thinking_level.as_deref(), Some("high"));
+    // 空 provider_id = 清除
+    cfg.apply_update(&LlmUpdate {
+        subagent: Some(SubagentPin::default()),
+        ..Default::default()
+    })
+    .unwrap();
+    assert!(cfg.subagent.is_none(), "空钉档 = 清除");
+    // 指向不存在档位：Err 且不污染
+    let err = cfg
+        .apply_update(&LlmUpdate {
+            subagent: Some(SubagentPin {
+                provider_id: "ghost".into(),
+                model: "m".into(),
+                thinking_level: None,
+            }),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(err.contains("不存在"));
+    assert!(cfg.subagent.is_none());
+    // 停用档拒收
+    cfg.providers[0].enabled = false;
+    let err = cfg
+        .apply_update(&LlmUpdate {
+            subagent: Some(SubagentPin {
+                provider_id: "p1".into(),
+                model: "m".into(),
+                thinking_level: None,
+            }),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(err.contains("停用"));
 }

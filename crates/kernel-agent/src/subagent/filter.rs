@@ -11,7 +11,8 @@ use plugin_api::{Tool, ToolError, ToolSpec};
 use crate::kernel::ToolSource;
 
 /// 子 Agent 自身（单层派生的硬底线：白名单显式包含也剔除——
-/// 子不可再生子，防失控递归）。
+/// 子不可再生子，防失控递归）。批 F 起剔除面 = `subagent_` 前缀
+/// （`subagent_verify` 验收同族：验收发生在父会话，子不自验收）。
 pub const SELF_TOOL: &str = "subagent_run";
 
 /// 父目录的白名单过滤包装。`allow` 为空 = 继承父全目录（仍剔除自身）；
@@ -31,7 +32,7 @@ impl FilterToolSource {
     }
 
     fn permitted(&self, name: &str) -> bool {
-        name != SELF_TOOL && (self.allow.is_empty() || self.allow.contains(name))
+        !name.starts_with("subagent_") && (self.allow.is_empty() || self.allow.contains(name))
     }
 }
 

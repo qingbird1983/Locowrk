@@ -67,6 +67,19 @@ async fn empty_allow_inherits_all_except_self() {
     assert!(f.resolve(None, "echo").await.is_ok());
 }
 
+/// 批 F：剔除面 = `subagent_` 前缀——验收同族（subagent_verify）也不进
+/// 子目录（验收发生在父会话，子不自验收）。
+#[tokio::test]
+async fn prefix_strips_whole_subagent_family() {
+    let f = FilterToolSource::new(
+        Arc::new(FixedSource(vec!["echo", "subagent_run", "subagent_verify"])),
+        vec![],
+    );
+    let names: Vec<String> = f.list(None).await.into_iter().map(|s| s.name).collect();
+    assert_eq!(names, vec!["echo".to_owned()]);
+    assert!(f.resolve(None, "subagent_verify").await.is_err());
+}
+
 #[tokio::test]
 async fn explicit_allow_is_strict_subset() {
     let f = FilterToolSource::new(

@@ -36,6 +36,8 @@ pub struct CatalogModel {
     pub reasoning_options: Vec<String>,
     pub tool_call: Option<bool>,
     pub pricing: Option<CatalogPricing>,
+    /// models.dev `family`（批 F 推荐三选的族分散键；缺失 = None）。
+    pub family: Option<String>,
 }
 
 /// 每百万 token 单价（models.dev `cost` 原样，USD）。
@@ -243,6 +245,11 @@ fn parse_model(provider_key: &str, model_id: &str, mv: &Value) -> CatalogModel {
                 output: c.get("output").and_then(Value::as_f64),
                 cache_read: c.get("cache_read").and_then(Value::as_f64),
             }),
+        family: mv
+            .get("family")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
     }
 }
 

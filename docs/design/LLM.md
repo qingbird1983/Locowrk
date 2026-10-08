@@ -1,12 +1,13 @@
 # LLM 接入设计（阶段八②参考）
 
-> 版本行：v3.5（2026-10-08）——批 E 多模态进阶（工具结果图片投影 D4 /
-> screenshot·read_image·pdf_to_images 三工具 / pdfium 随包 / 降级链挂捆
-> 边界最小形态）。v3.4 批 D 多模态地基（ContentPart 消息结构 / wire
-> content 数组编码 / AssetStore 内容寻址 / 上传链路 / 双道门控 / 估算平
-> 铺）。v3.3 批 C 连接与安全（keyring / 自定义请求头 / 端点扫描 / 逐模型
-> 测试 / 网络代理）。v3.2 批 B 推理档位（方言即数据）+ 输出预检钳制（D5
-> 窄修订）+ G1 length 闸；v3.1 批 A 目录；v3.0（2026-10-05）
+> 版本行：v3.6（2026-10-08）——批 F 生态（子代理模型档 + 终端错误回退链 /
+> 从其他工具导入 / 推荐三选 / subagent_verify 验收随批）。v3.5 批 E 多模态
+> 进阶（工具结果图片投影 D4 / screenshot·read_image·pdf_to_images 三工具 /
+> pdfium 随包 / 降级链挂捆边界最小形态）。v3.4 批 D 多模态地基（ContentPart
+> 消息结构 / wire content 数组编码 / AssetStore 内容寻址 / 上传链路 / 双道
+> 门控 / 估算平铺）。v3.3 批 C 连接与安全（keyring / 自定义请求头 / 端点扫
+> 描 / 逐模型测试 / 网络代理）。v3.2 批 B 推理档位（方言即数据）+ 输出预检
+> 钳制（D5 窄修订）+ G1 length 闸；v3.1 批 A 目录；v3.0（2026-10-05）
 > **方案一（genai 统一库）退役**，改为自建 OpenAI 兼容统一客户端。v2.x =
 > genai 三合一（历史见 CHANGELOG）。
 
@@ -279,3 +280,96 @@ chip 与查看器内按钮）。
 = 计划内失效语义）。「视觉模型生成一句话描述替代原图」记档 P2 缓办
 （整理期视觉辅助调用 = 新辅助调用面，待裁定）。**detail 旋钮 = 裁掉**
 （单线兼容层 detail 支持不一，宁缺勿假）。
+
+## 生态（批 F，v3.6 增补）
+
+### 子代理模型档 + 终端错误回退链
+
+**数据面**（全部 serde 字段级缺省零迁移）：
+
+- `ProviderModel.available_for_subagents: Option<bool>`——用户钉死的
+  「可用于子代理」标记（models.dev 无此数据，目录永不提供；None = 不参与，
+  `true` = 进池，宁缺勿假与模态门控同向）。设置 → 模型编辑模态高级区逐
+  模型开关；此标记是子代理钉模型选择器与回退链的共同数据源。
+- `LlmConfig.subagent: Option<SubagentPin>`——子代理主模型钉档
+  `{ providerId, model, thinkingLevel? }`。None（缺省）= 跟随会话（子请求
+  走父会话的会话覆盖 → 设置缺省，v2.131 及以前行为逐字节不变）。
+  `thinkingLevel` Some 时子请求吃钉档档位（经方言 clamp，同批 B 通道）。
+
+**路由通道**：`params["route"] = {provider, model, thinking?}`（§7.2 opaque
+params 是 sanctioned 通道，内核零改动）。`AppLlm::effective_cfg` 在会话覆盖
+之后、决策环 `req.model` 之前消费：命中 → `flat_profile(route.provider)` 整
+档换 + `cfg.model = route.model`；`prepare` 的能力面（maxOutput 钉死 / 窗口
+/ 图像三态 / 档位链）全部按路由后形状解析——一条代码路径，无第二装配形。
+`build_payload` 只读白名单 params（temperature/thinking_level），`route` 不
+进请求体（字节层面零泄漏）。
+
+**回退链**（PI 案落档）：新 `llm/subagent_llm.rs` `SubagentLlm`（实现
+`LlmService`，每个子 run 一个实例）：
+
+- 链构成：**钉档（若在）打头，其后 = 标记池**（enabled + has_key 档位 ×
+  `available_for_subagents == true` 模型，档位表顺序），排除与当前相同的
+  「provider/model」；构造时快照（run 内身份稳定）。链空 = 纯透传
+  `AppLlm`（零行为变化）。
+- 触发：**凡从 `AppLlm` 上抛的 `Err` 都是 Fatal**（v2.75 韧性纪律：瞬时错
+  误在客户端内不设上限重试，停止走 `Ok` 空收束不上抛）——`Err` = 推进到链
+  中下一个候选，同请求重试；链耗尽返回最后错误。**偏离记档**：PI 对瞬时
+  错误在子代理内有界重试后回退，本项目维持 v2.75「不设次数上限」用户裁定，
+  瞬时故障靠超时收束、回退只接终端错误——死供应商不触发回退（重试不可收
+  束是主会话同款语义，停止键/超时是退路）。
+- **窗口装不下已携上下文的候选跳过**（PI 案）：`est = estimate_tokens(req.
+  messages)`，候选窗口 = 模型行 context_window ?? 目录命中 ?? 档位
+  window_tokens；窗口已知且 `est >= window` → 跳过并记因（不烧槽位）；
+  窗口未知照试（装不下自然溢出推进，宁缺勿假不发明硬顶）。
+- 子内流式 sink 已被 `NoLlmStreamSink` 压制（⑳），回退重试无重复 delta 面。
+
+**内核面**（kernel-agent，`subagent/child_model.rs` 新）：`ChildModelHandle
+{ service, report }` + `ChildModelFactory = Arc<dyn Fn() -> ChildModelHandle>
+`；`Kernel::child_kernel` 增参，Some 时 `provide_dyn_scoped::<dyn
+LlmService>`（child_kernel scoped LlmService 先例——全局 AppLlm 回退语义保
+持：无工厂 = 与今日逐字节同形）。`SubagentOutcome` 增 `model`（末用模型）/
+`model_failures`（跳过与失败记因）两 JSON 键（手工 json!，零 schema 面）。
+
+**UI**：设置 → 模型新增「子代理模型」组（跟随会话缺省 + 更改浮层只列标记
+模型 + 钉档档位行随标记模型梯子）；模型高级区「可用于子代理」开关。
+
+### 从其他工具导入（纯读）
+
+四解析器（`llm/import/`，纯函数 + 路径注入可测；**密钥不进 IPC**——候选只
+带 `has_key` 布尔，apply 时后端自行从源读）：
+
+| 源 | 位置 | 形态 | kind 映射 |
+| :--- | :--- | :--- | :--- |
+| claude-code | `~/.claude/settings.json`（+ `settings.local.json` 浅合并） | `env.ANTHROPIC_AUTH_TOKEN/BASE_URL/MODEL`（+ SONNET/OPUS/HAIKU 去重并入清单） | `anthropic` |
+| codex | `~/.codex/config.toml` + `auth.json` | `model_provider` + `[model_providers.<id>]`（base_url）+ `model`/`review_model`；key = `OPENAI_API_KEY` | `openai`；`wire_api != "chat"` 带 note（_responses 端点 chat 兼容性未知，如实标注不拦） |
+| opencode | `~/.config/opencode/opencode.json`（key 缺席回落 `~/.local/share/opencode/auth.json`） | `provider.<id>{options.apiKey/baseURL, models{}}` + `model = "<prov>/<mid>"`；窗口自 `limit.context` | `openai`；npm 非 `openai-compatible` 带 note |
+| cc-switch | `~/.cc-switch/cc-switch.db`（SQLite `providers` 表；legacy `config.json` 存在才兜底读） | 容器：`settings_config` 按 `app_type` 分派给上面三个解析器 | 随分派 |
+
+命令两件：`llm_import_scan`（全源扫描 → `ImportCandidate` 列表，失败源如实
+带错不拖垮其它源）+ `llm_import_apply`（选中项 → 新 `ProviderProfile` 追加
+落盘，id 后端生成、label 带「(来源)」后缀；同 base_url 已存档**不合并**照
+新建——用户在预览里自己挑）。UI：模型配置页「AI 服务」组头「导入」按钮 →
+`ImportDialog.vue`（扫描 → 候选勾选清单[来源/名称/端点/模型数/note] → 导入
+选中 → 刷新列表）。
+
+### 推荐三选
+
+`llm/recommend.rs` 纯函数，探测命令返回 `ProbeOutcome.recommended`（serde
+缺省）：①目录 `tool_call` 有 `Some(true)` 在场 → 剔 `Some(false)`（未知
+None 留）；②按价格升序（input+output 之和，未知最后，同价 id 字典序）；
+③族分散：`family`（None = id 自成族）至多取 1；④取 ≤3。目录全未命中 =
+列表序前 3 保底。前端 `maybeAutoPick` 改吃 `recommended`（手动改选即退出自
+动预选语义不变；recommended 空 = 旧「≤8 全选」回落）。
+
+### subagent_verify 独立验收（随批 G5）
+
+宿主内置 Pure + OnDemand 工具（`subagent_verify.rs`）：入参 `{subagent_id,
+acceptance_criteria[]}`（id 白名单 `[A-Za-z0-9_-]` 防穿越）→ 读
+`sub-transcripts/<id>.jsonl` 紧凑转录（每消息 clip 2000 字符，总顶 60K）→
+**验收 LLM 调用吃辅助降档**（`params["aux"]=true`，批 B §5.4 通道：方言最
+低档 + 不发 max_tokens）→ 逐准则裁决 `{status: verified|failed|
+inconclusive, criteria[], summary}`。**claimed/verified 分离**：
+`subagent_run` 输出 = claimed，`subagent_verify` 输出 = verified——分离在
+既有工具结果通道表达，**不设新 SessionEvent**（设计稿 §7.6 偏离记档：验收
+结果就是父会话里的一次工具结果，双轨事件无增益）。`FilterToolSource` 剔除
+面从「`subagent_run` 精确名」扩为「`subagent_` 前缀」——子不自验收。

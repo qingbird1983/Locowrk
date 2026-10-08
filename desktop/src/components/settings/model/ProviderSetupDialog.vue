@@ -68,8 +68,15 @@ const resolvedBaseUrl = computed(() => preset.value?.baseUrl ?? baseUrl.value.tr
 const chooserOpen = computed(() => choosing.value || !service.value);
 
 /** 探测（请求序号防旧覆新，实现在 use-model-probe）。 */
-const { probeState, available, probeError, effectiveBaseUrl, run: probeRun, reset: resetProbe } =
-  useModelProbe();
+const {
+  probeState,
+  available,
+  recommended,
+  probeError,
+  effectiveBaseUrl,
+  run: probeRun,
+  reset: resetProbe,
+} = useModelProbe();
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 当前表单形态探测一次（ready 后触发自动预选 + 端点扫描采纳检查）。 */
@@ -140,10 +147,19 @@ function matchingPresetId(p: ProviderView): string | null {
   return hit?.id ?? null;
 }
 
-/** 添加路径首次探测成功自动全选 ≤ AUTO_PICK_MAX（手动改选即退出）。 */
+/** 添加路径首次探测成功自动预选（批 F 推荐三选：后端目录数据驱动
+ * ≤3——族分散 / toolCall 必备 / 超贵降权；recommended 空 = 旧「全选 ≤8」
+ * 回落。手动改选即退出自动预选。） */
 function maybeAutoPick() {
   if (props.provider || props.draft || touched.value) return;
   if (probeState.value !== "ready" || models.value.length > 0) return;
+  if (recommended.value.length > 0) {
+    const keys = new Set(recommended.value.map((r) => r.toLowerCase()));
+    models.value = available.value
+      .filter((id) => keys.has(id.toLowerCase()))
+      .map((id) => emptyModelRow(id));
+    return;
+  }
   if (available.value.length === 0 || available.value.length > AUTO_PICK_MAX) return;
   models.value = available.value.map((id) => emptyModelRow(id));
 }
@@ -159,7 +175,9 @@ function onPickService(id: string) {
   const next = PROVIDER_PRESETS.find((p) => p.id === id);
   // Key 属于它贴上去的服务：换服务清空（编辑态不换预设则保留）。
   apiKey.value = "";
-  touched.value = true;
+  // 选服务 ≠ 手动改模型选择：不置 touched——否则添加路径的自动预选
+  // （批 F 推荐三选 / 原「全选 ≤8」）永远不触发（v2.58 起沉睡，v2.132
+  // 走查实抓）。touched 只由 onChosenUpdate（手动勾模型）置位。
   service.value = id;
   if (next) {
     if (!name.value.trim() || PROVIDER_PRESETS.some((p) => p.name === name.value)) {

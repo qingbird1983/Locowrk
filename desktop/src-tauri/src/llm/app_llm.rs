@@ -26,7 +26,7 @@ use super::dialect;
 use super::wire::WireCaps;
 use crate::demo_llm::DemoLlm;
 use crate::model_override::ModelOverrideStore;
-use crate::settings::{LlmSettings, SettingsStore};
+use crate::settings::{LlmSettings, SettingsStore, SubagentPin};
 
 /// 重试通知出口（组装点闭包 emit `agent://llm-retry`；v2.66 同款组装闭包
 /// 模式——AppHandle 不进 llm 模块）。
@@ -144,8 +144,25 @@ impl AppLlm {
         })
     }
 
-    /// 本请求的生效配置：设置活动档 → 会话覆盖改写 → 决策环 model 改写。
-    /// 档位路由经 `flat_profile`（keyring 双读 + headers + 全区代理随行）。
+    /// 批 F 路由面：`params["route"] = {provider, model, thinking?}`（§7.2
+    /// opaque params sanctioned 通道，内核零改动；build_payload 只读白名单
+    /// params，route 不进请求体）。子代理模型面（SubagentLlm）写，本函数
+    /// 只读不解释来源。
+    fn route_of(req: &LlmRequest) -> Option<SubagentPin> {
+        let r = req.params.get("route")?;
+        Some(SubagentPin {
+            provider_id: r.get("provider").and_then(Value::as_str)?.to_string(),
+            model: r.get("model").and_then(Value::as_str)?.to_string(),
+            thinking_level: r
+                .get("thinking")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        })
+    }
+
+    /// 本请求的生效配置：设置活动档 → 会话覆盖改写 → **子代理路由改写
+    /// （批 F）** → 决策环 model 改写。档位路由经 `flat_profile`（keyring
+    /// 双读 + headers + 全区代理随行）。
     pub(crate) fn effective_cfg(&self, req: &LlmRequest) -> LlmSettings {
         let mut cfg = self.settings.llm();
         if let (Some(store), Some(sid)) = (&self.overrides, &req.session_id) {
@@ -155,6 +172,14 @@ impl AppLlm {
                 }
                 cfg.model = model;
             }
+        }
+        // 子代理路由（批 F）：整档换 + 模型名替换。在决策环 req.model 之前
+        // ——route 是组装点意志，决策环改写仍最高优先级。
+        if let Some(route) = Self::route_of(req) {
+            if let Some(p) = self.settings.llm_config().profile(&route.provider_id) {
+                cfg = self.settings.llm_config().flat_profile(p);
+            }
+            cfg.model = route.model;
         }
         // §7.2 决策环的 model 改写是最高优先级（会话覆盖只在缺省层生效）
         if let Some(m) = &req.model {
@@ -184,16 +209,22 @@ impl AppLlm {
     /// 零改动——params 是 opaque Value（§7.2 决策环同通道）。
     fn prepare(&self, mut req: LlmRequest) -> (LlmRequest, LlmSettings, WireCaps, Option<bool>) {
         let cfg = self.effective_cfg(&req);
-        // 模型行能力（settings 钉死面）：按生效模型名在活动/覆盖档的
-        // models 里找；窗口 = 模型行 context_window ?? 档位 window_tokens
+        // 模型行能力（settings 钉死面）：按生效模型名在 路由档（批 F）/
+        // 覆盖档 / 活动档 的 models 里找；窗口 = 模型行 context_window ??
+        // 档位 window_tokens
         let mut caps = WireCaps::default();
         let mut image_pin = None;
         let llm_cfg = self.settings.llm_config();
-        let profile = req
-            .session_id
-            .as_deref()
-            .and_then(|sid| self.overrides.as_ref().and_then(|o| o.get(sid)))
-            .and_then(|(pid, _)| llm_cfg.profile(&pid))
+        let route = Self::route_of(&req);
+        let profile = route
+            .as_ref()
+            .and_then(|r| llm_cfg.profile(&r.provider_id))
+            .or_else(|| {
+                req.session_id
+                    .as_deref()
+                    .and_then(|sid| self.overrides.as_ref().and_then(|o| o.get(sid)))
+                    .and_then(|(pid, _)| llm_cfg.profile(&pid))
+            })
             .or_else(|| llm_cfg.active_profile());
         if let Some(p) = profile {
             let row = p.models.iter().find(|m| m.id == cfg.model);
@@ -202,7 +233,8 @@ impl AppLlm {
             caps.ctx_window = row.and_then(|m| m.context_window).or(p.window_tokens);
             image_pin = row.and_then(|m| m.supports_image);
         }
-        // 推理档位解析：辅助降档优先（aux 标记），否则会话旁车档
+        // 推理档位解析：辅助降档优先（aux 标记），否则子代理钉档档位
+        // （批 F，路由后档位的方言 clamp），否则会话旁车档
         let dialect = dialect::dialect_of(cfg.base_url.as_deref());
         let aux = req
             .params
@@ -217,10 +249,15 @@ impl AppLlm {
         let level = if aux {
             dialect.aux_level().map(str::to_string)
         } else {
-            req.session_id
-                .as_deref()
-                .and_then(|sid| self.overrides.as_ref().and_then(|o| o.get_thinking(sid)))
-                .and_then(|lvl| dialect.clamp(&lvl).map(str::to_string))
+            let requested = route
+                .as_ref()
+                .and_then(|r| r.thinking_level.clone())
+                .or_else(|| {
+                    req.session_id
+                        .as_deref()
+                        .and_then(|sid| self.overrides.as_ref().and_then(|o| o.get_thinking(sid)))
+                });
+            requested.and_then(|lvl| dialect.clamp(&lvl).map(str::to_string))
         };
         if let Some(lvl) = level {
             req.params["thinking_level"] = Value::String(lvl);

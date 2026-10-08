@@ -66,6 +66,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 pdfium-render = "0.9"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+# codex 配置解析（批 F 导入面板：~/.codex/config.toml 纯读）
+toml = "0.8"
 # API Key 系统凭据库（批 C §8.4）：Windows=Credential Manager / macOS=Keychain
 # / Linux=kernel keyutils（无需 libsecret 守护进程）；不可用时回落文件存储。
 # 注意：target 表必须在 [dependencies] 段尾（表头之后的键都归入该表）。

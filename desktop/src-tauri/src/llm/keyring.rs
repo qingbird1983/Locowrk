@@ -183,6 +183,7 @@ mod tests {
                 profile("c", Some("  "), None),         // 空白 Key：跳过
             ],
             network_proxy: None,
+            subagent: None,
         };
         let mut written: Vec<(String, String)> = Vec::new();
         let changed = migrate_with(&mut cfg, &mut |id, key| {
@@ -212,6 +213,7 @@ mod tests {
             active: String::new(),
             providers: vec![profile("a", Some("sk-1"), None)],
             network_proxy: None,
+            subagent: None,
         };
         let changed = migrate_with(&mut cfg, &mut |_, _| false);
         assert!(!changed);

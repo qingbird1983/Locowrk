@@ -11,11 +11,13 @@
 //! 标识。快照条目随会话自然残留（进程生命周期，量级 = 转录本身），
 //! 超 [`GATE_CAP`] 全清重建，不做精细驱逐。
 
+mod child_model;
 mod filter;
 mod run;
 mod sink;
 mod tool;
 
+pub use child_model::{ChildModelFactory, ChildModelHandle, ChildModelReport};
 pub use filter::FilterToolSource;
 pub use sink::SubTranscriptSink;
 pub use tool::SubagentTool;

@@ -125,6 +125,9 @@ pub struct ProviderModel {
     pub max_output_source: Option<String>,
     /// 用户钉死的图像输入（tri-state：None = 随目录 / 纯文本缺省）。
     pub supports_image: Option<bool>,
+    /// 可用于子代理（批 F）：用户显式标记才进子代理模型池（钉模型选择
+    /// 器与终端错误回退链的共同数据源）；None = 不参与，目录无此数据。
+    pub available_for_subagents: Option<bool>,
 }
 
 /// 每百万 token 单价（USD 原值，供应商稿 §4.6：货币如实标注不做换算；
@@ -163,6 +166,8 @@ pub struct ProviderModelView {
     pub max_output_source: Option<String>,
     /// 用户钉死图像输入（tri-state）。
     pub supports_image: Option<bool>,
+    /// 可用于子代理（批 F，用户钉死；None = 不参与）。
+    pub available_for_subagents: Option<bool>,
     /// 展示用有效模态（钉死 ∪ 目录；未知 = ["text"] 纯文本缺省）。
     pub input_modalities: Vec<String>,
     /// 归一化推理梯子（目录；空 = 隐藏档位选择器——批 B 起接预设方言）。
@@ -182,6 +187,7 @@ pub fn synthesize_view(pm: &ProviderModel, hit: Option<&CatalogModel>) -> Provid
         max_output: pm.max_output,
         max_output_source: pm.max_output_source.clone(),
         supports_image: pm.supports_image,
+        available_for_subagents: pm.available_for_subagents,
     };
     synthesize_core(pins, hit)
 }
@@ -199,6 +205,7 @@ pub fn synthesize_view_raw(
         max_output: pm.max_output,
         max_output_source: pm.max_output_source.clone(),
         supports_image: pm.supports_image,
+        available_for_subagents: pm.available_for_subagents,
     };
     synthesize_core(pins, hit)
 }
@@ -211,6 +218,7 @@ struct PinFields<'a> {
     max_output: Option<u64>,
     max_output_source: Option<String>,
     supports_image: Option<bool>,
+    available_for_subagents: Option<bool>,
 }
 
 fn synthesize_core(pm: PinFields<'_>, hit: Option<&CatalogModel>) -> ProviderModelView {
@@ -237,6 +245,7 @@ fn synthesize_core(pm: PinFields<'_>, hit: Option<&CatalogModel>) -> ProviderMod
         max_output: pm.max_output.or(hit.and_then(|h| h.max_output)),
         max_output_source: pm.max_output_source,
         supports_image: pm.supports_image,
+        available_for_subagents: pm.available_for_subagents,
         input_modalities,
         reasoning_ladder: hit.map(|h| h.reasoning_options.clone()).unwrap_or_default(),
         tool_call: hit.and_then(|h| h.tool_call),
@@ -259,6 +268,36 @@ fn synthesize_core(pm: PinFields<'_>, hit: Option<&CatalogModel>) -> ProviderMod
                 .filter(|h| !h.reasoning_options.is_empty())
                 .map(|_| "catalog".into()),
         },
+    }
+}
+
+/// 子代理主模型钉档（批 F）：None = 跟随会话（子请求走父会话的会话覆盖
+/// → 设置缺省）。`thinking_level` Some = 子请求吃钉档档位（方言 clamp 同
+/// 批 B 通道）；模型必须在「可用于子代理」标记池里选（UI 侧约束）。
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SubagentPin {
+    pub provider_id: String,
+    pub model: String,
+    pub thinking_level: Option<String>,
+}
+
+impl SubagentPin {
+    /// 保存校验：钉档必须指到存在且启用的档位 + 非空模型名。
+    pub fn validate(&self, cfg: &LlmConfig) -> Result<(), String> {
+        let p = cfg
+            .profile(&self.provider_id)
+            .ok_or_else(|| format!("子代理模型钉档的档位不存在: {}", self.provider_id))?;
+        if !p.enabled {
+            return Err(format!(
+                "子代理模型钉档指向已停用档位: {}（请先启用或改钉其它档位）",
+                p.label
+            ));
+        }
+        if self.model.trim().is_empty() {
+            return Err("子代理模型钉档的模型名不能为空".into());
+        }
+        Ok(())
     }
 }
 
@@ -313,6 +352,8 @@ pub struct LlmConfig {
     pub providers: Vec<ProviderProfile>,
     /// 网络代理（§8.5）。None = system（reqwest 缺省吃环境变量）。
     pub network_proxy: Option<NetworkProxy>,
+    /// 子代理主模型钉档（批 F）。None = 跟随会话（缺省）。
+    pub subagent: Option<SubagentPin>,
 }
 
 impl LlmConfig {
@@ -409,6 +450,17 @@ impl LlmConfig {
         if let Some(k) = &u.api_key {
             p.api_key = (!k.is_empty()).then_some(k.clone());
         }
+        // 子代理钉档（批 F）：空 provider_id = 清除；否则校验指向存在且
+        // 启用的档位（模型名空同样拒收）。清除路径不校验（先清后删档的
+        // 顺序自由）。
+        if let Some(pin) = &u.subagent {
+            if pin.provider_id.trim().is_empty() || pin.model.trim().is_empty() {
+                self.subagent = None;
+            } else {
+                pin.validate(self)?;
+                self.subagent = Some(pin.clone());
+            }
+        }
         if let Some(w) = u.window_tokens {
             match w {
                 Some(n) if n <= 99 => {
@@ -499,6 +551,8 @@ pub struct LlmSettingsView {
     pub window_tokens: Option<u64>,
     /// 网络代理档（批 C §8.5）。None = system。
     pub network_proxy: Option<NetworkProxy>,
+    /// 子代理主模型钉档（批 F）。None = 跟随会话（缺省）。
+    pub subagent: Option<SubagentPin>,
 }
 
 /// 档位增改入参（`llm_provider_save`）。`id` None = 新建（后端生成）；
@@ -523,6 +577,8 @@ pub struct ProviderInput {
 /// 部分更新（`settings_set` 入参）。字段 None = 保持不变；base_url /
 /// api_key 传空串 = 清除；window_tokens 双层 Option：null = 清除；
 /// `active` = 切活动档。平面字段落到目标档（见 `apply_update`）。
+/// `subagent`（批 F）：provider_id/model 空串 = 清除钉档（v2.65「空串 =
+/// 清除」约定——双层 Option 的 JSON null 与字段缺失不可区分）。
 #[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LlmUpdate {
@@ -532,6 +588,7 @@ pub struct LlmUpdate {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub window_tokens: Option<Option<u64>>,
+    pub subagent: Option<SubagentPin>,
 }
 
 /// 新档 id（后端生成）：时间戳纳秒 + 进程内计数，不引第三方依赖。

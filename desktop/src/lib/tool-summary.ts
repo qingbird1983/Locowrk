@@ -30,6 +30,7 @@ export function toolAction(
     memory_list: "tool.action.memorySearch",
     search_tools: "tool.action.searchTools",
     subagent_run: "tool.action.subagent",
+    subagent_verify: "tool.action.subagentVerify",
     schedule_create: "tool.action.scheduleCreate",
     schedule_list: "tool.action.scheduleList",
     schedule_delete: "tool.action.scheduleDelete",

@@ -49,6 +49,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             api_key_set: flat.api_key.is_some(),
             window_tokens: flat.window_tokens,
             network_proxy: s.llm.network_proxy.clone(),
+            subagent: s.llm.subagent.clone(),
         },
         embedding: EmbeddingView {
             base_url: s.embedding.base_url.clone(),

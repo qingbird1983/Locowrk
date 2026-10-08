@@ -25,6 +25,9 @@ pub struct SubagentTool {
     /// §3.16 子会话转录接收器：宿主可选注入（桌面写 sub-transcripts/）；
     /// None = 纯黑盒（headless / 未接组装点），行为与 ⑮ 一致。
     transcript_sink: Option<Arc<dyn SubTranscriptSink>>,
+    /// 批 F 子代理模型面工厂：每子 run 造「带回退链的 LlmService + 报告」
+    /// 换入子内核作用域；None = 子回退全局服务（⑮ 以来行为不变）。
+    child_model: Option<super::ChildModelFactory>,
 }
 
 impl SubagentTool {
@@ -34,12 +37,19 @@ impl SubagentTool {
             gate,
             spec: build_spec(),
             transcript_sink: None,
+            child_model: None,
         }
     }
 
     /// 注入子转录接收器（组装点专用；§8.2「子会话落盘」通路）。
     pub fn with_transcript_sink(mut self, sink: Arc<dyn SubTranscriptSink>) -> Self {
         self.transcript_sink = Some(sink);
+        self
+    }
+
+    /// 注入子代理模型面工厂（批 F：子代理模型档 + 终端错误回退链）。
+    pub fn with_child_model_factory(mut self, factory: super::ChildModelFactory) -> Self {
+        self.child_model = Some(factory);
         self
     }
 }
@@ -53,7 +63,9 @@ fn build_spec() -> ToolSpec {
             tools（可选，允许子 Agent 使用的工具名白名单，缺省继承全部可用工具）；\
             max_turns（可选，子 Agent 最大步数，缺省 8、上限 32）；\
             timeout_secs（可选，超时秒数，缺省 300、上限 1800，0 = 不限）。\
-            预算耗尽/超时会如实返回部分结果（status 标明），不会虚构完成。"
+            预算耗尽/超时会如实返回部分结果（status 标明），不会虚构完成。\
+            重要任务收束后可用检索工具找 subagent_verify 对结果做独立验收\
+            （子代理自述完成 ≠ 完成）。"
             .into(),
         schema: json!({
             "type": "object",
@@ -104,6 +116,7 @@ impl Tool for SubagentTool {
             max_turns: parsed.max_turns,
             timeout: parsed.timeout,
             transcript_sink: self.transcript_sink.as_deref(),
+            child_model: self.child_model.as_ref(),
         })
         .await;
         Ok(outcome.to_json())

@@ -33,5 +33,8 @@ pub use middleware::{
     ToolExposureConfig, Tracing, TreeDirectoryInject, cosine, estimate_tokens, suggested_threshold,
 };
 pub use stream::{LlmStreamSink, NoLlmStreamSink};
-pub use subagent::{FilterToolSource, SubTranscriptSink, SubagentGate, SubagentTool};
+pub use subagent::{
+    ChildModelFactory, ChildModelHandle, ChildModelReport, FilterToolSource, SubTranscriptSink,
+    SubagentGate, SubagentTool,
+};
 pub use waterfall::{RequestErrorPayload, RequestPayload, RetryBudget, points};

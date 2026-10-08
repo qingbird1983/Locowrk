@@ -121,8 +121,14 @@ impl Kernel {
 
     /// 派生子内核（⑮）：同一 Context / 中间件 / 审批门 / 重试预算，
     /// 服务查询走全新作用域——工具目录换成父视图的白名单过滤包装
-    /// （子 ⊆ 父；`subagent_run` 硬剔除，单层派生）。
-    pub(crate) fn child_kernel(&self, allow: Vec<String>) -> Result<Self, KernelError> {
+    /// （子 ⊆ 父；`subagent_run` 硬剔除，单层派生）。`child_llm`（批 F）
+    /// Some 时换入子作用域 LlmService（子代理模型档/回退链）；None =
+    /// 回退全局服务（⑮ 以来行为逐字节不变）。
+    pub(crate) fn child_kernel(
+        &self,
+        allow: Vec<String>,
+        child_llm: Option<Arc<dyn LlmService>>,
+    ) -> Result<Self, KernelError> {
         let parent_view = self.scoped_dyn::<dyn ToolSource>()?;
         let key = cordis_core::ScopeKey::new();
         self.ctx.provide_dyn_scoped::<dyn ToolSource>(
@@ -135,6 +141,9 @@ impl Kernel {
                 &key,
                 Arc::new(crate::stream::NoLlmStreamSink),
             );
+        if let Some(llm) = child_llm {
+            self.ctx.provide_dyn_scoped::<dyn LlmService>(&key, llm);
+        }
         Ok(Self {
             ctx: Arc::clone(&self.ctx),
             mw: Arc::clone(&self.mw),

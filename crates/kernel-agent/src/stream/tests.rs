@@ -79,7 +79,7 @@ fn child_kernel_shadows_global_sink() {
         ctx.provide_dyn::<dyn ToolSource>(Arc::new(EmptySource));
 
         let parent = Kernel::new(Arc::clone(&ctx), vec![]);
-        let child = parent.child_kernel(vec![]).unwrap();
+        let child = parent.child_kernel(vec![], None).unwrap();
         let mut session = Session::new();
         session.append(SessionEvent::UserMessage {
             content: "任务".into(),

@@ -540,6 +540,30 @@ watch(() => props.available, () => (expandedId.value = null));
                   {{ t("settings.modelModalityUnknown") }}
                 </span>
               </label>
+              <!-- 可用于子代理（批 F）：标记 = 进子代理模型池（钉模型选择器与终端错误回退链的共同数据源） -->
+              <label class="flex items-center gap-2">
+                <span class="flex w-16 shrink-0 items-center gap-0.5 text-[length:var(--lw-fs-11)] text-ink-4">
+                  {{ t("settings.modelSubagentRow") }}
+                  <HoverTip
+                    class="text-ink-5"
+                    :text="t('settings.modelSubagentTip')"
+                    :label="t('settings.modelSubagentTip')"
+                  >
+                    <Icon name="info" :size="12" />
+                  </HoverTip>
+                </span>
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5 accent-[var(--lw-accent)]"
+                  :checked="m.availableForSubagents === true"
+                  :disabled="disabled"
+                  @change="
+                    updateChosen(m.id, {
+                      availableForSubagents: ($event.target as HTMLInputElement).checked,
+                    })
+                  "
+                />
+              </label>
               <!-- 推理梯子（只读；预设方言接线随批 B） -->
               <div v-if="m.reasoningLadder.length > 0" class="flex items-start gap-2">
                 <span class="w-16 shrink-0 pt-1 text-[length:var(--lw-fs-11)] text-ink-4">{{ t("settings.modelLadder") }}</span>

@@ -9,6 +9,8 @@ import { llmProbeModels } from "../../../lib/api";
 export function useModelProbe() {
   const probeState = ref<"idle" | "loading" | "ready" | "error">("idle");
   const available = ref<string[]>([]);
+  /** 推荐三选（批 F：后端目录数据驱动 ≤3；探测失败 = 空）。 */
+  const recommended = ref<string[]>([]);
   const probeError = ref("");
   /** 端点扫描胜出的 base_url（§8.2；与传入不同时非空，表单采纳）。 */
   const effectiveBaseUrl = ref<string | null>(null);
@@ -33,6 +35,7 @@ export function useModelProbe() {
       const outcome = await llmProbeModels(kind, baseUrl, apiKey, profileId);
       if (mine !== seq) return;
       available.value = outcome.models;
+      recommended.value = outcome.recommended ?? [];
       effectiveBaseUrl.value = outcome.effectiveBaseUrl;
       probeState.value = outcome.models.length > 0 ? "ready" : "error";
       probeError.value = outcome.error ?? (outcome.models.length > 0 ? "" : emptyHint);
@@ -40,6 +43,7 @@ export function useModelProbe() {
       if (mine !== seq) return;
       probeState.value = "error";
       available.value = [];
+      recommended.value = [];
       probeError.value = String(e);
     }
   }
@@ -48,9 +52,10 @@ export function useModelProbe() {
     seq += 1;
     probeState.value = "idle";
     available.value = [];
+    recommended.value = [];
     probeError.value = "";
     effectiveBaseUrl.value = null;
   }
 
-  return { probeState, available, probeError, effectiveBaseUrl, run, reset };
+  return { probeState, available, recommended, probeError, effectiveBaseUrl, run, reset };
 }

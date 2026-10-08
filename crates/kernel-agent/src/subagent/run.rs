@@ -2,6 +2,7 @@
 //! `step_as` 到收敛 → 摘要回父。轮数/超时越限**如实收束**返回部分
 //! 结果（status 标明，摘要取已有转录尾部，不虚构完成）。
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -38,7 +39,8 @@ impl SubagentStatus {
 }
 
 /// 一次子 Agent 运行的收束（工具输出 = `to_json()`，LLM 与父会话日志
-/// 看到同一结构）。
+/// 看到同一结构）。`model` / `model_failures`（批 F）= 子代理模型面
+/// 报告：末用模型与失败/跳过记因；无模型面（未接工厂）两值皆空。
 #[derive(Debug, Clone)]
 pub struct SubagentOutcome {
     pub status: SubagentStatus,
@@ -47,6 +49,8 @@ pub struct SubagentOutcome {
     pub tools_used: Vec<String>,
     pub child_session_id: String,
     pub error: Option<String>,
+    pub model: Option<String>,
+    pub model_failures: Vec<String>,
 }
 
 impl SubagentOutcome {
@@ -60,6 +64,14 @@ impl SubagentOutcome {
         });
         if let (Some(err), Some(slot)) = (&self.error, obj.as_object_mut()) {
             slot.insert("error".into(), json!(err));
+        }
+        if let (Some(model), Some(slot)) = (&self.model, obj.as_object_mut()) {
+            slot.insert("model".into(), json!(model));
+        }
+        if let Some(slot) = obj.as_object_mut() {
+            if !self.model_failures.is_empty() {
+                slot.insert("model_failures".into(), json!(self.model_failures));
+            }
         }
         obj
     }
@@ -83,6 +95,9 @@ pub(crate) struct ChildRunParams<'a> {
     pub max_turns: u32,
     pub timeout: Option<Duration>,
     pub transcript_sink: Option<&'a dyn crate::subagent::SubTranscriptSink>,
+    /// 子代理模型面工厂（批 F）：Some = 每次调用造「带回退链的服务 + 报
+    /// 告」换入子内核作用域；None = 全局服务（⑮ 以来行为不变）。
+    pub child_model: Option<&'a crate::subagent::ChildModelFactory>,
 }
 
 pub(crate) async fn run_child(
@@ -95,6 +110,7 @@ pub(crate) async fn run_child(
         max_turns,
         timeout,
         transcript_sink,
+        child_model,
     }: ChildRunParams<'_>,
 ) -> SubagentOutcome {
     let pre = |error: String| SubagentOutcome {
@@ -104,6 +120,8 @@ pub(crate) async fn run_child(
         tools_used: Vec::new(),
         child_session_id: String::new(),
         error: Some(error),
+        model: None,
+        model_failures: Vec::new(),
     };
 
     // 父转录前缀（⑨ fork 语义：可见事件克隆，游标前投影）
@@ -113,10 +131,14 @@ pub(crate) async fn run_child(
         ));
     };
     let child_id = gate.next_child_id(parent_session_id);
-    let child_kernel = match parent.child_kernel(allow) {
-        Ok(k) => k,
-        Err(e) => return pre(format!("子 Agent 工具视图构建失败：{e}")),
-    };
+    // 批 F：每 run 造一个模型面（带回退链的服务 + 报告句柄），报告随
+    // 收束进 outcome；无工厂 = None（headless / 未接组装点）。
+    let model_handle = child_model.map(|f| f());
+    let child_kernel =
+        match parent.child_kernel(allow, model_handle.as_ref().map(|h| Arc::clone(&h.service))) {
+            Ok(k) => k,
+            Err(e) => return pre(format!("子 Agent 工具视图构建失败：{e}")),
+        };
 
     let mut child = prefix.fork(prefix.cursor());
     // 子"自身"段从任务 prompt **之前**起算：prompt 是子的自有内容（§3.16
@@ -187,6 +209,12 @@ pub(crate) async fn run_child(
         sink.close(&child_id, own_from, &child);
     }
 
+    // 批 F：模型面报告（末用模型 + 失败/跳过记因）随收束回父。
+    let (model, model_failures) = match &model_handle {
+        Some(h) => h.report.snapshot(),
+        None => (None, Vec::new()),
+    };
+
     SubagentOutcome {
         status,
         summary: tail_summary(&child, own_from),
@@ -194,6 +222,8 @@ pub(crate) async fn run_child(
         tools_used: tools_used(&child, own_from),
         child_session_id: child_id,
         error,
+        model,
+        model_failures,
     }
 }
 

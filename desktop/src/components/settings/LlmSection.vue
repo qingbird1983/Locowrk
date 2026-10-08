@@ -15,11 +15,12 @@ import { llmCatalogRefresh, llmCatalogStatus, llmProbeModels, llmProviderReorder
 import { useSettingsStore } from "../../stores/settings";
 import { useToastStore } from "../../stores/toast";
 import { relativeTime } from "../../lib/format";
-import type { CatalogStatus, ProviderView } from "../../types";
+import type { CatalogStatus, ProviderView, SubagentPin } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import ServiceList from "./model/ServiceList.vue";
 import ProviderSetupDialog from "./model/ProviderSetupDialog.vue";
+import ImportDialog from "./model/ImportDialog.vue";
 import DefaultModelMenu from "./model/DefaultModelMenu.vue";
 import SettingsSelect from "./SettingsSelect.vue";
 
@@ -124,6 +125,70 @@ async function refreshCatalog() {
     catalogRefreshing.value = false;
   }
 }
+
+// ---- 子代理模型（批 F）：钉档 = 子 Agent 专用主模型（缺省跟随会话）；
+// 清单 = 只列「可用于子代理」标记的模型（复用 DefaultModelMenu，传过滤
+// 后的 providers 副本）；钉档档位随标记模型梯子。 ----
+const subPin = computed<SubagentPin | null>(() => llm.value?.subagent ?? null);
+const subMenuOpen = ref(false);
+const subAnchorEl = ref<HTMLElement | null>(null);
+/** 标记池投影：只保留 availableForSubagents === true 的模型行（空组剔除）。 */
+const markedProviders = computed<ProviderView[]>(() =>
+  providers.value
+    .filter((p) => p.enabled)
+    .map((p) => ({ ...p, models: p.models.filter((m) => m.availableForSubagents === true) }))
+    .filter((p) => p.models.length > 0),
+);
+const subLabel = computed(() => {
+  if (!subPin.value) return t("settings.subagentFollowSession");
+  const p = providers.value.find((x) => x.id === subPin.value?.providerId);
+  return `${p?.label ?? "—"} · ${subPin.value.model}`;
+});
+const subMarked = computed(
+  () => !!subPin.value && markedProviders.value.some(
+    (p) => p.id === subPin.value?.providerId &&
+      p.models.some((m) => m.id === subPin.value?.model),
+  ),
+);
+function onSelectSub(providerId: string, model: string) {
+  subMenuOpen.value = false;
+  if (!providerId || !model) {
+    if (subPin.value) void saveSub({ providerId: "", model: "" });
+    return;
+  }
+  void saveSub({ providerId, model });
+}
+async function saveSub(pin: { providerId: string; model: string; thinkingLevel?: string | null }) {
+  try {
+    await settings.saveLlm({ subagent: { providerId: pin.providerId, model: pin.model, thinkingLevel: pin.thinkingLevel ?? null } });
+  } catch (e) {
+    toast.push("danger", String(e));
+  }
+}
+/** 钉档档位选项 = 钉档模型的梯子（空梯子 = 行隐藏）；「跟随会话」= 清除。 */
+const subThinking = computed({
+  get: () => subPin.value?.thinkingLevel ?? "",
+  set: (v: string) => {
+    if (!subPin.value) return;
+    void saveSub({
+      providerId: subPin.value.providerId,
+      model: subPin.value.model,
+      thinkingLevel: v || null,
+    });
+  },
+});
+const subThinkingOptions = computed(() => {
+  const p = providers.value.find((x) => x.id === subPin.value?.providerId);
+  const ladder = p?.models.find((m) => m.id === subPin.value?.model)?.reasoningLadder ?? [];
+  return [
+    { value: "", label: t("settings.subagentThinkingFollow") },
+    ...ladder.map((l) => ({ value: l, label: l })),
+  ];
+});
+
+// ---- 导入面板（批 F）：四源扫描预览 → 选中写入档位。 ----
+const importOpen = ref(false);
+
 
 // ---- AI 服务：模态与动作 ----
 /** null = 关；"" = 添加；id = 编辑。 */
@@ -333,6 +398,44 @@ function closeSetup() {
       </SettingsRow>
     </SettingsGroup>
 
+    <!-- 子代理模型（批 F）：钉档 = 子 Agent 主模型（缺省跟随会话）；
+         清单只列「可用于子代理」标记的模型 -->
+    <SettingsGroup :title="t('settings.subagentTitle')">
+      <SettingsRow :title="t('settings.subagentRow')" :hint="t('settings.subagentHint')">
+        <template #detail>
+          <span
+            class="mt-1 block text-[length:var(--lw-fs-12)]"
+            :class="subPin && subMarked ? 'text-ink-3' : 'text-ink-4'"
+          >
+            {{ subLabel }}
+          </span>
+        </template>
+        <button
+          ref="subAnchorEl"
+          type="button"
+          class="lw-btn flex items-center gap-1 px-3 py-1.5 text-xs text-ink-1"
+          :disabled="markedProviders.length === 0"
+          :aria-haspopup="'listbox'"
+          :aria-expanded="subMenuOpen"
+          @click="subMenuOpen = !subMenuOpen"
+        >
+          {{ t("settings.modelDefaultChange") }}
+          <Icon name="chevronDown" :size="14" />
+        </button>
+      </SettingsRow>
+      <SettingsRow
+        v-if="subPin && subThinkingOptions.length > 1"
+        :title="t('settings.subagentThinkingRow')"
+      >
+        <SettingsSelect
+          v-model="subThinking"
+          class="w-44"
+          :entries="subThinkingOptions"
+          :label="t('settings.subagentThinkingRow')"
+        />
+      </SettingsRow>
+    </SettingsGroup>
+
     <!-- 模型目录（批 A）：快照状态行 + 刷新按钮 -->
     <SettingsGroup :title="t('settings.catalogTitle')">
       <SettingsRow :title="t('settings.catalogRow')" :hint="t('settings.catalogHint')">
@@ -376,14 +479,24 @@ function closeSetup() {
     <!-- AI 服务 -->
     <SettingsGroup :title="t('settings.modelServicesGroup', { n: providers.length })">
       <template #action>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 rounded-[var(--lw-r-xs)] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90"
-          @click="copyDraft = null; setupFor = ''"
-        >
-          <Icon name="plus" :size="14" />
-          {{ t("settings.modelAddService") }}
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="lw-btn flex items-center gap-1 px-3 py-1.5 text-xs text-ink-1"
+            @click="importOpen = true"
+          >
+            <Icon name="download" :size="14" />
+            {{ t("settings.importButton") }}
+          </button>
+          <button
+            type="button"
+            class="flex items-center gap-1.5 rounded-[var(--lw-r-xs)] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:opacity-90"
+            @click="copyDraft = null; setupFor = ''"
+          >
+            <Icon name="plus" :size="14" />
+            {{ t("settings.modelAddService") }}
+          </button>
+        </div>
       </template>
 
       <div v-if="providers.length === 0" class="flex flex-col items-center gap-1.5 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-8">
@@ -428,6 +541,26 @@ function closeSetup() {
       :none-label="t('settings.modelDefaultSame')"
       @select="onSelectRecorder"
       @close="managerMenuOpen = false"
+    />
+
+    <!-- 子代理模型更改浮层（批 F）：清单 = 只列「可用于子代理」标记的模型；
+         首项「跟随会话」= 清除钉档 -->
+    <DefaultModelMenu
+      v-if="subMenuOpen"
+      :providers="markedProviders"
+      :active-id="subPin?.providerId ?? ''"
+      :active-model="subPin?.model ?? ''"
+      :anchor="subAnchorEl"
+      :none-label="t('settings.subagentFollowSession')"
+      @select="onSelectSub"
+      @close="subMenuOpen = false"
+    />
+
+    <!-- 导入面板（批 F）：四源扫描预览 → 选中写入档位 -->
+    <ImportDialog
+      v-if="importOpen"
+      @close="importOpen = false"
+      @imported="settings.refresh()"
     />
 
     <ProviderSetupDialog

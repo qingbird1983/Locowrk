@@ -866,6 +866,8 @@ export interface ProviderModelView {
   maxOutputSource: string | null;
   /** 用户钉死图像输入（tri-state：null = 随目录 / 纯文本缺省）。 */
   supportsImage: boolean | null;
+  /** 可用于子代理（批 F：用户钉死；null = 不参与）。 */
+  availableForSubagents: boolean | null;
   /** 展示用有效模态（未知 = ["text"]）。 */
   inputModalities: string[];
   /** 归一化推理梯子（空 = 隐藏档位选择器）。 */
@@ -911,6 +913,15 @@ export interface LlmSettingsView {
   windowTokens: number | null;
   /** 网络代理档（批 C §8.5）；null = system（吃环境变量）。 */
   networkProxy: NetworkProxySettings | null;
+  /** 子代理主模型钉档（批 F）；null = 跟随会话（缺省）。 */
+  subagent: SubagentPin | null;
+}
+
+/** 子代理主模型钉档（批 F）：thinkingLevel null = 跟随会话档位。 */
+export interface SubagentPin {
+  providerId: string;
+  model: string;
+  thinkingLevel: string | null;
 }
 
 /** 网络代理档（§8.5）：system / direct / custom（custom 必带 url）。 */
@@ -925,6 +936,36 @@ export interface ProbeOutcome {
   models: string[];
   error: string | null;
   effectiveBaseUrl: string | null;
+  /** 推荐三选（批 F：目录数据驱动 ≤3；空 = 前端回落旧全选行为）。 */
+  recommended: string[];
+}
+
+/** 导入面板候选（批 F；密钥不出后端——hasKey 布尔代替）。 */
+export interface ImportCandidate {
+  source: "claude-code" | "codex" | "opencode" | "cc-switch";
+  id: string;
+  label: string;
+  kind: string;
+  baseUrl: string | null;
+  model: string;
+  models: ImportCandidateModel[];
+  hasKey: boolean;
+  notes: string[];
+}
+
+export interface ImportCandidateModel {
+  id: string;
+  contextWindow: number | null;
+}
+
+export interface ImportScanOutcome {
+  candidates: ImportCandidate[];
+  errors: string[];
+}
+
+export interface ImportApplyReport {
+  imported: string[];
+  skipped: string[];
 }
 
 /** 逐模型连通测试结果（§8.3；五分类 category + 如实报文）。 */
@@ -952,6 +993,8 @@ export interface LlmUpdate {
   baseUrl?: string;
   apiKey?: string;
   windowTokens?: number | null;
+  /** 子代理钉档（批 F）；providerId/model 空串 = 清除（v2.65 约定）。 */
+  subagent?: SubagentPin;
 }
 
 /** 档位增改入参（llm_provider_save；id 缺省 = 新建）。apiKey undefined =

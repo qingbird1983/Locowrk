@@ -722,6 +722,10 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.132 · 批 F 生态（LLM 能力轨第六批·收官，G5 随批）
+
+**① 子代理模型档 + 终端错误回退链**：`ProviderModel.available_for_subagents`（用户钉死标记，None = 不参与）+ `LlmConfig.subagent` 钉档（缺省跟随会话）；路由走 `params["route"]` sanctioned 通道（内核零改动、route 不进请求体）；`SubagentLlm` 每子 run 一实例——钉档打头 + 标记池，凡上抛 Err（= Fatal）推进下一候选同请求重试，窗口装不下已携上下文的候选记因跳过（PI 案）；死供应商不触发回退（v2.75 不设上限纪律，偏离 PI 记档）；`SubagentOutcome` 增 model/model_failures；内核 `child_model.rs` 契约 + child_kernel 作用域换入。**② 从其他工具导入**：claude-code/codex/opencode/cc-switch 四解析器（纯读、密钥不进 IPC、cc-switch = SQLite 容器分派前三解析器）+ `ImportDialog` 预览确认写入档位。**③ 推荐三选**：`llm/recommend.rs`（toolCall 门 + 价格升序 + 族分散 ≤3）驱动探测命令 `recommended`，前端自动预选改吃它——**实抓修复：自动预选自 v2.58 起因 onPickService 误置 touched 从未生效**。**④ G5 subagent_verify**：宿主内置 Pure 工具，读子转录 + 验收 LLM 调用（辅助降档）逐准则裁决；claimed/verified 分离走既有工具结果通道（偏离设计稿 §7.6 新事件记档）；FilterToolSource 剔除面扩 `subagent_` 前缀。**走查**（CDP 隔离数据根 + deepseek 真轮）：推荐三选 IPC+UI 实证 / 导入四源全命中 + cc-switch 落档 / 钉模型真轮 outcome.model = v4-pro（父在 flash）/ 回退真轮（伪模型 400 记因 → 推进 v4-pro 跑完）/ verify 真轮如实判 failed 带证据。门禁：clippy 0、fmt、workspace 39 套件 + desktop 321 绿、vue-tsc 0、pnpm build、lint:style。详见 CHANGELOG v2.132。
+
 ### v2.131 · 批 E 多模态进阶（LLM 能力轨第五批，D4 按推荐落档 = 投影）
 
 | 项 | 落点 |

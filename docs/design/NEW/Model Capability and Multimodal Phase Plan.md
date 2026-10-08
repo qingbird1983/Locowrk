@@ -4,7 +4,7 @@
 > 版本：1.0（2026-10-07）
 > 上游设计：《模型供应商配置与能力探测设计 v2.0》《多模态支持设计 v2.0》
 > 参照调查：PI-Desktop（F:\Warehouse\Github\PI-Desktop）、ZCode（F:\Warehouse\Github\ZCode）模型配置全量调查（2026-10-07）
-> 状态：**执行中**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；批 A–E 已完成（v2.127–v2.131），下一批 F
+> 状态：**六批全部完成（2026-10-08，v2.127–v2.132）**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；候补批 G5 已随批 F 落地，G2/G3/G4/G6/G7 留作独立小批/随缘搭车
 
 ---
 
@@ -19,7 +19,7 @@
 | **C** ✅（v2.129，2026-10-08） | 连接与安全 | keyring 迁移 + 自定义请求头 + 端点扫描 + 逐模型测试 + 网络代理 | 中 | 无（可插在 A/B 间） |
 | **D** ✅（v2.130，2026-10-08） | 多模态地基 | ContentPart + wire 编码 + AssetStore + 上传链路 + 渲染 + 估算 | **最大**（内核穿透） | A/B（模态数据 + 钳制公式） |
 | **E** ✅（v2.131，2026-10-08） | 多模态进阶 | 查看器 + 工具结果投影 + 多模态工具 + 降级链 | 中 | D |
-| **F** | 生态 | 子代理模型档 + 回退链 + 从其他工具导入 + 推荐三选 | 中 | A/B |
+| **F** ✅（v2.132，2026-10-08） | 生态 | 子代理模型档 + 回退链 + 从其他工具导入 + 推荐三选 | 中 | A/B |
 | **G**（候补） | 可靠性补强 | Turn Commit length 闸（随 B）+ Unknown Effect 恢复 + Revision Guard + 只读证明 + 子代理验收（随 F） | 各小-中 | 无硬依赖；G1 随 B、G5 随 F |
 
 > C 与 A/B 无依赖，若 keyring/代理急可先插；其余严格按序。
@@ -137,6 +137,9 @@
 
 **走查要点**：子代理钉模型真轮盘证（子转录 jsonl 用的模型与父不同）；claude-code 本机配置导入往返；OpenRouter 拉列表 → 推荐三选命中。
 
+**落成记录（2026-10-08，v2.132）**：**①子代理模型档 + 回退链**——`available_for_subagents` 标记 + `LlmConfig.subagent` 钉档（缺省跟随会话）；路由 = `params["route"]` sanctioned 通道（内核零改动）；`SubagentLlm` 回退链（钉档打头 + 标记池；凡上抛 Err = Fatal 推进；窗口装不下记因跳过；死供应商不回退 = v2.75 纪律偏离 PI 记档）；内核 `ChildModelFactory` 契约 + child_kernel 作用域换入；outcome 增 model/model_failures；FilterToolSource 剔 `subagent_` 前缀。**②导入面板**——四解析器纯读（claude-code `[1M]` 尾缀剥除 / codex wire_api note / opencode auth.json 回落 / cc-switch SQLite 容器分派），密钥不进 IPC（has_key 布尔 + apply 后端重扫取 Key）。**③推荐三选**——recommend 纯函数（toolCall 门/价格升序/族分散 ≤3）+ ProbeOutcome.recommended；**实抓：自动预选自 v2.58 起因 touched 误置从未生效，修复**。**④G5 subagent_verify**——Pure OnDemand 工具（转录紧凑化 + aux 降档 LLM 逐准则裁决）；claimed/verified 分离走工具结果通道（§7.6 新事件偏离记档）。**走查**：推荐三选 IPC+UI / 导入四源 + cc-switch 落档（缺省全选 × 脚本点击 = 14 条导入 + CM 迁移，清理记档）/ 钉模型真轮（outcome.model=v4-pro 父在 flash）/ 回退真轮（伪模型 400 → 推进）/ verify 真轮（如实判 failed 带证据）。门禁：clippy 0 / fmt / workspace 39 + desktop 321 / vue-tsc 0 / build / lint:style。已知边界见 CHANGELOG v2.132。
+
+
 ---
 
 ### 候补批 G — 可靠性补强（《Reliability Reinforcement Design v1.1》§13 已做逐机制对照与调优）
@@ -149,7 +152,7 @@
 | G2 Unknown Effect | 复用现有 ToolCall/ToolResult 配对（**不建双轨事件**）+ 崩溃恢复扫描（有 Call 无 Result → uncertain）+ uncertain UI + 用户决定事件 | 独立小批（P1） |
 | G3 Revision Guard | tool-fs 插件层：read 回 revision、写类工具带 expected_revision、StaleObservation 错误 | 可随时并行插批（P0） |
 | G4 只读证明 | shell_read 白名单之上的解析器证明层；硬锁/围栏/unlockRisky 全保留 | tool-shell 批（P1） |
-| G5 子 Agent 独立验收 | subagent_verify（Pure）+ claimed/verified 分离 + 验收调用吃辅助降档 | **随批 F** |
+| G5 子 Agent 独立验收 | subagent_verify（Pure）+ claimed/verified 分离 + 验收调用吃辅助降档 | ✅ **已随批 F 落地**（v2.132） |
 | G6 In-Band Summary | 实测 compact.rs:149 不复用前缀，但压缩低频且本就重建前缀——记档为 legacy 可选优化，不立批；批 B 顺带复核形状 | 记档（P2） |
 | G7 crate 行数软上限 | cordis-core 3000 / kernel-agent 5000，tokei 脚本挂 check_length 旁 | 随手搭车（P3） |
 
