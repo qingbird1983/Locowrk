@@ -29,9 +29,9 @@ pub use context::{ContextSettings, ContextSettingsView, ContextUpdate, STABILITY
 pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{
-    new_profile_id, synthesize_view, synthesize_view_raw, LlmConfig, LlmSettings, LlmSettingsView,
-    LlmUpdate, ProviderInput, ProviderModel, ProviderModelView, ProviderProfile, ProviderView,
-    PROVIDERS,
+    new_profile_id, synthesize_view, synthesize_view_raw, validate_headers, LlmConfig, LlmSettings,
+    LlmSettingsView, LlmUpdate, NetworkProxy, ProviderInput, ProviderModel, ProviderModelView,
+    ProviderProfile, ProviderView, PROVIDERS,
 };
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
@@ -162,6 +162,15 @@ impl SettingsStore {
             }
             Err(_) => AppSettings::default(),
         };
+        // 批 C §8.4 惰性迁移：明文 API Key → 系统凭据库。有变更**立即
+        // 落盘**（安全改进不留在内存等下一次保存）；写失败只 warn（内存
+        // 态已是迁移后形态，凭据库里已有 Key）。
+        if crate::llm::keyring::migrate(&mut settings.llm) {
+            let bytes = serde_json::to_vec_pretty(&settings).expect("settings serialize");
+            if let Err(e) = std::fs::write(&path, bytes) {
+                tracing::warn!("keyring 迁移后 settings.json 落盘失败: {e}");
+            }
+        }
         if settings.llm.flat().window_tokens.is_none() && settings.context.window_tokens.is_some() {
             let w = settings.context.window_tokens.take();
             if settings.llm.providers.is_empty() {

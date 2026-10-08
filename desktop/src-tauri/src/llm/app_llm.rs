@@ -124,18 +124,13 @@ impl AppLlm {
     }
 
     /// 本请求的生效配置：设置活动档 → 会话覆盖改写 → 决策环 model 改写。
+    /// 档位路由经 `flat_profile`（keyring 双读 + headers + 全区代理随行）。
     pub(crate) fn effective_cfg(&self, req: &LlmRequest) -> LlmSettings {
         let mut cfg = self.settings.llm();
         if let (Some(store), Some(sid)) = (&self.overrides, &req.session_id) {
             if let Some((provider_id, model)) = store.get(sid) {
                 if let Some(p) = self.settings.llm_config().profile(&provider_id) {
-                    cfg = LlmSettings {
-                        provider: p.kind.clone(),
-                        model: p.model.clone(),
-                        base_url: p.base_url.clone(),
-                        api_key: p.api_key.clone(),
-                        window_tokens: p.window_tokens,
-                    };
+                    cfg = self.settings.llm_config().flat_profile(p);
                 }
                 cfg.model = model;
             }

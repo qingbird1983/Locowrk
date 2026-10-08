@@ -139,6 +139,7 @@ fn profile_save_delete_semantics() {
         window_tokens: None,
         enabled: None,
         models: None,
+        headers: None,
     };
     let cfg = store
         .update_llm_config(|cfg| {
@@ -157,6 +158,7 @@ fn profile_save_delete_semantics() {
                     window_tokens: None,
                     enabled: true,
                     models: Vec::new(),
+                    ..Default::default()
                 });
             }
             cfg.active = cfg.providers[0].id.clone();
@@ -393,4 +395,99 @@ fn synthesize_view_pins_win_over_catalog() {
     assert!(v.reasoning_ladder.is_empty());
     assert_eq!(v.pricing, None);
     assert_eq!(v.sources.window, None);
+}
+
+// ---- 自定义请求头校验（批 C §8.1） ----
+
+#[test]
+fn headers_validation_rejects_reserved_and_malformed() {
+    use std::collections::BTreeMap;
+    let ok = BTreeMap::from([("User-Agent".into(), "Locowrk/1.0".into())]);
+    assert!(validate_headers(&ok).is_ok());
+    // 保留键（不区分大小写）：鉴权/逐跳/受控头不可自定义
+    for reserved in [
+        "authorization",
+        "X-API-Key",
+        "Host",
+        "Content-Type",
+        "cookie",
+    ] {
+        let bad = BTreeMap::from([(reserved.to_string(), "x".into())]);
+        assert!(validate_headers(&bad).is_err(), "{reserved} 应被拒收");
+    }
+    // 非法 token（冒号 / 空白 / 空）
+    for bad_key in ["bad:key", "bad key", ""] {
+        let bad = BTreeMap::from([(bad_key.to_string(), "x".into())]);
+        assert!(validate_headers(&bad).is_err(), "键 {bad_key:?} 应被拒收");
+    }
+    // 值含控制字符
+    let bad = BTreeMap::from([("x-trace".into(), "a\nb".into())]);
+    assert!(validate_headers(&bad).is_err());
+    // 条数超限
+    let many: BTreeMap<String, String> =
+        (0..=32).map(|i| (format!("x-h{i}"), "v".into())).collect();
+    assert!(validate_headers(&many).is_err());
+}
+
+// ---- 网络代理（批 C §8.5） ----
+
+#[test]
+fn network_proxy_validation_and_normalization() {
+    assert!(NetworkProxy {
+        mode: "system".into(),
+        url: None
+    }
+    .validate()
+    .is_ok());
+    assert!(NetworkProxy {
+        mode: "direct".into(),
+        url: None
+    }
+    .validate()
+    .is_ok());
+    let custom = NetworkProxy {
+        mode: "custom".into(),
+        url: Some(" http://127.0.0.1:7890 ".into()),
+    };
+    assert!(custom.validate().is_ok());
+    // custom 缺 url / 非 http 形态拒绝
+    assert!(NetworkProxy {
+        mode: "custom".into(),
+        url: None
+    }
+    .validate()
+    .is_err());
+    assert!(NetworkProxy {
+        mode: "custom".into(),
+        url: Some("socks5://x".into())
+    }
+    .validate()
+    .is_err());
+    // 未知模式拒绝
+    assert!(NetworkProxy {
+        mode: "proxy".into(),
+        url: None
+    }
+    .validate()
+    .is_err());
+    // 归一：system/direct 不带 url；custom 去 blanks
+    assert_eq!(
+        NetworkProxy {
+            mode: "direct".into(),
+            url: Some("http://x".into())
+        }
+        .normalized()
+        .url,
+        None
+    );
+    assert_eq!(
+        NetworkProxy {
+            mode: "custom".into(),
+            url: Some(" http://a:1 ".into())
+        }
+        .normalized()
+        .url
+        .as_deref(),
+        Some("http://a:1")
+    );
 }

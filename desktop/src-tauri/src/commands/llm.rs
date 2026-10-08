@@ -7,10 +7,10 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::llm::catalog::{CatalogStatus, CatalogStore};
-use crate::llm::models;
+use crate::llm::{keyring, models};
 use crate::settings::{
-    new_profile_id, LlmSettingsView, ProviderInput, ProviderModel, ProviderProfile, ProviderView,
-    PROVIDERS,
+    new_profile_id, validate_headers, LlmSettingsView, NetworkProxy, ProviderInput, ProviderModel,
+    ProviderProfile, ProviderView, PROVIDERS,
 };
 use crate::state::AppState;
 
@@ -56,7 +56,9 @@ pub fn enrich_with_catalog(catalog: &CatalogStore, llm_view: &mut LlmSettingsVie
     }
 }
 
-/// 全部已存档位的模型清单（并行探测，5s 超时逐组收口）。
+/// 全部已存档位的模型清单（并行探测，5s 超时逐组收口）。**选择器路径
+/// 不做端点扫描**（§8.2 记档）——扫描胜出的端点无处持久化，清单成功了
+/// 聊天仍走原端点必败 = 谎报；扫描只在表单 probe（有采纳面）发生。
 #[tauri::command]
 pub async fn llm_list_models(
     state: State<'_, AppState>,
@@ -66,11 +68,18 @@ pub async fn llm_list_models(
     let probes = cfg.providers.iter().filter(|p| p.enabled).map(|p| {
         let id = p.id.clone();
         let label = p.label.clone();
-        let kind = p.kind.clone();
-        let base = p.base_url.clone();
-        let key = p.api_key.clone();
+        let key = keyring::resolve(p);
+        let headers = p.headers.clone();
+        let proxy = cfg.network_proxy.clone();
         async move {
-            let res = models::list_models(&kind, base.as_deref(), key.as_deref()).await;
+            let res = models::list_models(
+                &p.kind,
+                p.base_url.as_deref(),
+                key.as_deref(),
+                &headers,
+                proxy.as_ref(),
+            )
+            .await;
             (id, label, res)
         }
     });
@@ -94,8 +103,19 @@ pub async fn llm_list_models(
         .collect())
 }
 
-/// 单档探测（设置表单未保存值）。`api_key` 空缺时回退 `profile_id`
-/// 指向档位的已存 Key（编辑既有档位不重复粘贴 Key）。
+/// 表单探测结果（§8.2）：清单或错误 + 扫描自动补全的端点（与传入不同
+/// 时 Some，表单字段未再编辑时自动采纳）。
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeOutcome {
+    pub models: Vec<String>,
+    pub error: Option<String>,
+    pub effective_base_url: Option<String>,
+}
+
+/// 单档探测（设置表单未保存值），失败时端点扫描（§8.2）。`api_key` 空缺
+/// 时回退 `profile_id` 指向档位的已存 Key（凭据库双读，编辑既有档位不
+/// 重复粘贴 Key）。
 #[tauri::command]
 pub async fn llm_probe_models(
     kind: String,
@@ -103,18 +123,99 @@ pub async fn llm_probe_models(
     api_key: Option<String>,
     profile_id: Option<String>,
     state: State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+) -> Result<ProbeOutcome, String> {
+    let cfg = state.settings.llm_config();
+    let stored = profile_id.as_deref().and_then(|id| cfg.profile(id));
     let key = match api_key.as_deref().filter(|k| !k.is_empty()) {
         Some(k) => Some(k.to_string()),
-        None => profile_id.and_then(|id| {
-            state
-                .settings
-                .llm_config()
-                .profile(&id)
-                .and_then(|p| p.api_key.clone())
-        }),
+        None => stored.and_then(keyring::resolve),
     };
-    models::list_models(&kind, base_url.as_deref(), key.as_deref()).await
+    let headers = stored.map(|p| p.headers.clone()).unwrap_or_default();
+    let outcome = models::list_models_swept(
+        &kind,
+        base_url.as_deref(),
+        key.as_deref(),
+        &headers,
+        cfg.network_proxy.as_ref(),
+    )
+    .await;
+    let (m, e) = match outcome.result {
+        Ok(m) => (m, None),
+        Err(e) => (vec![], Some(e)),
+    };
+    Ok(ProbeOutcome {
+        models: m,
+        error: e,
+        effective_base_url: outcome.effective_base_url,
+    })
+}
+
+/// 逐模型连通测试（§8.3）：最小请求 ping，五分类错误 + 延迟如实。
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelTestResult {
+    pub ok: bool,
+    pub category: Option<String>,
+    pub message: Option<String>,
+    pub latency_ms: Option<u64>,
+}
+
+#[tauri::command]
+pub async fn llm_test_model(
+    profile_id: String,
+    model: String,
+    state: State<'_, AppState>,
+) -> Result<ModelTestResult, String> {
+    let model = model.trim().to_string();
+    if model.is_empty() {
+        return Err("模型名为空，无法测试".into());
+    }
+    let cfg = state.settings.llm_config();
+    let p = cfg
+        .profile(&profile_id)
+        .ok_or_else(|| format!("档位不存在: {profile_id}"))?;
+    let flat = cfg.flat_profile(p);
+    match crate::llm::test_model(&flat, &model).await {
+        Ok(ms) => Ok(ModelTestResult {
+            ok: true,
+            category: None,
+            message: None,
+            latency_ms: Some(ms),
+        }),
+        Err(f) => Ok(ModelTestResult {
+            ok: false,
+            category: Some(f.category().to_string()),
+            message: Some(f.message()),
+            latency_ms: None,
+        }),
+    }
+}
+
+/// 网络代理设置（§8.5）：保存即热换（客户端逐请求新建，下一次请求生效）。
+/// mode = system 时存 None（settings 零噪声）。
+#[tauri::command]
+pub fn llm_set_proxy(
+    mode: String,
+    url: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<LlmSettingsView, String> {
+    if mode == "system" {
+        state.settings.update_llm_config(|cfg| {
+            cfg.network_proxy = None;
+            Ok(())
+        })?;
+    } else {
+        let np = NetworkProxy { mode, url }.normalized();
+        np.validate()?;
+        state.settings.update_llm_config(|cfg| {
+            cfg.network_proxy = Some(np.clone());
+            Ok(())
+        })?;
+    }
+    // 返回与 settings_get 同形的 llm 区视图（目录合成随行）
+    let mut view = state.settings.view().llm;
+    enrich_with_catalog(&state.catalog, &mut view);
+    Ok(view)
 }
 
 /// 档位增改。`input.id` None = 新建（后端生成 id）；api_key None = 保持
@@ -158,9 +259,25 @@ pub fn llm_provider_save(
         profile.label = label;
         profile.kind = input.kind.clone();
         profile.base_url = base.clone();
-        // api_key：None = 保持已存值；空串 = 清除
+        // 自定义请求头（§8.1）：None = 保持已存值；Some = 校验后整表替换
+        if let Some(h) = &input.headers {
+            validate_headers(h)?;
+            profile.headers = h.clone();
+        }
+        // api_key（§8.4）：None = 保持已存值；空串 = 清除（凭据库随删）；
+        // 非空 = 写凭据库 + 换标记（失败回落文件存储，warn 在 keyring 层）
         if let Some(k) = &input.api_key {
-            profile.api_key = (!k.is_empty()).then_some(k.clone());
+            if k.trim().is_empty() {
+                keyring::delete(&profile.id);
+                profile.api_key = None;
+                profile.key_storage = None;
+            } else if keyring::store(&profile.id, k) {
+                profile.api_key = None;
+                profile.key_storage = Some(keyring::KEYRING_MARK.to_string());
+            } else {
+                profile.api_key = Some(k.clone());
+                profile.key_storage = None;
+            }
         }
         profile.model = input.model.trim().to_string();
         profile.window_tokens = input.window_tokens;
@@ -207,7 +324,8 @@ pub fn llm_provider_save(
     Ok(project_providers(&state.catalog, &cfg))
 }
 
-/// 档位删除。删的是活动档 = 指针落首档或空。返回全量档位投影。
+/// 档位删除。删的是活动档 = 指针落首档或空。凭据库条目随删（best-
+/// effort）。返回全量档位投影。
 #[tauri::command]
 pub fn llm_provider_delete(
     id: String,
@@ -217,6 +335,7 @@ pub fn llm_provider_delete(
         if cfg.profile(&id).is_none() {
             return Err(format!("档位不存在: {id}"));
         }
+        keyring::delete(&id);
         cfg.providers.retain(|p| p.id != id);
         if cfg.active == id {
             cfg.active = cfg
@@ -262,10 +381,12 @@ fn project_providers(
             label: p.label.clone(),
             kind: p.kind.clone(),
             base_url: p.base_url.clone(),
-            api_key_set: p.api_key.is_some(),
+            // 明文或凭据库在位都算已配置（批 C §8.4）
+            api_key_set: p.has_key(),
             model: p.model.clone(),
             window_tokens: p.window_tokens,
             enabled: p.enabled,
+            headers: p.headers.clone(),
             models: p
                 .models
                 .iter()

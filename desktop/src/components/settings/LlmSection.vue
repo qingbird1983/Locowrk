@@ -8,10 +8,10 @@
  * 选服务瓦片格 ↔ 表单双栏）。API Key 只落盘不出 IPC。目录状态行
  * （models.dev 快照）= 文档记槽位，本页不渲染。
  */
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
-import { llmCatalogRefresh, llmCatalogStatus, llmProbeModels, llmProviderReorder } from "../../lib/api";
+import { llmCatalogRefresh, llmCatalogStatus, llmProbeModels, llmProviderReorder, llmSetProxy } from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
 import { useToastStore } from "../../stores/toast";
 import { relativeTime } from "../../lib/format";
@@ -178,11 +178,57 @@ async function onMakeDefault(p: ProviderView) {
 }
 async function onTest(p: ProviderView) {
   try {
-    const list = await llmProbeModels(p.kind, p.baseUrl, null, p.id);
-    toast.push(
-      list.length > 0 ? "ok" : "danger",
-      list.length > 0 ? t("settings.modelConnected", { n: list.length }) : t("settings.modelProbeEmpty"),
-    );
+    const out = await llmProbeModels(p.kind, p.baseUrl, null, p.id);
+    if (out.models.length > 0) {
+      toast.push("ok", t("settings.modelConnected", { n: out.models.length }));
+    } else {
+      toast.push("danger", out.error ?? t("settings.modelProbeEmpty"));
+    }
+  } catch (e) {
+    toast.push("danger", String(e));
+  }
+}
+
+// ---- 网络代理（批 C §8.5，裁定 D6）：system/direct 即选即存；custom
+// 由地址行提交（custom 必带 url）。保存即热换（下一次请求生效）。 ----
+const proxyMode = computed(() => llm.value?.networkProxy?.mode ?? "system");
+const proxyUrl = ref(llm.value?.networkProxy?.url ?? "");
+watch(proxyMode, () => {
+  proxyUrl.value = llm.value?.networkProxy?.url ?? "";
+});
+/** 本地草稿档：切「自定义」只记草稿不落盘（后端校验 custom 必带 url），
+ * 地址行以草稿档为门；system/direct 即选即存并清草稿。 */
+const proxyModeDraft = ref<string | null>(null);
+const proxyOptions = computed(() => [
+  { value: "system", label: t("settings.proxySystem") },
+  { value: "direct", label: t("settings.proxyDirect") },
+  { value: "custom", label: t("settings.proxyCustom") },
+]);
+const proxyModePref = computed({
+  get: () => proxyModeDraft.value ?? proxyMode.value,
+  set: (v: string) => void onProxyMode(v),
+});
+async function onProxyMode(v: string) {
+  if (v === (proxyModeDraft.value ?? proxyMode.value)) return;
+  if (v === "custom") {
+    proxyModeDraft.value = "custom";
+    proxyUrl.value = llm.value?.networkProxy?.url ?? "";
+    return;
+  }
+  proxyModeDraft.value = null;
+  await saveProxy(v as "system" | "direct", null);
+}
+async function onProxyUrlCommit() {
+  const url = proxyUrl.value.trim();
+  if (!url) return;
+  await saveProxy("custom", url);
+  proxyModeDraft.value = null;
+}
+async function saveProxy(mode: "system" | "direct" | "custom", url: string | null) {
+  try {
+    await llmSetProxy(mode, url);
+    await settings.refresh();
+    toast.push("ok", t("settings.proxySavedToast"));
   } catch (e) {
     toast.push("danger", String(e));
   }
@@ -302,6 +348,28 @@ function closeSetup() {
           <Icon name="refresh" :size="14" />
           {{ catalogRefreshing ? t("settings.catalogRefreshing") : t("settings.catalogRefresh") }}
         </button>
+      </SettingsRow>
+    </SettingsGroup>
+
+    <!-- 网络代理（批 C §8.5）：clash 类常驻代理的显式可控档 -->
+    <SettingsGroup :title="t('settings.proxyTitle')">
+      <SettingsRow :title="t('settings.proxyRow')" :hint="t('settings.proxyHint')">
+        <SettingsSelect
+          v-model="proxyModePref"
+          class="w-44"
+          :entries="proxyOptions"
+          :label="t('settings.proxyRow')"
+        />
+      </SettingsRow>
+      <SettingsRow v-if="(proxyModeDraft ?? proxyMode) === 'custom'" :title="t('settings.proxyUrlRow')">
+        <input
+          v-model="proxyUrl"
+          class="lw-field h-9 w-full px-2.5 font-mono text-[length:var(--lw-fs-12)]"
+          placeholder="http://127.0.0.1:7890"
+          spellcheck="false"
+          autocomplete="off"
+          @change="onProxyUrlCommit"
+        />
       </SettingsRow>
     </SettingsGroup>
 

@@ -37,13 +37,10 @@ impl AppLlmMemoryManager {
         ) {
             if !pid.trim().is_empty() {
                 if let Some(p) = self.settings.llm_config().profile(pid) {
-                    return LlmSettings {
-                        provider: p.kind.clone(),
-                        model: m.to_string(),
-                        base_url: p.base_url.clone(),
-                        api_key: p.api_key.clone(),
-                        window_tokens: p.window_tokens,
-                    };
+                    // flat_profile：keyring 双读 + headers + 全区代理随行（批 C）
+                    let mut flat = self.settings.llm_config().flat_profile(p);
+                    flat.model = m.to_string();
+                    return flat;
                 }
             }
         }

@@ -13,7 +13,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { llmLookupModel } from "../../../lib/api";
+import { llmLookupModel, llmTestModel } from "../../../lib/api";
 import { Icon } from "../../../lib/icons";
 import {
   catalogHitToRow,
@@ -24,7 +24,7 @@ import {
 } from "../../../lib/model-catalog";
 import { formatLimitShort, WINDOW_PRESETS } from "../../../lib/provider-presets";
 import { profileWindow } from "../../../lib/model-profiles";
-import type { ProviderModelView } from "../../../types";
+import type { ModelTestResult, ProviderModelView } from "../../../types";
 import HoverTip from "../HoverTip.vue";
 
 const props = defineProps<{
@@ -37,6 +37,8 @@ const props = defineProps<{
   /** 表单 kind + baseUrl（目录匹配的供应商定位输入）。 */
   kind: string;
   baseUrl: string;
+  /** 档位 id（逐模型连通测试 §8.3 需已存档位；添加流 = null 不显钮）。 */
+  profileId: string | null;
   disabled?: boolean;
 }>();
 const emit = defineEmits<{
@@ -55,6 +57,47 @@ const dragId = ref<string | null>(null);
 const overIndex = ref(-1);
 /** 在途目录合并（防重复请求 + 合并回环）。 */
 const mergingIds = new Set<string>();
+
+// ---- 逐模型连通测试（§8.3）：行头「测试」钮 + 结果徽章（五分类） ----
+const testingId = ref<string | null>(null);
+const testResults = ref<Record<string, ModelTestResult>>({});
+const TEST_CAT_KEYS: Record<string, string> = {
+  auth: "settings.testCatAuth",
+  model_not_found: "settings.testCatModelNotFound",
+  rate_limit: "settings.testCatRateLimit",
+  network: "settings.testCatNetwork",
+  server: "settings.testCatServer",
+  unknown: "settings.testCatUnknown",
+};
+
+async function testModel(id: string): Promise<void> {
+  if (!props.profileId || testingId.value) return;
+  testingId.value = id;
+  try {
+    testResults.value[id] = await llmTestModel(props.profileId, id);
+  } catch (e) {
+    // 命令层错误（模型名为空/档位缺失等）按 unknown 如实呈现
+    testResults.value[id] = {
+      ok: false,
+      category: "unknown",
+      message: String(e),
+      latencyMs: null,
+    };
+  } finally {
+    testingId.value = null;
+  }
+}
+
+const testBadge = (id: string): { text: string; cls: string; title: string } | null => {
+  const r = testResults.value[id];
+  if (!r) return null;
+  if (r.ok) return { text: `✓ ${r.latencyMs ?? "?"}ms`, cls: "text-ok", title: "" };
+  return {
+    text: TEST_CAT_KEYS[r.category ?? "unknown"] ? t(TEST_CAT_KEYS[r.category ?? "unknown"]) : t("settings.testCatUnknown"),
+    cls: "text-danger",
+    title: r.message ?? "",
+  };
+};
 
 const selectedSet = computed(() => new Set(props.chosen.map((m) => m.id.toLowerCase())));
 
@@ -353,6 +396,22 @@ watch(() => props.available, () => (expandedId.value = null));
               <span class="shrink-0 text-[length:var(--lw-fs-11)] tabular-nums text-ink-4">
                 {{ limitBadge(m) }}
               </span>
+              <!-- 逐模型连通测试（§8.3）：徽章常驻最近一次结果，失败 title 带报文 -->
+              <span
+                v-if="testBadge(m.id)"
+                class="shrink-0 text-[length:var(--lw-fs-11)] tabular-nums"
+                :class="testBadge(m.id)!.cls"
+                :title="testBadge(m.id)!.title"
+              >{{ testBadge(m.id)!.text }}</span>
+              <button
+                v-if="props.profileId"
+                type="button"
+                class="rounded-[var(--lw-r-3xs)] px-1.5 py-0.5 text-[length:var(--lw-fs-11)] text-ink-3 hover:bg-wash-3 hover:text-ink-1 disabled:opacity-50"
+                :disabled="testingId !== null || disabled"
+                @click="testModel(m.id)"
+              >
+                {{ testingId === m.id ? t("settings.modelTestingShort") : t("settings.modelTestBtn") }}
+              </button>
               <button
                 type="button"
                 class="rounded-[var(--lw-r-3xs)] px-1.5 py-0.5 text-[length:var(--lw-fs-11)] text-ink-3 hover:bg-wash-3 hover:text-ink-1"

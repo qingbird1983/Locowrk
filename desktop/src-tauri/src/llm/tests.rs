@@ -303,6 +303,7 @@ fn endpoint_normalizes_join_version() {
         base_url: base.map(Into::into),
         api_key: None,
         window_tokens: None,
+        ..Default::default()
     };
     assert_eq!(
         CompatLlm::endpoint(&cfg("openai", Some("https://api.deepseek.com"))),
@@ -421,6 +422,7 @@ fn effective_cfg_resolves_session_override() {
                 window_tokens: Some(200_000),
                 enabled: true,
                 models: Vec::new(),
+                ..Default::default()
             });
             cfg.active = "default".into();
             Ok(())
@@ -550,4 +552,45 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
     };
     let p = build_payload("m", &req, true, Dialect::None, &caps);
     assert_eq!(p["max_tokens"], 1_024);
+}
+
+// ---- 自定义请求头装配（批 C §8.1）：最后写入者覆盖 + 双带鉴权现状 ----
+
+#[test]
+fn build_headers_last_writer_wins() {
+    let mut cfg = crate::settings::LlmSettings {
+        provider: "anthropic".into(),
+        model: "m".into(),
+        ..Default::default()
+    };
+    cfg.headers
+        .insert("anthropic-version".into(), "2040-01-01".into());
+    cfg.headers
+        .insert("User-Agent".into(), "relay-gate/1".into());
+    let map = CompatLlm::build_headers(&cfg, "sk-test");
+    // 用户头覆盖默认头（HeaderMap insert 替换语义）
+    assert_eq!(map.get("anthropic-version").unwrap(), "2040-01-01");
+    assert_eq!(map.get("User-Agent").unwrap(), "relay-gate/1");
+    // anthropic 双带鉴权（v3.0 现状不变）
+    assert_eq!(map.get("x-api-key").unwrap(), "sk-test");
+    assert_eq!(map.get("authorization").unwrap(), "Bearer sk-test");
+    // openai 只有 Bearer；ollama 无鉴权
+    let m2 = CompatLlm::build_headers(
+        &crate::settings::LlmSettings {
+            provider: "openai".into(),
+            ..Default::default()
+        },
+        "k2",
+    );
+    assert_eq!(m2.get("authorization").unwrap(), "Bearer k2");
+    assert!(m2.get("x-api-key").is_none());
+    // ollama 走同一 `_ =>` 臂：空 Key 与旧 bearer_auth("") 行为逐字节一致
+    let m3 = CompatLlm::build_headers(
+        &crate::settings::LlmSettings {
+            provider: "ollama".into(),
+            ..Default::default()
+        },
+        "",
+    );
+    assert_eq!(m3.get("authorization").unwrap(), "Bearer ");
 }

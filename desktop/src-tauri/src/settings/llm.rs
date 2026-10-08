@@ -6,11 +6,106 @@
 //! `apply_update`，设置原值 / IPC 投影 / 部分更新三形齐备。
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::llm::catalog::CatalogModel;
+use crate::llm::keyring::KEYRING_MARK;
 
 /// LLM.md v3.0：统一适配器按 provider 路由（自建 OpenAI 兼容客户端）。
 pub const PROVIDERS: [&str; 3] = ["openai", "anthropic", "ollama"];
+
+/// 保留请求头（批 C §8.1）：鉴权 / 逐跳 / 受控头，保存时拒收（不区分
+/// 大小写）——用户头可覆盖 User-Agent 等，不可碰鉴权与连接治理。
+pub const RESERVED_HEADERS: [&str; 14] = [
+    "authorization",
+    "x-api-key",
+    "api-key",
+    "proxy-authorization",
+    "host",
+    "content-type",
+    "content-length",
+    "cookie",
+    "set-cookie",
+    "connection",
+    "transfer-encoding",
+    "te",
+    "trailer",
+    "upgrade",
+];
+
+/// 自定义请求头条数上限（§8.1）。
+pub const MAX_CUSTOM_HEADERS: usize = 32;
+
+/// 网络代理档位（§8.5）。
+pub const PROXY_MODES: [&str; 3] = ["system", "direct", "custom"];
+
+/// 自定义请求头保存校验：条数 ≤32；键 = 合法 HTTP token（可见 ASCII、
+/// 无冒号、无空白）、不在保留表；值无控制字符、长度 ≤1024。
+pub fn validate_headers(map: &BTreeMap<String, String>) -> Result<(), String> {
+    if map.len() > MAX_CUSTOM_HEADERS {
+        return Err(format!("自定义请求头最多 {} 条", MAX_CUSTOM_HEADERS));
+    }
+    for (k, v) in map {
+        let key = k.trim();
+        if key.is_empty() {
+            return Err("请求头名不能为空".into());
+        }
+        if key.len() > 128 || !key.bytes().all(|b| b.is_ascii_graphic() && b != b':') {
+            return Err(format!("请求头名不合法: {key}"));
+        }
+        if RESERVED_HEADERS.contains(&key.to_ascii_lowercase().as_str()) {
+            return Err(format!(
+                "请求头 {key} 是保留头（鉴权/逐跳/受控头不可自定义）"
+            ));
+        }
+        if v.chars().any(char::is_control) {
+            return Err(format!("请求头 {key} 的值含控制字符"));
+        }
+        if v.len() > 1024 {
+            return Err(format!("请求头 {key} 的值过长（上限 1024 字节）"));
+        }
+    }
+    Ok(())
+}
+
+/// 网络代理（批 C §8.5，裁定 D6）：system = reqwest 缺省（吃环境变量，
+/// 现状）；direct = 强制直连；custom = 指定 url。`LlmConfig.network_proxy`
+/// 缺省 None = system（零迁移零噪声）。
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NetworkProxy {
+    pub mode: String,
+    pub url: Option<String>,
+}
+
+impl NetworkProxy {
+    pub fn validate(&self) -> Result<(), String> {
+        if !PROXY_MODES.contains(&self.mode.as_str()) {
+            return Err(format!(
+                "不支持的代理模式: {}（可选 system / direct / custom）",
+                self.mode
+            ));
+        }
+        if self.mode == "custom" {
+            let url = self.url.as_deref().map(str::trim).unwrap_or("");
+            if !(url.starts_with("http://") || url.starts_with("https://")) {
+                return Err("自定义代理地址需以 http:// 或 https:// 开头".into());
+            }
+        }
+        Ok(())
+    }
+
+    /// 归一：system / direct 不携带 url（settings 零噪声）。
+    pub fn normalized(self) -> Self {
+        let url = (self.mode == "custom")
+            .then(|| self.url.clone().unwrap_or_default().trim().to_string())
+            .filter(|u| !u.is_empty());
+        Self {
+            mode: self.mode,
+            url,
+        }
+    }
+}
 
 /// 档位内一个已配置模型（㉚ 模型配置页）。`context_window` None =
 /// 跟随静态档案 / 保守保护；`alias` 仅展示。不含密钥，可进 IPC。
@@ -189,6 +284,19 @@ pub struct ProviderProfile {
     /// 该档已配置模型清单（配置页右栏；`model` 应指其中一项）。只存用户
     /// 钉死面——目录能力数据永不落这里（批 A，供应商稿 §九）。
     pub models: Vec<ProviderModel>,
+    /// 自定义请求头（批 C §8.1）：client 默认头之后最后写入者合并；
+    /// 保留键保存时拒收（`validate_headers`）。
+    pub headers: BTreeMap<String, String>,
+    /// Key 存储标记（批 C §8.4）：Some("keyring") = 系统凭据库；None =
+    /// 文件存储（存量明文，旧文件零迁移）。
+    pub key_storage: Option<String>,
+}
+
+impl ProviderProfile {
+    /// Key 是否已配置（明文或凭据库两态都算——IPC 的 api_key_set 用）。
+    pub fn has_key(&self) -> bool {
+        self.api_key.is_some() || self.key_storage.as_deref() == Some(KEYRING_MARK)
+    }
 }
 
 /// `ProviderProfile::enabled` 的字段级 serde 缺省（旧文件无此字段 = 启用）。
@@ -196,13 +304,15 @@ fn default_enabled() -> bool {
     true
 }
 
-/// llm 区持久态：活动指针 + 档位表。`active` 指向不存在 / 表空 =
-/// 未配置（平面投影回落缺省，DemoLlm 语义）。
+/// llm 区持久态：活动指针 + 档位表 + 代理档（§8.5，全区一级）。
+/// `active` 指向不存在 / 表空 = 未配置（平面投影回落缺省，DemoLlm 语义）。
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LlmConfig {
     pub active: String,
     pub providers: Vec<ProviderProfile>,
+    /// 网络代理（§8.5）。None = system（reqwest 缺省吃环境变量）。
+    pub network_proxy: Option<NetworkProxy>,
 }
 
 impl LlmConfig {
@@ -221,16 +331,29 @@ impl LlmConfig {
     }
 
     /// 生效配置（平面投影）：活动档 → `LlmSettings`；无档 = 缺省。
+    /// Key 经凭据库双读回落解析（明文优先）。
     pub fn flat(&self) -> LlmSettings {
-        self.active_profile()
-            .map(|p| LlmSettings {
-                provider: p.kind.clone(),
-                model: p.model.clone(),
-                base_url: p.base_url.clone(),
-                api_key: p.api_key.clone(),
-                window_tokens: p.window_tokens,
-            })
-            .unwrap_or_default()
+        match self.active_profile() {
+            Some(p) => self.flat_profile(p),
+            None => LlmSettings {
+                network_proxy: self.network_proxy.clone(),
+                ..LlmSettings::default()
+            },
+        }
+    }
+
+    /// 指定档 → 平面投影（会话覆盖路由同吃；Key 凭据库解析 +
+    /// headers + 全区代理档随行）。
+    pub fn flat_profile(&self, p: &ProviderProfile) -> LlmSettings {
+        LlmSettings {
+            provider: p.kind.clone(),
+            model: p.model.clone(),
+            base_url: p.base_url.clone(),
+            api_key: crate::llm::keyring::resolve(p),
+            window_tokens: p.window_tokens,
+            headers: p.headers.clone(),
+            network_proxy: self.network_proxy.clone(),
+        }
     }
 
     /// `settings_set` 的 llm 区部分更新（平面字段映射到活动档；
@@ -264,6 +387,8 @@ impl LlmConfig {
                     window_tokens: None,
                     enabled: true,
                     models: Vec::new(),
+                    headers: BTreeMap::new(),
+                    key_storage: None,
                 }
             }
         };
@@ -309,7 +434,8 @@ impl LlmConfig {
 }
 
 /// 生效配置（v2.58 起为活动档的平面投影；字段语义不变，全部既有
-/// 消费方——适配器 / embedding 回落 / 探测——同形零改动）。
+/// 消费方——适配器 / embedding 回落 / 探测——同形零改动）。批 C 起随行
+/// 自定义请求头与网络代理档。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LlmSettings {
@@ -320,6 +446,10 @@ pub struct LlmSettings {
     pub api_key: Option<String>,
     /// 模型上下文窗口（token）。None = 未设置（阈值回落保守保护）。
     pub window_tokens: Option<u64>,
+    /// 自定义请求头（批 C §8.1，最后写入者合并）。
+    pub headers: BTreeMap<String, String>,
+    /// 网络代理（批 C §8.5）。None = system。
+    pub network_proxy: Option<NetworkProxy>,
 }
 
 impl Default for LlmSettings {
@@ -330,6 +460,8 @@ impl Default for LlmSettings {
             base_url: None,
             api_key: None,
             window_tokens: None,
+            headers: BTreeMap::new(),
+            network_proxy: None,
         }
     }
 }
@@ -346,6 +478,8 @@ pub struct ProviderView {
     pub model: String,
     pub window_tokens: Option<u64>,
     pub enabled: bool,
+    /// 自定义请求头（非秘钥，编辑器回显用）。
+    pub headers: BTreeMap<String, String>,
     /// 该档已配置模型清单（批 A 起为目录合成视图：view.rs 以无目录形态
     /// 铺底，命令层 enrich 挂上 models.dev 数据）。
     pub models: Vec<ProviderModelView>,
@@ -363,6 +497,8 @@ pub struct LlmSettingsView {
     pub base_url: Option<String>,
     pub api_key_set: bool,
     pub window_tokens: Option<u64>,
+    /// 网络代理档（批 C §8.5）。None = system。
+    pub network_proxy: Option<NetworkProxy>,
 }
 
 /// 档位增改入参（`llm_provider_save`）。`id` None = 新建（后端生成）；
@@ -380,6 +516,8 @@ pub struct ProviderInput {
     pub window_tokens: Option<u64>,
     pub enabled: Option<bool>,
     pub models: Option<Vec<ProviderModel>>,
+    /// 自定义请求头：None = 保持已存值，Some = 整表替换（保存校验）。
+    pub headers: Option<BTreeMap<String, String>>,
 }
 
 /// 部分更新（`settings_set` 入参）。字段 None = 保持不变；base_url /

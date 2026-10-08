@@ -76,7 +76,10 @@
 
 ---
 
-### 批 C — 连接与安全
+### 批 C — 连接与安全 ✅（v2.129，2026-10-08 完成；D6/D7 按推荐落档）
+
+**落成记录**：①keyring（`keyring` crate 三平台 feature，service="Locowrk" + account=provider_id）——`ProviderProfile +key_storage`（None=文件零迁移）+ 双读回落（明文优先→凭据库）+ settings open **惰性迁移**（有变更立即落盘，安全改进不等下一次保存）+ 写失败回落文件 + IPC 面 `api_key_set` 不变（`has_key()` 两态点亮）；**测试构建不碰真实凭据库**（cfg(test) 按"不可用"走回落路径，防单测夹具写进开发机 Credential Manager）。②自定义请求头 `ProviderProfile +headers`（BTreeMap）：`validate_headers`（≤32 条/键 token 形/保留键 14 个拒收/值无控制字符）+ client `build_headers` HeaderMap（鉴权先入、用户头**最后写入者覆盖**，anthropic 双带现状不变）+ 探测同吃。③端点扫描 `sweep_candidates` 纯函数（现值剔除 + ≤3 候选 3s each；裸域名补 scheme——**本地形态 localhost/127.*/::1/无点补 http://，其余 https://**，走查实抓首版全 https 打不通本地 echo 服务器后改）+ `llm_probe_models` 返回 `ProbeOutcome{models,error,effectiveBaseUrl}` + 表单字段未再编辑时自动采纳 +「已自动补全端点」提示；**选择器路径不扫描**（无处采纳=扫了谎报，记档偏离设计稿）。④`llm_test_model`（最小 ping 15s）五分类 + unknown 带报文 + ModelPanes 行头「测试」钮 + 结果徽章常驻。⑤`llm.networkProxy{mode,url}`（system/direct/custom）+ `apply_proxy` 共享件（聊天客户端/探测/扫描/测试四处同吃）+ custom 代理地址草稿档门控（custom 必带 url，切档不落盘等地址提交）。UI：编辑模态折叠头编辑器（行 + 常用头 chips + JSON 导入/复制）+ 设置模型分区「网络代理」组 + LLM.md v3.3 + UI shell v4.23。**实机走查（CDP 独立数据根 + 复制真 Key + 本地 echo/scenario 服务器 18900）**：明文 Key 启动即迁移（settings 只剩标记 + Credential Manager `p-walk-ds.Locowrk`/`p-walk-echo.Locowrk` 取证 + 重启真轮读回成功）；种子头注入 + UI 加行保存双头随请求；裸域名扫描自动补全 http://…/v1 + 全程唯一 host；五分类 + network 七徽章逐例命中；custom 死代理落盘 → 真轮**无限重试不收束**（v2.75 裁定如实形态 + cfg 轮次绑定）→ 停止空收束退路 → system 恢复真轮完成。**走查教训记档**：①两驱动脚本轮次排队交错（前轮未收束后轮入队，代理翻转毒化排队轮 cfg——断言"错误事件"错，无限重试本就无错误事件）；②`llm_test_model` 走**已存**档位（表单未保存值不生效）。数据根已清 + Credential Manager 两条已删净（cmdkey /list 零残留）+ echo 服务器已停，脚本/截图留 tmp/v129-walk/。门禁（走查修复后复跑）：clippy 0、fmt、workspace 39 套件（desktop 283）、vue-tsc 0、pnpm build、lint:style 0。
+
 
 **范围**：
 1. keyring：`keyring` crate 接入 + 惰性迁移（明文 → keyring，幂等）+ 读回落 + key_storage 标记；IPC 面不变（api_key 永不过线）
@@ -175,8 +178,8 @@
 | D3 | thinking 控件 = 循环钮（vs PI 滑杆） | 循环钮 | **已采纳**（批 B 兑现，2026-10-08） |
 | D4 | 工具结果图片投影 = 挪下一条 user 消息（vs 仅文本占位） | 投影 | **待裁** |
 | D5 | max_tokens 窄修订 = 用户钉死值才发送 + 预检钳制（v2.75 措辞修订） | 采纳 | **已采纳**（批 B 兑现，2026-10-08） |
-| D6 | 网络代理进批 C | 进 | **待裁** |
-| D7 | keyring（Credential Manager 优先）+ 惰性迁移 | 确认 | **待裁** |
+| D6 | 网络代理进批 C | 进 | **已采纳**（批 C 兑现，2026-10-08） |
+| D7 | keyring（Credential Manager 优先）+ 惰性迁移 | 确认 | **已采纳**（批 C 兑现，2026-10-08） |
 | — | 缓办记档：OAuth 订阅账号 / 目录借池 / 用户自编辑档位映射 / aux 发 max_tokens / 视觉备用自动切换 / 图像转码 | — | 已记 |
 
 ---

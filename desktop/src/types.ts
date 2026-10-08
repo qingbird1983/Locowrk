@@ -812,6 +812,8 @@ export interface ProviderView {
   windowTokens: number | null;
   /** ㉚ 停用档：选择器与 active 回落跳过（配置保留）。 */
   enabled: boolean;
+  /** 自定义请求头（批 C §8.1；保留键后端拒收，键大小写原样）。 */
+  headers: Record<string, string>;
   /** 该档已配置模型清单（模型配置页右栏真源）。 */
   models: ProviderModelView[];
 }
@@ -889,6 +891,37 @@ export interface LlmSettingsView {
   /** 模型上下文窗口（token，S2 迁入）；null = 未设置（回落保守保护，
    * Ollama 可经 /api/show 探测，云端查静态档案或手填）。 */
   windowTokens: number | null;
+  /** 网络代理档（批 C §8.5）；null = system（吃环境变量）。 */
+  networkProxy: NetworkProxySettings | null;
+}
+
+/** 网络代理档（§8.5）：system / direct / custom（custom 必带 url）。 */
+export interface NetworkProxySettings {
+  mode: "system" | "direct" | "custom";
+  url: string | null;
+}
+
+/** 表单探测结果（§8.2）：清单或错误 + 端点扫描自动补全的 base_url
+ * （与传入不同时非空，表单字段未再编辑时自动采纳）。 */
+export interface ProbeOutcome {
+  models: string[];
+  error: string | null;
+  effectiveBaseUrl: string | null;
+}
+
+/** 逐模型连通测试结果（§8.3；五分类 category + 如实报文）。 */
+export interface ModelTestResult {
+  ok: boolean;
+  category:
+    | "auth"
+    | "model_not_found"
+    | "rate_limit"
+    | "network"
+    | "server"
+    | "unknown"
+    | null;
+  message: string | null;
+  latencyMs: number | null;
 }
 
 /** 部分更新：字段缺省（undefined）= 保持不变；baseUrl / apiKey 传
@@ -905,7 +938,8 @@ export interface LlmUpdate {
 
 /** 档位增改入参（llm_provider_save；id 缺省 = 新建）。apiKey undefined =
  * 保持已存值（更新时），空串 = 清除；models undefined = 保持已存清单，
- * 传数组 = 整表替换（原 model 不在清单时后端改指首项）。 */
+ * 传数组 = 整表替换（原 model 不在清单时后端改指首项）；headers
+ * undefined = 保持已存值，传对象 = 整表替换（保留键后端拒收）。 */
 export interface ProviderInput {
   id?: string;
   label: string;
@@ -916,6 +950,7 @@ export interface ProviderInput {
   windowTokens?: number | null;
   enabled?: boolean;
   models?: ProviderModelView[];
+  headers?: Record<string, string>;
 }
 
 /** 单档模型清单（llm_list_models 返回组；error = 该档探测失败）。 */

@@ -51,6 +51,14 @@ const saving = ref(false);
 const testing = ref(false);
 const touched = ref(false);
 
+/** 自定义请求头（批 C §8.1）：行编辑器形态；保存整表替换。 */
+const headerRows = ref<{ key: string; value: string }[]>([]);
+const showHeaders = ref(false);
+const headersMsg = ref("");
+/** 端点扫描采纳（§8.2）：探测起点（字段未再编辑才自动补全）。 */
+const sweepHint = ref("");
+let probeStartBase = "";
+
 const preset = computed(() => PROVIDER_PRESETS.find((p) => p.id === service.value));
 const isCustom = computed(() => service.value === CUSTOM_SERVICE);
 const resolvedName = computed(() =>
@@ -60,11 +68,13 @@ const resolvedBaseUrl = computed(() => preset.value?.baseUrl ?? baseUrl.value.tr
 const chooserOpen = computed(() => choosing.value || !service.value);
 
 /** 探测（请求序号防旧覆新，实现在 use-model-probe）。 */
-const { probeState, available, probeError, run: probeRun, reset: resetProbe } = useModelProbe();
+const { probeState, available, probeError, effectiveBaseUrl, run: probeRun, reset: resetProbe } =
+  useModelProbe();
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 当前表单形态探测一次（ready 后触发自动预选检查）。 */
+/** 当前表单形态探测一次（ready 后触发自动预选 + 端点扫描采纳检查）。 */
 async function probe(): Promise<void> {
+  probeStartBase = resolvedBaseUrl.value;
   await probeRun(
     kind.value,
     resolvedBaseUrl.value,
@@ -73,6 +83,16 @@ async function probe(): Promise<void> {
     t("settings.modelProbeEmpty"),
   );
   maybeAutoPick();
+  maybeAdoptSweep();
+}
+
+/** 扫描自动补全（§8.2）：胜出候选在**字段未再编辑**时直接采纳 + 提示。 */
+function maybeAdoptSweep() {
+  sweepHint.value = "";
+  const eff = effectiveBaseUrl.value;
+  if (!eff || resolvedBaseUrl.value !== probeStartBase) return;
+  baseUrl.value = eff;
+  sweepHint.value = t("settings.modelSwept", { url: eff });
 }
 
 function initFrom(provider: ProviderView | null) {
@@ -82,22 +102,31 @@ function initFrom(provider: ProviderView | null) {
     baseUrl.value = provider.baseUrl ?? "";
     kind.value = provider.kind as typeof kind.value;
     models.value = provider.models.map((m) => ({ ...m }));
+    headerRows.value = Object.entries(provider.headers ?? {}).map(([key, value]) => ({
+      key,
+      value,
+    }));
   } else if (props.draft) {
     service.value = CUSTOM_SERVICE;
     name.value = props.draft.label;
     baseUrl.value = props.draft.baseUrl ?? "";
     kind.value = props.draft.kind as typeof kind.value;
     models.value = props.draft.models.map((m) => ({ ...m }));
+    headerRows.value = [];
   } else {
     service.value = "";
     name.value = "";
     baseUrl.value = "";
     kind.value = "openai";
     models.value = [];
+    headerRows.value = [];
   }
   apiKey.value = "";
   choosing.value = false;
   touched.value = false;
+  showHeaders.value = false;
+  headersMsg.value = "";
+  sweepHint.value = "";
   resetProbe();
 }
 
@@ -193,11 +222,61 @@ async function save() {
       models: persistable,
     };
     if (apiKey.value.trim()) input.apiKey = apiKey.value.trim();
+    // 自定义请求头（§8.1）：行编辑器整表替换（空键行跳过、键 trim）。
+    const headerObj: Record<string, string> = {};
+    for (const r of headerRows.value) {
+      const k = r.key.trim();
+      if (k) headerObj[k] = r.value;
+    }
+    if (props.provider || Object.keys(headerObj).length > 0) input.headers = headerObj;
     await llmProviderSave(input);
     emit("saved");
     emit("close");
   } finally {
     saving.value = false;
+  }
+}
+
+// ---- 头编辑器操作（§8.1：行编辑 + 常用头预设 + JSON 导入/复制） ----
+
+const HEADER_PRESETS = ["User-Agent", "HTTP-Referer", "X-Title", "X-Api-Version"] as const;
+
+function addHeaderRow(key = ""): void {
+  headerRows.value.push({ key, value: "" });
+  headersMsg.value = "";
+}
+
+function removeHeaderRow(i: number): void {
+  headerRows.value.splice(i, 1);
+}
+
+async function copyHeadersJson(): Promise<void> {
+  const obj: Record<string, string> = {};
+  for (const r of headerRows.value) {
+    if (r.key.trim()) obj[r.key.trim()] = r.value;
+  }
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(obj, null, 2));
+    headersMsg.value = t("settings.modelHeadersCopied");
+  } catch {
+    headersMsg.value = t("settings.modelHeadersClipboardFail");
+  }
+}
+
+async function importHeadersJson(): Promise<void> {
+  try {
+    const text = await navigator.clipboard.readText();
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      headersMsg.value = t("settings.modelHeadersImportBad");
+      return;
+    }
+    headerRows.value = Object.entries(parsed as Record<string, unknown>)
+      .filter(([, v]) => typeof v === "string")
+      .map(([k, v]) => ({ key: k, value: v as string }));
+    headersMsg.value = "";
+  } catch {
+    headersMsg.value = t("settings.modelHeadersImportBad");
   }
 }
 
@@ -401,6 +480,93 @@ const kindOptions = computed(() => [
               <p v-else-if="probeState === 'error' && probeError" class="col-span-2 truncate text-[length:var(--lw-fs-12)] text-danger">
                 {{ probeError }}
               </p>
+              <p
+                v-if="sweepHint"
+                class="col-span-2 flex items-center gap-1 text-[length:var(--lw-fs-12)] text-ok"
+              >
+                <Icon name="check" :size="14" />
+                {{ sweepHint }}
+              </p>
+
+              <!-- 自定义请求头（批 C §8.1）：折叠行编辑器 -->
+              <div class="col-span-2">
+                <button
+                  type="button"
+                  class="flex items-center gap-1 text-[length:var(--lw-fs-12)] text-ink-3 hover:text-ink-1"
+                  @click="showHeaders = !showHeaders"
+                >
+                  <Icon name="chevronRight" :size="12" :class="showHeaders ? 'rotate-90 transition' : 'transition'" />
+                  {{ t("settings.modelHeaders") }}
+                  <span v-if="headerRows.length > 0" class="text-ink-4">({{ headerRows.length }})</span>
+                </button>
+                <p v-if="showHeaders" class="mt-1 text-[length:var(--lw-fs-11)] text-ink-4">
+                  {{ t("settings.modelHeadersHint") }}
+                </p>
+                <div v-if="showHeaders" class="mt-2 space-y-1.5">
+                  <div
+                    v-for="(row, i) in headerRows"
+                    :key="i"
+                    class="flex items-center gap-1.5"
+                  >
+                    <input
+                      v-model="row.key"
+                      class="lw-field h-8 w-44 min-w-0 px-2 font-mono text-[length:var(--lw-fs-12)]"
+                      placeholder="X-Title"
+                      spellcheck="false"
+                      autocomplete="off"
+                    />
+                    <input
+                      v-model="row.value"
+                      class="lw-field h-8 min-w-0 flex-1 px-2 font-mono text-[length:var(--lw-fs-12)]"
+                      :placeholder="t('settings.modelHeadersValue')"
+                      spellcheck="false"
+                      autocomplete="off"
+                    />
+                    <button
+                      type="button"
+                      class="lw-btn shrink-0 px-2 py-1 text-ink-3"
+                      :aria-label="t('settings.modelHeadersRemove')"
+                      @click="removeHeaderRow(i)"
+                    >
+                      <Icon name="close" :size="12" />
+                    </button>
+                  </div>
+                  <div class="flex items-center gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      class="lw-btn px-2.5 py-1 text-[length:var(--lw-fs-12)] text-ink-1"
+                      @click="addHeaderRow()"
+                    >
+                      {{ t("settings.modelHeadersAdd") }}
+                    </button>
+                    <span class="text-[length:var(--lw-fs-11)] text-ink-4">{{ t("settings.modelHeadersPreset") }}</span>
+                    <button
+                      v-for="h in HEADER_PRESETS"
+                      :key="h"
+                      type="button"
+                      class="lw-btn px-2 py-1 font-mono text-[length:var(--lw-fs-11)] text-ink-2"
+                      @click="addHeaderRow(h)"
+                    >
+                      {{ h }}
+                    </button>
+                    <button
+                      type="button"
+                      class="lw-btn px-2.5 py-1 text-[length:var(--lw-fs-12)] text-ink-1"
+                      @click="importHeadersJson"
+                    >
+                      {{ t("settings.modelHeadersImport") }}
+                    </button>
+                    <button
+                      type="button"
+                      class="lw-btn px-2.5 py-1 text-[length:var(--lw-fs-12)] text-ink-1"
+                      @click="copyHeadersJson"
+                    >
+                      {{ t("settings.modelHeadersCopy") }}
+                    </button>
+                    <span v-if="headersMsg" class="text-[length:var(--lw-fs-11)] text-danger">{{ headersMsg }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <ModelPanes
@@ -409,6 +575,7 @@ const kindOptions = computed(() => [
               :chosen="models"
               :kind="kind"
               :base-url="resolvedBaseUrl"
+              :profile-id="props.provider?.id ?? null"
               :disabled="saving"
               @fetch="probe"
               @update="onChosenUpdate"

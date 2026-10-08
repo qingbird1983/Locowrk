@@ -212,6 +212,8 @@ pub fn run() {
             commands::llm_provider_save,
             commands::llm_provider_delete,
             commands::llm_provider_reorder,
+            commands::llm_test_model,
+            commands::llm_set_proxy,
             commands::llm_catalog_status,
             commands::llm_catalog_refresh,
             commands::llm_lookup_model,

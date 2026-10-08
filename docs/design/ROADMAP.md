@@ -722,6 +722,21 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.129 · 批 C 连接与安全（LLM 能力轨第三批，D6/D7 按推荐落档）
+
+| 项 | 落点 |
+|---|---|
+| keyring（D7） | ✅ 新 `llm/keyring.rs`（三平台 feature，service="Locowrk"/account=provider_id）：`key_storage` 标记 + 双读回落（明文优先）+ settings open 惰性迁移（**有变更立即落盘**）+ 写失败回落文件；测试构建不碰真实凭据库；IPC `api_key_set` 两态点亮；`flat`/`flat_profile` 双入口全消费面接线 |
+| 自定义请求头 | ✅ `ProviderProfile +headers`：`validate_headers`（≤32 条/token 键/14 保留键拒收）+ `build_headers` HeaderMap 鉴权先入、用户头**最后写入者覆盖**；探测/清单/扫描同吃；UI 折叠行编辑器（chips 预设 + JSON 导入/复制） |
+| 端点扫描 | ✅ `sweep_candidates`（现值剔除 + ≤3 候选 × 3s；**裸域名补 scheme 分形态**：本地→http、其余→https，走查实抓修正）+ `ProbeOutcome.effectiveBaseUrl` 表单未再编辑自动采纳 + 提示行；选择器路径不扫描（谎报记档） |
+| 逐模型测试 | ✅ `llm_test_model`（最小 ping 15s）五分类 + unknown 带报文；ModelPanes 行「测试」钮 + 结果徽章常驻（title 带报文） |
+| 网络代理（D6） | ✅ `llm.networkProxy{mode,url}`（system/direct/custom）+ `apply_proxy` 四处同吃（客户端逐请求新建 = 保存即热换）+ `llm_set_proxy` 命令 + 「网络代理」组（custom 草稿档门控地址行） |
+| 实机走查 | ✅ CDP 独立数据根 + 复制真 Key + 本地 echo/scenario 服务器：明文 Key 启动即迁移（settings 只剩标记 + Credential Manager 双条取证）→ 重启真轮读回 → 种子/UI 双头随请求注入 → 裸域名扫描自动补全（唯一 host）→ 五分类+network 七徽章逐例命中 → custom 死代理真轮无限重试不收束（如实）+ 停止空收束退路 → system 恢复真轮完成。走查脚本教训记档 ×2（轮次排队交错断言纠偏 / test_model 走已存档位）。数据根已清 + CM 条目删净，脚本/截图留 tmp/v129-walk/ |
+| 门禁 | ✅ clippy --all-targets 0、fmt、workspace 39 套件（desktop 283 = +13）、vue-tsc 0、pnpm build 过、lint:style 0；check_length 新增 5 文件三问自检不拆 |
+| 文档 | ✅ LLM.md v3.3（连接与安全一节）+ UI shell v4.23（§3.30 五处 + 版本条）+ 阶段计划勾批 C + D6/D7 落档 + CHANGELOG v2.129 |
+
+---
+
 ### v2.128 · 批 B 推理档位 + 输出钳制 + G1 闸（LLM 能力轨第二批 + 候补 G1 随批，D3/D5 按推荐落档）
 
 | 项 | 落点 |

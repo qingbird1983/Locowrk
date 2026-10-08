@@ -148,7 +148,10 @@ pub fn write_thinking_level(
     session_id: &str,
     level: Option<&str>,
 ) -> std::io::Result<()> {
-    let lvl = level.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    let lvl = level
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
     write_meta(dir, session_id, |m| m.thinking_level = lvl)
 }
 

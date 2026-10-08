@@ -1,8 +1,9 @@
 # LLM 接入设计（阶段八②参考）
 
-> 版本行：v3.2（2026-10-08）——批 B 推理档位（方言即数据）+ 输出预检钳制
-> （D5 窄修订）+ G1 length 闸落 §7；§6 补 §5.5 复测结论。v3.1 批 A 目录；
-> v3.0（2026-10-05）**方案一（genai 统一库）退役**，改为自建 OpenAI 兼容
+> 版本行：v3.3（2026-10-08）——批 C 连接与安全（keyring / 自定义请求头 /
+> 端点扫描 / 逐模型测试 / 网络代理）。v3.2 批 B 推理档位（方言即数据）+
+> 输出预检钳制（D5 窄修订）+ G1 length 闸；v3.1 批 A 目录；v3.0
+> （2026-10-05）**方案一（genai 统一库）退役**，改为自建 OpenAI 兼容
 > 统一客户端。v2.x = genai 三合一（历史见 CHANGELOG）。
 
 ## 核心理念：一个接口，一条线格式
@@ -144,3 +145,43 @@ kind 只决定**鉴权头与端点归一**，不再决定请求/响应形状。�
 - **价格**：目录 USD 原值如实展示（选择器行缀 / 详情行），只作参考不进任何
   计算；与会话累计估算（`chat.cacheHitPrice/cacheMissPrice`，CNY 手填）两套
   口径并存互不替换。
+
+## 连接与安全（批 C，v3.3 增补）
+
+**keyring（§8.4）**：`keyring` crate（service=`"Locowrk"`，account=provider
+id；Windows = Credential Manager）。`ProviderProfile +key_storage`（缺省缺
+字段 = 文件存储，旧文件零迁移）：保存非空 Key → `keyring.set` 成功后
+`api_key=None + key_storage="keyring"`；失败回落文件存储 + warn（便携环境 /
+无凭据库，如实记档）。读取双路：存量明文优先，否则标记在位走 `keyring.get`。
+settings 加载时**惰性迁移**（明文 → 凭据库 → 立即落盘换标记，幂等）。IPC 面
+不变——api_key 永不过线，只露 `api_key_set` 布尔（keyring 在位同样点亮）。
+
+**自定义请求头（§8.1）**：`ProviderProfile +headers`（BTreeMap，serde
+default）。保存时校验：≤32 条、键为合法 token（可见 ASCII 无冒号）、值无控
+制字符；**保留键拒收**（authorization / x-api-key / api-key /
+proxy-authorization / host / content-type / content-length / cookie /
+set-cookie / connection / transfer-encoding / te / trailer / upgrade——鉴权
+与逐跳头不可碰）。注入 = `client.rs` 构造 HeaderMap：鉴权头先入、用户头
+**最后写入者覆盖**（可覆盖 anthropic-version / User-Agent，保留键在保存侧
+已挡死）。
+
+**端点扫描（§8.2，PI 同款补中转站）**：`llm_probe_models` 失败时对自定义
+base_url 候选扫描：现值（join_version 归一）→ `{origin}/v1` →
+`{origin}/api/v1` → `{origin}/api`（≤4 去重，每个 3s 超时；无 scheme 的裸
+域名补全定位——本地形态 localhost/`127.*`/`::1`/无点主机补 http://，其余补
+https://）。胜出候选随结果回报 `effective_base_url`，表单在
+字段未再编辑时自动采纳 + 提示。**选择器路径（llm_list_models）不扫描**——
+那里无处采纳，扫描成功反而谎报（聊天仍走原端点必败），宁缺勿假。
+候选只变路径不换 host（凭据不发去陌生主机）。
+
+**逐模型连通测试（§8.3）**：`llm_test_model {profile_id, model}` 最小请求
+（单条 user "ping"，非流式、无工具、无 max_tokens、15s 总超时），返回延迟
+ms 或五分类错误：`auth`(401/403) / `model_not_found`(404 带模型名与报文) /
+`rate_limit`(429) / `network`(超时/DNS/连接) / `server`(5xx)；其余 unknown
+带截断报文。`llm_probe_models` 保留"拉列表"语义，两者并存。
+
+**网络代理（§8.5，裁定 D6）**：`llm +network_proxy {mode, url}`
+（system = reqwest 缺省吃环境变量 / direct = 强制直连 / custom = 指定
+url）。HTTP 客户端逐请求新建（现状），代理随 cfg 读取——设置保存即对下一次
+请求生效，天然热换。probe / 扫描 / 测试同吃。动机：本机常驻 clash 类代理时
+显式可控（v2.45 走查记录）。

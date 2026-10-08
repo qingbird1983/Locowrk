@@ -35,6 +35,9 @@ import type {
   ProviderInput,
   CatalogModelInfo,
   CatalogStatus,
+  LlmSettingsView,
+  ModelTestResult,
+  ProbeOutcome,
   ProviderModels,
   ProviderView,
   TreeDebug,
@@ -360,14 +363,29 @@ export function openExternalUrl(url: string): Promise<void> {
   return invoke("open_external_url", { url });
 }
 
-/** 单档模型探测（设置表单未保存值；apiKey 空缺回退档位已存 Key）。 */
+/** 单档模型探测（设置表单未保存值；apiKey 空缺回退档位已存 Key——
+ * 凭据库双读）。失败时端点扫描（§8.2），胜出候选随行回报。 */
 export function llmProbeModels(
   kind: string,
   baseUrl: string | null,
   apiKey: string | null,
   profileId: string | null,
-): Promise<string[]> {
+): Promise<ProbeOutcome> {
   return invoke("llm_probe_models", { kind, baseUrl, apiKey, profileId });
+}
+
+/** 逐模型连通测试（§8.3）：最小请求 ping，五分类错误 + 延迟如实。 */
+export function llmTestModel(profileId: string, model: string): Promise<ModelTestResult> {
+  return invoke("llm_test_model", { profileId, model });
+}
+
+/** 网络代理设置（§8.5）：system / direct / custom（url）；保存即热换。
+ * 返回更新后的 llm 区视图（目录合成随行）。 */
+export function llmSetProxy(
+  mode: "system" | "direct" | "custom",
+  url: string | null,
+): Promise<LlmSettingsView> {
+  return invoke("llm_set_proxy", { mode, url });
 }
 
 /** 档位增改（v2.58 档位制）：id 缺省 = 新建；返回全量档位投影。 */

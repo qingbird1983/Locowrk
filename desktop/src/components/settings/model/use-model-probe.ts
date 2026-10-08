@@ -10,6 +10,8 @@ export function useModelProbe() {
   const probeState = ref<"idle" | "loading" | "ready" | "error">("idle");
   const available = ref<string[]>([]);
   const probeError = ref("");
+  /** 端点扫描胜出的 base_url（§8.2；与传入不同时非空，表单采纳）。 */
+  const effectiveBaseUrl = ref<string | null>(null);
   let seq = 0;
 
   async function run(
@@ -26,12 +28,14 @@ export function useModelProbe() {
       return;
     }
     probeState.value = "loading";
+    effectiveBaseUrl.value = null;
     try {
-      const list = await llmProbeModels(kind, baseUrl, apiKey, profileId);
+      const outcome = await llmProbeModels(kind, baseUrl, apiKey, profileId);
       if (mine !== seq) return;
-      available.value = list;
-      probeState.value = list.length > 0 ? "ready" : "error";
-      probeError.value = list.length > 0 ? "" : emptyHint;
+      available.value = outcome.models;
+      effectiveBaseUrl.value = outcome.effectiveBaseUrl;
+      probeState.value = outcome.models.length > 0 ? "ready" : "error";
+      probeError.value = outcome.error ?? (outcome.models.length > 0 ? "" : emptyHint);
     } catch (e) {
       if (mine !== seq) return;
       probeState.value = "error";
@@ -45,7 +49,8 @@ export function useModelProbe() {
     probeState.value = "idle";
     available.value = [];
     probeError.value = "";
+    effectiveBaseUrl.value = null;
   }
 
-  return { probeState, available, probeError, run, reset };
+  return { probeState, available, probeError, effectiveBaseUrl, run, reset };
 }

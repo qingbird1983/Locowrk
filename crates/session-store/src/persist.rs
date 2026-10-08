@@ -324,9 +324,8 @@ fn snippet_around(text: &str, byte_start: usize, needle: &[char]) -> String {
 mod meta;
 
 pub use meta::{
-    SessionMetaFile, read_meta, write_model_override, write_organizer,
-    write_permission_mode, write_thinking_level,
-    write_title, write_workspace,
+    SessionMetaFile, read_meta, write_model_override, write_organizer, write_permission_mode,
+    write_thinking_level, write_title, write_workspace,
 };
 use meta::{invalid_id, meta_file};
 

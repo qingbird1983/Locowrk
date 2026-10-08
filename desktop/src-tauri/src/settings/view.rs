@@ -32,10 +32,12 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
                     label: p.label.clone(),
                     kind: p.kind.clone(),
                     base_url: p.base_url.clone(),
-                    api_key_set: p.api_key.is_some(),
+                    // 明文或凭据库在位都算已配置（批 C §8.4）
+                    api_key_set: p.has_key(),
                     model: p.model.clone(),
                     window_tokens: p.window_tokens,
                     enabled: p.enabled,
+                    headers: p.headers.clone(),
                     // 无目录铺底（钉死面原样、能力未知）；命令层 enrich
                     // 挂 models.dev 数据（批 A）——本函数保持纯投影。
                     models: p.models.iter().map(|m| synthesize_view(m, None)).collect(),
@@ -46,6 +48,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             base_url: flat.base_url,
             api_key_set: flat.api_key.is_some(),
             window_tokens: flat.window_tokens,
+            network_proxy: s.llm.network_proxy.clone(),
         },
         embedding: EmbeddingView {
             base_url: s.embedding.base_url.clone(),

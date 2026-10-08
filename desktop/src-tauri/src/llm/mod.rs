@@ -11,6 +11,7 @@ mod client;
 pub mod diagnose;
 mod dialect;
 mod embed;
+pub(crate) mod keyring;
 pub mod models;
 pub mod probe;
 mod retry;
@@ -20,6 +21,6 @@ mod tests;
 mod wire;
 
 pub use app_llm::{AppLlm, RetryNotify};
-pub use client::CompatLlm;
+pub use client::{test_model, CompatLlm};
 pub use dialect::dialect_of;
 pub use embed::{CooledEmbed, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};

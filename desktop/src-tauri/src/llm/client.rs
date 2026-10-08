@@ -4,10 +4,11 @@
 //! 与流式共用同一条管道（一套线上代码）。
 
 use std::sync::atomic::AtomicU64;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use futures::StreamExt;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
 
 use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmService};
@@ -16,7 +17,7 @@ use crate::settings::LlmSettings;
 
 use super::dialect::{self, Dialect};
 use super::models::{
-    join_version, DEFAULT_ANTHROPIC_BASE, DEFAULT_OLLAMA_BASE, DEFAULT_OPENAI_BASE,
+    apply_proxy, join_version, DEFAULT_ANTHROPIC_BASE, DEFAULT_OLLAMA_BASE, DEFAULT_OPENAI_BASE,
 };
 use super::retry::{self, Failure};
 use super::sse::{SseEvent, SseParser};
@@ -26,6 +27,8 @@ use super::wire::{build_payload, Delta, StreamAcc, WireCaps};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// 重试等待期间的停等轮询步长（响应「停止生成」）。
 const STOP_POLL_MS: u64 = 200;
+/// 逐模型连通测试总超时（§8.3：ping 一次，快失败）。
+const TEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// 重试期间的宿主钩子（AppLlm 组装注入；`None` = 无停止查询/无重置通知，
 /// 记录员/标题等非交互调用点重试天然不可见）。
@@ -82,16 +85,32 @@ impl CompatLlm {
         format!("{}/chat/completions", join_version(&base))
     }
 
-    /// 鉴权头：openai = Bearer；anthropic = x-api-key + anthropic-version
-    /// （官方兼容层两种都收，双带最稳）；ollama 无鉴权。
-    fn auth(req: reqwest::RequestBuilder, cfg: &LlmSettings, key: &str) -> reqwest::RequestBuilder {
+    /// 鉴权 + 自定义头装配（批 C §8.1 HeaderMap）：鉴权头先入，用户头
+    /// **最后写入者覆盖**（HeaderMap::insert 替换语义——可覆盖
+    /// anthropic-version 等非保留头；鉴权/逐跳保留键已在保存侧拒收）。
+    pub(super) fn build_headers(cfg: &LlmSettings, key: &str) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        let put = |map: &mut HeaderMap, name: &str, val: &str| {
+            if let (Ok(n), Ok(v)) = (
+                HeaderName::from_bytes(name.as_bytes()),
+                HeaderValue::from_str(val),
+            ) {
+                map.insert(n, v);
+            }
+        };
         match cfg.provider.as_str() {
-            "anthropic" => req
-                .header("x-api-key", key)
-                .header("anthropic-version", "2023-06-01")
-                .bearer_auth(key),
-            _ => req.bearer_auth(key),
+            // anthropic 官方兼容层两种鉴权头都收，双带最稳（v3.0 现状）
+            "anthropic" => {
+                put(&mut map, "authorization", &format!("Bearer {key}"));
+                put(&mut map, "x-api-key", key);
+                put(&mut map, "anthropic-version", "2023-06-01");
+            }
+            _ => put(&mut map, "authorization", &format!("Bearer {key}")),
         }
+        for (k, v) in &cfg.headers {
+            put(&mut map, k, v);
+        }
+        map
     }
 
     /// 缺 Key 先行报错（对桌面用户友好）；ollama 无需 Key。
@@ -227,10 +246,14 @@ impl CompatLlm {
             repair_stream_options: false,
             repair_max_tokens: false,
         };
-        let client = reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .build()
-            .map_err(|e| AttemptError::Fatal(format!("HTTP 客户端构建失败: {e}")))?;
+        // 网络代理（批 C §8.5）：客户端逐请求新建（现状），代理随 cfg
+        // 读取——设置保存即热换。
+        let client = apply_proxy(
+            reqwest::Client::builder().connect_timeout(CONNECT_TIMEOUT),
+            cfg.network_proxy.as_ref(),
+        )
+        .build()
+        .map_err(|e| AttemptError::Fatal(format!("HTTP 客户端构建失败: {e}")))?;
         let mut payload = build_payload(&cfg.model, req, true, dialect, &caps);
         if drop_stream_options {
             payload
@@ -245,7 +268,9 @@ impl CompatLlm {
                 .remove("max_tokens");
         }
         let key = cfg.api_key.clone().unwrap_or_default();
-        let resp = Self::auth(client.post(Self::endpoint(cfg)), cfg, &key)
+        let resp = client
+            .post(Self::endpoint(cfg))
+            .headers(Self::build_headers(cfg, &key))
             .json(&payload)
             .send()
             .await;
@@ -419,6 +444,98 @@ fn merge_retry_after(f: Failure, retry_after_ms: Option<u64>) -> Failure {
         Failure::RateLimit { .. } => Failure::RateLimit { retry_after_ms },
         Failure::Transient { .. } => Failure::Transient { retry_after_ms },
         Failure::Fatal(msg) => Failure::Fatal(msg),
+    }
+}
+
+/// 逐模型连通测试失败（§8.3 五分类 + unknown；message 面向用户如实）。
+#[derive(Debug, Clone)]
+pub enum TestFailure {
+    Auth(String),
+    ModelNotFound(String),
+    RateLimit(String),
+    Network(String),
+    Server(String),
+    Unknown(String),
+}
+
+impl TestFailure {
+    /// 分类标识（IPC `category` 字段，前端如实渲染徽章）。
+    pub fn category(&self) -> &'static str {
+        match self {
+            TestFailure::Auth(_) => "auth",
+            TestFailure::ModelNotFound(_) => "model_not_found",
+            TestFailure::RateLimit(_) => "rate_limit",
+            TestFailure::Network(_) => "network",
+            TestFailure::Server(_) => "server",
+            TestFailure::Unknown(_) => "unknown",
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            TestFailure::Auth(m)
+            | TestFailure::ModelNotFound(m)
+            | TestFailure::RateLimit(m)
+            | TestFailure::Network(m)
+            | TestFailure::Server(m)
+            | TestFailure::Unknown(m) => m.clone(),
+        }
+    }
+}
+
+/// 报文截断（200 字符，探测同款）。
+fn snippet(body: &str) -> String {
+    let s: String = body.chars().take(200).collect();
+    s
+}
+
+/// 逐模型连通测试（§8.3）：最小请求（单条 user "ping"，非流式、无工具、
+/// 无 max_tokens）+ 15s 总超时。成功返回耗时 ms；失败按五分类如实归类。
+pub async fn test_model(cfg: &LlmSettings, model: &str) -> Result<u64, TestFailure> {
+    let started = Instant::now();
+    let client = apply_proxy(
+        reqwest::Client::builder().timeout(TEST_TIMEOUT),
+        cfg.network_proxy.as_ref(),
+    )
+    .build()
+    .map_err(|e| TestFailure::Network(format!("HTTP 客户端构建失败: {e}")))?;
+    let payload = serde_json::json!({
+        "model": model,
+        "messages": [{ "role": "user", "content": "ping" }],
+        "stream": false,
+    });
+    let key = cfg.api_key.clone().unwrap_or_default();
+    let resp = client
+        .post(CompatLlm::endpoint(cfg))
+        .headers(CompatLlm::build_headers(cfg, &key))
+        .json(&payload)
+        .send()
+        .await;
+    let resp = match resp {
+        Ok(r) => r,
+        Err(e) => {
+            // 超时 / DNS / 连接拒绝统一 network（不细分——前端只渲染徽章）
+            return Err(TestFailure::Network(format!("连接失败: {e}")));
+        }
+    };
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    let detail = snippet(&body);
+    match status.as_u16() {
+        200..=299 => Ok(started.elapsed().as_millis() as u64),
+        401 | 403 => Err(TestFailure::Auth(format!(
+            "鉴权失败（HTTP {status}）: {detail}"
+        ))),
+        404 => Err(TestFailure::ModelNotFound(format!(
+            "模型 {model} 不存在（HTTP 404）: {detail}"
+        ))),
+        429 => Err(TestFailure::RateLimit(format!(
+            "触发限流（HTTP 429）: {detail}"
+        ))),
+        s if (500..=599).contains(&s) => Err(TestFailure::Server(format!(
+            "服务端错误（HTTP {status}）: {detail}"
+        ))),
+        s => Err(TestFailure::Unknown(format!("HTTP {s}: {detail}"))),
     }
 }
 
