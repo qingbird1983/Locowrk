@@ -17,6 +17,7 @@ fn long_transcript(turns: usize) -> Vec<Message> {
     for i in 0..turns {
         messages.push(Message::User {
             content: format!("turn {i}: {filler}"),
+            parts: Vec::new(),
         });
         messages.push(Message::Assistant {
             content: format!("reply {i}: {filler}"),
@@ -77,6 +78,7 @@ async fn stability_period_suppresses_settlements_after_compaction() {
 
     let new_user = |n: usize| Message::User {
         content: format!("fresh turn {n}: {}", "x".repeat(400)),
+        parts: Vec::new(),
     };
     let mut grown = settled_view.clone();
     let mut fresh = 0usize;

@@ -46,7 +46,8 @@ fn update_persists_and_roundtrips() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     // 重新打开：从磁盘读回，而非内存态
     let v = SettingsStore::open(&root).unwrap().view();
@@ -79,7 +80,8 @@ fn api_key_never_leaks_into_view() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     let json = serde_json::to_string(&store.view()).unwrap();
     assert!(!json.contains("sk-secret-value"));
@@ -111,7 +113,8 @@ fn empty_string_clears_none_keeps() {
                 None,
                 None,
                 None,
-            )
+                        None,
+)
             .unwrap()
     };
     set(Some("sk-a"), Some("http://x"));
@@ -147,7 +150,8 @@ fn rejects_unknown_provider_and_locale() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     assert!(store
         .update(
@@ -164,7 +168,8 @@ fn rejects_unknown_provider_and_locale() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     // 校验失败不得污染内存态
     assert_eq!(store.view().locale, LOCALE_SYSTEM);
@@ -193,7 +198,8 @@ fn shortcut_default_update_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert_eq!(store.view().shortcut, "Alt+Space");
     assert_eq!(
@@ -221,7 +227,8 @@ fn shortcut_default_update_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     assert!(store
         .update(
@@ -238,7 +245,8 @@ fn shortcut_default_update_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     assert_eq!(store.view().shortcut, "Alt+Space");
     std::fs::remove_dir_all(&root).ok();

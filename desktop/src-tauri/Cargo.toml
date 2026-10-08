@@ -35,6 +35,9 @@ plugin-service = { path = "../../crates/plugin-service" }
 session-store = { path = "../../crates/session-store" }
 
 async-trait = "0.1"
+# 多模态（批 D）：asset_put 的 base64 解码 + AssetStore 内容寻址 sha256
+base64 = "0.22"
+sha2 = "0.10"
 # ⑳ 流式 / LLM.md v3.0 SSE：resp.bytes_stream() 的 next() 需要 StreamExt
 futures = "0.3"
 # 自建 OpenAI 兼容客户端（LLM.md v3.0，genai 已退役）：default-tls 原由

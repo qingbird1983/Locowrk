@@ -141,10 +141,28 @@ pub fn init_state(app: AppHandle) -> AppState {
     ));
     // M6.1 前缀断裂诊断账本：AppLlm 与命令层共享同一实例。
     let llm_diagnoser = Arc::new(crate::llm::diagnose::Diagnoser::default());
+    // 批 A 模型能力目录：随包快照路径解析（打包 = 资源目录；开发态 =
+    // crate 根兜底），惰性加载在首次访问（不进启动路径）。批 D 起先于
+    // AppLlm 构造（发送前模态门控的目录模态数据源）。
+    let catalog_bundled = app
+        .path()
+        .resolve(
+            "resources/models.dev/api.json",
+            tauri::path::BaseDirectory::Resource,
+        )
+        .ok()
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/models.dev/api.json")
+        });
+    let catalog = Arc::new(crate::llm::catalog::CatalogStore::new(catalog_bundled));
+    // 批 D 资产存储：`<数据根>/assets/` 内容寻址（wire 编码字节源 + GC 根）
+    let assets = Arc::new(crate::assets::AssetStore::new(root.join("assets")));
     let llm: Arc<dyn LlmService> = Arc::new(
         AppLlm::with_overrides(Arc::clone(&settings), Arc::clone(&model_overrides))
             .with_retry_surface(Arc::clone(&stop_flags), llm_notify)
-            .with_diagnoser(Arc::clone(&llm_diagnoser)),
+            .with_diagnoser(Arc::clone(&llm_diagnoser))
+            .with_multimodal(Arc::clone(&assets), Arc::clone(&catalog)),
     );
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
     // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）；v4.11 §3.39④
@@ -493,20 +511,31 @@ pub fn init_state(app: AppHandle) -> AppState {
         roots_on,
     );
 
-    // 批 A 模型能力目录：随包快照路径解析（打包 = 资源目录；开发态 =
-    // crate 根兜底），惰性加载在首次访问（不进启动路径）。
-    let catalog_bundled = app
-        .path()
-        .resolve(
-            "resources/models.dev/api.json",
-            tauri::path::BaseDirectory::Resource,
-        )
-        .ok()
-        .filter(|p| p.exists())
-        .unwrap_or_else(|| {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/models.dev/api.json")
+    // 批 D 孤儿资产 GC（§6.3）：autoGc 开时启动跑一遍 + 每 24h 后台巡检
+    //（手动命令 asset_gc 不受开关限制）。fire-and-forget；gcDays 每轮重读
+    // 设置（热调随下一次 tick 生效）。
+    if settings.multimodal().auto_gc {
+        let gc_assets = Arc::clone(&assets);
+        let gc_settings = Arc::clone(&settings);
+        let gc_root = root.clone();
+        // setup 阶段不在 tokio 运行时上下文里——必须走 tauri 的 async
+        // runtime 句柄（tokio::spawn 直接 panic，走查实抓）
+        tauri::async_runtime::spawn(async move {
+            loop {
+                let days = gc_settings.multimodal().gc_threshold_days;
+                let report = crate::assets::gc::run_gc(
+                    gc_assets.root(),
+                    &gc_root.join("sessions"),
+                    &gc_root.join("sub-transcripts"),
+                    days,
+                );
+                if report.scanned > 0 || report.removed > 0 {
+                    tracing::info!(scanned = report.scanned, removed = report.removed, "asset gc tick");
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(24 * 3600)).await;
+            }
         });
-    let catalog = Arc::new(crate::llm::catalog::CatalogStore::new(catalog_bundled));
+    }
 
     AppState {
         app,
@@ -544,6 +573,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         stop_flags,
         ask: ask_hub,
         catalog,
+        assets,
     }
 }
 

@@ -40,6 +40,7 @@ async fn streamed_step_suppresses_full_chunk() {
         &mut session,
         "s1",
         "echo 你好".into(),
+        Vec::new(),
         None,
         &projection,
         None,
@@ -77,6 +78,7 @@ async fn no_sink_keeps_full_chunk_projection() {
         &mut session,
         "s1",
         "echo 你好".into(),
+        Vec::new(),
         None,
         &projection,
         None,
@@ -104,6 +106,7 @@ fn thinking_projects_on_replay_and_suppresses_when_streamed() {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "问".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::Thinking {
         text: "想一步".into(),
@@ -147,6 +150,7 @@ fn llm_usage_projects_with_all_fields() {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "问".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::AssistantMessage {
         content: "答".into(),
@@ -201,6 +205,7 @@ fn turn_boundaries_project_timestamps_for_replay() {
     });
     s.append(SessionEvent::UserMessage {
         content: "问".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::AssistantMessage {
         content: "答".into(),
@@ -239,6 +244,7 @@ fn turn_boundaries_project_timestamps_for_replay() {
     let mut old = Session::new();
     old.append(SessionEvent::UserMessage {
         content: "旧".into(),
+        parts: Vec::new(),
     });
     let replay_old = crate::runner::project_events(old.events(), "s1");
     assert!(replay_old
@@ -261,6 +267,7 @@ async fn run_turn_writes_turn_boundaries_to_log() {
         &mut session,
         "s1",
         "echo 你好".into(),
+        Vec::new(),
         None,
         &sink,
         None,

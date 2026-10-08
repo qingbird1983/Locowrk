@@ -42,6 +42,7 @@ async fn usage_lands_as_event_and_session_id_reaches_request() {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "hi".into(),
+        parts: Vec::new(),
     });
     kernel.step_as(&mut session, "desktop-7").await.unwrap();
 

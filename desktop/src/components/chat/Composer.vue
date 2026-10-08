@@ -19,11 +19,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useI18n } from "vue-i18n";
 import { useApprovalsStore } from "../../stores/approvals";
 import { useAsksStore } from "../../stores/asks";
-import { useChatStore } from "../../stores/chat";
+import { useChatStore, type AttachmentItem } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
 import { Icon } from "../../lib/icons";
+import type { ContentPartDto } from "../../types";
 import AskCard from "./AskCard.vue";
 import AttachButton from "./AttachButton.vue";
 import ModelSelector from "./ModelSelector.vue";
@@ -118,11 +119,89 @@ function onConfigure() {
   shell.openSettings("llm");
 }
 
-/** §3.11 v3.9 附件 v1：路径以 `@路径` 引用追加进输入框（模型经 fs 工具
- * 读取）；已有草稿时空格分隔。图片内容上传待 ㉛ 消息通路。 */
+/** §3.11 v3.9 附件 v1（批 D 收窄）：非图片/PDF 的路径保持 `@路径` 引用
+ * 追加进输入框（模型经 fs 工具读取）；图片/PDF 由 AttachButton 直入
+ * 附件预览条（上传链路），不再走这里。 */
 function onAttach(paths: string[]) {
+  if (!paths.length) return;
   const refs = paths.map((p) => `@${p}`).join(" ");
   draft.value = draft.value ? `${draft.value} ${refs}` : refs;
+}
+
+// ---- 批 D 多模态：附件预览条 / 粘贴 / 拖拽 / 上传门控（§3.11 v4.24）----
+// 附件按钮的图片/PDF 分流在 AttachButton（pick 路径按扩展名路由）；这里
+// 只管粘贴/拖拽两条内存文件入口与门控。
+
+function onPaste(e: ClipboardEvent) {
+  const files = [...(e.clipboardData?.files ?? [])];
+  const media = files.filter(
+    (f) => f.type.startsWith("image/") || f.type === "application/pdf",
+  );
+  if (!media.length) return; // 纯文本粘贴走默认行为
+  e.preventDefault();
+  for (const f of media) void chat.addAttachmentFile(f);
+}
+
+const dragging = ref(false);
+let dragDepth = 0;
+function onDragEnter(e: DragEvent) {
+  if (![...(e.dataTransfer?.types ?? [])].includes("Files")) return;
+  dragDepth++;
+  dragging.value = true;
+}
+function onDragLeave() {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) dragging.value = false;
+}
+function onDrop(e: DragEvent) {
+  dragDepth = 0;
+  dragging.value = false;
+  const files = [...(e.dataTransfer?.files ?? [])];
+  const media = files.filter(
+    (f) => f.type.startsWith("image/") || f.type === "application/pdf",
+  );
+  for (const f of media) void chat.addAttachmentFile(f);
+  if (media.length) e.preventDefault();
+}
+
+/** 上传门控（§5.3 第一道）：生效模型图像输入明确不可用（用户钉死 false，
+ * 或钉死缺席时目录模态确定不含 image）且预览条里有图片。未知（null 且
+ * 非目录来源）放行——目录没有的能力不发明。 */
+const imageBlocked = computed(() => {
+  const pid = chat.modelOverride?.providerId || settings.view?.llm.active;
+  const model = chat.modelOverride?.model || settings.view?.llm.model || "";
+  const p = (settings.view?.llm.providers ?? []).find((x) => x.id === pid);
+  const m = p?.models.find((x) => x.id === model);
+  if (!m) return false;
+  if (m.supportsImage === false) return true;
+  if (
+    m.supportsImage == null &&
+    m.sources?.modalities === "catalog" &&
+    !m.inputModalities.includes("image")
+  ) {
+    return true;
+  }
+  return false;
+});
+const showImageGate = computed(
+  () => imageBlocked.value && chat.attachments.some((a) => a.kind === "image"),
+);
+function onGateTextOnly() {
+  chat.dropImageAttachments();
+}
+function onGatePickModel() {
+  showModels.value = true;
+}
+
+function removeAttachment(key: number) {
+  chat.removeAttachment(key);
+}
+function attachmentLabel(a: AttachmentItem): string {
+  return a.status === "error"
+    ? `${a.name} · ${a.error ?? ""}`
+    : a.status === "uploading"
+      ? `${a.name} · ${t("mm.uploading")}`
+      : a.name;
 }
 
 function autoResize() {
@@ -135,14 +214,40 @@ watch(draft, () => void nextTick(autoResize));
 
 /**
  * 发送入口统一走 chat.submit（§3.39②：运行中 = 入队，收束后自动派发；
- * /整理 前端拦截也在 store 内）。草稿清空 + 召回记录不变。
+ * /整理 前端拦截也在 store 内）。带附件（批 D）：先收口上传（失败不发、
+ * 留条如实展示），parts 随消息发出后预览条由 store 清空；运行中入队不
+ * 带附件（排队消息是纯文本——附件等空闲再发，toast 如实提示）。
  */
-function submit() {
+async function submit() {
   const text = draft.value;
-  if (!text.trim()) return;
+  const hasAttachments = chat.attachments.length > 0;
+  if (!text.trim() && !hasAttachments) return;
+  if (chat.running) {
+    if (hasAttachments) {
+      toast.push("warn", t("mm.busyAttach"));
+      return;
+    }
+    draft.value = "";
+    lastSent.value = text;
+    void chat.submit(text);
+    void nextTick(autoResize);
+    return;
+  }
+  let parts: ContentPartDto[] | null = null;
+  if (hasAttachments) {
+    parts = await chat.settleAttachments();
+    if (parts === null) {
+      toast.push("danger", t("mm.uploadFailed"));
+      return;
+    }
+  }
   draft.value = "";
   lastSent.value = text;
-  chat.submit(text);
+  if (parts?.length) {
+    await chat.send(text, parts);
+  } else {
+    void chat.submit(text);
+  }
   void nextTick(autoResize);
 }
 
@@ -240,9 +345,56 @@ onBeforeUnmount(() => {
 
     <div
       class="composer conv-w"
-      :class="{ 'composer--stacked': stacked }"
+      :class="{ 'composer--stacked': stacked, 'composer--drag': dragging }"
       :style="{ pointerEvents: chat.replaying ? 'none' : undefined }"
+      @dragenter="onDragEnter"
+      @dragleave="onDragLeave"
+      @drop="onDrop"
     >
+      <!-- 上传门控提示卡（批 D §9.5 第一道）：当前模型不支持图片 + 有图
+           片附件 → 「仅发送文字」剥图 / 「打开模型选择器」 -->
+      <div v-if="showImageGate" class="mm-gate" role="alert">
+        <Icon name="eye" :size="14" class="mm-gate__icon" aria-hidden="true" />
+        <span class="mm-gate__text">{{ t("mm.gateTitle") }}</span>
+        <button class="mm-gate__btn" type="button" @click="onGateTextOnly">
+          {{ t("mm.gateTextOnly") }}
+        </button>
+        <button class="mm-gate__btn" type="button" @click="onGatePickModel">
+          {{ t("mm.gatePickModel") }}
+        </button>
+      </div>
+      <!-- 附件预览条（批 D §9.2）：有附件才渲染；图片缩略 / PDF 文件 chip
+           + 右下 ✕ 移除；上传中/失败态在 title 与边色如实呈现 -->
+      <div v-if="chat.attachments.length" class="attach-strip" role="list">
+        <div
+          v-for="a in chat.attachments"
+          :key="a.key"
+          class="attach-chip"
+          :class="[`is-${a.status}`, { 'is-image': a.kind === 'image' }]"
+          role="listitem"
+          :title="attachmentLabel(a)"
+        >
+          <img
+            v-if="a.kind === 'image' && a.localUrl"
+            :src="a.localUrl"
+            class="attach-chip__thumb"
+            alt=""
+            draggable="false"
+          />
+          <span v-else class="attach-chip__file">
+            <Icon name="paperclip" :size="12" aria-hidden="true" />
+            <span class="attach-chip__name">{{ a.name }}</span>
+          </span>
+          <button
+            class="attach-chip__x"
+            type="button"
+            :aria-label="t('mm.removeAttachment')"
+            @click="removeAttachment(a.key)"
+          >
+            <Icon name="close" :size="10" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
       <textarea
         ref="ta"
         v-model="draft"
@@ -250,6 +402,7 @@ onBeforeUnmount(() => {
         class="composer__input scroll-y"
         :placeholder="chat.running ? t('chat.placeholderQueue') : t('chat.placeholder')"
         @keydown="onKeydown"
+        @paste="onPaste"
       />
       <div class="composer__toolbar">
         <!-- 左组：附件 ＋（v2.59）+ 权限模式切换器（§3.33） -->
@@ -302,7 +455,10 @@ onBeforeUnmount(() => {
           <button
             class="send-btn"
             type="button"
-            :disabled="chat.replaying || (!chat.running && !draft.trim())"
+            :disabled="
+              chat.replaying ||
+              (!chat.running && !draft.trim() && !chat.attachments.length)
+            "
             :aria-label="
               stopArmed
                 ? t('chat.stopGeneration')
@@ -387,6 +543,102 @@ onBeforeUnmount(() => {
 }
 .composer--stacked .composer__input {
   border-radius: 0;
+}
+/* 拖拽悬停（批 D §9.1）：卡内发丝线变 accent 提示可投放 */
+.composer--drag {
+  border-color: var(--lw-accent);
+}
+/* 上传门控提示卡（批 D §9.5 第一道）：warn 色警示条 + 两动作 */
+.mm-gate {
+  display: flex;
+  align-items: center;
+  gap: var(--lw-gap-8);
+  padding: var(--lw-gap-8) var(--lw-gap-14) 0;
+  font-size: var(--lw-fs-12half);
+  color: var(--lw-warn);
+}
+.mm-gate__icon {
+  flex: 0 0 auto;
+}
+.mm-gate__text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.mm-gate__btn {
+  flex: 0 0 auto;
+  padding: var(--lw-gap-2) var(--lw-gap-8);
+  border-radius: var(--lw-r-full);
+  font-size: var(--lw-fs-12half);
+  color: var(--lw-ink-2);
+  transition: background var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.mm-gate__btn:hover {
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-1);
+}
+/* 附件预览条（批 D §9.2）：输入域上方横向 chip 列 */
+.attach-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lw-gap-8);
+  padding: var(--lw-gap-10) var(--lw-gap-14) 0;
+}
+.attach-chip {
+  position: relative;
+  overflow: visible;
+  border: 1px solid var(--lw-line);
+  border-radius: var(--lw-r-lg);
+  background: var(--lw-bg-elevated);
+}
+.attach-chip.is-error {
+  border-color: var(--lw-danger);
+}
+.attach-chip.is-uploading {
+  opacity: 0.72;
+}
+.attach-chip__thumb {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  /* 内圆角 = 外 chip 圆角收一档（形状阶梯；✕ 钮悬在 chip 外不能裁切） */
+  border-radius: var(--lw-r-md);
+  user-select: none;
+}
+.attach-chip__file {
+  display: flex;
+  max-width: 180px;
+  height: 56px;
+  align-items: center;
+  gap: var(--lw-gap-6);
+  padding: 0 var(--lw-gap-12);
+  color: var(--lw-ink-2);
+}
+.attach-chip__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--lw-fs-12half);
+}
+.attach-chip__x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 1;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lw-r-full);
+  background: var(--lw-ink-3);
+  color: var(--lw-bg);
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.attach-chip__x:hover {
+  background: var(--lw-ink-1);
 }
 .composer__input {
   display: block;

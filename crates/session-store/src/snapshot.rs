@@ -11,7 +11,23 @@ use crate::error::StoreError;
 use crate::session::{Session, SessionState};
 
 /// 当前快照 schema 版本。演进 = 旧版本 upcaster 逐级升档；只增不减。
-pub const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+/// v2（批 D）：Message::User +parts（serde default）——v1 state 反序列化
+/// 时缺字段天然补空，upcaster 恒等（版本号记录格式演进这件事本身）。
+pub const SNAPSHOT_SCHEMA_VERSION: u32 = 2;
+
+/// v1 → v2 upcaster（批 D parts 字段）：state 结构无需改写——
+/// `Message::User.parts` 带 serde default，反序列化侧自动补空。
+#[derive(Default)]
+pub struct V1ToV2Upcaster;
+
+impl Upcaster for V1ToV2Upcaster {
+    fn source_version(&self) -> u32 {
+        1
+    }
+    fn upcast(&self, state: Value) -> Value {
+        state
+    }
+}
 
 /// 可持久化快照（§9.5）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,3 +106,6 @@ impl Session {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

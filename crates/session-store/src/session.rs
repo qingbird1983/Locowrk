@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use plugin_api::CallId;
 
+use crate::content::ContentPart;
 use crate::event::SessionEvent;
 use crate::snapshot::SNAPSHOT_SCHEMA_VERSION;
 
@@ -24,8 +25,13 @@ pub struct ToolCallMsg {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum Message {
+    /// `parts`（批 D，serde default）= 附件部件（图片/PDF，`content` 为正
+    /// 文）；空 = 纯文本消息（旧 jsonl/旧快照缺字段读入即此形态，零迁移；
+    /// 空 parts 序列化时跳过——纯文本消息落盘行与旧格式同形）。
     User {
         content: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        parts: Vec<ContentPart>,
     },
     /// AssistantMessage 事件只存 CallId；工具名与参数从 ToolCall 回填
     /// （真实工具协议要求 assistant 消息携带完整 tool_calls，§4.2）。
@@ -48,14 +54,34 @@ pub struct SessionState {
     pub messages: Vec<Message>,
 }
 
+impl Message {
+    /// 纯文本用户消息（批 D 起绝大多数构造点的简写；附件走
+    /// [`Message::user_with_parts`]）。
+    pub fn user(content: impl Into<String>) -> Self {
+        Message::User {
+            content: content.into(),
+            parts: Vec::new(),
+        }
+    }
+
+    /// 带附件的用户消息（批 D）。
+    pub fn user_with_parts(content: impl Into<String>, parts: Vec<ContentPart>) -> Self {
+        Message::User {
+            content: content.into(),
+            parts,
+        }
+    }
+}
+
 impl SessionState {
     /// 单事件折叠。ToolCall 紧随 AssistantMessage：按 call_id 回填最近一条
     /// assistant 消息里的占位条目（先有空位、后有内容，两遍合一遍）。
     pub fn apply(&mut self, e: &SessionEvent) {
         match e {
-            SessionEvent::UserMessage { content } => {
+            SessionEvent::UserMessage { content, parts } => {
                 self.messages.push(Message::User {
                     content: content.clone(),
+                    parts: parts.clone(),
                 });
             }
             SessionEvent::AssistantMessage {
@@ -145,8 +171,9 @@ fn project_messages(events: &[SessionEvent]) -> Vec<Message> {
     let mut messages: Vec<Message> = Vec::new();
     for e in events {
         match e {
-            SessionEvent::UserMessage { content } => messages.push(Message::User {
+            SessionEvent::UserMessage { content, parts } => messages.push(Message::User {
                 content: content.clone(),
+                parts: parts.clone(),
             }),
             SessionEvent::AssistantMessage {
                 content,
@@ -196,9 +223,9 @@ fn compact_messages(messages: &mut Vec<Message>, kept: usize, summary: &str) {
     let tail = messages.split_off(head_len);
     let head = std::mem::take(messages);
     if !summary.is_empty() && !head.is_empty() {
-        messages.push(Message::User {
-            content: format!("[earlier conversation summarized]\n{summary}"),
-        });
+        messages.push(Message::user(format!(
+            "[earlier conversation summarized]\n{summary}"
+        )));
     }
     messages.extend(tail);
 }

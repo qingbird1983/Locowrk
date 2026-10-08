@@ -163,6 +163,8 @@ pub enum AgentEvent {
     /// 实时轮不投影（前端本地回显），见 channels::USER_MESSAGE 注释。
     /// `pos`（v2.57 §3.34）：源事件在日志里的位次——消息编辑重发（截断）
     /// 的定位键；实时路径不产出（前端本地回显无 pos）。
+    /// `parts`（批 D）：附件部件（serde skip empty——纯文本消息不带字段，
+    /// 前端旧消息渲染零变化）。
     UserMessage {
         session_id: String,
         content: String,
@@ -171,6 +173,8 @@ pub enum AgentEvent {
         /// None = 旧日志无轮界事件（前端不虚构读数）。
         #[serde(skip_serializing_if = "Option::is_none")]
         ts: Option<i64>,
+        #[serde(skip_serializing_if = "Vec::is_empty", default)]
+        parts: Vec<session_store::ContentPart>,
     },
     /// 推理内容（v2.57 §3.9）：`SessionEvent::Thinking` 的投影。实时与
     /// 重放**同一事件形状**：实时 delta 直推（`text` = 增量，StreamChunkSink

@@ -6,8 +6,8 @@ use std::path::Path;
 
 use super::{
     synthesize_view, AppSettings, AppearanceView, ChatView, ContextSettingsView, DeveloperView,
-    EmbeddingView, LlmSettingsView, MemorySettingsView, PluginsView, ProviderView, SettingsView,
-    ShellSettingsView, ToolsSettingsView, FALLBACK_WINDOW_TOKENS,
+    EmbeddingView, LlmSettingsView, MemorySettingsView, MultimodalView, PluginsView,
+    ProviderView, SettingsView, ShellSettingsView, ToolsSettingsView, FALLBACK_WINDOW_TOKENS,
 };
 
 pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
@@ -127,6 +127,14 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
         },
         thinking: super::ThinkingView {
             language: s.thinking.language.clone(),
+        },
+        multimodal: MultimodalView {
+            max_dimension: s.multimodal.max_dimension,
+            max_size_mb: s.multimodal.max_size_mb,
+            image_formats: s.multimodal.image_formats.clone(),
+            file_formats: s.multimodal.file_formats.clone(),
+            auto_gc: s.multimodal.auto_gc,
+            gc_threshold_days: s.multimodal.gc_threshold_days,
         },
     }
 }

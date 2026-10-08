@@ -4,6 +4,8 @@ import { defineStore } from "pinia";
 import {
   chat,
   agentStop,
+  assetPut,
+  assetPutPath,
   sessionAssociate,
   sessionSetOrganizer,
   sessionDelete,
@@ -28,7 +30,7 @@ import { i18n } from "../i18n";
 import { useAsksStore } from "./asks";
 import { useSettingsStore } from "./settings";
 import { useToastStore } from "./toast";
-import type { AgentEvent, SessionMeta } from "../types";
+import type { AgentEvent, AssetRefDto, ContentPartDto, SessionMeta } from "../types";
 
 export type ToolItem = {
   id: number;
@@ -61,6 +63,8 @@ export type ChatItem =
       /** 源事件在会话日志里的位次（§3.34 编辑重发的定位键）。重放消息有；
        * 实时发送的没有（后端按「最后一条用户消息」解析）。 */
       pos?: number;
+      /** 附件部件（批 D）：图片/PDF 引用；缺省 = 纯文本（旧消息渲染零变化）。 */
+      parts?: ContentPartDto[];
     }
   | {
       id: number;
@@ -126,6 +130,22 @@ export type SessionUsage = {
 
 let nextId = 1;
 
+/** 附件预览条条目（批 D §9.2，前端态不入会话日志）：入条即后台上传，
+ * ready 后随消息作 parts 发出。localUrl = 本地 objectURL 预览（图片）；
+ * error = 后端校验拒绝的文案（红框可移除重加）。 */
+export type AttachmentItem = {
+  key: number;
+  name: string;
+  mime: string;
+  kind: "image" | "file";
+  status: "uploading" | "ready" | "error";
+  asset?: AssetRefDto;
+  localUrl?: string;
+  error?: string;
+};
+
+let nextAttachmentKey = 1;
+
 export const useChatStore = defineStore("chat", {
   state: () => ({
     sessionId: `desktop-${Date.now()}`,
@@ -173,6 +193,8 @@ export const useChatStore = defineStore("chat", {
     dispatching: false,
     /** §3.39② 「立即发送」的打断目标：当前轮被停止收束后立即发送。 */
     preempt: null as string | null,
+    /** 批 D §9.2 附件预览条（三条入口同进：按钮选择/粘贴/拖拽）。 */
+    attachments: [] as AttachmentItem[],
   }),
   getters: {
     /** M0 观测（KV v2 §7）：会话累计缓存统计。命中率 = cacheRead /
@@ -440,6 +462,7 @@ export const useChatStore = defineStore("chat", {
             text: e.content,
             pos: e.pos,
             ...(e.ts != null ? { ts: e.ts } : this.replaying ? {} : { ts: Date.now() }),
+            ...(e.parts?.length ? { parts: e.parts } : {}),
           });
           break;
         case "thinking":
@@ -659,7 +682,8 @@ export const useChatStore = defineStore("chat", {
     },
     /** 消息编辑重发（v2.57 §3.34）：后端截断到该消息之前 → 本地从该气泡
      * 起丢条目 → 走既有 send 通道重发（审批/用量/提取零新链路）。
-     * `pos = null` = 当前最后一条用户消息（实时发送无事件位的解析口）。 */
+     * `pos = null` = 当前最后一条用户消息（实时发送无事件位的解析口）。
+     * 批 D：原消息 parts 随重发（asset 引用复用，零重新上传）。 */
     async editResend(pos: number | null, text: string) {
       const t = text.trim();
       if (!t || this.running) return;
@@ -675,8 +699,13 @@ export const useChatStore = defineStore("chat", {
       } else {
         idx = this.items.findIndex((i) => i.kind === "user" && i.pos === pos);
       }
-      if (idx >= 0) this.items.splice(idx);
-      await this.send(t);
+      let parts: ContentPartDto[] | undefined;
+      if (idx >= 0) {
+        const it = this.items[idx]!;
+        if (it.kind === "user" && it.parts?.length) parts = it.parts;
+        this.items.splice(idx);
+      }
+      await this.send(t, parts);
     },
     /** 自动标题落地（v2.57）：只更新列表层标题（顶栏数据源同源）。 */
     applySessionTitle(id: string, title: string) {
@@ -698,13 +727,109 @@ export const useChatStore = defineStore("chat", {
         params: { text },
       });
     },
-    async send(text: string) {
+    /** 批 D §9.2 附件动作：入条即后台上传（asset_put；本地 objectURL 预
+     * 览）。`file` = 内存文件（粘贴/拖拽），`path` = 已选文件路径。失败
+     * 留条可移除重加（错误文案来自后端校验，如实展示）。 */
+    async addAttachmentFile(file: File) {
+      const kind = file.type.startsWith("image/") ? "image" : "file";
+      const item: AttachmentItem = {
+        key: nextAttachmentKey++,
+        name: file.name || "clipboard",
+        mime: file.type || "application/octet-stream",
+        kind,
+        status: "uploading",
+        ...(kind === "image" ? { localUrl: URL.createObjectURL(file) } : {}),
+      };
+      this.attachments.push(item);
+      try {
+        const buf = await file.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let bin = "";
+        const CH = 0x8000;
+        for (let i = 0; i < bytes.length; i += CH) {
+          bin += String.fromCharCode(...bytes.subarray(i, i + CH));
+        }
+        const asset = await assetPut(btoa(bin), item.mime, item.name);
+        if (item.status === "uploading") {
+          item.asset = asset;
+          item.mime = asset.mime;
+          item.status = "ready";
+        }
+      } catch (err) {
+        item.status = "error";
+        item.error = String(err);
+      }
+    },
+    /** 已选文件路径上传（asset_put_path，零 IPC 大载荷）。 */
+    async addAttachmentPath(path: string) {
+      const item: AttachmentItem = {
+        key: nextAttachmentKey++,
+        name: path.split(/[\\/]/).pop() || path,
+        mime: "",
+        kind: "file",
+        status: "uploading",
+      };
+      this.attachments.push(item);
+      try {
+        const asset = await assetPutPath(path);
+        item.asset = asset;
+        item.mime = asset.mime;
+        item.kind = asset.mime.startsWith("image/") ? "image" : "file";
+        if (item.kind === "image") {
+          // 本地预览：读一次 data URL（小图，无 objectURL 可用）
+          const { assetRead } = await import("../lib/api");
+          item.localUrl = await assetRead(asset.id, asset.mime);
+        }
+        item.status = "ready";
+      } catch (err) {
+        item.status = "error";
+        item.error = String(err);
+      }
+    },
+    removeAttachment(key: number) {
+      const idx = this.attachments.findIndex((a) => a.key === key);
+      if (idx >= 0) {
+        const [it] = this.attachments.splice(idx, 1);
+        if (it?.localUrl?.startsWith("blob:")) URL.revokeObjectURL(it.localUrl);
+      }
+    },
+    /** 「仅发送文字」门控动作（§9.5）：剥掉图片附件，PDF 与文本保留。 */
+    dropImageAttachments() {
+      for (const it of [...this.attachments]) {
+        if (it.kind === "image") this.removeAttachment(it.key);
+      }
+    },
+    /** 发送前收口：全部就绪才发（上传中等待完成；有失败 = 不发，留条
+     * 如实展示）。返回 parts（空表 = 纯文本）。 */
+    async settleAttachments(): Promise<ContentPartDto[] | null> {
+      const deadline = Date.now() + 30_000;
+      while (this.attachments.some((a) => a.status === "uploading")) {
+        if (Date.now() > deadline) break;
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      if (this.attachments.some((a) => a.status === "error")) return null;
+      return this.attachments
+        .filter((a) => a.asset)
+        .map((a) =>
+          a.kind === "image"
+            ? ({ type: "image", asset: a.asset } as ContentPartDto)
+            : ({ type: "file", asset: a.asset } as ContentPartDto),
+        );
+    },
+    async send(text: string, parts?: ContentPartDto[]) {
       const t = text.trim();
-      if (!t || this.running) return;
+      if (!t && !(parts && parts.length)) return;
+      if (this.running) return;
       this.stopRequested = false;
       // §3.39②：手动发送恢复自动派发（停止/出错后的暂停态由用户解）
       this.queueDraining = true;
-      this.items.push({ id: nextId++, kind: "user", text: t, ts: Date.now() });
+      this.items.push({
+        id: nextId++,
+        kind: "user",
+        text: t,
+        ts: Date.now(),
+        ...(parts?.length ? { parts } : {}),
+      });
       this.running = true;
       this.steps = null;
       this.turnUsage = null;
@@ -714,19 +839,25 @@ export const useChatStore = defineStore("chat", {
       const ws = this.pendingWorkspace;
       this.pendingWorkspace = null;
       try {
-        await chat(this.sessionId, t, ws);
+        await chat(this.sessionId, t, ws, parts);
       } catch (err) {
         // 失败轮次不发 turn_done（后端约定），在这里收尾；§3.39② 队列
-        // 转暂停（恢复键由用户按，失败后不打连发）
+        // 转暂停（恢复键由用户按，失败后不打连发）。附件条不清——后端
+        // 门控拒发（UnsupportedModality）后换模型重试还要用。
         this.items.push({ id: nextId++, kind: "error", text: String(err) });
         this.queueDraining = false;
-      } finally {
         this.running = false;
-        // ⑲ 新会话首聊后进列表（列表更新不阻塞输入）
         void this.refreshSessions();
-        // §3.39②：轮次收束（成功/失败）→ 消费打断目标 / 自动派发
         void this.dispatchQueue();
+        return;
       }
+      this.running = false;
+      // 发送成功后清空预览条（引用已随消息入会话日志，asset 常驻存储）
+      for (const it of [...this.attachments]) this.removeAttachment(it.key);
+      // ⑲ 新会话首聊后进列表（列表更新不阻塞输入）
+      void this.refreshSessions();
+      // §3.39②：轮次收束（成功/失败）→ 消费打断目标 / 自动派发
+      void this.dispatchQueue();
     },
     // ---- §3.39 停止与排队（v4.11）----
 

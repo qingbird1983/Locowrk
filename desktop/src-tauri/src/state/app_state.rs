@@ -115,6 +115,9 @@ pub struct AppState {
     /// 模型能力目录（批 A，供应商稿 §4）：随包快照惰性加载 + 在线刷新
     /// 只进内存；`llm_catalog_*` 命令与 llm 投影合成（enrich）共用。
     pub catalog: Arc<crate::llm::catalog::CatalogStore>,
+    /// 资产存储（批 D，`<数据根>/assets/` 内容寻址）：asset_put 命令写、
+    /// wire 编码与缩略图渲染读（LRU）；GC 引用面三扫的根。
+    pub assets: Arc<crate::assets::AssetStore>,
 }
 
 impl AppState {

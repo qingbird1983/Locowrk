@@ -31,6 +31,7 @@ async fn turn_mirrors_to_disk_and_restores_identically() {
         &mut session,
         "s-log",
         "echo 你好".into(),
+        Vec::new(),
         None,
         &sink,
         None,
@@ -72,6 +73,7 @@ async fn history_projection_includes_user_messages() {
         &mut session,
         "s-replay",
         "echo 你好".into(),
+        Vec::new(),
         None,
         &sink,
         None,
@@ -113,9 +115,11 @@ fn undo_rewrite_truncates_and_keeps_backup() {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "一".into(),
+        parts: Vec::new(),
     });
     session.append(SessionEvent::UserMessage {
         content: "二".into(),
+        parts: Vec::new(),
     });
     session_log::append_slice(&dir, "s", &session, 0);
 
@@ -124,6 +128,7 @@ fn undo_rewrite_truncates_and_keeps_backup() {
     let mut forked = session.fork(0);
     forked.append(SessionEvent::UserMessage {
         content: "新轮".into(),
+        parts: Vec::new(),
     });
     session_log::rewrite_after_undo(&dir, "s", &forked);
 
@@ -177,6 +182,7 @@ fn truncate_after_resolves_pos_and_rewrites_disk() {
         let mut s = Session::new();
         s.append(SessionEvent::UserMessage {
             content: "第一问".into(),
+            parts: Vec::new(),
         });
         s.append(SessionEvent::AssistantMessage {
             content: "第一答".into(),
@@ -184,6 +190,7 @@ fn truncate_after_resolves_pos_and_rewrites_disk() {
         });
         s.append(SessionEvent::UserMessage {
             content: "第二问".into(),
+            parts: Vec::new(),
         });
         s.append(SessionEvent::AssistantMessage {
             content: "第二答".into(),
@@ -246,6 +253,7 @@ async fn context_usage_persists_and_replays() {
         &mut session,
         "s-ctx",
         "echo 你好".into(),
+        Vec::new(),
         Some(crate::runner::UsagePolicy {
             threshold_tokens: 8000,
             window_tokens: 32000,

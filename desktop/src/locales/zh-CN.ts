@@ -141,7 +141,17 @@ export default {
   },
   composer: {
     attach: "添加文件或图片",
-    attachHint: "路径引用 · 模型经工具读取",
+    attachHint: "图片 / PDF 随消息发送 · 其余按路径引用",
+  },
+  mm: {
+    uploading: "上传中…",
+    uploadFailed: "附件上传失败，发送已取消",
+    removeAttachment: "移除附件",
+    gateTitle: "当前模型不支持图片",
+    gateTextOnly: "仅发送文字",
+    gatePickModel: "打开模型选择器",
+    busyAttach: "当前轮运行中，附件要等空闲时随消息发送",
+    revealAsset: "在文件夹中显示",
   },
   workspace: {
     title: "项目工作区",

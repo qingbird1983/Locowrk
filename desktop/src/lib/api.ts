@@ -5,9 +5,11 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AgentEvent,
   ApprovalRequest,
+  AssetRefDto,
   BatchResult,
   CacheBreakReport,
   ChatUpdate,
+  ContentPartDto,
   ContextUpdate,
   InstalledPlugin,
   MemoryRow,
@@ -51,13 +53,48 @@ import type {
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。
  * workspace = 首聊挂起归属（㉘·A·fix 归属先行）：后端建会话即写旁车，
- * 先于首轮注入/围栏/提取——不再等轮次收束后才关联。 */
+ * 先于首轮注入/围栏/提取——不再等轮次收束后才关联。
+ * parts（批 D 多模态）：附件部件（assetPut/assetPutPath 已上传的引用）。 */
 export function chat(
   sessionId: string,
   message: string,
   workspace?: string | null,
+  parts?: ContentPartDto[],
 ): Promise<number> {
-  return invoke("agent_chat", { sessionId, message, workspace: workspace ?? null });
+  return invoke("agent_chat", {
+    sessionId,
+    message,
+    workspace: workspace ?? null,
+    parts: parts?.length ? parts : null,
+  });
+}
+
+// ---- 多模态附件（批 D，多模态稿 §6/§9）----
+
+/** 上传内存文件（粘贴/拖拽）：base64 + mime + 原名 → AssetRef。后端做
+ * 魔数白名单/体积/单边校验，失败 reject 带面向用户的文案。 */
+export function assetPut(dataBase64: string, mime: string, name: string): Promise<AssetRefDto> {
+  return invoke("asset_put", { dataBase64, mime, name });
+}
+
+/** 上传已选文件（原生对话框路径，零 IPC 大载荷）→ AssetRef。 */
+export function assetPutPath(path: string): Promise<AssetRefDto> {
+  return invoke("asset_put_path", { path });
+}
+
+/** 缩略图/查看读取：返回 data URL（AssetStore 后端带 LRU）。 */
+export function assetRead(id: string, mime: string): Promise<string> {
+  return invoke("asset_read", { id, mime });
+}
+
+/** 在文件夹中显示资产原文件（大图查看器落地前的系统打开器顶位）。 */
+export function assetReveal(id: string, mime: string): Promise<void> {
+  return invoke("asset_reveal", { id, mime });
+}
+
+/** 手动孤儿资产 GC（走查/开发者）：按 gcThresholdDays 判定，返回计数。 */
+export function assetGc(): Promise<{ scanned: number; removed: number }> {
+  return invoke("asset_gc");
 }
 
 /** 撤销最近一次上下文压缩（⑨）：其后的轮次一并回退（前缀游标语义）。

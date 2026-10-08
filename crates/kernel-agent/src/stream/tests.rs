@@ -83,6 +83,7 @@ fn child_kernel_shadows_global_sink() {
         let mut session = Session::new();
         session.append(SessionEvent::UserMessage {
             content: "任务".into(),
+            parts: Vec::new(),
         });
         let outcome = child.step_as(&mut session, "p1-sub-1").await.unwrap();
 

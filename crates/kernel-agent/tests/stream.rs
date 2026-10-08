@@ -60,6 +60,7 @@ fn user_session() -> Session {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "你好".into(),
+        parts: Vec::new(),
     });
     s
 }

@@ -44,10 +44,12 @@ pub fn render_markdown(title: &str, session_id: &str, events: &[AgentEvent]) -> 
     for e in events {
         match e {
             AgentEvent::Chunk { delta, .. } => assistant.push_str(delta),
-            AgentEvent::UserMessage { content, .. } => {
+            AgentEvent::UserMessage { content, parts, .. } => {
                 section(&mut out, "## 助手\n\n", &assistant);
                 assistant.clear();
-                section(&mut out, "## 用户\n\n", content);
+                // parts（批 D）折叠为占位行——导出是面向人的 Markdown，
+                // 附件只留名目（无损归档用 jsonl 原件）
+                section(&mut out, "## 用户\n\n", &session_store::fold_parts(content, parts));
             }
             AgentEvent::ToolCall { tool, args, .. } => {
                 section(&mut out, "## 助手\n\n", &assistant);

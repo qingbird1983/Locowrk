@@ -297,12 +297,14 @@ function noticeText(item: SystemItem): string {
 
 <template>
   <template v-for="turn of turnViews" :key="turn.key">
-    <!-- 用户消息（容器外，§3.34 可编辑由父层给集；复制钮常态有） -->
+    <!-- 用户消息（容器外，§3.34 可编辑由父层给集；复制钮常态有）。
+         parts（批 D）：附件缩略图随重放与实时同形恢复 -->
     <MessageRow
       v-if="turn.userItem"
       kind="user"
       :text="turn.userItem.text"
       :ts="turn.userItem.ts"
+      :parts="turn.userItem.parts"
       :editable="editableIds?.has(turn.userItem.id) ?? false"
       @edit="(t2: string) => { if (turn.userItem) emit('edit', userPos(turn.userItem), t2); }"
     />

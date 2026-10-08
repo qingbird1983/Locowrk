@@ -16,6 +16,7 @@ mod developer;
 mod embedding;
 mod llm;
 mod memory;
+mod multimodal;
 mod plugins;
 mod shell;
 mod thinking;
@@ -34,6 +35,7 @@ pub use llm::{
     ProviderProfile, ProviderView, PROVIDERS,
 };
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
+pub use multimodal::{MultimodalSettings, MultimodalUpdate, MultimodalView};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
 pub use shell::{ShellSettings, ShellSettingsView, ShellUpdate};
 pub use thinking::{
@@ -87,6 +89,10 @@ pub struct AppSettings {
     /// 思考语言区（docs/design/NEW/language of thought.md；类型见
     /// `thinking` 子模块）。缺省 follow_ui，旧 settings.json 无此区零迁移。
     pub thinking: ThinkingSettings,
+    /// 多模态区（批 D：上传校验上限 + 孤儿资产 GC；类型见 `multimodal`
+    /// 子模块）。缺省 2048px/5MB/白名单 png-jpg-webp-gif+pdf/autoGc 开/
+    /// 7 天宽限，旧 settings.json 无此区零迁移。
+    pub multimodal: MultimodalSettings,
 }
 
 fn default_shortcut() -> String {
@@ -109,6 +115,7 @@ impl Default for AppSettings {
             chat: ChatSettings::default(),
             developer: DeveloperSettings::default(),
             thinking: ThinkingSettings::default(),
+            multimodal: MultimodalSettings::default(),
         }
     }
 }
@@ -136,6 +143,8 @@ pub struct SettingsView {
     pub developer: DeveloperView,
     /// 思考语言区（docs/design/NEW/language of thought.md）。
     pub thinking: ThinkingView,
+    /// 多模态区（批 D：上传校验上限 + 孤儿资产 GC）。
+    pub multimodal: MultimodalView,
 }
 
 pub struct SettingsStore {

@@ -74,6 +74,7 @@ fn session() -> Session {
     for i in 0..3 {
         s.append(SessionEvent::UserMessage {
             content: format!("第{i}轮问题"),
+            parts: Vec::new(),
         });
         s.append(SessionEvent::AssistantMessage {
             content: format!("第{i}轮回答"),
@@ -183,6 +184,7 @@ async fn incremental_trigger_then_rebound_pauses_auto() {
     let mut session2 = session();
     session2.append(SessionEvent::UserMessage {
         content: "第3轮问题".into(),
+        parts: Vec::new(),
     });
     session2.append(SessionEvent::AssistantMessage {
         content: "第3轮回答".into(),
@@ -342,6 +344,7 @@ fn long_session() -> Session {
     for i in 0..12 {
         s.append(SessionEvent::UserMessage {
             content: format!("第{i}轮问题"),
+            parts: Vec::new(),
         });
         s.append(SessionEvent::AssistantMessage {
             content: format!("第{i}轮回答"),
@@ -389,6 +392,7 @@ async fn window_overflow_organizes_orphans_without_rebound() {
     let mut s2 = s;
     s2.append(SessionEvent::UserMessage {
         content: "第12轮问题".into(),
+        parts: Vec::new(),
     });
     s2.append(SessionEvent::AssistantMessage {
         content: "第12轮回答".into(),

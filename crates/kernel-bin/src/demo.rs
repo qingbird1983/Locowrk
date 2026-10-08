@@ -37,6 +37,7 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "你好，请演示 echo 工具。".into(),
+        parts: Vec::new(),
     });
 
     let v12: Version = V12.parse().unwrap();

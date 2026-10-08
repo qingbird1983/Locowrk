@@ -26,7 +26,8 @@ fn user_session() -> Vec<Message> {
     vec![
         Message::User {
             content: "查下天气".into(),
-        },
+            parts: Vec::new(),
+            },
         Message::Assistant {
             content: String::new(),
             tool_calls: vec![ToolCallMsg {
@@ -70,7 +71,9 @@ fn payload_assembles_openai_shapes() {
         true,
         Dialect::None,
         &WireCaps::default(),
-    );
+        None,
+    )
+    .unwrap();
     assert_eq!(p["model"], "test-model");
     assert_eq!(p["stream"], true);
     assert_eq!(p["stream_options"]["include_usage"], true);
@@ -107,7 +110,9 @@ fn payload_assembles_openai_shapes() {
         false,
         Dialect::None,
         &WireCaps::default(),
-    );
+        None,
+    )
+    .unwrap();
     assert!(p["messages"][0]["content"]
         .as_str()
         .unwrap()
@@ -334,7 +339,8 @@ async fn empty_model_falls_back_to_demo() {
         .complete(LlmRequest {
             messages: vec![Message::User {
                 content: "hi".into(),
-            }],
+                parts: Vec::new(),
+                }],
             ..Default::default()
         })
         .await
@@ -373,7 +379,8 @@ async fn configured_model_without_key_fails_fast() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     let llm = AppLlm::new(Arc::clone(&store));
 
@@ -381,7 +388,8 @@ async fn configured_model_without_key_fails_fast() {
         .complete(LlmRequest {
             messages: vec![Message::User {
                 content: "hi".into(),
-            }],
+                parts: Vec::new(),
+                }],
             ..Default::default()
         })
         .await
@@ -481,12 +489,14 @@ fn payload_carries_dialect_thinking_fields() {
         true,
         Dialect::DeepseekThinking,
         &WireCaps::default(),
-    );
+        None,
+    )
+    .unwrap();
     assert_eq!(p["thinking"], json!({ "type": "enabled" }));
     assert_eq!(p["reasoning_effort"], "low");
 
     // 无方言（None）：不发任何档位字段（宁缺勿假）
-    let p = build_payload("m", &req, true, Dialect::None, &WireCaps::default());
+    let p = build_payload("m", &req, true, Dialect::None, &WireCaps::default(), None).unwrap();
     assert!(p.get("thinking").is_none());
     assert!(p.get("reasoning_effort").is_none());
 
@@ -501,7 +511,9 @@ fn payload_carries_dialect_thinking_fields() {
         true,
         Dialect::DeepseekThinking,
         &WireCaps::default(),
-    );
+        None,
+    )
+    .unwrap();
     assert!(p.get("thinking").is_none());
     assert!(p.get("reasoning_effort").is_none());
 
@@ -513,7 +525,9 @@ fn payload_carries_dialect_thinking_fields() {
         true,
         Dialect::DeepseekThinking,
         &WireCaps::default(),
-    );
+        None,
+    )
+    .unwrap();
     assert!(p.get("thinking").is_none());
 }
 
@@ -522,11 +536,12 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
     let req = LlmRequest {
         messages: vec![Message::User {
             content: "hi".into(),
-        }],
+            parts: Vec::new(),
+            }],
         ..Default::default()
     };
     // 未钉死：不发（v2.75 纪律不变）
-    let p = build_payload("m", &req, true, Dialect::None, &WireCaps::default());
+    let p = build_payload("m", &req, true, Dialect::None, &WireCaps::default(), None).unwrap();
     assert!(p.get("max_tokens").is_none());
 
     // 钉死 + 无窗口 = 原值发送
@@ -534,7 +549,7 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
         max_output: Some(5_000),
         ctx_window: None,
     };
-    let p = build_payload("m", &req, true, Dialect::None, &caps);
+    let p = build_payload("m", &req, true, Dialect::None, &caps, None).unwrap();
     assert_eq!(p["max_tokens"], 5_000);
 
     // 钉死 + 窗口充裕 = min(钉死, ctx − 估用 − 1000)；est 小 → 钉死赢
@@ -542,7 +557,7 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
         max_output: Some(5_000),
         ctx_window: Some(100_000),
     };
-    let p = build_payload("m", &req, true, Dialect::None, &caps);
+    let p = build_payload("m", &req, true, Dialect::None, &caps, None).unwrap();
     assert_eq!(p["max_tokens"], 5_000);
 
     // 窗口紧张 = 钳到余量；最低 1024（不钳到负数，留给溢出语义）
@@ -550,7 +565,7 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
         max_output: Some(5_000),
         ctx_window: Some(2_000),
     };
-    let p = build_payload("m", &req, true, Dialect::None, &caps);
+    let p = build_payload("m", &req, true, Dialect::None, &caps, None).unwrap();
     assert_eq!(p["max_tokens"], 1_024);
 }
 

@@ -80,6 +80,7 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     let mut session_a = Session::new();
     session_a.append(SessionEvent::UserMessage {
         content: "Agent A：请执行 echo 和 danger 工具。".into(),
+        parts: Vec::new(),
     });
 
     banner("phase A: 审批插件经 agent/request 改写参数 + 审批门");
@@ -100,6 +101,7 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     let mut session_b = Session::new();
     session_b.append(SessionEvent::UserMessage {
         content: "Agent B：请调用 echo 工具。".into(),
+        parts: Vec::new(),
     });
 
     banner("phase B: 两 Agent 工具视图隔离（同名 echo，不同实现）");

@@ -123,9 +123,7 @@ async fn update(
         .join(crate::repo_context::HANDOFF);
     let current = std::fs::read_to_string(&handoff_path).unwrap_or_default();
     let req = kernel_agent::LlmRequest {
-        messages: vec![Message::User {
-            content: material(&current, &transcript),
-        }],
+        messages: vec![Message::user(material(&current, &transcript))],
         system: Some(HANDOFF_SYSTEM.into()),
         // 辅助调用标记（批 B §5.4）：推理档降到方言最低档、不发 max_tokens
         params: serde_json::json!({ "aux": true }),

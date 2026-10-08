@@ -6,6 +6,8 @@ use serde_json::Value;
 
 use plugin_api::{CallId, SideEffect};
 
+use crate::content::ContentPart;
+
 /// 轮次标识。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TurnId(pub u64);
@@ -26,8 +28,13 @@ pub enum SessionEvent {
         turn_id: TurnId,
         ts: i64,
     },
+    /// `parts`（批 D，serde default）= 附件部件（图片/PDF）；旧日志缺字段
+    /// 读入 = 空 = 纯文本消息，零迁移。derive_messages 随 User 消息携带
+    /// （wire 层按需编码；压缩摘要/转录/标题只吃正文）。
     UserMessage {
         content: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        parts: Vec<ContentPart>,
     },
     /// 推理内容（v2.57）：供应商 reasoning 全文，每个 LLM step 至多一条、
     /// 紧贴其 AssistantMessage 之前。derive_messages 跳过（推理是过程不是

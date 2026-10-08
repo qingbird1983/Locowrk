@@ -2438,6 +2438,7 @@ name = "locowrk-desktop"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "cordis-core",
  "futures",
  "kernel-agent",
@@ -2452,6 +2453,7 @@ dependencies = [
  "serde",
  "serde_json",
  "session-store",
+ "sha2",
  "sys-locale",
  "tauri",
  "tauri-build",

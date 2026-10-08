@@ -2,6 +2,22 @@
  * `agent://` 事件的 TS 镜像类型。
  * 与 desktop/src-tauri/src/events.rs 的 AgentEvent 保持一致（snake_case 字段）。
  */
+
+/** 资产引用（批 D 多模态，session-store AssetRef）：内容寻址 id + mime +
+ * 原文件名（展示用）。字节在 `<数据根>/assets/`，消息只存引用。 */
+export interface AssetRefDto {
+  id: string;
+  mime: string;
+  name: string;
+}
+
+/** 消息附件部件（批 D，session-store ContentPart）：text = 正文段（用户
+ * 消息正文在 content 字段，此变体当前不产生）；image/file 携带 AssetRef。 */
+export type ContentPartDto =
+  | { type: "text"; text: string }
+  | { type: "image"; asset: AssetRefDto }
+  | { type: "file"; asset: AssetRefDto };
+
 export type AgentEvent =
   | ChunkEvent
   | ToolCallEvent
@@ -179,6 +195,8 @@ export interface UserMessageEvent {
   pos: number;
   /** 轮起点时刻（v2.101，TurnStart 配对投影）；缺省 = 旧日志无（不虚构）。 */
   ts?: number;
+  /** 附件部件（批 D）；缺省 = 纯文本消息（旧日志渲染零变化）。 */
+  parts?: ContentPartDto[];
 }
 
 /** 推理内容（v2.57 §3.9，agent://thinking / 重放同形）：实时 = 增量

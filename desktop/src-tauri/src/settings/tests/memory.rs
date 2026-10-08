@@ -67,7 +67,8 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert!(!store.view().memory.enabled);
     assert_eq!(store.view().memory.top_k, 3);
@@ -94,7 +95,8 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert!(!store.view().memory.enabled);
     assert_eq!(store.view().memory.top_k, 8);
@@ -118,7 +120,8 @@ fn memory_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
-            )
+                        None,
+)
             .is_err());
     }
     assert_eq!(store.view().memory.top_k, 8);
@@ -170,7 +173,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     drop(store);
     let store = SettingsStore::open(&root).unwrap();
@@ -198,7 +202,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap_err();
     assert!(err.contains("整理节奏"), "{err}");
     let err = store
@@ -219,7 +224,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap_err();
     assert!(err.contains("增量块"), "{err}");
     // 记忆管理器模型传空串 = 清除（回落同主模型）
@@ -242,7 +248,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert!(store.view().memory.memory_manager_model.is_none());
     std::fs::remove_dir_all(&root).ok();
@@ -281,7 +288,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     let v = store.view().memory;
     assert_eq!(v.tail_strategy, "window");
@@ -312,7 +320,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap_err();
     assert!(err.contains("尾巴策略"), "{err}");
     let err = store
@@ -333,7 +342,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap_err();
     assert!(err.contains("固定窗口"), "{err}");
     let err = store
@@ -354,7 +364,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap_err();
     assert!(err.contains("自动收起阈值"), "{err}");
     // 出界不污染内存态
@@ -387,7 +398,8 @@ fn m5_default_organizer_and_experiences_roundtrip() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     let reopened = SettingsStore::open(&root).unwrap();
     let v = reopened.view().memory;
@@ -417,7 +429,8 @@ fn m5_default_organizer_and_experiences_roundtrip() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap_err();
     assert!(err.contains("整理模式"), "{err}");
     assert_eq!(store.view().memory.default_organizer, "legacy");

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use kernel_agent::{EmbedPort, LlmRequest, LlmService};
 use serde_json::Value;
-use session_store::Message;
+use session_store::{fold_parts, Message};
 
 use crate::experiences::ExperienceDb;
 use crate::llm::CooledEmbed;
@@ -53,7 +53,8 @@ use null if the exchange was trivial.\n\
 - Never invent facts. Keys are short ASCII identifiers like user.language or project.db_choice.";
 
 /// 轮次转录（给 LLM 的提取输入）：User / Assistant 正文 + 工具调用痕迹。
-/// F3 handoff 收束更新复用同一转录口径。
+/// F3 handoff 收束更新复用同一转录口径。parts（批 D）折叠为 `[图片: name]`
+/// 占位——记忆只记文本事实（多模态稿 §2.2 记忆行）。
 pub(crate) fn build_transcript(turn: &[Message]) -> String {
     let mut lines: Vec<String> = Vec::new();
     let mut budget = TRANSCRIPT_MAX_CHARS;
@@ -62,7 +63,9 @@ pub(crate) fn build_transcript(turn: &[Message]) -> String {
             break;
         }
         let line = match m {
-            Message::User { content } => Some(format!("User: {}", clip(content, 1000))),
+            Message::User { content, parts } => {
+                Some(format!("User: {}", clip(&fold_parts(content, parts), 1000)))
+            }
             Message::Assistant { content, .. } if !content.trim().is_empty() => {
                 Some(format!("Assistant: {}", clip(content, 1000)))
             }
@@ -160,9 +163,7 @@ pub async fn run_turn_extract(
     let reply = deps
         .llm
         .complete(LlmRequest {
-            messages: vec![Message::User {
-                content: transcript,
-            }],
+            messages: vec![Message::user(transcript)],
             tools: Vec::new(),
             model: None,
             params: serde_json::json!({ "aux": true }),

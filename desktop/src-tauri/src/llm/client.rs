@@ -139,25 +139,28 @@ impl CompatLlm {
     }
 
     /// 非流式完成 = 同一条流式管道聚合（无回调、无钩子——重试对调用方
-    /// 不可见，只是等待变长）。
+    /// 不可见，只是等待变长）。`assets`（批 D）：附件字节读取器。
     pub async fn complete_with(
         &self,
         cfg: &LlmSettings,
         caps: WireCaps,
         req: LlmRequest,
+        assets: Option<&crate::assets::AssetStore>,
     ) -> Result<LlmResponse, LlmError> {
-        self.complete_streaming_with(cfg, caps, req, &|_| false, &|_| false, None)
+        self.complete_streaming_with(cfg, caps, req, assets, &|_| false, &|_| false, None)
             .await
     }
 
     /// 流式完成（⑳/v2.57/v4.11 语义同旧后端）：正文/推理 delta 逐段回调，
     /// 回调返回 true = 用户停止（部分正文原样收束）；传输失败自动重试
     /// （不设上限），已推过 delta 的重试先经 `hooks.on_retry` 让前端重置。
+    #[allow(clippy::too_many_arguments)]
     pub async fn complete_streaming_with(
         &self,
         cfg: &LlmSettings,
         caps: WireCaps,
         req: LlmRequest,
+        assets: Option<&crate::assets::AssetStore>,
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         hooks: Option<&RetryHooks>,
@@ -175,6 +178,7 @@ impl CompatLlm {
                     dialect,
                     caps,
                     &req,
+                    assets,
                     on_delta,
                     on_reasoning,
                     drop_stream_options,
@@ -226,6 +230,8 @@ impl CompatLlm {
 
     /// 单次尝试：POST + SSE 流循环。返回 Retryable 的分类（含 Retry-After
     /// 解析）与「已推 delta」标记。
+    /// `assets`（批 D）：带附件请求的 asset 字节读取器（AppLlm 注入；
+    /// build_payload 编码 content 数组时读，读失败 = Fatal）。
     #[allow(clippy::too_many_arguments)]
     async fn attempt_stream(
         &self,
@@ -233,6 +239,7 @@ impl CompatLlm {
         dialect: Dialect,
         caps: WireCaps,
         req: &LlmRequest,
+        assets: Option<&crate::assets::AssetStore>,
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         drop_stream_options: bool,
@@ -254,7 +261,8 @@ impl CompatLlm {
         )
         .build()
         .map_err(|e| AttemptError::Fatal(format!("HTTP 客户端构建失败: {e}")))?;
-        let mut payload = build_payload(&cfg.model, req, true, dialect, &caps);
+        let mut payload = build_payload(&cfg.model, req, true, dialect, &caps, assets)
+            .map_err(AttemptError::Fatal)?;
         if drop_stream_options {
             payload
                 .as_object_mut()

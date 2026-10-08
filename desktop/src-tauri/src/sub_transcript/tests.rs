@@ -16,9 +16,11 @@ fn fixture() -> Session {
     let mut s = Session::new();
     s.append(UserMessage {
         content: "父的旧消息（fork 前缀）".into(),
+        parts: Vec::new(),
     });
     s.append(UserMessage {
         content: "子任务 prompt".into(),
+        parts: Vec::new(),
     });
     s.append(session_store::SessionEvent::AssistantMessage {
         content: "子完成".into(),
@@ -41,7 +43,7 @@ fn close_writes_own_segment_and_overwrites() {
     assert_eq!(loaded.len(), 2, "只写自身段（fork 前缀不带）");
     assert!(matches!(
         loaded.events().first(),
-        Some(UserMessage { content }) if content == "子任务 prompt"
+        Some(UserMessage { content, .. }) if content == "子任务 prompt"
     ));
 
     // 同 id 重落 = 覆盖（不残留旧行）

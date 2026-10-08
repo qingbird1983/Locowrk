@@ -7,9 +7,7 @@ use kernel_agent::LlmResponse;
 use std::sync::Mutex;
 
 fn msg_user(text: &str) -> Message {
-    Message::User {
-        content: text.into(),
-    }
+    Message::user(text)
 }
 
 // ---- parse_reply ----

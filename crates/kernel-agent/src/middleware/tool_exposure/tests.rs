@@ -52,6 +52,7 @@ fn messages_with_session_use(tool: &str) -> Vec<Message> {
     vec![
         Message::User {
             content: "do it".into(),
+            parts: Vec::new(),
         },
         Message::ToolResult {
             call_id: plugin_api::CallId("c1".into()),
@@ -256,6 +257,7 @@ async fn retrieval_signal_fills_quota_and_attributes() {
     ];
     let messages = vec![Message::User {
         content: "please work on the rust project".into(),
+        parts: Vec::new(),
     }];
     let l = ToolExposure::new(
         Arc::new(Fixed(HashMap::new())),

@@ -9,6 +9,7 @@ fn items() -> Vec<MaterialItem> {
     let events = vec![
         SessionEvent::UserMessage {
             content: "第一轮：查问题".into(),
+            parts: Vec::new(),
         },
         SessionEvent::AssistantMessage {
             content: "好的，先看配置".into(),
@@ -16,6 +17,7 @@ fn items() -> Vec<MaterialItem> {
         },
         SessionEvent::UserMessage {
             content: "第二轮：改代码".into(),
+            parts: Vec::new(),
         },
         SessionEvent::AssistantMessage {
             content: "改完了".into(),
@@ -23,6 +25,7 @@ fn items() -> Vec<MaterialItem> {
         },
         SessionEvent::UserMessage {
             content: "第三轮：跑测试".into(),
+            parts: Vec::new(),
         },
         SessionEvent::AssistantMessage {
             content: "测试绿了".into(),
@@ -112,6 +115,7 @@ fn rule_split_never_splits_tool_pairing() {
     let events = vec![
         SessionEvent::UserMessage {
             content: "开头".into(),
+            parts: Vec::new(),
         },
         SessionEvent::AssistantMessage {
             content: String::new(),
@@ -132,6 +136,7 @@ fn rule_split_never_splits_tool_pairing() {
         },
         SessionEvent::UserMessage {
             content: "结尾".into(),
+            parts: Vec::new(),
         },
     ];
     let its = build_items(&events, 0);

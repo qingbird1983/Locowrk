@@ -231,6 +231,7 @@ pub fn user_session() -> Session {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "hi".into(),
+        parts: Vec::new(),
     });
     s
 }

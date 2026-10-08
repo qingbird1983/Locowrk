@@ -65,9 +65,7 @@ impl memory_tree::MemoryManagerClient for AppLlmMemoryManager {
             return Err("记忆管理器模型未配置".into());
         }
         let req = LlmRequest {
-            messages: vec![Message::User {
-                content: user.to_string(),
-            }],
+            messages: vec![Message::user(user.to_string())],
             tools: vec![],
             model: None,
             // 辅助调用标记（批 B §5.4）：推理档降到方言最低档、不发 max_tokens
@@ -85,7 +83,7 @@ impl memory_tree::MemoryManagerClient for AppLlmMemoryManager {
         }
         let resp = self
             .real
-            .complete_with(&cfg, Default::default(), req)
+            .complete_with(&cfg, Default::default(), req, None)
             .await
             .map_err(|e| e.to_string())?;
         let usage = resp

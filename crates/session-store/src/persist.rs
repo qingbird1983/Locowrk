@@ -157,7 +157,7 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                         };
                         events += 1;
                         if title.is_none() {
-                            if let SessionEvent::UserMessage { content } = ev {
+                            if let SessionEvent::UserMessage { content, .. } = ev {
                                 title = Some(content.chars().take(SESSION_TITLE_CHARS).collect());
                             }
                         }
@@ -254,7 +254,7 @@ pub fn search_sessions(dir: &Path, query: &str, limit: usize) -> Vec<SessionSear
                 continue;
             };
             let text = match ev {
-                SessionEvent::UserMessage { content } => content,
+                SessionEvent::UserMessage { content, .. } => content,
                 SessionEvent::AssistantMessage { content, .. } => content,
                 _ => continue,
             };

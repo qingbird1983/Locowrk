@@ -62,7 +62,8 @@ fn flat_update_materializes_default_profile() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     let v = store.view().llm;
     assert_eq!(v.active, "default");
@@ -94,7 +95,8 @@ fn active_switch_rejects_unknown_id_and_applies_to_target() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     // 不存在的档位 id 拒绝且不污染内存态
     assert!(store
@@ -115,7 +117,8 @@ fn active_switch_rejects_unknown_id_and_applies_to_target() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     assert_eq!(store.view().llm.active, "default");
     std::fs::remove_dir_all(&root).ok();
@@ -187,7 +190,8 @@ fn profile_save_delete_semantics() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert_eq!(store.view().llm.active, second);
     assert_eq!(store.view().llm.model, "qwen3:8b", "生效投影随活动档走");

@@ -139,7 +139,17 @@ export default {
   },
   composer: {
     attach: "Add files or images",
-    attachHint: "path reference · model reads via tools",
+    attachHint: "images / PDF sent with the message · others as @path refs",
+  },
+  mm: {
+    uploading: "uploading…",
+    uploadFailed: "attachment upload failed, send cancelled",
+    removeAttachment: "remove attachment",
+    gateTitle: "Current model does not support images",
+    gateTextOnly: "Send text only",
+    gatePickModel: "Open model selector",
+    busyAttach: "A turn is running — attachments will be sent with your next message when idle",
+    revealAsset: "Reveal in folder",
   },
   workspace: {
     title: "Project workspace",

@@ -16,6 +16,7 @@ fn seed(dir: &std::path::Path, id: &str) {
         &session_file(dir, id).unwrap(),
         &session_store::SessionEvent::UserMessage {
             content: "hi".into(),
+            parts: Vec::new(),
         },
     )
     .unwrap();

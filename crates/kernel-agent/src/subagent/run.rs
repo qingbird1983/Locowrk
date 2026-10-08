@@ -131,7 +131,10 @@ pub(crate) async fn run_child(
         turn_id: TurnId(1),
         ts: now_ms(),
     });
-    child.append(SessionEvent::UserMessage { content: prompt });
+    child.append(SessionEvent::UserMessage {
+        content: prompt,
+        parts: Vec::new(),
+    });
 
     let mut turns: u32 = 0;
     let loop_fut = async {

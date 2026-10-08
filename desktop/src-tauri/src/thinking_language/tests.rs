@@ -38,7 +38,8 @@ fn store_with(root: &std::path::Path, locale: &str, language: &str) -> SettingsS
             Some(ThinkingUpdate {
                 language: language.into(),
             }),
-        )
+                None,
+)
         .unwrap();
     store
 }
@@ -139,7 +140,8 @@ async fn hint_locks_per_session_across_setting_change() {
             Some(ThinkingUpdate {
                 language: "zh-CN".into(),
             }),
-        )
+                None,
+)
         .unwrap();
     let sys = system_of(handle_request(&listener, Some("s1"), None).await).unwrap();
     assert_eq!(sys, super::EN_HINT, "已开会话锁死");

@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
- * 附件按钮（UI shell doc §3.11 v3.9，用户裁定「暂时只实现添加文件或图片」
- * 的前端诚实版）：`＋` 圆钮 → 下弹/上弹菜单（单实项「添加文件或图片」，
- * 其余参考项——技能/插件/目标/计划——后端未就绪不渲染，宁缺勿假）→
- * `pick_files` 原生多选 → emit 路径数组。路径由 Composer 以 `@路径` 引用
- * 写进输入框（模型经 fs 工具读取）；**图片内容随消息上传的消息通路属
- * ㉛ 排期**，当前不传内容。
+ * 附件按钮（UI shell doc §3.11 v3.9 + v4.24 批 D 多模态）：`＋` 圆钮 →
+ * 下弹/上弹菜单（单实项「添加文件或图片」）→ `pick_files` 原生多选 →
+ * **图片/PDF 按扩展名分流进附件预览条**（asset_put_path 上传链路，随消息
+ * 作 parts 发出）；其余路径仍以 `@路径` 引用写进输入框（v1 语义，模型经
+ * fs 工具读取）。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -25,10 +24,17 @@ const root = ref<HTMLElement | null>(null);
 /** 弹出方向与权限/模型弹层同规：首页 composer 居中 = 向下弹。 */
 const dropDown = computed(() => props.dropDown ?? chat.items.length === 0);
 
+const MEDIA_RE = /\.(png|jpe?g|webp|gif|pdf)$/i;
+
 async function pick() {
   open.value = false;
   const paths = await pickFiles();
-  if (paths && paths.length > 0) emit("attach", paths);
+  if (!paths || paths.length === 0) return;
+  const media: string[] = [];
+  const refs: string[] = [];
+  for (const p of paths) (MEDIA_RE.test(p) ? media : refs).push(p);
+  for (const p of media) void chat.addAttachmentPath(p);
+  if (refs.length) emit("attach", refs);
 }
 
 function onDocPointerDown(e: PointerEvent) {

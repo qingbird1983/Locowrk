@@ -33,6 +33,7 @@
 
 mod approval;
 mod ask;
+mod assets;
 mod autodisable;
 mod commands;
 mod data_root;
@@ -160,6 +161,11 @@ pub fn run() {
             commands::agent_chat,
             commands::agent_approve,
             commands::agent_stop,
+            commands::asset_put,
+            commands::asset_put_path,
+            commands::asset_read,
+            commands::asset_reveal,
+            commands::asset_gc,
             commands::ask_respond,
             commands::ask_snooze,
             commands::list_pending_asks,

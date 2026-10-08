@@ -143,18 +143,18 @@ impl CtxCompact {
     }
 
     /// 摘要直连 LlmService（不经决策环，无递归）；任何一步失败返回 None。
+    /// 转录投影剥 parts（多模态稿 §10.1：parts 不参与摘要——图片在转录里
+    /// 只留正文；图片对估算的贡献见 [`estimate_one`] 平铺）。
     async fn summarize(&self, head: &[Message], model: Option<String>) -> Option<String> {
         let llm = self.ctx.use_dyn::<dyn LlmService>().ok()?;
-        let transcript = serde_json::to_string(head).ok()?;
+        let transcript = serde_json::to_string(&strip_parts(head)).ok()?;
         let summary_call = LlmRequest {
-            messages: vec![Message::User {
-                content: format!(
-                    "Summarize the earlier conversation below into concise notes for \
-                     continuing the work. Keep key facts, decisions, file paths and \
-                     unfinished tasks. Reply with the summary only.\n\n<transcript>\n\
-                     {transcript}"
-                ),
-            }],
+            messages: vec![Message::user(format!(
+                "Summarize the earlier conversation below into concise notes for \
+                 continuing the work. Keep key facts, decisions, file paths and \
+                 unfinished tasks. Reply with the summary only.\n\n<transcript>\n\
+                 {transcript}"
+            ))],
             tools: vec![],
             model,
             params: Value::Object(serde_json::Map::new()),
@@ -232,9 +232,9 @@ impl WaterfallListener for CtxCompact {
 
         let mut compacted: Vec<Message> = Vec::new();
         if !summary.is_empty() {
-            compacted.push(Message::User {
-                content: format!("[earlier conversation summarized]\n{summary}"),
-            });
+            compacted.push(Message::user(format!(
+                "[earlier conversation summarized]\n{summary}"
+            )));
         }
         compacted.extend(req.messages[cut..].iter().cloned());
         let outcome = CompactionOutcome {
@@ -260,8 +260,21 @@ impl WaterfallListener for CtxCompact {
 
 /// 粗估 token：全消息序列化字节 / 4（转义带来的高估当安全余量；CJK 偏
 /// 低估，宁早压不爆仓）。runner 进度条与压缩判定共用同一把尺。
+/// 批 D：附件 parts 平铺（图片 1024 / 文件 1000，`ContentPart::est_tokens`）
+/// ——图片推高估算 → 压缩更早触发 + maxOutput 预检钳制自动收窄（同尺）。
 pub fn estimate_tokens(messages: &[Message]) -> u64 {
     messages.iter().map(estimate_one).sum()
+}
+
+/// 摘要转录投影：User 消息剥 parts 只留正文（Assistant/ToolResult 原样）。
+fn strip_parts(messages: &[Message]) -> Vec<Message> {
+    messages
+        .iter()
+        .map(|m| match m {
+            Message::User { content, .. } => Message::user(content.clone()),
+            other => other.clone(),
+        })
+        .collect()
 }
 
 /// 用户消息数（稳定期的轮次锚点：每条 User 消息 = 一个新轮的开端）。
@@ -273,7 +286,12 @@ fn user_count(messages: &[Message]) -> usize {
 }
 
 fn estimate_one(m: &Message) -> u64 {
-    serde_json::to_string(m).map_or(0, |s| s.len() as u64) / 4
+    let base = serde_json::to_string(m).map_or(0, |s| s.len() as u64) / 4;
+    let parts: u64 = match m {
+        Message::User { parts, .. } => parts.iter().map(|p| p.est_tokens()).sum(),
+        _ => 0,
+    };
+    base + parts
 }
 
 /// 切点选择：返回把 `[0..cut)` 压掉的边界，0 = 不可压。

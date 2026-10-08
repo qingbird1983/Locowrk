@@ -45,7 +45,8 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert!(!store.view().tools.enabled);
     assert_eq!(store.view().tools.max_per_request, 15);
@@ -78,7 +79,8 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert!(!store.view().tools.enabled);
     assert_eq!(store.view().tools.max_per_request, 30);
@@ -103,7 +105,8 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
-            )
+                        None,
+)
             .is_err());
     }
     assert_eq!(store.view().tools.max_per_request, 30);
@@ -126,7 +129,8 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
-            )
+                        None,
+)
             .is_err());
     }
     assert_eq!(store.view().tools.call_timeout_secs, 45);
@@ -150,7 +154,8 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
-            )
+                        None,
+)
             .is_err());
     }
     assert_eq!(store.view().tools.max_turn_steps, 24);
@@ -174,7 +179,8 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert_eq!(
         store.view().tools.fs_roots,
@@ -241,7 +247,8 @@ fn fs_roots_normalize_reject_and_env_injection() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     crate::data_root::apply_fs_roots_env(&store);
     assert_eq!(std::env::var("LOCOWRK_FS_ROOTS").unwrap(), dir);
@@ -263,7 +270,8 @@ fn fs_roots_normalize_reject_and_env_injection() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     crate::data_root::apply_fs_roots_env(&store);
     assert!(std::env::var("LOCOWRK_FS_ROOTS").is_err(), "空表移除 env");
@@ -308,7 +316,8 @@ fn approval_timeout_configurable() {
                 None,
                 None,
                 None,
-            )
+                        None,
+)
             .unwrap();
         assert_eq!(store.view().tools.approval_timeout_secs, secs);
     }
@@ -332,7 +341,8 @@ fn approval_timeout_configurable() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     assert_eq!(store.view().tools.approval_timeout_secs, 0);
 
@@ -379,7 +389,8 @@ fn pin_session_roundtrip_and_legacy_compat() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert!(!store.view().tools.pin_session);
     assert!(!store.exposure_config().pin_session);

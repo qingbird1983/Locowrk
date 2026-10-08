@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{json, Value};
-use session_store::Message;
+use session_store::{ContentPart, Message};
 
 use kernel_agent::{estimate_tokens, LlmRequest, LlmResponse, LlmUsage, ToolCallReq};
 use plugin_api::{CallId, ToolSpec};
@@ -32,19 +32,22 @@ const CLAMP_HEADROOM: i64 = 1000;
 /// 流式携带；**max_tokens 只在用户钉死值在场时发送 + 预检钳制**
 /// `min(钉死, ctx − 估用 − 1000)`（供应商稿 §6 窄修订，D5 裁定）；推理
 /// 档位按方言写字段（`dialect.patch`，映射不了不发）。
+/// `assets`（批 D）：带附件消息的 asset 字节读取器（AppLlm 组装点注入；
+/// None + 请求带附件 = Fatal——没处读字节的附件不能静默丢）。
 pub fn build_payload(
     model: &str,
     req: &LlmRequest,
     stream: bool,
     dialect: Dialect,
     caps: &WireCaps,
-) -> Value {
+    assets: Option<&crate::assets::AssetStore>,
+) -> Result<Value, String> {
     let mut messages: Vec<Value> = Vec::with_capacity(req.messages.len() + 1);
     if let Some(sys) = &req.system {
         messages.push(json!({ "role": "system", "content": sys }));
     }
     for m in &req.messages {
-        messages.push(message_value(m));
+        messages.push(message_value(m, assets)?);
     }
     let mut payload = json!({ "model": model, "messages": messages, "stream": stream });
     if stream {
@@ -94,31 +97,77 @@ pub fn build_payload(
         };
         payload["max_tokens"] = json!(max_tokens.max(MIN_MAX_TOKENS as i64) as u64);
     }
-    payload
+    Ok(payload)
 }
 
-/// 发送前能力门控（供应商稿 §7 第二道防线；上传侧第一道在批 D 前端）：
-/// 请求 content parts 的模态 ⊆ 模型 input_modalities。批 D 落地前
-/// `Message::User.content` 是纯文本 String（构造上恒过）——检查点先立起
-/// 来，D 批 ContentPart 落地后在此填模态比对。
-pub fn check_modalities(_req: &LlmRequest) -> Result<(), String> {
+/// 发送前能力门控（供应商稿 §7 第二道防线；第一道在批 D 前端上传时）：
+/// 请求带图片 part 且生效模型图像输入三态解析为 `Some(false)` → 拒发带
+/// 指引。**未知（None）放行**——目录没有的能力不发明（宁缺勿假）。
+pub fn check_modalities(req: &LlmRequest, image_allowed: Option<bool>) -> Result<(), String> {
+    let has_image = req.messages.iter().any(|m| {
+        matches!(m, Message::User { parts, .. } if parts
+            .iter()
+            .any(|p| matches!(p, ContentPart::Image { .. })))
+    });
+    if has_image && image_allowed == Some(false) {
+        return Err(
+            "当前模型不支持图片输入：请在 设置 → 模型 里换用视觉模型，\
+             或去掉图片附件后重发"
+                .into(),
+        );
+    }
     Ok(())
 }
 
 /// 中立投影 → 线上消息。Assistant 的正文 + 工具调用合成一条消息（协议要求
 /// tool 结果挂在发起调用的同一条 assistant 消息上）；ToolResult 的错误作为
 /// JSON 内容回传（协议没有独立错误位，模型可自行处理）。
-fn message_value(m: &Message) -> Value {
+/// User 带 parts（批 D）→ content 数组：正文 text 在前（稳定前缀，M1 缓存
+/// 纪律——同图同 asset 同字节 + 图片只追加在尾部 = 追加式变更）+
+/// `image_url` data URL / `file`（PDF）按 parts 序。**空 parts = 字符串
+/// content（字节与现网逐字节一致）**。
+fn message_value(m: &Message, assets: Option<&crate::assets::AssetStore>) -> Result<Value, String> {
     match m {
-        Message::User { content } => json!({ "role": "user", "content": content }),
+        Message::User { content, parts } => {
+            if parts.is_empty() {
+                return Ok(json!({ "role": "user", "content": content }));
+            }
+            let mut arr: Vec<Value> = Vec::with_capacity(parts.len() + 1);
+            if !content.is_empty() {
+                arr.push(json!({ "type": "text", "text": content }));
+            }
+            for p in parts {
+                match p {
+                    ContentPart::Text { text } => {
+                        if !text.is_empty() {
+                            arr.push(json!({ "type": "text", "text": text }));
+                        }
+                    }
+                    ContentPart::Image { asset } => {
+                        let url = asset_data_url(assets, asset)?;
+                        arr.push(json!({ "type": "image_url", "image_url": { "url": url } }));
+                    }
+                    // 兼容层 file part 形态（OpenAI：file_data data URL +
+                    // filename；Anthropic/Google 兼容层各自映射）
+                    ContentPart::File { asset } => {
+                        let url = asset_data_url(assets, asset)?;
+                        arr.push(json!({
+                            "type": "file",
+                            "file": { "filename": asset.name, "file_data": url },
+                        }));
+                    }
+                }
+            }
+            Ok(json!({ "role": "user", "content": arr }))
+        }
         Message::Assistant {
             content,
             tool_calls,
         } => {
             if tool_calls.is_empty() {
-                json!({ "role": "assistant", "content": content })
+                Ok(json!({ "role": "assistant", "content": content }))
             } else {
-                json!({
+                Ok(json!({
                     "role": "assistant",
                     "content": if content.is_empty() { Value::Null } else { json!(content) },
                     "tool_calls": tool_calls.iter().map(|tc| json!({
@@ -129,7 +178,7 @@ fn message_value(m: &Message) -> Value {
                             "arguments": tc.args.to_string(),
                         },
                     })).collect::<Vec<_>>(),
-                })
+                }))
             }
         }
         Message::ToolResult {
@@ -142,9 +191,21 @@ fn message_value(m: &Message) -> Value {
                 Some(e) => json!({ "error": e }).to_string(),
                 None => output.to_string(),
             };
-            json!({ "role": "tool", "tool_call_id": call_id.0, "content": content })
+            Ok(json!({ "role": "tool", "tool_call_id": call_id.0, "content": content }))
         }
     }
+}
+
+/// asset → data URL（LRU 缓存在 AssetStore 内）。注入缺席 = Fatal（组装
+/// 点没接资产存储却收到带附件的请求——测试路径错误配置，如实报错不静默丢）。
+fn asset_data_url(
+    assets: Option<&crate::assets::AssetStore>,
+    asset: &session_store::AssetRef,
+) -> Result<String, String> {
+    let store = assets.ok_or_else(|| {
+        format!("资产存储未接入，附件 {} 无法随请求发送", asset.name)
+    })?;
+    store.data_url(&asset.id, &asset.mime)
 }
 
 /// 单个 SSE chunk 对累积器的作用（delta 为切片副本——token 级小串，

@@ -48,6 +48,7 @@ fn long_session() -> Session {
     for i in 0..12 {
         s.append(SessionEvent::UserMessage {
             content: format!("第{i}轮问题：关于主题{i}的细节"),
+            parts: Vec::new(),
         });
         s.append(SessionEvent::AssistantMessage {
             content: format!("第{i}轮回答"),
@@ -209,6 +210,7 @@ fn window_start_event_picks_nth_last_user() {
         for i in 0..n {
             s.append(SessionEvent::UserMessage {
                 content: format!("u{i}"),
+                parts: Vec::new(),
             });
             s.append(SessionEvent::AssistantMessage {
                 content: format!("a{i}"),

@@ -401,12 +401,14 @@ async fn adjacent_turns_keep_request_prefix_stable() {
     // 轮 1：step 1 发 fs_read 调用（工具执行进会话使用记录），step 2 收束
     session.append(SessionEvent::UserMessage {
         content: "turn 1".into(),
+        parts: Vec::new(),
     });
     kernel.step_as(&mut session, "s1").await.expect("step 1");
     kernel.step_as(&mut session, "s1").await.expect("step 2");
     // 轮 2：新用户消息
     session.append(SessionEvent::UserMessage {
         content: "turn 2".into(),
+        parts: Vec::new(),
     });
     kernel.step_as(&mut session, "s1").await.expect("turn 2");
 
@@ -516,6 +518,7 @@ async fn tree_session_slices_to_tail_and_appends_directory() {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "early".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::AssistantMessage {
         content: "early reply".into(),
@@ -523,6 +526,7 @@ async fn tree_session_slices_to_tail_and_appends_directory() {
     });
     s.append(SessionEvent::UserMessage {
         content: "tail q".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::AssistantMessage {
         content: "tail a".into(),
@@ -536,7 +540,7 @@ async fn tree_session_slices_to_tail_and_appends_directory() {
     assert_eq!(payload.messages.len(), 2);
     assert!(matches!(
         &payload.messages[0],
-        session_store::Message::User { content } if content == "tail q"
+        session_store::Message::User { content, .. } if content == "tail q"
     ));
     let system = payload.system.expect("system 在场");
     let mem_at = system.find("<persistent_memory>").expect("记忆块在前");
@@ -562,6 +566,7 @@ async fn tree_session_midturn_boundary_advances_to_next_user() {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "u1".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::AssistantMessage {
         content: "a1".into(),
@@ -569,6 +574,7 @@ async fn tree_session_midturn_boundary_advances_to_next_user() {
     });
     s.append(SessionEvent::UserMessage {
         content: "u2".into(),
+        parts: Vec::new(),
     });
     kernel.step_as(&mut s, "s1").await.expect("step");
 
@@ -577,7 +583,7 @@ async fn tree_session_midturn_boundary_advances_to_next_user() {
     assert_eq!(payload.messages.len(), 1, "前进到第一条 User：只剩 u2");
     assert!(matches!(
         &payload.messages[0],
-        session_store::Message::User { content } if content == "u2"
+        session_store::Message::User { content, .. } if content == "u2"
     ));
     assert_eq!(payload.system, None, "空目录不追加 system");
 }
@@ -594,6 +600,7 @@ async fn tree_session_collapsed_expand_results_become_stubs() {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "q".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::AssistantMessage {
         content: String::new(),
@@ -665,6 +672,7 @@ async fn tree_session_skips_compaction_over_threshold() {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "u1".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::AssistantMessage {
         content: "a1".into(),
@@ -672,6 +680,7 @@ async fn tree_session_skips_compaction_over_threshold() {
     });
     s.append(SessionEvent::UserMessage {
         content: "u2".into(),
+        parts: Vec::new(),
     });
     kernel.step_as(&mut s, "s1").await.expect("step");
 
@@ -693,6 +702,7 @@ async fn tree_session_skips_compaction_over_threshold() {
     let mut s2 = Session::new();
     s2.append(SessionEvent::UserMessage {
         content: "u1".into(),
+        parts: Vec::new(),
     });
     s2.append(SessionEvent::AssistantMessage {
         content: "a1".into(),
@@ -700,6 +710,7 @@ async fn tree_session_skips_compaction_over_threshold() {
     });
     s2.append(SessionEvent::UserMessage {
         content: "u2".into(),
+        parts: Vec::new(),
     });
     kernel2.step_as(&mut s2, "s1").await.expect("step");
     let recorded2 = spy2.0.lock().unwrap().clone();
@@ -721,6 +732,7 @@ async fn legacy_sessions_keep_full_assembly() {
         let mut s = Session::new();
         s.append(SessionEvent::UserMessage {
             content: "u1".into(),
+            parts: Vec::new(),
         });
         s.append(SessionEvent::AssistantMessage {
             content: "a1".into(),
@@ -728,6 +740,7 @@ async fn legacy_sessions_keep_full_assembly() {
         });
         s.append(SessionEvent::UserMessage {
             content: "u2".into(),
+            parts: Vec::new(),
         });
         kernel.step_as(&mut s, "s1").await.expect("step");
         let recorded = spy.0.lock().unwrap().clone();
@@ -758,6 +771,7 @@ async fn directory_growth_keeps_system_prefix() {
     let mut s = Session::new();
     s.append(SessionEvent::UserMessage {
         content: "u1".into(),
+        parts: Vec::new(),
     });
     s.append(SessionEvent::AssistantMessage {
         content: "a1".into(),
@@ -776,6 +790,7 @@ async fn directory_growth_keeps_system_prefix() {
     )));
     s.append(SessionEvent::UserMessage {
         content: "u2".into(),
+        parts: Vec::new(),
     });
     kernel.step_as(&mut s, "s1").await.expect("step 2");
 
@@ -795,6 +810,7 @@ fn tail_user_start_and_collapse_helpers() {
     let events = vec![
         SessionEvent::UserMessage {
             content: "u".into(),
+            parts: Vec::new(),
         },
         SessionEvent::AssistantMessage {
             content: "a".into(),
@@ -802,6 +818,7 @@ fn tail_user_start_and_collapse_helpers() {
         },
         SessionEvent::UserMessage {
             content: "u2".into(),
+            parts: Vec::new(),
         },
     ];
     assert_eq!(tail_user_start(&events, 0), Some(0));

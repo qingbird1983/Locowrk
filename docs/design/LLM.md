@@ -1,10 +1,12 @@
 # LLM 接入设计（阶段八②参考）
 
-> 版本行：v3.3（2026-10-08）——批 C 连接与安全（keyring / 自定义请求头 /
-> 端点扫描 / 逐模型测试 / 网络代理）。v3.2 批 B 推理档位（方言即数据）+
-> 输出预检钳制（D5 窄修订）+ G1 length 闸；v3.1 批 A 目录；v3.0
-> （2026-10-05）**方案一（genai 统一库）退役**，改为自建 OpenAI 兼容
-> 统一客户端。v2.x = genai 三合一（历史见 CHANGELOG）。
+> 版本行：v3.4（2026-10-08）——批 D 多模态地基（ContentPart 消息结构 /
+> wire content 数组编码 / AssetStore 内容寻址 / 上传链路 / 双道门控 /
+> 估算平铺）。v3.3 批 C 连接与安全（keyring / 自定义请求头 / 端点扫描 /
+> 逐模型测试 / 网络代理）。v3.2 批 B 推理档位（方言即数据）+ 输出预检钳
+> 制（D5 窄修订）+ G1 length 闸；v3.1 批 A 目录；v3.0（2026-10-05）
+> **方案一（genai 统一库）退役**，改为自建 OpenAI 兼容统一客户端。v2.x =
+> genai 三合一（历史见 CHANGELOG）。
 
 ## 核心理念：一个接口，一条线格式
 
@@ -185,3 +187,48 @@ ms 或五分类错误：`auth`(401/403) / `model_not_found`(404 带模型名与�
 url）。HTTP 客户端逐请求新建（现状），代理随 cfg 读取——设置保存即对下一次
 请求生效，天然热换。probe / 扫描 / 测试同吃。动机：本机常驻 clash 类代理时
 显式可控（v2.45 走查记录）。
+
+## 多模态输入侧（批 D，v3.4 增补）
+
+**消息结构**：`session-store/src/content.rs` 新 `ContentPart`（`text` /
+`image` / `file` 三变体；`AssetRef{id, mime, name}` 引用内容寻址存储；
+ToolUse/ToolResult **不进** ContentPart——工具协议维持内核中立事件，修订
+摘要 #1 裁定）。`Message::User` / `SessionEvent::UserMessage` 各
+`+parts: Vec<ContentPart>`（serde default，旧 jsonl/旧快照缺字段 = 纯文本
+零迁移；快照 schema_version 1→2 带 v1→v2 upcaster）。内存路径一次改对，
+落盘增量演进；v2.47 双气泡重放回归锁老字节。
+
+**wire 编码（一处完成）**：`Message::User.parts` 为空 = 现状字符串 content
+（**字节前缀与现网完全一致，M1 前缀缓存零扰动**——空 parts 是常态路径）；
+非空 = content 数组，`{"type":"text","text":content}` 正文在前（稳定头）+
+`image_url`（data URL base64）按 parts 序 + `file`（`{filename, file_data}`
+PDF）。asset 字节从 AssetStore 读（AppLlm 组装点注入），data URL 带 LRU
+缓存（同图同字节 = 前缀稳定，纪律 3 追加式变更）。读失败 = Fatal 如实报错。
+
+**双道门控**：①上传时（前端，`ProviderModelView.supportsImage`/
+`inputModalities`）提示卡：切换建议 / 仅发文字；②发送前
+（`wire::check_modalities`）：请求带图片 part 且生效模型三态解析为
+`Some(false)`（用户钉死 = 否，或钉死缺席时目录 `input_modalities` 明确无
+image）→ Fatal 拒发带指引；**未知（None）放行**——目录没有的能力不发明。
+「视觉备用自动切换」不做（记档：避免静默换模型烧钱）。
+
+**AssetStore（内容寻址）**：`<数据根>/assets/{images,files}/<sha256>.<ext>`，
+消息只存 `AssetRef`。`asset_put`（base64 + mime + name）上传即落盘：校验 =
+格式白名单（png/jpg/jpeg/webp/gif + pdf）+ 体积 ≤ maxSizeMb（缺省 5）+
+图片单边 ≤ maxDimension（缺省 2048px；**超限拒绝不转码**——图片转码记档
+不做，阶段计划批 D「明确不做」）；`asset_read`（缩略图渲染，IPC base64）；
+`asset_gc`（手动触发）：引用面三处全扫（sessions/*.jsonl +
+sessions/*.snapshot + sub-transcripts/*.jsonl，sha256 hex 子串粗筛）→ 孤儿
+且 mtime 超 gcDays（缺省 7）→ 删除；autoGc 开时启动 + 每 24h 后台各跑一遍。
+settings `multimodal` 区（字段级缺省零迁移），存储位置不开放配置（走查隔
+离依赖 LOCOWRK_DATA_DIR）。
+
+**估算与钳制联动**：`estimate_tokens` 对 parts 平铺——Image 1024（锚点 =
+DeepSeek 官方单图 token 上限）+ File 1000；图片只进估算不进真实计数
+（LlmUsage 供应商自报不动）。估算推高 → ctx-compact 更早触发（摘要器不吃
+parts——转录投影剥 parts 只留正文）+ maxOutput 预检钳制自动收窄输出预算
+（同一把尺）。压缩不丢图：摘要后图片仍保留（§10.1 宁可如实溢出不静默丢）。
+
+**记忆与转录**：extract 转录 / 记忆树材料 / 标题 / handoff 全部只吃正文文
+本——parts 在转录里折叠为 `[图片: name]` 占位（记忆只记文本事实）；导出
+Markdown 同款占位行。工具结果图片投影到下一条 user parts 属批 E（§8.1）。

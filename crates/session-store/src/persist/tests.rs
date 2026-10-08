@@ -14,6 +14,7 @@ fn tmp_dir(tag: &str) -> PathBuf {
 fn user_msg(content: &str) -> SessionEvent {
     SessionEvent::UserMessage {
         content: content.into(),
+        parts: Vec::new(),
     }
 }
 
@@ -35,7 +36,7 @@ fn session_id_validation_and_roundtrip() {
     assert_eq!(session.len(), 3);
     assert_eq!(session.cursor(), 3, "恢复后游标在末尾 = 停机时状态");
     assert!(
-        matches!(session.events()[1], SessionEvent::UserMessage { ref content } if content == "二")
+        matches!(session.events()[1], SessionEvent::UserMessage { ref content, .. } if content == "二")
     );
     std::fs::remove_dir_all(&dir).ok();
 }

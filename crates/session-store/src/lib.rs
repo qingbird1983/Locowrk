@@ -8,6 +8,7 @@
 //! 补偿工具必须幂等，用 `call_id` 做去重键。
 
 mod compensation;
+mod content;
 mod error;
 mod event;
 mod persist;
@@ -15,6 +16,7 @@ mod session;
 mod snapshot;
 
 pub use compensation::{CompensatedLedger, Compensation, plan};
+pub use content::{AssetRef, ContentPart, fold_parts};
 pub use error::StoreError;
 pub use event::{SessionEvent, TurnId, TurnOutcome};
 pub use persist::{
@@ -23,4 +25,4 @@ pub use persist::{
     write_organizer, write_permission_mode, write_thinking_level, write_title, write_workspace,
 };
 pub use session::{Message, SNAPSHOT_EVERY, Session, SessionState, ToolCallMsg};
-pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, Snapshot, Upcaster, Upcasters};
+pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, Snapshot, Upcaster, Upcasters, V1ToV2Upcaster};

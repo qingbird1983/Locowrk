@@ -39,7 +39,7 @@ impl Default for DemoLlm {
 impl LlmService for DemoLlm {
     async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
         match req.messages.last() {
-            Some(Message::User { content }) => {
+            Some(Message::User { content, .. }) => {
                 if content.to_lowercase().contains("echo") {
                     let n = self.next_call.fetch_add(1, Ordering::Relaxed);
                     Ok(LlmResponse {

@@ -172,6 +172,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         &mut session,
         &session_id,
         sched.prompt.clone(),
+        Vec::new(),
         Some(policy),
         deps.sink.as_ref(),
         Some(deps.usage.as_ref()),

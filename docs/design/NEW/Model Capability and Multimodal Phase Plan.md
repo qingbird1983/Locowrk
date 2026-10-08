@@ -4,7 +4,7 @@
 > 版本：1.0（2026-10-07）
 > 上游设计：《模型供应商配置与能力探测设计 v2.0》《多模态支持设计 v2.0》
 > 参照调查：PI-Desktop（F:\Warehouse\Github\PI-Desktop）、ZCode（F:\Warehouse\Github\ZCode）模型配置全量调查（2026-10-07）
-> 状态：**执行中**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；批 A 已完成（v2.127）
+> 状态：**执行中**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；批 A–D 已完成（v2.127–v2.130），下一批 E
 
 ---
 
@@ -16,8 +16,8 @@
 |---|---|---|---|---|
 | **A** ✅（v2.127，2026-10-08） | 模型能力目录 | models.dev 快照接入 + 打分匹配 + source 钉死 + 能力投影到 UI | 大（新模块 + 快照资源） | 无 |
 | **B** ✅（v2.128，2026-10-08） | 推理档位 + 输出钳制 | 方言数据表 + 会话档位持久化 + composer 档位钮 + maxOutput 预检钳制 + 辅助降档 + 发送门控 | 大 | A（梯子/模态数据） |
-| **C** | 连接与安全 | keyring 迁移 + 自定义请求头 + 端点扫描 + 逐模型测试 + 网络代理 | 中 | 无（可插在 A/B 间） |
-| **D** | 多模态地基 | ContentPart + wire 编码 + AssetStore + 上传链路 + 渲染 + 估算 | **最大**（内核穿透） | A/B（模态数据 + 钳制公式） |
+| **C** ✅（v2.129，2026-10-08） | 连接与安全 | keyring 迁移 + 自定义请求头 + 端点扫描 + 逐模型测试 + 网络代理 | 中 | 无（可插在 A/B 间） |
+| **D** ✅（v2.130，2026-10-08） | 多模态地基 | ContentPart + wire 编码 + AssetStore + 上传链路 + 渲染 + 估算 | **最大**（内核穿透） | A/B（模态数据 + 钳制公式） |
 | **E** | 多模态进阶 | 查看器 + 工具结果投影 + 多模态工具 + 降级链 | 中 | D |
 | **F** | 生态 | 子代理模型档 + 回退链 + 从其他工具导入 + 推荐三选 | 中 | A/B |
 | **G**（候补） | 可靠性补强 | Turn Commit length 闸（随 B）+ Unknown Effect 恢复 + Revision Guard + 只读证明 + 子代理验收（随 F） | 各小-中 | 无硬依赖；G1 随 B、G5 随 F |
@@ -94,7 +94,7 @@
 
 ---
 
-### 批 D — 多模态地基（最大批）
+### 批 D — 多模态地基（最大批）✅（v2.130，2026-10-08 完成；D2 随批落档）
 
 **范围**（多模态设计 v2.0 §12 阶段 1–6）：
 1. `session-store/src/content.rs`（新）：ContentPart/AssetRef；`Message::User +parts`、`SessionEvent::UserMessage +parts`（serde default）；快照 schema_version 递增
@@ -111,6 +111,8 @@
 **落点**：`crates/session-store`（content.rs/session.rs/event.rs/snapshot）、`crates/kernel-agent`（estimate_tokens 及构造点 parts 透传）、`desktop/src-tauri/llm/wire.rs`、`assets.rs`（新）、`commands/`、前端 `AttachButton.vue`/`MessageRow.vue`/chat store/types.ts。
 
 **走查要点**：老会话重放零变化；贴图真轮（**deepseek-flash 首选**——走查机现配 deepseek，官方已确认视觉走同一 chat completions；备选 qwen-vl / claude）→ 模型如实描述图片内容 + jsonl 落 parts + 前缀缓存命中率不塌（M1 面板）；不支持图片模型贴图 → 门控两道各触发一次；GC：删会话 → 7 天宽限内不删、人工触发过期删。
+
+**落成记录（2026-10-08，v2.130）**：①消息结构——session-store 新 `content.rs`：`ContentPart` tagged serde 枚举 `text|image|file` + `AssetRef{id,mime,name}`（无 ToolUse/ToolResult parts、无 detail 旋钮、无音频、无 URL 内联——全部记档不做）；`Message::User +parts` + `UserMessage +parts`（serde 字段级缺省 + `skip_serializing_if="Vec::is_empty"` = 纯文本消息磁盘字节逐位不变，v2.47 双气泡回归绿）；快照 schema_version 1→2 + `V1ToV2Upcaster`（serde default 填充缺 parts）——**实抓：snapshot.rs 缺 `#[cfg(test)] mod tests;` 声明，存量快照测试从未跑过，补声明后 upcaster 未注册随即被抓**。②穿透面——fork/rewind+undo 重写/树偏移投影/derive_messages/ctx-compact（parts 不进压缩摘要；`est_tokens` Image 1024/File 1000 进钳制估算，1024 锚点 = DeepSeek 官方单图 token 上限）/转录折叠 `[图片: name]`/export/extract/title 全部带 parts 或如实折叠。③AssetStore（`assets/` 模块三文件 store/validate/gc）——内容寻址 `<数据根>/assets/{images,files}/<sha256>.<ext>`（同文件天然去重）+ data-URL LRU(16) + magic 嗅探（PNG/JPEG/GIF87a·89a/RIFF-WEBP/%PDF-）+ **超尺寸拒收不转码**（转码记档不做）+ GC 三扫描面（sessions/*.jsonl + *.snapshot + sub-transcripts/*.jsonl，sha 十六进制子串粗匹配）+ 宽限期 `gcThresholdDays` 缺省 7（0=即净）+ 启动 + 24h 循环——**实抓：setup 上下文无 tokio runtime，`tokio::spawn` 启动即 panic，改 `tauri::async_runtime::spawn`**。④wire 编码——空 parts = 纯字符串 content（**M1 前缀缓存零扰动**，走查第二轮 cache_read>0 盘证）；非空 = content 数组 `{"type":"text"}` 先行稳定前缀 + `image_url` data URL / `file{filename,file_data}` 按部分顺序；`check_modalities` 后端发送门（目录未知 = None 放行宁缺勿假）。⑤双道门控——前端上传时（supportsImage 三态 + 目录 modalities，门卡带「仅发送文字/打开模型选择器」）+ 后端发送时各一道。⑥settings `multimodal` 区（maxDimension 2048/maxSizeMb 5/formats/autoGc/gcThresholdDays 7）字段级缺省零迁移。⑦前端——composer 预览条（56px 缩略图 + ✕ + 粘贴/拖拽/AttachButton 路由）+ MessageRow 96px 缩略图与文件 chip（点击 reveal）+ 重放恢复——**实抓产品缺陷：发送失败清空附件条（用户无法原样重试），改成功才清**。**实机走查（CDP 独立数据根 + keyring 标记真 Key 零明文 + deepseek-flash 真轮）**：walk1 13/13 PASS——老格式会话重放零变化/双气泡/零 parts 行；贴图真轮模型如实描述红底绿圆（E8232A/00CC44、圆占宽 60–65%）；jsonl user_message 落 parts 且 asset id 与盘上一致；第二轮 cache_read=3840>0 前缀缓存未塌；重放缩略图恢复。walk2——前端门卡（v4-pro 纯文本目录模态）+「仅发送文字」剥条；后端直发被拒（「当前模型不支持图片输入」如实报错）。GC 配对验证——days=7 `scanned=2 removed=0` 双存 / days=0 `removed=1` 孤儿删、被引用存（sessions jsonl 引用扫描实证）；**W6a 驱动伪失配记档**（宽限重启删孤儿断言受控复测无法复现，系驱动时序伪迹，GC 双向行为人工盘证）。数据根已清、vite 已停，脚本/截图留 tmp/v130-walk/。门禁：clippy 0、fmt、workspace 39 套件（desktop 292 = +9：assets 3/validate 3/gc 3）、vue-tsc 0、pnpm build 过、lint:style 0；check_length 新增超限 2 文件三问自检不拆（MessageRow 475 媒体条同职责面 / settings tests tools 403 测试道具），Composer 既超 530→782 同职责面扩张不拆。留待批 E：查看器/工具结果投影/多模态工具/降级链。
 
 ---
 
@@ -174,7 +176,7 @@
 | # | 裁定点 | 推荐 | 状态 |
 |---|---|---|---|
 | D1 | 档案库源 = models.dev 快照 | 推荐 | **已采纳**（用户指令开始执行，按推荐落档 2026-10-08；批 A 兑现） |
-| D2 | 单线纪律维持（多模态输入侧走兼容层；原生 thinking budget / 图像输出 / 原生 PDF 另批） | 推荐 | **待裁** |
+| D2 | 单线纪律维持（多模态输入侧走兼容层；原生 thinking budget / 图像输出 / 原生 PDF 另批） | 推荐 | **已采纳**（批 D 兑现，2026-10-08——content 数组走 OpenAI 兼容层，anthropic/ollama 亦走兼容端点） |
 | D3 | thinking 控件 = 循环钮（vs PI 滑杆） | 循环钮 | **已采纳**（批 B 兑现，2026-10-08） |
 | D4 | 工具结果图片投影 = 挪下一条 user 消息（vs 仅文本占位） | 投影 | **待裁** |
 | D5 | max_tokens 窄修订 = 用户钉死值才发送 + 预检钳制（v2.75 措辞修订） | 采纳 | **已采纳**（批 B 兑现，2026-10-08） |

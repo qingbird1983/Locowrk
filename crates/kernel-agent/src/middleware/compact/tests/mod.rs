@@ -73,6 +73,7 @@ fn long_transcript(turns: usize) -> Vec<Message> {
     for i in 0..turns {
         messages.push(Message::User {
             content: format!("turn {i}: {filler}"),
+            parts: Vec::new(),
         });
         messages.push(Message::Assistant {
             content: format!("reply {i}: {filler}"),
@@ -158,7 +159,7 @@ async fn layered_over_threshold_replaces_with_summary() {
     assert!(c.summary.contains("SUMMARY-CONTENTS"));
     assert!(c.from_tokens > c.to_tokens, "压缩必须减小体积");
     assert!(c.to_tokens < 400, "压到阈值一半附近（§3.4），不贴线");
-    let Message::User { content } = &req.messages[0] else {
+    let Message::User { content, .. } = &req.messages[0] else {
         panic!("摘要必须是 User 消息");
     };
     assert!(content.contains("SUMMARY-CONTENTS"));
@@ -204,6 +205,7 @@ async fn summary_only_cuts_at_last_user_boundary() {
     let mut messages = long_transcript(9);
     messages.push(Message::User {
         content: format!("turn 9: {filler}"),
+        parts: Vec::new(),
     });
     let payload = run(
         &ctx,
@@ -218,7 +220,7 @@ async fn summary_only_cuts_at_last_user_boundary() {
     assert_eq!(c.strategy, "summary_only");
     assert_eq!(c.kept_messages, 1, "只保留当前轮用户消息");
     assert_eq!(req.messages.len(), 2, "摘要 + 当前轮");
-    let Message::User { content } = &req.messages[1] else {
+    let Message::User { content, .. } = &req.messages[1] else {
         panic!("保留段以当前轮 User 开头");
     };
     assert!(content.starts_with("turn 9"));
@@ -276,6 +278,7 @@ async fn cut_never_splits_tool_call_pairing() {
     let messages = vec![
         Message::User {
             content: format!("q1 {filler}"),
+            parts: Vec::new(),
         },
         Message::Assistant {
             content: format!("a1 {filler}"),
@@ -294,6 +297,7 @@ async fn cut_never_splits_tool_call_pairing() {
         },
         Message::User {
             content: format!("q2 {filler}"),
+            parts: Vec::new(),
         },
         Message::Assistant {
             content: format!("a2 {filler}"),
@@ -317,7 +321,7 @@ async fn cut_never_splits_tool_call_pairing() {
     let req: RequestPayload = serde_json::from_value(payload).unwrap();
     // 滑动窗口无摘要：第一条保留消息必须仍是原始流里的 User（q2），
     // 不能是 Assistant/ToolResult 半截配对
-    let Message::User { content } = &req.messages[0] else {
+    let Message::User { content, .. } = &req.messages[0] else {
         panic!("cut must land right before a User message");
     };
     assert!(content.starts_with("q2"));

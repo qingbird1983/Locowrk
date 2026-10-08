@@ -44,6 +44,12 @@ pub struct AppLlm {
     notify_retry: Option<RetryNotify>,
     /// 前缀断裂诊断（M6.1）：开关开时每 step 记分块 hash 链；命令层读。
     diagnoser: Arc<super::diagnose::Diagnoser>,
+    /// 资产存储（批 D）：带附件请求的 wire 编码字节源；None = 附件请求
+    /// Fatal（测试路径错误配置如实报错）。
+    assets: Option<Arc<crate::assets::AssetStore>>,
+    /// 模型能力目录（批 A）：发送前门控的目录模态数据源（用户钉死缺席时
+    /// 目录说了算；两者都未知 = 放行，宁缺勿假）。
+    catalog: Option<Arc<super::catalog::CatalogStore>>,
 }
 
 impl AppLlm {
@@ -56,6 +62,8 @@ impl AppLlm {
             stop: None,
             notify_retry: None,
             diagnoser: Arc::new(super::diagnose::Diagnoser::default()),
+            assets: None,
+            catalog: None,
         }
     }
 
@@ -72,7 +80,20 @@ impl AppLlm {
             stop: None,
             notify_retry: None,
             diagnoser: Arc::new(super::diagnose::Diagnoser::default()),
+            assets: None,
+            catalog: None,
         }
+    }
+
+    /// 组装点注入资产存储与能力目录（批 D：wire 编码字节源 + 门控模态）。
+    pub fn with_multimodal(
+        mut self,
+        assets: Arc<crate::assets::AssetStore>,
+        catalog: Arc<super::catalog::CatalogStore>,
+    ) -> Self {
+        self.assets = Some(assets);
+        self.catalog = Some(catalog);
+        self
     }
 
     /// 组装点注入外部诊断账本（M6.1：AppState 持同一线程安全句柄供
@@ -142,15 +163,31 @@ impl AppLlm {
         cfg
     }
 
+    /// 发送前门控的图像输入三态（批 D）：用户钉死（`pin`，生效模型行的
+    /// supports_image）最高 → 目录命中次之 → 都未知 = None（放行——目录
+    /// 没有的能力不发明）。
+    fn image_allowed(&self, cfg: &LlmSettings, pin: Option<bool>) -> Option<bool> {
+        if let Some(ok) = pin {
+            return Some(ok);
+        }
+        let catalog = self.catalog.as_ref()?;
+        let hit = catalog.lookup_model(&cfg.provider, cfg.base_url.as_deref(), &cfg.model)?;
+        if hit.input_modalities.is_empty() {
+            return None;
+        }
+        Some(hit.input_modalities.iter().any(|m| m == "image"))
+    }
+
     /// 批 B 请求计划：生效配置 + 模型能力上限（钉死 max_output / 生效窗口）
     /// 与推理档位落 params。会话旁车 thinking_level 经方言 clamp（就近降档
     /// 或剥除）；`params["aux"]=true`（辅助调用标记）则取方言最低档。内核
     /// 零改动——params 是 opaque Value（§7.2 决策环同通道）。
-    fn prepare(&self, mut req: LlmRequest) -> (LlmRequest, LlmSettings, WireCaps) {
+    fn prepare(&self, mut req: LlmRequest) -> (LlmRequest, LlmSettings, WireCaps, Option<bool>) {
         let cfg = self.effective_cfg(&req);
         // 模型行能力（settings 钉死面）：按生效模型名在活动/覆盖档的
         // models 里找；窗口 = 模型行 context_window ?? 档位 window_tokens
         let mut caps = WireCaps::default();
+        let mut image_pin = None;
         let llm_cfg = self.settings.llm_config();
         let profile = req
             .session_id
@@ -163,6 +200,7 @@ impl AppLlm {
             // settings 只存用户钉死值（save 时打 source=user），有值即钉死
             caps.max_output = row.and_then(|m| m.max_output);
             caps.ctx_window = row.and_then(|m| m.context_window).or(p.window_tokens);
+            image_pin = row.and_then(|m| m.supports_image);
         }
         // 推理档位解析：辅助降档优先（aux 标记），否则会话旁车档
         let dialect = dialect::dialect_of(cfg.base_url.as_deref());
@@ -187,7 +225,8 @@ impl AppLlm {
         if let Some(lvl) = level {
             req.params["thinking_level"] = Value::String(lvl);
         }
-        (req, cfg, caps)
+        let image_allowed = self.image_allowed(&cfg, image_pin);
+        (req, cfg, caps, image_allowed)
     }
 }
 
@@ -195,13 +234,16 @@ impl AppLlm {
 impl LlmService for AppLlm {
     async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
         self.diagnose(&req);
-        let (req, cfg, caps) = self.prepare(req);
+        let (req, cfg, caps, image_allowed) = self.prepare(req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
             return self.demo.complete(req).await;
         }
-        let _ = super::wire::check_modalities(&req);
-        self.real.complete_with(&cfg, caps, req).await
+        // 发送前模态门控（批 D §5.3 第二道）：拒发 = Fatal（重试无意义）
+        super::wire::check_modalities(&req, image_allowed)
+            .map_err(LlmError::Backend)?;
+        let assets = self.assets.as_deref();
+        self.real.complete_with(&cfg, caps, req, assets).await
     }
 
     /// ⑳ 流式分发：同 complete 的设置驱动——未配置走演示替身（缺省实现
@@ -212,14 +254,17 @@ impl LlmService for AppLlm {
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         self.diagnose(&req);
-        let (req, cfg, caps) = self.prepare(req);
+        let (req, cfg, caps, image_allowed) = self.prepare(req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
             return self.demo.complete_streaming(req, on_delta).await;
         }
+        super::wire::check_modalities(&req, image_allowed)
+            .map_err(LlmError::Backend)?;
         let hooks = self.hooks(req.session_id.as_deref());
+        let assets = self.assets.as_deref();
         self.real
-            .complete_streaming_with(&cfg, caps, req, on_delta, &|_| false, hooks.as_ref())
+            .complete_streaming_with(&cfg, caps, req, assets, on_delta, &|_| false, hooks.as_ref())
             .await
     }
 
@@ -232,14 +277,17 @@ impl LlmService for AppLlm {
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
     ) -> Result<LlmResponse, LlmError> {
         self.diagnose(&req);
-        let (req, cfg, caps) = self.prepare(req);
+        let (req, cfg, caps, image_allowed) = self.prepare(req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
             return self.demo.complete_streaming(req, on_delta).await;
         }
+        super::wire::check_modalities(&req, image_allowed)
+            .map_err(LlmError::Backend)?;
         let hooks = self.hooks(req.session_id.as_deref());
+        let assets = self.assets.as_deref();
         self.real
-            .complete_streaming_with(&cfg, caps, req, on_delta, on_reasoning, hooks.as_ref())
+            .complete_streaming_with(&cfg, caps, req, assets, on_delta, on_reasoning, hooks.as_ref())
             .await
     }
 }

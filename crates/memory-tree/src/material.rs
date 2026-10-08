@@ -61,7 +61,8 @@ pub fn build_items(events: &[SessionEvent], base: EventId) -> Vec<MaterialItem> 
     for (i, e) in events.iter().enumerate() {
         let pos = base + i;
         let (kind, text) = match e {
-            SessionEvent::UserMessage { content } => (MaterialKind::User, content.clone()),
+            // 树材料只记文本事实：parts 不进（正文即转录口径）
+            SessionEvent::UserMessage { content, .. } => (MaterialKind::User, content.clone()),
             SessionEvent::AssistantMessage {
                 content,
                 tool_calls,
@@ -151,6 +152,7 @@ mod tests {
         vec![
             SessionEvent::UserMessage {
                 content: "帮我查插件加载".into(),
+                parts: Vec::new(),
             },
             SessionEvent::LlmUsage {
                 input: 1,

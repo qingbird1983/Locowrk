@@ -19,6 +19,8 @@
  */
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { assetRead, assetReveal } from "../../lib/api";
+import type { ContentPartDto } from "../../types";
 import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import { renderMarkdown } from "../../lib/markdown";
@@ -36,6 +38,9 @@ const props = withDefaults(
     /** 复制钮（v2.96 用户裁定）：只在用户消息与每轮最终汇报/总结之下出现
      * （缺省 true = 用户消息）；任务中间的简短回话由父层传 false 关掉。 */
     copyable?: boolean;
+    /** 附件部件（批 D）：用户消息的图片缩略图 / PDF 文件 chip（正文下方）；
+     * 缺省 = 纯文本消息（旧消息渲染零变化）。 */
+    parts?: ContentPartDto[];
   }>(),
   { copyable: true },
 );
@@ -58,6 +63,42 @@ const html = computed(() =>
     copyCode: t("chat.copyCode"),
   }) : "",
 );
+
+// ---- 附件部件渲染（批 D §9.3）：图片缩略（asset_read data URL，模块级
+// 缓存防重复读盘）/ PDF chip；点击 = 在文件夹中显示（大图查看器属批 E，
+// 系统打开器顶位）----
+const assetCache = new Map<string, string>();
+const mediaParts = computed(() => (props.parts ?? []).filter((p) => p.type !== "text"));
+const thumbUrls = ref<Record<string, string>>({});
+watch(
+  mediaParts,
+  (list) => {
+    for (const p of list) {
+      if (p.type !== "image") continue;
+      const key = `${p.asset.id}:${p.asset.mime}`;
+      const cached = assetCache.get(key);
+      if (cached) {
+        thumbUrls.value = { ...thumbUrls.value, [key]: cached };
+        continue;
+      }
+      void assetRead(p.asset.id, p.asset.mime).then((url) => {
+        assetCache.set(key, url);
+        thumbUrls.value = { ...thumbUrls.value, [key]: url };
+      });
+    }
+  },
+  { immediate: true },
+);
+function thumbOf(asset: { id: string; mime: string }): string {
+  return thumbUrls.value[`${asset.id}:${asset.mime}`] ?? "";
+}
+async function revealAsset(asset: { id: string; mime: string }) {
+  try {
+    await assetReveal(asset.id, asset.mime);
+  } catch {
+    /* 悬空引用静默（缩略图已在场说明曾有文件；报错不打断浏览） */
+  }
+}
 
 /** 编辑态（组件本地，不持久化）：进入即全选草稿，离开即丢弃。 */
 const editing = ref(false);
@@ -189,6 +230,35 @@ async function onBodyClick(e: MouseEvent) {
     <!-- eslint-disable-next-line vue/no-v-html —— 内容已过 DOMPurify -->
     <div v-else class="md" v-html="html" @click="onBodyClick" />
 
+    <!-- 附件部件（批 D §9.3）：正文下、动作区上——图片缩略 96px 圆角 +
+         PDF 文件 chip，点击在文件夹中显示。历史重放与实时同形。 -->
+    <div v-if="kind === 'user' && mediaParts.length" class="msg-parts">
+      <template v-for="(p, i) in mediaParts" :key="i">
+        <button
+          v-if="p.type === 'image'"
+          class="msg-part-img"
+          type="button"
+          :aria-label="`${p.asset.name} · ${t('mm.revealAsset')}`"
+          :title="`${p.asset.name} · ${t('mm.revealAsset')}`"
+          @click="revealAsset(p.asset)"
+        >
+          <img v-if="thumbOf(p.asset)" :src="thumbOf(p.asset)" alt="" draggable="false" />
+          <span v-else class="msg-part-img__loading" />
+        </button>
+        <button
+          v-else-if="p.type === 'file'"
+          class="msg-part-file"
+          type="button"
+          :aria-label="`${p.asset.name} · ${t('mm.revealAsset')}`"
+          :title="`${p.asset.name} · ${t('mm.revealAsset')}`"
+          @click="revealAsset(p.asset)"
+        >
+          <Icon name="file" :size="12" aria-hidden="true" />
+          <span class="msg-part-file__name">{{ p.asset.name }}</span>
+        </button>
+      </template>
+    </div>
+
     <!-- 动作区只在有内容时渲染：简短回复（copyable=false 且不可编辑）
          整行不渲染——隐藏时间行占位是组内间距虚高的成因之一 -->
     <div v-if="copyable || editable" class="msg__actions">
@@ -237,6 +307,57 @@ async function onBodyClick(e: MouseEvent) {
   margin-top: var(--lw-gap-2);
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
+}
+/* 附件部件行（批 D §9.3）：右对齐随用户气泡；图片 96px 圆角缩略 */
+.msg-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lw-gap-6);
+  margin-top: var(--lw-gap-6);
+  justify-content: flex-end;
+}
+.msg-user .msg-parts {
+  align-items: flex-end;
+}
+.msg-part-img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--lw-r-lg);
+  background: var(--lw-wash-2);
+}
+.msg-part-img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+.msg-part-img__loading {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--lw-wash-3);
+}
+.msg-part-file {
+  display: inline-flex;
+  max-width: 220px;
+  height: 28px;
+  align-items: center;
+  gap: var(--lw-gap-6);
+  padding: 0 var(--lw-gap-10);
+  border-radius: var(--lw-r-full);
+  background: var(--lw-wash-1);
+  color: var(--lw-ink-2);
+  font-size: var(--lw-fs-12half);
+}
+.msg-part-file__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .msg:hover .msg__actions,
 .msg:focus-within .msg__actions {

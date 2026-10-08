@@ -8,6 +8,7 @@ use session_store::Message;
 fn user_msg(s: &str) -> Message {
     Message::User {
         content: s.to_string(),
+        parts: Vec::new(),
     }
 }
 

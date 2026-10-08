@@ -722,6 +722,22 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.130 · 批 D 多模态地基（LLM 能力轨第四批·最大批（内核穿透），D2 随批落档 = 单线纪律维持）
+
+| 项 | 落点 |
+|---|---|
+| 消息结构 | ✅ session-store 新 `content.rs`：`ContentPart` 枚举 text/image/file + `AssetRef{id,mime,name}`；`Message::User +parts` + `UserMessage +parts`（serde 字段级缺省 + skip_serializing_if = 纯文本消息磁盘字节逐位不变，v2.47 双气泡回归绿）；快照 schema 1→2 + `V1ToV2Upcaster`——实抓 snapshot.rs 缺 `mod tests` 声明存量测试从未跑过，补后 upcaster 未注册被抓 |
+| 穿透面 | ✅ fork/rewind+undo/树偏移投影/derive_messages/ctx-compact（parts 不进摘要；est_tokens Image 1024/File 1000 进钳制估算，1024 = DeepSeek 官方单图锚点）/转录折叠 `[图片: name]`（export/extract/title 同吃）全绿；~30 文件构造点随迁 |
+| AssetStore | ✅ 新 `assets/` 三文件：内容寻址 `assets/{images,files}/<sha256>.<ext>`（同文件天然去重）+ data-URL LRU(16) + magic 嗅探 + 超尺寸拒收不转码 + 五命令（put/put_path/read/reveal/gc）；GC 三扫描面（sessions jsonl + snapshot + sub-transcripts）+ 宽限 gcThresholdDays 缺省 7（0=即净）+ 启动 + 24h 循环——实抓 setup 无 tokio runtime `tokio::spawn` 即 panic，改 `tauri::async_runtime::spawn` |
+| wire 编码 | ✅ 空 parts = 纯字符串 content（M1 前缀缓存零扰动）；非空 = content 数组 text 首位稳定前缀 + `image_url` data URL / `file{filename,file_data}`；`check_modalities` 后端发送门（目录未知放行宁缺勿假）；D2 = 多模态输入侧走 OpenAI 兼容层随批落档 |
+| 双道门控 | ✅ 前端上传时（supportsImage 三态 + 目录 modalities，门卡「仅发送文字/打开模型选择器」）+ 后端发送时各一道 |
+| settings | ✅ `multimodal` 区（maxDimension 2048/maxSizeMb 5/formats/autoGc/gcThresholdDays 7）字段级缺省零迁移 |
+| 前端 | ✅ composer 预览条（56px 缩略图 + 粘贴/拖拽/AttachButton 路由）+ MessageRow 96px 缩略图与文件 chip（点击 reveal）+ 重放恢复 + editResend 保留 parts + i18n mm.*；实抓产品缺陷：发送失败清空附件条（门控拒绝后无法原样重试）→ 改成功才清 |
+| 实机走查 | ✅ CDP 独立数据根 + keyring 标记真 Key + deepseek-flash 真轮：walk1 13/13 PASS（老格式会话重放零变化/双气泡；贴图真轮模型如实描述红底绿圆报色值 E8232A/00CC44；jsonl parts 落盘 asset id 一致；第二轮 cache_read=3840>0 前缀缓存未塌；重放缩略图恢复；同文件去重）；walk2 门控两道（前端门卡+仅发送文字 / 后端直发被拒如实报错）；GC 配对验证（days=7 scanned=2 removed=0 双存 / days=0 removed=1 孤儿删被引用存，jsonl 引用扫描实证；W6a 驱动伪失配记档）。数据根已清，脚本/截图留 tmp/v130-walk/ |
+| 门禁 | ✅ clippy --all-targets 0、fmt、workspace 39 套件（desktop 292 = +9：assets 3/validate 3/gc 3）、vue-tsc 0、pnpm build 过、lint:style 0；check_length 新增超限 2 文件三问自检不拆（MessageRow 475 / settings tests tools 403），Composer 既超同职责面扩张不拆 |
+| 文档 | ✅ LLM.md v3.4（多模态输入侧一节）+ UI shell v4.24（§3.11 附件预览条 + 门控卡）+ 阶段计划勾批 D + D2 落档 + CHANGELOG v2.130 |
+
+---
 ### v2.129 · 批 C 连接与安全（LLM 能力轨第三批，D6/D7 按推荐落档）
 
 | 项 | 落点 |

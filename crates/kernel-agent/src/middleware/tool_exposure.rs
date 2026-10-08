@@ -160,7 +160,7 @@ fn retrieval_query(messages: &[Message]) -> String {
     let mut parts: Vec<&str> = messages
         .iter()
         .filter_map(|m| match m {
-            Message::User { content } => Some(content.as_str()),
+            Message::User { content, .. } => Some(content.as_str()),
             _ => None,
         })
         .rev()

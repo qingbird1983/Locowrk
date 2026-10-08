@@ -16,6 +16,7 @@ fn sections_aggregate_and_order() {
             content: "帮我发邮件".into(),
             pos: 0,
             ts: None,
+            parts: Vec::new(),
         },
         AgentEvent::Chunk {
             session_id: "desktop-1".into(),
@@ -30,6 +31,7 @@ fn sections_aggregate_and_order() {
             content: "第二问".into(),
             pos: 3,
             ts: None,
+            parts: Vec::new(),
         },
     ]);
     assert!(md.starts_with("# 测试会话"));

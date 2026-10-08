@@ -43,9 +43,12 @@ fn should_generate(auto_title: bool, sidecar_title: Option<&str>, messages: &[Me
 }
 
 /// 题干（纯函数）：首个用户消息 + 首个非空助手正文，各截 [`MATERIAL_CHARS`]。
+/// parts 不进题干（标题只要正文——干净短词，不带 `[图片: …]` 占位）。
 fn title_material(messages: &[Message]) -> Option<String> {
     let user = messages.iter().find_map(|m| match m {
-        Message::User { content } => Some(content.chars().take(MATERIAL_CHARS).collect::<String>()),
+        Message::User { content, .. } => {
+            Some(content.chars().take(MATERIAL_CHARS).collect::<String>())
+        }
         _ => None,
     })?;
     let assistant = messages.iter().find_map(|m| match m {
@@ -108,9 +111,7 @@ async fn generate(
     }
     let material = title_material(messages).ok_or("没有用户消息")?;
     let req = kernel_agent::LlmRequest {
-        messages: vec![Message::User {
-            content: format!("请为下面这段对话生成一个不超过{TITLE_MAX_CHARS}个字的标题。只输出标题本身：不要引号、句号，不要任何前后缀说明。\n\n{material}"),
-        }],
+        messages: vec![Message::user(format!("请为下面这段对话生成一个不超过{TITLE_MAX_CHARS}个字的标题。只输出标题本身：不要引号、句号，不要任何前后缀说明。\n\n{material}"))],
         // 辅助调用标记（批 B §5.4）：推理档降到方言最低档、不发 max_tokens
         params: serde_json::json!({ "aux": true }),
         ..Default::default()

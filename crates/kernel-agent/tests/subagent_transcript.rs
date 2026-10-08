@@ -135,7 +135,7 @@ async fn transcript_sink_receives_own_segment() {
         "段首应落 TurnStart（计时起点）：{seg:?}"
     );
     assert!(
-        matches!(seg.get(1), Some(SessionEvent::UserMessage { content }) if content == "落盘任务"),
+        matches!(seg.get(1), Some(SessionEvent::UserMessage { content, .. }) if content == "落盘任务"),
         "TurnStart 后应紧随任务 prompt：{seg:?}"
     );
     assert!(

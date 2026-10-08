@@ -28,6 +28,7 @@ fn seed(root: &std::path::Path, ws: &str) {
     for i in 0..3 {
         s.append(SessionEvent::UserMessage {
             content: format!("第{i}轮问题：关于主题{i}的细节"),
+            parts: Vec::new(),
         });
         s.append(SessionEvent::AssistantMessage {
             content: format!("第{i}轮回答"),

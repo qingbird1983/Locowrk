@@ -54,6 +54,7 @@ pub async fn run_turn(
     session: &mut Session,
     session_id: &str,
     message: String,
+    parts: Vec<session_store::ContentPart>,
     usage: Option<UsagePolicy>,
     sink: &dyn EventSink,
     stats: Option<&UsageRecorder>,
@@ -79,7 +80,7 @@ pub async fn run_turn(
         turn_id,
         ts: now_ms(),
     });
-    session.append(SessionEvent::UserMessage { content: message });
+    session.append(SessionEvent::UserMessage { content: message, parts });
     if let Some(dir) = log {
         session_log::append_slice(dir, session_id, session, log_start);
     }
@@ -268,12 +269,13 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
             // UserMessage 追加之后，该段只落盘不上事件通道（前端本地回显）。
             // `pos`（v2.57 §3.34）：消息编辑重发的定位键——session_history
             // 传全量数组，pos 即绝对事件位。`ts`（v2.101）：轮起点时刻。
-            SessionEvent::UserMessage { content } => {
+            SessionEvent::UserMessage { content, parts } => {
                 out.push(AgentEvent::UserMessage {
                     session_id: session_id.into(),
                     content: content.clone(),
                     pos,
                     ts: turn_ts.take().filter(|t| *t != 0),
+                    parts: parts.clone(),
                 });
             }
             // 推理（v2.57 §3.9）：投影一行 ThinkingRow；实时轮已被流式

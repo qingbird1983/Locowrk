@@ -6,8 +6,9 @@
 
 use super::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
-    MemoryUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate, ThinkingUpdate,
-    ToolsUpdate, FILE_NAME, LOCALES, STABILITY_ROUNDS_RANGE, THINKING_LANGUAGE_VALUES,
+    MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate,
+    ThinkingUpdate, ToolsUpdate, FILE_NAME, LOCALES, STABILITY_ROUNDS_RANGE,
+    THINKING_LANGUAGE_VALUES,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -30,6 +31,7 @@ impl SettingsStore {
         chat: Option<ChatUpdate>,
         developer: Option<DeveloperUpdate>,
         thinking: Option<ThinkingUpdate>,
+        multimodal: Option<MultimodalUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
         if let Some(loc) = locale {
@@ -363,6 +365,29 @@ impl SettingsStore {
                 ));
             }
             next.thinking.language = u.language;
+        }
+        if let Some(u) = multimodal {
+            // 多模态区（批 D）：数值界 + 白名单格式校验在
+            // MultimodalSettings::validate；失败不污染内存态
+            if let Some(v) = u.max_dimension {
+                next.multimodal.max_dimension = v;
+            }
+            if let Some(v) = u.max_size_mb {
+                next.multimodal.max_size_mb = v;
+            }
+            if let Some(v) = u.image_formats {
+                next.multimodal.image_formats = v.iter().map(|s| s.trim().to_lowercase()).collect();
+            }
+            if let Some(v) = u.file_formats {
+                next.multimodal.file_formats = v.iter().map(|s| s.trim().to_lowercase()).collect();
+            }
+            if let Some(v) = u.auto_gc {
+                next.multimodal.auto_gc = v;
+            }
+            if let Some(v) = u.gc_threshold_days {
+                next.multimodal.gc_threshold_days = v;
+            }
+            next.multimodal.validate()?;
         }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
         std::fs::write(self.root.join(FILE_NAME), bytes)

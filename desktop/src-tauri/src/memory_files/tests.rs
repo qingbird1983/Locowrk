@@ -102,6 +102,7 @@ fn sync_writes_tree_md_and_guards_human_edits() {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "hi".into(),
+        parts: Vec::new(),
     });
     crate::session_log::append_slice(&sessions_dir, "s1", &session, 0);
     crate::session_log::rename(&sessions_dir, "s1", "会话标题甲").unwrap();

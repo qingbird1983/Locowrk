@@ -74,7 +74,8 @@ fn llm_window_update_validation_and_threshold_math() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert_eq!(store.view().llm.window_tokens, Some(128_000));
     assert_eq!(store.view().context.threshold_tokens, 51_200, "128k × 40%");
@@ -101,7 +102,8 @@ fn llm_window_update_validation_and_threshold_math() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert_eq!(store.view().llm.window_tokens, None);
     assert_eq!(store.view().context.threshold_tokens, 32_000 * 40 / 100);
@@ -124,7 +126,8 @@ fn llm_window_update_validation_and_threshold_math() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     assert!(store
         .update(
@@ -144,7 +147,8 @@ fn llm_window_update_validation_and_threshold_math() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     assert!(store
         .update(
@@ -164,7 +168,8 @@ fn llm_window_update_validation_and_threshold_math() {
             None,
             None,
             None,
-        )
+                None,
+)
         .is_err());
     assert_eq!(store.view().context.threshold_pct, 40);
     // 磁盘往返
@@ -200,7 +205,8 @@ fn context_usage_bar_default_and_roundtrip() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert!(!store.view().context.usage_bar, "关闭生效");
 
@@ -245,7 +251,8 @@ fn stability_rounds_roundtrip_and_validation() {
             None,
             None,
             None,
-        )
+                None,
+)
         .unwrap();
     assert_eq!(store.view().context.stability_rounds, 5);
     assert_eq!(store.compact_config().stability_rounds, 5);
@@ -269,7 +276,8 @@ fn stability_rounds_roundtrip_and_validation() {
                 None,
                 None,
                 None,
-            )
+                        None,
+)
             .is_err());
     }
     assert_eq!(store.view().context.stability_rounds, 5);

@@ -131,6 +131,7 @@ async fn tool_turn_projects_events_in_log_order() {
         &mut session,
         "s1",
         "echo 你好".into(),
+        Vec::new(),
         None,
         &sink,
         None,
@@ -175,6 +176,7 @@ async fn step_cap_force_closes_with_configured_limit() {
         &mut session,
         "s1",
         "echo 你好".into(),
+        Vec::new(),
         None,
         &sink,
         None,
@@ -208,6 +210,7 @@ async fn plain_reply_turn_is_single_step() {
         &mut session,
         "s1",
         "你好".into(),
+        Vec::new(),
         None,
         &sink,
         None,
@@ -232,6 +235,7 @@ async fn demo_llm_routes_by_content() {
         .complete(LlmRequest {
             messages: vec![Message::User {
                 content: "请 echo 一下".into(),
+                parts: Vec::new(),
             }],
             ..Default::default()
         })
@@ -244,6 +248,7 @@ async fn demo_llm_routes_by_content() {
         .complete(LlmRequest {
             messages: vec![Message::User {
                 content: "你好".into(),
+                parts: Vec::new(),
             }],
             ..Default::default()
         })
@@ -310,6 +315,7 @@ async fn usage_reporting_provider_converges_on_final_text_step() {
         &mut session,
         "s1",
         "你好".into(),
+        Vec::new(),
         None,
         &sink,
         None,
@@ -383,6 +389,7 @@ async fn usage_reporting_provider_still_loops_for_tool_calls() {
         &mut session,
         "s1",
         "echo 一下".into(),
+        Vec::new(),
         None,
         &sink,
         None,

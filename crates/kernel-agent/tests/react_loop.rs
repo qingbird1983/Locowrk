@@ -136,6 +136,7 @@ async fn react_loop_runs_tool_then_final_answer() {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "say hi via tool".into(),
+        parts: Vec::new(),
     });
 
     // 第一步：LLM 要求工具；第二步：看到工具结果后给最终答案
@@ -213,6 +214,7 @@ async fn unavailable_tool_fails_step_without_dangling_call() {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "call ghost".into(),
+        parts: Vec::new(),
     });
 
     // ㉘·B 起解析失败不再失败整轮：以失败 ToolResult 闭合该调用（悬空的
@@ -253,6 +255,7 @@ async fn request_carries_tool_catalog() {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "hello".into(),
+        parts: Vec::new(),
     });
     kernel.step(&mut session).await.unwrap();
 
@@ -272,6 +275,7 @@ async fn missing_tool_source_means_empty_catalog() {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "hello".into(),
+        parts: Vec::new(),
     });
     kernel.step(&mut session).await.unwrap();
 
@@ -362,6 +366,7 @@ async fn step_as_fills_callctx_session_id() {
     let mut session = Session::new();
     session.append(SessionEvent::UserMessage {
         content: "probe".into(),
+        parts: Vec::new(),
     });
     kernel.step(&mut session).await.unwrap();
     kernel.step_as(&mut session, "desktop-42").await.unwrap();

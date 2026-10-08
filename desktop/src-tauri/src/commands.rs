@@ -2,6 +2,7 @@
 //! 存取，业务逻辑在 runner / approval / kernel，本文件不写一行。
 
 mod ask;
+mod assets;
 mod llm;
 mod memory;
 mod organize;
@@ -12,6 +13,7 @@ mod sessions;
 use std::sync::Arc;
 
 pub use ask::*;
+pub use assets::*;
 pub use llm::*;
 pub use memory::*;
 pub use organize::*;
@@ -28,18 +30,21 @@ use crate::events::{AgentEvent, ApprovalRequestPayload};
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
-    MemoryUpdate, PluginsUpdate, SettingsView, ShellUpdate, ThinkingUpdate, ToolsUpdate,
+    MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsView, ShellUpdate, ThinkingUpdate,
+    ToolsUpdate,
 };
 use crate::state::AppState;
 
 /// 聊天命令。轮次内容全部经 `agent://` 事件推送（§12.2），返回值只表达
 /// 轮次是否成功收束（返回实际 step 数）。进度条口径从设置取（⑨）：
-/// 窗口在 llm 区（S2 迁移），阈值 = 窗口 × 百分比。
+/// 窗口在 llm 区（S2 迁移），阈值 = 窗口 × 百分比。`parts`（批 D）：附件
+/// 部件（asset_put 已上传的内容寻址引用；缺省 = 纯文本消息）。
 #[tauri::command]
 pub async fn agent_chat(
     session_id: String,
     message: String,
     workspace: Option<String>,
+    parts: Option<Vec<session_store::ContentPart>>,
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
     // ㉘·A·fix 归属先行：首聊挂起归属（chat.pendingWorkspace）随请求带入，
@@ -69,6 +74,7 @@ pub async fn agent_chat(
         &mut session,
         &session_id,
         message,
+        parts.unwrap_or_default(),
         Some(usage),
         state.sink.as_ref(),
         Some(state.usage.as_ref()),
@@ -241,6 +247,7 @@ pub async fn settings_set(
     chat: Option<ChatUpdate>,
     developer: Option<DeveloperUpdate>,
     thinking: Option<ThinkingUpdate>,
+    multimodal: Option<MultimodalUpdate>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SettingsView, String> {
@@ -261,6 +268,7 @@ pub async fn settings_set(
         chat,
         developer,
         thinking,
+        multimodal,
     )?;
     if let Some(sc) = shortcut.filter(|s| !s.trim().is_empty()) {
         crate::tray::apply_shortcut(&app, sc.trim())?;
