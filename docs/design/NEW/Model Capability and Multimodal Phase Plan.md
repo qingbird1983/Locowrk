@@ -4,7 +4,7 @@
 > 版本：1.0（2026-10-07）
 > 上游设计：《模型供应商配置与能力探测设计 v2.0》《多模态支持设计 v2.0》
 > 参照调查：PI-Desktop（F:\Warehouse\Github\PI-Desktop）、ZCode（F:\Warehouse\Github\ZCode）模型配置全量调查（2026-10-07）
-> 状态：**执行中**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；批 A–D 已完成（v2.127–v2.130），下一批 E
+> 状态：**执行中**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；批 A–E 已完成（v2.127–v2.131），下一批 F
 
 ---
 
@@ -18,7 +18,7 @@
 | **B** ✅（v2.128，2026-10-08） | 推理档位 + 输出钳制 | 方言数据表 + 会话档位持久化 + composer 档位钮 + maxOutput 预检钳制 + 辅助降档 + 发送门控 | 大 | A（梯子/模态数据） |
 | **C** ✅（v2.129，2026-10-08） | 连接与安全 | keyring 迁移 + 自定义请求头 + 端点扫描 + 逐模型测试 + 网络代理 | 中 | 无（可插在 A/B 间） |
 | **D** ✅（v2.130，2026-10-08） | 多模态地基 | ContentPart + wire 编码 + AssetStore + 上传链路 + 渲染 + 估算 | **最大**（内核穿透） | A/B（模态数据 + 钳制公式） |
-| **E** | 多模态进阶 | 查看器 + 工具结果投影 + 多模态工具 + 降级链 | 中 | D |
+| **E** ✅（v2.131，2026-10-08） | 多模态进阶 | 查看器 + 工具结果投影 + 多模态工具 + 降级链 | 中 | D |
 | **F** | 生态 | 子代理模型档 + 回退链 + 从其他工具导入 + 推荐三选 | 中 | A/B |
 | **G**（候补） | 可靠性补强 | Turn Commit length 闸（随 B）+ Unknown Effect 恢复 + Revision Guard + 只读证明 + 子代理验收（随 F） | 各小-中 | 无硬依赖；G1 随 B、G5 随 F |
 
@@ -116,9 +116,13 @@
 
 ---
 
-### 批 E — 多模态进阶
+### 批 E — 多模态进阶 ✅（v2.131，2026-10-08 完成；D4 按推荐落档 = 投影）
 
-**范围**：图片查看器（左右切换/下载/Esc/缩放）；工具结果投影（wire 层挪下一条 user parts + 工具文本占位）；`screenshot` / `read_image` / `pdf_to_images` 工具（Pure）；降级链挂捆边界（P2 尾）；detail 旋钮评估（P2 尾，可裁）。
+**落成记录（2026-10-08，v2.131）**：**①工具结果投影（D4 兑现，wire.rs `project_tool_assets` 纯函数，`AppLlm::prepare` 调用点）**——tool output 的 `asset`/`assets`（mime `image/*`）挪出 tool 消息（tool 只吃文本）：尾部合成一条只带图片的 user 消息（`[{text:[工具产生的图片]},{image_url}]`）；**设计稿偏离记档**——「无下一条 user 保持占位」会让模型永远看不到图，主流程不可用，改合成消息（ZCode 媒体投影同思路）。三条纪律：tool 消息改写位置无关（`image_note`「[图片已附于本工具结果之后: name]」跨请求字节稳定，M1 不破）；历史轮图片**不重发**（每请求重发 = token 永久膨胀）；模型不支持（三态 `Some(false)`）降级不报错——引用号留原地 +「图片未随请求发送」note。调用点在 prepare = maxOutput 预检钳制估算吃投影后形状（设计稿记档的估算缺口在调用点闭合；ContextUsage 前端口径不含合成图记档）。**②多模态工具三件**（宿主内置，Pure）：`screenshot`（Always，`screenshots` crate，按 `multimodal.maxDimension` **缩边落库**——**实抓 #1**：真屏 3440×1440 撞死 2048 单边上限工具必死；缩边 = 机器产物采集参数，非用户文件转码，read_image 拒收语义不变）；`read_image`（OnDemand，`fsutil::allowed_roots` 围栏 + 先验后写——非图片在落盘前拒收）；`pdf_to_images`（OnDemand，**pdfium.dll 7.5MB 随包 `resources/pdfium/`**（bblanchon pdfium-binaries chromium/8086），库缺席不进目录宁缺勿假；页数缺省 8 硬顶 20 = 20K token 量级成本闸；目标宽按 cap×纵横比 floor+1px 余量——**实抓 #2**：Letter 页 1583×2049 超 1px 被 put 拒；**实抓 #3**：pdfium 全局绑定二次初始化即死（`PdfiumLibraryBindingsAlreadyInitialized`），进程级 OnceLock 单例）。`asset_save_as` 命令（原生另存对话框 + assets/ 内复制）。**③图片查看器**（`ImageViewer.vue` + `viewer.ts` store，App 根挂载）：teleport 全屏浮层——左右切换（列表 = `chat.viewerImages` 转录序 = 用户 parts + 工具产物）、缩放（滚轮/＋−/双击/0 复位）、拖移、Esc（滚动锁随开合）、另存为、在文件夹中显示；MessageRow 图片缩略点击改开查看器（reveal 保留给 PDF chip 与查看器内按钮）。**④工具行产物预览**（§8.3 三行形态）：`output.asset/assets` 图片缩略 + 查看大图/另存为两钮（pending 无产物不渲染）；动作名三键（截屏/读取图片/转换 PDF 为图片）+ camera/download/chevronLeft 三图标。**⑤降级链挂捆边界（P2 尾，最小形态落地）**：memory-tree 材料 UserMessage 折 `[图片: name]` 占位——捆边界后图片离开请求，记录员摘要还能提到它（§10.2「捆与捆之间全部降级为文本」最小实现）；「视觉模型生成描述替代原图」记档 P2 缓办（整理期视觉辅助调用 = 新辅助调用面，待裁定）。**detail 旋钮评估 = 裁掉**（单线兼容层 detail 支持不一，宁缺勿假；P2 记档维持）。**实机走查（echo 18900 抓包 + deepseek-flash 真轮 10 轮，隔离数据根 + 复制真实档案零明文/Credential Manager 共享）**：echo 投影 10/10——支持 = tool 消息剥 asset + note + 尾部合成 user 带 image_url data URL 抓包实锤；不支持 = asset 留原地 + 未发送 note + 无合成 user + 零错误事件。真轮：截屏描述屏幕内容如实（Win11 深色壁纸/任务栏，投影端到端）+ 工具行三行形态渲染；read_image 描述红绿图（红底绿圆如批 D）；pdf_to_images 双页渲染逐页描述（PAGE ONE/TWO MARKER 逐字读出）；查看器打开/计数/左右切换（按钮+键盘）/放大 120%/Esc 关闭+滚动解锁；捆边界：tree 会话贴图轮 → /整理 → L1 摘要含图片占位（降级不归零）+ 命中率 4864→0→3712 一次性回落再恢复（计划内失效语义）。**实抓修复 ×4**（①②③上述 + **④投影 assets 数组翻面**——逆序遍历的收尾 reverse 把单结果内部页序也翻了，模型如实读出「第 1 张图 = PAGE TWO」，改「结果间与结果内都先翻、末尾一次还原」+ 保序回归）。**走查环境教训记档**：echo SSE 服务器必须 HTTP/1.1（BaseHTTPRequestHandler 缺省 1.0 + 手写 chunked 帧 = reqwest 按裸流读、SSE 解析失败无限重试——v2.129 echo 只回非流式 JSON 故未暴露）。清理：数据根已删（无 Key 落盘）、echo/vite/应用进程已停；脚本/截图留 tmp/v131-walk/。**门禁**：clippy 0、fmt、根 workspace 418 绿 + desktop 301（292→+9：投影 4/media 5）、vue-tsc 0、pnpm build 过、lint:style 0；check_length 新增超 2 文件三问不拆（wire.rs 515 单线协议+投影前置纯函数 / llm/tests.rs 784 测试道具跨组共用）。**已知边界（记档）**：①ContextUsage 前端口径不含合成图片消息（≈1024/图低估，钳制侧已闭合）；②note 文本随会话换模型（支持↔不支持）一次字节漂移 = 显式变更接受；③pdfium 只随 Windows dll（跨平台资源名按平台常量就绪、打包名单记档）；④screenshot 缩边不可关（随 maxDimension 走，0 = 原尺寸）。
+
+---
+
+**范围（原卡片）**：图片查看器（左右切换/下载/Esc/缩放）；工具结果投影（wire 层挪下一条 user parts + 工具文本占位）；`screenshot` / `read_image` / `pdf_to_images` 工具（Pure）；降级链挂捆边界（P2 尾）；detail 旋钮评估（P2 尾，可裁）。
 
 **走查要点**：screenshot 真轮 → 模型描述屏幕内容 + 下条 user 抓包证图片 part + 转录缩略图；树会话捆边界降级后命中率一次性回落再恢复（计划内失效语义）。
 
@@ -178,7 +182,7 @@
 | D1 | 档案库源 = models.dev 快照 | 推荐 | **已采纳**（用户指令开始执行，按推荐落档 2026-10-08；批 A 兑现） |
 | D2 | 单线纪律维持（多模态输入侧走兼容层；原生 thinking budget / 图像输出 / 原生 PDF 另批） | 推荐 | **已采纳**（批 D 兑现，2026-10-08——content 数组走 OpenAI 兼容层，anthropic/ollama 亦走兼容端点） |
 | D3 | thinking 控件 = 循环钮（vs PI 滑杆） | 循环钮 | **已采纳**（批 B 兑现，2026-10-08） |
-| D4 | 工具结果图片投影 = 挪下一条 user 消息（vs 仅文本占位） | 投影 | **待裁** |
+| D4 | 工具结果图片投影 = 挪下一条 user 消息（vs 仅文本占位） | 投影 | **已采纳**（批 E 兑现，2026-10-08——wire 层投影 + 尾部合成 user 消息；设计稿「无下一条 user 保持占位」偏离记档：占位 = 模型永远看不到图，主流程不可用） |
 | D5 | max_tokens 窄修订 = 用户钉死值才发送 + 预检钳制（v2.75 措辞修订） | 采纳 | **已采纳**（批 B 兑现，2026-10-08） |
 | D6 | 网络代理进批 C | 进 | **已采纳**（批 C 兑现，2026-10-08） |
 | D7 | keyring（Credential Manager 优先）+ 惰性迁移 | 确认 | **已采纳**（批 C 兑现，2026-10-08） |

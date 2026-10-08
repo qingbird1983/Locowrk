@@ -2,6 +2,7 @@
 // 必须显示中文名、参数摘要必须加工过——严禁裸复制命令 / 绝对路径 / JSON）。
 // 摘要态人话、明细态原样：原始性只在工具行的展开明细里出现。
 import { clip } from "./format";
+import type { AssetRefDto } from "../types";
 
 /** 动作名 i18n 定位；null = 表外工具（回落工具 id + 「插件」徽章）。 */
 export function toolAction(
@@ -35,6 +36,9 @@ export function toolAction(
     notify: "tool.action.notify",
     fetch: "tool.action.fetch",
     mcp_status: "tool.action.mcpStatus",
+    screenshot: "tool.action.screenshot",
+    read_image: "tool.action.readImage",
+    pdf_to_images: "tool.action.pdfToImages",
   };
   if (table[tool]) return { key: table[tool]! };
   if (tool.startsWith("git_")) return { key: "tool.action.git" };
@@ -181,4 +185,30 @@ export function toolDiffStats(output: unknown): {
         : `${bytes} B`
       : undefined;
   return { added, removed, size };
+}
+
+/** 工具产物里的图片资产（批 E §8.1 投影约定）：`asset`（单图）或
+ * `assets`（数组），mime `image/*` 才算——PDF 引用不是图片产物。无字段 /
+ * 非对象输出 = 空表（工具行不渲染预览区）。 */
+export function toolImageAssets(output: unknown): AssetRefDto[] {
+  if (output === null || typeof output !== "object") return [];
+  const o = output as Record<string, unknown>;
+  const parse = (v: unknown): AssetRefDto | null => {
+    if (v === null || typeof v !== "object") return null;
+    const a = v as Record<string, unknown>;
+    if (
+      typeof a.id !== "string" ||
+      typeof a.mime !== "string" ||
+      typeof a.name !== "string" ||
+      !a.mime.startsWith("image/")
+    ) {
+      return null;
+    }
+    return { id: a.id, mime: a.mime, name: a.name };
+  };
+  const single = parse(o.asset);
+  const list = Array.isArray(o.assets)
+    ? o.assets.map(parse).filter((a): a is AssetRefDto => a !== null)
+    : [];
+  return [...(single ? [single] : []), ...list];
 }

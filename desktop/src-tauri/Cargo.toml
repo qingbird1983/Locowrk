@@ -56,6 +56,14 @@ sys-locale = "0.3"
 tokio = { version = "1", default-features = false, features = ["sync", "time"] }
 # 宿主自有统计库（与 memory.sqlite3 分离——统计是宿主对插件的观测）
 rusqlite = { version = "0.32", features = ["bundled"] }
+# 批 E 多模态工具：屏幕截图（跨平台 GDI/DXGI 封装）+ PNG 编码（截图与
+# PDF 页位图两处同吃；只开 png——读图尺寸复用 assets::validate 的头解析）
+screenshots = "0.8"
+image = { version = "0.25", default-features = false, features = ["png"] }
+# PDF 转图片：pdfium 动态库运行时绑定（库文件随包 resources/pdfium/，
+# 缺库 = pdf_to_images 不进目录宁缺勿假）；image feature 缺省开，类型与
+# 上面的 image 0.25 对齐
+pdfium-render = "0.9"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 # API Key 系统凭据库（批 C §8.4）：Windows=Credential Manager / macOS=Keychain

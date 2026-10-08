@@ -1,10 +1,12 @@
 # LLM 接入设计（阶段八②参考）
 
-> 版本行：v3.4（2026-10-08）——批 D 多模态地基（ContentPart 消息结构 /
-> wire content 数组编码 / AssetStore 内容寻址 / 上传链路 / 双道门控 /
-> 估算平铺）。v3.3 批 C 连接与安全（keyring / 自定义请求头 / 端点扫描 /
-> 逐模型测试 / 网络代理）。v3.2 批 B 推理档位（方言即数据）+ 输出预检钳
-> 制（D5 窄修订）+ G1 length 闸；v3.1 批 A 目录；v3.0（2026-10-05）
+> 版本行：v3.5（2026-10-08）——批 E 多模态进阶（工具结果图片投影 D4 /
+> screenshot·read_image·pdf_to_images 三工具 / pdfium 随包 / 降级链挂捆
+> 边界最小形态）。v3.4 批 D 多模态地基（ContentPart 消息结构 / wire
+> content 数组编码 / AssetStore 内容寻址 / 上传链路 / 双道门控 / 估算平
+> 铺）。v3.3 批 C 连接与安全（keyring / 自定义请求头 / 端点扫描 / 逐模型
+> 测试 / 网络代理）。v3.2 批 B 推理档位（方言即数据）+ 输出预检钳制（D5
+> 窄修订）+ G1 length 闸；v3.1 批 A 目录；v3.0（2026-10-05）
 > **方案一（genai 统一库）退役**，改为自建 OpenAI 兼容统一客户端。v2.x =
 > genai 三合一（历史见 CHANGELOG）。
 
@@ -232,3 +234,48 @@ parts——转录投影剥 parts 只留正文）+ maxOutput 预检钳制自动�
 **记忆与转录**：extract 转录 / 记忆树材料 / 标题 / handoff 全部只吃正文文
 本——parts 在转录里折叠为 `[图片: name]` 占位（记忆只记文本事实）；导出
 Markdown 同款占位行。工具结果图片投影到下一条 user parts 属批 E（§8.1）。
+
+## 多模态进阶（批 E，v3.5 增补）
+
+**工具结果图片投影（D4 按推荐落档 = 投影）**：多模态稿 §8.1 兑现，落
+`wire.rs::project_tool_assets` 纯函数，调用点在 `AppLlm::prepare`
+（`image_allowed` 解析后、估算前）。工具 output 携带 `asset`（单图）/
+`assets`（数组，mime `image/*`）时——tool 消息剥引用 + 加
+`image_note`，图片随消息列**尾部合成的一条 user 消息**发送
+（`content = [{"type":"text","text":"[工具产生的图片]"}, ...image_url]`）。
+三条纪律：① tool 消息改写**位置无关的纯函数**——note 文案跨请求逐字节
+稳定（M1 前缀缓存）；② 历史轮图片**不重发**（后续有 user 消息 = 只留
+note，模型在工具结果当轮已看过一次；每请求重发 = token 永久膨胀）；
+③ 模型不支持（三态 `Some(false)`）**降级不报错**——引用号留原地 +
+「图片未随请求发送」note（工具文本输出照常可用）。**设计稿偏离记档**：
+「无下一条 user 保持占位」→ 合成消息——agent 循环里工具结果就在尾部，
+占位 = 模型永远看不到图，主流程不可用（ZCode 媒体投影同思路）。调用点
+在 prepare = maxOutput 预检钳制的估算吃投影后形状（设计稿记档的估算缺口
+在调用点闭合；ContextUsage 前端口径不含合成图，记档 ≈1024/图低估）。
+
+**多模态工具三件**（宿主内置，`media/` 模块，Pure，经 `with_builtin`
+进目录）：`screenshot`（**Always**——氛围能力常驻；`screenshots` crate
+跨平台采集；按 `multimodal.maxDimension` **缩边落库**（0 = 原尺寸）——
+机器产物的采集参数，非用户文件转码，read_image 的拒收语义不变）；
+`read_image`（OnDemand；`fsutil::allowed_roots` env 围栏 + **先验后写**
+——非图片在落盘前拒收，不泄漏副作用）；`pdf_to_images`（OnDemand；
+**pdfium.dll 随包 `resources/pdfium/`**（bblanchon pdfium-binaries
+chromium/8086），库缺席不进目录宁缺勿假 + 进程级绑定单例（全局绑定只许
+一次）；页数缺省 8 硬顶 20（≈20K token 估算量级成本闸）；页位图目标宽 =
+min(1600, cap×纵横比) floor + 1px 进位余量）。返回形态 = §8.1 投影约定
+（`asset`/`assets` + text 人话）。转录 UI 从 output 直接渲染预览
+（ToolRow 产物缩略 + 查看大图/另存为，§8.3 三行形态）。
+
+**图片查看器**（`ImageViewer.vue` + `viewer.ts`）：缩略图/工具产物点击
+进入的全屏浮层——左右切换（列表 = `chat.viewerImages` 转录序：用户
+parts + 工具产物）、缩放（滚轮/＋−/双击/0）、拖移、Esc（body 滚动锁随
+开合）、另存为（`asset_save_as`：原生对话框 + assets/ 内 id 定位复制）、
+在文件夹中显示。MessageRow 图片缩略点击改开查看器（reveal 保留给 PDF
+chip 与查看器内按钮）。
+
+**降级链挂捆边界（§10.2 最小形态）**：记忆树材料 UserMessage 折
+`[图片: name]` 占位——捆边界后图片离开请求，记录员摘要还能提到它，信息
+不归零（实测：L1 摘要含图片、捆边界命中率 4864→0→3712 一次性回落再恢复
+= 计划内失效语义）。「视觉模型生成一句话描述替代原图」记档 P2 缓办
+（整理期视觉辅助调用 = 新辅助调用面，待裁定）。**detail 旋钮 = 裁掉**
+（单线兼容层 detail 支持不一，宁缺勿假）。

@@ -18,6 +18,7 @@ import SchedulePage from "./components/schedule/SchedulePage.vue";
 import PluginMarket from "./components/PluginMarket.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 import CommandPalette from "./components/shell/CommandPalette.vue";
+import ImageViewer from "./components/chat/ImageViewer.vue";
 import DestinationShell from "./components/shell/DestinationShell.vue";
 import Sidebar from "./components/shell/Sidebar.vue";
 import ToastStack from "./components/shell/ToastStack.vue";
@@ -174,6 +175,8 @@ onMounted(() => {
 
     <WindowControls />
     <CommandPalette />
+    <!-- 图片查看器（批 E）：缩略图/工具产物点击进入，teleport body -->
+    <ImageViewer />
   </div>
 </template>
 

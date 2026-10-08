@@ -26,6 +26,7 @@ import {
   organizeNow,
 } from "../lib/api";
 import { compactNumber } from "../lib/format";
+import { toolImageAssets } from "../lib/tool-summary";
 import { i18n } from "../i18n";
 import { useAsksStore } from "./asks";
 import { useSettingsStore } from "./settings";
@@ -243,6 +244,20 @@ export const useChatStore = defineStore("chat", {
         );
       }
       return state.pendingWorkspace;
+    },
+    /** 转录图片清单（批 E 查看器）：用户 parts 图片 + 工具产物图片
+     * （output.asset/assets，mime image/*）按转录序——查看器左右切换的
+     * 列表真源。打开时求值一次（打开后新增图不回填游标，关闭重开即可）。 */
+    viewerImages(state): AssetRefDto[] {
+      const out: AssetRefDto[] = [];
+      for (const it of state.items) {
+        if (it.kind === "user" && it.parts) {
+          for (const p of it.parts) if (p.type === "image") out.push(p.asset);
+        } else if (it.kind === "tool" && !it.pending && it.output) {
+          out.push(...toolImageAssets(it.output));
+        }
+      }
+      return out;
     },
   },
   actions: {

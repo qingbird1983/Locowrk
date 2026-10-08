@@ -51,6 +51,7 @@ mod memory;
 mod memory_files;
 mod memory_reconcile;
 mod memory_tree_reconcile;
+mod media;
 mod model_override;
 mod notifications;
 mod organize;
@@ -166,6 +167,7 @@ pub fn run() {
             commands::asset_read,
             commands::asset_reveal,
             commands::asset_gc,
+            commands::asset_save_as,
             commands::ask_respond,
             commands::ask_snooze,
             commands::list_pending_asks,

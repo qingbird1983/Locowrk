@@ -103,3 +103,34 @@ fn upload_limits(state: &State<'_, AppState>) -> crate::assets::validate::Limits
         file_formats: m.file_formats,
     }
 }
+
+/// 查看器「另存为」（批 E 查看器）：原生保存对话框（Rust 侧直呼，§七 规
+/// 则 8 同族）→ 资产文件复制到选定路径。取消 = None。读取面只认 assets/
+/// 内 sha256 文件名（id 定位，无路径穿越面）；写入位置由用户对话框显式
+/// 选定（与 session_export 同授权形态）。
+#[tauri::command]
+pub async fn asset_save_as(
+    id: String,
+    mime: String,
+    default_name: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let src = state.assets.path_of(id.trim(), mime.trim())?;
+    if !src.exists() {
+        return Err(format!("资产文件不存在: {}", src.display()));
+    }
+    let mut builder = app.dialog().file();
+    let name = default_name.trim();
+    if !name.is_empty() {
+        builder = builder.set_file_name(name);
+    }
+    let picked = builder.blocking_save_file();
+    let Some(dest) = picked.and_then(|p| p.into_path().ok()) else {
+        return Ok(None);
+    };
+    let n = std::fs::copy(&src, &dest).map_err(|e| format!("保存失败: {e}"))?;
+    tracing::info!(dest = %dest.display(), bytes = n, "asset saved as");
+    Ok(Some(dest.display().to_string()))
+}

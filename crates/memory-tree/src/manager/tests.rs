@@ -163,3 +163,41 @@ fn prompt_family_matching_and_verbatim_clause_present() {
         assert!(!main_prompt(f).is_empty());
     }
 }
+
+#[test]
+fn user_parts_fold_to_placeholder_in_material() {
+    // 批 E §10.2 挂捆边界降级（最小形态）：图片字节不进材料，占位符
+    // 「[图片: name]」在场——记录员摘要还能提到它，捆边界后信息不归零
+    let events = vec![
+        SessionEvent::UserMessage {
+            content: "看这张图".into(),
+            parts: vec![session_store::ContentPart::Image {
+                asset: session_store::AssetRef {
+                    id: "abc".into(),
+                    mime: "image/png".into(),
+                    name: "shot.png".into(),
+                },
+            }],
+        },
+        SessionEvent::AssistantMessage {
+            content: "好的".into(),
+            tool_calls: vec![],
+        },
+    ];
+    let its = build_items(&events, 0);
+    assert_eq!(its.len(), 2);
+    assert_eq!(its[0].kind, MaterialKind::User);
+    assert!(
+        its[0].text.contains("[图片: shot.png]"),
+        "text = {}",
+        its[0].text
+    );
+    assert!(its[0].text.contains("看这张图"));
+    // 纯文本消息无占位（零噪声）
+    let plain = vec![SessionEvent::UserMessage {
+        content: "纯文字".into(),
+        parts: Vec::new(),
+    }];
+    let its = build_items(&plain, 0);
+    assert_eq!(its[0].text, "纯文字");
+}

@@ -8,14 +8,18 @@
  * 任务/状态/轮次/工具/摘要标签值行 + 「查看完整对话」入口（不虚构——父侧
  * 拿不到的字段不渲染，⑮ 黑盒边界不变）。
  */
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 import ProcessRow from "./ProcessRow.vue";
 import ToolDetailView from "./ToolDetailView.vue";
-import { toolDiffStats } from "../../lib/tool-summary";
+import { toolDiffStats, toolImageAssets } from "../../lib/tool-summary";
 import { toolKind, toolDescribe } from "../../lib/tool-detail";
 import { formatDuration } from "../../lib/format";
+import { assetRead, assetSaveAs } from "../../lib/api";
+import { useToastStore } from "../../stores/toast";
+import { useViewerStore } from "../../stores/viewer";
+import type { AssetRefDto } from "../../types";
 import type { ToolItem } from "../../stores/chat";
 
 const props = defineProps<{
@@ -31,6 +35,45 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+
+// ---- 工具产物图片（批 E §8.3）：output.asset/assets 的 image/*，行头下
+// 预览缩略（点击入查看器）+ 查看大图/保存两钮。设计稿三行形态；pending
+// 与无产物不渲染。缩略读 asset_read data URL（模块级缓存防重复读盘）。----
+const viewer = useViewerStore();
+const toast = useToastStore();
+const assets = computed<AssetRefDto[]>(() =>
+  props.item.pending ? [] : toolImageAssets(props.item.output),
+);
+const assetThumbs = ref<Record<string, string>>({});
+const thumbCache = new Map<string, string>();
+watch(
+  assets,
+  (list) => {
+    for (const a of list) {
+      const key = `${a.id}:${a.mime}`;
+      const cached = thumbCache.get(key);
+      if (cached) {
+        assetThumbs.value = { ...assetThumbs.value, [key]: cached };
+        continue;
+      }
+      void assetRead(a.id, a.mime).then((url) => {
+        thumbCache.set(key, url);
+        assetThumbs.value = { ...assetThumbs.value, [key]: url };
+      });
+    }
+  },
+  { immediate: true },
+);
+function thumbOf(a: AssetRefDto): string {
+  return assetThumbs.value[`${a.id}:${a.mime}`] ?? "";
+}
+function openViewer(a: AssetRefDto) {
+  viewer.openAsset(a);
+}
+async function saveAsset(a: AssetRefDto) {
+  const dest = await assetSaveAs(a.id, a.mime, a.name);
+  if (dest) toast.push("ok", t("mm.savedAs", { path: dest }));
+}
 /** 明细恒默认收起（v4.20：设置开关只作用过程组，明细不再接开关）。 */
 const expanded = ref(false);
 /** 明细懒挂载（v-if+v-show 组合）：多数步骤从不展开，不为它们在挂载期
@@ -117,6 +160,35 @@ function onToggle() {
       </template>
     </ProcessRow>
 
+    <!-- 工具产物图片（§8.3）：缩略 + 查看大图/保存（多图时钮作用于
+         首图，逐图走缩略点击） -->
+    <div v-if="assets.length" class="tool__assets">
+      <div class="tool__thumbs">
+        <button
+          v-for="(a, i) in assets"
+          :key="`${a.id}:${i}`"
+          class="tool__thumb"
+          type="button"
+          :aria-label="`${a.name} · ${t('mm.viewLarge')}`"
+          :title="`${a.name} · ${t('mm.viewLarge')}`"
+          @click="openViewer(a)"
+        >
+          <img v-if="thumbOf(a)" :src="thumbOf(a)" alt="" draggable="false" />
+          <span v-else class="tool__thumb-loading" />
+        </button>
+      </div>
+      <div class="tool__asset-actions">
+        <button class="tool__review" type="button" @click="openViewer(assets[0]!)">
+          <Icon name="eye" :size="12" />
+          {{ t("mm.viewLarge") }}
+        </button>
+        <button class="tool__review" type="button" @click="saveAsset(assets[0]!)">
+          <Icon name="download" :size="12" />
+          {{ t("mm.saveAsset") }}
+        </button>
+      </div>
+    </div>
+
     <!-- 展开体 = 缩进 + 左竖线的子行（不换布局；懒挂载 + v-show 保 DOM，
          首开后收展零重渲染） -->
     <div v-if="everExpanded" v-show="expanded" class="tool__sub">
@@ -178,6 +250,42 @@ function onToggle() {
   display: flex;
   flex-direction: column;
   gap: var(--lw-gap-8);
+}
+.tool__assets {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--lw-gap-6);
+}
+.tool__thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lw-gap-6);
+}
+.tool__thumb {
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-wash-2);
+  transition: box-shadow var(--dur-fast) var(--ease-standard);
+}
+.tool__thumb:hover {
+  box-shadow: 0 0 0 1px var(--lw-line);
+}
+.tool__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tool__thumb-loading {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.tool__asset-actions {
+  display: flex;
+  gap: var(--lw-gap-6);
 }
 .tool__review {
   display: inline-flex;

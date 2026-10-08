@@ -92,6 +92,15 @@ export function assetReveal(id: string, mime: string): Promise<void> {
   return invoke("asset_reveal", { id, mime });
 }
 
+/** 查看器「另存为」（批 E）：原生保存对话框 + 资产文件复制，取消 = null。 */
+export function assetSaveAs(
+  id: string,
+  mime: string,
+  defaultName: string,
+): Promise<string | null> {
+  return invoke("asset_save_as", { id, mime, defaultName });
+}
+
 /** 手动孤儿资产 GC（走查/开发者）：按 gcThresholdDays 判定，返回计数。 */
 export function assetGc(): Promise<{ scanned: number; removed: number }> {
   return invoke("asset_gc");

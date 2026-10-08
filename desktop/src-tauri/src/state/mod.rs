@@ -334,8 +334,42 @@ pub fn init_state(app: AppHandle) -> AppState {
     // v4.11 §3.39① ask_user 内置工具（Pure + always，见 ask_hub 处注释）
     let ask_tool: Arc<dyn plugin_api::Tool> =
         Arc::new(crate::ask::AskUserTool::new(Arc::clone(&ask_hub)));
+    // 批 E 多模态三件（Pure）：screenshot / read_image 常开；pdf_to_images
+    // 仅随包 pdfium 就位时进目录（宁缺勿假——注册必然失败的工具是谎报）。
+    // 上限调用期读 settings multimodal 区 = 保存即热换（asset_put 同口径）。
+    let media_limits: crate::media::LimitsFn = {
+        let s = Arc::clone(&settings);
+        Arc::new(move || {
+            let m = s.multimodal();
+            crate::assets::validate::Limits {
+                max_dimension: m.max_dimension,
+                max_size_mb: m.max_size_mb,
+                image_formats: m.image_formats,
+                file_formats: m.file_formats,
+            }
+        })
+    };
+    let screenshot_tool =
+        crate::media::ScreenshotTool::new(Arc::clone(&assets), Arc::clone(&media_limits));
+    let pdfium_lib = crate::media::resolve_pdfium_lib(&app);
+    let pdf_tool = pdfium_lib.map(|lib| {
+        tracing::info!(lib = %lib.display(), "pdf_to_images 就位");
+        crate::media::pdf::PdfToImagesTool::new(
+            Arc::clone(&assets),
+            Arc::clone(&media_limits),
+            lib,
+        )
+    });
+    let read_image_tool = crate::media::ReadImageTool::new(Arc::clone(&assets), media_limits);
     let with_host_tools = |src: KernelToolSource| {
-        let src = src.with_builtin(Arc::clone(&send_email));
+        let src = src
+            .with_builtin(Arc::clone(&send_email))
+            .with_builtin(screenshot_tool.clone())
+            .with_builtin(read_image_tool.clone());
+        let src = match &pdf_tool {
+            Some(t) => src.with_builtin(t.clone()),
+            None => src,
+        };
         let src = match &schedules {
             Some(db) => src
                 .with_builtin(crate::scheduler::ScheduleCreateTool::new(Arc::clone(db)))

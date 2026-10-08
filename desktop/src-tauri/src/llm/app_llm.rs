@@ -226,6 +226,9 @@ impl AppLlm {
             req.params["thinking_level"] = Value::String(lvl);
         }
         let image_allowed = self.image_allowed(&cfg, image_pin);
+        // 批 E 工具结果图片投影（§8.1，D4）：在 image_allowed 解析后、
+        // 估算前改写消息列——maxOutput 钳制估算吃投影后的形状
+        req.messages = super::wire::project_tool_assets(req.messages, image_allowed);
         (req, cfg, caps, image_allowed)
     }
 }

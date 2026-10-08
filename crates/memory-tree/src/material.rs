@@ -61,8 +61,13 @@ pub fn build_items(events: &[SessionEvent], base: EventId) -> Vec<MaterialItem> 
     for (i, e) in events.iter().enumerate() {
         let pos = base + i;
         let (kind, text) = match e {
-            // 树材料只记文本事实：parts 不进（正文即转录口径）
-            SessionEvent::UserMessage { content, .. } => (MaterialKind::User, content.clone()),
+            // 树材料只记文本事实：图片字节不进，但批 E 起留占位（多模态稿
+            // §10.2 挂捆边界降级的最小形态）——捆边界后图片离开请求，
+            // 「[图片: name]」让记录员摘要还能提到它，信息不归零
+            SessionEvent::UserMessage { content, parts, .. } => (
+                MaterialKind::User,
+                session_store::fold_parts(content, parts),
+            ),
             SessionEvent::AssistantMessage {
                 content,
                 tool_calls,

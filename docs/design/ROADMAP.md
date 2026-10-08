@@ -722,6 +722,21 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.131 · 批 E 多模态进阶（LLM 能力轨第五批，D4 按推荐落档 = 投影）
+
+| 项 | 落点 |
+|---|---|
+| 工具结果投影（D4） | ✅ wire.rs `project_tool_assets` 纯函数（`AppLlm::prepare` 调用点 = image_allowed 在场 + 钳制估算吃投影后形状）：tool 消息剥 asset + `image_note`（跨请求字节稳定）+ 尾部合成 user 图片消息；历史轮不重发；不支持 = 引用号留原地 + 未发送 note 降级不报错。设计稿「无下一条 user 保持占位」偏离记档（占位 = 模型永远看不到图） |
+| 多模态工具 | ✅ `media/` 三件宿主内置 Pure：`screenshot`（Always，screenshots crate，maxDimension 缩边）+ `read_image`（OnDemand，env 围栏 + 先验后写）+ `pdf_to_images`（OnDemand，**pdfium.dll 7.5MB 随包**、缺库不进目录、进程级绑定单例、页数缺省 8 顶 20、目标宽按 cap×纵横比 floor+余量）；`asset_save_as` 另存命令 |
+| 图片查看器 | ✅ `ImageViewer.vue` + `viewer.ts`：左右切换（chat.viewerImages 转录序）/缩放（滚轮/＋−/双击/0）/拖移/Esc+滚动锁/另存为/reveal；MessageRow 图片缩略点击改开查看器 |
+| 工具行产物预览 | ✅ output.asset/assets 图片 56px 缩略 + 查看大图/另存为（§8.3 三行形态）；动作名三键 + camera/download/chevronLeft 图标 |
+| 降级链挂捆边界 | ✅ 最小形态：memory-tree 材料 UserMessage 折 `[图片: name]` 占位（捆边界降级不归零）；「视觉描述替代原图」记档 P2 待裁定；**detail 旋钮评估 = 裁掉**（记档维持） |
+| 实机走查 | ✅ echo 18900 抓包 10/10（投影两形态载荷实锤）+ deepseek-flash 真轮（截屏描述屏幕/read_image 红绿图/pdf 双页逐页描述/查看器全交互/捆边界 L1 占位 + 命中率 4864→0→3712 回落恢复）；**实抓修复 ×4**（截屏缩边/PDF 页高 1px 超限/pdfium 绑定单例/投影数组翻面页序颠倒）；走查教训记档（echo SSE 必须 HTTP/1.1）。数据根已删、进程已停，脚本/截图留 tmp/v131-walk/ |
+| 门禁 | ✅ clippy --workspace --all-targets 0、fmt、根 workspace 418 绿 + desktop 301（292→+9：投影 4/media 5）、vue-tsc 0、pnpm build 过、lint:style 0；check_length 新增超 2 文件三问不拆（wire.rs 515 / llm/tests.rs 784） |
+| 文档 | ✅ 阶段计划勾批 E + D4 落档 + LLM.md v3.5（多模态进阶一节）+ UI shell v4.25（§3.8 产物预览 + 查看器 + 版本条）+ CHANGELOG v2.131 |
+
+---
+
 ### v2.130 · 批 D 多模态地基（LLM 能力轨第四批·最大批（内核穿透），D2 随批落档 = 单线纪律维持）
 
 | 项 | 落点 |

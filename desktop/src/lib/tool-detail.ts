@@ -68,6 +68,9 @@ const KIND_TABLE: Record<string, { type: string; icon: IconName }> = {
   search_tools: { type: "search", icon: "search" },
   subagent_run: { type: "subagent", icon: "bot" },
   notify: { type: "notify", icon: "bell" },
+  screenshot: { type: "screenshot", icon: "camera" },
+  read_image: { type: "read", icon: "eye" },
+  pdf_to_images: { type: "read", icon: "file" },
 };
 
 /** 类型词 i18n 后缀 + 字形（i18n key = `tool.type.${type}`；表外回落 工具/plug）。 */
@@ -105,6 +108,18 @@ function str(a: Record<string, unknown>, ...keys: string[]): string {
  * 命令只显首命令、子代理 = 任务截断、检索 = 搜索词。 */
 export function toolDescribe(tool: string, args: unknown): string {
   const a = asRecord(args);
+  if (tool === "screenshot") {
+    const d = typeof a.display === "number" ? a.display : 0;
+    return `display ${d}`;
+  }
+  if (tool === "read_image" || tool === "pdf_to_images") {
+    const name = baseName(str(a, "path"));
+    if (!name) return "";
+    if (tool === "pdf_to_images" && typeof a.max_pages === "number") {
+      return `${name} · ${a.max_pages}p`;
+    }
+    return name;
+  }
   if (tool === "shell" || tool === "shell_read" || tool === "sandbox_run") {
     const raw =
       typeof a.command === "string"
