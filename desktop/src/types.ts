@@ -33,7 +33,31 @@ export type AgentEvent =
   | AskUserEvent
   | AskResolvedEvent
   | LlmRetryEvent
-  | TurnCappedEvent;
+  | TurnCappedEvent
+  | ToolUncertainEvent
+  | UncertainResolvedEvent;
+
+/** 崩溃恢复 uncertain（G2，agent://tool-uncertain——只在会话重放产出，
+ * 实时轮不产生）：悬空调用（无 ToolResult 事件）的标记。tool/args 可能
+ * 缺（assistant 声明了但 ToolCall 事件未及落盘），按「细节缺失」渲染。 */
+export interface ToolUncertainEvent {
+  kind: "tool_uncertain";
+  session_id: string;
+  call_id: string;
+  tool: string;
+  args: unknown;
+}
+
+/** 用户裁决（G2，agent://uncertain-resolved，实时回推与重放同形）：
+ * decision = completed / not_executed / inspected。 */
+export interface UncertainResolvedEvent {
+  kind: "uncertain_resolved";
+  session_id: string;
+  call_id: string;
+  tool: string;
+  decision: "completed" | "not_executed" | "inspected";
+  note: string;
+}
 
 /** 传输重试（LLM.md v3.0，agent://llm-retry）：兼容客户端重试前通知——
  * 清空本步未完成的流式缓冲（重试轮 delta 从零重建同一气泡）+ 状态行。 */

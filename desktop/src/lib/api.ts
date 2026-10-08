@@ -182,6 +182,9 @@ const CHANNELS = [
   // LLM.md v3.0：传输重试（流式重置）+ 单轮步数到顶告知
   "agent://llm-retry",
   "agent://turn-capped",
+  // G2 崩溃恢复：用户裁决的实时回推（收束决策卡 + 闭合工具行）。
+  // tool_uncertain 只在会话重放产出（session_history 返回数组），不订阅。
+  "agent://uncertain-resolved",
 ] as const;
 
 export function subscribeAgentEvents(
@@ -323,6 +326,23 @@ export function sessionList(): Promise<SessionMeta[]> {
  * 前端重放恢复；历史不走 agent:// 事件通道。 */
 export function sessionHistory(sessionId: string): Promise<AgentEvent[]> {
   return invoke("session_history", { sessionId });
+}
+
+/** 崩溃恢复裁决（G2）：对 uncertain 悬空调用记录用户的事实认定
+ * （completed / not_executed / inspected + 检查记录），后端落日志并
+ * 回推 uncertain_resolved + 合成 tool_result 收束卡与工具行。 */
+export function sessionResolveUncertain(
+  sessionId: string,
+  callId: string,
+  decision: "completed" | "not_executed" | "inspected",
+  note?: string,
+): Promise<void> {
+  return invoke("session_resolve_uncertain", {
+    sessionId,
+    callId,
+    decision,
+    note: note ?? "",
+  });
 }
 
 /** 会话重命名（v2.49 §3.6）：旁车 meta.json 标题；空串 = 回落自动标题。 */

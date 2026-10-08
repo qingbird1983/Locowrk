@@ -27,6 +27,7 @@ import ThinkingRow from "./ThinkingRow.vue";
 import ToolRow from "./ToolRow.vue";
 import TurnProcess from "./TurnProcess.vue";
 import TurnTimerLine from "./TurnTimerLine.vue";
+import UncertainCard from "./UncertainCard.vue";
 
 const props = defineProps<{
   /** 待渲染条目（主对话 = chat.items；页签 = subagent_transcript 投影）。 */
@@ -390,6 +391,11 @@ function noticeText(item: SystemItem): string {
               @action="(a: string) => emit('noticeAction', block.item as SystemItem, a)"
             />
           </div>
+          <!-- G2 崩溃恢复 uncertain 决策卡：组外兄弟（折进组会被默认折叠
+               藏住，决策面必须可见）；resolved 后收为记录行 -->
+          <div v-else-if="block.item.kind === 'uncertain'" class="unc-row">
+            <UncertainCard :item="block.item" />
+          </div>
         </template>
       </template>
     </div>
@@ -414,6 +420,10 @@ function noticeText(item: SystemItem): string {
           "
           @action="(a: string) => emit('noticeAction', block.item as SystemItem, a)"
         />
+      </div>
+      <!-- G2：崩溃会话没有最终报告，uncertain 卡常落尾段（同组外语义） -->
+      <div v-else-if="block.item.kind === 'uncertain'" class="unc-row">
+        <UncertainCard :item="block.item" />
       </div>
     </template>
   </template>
@@ -448,7 +458,14 @@ function noticeText(item: SystemItem): string {
 .sys-row + .msg,
 .sys-row + .sys-row,
 .turn + .sys-row,
-.sys-row + .turn {
+.sys-row + .turn,
+.msg + .unc-row,
+.unc-row + .msg,
+.turn + .unc-row,
+.unc-row + .turn,
+.sys-row + .unc-row,
+.unc-row + .sys-row,
+.unc-row + .unc-row {
   padding-top: var(--lw-gap-8);
 }
 .turn-timer + .turn,

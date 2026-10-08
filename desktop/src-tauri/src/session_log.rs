@@ -38,6 +38,13 @@ pub fn restore_all(dir: &Path, sessions: &SessionsMap) -> usize {
                 if s.is_empty() {
                     continue;
                 }
+                // G2 崩溃恢复观测：悬空且未裁决的调用数进启动日志（裁决
+                // 的呈现走会话重放的 uncertain 卡，这里只留观测痕迹）。
+                let scan = session_store::scan_uncertain(s.events());
+                let pending = scan.unresolved(s.events()).len();
+                if pending > 0 {
+                    tracing::info!(id = %meta.id, pending, "session log 有未裁决的悬空调用（uncertain）");
+                }
                 sessions
                     .lock()
                     .expect("sessions poisoned")

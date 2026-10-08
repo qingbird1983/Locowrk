@@ -14,11 +14,12 @@ mod event;
 mod persist;
 mod session;
 mod snapshot;
+mod uncertain;
 
 pub use compensation::{CompensatedLedger, Compensation, plan};
 pub use content::{AssetRef, ContentPart, fold_parts};
 pub use error::StoreError;
-pub use event::{SessionEvent, TurnId, TurnOutcome};
+pub use event::{SessionEvent, TurnId, TurnOutcome, UncertainDecision};
 pub use persist::{
     SessionMeta, SessionMetaFile, SessionSearchHit, append_event, delete_session, list_sessions,
     load_session, read_meta, rewrite_log, search_sessions, session_file, write_model_override,
@@ -26,3 +27,4 @@ pub use persist::{
 };
 pub use session::{Message, SNAPSHOT_EVERY, Session, SessionState, ToolCallMsg};
 pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, Snapshot, Upcaster, Upcasters, V1ToV2Upcaster};
+pub use uncertain::{UncertainCall, UncertainScan, closure, scan_uncertain};

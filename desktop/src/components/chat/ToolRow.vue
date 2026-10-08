@@ -104,7 +104,11 @@ const durationText = computed(() =>
 );
 
 const statusWord = computed(() => {
-  if (props.item.pending) return props.awaiting ? t("tool.awaitingApproval") : t("tool.running");
+  if (props.item.pending) {
+    // G2：悬空未裁决 = 「结果未知」（不是执行中——进程已退出，不会再跑）
+    if (props.item.uncertain) return t("tool.unknown");
+    return props.awaiting ? t("tool.awaitingApproval") : t("tool.running");
+  }
   if (props.item.ok) return "";
   return t("tool.failed");
 });
@@ -144,10 +148,11 @@ function onToggle() {
       </template>
       <template #status>
         <!-- 克制（§3.8）：进行中 = 脉动点 + 弱化词；完成 = 时长或弱对勾；
-             失败 = danger 叉 + 红词（唯一高亮态） -->
+             失败 = danger 叉 + 红词（唯一高亮态）；G2 结果未知 = warn 点
+             + warn 词（不确定态，非失败非运行） -->
         <template v-if="item.pending">
-          <span class="dot lw-pulse" />
-          <span>{{ statusWord }}</span>
+          <span class="dot lw-pulse" :class="{ 'dot--unknown': item.uncertain }" />
+          <span :class="{ 'tool__unknown': item.uncertain }">{{ statusWord }}</span>
         </template>
         <template v-else-if="item.ok">
           <span v-if="durationText">{{ durationText }}</span>
@@ -237,6 +242,13 @@ function onToggle() {
 }
 .tool__fail {
   color: var(--lw-danger);
+}
+/* G2 结果未知：warn 点 + warn 词（不确定态，弱于失败的 danger） */
+.tool__unknown {
+  color: var(--lw-warn);
+}
+.tool :deep(.dot--unknown) {
+  background: var(--lw-warn);
 }
 /* 运行脉动点 = 层 2 状态字形，跟随次要色（全局 .dot 底 ink-4） */
 .tool :deep(.dot) {

@@ -234,6 +234,7 @@ export default {
     result: "结果",
     running: "执行中…",
     awaitingApproval: "等待审批",
+    unknown: "结果未知",
     success: "成功",
     failed: "失败",
     copyCall: "复制调用",
@@ -451,6 +452,21 @@ export default {
     coordinating: "正在协调 {n} 个委派任务",
     main: "主 Agent",
     child: "子 Agent",
+  },
+  // G2 崩溃恢复 uncertain 决策卡（可靠性稿 §5）
+  uncertain: {
+    title: "工具结果未知",
+    detailMissing: "调用细节缺失（日志未及落盘）",
+    desc: "应用在上次运行中退出，这个调用可能已执行、部分执行或没有执行。",
+    completed: "视为已完成",
+    notExecuted: "视为未执行",
+    inspect: "检查后记录…",
+    notePlaceholder: "记录你看到的实际状态…",
+    confirm: "确认",
+    resolved: "已裁决",
+    rCompleted: "视为已完成",
+    rNotExecuted: "视为未执行",
+    rInspected: "检查记录",
   },
   notice: {
     action: {

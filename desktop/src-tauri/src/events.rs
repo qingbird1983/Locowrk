@@ -46,6 +46,14 @@ pub mod channels {
     pub const LLM_RETRY: &str = "agent://llm-retry";
     /// 单轮步数到顶（LLM.md v3.0 同批）：TurnDone 后如实告知（不硬报错）。
     pub const TURN_CAPPED: &str = "agent://turn-capped";
+    /// 崩溃恢复 uncertain（G2，可靠性稿 §5）：全量投影里悬空调用的标记
+    /// ——前端渲染 uncertain 决策卡 + 工具行「结果未知」态。只在会话
+    /// 重放产出（悬空只在崩溃后出现），本通道**永不 emit**（USER_MESSAGE
+    /// 同款纪律）；裁决经 `agent://uncertain-resolved` 实时回推。
+    pub const TOOL_UNCERTAIN: &str = "agent://tool-uncertain";
+    /// 用户裁决落日志后的实时回推（G2）：前端收束决策卡、按裁决闭合
+    /// 工具行（随后的合成 ToolResult 投影同一来源闭合行明细）。
+    pub const UNCERTAIN_RESOLVED: &str = "agent://uncertain-resolved";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -227,6 +235,28 @@ pub enum AgentEvent {
         session_id: String,
         steps: u32,
     },
+    /// 崩溃恢复 uncertain（G2）：`ToolCall` 悬空（无 ToolResult 事件）且
+    /// 未裁决时在全量投影里紧随工具行发出——前端渲染 uncertain 决策卡。
+    /// `tool`/`args` 可能缺（assistant 声明了但 ToolCall 事件未及落盘），
+    /// 前端按「细节缺失」如实渲染。只在重放产出，实时轮不产生。
+    ToolUncertain {
+        session_id: String,
+        call_id: String,
+        tool: String,
+        args: Value,
+    },
+    /// 用户裁决（G2）：`ToolExecutionUncertain` 事件的投影——实时（裁决
+    /// 命令回推）与重放同形。`decision` = completed / not_executed /
+    /// inspected（serde 标签原样）；前端据此收束决策卡，随后同源的合成
+    /// ToolResult 投影按裁决闭合工具行。
+    UncertainResolved {
+        session_id: String,
+        call_id: String,
+        tool: String,
+        decision: String,
+        #[serde(default)]
+        note: String,
+    },
 }
 
 /// `ask_user` 的选项载荷（§3.39①）：label 必填，description 可选。
@@ -256,6 +286,8 @@ impl AgentEvent {
             AgentEvent::AskResolved { .. } => channels::ASK_RESOLVED,
             AgentEvent::LlmRetry { .. } => channels::LLM_RETRY,
             AgentEvent::TurnCapped { .. } => channels::TURN_CAPPED,
+            AgentEvent::ToolUncertain { .. } => channels::TOOL_UNCERTAIN,
+            AgentEvent::UncertainResolved { .. } => channels::UNCERTAIN_RESOLVED,
         }
     }
 }

@@ -4,7 +4,7 @@
 > 版本：1.0（2026-10-07）
 > 上游设计：《模型供应商配置与能力探测设计 v2.0》《多模态支持设计 v2.0》
 > 参照调查：PI-Desktop（F:\Warehouse\Github\PI-Desktop）、ZCode（F:\Warehouse\Github\ZCode）模型配置全量调查（2026-10-07）
-> 状态：**六批全部完成（2026-10-08，v2.127–v2.132）**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；候补批 G：**G1 随批 B、G5 随批 F、G3 独立小批（2026-10-09，v2.133）已落地**，G2/G4 留作独立小批，G6/G7 记档
+> 状态：**六批全部完成（2026-10-08，v2.127–v2.132）**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；候补批 G：**G1 随批 B、G5 随批 F、G3 独立小批（v2.133）、G2 独立小批（v2.134）已落地**，G4 留作独立小批（tool-shell 批），G6/G7 记档
 
 ---
 
@@ -149,12 +149,14 @@
 | 件 | 内容 | 排期 |
 |---|---|---|
 | G1 Turn Commit length 闸 | wire.rs 已捕获 finish_reason 但 client.rs:322 一律当完整——length 截断带部分 tool_calls 会被执行。截断不收束、工具不执行、如实提示 | **随批 B**（maxOutput 钳制提高截断概率，闸先行）；committed 标记 serde default |
-| G2 Unknown Effect | 复用现有 ToolCall/ToolResult 配对（**不建双轨事件**）+ 崩溃恢复扫描（有 Call 无 Result → uncertain）+ uncertain UI + 用户决定事件 | 独立小批（P1） |
+| G2 Unknown Effect | 复用现有 ToolCall/ToolResult 配对（**不建双轨事件**）+ 崩溃恢复扫描（有 Call 无 Result → uncertain）+ uncertain UI + 用户决定事件 | ✅ **已落地**（独立小批 v2.134，2026-10-09） |
 | G3 Revision Guard | tool-fs 插件层：read 回 revision、写类工具带 expected_revision、StaleObservation 错误 | ✅ **已落地**（独立小批 v2.133，2026-10-09——P0 最先做） |
 | G4 只读证明 | shell_read 白名单之上的解析器证明层；硬锁/围栏/unlockRisky 全保留 | tool-shell 批（P1） |
 | G5 子 Agent 独立验收 | subagent_verify（Pure）+ claimed/verified 分离 + 验收调用吃辅助降档 | ✅ **已随批 F 落地**（v2.132） |
 | G6 In-Band Summary | 实测 compact.rs:149 不复用前缀，但压缩低频且本就重建前缀——记档为 legacy 可选优化，不立批；批 B 顺带复核形状 | 记档（P2） |
 | G7 crate 行数软上限 | cordis-core 3000 / kernel-agent 5000，tokei 脚本挂 check_length 旁 | 随手搭车（P3） |
+
+**G2 落成记录（2026-10-09，v2.134）**：三件全落，不新增双轨事件。①**扫描** = `session_store::scan_uncertain`（单遍：assistant 声明位 − ToolResult 事件 = 悬空，**两形态都认**——ToolCall 事件已落 / 死在两次落盘间只剩声明位；含裁决表与 unresolved 按声明序）；**derive_messages 悬空诚实闭合**（设计稿未言及的落地补充：不给合成则下一轮请求带悬空 tool_calls 被供应商整单拒收——未裁决合成 `status:"unknown"` 效果未知、有裁决按裁决闭合；合成在投影层，日志不回填 ToolResult）。②**uncertain UI** = 组外决策卡（折进过程组会被默认折叠藏住，决策面必须可见）+ 工具行 warn「结果未知」态；三裁决 = 视为已完成 / 视为未执行 / 检查后记录（带检查记录输入）——设计稿四选的 **Rerun 裁掉记档**（「未执行」裁决后模型下一轮自然重做，走全部既有审批/守卫门，不建旁路重执行机构）。③**用户决定事件** = `ToolExecutionUncertain {decision, note?, ts?}`（serde default，只写一次重放/重启不再询问）；桌面 `session_resolve_uncertain` 命令（忙锁 try_lock 同编辑重发；inspected 必带非空记录）实时回推 UncertainResolved + 合成 ToolResult，**与重放投影同形**（走查实抓：重放缺合成闭合 → 已裁决行恒 pending 的真缺陷，修投影后重放=实时同序列「建卡→裁决收束→行闭合」）；启动 restore_all 对未裁决悬空调用落观测日志。走查（CDP 隔离数据根 + CM 共享零明文 + deepseek 真轮 4 轮）：真 kill + 构造 mid-flush 悬空尾三段实锤——W1b 重放卡/行态 + **未裁决状态发轮模型如实引用 `status:"unknown"` 报文拒绝猜测**（原话「我不知道删没删……绝不凭猜测宣称已完成」）+ 检查后记录裁决落 jsonl（decision=inspected 带 note）卡收为记录行；W2 再重启重放不重复询问 + 裁决后请求形状真轮完成（hello.txt 落盘）。**已知边界（记档）**：桌面落盘粒度 = 每 step（run_turn 在 step_as 返回后一次 append_slice），悬空只在 **mid-flush 崩溃**出现（毫秒级窗口，走查以构造代表真实形态）；per-event 落盘 = 潜在后续批（内核需持久化钩子，本批不做）。门禁：fmt / clippy 0 / 根 workspace 431（39 套件）/ desktop 322（+1）/ vue-tsc 0 / build / lint:style / check_length 零新增超限。详见 CHANGELOG v2.134。
 
 **G3 落成记录（2026-10-09，v2.133）**：共享基座 `plugin_api::fsutil`（content_revision = sha256 over **LF 归一全量字节**，\r\n 折叠与 edit_replace 容错同口径；check_revision 报文带双方 revision + 指路 fs_read——§3.3 兑现；plugin-api 增 sha2 与 desktop 同锁）+ `file_revision`/`arg_expected_revision`。五写类工具：fs_read 回全量 revision（与截断窗口解耦）；fs_write expected_revision **缺省/null = 新建语义**（§3.4，已存在即拒盲覆盖）；fs_delete 同守卫（§3.5 表）；edit_replace/lines/diff 必传（比对先于任何备份/写盘）；**成功输出带新 revision 供链式写**（多步编辑不重读，守卫不断链）；fs_restore 输出带恢复后 revision；undo 契约与审批面零改动。插件 tool-fs 0.1.5 / tool-edit 0.2.1（小迭代 +0.0.1）。§13 对齐注记：read_image/pdf_to_images asset 引用不带 revision（无 edit 消费方，评估裁掉记档）。走查（deepseek 真轮 3 轮）：§10.2 打地鼠全链实锤（读→外部注入→edit stale 拒→重读→成功且**注入行幸存**；模型收束报告逐字写明「工具因观测过期拒绝写入……这是安全机制要求的」）+ 链式 revision 逐字节相同零失败 + 删除守卫（陈旧 fs_delete → 拒 → 重读 → 删成功；复跑轮模型自觉先重读并主动报告外部改动异常）。实抓修复 ×2：tool-fs 测试锁分裂（read/write 各持私有 ENV_LOCK 互斥失效 → 上收 crate::testutil 共锁）、lines.rs 守卫绑定遮蔽 args content（clippy 抓到防住真 bug）；搭车 desktop catalog 测试同 pid 目录并行互删分家。已知边界：守卫核对与落盘间 TOCTOU 微窗（缩窗防线非事务，设计接受）。门禁：fmt / clippy 0 / 根 workspace 全绿（plugin-host FFI 端到端含盲覆盖与陈旧拒绝断言）/ desktop 321 / vue-tsc 0 / build / lint:style。详见 CHANGELOG v2.133。
 

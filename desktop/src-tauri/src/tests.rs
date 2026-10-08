@@ -100,6 +100,8 @@ pub(crate) fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::AskResolved { .. } => "ask_resolved",
         AgentEvent::LlmRetry { .. } => "llm_retry",
         AgentEvent::TurnCapped { .. } => "turn_capped",
+        AgentEvent::ToolUncertain { .. } => "tool_uncertain",
+        AgentEvent::UncertainResolved { .. } => "uncertain_resolved",
     }
 }
 

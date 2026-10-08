@@ -10,11 +10,12 @@
 //! reject 收尾），避免与成功路径的事件重复。步数到顶不是失败（LLM.md
 //! v3.0 同批）：TurnDone 正常收束 + TurnCapped 如实告知。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
 use kernel_agent::{estimate_tokens, Kernel};
+use serde_json::Value;
 use session_store::{Session, SessionEvent, TurnId, TurnOutcome};
 
 use crate::session_log;
@@ -261,6 +262,17 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
     // 编辑重发截断留下的孤儿 TurnStart 会被下一个 TurnStart 覆盖（自愈，
     // 不会把旧轮的起点错配给新轮）。
     let mut turn_ts: Option<i64> = None;
+    // G2 悬空扫描：声明了 call_id 而无 ToolResult 事件的调用（进程执行中
+    // 退出）——工具行后补 ToolUncertain 标记（卡），裁决事件投影收束。
+    // has_call_event：只落了声明位、连 ToolCall 事件都没有的调用（死在
+    // 两次落盘之间）没有宿主工具行，卡直接挂在 assistant 段之后。
+    let uncertain = session_store::scan_uncertain(events);
+    let mut has_call_event: HashSet<String> = HashSet::new();
+    for e in events {
+        if let SessionEvent::ToolCall { call_id, .. } = e {
+            has_call_event.insert(call_id.0.clone());
+        }
+    }
     for (pos, e) in events.iter().enumerate() {
         match e {
             SessionEvent::TurnStart { ts, .. } => turn_ts = Some(*ts),
@@ -323,13 +335,32 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                     tools_est_tokens: *tools_est_tokens,
                 });
             }
-            SessionEvent::AssistantMessage { content, .. } => {
+            SessionEvent::AssistantMessage {
+                content,
+                tool_calls,
+            } => {
                 // 纯工具调用的 assistant 步正文为空，不发空 chunk
                 if !content.is_empty() {
                     out.push(AgentEvent::Chunk {
                         session_id: session_id.into(),
                         delta: content.clone(),
                     });
+                }
+                // G2：只有声明位、连 ToolCall 事件都没落上的悬空调用
+                // （死在两次落盘之间）——没有宿主工具行，卡带空细节直接
+                // 出现在 assistant 段之后（细节缺失如实渲染）。已裁决的
+                // 也出（重放复现「建卡→裁决收束」序列，同上）。
+                for id in tool_calls {
+                    if uncertain.dangling.contains(id.0.as_str())
+                        && !has_call_event.contains(id.0.as_str())
+                    {
+                        out.push(AgentEvent::ToolUncertain {
+                            session_id: session_id.into(),
+                            call_id: id.0.clone(),
+                            tool: String::new(),
+                            args: Value::Null,
+                        });
+                    }
                 }
             }
             SessionEvent::ToolCall {
@@ -349,6 +380,18 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                     side_effect: side_effect_str(side_effect).into(),
                     plugin_version: plugin_version.to_string(),
                 });
+                // G2：悬空 → 紧随工具行补 uncertain 标记（卡）。已裁决的
+                // 也出：重放要复现「建卡→裁决收束」的实时序列（卡落在
+                // 裁决事件处收为记录行，行由合成 tool_result 闭合）。
+                // tool/args 细节缺失（声明位无 ToolCall 事件）原样透传。
+                if uncertain.dangling.contains(call_id.0.as_str()) {
+                    out.push(AgentEvent::ToolUncertain {
+                        session_id: session_id.into(),
+                        call_id: call_id.0.clone(),
+                        tool: tool.clone(),
+                        args: args.clone(),
+                    });
+                }
             }
             SessionEvent::ToolResult {
                 call_id,
@@ -393,6 +436,36 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                         .unwrap_or_else(|| call_id.0.clone()),
                     allowed: *allowed,
                     reason: reason.clone(),
+                });
+            }
+            SessionEvent::ToolExecutionUncertain {
+                call_id,
+                decision,
+                note,
+                ..
+            } => {
+                // G2：裁决的投影（实时经命令回推 / 重放经此处，同形）。
+                // tool 从同切片 ToolCall 找回（声明位缺失回落 call_id，
+                // ApprovalResolved 同款）；随后的合成 ToolResult 按裁决
+                // 闭合工具行（与裁决命令的实时回推同一来源 closure）。
+                out.push(AgentEvent::UncertainResolved {
+                    session_id: session_id.into(),
+                    call_id: call_id.0.clone(),
+                    tool: call_tools
+                        .get(call_id.0.as_str())
+                        .cloned()
+                        .unwrap_or_else(|| call_id.0.clone()),
+                    decision: decision.as_str().into(),
+                    note: note.clone(),
+                });
+                let (output, error) =
+                    session_store::closure(Some((*decision, note.as_str())));
+                out.push(AgentEvent::ToolResult {
+                    session_id: session_id.into(),
+                    call_id: call_id.0.clone(),
+                    ok: true,
+                    output,
+                    error,
                 });
             }
             SessionEvent::TurnEnd { ts, .. } => {

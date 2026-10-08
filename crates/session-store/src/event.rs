@@ -20,6 +20,43 @@ pub enum TurnOutcome {
     Failed,
 }
 
+/// 用户对 uncertain 调用的裁决（G2，可靠性稿 §5.4 收窄）：原稿四选里的
+/// Rerun 不设——「未执行」裁决后模型在下一轮自然重做，走全部既有审批 /
+/// 守卫门，不需要旁路重执行机构。措辞用「确认」不用「跳过」：裁决记录的
+/// 是用户对实际效果的事实认定，不是回避。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UncertainDecision {
+    /// 用户确认效果已发生。
+    Completed,
+    /// 用户确认效果未发生（模型可安全重做）。
+    NotExecuted,
+    /// 用户实地检查过，[`SessionEvent::ToolExecutionUncertain`] 的
+    /// `note` 携带检查记录。
+    Inspected,
+}
+
+impl UncertainDecision {
+    /// 事件投影 / IPC 面的字符串形态（与 serde 标签一致）。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            UncertainDecision::Completed => "completed",
+            UncertainDecision::NotExecuted => "not_executed",
+            UncertainDecision::Inspected => "inspected",
+        }
+    }
+
+    /// IPC 面解析（前端传 serde 标签）。
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "completed" => Some(UncertainDecision::Completed),
+            "not_executed" => Some(UncertainDecision::NotExecuted),
+            "inspected" => Some(UncertainDecision::Inspected),
+            _ => None,
+        }
+    }
+}
+
 /// 会话事件（§4.1 全集）。`tag = "type"` + snake_case，日志即 schema。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -115,6 +152,23 @@ pub enum SessionEvent {
         call_id: CallId,
         allowed: bool,
         reason: Option<String>,
+    },
+    /// 崩溃恢复的用户裁决（G2，可靠性稿 §5）：进程在 ToolCall 落日志
+    /// （纪律 5）与 ToolResult 闭合之间退出时，该调用的副作用未知
+    /// （Unknown Effect——"删了没有？"无法从本地证据判断）。扫描面
+    /// [`crate::uncertain::scan_uncertain`] 把悬空调用标成 uncertain，
+    /// 消息投影给模型一个如实的「效果未知」闭合；用户裁决后落本事件
+    /// （只写一次，重放/重启不再重复询问）。裁决不回填 ToolResult——
+    /// 日志只追加真实发生的事，闭合是投影层的合成（可随时重推导）。
+    ToolExecutionUncertain {
+        call_id: CallId,
+        decision: UncertainDecision,
+        /// inspected 裁决的用户检查记录；其余裁决为空串。
+        #[serde(default)]
+        note: String,
+        /// 裁决时刻（Unix 毫秒）；0 = 旧日志无（serde default 兼容）。
+        #[serde(default)]
+        ts: i64,
     },
     /// 上下文压缩（Context and Memory.md §3.7）：ctx-compact 在
     /// `agent/request` 决策环完成压缩后由 kernel 落日志。折叠语义

@@ -1,6 +1,6 @@
 //! 会话：仅追加的事件日志 + 投影（DESIGN.md §4.2）。
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,8 +8,9 @@ use serde_json::Value;
 use plugin_api::CallId;
 
 use crate::content::ContentPart;
-use crate::event::SessionEvent;
+use crate::event::{SessionEvent, UncertainDecision};
 use crate::snapshot::SNAPSHOT_SCHEMA_VERSION;
+use crate::uncertain::closure;
 
 /// 每 N 个事件落一个内部快照，`state_at` 从快照起步折算（§6.2）。
 pub const SNAPSHOT_EVERY: usize = 64;
@@ -154,17 +155,38 @@ impl SessionState {
 /// derive_messages 共用。
 /// 事件切片 → 消息投影（`derive_messages` / `derive_messages_from` 共用
 /// 单点实现，两遍：ToolCall 索引 → 拼装；M4 自 derive_messages 抽出）。
+/// G2 悬空闭合：assistant 声明了 call_id 而切片内没有 ToolResult 事件
+/// （进程在执行中退出的悬空调用，可靠性稿 §5）→ 紧贴 assistant 之后
+/// 合成一条诚实闭合的 ToolResult 消息（未裁决 =「效果未知」；有裁决 =
+/// 按裁决闭合）——不给合成，下一轮请求带悬空 tool_calls 会被供应商
+/// 整单拒收。快照折叠（`apply`）不合成：快照只服务存档面，请求装配
+/// 唯一真源是本函数。
 fn project_messages(events: &[SessionEvent]) -> Vec<Message> {
     let mut calls: HashMap<&CallId, (&str, &Value)> = HashMap::new();
+    let mut closed: HashSet<&CallId> = HashSet::new();
+    let mut decisions: HashMap<&CallId, (UncertainDecision, &str)> = HashMap::new();
     for e in events {
-        if let SessionEvent::ToolCall {
-            call_id,
-            tool,
-            args,
-            ..
-        } = e
-        {
-            calls.insert(call_id, (tool.as_str(), args));
+        match e {
+            SessionEvent::ToolCall {
+                call_id,
+                tool,
+                args,
+                ..
+            } => {
+                calls.insert(call_id, (tool.as_str(), args));
+            }
+            SessionEvent::ToolResult { call_id, .. } => {
+                closed.insert(call_id);
+            }
+            SessionEvent::ToolExecutionUncertain {
+                call_id,
+                decision,
+                note,
+                ..
+            } => {
+                decisions.insert(call_id, (*decision, note.as_str()));
+            }
+            _ => {}
         }
     }
 
@@ -178,20 +200,38 @@ fn project_messages(events: &[SessionEvent]) -> Vec<Message> {
             SessionEvent::AssistantMessage {
                 content,
                 tool_calls,
-            } => messages.push(Message::Assistant {
-                content: content.clone(),
-                tool_calls: tool_calls
-                    .iter()
-                    .map(|id| {
+            } => {
+                messages.push(Message::Assistant {
+                    content: content.clone(),
+                    tool_calls: tool_calls
+                        .iter()
+                        .map(|id| {
+                            let (tool, args) = backfill(calls.get(id));
+                            ToolCallMsg {
+                                id: id.clone(),
+                                tool,
+                                args,
+                            }
+                        })
+                        .collect(),
+                });
+                // 悬空闭合（G2）：声明位没有 ToolResult 事件 = 按裁决或
+                // 「效果未知」合成。位置紧贴 assistant——tool_calls 与
+                // tool 消息之间的先后是供应商硬约束。
+                for id in tool_calls {
+                    if !closed.contains(id) {
                         let (tool, args) = backfill(calls.get(id));
-                        ToolCallMsg {
-                            id: id.clone(),
+                        let (output, error) = closure(decisions.get(id).map(|(d, n)| (*d, *n)));
+                        messages.push(Message::ToolResult {
+                            call_id: id.clone(),
                             tool,
                             args,
-                        }
-                    })
-                    .collect(),
-            }),
+                            output,
+                            error,
+                        });
+                    }
+                }
+            }
             SessionEvent::ToolResult {
                 call_id,
                 output,

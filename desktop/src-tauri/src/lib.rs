@@ -210,6 +210,7 @@ pub fn run() {
             commands::session_search,
             commands::session_export,
             commands::session_truncate_after,
+            commands::session_resolve_uncertain,
             commands::session_set_model,
             commands::session_set_thinking,
             commands::session_set_organizer,

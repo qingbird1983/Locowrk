@@ -24,6 +24,7 @@ import {
   subscribeOrganizeDone,
   subscribeOrganizePaused,
   organizeNow,
+  sessionResolveUncertain,
 } from "../lib/api";
 import { compactNumber } from "../lib/format";
 import { toolImageAssets } from "../lib/tool-summary";
@@ -49,6 +50,9 @@ export type ToolItem = {
    * 轮次显示，重放不虚构时序）。 */
   ts?: number;
   doneTs?: number;
+  /** G2 崩溃恢复：悬空未裁决（执行中进程退出，副作用未知）。行状态点
+   * 走警示色 + 「结果未知」；裁决落日志后随 uncertain_resolved 复位。 */
+  uncertain?: boolean;
 };
 
 export type ChatItem =
@@ -87,6 +91,17 @@ export type ChatItem =
   /** 审批决策记录行（§3.7 v4.11 裁定①）：无卡片底，折叠进过程组为
    * 平铺行（无组时回落兄弟节点）；已允许/已拒绝都是可审计事实。 */
   | { id: number; kind: "decision"; tool: string; allowed: boolean }
+  /** G2 崩溃恢复 uncertain 决策卡（组外兄弟，同 error/notice 语义——
+   * 折进过程组会被默认折叠藏住，决策面必须可见）。resolved 落定后
+   * 收为单行记录（裁决 + 检查记录），工具行由合成 tool_result 闭合。 */
+  | {
+      id: number;
+      kind: "uncertain";
+      callId: string;
+      tool: string;
+      args: unknown;
+      resolved?: { decision: "completed" | "not_executed" | "inspected"; note: string };
+    }
   /** 会话内系统消息（SystemNotice 模式）：压缩通知 / 已记住 / 审批结果。 */
   | SystemItem;
 
@@ -462,6 +477,15 @@ export const useChatStore = defineStore("chat", {
         throw err;
       }
     },
+    /** G2 崩溃恢复裁决：落日志并实时回推（uncertain_resolved + 合成
+     * tool_result 由 onEvent 同一开关收束卡与工具行，本地不预改）。 */
+    async resolveUncertain(
+      callId: string,
+      decision: "completed" | "not_executed" | "inspected",
+      note = "",
+    ) {
+      await sessionResolveUncertain(this.sessionId, callId, decision, note);
+    },
     onEvent(e: AgentEvent) {
       switch (e.kind) {
         case "user_message":
@@ -520,6 +544,39 @@ export const useChatStore = defineStore("chat", {
           }
           break;
         }
+        case "tool_uncertain":
+          // G2 崩溃恢复：悬空未裁决——行进「结果未知」态 + 组外决策卡。
+          // 只在重放产出（悬空只在崩溃后出现）；找不到宿主行（声明位
+          // 缺失的极端形态）卡照出，细节缺失如实渲染。
+          {
+            const item = this.items.find(
+              (i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id,
+            );
+            if (item) item.uncertain = true;
+            this.items.push({
+              id: nextId++,
+              kind: "uncertain",
+              callId: e.call_id,
+              tool: e.tool,
+              args: e.args,
+            });
+          }
+          break;
+        case "uncertain_resolved":
+          // G2：裁决落日志——卡收为记录行、行复位（随后的合成 tool_result
+          // 同源闭合行明细；找不到行/卡时各自静默，重放幂等）。
+          {
+            const item = this.items.find(
+              (i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id,
+            );
+            if (item) item.uncertain = false;
+            const card = this.items.find(
+              (i): i is Extract<ChatItem, { kind: "uncertain" }> =>
+                i.kind === "uncertain" && i.callId === e.call_id,
+            );
+            if (card) card.resolved = { decision: e.decision, note: e.note };
+          }
+          break;
         case "turn_done":
           this.running = false;
           // steps（v2.101 起可选）：TurnEnd 的重放投影不带，保留 null 如实

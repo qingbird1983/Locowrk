@@ -109,6 +109,93 @@ async fn history_projection_includes_user_messages() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
+/// G2 回归：悬空调用（有 ToolCall 无 ToolResult）的全量投影 = 工具行 +
+/// 紧随的 tool_uncertain 标记；裁决后重放 = uncertain_resolved 收束且
+/// 不再出卡。声明位无 ToolCall 事件的极端形态 = 空细节卡直接出。
+#[test]
+fn uncertain_projection_marks_dangling_and_resolves() {
+    use plugin_api::CallId;
+    use serde_json::json;
+
+    let call = |id: &str| SessionEvent::ToolCall {
+        call_id: CallId(id.into()),
+        tool: "fs_write".into(),
+        args: json!({"path": "a.txt"}),
+        plugin_id: None,
+        plugin_version: semver::Version::new(0, 1, 0),
+        side_effect: plugin_api::SideEffect::Compensable {
+            undo_tool: String::new(),
+        },
+    };
+    let assistant = |ids: &[&str]| SessionEvent::AssistantMessage {
+        content: String::new(),
+        tool_calls: ids.iter().map(|s| CallId((*s).into())).collect(),
+    };
+
+    // 未裁决：工具行 + 卡
+    let mut s = Session::new();
+    for e in [
+        SessionEvent::UserMessage {
+            content: "go".into(),
+            parts: Vec::new(),
+        },
+        assistant(&["a"]),
+        call("a"),
+    ] {
+        s.append(e);
+    }
+    let projected = crate::runner::project_events(s.events(), "s-unc");
+    let kinds: Vec<&str> = projected.iter().map(crate::tests::kind).collect();
+    assert_eq!(
+        kinds,
+        vec!["user_message", "tool_call", "tool_uncertain"],
+        "悬空调用应带 uncertain 卡：{kinds:?}"
+    );
+
+    // 裁决落日志后重放：复现「建卡→裁决收束→行闭合」的实时序列
+    s.append(SessionEvent::ToolExecutionUncertain {
+        call_id: CallId("a".into()),
+        decision: session_store::UncertainDecision::Completed,
+        note: String::new(),
+        ts: 1,
+    });
+    let projected = crate::runner::project_events(s.events(), "s-unc");
+    let kinds: Vec<&str> = projected.iter().map(crate::tests::kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            "user_message",
+            "tool_call",
+            "tool_uncertain",
+            "uncertain_resolved",
+            "tool_result"
+        ],
+        "裁决后重放 = 建卡→收束→闭合：{kinds:?}"
+    );
+    let Some(AgentEvent::UncertainResolved { decision, .. }) =
+        projected.iter().find(|e| matches!(e, AgentEvent::UncertainResolved { .. }))
+    else {
+        panic!("应有 uncertain_resolved");
+    };
+    assert_eq!(decision, "completed");
+    // 合成 ToolResult 按裁决闭合（ok=true + 状态字段）
+    let Some(AgentEvent::ToolResult { ok, output, .. }) = projected.last() else {
+        panic!("末条应为合成 tool_result");
+    };
+    assert!(*ok && output["status"] == "confirmed_completed");
+
+    // 声明位无 ToolCall 事件：空细节卡挂在 assistant 段之后
+    let mut s2 = Session::new();
+    s2.append(assistant(&["ghost"]));
+    let projected = crate::runner::project_events(s2.events(), "s-unc2");
+    let kinds: Vec<&str> = projected.iter().map(crate::tests::kind).collect();
+    assert_eq!(kinds, vec!["tool_uncertain"], "声明位悬空出空细节卡：{kinds:?}");
+    let Some(AgentEvent::ToolUncertain { tool, args, .. }) = projected.first() else {
+        panic!("应为 tool_uncertain");
+    };
+    assert!(tool.is_empty() && args.is_null());
+}
+
 #[test]
 fn undo_rewrite_truncates_and_keeps_backup() {
     let dir = tmp_dir("undo");
