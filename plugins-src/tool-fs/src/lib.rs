@@ -63,9 +63,12 @@ fn describe_manifest() -> CString {
             ToolSpec {
                 name: "fs_read".into(),
                 description: "Read a UTF-8 text file from the local filesystem. \
-                              Pass an absolute path. Returns {path, size, truncated, content}; \
-                              content is capped at max_bytes (default 32KiB). Read before \
-                              edit_replace so old_string can be copied character-for-character."
+                              Pass an absolute path. Returns {path, size, truncated, revision, \
+                              content}; content is capped at max_bytes (default 32KiB) but \
+                              `revision` always covers the FULL file. Read before edit_replace \
+                              so old_string can be copied character-for-character, and pass the \
+                              `revision` as `expected_revision` on any later fs_write / edit / \
+                              fs_delete of this file — write tools reject stale observations."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -120,10 +123,15 @@ fn describe_manifest() -> CString {
             ToolSpec {
                 name: "fs_write".into(),
                 description: "Write a UTF-8 text file (create or overwrite). \
-                              Args: path (absolute), content, create_dirs (bool, default false). \
-                              The previous content, if any, is backed up automatically and the \
-                              result carries {path, bytes, existed, backup}; pass that result \
-                              to fs_restore to undo."
+                              Args: path (absolute), content, create_dirs (bool, default false), \
+                              expected_revision — the `revision` from a previous fs_read of \
+                              this file; pass null ONLY to create a file that must not exist \
+                              yet (the call is rejected if the file already exists without a \
+                              revision, so blind overwrites are impossible). The previous \
+                              content, if any, is backed up automatically; the result carries \
+                              {path, bytes, existed, backup, revision} — pass that `revision` \
+                              as `expected_revision` on your next write to this file, or pass \
+                              the original output to fs_restore to undo."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -131,9 +139,11 @@ fn describe_manifest() -> CString {
                         "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
                         "content": { "type": "string", "description": "full new file content" },
                         "create_dirs": { "type": "boolean",
-                                         "description": "create missing parent dirs (default false)" }
+                                         "description": "create missing parent dirs (default false)" },
+                        "expected_revision": { "type": ["string", "null"],
+                                               "description": "revision from fs_read or the previous write's result; null = create a new file (rejected if the file exists)" }
                     },
-                    "required": ["path", "content"]
+                    "required": ["path", "content", "expected_revision"]
                 }),
                 side_effect: SideEffect::Compensable {
                     undo_tool: "fs_restore".into(),
@@ -143,15 +153,20 @@ fn describe_manifest() -> CString {
             ToolSpec {
                 name: "fs_delete".into(),
                 description: "Delete a file (directories are rejected in v1). \
-                              Args: path (absolute). Irreversible — no backup is kept, \
-                              the call requires user approval."
+                              Args: path (absolute), expected_revision (the `revision` from \
+                              fs_read — deleting must prove the file hasn't changed since you \
+                              observed it, so an externally modified file is never deleted \
+                              blind). Irreversible — no backup is kept, the call requires \
+                              user approval."
                     .into(),
                 schema: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" }
+                        "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
+                        "expected_revision": { "type": "string",
+                                               "description": "revision from fs_read; the call is rejected if the file changed since you observed it" }
                     },
-                    "required": ["path"]
+                    "required": ["path", "expected_revision"]
                 }),
                 side_effect: SideEffect::Irreversible,
                 exposure: Default::default(),
@@ -163,8 +178,10 @@ fn describe_manifest() -> CString {
                               restoring twice is a no-op). Either the compensation layer or \
                               you can invoke it: pass the original call's {call_id, args, \
                               output} from the transcript; only output.{path, backup, existed} \
-                              is used. Irreversible — restoring overwrites the file's current \
-                              content, so the call requires user approval."
+                              is used. The result carries the restored file's `revision` — \
+                              pass it as expected_revision on your next edit. Irreversible — \
+                              restoring overwrites the file's current content, so the call \
+                              requires user approval."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -234,6 +251,14 @@ impl PluginState for FsState {
 }
 
 // ---------- 参数辅助（read / write 两模块共用） ----------
+
+/// 测试共用：env 是进程级全局，read / write 两模块的 env 用例必须共用
+/// 一把锁（tool-edit 的 testutil 同款——各自持锁 = 互斥失效，env 串场）。
+#[cfg(test)]
+pub(crate) mod testutil {
+    use std::sync::Mutex;
+    pub(crate) static ENV_LOCK: Mutex<()> = Mutex::new(());
+}
 
 pub(crate) fn arg_path(args: &Value) -> Result<String, String> {
     args.get("path")

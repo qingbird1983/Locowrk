@@ -4,7 +4,7 @@
 > 版本：1.0（2026-10-07）
 > 上游设计：《模型供应商配置与能力探测设计 v2.0》《多模态支持设计 v2.0》
 > 参照调查：PI-Desktop（F:\Warehouse\Github\PI-Desktop）、ZCode（F:\Warehouse\Github\ZCode）模型配置全量调查（2026-10-07）
-> 状态：**六批全部完成（2026-10-08，v2.127–v2.132）**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；候补批 G5 已随批 F 落地，G2/G3/G4/G6/G7 留作独立小批/随缘搭车
+> 状态：**六批全部完成（2026-10-08，v2.127–v2.132）**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；候补批 G：**G1 随批 B、G5 随批 F、G3 独立小批（2026-10-09，v2.133）已落地**，G2/G4 留作独立小批，G6/G7 记档
 
 ---
 
@@ -20,7 +20,7 @@
 | **D** ✅（v2.130，2026-10-08） | 多模态地基 | ContentPart + wire 编码 + AssetStore + 上传链路 + 渲染 + 估算 | **最大**（内核穿透） | A/B（模态数据 + 钳制公式） |
 | **E** ✅（v2.131，2026-10-08） | 多模态进阶 | 查看器 + 工具结果投影 + 多模态工具 + 降级链 | 中 | D |
 | **F** ✅（v2.132，2026-10-08） | 生态 | 子代理模型档 + 回退链 + 从其他工具导入 + 推荐三选 | 中 | A/B |
-| **G**（候补） | 可靠性补强 | Turn Commit length 闸（随 B）+ Unknown Effect 恢复 + Revision Guard + 只读证明 + 子代理验收（随 F） | 各小-中 | 无硬依赖；G1 随 B、G5 随 F |
+| **G**（候补） | 可靠性补强 | Turn Commit length 闸（随 B）+ Unknown Effect 恢复 + Revision Guard（✅ v2.133）+ 只读证明 + 子代理验收（随 F） | 各小-中 | 无硬依赖；G1 随 B、G5 随 F、G3 独立小批 |
 
 > C 与 A/B 无依赖，若 keyring/代理急可先插；其余严格按序。
 
@@ -150,11 +150,13 @@
 |---|---|---|
 | G1 Turn Commit length 闸 | wire.rs 已捕获 finish_reason 但 client.rs:322 一律当完整——length 截断带部分 tool_calls 会被执行。截断不收束、工具不执行、如实提示 | **随批 B**（maxOutput 钳制提高截断概率，闸先行）；committed 标记 serde default |
 | G2 Unknown Effect | 复用现有 ToolCall/ToolResult 配对（**不建双轨事件**）+ 崩溃恢复扫描（有 Call 无 Result → uncertain）+ uncertain UI + 用户决定事件 | 独立小批（P1） |
-| G3 Revision Guard | tool-fs 插件层：read 回 revision、写类工具带 expected_revision、StaleObservation 错误 | 可随时并行插批（P0） |
+| G3 Revision Guard | tool-fs 插件层：read 回 revision、写类工具带 expected_revision、StaleObservation 错误 | ✅ **已落地**（独立小批 v2.133，2026-10-09——P0 最先做） |
 | G4 只读证明 | shell_read 白名单之上的解析器证明层；硬锁/围栏/unlockRisky 全保留 | tool-shell 批（P1） |
 | G5 子 Agent 独立验收 | subagent_verify（Pure）+ claimed/verified 分离 + 验收调用吃辅助降档 | ✅ **已随批 F 落地**（v2.132） |
 | G6 In-Band Summary | 实测 compact.rs:149 不复用前缀，但压缩低频且本就重建前缀——记档为 legacy 可选优化，不立批；批 B 顺带复核形状 | 记档（P2） |
 | G7 crate 行数软上限 | cordis-core 3000 / kernel-agent 5000，tokei 脚本挂 check_length 旁 | 随手搭车（P3） |
+
+**G3 落成记录（2026-10-09，v2.133）**：共享基座 `plugin_api::fsutil`（content_revision = sha256 over **LF 归一全量字节**，\r\n 折叠与 edit_replace 容错同口径；check_revision 报文带双方 revision + 指路 fs_read——§3.3 兑现；plugin-api 增 sha2 与 desktop 同锁）+ `file_revision`/`arg_expected_revision`。五写类工具：fs_read 回全量 revision（与截断窗口解耦）；fs_write expected_revision **缺省/null = 新建语义**（§3.4，已存在即拒盲覆盖）；fs_delete 同守卫（§3.5 表）；edit_replace/lines/diff 必传（比对先于任何备份/写盘）；**成功输出带新 revision 供链式写**（多步编辑不重读，守卫不断链）；fs_restore 输出带恢复后 revision；undo 契约与审批面零改动。插件 tool-fs 0.1.5 / tool-edit 0.2.1（小迭代 +0.0.1）。§13 对齐注记：read_image/pdf_to_images asset 引用不带 revision（无 edit 消费方，评估裁掉记档）。走查（deepseek 真轮 3 轮）：§10.2 打地鼠全链实锤（读→外部注入→edit stale 拒→重读→成功且**注入行幸存**；模型收束报告逐字写明「工具因观测过期拒绝写入……这是安全机制要求的」）+ 链式 revision 逐字节相同零失败 + 删除守卫（陈旧 fs_delete → 拒 → 重读 → 删成功；复跑轮模型自觉先重读并主动报告外部改动异常）。实抓修复 ×2：tool-fs 测试锁分裂（read/write 各持私有 ENV_LOCK 互斥失效 → 上收 crate::testutil 共锁）、lines.rs 守卫绑定遮蔽 args content（clippy 抓到防住真 bug）；搭车 desktop catalog 测试同 pid 目录并行互删分家。已知边界：守卫核对与落盘间 TOCTOU 微窗（缩窗防线非事务，设计接受）。门禁：fmt / clippy 0 / 根 workspace 全绿（plugin-host FFI 端到端含盲覆盖与陈旧拒绝断言）/ desktop 321 / vue-tsc 0 / build / lint:style。详见 CHANGELOG v2.133。
 
 ---
 

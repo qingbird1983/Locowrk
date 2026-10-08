@@ -91,7 +91,9 @@ fn parse_str_counts_providers_and_models() {
 
 #[test]
 fn store_load_failure_degrades_to_empty() {
-    let dir = std::env::temp_dir().join(format!("lw-catalog-{}", std::process::id()));
+    // 目录名带测试名：两用例同 pid 目录会互删（并行线程竞态，2026-10-09 满
+    // 跑实抓）——各用独立目录
+    let dir = std::env::temp_dir().join(format!("lw-catalog-missing-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("missing.json");
     let store = CatalogStore::new(path);
@@ -103,7 +105,7 @@ fn store_load_failure_degrades_to_empty() {
 
 #[test]
 fn store_lazy_loads_from_file() {
-    let dir = std::env::temp_dir().join(format!("lw-catalog-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("lw-catalog-lazy-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("api.json");
     std::fs::write(

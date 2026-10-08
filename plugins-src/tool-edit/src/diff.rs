@@ -6,7 +6,10 @@
 use std::path::Path;
 
 use plugin_api::HostVtable;
-use plugin_api::fsutil::{backup_original, effective_roots, resolve_existing};
+use plugin_api::fsutil::{
+    arg_expected_revision, backup_original, check_revision, content_revision, effective_roots,
+    file_revision, resolve_existing,
+};
 use plugin_api::serde_json::{Value, json};
 
 use crate::{load_lines, store_lines};
@@ -44,7 +47,16 @@ pub(crate) fn edit_diff(args: &Value, host: *const HostVtable) -> Result<Value, 
     let roots = unsafe { effective_roots(host) }?;
     let resolved = resolve_existing(Path::new(path), &roots)?;
     let display = resolved.display().to_string();
-    let (_, lines, had_nl) = load_lines(&display)?;
+    let (content, lines, had_nl) = load_lines(&display)?;
+    // Revision Guard（可靠性稿 §3，G3）：守卫在 patch 试算之前（fail fast，
+    // 过期观察连匹配都不必做）
+    let expected = arg_expected_revision("edit_diff", args)?;
+    check_revision(
+        "edit_diff",
+        &display,
+        &expected,
+        &content_revision(content.as_bytes()),
+    )?;
 
     // 先在内存里整段试算（严格匹配），全过了才备份 + 落盘
     let mut out: Vec<String> = Vec::new();
@@ -92,12 +104,14 @@ pub(crate) fn edit_diff(args: &Value, host: *const HostVtable) -> Result<Value, 
     // 全部匹配 → 备份先行，再落盘
     let backup = backup_original(&resolved, "tool-edit")?;
     let bytes = store_lines(&display, &out, had_nl)?;
+    let revision = file_revision(Path::new(&display))?.unwrap_or_default();
     Ok(json!({
         "path": display,
         "bytes": bytes,
         "hunks_applied": hunks.len(),
         "existed": true,
         "backup": backup.display().to_string(),
+        "revision": revision,
     }))
 }
 

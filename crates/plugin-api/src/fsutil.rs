@@ -8,9 +8,13 @@
 //!   工作区目录），未设置时**只放行数据根**（备份目录在数据根下，
 //!   fs_restore 天然可达）；默认最小暴露，放开必须显式配置
 //! - 写入前备份原内容到数据根 `backups/<plugin>/`，undo 按路径自寻
+//! - Revision Guard（可靠性稿 §3）基座也在这里：read 回 revision、
+//!   写类工具核对 `expected_revision`，过期观察一律拒绝并指路重读
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+
+use sha2::{Digest, Sha256};
 
 /// 数据根：`LOCOWRK_DATA_DIR` 优先，否则 HOME 下 `.Locowrk`（desktop
 /// data_root.rs 同规则；插件不依赖宿主，此处为权威共享实现）。
@@ -226,6 +230,85 @@ pub fn restore_via_rename(backup: &Path, target: &Path) -> Result<(), String> {
 /// 便于 undo 工具区分"文件确实不在"与真 IO 错误。
 pub fn is_not_found(e: &std::io::Error) -> bool {
     matches!(e.kind(), ErrorKind::NotFound)
+}
+
+// ---------- Revision Guard（可靠性稿 §3，2026-10-09 G3 批） ----------
+
+/// 内容 revision：sha256 over **LF 归一后的全量字节**（\r\n 视作 \n）。
+/// 归一口径与 edit_replace 的容错匹配一致——换行风格漂移（编辑器保存 /
+/// git autocrlf）不判变更、不逼模型重读；BOM、尾随空白等其余差异照常
+/// 判变更。全量哈希而非 mtime+size 快路径：守卫判定每调用只算一次，
+/// MB 级文件毫秒级，换取对外部修改的无死角检测。
+pub fn content_revision(bytes: &[u8]) -> String {
+    let mut norm = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\r' && bytes.get(i + 1) == Some(&b'\n') {
+            i += 1; // 丢 \r 留 \n（成对折叠）
+        } else {
+            norm.push(bytes[i]);
+            i += 1;
+        }
+    }
+    let digest = Sha256::digest(&norm);
+    let mut out = String::with_capacity(7 + 2 * digest.len());
+    out.push_str("sha256:");
+    for b in digest {
+        out.push_str(&format!("{b:02x}"));
+    }
+    out
+}
+
+/// 文件当前 revision；不存在 = `None`（fs_write 新建语义的判定依据），
+/// 其余 IO 错误如实上抛。
+pub fn file_revision(path: &Path) -> Result<Option<String>, String> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(Some(content_revision(&bytes))),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("revision read `{}`: {e}", path.display())),
+    }
+}
+
+/// Revision Guard 核对（§3.2）：expected ≠ current = StaleObservation 形态
+/// 报错——§3.3「错误信息直接告诉 AI 下一步做什么」：带双方 revision、
+/// 列可能原因、指路重读。
+pub fn check_revision(
+    tool: &str,
+    display: &str,
+    expected: &str,
+    current: &str,
+) -> Result<(), String> {
+    if expected == current {
+        return Ok(());
+    }
+    Err(format!(
+        "{tool} rejected: the file has changed since you observed it (stale observation).\n\
+         your revision:       {expected}\n\
+         current revision:    {current}\n\
+         file: {display}\n\
+         it was probably modified outside this conversation (user editor, another \
+         process, or another session). fs_read the file again and rebuild your \
+         edit from the current content."
+    ))
+}
+
+/// edit 类 / 删除类工具的 `expected_revision` 必传参数；缺了给指路报错。
+/// fs_write 的新建语义（缺省/null = 期望文件不存在）由调用方自行分派，
+/// 不经这里。
+pub fn arg_expected_revision(
+    tool: &str,
+    args: &crate::serde_json::Value,
+) -> Result<String, String> {
+    args.get("expected_revision")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            format!(
+                "{tool} rejected: missing `expected_revision` — fs_read the file \
+                 first and pass the `revision` from its result (write tools must \
+                 verify the file hasn't changed since you observed it)"
+            )
+        })
 }
 
 #[cfg(test)]

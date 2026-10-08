@@ -66,6 +66,12 @@ stage tool-fs 0.1.3
 # 的唯一撤销路径，意外时刻最不可能探索）+ fs_restore 描述改写（删「usually
 # invoked by the compensation layer」劝退措辞，明确可拿原调用三件套手动自救）
 stage tool-fs 0.1.4
+# 0.1.5（2026-10-09，小迭代 +0.0.1）：G3 Revision Guard（可靠性稿 §3）——
+# fs_read 回全量 revision（LF 归一 sha256，与截断窗口解耦）；fs_write
+# expected_revision 缺省/null = 新建语义（已存在即拒盲覆盖）、给了必须
+# 一致；fs_delete 同守卫；成功输出带新 revision 供链式；fs_restore 输出
+# 带恢复后 revision（撤销后守卫不断链）。共享基座进 plugin_api::fsutil
+stage tool-fs 0.1.5
 # 0.1.1（2026-10-06，小迭代 +0.0.1）：fetch 副作用分级纠正（真实测试复测
 # P0-1）——Pure → Irreversible（GET 也对外发起网络请求，服务端留痕、URL
 # 可能带敏感 token，"只读"标法与事实不符）；描述同步如实（plugins.md §三
@@ -90,6 +96,11 @@ stage tool-git 0.1.3
 # Timo 实测教训 = on_demand 截断下模型根本用不上它，退而整文件重写）。
 # 设计文档 docs/design/edit_replace.md；工具描述与 edit_diff 互指优先级
 stage tool-edit 0.2.0
+# 0.2.1（2026-10-09，小迭代 +0.0.1）：G3 Revision Guard——三工具必带
+# expected_revision（fs_read / 上一次编辑输出的 revision），陈旧观察拒绝
+# 并指路重读（报文带双方 revision）；成功输出带新 revision 供链式编辑。
+# 共享基座 plugin_api::fsutil（check_revision / arg_expected_revision）
+stage tool-edit 0.2.1
 # 0.1.1（2026-10-04，小迭代 +0.0.1）：双层记忆（㉘·A·fix）——memory_write
 # +scope="global"（全局偏好层）；读/搜/列 = 项目 ∪ 全局并带层标；未归属
 # 会话缺省写拒绝；全局行聊天工具禁删（管理页专属）；headless 语义不变
@@ -108,5 +119,5 @@ stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit 0.2.0 + tool-fs/{0.1.3,0.1.4} + tool-fetch 0.1.1 + tool-shell 0.1.3 + tool-git 0.1.3 + memory-sqlite 0.1.4（工具层复测批）+ 其余见上注释"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit/{0.2.0,0.2.1} + tool-fs/{0.1.3,0.1.4,0.1.5} + tool-fetch 0.1.1 + tool-shell 0.1.3 + tool-git 0.1.3 + memory-sqlite 0.1.4（0.2.1/0.1.5 = G3 Revision Guard 批）+ 其余见上注释"
 echo "next: cargo run -p kernel-bin -- demo"

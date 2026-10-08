@@ -5,7 +5,10 @@
 use std::path::Path;
 
 use plugin_api::HostVtable;
-use plugin_api::fsutil::{backup_original, effective_roots, resolve_existing};
+use plugin_api::fsutil::{
+    arg_expected_revision, backup_original, check_revision, content_revision, effective_roots,
+    file_revision, resolve_existing,
+};
 use plugin_api::serde_json::{Value, json};
 
 use crate::{load_lines, store_lines};
@@ -40,7 +43,15 @@ pub(crate) fn edit_lines(args: &Value, host: *const HostVtable) -> Result<Value,
     let roots = unsafe { effective_roots(host) }?;
     let resolved = resolve_existing(Path::new(path), &roots)?;
     let display = resolved.display().to_string();
-    let (_, lines, had_nl) = load_lines(&display)?;
+    let (current, lines, had_nl) = load_lines(&display)?;
+    // Revision Guard（可靠性稿 §3，G3）：比对在任何备份/写盘之前
+    let expected = arg_expected_revision("edit_lines", args)?;
+    check_revision(
+        "edit_lines",
+        &display,
+        &expected,
+        &content_revision(current.as_bytes()),
+    )?;
     let total = lines.len() as u64;
     if end > total {
         return Err(format!(
@@ -65,11 +76,14 @@ pub(crate) fn edit_lines(args: &Value, host: *const HostVtable) -> Result<Value,
     out.extend(new_lines);
     out.extend_from_slice(&lines[end as usize..]);
     let bytes = store_lines(&display, &out, had_nl)?;
+    // 落盘后读回算 revision（与 replace 的内存口径等价——文件刚由本调用写定）
+    let revision = file_revision(Path::new(&display))?.unwrap_or_default();
     Ok(json!({
         "path": display,
         "bytes": bytes,
         "replaced": replaced,
         "existed": true,
         "backup": backup.display().to_string(),
+        "revision": revision,
     }))
 }

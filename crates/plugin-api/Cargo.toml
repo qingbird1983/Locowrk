@@ -10,3 +10,5 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+# Revision Guard（可靠性稿 §3）的内容指纹——版本与 desktop 的 asset 存储同锁
+sha2 = "0.10"

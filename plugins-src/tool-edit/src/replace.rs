@@ -13,7 +13,10 @@
 use std::path::Path;
 
 use plugin_api::HostVtable;
-use plugin_api::fsutil::{backup_original, effective_roots, resolve_existing};
+use plugin_api::fsutil::{
+    arg_expected_revision, backup_original, check_revision, content_revision, effective_roots,
+    resolve_existing,
+};
 use plugin_api::serde_json::{Value, json};
 
 pub(crate) fn edit_replace(args: &Value, host: *const HostVtable) -> Result<Value, String> {
@@ -45,6 +48,17 @@ pub(crate) fn edit_replace(args: &Value, host: *const HostVtable) -> Result<Valu
     let display = resolved.display().to_string();
     let content =
         std::fs::read_to_string(&resolved).map_err(|e| format!("edit_replace `{display}`: {e}"))?;
+
+    // Revision Guard（可靠性稿 §3，G3）：编辑必须证明观察未过期——revision
+    // 与当前内容（LF 归一哈希）不符即拒，报文指路重读；比对在任何匹配 /
+    // 备份之前（fail fast，不动文件系统）。
+    let expected = arg_expected_revision("edit_replace", args)?;
+    check_revision(
+        "edit_replace",
+        &display,
+        &expected,
+        &content_revision(content.as_bytes()),
+    )?;
 
     // 精确匹配优先：零命中才进容错匹配（精确多重命中 = 局面无歧义，报错
     // 列出行号让模型扩上下文，不浪费容错轮）
@@ -96,6 +110,7 @@ pub(crate) fn edit_replace(args: &Value, host: *const HostVtable) -> Result<Valu
         "byte_range": [first_span.0, first_span.1],
         "existed": true,
         "backup": backup.display().to_string(),
+        "revision": content_revision(new_content.as_bytes()),
     }))
 }
 

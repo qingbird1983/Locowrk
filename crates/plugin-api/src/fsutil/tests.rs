@@ -134,3 +134,52 @@ fn missing_path_outside_roots_reports_outside_not_os_error() {
         .join("evil.txt");
     assert!(resolve_for_write(&write_escape, &roots).is_err());
 }
+
+// ---------- Revision Guard（G3） ----------
+
+use super::{check_revision, content_revision, file_revision};
+
+#[test]
+fn revision_hash_is_lf_normalized_and_stable() {
+    // 稳定：同内容同 revision；格式 sha256:<64 hex>
+    let rev = content_revision(b"hello\nworld\n");
+    assert_eq!(content_revision(b"hello\nworld\n"), rev);
+    assert!(rev.starts_with("sha256:"));
+    assert_eq!(rev[7..].len(), 64);
+    assert!(rev[7..].bytes().all(|b| b.is_ascii_hexdigit()));
+
+    // CRLF ↔ LF 归一：换行风格漂移不判变更
+    assert_eq!(content_revision(b"a\r\nb\r\n"), content_revision(b"a\nb\n"));
+    // 孤 \r 是内容，照常参与哈希
+    assert_ne!(content_revision(b"a\rb\n"), content_revision(b"ab\n"));
+    // 其余差异照常判变更
+    assert_ne!(content_revision(b"a\nb\n"), content_revision(b"a\nb \n"));
+}
+
+#[test]
+fn file_revision_three_states() {
+    let root = temp_root("revision");
+    let file = root.join("f.txt");
+    // 不存在 = None（fs_write 新建语义判定依据）
+    assert_eq!(file_revision(&file).unwrap(), None);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(&file, b"v1").unwrap();
+    let rev1 = file_revision(&file).unwrap().unwrap();
+    std::fs::write(&file, b"v2").unwrap();
+    assert_ne!(file_revision(&file).unwrap().unwrap(), rev1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn check_revision_mismatch_teaches_reread() {
+    // 一致放行
+    assert!(check_revision("edit_replace", "f.txt", "sha256:a", "sha256:a").is_ok());
+    // 不一致：报文带双方 revision 并指路重读（§3.3）
+    let err = check_revision("edit_replace", "f.txt", "sha256:a", "sha256:b").unwrap_err();
+    assert!(err.contains("stale observation"), "got: {err}");
+    assert!(
+        err.contains("sha256:a") && err.contains("sha256:b"),
+        "got: {err}"
+    );
+    assert!(err.contains("fs_read"), "got: {err}");
+}

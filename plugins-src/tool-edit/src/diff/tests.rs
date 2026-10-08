@@ -7,12 +7,18 @@ use std::path::Path;
 use super::edit_diff;
 use crate::testutil::ENV_LOCK;
 use plugin_api::HostVtable;
+use plugin_api::fsutil::file_revision;
 use plugin_api::serde_json::json;
 
 /// 直呼函数的单测没有调用期 vtable——空指针 = 回落 env 全局围栏（与
 /// 未接围栏前的语义一致）。
 fn no_host() -> *const HostVtable {
     std::ptr::null()
+}
+
+/// 「当前 revision」：外部写入后取一次随调用传入（模拟模型从 fs_read 拿值）。
+fn rev_of(path: &Path) -> String {
+    file_revision(path).unwrap().unwrap()
 }
 
 fn temp_root(tag: &str) -> std::path::PathBuf {
@@ -55,8 +61,17 @@ fn multi_hunk_apply_with_trailing_newline() {
  fn e() {}
 +fn f() {}
 ";
-    let out = edit_diff(&json!({ "path": path, "patch": patch }), no_host()).expect("apply ok");
+    let out = edit_diff(
+        &json!({
+            "path": path,
+            "patch": patch,
+            "expected_revision": rev_of(Path::new(&path)),
+        }),
+        no_host(),
+    )
+    .expect("apply ok");
     assert_eq!(out["hunks_applied"], json!(2));
+    assert!(out["revision"].as_str().unwrap().starts_with("sha256:"));
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
         "fn a() {}\nfn b_changed() {}\nfn c() {}\nfn d() {}\nfn e() {}\nfn f() {}\n"
@@ -79,7 +94,8 @@ fn mismatch_rejects_whole_patch_without_touching_file() {
 -beta
 +BETA
 ";
-    // 恶意：上下文行与文件不符 → 整体拒绝、文件未动
+    let rev = rev_of(Path::new(&path));
+    // 恶意：上下文行与文件不符 → 整体拒绝、文件未动（守卫过、匹配才报错）
     let bad_context = "\
 --- a/f.txt
 +++ b/f.txt
@@ -87,7 +103,11 @@ fn mismatch_rejects_whole_patch_without_touching_file() {
 -delta
 +BETA
 ";
-    let err = edit_diff(&json!({ "path": path, "patch": bad_context }), no_host()).unwrap_err();
+    let err = edit_diff(
+        &json!({ "path": path, "patch": bad_context, "expected_revision": rev }),
+        no_host(),
+    )
+    .unwrap_err();
     assert!(err.contains("expected"), "got: {err}");
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
@@ -96,7 +116,11 @@ fn mismatch_rejects_whole_patch_without_touching_file() {
     );
 
     // 正确 patch 应用成功
-    edit_diff(&json!({ "path": path, "patch": patch }), no_host()).expect("正确 patch 应用成功");
+    edit_diff(
+        &json!({ "path": path, "patch": patch, "expected_revision": rev }),
+        no_host(),
+    )
+    .expect("正确 patch 应用成功");
 
     unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
     let _ = std::fs::remove_dir_all(&root);

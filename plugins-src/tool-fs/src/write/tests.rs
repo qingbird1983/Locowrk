@@ -1,14 +1,13 @@
 //! fs_write / fs_delete / fs_restore 单测（进程内直接调 PluginState 层，
-//! 不经 FFI）。涉及 LOCOWRK_DATA_DIR 的用例串行（env 是进程级全局）。
+//! 不经 FFI）。涉及 LOCOWRK_DATA_DIR 的用例串行（env 是进程级全局；
+//! 锁在 crate::testutil，与 read 模块共用）。
 
-use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{fs_delete, fs_restore, fs_write};
+use crate::testutil::ENV_LOCK;
+use plugin_api::fsutil::{content_revision, file_revision};
 use plugin_api::serde_json::{Value, json};
-
-/// env 是进程级全局：改数据根的用例先抢锁再 set_var。
-static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn temp_root(tag: &str) -> std::path::PathBuf {
     let nanos = SystemTime::now()
@@ -39,13 +38,18 @@ fn write_overwrite_backup_restore_roundtrip() {
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, "v1").unwrap();
 
-    // 覆盖写：existed=true 且备份落进数据根
+    // 覆盖写（带当前 revision）：existed=true 且备份落进数据根
     let out = fs_write(
-        &json!({ "path": file.display().to_string(), "content": "v2 longer" }),
+        &json!({
+            "path": file.display().to_string(),
+            "content": "v2 longer",
+            "expected_revision": file_revision(&file).unwrap().unwrap(),
+        }),
         std::ptr::null(),
     )
     .expect("write ok");
     assert_eq!(out["existed"], json!(true));
+    assert_eq!(out["revision"], json!(content_revision(b"v2 longer")));
     assert!(out["backup"].as_str().is_some(), "backup path recorded");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "v2 longer");
     let backup = out["backup"].as_str().unwrap();
@@ -57,10 +61,11 @@ fn write_overwrite_backup_restore_roundtrip() {
     );
     assert_eq!(std::fs::read_to_string(backup).unwrap(), "v1");
 
-    // undo：恢复 v1，备份自消费
+    // undo：恢复 v1，备份自消费；输出带恢复后文件的 revision（守卫不断链）
     let restored = fs_restore(&undo_payload(&out), std::ptr::null()).expect("restore ok");
     assert_eq!(restored["restored"], json!(true));
     assert_eq!(restored["already"], json!(false));
+    assert_eq!(restored["revision"], json!(content_revision(b"v1")));
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "v1");
     assert!(!backup.exists(), "backup consumed by rename");
 
@@ -149,11 +154,14 @@ fn write_guards_and_delete_matrix() {
     fs_restore(&undo_payload(&out), std::ptr::null()).unwrap();
     assert!(!deep.exists());
 
-    // delete 矩阵：删文件 ok；删目录 / 删不存在 报错
+    // delete 矩阵：删文件 ok（带当前 revision）；删目录 / 删不存在 报错
     let file = root.join("doomed.txt");
     std::fs::write(&file, b"bye").unwrap();
     let deleted = fs_delete(
-        &json!({ "path": file.display().to_string() }),
+        &json!({
+            "path": file.display().to_string(),
+            "expected_revision": file_revision(&file).unwrap().unwrap(),
+        }),
         std::ptr::null(),
     )
     .expect("delete ok");
@@ -183,6 +191,86 @@ fn write_guards_and_delete_matrix() {
         )
         .is_err()
     );
+
+    unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Revision Guard 矩阵（可靠性稿 §3）：新建语义 / 盲覆盖拒绝 / 陈旧观察
+/// 拒绝并指路重读 / 链式 revision / 删除守卫。
+#[test]
+fn write_and_delete_revision_guard_matrix() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let root = temp_root("revguard");
+    unsafe { std::env::set_var("LOCOWRK_DATA_DIR", &root) };
+    let p = root.join("g.txt").display().to_string();
+
+    // 新建：缺省（不带 expected_revision）= 期望文件不存在 → 放行；
+    // 输出带新 revision
+    let out =
+        fs_write(&json!({ "path": p, "content": "v1" }), std::ptr::null()).expect("create ok");
+    assert_eq!(out["existed"], json!(false));
+    assert_eq!(out["revision"], json!(content_revision(b"v1")));
+
+    // 盲覆盖拒绝：文件已存在而不带 revision（缺省与显式 null 同判）
+    for extra in [json!({}), json!({ "expected_revision": null })] {
+        let mut args = json!({ "path": p, "content": "v2" });
+        for (k, v) in extra.as_object().unwrap() {
+            args[k] = v.clone();
+        }
+        let err = fs_write(&args, std::ptr::null()).unwrap_err();
+        assert!(err.contains("already exists"), "got: {err}");
+        assert!(err.contains("fs_read"), "got: {err}");
+    }
+    assert_eq!(std::fs::read_to_string(&p).unwrap(), "v1", "目标未动");
+
+    // 陈旧观察拒绝：报文带双方 revision + fs_read 指路（§3.3）
+    let err = fs_write(
+        &json!({ "path": p, "content": "v2", "expected_revision": "sha256:deadbeef" }),
+        std::ptr::null(),
+    )
+    .unwrap_err();
+    assert!(err.contains("stale observation"), "got: {err}");
+    assert!(err.contains("sha256:deadbeef"), "got: {err}");
+    assert!(
+        err.contains(&content_revision(b"v1")),
+        "报文带当前 revision: {err}"
+    );
+
+    // 链式：上一次写输出的 revision 直接续用 → 放行
+    let out = fs_write(
+        &json!({ "path": p, "content": "v2", "expected_revision": out["revision"] }),
+        std::ptr::null(),
+    )
+    .expect("chained overwrite ok");
+    assert_eq!(std::fs::read_to_string(&p).unwrap(), "v2");
+    assert_eq!(out["revision"], json!(content_revision(b"v2")));
+
+    // 给了 revision 但文件已消失：指路新建语义
+    std::fs::remove_file(&p).unwrap();
+    let err = fs_write(
+        &json!({ "path": p, "content": "v3", "expected_revision": out["revision"] }),
+        std::ptr::null(),
+    )
+    .unwrap_err();
+    assert!(err.contains("does not exist"), "got: {err}");
+
+    // 删除守卫：缺 revision 指路报错；陈旧拒绝；一致才删
+    std::fs::write(&p, b"bye").unwrap();
+    let err = fs_delete(&json!({ "path": p }), std::ptr::null()).unwrap_err();
+    assert!(err.contains("missing `expected_revision`"), "got: {err}");
+    let err = fs_delete(
+        &json!({ "path": p, "expected_revision": "sha256:deadbeef" }),
+        std::ptr::null(),
+    )
+    .unwrap_err();
+    assert!(err.contains("stale observation"), "got: {err}");
+    fs_delete(
+        &json!({ "path": p, "expected_revision": content_revision(b"bye") }),
+        std::ptr::null(),
+    )
+    .expect("delete with fresh revision ok");
+    assert!(!std::path::Path::new(&p).exists());
 
     unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
     let _ = std::fs::remove_dir_all(&root);

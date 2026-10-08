@@ -1,10 +1,12 @@
 //! 端到端集成测试：阶段八⑥第二批官方工具（真实 dlopen）。
 //!
-//! - tool-fs 1.2.1：fs_write 备份 → fs_restore 撤销（undo 契约全链路）、
-//!   fs_delete、允许根拒绝
+//! - tool-fs 0.1.5：fs_read 回 revision → fs_write 守卫核对 + 备份 →
+//!   fs_restore 撤销（undo 契约全链路）、fs_delete 守卫、允许根拒绝、
+//!   陈旧观察拒绝（G3 Revision Guard）
 //! - tool-shell 1.0.0：白名单放行 / 显式配置扩展 / denylist 与元字符拒绝 /
 //!   真实 spawn（cargo --version）
-//! - tool-edit 1.1.1：edit_replace → 跨插件 fs_restore 撤销
+//! - tool-edit 0.2.1：edit_replace（带 expected_revision）→ 跨插件
+//!   fs_restore 撤销
 //!
 //! 与 fs_fetch_plugins.rs 同款模式：测试自建产物暂存到 target/locowrk-test/。
 //! env 是进程级全局，全部用例串行（一把大锁包住整个测试体）。
@@ -112,21 +114,59 @@ fn fs_write_backup_restore_delete_end_to_end() {
     unsafe { std::env::set_var("LOCOWRK_DATA_DIR", root.display().to_string()) };
 
     let registry = Arc::new(PluginRegistry::new());
-    load_activate("tool-fs", "1.2.1", &registry);
+    load_activate("tool-fs", "0.1.5", &registry);
     let source = RegistryToolSource::new(Arc::clone(&registry));
 
     let file = root.join("note.txt");
     std::fs::write(&file, "v1").unwrap();
 
-    // 覆盖写：备份进数据根
+    // fs_read 拿 revision（G3 链条的第一环，过 FFI 验证）
+    let read_out = call(
+        source.resolve("fs_read").unwrap().as_ref(),
+        json!({ "path": file.display().to_string() }),
+    )
+    .expect("fs_read ok");
+    let revision = read_out["revision"].as_str().expect("revision").to_string();
+
+    // 盲覆盖拒绝（无 expected_revision）
+    let err = err_msg(
+        call(
+            source.resolve("fs_write").unwrap().as_ref(),
+            json!({ "path": file.display().to_string(), "content": "v2 longer content" }),
+        )
+        .unwrap_err(),
+    );
+    assert!(err.contains("already exists"), "{err}");
+
+    // 覆盖写（带 revision）：备份进数据根，输出带新 revision
     let out = call(
         source.resolve("fs_write").unwrap().as_ref(),
-        json!({ "path": file.display().to_string(), "content": "v2 longer content" }),
+        json!({
+            "path": file.display().to_string(),
+            "content": "v2 longer content",
+            "expected_revision": revision,
+        }),
     )
     .expect("fs_write ok");
     assert_eq!(out["existed"], json!(true));
+    assert!(out["revision"].as_str().is_some(), "新 revision 回传");
     let backup = out["backup"].as_str().expect("backup recorded").to_string();
     assert_eq!(std::fs::read_to_string(&backup).unwrap(), "v1");
+
+    // 陈旧观察拒绝：伪造过期 revision → StaleObservation 报文带双方
+    let err = err_msg(
+        call(
+            source.resolve("fs_write").unwrap().as_ref(),
+            json!({
+                "path": file.display().to_string(),
+                "content": "v3",
+                "expected_revision": revision,
+            }),
+        )
+        .unwrap_err(),
+    );
+    assert!(err.contains("stale observation"), "{err}");
+    assert!(err.contains("fs_read"), "{err}");
 
     // undo 契约：内核以 {call_id, args, output} 调 fs_restore
     let undo = json!({
@@ -140,10 +180,19 @@ fn fs_write_backup_restore_delete_end_to_end() {
     // 幂等：重复恢复 no-op
     call(source.resolve("fs_restore").unwrap().as_ref(), undo).expect("idempotent restore");
 
-    // delete（Irreversible 的审批在内核层，这里验证工具本体）
+    // delete（Irreversible 的审批在内核层，这里验证工具本体）：重读拿
+    // 新 revision 后才放行
+    let read_out = call(
+        source.resolve("fs_read").unwrap().as_ref(),
+        json!({ "path": file.display().to_string() }),
+    )
+    .expect("fs_read ok");
     call(
         source.resolve("fs_delete").unwrap().as_ref(),
-        json!({ "path": file.display().to_string() }),
+        json!({
+            "path": file.display().to_string(),
+            "expected_revision": read_out["revision"],
+        }),
     )
     .expect("fs_delete ok");
     assert!(!file.exists());
@@ -270,24 +319,32 @@ fn edit_replace_then_cross_plugin_restore() {
 
     // tool-edit 与 tool-fs 同 registry：undo 跨插件解析
     let registry = Arc::new(PluginRegistry::new());
-    load_activate("tool-fs", "1.2.1", &registry);
-    load_activate("tool-edit", "1.1.1", &registry);
+    load_activate("tool-fs", "0.1.5", &registry);
+    load_activate("tool-edit", "0.2.1", &registry);
     let source = RegistryToolSource::new(Arc::clone(&registry));
 
     let file = root.join("app.rs");
     let original = "fn main() {\n    todo!()\n}\n";
     std::fs::write(&file, original).unwrap();
 
+    // fs_read → revision → edit_replace（G3 全链过 FFI）
+    let read_out = call(
+        source.resolve("fs_read").unwrap().as_ref(),
+        json!({ "path": file.display().to_string() }),
+    )
+    .expect("fs_read ok");
     let out = call(
         source.resolve("edit_replace").unwrap().as_ref(),
         json!({
             "path": file.display().to_string(),
             "old_string": "todo!()",
             "new_string": "println!(\"hi\");",
+            "expected_revision": read_out["revision"],
         }),
     )
     .expect("edit_replace ok");
     assert_eq!(out["edits"], json!(1));
+    assert!(out["revision"].as_str().is_some(), "新 revision 回传");
     assert!(std::fs::read_to_string(&file).unwrap().contains("println!"));
 
     // 撤销：edit 的 output 直接喂给 tool-fs 的 fs_restore

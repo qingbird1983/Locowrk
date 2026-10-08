@@ -751,7 +751,7 @@ fi
 | Turn Commit | draft/commit 分离已是结构现状：流式 delta 只进 UI 不落盘不执行，AssistantMessage 在 step 收束后才写（v2.35）。真缺口只有一个：wire.rs:137 已捕获 finish_reason，但 client.rs:322 把「finish_reason 到场」一律当完整——length 截断带部分 tool_calls 会被执行 | 只补 length 闸（截断不收束、工具不执行、如实提示），随批 B 落地（maxOutput 预检钳制会提高截断概率，闸要先于/同批有）；committed 落事件走 serde(default) 家法。与 DeepSeek 思考回传（供应商稿 §5.5）协同：截断消息不入史 → 无残缺 reasoning 需回传 |
 | Unknown Effect | Started/Receipt 配对已存在 = ToolCall/ToolResult 事件对（纪律 5 先写日志再执行；v2.56 已闭合解析失败的悬空调用） | 不新增 ToolExecutionStarted/Receipt 双轨事件——复用现有对，只补三件：崩溃恢复扫描（有 Call 无 Result → uncertain）、uncertain UI、用户决定事件（新事件一个，serde default）。批 D 的 ToolResult.output 携带 asset → receipt 载荷天然兼容 |
 | In-Band Summary | 实测 compact.rs:149：摘要 = 单条 user 消息包 <transcript>，不复用前缀——差距属实。但：①压缩是低频事件（阈值+稳定期），且压缩本身就重建前缀（计划内失效），摘要调用的 miss 是同一计划内事件的一部分，"1/50"按高频场景推算不成立；②in-band 复用全历史会引入 DeepSeek reasoning 回传义务与批 D 图片重发，复杂度大于收益；③记录员（tree 整理）是独立组合，本就不该 in-band | 记档为 legacy ctx-compact 的可选优化（P2），不单独立批；批 B 顺带复核形状。范围永不扩展到记录员/树会话（tree 会话本就跳过 ctx-compact） |
-| Revision Guard | 纯 tool-fs 插件层改动，与 LLM 轨零交集；mtime+size 快路径与 M1 缓存指纹思想同源；asset 存储的 sha256 内容寻址（批 D）是同一思想在媒体上的实例 | 可随时并行插批；read 返回 revision 时注意批 E read_image 返回 asset 引用同样带 revision（实现时对齐） |
+| Revision Guard | 纯 tool-fs 插件层改动，与 LLM 轨零交集；mtime+size 快路径与 M1 缓存指纹思想同源；asset 存储的 sha256 内容寻址（批 D）是同一思想在媒体上的实例 | ✅ **已落地（G3 独立小批 v2.133，2026-10-09）**：共享基座 `plugin_api::fsutil`（content_revision = sha256 over **LF 归一全量字节**——设计坑表「换行符不一致」按归一解决；mtime+size 快路径**不取**——守卫每调用只算一次，全量哈希换无死角检测）+ check_revision 报文带双方 revision 指路重读（§3.3 兑现）；fs_write **缺省/null = 新建语义**（§3.4），fs_delete 同守卫（§3.5 表），edit 三工具必传；**成功输出带新 revision 供链式写**（落地补充：设计稿未言及多步编辑链——无它则每次编辑后都要重读，守卫不断链）；read_image/pdf_to_images asset 引用不带 revision（无 edit 消费方，加了是死字段，评估裁掉记档）；fs_restore 输出带恢复后 revision（撤销后守卫不断链）。走查：§10.2 打地鼠验收全链实锤（外部修改后编辑被拒→重读→成功且外部行幸存，模型报告原话「工具因观测过期拒绝写入……这是安全机制要求的」） |
 | 只读证明 | 与 v2.26 三级分类（硬锁/高危/白名单）+ shell_read 固定表共存 | 解析器作为 shell_read 白名单之上的证明层；硬锁/围栏/unlockRisky/外部路径门全保留（doc §6.6 已含此意，明确化） |
 | 子 Agent 独立验收 | ⑮ own-segment 口径（v2.37）不受影响（验收发生在父会话）；批 F 给子代理模型档/回退链 | 验收调用吃批 B 辅助降档语义；verified_status 事件字段 serde default；随批 F 同批 |
 | 内核行数门禁 | 已有 scripts/check_length.sh（单文件 400 三问自检） | crate 级软上限是补充不是重复——tokei 一行脚本挂 check_length 旁，超限输出提醒即可 |
@@ -760,4 +760,4 @@ fi
 
 ---
 
-*文档版本：v1.1（2026-10-07，增补 §13 与 LLM 能力轨对照）* *配套项目：Locowrk* *关联文档：《Agent 内核设计》《记忆树设计》《LLM 客户端与调度层设计》《Model Capability and Multimodal Phase Plan》* *灵感来源：Kiso 的因果链思路*
+*文档版本：v1.2（2026-10-09，§13 Revision Guard 行随 G3 批 v2.133 更新为已落地）* *v1.1（2026-10-07，增补 §13 与 LLM 能力轨对照）* *配套项目：Locowrk* *关联文档：《Agent 内核设计》《记忆树设计》《LLM 客户端与调度层设计》《Model Capability and Multimodal Phase Plan》* *灵感来源：Kiso 的因果链思路*

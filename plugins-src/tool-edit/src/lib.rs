@@ -15,6 +15,11 @@
 //! 为什么比 fs_write 重要（plugins.md §三）：整文件重写会丢未预期改动、
 //! 浪费 token；编辑类工具让模型只提交 diff。
 //!
+//! Revision Guard（可靠性稿 §3，G3 批）：三个工具都必带 `expected_revision`
+//! ——fs_read（或上一次编辑输出）里的 `revision` 与当前内容不符即拒
+//! （StaleObservation 报文带双方 revision 并指路重读）；成功输出带新
+//! `revision` 供链式下一次编辑，守卫不断链。
+//!
 //! 安全底线：路径过 `plugin_api::fsutil` 允许根校验（同 tool-fs，调用期
 //! 围栏跟会话——vtable session_context 优先，env `LOCOWRK_FS_ROOTS` 回落）；
 //! 目标文件必须已存在（新建走 fs_write）。
@@ -78,13 +83,17 @@ fn describe_manifest() -> CString {
                               structural changes across many places, edit_lines only with known \
                               line numbers. Args: path (absolute), old_string (must match exactly \
                               once unless replace_all), new_string, replace_all (bool, default \
-                              false). If the exact match fails, a tolerant pass retries ignoring \
-                              line-ending (CRLF/LF), trailing-whitespace and BOM differences — \
-                              the result reports match_type so you can tell; uniqueness is \
-                              always enforced (multi-match errors list candidate lines). The \
-                              original file is backed up automatically; the result carries \
-                              {path, bytes, edits, match_type, byte_range, backup} for \
-                              fs_restore to undo."
+                              false), expected_revision (the `revision` from fs_read or from \
+                              the previous edit's result — the call is rejected with a stale-\
+                              observation error if the file changed since you observed it; \
+                              re-read and rebuild). If the exact match fails, a tolerant pass \
+                              retries ignoring line-ending (CRLF/LF), trailing-whitespace and \
+                              BOM differences — the result reports match_type so you can tell; \
+                              uniqueness is always enforced (multi-match errors list candidate \
+                              lines). The original file is backed up automatically; the result \
+                              carries {path, bytes, edits, match_type, byte_range, backup, \
+                              revision} — pass that `revision` to your next edit of this file, \
+                              and the output to fs_restore to undo."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -95,9 +104,11 @@ fn describe_manifest() -> CString {
                         "old_string": { "type": "string", "description": "exact text to find" },
                         "new_string": { "type": "string", "description": "replacement text" },
                         "replace_all": { "type": "boolean",
-                                         "description": "replace every occurrence (default false)" }
+                                         "description": "replace every occurrence (default false)" },
+                        "expected_revision": { "type": "string",
+                                               "description": "revision from fs_read or the previous edit's result; rejected if stale" }
                     },
-                    "required": ["path", "old_string", "new_string"]
+                    "required": ["path", "old_string", "new_string", "expected_revision"]
                 }),
                 side_effect: compensable(),
                 exposure: Exposure::Always,
@@ -106,9 +117,13 @@ fn describe_manifest() -> CString {
                 name: "edit_lines".into(),
                 description: "Replace a 1-based inclusive line range in a text file (the file \
                               must exist). Args: path (absolute), start_line, end_line, content \
-                              (new text for the range; empty content deletes it). \
+                              (new text for the range; empty content deletes it), \
+                              expected_revision (the `revision` from fs_read or from the \
+                              previous edit's result; stale observations are rejected — \
+                              re-read and rebuild). \
                               The original file is backed up automatically; the result carries \
-                              {path, bytes, replaced, backup} for fs_restore to undo."
+                              {path, bytes, replaced, backup, revision} for fs_restore to undo \
+                              and for your next edit of this file."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -119,9 +134,11 @@ fn describe_manifest() -> CString {
                         "start_line": { "type": "number", "description": "1-based, inclusive" },
                         "end_line": { "type": "number", "description": "1-based, inclusive" },
                         "content": { "type": "string",
-                                     "description": "new text for the range; empty string deletes" }
+                                     "description": "new text for the range; empty string deletes" },
+                        "expected_revision": { "type": "string",
+                                               "description": "revision from fs_read or the previous edit's result; rejected if stale" }
                     },
-                    "required": ["path", "start_line", "end_line", "content"]
+                    "required": ["path", "start_line", "end_line", "content", "expected_revision"]
                 }),
                 side_effect: compensable(),
                 exposure: Default::default(),
@@ -131,10 +148,13 @@ fn describe_manifest() -> CString {
                 description: "Apply a unified diff to a text file (the file must exist). \
                               Prefer edit_replace for most edits; use this only for structural \
                               changes across many places. Args: path (absolute), patch (unified \
-                              diff text with @@ hunks). Context lines must match exactly — no \
-                              fuzz; on mismatch the tool errors and the file is untouched. The \
-                              original file is backed up automatically; the result carries \
-                              {path, bytes, hunks_applied, backup} for fs_restore to undo."
+                              diff text with @@ hunks), expected_revision (the `revision` from \
+                              fs_read or from the previous edit's result; stale observations are \
+                              rejected — re-read and rebuild). Context lines must match exactly \
+                              — no fuzz; on mismatch the tool errors and the file is untouched. \
+                              The original file is backed up automatically; the result carries \
+                              {path, bytes, hunks_applied, backup, revision} for fs_restore to \
+                              undo and for your next edit of this file."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -142,9 +162,11 @@ fn describe_manifest() -> CString {
                         "path": { "type": "string",
                                   "description": "absolute file path (must be inside the allowed \
                                                   workspace roots)" },
-                        "patch": { "type": "string", "description": "unified diff text" }
+                        "patch": { "type": "string", "description": "unified diff text" },
+                        "expected_revision": { "type": "string",
+                                               "description": "revision from fs_read or the previous edit's result; rejected if stale" }
                     },
-                    "required": ["path", "patch"]
+                    "required": ["path", "patch", "expected_revision"]
                 }),
                 side_effect: compensable(),
                 exposure: Default::default(),

@@ -8,7 +8,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use plugin_api::HostVtable;
-use plugin_api::fsutil::{effective_roots, resolve_existing};
+use plugin_api::fsutil::{content_revision, effective_roots, resolve_existing};
 use plugin_api::serde_json::{Value, json};
 
 use crate::{arg_path, arg_u64};
@@ -34,17 +34,22 @@ pub(crate) fn fs_read(args: &Value, host: *const HostVtable) -> Result<Value, St
     if meta.is_dir() {
         return Err(format!("fs_read `{display}` is a directory (use fs_list)"));
     }
-    let file = std::fs::File::open(&resolved).map_err(|e| format!("fs_read `{display}`: {e}"))?;
+    let mut file =
+        std::fs::File::open(&resolved).map_err(|e| format!("fs_read `{display}`: {e}"))?;
+    // 全量读入（Revision Guard，可靠性稿 §3）：revision 必须覆盖完整内容、
+    // 与返回的截断窗口解耦——模型拿到的 revision 是它没读到的部分也算数的
+    // 承诺。内存口径与 backup_original（写侧全量备份）一致。
     let mut buf = Vec::new();
-    file.take(max + 1)
-        .read_to_end(&mut buf)
+    file.read_to_end(&mut buf)
         .map_err(|e| format!("fs_read `{display}`: {e}"))?;
+    let revision = content_revision(&buf);
     let truncated = buf.len() as u64 > max;
     buf.truncate(max as usize);
     Ok(json!({
         "path": display,
         "size": meta.len(),
         "truncated": truncated,
+        "revision": revision,
         "content": String::from_utf8_lossy(&buf).as_ref(),
     }))
 }
@@ -162,3 +167,6 @@ pub(crate) fn fs_grep(args: &Value, host: *const HostVtable) -> Result<Value, St
         "scanned": scanned,
     }))
 }
+
+#[cfg(test)]
+mod tests;
