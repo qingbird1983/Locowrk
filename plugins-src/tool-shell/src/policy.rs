@@ -1,7 +1,8 @@
 //! shell 白名单策略（plugins.md §二 + 清单《Setting and Constrained
 //! Optimization.md》§2/§3 三级分类）：
-//! - **只读级**（`shell_read` 专用，豁免审批）：`ls` / `cat` / `grep` /
-//!   `git status|log|diff|show`，路径校验见 paths.rs
+//! - **只读级**（`shell_read` 专用，豁免审批）：固定表 `ls` / `cat` /
+//!   `grep` / `git status|log|diff|show`——之上另有只读证明层
+//!   （proof.rs，词法/语法/语义三态，G4），路径校验见 paths.rs
 //! - **审批级**（`shell` 工具）：内置白名单 `ls` / `cat` / `grep` /
 //!   `git status`，`LOCOWRK_SHELL_ALLOW` 显式扩展（`prog` / `prog sub`）
 //! - **高危清单**：rm / sudo / chmod / dd 等"用户能判断后果"的破坏面——
@@ -14,12 +15,14 @@
 //! denylist 永远赢：白名单（含显式配置）撞上两级清单一律被压制，
 //! 启动期经 conflicting_allow() 列出并 warn（清单 §2.4，不静默）。
 //!
-//! 无 shell 解析：命令串先过元字符检查（管道 / 命令替换 / 顺序执行
-//! 直接拒绝），再引号感知切词，**首词即程序**直接 spawn——不存在
-//! `curl | sh` 的注入面，元字符检查是纵深防御。
+//! 无 shell 解析：`shell` 管线命令串先过元字符检查（管道 / 命令替换 /
+//! 顺序执行直接拒绝），再引号感知切词，**首词即程序**直接 spawn——
+//! 不存在 `curl | sh` 的注入面，元字符检查是纵深防御；`shell_read`
+//! 的结构检查由证明层按引号位置精确裁决（引号内元字符是数据）。
 
-/// 只读白名单（`shell_read` 专用）：`prog` + 可选子命令集合；子命令
+/// 只读白名单（`shell_read` 第一道门）：`prog` + 可选子命令集合；子命令
 /// 集合为空 = 只按程序名放行。固定内容，不吃 LOCOWRK_SHELL_ALLOW。
+/// 只读证明层（proof.rs）在表之上做词法/语义证明——表内不等于放行。
 pub(crate) const READ_ONLY: &[(&str, &[&str])] = &[
     ("ls", &[]),
     ("cat", &[]),
@@ -266,44 +269,10 @@ pub(crate) fn decide(command: &str, extra_allow: &[String], unlock_risky: bool) 
     }
 }
 
-/// 只读工具（shell_read）的判定管线：元字符 → 切词 → 只读表。
-/// 不吃 LOCOWRK_SHELL_ALLOW——免审批面必须固定内容。
-pub(crate) fn decide_readonly(command: &str) -> Decision {
-    if command.contains(METACHARS) {
-        return Decision::Deny {
-            reason: "shell command contains shell metacharacters (| & ; < > ` $ or newline); \
-                     pass a single simple command — pipes and command substitution are not allowed"
-                .into(),
-        };
-    }
-    let Some((program, rest)) = split_command(command) else {
-        return Decision::Deny {
-            reason: "shell command is empty".into(),
-        };
-    };
-    let program_lc = program.to_ascii_lowercase();
-    let first_arg = rest.first().map(String::as_str).unwrap_or("");
-    let allowed = READ_ONLY.iter().any(|(prog, subs)| {
-        program_lc == *prog
-            && (subs.is_empty() || subs.iter().any(|s| first_arg.eq_ignore_ascii_case(s)))
-    });
-    if !allowed {
-        return Decision::Deny {
-            reason: format!(
-                "`{program_lc}` is not a read-only command (allowed: ls, cat, grep, \
-                 git status|log|diff|show); use the `shell` tool instead — it runs the \
-                 same command but requires user approval"
-            ),
-        };
-    }
-    Decision::Allow {
-        program,
-        args: rest,
-    }
-}
-
 /// 引号感知切词：空格分隔，单/双引号包住的片段保持原样（引号本身剥掉）。
-/// 返回 (首词, 其余参数)；引号不闭合按错误处理。
+/// 返回 (首词, 其余参数)；引号不闭合按错误处理。`shell` 审批管线的切词
+/// 入口（元字符检查在前，此处只管切）；`shell_read` 走 proof::lex
+/// （按引号位置精确裁决元字符）。
 pub(crate) fn split_command(command: &str) -> Option<(String, Vec<String>)> {
     let mut tokens: Vec<String> = Vec::new();
     let mut cur = String::new();

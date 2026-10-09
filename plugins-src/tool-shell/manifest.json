@@ -9,8 +9,8 @@
     "en-US": "Shell"
   },
   "description": {
-    "zh-CN": "白名单命令执行：默认仅 ls / cat / grep / git status，全部需审批",
-    "en-US": "Whitelisted command execution: ls / cat / grep / git status by default, all approved"
+    "zh-CN": "分级命令执行：可证明只读的命令免审批（shell_read，解析器证明层），其余白名单命令需审批（shell）；硬锁解释器/网络类",
+    "en-US": "Tiered command execution: provably read-only commands run without approval (shell_read, parser proof layer), whitelisted ones need approval (shell); interpreters/network are hard-locked"
   },
   "icon": "assets/icon.svg",
 
@@ -21,7 +21,7 @@
   "tools": [
     {
       "name": "shell",
-      "description": "Run ONE whitelisted command and return {command, program, exit_code, success, timed_out, truncated, stdout, stderr}. Only a small allowlist is permitted (ls, cat, grep, git status; more via host config); destructive commands (rm, sudo, curl, ...) are on a permanent denylist and refused without approval; pipes, command substitution and shell metacharacters are rejected — pass a single simple command. The tool itself is Irreversible and requires user approval.",
+      "description": "Run ONE whitelisted command and return {command, program, exit_code, success, timed_out, truncated, stdout, stderr}. Only a small allowlist is permitted (ls, cat, grep, git status; more via host config). Denylist: interpreter/wrapper/network commands (python, bash, curl, xargs, ...) are never allowed; high-risk user-judgeable commands (rm, sudo, chmod, ...) are refused unless the host unlock switch is on — they then still require user approval. Pipes, command substitution and shell metacharacters are rejected — pass a single simple command. Commands run WITHOUT a shell: the first word is spawned directly via PATH. On Windows hosts PATH usually resolves to Unix coreutils (Git's usr/bin) — use Unix-style commands; cmd builtins (dir, del, copy, `rmdir /s /q`) do not exist. For read-only work prefer `shell_read` (no approval needed).",
       "schema": {
         "type": "object",
         "properties": {
@@ -33,6 +33,21 @@
         "required": ["command"]
       },
       "side_effect": "Irreversible"
+    },
+    {
+      "name": "shell_read",
+      "description": "Run ONE PROVEN read-only command WITHOUT user approval: ls, cat, grep, or git status/log/diff/show. A proof layer parses the command (lexing + structure + semantics): it must be a single simple command — no unquoted pipes/redirection/`$()`/backticks/subshells, no `$` or backticks inside double quotes; no git global options (`-c`, `--git-dir`, ... can launch external programs via config); no write or external-program flags (`--output`, `--ext-diff`, `--textconv`); no credential paths (.env, .ssh, credentials, key material). Anything that cannot be PROVEN read-only is refused: re-run via the `shell` tool (asks the user) or pass a simpler command. Same result shape as `shell`. Paths must stay inside the allowed file roots (LOCOWRK_FS_ROOTS, default = app data root) — this includes the optional cwd argument; anything resolving outside is refused. Commands run WITHOUT a shell: the first word is spawned directly via PATH. On Windows hosts PATH usually resolves to Unix coreutils (Git's usr/bin) — use Unix-style commands; cmd builtins (dir, del, copy, `rmdir /s /q`) do not exist.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string", "description": "single simple command, e.g. \"git status\"; no pipes/semicolons/backticks" },
+          "cwd": { "type": "string", "description": "optional working directory (absolute path, must exist)" },
+          "timeout_secs": { "type": "number", "description": "default 20, max 120" },
+          "max_bytes": { "type": "number", "description": "cap stdout/stderr each (default 65536, max 262144)" }
+        },
+        "required": ["command"]
+      },
+      "side_effect": "Pure"
     }
   ]
 }

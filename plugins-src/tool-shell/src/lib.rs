@@ -7,14 +7,20 @@
 //!   高危清单（rm/sudo/chmod/dd 等，默认拒绝，解锁开关开启后放行——
 //!   工具本身 Irreversible，放行即进审批）、白名单（默认 `ls` / `cat`
 //!   / `grep` / `git status`，`LOCOWRK_SHELL_ALLOW` 显式扩展）。
-//! - **`shell_read`**：只读工具，`SideEffect::Pure` 免审批。只放行
-//!   `ls` / `cat` / `grep` / `git status|log|diff|show`，路径面经
-//!   paths.rs 按 fsutil 允许根校验（与 fs_* 工具同源，cwd 与参数出根
-//!   即拒并引导改用 `shell`）——否则 shell 的 cat 绕过 fs 守卫读任意
-//!   盘文件，只读豁免不成立。
+//! - **`shell_read`**：只读工具，`SideEffect::Pure` 免审批。放行前提
+//!   是**可证明只读**（proof.rs，G4 只读证明层，可靠性稿 §6）：词法
+//!   （引号感知，未加引号/双引号内的元字符是结构面）→ 语法（单条
+//!   简单命令）→ 语义（固定表 `ls` / `cat` / `grep` /
+//!   `git status|log|diff|show` + git 全局选项拒（`-c` 可借配置触发
+//!   外部程序）+ 写/外部程序旗标拒（`--output`/`--ext-diff`）+ 敏感
+//!   凭据路径拒（`.env`/`.ssh`/credentials）。三态 Safe/Unsafe/Unknown，
+//!   Unknown 按 Unsafe 处理——证明不了就拒绝并指路 `shell` 审批。
+//!   路径面经 paths.rs 按 fsutil 允许根校验（与 fs_* 工具同源，cwd 与
+//!   参数出根即拒）——否则 shell 的 cat 绕过 fs 守卫读任意盘文件，
+//!   只读豁免不成立。
 //!
-//! 无 shell 解析：引号感知切词后**首词即程序**直接 spawn（exec.rs），
-//! 管道/命令替换等元字符整条拒绝；超时杀整棵进程树（Job Object /
+//! 无 shell 解析：**首词即程序**直接 spawn（exec.rs），管道/命令替换
+//! 等复合形态在两个工具面都不可执行；超时杀整棵进程树（Job Object /
 //! 进程组）；输出截断附提示。启动期把 `LOCOWRK_SHELL_ALLOW` 被清单
 //! 压制的条目与解锁开关状态打进 warn（清单 §2.4，不静默）。
 //!
@@ -23,6 +29,7 @@
 mod exec;
 mod paths;
 mod policy;
+mod proof;
 
 use std::collections::BTreeMap;
 use std::ffi::CString;
@@ -98,18 +105,26 @@ fn describe_manifest() -> CString {
             },
             ToolSpec {
                 name: "shell_read".into(),
-                description: "Run ONE read-only command WITHOUT user approval: ls, cat, \
-                              grep, or git status/log/diff/show. Same result shape as \
+                description: "Run ONE PROVEN read-only command WITHOUT user approval: ls, \
+                              cat, grep, or git status/log/diff/show. A proof layer parses \
+                              the command (lexing + structure + semantics): it must be a \
+                              single simple command — no unquoted pipes/redirection/`$()`/\
+                              backticks/subshells, no `$` or backticks inside double \
+                              quotes; no git global options (`-c`, `--git-dir`, ... can \
+                              launch external programs via config); no write or \
+                              external-program flags (`--output`, `--ext-diff`, \
+                              `--textconv`); no credential paths (.env, .ssh, \
+                              credentials, key material). Anything that cannot be PROVEN \
+                              read-only is refused: re-run via the `shell` tool (asks the \
+                              user) or pass a simpler command. Same result shape as \
                               `shell`. Paths must stay inside the allowed file roots \
                               (LOCOWRK_FS_ROOTS, default = app data root) — this includes \
                               the optional cwd argument; anything resolving outside is \
-                              refused: re-run the same command via the `shell` tool, which \
-                              asks the user for approval. No pipes, no command \
-                              substitution, no shell metacharacters. Commands run WITHOUT \
-                              a shell: the first word is spawned directly via PATH. On \
-                              Windows hosts PATH usually resolves to Unix coreutils \
-                              (Git's usr/bin) — use Unix-style commands; cmd builtins \
-                              (dir, del, copy, `rmdir /s /q`) do not exist."
+                              refused. Commands run WITHOUT a shell: the first word is \
+                              spawned directly via PATH. On Windows hosts PATH usually \
+                              resolves to Unix coreutils (Git's usr/bin) — use Unix-style \
+                              commands; cmd builtins (dir, del, copy, `rmdir /s /q`) do \
+                              not exist."
                     .into(),
                 schema: shell_schema(),
                 side_effect: SideEffect::Pure,
@@ -119,9 +134,10 @@ fn describe_manifest() -> CString {
         // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
         display_name: Some(zh_en("命令终端", "Shell")),
         description: Some(LocalizedOrString::Localized(zh_en(
-            "分级命令执行：只读命令免审批（shell_read），其余白名单命令需审批（shell）；硬锁解释器/网络类",
-            "Tiered command execution: read-only commands run without approval (shell_read), \
-             whitelisted ones need approval (shell); interpreters/network are hard-locked",
+            "分级命令执行：可证明只读的命令免审批（shell_read，解析器证明层），其余白名单命令需审批（shell）；硬锁解释器/网络类",
+            "Tiered command execution: provably read-only commands run without approval \
+             (shell_read, parser proof layer), whitelisted ones need approval (shell); \
+             interpreters/network are hard-locked",
         ))),
         icon: Some("assets/icon.svg".into()),
         author: Some(Author {

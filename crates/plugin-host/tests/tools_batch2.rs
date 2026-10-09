@@ -303,6 +303,30 @@ fn shell_readonly_path_guard_end_to_end() {
     let err = err_msg(call(shell_read.as_ref(), json!({ "command": "git push" })).unwrap_err());
     assert!(err.contains("not a read-only command"), "{err}");
 
+    // G4 只读证明层（可靠性稿 §6）：白名单内但证明不了 → 拒绝并带出路，
+    // 端到端过 FFI。结构性元字符 / git 配置覆盖 / 写旗标 / 敏感路径各一。
+    let err =
+        err_msg(call(shell_read.as_ref(), json!({ "command": "ls $(rm -rf /)" })).unwrap_err());
+    assert!(err.contains("not a single simple command"), "{err}");
+    let err = err_msg(
+        call(
+            shell_read.as_ref(),
+            json!({ "command": "git -c core.pager=x status" }),
+        )
+        .unwrap_err(),
+    );
+    assert!(err.contains("global options"), "{err}");
+    let err = err_msg(
+        call(
+            shell_read.as_ref(),
+            json!({ "command": "git diff --output=x" }),
+        )
+        .unwrap_err(),
+    );
+    assert!(err.contains("not read-only"), "{err}");
+    let err = err_msg(call(shell_read.as_ref(), json!({ "command": "cat .env" })).unwrap_err());
+    assert!(err.contains("sensitive path"), "{err}");
+
     unsafe {
         std::env::remove_var("LOCOWRK_FS_ROOTS");
         std::env::remove_var("LOCOWRK_DATA_DIR");

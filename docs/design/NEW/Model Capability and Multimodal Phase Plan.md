@@ -4,7 +4,7 @@
 > 版本：1.0（2026-10-07）
 > 上游设计：《模型供应商配置与能力探测设计 v2.0》《多模态支持设计 v2.0》
 > 参照调查：PI-Desktop（F:\Warehouse\Github\PI-Desktop）、ZCode（F:\Warehouse\Github\ZCode）模型配置全量调查（2026-10-07）
-> 状态：**六批全部完成（2026-10-08，v2.127–v2.132）**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；候补批 G：**G1 随批 B、G5 随批 F、G3 独立小批（v2.133）、G2 独立小批（v2.134）已落地**，G4 留作独立小批（tool-shell 批），G6/G7 记档
+> 状态：**六批全部完成（2026-10-08，v2.127–v2.132）**——用户 2026-10-08 指令「根据阶段计划开始执行」，裁定表 D1–D7 按推荐落档（各批动码时随批生效）；候补批 G：**G1 随批 B、G5 随批 F、G3 独立小批（v2.133）、G2 独立小批（v2.134）、G4 独立小批（v2.135）已全部落地**，G6/G7 记档不立批——候补批 G 全表收口
 
 ---
 
@@ -20,7 +20,7 @@
 | **D** ✅（v2.130，2026-10-08） | 多模态地基 | ContentPart + wire 编码 + AssetStore + 上传链路 + 渲染 + 估算 | **最大**（内核穿透） | A/B（模态数据 + 钳制公式） |
 | **E** ✅（v2.131，2026-10-08） | 多模态进阶 | 查看器 + 工具结果投影 + 多模态工具 + 降级链 | 中 | D |
 | **F** ✅（v2.132，2026-10-08） | 生态 | 子代理模型档 + 回退链 + 从其他工具导入 + 推荐三选 | 中 | A/B |
-| **G**（候补） | 可靠性补强 | Turn Commit length 闸（随 B）+ Unknown Effect 恢复 + Revision Guard（✅ v2.133）+ 只读证明 + 子代理验收（随 F） | 各小-中 | 无硬依赖；G1 随 B、G5 随 F、G3 独立小批 |
+| **G**（候补） | 可靠性补强 | Turn Commit length 闸（随 B）+ Unknown Effect 恢复（✅ v2.134）+ Revision Guard（✅ v2.133）+ 只读证明（✅ v2.135）+ 子代理验收（随 F） | 各小-中 | ✅ 全部落地（G1 随 B、G5 随 F、G2/G3/G4 独立小批；G6/G7 记档） |
 
 > C 与 A/B 无依赖，若 keyring/代理急可先插；其余严格按序。
 
@@ -151,7 +151,7 @@
 | G1 Turn Commit length 闸 | wire.rs 已捕获 finish_reason 但 client.rs:322 一律当完整——length 截断带部分 tool_calls 会被执行。截断不收束、工具不执行、如实提示 | **随批 B**（maxOutput 钳制提高截断概率，闸先行）；committed 标记 serde default |
 | G2 Unknown Effect | 复用现有 ToolCall/ToolResult 配对（**不建双轨事件**）+ 崩溃恢复扫描（有 Call 无 Result → uncertain）+ uncertain UI + 用户决定事件 | ✅ **已落地**（独立小批 v2.134，2026-10-09） |
 | G3 Revision Guard | tool-fs 插件层：read 回 revision、写类工具带 expected_revision、StaleObservation 错误 | ✅ **已落地**（独立小批 v2.133，2026-10-09——P0 最先做） |
-| G4 只读证明 | shell_read 白名单之上的解析器证明层；硬锁/围栏/unlockRisky 全保留 | tool-shell 批（P1） |
+| G4 只读证明 | shell_read 白名单之上的解析器证明层；硬锁/围栏/unlockRisky 全保留 | ✅ **已落地**（独立小批 v2.135，2026-10-09——候补批 G 全表收口，仅余 G6/G7 记档） |
 | G5 子 Agent 独立验收 | subagent_verify（Pure）+ claimed/verified 分离 + 验收调用吃辅助降档 | ✅ **已随批 F 落地**（v2.132） |
 | G6 In-Band Summary | 实测 compact.rs:149 不复用前缀，但压缩低频且本就重建前缀——记档为 legacy 可选优化，不立批；批 B 顺带复核形状 | 记档（P2） |
 | G7 crate 行数软上限 | cordis-core 3000 / kernel-agent 5000，tokei 脚本挂 check_length 旁 | 随手搭车（P3） |

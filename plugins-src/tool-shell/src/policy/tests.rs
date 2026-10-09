@@ -2,9 +2,7 @@
 //! 边界（大小写、子命令限定、引号切词）/ 恶意（denylist、元字符、
 //! 未列入白名单、引号不闭合）/ 启动冲突检测。
 
-use super::{
-    Decision, decide, decide_readonly, extra_allow_from_env, split_command, unlock_risky_from_env,
-};
+use super::{Decision, decide, extra_allow_from_env, split_command, unlock_risky_from_env};
 use std::sync::Mutex;
 
 /// 需要真实 env 的用例串行；先跑无 env 用例（静态序号控制不可靠，
@@ -136,31 +134,6 @@ fn risky_commands_deny_by_default_allow_into_approval_when_unlocked() {
         decide("nc -l 8080", &[], true),
         Decision::Deny { .. }
     ));
-}
-
-#[test]
-fn readonly_decision_matches_only_readonly_table() {
-    assert!(matches!(
-        decide_readonly("git log --oneline"),
-        Decision::Allow { .. }
-    ));
-    assert!(matches!(
-        decide_readonly("git diff HEAD~1"),
-        Decision::Allow { .. }
-    ));
-    // 白名单写操作不走只读面
-    for denied in [
-        "git push",
-        "git commit -m x",
-        "make",
-        "cargo check",
-        "ls | cat",
-    ] {
-        assert!(
-            matches!(decide_readonly(denied), Decision::Deny { .. }),
-            "{denied}"
-        );
-    }
 }
 
 #[test]

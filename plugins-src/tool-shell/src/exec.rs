@@ -122,8 +122,9 @@ pub(crate) fn shell_exec(
     run(command, program, cargs, args, cwd, defaults)
 }
 
-/// 只读工具（shell_read）入口：只读表 → 路径校验（fsutil 同源根）→
-/// 执行。路径出根在这里被拒（降级：改用 shell 工具走审批）。
+/// 只读工具（shell_read）入口：只读证明（词法/语法/语义，proof.rs）→
+/// 路径校验（fsutil 同源根）→ 执行。证明不了（Unsafe/Unknown 一视
+/// 同仁）与路径出根都在这里被拒（降级：改用 shell 工具走审批）。
 pub(crate) fn shell_read_exec(
     args: &Value,
     defaults: &RunDefaults,
@@ -133,9 +134,11 @@ pub(crate) fn shell_read_exec(
         .get("command")
         .and_then(Value::as_str)
         .ok_or_else(|| "missing string field `command`".to_string())?;
-    let (program, cargs) = match crate::policy::decide_readonly(command) {
-        Decision::Allow { program, args } => (program, args),
-        Decision::Deny { reason } => return Err(reason),
+    let (program, cargs) = match crate::proof::prove(command) {
+        crate::proof::Proof::Safe { program, args } => (program, args),
+        crate::proof::Proof::Unsafe { reason } | crate::proof::Proof::Unknown { reason } => {
+            return Err(reason);
+        }
     };
     let cwd = cwd_of(args)?;
     crate::paths::ensure_readonly_scope(&cargs, cwd.as_deref(), host)?;

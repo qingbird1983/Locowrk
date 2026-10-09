@@ -82,6 +82,18 @@ stage tool-fetch 0.1.1
 # Git 的 Unix coreutils：用 Unix 风格命令，cmd 内建（dir/del/rmdir /s /q）
 # 不存在
 stage tool-shell 0.1.3
+# 0.1.4（2026-10-09，小迭代 +0.0.1）：G4 只读证明（可靠性稿 §6）——
+# shell_read 从「白名单匹配」升级为「证明只读」：新 proof.rs 证明层
+# （词法引号感知——引号内元字符是数据（grep "a|b" 不再误拒），未加
+# 引号/双引号内的 |&;()< >`$ 与换行 = 结构面拒 + 语法单条简单命令 +
+# 语义（git 全局选项拒（-c 可借配置触发外部程序）/ 写与外部程序旗标
+# 拒（--output/--ext-diff/--textconv）/ 敏感凭据路径拒（.env/.ssh/
+# credentials/密钥材料））；三态 Safe/Unsafe/Unknown，Unknown 按
+# Unsafe 处理（§6.4），证明不了一律拒绝并指路 shell 审批。硬锁/高危/
+# unlockRisky/路径围栏/外部路径门全保留（§13 对照：解析器是白名单
+# 之上的证明层）；manifest.json 随批补齐 shell_read 条目（此前只列
+# shell，展示元数据与 DLL describe 脱节）
+stage tool-shell 0.1.4
 # 0.1.3（2026-10-06，小迭代 +0.0.1）：① 根提交显式拒绝（P0-2：此前
 # `reset --soft HEAD~1` 隐性失败、报错晦涩，模型反复尝试；现在
 # rev-list --parents 判父后拒绝并给出 update-ref 出路）+
@@ -119,5 +131,5 @@ stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit/{0.2.0,0.2.1} + tool-fs/{0.1.3,0.1.4,0.1.5} + tool-fetch 0.1.1 + tool-shell 0.1.3 + tool-git 0.1.3 + memory-sqlite 0.1.4（0.2.1/0.1.5 = G3 Revision Guard 批）+ 其余见上注释"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit/{0.2.0,0.2.1} + tool-fs/{0.1.3,0.1.4,0.1.5} + tool-fetch 0.1.1 + tool-shell/{0.1.3,0.1.4} + tool-git 0.1.3 + memory-sqlite 0.1.4（0.2.1/0.1.5 = G3 批，0.1.4 = G4 只读证明批）+ 其余见上注释"
 echo "next: cargo run -p kernel-bin -- demo"
