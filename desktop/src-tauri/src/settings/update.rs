@@ -168,6 +168,9 @@ impl SettingsStore {
             if let Some(e) = u.repo_context {
                 next.memory.repo_context = e;
             }
+            if let Some(e) = u.instruction_files {
+                next.memory.instruction_files = e;
+            }
         }
         if let Some(u) = tools {
             if let Some(e) = u.enabled {

@@ -141,6 +141,7 @@ async fn tool_turn_projects_events_in_log_order() {
         crate::runner::DEFAULT_MAX_STEPS,
         None,
         None,
+        None,
     )
     .await
     .expect("turn ok");
@@ -186,6 +187,7 @@ async fn step_cap_force_closes_with_configured_limit() {
         1,
         None,
         None,
+        None,
     )
     .await
     .expect("到顶按正常收束返回");
@@ -218,6 +220,7 @@ async fn plain_reply_turn_is_single_step() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
         None,
     )
@@ -325,6 +328,7 @@ async fn usage_reporting_provider_converges_on_final_text_step() {
         crate::runner::DEFAULT_MAX_STEPS,
         None,
         None,
+        None,
     )
     .await
     .expect("轮次必须正常收束");
@@ -397,6 +401,7 @@ async fn usage_reporting_provider_still_loops_for_tool_calls() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
         None,
     )

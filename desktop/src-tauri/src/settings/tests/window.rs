@@ -85,8 +85,8 @@ fn organize_threshold_update_validation_and_roundtrip() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     assert_eq!(store.view().context.threshold_tokens, 300_000);
     assert_eq!(store.organize_threshold_tokens(), 300_000);
@@ -112,8 +112,8 @@ fn organize_threshold_update_validation_and_roundtrip() {
                 None,
                 None,
                 None,
-                        None,
-)
+                None,
+            )
             .is_err());
     }
     assert_eq!(store.view().context.threshold_tokens, 300_000);
@@ -137,8 +137,8 @@ fn organize_threshold_update_validation_and_roundtrip() {
                 None,
                 None,
                 None,
-                        None,
-)
+                None,
+            )
             .unwrap();
     }
     std::fs::remove_dir_all(&root).ok();
@@ -170,8 +170,8 @@ fn context_usage_bar_default_and_roundtrip() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     assert!(!store.view().context.usage_bar, "关闭生效");
 
@@ -188,8 +188,10 @@ fn context_usage_bar_default_and_roundtrip() {
 #[test]
 fn session_window_resolution_chain() {
     let catalog_absent = std::env::temp_dir().join("settings-tests-catalog-absent");
-    let mut cfg = LlmConfig::default();
-    cfg.active = "p1".into();
+    let mut cfg = LlmConfig {
+        active: "p1".into(),
+        ..Default::default()
+    };
     cfg.providers.push(ProviderProfile {
         id: "p1".into(),
         label: "deepseek".into(),
@@ -228,9 +230,11 @@ fn session_window_resolution_chain() {
     // 目录在位（空快照 = 无命中，跳过该层）；档位窗口未设 → 全未知
     cfg.providers[0].window_tokens = None;
     assert_eq!(
-        session_window(&cfg, None, Some(&crate::llm::catalog::CatalogStore::new(
-            catalog_absent
-        ))),
+        session_window(
+            &cfg,
+            None,
+            Some(&crate::llm::catalog::CatalogStore::new(catalog_absent))
+        ),
         None,
         "全未知 = None（前端按未设置呈现）"
     );

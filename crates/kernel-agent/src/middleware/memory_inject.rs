@@ -9,9 +9,10 @@
 //! 当前工作的主模型按需用文件工具查看与维护；结构化项目事实走
 //! memory_read / memory_search 按需查。
 //!
-//! 链位（§3.6）：ToolExposure（⑫）→ **Memory-Inject** → ctx-compact——
-//! 记忆是"原料"，压缩是"分配预算"，注入必须发生在压缩估算之前（注册
-//! 次序即执行次序，组装点负责先注册本件再注册 ctx-compact）。
+//! 链位（§3.6；v2.139 提示词分层设计 §6 重排）：ToolExposure（⑫）→
+//! BaseSystemInject（静态身份层 = system 前缀）→ **Memory-Inject** →
+//! 思考语言 → 树目录（殿后）——静态段在前、动态块追加，append-only
+//! 目录永远最后（桌面链 v2.137 起 ctx-compact 退役，headless 保留）。
 //!
 //! 系统提示永不压缩（§5.3 冲突 2）由结构保证：记忆写在消息列表之外的
 //! `system` 字段里，ctx-compact 只改写 `messages`，会话日志也不落注入
@@ -73,9 +74,9 @@ pub trait MemorySource: Send + Sync + 'static {
         String::new()
     }
 
-    /// 注入块头部的工作区上下文行（㉘·A·fix）：归属会话告知模型"当前项目
-    /// 在哪"，让它不再靠旧记忆猜路径。逐会话稳定、同吃预取缓存。缺省
-    /// `None` = 不带行（未归属/headless）。
+    /// 环境块内文（提示词分层设计 §4.2，v2.139 起 `<environment>`）：
+    /// 归属会话告知项目根 + 日期/平台。逐会话稳定、同吃预取缓存（日期
+    /// 会话锁死）。缺省 `None` = 不带块（未归属/headless）。
     fn context_line(&self, session_id: Option<&str>) -> Option<String> {
         let _ = session_id;
         None
@@ -116,27 +117,21 @@ const VALUE_INJECT_MAX_CHARS: usize = 500;
 /// 预取缓存上限（FIFO 驱逐最旧会话）：与 ToolExposure 钉死表同款保险丝。
 const PREFETCH_CAP: usize = 128;
 
-/// 主动记忆指引（F3 起随注入块尾；v2.136 按新记忆模型改写）。**无条件
-/// 注入**（中间件启用即带）——主动记忆的本意就是零记忆的新会话也要知道
-/// "该自己记"，指引缺席 = 主动原则落空；静态文本与块同吃预取缓存（M1
-/// 纪律不破）。memory 注入关（`memory.enabled=false` / top_k=0）= 整块
-/// 含指引一起缺席。分工（v2.136 裁定）：全局记忆走 memory_write KV；
-/// 项目记忆（.Locowrk/ 文件）由当前工作的主模型自己读/写/改——软件不
-/// 代劳，只在 [`MemorySource::repo_context`] 提醒段给出节点钩子。
+/// 主动记忆指引（F3 起随注入块尾；v2.139 按提示词分层设计 §5.2 改写）。
+/// **无条件注入**（中间件启用即带）。分工不变（v2.136 裁定）：write 侧
+/// 保持主动（当场记，不等被问）；read 侧改按需——显式禁令「never as a
+/// way to start a conversation」治开场仪式（身份段总纲之外的第二道）。
+/// memory 注入关（`memory.enabled=false` / top_k=0）= 整块含指引一起
+/// 缺席。静态文本与块同吃预取缓存（M1 纪律不破）。
 const GUIDANCE_BLOCK: &str = "<memory_guidance>\n\
-     Proactive memory: you are expected to maintain memory yourself — do not \
-     wait to be asked.\n\
-     - When the user states a lasting preference or standing instruction \
-     (\"always ...\", \"from now on ...\"), save it immediately with \
-     memory_write using scope=\"global\"; prefer updating an existing key \
-     over creating near-duplicates.\n\
-     - Durable project facts worth structured recall: save them with \
-     memory_write (project scope); look them up later with memory_read / \
-     memory_search when needed.\n\
-     - Project working memory (requirements.md / handoff.md / notes/ under \
-     the project's .Locowrk/ directory) is yours to maintain directly with \
-     file tools — the repo context reminder below tells you when to read \
-     and update them.\n\
+     Proactive memory: when the user states a lasting preference or a durable \
+     decision is made, save it with memory_write on the spot (scope=\"global\" \
+     for standing preferences; project scope for durable project facts); \
+     prefer updating an existing key over near-duplicates. Reading memory is \
+     on-demand: use memory_read / memory_search only when the request touches \
+     past preferences, decisions, or project facts — never as a way to start \
+     a conversation. Project working memory (.Locowrk/ files) you maintain \
+     with file tools; the repo context reminder says when.\n\
      </memory_guidance>";
 
 /// 一个会话的预取块（None = 首查即无记忆，也缓存避免每轮重查）。
@@ -291,12 +286,14 @@ impl WaterfallListener for MemoryInject {
                 None => {}
             }
         }
-        // 工作区上下文行（㉘·A·fix）：归属会话先告知"当前项目在哪"——
-        // 即使零记忆也注入（块 = 上下文行 ∪ 提醒段 ∪ 全局记忆 ∪ 指引）。
+        // 环境块（提示词分层设计 §4.2，v2.139 由 workspace_context 升级）：
+        // 归属会话告知项目根 + 日期/平台——即使零记忆也注入（块 = 环境块
+        // ∪ 提醒段 ∪ 全局记忆 ∪ 指引）。日期/平台随块同吃会话预取 =
+        // 会话锁死（跨天不发提醒，设计稿记档）。
         let mut block = self
             .source
             .context_line(req.session_id.as_deref())
-            .map(|line| format!("<workspace_context>\n{line}\n</workspace_context>"));
+            .map(|line| format!("<environment>\n{line}\n</environment>"));
         // 提醒段（v2.136 项目侧全提醒制）：与工作区行同族，紧随其后；
         // 静态文本宿主给定（正文不注入，主模型按需读文件）。
         if let Some(repo) = self.source.repo_context(req.session_id.as_deref()) {

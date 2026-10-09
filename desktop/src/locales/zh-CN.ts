@@ -997,6 +997,8 @@ export default {
     memoryFiles: "记忆文件化",
     memoryFilesHint: "把记忆同步存为 Markdown 文件，方便直接查看和修改。",
     memoryRepoContext: "交接提醒",
+    memoryInstructionFiles: "指令文件",
+    memoryInstructionFilesHint: "全局（数据根）与项目根的 AGENTS.md 注入会话开头（每会话首查定格；项目文件优先于默认行为，安全边界不与之冲突）。",
     memoryRepoContextHint: "项目会话注入交接目录提醒（正文不注入，模型按需读写）。",
     organizePacing: "记忆树整理节奏",
     organizePacingHint: "批量是到阈值一次整理，增量是每满一块整理一次。",

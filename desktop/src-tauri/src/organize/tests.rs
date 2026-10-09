@@ -100,12 +100,15 @@ fn organizer(
         client,
         resolver(),
         root.to_path_buf(),
-        Arc::new(crate::model_override::ModelOverrideStore::new(root.join("sessions"))),
+        Arc::new(crate::model_override::ModelOverrideStore::new(
+            root.join("sessions"),
+        )),
         // 目录缺席 = 空快照（测试不依赖目录能力面）
         Arc::new(crate::llm::catalog::CatalogStore::new(
             std::env::temp_dir().join("organize-tests-catalog-absent"),
         )),
         std::sync::Arc::new(|_, _| {}), // 哑通知（不触 emit）
+        None,                           // 碎片表缺席（本批不测置位面）
     ))
 }
 

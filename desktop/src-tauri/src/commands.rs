@@ -91,6 +91,7 @@ pub async fn agent_chat(
         state.settings.max_turn_steps(),
         Some(&state.tree_assembler),
         Some(&state.stop_flags),
+        Some(state.fragments.as_ref()),
     )
     .await?;
     // v2.57 自动标题：旁车无手动标题时一次 LLM 调用生成（fire-and-forget，

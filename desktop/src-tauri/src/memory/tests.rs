@@ -117,6 +117,10 @@ fn scope_id_and_context_line_follow_attribution() {
     let line = store.context_line(Some("ws-session")).unwrap();
     assert!(line.contains("F:/ws/a"), "{line}");
     assert!(line.contains("this project"), "{line}");
+    // v2.139 `<environment>`：日期/平台两行 + 按需查路径（开场先读退役）
+    assert!(line.contains("Today: "), "{line}");
+    assert!(line.contains("Platform: "), "{line}");
+    assert!(!line.contains("list/read it first"), "开场先读钩子退役");
     // 未归属 / 无会话：空键位 + 无上下文行（不注入）
     assert_eq!(store.scope_id(Some("other")), "");
     assert_eq!(store.scope_id(None), "");

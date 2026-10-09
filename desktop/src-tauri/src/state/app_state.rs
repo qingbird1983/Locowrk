@@ -38,6 +38,9 @@ pub struct AppState {
     /// 树会话组装器（M4 §3.38②）：TreeContextSource 实现（同时注册进
     /// 内核服务表）；run_turn 用量口径按组装后估算消费。
     pub tree_assembler: Arc<crate::organize::TreeAssembler>,
+    /// 会话态碎片 pending 表（提示词分层设计 §4.4）：organize 收束 /
+    /// 权限切 Plan / 轮次到顶三处置位，FragmentInject 轮开场取件拼接。
+    pub fragments: Arc<crate::fragments::FragmentPending>,
     /// UI 事件出口（§12.2）：runner 与审批请求共用一个 sink。
     pub sink: Arc<dyn EventSink>,
     /// session_id → 会话锁。会话在锁内串行聊天（tokio Mutex 可跨 await）；

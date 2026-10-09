@@ -34,6 +34,9 @@ pub const FILES_DEFAULT: bool = true;
 /// F2 交接提醒缺省（v2.136 项目侧全提醒制：开）——归属会话注入
 /// `<repo>/.Locowrk/` 静态提醒段（节点钩子）+ 首次引导建目录。
 pub const REPO_CONTEXT_DEFAULT: bool = true;
+/// 指令文件层缺省（提示词分层设计 §4.3：开——有文件就注入，无文件零
+/// 负担；关 = 用户显式不要 AGENTS.md 面）。
+pub const INSTRUCTION_FILES_DEFAULT: bool = true;
 
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +92,10 @@ pub struct MemorySettings {
     /// 交接提醒（F2 §7 缺省开；v2.136 提醒制）：归属会话注入
     /// `<repo>/.Locowrk/` 静态提醒段 + 首次引导建目录。
     pub repo_context: bool,
+    /// 指令文件层（提示词分层设计 §4.3，缺省开）：全局 `<数据根>/AGENTS.md`
+    /// 与项目根 `AGENTS.md`（回落 `.Locowrk/AGENTS.md`）以合成 user 消息
+    /// 注入消息层头部（会话首查快照锁字节）。
+    pub instruction_files: bool,
 }
 
 impl Default for MemorySettings {
@@ -106,6 +113,7 @@ impl Default for MemorySettings {
             collapse_threshold_pct: COLLAPSE_THRESHOLD_PCT_DEFAULT,
             files: FILES_DEFAULT,
             repo_context: REPO_CONTEXT_DEFAULT,
+            instruction_files: INSTRUCTION_FILES_DEFAULT,
         }
     }
 }
@@ -128,6 +136,7 @@ pub struct MemorySettingsView {
     pub collapse_threshold_pct: u8,
     pub files: bool,
     pub repo_context: bool,
+    pub instruction_files: bool,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -151,4 +160,5 @@ pub struct MemoryUpdate {
     pub collapse_threshold_pct: Option<u8>,
     pub files: Option<bool>,
     pub repo_context: Option<bool>,
+    pub instruction_files: Option<bool>,
 }

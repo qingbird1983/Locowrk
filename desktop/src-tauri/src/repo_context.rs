@@ -59,10 +59,13 @@ fn append_gitignore(repo: &Path) -> Result<(), String> {
     std::fs::write(&gi, next).map_err(|e| format!(".gitignore 追加失败 {}: {e}", gi.display()))
 }
 
-/// `<repo_context>` 提醒段内文（v2.136 静态文本，不含标签——内核侧统一
-/// 包裹）。**与文件内容无关**（正文不注入）：列出目录里有什么 + 两个节
-/// 点钩子（开场读 / 状态实质变化时更新）。跨轮逐字节稳定 = 预取缓存
-/// 键只需会话键位，文件 mtime 不再参与（memory.rs scope_id）。
+/// `<repo_context>` 提醒段内文（静态文本，不含标签——内核侧统一包裹）。
+/// **与文件内容无关**（正文不注入）：列出目录里有什么 + 两个节点钩子。
+/// v2.139 按提示词分层设计 §5.1 改写：read 侧从「开场必读」（START +
+/// do not wait to be asked）改条件触发（请求触到项目工作才读，每任务至多
+/// 一次，不做开场仪式）——治「刚问第一句话就去读项目文件」的开场仪式；
+/// write 侧主动性保留（状态实质变化时自行更新）。跨轮逐字节稳定 = 预取
+/// 缓存键只需会话键位，文件 mtime 不再参与（memory.rs scope_id）。
 pub fn build(_repo: &Path) -> Option<String> {
     Some(format!(
         "Project working memory lives in {DIR}/ of this repo (git-ignored) and is \
@@ -71,12 +74,12 @@ pub fn build(_repo: &Path) -> Option<String> {
          - handoff.md — current work state (done / in progress / next steps) for \
          future sessions.\n\
          - notes/ — work logs and lessons learned (one dated file per topic).\n\
-         Nodes: at the START of work in this project, read requirements.md and \
-         handoff.md with file tools before substantive work. When the project \
-         state materially changes (task finished, direction changed, hard-won \
-         lesson learned), update handoff.md yourself and append a dated note for \
-         anything worth keeping. These files are NOT auto-injected — you maintain \
-         them; do not wait to be asked."
+         When the user's request builds on prior project work, consult \
+         requirements.md and handoff.md first — at most once per task, and never \
+         as an opening ritual when the request doesn't touch them. When the \
+         project state materially changes (task finished, direction changed, \
+         hard-won lesson learned), update handoff.md yourself and append a dated \
+         note. These files are NOT auto-injected — you maintain them."
     ))
 }
 

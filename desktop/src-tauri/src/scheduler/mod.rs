@@ -58,6 +58,7 @@ pub(crate) fn spawn_engine(
     organizer: Arc<crate::organize::Organizer>,
     tree_assembler: Arc<crate::organize::TreeAssembler>,
     stop_flags: Arc<crate::stop::StopFlags>,
+    fragments: Arc<crate::fragments::FragmentPending>,
 ) {
     spawn(EngineDeps {
         db,
@@ -74,5 +75,6 @@ pub(crate) fn spawn_engine(
         organizer,
         tree_assembler,
         stop_flags,
+        fragments,
     });
 }

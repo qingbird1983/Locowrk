@@ -26,11 +26,12 @@ pub use kernel::{
     ToolCallReq, ToolSource, TreeContextSource, TreePlan, collapse_expanded, tail_user_start,
 };
 pub use middleware::{
-    Audit, AuditEntry, AuditSink, CircuitBreaker, CompactConfig, CompactStrategy,
-    CompactionOutcome, CtxCompact, EmbedPort, ExposureSnapshot, GlobalEwma, JsonlAuditSink,
-    MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource, Middleware, Next,
-    RETRIEVAL_WEIGHT, Retriever, Retry, Timeout, ToolExposure, ToolExposureConfig, Tracing,
-    TreeDirectoryInject, cosine, estimate_tokens, suggested_threshold,
+    Audit, AuditEntry, AuditSink, BaseSystemInject, CircuitBreaker, CompactConfig, CompactStrategy,
+    CompactionOutcome, CtxCompact, EmbedPort, ExposureSnapshot, FragmentInject, FragmentSource,
+    GlobalEwma, InstructionFilesInject, InstructionSource, JsonlAuditSink, MemoryEntry,
+    MemoryInject, MemoryInjectConfig, MemorySource, Middleware, Next, RETRIEVAL_WEIGHT, Retriever,
+    Retry, Timeout, ToolExposure, ToolExposureConfig, Tracing, TreeDirectoryInject, base_system,
+    cosine, estimate_tokens, suggested_threshold, wrap_system_reminder,
 };
 pub use stream::{LlmStreamSink, NoLlmStreamSink};
 pub use subagent::{

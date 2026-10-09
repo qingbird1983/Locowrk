@@ -996,6 +996,8 @@ export default {
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
     memoryRepoContext: "Handoff reminder",
+    memoryInstructionFiles: "Instruction files",
+    memoryInstructionFilesHint: "Inject AGENTS.md from the data root and project root at the start of each session (snapshot per session; project files outrank defaults, never safety rules).",
     memoryRepoContextHint:
       "Project sessions inject a reminder for the handoff directory (content is not injected; the model reads and maintains it on demand).",
     memoryFiles: "Memory files",

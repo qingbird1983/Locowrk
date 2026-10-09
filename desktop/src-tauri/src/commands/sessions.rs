@@ -6,7 +6,7 @@
 use tauri::State;
 
 use session_store::{
-    load_session, session_file, UncertainDecision, SessionEvent, SessionSearchHit,
+    load_session, session_file, SessionEvent, SessionSearchHit, UncertainDecision,
 };
 
 use crate::events::AgentEvent;
@@ -60,7 +60,9 @@ pub async fn session_associate(
 
 /// 会话级权限模式（㉘·B，UI shell 文档 §3.33 切换器的后端）：写旁车
 /// `permission_mode`（重启保持）+ 模式存储缓存（即时生效，运行中可切）。
-/// 四档之外取值拒绝（plan / ask / acceptEdits / auto）。
+/// 四档之外取值拒绝（plan / ask / acceptEdits / auto）。切入 Plan 顺带
+/// 置位「Plan 模式只读」尾部碎片（提示词分层设计 §4.4——只读围栏不再
+/// 靠模型猜），切出移除（尚未投递的也不再带）。
 #[tauri::command]
 pub async fn session_set_permission_mode(
     session_id: String,
@@ -72,7 +74,17 @@ pub async fn session_set_permission_mode(
     state
         .permission_modes
         .set_session_mode(&session_id, m)
-        .map_err(|e| format!("写入失败: {e}"))
+        .map_err(|e| format!("写入失败: {e}"))?;
+    if m == crate::permission_mode::PermissionMode::Plan {
+        state
+            .fragments
+            .set(&session_id, crate::fragments::PLAN_MODE);
+    } else {
+        state
+            .fragments
+            .remove(&session_id, crate::fragments::PLAN_MODE);
+    }
+    Ok(())
 }
 
 /// 会话级模型覆盖（v2.58 §3.30 选择器的后端）：写旁车 `model` +
@@ -268,8 +280,8 @@ pub async fn session_resolve_uncertain(
     if held.try_lock().is_err() {
         return Err("会话正在运行，暂不能裁决（等这轮结束再试）".into());
     }
-    let dec = UncertainDecision::parse(&decision)
-        .ok_or_else(|| format!("未知裁决类型: {decision}"))?;
+    let dec =
+        UncertainDecision::parse(&decision).ok_or_else(|| format!("未知裁决类型: {decision}"))?;
     let note = note.unwrap_or_default();
     if matches!(dec, UncertainDecision::Inspected) && note.trim().is_empty() {
         return Err("「检查后记录」需要填写检查结果".into());
@@ -300,9 +312,7 @@ pub async fn session_resolve_uncertain(
         .iter()
         .find_map(|e| match e {
             SessionEvent::ToolCall {
-                call_id: c,
-                tool,
-                ..
+                call_id: c, tool, ..
             } if c.0 == call_id => Some(tool.clone()),
             _ => None,
         })

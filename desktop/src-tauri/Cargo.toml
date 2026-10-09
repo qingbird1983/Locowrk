@@ -37,6 +37,9 @@ session-store = { path = "../../crates/session-store" }
 async-trait = "0.1"
 # 多模态（批 D）：asset_put 的 base64 解码 + AssetStore 内容寻址 sha256
 base64 = "0.22"
+# <environment> Today 行（提示词分层设计 §4.2）：已在依赖树（tauri 传递
+# 引入），声明直依赖零新增编译成本
+chrono = "0.4"
 sha2 = "0.10"
 # ⑳ 流式 / LLM.md v3.0 SSE：resp.bytes_stream() 的 next() 需要 StreamExt
 futures = "0.3"

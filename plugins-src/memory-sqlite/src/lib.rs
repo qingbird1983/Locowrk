@@ -99,7 +99,8 @@ fn describe_manifest() -> CString {
                 description: "Read one memory entry by exact key. Looks in the current \
                               project first, then falls back to global user preferences. \
                               Returns {found, key, value, tags, updated_at, scope: \
-                              \"project\"|\"global\"}; found=false when absent from both."
+                              \"project\"|\"global\"}; found=false when absent from both. Use on demand when the request \
+                              touches prior context — not as an opening step."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -138,7 +139,8 @@ fn describe_manifest() -> CString {
                               Args: query (required), limit (default 20, max 100). Returns \
                               {query, matches: [{key, value, tags, updated_at, scope}]} — \
                               scope tells project records from global preferences. Wildcards \
-                              in the query are matched literally."
+                              in the query are matched literally. Use on demand when the request \
+                              touches prior context — not as an opening step."
                     .into(),
                 schema: json!({
                     "type": "object",

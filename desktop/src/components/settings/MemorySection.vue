@@ -29,6 +29,7 @@ const form = reactive({
   collapseThresholdPct: 80,
   files: true,
   repoContext: true,
+  instructionFiles: true,
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
@@ -57,6 +58,7 @@ watch(
     form.collapseThresholdPct = v.memory.collapseThresholdPct;
     form.files = v.memory.files;
     form.repoContext = v.memory.repoContext;
+    form.instructionFiles = v.memory.instructionFiles;
   },
   { immediate: true },
 );
@@ -73,6 +75,7 @@ function save() {
     collapseThresholdPct: Math.round(form.collapseThresholdPct),
     files: form.files,
     repoContext: form.repoContext,
+    instructionFiles: form.instructionFiles,
   });
 }
 </script>
@@ -109,6 +112,16 @@ function save() {
       <SettingsToggle
         v-model="form.repoContext"
         :label="t('settings.memoryRepoContext')"
+      />
+    </SettingsRow>
+    <!-- 指令文件层（提示词分层设计 §4.3）：全局/项目 AGENTS.md 注入消息层 -->
+    <SettingsRow
+      :title="t('settings.memoryInstructionFiles')"
+      :hint="t('settings.memoryInstructionFilesHint')"
+    >
+      <SettingsToggle
+        v-model="form.instructionFiles"
+        :label="t('settings.memoryInstructionFiles')"
       />
     </SettingsRow>
     <!-- M2 记忆树整理（树 v2 §4.3/§15）：节奏二档 + 增量块 X（增量档显示） -->

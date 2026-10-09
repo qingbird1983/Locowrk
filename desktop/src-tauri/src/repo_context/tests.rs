@@ -67,8 +67,19 @@ fn build_is_static_reminder_independent_of_files() {
     assert!(a.contains("requirements.md"), "{a}");
     assert!(a.contains("handoff.md"));
     assert!(a.contains("notes/"));
-    assert!(a.contains("START"), "开场先读的节点钩子在场");
-    assert!(a.contains("update handoff.md"), "状态变化时自行更新的钩子在场");
+    assert!(
+        a.contains("never as an opening ritual"),
+        "read 侧条件触发（开场仪式禁令）在场"
+    );
+    assert!(
+        a.contains("update handoff.md"),
+        "状态变化时自行更新的钩子在场"
+    );
+    assert!(!a.contains("at the START"), "「开场必读」旧钩子已退役");
+    assert!(
+        !a.contains("do not wait to be asked"),
+        "「不等被问」只保留在 write 侧（本段是 read 钩子）"
+    );
     assert!(a.contains("NOT auto-injected"), "提醒制语义自述在场");
     assert!(!a.contains("永远用 pnpm"), "正文不注入");
     assert!(!a.contains("2026-10-05"), "notes 清单也不注入");

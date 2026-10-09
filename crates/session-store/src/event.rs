@@ -100,11 +100,14 @@ pub enum SessionEvent {
         duration_ms: u64,
     },
     /// 上下文用量快照（v2.62，§3.12 进度条数据源持久化）：轮次前与每个
-    /// step 后各一条，口径与实时推送同源（kernel_agent::estimate_tokens）。
-    /// derive_messages 跳过（用量是过程计量不是上下文，不回传供应商）；
-    /// 投影层映成 `agent://context-usage`——重放恢复用量环（此前只推实时
-    /// 通道，切会话回来统计即消失）。字段全 `serde(default)`（向后兼容
-    /// 旧日志，ContextCompacted 同款）。旧日志无此变体。
+    /// step 后各一条。`used` 口径（v2.138 用户裁定统一锚点）：优先供应商
+    /// 真实 input（日志最后一条 LlmUsage，与整理触发/自动收起同一把尺
+    /// ——「看到的 = 触发用的」）；无上报回落估算（树组装口径优先，
+    /// 字符估算兜底）。derive_messages 跳过（用量是过程计量不是上下文，
+    /// 不回传供应商）；投影层映成 `agent://context-usage`——重放恢复用量
+    /// 环（此前只推实时通道，切会话回来统计即消失）。字段全
+    /// `serde(default)`（向后兼容旧日志，ContextCompacted 同款）。
+    /// 旧日志无此变体。
     ContextUsage {
         #[serde(default)]
         used: u64,

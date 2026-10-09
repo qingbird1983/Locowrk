@@ -126,10 +126,13 @@ stage tool-edit 0.2.1
 # 测试复测 P2-2）——删「usually invoked by the compensation layer」劝退
 # 措辞（v2.115 在 fs_restore 上同款裁定），审批说法改「跟随会话权限档」
 # （完全档直接放行不出卡，写死 requires approval 与事实不符）
-stage memory-sqlite 0.1.4
+# 0.1.5（2026-10-09，小迭代 +0.0.1）：提示词分层批（设计稿 §5.4）——
+# memory_read / memory_search 描述尾补「Use on demand … not as an opening
+# step」双保险句（主诱导在 system 块措辞，描述层随批收紧）
+stage memory-sqlite 0.1.5
 stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit/{0.2.0,0.2.1} + tool-fs/{0.1.3,0.1.4,0.1.5} + tool-fetch 0.1.1 + tool-shell/{0.1.3,0.1.4} + tool-git 0.1.3 + memory-sqlite 0.1.4（0.2.1/0.1.5 = G3 批，0.1.4 = G4 只读证明批）+ 其余见上注释"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit/{0.2.0,0.2.1} + tool-fs/{0.1.3,0.1.4,0.1.5} + tool-fetch 0.1.1 + tool-shell/{0.1.3,0.1.4} + tool-git 0.1.3 + memory-sqlite 0.1.5（0.1.5 = 提示词分层批；0.2.1/0.1.5 = G3 批，0.1.4 = G4 只读证明批）+ 其余见上注释"
 echo "next: cargo run -p kernel-bin -- demo"

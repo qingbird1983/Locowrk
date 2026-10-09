@@ -2,10 +2,12 @@
 //! waterfall 监听器——把内核组装侧交来的「记忆树目录」（`RequestPayload::
 //! tree_directory`）追加到 payload.system 尾部。
 //!
-//! 链位：ToolExposure → Memory-Inject → **TreeDirectoryInject** →
-//! ctx-compact——目录排在记忆块之后（组装次序 [2]记忆 → [3]目录 → [4]
-//! 尾巴，树 v2 §7.1），system 前缀（静态 system + 记忆块）不受目录增长
-//! 影响（前缀缓存只看字节前缀，目录追加发生在块尾）。
+//! 链位（v2.139 提示词分层设计 §6 重排）：**殿后 = system 真尾部**——
+//! 注册序 ToolExposure → BaseSystemInject → Memory-Inject → 思考语言 →
+//! **TreeDirectoryInject**；append-only 段之后不再有任何静态段，目录
+//! 追加只动尾部（前缀缓存只看字节前缀，静态段前缀不受目录增长影响；
+//! 旧序「思考语言排目录之后」每整理断一次缓存，prompt_layering 集成
+//! 测试锁死新序）。
 //!
 //! 目录文本由宿主 [`TreeContextSource`](crate::TreeContextSource) 生成，
 //! 本件只做追加：空串不追加（Some("") = 树会话尚无捆——marker 仍随

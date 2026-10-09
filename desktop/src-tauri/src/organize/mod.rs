@@ -19,7 +19,7 @@ use memory_tree::{
     AnchorSource, MaterialItem, MemoryManagerClient, MemoryManagerUsage, MemoryTree,
     OrganizeReason, OrganizeRecord, Pacing, ReboundDecision, TreeStore, TriggerInput,
 };
-use session_store::{Session, SessionEvent};
+use session_store::Session;
 
 use crate::settings::SettingsStore;
 use crate::settings::TailStrategy;
@@ -87,6 +87,10 @@ pub struct Organizer {
     inflight: StdMutex<HashSet<String>>,
     /// 整理系统消息推送（M3 §3.37③；测试传哑闭包 = 静默）。
     notifier: OrganizeNotifier,
+    /// 会话态碎片 pending 表（提示词分层设计 §4.4）：整理收束置位
+    /// 「历史去哪了、怎么找回」碎片，下一轮开场由 FragmentInject 拼接。
+    /// None = 测试装配（不置位）。
+    fragments: Option<Arc<crate::fragments::FragmentPending>>,
 }
 
 /// 决策产物：管道输入（材料项克隆自触发瞬间的会话日志——事件流
@@ -114,6 +118,7 @@ fn elapsed_ms(started: &std::time::Instant) -> u64 {
 }
 
 impl Organizer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         settings: Arc<SettingsStore>,
         sessions_dir: PathBuf,
@@ -123,6 +128,7 @@ impl Organizer {
         model_overrides: Arc<crate::model_override::ModelOverrideStore>,
         catalog: Arc<crate::llm::catalog::CatalogStore>,
         notifier: OrganizeNotifier,
+        fragments: Option<Arc<crate::fragments::FragmentPending>>,
     ) -> Self {
         Self {
             settings,
@@ -135,6 +141,7 @@ impl Organizer {
             catalog,
             inflight: StdMutex::new(HashSet::new()),
             notifier,
+            fragments,
         }
     }
 
@@ -160,6 +167,12 @@ impl Organizer {
             Ok(v) => (self.notifier)("lw://organize-done", v),
             Err(e) => tracing::warn!("organize-done 序列化失败: {e}"),
         }
+        // 尾部碎片（提示词分层设计 §4.4）：下一轮开场告知模型「历史去哪
+        // 了、怎么找回」——整理对模型不再静默（此前消息列突然变短模型
+        // 无感知）。fire-and-forget：置位失败不影响整理收束。
+        if let Some(f) = &self.fragments {
+            f.set(session_id, crate::fragments::ORGANIZED);
+        }
     }
 
     /// 熔断翻转告知（§3.37③ 如实）。
@@ -183,22 +196,17 @@ impl Organizer {
     }
 
     /// 占用锚点（§4.2：优先 provider 真实 input——日志最后一条 LlmUsage；
-    /// 无上报回落字符估算，锚点来源如实标注）。
+    /// 无上报回落字符估算，锚点来源如实标注）。扫描逻辑与用量面共用
+    /// `runner::reported_input_tokens`（v2.138 统一锚点：进度条 = 触发 =
+    /// 自动收起，一把尺）。
     fn anchor(session: &Session) -> (u64, AnchorSource) {
-        session
-            .events()
-            .iter()
-            .rev()
-            .find_map(|e| match e {
-                SessionEvent::LlmUsage { input, .. } => Some((*input, AnchorSource::LlmUsage)),
-                _ => None,
-            })
-            .unwrap_or_else(|| {
-                (
-                    kernel_agent::estimate_tokens(&session.derive_messages()),
-                    AnchorSource::Estimate,
-                )
-            })
+        match crate::runner::reported_input_tokens(session) {
+            Some(input) => (input, AnchorSource::LlmUsage),
+            None => (
+                kernel_agent::estimate_tokens(&session.derive_messages()),
+                AnchorSource::Estimate,
+            ),
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -237,8 +245,7 @@ impl Organizer {
         // 孤儿轮（chaptered_until < 窗口起点）既不在尾巴也不在目录，必须及时
         // 归章节——例行维护：**先于熔断判定**（熔断暂停的是阈值/增量烧钱信号，
         // 不是固定节奏）且**不记反弹**（管道按 reason 跳过 note_organized）。
-        if self.settings.tail_config().0 == TailStrategy::Window && tree.pending.is_none()
-        {
+        if self.settings.tail_config().0 == TailStrategy::Window && tree.pending.is_none() {
             let start = window_start_event(session.events(), mem.tail_window_turns);
             if tree.chaptered_until < start && start > 0 {
                 let events = session.events();
@@ -581,6 +588,7 @@ mod tests;
 /// 直呼；㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）；
 /// 事件推送闭包由 state 组装（emit 调用留在 state/mod.rs，见其注释）；
 /// v2.137 起持模型覆盖旁车 + 目录（自动收起的生效窗口四层链）。
+#[allow(clippy::too_many_arguments)]
 pub fn build_organizer(
     settings: Arc<SettingsStore>,
     sessions_dir: PathBuf,
@@ -589,6 +597,7 @@ pub fn build_organizer(
     model_overrides: Arc<crate::model_override::ModelOverrideStore>,
     catalog: Arc<crate::llm::catalog::CatalogStore>,
     notifier: OrganizeNotifier,
+    fragments: Option<Arc<crate::fragments::FragmentPending>>,
 ) -> Arc<Organizer> {
     Arc::new(Organizer::new(
         Arc::clone(&settings),
@@ -599,5 +608,6 @@ pub fn build_organizer(
         model_overrides,
         catalog,
         notifier,
+        fragments,
     ))
 }

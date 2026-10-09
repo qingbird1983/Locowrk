@@ -99,7 +99,9 @@ impl MemoryStore {
     }
 
     /// 会话的仓库根（归属路径 = 交接面落点）。未归属 / 非目录 = None。
-    fn repo_root(&self, session_id: Option<&str>) -> Option<PathBuf> {
+    /// v2.139 pub：指令文件层（instruction_files.rs）同一真源找项目根
+    /// AGENTS.md。
+    pub fn repo_root(&self, session_id: Option<&str>) -> Option<PathBuf> {
         let sid = session_id?;
         let ws = (self.workspace_of)(sid)?;
         if ws.is_empty() {
@@ -517,6 +519,16 @@ fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
+/// 本地日期 ISO 形（`YYYY-MM-DD`，`<environment>` Today 行用）。chrono
+/// 已在依赖树（tauri 传递引入，声明直依赖零新增编译成本）；取不到按
+/// epoch UTC 如实（不发明时区）。
+fn today_local() -> String {
+    chrono::Local::now()
+        .date_naive()
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
 /// Memory-Inject 的检索源（注册进 agent/request 决策环）。v2.136 裁定：
 /// 注入只取全局层（用户层面的喜好/全局要求；项目层事实不自动注入，模型
 /// memory_read / memory_search 按需查）。㉘·A·fix 另供两件：`scope_id`
@@ -548,10 +560,18 @@ impl MemorySource for MemoryStore {
         if ws.is_empty() {
             return None;
         }
+        // 提示词分层设计 §4.2/§5.3（v2.139 `<environment>` 内文）：项目根 +
+        // 日期/平台 + 按需查路径（"list/read it first" 退役——「背景不是
+        // 议程」）。日期/平台随块同吃会话预取 = 会话锁死（首请求定格，
+        // 跨天不发提醒——桌面会话单日为主，宁缺勿假）。
         Some(format!(
-            "Current project workspace: {ws} — \"this project\" in the user's \
-             message refers to this directory; list/read it first, do not guess \
-             other paths from old memories."
+            "Project workspace: {ws} — \"this project\" in the user's message \
+             refers to this directory.\n\
+             Today: {}. Platform: {}.\n\
+             Look up project files when the request touches them; treat paths \
+             recalled from memory as hints to verify, not facts.",
+            today_local(),
+            std::env::consts::OS
         ))
     }
 

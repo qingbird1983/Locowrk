@@ -6,8 +6,8 @@ use std::path::Path;
 
 use super::{
     synthesize_view, AppSettings, AppearanceView, ChatView, ContextSettingsView, DeveloperView,
-    EmbeddingView, LlmSettingsView, MemorySettingsView, MultimodalView, PluginsView,
-    ProviderView, SettingsView, ShellSettingsView, ToolsSettingsView,
+    EmbeddingView, LlmSettingsView, MemorySettingsView, MultimodalView, PluginsView, ProviderView,
+    SettingsView, ShellSettingsView, ToolsSettingsView,
 };
 
 pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
@@ -72,6 +72,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             collapse_threshold_pct: s.memory.collapse_threshold_pct,
             files: s.memory.files,
             repo_context: s.memory.repo_context,
+            instruction_files: s.memory.instruction_files,
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,

@@ -44,6 +44,7 @@ fn memory_defaults_legacy_compat_and_validation() {
                 collapse_threshold_pct: None,
                 files: None,
                 repo_context: None,
+                instruction_files: None,
             }),
             None,
             None,
@@ -51,8 +52,8 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     assert!(!store.view().memory.enabled);
     assert_eq!(store.view().memory.top_k, 3);
@@ -79,8 +80,8 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     assert!(!store.view().memory.enabled);
     assert_eq!(store.view().memory.top_k, 8);
@@ -104,8 +105,8 @@ fn memory_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
-                        None,
-)
+                None,
+            )
             .is_err());
     }
     assert_eq!(store.view().memory.top_k, 8);
@@ -146,6 +147,7 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 collapse_threshold_pct: None,
                 files: None,
                 repo_context: None,
+                instruction_files: None,
             }),
             None,
             None,
@@ -153,8 +155,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     drop(store);
     let store = SettingsStore::open(&root).unwrap();
@@ -182,8 +184,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap_err();
     assert!(err.contains("整理节奏"), "{err}");
     let err = store
@@ -204,8 +206,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap_err();
     assert!(err.contains("增量块"), "{err}");
     // 记忆管理器模型传空串 = 清除（回落同主模型）
@@ -228,8 +230,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     assert!(store.view().memory.memory_manager_model.is_none());
     std::fs::remove_dir_all(&root).ok();
@@ -268,8 +270,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     let v = store.view().memory;
     assert_eq!(v.tail_strategy, "window");
@@ -300,8 +302,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap_err();
     assert!(err.contains("尾巴策略"), "{err}");
     let err = store
@@ -322,8 +324,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap_err();
     assert!(err.contains("固定窗口"), "{err}");
     let err = store
@@ -344,8 +346,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap_err();
     assert!(err.contains("自动收起阈值"), "{err}");
     // 出界不污染内存态
@@ -357,8 +359,8 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
 fn retired_keys_are_phantom() {
     let root = temp_root("m5keys");
     SettingsStore::open(&root).unwrap(); // 建目录与缺省文件，再覆盖夹具
-    // 幻影键（v2.136 退役三键 + v2.137 defaultOrganizer）：存量
-    // settings.json 带着旧键照常解析，投影不出现、非退役键照常生效
+                                         // 幻影键（v2.136 退役三键 + v2.137 defaultOrganizer）：存量
+                                         // settings.json 带着旧键照常解析，投影不出现、非退役键照常生效
     std::fs::write(
         root.join(super::FILE_NAME),
         r#"{"memory":{"autoExtract":false,"handoffUpdate":false,"experiences":true,"defaultOrganizer":"legacy","topK":7}}"#,
@@ -366,8 +368,17 @@ fn retired_keys_are_phantom() {
     .unwrap();
     let v = SettingsStore::open(&root).unwrap().view().memory;
     assert_eq!(v.top_k, 7, "非退役键照常生效");
-    let json = serde_json::to_value(&v).unwrap().as_object().unwrap().clone();
-    for key in ["autoExtract", "handoffUpdate", "experiences", "defaultOrganizer"] {
+    let json = serde_json::to_value(&v)
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .clone();
+    for key in [
+        "autoExtract",
+        "handoffUpdate",
+        "experiences",
+        "defaultOrganizer",
+    ] {
         assert!(!json.contains_key(key), "退役键 {key} 不进投影");
     }
     std::fs::remove_dir_all(&root).ok();

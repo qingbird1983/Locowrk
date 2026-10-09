@@ -100,6 +100,9 @@ pub(crate) struct EngineDeps {
     /// v4.11 停止生成：调度触发的轮次与手聊同一停止面（发送键停止对
     /// 调度轮同样生效）。
     pub stop_flags: Arc<crate::stop::StopFlags>,
+    /// 会话态碎片 pending 表（提示词分层设计 §4.4）：到顶碎片与手聊
+    /// 同一置位面。
+    pub fragments: Arc<crate::fragments::FragmentPending>,
 }
 
 /// 起引擎后台任务（组装点调用；db 打不开 = 不起，调度缺席已降级）。
@@ -188,6 +191,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         deps.settings.max_turn_steps(),
         Some(&deps.tree_assembler),
         Some(&deps.stop_flags),
+        Some(deps.fragments.as_ref()),
     )
     .await
     {

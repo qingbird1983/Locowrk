@@ -722,6 +722,24 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.139 · 提示词分层拼装（《Prompt Assembly Layering Design v1》四批全落——治「开场就查记忆问项目」）
+
+**用户 2026-10-09 口述「那开始实施吧」**（设计稿同日评审通过）。病根：聊天请求的 system 无身份段与行为总纲，行为全由三个「主动去做」的注入块驱动（读 handoff / 维护记忆 / list 项目文件），模型开场就查记忆、读项目、盘问阶段。四层落地（ZCode 分层架构同构，M1 字节前缀纪律全保留）：
+
+| 层 | 落点 | 版本注 |
+|---|---|---|
+| 静态不可变层 | kernel-agent 新 `BaseSystemInject`：`prompts/base/` 六节 `include_str!`（引言/身份总纲/工具策略/安全边界/输出纪律/reminder 合法性）≈1.25K t，排 system 字节前缀——跨会话同前缀 | 「背景不是议程」优先级金字塔 + 开场禁令 = 治本一句 |
+| waterfall 重排 | ToolExposure → Base → Memory → 思考语言 → 树目录（殿后）→ 指令文件 → 碎片；`tests/prompt_layering.rs` 键静态段前缀 + 目录增长前缀逐字节不变 | 修 v2.137 前遗留：思考语言排在只增目录之后，每整理断一次缓存 |
+| 措辞手术 §5 | repo_context / memory_guidance / environment 三块：write 主动保留，read 全改按需（「never as an opening ritual」「never as a way to start a conversation」显式禁令） | 「do not wait to be asked」只保留在 write 语义 |
+| 动态环境层 | `<workspace_context>` 升级 `<environment>`：+ Today/Platform 两行（日期随记忆块预取 = 会话锁死；chrono 直依赖零新增编译成本）；diagnose SYSTEM_MARKERS 随改 | git 快照/项目树不做（模型自查，ZCode 亦无） |
+| 指令文件层 | kernel `InstructionFilesInject` + desktop `instruction_files.rs`：全局 `<数据根>/AGENTS.md` + 项目根 `AGENTS.md`（回落 `.Locowrk/`）→ 合成首条 user 消息（`# agentsMd` + OVERRIDE）+ system-reminder 包裹；会话首查快照锁字节；100KB 截断；settings `memory.instructionFiles` + 设置行 | I 子目录级裁掉记档；全局文件落数据根（设计稿 `~/.Locowrk` 的偏差记档） |
+| 会话态碎片 | kernel `FragmentInject`（wrap_system_reminder 集中转义）+ desktop `FragmentPending`：整理完成 / Plan 模式 / 轮次到顶三碎片，轮开场（最后一条消息是 User）取件拼接一次即清 | 落点裁决：kernel waterfall messages 可变（ctx-compact 同款通路），headless 同享 |
+| 描述微调 | memory_read / memory_search 尾补 on-demand 句 | memory-sqlite 0.1.5 随批 |
+
+门禁（最后一次编辑后全量复跑）：fmt --check 双侧 CLEAN、clippy 根 0 + desktop 0、根 workspace 全绿、desktop 315 绿（+6）、vue-tsc 0、pnpm build 过、lint:style 0、check_length 33 持平。已知边界：碎片 pending 内存态崩溃即失（无害）；碎片清标记同轮前缀分叉 ≈ 一条 user 消息编码；日期跨天不提醒；「背景不是议程」措辞强度实机双场景验收通过（用户 2026-10-10 目检「真机验证比之前好太多了」）。文档：设计稿标注 v2.139 + CHANGELOG v2.139。（进度条/用量环接入 llm_usage 真实事件——压力实测口径分裂修复）
+
+**用户 2026-10-09 压力实测抓的口径分裂 + 裁定**（「进度条能不能接入到这个 llm_usage 事件真实的事件上，这样不是准确吗？统一改成真实锚点吧」）：上下文 UI 显「已用 ≈110K」且阈值进度条 112% 全红，100K 整理阈值却不触发——触发锚点吃供应商真实 `prompt_tokens`（最后一条 `llm_usage.input` = **95,483 < 100,000**），用量环/进度条吃字符估算 `context_usage.used` = **112,606（+18%）**，两把尺并存（trigger.rs 挂账「M4 组装器批统一」一直未兑现）。落点（纯 runner/organize 面，前端零改动）：runner.rs 新 `reported_input_tokens` 共享锚点；`record_usage` 的 `used` 改真实优先（无上报回落原估算链：树组装口径 → 全量字符估算）；`Organizer::anchor` 收敛调用共享函数（触发/自动收起/观测面板与进度条同尺——**「看到的 = 触发用的」**，进度条到线必然伴随整理）；`ContextUsage`/`trigger.rs` 注释随改。回归：`context_usage_prefers_reported_input`（预置实测值 95,483 → 每条快照全等，估算回落不得发生）。门禁全绿（desktop 304）。已知边界：真实锚点滞后一步（最后一条 assistant 回复不计入，下次请求真算）；供应商不报用量 = 永久估算回落；旧日志历史事件不重算；浮层「尾巴 %」「工具上下文 ≈N」仍估算（无供应商计数）。详见 CHANGELOG v2.138。
+
 ### v2.137 · 上下文面重构（整理阈值绝对 K + 窗口自动识别 + 压缩/legacy 整理面退役 + 缓存单价退役）
 
 **用户 2026-10-09 口述裁定**（用量环要自动识别模型最大上下文；整理触发改「达到多少 K 就触发」不按百分比；压缩阈值改名整理阈值 + 100K–800K 滑块带气泡；压缩策略没用了就删；用量进度条改名阈值用量进度条、分母 = 阈值；缓存命中/未命中单价要用户手填 = 删；缺省整理方式随标准整理退役）。落点：`session_window` 四层链（会话覆盖旁车 → 模型行 → 目录 → 档位）喂 UsagePolicy 与自动收起；`TriggerInput.threshold_tokens` 绝对阈值（窗口未知照常触发）；ctx-compact 桌面链退役 + organizer_mode 删库（**一切会话皆树**，旧旁车/旧 settings 键全幻影）；ContextSection 重写（滑条 + 拖动气泡）；缓存单价两键 + 节省估算退役。门禁全绿（desktop 303）。已知边界：阈值需低于模型窗口；窗口全未知 = 环按未设置呈现、自动收起跳过。详见 CHANGELOG v2.137。

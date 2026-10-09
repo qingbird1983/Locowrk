@@ -203,9 +203,9 @@ pub fn init_state(app: AppHandle) -> AppState {
         sessions_dir.clone(),
         settings.default_permission_mode(),
     )); // ㉘·B 会话级权限模式（旁车持久 + 缓存；决策表/目录围栏数据源）
-    // M4 树会话组装器（§3.38②）：TreeContextSource 注册进内核服务表——
-    // v2.137 起一切会话皆树（legacy 整理面退役）= L0 目录 + 未整理尾巴。
-    // M5 起存储句柄收敛为 AppState 单例（便宜克隆），组装点共用。
+        // M4 树会话组装器（§3.38②）：TreeContextSource 注册进内核服务表——
+        // v2.137 起一切会话皆树（legacy 整理面退役）= L0 目录 + 未整理尾巴。
+        // M5 起存储句柄收敛为 AppState 单例（便宜克隆），组装点共用。
     let tree_store = memory_tree::TreeStore::new(&root);
     let tree_assembler = Arc::new(crate::organize::TreeAssembler::new(
         Arc::clone(&settings),
@@ -215,7 +215,10 @@ pub fn init_state(app: AppHandle) -> AppState {
     ));
     ctx.provide_dyn::<dyn kernel_agent::TreeContextSource>(Arc::clone(&tree_assembler) as Arc<_>);
 
-    // agent/request 决策环（exposure 文档 §7，注册次序 = 执行次序）：ToolExposure → Memory-Inject → ctx-compact，配置经 RwLock 热换入。
+    // agent/request 决策环（exposure 文档 §7 / 提示词分层设计 §6，注册次序
+    // = 执行次序）：ToolExposure → BaseSystemInject（静态身份层 = system
+    // 字节前缀）→ Memory-Inject → 思考语言 → 树目录（append-only 殿后）→
+    // 指令文件 / 尾部碎片（消息面，与 system 序无关），配置经 RwLock 热换入。
     let exposure_cfg: Arc<RwLock<ToolExposureConfig>> =
         Arc::new(RwLock::new(settings.exposure_config()));
     let embed_exposure_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
@@ -227,6 +230,17 @@ pub fn init_state(app: AppHandle) -> AppState {
     ctx.events
         .on_waterfall(points::REQUEST, Arc::clone(&exposure) as Arc<_>);
 
+    // 静态身份层（提示词分层设计 §4.1）：include_str! 编译期内嵌六节
+    // （引言/身份/工具策略/安全边界/输出纪律/reminder 合法性），跨会话
+    // 逐字节同前缀——「用户当前请求 > 背景」总纲治开场仪式。
+    ctx.events.on_waterfall(
+        points::REQUEST,
+        Arc::new(kernel_agent::BaseSystemInject) as Arc<_>,
+    );
+
+    // 会话态碎片 pending 表（§4.4）：organize/权限切换/runner 三处置位。
+    let fragments = Arc::new(crate::fragments::FragmentPending::default());
+
     let memory_cfg: Arc<RwLock<MemoryInjectConfig>> =
         Arc::new(RwLock::new(settings.memory_inject_config()));
     ctx.events.on_waterfall(
@@ -237,22 +251,52 @@ pub fn init_state(app: AppHandle) -> AppState {
         )),
     );
 
-    // M4 树目录注入（§3.38②）：Memory-Inject 之后——目录排在记忆块
-    // 之后（树 v2 §7.1 [2]→[3]）。v2.137：ctx-compact 桌面链退役（用户
-    // 裁定「上下文根本不压缩了」，压缩语义由记忆树整理边界承担；headless
-    // 内核侧中间件保留不动）。
+    // 思考语言（docs/design/NEW/language of thought.md）：**排在树目录
+    // 之前**（提示词分层设计 §6 重排）——思考语言是静态段，树目录是
+    // append-only，动态段必须殿后；旧序（目录之后）每整理一次就把思考
+    // 语言句的前缀缓存断一次。会话首请求解析并锁死（前缀缓存红线 §5）
+    // ——中途改设置当前会话不变，新会话用新配置。
+    ctx.events.on_waterfall(
+        points::REQUEST,
+        Arc::new(crate::thinking_language::ThinkingLanguageInject::new(
+            Arc::clone(&settings),
+        )),
+    );
+
+    // M4 树目录注入（§3.38②）：system **真尾部**（append-only 殿后，其后
+    // 不再有静态段）。v2.137：ctx-compact 桌面链退役（用户裁定「上下文
+    // 根本不压缩了」，压缩语义由记忆树整理边界承担；headless 内核侧
+    // 中间件保留不动）。
     ctx.events.on_waterfall(
         points::REQUEST,
         Arc::new(kernel_agent::TreeDirectoryInject) as Arc<_>,
     );
 
-    // 思考语言（docs/design/NEW/language of thought.md）：TreeDirectoryInject
-    // 之后注册 = system 真尾部（目录之后、会话历史之前）；会话首请求解析
-    // 并锁死（前缀缓存红线 §5）——中途改设置当前会话不变，新会话用新配置。
+    // 指令文件层（提示词分层设计 §4.3）：全局 <数据根>/AGENTS.md + 项目根
+    // AGENTS.md（回落 .Locowrk/AGENTS.md）→ 合成首条 user 消息（消息面，
+    // 会话首查快照锁字节）。开关 settings memory.instructionFiles。
+    let instruction_source = Arc::new(crate::instruction_files::InstructionFiles::new(
+        Arc::clone(&memory),
+        root.join("AGENTS.md"),
+        {
+            let s = Arc::clone(&settings);
+            Arc::new(move || s.memory().instruction_files) as Arc<dyn Fn() -> bool + Send + Sync>
+        },
+    ));
     ctx.events.on_waterfall(
         points::REQUEST,
-        Arc::new(crate::thinking_language::ThinkingLanguageInject::new(
-            Arc::clone(&settings),
+        Arc::new(kernel_agent::InstructionFilesInject::new(
+            instruction_source as Arc<dyn kernel_agent::InstructionSource>,
+        )),
+    );
+
+    // 尾部碎片（§4.4）：pending 表 → 轮开场拼 `<system-reminder>` 在最后
+    // 一条 user 消息尾（出现一次即清）——整理完成/Plan 模式/轮次到顶
+    // 不再对模型静默。
+    ctx.events.on_waterfall(
+        points::REQUEST,
+        Arc::new(kernel_agent::FragmentInject::new(
+            Arc::clone(&fragments) as Arc<dyn kernel_agent::FragmentSource>
         )),
     );
 
@@ -342,19 +386,16 @@ pub fn init_state(app: AppHandle) -> AppState {
     let pdfium_lib = crate::media::resolve_pdfium_lib(&app);
     let pdf_tool = pdfium_lib.map(|lib| {
         tracing::info!(lib = %lib.display(), "pdf_to_images 就位");
-        crate::media::pdf::PdfToImagesTool::new(
-            Arc::clone(&assets),
-            Arc::clone(&media_limits),
-            lib,
-        )
+        crate::media::pdf::PdfToImagesTool::new(Arc::clone(&assets), Arc::clone(&media_limits), lib)
     });
     let read_image_tool = crate::media::ReadImageTool::new(Arc::clone(&assets), media_limits);
     // G5 子代理独立验收（Pure + OnDemand）：读子转录 + 验收 LLM 调用（辅
     // 助降档）。与全局服务同一 AppLlm 实例。
-    let verify_tool: Arc<dyn plugin_api::Tool> = Arc::new(crate::subagent_verify::SubagentVerifyTool::new(
-        Arc::clone(&llm),
-        root.join("sub-transcripts"),
-    ));
+    let verify_tool: Arc<dyn plugin_api::Tool> =
+        Arc::new(crate::subagent_verify::SubagentVerifyTool::new(
+            Arc::clone(&llm),
+            root.join("sub-transcripts"),
+        ));
     let with_host_tools = |src: KernelToolSource| {
         let src = src
             .with_builtin(Arc::clone(&send_email))
@@ -497,6 +538,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::clone(&model_overrides),
         Arc::clone(&catalog),
         organizer_notifier,
+        Some(Arc::clone(&fragments)),
     );
     // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
 
@@ -517,6 +559,7 @@ pub fn init_state(app: AppHandle) -> AppState {
             Arc::clone(&organizer),
             Arc::clone(&tree_assembler),
             Arc::clone(&stop_flags),
+            Arc::clone(&fragments),
         );
     }
     // 在途整理任务重投（后台，不阻塞窗口出现）
@@ -556,7 +599,11 @@ pub fn init_state(app: AppHandle) -> AppState {
                     days,
                 );
                 if report.scanned > 0 || report.removed > 0 {
-                    tracing::info!(scanned = report.scanned, removed = report.removed, "asset gc tick");
+                    tracing::info!(
+                        scanned = report.scanned,
+                        removed = report.removed,
+                        "asset gc tick"
+                    );
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(24 * 3600)).await;
             }
@@ -571,6 +618,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         permission_modes,
         model_overrides,
         tree_assembler,
+        fragments,
         sink,
         sessions,
         sessions_dir,

@@ -522,6 +522,8 @@ export interface MemorySettingsView {
   files: boolean;
   /** F2 交接提醒（缺省开，v2.136 提醒制）：归属会话注入静态提醒段。 */
   repoContext: boolean;
+  /** 指令文件层（缺省开）：全局/项目 AGENTS.md 注入消息层头部。 */
+  instructionFiles: boolean;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -539,6 +541,7 @@ export interface MemoryUpdate {
   collapseThresholdPct?: number;
   files?: boolean;
   repoContext?: boolean;
+  instructionFiles?: boolean;
 }
 
 /** 前缀断裂诊断报告（M6.1，llm_cache_diagnose；breaks 空 = 健康纯追加）。 */

@@ -4,8 +4,9 @@
 //! 设计对齐文档：
 //! - **不是插件、不是内核中间件**：宿主内置监听器（TreeDirectoryInject
 //!   同款注册方式），配置是设置项 `thinking.language`（§1 不跨 ABI）。
-//! - **链位 = system 真尾部**（§6）：注册在 TreeDirectoryInject 之后、
-//!   ctx-compact 之前——目录之后、会话历史之前，对所有会话同一位置。
+//! - **链位**（§6；v2.139 提示词分层设计 §6 重排）：注册在 Memory-Inject
+//!   之后、TreeDirectoryInject **之前**——静态 hint 不得排在只增目录之后
+//!   （旧序每整理一次断一次该段前缀缓存）；append-only 目录殿后。
 //! - **会话内锁死**（§5 前缀缓存红线）：按 session_id 首请求解析一次并
 //!   缓存；中途改设置当前会话不变，新会话用新配置。None 身份（headless /
 //!   无身份请求）也缓存一条（M1 同款）。

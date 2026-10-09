@@ -381,8 +381,8 @@ async fn scope_change_recomputes_prefetch() {
     assert_eq!(src.count(), 2);
 }
 
-/// 归属会话零记忆也注入工作区上下文行——"看下这个项目"不再靠猜
-/// （此前零记忆 = 完全不注入，归属会话对自身项目一无所知）。
+/// 归属会话零记忆也注入环境块——"看下这个项目"不再靠猜（v2.139 起
+/// `<environment>`：项目根 + 日期/平台，日期随预取会话锁死）。
 #[tokio::test]
 async fn context_line_injected_even_without_memories() {
     let src = Arc::new(Scoped::new());
@@ -394,16 +394,16 @@ async fn context_line_injected_even_without_memories() {
     );
     let out = run_session(&inject, "s1")
         .await
-        .expect("上下文行单独成块")
+        .expect("环境块单独成块")
         .system
         .unwrap();
-    assert!(out.contains("<workspace_context>"));
+    assert!(out.contains("<environment>"));
     assert!(out.contains("F:\\AI\\Glance-main"));
     assert!(!out.contains("<persistent_memory>"));
 }
 
-/// 提醒段（v2.136 项目侧全提醒制）：归属会话在 workspace_context 之后、
-/// 记忆块之前注入 `<repo_context>`；无提醒面（None）零出现，组装零变化。
+/// 提醒段（v2.136 项目侧全提醒制）：归属会话在环境块之后、记忆块之前
+/// 注入 `<repo_context>`；无提醒面（None）零出现，组装零变化。
 #[tokio::test]
 async fn repo_context_injected_after_workspace_line() {
     let src = Arc::new(Scoped::new());
@@ -415,10 +415,10 @@ async fn repo_context_injected_after_workspace_line() {
         cfg_lock(MemoryInjectConfig::default()),
     );
     let out = run_session(&inject, "s1").await.unwrap().system.unwrap();
-    let ws = out.find("</workspace_context>").expect("工作区行在");
+    let env = out.find("</environment>").expect("环境块在");
     let repo = out.find("<repo_context>").expect("提醒段在");
     let mem = out.find("<persistent_memory>").unwrap_or(usize::MAX);
-    assert!(ws < repo, "提醒段紧随工作区行之后");
+    assert!(env < repo, "提醒段紧随环境块之后");
     assert!(repo < mem, "提醒段先于记忆块（无记忆时 mem 不存在）");
     assert!(out.contains("requirements / handoff / notes reminder"));
 }
@@ -451,8 +451,9 @@ async fn scoped_entries_render_tier_prefix() {
     assert!(out.contains("- [project] arch.note = uses pnpm"));
 }
 
-/// 主动记忆指引（F3 起，v2.136 改写）：随注入块尾——在事实块之后；
-/// 「永远/以后都」升格 global 与项目文件自维护的指引语义在场。
+/// 主动记忆指引（F3 起，v2.139 §5.2 改写）：随注入块尾——在事实块之后；
+/// write 主动 / read 按需（「never as a way to start a conversation」
+/// 显式禁令在场）与项目文件自维护的指引语义在场。
 #[tokio::test]
 async fn guidance_appended_at_block_tail() {
     let inject = inject(
@@ -466,7 +467,10 @@ async fn guidance_appended_at_block_tail() {
             let mem = out.find("<persistent_memory>").expect("事实块在");
             let guide = out.find("<memory_guidance>").expect("指引块在");
             assert!(mem < guide, "指引在注入块尾");
-            assert!(out.contains("from now on"), "升格 global 的触发示例在场");
+            assert!(
+                out.contains("never as a way to start"),
+                "read 侧开场禁令在场"
+            );
             assert!(out.contains(".Locowrk/"), "项目文件自维护的指引语义在场");
         }
         _ => panic!("expected replace"),

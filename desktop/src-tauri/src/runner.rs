@@ -63,6 +63,7 @@ pub async fn run_turn(
     max_steps: u32,
     tree: Option<&crate::organize::TreeAssembler>,
     stop: Option<&Arc<crate::stop::StopFlags>>,
+    fragments: Option<&crate::fragments::FragmentPending>,
 ) -> Result<u32, String> {
     let _stop_guard = stop.map(|f| f.guard(session_id));
     let log_start = session.len();
@@ -81,7 +82,10 @@ pub async fn run_turn(
         turn_id,
         ts: now_ms(),
     });
-    session.append(SessionEvent::UserMessage { content: message, parts });
+    session.append(SessionEvent::UserMessage {
+        content: message,
+        parts,
+    });
     if let Some(dir) = log {
         session_log::append_slice(dir, session_id, session, log_start);
     }
@@ -184,6 +188,11 @@ pub async fn run_turn(
         session_id: session_id.into(),
         steps: max_steps.max(1),
     });
+    // 尾部碎片（提示词分层设计 §4.4）：下一轮开场告知模型「到顶了、成果
+    // 保留、用户可发继续」——到顶对模型不再静默。
+    if let Some(f) = fragments {
+        f.set(session_id, crate::fragments::TURN_CAPPED);
+    }
     Ok(max_steps.max(1))
 }
 
@@ -458,8 +467,7 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                     decision: decision.as_str().into(),
                     note: note.clone(),
                 });
-                let (output, error) =
-                    session_store::closure(Some((*decision, note.as_str())));
+                let (output, error) = session_store::closure(Some((*decision, note.as_str())));
                 out.push(AgentEvent::ToolResult {
                     session_id: session_id.into(),
                     call_id: call_id.0.clone(),
@@ -510,10 +518,25 @@ fn record_stats(session: &Session, from: usize, stats: Option<&UsageRecorder>) {
     }
 }
 
-/// 进度条口径与压缩判定同源：折叠后的消息用 kernel_agent::estimate_tokens。
-/// v2.62：快照**落会话日志**（SessionEvent::ContextUsage）+ 实时单发投影
-/// ——重放经 project_events 同形恢复用量环（此前只推实时通道，切会话
-/// 回来统计即消失）。下一轮投影窗口 `before` 已越过本事件，不会重发。
+/// 供应商真实 input（日志最后一条 LlmUsage 的 prompt_tokens，含缓存命中
+/// ——模型实际收到的上下文；无上报 = None）。v2.138 起这是用量面的唯一
+/// 真尺：进度条/用量环（record_usage）与整理触发（Organizer::anchor）、
+/// 自动收起同吃一把尺——「看到的 = 触发用的」，压力实测抓的口径分裂
+/// （环显估算 110K、触发判真实 95K < 100K 阈值不整理）就此关闭。
+pub(crate) fn reported_input_tokens(session: &Session) -> Option<u64> {
+    session.events().iter().rev().find_map(|e| match e {
+        SessionEvent::LlmUsage { input, .. } => Some(*input),
+        _ => None,
+    })
+}
+
+/// 进度条快照：**优先供应商真实 input**（reported_input_tokens，v2.138
+/// 用户裁定统一锚点）；无上报（一步未跑 / 供应商不报用量）才回落估算
+/// ——树会话 = 组装后口径（目录 + 尾巴，M4 §3.38②），否则全量历史
+/// 字符估算。v2.62：快照**落会话日志**（SessionEvent::ContextUsage）+
+/// 实时单发投影——重放经 project_events 同形恢复用量环（此前只推实时
+/// 通道，切会话回来统计即消失）。下一轮投影窗口 `before` 已越过本事件，
+/// 不会重发。
 fn record_usage(
     session: &mut Session,
     session_id: &str,
@@ -522,13 +545,14 @@ fn record_usage(
     log: Option<&Path>,
     tree: Option<&crate::organize::TreeAssembler>,
 ) {
-    // M4 §3.38②：树会话 = 组装后口径（目录 + 尾巴），如实反映模型实际
-    // 看到的上下文；legacy / 组装器缺席 = 全量历史估算（口径不变）。
-    let used = match tree {
-        Some(t) => t
-            .context_tokens(session, session_id)
-            .unwrap_or_else(|| estimate_tokens(&session.derive_messages())),
-        None => estimate_tokens(&session.derive_messages()),
+    let used = match reported_input_tokens(session) {
+        Some(real) => real,
+        None => match tree {
+            Some(t) => t
+                .context_tokens(session, session_id)
+                .unwrap_or_else(|| estimate_tokens(&session.derive_messages())),
+            None => estimate_tokens(&session.derive_messages()),
+        },
     };
     session.append(SessionEvent::ContextUsage {
         used,

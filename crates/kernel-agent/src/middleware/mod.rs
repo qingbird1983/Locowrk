@@ -9,13 +9,20 @@
 //! （Memory-Inject，Context 文档 §4/§5）与 `tool_exposure`（工具暴露
 //! 截断，exposure 文档 §5/§6）都不是洋葱件——它们是 `agent/request`
 //! waterfall 监听器，与本套件同住只因同属"中间件类"。
-//! 注册次序（exposure 文档 §7 / Context 文档 §3.6）：ToolExposure 最前
-//! （先定暴露面，压缩才知道留多少空间）→ Memory-Inject（记忆是原料）→
-//! ctx-compact（压缩分配预算）。
+//! 注册次序（exposure 文档 §7 / Context 文档 §3.6 / 提示词分层设计 §6）：
+//! ToolExposure 最前（先定暴露面，压缩才知道留多少空间）→
+//! BaseSystemInject（静态身份层 = system 字节前缀）→ Memory-Inject
+//! （记忆是原料）→ 思考语言（宿主注册）→ 树目录（append-only 殿后）。
+//! 旧 ctx-compact 桌面链 v2.137 退役，headless 侧仍注册。
+//! 指令文件 / 尾部碎片两件改写 `messages`（消息层面非 system），注册
+//! 位置与 system 面无关，排尾部。
 
 mod audit;
+mod base_system;
 mod circuit_breaker;
 mod compact;
+mod fragments;
+mod instruction_files;
 mod memory_inject;
 mod retry;
 mod timeout;
@@ -28,11 +35,14 @@ mod tree_context;
 mod tests;
 
 pub use audit::{Audit, AuditEntry, AuditSink, JsonlAuditSink};
+pub use base_system::{BaseSystemInject, base_system};
 pub use circuit_breaker::CircuitBreaker;
 pub use compact::{
     CompactConfig, CompactStrategy, CompactionOutcome, CtxCompact, estimate_tokens,
     suggested_threshold,
 };
+pub use fragments::{FragmentInject, FragmentSource, wrap_system_reminder};
+pub use instruction_files::{InstructionFilesInject, InstructionSource};
 pub use memory_inject::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
 pub use retry::Retry;
 pub use timeout::Timeout;
