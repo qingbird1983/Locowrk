@@ -13,13 +13,8 @@ fn memory_defaults_legacy_compat_and_validation() {
     let v = store.view().memory;
     assert!(v.enabled);
     assert_eq!(v.top_k, 5);
-    // F3 缺省裁定：autoExtract 翻开（④）+ handoff 收束更新开（③）
-    assert!(v.auto_extract);
-    assert!(v.handoff_update);
-    // M5 阶段 3 裁定：缺省整理模式 = tree（用户层 memory 区）+
-    // 经历记忆缺省关（树 v2 §10.3 向量层关缺省）
+    // M5 阶段 3 裁定：缺省整理模式 = tree（用户层 memory 区）
     assert_eq!(v.default_organizer, "tree");
-    assert!(!v.experiences);
     assert!(matches!(
         store.default_organizer(),
         crate::organizer_mode::OrganizerMode::Tree
@@ -28,7 +23,6 @@ fn memory_defaults_legacy_compat_and_validation() {
     let cfg = store.memory_inject_config();
     assert!(cfg.enabled);
     assert_eq!(cfg.top_k, 5);
-    assert!(!cfg.experiences, "经历注入开关随配置桥接（缺省关）");
     // 旧 settings.json 无 memory 字段 → 字段级缺省，不解析失败
     std::fs::write(root.join(FILE_NAME), r#"{"locale":"zh-CN"}"#).unwrap();
     let v = SettingsStore::open(&root).unwrap().view().memory;
@@ -46,7 +40,6 @@ fn memory_defaults_legacy_compat_and_validation() {
             Some(MemoryUpdate {
                 enabled: Some(false),
                 top_k: Some(3),
-                auto_extract: Some(true),
                 organize_pacing: None,
                 organize_chunk_tokens: None,
                 memory_manager_model: None,
@@ -57,9 +50,7 @@ fn memory_defaults_legacy_compat_and_validation() {
                 collapse_threshold_pct: None,
                 files: None,
                 repo_context: None,
-                handoff_update: None,
                 default_organizer: None,
-                experiences: None,
             }),
             None,
             None,
@@ -152,7 +143,6 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             Some(MemoryUpdate {
                 enabled: None,
                 top_k: None,
-                auto_extract: None,
                 organize_pacing: Some("incremental".into()),
                 organize_chunk_tokens: Some(80_000),
                 memory_manager_model: Some("deepseek-flash".into()),
@@ -163,9 +153,7 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 collapse_threshold_pct: None,
                 files: None,
                 repo_context: None,
-                handoff_update: None,
                 default_organizer: None,
-                experiences: None,
             }),
             None,
             None,
@@ -374,11 +362,10 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
 }
 
 #[test]
-fn m5_default_organizer_and_experiences_roundtrip() {
+fn m5_default_organizer_roundtrip_and_stale_keys_are_phantom() {
     let root = temp_root("m5keys");
     let store = SettingsStore::open(&root).unwrap();
-    // 切 legacy + 开经历：磁盘往返 + default_organizer() 访问器随行 +
-    // 注入配置桥接 experiences
+    // 切 legacy：磁盘往返 + default_organizer() 访问器随行
     store
         .update(
             None,
@@ -389,7 +376,6 @@ fn m5_default_organizer_and_experiences_roundtrip() {
             None,
             Some(MemoryUpdate {
                 default_organizer: Some("legacy".into()),
-                experiences: Some(true),
                 ..Default::default()
             }),
             None,
@@ -404,12 +390,10 @@ fn m5_default_organizer_and_experiences_roundtrip() {
     let reopened = SettingsStore::open(&root).unwrap();
     let v = reopened.view().memory;
     assert_eq!(v.default_organizer, "legacy");
-    assert!(v.experiences);
     assert!(matches!(
         reopened.default_organizer(),
         crate::organizer_mode::OrganizerMode::Legacy
     ));
-    assert!(reopened.memory_inject_config().experiences);
     // 非法档拒绝且不污染内存态（M4 白名单语义平移到 memory 区）
     let err = store
         .update(
@@ -434,5 +418,19 @@ fn m5_default_organizer_and_experiences_roundtrip() {
         .unwrap_err();
     assert!(err.contains("整理模式"), "{err}");
     assert_eq!(store.view().memory.default_organizer, "legacy");
+    // 幻影键（v2.136 退役三键）：存量 settings.json 带着旧键照常解析，
+    // 投影不出现、非退役键照常生效
+    std::fs::write(
+        root.join(super::FILE_NAME),
+        r#"{"memory":{"autoExtract":false,"handoffUpdate":false,"experiences":true,"topK":7}}"#,
+    )
+    .unwrap();
+    let v = SettingsStore::open(&root).unwrap().view().memory;
+    assert_eq!(v.top_k, 7, "非退役键照常生效");
+    assert!(!serde_json::to_value(&v)
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .contains_key("autoExtract"));
     std::fs::remove_dir_all(&root).ok();
 }

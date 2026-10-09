@@ -27,10 +27,10 @@ pub use kernel::{
 };
 pub use middleware::{
     Audit, AuditEntry, AuditSink, CircuitBreaker, CompactConfig, CompactStrategy,
-    CompactionOutcome, CtxCompact, EmbedPort, ExperienceEntry, ExperienceSource, ExposureSnapshot,
-    GlobalEwma, JsonlAuditSink, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource,
-    Middleware, Next, RETRIEVAL_WEIGHT, Retriever, Retry, Timeout, ToolExposure,
-    ToolExposureConfig, Tracing, TreeDirectoryInject, cosine, estimate_tokens, suggested_threshold,
+    CompactionOutcome, CtxCompact, EmbedPort, ExposureSnapshot, GlobalEwma, JsonlAuditSink,
+    MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource, Middleware, Next,
+    RETRIEVAL_WEIGHT, Retriever, Retry, Timeout, ToolExposure, ToolExposureConfig, Tracing,
+    TreeDirectoryInject, cosine, estimate_tokens, suggested_threshold,
 };
 pub use stream::{LlmStreamSink, NoLlmStreamSink};
 pub use subagent::{

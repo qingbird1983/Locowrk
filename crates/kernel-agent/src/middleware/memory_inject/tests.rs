@@ -1,9 +1,7 @@
 //! memory_inject 单测：注入格式 / 配置开关 / 空表降级 / 超长截断 /
 //! 追加语义 / 非 REQUEST 点不碰。
 
-use super::{
-    ExperienceEntry, ExperienceSource, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource,
-};
+use super::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
 use crate::waterfall::{RequestPayload, points};
 use cordis_core::{WaterfallDecision, WaterfallListener};
 use serde_json::json;
@@ -50,7 +48,7 @@ fn inject(
     source: std::sync::Arc<dyn MemorySource>,
     cfg: std::sync::Arc<std::sync::RwLock<MemoryInjectConfig>>,
 ) -> MemoryInject {
-    MemoryInject::new(source, None, cfg)
+    MemoryInject::new(source, cfg)
 }
 
 async fn run(inject: &MemoryInject, key: &str) -> Option<RequestPayload> {
@@ -83,7 +81,6 @@ async fn top_k_limits_entries() {
             entry("c", "3"),
         ])),
         cfg_lock(MemoryInjectConfig {
-            enabled: true,
             top_k: 2,
             ..MemoryInjectConfig::default()
         }),
@@ -105,7 +102,6 @@ async fn disabled_or_zero_top_k_is_noop() {
         MemoryInjectConfig {
             enabled: true,
             top_k: 0,
-            ..MemoryInjectConfig::default()
         },
     ] {
         let inject = inject(
@@ -183,119 +179,6 @@ async fn non_request_key_is_noop() {
         cfg_lock(MemoryInjectConfig::default()),
     );
     assert!(run(&inject, points::PRE_STEP).await.is_none());
-}
-
-/// 固定返回预设经历的替身检索源（⑬）。
-struct FixedExp(Vec<ExperienceEntry>);
-
-#[async_trait::async_trait]
-impl ExperienceSource for FixedExp {
-    async fn recall(
-        &self,
-        _session_id: Option<&str>,
-        _query: &str,
-        limit: usize,
-    ) -> Vec<ExperienceEntry> {
-        self.0.iter().take(limit).cloned().collect()
-    }
-}
-
-fn exp(content: &str, created_at: i64) -> ExperienceEntry {
-    ExperienceEntry {
-        content: content.into(),
-        session_id: "s1".into(),
-        created_at,
-    }
-}
-
-/// 带最近用户消息的 payload（经历检索的 query 来源）。
-fn payload_with_user(text: &str) -> serde_json::Value {
-    let mut v = payload_value();
-    v["messages"] = json!([{ "role": "user", "content": text }]);
-    v
-}
-
-#[tokio::test]
-async fn experiences_injected_when_source_present() {
-    let inject = MemoryInject::new(
-        std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
-        Some(std::sync::Arc::new(FixedExp(vec![exp(
-            "chose rusqlite",
-            1_700_000_000,
-        )]))),
-        cfg_lock(MemoryInjectConfig {
-            experiences: true,
-            ..MemoryInjectConfig::default()
-        }),
-    );
-    match inject
-        .handle(points::REQUEST, &payload_with_user("向量库选型"))
-        .await
-    {
-        WaterfallDecision::Replace(v) => {
-            let req: RequestPayload = serde_json::from_value(v).unwrap();
-            let system = req.system.unwrap();
-            assert!(system.contains("<persistent_memory>"));
-            assert!(system.contains("<session_experiences>"));
-            assert!(system.contains("(2023-11-14) chose rusqlite"));
-        }
-        _ => panic!("expected replace"),
-    }
-}
-
-#[tokio::test]
-async fn experiences_skipped_when_absent_or_no_query() {
-    // 未提供经历源：只有事实块
-    let inject = MemoryInject::new(
-        std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
-        None,
-        cfg_lock(MemoryInjectConfig::default()),
-    );
-    let out = run(&inject, points::REQUEST).await.unwrap();
-    assert!(out.system.unwrap().contains("<persistent_memory>"));
-    // 有源但会话没有用户消息（query 空）→ 不检索、无经历块
-    let inject = MemoryInject::new(
-        std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
-        Some(std::sync::Arc::new(FixedExp(vec![exp("x", 0)]))),
-        cfg_lock(MemoryInjectConfig {
-            experiences: true,
-            ..MemoryInjectConfig::default()
-        }),
-    );
-    let out = run(&inject, points::REQUEST).await.unwrap();
-    assert!(!out.system.unwrap().contains("<session_experiences>"));
-}
-
-#[tokio::test]
-async fn experiences_skipped_when_switch_off() {
-    // M5 §10.3 向量层关缺省：源在、query 在、开关关 = 不检索不注入
-    //（缺省档 experiences=false 即本语义，无需覆盖字段）
-    let inject = MemoryInject::new(
-        std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
-        Some(std::sync::Arc::new(FixedExp(vec![exp(
-            "chose rusqlite",
-            1_700_000_000,
-        )]))),
-        cfg_lock(MemoryInjectConfig::default()),
-    );
-    match inject
-        .handle(points::REQUEST, &payload_with_user("向量库选型"))
-        .await
-    {
-        WaterfallDecision::Replace(v) => {
-            let req: RequestPayload = serde_json::from_value(v).unwrap();
-            let system = req.system.unwrap();
-            assert!(system.contains("<persistent_memory>"));
-            assert!(!system.contains("<session_experiences>"));
-        }
-        _ => panic!("expected replace"),
-    }
-}
-
-#[test]
-fn date_of_formats_utc() {
-    assert_eq!(super::date_of(0), "1970-01-01");
-    assert_eq!(super::date_of(1_700_000_000), "2023-11-14");
 }
 
 // ---- M1 会话级预取（KV v2 纪律 2）----
@@ -385,7 +268,6 @@ async fn top_k_change_recomputes_prefetch() {
     let cfg = cfg_lock(MemoryInjectConfig {
         enabled: true,
         top_k: 5,
-        ..MemoryInjectConfig::default()
     });
     let inject = inject(src.clone() as std::sync::Arc<dyn MemorySource>, cfg.clone());
     let _ = run_session(&inject, "s1").await.unwrap();
@@ -434,7 +316,7 @@ struct Scoped {
     per_call: std::sync::atomic::AtomicUsize,
     scope: std::sync::Mutex<String>,
     line: std::sync::Mutex<Option<String>>,
-    /// F2 交接段内文（Some = 有交接面）。
+    /// v2.136 提醒段内文（Some = 有提醒面）。
     repo: std::sync::Mutex<Option<String>>,
 }
 
@@ -520,25 +402,25 @@ async fn context_line_injected_even_without_memories() {
     assert!(!out.contains("<persistent_memory>"));
 }
 
-/// 交接段（F2 §2.2）：归属会话在 workspace_context 之后、记忆块之前
-/// 注入 `<repo_context>`；无交接面（None）零出现，组装零变化。
+/// 提醒段（v2.136 项目侧全提醒制）：归属会话在 workspace_context 之后、
+/// 记忆块之前注入 `<repo_context>`；无提醒面（None）零出现，组装零变化。
 #[tokio::test]
 async fn repo_context_injected_after_workspace_line() {
     let src = Arc::new(Scoped::new());
     src.per_call.store(0, std::sync::atomic::Ordering::SeqCst); // 零记忆
     *src.line.lock().unwrap() = Some("Current project workspace: F:\\p".into());
-    *src.repo.lock().unwrap() = Some("requirements / handoff / notes listing".into());
+    *src.repo.lock().unwrap() = Some("requirements / handoff / notes reminder".into());
     let inject = inject(
         src as std::sync::Arc<dyn MemorySource>,
         cfg_lock(MemoryInjectConfig::default()),
     );
     let out = run_session(&inject, "s1").await.unwrap().system.unwrap();
     let ws = out.find("</workspace_context>").expect("工作区行在");
-    let repo = out.find("<repo_context>").expect("交接段在");
+    let repo = out.find("<repo_context>").expect("提醒段在");
     let mem = out.find("<persistent_memory>").unwrap_or(usize::MAX);
-    assert!(ws < repo, "交接段紧随工作区行之后");
-    assert!(repo < mem, "交接段先于记忆块（无记忆时 mem 不存在）");
-    assert!(out.contains("requirements / handoff / notes listing"));
+    assert!(ws < repo, "提醒段紧随工作区行之后");
+    assert!(repo < mem, "提醒段先于记忆块（无记忆时 mem 不存在）");
+    assert!(out.contains("requirements / handoff / notes reminder"));
 }
 
 #[tokio::test]
@@ -550,7 +432,7 @@ async fn no_repo_context_by_default() {
         cfg_lock(MemoryInjectConfig::default()),
     );
     let out = run_session(&inject, "s1").await.unwrap().system.unwrap();
-    assert!(!out.contains("<repo_context>"), "缺省实现 = 无交接段");
+    assert!(!out.contains("<repo_context>"), "缺省实现 = 无提醒段");
 }
 
 /// 归属会话的记忆块带层标（双层记忆：全局 = 用户偏好 / 项目 = 本项目）。
@@ -569,34 +451,23 @@ async fn scoped_entries_render_tier_prefix() {
     assert!(out.contains("- [project] arch.note = uses pnpm"));
 }
 
-/// 主动记忆指引（F3 §4）：随注入块尾——在事实块与经历块之后；
-/// 「永远/以后都」升格 global 与"重要决定当场记"的指引语义在场。
+/// 主动记忆指引（F3 起，v2.136 改写）：随注入块尾——在事实块之后；
+/// 「永远/以后都」升格 global 与项目文件自维护的指引语义在场。
 #[tokio::test]
 async fn guidance_appended_at_block_tail() {
-    let inject = MemoryInject::new(
+    let inject = inject(
         std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
-        Some(std::sync::Arc::new(FixedExp(vec![exp(
-            "chose rusqlite",
-            0,
-        )]))),
-        cfg_lock(MemoryInjectConfig {
-            experiences: true,
-            ..MemoryInjectConfig::default()
-        }),
+        cfg_lock(MemoryInjectConfig::default()),
     );
-    // 经历检索的 query 来自最近用户消息（payload_value 无消息 = 跳过经历块）
-    match inject
-        .handle(points::REQUEST, &payload_with_user("向量库选型"))
-        .await
-    {
+    match inject.handle(points::REQUEST, &payload_value()).await {
         WaterfallDecision::Replace(v) => {
             let out: RequestPayload = serde_json::from_value(v).unwrap();
             let out = out.system.unwrap();
             let mem = out.find("<persistent_memory>").expect("事实块在");
-            let exp = out.find("<session_experiences>").expect("经历块在");
             let guide = out.find("<memory_guidance>").expect("指引块在");
-            assert!(mem < exp && exp < guide, "指引在注入块尾");
+            assert!(mem < guide, "指引在注入块尾");
             assert!(out.contains("from now on"), "升格 global 的触发示例在场");
+            assert!(out.contains(".Locowrk/"), "项目文件自维护的指引语义在场");
         }
         _ => panic!("expected replace"),
     }

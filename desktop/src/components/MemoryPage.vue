@@ -4,8 +4,6 @@
  * 模式）：搜索 / 列表（新→旧）/ 行内编辑 / 删除 / 清空；每条显示来源
  * 徽章（SourceBadge）与相对时间（lib/format.ts）。数据全部经 IPC 命令
  * （memory_list / update / delete / clear_all），本页不写业务规则。
- * ⑬ 增列经历记忆区（语义召回的"聊过什么、做过什么决策"）——同样必须
- * 可见可删（§11.3 信任基础），无编辑语义（自动沉淀的原文，不可改）。
  *
  * 删除 = 行内二次确认（与批量卸载同款"再点一次"模式）；清空 = 底部
  * 二次确认（§11.3：一键清空，除确认外不加任何阻力）。编辑行内展开，
@@ -20,9 +18,6 @@ import TreeSection from "./memory/TreeSection.vue";
 import { relativeTime } from "../lib/format";
 import { workspaceDisplayName } from "../lib/session-groups";
 import {
-  experienceClearAll,
-  experienceDelete,
-  experienceList,
   memoryClearAll,
   memoryDelete,
   memoryList,
@@ -30,7 +25,7 @@ import {
   memoryRevealFolder,
   memoryUpdate,
 } from "../lib/api";
-import type { ExperienceRow, MemoryRow } from "../types";
+import type { MemoryRow } from "../types";
 
 const { t } = useI18n();
 
@@ -85,7 +80,6 @@ onMounted(async () => {
     // 对账失败不拦页面（列表照常展示索引现状）
   }
   void load();
-  void loadExperiences();
 });
 
 /** 打开记忆人类层目录（~/.Locowrk/memory/）——人的编辑面入口。 */
@@ -157,52 +151,6 @@ function timeText(row: MemoryRow): string {
   return r.n === undefined ? t(`memory.time.${r.key}`) : t(`memory.time.${r.key}`, { n: r.n });
 }
 
-// ---- 经历记忆区（⑬）：独立于事实记忆的列表；只删不改 ----
-
-const experiences = ref<ExperienceRow[] | null>(null);
-const confirmingExpDelete = ref<number | null>(null);
-const confirmingExpClear = ref(false);
-
-async function loadExperiences() {
-  try {
-    experiences.value = await experienceList();
-  } catch {
-    experiences.value = []; // 库缺席/不可用 = 空区块，不阻塞事实记忆页
-  }
-}
-
-function expTimeText(row: ExperienceRow): string {
-  const r = relativeTime(row.createdAt);
-  return r.n === undefined ? t(`memory.time.${r.key}`) : t(`memory.time.${r.key}`, { n: r.n });
-}
-
-async function removeExperience(row: ExperienceRow) {
-  if (confirmingExpDelete.value !== row.id) {
-    confirmingExpDelete.value = row.id;
-    return;
-  }
-  confirmingExpDelete.value = null;
-  try {
-    await experienceDelete(row.id);
-    await loadExperiences();
-  } catch (e) {
-    loadError.value = String(e);
-  }
-}
-
-async function clearExperiences() {
-  if (!confirmingExpClear.value) {
-    confirmingExpClear.value = true;
-    return;
-  }
-  confirmingExpClear.value = false;
-  try {
-    await experienceClearAll();
-    await loadExperiences();
-  } catch (e) {
-    loadError.value = String(e);
-  }
-}
 </script>
 
 <template>
@@ -334,79 +282,6 @@ async function clearExperiences() {
     <!-- M3 §3.37① 双区块之二：记忆树（情景）只读区块（TreeSection 自持
          状态；影子运行零写操作，编辑/删除属 M5） -->
     <TreeSection />
-
-    <!-- ⑬ 经历记忆：语义召回"聊过什么、做过什么决策"；必须可见可删
-         （§11.3 信任基础），无编辑语义（自动沉淀原文） -->
-    <div class="border-t border-line px-5 py-3">
-      <div class="flex items-center gap-2">
-        <h3 class="text-xs font-semibold text-ink-1">
-          {{ t("memory.experienceTitle") }}
-        </h3>
-        <span class="text-[length:var(--lw-fs-10)] text-ink-5">
-          {{ experiences?.length ?? 0 }}
-        </span>
-        <button
-          v-if="(experiences?.length ?? 0) > 0"
-          class="ml-auto rounded-[var(--lw-r-xs)] px-3 py-1 text-[length:var(--lw-fs-11)] transition"
-          :class="
-            confirmingExpClear
-              ? 'bg-danger/16 text-danger'
-              : 'text-ink-4 hover:bg-wash-2 hover:text-danger'
-          "
-          @click="clearExperiences"
-        >
-          {{ confirmingExpClear ? t("memory.clearConfirm") : t("memory.experienceClear") }}
-        </button>
-      </div>
-
-      <p v-if="(experiences?.length ?? 0) === 0" class="mt-2 text-[length:var(--lw-fs-11)] text-ink-5">
-        {{ t("memory.experienceEmpty") }}
-      </p>
-      <ul v-else class="mt-2 space-y-2">
-        <li
-          v-for="row in experiences"
-          :key="row.id"
-          class="rounded-[var(--lw-r-md)] bg-wash-1 px-4 py-3"
-        >
-          <div class="flex items-center gap-2">
-            <span class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
-              {{ expTimeText(row) }}
-            </span>
-            <span class="truncate font-mono text-[length:var(--lw-fs-10)] text-ink-5">
-              {{ t("memory.experienceSession", { id: row.sessionId.slice(0, 8) }) }}
-            </span>
-            <HoverTip
-              v-if="row.workspace"
-              class="shrink-0"
-              :text="row.workspace"
-              :label="row.workspace"
-            >
-              <span class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
-                {{ t("memory.workspace") }} {{ workspaceDisplayName(row.workspace) }}
-              </span>
-            </HoverTip>
-            <button
-              class="ml-auto shrink-0 rounded-[var(--lw-r-xs)] px-2 py-1 text-[length:var(--lw-fs-11)] transition"
-              :class="
-                confirmingExpDelete === row.id
-                  ? 'bg-danger/16 text-danger'
-                  : 'text-ink-4 hover:bg-wash-2 hover:text-danger'
-              "
-              @click="removeExperience(row)"
-            >
-              {{
-                confirmingExpDelete === row.id
-                  ? t("memory.deleteConfirm")
-                  : t("memory.delete")
-              }}
-            </button>
-          </div>
-          <p class="mt-1 whitespace-pre-wrap break-words text-xs text-ink-3">
-            {{ row.content }}
-          </p>
-        </li>
-      </ul>
-    </div>
 
     <!-- 底部：清空（二次确认）+ 提示行 -->
     <div class="flex items-center gap-2 border-t border-line px-5 py-2">

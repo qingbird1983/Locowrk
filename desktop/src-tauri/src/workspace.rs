@@ -7,7 +7,7 @@
 //!    让路给权限档），memory-sqlite / tool-fs / tool-shell(路径类) /
 //!    tool-git / tool-edit 等插件经 vtable `session_context` 反向查询；
 //! ② `workspace_view`（workspace-only 投影）——`MemoryStore` /
-//!    `ExperienceIndex` 召回键位过滤 + `ApprovalHub` 环境行数据源。
+//!    `ApprovalHub` 环境行数据源。
 //!
 //! 未归属 / 旁车缺失 / id 非法 → workspace `None`、fs_roots 空表（消费方
 //! 统一映射为未归属键位 `""` / env 全局围栏回落，绝不 panic、绝不把别的
@@ -23,7 +23,7 @@ use session_store::read_meta;
 /// session_id → 调用期上下文（workspace + 围栏根；㉘·B 形态）。
 pub type SessionContextResolver = Arc<dyn Fn(&str) -> CallContext + Send + Sync>;
 
-/// workspace-only 视图（memory / experiences / 审批环境行消费）。
+/// workspace-only 视图（memory 注入键位 / 审批环境行消费）。
 pub type WorkspaceResolver = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
 /// 路径规范化：canonicalize 优先（解析符号链接与 `..`，含 Windows verbatim
@@ -79,15 +79,6 @@ pub fn scope_key(workspace: Option<&str>) -> String {
         .filter(|w| !w.is_empty())
         .unwrap_or("")
         .to_string()
-}
-
-/// 会话 → 仓库根（F3 handoff 收束更新落点）：同一份旁车真源——归属
-/// workspace 非空且目录存在才算数；未归属 / 目录已删 = None（跳过更新）。
-pub fn repo_root_of(sessions_dir: &Path, session_id: &str) -> Option<PathBuf> {
-    let ws = read_meta(sessions_dir, session_id).and_then(|m| m.workspace)?;
-    (!ws.is_empty())
-        .then_some(PathBuf::from(&ws))
-        .filter(|p| p.is_dir())
 }
 
 #[cfg(test)]

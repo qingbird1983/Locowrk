@@ -7,16 +7,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
-use kernel_agent::{
-    CompactConfig, Kernel, LlmService, MemoryInjectConfig, ToolExposure, ToolExposureConfig,
-};
+use kernel_agent::{CompactConfig, Kernel, MemoryInjectConfig, ToolExposure, ToolExposureConfig};
 use plugin_service::PluginService;
 use session_store::Session;
 use tauri::AppHandle;
 
 use crate::approval::ApprovalHub;
 use crate::events::EventSink;
-use crate::experiences::ExperienceDb;
 use crate::llm::{EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
 use crate::memory::MemoryStore;
 use crate::settings::SettingsStore;
@@ -87,13 +84,6 @@ pub struct AppState {
     /// embedding 共享柄（⑬）：settings embedding 区热换入，检索/经历/提取
     /// 三处共用；None 内值 = 未配置（智能层缺席，各处自行降级）。
     pub embed: SharedEmbed,
-    /// 带故障冷却的 EmbedPort 实现（⑬，全宿主共用一个实例——冷却状态
-    /// 不能分散）。
-    pub embed_port: Arc<crate::llm::CooledEmbed>,
-    /// 经历记忆库（⑬）；打不开 = None（经历不写不注入，事实记忆照常）。
-    pub experiences: Option<Arc<ExperienceDb>>,
-    /// LLM 服务句柄（⑬ 隐式提取用；与 ctx 里注册的是同一实例）。
-    pub llm: Arc<dyn LlmService>,
     /// 前缀断裂诊断账本（M6.1）：AppLlm 每 step 写入（开关
     /// `developer.cacheDiagnostics`），`llm_cache_diagnose` 命令读出。
     pub llm_diagnoser: Arc<crate::llm::diagnose::Diagnoser>,
@@ -147,18 +137,6 @@ impl AppState {
             .entry(id.to_string())
             .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(Session::new())))
             .clone()
-    }
-
-    /// ⑬ 隐式提取依赖快照（spawn 用，全部 Arc 克隆）。经历开关随快照
-    /// 走（M5 `memory.experiences` 逐轮读取 = 保存即热换）。
-    pub fn extract_deps(&self) -> crate::extract::ExtractDeps {
-        crate::extract::ExtractDeps {
-            llm: Arc::clone(&self.llm),
-            memory: Arc::clone(&self.memory),
-            experiences: self.experiences.clone(),
-            embed: Arc::clone(&self.embed_port),
-            experiences_enabled: self.settings.memory().experiences,
-        }
     }
 
     /// ⑬ settings_set 后重建 embedding 客户端（配置保存即生效）。

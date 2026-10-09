@@ -248,14 +248,6 @@ export interface SessionSchedule {
 
 /** 自动会话标题推送（lw://session-title，v2.57）：旁车落盘后通知前端
  * 更新侧栏与顶栏标题。 */
-/** F3 handoff 首建推送：归属会话轮次收束后首次创建 .Locowrk/handoff.md。 */
-export interface HandoffCreatedPayload {
-  /** 仓库根（绝对路径）。 */
-  repo: string;
-  /** handoff.md 全路径。 */
-  path: string;
-}
-
 export interface SessionTitlePayload {
   sessionId: string;
   title: string;
@@ -514,12 +506,11 @@ export interface ChatUpdate {
   foldLines?: number;
 }
 
-/** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。autoExtract =
- * ⑬ 隐式提取开关（F3 起缺省开——已裁定④，主动记忆）。 */
+/** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。v2.136 起注入面
+ * = 全局记忆 + 提醒段；autoExtract/handoffUpdate/experiences 三键退役。 */
 export interface MemorySettingsView {
   enabled: boolean;
   topK: number;
-  autoExtract: boolean;
   /** 记忆树整理节奏（M2：batch 批量 / incremental 增量，树 v2 §4.3）。 */
   organizePacing: string;
   /** 增量块 X（token，增量档触发线，10K–200K 缺省 50K）。 */
@@ -537,21 +528,16 @@ export interface MemorySettingsView {
   collapseThresholdPct: number;
   /** F1 记忆文件化总开关（缺省开；关 = 回纯 sqlite 不再读写 md）。 */
   files: boolean;
-  /** F2 交接注入（缺省开）：归属会话注入仓库 .Locowrk/ 交接段。 */
+  /** F2 交接提醒（缺省开，v2.136 提醒制）：归属会话注入静态提醒段。 */
   repoContext: boolean;
-  /** F3 handoff 收束更新（缺省开）：归属会话轮次收束后后台维护交接文件。 */
-  handoffUpdate: boolean;
   /** M5 会话缺省整理模式（未显式设置会话跟随此档；缺省 tree——阶段 3 裁定）。 */
   defaultOrganizer: string;
-  /** M5 经历记忆开关（缺省关，树 v2 §10.3 向量层关缺省观察一个版本）。 */
-  experiences: boolean;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
 export interface MemoryUpdate {
   enabled?: boolean;
   topK?: number;
-  autoExtract?: boolean;
   organizePacing?: string;
   organizeChunkTokens?: number;
   /** 空串 = 清除（回落同主模型）。 */
@@ -563,9 +549,7 @@ export interface MemoryUpdate {
   collapseThresholdPct?: number;
   files?: boolean;
   repoContext?: boolean;
-  handoffUpdate?: boolean;
   defaultOrganizer?: string;
-  experiences?: boolean;
 }
 
 /** 前缀断裂诊断报告（M6.1，llm_cache_diagnose；breaks 空 = 健康纯追加）。 */
@@ -795,16 +779,6 @@ export interface OrganizePausedPayload {
   m: number;
 }
 
-
-/** 经历记忆条目（⑬ experience_list 返回行；camelCase）。
- * workspace = 项目归属（㉘），"" = 未归属。 */
-export interface ExperienceRow {
-  id: number;
-  content: string;
-  sessionId: string;
-  workspace: string;
-  createdAt: number;
-}
 
 /** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。
  * source = "explicit" | "extracted"（前端按档位渲染人类文案）；

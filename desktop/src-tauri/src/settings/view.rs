@@ -69,7 +69,6 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
         memory: MemorySettingsView {
             enabled: s.memory.enabled,
             top_k: s.memory.top_k,
-            auto_extract: s.memory.auto_extract,
             organize_pacing: s.memory.organize_pacing.clone(),
             organize_chunk_tokens: s.memory.organize_chunk_tokens,
             memory_manager_model: s.memory.memory_manager_model.clone(),
@@ -80,9 +79,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             collapse_threshold_pct: s.memory.collapse_threshold_pct,
             files: s.memory.files,
             repo_context: s.memory.repo_context,
-            handoff_update: s.memory.handoff_update,
             default_organizer: s.memory.default_organizer.clone(),
-            experiences: s.memory.experiences,
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,

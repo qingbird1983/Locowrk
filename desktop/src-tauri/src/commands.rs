@@ -50,7 +50,7 @@ pub async fn agent_chat(
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
     // ㉘·A·fix 归属先行：首聊挂起归属（chat.pendingWorkspace）随请求带入，
-    // 建会话即写旁车——先于本轮任何注入 / 围栏 / 提取。旧时序（轮次收束
+    // 建会话即写旁车——先于本轮任何注入 / 围栏。旧时序（轮次收束
     // 后才 session_associate）让首轮注入落在未归属键位、还被 M1 预取缓存
     // 整场（Glance-main 会话引用 Locowrk 旧记忆的实机事故根因）。
     if let Some(ws) = workspace
@@ -86,28 +86,9 @@ pub async fn agent_chat(
         Some(&state.stop_flags),
     )
     .await?;
-    // ⑬ 隐式提取（Context 文档 §5.1 ⑤）：开关开启且轮次成功收束后
-    // fire-and-forget——本轮消息快照带出会话锁，不阻塞返回值。
-    // ㉘·A·fix：未归属会话不提取——`''` 键位现在是全局偏好层，自动
-    // 提取的项目事实不许污染它。
-    if state.settings.memory().auto_extract
-        && !state.memory.scope_of_session(Some(&session_id)).is_empty()
-    {
-        let turn = crate::extract::turn_messages(&session.derive_messages());
-        crate::extract::spawn_turn_extract(state.extract_deps(), session_id.clone(), turn);
-    }
     // v2.57 自动标题：旁车无手动标题时一次 LLM 调用生成（fire-and-forget，
     // 消息快照带出会话锁，不阻塞返回值——⑬ extract 同款）
     crate::title::spawn_auto_title(
-        state.app.clone(),
-        Arc::clone(&state.settings),
-        state.sessions_dir.clone(),
-        session_id.clone(),
-        session.derive_messages(),
-    );
-    // F3 handoff 收束更新（设计 §4 已裁定③）：归属会话后台维护
-    // <repo>/.Locowrk/handoff.md（fire-and-forget，同款快照纪律）
-    crate::handoff::spawn_handoff_update(
         state.app.clone(),
         Arc::clone(&state.settings),
         state.sessions_dir.clone(),

@@ -78,7 +78,7 @@ pub(crate) fn next_interval_run(now: i64, old_run_at: i64, interval_ms: i64) -> 
     (now + interval_ms).max(old_run_at + interval_ms)
 }
 
-/// 引擎依赖快照（全部 Arc 克隆，spawn 用——同 extract::ExtractDeps 模式）。
+/// 引擎依赖快照（全部 Arc 克隆，spawn 用）。
 pub(crate) struct EngineDeps {
     pub db: Arc<ScheduleDb>,
     pub kernel: Arc<Kernel>,
@@ -194,14 +194,6 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
     } else {
         // v2.57 自动标题（与 agent_chat 同一入口）：触发的轮次也算首轮
         crate::title::spawn_auto_title(
-            deps.app.clone(),
-            Arc::clone(&deps.settings),
-            deps.sessions_dir.clone(),
-            session_id.clone(),
-            session.derive_messages(),
-        );
-        // F3 handoff 收束更新（与 agent_chat 同一入口）
-        crate::handoff::spawn_handoff_update(
             deps.app.clone(),
             Arc::clone(&deps.settings),
             deps.sessions_dir.clone(),

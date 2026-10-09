@@ -425,8 +425,6 @@ export default {
     renameFailed: "Rename failed",
     movedInto: "Moved to workspace",
     movedOut: "Removed from workspace",
-    handoffCreatedTitle: "Handoff file created",
-    handoffCreatedBody: "{path} was generated for the first time after this turn; view and edit it in the repo.",
     associateFailed: "Workspace association failed",
     projectAdded: "Project added",
     projectAddFailed: "Failed to add project",
@@ -613,10 +611,6 @@ export default {
     cancel: "Cancel",
     clearAll: "Clear all memories",
     clearConfirm: "Click again to confirm",
-    experienceTitle: "Experiences",
-    experienceEmpty: "No experiences yet. Turn on \"auto-extract memories\" and each turn will leave a semantically searchable summary.",
-    experienceClear: "Clear all experiences",
-    experienceSession: "session {id}…",
     workspace: "Project",
     // ㉘·A·fix two-tier memory: '' keyspace = global preference tier
     globalTier: "Global preference",
@@ -1011,21 +1005,15 @@ export default {
     memoryEnabled: "Inject memories automatically",
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
-    memoryAutoExtract: "Auto-extract memories after conversations (implicit)",
     // M5 default organizer (tree v2 §11.2 stage 3: default tree, moved from developer layer)
     defaultOrganizer: "Default organizer",
     defaultOrganizerHint:
       "Which organizer sessions use when they never chose one; changes apply immediately.",
     organizerLegacy: "Standard",
     organizerTree: "Memory tree",
-    // M5 experiences (tree v2 §10.3: vector layer off by default for one version)
-    experiences: "Experience memory (vector)",
-    experiencesHint:
-      "Summarize and inject per-session experiences; needs an embedding model. Off by default; existing experiences are kept.",
-    memoryRepoContext: "Handoff injection",
-    memoryRepoContextHint: "Project sessions inject repo handoff files, created on first use.",
-    memoryHandoffUpdate: "Handoff auto-update",
-    memoryHandoffUpdateHint: "Updates the handoff file each turn; unchanged content is skipped.",
+    memoryRepoContext: "Handoff reminder",
+    memoryRepoContextHint:
+      "Project sessions inject a reminder for the handoff directory (content is not injected; the model reads and maintains it on demand).",
     memoryFiles: "Memory files",
     memoryFilesHint: "Memories are also saved as Markdown files you can view and edit.",
     organizePacing: "Memory tree pacing",
@@ -1055,7 +1043,6 @@ export default {
     thinkingEn: "English",
     thinkingNone: "Unspecified",
     thinkingSavedToast: "Saved. Applies from the next session.",
-    memoryAutoExtractHint: "On by default; memorable content is extracted after each turn.",
     // S1 shell governance section
     shellTitle: "Shell",
     shellHint: "Read-only commands run without approval inside workspace folders; the rest ask.",

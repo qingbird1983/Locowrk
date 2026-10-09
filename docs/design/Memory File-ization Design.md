@@ -81,6 +81,8 @@
 
 ## 4\. 主动记忆机制（WorkBuddy 语义 + ZCode 机制）
 
+> **⚠ v2.136 修订（用户裁定，2026-10-09）**：三机制中 ①提取常开（autoExtract）与 ②收束交接更新（handoff 后台改写）**双双退役**——项目记忆由当前工作的**主模型**自己在工作中读/写/改（记忆管理器只负责当前上下文的打包整理，不碰项目记忆），软件不代劳，只在 `<repo_context>` **静态提醒段**给出节点提醒钩子（开场先读 requirements.md + handoff.md；项目状态实质变化时主模型自行更新 handoff.md / 追加 dated notes）。③提示词主动指引保留并按新模型改写（全局走 memory_write scope="global"；结构化项目事实 memory_write + memory_read/search 按需查；项目文件主模型维护）。experiences 向量经历层一并退役（唯一写入方是 autoExtract 的 episode）。项目记忆正文不进流水线（注入面 = 全局记忆 + 提醒段）。本节其余文字按 v1.0 原稿留档。
+
 | 机制 | 说明 | 缺省 |
 |---|---|---|
 | 提取常开 | memory.autoExtract 缺省改开——v2.68 双层隔离（未归属拒绝项目写、全局层只进显式 global）已解除「污染」顾虑；提取落 facts/（项目）与 global/（显式偏好） | 开【待裁定④】 |

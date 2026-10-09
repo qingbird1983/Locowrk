@@ -39,7 +39,7 @@
 |---|---|---|---|---|
 | F1 | 双写与导出 ✅ v2.71 | memory_write / 整理收束双写 .md + 首启导出存量；组装零变化 | 设计 v1.1 定稿 | 删 \~/.Locowrk/memory/ 零损失 |
 | F2 | 人的编辑面 ✅ v2.72 | reconcile（人编辑 md 生效）+ 记忆页「打开文件夹」+ <repo>/.Locowrk/ 交接（gitignore + handoff/requirements 注入组装） | F1 | 总开关关闭 |
-| F3 | 主动记忆 ✅ v2.73 | autoExtract 缺省开 + handoff 收束更新 + 提示词主动指引 | F1（F2 的编辑面更好但非硬依赖） | 开关可退 |
+| F3 | 主动记忆 ◐ v2.73（⚠ v2.136 部分退役：autoExtract 删、handoff 后台改写删，指引块改节点提醒钩子——见 ROADMAP v2.136） | ~~autoExtract 缺省开 + handoff 收束更新~~ + 提示词主动指引（改写） | F1（F2 的编辑面更好但非硬依赖） | 开关可退 |
 
 **总回退原则**：树是投影、组装是投影、事件流唯一真相源——任何阶段验证失败都只拆投影，不动原文。M5 之前不存在不可逆动作。
 
@@ -195,6 +195,7 @@
 **落账**：设计 §4 三机制全落 + 裁定③④兑现，UI shell v4.10 先行（§3.2 交接更新行 + autoExtract 缺省翻转说明 + §4.1 `lw://handoff-created` 事件行）。**① autoExtract 缺省改开（裁定④）**：Default 翻转，显式保存过 false 的存量不受影响（走查实抓：用户存量 `"autoExtract": false` 系旧版整区自动写盘幻影键，本机外科移除使缺省生效——其余存量安装同样受影响，显式 false 优先，随批披露）。**② handoff 收束自动更新（裁定③）**：desktop 新 `handoff.rs`——归属会话轮次成功收束（agent_chat + 调度引擎两收束点）fire-and-forget 一次 AppLlm 调用，读当前 [handoff.md](http://handoff.md) + 本轮转录（extract 转录口径复用），提示词要求全量改写（Current state/Next steps/Notes ≤40 行、保留用户仍有效内容、无变化回 UNCHANGED）；净化 = UNCHANGED/空不写 + 剥代码围栏 + 8000 字符硬顶；**内容未变不落盘**（mtime 不动 → scope_id 指纹不换 → M1 缓存不失效）；`ensure_layout` 幂等 + `memlayout::atomic_write`（仅写 [handoff.md](http://handoff.md) 一个文件 = 写边界宁严勿松）；**首次创建 toast**（`lw://handoff-created` → §3.22 toast 一次，更新不发生）；未归属/模型未配置跳过、失败只 warn；开关 `memory.handoffUpdate` 缺省开（记忆设置行 zh/en）。**③ 注入块尾主动记忆指引**：memory_inject `GUIDANCE_BLOCK` 随注入块尾（设计「随注入块」无独立开关）、**无条件注入**（零记忆新会话也要知道该自己记 = 主动记忆本意；memory.enabled=false 整块缺席）；文案 =「永远/以后都」升格 `scope="global"` + 重要决定当场记 + 更新既有 key 优先；静态文本与块同吃预取缓存。**搭车**：`memlayout` re-export `atomic_write` + [workspace.rs](http://workspace.rs) `repo_root_of` + repo_context `HANDOFF` pub + **F2 缺陷补：en.ts 缺 memoryRepoContext/Hint 两键补齐**。测试：kernel-agent 85（+1）、desktop 205（+5 handoff 纯函数）绿、workspace 36 套件全绿、clippy 0 双侧、fmt、pnpm build 过；check_length 14 超（12 前批已裁定 + memory_inject.rs 418/tests 579 三问不拆）。**实机走查（CDP 真实轮 deepseek）**：首轮模型自发 memory_write 记录重要决定（指引实证）→ autoExtract 缺省开实证（3 条 auto.\* 行零人工干预）→ .Locowrk/ 引导 + [handoff.md](http://handoff.md) 首建（三段如实）+ toast 实发 → 轮 2「以后都 pnpm」→ 模型自发 **scope="global"** 写入（升格实证，sqlite 落全局行）→ handoff 随轮更新且 toast 计数不增 → 设置行渲染 + 开关落盘往返。走查清理全还原（会话/四件备份/memory 目录/tmp 仓库/settings/fsRoots）。**已知边界（记档）**：机器重写 handoff 的注入可见性 = 下一请求（指纹重算），实质进展轮一次计划内缓存失效属设计 §3 内；[handoff.md](http://handoff.md) 人的编辑靠提示词保留语义承载（无事实层 stash）；演示替身不生成。
 
 * F3 主动记忆：autoExtract 缺省开（裁定④）+ handoff 收束更新（裁定③，仅 `.Locowrk/` 内 + 首次创建 toast）+ 注入块尾主动记忆指引 ✅
+* **⚠ v2.136 部分退役（用户裁定）**：autoExtract 整模块删除、handoff 后台收束更新整模块删除——项目记忆改由**主模型**在工作中自己读/写/改（记忆管理器只管当前上下文打包整理），软件只在 `<repo_context>` 静态提醒段给节点提醒钩子（开场先读 requirements/handoff；状态实质变化时主模型自行更新）；提示词指引块按新模型改写。经历记忆层（experiences，M5 关缺省观察的那层）一并退役——其唯一写入方就是 autoExtract 的 episode。
 * 验收：真实轮模型自发 memory_write（决定当场记 + 「以后都」升格 global）✅；handoff 首建 toast + 随轮更新 + 内容未变不落盘 ✅；开关可退（handoffUpdate/autoExtract 两行设置）✅
 
 ---

@@ -28,12 +28,10 @@ import type {
   ExposureDebug,
   EmbeddingUpdate,
   PluginsUpdate,
-  ExperienceRow,
   SessionSearchHit,
   NotificationItem,
   SessionSchedule,
   SessionTitlePayload,
-  HandoffCreatedPayload,
   ProviderInput,
   CatalogModelInfo,
   CatalogStatus,
@@ -575,16 +573,6 @@ export function subscribeSessionTitle(
   );
 }
 
-/** F3 handoff 首建推送（UI shell §4.1）：首次创建 .Locowrk/handoff.md →
- * toast 如实告知一次（已有文件的更新不发生）。 */
-export function subscribeHandoffCreated(
-  onCreated: (payload: HandoffCreatedPayload) => void,
-): Promise<UnlistenFn> {
-  return listen<HandoffCreatedPayload>("lw://handoff-created", (e) =>
-    onCreated(e.payload),
-  );
-}
-
 // ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----
 /** 探测 Ollama 模型上下文窗口（token）；失败 reject（UI 提示手动选择）。 */
 export function llmProbeWindow(baseUrl: string, model: string): Promise<number> {
@@ -736,19 +724,3 @@ export function subscribeOrganizePaused(
   );
 }
 
-// ---- 经历记忆（⑬，Context and Memory.md §4.3 宿主侧） ----
-
-/** 列举经历（新→旧）。 */
-export function experienceList(limit?: number): Promise<ExperienceRow[]> {
-  return invoke("experience_list", { limit: limit ?? null });
-}
-
-/** 删除一条经历（不存在后端报错）。 */
-export function experienceDelete(id: number): Promise<void> {
-  return invoke("experience_delete", { id });
-}
-
-/** 清空全部经历。返回删除条数。 */
-export function experienceClearAll(): Promise<number> {
-  return invoke("experience_clear_all");
-}

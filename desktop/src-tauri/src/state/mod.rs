@@ -30,7 +30,6 @@ use crate::approval::ApprovalHub;
 use crate::data_root;
 use crate::demo_tools::SendEmailTool;
 use crate::events::{forward_plugin_states, EventSink, TauriSink};
-use crate::experiences::{ExperienceDb, ExperienceIndex};
 use crate::llm::{AppLlm, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
 use crate::memory::MemoryStore;
 use crate::plugins_root;
@@ -119,7 +118,7 @@ pub fn init_state(app: AppHandle) -> AppState {
 
     // v2.58 会话级模型覆盖存储（旁车持久 + 缓存；AppLlm 每请求按 LlmRequest.session_id
     // 解析覆盖——档位路由 + 模型名）。模型适配器也只是服务（§7.2，自建
-    // OpenAI 兼容客户端 LLM.md v3.0；未配置回落演示替身；⑬ 句柄留 AppState 给隐式提取）。
+    // OpenAI 兼容客户端 LLM.md v3.0；未配置回落演示替身）。
     // v4.11 停止标记先建（LLM.md v3.0 重试面同柄：重试等待轮询停止 +
     // 重试通知经组装闭包 emit，AppHandle 不进 llm 模块——v2.66 同款）。
     let stop_flags = Arc::new(crate::stop::StopFlags::default());
@@ -223,15 +222,6 @@ pub fn init_state(app: AppHandle) -> AppState {
     ));
     ctx.provide_dyn::<dyn kernel_agent::TreeContextSource>(Arc::clone(&tree_assembler) as Arc<_>);
 
-    // 经历记忆库（⑬）：experiences.sqlite3；打不开只丢经历。
-    let experiences = match ExperienceDb::open(&root.join("experiences.sqlite3")) {
-        Ok(db) => Some(Arc::new(db)),
-        Err(e) => {
-            tracing::warn!("experiences db unavailable: {e}；经历记忆降级为缺席");
-            None
-        }
-    };
-
     // agent/request 决策环（exposure 文档 §7，注册次序 = 执行次序）：ToolExposure → Memory-Inject → ctx-compact，配置经 RwLock 热换入。
     let exposure_cfg: Arc<RwLock<ToolExposureConfig>> =
         Arc::new(RwLock::new(settings.exposure_config()));
@@ -250,16 +240,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         points::REQUEST,
         Arc::new(MemoryInject::new(
             crate::memory::memory_source(&memory),
-            experiences
-                .as_ref()
-                .map(|db| {
-                    ExperienceIndex::new(
-                        Arc::clone(db),
-                        Arc::clone(&embed_port),
-                        Arc::clone(&workspace_of),
-                    )
-                })
-                .map(|idx| idx as Arc<dyn kernel_agent::ExperienceSource>),
             Arc::clone(&memory_cfg),
         )),
     );
@@ -626,9 +606,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         exposure,
         timeout_cfg,
         embed,
-        embed_port,
-        experiences,
-        llm,
         notifications,
         schedules,
         organizer,

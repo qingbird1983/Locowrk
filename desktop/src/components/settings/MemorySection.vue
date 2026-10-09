@@ -21,7 +21,6 @@ const settings = useSettingsStore();
 const form = reactive({
   enabled: true,
   topK: 5,
-  autoExtract: true,
   organizePacing: "batch",
   organizeChunkTokens: 50_000,
   tailStrategy: "boundary",
@@ -30,9 +29,7 @@ const form = reactive({
   collapseThresholdPct: 80,
   files: true,
   repoContext: true,
-  handoffUpdate: true,
   defaultOrganizer: "tree",
-  experiences: false,
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
@@ -59,7 +56,6 @@ watch(
     if (!v) return;
     form.enabled = v.memory.enabled;
     form.topK = v.memory.topK;
-    form.autoExtract = v.memory.autoExtract;
     form.organizePacing = v.memory.organizePacing;
     form.organizeChunkTokens = v.memory.organizeChunkTokens;
     form.tailStrategy = v.memory.tailStrategy;
@@ -68,9 +64,7 @@ watch(
     form.collapseThresholdPct = v.memory.collapseThresholdPct;
     form.files = v.memory.files;
     form.repoContext = v.memory.repoContext;
-    form.handoffUpdate = v.memory.handoffUpdate;
     form.defaultOrganizer = v.memory.defaultOrganizer;
-    form.experiences = v.memory.experiences;
   },
   { immediate: true },
 );
@@ -79,7 +73,6 @@ function save() {
   void settings.saveMemory({
     enabled: form.enabled,
     topK: form.topK,
-    autoExtract: form.autoExtract,
     organizePacing: form.organizePacing,
     organizeChunkTokens: Math.round(form.organizeChunkTokens),
     tailStrategy: form.tailStrategy,
@@ -88,9 +81,7 @@ function save() {
     collapseThresholdPct: Math.round(form.collapseThresholdPct),
     files: form.files,
     repoContext: form.repoContext,
-    handoffUpdate: form.handoffUpdate,
     defaultOrganizer: form.defaultOrganizer,
-    experiences: form.experiences,
   });
 }
 </script>
@@ -116,23 +107,6 @@ function save() {
       />
     </SettingsRow>
 
-    <!-- ⑬ 隐式提取（F3 起缺省开，已裁定④）：回合结束异步提事实+经历 -->
-    <SettingsRow
-      :title="t('settings.memoryAutoExtract')"
-      :hint="t('settings.memoryAutoExtractHint')"
-    >
-      <SettingsToggle v-model="form.autoExtract" :label="t('settings.memoryAutoExtract')" />
-    </SettingsRow>
-
-    <!-- M5 经历记忆（树 v2 §10.3 缺省关：向量层关缺省观察一个版本；
-         关 = 轮后经历提取与注入块经历段都停，已有数据保留） -->
-    <SettingsRow
-      :title="t('settings.experiences')"
-      :hint="t('settings.experiencesHint')"
-    >
-      <SettingsToggle v-model="form.experiences" :label="t('settings.experiences')" />
-    </SettingsRow>
-
     <!-- F1 记忆文件化（文件化设计 §7）：关 = 回纯 sqlite，md 不再读写 -->
     <SettingsRow :title="t('settings.memoryFiles')" :hint="t('settings.memoryFilesHint')">
       <SettingsToggle v-model="form.files" :label="t('settings.memoryFiles')" />
@@ -146,17 +120,6 @@ function save() {
         :label="t('settings.memoryRepoContext')"
       />
     </SettingsRow>
-    <!-- F3 handoff 收束更新（文件化设计 §4 已裁定③）：归属会话后台维护交接 -->
-    <SettingsRow
-      :title="t('settings.memoryHandoffUpdate')"
-      :hint="t('settings.memoryHandoffUpdateHint')"
-    >
-      <SettingsToggle
-        v-model="form.handoffUpdate"
-        :label="t('settings.memoryHandoffUpdate')"
-      />
-    </SettingsRow>
-
     <!-- M5 缺省整理方式（树 v2 §11.2 阶段 3：缺省记忆树，未显式设置
          的会话跟随此档热换；自开发者区迁入用户层） -->
     <SettingsRow

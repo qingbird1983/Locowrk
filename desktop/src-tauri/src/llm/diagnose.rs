@@ -5,10 +5,10 @@
 //! token 级精度。
 //!
 //! 分块两级：**粗块** = system / tools / 逐消息；**system 子块**按稳定
-//! 协议标记切片（workspace_context / persistent_memory /
-//! session_experiences / repo_context / memory_guidance / [memory tree]
-//! 目录段）——记忆块与树目录的变化可以定位到段，不混在「system 变了」
-//! 里。开关缺省关（开发者分区 `developer.cacheDiagnostics`），开启后
+//! 协议标记切片（workspace_context / persistent_memory / repo_context /
+//! memory_guidance / [memory tree] 目录段）——记忆块与树目录的变化可以
+//! 定位到段，不混在「system 变了」里。开关缺省关（开发者分区
+//! `developer.cacheDiagnostics`），开启后
 //! 每轮仅多几次 hash 计算，无额外请求。无会话身份的请求（记录员/摘要
 //! 等一次性调用，纪律 6 本就不写缓存）不记录。
 
@@ -22,10 +22,9 @@ use serde::Serialize;
 use session_store::Message;
 
 /// system 内稳定标记（按出现序切片；前一个标记起 = 后一个标记止）。
-const SYSTEM_MARKERS: [&str; 6] = [
+const SYSTEM_MARKERS: [&str; 5] = [
     "<workspace_context>",
     "<persistent_memory>",
-    "<session_experiences>",
     "<repo_context>",
     "<memory_guidance>",
     "[memory tree]",

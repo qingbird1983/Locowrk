@@ -388,7 +388,6 @@ async fn adjacent_turns_keep_request_prefix_stable() {
         points::REQUEST,
         Arc::new(MemoryInject::new(
             Arc::new(DriftingMemory(std::sync::atomic::AtomicUsize::new(0))),
-            None,
             Arc::new(std::sync::RwLock::new(MemoryInjectConfig::default())),
         )),
     );
@@ -497,7 +496,6 @@ async fn tree_session_slices_to_tail_and_appends_directory() {
         points::REQUEST,
         Arc::new(MemoryInject::new(
             Arc::new(DriftingMemory(std::sync::atomic::AtomicUsize::new(0))),
-            None,
             Arc::new(std::sync::RwLock::new(MemoryInjectConfig::default())),
         )) as Arc<_>,
     );

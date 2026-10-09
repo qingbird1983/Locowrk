@@ -31,12 +31,9 @@ pub const COLLAPSE_THRESHOLD_PCT_RANGE: std::ops::RangeInclusive<u8> = 50..=95;
 /// F1 记忆文件化总开关缺省（《Memory File-ization Design》§7 已裁定：
 /// 关 = 回纯 sqlite，md 不再读写；缺省开——md 是人类层，写失败不破契约）。
 pub const FILES_DEFAULT: bool = true;
-/// F2 交接注入缺省（设计 §7：开）——归属会话注入 `<repo>/.Locowrk/`
-/// 交接段；关 = 不建目录不注入。
+/// F2 交接提醒缺省（v2.136 项目侧全提醒制：开）——归属会话注入
+/// `<repo>/.Locowrk/` 静态提醒段（节点钩子）+ 首次引导建目录。
 pub const REPO_CONTEXT_DEFAULT: bool = true;
-/// F3 handoff 收束更新缺省（设计 §7 已裁定③：开）——归属会话轮次收束后
-/// 后台更新 `<repo>/.Locowrk/handoff.md`；写边界 = 仅此一个文件。
-pub const HANDOFF_UPDATE_DEFAULT: bool = true;
 
 /// 会话缺省整理模式缺省值（M5 阶段 3 裁定：**tree**——树 v2 §11.2 阶段 3
 /// 「缺省切 tree」，键自 developer 区迁入用户层；legacy 老会话按旁车显式档
@@ -44,11 +41,6 @@ pub const HANDOFF_UPDATE_DEFAULT: bool = true;
 pub const DEFAULT_ORGANIZER_DEFAULT: &str = "tree";
 /// 合法缺省整理模式值（未知值保存时拒绝，读取时回落缺省）。
 pub const DEFAULT_ORGANIZER_VALUES: [&str; 2] = ["legacy", "tree"];
-/// experiences/向量层开关缺省（M5，树 v2 §10.3 方向性裁定：**关缺省**
-/// ——记忆召回走「索引注入 + 懒加载」，零向量纯索引式生产可用；关 =
-/// 轮后经历提取与注入块经历段都停，已有经历数据保留。SharedEmbed 基建
-/// 同时服务 search_tools 语义检索，那部分与本开关无关、另行决策）。
-pub const EXPERIENCES_DEFAULT: bool = false;
 
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,16 +60,16 @@ impl TailStrategy {
     }
 }
 
-/// 记忆注入设置。top_k 缺省 5（约束清单 §3"注入条数可配"）；
-/// auto_extract（⑬ 隐式记忆提取）缺省**开**（F3 已裁定④——v2.68 双层
-/// 隔离已解除"污染"顾虑，主动记忆 = 模型主动记录不等提醒；旧文件未写字段
-/// 自动随缺省翻开，显式保存过 false 的不受影响）。
+/// 记忆注入设置。top_k 缺省 5（约束清单 §3"注入条数可配"）。
+/// v2.136 裁定退役三键：`autoExtract`（自动提取，⑬）/ `handoffUpdate`
+/// （F3 收束后台改写）/ `experiences`（向量经历层）——项目记忆改由主
+/// 模型自维护 + 提醒钩子；settings.json 里的历史键为**幻影键**（serde
+/// 未知字段忽略，读取不破，下次保存自然消失）。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct MemorySettings {
     pub enabled: bool,
     pub top_k: u32,
-    pub auto_extract: bool,
     /// 记忆树整理节奏（M2：batch 批量 / incremental 增量）。
     pub organize_pacing: String,
     /// 增量块 X（token，增量档触发线）。
@@ -100,17 +92,12 @@ pub struct MemorySettings {
     pub collapse_threshold_pct: u8,
     /// 记忆文件化总开关（F1 §7 缺省开）：关 = 回纯 sqlite，md 不再读写。
     pub files: bool,
-    /// 交接注入（F2 §7 缺省开）：归属会话注入 `<repo>/.Locowrk/` 交接段。
+    /// 交接提醒（F2 §7 缺省开；v2.136 提醒制）：归属会话注入
+    /// `<repo>/.Locowrk/` 静态提醒段 + 首次引导建目录。
     pub repo_context: bool,
-    /// handoff 收束更新（F3 §7 已裁定③缺省开）：归属会话轮次收束后后台
-    /// 更新 `<repo>/.Locowrk/handoff.md`（仅写该文件；未归属跳过）。
-    pub handoff_update: bool,
     /// 会话缺省整理模式（M5 阶段 3：legacy | tree，缺省 tree——未显式
     /// 设置过的会话跟随此档；持久键 defaultOrganizer）。
     pub default_organizer: String,
-    /// 经历记忆开关（M5 §10.3 缺省关）：关 = 轮后经历提取与注入块经历段
-    /// 都停；不碰 search_tools / 工具暴露的嵌入基建。
-    pub experiences: bool,
 }
 
 impl Default for MemorySettings {
@@ -118,7 +105,6 @@ impl Default for MemorySettings {
         Self {
             enabled: true,
             top_k: 5,
-            auto_extract: true,
             organize_pacing: ORGANIZE_PACING_DEFAULT.into(),
             organize_chunk_tokens: ORGANIZE_CHUNK_TOKENS_DEFAULT,
             memory_manager_model: None,
@@ -129,9 +115,7 @@ impl Default for MemorySettings {
             collapse_threshold_pct: COLLAPSE_THRESHOLD_PCT_DEFAULT,
             files: FILES_DEFAULT,
             repo_context: REPO_CONTEXT_DEFAULT,
-            handoff_update: HANDOFF_UPDATE_DEFAULT,
             default_organizer: DEFAULT_ORGANIZER_DEFAULT.into(),
-            experiences: EXPERIENCES_DEFAULT,
         }
     }
 }
@@ -142,7 +126,6 @@ impl Default for MemorySettings {
 pub struct MemorySettingsView {
     pub enabled: bool,
     pub top_k: u32,
-    pub auto_extract: bool,
     pub organize_pacing: String,
     pub organize_chunk_tokens: u64,
     #[serde(rename = "recorderModel")]
@@ -155,9 +138,7 @@ pub struct MemorySettingsView {
     pub collapse_threshold_pct: u8,
     pub files: bool,
     pub repo_context: bool,
-    pub handoff_update: bool,
     pub default_organizer: String,
-    pub experiences: bool,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -169,7 +150,6 @@ pub struct MemorySettingsView {
 pub struct MemoryUpdate {
     pub enabled: Option<bool>,
     pub top_k: Option<u32>,
-    pub auto_extract: Option<bool>,
     pub organize_pacing: Option<String>,
     pub organize_chunk_tokens: Option<u64>,
     #[serde(rename = "recorderModel")]
@@ -182,7 +162,5 @@ pub struct MemoryUpdate {
     pub collapse_threshold_pct: Option<u8>,
     pub files: Option<bool>,
     pub repo_context: Option<bool>,
-    pub handoff_update: Option<bool>,
     pub default_organizer: Option<String>,
-    pub experiences: Option<bool>,
 }

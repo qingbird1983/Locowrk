@@ -11,11 +11,13 @@
 //! 由 `ensure_workspace_schema` 整表重建进未归属键位（与插件侧迁移
 //! 等价幂等，先跑谁都一样）。
 //!
-//! **项目隔离 + 双层记忆（Context 文档 §4.6，㉘·A·fix）**：注入召回 =
-//! 会话归属键位 ∪ 全局层（`''` = 用户喜好偏好，对一切会话可见；未归属
-//! 会话只落在全局层）；管理页是人的管理面，看全部并透出归属。降级纪律：
-//! 打不开 = 检索降级空表（仅告警一次，注入不拦聊天）+ 管理命令报错给
-//! UI；不在启动路径上 panic。
+//! **注入面（v2.136 裁定「项目侧全提醒制」）**：Memory-Inject 只取
+//! **全局层**（`''` = 用户层面的喜好/全局要求，对一切会话可见；未归属
+//! 会话同样只落全局层）——项目层事实不再自动注入，由模型 memory_read /
+//! memory_search 按需查；项目记忆文件（`<repo>/.Locowrk/`）以静态提醒段
+//! 指路（repo_context），由当前工作的主模型自己读/写/改。管理页是人的
+//! 管理面，看全部并透出归属。降级纪律：打不开 = 检索降级空表（仅告警
+//! 一次，注入不拦聊天）+ 管理命令报错给 UI；不在启动路径上 panic。
 
 use std::path::{Path, PathBuf};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
@@ -64,8 +66,8 @@ pub struct MemoryStore {
     workspace_of: WorkspaceResolver,
     /// 检索失败只告警一次（每 step 都 recall，别刷日志）。
     warned: AtomicBool,
-    /// F1 人类层（md 双写，文件化设计 §3）：sqlite 为真源，四条宿主写
-    /// 路径（提取 write / 管理页 update·delete·clear）成功后同步 md；
+    /// F1 人类层（md 双写，文件化设计 §3）：sqlite 为真源，宿主写
+    /// 路径（store write / 管理页 update·delete·clear）成功后同步 md；
     /// 未接线（单测）= 纯 sqlite。
     files: Option<Arc<crate::memory_files::MemoryFiles>>,
     /// 文件化总开关（settings `memory.files` 闭包；缺省无接线 = 恒关）。
@@ -138,7 +140,7 @@ impl MemoryStore {
         }
     }
 
-    /// 会话（可缺）→ 键位（未归属 = ""）。extract 与 MemorySource 共用。
+    /// 会话（可缺）→ 键位（未归属 = ""）。context_line / scope_id 共用。
     pub fn scope_of_session(&self, session_id: Option<&str>) -> String {
         scope_key(session_id.and_then(|s| (self.workspace_of)(s)).as_deref())
     }
@@ -262,9 +264,11 @@ impl MemoryStore {
         Ok(n > 0)
     }
 
-    /// 写入/覆盖一条记忆（⑬ 隐式提取的落库路径；管理面不用它）。键位 =
-    /// (workspace, key)——调用方负责命名空间（extract 侧强制 `auto.` 前缀，
-    /// 永不覆盖用户显式记忆）；source = "explicit" | "extracted"。
+    /// 写入/覆盖一条记忆（store 基础 upsert；生产写路径 = memory-sqlite
+    /// 插件的 memory_write 工具与管理页 update_value，本方法当前只服务
+    /// 测试播种）。键位 = (workspace, key)；source = "explicit" | "extracted"
+    /// （v2.136 起 extracted 为历史数据遗留来源，自动提取已退役）。
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn write(
         &self,
         workspace: &str,
@@ -427,22 +431,21 @@ impl MemoryStore {
         Ok(rows)
     }
 
-    fn recall_quiet(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryRow> {
-        let ws = self.scope_of_session(session_id);
-        // 双层记忆（Context 文档 §4.6，㉘·A·fix）：项目键位 ∪ 全局层（''，
-        // 用户喜好偏好）——归属会话两层都见；未归属会话只落在全局层
-        // （?1 = '' 时两条件重合），任何别的项目行不可见。
+    fn recall_quiet(&self, _session_id: Option<&str>, limit: usize) -> Vec<MemoryRow> {
+        // v2.136 裁定「项目侧全提醒制」：注入只取**全局层**（''，用户层
+        // 面的喜好/全局要求，保持简短）——项目层事实不自动注入（由模型
+        // memory_read / memory_search 按需查），所以召回与会话归属无关。
         let recalled: Result<Vec<MemoryRow>, String> = (|| {
             let conn = self.open_conn()?;
             let mut stmt = conn
                 .prepare(
                     "SELECT workspace, key, value, tags, source, updated_at FROM memories
-                     WHERE workspace = ?1 OR workspace = ''
-                     ORDER BY updated_at DESC, key LIMIT ?2",
+                     WHERE workspace = ''
+                     ORDER BY updated_at DESC, key LIMIT ?1",
                 )
                 .map_err(|e| format!("memory recall: {e}"))?;
             let rows = stmt
-                .query_map(params![ws, limit as i64], Self::row)
+                .query_map(params![limit as i64], Self::row)
                 .map_err(|e| format!("memory recall: {e}"))?
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| format!("memory recall: {e}"))?;
@@ -514,45 +517,30 @@ fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
-/// Memory-Inject 的检索源（注册进 agent/request 决策环）。㉘：按会话
-/// 归属的项目键位 ∪ 全局层过滤（workspace.rs 解析；未归属只见全局层）。
-/// ㉘·A·fix 另供两件：`scope_id`（预取缓存键成分——归属变更自动重算）
-/// 与 `context_line`（归属会话告知模型当前项目根，"看下这个项目"不再
-/// 靠旧记忆猜路径）。
+/// Memory-Inject 的检索源（注册进 agent/request 决策环）。v2.136 裁定：
+/// 注入只取全局层（用户层面的喜好/全局要求；项目层事实不自动注入，模型
+/// memory_read / memory_search 按需查）。㉘·A·fix 另供两件：`scope_id`
+/// （预取缓存键成分——归属变更自动重算）与 `context_line`（归属会话告知
+/// 模型当前项目根，"看下这个项目"不再靠旧记忆猜路径）。
 impl MemorySource for MemoryStore {
-    fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
-        self.recall_quiet(session_id, limit)
+    fn recall(&self, _session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
+        self.recall_quiet(None, limit)
             .into_iter()
             .map(|r| MemoryEntry {
                 key: r.key,
                 value: r.value,
                 tags: r.tags,
                 updated_at: r.updated_at,
-                scope: if r.workspace.is_empty() {
-                    "global".into()
-                } else {
-                    "project".into()
-                },
+                // 只取全局层，层标恒 global（层标渲染在内核侧保留）
+                scope: "global".into(),
             })
             .collect()
     }
 
     fn scope_id(&self, session_id: Option<&str>) -> String {
-        let base = self.scope_of_session(session_id);
-        // F2：交接文件 mtime 指纹进预取缓存键（设计 §2.2）——人改文件 =
-        // 显式变更自动重算；开关关 / 无交接面 = 空指纹不参与键。
-        if !(self.repo_on)() {
-            return base;
-        }
-        let fp = self
-            .repo_root(session_id)
-            .map(|repo| crate::repo_context::fingerprint(&repo))
-            .unwrap_or_default();
-        if fp.is_empty() {
-            base
-        } else {
-            format!("{base}\u{1}repo:{fp}")
-        }
+        // v2.136：提醒段改静态文本后，交接文件 mtime 指纹退出缓存键——
+        // 人改 .Locowrk/ 文件不再触发记忆块重算（正文本就不注入）。
+        self.scope_of_session(session_id)
     }
 
     fn context_line(&self, session_id: Option<&str>) -> Option<String> {
@@ -567,10 +555,11 @@ impl MemorySource for MemoryStore {
         ))
     }
 
-    /// F2 交接段（文件化设计 §2.2）：归属会话注入 `<repo>/.Locowrk/`
-    /// 交接面。首次调用顺手引导建目录（幂等，每仓库一次）；开关关 /
-    /// 未归属 / 非目录 = None（组装零变化）。内文随 mtime 进 scope_id
-    /// （见上），M1 预取纪律不破。
+    /// v2.136 提醒段（项目侧全提醒制）：归属会话注入 `<repo>/.Locowrk/`
+    /// **静态提醒文本**（目录里有什么、在什么节点读/更新）——正文不再
+    /// 注入，项目记忆由当前工作的主模型按需用文件工具查看与维护。首次
+    /// 调用顺手引导建目录（幂等，每仓库一次）；开关关 / 未归属 / 非目录
+    /// = None（组装零变化）。
     fn repo_context(&self, session_id: Option<&str>) -> Option<String> {
         if !(self.repo_on)() {
             return None;

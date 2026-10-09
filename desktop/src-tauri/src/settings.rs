@@ -299,17 +299,15 @@ impl SettingsStore {
     }
 
     /// 后端专用：记忆注入活配置（MemoryInject 共享锁的内容物，⑪）。
-    /// M5 起 `experiences` 随行——注入侧每请求读锁，保存即热换（免重建）。
     pub fn memory_inject_config(&self) -> MemoryInjectConfig {
         let m = self.inner.lock().expect("settings poisoned").memory.clone();
         MemoryInjectConfig {
             enabled: m.enabled,
             top_k: m.top_k as usize,
-            experiences: m.experiences,
         }
     }
 
-    /// 后端专用：记忆区全量（⑬ extract 钩子读 auto_extract 用）。
+    /// 后端专用：记忆区全量（树工具门控 / 文件化开关等读这里）。
     pub fn memory(&self) -> MemorySettings {
         self.inner.lock().expect("settings poisoned").memory.clone()
     }

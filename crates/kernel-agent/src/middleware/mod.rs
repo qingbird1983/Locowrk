@@ -33,9 +33,7 @@ pub use compact::{
     CompactConfig, CompactStrategy, CompactionOutcome, CtxCompact, estimate_tokens,
     suggested_threshold,
 };
-pub use memory_inject::{
-    ExperienceEntry, ExperienceSource, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource,
-};
+pub use memory_inject::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
 pub use retry::Retry;
 pub use timeout::Timeout;
 pub use tool_exposure::{ExposureSnapshot, GlobalEwma, ToolExposure, ToolExposureConfig};

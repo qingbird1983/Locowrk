@@ -85,7 +85,7 @@ fn update_validation_rejects_oversize() {
 }
 
 #[test]
-fn recall_is_scoped_by_session_workspace() {
+fn recall_injects_global_layer_only() {
     let dir = temp_dir("recall-scope");
     let store = MemoryStore::new(&dir, test_resolver());
     // 项目键位与全局层各一条（同 key，(workspace,key) 主键允许并存）
@@ -94,24 +94,16 @@ fn recall_is_scoped_by_session_workspace() {
         .unwrap();
     store.write("", "k", "global-v", "", "explicit").unwrap();
 
-    // 双层（㉘·A·fix）：归属会话 = 项目行 ∪ 全局行；未归属会话只见全局层
-    let got = store.recall(Some("ws-session"), 5);
-    assert_eq!(got.len(), 2);
-    let mut scopes: Vec<&str> = got.iter().map(|e| e.scope.as_str()).collect();
-    scopes.sort();
-    assert_eq!(scopes, vec!["global", "project"]);
-    assert!(got.iter().any(|e| e.value == "project-v"));
-    assert!(got.iter().any(|e| e.value == "global-v"));
-
-    // 未归属 / 无会话：只落全局层，别的项目行不可见
-    for sid in [Some("other"), None] {
+    // v2.136 裁定「项目侧全提醒制」：注入只取全局层——项目层事实不自动
+    // 注入（模型 memory_read / memory_search 按需查），与会话归属无关。
+    for sid in [Some("ws-session"), Some("other"), None] {
         let got = store.recall(sid, 5);
-        assert_eq!(got.len(), 1);
+        assert_eq!(got.len(), 1, "任何会话都只见全局层");
         assert_eq!(got[0].value, "global-v");
         assert_eq!(got[0].scope, "global");
     }
 
-    // 管理面 list 看全量两行（跨键位）
+    // 管理面 list 看全量两行（跨键位）——项目层仍在库与 md 人类层
     assert_eq!(store.list("", 200).unwrap().len(), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }
