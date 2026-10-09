@@ -130,7 +130,10 @@ fn recommend_probe_models(
             crate::llm::recommend::RecCandidate {
                 id: id.clone(),
                 tool_call: hit.as_ref().and_then(|h| h.tool_call),
-                input_price: hit.as_ref().and_then(|h| h.pricing.as_ref()).and_then(|p| p.input),
+                input_price: hit
+                    .as_ref()
+                    .and_then(|h| h.pricing.as_ref())
+                    .and_then(|p| p.input),
                 output_price: hit
                     .as_ref()
                     .and_then(|h| h.pricing.as_ref())

@@ -31,7 +31,10 @@ impl Default for MultimodalSettings {
         Self {
             max_dimension: 2048,
             max_size_mb: 5,
-            image_formats: DEFAULT_IMAGE_FORMATS.iter().map(|s| s.to_string()).collect(),
+            image_formats: DEFAULT_IMAGE_FORMATS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             file_formats: DEFAULT_FILE_FORMATS.iter().map(|s| s.to_string()).collect(),
             auto_gc: true,
             gc_threshold_days: 7,

@@ -86,7 +86,10 @@ fn build_transcript(events: &[SessionEvent]) -> String {
                 let text = clip(&fold_parts(content, parts), MSG_CLIP);
                 push(format!("[任务] {text}"));
             }
-            SessionEvent::AssistantMessage { content, tool_calls } => {
+            SessionEvent::AssistantMessage {
+                content,
+                tool_calls,
+            } => {
                 if !content.is_empty() {
                     push(format!("[助手] {}", clip(content, MSG_CLIP)));
                 }
@@ -94,7 +97,12 @@ fn build_transcript(events: &[SessionEvent]) -> String {
                     push(format!("[助手] （发起 {} 个工具调用）", tool_calls.len()));
                 }
             }
-            SessionEvent::ToolCall { call_id, tool, args, .. } => {
+            SessionEvent::ToolCall {
+                call_id,
+                tool,
+                args,
+                ..
+            } => {
                 let a = clip(&args.to_string(), 200);
                 push(format!("[调用 {}] {tool}({a})", call_id.0));
             }
@@ -104,7 +112,11 @@ fn build_transcript(events: &[SessionEvent]) -> String {
                 error,
             } => match error {
                 Some(err) => push(format!("[结果 {}] 失败: {}", call_id.0, clip(err, 400))),
-                None => push(format!("[结果 {}] {}", call_id.0, clip(&output.to_string(), 400))),
+                None => push(format!(
+                    "[结果 {}] {}",
+                    call_id.0,
+                    clip(&output.to_string(), 400)
+                )),
             },
             _ => {}
         }
@@ -148,13 +160,24 @@ fn parse_verdict(raw: &str, criteria: &[String]) -> (String, Value, String) {
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
-        return (status, v.get("criteria").cloned().unwrap_or(Value::Null), summary);
+        return (
+            status,
+            v.get("criteria").cloned().unwrap_or(Value::Null),
+            summary,
+        );
     }
-    ("inconclusive".into(), json!(criteria.iter().map(|c| json!({
-        "criterion": c,
-        "verdict": "inconclusive",
-        "evidence": "验收输出无法解析"
-    })).collect::<Vec<_>>()), clip(raw, 800))
+    (
+        "inconclusive".into(),
+        json!(criteria
+            .iter()
+            .map(|c| json!({
+                "criterion": c,
+                "verdict": "inconclusive",
+                "evidence": "验收输出无法解析"
+            }))
+            .collect::<Vec<_>>()),
+        clip(raw, 800),
+    )
 }
 
 #[async_trait]

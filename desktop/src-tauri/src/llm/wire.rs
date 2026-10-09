@@ -110,11 +110,9 @@ pub fn check_modalities(req: &LlmRequest, image_allowed: Option<bool>) -> Result
             .any(|p| matches!(p, ContentPart::Image { .. })))
     });
     if has_image && image_allowed == Some(false) {
-        return Err(
-            "当前模型不支持图片输入：请在 设置 → 模型 里换用视觉模型，\
+        return Err("当前模型不支持图片输入：请在 设置 → 模型 里换用视觉模型，\
              或去掉图片附件后重发"
-                .into(),
-        );
+            .into());
     }
     Ok(())
 }
@@ -349,9 +347,8 @@ fn asset_data_url(
     assets: Option<&crate::assets::AssetStore>,
     asset: &session_store::AssetRef,
 ) -> Result<String, String> {
-    let store = assets.ok_or_else(|| {
-        format!("资产存储未接入，附件 {} 无法随请求发送", asset.name)
-    })?;
+    let store =
+        assets.ok_or_else(|| format!("资产存储未接入，附件 {} 无法随请求发送", asset.name))?;
     store.data_url(&asset.id, &asset.mime)
 }
 

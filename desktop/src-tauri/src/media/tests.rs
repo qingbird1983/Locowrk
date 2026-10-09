@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use serde_json::json;
 use plugin_api::Tool;
+use serde_json::json;
 
 use super::{rgba_to_png, ScreenshotTool};
 use crate::assets::{validate, AssetStore};
@@ -37,7 +37,9 @@ fn rgba_png_roundtrip_through_asset_store() {
         }
     }
     let png = rgba_to_png(4, 2, rgba).expect("encode");
-    let asset = store.put(&png, "image/png", "t.png", &test_limits()).expect("put");
+    let asset = store
+        .put(&png, "image/png", "t.png", &test_limits())
+        .expect("put");
     assert_eq!(asset.mime, "image/png");
     let path = store.path_of(&asset.id, &asset.mime).expect("path");
     let bytes = std::fs::read(&path).expect("read back");
@@ -46,13 +48,18 @@ fn rgba_png_roundtrip_through_asset_store() {
     assert_eq!((img.width(), img.height()), (4, 2));
     assert_eq!(rgba.get_pixel(0, 0).0, [255, 0, 0, 255]);
     // 同字节再 put = 幂等（内容寻址同 id）
-    let again = store.put(&png, "image/png", "t.png", &test_limits()).expect("put2");
+    let again = store
+        .put(&png, "image/png", "t.png", &test_limits())
+        .expect("put2");
     assert_eq!(again.id, asset.id);
 }
 
 #[test]
 fn rgba_png_rejects_size_mismatch() {
-    assert!(rgba_to_png(4, 2, vec![0; 3 * 4]).is_err(), "字节数不符 = Err 不 panic");
+    assert!(
+        rgba_to_png(4, 2, vec![0; 3 * 4]).is_err(),
+        "字节数不符 = Err 不 panic"
+    );
 }
 
 #[test]

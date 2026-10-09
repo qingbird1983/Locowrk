@@ -14,7 +14,7 @@ fn req(system: &str, msgs: &[&str], session: &str) -> LlmRequest {
             .map(|m| Message::User {
                 content: (*m).to_string(),
                 parts: Vec::new(),
-                })
+            })
             .collect(),
         tools: vec![ToolSpec {
             name: "t1".into(),

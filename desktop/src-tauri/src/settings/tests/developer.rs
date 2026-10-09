@@ -47,7 +47,7 @@ fn dev_update_full(
         }),
         None,
         None,
-)
+    )
 }
 
 #[test]
@@ -165,8 +165,8 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 rule_chunk_tokens: Some(30_000),
             }),
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     drop(store);
     let store = SettingsStore::open(&root).unwrap();
@@ -208,8 +208,8 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 None,
                 Some(u),
                 None,
-                        None,
-)
+                None,
+            )
             .unwrap_err();
         assert!(err.contains(keyword), "{field}: {err}");
     }

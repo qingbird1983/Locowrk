@@ -722,6 +722,11 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.140 · desktop fmt 漂移归一（v2.138 挂账兑现 + desktop 纳入门禁）
+
+**用户 2026-10-10 口述裁定「那45多正好修复掉吧」**（v2.138 挂账项「desktop 树内 fmt --check 全 crate 飘红是否独立归一批」的兑现）。实测漂移 = **39 文件 / 121 diff 块**（挂账时的「~45」为目测约数；中位 10 行/文件、总 1369 diff 行），全部为 v2.127–v2.132 时代旧文件（assets/、llm/import/、media/、settings/tests/、subagent_verify、wire.rs 等），与 v2.137–139 触碰集零交集。根因不变：desktop edition 2021、代码系 edition-2024 风格（style_edition 随 crate edition 缺省），根 fmt 因 workspace exclude 从不覆盖 desktop。落点 = `cargo fmt` 一次归一：+418/−223 **纯格式重排**（抽查 = 函数调用参数竖排等 style_edition 差异），零语义改动、零意外文件（39 与漂移清单 1:1）。门禁（最后一次编辑后复跑）：**desktop `cargo fmt --check` 历史首次 CLEAN** + 根 fmt CLEAN + clippy --all-targets 0 + desktop 315 绿（与 v2.139 持平，格式不改语义）；根工作区零触碰（位等同 v2.139 提交态）。**自此 desktop fmt --check 纳入每批门禁**（基线已净，此后见红即本批之责）。已知边界（记档）：无 rustfmt.toml——desktop 按 crate edition 缺省 style_edition 2021 归一；将来若升 edition 2024 需重归一轮。文档：CHANGELOG/ROADMAP/AGENTS v2.140。
+
+---
 ### v2.139 · 提示词分层拼装（《Prompt Assembly Layering Design v1》四批全落——治「开场就查记忆问项目」）
 
 **用户 2026-10-09 口述「那开始实施吧」**（设计稿同日评审通过）。病根：聊天请求的 system 无身份段与行为总纲，行为全由三个「主动去做」的注入块驱动（读 handoff / 维护记忆 / list 项目文件），模型开场就查记忆、读项目、盘问阶段。四层落地（ZCode 分层架构同构，M1 字节前缀纪律全保留）：

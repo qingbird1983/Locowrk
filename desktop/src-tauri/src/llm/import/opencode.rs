@@ -10,7 +10,11 @@ use super::{candidate_id, ImportModel, ParsedProvider, SOURCE_OPENCODE};
 
 /// 单 provider 对象 → 候选（无端点 / npm 形态不兼容 = None，缺 Key 照出
 /// ——has_key=false 让用户预览时自行取舍）。
-pub(crate) fn parse_provider(pid: &str, pv: &Value, fallback_key: Option<String>) -> Option<ParsedProvider> {
+pub(crate) fn parse_provider(
+    pid: &str,
+    pv: &Value,
+    fallback_key: Option<String>,
+) -> Option<ParsedProvider> {
     let options = pv.get("options");
     let base_url = options
         .and_then(|o| o.get("baseURL"))
@@ -21,7 +25,9 @@ pub(crate) fn parse_provider(pid: &str, pv: &Value, fallback_key: Option<String>
     let npm = pv.get("npm").and_then(Value::as_str).unwrap_or("");
     let mut notes = Vec::new();
     if !npm.is_empty() && npm != "@ai-sdk/openai-compatible" {
-        notes.push(format!("opencode 适配器 {npm} 非 openai-compatible，兼容性未验证"));
+        notes.push(format!(
+            "opencode 适配器 {npm} 非 openai-compatible，兼容性未验证"
+        ));
     }
     let key = options
         .and_then(|o| o.get("apiKey"))
@@ -72,7 +78,10 @@ pub(crate) fn apply_current_model(parsed: &mut [ParsedProvider], current: Option
     let Some((pid, mid)) = cur.split_once('/') else {
         return;
     };
-    if let Some(p) = parsed.iter_mut().find(|p| p.id == candidate_id(SOURCE_OPENCODE, pid)) {
+    if let Some(p) = parsed
+        .iter_mut()
+        .find(|p| p.id == candidate_id(SOURCE_OPENCODE, pid))
+    {
         if p.models.iter().any(|m| m.id == mid) {
             p.model = mid.to_string();
         }
@@ -105,7 +114,8 @@ pub(crate) fn scan_opencode(home: &std::path::Path) -> Result<Vec<ParsedProvider
         for (pid, pv) in map {
             if let Some(mut p) = parse_provider(pid, pv, auth_key(pid)) {
                 if p.api_key.is_none() {
-                    p.notes.push("未发现 API Key（opencode.json 与 auth.json 都没有）".into());
+                    p.notes
+                        .push("未发现 API Key（opencode.json 与 auth.json 都没有）".into());
                 }
                 out.push(p);
             }

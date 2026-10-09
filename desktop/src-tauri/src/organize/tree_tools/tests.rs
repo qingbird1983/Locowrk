@@ -148,10 +148,7 @@ async fn collapse_only_after_expand_and_expand_clears_it() {
     let ws = r"F:\ws\demo";
     seed(&root, ws);
     let expand_tool = expand(&root);
-    let collapse_tool = MemoryCollapseTool::new(
-        memory_tree::TreeStore::new(&root),
-        resolver(),
-    );
+    let collapse_tool = MemoryCollapseTool::new(memory_tree::TreeStore::new(&root), resolver());
     assert_eq!(
         collapse_tool.spec().side_effect,
         SideEffect::Compensable {

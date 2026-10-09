@@ -86,7 +86,9 @@ pub(crate) fn scan_full(home: &Path) -> (Vec<ParsedProvider>, Vec<String>) {
     if let Some(p) = claude::scan_claude_code(home) {
         out.push(p);
     } else {
-        errors.push(format!("{SOURCE_CLAUDE}: 未发现可用配置（~/.claude/settings.json 无 Key 或缺模型）"));
+        errors.push(format!(
+            "{SOURCE_CLAUDE}: 未发现可用配置（~/.claude/settings.json 无 Key 或缺模型）"
+        ));
     }
     match codex::scan_codex(home) {
         Ok(p) => {
@@ -134,7 +136,6 @@ pub fn scan(home: &Path) -> ScanOutcome {
             .collect(),
         errors,
     }
-
 }
 
 /// 导入选中项（后端重扫回配 id 取 Key → 新档追加）。id 未命中 / 缺 Key /
@@ -150,7 +151,9 @@ pub fn apply(home: &Path, ids: &[String], cfg: &mut LlmConfig) -> ApplyReport {
             continue;
         };
         let Some(key) = p.api_key.as_deref().filter(|k| !k.trim().is_empty()) else {
-            report.skipped.push(format!("{id}: 未发现 API Key，无法导入"));
+            report
+                .skipped
+                .push(format!("{id}: 未发现 API Key，无法导入"));
             continue;
         };
         let norm = |u: &str| u.trim().trim_end_matches('/').to_string();

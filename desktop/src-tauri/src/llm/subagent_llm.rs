@@ -18,7 +18,9 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use kernel_agent::{estimate_tokens, ChildModelReport, LlmError, LlmRequest, LlmResponse, LlmService};
+use kernel_agent::{
+    estimate_tokens, ChildModelReport, LlmError, LlmRequest, LlmResponse, LlmService,
+};
 use serde_json::{json, Value};
 
 use super::app_llm::AppLlm;
@@ -137,7 +139,12 @@ impl SubagentLlm {
     fn candidate_window(&self, c: &Candidate) -> Option<u64> {
         let cfg = self.settings.llm_config();
         let p = cfg.profile(&c.provider_id)?;
-        if let Some(w) = p.models.iter().find(|m| m.id == c.model).and_then(|m| m.context_window) {
+        if let Some(w) = p
+            .models
+            .iter()
+            .find(|m| m.id == c.model)
+            .and_then(|m| m.context_window)
+        {
             return Some(w);
         }
         if let Some(hit) = self
@@ -171,9 +178,8 @@ impl SubagentLlm {
             }
             if let Some(window) = self.candidate_window(c) {
                 if est >= window {
-                    let reason = format!(
-                        "窗口装不下已携上下文（估算 ≈{est} token ≥ 窗口 {window}），跳过"
-                    );
+                    let reason =
+                        format!("窗口装不下已携上下文（估算 ≈{est} token ≥ 窗口 {window}），跳过");
                     self.report.record_failure(&identity, &reason);
                     state.attempted.insert(identity);
                     next += 1;
@@ -190,13 +196,22 @@ impl SubagentLlm {
 
     /// 三入口共用的回退循环：`call` 捕获流式闭包，按当前路由注入
     /// `params["route"]` 后调 inner（AppLlm）。Err = 推进重试同请求。
-    async fn with_fallback<F, Fut>(&self, mut req: LlmRequest, call: F) -> Result<LlmResponse, LlmError>
+    async fn with_fallback<F, Fut>(
+        &self,
+        mut req: LlmRequest,
+        call: F,
+    ) -> Result<LlmResponse, LlmError>
     where
         F: Fn(LlmRequest) -> Fut,
         Fut: std::future::Future<Output = Result<LlmResponse, LlmError>>,
     {
         // 首请求即带钉档路由（透传路径零注入）
-        if let Some(idx) = self.state.lock().expect("subagent llm state poisoned").route {
+        if let Some(idx) = self
+            .state
+            .lock()
+            .expect("subagent llm state poisoned")
+            .route
+        {
             let c = &self.chain[idx];
             req.params["route"] = c.route_value();
             self.report.record_used(&c.identity());

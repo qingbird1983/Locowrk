@@ -31,8 +31,8 @@ fn shell_defaults_legacy_compat_and_update() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     assert!(store.view().shell.unlock_risky);
     assert!(SettingsStore::open(&root).unwrap().shell_unlock_risky());

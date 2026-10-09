@@ -16,7 +16,12 @@ pub(crate) struct ClaudeEnv {
 
 /// 从 claude `env` 对象解析（无模型 = None）。
 pub(crate) fn parse_claude_env(env: &Value) -> Option<ClaudeEnv> {
-    let get = |k: &str| env.get(k).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+    let get = |k: &str| {
+        env.get(k)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    };
     let key = get("ANTHROPIC_AUTH_TOKEN").or_else(|| get("ANTHROPIC_API_KEY"));
     let base_url = get("ANTHROPIC_BASE_URL");
     // Claude Code 的模型值可带「[1M]」这类上下文提示尾缀——真实模型 id 是
@@ -66,7 +71,10 @@ pub(crate) fn scan_claude_code(home: &std::path::Path) -> Option<ParsedProvider>
     let global = read_json(&paths.claude_settings)?;
     let mut env = global.get("env").cloned().unwrap_or(Value::Null);
     if let Some(local) = read_json(&paths.claude_local) {
-        if let (Some(dst), Some(src)) = (env.as_object_mut(), local.get("env").and_then(Value::as_object)) {
+        if let (Some(dst), Some(src)) = (
+            env.as_object_mut(),
+            local.get("env").and_then(Value::as_object),
+        ) {
             for (k, v) in src {
                 dst.insert(k.clone(), v.clone());
             }
@@ -85,7 +93,10 @@ pub(crate) fn scan_claude_code(home: &std::path::Path) -> Option<ParsedProvider>
         models: e
             .models
             .into_iter()
-            .map(|id| ImportModel { id, context_window: None })
+            .map(|id| ImportModel {
+                id,
+                context_window: None,
+            })
             .collect(),
         notes: e.notes,
     })

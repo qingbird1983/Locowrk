@@ -84,8 +84,7 @@ impl AssetStore {
         std::fs::create_dir_all(&dir).map_err(|e| format!("资产目录创建失败: {e}"))?;
         let path = dir.join(format!("{id}.{}", kind.ext));
         if !path.exists() {
-            std::fs::write(&path, bytes)
-                .map_err(|e| format!("资产写入失败: {e}"))?;
+            std::fs::write(&path, bytes).map_err(|e| format!("资产写入失败: {e}"))?;
         }
         Ok(AssetRef {
             id,
@@ -111,8 +110,8 @@ impl AssetStore {
             }
         }
         let path = self.path_of(id, mime)?;
-        let bytes = std::fs::read(&path)
-            .map_err(|e| format!("资产读取失败（{}）: {e}", path.display()))?;
+        let bytes =
+            std::fs::read(&path).map_err(|e| format!("资产读取失败（{}）: {e}", path.display()))?;
         let url = format!(
             "data:{mime};base64,{}",
             base64::engine::general_purpose::STANDARD.encode(bytes)

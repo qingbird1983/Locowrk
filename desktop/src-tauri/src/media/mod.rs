@@ -140,12 +140,8 @@ impl Tool for ScreenshotTool {
                     ((w as f64 * scale).round() as u32).max(1),
                     ((h as f64 * scale).round() as u32).max(1),
                 );
-                let resized = image::imageops::resize(
-                    &img,
-                    nw,
-                    nh,
-                    image::imageops::FilterType::Triangle,
-                );
+                let resized =
+                    image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Triangle);
                 let mut out = std::io::Cursor::new(Vec::new());
                 image::DynamicImage::ImageRgba8(resized)
                     .write_to(&mut out, image::ImageFormat::Png)
@@ -153,8 +149,8 @@ impl Tool for ScreenshotTool {
                 (nw, nh, out.into_inner())
             } else {
                 // 像素缓冲换底（into_raw 不依赖对方 image 版本类型一致）
-                let png = rgba_to_png(w, h, shot.into_raw())
-                    .map_err(|e| format!("PNG 编码失败: {e}"))?;
+                let png =
+                    rgba_to_png(w, h, shot.into_raw()).map_err(|e| format!("PNG 编码失败: {e}"))?;
                 (w, h, png)
             };
             Ok(png)
@@ -234,9 +230,10 @@ impl Tool for ReadImageTool {
         let limits = (self.limits)();
         let read = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, String), String> {
             let roots = plugin_api::fsutil::allowed_roots()?;
-            let resolved = plugin_api::fsutil::resolve_existing(std::path::Path::new(&raw), &roots)?;
-            let bytes = std::fs::read(&resolved)
-                .map_err(|e| format!("`{}`: {e}", resolved.display()))?;
+            let resolved =
+                plugin_api::fsutil::resolve_existing(std::path::Path::new(&raw), &roots)?;
+            let bytes =
+                std::fs::read(&resolved).map_err(|e| format!("`{}`: {e}", resolved.display()))?;
             let name = resolved
                 .file_name()
                 .and_then(|s| s.to_str())
@@ -249,8 +246,8 @@ impl Tool for ReadImageTool {
         .map_err(|e| failed("read_image", e))?;
         let (bytes, name) = read;
         // 先验后写：非图片在落盘前拒绝（写出去再报错 = 泄漏副作用）
-        let sniffed = validate::validate(&bytes, "", &limits)
-            .map_err(|e| failed("read_image", e))?;
+        let sniffed =
+            validate::validate(&bytes, "", &limits).map_err(|e| failed("read_image", e))?;
         if sniffed.dir != "images" {
             return Err(failed(
                 "read_image",
@@ -262,9 +259,7 @@ impl Tool for ReadImageTool {
             .assets
             .put(&bytes, sniffed.mime, &name, &limits)
             .map_err(|e| failed("read_image", e))?;
-        let dims_text = dims
-            .map(|(w, h)| format!(", {w}x{h}"))
-            .unwrap_or_default();
+        let dims_text = dims.map(|(w, h)| format!(", {w}x{h}")).unwrap_or_default();
         Ok(json!({
             "asset": asset,
             "text": format!("image loaded: {name} ({}, {} KB{})", sniffed.mime, bytes.len() / 1024, dims_text),
@@ -282,7 +277,10 @@ pub(crate) fn rgba_to_png(w: u32, h: u32, rgba: Vec<u8>) -> Result<Vec<u8>, Stri
         .ok_or_else(|| format!("pixel buffer size mismatch: {w}x{h}"))?;
     let mut out = std::io::Cursor::new(Vec::new());
     image::DynamicImage::ImageRgba8(img)
-        .write_to(&mut std::io::BufWriter::new(&mut out), image::ImageFormat::Png)
+        .write_to(
+            &mut std::io::BufWriter::new(&mut out),
+            image::ImageFormat::Png,
+        )
         .map_err(|e| e.to_string())?;
     out.flush().map_err(|e| e.to_string())?;
     Ok(out.into_inner())

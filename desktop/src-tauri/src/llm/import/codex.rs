@@ -12,7 +12,9 @@ use serde_json::Value;
 use super::{candidate_id, ImportModel, ParsedProvider, SOURCE_CODEX};
 
 /// config.toml 文本 → (provider 键, base_url, wire_api, 模型清单)。
-pub(crate) fn parse_codex_toml(text: &str) -> Option<(String, Option<String>, String, Vec<String>)> {
+pub(crate) fn parse_codex_toml(
+    text: &str,
+) -> Option<(String, Option<String>, String, Vec<String>)> {
     let cfg: toml::Value = toml::from_str(text).ok()?;
     let provider_id = cfg
         .get("model_provider")
@@ -32,9 +34,7 @@ pub(crate) fn parse_codex_toml(text: &str) -> Option<(String, Option<String>, St
     if models.is_empty() {
         return None;
     }
-    let table = cfg
-        .get("model_providers")
-        .and_then(|p| p.get(&provider_id));
+    let table = cfg.get("model_providers").and_then(|p| p.get(&provider_id));
     let base_url = table
         .and_then(|t| t.get("base_url"))
         .and_then(toml::Value::as_str)
@@ -47,10 +47,7 @@ pub(crate) fn parse_codex_toml(text: &str) -> Option<(String, Option<String>, St
     Some((provider_id, base_url, wire_api, models))
 }
 
-pub(crate) fn from_parts(
-    key: Option<String>,
-    config_text: &str,
-) -> Option<ParsedProvider> {
+pub(crate) fn from_parts(key: Option<String>, config_text: &str) -> Option<ParsedProvider> {
     let (provider_id, base_url, wire_api, models) = parse_codex_toml(config_text)?;
     let mut notes = Vec::new();
     if wire_api != "chat" {
@@ -73,16 +70,17 @@ pub(crate) fn from_parts(
         model: models.first().cloned().unwrap_or_default(),
         models: models
             .into_iter()
-            .map(|id| ImportModel { id, context_window: None })
+            .map(|id| ImportModel {
+                id,
+                context_window: None,
+            })
             .collect(),
         notes,
     })
 }
 
 /// codex 主扫描：Err = 配置读不了；Ok(None) = 配置在但缺 Key/模型。
-pub(crate) fn scan_codex(
-    home: &std::path::Path,
-) -> Result<Option<ParsedProvider>, String> {
+pub(crate) fn scan_codex(home: &std::path::Path) -> Result<Option<ParsedProvider>, String> {
     let paths = super::ImportPaths::from_home(home);
     if !paths.codex_config.exists() {
         return Err("未发现 ~/.codex/config.toml".into());
@@ -92,6 +90,10 @@ pub(crate) fn scan_codex(
     let key: Option<String> = std::fs::read_to_string(&paths.codex_auth)
         .ok()
         .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|v| v.get("OPENAI_API_KEY").and_then(Value::as_str).map(str::to_string));
+        .and_then(|v| {
+            v.get("OPENAI_API_KEY")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        });
     Ok(from_parts(key, &text))
 }

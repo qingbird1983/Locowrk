@@ -33,7 +33,13 @@ fn referenced_assets_survive_orphans_expire() {
 
     // gc_days = 0（全部立即过期）：孤儿删、被引用留
     let r = run_gc(&assets, &sessions, &subs, 0);
-    assert_eq!(r, GcReport { scanned: 2, removed: 1 });
+    assert_eq!(
+        r,
+        GcReport {
+            scanned: 2,
+            removed: 1
+        }
+    );
     assert!(kept.exists());
     assert!(!orphan.exists());
     let _ = std::fs::remove_dir_all(&root);
@@ -65,6 +71,12 @@ fn grace_period_spares_fresh_orphans() {
 fn absent_dirs_are_empty_scan() {
     let root = tmp("absent");
     let r = run_gc(&root.join("assets"), &root.join("s"), &root.join("t"), 0);
-    assert_eq!(r, GcReport { scanned: 0, removed: 0 });
+    assert_eq!(
+        r,
+        GcReport {
+            scanned: 0,
+            removed: 0
+        }
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -69,7 +69,11 @@ pub async fn asset_read(
 /// 缩略图点击「在文件夹中显示」（批 D 大图查看器的系统打开器顶位）：
 /// id + mime → assets 目录内路径（sha256 文件名，无路径穿越面）。
 #[tauri::command]
-pub async fn asset_reveal(id: String, mime: String, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn asset_reveal(
+    id: String,
+    mime: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let path = state.assets.path_of(id.trim(), mime.trim())?;
     if !path.exists() {
         return Err(format!("资产文件不存在: {}", path.display()));
@@ -90,7 +94,11 @@ pub async fn asset_gc(state: State<'_, AppState>) -> Result<GcReport, String> {
     })
     .await
     .map_err(|e| format!("GC 任务失败: {e}"))?;
-    tracing::info!(scanned = report.scanned, removed = report.removed, "asset gc done");
+    tracing::info!(
+        scanned = report.scanned,
+        removed = report.removed,
+        "asset gc done"
+    );
     Ok(report)
 }
 

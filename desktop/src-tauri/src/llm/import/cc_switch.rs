@@ -58,7 +58,10 @@ pub(crate) fn scan_cc_switch(home: &std::path::Path) -> Result<Vec<ParsedProvide
                     models: env
                         .models
                         .into_iter()
-                        .map(|m| ImportModel { id: m, context_window: None })
+                        .map(|m| ImportModel {
+                            id: m,
+                            context_window: None,
+                        })
                         .collect(),
                     notes: env.notes,
                 });

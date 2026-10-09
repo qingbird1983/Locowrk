@@ -15,7 +15,13 @@ pub struct GcReport {
 /// 扫引用面 → 删过期孤儿。`assets_root` = `<数据根>/assets`；
 /// `sessions_dir` = `<数据根>/sessions`；`sub_dir` = `<数据根>/sub-transcripts`。
 pub fn run_gc(assets_root: &Path, sessions_dir: &Path, sub_dir: &Path, gc_days: u32) -> GcReport {
-    run_gc_at(assets_root, sessions_dir, sub_dir, gc_days, std::time::SystemTime::now())
+    run_gc_at(
+        assets_root,
+        sessions_dir,
+        sub_dir,
+        gc_days,
+        std::time::SystemTime::now(),
+    )
 }
 
 /// `run_gc` 的时钟注入形态（测试把 now 拨到未来造过期，不碰平台 mtime API）。

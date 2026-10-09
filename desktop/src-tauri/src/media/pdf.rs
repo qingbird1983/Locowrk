@@ -103,7 +103,9 @@ impl PdfToImagesTool {
 /// 渲染页数计划（纯函数，单测覆盖）：缺省 8、入参钳 1..=20、再被总页数
 /// 截断（宁少勿假——不存在的页不渲染也不报错）。
 fn render_plan(max_pages: Option<u64>, total: usize) -> usize {
-    let want = max_pages.unwrap_or(DEFAULT_PAGES).clamp(1, MAX_PAGES_HARD_CAP);
+    let want = max_pages
+        .unwrap_or(DEFAULT_PAGES)
+        .clamp(1, MAX_PAGES_HARD_CAP);
     (want as usize).min(total)
 }
 
@@ -145,11 +147,10 @@ impl Tool for PdfToImagesTool {
             let roots = plugin_api::fsutil::allowed_roots()?;
             let resolved =
                 plugin_api::fsutil::resolve_existing(std::path::Path::new(&raw), &roots)?;
-            let bytes = std::fs::read(&resolved)
-                .map_err(|e| format!("`{}`: {e}", resolved.display()))?;
+            let bytes =
+                std::fs::read(&resolved).map_err(|e| format!("`{}`: {e}", resolved.display()))?;
             // 先验后转：非 PDF / 超限在 pdfium 介入前拒绝
-            let sniffed =
-                validate::validate(&bytes, "", &limits).map_err(|e| e.to_string())?;
+            let sniffed = validate::validate(&bytes, "", &limits).map_err(|e| e.to_string())?;
             if sniffed.ext != "pdf" {
                 return Err(format!(
                     "pdf_to_images 只吃 PDF 文件（`{}` 实为 .{}）",

@@ -27,7 +27,7 @@ fn user_session() -> Vec<Message> {
         Message::User {
             content: "查下天气".into(),
             parts: Vec::new(),
-            },
+        },
         Message::Assistant {
             content: String::new(),
             tool_calls: vec![ToolCallMsg {
@@ -340,7 +340,7 @@ async fn empty_model_falls_back_to_demo() {
             messages: vec![Message::User {
                 content: "hi".into(),
                 parts: Vec::new(),
-                }],
+            }],
             ..Default::default()
         })
         .await
@@ -379,8 +379,8 @@ async fn configured_model_without_key_fails_fast() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     let llm = AppLlm::new(Arc::clone(&store));
 
@@ -389,7 +389,7 @@ async fn configured_model_without_key_fails_fast() {
             messages: vec![Message::User {
                 content: "hi".into(),
                 parts: Vec::new(),
-                }],
+            }],
             ..Default::default()
         })
         .await
@@ -537,7 +537,7 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
         messages: vec![Message::User {
             content: "hi".into(),
             parts: Vec::new(),
-            }],
+        }],
         ..Default::default()
     };
     // 未钉死：不发（v2.75 纪律不变）
@@ -647,10 +647,7 @@ fn tool_image_projects_into_tail_user_message() {
     match &out[1] {
         Message::ToolResult { output, .. } => {
             assert!(output.get("asset").is_none(), "引用号已剥");
-            assert_eq!(
-                output["image_note"],
-                "[图片已附于本工具结果之后: shot.png]"
-            );
+            assert_eq!(output["image_note"], "[图片已附于本工具结果之后: shot.png]");
             assert_eq!(output["text"], "screenshot 1920x1080 captured");
         }
         other => panic!("expected tool result, got {other:?}"),
@@ -697,10 +694,13 @@ fn historical_tool_image_not_resent_but_note_stable() {
     }
     // 尾部合成消息只出现一次且在末尾
     let tail2 = super::wire::project_tool_assets(
-        vec![tool_msg(asset_output()), Message::User {
-            content: "hi".into(),
-            parts: Vec::new(),
-        }],
+        vec![
+            tool_msg(asset_output()),
+            Message::User {
+                content: "hi".into(),
+                parts: Vec::new(),
+            },
+        ],
         Some(true),
     );
     assert_eq!(tail2.len(), 2);
@@ -760,7 +760,10 @@ fn non_image_assets_and_plain_output_untouched() {
     }
     // 跨结果也保序：A[p1,p2] 在前、B[b1] 在后 → 合成消息 [p1,p2,b1]
     let two = vec![
-        Message::User { content: "hi".into(), parts: Vec::new() },
+        Message::User {
+            content: "hi".into(),
+            parts: Vec::new(),
+        },
         tool_msg(json!({"assets": [
             { "id": "a1", "mime": "image/png", "name": "a1.png" },
             { "id": "a2", "mime": "image/png", "name": "a2.png" }

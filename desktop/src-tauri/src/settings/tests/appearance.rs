@@ -38,8 +38,8 @@ fn appearance_defaults_legacy_compat_and_update() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap();
     let v = SettingsStore::open(&root).unwrap().view().appearance;
     assert_eq!(v.theme, "light");
@@ -67,8 +67,8 @@ fn rejects_unknown_theme() {
             None,
             None,
             None,
-                None,
-)
+            None,
+        )
         .is_err());
     // 拒绝后内存态不被污染（仍为缺省 light）
     assert_eq!(store.view().appearance.theme, "light");

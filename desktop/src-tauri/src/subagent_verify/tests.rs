@@ -13,12 +13,17 @@ use super::{build_transcript, parse_verdict};
 
 fn sample_events() -> Vec<SessionEvent> {
     vec![
-        SessionEvent::TurnStart { turn_id: TurnId(1), ts: 0 },
+        SessionEvent::TurnStart {
+            turn_id: TurnId(1),
+            ts: 0,
+        },
         SessionEvent::UserMessage {
             content: "重构 foo 模块并跑测试".into(),
             parts: Vec::new(),
         },
-        SessionEvent::Thinking { text: "内部推理".into() },
+        SessionEvent::Thinking {
+            text: "内部推理".into(),
+        },
         SessionEvent::AssistantMessage {
             content: "好的，开始重构".into(),
             tool_calls: vec![CallId("c1".into())],
@@ -40,7 +45,11 @@ fn sample_events() -> Vec<SessionEvent> {
             content: "重构完成 ✓".into(),
             tool_calls: Vec::new(),
         },
-        SessionEvent::TurnEnd { turn_id: TurnId(1), outcome: TurnOutcome::Completed, ts: 1 },
+        SessionEvent::TurnEnd {
+            turn_id: TurnId(1),
+            outcome: TurnOutcome::Completed,
+            ts: 1,
+        },
     ]
 }
 
@@ -98,8 +107,10 @@ fn verdict_parses_bare_and_fenced_json() {
 
 #[test]
 fn verdict_unparseable_falls_inconclusive() {
-    let (status, criteria, _) =
-        parse_verdict("我觉得差不多完成了", &["测试通过".into(), "文件已改".into()]);
+    let (status, criteria, _) = parse_verdict(
+        "我觉得差不多完成了",
+        &["测试通过".into(), "文件已改".into()],
+    );
     assert_eq!(status, "inconclusive");
     assert_eq!(criteria.as_array().map(Vec::len), Some(2));
     assert_eq!(criteria[0]["verdict"], "inconclusive");

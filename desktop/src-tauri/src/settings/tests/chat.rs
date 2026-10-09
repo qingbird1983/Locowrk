@@ -61,8 +61,8 @@ fn chat_update_persists_and_roundtrips() {
             }),
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap()
         .chat;
     assert_eq!(v.content_max_width, Some(1000));
@@ -103,8 +103,8 @@ fn chat_update_persists_and_roundtrips() {
             }),
             None,
             None,
-                None,
-)
+            None,
+        )
         .unwrap()
         .chat;
     assert_eq!(v.content_max_width, Some(1000));
@@ -141,8 +141,8 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
             }),
             None,
             None,
-                None,
-)
+            None,
+        )
         .is_err());
     assert!(store
         .update(
@@ -168,8 +168,8 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
             }),
             None,
             None,
-                None,
-)
+            None,
+        )
         .is_err());
     // 失败不污染内存态
     assert_eq!(store.view().chat.content_max_width, None);
@@ -205,8 +205,8 @@ fn chat_rejects_bad_fold_lines_and_keeps_state() {
                 }),
                 None,
                 None,
-                        None,
-)
+                None,
+            )
             .is_err()
     };
     assert!(reject(Some(2)), "低于下限拒绝");

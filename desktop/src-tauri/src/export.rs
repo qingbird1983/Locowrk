@@ -49,7 +49,11 @@ pub fn render_markdown(title: &str, session_id: &str, events: &[AgentEvent]) -> 
                 assistant.clear();
                 // parts（批 D）折叠为占位行——导出是面向人的 Markdown，
                 // 附件只留名目（无损归档用 jsonl 原件）
-                section(&mut out, "## 用户\n\n", &session_store::fold_parts(content, parts));
+                section(
+                    &mut out,
+                    "## 用户\n\n",
+                    &session_store::fold_parts(content, parts),
+                );
             }
             AgentEvent::ToolCall { tool, args, .. } => {
                 section(&mut out, "## 助手\n\n", &assistant);

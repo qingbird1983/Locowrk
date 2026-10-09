@@ -26,10 +26,7 @@ fn resolver() -> crate::workspace::WorkspaceResolver {
     Arc::new(|_sid: &str| Some(r"F:\ws\demo".to_string()))
 }
 
-fn assembler(
-    root: &std::path::Path,
-    settings: Arc<SettingsStore>,
-) -> TreeAssembler {
+fn assembler(root: &std::path::Path, settings: Arc<SettingsStore>) -> TreeAssembler {
     TreeAssembler::new(
         settings,
         resolver(),

@@ -27,9 +27,8 @@ pub struct Sniffed {
 /// 校验入口：返回嗅探出的规范 mime（与申报 mime 解耦——落盘mime 以魔数
 /// 为准）。失败 = Err 面向用户的文案。
 pub fn validate(bytes: &[u8], _declared_mime: &str, limits: &Limits) -> Result<Sniffed, String> {
-    let sniffed = sniff(bytes).ok_or_else(|| {
-        "不支持的文件格式（仅支持 PNG/JPG/WebP/GIF 图片与 PDF）".to_string()
-    })?;
+    let sniffed = sniff(bytes)
+        .ok_or_else(|| "不支持的文件格式（仅支持 PNG/JPG/WebP/GIF 图片与 PDF）".to_string())?;
     let allowed: &Vec<String> = if sniffed.dir == "images" {
         &limits.image_formats
     } else {
@@ -69,19 +68,39 @@ pub fn validate(bytes: &[u8], _declared_mime: &str, limits: &Limits) -> Result<S
 fn sniff(b: &[u8]) -> Option<Sniffed> {
     let has = |pre: &[u8]| b.len() >= pre.len() && &b[..pre.len()] == pre;
     if has(b"\x89PNG\r\n\x1a\n") {
-        return Some(Sniffed { mime: "image/png", ext: "png", dir: "images" });
+        return Some(Sniffed {
+            mime: "image/png",
+            ext: "png",
+            dir: "images",
+        });
     }
     if has(b"\xff\xd8\xff") {
-        return Some(Sniffed { mime: "image/jpeg", ext: "jpg", dir: "images" });
+        return Some(Sniffed {
+            mime: "image/jpeg",
+            ext: "jpg",
+            dir: "images",
+        });
     }
     if has(b"GIF87a") || has(b"GIF89a") {
-        return Some(Sniffed { mime: "image/gif", ext: "gif", dir: "images" });
+        return Some(Sniffed {
+            mime: "image/gif",
+            ext: "gif",
+            dir: "images",
+        });
     }
     if b.len() > 12 && has(b"RIFF") && &b[8..12] == b"WEBP" {
-        return Some(Sniffed { mime: "image/webp", ext: "webp", dir: "images" });
+        return Some(Sniffed {
+            mime: "image/webp",
+            ext: "webp",
+            dir: "images",
+        });
     }
     if has(b"%PDF-") {
-        return Some(Sniffed { mime: "application/pdf", ext: "pdf", dir: "files" });
+        return Some(Sniffed {
+            mime: "application/pdf",
+            ext: "pdf",
+            dir: "files",
+        });
     }
     None
 }
@@ -154,9 +173,8 @@ fn webp_dimensions(b: &[u8]) -> Option<(u32, u32)> {
     }
     let fourcc = &b[12..16];
     if fourcc == b"VP8X" {
-        let read24 = |s: usize| -> u32 {
-            b[s] as u32 | (b[s + 1] as u32) << 8 | (b[s + 2] as u32) << 16
-        };
+        let read24 =
+            |s: usize| -> u32 { b[s] as u32 | (b[s + 1] as u32) << 8 | (b[s + 2] as u32) << 16 };
         return Some((read24(24) + 1, read24(27) + 1));
     }
     if fourcc == b"VP8 " {

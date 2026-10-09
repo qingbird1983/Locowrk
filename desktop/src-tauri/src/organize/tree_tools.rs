@@ -207,10 +207,7 @@ pub struct MemoryCollapseTool {
 }
 
 impl MemoryCollapseTool {
-    pub fn new(
-        tree_store: TreeStore,
-        workspace_of: WorkspaceResolver,
-    ) -> Arc<Self> {
+    pub fn new(tree_store: TreeStore, workspace_of: WorkspaceResolver) -> Arc<Self> {
         Arc::new(Self {
             tree_store,
             workspace_of,

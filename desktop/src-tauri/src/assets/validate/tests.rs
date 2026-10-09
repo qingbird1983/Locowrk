@@ -4,7 +4,13 @@ fn limits() -> Limits {
     Limits {
         max_dimension: 2048,
         max_size_mb: 5,
-        image_formats: vec!["png".into(), "jpg".into(), "jpeg".into(), "webp".into(), "gif".into()],
+        image_formats: vec![
+            "png".into(),
+            "jpg".into(),
+            "jpeg".into(),
+            "webp".into(),
+            "gif".into(),
+        ],
         file_formats: vec!["pdf".into()],
     }
 }
@@ -49,8 +55,12 @@ fn rejects_unknown_magic_and_oversize_and_dimension() {
 fn jpeg_gif_webp_pdf_dimension_parsers() {
     // JPEG：SOI + APP0(JFIF 最小 16 长段) + SOF0（8 数据段，高 200 宽 100）
     let mut j = vec![0xFF, 0xD8, 0xFF];
-    j.extend_from_slice(&[0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F', 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]);
-    j.extend_from_slice(&[0xFF, 0xC0, 0x00, 0x0B, 8, 0x00, 0xC8, 0x00, 0x64, 3, 0x11, 0]);
+    j.extend_from_slice(&[
+        0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F', 0, 1, 1, 0, 0, 1, 0, 1, 0, 0,
+    ]);
+    j.extend_from_slice(&[
+        0xFF, 0xC0, 0x00, 0x0B, 8, 0x00, 0xC8, 0x00, 0x64, 3, 0x11, 0,
+    ]);
     assert_eq!(image_dimensions(&j, "image/jpeg"), Some((100, 200)));
     // GIF：头 + 逻辑屏幕（宽高 LE）
     let mut g = b"GIF89a".to_vec();

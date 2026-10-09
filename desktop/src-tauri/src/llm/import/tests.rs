@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::{json, Value};
 
-use super::{claude, codex, opencode, apply, scan, scan_full, SOURCE_CLAUDE};
+use super::{apply, claude, codex, opencode, scan, scan_full, SOURCE_CLAUDE};
 
 fn write(path: &Path, text: &str) {
     std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
@@ -29,7 +29,10 @@ fn claude_env_parses_and_strips_suffix() {
         "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v4-flash[1M]"
     });
     let e = claude::parse_claude_env(&env).expect("parsed");
-    assert_eq!(e.base_url.as_deref(), Some("https://api.deepseek.com/anthropic"));
+    assert_eq!(
+        e.base_url.as_deref(),
+        Some("https://api.deepseek.com/anthropic")
+    );
     assert_eq!(e.api_key.as_deref(), Some("sk-test"));
     assert_eq!(e.models, vec!["deepseek-v4-flash".to_string()]);
     assert!(e.notes.iter().any(|n| n.contains("剥上下文尾缀")));

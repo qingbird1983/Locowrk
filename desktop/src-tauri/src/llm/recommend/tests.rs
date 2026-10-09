@@ -2,7 +2,13 @@
 
 use super::{recommend, RecCandidate};
 
-fn c(id: &str, tool: Option<bool>, in_p: Option<f64>, out_p: Option<f64>, family: Option<&str>) -> RecCandidate {
+fn c(
+    id: &str,
+    tool: Option<bool>,
+    in_p: Option<f64>,
+    out_p: Option<f64>,
+    family: Option<&str>,
+) -> RecCandidate {
     RecCandidate {
         id: id.into(),
         tool_call: tool,
@@ -15,7 +21,13 @@ fn c(id: &str, tool: Option<bool>, in_p: Option<f64>, out_p: Option<f64>, family
 #[test]
 fn drops_known_no_toolcall_when_better_exists() {
     let list = vec![
-        c("a-nontool", Some(false), Some(0.1), Some(0.2), Some("fam-a")),
+        c(
+            "a-nontool",
+            Some(false),
+            Some(0.1),
+            Some(0.2),
+            Some("fam-a"),
+        ),
         c("b-tool", Some(true), Some(0.3), Some(0.6), Some("fam-b")),
         c("c-unknown", None, Some(0.2), Some(0.4), Some("fam-c")),
     ];
@@ -36,8 +48,20 @@ fn keeps_all_when_nobody_has_toolcall() {
 #[test]
 fn price_ascending_unknown_last_family_spread() {
     let list = vec![
-        c("cheap-samefam", Some(true), Some(0.05), Some(0.1), Some("deepseek")),
-        c("cheap2-samefam", Some(true), Some(0.06), Some(0.1), Some("deepseek")),
+        c(
+            "cheap-samefam",
+            Some(true),
+            Some(0.05),
+            Some(0.1),
+            Some("deepseek"),
+        ),
+        c(
+            "cheap2-samefam",
+            Some(true),
+            Some(0.06),
+            Some(0.1),
+            Some("deepseek"),
+        ),
         c("mid", Some(true), Some(0.5), Some(1.0), Some("glm")),
         c("priceless", Some(true), None, None, Some("mystery")),
         c("pricey", Some(true), Some(3.0), Some(15.0), Some("claude")),
@@ -45,7 +69,14 @@ fn price_ascending_unknown_last_family_spread() {
     // 未知价格排最后 → 第三个名额被已知价的 pricey 占（cheap2 同族被
     // 族分散跳过）；priceless 出局是「未知最后」的正确代价。
     let out = recommend(&list);
-    assert_eq!(out, vec!["cheap-samefam".to_string(), "mid".to_string(), "pricey".to_string()]);
+    assert_eq!(
+        out,
+        vec![
+            "cheap-samefam".to_string(),
+            "mid".to_string(),
+            "pricey".to_string()
+        ]
+    );
 }
 
 #[test]
@@ -60,8 +91,16 @@ fn unknown_family_models_do_not_shadow_each_other() {
 
 #[test]
 fn no_catalog_hits_falls_back_to_list_order() {
-    let list = vec![c("m3", None, None, None, None), c("m1", None, None, None, None), c("m2", None, None, None, None), c("m4", None, None, None, None)];
-    assert_eq!(recommend(&list), vec!["m3".to_string(), "m1".to_string(), "m2".to_string()]);
+    let list = vec![
+        c("m3", None, None, None, None),
+        c("m1", None, None, None, None),
+        c("m2", None, None, None, None),
+        c("m4", None, None, None, None),
+    ];
+    assert_eq!(
+        recommend(&list),
+        vec!["m3".to_string(), "m1".to_string(), "m2".to_string()]
+    );
 }
 
 #[test]

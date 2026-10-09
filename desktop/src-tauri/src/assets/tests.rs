@@ -44,7 +44,9 @@ fn put_dedupes_by_content_and_reads_back() {
 #[test]
 fn rejects_rejected_format_and_returns_error_on_missing() {
     let (store, root) = store("reject");
-    assert!(store.put(b"not an image", "image/png", "x.png", &limits()).is_err());
+    assert!(store
+        .put(b"not an image", "image/png", "x.png", &limits())
+        .is_err());
     // 悬空引用：读取如实报错（不静默丢）
     assert!(store.data_url("deadbeef", "image/png").is_err());
     let _ = std::fs::remove_dir_all(&root);

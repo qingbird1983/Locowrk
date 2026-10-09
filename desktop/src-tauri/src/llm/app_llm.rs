@@ -280,8 +280,7 @@ impl LlmService for AppLlm {
             return self.demo.complete(req).await;
         }
         // 发送前模态门控（批 D §5.3 第二道）：拒发 = Fatal（重试无意义）
-        super::wire::check_modalities(&req, image_allowed)
-            .map_err(LlmError::Backend)?;
+        super::wire::check_modalities(&req, image_allowed).map_err(LlmError::Backend)?;
         let assets = self.assets.as_deref();
         self.real.complete_with(&cfg, caps, req, assets).await
     }
@@ -299,12 +298,19 @@ impl LlmService for AppLlm {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
             return self.demo.complete_streaming(req, on_delta).await;
         }
-        super::wire::check_modalities(&req, image_allowed)
-            .map_err(LlmError::Backend)?;
+        super::wire::check_modalities(&req, image_allowed).map_err(LlmError::Backend)?;
         let hooks = self.hooks(req.session_id.as_deref());
         let assets = self.assets.as_deref();
         self.real
-            .complete_streaming_with(&cfg, caps, req, assets, on_delta, &|_| false, hooks.as_ref())
+            .complete_streaming_with(
+                &cfg,
+                caps,
+                req,
+                assets,
+                on_delta,
+                &|_| false,
+                hooks.as_ref(),
+            )
             .await
     }
 
@@ -322,12 +328,19 @@ impl LlmService for AppLlm {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
             return self.demo.complete_streaming(req, on_delta).await;
         }
-        super::wire::check_modalities(&req, image_allowed)
-            .map_err(LlmError::Backend)?;
+        super::wire::check_modalities(&req, image_allowed).map_err(LlmError::Backend)?;
         let hooks = self.hooks(req.session_id.as_deref());
         let assets = self.assets.as_deref();
         self.real
-            .complete_streaming_with(&cfg, caps, req, assets, on_delta, on_reasoning, hooks.as_ref())
+            .complete_streaming_with(
+                &cfg,
+                caps,
+                req,
+                assets,
+                on_delta,
+                on_reasoning,
+                hooks.as_ref(),
+            )
             .await
     }
 }
