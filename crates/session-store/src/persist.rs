@@ -100,8 +100,7 @@ pub fn load_session(path: &Path) -> std::io::Result<(Session, usize)> {
 /// 会话文件元数据（列表用；`updated_at` = mtime Unix 秒；`title` = 首条用户消息截断
 /// （None = 无用户消息），截断宽 [`SESSION_TITLE_CHARS`]；`workspace` = §2.3 工作区关联
 /// （v2.50，None = 未关联）；`permission_mode` = ㉘·B 会话权限模式（None = 取设置缺省）；
-/// `model`/`model_provider` = v2.58 会话级模型覆盖（None = 跟随设置缺省）；
-/// `organizer` = M4 会话整理模式（None = 跟随开发者缺省档））。
+/// `model`/`model_provider` = v2.58 会话级模型覆盖（None = 跟随设置缺省）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMeta {
@@ -113,7 +112,6 @@ pub struct SessionMeta {
     pub permission_mode: Option<String>,
     pub model: Option<String>,
     pub model_provider: Option<String>,
-    pub organizer: Option<String>,
     /// 会话级推理档位（批 B）；None = 未设置。
     pub thinking_level: Option<String>,
 }
@@ -174,7 +172,6 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
             let permission_mode = sidecar.as_ref().and_then(|m| m.permission_mode.clone());
             let model = sidecar.as_ref().and_then(|m| m.model.clone());
             let model_provider = sidecar.as_ref().and_then(|m| m.model_provider.clone());
-            let organizer = sidecar.as_ref().and_then(|m| m.organizer.clone());
             let thinking_level = sidecar.and_then(|m| m.thinking_level);
             Some((
                 modified,
@@ -187,7 +184,6 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                     permission_mode,
                     model,
                     model_provider,
-                    organizer,
                     thinking_level,
                 },
             ))
@@ -324,8 +320,8 @@ fn snippet_around(text: &str, byte_start: usize, needle: &[char]) -> String {
 mod meta;
 
 pub use meta::{
-    SessionMetaFile, read_meta, write_model_override, write_organizer, write_permission_mode,
-    write_thinking_level, write_title, write_workspace,
+    SessionMetaFile, read_meta, write_model_override, write_permission_mode, write_thinking_level,
+    write_title, write_workspace,
 };
 use meta::{invalid_id, meta_file};
 

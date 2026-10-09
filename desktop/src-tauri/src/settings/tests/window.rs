@@ -1,5 +1,6 @@
 //! 上下文管理区（⑨）与模型窗口（S2 迁 llm 区）设置测试：缺省值 /
-//! 旧字段迁移幂等 / 阈值换算与建议值 / 窗口校验。
+//! 旧字段迁移幂等 / 整理阈值（v2.137 绝对 token）校验 / 幻影键 /
+//! session_window 四层窗口链。
 
 use super::*;
 
@@ -10,20 +11,31 @@ fn context_defaults_and_legacy_json_compat() {
     let root = temp_root("context-defaults");
     let store = SettingsStore::open(&root).unwrap();
     let v = store.view().context;
-    // 缺省：阈值 30% / 分层保留；窗口未知 → FALLBACK 保守保护
-    assert_eq!(v.threshold_pct, 30);
-    assert_eq!(v.strategy, kernel_agent::CompactStrategy::Layered);
-    assert_eq!(v.threshold_tokens, 9_600, "默认 = FALLBACK_WINDOW × 30%");
-    assert_eq!(v.suggested_pct, None, "窗口未知不给建议值");
+    // 缺省：整理阈值 100K（绝对 token）+ 进度条开
+    assert_eq!(v.threshold_tokens, 100_000);
+    assert!(v.usage_bar);
     // 旧 settings.json 无 context 字段 → 字段级缺省，不解析失败
     std::fs::write(root.join(FILE_NAME), r#"{"locale":"zh-CN"}"#).unwrap();
     let v = SettingsStore::open(&root).unwrap().view().context;
-    assert_eq!(v.threshold_pct, 30);
+    assert_eq!(v.threshold_tokens, 100_000);
+    // v2.137 前旧键（百分比/策略/稳定期）= 幻影键：读得进、新键走缺省
+    std::fs::write(
+        root.join(FILE_NAME),
+        r#"{"context":{"thresholdPct":40,"strategy":"sliding_window","stabilityRounds":7}}"#,
+    )
+    .unwrap();
+    let v = SettingsStore::open(&root).unwrap().view().context;
+    assert_eq!(v.threshold_tokens, 100_000, "退役键幻影化：阈值走缺省");
+    assert_eq!(
+        store.organize_threshold_tokens(),
+        100_000,
+        "触发面同源（不再折算窗口百分比）"
+    );
     std::fs::remove_dir_all(&root).ok();
 }
 
 /// S2 迁移：旧 `context.windowTokens` 一次搬到 llm 区（信息归属——窗口是
-/// 模型属性）；阈值换算与建议值随之改用新来源。
+/// 模型属性）；v2.137 起阈值不再吃窗口，迁移只搬窗口。
 #[test]
 fn llm_window_migrates_from_legacy_context_section() {
     let root = temp_root("window-migrate");
@@ -39,9 +51,11 @@ fn llm_window_migrates_from_legacy_context_section() {
         Some(262_144),
         "旧 context 窗口迁移到 llm 区"
     );
-    let v = store.view().context;
-    assert_eq!(v.threshold_tokens, 262_144 * 40 / 100, "阈值按新来源换算");
-    assert!(v.suggested_pct.is_some(), "窗口已知后给出建议值");
+    assert_eq!(
+        store.view().context.threshold_tokens,
+        100_000,
+        "阈值是独立旋钮，不随旧百分比换算"
+    );
     // 迁移幂等：源字段已被置 None，再开一次不变
     let again = SettingsStore::open(&root).unwrap();
     assert_eq!(again.view().llm.window_tokens, Some(262_144));
@@ -49,23 +63,20 @@ fn llm_window_migrates_from_legacy_context_section() {
 }
 
 #[test]
-fn llm_window_update_validation_and_threshold_math() {
-    let root = temp_root("window-update");
+fn organize_threshold_update_validation_and_roundtrip() {
+    let root = temp_root("threshold-update");
     let store = SettingsStore::open(&root).unwrap();
+    // 合法档位 + 磁盘往返（重开读回 = 永久保存的硬证明）
     store
         .update(
             None,
             None,
             None,
-            Some(LlmUpdate {
-                window_tokens: Some(Some(128_000)),
-                ..Default::default()
-            }),
+            None,
             None,
             Some(ContextUpdate {
-                threshold_pct: Some(40),
-                strategy: Some(kernel_agent::CompactStrategy::SlidingWindow),
-                ..Default::default()
+                threshold_tokens: Some(300_000),
+                usage_bar: None,
             }),
             None,
             None,
@@ -77,109 +88,63 @@ fn llm_window_update_validation_and_threshold_math() {
                 None,
 )
         .unwrap();
-    assert_eq!(store.view().llm.window_tokens, Some(128_000));
-    assert_eq!(store.view().context.threshold_tokens, 51_200, "128k × 40%");
-    // compact_config 桥接（ctx-compact 共享锁内容物）用同一把尺
-    let cfg = store.compact_config();
-    assert_eq!(cfg.threshold_tokens, 51_200);
-    assert_eq!(cfg.strategy, kernel_agent::CompactStrategy::SlidingWindow);
-    // windowTokens: null = 清除窗口 → 回落 32k 保守保护
-    store
-        .update(
-            None,
-            None,
-            None,
-            Some(LlmUpdate {
-                window_tokens: Some(None),
-                ..Default::default()
-            }),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-                None,
-)
-        .unwrap();
-    assert_eq!(store.view().llm.window_tokens, None);
-    assert_eq!(store.view().context.threshold_tokens, 32_000 * 40 / 100);
-    // 校验：窗口荒谬值拒绝且不污染内存态；阈值出界照旧拒绝
-    assert!(store
-        .update(
-            None,
-            None,
-            None,
-            Some(LlmUpdate {
-                window_tokens: Some(Some(50)),
-                ..Default::default()
-            }),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-                None,
-)
-        .is_err());
-    assert!(store
-        .update(
-            None,
-            None,
-            None,
-            Some(LlmUpdate {
-                window_tokens: Some(Some(200_000_001)),
-                ..Default::default()
-            }),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-                None,
-)
-        .is_err());
-    assert!(store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(ContextUpdate {
-                threshold_pct: Some(5),
-                ..Default::default()
-            }),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-                None,
-)
-        .is_err());
-    assert_eq!(store.view().context.threshold_pct, 40);
-    // 磁盘往返
+    assert_eq!(store.view().context.threshold_tokens, 300_000);
+    assert_eq!(store.organize_threshold_tokens(), 300_000);
     let v = SettingsStore::open(&root).unwrap().view().context;
-    assert_eq!(v.threshold_pct, 40);
-    assert_eq!(v.strategy, kernel_agent::CompactStrategy::SlidingWindow);
+    assert_eq!(v.threshold_tokens, 300_000);
+    // 校验：出界拒绝（下限下方 / 上限上方）且不污染内存态
+    for bad in [999u64, 99_999, 800_001, 10_000_000] {
+        assert!(store
+            .update(
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(ContextUpdate {
+                    threshold_tokens: Some(bad),
+                    usage_bar: None,
+                }),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                        None,
+)
+            .is_err());
+    }
+    assert_eq!(store.view().context.threshold_tokens, 300_000);
+    // 边界值合法
+    for ok in [100_000u64, 800_000] {
+        store
+            .update(
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(ContextUpdate {
+                    threshold_tokens: Some(ok),
+                    usage_bar: None,
+                }),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                        None,
+)
+            .unwrap();
+    }
     std::fs::remove_dir_all(&root).ok();
 }
 
-/// v4.18（UI shell §3.4）：上下文用量进度条显隐——缺省开 / 更新关 /
+/// v4.18（UI shell §3.4）：阈值用量进度条显隐——缺省开 / 更新关 /
 /// 磁盘往返（旧文件缺字段走 serde 容器级 default = 开，零迁移）。
 #[test]
 fn context_usage_bar_default_and_roundtrip() {
@@ -195,8 +160,8 @@ fn context_usage_bar_default_and_roundtrip() {
             None,
             None,
             Some(ContextUpdate {
+                threshold_tokens: None,
                 usage_bar: Some(false),
-                ..Default::default()
             }),
             None,
             None,
@@ -218,79 +183,55 @@ fn context_usage_bar_default_and_roundtrip() {
     std::fs::remove_dir_all(&root).ok();
 }
 
-/// M1（KV v2 §6.4）：稳定期轮数——缺省 3 / 校验 1–10 / 生效配置桥接 /
-/// 磁盘往返。缺省值与缺省档测试同源（context_defaults 之外单列本键的
-/// 生命周期）。
+/// v2.137 会话生效窗口四层链：模型行 context_window（钉死面）→ 目录 →
+/// 档位 window_tokens；会话模型覆盖改判档。目录缺席 = 空快照（该层跳过）。
 #[test]
-fn stability_rounds_roundtrip_and_validation() {
-    let root = temp_root("stability-rounds");
-    let store = SettingsStore::open(&root).unwrap();
-    assert_eq!(
-        store.view().context.stability_rounds,
-        3,
-        "缺省 3（KV v2 §6.4）"
-    );
-    assert_eq!(store.compact_config().stability_rounds, 3, "生效配置桥接");
+fn session_window_resolution_chain() {
+    let catalog_absent = std::env::temp_dir().join("settings-tests-catalog-absent");
+    let mut cfg = LlmConfig::default();
+    cfg.active = "p1".into();
+    cfg.providers.push(ProviderProfile {
+        id: "p1".into(),
+        label: "deepseek".into(),
+        kind: "deepseek".into(),
+        base_url: Some("https://api.deepseek.com/v1".into()),
+        model: "deepseek-flash".into(),
+        window_tokens: Some(65_536),
+        enabled: true,
+        models: vec![ProviderModel {
+            id: "deepseek-v4-pro".into(),
+            context_window: Some(131_072),
+            ..Default::default()
+        }],
+        ..Default::default()
+    });
 
-    // 合法更新 + 磁盘往返
-    store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(ContextUpdate {
-                stability_rounds: Some(5),
-                ..Default::default()
-            }),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-                None,
-)
-        .unwrap();
-    assert_eq!(store.view().context.stability_rounds, 5);
-    assert_eq!(store.compact_config().stability_rounds, 5);
-    // 出界拒绝且不污染内存态（0 与 11 都拒）
-    for bad in [0u32, 11] {
-        assert!(store
-            .update(
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(ContextUpdate {
-                    stability_rounds: Some(bad),
-                    ..Default::default()
-                }),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                        None,
-)
-            .is_err());
-    }
-    assert_eq!(store.view().context.stability_rounds, 5);
-
-    drop(store);
+    // 活动档模型无行 → 回落档位 window_tokens
     assert_eq!(
-        SettingsStore::open(&root)
-            .unwrap()
-            .view()
-            .context
-            .stability_rounds,
-        5,
-        "重开软件后逐字段读回"
+        session_window(&cfg, None, None),
+        Some(65_536),
+        "档位 window_tokens 兜底"
     );
-    std::fs::remove_dir_all(&root).ok();
+
+    // 会话覆盖到有行模型 → 模型行钉死窗口优先
+    let ov = ("p1".to_string(), "deepseek-v4-pro".to_string());
+    assert_eq!(
+        session_window(&cfg, Some(&ov), None),
+        Some(131_072),
+        "模型行 context_window 优先"
+    );
+
+    // 覆盖到未知档 → 回落活动档档位窗口（不因覆盖档缺失而丢失口径）
+    let bad_ov = ("pX".to_string(), "m".to_string());
+    assert_eq!(session_window(&cfg, Some(&bad_ov), None), Some(65_536));
+
+    // 目录在位（空快照 = 无命中，跳过该层）；档位窗口未设 → 全未知
+    cfg.providers[0].window_tokens = None;
+    assert_eq!(
+        session_window(&cfg, None, Some(&crate::llm::catalog::CatalogStore::new(
+            catalog_absent
+        ))),
+        None,
+        "全未知 = None（前端按未设置呈现）"
+    );
 }

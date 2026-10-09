@@ -133,7 +133,6 @@ export default {
     expandRow: "Memory expands",
     expandCalls: "{n} this session",
     treeTail: "unorganized tail {n} tokens",
-    savings: "Saved",
     cacheAlert:
       "Cache hit rate fell below {pct}% — a prefix break may have occurred (tool-set/system-prompt change or compaction)",
   },
@@ -215,8 +214,6 @@ export default {
       export: "Export",
       moveInto: "Move to “{name}”",
       moveOut: "Remove from workspace",
-      organizerTree: "Switch to memory-tree organizing",
-      organizerLegacy: "Switch to standard organizing",
       delete: "Delete",
       confirmDelete: "Confirm delete? Tap again",
     },
@@ -415,9 +412,6 @@ export default {
   // ⑫ Exposure debug panel (read-only part of developer options; separate
   // from settings.developer* — this is "user comes looking" info)
   toast: {
-    organizerTree: "Switched to memory-tree organizing (applies from the next turn).",
-    organizerLegacy: "Switched to standard organizing (applies from the next turn).",
-    organizerFailed: "Failed to switch organizer mode",
     exported: "Exported",
     exportFailed: "Export failed",
     deleted: "Session deleted",
@@ -543,7 +537,6 @@ export default {
     cacheEmpty: "Provider has not reported cache fields yet — start a chat and come back.",
     cacheHitRate: "Session cumulative hit rate: {pct}% ({steps} steps)",
     cacheHitMiss: "Hit / miss / total input: {hit} / {miss} / {input} tokens",
-    cacheSavings: "Estimated savings at current prices: {n}",
     cacheTurn: "This turn: in {input} · hit {hit} · out {out}",
     cacheAlertTitle: "Cache hit-rate alert",
     // M6.1 break diagnostics (KV v2 §7.4)
@@ -585,7 +578,7 @@ export default {
     treeEmpty: "No memory tree projection for this session yet (appears after an organize run).",
     treeChapters: "Chapters: {n} / organized cursor: event #{cursor}",
     treeTail: "Unorganized tail: {events} content events ≈ {tokens} tokens",
-    treeAnchor: "Anchor: {tokens} tokens ({source}) / threshold {pct}% / {pacing}",
+    treeAnchor: "Anchor: {tokens} tokens ({source}) / organize threshold {threshold} / {pacing}",
     treeAnchorLlm: "reported",
     treeAnchorEstimate: "estimated",
     treePacingBatch: "batch",
@@ -804,10 +797,7 @@ export default {
     usageReadout_used: "Used",
     usageReadout_remaining: "Remaining",
     cacheStatsTitle: "Cache hit-rate display",
-    cacheStatsHint: "Show session cumulative hit rate and price-based savings in the usage popover",
-    cacheHitPriceTitle: "Cache hit price",
-    cacheMissPriceTitle: "Cache miss price",
-    cachePriceHint: "¥ per million tokens for savings estimation (e.g. deepseek-flash off-peak 0.02 / 1.0)",
+    cacheStatsHint: "Show session cumulative cache hit rate in the usage popover",
     llmTitle: "Models",
     llmHint: "API keys stay local; add multiple providers and switch models anytime.",
     provider: "Provider",
@@ -1005,12 +995,6 @@ export default {
     memoryEnabled: "Inject memories automatically",
     memoryTopK: "Entries per turn",
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
-    // M5 default organizer (tree v2 §11.2 stage 3: default tree, moved from developer layer)
-    defaultOrganizer: "Default organizer",
-    defaultOrganizerHint:
-      "Which organizer sessions use when they never chose one; changes apply immediately.",
-    organizerLegacy: "Standard",
-    organizerTree: "Memory tree",
     memoryRepoContext: "Handoff reminder",
     memoryRepoContextHint:
       "Project sessions inject a reminder for the handoff directory (content is not injected; the model reads and maintains it on demand).",
@@ -1094,32 +1078,20 @@ export default {
     autoDisableDaysHint: "0 = off; 7–365 days, third-party plugins only.",
     // ⑨ Context management section (real section, replaces shell placeholder)
     contextTitle: "Context management",
-    contextHint: "Long chats are compacted automatically; adjustable and undoable.",
+    contextHint:
+      "When the context reaches the organize threshold it is organized into the memory tree; the full history stays on disk and can be expanded anytime.",
     // S2 (audit doc §5): the window is a model property — key moved here
-    window: "Model context window (tokens)",
-    windowUnset: "Not set (conservative 32k protection)",
-    windowCustom: "Custom…",
-    windowCustomLabel: "Window size (tokens)",
-    windowDetect: "Detect",
-    windowProbing: "Detecting…",
-    windowDetectFail: "Detect failed — pick manually:",
-    threshold: "Compaction threshold",
-    thresholdValue: "Current: {pct}% · {tokens} tokens",
-    thresholdSuggest: "ⓘ Suggested {pct}%",
-    thresholdSuggestHint: "(larger windows suggest lower thresholds)",
-    thresholdLowWarning: "Lower thresholds may cost more than they save",
-    thresholdOrganizeHint: "This slider is also the memory tree organize trigger (single knob; manual /organize bypasses it).",
-    strategy: "Compaction strategy",
-    strategy_sliding_window: "Sliding window",
-    strategy_sliding_window_desc: "Keep recent messages only, no model call",
-    strategy_layered: "Layered",
-    strategy_layered_desc: "Summary + recent messages, recommended",
-    strategy_summary_only: "Summary only",
-    strategy_summary_only_desc: "Compress everything into one summary",
-    // v4.18（§3.4）：context usage bar visibility
-    usageBar: "Context usage bar",
+    // v2.137: organize threshold (absolute tokens, 100K–800K) — trigger at N K
+    // of context; compaction pct/strategy/stability retired with the desktop
+    // ctx-compact chain
+    threshold: "Organize threshold",
+    thresholdValue: "Current: {n} tokens",
+    thresholdHint:
+      "Organize into the memory tree once the conversation context reaches this many tokens (manual /organize bypasses it). Keep it below the model's context window, or the context-overflow error hits first.",
+    // v4.18 (§3.4): threshold usage bar visibility (v2.137 renamed — denominator = organize threshold)
+    usageBar: "Threshold usage bar",
     usageBarHint:
-      "Thin bar at the top of the chat area showing context usage; details live in the usage ring by the composer.",
+      "Thin bar at the top of the chat area; the percentage is computed against the organize threshold. Details live in the usage ring by the composer.",
   },
   error: {
     unknown: "Something went wrong",

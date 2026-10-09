@@ -356,6 +356,47 @@ pub struct LlmConfig {
     pub subagent: Option<SubagentPin>,
 }
 
+/// 会话生效上下文窗口（v2.137 自动识别，四层链）：会话模型覆盖（旁车
+/// `{providerId, model}`，缺 = 活动档）→ 模型行 `context_window`（用户
+/// 钉死面）→ 目录命中（批 A models.dev 快照/在线刷新）→ 档位
+/// `window_tokens`。全未知 = None（调用方按「未设置」呈现）。与子代理
+/// 回退链的窗口口径同形（subagent_llm「模型行 ?? 目录 ?? 档位」）——
+/// 不读 keyring（flat() 会碰凭据库，此函数走纯档位字段）。
+pub fn session_window(
+    cfg: &LlmConfig,
+    session_override: Option<&(String, String)>,
+    catalog: Option<&crate::llm::catalog::CatalogStore>,
+) -> Option<u64> {
+    let (profile, model) = match session_override {
+        Some((pid, model)) => (
+            cfg.profile(pid).or_else(|| cfg.active_profile())?,
+            model.as_str(),
+        ),
+        None => {
+            let p = cfg.active_profile()?;
+            (p, p.model.as_str())
+        }
+    };
+    if model.is_empty() {
+        return None;
+    }
+    if let Some(w) = profile
+        .models
+        .iter()
+        .find(|m| m.id == model)
+        .and_then(|m| m.context_window)
+    {
+        return Some(w);
+    }
+    if let Some(w) = catalog.and_then(|c| {
+        c.lookup_model(&profile.kind, profile.base_url.as_deref(), model)
+            .and_then(|m| m.context_window)
+    }) {
+        return Some(w);
+    }
+    profile.window_tokens
+}
+
 impl LlmConfig {
     /// 活动档：活动指针（须未停用）→ 首个未停用档 → 首档（全停用兜底，
     /// 避免零可用配置丢平面投影）。

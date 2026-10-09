@@ -10,7 +10,7 @@ import { onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { llmCacheDiagnose, memoryReconcile, toolExposureDebug } from "../../lib/api";
 import type { CacheBreakReport, ReconcileSummary } from "../../types";
-import { compactNumber, formatMoney } from "../../lib/format";
+import { compactNumber } from "../../lib/format";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
@@ -35,7 +35,6 @@ const form = reactive({
   cacheDiagnostics: false,
   cacheHitAlertPercent: 80,
   pinSession: true,
-  stabilityRounds: 3,
   organizeReboundK: 3,
   organizeReboundM: 3,
   recorderTimeoutSecs: 60,
@@ -52,9 +51,9 @@ watch(
     form.cacheHitAlert = v.developer.cacheHitAlert;
     form.cacheDiagnostics = v.developer.cacheDiagnostics;
     form.cacheHitAlertPercent = v.developer.cacheHitAlertPercent;
-    // M1 前缀纪律两键：JSON 分属 tools/context 区，UI 行同挂本分区
+    // M1 前缀纪律：JSON 在 tools 区，UI 行同挂本分区（v2.137 稳定期
+    // 随 ctx-compact 桌面链退役）
     form.pinSession = v.tools.pinSession;
-    form.stabilityRounds = v.context.stabilityRounds;
     // M2 记忆树整理（树 v2 §15 开发者层级）
     form.organizeReboundK = v.developer.organizeReboundK;
     form.organizeReboundM = v.developer.organizeReboundM;
@@ -78,13 +77,6 @@ function save() {
 /** 工具集会话钉死（KV v2 §4.2）：写 tools 区。 */
 function savePin() {
   void settings.saveTools({ pinSession: form.pinSession });
-}
-
-/** 稳定期轮数（KV v2 §6.4）：写 context 区（1–10，出界后端拒绝）。 */
-function saveStability() {
-  void settings.saveContext({
-    stabilityRounds: Math.round(form.stabilityRounds),
-  });
 }
 
 /** M2 记忆树整理可调项：全写 developer 区（出界后端拒绝）。 */
@@ -289,9 +281,6 @@ onMounted(() => void refresh());
               })
             }}
           </p>
-          <p>
-            {{ t("developer.cacheSavings", { n: formatMoney(chat.cacheStats.savings) }) }}
-          </p>
         </template>
         <p v-if="chat.turnUsage" class="text-[length:var(--lw-fs-12)] text-ink-3">
           {{
@@ -348,21 +337,6 @@ onMounted(() => void refresh());
           v-model="form.pinSession"
           :label="t('developer.pinSession')"
           @update:model-value="savePin"
-        />
-      </SettingsRow>
-      <SettingsRow
-        :title="t('developer.stabilityRounds')"
-        :hint="t('developer.stabilityRoundsHint')"
-        control-id="dev-stability-rounds"
-      >
-        <input
-          id="dev-stability-rounds"
-          v-model.number="form.stabilityRounds"
-          type="number"
-          min="1"
-          max="10"
-          class="lw-field lw-field-num px-2 text-xs"
-          @change="saveStability"
         />
       </SettingsRow>
     </SettingsGroup>

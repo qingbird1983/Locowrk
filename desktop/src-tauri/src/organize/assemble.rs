@@ -24,7 +24,6 @@ use kernel_agent::{estimate_tokens, TreeContextSource, TreePlan};
 
 use memory_tree::{MemoryTree, TreeStore};
 
-use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 use crate::settings::SettingsStore;
 use crate::settings::TailStrategy;
 use crate::workspace::WorkspaceResolver;
@@ -82,7 +81,6 @@ fn directory_text(tree: &MemoryTree, before_event: usize) -> String {
 
 /// 组装器（AppState 持 Arc；同时注册进内核 Context 服务表）。
 pub struct TreeAssembler {
-    modes: Arc<OrganizerModeStore>,
     settings: Arc<SettingsStore>,
     workspace_of: WorkspaceResolver,
     tree_store: TreeStore,
@@ -91,14 +89,12 @@ pub struct TreeAssembler {
 
 impl TreeAssembler {
     pub fn new(
-        modes: Arc<OrganizerModeStore>,
         settings: Arc<SettingsStore>,
         workspace_of: WorkspaceResolver,
         tree_store: TreeStore,
         sessions_dir: PathBuf,
     ) -> Self {
         Self {
-            modes,
             settings,
             workspace_of,
             tree_store,
@@ -145,13 +141,10 @@ impl TreeAssembler {
         }
     }
 
-    /// 组装后上下文估算（§3.38② 用量口径）：树会话 = 目录 + 尾巴；
-    /// legacy 会话 = None（调用方回落全量估算）。`session` 是调用方在册
+    /// 组装后上下文估算（§3.38② 用量口径）= 目录 + 尾巴（v2.137 起
+    /// 一切会话皆树，无 legacy 分支）。`session` 是调用方在册
     /// 的内存会话（与磁盘镜像一致，模式 B 边界直接用，免盘读）。
     pub fn context_tokens(&self, session: &Session, session_id: &str) -> Option<u64> {
-        if self.modes.mode_of(Some(session_id)) != OrganizerMode::Tree {
-            return None;
-        }
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let tree = self.load_tree(&workspace, session_id);
         let (from, directory) = self.boundary_and_directory(&tree, Some(session.events()));
@@ -164,9 +157,6 @@ impl TreeAssembler {
 #[async_trait]
 impl TreeContextSource for TreeAssembler {
     async fn plan(&self, session_id: &str) -> Option<TreePlan> {
-        if self.modes.mode_of(Some(session_id)) != OrganizerMode::Tree {
-            return None;
-        }
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let tree = self.load_tree(&workspace, session_id);
         // 模式 B 需要窗口起点：盘读一次（树会话 + 实验档才会走）。

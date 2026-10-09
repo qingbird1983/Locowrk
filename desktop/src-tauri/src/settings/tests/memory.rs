@@ -13,12 +13,6 @@ fn memory_defaults_legacy_compat_and_validation() {
     let v = store.view().memory;
     assert!(v.enabled);
     assert_eq!(v.top_k, 5);
-    // M5 阶段 3 裁定：缺省整理模式 = tree（用户层 memory 区）
-    assert_eq!(v.default_organizer, "tree");
-    assert!(matches!(
-        store.default_organizer(),
-        crate::organizer_mode::OrganizerMode::Tree
-    ));
     // memory_inject_config 桥接（MemoryInject 共享锁内容物）
     let cfg = store.memory_inject_config();
     assert!(cfg.enabled);
@@ -50,7 +44,6 @@ fn memory_defaults_legacy_compat_and_validation() {
                 collapse_threshold_pct: None,
                 files: None,
                 repo_context: None,
-                default_organizer: None,
             }),
             None,
             None,
@@ -153,7 +146,6 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 collapse_threshold_pct: None,
                 files: None,
                 repo_context: None,
-                default_organizer: None,
             }),
             None,
             None,
@@ -362,75 +354,21 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
 }
 
 #[test]
-fn m5_default_organizer_roundtrip_and_stale_keys_are_phantom() {
+fn retired_keys_are_phantom() {
     let root = temp_root("m5keys");
-    let store = SettingsStore::open(&root).unwrap();
-    // 切 legacy：磁盘往返 + default_organizer() 访问器随行
-    store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(MemoryUpdate {
-                default_organizer: Some("legacy".into()),
-                ..Default::default()
-            }),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-                None,
-)
-        .unwrap();
-    let reopened = SettingsStore::open(&root).unwrap();
-    let v = reopened.view().memory;
-    assert_eq!(v.default_organizer, "legacy");
-    assert!(matches!(
-        reopened.default_organizer(),
-        crate::organizer_mode::OrganizerMode::Legacy
-    ));
-    // 非法档拒绝且不污染内存态（M4 白名单语义平移到 memory 区）
-    let err = store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(MemoryUpdate {
-                default_organizer: Some("bogus".into()),
-                ..Default::default()
-            }),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-                None,
-)
-        .unwrap_err();
-    assert!(err.contains("整理模式"), "{err}");
-    assert_eq!(store.view().memory.default_organizer, "legacy");
-    // 幻影键（v2.136 退役三键）：存量 settings.json 带着旧键照常解析，
-    // 投影不出现、非退役键照常生效
+    SettingsStore::open(&root).unwrap(); // 建目录与缺省文件，再覆盖夹具
+    // 幻影键（v2.136 退役三键 + v2.137 defaultOrganizer）：存量
+    // settings.json 带着旧键照常解析，投影不出现、非退役键照常生效
     std::fs::write(
         root.join(super::FILE_NAME),
-        r#"{"memory":{"autoExtract":false,"handoffUpdate":false,"experiences":true,"topK":7}}"#,
+        r#"{"memory":{"autoExtract":false,"handoffUpdate":false,"experiences":true,"defaultOrganizer":"legacy","topK":7}}"#,
     )
     .unwrap();
     let v = SettingsStore::open(&root).unwrap().view().memory;
     assert_eq!(v.top_k, 7, "非退役键照常生效");
-    assert!(!serde_json::to_value(&v)
-        .unwrap()
-        .as_object()
-        .unwrap()
-        .contains_key("autoExtract"));
+    let json = serde_json::to_value(&v).unwrap().as_object().unwrap().clone();
+    for key in ["autoExtract", "handoffUpdate", "experiences", "defaultOrganizer"] {
+        assert!(!json.contains_key(key), "退役键 {key} 不进投影");
+    }
     std::fs::remove_dir_all(&root).ok();
 }

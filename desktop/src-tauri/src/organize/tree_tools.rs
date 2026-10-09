@@ -19,7 +19,6 @@ use serde_json::{json, Value};
 
 use memory_tree::{build_items, transcript, TreeStore};
 
-use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 use crate::workspace::WorkspaceResolver;
 
 static VERSION: std::sync::LazyLock<semver::Version> =
@@ -65,7 +64,6 @@ fn expand_spec() -> &'static ToolSpec {
 pub struct MemoryExpandTool {
     tree_store: TreeStore,
     workspace_of: WorkspaceResolver,
-    modes: Arc<OrganizerModeStore>,
     sessions_dir: PathBuf,
 }
 
@@ -73,13 +71,11 @@ impl MemoryExpandTool {
     pub fn new(
         tree_store: TreeStore,
         workspace_of: WorkspaceResolver,
-        modes: Arc<OrganizerModeStore>,
         sessions_dir: PathBuf,
     ) -> Arc<Self> {
         Arc::new(Self {
             tree_store,
             workspace_of,
-            modes,
             sessions_dir,
         })
     }
@@ -112,12 +108,6 @@ impl Tool for MemoryExpandTool {
             .clone()
             .filter(|s| !s.is_empty())
             .ok_or_else(|| unavailable("memory_expand", "无会话身份"))?;
-        if self.modes.mode_of(Some(&session_id)) != OrganizerMode::Tree {
-            return Err(unavailable(
-                "memory_expand",
-                "本会话不是记忆树整理模式（可在任务行菜单切换）",
-            ));
-        }
         let chapter_id = args
             .get("chapter_id")
             .and_then(Value::as_str)
@@ -214,19 +204,16 @@ fn collapse_spec() -> &'static ToolSpec {
 pub struct MemoryCollapseTool {
     tree_store: TreeStore,
     workspace_of: WorkspaceResolver,
-    modes: Arc<OrganizerModeStore>,
 }
 
 impl MemoryCollapseTool {
     pub fn new(
         tree_store: TreeStore,
         workspace_of: WorkspaceResolver,
-        modes: Arc<OrganizerModeStore>,
     ) -> Arc<Self> {
         Arc::new(Self {
             tree_store,
             workspace_of,
-            modes,
         })
     }
 }
@@ -247,12 +234,6 @@ impl Tool for MemoryCollapseTool {
             .clone()
             .filter(|s| !s.is_empty())
             .ok_or_else(|| unavailable("memory_collapse", "无会话身份"))?;
-        if self.modes.mode_of(Some(&session_id)) != OrganizerMode::Tree {
-            return Err(unavailable(
-                "memory_collapse",
-                "本会话不是记忆树整理模式（可在任务行菜单切换）",
-            ));
-        }
         let chapter_id = args
             .get("chapter_id")
             .and_then(Value::as_str)

@@ -1,87 +1,69 @@
 //! 上下文管理设置类型（⑨，Context and Memory.md §3 / §6.2）。
-//! 独立成文件遵守 400 行纪律（memory/tools/shell 同款）。
 //!
-//! S2（清单 §5 信息归属）：模型上下文窗口是**模型的属性**，字段已迁
-//! `llm` 区；本区只留阈值（百分比）与策略。`window_tokens` 字段保留
-//! 仅为读旧 settings.json（open() 迁移一次到 llm 区），不再进投影
-//! 与更新入参。
+//! v2.137（用户裁定「上下文根本不压缩了」）：整理阈值改**绝对 token**
+//! ——「对话上下文达到多少 K 就触发记忆树整理」，不再按窗口百分比折算；
+//! `threshold_pct`（百分比）/ `strategy`（压缩策略三档）/ `stability_rounds`
+//! （ctx-compact 稳定期）三键随 ctx-compact 桌面链一并退役，settings.json
+//! 里的历史键为**幻影键**（serde 未知字段忽略，读取不破，下次保存自然
+//! 消失）。S2（清单 §5 信息归属）：模型上下文窗口是**模型的属性**，字段
+//! 在 `llm` 区；`window_tokens` 保留仅为读旧 settings.json（open() 迁移
+//! 一次到 llm 区），不进投影与更新入参。
 
-use kernel_agent::{suggested_threshold, CompactStrategy};
 use serde::{Deserialize, Serialize};
 
-/// strategy 与 kernel-agent 的 CompactStrategy 同形（serde snake_case
-/// 直接复用）。
+/// 整理阈值缺省（100K）：主流大窗口模型安全（需低于模型窗口，否则上下文
+/// 超限会先于整理发生——设置行提示同文）。
+pub const ORGANIZE_THRESHOLD_DEFAULT: u64 = 100_000;
+/// 整理阈值合法区间（100K–800K，100K 一档；UI 滑块同档位）。
+pub const ORGANIZE_THRESHOLD_RANGE: std::ops::RangeInclusive<u64> = 100_000..=800_000;
+
+/// 整理阈值合法性（update.rs 校验用）。
+pub fn valid_organize_threshold(v: u64) -> bool {
+    ORGANIZE_THRESHOLD_RANGE.contains(&v)
+}
+
+/// `context` 区（settings.json）。字段级缺省：旧文件无此区 / 带旧键 →
+/// 新键走缺省（旧键幻影），零迁移。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ContextSettings {
     /// 旧版窗口字段（S2 前的落点）。仅作迁移来源；新写入走 `llm` 区，
     /// open() 把它搬到 llm 后置 None。
     pub window_tokens: Option<u64>,
-    /// 压缩触发阈值（窗口百分比，10–90）。
-    pub threshold_pct: u32,
-    /// 压缩策略（缺省分层保留）。
-    pub strategy: CompactStrategy,
-    /// 稳定期轮数（KV v2 §6.4，缺省 3，合法 1–10）：结算后 N 个用户轮
-    /// 内不再触发压缩——新前缀尽快落盘，二次压缩只烧钱。
-    pub stability_rounds: u32,
-    /// 上下文用量进度条显隐（UI shell §3.4 v4.18，缺省开）：关掉后会话
-    /// 顶栏下方的进度条整根不渲染（读数仍走用量浮层）。
+    /// 整理阈值（绝对 token，缺省 100K）：对话上下文达到该 token 数触发
+    /// 记忆树整理（批量档；增量的第二把尺在 memory.organizeChunkTokens）。
+    pub threshold_tokens: u64,
+    /// 阈值用量进度条显隐（UI shell §3.4 v4.18，缺省开；v2.137 改名——
+    /// 分母 = 整理阈值非窗口）：关掉后顶栏下方进度条整根不渲染（读数仍
+    /// 走用量浮层）。
     pub usage_bar: bool,
 }
+
 impl Default for ContextSettings {
     fn default() -> Self {
         Self {
             window_tokens: None,
-            threshold_pct: 30,
-            strategy: CompactStrategy::default(),
-            stability_rounds: 3,
+            threshold_tokens: ORGANIZE_THRESHOLD_DEFAULT,
             usage_bar: true,
         }
     }
 }
 
-impl ContextSettings {
-    /// 生效阈值（绝对 token）＝ 窗口 × 百分比 / 100。窗口由调用方解析
-    /// （llm 区优先、未知回落 FALLBACK_WINDOW_TOKENS）。压缩判定、进度条、
-    /// 设置面板三处共用一把尺。
-    pub fn effective_threshold(&self, window: u64) -> u64 {
-        window * self.threshold_pct as u64 / 100
-    }
-
-    /// 窗口已知时的建议阈值百分比（§3.2.3 动态建议）；未知返回 None。
-    pub fn suggested_pct(&self, window: Option<u64>) -> Option<u32> {
-        window.map(suggested_threshold)
-    }
-}
-
-/// 上下文管理区投影：设置原值 + 生效值（阈值绝对数、建议百分比）
-/// 一起给出，前端不做第二套换算。窗口不在本区（S2 迁 llm 区）。
+/// 上下文管理区投影（v2.137 起只两键——阈值即绝对值，无换算无建议值，
+/// 前端不做第二套算术）。
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextSettingsView {
-    pub threshold_pct: u32,
-    pub strategy: CompactStrategy,
-    /// 稳定期轮数（KV v2 §6.4，1–10，缺省 3）。
-    pub stability_rounds: u32,
-    /// 上下文用量进度条显隐（v4.18，缺省开）。
-    pub usage_bar: bool,
-    /// 生效阈值（窗口已知 = 窗口×百分比；未知 = FALLBACK_WINDOW_TOKENS）。
+    /// 整理阈值（绝对 token）。
     pub threshold_tokens: u64,
-    /// 建议阈值百分比（窗口未知 = None，UI 隐藏建议行）。
-    pub suggested_pct: Option<u32>,
+    /// 阈值用量进度条显隐（缺省开）。
+    pub usage_bar: bool,
 }
 
-/// 上下文管理区部分更新（settings_set 入参）。S2 起不再收窗口——
-/// 窗口走 `LlmUpdate.window_tokens`。
+/// 上下文管理区部分更新（settings_set 入参）。
 #[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ContextUpdate {
-    pub threshold_pct: Option<u32>,
-    pub strategy: Option<CompactStrategy>,
-    pub stability_rounds: Option<u32>,
+    pub threshold_tokens: Option<u64>,
     pub usage_bar: Option<bool>,
 }
-
-/// stability_rounds 合法区间（KV v2 §9 可调项总表）：1–10。下限 1 保住
-/// "结算当轮不二次结算"的最低纪律，上限 10 防稳定期变成禁压。
-pub const STABILITY_ROUNDS_RANGE: std::ops::RangeInclusive<u32> = 1..=10;

@@ -24,8 +24,8 @@ pub struct TreeDebug {
     pub tail_tokens_est: u64,
     pub anchor_tokens: u64,
     pub anchor_source: &'static str,
-    pub threshold_pct: u32,
-    pub window_tokens: u64,
+    /// 整理阈值（绝对 token，v2.137）。
+    pub threshold_tokens: u64,
     pub pacing: &'static str,
     pub chunk_tokens: u64,
     pub paused_auto: bool,
@@ -45,7 +45,6 @@ pub struct PendingDebug {
 impl Organizer {
     /// 树投影 + 触发配置 + 尾巴/锚点现状（持有会话锁的同步上下文调用）。
     pub(super) fn assemble(&self, session: &Session, session_id: &str) -> TreeDebug {
-        let ctx = self.settings.context();
         let mem = self.settings.memory();
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let tree = self.load_tree(&workspace, session_id);
@@ -65,8 +64,7 @@ impl Organizer {
                 AnchorSource::LlmUsage => "llm_usage",
                 AnchorSource::Estimate => "estimate",
             },
-            threshold_pct: ctx.threshold_pct,
-            window_tokens: self.settings.effective_window().unwrap_or(0),
+            threshold_tokens: self.settings.organize_threshold_tokens(),
             pacing: pacing.as_str(),
             chunk_tokens: mem.organize_chunk_tokens,
             paused_auto: tree.paused_auto,

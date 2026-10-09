@@ -60,21 +60,6 @@ const menuItems = computed<RowMenuItem[]>(() => {
     { id: "rename", label: t("sidebar.menu.rename") },
     { id: "export", label: t("sidebar.menu.export") },
   ];
-  // M4 §3.38①：整理模式切换——标签按生效档渲染（显式档 ∪ 开发者缺省
-  // 档推算），切换即时生效（下一次请求按新档组装）。
-  const organizerMode =
-    props.session.organizer ??
-    (settings.view?.memory.defaultOrganizer === "legacy" ? "legacy" : "tree");
-  items.push(
-    { id: "sep-org", label: "", separator: true },
-    {
-      id: "organizer:toggle",
-      label:
-        organizerMode === "tree"
-          ? t("sidebar.menu.organizerLegacy")
-          : t("sidebar.menu.organizerTree"),
-    },
-  );
   // v4.11 用户裁定：**移除「移入其它项目」**——归属只在首聊挂起时确定
   // （工作区 chip / 项目行 ＋），会后改挂造成注入键位/记忆隔离的困惑面；
   // session_associate 命令保留（后端契约不动），仅菜单不再出口。
@@ -110,23 +95,6 @@ async function onMenuSelect(id: string) {
   if (id === "rename") {
     closeMenu();
     void startRename();
-  } else if (id === "organizer:toggle") {
-    // M4 §3.38①：整理模式两态切换（显式写旁车，不再跟随缺省档）
-    closeMenu();
-    const current =
-      props.session.organizer ??
-      (settings.view?.memory.defaultOrganizer === "legacy" ? "legacy" : "tree");
-    try {
-      await chat.setOrganizer(sid, current === "tree" ? "legacy" : "tree");
-      toast.push(
-        "ok",
-        current === "tree"
-          ? t("toast.organizerLegacy")
-          : t("toast.organizerTree"),
-      );
-    } catch (e) {
-      toast.push("danger", t("toast.organizerFailed"), String(e));
-    }
   } else if (id === "export") {
     closeMenu();
     try {

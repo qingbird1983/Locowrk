@@ -25,8 +25,6 @@ const form = reactive({
   usageReadout: "used",
   autoTitle: true,
   cacheStats: true,
-  cacheHitPrice: 0.02,
-  cacheMissPrice: 1.0,
   foldLongMessages: true,
   foldLines: 5,
 });
@@ -41,8 +39,6 @@ watch(
     form.usageReadout = v.chat.usageReadout;
     form.autoTitle = v.chat.autoTitle;
     form.cacheStats = v.chat.cacheStats;
-    form.cacheHitPrice = v.chat.cacheHitPrice;
-    form.cacheMissPrice = v.chat.cacheMissPrice;
     form.foldLongMessages = v.chat.foldLongMessages;
     form.foldLines = v.chat.foldLines;
   },
@@ -57,8 +53,6 @@ function save() {
     usageReadout: form.usageReadout,
     autoTitle: form.autoTitle,
     cacheStats: form.cacheStats,
-    cacheHitPrice: form.cacheHitPrice,
-    cacheMissPrice: form.cacheMissPrice,
     foldLongMessages: form.foldLongMessages,
     foldLines: form.foldLines,
   });
@@ -140,44 +134,13 @@ const readoutOptions = computed(() => [
       />
     </SettingsRow>
 
-    <!-- M0 观测（KV v2 §7）：缓存命中率/节省显示与单价（元/百万 tokens） -->
+    <!-- M0 观测（KV v2 §7）：缓存命中率显示（v2.137 单价两行与节省估算
+         一并退役——单价要用户手填 = 无用负担） -->
     <SettingsRow
       :title="t('settings.cacheStatsTitle')"
       :hint="t('settings.cacheStatsHint')"
     >
       <SettingsToggle v-model="form.cacheStats" :label="t('settings.cacheStatsTitle')" />
-    </SettingsRow>
-
-    <SettingsRow
-      :title="t('settings.cacheHitPriceTitle')"
-      :hint="t('settings.cachePriceHint')"
-      control-id="chat-cache-hit-price"
-    >
-      <input
-        id="chat-cache-hit-price"
-        v-model.number="form.cacheHitPrice"
-        type="number"
-        :min="0"
-        :max="10000"
-        step="0.01"
-        class="lw-field lw-field-num px-2 text-xs"
-      />
-    </SettingsRow>
-
-    <SettingsRow
-      :title="t('settings.cacheMissPriceTitle')"
-      :hint="t('settings.cachePriceHint')"
-      control-id="chat-cache-miss-price"
-    >
-      <input
-        id="chat-cache-miss-price"
-        v-model.number="form.cacheMissPrice"
-        type="number"
-        :min="0"
-        :max="10000"
-        step="0.1"
-        class="lw-field lw-field-num px-2 text-xs"
-      />
     </SettingsRow>
   </SettingsGroup>
 

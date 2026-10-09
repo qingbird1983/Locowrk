@@ -15,35 +15,26 @@ use kernel_agent::ToolSource;
 use plugin_api::{SideEffect, Tool, ToolError, ToolSpec};
 use plugin_host::RegistryToolSource;
 
-use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 use crate::permission_mode::{PermissionMode, PermissionModeStore};
 
-/// M4 树工具（memory_expand / memory_collapse）的会话门控数据源。
+/// M4 树工具（memory_expand / memory_collapse）的暴露门控数据源。
+/// v2.137 起一切会话皆树（legacy 整理面退役），本门控只剩 collapse
+/// 暴露开关；expand 常驻。
 pub struct TreeToolGate {
-    modes: Arc<OrganizerModeStore>,
     /// memory_collapse 暴露开关（settings `memory.collapseEnabled`，保存即
     /// 读当前值；缺省关——§8.3 宁缺勿假）。
     collapse_enabled: Arc<dyn Fn() -> bool + Send + Sync>,
 }
 
 impl TreeToolGate {
-    pub fn new(
-        modes: Arc<OrganizerModeStore>,
-        collapse_enabled: Arc<dyn Fn() -> bool + Send + Sync>,
-    ) -> Self {
-        Self {
-            modes,
-            collapse_enabled,
-        }
+    pub fn new(collapse_enabled: Arc<dyn Fn() -> bool + Send + Sync>) -> Self {
+        Self { collapse_enabled }
     }
 
-    /// 工具对该会话是否可见/可解析：expand 树会话常驻；collapse 树会话 +
-    /// 开关开启。
-    fn allows(&self, session_id: Option<&str>, name: &str) -> bool {
-        let tree = self.modes.mode_of(session_id) == OrganizerMode::Tree;
+    /// 工具对该会话是否可见/可解析：expand 常驻；collapse 看开关。
+    fn allows(&self, _session_id: Option<&str>, name: &str) -> bool {
         match name {
-            "memory_expand" => tree,
-            "memory_collapse" => tree && (self.collapse_enabled)(),
+            "memory_collapse" => (self.collapse_enabled)(),
             _ => true,
         }
     }
@@ -117,7 +108,7 @@ impl ToolSource for KernelToolSource {
         if let Some(gate) = &self.tree_gate {
             if !gate.allows(session_id, name) {
                 return Err(ToolError::NotAvailable(format!(
-                    "{name} 不可用：仅记忆树整理模式的会话可调（任务行菜单可切换）"
+                    "{name} 不可用：未在设置中开启该工具（设置 → 记忆 → 暴露 memory-collapse 工具）"
                 )));
             }
         }

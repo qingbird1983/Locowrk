@@ -722,6 +722,10 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.137 · 上下文面重构（整理阈值绝对 K + 窗口自动识别 + 压缩/legacy 整理面退役 + 缓存单价退役）
+
+**用户 2026-10-09 口述裁定**（用量环要自动识别模型最大上下文；整理触发改「达到多少 K 就触发」不按百分比；压缩阈值改名整理阈值 + 100K–800K 滑块带气泡；压缩策略没用了就删；用量进度条改名阈值用量进度条、分母 = 阈值；缓存命中/未命中单价要用户手填 = 删；缺省整理方式随标准整理退役）。落点：`session_window` 四层链（会话覆盖旁车 → 模型行 → 目录 → 档位）喂 UsagePolicy 与自动收起；`TriggerInput.threshold_tokens` 绝对阈值（窗口未知照常触发）；ctx-compact 桌面链退役 + organizer_mode 删库（**一切会话皆树**，旧旁车/旧 settings 键全幻影）；ContextSection 重写（滑条 + 拖动气泡）；缓存单价两键 + 节省估算退役。门禁全绿（desktop 303）。已知边界：阈值需低于模型窗口；窗口全未知 = 环按未设置呈现、自动收起跳过。详见 CHANGELOG v2.137。
+
 ### v2.136 · 记忆模型 v2（autoExtract / experiences / handoff 后台改写三退役 + 注入面收敛项目侧全提醒制）
 
 **用户 2026-10-09 口述裁定**（真正的记忆 = 短期会话上下文 + 长期记忆树 + 项目记忆两处 + 全局记忆（进流水线保持简短）；项目记忆由主模型在工作中自己管理记录修改——记忆管理器只管当前上下文打包整理，软件只做节点提醒钩子）：**①autoExtract 退役**（extract.rs 整模块 + agent_chat 收束钩子 + app_state extract_deps/llm 字段）；**②experiences 退役**（experiences.rs 整模块 + `<session_experiences>` 注入段 + 内核 ExperienceSource 契约 + 管理页经历区块；向量基建保留服务 search_titles/工具打分/search_tools）；**③注入面收敛**：persistent_memory 只注入全局层（项目层事实改按需 memory_read/search），repo_context 改**静态提醒段**（节点钩子：开场先读 requirements/handoff、状态实质变化时主模型自己更新），scope_id 去 mtime 指纹（人改 .Locowrk/ 不再触发记忆块重算）；**④handoff 后台自动改写退役**（agent_chat/调度引擎两收束点钩子拔除，交接文件主模型按提醒自维护）。GUIDANCE_BLOCK 按新模型改写；settings 三键幻影化（存量 settings.json 照常解析）。门禁：fmt、clippy 0、根 workspace 39 套件 + desktop 307 绿、vue-tsc 0、build、lint:style、check_length 零新增超限。已知边界：历史 auto.*/experiences 数据不迁移；主模型不读提醒则交接面退化（观察）。详见 CHANGELOG v2.136。

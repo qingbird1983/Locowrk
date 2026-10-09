@@ -7,7 +7,6 @@ import {
   assetPut,
   assetPutPath,
   sessionAssociate,
-  sessionSetOrganizer,
   sessionDelete,
   sessionExport,
   sessionHistory,
@@ -169,8 +168,9 @@ export const useChatStore = defineStore("chat", {
     steps: null as number | null,
     /** 会话列表（⑲，session_list mtime 降序）：切换器数据源。 */
     sessions: [] as SessionMeta[],
-    /** 上下文用量（进度条投影；agent://context-usage 驱动）。windowTokens
-     * 0 = 窗口未设置（比例段隐藏）。 */
+    /** 上下文用量（阈值用量进度条投影；agent://context-usage 驱动）。
+     * threshold = 整理阈值（绝对 token，分母）；windowTokens = 会话生效
+     * 窗口（v2.137 四层链自动识别，0 = 未识别，比例段隐藏）。 */
     contextUsage: null as {
       used: number;
       threshold: number;
@@ -213,13 +213,12 @@ export const useChatStore = defineStore("chat", {
   }),
   getters: {
     /** M0 观测（KV v2 §7）：会话累计缓存统计。命中率 = cacheRead /
-     * input（**分母不含 cacheWrite**——纪律 7，加了会把命中率压低）；
-     * 节省 = 命中 × (未命中价 − 命中价)，单价来自设置（元/百万 tokens）。
-     * cacheRead 为 0 = 供应商未报告缓存字段或全 miss → null（行不渲染，
-     * 宁缺勿假）。 */
+     * input（**分母不含 cacheWrite**——纪律 7，加了会把命中率压低）。
+     * v2.137：节省估算随两档单价设置退役（真实价格模型各异，不发明
+     * 全局估算）。cacheRead 为 0 = 供应商未报告缓存字段或全 miss →
+     * null（行不渲染，宁缺勿假）。 */
     cacheStats(state): {
       hitRate: number;
-      savings: number;
       input: number;
       cacheRead: number;
       cacheWrite: number;
@@ -228,13 +227,8 @@ export const useChatStore = defineStore("chat", {
     } | null {
       const u = state.sessionUsage;
       if (!u || u.input <= 0 || u.cacheRead <= 0) return null;
-      const chat = useSettingsStore().view?.chat ?? null;
-      const delta = chat
-        ? Math.max(0, chat.cacheMissPrice - chat.cacheHitPrice)
-        : 0;
       return {
         hitRate: Math.round((u.cacheRead / u.input) * 100),
-        savings: (u.cacheRead * delta) / 1_000_000,
         input: u.input,
         cacheRead: u.cacheRead,
         cacheWrite: u.cacheWrite,
@@ -362,12 +356,6 @@ export const useChatStore = defineStore("chat", {
      * 移出；后端校验必须是其一根，列表层生效。 */
     async associateSession(id: string, workspace: string | null) {
       await sessionAssociate(id, workspace);
-      await this.refreshSessions();
-    },
-    /** 会话整理模式（M4 §3.38①）：legacy | tree；"" = 清除显式档
-     * （跟随开发者缺省档）。下一次请求按新档组装，列表刷新生效档。 */
-    async setOrganizer(id: string, mode: "legacy" | "tree" | "") {
-      await sessionSetOrganizer(id, mode);
       await this.refreshSessions();
     },
     /** 删除会话（v2.49）：后端忙锁守卫（运行中默认拒绝，开发者开关可

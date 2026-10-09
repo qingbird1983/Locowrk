@@ -7,8 +7,7 @@
 use super::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
     MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate,
-    ThinkingUpdate, ToolsUpdate, FILE_NAME, LOCALES, STABILITY_ROUNDS_RANGE,
-    THINKING_LANGUAGE_VALUES,
+    ThinkingUpdate, ToolsUpdate, FILE_NAME, LOCALES, THINKING_LANGUAGE_VALUES,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -79,24 +78,18 @@ impl SettingsStore {
             }
         }
         if let Some(u) = context {
-            if let Some(pct) = u.threshold_pct {
-                if !(10..=90).contains(&pct) {
-                    return Err(format!("压缩阈值 {pct}% 超出范围（10–90，10% 一级）"));
-                }
-                next.context.threshold_pct = pct;
-            }
-            if let Some(s) = u.strategy {
-                next.context.strategy = s;
-            }
-            if let Some(n) = u.stability_rounds {
-                if !STABILITY_ROUNDS_RANGE.contains(&n) {
+            // v2.137 整理阈值（绝对 token，100K–800K）：折算键
+            // threshold_pct / strategy / stability_rounds 随 ctx-compact
+            // 桌面链退役（settings 里为幻影键）。
+            if let Some(n) = u.threshold_tokens {
+                if !super::context::valid_organize_threshold(n) {
                     return Err(format!(
-                        "稳定期轮数 {n} 超出范围（{}–{}）",
-                        STABILITY_ROUNDS_RANGE.start(),
-                        STABILITY_ROUNDS_RANGE.end()
+                        "整理阈值 {n} 超出范围（{}–{} token）",
+                        super::context::ORGANIZE_THRESHOLD_RANGE.start(),
+                        super::context::ORGANIZE_THRESHOLD_RANGE.end()
                     ));
                 }
-                next.context.stability_rounds = n;
+                next.context.threshold_tokens = n;
             }
             if let Some(v) = u.usage_bar {
                 next.context.usage_bar = v;
@@ -111,14 +104,6 @@ impl SettingsStore {
                     return Err(format!("记忆注入条数 {k} 超出范围（1–20）"));
                 }
                 next.memory.top_k = k;
-            }
-            // M5 会话缺省整理模式（树 v2 §15 用户层级，自 developer 区迁入）：
-            // 白名单校验，未显式设置过的会话跟随此档热换
-            if let Some(p) = u.default_organizer {
-                if !super::memory::DEFAULT_ORGANIZER_VALUES.contains(&p.as_str()) {
-                    return Err(format!("会话缺省整理模式 {p:?} 非法（可选 legacy / tree）"));
-                }
-                next.memory.default_organizer = p;
             }
             // M2 记忆树整理三键（树 v2 §4.3/§5.2/§15）：节奏白名单 +
             // 增量块区间 + 记忆管理器模型（空串按清除处理，回落同主模型）

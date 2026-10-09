@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
-use kernel_agent::{CompactConfig, Kernel, MemoryInjectConfig, ToolExposure, ToolExposureConfig};
+use kernel_agent::{Kernel, MemoryInjectConfig, ToolExposure, ToolExposureConfig};
 use plugin_service::PluginService;
 use session_store::Session;
 use tauri::AppHandle;
@@ -35,9 +35,6 @@ pub struct AppState {
     /// 会话级模型覆盖存储（v2.58 §3.30）：旁车持久 + 缓存；AppLlm 每
     /// 请求按会话解析，session_set_model 命令写穿。
     pub model_overrides: Arc<crate::model_override::ModelOverrideStore>,
-    /// 会话级整理模式存储（M4 §3.38①）：旁车持久 + 缓存；未显式设置
-    /// 会话跟随开发者缺省档，session_set_organizer 命令写穿。
-    pub organizer_modes: Arc<crate::organizer_mode::OrganizerModeStore>,
     /// 树会话组装器（M4 §3.38②）：TreeContextSource 实现（同时注册进
     /// 内核服务表）；run_turn 用量口径按组装后估算消费。
     pub tree_assembler: Arc<crate::organize::TreeAssembler>,
@@ -58,10 +55,7 @@ pub struct AppState {
     pub last_chat: Arc<RwLock<Option<String>>>,
     /// 设置存储（§13.1）。Arc 共享给 AppLlm（每请求重读，改动即生效）。
     pub settings: Arc<SettingsStore>,
-    /// ctx-compact 的活配置（kernel-agent 侧只认 CompactConfig）。settings_set
-    /// 成功后由命令层换入新值——压缩行为随即生效，无需重启。
-    pub compact_cfg: Arc<RwLock<CompactConfig>>,
-    /// Memory-Inject 的活配置（⑪，同 compact_cfg 的换入模式）。
+    /// Memory-Inject 的活配置（⑪，settings_set 换入模式）。
     pub memory_cfg: Arc<RwLock<MemoryInjectConfig>>,
     /// 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
     pub memory: Arc<MemoryStore>,

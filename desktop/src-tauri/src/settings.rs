@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use kernel_agent::{CompactConfig, MemoryInjectConfig};
+use kernel_agent::MemoryInjectConfig;
 use serde::{Deserialize, Serialize};
 
 mod appearance;
@@ -26,13 +26,13 @@ mod view;
 
 pub use appearance::{AppearanceSettings, AppearanceUpdate, AppearanceView};
 pub use chat::{ChatSettings, ChatUpdate, ChatView};
-pub use context::{ContextSettings, ContextSettingsView, ContextUpdate, STABILITY_ROUNDS_RANGE};
+pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
 pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{
-    new_profile_id, synthesize_view, synthesize_view_raw, validate_headers, LlmConfig,
-    LlmSettings, LlmSettingsView, LlmUpdate, NetworkProxy, ProviderInput, ProviderModel,
-    ProviderModelView, ProviderProfile, ProviderView, SubagentPin, PROVIDERS,
+    new_profile_id, session_window, synthesize_view, synthesize_view_raw, validate_headers,
+    LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, NetworkProxy, ProviderInput,
+    ProviderModel, ProviderModelView, ProviderProfile, ProviderView, SubagentPin, PROVIDERS,
 };
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use multimodal::{MultimodalSettings, MultimodalUpdate, MultimodalView};
@@ -48,9 +48,6 @@ pub const LOCALE_SYSTEM: &str = "system";
 const LOCALES: [&str; 3] = [LOCALE_SYSTEM, "zh-CN", "en"];
 /// 全局快捷键缺省值（tray.rs 启动注册用；settings.json `shortcut`）。
 pub const SHORTCUT_DEFAULT: &str = "Ctrl+Shift+L";
-/// 模型窗口未设置时的保守回落：沿用 v2.14 固定 32k 保护（Context 文档
-/// §3.2 的窗口 × 百分比语义要等窗口已知才成立）。
-pub const FALLBACK_WINDOW_TOKENS: u64 = 32_000;
 
 const FILE_NAME: &str = "settings.json";
 
@@ -70,8 +67,8 @@ pub struct AppSettings {
     pub llm: LlmConfig,
     /// embedding 模型区（⑬ 智能层共享基建；类型见 `embedding` 子模块）。
     pub embedding: EmbeddingSettings,
-    /// 上下文管理区（⑨）。字段级缺省：旧 settings.json 无此字段时取默认
-    /// （窗口未设置 / 阈值 30% / 分层保留）。
+    /// 上下文管理区（⑨）。字段级缺省：旧 settings.json 无此区时取默认
+    /// （窗口未设置 / 整理阈值 100K / 进度条开；v2.137 前的旧键幻影）。
     pub context: ContextSettings,
     /// 记忆注入区（⑪，类型见 `memory` 子模块）。
     pub memory: MemorySettings,
@@ -260,42 +257,14 @@ impl SettingsStore {
             .clone()
     }
 
-    /// 后端专用：上下文管理设置快照（runner 进度条 / compact 配置换入用）。
-    pub fn context(&self) -> ContextSettings {
+    /// 后端专用：整理阈值（绝对 token，v2.137——「上下文达到多少 K 就
+    /// 整理」；UsagePolicy / 记忆树批量触发同源，不再折算窗口百分比）。
+    pub fn organize_threshold_tokens(&self) -> u64 {
         self.inner
             .lock()
             .expect("settings poisoned")
             .context
-            .clone()
-    }
-
-    /// 后端专用：生效窗口（S2 llm 活动档优先；context 旧字段兜底——正常路径 open() 迁移后恒为 None）。None = 未设置。
-    pub fn effective_window(&self) -> Option<u64> {
-        let s = self.inner.lock().expect("settings poisoned");
-        s.llm.flat().window_tokens.or(s.context.window_tokens)
-    }
-
-    /// 后端专用：生效阈值绝对值（runner UsagePolicy / ctx-compact 判定
-    /// 同源）。窗口未知回落 FALLBACK_WINDOW_TOKENS 保守保护。
-    pub fn effective_threshold_tokens(&self) -> u64 {
-        let s = self.inner.lock().expect("settings poisoned");
-        let window = s
-            .llm
-            .flat()
-            .window_tokens
-            .or(s.context.window_tokens)
-            .unwrap_or(FALLBACK_WINDOW_TOKENS);
-        s.context.effective_threshold(window)
-    }
-
-    /// 后端专用：生效压缩配置（ctx-compact 共享锁的内容物）。
-    pub fn compact_config(&self) -> CompactConfig {
-        let c = self.context();
-        CompactConfig {
-            threshold_tokens: self.effective_threshold_tokens(),
-            strategy: c.strategy,
-            stability_rounds: c.stability_rounds,
-        }
+            .threshold_tokens
     }
 
     /// 后端专用：记忆注入活配置（MemoryInject 共享锁的内容物，⑪）。
@@ -360,13 +329,6 @@ impl SettingsStore {
     pub fn collapse_config(&self) -> (bool, u8) {
         let m = self.memory();
         (m.collapse_enabled, m.collapse_threshold_pct)
-    }
-
-    /// 后端专用：未显式设置会话的缺省整理模式（M5 阶段 3 起用户层
-    /// memory 区，缺省 tree——阶段 2 曾在 developer 区，键已退役）。
-    pub fn default_organizer(&self) -> crate::organizer_mode::OrganizerMode {
-        crate::organizer_mode::OrganizerMode::parse(&self.memory().default_organizer)
-            .unwrap_or_default()
     }
 }
 

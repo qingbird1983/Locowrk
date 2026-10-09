@@ -7,13 +7,12 @@ use std::path::Path;
 use super::{
     synthesize_view, AppSettings, AppearanceView, ChatView, ContextSettingsView, DeveloperView,
     EmbeddingView, LlmSettingsView, MemorySettingsView, MultimodalView, PluginsView,
-    ProviderView, SettingsView, ShellSettingsView, ToolsSettingsView, FALLBACK_WINDOW_TOKENS,
+    ProviderView, SettingsView, ShellSettingsView, ToolsSettingsView,
 };
 
 pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
-    // S2：窗口以 llm 活动档为准（context 旧字段只在迁移前的旧文件里出现）
+    // S2：llm 平面投影（窗口等档位原样；v2.137 起 context 投影不再吃窗口）
     let flat = s.llm.flat();
-    let window = flat.window_tokens.or(s.context.window_tokens);
     SettingsView {
         locale: s.locale.clone(),
         appearance: AppearanceView {
@@ -57,14 +56,8 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             api_key_set: s.embedding.api_key.is_some(),
         },
         context: ContextSettingsView {
-            threshold_pct: s.context.threshold_pct,
-            strategy: s.context.strategy,
-            stability_rounds: s.context.stability_rounds,
+            threshold_tokens: s.context.threshold_tokens,
             usage_bar: s.context.usage_bar,
-            threshold_tokens: s
-                .context
-                .effective_threshold(window.unwrap_or(FALLBACK_WINDOW_TOKENS)),
-            suggested_pct: s.context.suggested_pct(window),
         },
         memory: MemorySettingsView {
             enabled: s.memory.enabled,
@@ -79,7 +72,6 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             collapse_threshold_pct: s.memory.collapse_threshold_pct,
             files: s.memory.files,
             repo_context: s.memory.repo_context,
-            default_organizer: s.memory.default_organizer.clone(),
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,
@@ -105,8 +97,6 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             usage_readout: s.chat.usage_readout.clone(),
             auto_title: s.chat.auto_title,
             cache_stats: s.chat.cache_stats,
-            cache_hit_price: s.chat.cache_hit_price,
-            cache_miss_price: s.chat.cache_miss_price,
             fold_long_messages: s.chat.fold_long_messages,
             fold_lines: s.chat.fold_lines,
         },

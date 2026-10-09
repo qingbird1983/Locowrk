@@ -15,13 +15,6 @@ pub const USAGE_READOUT_USED: &str = "used";
 /// 上下文用量读数口径：剩余。
 pub const USAGE_READOUT_REMAINING: &str = "remaining";
 const USAGE_READOUTS: [&str; 2] = [USAGE_READOUT_USED, USAGE_READOUT_REMAINING];
-/// 缓存命中单价缺省（元/百万 tokens，deepseek-flash 空闲价；KV v2 §7.2）。
-pub const CACHE_HIT_PRICE_DEFAULT: f64 = 0.02;
-/// 缓存未命中单价缺省（元/百万 tokens）。价差 = 省钱估算的来源（命中约
-/// 为未命中的 1/50）。
-pub const CACHE_MISS_PRICE_DEFAULT: f64 = 1.0;
-/// 单价存取上限（元/百万 tokens）：只防显然离谱的值，真实价格远低于此。
-pub const PRICE_MAX: f64 = 10_000.0;
 /// 长消息折叠行数下限（组件规格 §六：3 行）。
 pub const FOLD_LINES_MIN: u32 = 3;
 /// 长消息折叠行数上限（组件规格 §六：20 行）。
@@ -46,13 +39,10 @@ pub struct ChatSettings {
     /// 调用生成 ≤25 字标题（替代首条截断）；用户手动重命名过（旁车有
     /// title 字段）永不覆盖。关 = 恢复首条截断。
     pub auto_title: bool,
-    /// 缓存命中率/节省显示（M0 观测，KV v2 §7，缺省开）：用量浮层
-    /// 「会话累计」行的显隐。
+    /// 缓存命中率显示（M0 观测，KV v2 §7，缺省开）：用量浮层「会话累计」
+    /// 行的显隐。v2.137：节省估算随两档单价设置一并退役（单价要用户手填
+    /// = 无用负担；真实价格模型各异，不发明全局估算）。
     pub cache_stats: bool,
-    /// 缓存命中单价（元/百万 tokens）：节省估算 = 命中 × (未命中价 − 命中价)。
-    pub cache_hit_price: f64,
-    /// 缓存未命中单价（元/百万 tokens）。
-    pub cache_miss_price: f64,
     /// 长消息折叠（组件规格「Line Clamp with Fade Mask」，缺省开）：用户
     /// 消息与助手长文超过 `fold_lines` 行自动收起（渐变遮罩 + 圆形展开钮）。
     pub fold_long_messages: bool,
@@ -69,8 +59,6 @@ impl Default for ChatSettings {
             usage_readout: USAGE_READOUT_USED.into(),
             auto_title: true,
             cache_stats: true,
-            cache_hit_price: CACHE_HIT_PRICE_DEFAULT,
-            cache_miss_price: CACHE_MISS_PRICE_DEFAULT,
             fold_long_messages: true,
             fold_lines: 5,
         }
@@ -87,8 +75,6 @@ pub struct ChatView {
     pub usage_readout: String,
     pub auto_title: bool,
     pub cache_stats: bool,
-    pub cache_hit_price: f64,
-    pub cache_miss_price: f64,
     pub fold_long_messages: bool,
     pub fold_lines: u32,
 }
@@ -103,8 +89,6 @@ pub struct ChatUpdate {
     pub usage_readout: Option<String>,
     pub auto_title: Option<bool>,
     pub cache_stats: Option<bool>,
-    pub cache_hit_price: Option<f64>,
-    pub cache_miss_price: Option<f64>,
     pub fold_long_messages: Option<bool>,
     pub fold_lines: Option<u32>,
 }
@@ -112,11 +96,6 @@ pub struct ChatUpdate {
 /// 合法性检查（update.rs 校验用）。
 pub fn valid_usage_readout(v: &str) -> bool {
     USAGE_READOUTS.contains(&v)
-}
-
-/// 单价合法性：有限且在 [0, PRICE_MAX]。
-pub fn valid_price(v: f64) -> bool {
-    v.is_finite() && (0.0..=PRICE_MAX).contains(&v)
 }
 
 /// 折叠行数合法性（组件规格 §六：3–20 行）。
@@ -152,21 +131,9 @@ pub fn apply_update(next: &mut ChatSettings, u: ChatUpdate) -> Result<(), String
     if let Some(a) = u.auto_title {
         next.auto_title = a;
     }
-    // M0 观测（KV v2 §7）：命中率显示开关 + 节省估算单价
+    // M0 观测（KV v2 §7）：命中率显示开关（v2.137 单价两键退役）
     if let Some(e) = u.cache_stats {
         next.cache_stats = e;
-    }
-    if let Some(p) = u.cache_hit_price {
-        if !valid_price(p) {
-            return Err(format!("缓存命中单价 {p} 超出范围（0–{PRICE_MAX}）"));
-        }
-        next.cache_hit_price = p;
-    }
-    if let Some(p) = u.cache_miss_price {
-        if !valid_price(p) {
-            return Err(format!("缓存未命中单价 {p} 超出范围（0–{PRICE_MAX}）"));
-        }
-        next.cache_miss_price = p;
     }
     // 长消息折叠（组件规格）：开关 + 行数（3–20）
     if let Some(e) = u.fold_long_messages {

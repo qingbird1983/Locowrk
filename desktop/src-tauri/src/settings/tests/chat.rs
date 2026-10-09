@@ -12,16 +12,8 @@ fn chat_defaults_and_legacy_compat() {
     assert!(!v.collapse_tool_process);
     assert!(v.enter_to_send);
     assert_eq!(v.usage_readout, "used");
-    // M0 观测缺省：显示开 + deepseek-flash 空闲价（0.02 / 1.0 元每百万）
+    // M0 观测缺省：显示开（v2.137 两档单价退役为幻影键）
     assert!(v.cache_stats);
-    assert_eq!(
-        v.cache_hit_price,
-        super::super::chat::CACHE_HIT_PRICE_DEFAULT
-    );
-    assert_eq!(
-        v.cache_miss_price,
-        super::super::chat::CACHE_MISS_PRICE_DEFAULT
-    );
     // 长消息折叠缺省：开 + 5 行
     assert!(v.fold_long_messages);
     assert_eq!(v.fold_lines, 5);
@@ -64,8 +56,6 @@ fn chat_update_persists_and_roundtrips() {
                 usage_readout: Some("remaining".into()),
                 auto_title: Some(false),
                 cache_stats: Some(false),
-                cache_hit_price: Some(0.01),
-                cache_miss_price: Some(2.0),
                 fold_long_messages: Some(false),
                 fold_lines: Some(12),
             }),
@@ -81,16 +71,12 @@ fn chat_update_persists_and_roundtrips() {
     assert_eq!(v.usage_readout, "remaining");
     assert!(!v.auto_title, "显式关闭生效");
     assert!(!v.cache_stats);
-    assert_eq!(v.cache_hit_price, 0.01);
-    assert_eq!(v.cache_miss_price, 2.0);
     assert!(!v.fold_long_messages, "显式关闭生效");
     assert_eq!(v.fold_lines, 12);
     // 磁盘往返
     let v = SettingsStore::open(&root).unwrap().view().chat;
     assert_eq!(v.content_max_width, Some(1000));
     assert_eq!(v.usage_readout, "remaining");
-    assert_eq!(v.cache_hit_price, 0.01);
-    assert_eq!(v.cache_miss_price, 2.0);
     assert_eq!(v.fold_lines, 12);
     // 部分更新：None 字段保持不变
     let v = store
@@ -112,8 +98,6 @@ fn chat_update_persists_and_roundtrips() {
                 usage_readout: None,
                 auto_title: None,
                 cache_stats: None,
-                cache_hit_price: None,
-                cache_miss_price: None,
                 fold_long_messages: None,
                 fold_lines: None,
             }),
@@ -152,8 +136,6 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 usage_readout: None,
                 auto_title: None,
                 cache_stats: None,
-                cache_hit_price: None,
-                cache_miss_price: None,
                 fold_long_messages: None,
                 fold_lines: None,
             }),
@@ -181,8 +163,6 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
                 usage_readout: Some("total".into()),
                 auto_title: None,
                 cache_stats: None,
-                cache_hit_price: None,
-                cache_miss_price: None,
                 fold_long_messages: None,
                 fold_lines: None,
             }),
@@ -193,86 +173,6 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
         .is_err());
     // 失败不污染内存态
     assert_eq!(store.view().chat.content_max_width, None);
-    std::fs::remove_dir_all(&root).ok();
-}
-
-#[test]
-fn chat_rejects_invalid_price_and_keeps_state() {
-    let root = temp_root("chat-price-invalid");
-    let store = SettingsStore::open(&root).unwrap();
-    let reject = |hit: Option<f64>, miss: Option<f64>| {
-        store
-            .update(
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(ChatUpdate {
-                    content_max_width: None,
-                    collapse_tool_process: None,
-                    enter_to_send: None,
-                    usage_readout: None,
-                    auto_title: None,
-                    cache_stats: None,
-                    cache_hit_price: hit,
-                    cache_miss_price: miss,
-                    fold_long_messages: None,
-                    fold_lines: None,
-                }),
-                None,
-                None,
-                        None,
-)
-            .is_err()
-    };
-    assert!(reject(Some(-0.01), None), "负单价拒绝");
-    assert!(reject(None, Some(10_001.0)), "超上限拒绝");
-    // 拒绝不污染内存态：单价仍是缺省
-    let v = store.view().chat;
-    assert_eq!(
-        v.cache_hit_price,
-        super::super::chat::CACHE_HIT_PRICE_DEFAULT
-    );
-    assert_eq!(
-        v.cache_miss_price,
-        super::super::chat::CACHE_MISS_PRICE_DEFAULT
-    );
-    // 0 合法（免单价场景）；上限值合法
-    store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(ChatUpdate {
-                content_max_width: None,
-                collapse_tool_process: None,
-                enter_to_send: None,
-                usage_readout: None,
-                auto_title: None,
-                cache_stats: None,
-                cache_hit_price: Some(0.0),
-                cache_miss_price: Some(super::super::chat::PRICE_MAX),
-                fold_long_messages: None,
-                fold_lines: None,
-            }),
-            None,
-            None,
-                None,
-)
-        .unwrap();
     std::fs::remove_dir_all(&root).ok();
 }
 
@@ -300,8 +200,6 @@ fn chat_rejects_bad_fold_lines_and_keeps_state() {
                     usage_readout: None,
                     auto_title: None,
                     cache_stats: None,
-                    cache_hit_price: None,
-                    cache_miss_price: None,
                     fold_long_messages: None,
                     fold_lines: n,
                 }),

@@ -164,8 +164,6 @@ export interface SessionMeta {
   /** v2.58 §3.30 会话级模型覆盖（成对；null = 跟随设置缺省）。 */
   model: string | null;
   modelProvider: string | null;
-  /** M4 §3.38 会话级整理模式（null = 跟随开发者缺省档）。 */
-  organizer: "legacy" | "tree" | null;
   /** 批 B 会话级推理档位（null = 未设置，模型走自家缺省）。 */
   thinkingLevel: string | null;
 }
@@ -480,12 +478,8 @@ export interface ChatSettingsView {
   usageReadout: string;
   /** 自动会话标题（v2.57，缺省开）。 */
   autoTitle: boolean;
-  /** 缓存命中率/节省显示（M0 观测，缺省开）。 */
+  /** 缓存命中率显示（M0 观测，缺省开；v2.137 单价两键退役）。 */
   cacheStats: boolean;
-  /** 缓存命中单价（元/百万 tokens）。 */
-  cacheHitPrice: number;
-  /** 缓存未命中单价（元/百万 tokens）。 */
-  cacheMissPrice: number;
   /** 长消息折叠（缺省开）：超过 foldLines 行收起 + 遮罩 + 展开钮。 */
   foldLongMessages: boolean;
   /** 长消息折叠行数（3–20，缺省 5）。 */
@@ -500,8 +494,6 @@ export interface ChatUpdate {
   usageReadout?: string;
   autoTitle?: boolean;
   cacheStats?: boolean;
-  cacheHitPrice?: number;
-  cacheMissPrice?: number;
   foldLongMessages?: boolean;
   foldLines?: number;
 }
@@ -530,8 +522,6 @@ export interface MemorySettingsView {
   files: boolean;
   /** F2 交接提醒（缺省开，v2.136 提醒制）：归属会话注入静态提醒段。 */
   repoContext: boolean;
-  /** M5 会话缺省整理模式（未显式设置会话跟随此档；缺省 tree——阶段 3 裁定）。 */
-  defaultOrganizer: string;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -549,7 +539,6 @@ export interface MemoryUpdate {
   collapseThresholdPct?: number;
   files?: boolean;
   repoContext?: boolean;
-  defaultOrganizer?: string;
 }
 
 /** 前缀断裂诊断报告（M6.1，llm_cache_diagnose；breaks 空 = 健康纯追加）。 */
@@ -676,8 +665,8 @@ export interface TreeDebug {
   tailTokensEst: number;
   anchorTokens: number;
   anchorSource: "llm_usage" | "estimate";
-  thresholdPct: number;
-  windowTokens: number;
+  /** 整理阈值（绝对 token，v2.137）。 */
+  thresholdTokens: number;
   pacing: "batch" | "incremental";
   chunkTokens: number;
   pausedAuto: boolean;
@@ -792,27 +781,18 @@ export interface MemoryRow {
   updated_at: number;
 }
 
-/** 上下文管理区投影（⑨）：设置原值 + 生效值（阈值绝对数 / 建议百分比）
- * 后端一并算好，前端不做第二套换算。 */
+/** 上下文管理区投影（⑨；v2.137 整理阈值 = 绝对 token——「上下文达到
+ * 多少 K 就整理」，百分比/策略/稳定期三键随 ctx-compact 桌面链退役）。 */
 export interface ContextSettingsView {
-  /** 窗口不在本区（S2 迁 llm 区）；窗口未知时后端按 32k 保守保护。 */
-  thresholdPct: number;
-  /** "sliding_window" | "layered" | "summary_only"。 */
-  strategy: string;
-  /** 稳定期轮数（KV v2 §6.4，1–10，缺省 3）。 */
-  stabilityRounds: number;
-  /** 上下文用量进度条显隐（v4.18，缺省开）。 */
-  usageBar: boolean;
+  /** 整理阈值（绝对 token，100K–800K 缺省 100K）。 */
   thresholdTokens: number;
-  /** 建议阈值百分比；null = 窗口未知，UI 隐藏建议行。 */
-  suggestedPct: number | null;
+  /** 阈值用量进度条显隐（v4.18，缺省开）。 */
+  usageBar: boolean;
 }
 
-/** 上下文管理区部分更新（S2 起只含阈值与策略；窗口走 LlmUpdate）。 */
+/** 上下文管理区部分更新（窗口走 LlmUpdate）。 */
 export interface ContextUpdate {
-  thresholdPct?: number;
-  strategy?: string;
-  stabilityRounds?: number;
+  thresholdTokens?: number;
   usageBar?: boolean;
 }
 

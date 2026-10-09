@@ -21,7 +21,6 @@ use memory_tree::{
 };
 use session_store::{Session, SessionEvent};
 
-use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 use crate::settings::SettingsStore;
 use crate::settings::TailStrategy;
 use crate::workspace::WorkspaceResolver;
@@ -81,8 +80,9 @@ pub struct Organizer {
     tree_store: TreeStore,
     /// F1 人类层：整理落树后同步项目 tree.md（人读面，文件化设计 §3）。
     files: crate::memory_files::MemoryFiles,
-    /// 会话整理模式（M4 切流：溢出整理 / 自动收起只作用树会话）。
-    modes: Arc<OrganizerModeStore>,
+    /// v2.137 会话生效窗口四层链的数据源（自动收起的占用锚点口径）。
+    model_overrides: Arc<crate::model_override::ModelOverrideStore>,
+    catalog: Arc<crate::llm::catalog::CatalogStore>,
     /// 会话级在途去重（进程内；跨重启由投影 pending 字段守卫）。
     inflight: StdMutex<HashSet<String>>,
     /// 整理系统消息推送（M3 §3.37③；测试传哑闭包 = 静默）。
@@ -120,7 +120,8 @@ impl Organizer {
         client: Arc<dyn MemoryManagerClient>,
         workspace_of: WorkspaceResolver,
         data_root: PathBuf,
-        modes: Arc<OrganizerModeStore>,
+        model_overrides: Arc<crate::model_override::ModelOverrideStore>,
+        catalog: Arc<crate::llm::catalog::CatalogStore>,
         notifier: OrganizeNotifier,
     ) -> Self {
         Self {
@@ -130,7 +131,8 @@ impl Organizer {
             workspace_of,
             tree_store: TreeStore::new(&data_root),
             files: crate::memory_files::MemoryFiles::new(&data_root),
-            modes,
+            model_overrides,
+            catalog,
             inflight: StdMutex::new(HashSet::new()),
             notifier,
         }
@@ -227,18 +229,15 @@ impl Organizer {
     /// 自动触发决策（轮次收束后、持有会话锁的同步上下文调用）。写路径：
     /// 反弹账本落投影文件；返回 None = 不整理。
     pub(crate) fn plan_auto(&self, session: &Session, session_id: &str) -> Option<TaskPayload> {
-        let ctx = self.settings.context();
         let mem = self.settings.memory();
         let dev = self.settings.developer();
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let mut tree = self.load_tree(&workspace, session_id);
-        // M4 模式 B 溢出整理（§3.38②）：树会话 + 固定窗口档，窗口滑出的
+        // M4 模式 B 溢出整理（§3.38②）：固定窗口档，窗口滑出的
         // 孤儿轮（chaptered_until < 窗口起点）既不在尾巴也不在目录，必须及时
         // 归章节——例行维护：**先于熔断判定**（熔断暂停的是阈值/增量烧钱信号，
         // 不是固定节奏）且**不记反弹**（管道按 reason 跳过 note_organized）。
-        if self.modes.mode_of(Some(session_id)) == OrganizerMode::Tree
-            && self.settings.tail_config().0 == TailStrategy::Window
-            && tree.pending.is_none()
+        if self.settings.tail_config().0 == TailStrategy::Window && tree.pending.is_none()
         {
             let start = window_start_event(session.events(), mem.tail_window_turns);
             if tree.chaptered_until < start && start > 0 {
@@ -265,8 +264,7 @@ impl Organizer {
         let reason = should_auto_organize(&TriggerInput {
             anchor_source,
             anchor_tokens,
-            window_tokens: self.settings.effective_window().unwrap_or(0),
-            threshold_pct: ctx.threshold_pct,
+            threshold_tokens: self.settings.organize_threshold_tokens(),
             pacing: Pacing::parse(&mem.organize_pacing),
             chunk_tokens: mem.organize_chunk_tokens,
             tail_tokens,
@@ -335,18 +333,20 @@ impl Organizer {
         }
     }
 
-    /// 自动收起（M4 §8.3，缺省关）：树会话 + collapse 开启 + 占用 ≥ 阈值
-    /// → 收起最早展开的章节（一次一个，逐步泄压）。窗口未知不猜口径；
-    /// legacy 会话零参与。
+    /// 自动收起（M4 §8.3，缺省关）：collapse 开启 + 占用 ≥ 会话生效窗口
+    /// 阈值 → 收起最早展开的章节（一次一个，逐步泄压）。窗口走 v2.137
+    /// 四层链自动识别（模型行 ?? 目录 ?? 档位）；全未知不猜口径。
     fn auto_collapse(&self, session: &Session, session_id: &str) {
-        if self.modes.mode_of(Some(session_id)) != OrganizerMode::Tree {
-            return;
-        }
         let (enabled, threshold_pct) = self.settings.collapse_config();
         if !enabled {
             return;
         }
-        let Some(window) = self.settings.effective_window() else {
+        let ov = self.model_overrides.get(session_id);
+        let Some(window) = crate::settings::session_window(
+            &self.settings.llm_config(),
+            ov.as_ref(),
+            Some(&self.catalog),
+        ) else {
             return;
         };
         if window == 0 {
@@ -580,13 +580,14 @@ mod tests;
 /// 组装点构造（state/init_state 调用）：记忆管理器客户端 = 设置路由的兼容
 /// 直呼；㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）；
 /// 事件推送闭包由 state 组装（emit 调用留在 state/mod.rs，见其注释）；
-/// M4 起持整理模式存储（溢出整理 / 自动收起的会话门控）。
+/// v2.137 起持模型覆盖旁车 + 目录（自动收起的生效窗口四层链）。
 pub fn build_organizer(
     settings: Arc<SettingsStore>,
     sessions_dir: PathBuf,
     workspace_of: WorkspaceResolver,
     data_root: PathBuf,
-    modes: Arc<OrganizerModeStore>,
+    model_overrides: Arc<crate::model_override::ModelOverrideStore>,
+    catalog: Arc<crate::llm::catalog::CatalogStore>,
     notifier: OrganizeNotifier,
 ) -> Arc<Organizer> {
     Arc::new(Organizer::new(
@@ -595,7 +596,8 @@ pub fn build_organizer(
         Arc::new(AppLlmMemoryManager::new(settings)),
         workspace_of,
         data_root,
-        modes,
+        model_overrides,
+        catalog,
         notifier,
     ))
 }

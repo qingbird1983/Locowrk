@@ -29,7 +29,6 @@ const form = reactive({
   collapseThresholdPct: 80,
   files: true,
   repoContext: true,
-  defaultOrganizer: "tree",
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
@@ -42,12 +41,6 @@ const pacingOptions = [
 const tailOptions = [
   { value: "boundary", label: t("settings.tailStrategyBoundary") },
   { value: "window", label: t("settings.tailStrategyWindow") },
-];
-
-// M5 缺省整理方式二档（树 v2 §11.2 阶段 3：缺省 tree，自开发者区迁入）
-const organizerOptions = [
-  { value: "legacy", label: t("settings.organizerLegacy") },
-  { value: "tree", label: t("settings.organizerTree") },
 ];
 
 watch(
@@ -64,7 +57,6 @@ watch(
     form.collapseThresholdPct = v.memory.collapseThresholdPct;
     form.files = v.memory.files;
     form.repoContext = v.memory.repoContext;
-    form.defaultOrganizer = v.memory.defaultOrganizer;
   },
   { immediate: true },
 );
@@ -81,7 +73,6 @@ function save() {
     collapseThresholdPct: Math.round(form.collapseThresholdPct),
     files: form.files,
     repoContext: form.repoContext,
-    defaultOrganizer: form.defaultOrganizer,
   });
 }
 </script>
@@ -120,19 +111,6 @@ function save() {
         :label="t('settings.memoryRepoContext')"
       />
     </SettingsRow>
-    <!-- M5 缺省整理方式（树 v2 §11.2 阶段 3：缺省记忆树，未显式设置
-         的会话跟随此档热换；自开发者区迁入用户层） -->
-    <SettingsRow
-      :title="t('settings.defaultOrganizer')"
-      :hint="t('settings.defaultOrganizerHint')"
-    >
-      <SettingsSegmented
-        v-model="form.defaultOrganizer"
-        :options="organizerOptions"
-        :label="t('settings.defaultOrganizer')"
-      />
-    </SettingsRow>
-
     <!-- M2 记忆树整理（树 v2 §4.3/§15）：节奏二档 + 增量块 X（增量档显示） -->
     <SettingsRow
       :title="t('settings.organizePacing')"

@@ -100,9 +100,10 @@ fn organizer(
         client,
         resolver(),
         root.to_path_buf(),
-        Arc::new(crate::organizer_mode::OrganizerModeStore::new(
-            root.join("sessions"),
-            crate::organizer_mode::OrganizerMode::Legacy,
+        Arc::new(crate::model_override::ModelOverrideStore::new(root.join("sessions"))),
+        // 目录缺席 = 空快照（测试不依赖目录能力面）
+        Arc::new(crate::llm::catalog::CatalogStore::new(
+            std::env::temp_dir().join("organize-tests-catalog-absent"),
         )),
         std::sync::Arc::new(|_, _| {}), // 哑通知（不触 emit）
     ))
@@ -314,28 +315,16 @@ async fn view_bundles_and_original_read_from_disk() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-// ---- M4 按会话切流：模式 B 溢出整理（不记反弹 / 熔断不受限）+ 自动收起 ----
+// ---- M4 模式 B 溢出整理（不记反弹 / 熔断不受限）+ 自动收起 ----
+// （v2.137 起一切会话皆树，tree_organizer 与 organizer 同形，保留别名语义）
 
-use crate::organizer_mode::OrganizerMode as Mode;
-
-/// 树模式编排器（organizer() 辅助硬编码 Legacy，溢出/收起要 Tree 档）。
+/// 树模式编排器（历史上溢出/收起要 Tree 档；v2.137 后与 organizer 同构）。
 fn tree_organizer(
     root: &std::path::Path,
     settings: Arc<SettingsStore>,
     client: Arc<dyn MemoryManagerClient>,
 ) -> Arc<Organizer> {
-    Arc::new(Organizer::new(
-        settings,
-        root.join("sessions"),
-        client,
-        resolver(),
-        root.to_path_buf(),
-        Arc::new(crate::organizer_mode::OrganizerModeStore::new(
-            root.join("sessions"),
-            Mode::Tree,
-        )),
-        std::sync::Arc::new(|_, _| {}),
-    ))
+    organizer(root, settings, client)
 }
 
 /// 十二轮会话（溢出窗口的孤儿轮素材）。
@@ -429,14 +418,19 @@ async fn overflow_respects_pending_and_legacy_mode() {
 #[tokio::test]
 async fn auto_collapse_relieves_oldest_expanded() {
     let root = temp_root("autocollapse");
-    // thresholdPct 90：把「自动整理」触发阈值抬到本测锚点之上——本测
-    // 只验收起，若 600/1000 也过整理线，after_turn 会经 tauri::async_
-    // runtime（独立全局 runtime，不受测试单线程 tokio 约束）派生整理
-    // 任务，FakeClient 空队列秒失败走规则降级、重建章节抹掉 collapsed_
-    // at 回写，与本测读盘竞速（真实 flaky 根因，2026-10-06 定位）。
+    // 窗口经 llm 档给出（v2.137 自动收起走 session_window 四层链——
+    // 模型行缺席时回落档位 window_tokens，但要求模型名非空）；
+    // thresholdTokens 900：把「自动整理」触发线抬到本测锚点之上——本测
+    // 只验收起，若 600 也过整理线，after_turn 会经 tauri::async_runtime
+    // （独立全局 runtime，不受测试单线程 tokio 约束）派生整理任务，
+    // FakeClient 空队列秒失败走规则降级、重建章节抹掉 collapsed_at 回写，
+    // 与本测读盘竞速（真实 flaky 根因，2026-10-06 定位）。
     let settings = settings_with(
         serde_json::json!({
-            "context": {"windowTokens": 1000, "thresholdPct": 90},
+            "llm": {"active": "p1", "providers": [
+                {"id": "p1", "label": "t", "kind": "openai", "model": "m",
+                 "windowTokens": 1000, "enabled": true}]},
+            "context": {"thresholdTokens": 900},
             "memory": {"collapseEnabled": true, "collapseThresholdPct": 50}
         }),
         &root,
@@ -492,9 +486,9 @@ async fn auto_collapse_relieves_oldest_expanded() {
     );
     assert_eq!(t.oldest_expanded(), None);
 
-    // legacy 会话零参与
-    let legacy_org = organizer(&root, Arc::clone(&settings), FakeClient::new(vec![]));
-    legacy_org.after_turn(&session, "s-legacy");
+    // 无树会话零参与（v2.137 起一切会话皆树，本行退化为空投影冒烟）
+    let other_org = organizer(&root, Arc::clone(&settings), FakeClient::new(vec![]));
+    other_org.after_turn(&session, "s-other");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -587,7 +581,7 @@ async fn project_view_flattens_across_sessions() {
 }
 
 #[tokio::test]
-async fn search_titles_requires_tree_session_and_falls_back_to_keyword() {
+async fn search_titles_falls_back_to_keyword_without_embedding() {
     let root = temp_root("titles");
     let settings = settings_with(serde_json::json!({}), &root);
     let org = organizer(&root, settings, FakeClient::new(vec![Ok(good_reply())]));
@@ -595,18 +589,9 @@ async fn search_titles_requires_tree_session_and_falls_back_to_keyword() {
     let task = org.plan_manual(&session, "s-st").expect("发起成功");
     org.clone().run_task(task).await;
 
-    let modes = Arc::new(crate::organizer_mode::OrganizerModeStore::new(
-        root.join("sessions"),
-        crate::organizer_mode::OrganizerMode::Legacy,
-    ));
-    // s-st 显式切树（工具门控按生效档；夹具缺省 legacy）
-    modes
-        .set_session_mode("s-st", crate::organizer_mode::OrganizerMode::Tree)
-        .unwrap();
     let tool = crate::organize::SearchTitlesTool::new(
         memory_tree::TreeStore::new(&root),
         resolver(),
-        modes,
         None, // embedding 缺席 = 关键词降级
     );
     use plugin_api::{CallCtx, Tool as _};
@@ -620,12 +605,5 @@ async fn search_titles_requires_tree_session_and_falls_back_to_keyword() {
     assert_eq!(out["match_mode"], "keyword");
     assert_eq!(out["hits"].as_array().unwrap().len(), 1);
     assert_eq!(out["hits"][0]["title"], "话题一");
-    // legacy 会话调用 = 门控拒绝
-    let mut ctx2 = CallCtx::new();
-    ctx2.session_id = Some("s-legacy".into());
-    assert!(tool
-        .call(&ctx2, serde_json::json!({"query": "x"}))
-        .await
-        .is_err());
     let _ = std::fs::remove_dir_all(&root);
 }

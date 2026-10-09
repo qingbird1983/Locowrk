@@ -373,13 +373,6 @@ export function sessionSetPermissionMode(
 
 /** 会话级整理模式（M4 §3.38⑦）：写旁车 + 缓存，下一次请求按新档组装
  * （即时生效，事件流零改动）；mode 空串 = 清除（跟随开发者缺省档）。 */
-export function sessionSetOrganizer(
-  sessionId: string,
-  mode: "legacy" | "tree" | "",
-): Promise<void> {
-  return invoke("session_set_organizer", { sessionId, mode });
-}
-
 /** 会话级模型覆盖（v2.58 §3.30）：成对写旁车 + 缓存，下一轮即生效；
  * model 空串 = 清除覆盖（回落设置缺省）。 */
 export function sessionSetModel(

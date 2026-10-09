@@ -135,7 +135,6 @@ export default {
     expandRow: "记忆展开",
     expandCalls: "本会话 {n} 次",
     treeTail: "未整理尾巴 {n} tokens",
-    savings: "节省",
     cacheAlert:
       "缓存命中率跌破 {pct}%——可能发生了前缀断裂（工具集/系统提示变化或压缩）",
   },
@@ -217,8 +216,6 @@ export default {
       export: "导出",
       moveInto: "移入「{name}」",
       moveOut: "移出工作区",
-      organizerTree: "切换为记忆树整理",
-      organizerLegacy: "切换为标准整理",
       delete: "删除",
       confirmDelete: "确认删除？再点一次执行",
     },
@@ -366,9 +363,6 @@ export default {
   // 会话内系统消息（SystemNotice 模式）：文案是 UI 不是会话数据，store
   // 存 i18n key，渲染期翻译以跟随语言切换。
   toast: {
-    organizerTree: "已切换为记忆树整理（下一次对话生效）。",
-    organizerLegacy: "已切换为标准整理（下一次对话生效）。",
-    organizerFailed: "整理模式切换失败",
     exported: "已导出",
     exportFailed: "导出失败",
     deleted: "会话已删除",
@@ -540,7 +534,6 @@ export default {
     cacheEmpty: "供应商尚未报告缓存字段——发起对话后回来看。",
     cacheHitRate: "会话累计命中率：{pct}%（{steps} 步）",
     cacheHitMiss: "命中 / 未命中 / 总输入：{hit} / {miss} / {input} tokens",
-    cacheSavings: "按当前单价估算节省：{n}",
     cacheTurn: "本轮：输入 {input} · 命中 {hit} · 输出 {out}",
     cacheAlertTitle: "缓存命中率告警",
     // M6.1 断裂诊断（KV v2 §7.4）
@@ -581,7 +574,7 @@ export default {
     treeEmpty: "当前会话还没有记忆树投影（触发整理后出现）。",
     treeChapters: "章节：{n} / 已整理游标：事件 #{cursor}",
     treeTail: "未整理尾巴：{events} 个内容事件 ≈ {tokens} token",
-    treeAnchor: "占用锚点：{tokens} token（{source}）/ 阈值 {pct}% / {pacing}",
+    treeAnchor: "占用锚点：{tokens} token（{source}）/ 整理阈值 {threshold} / {pacing}",
     treeAnchorLlm: "真实上报",
     treeAnchorEstimate: "字符估算",
     treePacingBatch: "批量",
@@ -805,10 +798,7 @@ export default {
     usageReadout_used: "已用",
     usageReadout_remaining: "剩余",
     cacheStatsTitle: "缓存命中率显示",
-    cacheStatsHint: "用量浮层显示会话累计命中率与按单价估算的节省金额",
-    cacheHitPriceTitle: "缓存命中单价",
-    cacheMissPriceTitle: "缓存未命中单价",
-    cachePriceHint: "元/百万 tokens，用于节省估算（如 deepseek-flash 空闲价 0.02 / 1.0）",
+    cacheStatsHint: "用量浮层显示会话累计缓存命中率",
     llmTitle: "模型",
     llmHint: "API Key 只保存在本机，可配置多个服务商并随时切换模型。",
     provider: "提供商",
@@ -1004,11 +994,6 @@ export default {
     memoryEnabled: "自动注入记忆",
     memoryTopK: "每轮注入条数",
     memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
-    // M5 缺省整理方式（树 v2 §11.2 阶段 3：缺省记忆树，自开发者区迁入）
-    defaultOrganizer: "缺省整理方式",
-    defaultOrganizerHint: "没自己选过整理方式的会话默认用哪种；切换即时生效。",
-    organizerLegacy: "标准整理",
-    organizerTree: "记忆树整理",
     memoryFiles: "记忆文件化",
     memoryFilesHint: "把记忆同步存为 Markdown 文件，方便直接查看和修改。",
     memoryRepoContext: "交接提醒",
@@ -1080,31 +1065,16 @@ export default {
     fsRootsEmpty: "未添加工作区目录——工具仅能访问数据目录。",
     // ⑨ 上下文管理分区（真分区，替换壳批次占位）
     contextTitle: "上下文管理",
-    contextHint: "对话过长时自动压缩历史，阈值和策略可调，压缩可撤销。",
-    // S2（清单 §5 信息归属）：窗口属模型属性，键自上下文管理区迁来
-    window: "模型上下文窗口（token）",
-    windowUnset: "未设置（按 32k 保守保护）",
-    windowCustom: "自定义…",
-    windowCustomLabel: "窗口大小（token）",
-    windowDetect: "自动检测",
-    windowProbing: "检测中…",
-    windowDetectFail: "检测失败，请手动选择：",
-    threshold: "压缩阈值",
-    thresholdValue: "当前：{pct}% · {tokens} token",
-    thresholdSuggest: "ⓘ 建议 {pct}%",
-    thresholdSuggestHint: "（窗口越大，建议值越低）",
-    thresholdLowWarning: "更低的阈值可能导致压缩开销超过节省的成本",
-    thresholdOrganizeHint: "此滑条同时作为记忆树整理触发阈值（单旋钮，手动 /整理 不受此限）。",
-    strategy: "压缩策略",
-    strategy_sliding_window: "滑动窗口",
-    strategy_sliding_window_desc: "只保留最近消息，不调用模型",
-    strategy_layered: "分层保留",
-    strategy_layered_desc: "摘要 + 最近原文，推荐",
-    strategy_summary_only: "仅摘要",
-    strategy_summary_only_desc: "全部压缩成一段摘要",
-    // v4.18（§3.4）：上下文用量进度条显隐
-    usageBar: "上下文用量进度条",
-    usageBarHint: "会话区顶部的细进度条，显示当前上下文占用；读数详情见输入框用量环。",
+    contextHint: "上下文达到整理阈值时自动整理进记忆树；完整历史留在磁盘，可随时展开回看。",
+    // v2.137：整理阈值（绝对 token，100K–800K）——「上下文达到多少 K 就
+    // 整理」；压缩百分比/策略/稳定期随 ctx-compact 桌面链退役
+    threshold: "整理阈值",
+    thresholdValue: "当前：{n} tokens",
+    thresholdHint:
+      "对话上下文达到该 token 数即触发记忆树整理（手动 /整理 不受此限）。请勿超过所用模型的上下文窗口，否则会先撞上下文超限。",
+    // v4.18（§3.4）：阈值用量进度条显隐（v2.137 改名——分母 = 整理阈值）
+    usageBar: "阈值用量进度条",
+    usageBarHint: "会话区顶部的细进度条，按整理阈值计算用量百分比；读数详情见输入框用量环。",
   },
   error: {
     unknown: "发生错误",

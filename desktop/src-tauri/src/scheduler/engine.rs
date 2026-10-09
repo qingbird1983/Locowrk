@@ -85,6 +85,9 @@ pub(crate) struct EngineDeps {
     pub sink: Arc<dyn EventSink>,
     pub usage: Arc<UsageRecorder>,
     pub settings: Arc<SettingsStore>,
+    /// v2.137 会话生效窗口四层链的数据源（模型覆盖旁车 + 模型目录）。
+    pub model_overrides: Arc<crate::model_override::ModelOverrideStore>,
+    pub catalog: Arc<crate::llm::catalog::CatalogStore>,
     pub sessions: Arc<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>>,
     /// ⑲ 会话落盘目录：触发的轮次与手聊同一镜像（run_turn log 参数）。
     pub sessions_dir: std::path::PathBuf,
@@ -161,8 +164,13 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
     }
 
     let policy = UsagePolicy {
-        threshold_tokens: deps.settings.effective_threshold_tokens(),
-        window_tokens: deps.settings.effective_window().unwrap_or(0),
+        threshold_tokens: deps.settings.organize_threshold_tokens(),
+        window_tokens: crate::settings::session_window(
+            &deps.settings.llm_config(),
+            deps.model_overrides.get(&session_id).as_ref(),
+            Some(&deps.catalog),
+        )
+        .unwrap_or(0),
         tools_est_tokens: runner::catalog_estimate(&deps.kernel, &session_id).await,
     };
     // 失败也照常收尾：一次性删行（重试多半还是错），周期滚到下槽；

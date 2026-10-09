@@ -134,28 +134,25 @@ fn meta_title_overrides_list_and_resets() {
 }
 
 #[test]
-fn meta_organizer_roundtrip_and_projection() {
+fn meta_organizer_key_is_phantom_on_read() {
     let dir = tmp_dir("organizer");
     let path = session_file(&dir, "s1").unwrap();
     append_event(&path, &user_msg("hello")).unwrap();
-    // 无旁车 = None（跟随开发者缺省档）
-    assert!(list_sessions(&dir)[0].organizer.is_none());
-    // 设置 / 列表投影
-    write_organizer(&dir, "s1", Some("tree")).unwrap();
-    assert_eq!(list_sessions(&dir)[0].organizer.as_deref(), Some("tree"));
-    assert_eq!(
-        read_meta(&dir, "s1").unwrap().organizer.as_deref(),
-        Some("tree")
+    // v2.137 退役键：旧旁车里的存量 `organizer` 照常解析（serde 忽略），
+    // 列表投影不再透出
+    std::fs::write(
+        dir.join("s1.meta.json"),
+        r#"{"organizer":"legacy","title":"旧会话"}"#,
+    )
+    .unwrap();
+    let meta = read_meta(&dir, "s1").expect("旧旁车读得进");
+    assert_eq!(meta.title.as_deref(), Some("旧会话"));
+    assert!(
+        serde_json::to_value(&list_sessions(&dir)[0])
+            .unwrap()
+            .get("organizer")
+            .is_none()
     );
-    // 空串 = 清除；合并写保留既有字段
-    write_title(&dir, "s1", "标题").unwrap();
-    write_organizer(&dir, "s1", Some("  ")).unwrap();
-    let meta = read_meta(&dir, "s1").unwrap();
-    assert!(meta.organizer.is_none());
-    assert_eq!(meta.title.as_deref(), Some("标题"));
-    // 全字段空 = 删旁车文件
-    write_title(&dir, "s1", "").unwrap();
-    assert!(read_meta(&dir, "s1").is_none());
     std::fs::remove_dir_all(&dir).ok();
 }
 

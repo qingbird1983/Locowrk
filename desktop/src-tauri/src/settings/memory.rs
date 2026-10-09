@@ -35,13 +35,6 @@ pub const FILES_DEFAULT: bool = true;
 /// `<repo>/.Locowrk/` 静态提醒段（节点钩子）+ 首次引导建目录。
 pub const REPO_CONTEXT_DEFAULT: bool = true;
 
-/// 会话缺省整理模式缺省值（M5 阶段 3 裁定：**tree**——树 v2 §11.2 阶段 3
-/// 「缺省切 tree」，键自 developer 区迁入用户层；legacy 老会话按旁车显式档
-/// 永久兼容，未显式设置过的会话跟随此档热换）。
-pub const DEFAULT_ORGANIZER_DEFAULT: &str = "tree";
-/// 合法缺省整理模式值（未知值保存时拒绝，读取时回落缺省）。
-pub const DEFAULT_ORGANIZER_VALUES: [&str; 2] = ["legacy", "tree"];
-
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TailStrategy {
@@ -63,8 +56,9 @@ impl TailStrategy {
 /// 记忆注入设置。top_k 缺省 5（约束清单 §3"注入条数可配"）。
 /// v2.136 裁定退役三键：`autoExtract`（自动提取，⑬）/ `handoffUpdate`
 /// （F3 收束后台改写）/ `experiences`（向量经历层）——项目记忆改由主
-/// 模型自维护 + 提醒钩子；settings.json 里的历史键为**幻影键**（serde
-/// 未知字段忽略，读取不破，下次保存自然消失）。
+/// 模型自维护 + 提醒钩子；v2.137 退役 `defaultOrganizer`（M5 缺省整理
+/// 方式：legacy/标准整理整面退役，一切会话皆树）。settings.json 里的
+/// 历史键均为**幻影键**（serde 未知字段忽略，读取不破，下次保存自然消失）。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct MemorySettings {
@@ -95,9 +89,6 @@ pub struct MemorySettings {
     /// 交接提醒（F2 §7 缺省开；v2.136 提醒制）：归属会话注入
     /// `<repo>/.Locowrk/` 静态提醒段 + 首次引导建目录。
     pub repo_context: bool,
-    /// 会话缺省整理模式（M5 阶段 3：legacy | tree，缺省 tree——未显式
-    /// 设置过的会话跟随此档；持久键 defaultOrganizer）。
-    pub default_organizer: String,
 }
 
 impl Default for MemorySettings {
@@ -115,7 +106,6 @@ impl Default for MemorySettings {
             collapse_threshold_pct: COLLAPSE_THRESHOLD_PCT_DEFAULT,
             files: FILES_DEFAULT,
             repo_context: REPO_CONTEXT_DEFAULT,
-            default_organizer: DEFAULT_ORGANIZER_DEFAULT.into(),
         }
     }
 }
@@ -138,7 +128,6 @@ pub struct MemorySettingsView {
     pub collapse_threshold_pct: u8,
     pub files: bool,
     pub repo_context: bool,
-    pub default_organizer: String,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -162,5 +151,4 @@ pub struct MemoryUpdate {
     pub collapse_threshold_pct: Option<u8>,
     pub files: Option<bool>,
     pub repo_context: Option<bool>,
-    pub default_organizer: Option<String>,
 }

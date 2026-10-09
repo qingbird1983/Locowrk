@@ -50,7 +50,6 @@ mod media;
 mod model_override;
 mod notifications;
 mod organize;
-mod organizer_mode;
 mod permission_mode;
 mod plugins_root;
 mod privacy;
@@ -205,7 +204,6 @@ pub fn run() {
             commands::session_resolve_uncertain,
             commands::session_set_model,
             commands::session_set_thinking,
-            commands::session_set_organizer,
             commands::reveal_in_explorer,
             commands::schedule_list,
             commands::schedule_delete,

@@ -58,11 +58,3 @@ export function formatDuration(ms: number): string {
   if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
   return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
 }
-
-/** 金额（元，M0 观测节省估算）：≥1 两位小数、≥0.01 三位、否则四位——
- * 缓存节省常在分以下，固定两位会把 ¥0.0003 显示成 ¥0.00。 */
-export function formatMoney(v: number): string {
-  const abs = Math.abs(v);
-  const digits = abs >= 1 ? 2 : abs >= 0.01 ? 3 : 4;
-  return `¥${v.toFixed(digits)}`;
-}

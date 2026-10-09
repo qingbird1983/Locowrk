@@ -17,9 +17,9 @@ use std::time::Duration;
 
 use cordis_core::Context;
 use kernel_agent::{
-    points, Audit, CircuitBreaker, CompactConfig, CtxCompact, JsonlAuditSink, Kernel, LlmService,
-    MemoryInject, MemoryInjectConfig, Middleware, Retriever, SubagentGate, SubagentTool, Timeout,
-    ToolExposure, ToolExposureConfig, ToolSource, Tracing,
+    points, Audit, CircuitBreaker, JsonlAuditSink, Kernel, LlmService, MemoryInject,
+    MemoryInjectConfig, Middleware, Retriever, SubagentGate, SubagentTool, Timeout, ToolExposure,
+    ToolExposureConfig, ToolSource, Tracing,
 };
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use plugin_service::{LocalDirMarket, PluginService};
@@ -203,18 +203,11 @@ pub fn init_state(app: AppHandle) -> AppState {
         sessions_dir.clone(),
         settings.default_permission_mode(),
     )); // ㉘·B 会话级权限模式（旁车持久 + 缓存；决策表/目录围栏数据源）
-        // M4 会话级整理模式（树 v2 §11.2 阶段 2）：旁车 `organizer` 持久 +
-        // 缓存写穿；未显式设置会话跟随开发者缺省档（settings_set 热换）。
-    let organizer_modes = Arc::new(crate::organizer_mode::OrganizerModeStore::new(
-        sessions_dir.clone(),
-        settings.default_organizer(),
-    ));
     // M4 树会话组装器（§3.38②）：TreeContextSource 注册进内核服务表——
-    // legacy 会话返回 None（组装零变化），树会话 = L0 目录 + 未整理尾巴。
+    // v2.137 起一切会话皆树（legacy 整理面退役）= L0 目录 + 未整理尾巴。
     // M5 起存储句柄收敛为 AppState 单例（便宜克隆），组装点共用。
     let tree_store = memory_tree::TreeStore::new(&root);
     let tree_assembler = Arc::new(crate::organize::TreeAssembler::new(
-        Arc::clone(&organizer_modes),
         Arc::clone(&settings),
         Arc::clone(&workspace_of),
         tree_store.clone(),
@@ -244,9 +237,10 @@ pub fn init_state(app: AppHandle) -> AppState {
         )),
     );
 
-    // M4 树目录注入（§3.38②）：Memory-Inject 之后、ctx-compact 之前——
-    // 目录排在记忆块之后（树 v2 §7.1 [2]→[3]）；ctx-compact 见树会话标记
-    // 即跳过（树会话不压缩，压缩语义由整理边界承担）。
+    // M4 树目录注入（§3.38②）：Memory-Inject 之后——目录排在记忆块
+    // 之后（树 v2 §7.1 [2]→[3]）。v2.137：ctx-compact 桌面链退役（用户
+    // 裁定「上下文根本不压缩了」，压缩语义由记忆树整理边界承担；headless
+    // 内核侧中间件保留不动）。
     ctx.events.on_waterfall(
         points::REQUEST,
         Arc::new(kernel_agent::TreeDirectoryInject) as Arc<_>,
@@ -260,14 +254,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::new(crate::thinking_language::ThinkingLanguageInject::new(
             Arc::clone(&settings),
         )),
-    );
-
-    // ctx-compact（Context and Memory.md §3）：agent/request 决策环上的压缩
-    // 监听器——三策略配置驱动（阈值 = 窗口 × 百分比，压到阈值 50%），压缩结果经 payload 带回 kernel 落 ContextCompacted 事件。
-    let compact_cfg: Arc<RwLock<CompactConfig>> = Arc::new(RwLock::new(settings.compact_config()));
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(CtxCompact::new(ctx.clone(), Arc::clone(&compact_cfg))),
     );
 
     // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。Audit 挂外侧（被拒也留痕）；audit.jsonl 只增不改；S2 超时可配热换入。
@@ -394,17 +380,14 @@ pub fn init_state(app: AppHandle) -> AppState {
         RegistryToolSource::new(Arc::clone(&registry)),
     )));
     let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
-    // M4 树工具（§3.38③④）：expand 树会话常驻（exposure=always）、collapse
+    // M4 树工具（§3.38③④）：expand 常驻（exposure=always）、collapse
     // 开关开启才进目录（§8.3 缺省关）——门控在 KernelToolSource 列表/解析
-    // 双侧（legacy 会话不可见不可调）。不进 search_catalog 索引（会话级
-    // 工具，人的检索面不含）。
-    let tree_gate = Arc::new(crate::tool_source::TreeToolGate::new(
-        Arc::clone(&organizer_modes),
-        {
-            let s = Arc::clone(&settings);
-            Arc::new(move || s.memory().collapse_enabled)
-        },
-    ));
+    // 双侧（v2.137 起门控只剩开关，一切会话皆树）。不进 search_catalog
+    // 索引（会话级工具，人的检索面不含）。
+    let tree_gate = Arc::new(crate::tool_source::TreeToolGate::new({
+        let s = Arc::clone(&settings);
+        Arc::new(move || s.memory().collapse_enabled)
+    }));
     let main_source = with_host_tools(KernelToolSource::new(RegistryToolSource::new(Arc::clone(
         &registry,
     ))))
@@ -416,18 +399,15 @@ pub fn init_state(app: AppHandle) -> AppState {
     .with_builtin(crate::organize::MemoryExpandTool::new(
         tree_store.clone(),
         Arc::clone(&workspace_of),
-        Arc::clone(&organizer_modes),
         sessions_dir.clone(),
     ))
     .with_builtin(crate::organize::MemoryCollapseTool::new(
         tree_store.clone(),
         Arc::clone(&workspace_of),
-        Arc::clone(&organizer_modes),
     ))
     .with_builtin(crate::organize::SearchTitlesTool::new(
         tree_store.clone(),
         Arc::clone(&workspace_of),
-        Arc::clone(&organizer_modes),
         Some(embed_port.clone() as Arc<dyn kernel_agent::EmbedPort>),
     ))
     .with_tree_gate(tree_gate)
@@ -514,7 +494,8 @@ pub fn init_state(app: AppHandle) -> AppState {
         sessions_dir.clone(),
         Arc::clone(&workspace_of),
         root.clone(),
-        Arc::clone(&organizer_modes),
+        Arc::clone(&model_overrides),
+        Arc::clone(&catalog),
         organizer_notifier,
     );
     // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
@@ -527,6 +508,8 @@ pub fn init_state(app: AppHandle) -> AppState {
             Arc::clone(&sink),
             Arc::clone(&usage),
             Arc::clone(&settings),
+            Arc::clone(&model_overrides),
+            Arc::clone(&catalog),
             Arc::clone(&sessions),
             sessions_dir.clone(),
             Arc::clone(&last_chat),
@@ -586,7 +569,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         plugins,
         approval,
         permission_modes,
-        organizer_modes,
         model_overrides,
         tree_assembler,
         sink,
@@ -596,7 +578,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         last_chat,
         settings,
         llm_diagnoser,
-        compact_cfg,
         memory_cfg,
         memory,
         memory_files,

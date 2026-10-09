@@ -33,6 +33,11 @@ async function refresh() {
 }
 onMounted(() => void refresh());
 
+/** 整理阈值显示（绝对 token → 100K–800K 档位文本）。 */
+function thresholdText(tokens: number): string {
+  return `${Math.round(tokens / 1000)}K`;
+}
+
 function relTime(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60_000);
@@ -69,7 +74,7 @@ function relTime(ts: number): string {
             t("developer.treeAnchor", {
               tokens: compactNumber(tree.anchorTokens),
               source: tree.anchorSource === "llm_usage" ? t("developer.treeAnchorLlm") : t("developer.treeAnchorEstimate"),
-              pct: tree.thresholdPct,
+              threshold: thresholdText(tree.thresholdTokens),
               pacing: tree.pacing === "batch" ? t("developer.treePacingBatch") : t("developer.treePacingIncremental"),
             })
           }}

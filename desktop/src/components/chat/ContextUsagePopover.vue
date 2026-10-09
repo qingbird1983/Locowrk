@@ -11,7 +11,7 @@
  */
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { compactNumber, formatMoney } from "../../lib/format";
+import { compactNumber } from "../../lib/format";
 import { memoryTreeView } from "../../lib/api";
 import { useChatStore, type ToolItem } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
@@ -87,9 +87,10 @@ const treeText = computed(() => {
   const info = tree.value;
   if (!info || !info.exists || info.chapterCount === 0) return null;
   const tail = t("usage.treeTail", { n: compactNumber(info.tailTokensEst) });
+  // 尾巴 % 分母 = 会话生效窗口（v2.137 四层链；树投影不再带窗口）
   const pct =
-    info.windowTokens > 0
-      ? ` ${Math.min(100, Math.round((info.tailTokensEst / info.windowTokens) * 100))}%`
+    props.usage.windowTokens > 0
+      ? ` ${Math.min(100, Math.round((info.tailTokensEst / props.usage.windowTokens) * 100))}%`
       : "";
   return { chapters: info.chapterCount, text: tail + pct };
 });
@@ -183,15 +184,13 @@ const expandCalls = computed(() =>
       </div>
     </template>
 
-    <!-- 会话累计（M0 观测 KV v2 §7）：命中率（分母不含 cacheWrite，纪律 7）
-         + 节省估算。chat.cacheStats 为 null = 供应商未报告缓存字段 → 不渲染；
-         chat.cacheStats 设置（用户层，缺省开）控制整行显隐。 -->
+    <!-- 会话累计（M0 观测 KV v2 §7）：命中率（分母不含 cacheWrite，纪律 7）。
+         v2.137：节省估算随两档单价设置退役。chat.cacheStats 为 null =
+         供应商未报告缓存字段 → 不渲染；chat.cacheStats 设置（用户层，
+         缺省开）控制整行显隐。 -->
     <div v-if="settings.view?.chat.cacheStats && chat.cacheStats" class="kv">
       <span>{{ t("usage.sessionCumulative") }}</span>
-      <span class="kv__v">
-        {{ t("usage.cacheHit") }} {{ chat.cacheStats.hitRate }}% ·
-        {{ t("usage.savings") }} {{ formatMoney(chat.cacheStats.savings) }}
-      </span>
+      <span class="kv__v">{{ t("usage.cacheHit") }} {{ chat.cacheStats.hitRate }}%</span>
     </div>
 
     <!-- 工具上下文（本轮调用种数/次数 + 目录估算） -->

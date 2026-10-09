@@ -25,7 +25,7 @@ pub use sessions::*;
 
 use tauri::{AppHandle, State};
 
-use kernel_agent::{CompactConfig, ExposureSnapshot};
+use kernel_agent::ExposureSnapshot;
 use session_store::{SessionEvent, SessionMeta};
 
 use crate::events::{AgentEvent, ApprovalRequestPayload};
@@ -38,9 +38,10 @@ use crate::settings::{
 use crate::state::AppState;
 
 /// 聊天命令。轮次内容全部经 `agent://` 事件推送（§12.2），返回值只表达
-/// 轮次是否成功收束（返回实际 step 数）。进度条口径从设置取（⑨）：
-/// 窗口在 llm 区（S2 迁移），阈值 = 窗口 × 百分比。`parts`（批 D）：附件
-/// 部件（asset_put 已上传的内容寻址引用；缺省 = 纯文本消息）。
+/// 轮次是否成功收束（返回实际 step 数）。用量口径（v2.137）：阈值 =
+/// 整理阈值（绝对 token）；窗口 = 会话模型四层链自动识别（模型行 ??
+/// 目录 ?? 档位，`session_window`）。`parts`（批 D）：附件部件
+/// （asset_put 已上传的内容寻址引用；缺省 = 纯文本消息）。
 #[tauri::command]
 pub async fn agent_chat(
     session_id: String,
@@ -66,9 +67,15 @@ pub async fn agent_chat(
     state.note_chat(&session_id);
     let session = state.session_lock(&session_id);
     let mut session = session.lock().await;
+    let ov = state.model_overrides.get(&session_id);
     let usage = UsagePolicy {
-        threshold_tokens: state.settings.effective_threshold_tokens(),
-        window_tokens: state.settings.effective_window().unwrap_or(0),
+        threshold_tokens: state.settings.organize_threshold_tokens(),
+        window_tokens: crate::settings::session_window(
+            &state.settings.llm_config(),
+            ov.as_ref(),
+            Some(&state.catalog),
+        )
+        .unwrap_or(0),
         tools_est_tokens: runner::catalog_estimate(&state.kernel, &session_id).await,
     };
     let steps = runner::run_turn(
@@ -260,11 +267,6 @@ pub async fn settings_set(
     if locale.is_some() {
         crate::tray::refresh_menu(&app);
     }
-    // ⑨：压缩配置热更新（阈值/策略/窗口换入共享锁）
-    let cfg: CompactConfig = state.settings.compact_config();
-    if let Ok(mut guard) = state.compact_cfg.write() {
-        *guard = cfg;
-    }
     // ⑪：记忆注入配置热更新（开关/topK 换入共享锁）
     let mcfg = state.settings.memory_inject_config();
     if let Ok(mut guard) = state.memory_cfg.write() {
@@ -291,10 +293,6 @@ pub async fn settings_set(
     state
         .permission_modes
         .set_default(state.settings.default_permission_mode());
-    // M4：未显式设置会话的缺省整理模式热更新（developer 区 defaultOrganizer）
-    state
-        .organizer_modes
-        .set_default(state.settings.default_organizer());
     // ⑱：工作区目录热更新（fsutil 每次工具调用读 env，重注入即生效）
     if tools_section_touched {
         crate::data_root::apply_fs_roots_env(&state.settings);

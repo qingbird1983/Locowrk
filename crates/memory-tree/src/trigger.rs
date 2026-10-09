@@ -1,8 +1,9 @@
-//! 触发决策（树 v2 §4.1–4.3，纯函数）：批量档 = 占用 ≥ 阈值滑条；
-//! 增量档 = 尾巴估算 ≥ 增量块 X。占用锚点**优先 provider 真实 input**
-//! （LlmUsage，§4.2——与浮层估算口径的差异在 M4 组装器批统一）；
-//! 窗口未知（0）时批量档放弃自动触发（百分比算不出 = 宁可不整，手动
-//! `/整理` 不受此限）。没有隐藏的第二把尺（纪律 6）。
+//! 触发决策（树 v2 §4.1–4.3，纯函数；v2.137 起阈值改**绝对 token**——
+//! 用户裁定「达到多少 K 就触发」，不再按窗口百分比折算）：批量档 =
+//! 占用 ≥ 整理阈值；增量档 = 尾巴估算 ≥ 增量块 X。占用锚点**优先
+//! provider 真实 input**（LlmUsage，§4.2——与浮层估算口径的差异在 M4
+//! 组装器批统一）。绝对阈值不依赖窗口，窗口未知也能触发；阈值 0 = 关
+//! 自动（宁可不整，手动 `/整理` 不受此限）。没有隐藏的第二把尺（纪律 6）。
 
 use serde::{Deserialize, Serialize};
 
@@ -73,8 +74,8 @@ impl OrganizeReason {
 pub struct TriggerInput {
     pub anchor_source: AnchorSource,
     pub anchor_tokens: u64,
-    pub window_tokens: u64,
-    pub threshold_pct: u32,
+    /// 整理阈值（绝对 token，v2.137）：占用达到即触发批量整理；0 = 关自动。
+    pub threshold_tokens: u64,
     pub pacing: Pacing,
     pub chunk_tokens: u64,
     /// 未整理尾巴的估算 token（material 估算口径）。
@@ -91,13 +92,8 @@ pub fn should_auto_organize(inp: &TriggerInput) -> Option<OrganizeReason> {
     match inp.pacing {
         Pacing::Incremental => (inp.chunk_tokens > 0 && inp.tail_tokens >= inp.chunk_tokens)
             .then_some(OrganizeReason::IncrementalChunk),
-        Pacing::Batch => {
-            if inp.window_tokens == 0 || inp.threshold_pct == 0 {
-                return None;
-            }
-            let pct = inp.anchor_tokens * 100 / inp.window_tokens;
-            (pct >= inp.threshold_pct as u64).then_some(OrganizeReason::Threshold)
-        }
+        Pacing::Batch => (inp.threshold_tokens > 0 && inp.anchor_tokens >= inp.threshold_tokens)
+            .then_some(OrganizeReason::Threshold),
     }
 }
 
@@ -108,9 +104,8 @@ mod tests {
     fn inp(pacing: Pacing) -> TriggerInput {
         TriggerInput {
             anchor_source: AnchorSource::LlmUsage,
-            anchor_tokens: 400,
-            window_tokens: 1000,
-            threshold_pct: 30,
+            anchor_tokens: 120_000,
+            threshold_tokens: 100_000,
             pacing,
             chunk_tokens: 50_000,
             tail_tokens: 60_000,
@@ -129,18 +124,24 @@ mod tests {
     #[test]
     fn batch_below_threshold_and_empty_tail_stay_silent() {
         let mut i = inp(Pacing::Batch);
-        i.anchor_tokens = 299;
+        i.anchor_tokens = 99_999;
         assert_eq!(should_auto_organize(&i), None);
-        i.anchor_tokens = 400;
+        i.anchor_tokens = 120_000;
         i.tail_events = 0;
         assert_eq!(should_auto_organize(&i), None);
     }
 
     #[test]
-    fn batch_without_window_never_fires() {
-        let mut i = inp(Pacing::Batch);
-        i.window_tokens = 0;
-        assert_eq!(should_auto_organize(&i), None);
+    fn batch_fires_without_window_and_zero_threshold_never_fires() {
+        // 绝对阈值不依赖窗口：窗口信息缺席照样判（v2.137 前窗口未知 =
+        // 百分比算不出 = 永不触发）；阈值 0 = 关自动。
+        assert_eq!(
+            should_auto_organize(&inp(Pacing::Batch)),
+            Some(OrganizeReason::Threshold)
+        );
+        let mut off = inp(Pacing::Batch);
+        off.threshold_tokens = 0;
+        assert_eq!(should_auto_organize(&off), None);
     }
 
     #[test]

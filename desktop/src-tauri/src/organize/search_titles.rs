@@ -20,7 +20,6 @@ use serde_json::{json, Value};
 
 use memory_tree::TreeStore;
 
-use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 use crate::workspace::WorkspaceResolver;
 
 static VERSION: std::sync::LazyLock<semver::Version> =
@@ -68,7 +67,6 @@ struct Candidate {
 pub struct SearchTitlesTool {
     tree_store: TreeStore,
     workspace_of: WorkspaceResolver,
-    modes: Arc<OrganizerModeStore>,
     /// 语义模式出口；None / 未配置 = 关键词降级（组装点传 CooledEmbed）。
     embed: Option<Arc<dyn EmbedPort>>,
 }
@@ -77,13 +75,11 @@ impl SearchTitlesTool {
     pub fn new(
         tree_store: TreeStore,
         workspace_of: WorkspaceResolver,
-        modes: Arc<OrganizerModeStore>,
         embed: Option<Arc<dyn EmbedPort>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             tree_store,
             workspace_of,
-            modes,
             embed,
         })
     }
@@ -120,11 +116,6 @@ impl Tool for SearchTitlesTool {
             .clone()
             .filter(|s| !s.is_empty())
             .ok_or_else(|| unavailable("无会话身份"))?;
-        if self.modes.mode_of(Some(&session_id)) != OrganizerMode::Tree {
-            return Err(unavailable(
-                "本会话不是记忆树整理模式（可在任务行菜单切换）",
-            ));
-        }
         let query = args
             .get("query")
             .and_then(Value::as_str)

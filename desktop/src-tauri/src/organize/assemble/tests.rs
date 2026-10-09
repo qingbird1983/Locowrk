@@ -8,7 +8,6 @@ use session_store::{Session, SessionEvent};
 use kernel_agent::TreeContextSource as _;
 
 use super::{window_start_event, TreeAssembler};
-use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 use crate::settings::SettingsStore;
 
 fn temp_root(tag: &str) -> std::path::PathBuf {
@@ -30,11 +29,8 @@ fn resolver() -> crate::workspace::WorkspaceResolver {
 fn assembler(
     root: &std::path::Path,
     settings: Arc<SettingsStore>,
-    mode: OrganizerMode,
 ) -> TreeAssembler {
-    let modes = Arc::new(OrganizerModeStore::new(root.join("sessions"), mode));
     TreeAssembler::new(
-        modes,
         settings,
         resolver(),
         memory_tree::TreeStore::new(root),
@@ -92,26 +88,12 @@ fn seed_tree(root: &std::path::Path, ws: &str, session_id: &str) {
 }
 
 #[tokio::test]
-async fn legacy_sessions_plan_none_and_context_none() {
-    let root = temp_root("legacy");
-    let settings = settings_with(serde_json::json!({}), &root);
-    let asm = assembler(&root, settings, OrganizerMode::Legacy);
-    let s = long_session();
-    assert!(asm.plan("s1").await.is_none(), "legacy 会话无计划");
-    assert_eq!(asm.context_tokens(&s, "s1"), None, "legacy 用量回落调用方");
-}
-
-#[tokio::test]
 async fn tree_mode_a_slices_at_chaptered_until_and_lists_directory() {
     let root = temp_root("modea");
     let sid = "s1";
     let ws = r"F:\ws\demo";
     seed_tree(&root, ws, sid);
-    let asm = assembler(
-        &root,
-        settings_with(serde_json::json!({}), &root),
-        OrganizerMode::Tree,
-    );
+    let asm = assembler(&root, settings_with(serde_json::json!({}), &root));
 
     let plan = asm.plan(sid).await.expect("树会话有计划");
     assert_eq!(plan.tail_from_event, 20, "A 档 = chaptered_until 排他游标");
@@ -140,7 +122,6 @@ async fn tree_mode_b_window_floors_at_chaptered_until() {
             serde_json::json!({ "memory": { "tailStrategy": "window", "tailWindowTurns": 1 } }),
             &root,
         ),
-        OrganizerMode::Tree,
     );
     // 窗口 1 轮：起点 = 最后一条 User（事件 22）；chaptered_until=20 → from=22
     let plan = asm.plan(sid).await.expect("计划在场");
@@ -153,7 +134,6 @@ async fn tree_mode_b_window_floors_at_chaptered_until() {
             serde_json::json!({ "memory": { "tailStrategy": "window", "tailWindowTurns": 30 } }),
             &root,
         ),
-        OrganizerMode::Tree,
     );
     let plan5 = asm5.plan(sid).await.expect("计划在场");
     assert_eq!(plan5.tail_from_event, 20, "max(chaptered_until, 窗口起点)");
@@ -169,11 +149,7 @@ async fn pending_bundles_never_enter_directory() {
     tree.insert_placeholder(20, 21, 9).expect("占位可建");
     memory_tree::TreeStore::new(&root).save(&tree).unwrap();
 
-    let asm = assembler(
-        &root,
-        settings_with(serde_json::json!({}), &root),
-        OrganizerMode::Tree,
-    );
+    let asm = assembler(&root, settings_with(serde_json::json!({}), &root));
     let plan = asm.plan(sid).await.expect("计划在场");
     assert!(!plan.directory.contains("对话 #"), "占位章节不进目录");
     assert!(plan.directory.contains("b1"));
@@ -190,11 +166,7 @@ async fn collapsed_ids_flow_into_plan() {
     tree.mark_collapsed("b1", 6);
     memory_tree::TreeStore::new(&root).save(&tree).unwrap();
 
-    let asm = assembler(
-        &root,
-        settings_with(serde_json::json!({}), &root),
-        OrganizerMode::Tree,
-    );
+    let asm = assembler(&root, settings_with(serde_json::json!({}), &root));
     let plan = asm.plan(sid).await.expect("计划在场");
     assert_eq!(
         plan.collapsed_chapters,

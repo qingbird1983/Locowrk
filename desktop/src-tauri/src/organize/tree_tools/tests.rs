@@ -1,5 +1,6 @@
-//! tree_tools 单测：expand 摘要/原文切片 / 未知章节如实失败 / legacy 会话
-//! 拒绝（调用层双保险）/ collapse 只对已展开章节生效。
+//! tree_tools 单测：expand 摘要/原文切片 / 未知章节如实失败 / collapse
+//! 只对已展开章节生效。（v2.137：legacy 拒绝面随整理模式退役——一切
+//! 会话皆树；collapse 的暴露开关门控在 tool_source 侧，tests_tree_gate。）
 
 use std::sync::Arc;
 
@@ -8,7 +9,6 @@ use serde_json::json;
 use session_store::{Session, SessionEvent};
 
 use super::{MemoryCollapseTool, MemoryExpandTool};
-use crate::organizer_mode::{OrganizerMode, OrganizerModeStore};
 
 fn temp_root(tag: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("ttools-{tag}-{}", std::process::id()));
@@ -88,11 +88,10 @@ fn ctx(session_id: Option<&str>) -> CallCtx {
     c
 }
 
-fn expand(root: &std::path::Path, modes: Arc<OrganizerModeStore>) -> Arc<MemoryExpandTool> {
+fn expand(root: &std::path::Path) -> Arc<MemoryExpandTool> {
     MemoryExpandTool::new(
         memory_tree::TreeStore::new(root),
         resolver(),
-        modes,
         root.join("sessions"),
     )
 }
@@ -102,11 +101,7 @@ async fn expand_returns_summary_and_transcript() {
     let root = temp_root("expand");
     let ws = r"F:\ws\demo";
     seed(&root, ws);
-    let modes = Arc::new(OrganizerModeStore::new(
-        root.join("sessions"),
-        OrganizerMode::Tree,
-    ));
-    let tool = expand(&root, Arc::clone(&modes));
+    let tool = expand(&root);
 
     let v = tool
         .call(&ctx(Some("s1")), json!({ "chapter_id": "b1", "level": 1 }))
@@ -129,34 +124,18 @@ async fn expand_returns_summary_and_transcript() {
 }
 
 #[tokio::test]
-async fn expand_rejects_unknown_bundle_and_legacy_session() {
+async fn expand_rejects_unknown_bundle() {
     let root = temp_root("reject");
     let ws = r"F:\ws\demo";
     seed(&root, ws);
-    let tree_modes = Arc::new(OrganizerModeStore::new(
-        root.join("sessions"),
-        OrganizerMode::Tree,
-    ));
-    let legacy_modes = Arc::new(OrganizerModeStore::new(
-        root.join("sessions"),
-        OrganizerMode::Legacy,
-    ));
 
     // 未知章节如实失败
-    let tool = expand(&root, Arc::clone(&tree_modes));
+    let tool = expand(&root);
     let err = tool
         .call(&ctx(Some("s1")), json!({ "chapter_id": "b9", "level": 1 }))
         .await
         .expect_err("未知章节拒绝");
     assert!(matches!(err, plugin_api::ToolError::Failed { .. }));
-
-    // legacy 会话调到 = NotAvailable（目录层门控失效时的调用层双保险）
-    let tool = expand(&root, legacy_modes);
-    let err = tool
-        .call(&ctx(Some("s1")), json!({ "chapter_id": "b1", "level": 1 }))
-        .await
-        .expect_err("legacy 拒绝");
-    assert!(matches!(err, plugin_api::ToolError::NotAvailable(_)));
 
     // 规格纪律：expand = Pure + Always；collapse = Compensable + Hidden
     assert_eq!(tool.spec().side_effect, SideEffect::Pure);
@@ -168,15 +147,10 @@ async fn collapse_only_after_expand_and_expand_clears_it() {
     let root = temp_root("collapse");
     let ws = r"F:\ws\demo";
     seed(&root, ws);
-    let modes = Arc::new(OrganizerModeStore::new(
-        root.join("sessions"),
-        OrganizerMode::Tree,
-    ));
-    let expand_tool = expand(&root, Arc::clone(&modes));
+    let expand_tool = expand(&root);
     let collapse_tool = MemoryCollapseTool::new(
         memory_tree::TreeStore::new(&root),
         resolver(),
-        Arc::clone(&modes),
     );
     assert_eq!(
         collapse_tool.spec().side_effect,
