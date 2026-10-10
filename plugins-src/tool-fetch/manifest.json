@@ -31,7 +31,7 @@
         },
         "required": ["url"]
       },
-      "side_effect": "Pure"
+      "side_effect": "Irreversible"
     }
   ]
 }

@@ -133,7 +133,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     group: "capability",
     labelKey: "settings.nav.tools",
     icon: "checklist",
-    searchKeys: ["settings.developerTitle", "settings.panelTitle", "settings.maxTurnSteps"],
+    searchKeys: ["settings.developerTitle", "developer.panelTitle", "settings.maxTurnSteps"],
   },
   {
     id: "sessions",

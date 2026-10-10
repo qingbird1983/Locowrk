@@ -11,6 +11,11 @@
 # 依赖这里的暂存布局。
 set -euo pipefail
 
+# 暂存记录（版本真源 = 下面的 stage 调用清单，审计报告 M-12/E7：收尾文案
+# 曾手抄版本号，改一次漏一次，最后连「0.1.5 同时指 memory-sqlite 与
+# tool-shell」这种自相矛盾的话都写出来了。现在文案由清单生成）。
+STAGED=()
+
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
@@ -45,9 +50,14 @@ stage() {
   sed "0,/\"version\": \"[^\"]*\"/s//\"version\": \"$ver\"/" \
     "plugins-src/$id/manifest.json" > "$dst/manifest.json"
   if [[ -d "plugins-src/$id/assets" ]]; then
+    # 幂等：先清旧 assets 再复制。`cp -R src/assets dst/assets` 在目标已
+    # 存在时把源目录塞进 dst/assets/assets（第二次运行起每次叠一层），
+    # 曾致 10 个插件的暂存图标全部落错路径（审计报告 M-5）。
+    rm -rf "$dst/assets"
     cp -R "plugins-src/$id/assets" "$dst/assets"
   fi
   echo "    staged -> $dst/$(basename "$src")"
+  STAGED+=("$id $ver")
 }
 
 stage tool-echo 0.1.0
@@ -77,6 +87,12 @@ stage tool-fs 0.1.5
 # 可能带敏感 token，"只读"标法与事实不符）；描述同步如实（plugins.md §三
 # 表格一并改）
 stage tool-fetch 0.1.1
+# 0.1.2（2026-10-10，小迭代 +0.0.1）：展示元数据纠正（审计报告 H8）——
+# manifest.json 的 fetch.side_effect 仍写 "Pure"，而代码早在 0.1.1 就改
+# Irreversible；display.rs 读**暂存 manifest** 作插件卡徽章真源，结果
+# 插件卡显示「纯」而实际每次调用都弹审批卡（用户可见的谎报）。源
+# manifest 已同步，本版本把它带进暂存面
+stage tool-fetch 0.1.2
 # 0.1.3（2026-10-06，小迭代 +0.0.1）：环境事实写进双工具描述（真实测试
 # 复测·事实 2）——无 shell 直 spawn 经 PATH 解析，Windows 上 PATH 通常是
 # Git 的 Unix coreutils：用 Unix 风格命令，cmd 内建（dir/del/rmdir /s /q）
@@ -104,6 +120,14 @@ stage tool-shell 0.1.5
 # 之上的证明层）；manifest.json 随批补齐 shell_read 条目（此前只列
 # shell，展示元数据与 DLL describe 脱节）
 stage tool-shell 0.1.4
+# 0.1.6（2026-10-10，小迭代 +0.0.1）：审计报告批 A 两件——① 两条拒绝报文
+# 分开（M-10：引号不闭合此前与空命令共用 "shell command is empty"，模型
+# 收到后去查空串而不是补右引号，违背「错误信息要教模型下一步」；
+# split_command 现返回 SplitError::{UnclosedQuote, Empty}，decide 各给各
+# 的出路）；② manifest 展示元数据同步 v2.145 语义（H8：旧文案还在讲
+# 「白名单 / denylist 硬锁 / 宿主解锁开关」，实为无命令级禁令、任何单条
+# 简单命令放行进审批；shell_read 免审面补 EXACT_ARGV 名单）
+stage tool-shell 0.1.6
 # 0.1.3（2026-10-06，小迭代 +0.0.1）：① 根提交显式拒绝（P0-2：此前
 # `reset --soft HEAD~1` 隐性失败、报错晦涩，模型反复尝试；现在
 # rev-list --parents 判父后拒绝并给出 update-ref 出路）+
@@ -143,5 +167,10 @@ stage memory-sqlite 0.1.5
 stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit/{0.2.0,0.2.1} + tool-fs/{0.1.3,0.1.4,0.1.5} + tool-fetch 0.1.1 + tool-shell/{0.1.3,0.1.4,0.1.5} + tool-git 0.1.3（tool-sandbox 已随 v2.145 退役不再 staging；tool-shell 0.1.5 = 权限模型重设计批） + memory-sqlite 0.1.5（0.1.5 = 提示词分层批；0.2.1/0.1.5 = G3 批，0.1.4 = G4 只读证明批）+ 其余见上注释"
+summary="$(printf '%s\n' "${STAGED[@]}" \
+  | sort -u \
+  | awk '{ if ($1 != prev) { if (prev != "") printf "%s}\n", cur; prev = $1; cur = $1 " {" $2 } else cur = cur "," $2 } END { if (prev != "") printf "%s}\n", cur }')"
+echo "done: plugins/ 暂存 ${#STAGED[@]} 份"
+printf '%s\n' "$summary" | sed 's/^/  /'
+echo "  （版本真源 = 本脚本的 stage 清单；tool-sandbox 已随 v2.145 退役不再 staging）"
 echo "next: cargo run -p kernel-bin -- demo"

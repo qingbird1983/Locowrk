@@ -77,6 +77,14 @@ pub(crate) fn retired_env_warns() -> Vec<String> {
     warns
 }
 
+/// 切词失败形态：引号不闭合 vs 空命令。两条报文各指各的出路（错误信息
+/// 要教模型下一步），合并成一条会让模型去查空串而不是补引号。
+#[derive(Debug)]
+pub(crate) enum SplitError {
+    UnclosedQuote,
+    Empty,
+}
+
 /// 审批工具（shell）的完整判定管线：元字符 → 切词 → 放行进审批。
 pub(crate) fn decide(command: &str) -> Decision {
     if command.contains(METACHARS) {
@@ -86,10 +94,23 @@ pub(crate) fn decide(command: &str) -> Decision {
                 .into(),
         };
     }
-    let Some((program, rest)) = split_command(command) else {
-        return Decision::Deny {
-            reason: "shell command is empty".into(),
-        };
+    let (program, rest) = match split_command(command) {
+        Ok(pair) => pair,
+        // 两条拒绝报文分开给（错误信息要教模型下一步）：空命令 → 给一个
+        // 命令词；引号不闭合 → 补上右引号。合并成「command is empty」会
+        // 让模型去查空串而不是补引号。
+        Err(SplitError::UnclosedQuote) => {
+            return Decision::Deny {
+                reason: "shell command has an unclosed quote — close the matching ' or \" \
+                         and retry (quotes are stripped after closing)"
+                    .into(),
+            };
+        }
+        Err(SplitError::Empty) => {
+            return Decision::Deny {
+                reason: "shell command is empty — pass at least one command word".into(),
+            };
+        }
     };
     // 无命令级禁令：策略层只保证「单条简单命令、可切词」。副作用语义
     // 交审批门（工具 Irreversible）+ 粘性规则承载。
@@ -100,10 +121,10 @@ pub(crate) fn decide(command: &str) -> Decision {
 }
 
 /// 引号感知切词：空格分隔，单/双引号包住的片段保持原样（引号本身剥掉）。
-/// 返回 (首词, 其余参数)；引号不闭合按错误处理。`shell` 审批管线的切词
-/// 入口（元字符检查在前，此处只管切）；`shell_read` 走 proof::lex
-/// （按引号位置精确裁决元字符）。
-pub(crate) fn split_command(command: &str) -> Option<(String, Vec<String>)> {
+/// 返回 (首词, 其余参数)；引号不闭合与空命令是两种失败（报文不同，
+/// 见 [`SplitError`]）。`shell` 审批管线的切词入口（元字符检查在前，
+/// 此处只管切）；`shell_read` 走 proof::lex（按引号位置精确裁决元字符）。
+pub(crate) fn split_command(command: &str) -> Result<(String, Vec<String>), SplitError> {
     let mut tokens: Vec<String> = Vec::new();
     let mut cur = String::new();
     let mut in_word = false;
@@ -129,13 +150,17 @@ pub(crate) fn split_command(command: &str) -> Option<(String, Vec<String>)> {
         }
     }
     if quote.is_some() {
-        return None; // 引号不闭合 → 判空拒绝（宁拒勿猜）
+        // 引号不闭合 = 结构错误，绝不猜后半段当参数（宁拒勿猜）
+        return Err(SplitError::UnclosedQuote);
     }
     if in_word {
         tokens.push(cur);
     }
-    let first = tokens.first()?.clone();
-    Some((first, tokens.into_iter().skip(1).collect()))
+    if tokens.is_empty() {
+        return Err(SplitError::Empty);
+    }
+    let first = tokens[0].clone();
+    Ok((first, tokens.into_iter().skip(1).collect()))
 }
 
 #[cfg(test)]

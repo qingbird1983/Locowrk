@@ -117,9 +117,17 @@ impl Tool for BrowserOpenTool {
         let (kind, final_url, target, title) = match (path, url) {
             (Some(p), None) if !p.is_empty() => {
                 if !std::path::Path::new(p).is_absolute() {
+                    // 报错写给模型看，示例必须跟宿主平台一致（本 crate
+                    // 三平台构建；旧文案把 Windows 路径写死，非 Windows 下
+                    // 模型会照抄一个非法示例）。
+                    let example = if cfg!(windows) {
+                        r#"e.g. F:\dir\page.html"#
+                    } else {
+                        "e.g. /home/you/page.html"
+                    };
                     return Err(failed(
                         "browser_open",
-                        "path must be absolute (e.g. F:\\dir\\page.html)",
+                        format!("path must be absolute ({example})"),
                     ));
                 }
                 let ext_ok = std::path::Path::new(p)

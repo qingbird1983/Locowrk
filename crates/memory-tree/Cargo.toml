@@ -12,6 +12,5 @@ async-trait = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
 plugin-api = { workspace = true }
 semver = { workspace = true }

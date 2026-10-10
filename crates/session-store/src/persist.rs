@@ -164,8 +164,8 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                 })
                 .unwrap_or((0, None));
             // 重命名标题覆盖自动标题（v2.49）+ 工作区归属透出（v2.50）+
-            // 权限模式透出（㉘·B）+ 模型覆盖透出（v2.58）+ 整理模式透出
-            // （M4）：旁车一次读，缺文件 / 无字段时各自回落
+            // 权限模式透出（㉘·B）+ 模型覆盖透出（v2.58）：旁车一次读，
+            // 缺文件 / 无字段时各自回落（整理模式透出已随 v2.137 退役）
             let sidecar = read_meta(dir, &id);
             let title = sidecar.as_ref().and_then(|m| m.title.clone()).or(title);
             let workspace = sidecar.as_ref().and_then(|m| m.workspace.clone());

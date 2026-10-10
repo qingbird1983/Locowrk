@@ -6,7 +6,7 @@
 //! 分级见 tools.rs。
 //!
 //! 降级：库打不开 = 调度整体缺席（工具面不注册、引擎不起），聊天
-//! 不受影响——与 usage / experiences 同纪律。装配两步走：`open_db`
+//! 不受影响——与 usage 库同纪律。装配两步走：`open_db`
 //! 在工具目录构造前（内置工具面要持有库），`spawn` 在 kernel 就绪后。
 
 mod engine;

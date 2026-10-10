@@ -9,7 +9,6 @@ plugin-api = { workspace = true }
 cordis-core = { workspace = true }
 kernel-agent = { workspace = true }
 plugin-host = { workspace = true }
-plugin-service = { workspace = true }
 session-store = { workspace = true }
 async-trait = { workspace = true }
 semver = { workspace = true }

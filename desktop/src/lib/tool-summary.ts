@@ -11,11 +11,12 @@ export function toolAction(
   const table: Record<string, string> = {
     shell: "tool.action.run",
     shell_read: "tool.action.run",
+    // sandbox_run：tool-sandbox 插件已于 v2.145 整目录退役，新会话不可达；
+    // 此处保留只为**历史会话日志重放**仍能渲染旧工具行（用户 2026-10-10 裁定）。
     sandbox_run: "tool.action.sandbox",
     fs_read: "tool.action.read",
     fs_list: "tool.action.list",
     fs_write: "tool.action.write",
-    fs_edit: "tool.action.edit",
     edit_replace: "tool.action.edit",
     edit_lines: "tool.action.edit",
     edit_diff: "tool.action.edit",

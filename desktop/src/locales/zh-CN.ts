@@ -20,6 +20,7 @@ export default {
     back: "返回应用",
     cancel: "取消",
     refresh: "刷新",
+    close: "关闭",
   },
   // 确认弹窗（§五 唯一带遮罩 Modal，ConfirmDialog）
   confirm: {
@@ -607,6 +608,8 @@ export default {
     treePending: "在途任务：事件 #{from}–#{to}（重投 {attempts} 次）",
     treeHistory: "最近整理",
     treeHistoryRow: "{time} · {reason} · {mode} · {status} · {chapters} 个章节 · 入 {input} / 出 {output} · {ms}ms",
+    modeMemoryManager: "记忆管理器",
+    modeRule: "规则切分",
     stabilityRoundsHint: "压缩或整理后的 N 轮内不再改动请求前缀，范围 1–10。",
   },
   memory: {
@@ -958,6 +961,7 @@ export default {
     proxyDirect: "强制直连",
     proxyCustom: "自定义",
     proxyUrlRow: "代理地址",
+    proxySavedToast: "网络代理已保存",
     subagentTitle: "子代理模型",
     subagentRow: "子代理主模型",
     subagentHint: "子 Agent（subagent_run）使用的模型；缺省跟随会话。可在此钉死专门模型——终端错误时自动回退到「可用于子代理」标记的其它模型（窗口装不下已携上下文的候选自动跳过）。",

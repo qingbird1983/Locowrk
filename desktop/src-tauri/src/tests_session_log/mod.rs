@@ -14,7 +14,16 @@ use crate::session_log;
 use crate::tests::{kernel_with_tools, Collector};
 
 fn tmp_dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("locowrk-slog-{tag}-{}", std::process::id()));
+    // 目录名带纳秒 + 先清旧（memory_files/tests.rs 同款）：只带 pid 的写法
+    // 会在 Windows 上撞**上一个测试运行留下的残目录**（pid 会被回收复用），
+    // 而本模块的断言数的是「追加了几条事件」——脏目录直接让
+    // `.undo.bak` 读出 6 条（期望 4）。实测抓到过一次满跑红、单跑绿。
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let d = std::env::temp_dir().join(format!("locowrk-slog-{tag}-{}-{nanos}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
 }

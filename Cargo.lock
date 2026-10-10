@@ -714,7 +714,6 @@ dependencies = [
  "kernel-agent",
  "plugin-api",
  "plugin-host",
- "plugin-service",
  "semver",
  "serde_json",
  "session-store",
@@ -837,7 +836,6 @@ dependencies = [
  "serde",
  "serde_json",
  "session-store",
- "tokio",
  "tracing",
 ]
 

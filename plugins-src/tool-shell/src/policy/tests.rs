@@ -74,12 +74,24 @@ fn structural_denies_remain() {
             "{bad} must stay structurally denied"
         );
     }
-    // 空命令 / 引号不闭合
-    assert!(matches!(decide("   "), Decision::Deny { .. }));
-    assert!(matches!(
-        decide("cat \"unterminated"),
-        Decision::Deny { .. }
-    ));
+    // 空命令 / 引号不闭合：两条报文分开（各指各的出路，不合并成「empty」）
+    let reason = |cmd: &str| match decide(cmd) {
+        Decision::Deny { reason } => reason,
+        Decision::Allow { .. } => panic!("expected deny for {cmd}"),
+    };
+    assert!(
+        reason("   ").contains("empty"),
+        "空命令报文要指「给一个命令词」"
+    );
+    let unclosed = reason("cat \"unterminated");
+    assert!(
+        unclosed.contains("unclosed quote"),
+        "引号不闭合要说清是引号问题，got {unclosed}"
+    );
+    assert!(
+        !unclosed.contains("empty"),
+        "两条报文不得合并——模型按报文自救"
+    );
 }
 
 #[test]

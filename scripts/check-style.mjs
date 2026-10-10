@@ -19,7 +19,11 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const staged = process.argv.includes("--staged");
 
-// [名称, 正则, 级别]：error = 一级判错；warn = 二级报告（收敛清单）
+// [名称, 正则, 级别]：error = 一级判错；warn = 二级报告（收敛清单）。
+// 分级机架说明（审计报告 M-9）：**当前四条规则全为 error**，因此下面的
+// warns 分支暂无数据——不是死代码待删，而是「先二级观察、迁完翻判错」这条
+// 流程的固定工位（任意 px 字号就走完过这一轮：warn → v2.87 全量迁移 →
+// 翻 error）。新规则若要观察期，写 "warn" 即走该分支。
 const RULES = [
   ["tailwind内建圆角", /\brounded-(?:sm|md|lg|xl|2xl|3xl)\b/g, "error"],
   ["tailwind任意px圆角", /\brounded-\[\d+m?px\]/g, "error"],

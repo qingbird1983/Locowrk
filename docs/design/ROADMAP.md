@@ -722,6 +722,27 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.146 · 审计修复批 A+B（用户可见缺陷 + 门禁体系四道新防线）
+
+**依据**：`docs/reports/CODE-AUDIT-v1.md`（2026-10-10 全仓审计，4 子域 + Lead 机械取证）；执行计划与逐条证据 = `docs/reports/AUDIT-FIX-PLAN-v1.md`。**用户 2026-10-10 裁定**：本轮先做批 A+B；H2 `CtxCompact`/`Retry` 删本体（批 C）；批 C 删除范围只勾「59 孤儿 i18n 键」（`sandbox_run` 前端残留与三个死 API 包装保留 + 加注释）；`config/profile.toml` 删文件 + 移除文档描述（批 D）。**P0 复核 = 已修**（`approval.rs` 字节判定 + 整字符步进 + 三条 CJK 回归在位，逐行核过）。
+
+| 面 | 落点 |
+|---|---|
+| ①裸键名修复（H3b，用户可见） | 补 4 键 ×中英（`common.close` / `settings.proxySavedToast` / `developer.modeMemoryManager` / `developer.modeRule`）+ `settings-index.ts:136` 搜索键改指 `developer.panelTitle`；zh/en 949→**953** 对称，引用-存在性双向零缺键 |
+| ②UI 谎报修复（H8，用户可见） | `tool-fetch` manifest `fetch.side_effect` Pure→**Irreversible**（代码 v0.1.1 就改了、manifest 漏改 → 插件卡显示「纯」而每次调用都弹卡）；`tool-shell` manifest 简介与两工具描述同步 v2.145 语义（删「白名单/denylist 硬锁/解锁开关」幽灵，补「无命令级禁令 + EXACT_ARGV 免审面」）；版本随批 tool-fetch **0.1.2** / tool-shell **0.1.6** |
+| ③报错教学（M-10） | `policy.rs` `split_command` 返回 `Result<_, SplitError::{UnclosedQuote, Empty}>`——引号不闭合不再冒充「命令为空」（模型原本会去查空串而不是补右引号）；desktop `browser/tools.rs` 绝对路径示例按 `cfg!(windows)` 分支（三平台 crate 不再给非 Windows 模型喂 `F:\…`） |
+| ④小垃圾（H3 部分/H6/M-3/C1/C7/M-17/M-25） | 删孤儿整文件 `lib/side-effect.ts`（57 行，副作用分级真源是后端字段）；删 `tool-summary.ts` 的 `fs_edit` 幽灵映射；删两条零使用依赖（`kernel-bin/plugin-service`、`memory-tree` dev `tokio`）；删 `session.rs` 冗余 re-export + `AppState.app` 陈旧 `#[allow(dead_code)]`（字段确有消费者）；订正 6 处腐烂注释（experiences 先例 / compact_cfg / profile.toml / 整理模式透出 / 「三个」监听器实为 7 模块 9 处） |
+| ⑤退役残留按裁定保留 | `sandbox_run` 前端 6 处 + `assetGc`/`llmListModels`/`llmProbeWindow` 三包装 = **保留并加「历史渲染面 / 预留」注释**（用户多选只勾 i18n 孤儿键一项） |
+| ⑥门禁 CI 补齐（H1） | `ci.yml` 三作业：kernel（根 workspace）/ **desktop**（`windows-latest`：前端 build 供 `generate_context!` 吃 dist + lint:style + desktop fmt/clippy/test，此前**桌面端与前端在 CI 上完全不存在**）/ hygiene（四道脚本闸）；`cargo machete` 以 advisory 进 kernel 作业 |
+| ⑦四道新防线（新脚本） | `check_length.sh` 恒 exit 0 的**空转门禁**改基线比较（基线 32→**40**，覆盖面同时补 `plugins-src/` +2 与 `desktop/src/**/*.ts` +6——locales/chat.ts/types.ts/api.ts/tool-detail.ts 长期在盲区；逐文件 `wc` 改 `xargs` 批算，整闸 15s→2.3s）；新 `check-i18n.mjs`（token 级状态机解析，不再犯「正则把 prettier 折行误判成缺键 18 条」；键集双向相等 + 反向缺键 + 动态前缀豁免的无引用报告）；新 `check-commands.mjs`（`#[tauri::command]` ↔ `generate_handler!` ↔ `invoke` 三向，实测 85=85=85）；新 `check-middleware-wiring.mjs`（未接线必须进 `KNOWN_UNWIRED`，接上了不删条目反向判红——**独立复现出审计 H2 的 CtxCompact + Retry**）；`.githooks/pre-commit` 按暂存面触发这四道 |
+| ⑧构建脚本（M-5/M-12） | `build_plugins.sh` 暂存幂等化（`cp -R assets` 前先清，修掉每跑一次叠一层 `assets/assets/` 的错位；连跑两次当前 stage 全集嵌套数 = **0**）；收尾文案改由 stage 清单生成（旧硬编码版本行已写出自相矛盾） |
+| ⑨附带修的测试地雷（审计未列） | `tests_session_log/mod.rs::tmp_dir` 目录名只带 pid、不先清 → Windows 复用 pid 时读到上次运行残留（实测「满跑红单跑绿」，`.undo.bak` 读出 6 条 vs 期望 4）；按 `memory_files` 先例加纳秒 + 先清。同形态全仓还有 ~20 处 → 登记为计划批 F11（本批不扩大改动面） |
+| 变异验证 | 新闸全部按「弄坏→见红→精确还原→查残留」验过：i18n 两例（单边加键 / 引用不存在键）、命令闭合一例（注册表塞幽灵命令 → 同时报两类）、接线闸两例（摘白名单 / 假登白名单）、行数一例（塞 401 行文件）；tool-shell 报文分离断言亦做变异（改回合并形态当场红）。每次还原后 sha 逐字节比对 + grep 零残留 |
+| 门禁 | 最后一次编辑后全量复跑（见 CHANGELOG v2.146 行数字）；desktop `fmt/clippy/test` 三件绿、356 测与 v2.145 持平零回归 |
+| 边界 | ①CI 三作业的**实跑结果本机无法验证**（Actions 要 push 后才知，desktop 在 Windows runner 上的编译时长未知，退路 = 改 `workflow_dispatch`/定时）；②无引用键报告口径比审计严（我这边 133 条 vs 审计 59 条确证），批 C 删键前须与 `_parts/1-i18n-orphans.md` 取交集而非直接照我的清单删；③本批**未做** 4 个裸键名的中/英界面截图（机制层证据 = i18n 闸 + `pnpm build`）；④`cargo machete` 首版标 advisory，跑绿一次才转硬门；⑤`proof.rs` 的 `unterminated quote` 报文仍走通用模板（出路提示偏弱，同族但轻，留批 F） |
+| 文档 | `AUDIT-FIX-PLAN-v1.md`（新立，含裁定登记 + 逐条证据）+ ROADMAP/CHANGELOG/AGENTS v2.146 |
+
+---
 ### v2.145 · 权限模型重设计（对齐 ZCode：无命令级禁令 + 粘性授权 + 全自动档真全自动）
 
 **用户 2026-10-10 口述裁定**：「我们按照 ZCODE 的学来吧……这个不能用 那个不能开 就连发起子代理 还要申请来授权 权限限制的太死板了。真实做项目的话就没办法使用了。除非用户一直坐电脑边上看着，zcode 的机制就很完美的」+ 问卷两条：sandbox_run **退役**、Auto 档 **ZCode yolo 同款字面全放行**（两道既有硬门保留）+ 追加口谕「设置页终端的分类删掉」。

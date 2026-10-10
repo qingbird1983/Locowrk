@@ -1,17 +1,44 @@
 #!/usr/bin/env bash
-# pre-commit：①单文件行数上限检查（规则见 AGENTS.md「模块与文件规模纪律」）
-#            ②前端统一标准一级判错（规则见《Front-end Design Guidelines.md》§六
-#              ——用户 2026-10-06 裁定「自发明一律判错」）：
-#              · stylelint = CSS 声明维度（颜色/圆角/阴影/时长，desktop/stylelint.config.cjs）
-#              · check-style.mjs = 模板维度（tailwind 圆角类）
+# pre-commit（规则出处见 AGENTS.md「模块与文件规模纪律」+《Front-end Design
+# Guidelines.md》§六 + 审计报告 §7.1–7.4 的四道新防线）：
+#   ① 行数基线          scripts/check_length.sh（改基线比较后**真的会拦**——
+#                        旧版 `|| exit 1` 配恒 exit 0 的脚本 = 空转，H1）
+#   ② 前端统一标准       stylelint（CSS 声明维度）+ check-style.mjs（模板维度）
+#   ③ i18n 双向闭合      check-i18n.mjs（zh/en 键集相等 + 引用键必存在）
+#   ④ 命令三向闭合       check-commands.mjs（定义 = generate_handler! = invoke）
+#   ⑤ 中间件接线         check-middleware-wiring.mjs（未接线必须显式白名单）
+# ③–⑤ 只在相关文件暂存时跑（各自约 5–10s，Windows 文件系统实测）。
 root="$(git rev-parse --show-toplevel)"
-bash "$root/scripts/check_length.sh" || exit 1
-
-staged_vue="$(git diff --cached --name-only --diff-filter=ACM | grep '\.vue$' || true)"
+staged="$(git diff --cached --name-only --diff-filter=ACM)"
 fail=0
+
+say() { echo "[pre-commit] $*"; }
+
+bash "$root/scripts/check_length.sh" || fail=1
+
+staged_vue="$(printf '%s\n' "$staged" | grep '\.vue$' || true)"
 if [ -n "$staged_vue" ]; then
-  rel="$(echo "$staged_vue" | sed 's#^desktop/##')"
+  rel="$(printf '%s\n' "$staged_vue" | sed 's#^desktop/##')"
   (cd "$root/desktop" && pnpm exec stylelint $rel) || fail=1
   node "$root/scripts/check-style.mjs" --staged || fail=1
+fi
+
+if printf '%s\n' "$staged" | grep -q '^desktop/src/'; then
+  say "i18n 双向闭合"
+  node "$root/scripts/check-i18n.mjs" || fail=1
+fi
+
+if printf '%s\n' "$staged" | grep -qE '^desktop/src-tauri/src/|^desktop/src/lib/api\.ts$'; then
+  say "Tauri 命令三向闭合"
+  node "$root/scripts/check-commands.mjs" || fail=1
+fi
+
+if printf '%s\n' "$staged" | grep -qE '^crates/kernel-agent/src/|^desktop/src-tauri/src/state/'; then
+  say "中间件接线检查"
+  node "$root/scripts/check-middleware-wiring.mjs" || fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "[pre-commit] 有门禁判红——修它，或按项目纪律在脚本里登记带理由的豁免。"
 fi
 exit $fail

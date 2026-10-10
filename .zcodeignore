@@ -22,10 +22,10 @@ Thumbs.db
 /tmp/
 .zcode/
 
-# 开发态插件产物（二进制不入库；源码在 plugins-src/）
-plugins/**/*.dll
-plugins/**/*.so
-plugins/**/*.dylib
+# 开发态插件产物：整目录由下方 `plugins/*` 忽略。此处曾另列
+# plugins/**/*.dll|.so|.dylib 三条——被 `plugins/*` 完全覆盖、永不生效
+# （git check-ignore -v 实测命中 plugins/*），审计报告 M-9 删除。
+# 若将来放宽 plugins/*，再按需要把二进制三行加回来。
 
 # 市场插件产物（二进制不入库；源码在 plugins-src/，暂存脚本 scripts/build_market.sh）
 market/**/*.dll
@@ -36,6 +36,9 @@ market/**/*.dylib
 # 源头已跟踪，暂存副本不入库）
 plugins/*
 !plugins/README.md
+
+# 用户问题批次工作目录（docs/issue，不入库）
+docs/issue/
 
 # ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
 .git/

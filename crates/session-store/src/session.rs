@@ -406,10 +406,5 @@ fn backfill(found: Option<&(&str, &Value)>) -> (String, Value) {
         .unwrap_or_else(|| (String::new(), Value::Null))
 }
 
-// TurnId / TurnOutcome 目前由 kernel 的会话管理层（阶段四 SessionManager）使用，
-// 这里 re-export 保持 §4.1 事件全集的类型完整。
-#[allow(unused_imports)]
-pub use crate::event::{TurnId, TurnOutcome};
-
 #[cfg(test)]
 mod tests;

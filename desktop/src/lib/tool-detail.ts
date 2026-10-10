@@ -59,6 +59,7 @@ const KIND_TABLE: Record<string, { type: string; icon: IconName }> = {
   edit_diff: { type: "write", icon: "edit" },
   shell: { type: "terminal", icon: "terminal" },
   shell_read: { type: "terminal", icon: "terminal" },
+  // tool-sandbox 已于 v2.145 退役，此条只服务历史会话日志重放（用户裁定保留）。
   sandbox_run: { type: "terminal", icon: "terminal" },
   fetch: { type: "web", icon: "globe" },
   memory_write: { type: "memory", icon: "database" },

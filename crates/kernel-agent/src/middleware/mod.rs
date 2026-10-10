@@ -60,7 +60,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 /// waterfall 监听器的 Replace 收口（to_value 失败按 fail-open 放行）——
-/// ToolExposure / Memory-Inject / ctx-compact 三个 request 监听器共用。
+/// 所有做 Replace 的 request 监听器共用（现网 7 个模块 9 处调用）。
 pub(crate) fn replace_decision(req: impl Serialize) -> WaterfallDecision {
     match serde_json::to_value(&req) {
         Ok(v) => WaterfallDecision::Replace(v),

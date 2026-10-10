@@ -20,6 +20,7 @@ export default {
     back: "Back to app",
     cancel: "Cancel",
     refresh: "Refresh",
+    close: "Close",
   },
   // Confirm dialog (§五: the only modal with a scrim, ConfirmDialog)
   confirm: {
@@ -612,6 +613,8 @@ export default {
     treePending: "Pending task: events #{from}–#{to} (redispatched {attempts}×)",
     treeHistory: "Recent organizes",
     treeHistoryRow: "{time} · {reason} · {mode} · {status} · {chapters} chapters · in {input} / out {output} · {ms}ms",
+    modeMemoryManager: "memory manager",
+    modeRule: "rule split",
     stabilityRoundsHint: "For N turns after compaction the prefix stays untouched (1–10).",
   },
   memory: {
@@ -958,6 +961,7 @@ export default {
     proxyDirect: "Direct",
     proxyCustom: "Custom",
     proxyUrlRow: "Proxy URL",
+    proxySavedToast: "Network proxy saved",
     subagentTitle: "Sub-agent model",
     subagentRow: "Sub-agent model",
     subagentHint: "Which model sub-agents (subagent_run) use; defaults to following the session. Pin a dedicated model here — on terminal errors it automatically falls back to models marked \"available for sub-agents\" (candidates whose window cannot fit the carried context are skipped).",

@@ -20,9 +20,8 @@ use crate::settings::SettingsStore;
 use crate::usage::UsageRecorder;
 
 pub struct AppState {
-    /// 阶段八的窗口级命令（对话框、多窗口）从这里取句柄；当前
-    /// 事件出口已是共享 sink，字段暂无读取方。
-    #[allow(dead_code)]
+    /// 窗口级命令句柄：自动标题（commands.rs）与调度引擎触发通知都经它
+    /// 取窗口/发事件。
     pub app: AppHandle,
     pub kernel: Arc<Kernel>,
     /// 插件管理唯一入口（UI 不得直碰 registry，AGENTS.md 架构边界）。
@@ -74,7 +73,7 @@ pub struct AppState {
     /// 应用内通知记录（§3.13，v2.51）：notifications.json 自持，命令层
     /// 读改；TauriSink 入账钩子经 app.manage 的克隆惰性取用。
     pub notifications: Arc<crate::notifications::NotificationStore>,
-    /// ToolExposure 的活配置（⑫，同 compact_cfg 的换入模式）。
+    /// ToolExposure 的活配置（⑫，与下方 timeout_cfg 同一热换模式）。
     pub exposure_cfg: Arc<RwLock<ToolExposureConfig>>,
     /// ToolExposure 本体（⑫）：tool_exposure_debug 命令读最近一次截断快照。
     pub exposure: Arc<ToolExposure>,
