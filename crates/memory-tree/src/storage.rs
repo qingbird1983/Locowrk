@@ -8,18 +8,13 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::tree::MemoryTree;
+// 会话 id 白名单的唯一真源（审计 M-23）：这里与 session-store 曾各写一份
+// 且已分叉——本侧不认 `.`，对侧认，于是含 `.` 的会话 id「日志落盘成功而
+// 树投影静默失效」，而旧注释还自称「与 session_log 同源」。相对本侧旧判据
+// 的行为差异 = **放宽** `.`（长度 ≤64 与防穿越判据原样保留）。
+use plugin_api::naming::valid_session_id;
 
 const DIR_NAME: &str = "memory-tree";
-const SESSION_ID_MAX: usize = 64;
-
-/// 会话 id 白名单（与 session_log 落盘命名同源收紧）：防路径穿越。
-fn valid_session_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= SESSION_ID_MAX
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-}
 
 /// fnv-1a 64 位（无依赖、跨运行稳定）。
 fn fnv1a(data: &[u8]) -> u64 {
@@ -285,6 +280,39 @@ mod tests {
         store.save(&sample("ws-a", "sess-1")).expect("二次保存");
         assert!(store.delete("ws-a", "sess-1").unwrap());
         assert!(store.load("ws-a", "sess-1").is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dotted_session_id_round_trips() {
+        // 回归锁（审计 M-23）：本侧曾拒 `.`（而 session-store 放行）——含点
+        // 的会话 id「日志有、树投影存不进」，只以 Err 字符串出现 = 静默
+        // 失效。规则单点化（plugin_api::naming）后必须存得进、读得出。
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("mt-test-dotted-{nanos}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = TreeStore::new(&dir);
+        let id = "a.b_c-1";
+        store.save(&sample("ws-a", id)).expect("带点 id 必须存得进");
+        assert!(store.load("ws-a", id).is_some(), "读得出");
+        assert!(
+            store
+                .scan_trees()
+                .iter()
+                .any(|s| s.session_id == id && s.workspace == "ws-a"),
+            "清单一并可见（投影可被发现才算真活）"
+        );
+        assert!(
+            store.load("ws-a", ".").is_none(),
+            "整串全点必须拒（读面回落 None = 按不存在处理）"
+        );
+        assert!(
+            store.save(&sample("ws-a", "../escape")).is_err(),
+            "路径分隔必须拒"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -71,9 +71,12 @@ impl OrganizeReason {
 }
 
 /// 触发判定输入（桌面端每轮收束后装配；token 单位统一）。
+///
+/// 这里**不带** [`AnchorSource`]：判定只吃 `anchor_tokens` 这个数字，锚点
+/// 来源是桌面观测面（`organize/debug.rs` 如实标注）的事，塞进判定输入
+/// 只会长出一个「只写不读」的幻影字段（审计 M-23 删的就是这一条）。
 #[derive(Debug, Clone, Copy)]
 pub struct TriggerInput {
-    pub anchor_source: AnchorSource,
     pub anchor_tokens: u64,
     /// 整理阈值（绝对 token，v2.137）：占用达到即触发批量整理；0 = 关自动。
     pub threshold_tokens: u64,
@@ -104,7 +107,6 @@ mod tests {
 
     fn inp(pacing: Pacing) -> TriggerInput {
         TriggerInput {
-            anchor_source: AnchorSource::LlmUsage,
             anchor_tokens: 120_000,
             threshold_tokens: 100_000,
             pacing,

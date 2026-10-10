@@ -42,6 +42,49 @@ fn session_id_validation_and_roundtrip() {
 }
 
 #[test]
+fn dotted_session_id_round_trips() {
+    // 回归锁（审计 M-23）：含 `.` 的会话 id 曾在 memory-tree 侧被拒、这边
+    // 被收 = 「日志落盘成功、树投影静默失效」。规则单点化后两侧必须都认，
+    // 且旁车仍落 `<id>.meta.json`（with_extension 只换 jsonl 那一段）。
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    // 目录名带纳秒并先清（历批 F11 教训：只带 pid 会读到上次运行残留）
+    let dir = std::env::temp_dir().join(format!("locowrk-persist-dotted-{nanos}"));
+    std::fs::remove_dir_all(&dir).ok();
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let id = "a.b_c-1";
+    assert!(valid_session_id(id), "plugin-api 单点规则必须放行点号");
+    let path = session_file(&dir, id).unwrap();
+    append_event(&path, &user_msg("一")).unwrap();
+    let (session, skipped) = load_session(&path).unwrap();
+    assert_eq!(session.len(), 1, "带点 id 的日志读得回");
+    assert_eq!(skipped, 0);
+
+    write_title(&dir, id, "带点标题").unwrap();
+    assert_eq!(
+        read_meta(&dir, id).unwrap().title.as_deref(),
+        Some("带点标题")
+    );
+    assert!(
+        dir.join("a.b_c-1.meta.json").exists(),
+        "旁车文件名只替换 jsonl 段，id 内的点不动"
+    );
+
+    // 收紧面照旧拒（全点串 / 穿越 / 空）
+    assert!(session_file(&dir, "..").is_err(), "整串全点必须拒");
+    assert!(session_file(&dir, ".").is_err());
+    let long = "x".repeat(65);
+    assert!(
+        session_file(&dir, &long).is_err(),
+        "超过 64 字符上限必须拒（新增判据）"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn rewrite_truncates_and_leaves_backup() {
     let dir = tmp_dir("rewrite");
     let path = session_file(&dir, "s").unwrap();

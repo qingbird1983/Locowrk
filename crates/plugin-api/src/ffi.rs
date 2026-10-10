@@ -13,6 +13,13 @@ pub mod code {
     /// 插件内部 panic（已被插件侧 `catch_unwind` 拦下，纪律 3 / §9.4）。
     pub const ERR_PANIC: i32 = -1;
     /// 请求的工具名在本插件中不存在。
+    ///
+    /// **RESERVED（审计 M-21 / 计划 D5）**：`-2` 是冻结码表里的槽位，**现网
+    /// 无人返回它**——宿主侧与插件侧（`plugin_side` 宏 + 内置八插件）遇到未知
+    /// 工具都走 `ERR_CALL_FAILED` + `out` 里的 `{"error":"unknown tool ..."}`
+    /// 信封（宿主优先读信封，见本模块头注）。数值槽位保留 = ABI 不重排；
+    /// 将来若要让「路由不到工具」与「工具执行失败」在码面层可分，就是它上线
+    /// 的那天，届时宿主错误映射表同步补一行人类可读报文。
     pub const ERR_UNKNOWN_TOOL: i32 = -2;
     /// 工具执行失败（`out` 携带错误信封）。
     pub const ERR_CALL_FAILED: i32 = -3;

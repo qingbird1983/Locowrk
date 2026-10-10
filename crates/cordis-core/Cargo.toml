@@ -6,6 +6,12 @@ rust-version.workspace = true
 
 [dependencies]
 tokio = { workspace = true }
+# **设计约束，不是冗余**：本 crate 源码当前零 `plugin_api::` 引用，但
+# AGENTS.md/DESIGN.md §8 依赖图明写 `cordis-core → plugin-api`（审计
+# M-6.2/H6 拿的正是这条「图上有、代码里没」的反向证据）。CI 的
+# `cargo machete` 属 advisory，会点名这一条——别顺手删：删它必须同批改
+# §8 依赖图与 AGENTS 架构边界段（计划 D8 裁定 = 连文档同判，本轮不动，
+# 只在清单里把理由钉在依赖声明旁边）。
 plugin-api = { workspace = true }
 async-trait = { workspace = true }
 dashmap = { workspace = true }

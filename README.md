@@ -22,5 +22,4 @@ crates/
   kernel-bin/       CLI 可执行入口
 desktop/            Tauri 2 + Vue 3 桌面端（阶段五脚手架）
 plugins/            插件安装目录（多版本并存）
-config/             profile.toml 插件组合配置
 ```

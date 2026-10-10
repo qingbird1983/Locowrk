@@ -145,15 +145,15 @@ impl LockFile {
     }
 
     /// 追加 tombstone（去重）。
+    ///
+    /// 清理路径只有一条：`service.rs::startup_reconcile`（重启时逐条
+    /// `remove_dir_all` 成功才摘）。曾另有一个 `clear_pending_delete(dir)`
+    /// 单元入口，全仓无生产调用点（只被自家测试用）= 与上面同语义的第二
+    /// 份实现，审计 M-22/D6 就此删掉——留两个入口迟早分叉。
     pub fn push_pending_delete(&mut self, dir: PathBuf) {
         if !self.pending_delete.contains(&dir) {
             self.pending_delete.push(dir);
         }
-    }
-
-    /// 清理已成功删除的 tombstone。
-    pub fn clear_pending_delete(&mut self, dir: &Path) {
-        self.pending_delete.retain(|p| p != dir);
     }
 }
 

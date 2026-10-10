@@ -2824,6 +2824,7 @@ name = "memory-tree"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "plugin-api",
  "serde",
  "serde_json",
  "session-store",

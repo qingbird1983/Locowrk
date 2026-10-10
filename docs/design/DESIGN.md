@@ -395,12 +395,18 @@ impl<L: Default> ScopedLayers<L> {
 
 事件总线同时承担协作和拦截两个职责。
 
-| 模式 | 语义 | 典型用途 |
-|---|---|---|
-| `emit` | 异步通知，不等待返回值 | 日志、指标、遥测 |
-| `parallel` | 并发通知所有监听者 | 缓存刷新、索引更新 |
-| `serial` | 顺序通知，可短路 | 审计链、安全过滤器 |
-| `waterfall` | 顺序经过中间件，每个可改写/拒绝 | Agent 循环插桩、请求改写、审批 |
+| 模式 | 语义 | 典型用途 | 现网接线（v2.148 批 D 如实标注） |
+|---|---|---|---|
+| `emit` | 异步通知，不等待返回值 | 日志、指标、遥测 | ✅ 活的（内核与两个组装点都在通知） |
+| `parallel` | 并发通知所有监听者 | 缓存刷新、索引更新 | **RESERVED**——实现与测试在位，零生产调用点 |
+| `serial` | 顺序通知，可短路 | 审计链、安全过滤器 | **RESERVED**——审计链实际落在 `waterfall`（mw-audit），本语义无生产调用点 |
+| `waterfall` | 顺序经过中间件，每个可改写/拒绝 | Agent 循环插桩、请求改写、审批 | ✅ 活的（`agent/request`、`agent/request-error` 等决策点） |
+
+> 四种语义都是规范面（删了就是改设计）。`parallel` / `serial` 两簇的**未接线
+> 状态**由审计《CODE-AUDIT-v1》H 域/D4 抓出，v2.148 批 D 的处置 = 保留 +
+> 就地标注（`crates/cordis-core/src/event_bus.rs` 头注），不当死码删；
+> 「存在但从未接线」自此由 `scripts/check-middleware-wiring.mjs` 那类交叉
+> 验证负责，本表负责不再让文档宣称四者皆现役。
 
 ```rust
 pub enum WaterfallDecision {
@@ -1244,17 +1250,20 @@ agent-kernel/
 │   │   ├── lib/api.ts
 │   │   └── App.vue
 │   └── package.json
-├── plugins/
-│   ├── llm-openai/               # LlmService 插件
-│   ├── tool-http/
-│   │   ├── 1.2.0/libtool_http.so
-│   │   └── 1.3.0/libtool_http.so
-│   ├── tool-shell/
-│   │   └── 0.9.0/libtool_shell.so
-│   └── session-sqlite/           # 会话持久化插件
-└── config/
-    └── profile.toml              # 声明 active 版本 + 插件组合
+└── plugins/
+    ├── llm-openai/               # LlmService 插件
+    ├── tool-http/
+    │   ├── 1.2.0/libtool_http.so
+    │   └── 1.3.0/libtool_http.so
+    ├── tool-shell/
+    │   └── 0.9.0/libtool_shell.so
+    └── session-sqlite/           # 会话持久化插件
 ```
+
+> **v2.148 批 D 更正**：本图原有一份 `config/profile.toml`（「声明 active 版本 +
+> 插件组合，内核启动时按 profile 加载」）。该加载器**从未实现过**，文件里也没有
+> 任何生效键（七行全注释），插件装载实际走 lockfile + `plugins/{id}/{version}/`
+> + fsRoots（⑦/㉚/㉘·B）——文件与本描述一并移除（审计《CODE-AUDIT-v1》H4）。
 
 ### 依赖方向（严格单向；`X → Y` 表示 X 依赖 Y）
 
@@ -1689,15 +1698,16 @@ impl PluginService {
 │       └── 0.9.0/
 │           └── libtool_shell.so
 ├── lockfile.json               # 记录已安装插件、版本、EffectId
-├── market-cache/               # 市场目录缓存
-│   └── registry-snapshot.json
-└── config/
-    └── profile.toml            # 当前激活的插件组合
+└── market-cache/               # 市场目录缓存
+    └── registry-snapshot.json
 ```
 
 多版本并存是回退的基础，`install_root/{id}/{version}/` 的结构让版本回退只需切换 `active` 指针，不需要重新下载。
 
-**开发态与安装态是两套目录**：开发态是仓库内的 `plugins/{id}/{version}/` 与 `config/profile.toml`（§8），内核开发与测试直接按 profile 声明加载，不经市场与 lockfile；安装态是上面的 `~/.Locowrk/`，存放用户从市场安装的插件。`PluginService.install_root` 指向安装态，两套目录互不重叠。
+**开发态与安装态是两套目录**：开发态是仓库内的 `plugins/{id}/{version}/`，由 plugin-host 的 dev_scan 直接扫描装载（内置插件的启用/停用也落 lockfile 登记，见 ⑫/㉚），**不经市场**；安装态是上面的数据根目录，存放用户从市场安装的插件，按 `lockfile.json` 解析版本。`PluginService.install_root` 指向安装态，两套目录互不重叠。
+
+> 本节原写「开发态 = `plugins/` 与 `config/profile.toml`，内核按 profile 声明加载」——
+> 该 profile 加载器从未实现（审计《CODE-AUDIT-v1》H4，v2.148 批 D 更正为实际机制）。
 
 ### 11.4 LockFile 结构
 
@@ -2602,8 +2612,9 @@ export const usePluginStore = defineStore('plugins', {
 > 提取"值得记住的事实"——容易记垃圾故放最后）、自动停用设置项（exposure
 > 文档阶段 12，默认关闭）。四者共享 embedding 基建，出现真实需求一起排。
 > 收尾 backlog 不变（fs roots 目录选择器、desktop session 持久化、LLM
-> 流式、市场 wasm 打包分发、kv_get 所有权、profile.toml 面板接线、托盘
-> i18n），随批次搭车。
+> 流式、市场 wasm 打包分发、kv_get 所有权、托盘 i18n），随批次搭车。
+> （原列的「profile.toml 面板接线」随 v2.148 批 D 撤销：加载器从未实现，
+> 文件与 §8/§11.3 描述一并移除。）
 >
 > **壳批次落点（UI 骨架，v2.18，提交 a2c82a5）**：落地规则文档
 > `docs/design/UI shell and patterns.md`（§2 导航 / §3 模式库 / §4 流向图

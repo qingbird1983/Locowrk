@@ -23,6 +23,7 @@ pub mod ffi;
 pub mod fsutil;
 pub mod manifest;
 pub mod memlayout;
+pub mod naming;
 pub mod plugin_side;
 pub mod tool;
 

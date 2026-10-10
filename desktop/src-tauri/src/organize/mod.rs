@@ -270,9 +270,8 @@ impl Organizer {
         }
         let items = build_items(session.events(), tree.chaptered_until);
         let tail_tokens: u64 = items.iter().map(|i| i.tokens).sum();
-        let (anchor_tokens, anchor_source) = Self::anchor(session);
+        let (anchor_tokens, _) = Self::anchor(session);
         let reason = should_auto_organize(&TriggerInput {
-            anchor_source,
             anchor_tokens,
             threshold_tokens: self.settings.organize_threshold_tokens(),
             pacing: Pacing::parse(&mem.organize_pacing),

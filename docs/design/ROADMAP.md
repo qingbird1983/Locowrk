@@ -722,6 +722,23 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.148 · 审计修复批 D（死配置与哑 ABI：删的删、预留的标注、分叉规则单点化）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§5 批 D 段（逐条证据 + grep 对账在那儿）。**D2 改判转批 H**（查证发现取消信号过不去 C ABI 边界，只接宿主侧 = 造半接线，正是本轮审计在罚的形态；用户对该口径尚未表态，先按最低风险路径诚实化 + 立批）。
+
+| 面 | 落点 |
+|---|---|
+| ①死配置（D1/Q4） | `config/profile.toml` **删文件** + README/AGENTS 目录条目 + DESIGN §8 目录树与 §11.3 开发态段按真实机制重写 + DESIGN 末 backlog 与 ROADMAP backlog 行撤销 + `kernel-bin` 头注改完成时；改前 `grep profile.toml` = 9 处（README 1/DESIGN 4/ROADMAP 1/AGENTS 2 + 代码注释 1）→ 改后 **0**（历史批次日志与审计/计划文档除外） |
+| ②谎报能力（D5） | `host_kv_put` 不再写进读不回来的 `KV`、如实回 `ERR_UNSUPPORTED`（`static KV` + `LazyLock/HashMap` 随删；测试改名并断言 UNSUPPORTED，null 参仍 BAD_ARGS）——审计抓的「回 OK 但数据永不可读」= 谎报成功；`ERR_UNKNOWN_TOOL = -2` 标 **RESERVED**（现网两端都不返回它，未知工具实走 `-3` + JSON 信封；冻结 ABI 数值槽不删） |
+| ③分叉规则单点化（D7） | 新 `plugin_api::naming::valid_session_id`（唯一真源，`SESSION_ID_MAX=64`），`session-store/persist.rs` 与 `memory-tree/storage.rs` 两份本地实现删除（memory-tree 的 plugin-api 由 dev 依赖升为正式依赖）；`TriggerInput.anchor_source` 幻影字段删（`AnchorSource` 枚举留 = 桌面观测面板在读）。**变异验证**：规则改回不认点号 → plugin-api / session-store / memory-tree **三处回归锁齐红** → 逐字节还原复绿 |
+| ④测试专属 pub 面（D6） | `runtime::deps_of` 删（零消费者）、`lockfile::clear_pending_delete` 删（与 `startup_reconcile` 同语义两份实现）、`registry::graveyard_len` 降 `#[cfg(test)]`（只降 `pub(crate)` 会在无 cfg(test) 的 lib 构建触发 `dead_code`，实测）、`kernel::with_retry_budget` 保留 + 注明「活机制唯一注入口」、cordis-core 四个运行态观测方法保留 + RESERVED（§11.6 明写的 UI 投影面） |
+| ⑤未接线簇诚实化（D3/D4/D8） | 磁盘快照 + upcaster 簇标 RESERVED（§9.5/纪律 5 明写、实现与测试在位、磁盘面从未接、恢复真源 = JSONL 逐行回放，并写明接上那天要做的三件事 + ⚠ 勿与内存态 `Session.snapshots` 混）；`parallel`/`serial` 两簇标 RESERVED + **DESIGN §3.5 表加「现网接线」列**（emit/waterfall ✅、parallel/serial 零生产调用点，审计链实际落 waterfall）；`cordis-core → plugin-api` 依赖不动但在 `Cargo.toml` 依赖行旁钉住理由（DESIGN §8 要求 + CI `cargo machete` advisory，防顺手删） |
+| 测试账 | 根 workspace 432→**436**（+2 naming / +1 session-store / +1 memory-tree，删 0）；desktop 356 持平；`kv`/graveyard/lockfile 三处旧断言按新语义重写，未丢覆盖面 |
+| 门禁 | 根 fmt CLEAN、clippy `--workspace --all-targets -D warnings` 0、39 套件 436 绿；desktop fmt CLEAN、clippy 0、356 绿；`check_length` 39 == 基线；`check-middleware-wiring` 10·10·0·白名单 0；`check-i18n` 891=891、`check-commands` 85·85·85（本批零前端改动，故未跑 `pnpm build`/`lint:style`） |
+| 边界 | ①D2 真接线 = 新立**批 H**（内核活动调用登记表 + 停止逐个 cancel + vtable 末尾追加 `call_cancelled` 槽 + 长任务工具轮询 + §5.2 文档同批），一动就是「行为 + ABI」两面，需设计稿先行与实机走查；②`kv_put` 如实回 UNSUPPORTED 后，插件真要用 kv 仍须先定缓冲区所有权协议（§15.1 末尾追加 `kv_free` 槽路径不变）；③`memory-tree::fnv1a` 与 `memlayout::fnv1a64` 两份实现 = 登记批 F 收敛，本轮不动 |
+| 文档 | `AUDIT-FIX-PLAN-v1.md` 批 D 段 + §1 新增**批 H** 表 + 批 C/批 D 标题标 ✅ + ROADMAP/CHANGELOG/AGENTS v2.148 |
+
+---
 ### v2.147 · 审计修复批 C（两个从未接线的内核中间件摘本体 + 134 条死文案清零）
 
 **依据**：`docs/reports/AUDIT-FIX-PLAN-v1.md` §5 批 C 段（逐条证据在那儿，本节只记结论）。用户裁定 = Q2「`CtxCompact`/`Retry` 删本体」+ Q3「批 C 只删孤儿 i18n 键，`sandbox_run` 残留与三包装保留加注释」。
@@ -975,7 +992,8 @@
 | LLM 流式输出 | ✅ 已完成（⑳，v2.35，54a97ba：genai 流式 → delta 直推 + streamed 投影去重 + 子内黑盒压制，详见下方 ⑳ 块） | — |
 | 市场 wasm 打包分发 | ⑧⑧ 遗留 | 看需求 |
 | kv_get 所有权协议 |  | 看需求 |
-| profile.toml 设置面板接线 |  | 看需求 |
+| profile.toml 设置面板接线 | ❌ 已撤销（批 D v2.148，审计 H4：加载器从未实现、文件七行全注释零生效键；文件与 README/DESIGN §8·§11.3/AGENTS 目录描述一并移除，开发态装载归 dev_scan + lockfile） | — |
+| 工具级取消与 deadline 真接线（审计 H5 → 计划批 H） | ⬜ 设计稿先行：`CallCtx.cancel/deadline` 现网两端未接（deadline 有消费者无生产者、cancel 无人触发），且取消信号过不去 C ABI（`HostVtable` 无取消槽）。最小完整形态 = 内核活动调用登记表 + 停止时逐个 cancel + vtable 末尾追加 `call_cancelled` + `subagent_run`/`ask` 真轮询 + §5.2 同批。v2.148 批 D 已在代码头注标 RESERVED 并写清事实 | 需设计 + 你定口径 |
 | 托盘菜单 i18n | ✅ 已随壳批次完成（a2c82a5：sys-locale 探测，语言改动即时重挂菜单） | — |
 | UI 视觉抛光 | ✅ 已完成（⑰，v2.32，945e681：明暗主题 + 语义颜色类 + 统一动效；规范落 UI shell 文档 §六） | — |
 | tool-http（POST/PUT 通用请求） | plugins.md P1 唯一未做的工具类；tool-fetch 仅 GET（其代码注释已声明 POST/PUT 归本插件） | 看需求 |

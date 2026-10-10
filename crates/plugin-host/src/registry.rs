@@ -207,7 +207,11 @@ impl PluginRegistry {
             .collect()
     }
 
-    /// graveyard 长度（诊断/测试用：确认逻辑卸载只挪不移除）。
+    /// graveyard 长度（**只服务测试**：确认逻辑卸载「只挪不移除」= 纪律 2）。
+    ///
+    /// 审计 M-22/D6：曾有 `pub` 却零生产消费方，公开面等于无主 API。现收
+    /// 进 `#[cfg(test)]`——将来真做插件诊断面板时按当时的形态重新暴露。
+    #[cfg(test)]
     pub fn graveyard_len(&self) -> usize {
         self.graveyard
             .lock()

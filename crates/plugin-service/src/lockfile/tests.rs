@@ -75,11 +75,10 @@ fn remove_drops_entry_and_clear_pending_only_matches() {
     let gone = lf.remove("tool-a").unwrap();
     assert_eq!(gone.id, "tool-a");
     assert!(lf.entry("tool-a").is_none());
-
-    let d = PathBuf::from("/tmp/x");
-    lf.push_pending_delete(d.clone());
-    lf.clear_pending_delete(&d);
-    assert!(lf.pending_delete.is_empty());
+    // 原此处还断过 `clear_pending_delete`（与 startup_reconcile 同语义的第二
+    // 份实现，全仓无生产调用点）——审计 M-22/D6 已随方法一并删除；tombstone
+    // 的追加/去重断言在本文件 push 测试里，清理路径断言在 service 生命周期测
+    // 试里（`service/tests/lifecycle.rs`）。
 }
 
 fn tempfile_dir() -> PathBuf {

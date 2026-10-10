@@ -107,6 +107,11 @@ impl Kernel {
     }
 
     /// 自定义 request-error 的重试预算。
+    ///
+    /// 审计 M-22 把这条列进「只被自家测试消费的 pub 面」，但**不删**：它是
+    /// 活机制 [`RetryBudget`] 的唯一注入口（决策环在 `request.rs` 真读
+    /// `self.retry_budget`），删了就没有「组装点收紧重试」这条路，而预算
+    /// 本身仍是缺省值在跑。现网两个组装点都用缺省 = 记档事实，不是死码。
     pub fn with_retry_budget(mut self, budget: RetryBudget) -> Self {
         self.retry_budget = budget;
         self

@@ -7,6 +7,14 @@
 //!
 //! 纪律：先克隆监听器列表再 await，绝不持 DashMap 分片锁跨 await；
 //! 绝不 fire-and-forget——`parallel` 也 join 全部任务再返回。
+//!
+//! **现网接线状态（审计 D4 / v2.148 批 D 如实标注）**：四语义里
+//! [`EventBus::emit`] 与 [`EventBus::waterfall`] 是活的；[`EventBus::parallel`]
+//! 与 [`EventBus::serial`]（含 [`SerialListener`] / [`SerialOutcome`] /
+//! [`EventBus::on_serial`]）**零生产调用点** = §3.5 规范的预留面，不是死码：
+//! 审计链实际落在 waterfall（`kernel-agent::middleware::audit` 是 waterfall
+//! 监听器，理由见该文件头注），并发通知至今没有需要它的使用方。删除要同批
+//! 改 §3.5 表（已随本批在该表加「现网接线」列），故此处保留 + 标注。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};

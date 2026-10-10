@@ -68,12 +68,12 @@
 | C2 | `sandbox_run` 前端残留 6 处：`lib/tool-summary.ts:14,125`、`lib/tool-detail.ts:62,123,332,526`、`lib/side-effect.ts:43-44`（A3 已删）、`locales/*` 两条 | 插件 v2.145 已整目录退役，新会话不可达；**历史会话日志重放仍会渲染这些工具行** | 二选一：① 一并删（推荐——审计已确认删后落既有兜底 `{type:"tool", icon:"plug"}`+插件徽章，不崩）；② 判为「历史渲染面」保留 |
 | C3 | 三个死 API 包装 + 连带的 Rust 命令（审计 C2/B 域同源） | 已复核零 import：`lib/api.ts:105 assetGc`、`:419 llmListModels`、`:607 llmProbeWindow`；`types.ts:1030 ProviderModels` 孤儿。其中 `llm_probe_window` 的 UI 触发点（设置页自动检测）随 v2.137 四层链下线，`llm/probe.rs`（50 行）+ `probe/tests.rs`（27 行）整模块随之无消费者 | **这条不能只删包装**：删包装而留命令 = B5 那道三向闭合当场出现「后端有、前端无」红灯。三选一：① 连 Rust 命令一起退役（三处命令 + `lib.rs` 注册 + `probe.rs` 模块 + 相关测试）；② 只删 `llm_probe_window`/`llm_list_models` 两条真死的，`asset_gc` 保留（它是开发者手动 GC 入口，启动 + 24h 循环之外仍有用途）；③ 全保留并加「预留」注释 |
 
-### 批 D｜死配置与哑 ABI（审计 H4/H5 + M-20/M-21/M-22/M-23）——**部分需裁定**
+### 批 D｜死配置与哑 ABI（审计 H4/H5 + M-20/M-21/M-22/M-23）——✅ 已落（2026-10-11，证据见 §5 批 D 段；D2 转 批 H）
 
 | # | 条目 | 现状（已复核/审计取证） | 建议口径 |
 |---|---|---|---|
 | D1 | `config/profile.toml`（审计 H4） | 实测文件 7 行全注释、零生效键；全仓 Rust 无任何读取路径（`grep profile.toml` 唯一命中是 `kernel-bin/src/main.rs:7` 的「阶段七补」文档注释）；README 与 `DESIGN.md:1256,1695` 按「已实现」描述 | **需裁定三选一**：① 删文件 + 从 README/DESIGN 移除（推荐，当前桌面端插件装载走 lockfile/fsRoots，这条路已不存在）；② 保留 + 文档改「规划中」；③ 真实现加载器（工作量最大且与现网插件机制重复） |
-| D2 | `CallCtx` 取消设施（审计 H5） | `crates/plugin-api/src/tool.rs:180,193,197` 全仓零调用；唯一 `cancel` 字面命中是 `scheduler/tools.rs:51` 的描述文案 | **需裁定**：接线（超时/用户停止时真 `cancel()`，插件可感知）或删三者改为「取消由 `deadline` 承担」。`CallCtx` 是公开 ABI，删除属收窄 → 倾向**接线**（v2.144 刚修过 `subagent_run` 超时契约，停止语义接上是同一族问题） |
+| D2 | `CallCtx` 取消设施（审计 H5） | `crates/plugin-api/src/tool.rs:180,193,197` 全仓零调用；唯一 `cancel` 字面命中是 `scheduler/tools.rs:51` 的描述文案 | **v2.148 批 D 改判：不在清理批里接线**。查证发现取消信号**过不去 C ABI 边界**（插件 `call` 是同步 `extern "C"`，`HostVtable` 五槽没有取消/轮询入口，调用还跑在 `spawn_blocking`）——只接宿主侧就是再造一处「实现只到一半」，正是本轮审计在罚的形态。处置 = 就地标 RESERVED + 写清硬事实与最小完整形态，真接线转 **批 H**（见 §1 批 H 表）。搭车查证：`deadline` 是**有消费者（Timeout 中间件）无生产者**，同一批处理 |
 | D3 | session-store 磁盘快照 + upcaster 簇（审计 M-20，111 + 122 行） | `Snapshot`/`Upcaster`/`V1ToV2Upcaster`/`snapshot_at`/`from_snapshot` 全仓零生产引用；恢复走 `persist.rs:80-98` 逐行 JSONL 回放 | 先读 `DESIGN.md:1360-1380`（§9.5）定「未接线缺陷 vs 预留」再决定；⚠ 勿连带删内存态 `Session.snapshots`（活的另一套）；⚠ 删除要同时撤回 `CHANGELOG.md:28` / `ROADMAP.md:872` 的归档里程碑——**这一条我倾向标注 RESERVED + 注释，而不是删**（归档代价 > 111 行收益） |
 | D4 | cordis-core `serial` 监听器机制（约 45 行 + 测试） | 命中全在 `event_bus/tests.rs` 与 `lib.rs:27` re-export；`serials` map 生产恒空；其自述用途已被宿主侧中间件取代（`middleware/audit.rs:5`） | 删整簇或标 RESERVED，同步 DESIGN §3.5 表 |
 | D5 | `host_kv_put` 回 OK 但数据永不可读 + `ERR_UNKNOWN_TOOL` 幻影码（审计 M-21） | `plugin-host/src/host_vtable.rs:65-93`；`plugin-api/src/ffi.rs:16` | 让 `host_kv_put` 如实返回 `ERR_UNSUPPORTED`（ABI 签名不动，语义诚实化）；`-2` 补人类可读报文或标 RESERVED（`ffi.rs` 自述冻结契约，不宜删） |
@@ -121,6 +121,22 @@
 | 审计留下的取证脚本 | `tmp/audit-*.ps1` ×5、`tmp/paniccheck.rs` | **建议暂时保留**：P0 的复现证据，等本计划全部收口再删 |
 
 两份 `target/` 合计 ≈ 57 GB，是本机最值钱的一项回收。**我不会自己跑 `cargo clean`**——这是不可逆的时间成本，等你明确同意。
+
+---
+
+### 批 H｜工具级取消与 deadline 真接线（D2 后置，需设计稿先行）
+
+批 D 查证后单独立批（不在清理批里造半接线），完整口径见
+`crates/plugin-api/src/tool.rs` 的 `CallCtx` 头注。
+
+| 项 | 现状（v2.148 批 D 查证） | 要做的事 |
+|---|---|---|
+| H-1 `CallCtx::deadline` | **有消费者、无生产者**：`Timeout` 中间件每次读它取小，两个组装点从不写 → 现网恒 `None` | 调用前把「审批剩余 + 全局预算剩余」写进 deadline；与 ⑯/㉘·B 的超时口径对齐 |
+| H-2 `CallCtx::cancel/is_cancelled` | **两端都没接**：没有活动调用登记表；用户「停止」只作用于 LLM 流式与重试等待（`StopFlags`，v2.75） | 内核加 `(session_id, call_id)` 活动调用登记表 → 停止请求逐个 cancel → 长任务工具真轮询 |
+| H-3 C ABI 无取消通道 | 插件 `call` 是同步 `extern "C"`；`HostVtable` 五槽里没有取消/轮询入口；调用跑在 `spawn_blocking` | vtable **末尾**追加 `call_cancelled: extern "C" fn() -> u32`（append-only，⑭/㉘·A 先例）+ plugin-api 便捷封装 + 一个内置插件真实消费 |
+| H-4 文档 | DESIGN §5.2 列了 `deadline / 取消信号` 却没写「未接线」；`plugins.md` 无取消契约 | 接线批同步 §5.2 与插件作者文档（不接线就照批 D 的方式标预留，两不混淆） |
+
+判据提醒：这条批一动就是「行为 + ABI」两面，回归面比批 C/D 宽，需单独门禁 + 实机走查（用户点停止 → 长工具真早停 → 日志如实记 cancelled 而非 timeout）。
 
 ---
 
@@ -273,6 +289,34 @@ check-middleware-wiring.mjs  实现=10 · 已接线=10 · 未接线=0 · 白名�
 ```
 
 本批为纯代码/门禁面 + 死文案删除，**未做实机 CDP 走查**：判据 = 静态引用面（`t()` 字面量/索引键/动态前缀三路闭合）+ `vue-tsc` 构建 + 全量测试。要肉眼确认界面没有裸键名回潮，需另起一轮走查（列入批 V 验收）。
+
+### 批 D（2026-10-11 落地，v2.148；D2 转批 H）
+
+| # | 落点 | 证据（删除类一律给「改前 grep = 改后 grep」） |
+|---|---|---|
+| D1 | `config/profile.toml` **删文件**（`git rm`，7 行全注释零生效键）+ 文档描述移除：README 目录表一行、AGENTS 目录结构一行、DESIGN §8 目录树（`├── plugins/` 改 `└── plugins/` 保 ASCII 树正确）+ 树下更正注、§11.3 开发态/安装态段按真实机制重写（dev_scan + lockfile）、§末 backlog 一行撤销、ROADMAP backlog 行标 ❌ 已撤销、`kernel-bin/src/main.rs` 头注改完成时 | 改前 `grep -rn profile.toml` = README 1 / DESIGN 4 / ROADMAP 1 / AGENTS 2 / kernel-bin 1；改后 = **0**（历史批次日志与本计划、审计报告原文除外）。`ls config` = No such file or directory |
+| D2 | **改判：不在清理批里接线**。`CallCtx` 头注标 RESERVED 并写清两处硬事实：`deadline` = 有消费者（`Timeout` 中间件）无生产者（现网恒 `None`）；`cancel/is_cancelled` = 两端都没接，且**取消信号过不去 C ABI**（`call` 同步 `extern "C"`、`HostVtable` 五槽无取消入口、调用跑在 `spawn_blocking`）。真接线立 **批 H**（§1 新增四行表） | 查证链：`grep "is_cancelled\|\.cancel()"` = 只有 tool.rs 定义行，零调用方；`HostVtable` 逐槽读实（log/kv_get/kv_put/notify/session_context）。计划原先「倾向接线」被这条边界证据推翻——只接宿主侧 = 第三方与 wasm 插件照样收不到 = 再造一处「实现只到一半」，正是本轮审计在罚的形态 |
+| D3 | 磁盘快照 + upcaster 簇**保留并标 RESERVED**：`snapshot.rs` 头注重写（§9.5 与设计纪律 5 明写的机制、实现与测试在位、**磁盘面从未接**、恢复真源 = `persist.rs` 逐行回放、接上那天要做的三件事、⚠ 与内存态 `Session.snapshots` 区分） | `grep "from_snapshot\|snapshot_at\|V1ToV2Upcaster\|Upcaster"` 改后命中 = 定义 / re-export / 测试，生产调用点 **0**（与审计一致）；`Session.snapshots` 在 `session.rs:309/354/387` 有读写 = 活的，未碰 |
+| D4 | cordis-core `parallel` + `serial` 两簇**保留并标 RESERVED**：`event_bus.rs` 头注写清「emit/waterfall 活的、parallel/serial 零生产调用点、审计链实际落 waterfall」；DESIGN §3.5 表加「现网接线」列（四行逐条 ✅/RESERVED）+ 表下注 | `grep "\.parallel(\|\.serial(\|on_serial"` 全仓命中 = `event_bus/tests.rs`（`serial_stops_at_first_veto` 等 4 测），生产 0。改动依据 = 该簇自述用途已被 `middleware/audit.rs` 头注逐条说明（落 waterfall） |
+| D5 | `host_kv_put` **语义诚实化**：能力未定即如实回 `ERR_UNSUPPORTED`（不再写进读不回来的 `KV`），`static KV` 与 `LazyLock/HashMap` 导入随删；`ERR_UNKNOWN_TOOL = -2` **标 RESERVED**（写明本该谁返回、现网两端都没返回、未知工具实际走 `-3` + JSON 信封；数值槽位不删 = ABI 不重排） | 改前 `host_kv_put` 回 `code::OK` + 测试 `kv_put_stores_value` 断言 `KV` 有值 = **谎报成功**（get 恒 UNSUPPORTED）；改后测试改名 `kv_put_is_unsupported_until_ownership_protocol_lands`，断言 rc = `ERR_UNSUPPORTED`（null 参仍 `ERR_BAD_ARGS`）。plugin-api 35 测 + plugin-host 全 FFI/wasm 集成套件绿 = 无真实插件依赖 kv 写成功 |
+| D6 | 仅自家测试消费的 pub 面逐条分判：`runtime::deps_of` **删**（零消费者）、`lockfile::clear_pending_delete` **删**（与 `startup_reconcile` 同语义两份实现，留两入口迟早分叉）、`registry::graveyard_len` **降 `#[cfg(test)]`**、`kernel::with_retry_budget` **保留 + 注明「活机制唯一注入口」**、cordis-core 四个运行态观测方法 **保留 + RESERVED**（§11.6 明写的 UI 投影面） | `grep "\bdeps_of("` 改前 = 仅定义行 → 改后 0；`clear_pending_delete` 改前 = 定义 + `lockfile/tests.rs:81`（断言随葬，追加/去重与清理路径各自已有测试覆盖）。`graveyard_len` 若只降 `pub(crate)` 会在无 cfg(test) 的 lib 构建触发 `dead_code`（实测），故用 `#[cfg(test)]` 才是干净收口 |
+| D7 | `TriggerInput.anchor_source` 幻影字段**删**（只写不读；`AnchorSource` 枚举本身留 = 桌面观测面板在读）+ `valid_session_id` **下沉新模块 `plugin_api::naming` 单点定义**，两处本地实现删除，`memory-tree` 的 plugin-api 从 dev 依赖升为正式依赖 | 判据 = 两侧各加一条 `dotted_session_id_round_trips` 回归锁 + plugin-api 两条规则边界测（`..`/全点/65 字符/中文/冒号）。**变异验证**：规则改回「不认点号」→ plugin-api `real_id_shapes_are_accepted` + session-store + memory-tree **三处齐红**；逐字节还原（sha 比对一致）→ 复绿、零残留。分叉的实际后果照审计原文登记：含 `.` 的 id 日志落盘成功而树投影静默失效（现网 `desktop-<毫秒>` 恰好两边都合法 = 陷阱非现网缺陷） |
+| D8 | `cordis-core → plugin-api` 依赖**不动**，在 `Cargo.toml` 依赖行上方写清「设计约束非冗余」并指向 §8 与 CI `cargo machete` advisory（防将来顺手删） | 查证 = `grep plugin_api crates/cordis-core/src` 命中 **0**，而 DESIGN:1266 依赖图明写要求；删它必须同批改 §8 + AGENTS 架构边界 = 设计决策，不是垃圾清理 |
+
+顺带（登记，未修）：`memory-tree/src/storage.rs::fnv1a` 与 `plugin_api::memlayout::fnv1a64` 是同一算法两份实现（`scope_dir` 与 `project_dir_name` 亦同族重复）= 批 F「重复实现收敛」类，本轮不动（一轮只动一类变量）。
+
+**批 D 门禁（代码最后一次编辑后全量复跑，2026-10-11）**
+
+```
+根 cargo fmt --all --check CLEAN · clippy --workspace --all-targets -D warnings 0
+根 cargo test --workspace 39 套件 · 436 passed · 0 FAILED
+   （432 + naming 2 + session-store 1 + memory-tree 1 = 436，与批 C 收尾数逐数对上）
+desktop fmt --check CLEAN · clippy --all-targets 0 · cargo test 356 passed（持平）
+check_length 39 == 基线 39 · check-middleware-wiring 10·10·0·白名单 0
+check-i18n zh=891 en=891 · check-commands 85·85·85（本批未碰前端）
+```
+
+已知边界：①本批未跑 `pnpm build`/`lint:style`（无 `.ts/.vue` 改动，提交时按 pre-commit 暂存面自动跳过）；②D2 的接线口径（批 H）**用户尚未表态**，我按「不造半接线」的最低风险路径先做诚实化 + 立批，改主意随时可转；③`kv_put` 如实回 UNSUPPORTED 后，真有插件要用 kv 仍需先定缓冲区所有权协议（§15.1 末尾追加 `kv_free` 槽的路径不变）。
 
 ## 6. 验收判据（每批交付时逐条给）
 

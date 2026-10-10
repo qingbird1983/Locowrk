@@ -16,17 +16,15 @@ use serde::Serialize;
 use crate::error::StoreError;
 use crate::event::SessionEvent;
 use crate::session::Session;
+// 会话 id 白名单单点实现（审计 M-23）：本 crate 与 memory-tree 曾各写一份
+// 且已分叉（这边放行 `.`、那边不放行且限长 64，而那边注释自称同源），
+// 后果是含 `.` 的会话 id 日志落盘成功、树投影静默失效。规则收敛进
+// plugin-api 后两侧不可能再漂；相对本 crate 旧判据的**行为差异** = 新增
+// ≤64 长度上限与「整串全点」拒绝（现网 id 形如 `desktop-<毫秒>`，够不着）。
+use plugin_api::naming::valid_session_id;
 
 /// undo 截断重写前的滚动备份后缀（`<file>.undo.bak`，每次覆盖）。
 const UNDO_BACKUP_SUFFIX: &str = "undo.bak";
-
-/// 会话 id 允许字符：ASCII 字母数字与 `.` `_` `-`（前端生成 `desktop-<毫秒>`；拒路径分隔符防穿越）。
-fn valid_session_id(id: &str) -> bool {
-    !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
-}
 
 /// 会话 id → JSONL 文件路径（`<dir>/<id>.jsonl`）。id 非法 = [`StoreError::Invalid`]。
 pub fn session_file(dir: &Path, session_id: &str) -> Result<PathBuf, StoreError> {

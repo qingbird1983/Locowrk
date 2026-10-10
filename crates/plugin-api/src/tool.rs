@@ -172,6 +172,27 @@ pub enum ToolError {
 }
 
 /// 一次工具调用的宿主侧上下文（§5.2：session_id / call_id / deadline / 取消信号）。
+///
+/// **四个字段里两个是预留面（审计 H5 / 计划 D2，v2.148 批 D 查证并标注）**，
+/// 现役的是 `session_id`（㉘ 记忆隔离、⑭ 调度归属真在读）与 `call_id`
+/// （幂等去重键，纪律 7）：
+///
+/// * `deadline` = **有消费者、无生产者**。kernel-agent 的 `Timeout`
+///   中间件每次调用都会读它做「剩余预算 vs 全局超时」取小，但两个组装点都
+///   没写过 → 现网恒走 `None` 分支（= 只吃全局 `callTimeoutSecs`）。
+/// * `cancelled`（[`CallCtx::cancel`] / [`CallCtx::is_cancelled`]）=
+///   **两端都没接**：没有任何地方持有「本会话进行中调用」的登记表去逐个
+///   cancel，而用户的「停止」现在落在宿主侧 `StopFlags`（按会话，v2.75 起
+///   只作用于 LLM 流式与重试等待）。更硬的一条 = **取消信号过不去 C ABI
+///   边界**：插件的 `call` 是同步 `extern "C"`（[`ffi::CallFn`]），
+///   [`ffi::HostVtable`] 五个槽里没有取消/轮询入口，调用还跑在
+///   `spawn_blocking` 里——所以哪怕宿主翻了标志，第三方与 wasm 插件也看不见。
+///
+/// 真接线的最小完整形态（另立批做，不在清理批里造半接线）：内核加活动调用
+/// 登记表（按 `(session_id, call_id)`）→ 停止请求逐个 `cancel()` → 调用前把
+/// 审批/预算剩余时间写进 `deadline` → `HostVtable` **末尾**追加
+/// `call_cancelled: extern "C" fn() -> u32` 槽（append-only，ABI 版本不动，
+/// ㉘·A/⑭ 先例）→ 长任务工具（`subagent_run` / `ask`）真去轮询它。
 #[derive(Clone)]
 pub struct CallCtx {
     pub session_id: Option<String>,

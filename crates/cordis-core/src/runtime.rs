@@ -47,14 +47,6 @@ impl DependencyGraph {
     fn forget(&self, id: FiberId) {
         self.dependencies.remove(&id);
     }
-
-    /// 某 Fiber 声明依赖的服务键（调试/校验用）。
-    pub fn deps_of(&self, id: FiberId) -> Vec<TypeId> {
-        self.dependencies
-            .get(&id)
-            .map(|e| e.value().clone())
-            .unwrap_or_default()
-    }
 }
 
 /// 依赖图 + Fiber 表 + 反应式重载（§3.3）。方法全部 `&self`（内部可变性），
@@ -80,6 +72,11 @@ impl Runtime {
     }
 
     /// 查询 Fiber 状态（UI 投影的运行态来源，§11.6）。
+    ///
+    /// **RESERVED（审计 M-22/D6，v2.148 批 D 定性）**：下面四个观测方法是
+    /// DESIGN §11.6 明写的「运行态投影」入口，现网两个组装点都还没接
+    /// （当前消费方只有本 crate 的生命周期测试）。与 D3 快照簇同一口径
+    /// 处理 = 保留并标注，不当死码删；真接 UI 时它们就是入口。
     pub fn state_of(&self, id: FiberId) -> Option<FiberState> {
         self.fibers.get(&id).map(|f| f.value().state())
     }
