@@ -429,6 +429,14 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                     summary_preview: summary.chars().take(200).collect(),
                 });
             }
+            // 整理段落总结（Organize Summary Design v1 §3.3）：重放与实时
+            // 同形——历史会话恢复时总结块照常出现在断层缝合处。
+            SessionEvent::ContextSummary { text } => {
+                out.push(AgentEvent::ContextSummary {
+                    session_id: session_id.into(),
+                    text: text.clone(),
+                });
+            }
             SessionEvent::ApprovalDecided {
                 call_id,
                 allowed,

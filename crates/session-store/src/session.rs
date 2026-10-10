@@ -251,6 +251,13 @@ fn project_messages(events: &[SessionEvent]) -> Vec<Message> {
                 summary,
                 ..
             } => compact_messages(&mut messages, *kept_messages, summary),
+            // 整理段落总结（Organize Summary Design v1 §3.2）：映成带标记的
+            // User 消息（ContextCompacted 摘要同款纯标记先例——session-store
+            // 无 system-reminder 包裹惯例，免转义面）。位置 = 日志真实位
+            // （断层缝合处），从落位轮起随历史每轮在场。
+            SessionEvent::ContextSummary { text } => messages.push(Message::user(format!(
+                "[context summary of earlier organized conversation]\n{text}"
+            ))),
             _ => {}
         }
     }

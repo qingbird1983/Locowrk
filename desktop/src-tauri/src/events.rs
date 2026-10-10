@@ -54,6 +54,10 @@ pub mod channels {
     /// 用户裁决落日志后的实时回推（G2）：前端收束决策卡、按裁决闭合
     /// 工具行（随后的合成 ToolResult 投影同一来源闭合行明细）。
     pub const UNCERTAIN_RESOLVED: &str = "agent://uncertain-resolved";
+    /// 整理段落总结（Organize Summary Design v1 §3.3）：轮开场排空落日志
+    /// 后实时回推（与重放投影同形，uncertain-resolved 同款纪律）。前端渲染
+    /// 淡色总结块（断层交接：此前工作段的浓缩叙事）。
+    pub const CONTEXT_SUMMARY: &str = "agent://context-summary";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -159,6 +163,13 @@ pub enum AgentEvent {
         /// sliding_window / layered / summary_only（文案前端渲染）。
         strategy: String,
         summary_preview: String,
+    },
+    /// 整理段落总结（Organize Summary Design v1 §3.3）：上一轮收束的整理
+    /// 产出的轮级总结在轮开场排空进日志后实时推送；重放经 project_events
+    /// 同形产出（实时与重放同一变体，v2.134 uncertain 先例）。
+    ContextSummary {
+        session_id: String,
+        text: String,
     },
     /// 定时触发（⑭）：调度引擎注入轮之前告知——SystemNotice 无动作按钮，
     /// 后续助手回复以 chunk 跟进；窗口不在位时后端另有系统通知兜底。
@@ -277,6 +288,7 @@ impl AgentEvent {
             AgentEvent::ApprovalRequest(_) => channels::APPROVAL_REQUEST,
             AgentEvent::ContextUsage { .. } => channels::CONTEXT_USAGE,
             AgentEvent::ContextCompacted { .. } => channels::CONTEXT_COMPACTED,
+            AgentEvent::ContextSummary { .. } => channels::CONTEXT_SUMMARY,
             AgentEvent::ScheduleFired { .. } => channels::SCHEDULE_FIRED,
             AgentEvent::UserMessage { .. } => channels::USER_MESSAGE,
             AgentEvent::ApprovalResolved { .. } => channels::APPROVAL_RESOLVED,

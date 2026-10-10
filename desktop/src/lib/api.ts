@@ -43,7 +43,7 @@ import type {
   TreeDebug,
   TreeSummaryView,
   TreeChaptersView,
-  ProjectChapterView,
+  ProjectTreeView,
   TreeOriginalItem,
   OrganizeDonePayload,
   OrganizePausedPayload,
@@ -183,6 +183,8 @@ const CHANNELS = [
   // G2 崩溃恢复：用户裁决的实时回推（收束决策卡 + 闭合工具行）。
   // tool_uncertain 只在会话重放产出（session_history 返回数组），不订阅。
   "agent://uncertain-resolved",
+  // v2.141 整理段落总结：轮开场排空落日志后的实时推送（重放同形）。
+  "agent://context-summary",
 ] as const;
 
 export function subscribeAgentEvents(
@@ -663,8 +665,8 @@ export function memoryTreeOriginal(
   return invoke("memory_tree_original", { sessionId, workspace, chapterId });
 }
 
-/** 项目级 L0 联合视图（M6.4；跨会话捆平铺，最近活动会话优先）。 */
-export function memoryTreeProject(workspace: string): Promise<ProjectChapterView[]> {
+/** 项目级 L0 联合视图（M6.4；跨会话捆平铺 + v2.141 总结链，时间正序）。 */
+export function memoryTreeProject(workspace: string): Promise<ProjectTreeView> {
   return invoke("memory_tree_project", { workspace });
 }
 

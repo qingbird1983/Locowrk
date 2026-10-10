@@ -722,6 +722,39 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.142 · 跨会话取回闭环（时间线 = 第一答案面）
+
+**用户 2026-10-10 口述裁定**：①批 1（工具面闭环）照做，批 2（常驻进展行注入）**暂缓**——后期实际验证确实需要时再考虑；②**时间线优先**：最先查到的应该是时间线里的**总结 + 该总结所包含的标题**，这就够了，需要某标题的详细内容再深入追寻。病根 = 树投影按 `(workspace, session)` 隔离存储（有意设计），新会话问「之前做了什么」四处断裂：目录只投影当前会话 / search_titles 只对短标题打分 / **expand 只认当前会话章节**（v2.136 已知边界④）/ 项目总结链只在 UI 模型面零暴露。数据都在盘上，断的全是取回链路。
+
+| 面 | 落点 |
+|---|---|
+| 下钻 | `memory_expand` 跨会话化：schema 加可选 `session_id`（缺省 = 当前会话，旧调用逐字节兼容），(会话, 章节) 复合寻址；workspace 含入由当前会话解析（目标树必须在本项目 scope 下，跨项目天然拒）；L2 原文按**目标会话**日志 event_range 切片；**`mark_expanded` 只在目标 = 当前会话时写**（expanded_at 是「本会话上下文有展开内容」的记账，跨会话展开 = 纯读，写目标会话的树会让它的自动收起误判）；版本 1.1.0 |
+| 搜索 | `memory_search_titles` 索引扩容：打分文本 = 标题 + L1 摘要 + **所在轮总结正文**（章节区间 ⊆ RunSummary [from,to] 即归属；宽查询的语义主体是总结叙事），关键词降级同扩；hits 增 `session_title`；构造函数增 sessions_dir 参；版本 1.1.0 |
+| 时间线 | 新工具 `memory_project_history`（Pure + OnDemand）：项目跨会话**时间正序** ×（旁车标题 + 各轮 RunSummary 正文 + 该轮所含章节 `{id,title}` + 无总结覆盖章节落 other_chapters）；标题不带 L1 正文（裁定：总结+标题够了，L1 走 expand level=1）；**钳最近 20 会话** + truncated 如实指路 search_titles；数据源与 `tree_project` 同源但自带聚合（组装点在 Organizer 构建之前） |
+| 钩子 | repo_context 静态提醒段加历史查询钩子一句（项目过往 → memory_project_history 时间线先行 → search_titles/expand 下钻；on demand not proactively，v2.139 按需制纪律） |
+| 测试 | desktop 322（+4：跨会话 expand 读目标且两会话树零记账污染 / 缺省仍当前会话 / search_titles 只在总结正文的查询词命中 / project_history 分组时间正序 + 20 会话钳制 + 无总结落 other_chapters）、根 workspace 40 套件全绿 |
+| 门禁 | fmt 双侧 CLEAN、clippy 根 0 + desktop --all-targets 0、vue-tsc 0、pnpm build 过、lint:style 0、check_length 零新增超限（project_history.rs 165 / tree_tools.rs 288 / search_titles.rs 241 守线内；organize/tests.rs 722→864 系既有集成测试文件内增长，三问自检不拆） |
+| 边界 | ①search_titles 同轮总结文本在多章打分文本重复，一轮多章可能挤占 top-5（接受）；②时间线 20 会话钳制——更早主题靠 search_titles（候选池无钳制）；③会话排序按 session_id 字典序（桌面 id 含毫秒 = 时间序）；④**批 2 挂账**：常驻进展行注入，待实测验证；⑤大一统树目录否决（别会话整理改写本会话 system 前缀 = 全项目缓存互断，分层方案零缓存代价） |
+| 文档 | **《Cross-Session Recall Design v1》新立** + CHANGELOG v2.142 + AGENTS v2.142 |
+
+---
+### v2.141 · 整理段落总结（断层交接 + 项目跨会话锚点）
+
+**用户 2026-10-10 口述裁定四条**：①整理在章节标题之外增加「可追溯对话流的浓缩总结」；②总结只在整理触发的下一轮拼进提示词，起断层交接作用，不每轮专门携带；③层级上总结在该轮 N 份章节标题的上层（这批章节的浓缩父节点）；④总结兼作项目跨会话的进展记忆锚点。另核实：手动 `/整理` 斜杠命令自 v2.65 在位（不经阈值、不受熔断限制、随时可触发），与本批管线天然协同零改动。
+
+| 面 | 落点 |
+|---|---|
+| 层级 | 四层多分辨率：**RunSummary 轮级总结（常驻·历史消息面）→ L0 标题（常驻·system 目录）→ L1/L2（按需 expand）**；去噪只在常驻层（L1/L2 无损保留 = 有安全网的降采样）；持久性偏好居所仍是 memory_write（v2.136 模型） |
+| 交付 | **真实历史事件落在断层处**：新 `SessionEvent::ContextSummary`，下一轮开场（agent_chat / 调度引擎持锁、先于 run_turn）从树投影排空落日志——旁路管道不持锁不得直写日志（内存/磁盘索引分叉防线）；位置恒在断层缝合处，随历史每轮在场直到被下一次整理**滚动收编**（近详远略 + 2400 字符硬钳） |
+| 缓存 | 总结走消息历史追加面，system 与目录一字不改——prompt_layering 锁的前缀纪律原样成立；不重蹈 v2.136 handoff 教训（总结 = 封段一次成文的封闭期记录，非活文档） |
+| 管道 | 记录员输出 = JSON 数组 + `===SUMMARY===` 尾随标记段（数组契约不动，先切标记再取数组）；rule 降级无总结宁缺勿假；四份家族提示词补「段落总结」节（叙事/去噪/引号原文/章节编号指代/衔接上一份/只用材料内信息/500 字上限）；材料新 `MaterialKind::Summary`（转录标签「总结」、逐字、非 User 不作切点） |
+| 观察面 | 转录淡色可展开总结块（`agent://context-summary` 实时与重放同形）+ 记忆页会话档章节组上方总结链 + 项目联合视图升 `ProjectTreeView`（跨会话总结链时间正序 = 进展叙事锚点）+ tree.md 每轮总结引用块在该轮章节组正上方 |
+| 测试 | memory-tree 45（+4）、session-store 46（+1）、desktop 318（+3：落树→下一轮排空全链含磁盘镜像对齐与幂等 / 降级无总结+越界跳过 / tree.md 字面上层渲染）、根 workspace 全绿 |
+| 门禁 | fmt 双侧 CLEAN、clippy 根 0 + desktop --all-targets 0、vue-tsc 0、pnpm build 过、lint:style 0、check_length 零新增超限 |
+| 边界 | ①整理在途时抢先发言 = 总结晚到一轮；②fork 截断已交付事件后重投（与树投影 rewind 语义一致）；③记录员编造风险靠提示词纪律 + expand 下钻验证缓解；④search_titles 不搜总结正文（记档）；⑤无设置开关（自然降级已覆盖，幻影旋钮不做） |
+| 文档 | **《Organize Summary Design v1》新立** + CHANGELOG v2.141 + Memory Tree Design v2 §3.1 注记 + Context and Memory.md §3.2 注记 |
+
+---
 ### v2.140 · desktop fmt 漂移归一（v2.138 挂账兑现 + desktop 纳入门禁）
 
 **用户 2026-10-10 口述裁定「那45多正好修复掉吧」**（v2.138 挂账项「desktop 树内 fmt --check 全 crate 飘红是否独立归一批」的兑现）。实测漂移 = **39 文件 / 121 diff 块**（挂账时的「~45」为目测约数；中位 10 行/文件、总 1369 diff 行），全部为 v2.127–v2.132 时代旧文件（assets/、llm/import/、media/、settings/tests/、subagent_verify、wire.rs 等），与 v2.137–139 触碰集零交集。根因不变：desktop edition 2021、代码系 edition-2024 风格（style_edition 随 crate edition 缺省），根 fmt 因 workspace exclude 从不覆盖 desktop。落点 = `cargo fmt` 一次归一：+418/−223 **纯格式重排**（抽查 = 函数调用参数竖排等 style_edition 差异），零语义改动、零意外文件（39 与漂移清单 1:1）。门禁（最后一次编辑后复跑）：**desktop `cargo fmt --check` 历史首次 CLEAN** + 根 fmt CLEAN + clippy --all-targets 0 + desktop 315 绿（与 v2.139 持平，格式不改语义）；根工作区零触碰（位等同 v2.139 提交态）。**自此 desktop fmt --check 纳入每批门禁**（基线已净，此后见红即本批之责）。已知边界（记档）：无 rustfmt.toml——desktop 按 crate edition 缺省 style_edition 2021 归一；将来若升 edition 2024 需重归一轮。文档：CHANGELOG/ROADMAP/AGENTS v2.140。

@@ -203,6 +203,18 @@ pub enum SessionEvent {
         #[serde(default)]
         ts: i64,
     },
+    /// 整理段落总结（Organize Summary Design v1 §3.2）：记忆管理器对一次
+    /// 整理区间的浓缩叙事（跨章节来龙去脉、去噪），由编排层在**下一轮
+    /// 开场**（持会话锁）排空落日志——位置恒在断层缝合处（该轮整理边界
+    /// 之后、后续轮次之前），从下一轮起随历史每轮在场，直到被下一次整理
+    /// 收编进材料滚动进新总结。`text` 存未包裹的总结正文；消息投影
+    /// （project_messages）映成带 `[context summary …]` 标记的 User 消息
+    /// （ContextCompacted 摘要消息同款纯标记先例）。写一次永不改写
+    /// （v2.136 handoff 教训：封闭期记录不可变）。旧日志无此变体（serde
+    /// 天然兼容）。
+    ContextSummary {
+        text: String,
+    },
 }
 
 #[cfg(test)]

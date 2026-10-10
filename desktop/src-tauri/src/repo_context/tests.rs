@@ -81,6 +81,14 @@ fn build_is_static_reminder_independent_of_files() {
         "「不等被问」只保留在 write 侧（本段是 read 钩子）"
     );
     assert!(a.contains("NOT auto-injected"), "提醒制语义自述在场");
+    // v2.142 历史查询钩子：项目过往问题 → 时间线先行 + 按需下钻
+    assert!(a.contains("memory_project_history"), "指路时间线工具: {a}");
+    assert!(a.contains("memory_search_titles"));
+    assert!(a.contains("memory_expand"));
+    assert!(
+        a.contains("on demand, not"),
+        "历史钩子同样按需制（不开场仪式）"
+    );
     assert!(!a.contains("永远用 pnpm"), "正文不注入");
     assert!(!a.contains("2026-10-05"), "notes 清单也不注入");
     let _ = std::fs::remove_dir_all(&repo);

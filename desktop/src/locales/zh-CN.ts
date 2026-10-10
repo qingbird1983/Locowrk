@@ -635,6 +635,13 @@ export default {
     kindAssistant: "助手",
     kindToolCall: "工具调用",
     kindToolResult: "工具结果",
+    kindSummary: "总结",
+    // 整理段落总结（v2.141，Organize Summary Design v1）
+    summaryBlock: "段落总结",
+    summaryExpand: "展开",
+    summaryCollapse: "收起",
+    summaryHint: "被整理时段的浓缩叙事——此前工作的来龙去脉",
+    projectSummaries: "项目进展（各会话总结，由远及近）",
     time: {
       just_now: "刚刚",
       minutes: "{n} 分钟前",

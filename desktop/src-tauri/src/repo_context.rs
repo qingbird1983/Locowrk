@@ -77,6 +77,11 @@ pub fn build(_repo: &Path) -> Option<String> {
          When the user's request builds on prior project work, consult \
          requirements.md and handoff.md first — at most once per task, and never \
          as an opening ritual when the request doesn't touch them. When the \
+         user asks about this project's PAST (earlier sessions, what was done \
+         before, prior decisions), the memory tree holds the organized record: \
+         call memory_project_history for the timeline first, then \
+         memory_search_titles / memory_expand to drill in — on demand, not \
+         proactively. When the \
          project state materially changes (task finished, direction changed, \
          hard-won lesson learned), update handoff.md yourself and append a dated \
          note. These files are NOT auto-injected — you maintain them."

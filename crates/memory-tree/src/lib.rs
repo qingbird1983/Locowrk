@@ -27,10 +27,12 @@ pub mod trigger;
 pub use chapter::{ChapterDraft, ChapterId, EventId, MemoryChapter, sanitize_draft};
 pub use index::EventToChapterIndex;
 pub use manager::{
-    MemoryManagerClient, MemoryManagerError, MemoryManagerUsage, family_of, main_prompt,
-    manager_prompt, parse_drafts, rule_split_drafts,
+    MemoryManagerClient, MemoryManagerError, MemoryManagerUsage, RUN_SUMMARY_MAX_CHARS, family_of,
+    main_prompt, manager_prompt, parse_drafts, rule_split_drafts, run_summary,
 };
 pub use material::{MaterialItem, MaterialKind, build_items, transcript, user_count};
 pub use storage::{TreeStore, TreeSummary};
-pub use tree::{MemoryTree, OrganizeRecord, PendingTask, ReboundDecision, ReboundState};
+pub use tree::{
+    MemoryTree, OrganizeRecord, PendingTask, ReboundDecision, ReboundState, RunSummary,
+};
 pub use trigger::{AnchorSource, OrganizeReason, Pacing, TriggerInput, should_auto_organize};

@@ -101,7 +101,9 @@ export type ChatItem =
       resolved?: { decision: "completed" | "not_executed" | "inspected"; note: string };
     }
   /** 会话内系统消息（SystemNotice 模式）：压缩通知 / 已记住 / 审批结果。 */
-  | SystemItem;
+  | SystemItem
+  /** 整理段落总结块（v2.141）：组外兄弟——断层缝合处的浓缩叙事。 */
+  | SummaryItem;
 
 /**
  * 系统消息是 UI 陈述而非会话数据：存 i18n key，渲染期翻译以跟随语言
@@ -114,6 +116,15 @@ export type SystemItem = {
   key: string;
   params?: Record<string, unknown>;
   actions?: string[];
+};
+
+/** 整理段落总结块（v2.141，Organize Summary Design v1）：历史消息面的
+ * 轮级总结（落日志、重放同形）——存正文原文，不是 i18n 陈述。渲染为
+ * 淡色可展开块（断层交接：此前工作段的浓缩叙事）。 */
+export type SummaryItem = {
+  id: number;
+  kind: "summary";
+  text: string;
 };
 
 /** 本轮 LLM 用量聚合（v2.58 §3.12）：llm_usage 事件按轮累计——用户消息
@@ -662,6 +673,12 @@ export const useChatStore = defineStore("chat", {
             actions: ["details", "undo"],
           });
           if (e.summary_preview) this.noticeDetails[id] = e.summary_preview;
+          break;
+        }
+        case "context_summary": {
+          // 整理段落总结（v2.141）：断层缝合处的浓缩叙事块——实时与重放
+          // 同一分支（历史消息面，切会话回来照常在）。
+          this.items.push({ id: nextId++, kind: "summary", text: e.text });
           break;
         }
       }

@@ -67,6 +67,15 @@ pub async fn agent_chat(
     state.note_chat(&session_id);
     let session = state.session_lock(&session_id);
     let mut session = session.lock().await;
+    // 整理段落总结交付（Organize Summary Design v1 §3.3）：上一轮收束的
+    // 整理若产出了轮级总结，在本轮开场排空进会话日志（断层缝合处），实时
+    // 经 sink 推送、重放走 project_events——同一投影两路同形。
+    for text in state.organizer.deliver_summaries(&mut session, &session_id) {
+        state.sink.emit(&AgentEvent::ContextSummary {
+            session_id: session_id.clone(),
+            text,
+        });
+    }
     let ov = state.model_overrides.get(&session_id);
     let usage = UsagePolicy {
         threshold_tokens: state.settings.organize_threshold_tokens(),

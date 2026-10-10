@@ -2,7 +2,7 @@
 //! 不断工具对）+ 提示词家族匹配。
 
 use super::*;
-use crate::material::{MaterialKind, build_items};
+use crate::material::{MaterialKind, build_items, transcript};
 use session_store::SessionEvent;
 
 fn items() -> Vec<MaterialItem> {
@@ -200,4 +200,73 @@ fn user_parts_fold_to_placeholder_in_material() {
     }];
     let its = build_items(&plain, 0);
     assert_eq!(its[0].text, "纯文字");
+}
+
+// ---- 轮级总结（Organize Summary Design v1 §3.4）----
+
+#[test]
+fn parse_drafts_ignores_trailing_summary_section() {
+    // 总结正文带 [ ] 也不污染数组首尾定位（先切标记再取数组）
+    let raw = concat!(
+        "前言\n```json\n[",
+        "{\"title\": \"a\", \"summary\": \"s\", \"event_range\": [0, 1]}, ",
+        "{\"title\": \"b\", \"summary\": \"s\", \"event_range\": [2, 3]}, ",
+        "{\"title\": \"c\", \"summary\": \"s\", \"event_range\": [4, 5]}]",
+        "\n```\n===SUMMARY===\n本轮讨论了 [1M] 后缀与 [N] 行号，结论：都保留。"
+    );
+    let drafts = parse_drafts(raw, &items()).expect("数组部分照常解析");
+    assert_eq!(drafts.len(), 3);
+    let sum = run_summary(raw).expect("总结段可提取");
+    assert!(sum.contains("都保留"));
+    assert!(!sum.contains("===SUMMARY==="));
+}
+
+#[test]
+fn run_summary_cases() {
+    // 无标记 = None；标记后空白 = None
+    let bare = r#"[{"title":"a","summary":"s","event_range":[0,0]}]"#;
+    assert!(run_summary(bare).is_none());
+    assert!(run_summary("[]\n===SUMMARY===\n   \n").is_none());
+    // 空行折叠 + 前后 trim
+    let s = run_summary("垃圾\n===SUMMARY===\n第一段。\n\n\n第二段。\n").unwrap();
+    assert_eq!(s, "第一段。\n\n第二段。"); // 连续空行压到一段
+    // 硬钳
+    let long = format!(
+        "垃圾===SUMMARY==={}",
+        "长".repeat(RUN_SUMMARY_MAX_CHARS + 100)
+    );
+    let s = run_summary(&long).unwrap();
+    assert_eq!(s.chars().count(), RUN_SUMMARY_MAX_CHARS);
+}
+
+#[test]
+fn material_flags_run_summary_and_keeps_verbatim() {
+    use crate::material::MaterialKind;
+    let events = vec![
+        SessionEvent::UserMessage {
+            content: "早问".into(),
+            parts: vec![],
+        },
+        SessionEvent::AssistantMessage {
+            content: "早答".into(),
+            tool_calls: vec![],
+        },
+        SessionEvent::ContextSummary {
+            text: "上一段总结。".into(),
+        },
+        SessionEvent::UserMessage {
+            content: "新问".into(),
+            parts: vec![],
+        },
+    ];
+    let its = build_items(&events, 0);
+    assert_eq!(its.len(), 4);
+    assert_eq!(its[2].kind, MaterialKind::Summary);
+    assert_eq!(its[2].event, 2);
+    // 总结逐字进转录（不截断），标签「总结」
+    let t = transcript(&its);
+    assert!(t.contains("[2] 总结: 上一段总结。"));
+    // 非 User 不作规则切分切点（总结夹在中间不产生断口）
+    let drafts = rule_split_drafts(&its, 1);
+    assert!(!drafts.is_empty());
 }

@@ -640,6 +640,13 @@ export default {
     kindAssistant: "Assistant",
     kindToolCall: "Tool call",
     kindToolResult: "Tool result",
+    kindSummary: "Summary",
+    // 整理段落总结（v2.141，Organize Summary Design v1）
+    summaryBlock: "Context summary",
+    summaryExpand: "Expand",
+    summaryCollapse: "Collapse",
+    summaryHint: "Condensed narrative of the organized segment — how the earlier work unfolded",
+    projectSummaries: "Project narrative (session summaries, oldest first)",
     time: {
       just_now: "just now",
       minutes: "{n} min ago",

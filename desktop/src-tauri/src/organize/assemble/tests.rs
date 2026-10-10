@@ -80,7 +80,7 @@ fn seed_tree(root: &std::path::Path, ws: &str, session_id: &str) {
     let mut tree = memory_tree::MemoryTree::new(ws, session_id);
     let drafts = vec![memory_tree::sanitize_draft("章节一", "摘要一", (0, 19)).unwrap()];
     let chapters = tree.build_chapters(&drafts, "recorder", 1);
-    tree.apply_organized(chapters, 19, record(19));
+    tree.apply_organized(chapters, 19, record(19), None);
     memory_tree::TreeStore::new(root).save(&tree).unwrap();
 }
 

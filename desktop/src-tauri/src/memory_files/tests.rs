@@ -54,6 +54,7 @@ fn real_tree(ws: &str, sid: &str) -> MemoryTree {
             manager_output: 0,
             duration_ms: 0,
         },
+        None,
     );
     t
 }
@@ -173,4 +174,24 @@ fn initial_export_skips_existing_files_and_regenerates_trees() {
     let (facts2, trees2) = run_initial_export(&memory, &store, &files, &sessions_dir).unwrap();
     assert_eq!((facts2, trees2), (0, 0), "重跑幂等");
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn render_tree_md_places_run_summary_above_its_chapter_group() {
+    let mut t = real_tree("ws", "s-sum");
+    t.summaries.push(memory_tree::RunSummary {
+        from: 0,
+        to: 9,
+        text: "第一段总结。\n\n第二段总结。".into(),
+        created_at: 1000,
+    });
+    let md = render_tree_md("ws", &[("s-sum".into(), "会话题".into(), &t)]);
+    let sum_pos = md.find("段落总结").expect("总结块在场");
+    let b1_pos = md.find("### b1").expect("b1 在场");
+    let b2_pos = md.find("### b2").expect("b2 在场");
+    // 字面上层：总结块在该轮全部章节组之前
+    assert!(sum_pos < b1_pos && sum_pos < b2_pos);
+    assert!(md.contains("> 📋 **段落总结**（事件 0-9）"));
+    assert!(md.contains("> 第一段总结。"));
+    assert!(md.contains("> 第二段总结。"));
 }

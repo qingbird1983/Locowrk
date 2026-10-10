@@ -31,16 +31,19 @@ mod assemble;
 mod client;
 mod debug;
 mod edit;
+mod project_history;
 mod recovery;
 mod search_titles;
+mod summary;
 mod tree_tools;
 mod view;
 pub use assemble::TreeAssembler;
 pub use client::AppLlmMemoryManager;
 pub use debug::TreeDebug;
+pub use project_history::ProjectHistoryTool;
 pub use search_titles::SearchTitlesTool;
 pub use tree_tools::{MemoryCollapseTool, MemoryExpandTool};
-pub use view::{OriginalItem, ProjectChapterView, TreeChaptersView, TreeSummaryView};
+pub use view::{OriginalItem, ProjectTreeView, TreeChaptersView, TreeSummaryView};
 
 /// `lw://organize-done` 载荷（M3 §3.37③：整理收束系统消息，三路同源）。
 #[derive(Serialize, Clone)]
@@ -499,6 +502,9 @@ impl Organizer {
                         tree = self.load_tree(&task.workspace, &task.session_id);
                         let chapters = tree.build_chapters(&drafts, "recorder", now_ms());
                         let n = chapters.len();
+                        // 轮级总结（Organize Summary Design v1 §3.4）：尾随
+                        // 标记段，无 = None（成功无总结，目录照常）。
+                        let run_sum = memory_tree::run_summary(&raw);
                         tree.apply_organized(
                             chapters,
                             to,
@@ -512,6 +518,7 @@ impl Organizer {
                                 usage,
                                 elapsed_ms(&started),
                             ),
+                            run_sum,
                         );
                         // 溢出整理（模式 B 例行维护）不碰反弹基线——§5.5
                         // 只度量「整理后占用立刻再超」的烧钱信号
@@ -556,6 +563,7 @@ impl Organizer {
                 MemoryManagerUsage::default(),
                 elapsed_ms(&started),
             ),
+            None, // 规则切分无总结（宁缺勿假，退化到目录行为）
         );
         // 溢出整理不碰反弹基线（同上）
         if !matches!(task.reason, OrganizeReason::WindowOverflow) {

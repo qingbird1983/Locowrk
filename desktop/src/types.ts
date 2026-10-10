@@ -35,7 +35,8 @@ export type AgentEvent =
   | LlmRetryEvent
   | TurnCappedEvent
   | ToolUncertainEvent
-  | UncertainResolvedEvent;
+  | UncertainResolvedEvent
+  | ContextSummaryEvent;
 
 /** 崩溃恢复 uncertain（G2，agent://tool-uncertain——只在会话重放产出，
  * 实时轮不产生）：悬空调用（无 ToolResult 事件）的标记。tool/args 可能
@@ -148,6 +149,15 @@ export interface ContextCompactedEvent {
   to_tokens: number;
   strategy: string;
   summary_preview: string;
+}
+
+/** 整理段落总结（v2.141，agent://context-summary）：上一轮收束的整理产出
+ * 的轮级总结，在下一轮开场排空进会话日志后实时推送；重放经 session_history
+ * 同形产出（同一变体）。text = 总结正文（已浓缩的历史叙事，不进 i18n）。 */
+export interface ContextSummaryEvent {
+  kind: "context_summary";
+  session_id: string;
+  text: string;
 }
 
 /** 会话列表行（⑲ session_list；mtime 降序）。title = 首条用户消息
@@ -728,6 +738,27 @@ export interface TreeChaptersView {
   chapteredUntil: number;
   pausedAuto: boolean;
   chapters: TreeChapterView[];
+  /** 轮级总结链（v2.141）：按整理收束序，渲染在对应章节组上方。 */
+  summaries: RunSummaryView[];
+}
+
+/** 轮级总结（Organize Summary Design v1）：一次整理区间的浓缩叙事，
+ * 该批章节的父节点。 */
+export interface RunSummaryView {
+  text: string;
+  eventFrom: number;
+  eventTo: number;
+  createdAt: number;
+  /** 项目视图带会话标注；会话视图内为空串。 */
+  sessionId: string;
+  sessionTitle: string;
+}
+
+/** 项目联合视图（v2.141 扩展）：跨会话捆平铺 + 跨会话总结链（时间正序
+ * = 项目进展叙事锚点）。 */
+export interface ProjectTreeView {
+  chapters: ProjectChapterView[];
+  summaries: RunSummaryView[];
 }
 
 /** 项目联合视图行（M6.4，memory_tree_project；跨会话捆平铺 + 会话标注）。 */
@@ -746,7 +777,7 @@ export interface ProjectChapterView {
 }
 
 /** 原文切片行（与记忆管理器材料同形；index = 会话日志事件位）。 */
-export type TreeOriginalKind = "user" | "assistant" | "tool_call" | "tool_result";
+export type TreeOriginalKind = "user" | "assistant" | "tool_call" | "tool_result" | "summary";
 export interface TreeOriginalItem {
   index: number;
   kind: TreeOriginalKind;

@@ -22,7 +22,7 @@ use memory_tree::{build_items, transcript, TreeStore};
 use crate::workspace::WorkspaceResolver;
 
 static VERSION: std::sync::LazyLock<semver::Version> =
-    std::sync::LazyLock::new(|| semver::Version::new(1, 0, 0));
+    std::sync::LazyLock::new(|| semver::Version::new(1, 1, 0));
 
 fn unavailable(what: &str, why: &str) -> ToolError {
     ToolError::NotAvailable(format!("{what} 不可用：{why}"))
@@ -41,16 +41,19 @@ fn expand_spec() -> &'static ToolSpec {
     static SPEC: OnceLock<ToolSpec> = OnceLock::new();
     SPEC.get_or_init(|| ToolSpec {
         name: "memory_expand".into(),
-        description: "Expand a chapter of this session's memory tree — older turns that were \
-                      organized out of the visible context. Pass the chapter_id from the table \
-                      of contents. level=1 returns the chapter's summary (~200 tokens); level=2 \
-                      returns its full original transcript. The result is appended to the \
-                      conversation and stays visible."
+        description: "Expand a chapter of a session's memory tree — turns that were organized \
+                      out of the visible context. Pass the chapter_id from the table of contents \
+                      of the CURRENT session, or from memory_search_titles / \
+                      memory_project_history together with that tool's session_id to read an \
+                      EARLIER session's chapter of this project. level=1 returns the chapter's \
+                      summary (~200 tokens); level=2 returns its full original transcript. The \
+                      result is appended to the conversation and stays visible."
             .into(),
         schema: json!({
             "type": "object",
             "properties": {
-                "chapter_id": { "type": "string", "description": "chapter id from the memory tree directory (e.g. \"b2\")" },
+                "chapter_id": { "type": "string", "description": "chapter id from the memory tree directory or a search/history tool (e.g. \"b2\")" },
+                "session_id": { "type": "string", "description": "owning session of the chapter; omit = current session (ids from memory_search_titles / memory_project_history)" },
                 "level": { "type": "integer", "minimum": 1, "maximum": 2,
                            "description": "1=summary, 2=full transcript" }
             },
@@ -120,9 +123,19 @@ impl Tool for MemoryExpandTool {
                 format!("level {level} 非法（1=摘要 2=原文）"),
             ));
         }
+        // 跨会话（v2.142）：缺省 = 当前会话（旧调用逐字节兼容）；带
+        // session_id = (会话, 章节) 复合寻址。workspace 含入由当前会话解析
+        // ——目标会话的树必须在本项目 scope 下才存在，跨项目天然拒。
+        let target_session = args
+            .get("session_id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .unwrap_or(session_id.clone());
         let workspace = (self.workspace_of)(&session_id).unwrap_or_default();
         let tree = self
-            .load_tree(&workspace, &session_id)
+            .load_tree(&workspace, &target_session)
             .map_err(|e| failed("memory_expand", e))?;
         let chapter = tree
             .chapters
@@ -137,14 +150,15 @@ impl Tool for MemoryExpandTool {
 
         let content = if level == 1 {
             json!({
+                "session_id": target_session,
                 "chapter_id": chapter_id,
                 "title": chapter.title,
                 "summary": chapter.summary,
             })
         } else {
-            // level=2：原文切片（M3 view 同源：磁盘日志按 event_range 切，
-            // 材料行同形转文本）
-            let path = session_store::session_file(&self.sessions_dir, &session_id)
+            // level=2：原文切片（M3 view 同源：目标会话日志按 event_range
+            // 切，材料行同形转文本）
+            let path = session_store::session_file(&self.sessions_dir, &target_session)
                 .map_err(|e| failed("memory_expand", e.to_string()))?;
             let (session, _) = session_store::load_session(&path)
                 .map_err(|e| failed("memory_expand", format!("会话日志不可读: {e}")))?;
@@ -159,17 +173,23 @@ impl Tool for MemoryExpandTool {
             let end = (to + 1).min(events.len());
             let items = build_items(&events[from..end], from);
             json!({
+                "session_id": target_session,
                 "chapter_id": chapter_id,
                 "title": chapter.title,
                 "transcript": transcript(&items),
             })
         };
 
-        // 展开记账（解除收起 §8.3；写投影失败只影响自动收起的挑选，不拦读）
-        let mut tree = tree;
-        tree.mark_expanded(chapter_id, now_ms());
-        if let Err(e) = self.tree_store.save(&tree) {
-            tracing::warn!("expanded_at 记账失败: {e}");
+        // 展开记账只写当前会话（expanded_at =「本会话上下文里有展开内容」
+        // 的记账，自动收起的挑选依据；跨会话展开的内容在本会话消息里，
+        // 写目标会话的树会让它的自动收起误判）——跨会话展开 = 纯读。
+        // 写投影失败只影响自动收起的挑选，不拦读。
+        if target_session == session_id {
+            let mut tree = tree;
+            tree.mark_expanded(chapter_id, now_ms());
+            if let Err(e) = self.tree_store.save(&tree) {
+                tracing::warn!("expanded_at 记账失败: {e}");
+            }
         }
         Ok(content)
     }

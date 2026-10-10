@@ -237,7 +237,9 @@ function kindLabel(kind: TreeOriginalItem["kind"]): string {
         ? "memory.kindAssistant"
         : kind === "tool_call"
           ? "memory.kindToolCall"
-          : "memory.kindToolResult",
+          : kind === "summary"
+            ? "memory.kindSummary"
+            : "memory.kindToolResult",
   );
 }
 
@@ -337,6 +339,21 @@ function sourceLabel(source: string): string {
         />
         <!-- 会话档：章节列表（展开摘要 / 看原文 / 编辑 / 删除） -->
         <template v-else>
+        <!-- 轮级总结链（v2.141）：该轮章节组的浓缩父节点，字面「标题上层」 -->
+        <div v-if="chapters?.summaries?.length" class="mt-2 space-y-1.5">
+          <details
+            v-for="(s, i) in chapters.summaries"
+            :key="`sum-${i}`"
+            class="rounded-[var(--lw-r-md)] border border-line bg-wash-1 px-4 py-2"
+          >
+            <summary class="cursor-pointer text-[length:var(--lw-fs-11)] text-ink-3">
+              {{ t("memory.summaryBlock") }} · {{ timeText(s.createdAt) }}
+            </summary>
+            <p class="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-ink-2">
+              {{ s.text }}
+            </p>
+          </details>
+        </div>
         <p
           v-if="filtered.length === 0"
           class="mt-2 text-[length:var(--lw-fs-11)] text-ink-5"

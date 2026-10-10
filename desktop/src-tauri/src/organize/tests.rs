@@ -460,6 +460,7 @@ async fn auto_collapse_relieves_oldest_expanded() {
             manager_output: 0,
             duration_ms: 1,
         },
+        None,
     );
     tree.mark_expanded("b1", 100);
     memory_tree::TreeStore::new(&root).save(&tree).unwrap();
@@ -576,10 +577,17 @@ async fn project_view_flattens_across_sessions() {
     let t2 = org.plan_manual(&session, "s-p2").expect("发起成功");
     org.clone().run_task(t2).await;
 
-    let rows = org.tree_project(r"F:\ws\demo");
-    assert_eq!(rows.len(), 4, "两会话 × 两捆平铺");
+    let view = org.tree_project(r"F:\ws\demo");
+    assert_eq!(view.chapters.len(), 4, "两会话 × 两捆平铺");
     // 会话标注在场；编辑过的打手动标记
-    assert!(rows.iter().all(|r| r.session_id.starts_with("s-p")));
+    assert!(view
+        .chapters
+        .iter()
+        .all(|r| r.session_id.starts_with("s-p")));
+    assert!(
+        view.summaries.is_empty(),
+        "good_reply 无总结段 = 项目总结链为空"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -596,6 +604,7 @@ async fn search_titles_falls_back_to_keyword_without_embedding() {
         memory_tree::TreeStore::new(&root),
         resolver(),
         None, // embedding 缺席 = 关键词降级
+        root.join("sessions"),
     );
     use plugin_api::{CallCtx, Tool as _};
     let mut ctx = CallCtx::new();
@@ -608,5 +617,251 @@ async fn search_titles_falls_back_to_keyword_without_embedding() {
     assert_eq!(out["match_mode"], "keyword");
     assert_eq!(out["hits"].as_array().unwrap().len(), 1);
     assert_eq!(out["hits"][0]["title"], "话题一");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// v2.142 索引扩容：查询词只出现在**轮总结正文**（标题/摘要都不含）也
+/// 命中——总结是浓缩叙事，宽查询的语义主体。
+#[tokio::test]
+async fn search_titles_scores_round_summary_text_not_just_titles() {
+    let root = temp_root("titles-summary");
+    let settings = settings_with(serde_json::json!({}), &root);
+    let org = organizer(
+        &root,
+        settings,
+        FakeClient::new(vec![Ok(good_reply_with_summary())]),
+    );
+    let task = org.plan_manual(&session(), "s-st2").expect("发起成功");
+    org.clone().run_task(task).await;
+
+    let tool = crate::organize::SearchTitlesTool::new(
+        memory_tree::TreeStore::new(&root),
+        resolver(),
+        None,
+        root.join("sessions"),
+    );
+    use plugin_api::{CallCtx, Tool as _};
+    let mut ctx = CallCtx::new();
+    ctx.session_id = Some("s-st2".into());
+    let out = tool
+        .call(&ctx, serde_json::json!({"query": "共享 runtime"}))
+        .await
+        .expect("可调用");
+    assert_eq!(out["match_mode"], "keyword");
+    let hits = out["hits"].as_array().unwrap();
+    assert!(!hits.is_empty(), "总结正文命中: {out}");
+    assert!(
+        hits[0]["session_title"].is_string(),
+        "hits 带 session_title 字段"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// v2.142 时间线（Cross-Session Recall Design v1 §2.3）：项目跨会话
+/// 时间正序 ×（总结 + 所含章节标题）=「之前做了什么」的第一答案面。
+#[tokio::test]
+async fn project_history_returns_timeline_grouped_by_summary() {
+    let root = temp_root("history");
+    let settings = settings_with(serde_json::json!({}), &root);
+    let org = organizer(
+        &root,
+        settings,
+        FakeClient::new(vec![
+            Ok(good_reply_with_summary()),
+            Ok(good_reply_with_summary()),
+        ]),
+    );
+    let task = org.plan_manual(&session(), "s-h1").expect("发起成功");
+    org.clone().run_task(task).await;
+    let task = org.plan_manual(&session(), "s-h2").expect("发起成功");
+    org.clone().run_task(task).await;
+
+    let tool = crate::organize::ProjectHistoryTool::new(
+        memory_tree::TreeStore::new(&root),
+        resolver(),
+        root.join("sessions"),
+    );
+    use plugin_api::{CallCtx, Tool as _};
+    let mut ctx = CallCtx::new();
+    ctx.session_id = Some("s-h2".into());
+    let out = tool
+        .call(&ctx, serde_json::json!({}))
+        .await
+        .expect("可调用");
+    assert_eq!(out["truncated"], false);
+    let sessions = out["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 2, "两会话都在时间线");
+    assert_eq!(sessions[0]["session_id"], "s-h1", "时间正序");
+    let sums = sessions[0]["summaries"].as_array().unwrap();
+    assert_eq!(sums.len(), 1, "每会话一轮总结");
+    assert!(sums[0]["text"].as_str().unwrap().contains("共享 runtime"));
+    let covered = sums[0]["chapters"].as_array().unwrap();
+    assert_eq!(covered.len(), 2, "该轮两章都归入总结（区间包含）");
+    assert_eq!(
+        covered[0]["id"], "b2",
+        "章节带 id 供 expand 寻址（占位捆占 b1，管道章节自 b2 起）"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 时间线钳制：>20 会话取最近 20 + truncated 如实 + 指路 search_titles；
+/// 无总结覆盖的章节落 other_chapters（v2.141 前存量会话形态）。
+#[tokio::test]
+async fn project_history_caps_to_recent_sessions_and_keeps_uncovered() {
+    let root = temp_root("history-cap");
+    let ws = r"F:\ws\demo";
+    let store = memory_tree::TreeStore::new(&root);
+    for i in 0..21 {
+        let sid = format!("t{i:02}");
+        let mut tree = memory_tree::MemoryTree::new(ws, &sid);
+        let d = vec![memory_tree::sanitize_draft(&format!("章节{i}"), "摘要", (0, 1)).unwrap()];
+        let b = tree.build_chapters(&d, "recorder", 1);
+        // t20 不带总结 = 章节无覆盖 → other_chapters（存量形态）
+        let summary = (i != 20).then(|| format!("第{i}轮总结"));
+        tree.apply_organized(
+            b,
+            1,
+            memory_tree::OrganizeRecord {
+                ts: i as i64,
+                reason: "manual".into(),
+                mode: "recorder".into(),
+                status: "ok".into(),
+                from: 0,
+                to: 1,
+                chapters: 1,
+                manager_input: 0,
+                manager_output: 0,
+                duration_ms: 1,
+            },
+            summary,
+        );
+        store.save(&tree).unwrap();
+    }
+    let tool = crate::organize::ProjectHistoryTool::new(store, resolver(), root.join("sessions"));
+    use plugin_api::{CallCtx, Tool as _};
+    let mut ctx = CallCtx::new();
+    ctx.session_id = Some("t20".into());
+    let out = tool
+        .call(&ctx, serde_json::json!({}))
+        .await
+        .expect("可调用");
+    assert_eq!(out["total_sessions"], 21);
+    assert_eq!(out["truncated"], true);
+    assert!(out["note"]
+        .as_str()
+        .unwrap()
+        .contains("memory_search_titles"));
+    let sessions = out["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 20, "钳最近 20");
+    assert_eq!(sessions[0]["session_id"], "t01", "最早的 t00 被钳掉");
+    // 无总结会话：章节落 other_chapters（标题在场，expand 可下钻）
+    let last = &sessions[sessions.len() - 1];
+    assert_eq!(last["session_id"], "t20");
+    assert_eq!(last["summaries"].as_array().unwrap().len(), 0);
+    let other = last["other_chapters"].as_array().unwrap();
+    assert_eq!(other.len(), 1);
+    assert_eq!(other[0]["id"], "b1");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// ---- 轮级总结（Organize Summary Design v1 §3.3）----
+
+/// 合法铺满 6 项材料 + 尾随总结段的记忆管理器输出。
+fn good_reply_with_summary() -> String {
+    format!(
+        "{}\n===SUMMARY===\n本轮完成了插件加载排查，结论是共享 runtime；仍未决：缓存命中率观测。",
+        good_reply()
+    )
+}
+
+#[tokio::test]
+async fn recorder_summary_stored_then_delivered_at_next_turn_opening() {
+    let root = temp_root("summary");
+    let settings = settings_with(serde_json::json!({}), &root);
+    let org = organizer(
+        &root,
+        Arc::clone(&settings),
+        FakeClient::new(vec![Ok(good_reply_with_summary())]),
+    );
+    // 管道收束：总结落树投影
+    let task = org.plan_manual(&session(), "s-sum").expect("发起成功");
+    org.clone().run_task(task).await;
+    let tree = tree_at(&root, org.settings.as_ref(), "s-sum");
+    assert_eq!(tree.summaries.len(), 1);
+    assert!(tree.summaries[0].text.contains("共享 runtime"));
+
+    // 下一轮开场排空：日志落 ContextSummary（断层缝合处 = 游标位 6），
+    // 磁盘镜像同步（基座先落盘 = 生产形态：run_turn 每 step 持久化）
+    let mut session = session();
+    crate::session_log::append_slice(&root.join("sessions"), "s-sum", &session, 0);
+    let delivered = org.deliver_summaries(&mut session, "s-sum");
+    assert_eq!(delivered.len(), 1);
+    assert_eq!(session.len(), 7);
+    let msgs = session.derive_messages_from(6);
+    assert_eq!(msgs.len(), 1);
+    assert!(
+        matches!(&msgs[0], session_store::Message::User { content, .. }
+            if content.contains("context summary") && content.contains("共享 runtime"))
+    );
+    let (disk, _) = session_store::load_session(
+        &session_store::session_file(&root.join("sessions"), "s-sum").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(disk.len(), 7, "磁盘镜像与内存索引对齐");
+
+    // 幂等：再次排空 = 零新交付（已交付判定自愈）
+    let again = org.deliver_summaries(&mut session, "s-sum");
+    assert!(again.is_empty());
+    assert_eq!(session.len(), 7);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
+async fn degraded_run_carries_no_summary_and_truncated_base_skips() {
+    let root = temp_root("summary-none");
+    let settings = settings_with(serde_json::json!({}), &root);
+    // 降级：规则切分无总结
+    let junk = vec![Ok("不会".into()); 4];
+    let org = organizer(&root, settings, FakeClient::new(junk));
+    let task = org.plan_manual(&session(), "s-none").expect("发起成功");
+    org.clone().run_task(task).await;
+    let tree = tree_at(&root, org.settings.as_ref(), "s-none");
+    assert!(tree.history[0].status == "degraded");
+    assert!(tree.summaries.is_empty(), "宁缺勿假：降级不落总结");
+    let mut session = session();
+    assert!(org.deliver_summaries(&mut session, "s-none").is_empty());
+
+    // 底座事件位超出日志（截断重写形态）：跳过不投
+    let mut t = memory_tree::MemoryTree::new(r"F:\ws\demo", "s-none");
+    t.apply_organized(
+        vec![memory_tree::MemoryChapter::from_draft(
+            memory_tree::ChapterId("b1".into()),
+            &memory_tree::sanitize_draft("题", "要", (0, 1)).unwrap(),
+            "recorder",
+            1,
+        )],
+        99,
+        memory_tree::OrganizeRecord {
+            ts: 1,
+            reason: "manual".into(),
+            mode: "recorder".into(),
+            status: "ok".into(),
+            from: 0,
+            to: 99,
+            chapters: 1,
+            manager_input: 0,
+            manager_output: 0,
+            duration_ms: 1,
+        },
+        Some("越界总结".into()),
+    );
+    memory_tree::TreeStore::new(&root).save(&t).unwrap();
+    let org2 = organizer(
+        &root,
+        settings_with(serde_json::json!({}), &root),
+        FakeClient::new(vec![]),
+    );
+    assert!(org2.deliver_summaries(&mut session, "s-none").is_empty());
+    assert_eq!(session.len(), 6, "越界总结不追加");
     let _ = std::fs::remove_dir_all(&root);
 }

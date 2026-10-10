@@ -47,6 +47,7 @@ fn tree_with(ws: &str, sid: &str, ranges: &[(u64, u64)]) -> MemoryTree {
         chapters,
         ranges.last().map(|r| r.1).unwrap_or(0) as usize,
         record(),
+        None,
     );
     t
 }

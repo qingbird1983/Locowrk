@@ -140,6 +140,20 @@ pub fn render_tree_md(workspace: &str, sessions: &[(String, String, &MemoryTree)
                 TREE_TITLE_CHARS
             )
         ));
+        // 轮级总结（Organize Summary Design v1 §3.5）：以引用块渲染在
+        // 该轮章节组正上方（字面意义的「标题上层」）。行间区（小节之外）
+        // 的 `>` 行不进 memory_tree_reconcile 的小节收集（cur=None 丢弃），
+        // 人改保护纪律不变。文本内的 md 结构字符按行前缀隔离。
+        for s in &tree.summaries {
+            out.push_str(&format!(
+                "\n> 📋 **段落总结**（事件 {}-{}）\n",
+                s.from, s.to
+            ));
+            for line in s.text.trim().lines() {
+                out.push_str(&format!("> {}\n", line.trim()));
+            }
+            out.push('\n');
+        }
         for b in chapters {
             out.push_str(&format!(
                 "\n### {} · {}\n\n",

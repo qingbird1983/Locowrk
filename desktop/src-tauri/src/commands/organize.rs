@@ -7,7 +7,7 @@
 use tauri::State;
 
 use crate::organize::{
-    OriginalItem, ProjectChapterView, TreeChaptersView, TreeDebug, TreeSummaryView,
+    OriginalItem, ProjectTreeView, TreeChaptersView, TreeDebug, TreeSummaryView,
 };
 
 use crate::state::AppState;
@@ -66,12 +66,13 @@ pub async fn memory_tree_original(
 }
 
 /// 项目级 L0 联合视图（M6.4 §11.4）：该项目跨会话全部捆平铺（会话标注，
-/// 最近活动会话优先）。记忆页「按项目」档数据源。
+/// 最近活动会话优先）+ v2.141 跨会话总结链（时间正序 = 项目进展叙事锚点，
+/// Organize Summary Design v1 §3.5）。记忆页「按项目」档数据源。
 #[tauri::command]
 pub async fn memory_tree_project(
     workspace: String,
     state: State<'_, AppState>,
-) -> Result<Vec<ProjectChapterView>, String> {
+) -> Result<ProjectTreeView, String> {
     Ok(state.organizer.tree_project(&workspace))
 }
 

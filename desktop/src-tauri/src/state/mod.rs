@@ -450,6 +450,12 @@ pub fn init_state(app: AppHandle) -> AppState {
         tree_store.clone(),
         Arc::clone(&workspace_of),
         Some(embed_port.clone() as Arc<dyn kernel_agent::EmbedPort>),
+        sessions_dir.clone(),
+    ))
+    .with_builtin(crate::organize::ProjectHistoryTool::new(
+        tree_store.clone(),
+        Arc::clone(&workspace_of),
+        sessions_dir.clone(),
     ))
     .with_tree_gate(tree_gate)
     // ㉘·B 计划模式目录围栏（非 Pure 不出目录、resolve 即拒）

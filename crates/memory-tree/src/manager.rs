@@ -16,6 +16,14 @@ use crate::material::MaterialItem;
 /// 单次整理输入章节数上限（防失控输出；超出 = 不合规）。
 const MAX_CHAPTERS: usize = 200;
 
+/// 轮级总结的尾随标记（Organize Summary Design v1 §3.4）：记录员输出 =
+/// JSON 数组 + 本标记 + 总结正文。数组契约不动——解析层先按标记切分再取
+/// 数组，防总结正文里的 `[`/`]` 污染 `extract_array` 的首尾定位。
+const SUMMARY_MARKER: &str = "===SUMMARY===";
+/// 轮级总结硬钳字符数（提示词要 ≤500 字，这里防垃圾灌爆；≈600-1K token，
+/// 滚动收编的尺寸预算顶）。
+pub const RUN_SUMMARY_MAX_CHARS: usize = 2400;
+
 // ---- 提示词两层目录（§6.2）：{role}/{family}.md，家族未命中回落 default ----
 
 const MANAGER_DEFAULT: &str = include_str!("prompts/manager/default.md");
@@ -118,15 +126,53 @@ fn extract_array(raw: &str) -> Option<&str> {
     (end > start).then_some(&raw[start..=end])
 }
 
+/// 按尾随标记切出「数组部分 | 总结部分」。无标记 = 全部是数组部分、无总结。
+fn split_summary_section(raw: &str) -> (&str, Option<&str>) {
+    match raw.split_once(SUMMARY_MARKER) {
+        Some((before, after)) => (before, Some(after)),
+        None => (raw, None),
+    }
+}
+
+/// 提取轮级总结正文（Organize Summary Design v1 §3.4）：标记后 trim +
+/// 空白行折叠 + 硬钳。无标记 / 空正文 = None（成功无总结，目录照常——
+/// 降级路径宁缺勿假，与规则切分无总结同一口径）。
+pub fn run_summary(raw: &str) -> Option<String> {
+    let after = split_summary_section(raw).1?;
+    let mut text = after.trim();
+    if text.is_empty() {
+        return None;
+    }
+    // 压掉连续空白行（树 md/转录投影按行渲染，冗余空行只添噪）
+    let mut collapsed = String::with_capacity(text.len());
+    let mut prev_blank = false;
+    for line in text.lines() {
+        let blank = line.trim().is_empty();
+        if !(blank && prev_blank) {
+            collapsed.push_str(line.trim_end());
+            collapsed.push('\n');
+        }
+        prev_blank = blank;
+    }
+    text = collapsed.trim();
+    if text.is_empty() {
+        return None;
+    }
+    Some(text.chars().take(RUN_SUMMARY_MAX_CHARS).collect())
+}
+
 /// 解析并校验记忆管理器输出（§4.6/§5.4）：每章节 title/summary 净化后成草稿；
 /// 切分区间必须按材料项下标**完整铺满** `[0..n)` 且不重叠不越界——任何
 /// 一条不满足整批判垃圾（调用方转规则切分，绝不半信半疑落树）。
-/// 成功时把项下标翻回会话事件位（L2 引用锚点）。
+/// 成功时把项下标翻回会话事件位（L2 引用锚点）。**只吃数组部分**——
+/// 尾随总结段（`===SUMMARY===` 之后）由 `run_summary` 单独取，防总结
+/// 正文里的 `[`/`]` 污染数组首尾定位。
 pub fn parse_drafts(
     raw: &str,
     items: &[MaterialItem],
 ) -> Result<Vec<ChapterDraft>, MemoryManagerError> {
-    let arr_text = extract_array(raw).ok_or(MemoryManagerError::NoJson)?;
+    let (array_part, _) = split_summary_section(raw);
+    let arr_text = extract_array(array_part).ok_or(MemoryManagerError::NoJson)?;
     let arr: Vec<RawDraft> =
         serde_json::from_str(arr_text).map_err(|e| MemoryManagerError::BadEntry(e.to_string()))?;
     if arr.len() > MAX_CHAPTERS {

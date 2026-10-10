@@ -48,6 +48,7 @@ fn placeholder_then_apply_replaces_and_advances() {
         vec![chapter("b1", (10, 14)), chapter("b2", (15, 19))],
         19,
         record("ok"),
+        None,
     );
     assert!(t.pending.is_none());
     assert_eq!(t.chapter_count(), 2); // 占位章节已撤
@@ -129,7 +130,7 @@ fn history_is_capped() {
 #[test]
 fn chapter_ids_skip_past_max() {
     let mut t = MemoryTree::new("ws", "s1");
-    t.apply_organized(vec![chapter("b3", (0, 1))], 1, record("ok"));
+    t.apply_organized(vec![chapter("b3", (0, 1))], 1, record("ok"), None);
     let task = t.insert_placeholder(2, 3, 1).unwrap();
     assert_eq!(task.placeholder_id.0, "b4");
 }
@@ -141,6 +142,7 @@ fn expand_collapse_lifecycle_and_auto_pick() {
         vec![chapter("b1", (0, 4)), chapter("b2", (5, 9))],
         9,
         record("ok"),
+        None,
     );
 
     // 未展开不可收起；展开后可收起；再展开解除收起
@@ -206,7 +208,7 @@ fn edit_chapter_marks_manual_and_rejects_pending() {
     let pid = t.pending.as_ref().unwrap().placeholder_id.0.clone();
     assert!(!t.edit_chapter(&pid, Some("新题"), None));
 
-    t.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"));
+    t.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"), None);
     assert!(t.edit_chapter("b1", Some("  人改标题  "), Some("人改摘要")));
     let b = &t.chapters["b1"];
     assert_eq!(b.title, "人改标题"); // trim 落值
@@ -214,7 +216,7 @@ fn edit_chapter_marks_manual_and_rejects_pending() {
     assert!(b.summary_edited_by_user);
     // 只改标题不动摘要标记
     let mut t2 = MemoryTree::new("ws", "s1");
-    t2.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"));
+    t2.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"), None);
     assert!(t2.edit_chapter("b1", Some("只改题"), None));
     assert!(!t2.chapters["b1"].summary_edited_by_user);
     assert!(!t2.edit_chapter("bX", Some("不存在"), None));
@@ -227,9 +229,37 @@ fn remove_chapter_keeps_cursor_and_rejects_pending() {
     let pid = t.pending.as_ref().unwrap().placeholder_id.0.clone();
     assert!(!t.remove_chapter(&pid)); // 占位拒删
 
-    t.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"));
+    t.apply_organized(vec![chapter("b1", (10, 19))], 19, record("ok"), None);
     assert!(t.remove_chapter("b1"));
     assert_eq!(t.chapter_count(), 0);
     assert_eq!(t.chaptered_until, 20); // 游标不动：被删区间留在已整理侧
     assert!(!t.remove_chapter("b1")); // 再删 = false
+}
+
+#[test]
+fn apply_organized_stores_run_summary_and_roundtrips() {
+    let mut t = MemoryTree::new("ws", "s1");
+    t.insert_placeholder(0, 5, 1).unwrap();
+    t.apply_organized(
+        vec![chapter("b1", (0, 2)), chapter("b2", (3, 5))],
+        5,
+        record("ok"),
+        Some("本轮完成了插件加载排查，结论是共享 runtime。".into()),
+    );
+    assert_eq!(t.summaries.len(), 1);
+    let s = &t.summaries[0];
+    assert_eq!((s.from, s.to), (0, 9)); // 区间取自台账（本次整理覆盖范围）
+    assert!(s.text.contains("共享 runtime"));
+    // rule 降级（None）不落总结；历史/游标照常
+    let mut t2 = MemoryTree::new("ws", "s2");
+    t2.apply_organized(vec![chapter("b1", (0, 1))], 1, record("degraded"), None);
+    assert!(t2.summaries.is_empty());
+
+    // serde 往返（旧投影无 summaries 键 = default 空，零迁移）
+    let json = serde_json::to_string(&t).unwrap();
+    let back: MemoryTree = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.summaries.len(), 1);
+    let old_shape = r#"{"schema_version":1,"workspace":"ws","session_id":"s3","root":"root","chapters":{},"chaptered_until":0}"#;
+    let legacy: MemoryTree = serde_json::from_str(old_shape).unwrap();
+    assert!(legacy.summaries.is_empty());
 }

@@ -17,6 +17,13 @@ fn user(content: impl Into<String>) -> SessionEvent {
     }
 }
 
+fn assistant(content: impl Into<String>) -> SessionEvent {
+    SessionEvent::AssistantMessage {
+        content: content.into(),
+        tool_calls: vec![],
+    }
+}
+
 fn tool_call(seq: u32) -> SessionEvent {
     SessionEvent::ToolCall {
         call_id: CallId(format!("call-{seq}")),
@@ -248,6 +255,37 @@ fn derive_from_offsets_to_the_tree_tail() {
     s.rewind_to(2);
     assert_eq!(s.derive_messages_from(0).len(), 2, "游标裁剪语义不变");
     assert!(s.derive_messages_from(2).is_empty());
+}
+
+// ---- 整理段落总结（Organize Summary Design v1 §3.2）----
+
+#[test]
+fn context_summary_projects_as_marked_user_message() {
+    let mut s = Session::new();
+    s.append(user("early"));
+    s.append(assistant("early reply"));
+    s.append(SessionEvent::ContextSummary {
+        text: "此前完成了记忆树设计，决定加轮级总结。".into(),
+    });
+    s.append(user("tail question"));
+    s.append(assistant("tail reply"));
+
+    // 全量与尾巴投影都按日志真实位携带（断层缝合处 = 尾巴第一条）
+    let msgs = s.derive_messages();
+    let crate::Message::User { content, parts } = &msgs[2] else {
+        panic!("expected user message at summary position");
+    };
+    assert!(parts.is_empty());
+    assert!(
+        content.starts_with("[context summary of earlier organized conversation]\n"),
+        "content = {content}"
+    );
+    assert!(content.contains("轮级总结"));
+    let tail = s.derive_messages_from(2);
+    assert_eq!(tail.len(), 3);
+    assert!(
+        matches!(&tail[0], crate::Message::User { content, .. } if content.contains("context summary"))
+    );
 }
 
 // ---- parts 穿透（批 D）----

@@ -23,6 +23,10 @@ pub enum MaterialKind {
     Assistant,
     ToolCall,
     ToolResult,
+    /// 整理段落总结（v2.141）：上一刀的 RunSummary 排空成日志事件后，
+    /// 落进下一刀材料区间——记录员据此滚动收编（衔接而非丢弃），提示词
+    /// 按「总结」标签识别它。非 User，不作为规则切分切点。
+    Summary,
 }
 
 /// 一条材料项：`event` 是它在会话日志里的绝对位（L2 引用的锚点）。
@@ -92,6 +96,9 @@ pub fn build_items(events: &[SessionEvent], base: EventId) -> Vec<MaterialItem> 
                 };
                 (MaterialKind::ToolResult, body)
             }
+            // 上一刀的轮级总结（滚动收编的衔接点，设计稿 §3.1）——正文
+            // 全量进材料（它是浓缩层，再截断就滚丢了）
+            SessionEvent::ContextSummary { text } => (MaterialKind::Summary, text.clone()),
             _ => continue,
         };
         if matches!(kind, MaterialKind::User | MaterialKind::Assistant) && text.trim().is_empty() {
@@ -118,9 +125,10 @@ pub fn transcript(items: &[MaterialItem]) -> String {
             MaterialKind::Assistant => "助手",
             MaterialKind::ToolCall => "工具调用",
             MaterialKind::ToolResult => "工具结果",
+            MaterialKind::Summary => "总结",
         };
-        let text: String = if it.kind == MaterialKind::User {
-            it.text.clone() // 用户消息逐字
+        let text: String = if matches!(it.kind, MaterialKind::User | MaterialKind::Summary) {
+            it.text.clone() // 用户消息与轮级总结逐字（总结已是浓缩层，再截会滚丢）
         } else {
             clip(&it.text, ASSISTANT_CLIP)
         };

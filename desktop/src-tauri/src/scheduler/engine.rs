@@ -152,6 +152,15 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         return;
     };
 
+    // 整理段落总结交付（Organize Summary Design v1 §3.3）：与 agent_chat
+    // 同一排空点——上一轮整理的总结在轮开场落日志（断层缝合处）并实时推送。
+    for text in deps.organizer.deliver_summaries(&mut session, &session_id) {
+        deps.sink.emit(&AgentEvent::ContextSummary {
+            session_id: session_id.clone(),
+            text,
+        });
+    }
+
     // 告知先行：会话内 SystemNotice（UI 投影）+ 窗口不在位补系统通知。
     // 之后才跑轮（与"先事件后执行"同精神——用户先知道发生了什么）。
     deps.sink.emit(&AgentEvent::ScheduleFired {

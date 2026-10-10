@@ -62,6 +62,19 @@ pub struct OrganizeRecord {
     pub duration_ms: u64,
 }
 
+/// 一次整理的轮级总结（Organize Summary Design v1 §3）：记忆管理器对本次
+/// 整理区间 `[from, to]` 的浓缩叙事（跨章节来龙去脉、去噪），是该轮全部
+/// 章节的父节点。编排层在下一轮开场把它排空成会话日志的
+/// `SessionEvent::ContextSummary`（断层交接消息面）；投影/人读层
+/// （tree.md、记忆页、项目联合视图）直接消费本记录。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RunSummary {
+    pub from: EventId,
+    pub to: EventId,
+    pub text: String,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryTree {
     pub schema_version: u32,
@@ -76,6 +89,10 @@ pub struct MemoryTree {
     /// 其后的内容事件。旧名 bundled_until 走 alias 读回。
     #[serde(alias = "bundled_until")]
     pub chaptered_until: EventId,
+    /// 轮级总结链（v2.141，serde default 零迁移）：按整理收束序追加，
+    /// 封闭期记录一次成文永不改写（设计稿 §2/§3）。
+    #[serde(default)]
+    pub summaries: Vec<RunSummary>,
     #[serde(default)]
     pub pending: Option<PendingTask>,
     #[serde(default)]
@@ -105,6 +122,7 @@ impl MemoryTree {
             root: ChapterId(ROOT_ID.into()),
             chapters: BTreeMap::new(),
             chaptered_until: 0,
+            summaries: Vec::new(),
             pending: None,
             rebound: ReboundState::default(),
             paused_auto: false,
@@ -191,12 +209,14 @@ impl MemoryTree {
     }
 
     /// 收束一次整理（记忆管理器或规则切分的产物）：撤占位章节、落真章节、推进
-    /// 游标、记台账。
+    /// 游标、记台账。`summary` = 记忆管理器产出的轮级总结（rule 降级 =
+    /// None——宁缺勿假，退化到无总结的旧行为）。
     pub fn apply_organized(
         &mut self,
         chapters: Vec<MemoryChapter>,
         to: EventId,
         record: OrganizeRecord,
+        summary: Option<String>,
     ) {
         if let Some(task) = self.pending.take() {
             self.chapters.remove(&task.placeholder_id.0);
@@ -205,6 +225,14 @@ impl MemoryTree {
             self.chapters.insert(b.chapter_id.0.clone(), b);
         }
         self.chaptered_until = self.chaptered_until.max(to + 1);
+        if let Some(text) = summary {
+            self.summaries.push(RunSummary {
+                from: record.from,
+                to: record.to,
+                text,
+                created_at: record.ts,
+            });
+        }
         self.push_history(record);
     }
 

@@ -32,6 +32,31 @@ pub struct TreeChaptersView {
     pub chaptered_until: usize,
     pub paused_auto: bool,
     pub chapters: Vec<ChapterView>,
+    /// 轮级总结链（v2.141，Organize Summary Design v1）：按收束序，前端
+    /// 渲染在对应章节组上方（总结是该批章节的浓缩父节点）。
+    pub summaries: Vec<RunSummaryView>,
+}
+
+/// 轮级总结行（会话视图 / 项目视图共用形状）。
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RunSummaryView {
+    pub text: String,
+    pub event_from: usize,
+    pub event_to: usize,
+    pub created_at: i64,
+    /// 项目视图带会话标注；会话视图内为空串。
+    pub session_id: String,
+    pub session_title: String,
+}
+
+/// 项目联合视图（M6.4 v2.141 扩展）：跨会话捆平铺 + **跨会话总结链**
+/// ——后者按时间正序串联即项目进展叙事锚点（设计稿 §3.5）。
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTreeView {
+    pub chapters: Vec<ProjectChapterView>,
+    pub summaries: Vec<RunSummaryView>,
 }
 
 /// 项目联合视图行（M6.4）：跨会话捆平铺 + 会话标注。
@@ -82,8 +107,9 @@ pub struct OriginalItem {
 impl Organizer {
     /// 项目级 L0 联合视图（M6.4，树 v2 §11.4）：该项目**跨会话**全部捆
     /// 平铺（会话标注 + 章节序）。memory_search_titles 工具的候选池与此
-    /// 同一数据源（scan_workspace）。
-    pub fn tree_project(&self, workspace: &str) -> Vec<ProjectChapterView> {
+    /// 同一数据源（scan_workspace）。v2.141 带上跨会话总结链（时间正序
+    /// ——项目进展叙事锚点）。
+    pub fn tree_project(&self, workspace: &str) -> ProjectTreeView {
         let titles: std::collections::HashMap<String, String> =
             crate::session_log::list(&self.sessions_dir)
                 .into_iter()
@@ -92,6 +118,7 @@ impl Organizer {
         let mut rows = self.tree_store.scan_workspace(workspace);
         // 最近活动会话优先（scan_workspace 已按 mtime 降序，稳定即可）
         let mut out = Vec::new();
+        let mut summaries = Vec::new();
         for (tree, session_id, _) in rows.drain(..) {
             let session_title = titles.get(&session_id).cloned().unwrap_or_default();
             let mut chapters: Vec<&memory_tree::MemoryChapter> =
@@ -118,8 +145,23 @@ impl Organizer {
                     event_to: b.event_range.1,
                 });
             }
+            for s in &tree.summaries {
+                summaries.push(RunSummaryView {
+                    text: s.text.clone(),
+                    event_from: s.from,
+                    event_to: s.to,
+                    created_at: s.created_at,
+                    session_id: session_id.clone(),
+                    session_title: session_title.clone(),
+                });
+            }
         }
-        out
+        // 总结链 = 项目进展叙事：时间正序（同刻按区间起点，稳定）
+        summaries.sort_by_key(|s| (s.created_at, s.event_from));
+        ProjectTreeView {
+            chapters: out,
+            summaries,
+        }
     }
 
     /// 树投影清单（会话切换器数据源，最近更新降序）。
@@ -159,6 +201,7 @@ impl Organizer {
                 chaptered_until: 0,
                 paused_auto: false,
                 chapters: Vec::new(),
+                summaries: Vec::new(),
             };
         };
         // BTreeMap 是字典序（b10 < b2），列表按章节序号数值排（创建序）。
@@ -192,6 +235,18 @@ impl Organizer {
             chaptered_until: tree.chaptered_until,
             paused_auto: tree.paused_auto,
             chapters,
+            summaries: tree
+                .summaries
+                .iter()
+                .map(|s| RunSummaryView {
+                    text: s.text.clone(),
+                    event_from: s.from,
+                    event_to: s.to,
+                    created_at: s.created_at,
+                    session_id: String::new(),
+                    session_title: String::new(),
+                })
+                .collect(),
         }
     }
 
