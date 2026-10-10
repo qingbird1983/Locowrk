@@ -1,7 +1,9 @@
 //! 中间件链组装（DESIGN.md §7.1）。
 //!
-//! 纪律：组装次序 Tracing → Timeout → Retry → CircuitBreaker → Approval → Tool
-//! （具体件阶段四提供；阶段一链可为空 = 直连工具）。
+//! 纪律：**实际装配序** = Tracing → Audit → Timeout → CircuitBreaker →
+//! 审批门（Kernel 内 InnerApproval，非洋葱件）→ Tool；链可为空 = 直连工具。
+//! 旧文本在这里并列写过 Retry，它从未被任何装配点注册、已随审计修复批 C
+//! 删除（详见 `middleware/mod.rs` 头注）。
 
 use std::sync::Arc;
 

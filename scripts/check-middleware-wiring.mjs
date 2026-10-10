@@ -19,10 +19,9 @@ const ROOT = process.argv[2] && !process.argv[2].startsWith("-") ? process.argv[
 const verbose = process.argv.includes("--verbose");
 
 // 未接线白名单（每项都要写清理由与去处）。
-const KNOWN_UNWIRED = new Map([
-  ["CtxCompact", "审计 H2 已裁定删本体（桌面压缩链 v2.137 退役）；批 C 删除后请清空本条目"],
-  ["Retry", "审计 H2 已裁定删本体（重试在 LLM 客户端层承载，v2.75）；批 C 删除后请清空本条目"],
-]);
+// 批 C（2026-10-11）删掉 CtxCompact + Retry 本体后清空 —— 清单为空 = 此后
+// 任何新写却忘接线的中间件件当场判红，不再有豁免位。
+const KNOWN_UNWIRED = new Map();
 
 const walk = (dir, out = []) => {
   for (const name of readdirSync(dir)) {

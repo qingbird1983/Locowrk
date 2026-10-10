@@ -12,13 +12,15 @@
 //! 链位（§3.6；v2.139 提示词分层设计 §6 重排）：ToolExposure（⑫）→
 //! BaseSystemInject（静态身份层 = system 前缀）→ **Memory-Inject** →
 //! 思考语言 → 树目录（殿后）——静态段在前、动态块追加，append-only
-//! 目录永远最后（桌面链 v2.137 起 ctx-compact 退役，headless 保留）。
+//! 目录永远最后。上下文压缩件（ctx-compact）自 v2.137 桌面链退役、并随
+//! 审计修复批 C 删除本体（headless 侧其实从未注册过它），节奏改由记忆树
+//! 的整理边界承担。
 //!
 //! 系统提示永不压缩（§5.3 冲突 2）由结构保证：记忆写在消息列表之外的
-//! `system` 字段里，ctx-compact 只改写 `messages`，会话日志也不落注入
-//! 内容——投影零改动。
+//! `system` 字段里，任何改写消息的决策方（历史上是 ctx-compact）都只动
+//! `messages`，会话日志也不落注入内容——投影零改动。
 //!
-//! 与 mw-audit / ctx-compact 同理落在宿主侧：事实记忆库归 memory-sqlite
+//! 与 mw-audit 同理落在宿主侧：事实记忆库归 memory-sqlite
 //! 插件所有，内核不碰 SQL——检索经 [`MemorySource`] trait（组装点提供
 //! 实现，与 ApprovalResolver 同款"内核定契约、组装点实现"模式；不经
 //! ToolSource 走工具管道，否则每 step 一次 memory_list 会污染 ⑩ 的使用
@@ -329,7 +331,7 @@ impl WaterfallListener for MemoryInject {
         // kernel 每 step 重建 payload，system 恒为 None；仍按"追加"合并，
         // 未来若有其他决策方先写 system 也不覆盖
         req.system = Self::append_block(req.system.take(), Some(block));
-        // to_value 失败按 fail-open 放行（与 ctx-compact 同纪律）
+        // to_value 失败按 fail-open 放行（Replace 收口统一纪律，见 replace_decision）
         super::replace_decision(req)
     }
 }

@@ -31,17 +31,18 @@ pub struct PreStepPayload {
 /// `agent/request` 的 payload。`model` / `params` 可被决策环改写——
 /// 审批插件通过该点注入策略参数（§14 阶段四验收）。`tools` 是工具目录
 /// 快照（LLM.md：适配层负责映射各家格式），`serde(default)` 保持与
-/// 旧决策方互通。`compacted` 由 ctx-compact 写回（⑨）：kernel 据此落
-/// `ContextCompacted` 事件进会话日志。`system` 是请求级系统提示（⑪）：
-/// Memory-Inject 把持久记忆写在这里——它在消息列表之外，ctx-compact
-/// 只改写 `messages`，"系统提示永不压缩"（Context 文档 §5.3）由结构保证，
-/// 会话日志也不落注入内容。`session_id`（㉘）：本 step 的会话 id——
+/// 旧决策方互通。`compacted` 是压缩结果的带回位（⑨）：kernel 据此落
+/// `ContextCompacted` 事件进会话日志；写入方 ctx-compact 已随审计修复批 C
+/// 删除，字段本身是留给任何 `agent/request` 决策方的可扩展契约，且历史
+/// 事件重放在读它的形状。`system` 是请求级系统提示（⑪）：
+/// Memory-Inject 把持久记忆写在这里——它在消息列表之外，任何改写消息的
+/// 决策方都只动 `messages`，"系统提示永不压缩"（Context 文档 §5.3）由结构
+/// 保证，会话日志也不落注入内容。`session_id`（㉘）：本 step 的会话 id——
 /// Memory-Inject 交给宿主检索源做项目隔离（workspace 是宿主概念，内核
 /// 只透传 id，不解释）。`tree_directory`（M4 记忆树切流）：**Some = 树
 /// 会话**（含空串 = 尚无捆）——内核组装侧已把 `messages` 切到未整理尾巴，
 /// 本字段携带 L0 目录文本，链上 TreeDirectoryInject 把它追加到 system
 /// 尾部（Memory-Inject 之后 = 目录在记忆块后，树 v2 §7.1 组装次序）；
-/// ctx-compact 见 Some 即跳过（树会话不压缩，压缩语义由整理边界承担）；
 /// None = legacy 会话，组装零变化。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RequestPayload {

@@ -3,8 +3,8 @@
 //! 取配置时长与 `CallCtx::deadline` 的较小者；deadline 已过 = 立即超时。
 //! 时长两态来源（S2，约束最小化清单 §3"单插件执行时间可配"）：固定值
 //! （[`Timeout::new`]，测试与 CLI）或共享锁（[`Timeout::hot`]，组装点
-//! 持有 `Arc<RwLock<Duration>>`，设置保存即换入——与 CompactConfig 同
-//! 模式，本 crate 不依赖任何设置存储）。
+//! 持有 `Arc<RwLock<Duration>>`，设置保存即换入——与 ToolExposureConfig
+//! 同模式，本 crate 不依赖任何设置存储）。
 //!
 //! 自管时长名单（v2.144）：名单内工具整体不受全局预算掐断——它们自带
 //! 完整的时长纪律（预算参数 + 步数上限 + 超时如实返回部分结果），全局

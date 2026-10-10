@@ -56,7 +56,9 @@ impl Kernel {
     /// `agent/request` 决策环：插件可改 model / params / system（记忆注入见
     /// middleware::memory_inject；树目录见 middleware::tree_context）。tools 随
     /// payload 进决策环（决策方理论上可裁剪目录），出环后进 LlmRequest；
-    /// ctx-compact 的压缩结果经 `compacted` 一并带回（kernel 落日志）。
+    /// 压缩结果经 `compacted` 一并带回（kernel 落日志）——该字段是 waterfall
+    /// 决策方的可扩展契约，现网无生产写入点（ctx-compact 已随批 C 删除），
+    /// 但历史 `ContextCompacted` 事件的重放面仍在读它的形状，不能拔。
     /// `tree_directory`（M4）：Some = 树会话标记 + L0 目录文本（见
     /// RequestPayload 文档）。
     async fn waterfall_request(

@@ -101,7 +101,12 @@ export function assetSaveAs(
   return invoke("asset_save_as", { id, mime, defaultName });
 }
 
-/** 手动孤儿资产 GC（走查/开发者）：按 gcThresholdDays 判定，返回计数。 */
+/** 手动孤儿资产 GC（走查/开发者）：按 gcThresholdDays 判定，返回计数。
+ *
+ * **预留·前端零消费者**（审计 C3 / 用户 2026-10-10 裁定保留）：调用入口在
+ * 后端命令 `asset_gc`（启动 + 24h 自动循环之外的手动档），包装留着给走查与
+ * 将来的开发者钮用。要退役它必须连 Rust 命令一起拔——只删包装会让
+ * `check-commands.mjs` 的「定义 = 注册 = 前端引用」三向闭合当场判红。 */
 export function assetGc(): Promise<{ scanned: number; removed: number }> {
   return invoke("asset_gc");
 }
@@ -415,7 +420,12 @@ export function sessionSetThinking(sessionId: string, level: string): Promise<vo
 }
 
 /** 全部档位的模型清单（§3.30 选择器数据源）：并行探测逐组收口，
- * 单档失败进 error 不拖垮其它组。 */
+ * 单档失败进 error 不拖垮其它组。
+ *
+ * **预留·零消费者**（审计 C3 / 用户 2026-10-10 裁定保留）：模型清单面现走
+ * 目录快照 + 档位内 `llm_probe_models`，本包装在 `api.ts` 之外无任何 import
+ * 方（审计逐条复核过，非目测）。退役需与后端命令 `llm_list_models` 同批，
+ * 否则 `check-commands.mjs` 三向闭合当场判红。 */
 export function llmListModels(): Promise<ProviderModels[]> {
   return invoke("llm_list_models");
 }
@@ -603,7 +613,13 @@ export function subscribeSessionTitle(
 }
 
 // ---- 模型窗口探测（S2，清单 §5）：Ollama /api/show 自动提取 ----
-/** 探测 Ollama 模型上下文窗口（token）；失败 reject（UI 提示手动选择）。 */
+/** 探测 Ollama 模型上下文窗口（token）；失败 reject（UI 提示手动选择）。
+ *
+ * **预留·零消费者**（审计 C3 / 用户 2026-10-10 裁定保留）：窗口面自 v2.137
+ * 四层链（会话覆盖 ?? 模型行钉死 ?? 目录 ?? 档位）起不再需要手动触发，
+ * 设置页的「自动检测」钮随该批下线，本包装在 `api.ts` 之外无 import 方；
+ * 后端 `llm/probe.rs` 因此同属零消费者面。退役需与命令 `llm_probe_window`
+ * 同批（三向闭合同上）。 */
 export function llmProbeWindow(baseUrl: string, model: string): Promise<number> {
   return invoke("llm_probe_window", { baseUrl: baseUrl || null, model });
 }

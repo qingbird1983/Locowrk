@@ -1,7 +1,6 @@
 // 中文文案（默认语言，DESIGN.md §13.5）。会话内容属于数据，不在此列。
 export default {
   app: {
-    subtitle: "阶段八 · 真实模型接入 · 当前模型 = {model}",
     modelFallback: "脚本替身（设置 → LLM 配置）",
   },
   nav: {
@@ -13,7 +12,6 @@ export default {
     notifications: "通知",
   },
   status: {
-    ready: "就绪",
     running: "运行中…",
   },
   common: {
@@ -43,7 +41,6 @@ export default {
     },
     placeholder: "输入 / 使用命令 · {'@'} 引用文件",
     send: "发送",
-    newSession: "新会话",
     copyMessage: "复制这条消息",
     editMessage: "编辑并重发",
     copyCode: "复制代码",
@@ -66,8 +63,6 @@ export default {
     stopped: "已停止",
     toolCount: "{n} 个工具",
     problemCount: "{n} 个问题",
-    thinking: "思考",
-    thinkingFor: "持续了 {s} 秒",
   },
   // ask_user 选择卡（v4.11 §3.39①）：模型反向提问，composer 坞内作答
   ask: {
@@ -179,7 +174,6 @@ export default {
     badgeThinking: "支持推理档位调节",
     badgeVision: "支持图像输入",
     followDefault: "跟随默认 · {model}",
-    loading: "正在拉取模型清单…",
     empty: "没有可用的模型清单",
     configure: "配置服务",
     switchFailed: "模型切换失败",
@@ -202,7 +196,6 @@ export default {
     untitled: "未命名会话",
     lockedWhileRunning: "会话运行中，暂不能切换",
     versionTip: "版本 v{v}",
-    devUnlockHint: "连点 7 次进入开发者选项",
     devUnlockProgress: "再点 {n} 次进入开发者选项",
     devUnlocked: "已进入开发者选项（设置 → 系统）",
     projectMenu: {
@@ -215,8 +208,6 @@ export default {
       more: "会话操作",
       rename: "重命名",
       export: "导出",
-      moveInto: "移入「{name}」",
-      moveOut: "移出工作区",
       delete: "删除",
       confirmDelete: "确认删除？再点一次执行",
     },
@@ -228,16 +219,12 @@ export default {
     close: "关闭",
   },
   tool: {
-    params: "参数",
-    result: "结果",
     running: "执行中…",
     awaitingApproval: "等待审批",
     unknown: "结果未知",
-    success: "成功",
     failed: "失败",
     copyCall: "复制调用",
     copyCode: "复制代码",
-    pluginBadge: "插件",
     thinkingNow: "思考中…",
     rawData: "原始数据",
     fullConversation: "查看完整对话",
@@ -369,9 +356,6 @@ export default {
     deleted: "会话已删除",
     deleteFailed: "删除失败",
     renameFailed: "重命名失败",
-    movedInto: "已移入工作区",
-    movedOut: "已移出工作区",
-    associateFailed: "工作区关联失败",
     projectAdded: "已添加项目",
     projectAddFailed: "添加项目失败",
     projectRemoved: "已移除项目",
@@ -447,17 +431,6 @@ export default {
     browserConsoleEmpty: "还没有 console 报错/警告",
     browserEmptyHint:
       "打开工作区内的 HTML 页面或 http(s) 地址；对话中让模型「打开看看」也能自动开到这里，页面报错会回到对话里。",
-  },
-  // 子 Agent 卡（§3.10）：数据诚实边界见组件注释（步骤数/子模型不发明）
-  subagent: {
-    region: "子 Agent",
-    working: "子 Agent 正在工作",
-    done: "子 Agent 已收束",
-    count: "{n} 个 subagent",
-    doneCount: "已完成 {done}/{n}",
-    coordinating: "正在协调 {n} 个委派任务",
-    main: "主 Agent",
-    child: "子 Agent",
   },
   // G2 崩溃恢复 uncertain 决策卡（可靠性稿 §5）
   uncertain: {
@@ -573,7 +546,6 @@ export default {
     prefixHint: "保持请求开头稳定以命中缓存，改动会让当前会话缓存重建一次。",
     pinSession: "工具集会话钉死",
     pinSessionHint: "工具清单本会话固定，新工具用 search_tools 找；关闭后每轮重新挑选，命中率会下降。",
-    stabilityRounds: "稳定期轮数",
     filesTitle: "记忆文件化",
     filesHint: "md 是权威编辑面（人可查可读可写），sqlite 是机器索引。",
     reconcileTitle: "记忆文件合并",
@@ -610,7 +582,6 @@ export default {
     treeHistoryRow: "{time} · {reason} · {mode} · {status} · {chapters} 个章节 · 入 {input} / 出 {output} · {ms}ms",
     modeMemoryManager: "记忆管理器",
     modeRule: "规则切分",
-    stabilityRoundsHint: "压缩或整理后的 N 轮内不再改动请求前缀，范围 1–10。",
   },
   memory: {
     search: "搜索记忆…",
@@ -650,8 +621,6 @@ export default {
     projectEmpty: "本项目还没有跨会话的整理记录。",
     projectOpenHint: "查看原文与编辑 → 进入所在会话",
     treeEditFailed: "保存失败：{reason}",
-    viewOriginal: "看原文",
-    hideOriginal: "收起原文",
     originalLoading: "加载原文…",
     originalFailed: "原文读取失败：{reason}",
     sourceMemoryManager: "记忆管理器",
@@ -681,17 +650,9 @@ export default {
     // ㉕·对话区① §3.17 内联决策卡（ApprovalModal 退役；审批不是弹窗）
     cardTitle: "需要权限",
     queue: "还有 {n} 个待处理",
-    riskHigh: "高风险",
-    riskMedium: "中风险",
-    riskLow: "低风险",
-    askLead: "允许 ",
-    askTail: " 运行吗？",
-    inputLabel: "输入",
-    inputCopy: "复制输入",
     envProject: "项目 {path}",
     envTemp: "临时会话",
     timeoutHint: "若 {n} 秒内未响应将自动拒绝",
-    timeoutNow: "超时自动拒绝中…",
     deny: "拒绝",
     allowSession: "允许本次对话",
     allowProject: "本项目始终允许",
@@ -782,7 +743,6 @@ export default {
     builtinNotSelectable: "内置开发态插件不走批量管理",
   },
   settings: {
-    title: "设置",
     // ㉔ 导航轨（UI shell doc §3.31/§3.32：数据驱动索引的轨面文案）
     navSearch: "搜索设置",
     navEmpty: "没有匹配的设置",
@@ -814,7 +774,6 @@ export default {
     askTimeout: "选择等待时长",
     askTimeoutHint: "「任务选择」卡超时按跳过收束（轮次不挂死）；0 = 一直等待",
     // 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽，㉕）
-    chatTitle: "对话行为",
     chatWidthTitle: "对话宽度",
     chatWidthHint:
       "转录列与输入框同宽（缺省 760，下限 560）；拖拽对话区两侧边缘也可调。",
@@ -834,28 +793,6 @@ export default {
     cacheStatsTitle: "缓存命中率显示",
     cacheStatsHint: "用量浮层显示会话累计缓存命中率",
     llmTitle: "模型",
-    llmHint: "API Key 只保存在本机，可配置多个服务商并随时切换模型。",
-    provider: "提供商",
-    provActive: "默认",
-    provSetActive: "设为默认",
-    provEdit: "编辑",
-    provDelete: "删除",
-    provDeleteConfirm: "确认删除",
-    provAdd: "添加服务商档位",
-    provEmpty: "还没有服务商档位——添加一个（填 Key、选模型）后即可在输入框旁的模型选择器里切换。",
-    provFormHint: "填好端点和 Key，点「拉取清单」获取该服务商的可用模型。",
-    provLabel: "档位名称",
-    provNoModel: "未选模型",
-    provFetch: "拉取清单",
-    provFetching: "拉取中…",
-    provSave: "保存档位",
-    provCancel: "取消",
-    labelRequired: "档位名称不能为空",
-    model: "模型",
-    baseUrl: "Base URL",
-    baseUrlPlaceholder: "留空使用该提供商的默认端点",
-    apiKey: "API Key",
-    apiKeyPlaceholder: "未保存",
     apiKeyKeep: "已保存 · 留空保持不变",
     clearKey: "清除已存 Key",
     save: "保存",
@@ -968,7 +905,6 @@ export default {
     subagentFollowSession: "跟随会话",
     subagentThinkingRow: "推理档位",
     subagentThinkingFollow: "跟随会话",
-    subagentNoneMarked: "还没有标记「可用于子代理」的模型——在服务编辑 → 模型高级区里标记",
     importButton: "从其他工具导入",
     importTitle: "从其他工具导入",
     importHint: "扫描本机 Claude Code / Codex / opencode / cc-switch 的配置（纯读不改原文件）；勾选后导入为本地 AI 服务。密钥不经过界面。",
@@ -1114,9 +1050,6 @@ export default {
     // v4.18（§3.4）：阈值用量进度条显隐（v2.137 改名——分母 = 整理阈值）
     usageBar: "阈值用量进度条",
     usageBarHint: "会话区顶部的细进度条，按整理阈值计算用量百分比；读数详情见输入框用量环。",
-  },
-  error: {
-    unknown: "发生错误",
   },
   palette: {
     title: "命令面板",

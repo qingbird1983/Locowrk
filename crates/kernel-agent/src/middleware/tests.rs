@@ -1,5 +1,8 @@
-//! 中间件套件单测：Tracing / Timeout / Retry / CircuitBreaker / Audit。
+//! 中间件套件单测：Tracing / Timeout / CircuitBreaker / Audit。
 //! 用 mock 工具直连 `Next` 链验证行为（§7.1）。
+//!
+//! 曾有的 `Retry` 件测试随批 C 删除（该件从未被任何装配点注册，重试语义在
+//! LLM 客户端层承载，v2.75）。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -10,7 +13,7 @@ use plugin_api::{CallCtx, SideEffect, Tool, ToolError, ToolSpec};
 use serde_json::{Value, json};
 
 use super::{
-    Audit, AuditEntry, AuditSink, CircuitBreaker, JsonlAuditSink, Middleware, Next, Retry, Timeout,
+    Audit, AuditEntry, AuditSink, CircuitBreaker, JsonlAuditSink, Middleware, Next, Timeout,
     Tracing,
 };
 
@@ -164,21 +167,6 @@ async fn timeout_still_bounds_tools_outside_self_managed() {
     .await
     .expect_err("名单之外慢调用必须超时");
     assert!(err.to_string().contains("timed out"), "{err}");
-}
-
-#[tokio::test]
-async fn retry_recovers_after_transient_failure() {
-    let mw = Arc::new(Retry::new(3, Duration::from_millis(1)));
-    let tool = MockTool::fail_first(2); // 前两次失败，第三次成功
-    let out = run(mw, tool).await;
-    assert!(out.is_ok(), "第 3 次应成功: {out:?}");
-}
-
-#[tokio::test]
-async fn retry_exhausts_attempts() {
-    let mw = Arc::new(Retry::new(3, Duration::from_millis(1)));
-    let out = run(mw, MockTool::fail_first(u32::MAX)).await;
-    assert!(out.is_err(), "始终失败应耗尽尝试");
 }
 
 #[tokio::test]

@@ -722,6 +722,23 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.147 · 审计修复批 C（两个从未接线的内核中间件摘本体 + 134 条死文案清零）
+
+**依据**：`docs/reports/AUDIT-FIX-PLAN-v1.md` §5 批 C 段（逐条证据在那儿，本节只记结论）。用户裁定 = Q2「`CtxCompact`/`Retry` 删本体」+ Q3「批 C 只删孤儿 i18n 键，`sandbox_run` 残留与三包装保留加注释」。
+
+| 面 | 落点 |
+|---|---|
+| ①摘本体 | `middleware/retry.rs` 整删（52 行）+ `compact.rs` 332→56 行 + 其测试 `compact/tests/{mod,stability}.rs` 509 行随葬；`lib.rs`/`middleware/mod.rs` 再导出与洋葱序注释**与实际对齐**（审计 H2 抓的「注释宣称有、实现里没有」就此闭合）；死码面净摘 **893 行** |
+| ②留活面 | `CompactionOutcome`（旧日志 `ContextCompacted` 重放链在读）+ `estimate_tokens`（全仓唯一粗估尺）留任，新 `compact/tests.rs` 四测锁形状；`WaterfallDecision::Retry`/`RetryBudget`/`with_retry_budget` **保留** = 有意偏离审计 M-22（它们是 `agent/request-error` 重试环的活机制，与被删的洋葱件 `Retry` 同名不同物） |
+| ③接线闸收口 | `check-middleware-wiring.mjs` 的 `KNOWN_UNWIRED` **清空**（原登这两条）→ 现跑「实现 10 · 已接线 10 · 未接线 0 · 白名单 0」，此后任何新写忘接线的件当场判红；**变异验证**用临时 `MutateProbe` 探针实抓判红 → 删探针复绿 → 零残留 |
+| ④死文案 | 62 个孤儿键 ×zh/en = **134 条**删除（`subagent`/`error` 两命名空间整体收敛）；与台账对账 = 闸为台账超集，多出仅 `chat.newSession`/`turn.thinkingFor` 两个后批新孤儿，9 条「叶名歧义」逐条复核无误删；动态前缀面逐条手查确认**无一个被删键的前缀**存在动态消费；删后 `check-i18n` = zh=891 en=891 · 缺键 0 · 无引用键 0 |
+| ⑤按裁定保留 | `sandbox_run` 前端 6 处「历史渲染面」注释在位（批 A+B 已落）；`api.ts` 三包装 + `types.ts` `ProviderModels` 本批补「**预留·零消费者**」注释——并纠正 v2.146 ⑤ 的过度声明（当时只落了 tool-summary/tool-detail 两处，`api.ts` 面并未落）。零消费者为 grep 实证：三包装 `desktop/src` 命中各 1（= 自身定义行）；`llm/probe.rs` 唯一消费点 = `commands.rs:371` 命令本身 |
+| 测试账 | 根 workspace 443→**432** passed（删 12 compact + 2 Retry + 1 `tree_session_skips_compaction_over_threshold`，增 4 = 净 −11，逐数对上）；desktop 356 持平零回归 |
+| 门禁 | 最后一次编辑后全量：根 fmt CLEAN / clippy `-D warnings` 0 / 39 套件 432 绿；desktop fmt CLEAN / clippy 0 / 356 绿；`pnpm build`(vue-tsc 0)+`lint:style` 0+`check-style` 91 文件干净；`check_length` **39 == 基线 39**（本批净降 1 = 旧 compact 测试 405 行超限文件随葬，基线随批收紧 40→39）；`check-commands` 85·85·85 |
+| 边界 | ①本批纯代码/门禁/死文案面，**未做实机 CDP 走查**（判据 = 静态引用三路闭合 + vue-tsc + 全量测试）；裸键名回潮的眼验列入批 V；②删除器首轮用行级状态机被 `en.ts` 折行值里的裸撇号（`provider's`）骗过 → 26 键假「文件里没有」，改与门禁同一套字符级扫描器并先校 953 叶键一致才落盘——**删除工具的解析器必须与门禁同源**，已写进计划稿；③`docs/上下文与记忆工作流程报告.md` 仍把 `CtxCompact` 列为流程第 ⑤ 步，随批 E 文档真实化处理 |
+| 文档 | `AUDIT-FIX-PLAN-v1.md` 批 C 段（含对账与变异验证全记录）+ ROADMAP/CHANGELOG/AGENTS v2.147 |
+
+---
 ### v2.146 · 审计修复批 A+B（用户可见缺陷 + 门禁体系四道新防线）
 
 **依据**：`docs/reports/CODE-AUDIT-v1.md`（2026-10-10 全仓审计，4 子域 + Lead 机械取证）；执行计划与逐条证据 = `docs/reports/AUDIT-FIX-PLAN-v1.md`。**用户 2026-10-10 裁定**：本轮先做批 A+B；H2 `CtxCompact`/`Retry` 删本体（批 C）；批 C 删除范围只勾「59 孤儿 i18n 键」（`sandbox_run` 前端残留与三个死 API 包装保留 + 加注释）；`config/profile.toml` 删文件 + 移除文档描述（批 D）。**P0 复核 = 已修**（`approval.rs` 字节判定 + 整字符步进 + 三条 CJK 回归在位，逐行核过）。

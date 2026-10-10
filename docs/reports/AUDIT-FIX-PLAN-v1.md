@@ -60,7 +60,7 @@
 
 风险与代价（如实）：desktop 作业跑在 `windows-latest` 上无缓存可复用，CI 时长会显著上升（本机 `target/` 41.7 GB + `desktop/src-tauri/target/` 23.9 GB 的规模即编译成本的旁证）。可先只接 desktop 的 fmt+clippy+test，前端步骤零成本；若 CI 时长不可接受，退路是把 desktop 作业挂 `workflow_dispatch`/每日定时而非每次 push。**GitHub Actions 的实际运行结果我无法在本机验证，这一条只能等你 push 后确认。**
 
-### 批 C｜退役残留清扫（审计 H3）——**需裁定**
+### 批 C｜退役残留清扫（审计 H3）——✅ 已落（2026-10-11，证据见 §5 批 C 段）
 
 | # | 条目 | 判据 | 待裁定的口径 |
 |---|---|---|---|
@@ -222,7 +222,57 @@ check-middleware-wiring.mjs  实现=12 · 已接线=10 · 未接线=2（均在 K
 
 一次诚实记录：末次全量跑首轮**判红**，两条红都不是本批改动造成的——① `tests_session_log` 的临时目录读到上次运行残留（已修，见上方「顺带发现」）；② `plugin-host/tests/wasm_plugins` 并行偶发红（历批已记，单跑 2/2 绿）。复跑全绿后才有上面这组数；`wasm_plugins` 的共享目录问题与①同族，一并登记 F11。
 
-另：孤儿键口径在批内收紧了两次（133 → 62）。第一轮虚高是因为只扫 `t()` 调用点，漏掉 `PermissionCard.vue:64` 这种「先 `const path = \`approval.sensitive.${key}\`` 拼串、再传进 `t()`」的形态，把 11 条活文案误报成孤儿——**假孤儿比漏报危险**（人会照着清单删掉正在用的文案）。收紧后 62 条与台账「确证 50 + 待确认 9」基本对齐，批 C 执行时取两者交集、并优先信任台账。
+另：孤儿键口径在批内收紧了两次（133 → 62）。第一轮虚高是因为只扫 `t()` 调用点，漏掉 `PermissionCard.vue:64` 这种「先 `const path = \`approval.sensitive.${key}\`` 拼串、再传进 `t()`」的形态，把 11 条活文案误报成孤儿——**假孤儿比漏报危险**（人会照着清单删掉正在用的文案）。收紧后 62 条与台账「确证 50 + 待确认 9」基本对齐，批 C 执行时取两者交集、并优先信任台账（实际对账结果见下批 C 段：闸是台账的超集，多出的只有 2 个后批新产生的孤儿）。
+
+### 批 C（2026-10-11，H2 摘本体 + C1/C2/C3 全落）
+
+**C0 = Q2 裁定兑现：`CtxCompact` + `Retry` 摘本体**
+
+| 落点 | 证据 |
+|---|---|
+| 删 `middleware/retry.rs`（52 行）+ `mod retry`/再导出；`compact.rs` 332→56 行；删其测试 `compact/tests/mod.rs` 405 + `tests/stability.rs` 104 行 | 净差 = `git diff --stat` 本批 **−1140 / +113**（另新建 `compact/tests.rs` 116 行未入 diff 统计）；死码面合计摘掉 **893 行** |
+| `CompactionOutcome` + `estimate_tokens/estimate_one` 保留 | 新 `compact/tests.rs` 四测锁住：尺子口径（序列化字节 ÷4 精确等式 + 媒体部件平铺）/ CJK 低估是记档行为 / **旧日志载荷字面 JSON 读得进 + 字段名回序列化**（重放面不能漂）。平铺断言首轮就被自己抓红：`estimate_tokens` 的增量是「平铺值 + 部件自身 JSON 字节」= 实测 1046 而非 1024，写死 1024 是假断言 → 改成刻度层用 `est_tokens()` 精确锁 1024/1000/0，集成层锁「≥ 平铺值且不超出一个量级」 |
+| 陈旧注释逐处订正（审计 H2 的「注释宣称有、实现里没有」） | `chain.rs` 装配序改真实（Tracing→Audit→Timeout→CircuitBreaker→审批门→Tool，并注明 Retry 从未注册）；`middleware/mod.rs` 头注重写；`lib.rs` 再导出瘦身（`CompactConfig/CompactStrategy/suggested_threshold/CtxCompact/Retry` 摘出）；`memory_inject.rs` 删虚假「headless 保留」；`waterfall.rs`/`kernel/request.rs` 的 `compacted`/`tree_directory` 由「ctx-compact 写回」改为**契约面**措辞（现网无生产写入点 ≠ 契约失效）；`timeout.rs` 的 `CompactConfig 同模式`→`ToolExposureConfig`；`fragments.rs` 同步 |
+| **有意偏离审计 M-22** | `WaterfallDecision::Retry` / `RetryBudget` / `Kernel::with_retry_budget` **保留**——它们是 `agent/request-error` 重试环的**活机制**（`kernel/request.rs:211` 消费 + `tests/waterfall.rs` 两测在跑），与被删的洋葱件 `Retry` 同名不同物。审计把两者并列为「未接线」是名称误判，此处按查证结果处理 |
+| 接线闸白名单清空 | `KNOWN_UNWIRED` 两条删除 → 现跑 = **实现 10 · 已接线 10 · 未接线 0 · 白名单 0**；**变异验证**（新形态=空清单必须仍能抓鬼）：临时落一个无构造点的 `MutateProbe` 监听器文件 → 当场判红「有定义、无生产构造点，且未登记白名单」→ 删探针复绿 → `grep MutateProbe` 全仓 = 0 残留 |
+| 测试账 | 根 workspace 443 → **432** passed：删 12（旧 compact 测）+ 2（Retry 测）+ 1（`kernel/tests.rs` 的 `tree_session_skips_compaction_over_threshold`，唯一依赖 `CtxCompact::new` 的内核测）= 15，增 4（新 compact 测）→ 净 −11，逐数对得上，无「测试静默消失」 |
+
+**C1 = 62 个孤儿 i18n 键删除（zh/en 共 134 条死文案）**
+
+- 与台账对账（机械比对，不靠目测）：闸内 62 键 ⊇ 台账列名的 49 键（`*` 待确认 9 条叶名全部逐条复核）；闸比台账**多出的只有 2 个新孤儿** = `chat.newSession`（SessionSwitcher 退役后遗留，现文案走 `sidebar.newTask`）与 `turn.thinkingFor`（ThinkingRow 实际用 `tool.thinkingNow` + `tool.type.thinking`）；余差是台账自身的折叠写法（`subagent.region*`、`status.* 中的 ready`）与正文 59 的计数口径，**以闸为准**。
+- 逐条复核后删：`subagent.*` 与 `error.*` 两个命名空间整体无引用 → 整块收敛（连带删除上方只为它们存在的 `// 子 Agent 卡（§3.10）` 注释行，zh/en 各一行）；`sidebar.menu.moveInto/moveOut` + `toast.moved*/associateFailed` 的死因有源可查——`SessionRow.vue:63` 记着 v4.11 用户裁定「移除移入其它项目」，功能先退役、文案后落灰，删它是对的。
+- **假孤儿防线**（本批最要命的风险）：删除器的判据 = 闸的三条豁免（`t()` 字面量 / 源码任何带引号点分字面量 / 动态前缀整族）全不成立。动态族逐条手查：源码里全部 `t(\`…\`)` 调用点 = `idle. memory.time. market. notice.action. perm.short. perm.desc. tool.type. nav. chat.greeting. chat.greetingBare. effect.`，**没有一个被删键的前缀**，故无动态成员被动过。
+- 工具面：写删除器时先用行级状态机，`en.ts` 里 `"...the provider's default endpoint"` 这种**折行值续行含裸撇号**被误判成未闭合字符串、整块结构错位 → 26 键「清单有但文件没有」。假孤儿风险当场暴露，改为与 `check-i18n.mjs` 同一套**字符级扫描器**（记行区间 + 键行起删，prettier 折行不误伤），两文件各自解析出 953 叶键 = 与门禁一致后才允许落盘。
+- 删除器只删「键自身行 + 子键全删光的空块」，其余字节不动 → `git diff --stat` = 两文件各 **−67 行、零改写行**，diff 可直接审。
+- 删后：`check-i18n.mjs` = **zh=891 en=891 · 缺键 0 · 无静态引用键 0**（双向差集仍为 0）+ `pnpm build`（vue-tsc）过 + `lint:style`/`check-style.mjs` 0。
+
+**C2/C3 = 按裁定「保留 + 加注释」**
+
+- C2 `sandbox_run` 前端 6 处：`tool-summary.ts:14` 与 `tool-detail.ts:62` 的「历史渲染面」注释在批 A+B 已落（本批复核确认在位），三处 `shell / shell_read / sandbox_run` 共用分支与 §333 文档行同属该面。
+- C3 三个死 API 包装：`api.ts` 的 `assetGc` / `llmListModels` / `llmProbeWindow` 各补「**预留·零消费者**」注释（写清退役必须连 Rust 命令同批，否则 `check-commands.mjs` 三向闭合当场判红）+ `types.ts` 的 `ProviderModels` 标注唯一消费方。**零消费者是跑出来的**：`grep assetGc|llmListModels|llmProbeWindow` 全 `desktop/src` 命中数 = 1/1/1（全在自身定义行）；Rust 侧 `probe::` 唯一消费点 = `commands.rs:371` 那条命令本身。
+- **纠正 v2.146 的一条过度声明**：ROADMAP ⑤ 当时写「三包装 = 保留并加注释」，实际只有 `tool-summary/tool-detail` 两处注释落了，`api.ts`/`types.ts` 的四条是本批才补上。文档领先于代码一格，登记在此。
+- 闸数不变：`check-commands` 定义=85 · 注册=85 · 前端引用=85（承诺兑现）。
+
+**顺带（登记批 E）**：`docs/上下文与记忆工作流程报告.md:26,75` 仍把 `CtxCompact` 列为流程第 ⑤ 步（现该本体已摘），属「文档描述现役机制」类失真，随 E 批真实化处理，本批不改文档。
+
+**批 C 门禁（最后一次编辑之后全量复跑，2026-10-11）**
+
+```
+根 cargo fmt --all --check            CLEAN
+根 cargo clippy --workspace --all-targets -D warnings   0
+根 cargo test --workspace             39 套件 · 432 passed · 0 FAILED（对账见上）
+desktop cargo fmt --check             CLEAN
+desktop cargo clippy --all-targets -D warnings   0
+desktop cargo test                    356 passed（与 v2.145/2.146 持平，零回归）
+desktop pnpm build（vue-tsc 0 + vite）过
+desktop pnpm run lint:style           0 ·  check-style.mjs 91 文件干净
+check_length.sh     39 == 基线 39（本批净降 1：旧 compact 测试 405 行超限文件随葬 → BASELINE 随批收紧 40→39）
+check-i18n.mjs      zh=891 en=891 · 缺键 0 · 无静态引用键 0
+check-commands.mjs  85 · 85 · 85
+check-middleware-wiring.mjs  实现=10 · 已接线=10 · 未接线=0 · 白名单=0
+```
+
+本批为纯代码/门禁面 + 死文案删除，**未做实机 CDP 走查**：判据 = 静态引用面（`t()` 字面量/索引键/动态前缀三路闭合）+ `vue-tsc` 构建 + 全量测试。要肉眼确认界面没有裸键名回潮，需另起一轮走查（列入批 V 验收）。
 
 ## 6. 验收判据（每批交付时逐条给）
 

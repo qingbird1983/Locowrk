@@ -1,21 +1,27 @@
 //! 洋葱模型中间件（DESIGN.md §7.1）。
 //!
-//! 阶段一：trait + Next 链。阶段四补齐套件：`trace`（Tracing）、`timeout`
-//! （Timeout）、`retry`（Retry）、`circuit_breaker`（CircuitBreaker）。
-//! 组装次序 Tracing → Timeout → Retry → CircuitBreaker → [Approval] → Tool；
-//! 审批门在 Kernel（§7.2）——决策必须作为 ApprovalDecided 事件进会话日志，
-//! 中间件没有会话句柄（见 `crate::approval`）。
-//! `compact`（ctx-compact，plugins.md 第二批）、`memory_inject`
-//! （Memory-Inject，Context 文档 §4/§5）与 `tool_exposure`（工具暴露
-//! 截断，exposure 文档 §5/§6）都不是洋葱件——它们是 `agent/request`
-//! waterfall 监听器，与本套件同住只因同属"中间件类"。
-//! 注册次序（exposure 文档 §7 / Context 文档 §3.6 / 提示词分层设计 §6）：
-//! ToolExposure 最前（先定暴露面，压缩才知道留多少空间）→
-//! BaseSystemInject（静态身份层 = system 字节前缀）→ Memory-Inject
-//! （记忆是原料）→ 思考语言（宿主注册）→ 树目录（append-only 殿后）。
-//! 旧 ctx-compact 桌面链 v2.137 退役，headless 侧仍注册。
-//! 指令文件 / 尾部碎片两件改写 `messages`（消息层面非 system），注册
-//! 位置与 system 面无关，排尾部。
+//! **实际存在的洋葱件**四件：`trace`（Tracing）、`audit`（Audit）、
+//! `timeout`（Timeout）、`circuit_breaker`（CircuitBreaker）。组装次序以
+//! 桌面装配点 `desktop/src-tauri/src/state/mod.rs` 为准：Tracing → Audit
+//! （挂外侧，被拒也留痕）→ Timeout → CircuitBreaker → 审批门 → Tool。
+//! 审批门不是洋葱件而是 Kernel 内的 InnerApproval（§7.2）——决议必须作为
+//! `ApprovalDecided` 事件进会话日志，中间件没有会话句柄（见 `crate::approval`）。
+//! 旧纪律里并列写的 `retry`（Retry）**从未被任何装配点注册**，已随审计修复
+//! 批 C 删除（重试语义在 LLM 客户端层承载，v2.75；`WaterfallDecision::Retry`
+//! 这个决策位依然活着，由 `Kernel::retry_budget` 计量）——「注释宣称有、实现
+//! 里没有」正是审计报告 H2 抓出的形态，此段注释即为订正。
+//!
+//! 其余件都不是洋葱件，而是 `agent/request` waterfall 监听器，与本套件同住
+//! 只因同属「中间件类」：`tool_exposure`（工具暴露截断，exposure 文档
+//! §5/§6）、`base_system`（静态身份层 = system 字节前缀）、`memory_inject`
+//! （记忆原料，Context 文档 §4/§5）、`thinking_language`（宿主注册）、
+//! `tree_context`（树目录，append-only 殿后于 system 面）、
+//! `instruction_files`（指令文件层）、`fragments`（尾部碎片）。注册次序 =
+//! ToolExposure → BaseSystemInject → MemoryInject → 思考语言 →
+//! TreeDirectoryInject → InstructionFilesInject → FragmentInject
+//! （静态段在前、只增目录殿后 = 前缀缓存友好，提示词分层设计 §6）。
+//! `compact` 已降级为历史契约面（载荷类型 + token 尺子，见该模块注释），
+//! 不再是监听器。
 
 mod audit;
 mod base_system;
@@ -24,7 +30,6 @@ mod compact;
 mod fragments;
 mod instruction_files;
 mod memory_inject;
-mod retry;
 mod timeout;
 mod tool_exposure;
 mod tool_retrieval;
@@ -37,14 +42,10 @@ mod tests;
 pub use audit::{Audit, AuditEntry, AuditSink, JsonlAuditSink};
 pub use base_system::{BaseSystemInject, base_system};
 pub use circuit_breaker::CircuitBreaker;
-pub use compact::{
-    CompactConfig, CompactStrategy, CompactionOutcome, CtxCompact, estimate_tokens,
-    suggested_threshold,
-};
+pub use compact::{CompactionOutcome, estimate_tokens};
 pub use fragments::{FragmentInject, FragmentSource, wrap_system_reminder};
 pub use instruction_files::{InstructionFilesInject, InstructionSource};
 pub use memory_inject::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
-pub use retry::Retry;
 pub use timeout::Timeout;
 pub use tool_exposure::{ExposureSnapshot, GlobalEwma, ToolExposure, ToolExposureConfig};
 pub use tool_retrieval::{EmbedPort, RETRIEVAL_WEIGHT, Retriever, cosine};

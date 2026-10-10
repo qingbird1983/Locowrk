@@ -1,9 +1,10 @@
 //! ToolExposure（exposure 文档 §5/§6/§7）：`agent/request` waterfall 监听器
 //! ——按打分截断每请求的工具目录，控制上下文开销与选择信噪比。
 //!
-//! 链位（exposure 文档 §7）：**ToolExposure → Memory-Inject → ctx-compact**
-//! ——先决定暴露多少工具，压缩才知道要保留多少空间（注册次序即执行次序，
-//! 组装点负责本件最先注册）。
+//! 链位（exposure 文档 §7）：**ToolExposure 最先**，其后 BaseSystemInject /
+//! Memory-Inject / 思考语言 / 树目录（v2.139 重排；旧文本此处并列写的
+//! ctx-compact 已随审计修复批 C 删除本体）——先决定暴露多少工具，后续件
+//! 才知道还有多少空间（注册次序即执行次序，组装点负责本件最先注册）。
 //!
 //! 打分（§5.3）：`1.0 × 会话内用过 + 0.7 × 全局 EWMA + 0.5 × 语义相似`
 //! （always 满分直通不占额度）。会话热度直接从 `payload.messages`
@@ -111,7 +112,7 @@ impl SessionPins {
 }
 
 /// 最近一次截断的选择快照（§6.3 调试面板数据源）：按选中原因分组，
-/// token 节省为 chars/4 估算（与 ctx-compact 同口径，§9.6 的"约"）。
+/// token 节省为 chars/4 估算（与 `estimate_tokens` 同一把尺，§9.6 的"约"）。
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExposureSnapshot {

@@ -1026,7 +1026,8 @@ export interface ProviderInput {
   headers?: Record<string, string>;
 }
 
-/** 单档模型清单（llm_list_models 返回组；error = 该档探测失败）。 */
+/** 单档模型清单（llm_list_models 返回组；error = 该档探测失败）。
+ * 唯一消费方 = `api.ts` 的 `llmListModels` 预留包装（零消费者，裁定同上）。 */
 export interface ProviderModels {
   id: string;
   label: string;

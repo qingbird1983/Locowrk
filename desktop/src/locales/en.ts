@@ -1,7 +1,6 @@
 // English UI copy (DESIGN.md §13.5). Session content is data, never listed here.
 export default {
   app: {
-    subtitle: "Stage 8 · real model wired · current model = {model}",
     modelFallback: "scripted stub (Settings → LLM)",
   },
   nav: {
@@ -13,7 +12,6 @@ export default {
     notifications: "Notifications",
   },
   status: {
-    ready: "Ready",
     running: "Working…",
   },
   common: {
@@ -43,7 +41,6 @@ export default {
     },
     placeholder: "Type / use commands · {'@'} reference files",
     send: "Send",
-    newSession: "New chat",
     copyMessage: "Copy this message",
     editMessage: "Edit and resend",
     copyCode: "Copy code",
@@ -66,8 +63,6 @@ export default {
     stopped: "Stopped",
     toolCount: "{n} tools",
     problemCount: "{n} problems",
-    thinking: "Thinking",
-    thinkingFor: "for {s}s",
   },
   // ask_user choice card (v4.11 §3.39①): blocking question, answered in dock
   ask: {
@@ -177,7 +172,6 @@ export default {
     badgeThinking: "Adjustable reasoning level",
     badgeVision: "Supports image input",
     followDefault: "Follow default · {model}",
-    loading: "Fetching model list…",
     empty: "No model list available",
     configure: "Configure providers",
     switchFailed: "Model switch failed",
@@ -200,7 +194,6 @@ export default {
     untitled: "Untitled chat",
     lockedWhileRunning: "Session is running; switching is paused",
     versionTip: "Version v{v}",
-    devUnlockHint: "Tap 7 times to unlock developer options",
     devUnlockProgress: "{n} more taps to unlock developer options",
     devUnlocked: "Developer options unlocked (Settings → System)",
     projectMenu: {
@@ -213,8 +206,6 @@ export default {
       more: "Session actions",
       rename: "Rename",
       export: "Export",
-      moveInto: "Move to “{name}”",
-      moveOut: "Remove from workspace",
       delete: "Delete",
       confirmDelete: "Confirm delete? Tap again",
     },
@@ -226,16 +217,12 @@ export default {
     close: "Close",
   },
   tool: {
-    params: "Arguments",
-    result: "Result",
     running: "Running…",
     awaitingApproval: "Awaiting approval",
     unknown: "Outcome unknown",
-    success: "Success",
     failed: "Failed",
     copyCall: "Copy call",
     copyCode: "Copy code",
-    pluginBadge: "plugin",
     thinkingNow: "Thinking…",
     rawData: "Raw data",
     fullConversation: "View full conversation",
@@ -429,9 +416,6 @@ export default {
     deleted: "Session deleted",
     deleteFailed: "Delete failed",
     renameFailed: "Rename failed",
-    movedInto: "Moved to workspace",
-    movedOut: "Removed from workspace",
-    associateFailed: "Workspace association failed",
     projectAdded: "Project added",
     projectAddFailed: "Failed to add project",
     projectRemoved: "Project removed",
@@ -511,17 +495,6 @@ export default {
     browserEmptyHint:
       "Open an HTML page from a workspace or an http(s) URL. Ask the model to \"open it up\" in chat and it lands here; page errors flow back into the conversation.",
   },
-  // Sub-agent card (§3.10): honest-data boundary documented in the component
-  subagent: {
-    region: "Sub-agent",
-    working: "Sub-agent is working",
-    done: "Sub-agent finished",
-    count: "{n} subagent(s)",
-    doneCount: "{done}/{n} done",
-    coordinating: "Coordinating {n} delegated task(s)",
-    main: "Main agent",
-    child: "Sub-agent",
-  },
   // G2 crash-recovery uncertain decision card (reliability doc §5)
   uncertain: {
     title: "Unknown tool outcome",
@@ -578,7 +551,6 @@ export default {
     prefixHint: "A stable request prefix keeps the cache; changes rebuild it once.",
     pinSession: "Pin tool set per session",
     pinSessionHint: "Tool list fixed per session; search_tools finds new ones; off lowers hit rate.",
-    stabilityRounds: "Stability period (turns)",
     filesTitle: "Memory files",
     filesHint: "Markdown is the authoritative edit surface (human-readable and editable); sqlite is the machine index.",
     reconcileTitle: "Merge memory files",
@@ -615,7 +587,6 @@ export default {
     treeHistoryRow: "{time} · {reason} · {mode} · {status} · {chapters} chapters · in {input} / out {output} · {ms}ms",
     modeMemoryManager: "memory manager",
     modeRule: "rule split",
-    stabilityRoundsHint: "For N turns after compaction the prefix stays untouched (1–10).",
   },
   memory: {
     search: "Search memories…",
@@ -656,8 +627,6 @@ export default {
     projectEmpty: "No chapters across sessions in this project yet.",
     projectOpenHint: "View original & edit → open its session",
     treeEditFailed: "Save failed: {reason}",
-    viewOriginal: "View original",
-    hideOriginal: "Hide original",
     originalLoading: "Loading original…",
     originalFailed: "Failed to load original: {reason}",
     sourceMemoryManager: "Memory manager",
@@ -688,17 +657,9 @@ export default {
     // not a modal)
     cardTitle: "Permission needed",
     queue: "{n} more pending",
-    riskHigh: "High risk",
-    riskMedium: "Medium risk",
-    riskLow: "Low risk",
-    askLead: "Allow ",
-    askTail: " to run?",
-    inputLabel: "Input",
-    inputCopy: "Copy input",
     envProject: "Project {path}",
     envTemp: "Temporary session",
     timeoutHint: "Auto-denied in {n} s if unanswered",
-    timeoutNow: "Auto-denying on timeout…",
     deny: "Deny",
     allowSession: "Allow for this chat",
     allowProject: "Always allow in this project",
@@ -787,7 +748,6 @@ export default {
     cancel: "Cancel",
     builtinNotSelectable: "Built-in dev plugins are not batch-managed",  },
   settings: {
-    title: "Settings",
     // ㉔ Settings nav rail (UI shell doc §3.31/§3.32: data-driven index)
     navSearch: "Search settings",
     navEmpty: "No matching settings",
@@ -812,7 +772,6 @@ export default {
       developer: "Developer",
     },
     // Chat behavior section (UI shell doc §3.2 ChatSection / §2.7 width, ㉕)
-    chatTitle: "Chat behavior",
     chatWidthTitle: "Conversation width",
     chatWidthHint:
       "Transcript and composer share one width (default 760, minimum 560); dragging either conversation edge also works.",
@@ -834,28 +793,6 @@ export default {
     cacheStatsTitle: "Cache hit-rate display",
     cacheStatsHint: "Show session cumulative cache hit rate in the usage popover",
     llmTitle: "Models",
-    llmHint: "API keys stay local; add multiple providers and switch models anytime.",
-    provider: "Provider",
-    provActive: "Default",
-    provSetActive: "Set default",
-    provEdit: "Edit",
-    provDelete: "Delete",
-    provDeleteConfirm: "Confirm delete",
-    provAdd: "Add provider profile",
-    provEmpty: "No provider profile yet — add one (key + model) to switch models from the selector next to the composer.",
-    provFormHint: "Fill in endpoint and key, then “Fetch list” for available models.",
-    provLabel: "Profile name",
-    provNoModel: "no model selected",
-    provFetch: "Fetch list",
-    provFetching: "Fetching…",
-    provSave: "Save profile",
-    provCancel: "Cancel",
-    labelRequired: "Profile name is required",
-    model: "Model",
-    baseUrl: "Base URL",
-    baseUrlPlaceholder: "Leave empty to use the provider's default endpoint",
-    apiKey: "API Key",
-    apiKeyPlaceholder: "Not saved",
     apiKeyKeep: "Saved · leave empty to keep",
     clearKey: "Clear saved key",
     save: "Save",
@@ -968,7 +905,6 @@ export default {
     subagentFollowSession: "Follow session",
     subagentThinkingRow: "Reasoning level",
     subagentThinkingFollow: "Follow session",
-    subagentNoneMarked: "No models marked \"available for sub-agents\" yet — mark them in service edit → model advanced area",
     importButton: "Import from other tools",
     importTitle: "Import from other tools",
     importHint: "Scans local Claude Code / Codex / opencode / cc-switch configs (read-only, originals untouched); pick entries to import as local AI services. API keys never pass through the UI.",
@@ -1132,9 +1068,6 @@ export default {
     usageBar: "Threshold usage bar",
     usageBarHint:
       "Thin bar at the top of the chat area; the percentage is computed against the organize threshold. Details live in the usage ring by the composer.",
-  },
-  error: {
-    unknown: "Something went wrong",
   },
   palette: {
     title: "Command palette",

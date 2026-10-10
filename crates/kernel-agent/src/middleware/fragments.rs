@@ -3,8 +3,8 @@
 //! `<system-reminder>` 包裹拼在**最后一条 user 消息**尾部。
 //!
 //! 落点裁决（设计稿 §6 二选一已查证）：kernel waterfall 的 payload 携带
-//! 完整 `messages` 且 Replace 决策整体换入（ctx-compact 改写消息同款
-//! 通路）——内核中间件可落，headless 同享。pending 表归宿主：内核定
+//! 完整 `messages` 且 Replace 决策整体换入（旧 ctx-compact 改写消息走的
+//! 就是这条通路）——内核中间件可落，headless 同享。pending 表归宿主：内核定
 //! [`FragmentSource`] 契约、组装点实现（MemorySource 同款模式）——碎片
 //! 事件全是桌面面（整理收束/权限切换/步数到顶），内核不解释。
 //!

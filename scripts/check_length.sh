@@ -14,11 +14,13 @@
 # 覆盖面同时扩了两处（旧版只扫 crates + desktop 的 *.rs|*.vue）：
 #   plugins-src/（审计报告 M-4 缺口）与 desktop/src/**/*.ts（同类盲区：
 #   locales 1157/1139、stores/chat.ts 1064、types.ts 1035、lib/api.ts 764、
-#   lib/tool-detail.ts 622 长期无人看见）。基线随新口径一次锁死 = 40。
+#   lib/tool-detail.ts 622 长期无人看见）。基线随新口径一次锁死 = 40；
+#   审计修复批 C（2026-10-11）删掉从未接线的 CtxCompact 及其 405 行测试，
+#   超限数自然净降到 39 → 基线随批收紧为 39。
 set -u
 
 SUGGEST=400
-BASELINE=40
+BASELINE=39
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。
