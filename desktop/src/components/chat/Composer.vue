@@ -24,6 +24,7 @@ import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
 import { Icon } from "../../lib/icons";
+import type { SlashCommand } from "../../lib/slash-commands";
 import type { ContentPartDto } from "../../types";
 import AskCard from "./AskCard.vue";
 import AttachButton from "./AttachButton.vue";
@@ -31,6 +32,7 @@ import ModelSelector from "./ModelSelector.vue";
 import PermissionCard from "./PermissionCard.vue";
 import PermissionModePicker from "./PermissionModePicker.vue";
 import QueueCard from "./QueueCard.vue";
+import SlashPanel from "./SlashPanel.vue";
 import UsageRing from "./UsageRing.vue";
 import WorkspacePicker from "./WorkspacePicker.vue";
 
@@ -60,6 +62,24 @@ function onDocPointerDown(e: PointerEvent) {
   if (!(modelAnchor.value?.contains(e.target as Node) ?? false)) {
     showModels.value = false;
   }
+}
+
+// ---- 斜杠命令面板（v2.143，UI shell §3.36① 扩展）：键入 `/` 弹出，
+// ↑↓ 选择 / Enter·Tab 或点击直接触发；命令清单与提交拦截同源
+// lib/slash-commands.ts。Esc 先关面板再走 §3.25/§3.39⑤ Esc 链。----
+const slashPanel = ref<InstanceType<typeof SlashPanel> | null>(null);
+const slashDismissed = ref(false);
+/** `/` 开头的单 token 草稿（无空白无第二个 `/`）= 面板开着。 */
+const slashOpen = computed(
+  () => !slashDismissed.value && /^\/[^/\s]*$/.test(draft.value),
+);
+watch(draft, () => {
+  slashDismissed.value = false;
+});
+function onSlashPick(cmd: SlashCommand) {
+  draft.value = "";
+  slashDismissed.value = false;
+  void chat.submit(`/${cmd.name}`);
 }
 
 /** 坞内决策卡：一次只渲染队首（队列数在卡头如实显示）。 */
@@ -262,9 +282,14 @@ function onSendClick() {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  // §3.25/§3.39⑤ Esc 链：跳过 ask → 拒绝审批 → 停止 → 交出焦点；
-  // 模型浮层开着时 Esc 归它（自持收口），这里不抢。输入法组合中是取消候选。
+  // §3.25/§3.39⑤ Esc 链：斜杠面板 → 跳过 ask → 拒绝审批 → 停止 → 交出
+  // 焦点；模型浮层开着时 Esc 归它（自持收口），这里不抢。输入法组合中
+  // 是取消候选。
   if (e.key === "Escape" && !e.isComposing) {
+    if (slashOpen.value) {
+      slashDismissed.value = true;
+      return;
+    }
     if (showModels.value) return;
     const ask = asks.pending[0];
     if (ask) {
@@ -283,6 +308,12 @@ function onKeydown(e: KeyboardEvent) {
       return;
     }
     ta.value?.blur();
+    return;
+  }
+  // 斜杠面板开着：↑↓/Enter/Tab 归面板导航（Enter 不发送、↑ 不召回
+  // 上一条——面板开着意味着草稿非空，召回本就不会触发）
+  if (slashOpen.value && !e.isComposing && slashPanel.value?.onKey(e)) {
+    e.preventDefault();
     return;
   }
   // §3.25：↑（输入框为空时）召回上一条输入
@@ -395,6 +426,16 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
+      <!-- 斜杠命令面板（v2.143）：键入 `/` 即弹出，锚在输入卡上方；
+           ↑↓ 选择、Enter/Tab 或点击直接触发，Esc 关闭 -->
+      <SlashPanel
+        v-if="slashOpen"
+        ref="slashPanel"
+        class="slash-anchor"
+        :query="draft.slice(1)"
+        @select="onSlashPick"
+        @close="slashDismissed = true"
+      />
       <textarea
         ref="ta"
         v-model="draft"
@@ -547,6 +588,15 @@ onBeforeUnmount(() => {
 /* 拖拽悬停（批 D §9.1）：卡内发丝线变 accent 提示可投放 */
 .composer--drag {
   border-color: var(--lw-accent);
+}
+/* 斜杠命令面板锚位（v2.143）：与输入卡同宽（左右各吃掉 1px 边对齐外沿），
+ * 贴输入卡顶边上浮；z 走弹层档（高于 composer 卡、低于模态） */
+.slash-anchor {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: calc(100% + 6px);
+  z-index: var(--lw-z-pop);
 }
 /* 上传门控提示卡（批 D §9.5 第一道）：warn 色警示条 + 两动作 */
 .mm-gate {

@@ -469,11 +469,12 @@ export default {
     editResendFailed: "编辑重发失败：{reason}",
     // ⑨ 压缩通知（[查看详情][撤销]，Context 文档 §3.8.3）
     contextCompacted: "已压缩早期对话，节省 {saved} token",
-    organizeRequested: "已发起整理（影子运行：后台进行，不影响当前对话）。",
+    // v2.143 整理发丝线：发起/收束/熔断同一条线就地改写（pushOrganizeNotice）
+    organizeRunning: "正在整理对话上下文…",
     // M3 §3.37③：整理收束 / 熔断翻转（lw://organize-done / -paused）
-    organizeDone: "📦 已整理 {users} 轮为 {chapters} 个章节",
+    organizeDone: "已整理 {users} 轮为 {chapters} 个章节",
     organizeDoneDegraded:
-      "📦 已整理 {users} 轮为 {chapters} 个章节（记忆管理器不可用，已转规则切分）",
+      "已整理 {users} 轮为 {chapters} 个章节（记忆管理器不可用，已转规则切分）",
     organizePaused:
       "本会话自动整理已暂停（连续 {rebounds} 次反弹达到熔断阈值 m={m}）；/整理 可手动整理并复位。",
     compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",
@@ -483,6 +484,15 @@ export default {
     // LLM.md v3.0：传输重试 / 步数到顶
     llmRetried: "供应商暂时无响应，已自动重试（第 {attempt} 次）",
     turnCapped: "已达单轮步数上限（{steps} 步），本轮在此收束——发「继续」可接着跑；也可在 设置 → 工具与分发 调高上限",
+  },
+  // 斜杠命令面板（v2.143，§3.36① 扩展）：清单与提交拦截同源 lib/slash-commands.ts
+  slash: {
+    title: "命令",
+    hint: "↑↓ 选择，Enter 或点击触发，Esc 关闭",
+    none: "没有匹配的命令",
+    desc: {
+      organize: "整理当前会话上下文（手动整理不受熔断限制并复位熔断）",
+    },
   },
   // 闲置徽章（IdleBadge，⑩ 接线 exposure 文档 §8.4/§11.3）：后端只给
   // 结构化 IdleInfo，前端按档位渲染"多久没用"人类文案——永不显示裸天数
@@ -873,6 +883,7 @@ export default {
     modelChangeService: "更换服务",
     modelTestConn: "测试连接",
     modelTesting: "测试中…",
+    modelTestOk: "连接正常 · {ms}ms",
     modelSaving: "保存中…",
     modelSaveService: "保存服务",
     modelReplace: "更换",

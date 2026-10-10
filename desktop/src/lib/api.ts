@@ -450,6 +450,18 @@ export function llmTestModel(profileId: string, model: string): Promise<ModelTes
   return invoke("llm_test_model", { profileId, model });
 }
 
+/** 表单连通测试（v2.143）：编辑模态「测试连接」吃表单当前值（未保存也
+ * 可测）；Key 留空回落 profileId 已存 Key（后端同 llm_probe_models 口径）。 */
+export function llmTestCustom(
+  kind: string,
+  baseUrl: string | null,
+  apiKey: string | null,
+  profileId: string | null,
+  model: string,
+): Promise<ModelTestResult> {
+  return invoke("llm_test_custom", { kind, baseUrl, apiKey, profileId, model });
+}
+
 /** 网络代理设置（§8.5）：system / direct / custom（url）；保存即热换。
  * 返回更新后的 llm 区视图（目录合成随行）。 */
 export function llmSetProxy(

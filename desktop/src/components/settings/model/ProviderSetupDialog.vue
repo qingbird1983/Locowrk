@@ -8,12 +8,14 @@
  * 名称 / baseUrl（预设只读）/ 类型（仅自定义 SettingsSelect）/ API 密钥
  * + 探测状态行）+ ModelPanes 双栏。探测：表单编辑防抖 600ms（密钥留空
  * 回落已存值）、获取列表立即探、请求序号防旧覆新；添加路径首次探测成功
- * 自动全选 ≤ AUTO_PICK_MAX 个，用户手动勾选即退出自动预选。保存：
+ * 自动全选 ≤ AUTO_PICK_MAX 个，用户手动勾选即退出自动预选。测试连接
+ * （v2.143）= llm_test_custom 最小 ping 吃表单当前值（未保存也可测），
+ * 与「获取列表」（清单探测）分离，结果独立成行。保存：
  * models 首项 = 该档默认模型，密钥留空 = 保持已存。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { llmProviderSave, openExternalUrl } from "../../../lib/api";
+import { llmProviderSave, llmTestCustom, openExternalUrl } from "../../../lib/api";
 import { emptyModelRow } from "../../../lib/model-catalog";
 import { Icon } from "../../../lib/icons";
 import {
@@ -26,7 +28,7 @@ import SettingsSelect from "../SettingsSelect.vue";
 import ServiceChooser from "./ServiceChooser.vue";
 import ModelPanes from "./ModelPanes.vue";
 import { useModelProbe } from "./use-model-probe";
-import type { ProviderInput, ProviderModelView, ProviderView } from "../../../types";
+import type { ModelTestResult, ProviderInput, ProviderModelView, ProviderView } from "../../../types";
 
 const AUTO_PICK_MAX = 8;
 
@@ -50,6 +52,9 @@ const choosing = ref(false);
 const saving = ref(false);
 const testing = ref(false);
 const touched = ref(false);
+/** 连通测试结果（v2.143）：ModelTestResult 如实渲染；表单再编辑即清。 */
+const testResult = ref<ModelTestResult | null>(null);
+const testError = ref("");
 
 /** 自定义请求头（批 C §8.1）：行编辑器形态；保存整表替换。 */
 const headerRows = ref<{ key: string; value: string }[]>([]);
@@ -134,6 +139,8 @@ function initFrom(provider: ProviderView | null) {
   showHeaders.value = false;
   headersMsg.value = "";
   sweepHint.value = "";
+  testResult.value = null;
+  testError.value = "";
   resetProbe();
 }
 
@@ -192,9 +199,24 @@ function onPickService(id: string) {
 
 async function testConnection() {
   if (!props.provider) return;
+  // v2.143：真实连通测试（此前误接 probe = 与「获取列表」同功能，用户
+  // 目检实抓）。吃表单当前值（未保存也可测），模型取已选清单首项（= 保
+  // 存后的档位默认模型），清单被清空则回落已存档位的默认模型。
+  const model = models.value[0]?.id || props.provider.model;
+  if (!model) return;
   testing.value = true;
+  testResult.value = null;
+  testError.value = "";
   try {
-    await probe();
+    testResult.value = await llmTestCustom(
+      kind.value,
+      resolvedBaseUrl.value || null,
+      apiKey.value.trim() || null,
+      props.provider.id,
+      model,
+    );
+  } catch (err) {
+    testError.value = String(err);
   } finally {
     testing.value = false;
   }
@@ -299,7 +321,10 @@ async function importHeadersJson(): Promise<void> {
 }
 
 // 表单编辑防抖探测：编辑态开箱即探（密钥回落已存）；预设切换同规则。
+// 连通测试结果随表单变化即清（旧结果不再代表当前表单形态）。
 watch([resolvedBaseUrl, kind, apiKey], () => {
+  testResult.value = null;
+  testError.value = "";
   if (chooserOpen.value) return;
   if (probeTimer) clearTimeout(probeTimer);
   probeTimer = setTimeout(() => void probe(), 600);
@@ -497,6 +522,24 @@ const kindOptions = computed(() => [
               </p>
               <p v-else-if="probeState === 'error' && probeError" class="col-span-2 truncate text-[length:var(--lw-fs-12)] text-danger">
                 {{ probeError }}
+              </p>
+              <!-- 连通测试结果（v2.143）：与清单探测分离的独立行——测试 =
+                   最小 ping（五分类 + 延迟），获取列表 = 拉模型清单 -->
+              <p
+                v-if="testResult?.ok"
+                class="col-span-2 flex items-center gap-1 text-[length:var(--lw-fs-12)] text-ok"
+              >
+                <Icon name="check" :size="14" />
+                {{ t("settings.modelTestOk", { ms: testResult.latencyMs ?? 0 }) }}
+              </p>
+              <p
+                v-else-if="testResult && !testResult.ok"
+                class="col-span-2 text-[length:var(--lw-fs-12)] text-danger"
+              >
+                {{ testResult.message }}
+              </p>
+              <p v-else-if="testError" class="col-span-2 truncate text-[length:var(--lw-fs-12)] text-danger">
+                {{ testError }}
               </p>
               <p
                 v-if="sweepHint"

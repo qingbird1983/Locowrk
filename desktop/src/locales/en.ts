@@ -370,10 +370,11 @@ export default {
     editResendFailed: "Edit & resend failed: {reason}",
     // ⑨ Compaction notice ([View details][Undo], Context doc §3.8.3)
     contextCompacted: "Compacted earlier messages, saved {saved} tokens",
-    organizeRequested: "Organize requested (shadow run: running in the background, chat unaffected).",
-    organizeDone: "📦 Organized {users} turns into {chapters} chapters",
+    // v2.143 organize hairline: start/done/paused rewrite one line in place
+    organizeRunning: "Organizing conversation context…",
+    organizeDone: "Organized {users} turns into {chapters} chapters",
     organizeDoneDegraded:
-      "📦 Organized {users} turns into {chapters} chapters (memory manager unavailable, fell back to rule split)",
+      "Organized {users} turns into {chapters} chapters (memory manager unavailable, fell back to rule split)",
     organizePaused:
       "Auto organize paused for this session ({rebounds} consecutive rebounds hit the breaker m={m}); /organize runs it manually and resets.",
     compactUndone:
@@ -384,6 +385,16 @@ export default {
     // LLM.md v3.0: transport retry / step cap
     llmRetried: "Provider temporarily unresponsive, retried automatically (attempt {attempt})",
     turnCapped: "Turn step limit reached ({steps} steps), ending the turn here — send \"continue\" to resume, or raise the limit in Settings → Tools & Dispatch",
+  },
+  // Slash command panel (v2.143, §3.36① extension): list shares the
+  // registry with the submit intercept (lib/slash-commands.ts)
+  slash: {
+    title: "Commands",
+    hint: "↑↓ to navigate, Enter or click to run, Esc to close",
+    none: "No matching commands",
+    desc: {
+      organize: "Organize this session's context (manual runs ignore the breaker and reset it)",
+    },
   },
   // Idle badge (IdleBadge, ⑩ wired per exposure doc §8.4/§11.3): backend
   // sends structured IdleInfo only; the frontend renders human phrasing.
@@ -872,6 +883,7 @@ export default {
     modelChangeService: "Change service",
     modelTestConn: "Test connection",
     modelTesting: "Testing…",
+    modelTestOk: "Connected · {ms}ms",
     modelSaving: "Saving…",
     modelSaveService: "Save service",
     modelReplace: "Change",

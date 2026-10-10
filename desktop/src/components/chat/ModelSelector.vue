@@ -126,12 +126,16 @@ function pick(providerId: string, model: string) {
     role="dialog"
     :aria-label="t('model.selector')"
   >
-    <SearchInput
-      v-model="query"
-      class="mx-2.5 mt-2.5 mb-1.5"
-      :placeholder="t('model.searchPlaceholder')"
-      :label="t('model.searchPlaceholder')"
-    />
+    <!-- v2.143：搜索胶囊包一层 padding 容器——此前 mx 负距 + 子组件
+         width:100%（scoped 特异性高于工具类）在 280px 弹层里恒右溢
+         10px（用户目检实抓）；块级容器让 label 拉伸到内容盒，不再出界 -->
+    <div class="ms-search">
+      <SearchInput
+        v-model="query"
+        :placeholder="t('model.searchPlaceholder')"
+        :label="t('model.searchPlaceholder')"
+      />
+    </div>
 
     <button
       v-if="override"
@@ -164,7 +168,15 @@ function pick(providerId: string, model: string) {
             <Icon name="eye" :size="11" />
           </span>
           <span v-if="pricingOf(g.id, m)" class="ms-row__price">{{ pricingOf(g.id, m) }}</span>
-          <Icon v-if="m === effective()" name="check" :size="14" class="ms-row__check" />
+          <!-- v2.143：对勾槽位恒在（非当前行 visibility 隐藏）——此前 v-if
+               只在当前行渲染，勾一出现把名称/价格挤移位（用户目检实抓）；
+               预留等宽槽位后各行名称宽度一致，切换选择零位移 -->
+          <Icon
+            name="check"
+            :size="14"
+            class="ms-row__check"
+            :class="{ 'ms-row__check--off': m !== effective() }"
+          />
         </button>
       </template>
 
@@ -198,6 +210,11 @@ function pick(providerId: string, model: string) {
 .model-selector--down {
   top: calc(100% + 10px);
   bottom: auto;
+}
+/* 搜索胶囊容器（v2.143 出界修复）：padding 承载原 mx 间距，子组件
+ * width:100% 相对内容盒求值 → 恰好填满不出界 */
+.ms-search {
+  padding: var(--lw-gap-10) var(--lw-gap-10) var(--lw-gap-6);
 }
 .ms-list {
   max-height: min(420px, 60vh);
@@ -261,6 +278,10 @@ function pick(providerId: string, model: string) {
 .ms-row__check {
   color: var(--lw-ink-1);
   flex: 0 0 auto;
+}
+/* 非当前行：勾不可见但占位（v2.143 对勾挤位移修复） */
+.ms-row__check--off {
+  visibility: hidden;
 }
 .ms-empty {
   display: flex;

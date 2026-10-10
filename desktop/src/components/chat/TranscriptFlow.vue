@@ -383,6 +383,7 @@ function noticeText(item: SystemItem): string {
           <div v-else-if="block.item.kind === 'system'" class="sys-row flex justify-center">
             <SystemNotice
               :text="noticeText(block.item as SystemItem)"
+              :hairline="(block.item as SystemItem).tone === 'hairline'"
               :actions="
                 (block.item.actions ?? []).map((a) => ({
                   id: a,
@@ -418,6 +419,7 @@ function noticeText(item: SystemItem): string {
       <div v-else-if="block.item.kind === 'system'" class="sys-row flex justify-center">
         <SystemNotice
           :text="noticeText(block.item as SystemItem)"
+          :hairline="(block.item as SystemItem).tone === 'hairline'"
           :actions="
             (block.item.actions ?? []).map((a) => ({
               id: a,

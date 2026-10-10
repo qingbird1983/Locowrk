@@ -116,6 +116,10 @@ export type SystemItem = {
   key: string;
   params?: Record<string, unknown>;
   actions?: string[];
+  /** v2.143 整理发丝线形态：居中细字盖在一根发丝线上（非卡片）。 */
+  tone?: "hairline";
+  /** 同族标记（"organize"）：发起→收束事件就地改写同一条线。 */
+  tag?: string;
 };
 
 /** 整理段落总结块（v2.141，Organize Summary Design v1）：历史消息面的
@@ -288,7 +292,7 @@ export const useChatStore = defineStore("chat", {
       // 树文件本身是持久记录；「查看」动作跳记忆页，接线在 ChatTranscript）
       void subscribeOrganizeDone((p) => {
         if (p.sessionId !== this.sessionId) return;
-        this.pushNotice(
+        this.pushOrganizeNotice(
           p.status === "degraded"
             ? "notice.organizeDoneDegraded"
             : "notice.organizeDone",
@@ -298,7 +302,7 @@ export const useChatStore = defineStore("chat", {
       });
       void subscribeOrganizePaused((p) => {
         if (p.sessionId !== this.sessionId) return;
-        this.pushNotice("notice.organizePaused", {
+        this.pushOrganizeNotice("notice.organizePaused", {
           rebounds: p.rebounds,
           m: p.m,
         });
@@ -785,6 +789,42 @@ export const useChatStore = defineStore("chat", {
     pushNotice(key: string, params?: Record<string, unknown>, actions?: string[]) {
       this.items.push({ id: nextId++, kind: "system", key, params, actions });
     },
+    /** 整理发丝线（v2.143 用户裁定「两卡片改一根发丝线，状态居中盖在线
+     * 上」）：发起/收束/熔断共用同一根线——在途线（organizeRunning）被
+     * 收束事件**就地改写**（一条线从「整理中」变「已整理」），无在途线
+     * （自动整理）直接落收束线。tag="organize" 标记本族条目。 */
+    pushOrganizeNotice(key: string, params?: Record<string, unknown>, actions?: string[]) {
+      const items = this.items;
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i]!;
+        if (it.kind === "system" && it.tag === "organize" && it.key === "notice.organizeRunning") {
+          it.key = key;
+          it.params = params;
+          it.actions = actions;
+          return;
+        }
+      }
+      this.items.push({
+        id: nextId++,
+        kind: "system",
+        key,
+        params,
+        actions,
+        tone: "hairline",
+        tag: "organize",
+      });
+    },
+    /** 收走在途整理线（发起失败时用——线是「整理中」的陈述，失败后不再
+     * 成立；就地摘除，错误由 pushRawSystem 另行陈述）。 */
+    dropOrganizeRunning() {
+      for (let i = this.items.length - 1; i >= 0; i--) {
+        const it = this.items[i]!;
+        if (it.kind === "system" && it.tag === "organize" && it.key === "notice.organizeRunning") {
+          this.items.splice(i, 1);
+          return;
+        }
+      }
+    },
     /** 原文系统条（key = "__raw__"，ChatMessages 按 params.text 渲染）：
      * 用于"查看详情"展开压缩摘要等内容型陈述。 */
     pushRawSystem(text: string) {
@@ -936,11 +976,15 @@ export const useChatStore = defineStore("chat", {
       if (!t) return;
       // M2 斜杠命令 /整理（UI shell §3.36①）：前端拦截——元操作不进对话
       // 流、不建用户气泡；手动整理不受反弹熔断限制且复位熔断态（后端）。
+      // v2.143：发起提示改发丝线（在途态），收束事件就地改写同一条线。
       if (t === "/整理" || t === "/organize") {
-        this.pushNotice("notice.organizeRequested");
+        this.pushOrganizeNotice("notice.organizeRunning");
         try {
           await organizeNow(this.sessionId);
         } catch (err) {
+          // 发起线随失败一并收走（宁缺勿假——不留悬着的「整理中」线），
+          // 错误原文照常出原文系统条。
+          this.dropOrganizeRunning();
           this.pushRawSystem(String(err));
         }
         return;
