@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
  * 工作面板启动器（§8.4 WorkPanelLauncher，自 WorkPanel 拆出）：面板空态 =
- * 启动器清单而非空态文案（§3.14）。只列已实装页签类型的条目：§3.16 当前
- * 会话收束的 subagent_run（子转录）+ §3.28 当前会话的 edit_diff（审阅，
- * diff 随 args.patch 快照）。行形态照原型 .launcher__row（wash-1 卡、
- * 图标 + 标题 + 行尾 hint）。
+ * 启动器清单而非空态文案（§3.14）。浏览器为常备条目（v2.144，不随会话
+ * 清单空转）；会话清单只列当前会话实项：§3.16 收束的 subagent_run（子转
+ * 录）+ §3.28 的 edit_diff（审阅，diff 随 args.patch 快照）。行形态照原型
+ * .launcher__row（wash-1 卡、图标 + 标题 + 行尾 hint）。
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
@@ -19,6 +19,7 @@ import HoverTip from "../settings/HoverTip.vue";
 const emit = defineEmits<{
   openSub: [childId: string, title: string];
   openReview: [item: { callId: string; path: string; diff: string }];
+  openBrowser: [];
 }>();
 
 const { t } = useI18n();
@@ -63,6 +64,13 @@ const reviewItems = computed(() => {
 
 <template>
   <div class="launcher scroll-y flex-1 px-3 pb-4 pt-2.5">
+    <!-- 浏览器（v2.144）：常备条目，不随会话清单一空再空 -->
+    <div class="side-label px-1">{{ t("panel.launcherBrowser") }}</div>
+    <button type="button" class="launcher-row" @click="emit('openBrowser')">
+      <Icon name="globe" :size="14" aria-hidden="true" />
+      <span class="launcher-row__title">{{ t("panel.browserTitle") }}</span>
+      <span class="launcher-row__hint">{{ t("panel.launcherBrowserHint") }}</span>
+    </button>
     <template v-if="subItems.length > 0 || reviewItems.length > 0">
       <template v-if="subItems.length > 0">
         <div class="side-label px-1">{{ t("panel.launcherSub") }}</div>

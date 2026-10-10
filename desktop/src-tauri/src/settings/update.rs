@@ -6,8 +6,8 @@
 
 use super::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
-    MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsStore, SettingsView, ShellUpdate,
-    ThinkingUpdate, ToolsUpdate, FILE_NAME, LOCALES, THINKING_LANGUAGE_VALUES,
+    MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsStore, SettingsView, ThinkingUpdate,
+    ToolsUpdate, FILE_NAME, LOCALES, THINKING_LANGUAGE_VALUES,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -25,7 +25,6 @@ impl SettingsStore {
         context: Option<ContextUpdate>,
         memory: Option<MemoryUpdate>,
         tools: Option<ToolsUpdate>,
-        shell: Option<ShellUpdate>,
         plugins: Option<PluginsUpdate>,
         chat: Option<ChatUpdate>,
         developer: Option<DeveloperUpdate>,
@@ -239,11 +238,6 @@ impl SettingsStore {
             if let Some(pin) = u.pin_session {
                 // KV v2 §4.2 工具集会话钉死（无范围校验，布尔开关）
                 next.tools.pin_session = pin;
-            }
-        }
-        if let Some(u) = shell {
-            if let Some(e) = u.unlock_risky {
-                next.shell.unlock_risky = e;
             }
         }
         if let Some(u) = plugins {

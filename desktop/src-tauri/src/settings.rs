@@ -1,6 +1,6 @@
 //! 设置存储（DESIGN.md §13.1 / §13.5）。分区：LLM 配置、⑬ embedding 模型、
-//! 语言、快捷键、⑨ 上下文管理、⑪ 记忆注入、⑫ 工具暴露、S1 shell 治理
-//! （高危解锁）、⑬ 插件管理（自动停用）。持久化在数据根 `settings.json`；
+//! 语言、快捷键、⑨ 上下文管理、⑪ 记忆注入、⑫ 工具暴露、
+//! ⑬ 插件管理（自动停用）。持久化在数据根 `settings.json`；
 //! API Key 只落盘不出 IPC（投影只有 `api_key_set` 布尔），真适配器在后端侧读原值。
 
 use std::path::{Path, PathBuf};
@@ -18,7 +18,6 @@ mod llm;
 mod memory;
 mod multimodal;
 mod plugins;
-mod shell;
 mod thinking;
 mod tools;
 mod update;
@@ -37,7 +36,6 @@ pub use llm::{
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use multimodal::{MultimodalSettings, MultimodalUpdate, MultimodalView};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
-pub use shell::{ShellSettings, ShellSettingsView, ShellUpdate};
 pub use thinking::{
     ThinkingSettings, ThinkingUpdate, ThinkingView, THINKING_LANGUAGE_VALUES, THINKING_NONE,
 };
@@ -74,8 +72,6 @@ pub struct AppSettings {
     pub memory: MemorySettings,
     /// 工具暴露区（⑫，类型见 `tools` 子模块）。
     pub tools: ToolsSettings,
-    /// shell 治理区（S1，类型见 `shell` 子模块）。
-    pub shell: ShellSettings,
     /// 插件管理区（⑬ 自动停用；类型见 `plugins` 子模块）。
     pub plugins: PluginsSettings,
     /// 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好；类型见
@@ -107,7 +103,6 @@ impl Default for AppSettings {
             context: ContextSettings::default(),
             memory: MemorySettings::default(),
             tools: ToolsSettings::default(),
-            shell: ShellSettings::default(),
             plugins: PluginsSettings::default(),
             chat: ChatSettings::default(),
             developer: DeveloperSettings::default(),
@@ -132,7 +127,6 @@ pub struct SettingsView {
     pub context: ContextSettingsView,
     pub memory: MemorySettingsView,
     pub tools: ToolsSettingsView,
-    pub shell: ShellSettingsView,
     pub plugins: PluginsView,
     /// 对话行为区（§3.2 ChatSection）。
     pub chat: ChatView,

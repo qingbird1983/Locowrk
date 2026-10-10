@@ -433,6 +433,19 @@ export default {
     viewDiff: "看 diff",
     diffEmpty: "这段 diff 没有可显示的内容",
     expandLines: "… 展开 {n} 行",
+    browserTitle: "浏览器",
+    launcherBrowser: "浏览器",
+    launcherBrowserHint: "打开页面预览",
+    browserUrlPlaceholder: "输入工作区内绝对路径或 http(s) 地址",
+    browserGo: "打开",
+    browserBack: "后退",
+    browserForward: "前进",
+    browserReload: "重新加载",
+    browserExternal: "在系统浏览器打开",
+    browserConsole: "控制台",
+    browserConsoleEmpty: "还没有 console 报错/警告",
+    browserEmptyHint:
+      "打开工作区内的 HTML 页面或 http(s) 地址；对话中让模型「打开看看」也能自动开到这里，页面报错会回到对话里。",
   },
   // 子 Agent 卡（§3.10）：数据诚实边界见组件注释（步骤数/子模型不发明）
   subagent: {
@@ -678,6 +691,8 @@ export default {
     timeoutNow: "超时自动拒绝中…",
     deny: "拒绝",
     allowSession: "允许本次对话",
+    allowProject: "本项目始终允许",
+    allowProjectHint: "保存粘性授权规则到本项目（shell 命令按精确命令记录；工具类按工具记录），跨会话生效。可在 设置→工具与分发 管理。",
     allowOnce: "允许一次",
     // ⑮ 子 Agent 派生的调用标识（session_id 非当前会话时显示）
     subagentTag: "子 Agent 调用",
@@ -784,7 +799,6 @@ export default {
       memory: "记忆",
       embedding: "嵌入",
       plugins: "插件",
-      shell: "命令终端",
       tools: "工具与分发",
       sessions: "会话与数据",
       developer: "开发者",
@@ -1043,12 +1057,6 @@ export default {
     thinkingEn: "English",
     thinkingNone: "不指定",
     thinkingSavedToast: "已保存。新设置将在下个会话生效。",
-    // S1 shell 治理分区
-    shellTitle: "命令终端",
-    shellHint: "只读命令免审批，且只能访问工作区内的文件；其余命令逐条审批。",
-    shellUnlock: "允许 rm / sudo / chmod 等高危命令进入审批（默认直接拒绝）",
-    shellUnlockWarning: "开启后逐条弹确认框，由你放行；python、curl 等脚本和联网命令仍然禁止。",
-    shellRestart: "改动在重启应用后生效。",
     // ⑫ 工具暴露区（开发者选项真分区，替换壳批次占位）
     developerTitle: "开发者选项",
     developerHint: "工具分发截断（Top-N）设置 + 最近一次请求的分发分布。",
@@ -1083,6 +1091,13 @@ export default {
     fsRootsAdd: "添加目录…",
     fsRootsRemove: "移除",
     fsRootsEmpty: "未添加工作区目录——工具仅能访问数据目录。",
+    // v2.145 项目粘性授权规则管理
+    rulesTitle: "项目权限规则",
+    rulesHint: "审批卡「本项目始终允许」的持久化规则（shell 按精确命令、其余按工具）；清除即恢复逐次审批。文件可手工编辑，改完即生效。",
+    rulesOpen: "打开文件夹",
+    rulesEmpty: "暂无项目权限规则",
+    rulesCounts: "允许 {allow} · 拒绝 {deny}",
+    rulesClear: "清除",
     // ⑨ 上下文管理分区（真分区，替换壳批次占位）
     contextTitle: "上下文管理",
     contextHint: "上下文达到整理阈值时自动整理进记忆树；完整历史留在磁盘，可随时展开回看。",

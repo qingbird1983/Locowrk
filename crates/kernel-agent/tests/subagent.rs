@@ -87,8 +87,9 @@ fn rig(
 ) -> Rig {
     let ctx = Arc::new(Context::new());
     let gate = Arc::new(SubagentGate::default());
-    // subagent_run 是 Irreversible：缺省 AllowAll 让用例聚焦调度本身
-    // （审批 fail-safe 另有专项）；传入决议者则整体替换（冒泡测试用）
+    // subagent_run 自 v2.145 是 Pure（派生不动用户世界，子工具各有其门）：
+    // 缺省 AllowAll 让用例聚焦调度本身（审批 fail-safe 另有专项）；传入
+    // 决议者则整体替换（冒泡测试用）
     let k = Kernel::new(ctx.clone(), vec![])
         .with_subagent(Arc::clone(&gate))
         .with_approval(resolver.unwrap_or_else(|| Arc::new(AllowAll) as Arc<dyn ApprovalResolver>));

@@ -58,6 +58,14 @@
 - 危险命令（`rm` / `curl | sh` / `sudo`）**直接拒绝，不进审批流程**
 - 想放开就显式配置
 
+> **v2.145 修订（《Permission Model Redesign (ZCode Alignment) v1》）**：上行「第一版
+> 建议」已成历史——白名单与 denylist 整批退役，政策层收敛两态：Deny 仅剩结构性拒绝
+> （元字符/空命令/引号未闭合），其余一切命令放行进审批卡；免审面 `shell_read` 依赖
+> 只读证明层（proof.rs，固定表 + EXACT_ARGV 精确表）。解释器安全语义 = 审批卡 + 项目
+> 粘性规则（桌面 permission_rules，「本项目始终允许」落 `permissions/<hash>.json`）。
+> `LOCOWRK_SHELL_ALLOW` / `LOCOWRK_SHELL_UNLOCK_RISK` env 幻影化（设置即启动 warn）。
+> tool-shell 版本 0.1.5。
+
 ---
 
 ## 三、P1：让它真正好用
@@ -188,6 +196,12 @@ tool-mcp 插件
 不设**——fs 不隔离的前提下沙箱内解锁 rm 无增益，宁严勿松，引导走
 `shell` 的解锁路径。与 tool-shell 的关系 = **并存不替换**（沙箱档位是
 独立工具，shell 既有纪律原样保留）。
+
+> **v2.145 退役注**：本节所述 tool-sandbox 已整批退役（用户裁定，ZCode 沙箱拆除
+> 同款先例）——`plugins-src/tool-sandbox/` 与暂存产物删除，shell 成为唯一命令执行面。
+> 理由：沙箱自认不隔离文件系统与网络、不构成真实安全边界，留第二入口只多一个「更易
+> 撞锁」的面；能力面由 shell 审批 + 粘性规则承接。已存会话钉死集里的 sandbox_run 按
+> 回映射 miss 语义自然消失。
 
 **工具面**：单工具 `sandbox_run`（`SideEffect::Irreversible` 一律审批），
 参数 `command` 必填 + `cwd` / `timeout_secs` / `max_bytes` / `mem_mb` /

@@ -422,7 +422,6 @@ export interface SettingsView {
   context: ContextSettingsView;
   memory: MemorySettingsView;
   tools: ToolsSettingsView;
-  shell: ShellSettingsView;
   plugins: PluginsView;
   /** 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好）。 */
   chat: ChatSettingsView;
@@ -630,16 +629,6 @@ export interface PluginsUpdate {
   autoDisableIdleDays?: number;
 }
 
-/** shell 治理区投影（S1）：高危命令解锁开关（硬锁类不受影响）。 */
-export interface ShellSettingsView {
-  unlockRisky: boolean;
-}
-
-/** shell 治理区部分更新：字段缺省 = 保持不变；改动重启后生效。 */
-export interface ShellUpdate {
-  unlockRisky?: boolean;
-}
-
 /** 外观区投影（⑰）：明暗主题。生效在前端 lib/theme.ts（§六）。 */
 export interface AppearanceView {
   theme: string;
@@ -792,6 +781,17 @@ export interface OrganizeDonePayload {
   mode: "recorder" | "rule";
   status: "ok" | "degraded";
   reason: string;
+}
+
+/** 浏览器页签开签推送（lw://browser-open；browser_open 工具 → 工作面板）。 */
+export interface BrowserOpenPayload {
+  tabId: string;
+  kind: "file" | "url";
+  /** 页签最终 URL（file = lwpreview 预览地址；url = 原样）。 */
+  url: string;
+  /** 原始输入（文件绝对路径或 http(s) 地址，URL 栏回显用）。 */
+  target: string;
+  title: string;
 }
 
 /** 熔断翻转推送（lw://organize-paused；仅翻转瞬间发）。 */

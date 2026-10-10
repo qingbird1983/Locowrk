@@ -722,6 +722,39 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.145 · 权限模型重设计（对齐 ZCode：无命令级禁令 + 粘性授权 + 全自动档真全自动）
+
+**用户 2026-10-10 口述裁定**：「我们按照 ZCODE 的学来吧……这个不能用 那个不能开 就连发起子代理 还要申请来授权 权限限制的太死板了。真实做项目的话就没办法使用了。除非用户一直坐电脑边上看着，zcode 的机制就很完美的」+ 问卷两条：sandbox_run **退役**、Auto 档 **ZCode yolo 同款字面全放行**（两道既有硬门保留）+ 追加口谕「设置页终端的分类删掉」。
+
+| 面 | 落点 |
+|---|---|
+| ①shell 政策层 | `decide()` 收敛两态——Deny 仅剩结构性拒绝（元字符/空命令/引号未闭合），**无命令级禁令**，其余一切命令 Allow 进审批卡（工具 Irreversible 机制不变）；DENY_HARD（约 50 项）/DENY_RISKY+unlockRisky/BASE_ALLOW/LOCOWRK_SHELL_ALLOW 全退役（env 幻影化设置即 warn）；proof.rs 免审面新增 **EXACT_ARGV 精确表**（pwd / git --version / node -v/--version / python[3] --version，ZCode 同款逐 token 全等），git 全局选项守卫零例外；敏感路径/写旗标拒绝保留；版本 0.1.5 |
+| ②sandbox 退役 | `plugins-src/tool-sandbox/` 整删 + stage 行删 + 审批越界扫描面移除（ZCode 沙箱拆除同款先例——不隔离 fs/网络即非安全边界，第二入口只多撞锁面）；已存会话钉死集回映射 miss 自然消失 |
+| ③决策表 | 新序 ①Plan 硬拒 → ②硬门（隐私+越界，含 Auto 强制卡只许一次）→ **③项目拒绝规则 deny（先于模式放行 = 连 Auto 也拦，安全向偏离 ZCode 记档）** → ④模式放行 → **⑤项目允许规则 allow** → ⑥会话豁免 → ⑦卡 |
+| ④粘性规则 | 新 `permission_rules.rs`：数据根 `permissions/<fnv1a-hex8>.json`（ZCode PermissionRuleset 同形；查询直读无缓存 = 人改即生效即撤销出口）；匹配 = 工具级 / `prefix:*` token 边界 / 精确（ZCode 同款）；UI 落「本项目始终允许」（shell=精确命令，未归属跳过持久化）；不产 deny 规则；设置页管理块（计数 + 清除 + 打开文件夹，三新命令） |
+| ⑤子代理 | `subagent_run` Irreversible→**Pure**（派生不动用户世界，ZCode Agent 同口径；副产品 = Plan 档只读研究子代理）；**子会话审批改道** `{parent}-sub-{n}`→父根——权限档继承 + 豁免跨派生 + 卡片工作区取父，一修三得（两处既有缺陷：子 id 全新豁免永不命中 / 子档回落设置缺省）；kernel 契约零改动 |
+| ⑥前端 | PermissionCard 上弹组扩「本项目始终允许」（真实归属才渲染）；设置页「命令终端」分区整删（ShellSection + unlockRisky 幻影化）+ SettingsPage 删区回落外观兜底 |
+| 实机走查 | CDP 隔离数据根 + CM 共享零明文 + deepseek 真轮：W1 `node --version` shell_read 免审直跑（mode:pure，v24.14.0 实回）零卡；W2 python 弹卡 →「本项目始终允许」→ 精确命令规则落盘（逐字段盘证）→ 二轮 **rule:project-allow 免卡直行**（jsonl 铁证 + 截图「无需再次确认」）；W3 派生零卡 + 子内卡挂父会话带徽章（截图）→ 允许本次对话 → 二次派生子内零卡（改道豁免生效）；W4 Auto 档 rm 真跑零弹窗；W5 Auto 档绝对路径 .ssh → 隐私门强制卡「SSH 凭据目录」两键硬门 + 允许一次执行；W6/W7 sandbox 不在加载清单 + 「命令终端」分区消失 + 项目权限规则块在场（截图）。**校准记档**：.env 从不在隐私门清单（v2.26 宁漏勿错杀，Auto 直跑 = 新旧一致）；隐私门 path 类只认反斜杠归一绝对路径（相对漏报设计内）。**环境教训**：种子 settings 需 `keyStorage:"keyring"` 标记 + active 指真实档 id；侧栏树 fsRoots 与旁车 workspace 字符串需一致 + 组默认折叠 |
+| 门禁 | fmt 双侧 CLEAN、clippy 根 0 + desktop --all-targets 0、根 workspace 39 套件全绿、desktop 356 绿（+10 新测，政策面旧断言按新语义重写——「permanently locked」时代结束）、vue-tsc 0、pnpm build 过、lint:style 0、check_length **32 < 基线 33**（ShellSection 删除净降一；approval.rs/tests_approval.rs/PermissionCard.vue 既有超限同职责面增长不拆） |
+| 边界 | ①粘性 v1 精确优先无智能前缀（无 CLI 注册表；matcher 支持 `:*` 可手改 JSON）；②项目拒绝规则先于 Auto（安全向偏离记档）；③Auto 字面全放行 = 用户显式自担面，两道硬门是唯一拦截；④shell 保持 Irreversible——Ask 档未粘住命令每次弹卡（粘性规则是承接面）；⑤已存会话看不到 sandbox_run；⑥NO_BLANKET_PREFIX 集随批退役，将来前缀建议批回归 |
+| 文档 | ✅ 《Permission Model Redesign (ZCode Alignment) v1》（新立+落地标注）+ Setting and Constrained Optimization.md（§2.3/§2.7/§3 修订注——致命级收敛为隐私门/越界门/元字符三项）+ plugins.md（shell 策略修订注 + sandbox 退役注）+ UI shell v4.30（§3.17 上弹组 + 硬门扫描面 + 版本条）+ CHANGELOG/AGENTS v2.145 |
+
+---
+### v2.144 · 子代理超时契约修复 + 工作面板浏览器页签
+
+**用户 2026-10-10 口述两条**：①TITY 测试项目实抓 subagent_run 30s 即掐——修；②浏览器参考 ZCode 在右栏加入浏览器入口。
+
+| 面 | 落点 |
+|---|---|
+| ①超时契约修复 | 病根 = Timeout 中间件（`tools.callTimeoutSecs` 缺省 30s）包裹一切工具调用，`subagent_run` 的 timeout_secs 契约（300 缺省/1800 上限/0 不限，v2.132 批 F）永不可达；修 = `Timeout` 新增**自管时长名单**（内置缺省即 `subagent_run`——工具内部已有预算+步数上限+诚实部分结果三重纪律，全局预算让位；`with_self_managed` 供宿主追加）+ middleware tests +3 |
+| ②浏览器页签 | 渲染 = 前端 iframe + 新 `lwpreview://` 协议（fsRoots 围栏 canonicalize 比对 + 逐段编码保相对引用 + 20MB 钳 + MIME 表；CSP 扩 frame-src）；`browser/bridge.rs` text/html 注入 console 桥（error/warn/unhandledrejection → postMessage）；`ConsoleStore` 每签环形 200 条（`browser_report_errors` 增量推入）；双工具 **`browser_open`**（path 渲染型扩展名门 / url http(s)，emit `lw://browser-open`）+ **`browser_console`**（读账本缺省最近签）双 Pure+OnDemand |
+| 前端 | WorkPanelTab +browser 种类（工具签 `br-*` / 手动签固定 id 复用）+ `BrowserTab.vue`（自管历史 + URL 栏 + 刷新 + 系统浏览器 + 控制台抽屉带徽章；sandbox 无 top-navigation/popups）+ 浏览器签**常驻 v-show 保活**（ZCode 同款）+ 启动器常备条目 + browser store（环形 + 500ms 节流推后端）|
+| 走查实抓 | `preview_url` 吃 canonicalize verbatim 前缀（`\?\`）→ URL 首段 `%3F` 协议侧 400，工具签全错误页——修 = URL 面剥前缀 + 回归锁 |
+| 实机走查 | CDP 隔离数据根 + CM 共享零明文 + deepseek 真轮：breakout.html 面板 iframe 完整渲染；切签保活 DOM 节点不换；工具签 URL 干净页面真渲染；console 回环 E2E 三条报文全链通模型原样引用 boom-marker；**子代理 5 文件顺序读 48s 完成**（修复前 30s 必死）零 timeout 落日志 |
+| 门禁 | fmt 双侧 CLEAN、clippy 根 0 + desktop 0、根 workspace 458 绿（wasm_plugins 已知偶发复跑即绿）、desktop 347（+25）、vue-tsc 0、build 过、lint:style 0、check_length 33 持平 |
+| 文档 | ✅ UI shell v4.29（§2.5 浏览器页签节 + 版本条）+ CHANGELOG v2.144 |
+
+---
 ### v2.143 · 对话面四件修复（整理发丝线 + 斜杠面板 + 选择器双修 + 测试连接正名）
 
 **用户 2026-10-10 口述四条**：①会话整理从开始到完成的两个卡片式显示改**一根发丝线、整理状态居中盖在线上**（参考「上下文已压缩」分隔线）；②斜杠命令参考 ZCode 命令面板——对话框上方弹出面板，选择/点击**直接触发**；③模型选择弹窗搜索胶囊右边出界 + 选中行对勾把内容挤移位（欢迎页同款一并修）；④设置模型编辑页「测试连接」点了跟「获取列表」一样，应真实测连接。

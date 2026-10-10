@@ -34,7 +34,6 @@ fn store_with(root: &std::path::Path, locale: &str, language: &str) -> SettingsS
             None,
             None,
             None,
-            None,
             Some(ThinkingUpdate {
                 language: language.into(),
             }),
@@ -125,7 +124,6 @@ async fn hint_locks_per_session_across_setting_change() {
     // 中途改设置（文档 §8）：s1 不变（前缀缓存红线），新会话 s2 用新值
     store
         .update(
-            None,
             None,
             None,
             None,

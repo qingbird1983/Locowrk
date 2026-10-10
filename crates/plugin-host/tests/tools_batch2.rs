@@ -211,13 +211,16 @@ fn fs_write_backup_restore_delete_end_to_end() {
 }
 
 #[test]
-fn shell_whitelist_and_spawn_end_to_end() {
+fn shell_any_simple_command_runs_end_to_end() {
+    // v2.145 无命令级禁令（《Permission Model Redesign (ZCode Alignment)
+    // v1》）：结构合法即执行——审批在内核侧（工具 Irreversible），FFI 面
+    // 直调工具 = 已过审批的形状。曾「not whitelisted」拒绝的命令现在真跑。
     let _env = env_lock().lock().unwrap();
     let root = temp_root("shell");
     unsafe {
-        // init 时读一次：必须在 load 之前设好
-        std::env::set_var("LOCOWRK_SHELL_ALLOW", "cargo --version");
         std::env::remove_var("LOCOWRK_DATA_DIR");
+        // 退役 env 幻影化：设置了也无效（插件只启动 warn），此处顺带证明
+        std::env::set_var("LOCOWRK_SHELL_ALLOW", "cargo --version");
     }
     std::fs::create_dir_all(&root).unwrap();
 
@@ -226,36 +229,36 @@ fn shell_whitelist_and_spawn_end_to_end() {
     let source = RegistryToolSource::new(Arc::clone(&registry));
     let shell = source.resolve("shell").unwrap();
 
-    // 显式配置的条目：真实 spawn（本机必有 cargo）
+    // 白名单外的命令（v2.144 前被拒绝）现在真跑（whoami 各平台必有）
     let out = call(
         shell.as_ref(),
-        json!({ "command": "cargo --version", "timeout_secs": 60 }),
+        json!({ "command": "whoami", "timeout_secs": 60 }),
     )
-    .expect("whitelisted command runs");
+    .expect("non-whitelisted command runs since v2.145");
     assert_eq!(out["timed_out"], json!(false));
-    assert!(
-        out["stdout"].as_str().unwrap().contains("cargo"),
-        "stdout: {:?}",
-        out["stdout"]
-    );
+    assert_eq!(out["success"], json!(true));
 
-    // 子命令限定：cargo publish 不在条目内
-    let err = err_msg(call(shell.as_ref(), json!({ "command": "cargo publish" })).unwrap_err());
-    assert!(err.contains("not whitelisted"), "{err}");
-    // 高危类（S1 三级分类）：默认拒绝、解锁开关才放行进审批
-    let err = err_msg(call(shell.as_ref(), json!({ "command": "rm -rf /" })).unwrap_err());
-    assert!(
-        err.contains("high-risk command, refused by default"),
-        "{err}"
-    );
-    // 硬锁类：永不放行（解锁也救不了）
-    let err = err_msg(call(shell.as_ref(), json!({ "command": "python -c x" })).unwrap_err());
-    assert!(err.contains("permanently locked"), "{err}");
-    // 元字符：管道拒绝
+    // 前硬锁类（python -c）：策略放行——python 在则真跑，不在则 spawn
+    // 错误；两种结果都证明政策层不再拒绝（报文无 "permanently locked"）
+    match call(
+        shell.as_ref(),
+        json!({ "command": "python --version", "timeout_secs": 60 }),
+    ) {
+        Ok(out) => assert_eq!(out["success"], json!(true)),
+        Err(e) => {
+            let err = err_msg(e);
+            assert!(
+                !err.contains("permanently locked") && !err.contains("not whitelisted"),
+                "policy must not reject interpreters anymore: {err}"
+            );
+        }
+    }
+
+    // 元字符：结构性拒绝保留（唯一幸存的 deny 面）
     let err = err_msg(call(shell.as_ref(), json!({ "command": "ls | cat" })).unwrap_err());
     assert!(err.contains("metacharacters"), "{err}");
-    // 内置白名单：git 只放行 status
-    assert!(call(shell.as_ref(), json!({ "command": "git push" })).is_err());
+    // 空命令
+    assert!(call(shell.as_ref(), json!({ "command": "   " })).is_err());
 
     unsafe { std::env::remove_var("LOCOWRK_SHELL_ALLOW") };
     let _ = std::fs::remove_dir_all(&root);
@@ -272,7 +275,6 @@ fn shell_readonly_path_guard_end_to_end() {
         // 只读豁免的硬前提：路径面受 fsutil 允许根约束（与 fs_* 同源）
         std::env::set_var("LOCOWRK_DATA_DIR", root.join("data"));
         std::env::set_var("LOCOWRK_FS_ROOTS", &fs_root);
-        std::env::remove_var("LOCOWRK_SHELL_ALLOW");
     }
 
     let registry = Arc::new(PluginRegistry::new());

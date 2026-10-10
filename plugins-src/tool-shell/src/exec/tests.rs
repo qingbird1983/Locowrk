@@ -1,5 +1,5 @@
-//! 执行层单测：参数钳制 / 真实 spawn 全链（git --version，经显式
-//! extra_allow 放行，不碰进程 env）/ 截断提示文案 / 环境默认解析。
+//! 执行层单测：参数钳制 / 真实 spawn 全链（git --version，v2.145 起免
+//! 白名单直达审批路径，不碰进程 env）/ 截断提示文案 / 环境默认解析。
 //! 杀树路径依赖平台信号语义，不在单测里模拟（策略与路径层已覆盖拦截面）。
 
 use super::{RunDefaults, arg_u64, env_u64, shell_exec};
@@ -48,16 +48,10 @@ fn env_u64_unset_clamps_and_rejects() {
 }
 
 #[test]
-fn runs_whitelisted_program_end_to_end() {
-    // git --version：显式 extra_allow 放行（denylist 外），走通
+fn runs_simple_command_end_to_end() {
+    // git --version：无命令级禁令（v2.145），走通
     // 切词 → 策略 → spawn → 双管道收集 → json 投影
-    let out = shell_exec(
-        &json!({ "command": "git --version" }),
-        &["git --version".to_string()],
-        false,
-        &DEFAULTS,
-    )
-    .unwrap();
+    let out = shell_exec(&json!({ "command": "git --version" }), &DEFAULTS).unwrap();
     assert_eq!(out["program"], "git");
     assert_eq!(out["success"], true);
     assert_eq!(out["truncated"], false);
@@ -68,8 +62,6 @@ fn runs_whitelisted_program_end_to_end() {
 fn truncation_appends_retry_hint() {
     let out = shell_exec(
         &json!({ "command": "git --version", "max_bytes": 10 }),
-        &["git --version".to_string()],
-        false,
         &DEFAULTS,
     )
     .unwrap();

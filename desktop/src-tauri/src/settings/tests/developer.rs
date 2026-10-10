@@ -31,7 +31,6 @@ fn dev_update_full(
         None,
         None,
         None,
-        None,
         Some(DeveloperUpdate {
             unlocked,
             allow_delete_running_session: del,
@@ -150,7 +149,6 @@ fn organize_developer_keys_roundtrip_and_validation() {
             None,
             None,
             None,
-            None,
             Some(DeveloperUpdate {
                 unlocked: None,
                 allow_delete_running_session: None,
@@ -195,7 +193,6 @@ fn organize_developer_keys_roundtrip_and_validation() {
         };
         let err = store
             .update(
-                None,
                 None,
                 None,
                 None,

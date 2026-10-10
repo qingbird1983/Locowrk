@@ -22,7 +22,6 @@ export type SettingsSectionId =
   | "memory"
   | "embedding"
   | "plugins"
-  | "shell"
   | "tools"
   | "sessions"
   | "developer";
@@ -128,13 +127,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     labelKey: "settings.nav.plugins",
     icon: "plug",
     searchKeys: ["settings.pluginsTitle", "settings.fsRootsTitle"],
-  },
-  {
-    id: "shell",
-    group: "capability",
-    labelKey: "settings.nav.shell",
-    icon: "terminal",
-    searchKeys: ["settings.shellTitle"],
   },
   {
     id: "tools",

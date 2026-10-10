@@ -496,6 +496,19 @@ export default {
     viewDiff: "View diff",
     diffEmpty: "Nothing to show in this diff",
     expandLines: "… Expand {n} lines",
+    browserTitle: "Browser",
+    launcherBrowser: "Browser",
+    launcherBrowserHint: "Open a page preview",
+    browserUrlPlaceholder: "Absolute path inside a workspace, or an http(s) URL",
+    browserGo: "Open",
+    browserBack: "Back",
+    browserForward: "Forward",
+    browserReload: "Reload",
+    browserExternal: "Open in system browser",
+    browserConsole: "Console",
+    browserConsoleEmpty: "No console errors/warnings yet",
+    browserEmptyHint:
+      "Open an HTML page from a workspace or an http(s) URL. Ask the model to \"open it up\" in chat and it lands here; page errors flow back into the conversation.",
   },
   // Sub-agent card (§3.10): honest-data boundary documented in the component
   subagent: {
@@ -685,6 +698,8 @@ export default {
     timeoutNow: "Auto-denying on timeout…",
     deny: "Deny",
     allowSession: "Allow for this chat",
+    allowProject: "Always allow in this project",
+    allowProjectHint: "Persists a sticky rule for this project (shell commands stored exactly; other tools by tool name), effective across sessions. Manage in Settings → Tools & exposure.",
     allowOnce: "Allow once",
     // ㉘·B outside-roots gate / ㉘·C privacy gate (two buttons only)
     externalHint: "Target is outside the declared workspace roots; one-time approval only",
@@ -789,7 +804,6 @@ export default {
       memory: "Memory",
       embedding: "Embedding",
       plugins: "Plugins",
-      shell: "Terminal",
       tools: "Tools & exposure",
       sessions: "Sessions & data",
       developer: "Developer",
@@ -1048,12 +1062,6 @@ export default {
     thinkingEn: "English",
     thinkingNone: "Unspecified",
     thinkingSavedToast: "Saved. Applies from the next session.",
-    // S1 shell governance section
-    shellTitle: "Shell",
-    shellHint: "Read-only commands run without approval inside workspace folders; the rest ask.",
-    shellUnlock: "Allow rm / sudo / chmod-class high-risk commands to reach approval (refused by default)",
-    shellUnlockWarning: "Each call asks for your approval; python and curl-class commands stay locked.",
-    shellRestart: "Takes effect after restarting the app.",
     // ⑫ Tool exposure section (real section, replaces shell placeholder)
     developerTitle: "Developer options",
     developerHint: "Tool exposure truncation (Top-N) settings + last-request exposure breakdown.",
@@ -1080,6 +1088,13 @@ export default {
     fsRootsAdd: "Add folder…",
     fsRootsRemove: "Remove",
     fsRootsEmpty: "No workspace folders — tools can only reach the data directory.",
+    // v2.145 project sticky permission rules
+    rulesTitle: "Project permission rules",
+    rulesHint: "Sticky rules persisted from the approval card's \"Always allow in this project\" (shell by exact command, others by tool); clearing restores per-call approval. Files are hand-editable and take effect immediately.",
+    rulesOpen: "Open folder",
+    rulesEmpty: "No project permission rules",
+    rulesCounts: "allow {allow} · deny {deny}",
+    rulesClear: "Clear",
     embeddingTitle: "Embedding model (semantic search)",
     embeddingHint: "Shared by semantic search and extraction; empty does not affect chat.",
     embeddingModel: "Model name",

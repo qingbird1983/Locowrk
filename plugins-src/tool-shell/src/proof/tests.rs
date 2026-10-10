@@ -146,6 +146,7 @@ fn dangerous_regression_whitelist_miss_and_empty() {
         "git commit -m x",
         "find . -name x",
         "python x.py",
+        "node script.js",
         "whoami",
         "make",
         "cargo test",
@@ -158,6 +159,45 @@ fn dangerous_regression_whitelist_miss_and_empty() {
     for empty in ["", "   "] {
         assert!(refused(empty).contains("empty"));
     }
+}
+
+#[test]
+fn exact_argv_readonly_entries() {
+    // 精确 argv 表（v2.145，ZCode READONLY_EXACT_ARGV_COMMANDS 同款）：
+    // 版本检查零副作用免审；多一个 token 就不匹配（宁严勿松）
+    for cmd in [
+        "pwd",
+        "node -v",
+        "node --version",
+        "python --version",
+        "python3 --version",
+        "NODE --version", // 大小写不敏感
+    ] {
+        safe(cmd);
+    }
+    // 近似形态不在表内：多参 / 形态不同 / 白名单外程序
+    for bad in [
+        "node --version extra",
+        "node -vv",
+        "pwd -L",
+        "python -V",
+        "node",
+        "python3",
+    ] {
+        let reason = refused(bad);
+        assert!(
+            reason.contains("not a read-only command"),
+            "`{bad}`: {reason}"
+        );
+    }
+}
+
+#[test]
+fn git_version_flag_is_readonly() {
+    // `git --version` 免审（v2.145）；git 全局选项拒不误伤它
+    safe("git --version");
+    assert!(refused("git -c core.pager=x status").contains("global options"));
+    assert!(refused("git --version --git-dir=/x").contains("global options"));
 }
 
 #[test]

@@ -3,14 +3,23 @@
  * 设置分区：工具与分发（⑫，settings.json `tools` 区；exposure 文档
  * §6.3/§9.6；v2.49 更名自 DeveloperSection——分区 id 本就是 tools，组件
  * 名对齐 1:1）。上半是截断设置（开关 + 每请求最大工具数 + 调用超时 +
- * 单轮步数上限 + 审批等待时长，保存即热生效）；下半是工作区目录（⑱，
- * 增删即存即生效）。暴露调试面板同批迁入「开发者」分区（开发者信息不
- * 占普通面板）。可配置原则 §七-16①：不确定数值一律可调项。
- * 行版式（§3.32·七 v3.5）：两块组（行组 / 工作区目录）。
+ * 单轮步数上限 + 审批等待时长，保存即热生效）；中段是工作区目录（⑱，
+ * 增删即存即生效）；尾段是项目粘性授权规则管理（v2.145：审批卡「本项目
+ * 始终允许」的持久化面，逐工作区清除 + 打开文件夹）。暴露调试面板同批
+ * 迁入「开发者」分区（开发者信息不占普通面板）。可配置原则 §七-16①：
+ * 不确定数值一律可调项。
+ * 行版式（§3.32·七 v3.5）：三块组（行组 / 工作区目录 / 项目权限规则）。
  */
-import { computed, reactive, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { pickDirectory } from "../../lib/api";
+import {
+  deleteProjectRules,
+  listProjectRules,
+  pickDirectory,
+  projectRulesDir,
+  revealInExplorer,
+  type ProjectRulesView,
+} from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
 import HoverTip from "./HoverTip.vue";
 import SettingsGroup from "./SettingsGroup.vue";
@@ -82,6 +91,31 @@ async function addRoot() {
 function removeRoot(idx: number) {
   void settings.saveTools({ fsRoots: fsRoots.value.filter((_, i) => i !== idx) });
 }
+
+// ---- v2.145 项目粘性授权规则管理：审批卡「本项目始终允许」的持久化
+// 面。逐工作区列出规则计数，清除即时生效（后端每次查询直读文件）；
+// 「打开文件夹」出口供手工编辑/备份。 ----
+const rules = ref<ProjectRulesView[]>([]);
+
+async function reloadRules() {
+  try {
+    rules.value = await listProjectRules();
+  } catch {
+    rules.value = [];
+  }
+}
+
+async function removeRules(workspace: string) {
+  await deleteProjectRules(workspace);
+  await reloadRules();
+}
+
+async function openRulesDir() {
+  const dir = await projectRulesDir();
+  await revealInExplorer(dir);
+}
+
+onMounted(reloadRules);
 </script>
 
 <template>
@@ -222,6 +256,47 @@ function removeRoot(idx: number) {
           @click="removeRoot(i)"
         >
           ✕
+        </button>
+      </div>
+    </SettingsGroup>
+
+    <!-- v2.145 项目粘性授权规则（「本项目始终允许」的管理面） -->
+    <SettingsGroup
+      :title="t('settings.rulesTitle')"
+      :hint="t('settings.rulesHint')"
+    >
+      <template #action>
+        <button
+          type="button"
+          class="lw-btn px-3 py-1.5 text-xs text-ink-2"
+          @click="openRulesDir"
+        >
+          {{ t("settings.rulesOpen") }}
+        </button>
+      </template>
+      <p v-if="!rules.length" class="px-1 py-1 text-[length:var(--lw-fs-12)] text-ink-4">
+        {{ t("settings.rulesEmpty") }}
+      </p>
+      <div
+        v-for="r in rules"
+        :key="r.workspace"
+        class="flex items-center justify-between gap-2 rounded-[var(--lw-r-md-plus)] bg-wash-1 px-4 py-2.5"
+      >
+        <HoverTip :text="r.workspace" :label="r.workspace" class="min-w-0">
+          <span class="min-w-0 truncate text-[length:var(--lw-fs-12)] text-ink-2">
+            {{ r.workspace }}
+            <span class="ml-2 text-ink-4">
+              {{ t("settings.rulesCounts", { allow: r.allow, deny: r.deny }) }}
+            </span>
+          </span>
+        </HoverTip>
+        <button
+          type="button"
+          class="shrink-0 rounded-[var(--lw-r-3xs)] px-1.5 text-[length:var(--lw-fs-11)] text-ink-4 transition hover:bg-wash-2 hover:text-danger"
+          :aria-label="`${t('settings.rulesClear')} ${r.workspace}`"
+          @click="removeRules(r.workspace)"
+        >
+          {{ t("settings.rulesClear") }}
         </button>
       </div>
     </SettingsGroup>

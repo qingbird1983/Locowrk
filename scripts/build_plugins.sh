@@ -82,6 +82,16 @@ stage tool-fetch 0.1.1
 # Git 的 Unix coreutils：用 Unix 风格命令，cmd 内建（dir/del/rmdir /s /q）
 # 不存在
 stage tool-shell 0.1.3
+# 0.1.5（2026-10-10，小迭代 +0.0.1）：权限模型重设计（设计稿《Permission
+# Model Redesign (ZCode Alignment) v1》，对齐 ZCode）——shell 政策层收敛
+# 两态：Deny 仅剩结构性（元字符/空命令/引号未闭合），**无命令级禁令**，
+# 解释器/高危/网络/白名单外一律放行进审批卡（工具 Irreversible，放行
+# 即审批；DENY_HARD/DENY_RISKY/BASE_ALLOW/LOCOWRK_SHELL_ALLOW/
+# unlockRisky 全退役，LOCOWRK_SHELL_ALLOW/UNLOCK_RISK env 幻影化设置即
+# warn）；shell_read 免审面新增 EXACT_ARGV 精确表（pwd / git --version /
+# node -v|--version / python[3] --version，ZCode READONLY_EXACT_ARGV_
+# COMMANDS 同款，逐 token 全等宁严勿松），git 全局选项守卫零例外
+stage tool-shell 0.1.5
 # 0.1.4（2026-10-09，小迭代 +0.0.1）：G4 只读证明（可靠性稿 §6）——
 # shell_read 从「白名单匹配」升级为「证明只读」：新 proof.rs 证明层
 # （词法引号感知——引号内元字符是数据（grep "a|b" 不再误拒），未加
@@ -132,7 +142,6 @@ stage tool-edit 0.2.1
 stage memory-sqlite 0.1.5
 stage tool-mcp 0.1.0
 stage tool-notify 0.1.0
-stage tool-sandbox 0.1.0
 
-echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit/{0.2.0,0.2.1} + tool-fs/{0.1.3,0.1.4,0.1.5} + tool-fetch 0.1.1 + tool-shell/{0.1.3,0.1.4} + tool-git 0.1.3 + memory-sqlite 0.1.5（0.1.5 = 提示词分层批；0.2.1/0.1.5 = G3 批，0.1.4 = G4 只读证明批）+ 其余见上注释"
+echo "done: plugins/tool-echo/{0.1.0,0.2.0} + tool-edit/{0.2.0,0.2.1} + tool-fs/{0.1.3,0.1.4,0.1.5} + tool-fetch 0.1.1 + tool-shell/{0.1.3,0.1.4,0.1.5} + tool-git 0.1.3（tool-sandbox 已随 v2.145 退役不再 staging；tool-shell 0.1.5 = 权限模型重设计批） + memory-sqlite 0.1.5（0.1.5 = 提示词分层批；0.2.1/0.1.5 = G3 批，0.1.4 = G4 只读证明批）+ 其余见上注释"
 echo "next: cargo run -p kernel-bin -- demo"

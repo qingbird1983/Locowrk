@@ -1,12 +1,18 @@
 //! 阶段六审批门测试（§13.2 / 纪律 9）：固定决议替身 / ApprovalHub 端到端。
 //! （原在 tests.rs，400 行纪律拆出；共用收集器与 kind 从 tests 引入。）
+//! v2.145 追加：项目粘性规则两级（③deny / ⑤allow）+ 子会话审批改道。
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use cordis_core::Context;
-use kernel_agent::{ApprovalDecision, ApprovalResolver, Kernel, LlmService, ToolSource};
-use plugin_api::ToolSpec;
+use kernel_agent::{
+    ApprovalDecision, ApprovalResolver, Kernel, LlmService, ToolCallReq, ToolSource,
+};
+use plugin_api::ffi::CallContext;
+use plugin_api::memlayout::fnv1a64;
+use plugin_api::{CallId, Exposure, SideEffect, ToolSpec};
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use serde_json::json;
 use session_store::{Session, SessionEvent};
@@ -15,6 +21,8 @@ use crate::approval::ApprovalHub;
 use crate::demo_llm::DemoLlm;
 use crate::demo_tools::SendEmailTool;
 use crate::events::AgentEvent;
+use crate::permission_mode::{PermissionMode, PermissionModeStore};
+use crate::permission_rules::PermissionRuleStore;
 use crate::runner::run_turn;
 use crate::tests::{kind, Collector};
 use crate::tool_source::KernelToolSource;
@@ -411,4 +419,222 @@ async fn unlimited_timeout_keeps_waiting_for_decision() {
         e,
         SessionEvent::ApprovalDecided { reason: Some(r), .. } if r.contains("超时自动拒绝")
     )));
+}
+
+// ---- v2.145 权限模型重设计（《Permission Model Redesign (ZCode
+// Alignment) v1》）：项目粘性规则两级 + 子会话审批改道。 ----
+
+/// shell 工具 spec（Irreversible——审批卡路径的形状）。
+fn shell_spec() -> ToolSpec {
+    ToolSpec {
+        name: "shell".into(),
+        description: String::new(),
+        schema: json!({}),
+        side_effect: SideEffect::Irreversible,
+        exposure: Exposure::default(),
+    }
+}
+
+/// 测试隔离根（不碰真实数据目录）。
+fn tmp_root(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("locowrk-appr-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// ctx 替身：s1 / s1-sub-* 归属 ws-A（子会话改道语义的数据源），其余未归属。
+fn ctx_stub() -> crate::workspace::SessionContextResolver {
+    Arc::new(|sid: &str| CallContext {
+        session_id: Some(sid.to_string()),
+        workspace: sid.starts_with("s1").then(|| "ws-A".to_string()),
+        fs_roots: Vec::new(),
+    })
+}
+
+fn hub_v145(
+    tag: &str,
+    default_mode: PermissionMode,
+) -> (
+    Arc<ApprovalHub>,
+    Arc<PermissionRuleStore>,
+    Arc<PermissionModeStore>,
+    PathBuf,
+) {
+    let root = tmp_root(tag);
+    let rules = Arc::new(PermissionRuleStore::new(&root.join("data")));
+    let modes = Arc::new(PermissionModeStore::new(
+        root.join("sessions"),
+        default_mode,
+    ));
+    let hub = Arc::new(
+        ApprovalHub::with_timeout(
+            Arc::new(Collector::default()),
+            std::time::Duration::from_millis(80),
+        )
+        .with_modes(Arc::clone(&modes))
+        .with_workspace(ctx_stub())
+        .with_rules(Arc::clone(&rules)),
+    );
+    (hub, rules, modes, root)
+}
+
+fn shell_req(session: &str, command: &str) -> ToolCallReq {
+    ToolCallReq {
+        id: CallId("c1".into()),
+        tool: "shell".into(),
+        args: json!({ "command": command }),
+        session_id: Some(session.into()),
+    }
+}
+
+/// ⑤ 项目允许规则：Ask 档下命中的命令免卡直行；未命中的照常弹卡。
+#[tokio::test]
+async fn project_allow_rule_skips_card_in_ask_mode() {
+    let (hub, rules, _modes, root) = hub_v145("allow", PermissionMode::Ask);
+    rules
+        .add_allow("ws-A", "shell", Some("npm test".into()))
+        .unwrap();
+
+    // 命中：直行（rule:project-allow 审计理由，不带 mode: 前缀 = 前端照常渲染记录条）
+    let d = hub
+        .resolve(&shell_req("s1", "npm test"), &shell_spec())
+        .await;
+    assert!(d.allowed);
+    assert_eq!(d.reason.as_deref(), Some("rule:project-allow"));
+
+    // 未命中：弹卡（守夜 80ms 后自动拒绝）
+    let d = hub
+        .resolve(&shell_req("s1", "npm run build"), &shell_spec())
+        .await;
+    assert!(!d.allowed);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// ③ 项目拒绝规则先于模式放行：Auto 档也拦（比 ZCode 的 yolo 先于
+/// deny 更安全，有意偏离记档）。
+#[tokio::test]
+async fn project_deny_rule_blocks_even_in_auto_mode() {
+    let (hub, rules, _modes, root) = hub_v145("deny", PermissionMode::Auto);
+    rules
+        .add_allow("ws-A", "shell", Some("rm -rf build".into()))
+        .unwrap();
+    // UI 不产 deny——手改 JSON 注入（文件面生效语义）
+    let fname = format!("{:08x}.json", fnv1a64("ws-A".as_bytes()));
+    let f = root.join("data").join("permissions").join(&fname);
+    let mut v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&f).unwrap()).unwrap();
+    v["deny"] = json!([{ "tool": "shell", "content": "rm -rf build" }]);
+    std::fs::write(&f, serde_json::to_string_pretty(&v).unwrap()).unwrap();
+
+    let d = hub
+        .resolve(&shell_req("s1", "rm -rf build"), &shell_spec())
+        .await;
+    assert!(!d.allowed, "deny 规则必须拦下 Auto 档");
+    assert!(d.reason.unwrap_or_default().contains("项目权限规则拒绝"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 子会话审批改道：{parent}-sub-{n} 的豁免/规则/权限档全部取父根会话。
+#[tokio::test]
+async fn child_session_routes_to_parent_root() {
+    let (hub, rules, _modes, root) = hub_v145("child", PermissionMode::Ask);
+    rules
+        .add_allow("ws-A", "shell", Some("node server.js".into()))
+        .unwrap();
+
+    // 豁免种在父会话上——改道前子会话 id 全新永不命中（v2.144 缺陷）
+    hub.decide_seed_for_test("s1", "shell");
+    let d = hub
+        .resolve(&shell_req("s1-sub-1", "cargo build"), &shell_spec())
+        .await;
+    assert!(d.allowed, "子会话必须命中父会话豁免");
+
+    // 规则同理：子会话发起的 shell 调用命中 ws-A 的粘性规则
+    let d = hub
+        .resolve(&shell_req("s1-sub-2", "node server.js"), &shell_spec())
+        .await;
+    assert!(d.allowed);
+    assert_eq!(d.reason.as_deref(), Some("rule:project-allow"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 权限档继承：父会话显式 Plan，子会话非 Pure 调用按父档硬拒
+/// （v2.144 缺陷 = 回落设置缺省 Ask，弹卡）。
+#[tokio::test]
+async fn child_session_inherits_parent_mode() {
+    let (hub, _rules, modes, root) = hub_v145("childmode", PermissionMode::Ask);
+    modes.set_session_mode("s1", PermissionMode::Plan).unwrap();
+    let d = hub
+        .resolve(&shell_req("s1-sub-1", "npm test"), &shell_spec())
+        .await;
+    assert!(!d.allowed, "子会话必须继承父会话 Plan 档");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 「本项目始终允许」落盘：scope=project 决策持久化精确命令规则（shell），
+/// 第二次同命令免卡直行。
+#[tokio::test]
+async fn project_scope_persists_exact_command_rule() {
+    let (hub, rules, _modes, root) = hub_v145("persist", PermissionMode::Ask);
+
+    // 第一次：弹卡（后台抓 request_id 后按 project 放行）
+    let decider = Arc::clone(&hub);
+    let worker = tokio::spawn(async move {
+        loop {
+            if let Some(req) = decider.pending().first().cloned() {
+                decider
+                    .decide(&req.request_id, true, None, Some("project"))
+                    .expect("decision accepted");
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    });
+    let d = hub
+        .resolve(&shell_req("s1", "node server.js"), &shell_spec())
+        .await;
+    worker.await.unwrap();
+    assert!(d.allowed, "决策后 step 醒来放行");
+    // 精确命令规则落盘
+    assert!(
+        rules.allows("ws-A", "shell", Some("node server.js")),
+        "scope=project 必须持久化规则"
+    );
+    assert!(
+        !rules.allows("ws-A", "shell", Some("node other.js")),
+        "v1 粘性 = 精确命令，不同命令不得被放宽"
+    );
+    // 第二次同命令：免卡直行
+    let d = hub
+        .resolve(&shell_req("s1", "node server.js"), &shell_spec())
+        .await;
+    assert!(d.allowed);
+    assert_eq!(d.reason.as_deref(), Some("rule:project-allow"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 未归属会话的 project 决策 = 跳过持久化（当次放行仍生效，ZCode 同款）。
+#[tokio::test]
+async fn project_scope_without_workspace_skips_persistence() {
+    let (hub, rules, _modes, root) = hub_v145("nows", PermissionMode::Ask);
+    let decider = Arc::clone(&hub);
+    let worker = tokio::spawn(async move {
+        loop {
+            if let Some(req) = decider.pending().first().cloned() {
+                decider
+                    .decide(&req.request_id, true, None, Some("project"))
+                    .expect("decision accepted");
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    });
+    let d = hub
+        .resolve(&shell_req("other-session", "node server.js"), &shell_spec())
+        .await;
+    worker.await.unwrap();
+    assert!(d.allowed, "当次放行不受持久化缺席影响");
+    assert!(!rules.allows("ws-A", "shell", Some("node server.js")));
+    let _ = std::fs::remove_dir_all(&root);
 }

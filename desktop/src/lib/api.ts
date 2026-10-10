@@ -23,7 +23,6 @@ import type {
   SettingsView,
   AppearanceUpdate,
   DeveloperUpdate,
-  ShellUpdate,
   ToolsUpdate,
   ExposureDebug,
   EmbeddingUpdate,
@@ -45,6 +44,7 @@ import type {
   TreeChaptersView,
   ProjectTreeView,
   TreeOriginalItem,
+  BrowserOpenPayload,
   OrganizeDonePayload,
   OrganizePausedPayload,
   ImportApplyReport,
@@ -118,9 +118,33 @@ export function contextUndoCompact(sessionId: string): Promise<number> {
 export function approve(
   requestId: string,
   allowed: boolean,
-  scope?: "session",
+  scope?: "session" | "project",
 ): Promise<void> {
   return invoke("agent_approve", { requestId, allowed, scope: scope ?? null });
+}
+
+// ---- 项目粘性授权规则（v2.145 设置管理行）----
+
+/** 单工作区规则概览（permission_rules_list 投影）。 */
+export interface ProjectRulesView {
+  workspace: string;
+  allow: number;
+  deny: number;
+}
+
+/** 全部工作区的规则概览。 */
+export function listProjectRules(): Promise<ProjectRulesView[]> {
+  return invoke("permission_rules_list");
+}
+
+/** 清除一个工作区的全部粘性规则。 */
+export function deleteProjectRules(workspace: string): Promise<void> {
+  return invoke("permission_rules_delete", { workspace });
+}
+
+/** 规则目录路径（「打开文件夹」出口）。 */
+export function projectRulesDir(): Promise<string> {
+  return invoke("permission_rules_dir");
 }
 
 /** 未决审批补拉（前端刷新/重连时，事件可能已错过）。 */
@@ -294,7 +318,6 @@ export function setSettings(patch: {
   context?: ContextUpdate;
   memory?: MemoryUpdate;
   tools?: ToolsUpdate;
-  shell?: ShellUpdate;
   plugins?: PluginsUpdate;
   chat?: ChatUpdate;
   developer?: DeveloperUpdate;
@@ -309,7 +332,6 @@ export function setSettings(patch: {
     context: patch.context ?? null,
     memory: patch.memory ?? null,
     tools: patch.tools ?? null,
-    shell: patch.shell ?? null,
     plugins: patch.plugins ?? null,
     chat: patch.chat ?? null,
     developer: patch.developer ?? null,
@@ -719,6 +741,15 @@ export function subscribeOrganizeDone(
 ): Promise<UnlistenFn> {
   return listen<OrganizeDonePayload>("lw://organize-done", (e) =>
     onDone(e.payload),
+  );
+}
+
+/** 浏览器页签开签推送（lw://browser-open；browser_open 工具 → 工作面板）。 */
+export function subscribeBrowserOpen(
+  onOpen: (payload: BrowserOpenPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<BrowserOpenPayload>("lw://browser-open", (e) =>
+    onOpen(e.payload),
   );
 }
 

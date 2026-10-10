@@ -17,6 +17,16 @@
 //!   0 = 不限等待（不起守夜任务），保存即 [`ApprovalHub::set_timeout_secs`]
 //!   热换入。
 //!
+//! v2.145（《Permission Model Redesign (ZCode Alignment) v1》）：
+//! - **子会话审批改道**：`{parent}-sub-{n}` 会话 id 一律映射回父根会话
+//!   再决策——权限档继承父会话（不再回落设置缺省）、「允许本次对话」
+//!   豁免跨派生生效（子 id 每次全新曾使豁免永不命中）、卡片工作区取父。
+//!   卡片徽章仍带原始子 id（前端标识用）。
+//! - **项目粘性规则**（permission_rules）：决策序新增 ③项目拒绝规则
+//!   （先于模式放行 = 用户明示拒绝连 Auto 也拦，比 ZCode yolo 先于
+//!   deny 更安全，有意偏离记档）与 ⑤项目允许规则（「本项目始终允许」，
+//!   shell = 精确命令规则，其余 = 工具级）。
+//!
 //! 并发安全：pending/exempt 表是 std Mutex（存取不跨 await）；oneshot 的
 //! `rx.await` 在锁外，`agent_approve` 也只碰这两张表，不碰会话锁，
 //! 与"聊天锁内串行"无死锁交集。
@@ -62,6 +72,28 @@ pub struct ApprovalHub {
     /// ㉘·B 会话→调用期上下文：环境行"如实"数据源（`.workspace`）+ 硬门
     /// （越界）的围栏来源（`.fs_roots`，㉘·C 起与插件围栏同源 = 全局声明根）。
     ctx_of: Option<crate::workspace::SessionContextResolver>,
+    /// v2.145 项目粘性授权规则库（决策序 ③deny / ⑤allow）。None = 跳过
+    /// 两级（旧测试 / 最小组装）。
+    rules: Option<Arc<crate::permission_rules::PermissionRuleStore>>,
+}
+
+/// 子会话 id 改道父根：`{parent}-sub-{n}` → `{parent}`（v2.145——模式
+/// 继承 / 豁免共享 / 规则键位 / 卡片工作区全部取父根会话；身份徽章仍用
+/// 原始 id）。桌面会话 id 形如 `desktop-<millis>`，不含 `-sub-`，无歧义。
+pub(crate) fn root_session_id(sid: Option<&str>) -> Option<String> {
+    sid.map(|s| match s.split_once("-sub-") {
+        Some((parent, _)) if !parent.is_empty() => parent.to_string(),
+        _ => s.to_string(),
+    })
+}
+
+/// 规则匹配的命令文本：目前只有 `shell` 带 `command` 参数。
+fn command_subject<'a>(tool: &str, args: &'a serde_json::Value) -> Option<&'a str> {
+    if tool == "shell" {
+        args.get("command").and_then(serde_json::Value::as_str)
+    } else {
+        None
+    }
 }
 
 impl ApprovalHub {
@@ -80,6 +112,7 @@ impl ApprovalHub {
             timeout_ms: AtomicU64::new(timeout.as_millis() as u64),
             modes: None,
             ctx_of: None,
+            rules: None,
         }
     }
 
@@ -95,6 +128,18 @@ impl ApprovalHub {
     pub fn with_workspace(mut self, ctx: crate::workspace::SessionContextResolver) -> Self {
         self.ctx_of = Some(ctx);
         self
+    }
+
+    /// v2.145：接项目粘性授权规则库（决策序 ③deny / ⑤allow）。
+    pub fn with_rules(mut self, rules: Arc<crate::permission_rules::PermissionRuleStore>) -> Self {
+        self.rules = Some(rules);
+        self
+    }
+
+    /// 会话（父根）→ 工作区。None = 未归属 / 无 resolver。
+    fn workspace_of(&self, root_sid: Option<&str>) -> Option<String> {
+        let ctx = self.ctx_of.as_ref()?;
+        root_sid.and_then(|sid| ctx(sid).workspace)
     }
 
     /// 测试脚手架：直接给豁免表种一条记录（生产路径经 `decide`）。
@@ -127,8 +172,12 @@ impl ApprovalHub {
     }
 
     /// `agent_approve`（§12.1）：回填决策并唤醒挂起的 step。
-    /// `scope = Some("session")` 且放行 → 记 (session_id, tool) 豁免，
-    /// 本会话后续同工具调用不再问（§3.17「允许本次对话」）。
+    /// `scope = Some("session")` 且放行 → 记 (root_session, tool) 豁免，
+    /// 本会话（含其子代理）后续同工具调用不再问（§3.17「允许本次对话」；
+    /// v2.145 起按父根会话记键——子会话改道语义，豁免跨派生生效）。
+    /// `scope = Some("project")` 且放行 → 落盘粘性规则（v2.145「本项目
+    /// 始终允许」：shell = 精确命令规则，其余 = 工具级；未归属会话跳过
+    /// 持久化，当次放行仍生效）。
     /// 请求不存在（已处理 / 前端陈旧状态 / 超时已被守夜拒绝）返回 Err。
     pub fn decide(
         &self,
@@ -145,15 +194,34 @@ impl ApprovalHub {
         let Some(entry) = entry else {
             return Err(format!("未知或已处理的审批请求：{request_id}"));
         };
+        let root = root_session_id(entry.request.session_id.as_deref());
         if allowed && scope == Some("session") {
-            let key = (
-                entry.request.session_id.clone().unwrap_or_default(),
-                entry.request.tool.clone(),
-            );
+            let key = (root.clone().unwrap_or_default(), entry.request.tool.clone());
             self.exempt
                 .lock()
                 .expect("approval exempt poisoned")
                 .insert(key);
+        }
+        if allowed && scope == Some("project") {
+            if let (Some(rules), Some(ws)) = (
+                &self.rules,
+                root.as_deref().and_then(|sid| self.workspace_of(Some(sid))),
+            ) {
+                let content = if entry.request.tool == "shell" {
+                    entry
+                        .request
+                        .args
+                        .get("command")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_string)
+                } else {
+                    None
+                };
+                if let Err(e) = rules.add_allow(&ws, &entry.request.tool, content) {
+                    // 持久化失败不回滚当次放行（决策已定），如实告警
+                    tracing::warn!("project allow rule persist failed: {e}");
+                }
+            }
         }
         let decision = if allowed {
             ApprovalDecision::allow()
@@ -192,13 +260,14 @@ impl ApprovalHub {
 #[async_trait]
 impl ApprovalResolver for ApprovalHub {
     async fn resolve(&self, req: &ToolCallReq, spec: &ToolSpec) -> ApprovalDecision {
+        // 子会话改道（v2.145）：{parent}-sub-{n} → parent——权限档继承、
+        // 豁免/规则键位、越界门围栏、卡片工作区全部取父根会话。
+        let root_sid = root_session_id(req.session_id.as_deref());
         // ㉘·C 决策表（DESIGN §7.2，序即优先级）：①计划档硬拒 ②硬门（隐私
-        // + 越界）③模式放行（一等公民）④会话豁免 ⑤决策卡。modes 缺席 =
-        // 退化为④⑤（旧行为；kernel-bin 桥不装配决策表）。
-        let mode = self
-            .modes
-            .as_ref()
-            .map(|m| m.mode_of(req.session_id.as_deref()));
+        // + 越界）③项目拒绝规则 ④模式放行（一等公民）⑤项目允许规则
+        // ⑥会话豁免 ⑦决策卡。modes 缺席 = 退化为⑥⑦（旧行为；kernel-bin
+        // 桥不装配决策表）。
+        let mode = self.modes.as_ref().map(|m| m.mode_of(root_sid.as_deref()));
         if mode == Some(crate::permission_mode::PermissionMode::Plan)
             && !matches!(spec.side_effect, plugin_api::SideEffect::Pure)
         {
@@ -215,16 +284,27 @@ impl ApprovalResolver for ApprovalHub {
             None => None,
         };
         let external = match (&self.modes, &self.ctx_of) {
-            (Some(_), ctx) => command_touches_outside(
-                &req.tool,
-                &req.args,
-                req.session_id.as_deref(),
-                ctx.as_ref(),
-            ),
+            (Some(_), ctx) => {
+                command_touches_outside(&req.tool, &req.args, root_sid.as_deref(), ctx.as_ref())
+            }
             _ => false,
         };
         if sensitive.is_none() && !external {
-            // ③ 模式放行（一等公民，㉘·C；审计 reason 带 mode: 前缀，前端
+            let subject = command_subject(&req.tool, &req.args);
+            // ③ 项目拒绝规则（v2.145）：UI 不产 deny，手改 JSON 生效；
+            // 先于模式放行 = 用户明示拒绝连 Auto 也拦（比 ZCode 的 yolo
+            // 先于 deny 更安全，设计稿 §2.1 有意偏离记档）。
+            if let Some(rules) = &self.rules {
+                if let Some(ws) = self.workspace_of(root_sid.as_deref()) {
+                    if rules.denies(&ws, &req.tool, subject) {
+                        return ApprovalDecision::deny(
+                            "项目权限规则拒绝（deny 清单命中）：编辑或删除数据目录 \
+                             permissions/ 下的规则文件以解除",
+                        );
+                    }
+                }
+            }
+            // ④ 模式放行（一等公民，㉘·C；审计 reason 带 mode: 前缀，前端
             // 据此不渲染记录条）。只读直通 = 所有档位（隐私门已在上面临过）。
             use crate::permission_mode::PermissionMode as PM;
             if matches!(spec.side_effect, plugin_api::SideEffect::Pure) {
@@ -254,9 +334,22 @@ impl ApprovalResolver for ApprovalHub {
                 }
                 _ => {}
             }
-            // ④ 会话豁免：本会话已放行过同工具，直接放行（Kernel 照写
-            // ApprovalDecided，投影出记录条——转录里留得住"自动批过"）
-            let exempt_key = (req.session_id.clone().unwrap_or_default(), req.tool.clone());
+            // ⑤ 项目允许规则（v2.145 粘性授权）：工具级或精确命令命中即
+            // 放行（reason 不带 mode: 前缀 = 前端照常渲染记录条，审计可见）
+            if let Some(rules) = &self.rules {
+                if let Some(ws) = self.workspace_of(root_sid.as_deref()) {
+                    if rules.allows(&ws, &req.tool, subject) {
+                        return ApprovalDecision {
+                            allowed: true,
+                            reason: Some("rule:project-allow".into()),
+                        };
+                    }
+                }
+            }
+            // ⑥ 会话豁免：本会话（含子代理，键 = 父根会话）已放行过同工具，
+            // 直接放行（Kernel 照写 ApprovalDecided，投影出记录条——转录里
+            // 留得住"自动批过"）
+            let exempt_key = (root_sid.clone().unwrap_or_default(), req.tool.clone());
             if self
                 .exempt
                 .lock()
@@ -267,10 +360,7 @@ impl ApprovalResolver for ApprovalHub {
             }
         }
 
-        let workspace = self
-            .ctx_of
-            .as_ref()
-            .and_then(|ctx| req.session_id.as_deref().and_then(|sid| ctx(sid).workspace));
+        let workspace = self.workspace_of(root_sid.as_deref());
         let request = ApprovalRequestPayload {
             request_id: req.id.0.clone(),
             tool: req.tool.clone(),
@@ -335,20 +425,21 @@ impl ApprovalResolver for ApprovalHub {
 
 // ---- 硬门·越界（㉘·B 外部路径门，启发式命令扫描）---------------------------
 
-/// 命令类工具（`shell` / `sandbox_run`）的命令文本是否触及全局声明根之外
+/// 命令类工具（`shell`）的命令文本是否触及全局声明根之外
 /// 的绝对路径（㉘·C 起围栏 = 全局声明根，与插件侧 fsutil 同源——声明根内
 /// 跨项目畅通不弹卡）。结构化路径工具（fs/edit/git）不走这里——它们在
 /// 插件内对出围栏路径 fail-closed 拒绝（既有契约，拒绝文案引导改走 shell
 /// 审批路）。启发式：只识别 Windows 绝对路径形态（盘符 `X:\`·`X:/` 与
 /// UNC `\\…`）；扫不出绝对路径 = 视为围栏内——漏报在 `询问` 档仍有弹卡
 /// 兜底（shell 本就是 Irreversible），宁漏勿错杀。
+/// （v2.145：`sandbox_run` 随插件退役移出扫描面。）
 pub(crate) fn command_touches_outside(
     tool: &str,
     args: &serde_json::Value,
     session_id: Option<&str>,
     ctx: Option<&crate::workspace::SessionContextResolver>,
 ) -> bool {
-    if !matches!(tool, "shell" | "sandbox_run") {
+    if tool != "shell" {
         return false;
     }
     let cmd = args
@@ -393,14 +484,16 @@ pub(crate) fn extract_windows_abs_paths(cmd: &str) -> Vec<String> {
             }
             i = end;
         } else {
-            i += 1;
+            // 按整字符步进，保 i 恒为 char boundary——字节步进会在多字节
+            // 字符（中文命令）的续字节上 cmd[i..] 切片 panic
+            i += cmd[i..].chars().next().map_or(1, char::len_utf8);
         }
     }
     out
 }
 
 fn rest_starts_unc(cmd: &str, i: usize) -> bool {
-    cmd[i..].starts_with("\\\\")
+    cmd.as_bytes()[i..].starts_with(b"\\\\")
 }
 
 /// 扫描围栏（与插件侧 fsutil 语义逐值对齐，㉘·C）：会话上下文带 `fs_roots`

@@ -33,6 +33,7 @@ mod approval;
 mod ask;
 mod assets;
 mod autodisable;
+mod browser;
 mod commands;
 mod data_root;
 mod demo_llm;
@@ -53,6 +54,7 @@ mod model_override;
 mod notifications;
 mod organize;
 mod permission_mode;
+mod permission_rules;
 mod plugins_root;
 mod privacy;
 mod repo_context;
@@ -112,6 +114,9 @@ pub fn run() {
         // ⑱ 原生目录选择（UI shell 文档 §7 规则 8）：pick_directory 命令
         // Rust 侧直呼，无 JS guest、无需 capability
         .plugin(tauri_plugin_dialog::init())
+        // 工作面板浏览器预览协议（v2.144）：lwpreview 服务 fsRoots 内
+        // 本地文件给右栏 iframe（围栏/MIME/console 桥注入见 browser/preview）
+        .register_uri_scheme_protocol("lwpreview", crate::browser::preview::handle)
         .setup(move |app| {
             tracing::info!(
                 ms = boot.elapsed().as_millis() as u64,
@@ -163,12 +168,16 @@ pub fn run() {
             commands::asset_put_path,
             commands::asset_read,
             commands::asset_reveal,
+            commands::browser_report_errors,
             commands::asset_gc,
             commands::asset_save_as,
             commands::ask_respond,
             commands::ask_snooze,
             commands::list_pending_asks,
             commands::list_pending_approvals,
+            commands::permission_rules_list,
+            commands::permission_rules_delete,
+            commands::permission_rules_dir,
             commands::context_undo_compact,
             commands::plugin_list,
             commands::plugin_list_with_usage,

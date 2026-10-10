@@ -3,6 +3,7 @@
 
 mod ask;
 mod assets;
+mod browser;
 mod llm;
 mod llm_import;
 mod memory;
@@ -15,6 +16,7 @@ use std::sync::Arc;
 
 pub use ask::*;
 pub use assets::*;
+pub use browser::*;
 pub use llm::*;
 pub use llm_import::*;
 pub use memory::*;
@@ -32,8 +34,7 @@ use crate::events::{AgentEvent, ApprovalRequestPayload};
 use crate::runner::{self, UsagePolicy};
 use crate::settings::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
-    MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsView, ShellUpdate, ThinkingUpdate,
-    ToolsUpdate,
+    MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsView, ThinkingUpdate, ToolsUpdate,
 };
 use crate::state::AppState;
 
@@ -207,6 +208,29 @@ pub async fn list_pending_approvals(
     Ok(state.approval.pending())
 }
 
+/// 项目粘性授权规则概览（v2.145 设置管理行）：全部工作区的规则计数。
+#[tauri::command]
+pub async fn permission_rules_list(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::permission_rules::ProjectRulesView>, String> {
+    Ok(state.permission_rules.list_all())
+}
+
+/// 清除一个工作区的全部粘性规则（v2.145 设置管理行）。
+#[tauri::command]
+pub async fn permission_rules_delete(
+    workspace: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.permission_rules.clear(&workspace)
+}
+
+/// 规则目录路径（v2.145 设置管理行「打开文件夹」出口）。
+#[tauri::command]
+pub async fn permission_rules_dir(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.permission_rules.dir().to_string_lossy().into_owned())
+}
+
 // ---- 设置命令（DESIGN.md §13.1 / §13.5）：薄适配层，校验与落盘全在
 // SettingsStore。返回投影永不含 API Key 原值，只有 api_key_set。 ----
 
@@ -242,7 +266,6 @@ pub async fn settings_set(
     context: Option<ContextUpdate>,
     memory: Option<MemoryUpdate>,
     tools: Option<ToolsUpdate>,
-    shell: Option<ShellUpdate>,
     plugins: Option<PluginsUpdate>,
     chat: Option<ChatUpdate>,
     developer: Option<DeveloperUpdate>,
@@ -263,7 +286,6 @@ pub async fn settings_set(
         context,
         memory,
         tools,
-        shell,
         plugins,
         chat,
         developer,

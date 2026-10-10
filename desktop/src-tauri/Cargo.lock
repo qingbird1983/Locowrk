@@ -2707,6 +2707,7 @@ dependencies = [
  "keyring",
  "memory-tree",
  "pdfium-render",
+ "percent-encoding",
  "plugin-api",
  "plugin-host",
  "plugin-service",

@@ -1,6 +1,9 @@
 //! `subagent_run` 工具面（⑮）：LLM 可调用的子 Agent 入口。宿主/内核侧
-//! 内置工具（同 search_tools 形态，组装点注册）；副作用标 **Irreversible**
-//! （宁严勿松：一次派生 = LLM 花销 + 白名单工具执行，闸门交给人）。
+//! 内置工具（同 search_tools 形态，组装点注册）；副作用标 **Pure**
+//! （v2.145 用户裁定推翻 v2.88 的 Irreversible：派生本身不动用户世界，
+//! 子工具各有其门——ZCode Agent 工具 `readOnly/needsApproval:false`
+//! 同口径；副产品 = Plan 档可派生只读研究子代理，子目录被 Plan 围栏
+//! Pure-only，天然安全）。
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -81,7 +84,7 @@ fn build_spec() -> ToolSpec {
             },
             "required": ["prompt"]
         }),
-        side_effect: SideEffect::Irreversible,
+        side_effect: SideEffect::Pure,
         exposure: Exposure::Always,
     }
 }

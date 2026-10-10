@@ -11,9 +11,10 @@ import {
 } from "../lib/api";
 import type { ApprovalRequest } from "../types";
 
-/** 决策粒度（§3.17 三键）：deny=拒绝；once=允许一次；session=允许本次
- * 对话（后端豁免集，本会话同工具不再问）。 */
-export type ApprovalDecisionKind = "deny" | "once" | "session";
+/** 决策粒度（§3.17 三键 + v2.145 粘性授权）：deny=拒绝；once=允许一次；
+ * session=允许本次对话（后端豁免集，本会话同工具不再问）；project=本项目
+ * 始终允许（持久化粘性规则，跨会话生效；shell=精确命令规则，其余=工具级）。 */
+export type ApprovalDecisionKind = "deny" | "once" | "session" | "project";
 
 export const useApprovalsStore = defineStore("approvals", {
   state: () => ({
@@ -38,14 +39,12 @@ export const useApprovalsStore = defineStore("approvals", {
         this.pending = this.pending.filter((p) => p.request_id !== e.call_id);
       });
     },
-    /** 三键决策（§3.17）：命令报错时抛给调用方（卡内联报错、恢复可点）。 */
+    /** 决策（§3.17 + v2.145）：命令报错时抛给调用方（卡内联报错、恢复可点）。 */
     async decide(req: ApprovalRequest, decision: ApprovalDecisionKind) {
       const allowed = decision !== "deny";
-      await approve(
-        req.request_id,
-        allowed,
-        decision === "session" ? "session" : undefined,
-      );
+      const scope =
+        decision === "session" ? "session" : decision === "project" ? "project" : undefined;
+      await approve(req.request_id, allowed, scope);
       this.pending = this.pending.filter(
         (p) => p.request_id !== req.request_id,
       );

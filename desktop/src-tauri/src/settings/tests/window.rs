@@ -85,7 +85,6 @@ fn organize_threshold_update_validation_and_roundtrip() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     assert_eq!(store.view().context.threshold_tokens, 300_000);
@@ -112,7 +111,6 @@ fn organize_threshold_update_validation_and_roundtrip() {
                 None,
                 None,
                 None,
-                None,
             )
             .is_err());
     }
@@ -130,7 +128,6 @@ fn organize_threshold_update_validation_and_roundtrip() {
                     threshold_tokens: Some(ok),
                     usage_bar: None,
                 }),
-                None,
                 None,
                 None,
                 None,
@@ -163,7 +160,6 @@ fn context_usage_bar_default_and_roundtrip() {
                 threshold_tokens: None,
                 usage_bar: Some(false),
             }),
-            None,
             None,
             None,
             None,

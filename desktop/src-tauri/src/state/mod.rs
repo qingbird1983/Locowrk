@@ -104,10 +104,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         ));
     }
 
-    // S1：高危解锁开关插件加载前注入 env（tool-shell init 读一次，改动重启生效）；硬锁类不受影响。
-    if settings.shell_unlock_risky() {
-        std::env::set_var("LOCOWRK_SHELL_UNLOCK_RISK", "1");
-    }
     // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后重注入即生效免重启
     crate::data_root::apply_fs_roots_env(&settings);
     // F1 记忆文件化总开关（settings_set 热换在 commands.rs）：关 = 插件侧
@@ -311,13 +307,16 @@ pub fn init_state(app: AppHandle) -> AppState {
         Arc::new(CircuitBreaker::new(5, Duration::from_secs(30))),
     ];
     // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）。㉘·B：接权限模式存储（四档决策表）+ 会话→上下文（环境行/越界门围栏；㉘·C 起传全量 resolver 与插件围栏同源）
+    // v2.145 项目粘性授权规则库：审批决策表与设置管理命令共读同一条 Arc
+    let permission_rules = Arc::new(crate::permission_rules::PermissionRuleStore::new(&root));
     let approval = Arc::new(
         ApprovalHub::with_timeout(
             Arc::clone(&sink),
             Duration::from_secs(settings.approval_timeout_secs()),
         )
         .with_modes(Arc::clone(&permission_modes))
-        .with_workspace(Arc::clone(&session_ctx)),
+        .with_workspace(Arc::clone(&session_ctx))
+        .with_rules(Arc::clone(&permission_rules)),
     );
     let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
     // v4.11 §3.39① ask_user 选择卡中心：与审批同款机械件（oneshot + 守夜），
@@ -396,6 +395,26 @@ pub fn init_state(app: AppHandle) -> AppState {
             Arc::clone(&llm),
             root.join("sub-transcripts"),
         ));
+    // 浏览器页签（v2.144）：console 账本 + browser_open 的 UI 推送出口
+    //（同一 emit 形态；AppHandle 不进 browser 模块）。须在 with_host_tools
+    // 闭包之前就位（闭包按名捕获工具变量）。
+    let browser_console = Arc::new(crate::browser::ConsoleStore::new());
+    let browser_emit: crate::browser::EmitFn = {
+        let app = app.clone();
+        std::sync::Arc::new(move |event, payload| {
+            use tauri::Emitter;
+            if let Err(e) = app.emit(event, payload) {
+                tracing::warn!("{event} 推送失败: {e}");
+            }
+        })
+    };
+    let browser_open_tool: Arc<dyn plugin_api::Tool> = crate::browser::BrowserOpenTool::new(
+        Arc::clone(&settings),
+        Arc::clone(&browser_console),
+        browser_emit,
+    );
+    let browser_console_tool: Arc<dyn plugin_api::Tool> =
+        crate::browser::BrowserConsoleTool::new(Arc::clone(&browser_console));
     let with_host_tools = |src: KernelToolSource| {
         let src = src
             .with_builtin(Arc::clone(&send_email))
@@ -415,6 +434,8 @@ pub fn init_state(app: AppHandle) -> AppState {
         src.with_builtin(Arc::clone(&sub_tool))
             .with_builtin(Arc::clone(&ask_tool))
             .with_builtin(Arc::clone(&verify_tool))
+            .with_builtin(Arc::clone(&browser_open_tool))
+            .with_builtin(Arc::clone(&browser_console_tool))
     };
 
     let search_catalog = Arc::new(with_host_tools(KernelToolSource::new(
@@ -622,6 +643,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         plugins,
         approval,
         permission_modes,
+        permission_rules,
         model_overrides,
         tree_assembler,
         fragments,
@@ -649,6 +671,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         ask: ask_hub,
         catalog,
         assets,
+        browser: browser_console,
     }
 }
 

@@ -26,6 +26,7 @@ import Topbar from "./components/shell/Topbar.vue";
 import WindowControls from "./components/shell/WindowControls.vue";
 import { useGlobalShortcuts } from "./components/shell/use-global-shortcuts";
 import { useResponsiveShell } from "./components/shell/use-responsive-shell";
+import { subscribeBrowserOpen } from "./lib/api";
 import { computed, ref } from "vue";
 
 /**
@@ -82,6 +83,9 @@ onMounted(() => {
   void asks.init();
   void settings.init();
   void notifications.init();
+  // 浏览器页签开签（v2.144）：browser_open 工具 → 工作面板（App 生存期
+  // 订阅，organize-done 同款不反注册）
+  void subscribeBrowserOpen((p) => workPanel.openBrowserTab(p));
 });
 </script>
 

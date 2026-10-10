@@ -14,7 +14,7 @@ import type {
   PluginsUpdate,
   ProviderInput,
   SettingsView,
-  ShellUpdate,
+  
   ToolsUpdate,
 } from "../types";
 
@@ -256,23 +256,6 @@ export const useSettingsStore = defineStore("settings", {
         setTimeout(() => (this.savedFlash = false), 2000);
       } catch (e) {
         this.error = String(e);
-      }
-    },
-    /** 保存 shell 治理区（S1）：高危解锁开关经插件加载前的 env 注入，
-     * 重启后生效（分区文案里说明）。 */
-    async saveShell(shell: ShellUpdate) {
-      if (this.saving) return;
-      this.error = "";
-      this.saving = true;
-      this.savedFlash = false;
-      try {
-        this.view = await setSettings({ shell });
-        this.savedFlash = true;
-        setTimeout(() => (this.savedFlash = false), 2000);
-      } catch (e) {
-        this.error = String(e);
-      } finally {
-        this.saving = false;
       }
     },
   },

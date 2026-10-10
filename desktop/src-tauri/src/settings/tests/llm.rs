@@ -62,7 +62,6 @@ fn flat_update_materializes_default_profile() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     let v = store.view().llm;
@@ -95,7 +94,6 @@ fn active_switch_rejects_unknown_id_and_applies_to_target() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     // 不存在的档位 id 拒绝且不污染内存态
@@ -108,7 +106,6 @@ fn active_switch_rejects_unknown_id_and_applies_to_target() {
                 active: Some("nope".into()),
                 ..Default::default()
             }),
-            None,
             None,
             None,
             None,
@@ -181,7 +178,6 @@ fn profile_save_delete_semantics() {
                 active: Some(second.clone()),
                 ..Default::default()
             }),
-            None,
             None,
             None,
             None,

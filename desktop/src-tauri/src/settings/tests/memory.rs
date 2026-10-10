@@ -52,7 +52,6 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     assert!(!store.view().memory.enabled);
@@ -80,7 +79,6 @@ fn memory_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     assert!(!store.view().memory.enabled);
@@ -99,7 +97,6 @@ fn memory_defaults_legacy_compat_and_validation() {
                     top_k: Some(bad),
                     ..Default::default()
                 }),
-                None,
                 None,
                 None,
                 None,
@@ -155,7 +152,6 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     drop(store);
@@ -184,7 +180,6 @@ fn organize_keys_roundtrip_validation_and_bridge() {
             None,
             None,
             None,
-            None,
         )
         .unwrap_err();
     assert!(err.contains("整理节奏"), "{err}");
@@ -200,7 +195,6 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 organize_chunk_tokens: Some(1_000),
                 ..Default::default()
             }),
-            None,
             None,
             None,
             None,
@@ -224,7 +218,6 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 memory_manager_provider: Some(String::new()),
                 ..Default::default()
             }),
-            None,
             None,
             None,
             None,
@@ -270,7 +263,6 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     let v = store.view().memory;
@@ -302,7 +294,6 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-            None,
         )
         .unwrap_err();
     assert!(err.contains("尾巴策略"), "{err}");
@@ -324,7 +315,6 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
             None,
             None,
             None,
-            None,
         )
         .unwrap_err();
     assert!(err.contains("固定窗口"), "{err}");
@@ -340,7 +330,6 @@ fn tail_strategy_window_and_collapse_roundtrip_with_validation() {
                 collapse_threshold_pct: Some(30),
                 ..Default::default()
             }),
-            None,
             None,
             None,
             None,

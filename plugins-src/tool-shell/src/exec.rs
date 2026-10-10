@@ -1,5 +1,6 @@
 //! 进程执行：**无 shell** —— `Command::new(首词).args(其余)` 直接 spawn，
-//! 策略层已保证首词在白名单/只读表内。带轮询超时（超时杀**整棵进程树**：
+//! 策略层/证明层已保证是单条简单命令（shell：结构合法即进审批；shell_read：
+//! 可证明只读）。带轮询超时（超时杀**整棵进程树**：
 //! Windows Job Object / Unix 进程组——只杀首进程会让孙进程成孤儿，
 //! 清单 §2.5）、stdout/stderr 双管道读取线程（防管道满死锁）、输出
 //! 截断并附提示文案（清单 §2.6）。
@@ -103,18 +104,13 @@ fn cwd_of(args: &Value) -> Result<Option<PathBuf>, String> {
     }
 }
 
-/// 审批工具（shell）入口：策略管线（硬锁/高危/白名单）→ 执行。
-pub(crate) fn shell_exec(
-    args: &Value,
-    extra_allow: &[String],
-    unlock_risky: bool,
-    defaults: &RunDefaults,
-) -> Result<Value, String> {
+/// 审批工具（shell）入口：策略管线（结构性拒绝，其余放行）→ 执行。
+pub(crate) fn shell_exec(args: &Value, defaults: &RunDefaults) -> Result<Value, String> {
     let command = args
         .get("command")
         .and_then(Value::as_str)
         .ok_or_else(|| "missing string field `command`".to_string())?;
-    let (program, cargs) = match crate::policy::decide(command, extra_allow, unlock_risky) {
+    let (program, cargs) = match crate::policy::decide(command) {
         Decision::Allow { program, args } => (program, args),
         Decision::Deny { reason } => return Err(reason),
     };

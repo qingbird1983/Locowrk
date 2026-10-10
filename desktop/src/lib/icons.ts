@@ -56,7 +56,10 @@ export type IconName =
   | "camera"
   | "download"
   | "chevronLeft"
-  | "eye";
+  | "eye"
+  | "arrowLeft"
+  | "arrowRight"
+  | "external";
 
 /** 原型 sprite 的 symbol 内联内容（stroke 属性由外壳 svg 统一给）。
  * 全表原生 16 格坐标（lucide 24 格源路径已按 2/3 统一缩放内联——无
@@ -125,6 +128,9 @@ const PATHS: Record<IconName, string> = {
   camera: '<path d="M5.6 4.4 6.4 3h3.2l.8 1.4h2.4a1.2 1.2 0 0 1 1.2 1.2v6.2a1.2 1.2 0 0 1-1.2 1.2H3.2a1.2 1.2 0 0 1-1.2-1.2V5.6a1.2 1.2 0 0 1 1.2-1.2Z"/><circle cx="8" cy="8.2" r="2.6"/>',
   download: '<path d="M8 3.2v7.6M4.8 7.6 8 10.8l3.2-3.2"/><path d="M3.4 12.8h9.2"/>',
   chevronLeft: '<path d="M9.6 4.6 6.2 8l3.4 3.4"/>',
+  arrowLeft: '<path d="M13 8H3.4"/><path d="M6.8 4.6 3.4 8l3.4 3.4"/>',
+  arrowRight: '<path d="M3 8h9.6"/><path d="M9.2 4.6 12.6 8l-3.4 3.4"/>',
+  external: '<path d="M12.6 9.2v2.8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4.4a1 1 0 0 1 1-1h2.8"/><path d="M9.2 2.6H13.4V6.8"/><path d="M13.2 2.8 7.4 8.6"/>',
   paperclip: '<path d="m 14.293 7.367 -6.127 6.127 a 4 4 0 0 1 -5.66 -5.66 l 5.713 -5.713 A 2.667 2.667 0 1 1 12 5.893 l -5.727 5.713 a 1.333 1.333 0 0 1 -1.887 -1.887 l 5.66 -5.653"/>',
   eye:
     '<path d="M1.6 8s2.3-4.5 6.4-4.5S14.4 8 14.4 8s-2.3 4.5-6.4 4.5S1.6 8 1.6 8Z"/><circle cx="8" cy="8" r="1.9"/>',

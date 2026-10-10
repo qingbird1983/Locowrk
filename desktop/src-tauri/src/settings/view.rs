@@ -7,7 +7,7 @@ use std::path::Path;
 use super::{
     synthesize_view, AppSettings, AppearanceView, ChatView, ContextSettingsView, DeveloperView,
     EmbeddingView, LlmSettingsView, MemorySettingsView, MultimodalView, PluginsView, ProviderView,
-    SettingsView, ShellSettingsView, ToolsSettingsView,
+    SettingsView, ToolsSettingsView,
 };
 
 pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
@@ -84,9 +84,6 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             ask_timeout_secs: s.tools.ask_timeout_secs,
             default_permission_mode: s.tools.default_permission_mode.clone(),
             pin_session: s.tools.pin_session,
-        },
-        shell: ShellSettingsView {
-            unlock_risky: s.shell.unlock_risky,
         },
         plugins: PluginsView {
             auto_disable_idle_days: s.plugins.auto_disable_idle_days,

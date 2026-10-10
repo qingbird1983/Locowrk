@@ -3,6 +3,7 @@
 // 页签进程内不跨重启（§3.16 转录文件在，可重开）。宽度上限 = 三栏预算
 // （容器宽 − 侧栏宽 − 主区地板 450），由 WorkPanel 拖柄实时钳制。
 import { defineStore } from "pinia";
+import type { BrowserOpenPayload } from "../types";
 import {
   loadPanelPrefs,
   savePanelPrefs,
@@ -13,14 +14,19 @@ import { BREAKPOINT_MD } from "../lib/breakpoints";
 import { useShellStore } from "./shell";
 
 export interface WorkPanelTab {
-  /** 页签 id：子会话 = childId（§3.16）；审阅 = `rev:<callId>`（§3.28）。 */
+  /** 页签 id：子会话 = childId（§3.16）；审阅 = `rev:<callId>`（§3.28）；
+   * 浏览器 = 工具开签 `br-*`（v2.144）/ 手动签 = `browser`。 */
   id: string;
-  kind: "subagent" | "review";
+  kind: "subagent" | "review" | "browser";
   /** 子页签名 = 子 Agent + 任务 prompt 截断；审阅页签名 = 文件路径末段。 */
   title: string;
   /** 审阅页签数据快照（edit_diff 的 unified diff，进程内跨会话保持）。 */
   path?: string;
   diff?: string;
+  /** 浏览器页签：页签最终 URL（空 = 待输入空态；v2.144）。 */
+  url?: string;
+  /** 浏览器页签：原始输入（文件绝对路径或 http(s) 地址，URL 栏回显）。 */
+  target?: string;
 }
 
 const prefs = loadPanelPrefs();
@@ -76,6 +82,21 @@ export const useWorkPanelStore = defineStore("workPanel", {
     },
     openSubTab(childId: string, title: string) {
       this.openTab({ id: childId, kind: "subagent", title });
+    },
+    /** 浏览器页签（v2.144）：browser_open 工具推送开签；同 tabId 重开 =
+     * 换页（iframe src 随 url 覆写）。 */
+    openBrowserTab(payload: BrowserOpenPayload) {
+      this.openTab({
+        id: payload.tabId,
+        kind: "browser",
+        title: payload.title || payload.target,
+        url: payload.url,
+        target: payload.target,
+      });
+    },
+    /** 手动浏览器页签：固定 id 复用（已开 = 只激活）；空 url = 待输入态。 */
+    openBrowserManual(title: string) {
+      this.openTab({ id: "browser", kind: "browser", title, url: "", target: "" });
     },
     /** 审阅页签（§3.28）：同 callId 重开 = 快照覆盖（文件最新态）。 */
     openReviewTab(callId: string, path: string, diff: string) {

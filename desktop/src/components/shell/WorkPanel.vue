@@ -17,6 +17,7 @@ import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import SubagentTranscriptTab from "./SubagentTranscriptTab.vue";
 import ReviewTab from "./ReviewTab.vue";
+import BrowserTab from "./BrowserTab.vue";
 import WorkPanelLauncher from "./WorkPanelLauncher.vue";
 
 const { t } = useI18n();
@@ -34,6 +35,9 @@ onBeforeUnmount(() => window.removeEventListener("resize", onResize));
 const activeTab = computed(() =>
   wp.tabs.find((t) => t.id === wp.activeTabId) ?? null,
 );
+/** 浏览器页签清单（v2.144）：全部常驻挂载 v-show 保活——页面状态
+ * （游戏进度/滚动/表单）不随切签丢，只有显式关签才销毁。 */
+const browserTabs = computed(() => wp.tabs.filter((t) => t.kind === "browser"));
 
 const sidebarW = computed(() => (shell.sidebarCollapsed ? 0 : shell.sidebarWidth));
 /** 常态预算：主区保地板 450（§2.5）。 */
@@ -132,6 +136,12 @@ function openReview(item: { callId: string; path: string; diff: string }) {
               :size="12"
               aria-hidden="true"
             />
+            <Icon
+              v-else-if="tab.kind === 'browser'"
+              name="globe"
+              :size="12"
+              aria-hidden="true"
+            />
             <span class="panel-tab__title">{{ tab.title }}</span>
             <span
               class="panel-tab__close"
@@ -168,26 +178,33 @@ function openReview(item: { callId: string; path: string; diff: string }) {
       </HoverTip>
     </header>
 
-    <!-- 内容：活动页签（按类型分派）/ 启动器清单（§3.14：不是空态文案；
-         数据与行渲染在 WorkPanelLauncher，§8.4 规划的拆分件） -->
+    <!-- 内容：活动页签（按类型分派；浏览器签全量常驻 v-show 保活，v2.144）/
+         启动器清单（§3.14：不是空态文案；数据与行渲染在 WorkPanelLauncher） -->
     <div class="flex min-h-0 flex-1 flex-col">
-      <template v-if="activeTab">
-        <SubagentTranscriptTab
-          v-if="activeTab.kind === 'subagent'"
-          :key="activeTab.id"
-          :child-id="activeTab.id"
-        />
-        <ReviewTab
-          v-else-if="activeTab.kind === 'review' && activeTab.path && activeTab.diff"
-          :key="activeTab.id"
-          :path="activeTab.path"
-          :diff="activeTab.diff"
-        />
+      <SubagentTranscriptTab
+        v-if="activeTab && activeTab.kind === 'subagent'"
+        :key="activeTab.id"
+        :child-id="activeTab.id"
+      />
+      <ReviewTab
+        v-else-if="
+          activeTab &&
+          activeTab.kind === 'review' &&
+          activeTab.path &&
+          activeTab.diff
+        "
+        :key="activeTab.id"
+        :path="activeTab.path"
+        :diff="activeTab.diff"
+      />
+      <template v-for="bt in browserTabs" :key="bt.id">
+        <BrowserTab :tab="bt" v-show="wp.activeTabId === bt.id" />
       </template>
       <WorkPanelLauncher
-        v-else
+        v-if="!activeTab"
         @open-sub="openSub"
         @open-review="openReview"
+        @open-browser="wp.openBrowserManual(t('panel.browserTitle'))"
       />
     </div>
 

@@ -21,14 +21,15 @@
 //! 工具降级路径），标松是越权执行（§11 坑表「只读证明太严 = 对的」）。
 //!
 //! 与既有门的关系（§13 对照）：本层是 shell_read 白名单**之上**的
-//! 证明层；`shell` 工具管线（硬锁/高危/unlockRisky/白名单）、路径
-//! 围栏（paths::ensure_readonly_scope）、外部路径门全保留不动。
+//! 证明层；`shell` 工具管线自 v2.145 起无命令级禁令（Deny 仅结构性，
+//! 其余进审批），路径围栏（paths::ensure_readonly_scope）、外部路径
+//! 门全保留不动。
 //!
 //! 敏感路径启发式与桌面 privacy 门职责不同：privacy 是审批决策表的
 //! 「宁漏勿错杀」用户隐私面（`.env` 明确不拦——完全档弹窗不断违背
 //! 其存在目的）；本层是免审批豁免面，经济学相反，宁严勿松。
 
-use crate::policy::READ_ONLY;
+use crate::policy::{EXACT_ARGV, READ_ONLY};
 
 /// 证明结论（§6.4 三态）。Unsafe 与 Unknown 的拒绝路径相同（不放行），
 /// 分态只为报文如实：能点名的副作用点名，不能点名的承认看不懂。
@@ -132,6 +133,22 @@ pub(crate) fn prove(command: &str) -> Proof {
     let program = program.to_owned();
     let program_lc = program.to_ascii_lowercase();
     let first_arg = args.first().map(String::as_str).unwrap_or("");
+    // 精确 argv 表先于一切语义检查：整条命令逐 token 相等即证毕（表内容
+    // 本身零副作用——版本打印 / pwd），git 全局选项守卫对它天然无接触
+    let exact = EXACT_ARGV.iter().any(|argv| {
+        argv[0].eq_ignore_ascii_case(&program_lc)
+            && args.len() == argv.len() - 1
+            && args
+                .iter()
+                .zip(argv[1..].iter())
+                .all(|(a, e)| a.eq_ignore_ascii_case(e))
+    });
+    if exact {
+        return Proof::Safe {
+            program,
+            args: args.to_vec(),
+        };
+    }
     // git 全局选项（§6.3 条件 6）先于白名单子命令匹配——`-c`/`--git-dir`
     // 打头的首参本来就不在子命令表里，顺序反了会被泛化白名单报文盖掉
     if program_lc == "git" && first_arg.starts_with('-') {
@@ -151,7 +168,8 @@ pub(crate) fn prove(command: &str) -> Proof {
         return Proof::Unknown {
             reason: format!(
                 "`{program_lc}` is not a read-only command (allowed: ls, cat, grep, \
-                 git status|log|diff|show); use the `shell` tool instead — it runs the \
+                 git status|log|diff|show, pwd, git --version, node -v/--version, \
+                 python[3] --version); use the `shell` tool instead — it runs the \
                  same command but requires user approval"
             ),
         };

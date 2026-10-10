@@ -53,6 +53,14 @@ impl MockTool {
             sleep,
         }
     }
+
+    /// 指定工具名的慢调用 mock（自管时长名单按名字豁免，v2.144）。
+    fn slow_named(name: &str, sleep: Duration) -> Self {
+        Self {
+            spec: spec(name),
+            ..Self::slow(sleep)
+        }
+    }
 }
 
 #[async_trait]
@@ -120,6 +128,41 @@ async fn timeout_hot_duration_swaps_without_rebuild() {
     *shared.write().unwrap() = Duration::from_millis(20);
     let out = run(mw, MockTool::slow(Duration::from_millis(500))).await;
     let err = out.expect_err("换入短时长后慢调用必须超时");
+    assert!(err.to_string().contains("timed out"), "{err}");
+}
+
+#[tokio::test]
+async fn timeout_yields_to_self_managed_tools() {
+    // v2.144：subagent_run 自带完整时长纪律（timeout_secs 契约 + 步数上限
+    // + 超时如实返回部分结果），全局预算让位——否则其预算契约永不可达
+    let mw: Arc<dyn Middleware> = Arc::new(Timeout::new(Duration::from_millis(20)));
+    let out = run(
+        mw,
+        MockTool::slow_named("subagent_run", Duration::from_millis(120)),
+    )
+    .await;
+    assert!(out.is_ok(), "内置自管工具不受全局预算掐断: {out:?}");
+
+    // 宿主可追加名单：新名字同样豁免
+    let mw: Arc<dyn Middleware> =
+        Arc::new(Timeout::new(Duration::from_millis(20)).with_self_managed(["long_runner"]));
+    let out = run(
+        mw,
+        MockTool::slow_named("long_runner", Duration::from_millis(120)),
+    )
+    .await;
+    assert!(out.is_ok(), "追加名单内的工具同样豁免: {out:?}");
+}
+
+#[tokio::test]
+async fn timeout_still_bounds_tools_outside_self_managed() {
+    let mw: Arc<dyn Middleware> = Arc::new(Timeout::new(Duration::from_millis(20)));
+    let err = run(
+        mw,
+        MockTool::slow_named("fs_read", Duration::from_millis(500)),
+    )
+    .await
+    .expect_err("名单之外慢调用必须超时");
     assert!(err.to_string().contains("timed out"), "{err}");
 }
 

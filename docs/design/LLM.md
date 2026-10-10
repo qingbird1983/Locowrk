@@ -1,6 +1,8 @@
 # LLM 接入设计（阶段八②参考）
 
-> 版本行：v3.6（2026-10-08）——批 F 生态（子代理模型档 + 终端错误回退链 /
+> 版本行：v3.7（2026-10-10）——浏览器面板双工具（`browser_open` 开签 +
+> `browser_console` 读回页面报错，验证环；随批 subagent_run 超时契约在
+> Timeout 中间件自管时长名单下恢复可达）。v3.6（2026-10-08）——批 F 生态（子代理模型档 + 终端错误回退链 /
 > 从其他工具导入 / 推荐三选 / subagent_verify 验收随批）。v3.5 批 E 多模态
 > 进阶（工具结果图片投影 D4 / screenshot·read_image·pdf_to_images 三工具 /
 > pdfium 随包 / 降级链挂捆边界最小形态）。v3.4 批 D 多模态地基（ContentPart
@@ -266,6 +268,19 @@ chromium/8086），库缺席不进目录宁缺勿假 + 进程级绑定单例（�
 min(1600, cap×纵横比) floor + 1px 进位余量）。返回形态 = §8.1 投影约定
 （`asset`/`assets` + text 人话）。转录 UI 从 output 直接渲染预览
 （ToolRow 产物缩略 + 查看大图/另存为，§8.3 三行形态）。
+
+**浏览器面板双工具**（v3.7，宿主内置 `browser/` 模块，双 Pure + OnDemand）：
+`browser_open`（path（fsRoots 内渲染型扩展名门：html/svg/图片/txt/md/json
+——页内 js/css 子资源不受此限，协议层只认围栏）或 url（http/https）二选
+一，emit `lw://browser-open` 把页面开进工作面板浏览器页签（UI shell
+§2.5）；模型交付可运行成品的正门）+ `browser_console`（读页面 console
+error/warn——`lwpreview://` 服务 text/html 注入桥回传，后端每签环形
+200 条，缺省最近签）。两件构成**验证环**：开页 → 读回报错 → 修。
+**随批超时契约修复**：`subagent_run` 的 timeout_secs（300 缺省/1800 上限
+/0 不限）曾被 Timeout 中间件（`tools.callTimeoutSecs` 缺省 30s）整体掐死
+——`Timeout` 新增自管时长名单（内置 `subagent_run`：时长纪律在工具内部
+已有预算 + 步数上限 + 诚实部分结果三重），全局预算对名单内工具让位，
+契约恢复可达。
 
 **图片查看器**（`ImageViewer.vue` + `viewer.ts`）：缩略图/工具产物点击
 进入的全屏浮层——左右切换（列表 = `chat.viewerImages` 转录序：用户

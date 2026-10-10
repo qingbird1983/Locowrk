@@ -32,6 +32,9 @@ pub struct AppState {
     /// 会话级权限模式存储（㉘·B）：旁车持久 + 缓存，决策表与目录围栏
     /// 的数据源；session_set_permission_mode 命令写穿。
     pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
+    /// 项目粘性授权规则库（v2.145）：审批决策表（③deny/⑤allow）与
+    /// permission_rules_* 管理命令共读。
+    pub permission_rules: Arc<crate::permission_rules::PermissionRuleStore>,
     /// 会话级模型覆盖存储（v2.58 §3.30）：旁车持久 + 缓存；AppLlm 每
     /// 请求按会话解析，session_set_model 命令写穿。
     pub model_overrides: Arc<crate::model_override::ModelOverrideStore>,
@@ -105,6 +108,9 @@ pub struct AppState {
     /// 资产存储（批 D，`<数据根>/assets/` 内容寻址）：asset_put 命令写、
     /// wire 编码与缩略图渲染读（LRU）；GC 引用面三扫的根。
     pub assets: Arc<crate::assets::AssetStore>,
+    /// 浏览器页签 console 账本（v2.144）：前端桥接回传经
+    /// browser_report_errors 写入，browser_console 工具读出（验证环）。
+    pub browser: Arc<crate::browser::ConsoleStore>,
 }
 
 impl AppState {

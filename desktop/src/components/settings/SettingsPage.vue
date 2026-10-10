@@ -28,7 +28,6 @@ import LlmSection from "./LlmSection.vue";
 import MemorySection from "./MemorySection.vue";
 import PluginsSection from "./PluginsSection.vue";
 import SessionsSection from "./SessionsSection.vue";
-import ShellSection from "./ShellSection.vue";
 import ShortcutSection from "./ShortcutSection.vue";
 
 const SECTION_COMPONENTS: Record<SettingsSectionId, Component> = {
@@ -41,7 +40,6 @@ const SECTION_COMPONENTS: Record<SettingsSectionId, Component> = {
   memory: MemorySection,
   embedding: EmbeddingSection,
   plugins: PluginsSection,
-  shell: ShellSection,
   tools: ToolsSection,
   developer: DeveloperSection,
   sessions: SessionsSection,
@@ -51,11 +49,12 @@ const { t } = useI18n();
 const shell = useShellStore();
 const settings = useSettingsStore();
 
-/** 当前分区（带 devOnly 守卫）：开发者选项上锁时若持久化/跳转落在此
- * 分区，回落外观（隐藏 = 三处同隐，面板也不渲染，§3.2 v2.49）。 */
+/** 当前分区（带守卫）：分区不存在（如 v2.145 删除的 shell 终端分区，
+ * 持久化 id 落在已删分区）或开发者选项上锁时，回落外观（隐藏 = 三处
+ * 同隐，面板也不渲染，§3.2 v2.49）。 */
 const current = computed(() => {
   const meta = SETTINGS_SECTIONS.find((x) => x.id === shell.settingsSection);
-  if (meta && !isSectionVisible(meta, settings.view?.developer.unlocked ?? false)) {
+  if (!meta || !isSectionVisible(meta, settings.view?.developer.unlocked ?? false)) {
     return "appearance" as SettingsSectionId;
   }
   return shell.settingsSection;

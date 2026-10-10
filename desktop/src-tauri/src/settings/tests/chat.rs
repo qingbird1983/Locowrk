@@ -48,7 +48,6 @@ fn chat_update_persists_and_roundtrips() {
             None,
             None,
             None,
-            None,
             Some(ChatUpdate {
                 content_max_width: Some(1000),
                 collapse_tool_process: Some(true),
@@ -81,7 +80,6 @@ fn chat_update_persists_and_roundtrips() {
     // 部分更新：None 字段保持不变
     let v = store
         .update(
-            None,
             None,
             None,
             None,
@@ -128,7 +126,6 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
             None,
             None,
             None,
-            None,
             Some(ChatUpdate {
                 content_max_width: Some(200),
                 collapse_tool_process: None,
@@ -146,7 +143,6 @@ fn chat_rejects_out_of_range_width_and_unknown_readout() {
         .is_err());
     assert!(store
         .update(
-            None,
             None,
             None,
             None,
@@ -183,7 +179,6 @@ fn chat_rejects_bad_fold_lines_and_keeps_state() {
     let reject = |n: Option<u32>| {
         store
             .update(
-                None,
                 None,
                 None,
                 None,

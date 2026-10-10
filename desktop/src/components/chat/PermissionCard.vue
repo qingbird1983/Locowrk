@@ -172,16 +172,24 @@ async function decide(kind: ApprovalDecisionKind) {
           >
             <Icon name="chevronDown" :size="12" />
           </button>
-          <!-- 「允许本次对话」上弹单项：进退场由 Transition 接管（标准 §二①） -->
+          <!-- 「允许本次对话 / 本项目始终允许」上弹组（v4.11 收进 chevron：
+               主路径 = 允许一次，最小授权是缺省；升级动作逐级外浮。粘性
+               授权只在真实归属工作区可给——未归属会话没有规则键位） -->
           <Transition name="lw-pop-up">
-            <button
-              v-if="showScope"
-              class="approval-card__scope-item"
-              type="button"
-              @click="decide('session')"
-            >
-              {{ t("approval.allowSession") }}
-            </button>
+            <div v-if="showScope" class="approval-card__scope-pop">
+              <button class="approval-card__scope-item" type="button" @click="decide('session')">
+                {{ t("approval.allowSession") }}
+              </button>
+              <button
+                v-if="props.req.workspace"
+                class="approval-card__scope-item"
+                type="button"
+                :title="t('approval.allowProjectHint')"
+                @click="decide('project')"
+              >
+                {{ t("approval.allowProject") }}
+              </button>
+            </div>
           </Transition>
         </div>
         <button
@@ -352,22 +360,28 @@ async function decide(kind: ApprovalDecisionKind) {
   opacity: 0.4;
 }
 
-/* 「允许本次对话」上弹单项（锚在分体钮上）：浮层唯一式 = elevated 面 +
- * 1px line 围边 + 微弱悬浮影 + 圆角 14（标准 §二③） */
-.approval-card__scope-item {
+/* 「允许本次对话 / 本项目始终允许」上弹组（锚在分体钮上）：浮层唯一式 =
+ * elevated 面 + 1px line 围边 + 微弱悬浮影 + 圆角 14（标准 §二③） */
+.approval-card__scope-pop {
   position: absolute;
   right: 0;
   bottom: calc(100% + 6px);
-  white-space: nowrap;
-  height: 30px;
-  padding: 0 var(--lw-gap-12);
+  display: flex;
+  flex-direction: column;
   border-radius: var(--lw-r-md-plus);
   border: 1px solid var(--lw-line);
   background: var(--lw-bg-elevated);
   box-shadow: var(--lw-shadow-pop);
+  z-index: 1;
+  overflow: hidden;
+}
+.approval-card__scope-item {
+  white-space: nowrap;
+  height: 30px;
+  padding: 0 var(--lw-gap-12);
   font-size: var(--lw-fs-12);
   color: var(--lw-ink-1);
-  z-index: 1;
+  text-align: left;
 }
 .approval-card__scope-item:hover {
   background: var(--lw-wash-2);

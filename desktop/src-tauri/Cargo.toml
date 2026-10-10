@@ -35,6 +35,9 @@ plugin-service = { path = "../../crates/plugin-service" }
 session-store = { path = "../../crates/session-store" }
 
 async-trait = "0.1"
+# 浏览器页签（v2.144）：lwpreview 协议的段编码/解码（url crate 传递依赖
+# 已在树，声明直依赖零新增编译成本）
+percent-encoding = "2"
 # 多模态（批 D）：asset_put 的 base64 解码 + AssetStore 内容寻址 sha256
 base64 = "0.22"
 # <environment> Today 行（提示词分层设计 §4.2）：已在依赖树（tauri 传递

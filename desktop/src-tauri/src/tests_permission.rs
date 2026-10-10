@@ -279,6 +279,20 @@ fn scanner_extracts_and_judges_paths() {
     assert!(is_outside("C:\\Windows\\system.ini", &roots));
     // 分量边界：F:\ab 不算 F:\a 内
     assert!(is_outside("F:\\ws\\ab", &roots));
+
+    // CJK 回归：多字节字符不得打崩扫描（续字节切片 panic），纯中文命令
+    // 无路径 token，含中文的路径 token 照常提取
+    assert!(extract_windows_abs_paths("echo 你好").is_empty());
+    assert!(extract_windows_abs_paths(r#"git commit -m "修复""#).is_empty());
+    assert!(extract_windows_abs_paths("type 中文文件.txt").is_empty());
+    assert_eq!(
+        extract_windows_abs_paths(r#"type F:\数据\文件.txt"#),
+        vec![r"F:\数据\文件.txt".to_string()]
+    );
+    assert_eq!(
+        extract_windows_abs_paths(r#"\\服务器\share\f"#),
+        vec![r"\\服务器\share\f".to_string()]
+    );
 }
 
 /// 决策表④ 豁免仍按既有语义放行（非 external 路径）。
