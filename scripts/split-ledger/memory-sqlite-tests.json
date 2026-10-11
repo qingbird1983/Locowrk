@@ -1,0 +1,63 @@
+{
+  "_note": "批 F-15：tests_approval.rs 638 行 → tests_approval/ 五文件。rewroteOut / registeredNew = use 按引用面分派的两条腿（原文改写掉 / 产物有意新增），由 tmp/v167-ledger.mjs 对产物实测生成，非手抄；两侧出现非 use 行即 throw。",
+  "ref": "17f0617",
+  "orig": "plugins-src/memory-sqlite/src/tests.rs",
+  "dir": "plugins-src/memory-sqlite/src/tests",
+  "clusters": [
+    "human_md_layer",
+    "kv_basic",
+    "project_isolation",
+    "scope_two_layer"
+  ],
+  "asserts": 81,
+  "cargoPrefix": "tests",
+  "cargoPackage": "-p memory-sqlite",
+  "cargoExpectRunning": 19,
+  "registeredNew": [
+    "use plugin_api::serde_json::json;"
+  ],
+  "rewroteOut": [],
+  "map": {
+    "ENV_LOCK": "mod",
+    "h": "mod",
+    "proj": "mod",
+    "temp_data_dir": "mod",
+    "contract": "mod",
+    "write_read_roundtrip_and_overwrite_reports_previous": "kv_basic",
+    "write_undo_restores_previous_entry": "kv_basic",
+    "write_undo_without_previous_removes_key": "kv_basic",
+    "delete_then_undo_restores_entry": "kv_basic",
+    "delete_missing_is_noop_and_undo_of_noop_is_noop": "kv_basic",
+    "list_prefix_limit_offset_and_total": "kv_basic",
+    "search_is_case_insensitive_and_wildcards_are_literal": "kv_basic",
+    "oversized_key_and_value_rejected": "kv_basic",
+    "sql_injection_in_key_is_inert": "kv_basic",
+    "missing_required_fields_rejected": "kv_basic",
+    "same_key_coexists_across_projects_and_is_invisible_cross_project": "project_isolation",
+    "delete_is_scoped_and_undo_restores_original_workspace": "project_isolation",
+    "legacy_key_only_table_migrates_into_unfiled_scope": "project_isolation",
+    "project_write_defaults_to_project_and_global_scope_needs_opt_in": "scope_two_layer",
+    "unattributed_session_cannot_write_project_memory": "scope_two_layer",
+    "read_falls_back_to_global_and_project_row_wins": "scope_two_layer",
+    "global_rows_not_deletable_from_chat_sessions": "scope_two_layer",
+    "ws_ctx_triage_from_parts": "scope_two_layer",
+    "write_and_delete_sync_md_human_layer": "human_md_layer"
+  },
+  "head": {
+    "mod": [
+      "//! memory 三态用例：正常（roundtrip / undo 还原 / 搜索 / 列举）/ 边界,//! （缺失键 no-op、参数上限、缺字段拒绝）/ 恶意（SQL 注入惰性、LIKE,//! 通配符按字面量）/ 项目隔离（㉘：同名 key 各项目互不覆盖互不可见、,//! undo 忠实还原原键位、旧库迁移归入未归属）。涉 env（LOCOWRK_DATA_DIR）,//! 用例全程持锁串行。,//! 批 F-15 目录化：共享假件与 env 锁留本文件，用例按面分簇见 `kv_basic` /,//! `project_isolation` / `scope_two_layer` / `human_md_layer`。"
+    ],
+    "human_md_layer": [
+      "//! 人类层双写（F1，《Memory File-ization Design》§3）（自 `tests.rs` 批 F-15 拆出，,//! 用例本体逐字未改）：写与删同步 memory md 文件。"
+    ],
+    "kv_basic": [
+      "//! 单库基本回路（自 `tests.rs` 批 F-15 拆出，用例本体逐字未改）：写读往返与覆盖回报 /,//! 三种 undo（还原前值、无前值删键、删除后撤销复原）/ 列举分页与总数 / 搜索大小写与,//! 通配符字面量化 / 键值上限 / SQL 注入惰性 / 缺字段拒绝。"
+    ],
+    "project_isolation": [
+      "//! 项目隔离（㉘）（自 `tests.rs` 批 F-15 拆出，用例本体逐字未改）：同名 key 跨项目共存且,//! 互不可见 / 删除按键位定域且 undo 还原原 workspace / 旧库（仅 key 列）迁移归入未归属。"
+    ],
+    "scope_two_layer": [
+      "//! 双层记忆（㉘·A·fix：全局层 = 用户偏好 / 项目层 = 严格隔离）（自 `tests.rs` 批 F-15,//! 拆出，用例本体逐字未改）：项目写缺省落项目层、全局层要显式 opt-in / 未归属会话不可写,//! 项目记忆 / 读回落全局且项目行优先 / 全局行不可被聊天会话删除 / WsCtx 三段拆分判定。"
+    ]
+  }
+}

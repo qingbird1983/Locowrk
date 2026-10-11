@@ -43,7 +43,12 @@ const DBG = argv.includes('--dbg-tests');
 const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 
 /* ---------------- 单元模型（拆分器与判据共用同一口径，两侧同文） ---------------- */
-const DECL = /^(?:(pub(?:\([^)]*\))?)\s+)?(async\s+)?(const\s+|static\s+)?(fn|struct|enum|impl|type|trait|mod|use)\b/;
+const DECL = /^(?:(pub(?:\([^)]*\))?)\s+)?(async\s+)?(const\s+|static\s+)?(fn|struct|enum|impl|type|trait|mod|use|const|static)\b/;
+// 第 4 组必须含 const/static：夹具段的过滤条件本来就写了 `static`（见 S3/--split 段3），
+// 而 DECL 取不到 ⇒ 顶层 `static ENV_LOCK: Mutex<()> = …` 这类共享锁夹具**根本进不了单元集**，
+// 于是登记表把它写进 MAP 就被判「原文查无的键」。批 F-15 是第一刀遇到顶层 static 的。
+// 保留第 3 组（可选前缀）不动 ⇒ kw 仍在 m[4]，历史四刀原文实测零条顶层 static/const，
+// 扩口径不改变它们的旧登记表重放结果（本批以五张重放验证）。
 const ATTACH = /^(\/\/\/|#\[|#!\[)/;
 
 /**
@@ -122,7 +127,11 @@ function units(srcRaw) {
     else if (kw === 'use') name = lines.slice(i, j + 1).join(' ').replace(/;+\s*$/, '').replace(/\s+/g, ' ').trim();
     else if (kw === 'mod') name = (/^[\w\s<>:'"()]*\bmod\s+([\w:]+)/.exec(decl) || [])[1] || `?${decl.slice(0, 30)}`;
     else {
-      const mm = /^(?:(?:pub(?:\([^)]*\))?)\s+)?(?:async\s+)?(?:const\s+|static\s+)?(fn|struct|enum|trait|type)\s+([\w:]+)/.exec(decl);
+      // 声明名只取一个标识符：`[\w:]+` 会把 `static ENV_LOCK: Mutex<()>` 的**类型标注冒号**
+      // 吃进名字里（得到 `ENV_LOCK:`），于是与拆分器取的 `ENV_LOCK` 两侧对不上——
+      // 登记表现为「无归属单元 1 + 原文查无的键 1」同时出现（批 F-15 撞出来的口径差）。
+      // fn/struct/enum/trait/type/const/static 的声明名按语言本来就是一个标识符。
+      const mm = /^(?:(?:pub(?:\([^)]*\))?)\s+)?(?:async\s+)?(?:const\s+|static\s+)?(fn|struct|enum|trait|type|const|static)\s+([A-Za-z_]\w*)/.exec(decl);
       name = mm ? mm[2] : `?${decl.slice(0, 30)}`;
     }
     const head = lines.slice(s, i).join('\n');
@@ -212,7 +221,7 @@ function shapeGate() {
     return false;
   };
 
-  let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, checked = 0, testDirs = 0;
+  let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, s6 = 0, checked = 0, testDirs = 0;
   const observed = []; // 撞名但当前无歧义的形状：只报告不判红（见 S4 注释）
   const testList = []; // S2/S3/S4 管辖名单——口径漂移必须当场可见（批 F-9「显示层不许藏口径差」）
   const bad = (msg) => console.log('   !! ' + msg);
@@ -324,6 +333,88 @@ function shapeGate() {
         if (hit.length) { s5++; bad(`${rel}/${c}.rs 引用父模块私有项 ${hit.slice(0, 3).join(', ')} 但没有 \`use super::…\` ⇒ E0425（补 glob 或具名引用句，别改正文）`); }
       }
     }
+    // S6 「glob 传导链断裂」（批 F-15 立）。子簇正文用到的名字，出处只有三种：
+    //   ① 本簇自己的 `use` 绑定；② mod.rs 的顶层定义（父私有项对后代可见）；
+    //   ③ **mod.rs 的 `use` 绑定**——`use super::*;` 会把父模块 import 进来的名字一起带过来，
+    //   批 F-15 的 `store` 就是这样被四个簇用上的（mod.rs 自己并不调 store）。
+    // 三种都没有 ⇒ `E0433`/`E0425`。③ 这条链此前只有 cargo 会断：摘掉 mod.rs 的
+    // `use super::store;` 会让四个簇同时坏，而闸一声不响（S5 只检查簇侧有没有引用句）。
+    // 口径与 S3 同：只在测试目录生效（这里的候选名字都是本地夹具与显式 import，
+    // 生产目录里字段名/宏名会让 `\bname\b` 误报）。
+    if (isTests) {
+      const bindOf = (name) => {
+        const t = String(name).replace(/^use\s+/, '').replace(/;$/, '').trim();
+        if (/\*$/.test(t)) return [];
+        const br = /\{([^}]*)\}/.exec(t);
+        const parts = br ? br[1].split(',') : [t];
+        return parts.map((x) => x.trim().split(/\s+as\s+/).pop()).filter(Boolean)
+          .map((x) => x.split('::').pop()).filter((x) => /^[A-Za-z_]\w*$/.test(x));
+      };
+      const defsOf = (src) => [...units(src)]
+        .filter((u) => !u.isTest && /^(fn|struct|enum|trait|type|const|static)$/.test(u.kw))
+        .map((u) => baseName(u.name)).filter((n) => /^[A-Za-z_]\w*$/.test(n));
+      const usesOf = (src) => [...units(src)].filter((u) => u.kw === 'use').flatMap((u) => bindOf(u.name));
+      const modSrc2 = fs.readFileSync(path.join(dir, 'mod.rs'), 'utf8');
+      const modUseBinds = usesOf(modSrc2), modDefs = defsOf(modSrc2);
+      const modDecls = [...units(modSrc2)].filter((u) => u.kw === 'mod').map((u) => u.name);
+      // 第三类候选源（Y3 变异抓出来的缺口）：**crate root 的 mod 名单**。像 `store` 这种
+      // 「只有父模块 import 了、各簇全靠 glob 传导」的名字，一旦摘掉 mod.rs 那条 import，
+      // 目录内任何一面都不再 import 它 ⇒ 只按"目录内 import 并集"取候选就查不到它，
+      // S6 会静默不红（第一版就在这里假绿）。crate root 的 mod 名单给的是**语言里真实存在
+      // 的模块名**，既精确又不会把 prelude（`Vec::`）与外部 crate（`rusqlite::`）拉进来误报。
+      let rootDir = dir, rootSrc = null;
+      for (let up = 0; up < 6 && rootSrc === null; up++) {
+        for (const cand of ['lib.rs', 'main.rs']) {
+          const p = path.join(rootDir, cand);
+          if (fs.existsSync(p)) { rootSrc = p; break; }
+        }
+        if (rootSrc === null) rootDir = path.dirname(rootDir);
+      }
+      const rootMods = rootSrc
+        ? [...units(fs.readFileSync(rootSrc, 'utf8'))].filter((u) => u.kw === 'mod').map((u) => u.name)
+        : [];
+      // 候选名 → 匹配档位。同名两例并存时以 `local` 的宽松档为准（目录内的夹具/import
+      // 才是本闸主战场）。第一版这里用 `local:xxx` 前缀串 + `slice(5)` 取名字，
+      // 于是 `mod:store` 被切成 `tore`（4 字符前缀按 5 切），Y3 变异照样不红——
+      // 判据的实现细节也会造假，必须靠变异反证才暴露。
+      const candMap = new Map();
+      const addCand = (kind, n) => {
+        if (!/^[A-Za-z_]\w*$/.test(n)) return;
+        const cur = candMap.get(n);
+        if (!cur || (cur === 'mod' && kind === 'local')) candMap.set(n, kind);
+      };
+      [...modUseBinds, ...modDefs].forEach((n) => addCand('local', n));
+      rootMods.forEach((n) => addCand('mod', n));
+      for (const c of sib) {
+        const s = readCluster(dir, c);
+        [...usesOf(s), ...defsOf(s)].forEach((n) => addCand('local', n));
+      }
+      const candidates = [...candMap].map(([name, kind]) => ({ name, kind }));
+      const uses = (u, n, kind) => {
+        // `mod:` 档 = crate root 的模块名，只认**裸路径形** `name::…`（前面不能是 `::`，
+        // 因为 `crate::store::x` 那种全路径本来就不需要任何 import）。
+        // 为什么必须分档：这一档如果也用宽松 `\bname\b`，`let kernel = Kernel::new(…)`
+        // 这类**局部变量撞模块名**会当场造出 10+ 条假红（第一版就在这里红了一片），
+        // 与批 F-11 边界①「生产目录里 `\bname\b` 会误报」完全同族。
+        const re = kind === 'mod' ? new RegExp(`(?<![:\\w])\\b${n}::`) : new RegExp(`(?<!::)\\b${n}\\b`);
+        return re.test(u.body);
+      };
+      for (const c of sib) {
+        const src = readCluster(dir, c);
+        const hasGlob = /^\s*use\s+super::\*/m.test(src);
+        const supplied = new Set([...usesOf(src), ...defsOf(src),
+          ...(hasGlob ? [...modUseBinds, ...modDefs, ...modDecls] : [])]);
+        const stripped = stripCommentsStrings(src);
+        const missing = candidates.filter((k) => !supplied.has(k.name) && /^[A-Za-z_]\w*$/.test(k.name))
+          .filter((k) => units(stripped).some((u) => u.kw !== 'use' && u.kw !== 'mod' && u.name !== k.name
+            && uses(u, k.name, k.kind)))
+          .map((k) => k.name);
+        if (missing.length) {
+          s6++;
+          bad(`${rel}/${c}.rs 用到 ${missing.slice(0, 4).join(', ')} 但没有任何出处（本簇 use / 父模块定义 / 父模块 use 经 glob 传导）⇒ E0433 的成因；处置 = 在 mod.rs 补 import，别改正文`);
+        }
+      }
+    }
     // S4 测试簇名不得与被测父模块已有的子模块同名 —— 但**撞名本身不是缺陷**，
     // 只有真的产生歧义才红（批 F-9 首跑 `wire` 撞 `llm::wire` 就是这两种形态之一）：
     //  (i) `tests/mod.rs` 里另有 `use super::<name>` 绑定 ⇒ 与 `mod <name>;` 在同一定义两次 = `E0255`
@@ -366,10 +457,10 @@ function shapeGate() {
   }
   console.log(`check-split-equivalence: 目录式模块 ${dirs.length} 个（测试目录 ${testDirs} 个）`);
   console.log(`  测试目录名单（= S2/S3/S4 管辖面，判据 = 父声明带 #[cfg(test)]）：${testList.join(' · ') || '（空）'}`);
-  console.log(`  S0 解析面不可靠文件 = ${s0} | S1 mod 声明↔文件闭合偏差 = ${s1} | S2 测试 mod.rs 内用例 = ${s2} | S3 私有项跨簇引用 = ${s3} | S4 簇名撞父模块子模块 = ${s4} | S5 子簇缺 \`use super::\` 引用句 = ${s5}`);
+  console.log(`  S0 解析面不可靠文件 = ${s0} | S1 mod 声明↔文件闭合偏差 = ${s1} | S2 测试 mod.rs 内用例 = ${s2} | S3 私有项跨簇引用 = ${s3} | S4 簇名撞父模块子模块 = ${s4} | S5 子簇缺 \`use super::\` 引用句 = ${s5} | S6 glob 传导链断裂 = ${s6}`);
   // 命中统计必须打出来：判据扫到 0 个对象时"零偏差"是空转不是干净（批 F-8 教训）。
   console.log(`  S4 观察项（撞名但当前无歧义引用；正文一旦出现 \`super::同名\` 即判红）= ${observed.length}${observed.length ? ': ' + observed.join(', ') : ''}`);
-  const total = s0 + s1 + s2 + s3 + s4 + s5;
+  const total = s0 + s1 + s2 + s3 + s4 + s5 + s6;
   if (!checked) { console.log('  !! 扫到 0 个目录式模块 ⇒ 本闸空转（判据失效，不是"没有偏差"）'); return 1; }
   return total ? 1 : 0;
 }

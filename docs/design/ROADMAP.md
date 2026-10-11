@@ -721,7 +721,27 @@
 | 实机走查 | ✅ CDP 独立数据根 + 构造单轮 jsonl（思考×2+工具×2+汇报）**17/17 PASS**：OFF 五断言（行可见/组全开/组头在场/无明细/容器展开）→ 真点开关+保存切 ON 不重启即收（容器收为计时行）→ 重开容器组折叠一行摘要→组头可展开 → 切回 OFF 即时回扩；settings.json 往返盘证；数据根已清，脚本/截图留 tmp/v126-walk/ |
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
-### v2.164 · 审计修复批 F-14（巨型测试文件目录化第五件 = `tests_approval.rs` 638 行 → `tests_approval/` 五文件 + 第五道闸两处口径升级与新不变量 S5）
+### v2.165 · 审计修复批 F-15（巨型测试文件目录化第六件 = `memory-sqlite/src/tests.rs` 557 行 → `tests/` 五文件 + 第五道闸三处口径补齐与新立 S6）
+
+**依据**：《CODE-AUDIT-v1》M-19/M-24 的 F5 余项；执行台账 =《AUDIT-FIX-PLAN-v1》§5 批 F-15 段。**纯测试面、行为零改动**——生产码一行未触、插件 ABI 零变动、前端零改动；测试账 根 **438** / desktop **369** 持平，**19 条用例与 81 行断言逐条守恒**。
+
+| 面 | 落点 |
+|---|---|
+| ① 拆分 | 557 → `tests/{mod 46(共享件 5)+kv_basic 205(10)+project_isolation 127(3)+scope_two_layer 159(5)+human_md_layer 51(1)}`，全守 400 线 ⇒ `check_length` **31 → 30**；簇边界 = 原文三处分区注释（项目隔离 / 双层记忆 / 人类层双写），`human_md_layer` 单用例独立成簇是按被测面正名 |
+| ② 新规则 | **`use super::…` 只留 mod.rs，子簇一律靠 `use super::*;`**：加深一层后 `super` 变了含义——mod.rs 的 super 仍是 crate root（`use super::store;` 逐字有效），子簇的 super = `tests`（照抄 = `E0432`）。实测确证：mod.rs 的 import 被四个子簇经 glob 使用**不判 `unused_imports`**（`cargo check --tests` 零 warning） |
+| ③ 一处正文侧改动 | `ws_ctx_triage_from_parts` 里函数级 `use super::WsCtx;` 摘掉（glob 已带同名）。**如实记一条行级盲区**：该行字面与 mod.rs 保留的顶格那条相同 ⇒ 段4 看不见它消失（未原样命中 0），补证 = 段7 编译器注册表 `running 19 / 查无 0` |
+| ④ 闸侧硬缺陷（两侧口径不齐） | 闸的 DECL **不认 `const`/`static`**，而夹具过滤条件里早就写了 `static` ⇒ 顶层 `static ENV_LOCK: Mutex<()>`（全簇共用的 env 串行锁）根本进不了单元集，登记表一写它就报「无归属 + 原文查无」。补 kw 组时保留第 3 组可选前缀（拆分器那边我删了前缀组 ⇒ `m[4]` 变 undefined ⇒ use 识别全丢，同一轮第二处）。扩口径前实测**历史五刀原文零条顶层 static/const** ⇒ 六张登记表重放全绿 |
+| ⑤ 名字口径 | 声明名提取从 `([\w:]+)` 改 `[A-Za-z_]\w*`：前者把 `static ENV_LOCK: Mutex` 的类型标注冒号吃进名字（取成 `ENV_LOCK:`），与拆分器取的 `ENV_LOCK` 两侧对不上 |
+| ⑥ 新立 S6 = 「glob 传导链断裂」 | 子簇用到的名字必须有三出处之一：本簇 `use` / mod.rs 定义 / **mod.rs 的 `use` 经 glob 传导**。第三种正是本刀的核心依赖（`store`），此前只有 cargo 会断——摘掉 mod.rs 那条 import，四个簇同时坏而 S5（只查簇侧引用句）一声不响。上线后 Y3 变异实测 `S6 = 4` |
+| ⑦ S6 的三处自纠（本批最值钱的一段） | (a) 候选集只取"目录内 import 并集" ⇒ `store` 恰恰只由父 import 提供，摘掉后目录内谁都不 import 它 ⇒ 候选里没有它 ⇒ **Y3 静默不红**；补第三类候选源 = crate root 的 `mod` 名单。(b) 补了立刻造出 **10+ 条假红**：`let kernel = Kernel::new(…)` 这种局部变量撞模块名被宽松 `\bkernel\b` 命中（批 F-11 边界①同族）⇒ 按来源**分档匹配**，`mod:` 档只认裸路径形 `(?<![:\w])\bname::`（`crate::store::x` 全路径不需要 import ⇒ 正确地不匹）。(c) 分档实现里 `'mod:store'.slice(5)` 取出 `tore` ⇒ Y3 仍不红——**判据的实现细节也会造假，只有变异反证能暴露** |
+| ⑧ 驱动的自纠 | 期望串**不许写死计数器数字**：Y7 写「S3 = 1」实测 8、Y3 写「S6 = 1」实测 4，两次都被判成"没红"，而判据其实红在该点 ⇒ 一律改用定位子串，条数由日志给（另加返工保护的行尾归一：备份是 LF、`git checkout` 检出 CRLF ⇒ 逐字节比较假报"原文变了"，本项目第七次被行尾伪装成内容变化） |
+| ⑨ 七段 | 条目 **29 = 去重名 29**；段1 **19 = 19**；段2 断言 **81 = 81** 逐条 0 差；段3 夹具 **5 = 5**（补 static 口径后从 4 变 5，`ENV_LOCK` 首次进夹具账）；段4 原文 484 行未命中 0、新增 23 = 结构性 20 + 代码 3（未登记 0 / 登记未出现 0）；段5 倒挂 0；段6 声明 4 = 文件 4；段7 `running 19 / 名单匹配 19 / 查无 0` |
+| ⑩ 变异 7 条 | Y1 摘 `mod kv_basic;`→S1；Y2 摘 `use super::*;`→S5（+S6）；**Y3 摘 mod.rs `use super::store;`→S6 点名四簇**；Y4 改名→丢失 1；Y5 删断言→逐条不一致 1；Y6 改坏分派 use→未登记 1；Y7 把 `static ENV_LOCK` 搬进单簇→S3 按单元 8 条 + S6 3 条（兼证④的口径扩展进账）。基准回绿、残留 0 = `MUTATE_ALL_RED_AS_EXPECTED` |
+| ⑪ 入库物 | 第六张登记表 `scripts/split-ledger/memory-sqlite-tests.json`（24 键 MAP + 五面头注 + asserts 81 + cargoPrefix `tests`）；闸的 S6 + DECL/名字两处口径修复 + `--dbg-tests`；`check_length` 基线 30 |
+| 门禁 | `tmp/v167-gates.sh` 逐步骤记 RC：**16 动作全 0 = `GATE_ALL_GREEN`**（含六张登记表全数重放、本刀带 cargo 段7、`gate_s5_s6_present` 自检） |
+| 边界 | ①纯测试面 ⇒ 未做走查、未跑前端两件；②巨型测试目录化**余 3 件**（492/421/418）；③F5 余两处 = `project_events` 237 / `session.rs` 410；④S6 的 `mod:` 档只认路径形，非路径形由 `local:` 档覆盖，"函数内 use 又摘掉"仍靠 cargo；⑤行级判据看不见同字面行消失（③已记）；⑥`human_md_layer` 单用例 51 行 = 正名代价；⑦批 G 按 Q8 推迟 |
+
+### v2.164（提交 17f0617）· 审计修复批 F-14（巨型测试文件目录化第五件 = `tests_approval.rs` 638 行 → `tests_approval/` 五文件 + 第五道闸两处口径升级与新不变量 S5）
 
 **依据**：《CODE-AUDIT-v1》M-19/M-24 的 F5 余项；执行台账 = 《AUDIT-FIX-PLAN-v1》§5 批 F-14 段。**纯测试面、行为零改动**——生产码一行未触、内核契约零破坏、前端零改动；测试账 根 **438** / desktop **369** 持平，**13 条用例与 37 行断言逐条守恒**。
 
