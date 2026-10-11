@@ -70,6 +70,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        # 拆分登记表复验要从历史 blob 取原文（`git show <ref>:<path>`），浅克隆取不到 ⇒ 全量拉历史
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -81,3 +84,12 @@ jobs:
         run: node scripts/check-commands.mjs
       - name: 中间件接线（未接线必须显式白名单）
         run: node scripts/check-middleware-wiring.mjs
+      - name: 拆分形状（第五道结构闸：mod 闭合 / 用例不混住 / 私有项跨簇 / 簇名撞名）
+        run: node scripts/check-split-equivalence.mjs
+      - name: 拆分登记表复验（每刀入库的 ledger 都要能从历史原文重放，--no-cargo）
+        run: |
+          shopt -s nullglob
+          for f in scripts/split-ledger/*.json; do
+            echo "── $f"
+            node scripts/check-split-equivalence.mjs --split --ledger "$f" --no-cargo
+          done

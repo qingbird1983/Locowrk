@@ -1,0 +1,84 @@
+{
+  "ref": "45a636d",
+  "orig": "desktop/src-tauri/src/llm/tests.rs",
+  "dir": "desktop/src-tauri/src/llm/tests",
+  "clusters": [
+    "payload",
+    "transport",
+    "dispatch",
+    "assets"
+  ],
+  "asserts": 108,
+  "cargoPrefix": "llm::tests",
+  "cargoPackage": "--manifest-path desktop/src-tauri/Cargo.toml",
+  "registeredNew": [
+    "use super::wire;"
+  ],
+  "map": {
+    "use std::sync::Arc": "mod",
+    "use kernel_agent::{LlmError, LlmRequest, LlmService}": "mod",
+    "use plugin_api::{CallId, SideEffect, ToolSpec}": "mod",
+    "use serde_json::json": "mod",
+    "use session_store::{Message, ToolCallMsg}": "mod",
+    "use super::app_llm::AppLlm": "mod",
+    "use super::client::CompatLlm": "mod",
+    "use super::dialect::Dialect": "mod",
+    "use super::retry::{self, Failure}": "mod",
+    "use super::sse::{SseEvent, SseParser}": "mod",
+    "use super::wire::{build_payload, parse_usage, StreamAcc, WireCaps}": "mod",
+    "use crate::settings::SettingsStore": "mod",
+    "temp_root": "mod",
+    "user_session": "mod",
+    "asset_output": "mod",
+    "tool_msg": "mod",
+    "payload_assembles_openai_shapes": "payload",
+    "stream_acc_assembles_deltas_and_tool_calls": "payload",
+    "reasoning_deltas_route_to_reasoning": "payload",
+    "usage_maps_cache_and_reasoning_fields": "payload",
+    "payload_carries_dialect_thinking_fields": "payload",
+    "max_tokens_only_when_pinned_and_preflight_clamped": "payload",
+    "build_headers_last_writer_wins": "payload",
+    "sse_parser_buffers_lines_across_chunks": "transport",
+    "classify_follows_status_and_body": "transport",
+    "backoff_curves_match_policy": "transport",
+    "endpoint_normalizes_join_version": "dispatch",
+    "empty_model_falls_back_to_demo": "dispatch",
+    "configured_model_without_key_fails_fast": "dispatch",
+    "effective_cfg_resolves_session_override": "dispatch",
+    "tool_image_projects_into_tail_user_message": "assets",
+    "historical_tool_image_not_resent_but_note_stable": "assets",
+    "unsupported_model_keeps_asset_ref_with_note": "assets",
+    "non_image_assets_and_plain_output_untouched": "assets"
+  },
+  "head": {
+    "payload": [
+      "//! 线上协议装配（被测面 = `llm::wire`；簇名不叫 `wire` 是硬约束：子簇 `mod wire;` 会占住",
+      "//! `tests` 命名空间里的 `wire`，正文的 `super::wire::…` 就会指向测试簇自己而不是被测模块）。",
+      "//! 覆盖面：请求体形状 / 流式增量累积 / reasoning 分流 /",
+      "//! usage 字段映射 / 方言 thinking 字段与 `max_tokens` 预检钳制 / 自定义请求头装配。",
+      "",
+      "use super::*;",
+      ""
+    ],
+    "transport": [
+      "//! 传输韧性：SSE 分帧跨块缓冲 + 错误分类（状态码 × 报文）与退避曲线。",
+      "",
+      "use super::*;",
+      ""
+    ],
+    "dispatch": [
+      "//! 端点与设置分发：base_url 归一化 / 缺模型回落 demo / 已配模型缺 Key 快速失败 /",
+      "//! 会话级覆盖的四层生效链。",
+      "",
+      "use super::*;",
+      ""
+    ],
+    "assets": [
+      "//! 工具结果图片投影（批 E §8.1）：图片进尾随 user 消息 / 历史图不重发但提示稳定 /",
+      "//! 不支持模态保留资源引用 / 非图片资源与纯文本输出原样不动。",
+      "",
+      "use super::*;",
+      ""
+    ]
+  }
+}

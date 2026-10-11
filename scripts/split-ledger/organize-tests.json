@@ -1,0 +1,107 @@
+{
+  "ref": "dd83f5a",
+  "orig": "desktop/src-tauri/src/organize/tests.rs",
+  "dir": "desktop/src-tauri/src/organize/tests",
+  "clusters": [
+    "pipeline",
+    "recovery",
+    "overflow",
+    "views",
+    "tools",
+    "summary"
+  ],
+  "asserts": 109,
+  "cargoPrefix": "organize::tests",
+  "cargoPackage": "--manifest-path desktop/src-tauri/Cargo.toml",
+  "registeredNew": [],
+  "mapExtra": {
+    "impl FakeClient": "mod",
+    "impl MemoryManagerClient for FakeClient": "mod"
+  },
+  "mapDrop": [
+    "MemoryManagerClient"
+  ],
+  "map": {
+    "use std::collections::VecDeque": "mod",
+    "use std::sync::{Arc, Mutex as StdMutex}": "mod",
+    "use async_trait::async_trait": "mod",
+    "use memory_tree::{MemoryManagerClient, MemoryManagerUsage, OrganizeReason, TreeStore}": "mod",
+    "use session_store::{Session, SessionEvent}": "mod",
+    "use super::Organizer": "mod",
+    "use crate::settings::SettingsStore": "mod",
+    "FakeClient": "mod",
+    "temp_root": "mod",
+    "settings_with": "mod",
+    "resolver": "mod",
+    "session": "mod",
+    "good_reply": "mod",
+    "organizer": "mod",
+    "tree_at": "mod",
+    "tree_organizer": "mod",
+    "long_session": "mod",
+    "good_reply_with_summary": "mod",
+    "manual_organize_records_recorder_bundles": "pipeline",
+    "garbage_recorder_output_degrades_to_rule_split": "pipeline",
+    "incremental_trigger_then_rebound_pauses_auto": "pipeline",
+    "batch_without_window_never_auto_fires": "pipeline",
+    "crash_recovery_redispatches_pending_task": "recovery",
+    "recovery_gives_up_when_session_file_deleted": "recovery",
+    "view_bundles_and_original_read_from_disk": "views",
+    "edit_chapter_updates_projection_and_marks_manual": "views",
+    "delete_chapter_removes_projection_keeps_cursor": "views",
+    "project_view_flattens_across_sessions": "views",
+    "window_overflow_organizes_orphans_without_rebound": "overflow",
+    "overflow_respects_pending_and_legacy_mode": "overflow",
+    "auto_collapse_relieves_oldest_expanded": "overflow",
+    "search_titles_falls_back_to_keyword_without_embedding": "tools",
+    "search_titles_scores_round_summary_text_not_just_titles": "tools",
+    "project_history_returns_timeline_grouped_by_summary": "tools",
+    "project_history_caps_to_recent_sessions_and_keeps_uncovered": "tools",
+    "recorder_summary_stored_then_delivered_at_next_turn_opening": "summary",
+    "degraded_run_carries_no_summary_and_truncated_base_skips": "summary",
+    "impl FakeClient": "mod",
+    "impl MemoryManagerClient for FakeClient": "mod"
+  },
+  "head": {
+    "pipeline": [
+      "//! 管道与触发决策：记忆管理器成功落树 / 垃圾输出降级规则切分 / 增量档触发后",
+      "//! 反弹熔断（手动不受限且复位）/ batch 档无窗口永不自动触发。",
+      "",
+      "use super::*;",
+      ""
+    ],
+    "recovery": [
+      "//! 崩溃恢复（记忆树 §5.3）：投影带 pending 时重投续跑 / 会话文件已删则放弃并撤占位。",
+      "",
+      "use super::*;",
+      ""
+    ],
+    "overflow": [
+      "//! M4 模式 B 窗口溢出整理（不记反弹 / 永不熔断 / 让位在途任务）+ 自动收起泄压。",
+      "",
+      "use super::*;",
+      ""
+    ],
+    "views": [
+      "//! 开发者观测与人类编辑面：清单 / 章节视图 / 原文切片 / 项目平铺 / 改章节（人改保护 +",
+      "//! tree.md 同步）/ 删章节（游标不动）。",
+      "",
+      "use super::*;",
+      ""
+    ],
+    "tools": [
+      "//! 检索与历史两把工具：search_titles（语义缺席降级关键词 / 轮总结正文参与打分）与",
+      "//! project_history（跨会话时间线 / 最近 20 条钳制 + 无总结章节落 other_chapters）。",
+      "",
+      "use super::*;",
+      ""
+    ],
+    "summary": [
+      "//! 轮级总结（Organize Summary Design v1 §3.3）：收束落投影 → 下一轮开场排空落日志并同步",
+      "//! 磁盘镜像 → 幂等再排空；降级运行不落总结，事件位越界的存量投影跳过不投。",
+      "",
+      "use super::*;",
+      ""
+    ]
+  }
+}
