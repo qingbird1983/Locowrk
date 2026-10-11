@@ -1,0 +1,74 @@
+{
+  "_note": "批 F-16：tests.rs → tests/ 目录式 4 文件。rewroteOut / registeredNew = use 按引用面分派的两条腿，由 tmp/v169-ledger.mjs 对产物实测生成，非手抄；两侧出现非 use 行即 throw。SCOPE_BINDS（trait in-scope 的零命中绑定发面）同源取自拆分器：{\"WaterfallListener\":[\"mod\",\"render\"]}",
+  "ref": "8d66dda",
+  "orig": "crates/kernel-agent/src/middleware/memory_inject/tests.rs",
+  "dir": "crates/kernel-agent/src/middleware/memory_inject/tests",
+  "clusters": [
+    "prefetch",
+    "render",
+    "scope_context"
+  ],
+  "asserts": 49,
+  "cargoPrefix": "middleware::memory_inject::tests",
+  "cargoPackage": "-p kernel-agent",
+  "registeredNew": [],
+  "rewroteOut": [],
+  "map": {
+    "Fixed": "mod",
+    "impl MemorySource for Fixed": "mod",
+    "entry": "mod",
+    "cfg_lock": "mod",
+    "payload_value": "mod",
+    "inject": "mod",
+    "run": "mod",
+    "run_session": "mod",
+    "injects_block_into_system": "render",
+    "top_k_limits_entries": "render",
+    "disabled_or_zero_top_k_is_noop": "render",
+    "empty_recall_still_gets_guidance": "render",
+    "long_values_truncated_with_marker": "render",
+    "tags_rendered_when_present": "render",
+    "appends_to_existing_system": "render",
+    "non_request_key_is_noop": "render",
+    "scoped_entries_render_tier_prefix": "render",
+    "guidance_appended_at_block_tail": "render",
+    "Counting": "prefetch",
+    "impl Counting": "prefetch",
+    "impl MemorySource for Counting": "prefetch",
+    "prefetch_freezes_block_across_rounds": "prefetch",
+    "prefetch_is_per_session": "prefetch",
+    "top_k_change_recomputes_prefetch": "prefetch",
+    "empty_recall_prefetched_too": "prefetch",
+    "Scoped": "scope_context",
+    "impl Scoped": "scope_context",
+    "impl MemorySource for Scoped": "scope_context",
+    "scope_change_recomputes_prefetch": "scope_context",
+    "context_line_injected_even_without_memories": "scope_context",
+    "repo_context_injected_after_workspace_line": "scope_context",
+    "no_repo_context_by_default": "scope_context",
+    "context_line_prefetched_with_block": "scope_context"
+  },
+  "head": {
+    "mod": [
+      "//! memory_inject 单测：注入格式 / 配置开关 / 空表降级 / 超长截断 /",
+      "//! 追加语义 / 非 REQUEST 点不碰。",
+      "//! 批 F-16 目录化：共享假件与跑批入口留本文件，用例按面分簇见 `render` /",
+      "//! `prefetch` / `scope_context`。"
+    ],
+    "render": [
+      "//! 注入块渲染（自 `tests.rs` 批 F-16 拆出，用例本体逐字未改）：事实块与指引块进",
+      "//! system / top_k 截条目 / 停用与零额度 noop / 空记忆仍有指引（F3）/ 超长值截断标记 /",
+      "//! tags 渲染 / 追加到已有 system / 非 REQUEST 点 noop / 双层条目层标 / 指引落块尾。"
+    ],
+    "prefetch": [
+      "//! M1 会话级预取（KV v2 纪律 2）（自 `tests.rs` 批 F-16 拆出，用例本体逐字未改）：",
+      "//! 同会话跨轮逐字节冻结且只检索一次 / 换会话换预取 / top_k 变更显式失效重算 /",
+      "//! 首查即空也入缓存（指引块同拍冻结）。"
+    ],
+    "scope_context": [
+      "//! ㉘·A·fix 键位身份缓存键 + 工作区上下文行（自 `tests.rs` 批 F-16 拆出，用例本体",
+      "//! 逐字未改）：scope_id 变更换键重算 / 零记忆也注入环境块（v2.139）/ 提醒段落在环境块",
+      "//! 之后记忆块之前（v2.136）/ 缺省无提醒段 / 上下文行随块整体冻结。"
+    ]
+  }
+}

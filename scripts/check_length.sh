@@ -61,10 +61,18 @@
 #   条件早就写了 static = 两侧口径不齐）、单元名不再吃掉类型标注的冒号（`static ENV_LOCK:
 #   Mutex` 曾取成 `ENV_LOCK:`）、新增 S6「glob 传导链断裂」（`store` 只由 mod.rs 的 import
 #   提供、四个簇经 `use super::*;` 用它，摘掉那条 import 此前只有 cargo 会断）。
+#   审计修复批 F-16（2026-10-12）一次砍两件：kernel-agent 的
+#   middleware/memory_inject/tests.rs（492 行）→ tests/{mod 75(共享件 8)+render 173(用例 10)
+#   +prefetch 123(4)+scope_context 148(5)}，middleware/tool_exposure/tests.rs（421 行）→
+#   tests/{mod 98(共享件 8)+scoring 79(4)+passthrough 62(4)+retrieval 63(2)+pin_session 151(4)}，
+#   超限数 30 → 28 ⇒ 基线收紧为 28。这一刀还暴露 S6 的一个洞（变异 Z3 首跑没红）：
+#   tool_exposure 整层靠 mod.rs 的**父 glob** 传导 `Exposure`/`ToolSpec` 这类名字，而候选集
+#   原本没有「父模块类型面」这一档 ⇒ 摘掉那句 glob 四簇全 E0412 而读数 0；闸补 gp 档后
+#   十目录零假红 + 八张登记表重放全绿。
 set -u
 
 SUGGEST=400
-BASELINE=30
+BASELINE=28
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。

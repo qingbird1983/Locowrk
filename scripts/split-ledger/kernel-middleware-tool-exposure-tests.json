@@ -1,0 +1,67 @@
+{
+  "_note": "批 F-16：tests.rs → tests/ 目录式 5 文件。rewroteOut / registeredNew = use 按引用面分派的两条腿，由 tmp/v169-ledger.mjs 对产物实测生成，非手抄；两侧出现非 use 行即 throw。SCOPE_BINDS（trait in-scope 的零命中绑定发面）同源取自拆分器：{\"WaterfallListener\":[\"mod\",\"passthrough\"]}",
+  "ref": "8d66dda",
+  "orig": "crates/kernel-agent/src/middleware/tool_exposure/tests.rs",
+  "dir": "crates/kernel-agent/src/middleware/tool_exposure/tests",
+  "clusters": [
+    "passthrough",
+    "pin_session",
+    "retrieval",
+    "scoring"
+  ],
+  "asserts": 46,
+  "cargoPrefix": "middleware::tool_exposure::tests",
+  "cargoPackage": "-p kernel-agent",
+  "registeredNew": [],
+  "rewroteOut": [],
+  "map": {
+    "Fixed": "mod",
+    "impl GlobalEwma for Fixed": "mod",
+    "spec": "mod",
+    "cfg_lock": "mod",
+    "cfg_lock_unpinned": "pin_session",
+    "listener": "mod",
+    "messages_with_session_use": "mod",
+    "run": "mod",
+    "run_session": "mod",
+    "always_pass_through_and_top_n_fills_quota": "scoring",
+    "scoring_orders_session_and_global": "scoring",
+    "session_hot_is_boolean_not_count": "scoring",
+    "no_trimming_needed_still_records_snapshot": "scoring",
+    "disabled_or_zero_max_is_passthrough": "passthrough",
+    "non_request_key_is_noop": "passthrough",
+    "malformed_payload_fails_open": "passthrough",
+    "session_counts_ignores_empty_tool_names": "passthrough",
+    "retrieval_signal_fills_quota_and_attributes": "retrieval",
+    "no_retriever_keeps_legacy_scoring": "retrieval",
+    "pin_freezes_exposed_set_across_rounds": "pin_session",
+    "pinned_set_intersects_shrunk_catalog": "pin_session",
+    "pinned_set_appends_new_always_tools_on_catalog_growth": "pin_session",
+    "sessionless_requests_keep_legacy_per_round": "pin_session"
+  },
+  "head": {
+    "mod": [
+      "//! ToolExposure 单测：always 直通 / Top-N 截断 / 会话内优先 / 全局 EWMA /",
+      "//! 停用直通 / 快照归因 / fail-open。",
+      "//! 批 F-16 目录化：共享假件与请求跑批入口留本文件，用例按面分簇见 `scoring` /",
+      "//! `passthrough` / `retrieval` / `pin_session`。"
+    ],
+    "scoring": [
+      "//! 打分与入选（自 `tests.rs` 批 F-16 拆出，用例本体逐字未改）：always 直通不占额度 +",
+      "//! Top-N 补位 / 会话热与全局 EWMA 排序 / 会话热是布尔不是次数 / 无需裁剪也记快照。"
+    ],
+    "passthrough": [
+      "//! 直通与容错（自 `tests.rs` 批 F-16 拆出，用例本体逐字未改）：停用或零额度直通 /",
+      "//! 非 REQUEST 点 noop / 报文畸形 fail-open / 空工具名不计入会话热度。"
+    ],
+    "retrieval": [
+      "//! 检索信号（⑬）（自 `tests.rs` 批 F-16 拆出，用例本体逐字未改）：无热度时相似度",
+      "//! 命中者补位并归因 retrieved / 无检索器保持两层打分旧行为。"
+    ],
+    "pin_session": [
+      "//! M1 会话钉死（KV v2 §4.2）（自 `tests.rs` 批 F-16 拆出，用例本体逐字未改）：钉死后",
+      "//! 暴露集跨轮逐字节冻结、关闭恢复每轮 Top-N / 钉死集与收紧后的目录取交集 / 目录放宽时",
+      "//! 新增 always 工具追加尾部（M4）/ 无会话身份不钉死。"
+    ]
+  }
+}

@@ -357,6 +357,24 @@ function shapeGate() {
       const modSrc2 = fs.readFileSync(path.join(dir, 'mod.rs'), 'utf8');
       const modUseBinds = usesOf(modSrc2), modDefs = defsOf(modSrc2);
       const modDecls = [...units(modSrc2)].filter((u) => u.kw === 'mod').map((u) => u.name);
+      /* 第四类候选源 = **父模块文件（grandparent）里的类型面名字**（批 F-16 的 Z3 变异抓出来的洞）。
+       * `tool_exposure/tests/` 这一刀整层靠 mod.rs 的 `use super::*;` 从父模块传导：`Exposure`、
+       * `ToolSpec`、`RequestPayload`、`WaterfallDecision`…… 而 `bindOf` 对 glob 返回空数组 ⇒
+       * 这些名字一个都进不了候选集 ⇒ 摘掉 mod.rs 那句 glob，四个簇当场 E0412 而 S6 读数 0。
+       * **变异没红 = 判据有洞**，不是"测试挑错了目标"。
+       * 收窄到类型面（CamelCase / 全大写）的原因 = 批 F-15 的 (b) 假红教训：`let kernel = …`
+       * 这种局部变量撞小写名会把绿基线红成一片；函数/夹具这类小写名本来也由 mod 层候选覆盖。
+       * mod.rs 有没有向上 glob 决定这些名字算不算"有出处"：有 = 传导得到，没有 = 判红。
+       * 父模块文件三种布局都试（S4 已经因为漏一种形态整段静默跳过栽过一次）。 */
+      const gpDir = path.dirname(dir), gpName = path.basename(gpDir);
+      const gpFile = [path.join(gpDir, `${gpName}.rs`), path.join(gpDir, 'mod.rs'),
+        path.join(gpDir, '..', `${gpName}.rs`), path.join(gpDir, 'lib.rs'), path.join(gpDir, 'main.rs')]
+        .find((p) => fs.existsSync(p) && path.resolve(p) !== path.resolve(path.join(dir, 'mod.rs')));
+      const gpSrc = gpFile ? fs.readFileSync(gpFile, 'utf8') : '';
+      const isTypeish = (n) => /^[A-Z][A-Za-z0-9]*$/.test(n) || /^[A-Z0-9_]+$/.test(n);
+      const gpNames = [...new Set([...defsOf(gpSrc), ...usesOf(gpSrc)])].filter(isTypeish);
+      const modHasGlob = /^\s*use\s+[\w:]*\*;/m.test(modSrc2);
+
       // 第三类候选源（Y3 变异抓出来的缺口）：**crate root 的 mod 名单**。像 `store` 这种
       // 「只有父模块 import 了、各簇全靠 glob 传导」的名字，一旦摘掉 mod.rs 那条 import，
       // 目录内任何一面都不再 import 它 ⇒ 只按"目录内 import 并集"取候选就查不到它，
@@ -378,13 +396,16 @@ function shapeGate() {
       // 于是 `mod:store` 被切成 `tore`（4 字符前缀按 5 切），Y3 变异照样不红——
       // 判据的实现细节也会造假，必须靠变异反证才暴露。
       const candMap = new Map();
+      const PREC = { local: 3, gp: 2, mod: 1 };
       const addCand = (kind, n) => {
         if (!/^[A-Za-z_]\w*$/.test(n)) return;
         const cur = candMap.get(n);
-        if (!cur || (cur === 'mod' && kind === 'local')) candMap.set(n, kind);
+        if (!cur || PREC[kind] > PREC[cur]) candMap.set(n, kind);
       };
       [...modUseBinds, ...modDefs].forEach((n) => addCand('local', n));
       rootMods.forEach((n) => addCand('mod', n));
+      // gp 档压过 mod 档：父模块里既叫得上又是个类型名时，宽松匹配才是对的口径
+      gpNames.forEach((n) => addCand('gp', n));
       for (const c of sib) {
         const s = readCluster(dir, c);
         [...usesOf(s), ...defsOf(s)].forEach((n) => addCand('local', n));
@@ -403,7 +424,7 @@ function shapeGate() {
         const src = readCluster(dir, c);
         const hasGlob = /^\s*use\s+super::\*/m.test(src);
         const supplied = new Set([...usesOf(src), ...defsOf(src),
-          ...(hasGlob ? [...modUseBinds, ...modDefs, ...modDecls] : [])]);
+          ...(hasGlob ? [...modUseBinds, ...modDefs, ...modDecls, ...(modHasGlob ? gpNames : [])] : [])]);
         const stripped = stripCommentsStrings(src);
         const missing = candidates.filter((k) => !supplied.has(k.name) && /^[A-Za-z_]\w*$/.test(k.name))
           .filter((k) => units(stripped).some((u) => u.kw !== 'use' && u.kw !== 'mod' && u.name !== k.name
@@ -411,7 +432,7 @@ function shapeGate() {
           .map((k) => k.name);
         if (missing.length) {
           s6++;
-          bad(`${rel}/${c}.rs 用到 ${missing.slice(0, 4).join(', ')} 但没有任何出处（本簇 use / 父模块定义 / 父模块 use 经 glob 传导）⇒ E0433 的成因；处置 = 在 mod.rs 补 import，别改正文`);
+          bad(`${rel}/${c}.rs 用到 ${missing.slice(0, 4).join(', ')} 但没有任何出处（本簇 use / mod.rs 定义 / mod.rs 的 import / **mod.rs 的 glob 向上传导的父模块类型面**）⇒ E0433·E0412 的成因；处置 = 在 mod.rs 补 import 或补「use super::*;」，别改正文`);
         }
       }
     }

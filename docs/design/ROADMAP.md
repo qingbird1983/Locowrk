@@ -721,7 +721,24 @@
 | 实机走查 | ✅ CDP 独立数据根 + 构造单轮 jsonl（思考×2+工具×2+汇报）**17/17 PASS**：OFF 五断言（行可见/组全开/组头在场/无明细/容器展开）→ 真点开关+保存切 ON 不重启即收（容器收为计时行）→ 重开容器组折叠一行摘要→组头可展开 → 切回 OFF 即时回扩；settings.json 往返盘证；数据根已清，脚本/截图留 tmp/v126-walk/ |
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
-### v2.165 · 审计修复批 F-15（巨型测试文件目录化第六件 = `memory-sqlite/src/tests.rs` 557 行 → `tests/` 五文件 + 第五道闸三处口径补齐与新立 S6）
+### v2.166 · 审计修复批 F-16（巨型测试文件目录化第七、八件 = `kernel-agent/src/middleware/{memory_inject,tool_exposure}/tests.rs` 492/421 行 → 各自 `tests/` 目录 + S6 补「父模块类型面」档）
+
+**依据**：《CODE-AUDIT-v1》M-19/M-24 的 F5 余项 +《AUDIT-FIX-PLAN-v1》§1「巨型测试文件目录化余 3 件」前两件。**纯测试面、行为零改动**——生产码一行未触、内核 API 契约零破坏、ABI 零重排、前端零改动；测试账 根 **438** / desktop **369** 持平，**两刀 19 + 14 条用例与 49 + 46 行断言逐条守恒**。
+
+| 面 | 落点 |
+|---|---|
+| ① 一刀两件 + 脚本参数化 | `memory_inject/tests/` = `mod` **75**(共享件 8 单元) + `render` **173**(10) + `prefetch` **123**(4) + `scope_context` **148**(5) = 519 行；`tool_exposure/tests/` = `mod` **98**(8) + `scoring` **79**(4) + `passthrough` **62**(4) + `retrieval` **63**(2) + `pin_session` **151**(4) = 453 行 ⇒ 十文件全守 400 线，`check_length` **30 → 28**。合批理由 = 同族形状（兄弟文件式父模块 `X.rs` + `X/tests/`），"一轮一类变量"的类是形状不是文件数。拆分器/登记表生成器/变异驱动三件改吃 `--case`，MAP/HEAD/SCOPE_BINDS 只有一份正文（ledger 用 eval 从拆分器抓，不手抄） |
+| ② 两刀都是**零改写零新增** | 两张新登记表的 `rewroteOut` 与 `registeredNew` 都是空数组：段4 原文 451 / 387 非空行「未原样命中 0」，产物新增 17 / 15 行全是结构性行（`mod x;`、`use super::*;`）⇒ 除头注外没有一行代码被改写 = 本族六刀里证明最强的一档 |
+| ③ glob 套 glob 的向上传导实测成立 | `tool_exposure` 原文件顶格就是 `use super::*;`；按批 F-15 规则父级相对 import 只留 mod.rs ⇒ 子簇的整层名字（`Exposure`/`ToolSpec`/`Retriever`…）靠 **cluster glob → tests(mod.rs) → 父 glob** 两跳传导。`cargo check --workspace --tests` 零 error 零 warning + 段7 `running 14` 把它从"应该没问题"变成实测事实 |
+| ④ 新登记接缝 `SCOPE_BINDS` | **文本零命中的 import ≠ 死 import**：`use cordis_core::WaterfallListener;` 全文不出现，但 `inject.handle(…)` 靠它解析 = trait in-scope；第一版按"零命中即丢弃"当场造出 **4 条 `E0599`**（与批 F-13/F-14「名字出现 ≠ 名字被引用」正好反向）。不发"所有面"（会给不需要它的面塞死 import = `unused_imports`，把猜测转成另一轮返工），改成**人工判定 + 编译器复核**的发面表；未登记的零命中绑定直接 throw，不静默降级 |
+| ⑤ **S6 补第四类候选源 = 父模块类型面（`gp` 档）**（本批最值钱） | 变异 Z3 摘掉 `tool_exposure/tests/mod.rs` 的父 glob，四簇应当全 `E0412`，实测 **S6 = 0** = **判据有洞**（`bindOf` 对 glob 返回空数组 ⇒ 只由 glob 传导的名字根本不在候选集）。修 = 新增 `gp` 档（父文件的 defs + import，**只收 CamelCase/全大写**的类型名——批 F-15 的局部变量撞名假红教训在前），并按「mod.rs 有没有向上 glob」决定它算不算出处。补后 Z3 实测 **S6 = 4**（四簇点名），全仓 **10 个测试目录零假红 + 八张登记表重放全绿** = 旧形状没被改坏 |
+| ⑥ 等价判据七段 × 两刀 | memory_inject：条目 38 = 去重名 38；段1 **19 = 19**；段2 **49 = 49** 逐条 0 差；段3 夹具 **14 = 14** / `mod.rs` 用例 0；段4 未命中 0、新增 17 = 结构性 17 + 代码 0；段5 倒挂 0；段6 声明 3 = 文件 3；段7 `running 19 / 名单匹配 19 / 查无 0`。tool_exposure：条目 28 = 28；段1 **14 = 14**；段2 **46 = 46**；段3 **9 = 9**；段4 未命中 0、新增 15 全结构性；段6 **4 = 4**；段7 `running 14 / 查无 0` |
+| ⑦ 变异 8 条逐条红 | Z1 摘 `mod render;`→S1；Z2 摘簇 glob→S5(+S6)；**Z3 摘父 glob→S6 = 4**（⑤的新档为它而补）；**Z4 摘零命中 trait import→段7「编译器里查无 19」**（行级/名级判据全盲的唯一补证）；Z5 改名→丢失 1；Z6 删断言→逐条不一致 1；Z7 夹具搬进单簇→S3 = 2 + S6 = 1；Z8 塞未登记代码行→未登记 1。基准回绿、残留 0。**首跑 Z3/Z4 两条没红的处置**：Z3 是真洞（补档）、Z4 是靶子错（`tool_exposure/tests/mod.rs` 有父 glob 兜底，那条 import 在该面是 shadowing 不是必需 ⇒ 改打无父 glob 的 memory_inject）——**改靶子必须把原因写进台账，不许把口径改动当修复** |
+| ⑧ 入库物 | 第七、八张登记表 `scripts/split-ledger/kernel-middleware-{memory-inject,tool-exposure}-tests.json`；闸的 `gp` 档 + S6 措辞；`check_length` 基线 **28**（含批 F-16 形态注）；AGENTS 命令清单的测试目录口径不变 |
+| 门禁 | `tmp/v169-gates.sh` 逐步骤记 RC：**16 动作全 0 = `GATE_ALL_GREEN`**（八张登记表全数重放 + 本批两刀各带 cargo 段7 + `gate_s5_s6_present` 自检 + 变异残留只扫本批目录） |
+| 边界 | ①纯测试面 ⇒ 未做走查、未跑前端两件；②巨型测试目录化**余 1 件** = `desktop/src-tauri/src/tests.rs` **418**；③F5 余两处 = `project_events` 237 / `session.rs` 410；④`gp` 档只收类型面名字——父模块的小写函数若也只由 mod.rs 的 glob 传导，摘掉那句仍靠 cargo（收窄是有意的）；⑤S6 判"有没有出处"，出处指错仍靠编译器；⑥`SCOPE_BINDS` 是人工表 + 编译器兜底，不是机器判据；⑦`retrieval` 簇 2 用例 63 行 = 按被测面正名的代价；⑧批 G 按 Q8 推迟 |
+
+### v2.165（提交 8d66dda）· 审计修复批 F-15（巨型测试文件目录化第六件 = `memory-sqlite/src/tests.rs` 557 行 → `tests/` 五文件 + 第五道闸三处口径补齐与新立 S6）
 
 **依据**：《CODE-AUDIT-v1》M-19/M-24 的 F5 余项；执行台账 =《AUDIT-FIX-PLAN-v1》§5 批 F-15 段。**纯测试面、行为零改动**——生产码一行未触、插件 ABI 零变动、前端零改动；测试账 根 **438** / desktop **369** 持平，**19 条用例与 81 行断言逐条守恒**。
 
