@@ -1,0 +1,71 @@
+{
+  "_note": "批 F-16：tests.rs → tests/ 目录式 4 文件。rewroteOut / registeredNew = use 按引用面分派的两条腿，由 tmp/v169-ledger.mjs 对产物实测生成，非手抄；两侧出现非 use 行即 throw。SCOPE_BINDS（trait in-scope 的零命中绑定发面）同源取自拆分器：{}",
+  "ref": "b1f79ec",
+  "orig": "desktop/src-tauri/src/tests.rs",
+  "dir": "desktop/src-tauri/src/tests",
+  "clusters": [
+    "convergence",
+    "demo_routing",
+    "turn_rounds"
+  ],
+  "asserts": 17,
+  "cargoPrefix": "tests",
+  "cargoPackage": "--manifest-path desktop/src-tauri/Cargo.toml",
+  "cargoNameOnly": true,
+  "registeredNew": [
+    "use kernel_agent::{Kernel, LlmService, ToolSource};",
+    "use crate::events::AgentEvent;",
+    "use session_store::Session;",
+    "use kernel_agent::LlmRequest;",
+    "use serde_json::json;",
+    "use session_store::Message;",
+    "use std::sync::{Arc, Mutex as StdMutex};"
+  ],
+  "rewroteOut": [
+    "use session_store::{Message, Session};"
+  ],
+  "map": {
+    "EchoTool": "mod",
+    "echo_spec": "mod",
+    "impl Tool for EchoTool": "mod",
+    "SingleToolSource": "mod",
+    "impl ToolSource for SingleToolSource": "mod",
+    "Collector": "mod",
+    "impl Collector": "mod",
+    "impl EventSink for Collector": "mod",
+    "kind": "mod",
+    "kernel_with_tools": "mod",
+    "kernel_with_tools_streaming": "mod",
+    "tool_turn_projects_events_in_log_order": "turn_rounds",
+    "step_cap_force_closes_with_configured_limit": "turn_rounds",
+    "plain_reply_turn_is_single_step": "turn_rounds",
+    "demo_llm_routes_by_content": "demo_routing",
+    "UsageLlm": "convergence",
+    "impl LlmService for UsageLlm": "convergence",
+    "usage_reporting_provider_converges_on_final_text_step": "convergence",
+    "usage_reporting_provider_still_loops_for_tool_calls": "convergence"
+  },
+  "head": {
+    "mod": [
+      "//! 桌面端单元测试：runner 的日志投影循环 / demo_llm 决策规则 / 步数上限收束。",
+      "//! （plugins_root 工件发现用例在 tests_plugins_root.rs；审批门用例在",
+      "//! tests_approval.rs——400 行纪律拆出。事件出口用收集器替换 TauriSink。）",
+      "//! 批 F-17 目录化：共享假件（进程内 echo 工具 / 事件收集器 / 内核装配）留本文件，",
+      "//! 用例按面分簇见 `turn_rounds` / `demo_routing` / `convergence`。"
+    ],
+    "turn_rounds": [
+      "//! 轮次投影与收束（自 `tests.rs` 批 F-17 拆出，用例本体逐字未改）：工具轮的日志事件",
+      "//! 次序（tool_call → tool_result → chunk → turn_done）/ 纯文本轮单步收束 / 步数上限",
+      "//! 到顶照常 TurnDone 并如实发 TurnCapped。"
+    ],
+    "demo_routing": [
+      "//! 剧本 LLM 路由（自 `tests.rs` 批 F-17 拆出，用例本体逐字未改）：demo_llm 按内容决定",
+      "//! 发工具 / 回纯文本 / 工具回执后汇总。"
+    ],
+    "convergence": [
+      "//! 收敛判据回归（自 `tests.rs` 批 F-17 拆出，用例本体逐字未改）：报告用量的供应商下",
+      "//! 纯文本轮必须 1 步收束（M1 走查实抓的存量缺陷——判据曾读 events().last()），",
+      "//! 而真有工具调用的轮次不得被误判收敛。"
+    ]
+  }
+}

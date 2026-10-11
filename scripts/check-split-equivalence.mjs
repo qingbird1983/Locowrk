@@ -588,7 +588,12 @@ function splitGate() {
   const reg = (led.registeredNew || []).map(norm);
   const unregistered = newCode.filter((l) => !reg.includes(norm(l)));
   const staleReg = reg.filter((r) => !newCode.map(norm).includes(r));
-  say('段4 产物新增行', `${extraLines.length}（结构性可指回 ${extraLines.length - newCode.length}）/ 新增代码行 ${newCode.length} = 登记 ${reg.length} ⇒ 未登记 ${unregistered.length} / 登记未出现 ${staleReg.length}`);
+  // 打印口径必须自己说得清：`新增代码行` 数的是**行**（同一 import 在三个簇各出现一次 = 3 行），
+  // `登记` 数的是**去重后的登记条目**，两个数天然不等（批 F-17 首跑就打印出"10 = 登记 7"这种
+  // 看着像矛盾的行）。同族问题批 F-15 已立过纪律：**显示层不许藏口径差** ⇒ 这里把行数的
+  // 去重值一并打出来，读者一眼能看出 10 行 → 7 个不同名字 是怎么来的。
+  const newCodeUniq = new Set(newCode.map(norm)).size;
+  say('段4 产物新增行', `${extraLines.length}（结构性可指回 ${extraLines.length - newCode.length}）/ 新增代码行 ${newCode.length} 行（去重 ${newCodeUniq} 名）= 登记 ${reg.length} 条 ⇒ 未登记 ${unregistered.length} / 登记未出现 ${staleReg.length}`);
   if (unregistered.length) unregistered.slice(0, 6).forEach((l) => console.log('     新增代码无登记:', l.slice(0, 90)));
   if (staleReg.length) console.log('     登记了却没出现:', staleReg.join(' | '));
   bad.push(lost.length + unregistered.length + staleReg.length + staleOut.length);
@@ -620,11 +625,17 @@ function splitGate() {
     // 的用例数）。此时判据改成两条同时成立：**总数守恒**（running == cargoExpectRunning，
     // 拆前拆后一样多）+ **本刀每条路径都在编译器里存在**（notSeen == 0）。缺省仍按
     // `running == 本刀用例数`（批 F-8/F-9/F-10 那三刀的口径，一字未动）。
-    const expectRunning = led.cargoExpectRunning ?? origNames.length;
-    say('段7 cargo 注册表', `running ${running} / 期望 ${expectRunning}${led.cargoExpectRunning ? '（前缀下总数）' : '（= 本刀用例数）'} / 名单匹配 ${seen.length} / 原文应有 ${origNames.length} / 编译器里查无 ${notSeen.length}`);
+    // `cargoNameOnly`（批 F-17 新立）：前缀**撞满整个包**时用。桌面包里每个测试模块名都含
+    // `tests` ⇒ `cargo test --lib -- tests` 的 running = 全包 369，与本刀 6 条之间没有守恒
+    // 关系；把它钉成 `cargoExpectRunning: 369` 会随任意一次加用例漂红，那条数字**不表达
+    // "这一刀没丢用例"**，表达它的是名单双向闭合。所以这一档判据换成两条：
+    // **running ≥ 本刀用例数**（确实跑起来了）+ **notSeen == 0**（每条路径都在编译器里）。
+    // 这不是放宽：`running <= 0` 那条「一条都没跑不许当绿」的底线照旧判红，`notSeen` 一条不放过。
+    const expectRunning = led.cargoNameOnly ? origNames.length : (led.cargoExpectRunning ?? origNames.length);
+    say('段7 cargo 注册表', `running ${running} / 期望 ${expectRunning}${led.cargoNameOnly ? '（名单口径：running 只需 ≥ 本刀用例数）' : led.cargoExpectRunning ? '（前缀下总数）' : '（= 本刀用例数）'} / 名单匹配 ${seen.length} / 原文应有 ${origNames.length} / 编译器里查无 ${notSeen.length}`);
     if (notSeen.length) notSeen.slice(0, 6).forEach((p) => console.log('     查无:', p));
     if (running <= 0) console.log('   !! running<=0 = 一条都没跑，本段结论无效（不许当"绿"）');
-    bad.push(notSeen.length, running === expectRunning ? 0 : 1);
+    bad.push(notSeen.length, led.cargoNameOnly ? (running >= expectRunning ? 0 : 1) : (running === expectRunning ? 0 : 1));
   } else say('段7 cargo 注册表', led.cargoPrefix ? '跳过（--no-cargo：CI 上由 kernel 作业的 cargo test 覆盖，此处不重编）' : '跳过（登记表未写 cargoPrefix）');
 
   const total = bad.reduce((a, b) => a + b, 0);

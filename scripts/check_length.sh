@@ -69,10 +69,16 @@
 #   tool_exposure 整层靠 mod.rs 的**父 glob** 传导 `Exposure`/`ToolSpec` 这类名字，而候选集
 #   原本没有「父模块类型面」这一档 ⇒ 摘掉那句 glob 四簇全 E0412 而读数 0；闸补 gp 档后
 #   十目录零假红 + 八张登记表重放全绿。
+#   上线后 Z3 实测 S6 = 4（四簇点名），十目录零假红。
+#   审计修复批 F-17（2026-10-12）F5 余项收口三件：desktop/src-tauri/src/tests.rs（418）→
+#   tests/{mod 125(共享假件 11)+turn_rounds 119(3)+demo_routing 54(1)+convergence 154(2)}；
+#   desktop/src-tauri/src/runner.rs（585，含单函数 project_events 237）→ runner/{mod 349 +
+#   projection 250}；crates/session-store/src/session.rs（410）→ 原地留 session.rs 283 +
+#   session/project.rs 145（sibling 形状：session/ 目录本来就住着 tests.rs）。超限数 28 → 25。
 set -u
 
 SUGGEST=400
-BASELINE=28
+BASELINE=25
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。
