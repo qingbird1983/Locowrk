@@ -721,7 +721,24 @@
 | 实机走查 | ✅ CDP 独立数据根 + 构造单轮 jsonl（思考×2+工具×2+汇报）**17/17 PASS**：OFF 五断言（行可见/组全开/组头在场/无明细/容器展开）→ 真点开关+保存切 ON 不重启即收（容器收为计时行）→ 重开容器组折叠一行摘要→组头可展开 → 切回 OFF 即时回扩；settings.json 往返盘证；数据根已清，脚本/截图留 tmp/v126-walk/ |
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
-### v2.161 · 审计修复批 F-11（第五道结构闸入库 = 拆分等价性守卫 `check-split-equivalence.mjs`）
+### v2.162 · 审计修复批 F-12（F15 走 A 案 = 开发态暂存面口径改字面，「回退 = 切回旧版本指针」）
+
+**依据**：《AUDIT-FIX-PLAN-v1》**F15**（v2.155 批 F-5 期间字节级新立）+ 用户 2026-10-11 裁定 **§4 Q9 = A**。本轮只动「构建脚本 + 文档措辞 + 验收叙事」这一类变量：内核 API 契约零破坏、插件行为零改动（改的只有注释），测试数不变。
+
+| 面 | 落点 |
+|---|---|
+| ① 先核实事实（不照抄审计结论） | **`tool-echo` 与 `tool-shout` 的双版本有真实行为差异**：两个夹具都按内嵌版本串做**运行时**判定（`plugins-src/tool-echo/src/lib.rs` `reverse_supported(v)=v>=REVERSE_SINCE`、tool-shout `repeat_supported()`），所以"回退后 reverse 报错"是可观察的 ⇒ A 案说的"历史版本目录仅保留 tool-echo 这类**机制夹具**"有代码依据，不是文字游戏。反面 = `build_plugins.sh` 里其余 20 个 stage 调用都是**当前 HEAD 重编 + 只换版本串**（审计实测只差 21 字节），且集成测试自己往 `target/locowrk-test/` 暂存、**不吃脚本产物**（`plugins-src/*/manifest.json` 一律还写 0.1.0，版本号真源只在脚本里） |
+| ② 脚本面 `scripts/build_plugins.sh` | stage 清单**数据化**为 `PLAN`（10 项 = 9 个 id 各当前版本 + `tool-echo` 双份）+ **开机预校验**：`FIXTURE_IDS` 之外的 id 在清单里出现第二次直接 `exit 1`，报文把出路也写出来（"确需多版本行为差异 = 做成机制夹具：插件侧按内嵌版本串做运行时判定"）；收尾按清单 **prune** 不在册的版本目录。实跑：**清理陈旧 30 份**，终态 `plugins/` = `memory-sqlite{0.1.5} tool-echo{0.1.0,0.2.0} tool-edit{0.2.2} tool-fetch{0.1.2} tool-fs{0.1.6} tool-git{0.1.4} tool-mcp{0.1.0} tool-notify{0.1.0} tool-shell{0.1.8}` |
+| ③ 判据（A 侧，Q9 原文要的那条） | 「同 id 不同版本目录的 dll 只差版本串」的共存 = **0 处**（脚本判据：每个 id 目录数必须为 1，`tool-echo` 必须为 2）；脚本幂等 = 第二次运行 prune 计数 0 |
+| ④ 措辞面全改字面 | **AGENTS.md**：纪律 8（"旧版本永远保留"限定为注册表内 + 安装态，开发态不成立）+ 常用命令行（版本真源 = PLAN 清单）+ 验收叙事行；**DESIGN.md**：§11.5 之后新立 ⚠ 段（安装态 vs 开发态字节来源）+ 附录 C 纪律 8；**Plug-in packaging.md**：§三 目录布局后加 ⚠（哪个面会真共存）+ §9.4 内置插件段整句重写（原句"运行期回退依赖 registry 内多版本并存"在开发态是假的）；**代码注释五处**：`kernel-bin/src/demo.rs` 头注（这条叙事证明的是版本切换机制 + 插件自维版本闸门，不是"旧二进制被保存"）/ `echo_llm.rs` 脚本注释 / `plugin-host/src/registry.rs` 纪律行 / `desktop/src-tauri/src/commands/plugins.rs` 命令注释 / `plugins-src/tool-echo/src/lib.rs` 夹具自述 |
+| ⑤ 用户可见副作用（如实登记） | 开发态内置插件的「回退」入口不再出现：`plugin-helpers.ts` 的 `rollbackTargets` 读 registry 的 `loaded_versions`，此前它列出的正是那些假历史目录 ⇒ **一项 UI 谎报随本批消失**（不是新增缺陷）。装机/市场通路不受影响（`plugin-service` 安装态仍保留历史字节） |
+| ⑥ 变异验证（2 条 + 还原） | M1 清单里加第二条 `tool-fs` → `RC=1` 且报文点名，**`==> build` 行数 = 0**（拦在第一个构建之前，不是构建完才抱怨）；M2 摘掉 `FIXTURE_IDS` 豁免 → 同一判据立刻拦 `tool-echo`，证明白名单不是摆设。两条均在**副本**上做（`tmp/`），仓库文件零污染；还原后 grep 残留 0 |
+| ⑦ demo 回归（产物重建后复跑） | `cargo run -p kernel-bin -- demo` **RC=0**：phase A `active=0.1.0` plain 回显 → phase B `active=0.2.0（升级；0.1.0 仍在注册表内，回退 = 换回指针）` reverse=`olleH` → phase C `rollback -> 0.1.0` 报 `tool-echo 0.1.0 does not support mode=\`reverse\``；收尾 `tool-echo active=Some("0.1.0") loaded=["0.1.0","0.2.0"]`，事件日志 10 条含三条 `plugin_version` 字段可查 |
+| 测试账 | 根 **438** / desktop **369** 持平（本批只改注释，用例数不可能变——门禁仍全量复跑） |
+| 门禁（最后一次编辑后全量复跑） | `tmp/v162-gates.sh` 逐步骤单独记 RC：**16 动作全 0 = `GATE_ALL_GREEN`**（根 fmt/clippy **0** + 39 套件 **438**、desktop fmt/clippy **0** + 3 套件 **369**、五道结构闸 `33==33` / `zh=en=891` / `85·85·85` / `10·10·0` / `22 模块 S0…S4 全 0`），含本批新立的四项独有判据 `stage_idempotent=0` / `fifteen_a_zero_fake_history=0` / `mutation_residue=0` / `tmp_copy_leftover=0`。**门禁自己也写反过两处并当场改正**：残留判据把 `docs/` 一起扫 ⇒ 报"残留 2"的正是台账里如实记录的变异串（文档要记录变异内容，不能拿它当残留）；桌面三件初稿写进子 shell ⇒ `FAIL` 传不回父 shell = **桌面全红也会绿**，改走 `--manifest-path` |
+| 边界 | ①**B 案（真快照）未被否决，只是未被选**：若今后要"回退 = 拿回旧行为"，必须做到安装态（或按 commit 归档产物），开发态暂存面不承接这件事；②开发态由此**失去"在装机前演练多版本"的能力**——需要多版本时走 `tool-echo`/`tool-shout` 夹具或临时手工复制目录（脚本重跑会把它 prune 掉，这是有意的）；③`PLAN` 里的版本号仍是"叙事版本"（源 `manifest.json` 一律 0.1.0，靠 sed 落成），把它变成源 manifest 真源属另一类变量，本批不动；④批 G 的 `target/` 清理按 Q8 推迟 |
+
+### v2.161（提交 28922cf）· 审计修复批 F-11（第五道结构闸入库 = 拆分等价性守卫 `check-split-equivalence.mjs`）
 
 **依据**：用户 2026-10-11 三项裁定（《AUDIT-FIX-PLAN-v1》§4 Q8/Q9/Q10）：**第五道闸入库** + **F15 选 A 口径改字面** + **批 G 推迟到全批收口后**。本批只做"闸"这一类变量（生产码一行未触、内核契约零破坏、前端零改动）。
 

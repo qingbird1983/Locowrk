@@ -11,7 +11,8 @@ use serde_json::json;
 /// 按调用次序轮转的三段脚本：
 /// 1. plain 回显（0.1.0 即支持）
 /// 2. reverse 回显（0.2.0 新能力，激活后成功）
-/// 3. 再次 reverse（回退 0.1.0 后应失败——证明回退生效）
+/// 3. 再次 reverse（回退 0.1.0 后应失败——证明 `active` 指针换回去之后，工具面
+///    随之改变；失败判定来自 0.1.0 自身的运行时版本闸门，见 demo.rs 头注 F15-A）
 pub struct ScriptedLlm {
     step: AtomicUsize,
 }

@@ -9,18 +9,18 @@
 
 > **⚠ v2.149 批 E 加「现役状态」列（此前本表只有"该建什么"、没有任何一列说明"现在是什么"，
 > 于是照本表实现的 agent 会去重建 `tool-sandbox`、把 LLM 写成插件、给已存在的功能再造一份）**。
-> 图例：✅ 现役插件（`plugins-src/` 动态库，版本号 = 最新暂存档）· 🔧 已交付但**不是插件**
+> 图例：✅ 现役插件（`plugins-src/` 动态库，版本号 = **暂存面当前版本**，真源 = `scripts/build_plugins.sh` 的 `PLAN` 清单，本列只是投影可能滞后；v2.162 F15-A 起开发态每 id 只 stage 一份产物）· 🔧 已交付但**不是插件**
 > （宿主内置，经组装点注册，无 manifest 面）· ◐ 部分 / 形态已变 · ❌ 已退役 · ⬜ 未做。
 > 唯一进度看板仍是 [ROADMAP.md](ROADMAP.md)，本列只回答"这份清单里哪些已经存在、以什么形态存在"。
 
 | 优先级 | 插件 | 一句话作用 | 现役状态（v2.149 核） |
 |---|---|---|---|
 | P0 | `llm-openai` / `llm-ollama` | 真实模型适配 | ❌ **插件形态作废**——v2.75 裁定 LLM 是宿主内置服务（`desktop/src-tauri/src/llm/` 自建 OpenAI 兼容客户端，一条线协议，genai 依赖全删；kind 只决定鉴权头与端点归一） |
-| P0 | `tool-fs` | 读/写/列目录/搜索文件 | ✅ 0.1.5（六工具；G3 revision 守卫在位） |
-| P0 | `tool-shell` | 执行命令（危险） | ✅ 0.1.6（`shell` + `shell_read`；v2.145 起无命令级禁令，见 §三修订注） |
+| P0 | `tool-fs` | 读/写/列目录/搜索文件 | ✅ 0.1.6（六工具；G3 revision 守卫在位） |
+| P0 | `tool-shell` | 执行命令（危险） | ✅ 0.1.8（`shell` + `shell_read`；v2.145 起无命令级禁令，见 §三修订注） |
 | P0 | `tool-fetch` | HTTP GET / 网页抓取 | ✅ 0.1.2（`Irreversible`，SSRF 防线） |
-| P1 | `tool-edit` | 精确代码编辑 | ✅ 0.2.1（容错匹配 + revision 链） |
-| P1 | `tool-git` | Git 操作 | ✅ 0.1.3（根提交显式拒绝 + stderr 末 6 行） |
+| P1 | `tool-edit` | 精确代码编辑 | ✅ 0.2.2（容错匹配 + revision 链） |
+| P1 | `tool-git` | Git 操作 | ✅ 0.1.4（根提交显式拒绝 + stderr 末 6 行） |
 | P1 | `tool-http` | POST / PUT / 通用请求 | ⬜ 未做（backlog；`fetch` 只 GET，webhook 外发在 `tool-notify` 里） |
 | P1 | `memory-sqlite` | 会话持久化 + 跨会话记忆 | ✅ 0.1.5（双层记忆 + 文件化双写） |
 | P1 | `memory-vector` | 向量检索（RAG） | ◐ 从未作独立插件——向量基建以**宿主共享件**存在（`llm/embed.rs` + `SharedEmbed`），服务 `search_titles` / ToolExposure 第三路打分 / `search_tools`；未配置 embedding 时整条智能层优雅降级 |

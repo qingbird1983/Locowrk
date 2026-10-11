@@ -2,7 +2,10 @@
 //!
 //! 纪律：
 //! - 内部可变性，方法全部 `&self`，外层 `Arc<PluginRegistry>` 共享
-//! - 回退 = `activate` 旧版本（微秒级），旧版本永远保留
+//! - 回退 = `activate` 已装载的旧版本（微秒级）；「旧版本永远保留」成立于**注册表
+//!   内**（load 进来的实例常驻，纪律 2 永不 dlclose）。磁盘上有没有旧版本目录是另一
+//!   回事：安装态由 plugin-service 保留当时字节，开发态暂存面每 id 只 stage 当前版本
+//!   （`scripts/build_plugins.sh` 头注 F15-A，v2.162）
 //! - 逻辑卸载 = 把 Arc 挪进 graveyard（物理保留，永不 dlclose）；
 //!   在途调用持有各自的 Arc 克隆，结束后引用计数自然归一
 //! - load 的幂等：同 (id, version) 重复加载返回既有实例，不重复 dlopen

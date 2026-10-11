@@ -7,6 +7,12 @@
 //!   供"加载 0.1.0 → 激活 0.2.0 → 回退 0.1.0"验收观察行为差异）
 //! - `mode = "panic"` —— 故意 panic，验证插件侧 catch_unwind（纪律 3）
 //!
+//! 本插件是**机制夹具**：两个版本目录由同一份源码构建（`build.rs` 只注入版本串），
+//! 行为差异全部来自下面 `reverse_supported()` 的**运行时**版本比较。所以"回退后
+//! reverse 不可用"证明的是 `active` 指针切换 + 插件自维的版本闸门，不是磁盘上存着
+//! 旧二进制——开发态暂存面也因此只给业务插件 stage 当前版本（v2.162 F15-A，见
+//! `scripts/build_plugins.sh` 头注；市场侧夹具 tool-shout 的 `repeat_supported()` 同理）。
+//!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 
 use std::collections::BTreeMap;

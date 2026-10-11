@@ -1,6 +1,14 @@
 //! 阶段三验收叙事（DESIGN.md §14）：加载 0.1.0 → 激活 0.2.0 →
-//! 回退 0.1.0，全程不重启。经 Kernel 主循环驱动 FFI 工具，
+//! 回退 0.1.0（= 切 `active` 指针），全程不重启。经 Kernel 主循环驱动 FFI 工具，
 //! 会话事件先写日志再执行（纪律 5）。
+//!
+//! **这条叙事证明的是「版本切换机制」，不是「行为回滚能力」**（《AUDIT-FIX-PLAN-v1》
+//! F15 的用户裁定口径，v2.162）：`tool-echo` 是**机制夹具**，它的 reverse 模式由插件
+//! 自身按内嵌版本串做**运行时**判定（`plugins-src/tool-echo/src/lib.rs`
+//! `reverse_supported(v) = v >= REVERSE_SINCE`），所以切回 0.1.0 指针确实能让 reverse
+//! 变不可用。真实业务插件若没有这种运行时闸门，切回旧指针拿到的仍是当前行为——
+//! 开发态暂存面因此每个 id 只 stage 一份产物（`scripts/build_plugins.sh` 头注 F15-A：
+//! 多 stage 出来的"历史版本"是同码不同串，安装态才有真历史字节）。
 //!
 //! 运行前置：`bash scripts/build_plugins.sh`（把双版本产物暂存到
 //! plugins/tool-echo/{0.1.0,0.2.0}/）。
@@ -53,10 +61,10 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
 
     // ---- 2) 加载 0.2.0 并激活（多版本并存，切换 = 换指针，微秒级）----
     load_and_activate(&registry, PLUGIN_ID, &neu, plugins_root)?;
-    banner("phase B: active = 0.2.0（升级，旧版本保留）");
+    banner("phase B: active = 0.2.0（升级；0.1.0 仍在注册表内，回退 = 换回指针）");
     step(&kernel, &mut session).await?;
 
-    // ---- 3) 回退 0.1.0（不重启，reverse 应立刻不可用）----
+    // ---- 3) 回退 0.1.0（不重启；reverse 立刻不可用 = 0.1.0 自身的运行时版本闸门）----
     let rolled = registry
         .rollback(PLUGIN_ID)
         .map_err(|e| format!("rollback: {e}"))?;

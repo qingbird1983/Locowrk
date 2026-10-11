@@ -57,7 +57,9 @@ pub async fn plugin_uninstall(id: String, state: State<'_, AppState>) -> Result<
     state.plugins.uninstall(&id).await
 }
 
-/// 回退到指定版本（切 active 指针，旧版本永远保留）。返回回退到的版本。
+/// 回退到指定版本（切 `active` 指针，版本须仍在注册表 `loaded_versions` 内）。
+/// 返回回退到的版本。开发态每 id 只 stage 当前版本（F15-A，v2.162）⇒ 除机制夹具外
+/// 没有第二项可切，UI 的「回退」入口不出现；多版本历史属安装态。
 #[tauri::command]
 pub async fn plugin_rollback(
     id: String,
