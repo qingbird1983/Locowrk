@@ -14,6 +14,6 @@ crate-type = ["cdylib"]
 plugin-api = { workspace = true }
 
 # manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
-# （scripts/build_plugins.sh 负责按 1.2.0 / 1.3.0 各构建一次）；
+# （版本真源 = scripts/build_plugins.sh 的 stage 调用清单——本插件在其中被 stage 两次）；
 # build.rs 声明 rerun-if-env-changed，变量变更即触发重编，
 # 产出多版本并存所需的双 DLL。

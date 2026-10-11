@@ -10,10 +10,24 @@ market/
 └── tool-shout/          # 插件 id（kebab-case）
     ├── 1.0.0/
     │   ├── tool_shout.dll      # 平台库（Windows；.so/.dylib 同名规则）
-    │   └── manifest.json       # 市场元数据 { id, version, description }
+    │   ├── manifest.json       # packaging v2 全量 manifest（见下）
+    │   └── assets/icon.svg     # manifest.icon 指向的相对路径
     └── 1.1.0/
         └── ...
 ```
+
+> **⚠ v2.149 批 E 订正（两处）**：
+> ① `manifest.json` **不是**早期设想的 `{ id, version, description }` 三键 v1 形状——
+> 本目录由 `scripts/build_market.sh` 生成 **《Plug-in packaging.md》v2 全量 manifest**
+> （`abi_version` / `kind` / 双语 `display_name`·`description` / `icon` / `author` /
+> `origin` / `license` / `tools[]`（含 `schema` 与 `side_effect`）），installer 与市场
+> 目录都按它解析；这份 JSON **硬编码在构建脚本里**（`plugins-src/tool-shout/` 没有
+> manifest.json 源文件），改元数据要改脚本——与 `plugins/` 侧「源 manifest + sed 版本号」
+> 是两条不同通路（同源重复，已登记《AUDIT-FIX-PLAN-v1》批 F·F13）。
+> ② 版本基准：v2.56 用户裁定「全部插件 0.1.0 起步」，`plugins-src/` 九件已随批重置，
+> **本夹具仍是 1.0.0 / 1.1.0**（`fallback.rs` 等集成测试按目录动态枚举版本、不写死号，
+> 保留 1.x 恰好持续覆盖「旧 1.x lockfile 条目由 `resolve_latest` 天然回退」这条路径）。
+> 属**已知偏差、非缺陷**，是否随基准重置为 0.1.0/0.2.0 待用户裁定，批 E 不擅自动产物。
 
 ## 重新生成
 

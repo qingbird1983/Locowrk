@@ -1,5 +1,17 @@
 # Locowrk 沙箱执行设计：集成 CubeSandbox
 
+> **⚠ 归档说明（v2.149 批 E，2026-10-11；依据《CODE-AUDIT-v1》H9 / 《AUDIT-FIX-PLAN-v1》E6）**
+> ① **本稿从未采纳、从未实施**：全仓 `grep -r "Sandbox Execution Design"` 除审计取证文档外**零引用**，
+> `plugins-src/` 与 `crates/` 里没有任何 CubeSandbox 相关代码或依赖；它记录的是一条**外部沙箱集成路线**
+> （CubeSandbox），与项目实际走的路线不同。
+> ② **主题已整体退役**：实际交付的沙箱方案是 v2.31（⑯）的 **Windows 受限令牌 + JobObject 限额**
+> （`plugins-src/tool-sandbox`，方案取舍记在 `docs/design/plugins.md` §六），而该插件又已随
+> **v2.145 权限模型重设计整目录删除**（裁定：不隔离 fs/网络即非安全边界，第二入口只多撞锁面）。
+> 因此本稿既不是「待办」也不是「现役规范」，只作**方向史**保留。
+> ③ 现役的命令执行面与安全边界看：`docs/design/NEW/Permission Model Redesign (ZCode Alignment) v1.md`
+> + `crates/plugin-api/src/policy.rs`（shell 政策两态）+ `plugins-src/tool-shell/src/proof.rs`（只读证明）
+> + `desktop/src-tauri/src/privacy.rs`（隐私门）。**照本稿实现会造出与现网相反的东西。**
+
 > 配套项目：Locowrk
 > 版本：1.0
 > 前置文档：《Agent 内核设计》《Agent 必备插件清单》《约束最小化原则》

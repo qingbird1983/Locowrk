@@ -986,7 +986,7 @@ pub struct Next<'a> {
     tool: Arc<dyn Tool>,
 }
 
-/// 组装：Tracing → Timeout → Retry → CircuitBreaker → Approval → Tool
+/// 组装：Tracing → Audit → Timeout → CircuitBreaker →（审批门）→ Tool
 pub fn build_chain(mw: Vec<Arc<dyn Middleware>>, tool: Arc<dyn Tool>) -> Service;
 ```
 
@@ -996,7 +996,22 @@ pub fn build_chain(mw: Vec<Arc<dyn Middleware>>, tool: Arc<dyn Tool>) -> Service
 > 日志，而洋葱中间件没有会话句柄——所以审批门落在 Kernel 的 step 循环里
 > （§7.2 的 `await_approval`，经 `ApprovalResolver` trait 解析，无决议者时
 > fail-safe 拒绝）。§7.1 链上的 Approval 位保留给未来无会话上下文的独立
-> 调用路径；本阶段链上实装的是 Tracing → Timeout → Retry → CircuitBreaker。
+> 调用路径。**⚠ v2.147 批 C 更正（本段原写「实装 Tracing → Timeout → Retry →
+> CircuitBreaker」）**：洋葱链现役实装 = **Tracing → Audit → Timeout →
+> CircuitBreaker**——`Retry` 洋葱件自写起就**从未被任何装配点注册过**（重试
+> 语义自 v2.75 起在 LLM 客户端层承载：分类退避、不设次数上限、停止可打断），
+> 审计 H2 抓出的正是「代码注释宣称有、实现里没有」这一类，本体已随批 C 摘除，
+> 装配真源 = `desktop/src-tauri/src/state/mod.rs` 注册处 + `chain.rs` 头注。
+> 同名不同物的 `WaterfallDecision::Retry`（`agent/request-error` 决策环）与
+> `RetryBudget` 是**活机制**，未随批删除。
+>
+> **另一条链不在这里（§7.2/§3.5）**：逐请求的 system/messages 组装与工具集
+> 裁剪走 `agent/request` **waterfall 监听器**，现网注册序 = ToolExposure →
+> BaseSystemInject → MemoryInject → TreeDirectoryInject → InstructionFilesInject
+> → FragmentInject（v2.139 前缀分层定序；`ctx-compact` 已随 v2.137 退役、
+> v2.147 摘本体）。洋葱件与监听器两类各 5 + 6 个实现由
+> `scripts/check-middleware-wiring.mjs` 交叉验证（v2.147 起白名单为空 = 任何
+> 「写了但没接线」的件当场判红）。
 
 > **审计落点（v2.9，阶段八③）**：plugins.md 的 `mw-audit` 以**宿主侧中间件**
 > 落地（`kernel-agent::middleware::audit`：`AuditEntry` / `AuditSink` /
@@ -1155,10 +1170,21 @@ impl Kernel {
 > | 序 | 门 | 行为 |
 > |---|---|---|
 > | 1 | 计划档 | 非 Pure 一律拒绝、不弹卡（正常路径已被目录过滤，此处纵深防御） |
-> | 2 | 硬门（隐私 + 越界） | **隐私门**：凭据/隐私目标 → 强制弹卡，载荷 `sensitive`（类别键）：凭据目录/文件（`.ssh`、`.aws`、`.gnupg`、`.kube`、`.git-credentials`、`.netrc`、`.docker/config.json`、浏览器凭据库）、凭据库/转储命令（`vaultcmd`、`mimikatz`、`sekurlsa`、lsass minidump 类）、毁灭性命令（`format X:`、`mkfs`、`diskpart`、`cipher /w`、`vssadmin delete`、`bcdedit`、`dd … of=/dev/`、fork bomb、盘根/家目录递归强删）；**越界门**（㉘·B 外部路径门，围栏改全局声明根后 = 越出声明根才触发）：`shell` / `sandbox_run` 命令文本扫出全局声明根外绝对路径 → 强制弹卡，载荷 `external:true`。两门都**只许一次**（不进豁免集、`完全` 档也不能跳过——用户裁定"最危险的触及用户隐私的或本地隐私的有拦截"）。清单住桌面端 `privacy.rs`，启发式宁漏勿错杀（漏报由档位兜底：`询问` 档非 Pure 本来就卡），`.env` 不拦（开发日常，ZCode 同款；未来可配开关） |
-> | 3 | 模式放行（一等公民，㉘·C 用户裁定） | `完全` = 全放、基本零弹窗（硬门除外）；`自动编辑` = 仅 `Compensable` 放；`询问` = 非 Pure 落到决策卡；`计划` + Pure = 直通放行（只读调研，reason `mode:plan-readonly`） |
-> | 4 | 会话豁免 | `(session_id, tool)` 命中 → 放行（「允许本次对话」既有语义） |
-> | 5 | 决策卡 | 弹卡（豁免三键 / 硬门两键 / 守夜超时等既有语义不变） |
+> | 2 | 硬门（隐私 + 越界） | **隐私门**：凭据/隐私目标 → 强制弹卡，载荷 `sensitive`（类别键）：凭据目录/文件（`.ssh`、`.aws`、`.gnupg`、`.kube`、`.git-credentials`、`.netrc`、`.docker/config.json`、浏览器凭据库）、凭据库/转储命令（`vaultcmd`、`mimikatz`、`sekurlsa`、lsass minidump 类）、毁灭性命令（`format X:`、`mkfs`、`diskpart`、`cipher /w`、`vssadmin delete`、`bcdedit`、`dd … of=/dev/`、fork bomb、盘根/家目录递归强删）；**越界门**（㉘·B 外部路径门，围栏改全局声明根后 = 越出声明根才触发）：`shell` 命令文本扫出全局声明根外绝对路径（`sandbox_run` 曾并列于此，该插件已随 v2.145 整目录退役） → 强制弹卡，载荷 `external:true`。两门都**只许一次**（不进豁免集、`完全` 档也不能跳过——用户裁定"最危险的触及用户隐私的或本地隐私的有拦截"）。清单住桌面端 `privacy.rs`，启发式宁漏勿错杀（漏报由档位兜底：`询问` 档非 Pure 本来就卡），`.env` 不拦（开发日常，ZCode 同款；未来可配开关） |
+> | 3 | 项目拒绝规则 deny（**v2.145 新增**） | `permission_rules.rs` 的 `{version, workspace, allow[], deny[]}`（数据根 `permissions/<fnv1a-hex8>.json`）命中 → **拒绝**。**先于模式放行 = 用户明示拒绝连 `完全` 档也拦**（ZCode 的 yolo 是放行先于 deny，此处有意偏离并记档）；匹配 = 工具级 / `prefix:*` token 边界 / 精确命令三种；查询直读无缓存 = 人改 JSON 即生效兼作撤销出口；坏 JSON 当空 |
+> | 4 | 模式放行（一等公民，㉘·C 用户裁定） | `完全`（Auto）= 全放、基本零弹窗（硬门与③除外）；`自动编辑` = 仅 `Compensable` 放（reason `mode:acceptEdits`）；`询问` = 非 Pure 落到决策卡；Pure 一律直通（reason `mode:pure`，`计划` 档下 = `mode:plan-readonly`） |
+> | 5 | 项目允许规则 allow（**v2.145 粘性授权**） | 工具级或精确命令命中 → 放行，reason `rule:project-allow`（**不带 `mode:` 前缀 = 前端照常渲染记录条**，审计可见）。UI 侧「本项目始终允许」才产 allow，UI 不产 deny（手改 JSON 生效）；shell 落精确命令规则、其余工具级；未归属会话跳过持久化、当次放行仍生效 |
+> | 6 | 会话豁免 | `(session_id, tool)` 命中 → 放行（「允许本次对话」既有语义；子会话经 `root_session_id` 改道挂父根会话，v2.145——一次豁免跨该根会话的历次派生） |
+> | 7 | 决策卡 | 弹卡（豁免三键 / 硬门两键 / 守夜超时等既有语义不变；上弹组含「本项目始终允许」= 走 ⑤） |
+>
+> **v2.145 修订注（权限模型重设计，对齐 ZCode）**：原表是 ㉘·C 的五序（计划硬
+> 拒 → 硬门 → 模式放行 → 会话豁免 → 卡），本批插入 ③项目拒绝 / ⑤项目允许
+> 两序并把命令级永久禁令全部退役——`DENY_HARD`（解释器/包装/网络/LOLBin 约
+> 50 项）、`DENY_RISKY` + `shell.unlockRisky`、`BASE_ALLOW`、`LOCOWRK_SHELL_ALLOW`
+> 一并退场，`decide()` 的 Deny 只剩结构性拒绝（元字符 / 空命令 / 引号未闭合）。
+> 现网代码真源 = `desktop/src-tauri/src/approval.rs::resolve`（该函数头注逐序
+> 标注）。致命级同时收敛为三项：隐私门、越界门、元字符结构性拒绝
+> （《Setting and Constrained Optimization.md》§2.3/§2.7/§3 同批带修订注）。
 >
 > 自动放行照写 `ApprovalDecided`（审计不缺；reason 用 `mode:*` 前缀，前端据此不渲染
 > 记录条）。**围栏让路给权限档（㉘·C 用户裁定"权限选择一等公民；其它阻挡全部让路"；
@@ -2394,11 +2420,22 @@ export const usePluginStore = defineStore('plugins', {
 > powershell/python 等约 50 项）永远赢、不进审批；元字符
 > （`|&;<>\`$\n`）整条拒绝；无 shell 解析——引号感知切词后首词直接
 > spawn，读取线程防管道死锁，轮询超时 20s（上限 120s）kill，输出限长；
-> 一律 Irreversible）；**tool-edit@1.0.0**（edit.replace 强制唯一命中、
+> 一律 Irreversible。**⚠ v2.145 修订（本条为 S1 时期策略，现网已换形态）**：
+> 内置白名单 / denylist 约 50 项 / `shell.unlockRisky` / `LOCOWRK_SHELL_ALLOW` **全部退役**，
+> 设置页「命令终端」分区随之删除——`decide()` 收敛两态，Deny 只剩结构性拒绝
+> （元字符 / 空命令 / 引号未闭合，v2.146 起报错分教学），**无任何命令级永久禁令**，
+> 其余命令一律 Allow 进审批卡；只读免审面改由 `shell_read` 的三段证明承载
+> （`policy::READ_ONLY` 固定表 + git 全局选项/写旗标/敏感路径拒 + EXACT_ARGV
+> 精确表 pwd / git --version / node -v|--version / python[3] --version）。
+> 真源 = `plugins-src/tool-shell/src/{policy.rs,proof.rs}` 与 plugins.md §二修订注。
+> 同批 `tool-sandbox`（⑯）整目录退役，`sandbox_run` 不再存在于插件清单。**tool-edit@1.0.0**（edit.replace 强制唯一命中、
 > edit.lines 1-based 闭区间严格不越界、edit.diff 严格 unified diff 无
 > fuzz——试算全过才备份落盘，失配整体拒绝文件不动；全部
 > `Compensable{undo_tool:"fs.restore"}` 跨插件 undo——官方捆绑保证同装，
-> 备份经 fsutil 同布局）；**ctx-compact**（kernel-agent
+> 备份经 fsutil 同布局）；**ctx-compact**（⚠ v2.137 桌面压缩链整面退役、
+> v2.147 批 C 摘除本体——本条为 ⑨ 时期记录，现网上下文节奏由记忆树整理
+> 边界承担；留在文档里的现役机制描述见 §3.2 与《Context and Memory.md》§3.2.2
+> 修订注。以下原文照存不改）：（kernel-agent
 > `middleware/compact.rs`，宿主侧——C ABI 插件够不到 LlmService；挂在
 > `agent/request` waterfall：估算 token（序列化字节/4）超 32k 就把早期
 > 消息压成单条 User 摘要（keep_recent=8），**切点对齐 User 消息起点**

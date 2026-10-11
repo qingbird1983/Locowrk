@@ -14,4 +14,4 @@ crate-type = ["cdylib"]
 plugin-api = { workspace = true }
 
 # manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
-# （scripts/build_market.sh 按 1.0.0 / 1.1.0 各构建一次，暂存进 market/）。
+# （版本真源 = scripts/build_market.sh 的 stage 调用清单，暂存进 market/）。

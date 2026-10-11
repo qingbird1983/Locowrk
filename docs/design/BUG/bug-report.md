@@ -1,8 +1,16 @@
 # Locowrk 工具 bug 上报（plugin 0.2.0）
 
-> **状态：Bug 1 / Bug 2 已修复 —— 转为历史存档（用户告知，未经独立复测）；Bug 3 为本轮实测新增、待上报。**
-> 用户确认 Bug 1、Bug 2 均已修复，不再作为待提交的上报材料，保留作排查与回归复测的参考。
-> **Bug 3（报错不指路 / 指路覆盖不一致）为新增待上报项，见文末。**
+> **状态（v2.149 批 E 订正，此前只写「Bug 3 待上报」与仓内实际处理记录矛盾）**：
+> **Bug 1 / Bug 2**：✅ 已修复（用户告知，未经独立复测）= v2.116 当批落地，落点见
+> 同目录《Tool Layer Issues Todo List》§六处理记录（P1-1 = `require_ok` 保留 stderr 末 6 条非空行，
+> tool-git 0.1.3）；转为历史存档。
+> **Bug 3（报错不指路 / 指路覆盖不一致）**：**部分处理**——① `shell` 的「引号不闭合冒充空命令」
+> 一支已修（v2.146 批 A M-10：`policy::split_command` 改返 `SplitError::{UnclosedQuote, Empty}`，
+> 两条报文各给各的出路，`plugins-src/tool-shell/src/policy.rs:80-110`）；② **仍开放**的四支：
+> `fs_read`/`fs_grep`/`fs_list` 的 ENOENT 分支只透传系统原文（不指 `fs_list` 上级）、
+> `shell_read` 元字符拒绝不指 `fs_grep`/`shell`（`policy.rs:92` 现文可查）、`proof.rs` 的
+> unterminated-quote 走通用 `structural()` 模板（病因可见、出路偏弱）。
+> **已登记《AUDIT-FIX-PLAN-v1》批 F（F12）**，本文不再挂「待上报」这种与代码实况脱节的标签。
 > 若要独立确认 Bug 1 / Bug 2，按文末「附」节重建最小仓库逐条跑一遍（复测方法：一次一个变体）。
 
 Bug 1 / Bug 2 为两处实测确认、已修复的历史问题（均含最小复现）；Bug 3 为新增待上报项。环境：Windows 主机，`shell` 走 Unix coreutils（git-bash 风格）。
@@ -89,7 +97,9 @@ git_undo_commit: HEAD has moved (20b1d6caf…e4e != 20b1d6c); manual interventio
 
 ## Bug 3 — 路径/元字符类报错只回系统原文，不给替代工具指路（指路覆盖不一致）
 
-**状态**：🆕 待上报（本轮实测确认，8 条对照）
+**状态**：◐ **部分处理**（v2.146 批 A 修「引号不闭合 vs 空命令」一支；ENOENT 与元字符两支仍开放，
+登记《AUDIT-FIX-PLAN-v1》批 F·F12）——原「🆕 待上报」标签自 2026-10-06 起未随仓内处理记录更新，
+v2.149 批 E 订正。本轮实测确认，8 条对照见下表（表内 ✅ 行 = 当时已有的指路先例，正是修复的模板）。
 
 **严重度**：低~中（不影响功能正确性，但损害可诊断性与模型自愈；因 `catalog` 已兜底全量工具名，尚未致任务失败）
 

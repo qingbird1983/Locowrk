@@ -81,7 +81,7 @@
 | D7 | 幻影字段 + 双份校验规则（审计 M-23） | `memory-tree/src/trigger.rs:76 anchor_source` 只写不读；`valid_session_id` 两份规则**已分叉**（`session-store/persist.rs:23-29` 允许 `.` vs `memory-tree/storage.rs:15-22` 不允许且限长 64，注释却自称同源）→ 含 `.` 的会话 id 日志落盘成功而树投影静默失效。当前桌面 id 形如 `desktop-<毫秒>` 恰好都合法 = **陷阱不是现网缺陷** | 删 `anchor_source`；`valid_session_id` 下沉 `plugin_api`（有 `fsutil` 先例）单点定义 + 单测锁规则 |
 | D8 | `cordis-core → plugin-api` 依赖（审计 H6/M-6.2 反向证据） | 代码零使用，但 `DESIGN.md:1266` 依赖图明写要求 | 删它必须同批改 `DESIGN.md:1264-1279`（§8），否则文档与清单反向不符。**倾向：连文档一起改，或干脆不动（这条是设计约束不是垃圾）** |
 
-### 批 E｜权威文档真实化（审计 H9 + M-6/M-8/M-11/M-12）
+### 批 E｜权威文档真实化（审计 H9 + M-6/M-8/M-11/M-12）——✅ 已落（2026-10-11，证据见 §5 批 E 段；E4b「CHANGELOG 拆目录」未采纳并登记待裁定）
 
 | # | 条目 | 建议动作 |
 |---|---|---|
@@ -109,6 +109,9 @@
 - F9 前端超大文件（C16–C19）：locale 拆命名域、`stores/chat.ts` 事件投影下沉纯函数、`types.ts` 拆目录 + 71 个只内部使用的导出收窄、`lab/BuiApprovalCard.vue`（635 行，仅 `LabPanel` 引用的演示夹具）移出生产树。
 - F10 `session-store` 侧优化（M-24 a–d）：`pending_slot` 反向全扫 O(n²) → 命中即停；`tool_exposure` 每请求克隆全目录 + 两次序列化求长度 → 逐项累加 + `select` 返回下标；`search_sessions` 每文件读两遍 → 复用 `list_sessions` 单遍。
 - **F11（本批新增，审计未列）测试临时目录/共享目录隔离收敛**：`grep temp_dir()` 全仓 ~20 处写的是 `{前缀}-{tag}-{pid}`——无每次运行 nonce、多数不先清，Windows 复用 pid 时会读到上次残留（批 B 实测撞红一次，机制见 §5 顺带发现）。修法 = 统一收进 `desktop/src-tauri/src/testutil.rs` 的 `tmp_dir(tag)`（pid + 纳秒 + `remove_dir_all` 先清，`memory_files/tests.rs` 已有正确实现可作蓝本），各处删本地副本。同族的还有一处**根 workspace 侧已知偶发红**：`crates/plugin-host/tests/wasm_plugins.rs` 用 `target/locowrk-test/...` 共享目录，并行套件互踩（本批末次全量跑当场抓到、单跑即绿；AGENTS 历批记的「wasm_plugins 已知偶发」就是它）——同一味药：每个测试独占带 nonce 的目录。**登记：`CODE-AUDIT-v1` 完全没有覆盖这一类**（它查的是死代码与重复实现，「测试脚手架脏」要靠真跑门禁才现形）。
+- **F12（批 E 从 `BUG/bug-report.md` Bug 3 开放面登记）** 报错教学覆盖不齐：`tool-fs` 的 ENOENT 分支（`fs_read`/`fs_grep`/`fs_list` 路径不存在）只透传系统原文，不指 `fs_list` 上级；`tool-shell` 的元字符拒绝（`policy.rs:92`）不指 `fs_grep`/`shell`；`proof.rs` 的 unterminated-quote 走通用 `structural()` 模板（病因可见、出路偏弱，与批 B 登记的 ⑤ 同族）。修法 = 照仓内三条 ✅ 先例补文案（`use fs_list` / `use the shell tool instead` / `copy old_string character-for-character`），零逻辑改动。
+- **F13（批 E 从 `market/README.md` 订正登记）** 同一份插件元数据**两条通路**：`market` 的 v2 manifest 硬编码在 `scripts/build_market.sh`（`cat > manifest.json <<EOF`），而 `plugins/` 侧走「源 `manifest.json` + sed 版本号」；`plugins-src/tool-shout/` 根本没有 manifest 源文件。与 F7 同源病（分家后漂移），改元数据只改一处必然脱节。
+- **F14（批 E 顺手发现，零风险小项）** `crates/kernel-bin/src/demo.rs` 的常量名 `V12 = "0.1.0"` / `V13 = "0.2.0"` 来自已作废的 1.2.0/1.3.0 时代（v2.56 版本基准重置的残影）；改名 `V_OLD/V_NEW` 即可，不改行为。
 
 ### 批 G｜本地产物与环境（不入库，需你点头）
 
@@ -317,6 +320,38 @@ check-i18n zh=891 en=891 · check-commands 85·85·85（本批未碰前端）
 ```
 
 已知边界：①本批未跑 `pnpm build`/`lint:style`（无 `.ts/.vue` 改动，提交时按 pre-commit 暂存面自动跳过）；②D2 的接线口径（批 H）**用户尚未表态**，我按「不造半接线」的最低风险路径先做诚实化 + 立批，改主意随时可转；③`kv_put` 如实回 UNSUPPORTED 后，真有插件要用 kv 仍需先定缓冲区所有权协议（§15.1 末尾追加 `kv_free` 槽的路径不变）。
+
+### 批 E（2026-10-11 落地，v2.149；E1–E8 全落 + 三条新登记）
+
+**这一批的性质与 A–D 不同**：A–D 改代码，E 改的是「agent 读进去就照着写」的那一层。审计 H9 的判据是「文档领先/落后代码一格」，而本仓的文档里 **DESIGN.md 是 AGENTS.md 明写的「改核心模块前先读」对象**——它 0 处 v2.145 就意味着：下一个会话照它实现，会重新造出 denylist、`LOCOWRK_SHELL_ALLOW`、`sandbox_run` 和一整套五序决策表。所以 E 批的产出不看代码行数，看**「文档里还有多少句在描述已不存在的机制」**。
+
+| # | 落点 | 证据（改前 → 改后） |
+|---|---|---|
+| E1 | `DESIGN.md` 五处规范正文按代码重写：§7.1 洋葱链（原写「本阶段实装 Tracing → Timeout → **Retry** → CircuitBreaker」→ 真实链 + 批 C 更正块 + **新增 waterfall 七监听器注册序段**）· §7.2 决策表补 ③项目 deny / ⑤项目 allow 重排七序 + row2 删 `sandbox_run` + v2.145 修订注（逐序抄自 `approval.rs::resolve`，含「`rule:project-allow` 不带 `mode:` 前缀 = 前端照常渲染记录条」这种细节）· §8 目录树删 `config/` 块 · §11.3 开发态/安装态重写为 dev_scan + lockfile · §3.5 表加「现网接线」列 · 实现备注 tool-shell / ctx-compact 各加 ⚠ 修订注 | 改前 `grep -c v2.145 DESIGN.md` = **0** → 改后 **6**（另 v2.147 = 4、v2.148 = 5）；`sandbox_run` 现存 2 处、`LOCOWRK_SHELL_ALLOW` 3 处、`denylist` 2 处**全部落在「已退役」语境的修订注内**（`:1173/:1183/:2418/:2424/:2431` 逐条眼验），零处当作现役机制陈述 |
+| E2 | `plugins/README.md` 整表重写：件数「八件」→ **9 个 id**（`plugins-src/` 实有 10 目录，`tool-shout` 只进 `market/`）；工具名点号 → 下划线；1.x → 最新暂存版本（真源 = `build_plugins.sh` 的 `stage` 清单）；`fetch` Pure → **Irreversible**；`shell` 「白名单 + denylist」→ v2.145 两态；`side_effect` 的 Compensable 写成实际形状 `{kind, undo_tool}`；**新列「宿主内置工具不在本表」**（`search_tools`/`memory_expand`/`subagent_run`/`browser_*` 等走组装点，不经 `plugins/`）；安装态数据根补 `LOCOWRK_DATA_DIR` 口径 | 改前表内 `1.0.0/1.1.0/1.2.0` 字面 = 8 处、点号工具名 = 6 处 → 改后**全 0**；表逐格与 `plugins-src/*/manifest.json` + `stage` 清单机器对账（node 解析 manifest 打印 `name/side_effect/exposure` 全表核过，非目测） |
+| E3 | `UI shell and patterns.md` 四处现状表**只加注不改正文**（它是规范文档，正文是当时的规格）：`:193` MemorySection 行 → 点明 autoExtract/handoffUpdate/experiences（v2.136）、defaultOrganizer（v2.137）四键 = 幻影键 + 列出**现役 memory 区键集**；`:202` DeveloperSection 行 → `context.stabilityRounds`、`developer.defaultOrganizer` 已退役；`:883`/`:999` `session_set_organizer` → 命令已随 v2.137 删除，本行保留为历史落点 | 三处「已退役」判据不靠记忆：`grep -rn session_set_organizer desktop/` = **0**、`stabilityRounds`/`defaultOrganizer` 只存在于 `settings/*` 的幻影键注释与 `settings/tests/memory.rs:351-369` 幻影回归锁内 |
+| E4 | `AGENTS.md` 瘦身（**本批最直接改善 agent 体验的一项**）：32 条历史流水**逐字原样**搬入 `docs/design/archive/AGENTS-progress-archive.md`（零改写，脚本按 `git show HEAD:AGENTS.md` 行区间切出）；本文件只留「当前进度 + 前一版 + 归档指针」，并写死新的**写入纪律**（保留两条、每条 ≤2,000 字节、被挤出的整条搬走不留残段）。同批订正本文件内五处失真：**「定位」行**（原「模型适配器、工具、会话存储、**沙箱**、Agent 循环本身都是插件」→ 沙箱已退役 + LLM 是宿主内置服务 + "一切皆插件"约束的是无特权模块不是打包方式）、**权威文档行**（新增「动手前查 INDEX.md 分清权威/已兑现/存档」并说明该纪律的来源就是 H9）、**目录结构块**（补 `memory-tree` crate、`INDEX.md`、`NEW/`·`BUG/`·`archive/`、`scripts/`；`LLM.md` 描述从「三合一 genai 适配器」改为单线协议实况）、**常用命令块**（补齐批 B 立的四道结构闸 + desktop 三件 + 前端三件，demo 叙事的版本号 1.2.0/1.3.0 → **0.1.0/0.2.0** 与 `stage` 清单一致）、**设计纪律 4/5/6 三条就地加实况注**（④ 桌面是**每 step 批量落盘**不是 per-event，悬空只在 mid-flush 出现；⑤ 磁盘快照从未接线 = RESERVED；⑥ `Irreversible` 由「必须审批」改「**默认**审批」并列明五条免审路径 —— 这条不改就是让下一个 agent 以为弹卡是硬保证）；`check_length.sh` 措辞从「报告不拦截」改「基线比较闸」 | `wc -c AGENTS.md`：**206,707 → 22,080 字节（−89.3%）**；归档文件 195,039 字节，**逐字校验 = 33 行 vs `git show HEAD:AGENTS.md` 行区间，mismatch 0**；会话注入预算 65,536 字节此前被历史流水吃满，现在整份文件在预算内**且现行纪律全部可读** |
+| E4b | **审计建议未采纳的一项（如实登记，不是遗漏）**：`CHANGELOG.md`（186 行 / 418 KB，每版一整行）**不拆成 `docs/design/CHANGELOG/` 目录**。理由三条：①它不进会话注入源（不是 AGENTS.md），拆分没有 E4 那种「挤爆预算」的收益；②150 个单文件目录 + 全仓几十处 `docs/design/CHANGELOG.md` 引用改写 = 纯迁移成本；③检索手段已经够用（`grep -n "^\*文档版本：v2.14" CHANGELOG.md` 一次命中）。改为在 `INDEX.md` 里把它标为「逐批落点唯一真源 + 检索口径」。**如你仍要拆，说一声我单独做一批** | 未做，登记待裁定 |
+| E5 | `CHANGELOG.md` 撞号修实：`v2.75` 被「LLM 兼容层重构」（2026-10-05）与「前端统一标准 + 机械门禁」（2026-10-06）两条互不相关的批共用。处置 = **LLM 条条号沿用不动**（它承载全仓 40+ 处按号引用），前端标准条改占空号 **v2.76** 并从 v2.72 之后移到 v2.75 之前（位序按日期归正），两条各自加订正说明 | 改前 `grep -c "^\\*文档版本：v2.75（"` = **2** → 改后 **1**（v2.76 = 1）；改号前全仓 `grep -rn v2.75 docs AGENTS.md` 复算 = 47 命中，逐条判读**除被改的那条外全部指 LLM 兼容层批**，且前端标准批在其它文档一律按日期（「用户 2026-10-06 裁定」）而非按号引用 = **改号零牵动**；`git diff --numstat` = 3/3（只动三行，未波及其它 183 行） |
+| E6 | `docs/design/Sandbox Execution Design.md` → `docs/design/archive/`（`git mv` 保留历史）+ 首行三行定性：**从未采纳从未实施**（全仓零引用、无 CubeSandbox 代码或依赖）+ **主题已整体退役**（实际沙箱路线 = v2.31 受限令牌 + JobObject，而该插件本身又已于 v2.145 删除）+ 现役安全面指路四文件；结尾一句「照本稿实现会造出与现网相反的东西」。**新立 `docs/design/INDEX.md`**：七节分类（权威规范 / 已兑现设计稿 / 待研究 / 对照留档 / 存档·未采纳 / 工单与台账 / 目录约定），逐篇标状态与兑现批次，含六词状态词汇表与「新建或退役 md 同批改本表」的维护纪律 | 该文档 761 行（**审计记 575 = 数字失实，按实测登记**），`grep -rln "Sandbox Execution Design"` 改前命中 = 仅 `docs/reports/` 三份审计文档、正文零引用；INDEX.md 里全部本地链接过自检脚本 = **broken 0**（两条剩余命中是审计报告里的正则代码片段 `[a-z0-9_]+` 被误当链接，非真链）；`icon replacement plan.md` 顺手查实**未采纳**（`grep -ri tabler desktop/src` = 0，现役 = 自绘 `lib/icons.ts`）并在 INDEX 标出 |
+| E7 | 版本注释收敛（审计 M-12）：`plugins-src/{memory-sqlite,tool-edit,tool-fetch,tool-fs,tool-git,tool-notify,tool-shell}/Cargo.toml` 七条「build_plugins.sh 按 **1.0.0** 构建一次并暂存」+ `tool-echo`「按 **1.2.0 / 1.3.0** 各构建一次」+ `tool-shout`「build_market.sh 按 **1.0.0 / 1.1.0**」→ 统一改「**版本真源 = 脚本内 stage 调用清单**，此处不写死版本号」。`build_plugins.sh` 的收尾文案已在批 B 由 stage 清单生成，本批不再二次维护 | `grep -rn "1\\.0\\.0\\|1\\.2\\.0\\|1\\.3\\.0\\|1\\.1\\.0" plugins-src/*/Cargo.toml`：**9 → 0**；9 个文件各 1 行改动（`git diff --numstat` 逐文件 = 1/1），零行为改动 |
+| E8 | README 与工单真实化：`README.md` 从 25 行「当前状态 = 阶段一（内核骨架 + 事件日志）」重写为 84 行现役面貌（版本 / 可用形态 / 规模参考 / 八 crate 结构 / 两套门禁命令 / 文档入口），并把「一切皆插件」的定性按 v2.75 架构裁定与 v2.145 沙箱退役改写；`market/README.md` 的 `manifest.json` 形状从 v1 三键 `{id,version,description}` 订正为 **packaging v2 全量**（并点明它硬编码在 `build_market.sh` 里、与 `plugins/` 侧「源 manifest + sed」是两条通路 → 登记 F13），版本基准偏差（夹具仍 1.x vs「全部插件 0.1.0 起步」）**登记待裁定不擅自动产物**；`BUG/Tool Layer Issues Todo List.md` 状态行「待处理」→「已处理（v2.116），唯余 shell 跨平台策略 ⏸」（它与自家 §六 处理记录自相矛盾）；`BUG/bug-report.md` 的 Bug 3 从「🆕 待上报」→「◐ 部分处理」并列明哪一支已修（v2.146 M-10 拆开引号不闭合 vs 空命令）、哪两支仍开放（ENOENT 不指 `fs_list`、元字符不指 `fs_grep`）→ 登记 F12；`plugins.md` **§一 加「现役状态」整列**（19 行逐项标 ✅/🔧/◐/❌/⬜ 并给依据），§二/§三/§四/§六 四处退役件加就地注（含 §四 表里「挂载点 `serial` on `tool/call`」这条**实际不存在的通路** —— 与批 D 给 DESIGN §3.5 标的 parallel/serial RESERVED 同源）；`NEW/Reliability Reinforcement Design.md:755` 与 `NEW/Model Capability and Multimodal Phase Plan.md:154` 的「硬锁/unlockRisky 全保留」加 v2.145 订正注；批 C 登记的随批项 `docs/上下文与记忆工作流程报告.md` 收口：§1.2 管线图与 §1.3「五监听器」表按代码重写为**七监听器现役序**（`state/mod.rs:215-300` 逐行核过，补齐 v2.139 三件、把 `CtxCompact` 移出现役表并写清它留下的两件活物），「规则切分降级」条的 ctx-compact 措辞改为「纪律源自它、现由树侧自持」，注里的行号指路改成锚名指路（行号会漂，这本身就是一种失真） | `README.md` 25 → 84 行、`plugins.md` 改动 111 行、报告 38 行；`plugins.md` 的「误删—补回」闭环：批 E 首次改 §一 表时连带删掉了 §二 节标题与 P0 表，**当场用 `git show HEAD` 原文补回并逐行核对** —— `git diff` 删除行清单 = 20 行 §一 旧表 + 2 行表头 + 1 句改写 + 1 行 `fs.restore` 订正，§二 四行**不在删除清单内** = 原文原样回归；报告表重写后**机器校验列数**（首轮 splice 把「行为」列错位，按 `split("|").length!==6` 判红抓到 → 修 73/75 两行 → 七行全 4 列）；CRLF 保持：`Model Capability...md` 改前改后 `crlf=213/213`（注插在 `\r` 之前，未被整文件转 LF） |
+
+**新登记（批 F 段）**
+
+- **F12**（来自 `bug-report.md` Bug 3 的开放面）：`fs_read`/`fs_grep`/`fs_list` 的 ENOENT 分支只透传系统原文（不指 `fs_list` 上级）、`shell_read` 元字符拒绝不指 `fs_grep`/`shell`、`proof.rs` 的 unterminated-quote 走通用 `structural()` 模板 —— 同族「错误信息要教模型下一步」，修复模板 = 仓内已有的三条 ✅ 先例（`use fs_list` / `use the shell tool instead` / `copy old_string character-for-character`）。
+- **F13**（来自 `market/README.md` 订正）：`market` 的 v2 manifest **硬编码在 `scripts/build_market.sh` 里**（`cat > manifest.json <<EOF`），而 `plugins/` 侧走「源 manifest.json + sed 版本号」—— 同一份元数据两条通路，正是 F7「同源实现分家后漂移」的家族成员（v2.133 ENV_LOCK 分裂、v2.135 gc 序错同源）。
+- **F14**（本批顺手发现，零风险小项）：`crates/kernel-bin/src/demo.rs` 的版本常量名仍是 `V12: &str = "0.1.0"` / `V13: &str = "0.2.0"` —— 名字来自已被作废的 1.2.0/1.3.0 时代，随批 F 改名 `V_OLD/V_NEW` 即可（不改行为）。
+
+**批 E 门禁（文档最后一次编辑后全量复跑，2026-10-11）**
+
+```
+（见下方实跑结果，本批含 9 个 Cargo.toml 注释改动，故按「动过 Rust 轨」口径全量复跑）
+```
+
+已知边界：①E4b 的 `CHANGELOG.md` 拆分建议**未采纳并登记待裁定**；②`market/tool-shout` 仍 1.0.0/1.1.0 与 v2.56「全部插件 0.1.0 起步」存在**已知偏差**（夹具保留 1.x 恰好覆盖旧锁文件回退路径），是否重置待你裁定；③INDEX.md 的状态判定 = 我按当前代码逐个 grep 得出（如 `tabler` 0 命中判「未采纳」），**「已兑现」类的兑现批次号来自 AGENTS/ROADMAP 自述**，未逐批重跑验证；④本批未做界面/CDP 走查（纯文档批，无 `.ts/.vue` 改动）；⑤**链接自检脚本 `tmp/v149-linkcheck.mjs` 留在 tmp 未入库**——它抓到过本批自己写出的两处断链（ROADMAP 新块的 `../plugins/README.md` 解析到 `docs/plugins/`、INDEX.md 里含括号的文件名未做百分号编码），但升为第五道门禁要配套变异验证（塞坏链接见红 → 还原复绿）+ pre-commit 接线，属新增门禁面，**等你点头再入库**；⑥「表改写必须带列数断言」这条教训目前只写进 CHANGELOG，**没有机器化**——下一轮表格改写若人记不住就会再犯，可随批 V 一起决定是否落成脚本。
+
+---
 
 ## 6. 验收判据（每批交付时逐条给）
 

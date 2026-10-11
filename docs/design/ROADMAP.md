@@ -722,6 +722,27 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.149 · 审计修复批 E（权威文档真实化：让下一个 agent 不再被文档骗）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§5 批 E 段（逐条「改前 → 改后」计数与取证都在那儿）。本批**零功能代码改动**，
+射程是文档层——判据不是写了多少字，而是**「文档里还有多少句在描述已不存在的机制」**。审计未覆盖而本批
+核对时新抓的一类：**同一信息两份表互相分叉**（`ROADMAP §四` 的插件完成度表与 `plugins.md §一`），已单点化。
+
+| 面 | 落点 |
+|---|---|
+| ① DESIGN.md 归真（E1） | §7.1 洋葱链改真实（原写「实装 Tracing → Timeout → **Retry** → CircuitBreaker」）+ 新增 **waterfall 七监听器注册序**段；§7.2 决策表补 ③项目 deny / ⑤项目 allow 重排七序、row2 删 `sandbox_run`、逐序按 `approval.rs::resolve` 抄实；§8 目录树删 `config/` 块；§11.3 开发态/安装态重写为 dev_scan + lockfile；§3.5 表加「现网接线」列。`grep -c v2.145 DESIGN.md` = 改前 **0** → 改后 **6** |
+| ② 插件门面归真（E2/E7） | `plugins/README.md` 整表重写：件数「八件」→ **9 个 id**（`tool-shout` 只进 market、`tool-sandbox` 已退役）、工具名点号 → 下划线、1.x → 最新暂存版本、`fetch` Pure → **Irreversible**、`shell`「白名单 + denylist」→ v2.145 两态、`Compensable` 写成实际形状 `{kind, undo_tool}`，并新列「宿主内置工具不在本表」；`plugins-src/*/Cargo.toml` 九条写死的版本号（1.0.0 / 1.2.0 / 1.3.0 / 1.1.0）全改指 **`build_plugins.sh` 的 stage 清单**（唯一真源），`grep` 计数 **9 → 0** |
+| ③ AGENTS.md 瘦身（E4） | 32 条历史流水（195,039 字节；搬出后按新纪律把 v2.147 条从本文件移除，归档里本来就有它，不重复搬入）**逐字原样**搬入 `docs/design/archive/AGENTS-progress-archive.md`（脚本按 `git show HEAD:AGENTS.md` 行区间切，**逐行校验 mismatch = 0**）；`wc -c AGENTS.md` = **206,707 → 22,080 字节（−89.3%）**，从此整份文件在会话注入的 65,536 字节预算内、现行纪律全部可读；写死新**写入纪律**（只留当前 + 前一版 + 归档指针三条，合计 ≤6,000 字节（本批实测 3,572 + 1,191 + 915），被挤出的整条搬走不留残段）。同批订正五处失真：**「定位」行**（原把「模型适配器、沙箱」都算插件——LLM 按 v2.75 是宿主内置服务、沙箱 v2.145 已退役）、权威文档行加「动手前先查 INDEX.md」、目录结构块补 `memory-tree` crate / `INDEX.md` / `archive/` / `scripts/`、常用命令块补批 B 立的四道结构闸与 desktop/前端三件（demo 叙事版本号 1.2.0/1.3.0 → 0.1.0/0.2.0）、**设计纪律 ④⑤⑥ 三条加实况注**（桌面是**每 step 批量落盘**不是 per-event / 磁盘快照从未接线 = RESERVED / `Irreversible` 由「必须审批」改「**默认**审批」并列明五条免审路径）|
+| ④ 文档体检入口（E6） | 新 **`docs/design/INDEX.md`**：七节分类（权威规范 / 已兑现设计稿 / 待研究 / 对照留档 / 存档·未采纳 / 工单与台账 / 目录约定）+ 六个状态词汇 + 「新建或退役 md 同批改本表」纪律；`Sandbox Execution Design.md`（**761 行**，审计记 575 = 数字失实已按实测登记）`git mv` 进 `archive/` + 首行三行定性（从未采纳从未实施 + 主题已退役 + 现役安全面指路）；`icon replacement plan.md` 查实**未采纳**（`grep -ri tabler desktop/src` = 0）就地标注 |
+| ⑤ 撞号与状态行（E5/E8） | `CHANGELOG.md` 两条互不相关的批共用 `v2.75` → LLM 兼容层条**号沿用**（承载全仓 40+ 处按号引用），前端统一标准条改占空号 **v2.76** 并按日期移到正确位序（改号前逐条判读 47 处 `v2.75` 引用：除被改条外全部指 LLM 批、且该批在别处一律按日期引用 = **改号零牵动**，diff 只 3/3 行）；`README.md` 从「当前状态 = 阶段一」25 行重写为 84 行现役面貌；`market/README.md` 的 manifest 形状从 v1 三键订正为 packaging v2 全量 + 版本基准偏差登记；`BUG/` 两份清单状态行与自家处理记录对账（「待处理」→「已处理 v2.116，唯余 ⏸ 一项」；Bug 3「待上报」→「◐ 部分处理」并写清哪支已修哪两支开放 → 登记 **F12**）|
+| ⑥ 退役件就地注（E3/E8） | `UI shell and patterns.md` 四处现状表**只加注不改正文**（幻影四键 / `stabilityRounds` / `session_set_organizer` 已删，判据 = `grep -rn session_set_organizer desktop/` **0** 与 `settings/tests/memory.rs:351-369` 幻影锁）；`plugins.md` **§一 加「现役状态」整列**（19 行逐项 ✅/🔧/◐/❌/⬜ 带依据）+ §二/§三/§四/§六 四处就地注（含 §四 表里「挂载点 = `serial` on `tool/call`」这条**实际不存在的通路**，与批 D 的 §3.5 RESERVED 同源）；`Reliability:755` 与 `Model Capability:154` 的「硬锁/unlockRisky 全保留」加 v2.145 订正注（**CRLF 保持**：改前改后 `crlf=213/213`，注插在 `\r` 之前）|
+| ⑦ 新抓：两份表分叉单点化（审计未列） | `ROADMAP §四`「plugins.md 完成度」逐条表与 `plugins.md §一` 是同一信息两份——核对时它已分叉到 **6 处 ✅ 描述已退役/已换形态的东西**（genai 三合一 / shell 白名单+denylist / ctx-compact v2.19 / memory-vector 的 experiences / **tool-sandbox 标 ✅ 而目录已删** / tool-fetch 措辞）。处置 = §四 删掉逐条表，改为「结论（未做的只剩 tool-http、mw-ratelimit、中间件插件化、Playwright 级网页自动化、shell 跨平台策略）+ 六处失效清单 + **今后只改 plugins.md §一**」；`上下文与记忆工作流程报告.md` §1.2/§1.3 按 `state/mod.rs:215-300` 重写为**七监听器现役序**（原表把已退役的 `CtxCompact` 列为现役第 ⑤ 步、漏列 v2.139 三件），注里的行号指路改锚名指路 |
+| 门禁 | 根 fmt CLEAN、clippy `--workspace --all-targets -- -D warnings` 0、**39 套件 436 passed 0 failed**（与 v2.148 持平，零回归；`wasm_plugins` 满跑一次偶发红 = **F11 已知并行互踩**，单跑 2/2 绿，与本批零代码改动无关）；desktop fmt CLEAN、clippy --all-targets -- -D warnings 0、3 套件 **356 passed 0 failed**（与 v2.148 持平，零回归）；四道结构闸全绿 = `check_length` 39==基线、`check-i18n` 891=891·缺键 0·无引用键 0、`check-commands` 85·85·85、`check-middleware-wiring` 10·10·0·白名单 0；**本批新增一项自检** = 全仓 markdown 本地链接自检（`tmp/v149-linkcheck.mjs`，73 条本地链接 broken 0；剩下两条命中是审计报告里的正则代码片段被误当链接）|
+| 边界 | ①**E4b 未采纳**：`CHANGELOG.md`（186 行 / 418 KB）不拆成目录——它不进会话注入源，拆分无 E4 那种收益，而 150 个文件 + 几十处引用改写是纯成本，检索靠 `grep "^\*文档版本：v2.14"` 已够；仍要拆请单独点头；②`market/tool-shout` 仍 1.0.0/1.1.0 与 v2.56「全部插件 0.1.0 起步」**已知偏差**（夹具保留 1.x 恰好持续覆盖旧 lockfile 条目回退路径），未擅自动产物，待裁定；③INDEX.md 的「已兑现」批次号来自 AGENTS/ROADMAP 自述，未逐批重跑验证；④纯文档批，无 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`，也未做界面走查 |
+| 文档 | `AUDIT-FIX-PLAN-v1.md` §5 批 E 段 + §1 批 E 标 ✅ + 批 F 段新增 **F12/F13/F14** + ROADMAP §四 重写 + **INDEX.md 新立** + README/plugins·market 两份 README/AGENTS/CHANGELOG/DESIGN/plugins.md/UI shell/两份 NEW 设计稿/工作流程报告/BUG 两份 全随批 v2.149 |
+
+---
+
 ### v2.148 · 审计修复批 D（死配置与哑 ABI：删的删、预留的标注、分叉规则单点化）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§5 批 D 段（逐条证据 + grep 对账在那儿）。**D2 改判转批 H**（查证发现取消信号过不去 C ABI 边界，只接宿主侧 = 造半接线，正是本轮审计在罚的形态；用户对该口径尚未表态，先按最低风险路径诚实化 + 立批）。
@@ -1004,51 +1025,35 @@
 
 ---
 
-## 四、[plugins.md](http://plugins.md) 必备插件清单完成度
+## 四、[plugins.md](plugins.md) 必备插件清单完成度
 
-> 对照《[plugins.md](http://plugins.md)》§一总览 19 项逐条核对（2026-09-29，以 plugins-src/ 与 提交记录为准）。**结论：还剩 tool-http / mw-ratelimit 两个未排期；P2 五件 于 2026-09-30 用户确认排期 = ⑭（schedule+notify）⑮（agent-sub）⑯ （sandbox），tool-browser 用户裁定最后；其余全部落地。**
+> **状态列唯一真源 = [plugins.md §一「现役状态」列](plugins.md)**（v2.149 批 E 立的）。本节此前是一张
+> 2026-09-29 的逐项 ✅/⬜ 快照，而 plugins.md 同时也被人读——**同一信息两份表，改一处必漏另一处**，
+> 到批 E 核对时两份已经分叉到互相矛盾的程度（本节 6 处 ✅ 描述的是**已退役或已换形态**的东西）。
+> 处置 = 本节删掉逐条表，只留结论与分叉清单；今后**新增/退役能力只改 plugins.md §一**，本节不复制表格。
 
-### P0 —— 全部 ✅
+**结论（v2.149 核）**
 
-| 插件 | 状态 | 落点 |
+* 清单 19 项里：**动态库插件 9 个 id 全部现役**（`plugins-src/`，见 [plugins/README.md](../../plugins/README.md) 版本表）；
+  另有 6 项能力以**宿主内置**形态交付（模型接入 / 审批 / 审计 / 子 Agent / 定时任务 / 向量检索基建）——
+  「不是插件」不等于「没做」，也不等于「该补成插件」。
+* **仍未做**：`tool-http`（POST/PUT 通用请求）、`mw-ratelimit`（工具调用限流；现存的只有 LLM 传输层 429 退避）、
+  `PluginKind::Middleware` 中间件插件化（契约位仍是占位变体）、Playwright 级网页自动化（`tool-browser` 的原始定义；
+  v2.144 交付的是宿主内置预览 + 控制台回读，不是同一件事）、shell 跨平台长期策略（`BUG/` 清单里 ⏸ 的那项）。
+* 用户裁定记录：`tool-browser` 在五件 P2 中排最末（2026-09-30）。
+
+**本节原表里已失效的 6 处 ✅（批 E 逐条订正，写在这里是为了让「按老表干活」不再发生）**
+
+| 项 | 原表陈述 | 现况 |
 |---|---|---|
-| llm-openai / llm-ollama | ✅ | v2.8：宿主侧 llm 模块（genai 三合一），非插件形态 |
-| tool-fs | ✅ | v2.9 读三件套 + v2.14 写三件套（write=Compensable{fs.restore} / delete=Irreversible / restore=Irreversible） |
-| tool-shell | ✅ | v2.14（白名单 + denylist 永远赢 + 元字符拒绝，一律 Irreversible） |
-| tool-fetch | ✅ | v2.9（GET-only；SSRF 防线 v2.14 补） |
+| `llm-openai` / `llm-ollama` | ✅ v2.8 宿主侧 llm 模块（**genai 三合一**） | genai 依赖随 **v2.75 全删**，现役 = 自建 OpenAI 兼容客户端一条线协议；kind 只决定鉴权头与端点归一 |
+| `tool-shell` | ✅ v2.14（**白名单 + denylist 永远赢** + 元字符拒绝） | **v2.145 命令级禁令整批退役**：Deny 仅剩结构性拒绝，其余进审批卡；另有 `shell_read` 免审面（证明层 v2.135 + EXACT_ARGV v2.145） |
+| `tool-fetch` | ✅ v2.9（GET-only） | ✅ 仍在，但副作用自 v2.113 起 = **Irreversible**（原标 Pure 作废），且展示元数据自 v2.146 起与代码同步 |
+| `ctx-compact` | ✅ v2.19 配置驱动收口（三策略/阈值 50%/事件+撤销） | **已退役**：桌面压缩链 v2.137 整面退役（整理接管），本体 v2.147 批 C 摘除；只剩 `CompactionOutcome` 重放面 + `estimate_tokens` |
+| `memory-vector` | ✅ v2.28（experiences.sqlite3 + ExperienceSource 契约） | **experiences 已随 v2.136 删除**（含内核契约）；向量基建以宿主共享件 `llm/embed.rs` 存活，服务 `search_titles` / ToolExposure 第三路 / `search_tools` |
+| `tool-sandbox` | ✅ ⑯ v2.31 受限令牌 + JobObject | **整目录退役（v2.145）**：不隔离 fs/网络即非安全边界，第二入口只多撞锁面；已存会话的 `sandbox_run` 按钉死集回映射 miss 自然消失（前端仅保留历史日志重放映射） |
 
-### P1 —— 差一个 tool-http
-
-| 插件 | 状态 | 落点 |
-|---|---|---|
-| tool-edit | ✅ | v2.14（replace/lines/严格 diff，跨插件 undo） |
-| tool-git | ✅ | v2.15（status/diff/log/commit/push + undo_commit） |
-| tool-http | ⬜ 未排期 | POST/PUT 通用请求；已入收尾 backlog |
-| memory-sqlite | ✅ | v2.15（跨会话记忆；plugins.md 所述"会话持久化"归 session-store——desktop 落盘在 backlog） |
-| memory-vector | ✅ | v2.28 宿主侧形态（42bcbf9，同 llm 插件宿主侧先例：embedding 端点+密钥归宿主）——experiences.sqlite3 + ExperienceSource 契约，详见 ⑬ 行 |
-| ctx-compact | ✅ | v2.19 配置驱动收口（三策略/阈值 50%/事件+撤销，92f298b） |
-
-### P1.5 —— 中间件类：宿主侧形态已齐，插件化未做
-
-| 插件 | 状态 | 落点 |
-|---|---|---|
-| mw-approval | ✅ | 阶段四审批门 + 阶段六桌面审批弹窗（宿主侧） |
-| mw-audit | ✅ | v2.9（宿主侧 JSONL 审计） |
-| mw-ratelimit | ⬜ 未排期 | 已入收尾 backlog |
-| （中间件插件化本身） | ⏸ | PluginKind::Middleware 仍是占位变体；已入 backlog |
-
-### P2 —— 只做了 tool-mcp，其余后排
-
-| 插件 | 状态 | 说明 |
-|---|---|---|
-| tool-mcp | ✅ | v2.15（mcp.json 加载期发现冻结 + stdio JSON-RPC + side_effect 缺省 Irreversible） |
-| tool-browser | ⏸ 最后 | 文档自己建议晚做（fetch + MCP 已覆盖多数场景）；用户裁定 2026-09-30：五件中排最末 |
-| tool-sandbox | ✅ | ⑯（v2.31，dc822d9）：受限令牌 + JobObject 限额受限档（能力矩阵如实分级，fs/net 不隔离由策略三道闸补偿），定稿见 plugins.md §六 |
-| agent-sub | ✅ | ⑮（v2.30，d29cd69）：kernel-agent subagent/ 单层调度 + fork 前缀 + 白名单视图 + 审批冒泡，详见 ⑮ 块 |
-| tool-schedule | ✅ | ⑭（v2.29，7dc0139）：宿主内置工具面 + schedule.sqlite3 + 触发引擎，详见 ⑭ 块 |
-| tool-notify | ✅ | ⑭（v2.29，7dc0139）：webhook 插件（SSRF 防线照搬）+ 桌面通知走 vtable 追加槽 |
-
----
+另两处旧措辞随批 E 一并纠正：`tool-fs` 的 `Compensable{fs.restore}` = 点号旧名，现役 `fs_restore`（v2.25 起因 OpenAI 兼容接口拒收点号全表改下划线）；`tool-browser` 由「⏸ 最后」细化为「◐ 预览面已交付、自动化面未做」。
 
 ## 五、功能层排期（2026-10-04 规划：UI shell 文档内设计项已全部落地（㉗·C），转入功能面——PI-Desktop 全功能面借鉴盘点 + 既有欠账合并）
 

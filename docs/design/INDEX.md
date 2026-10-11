@@ -1,0 +1,114 @@
+# docs/design 文档索引（INDEX）
+
+> **为什么有这份文件**：`docs/design/` 里同时躺着**现役规范**、**已兑现的历史设计稿**和
+> **从未采纳/已退役的旧方案**，文件名与目录位置看不出区别。审计《CODE-AUDIT-v1》H9 判的
+> 「照 DESIGN.md 实现会写出一套与代码相反的策略层」就是这件事的代价——而 AGENTS.md 明写
+> 「改核心模块前先读对应章节」。本表回答一个问题：**这篇现在还算数吗？**
+>
+> **维护纪律（v2.149 批 E 起）**：新建或退役任何 `docs/` 下的 md，**同一批里改本表**。
+> 状态词汇只有六个：`权威` / `参考` / `已兑现` / `待研究` / `对照留档` / `存档·未采纳`。
+
+---
+
+## 一、权威规范（改代码前必读；与代码冲突时，先对齐文档再动码）
+
+| 文档 | 地位 | 现役版本 |
+|---|---|---|
+| [DESIGN.md](DESIGN.md) | 唯一需求来源：内核架构、ABI 契约、决策表、目录树 | 批 E 已把 §7.1 洋葱链、§7.2 决策表、§8 目录树、§11.3 装载机制、§3.5 接线列订正到代码实况（v2.149） |
+| [ROADMAP.md](ROADMAP.md) | **唯一进度看板**（⬜/◐/✅ + 版本 + 哈希） | 现役 |
+| [CHANGELOG.md](CHANGELOG.md) | **逐批落点日志**（每版一整行，倒序；本文件是"写了什么"的真源，不是进度表） | 现役。检索：`grep -n "^\*文档版本：v2.14" CHANGELOG.md` |
+| [UI shell and patterns.md](UI%20shell%20and%20patterns.md) | UI 唯一权威（导航模型 / 模式库 / 事件流向 / 弹层规则） | v4.30；⚠ 现状表里若干键/命令已退役，**逐条已加批 E 退役注**（§193/§202/§883/§999） |
+| [Front-end Design Guidelines.md](Front-end%20Design%20Guidelines.md) | 前端**唯一形态标准**（15 类唯一形态 + 特例申请制 + 双闸门禁） | v2.1 |
+| [Memory Tree Design v2.md](Memory%20Tree%20Design%20v2.md) | 记忆树规范正身（章节捆 L0/L1/L2 / 整理触发 / 记录员） | v2.0（§4.1/§15 已随 v2.137 修订） |
+| [KV Prefix Cache Design v2.md](KV%20Prefix%20Cache%20Design%20v2.md) | 前缀缓存纪律（钉死集 / 预取 / 稳定期） | v2.0；⚠ 稳定期随 ctx-compact 退役，见其 §6.4 |
+| [Context and Memory.md](Context%20and%20Memory.md) | 上下文 + 记忆总纲（注入顺序 / 双层隔离） | §3.2.2/§4 已随 v2.136–v2.138 加注 |
+
+**专题参考（各管一轨，现役）**
+
+| 文档 | 管什么 |
+|---|---|
+| [LLM.md](LLM.md) | 模型接入：单线协议、韧性重试、方言档位、多模态、子代理模型档（v3.7） |
+| [plugins.md](plugins.md) | 必备能力清单与落地顺序；⚠ §一 已加**现役状态列**（v2.149），别再照旧表重建 sandbox/LLM 插件 |
+| [Plug-in packaging.md](Plug-in%20packaging.md) | 插件元数据与打包 v2（manifest / 版本策略 §9.4） |
+| [Tool exposure strategy and usage statistics.md](Tool%20exposure%20strategy%20and%20usage%20statistics.md) | 工具暴露三层 / EWMA / 闲置分级 |
+| [Setting and Constrained Optimization.md](Setting%20and%20Constrained%20Optimization.md) | 设置项与约束最小化清单（§2.3/§2.7/§3 已随 v2.145 加修订注） |
+| [Memory-KV Roadmap.md](Memory-KV%20Roadmap.md) | 记忆树 × KV 专项路线表（M0–M6 + F1–F3 **全表收口**，主 ROADMAP 不列本专项） |
+
+---
+
+## 二、已兑现设计稿（内容 = 当时的方案与裁定；实现偏差以文内「落地标注」为准）
+
+这些文档**不是待办**。它们的价值是"为什么长成这样"的决策记录。
+
+| 文档 | 兑现批次 |
+|---|---|
+| [NEW/Permission Model Redesign (ZCode Alignment) v1.md](NEW/Permission%20Model%20Redesign%20%28ZCode%20Alignment%29%20v1.md) | v2.145（五条裁定全落 + 实机走查） |
+| [NEW/Prompt Assembly Layering Design.md](NEW/Prompt%20Assembly%20Layering%20Design.md) | v2.139（四批全落，偏差三条已标注） |
+| [Organize Summary Design v1.md](Organize%20Summary%20Design%20v1.md) | v2.141（四层多分辨率记忆） |
+| [Cross-Session Recall Design v1.md](Cross-Session%20Recall%20Design%20v1.md) | v2.142（批 1 工具面；**批 2 常驻进展行注入挂账未做**） |
+| [NEW/Model Capability and Multimodal Phase Plan.md](NEW/Model%20Capability%20and%20Multimodal%20Phase%20Plan.md) | v2.127–v2.132（六批收官；G4 行已加 v2.145 订正注） |
+| [NEW/Model Vendor Configuration and Capability Probing Design.md](NEW/Model%20Vendor%20Configuration%20and%20Capability%20Probing%20Design.md) | 批 A/B（v2.127–v2.128） |
+| [NEW/Multimodal Model Support Design.md](NEW/Multimodal%20Model%20Support%20Design.md) | 批 D/E（v2.130–v2.131） |
+| [NEW/Reliability Reinforcement Design.md](NEW/Reliability%20Reinforcement%20Design.md) | G1 随批 B、G2 v2.134、G3 v2.133、G4 v2.135、G5 v2.132；**G6/G7 记档未立批** |
+| [edit_replace.md](edit_replace.md) | v2.114（容错匹配 + always 暴露） |
+| [three-column responsive layout V2.md](three-column%20responsive%20layout%20V2.md) | v2.111–v2.112 |
+| [NEW/Tool Execution Process Display.md](NEW/Tool%20Execution%20Process%20Display.md) | v2.117 |
+| [NEW/language of thought.md](NEW/language%20of%20thought.md) | v2.116（思考语言设置） |
+| [Memory File-ization Design.md](Memory%20File-ization%20Design.md) | F1–F3（v2.71–v2.73） |
+
+---
+
+## 三、待研究 / 未实施（**不是规范，别照它写码**）
+
+| 文档 | 状态 |
+|---|---|
+| [NEW/Context Budget Closure Design.md](NEW/Context%20Budget%20Closure%20Design.md) | 文首自述「状态：待研究。本文是问题陈述 + 方案候选，**不是已实施设计**」；行号以 v2.137 工作区为准 |
+
+---
+
+## 四、对照留档（有意保留的旧版，以 v2 为准）
+
+| 文档 | 说明 |
+|---|---|
+| [KV Prefix Cache Design.md](KV%20Prefix%20Cache%20Design.md) | v1.0，v2 文档明写「原文保留作对照，两文档并存，以本文为准」 |
+| [Memory Tree Design.md](Memory%20Tree%20Design.md) | v1.0，同上 |
+
+---
+
+## 五、存档·未采纳 / 已退役（`archive/`，只作方向史）
+
+| 文档 | 为什么在这里 |
+|---|---|
+| [archive/Sandbox Execution Design.md](archive/Sandbox%20Execution%20Design.md) | **CubeSandbox 集成路线从未采纳、从未实施**（全仓零引用、无相关代码与依赖）；且沙箱主题整体已随 v2.145 退役。v2.149 批 E 移入 `archive/` 并在首行加两行定性 |
+| [icon replacement plan.md](icon%20replacement%20plan.md) | Tabler Icons 替换方案**未采纳**：现役图标 = 自绘 `desktop/src/lib/icons.ts`（lucide 风格 16 格，`grep -ri tabler desktop/src` = 0 命中）。留在原位，改图标前先读它了解曾考虑过的方案，别当待办 |
+
+---
+
+## 六、工单与台账（按目录归位，状态行须与自身处理记录一致）
+
+| 文档 | 状态 |
+|---|---|
+| [BUG/环境已知限制.md](BUG/环境已知限制.md) | **长期维护**：所有"外网工具失败 / shell 命令奇怪行为"先对照本文 |
+| [BUG/Tool Layer Issues Todo List.md](BUG/Tool%20Layer%20Issues%20Todo%20List.md) | 已处理（v2.116），唯余「shell 跨平台策略」⏸；原「待处理」状态行与 §六 自相矛盾，批 E 订正 |
+| [BUG/bug-report.md](BUG/bug-report.md) | Bug 1/2 已修复转存档；**Bug 3 部分处理**（开放两支登记批 F·F12），原「待上报」标签已订正 |
+| [../reports/CODE-AUDIT-v1.md](../reports/CODE-AUDIT-v1.md) | 2026-10-10 全仓审计（证据台账在 `_parts/`） |
+| [../reports/AUDIT-FIX-PLAN-v1.md](../reports/AUDIT-FIX-PLAN-v1.md) | **审计修复执行计划 = 逐批证据台账**（批 A–E 已落，F/G/H 排队） |
+| [../上下文与记忆工作流程报告.md](../上下文与记忆工作流程报告.md) | as-built 现状报告（v2.135 生成 + 逐批修订注；§1.2/§1.3 已按代码重写为七监听器） |
+| [ui-prototype/](ui-prototype/) | UI 静态原型（方向参考，不是像素合同） |
+
+---
+
+## 七、目录结构约定
+
+```
+docs/design/
+  DESIGN.md / ROADMAP.md / CHANGELOG.md / INDEX.md   四个顶层件：规范 / 进度 / 落点 / 本表
+  NEW/                    近几轮的设计稿（兑现后不搬走，靠本表标状态）
+  BUG/                    工单与限制清单
+  archive/                已退役 / 未采纳（含 AGENTS-progress-archive.md = 历史进度流水）
+  ui-prototype/           静态原型
+```
+
+`archive/` 不是垃圾桶：进这里的文件都带**首行定性注**（未采纳还是退役、现役替代品指在哪）。
+历史进度流水不再写进 `AGENTS.md`（会话注入源，65,536 字节预算），改写进
+[archive/AGENTS-progress-archive.md](archive/AGENTS-progress-archive.md)。

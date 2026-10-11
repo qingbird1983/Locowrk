@@ -190,7 +190,7 @@
 |---|---|---|
 | LlmSection | llm | ✅ 既有（+ 窗口下拉） |
 | ContextSection | context | ✅（v4.27 重写：整理阈值滑条 100K–800K + 拖动气泡 + usageBar 阈值用量进度条显隐；压缩百分比/策略行退役） |
-| MemorySection | memory | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：尾巴策略（边界结算 / 固定窗口，缺省边界结算）+ 固定窗口 N（1–20 缺省 5，窗口档显示）+ memory_collapse 暴露（缺省关）+ 自动收起阈值（50–95% 缺省 80，collapse 开启时显示）；F1 v4.8 起另挂记忆文件化开关行（缺省开，关 = 回纯 sqlite 不再读写 md）；F2 v4.9 起再挂交接注入开关行（memory.repoContext 缺省开——归属会话注入 <repo>/.Locowrk/ 交接段，关 = 不建目录不注入）；F3 v4.10 起再挂交接更新开关行（memory.handoffUpdate 缺省开——归属会话轮次收束后后台自动更新 <repo>/.Locowrk/handoff.md，仅写该文件；未归属会话跳过），且 autoExtract 缺省改开（已裁定④，主动记忆；旧行为关 = 显式保存 false 不受影响）；M5 v4.19 起再挂缺省整理方式行（memory.defaultOrganizer，标准整理 / 记忆树整理——缺省记忆树，阶段 3 裁定自开发者区迁入用户层；未显式设置过的会话跟随此档）+ 经历记忆开关行（memory.experiences，缺省关——树 v2 §10.3 向量层关缺省观察一个版本：关 = 轮后经历提取与注入块经历段都停，已有经历数据保留可看；search_tools 语义检索的嵌入基建不动）） |
+| MemorySection | memory | ✅（注入开关 / topK / autoExtract；M2 v4.5 起另挂记忆树整理行：整理节奏 / 增量块 X；M4 v4.7 起另挂尾巴策略行：尾巴策略（边界结算 / 固定窗口，缺省边界结算）+ 固定窗口 N（1–20 缺省 5，窗口档显示）+ memory_collapse 暴露（缺省关）+ 自动收起阈值（50–95% 缺省 80，collapse 开启时显示）；F1 v4.8 起另挂记忆文件化开关行（缺省开，关 = 回纯 sqlite 不再读写 md）；F2 v4.9 起再挂交接注入开关行（memory.repoContext 缺省开——归属会话注入 <repo>/.Locowrk/ 交接段，关 = 不建目录不注入）；F3 v4.10 起再挂交接更新开关行（memory.handoffUpdate 缺省开——归属会话轮次收束后后台自动更新 <repo>/.Locowrk/handoff.md，仅写该文件；未归属会话跳过），且 autoExtract 缺省改开（已裁定④，主动记忆；旧行为关 = 显式保存 false 不受影响）；M5 v4.19 起再挂缺省整理方式行（memory.defaultOrganizer，标准整理 / 记忆树整理——缺省记忆树，阶段 3 裁定自开发者区迁入用户层；未显式设置过的会话跟随此档）+ 经历记忆开关行（memory.experiences，缺省关——树 v2 §10.3 向量层关缺省观察一个版本：关 = 轮后经历提取与注入块经历段都停，已有经历数据保留可看；search_tools 语义检索的嵌入基建不动）） 〔⚠ **v2.149 批 E 加注**：本行是逐批累积的现状流水，其中 **autoExtract / handoffUpdate / experiences** 三键随 v2.136 记忆模型 v2 退役、**defaultOrganizer** 随 v2.137「一切会话皆树」退役 = 四键皆为**幻影键**（serde 未知字段忽略，存量 settings.json 读得进、下次保存自然消失；锁在 `settings/tests/memory.rs:351-369` 幻影回归），设置页已无对应行；`repoContext` 语义自 v2.136 由「交接注入+收束改写」改为**静态提醒段**（节点钩子，内容不参与注入计算）。现役 memory 区键集 = enabled/topK/organizePacing/organizeChunkTokens/recorderModel·Provider/tailStrategy/tailWindowTurns/collapseThresholdPct/files/repoContext/instructionFiles〕 |
 | LlmSection | llm | ✅（v4.5 起默认项组内增会话记录员行——同主模型 ▾，树 v2 §5.2） |
 | SessionsSection | —（只读 dataDir） | ✅ |
 | LanguageSection | locale | ✅ |
@@ -199,7 +199,7 @@
 | ShortcutSection | shortcut | ✅ |
 | ShellSection | shell | ✅（高危解锁开关；重启生效） |
 | ToolsSection（v2.49 更名——分区 id 本就是 tools，组件名对齐 1:1；原 DeveloperSection） | tools（含 fsRoots 工作区目录 / maxTurnSteps 单轮步数上限 1–100 缺省 8 / approvalTimeoutSecs 审批等待时长，0=不限 缺省 100，🆕 v2.49） | ✅ |
-| DeveloperSection（🆕 v2.49 开发者选项，默认隐藏） | developer（unlocked 解锁态 / allowDeleteRunningSession 运行中会话强制删除 / allowSwitchRunningSession 运行中切换会话——危险开关缺省全关；🆕 M0：cacheHitAlert 命中率告警缺省关 + cacheHitAlertPercent 阈值缺省 80 + 「前缀缓存读数」只读面板；🆕 M1：tools.pinSession 工具集会话钉死缺省开 + context.stabilityRounds 稳定期轮数 1–10 缺省 3——两键 JSON 分属 tools/context 区，UI 行同挂开发者分区，KV v2 §9 开发者层级；🆕 M4：developer.defaultOrganizer 会话缺省整理模式（legacy / tree，缺省 legacy——树 v2 §15「会话缺省 organizer」，阶段 3 数据裁决后才切用户层；🆕 M5 v4.19：本行退役删除——键迁用户层 memory.defaultOrganizer 缺省 tree，见 MemorySection 行）；🆕 F2 v4.9：记忆文件合并动作行（手动触发 reconcile，结果 toast 如实报计数——M5 v4.19 起同跑 tree.md 人改回写）） | ✅ |
+| DeveloperSection（🆕 v2.49 开发者选项，默认隐藏） | developer（unlocked 解锁态 / allowDeleteRunningSession 运行中会话强制删除 / allowSwitchRunningSession 运行中切换会话——危险开关缺省全关；🆕 M0：cacheHitAlert 命中率告警缺省关 + cacheHitAlertPercent 阈值缺省 80 + 「前缀缓存读数」只读面板；🆕 M1：tools.pinSession 工具集会话钉死缺省开 + context.stabilityRounds 稳定期轮数 1–10 缺省 3——两键 JSON 分属 tools/context 区，UI 行同挂开发者分区，KV v2 §9 开发者层级；🆕 M4：developer.defaultOrganizer 会话缺省整理模式（legacy / tree，缺省 legacy——树 v2 §15「会话缺省 organizer」，阶段 3 数据裁决后才切用户层；🆕 M5 v4.19：本行退役删除——键迁用户层 memory.defaultOrganizer 缺省 tree，见 MemorySection 行）；🆕 F2 v4.9：记忆文件合并动作行（手动触发 reconcile，结果 toast 如实报计数——M5 v4.19 起同跑 tree.md 人改回写）） | ✅ 〔⚠ **v2.149 批 E 加注**：本行内 `context.stabilityRounds`（稳定期轮数）随 v2.137 压缩链退役 = 幻影键（`settings/update.rs:81`）；`developer.defaultOrganizer` 及其迁用户层的后继 `memory.defaultOrganizer` 同批退役——两行的 UI 已不在开发者分区内。分区现役项以本版本文末版本条为准〕 |
 | EmbeddingSection | embedding | ✅ |
 | PluginsSection | plugins | ✅（自动停用天数 / 调用超时） |
 
@@ -880,7 +880,7 @@ settings.json 读取或解析失败时**绝不空白页**：给一个居中的�
 
 **⑥ 召回质量埋点**：用量浮层「记忆展开 N 次」行（§3.12 v4.7，前端从当前转录 工具行统计）——实验判据④「该找到的信息可找到」的数据面；人工出题抽查仍按 路线表 §四 执行。
 
-**⑦ 新命令一件**（§4.2 扩表）：`session_set_organizer(sessionId, mode?)`—— `mode` = "legacy" | "tree" | 缺省（清除旁车字段 = 跟随缺省档）；旁车写穿 + 即时生效。
+**⑦ 新命令一件**（§4.2 扩表）：`session_set_organizer(sessionId, mode?)`—— `mode` = "legacy" | "tree" | 缺省（清除旁车字段 = 跟随缺省档）；旁车写穿 + 即时生效。（⚠ **v2.149 批 E 加注**：`session_set_organizer` 命令与旁车 `organizer` 键已随 v2.137 退役删除；本条保留为 M4 当时的落点记录，现役口径 =「一切会话皆树」，无会话级整理方式可选）
 
 ### 3.39 对话坞交互层：任务选择卡 / 排队卡 / 停止 / 回到底部（v4.11 新增）
 
@@ -996,7 +996,7 @@ settings.json 读取或解析失败时**绝不空白页**：给一个居中的�
 | memory_tree_sessions（✅ M3 §3.37④） | 记忆页树区块挂载/刷新 | 树投影目录扫描；会话切换器数据源 |
 | memory_tree_bundles（✅ M3 §3.37④） | 记忆页树区块（选中会话变化/刷新） | 直读投影文件，不占会话锁；捆列表渲染 |
 | memory_tree_original（✅ M3 §3.37④） | 记忆页树区块 \[看原文\] | 磁盘会话日志切片，与记录员材料同形；行内只读展开 |
-| session_set_organizer（✅ M4 §3.38⑦） | 侧栏任务行 … 菜单 | 旁车 organizer 写穿（mode 缺省 = 清除跟随缺省档）；即时生效，事件流零改动 |
+| session_set_organizer（✅ M4 §3.38⑦） | 侧栏任务行 … 菜单 | 旁车 organizer 写穿（mode 缺省 = 清除跟随缺省档）；即时生效，事件流零改动 〔⚠ **v2.149 批 E 加注**：该命令已随 v2.137「压缩面/标准整理整面退役」删除，桌面代码零命中（`grep -rn session_set_organizer desktop/` = 0），旁车 `organizer` 键不再读写，`scripts/check-commands.mjs` 三向闭合不含它——本行保留为历史落点记录〕 |
 | memory_reconcile（✅ F2 v4.9） | 记忆页挂载 + 开发者「记忆文件合并」动作 | diff 文件 ↔ 索引以文件为准回写（文件化设计 §3）；返回计数供 toast；总开关关 = 空转 |
 | memory_reveal_folder（✅ F2 v4.9） | 记忆页区块头「打开文件夹」 | 打开/创建 \~/.Locowrk/memory/——人的编辑面入口，不经 fsRoots 白名单（自有数据根非用户仓库） |
 
