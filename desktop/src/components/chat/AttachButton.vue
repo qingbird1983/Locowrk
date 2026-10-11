@@ -6,10 +6,11 @@
  * 作 parts 发出）；其余路径仍以 `@路径` 引用写进输入框（v1 语义，模型经
  * fs 工具读取）。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { pickFiles } from "../../lib/api";
+import { useDismissOnOutside } from "../../lib/use-popover";
 import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 
@@ -37,21 +38,8 @@ async function pick() {
   if (refs.length) emit("attach", refs);
 }
 
-function onDocPointerDown(e: PointerEvent) {
-  if (!open.value) return;
-  if (!(root.value?.contains(e.target as Node) ?? false)) open.value = false;
-}
-function onDocKeydown(e: KeyboardEvent) {
-  if (open.value && e.key === "Escape") open.value = false;
-}
-onMounted(() => {
-  document.addEventListener("pointerdown", onDocPointerDown);
-  document.addEventListener("keydown", onDocKeydown);
-});
-onBeforeUnmount(() => {
-  document.removeEventListener("pointerdown", onDocPointerDown);
-  document.removeEventListener("keydown", onDocKeydown);
-});
+// 浮层外点关闭（§五：小浮层不挂遮罩）→ 唯一实现见 lib/use-popover.ts
+useDismissOnOutside(root, open);
 </script>
 
 <template>

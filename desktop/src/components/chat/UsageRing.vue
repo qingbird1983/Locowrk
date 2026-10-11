@@ -5,10 +5,11 @@
  * 设置（环隐藏）。开合/外点关闭/Esc 自持，浮层锚钮上方（lw-pop-up 滑动
  * 过渡，§6.6 ②）。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
+import { useDismissOnOutside } from "../../lib/use-popover";
 import ContextUsagePopover from "./ContextUsagePopover.vue";
 
 const { t } = useI18n();
@@ -25,21 +26,8 @@ const pct = computed(() => {
 });
 const ringValue = computed(() => (pct.value / 100) * 34.56);
 
-function onDocPointerDown(e: PointerEvent) {
-  if (!show.value) return;
-  if (!(root.value?.contains(e.target as Node) ?? false)) show.value = false;
-}
-function onDocKeydown(e: KeyboardEvent) {
-  if (show.value && e.key === "Escape") show.value = false;
-}
-onMounted(() => {
-  document.addEventListener("pointerdown", onDocPointerDown);
-  document.addEventListener("keydown", onDocKeydown);
-});
-onBeforeUnmount(() => {
-  document.removeEventListener("pointerdown", onDocPointerDown);
-  document.removeEventListener("keydown", onDocKeydown);
-});
+// 浮层外点关闭（§五：小浮层不挂遮罩）→ 唯一实现见 lib/use-popover.ts
+useDismissOnOutside(root, show);
 </script>
 
 <template>

@@ -10,7 +10,7 @@
  * 标题前的纯图标触发钮（项目 chip 自 composer 底行移来，只显示图标，
  * 菜单下弹）。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
@@ -18,6 +18,7 @@ import { useToastStore } from "../../stores/toast";
 import { pickDirectory } from "../../lib/api";
 import { workspaceDisplayName } from "../../lib/session-groups";
 import { Icon, type IconName } from "../../lib/icons";
+import { useDismissOnOutside } from "../../lib/use-popover";
 import HoverTip from "../settings/HoverTip.vue";
 
 const props = defineProps<{ dropDown?: boolean; iconOnly?: boolean }>();
@@ -92,22 +93,8 @@ async function addAndChoose() {
   await choose(dir);
 }
 
-// 浮层外点关闭（§五：小浮层不挂遮罩）
-function onDocPointerDown(e: PointerEvent) {
-  if (!open.value) return;
-  if (!(root.value?.contains(e.target as Node) ?? false)) open.value = false;
-}
-function onDocKeydown(e: KeyboardEvent) {
-  if (open.value && e.key === "Escape") open.value = false;
-}
-onMounted(() => {
-  document.addEventListener("pointerdown", onDocPointerDown);
-  document.addEventListener("keydown", onDocKeydown);
-});
-onBeforeUnmount(() => {
-  document.removeEventListener("pointerdown", onDocPointerDown);
-  document.removeEventListener("keydown", onDocKeydown);
-});
+// 浮层外点关闭（§五：小浮层不挂遮罩）→ 唯一实现见 lib/use-popover.ts
+useDismissOnOutside(root, open);
 
 const chipIcon: IconName = "folder";
 </script>

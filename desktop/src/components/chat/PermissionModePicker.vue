@@ -10,11 +10,12 @@
  * chip 图标+文字挂橘黄警示色（--lw-warn）。首屏 composer 居中 = 向下弹，
  * 会话态贴底 = 向上弹（模型选择器同规）。
  */
-import { computed, onBeforeUnmount, onMounted, ref, Transition } from "vue";
+import { computed, ref, Transition } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { Icon, type IconName } from "../../lib/icons";
+import { useDismissOnOutside } from "../../lib/use-popover";
 
 type Mode = "plan" | "ask" | "acceptEdits" | "auto";
 const MODES: Mode[] = ["plan", "ask", "acceptEdits", "auto"];
@@ -68,22 +69,8 @@ async function pick(m: Mode) {
   }
 }
 
-// 浮层外点关闭（§五：小浮层不挂遮罩）
-function onDocPointerDown(e: PointerEvent) {
-  if (!open.value) return;
-  if (!(root.value?.contains(e.target as Node) ?? false)) open.value = false;
-}
-function onDocKeydown(e: KeyboardEvent) {
-  if (open.value && e.key === "Escape") open.value = false;
-}
-onMounted(() => {
-  document.addEventListener("pointerdown", onDocPointerDown);
-  document.addEventListener("keydown", onDocKeydown);
-});
-onBeforeUnmount(() => {
-  document.removeEventListener("pointerdown", onDocPointerDown);
-  document.removeEventListener("keydown", onDocKeydown);
-});
+// 浮层外点关闭（§五：小浮层不挂遮罩）→ 唯一实现见 lib/use-popover.ts
+useDismissOnOutside(root, open);
 </script>
 
 <template>
