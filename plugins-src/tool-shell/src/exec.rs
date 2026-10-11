@@ -91,13 +91,30 @@ pub(crate) fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result
 }
 
 /// cwd 参数解析（存在性校验在这里，根内校验只归只读面）。
+///
+/// 报文教学（F12b / DESIGN §3.3）：只宣布「不是目录」的拒绝，模型下一步
+/// 只能在原地重试或换一个猜出来的路径。这里把病因分两说（是文件 vs 根本
+/// 不存在）并给两条真出路：省略 `cwd`（子进程就落在宿主进程的工作目录，
+/// `run` 只在 Some 时 `current_dir`）、或先 `fs_list` 上级看清层级。
+/// 措辞与 manifest 的 `cwd` 描述同口径（optional / must exist），不写
+/// "workspace root"——缺省落点是宿主进程的 cwd，不是工作根。
 fn cwd_of(args: &Value) -> Result<Option<PathBuf>, String> {
     match args.get("cwd").and_then(Value::as_str) {
         None | Some("") => Ok(None),
         Some(dir) => {
             let p = Path::new(dir);
             if !p.is_dir() {
-                return Err(format!("shell `cwd` `{dir}` is not a directory"));
+                let cause = if p.is_file() {
+                    "that path is a file — `cwd` takes the directory to run in, not a file inside it"
+                } else {
+                    "nothing exists at that path (a directory recalled from an earlier turn or \
+                     from memory is a hint to verify, not a guarantee)"
+                };
+                return Err(format!(
+                    "shell `cwd` `{dir}` is not a directory — {cause}. Omit `cwd` to run in the \
+                     host process's working directory, or run `fs_list` on the parent directory \
+                     to see what is actually there"
+                ));
             }
             Ok(Some(p.to_path_buf()))
         }

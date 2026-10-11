@@ -141,6 +141,13 @@ stage tool-shell 0.1.6
 # simple command"，会把模型推向改命令结构）改为自己那条报文，点名是哪把引号、
 # 出路是补右引号（proof.rs 批 B 记的 ⑤ 同族轻症，本批清）
 stage tool-shell 0.1.7
+# 0.1.8（2026-10-11，小迭代 +0.0.1）：F12b 报错教学补最后一支——shell /
+# shell_read 的 cwd 校验此前只宣布「is not a directory」，模型下一步只能
+# 原地重试或换个猜的路径。现分病因（那是个文件 vs 那里什么都没有）并给
+# 两条真出路（省略 cwd 落宿主进程工作目录 / 先 fs_list 上级）。措辞按
+# run() 实况：cwd None 就是不设 current_dir，故写 "host process's working
+# directory"，不写与代码不符的 "workspace root"
+stage tool-shell 0.1.8
 # 0.1.3（2026-10-06，小迭代 +0.0.1）：① 根提交显式拒绝（P0-2：此前
 # `reset --soft HEAD~1` 隐性失败、报错晦涩，模型反复尝试；现在
 # rev-list --parents 判父后拒绝并给出 update-ref 出路）+

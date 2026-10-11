@@ -18,12 +18,17 @@
 #   审计修复批 C（2026-10-11）删掉从未接线的 CtxCompact 及其 405 行测试，
 #   超限数自然净降到 39 → 基线随批收紧为 39。
 #   审计修复批 F-3（2026-10-11）把 desktop 组装点 init_state（636 行函数 /
-#   698 行文件）按子系统拆成 plugins/tools/llm_stack/memory_stack/waterfall/
-#   kernel_stack 六簇（state/mod.rs 350 行），超限数净降到 38 → 基线收紧为 38。
+#   698 行文件）按子系统拆成 boot/llm_stack/memory_stack/waterfall/kernel_stack/
+#   tools/plugins/background 八簇（state/mod.rs 220 行），超限数净降到 38 →
+#   基线收紧为 38。（注释原文写「六簇 / 350 行」是批 F-3 当时的形态，v2.156
+#   批 F-6 顺手按实测改正：八簇、220 行。）
+#   审计修复批 F-6（2026-10-11）把 settings/llm.rs（682 行）拆成 policy/
+#   persist/synthesize/ipc/migrate 五簇（mod.rs 38 行，全簇守 400 线内），
+#   超限数 38 → 37 ⇒ 基线收紧为 37。
 set -u
 
 SUGGEST=400
-BASELINE=38
+BASELINE=37
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。

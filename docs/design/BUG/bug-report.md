@@ -4,18 +4,19 @@
 > **Bug 1 / Bug 2**：✅ 已修复（用户告知，未经独立复测）= v2.116 当批落地，落点见
 > 同目录《Tool Layer Issues Todo List》§六处理记录（P1-1 = `require_ok` 保留 stderr 末 6 条非空行，
 > tool-git 0.1.3）；转为历史存档。
-> **Bug 3（报错不指路 / 指路覆盖不一致）**：**部分处理**——① `shell` 的「引号不闭合冒充空命令」
+> **Bug 3（报错不指路 / 指路覆盖不一致）**：**✅ 表内五支全覆盖（v2.146 一支 + v2.155 三支 + v2.156 一支）**——① `shell` 的「引号不闭合冒充空命令」
 > 一支已修（v2.146 批 A M-10：`policy::split_command` 改返 `SplitError::{UnclosedQuote, Empty}`，
 > 两条报文各给各的出路，`plugins-src/tool-shell/src/policy.rs:80-110`）；② **v2.155 批 F-5 修掉三支（审计 F12 ✅）**：
 > `fs_read`/`fs_grep`/`fs_list` 的 ENOENT 出路补在**共享基座** `plugin-api/src/fsutil.rs::resolve_existing`
 > （一处改、四插件受益——tool-edit 三处与 tool-git 一处同走这段），报文改为指「先 `fs_list` 上级」；
 > `shell_read` 元字符拒绝现指 `fs_grep`/`fs_list` 并讲清病因「宿主不经 shell 直 spawn ⇒ 管道根本不会执行」；
 > `proof.rs` 的 unterminated-quote 不再吃通用 `structural()` 模板，自出报文并**点名是哪把引号**。
-> ③ **仍开放一支（登记为《AUDIT-FIX-PLAN-v1》F12b）**：`shell_read` 的 `cwd` 非目录报文（现文
-> `plugins-src/tool-shell/src/exec.rs:100` = `shell cwd … is not a directory`）只说"是什么"不说"怎么办"。
+> ③ **v2.156 批 F-6 修掉最后一支（审计 F12b ✅）**：`shell` / `shell_read` 的 `cwd` 非目录报文
+> （原 `plugins-src/tool-shell/src/exec.rs:100` = `shell cwd … is not a directory`，只说"是什么"）
+> 现分病因（那是个文件 vs 那里什么都没有）+ 两条出路（省略 `cwd` 落宿主进程工作目录、先 `fs_list` 上级）。
 > 本文原写「仍开放的四支」而其下只列三条**不是笔误**——漏写的第四支就是这条 `cwd`（下表「对照实测」第 118 行
 > 有它，v2.155 复核时才发现，先前差点判成数目自相矛盾）。
-> 登记出处《AUDIT-FIX-PLAN-v1》批 F（F12）**已标 ✅**（余 F12b ⬜），本文不再挂「待上报」这种与代码实况脱节的标签。
+> 登记出处《AUDIT-FIX-PLAN-v1》批 F（F12 + F12b）**四条全 ✅**，本文不再挂「待上报」这种与代码实况脱节的标签。
 > 若要独立确认 Bug 1 / Bug 2，按文末「附」节重建最小仓库逐条跑一遍（复测方法：一次一个变体）。
 
 Bug 1 / Bug 2 为两处实测确认、已修复的历史问题（均含最小复现）；Bug 3 为新增待上报项。环境：Windows 主机，`shell` 走 Unix coreutils（git-bash 风格）。
@@ -110,7 +111,7 @@ v2.149 批 E 订正。本轮实测确认，8 条对照见下表（表内 ✅ 行
 
 **现象**：工具报错时的「指路」能力覆盖**不一致**——同一工具，部分错误分支会给出替代工具建议，`os error`（ENOENT）分支却只透传系统原文。
 
-**对照实测**（**上报当时** 的实测记录：表中 ❌ 的三支已随 v2.155 批 F-5 补上出路，`cwd` 一支仍开放 = F12b；现状以文首状态段为准）：
+**对照实测**（**上报当时** 的实测记录，❌ 是历史原文快照、不随批次改写：表中五支 ❌ 现已全部补上出路——三支随 v2.155 批 F-5（F12）、`cwd` 一支随 v2.156 批 F-6（F12b）；现状以文首状态段为准）：
 
 | 调用 | 返回 | 指路 |
 |---|---|---|

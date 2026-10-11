@@ -1,5 +1,6 @@
 //! 执行层单测：参数钳制 / 真实 spawn 全链（git --version，v2.145 起免
-//! 白名单直达审批路径，不碰进程 env）/ 截断提示文案 / 环境默认解析。
+//! 白名单直达审批路径，不碰进程 env）/ 截断提示文案 / 环境默认解析 /
+//! cwd 拒绝报文的教学面（F12b，v2.156）。
 //! 杀树路径依赖平台信号语义，不在单测里模拟（策略与路径层已覆盖拦截面）。
 
 use super::{RunDefaults, arg_u64, env_u64, shell_exec};
@@ -69,4 +70,33 @@ fn truncation_appends_retry_hint() {
     let stdout = out["stdout"].as_str().unwrap();
     assert!(stdout.contains("output truncated at 10 bytes"), "{stdout}");
     assert!(stdout.contains("retry"), "{stdout}");
+}
+
+/// cwd 校验的报文教学（F12b / DESIGN §3.3）：拒绝必须带病因 + 出路。两条
+/// 病因各说各的（不存在 vs 那是个文件），出路两条都在句子里（省略 `cwd`
+/// 落宿主进程工作目录 / 先 `fs_list` 上级）。变异判据 = 报文退回改前那句
+/// 只宣布 "is not a directory" 的原文，本测试立即见红。
+#[test]
+fn cwd_denial_names_the_cause_and_points_a_way_out() {
+    let exe = std::env::current_exe().expect("current_exe");
+    let missing = exe.with_file_name("locowrk-no-such-dir-here");
+
+    let err = shell_exec(
+        &json!({ "command": "git --version", "cwd": missing.to_string_lossy().to_string() }),
+        &DEFAULTS,
+    )
+    .unwrap_err();
+    assert!(err.contains("is not a directory"), "{err}");
+    assert!(err.contains("nothing exists at that path"), "{err}");
+    assert!(err.contains("Omit `cwd`"), "{err}");
+    assert!(err.contains("fs_list"), "{err}");
+
+    // 同一条报文换个病因要换个说法：真实存在的文件不该被说成「不存在」
+    let err = shell_exec(
+        &json!({ "command": "git --version", "cwd": exe.to_string_lossy().to_string() }),
+        &DEFAULTS,
+    )
+    .unwrap_err();
+    assert!(err.contains("that path is a file"), "{err}");
+    assert!(!err.contains("nothing exists"), "{err}");
 }

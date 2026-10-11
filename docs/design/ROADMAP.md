@@ -722,7 +722,29 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
-### v2.155 · 审计修复批 F-5（F12 报错教学三处 + F13 market manifest 真源并轨）
+### v2.156 · 审计修复批 F-6（F5 第二项 `settings/llm.rs` 目录化拆分 + F12b 最后一支）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§1 **F5 余项的第二条**（682 行的 `settings/llm.rs`）与 **F12b**（v2.155 复核时新立的第四支报错教学）。拆分是**结构性搬用**——外部 API 一字未改、内核契约零改动；F12b 是**零逻辑改动**的一句报文。
+
+| 面 | 落点 |
+|---|---|
+| ① 为什么拆（三问自检三条全命中） | 原 682 行一个文件做四件互不相干的事：**落盘结构** / **校验规则** / **目录合成** / **IPC 形状**（外加磁盘旧格式迁移）⇒ ①不做一件事 ②名字概括不了 ③改展示合成要滚过落盘结构 |
+| ② 拆成的形状 | 目录式子模块 `settings/llm/`：`mod.rs` **38**（只声明 + re-export + 路径下沉说明）/ `policy.rs` **105**（PROVIDERS·保留头表·代理档·`validate_headers`）/ `persist.rs` **337**（落盘态：`LlmConfig`·`ProviderProfile`·`ProviderModel`·`SubagentPin`·`LlmSettings`·`session_window`·`apply_update`）/ `synthesize.rs` **153**（钉死值 ∪ models.dev 目录的合成面）/ `ipc.rs` **86**（四型 IPC 投影与入参）/ `migrate.rs` **43**（旧平面一次幂等）。682 → **762**（净 +80，全是各簇头注的次序与职责契约），**六文件全守 400 线内** |
+| ③ 等价判据（本刀唯一的真证据） | 桌面单测对本刀零证明力（顺序与形状错位编译器不看见），判据 = `tmp/v156-split.mjs`（dry/write 两态）+ `tmp/v156-verify.mjs`：**顶层块 31 = 31**、声明行**丢失 0 / 新增 0**（唯一一处已登记改动见 ④）、**块体 634 个非空行在新文件里原样命中 0 丢失**（derive/serde 属性行也在块体内 ⇒ 属性漂移可被逐字证明）、**簇内相对次序倒挂 0**、`settings.rs` 的 **17 条 `pub use`** 全部在 mod.rs 的 re-export 语句里、五个下沉项**全仓零引用** |
+| ④ 唯一一处有意改动 = 可见性提升，并把它写成断言 | `migrate_flat_llm` 原为 `pub(super) fn`；子模块的 `pub(super)` 项被父模块 `pub use` 会撞 **E0364** ⇒ 改 `pub fn`，可见面由 `mod.rs` 的 **`pub(super) use migrate::migrate_flat_llm;`** 收口（super 仍是 `settings` ⇒ **对外可见面不变**）。判据不"放宽"而是把这条登记成白名单 + **三条硬断言**：migrate.rs 声明字面必须等于新版、mod.rs 必须是 `pub(super) use`、全簇只有这一处该形态；任何第三处差异照旧判红 |
+| ⑤ 五个空转 re-export 摘掉（不挂 `#[allow]`） | `RESERVED_HEADERS` / `MAX_CUSTOM_HEADERS` / `PROXY_MODES` / `PricingView` / `SourcesView` 原本 `pub`，但 `settings.rs` 从没带它们、`mod llm` 又是私有子模块 ⇒ **无人可达**；保留 re-export 会让 rustc 报 `unused_imports`，而挂 `#[allow]` 续命正是批 A 在清的形态 ⇒ 保持 `pub` 留在簇内、路径下沉一级（`llm::X` → `llm::policy::X`），实测引用点 0 ⇒ 使用面一字未改 |
+| ⑥ F12b（报错教学最后一支） | `tool-shell/src/exec.rs::cwd_of` 改前只宣布 `shell \`cwd\` \`{dir}\` is not a directory`。现**分病因**（那是个文件 vs 那里什么都没有）**+ 两条出路**（省略 `cwd` / 先 `fs_list` 上级）。措辞按 `run()` 实况订正：`cwd` 为 None 就是**不设 `current_dir`** ⇒ 写 "the host process's working directory"，**不写与代码不符的 "workspace root"**（《AUDIT-FIX-PLAN-v1》§1 F12b 预写的修法文本里就有这个说法，落时改真）；新增测试 `exec::tests::cwd_denial_names_the_cause_and_points_a_way_out` |
+| ⑦ 新立 IPC 键名守卫（编译器不证的那一面改成机器证） | `settings/tests/llm.rs::llm_ipc_json_shape_is_camel_case_end_to_end`：`rename_all = "camelCase"` 是 derive 属性，既有断言读的都是 Rust 字段，**没有一条证明前端吃到的键名**。新测试吃一份完整 camelCase 盘面 JSON，**按层各查各的键集**（顶层 / ProviderView / ProviderModelView / SourcesView / NetworkProxy / SubagentPin，正向缺键 + 反向漏下划线双向）。第一版递归收成全集时摘 `LlmSettingsView` 的 `base_url` 被 `ProviderView` 的 `baseUrl` 遮蔽 ⇒ 三条变异全停在同一个无关键上，**红是红了但报不出是谁掉的**——分层后才有定位能力 |
+| ⑧ 变异验证（两条新守卫，9 个动作） | **等价判据 6 条**：M1 删字段行 / M2 摘 re-export 名 / M3 块整体挪前（次序倒挂）/ M4 收口改 `pub use` → 四条见红；M5 抹掉头注里的五个下沉名 → **仍 VERIFY_OK**（证明判据不靠注释喂绿）；M6 簇外加一行 `llm::PROXY_MODES` 真引用 → refs 见红（证明零引用查证有牙齿）。**IPC 键名 6 条**：五个结构体各摘 `rename_all` **且各红在对应层**；NetworkProxy 摘后**不红 = 已确认边界**（`mode`/`url` 两形同拼，键名守卫对它零信息量，摘了也确实无契约后果）。**F12b 3 条**：V1 报文整段退回 `git HEAD` 原文 / V2 病因合并（`is_file` 短路）/ V3 删掉「省略 cwd」出路 → 三条全红。**全部逐字节 sha 还原一致 + grep 零残留**，复绿必须看到 `Compiling`（v2.154 教训）与 `ran=1`（见 ⑩） |
+| ⑨ 版本随批 | stage 清单加 tool-shell **0.1.8**（F12b 报文进产物）；全量重跑暂存 = **22 份**（21 + 1），幂等 |
+| ⑩ 判据自己又骗人三次（同族教训，逐条记档） | **(a) 假绿**：第 6/7 段用 `\bNAME\b` 在 mod.rs 全文找 re-export，而那五个下沉名写在头注里 ⇒ "未透出 = 0" 是注释喂出来的，改成**只解析 `pub use` 语句**；改完立刻露出真实差集 5 项，再被 IPC 测试里的字符串字面量 `"SourcesView"` 判成引用命中 ⇒ 引用查证改成**剥掉字符串与行尾注释后的代码面**匹配（不剥就会逼后人为了过闸改文案）。**(b) 假红**：变异脚本用 `cargo test <短名> -- --exact`，短名配 `--exact` 过滤成**空集**，"0 passed" 把三条变异全伪装成"守卫没抓到" ⇒ 脚本改为硬断言 `ran≥1`，并新增 `NOT-RAN` 状态。**(c) 污染**：多 case 共用一个文件时把还原全押在外层 `finally`，I2 改过的 `ipc.rs` 带着变异去编后面四条的测试二进制 ⇒ 改成 **per-case 即时还原** + 进入下一条时校验 sha 必须干净。附带一条纪律：**变异必须单变量**——第一版删整行 `#[serde(rename_all = "camelCase", default)]` 把 `default` 一起摘了，炸点跑到反序列化（真红，但不是键名契约的红） |
+| 测试账 | 根 workspace 437 → **438**（+1 = F12b 报文测试）；desktop 368 → **369**（+1 = IPC 键名守卫）；断言只增不减，旧用例一条未动 |
+| 门禁 | 根 fmt `--check` CLEAN / clippy `--workspace --all-targets -- -D warnings` **0** / `cargo test --workspace` **438 passed 0 failed**；desktop fmt CLEAN / clippy `--all-targets -- -D warnings` **0** / **369 passed 0 failed**；四道结构闸全绿 = `check_length` **37 == 基线 37 零新增**（本批净降一项 ⇒ **基线 38 → 37 显式收紧**，脚本注释同步记账）、`check-i18n` zh=891 en=891 无静态引用键 0、`check-commands` 85·85·85 预留 0、`check-middleware-wiring` 10·10·0 白名单 0；`build_plugins.sh` 重跑一次全绿（22 份，`plugins/tool-shell/0.1.8/manifest.json` 版本串已核）；零 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`（口径同 v2.155） |
+| 边界 | ①**未做设置页真机 CDP 走查**——本批的 IPC 面证据停在「derive 属性行属块体内逐字命中 + 既有往返测试吃原始 JSON 字面串 + 新分层键名守卫 + 369 绿」，运行期渲染一态未截图（拆分不产生新形态，走查的增量证明有限，但这是取舍不是无证）；②`PricingView` 的键名未进守卫（目录未命中时 `pricing = null`，测它要先注入目录快照，成本高 ⇒ 登记不扩）；③`NetworkProxy` 键名守卫无信息量（⑧ 里 B1 已确认）；④F5 余三项未动 = `organize/mod.rs` **614**、`runner.rs::project_events` **237**、`session.rs`（另巨型测试文件目录化）；⑤判据与变异脚本仍在 `tmp/` 未入库，「第五道闸」仍待点头；⑥F15（开发态历史版本目录不是历史快照）待裁定 |
+| 文档 | `AUDIT-FIX-PLAN-v1.md`：**F5 第二项标已落**（余三项按实测行数改写）+ **F12b 标 ✅**（含「workspace root 措辞落时改真」的订正）+ §5 批 F-6 证据段 + **失实自报「14 条 `pub use`」就地订正为实测 17**；`scripts/check_length.sh` 基线 38 → 37 并顺手改正批 F-3 注释的「六簇 / 350 行」为实测「八簇 / 220 行」；`BUG/bug-report.md` 第四支随批转 ✅；ROADMAP/CHANGELOG/AGENTS v2.156 + 本节回补 v2.155 哈希 `a2534a1` |
+
+---
+### v2.155（提交 a2534a1）· 审计修复批 F-5（F12 报错教学三处 + F13 market manifest 真源并轨）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§1 批 F 的 **F12** 与 **F13**（两条都是批 E 登记的面）。三处报文都是**零逻辑改动**，F13 是**一条通路换真源**；合计净 **+127/−50**（7 个代码/测试文件 + 2 个构建脚本 + 1 个新源文件）。
 
