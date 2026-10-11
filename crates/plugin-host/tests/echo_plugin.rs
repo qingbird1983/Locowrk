@@ -2,80 +2,15 @@
 //! （DESIGN.md §14：加载 0.1.0 → 激活 0.2.0 → 回退 0.1.0，全程不重启）。
 //!
 //! 测试自行构建插件产物（改 LOCOWRK_PLUGIN_VERSION 触发重编）并暂存到
-//! target/locowrk-test/，不依赖仓库 plugins/ 目录的预暂存状态。
-//! 所有 cargo 调用串行执行（同一把构建锁），避免 env 变量触发的重编互相踩踏。
+//! target/locowrk-test/{pid}/，不依赖仓库 plugins/ 目录的预暂存状态。
+//! 构建样板（build_lock / build_and_stage / call / err_msg_ref）来自 `mod common`；
+//! 那把构建锁只串行化**本测试二进制内**的用例，跨二进制不互斥（现状见 common 头注）。
 
-use std::path::PathBuf;
-use std::process::Command;
-use std::sync::{Mutex, OnceLock};
-
-use plugin_api::{Tool, ToolError};
 use plugin_host::{DylibLoader, LoadError, PluginRegistry, RegistryToolSource};
 use semver::Version;
 use serde_json::json;
-
-/// 串行化构建（LOCOWRK_PLUGIN_VERSION 变更会重编同一产物路径）。
-fn build_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
-fn workspace_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root")
-}
-
-fn artifact_name() -> &'static str {
-    if cfg!(windows) {
-        "tool_echo.dll"
-    } else if cfg!(target_os = "macos") {
-        "libtool_echo.dylib"
-    } else {
-        "libtool_echo.so"
-    }
-}
-
-/// 以指定版本构建 tool-echo，并把产物复制到独立暂存目录。
-fn build_and_stage(version: &str) -> PathBuf {
-    let _guard = build_lock().lock().unwrap();
-    let status = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-        .args(["build", "-p", "tool-echo", "--quiet"])
-        .env("LOCOWRK_PLUGIN_VERSION", version)
-        .status()
-        .expect("spawn cargo");
-    assert!(
-        status.success(),
-        "cargo build -p tool-echo ({version}) failed"
-    );
-
-    let src = workspace_dir().join("target/debug").join(artifact_name());
-    assert!(src.exists(), "artifact missing at {}", src.display());
-    let dst_dir = workspace_dir()
-        .join("target/locowrk-test/tool-echo")
-        .join(version);
-    std::fs::create_dir_all(&dst_dir).unwrap();
-    let dst = dst_dir.join(artifact_name());
-    std::fs::copy(&src, &dst).unwrap();
-    dst
-}
-
-fn call(tool: &dyn Tool, args: serde_json::Value) -> Result<serde_json::Value, ToolError> {
-    let ctx = plugin_api::CallCtx::new();
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    rt.block_on(tool.call(&ctx, args))
-}
-
-fn echo_error(err: &ToolError) -> String {
-    match err {
-        ToolError::Failed { message, .. } => message.clone(),
-        other => other.to_string(),
-    }
-}
+mod common;
+use common::{build_and_stage, call, err_msg_ref};
 
 #[test]
 fn echo_load_activate_rollback_without_restart() {
@@ -84,7 +19,7 @@ fn echo_load_activate_rollback_without_restart() {
     let v_new: Version = "0.2.0".parse().unwrap();
 
     // ---- 加载 0.1.0 并激活：plain / upper 可用，reverse 尚不存在 ----
-    let p_old = build_and_stage("0.1.0");
+    let p_old = build_and_stage("tool-echo", "0.1.0");
     registry
         .load("tool-echo", &v_old, &p_old)
         .expect("load 0.1.0");
@@ -104,10 +39,10 @@ fn echo_load_activate_rollback_without_restart() {
     assert_eq!(out["echo"], "HELLO");
 
     let err = call(echo.as_ref(), json!({"text": "hello", "mode": "reverse"})).unwrap_err();
-    assert!(echo_error(&err).contains("does not support mode=`reverse`"));
+    assert!(err_msg_ref(&err).contains("does not support mode=`reverse`"));
 
     // ---- 加载 0.2.0 并激活（多版本并存，切换 = 换指针）----
-    let p_new = build_and_stage("0.2.0");
+    let p_new = build_and_stage("tool-echo", "0.2.0");
     registry
         .load("tool-echo", &v_new, &p_new)
         .expect("load 0.2.0");
@@ -124,7 +59,7 @@ fn echo_load_activate_rollback_without_restart() {
 
     // panic 模式：插件侧 catch_unwind → ERR_PANIC → 宿主 ToolError
     let err = call(echo13.as_ref(), json!({"text": "x", "mode": "panic"})).unwrap_err();
-    assert!(echo_error(&err).contains("panicked"));
+    assert!(err_msg_ref(&err).contains("panicked"));
 
     // ---- 回退 0.1.0（不重启）：reverse 立刻变回不可用 ----
     let rolled = registry.rollback("tool-echo").expect("rollback");
@@ -137,7 +72,7 @@ fn echo_load_activate_rollback_without_restart() {
     let echo12 = source.resolve("echo").expect("resolve echo@0.1.0");
     assert_eq!(echo12.plugin_version(), &v_old);
     let err = call(echo12.as_ref(), json!({"text": "Hello", "mode": "reverse"})).unwrap_err();
-    assert!(echo_error(&err).contains("does not support mode=`reverse`"));
+    assert!(err_msg_ref(&err).contains("does not support mode=`reverse`"));
 
     let states = registry.list_states();
     assert_eq!(states.len(), 1);
@@ -147,7 +82,7 @@ fn echo_load_activate_rollback_without_restart() {
 
 #[test]
 fn loader_rejects_mismatched_identity_and_missing_files() {
-    let p_new = build_and_stage("0.2.0");
+    let p_new = build_and_stage("tool-echo", "0.2.0");
     let v_old: Version = "0.1.0".parse().unwrap();
 
     // manifest 自述 id 与登记键不一致 → 拒载

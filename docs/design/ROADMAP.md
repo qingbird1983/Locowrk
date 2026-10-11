@@ -722,10 +722,31 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.152 · 审计修复批 F-2b（plugin-host 测试夹具单点化 + 暂存目录 pid 分层）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§1 批 F 的 **F8**（五个集成测试各抄一遍样板）与 **F11 的根侧部分 F11b**。
+纯测试面：**生产码零改动**（`crates/plugin-host/src/` 一行未动）。已跟踪测试文件 **+44 / −428 = 净 −384 行**，
+新夹具模块 `tests/common/mod.rs` 187 行（13 个 `pub fn`）= 全批净减 **197 行**。
+
+| 面 | 落点 |
+|---|---|
+| ① F8 夹具单点化 | 新 **`crates/plugin-host/tests/common/mod.rs`**，照 `kernel-agent/tests/common/mod.rs` 先例（`mod common;` + 整模块 `#![allow(dead_code)]`，因为每个测试二进制只用到一部分）。**夹具函数定义副本 37 → 0**：`build_lock` ×5 / `workspace_dir` ×5 / `artifact_name` ×5 / `build_and_stage` ×5 / `call` ×5 / `load_activate` ×4 / `env_lock` ×2 / `temp_root` ×2 / `err_msg` ×2 / `echo_error` ×1 / `stage` ×1。`tools_batch2.rs` 与 `tools_batch3.rs` 的夹具区**除一个前缀字符串外逐字相同** = 本项最直白的实物证据 |
+| ② 形态合并的判据 | 两处不是简单复制：**`load_activate` 两种签名**（batch 系列的「往调用方 registry 上挂」与 fs_fetch 的「自建 registry 返回元组」）保留为 `load_activate(id, ver, &registry)` + `stage_and_load(id, ver) -> (Arc<Registry>, ToolSource)`，后者内部调前者；**`echo_error(&ToolError)` 与 `err_msg(ToolError)`** 是借用/取值两种形态，合并成 `err_msg_ref(&e)` + `err_msg(e) = err_msg_ref(&e)`（行为逐字不变）。断言消息取信息更全的那份（`cargo build -p {id} ({version}) failed`，batch 版原来不带 version） |
+| ③ F11b 暂存目录 | `stage()` 落点从 `target/locowrk-test/{plugin}/{version}/` 改成 **`target/locowrk-test/{pid}/{plugin}/{version}/`**（`run_root()`），并行进程不再写同一条路径（`create_dir_all` + `copy` 非原子，原形状下另一半可能读到写了一半的 dll；Windows 还会报「文件正在使用」——`wasm_plugins.rs` 那条 tmp 注释记的就是这个症状）。**诚实边界**：逐条查过当前调用表，两个二进制请求同一 `(plugin, version)` 的情况**并不存在**（tool-echo 被 `echo_plugin` 用 0.1.0/0.2.0、被 `wasm_plugins` 用 1.0.0；tool-fs 被 `fs_fetch` 用 1.2.1、被 `tools_batch2` 用 0.1.5……），所以这一层是**结构性隔离防今后新增重叠组合**，不是"修好了历批记的偶发红" |
+| ④ 偶发红压测与未确证 | `cargo test -p plugin-host` 连续 **8 轮全绿**；再把 `fs_fetch_plugins` 与 `tools_batch2` 两个测试二进制**定向并行 4 轮**（8 个结果）全绿。批内进行过一轮完整跑时抓到一次红（`fs_fetch_plugins` 4 failed / 1 passed，**0.80s 内失败 = 不像 5s 网络超时**），此后再未复现 → **机制未确证**。理论窗口是「`cargo build` 产物固定在共享 `target/debug/`，而 `LOCOWRK_PLUGIN_VERSION` 编译期注入 → 并发构建同一插件不同版本时，先构建方的「build 返回 → copy」窗口可能复制到手」；但**不凭猜测造跨进程锁**（那要单独定口径：fs-lock 类新依赖，或自研锁文件 + 陈旧回收）。替代动作 = 把 `load_activate` 的失败报文从光秃秃的 `"load"` 补成 **`(plugin_id, version, 暂存路径)` 三要素探针**，下次再红能直接定性 |
+| ⑤ 新夹具自身的红 | `run_root()` 首版**漏了 `create_dir_all`**，`stage_ping_guest` 先 `fs::write` 再 `stage()` → `NotFound` panic，并连锁把 `build_lock` 打中毒（第二个测试 `PoisonError`）→ **`wasm_plugins` 两个测试当场红**。这条正是「测试是真判据」的实证：夹具层改动没有生产码可看，全靠测试跑出来。修法 = `run_root()` 改为访问即确保存在并写进 doc |
+| ⑥ 顺带 | `cargo fix --tests -p plugin-host` 清掉合并后变孤儿的 import（4 个文件自动修，`echo_plugin.rs` 的 `use plugin_api::Tool` 手工删）；五个文件头注随批订正——原注释写「暂存到 `target/locowrk-test/`」和「所有 cargo 调用串行执行（同一把构建锁）」，后者在合并后**只对同一二进制内成立**，注释领先代码是批 E 在罚的形态，一并改为如实措辞并指向 `mod common`；另抓到并修好**上一批留下的数字失实**——归档文件标题写「共 34 条非空条目」而文件里实有 **33** 条（v2.151 批自报数字靠推算 = 多算 1），本批搬入 v2.151 全文后用脚本数出实数 **34** 并按实测登记，AGENTS 指针条同步改 34，并把「今后这类自报数字由脚本数出来再写、不靠推算」写进 AGENTS 写入纪律 |
+| 测试账 | 根 workspace 39 套件 **436 passed 0 failed**（`plugin-host` 侧 21 + 2 + 5 + 4 + 3 + 2 = 37 个用例数量不变，夹具换实现）；desktop **368 持平**（本刀未碰 desktop） |
+| 门禁 | 根 fmt CLEAN、clippy `--workspace --all-targets -- -D warnings` **0**、436 全绿；四道结构闸全等基线（`check_length` 39==基线零新增——新模块 187 行守 400 内、`check-i18n` 891=891、`check-commands` 85·85·85、`check-middleware-wiring` 10·10·0·白名单 0）；零 `.ts/.vue` 与 desktop Rust 改动故未跑 `pnpm build`/`lint:style` |
+| 边界 | ①**偶发红机制未确证**（见 ④），跨进程互斥「构建+复制」整段是待裁定的独立一刀，登记在本批与 `common/mod.rs` 头注 ⚠；②`target/locowrk-test/{pid}/` 会随运行次数累积（`cargo clean` 一并清，属批 G 射程），与批 F-2a 边界①「不治累积」同一口径；③同二进制内并行用例仍共享 `build_lock`，一旦某用例持锁 panic，`lock().unwrap()` 会毒化其余用例——收敛前也是这个形状，本批未扩大改动；④未新增门禁（与批 F-1 ⑤、批 F-2a ④ 同一件待点头的事） |
+| 文档 | `AUDIT-FIX-PLAN-v1.md` §1 F8 标 ✅ + F11 标 ✅（desktop F-2a + 根侧 F-2b 两刀合完，残留项如实写）+ §5 批 F-2b 证据段；ROADMAP/CHANGELOG/AGENTS v2.152 |
+
+---
+
 ### v2.151 · 审计修复批 F-2a（测试临时目录单点化：把"满跑红单跑绿"的地雷拆掉）
 
 **依据**：《AUDIT-FIX-PLAN-v1》F11（批 B 自己撞出来、**审计完全没覆盖**的一类——它查死代码与重复实现，"测试脚手架脏"只有真跑门禁才现形）。
-本子批口径 = **只做 desktop 侧**（F11 的根侧 `wasm_plugins` 共享目录 = F11b、F8 plugin-host 测试样板都未动）。
+本子批口径 = **只做 desktop 侧**（F11 的根侧 `wasm_plugins` 共享目录 = F11b、F8 plugin-host 测试样板都未动 → **下一刀 v2.152 批 F-2b 已把这两条收口**，本节保留为当时快照）。
 纯测试面改动：**生产码零改动、零行为变化**，判据 = 全量测试在改前改后都绿 + 机器证明没有附带删除。
 
 | 面 | 落点 |

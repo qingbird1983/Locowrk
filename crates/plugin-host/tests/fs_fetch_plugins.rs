@@ -2,91 +2,18 @@
 //! （plugins.md：tool-fs 只读三件套 + tool-fetch）。
 //!
 //! 与 echo_plugin.rs 同款模式：测试自行构建插件产物（LOCOWRK_PLUGIN_VERSION
-//! 触发重编）并暂存到 target/locowrk-test/，不依赖仓库 plugins/ 目录的
+//! 触发重编）并暂存到 target/locowrk-test/{pid}/，不依赖仓库 plugins/ 目录的
 //! 预暂存状态。fetch 的网络路径打本进程 TCP 起的 HTTP 服务，全离线。
+//! 装载样板 = `mod common`（本文件用 `stage_and_load`，env 锁用 `common::env_lock`）。
 
-use std::path::PathBuf;
-use std::process::Command;
-use std::sync::{Arc, Mutex, OnceLock};
-
-use plugin_api::{Tool, ToolError};
-use plugin_host::{PluginRegistry, RegistryToolSource};
-use semver::Version;
+use plugin_api::ToolError;
 use serde_json::json;
-
-/// 串行化构建（LOCOWRK_PLUGIN_VERSION 变更会重编同一产物路径）。
-fn build_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
-fn workspace_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root")
-}
-
-fn artifact_name(plugin_id: &str) -> String {
-    let stem = plugin_id.replace('-', "_");
-    if cfg!(windows) {
-        format!("{stem}.dll")
-    } else if cfg!(target_os = "macos") {
-        format!("lib{stem}.dylib")
-    } else {
-        format!("lib{stem}.so")
-    }
-}
-
-/// 以指定版本构建插件，并把产物复制到独立暂存目录。
-fn build_and_stage(plugin_id: &str, version: &str) -> PathBuf {
-    let _guard = build_lock().lock().unwrap();
-    let status = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-        .args(["build", "-p", plugin_id, "--quiet"])
-        .env("LOCOWRK_PLUGIN_VERSION", version)
-        .status()
-        .expect("spawn cargo");
-    assert!(
-        status.success(),
-        "cargo build -p {plugin_id} ({version}) failed"
-    );
-
-    let src = workspace_dir()
-        .join("target/debug")
-        .join(artifact_name(plugin_id));
-    assert!(src.exists(), "artifact missing at {}", src.display());
-    let dst_dir = workspace_dir()
-        .join("target/locowrk-test")
-        .join(plugin_id)
-        .join(version);
-    std::fs::create_dir_all(&dst_dir).unwrap();
-    let dst = dst_dir.join(artifact_name(plugin_id));
-    std::fs::copy(&src, &dst).unwrap();
-    dst
-}
-
-fn call(tool: &dyn Tool, args: serde_json::Value) -> Result<serde_json::Value, ToolError> {
-    let ctx = plugin_api::CallCtx::new();
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    rt.block_on(tool.call(&ctx, args))
-}
-
-fn load_activate(plugin_id: &str, version: &str) -> (Arc<PluginRegistry>, RegistryToolSource) {
-    let registry = Arc::new(PluginRegistry::new());
-    let ver: Version = version.parse().unwrap();
-    let path = build_and_stage(plugin_id, version);
-    registry.load(plugin_id, &ver, &path).expect("load");
-    registry.activate(plugin_id, &ver).expect("activate");
-    let source = RegistryToolSource::new(Arc::clone(&registry));
-    (registry, source)
-}
+mod common;
+use common::{call, stage_and_load};
 
 #[test]
 fn fs_tools_catalog_read_list_grep_roundtrip() {
-    let (_registry, source) = load_activate("tool-fs", "1.2.1");
+    let (_registry, source) = stage_and_load("tool-fs", "1.2.1");
 
     // 目录快照：六个工具，副作用分级符合 plugins.md §二
     let tools = source.list_tools();
@@ -208,7 +135,7 @@ fn fs_tools_catalog_read_list_grep_roundtrip() {
 
 #[test]
 fn fetch_rejects_non_http_schemes() {
-    let (_registry, source) = load_activate("tool-fetch", "1.0.0");
+    let (_registry, source) = stage_and_load("tool-fetch", "1.0.0");
     let err = call(
         source.resolve("fetch").unwrap().as_ref(),
         json!({"url": "file:///etc/hosts"}),
@@ -239,14 +166,10 @@ fn serve_once(status_line: &'static str, body: &'static str) -> (u16, std::threa
     (port, handle)
 }
 
-/// fetch 测试共用一把锁：LOCOWRK_FETCH_ALLOW_PRIVATE 是进程级 env，
-/// 并行测试里"设 1"与"验证拒绝"不能同时进行。
-static FETCH_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 #[test]
 fn fetch_local_http_200_returns_capped_body() {
-    let _env = FETCH_ENV_LOCK.lock().unwrap();
-    let (_registry, source) = load_activate("tool-fetch", "1.0.0");
+    let _env = common::env_lock().lock().unwrap();
+    let (_registry, source) = stage_and_load("tool-fetch", "1.0.0");
     // SSRF 防线默认拒绝 127.0.0.1——本机测试显式走后门
     unsafe { std::env::set_var("LOCOWRK_FETCH_ALLOW_PRIVATE", "1") };
     let (port, server) = serve_once("HTTP/1.1 200 OK", "hello-fetch-body");
@@ -271,8 +194,8 @@ fn fetch_local_http_200_returns_capped_body() {
 
 #[test]
 fn fetch_http_404_is_data_not_error() {
-    let _env = FETCH_ENV_LOCK.lock().unwrap();
-    let (_registry, source) = load_activate("tool-fetch", "1.0.0");
+    let _env = common::env_lock().lock().unwrap();
+    let (_registry, source) = stage_and_load("tool-fetch", "1.0.0");
     unsafe { std::env::set_var("LOCOWRK_FETCH_ALLOW_PRIVATE", "1") };
     let (port, server) = serve_once("HTTP/1.1 404 Not Found", "no such page");
 
@@ -291,8 +214,8 @@ fn fetch_http_404_is_data_not_error() {
 /// 请求到不了网络（没有任何 server 应答）。
 #[test]
 fn fetch_ssrf_guard_refuses_loopback() {
-    let _env = FETCH_ENV_LOCK.lock().unwrap();
-    let (_registry, source) = load_activate("tool-fetch", "1.0.0");
+    let _env = common::env_lock().lock().unwrap();
+    let (_registry, source) = stage_and_load("tool-fetch", "1.0.0");
     unsafe { std::env::remove_var("LOCOWRK_FETCH_ALLOW_PRIVATE") };
 
     let err = call(

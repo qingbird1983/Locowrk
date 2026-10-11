@@ -7,103 +7,17 @@
 //! - tool-mcp 1.1.0：mcp.json → dlopen 后 describe 阶段发现 mcp_fake_*
 //!   工具 → 调用回显 / 工具级错误作为数据 / mcp_status
 //!
-//! 与 tools_batch2.rs 同款模式：测试自建产物暂存到 target/locowrk-test/。
+//! 与 tools_batch2.rs 同款模式：测试自建产物暂存到 target/locowrk-test/{pid}/。
+//! 样板来自 `mod common`（收敛前这两个文件的夹具区除一个前缀字符串外逐字相同）。
 //! env 是进程级全局，全部用例串行（一把大锁包住整个测试体）。
 
-use std::path::PathBuf;
 use std::process::Command;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 
-use plugin_api::{Tool, ToolError};
 use plugin_host::{PluginRegistry, RegistryToolSource};
-use semver::Version;
 use serde_json::{Value, json};
-
-fn build_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
-fn workspace_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root")
-}
-
-fn artifact_name(plugin_id: &str) -> String {
-    let stem = plugin_id.replace('-', "_");
-    if cfg!(windows) {
-        format!("{stem}.dll")
-    } else if cfg!(target_os = "macos") {
-        format!("lib{stem}.dylib")
-    } else {
-        format!("lib{stem}.so")
-    }
-}
-
-fn build_and_stage(plugin_id: &str, version: &str) -> PathBuf {
-    let _guard = build_lock().lock().unwrap();
-    let status = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-        .args(["build", "-p", plugin_id, "--quiet"])
-        .env("LOCOWRK_PLUGIN_VERSION", version)
-        .status()
-        .expect("spawn cargo");
-    assert!(status.success(), "cargo build -p {plugin_id} failed");
-
-    let src = workspace_dir()
-        .join("target/debug")
-        .join(artifact_name(plugin_id));
-    assert!(src.exists(), "artifact missing at {}", src.display());
-    let dst_dir = workspace_dir()
-        .join("target/locowrk-test")
-        .join(plugin_id)
-        .join(version);
-    std::fs::create_dir_all(&dst_dir).unwrap();
-    let dst = dst_dir.join(artifact_name(plugin_id));
-    std::fs::copy(&src, &dst).unwrap();
-    dst
-}
-
-fn load_activate(plugin_id: &str, version: &str, registry: &Arc<PluginRegistry>) {
-    let ver: Version = version.parse().unwrap();
-    let path = build_and_stage(plugin_id, version);
-    registry.load(plugin_id, &ver, &path).expect("load");
-    registry.activate(plugin_id, &ver).expect("activate");
-}
-
-fn call(tool: &dyn Tool, args: Value) -> Result<Value, ToolError> {
-    let ctx = plugin_api::CallCtx::new();
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    rt.block_on(tool.call(&ctx, args))
-}
-
-/// env 串行锁：本文件所有用例都动进程级 env。
-fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
-fn temp_root(tag: &str) -> PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "locowrk-batch3-{tag}-{}-{nanos}",
-        std::process::id()
-    ))
-}
-
-fn err_msg(e: ToolError) -> String {
-    match e {
-        ToolError::Failed { message, .. } => message,
-        other => other.to_string(),
-    }
-}
+mod common;
+use common::{call, env_lock, err_msg, load_activate, temp_root, workspace_dir};
 
 fn git(cwd: &std::path::Path, argv: &[&str]) -> String {
     let out = Command::new("git")
