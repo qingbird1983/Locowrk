@@ -256,7 +256,18 @@ function shapeGate() {
     if (isTests) {
       const parentDir = path.dirname(dir);
       const parentName = path.basename(parentDir);
-      const parentCandidates = [path.join(parentDir, `${parentName}.rs`), path.join(parentDir, 'mod.rs')];
+      // 父模块文件有两种布局：目录式（`parent/mod.rs`）与 Rust 2018 的**兄弟文件式**
+      // （`parent.rs` + `parent/`）—— `desktop/src-tauri/src/settings.rs` 配
+      // `desktop/src-tauri/src/settings/tests/` 正是后者，它的父模块文件在 tests 的
+      // **上一级**目录里。第一版只找前者 ⇒ `parentFile` 取不到 ⇒ **S4 整段静默跳过**
+      // （修好后 `settings/tests` 的 llm/chat/memory/tools/appearance/developer/window
+      //  七个簇名全部撞 `settings.rs` 的 mod 名单 ⇒ 集体进观察项 = 漏检被暴露成读数暴增；
+      //  这条自纠本身就是"闸入库了也照样会写漏一种形态"的现场证据）。
+      const parentCandidates = [
+        path.join(parentDir, `${parentName}.rs`),
+        path.join(parentDir, 'mod.rs'),
+        path.join(parentDir, '..', `${parentName}.rs`),
+      ];
       const parentFile = parentCandidates.find((p) => fs.existsSync(p));
       if (parentFile && parentFile !== path.join(dir, 'mod.rs')) {
         const pmods = new Set([...declaredMods(fs.readFileSync(parentFile, 'utf8')).keys()]);
@@ -264,7 +275,11 @@ function shapeGate() {
         for (const c of sib) {
           if (!pmods.has(c)) continue;
           const useBind = new RegExp(`use\\s+super::${c}\\b|use\\s+super::\\{[^}]*\\b${c}\\b`).test(modSrc);
-          const pathUse = sibSrcs.some(({ src }) => new RegExp(`\\bsuper::${c}\\b`).test(stripCommentsStrings(src)));
+          // 路径形态必须排掉 `super::super::<name>` —— 那是**合法的两级上跳**（指回父模块的
+          // 子模块），而 `\bsuper::<name>\b` 会在它的后半段上命中 ⇒ 假红。本闸修完父模块
+          // 布局漏检后立刻在 `settings/tests/{developer,tools}.rs` 上造出两条假红（现役代码、
+          // 编译与 438 测试全绿），靠负向后行断言才分清"歧义"与"本来就该这么写"。
+          const pathUse = sibSrcs.some(({ src }) => new RegExp(`(?<!super::)\\bsuper::${c}\\b`).test(stripCommentsStrings(src)));
           if (useBind || pathUse) {
             s4++; bad(`${rel}: 测试簇名 \`${c}\` 与被测父模块 ${parentName} 的子模块同名，且${useBind ? '`tests/mod.rs` 里有 `use super::' + c + '`（E0255）' : '簇正文出现 `super::' + c + '::`（E0425）'} ⇒ 改名或按职责重命名`);
           } else observed.push(`${rel}/${c}`);
@@ -310,7 +325,12 @@ function splitGate() {
   if (Object.keys(claimed).length !== distinct || unowned.length) { console.log('   !! 登记表没覆盖全部单元 ⇒ 段1/段5/段7 同时作废'); bad.push(1, unowned.length); }
 
   const perFile = new Map(), pf = new Map();
-  for (const c of [...led.clusters, 'mod']) {
+  // `excludeMod`（批 F-13 新形态）：本刀是**同目录兄弟簇的部分搬出**，`dir` 里的 `mod.rs`
+  // 是**既有目录的共享区**（`settings/tests/mod.rs` 里那 6 条混住用例属 `KNOWN_MIXED`
+  // 历史形状，与这一刀无关）。把它计入产物面 ⇒ 段1"多出 6"、段3"多出 temp_root"、
+  // 段4"新增代码 62 行未登记"三条假红一起爆。缺省不带此字段 = 批 F-8/F-9/F-10 的
+  // "整文件搬进新目录"口径，一字未动。
+  for (const c of [...led.clusters, ...(led.excludeMod ? [] : ['mod'])]) {
     const src = c === 'mod' ? fs.readFileSync(path.join(ROOT, led.dir, 'mod.rs'), 'utf8') : fs.readFileSync(path.join(ROOT, led.dir, `${c}.rs`), 'utf8');
     perFile.set(c, L(src)); pf.set(c, units(src));
   }
@@ -347,8 +367,8 @@ function splitGate() {
   const fxMiss = fxOrig.filter((n) => !fxNames.includes(n));
   const fxExtra = fxNames.filter((n) => !fxOrig.includes(n));
   const fxWrong = foundFx.filter((f) => claimed[f.name] && claimed[f.name] !== f.c);
-  const modTests = [...pf.get('mod')].filter((u) => u.isTest).length;
-  say('段3 夹具/类型', `原 ${fxOrig.length} / 产物 ${fxNames.length} / 丢失 ${fxMiss.length} / 登记外多出 ${fxExtra.length} / 归属错 ${fxWrong.length} / mod.rs 内用例 ${modTests}`);
+  const modTests = pf.has('mod') ? [...pf.get('mod')].filter((u) => u.isTest).length : 0;
+  say('段3 夹具/类型', `原 ${fxOrig.length} / 产物 ${fxNames.length} / 丢失 ${fxMiss.length} / 登记外多出 ${fxExtra.length} / 归属错 ${fxWrong.length} / mod.rs 内用例 ${modTests}${pf.has('mod') ? '' : '（excludeMod：mod.rs 不属本刀产物面）'}`);
   if (fxMiss.length || fxExtra.length) console.log('   ', fxMiss.concat(fxExtra).slice(0, 8).join(', '));
   bad.push(fxMiss.length + fxExtra.length + fxWrong.length + modTests);
 
@@ -395,10 +415,16 @@ function splitGate() {
     const seen = [...new Set((out.match(new RegExp(led.cargoPrefix.replace(/[^\w]/g, '\\$&') + '::[\\w:]+', 'g')) || []))].sort();
     const want = origNames.map((n) => `${led.cargoPrefix}::${claimed[n]}::${n}`);
     const notSeen = want.filter((p) => !seen.includes(p));
-    say('段7 cargo 注册表', `running ${running} / 名单匹配 ${seen.length} / 原文应有 ${origNames.length} / 编译器里查无 ${notSeen.length}`);
+    // `cargoExpectRunning`（可选）：登记表的用例**只是该前缀下的一部分**时用（批 F-13 那刀
+    // 是"同目录兄弟簇部分搬出"，前缀 `settings::tests` 下还有别的簇 ⇒ running 天然大于本刀
+    // 的用例数）。此时判据改成两条同时成立：**总数守恒**（running == cargoExpectRunning，
+    // 拆前拆后一样多）+ **本刀每条路径都在编译器里存在**（notSeen == 0）。缺省仍按
+    // `running == 本刀用例数`（批 F-8/F-9/F-10 那三刀的口径，一字未动）。
+    const expectRunning = led.cargoExpectRunning ?? origNames.length;
+    say('段7 cargo 注册表', `running ${running} / 期望 ${expectRunning}${led.cargoExpectRunning ? '（前缀下总数）' : '（= 本刀用例数）'} / 名单匹配 ${seen.length} / 原文应有 ${origNames.length} / 编译器里查无 ${notSeen.length}`);
     if (notSeen.length) notSeen.slice(0, 6).forEach((p) => console.log('     查无:', p));
     if (running <= 0) console.log('   !! running<=0 = 一条都没跑，本段结论无效（不许当"绿"）');
-    bad.push(notSeen.length, running === origNames.length ? 0 : 1);
+    bad.push(notSeen.length, running === expectRunning ? 0 : 1);
   } else say('段7 cargo 注册表', led.cargoPrefix ? '跳过（--no-cargo：CI 上由 kernel 作业的 cargo test 覆盖，此处不重编）' : '跳过（登记表未写 cargoPrefix）');
 
   const total = bad.reduce((a, b) => a + b, 0);

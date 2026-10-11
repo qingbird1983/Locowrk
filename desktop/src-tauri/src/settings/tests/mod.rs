@@ -246,7 +246,10 @@ fn shortcut_default_update_and_validation() {
 mod appearance;
 mod chat;
 mod llm;
+mod llm_profile;
+mod llm_provider;
 mod memory;
+mod network_proxy;
 mod window;
 
 mod developer;

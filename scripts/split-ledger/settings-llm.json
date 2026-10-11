@@ -1,0 +1,50 @@
+{
+  "ref": "039992f",
+  "orig": "desktop/src-tauri/src/settings/tests/llm.rs",
+  "dir": "desktop/src-tauri/src/settings/tests",
+  "clusters": [
+    "llm",
+    "llm_profile",
+    "llm_provider",
+    "network_proxy"
+  ],
+  "asserts": 78,
+  "cargoPrefix": "settings::tests",
+  "cargoPackage": "--manifest-path desktop/src-tauri/Cargo.toml",
+  "cargoExpectRunning": 39,
+  "excludeMod": true,
+  "registeredNew": [],
+  "map": {
+    "legacy_flat_llm_migrates_to_default_profile": "llm",
+    "llm_ipc_json_shape_is_camel_case_end_to_end": "llm",
+    "flat_update_materializes_default_profile": "llm_profile",
+    "active_switch_rejects_unknown_id_and_applies_to_target": "llm_profile",
+    "profile_save_delete_semantics": "llm_profile",
+    "models_replace_repoints_model_and_disabled_skips_active": "llm_profile",
+    "subagent_pin_update_validates_and_clears": "llm_profile",
+    "provider_model_pins_roundtrip_and_legacy_default": "llm_provider",
+    "synthesize_view_pins_win_over_catalog": "llm_provider",
+    "headers_validation_rejects_reserved_and_malformed": "llm_provider",
+    "network_proxy_validation_and_normalization": "network_proxy"
+  },
+  "head": {
+    "llm": [
+      "//! LLM 档位制测试（v2.58，DESIGN §13.1）：旧平面迁移 / 生效投影 /",
+      "//! 平面更新物化缺省档 / 切档校验 / 档位命令层语义（save/delete）。",
+      "//! 批 F-13 把三面拆成同目录兄弟簇（**用例本体逐字未动**）：档位命令层与子代理钉档见",
+      "//! `llm_profile`、provider 钉模与展示视图见 `llm_provider`、网络代理见 `network_proxy`。"
+    ],
+    "llm_profile": [
+      "//! 档位命令层测试（自 `llm.rs` 批 F-13 拆出，用例本体逐字未改）：平面更新物化缺省档",
+      "//! / 切档校验 / 档位增删语义 / 模型清单替换与停用跳过 / 子代理钉档校验与清除。"
+    ],
+    "llm_provider": [
+      "//! Provider 钉模与展示视图测试（自 `llm.rs` 批 F-13 拆出，用例本体逐字未改）：provider",
+      "//! 模型钉档往返与旧缺省兼容 / 合成视图钉档胜过目录 / 自定义 Header 保留字与畸形拒绝。"
+    ],
+    "network_proxy": [
+      "//! 网络代理测试（自 `llm.rs` 批 F-13 拆出，用例本体逐字未改）：system/direct/custom 三态",
+      "//! 校验、custom 缺 url 与非 http 拒绝、未知模式拒绝、url 去 blanks 归一。"
+    ]
+  }
+}

@@ -41,10 +41,17 @@
 #   146)+approval 208+prefix 117+tree 350} 四文件，超限数 34 → 33 ⇒ 基线收紧为 33。
 #   本批是 F5「巨型测试文件目录化」的第四件，也是根 workspace 侧第一件：拆分等价性
 #   由 tmp/v160-verify.mjs 七段判据 + 12 条变异证明（既有测试对结构搬用零证明力）。
+#   审计修复批 F-13（2026-10-12）把 settings/tests/llm.rs（681 行 = 巨型测试余 6 件榜首）
+#   拆成同目录兄弟簇 {llm 163 + llm_profile 319 + llm_provider 149 + network_proxy 68}，
+#   超限数 33 → 32 ⇒ 基线收紧为 32。这一刀与前几件**形状不同**：父目录 settings/tests/
+#   早已是目录式，所以不做"tests.rs → tests/"的模块加深，而是把超长簇**横着**分成兄弟簇
+#   ⇒ 每个新簇的 `super` 仍 = settings::tests ⇒ 用例正文与可见性一行都不用改。代价 =
+#   第五道闸要新增 excludeMod 口径（既有 mod.rs 的共享区不属本刀产物面，否则段1/3/4
+#   一起爆假红）+ 分区注释必须随单元搬走（段4「未原样命中 7」抓出来的）。
 set -u
 
 SUGGEST=400
-BASELINE=33
+BASELINE=32
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。
