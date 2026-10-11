@@ -37,6 +37,7 @@ mod search_titles;
 mod summary;
 mod tree_tools;
 mod view;
+use crate::timeutil::now_ms;
 pub use assemble::TreeAssembler;
 pub use client::AppLlmMemoryManager;
 pub use debug::TreeDebug;
@@ -108,13 +109,6 @@ pub(crate) struct TaskPayload {
 
 /// 管道收束台账（run_task 返回值，观测日志用）。
 type Outcome = (String, String, usize, MemoryManagerUsage);
-
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
 
 fn elapsed_ms(started: &std::time::Instant) -> u64 {
     started.elapsed().as_millis() as u64

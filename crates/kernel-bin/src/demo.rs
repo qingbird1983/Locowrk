@@ -18,8 +18,11 @@ use crate::echo_llm::ScriptedLlm;
 use crate::tool_source::KernelToolSource;
 
 const PLUGIN_ID: &str = "tool-echo";
-const V12: &str = "0.1.0";
-const V13: &str = "0.2.0";
+/// 升级/回退叙事的两档。名字讲「旧档 / 新档」，不讲 1.2 / 1.3 —— 那两个版本号
+/// 属于 v2.56 插件版本基准重置前的旧世界，常量值早就换成 0.1.0 / 0.2.0 而名字
+/// 没跟着换，读代码的人会把 "V13" 当成某个真实版本（审计 F14）。
+const V_OLD: &str = "0.1.0";
+const V_NEW: &str = "0.2.0";
 
 /// 依赖方向总览（§8）：本函数是全仓库唯一同时触碰 kernel-agent 与
 /// plugin-host 的地方（组装点），其余代码各守各的边界。
@@ -40,16 +43,16 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
         parts: Vec::new(),
     });
 
-    let v12: Version = V12.parse().unwrap();
-    let v13: Version = V13.parse().unwrap();
+    let old: Version = V_OLD.parse().unwrap();
+    let neu: Version = V_NEW.parse().unwrap();
 
     // ---- 1) 加载 0.1.0 并激活 ----
-    load_and_activate(&registry, PLUGIN_ID, &v12, plugins_root)?;
+    load_and_activate(&registry, PLUGIN_ID, &old, plugins_root)?;
     banner("phase A: active = 0.1.0");
     step(&kernel, &mut session).await?;
 
     // ---- 2) 加载 0.2.0 并激活（多版本并存，切换 = 换指针，微秒级）----
-    load_and_activate(&registry, PLUGIN_ID, &v13, plugins_root)?;
+    load_and_activate(&registry, PLUGIN_ID, &neu, plugins_root)?;
     banner("phase B: active = 0.2.0（升级，旧版本保留）");
     step(&kernel, &mut session).await?;
 
@@ -57,7 +60,7 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     let rolled = registry
         .rollback(PLUGIN_ID)
         .map_err(|e| format!("rollback: {e}"))?;
-    assert_eq!(rolled, v12, "rollback must return to 0.1.0");
+    assert_eq!(rolled, old, "rollback must return to 0.1.0");
     banner("phase C: rollback -> 0.1.0（不重启）");
     step(&kernel, &mut session).await?;
 

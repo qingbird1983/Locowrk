@@ -15,6 +15,7 @@ use memory_tree::{MemoryTree, TreeStore};
 use plugin_api::memlayout::{self, FactEntry};
 
 use crate::memory::MemoryStore;
+use crate::timeutil::to_epoch_ms;
 
 /// tree.md 一节标题（L0）宽度。
 const TREE_TITLE_CHARS: usize = 60;
@@ -87,10 +88,7 @@ impl MemoryFiles {
         let path = self.tree_md_path(workspace);
         if let Ok(meta) = std::fs::metadata(&path) {
             if let Ok(t) = meta.modified() {
-                let md_ms = t
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as i64)
-                    .unwrap_or(0);
+                let md_ms = to_epoch_ms(t);
                 if md_ms > newest_projection_ms {
                     return Ok(false);
                 }

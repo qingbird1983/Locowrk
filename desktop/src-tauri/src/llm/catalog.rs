@@ -13,6 +13,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::catalog_match;
+use crate::timeutil::now_ms;
 
 /// 在线刷新（供应商稿 §4.1：手动按钮触发）。超时 30s——设计稿写 10s，
 /// 实机走查抓到 5.3MB 载荷在本机代理链路（clash TUN）实测 10.2s 撞死
@@ -177,7 +178,7 @@ fn load_file(path: &std::path::Path, source: CatalogSource) -> CatalogSnapshot {
             tracing::warn!(path = %path.display(), error = %e, "模型目录快照加载失败（能力数据缺席）");
             CatalogSnapshot {
                 source,
-                loaded_ms: now_ms(),
+                loaded_ms: now_ms() as u64,
                 models: HashMap::new(),
                 api_index: HashMap::new(),
             }
@@ -204,7 +205,7 @@ pub fn parse_str(text: &str, source: CatalogSource) -> Result<CatalogSnapshot, S
     }
     Ok(CatalogSnapshot {
         source,
-        loaded_ms: now_ms(),
+        loaded_ms: now_ms() as u64,
         models,
         api_index,
     })
@@ -313,13 +314,6 @@ fn normalize_reasoning(options: Option<&Value>) -> Vec<String> {
     }
     out.sort_by_key(|v| ORDER.iter().position(|o| o == v).unwrap_or(usize::MAX));
     out
-}
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 #[cfg(test)]

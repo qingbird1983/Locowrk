@@ -21,7 +21,9 @@ use crate::inline_tools::{DangerTool, StubEchoTool};
 use crate::tool_source::KernelToolSource;
 
 const PLUGIN_ID: &str = "tool-echo";
-const V13: &str = "0.2.0";
+/// 本演示只装载一档（0.2.0，含 upper / reverse）；名字讲"当前演示档"而不是
+/// 具体版本号（`demo.rs` 同款，审计 F14：旧名 V13 讲的是基准重置前的 1.3.0）。
+const V_ACTIVE: &str = "0.2.0";
 
 /// 全局工具目录 = FFI 插件注册表 + 宿主进程内工具的复合。
 /// 组装点职责：多个工具来源在目录层复合，主循环对此无感知。
@@ -68,8 +70,8 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     ctx.events.on_waterfall(points::REQUEST, listener);
 
     // 全局加载并激活 tool-echo 0.2.0（含 upper / reverse）
-    let v13: Version = V13.parse().unwrap();
-    load_and_activate(&registry, PLUGIN_ID, &v13, plugins_root)?;
+    let active: Version = V_ACTIVE.parse().unwrap();
+    load_and_activate(&registry, PLUGIN_ID, &active, plugins_root)?;
 
     // ---- 1) Agent A（§9.3 快路径：作用域层为空 → 直接走全局服务）----
     let key_a = ScopeKey::new();

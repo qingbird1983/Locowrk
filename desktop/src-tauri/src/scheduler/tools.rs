@@ -16,7 +16,9 @@ use async_trait::async_trait;
 use plugin_api::{CallCtx, Exposure, SideEffect, Tool, ToolError, ToolSpec};
 use serde_json::{json, Value};
 
-use crate::scheduler::store::{now_ms, Kind, Schedule, ScheduleDb, MAX_SCHEDULES};
+use crate::scheduler::store::{Kind, Schedule, ScheduleDb, MAX_SCHEDULES};
+use crate::text::clip_trimmed;
+use crate::timeutil::now_ms;
 
 static VERSION: std::sync::LazyLock<semver::Version> =
     std::sync::LazyLock::new(|| semver::Version::new(1, 0, 0));
@@ -95,8 +97,8 @@ impl Tool for ScheduleCreateTool {
         })?;
         let prompt = string_arg(&args, "prompt", 8000)?;
         let title = match args.get("title").and_then(Value::as_str) {
-            Some(t) if !t.trim().is_empty() => clip(t, 100),
-            _ => clip(&prompt, 40),
+            Some(t) if !t.trim().is_empty() => clip_trimmed(t, 100),
+            _ => clip_trimmed(&prompt, 40),
         };
         let now = now_ms();
         let interval_secs = opt_num(&args, "interval_secs")?;
@@ -293,10 +295,6 @@ fn kind_str(k: Kind) -> &'static str {
     }
 }
 
-fn clip(s: &str, max_chars: usize) -> String {
-    s.trim().chars().take(max_chars).collect()
-}
-
 fn string_arg(args: &Value, key: &str, max_chars: usize) -> Result<String, ToolError> {
     let s = args
         .get(key)
@@ -304,7 +302,7 @@ fn string_arg(args: &Value, key: &str, max_chars: usize) -> Result<String, ToolE
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .ok_or_else(|| bad(&format!("missing non-empty string field `{key}`")))?;
-    Ok(clip(s, max_chars))
+    Ok(clip_trimmed(s, max_chars))
 }
 
 fn opt_num(args: &Value, key: &str) -> Result<Option<u64>, ToolError> {

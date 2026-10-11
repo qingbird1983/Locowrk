@@ -272,10 +272,7 @@ impl UsageRecorder {
     /// ToolResult 后异步更新（exposure 文档 §3.3）：只记名字与结果成败。
     pub fn record(&self, tool: &str, plugin_id: Option<&str>, ok: bool) {
         let Some(tx) = &self.tx else { return };
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
+        let ts = now_secs();
         let _ = tx.send(UsageRec {
             tool: tool.to_string(),
             plugin_id: plugin_id.map(str::to_owned),
@@ -378,6 +375,7 @@ pub fn attach(
 
 mod ewma;
 
+use crate::timeutil::now_secs;
 use ewma::update_ewma;
 pub use ewma::UsageEwma;
 

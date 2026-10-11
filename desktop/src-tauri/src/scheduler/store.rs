@@ -62,13 +62,6 @@ pub(crate) struct Schedule {
     pub created_ms: i64,
 }
 
-pub(crate) fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
 pub(crate) struct ScheduleDb {
     conn: Mutex<Connection>,
 }

@@ -15,11 +15,11 @@ fn base_url_resolution_order() {
         e.resolved_base_url("openai", Some("http://llm.local")),
         Some("http://embed.local".into())
     );
-    // ollama 兜底本机缺省
+    // ollama 兜底本机缺省（真源 = llm/models.rs 的常量，此处按同一来源断言）
     let e = EmbeddingSettings::default();
     assert_eq!(
         e.resolved_base_url("ollama", Some("http://llm.local")),
-        Some(OLLAMA_DEFAULT_BASE.into())
+        Some(crate::llm::models::DEFAULT_OLLAMA_BASE.into())
     );
     // 其余 provider 回落主模型端点；两者皆无 = None
     assert_eq!(

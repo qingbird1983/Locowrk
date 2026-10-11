@@ -23,6 +23,7 @@ use serde_json::{json, Value};
 
 use memory_tree::TreeStore;
 
+use crate::text::clip_ellipsis;
 use crate::workspace::WorkspaceResolver;
 
 static VERSION: std::sync::LazyLock<semver::Version> =
@@ -181,7 +182,7 @@ impl Tool for SearchTitlesTool {
                     "session_title": c.session_title,
                     "chapter_id": c.chapter_id,
                     "title": c.title,
-                    "summary": clip(&c.summary, SUMMARY_CLIP),
+                    "summary": clip_ellipsis(&c.summary, SUMMARY_CLIP),
                     "score": (score * 1000.0).round() / 1000.0,
                 })
             })
@@ -230,12 +231,4 @@ fn keyword_hits(query: &str, cands: &[Candidate]) -> Vec<(Candidate, f64)> {
         .cloned()
         .map(|c| (c, 1.0))
         .collect()
-}
-
-fn clip(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        s.chars().take(max).collect::<String>() + "…"
-    }
 }

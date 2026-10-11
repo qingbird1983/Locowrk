@@ -24,6 +24,7 @@ use plugin_api::{CallCtx, Exposure, SideEffect, Tool, ToolError, ToolSpec};
 use serde_json::{json, Value};
 
 use crate::assets::{validate, AssetStore};
+use crate::timeutil::now_ms;
 
 /// 上限读取器（settings `multimodal` 区 → validate::Limits；调用期读 =
 /// 设置保存即热换，与 asset_put 命令同口径）。
@@ -284,11 +285,4 @@ pub(crate) fn rgba_to_png(w: u32, h: u32, rgba: Vec<u8>) -> Result<Vec<u8>, Stri
         .map_err(|e| e.to_string())?;
     out.flush().map_err(|e| e.to_string())?;
     Ok(out.into_inner())
-}
-
-fn now_ms() -> u128 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0)
 }

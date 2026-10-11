@@ -18,6 +18,10 @@ use crate::settings::NetworkProxy;
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 /// 端点扫描单候选超时（§8.2：3s 快试）。
 pub const SWEEP_TIMEOUT: Duration = Duration::from_secs(3);
+/// 各家缺省端点**唯一真源**（批 F·F3）：聊天客户端 (`llm/client.rs`)、模型清单
+/// 探测（本文件）、Ollama 窗口探测 (`llm/probe.rs`)、embedding 端点兜底
+/// (`settings/embedding.rs`) 四处同吃这三个常量——收敛前 `probe.rs` 与
+/// `embedding.rs` 各写了一份同值字面量（还互相注释自称"同源"）。
 pub const DEFAULT_OLLAMA_BASE: &str = "http://localhost:11434";
 pub const DEFAULT_OPENAI_BASE: &str = "https://api.openai.com/v1";
 pub const DEFAULT_ANTHROPIC_BASE: &str = "https://api.anthropic.com/v1";

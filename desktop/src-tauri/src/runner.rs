@@ -22,6 +22,7 @@ use crate::session_log;
 use crate::usage::UsageRecorder;
 
 use crate::events::{side_effect_str, AgentEvent, EventSink};
+use crate::timeutil::now_ms;
 
 /// 单轮 step 上限缺省值：防止模型反复发工具调用打转（防御性兜底）。
 /// ㉕·微调③ 起实际值可配（settings `tools.maxTurnSteps`，工具与暴露
@@ -225,14 +226,6 @@ fn finish_turn(
             ts: Some(ts),
         });
     }
-}
-
-/// Unix 毫秒（轮界事件时间戳）。
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
 }
 
 /// 把日志新增段 `[from..]` 投影成 UI 事件（顺序 = 日志顺序）。

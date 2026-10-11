@@ -2,12 +2,12 @@
 //! "自动检测"按钮的数据源。一次 HTTP 调用、5 秒超时；失败返回 Err 由 UI
 //! 提示手动选择（读不到手动兜底，不做静默猜测）。
 
-use std::time::Duration;
-
 use serde_json::{json, Value};
 
-const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
-const DEFAULT_OLLAMA_BASE: &str = "http://localhost:11434";
+// 超时与缺省端点都吃 `llm/models.rs` 的真源（批 F·F3：此前这里另写一份同值常量，
+// 而 settings/embedding.rs 还写了第三份、名字都不一样——注释自称"同源"而磁盘上是
+// 三个独立字面量，正是 D7 那类「两份规则已分叉」的形态）。
+use crate::llm::models::{DEFAULT_OLLAMA_BASE, PROBE_TIMEOUT};
 
 /// 探测模型上下文窗口（token）。`base_url` 空 = Ollama 默认端点。
 pub async fn probe_context_window(base_url: Option<&str>, model: &str) -> Result<u64, String> {

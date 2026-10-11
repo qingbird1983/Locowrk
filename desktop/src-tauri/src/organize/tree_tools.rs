@@ -19,6 +19,7 @@ use serde_json::{json, Value};
 
 use memory_tree::{build_items, transcript, TreeStore};
 
+use crate::timeutil::now_ms;
 use crate::workspace::WorkspaceResolver;
 
 static VERSION: std::sync::LazyLock<semver::Version> =
@@ -275,13 +276,6 @@ impl Tool for MemoryCollapseTool {
             "note": "chapter content replaced by a stub in context; memory_expand brings it back"
         }))
     }
-}
-
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 #[cfg(test)]

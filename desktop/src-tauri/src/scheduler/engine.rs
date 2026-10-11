@@ -113,7 +113,7 @@ pub(crate) fn spawn(deps: EngineDeps) {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
         loop {
             tick.tick().await;
-            let now = store::now_ms();
+            let now = crate::timeutil::now_ms();
             for sched in deps.db.due(now) {
                 fire(&deps, sched, now).await;
             }

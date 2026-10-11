@@ -181,7 +181,7 @@ async fn create_interval_min_and_defaults() {
     let row = &db.list_session("s")[0];
     assert_eq!(row.interval_secs, Some(10));
     assert!(
-        row.run_at > super::store::now_ms(),
+        row.run_at > crate::timeutil::now_ms(),
         "default start = now + interval"
     );
 }

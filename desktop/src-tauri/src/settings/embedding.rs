@@ -9,8 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Ollama 缺省端点（与 llm/probe.rs 的探测兜底同源）。
-pub const OLLAMA_DEFAULT_BASE: &str = "http://localhost:11434";
+use crate::llm::models::DEFAULT_OLLAMA_BASE;
 
 /// embedding 模型设置。三项全 None = 未配置（智能层缺席）。
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -32,7 +31,7 @@ impl EmbeddingSettings {
             return Some(b.clone());
         }
         match provider {
-            "ollama" => Some(OLLAMA_DEFAULT_BASE.into()),
+            "ollama" => Some(DEFAULT_OLLAMA_BASE.into()),
             _ => llm_base.map(str::to_string),
         }
     }

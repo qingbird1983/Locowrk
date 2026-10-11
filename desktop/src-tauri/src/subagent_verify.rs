@@ -10,6 +10,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::text::clip_ellipsis;
 use async_trait::async_trait;
 use kernel_agent::{LlmRequest, LlmService};
 use plugin_api::{CallCtx, Exposure, SideEffect, Tool, ToolError, ToolSpec};
@@ -83,7 +84,7 @@ fn build_transcript(events: &[SessionEvent]) -> String {
     for e in events {
         match e {
             SessionEvent::UserMessage { content, parts } => {
-                let text = clip(&fold_parts(content, parts), MSG_CLIP);
+                let text = clip_ellipsis(&fold_parts(content, parts), MSG_CLIP);
                 push(format!("[任务] {text}"));
             }
             SessionEvent::AssistantMessage {
@@ -91,7 +92,7 @@ fn build_transcript(events: &[SessionEvent]) -> String {
                 tool_calls,
             } => {
                 if !content.is_empty() {
-                    push(format!("[助手] {}", clip(content, MSG_CLIP)));
+                    push(format!("[助手] {}", clip_ellipsis(content, MSG_CLIP)));
                 }
                 if !tool_calls.is_empty() {
                     push(format!("[助手] （发起 {} 个工具调用）", tool_calls.len()));
@@ -103,7 +104,7 @@ fn build_transcript(events: &[SessionEvent]) -> String {
                 args,
                 ..
             } => {
-                let a = clip(&args.to_string(), 200);
+                let a = clip_ellipsis(&args.to_string(), 200);
                 push(format!("[调用 {}] {tool}({a})", call_id.0));
             }
             SessionEvent::ToolResult {
@@ -111,11 +112,15 @@ fn build_transcript(events: &[SessionEvent]) -> String {
                 output,
                 error,
             } => match error {
-                Some(err) => push(format!("[结果 {}] 失败: {}", call_id.0, clip(err, 400))),
+                Some(err) => push(format!(
+                    "[结果 {}] 失败: {}",
+                    call_id.0,
+                    clip_ellipsis(err, 400)
+                )),
                 None => push(format!(
                     "[结果 {}] {}",
                     call_id.0,
-                    clip(&output.to_string(), 400)
+                    clip_ellipsis(&output.to_string(), 400)
                 )),
             },
             _ => {}
@@ -123,14 +128,6 @@ fn build_transcript(events: &[SessionEvent]) -> String {
     }
     if out.len() >= TRANSCRIPT_CAP {
         out.push_str("[转录过长，已截断]\n");
-    }
-    out
-}
-
-fn clip(s: &str, n: usize) -> String {
-    let mut out: String = s.chars().take(n).collect();
-    if s.chars().count() > n {
-        out.push('…');
     }
     out
 }
@@ -176,7 +173,7 @@ fn parse_verdict(raw: &str, criteria: &[String]) -> (String, Value, String) {
                 "evidence": "验收输出无法解析"
             }))
             .collect::<Vec<_>>()),
-        clip(raw, 800),
+        clip_ellipsis(raw, 800),
     )
 }
 

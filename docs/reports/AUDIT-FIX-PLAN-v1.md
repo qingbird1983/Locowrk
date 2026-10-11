@@ -94,13 +94,13 @@
 | E7 | 版本注释三处过期（审计 M-12）：`build_plugins.sh:146` 收尾文案 + 9 个 `plugins-src/*/Cargo.toml` 的「按 1.0.0 构建」注释 | 版本真源收敛到 stage 表，注释统一指它 |
 | E8 | `README.md` 仅 21 行且停在「阶段一」；`market/README.md:13` 仍描述 v1 manifest；`docs/design/BUG/*` 两份清单状态行与自身处理记录矛盾；`Reliability Reinforcement Design.md:755`、`Model Capability ... Phase Plan.md:154`、`plugins.md:27,152,206-213` 仍讲已退役的硬锁/sandbox | 逐处订正（纯文档，零代码风险） |
 
-### 批 F｜重复实现收敛与性能（审计 M-1/M-14/M-18/M-19/M-24 + C 域 C8–C13）
+### 批 F｜重复实现收敛与性能（审计 M-1/M-14/M-18/M-19/M-24 + C 域 C8–C13）——◐ 子批 F-1 已落（2026-10-11，v2.150：F1/F2/F3/F14 全 ✅，证据见 §5 批 F-1 段；F4–F13 未动）
 
 低风险优先，建议**一轮只动一类变量**（与项目纪律一致）：
 
-- F1 `desktop/src/timeutil.rs`：`now_ms()` 7 处 + `now_secs()` 2 处收敛（`scheduler/store.rs:65` 已是 `pub(crate)` 共享版）。
-- F2 `desktop/src/text.rs`：`clip()` 6 处 / 4 种语义收敛；⚠ `export.rs` 的输出是用户可见的 Markdown 字节，合并必须逐字节不变（先写等值断言再动）。
-- F3 Ollama 端点常量 3 份留 1 份（`llm/models.rs:21`、`llm/probe.rs:10`、`settings/embedding.rs:13`）。
+- ✅ **F1** `desktop/src/timeutil.rs`：`now_ms()` 7 处 + `now_secs()` 2 处收敛（`scheduler/store.rs:65` 已是 `pub(crate)` 共享版）。**实测规模比计划大**：本地定义 9 份 + 内联链 8 处 = 17 段取时刻链（计划按函数名只数到 9）。
+- ✅ **F2** `desktop/src/text.rs`：`clip()` 6 处 / 4 种语义收敛；⚠ `export.rs` 的输出是用户可见的 Markdown 字节，合并必须逐字节不变（先写等值断言再动）。**断言已先行**：等值测试以被删的 6 份原文为参考实现。
+- ✅ **F3** Ollama 端点常量 3 份留 1 份（`llm/models.rs:21`、`llm/probe.rs:10`、`settings/embedding.rs:13`）。**搭车抓到同族第二对**：`PROBE_TIMEOUT` 也在 `models.rs`/`probe.rs` 各写一份 5s，同批收。
 - F4 热路径（审计 M-18 a–g）：审批单次决策 ~4 次会话上下文解析 → `resolve` 内 memo（**不跨调用缓存**，`workspace.rs:39-46` 的「保存即生效」是有意设计）；项目规则 JSON 两读 → 新增 `verdicts()`；每轮 2 次 `LlmConfig` 全量克隆（含明文 Key 串）→ `with_llm(\|cfg\| …)` 闭包访问器 + 合并 `commands.rs` 三连取锁；`turn_id` 每轮全扫 → `rev().find_map` 折衷；`has_call_event` 懒建；`session_history` 锁内深克隆 → 锁内取快照、锁外投影 + 重 IO 命令包 `spawn_blocking`；`append_slice` 每条一次 open/write/close → 单句柄批量。
 - F5 结构性拆分（审计 M-19/M-24e + M-4 超限榜首）：`init_state` **636 行**按子系统抽私有构造器（注意 sink 先于 approval、catalog 先于 session_window 的构造顺序隐性契约，回归判据 = 启动日志 + desktop 全测）；`organize/mod.rs` 621 行拆 trigger/collapse/task；`runner.rs::project_events` 单函数 237 行拆 `runner/projection.rs`；`settings/llm.rs` 682 行拆 view/model（保持 `settings.rs` 的 14 条 `pub use` 不变）；`session.rs` 415 行抽 `session/project.rs`；巨型测试文件按既有先例（`tests_session_log/`）目录式拆分。
 - F6 前端重复（C8–C13）：命令包装剥离/工作区相对化两份下沉；相对时间四份统一到 `format.ts`；`v-html` 复制委托两份合并；**弹层「外点关 + Esc」10 处各写一遍 → `use-popover` composable**；`stores/settings.ts` 保存样板 ×9（135 行里约 90 行同构，且 `setTimeout` 无句柄复用是同源小缺陷）。
@@ -111,7 +111,7 @@
 - **F11（本批新增，审计未列）测试临时目录/共享目录隔离收敛**：`grep temp_dir()` 全仓 ~20 处写的是 `{前缀}-{tag}-{pid}`——无每次运行 nonce、多数不先清，Windows 复用 pid 时会读到上次残留（批 B 实测撞红一次，机制见 §5 顺带发现）。修法 = 统一收进 `desktop/src-tauri/src/testutil.rs` 的 `tmp_dir(tag)`（pid + 纳秒 + `remove_dir_all` 先清，`memory_files/tests.rs` 已有正确实现可作蓝本），各处删本地副本。同族的还有一处**根 workspace 侧已知偶发红**：`crates/plugin-host/tests/wasm_plugins.rs` 用 `target/locowrk-test/...` 共享目录，并行套件互踩（本批末次全量跑当场抓到、单跑即绿；AGENTS 历批记的「wasm_plugins 已知偶发」就是它）——同一味药：每个测试独占带 nonce 的目录。**登记：`CODE-AUDIT-v1` 完全没有覆盖这一类**（它查的是死代码与重复实现，「测试脚手架脏」要靠真跑门禁才现形）。
 - **F12（批 E 从 `BUG/bug-report.md` Bug 3 开放面登记）** 报错教学覆盖不齐：`tool-fs` 的 ENOENT 分支（`fs_read`/`fs_grep`/`fs_list` 路径不存在）只透传系统原文，不指 `fs_list` 上级；`tool-shell` 的元字符拒绝（`policy.rs:92`）不指 `fs_grep`/`shell`；`proof.rs` 的 unterminated-quote 走通用 `structural()` 模板（病因可见、出路偏弱，与批 B 登记的 ⑤ 同族）。修法 = 照仓内三条 ✅ 先例补文案（`use fs_list` / `use the shell tool instead` / `copy old_string character-for-character`），零逻辑改动。
 - **F13（批 E 从 `market/README.md` 订正登记）** 同一份插件元数据**两条通路**：`market` 的 v2 manifest 硬编码在 `scripts/build_market.sh`（`cat > manifest.json <<EOF`），而 `plugins/` 侧走「源 `manifest.json` + sed 版本号」；`plugins-src/tool-shout/` 根本没有 manifest 源文件。与 F7 同源病（分家后漂移），改元数据只改一处必然脱节。
-- **F14（批 E 顺手发现，零风险小项）** `crates/kernel-bin/src/demo.rs` 的常量名 `V12 = "0.1.0"` / `V13 = "0.2.0"` 来自已作废的 1.2.0/1.3.0 时代（v2.56 版本基准重置的残影）；改名 `V_OLD/V_NEW` 即可，不改行为。
+- ✅ **F14（批 E 顺手发现，零风险小项）** `crates/kernel-bin/src/demo.rs` 的常量名 `V12 = "0.1.0"` / `V13 = "0.2.0"` 来自已作废的 1.2.0/1.3.0 时代（v2.56 版本基准重置的残影）；改名 `V_OLD/V_NEW` 即可，不改行为。**同族一起改了** `demo4.rs` 的 `V13` 与 `plugin-host/tests/echo_plugin.rs` 的 `v12/v13/p12/p13`；`registry/tests.rs` 的 `v12` 值真是 `1.2.0` = 名副其实不动。
 
 ### 批 G｜本地产物与环境（不入库，需你点头）
 
@@ -346,10 +346,32 @@ check-i18n zh=891 en=891 · check-commands 85·85·85（本批未碰前端）
 **批 E 门禁（文档最后一次编辑后全量复跑，2026-10-11）**
 
 ```
-（见下方实跑结果，本批含 9 个 Cargo.toml 注释改动，故按「动过 Rust 轨」口径全量复跑）
+根 fmt CLEAN · clippy --workspace --all-targets -- -D warnings 0 · 39 套件 436 passed 0 failed
+desktop fmt CLEAN · clippy --all-targets -- -D warnings 0 · 356 passed 0 failed
+check_length 39==基线 · check-i18n zh=en=891 缺键0 无引用键0 · check-commands 85·85·85 · check-middleware-wiring 10·10·0·白名单0
+markdown 本地链接自检 73 条 broken 0（脚本 tmp/v149-linkcheck.mjs，未入库）
 ```
 
+（本段原先写的是「见下方实跑结果」而下面并没有结果块 = 文档领先事实的一句空指向，批 F-1 顺手补实数。）
+
 已知边界：①E4b 的 `CHANGELOG.md` 拆分建议**未采纳并登记待裁定**；②`market/tool-shout` 仍 1.0.0/1.1.0 与 v2.56「全部插件 0.1.0 起步」存在**已知偏差**（夹具保留 1.x 恰好覆盖旧锁文件回退路径），是否重置待你裁定；③INDEX.md 的状态判定 = 我按当前代码逐个 grep 得出（如 `tabler` 0 命中判「未采纳」），**「已兑现」类的兑现批次号来自 AGENTS/ROADMAP 自述**，未逐批重跑验证；④本批未做界面/CDP 走查（纯文档批，无 `.ts/.vue` 改动）；⑤**链接自检脚本 `tmp/v149-linkcheck.mjs` 留在 tmp 未入库**——它抓到过本批自己写出的两处断链（ROADMAP 新块的 `../plugins/README.md` 解析到 `docs/plugins/`、INDEX.md 里含括号的文件名未做百分号编码），但升为第五道门禁要配套变异验证（塞坏链接见红 → 还原复绿）+ pre-commit 接线，属新增门禁面，**等你点头再入库**；⑥「表改写必须带列数断言」这条教训目前只写进 CHANGELOG，**没有机器化**——下一轮表格改写若人记不住就会再犯，可随批 V 一起决定是否落成脚本。
+
+---
+
+### 批 F-1（2026-10-11 落地，v2.150；F1/F2/F3/F14 全落，F4–F13 未动）
+
+| 项 | 证据（改前 → 改后，计数全部机器数得） |
+|---|---|
+| F1 时间尺 | `desktop/src-tauri/src/timeutil.rs` 新（57 行）+ `timeutil/tests.rs`（107 行）。**本地定义 9 → 0**：`llm/catalog.rs:318`(u64) / `llm/diagnose.rs:206` / `media/mod.rs:289`(u128) / `memory.rs:515` / `memory_reconcile.rs:242` / `organize/mod.rs:112` / `organize/tree_tools.rs:280` / `runner.rs:231`（唯一 `unwrap_or_default` 形状）/ `scheduler/store.rs:65`（`pub(crate)`）。**内联链 8 → 0**：`browser/console.rs:61` / `notifications.rs:105`+`:114` / `commands/sessions.rs:297` / `commands/plugins.rs:99` / `autodisable.rs:20` / `usage.rs:275` / `memory_files.rs:91`（mtime 面走新增 `to_epoch_ms`，与 `now_ms` 同一把尺）。合并计数 = 本批触及文件里 `.duration_since(` **17 → 0**（计划 §1 按函数名只数到 9，实测含内联写开的 8 段）。`scheduler::store::now_ms` 三消费者改直连（`engine.rs:116` / `tests.rs:184` / `tools.rs:19` 的 import 拆名），**不留 re-export**。`loaded_ms: u64` 保持字段类型，调用点 `as u64` ×2。**两类故意不收**（写进头注防"顺手统一"）：纳秒造号（`settings/llm.rs::new_profile_id` + 13 处测试夹具 nonce）与 `llm/retry.rs::jitter_random` 的 `subsec_nanos` **熵源** |
+| F2 截断尺 | `text.rs` 新（51 行）+ `text/tests.rs`（164 行）。**本地 `fn clip(` 定义 6 → 0**（`browser/console.rs:46` / `notifications.rs:80` / `export.rs:12` / `organize/search_titles.rs:235` / `scheduler/tools.rs:296` / `subagent_verify.rs:130`），**裸 `clip(` 引用 22 → 0**（22 = 6 定义行 + 16 调用点；`export.rs` 的 `clip_json` 不同名不同物保留）。旧实现不是「一种语义抄了六遍」而是**四种**：`clip_plain`（console/notifications 纯截断）/ `clip_ellipsis`（search_titles/subagent_verify 超长才补 `…`）/ `clip_trimmed`（scheduler/tools 先 trim）/ `clip_markdown`（export 补 `…（截断）` + 换行折平）——四份各归一名，**行为逐点对位**而非统一改写 |
+| F3 缺省端点 | `llm/models.rs:21-23` 补「唯一真源」声明；`llm/probe.rs:10` 私有 `DEFAULT_OLLAMA_BASE` 与 `settings/embedding.rs:13` `pub OLLAMA_DEFAULT_BASE` 删除 → `grep localhost:11434` 全 desktop **3 → 1**。`embedding.rs` 原注释自称「与 llm/probe.rs 的探测兜底同源」而磁盘上是两份独立字面量 = 批 D D7「注释自称同源而实际已分叉」同款（这批**还没漂**，属于趁未漂收口）。搭车抓到同文件第二对同名单位：`PROBE_TIMEOUT` `models.rs`(pub 5s) 与 `probe.rs`(私有 5s) → **2 → 1** |
+| F14 命名 | `demo.rs` `V12/V13` → `V_OLD/V_NEW` + 注（讲明旧名来自 v2.56 基准重置前的 1.2/1.3）；`demo4.rs` `V13` → `V_ACTIVE`；`plugin-host/tests/echo_plugin.rs` `v12/v13/p12/p13` → `v_old/v_new/p_old/p_new`（24 标识符）。crates 侧这类标识符 **37 → 2**（余 2 = 新注释里解释旧名的字面量，非代码）。`plugin-host/src/registry/tests.rs:6` 的 `v12` **不动**：它的值真是 `1.2.0`，名副其实 |
+| 等值判据 | 两个新模块的测试都是**「被删旧代码原文照抄当参考实现」**（出处文件:行号标在注释里），不是手写期望值：`text/tests.rs` 六份旧实现 × 12 档宽度 × 35 条语料逐 `assert_eq`，另加「四语义确实互不相同」的判别测试（若将来被"顺手统一"成一条即红）与导出金样逐字节钉死；`timeutil/tests.rs` 五份旧形状（含 runner 的 `unwrap_or_default` 独形）× 9 个采样时刻（epoch 点、±1ms、1001ms、epoch 之前两种）全等 + epoch 前回落 0 + 两单位读同一个钟 200 次 |
+| 变异验证 | 六个变异全部「弄坏 → 见红 → 逐字节还原 → sha 校验」：`text.rs`（ellipsis 无条件加 `…` / trimmed 丢 `trim` / markdown 不折平换行）与 `timeutil.rs`（epoch 前 `unwrap()` 由回落变 panic / 毫秒尺换微秒 / 秒换算多给 1 秒）。**变异脚本自身的一处缺陷当场被自己的 sha 校验抓到**：首版用「反向 replace」还原，锚点 `clip_plain(s, n)` 非唯一 → 把 `trim` 错插进另一个函数，手工逐字节复原（sha 回 `6cd171e213c6c26f`）后改成「写回整份备份」重跑三例全 PASS → 教训落 ROADMAP 边界③：**还原永远走备份，不走反向替换** |
+| 测试账 | desktop **356 → 363**（+4 text / +3 timeutil，删 0）；根 workspace **436 持平**（`echo_plugin` 重命名后 2/2 绿）|
+| 门禁 | 见 ROADMAP v2.150 门禁行：根 fmt CLEAN / clippy `--workspace --all-targets -- -D warnings` 0 / 39 套件 436 passed 0 failed；desktop fmt CLEAN / clippy 0 / 363 passed 0 failed；四道结构闸全等基线（`check_length` 39==39、`check-i18n` 891=891·无引用键 0、`check-commands` 85·85·85、`check-middleware-wiring` 10·10·0·0）|
+
+**批 F-1 已知边界（记档）**：①**行尾风格陷阱第二次咬人**——`organize/search_titles.rs` 等是 CRLF，脚本 `lines[i] === "}"` 判块尾失配，而 `cat -A` 在本机工具输出里**不显示 `^M`**（`\r` 被输出通道吞掉，od 看同一行也显示 `\n`）：判换行风格只能靠 node 读原始字节。改法 = `split(/\r?\n/)` + 按原 eol 写回，验据 = `git diff --numstat` 每文件都是个位/十位数（整文件翻 LF 会是数百行）；②批量脚本首版半途抛错留半状态（前 3 文件已写盘），F1 脚本改「全内存变换 + 断言全过才统一写盘 + dry-run 预览锚点命中数」；③本批**未新增第五道门禁**防「端点字面量再分叉」——加闸属批 B 门禁体系范畴、需配套变异验证与 pre-commit 接线，等你点头；现防线 = `grep` 对账 + 等值测试锁形状；④本批零 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`，未做界面走查（收敛判据 = 等值测试 + 全量编译/门禁，非视觉面）；⑤F4（热路径）/F5（结构性拆分）/F6（前端重复）/F7（plugin-api 共享基座，最大一刀 600–700 行）/F8–F13 各自独立成刀，本轮一律未动。
 
 ---
 

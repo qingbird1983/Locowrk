@@ -80,16 +80,18 @@ fn echo_error(err: &ToolError) -> String {
 #[test]
 fn echo_load_activate_rollback_without_restart() {
     let registry = std::sync::Arc::new(PluginRegistry::new());
-    let v12: Version = "0.1.0".parse().unwrap();
-    let v13: Version = "0.2.0".parse().unwrap();
+    let v_old: Version = "0.1.0".parse().unwrap();
+    let v_new: Version = "0.2.0".parse().unwrap();
 
     // ---- 加载 0.1.0 并激活：plain / upper 可用，reverse 尚不存在 ----
-    let p12 = build_and_stage("0.1.0");
-    registry.load("tool-echo", &v12, &p12).expect("load 0.1.0");
+    let p_old = build_and_stage("0.1.0");
     registry
-        .activate("tool-echo", &v12)
+        .load("tool-echo", &v_old, &p_old)
+        .expect("load 0.1.0");
+    registry
+        .activate("tool-echo", &v_old)
         .expect("activate 0.1.0");
-    assert_eq!(registry.current("tool-echo").unwrap().version(), &v12);
+    assert_eq!(registry.current("tool-echo").unwrap().version(), &v_old);
 
     let source = RegistryToolSource::new(std::sync::Arc::clone(&registry));
     let echo = source.resolve("echo").expect("resolve echo");
@@ -105,15 +107,17 @@ fn echo_load_activate_rollback_without_restart() {
     assert!(echo_error(&err).contains("does not support mode=`reverse`"));
 
     // ---- 加载 0.2.0 并激活（多版本并存，切换 = 换指针）----
-    let p13 = build_and_stage("0.2.0");
-    registry.load("tool-echo", &v13, &p13).expect("load 0.2.0");
-    assert!(registry.has_version("tool-echo", &v12), "旧版本仍并存");
+    let p_new = build_and_stage("0.2.0");
     registry
-        .activate("tool-echo", &v13)
+        .load("tool-echo", &v_new, &p_new)
+        .expect("load 0.2.0");
+    assert!(registry.has_version("tool-echo", &v_old), "旧版本仍并存");
+    registry
+        .activate("tool-echo", &v_new)
         .expect("activate 0.2.0");
 
     let echo13 = source.resolve("echo").expect("resolve echo@0.2.0");
-    assert_eq!(echo13.plugin_version(), &v13);
+    assert_eq!(echo13.plugin_version(), &v_new);
     let out = call(echo13.as_ref(), json!({"text": "Hello", "mode": "reverse"})).unwrap();
     assert_eq!(out["echo"], "olleH");
     assert_eq!(out["plugin_version"], "0.2.0");
@@ -124,38 +128,38 @@ fn echo_load_activate_rollback_without_restart() {
 
     // ---- 回退 0.1.0（不重启）：reverse 立刻变回不可用 ----
     let rolled = registry.rollback("tool-echo").expect("rollback");
-    assert_eq!(rolled, v12);
+    assert_eq!(rolled, v_old);
     // 已是最早版本，再回退即 NoPreviousVersion
     assert!(matches!(
         registry.rollback("tool-echo"),
         Err(LoadError::NoPreviousVersion(_))
     ));
     let echo12 = source.resolve("echo").expect("resolve echo@0.1.0");
-    assert_eq!(echo12.plugin_version(), &v12);
+    assert_eq!(echo12.plugin_version(), &v_old);
     let err = call(echo12.as_ref(), json!({"text": "Hello", "mode": "reverse"})).unwrap_err();
     assert!(echo_error(&err).contains("does not support mode=`reverse`"));
 
     let states = registry.list_states();
     assert_eq!(states.len(), 1);
-    assert_eq!(states[0].active.as_ref(), Some(&v12));
-    assert_eq!(states[0].loaded, vec![v12.clone(), v13.clone()]);
+    assert_eq!(states[0].active.as_ref(), Some(&v_old));
+    assert_eq!(states[0].loaded, vec![v_old.clone(), v_new.clone()]);
 }
 
 #[test]
 fn loader_rejects_mismatched_identity_and_missing_files() {
-    let p13 = build_and_stage("0.2.0");
-    let v12: Version = "0.1.0".parse().unwrap();
+    let p_new = build_and_stage("0.2.0");
+    let v_old: Version = "0.1.0".parse().unwrap();
 
     // manifest 自述 id 与登记键不一致 → 拒载
     let registry = PluginRegistry::new();
     let err = registry
-        .load("tool-other", &v12, &p13)
+        .load("tool-other", &v_old, &p_new)
         .expect_err("id mismatch must fail");
     assert!(matches!(err, LoadError::IdMismatch { .. }));
 
     // manifest 自述版本与登记键不一致 → 拒载（防止目录名与产物脱钩）
     let err = registry
-        .load("tool-echo", &v12, &p13)
+        .load("tool-echo", &v_old, &p_new)
         .expect_err("version mismatch must fail");
     assert!(matches!(err, LoadError::VersionMismatch { .. }));
 

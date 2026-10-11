@@ -31,6 +31,7 @@ use crate::memory_files::MemoryFiles;
 
 /// 与 memory.rs 同限（跨模块可见性从这里引用，避免第二份常量）。
 use crate::memory::{KEY_MAX, VALUE_MAX};
+use crate::timeutil::now_secs;
 
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -237,13 +238,6 @@ fn process_file(
 /// 正文等价（尾空白不敏感）：人重存 / 首次纳管不当作编辑。
 fn body_eq(a: &str, b: &str) -> bool {
     a.trim_end() == b.trim_end()
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 #[cfg(test)]

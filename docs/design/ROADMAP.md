@@ -722,6 +722,26 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.150 · 审计修复批 F-1（同源重复实现收敛：一把时钟尺 · 四种截断语义 · 一份缺省端点）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§5 批 F 段（F1 / F2 / F3 / F14 四项，审计 M-1 同族）。子批口径 = **只收敛「同一件事在多处各写一遍」**，
+不动性能（F4/F10）、不动结构（F5/F9）、不动跨 crate 基座（F7）——那些各自是独立一刀。纯 desktop + kernel-bin/plugin-host 代码面，
+**内核 API 契约零破坏、ABI 零重排、前端零改动、LLM 轨零行为变化**。
+
+| 面 | 落点 |
+|---|---|
+| ① 时间尺（F1） | 新 **`desktop/src-tauri/src/timeutil.rs`**：`now_ms()` / `now_secs()` / `to_epoch_ms(SystemTime)` 三入口（一把尺两个单位 + mtime 读数同一把尺）。收敛前 desktop 生产码有 **9 份本地定义**（`llm/catalog` u64 / `llm/diagnose` / `media` u128 / `memory` / `memory_reconcile` / `organize/mod` / `organize/tree_tools` / `runner`（唯一用 `unwrap_or_default` 的那份）/ `scheduler/store` `pub(crate)`）**+ 8 处把同一段链内联写开**（`browser/console` / `notifications`×2 / `commands/sessions` / `commands/plugins` / `autodisable` / `usage` / `memory_files` mtime），彼此只差单位与返回类型——实测 `grep -c duration_since` **17 → 0**。`scheduler::store::now_ms` 的三个消费者（`engine.rs` / `tests.rs` / `tools.rs`）改直连 timeutil，**不留转发 re-export**（批 D 刚删过同类冗余 re-export）。`llm/catalog.rs` 的 `loaded_ms: u64` 是既有序列化面，**尺统一不等于换字段类型**：调用点显式 `as u64` ×2。**明确不收的两类**写进头注：纳秒造号（`settings/llm.rs::new_profile_id` + 13 处测试夹具 nonce）语义是"发号"不是"读时间"；`llm/retry.rs::jitter_random` 取 `subsec_nanos` 当**熵源** = 第三种语义 |
+| ② 截断尺（F2） | 新 **`desktop/src-tauri/src/text.rs`**：`clip_plain` / `clip_ellipsis` / `clip_trimmed` / `clip_markdown` 四语义。审计抓的形态在这里格外真：**6 份同名 `clip` 实为 4 种互不相同的行为**（加不加 `…` / trim 在哪层 / 换行折不折 / 标记文本长短），同名不同物 = 「顺手误用」的产地。16 个调用点按各自旧行为逐一对位改指（`console` 1 / `notifications` 2 / `export` 3 / `search_titles` 1 / `scheduler/tools` 3 / `subagent_verify` 6），`export.rs` 的 `clip_json` 保留（不同名不同物）。实测 `grep`：**本地 `fn clip(` 定义 6 → 0**，**裸 `clip(` 引用 22 → 0** |
+| ③ 缺省端点（F3） | `llm/models.rs` 三个 `DEFAULT_*_BASE` 常量补**唯一真源**声明并写清四处消费者；`llm/probe.rs` 的私有 `DEFAULT_OLLAMA_BASE` 与 `settings/embedding.rs` 的 `pub OLLAMA_DEFAULT_BASE` 删除改吃真源——`embedding.rs` 原注释**自称「与 llm/probe.rs 的探测兜底同源」而磁盘上是两份独立字面量**（批 D 的 D7「注释自称同源而实际已分叉」同款，只是这批还没漂）。搭车抓到同文件另一对：`PROBE_TIMEOUT` 在 `models.rs`（pub）与 `probe.rs`（私有）各写一份 5s，一并收。实测 `grep localhost:11434` **3 → 1**、`const PROBE_TIMEOUT` **2 → 1** |
+| ④ 版本号命名（F14） | `kernel-bin/demo.rs` 的 `V12/V13` → `V_OLD/V_NEW`（值早在 v2.56 基准重置时换成 0.1.0/0.2.0，名字还讲 1.2/1.3 = 读代码的人把 "V13" 当真实版本）；`demo4.rs` `V13` → `V_ACTIVE` + 注；`plugin-host/tests/echo_plugin.rs` 的 `v12/v13/p12/p13` → `v_old/v_new/p_old/p_new`（24 处标识符）。`registry/tests.rs` 的 `v12` **不动**——它的值真是 `1.2.0`，名副其实。实测 crates 侧这类标识符 **37 → 2**（余 2 = 新注释里解释旧名的字面量）|
+| ⑤ 变异验证 | 两个新模块的等值测试各三例变异，全部「弄坏 → 见红 → 逐字节还原 → sha 校验无残留」：`text.rs`（ellipsis 无条件加 `…` / trimmed 丢 trim / markdown 不折平换行 → 各击中 `every_width_boundary…` 等测试）与 `timeutil.rs`（epoch 前改 `unwrap()` 由回落 0 变 panic / 毫秒尺换微秒 / 秒换算多给 1 秒 → 各击中形状锁与回落锁）。**判据强度**：参考实现是**被删的旧代码原文照抄**（出处文件行号标在注释里），不是手写期望值——所以「换了一条取整路径」「悄悄不加省略号」这类行为漂当场红 |
+| 测试账 | desktop 356 → **363**（+4 `text::tests` / +3 `timeutil::tests`，删 0）；根 workspace **436 持平**（本批不改内核契约，`echo_plugin` 重命名后 2/2 仍绿）|
+| 门禁 | 根 fmt CLEAN、clippy `--workspace --all-targets -- -D warnings` **0**、39 套件 **436 passed 0 failed**；desktop fmt CLEAN（v2.140 起的每批硬闸）、clippy --all-targets **0**、**363 passed 0 failed**；四道结构闸全等基线 = `check_length` **39 == 基线**（新增四文件全在 400 内：51/164/57/107）、`check-i18n` 891=891·无引用键 0、`check-commands` 85·85·85、`check-middleware-wiring` 10·10·0·白名单 0；本批零 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`。已跟踪文件 **+114 / −201 = 净 −87 行**，新模块 +379 行（其中测试 271 行、实现 108 行）|
+| 边界 | ①**行尾风格陷阱复现**：`organize/search_titles.rs` 等文件是 **CRLF**，首轮批量脚本用 `lines[i] === "}"` 判块尾找不到（行实为 `}\r`）且 `cat -A` 在本机工具输出里**不显示 `^M`**（`\r` 被输出通道吞掉）——判换行风格只能靠 node 读原始字节；脚本改为 split(`/\r?\n/`) + 按原 eol 写回，改后 `git diff --numstat` 每文件都是小数字（若被整文件翻成 LF 会是数百行）②**脚本半途抛错留半状态**：首版六文件批处理在第 4 个 throw 时前 3 个已写盘（三文件 diff 事后逐行核过内容正确、只是集合不齐），F1 的脚本据此改成「全部在内存变换 + 断言全过才统一写盘」并先跑 dry-run 预览 19 处锚点命中数 ③**变异脚本自身的还原缺陷**：首版用 `replace(反向)` 还原，锚点非唯一时把 `trim` 错插进另一个函数（当场被 sha 校验抓到，手工逐字节复原后改「写回整份备份」重跑三例全 PASS）——登记教训：**还原永远走备份，不走反向替换** ④本批只动 desktop + kernel-bin/plugin-host 测试，F4–F13 各自独立成刀未动 ⑤未新增第五道闸防「字面量再分叉」（加闸属批 B 门禁体系范畴，需你点头；现防线 = `grep` 对账 + 等值测试锁形状）|
+| 文档 | `AUDIT-FIX-PLAN-v1.md` §5 批 F-1 段（F1/F2/F3/F14 逐条证据 + 上述三条边界）+ §1 批 F-1 标 ◐（余 F4–F13）+ ROADMAP/CHANGELOG/AGENTS v2.150 |
+
+---
+
 ### v2.149 · 审计修复批 E（权威文档真实化：让下一个 agent 不再被文档骗）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§5 批 E 段（逐条「改前 → 改后」计数与取证都在那儿）。本批**零功能代码改动**，

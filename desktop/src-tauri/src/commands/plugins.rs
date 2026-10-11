@@ -1,12 +1,11 @@
 //! 插件管理命令（DESIGN.md §11.1 / §13.3 / ⑩ 批量）：薄适配层，业务全
 //! 在 PluginService。install/update 返回生效版本号，前端据此刷新。
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use serde::Serialize;
 use tauri::State;
 
 use crate::state::AppState;
+use crate::timeutil::now_secs;
 use crate::usage::{self, PluginUsageView};
 use plugin_service::{InstalledPlugin, MarketplaceItem};
 
@@ -96,10 +95,7 @@ pub async fn plugin_list_with_usage(
 ) -> Result<Vec<PluginUsageView>, String> {
     let installed = state.plugins.list_installed();
     let times = state.usage.plugin_times();
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+    let now = now_secs();
     Ok(usage::attach(&installed, now, &times))
 }
 

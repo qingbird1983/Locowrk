@@ -8,6 +8,8 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
+use crate::text::clip_plain;
+use crate::timeutil::now_ms;
 use serde::{Deserialize, Serialize};
 
 /// 每页签保留条数（FIFO 溢出删最旧）：一个页面会话的错误量级。
@@ -43,10 +45,6 @@ pub struct ConsoleStore {
     seq: AtomicU64,
 }
 
-fn clip(s: &str) -> String {
-    s.chars().take(TEXT_CLIP).collect()
-}
-
 impl ConsoleStore {
     pub fn new() -> Self {
         Self {
@@ -59,14 +57,7 @@ impl ConsoleStore {
     /// 新页签 id（打开即占位：页面还没报错也能被 browser_console 点名读）。
     pub fn next_tab_id(&self) -> String {
         let n = self.seq.fetch_add(1, Ordering::Relaxed);
-        format!(
-            "br-{}-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis())
-                .unwrap_or(0),
-            n
-        )
+        format!("br-{}-{}", now_ms(), n)
     }
 
     /// 回传入账：未知页签先登记（含打开占位补登记），溢出删最旧。
@@ -93,7 +84,7 @@ impl ConsoleStore {
                 let entry = ConsoleEntry {
                     ts: e.ts,
                     level: e.level,
-                    text: clip(&e.text),
+                    text: clip_plain(&e.text, TEXT_CLIP),
                 };
                 if buf.len() == PER_TAB_CAP {
                     buf.pop_front();

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 
+use crate::timeutil::now_ms;
 use kernel_agent::LlmRequest;
 use plugin_api::ToolSpec;
 use serde::Serialize;
@@ -201,13 +202,6 @@ impl Diagnoser {
             .get(session_id)
             .cloned()
     }
-}
-
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 #[cfg(test)]

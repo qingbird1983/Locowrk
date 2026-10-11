@@ -17,6 +17,9 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::approval::TIMEOUT_REASON_PREFIX;
 use crate::events::AgentEvent;
+use crate::text::clip_plain;
+use crate::timeutil::now_ms;
+use crate::timeutil::now_secs;
 
 /// 通知上限（FIFO 溢出删最旧）：浮层一屏的数据量级，100 条足够追溯。
 const CAP: usize = 100;
@@ -77,10 +80,6 @@ pub struct NotificationStore {
 
 static SEQ: AtomicU64 = AtomicU64::new(0);
 
-fn clip(s: &str, n: usize) -> String {
-    s.chars().take(n).collect()
-}
-
 impl NotificationStore {
     /// 打开（启动时一次）：坏 / 缺文件当空表，不拦启动。
     pub fn open(path: PathBuf) -> Self {
@@ -103,21 +102,11 @@ impl NotificationStore {
         label: Option<String>,
     ) -> NotificationItem {
         let item = NotificationItem {
-            id: format!(
-                "n-{}-{}",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis())
-                    .unwrap_or(0),
-                SEQ.fetch_add(1, Ordering::Relaxed)
-            ),
+            id: format!("n-{}-{}", now_ms(), SEQ.fetch_add(1, Ordering::Relaxed)),
             kind,
             session_id,
             label,
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0),
+            created_at: now_secs(),
             read: false,
         };
         let mut items = self.items.lock().expect("notifications poisoned");
@@ -202,7 +191,7 @@ pub fn draft_from_event(
         } => Some(NotificationDraft {
             kind: NotificationKind::ScheduleFired,
             session_id: Some(session_id.clone()),
-            label: Some(clip(title, 80)),
+            label: Some(clip_plain(title, 80)),
         }),
         AgentEvent::ToolCall { call_id, tool, .. } => {
             if pending.len() >= PAIR_CAP {
@@ -234,7 +223,7 @@ pub fn draft_from_event(
                     NotificationKind::SubagentFailed
                 },
                 session_id: Some(session_id.clone()),
-                label: error.as_deref().map(|e| clip(e, 120)),
+                label: error.as_deref().map(|e| clip_plain(e, 120)),
             })
         }
         AgentEvent::ContextCompacted {

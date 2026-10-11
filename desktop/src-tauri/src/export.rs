@@ -5,22 +5,15 @@
 //! 不追求无损。
 
 use crate::events::AgentEvent;
+use crate::text::clip_markdown;
 
 /// 工具参数 / 结果单条截断宽度（字符）。
 const CLIP: usize = 400;
 
-fn clip(s: &str) -> String {
-    let mut out: String = s.chars().take(CLIP).collect();
-    if s.chars().count() > CLIP {
-        out.push_str("…（截断）");
-    }
-    out.replace('\n', " ")
-}
-
 fn clip_json(v: &serde_json::Value) -> String {
     match v {
         serde_json::Value::Null => "(无参数)".into(),
-        other => clip(&other.to_string()),
+        other => clip_markdown(&other.to_string(), CLIP),
     }
 }
 
@@ -69,7 +62,10 @@ pub fn render_markdown(title: &str, session_id: &str, events: &[AgentEvent]) -> 
                 section(&mut out, "## 助手\n\n", &assistant);
                 assistant.clear();
                 if let Some(err) = error {
-                    out.push_str(&format!("> 工具结果 · 失败：{}\n\n", clip(err)));
+                    out.push_str(&format!(
+                        "> 工具结果 · 失败：{}\n\n",
+                        clip_markdown(err, CLIP)
+                    ));
                 } else if *ok {
                     out.push_str(&format!("> 工具结果 · 成功：{}\n\n", clip_json(output)));
                 } else {
@@ -87,7 +83,10 @@ pub fn render_markdown(title: &str, session_id: &str, events: &[AgentEvent]) -> 
             } => {
                 section(&mut out, "## 助手\n\n", &assistant);
                 assistant.clear();
-                out.push_str(&format!("> 上下文已压缩：{}\n\n", clip(summary_preview)));
+                out.push_str(&format!(
+                    "> 上下文已压缩：{}\n\n",
+                    clip_markdown(summary_preview, CLIP)
+                ));
             }
             _ => {}
         }

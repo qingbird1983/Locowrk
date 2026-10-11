@@ -12,6 +12,7 @@ use session_store::{
 use crate::events::AgentEvent;
 use crate::runner;
 use crate::state::AppState;
+use crate::timeutil::now_ms;
 
 /// 会话重命名：写旁车 `<id>.meta.json` 标题（trim 后空 = 回落自动标题）。
 /// 内存会话不动，列表层生效。
@@ -294,10 +295,7 @@ pub async fn session_resolve_uncertain(
     if scan.decisions.contains_key(call_id.as_str()) {
         return Err("该调用已经裁决过了".into());
     }
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
+    let ts = now_ms();
     let seq = session.append(SessionEvent::ToolExecutionUncertain {
         call_id: plugin_api::CallId(call_id.clone()),
         decision: dec,

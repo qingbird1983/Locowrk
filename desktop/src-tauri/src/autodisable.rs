@@ -9,6 +9,7 @@
 
 use plugin_service::PluginService;
 
+use crate::timeutil::now_secs;
 use crate::usage::UsageRecorder;
 
 /// 巡检一遍并停用超期插件。`days` = 0 直接返回（关闭态，两个调用点都
@@ -17,10 +18,7 @@ pub(crate) async fn auto_disable_idle(plugins: &PluginService, usage: &UsageReco
     if days == 0 {
         return;
     }
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+    let now = now_secs();
     let times = usage.plugin_times();
     for p in plugins.list_installed() {
         if matches!(p.source, plugin_service::InstallSource::Builtin) || !p.enabled {

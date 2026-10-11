@@ -28,6 +28,7 @@ use serde::Serialize;
 
 use kernel_agent::{MemoryEntry, MemorySource};
 
+use crate::timeutil::now_secs;
 use crate::workspace::{scope_key, WorkspaceResolver};
 
 /// 与 memory-sqlite 插件同限：key 主键不能无限长，value 防 runaway 写。
@@ -510,13 +511,6 @@ fn ensure_workspace_schema(conn: &Connection) -> Result<(), String> {
             Err(e)
         }
     }
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 /// 本地日期 ISO 形（`YYYY-MM-DD`，`<environment>` Today 行用）。chrono
