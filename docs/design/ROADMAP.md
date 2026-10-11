@@ -722,6 +722,28 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.153 · 审计修复批 F-3（组装点 `init_state` 结构性拆分：636 行函数拆成八簇 + 一条「语句零重排」机器判据）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§1 批 F 的 **F5 第一项**（审计 M-4 超限榜首：`desktop/src-tauri/src/state/mod.rs` 698 行、其中 `init_state` 一个函数 636 行）。
+生产码语义零改动：**497 条原语句逐条保序、零丢失、零新增行为**（机器判据，见 ③）；desktop 与根测试数**全部持平**。
+`state/mod.rs` 699 → **220 行**、`init_state` 636 → **195 行**（纯编排 + `AppState` 字面量）；拆出 **8 个簇文件共 1174 行**，全批净 **+696 行**——**这是一次有意的行数增加**，理由见 ②。
+
+| 面 | 落点 |
+|---|---|
+| ① 拆分形态 | 新 `state/boot.rs`（启动基座：Context/注册表/事件出口/通知 vtable 钩子/数据根/调度库/统计库/embedding/会话表与启动回放/SettingsStore 含降级/env 注入）、`state/llm_stack.rs`、`state/memory_stack.rs`、`state/waterfall.rs`（七监听器注册序本体）、`state/kernel_stack.rs`（洋葱链 + 审批 + AskHub + Gate + Kernel）、`state/tools.rs`（宿主内置工具 + 两棵目录树 + ToolSource 注册）、`state/plugins.rs`（服务开启 + 对账 + 开发态装载 + 广播 + 停用巡检）、`state/background.rs`（Organizer + 调度引擎 + 在途重投 + 首启导出 + 资产 GC）。**每簇 = `Init`（入参逐字段显名）+ `Stack`（出参字段名 = 原 `init_state` 局部变量名）+ `fn build`**：调用点按名解构，所以下游语句和 `AppState` 字面量**一行都不用改写** |
+| ② 为什么值得（不是为行数拆） | `init_state` 是**两个组装点之一**、也是历批提交里被反复"顺手加一段"的地方（v2.131 媒体三件 / v2.142 树工具四件 / v2.144 浏览器两件 / v2.135 G5 一件…）。三问自检：①它只做一件事吗——不，它做了八件事；②名字准确吗——`init_state` 掩盖了八个子系统；③改它是否牵连不相关部分——**是，而且是本刀的全部动机**：加工具要滚到 335 行处、改 GC 要滚到 610 行处，一次误触就是整窗不起。拆完 `tools.rs` 自带 18 参 `Init`，**新增内置工具的改动面从"636 行函数中段"缩到"一个 242 行文件"** |
+| ③ 等价判据（本刀最值钱的一项） | 新 `tmp/v153-equiv2.mjs`：**A = `git show HEAD:` 的 init_state 有序语句（497 条）**，**B = 改后 init_state 体把八个调用点就地展开回各簇 `fn build` 体**。判三条：改前有改后无（丢语句）= **0**、保序子序列失败（顺序错乱）= **0**、B 多出的行不属于机械形状 = **0**（多出 16 行全部是 `Stack` 字面量字段名行与两个簇返回值行）。**为什么必须有它**：`state/mod.rs` 原注释明写「桌面单测不引用 state」（为了不让 tao/WebView2 符号进测试二进制）⇒ **368 个单测全绿也证明不了我把句柄接对了**，"顺序契约"这一类缺陷编译器根本看不见 |
+| ④ 判据脚本自己的两个 bug（如实记） | ⑴首版只认 `::build(`，漏了 `build_and_provide` → tools 簇整簇没展开，误报「281 条顺序错乱 + 90 条丢语句」；⑵调用块收尾只认 `trim() === "});"`，而 13 字段的 boot 簇收尾是 `} = boot::build(boot::Init { app: app.clone() });`（同行）→ 扫过头吞到 GC 块。**两处都是判据自己错、却把绿的说成红**——若我当时选择"信脚本"就会误判整个拆分失败。教训 = **判据脚本自己也要验**，且窗口法（往后 N 行找匹配）不可靠，改为只认两种块起点（同行调用 / `::Stack {` 头）|
+| ⑤ 实机走查（state 无单测的替代证据，两子批各一次共 **20/20 PASS**） | `tmp/v153-walk/walk.mjs`：隔离数据根 + 隔离 WebView2 目录 + CDP 9233 起 debug 实例。判据 **W1 九插件装载**（`plugins loaded` 逐 id 列出）·**W2 `boot: init_state done`**（991/3029/3723ms 三次实测）·**W3 零 panic/零服务不可用/零 ENTRYPOINT_NOT_FOUND**·**W4 窗口真起来**（composer 渲染）·**W5b 真轮第一跳 `search_tools` 返回目录带回 screenshot/browser_open/subagent_run/ask_user**（= `with_builtin` 链在位）·**W5c/W5d 插件工具 `fs_list` 被调到、`plugin_id=tool-fs`、结果里读到夹具文件名**（= 一条调用同时穿过插件装载簇与目录簇，端到端）·**W6 `tool_call` 先于 `tool_result` 落盘**（纪律 4 的事件面）。**走查环境两条教训**：⑴首版把 CDP 的 `about:blank` 当主窗 → DOM 全空、`HTMLTextAreaElement` 取属性描述符抛 `Illegal invocation`；⑵**debug 构建的 `devUrl = http://localhost:5173`**（`tauri.conf.json`），直接跑 exe 时前端没人服务就是空白页——脚本改为先起 vite（`netstat` 核实 5173 空闲，未与用户 dev 实例抢端口）、结束时同 kill；`evaljs` 改为返回 null 而非抛错，否则半途退出漏 `proc.kill()` 把 exe 锁住（历批门禁红的同款坑）|
+| ⑥ 顺带 | `llm/mod.rs` 的 embed re-export 行加 `CooledEmbed`（1 行；`tools.rs` 的 `Init` 字段要写 `Arc<CooledEmbed>`，而 `mod embed` 是 llm 的私有子模块——与既有 `pub use embed::{EmbedClient, …}` 同形状，不新开模式）；`cargo fix --lib` 清搬空后变孤儿的 import（两轮：F-3a 六条、F-3b 若干）；`check_length.sh` **BASELINE 39 → 38 并在脚本内记因**（`state/mod.rs` 脱离超限区 = M-4 榜首消失）；四处新簇头注踩了 clippy `doc_lazy_continuation`（编号列表后无空行 = rustdoc 会把下一段当成列表续行），补 `//!` 分隔后归零 |
+| ⑦ 本批新抓（根门禁红 → 机制**确证**，未修 = 新登记 **F11c**） | 满跑抓到 `wasm_plugin_staged_and_served_via_registry` 红：报文 `compile: failed to parse WebAssembly module: unexpected end-of-file (at offset 0x0)`，而路径是 `target\locowrk-test\28344\wasm-ping\0.1.0\wasm_ping.wasm`——**pid 分层已在位（F-2b 那层挡的是跨进程）却仍然红**，机制就此钉死为另一层：同二进制的两个测试都往 **同一个** `run_root()/wasm-ping/0.1.0/wasm_ping.wasm` 做 `fs::copy`（truncate + 写），而 `registry.load()` 的读发生在 `build_lock` **之外** → 并发时读到 0 字节/半截文件。`offset 0x0` 正是 truncate 后的形状。**这把批 F-2b 记的「机制未确证」升级为「已确证」**，也推翻了我当时猜的理论窗口（跨进程 cargo 产物竞争）。单跑 2/2 绿、随后 6 轮 `-p plugin-host` 全绿 = 窗口小。**修法 = `stage()` 目标带 nonce**（每次调用独占暂存路径，id/version 注册语义不变），但那是 plugin-host 测试面的一刀，与「desktop 组装点拆分」不是一类变量 ⇒ 登记 **F11c** 未在本批动 |
+| 测试账 | desktop 3 套件 **368 持平**（本刀未碰任何被测函数，`state` 本就无单测）；根 workspace 39 套件 **436 持平**（根侧零改动，仍全量复跑取证）|
+| 门禁（最后一次编辑后全量复跑） | 根 fmt CLEAN、clippy `--workspace --all-targets -- -D warnings` 0、39 套件 436 passed 0 failed；desktop fmt CLEAN、clippy `--all-targets` 0、368 passed 0 failed；四道结构闸全绿（**`check_length` 38 == 收紧后的基线**、`check-i18n` 891=891、`check-commands` 85·85·85、`check-middleware-wiring` 10·10·0·白名单 0）；等价判据 EXIT=0；走查 10/10（两子批各一轮）。零 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`（前端与 LLM 轨零改动）|
+| 边界 | ①**净增 +696 行**：八簇各带「次序契约」头注 + `Init`/`Stack` 结构体，这是把隐式知识显式化的代价——不认这笔账就会退回"一个巨型函数最省行"的反面；②F5 其余项未动：`organize/mod.rs` 614 行、`runner::project_events` 237 行、`settings/llm.rs` 682 行、`session.rs` 410 行、巨型测试文件目录式拆分；③`init_state` 仍有 195 行（`AppState` 字面量 40 个字段占大头），进一步压缩要动 `AppState` 形状 = 另一类变量；④等价判据是 **tmp/ 下的一次性脚本**（未入库、未成门禁），它证明的是"这一刀"，不会防住下一刀重排——与「第五道闸」是同一件待你点头的事；⑤簇 `Init` 参数面宽（tools 18 字段、background 21 字段）是**忠实反映原本就存在的数据流**，不是新增耦合；真正收敛它要给启动期句柄做分层容器，本批按「一轮只动一类变量」未做 |
+| 文档 | `AUDIT-FIX-PLAN-v1.md` §1 **F5 标 ◐**（本刀 = F5 第一项落，余项排期写明）+ **新增 F11c 条目（机制确证 + 修法 + 未修理由）** + F11 段内把「偶发红未确证」订正为「已确证 = 同进程 stage/load 共享路径」+ §5 批 F-3 证据段；`DESIGN.md` §12.3 加实现备注（原文是 v0.x 伪代码，本批只注明真实模块划分与文件指路，不重写规范正文）；ROADMAP/CHANGELOG/AGENTS v2.153 |
+
+---
+
 ### v2.152 · 审计修复批 F-2b（plugin-host 测试夹具单点化 + 暂存目录 pid 分层）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§1 批 F 的 **F8**（五个集成测试各抄一遍样板）与 **F11 的根侧部分 F11b**。

@@ -1970,6 +1970,9 @@ export async function subscribeApprovals(cb: (p: ApprovalRequest) => void) {
 
 ### 12.3 共享状态初始化
 
+> **实现备注（v2.153 批 F-3，本段正文保留作设计意图对照）**：下面这段是 v0.x 时期的形状——`LockFile` / `MarketClient` / `SessionManager` 三个名字都已不是现役类型（对账与恢复收进 `PluginService::startup_reconcile`，市场是 `LocalDirMarket`，会话表是 `AppState.sessions`）。**现役组装真源 = `desktop/src-tauri/src/state/mod.rs` 的 `init_state`（195 行编排 + `AppState` 字面量）+ 八个簇文件**：`boot`（启动基座）/ `llm_stack` / `memory_stack` / `waterfall`（七监听器注册序本体）/ `kernel_stack`（洋葱链 + 审批 + 内核）/ `tools`（宿主内置工具与两棵目录树）/ `plugins`（服务开启 + 对账 + 开发态装载 + 广播 + 停用巡检）/ `background`（Organizer + 调度引擎 + 首启导出 + 资产 GC），每簇形状 = `Init` 入参 + `Stack` 出参 + `fn build`。
+> 启动顺序契约今后**不在本节转述**（转述就会漂）：每条都写进所属簇文件头注，`state/waterfall.rs` 的头注另列三道交叉验证防线（`crates/kernel-agent/tests/prompt_layering.rs`、`scripts/check-middleware-wiring.mjs`、本文 §7.1）。
+
 ```rust
 // desktop/src-tauri/src/state.rs
 pub struct AppState {

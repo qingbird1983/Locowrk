@@ -8,634 +8,178 @@
 //! 3. 安装态已由第 1 步恢复完毕（`~/.Locowrk`，lockfile 管理）
 
 mod app_state;
+mod background;
+mod boot;
+mod kernel_stack;
+mod llm_stack;
+mod memory_stack;
+mod plugins;
+mod tools;
+mod waterfall;
 
 pub use app_state::AppState;
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::sync::Arc;
 
-use cordis_core::Context;
-use kernel_agent::{
-    points, Audit, CircuitBreaker, JsonlAuditSink, Kernel, LlmService, MemoryInject,
-    MemoryInjectConfig, Middleware, Retriever, SubagentGate, SubagentTool, Timeout, ToolExposure,
-    ToolExposureConfig, ToolSource, Tracing,
-};
-use plugin_host::{PluginRegistry, RegistryToolSource};
-use plugin_service::{LocalDirMarket, PluginService};
-use session_store::Session;
-use tauri::{AppHandle, Manager};
-
-use crate::approval::ApprovalHub;
-use crate::data_root;
-use crate::demo_tools::SendEmailTool;
-use crate::events::{forward_plugin_states, EventSink, TauriSink};
-use crate::llm::{AppLlm, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
-use crate::memory::MemoryStore;
-use crate::plugins_root;
-use crate::search_tools::SearchToolsTool;
-use crate::settings::SettingsStore;
-use crate::tool_source::KernelToolSource;
-use crate::usage::{UsageDb, UsageEwma, UsageRecorder};
+use tauri::AppHandle;
 
 pub fn init_state(app: AppHandle) -> AppState {
-    let ctx = Arc::new(Context::new());
-    let registry = Arc::new(PluginRegistry::new());
-    let sink: Arc<dyn EventSink> = Arc::new(TauriSink::new(app.clone()));
+    // 启动基座簇（§12.3）：Context / 注册表 / 事件出口 / 桌面通知 vtable 钩子 /
+    // 数据根 / 调度库 / 统计库 / embedding / 会话表与启动回放 / SettingsStore（含
+    // 降级）/ fsRoots 与记忆文件化 env 注入。四条顺序契约写在 state/boot.rs 头注。
+    let boot::Stack {
+        ctx,
+        registry,
+        sink,
+        notifications,
+        root,
+        schedules,
+        usage,
+        embed,
+        embed_port,
+        sessions,
+        sessions_dir,
+        last_chat,
+        settings,
+    } = boot::build(boot::Init { app: app.clone() });
 
-    // ⑭ 桌面通知注入 vtable 槽：必须先于任何插件 init（tool-notify 通道经此投递）。
-    crate::desktop_notify::register_vtable_hook(app.clone());
-
-    // 数据根绑定一次，设置 / 插件编排 / LLM 配置共用（settings.json 同目录）。
-    let root = data_root::data_dir();
-
-    // 应用内通知记录（§3.13）：manage 给 TauriSink 入账钩子惰性取用。
-    let notifications = Arc::new(crate::notifications::NotificationStore::open(
-        root.join("notifications.json"),
-    ));
-    app.manage(Arc::clone(&notifications));
-
-    // ⑭ 调度库先开（工具目录构造要持有）；引擎等 kernel 就绪后再起。
-    let schedules = crate::scheduler::open_db(&root);
-
-    // 使用统计库（⑩③）：usage.sqlite3，5s 批量刷盘；打不开只丢统计；⑫ 的 EWMA 积累与 search_tools 高频回退也从这里读。
-    let usage = match UsageDb::open(&root.join("usage.sqlite3")) {
-        Ok(db) => UsageRecorder::spawn(db),
-        Err(e) => {
-            tracing::warn!("usage db unavailable: {e}；使用统计降级为丢弃");
-            UsageRecorder::disabled()
-        }
-    };
-
-    // ⑬ embedding 共享柄：未配置 = None 内值（各处自行降级）；settings_set 后命令层换入即生效。port 全宿主共用（冷却不分家）。
-    let embed = SharedEmbed::new();
-    let embed_port = embed.port();
-
-    // 会话表（内存）：键 = session id；⑭ 触发目标 / ⑮ 子快照同口径。
-    let sessions: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    let sessions_dir = root.join("sessions");
-    // ⑲ 启动恢复：回放进内存表——必须在调度引擎（消费方）之前。
-    let restored = crate::session_log::restore_all(&sessions_dir, &sessions);
-    if restored > 0 {
-        tracing::info!(restored, dir = %sessions_dir.display(), "sessions restored");
-    }
-    let last_chat: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
-
-    let settings: Arc<SettingsStore> = Arc::new(match SettingsStore::open(&root) {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::warn!("{e}；设置降级到临时目录");
-            let fallback = std::env::temp_dir().join("locowrk-degraded-data");
-            SettingsStore::open(&fallback).expect("settings unavailable even in fallback dir")
-        }
+    // LLM 栈簇（§7.2 + LLM.md v3.0）：停止标记 / 重试通知 / 模型覆盖 / 诊断账本 /
+    // 能力目录 / 资产存储 / AppLlm 组装，末尾把 LlmService 与 LlmStreamSink 注册
+    // 进 Context。字段名 = 原变量名（diagnoser 解构回 llm_diagnoser），下游语句逐字不动。
+    let llm_stack::Stack {
+        stop_flags,
+        model_overrides,
+        diagnoser: llm_diagnoser,
+        catalog,
+        assets,
+        app_llm,
+        llm,
+    } = llm_stack::build(llm_stack::Init {
+        app: app.clone(),
+        ctx: Arc::clone(&ctx),
+        settings: Arc::clone(&settings),
+        sessions_dir: sessions_dir.clone(),
+        root: root.clone(),
     });
 
-    // settings 就绪：按 embedding 区灌入首批配置（llm 区 provider/端点兜底）
-    {
-        let cfg = settings.embedding();
-        let l = settings.llm();
-        embed.set(EmbedClient::from_settings(
-            &cfg,
-            &EmbeddingSettingsLlmView {
-                provider: l.provider,
-                base_url: l.base_url,
-            },
-        ));
-    }
-
-    // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后重注入即生效免重启
-    crate::data_root::apply_fs_roots_env(&settings);
-    // F1 记忆文件化总开关（settings_set 热换在 commands.rs）：关 = 插件侧
-    // 双写整体跳过（env 缺省未设 = 开，与 memlayout::files_enabled 对齐）。
-    if !settings.memory().files {
-        std::env::set_var("LOCOWRK_MEMORY_FILES", "0");
-    }
-
-    // v2.58 会话级模型覆盖存储（旁车持久 + 缓存；AppLlm 每请求按 LlmRequest.session_id
-    // 解析覆盖——档位路由 + 模型名）。模型适配器也只是服务（§7.2，自建
-    // OpenAI 兼容客户端 LLM.md v3.0；未配置回落演示替身）。
-    // v4.11 停止标记先建（LLM.md v3.0 重试面同柄：重试等待轮询停止 +
-    // 重试通知经组装闭包 emit，AppHandle 不进 llm 模块——v2.66 同款）。
-    let stop_flags = Arc::new(crate::stop::StopFlags::default());
-    let llm_notify = {
-        let app = app.clone();
-        Arc::new(move |sid: &str, attempt: u32, delay_ms: u64| {
-            let event = crate::events::AgentEvent::LlmRetry {
-                session_id: sid.to_string(),
-                attempt,
-                delay_ms,
-            };
-            if let Err(e) = tauri::Emitter::emit(&app, event.channel(), &event) {
-                tracing::warn!("emit {} failed: {e}", event.channel());
-            }
-        }) as crate::llm::RetryNotify
-    };
-    let model_overrides = Arc::new(crate::model_override::ModelOverrideStore::new(
-        sessions_dir.clone(),
-    ));
-    // M6.1 前缀断裂诊断账本：AppLlm 与命令层共享同一实例。
-    let llm_diagnoser = Arc::new(crate::llm::diagnose::Diagnoser::default());
-    // 批 A 模型能力目录：随包快照路径解析（打包 = 资源目录；开发态 =
-    // crate 根兜底），惰性加载在首次访问（不进启动路径）。批 D 起先于
-    // AppLlm 构造（发送前模态门控的目录模态数据源）。
-    let catalog_bundled = app
-        .path()
-        .resolve(
-            "resources/models.dev/api.json",
-            tauri::path::BaseDirectory::Resource,
-        )
-        .ok()
-        .filter(|p| p.exists())
-        .unwrap_or_else(|| {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/models.dev/api.json")
-        });
-    let catalog = Arc::new(crate::llm::catalog::CatalogStore::new(catalog_bundled));
-    // 批 D 资产存储：`<数据根>/assets/` 内容寻址（wire 编码字节源 + GC 根）
-    let assets = Arc::new(crate::assets::AssetStore::new(root.join("assets")));
-    // 批 F：AppLlm 保具体类型句柄——子代理模型面工厂（SubagentLlm 内层）
-    // 与全局服务共用同一实例。
-    let app_llm = Arc::new(
-        AppLlm::with_overrides(Arc::clone(&settings), Arc::clone(&model_overrides))
-            .with_retry_surface(Arc::clone(&stop_flags), llm_notify)
-            .with_diagnoser(Arc::clone(&llm_diagnoser))
-            .with_multimodal(Arc::clone(&assets), Arc::clone(&catalog)),
-    );
-    let llm: Arc<dyn LlmService> = Arc::clone(&app_llm) as Arc<dyn LlmService>;
-    ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
-    // ⑳ 文本 delta 直推（流式步骤整段投影被抑制，§12.2）；v4.11 §3.39④
-    // 停止标记注册表同柄——delta 回调点逐段查询，命中即带部分正文收束。
-    ctx.provide_dyn::<dyn kernel_agent::LlmStreamSink>(Arc::new(
-        crate::events::StreamChunkSink::new(app.clone(), Arc::clone(&stop_flags)),
-    ));
-
-    // 记忆库（⑪）：Memory-Inject 检索源 + 管理页存储。㉘ 会话→项目解析器一次构造多处消费：插件调用期上下文（workspace + fs_roots 围栏）/注入键位/经历键位。㉘·C 围栏让路：fs_roots = 全局声明根（fsRoots 供给闭包读当前设置，保存即生效）。
-    let fs_roots_of = {
-        let s = Arc::clone(&settings);
-        Arc::new(move || s.fs_roots()) as Arc<dyn Fn() -> Vec<String> + Send + Sync>
-    };
-    let session_ctx =
-        crate::workspace::session_context_resolver(sessions_dir.clone(), root.clone(), fs_roots_of);
-    plugin_host::set_session_context_resolver(Arc::clone(&session_ctx));
-    let workspace_of = crate::workspace::workspace_view(Arc::clone(&session_ctx));
-    // F1 人类层（文件化设计 §3）：md 句柄 + 总开关闭包——MemoryStore 四条
-    // 宿主写路径（提取 write / 管理页 update·delete·clear）成功后同步 md。
-    let memory_files = Arc::new(crate::memory_files::MemoryFiles::new(&root));
-    let files_on = {
-        let s = Arc::clone(&settings);
-        Arc::new(move || s.memory().files) as Arc<dyn Fn() -> bool + Send + Sync>
-    };
-    // F2 交接注入（repo_context.rs）：归属会话注入 <repo>/.Locowrk/ 交接段
-    let repo_on = {
-        let s = Arc::clone(&settings);
-        Arc::new(move || s.memory().repo_context) as Arc<dyn Fn() -> bool + Send + Sync>
-    };
-    let memory = Arc::new(
-        MemoryStore::new(&root, Arc::clone(&workspace_of))
-            .with_files(Arc::clone(&memory_files), Arc::clone(&files_on))
-            .with_repo_context(Arc::clone(&repo_on)),
-    );
-    let permission_modes = Arc::new(crate::permission_mode::PermissionModeStore::new(
-        sessions_dir.clone(),
-        settings.default_permission_mode(),
-    )); // ㉘·B 会话级权限模式（旁车持久 + 缓存；决策表/目录围栏数据源）
-        // M4 树会话组装器（§3.38②）：TreeContextSource 注册进内核服务表——
-        // v2.137 起一切会话皆树（legacy 整理面退役）= L0 目录 + 未整理尾巴。
-        // M5 起存储句柄收敛为 AppState 单例（便宜克隆），组装点共用。
-    let tree_store = memory_tree::TreeStore::new(&root);
-    let tree_assembler = Arc::new(crate::organize::TreeAssembler::new(
-        Arc::clone(&settings),
-        Arc::clone(&workspace_of),
-        tree_store.clone(),
-        sessions_dir.clone(),
-    ));
-    ctx.provide_dyn::<dyn kernel_agent::TreeContextSource>(Arc::clone(&tree_assembler) as Arc<_>);
-
-    // agent/request 决策环（exposure 文档 §7 / 提示词分层设计 §6，注册次序
-    // = 执行次序）：ToolExposure → BaseSystemInject（静态身份层 = system
-    // 字节前缀）→ Memory-Inject → 思考语言 → 树目录（append-only 殿后）→
-    // 指令文件 / 尾部碎片（消息面，与 system 序无关），配置经 RwLock 热换入。
-    let exposure_cfg: Arc<RwLock<ToolExposureConfig>> =
-        Arc::new(RwLock::new(settings.exposure_config()));
-    let embed_exposure_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
-    let exposure = Arc::new(ToolExposure::new(
-        UsageEwma::new(Arc::clone(&usage)),
-        Arc::clone(&exposure_cfg),
-        Some(Arc::new(Retriever::new(embed_exposure_port))), // ⑬ 语义信号：未配置 = 空表退回两层打分（fail-open）
-    ));
-    ctx.events
-        .on_waterfall(points::REQUEST, Arc::clone(&exposure) as Arc<_>);
-
-    // 静态身份层（提示词分层设计 §4.1）：include_str! 编译期内嵌六节
-    // （引言/身份/工具策略/安全边界/输出纪律/reminder 合法性），跨会话
-    // 逐字节同前缀——「用户当前请求 > 背景」总纲治开场仪式。
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(kernel_agent::BaseSystemInject) as Arc<_>,
-    );
-
-    // 会话态碎片 pending 表（§4.4）：organize/权限切换/runner 三处置位。
-    let fragments = Arc::new(crate::fragments::FragmentPending::default());
-
-    let memory_cfg: Arc<RwLock<MemoryInjectConfig>> =
-        Arc::new(RwLock::new(settings.memory_inject_config()));
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(MemoryInject::new(
-            crate::memory::memory_source(&memory),
-            Arc::clone(&memory_cfg),
-        )),
-    );
-
-    // 思考语言（docs/design/NEW/language of thought.md）：**排在树目录
-    // 之前**（提示词分层设计 §6 重排）——思考语言是静态段，树目录是
-    // append-only，动态段必须殿后；旧序（目录之后）每整理一次就把思考
-    // 语言句的前缀缓存断一次。会话首请求解析并锁死（前缀缓存红线 §5）
-    // ——中途改设置当前会话不变，新会话用新配置。
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(crate::thinking_language::ThinkingLanguageInject::new(
-            Arc::clone(&settings),
-        )),
-    );
-
-    // M4 树目录注入（§3.38②）：system **真尾部**（append-only 殿后，其后
-    // 不再有静态段）。v2.137：ctx-compact 桌面链退役（用户裁定「上下文
-    // 根本不压缩了」，压缩语义由记忆树整理边界承担；headless 内核侧
-    // 中间件保留不动）。
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(kernel_agent::TreeDirectoryInject) as Arc<_>,
-    );
-
-    // 指令文件层（提示词分层设计 §4.3）：全局 <数据根>/AGENTS.md + 项目根
-    // AGENTS.md（回落 .Locowrk/AGENTS.md）→ 合成首条 user 消息（消息面，
-    // 会话首查快照锁字节）。开关 settings memory.instructionFiles。
-    let instruction_source = Arc::new(crate::instruction_files::InstructionFiles::new(
-        Arc::clone(&memory),
-        root.join("AGENTS.md"),
-        {
-            let s = Arc::clone(&settings);
-            Arc::new(move || s.memory().instruction_files) as Arc<dyn Fn() -> bool + Send + Sync>
-        },
-    ));
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(kernel_agent::InstructionFilesInject::new(
-            instruction_source as Arc<dyn kernel_agent::InstructionSource>,
-        )),
-    );
-
-    // 尾部碎片（§4.4）：pending 表 → 轮开场拼 `<system-reminder>` 在最后
-    // 一条 user 消息尾（出现一次即清）——整理完成/Plan 模式/轮次到顶
-    // 不再对模型静默。
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(kernel_agent::FragmentInject::new(
-            Arc::clone(&fragments) as Arc<dyn kernel_agent::FragmentSource>
-        )),
-    );
-
-    // 中间件链组装次序（§7.1）：Tracing → Audit → Timeout → CircuitBreaker。Audit 挂外侧（被拒也留痕）；audit.jsonl 只增不改；S2 超时可配热换入。
-    let timeout_cfg: Arc<RwLock<Duration>> = Arc::new(RwLock::new(settings.call_timeout()));
-    let mw: Vec<Arc<dyn Middleware>> = vec![
-        Arc::new(Tracing),
-        Arc::new(Audit::new(Arc::new(JsonlAuditSink::new(
-            root.join("audit.jsonl"),
-        )))),
-        Arc::new(Timeout::hot(Arc::clone(&timeout_cfg))),
-        Arc::new(CircuitBreaker::new(5, Duration::from_secs(30))),
-    ];
-    // 审批门（纪律 9）：守夜超时初值取设置（v2.49 可配置，热换入；0=不限）。㉘·B：接权限模式存储（四档决策表）+ 会话→上下文（环境行/越界门围栏；㉘·C 起传全量 resolver 与插件围栏同源）
-    // v2.145 项目粘性授权规则库：审批决策表与设置管理命令共读同一条 Arc
-    let permission_rules = Arc::new(crate::permission_rules::PermissionRuleStore::new(&root));
-    let approval = Arc::new(
-        ApprovalHub::with_timeout(
-            Arc::clone(&sink),
-            Duration::from_secs(settings.approval_timeout_secs()),
-        )
-        .with_modes(Arc::clone(&permission_modes))
-        .with_workspace(Arc::clone(&session_ctx))
-        .with_rules(Arc::clone(&permission_rules)),
-    );
-    let resolver: Arc<dyn kernel_agent::ApprovalResolver> = approval.clone();
-    // v4.11 §3.39① ask_user 选择卡中心：与审批同款机械件（oneshot + 守夜），
-    // 超时初值取设置（0 = 不限；settings_set 热换）。Pure + always：不走
-    // 审批门、常驻目录。
-    let ask_hub = Arc::new(crate::ask::AskHub::new(Arc::clone(&sink)));
-    ask_hub.set_timeout_secs(settings.ask_timeout_secs());
-    // ⑮ 子 Agent 快照表：每 step 刷新父转录前缀；subagent_run 执行时 fork
-    let gate = Arc::new(SubagentGate::default());
-    let kernel = Arc::new(
-        Kernel::new(ctx.clone(), mw)
-            .with_approval(resolver)
-            .with_subagent(Arc::clone(&gate)),
-    );
-
-    // 工具目录：始终提供（registry 空 → resolve 报 NotAvailable，错误以失败 ToolResult 闭合，§7.2）。
-    // 内置：send_email 演示替身（不可逆 → 审批）；⑭ 调度三件套；⑮ subagent_run（持内核 Arc，组装期有意成环）；
-    // search_tools（⑫）持全目录视图（含 hidden）+ usage 高频回退 + ⑬ 语义检索（未配置降级关键词）。
-    let send_email: Arc<dyn plugin_api::Tool> = Arc::new(SendEmailTool);
-    // §3.16 子转录接收器：子自身段落 sub-transcripts/（§8.2 通路）
-    let sub_tx = Arc::new(crate::sub_transcript::SubTranscriptStore::new(
-        root.join("sub-transcripts"),
-    ));
-    // 批 F 子代理模型面工厂：每子 run 造一个 SubagentLlm（钉档 + 可用标
-    // 记池的终端错误回退链）+ 报告句柄；链空 = 纯透传零行为变化。
-    let child_model_factory: kernel_agent::ChildModelFactory = {
-        let llm = Arc::clone(&app_llm);
-        let settings = Arc::clone(&settings);
-        let catalog = Arc::clone(&catalog);
-        Arc::new(move || {
-            let report = Arc::new(kernel_agent::ChildModelReport::default());
-            let service: Arc<dyn LlmService> = Arc::new(crate::llm::SubagentLlm::new(
-                Arc::clone(&llm),
-                Arc::clone(&settings),
-                Arc::clone(&catalog),
-                Arc::clone(&report),
-            ));
-            kernel_agent::ChildModelHandle { service, report }
-        })
-    };
-    let sub_tool: Arc<dyn plugin_api::Tool> = Arc::new(
-        SubagentTool::new(Arc::clone(&kernel), Arc::clone(&gate))
-            .with_transcript_sink(Arc::clone(&sub_tx) as Arc<dyn kernel_agent::SubTranscriptSink>)
-            .with_child_model_factory(child_model_factory),
-    );
-    // v4.11 §3.39① ask_user 内置工具（Pure + always，见 ask_hub 处注释）
-    let ask_tool: Arc<dyn plugin_api::Tool> =
-        Arc::new(crate::ask::AskUserTool::new(Arc::clone(&ask_hub)));
-    // 批 E 多模态三件（Pure）：screenshot / read_image 常开；pdf_to_images
-    // 仅随包 pdfium 就位时进目录（宁缺勿假——注册必然失败的工具是谎报）。
-    // 上限调用期读 settings multimodal 区 = 保存即热换（asset_put 同口径）。
-    let media_limits: crate::media::LimitsFn = {
-        let s = Arc::clone(&settings);
-        Arc::new(move || {
-            let m = s.multimodal();
-            crate::assets::validate::Limits {
-                max_dimension: m.max_dimension,
-                max_size_mb: m.max_size_mb,
-                image_formats: m.image_formats,
-                file_formats: m.file_formats,
-            }
-        })
-    };
-    let screenshot_tool =
-        crate::media::ScreenshotTool::new(Arc::clone(&assets), Arc::clone(&media_limits));
-    let pdfium_lib = crate::media::resolve_pdfium_lib(&app);
-    let pdf_tool = pdfium_lib.map(|lib| {
-        tracing::info!(lib = %lib.display(), "pdf_to_images 就位");
-        crate::media::pdf::PdfToImagesTool::new(Arc::clone(&assets), Arc::clone(&media_limits), lib)
+    // 记忆与工作区簇（⑪ + ㉘ + F1 + M4）：fsRoots/开关供给闭包（保存即生效，不是
+    // 启动快照）→ 会话上下文解析器（含 plugin-host 全局注入）→ MemoryStore →
+    // 权限模式存储 → 树存储与组装器（TreeContextSource 注册）。
+    let memory_stack::Stack {
+        session_ctx,
+        workspace_of,
+        memory_files,
+        files_on,
+        memory,
+        permission_modes,
+        tree_store,
+        tree_assembler,
+    } = memory_stack::build(memory_stack::Init {
+        ctx: Arc::clone(&ctx),
+        settings: Arc::clone(&settings),
+        sessions_dir: sessions_dir.clone(),
+        root: root.clone(),
     });
-    let read_image_tool = crate::media::ReadImageTool::new(Arc::clone(&assets), media_limits);
-    // G5 子代理独立验收（Pure + OnDemand）：读子转录 + 验收 LLM 调用（辅
-    // 助降档）。与全局服务同一 AppLlm 实例。
-    let verify_tool: Arc<dyn plugin_api::Tool> =
-        Arc::new(crate::subagent_verify::SubagentVerifyTool::new(
-            Arc::clone(&llm),
-            root.join("sub-transcripts"),
-        ));
-    // 浏览器页签（v2.144）：console 账本 + browser_open 的 UI 推送出口
-    //（同一 emit 形态；AppHandle 不进 browser 模块）。须在 with_host_tools
-    // 闭包之前就位（闭包按名捕获工具变量）。
-    let browser_console = Arc::new(crate::browser::ConsoleStore::new());
-    let browser_emit: crate::browser::EmitFn = {
-        let app = app.clone();
-        std::sync::Arc::new(move |event, payload| {
-            use tauri::Emitter;
-            if let Err(e) = app.emit(event, payload) {
-                tracing::warn!("{event} 推送失败: {e}");
-            }
-        })
-    };
-    let browser_open_tool: Arc<dyn plugin_api::Tool> = crate::browser::BrowserOpenTool::new(
-        Arc::clone(&settings),
-        Arc::clone(&browser_console),
-        browser_emit,
-    );
-    let browser_console_tool: Arc<dyn plugin_api::Tool> =
-        crate::browser::BrowserConsoleTool::new(Arc::clone(&browser_console));
-    let with_host_tools = |src: KernelToolSource| {
-        let src = src
-            .with_builtin(Arc::clone(&send_email))
-            .with_builtin(screenshot_tool.clone())
-            .with_builtin(read_image_tool.clone());
-        let src = match &pdf_tool {
-            Some(t) => src.with_builtin(t.clone()),
-            None => src,
-        };
-        let src = match &schedules {
-            Some(db) => src
-                .with_builtin(crate::scheduler::ScheduleCreateTool::new(Arc::clone(db)))
-                .with_builtin(crate::scheduler::ScheduleListTool::new(Arc::clone(db)))
-                .with_builtin(crate::scheduler::ScheduleDeleteTool::new(Arc::clone(db))),
-            None => src,
-        };
-        src.with_builtin(Arc::clone(&sub_tool))
-            .with_builtin(Arc::clone(&ask_tool))
-            .with_builtin(Arc::clone(&verify_tool))
-            .with_builtin(Arc::clone(&browser_open_tool))
-            .with_builtin(Arc::clone(&browser_console_tool))
-    };
 
-    let search_catalog = Arc::new(with_host_tools(KernelToolSource::new(
-        RegistryToolSource::new(Arc::clone(&registry)),
-    )));
-    let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
-    // M4 树工具（§3.38③④）：expand 常驻（exposure=always）、collapse
-    // 开关开启才进目录（§8.3 缺省关）——门控在 KernelToolSource 列表/解析
-    // 双侧（v2.137 起门控只剩开关，一切会话皆树）。不进 search_catalog
-    // 索引（会话级工具，人的检索面不含）。
-    let tree_gate = Arc::new(crate::tool_source::TreeToolGate::new({
-        let s = Arc::clone(&settings);
-        Arc::new(move || s.memory().collapse_enabled)
-    }));
-    let main_source = with_host_tools(KernelToolSource::new(RegistryToolSource::new(Arc::clone(
-        &registry,
-    ))))
-    .with_builtin(SearchToolsTool::new(
-        search_catalog,
-        Arc::clone(&usage),
-        Some(embed_tool_port),
-    ))
-    .with_builtin(crate::organize::MemoryExpandTool::new(
-        tree_store.clone(),
-        Arc::clone(&workspace_of),
-        sessions_dir.clone(),
-    ))
-    .with_builtin(crate::organize::MemoryCollapseTool::new(
-        tree_store.clone(),
-        Arc::clone(&workspace_of),
-    ))
-    .with_builtin(crate::organize::SearchTitlesTool::new(
-        tree_store.clone(),
-        Arc::clone(&workspace_of),
-        Some(embed_port.clone() as Arc<dyn kernel_agent::EmbedPort>),
-        sessions_dir.clone(),
-    ))
-    .with_builtin(crate::organize::ProjectHistoryTool::new(
-        tree_store.clone(),
-        Arc::clone(&workspace_of),
-        sessions_dir.clone(),
-    ))
-    .with_tree_gate(tree_gate)
-    // ㉘·B 计划模式目录围栏（非 Pure 不出目录、resolve 即拒）
-    .with_modes(Arc::clone(&permission_modes));
-    ctx.provide_dyn::<dyn ToolSource>(Arc::new(main_source));
+    // waterfall 七监听器簇（提示词分层设计 §6）：**注册序 = 执行序 = 前缀缓存红线**，
+    // 序本体与三道交叉验证防线（prompt_layering.rs / check-middleware-wiring.mjs /
+    // DESIGN §7.1）写在 state/waterfall.rs 头注——要动顺序先读它。
+    let waterfall::Stack {
+        exposure_cfg,
+        exposure,
+        memory_cfg,
+        fragments,
+    } = waterfall::build(waterfall::Init {
+        ctx: Arc::clone(&ctx),
+        settings: Arc::clone(&settings),
+        usage: Arc::clone(&usage),
+        embed_port: embed_port.clone(),
+        memory: Arc::clone(&memory),
+        root: root.clone(),
+    });
 
-    // 插件编排（§11.2）：数据根缺省 ~/.Locowrk（LOCOWRK_DATA_DIR可隔离）；打不开时退化到临时目录并明确告警——聊天不受影响。
-    // S2：内置插件根一次解析，服务（启停解析工件）与开发态扫描共用。
-    let builtin_root = plugins_root::resolve();
-    let plugins =
-        match open_plugin_service(&root, Arc::clone(&registry), &ctx, builtin_root.clone()) {
-            Ok(svc) => Arc::new(svc),
-            Err(primary_err) => {
-                tracing::error!("plugin service init failed: {primary_err}；降级到临时目录");
-                let fallback = std::env::temp_dir().join("locowrk-degraded-data");
-                match open_plugin_service(
-                    &fallback,
-                    Arc::clone(&registry),
-                    &ctx,
-                    builtin_root.clone(),
-                ) {
-                    Ok(svc) => Arc::new(svc),
-                    Err(e) => panic!("plugin service unavailable even in fallback dir: {e}"),
-                }
-            }
-        };
+    // 中间件链 + 审批 + 内核簇（§7.1 / 纪律 6 / ⑮）：洋葱序与「sink 先于 approval」
+    // 的先后写在 state/kernel_stack.rs 头注。
+    let kernel_stack::Stack {
+        timeout_cfg,
+        permission_rules,
+        approval,
+        ask_hub,
+        gate,
+        kernel,
+    } = kernel_stack::build(kernel_stack::Init {
+        ctx: Arc::clone(&ctx),
+        sink: Arc::clone(&sink),
+        settings: Arc::clone(&settings),
+        permission_modes: Arc::clone(&permission_modes),
+        session_ctx: Arc::clone(&session_ctx),
+        root: root.clone(),
+    });
 
-    // 1. 启动对账（任何插件加载之前）
-    if let Err(e) = plugins.startup_reconcile() {
-        tracing::warn!("startup reconcile failed: {e}");
-    }
-    // 2. 开发态装载 plugins/（找不到不致命）。S2：跳过 lockfile 已接管/已停用 id；装载即登记 Builtin 条目（停用落 lockfile，重启不复活）。
-    match builtin_root {
-        Some(proot) => {
-            let skip: std::collections::HashSet<String> =
-                plugins.dev_scan_skip_ids().into_iter().collect();
-            match plugins_root::load_all(&proot, &registry, &skip) {
-                Ok(loaded) if loaded.is_empty() => {
-                    tracing::warn!(dir = %proot.display(), "plugins/ 存在但没有加载任何插件")
-                }
-                Ok(loaded) => {
-                    for (id, ver) in &loaded {
-                        plugins.register_builtin(id, ver);
-                    }
-                    tracing::info!(dir = %proot.display(), ?loaded, "plugins loaded")
-                }
-                Err(e) => tracing::warn!("plugin scan failed: {e}"),
-            }
-        }
-        None => tracing::warn!("plugins/ 目录未找到（可设 LOCOWRK_PLUGINS_DIR）；工具调用将不可用"),
-    }
-    // 3. 安装态已在对账中恢复；4. 状态广播转发给 UI（§13.4）
-    forward_plugin_states(app.clone(), plugins.subscribe());
+    // 工具目录簇（§7.2 + §3.38③④）：宿主内置工具构造 + with_builtin 挂目录 +
+    // search_catalog/main_source 两棵树 + ToolSource 注册。语句自本函数原样搬进
+    // state/tools.rs（批 F-3a），本调用点就是它们原来的位置；返回的 console 账本
+    // 是 AppState 唯一要接的句柄，其余都在簇内消费掉了。
+    let browser_console = tools::build_and_provide(tools::Init {
+        app: app.clone(),
+        ctx: Arc::clone(&ctx),
+        registry: Arc::clone(&registry),
+        settings: Arc::clone(&settings),
+        sessions_dir: sessions_dir.clone(),
+        root: root.clone(),
+        usage: Arc::clone(&usage),
+        embed_port: embed_port.clone(),
+        llm: Arc::clone(&llm),
+        app_llm: Arc::clone(&app_llm),
+        catalog: Arc::clone(&catalog),
+        assets: Arc::clone(&assets),
+        kernel: Arc::clone(&kernel),
+        gate: Arc::clone(&gate),
+        ask_hub: Arc::clone(&ask_hub),
+        schedules: schedules.clone(),
+        permission_modes: Arc::clone(&permission_modes),
+        tree_store: tree_store.clone(),
+        workspace_of: Arc::clone(&workspace_of),
+    });
 
-    // 5. ⑬ 自动停用巡检（exposure 文档 §8.8 例外条款，缺省关；spawn 化不阻塞窗口出现）
-    let days = settings.plugins().auto_disable_idle_days;
-    if days > 0 {
-        let plugins2 = Arc::clone(&plugins);
-        let usage2 = Arc::clone(&usage);
-        // setup 主线程没有 tokio 上下文，后台化走 tauri 全局运行时（同 events / usage / scheduler-engine 先例）。
-        tauri::async_runtime::spawn(async move {
-            crate::autodisable::auto_disable_idle(&plugins2, &usage2, days).await;
-        });
-    }
+    // 插件编排簇（§11.2 + §12.3）：服务开启（含数据根降级）→ 启动对账 → 开发态装载 →
+    // 状态广播 → 自动停用巡检。语句自本函数原样搬进 state/plugins.rs，本调用点就是
+    // 它们原来的位置——启动顺序在编排面上仍然可读，逐字段显名传参不动位置。
+    let plugins = plugins::open_and_load(plugins::Init {
+        app: app.clone(),
+        ctx: Arc::clone(&ctx),
+        registry: Arc::clone(&registry),
+        settings: Arc::clone(&settings),
+        usage: Arc::clone(&usage),
+        root: root.clone(),
+    });
 
-    // M2 记忆树影子运行编排器：记忆管理器客户端 = 设置路由的兼容客户端直呼；
-    // ㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）。
-    // 整理事件推送闭包在此组装（M3 §3.37③）：emit 调用只落在本模块——
-    // 桌面单测不引用 state，tauri 运行时符号（及其窗口栈 tao）就不会进
-    // 测试二进制；无 v6 清单的进程链接 tao 后 comctl32 缺
-    // SetWindowSubclass/TaskDialogIndirect，加载即 ENTRYPOINT_NOT_FOUND。
-    let organizer_notifier: crate::organize::OrganizeNotifier = {
-        let app = app.clone();
-        std::sync::Arc::new(move |event, payload| {
-            use tauri::Emitter;
-            if let Err(e) = app.emit(event, payload) {
-                tracing::warn!("{event} 推送失败: {e}");
-            }
-        })
-    };
-    let organizer = crate::organize::build_organizer(
-        Arc::clone(&settings),
-        sessions_dir.clone(),
-        Arc::clone(&workspace_of),
-        root.clone(),
-        Arc::clone(&model_overrides),
-        Arc::clone(&catalog),
-        organizer_notifier,
-        Some(Arc::clone(&fragments)),
-    );
-    // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
-
-    // 6. ⑭ 调度引擎（库可用时）：1s tick；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑
-    if let Some(db) = &schedules {
-        crate::scheduler::spawn_engine(
-            Arc::clone(db),
-            Arc::clone(&kernel),
-            Arc::clone(&sink),
-            Arc::clone(&usage),
-            Arc::clone(&settings),
-            Arc::clone(&model_overrides),
-            Arc::clone(&catalog),
-            Arc::clone(&sessions),
-            sessions_dir.clone(),
-            Arc::clone(&last_chat),
-            app.clone(),
-            Arc::clone(&organizer),
-            Arc::clone(&tree_assembler),
-            Arc::clone(&stop_flags),
-            Arc::clone(&fragments),
-        );
-    }
-    // 在途整理任务重投（后台，不阻塞窗口出现）
-    organizer.recover_pending();
-
-    // F1 首启导出（文件化设计 §6）+ F2 启动 reconcile（先对账再补缺）：
-    // 后台线程幂等，总开关关 = 什么都不做。
-    let roots_on = {
-        let s = Arc::clone(&settings);
-        Arc::new(move || s.fs_roots()) as Arc<dyn Fn() -> Vec<String> + Send + Sync>
-    };
-    crate::memory_files::spawn_initial_export(
-        Arc::clone(&memory),
-        tree_store.clone(),
-        (*memory_files).clone(),
-        sessions_dir.clone(),
-        Arc::clone(&files_on),
-        roots_on,
-    );
-
-    // 批 D 孤儿资产 GC（§6.3）：autoGc 开时启动跑一遍 + 每 24h 后台巡检
-    //（手动命令 asset_gc 不受开关限制）。fire-and-forget；gcDays 每轮重读
-    // 设置（热调随下一次 tick 生效）。
-    if settings.multimodal().auto_gc {
-        let gc_assets = Arc::clone(&assets);
-        let gc_settings = Arc::clone(&settings);
-        let gc_root = root.clone();
-        // setup 阶段不在 tokio 运行时上下文里——必须走 tauri 的 async
-        // runtime 句柄（tokio::spawn 直接 panic，走查实抓）
-        tauri::async_runtime::spawn(async move {
-            loop {
-                let days = gc_settings.multimodal().gc_threshold_days;
-                let report = crate::assets::gc::run_gc(
-                    gc_assets.root(),
-                    &gc_root.join("sessions"),
-                    &gc_root.join("sub-transcripts"),
-                    days,
-                );
-                if report.scanned > 0 || report.removed > 0 {
-                    tracing::info!(
-                        scanned = report.scanned,
-                        removed = report.removed,
-                        "asset gc tick"
-                    );
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(24 * 3600)).await;
-            }
-        });
-    }
+    // 编排器与后台任务簇（M2/M3 §3.37 + ⑭ 调度引擎 + F1 §6 首启导出 + 批 D §6.3 GC）：
+    // 整理事件闭包 / Organizer / spawn_engine / 在途重投 / 资产巡检。
+    // 「emit 只落本模块」的原因（tao 不能进桌面测试二进制）写在 state/background.rs 头注。
+    let background::Stack { organizer } = background::build(background::Init {
+        app: app.clone(),
+        settings: Arc::clone(&settings),
+        sessions_dir: sessions_dir.clone(),
+        root: root.clone(),
+        workspace_of: Arc::clone(&workspace_of),
+        model_overrides: Arc::clone(&model_overrides),
+        catalog: Arc::clone(&catalog),
+        fragments: Arc::clone(&fragments),
+        kernel: Arc::clone(&kernel),
+        sink: Arc::clone(&sink),
+        usage: Arc::clone(&usage),
+        sessions: Arc::clone(&sessions),
+        last_chat: Arc::clone(&last_chat),
+        tree_assembler: Arc::clone(&tree_assembler),
+        stop_flags: Arc::clone(&stop_flags),
+        schedules: schedules.clone(),
+        memory: Arc::clone(&memory),
+        tree_store: tree_store.clone(),
+        memory_files: Arc::clone(&memory_files),
+        files_on: Arc::clone(&files_on),
+        assets: Arc::clone(&assets),
+    });
 
     AppState {
         app,
@@ -673,26 +217,4 @@ pub fn init_state(app: AppHandle) -> AppState {
         assets,
         browser: browser_console,
     }
-}
-
-fn open_plugin_service(
-    data_dir: &std::path::Path,
-    registry: Arc<PluginRegistry>,
-    ctx: &Arc<Context>,
-    builtin_root: Option<std::path::PathBuf>,
-) -> Result<PluginService, String> {
-    let market_root =
-        data_root::resolve_market_dir().unwrap_or_else(|| data_dir.join("market-absent"));
-    tracing::info!(
-        data = %data_dir.display(),
-        market = %market_root.display(),
-        "plugin service opening"
-    );
-    PluginService::open(
-        data_dir.to_path_buf(),
-        registry,
-        Arc::clone(ctx),
-        Box::new(LocalDirMarket::new(market_root)),
-        builtin_root,
-    )
 }

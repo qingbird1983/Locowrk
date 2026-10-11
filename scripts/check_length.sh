@@ -17,10 +17,13 @@
 #   lib/tool-detail.ts 622 长期无人看见）。基线随新口径一次锁死 = 40；
 #   审计修复批 C（2026-10-11）删掉从未接线的 CtxCompact 及其 405 行测试，
 #   超限数自然净降到 39 → 基线随批收紧为 39。
+#   审计修复批 F-3（2026-10-11）把 desktop 组装点 init_state（636 行函数 /
+#   698 行文件）按子系统拆成 plugins/tools/llm_stack/memory_stack/waterfall/
+#   kernel_stack 六簇（state/mod.rs 350 行），超限数净降到 38 → 基线收紧为 38。
 set -u
 
 SUGGEST=400
-BASELINE=39
+BASELINE=38
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。

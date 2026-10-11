@@ -26,5 +26,5 @@ mod wire;
 pub use app_llm::{AppLlm, RetryNotify};
 pub use client::{test_model, CompatLlm};
 pub use dialect::dialect_of;
-pub use embed::{EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
+pub use embed::{CooledEmbed, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
 pub use subagent_llm::SubagentLlm;
