@@ -257,16 +257,6 @@ pub(crate) fn arg_path(args: &Value) -> Result<String, String> {
         .ok_or_else(|| "missing string field `repo`".to_string())
 }
 
-pub(crate) fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
-    match args.get(key) {
-        None | Some(Value::Null) => Ok(default),
-        Some(v) => v
-            .as_u64()
-            .map(|n| n.min(max))
-            .ok_or_else(|| format!("field `{key}` must be a non-negative number")),
-    }
-}
-
 /// repo 参数：canonicalize + 允许根校验（仓库可以是仓库根，也可以是仓库
 /// 内目录——`git -C` 会向上发现 .git）。
 pub(crate) fn resolve_repo(args: &Value, host: *const HostVtable) -> Result<PathBuf, String> {

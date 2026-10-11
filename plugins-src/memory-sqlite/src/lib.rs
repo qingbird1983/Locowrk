@@ -319,16 +319,6 @@ pub(crate) fn arg_str(args: &Value, key: &str) -> Result<String, String> {
         .ok_or_else(|| format!("missing string field `{key}`"))
 }
 
-pub(crate) fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
-    match args.get(key) {
-        None | Some(Value::Null) => Ok(default),
-        Some(v) => v
-            .as_u64()
-            .map(|n| n.min(max))
-            .ok_or_else(|| format!("field `{key}` must be a non-negative number")),
-    }
-}
-
 fn make_state(host: *const HostVtable) -> Box<dyn PluginState> {
     Box::new(MemoryState { host })
 }

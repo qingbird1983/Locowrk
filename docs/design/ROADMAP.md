@@ -721,7 +721,24 @@
 | 实机走查 | ✅ CDP 独立数据根 + 构造单轮 jsonl（思考×2+工具×2+汇报）**17/17 PASS**：OFF 五断言（行可见/组全开/组头在场/无明细/容器展开）→ 真点开关+保存切 ON 不重启即收（容器收为计时行）→ 重开容器组折叠一行摘要→组头可展开 → 切回 OFF 即时回扩；settings.json 往返盘证；数据根已清，脚本/截图留 tmp/v126-walk/ |
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
-### v2.170 · 审计修复批 F-20（**F6 最后一刀 C12 = 弹层「外点关 + Esc」族 A 四处收进新 `lib/use-popover.ts` ⇒ F6 整项收口 ✅**；行为逐字等价，零 Rust 改动，族 B/C 有意不收）
+### v2.171 · 审计修复批 F-21a（**F7 第一刀 = `arg_u64` 六插件同形上收进 `plugin_api::args`；顺带把审计「fs 与 git 两版已轻微漂移」这条定性订正回事实**；行为逐字等价，C ABI 面零改动）
+
+**依据**：《CODE-AUDIT-v1》M-1/S9 的 F7 簇（`arg_u64` ×6）+《AUDIT-FIX-PLAN-v1》§1 F7 行。**已有签名一字未改、`PLUGIN_ABI_VERSION` 与 HEAD 相同、`ffi` 模块零改动**；测试账 根 **440**（438 + 本批 2 条等值测试）/ desktop **369** 持平。
+
+| 面 | 落点 |
+|---|---|
+| ① 落点与实测规模 | 新 `crates/plugin-api/src/args.rs` **29 行** + `args/tests.rs` **94 行**；六份原文删除（`memory-sqlite/lib.rs` **336→326**、`tool-fetch/lib.rs` **199→188**、`tool-fs/lib.rs` **286→274**、`tool-git/lib.rs` **289→279**、`tool-notify/lib.rs` **235→224**、`tool-shell/exec.rs` **363→354**），七个调用点文件各 +1 行 import ⇒ **13 个文件 2765→2832（+67）**：**生产码净 −28**，另 **+95 是测试**（证明留在仓内，不是膨胀）。⚠ 审计 F7 预估 600–700 行的主力在 SSRF 那 361 行，本刀只覆盖 `arg_u64` 一簇 ⇒ **如实报小账** |
+| ② **最值钱：把审计的定性订正回事实** | 审计写「`arg_u64` ×6（fs 与 git 两版已**轻微漂移**）」。逐份读全文实测 = 六份只有**两种写法**（表达式形 = memory-sqlite/tool-git/tool-shell；`let … ?` 形 = tool-fetch/tool-fs/tool-notify），**签名、分支、上限语义、错误报文六处逐字相同** ⇒ "漂移"是**代码文本分叉**而不是**行为分叉**。区别有直接后果：按"已漂移"就得逐族保留语义（像批 F-18 的 C9 那样留两个出口），按实测可以直接收成一份。**登记：审计结论不能照抄，动手前必须逐份读原文**（同族 = 批 F-19「登记 135 行/9 份而实测 263/10」、批 F-20「登记 10 处而实测同形 4 处」⇒ **F7 是同批审计里第三处规模/性质失实**） |
+| ③ 等价测试**入库**（形态与前四刀不同） | `args/tests.rs` 拿**被删的两种原文当参考实现**（`ref_expr`/`ref_let` 原样抄），**13 格输入矩阵**逐格断言基座与两形都相等（键不存在 / 显式 `null` / 正常值 / 越界截断 / **零不是缺省** / 负数 / 小数 / 字符串数字 / 字符串 / 布尔 / `max = u64::MAX` 不截断 / 容器不是对象 / 另一键名），第二条把**错误报文逐字节**钉住。先例 = 批 F-1/F-2「参考实现必须是被删的那份」。**比一次性 `tmp/` 判据强：每次 `cargo test --workspace` 都跑**。写作时撞上一条 Rust 约束并记进注释：数组字面量放两个**不同 fn item** 直接 `E0308` ⇒ 显式收到 `fn` 指针 |
+| ④ 调用点一条没动 | 生产调用 **12 处**与改前逐一对应（memory-sqlite 3 / tool-fetch 2 / tool-fs 3 / tool-git 1 / tool-notify 1 / tool-shell 2），参数原样；`tool-shell/exec/tests.rs` 原有的 `arg_u64_clamps_and_rejects_non_numeric` **保留**（现在测基座）⇒ 没有为了合并删掉一条既有测试 |
+| ⑤ 冻结 ABI 的自证 | 动的是 `plugin-api`，必须说清为什么不算 breaking：① 已有结构体字段与函数签名一字未改 ② `PLUGIN_ABI_VERSION` 未变（门禁拿 HEAD 版 `ffi.rs` 常量串等值比较）③ `ffi` 模块零改动。AGENTS 冻结纪律的禁止面 = 「改已有签名 / 动 `PLUGIN_ABI_VERSION`」，**新增 Rust 便利层模块不在其中**（`fsutil`/`memlayout` 同先例），且新代码只被随仓库重编的内置插件使用 ⇒ 已编译第三方插件按旧 ABI 仍可加载 |
+| ⑥ 变异 4 条各红在指定测试 | R1 摘 `.min(max)`（各工具保护性上限全部失效）→ 等值矩阵；R2 少掉 `Some(Value::Null)` 一支（模型写 `null` 会报错）→ 等值矩阵；R3 报文改一个词（"分家后漂移"的形状）→ **两条测试同时红**；R4 `as_u64` 改吃 `as_f64`（小数被静默截成整数 = 模型给 1.5 变成 1）→ 等值矩阵。sha 漂移 0 · 残留 0 · 末跑回绿；驱动带批 F-20 立的**开机自检三件套**（扫变异串 / 未变异必须先绿 / 每 case 前复核 sha） |
+| ⑦ 门禁读数的两条假红（判据自己造的） | ① `arg_test_ledger` 用 `grep -oE "test result: ok. [0-9]+ passed"` 取到**两行**（`cargo test` 还跑 doc-test，那段也有一行 `ok. 0 passed`）⇒ 与 `"2"` 比较必挂，改 `awk` 累加；② `change_scope` 想用 `git status --porcelain` 数新文件，**未跟踪目录被折叠成一行**（数出 1 而不是 2）⇒ 改逐文件 `git ls-files` 判"存在且未跟踪"；③ `abi_untouched` 去 `ffi.rs` 取常量——那里只有一句**提到**它的文档注释（真身在 `lib.rs`），且 `grep -rn` 的行号前缀让两侧天生不等 = 假红。另**一条自造竞态**：首跑门禁的 `arg_tests`/`mutate` 红在「我边跑门禁边改测试文件」，驱动的「未变异不绿」自检把它拦下是对的 ⇒ 纪律补 = **门禁跑动期间不编辑被它读的文件**。本仓**第三次**撞在"读数解析"（批 F-17 口径差、批 F-19 阈值、批 F-20 BRE 交替空转） |
+| ⑧ 门禁 | `tmp/v175-gates.sh` 最后一次编辑后全量复跑：**22 项动作读数全 0 = `GATE_ALL_GREEN`**（根 fmt/clippy `-D warnings`/test 39 套件 **440**；桌面三件 3 套件 369；前端三件 0；五道结构闸含 `check_length` **25 == 基线**；`arg_tests=0` + `mutate=0` + `arg_test_ledger=0`（2/2）+ `uplift_complete=0`（旧定义 0 · 生产调用 12 · 基座引用 7 文件）+ `abi_untouched=0` + `change_scope=0`） |
+| 边界 | ①**F7 未整项 ✅**：余四簇 = **SSRF 防线两插件 361 行逐行同形**（最大一块，要新开 `netsafe`）/ `zh_en`+`plugin_version` 样板各 ×10（要宏）/ `unsafe impl Send/Sync` + `SAFETY` ×10 / 官方展示元数据样板 ×10。②**插件产物未重编**（`plugins/` 里 dll 仍是上一批）：源码级等价合并由 `cargo test --workspace` 直接编译插件 crate 覆盖，`build_plugins.sh` + `kernel-bin demo` 验收叙事留到 F7 收口批一起跑。③未做真机走查（`arg_u64` 输入面是 JSON 参数，13 格矩阵 + 六插件既有测试即证据链，渲染面无涉及）。④变异/门禁脚本在 `tmp/`，但**等价测试本体已入库** ⇒ 这一半不再依赖 `tmp/`。⑤`arg_str` 只有一份、`arg_path`（tool-fs/tool-git 的 `missing string field` 两种写法）未列入审计 F7 ⇒ 没顺手扩射程，一并上收与否看 F7 收口批取证 |
+| 文档 | 《AUDIT-FIX-PLAN-v1》§1 批 F 标题按实测改「**二十二批已落**」+ v2.171 一句话 + **F7 标 ◐（第一刀已落 + 四簇余项）** + F7 行的"轻微漂移"定性订正 + §5 批 F-21a 证据段（8 条 + 边界 5 条）；ROADMAP 本节 + 回补 v2.170 提交哈希 `78348c6`；CHANGELOG v2.171；AGENTS「当前进度」三条轮转 + 被挤出的 v2.170 条目逐字搬进归档正文最前 |
+
+### v2.170（提交 78348c6）· 审计修复批 F-20（**F6 最后一刀 C12 = 弹层「外点关 + Esc」族 A 四处收进新 `lib/use-popover.ts` ⇒ F6 整项收口 ✅**；行为逐字等价，零 Rust 改动，族 B/C 有意不收）
 
 **依据**：《CODE-AUDIT-v1》C 域 C12（弹层「外点关 + Esc」10 处各写一遍）+《AUDIT-FIX-PLAN-v1》§1 F6 行。**外部 API 一字未改**（四组件的 `open`/`show`/`root` 与模板 `ref="root"` 接线全在位）、无新增依赖；测试账 根 **438** / desktop **369** 逐字持平（本批零 Rust 改动仍全量复跑）。
 

@@ -8,10 +8,11 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use plugin_api::HostVtable;
+use plugin_api::args::arg_u64;
 use plugin_api::fsutil::{content_revision, effective_roots, resolve_existing};
 use plugin_api::serde_json::{Value, json};
 
-use crate::{arg_path, arg_u64};
+use crate::arg_path;
 
 /// 单文件读取缺省/上限（字节）。上限防一次调用灌爆模型上下文。
 const READ_DEFAULT: u64 = 32 * 1024;

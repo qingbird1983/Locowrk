@@ -21,6 +21,7 @@ use std::ffi::CString;
 use std::io::Read;
 use std::time::Duration;
 
+use plugin_api::args::arg_u64;
 use plugin_api::ffi::{code, log_level};
 use plugin_api::manifest::{
     Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
@@ -178,18 +179,6 @@ fn text_arg(args: &Value, key: &str, max_chars: usize) -> Result<String, String>
         return Err(format!("field `{key}` exceeds {max_chars} chars ({n})"));
     }
     Ok(s.to_owned())
-}
-
-fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
-    match args.get(key) {
-        None | Some(Value::Null) => Ok(default),
-        Some(v) => {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| format!("field `{key}` must be a non-negative number"))?;
-            Ok(n.min(max))
-        }
-    }
 }
 
 fn webhook(args: &Value, title: &str, body: &str) -> Result<Value, String> {

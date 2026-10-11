@@ -25,6 +25,7 @@ use std::ffi::CString;
 use std::io::Read;
 use std::time::Duration;
 
+use plugin_api::args::arg_u64;
 use plugin_api::ffi::log_level;
 use plugin_api::manifest::{
     Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
@@ -131,18 +132,6 @@ impl PluginState for FetchState {
         }
         self.log(log_level::INFO, "tool-fetch: fetch called");
         fetch(&args)
-    }
-}
-
-fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
-    match args.get(key) {
-        None | Some(Value::Null) => Ok(default),
-        Some(v) => {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| format!("field `{key}` must be a non-negative number"))?;
-            Ok(n.min(max))
-        }
     }
 }
 

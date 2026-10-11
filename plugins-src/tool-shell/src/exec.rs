@@ -12,6 +12,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use plugin_api::HostVtable;
+use plugin_api::args::arg_u64;
 use plugin_api::serde_json::{Value, json};
 
 use crate::policy::Decision;
@@ -77,16 +78,6 @@ fn env_u64(var: &str, fallback: u64, min: u64, max: u64) -> Result<u64, String> 
         Err(_) => Err(format!(
             "tool-shell: {var}={raw} is not a number; keeping {fallback}"
         )),
-    }
-}
-
-pub(crate) fn arg_u64(args: &Value, key: &str, default: u64, max: u64) -> Result<u64, String> {
-    match args.get(key) {
-        None | Some(Value::Null) => Ok(default),
-        Some(v) => v
-            .as_u64()
-            .map(|n| n.min(max))
-            .ok_or_else(|| format!("field `{key}` must be a non-negative number")),
     }
 }
 

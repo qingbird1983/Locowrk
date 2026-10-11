@@ -4,11 +4,12 @@
 use std::path::Path;
 
 use plugin_api::HostVtable;
+use plugin_api::args::arg_u64;
 use plugin_api::fsutil::resolve_for_write;
 use plugin_api::serde_json::{Value, json};
 
 use crate::proc::{require_ok, run_git};
-use crate::{arg_u64, resolve_repo};
+use crate::resolve_repo;
 
 pub(crate) fn git_status(args: &Value, host: *const HostVtable) -> Result<Value, String> {
     let repo = resolve_repo(args, host)?;

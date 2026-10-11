@@ -3,7 +3,8 @@
 //! cwd 拒绝报文的教学面（F12b，v2.156）。
 //! 杀树路径依赖平台信号语义，不在单测里模拟（策略与路径层已覆盖拦截面）。
 
-use super::{RunDefaults, arg_u64, env_u64, shell_exec};
+use super::{RunDefaults, env_u64, shell_exec};
+use plugin_api::args::arg_u64;
 use plugin_api::serde_json::json;
 
 const DEFAULTS: RunDefaults = RunDefaults {

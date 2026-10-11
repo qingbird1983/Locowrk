@@ -10,10 +10,11 @@
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use plugin_api::args::arg_u64;
 use plugin_api::serde_json::{Value, json};
 use rusqlite::{Connection, Error, params};
 
-use crate::{arg_str, arg_u64};
+use crate::arg_str;
 
 /// key / value 上限（字节）。key 是主键不能无限长；value 防 runaway 写。
 const KEY_MAX: usize = 512;
