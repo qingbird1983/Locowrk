@@ -25,10 +25,13 @@
 #   审计修复批 F-6（2026-10-11）把 settings/llm.rs（682 行）拆成 policy/
 #   persist/synthesize/ipc/migrate 五簇（mod.rs 38 行，全簇守 400 线内），
 #   超限数 38 → 37 ⇒ 基线收紧为 37。
+#   审计修复批 F-7（2026-10-11）把 organize/mod.rs（614 行）拆成 events/
+#   trigger/collapse/task 四簇 + 本体（mod.rs 229 行），超限数 37 → 36 ⇒
+#   基线收紧为 36。
 set -u
 
 SUGGEST=400
-BASELINE=37
+BASELINE=36
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。

@@ -722,7 +722,28 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
-### v2.156 · 审计修复批 F-6（F5 第二项 `settings/llm.rs` 目录化拆分 + F12b 最后一支）
+---
+### v2.157 · 审计修复批 F-7（F5 第三项 `organize/mod.rs` 614 行目录化拆分）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§1 **F5 余项的第一条**。纯结构性批：**行为零改动**（内核、LLM 轨、前端全部未触），桌面单测用例数不变。
+
+| 面 | 落点 |
+|---|---|
+| ① 为什么拆 | `organize/mod.rs` 614 行里同时住着四件事：**同步触发决策**（含反弹熔断与窗口溢出整理）、**异步执行管道**（超时重试 + 降级规则切分）、**空间急救**（自动收起）、**对模型与界面的告知**（两条系统消息 + 尾部碎片置位）。三问自检：①只做一件事 ✗ ②名字概括不了 ✗ ③改告知要滚过管道 ✗（`notify_done` 与 `pipeline` 在同一文件同一个 `impl` 块）⇒ 拆 |
+| ② 拆成的形状 | `mod.rs` **229**（编排器状态与构造 + 投影/台账小工具 + 三个门面入口 + 组装点构造）/ `events.rs` **89**（告知面）/ `trigger.rs` **122**（决策面）/ `collapse.rs` **50**（急救面）/ `task.rs` **196**（管道面）= **686 行**（净 **+72**，增量是各簇头注），五文件全守 400 线内 ⇒ `check_length` **37 → 36**，基线随批显式收紧 |
+| ③ 本刀的技术难点 = 拆 `impl` 块 | 与批 F-6 的差别：`impl Organizer` 一个块里 **16 个方法要分到 4 个文件**。拆分器的块模型因此是两层（顶层块 + impl 成员块），成员搬出时包一层 `impl super::Organizer { … }`；Rust 允许同一类型的多个 impl 块分散在子模块，且父模块的私有项对后代可见 ⇒ 留在 `mod.rs` 的 `load_tree`/`anchor`/`record`/`sync_tree_md` 被各簇直接调用，无需改可见性 |
+| ④ 唯一一处字面改动 = 五处可见性提升，且逐个证明必要性 | `notify_done`/`notify_paused`（被 trigger + task 调）、`auto_collapse`（被 `mod` 的 `after_turn` 调）、`spawn`（被 `mod` 调）、`run_task`（被 `tests.rs` 调 18 处）由私有 → **`pub(super)`**。论证：私有方法原可见面 = 「定义模块 organize 及其后代」，移到子模块后写 `pub(super)` 的可见面**恰好也是 organize 及其后代** ⇒ 对外一字未增。`pipeline` 只被同簇的 `run_task` 调用 ⇒ **保持私有**（判据实测产物里 `pub(super) fn` 恰好 5 个，多一个即红） |
+| ⑤ 等价判据（`tmp/v157-split.cjs` + `tmp/v157-verify.cjs`，七段） | 单元集合 **24 = 24**（顶层 8 + 成员 16）且**归属簇 = 映射表**；**双向对账分两个口径**——正文按**逐行字面**（orig 每一非空行在产物原样命中，丢失 0；产物没被解释的余下每一行必须能指回脚本模板或 `impl` 包裹行 = 余量法，不用"总量差 N 行"那种归不了因的算法），头部按**语句**（`cargo fmt` 会重排 `use {}` 的换行，逐行比会把折行报成来路不明）；簇内**次序不倒挂**；外部 `crate::organize::X` 引用**全部可达**；未透出的搬出项（`OrganizeDoneEvent`/`OrganizePausedEvent`）**全仓零引用**；五处提升**各有簇外调用点**（2/1/1/2/18 处） |
+| ⑥ 顺手摘掉两处空转 re-export | 两个事件载荷 struct 全 crate 只有 `events.rs` 自己构造（`grep` 实测外部引用 0，唯一带外引的是 `OrganizeNotifier` = `state/background.rs:90`）⇒ `mod.rs` 只透出 `OrganizeNotifier`。判据第 5、7 段把这个口径变成机器检查：既查"该透出的没透出"，也查"透出了但没人用" |
+| ⑦ 判据本次自纠七例（全部落到脚本注释，逐条可查） | **(a) 块模型漏识别**：版正则不认 `async fn` ⇒ `run_task`/`pipeline`（含最大的 139 行）整段不进块集合，**拆完不报错、只静默丢代码**；靠"先只读勘察再动手"抓到（勘察 23 单元 → 修正 24）。**(b) 注释吸附不认缩进**：`ATTACH` 写死行首 ⇒ impl 成员的文档注释与 `#[allow]` 属性没跟着块走，悬空注释残留 `mod.rs`，`rustc` 直接 `expected item after doc comment`（编译器先抓住，判据本来也会报重复行）；本批因此**回滚重做一次**。**(c) 判据里写废的分支**：反向对账第一版是"consumed 计数 + `bad` 数组"，而 `bad` 永远是空数组 ⇒ 看着在执行、其实一条都没判。**(d) 空转假绿（本次最危险）**：头部对账正则写成 `(?:pub…use\|mod)`，**裸 `use` 没有分支** ⇒ 四个簇一条语句都匹配不上、`headBad` 恒 0，却照样打印"头部语句全部可解释 = **true**"；是 **N6 变异不红**把它暴露的——若不跑变异，这条断言会长期装作有效。**(e) 变异必须单变量且必须红在指定段**：原 N3「交换两个方法的声明行」把签名也换了 ⇒ 红在"单元丢失"而不是"次序倒挂" = 没测到目标断言，改成整块移动；`where` 最初抓输出里第一个含关键词的行 ⇒ 八条全显示"单元丢失 = 0"，改成抓计数非零那行。**(f) 变异锚点过期**：`notify_paused` 提升后 N7 还按 `    fn notify_paused(` 找 ⇒ 假变异；另一处正则把空格写进可选组**内**，导致 `pub(crate) fn` 一律不匹配。**(g) 基准保护**：第二次 `--write` 会把上一次的**产物**当原文备份回去，判据随即拿产物跟自己对账 = 恒绿 ⇒ 脚本遇到已存在的备份直接拒绝，并加 `--template-only`（第一次跑就撞过：模板导出写在 `!WRITE` 早退之后，该模式永远走不到） |
+| ⑧ 变异验证账（8 条逐条红在指定段） | N1 删正文一行 → `正向未命中 = 1`；N2 摘 `OrganizeNotifier` 透出 → `外部引用不可达 = 1`；N3 `plan_manual` 整块前移 → `簇内次序倒挂 = 1`；N4 给 `pipeline` 多加一个提升 → `提升无理由: task pipeline`（总数 6）；N5 把 `run_task` 降回私有 → 总数 4；N6 头部塞模板外的 `use` → `头部来路不明的语句 @ collapse`；N7 正文伪造一行 → `无法解释的新增行 = 1 ['let _injected_v157 = 1;']`；N8 整块删 `notify_paused` → `单元丢失 = 1`。每条 per-case 即时还原 + `sha` 逐字节核对，八条跑完基准回绿；注入串与临时 use 全仓 grep 0 命中 |
+| 测试账 | 根 **438 持平** / desktop **369 持平**（纯结构批不新增用例；`organize/tests.rs` 865 行一条未改——它 `use super::Organizer` 后直接驱动 `run_task`/`plan_manual`/`plan_auto`/`after_turn`，跨簇可达性由 ④ 的提升与 ⑥ 的透出保证） |
+| 门禁（最后一次编辑后全量复跑） | 12 个动作逐个记 RC 全 0 = `GATE_ALL_GREEN`（脚本 `tmp/v157-gates.sh`）：根 fmt `--check` CLEAN / clippy `--workspace --all-targets -- -D warnings` **0** / `cargo test --workspace` 39 套件 **438 passed 0 failed**；desktop fmt CLEAN / clippy `--all-targets -- -D warnings` **0** / **369 passed 0 failed**；四道结构闸全绿 = `check_length` **36 == 基线 36 零新增**、`check-i18n` zh=891 en=891 无静态引用键 0、`check-commands` 85·85·85 预留 0、`check-middleware-wiring` 10·10·0 白名单 0；等价判据随门禁复跑 = `VERIFY_OK`；零 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`（口径同 v2.155/v2.156） |
+| 边界 | ①**未做真机走查**：本批不产生任何新形态，IPC JSON 形状一行未动（`OrganizeDoneEvent`/`OrganizePausedEvent` 的 `#[serde(rename_all = "camelCase")]` 属性行在块体内逐字命中 ⇒ 由判据证），事件面证据 = 单测里的哑 notifier 断言；②`organize/tests.rs` **865 行**（F5 余项里的"巨型测试文件目录化"）未动，一轮一类变量；③F5 余两项 = `runner.rs::project_events` **237 行**、`crates/session-store/src/session.rs` **410 行**；④判据与变异脚本仍在 `tmp/` 未入库（「第五道闸」待点头）——⑦(d) 那种空转假绿正是"判据不入库就没人再跑"的风险面；⑤F15 待裁定 |
+| 文档 | `AUDIT-FIX-PLAN-v1.md`：§1 批 F 标题改「八个子批已落」+ **F5 标第三项已落**（余两项按实测行数）+ §5 批 F-7 证据段（含「文档轮转」一行）；ROADMAP 本节 + 回补 v2.156 提交哈希 `3cdeb20`；CHANGELOG v2.157；AGENTS 三条轮转 = 当前 **3440** + 此前 **1352** + 指针 **1204** = **5996 ≤6000**（`tmp/v157-rot.mjs` 预算硬闸：超限 exit 2 不写盘，本批连压三轮才落；v2.156 全文搬入归档，**条数改双口径并报** = 行首 `* ` 39 条 / 非空条目行 40，因复核实测上批标题「38 条」漏计一条历史无前缀段 ㉚ v2.58）；`scripts/check_length.sh` 基线 36 + 批 F-7 注释 |
+
+---
+### v2.156（提交 3cdeb20）· 审计修复批 F-6（F5 第二项 `settings/llm.rs` 目录化拆分 + F12b 最后一支）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§1 **F5 余项的第二条**（682 行的 `settings/llm.rs`）与 **F12b**（v2.155 复核时新立的第四支报错教学）。拆分是**结构性搬用**——外部 API 一字未改、内核契约零改动；F12b 是**零逻辑改动**的一句报文。
 
