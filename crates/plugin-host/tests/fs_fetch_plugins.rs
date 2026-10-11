@@ -2,7 +2,8 @@
 //! （plugins.md：tool-fs 只读三件套 + tool-fetch）。
 //!
 //! 与 echo_plugin.rs 同款模式：测试自行构建插件产物（LOCOWRK_PLUGIN_VERSION
-//! 触发重编）并暂存到 target/locowrk-test/{pid}/，不依赖仓库 plugins/ 目录的
+//! 触发重编）并暂存到 target/locowrk-test/{pid}-{纳秒}/，且每次 stage() 落一个
+//! 独占快照目录（F11b/F11c，见 `common/mod.rs` 头注），不依赖仓库 plugins/ 目录的
 //! 预暂存状态。fetch 的网络路径打本进程 TCP 起的 HTTP 服务，全离线。
 //! 装载样板 = `mod common`（本文件用 `stage_and_load`，env 锁用 `common::env_lock`）。
 

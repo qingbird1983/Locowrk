@@ -722,7 +722,29 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
-### v2.153 · 审计修复批 F-3（组装点 `init_state` 结构性拆分：636 行函数拆成八簇 + 一条「语句零重排」机器判据）
+### v2.154 · 审计修复批 F-4（F11c：同一测试二进制内的暂存路径竞争修掉）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§1 **F11c**（v2.153 批 F-3 期间机制确证后新立，本批 ✅）。纯测试面——
+`crates/plugin-host/src/` 一行未动、生产码零改动、desktop 与前端零改动；plugin-host 用例
+**37 → 38**（唯一新增 = 一条确定性守卫）。标题里的提交哈希按本仓现行做法由下一批回补
+（本批已把 v2.146–v2.153 八节的哈希回补进标题）。
+
+| 面 | 落点 |
+|---|---|
+| ① 病与登记时的差别 | 登记时把 native 侧写成「理论风险面」，**逐条统计调用表后推翻**：同一测试二进制内已有 5 组共享目标（`fs_fetch_plugins` 的 tool-fetch@1.0.0 **×4**、`echo_plugin` 的 tool-echo@0.2.0 ×2、`tools_batch2` 的 tool-fs@0.1.5 ×2 + tool-shell@1.0.0 ×2）⇒ **18 次 `stage()` 里 12 次落在会被别人 truncate 的路径上**。`{pid}` 只隔进程，不隔同一二进制内的并行用例；`fs::copy`（truncate + 写）在 `build_lock` 内、`registry.load()` 的读在锁外 |
+| ② 修法 | `stage()` 落点 → **`{run_root}/{id}/{version}/stage-{n}/{artifact}`**（`n` = 进程内 `AtomicU64`）。不把 nonce 拼进版本名：`{version}` 目录名要保持可辨认（与 packaging.md §3.1 布局同形），多一层子目录对 registry 透明（`plugin_dir()` 取父目录，`wasm_plugins` 那条断言原样通过）。**为什么不能走「原子 rename 覆盖」/「内容相同就跳过」**：纪律 2「永不 dlclose」——已装载 dll 一直被映射，第二方无论 truncate 还是 rename-over 都撞 os error 32，只有「一人一份」成立 |
+| ③ 顺带（同类变量并刀） | `run_root()` 从 `{pid}` 补成 **`{pid}-{启动纳秒}`**：批 F-2a 在 desktop 侧立过的同一味药（Windows 回收复用 pid ⇒ 读到上一轮残留），根侧 v2.152 漏了。其余 crate 无同类面（`kernel-agent/tests/common` 全内存 mock，`grep target/` 零命中） |
+| ④ 必红复现（一次性探针） | 临时 `tests/race_probe.rs`（8 线程 × 200 轮 × 64 KiB）：**改前 脏读 1322 / copy 报错 61 / 1600 → FAILED**（copy 报错原文 = `Os { code: 32, ... 另一个程序正在使用此文件 }` = `wasm_plugins.rs` 历史注释那个症状，两种病形同源一次拿到）；**改后同一探针 0 / 0 → ok**。探针随批删除（单跑造 ~100 MB 副本，与「测试不制造负载」冲突），证据留《AUDIT-FIX-PLAN-v1》§5 批 F-4 段 |
+| ⑤ 入库守卫（确定性，不靠运气） | 新 `wasm_plugins.rs::staging_two_calls_never_share_a_target_path`：同一 `(id, version)` 两次 `stage()` 路径必不相等 + 两份内容各自完整。放测试文件而非 `common/mod.rs`（后者的 `#[test]` 会被五个二进制各跑一遍）；用确定性断言而非并发断言（并发就是本题的偶发形态，守卫不能自己也偶发） |
+| ⑥ 变异验证 + 一条新陷阱 | 摘掉 `stage-{n}` ⇒ 守卫 **FAILED**（`assert_ne!` 两侧相等，exit 101）= 变异真生效。还原后 sha 与改前逐字节一致却**仍然红**——根因 = **Windows 上 `fs.copyFileSync` 走 `CopyFile` 会连备份的旧 mtime 一起复制 ⇒ cargo 的 mtime 指纹认为源码未变 ⇒ 跑的是变异体编出的过期二进制**。改「读字节 + 同字节 `writeFileSync`」刷 mtime，出现 `Compiling plugin-host` 后复绿。**口径：sha 相等只证明内容，`Compiling` 行才证明运行态**（与批 B「变异要在运行时真生效」同族，这次撞到的是它的还原侧） |
+| ⑦ 老红对上号 | 批 F-2b 记的「`fs_fetch_plugins` 4 failed / 1 passed、机制未确证」——该二进制正是 tool-fetch@1.0.0 被四个用例共用的那个，一方 truncate 时其余三方在锁外读 ⇒ **四个一起红**。**未复现**，故只作解释、不作证明；§1 F11 段的「当时未确证」与 §5 批 F-2b 段均已就地订正指向 F11c |
+| 测试账 | plugin-host **37 → 38**（lib 21 + 集成 17：2/5/4/3/3）；根 workspace **436 → 437**；desktop **368 持平**（零改动仍全量复跑取证）——以门禁实跑为准 |
+| 门禁 | 根 fmt `--check` CLEAN / clippy `--workspace --all-targets -- -D warnings` **0** / `cargo test --workspace` 39 套件 **437 passed 0 failed**（436 → 437 = ⑤ 新增的那条守卫）；desktop fmt CLEAN / clippy `--all-targets -- -D warnings` **0** / **368 passed 0 failed**（本批零改动，仍全量复跑取证）；四道结构闸全绿 = `check_length` **38 == 基线 38、零新增**（改后 `common/mod.rs` 231 行、`wasm_plugins.rs` 134 行都在 400 线内）、`check-i18n` zh=891 en=891 无静态引用键 0、`check-commands` 85·85·85 预留 0、`check-middleware-wiring` 10·10·0 白名单 0；零 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`。**同批抓到并修掉门禁脚本自己的一条假绿**：`cargo clippy … -D warnings` 少写 `--` 分隔 ⇒ cargo 报 `error: unexpected argument '-D'` 根本没跑 clippy，而脚本把它接进 `| tail` ⇒ 退出码被 tail 盖住、汇总照常打出 `GATE_FAIL=0`（正撞在本仓既有纪律「跑闸必须 && 串联、中间不套管道」上，这次是它的还原/汇总侧变体）。两侧 clippy 已按正确形式复跑 = 0，**AGENTS.md 门禁命令块同批改对并加成因注释**（原文两处都少了 `--`，照它抄就会静默不跑）。 |
+| 边界 | ①**跨进程那半边仍未修、机制仍未确证**（`target/debug/` 产物共享 + `LOCOWRK_PLUGIN_VERSION` 编译期注入的理论窗口）：本批探针不并发跑 cargo，治不到它；不凭猜测造跨进程锁（fs-lock 新依赖或自研锁文件 + 陈旧回收 = 单独口径），三要素报文保留。②`stage-{n}` ⇒ 每次调用留一份完整副本，`target/locowrk-test/` 增长比改前快：本机实测**改前 578 MB → 本批跑完 1.2 GB**（273 个进程根 / 3512 个快照目录），口径仍与批 F-2a「治脏读不治累积」一致，`cargo clean` 一并清（批 G 射程，等你点头）。③守卫锁「路径唯一」而非「并发无竞争」：若今后改成共享路径 + 进程内互斥，守卫会红而实际安全，届时要按具体情况改写断言（这条刻意取保守方向）。④纯测试面批，无界面走查。⑤未新增门禁（与批 F-1/F-2a/F-2b/F-3 同一件待你点头的事） |
+| 文档 | `AUDIT-FIX-PLAN-v1.md` §1 批 F 标题改「五个子批已落」+ **F11c 标 ✅**（含落法/实测/陷阱八条）+ §1 F11 段残留项与「未确证」措辞就地订正 + §5 新立批 F-4 证据段；ROADMAP/CHANGELOG/AGENTS v2.154；五个测试文件头注随代码改真（不留领先注释） |
+
+---
+### v2.153（提交 584fbf5）· 审计修复批 F-3（组装点 `init_state` 结构性拆分：636 行函数拆成八簇 + 一条「语句零重排」机器判据）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§1 批 F 的 **F5 第一项**（审计 M-4 超限榜首：`desktop/src-tauri/src/state/mod.rs` 698 行、其中 `init_state` 一个函数 636 行）。
 生产码语义零改动：**497 条原语句逐条保序、零丢失、零新增行为**（机器判据，见 ③）；desktop 与根测试数**全部持平**。
@@ -744,7 +766,7 @@
 
 ---
 
-### v2.152 · 审计修复批 F-2b（plugin-host 测试夹具单点化 + 暂存目录 pid 分层）
+### v2.152（提交 fccbd05）· 审计修复批 F-2b（plugin-host 测试夹具单点化 + 暂存目录 pid 分层）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§1 批 F 的 **F8**（五个集成测试各抄一遍样板）与 **F11 的根侧部分 F11b**。
 纯测试面：**生产码零改动**（`crates/plugin-host/src/` 一行未动）。已跟踪测试文件 **+44 / −428 = 净 −384 行**，
@@ -765,7 +787,7 @@
 
 ---
 
-### v2.151 · 审计修复批 F-2a（测试临时目录单点化：把"满跑红单跑绿"的地雷拆掉）
+### v2.151（提交 59abd0d）· 审计修复批 F-2a（测试临时目录单点化：把"满跑红单跑绿"的地雷拆掉）
 
 **依据**：《AUDIT-FIX-PLAN-v1》F11（批 B 自己撞出来、**审计完全没覆盖**的一类——它查死代码与重复实现，"测试脚手架脏"只有真跑门禁才现形）。
 本子批口径 = **只做 desktop 侧**（F11 的根侧 `wasm_plugins` 共享目录 = F11b、F8 plugin-host 测试样板都未动 → **下一刀 v2.152 批 F-2b 已把这两条收口**，本节保留为当时快照）。
@@ -785,7 +807,7 @@
 
 ---
 
-### v2.150 · 审计修复批 F-1（同源重复实现收敛：一把时钟尺 · 四种截断语义 · 一份缺省端点）
+### v2.150（提交 b947038）· 审计修复批 F-1（同源重复实现收敛：一把时钟尺 · 四种截断语义 · 一份缺省端点）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§5 批 F 段（F1 / F2 / F3 / F14 四项，审计 M-1 同族）。子批口径 = **只收敛「同一件事在多处各写一遍」**，
 不动性能（F4/F10）、不动结构（F5/F9）、不动跨 crate 基座（F7）——那些各自是独立一刀。纯 desktop + kernel-bin/plugin-host 代码面，
@@ -805,7 +827,7 @@
 
 ---
 
-### v2.149 · 审计修复批 E（权威文档真实化：让下一个 agent 不再被文档骗）
+### v2.149（提交 67bd6dc）· 审计修复批 E（权威文档真实化：让下一个 agent 不再被文档骗）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§5 批 E 段（逐条「改前 → 改后」计数与取证都在那儿）。本批**零功能代码改动**，
 射程是文档层——判据不是写了多少字，而是**「文档里还有多少句在描述已不存在的机制」**。审计未覆盖而本批
@@ -826,7 +848,7 @@
 
 ---
 
-### v2.148 · 审计修复批 D（死配置与哑 ABI：删的删、预留的标注、分叉规则单点化）
+### v2.148（提交 1935164）· 审计修复批 D（死配置与哑 ABI：删的删、预留的标注、分叉规则单点化）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§5 批 D 段（逐条证据 + grep 对账在那儿）。**D2 改判转批 H**（查证发现取消信号过不去 C ABI 边界，只接宿主侧 = 造半接线，正是本轮审计在罚的形态；用户对该口径尚未表态，先按最低风险路径诚实化 + 立批）。
 
@@ -843,7 +865,7 @@
 | 文档 | `AUDIT-FIX-PLAN-v1.md` 批 D 段 + §1 新增**批 H** 表 + 批 C/批 D 标题标 ✅ + ROADMAP/CHANGELOG/AGENTS v2.148 |
 
 ---
-### v2.147 · 审计修复批 C（两个从未接线的内核中间件摘本体 + 134 条死文案清零）
+### v2.147（提交 78e3dd9）· 审计修复批 C（两个从未接线的内核中间件摘本体 + 134 条死文案清零）
 
 **依据**：`docs/reports/AUDIT-FIX-PLAN-v1.md` §5 批 C 段（逐条证据在那儿，本节只记结论）。用户裁定 = Q2「`CtxCompact`/`Retry` 删本体」+ Q3「批 C 只删孤儿 i18n 键，`sandbox_run` 残留与三包装保留加注释」。
 
@@ -860,7 +882,7 @@
 | 文档 | `AUDIT-FIX-PLAN-v1.md` 批 C 段（含对账与变异验证全记录）+ ROADMAP/CHANGELOG/AGENTS v2.147 |
 
 ---
-### v2.146 · 审计修复批 A+B（用户可见缺陷 + 门禁体系四道新防线）
+### v2.146（提交 b904e9d）· 审计修复批 A+B（用户可见缺陷 + 门禁体系四道新防线）
 
 **依据**：`docs/reports/CODE-AUDIT-v1.md`（2026-10-10 全仓审计，4 子域 + Lead 机械取证）；执行计划与逐条证据 = `docs/reports/AUDIT-FIX-PLAN-v1.md`。**用户 2026-10-10 裁定**：本轮先做批 A+B；H2 `CtxCompact`/`Retry` 删本体（批 C）；批 C 删除范围只勾「59 孤儿 i18n 键」（`sandbox_run` 前端残留与三个死 API 包装保留 + 加注释）；`config/profile.toml` 删文件 + 移除文档描述（批 D）。**P0 复核 = 已修**（`approval.rs` 字节判定 + 整字符步进 + 三条 CJK 回归在位，逐行核过）。
 

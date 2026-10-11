@@ -2,7 +2,9 @@
 //! （DESIGN.md §14：加载 0.1.0 → 激活 0.2.0 → 回退 0.1.0，全程不重启）。
 //!
 //! 测试自行构建插件产物（改 LOCOWRK_PLUGIN_VERSION 触发重编）并暂存到
-//! target/locowrk-test/{pid}/，不依赖仓库 plugins/ 目录的预暂存状态。
+//! target/locowrk-test/{pid}-{纳秒}/，且每次 stage() 落一个独占快照目录
+//! （F11b/F11c，形状与成因见 `common/mod.rs` 头注），不依赖仓库 plugins/ 目录的
+//! 预暂存状态。
 //! 构建样板（build_lock / build_and_stage / call / err_msg_ref）来自 `mod common`；
 //! 那把构建锁只串行化**本测试二进制内**的用例，跨二进制不互斥（现状见 common 头注）。
 

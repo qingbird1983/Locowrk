@@ -5,7 +5,8 @@
 //! - native 与 wasm 混载同一 registry：工具目录共存、各自可解析调用
 //!
 //! native 侧沿用 tools_batch2 模式：测试自建产物暂存到
-//! target/locowrk-test/{pid}/。wasm 客户机用 `wat` 即时编译，不依赖 wasm32
+//! `target/locowrk-test/{pid}-{纳秒}/{id}/{version}/stage-{n}/`（进程独占 + 调用独占，
+//! 见 `common/mod.rs` 头注的 F11b/F11c）。wasm 客户机用 `wat` 即时编译，不依赖 wasm32
 //! 工具链。
 
 use std::path::PathBuf;
@@ -63,7 +64,8 @@ fn wasm_plugin_staged_and_served_via_registry() {
     registry.load("wasm-ping", &ver, &wasm).expect("load wasm");
     registry.activate("wasm-ping", &ver).expect("activate");
 
-    // 版本目录即 wasm 所在目录（manifest.json/图标定位基础不受影响）
+    // 快照目录（stage-{n}）即 wasm 所在目录：manifest.json/图标的定位基础不受影响，
+    // plugin_dir() 只取工件路径的父目录，多一层对 registry 是透明的
     assert_eq!(
         registry.plugin_dir("wasm-ping", &ver),
         Some(wasm.parent().unwrap().to_path_buf())
@@ -98,4 +100,35 @@ fn native_and_wasm_coexist_in_one_registry() {
     let ping = source.resolve("ping").expect("wasm ping");
     let out = call(ping.as_ref(), json!({})).expect("ping ok");
     assert_eq!(out, json!({ "pong": true }));
+}
+
+/// **F11c 守卫**：同一 `(id, version)` 的两次 `stage()` 必须落到**不同**路径，各自内容
+/// 完整。上面两个用例正是病发现地——它们都往 `wasm-ping/0.1.0/` 里复制同一个文件，
+/// 一方 `fs::copy` 的 truncate 撞上另一方 `registry.load()` 的读，报文
+/// `unexpected end-of-file (at offset 0x0)`。
+///
+/// 这条断言是**确定性的**（不靠并发运气）：把 `common::stage()` 里的调用级序号摘掉，
+/// 两次返回的路径必然相等 → 本用例必红。为什么放本文件而不是 `common/mod.rs`：后者
+/// 的 `#[test]` 会被五个测试二进制各编一遍各跑一遍，而竞争的产地就在这里。
+#[test]
+fn staging_two_calls_never_share_a_target_path() {
+    let payload: Vec<u8> = (0..4096).map(|i| (i % 251) as u8).collect();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let src = common::run_root().join(format!("tmp-uniq-{nanos}.wasm"));
+    std::fs::write(&src, &payload).unwrap();
+
+    let a = common::stage(&src, "wasm-uniq", "0.1.0", "wasm_uniq.wasm");
+    let b = common::stage(&src, "wasm-uniq", "0.1.0", "wasm_uniq.wasm");
+
+    assert_ne!(
+        a, b,
+        "F11c 复发：两次 stage() 落到同一路径 = 同二进制内的并行用例会在同一文件上互相 truncate"
+    );
+    assert_eq!(std::fs::read(&a).unwrap(), payload, "第一份快照内容不完整");
+    assert_eq!(std::fs::read(&b).unwrap(), payload, "第二份快照内容不完整");
+
+    std::fs::remove_file(&src).unwrap();
 }

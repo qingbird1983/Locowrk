@@ -8,7 +8,9 @@
 //! - tool-edit 0.2.1：edit_replace（带 expected_revision）→ 跨插件
 //!   fs_restore 撤销
 //!
-//! 与 fs_fetch_plugins.rs 同款模式：测试自建产物暂存到 target/locowrk-test/{pid}/。
+//! 与 fs_fetch_plugins.rs 同款模式：测试自建产物暂存到
+//! target/locowrk-test/{pid}-{纳秒}/，且每次 stage() 落一个独占快照目录（F11b/F11c，
+//! 见 `common/mod.rs` 头注）。
 //! 样板（build/load/call/env 锁/临时根）全部来自 `mod common`，本文件不再自带副本。
 //! env 是进程级全局，全部用例串行（一把大锁包住整个测试体）。
 

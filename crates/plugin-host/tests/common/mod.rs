@@ -1,4 +1,4 @@
-//! plugin-host 集成测试共用夹具（《AUDIT-FIX-PLAN-v1》批 F·F8 + F11b）。
+//! plugin-host 集成测试共用夹具（《AUDIT-FIX-PLAN-v1》批 F·F8 + F11b + F11c）。
 //!
 //! 收敛前这五个集成测试文件（`echo_plugin` / `fs_fetch_plugins` / `tools_batch2`
 //! / `tools_batch3` / `wasm_plugins`）**各抄一份同构样板**：`build_lock` /
@@ -11,30 +11,41 @@
 //! 每个测试二进制只会用到其中一部分，未用项是常态 → 整模块 `#![allow(dead_code)]`
 //! （同款先例）。
 //!
-//! **F11b：暂存目录带 pid 分层**（`target/locowrk-test/{pid}/{plugin}/{version}/`）。
-//! 原来所有测试二进制共用 `target/locowrk-test/{plugin}/{version}/`，`stage()` 的
-//! `create_dir_all` + `copy` 不是原子的，两个进程写同一路径时另一半可能读到写了一半的
-//! dll（Windows 还会报「文件正在使用」——`wasm_plugins.rs` 里那条 tmp 注释记的就是这个
-//! 症状）。加一层 pid 后各进程写各的目录。
+//! **F11b + F11c：暂存根按进程独占，快照目录按调用独占**
+//! （`target/locowrk-test/{pid}-{启动纳秒}/{plugin}/{version}/stage-{n}/{artifact}`）。
+//! 收敛前所有测试二进制共用 `target/locowrk-test/{plugin}/{version}/`，而 `stage()` 的
+//! `create_dir_all` + `copy` 不是原子的、`registry.load()` 的读又发生在锁外——写的一方
+//! truncate 的瞬间，读的一方拿到 0 字节 / 半截 dll（Windows 上另一侧直接报 os error 32
+//! 「另一个程序正在使用此文件」）。两层各治一半：**进程层**隔不同二进制（批 F-2b），
+//! **`stage-{n}` 层**隔同一二进制内的并行用例（批 F-4 = F11c）。
 //!
-//! ⚠ 诚实边界：按**当前**的调用表，两个二进制请求同一 `(plugin, version)` 的情况其实
-//! 不存在（tool-echo 被 `echo_plugin` 用 0.1.0/0.2.0、被 `wasm_plugins` 用 1.0.0；
-//! tool-fs 被 `fs_fetch` 用 1.2.1、被 `tools_batch2` 用 0.1.5……逐条查过），所以这一层
-//! 是**结构性隔离（防今后新增重叠组合）**，不是"修好了历批记的偶发红"——那条的真实
-//! 机制本批未确证，见下面的 ⚠ 段。
+//! **F11c 的三段史（一条老"偶发"是怎么钉死的）**：批 F-2b 只加了进程层，并把当时的
+//! 偶发红判为「机制未确证」；批 F-3（v2.153）满跑抓到 `wasm_plugins` 红
+//! `unexpected end-of-file (at offset 0x0)`，**而报文里的路径已经带着 pid 分层** ⇒ 病不
+//! 在跨进程，在同进程共享写目标，机制就此确证并立为 F11c。本批先用一次性探针把窗口
+//! 放大（8 线程 × 200 轮 × 64 KiB 载荷）跑出必红复现 = **脏读 1322 / copy 报错 61 /
+//! 总次数 1600**，再落 `stage-{n}`，同一探针转绿（证据见《AUDIT-FIX-PLAN-v1》§5 批 F-4 段）。
 //!
-//! ⚠ **本层没有解决、也没有确证的一条**：`cargo build` 的输出固定在共享的
+//! ⚠ 诚实边界：进程层当年那句「两个二进制请求同一 `(plugin, version)` 的情况并不存在」
+//! 仍然成立（tool-echo 被 `echo_plugin` 用 0.1.0/0.2.0、被 `wasm_plugins` 用 1.0.0；
+//! tool-fs 被 `fs_fetch` 用 1.2.1、被 `tools_batch2` 用 0.1.5……逐条查过），所以跨进程
+//! 那层至今仍是**结构性隔离（防今后新增重叠组合）**；本批真正修掉的是**同进程**那一半。
+//!
+//! ⚠ **仍开放的一条（不同类变量，本批不动）**：`cargo build` 的输出固定在共享的
 //! `target/debug/`，而 `LOCOWRK_PLUGIN_VERSION` 是编译期注入——两个二进制并发构建同一
 //! 插件的**不同版本**时（现存的组合：`fs_fetch` 要 tool-fs 1.2.1 与 `tools_batch2` 要
 //! tool-fs 0.1.5；`echo_plugin` 的 tool-echo 0.1.0/0.2.0 与 `wasm_plugins` 的 1.0.0），
 //! 理论上后构建的一方会覆盖 `target/debug` 里的产物，前一方「构建返回 → 复制」之间的
-//! 窗口里可能复制到对方的字节。**但本批定向压测没能复现**：`fs_fetch_plugins` 与
-//! `tools_batch2` 两个测试二进制并行 4 轮（8 个结果）全绿，另 `cargo test -p
-//! plugin-host` 连续 8 轮全绿；批 F-2b 期间抓到过一次红（fs_fetch 4 failed / 1 passed，
-//! 0.8s 内失败 = 不像 5s 网络超时）此后再未复现，**机制未确证**。因此这里不凭猜测
-//! 造跨进程锁（那要单独定口径：新依赖 fs-lock 类，或自研锁文件 + 陈旧回收），只把
-//! 失败报文补成 `(plugin_id, version, 暂存路径)` 三要素——见 [`load_activate`]，
-//! 下次再红能直接定性。本层 `build_lock()` 仍只串行化**同一二进制内**的构建。
+//! 窗口里可能复制到对方的字节。**本批的探针治不到它**（探针只并发走 `stage()`，不并发
+//! 跑 cargo），批 F-2b 的 8 轮全量 + 4 轮定向并行也未复现 ⇒ 机制仍未确证。不凭猜测造
+//! 跨进程锁（那要单独定口径：新依赖 fs-lock 类，或自研锁文件 + 陈旧回收），只保留
+//! `(plugin_id, version, 暂存路径)` 三要素报文——见 [`load_activate`]。本层
+//! `build_lock()` 仍只串行化**同一二进制内**的构建。
+//!
+//! ⚠ **代价（如实记账）**：`stage-{n}` 让每次调用都留一份完整副本，同一 `(id, version)`
+//! 在一轮内不再互相覆盖 ⇒ `target/locowrk-test/` 的增长比改前快（本机 dll 0.6–1.0 MB、
+//! 一轮约 18 次 `stage()` 调用）。治理口径与批 F-2a「治脏读不治累积」一致：不在本批
+//! 扩大改动面，累积目录由 `cargo clean` 一并清（批 G 射程）。
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
@@ -67,14 +78,27 @@ pub fn workspace_dir() -> PathBuf {
         .expect("workspace root")
 }
 
-/// 本轮运行的暂存根：`target/locowrk-test/{pid}`（F11b：并行进程各写各的目录）。
+/// 本轮运行的暂存根：`target/locowrk-test/{pid}-{启动纳秒}`。
+///
+/// 为什么不只带 pid（F-2b 首版只带 pid，本批 F11c 补上纳秒）：**Windows 会回收复用
+/// pid**，只带 pid 时下一次运行可能落进上一次留下的同名目录，读到的是**上一轮的残留
+/// 产物**——正是批 F-2a 在 desktop 侧 `testutil.rs` 立过的教训（当时 `.undo.bak` 读出
+/// 6 条 vs 期望 4 条），口径在此沿用。一个进程一个独占根之后，`stage()` 的调用级序号
+/// 才真正闭合「写目标永不共享」。
+///
 /// **访问即确保存在**——调用方有的会直接往这里写临时工件（`stage_ping_guest` 的
 /// tmp wasm），目录不存在时 `fs::write` 会 NotFound（本函数首版就漏了 create，
 /// 由 wasm_plugins 两个测试当场抓红）。
 pub fn run_root() -> PathBuf {
-    let d = workspace_dir()
-        .join("target/locowrk-test")
-        .join(format!("{}", std::process::id()));
+    static RUN_TOKEN: OnceLock<String> = OnceLock::new();
+    let token = RUN_TOKEN.get_or_init(|| {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        format!("{}-{nanos}", std::process::id())
+    });
+    let d = workspace_dir().join("target/locowrk-test").join(token);
     std::fs::create_dir_all(&d).expect("run_root: 暂存根创建失败");
     d
 }
@@ -92,11 +116,31 @@ pub fn artifact_name(plugin_id: &str) -> String {
     }
 }
 
-/// 把任意工件落成版本目录布局（`{run_root}/{plugin_id}/{version}/{file_name}`）。
-/// wasm 客户机不走 cargo build，直接给字节时也走这里（packaging.md §3.1：
-/// manifest.json 与工件同目录）。
+/// 把任意工件落成**每次调用独占**的快照目录
+/// `{run_root}/{plugin_id}/{version}/stage-{n}/{file_name}`（F11c）。
+///
+/// 为什么必须有 `{n}`：`{pid}` 只隔离**进程**，不隔离同一测试二进制内的**并行用例**。
+/// `wasm_plugins.rs` 的两个用例都往同一个 `wasm-ping/0.1.0/wasm_ping.wasm` 做
+/// `fs::copy`（truncate + 写），而 `registry.load()` 的读发生在 `build_lock` **之外**
+/// → 并发时读到 0 字节 / 半截，报文正是 `unexpected end-of-file (at offset 0x0)`；
+/// Windows 上另一侧还会直接报「另一个程序正在使用此文件」（os error 32）。一次性探针
+/// 把这条竞争从"满跑偶尔一次"变成"每次必红"：8 线程 × 200 轮、64 KiB 载荷，实测
+/// **脏读 1322 / copy 报错 61 / 总次数 1600**（证据见《AUDIT-FIX-PLAN-v1》§5 批 F-4 段）。
+///
+/// 为什么不能用「复制前先看内容是否一致」或「原子 rename 覆盖」绕过：本仓的纪律是
+/// **永不 dlclose**（DESIGN §5 / AGENTS 纪律 2），已装载的 dll 一直被系统映射着，第二个
+/// 调用方无论 truncate 还是 rename-over 都会撞文件占用——只有「一人一份」成立。
+///
+/// `(id, version)` 的**注册语义不变**：registry 只认工件路径，`plugin_dir()` 取其父目录
+/// （packaging.md §3.1 的 manifest/图标定位基础因此照常成立，目录层级对它是透明的）。
+/// wasm 客户机不走 cargo build，直接给字节时也走这里。
 pub fn stage(src: &Path, plugin_id: &str, version: &str, file_name: &str) -> PathBuf {
-    let dst_dir = run_root().join(plugin_id).join(version);
+    static STAGE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = STAGE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dst_dir = run_root()
+        .join(plugin_id)
+        .join(version)
+        .join(format!("stage-{n}"));
     std::fs::create_dir_all(&dst_dir).unwrap();
     let dst = dst_dir.join(file_name);
     std::fs::copy(src, &dst).unwrap();

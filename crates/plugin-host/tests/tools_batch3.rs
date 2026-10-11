@@ -7,7 +7,9 @@
 //! - tool-mcp 1.1.0：mcp.json → dlopen 后 describe 阶段发现 mcp_fake_*
 //!   工具 → 调用回显 / 工具级错误作为数据 / mcp_status
 //!
-//! 与 tools_batch2.rs 同款模式：测试自建产物暂存到 target/locowrk-test/{pid}/。
+//! 与 tools_batch2.rs 同款模式：测试自建产物暂存到
+//! target/locowrk-test/{pid}-{纳秒}/，且每次 stage() 落一个独占快照目录（F11b/F11c，
+//! 见 `common/mod.rs` 头注）。
 //! 样板来自 `mod common`（收敛前这两个文件的夹具区除一个前缀字符串外逐字相同）。
 //! env 是进程级全局，全部用例串行（一把大锁包住整个测试体）。
 
