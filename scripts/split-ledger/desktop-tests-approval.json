@@ -1,0 +1,68 @@
+{
+  "_note": "批 F-14：tests_approval.rs 638 行 → tests_approval/ 五文件。rewroteOut / registeredNew = use 按引用面分派的两条腿（原文改写掉 / 产物有意新增），由 tmp/v165-ledger.mjs 对产物实测生成，非手抄；两侧出现非 use 行即 throw。",
+  "ref": "ba62066",
+  "orig": "desktop/src-tauri/src/tests_approval.rs",
+  "dir": "desktop/src-tauri/src/tests_approval",
+  "clusters": [
+    "child_session",
+    "hub_basic",
+    "project_rules",
+    "session_timeout"
+  ],
+  "asserts": 37,
+  "cargoPrefix": "tests_approval",
+  "cargoPackage": "--manifest-path desktop/src-tauri/Cargo.toml",
+  "cargoExpectRunning": 13,
+  "registeredNew": [
+    "use crate::tests::Collector;",
+    "use kernel_agent::{ApprovalResolver, Kernel, LlmService, ToolCallReq, ToolSource};",
+    "use crate::permission_mode::PermissionMode;",
+    "use kernel_agent::{ApprovalDecision, ApprovalResolver};",
+    "use plugin_api::ToolSpec;",
+    "use kernel_agent::ApprovalResolver;"
+  ],
+  "rewroteOut": [
+    "use kernel_agent::{",
+    "    ApprovalDecision, ApprovalResolver, Kernel, LlmService, ToolCallReq, ToolSource,"
+  ],
+  "map": {
+    "FixedResolver": "hub_basic",
+    "impl ApprovalResolver for FixedResolver": "hub_basic",
+    "kernel_with_email": "mod",
+    "shell_spec": "mod",
+    "tmp_root": "mod",
+    "ctx_stub": "mod",
+    "hub_v145": "mod",
+    "shell_req": "mod",
+    "denied_email_closes_result_without_executing": "hub_basic",
+    "allowed_email_executes_and_logs_decision": "hub_basic",
+    "approval_hub_roundtrip_through_pending_map": "hub_basic",
+    "deciding_unknown_request_is_an_error": "hub_basic",
+    "session_scope_exempts_same_tool_next_call": "session_timeout",
+    "timeout_guard_denies_when_unanswered": "session_timeout",
+    "unlimited_timeout_keeps_waiting_for_decision": "session_timeout",
+    "project_allow_rule_skips_card_in_ask_mode": "project_rules",
+    "project_deny_rule_blocks_even_in_auto_mode": "project_rules",
+    "child_session_routes_to_parent_root": "child_session",
+    "child_session_inherits_parent_mode": "child_session",
+    "project_scope_persists_exact_command_rule": "project_rules",
+    "project_scope_without_workspace_skips_persistence": "project_rules"
+  },
+  "head": {
+    "mod": [
+      "//! 阶段六审批门测试（§13.2 / 纪律 9）：固定决议替身 / ApprovalHub 端到端。,//! （原在 tests.rs，400 行纪律拆出；共用收集器与 kind 从 tests 引入。）,//! v2.145 追加：项目粘性规则两级（③deny / ⑤allow）+ 子会话审批改道。,//! 批 F-14 目录化：共享假件留本文件，用例按面分簇见 `hub_basic` / `session_timeout` /,//! `project_rules` / `child_session`。"
+    ],
+    "child_session": [
+      "//! 子会话审批改道（自 `tests_approval.rs` 批 F-14 拆出，用例本体逐字未改）：子会话请求上溯,//! 父根审批 / 子会话继承父权限档。"
+    ],
+    "hub_basic": [
+      "//! 审批门基本回路（自 `tests_approval.rs` 批 F-14 拆出，用例本体逐字未改）：拒绝即闭合不执行 /,//! 放行执行并落决议事件 / ApprovalHub 经 pending map 端到端 / 未知 request 报错。"
+    ],
+    "project_rules": [
+      "//! 项目粘性规则（自 `tests_approval.rs` 批 F-14 拆出，用例本体逐字未改）：allow 规则在 Ask 档免卡 /,//! deny 规则在 Auto 档仍拦 / 精确命令规则落盘 / 无工作区时跳过持久化。"
+    ],
+    "session_timeout": [
+      "//! 会话豁免与超时守夜（自 `tests_approval.rs` 批 F-14 拆出，用例本体逐字未改）：,//! scope=session 放行后同会话同工具豁免 / 短超时到期 fail-closed 拒绝 / 无限超时继续等待。"
+    ]
+  }
+}

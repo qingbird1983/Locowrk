@@ -48,10 +48,16 @@
 #   ⇒ 每个新簇的 `super` 仍 = settings::tests ⇒ 用例正文与可见性一行都不用改。代价 =
 #   第五道闸要新增 excludeMod 口径（既有 mod.rs 的共享区不属本刀产物面，否则段1/3/4
 #   一起爆假红）+ 分区注释必须随单元搬走（段4「未原样命中 7」抓出来的）。
+#   审计修复批 F-14（2026-10-12）把 desktop/src-tauri/src/tests_approval.rs（638 行）拆成
+#   tests_approval/{mod 101(共享假件 6)+hub_basic 194+session_timeout 216+project_rules 123
+#   +child_session 43}，超限数 32 → 31 ⇒ 基线收紧为 31。形状 = 模块加深一层（`tests.rs →
+#   tests/` 同族），但带一条前几刀没有的改动面：**`use` 按引用面分派**（整条复制 = 未用到
+#   的绑定在该面成 `unused_imports`，clippy `-D warnings` 实测报 7 条），于是第五道闸的段4
+#   需要原文侧白名单 `rewroteOut`（与 `registeredNew` 成对，两侧仍双向闭合）。
 set -u
 
 SUGGEST=400
-BASELINE=32
+BASELINE=31
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。

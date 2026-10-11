@@ -15,6 +15,8 @@
  *        这是编译器 `E0425` 的活，但本闸在编译之前就能点名（批 F-10 拆分器 U2 抓过 `ProbeTool`）
  *     S4 测试簇名不得与被测父模块已有的子模块同名……`super::wire::X` 会指向测试簇自己
  *        （批 F-9 首跑撞 `llm::wire`，E0255+E0425 共 12 条）
+ *     S5 子簇引用了父模块私有项却没有 `use super::…` 引用句……Rust 允许"向上看"但要先
+ *        把名字带进作用域（批 F-14 拆分器给每簇写 `use super::*;`，去掉它只有 cargo 会抓）
  *  ② `--split` = **一次性拆分等价证明**（七段，输入 = 原文 + 产物目录 + 归属登记表）
  *     供返工与新拆分使用；登记表随批入库（`scripts/split-ledger/*.json`），
  *     于是"这一刀怎么证明的"变成仓库里的东西，而不是对话里的话。
@@ -35,6 +37,9 @@ const ROOT = process.cwd();
 const SCAN = (process.env.SPLIT_SCAN_ROOT || 'crates,desktop/src-tauri/src,plugins-src').split(',');
 const SKIP = [/\/target\//, /\/node_modules\//, /\/dist\//];
 const argv = process.argv.slice(2);
+// `--dbg-tests`：打印每个候选父文件的判定过程。判据"静默不命中"是最难查的红（本函数
+// 第一版就把三种父文件形状写错成两种，表现为测试目录名单少 3 个而不报任何错）。
+const DBG = argv.includes('--dbg-tests');
 const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 
 /* ---------------- 单元模型（拆分器与判据共用同一口径，两侧同文） ---------------- */
@@ -170,9 +175,46 @@ function shapeGate() {
   }
   // `crates/x/tests/common/` 这类集成测试共享夹具目录：没有父模块声明它们，S1/S4 不适用
   const isIntegrationCommon = (d) => /[\\/]tests[\\/]common$/.test(d);
+  /**
+   * 目录的父级声明是否 `#[cfg(test)]`。父模块文件有**三种形状**，少一种就漏判（本函数
+   * 第一版只写了前两种，`kernel/tests/`、`service/tests/`、`settings/tests/` 当场掉出
+   * 测试目录名单——批 F-13 的 S4 候选列表是同一个坑的第一次）：
+   *   a) `../<父目录名>.rs`——Rust 2018 兄弟文件式父模块：`src/kernel.rs` + `src/kernel/tests/`
+   *   b) `../mod.rs`——目录式父模块：`src/organize/mod.rs` + `src/organize/tests/`
+   *   c) `../lib.rs` / `../main.rs`——crate 根下的模块：`src/lib.rs` 里 `mod tests_session_log;`
+   * 查不到声明 = 保守判否：误报的代价（批 F-11 边界①的 10 条假红）高于漏报。
+   */
+  const declHasCfgTest = (d) => {
+    const name = path.basename(d);
+    const parentDir = path.dirname(d);            // src/kernel/tests → src/kernel
+    const parentName = path.basename(parentDir);  // kernel
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return false;
+    for (const f of [
+      // a) 兄弟文件式父模块：`src/kernel.rs` 声明 `mod tests;`，子文件放 `src/kernel/`
+      //    （注意它在 parentDir **的上一级**——写成 parentDir/kernel.rs 就是第三次踩这个坑）
+      path.join(parentDir, '..', `${parentName}.rs`),
+      // b) 目录式父模块：`src/organize/mod.rs`
+      path.join(parentDir, 'mod.rs'),
+      // c) crate 根：`src/lib.rs` / `src/main.rs`
+      path.join(parentDir, 'lib.rs'),
+      path.join(parentDir, 'main.rs'),
+    ]) {
+      if (!fs.existsSync(f)) continue;
+      for (const u of units(fs.readFileSync(f, 'utf8'))) {
+        if (u.kw === 'mod' && u.name === name) {
+          const hit = /#\[\s*cfg\s*\(\s*test\b/.test(u.body);
+          if (DBG) console.log(`   [dbg] ${name} ← ${path.relative(ROOT, f)} body 首行=`, JSON.stringify(u.body.split(/\r?\n/)[0]), `⇒ cfg(test)=${hit}`);
+          return hit;
+        }
+      }
+      if (DBG) console.log(`   [dbg] ${name} ← ${path.relative(ROOT, f)} 有该文件但 units 里查无此 mod 名`);
+    }
+    return false;
+  };
 
-  let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, checked = 0, testDirs = 0;
+  let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, checked = 0, testDirs = 0;
   const observed = []; // 撞名但当前无歧义的形状：只报告不判红（见 S4 注释）
+  const testList = []; // S2/S3/S4 管辖名单——口径漂移必须当场可见（批 F-9「显示层不许藏口径差」）
   const bad = (msg) => console.log('   !! ' + msg);
   for (const dir of dirs) {
     checked++;
@@ -180,8 +222,18 @@ function shapeGate() {
     const decl = declaredMods(modSrc);
     const sib = siblings(dir);
     const rel = path.relative(ROOT, dir).replace(/\\/g, '/');
-    const isTests = /(^|\/)tests$/.test(rel) && !isIntegrationCommon(dir);
-    if (isTests) testDirs++;
+    // 测试目录判据（批 F-14 立）= **父级声明处是否 `#[cfg(test)] mod <目录名>;`**。
+    // 语言事实：cfg(test) 让整棵子树只存在于测试构建，其内的形状（夹具与用例混住、
+    // 簇名撞被测子模块、私有项跨簇引用）才是 S2/S3/S4 该管的面。
+    // 两次踩坑都写在这儿，别再走回头路：
+    //  ① 旧口径按目录名字面 `tests` ⇒ `tests_approval/`、`tests_session_log/` 这批
+    //     cfg(test) 主题测试模块整片不判（本刀就是 `tests_approval/`）；
+    //  ② 中间态改成"目录里出现 `#[test]`"的内容判据 ⇒ `scheduler/`（生产目录，
+    //     `engine.rs` 里 `for sched in deps.db.due(now)` 的**局部变量**撞了
+    //     `scheduler/tests.rs` 夹具名 `sched`）被判成测试目录，S3 一次造出 **10 条假红**。
+    //     批 F-11 边界①「生产目录里 `\bname\b` 会误报，宁可窄而准」就是这条。
+    const isTests = !isIntegrationCommon(dir) && declHasCfgTest(dir);
+    if (isTests) { testDirs++; testList.push(rel); }
     // S0 先验尺子：剥离注释/字符串**不该**改变花括号净额；变了就说明这个文件里有某种定界符
     // 没被正确处理（本闸第一版就栽在 raw string `r#"{"choices":…}"#` 上，把 18 条用例数成 15 条）。
     // 尺子坏 ⇒ 该文件判据作废并判红，绝不允许"坏尺子量出零偏差"。
@@ -201,10 +253,16 @@ function shapeGate() {
       }
     }
     // S2 测试目录的 `mod.rs` 内不许有用例（夹具与用例混住 = 拆分没做完）。
-    // **历史基线**：批 F-11 立这道闸时 `settings/tests/mod.rs` 已有 6 条用例（v2.58 时代形状，
-    // 该文件 253 行未超 400 线），与 check_length 的 BASELINE 同一手法——**只拦新增**，
-    // 不在本批顺手扩大改动面（把它们搬进子簇属另一刀）。基线只能降不能升。
-    const KNOWN_MIXED = { 'desktop/src-tauri/src/settings/tests': 6 };
+    // **历史基线**（与 check_length 的 BASELINE 同一手法：只拦新增，基线只能降不能升）：
+    //  · `settings/tests` 6 条 = 批 F-11 立闸时实测（v2.58 时代形状，该文件 253 行）；
+    //  · `tests_session_log` 6 条 = **批 F-14 扩识别口径后才第一次看到它**（它是
+    //    `#[cfg(test)] mod tests_session_log;`，旧口径按目录名字面 `tests` 匹配不上，
+    //    这道闸从没判过它）。该文件 336 行未超 400 线，把用例搬进子簇属另一刀，
+    //    不在本批顺手扩大改动面。
+    const KNOWN_MIXED = {
+      'desktop/src-tauri/src/settings/tests': 6,
+      'desktop/src-tauri/src/tests_session_log': 6,
+    };
     if (isTests) {
       const inMod = [...units(modSrc)].filter((u) => u.isTest).length;
       const want = KNOWN_MIXED[rel] || 0;
@@ -245,6 +303,25 @@ function shapeGate() {
             }
           }
         }
+      }
+    }
+    // S5 「子簇引用父模块私有项但没有引用句」= `E0425` 的另一半成因（批 F-14 立）。
+    // S3 管"兄弟簇之间看不见"；S5 管"向上看"：Rust 语言事实 = 子模块**可以**用父模块的
+    // 私有项，但必须有一条 `use super::…`（glob 或具名）把名字带进作用域。
+    // 批 F-14 的拆分器给每个簇写 `use super::*;`（共享夹具靠它），删掉这句只有 cargo 会抓
+    // —— 而"要编译过才知道"正是本闸要消掉的成本（批 F-10 的 M9/M10 就是这个形态）。
+    if (isTests) {
+      const modDefs = [...units(modSrc)]
+        .filter((u) => !u.vis && !u.isTest && /^(fn|struct|enum|trait|type|const|static)$/.test(u.kw))
+        .map((u) => baseName(u.name))
+        .filter((n) => /^[A-Za-z_]\w*$/.test(n));
+      for (const c of sib) {
+        if (!modDefs.length) break;
+        const src = readCluster(dir, c);
+        if (/^\s*use\s+super::/m.test(src)) continue; // 有引用句（glob 或具名都算）
+        const stripped = stripCommentsStrings(src);
+        const hit = modDefs.filter((n) => new RegExp(`(?<!::)\\b${n}\\b`).test(stripped));
+        if (hit.length) { s5++; bad(`${rel}/${c}.rs 引用父模块私有项 ${hit.slice(0, 3).join(', ')} 但没有 \`use super::…\` ⇒ E0425（补 glob 或具名引用句，别改正文）`); }
       }
     }
     // S4 测试簇名不得与被测父模块已有的子模块同名 —— 但**撞名本身不是缺陷**，
@@ -288,10 +365,11 @@ function shapeGate() {
     }
   }
   console.log(`check-split-equivalence: 目录式模块 ${dirs.length} 个（测试目录 ${testDirs} 个）`);
-  console.log(`  S0 解析面不可靠文件 = ${s0} | S1 mod 声明↔文件闭合偏差 = ${s1} | S2 测试 mod.rs 内用例 = ${s2} | S3 私有项跨簇引用 = ${s3} | S4 簇名撞父模块子模块 = ${s4}`);
+  console.log(`  测试目录名单（= S2/S3/S4 管辖面，判据 = 父声明带 #[cfg(test)]）：${testList.join(' · ') || '（空）'}`);
+  console.log(`  S0 解析面不可靠文件 = ${s0} | S1 mod 声明↔文件闭合偏差 = ${s1} | S2 测试 mod.rs 内用例 = ${s2} | S3 私有项跨簇引用 = ${s3} | S4 簇名撞父模块子模块 = ${s4} | S5 子簇缺 \`use super::\` 引用句 = ${s5}`);
   // 命中统计必须打出来：判据扫到 0 个对象时"零偏差"是空转不是干净（批 F-8 教训）。
   console.log(`  S4 观察项（撞名但当前无歧义引用；正文一旦出现 \`super::同名\` 即判红）= ${observed.length}${observed.length ? ': ' + observed.join(', ') : ''}`);
-  const total = s0 + s1 + s2 + s3 + s4;
+  const total = s0 + s1 + s2 + s3 + s4 + s5;
   if (!checked) { console.log('  !! 扫到 0 个目录式模块 ⇒ 本闸空转（判据失效，不是"没有偏差"）'); return 1; }
   return total ? 1 : 0;
 }
@@ -378,9 +456,19 @@ function splitGate() {
   for (const c of led.clusters) { (led.head[c] || []).forEach((l) => headSet.add(norm(l))); headSet.add(norm(`mod ${c};`)); }
   const clusterSet = new Set(clusterLines.map(norm));
   const nonEmptyOrig = orig.filter((l) => l.trim());
-  const lost = nonEmptyOrig.filter((l) => !clusterSet.has(norm(l)));
-  say('段4 原文非空行', `${nonEmptyOrig.length} / 未原样命中 ${lost.length}`);
+  // `rewroteOut`（批 F-14 新字段）= 本刀**有意改写掉的原文行**白名单。成因：`use` 按引用面
+  // 分派时，一条 `use p::{A, B, C}` 在只用 B 的面上必须重写成 `use p::{B};`（整条复制 =
+  // 另两个绑定在该面是 `unused_imports`，clippy `-D warnings` 直接红），于是原条不再逐字出现。
+  // 它与 `registeredNew` 成对：那边登记"产物新增了什么"，这边登记"原文改写掉了什么"，
+  // 段4 两侧仍双向闭合。口径纪律同批 F-13 教训 (b)：**登记的行必须原文真实存在**——
+  // 允许登记不存在的行等于提前给任意删改发免检证。缺省空数组 = 历史三刀口径一字未动。
+  const rewroteOut = (led.rewroteOut || []).map(norm);
+  const origNormList = nonEmptyOrig.map(norm);
+  const staleOut = rewroteOut.filter((r) => !origNormList.includes(r));
+  const lost = nonEmptyOrig.filter((l) => !clusterSet.has(norm(l)) && !rewroteOut.includes(norm(l)));
+  say('段4 原文非空行', `${nonEmptyOrig.length} / 未原样命中 ${lost.length}（登记改写 ${rewroteOut.length} − 原文查无 ${staleOut.length} = 实际生效 ${rewroteOut.length - staleOut.length}）`);
   if (lost.length) lost.slice(0, 6).forEach((l) => console.log('     丢:', l.slice(0, 90)));
+  if (staleOut.length) console.log('     登记改写但原文查无:', staleOut.slice(0, 4).join(' | '));
   const origNorm = new Set(nonEmptyOrig.map(norm));
   const extraLines = clusterLines.filter((l) => l.trim() && !origNorm.has(norm(l)));
   const isStructural = (l) => /^\s*\/\//.test(l) || /^\s*(pub )?mod \w+;\s*$/.test(l) || /^use super::\*;/.test(l) || headSet.has(norm(l));
@@ -391,7 +479,7 @@ function splitGate() {
   say('段4 产物新增行', `${extraLines.length}（结构性可指回 ${extraLines.length - newCode.length}）/ 新增代码行 ${newCode.length} = 登记 ${reg.length} ⇒ 未登记 ${unregistered.length} / 登记未出现 ${staleReg.length}`);
   if (unregistered.length) unregistered.slice(0, 6).forEach((l) => console.log('     新增代码无登记:', l.slice(0, 90)));
   if (staleReg.length) console.log('     登记了却没出现:', staleReg.join(' | '));
-  bad.push(lost.length + unregistered.length + staleReg.length);
+  bad.push(lost.length + unregistered.length + staleReg.length + staleOut.length);
 
   let orderBad = 0;
   for (const c of led.clusters) {
