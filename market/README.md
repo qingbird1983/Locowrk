@@ -21,9 +21,10 @@ market/
 > 本目录由 `scripts/build_market.sh` 生成 **《Plug-in packaging.md》v2 全量 manifest**
 > （`abi_version` / `kind` / 双语 `display_name`·`description` / `icon` / `author` /
 > `origin` / `license` / `tools[]`（含 `schema` 与 `side_effect`）），installer 与市场
-> 目录都按它解析；这份 JSON **硬编码在构建脚本里**（`plugins-src/tool-shout/` 没有
-> manifest.json 源文件），改元数据要改脚本——与 `plugins/` 侧「源 manifest + sed 版本号」
-> 是两条不同通路（同源重复，已登记《AUDIT-FIX-PLAN-v1》批 F·F13）。
+> 目录都按它解析。**v2.155 批 F-5 已并轨（审计 F13 ✅）**：真源 =
+> `plugins-src/tool-shout/manifest.json`，`build_market.sh` 只 sed 版本号——与 `plugins/`
+> 侧同一条通路（此前这份 JSON 整份硬编码在脚本里，而 tool-shout 是十个内置 id 里唯一
+> 没有源 manifest.json 的那个；两条通路意味着改元数据必脱节）。
 > ② 版本基准：v2.56 用户裁定「全部插件 0.1.0 起步」，`plugins-src/` 九件已随批重置，
 > **本夹具仍是 1.0.0 / 1.1.0**（`fallback.rs` 等集成测试按目录动态枚举版本、不写死号，
 > 保留 1.x 恰好持续覆盖「旧 1.x lockfile 条目由 `resolve_latest` 天然回退」这条路径）。

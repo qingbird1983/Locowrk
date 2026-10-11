@@ -109,7 +109,17 @@ pub fn resolve_existing(path: &Path, roots: &[PathBuf]) -> Result<PathBuf, Strin
         Ok(resolved) => ensure_inside(&resolved, roots),
         Err(e) if e.kind() == ErrorKind::NotFound => {
             resolve_for_write(path, roots)?;
-            Err(format!("`{}`: {e}", path.display()))
+            // 报错教学（审计 F12）：光透传 OS 原文（"The system cannot find the file
+            // specified"）时，模型拿着同一个路径反复重试也不去查目录。出路给具体的：
+            // 先 `fs_list` 上级看真实存在的东西。措辞避开 "outside the allowed roots"
+            // 子串——那条是守卫拒绝的识别码，测试靠它区分「越界」与「真找不到」。
+            Err(format!(
+                "`{}`: {e} — nothing exists at this path under the allowed roots. Run \
+                 `fs_list` on the parent directory to see what is actually there (a path \
+                 recalled from memory or an earlier turn is a hint to verify, not a \
+                 guarantee)",
+                path.display()
+            ))
         }
         Err(e) => Err(format!("`{}`: {e}", path.display())),
     }

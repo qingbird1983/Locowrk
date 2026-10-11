@@ -71,14 +71,30 @@ fn dangerous_regression_structural_forms() {
         "git status & git push",
         "cat \"$(x)\"",                  // 双引号内的替换/展开面
         r#"grep "$HOME/.ssh/id_rsa" f"#, // 双引号内的变量展开面
-        "cat \"unterminated",
-        "cat 'unterminated",
         "ls\nrm -rf /",
     ] {
         let reason = refused(bad);
         assert!(
             reason.contains("not a single simple command"),
             "`{bad}` -> {reason}"
+        );
+    }
+    // 引号不闭合走**自己的**报文（审计 F12）：出路是「补上右引号」。让它吃通用模板那句
+    // 「not a single simple command」会把模型推向改命令结构，而结构本来没错——差一个引号。
+    // 两条各点自己那把引号（`"` vs `'`），并反向锁死「不再吃通用模板」。
+    for (bad, q) in [("cat \"unterminated", "\""), ("cat 'unterminated", "'")] {
+        let reason = refused(bad);
+        assert!(
+            reason.contains(&format!("unterminated {q} quote")),
+            "`{bad}` -> {reason}"
+        );
+        assert!(
+            reason.contains("add the matching closing"),
+            "`{bad}` 要给出「补右引号」的出路，got: {reason}"
+        );
+        assert!(
+            !reason.contains("not a single simple command"),
+            "引号不闭合不该再吃通用模板，got: {reason}"
         );
     }
 }

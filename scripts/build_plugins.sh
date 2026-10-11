@@ -82,6 +82,12 @@ stage tool-fs 0.1.4
 # 一致；fs_delete 同守卫；成功输出带新 revision 供链式；fs_restore 输出
 # 带恢复后 revision（撤销后守卫不断链）。共享基座进 plugin_api::fsutil
 stage tool-fs 0.1.5
+# 0.1.6（2026-10-11，小迭代 +0.0.1）：报错教学（审计报告 F12）——共享基座
+# plugin_api::fsutil::resolve_existing 的 NotFound 分支此前只透传系统原文
+# （"The system cannot find the file specified. (os error 2)"），模型拿着同
+# 一路径反复重试而不去查目录；现补出路「先 fs_list 上级」。同一段文本也编进
+# tool-edit / tool-git 的产物，故那两个 id 同批 +0.0.1（版本 = 产物出处）
+stage tool-fs 0.1.6
 # 0.1.1（2026-10-06，小迭代 +0.0.1）：fetch 副作用分级纠正（真实测试复测
 # P0-1）——Pure → Irreversible（GET 也对外发起网络请求，服务端留痕、URL
 # 可能带敏感 token，"只读"标法与事实不符）；描述同步如实（plugins.md §三
@@ -128,6 +134,13 @@ stage tool-shell 0.1.4
 # 「白名单 / denylist 硬锁 / 宿主解锁开关」，实为无命令级禁令、任何单条
 # 简单命令放行进审批；shell_read 免审面补 EXACT_ARGV 名单）
 stage tool-shell 0.1.6
+# 0.1.7（2026-10-11，小迭代 +0.0.1）：报错教学补全（审计报告 F12 两处）——
+# ①元字符拒绝报文不再只说「不允许」，把替身说出来（搜内容用 fs_grep、列目录用
+# fs_list、字面量用单引号包住），并讲清病因是「宿主不经 shell 直 spawn，管道根本
+# 不会执行」而非政策禁；②引号不闭合从通用 structural() 模板（"not a single
+# simple command"，会把模型推向改命令结构）改为自己那条报文，点名是哪把引号、
+# 出路是补右引号（proof.rs 批 B 记的 ⑤ 同族轻症，本批清）
+stage tool-shell 0.1.7
 # 0.1.3（2026-10-06，小迭代 +0.0.1）：① 根提交显式拒绝（P0-2：此前
 # `reset --soft HEAD~1` 隐性失败、报错晦涩，模型反复尝试；现在
 # rev-list --parents 判父后拒绝并给出 update-ref 出路）+
@@ -135,6 +148,10 @@ stage tool-shell 0.1.6
 # 非空行（P1-1：只取末行把 git push 无远端的 fatal 主因截掉，模型只见
 # "and the repository exists."）
 stage tool-git 0.1.3
+# 0.1.4（2026-10-11，+0.0.1）：**本 id 自身零改动**，只因共享基座
+# plugin_api::fsutil 的 NotFound 报文随批变化（resolve_existing 在 lib.rs:276
+# 被用于路径归属校验）——暂存产物字节随之不同，按「版本 = 产物出处」随批 bump
+stage tool-git 0.1.4
 # 0.2.0（2026-10-06，大改版 +0.1.0 经用户确认）：edit_replace 升级——
 # 精确零命中后容错匹配（行尾空白 / CRLF / BOM 归一，缩进·大小写·编辑
 # 距离不做）+ match_type/byte_range 如实回报 + 多重命中列行号的结构化
@@ -147,6 +164,10 @@ stage tool-edit 0.2.0
 # 并指路重读（报文带双方 revision）；成功输出带新 revision 供链式编辑。
 # 共享基座 plugin_api::fsutil（check_revision / arg_expected_revision）
 stage tool-edit 0.2.1
+# 0.2.2（2026-10-11，+0.0.1）：**本 id 自身零改动**，同 tool-git 0.1.4 的理由
+# ——diff/lines/replace 三处都调 plugin_api::fsutil::resolve_existing，共享
+# NotFound 报文随批变化，产物字节不同 ⇒ 版本随批
+stage tool-edit 0.2.2
 # 0.1.1（2026-10-04，小迭代 +0.0.1）：双层记忆（㉘·A·fix）——memory_write
 # +scope="global"（全局偏好层）；读/搜/列 = 项目 ∪ 全局并带层标；未归属
 # 会话缺省写拒绝；全局行聊天工具禁删（管理页专属）；headless 语义不变

@@ -99,8 +99,15 @@ fn lex(command: &str) -> Result<Vec<String>, String> {
             }
         }
     }
-    if quote.is_some() {
-        return Err(structural("unterminated quote"));
+    if let Some(q) = quote {
+        // 报错教学（审计 F12）：引号不闭合的出路是「把右引号补上」，不是通用 structural
+        // 模板那句「传一条简单命令」——通用报文会把模型推向改命令结构，而结构本来没错。
+        // 引号字符直接取自己跟踪着的 `quote`，零新增状态。
+        return Err(format!(
+            "unterminated {q} quote: the command opens {q} and never closes it — add the \
+             matching closing {q} and retry (quotes are stripped once closed, so their \
+             contents stay literal)"
+        ));
     }
     if in_word {
         tokens.push(cur);

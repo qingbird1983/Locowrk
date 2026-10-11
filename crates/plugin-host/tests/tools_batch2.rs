@@ -121,6 +121,26 @@ fn fs_write_backup_restore_delete_end_to_end() {
     .unwrap_err();
     assert!(err_msg(err).contains("outside the allowed roots"));
 
+    // 报错教学端到端（审计 F12）：根内不存在的路径，**经真实 dlopen 的 FFI 面**出来的
+    // 报文必须带出路（指 `fs_list` 上级）。plugin-api 单测证明的是函数，这条证明的是
+    // 模型实际读到的那一句——共享基座文本要真的编进插件产物才算兑现。
+    let missing = root.join("nope.txt");
+    let err = err_msg(
+        call(
+            source.resolve("fs_read").unwrap().as_ref(),
+            json!({ "path": missing.display().to_string() }),
+        )
+        .unwrap_err(),
+    );
+    assert!(
+        err.contains("fs_list"),
+        "NotFound 报文要指「先 fs_list 上级」，got: {err}"
+    );
+    assert!(
+        !err.contains("outside the allowed roots"),
+        "根内缺失不能冒充越界，got: {err}"
+    );
+
     unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -172,6 +192,15 @@ fn shell_any_simple_command_runs_end_to_end() {
     // 元字符：结构性拒绝保留（唯一幸存的 deny 面）
     let err = err_msg(call(shell.as_ref(), json!({ "command": "ls | cat" })).unwrap_err());
     assert!(err.contains("metacharacters"), "{err}");
+    // 出路也得经 FFI 面真的到达模型（审计 F12）：替身工具名 + 病因（不经 shell 启动）
+    assert!(
+        err.contains("fs_grep") && err.contains("fs_list"),
+        "元字符报文要指替身工具，got: {err}"
+    );
+    assert!(
+        err.contains("without a shell"),
+        "报文要说清病因，got: {err}"
+    );
     // 空命令
     assert!(call(shell.as_ref(), json!({ "command": "   " })).is_err());
 

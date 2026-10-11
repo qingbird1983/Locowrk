@@ -2,7 +2,8 @@
 # 构建并暂存市场插件包（DESIGN.md §11.3 安装态 / §13.3 市场目录）。
 #
 # tool-shout 的 manifest 版本来自编译期环境变量 LOCOWRK_PLUGIN_VERSION，
-# 按 1.0.0 / 1.1.0 各构建一次，连同市场元数据 manifest.json 一起暂存到
+# 按 1.0.0 / 1.1.0 各构建一次，manifest.json 由 **plugins-src/tool-shout/manifest.json**
+# （展示元数据唯一真源）sed 版本号落成，连同工件一起暂存到
 # market/tool-shout/{ver}/——这就是桌面端"发现"页看到的市场目录（本地
 # 目录市场，真实市场服务出现前的替身）。二进制不入库（.gitignore）。
 #
@@ -25,7 +26,7 @@ find_artifact() {
 }
 
 stage() {
-  local ver="$1" desc="$2"
+  local ver="$1"
   echo "==> build $id $ver"
   LOCOWRK_PLUGIN_VERSION="$ver" cargo build -p "$id" --quiet
 
@@ -38,52 +39,19 @@ stage() {
   local dst="market/$id/$ver"
   mkdir -p "$dst"
   cp -f "$src" "$dst/"
-  # packaging.md v2 全量 manifest（installer / 市场目录都按它解析）+ 图标
-  cat > "$dst/manifest.json" <<EOF
-{
-  "id": "$id",
-  "version": "$ver",
-  "abi_version": 1,
-  "kind": "tool",
-
-  "display_name": {
-    "zh-CN": "大小写转换",
-    "en-US": "Shout"
-  },
-  "description": {
-    "zh-CN": "把文本转换成大写输出",
-    "en-US": "$desc"
-  },
-  "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
-  "origin": "official",
-  "license": "MIT",
-
-  "tools": [
-    {
-      "name": "shout",
-      "description": "shouts text back in uppercase (optionally repeated)",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "text": { "type": "string" },
-          "mode": { "type": "string", "enum": ["plain", "repeat"] }
-        },
-        "required": ["text"]
-      },
-      "side_effect": "Pure"
-    }
-  ]
-}
-EOF
+  # packaging.md v2 全量 manifest：**真源 = plugins-src/tool-shout/manifest.json**，
+  # 这里只 sed 版本号——与 build_plugins.sh 的 plugins/ 侧同一条通路（审计报告 F13：
+  # 此前市场 manifest 整份硬编码在本脚本里，是同一元数据的第二条通路，改一处必脱节；
+  # tool-shout 也因此一度是十个内置 id 里唯一没有源 manifest.json 的那个）。
+  sed "0,/\"version\": \"[^\"]*\"/s//\"version\": \"$ver\"/" \
+    "plugins-src/$id/manifest.json" > "$dst/manifest.json"
   mkdir -p "$dst/assets"
   cp -f "plugins-src/$id/assets/icon.svg" "$dst/assets/icon.svg"
   echo "    staged -> $dst/"
 }
 
-stage 1.0.0 "Shouts text back in uppercase. The stage-7 market demo plugin."
-stage 1.1.0 "Shouts text back in uppercase; 1.1.0 adds repeat mode."
+stage 1.0.0
+stage 1.1.0
 
 echo "done. market/ 内容（二进制不入库，勿提交 dll）:"
 find market -type f | sort

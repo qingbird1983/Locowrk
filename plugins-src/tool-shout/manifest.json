@@ -1,0 +1,36 @@
+{
+  "id": "tool-shout",
+  "version": "1.1.0",
+  "abi_version": 1,
+  "kind": "tool",
+
+  "display_name": {
+    "zh-CN": "大小写转换",
+    "en-US": "Shout"
+  },
+  "description": {
+    "zh-CN": "把文本转换成大写输出（repeat 模式自 1.1.0 起提供）",
+    "en-US": "Shouts text back in uppercase (repeat mode from 1.1.0)"
+  },
+  "icon": "assets/icon.svg",
+
+  "author": { "name": "Locowrk Team" },
+  "origin": "official",
+  "license": "MIT",
+
+  "tools": [
+    {
+      "name": "shout",
+      "description": "shouts text back in uppercase (optionally repeated)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "mode": { "type": "string", "enum": ["plain", "repeat"] }
+        },
+        "required": ["text"]
+      },
+      "side_effect": "Pure"
+    }
+  ]
+}

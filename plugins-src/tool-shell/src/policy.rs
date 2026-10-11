@@ -88,9 +88,16 @@ pub(crate) enum SplitError {
 /// 审批工具（shell）的完整判定管线：元字符 → 切词 → 放行进审批。
 pub(crate) fn decide(command: &str) -> Decision {
     if command.contains(METACHARS) {
+        // 报错教学（审计 F12）：拒绝必须把「想做的事用什么做」说出来——模型写管道时
+        // 十有八九是在搜文件或列目录，那两个面各有专职工具；顺带说明本宿主不经 shell
+        // 启动进程，所以管道不是「被禁」而是「根本不会执行」。
         return Decision::Deny {
-            reason: "shell command contains shell metacharacters (| & ; < > ` $ or newline); \
-                     pass a single simple command — pipes and command substitution are not allowed"
+            reason: "shell command contains shell metacharacters (| & ; < > ` $ or newline) \
+                     — Locowrk spawns the program directly without a shell, so pipes, \
+                     redirection and command substitution never execute here. Split the \
+                     intent instead: use `fs_grep` to search file contents, `fs_list` to \
+                     list a directory, or pass ONE simple command (quote the character as \
+                     data with ' ' when it is a literal)."
                 .into(),
         };
     }

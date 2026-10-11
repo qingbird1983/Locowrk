@@ -110,6 +110,16 @@ fn missing_path_outside_roots_reports_outside_not_os_error() {
     let inside_missing = sub.join("no_such_file.txt");
     let err = resolve_existing(&inside_missing, &roots).unwrap_err();
     assert!(!err.contains("outside the allowed roots"), "got: {err}");
+    // 报错教学（审计 F12）：光报 OS 原文模型会拿同一路径反复重试，报文必须给出路
+    // （指 `fs_list` 上级），且原始路径仍在场供自查
+    assert!(
+        err.contains("fs_list"),
+        "根内 NotFound 要指「先 fs_list 上级」，got: {err}"
+    );
+    assert!(
+        err.contains("no_such_file.txt"),
+        "报文要带上查不到的路径，got: {err}"
+    );
 
     // 借不存在组件 + `..` 逃逸：缺失尾部的 `..` 归一后判前缀。
     // sub/no_such/../.. = root（两级）→ 根内 NotFound；

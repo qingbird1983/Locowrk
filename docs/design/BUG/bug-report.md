@@ -6,11 +6,16 @@
 > tool-git 0.1.3）；转为历史存档。
 > **Bug 3（报错不指路 / 指路覆盖不一致）**：**部分处理**——① `shell` 的「引号不闭合冒充空命令」
 > 一支已修（v2.146 批 A M-10：`policy::split_command` 改返 `SplitError::{UnclosedQuote, Empty}`，
-> 两条报文各给各的出路，`plugins-src/tool-shell/src/policy.rs:80-110`）；② **仍开放**的四支：
-> `fs_read`/`fs_grep`/`fs_list` 的 ENOENT 分支只透传系统原文（不指 `fs_list` 上级）、
-> `shell_read` 元字符拒绝不指 `fs_grep`/`shell`（`policy.rs:92` 现文可查）、`proof.rs` 的
-> unterminated-quote 走通用 `structural()` 模板（病因可见、出路偏弱）。
-> **已登记《AUDIT-FIX-PLAN-v1》批 F（F12）**，本文不再挂「待上报」这种与代码实况脱节的标签。
+> 两条报文各给各的出路，`plugins-src/tool-shell/src/policy.rs:80-110`）；② **v2.155 批 F-5 修掉三支（审计 F12 ✅）**：
+> `fs_read`/`fs_grep`/`fs_list` 的 ENOENT 出路补在**共享基座** `plugin-api/src/fsutil.rs::resolve_existing`
+> （一处改、四插件受益——tool-edit 三处与 tool-git 一处同走这段），报文改为指「先 `fs_list` 上级」；
+> `shell_read` 元字符拒绝现指 `fs_grep`/`fs_list` 并讲清病因「宿主不经 shell 直 spawn ⇒ 管道根本不会执行」；
+> `proof.rs` 的 unterminated-quote 不再吃通用 `structural()` 模板，自出报文并**点名是哪把引号**。
+> ③ **仍开放一支（登记为《AUDIT-FIX-PLAN-v1》F12b）**：`shell_read` 的 `cwd` 非目录报文（现文
+> `plugins-src/tool-shell/src/exec.rs:100` = `shell cwd … is not a directory`）只说"是什么"不说"怎么办"。
+> 本文原写「仍开放的四支」而其下只列三条**不是笔误**——漏写的第四支就是这条 `cwd`（下表「对照实测」第 118 行
+> 有它，v2.155 复核时才发现，先前差点判成数目自相矛盾）。
+> 登记出处《AUDIT-FIX-PLAN-v1》批 F（F12）**已标 ✅**（余 F12b ⬜），本文不再挂「待上报」这种与代码实况脱节的标签。
 > 若要独立确认 Bug 1 / Bug 2，按文末「附」节重建最小仓库逐条跑一遍（复测方法：一次一个变体）。
 
 Bug 1 / Bug 2 为两处实测确认、已修复的历史问题（均含最小复现）；Bug 3 为新增待上报项。环境：Windows 主机，`shell` 走 Unix coreutils（git-bash 风格）。
@@ -105,7 +110,7 @@ v2.149 批 E 订正。本轮实测确认，8 条对照见下表（表内 ✅ 行
 
 **现象**：工具报错时的「指路」能力覆盖**不一致**——同一工具，部分错误分支会给出替代工具建议，`os error`（ENOENT）分支却只透传系统原文。
 
-**对照实测**：
+**对照实测**（**上报当时** 的实测记录：表中 ❌ 的三支已随 v2.155 批 F-5 补上出路，`cwd` 一支仍开放 = F12b；现状以文首状态段为准）：
 
 | 调用 | 返回 | 指路 |
 |---|---|---|

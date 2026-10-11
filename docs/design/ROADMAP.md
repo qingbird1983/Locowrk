@@ -722,7 +722,27 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
-### v2.154 · 审计修复批 F-4（F11c：同一测试二进制内的暂存路径竞争修掉）
+### v2.155 · 审计修复批 F-5（F12 报错教学三处 + F13 market manifest 真源并轨）
+
+**依据**：《AUDIT-FIX-PLAN-v1》§1 批 F 的 **F12** 与 **F13**（两条都是批 E 登记的面）。三处报文都是**零逻辑改动**，F13 是**一条通路换真源**；合计净 **+127/−50**（7 个代码/测试文件 + 2 个构建脚本 + 1 个新源文件）。
+
+| 面 | 落点 |
+|---|---|
+| ① F12-a 病根比登记更靠上 | 审计按三个工具记（`fs_read`/`fs_grep`/`fs_list`），实测它们共吃**共享基座** `plugin-api/src/fsutil.rs::resolve_existing` 的 NotFound 分支（tool-edit 三处、tool-git 一处也走同一段）⇒ 一处补出路，四个插件同受益。改前真报文（变异复跑时抓到）= ``` `…\no_such_file.txt`: 系统找不到指定的文件。 (os error 2) ```；改后补「Run `fs_list` on the parent directory…（记忆/上一轮里的路径是待验证线索，不是保证）」 |
+| ② 措辞的硬约束（写进源码注释） | 新文本**不得含** `"outside the allowed roots"` 子串——那是守卫拒绝的识别码，`fsutil/tests.rs` 靠它区分「越界」与「真找不到」（2026-09 冒烟误读教训）。落点用 "nothing exists at this path under the allowed roots"，注释里写破原因，防后人"统一措辞"把两条报文合并 |
+| ③ F12-b 元字符报文 | `tool-shell/src/policy.rs` 的 `METACHARS` 分支从"只宣布禁令"改为**把替身说出来**：搜内容 → `fs_grep`、列目录 → `fs_list`、字面量 → 单引号包住；并讲清病因 = 宿主不经 shell 直 spawn ⇒ 管道不是被禁、是根本不会执行。元字符清单与 `policy.rs:47` 常量逐一对应（**没**顺手写 `( )`，那对面归 proof.rs） |
+| ④ F12-c 引号不闭合 | `proof.rs` 从通用 `structural()` 模板（"not a single simple command"，会把模型推向改命令结构）改为自出报文并**点名是哪把引号**（`"` vs `'`，字符取自己跟踪的 `quote` ⇒ 零新增状态）。既有测试把这两条也断言成通用模板短语，随批拆成独立循环 + **反向锁死**「不该再吃通用模板」 |
+| ⑤ 变异验证 | 三处报文精确退回改前原文 ⇒ 三条测试各见红（`fsutil::tests::missing_path_…` 报「要指『先 fs_list 上级』」、`policy::tests::structural_denies_remain` 报「报文要指搜索替身」、`proof::tests::dangerous_regression_structural_forms` 在引号循环红）。还原 sha 逐字节 == 变异前，且**这次显式 `writeFileSync` 回写刷 mtime**（v2.154 的 Windows CopyFile 陷阱当场兑现），出现 `Compiling plugin-api` / `Compiling tool-shell` 后才认复绿 |
+| ⑥ F13 真源并轨 | `scripts/build_market.sh` 里 36 行 heredoc 整份硬编码 → 改为与 `build_plugins.sh` 同一条通路：新 `plugins-src/tool-shout/manifest.json` 为真源，脚本只 sed 版本号。**tool-shout 此前是十个内置 id 里唯一没有源 manifest.json 的那个**。验收 = 两份暂存 manifest 改前/改后逐行 diff：**只有 description 的 zh/en 两行变化**，version 行与其余字段（含空行与结尾换行）逐字节相同。原先 per-version 的 EN 描述收进真源一句（`repeat` 由产物内 `repeat_supported(version)` 门控，两版本共用更准确） |
+| ⑦ 版本随批 | stage 清单加 tool-fs **0.1.6** / tool-shell **0.1.7** / tool-edit **0.2.2** / tool-git **0.1.4**（后两条自身零改动，只因共享基座文本进入产物）；全量重跑暂存 = 21 份，幂等 |
+| ⑧ 新立 F15（本批自己拆了自己的台） | 字节级抽查发现：`tool-fs/0.1.5/tool_fs.dll` 与 `0.1.6/tool_fs.dll` **长度相同、逐字节仅 21 处不同**（= 内嵌版本串），且**新报文在两个目录里都在**（旧报文两处都查不到）⇒ `build_plugins.sh` 每次用当前 HEAD 重编所有版本目录，**开发态的"历史版本目录"不是历史行为快照**。连带：demo 叙事证明的是**版本切换机制**不是**行为回滚能力**；「旧版本永远保留」只在安装态成立；**本批四条 bump 在开发态只是叙事标签**（此话已写进 §1 F15 自陈）。修法候选 A（口径改字面 + 开发态只 stage 当前版本）/ B（按 commit 归档真快照，体积复杂度双涨）**待你裁定**，判据也一并登记 |
+| 测试账 | 断言全部落在既有用例内（用例数不变）；plugin-host 侧新增两条**端到端**断言 = 经真实 dlopen 的 FFI 面证明模型实际读到的那句（`fs_read` 缺路径含 `fs_list`；`shell` 元字符含 `fs_grep`/`fs_list`/`without a shell`）。unit 证明函数，集成证明句子真的到了模型眼前 |
+| 门禁 | 12 个动作逐个记 RC 全 0 = `GATE_ALL_GREEN`（脚本 `tmp/v155-gates.sh` 自身按 v2.154 的教训写：clippy 一律 `-- -D warnings`，`set -o pipefail` + 每步单独记 RC，不再用 `| tail` 把 clippy 的退出码盖掉）。根 fmt `--check` CLEAN / clippy `--workspace --all-targets -- -D warnings` **0** / `cargo test --workspace` 39 套件 **437 passed 0 failed**（与 v2.154 持平——本批断言全部加固在既有用例内，用例数不变）；desktop fmt CLEAN / clippy `--all-targets -- -D warnings` **0** / **368 passed 0 failed**（零改动仍全量复跑）；四道结构闸全绿 = `check_length` **38 == 基线 38、零新增**、`check-i18n` zh=891 en=891 无静态引用键 0、`check-commands` 85·85·85 预留 0、`check-middleware-wiring` 10·10·0 白名单 0；`build_market.sh` 与 `build_plugins.sh` 各重跑一次全绿（market 7 份文件 / plugins 21 份，幂等）；零 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`。 |
+| 边界 | ①F12 按登记的三支收口，**复核发现同族第四支未覆盖** = `shell_read` 的 `cwd` 非目录报文（`exec.rs:100` "…is not a directory"）也不指路 ⇒ **新立 F12b**（工单写「仍开放的四支」而正文只列三条**不是笔误**，漏写的正是这支——差点误判成数目自相矛盾，回查「对照实测」表才没误判）；同族另 `fs_write` 盲覆盖拒绝、`fs_delete` 目标消失、`fs_grep` 空 query 等报文未逐条审读（按登记面收口，不扩大）；②F15 未修（要动的是口径/存储策略，属裁定不属手艺）；③F13 只并轨**市场**通路，`plugin-api/src/lib.rs` 的 `DOC_EXAMPLE` 那份 tool-shout manifest 是 packaging.md §2.1 规范示例（含被忽略字段与 ja-JP），性质不同未并；④新报文一律英文（工具错误面自 v2.6 统一英文、模型侧读取，不受 i18n 闸约束）；⑤未新增门禁（第五道闸仍待点头） |
+| 文档 | `AUDIT-FIX-PLAN-v1.md` §1 批 F 标题改「六个子批已落」+ **F12/F13 标 ✅**（含实测与措辞约束）+ **新立 F15** + §5 批 F-5 证据段；`BUG/bug-report.md` Bug 3 状态段随批改真（三支 ✅ + 第四支转 F12b + 「对照实测」表加"上报当时"限定，防人把历史实测记录读成现状）；ROADMAP/CHANGELOG/AGENTS v2.155；`scripts/build_market.sh` 头注与 `build_plugins.sh` stage 注释同步真源口径 |
+
+---
+### v2.154（提交 28f80dc）· 审计修复批 F-4（F11c：同一测试二进制内的暂存路径竞争修掉）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§1 **F11c**（v2.153 批 F-3 期间机制确证后新立，本批 ✅）。纯测试面——
 `crates/plugin-host/src/` 一行未动、生产码零改动、desktop 与前端零改动；plugin-host 用例

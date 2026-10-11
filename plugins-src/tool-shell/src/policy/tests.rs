@@ -79,6 +79,15 @@ fn structural_denies_remain() {
         Decision::Deny { reason } => reason,
         Decision::Allow { .. } => panic!("expected deny for {cmd}"),
     };
+    // 元字符报文要给出路（审计 F12）：模型写管道多半是在搜文件/列目录，报文得把替身
+    // 工具名说出来，而不是只说「不允许」；顺带讲清「不经 shell ⇒ 管道根本不会执行」
+    let meta = reason("ls | cat");
+    assert!(meta.contains("fs_grep"), "报文要指搜索替身，got: {meta}");
+    assert!(meta.contains("fs_list"), "报文要指列目录替身，got: {meta}");
+    assert!(
+        meta.contains("without a shell"),
+        "要说清病因（宿主不经 shell 启动进程），got: {meta}"
+    );
     assert!(
         reason("   ").contains("empty"),
         "空命令报文要指「给一个命令词」"
