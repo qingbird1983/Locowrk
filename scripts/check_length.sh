@@ -35,10 +35,15 @@
 #   文件**）拆成 tests/{mod(夹具 172)+pipeline+recovery+overflow+views+tools+
 #   summary} 七文件（形状照 settings/tests/ 先例：夹具留父模块、子簇
 #   `use super::*`，可见性零改动），超限数 36 → 35 ⇒ 基线收紧为 35。
+#   审计修复批 F-9（2026-10-11）把 llm/tests.rs（785 行）拆成 tests/{mod(夹具
+#   86)+payload 307+transport 88+dispatch 181+assets 163} 五文件，超限数 35 → 34
+#   ⇒ 基线收紧为 34。**簇名有一条硬约束**：不能与被测父模块已有的子模块同名
+#   （首跑用 `wire` 撞了 `llm::wire` ⇒ 子簇正文的 `super::wire::…` 指向测试簇
+#   自己，E0255 + E0425 共 12 条），故该簇改名 `payload`。
 set -u
 
 SUGGEST=400
-BASELINE=35
+BASELINE=34
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。
