@@ -161,25 +161,13 @@ const { isOpen, overflowing, showFold, foldStyle, animating, onToggleFold } =
 
 // 复制反馈（§3.7 v4.18）：成功后字形换对勾 ≈1.6s（消息钮走 ref、
 // 代码块委托钮走 DOM class，同一 composable）
-const { copiedId, copyWithFeedback, flashDom } = useCopyFeedback();
+const { copiedId, copyWithFeedback, copyDelegatedCode } = useCopyFeedback();
 
 async function copySelf() {
   await copyWithFeedback(props.text, "msg");
 }
 
-/** 代码块头行的复制按钮挂在 v-html 里，事件在容器上委托。 */
-async function onBodyClick(e: MouseEvent) {
-  const target = (e.target as HTMLElement).closest?.(".copy-btn");
-  if (!target) return;
-  const fig = target.closest(".code-block");
-  const code = fig?.querySelector("pre code")?.textContent ?? "";
-  try {
-    await navigator.clipboard.writeText(code);
-    flashDom(target);
-  } catch {
-    /* 剪贴板不可用不打断 */
-  }
-}
+// 代码块复制委托（v-html 里的钮）实现同在 `lib/use-copy.ts`：两组件那段逐字相同。
 </script>
 
 <template>
@@ -233,7 +221,7 @@ async function onBodyClick(e: MouseEvent) {
       </HoverTip>
     </div>
     <!-- eslint-disable-next-line vue/no-v-html —— 内容已过 DOMPurify -->
-    <div v-else class="md" v-html="html" @click="onBodyClick" />
+    <div v-else class="md" v-html="html" @click="copyDelegatedCode" />
 
     <!-- 附件部件（批 D §9.3）：正文下、动作区上——图片缩略 96px 圆角 +
          PDF 文件 chip，点击在文件夹中显示。历史重放与实时同形。 -->

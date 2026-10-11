@@ -165,6 +165,7 @@ const DOTTED_KEY_RE = /^[a-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$/;
 const refs = new Set(); // t() 字面量键（缺键判红的依据）
 const credited = new Set(); // 「任何形式的带引号点分字面量，且能解析到真实键」——只用于孤儿豁免
 const dynPrefixes = []; // 动态键前缀（'effect.' 这种）
+const dynWhere = new Map(); // 前缀 → 出处文件（'死前缀'断言要点名，v2.168 批 F-18）
 const dataKeys = new Set(); // settings-index.ts 的 labelKey / searchKeys
 
 for (const file of walk(SRC)) {
@@ -179,9 +180,28 @@ for (const file of walk(SRC)) {
   // 动态前缀提取按台账口径**不限 t() 调用点**：`const path = \`approval.
   // sensitive.${key}\`` 这种「先拼串再传进 t()」的写法，只扫调用点会漏，
   // 漏了就是一批假孤儿（假孤儿比漏报危险——人会照着清单删活文案）。
-  for (const m of text.matchAll(/`([a-z][A-Za-z0-9_.]*)\$\{/g)) {
+  // 注释行不参与动态前缀扫描（v2.168 批 F-18）：本批给 tool-detail 写的缺陷说明里就带
+  // `time.` 加占位符那种示例字面，扫到会把自己判红——**注释里的键名不是引用**。口径按行首
+  // （双斜杠 / 块注释续行的星号 / 块注释起始），行尾注释里的示例属少数情况，登记为已知边界；
+  // refs 与缺键那两路仍扫原文：真正的引用漏报比误报贵。
+  const codeOnly = text
+    .split("\n")
+    .filter((l) => {
+      const s = l.trimStart();
+      return !(s.startsWith("//") || s.startsWith("*") || s.startsWith("/*"));
+    })
+    .join("\n");
+  for (const m of codeOnly.matchAll(/`([a-z][A-Za-z0-9_.]*)\$\{/g)) {
     const prefix = m[1];
-    if (prefix.includes(".")) dynPrefixes.push(prefix.endsWith(".") ? prefix : prefix + ".");
+    if (prefix.includes(".")) {
+      const p = prefix.endsWith(".") ? prefix : prefix + ".";
+      dynPrefixes.push(p);
+      // 死前缀断言按**原始前缀**记账（不补尾点）：`market.origin_${group.key}` 的真实键是
+      // `market.origin_official`，补点就变成永远对不上的 `market.origin_.`——首跑两条假红
+      // 之一就是它（另一条是注释里的示例，见 codeOnly）。豁免仍用补点形 = 旧行为不动。
+      if (!dynWhere.has(prefix)) dynWhere.set(prefix, new Set());
+      dynWhere.get(prefix).add(relative(SRC, file).replace(/\\/g, "/"));
+    }
   }
   if (relative(SRC, file).replace(/\\/g, "/") === "lib/settings-index.ts") {
     for (const m of text.matchAll(/(?:labelKey|group):\s*(['"])([^'"]+)\1/g))
@@ -221,6 +241,17 @@ if (missing.length) {
   console.error(`check-i18n: ${missing.length} 个被引用的键在语言包里不存在（界面直显裸键名）`);
   for (const k of missing) console.error(`  缺：${k}`);
   console.error("  → 在 desktop/src/locales/{zh-CN,en}.ts 同位补键，或改引用点键名。");
+}
+
+// 「死前缀」断言（v2.168 批 F-18 新立）：上面的豁免只解决「键是拼出来的、静态扫不见」，
+// 但**扫不见 ≠ 存在**。本仓 `lib/tool-detail.ts` 曾拼 `time.${r.key}`，而两份语言包里
+// 一个 `time.*` 键都没有 ⇒ 工具明细的时间戳一直直显裸键名「time.hours」（与审计 H3b 同族，
+// 而缺键检查 missing 看不见它、孤儿检查又因豁免放行——只有"前缀必须命中真实键"堵得住）。
+const deadDyn = [...dynWhere.keys()].filter((p) => ![...zh.keys()].some((k) => k.startsWith(p)));
+if (deadDyn.length) {
+  fail = 1;
+  console.error(`check-i18n: ${deadDyn.length} 个动态前缀在语言包里一个键都对不上（拼出的键名必然直显裸键名）`);
+  for (const p of deadDyn) console.error(`  死前缀：\`${p}\${…}\` ← ${[...dynWhere.get(p)].join(", ")}`);
 }
 
 const covered = (k) => dynPrefixes.some((p) => k.startsWith(p));

@@ -15,7 +15,7 @@ import {
   memoryTreeOriginal,
   memoryTreeSessions,
 } from "../../lib/api";
-import { relativeTime } from "../../lib/format";
+import { relativeTimeLabel, relativeTimeMs } from "../../lib/format";
 import { workspaceDisplayName } from "../../lib/session-groups";
 import { useChatStore } from "../../stores/chat";
 import ProjectTree from "./ProjectTree.vue";
@@ -223,10 +223,7 @@ async function removeChapter(b: TreeChapterView) {
 }
 
 function timeText(ms: number): string {
-  const r = relativeTime(ms);
-  return r.n === undefined
-    ? t(`memory.time.${r.key}`)
-    : t(`memory.time.${r.key}`, { n: r.n });
+  return relativeTimeLabel(relativeTimeMs(ms), (k, p) => t(k, p));
 }
 
 function kindLabel(kind: TreeOriginalItem["kind"]): string {

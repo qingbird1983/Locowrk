@@ -3,7 +3,14 @@
 // 三条红线：不出现卡片、列对齐、默认明细零裸 JSON——字段名翻中文标签、
 // 枚举翻中文、字节带单位、时间转相对时间、路径相对化；原始 JSON 只活在
 // 「原始数据」折叠入口里（ToolDetailView 承担）。
-import { clip, relativeTime } from "./format";
+import {
+  clip,
+  relativeTimeLabel,
+  relativeTimeMs,
+  relativeTimeSec,
+  type RelativeTime,
+} from "./format";
+import { relativizeDetail, stripCommandWrapping } from "./tool-args";
 import type { IconName } from "./icons";
 
 /** 渲染期翻译函数（调用方从 useI18n 传入，lib 层不持有 i18n 实例）。 */
@@ -129,7 +136,10 @@ export function toolDescribe(tool: string, args: unknown): string {
           ? a.args.filter((v) => typeof v === "string").join(" ")
           : "";
     if (!raw) return "";
-    return clip(stripCommandWrapping(raw), 40);
+    // 外层 `clip` 是**改前既有形态**，本批按"收敛不动显示语义"的纪律逐字保住：
+    // 内层已 clip 到 40，外层再 clip 会把 ` … +N` 后缀吃掉——这条冗余已登记为
+    // 《AUDIT-FIX-PLAN-v1》F6 顺带发现①（改它 = 改明细行宽度行为，另刀另证）。
+    return clip(stripCommandWrapping(raw, 40), 40);
   }
   if (tool === "subagent_run") return clip(str(a, "prompt"), 24);
   if (tool === "fs_grep") return clip(str(a, "query", "pattern"), 24);
@@ -148,42 +158,9 @@ export function toolDescribe(tool: string, args: unknown): string {
   return "";
 }
 
-/** 剥 cd 前缀 / bash -lc 包装，&& 串联只留首段（与旧 toolArgSummary 同规）。 */
-function stripCommandWrapping(raw: string): string {
-  let s = raw.trim();
-  let hidden = 0;
-  for (;;) {
-    const cd = s.match(/^cd\s+(?:"[^"]*"|\S+)\s*&&\s*/);
-    if (cd) {
-      s = s.slice(cd[0].length);
-      hidden++;
-      continue;
-    }
-    const sh = s.match(/^(?:bash|sh)\s+(?:-l\w*\s+)*-c\s+"([\s\S]*)"\s*$/);
-    if (sh) {
-      s = sh[1]!.trim();
-      continue;
-    }
-    break;
-  }
-  const parts = s.split(" && ");
-  const first = parts[0]!.trim();
-  hidden += Math.max(0, parts.length - 1);
-  return clip(first, 40) + (hidden > 0 ? ` … +${hidden}` : "");
-}
-
-/** 工作区相对化（明细属性行用，比折叠行的裸文件名多留目录信息）；
- * 剥 Windows 扩展路径前缀 `\\?\`（插件 display 带它，纯显示噪声）。 */
-function relativize(path: string, roots: string[]): string {
-  const norm = path.replace(/\\\\\?\\/g, "").replace(/\\/g, "/");
-  for (const root of roots) {
-    const r = root.replace(/\\/g, "/").replace(/\/+$/, "");
-    if (r && norm.toLowerCase().startsWith(r.toLowerCase() + "/")) {
-      return norm.slice(r.length + 1);
-    }
-  }
-  return norm;
-}
+// 命令剥包装与工作区相对化的实现在 `lib/tool-args.ts`（v2.168 批 F-18 收敛：
+// 与 tool-summary.ts 各写一遍的同族重复收成一份；本文件只用 `relativizeDetail`
+// 这个"多留目录信息 + 剥 verbatim 前缀"的出口，折叠行那个裸文件名出口留在对面）。
 
 // ---------------------------------------------------------------------------
 // 值格式化
@@ -220,11 +197,19 @@ function fmtEnum(_key: string, v: unknown, tr: Tr): string | null {
   return hit ? tr(`tool.value.${hit}`) : null;
 }
 
-/** 时间戳转相对时间：秒级 unix（memory updated_at）；毫秒级（schedule run_at）。 */
-function fmtTime(v: number, tr: Tr): string {
-  const sec = v > 1e12 ? Math.floor(v / 1000) : v;
-  const r = relativeTime(sec);
-  return tr(`time.${r.key}`, { n: r.n });
+/**
+ * 时间戳 → 相对时间文案。v2.168 批 F-18 把三件事一次收干净：
+ * ① 旧代码拼的是 `time.${key}`，而两份语言包**没有顶层 `time` 命名空间**（实测
+ *    键面清单里就没有）⇒ 工具明细里的时间一直直显裸键名「time.hours」，与审计
+ *    H3b 同族；它躲过了 `check-i18n` 是因为该闸对"动态拼的前缀"整族豁免——那条
+ *    豁免本批补成断言（前缀必须在语言包里真实存在），见 §5 批 F-18 段。
+ * ② 旧代码按 `v > 1e12` **猜**单位 ⇒ 改成调用点按数据源声明：memory.updated_at
+ *    是秒（`memory.rs` 的 now_secs），schedule.run_at 是毫秒（`timeutil.rs:12`
+ *    权威注释「sqlite run_at」+ `ScheduleView.run_at_ms`）。
+ * ③ 渲染段与另外六处同形，收进 `relativeTimeLabel` 唯一落点。
+ */
+function fmtTime(rt: RelativeTime, tr: Tr): string {
+  return relativeTimeLabel(rt, tr);
 }
 
 /** 通用键名翻译（兜底渲染：翻得出就翻，翻不出保留原名）。 */
@@ -444,7 +429,7 @@ export function toolDetail(
     const p = typeof o.path === "string" ? o.path : pathIn;
     const size = typeof o.size === "number" ? fmtBytes(o.size) : "";
     pushProps(blocks, [
-      prop(tr("tool.label.path"), p ? relativize(p, roots) : "", "mono"),
+      prop(tr("tool.label.path"), p ? relativizeDetail(p, roots) : "", "mono"),
       prop(tr("tool.label.size"), size),
       truncatedRow(o.truncated, tr),
     ]);
@@ -455,7 +440,7 @@ export function toolDetail(
 
   if (tool === "fs_list") {
     const p = typeof o.path === "string" ? o.path : pathIn;
-    pushProps(blocks, [prop(tr("tool.label.path"), p ? relativize(p, roots) : "", "mono")]);
+    pushProps(blocks, [prop(tr("tool.label.path"), p ? relativizeDetail(p, roots) : "", "mono")]);
     const entries = Array.isArray(o.entries) ? o.entries : [];
     if (entries.length > 0) {
       const items: ListRow[] = entries.map((e) => {
@@ -479,7 +464,7 @@ export function toolDetail(
     const dir = str(a, "path");
     pushProps(blocks, [
       prop(tr("tool.label.query"), str(a, "query", "pattern")),
-      dir ? prop(tr("tool.label.path"), relativize(dir, roots), "mono") : null,
+      dir ? prop(tr("tool.label.path"), relativizeDetail(dir, roots), "mono") : null,
       typeof o.scanned === "number" ? prop(tr("tool.label.scanned"), String(o.scanned)) : null,
       truncatedRow(o.truncated, tr),
     ]);
@@ -504,21 +489,21 @@ export function toolDetail(
     const bytes = typeof o.bytes === "number" ? fmtBytes(o.bytes) : "";
     const match = fmtEnum("match_type", o.match_type, tr);
     pushProps(blocks, [
-      prop(tr("tool.label.path"), p ? relativize(p, roots) : "", "mono"),
+      prop(tr("tool.label.path"), p ? relativizeDetail(p, roots) : "", "mono"),
       prop(tr("tool.label.size"), bytes),
       typeof o.edits === "number" ? prop(tr("tool.label.edits"), String(o.edits)) : null,
       match ? prop(tr("tool.label.matchType"), match) : null,
       typeof o.existed === "boolean" ? prop(tr("tool.label.existed"), tr(o.existed ? "tool.value.overwrite" : "tool.value.created")) : null,
     ]);
     const backup = typeof o.backup === "string" ? o.backup : "";
-    if (backup) pushProps(blocks, [prop(tr("tool.label.backup"), relativize(backup, roots), "mono")]);
+    if (backup) pushProps(blocks, [prop(tr("tool.label.backup"), relativizeDetail(backup, roots), "mono")]);
     return { blocks };
   }
 
   if (tool === "fs_delete" || tool === "fs_restore") {
     const p = typeof o.path === "string" ? o.path : pathIn;
     pushProps(blocks, [
-      prop(tr("tool.label.path"), p ? relativize(p, roots) : "", "mono"),
+      prop(tr("tool.label.path"), p ? relativizeDetail(p, roots) : "", "mono"),
       prop(tr("tool.label.restored"), tr("tool.value.yes"), "ok"),
     ]);
     return { blocks };
@@ -542,7 +527,10 @@ export function toolDetail(
 
   if (tool === "memory_write" || tool === "memory_read") {
     const scope = fmtEnum("scope", o.scope, tr);
-    const updated = typeof o.updated_at === "number" ? fmtTime(o.updated_at, tr) : "";
+    const updated =
+      typeof o.updated_at === "number"
+        ? fmtTime(relativeTimeSec(o.updated_at), tr)
+        : "";
     const value = str(o, "value") || str(a, "value");
     pushProps(blocks, [
       prop(tr("tool.label.key"), str(o, "key") || str(a, "key"), "mono"),
@@ -598,7 +586,8 @@ export function toolDetail(
   }
 
   if (tool.startsWith("schedule_")) {
-    const runAt = typeof o.run_at === "number" ? fmtTime(o.run_at, tr) : "";
+    const runAt =
+      typeof o.run_at === "number" ? fmtTime(relativeTimeMs(o.run_at), tr) : "";
     const kind = fmtEnum("kind", o.kind, tr);
     pushProps(blocks, [
       prop(tr("tool.label.id"), str(o, "id"), "mono"),

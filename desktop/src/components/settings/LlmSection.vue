@@ -14,7 +14,7 @@ import { Icon } from "../../lib/icons";
 import { llmCatalogRefresh, llmCatalogStatus, llmProbeModels, llmProviderReorder, llmSetProxy } from "../../lib/api";
 import { useSettingsStore } from "../../stores/settings";
 import { useToastStore } from "../../stores/toast";
-import { relativeTime } from "../../lib/format";
+import { relativeTimeLabel, relativeTimeMs } from "../../lib/format";
 import type { CatalogStatus, ProviderView, SubagentPin } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
@@ -111,8 +111,11 @@ const catalogDetail = computed(() => {
       ? "settings.catalogSourceBundled"
       : "settings.catalogSourceRefreshed",
   );
-  const rt = relativeTime(catalogStatus.value.updatedMs / 1000);
-  return `${src} · ${t("settings.catalogModelsCount", { n: catalogStatus.value.models })} · ${t(`memory.time.${rt.key}`, { n: rt.n })}`;
+  // updatedMs 是毫秒：旧代码手写 `/ 1000` 再喂按秒算的函数（能对上，但单位靠人记），
+  // 现在单位进函数名；旧版还少了 `n === undefined` 分支，just_now 档传 { n: undefined }
+  // ——两份语言包的 memory.time.just_now 都不含 {n} 占位，所以输出等价（判据按实文案核）。
+  const rel = relativeTimeLabel(relativeTimeMs(catalogStatus.value.updatedMs), (k, p) => t(k, p));
+  return `${src} · ${t("settings.catalogModelsCount", { n: catalogStatus.value.models })} · ${rel}`;
 });
 async function refreshCatalog() {
   catalogRefreshing.value = true;

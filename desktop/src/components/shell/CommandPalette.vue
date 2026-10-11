@@ -13,7 +13,7 @@ import { useChatStore } from "../../stores/chat";
 import { useShellStore } from "../../stores/shell";
 import { useSettingsStore } from "../../stores/settings";
 import { useWorkPanelStore } from "../../stores/work-panel";
-import { relativeTime } from "../../lib/format";
+import { relativeTimeLabel, relativeTimeSec } from "../../lib/format";
 import { useSessionSearch } from "./use-session-search";
 import {
   SETTINGS_SECTIONS,
@@ -50,11 +50,12 @@ interface PaletteGroup {
 /** 全量项；过滤在 computed 里做（索引驱动，不爬 DOM）。 */
 const allGroups = computed<PaletteGroup[]>(() => {
   const sessions: PaletteItem[] = chat.sessions.map((s) => {
-    const rt = relativeTime(s.updatedAt);
+    // 会话列表 updated_at = 文件 mtime 的 Unix 秒（session-store persist.rs:98 注释明写）
+    const rel = relativeTimeLabel(relativeTimeSec(s.updatedAt), (k, p) => t(k, p));
     return {
       key: `session:${s.id}`,
       label: s.title ?? t("sidebar.untitled"),
-      hint: rt.n !== undefined ? t(`memory.time.${rt.key}`, { n: rt.n }) : t(`memory.time.${rt.key}`),
+      hint: rel,
       run: () => {
         if (chat.running && s.id !== chat.sessionId) return; // 运行中禁切
         void chat.switchSession(s.id);

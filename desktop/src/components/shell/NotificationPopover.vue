@@ -12,7 +12,7 @@ import { useI18n } from "vue-i18n";
 import { useChatStore } from "../../stores/chat";
 import { useNotificationsStore } from "../../stores/notifications";
 import { useShellStore } from "../../stores/shell";
-import { compactNumber, relativeTime } from "../../lib/format";
+import { compactNumber, relativeTimeLabel, relativeTimeSec } from "../../lib/format";
 import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import SettingsSegmented from "../settings/SettingsSegmented.vue";
@@ -97,10 +97,7 @@ function bodyText(item: NotificationItem): string {
 }
 
 function timeText(item: NotificationItem): string {
-  const r = relativeTime(item.createdAt);
-  return r.n !== undefined
-    ? t(`memory.time.${r.key}`, { n: r.n })
-    : t(`memory.time.${r.key}`);
+  return relativeTimeLabel(relativeTimeSec(item.createdAt), (k, p) => t(k, p));
 }
 
 async function onRow(item: NotificationItem) {

@@ -53,20 +53,8 @@ const codeHtml = computed(() => {
 });
 
 // 复制反馈（§3.7 v4.18）：代码块委托钮走 DOM class、复制调用钮走 ref
-const { copiedId, copyWithFeedback, flashDom } = useCopyFeedback();
+const { copiedId, copyWithFeedback, copyDelegatedCode } = useCopyFeedback();
 
-async function onCodeClick(e: MouseEvent) {
-  const target = (e.target as HTMLElement).closest?.(".copy-btn");
-  if (!target) return;
-  const fig = target.closest(".code-block");
-  const code = fig?.querySelector("pre code")?.textContent ?? "";
-  try {
-    await navigator.clipboard.writeText(code);
-    flashDom(target);
-  } catch {
-    /* 剪贴板不可用不打断 */
-  }
-}
 
 const rawJson = computed(() => {
   const payload = {
@@ -130,7 +118,7 @@ async function copyCall() {
       v-if="codeHtml"
       class="md tdetail__code"
       v-html="codeHtml"
-      @click="onCodeClick"
+      @click="copyDelegatedCode"
     />
 
     <!-- 原始数据入口 + 复制调用（文本钮，默认收起） -->

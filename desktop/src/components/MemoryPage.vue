@@ -15,7 +15,7 @@ import ListPage from "./patterns/ListPage.vue";
 import SourceBadge from "./SourceBadge.vue";
 import HoverTip from "./settings/HoverTip.vue";
 import TreeSection from "./memory/TreeSection.vue";
-import { relativeTime } from "../lib/format";
+import { relativeTimeLabel, relativeTimeSec } from "../lib/format";
 import { workspaceDisplayName } from "../lib/session-groups";
 import {
   memoryClearAll,
@@ -147,8 +147,7 @@ async function clearAll() {
 }
 
 function timeText(row: MemoryRow): string {
-  const r = relativeTime(row.updated_at);
-  return r.n === undefined ? t(`memory.time.${r.key}`) : t(`memory.time.${r.key}`, { n: r.n });
+  return relativeTimeLabel(relativeTimeSec(row.updated_at), (k, p) => t(k, p));
 }
 
 </script>

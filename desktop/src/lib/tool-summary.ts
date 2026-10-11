@@ -1,7 +1,10 @@
 // 工具与动作的人类呈现（UI shell doc §3.18，用户 2026-10-01 裁定：动作
 // 必须显示中文名、参数摘要必须加工过——严禁裸复制命令 / 绝对路径 / JSON）。
 // 摘要态人话、明细态原样：原始性只在工具行的展开明细里出现。
+// 命令剥包装与工作区相对化的**实现在 `lib/tool-args.ts`**（v2.168 批 F-18：与
+// `tool-detail.ts` 各写一遍的同族重复收成一份，两种显示语义按出口名区分）。
 import { clip } from "./format";
+import { relativizeBare, stripCommandWrapping } from "./tool-args";
 import type { AssetRefDto } from "../types";
 
 /** 动作名 i18n 定位；null = 表外工具（回落工具 id + 「插件」徽章）。 */
@@ -59,45 +62,6 @@ export function toolAction(
   return null;
 }
 
-/** 命令类：先剥包装——cd 前缀、bash -lc 包装；&& 串联只留第一个有意义的
- * 命令，其余记 … +N（§3.18）。 */
-function commandSummary(raw: string): string {
-  let s = raw.trim();
-  let hidden = 0;
-  for (;;) {
-    const cd = s.match(/^cd\s+(?:"[^"]*"|\S+)\s*&&\s*/);
-    if (cd) {
-      s = s.slice(cd[0].length);
-      hidden++;
-      continue;
-    }
-    const sh = s.match(/^(?:bash|sh)\s+(?:-l\w*\s+)*-c\s+"([\s\S]*)"\s*$/);
-    if (sh) {
-      s = sh[1]!.trim();
-      continue;
-    }
-    break;
-  }
-  const parts = s.split(" && ");
-  const first = parts[0]!.trim();
-  hidden += Math.max(0, parts.length - 1);
-  return clip(first, 48) + (hidden > 0 ? ` … +${hidden}` : "");
-}
-
-/** 文件类：工作区相对路径（能相对就相对，不显示绝对盘符），全路径留给
- * 展开明细与 tooltip。 */
-function relativize(path: string, roots: string[]): string {
-  const norm = path.replace(/\\/g, "/");
-  for (const root of roots) {
-    const r = root.replace(/\\/g, "/").replace(/\/+$/, "");
-    if (r && norm.toLowerCase().startsWith(r.toLowerCase() + "/")) {
-      return norm.slice(r.length + 1);
-    }
-  }
-  const base = norm.split("/").pop() ?? norm;
-  return base || norm;
-}
-
 const OBJECT_KEYS = ["prompt", "query", "url", "key", "text", "pattern", "name"];
 
 function objectSummary(a: Record<string, unknown>): string {
@@ -130,7 +94,7 @@ export function toolArgSummary(
         : Array.isArray(a.args)
           ? a.args.filter((v) => typeof v === "string").join(" ")
           : firstString(a);
-    return raw ? commandSummary(raw) : "";
+    return raw ? stripCommandWrapping(raw, 48) : "";
   }
   if (tool.startsWith("fs_") || tool.startsWith("edit_")) {
     const p =
@@ -142,7 +106,7 @@ export function toolArgSummary(
             ? a.key
             : "";
     if (!p) return firstString(a);
-    return relativize(p, roots);
+    return relativizeBare(p, roots);
   }
   if (tool.startsWith("mcp_")) {
     const s = typeof a.server === "string" ? a.server : "";

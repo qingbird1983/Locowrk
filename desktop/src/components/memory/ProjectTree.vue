@@ -10,7 +10,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { memoryTreeProject } from "../../lib/api";
-import { relativeTime } from "../../lib/format";
+import { relativeTimeLabel, relativeTimeMs } from "../../lib/format";
 import type { ProjectChapterView, ProjectTreeView, RunSummaryView } from "../../types";
 
 const { t } = useI18n();
@@ -71,11 +71,11 @@ function sessionLabel(b: ProjectChapterView): string {
   return b.sessionTitle || b.sessionId.slice(0, 8);
 }
 
+/** 章节/摘要是**毫秒**（`memory-tree` 的 `created_at: now_ms`）——旧代码把毫秒
+ * 喂给按秒算的 `relativeTime`，diff 变负 ⇒ 恒命中 `minutes < 1`，这里此前**永远
+ * 显示「刚刚」**（v2.168 批 F-18 修，登记为 F6 顺带发现②）。 */
 function timeText(ms: number): string {
-  const r = relativeTime(ms);
-  return r.n === undefined
-    ? t(`memory.time.${r.key}`)
-    : t(`memory.time.${r.key}`, { n: r.n });
+  return relativeTimeLabel(relativeTimeMs(ms), (k, p) => t(k, p));
 }
 </script>
 

@@ -53,11 +53,32 @@ export function useCopyFeedback() {
     );
   }
 
+  /**
+   * v-html 代码块头行的复制钮（事件在容器上委托，§3.7）。此前
+   * `MessageRow.vue::onBodyClick` 与 `ToolDetailView.vue::onCodeClick` **函数体逐字
+   * 相同**地各写一遍「closest('.copy-btn') → 找宿主 .code-block → 取 `pre code`
+   * 文本 → 写剪贴板 → flashDom」（审计 C11：两者都已经在用本文件，只有这段没下沉）。
+   * 形参收 `Event` 而不是 `MouseEvent`：模板 `@click` 传的是 MouseEvent，而这段只用
+   * `target`——收窄到真正依赖的那一层。
+   */
+  async function copyDelegatedCode(e: Event) {
+    const target = (e.target as HTMLElement).closest?.(".copy-btn");
+    if (!target) return;
+    const fig = target.closest(".code-block");
+    const code = fig?.querySelector("pre code")?.textContent ?? "";
+    try {
+      await navigator.clipboard.writeText(code);
+      flashDom(target);
+    } catch {
+      /* 剪贴板不可用不打断 */
+    }
+  }
+
   onScopeDispose(() => {
     if (timer !== undefined) clearTimeout(timer);
     for (const t of domTimers.values()) clearTimeout(t);
     domTimers.clear();
   });
 
-  return { copiedId, copyWithFeedback, flashDom };
+  return { copiedId, copyWithFeedback, flashDom, copyDelegatedCode };
 }
