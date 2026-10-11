@@ -3,7 +3,8 @@
 
 use std::sync::Mutex;
 
-use super::{guard, host_port, is_private};
+use super::SSRF;
+use plugin_api::netsafe::is_private;
 use std::net::IpAddr;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -21,14 +22,14 @@ fn host_port_extracts_authority() {
     ];
     for (url, (host, port)) in cases {
         assert_eq!(
-            host_port(url).unwrap(),
+            SSRF.host_port(url).unwrap(),
             (host.to_owned(), port),
             "url: {url}"
         );
     }
-    assert!(host_port("http:///path").is_err(), "empty host");
-    assert!(host_port("http://h:notaport/").is_err(), "bad port");
-    assert!(host_port("no-scheme").is_err());
+    assert!(SSRF.host_port("http:///path").is_err(), "empty host");
+    assert!(SSRF.host_port("http://h:notaport/").is_err(), "bad port");
+    assert!(SSRF.host_port("no-scheme").is_err());
 }
 
 #[test]
@@ -65,20 +66,23 @@ fn guard_denies_localhost_and_ip_literals() {
     // 否则后门开着时本用例必挂（并行竞态）
     let _env_lock = ENV_LOCK.lock().unwrap();
     // IP 字面量不需要 DNS
-    let err = guard("http://127.0.0.1:6379/").unwrap_err();
+    let err = SSRF.guard("http://127.0.0.1:6379/").unwrap_err();
     assert!(err.contains("SSRF guard"), "got: {err}");
-    assert!(guard("http://192.168.1.10/admin").is_err());
-    assert!(guard("http://[::1]:9/").is_err());
+    assert!(SSRF.guard("http://192.168.1.10/admin").is_err());
+    assert!(SSRF.guard("http://[::1]:9/").is_err());
     // localhost 靠解析（本机必有）
-    assert!(guard("http://localhost:6379/").is_err());
+    assert!(SSRF.guard("http://localhost:6379/").is_err());
 }
 
 #[test]
 fn allow_private_env_overrides() {
     let _guard_lock = ENV_LOCK.lock().unwrap();
     unsafe { std::env::set_var("LOCOWRK_NOTIFY_ALLOW_PRIVATE", "1") };
-    assert!(guard("http://127.0.0.1:1/").is_ok(), "显式后门放行本机");
+    assert!(
+        SSRF.guard("http://127.0.0.1:1/").is_ok(),
+        "显式后门放行本机"
+    );
     unsafe { std::env::set_var("LOCOWRK_NOTIFY_ALLOW_PRIVATE", "0") };
-    assert!(guard("http://127.0.0.1:1/").is_err());
+    assert!(SSRF.guard("http://127.0.0.1:1/").is_err());
     unsafe { std::env::remove_var("LOCOWRK_NOTIFY_ALLOW_PRIVATE") };
 }

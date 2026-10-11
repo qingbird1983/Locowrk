@@ -15,6 +15,8 @@
 //!   备份），Rust 便利层，不进 ABI 面（阶段八⑥第二批，安全底线）。
 //! - `args`：参数读取基座（`arg_u64` 六插件各写一遍的上收），Rust 便利层，
 //!   不进 ABI 面（审计 F7 · 批 F-21）。
+//! - `netsafe`：SSRF 防线基座（tool-fetch / tool-notify 两份同形实现的上收，
+//!   参数位 = 报文前缀 + 后门环境变量名），Rust 便利层，不进 ABI 面（审计 F7 · 批 F-21b）。
 //! - `memlayout`：记忆文件化布局（F1，《Memory File-ization Design》
 //!   v1.1）——md 人类层的路径/格式/索引，插件与宿主共用一份实现。
 //!
@@ -27,6 +29,7 @@ pub mod fsutil;
 pub mod manifest;
 pub mod memlayout;
 pub mod naming;
+pub mod netsafe;
 pub mod plugin_side;
 pub mod tool;
 

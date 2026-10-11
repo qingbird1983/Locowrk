@@ -190,7 +190,7 @@ fn webhook(args: &Value, title: &str, body: &str) -> Result<Value, String> {
         return Err("webhook only supports http:// and https:// URLs".into());
     }
     // SSRF 防线：内网/环回/链路本地拒绝（IP 字面量直判，域名解析后逐 IP 判）
-    ssrf::guard(url)?;
+    ssrf::SSRF.guard(url)?;
     let timeout = arg_u64(args, "timeout_secs", TIMEOUT_DEFAULT, TIMEOUT_MAX)?;
 
     let payload = json!({ "title": title, "body": body, "source": "locowrk" });
