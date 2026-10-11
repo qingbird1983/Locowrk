@@ -28,10 +28,17 @@
 #   审计修复批 F-7（2026-10-11）把 organize/mod.rs（614 行）拆成 events/
 #   trigger/collapse/task 四簇 + 本体（mod.rs 229 行），超限数 37 → 36 ⇒
 #   基线收紧为 36。
+#   审计修复批 F-7（2026-10-11）把 organize/mod.rs（614 行）拆成 events/
+#   trigger/collapse/task 四簇 + 本体（mod.rs 229 行），超限数 37 → 36 ⇒
+#   基线收紧为 36。
+#   审计修复批 F-8（2026-10-11）把 organize/tests.rs（865 行，拆前**全仓最长
+#   文件**）拆成 tests/{mod(夹具 172)+pipeline+recovery+overflow+views+tools+
+#   summary} 七文件（形状照 settings/tests/ 先例：夹具留父模块、子簇
+#   `use super::*`，可见性零改动），超限数 36 → 35 ⇒ 基线收紧为 35。
 set -u
 
 SUGGEST=400
-BASELINE=36
+BASELINE=35
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。
