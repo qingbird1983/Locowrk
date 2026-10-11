@@ -213,12 +213,10 @@ const LIB_RS: &str = r#"//! __PLUGIN_ID__：`locowrk new plugin` 生成的最小
 //! 开发流程：改 manifest.json 的展示字段与工具 schema，改本文件的 call 逻辑，
 //! `cargo build` 后把动态库交给宿主装载（或经市场目录安装，见 plugins/README.md）。
 
-use std::collections::BTreeMap;
 use std::ffi::CString;
 
-use plugin_api::manifest::{
-    Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
-};
+use plugin_api::manifest::{Author, LocalizedOrString, PluginKind, PluginManifest, PluginOrigin};
+use plugin_api::meta::zh_en;
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
@@ -226,15 +224,6 @@ use plugin_api::{HostVtable, PluginState};
 const PLUGIN_ID: &str = "__PLUGIN_ID__";
 const PLUGIN_VERSION: &str = "0.1.0";
 const TOOL_NAME: &str = "__TOOL_NAME__";
-
-/// 双语展示元数据样板（packaging.md §2.3）：缺省回退链见
-/// plugin_api::manifest::LocalizedString::pick。
-fn zh_en(zh: &str, en: &str) -> LocalizedString {
-    LocalizedString(BTreeMap::from([
-        ("zh-CN".to_owned(), zh.to_owned()),
-        ("en-US".to_owned(), en.to_owned()),
-    ]))
-}
 
 /// describe 符号的数据源：manifest JSON（NUL 结尾，约定见 plugin-api::ffi）。
 fn describe_manifest() -> CString {
@@ -252,9 +241,13 @@ fn describe_manifest() -> CString {
                 "required": ["input"]
             }),
             side_effect: SideEffect::Pure,
+            exposure: Default::default(),
         }],
         // v2 展示元数据（packaging.md §2.2）。origin 缺省 community（§2.4
         // 安全默认）；确属官方插件时改为 PluginOrigin::Official。
+        // 这里的七个字段刻意**手写展开**而不调 `meta::official_meta`：那个基座
+        // 是给仓库自带的官方插件收样板的（会硬写 `Official` 徽章与仓库作者），
+        // 第三方插件用它就等于伪造官方身份。
         display_name: Some(zh_en("我的插件", "My Plugin")),
         description: Some(LocalizedOrString::Localized(zh_en(
             "描述这个插件做什么",

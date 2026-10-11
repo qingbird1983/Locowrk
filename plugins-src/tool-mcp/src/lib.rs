@@ -29,27 +29,17 @@ mod registry;
 #[cfg(test)]
 mod tests;
 
-use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::sync::Arc;
 
 use plugin_api::ffi::log_level;
-use plugin_api::manifest::{
-    Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
-};
+use plugin_api::manifest::{PluginKind, PluginManifest};
+use plugin_api::meta::official_meta;
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
 
 use crate::registry::Registry;
-
-/// 双语展示元数据样板（packaging.md §2.2）。
-pub(crate) fn zh_en(zh: &str, en: &str) -> LocalizedString {
-    LocalizedString(BTreeMap::from([
-        ("zh-CN".to_owned(), zh.to_owned()),
-        ("en-US".to_owned(), en.to_owned()),
-    ]))
-}
 
 const PLUGIN_ID: &str = "tool-mcp";
 
@@ -92,29 +82,26 @@ fn describe_manifest() -> CString {
     let mut tools = management_specs();
     tools.extend(registry.tool_specs());
     let discovered = tools.len() - 2;
-    let manifest = PluginManifest {
+    let mut manifest = PluginManifest {
         id: PLUGIN_ID.into(),
         version: plugin_version().into(),
         abi_version: plugin_api::PLUGIN_ABI_VERSION,
         kind: PluginKind::Tool,
         tools,
-        // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
-        display_name: Some(zh_en("MCP 桥接", "MCP Bridge")),
-        description: Some(LocalizedOrString::Localized(zh_en(
+        // 展示元数据（display_name / description / icon / author /
+        // origin / homepage / license）由 plugin_api::meta 单点给出（审计 F7）。
+        ..Default::default()
+    };
+    official_meta(
+        &mut manifest,
+        ("MCP 桥接", "MCP Bridge"),
+        (
             &format!("桥接 MCP 生态：本次发现 {discovered} 个远端工具（配置 <数据根>/mcp.json）"),
             &format!(
                 "Bridges the MCP ecosystem: {discovered} remote tool(s) discovered (config <data root>/mcp.json)"
             ),
-        ))),
-        icon: Some("assets/icon.svg".into()),
-        author: Some(Author {
-            name: "Locowrk Team".into(),
-            url: None,
-        }),
-        origin: PluginOrigin::Official,
-        homepage: None,
-        license: Some("MIT".into()),
-    };
+        ),
+    );
     manifest.to_describe_json()
 }
 

@@ -150,6 +150,31 @@ pub struct PluginManifest {
     pub license: Option<String>,
 }
 
+/// 只为「结构体更新语法」而存在（`PluginManifest { id: …, ..Default::default() }`）：
+/// 五个核心字段是空占位，七个可选元数据字段按 packaging.md §2.4 的安全默认取
+/// `None` + `Community`。**不要单靠它构造一个可加载的 manifest**——`id` 为空、
+/// `version` 为空，只有 `abi_version` 给当前契约版本以免误报 ABI 不符。
+/// 上收这个默认值的动机：展示元数据由 `meta::official_meta` 单点填（审计 F7 ·
+/// 批 F-21c），插件的字面量因此不再重复写那七个字段。
+impl Default for PluginManifest {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            version: String::new(),
+            abi_version: crate::PLUGIN_ABI_VERSION,
+            kind: PluginKind::Tool,
+            tools: Vec::new(),
+            display_name: None,
+            description: None,
+            icon: None,
+            author: None,
+            origin: PluginOrigin::Community,
+            homepage: None,
+            license: None,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ManifestError {
     #[error("manifest is not valid UTF-8: {0}")]

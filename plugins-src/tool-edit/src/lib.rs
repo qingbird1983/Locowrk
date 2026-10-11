@@ -40,23 +40,14 @@ pub(crate) mod testutil {
     pub(crate) static ENV_LOCK: Mutex<()> = Mutex::new(());
 }
 
-use std::collections::BTreeMap;
 use std::ffi::CString;
 
 use plugin_api::ffi::log_level;
-use plugin_api::manifest::{
-    Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
-};
+use plugin_api::manifest::{PluginKind, PluginManifest};
+use plugin_api::meta::official_meta;
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{Exposure, SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
-
-fn zh_en(zh: &str, en: &str) -> LocalizedString {
-    LocalizedString(BTreeMap::from([
-        ("zh-CN".to_owned(), zh.to_owned()),
-        ("en-US".to_owned(), en.to_owned()),
-    ]))
-}
 
 const PLUGIN_ID: &str = "tool-edit";
 
@@ -69,7 +60,7 @@ fn describe_manifest() -> CString {
     let compensable = || SideEffect::Compensable {
         undo_tool: "fs_restore".into(),
     };
-    let manifest = PluginManifest {
+    let mut manifest = PluginManifest {
         id: PLUGIN_ID.into(),
         version: plugin_version().into(),
         abi_version: plugin_api::PLUGIN_ABI_VERSION,
@@ -172,21 +163,18 @@ fn describe_manifest() -> CString {
                 exposure: Default::default(),
             },
         ],
-        // v2 展示元数据（packaging.md §2.2；仓库自带插件显式声明 official）
-        display_name: Some(zh_en("代码编辑", "Code Edit")),
-        description: Some(LocalizedOrString::Localized(zh_en(
+        // 展示元数据（display_name / description / icon / author /
+        // origin / homepage / license）由 plugin_api::meta 单点给出（审计 F7）。
+        ..Default::default()
+    };
+    official_meta(
+        &mut manifest,
+        ("代码编辑", "Code Edit"),
+        (
             "精确代码编辑：字符串替换 / 行区间替换 / unified diff，全部带备份可撤销",
             "Precise edits: string replace / line range / unified diff, all undoable via backup",
-        ))),
-        icon: Some("assets/icon.svg".into()),
-        author: Some(Author {
-            name: "Locowrk Team".into(),
-            url: None,
-        }),
-        origin: PluginOrigin::Official,
-        homepage: None,
-        license: Some("MIT".into()),
-    };
+        ),
+    );
     manifest.to_describe_json()
 }
 
