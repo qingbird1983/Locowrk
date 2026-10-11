@@ -5,14 +5,7 @@ use super::{build, ensure_layout, DIR};
 use std::path::PathBuf;
 
 fn temp_dir(tag: &str) -> PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "locowrk-repoctx-{tag}-{nanos}-{}",
-        std::process::id()
-    ))
+    crate::testutil::unique_dir(&format!("repoctx-{}", tag))
 }
 
 #[test]

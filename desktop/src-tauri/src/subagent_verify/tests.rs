@@ -121,9 +121,7 @@ fn verdict_unparseable_falls_inconclusive() {
 /// + 收尾删。
 #[test]
 fn transcript_roundtrips_from_disk() {
-    let dir = std::env::temp_dir().join(format!("locowrk-verify-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("mkdir");
+    let dir = crate::testutil::work_dir("verify");
     let path: PathBuf = dir.join("p1-sub-1.jsonl");
     for e in sample_events() {
         append_event(&path, &e).expect("append");

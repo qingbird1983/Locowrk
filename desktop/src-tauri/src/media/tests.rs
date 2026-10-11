@@ -20,9 +20,7 @@ fn test_limits() -> validate::Limits {
 }
 
 fn temp_store(tag: &str) -> (std::path::PathBuf, Arc<AssetStore>) {
-    let dir = std::env::temp_dir().join(format!("locowrk-media-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("media-{}", tag));
     (dir.clone(), Arc::new(AssetStore::new(dir.join("assets"))))
 }
 
@@ -65,7 +63,7 @@ fn rgba_png_rejects_size_mismatch() {
 #[test]
 fn screenshot_spec_shape() {
     // 目录声明面锁形状：Pure + Always + 参数 schema（走查与暴露文档对表）
-    let store = AssetStore::new(std::env::temp_dir().join("locowrk-media-spec"));
+    let store = AssetStore::new(crate::testutil::unique_dir("media-spec"));
     let limits: super::LimitsFn = Arc::new(test_limits);
     let tool = ScreenshotTool::new(Arc::new(store), limits);
     let spec = tool.spec();

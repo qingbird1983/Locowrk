@@ -13,9 +13,7 @@ fn write(path: &Path, text: &str) {
 }
 
 fn temp_home(tag: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("locowrk-import-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("mkdir");
+    let dir = crate::testutil::work_dir(&format!("import-{}", tag));
     dir
 }
 

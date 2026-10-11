@@ -437,9 +437,7 @@ fn shell_spec() -> ToolSpec {
 
 /// 测试隔离根（不碰真实数据目录）。
 fn tmp_root(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("locowrk-appr-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("appr-{}", tag));
     dir
 }
 

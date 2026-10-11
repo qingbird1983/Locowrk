@@ -10,13 +10,7 @@ use super::*;
 use crate::memory::MemoryStore;
 
 fn tmp_dir(tag: &str) -> std::path::PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let dir = std::env::temp_dir().join(format!("mfiles-{tag}-{nanos}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+    crate::testutil::work_dir(&format!("mfiles-{}", tag))
 }
 
 fn resolver() -> crate::workspace::WorkspaceResolver {

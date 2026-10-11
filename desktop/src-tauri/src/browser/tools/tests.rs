@@ -19,14 +19,7 @@ fn emit_log() -> (EmitFn, EmitLog) {
 
 fn settings_with_roots(roots: Vec<String>) -> Arc<SettingsStore> {
     // settings 存储走真实存储（临时目录），tools 区 fsRoots 打进去
-    let dir = std::env::temp_dir().join(format!(
-        "lw-browser-tools-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let dir = crate::testutil::unique_dir("lw-browser-tools");
     let store = SettingsStore::open(&dir).expect("settings open");
     store
         .update(
@@ -97,7 +90,7 @@ async fn open_rejects_relative_path_and_bad_extension() {
 async fn open_rejects_outside_roots() {
     let (emit, _) = emit_log();
     // fsRoots 写入带存在性校验：根必须是真实存在的目录，"外部"文件也须实存
-    let base = std::env::temp_dir().join(format!("lw-browser-out-{}", std::process::id()));
+    let base = crate::testutil::unique_dir("lw-browser-out");
     let root = base.join("ws");
     std::fs::create_dir_all(&root).unwrap();
     let outside = base.join("outside.html");
@@ -117,7 +110,7 @@ async fn open_rejects_outside_roots() {
 
 #[tokio::test]
 async fn open_file_emits_event_and_returns_tab() {
-    let base = std::env::temp_dir().join(format!("lw-browser-open-{}", std::process::id()));
+    let base = crate::testutil::unique_dir("lw-browser-open");
     let root = base.join("ws");
     std::fs::create_dir_all(&root).unwrap();
     let page = root.join("game.html");

@@ -11,9 +11,7 @@ use session_store::{Session, SessionEvent};
 use super::{MemoryCollapseTool, MemoryExpandTool};
 
 fn temp_root(tag: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("ttools-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("ttools-{}", tag));
     dir
 }
 

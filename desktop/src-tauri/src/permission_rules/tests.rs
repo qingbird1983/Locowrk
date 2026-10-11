@@ -12,9 +12,7 @@ fn rule(tool: &str, content: Option<&str>) -> PermissionRule {
 }
 
 fn store(tag: &str) -> PermissionRuleStore {
-    let dir = std::env::temp_dir().join(format!("locowrk-rules-test-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("rules-test-{}", tag));
     PermissionRuleStore::new(&dir)
 }
 

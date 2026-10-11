@@ -12,15 +12,7 @@ fn no_roots() -> Arc<dyn Fn() -> Vec<String> + Send + Sync> {
 
 #[test]
 fn resolver_reads_sidecar_and_fails_closed() {
-    let dir = std::env::temp_dir().join(format!(
-        "locowrk-ws-resolver-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir("ws-resolver");
     session_store::write_workspace(&dir, "session-1", Some("F:/ws/a")).unwrap();
     // workspace=None 且无标题 → 旁车整文件删除 → 解析为 None
     session_store::write_workspace(&dir, "session-2", None).unwrap();
@@ -52,15 +44,7 @@ fn resolver_reads_sidecar_and_fails_closed() {
 
 #[test]
 fn fence_reflects_current_settings_on_each_call() {
-    let dir = std::env::temp_dir().join(format!(
-        "locowrk-ws-fence-live-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir("ws-fence-live");
     session_store::write_workspace(&dir, "s1", Some("F:/ws/a")).unwrap();
     // 供给可变：设置保存即生效（下一次调用读新值）
     let roots = Arc::new(std::sync::Mutex::new(vec!["F:/ws/a".to_string()]));
@@ -77,15 +61,7 @@ fn fence_reflects_current_settings_on_each_call() {
 
 #[test]
 fn workspace_view_projects_workspace_only() {
-    let dir = std::env::temp_dir().join(format!(
-        "locowrk-ws-view-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir("ws-view");
     session_store::write_workspace(&dir, "session-1", Some("F:/ws/a")).unwrap();
     let view = workspace_view(session_context_resolver(
         dir.clone(),

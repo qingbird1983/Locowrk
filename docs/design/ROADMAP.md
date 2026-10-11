@@ -722,6 +722,26 @@
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
 ---
+### v2.151 · 审计修复批 F-2a（测试临时目录单点化：把"满跑红单跑绿"的地雷拆掉）
+
+**依据**：《AUDIT-FIX-PLAN-v1》F11（批 B 自己撞出来、**审计完全没覆盖**的一类——它查死代码与重复实现，"测试脚手架脏"只有真跑门禁才现形）。
+本子批口径 = **只做 desktop 侧**（F11 的根侧 `wasm_plugins` 共享目录 = F11b、F8 plugin-host 测试样板都未动）。
+纯测试面改动：**生产码零改动、零行为变化**，判据 = 全量测试在改前改后都绿 + 机器证明没有附带删除。
+
+| 面 | 落点 |
+|---|---|
+| ① 新入口 | **`desktop/src-tauri/src/testutil.rs`**（`#[cfg(test)] mod testutil;`）：唯一名 = `locowrk-{tag}-{pid}-{纳秒}-{进程内 seq}` 三重保险，`dir_name(tag, nanos, seq)` 抽成**纯函数**（否则"同纳秒靠 seq 分家"这一维根本测不到——快速循环在 Windows 100ns 粒度下完全可能撞，撞了就是两个并行测试互删对方落盘产物，表现为满跑红单跑绿）。两入口按调用方需求分：`work_dir`（已建好、保证空）/ `unique_dir`（**故意不创建**，给「目录缺席 / fail-closed / 缺文件出默认值」那一类）。头注写清「纳秒属于发号不属读时间，故不引 `crate::timeutil`」 |
+| ② 收敛面 | 改前 HEAD：**测试面 44 处 `std::env::temp_dir()` 散在 36 个文件**，形态三档——`pid` 且**不先清** 17 处（**地雷本尊**：Windows 回收复用 pid → 本次读到上次残留）/ `pid` + 先清 19 处（不脏读，但同进程同 tag 互踩）/ 带 nonce 8 处（不脏读，目录名每次不同）。改后 **44 → 0**（`grep -rc env::temp_dir()` 测试面只剩 0，唯一实现点在 `testutil.rs`）。同批消掉 4 份**逐字同构**的 `fn temp_dir(tag)`（`instruction_files` / `memory` / `memory_reconcile` / `repo_context` 各抄一遍）与 `tests_session_log` 里那段"为什么要 nonce"的**重复解释**（真源改指 testutil 头注，批 E 立的「同一信息单点化」同款） |
+| ③ 明确不动 | `data_root.rs:56` 与 `state/mod.rs:89/494` 的 `temp_dir()` 是**生产码的降级兜底数据根**（`locowrk-data` / `locowrk-degraded-data`，主目录创建失败时聊天不受影响），语义与测试夹具无关，且 `testutil` 是 `#[cfg(test)]` 模块——生产码根本不该引它。脚本层直接按「非测试文件不碰 + 非 `let NAME = temp_dir()` 开头不碰」双闸挡住 |
+| ④ 新守卫的变异验证 | 三例全「弄坏 → 见红 → 逐字节还原（sha==baseline）」：①目录名丢 seq 维 → `same_nanosecond_is_split_by_seq` 红 ②`prepared` 不先清 → `a_taken_name_is_cleared_before_it_is_handed_back` 红 ③`unique_dir` 也建目录 → `unique_dir_never_touches_the_filesystem` 红。**第一版测试锁不住 ①**（只测"200 次调用全不同"，去掉 seq 也未必红）——把命名抽成纯函数才让这一维可判，这条写进了 `dir_name` 的 doc |
+| ⑤ 事故与检测器 | 批量脚本首版 `L.splice(i, j - i + 1, line)` 有 **off-by-one**：多吃一行，把 `let path = dir.join(..)`、函数返回行 `dir` / `(dir.clone(), Arc::new(..))` 一起删了。**是人眼审 diff 抓到的**，回滚重放时又因「回滚保护名单」把两个已损坏文件排除在外，导致坏状态被带进第二轮——两处编译错误（`implicitly returns ()`）当场暴露。修法 = 把这类核对**机器化**：新 `tmp/v151-nocollateral.mjs` 逐行判「被删的 198 行是否都属于取临时目录这件事」，命中 7 行可疑 → 逐条判读全部合法（3 处返回行合并进单表达式 + 4 行注释迁移到 testutil 头注），其余 191 行零可疑 |
+| 测试账 | desktop 363 → **368**（+5 `testutil::tests`，删 0）；根 workspace **436 持平**（本批未碰 `crates/`，仍全量复跑取证）。**关键判据 = 44 处目录取得方式全换、368 个测试仍然绿**：这些测试全部依赖临时目录，换错任何一处语义（该建的没建 / 不该建的建了 / 名字撞车）都会当场反映为红 |
+| 门禁 | desktop fmt CLEAN、clippy `--all-targets -- -D warnings` **0**、368 passed 0 failed；根 fmt CLEAN、clippy 0、39 套件 436 passed 0 failed；四道结构闸全等基线（`check_length` 39==39 零新增、`check-i18n` 891=891·无引用键 0、`check-commands` 85·85·85、`check-middleware-wiring` 10·10·0·白名单 0）；零 `.ts/.vue` 改动故未跑 `pnpm build`/`lint:style`。净变化 **desktop +48 / −198 = −150 行**（新模块 154 行 = 实现 71 + 测试 83） |
+| 边界 | ①**本入口治"脏读"不治"累积"**：带 nonce 的目录跑完仍留在 `%TEMP%`，要收这条得给每个调用点挂 Drop 守卫（44 处路径会被 move 进 store/闭包，逐点判生命周期），与 F11 的病不是一回事——已写进 `testutil.rs` 头注并登记待裁定，不在本批扩大改动面；②`wasm_plugins` 用 `target/locowrk-test/` 共享目录（历批记的"已知偶发红"即它）= **F11b 未动**，属根侧；③F8 plugin-host 测试样板未动；④**未新增门禁**防「今后又有人手写一份 temp_dir」——现防线只有「本批改完的 grep 对账（测试面 44 → 0）」这一条，它不是持续闸；要长期钉死需第五道闸，与批 F-1 边界⑤同一件待裁定事项；⑤脚本判「同一变量的 remove/create 行」用前缀匹配，`fs::create_dir_all`（文件里 `use std::fs` 的写法）首版漏吸，靠 dry-run 预览发现——批量改造的 dry 必须**带上下文预览**才审得动 |
+| 文档 | `AUDIT-FIX-PLAN-v1.md` §1 F11 标 ◐（desktop 侧已落 / 根侧 F11b 待做）+ §5 批 F-2a 证据段 + ROADMAP/CHANGELOG/AGENTS v2.151 |
+
+---
+
 ### v2.150 · 审计修复批 F-1（同源重复实现收敛：一把时钟尺 · 四种截断语义 · 一份缺省端点）
 
 **依据**：《AUDIT-FIX-PLAN-v1》§5 批 F 段（F1 / F2 / F3 / F14 四项，审计 M-1 同族）。子批口径 = **只收敛「同一件事在多处各写一遍」**，

@@ -16,15 +16,7 @@ fn dll_name_matches_platform() {
 }
 
 fn artifact_dir(tag: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "locowrk-find-{tag}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("find-{}", tag));
     dir
 }
 

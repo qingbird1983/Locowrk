@@ -6,8 +6,7 @@ use crate::events::AgentEvent;
 use serde_json::json;
 
 fn tmp_store(tag: &str) -> (NotificationStore, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("lw-notif-test-{}-{}", tag, std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("lw-notif-test-{}", tag));
     let path = dir.join("notifications.json");
     (NotificationStore::open(path.clone()), path)
 }

@@ -183,7 +183,7 @@ fn context_usage_bar_default_and_roundtrip() {
 /// 档位 window_tokens；会话模型覆盖改判档。目录缺席 = 空快照（该层跳过）。
 #[test]
 fn session_window_resolution_chain() {
-    let catalog_absent = std::env::temp_dir().join("settings-tests-catalog-absent");
+    let catalog_absent = crate::testutil::unique_dir("settings-tests-catalog-absent");
     let mut cfg = LlmConfig {
         active: "p1".into(),
         ..Default::default()

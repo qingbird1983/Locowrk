@@ -52,9 +52,7 @@ impl MemoryManagerClient for FakeClient {
 }
 
 fn temp_root(tag: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("orgz-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("orgz-{}", tag));
     dir
 }
 
@@ -105,7 +103,7 @@ fn organizer(
         )),
         // 目录缺席 = 空快照（测试不依赖目录能力面）
         Arc::new(crate::llm::catalog::CatalogStore::new(
-            std::env::temp_dir().join("organize-tests-catalog-absent"),
+            crate::testutil::unique_dir("orgz-catalog-absent"),
         )),
         std::sync::Arc::new(|_, _| {}), // 哑通知（不触 emit）
         None,                           // 碎片表缺席（本批不测置位面）

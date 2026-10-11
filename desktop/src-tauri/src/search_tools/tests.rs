@@ -118,15 +118,7 @@ async fn call_keyword_match_returns_schema() {
 #[tokio::test]
 async fn call_falls_back_to_hot_tools_then_no_match() {
     let usage_db = {
-        let dir = std::env::temp_dir().join(format!(
-            "locowrk-search-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testutil::work_dir("search");
         crate::usage::UsageDb::open(&dir.join("usage.sqlite3")).unwrap()
     };
     // 直接落库一条 hot 统计（recorder 后台通道未启动，直连 db）

@@ -90,6 +90,8 @@ mod tests_session_log;
 mod tests_stream;
 #[cfg(test)]
 mod tests_tree_gate;
+#[cfg(test)]
+mod testutil;
 
 pub fn run() {
     use tauri::{Listener, Manager};

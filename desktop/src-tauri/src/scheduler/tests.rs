@@ -31,9 +31,7 @@ fn sched(id: &str, kind: Kind, run_at: i64) -> Schedule {
 
 fn tmp_db(tag: &str) -> (PathBuf, Arc<ScheduleDb>) {
     // 无 tempfile 依赖（memory 测试同款）：pid 隔离 + 收尾删
-    let dir = std::env::temp_dir().join(format!("locowrk-sched-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("mkdir");
+    let dir = crate::testutil::work_dir(&format!("sched-{}", tag));
     let db = Arc::new(ScheduleDb::open(&dir.join("schedule.sqlite3")).expect("open schedule db"));
     (dir, db)
 }

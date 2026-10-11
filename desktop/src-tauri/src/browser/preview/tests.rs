@@ -63,7 +63,7 @@ fn mime_table_covers_renderable_set() {
 /// 真实 fs 的围栏比对：临时目录内放行、外拒 403、缺失 404。
 #[test]
 fn scope_check_enforces_root_prefix() {
-    let base = std::env::temp_dir().join(format!("lw-preview-test-{}", std::process::id()));
+    let base = crate::testutil::unique_dir("lw-preview-test");
     let inner = base.join("proj");
     std::fs::create_dir_all(&inner).unwrap();
     let file = inner.join("page.html");

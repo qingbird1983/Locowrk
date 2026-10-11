@@ -3,8 +3,7 @@
 use super::*;
 
 fn temp_root(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("locowrk-settings-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::testutil::work_dir(&format!("settings-{}", tag));
     dir
 }
 

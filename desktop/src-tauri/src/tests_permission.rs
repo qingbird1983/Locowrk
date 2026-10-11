@@ -14,15 +14,7 @@ use crate::tests::{kind, Collector};
 
 /// 临时会话目录 + 指定缺省档的存储。
 fn store(tag: &str, default: PermissionMode) -> Arc<PermissionModeStore> {
-    let dir = std::env::temp_dir().join(format!(
-        "lw-perm-tests-{tag}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("lw-perm-tests-{}", tag));
     Arc::new(PermissionModeStore::new(dir, default))
 }
 
@@ -131,7 +123,7 @@ async fn plan_mode_denies_without_card() {
 async fn external_path_forces_card_even_in_auto() {
     let sink = Collector::default();
     let modes = store("external", PermissionMode::Auto);
-    let sessions = std::env::temp_dir().join("lw-perm-ext-sessions");
+    let sessions = crate::testutil::unique_dir("lw-perm-ext-sessions");
     let _ = std::fs::create_dir_all(sessions.join("ws"));
     // 归属 s1 → 工作区；围栏 = 全局声明根（数据根 + fsRoots），resolver 手工构造
     let ws_path = sessions.join("ws").canonicalize().unwrap();

@@ -217,7 +217,7 @@ fn fs_roots_normalize_reject_and_env_injection() {
     assert_eq!(got, vec![a, b]);
 
     // 不存在的目录 → 拒绝（fail-closed，同 fsutil 使用时契约）
-    let missing = std::env::temp_dir().join("locowrk-fs-roots-missing-dir");
+    let missing = crate::testutil::unique_dir("fs-roots-missing-dir");
     assert!(super::super::tools::normalize_fs_roots(&[missing.display().to_string()]).is_err());
 
     // env 注入：非空 = `;` 连接；空表 = 移除 env

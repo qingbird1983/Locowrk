@@ -10,15 +10,7 @@ use kernel_agent::GlobalEwma;
 use plugin_service::{InstallSource, InstalledPlugin};
 
 fn temp_db(tag: &str) -> UsageDb {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let dir = std::env::temp_dir().join(format!(
-        "locowrk-usage-{tag}-{}-{nanos}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::testutil::work_dir(&format!("usage-{}", tag));
     UsageDb::open(&dir.join("usage.sqlite3")).expect("open temp usage db")
 }
 

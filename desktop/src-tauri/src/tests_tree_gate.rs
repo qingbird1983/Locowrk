@@ -10,9 +10,7 @@ use plugin_host::RegistryToolSource;
 use crate::tool_source::{KernelToolSource, TreeToolGate};
 
 fn temp_dir(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("treegate-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let d = crate::testutil::work_dir(&format!("treegate-{}", tag));
     d
 }
 

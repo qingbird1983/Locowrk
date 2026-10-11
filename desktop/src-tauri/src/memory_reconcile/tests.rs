@@ -9,14 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 fn temp_dir(tag: &str) -> PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "locowrk-reconcile-{tag}-{nanos}-{}",
-        std::process::id()
-    ))
+    crate::testutil::unique_dir(&format!("reconcile-{}", tag))
 }
 
 /// 开着文件层的宿主存储（sqlite 与 md 同根）。

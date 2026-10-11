@@ -6,9 +6,7 @@ use session_store::SessionEvent::UserMessage;
 use std::path::Path;
 
 fn tmp_dir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("lw-subtx-{}-{}", tag, std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    crate::testutil::work_dir(&format!("lw-subtx-{}", tag))
 }
 
 /// 造一个会话：父前缀 1 条 + 自身段 2 条（任务 prompt + 回复）。

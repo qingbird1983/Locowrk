@@ -1,8 +1,7 @@
 use super::*;
 
 fn store(tag: &str) -> (AssetStore, std::path::PathBuf) {
-    let root = std::env::temp_dir().join(format!("locowrk-asset-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = crate::testutil::work_dir(&format!("asset-{}", tag));
     (AssetStore::new(root.join("assets")), root)
 }
 

@@ -8,14 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 fn temp_dir(tag: &str) -> PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "locowrk-instr-{tag}-{nanos}-{}",
-        std::process::id()
-    ))
+    crate::testutil::unique_dir(&format!("instr-{}", tag))
 }
 
 /// 解析器：`ws-` 前缀会话 → 真实临时仓库（repo_root 要求 is_dir）。

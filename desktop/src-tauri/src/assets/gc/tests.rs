@@ -2,9 +2,7 @@ use super::*;
 use std::time::{Duration, SystemTime};
 
 fn tmp(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("locowrk-gc-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let d = crate::testutil::work_dir(&format!("gc-{}", tag));
     d
 }
 
