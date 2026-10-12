@@ -226,7 +226,11 @@ export default {
     memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
     memoryRepoContext: "Handoff reminder",
     memoryInstructionFiles: "Instruction files",
-    memoryInstructionFilesHint: "Inject AGENTS.md from the data root and project root at the start of each session (snapshot per session; project files outrank defaults, never safety rules).",
+    memoryInstructionFilesHint: "Inject instruction files from the data root plus the project layer at the start of a session. The project layer knows three families—AGENTS.md / CLAUDE.md / AGENTS.override.md—pick-one-per-family, chained across families, with override last (append, never replace). Snapshotted on the first turn of each session: editing a file leaves the current session untouched and applies to new sessions; project files outrank defaults but never safety rules.",
+    instructionGlobalKib: "Global chain budget (KiB)",
+    instructionGlobalKibHint: "Total byte budget for the global chain, 8–512, default 100 (100 is the hard-coded value from before this became configurable). Once the budget is spent, later files are not injected and the injection names which file was squeezed out.",
+    instructionProjectKib: "Project chain budget (KiB)",
+    instructionProjectKibHint: "Total budget for the three project families chained together, 8–512, default 100. Shrinking it drops the families at the tail first (override sits last), and both truncation and skipping are labelled in the injection—never silently omitted.",
     memoryRepoContextHint:
       "Project sessions inject a reminder for the handoff directory (content is not injected; the model reads and maintains it on demand).",
     memoryFiles: "Memory files",

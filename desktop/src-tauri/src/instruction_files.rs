@@ -1,16 +1,27 @@
 //! 指令文件层宿主实现（提示词分层设计 §4.3）：全局文件取 `<数据根>/AGENTS.md`，
-//! 项目级取项目根 `AGENTS.md`（回落 `.Locowrk/AGENTS.md`），拼成
-//! [`InstructionSource`] 内文，由内核
+//! 项目层认**三族**候选名（`AGENTS.md` / `CLAUDE.md` / `AGENTS.override.md`），
+//! 拼成 [`InstructionSource`] 内文，由内核
 //! [`kernel_agent::InstructionFilesInject`] 包裹 `<system-reminder>` 后插
 //! 消息列头部。
 //!
-//! 子目录级按需指令**裁掉**（设计稿 §7 记档：ZCode 亦未做；Locowrk 是
-//! 项目归属制，无 cwd 语义）。
+//! **族内二选一，族间串联**（v2.188 · 队列 Q4）：同一约定名的两个家（仓库根与
+//! `.Locowrk/`）只取第一个能读到内容的——双读会把同一份约定注两遍；不同约定名之间
+//! 则**都注入**，且顺序 = 模型读到的顺序 = 越靠后权重越高，所以 override 族排在最后
+//! （用户 2026-10-13 裁定的「追加不替换」：override 在场时同族的 `AGENTS.md` 仍然注入，
+//! override 只是补在后面，不屏蔽同层任何东西）。
 //!
-//! 快照锁字节（设计稿 §3.3）：按 `(session, scope)` 键位**会话首查读
-//! 文件并缓存**（None 也缓存——MemoryInject 预取同款），中途人改文件 =
-//! 显式变更：当前会话不变，下一会话生效；会话改归属 = 换键 = 重算。
-//! 全局文件缓存在 `""` 会话键位下进程级共享（读一次）。
+//! 预算做成**两条链各一档可调**（`memory.instructionGlobalKib` /
+//! `instructionProjectKib`，8–512 KiB 缺省 100）：缺省 100 就是改前那颗写死的
+//! `MAX_FILE_BYTES`，所以「项目里只有一份 AGENTS.md」这个存量主形态在改前改后
+//! 逐字节相同。额度用尽时后面的文件**不读并留一句如实说明**，装不满的文件
+//! 截断并标注当前上限——「指令文件写坏了如实呈现，不静默丢弃」（分层稿 §9.3）。
+//!
+//! 快照锁字节（设计稿 §3.3）：按 `(session, scope)` 键位**会话首查读文件并缓存**
+//! （None 也缓存——MemoryInject 预取同款），中途人改文件 = 显式变更：当前会话不变，
+//! 下一会话生效；会话改归属 = 换键 = 重算。⚠ **预算档位同样吃这条纪律**：额度闭包
+//! 只在未命中时读一次，改了设置也不会让已定格的会话重算（前缀与消息字节都不能被
+//! 中途改写，这是同一次注入的两个成分，不是两个开关）。全局文件缓存在 `""`
+//! 会话键位下进程级共享（读一次）。
 
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -20,19 +31,32 @@ use kernel_agent::InstructionSource;
 
 use crate::memory::MemoryStore;
 
-/// 单文件字节上限（设计稿 §4.3：100KB，超限截断 + 标记如实，不静默
-/// 丢弃）。
-const MAX_FILE_BYTES: usize = 100 * 1024;
+/// KiB → 字节（设置页的单位是 KiB，读盘按字节）。
+const KIB: usize = 1024;
 
 /// 缓存上限（FIFO 驱逐）：与 Memory-Inject 预取同款保险丝。
 const CACHE_CAP: usize = 128;
 
-/// 指令文件源（组装点构造：全局路径 = 数据根 AGENTS.md；开关 = settings
-/// `memory.instructionFiles` 闭包）。
+/// 项目层族号（族内二选一、族间串联的分组键）。顺序即优先级：越靠后模型读得越晚
+/// = 权重越高，所以 override 是 2 而不是 0。
+const FAM_AGENTS: usize = 0;
+const FAM_CLAUDE: usize = 1;
+const FAM_OVERRIDE: usize = 2;
+
+/// `CLAUDE.md` 的回落目录名（Claude Code 的项目内配置面）。⚠ 这与
+/// `llm/import/claude.rs` 里那个 `~/.claude/settings.json` 的**用户主目录**同名但
+/// 不同概念（一个是仓库内目录、一个是 home 下目录），不合并成一个常量——
+/// 强行统一会造出一条假耦合：改"项目回落目录"会连带改到供应商配置导入路径。
+const CLAUDE_DIR: &str = ".claude";
+
+/// 指令文件源（组装点构造：全局路径 = 数据根 AGENTS.md；开关与两档预算 = settings
+/// `memory.instructionFiles` / `instructionGlobalKib` / `instructionProjectKib` 闭包）。
 pub struct InstructionFiles {
     store: Arc<MemoryStore>,
     global_path: PathBuf,
     enabled: Arc<dyn Fn() -> bool + Send + Sync>,
+    /// (全局链 KiB, 项目链 KiB)，只在**未命中缓存**时读——见头注的快照纪律。
+    limits: Arc<dyn Fn() -> (u32, u32) + Send + Sync>,
     cache: Mutex<Cache>,
 }
 
@@ -47,45 +71,59 @@ impl InstructionFiles {
         store: Arc<MemoryStore>,
         global_path: PathBuf,
         enabled: Arc<dyn Fn() -> bool + Send + Sync>,
+        limits: Arc<dyn Fn() -> (u32, u32) + Send + Sync>,
     ) -> Self {
         Self {
             store,
             global_path,
             enabled,
+            limits,
             cache: Mutex::new(Cache::default()),
         }
     }
 
     /// 未命中路径的加载体（纯函数语义：读盘 + 拼段，无隐藏状态）。
     fn load_uncached(&self, session_id: Option<&str>) -> Option<String> {
+        let (global_kib, project_kib) = (self.limits)();
         let mut sections: Vec<String> = Vec::new();
-        if let Some(text) = read_capped(&self.global_path) {
-            sections.push(section(&self.global_path.display().to_string(), text));
-        }
-        // 项目级：归属会话的仓库根，先找业界共识文件名 AGENTS.md，回落
-        // .Locowrk/AGENTS.md（F2 交接目录——同一仓库两处皆认，先到先得）。
+        let mut notes: Vec<String> = Vec::new();
+        // 全局链：一个位置，但同样走链装配体（预算的口径是「链」而不是「文件」，
+        // 两个成分共用一段代码才不会各自漂）。
+        fill_chain(
+            &[(0usize, self.global_path.clone())],
+            global_kib as usize * KIB,
+            &mut sections,
+            &mut notes,
+        );
+        // 项目链：归属会话的仓库根，三族候选按族号分组。
         if let Some(repo) = self.store.repo_root(session_id) {
-            let candidates = [
-                repo.join("AGENTS.md"),
-                repo.join(crate::repo_context::DIR).join("AGENTS.md"),
-            ];
-            for cand in &candidates {
-                if let Some(text) = read_capped(cand) {
-                    sections.push(section(&cand.display().to_string(), text));
-                    break;
-                }
-            }
+            fill_chain(
+                &project_candidates(&repo),
+                project_kib as usize * KIB,
+                &mut sections,
+                &mut notes,
+            );
         }
         if sections.is_empty() {
             return None;
         }
-        Some(format!(
+        let mut body = format!(
             "# agentsMd\nCodebase and user instructions are shown below. Be sure \
              to adhere to these instructions. IMPORTANT: These instructions \
              OVERRIDE any default behavior and you MUST follow them exactly as \
              written.\n\n{}",
             sections.join("\n\n")
-        ))
+        );
+        // 被额度挤掉的文件**必须说出来**：静默少注一个族的约定 = 模型以为自己拿到了
+        // 全部项目规则（与截断同一口径，分层稿 §9.3）。
+        // ⚠ `push_str("\n\n")` 是**两**字符字面量：clippy 的 `single_char_add_str`
+        // 会把单字符 `push_str("\n")` 判错（本批 desk_clippy 就红在那里），而这里要的
+        // 是"段与段之间空一行"的双换行，不能改成 `push('\n')`（那会少一个空行）。
+        for n in notes {
+            body.push_str("\n\n");
+            body.push_str(&n);
+        }
+        Some(body)
     }
 }
 
@@ -120,24 +158,73 @@ impl InstructionSource for InstructionFiles {
     }
 }
 
+/// 项目层候选表：`(族号, 路径)`，**同族内按给出的先后排**（先者 = 仓库根），
+/// 族与族之间按本函数给出的顺序串联（AGENTS → CLAUDE → override）。
+/// ⚠ 两个回落目录名都走常量（`repo_context::DIR` / 本文件的 `CLAUDE_DIR`），
+/// 不在候选表里重复字面串——「同一属性还剩几个出处」才是修好了的机器形状
+/// （批 Q3b 立的口径，这里同形适用）。
+fn project_candidates(repo: &Path) -> Vec<(usize, PathBuf)> {
+    let fallback = crate::repo_context::DIR;
+    vec![
+        (FAM_AGENTS, repo.join("AGENTS.md")),
+        (FAM_AGENTS, repo.join(fallback).join("AGENTS.md")),
+        (FAM_CLAUDE, repo.join("CLAUDE.md")),
+        (FAM_CLAUDE, repo.join(CLAUDE_DIR).join("CLAUDE.md")),
+        (FAM_OVERRIDE, repo.join("AGENTS.override.md")),
+        (FAM_OVERRIDE, repo.join(fallback).join("AGENTS.override.md")),
+    ]
+}
+
+/// 一条链的装配体：族内先到先得（同族第二个位置不再读），族间按给出顺序串联；
+/// `cap` 是这条链的总字节额度。装不进剩余额度的**截断 + 标注当前上限**，
+/// 额度归零后还在排队的文件**跳过并留一句说明**——两者都不静默。
+/// ⚠ 缺文件 / 空文件 **不算族命中**（继续试同族下一个位置），与改前行为一致。
+fn fill_chain(
+    candidates: &[(usize, PathBuf)],
+    cap: usize,
+    sections: &mut Vec<String>,
+    notes: &mut Vec<String>,
+) {
+    let mut taken: Vec<usize> = Vec::new();
+    let mut used = 0usize;
+    for (family, path) in candidates {
+        if taken.contains(family) {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(path) else {
+            continue;
+        };
+        if bytes.is_empty() {
+            continue;
+        }
+        taken.push(*family);
+        if used >= cap {
+            notes.push(format!(
+                "[Skipped {}: the instruction chain budget of {} KB is already exhausted]",
+                path.display(),
+                cap / KIB
+            ));
+            continue;
+        }
+        let room = cap - used;
+        let truncated = bytes.len() > room;
+        let mut text = String::from_utf8_lossy(&bytes[..bytes.len().min(room)]).into_owned();
+        if truncated {
+            // 标注带的是**这个文件实际拿到的额度**（剩余额度），不是整条链的档位——
+            // 否则同一条链里第二个被截的文件报 100 KB 而只装进 4 KB，标记在说谎。
+            text.push_str(&format!(
+                "\n\n[File truncated: only {} KB of the instruction chain budget was left]",
+                room / KIB
+            ));
+        }
+        used += text.len();
+        sections.push(section(&path.display().to_string(), text));
+    }
+}
+
 /// 单文件段标题（ZCode agentsMd 同款形状）。
 fn section(path: &str, text: String) -> String {
     format!("Contents of {path} (workspace instructions):\n\n{text}")
-}
-
-/// 读文件（缺文件 / 空文件 = None；超限截断 + 标记）。二进制内容不探测
-/// ——UTF-8 lossy 照收（指令文件坏了如实呈现，不静默丢弃，设计稿 §9.3）。
-fn read_capped(path: &Path) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
-    if bytes.is_empty() {
-        return None;
-    }
-    let truncated = bytes.len() > MAX_FILE_BYTES;
-    let mut text = String::from_utf8_lossy(&bytes[..bytes.len().min(MAX_FILE_BYTES)]).into_owned();
-    if truncated {
-        text.push_str("\n\n[File truncated: instruction files are capped at 100KB]");
-    }
-    Some(text)
 }
 
 #[cfg(test)]

@@ -114,15 +114,23 @@ pub(crate) fn build(init: Init) -> Stack {
         Arc::new(kernel_agent::TreeDirectoryInject) as Arc<_>,
     );
 
-    // 指令文件层（提示词分层设计 §4.3）：全局 <数据根>/AGENTS.md + 项目根
-    // AGENTS.md（回落 .Locowrk/AGENTS.md）→ 合成首条 user 消息（消息面，
-    // 会话首查快照锁字节）。开关 settings memory.instructionFiles。
+    // 指令文件层（提示词分层设计 §4.3）：全局 <数据根>/AGENTS.md + 项目层三族候选
+    // （AGENTS.md / CLAUDE.md / AGENTS.override.md，族内二选一、族间串联）→
+    // 合成首条 user 消息（消息面，会话首查快照锁字节）。开关 memory.instructionFiles，
+    // 两条链各一档预算 memory.instructionGlobalKib / instructionProjectKib（v2.188 · Q4）。
     let instruction_source = Arc::new(crate::instruction_files::InstructionFiles::new(
         Arc::clone(&memory),
         root.join("AGENTS.md"),
         {
             let s = Arc::clone(&settings);
             Arc::new(move || s.memory().instruction_files) as Arc<dyn Fn() -> bool + Send + Sync>
+        },
+        {
+            let s = Arc::clone(&settings);
+            Arc::new(move || {
+                let m = s.memory();
+                (m.instruction_global_kib, m.instruction_project_kib)
+            }) as Arc<dyn Fn() -> (u32, u32) + Send + Sync>
         },
     ));
     ctx.events.on_waterfall(

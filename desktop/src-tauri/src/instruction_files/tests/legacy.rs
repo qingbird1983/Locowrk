@@ -1,36 +1,8 @@
-//! InstructionFiles 单测：全局 + 项目两段拼装 / .Locowrk 回落 /
-//! 缺文件 None / 快照锁字节 / 100KB 截断 / 开关关。
+use super::*;
 
-use super::InstructionFiles;
-use crate::memory::MemoryStore;
-use kernel_agent::InstructionSource;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
-fn temp_dir(tag: &str) -> PathBuf {
-    crate::testutil::unique_dir(&format!("instr-{}", tag))
-}
-
-/// 解析器：`ws-` 前缀会话 → 真实临时仓库（repo_root 要求 is_dir）。
-fn fixture(tag: &str) -> (PathBuf, PathBuf, Arc<MemoryStore>) {
-    let data = temp_dir(tag);
-    let repo = data.join("repo");
-    std::fs::create_dir_all(&repo).unwrap();
-    let store = MemoryStore::new(&data, {
-        let repo = repo.clone();
-        Arc::new(move |sid: &str| sid.starts_with("ws").then(|| repo.display().to_string()))
-            as crate::workspace::WorkspaceResolver
-    });
-    (data, repo, Arc::new(store))
-}
-
-fn source(data: &Path, store: &Arc<MemoryStore>, on: bool) -> InstructionFiles {
-    InstructionFiles::new(
-        Arc::clone(store),
-        data.join("AGENTS.md"),
-        Arc::new(move || on) as Arc<dyn Fn() -> bool + Send + Sync>,
-    )
-}
+// 既有判据（v2.139 建簇时写下）：两段拼装 / 回落链 / 缺文件 / 快照锁字节 /
+// 超限截断 / 开关关。**本批一条断言都没改**——它们仍然绿就是
+// 「可调项缺省 = 改前那颗写死值」的等价性证据。
 
 #[test]
 fn loads_global_and_project_sections() {

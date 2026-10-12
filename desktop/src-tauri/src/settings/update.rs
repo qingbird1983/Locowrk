@@ -170,6 +170,18 @@ impl SettingsStore {
             if let Some(e) = u.instruction_files {
                 next.memory.instruction_files = e;
             }
+            // 指令文件两档链预算（v2.188 · 队列 Q4）：区间端点只有 `INSTRUCTION_KIB_RANGE`
+            // 一个出处，校验体在 `settings/memory.rs::check_instruction_kib`（本文件
+            // 393 行，就地写两遍会顶成新增超限件 ⇒ 抽函数，见那里的头注），
+            // **标签各写各的**：出界文案必须点名是哪一档。
+            if let Some(n) = u.instruction_global_kib {
+                super::memory::check_instruction_kib("全局", n)?;
+                next.memory.instruction_global_kib = n;
+            }
+            if let Some(n) = u.instruction_project_kib {
+                super::memory::check_instruction_kib("项目", n)?;
+                next.memory.instruction_project_kib = n;
+            }
             if let Some(e) = u.fact_cards {
                 next.memory.fact_cards = e;
             }

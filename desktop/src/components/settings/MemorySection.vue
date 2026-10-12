@@ -30,6 +30,8 @@ const form = reactive({
   files: true,
   repoContext: true,
   instructionFiles: true,
+  instructionGlobalKib: 100,
+  instructionProjectKib: 100,
   factCards: true,
   factCardMax: 3,
 });
@@ -61,6 +63,8 @@ watch(
     form.files = v.memory.files;
     form.repoContext = v.memory.repoContext;
     form.instructionFiles = v.memory.instructionFiles;
+    form.instructionGlobalKib = v.memory.instructionGlobalKib;
+    form.instructionProjectKib = v.memory.instructionProjectKib;
     form.factCards = v.memory.factCards;
     form.factCardMax = v.memory.factCardMax;
   },
@@ -80,6 +84,8 @@ function save() {
     files: form.files,
     repoContext: form.repoContext,
     instructionFiles: form.instructionFiles,
+    instructionGlobalKib: Math.round(form.instructionGlobalKib),
+    instructionProjectKib: Math.round(form.instructionProjectKib),
     factCards: form.factCards,
     factCardMax: Math.round(form.factCardMax),
   });
@@ -120,7 +126,7 @@ function save() {
         :label="t('settings.memoryRepoContext')"
       />
     </SettingsRow>
-    <!-- 指令文件层（提示词分层设计 §4.3）：全局/项目 AGENTS.md 注入消息层 -->
+    <!-- 指令文件层（提示词分层设计 §4.3）：全局 + 项目三族候选注入消息层头部 -->
     <SettingsRow
       :title="t('settings.memoryInstructionFiles')"
       :hint="t('settings.memoryInstructionFilesHint')"
@@ -128,6 +134,38 @@ function save() {
       <SettingsToggle
         v-model="form.instructionFiles"
         :label="t('settings.memoryInstructionFiles')"
+      />
+    </SettingsRow>
+    <!-- 两条链各一档预算（v2.188 · 队列 Q4）：缺省 100 KiB = 这项可调之前的写死值。
+         额度用尽后面的族**不读并在注入里点名**，所以调小是"少注"而不是"静默丢"。 -->
+    <SettingsRow
+      v-if="form.instructionFiles"
+      :title="t('settings.instructionGlobalKib')"
+      :hint="t('settings.instructionGlobalKibHint')"
+      control-id="memory-instruction-global-kib"
+    >
+      <input
+        id="memory-instruction-global-kib"
+        v-model.number="form.instructionGlobalKib"
+        type="number"
+        min="8"
+        max="512"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.instructionFiles"
+      :title="t('settings.instructionProjectKib')"
+      :hint="t('settings.instructionProjectKibHint')"
+      control-id="memory-instruction-project-kib"
+    >
+      <input
+        id="memory-instruction-project-kib"
+        v-model.number="form.instructionProjectKib"
+        type="number"
+        min="8"
+        max="512"
+        class="lw-field lw-field-num px-2 text-xs"
       />
     </SettingsRow>
     <!-- M2 记忆树整理（树 v2 §4.3/§15）：节奏二档 + 增量块 X（增量档显示） -->

@@ -32,8 +32,14 @@ export interface MemorySettingsView {
   files: boolean;
   /** F2 交接提醒（缺省开，v2.136 提醒制）：归属会话注入静态提醒段。 */
   repoContext: boolean;
-  /** 指令文件层（缺省开）：全局/项目 AGENTS.md 注入消息层头部。 */
+  /** 指令文件层（缺省开）：全局 `<数据根>/AGENTS.md` + 项目层三族候选
+   * （AGENTS.md / CLAUDE.md / AGENTS.override.md，族内二选一、族间串联）
+   * 注入消息层头部。 */
   instructionFiles: boolean;
+  /** 全局指令链预算（KiB，8–512 缺省 100；v2.188 队列 Q4）。 */
+  instructionGlobalKib: number;
+  /** 项目指令链预算（KiB，同上）：三族串联后的总上限，额度用尽后面的族不读。 */
+  instructionProjectKib: number;
   /** M2 整理事实卡（缺省开，v2.186）：整理收束时记录员顺带产出 ≤上限 张卡落记忆层。 */
   factCards: boolean;
   /** 每次整理最多几张卡（1–10 缺省 3，factCards 开启时生效）。 */
@@ -56,6 +62,10 @@ export interface MemoryUpdate {
   files?: boolean;
   repoContext?: boolean;
   instructionFiles?: boolean;
+  /** 全局指令链预算（KiB，出界 = 后端拒绝并点名档位）。 */
+  instructionGlobalKib?: number;
+  /** 项目指令链预算（KiB，同上）。 */
+  instructionProjectKib?: number;
   /** M2 整理事实卡总开关（v2.186，缺省开）。 */
   factCards?: boolean;
   /** 单次整理最多产几张卡（1–10 缺省 3，仅在 factCards 开时生效）。 */

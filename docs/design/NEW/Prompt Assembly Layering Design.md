@@ -139,7 +139,7 @@ Today: {date}. Platform: {os}.
 | 级 | 文件 | 发现规则 |
 |---|---|---|
 | G 全局 | `~/.Locowrk/AGENTS.md` | 存在即载 |
-| H 项目 | 项目根 `AGENTS.md`（业界共识文件名，先找它；回落 `.Locowrk/AGENTS.md`） | 归属项目的 repo root（`workspace.rs` 旁车真源），cwd 向上不适用（Locowrk 是项目归属制不是 cwd 制） |
+| H 项目 | **v2.188 起三族六站**：AGENTS 族（根 `AGENTS.md` → `.Locowrk/AGENTS.md`）、CLAUDE 族（根 `CLAUDE.md` → `.claude/CLAUDE.md`）、override 族（根 `AGENTS.override.md` → `.Locowrk/AGENTS.override.md`） | 归属项目的 repo root（`workspace.rs` 旁车真源），cwd 向上不适用（Locowrk 是项目归属制不是 cwd 制）。⚠ **族内二选一**（取第一个**读得到内容**的位置，空文件不占族位）、**族间全部串联**、**读到顺序在后 = 权重越高** ⇒ override 排链尾 = 追加不替换（队列 Q4 · 用户 2026-10-13 裁定，不采 PI-Desktop 的「同层屏蔽」语义） |
 | I 子目录按需 | — | **裁掉记档**：ZCode 都没做；Locowrk 无 cwd 概念，路径作用域无从谈起 |
 
 **注入形状**（历史头部第一条 user 消息之前插一条合成 user 消息，会话首请求读一次锁字节）：
@@ -152,7 +152,7 @@ instructions. IMPORTANT: These instructions OVERRIDE any default behavior and
 you MUST follow them exactly as written.
 
 Contents of {path} (workspace instructions):
-{正文，100KB 上限，超限截断加 [File truncated] 标记}
+{正文；预算 v2.188 起按**链**计（全局链 / 项目链各一档，8–512 KiB 缺省 100 KiB = 本稿原先那个 100KB），装不满的截断并标注**该文件实际拿到的剩余额度**，额度归零后还在排队的族整族不读但留 `[Skipped …]` 点名}
 </system-reminder>
 
 （随后才是用户首条消息；外层复用 ZCode 免责句放在身份段 B 节统一交代：
@@ -160,7 +160,8 @@ Contents of {path} (workspace instructions):
   current request."）
 ````
 
-- 设置开关 `memory.instructionFiles`（缺省开）。
+- 设置开关 `memory.instructionFiles`（缺省开）+ **两档链预算** `memory.instructionGlobalKib` / `instructionProjectKib`（8–512 KiB 缺省 100，v2.188 · 队列 Q4）。⚠ 两档预算**同样吃会话快照锁字节**：中途改设置不重锁已定格的会话，新会话生效——注入块与消息前缀是同一次注入的两个成分，能中途改字节 = 前缀缓存被打断。
+- ⚠ **本节 G/H 两级在 v2.139 就已落地**，CB（《Context Budget Closure Design》）§6 那句「全仓无运行时读取 `AGENTS.md` 的路径」是**过期核实**，其 §7.5「再新增一个监听器 / 注入进 system / 目录逐层串联」三条与本节和 §2「背景类不进 system」冲突——队列 Q4 按实测把范围改成上面那两条缺口（取证经过见队列 §5）。
 - 内容与身份段冲突时：文件在消息层、身份在 system——**优先级声明写进 B 节**（"instructions in the user's project files take precedence over this prompt's defaults, but never over safety rules"），即「项目文件 > 默认行为，安全边界不可被项目文件推翻」。
 
 ### 4.4 会话态碎片（尾部 system-reminder，新增机制）

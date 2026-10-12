@@ -192,6 +192,8 @@ DEFAULT_RESULT_BUDGET = {
 
 ## 6\. 缺口四：没有项目指令注入面
 
+> ⚠ **本节的核实随施工进度过期（2026-10-13 Q4 动手前取证订正）**：项目指令注入面**早已随 v2.139 落地** —— 内核监听器 `crates/kernel-agent/src/middleware/instruction_files.rs`（`InstructionFilesInject`，挂 `agent/request`）+ 宿主 `desktop/src-tauri/src/instruction_files.rs`（G 全局 = `<数据根>/AGENTS.md`、H 项目 = repo root `AGENTS.md` 回落 `.Locowrk/AGENTS.md`）+ 设置开关 `memory.instructionFiles` + `(session, scope)` 键会话钉死缓存 + 单文件 100 KiB 截断，规范正身 = 《Prompt Assembly Layering Design》§4.3 / §7。因此 §7.5 的三条要求里：「与会话钉死同等对待」**已做到**、「注入进 `system`」与「逐层串联」**与已采纳规范正面冲突**（分层稿 §2 第 2 条「背景类内容一律不进 system」+ §7「子目录按需指令裁掉：Locowrk 是项目归属制，无 cwd 语义」）。⇒ 本节与 §7.5 的原文叙述**保留不动**（那是立稿日的核实记录），队列 **Q4 已按此重定义**，实测剩下的价值与冲突处置见《Post-Audit Roadmap v1》§5 的「Q4 的前提『全仓无运行时读取 AGENTS.md』= 过期核实」行——本行只留指针不重抄（同一读数两处手写必漂）。
+
 核实：**全仓无任何运行时读取 `AGENTS.md` / `CLAUDE.md` 的路径。** grep 命中项全部是文档、`include_str!` 内置的记忆树提示模板（`crates/memory-tree/src/manager.rs:22,26`）与代码注释。
 
 这是一个**功能性缺失**，不是优化点。Locowrk 自己就有 `AGENTS.md`（项目根），但运行时根本不读它。
