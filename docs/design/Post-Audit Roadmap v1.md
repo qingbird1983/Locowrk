@@ -96,7 +96,7 @@
 
 | Q | 状态 | 内容 |
 |---|---|---|
-| Q0 | ✅ 本批 | 六份设计稿 + 《UI Design System.md》+ `ui-prototype/memory-board.html` 落文档提交；本表立稿；INDEX 六份稿状态由「待研究」改「已采纳 ⇒ 排期见本表」；ROADMAP 加指针；AGENTS 概览区加队列指针 |
+| Q0 | ✅ **v2.182 · 提交 `75de208`** | 六份设计稿 + 《UI Design System.md》+ `ui-prototype/memory-board.html` 落文档提交；本表立稿；INDEX 六份稿状态由「待研究」改「已采纳 ⇒ 排期见本表」；ROADMAP 加指针；AGENTS 概览区加队列指针 |
 
 ### 阶段一 · 记忆轨道地基（Q1–Q5）
 
@@ -172,7 +172,7 @@ AGENTS 设计纪律 5 的注）——**它不是"要不要做"的问题，是前
 
 1. 先勾 [ROADMAP.md](ROADMAP.md) 逐批区（⬜/◐ → ✅ + 版本 + 提交哈希），写「**Q 号 · 出处稿 · 稿内代号**」三元形式。
 2. [CHANGELOG.md](CHANGELOG.md) 补该版落点行（每版一整行，倒序）。
-3. **本表状态列同批更新**（Q 号那行 ⬜ → ✅，并回填版本与哈希）——漂移的源头都是同一读数两处写。
+3. **本表状态列同批更新**（Q 号那行 ⬜ → ✅，并回填版本与哈希；**哈希不得留「由下一批回补」的悬空账，照 `c052318` 先例在同批补正提交里落下**）——漂移的源头都是同一读数两处写。
 4. 门禁按改动面跑：改 Rust 跑根侧三件 + 桌面侧三件（`src-tauri` 不在根 workspace，须单独跑）；
    改前端跑 `pnpm build` / `lint:style` / `node scripts/check-style.mjs`；五道结构闸照 pre-commit。
    纯文档批可只跑结构闸（沿用 v2.181 登记的机器结论：门禁脚本只在 `change_scope` 的**排除**过滤器里提到 `.md`）。
