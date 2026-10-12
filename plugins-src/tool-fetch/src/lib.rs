@@ -28,6 +28,7 @@ use plugin_api::args::arg_u64;
 use plugin_api::ffi::log_level;
 use plugin_api::manifest::{PluginKind, PluginManifest};
 use plugin_api::meta::official_meta;
+use plugin_api::plugin_version;
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
@@ -41,15 +42,11 @@ const BODY_MAX: u64 = 1024 * 1024;
 const TIMEOUT_DEFAULT: u64 = 10;
 const TIMEOUT_MAX: u64 = 60;
 
-fn plugin_version() -> &'static str {
-    option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")
-}
-
 /// describe 符号的数据源：manifest JSON（NUL 结尾，约定见 plugin-api::ffi）。
 fn describe_manifest() -> CString {
     let mut manifest = PluginManifest {
         id: PLUGIN_ID.into(),
-        version: plugin_version().into(),
+        version: plugin_version!().into(),
         abi_version: plugin_api::PLUGIN_ABI_VERSION,
         kind: PluginKind::Tool,
         tools: vec![ToolSpec {

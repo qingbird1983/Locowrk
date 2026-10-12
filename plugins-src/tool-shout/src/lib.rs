@@ -13,6 +13,7 @@ use std::ffi::CString;
 use plugin_api::ffi::log_level;
 use plugin_api::manifest::{PluginKind, PluginManifest};
 use plugin_api::meta::official_meta;
+use plugin_api::plugin_version;
 use plugin_api::semver::Version;
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{SideEffect, ToolSpec};
@@ -22,15 +23,11 @@ const PLUGIN_ID: &str = "tool-shout";
 /// repeat 模式自该版本起提供。
 const REPEAT_SINCE: Version = Version::new(1, 1, 0);
 
-fn plugin_version() -> &'static str {
-    option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")
-}
-
 /// describe 符号的数据源：manifest JSON（NUL 结尾，约定见 plugin-api::ffi）。
 fn describe_manifest() -> CString {
     let mut manifest = PluginManifest {
         id: PLUGIN_ID.into(),
-        version: plugin_version().into(),
+        version: plugin_version!().into(),
         abi_version: plugin_api::PLUGIN_ABI_VERSION,
         kind: PluginKind::Tool,
         tools: vec![ToolSpec {
@@ -91,7 +88,7 @@ impl PluginState for ShoutState {
             .and_then(Value::as_str)
             .ok_or_else(|| "missing string field `text`".to_string())?;
         let mode = args.get("mode").and_then(Value::as_str).unwrap_or("plain");
-        let version = plugin_version();
+        let version = plugin_version!();
         let shouted = match mode {
             "plain" => format!("{text}!"),
             "repeat" if repeat_supported(version) => format!("{text}! {text}!"),

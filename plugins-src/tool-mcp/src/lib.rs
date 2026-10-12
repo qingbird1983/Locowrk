@@ -35,6 +35,7 @@ use std::sync::Arc;
 use plugin_api::ffi::log_level;
 use plugin_api::manifest::{PluginKind, PluginManifest};
 use plugin_api::meta::official_meta;
+use plugin_api::plugin_version;
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
@@ -42,10 +43,6 @@ use plugin_api::{HostVtable, PluginState};
 use crate::registry::Registry;
 
 const PLUGIN_ID: &str = "tool-mcp";
-
-fn plugin_version() -> &'static str {
-    option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")
-}
 
 /// 管理工具（固定）：status 只读；reload 重连（工具清单冻结于加载时）。
 fn management_specs() -> Vec<ToolSpec> {
@@ -84,7 +81,7 @@ fn describe_manifest() -> CString {
     let discovered = tools.len() - 2;
     let mut manifest = PluginManifest {
         id: PLUGIN_ID.into(),
-        version: plugin_version().into(),
+        version: plugin_version!().into(),
         abi_version: plugin_api::PLUGIN_ABI_VERSION,
         kind: PluginKind::Tool,
         tools,

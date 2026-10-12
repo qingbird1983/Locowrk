@@ -49,5 +49,24 @@ pub fn official_meta(m: &mut PluginManifest, name: (&str, &str), desc: (&str, &s
     m.license = Some("MIT".into());
 }
 
+/// 插件自维的版本号：读编译期环境变量 `LOCOWRK_PLUGIN_VERSION`（由各插件的
+/// `build.rs` 声明 `rerun-if-env-changed`，`scripts/build_plugins.sh` 按 stage
+/// 清单逐版注入），没给环境变量时回落 `"0.0.0-dev"`。
+///
+/// **必须是宏而不是函数**：`option_env!` 在**书写处**展开——写进基座函数里就会
+/// 读成 plugin-api 自己的编译环境（一次编译、十个插件共用），版本号会集体变成
+/// 同一个值甚至全变 `0.0.0-dev`。宏在调用它的插件 crate 里展开 ⇒ 语义与上收前
+/// 十份 `fn plugin_version()` 逐字相同（等值证明 = 门禁 `version_equiv` 拿
+/// `git show HEAD:` 的十份原文与本宏体做归一化比较）。
+///
+/// 收成一处真正消灭的缺陷面：环境变量名与回落字面量此前有十份拷贝，任何一份
+/// 拼错都会**静默**变成 `0.0.0-dev`（`option_env!` 拼错的名字照样编译通过）。
+#[macro_export]
+macro_rules! plugin_version {
+    () => {
+        option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")
+    };
+}
+
 #[cfg(test)]
 mod tests;

@@ -45,15 +45,12 @@ use std::ffi::CString;
 use plugin_api::ffi::log_level;
 use plugin_api::manifest::{PluginKind, PluginManifest};
 use plugin_api::meta::official_meta;
+use plugin_api::plugin_version;
 use plugin_api::serde_json::{Value, json};
 use plugin_api::tool::{Exposure, SideEffect, ToolSpec};
 use plugin_api::{HostVtable, PluginState};
 
 const PLUGIN_ID: &str = "tool-edit";
-
-fn plugin_version() -> &'static str {
-    option_env!("LOCOWRK_PLUGIN_VERSION").unwrap_or("0.0.0-dev")
-}
 
 /// describe 符号的数据源：manifest JSON（NUL 结尾，约定见 plugin-api::ffi）。
 fn describe_manifest() -> CString {
@@ -62,7 +59,7 @@ fn describe_manifest() -> CString {
     };
     let mut manifest = PluginManifest {
         id: PLUGIN_ID.into(),
-        version: plugin_version().into(),
+        version: plugin_version!().into(),
         abi_version: plugin_api::PLUGIN_ABI_VERSION,
         kind: PluginKind::Tool,
         tools: vec![
