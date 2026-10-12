@@ -48,7 +48,11 @@ impl Organizer {
         let mem = self.settings.memory();
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let tree = self.load_tree(&workspace, session_id);
-        let items = build_items(session.events(), tree.chaptered_until);
+        // 诊断面也必须是**尾巴**而不是全量（Q3b 同族第三处）：这个面板的作用就是让
+        // 人看出"这次要喂多大一段"，它要是还在报全量，缺陷就被观测面掩护住了。
+        // 只读 ⇒ 不在这里钳游标（修数据是 plan_* 的决策面干的，见 `Organizer::clamp_cursor`）。
+        let (tail, base) = Self::tail_material(session.events(), tree.chaptered_until);
+        let items = build_items(tail, base);
         let (anchor_tokens, anchor_source) = Self::anchor(session);
         let pacing = Pacing::parse(&mem.organize_pacing);
         TreeDebug {

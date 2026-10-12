@@ -15,6 +15,7 @@ mod overflow;
 mod pipeline;
 mod recovery;
 mod summary;
+mod tail;
 mod tools;
 mod views;
 

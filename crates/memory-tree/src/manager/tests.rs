@@ -75,6 +75,42 @@ fn parse_rejects_gaps_overlap_and_out_of_range() {
     ));
 }
 
+/// **下标越界必须是 Err 而不是 panic**（v2.187 / 队列 Q3b 逼出来的第二条）。
+///
+/// ⚠ 上面那条名字叫 `…_and_out_of_range` 的用例其实测的是「未铺满」（`[0,3]` 对 6 项
+/// 材料 ⇒ 末检 `expect != len`），**没有**覆盖「区间比材料长」（`[0,5]` 对 2 项材料）
+/// 这一档——那一档过去会走到 `items[b]` 直接 index out of bounds。
+///
+/// 为什么它现在可达而不是理论风险：Q3b 之前每次整理都拿到全量事件（尾巴长度 ≡ 会话
+/// 长度），模型给的区间总在界内；改成尾巴切片之后材料只剩新增那一轮，而记录员照旧会
+/// 按它看到的整段语境给大区间 ⇒ 桌面端既有测试
+/// `incremental_trigger_then_rebound_pauses_auto` 修复当天就 panic 在这一行。
+/// 「模型输出不可信」是 §5.4 降级设计的第一前提，校验层不许存在能被打穿的下标访问。
+#[test]
+fn parse_drafts_rejects_an_event_range_past_the_material() {
+    let two = items()[..2].to_vec();
+    let past = r#"[{"title":"a","summary":"s","event_range":[0,5]}]"#;
+    assert!(
+        matches!(
+            parse_drafts(past, &two),
+            Err(MemoryManagerError::Coverage(_))
+        ),
+        "区间越出材料必须判不合规走降级，不许 panic"
+    );
+    let e = parse_drafts(past, &two).unwrap_err().to_string();
+    assert!(
+        e.contains("越出材料") && e.contains("共 2 项"),
+        "文案要带上材料数，人才看得懂模型错在哪: {e}"
+    );
+    // 阳性对照：同一份 2 项夹具下"正好铺满"照常通过 ⇒ 上面的红不是夹具造成的
+    let exact = r#"[{"title":"a","summary":"s","event_range":[0,1]}]"#;
+    assert!(parse_drafts(exact, &two).is_ok());
+    // 越界检查排在衔接检查**之后**：不衔接的形状仍按原口径报错（既有判据不受扰动）
+    let not_tiled = r#"[{"title":"a","summary":"s","event_range":[1,2]}]"#;
+    let e2 = parse_drafts(not_tiled, &two).unwrap_err().to_string();
+    assert!(e2.contains("不衔接"), "先查衔接: {e2}");
+}
+
 #[test]
 fn parse_rejects_garbage_and_empty_entries() {
     assert_eq!(

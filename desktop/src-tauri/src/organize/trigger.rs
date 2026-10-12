@@ -32,6 +32,12 @@ impl super::Organizer {
         let dev = self.settings.developer();
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let mut tree = self.load_tree(&workspace, session_id);
+        // Q3b（v2.187）：越界游标当场钳回并落盘，放在**最前面**让三个分支（溢出 /
+        // 熔断 / 常规）共用同一个合法起点——溢出支那句裸切片 `&events[chaptered_until..start]`
+        // 在游标越界时本来会 panic，钳过之后不会。
+        if Self::clamp_cursor(&mut tree, session.events().len()) {
+            self.tree_store.save(&tree).ok();
+        }
         // M4 模式 B 溢出整理（§3.38②）：固定窗口档，窗口滑出的
         // 孤儿轮（chaptered_until < 窗口起点）既不在尾巴也不在目录，必须及时
         // 归章节——例行维护：**先于熔断判定**（熔断暂停的是阈值/增量烧钱信号，
@@ -56,7 +62,13 @@ impl super::Organizer {
         if tree.paused_auto || tree.pending.is_some() {
             return None;
         }
-        let items = build_items(session.events(), tree.chaptered_until);
+        // ⚠ **尾巴切片**而不是全量事件（Q3b 主修，见 `Organizer::tail_material`）：
+        // 这句原来写的是 `build_items(session.events(), tree.chaptered_until)`，等于
+        // 「把整段对话当未整理的尾巴」——第二次整理实测 items=7、`event` 区间 [6,12]、
+        // 收束后游标 13（会话只有 7 条事件）。附带后果是 `tail_tokens` / `tail_events`
+        // 两项读数失实 ⇒ `should_auto_organize` 的阈值与增量档判定跟着失实。
+        let (tail, base) = Self::tail_material(session.events(), tree.chaptered_until);
+        let items = build_items(tail, base);
         let tail_tokens: u64 = items.iter().map(|i| i.tokens).sum();
         let (anchor_tokens, _) = Self::anchor(session);
         let reason = should_auto_organize(&TriggerInput {
@@ -104,7 +116,14 @@ impl super::Organizer {
         if tree.pending.is_some() {
             return Err("已有整理任务在途".into());
         }
-        let items = build_items(session.events(), tree.chaptered_until);
+        // 同 `plan_auto`：越界游标先钳回并落盘（`/整理` 是用户亲手发起的，损坏更该
+        // 在这一刀被修掉，而不是等下一次自动触发）
+        if Self::clamp_cursor(&mut tree, session.events().len()) {
+            self.tree_store.save(&tree).ok();
+        }
+        // ⚠ **尾巴切片**而不是全量事件（Q3b 主修，见 `Organizer::tail_material`）
+        let (tail, base) = Self::tail_material(session.events(), tree.chaptered_until);
+        let items = build_items(tail, base);
         if items.is_empty() {
             return Err("没有可整理的尾巴".into());
         }

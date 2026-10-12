@@ -22,7 +22,7 @@ use memory_tree::{
     AnchorSource, MemoryManagerClient, MemoryManagerUsage, MemoryTree, OrganizeReason,
     OrganizeRecord, TreeStore,
 };
-use session_store::Session;
+use session_store::{Session, SessionEvent};
 
 use crate::settings::SettingsStore;
 use crate::workspace::WorkspaceResolver;
@@ -134,6 +134,47 @@ impl Organizer {
                 AnchorSource::Estimate,
             ),
         }
+    }
+
+    /// 尾巴材料（审计队列 **Q3b** · v2.187）：`memory_tree::build_items(events, base)`
+    /// 的 `base` 是「**切片首元素**在会话日志里的绝对位」，契约要求调用方自己传尾巴
+    /// 切片（头注原话：「调用方传尾巴切片时带出偏移」）。`recovery.rs`、`view.rs` 和
+    /// `trigger.rs` 的 `WindowOverflow` 支一直是这个形状；漏写的是 `plan_auto` /
+    /// `plan_manual` / `tree_view` 三处——把**全量事件**连同游标一起传进去，于是每次
+    /// 整理都把整段历史重喂记录员、`event` 记成「游标 + 下标」的假绝对位、
+    /// `chaptered_until` 被推到日志末尾之外。这里把"取尾巴"收成一个点，三个调用方
+    /// 不再各自拼切片（同一属性只剩一个出处，才是"修好了"的机器形状）。
+    ///
+    /// 起点钳到事件数：越界宁可给空尾巴，也不 panic、更不把全段重喂。但**空尾巴不等于
+    /// 修好了**——见 [`Self::clamp_cursor`]，越界游标必须当场钳回并落盘，否则该会话
+    /// 在切片写法修好之后仍然永久静默。
+    fn tail_material(events: &[SessionEvent], chaptered_until: usize) -> (&[SessionEvent], usize) {
+        let start = chaptered_until.min(events.len());
+        (&events[start..], start)
+    }
+
+    /// 游标自愈（Q3b 的后一半，缺它这条缺陷收不干净）：`MemoryTree::apply_organized`
+    /// 用 `chaptered_until = max(to + 1)` **单调不回退**，所以历史缺陷推到 13 的那个
+    /// 值永远不会自己退回来——只修切片不改游标，`min()` 每次把起点顶到当前事件数，
+    /// 新来的事件反倒永远落在游标之下 ⇒ 尾巴恒空、该会话再也不整理，缺陷从"重喂全段"
+    /// 变成"永久静默"，是更坏的一种。这里把越界游标钳回事件数并交调用方落盘：钳的
+    /// 语义是"越界那截账作废，从现在起重新算尾巴"，不是重整理历史。
+    ///
+    /// 返回 `true` = 发生过钳制。损坏是既成事实 ⇒ 必须给一条 warn 说得出来，
+    /// 并且**当场 save**（调用方 `WindowOverflow` 支会提前 return，不能指望它后面的
+    /// 那次 save）。
+    fn clamp_cursor(tree: &mut MemoryTree, events_len: usize) -> bool {
+        if tree.chaptered_until <= events_len {
+            return false;
+        }
+        tracing::warn!(
+            session = %tree.session_id,
+            from = tree.chaptered_until,
+            to = events_len,
+            "整理游标越出会话日志末尾（Q3b 的历史损坏投影）：已钳回事件数并落盘，越界那截账作废"
+        );
+        tree.chaptered_until = events_len;
+        true
     }
 
     #[allow(clippy::too_many_arguments)]

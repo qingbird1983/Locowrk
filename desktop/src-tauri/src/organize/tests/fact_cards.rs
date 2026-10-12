@@ -11,19 +11,38 @@ use memory_tree::{MemoryManagerClient, MemoryManagerUsage};
 use super::*;
 
 /// 章节数组 + 轮级总结 + 卡段（形状照 `memory_tree::manager` 的三段契约）。
-///
-/// 数组覆盖 `good_reply()` 那 6 项材料——本文件的用例都只整理**一次**，理由见
-/// `the_organize_prompt_lists_the_keys_that_already_exist` 头注里的 Q3b。
 fn good_reply_with_facts(facts: &str) -> String {
-    format!(
-        "{}
-===SUMMARY===
-本轮结论是共享 runtime。
-===FACTS===
-{}",
-        good_reply(),
-        facts
-    )
+    reply_with_facts_for(facts, 6)
+}
+
+/// 覆盖 `n` 项材料的三段式回复。`event_range` 用的是**相对 items 的下标**，
+/// `parse_drafts` 要求首尾衔接并铺满 `items.len()`。
+///
+/// ⚠ v2.187（队列 Q3b）之后这条夹具才成立：修复前第二次整理拿到的是**全量事件**
+/// （8 项）而不是新增那一轮（2 项），照材料真实长度写的两次整理夹具会一路判"未铺满"
+/// 而掉进降级支——而降级支根本不产卡，于是"第二次整理看到既有 key 清单并 upsert"
+/// 这种断言红在业务面上、原因却在夹具里。现在尾巴切片修好 ⇒ 本文件恢复**两次整理**
+/// 的端到端形态（`the_second_organize_is_told_the_first_cards_and_upserts_them`）。
+fn reply_with_facts_for(facts: &str, n: usize) -> String {
+    let arr = match n {
+        // 第一次那 6 项沿用既有夹具：数组文本一字不动，免得扰动别的断言
+        6 => good_reply(),
+        0..=2 => {
+            let last = n.saturating_sub(1);
+            format!(r#"[{{"title":"话题一","summary":"摘要一。","event_range":[0,{last}]}}]"#)
+        }
+        _ => {
+            let last = n - 1;
+            let mid = last / 2;
+            format!(
+                r#"[{{"title":"话题一","summary":"摘要一。","event_range":[0,{mid}]}},
+                   {{"title":"话题二","summary":"摘要二。","event_range":[{},{}]}}]"#,
+                mid + 1,
+                last
+            )
+        }
+    };
+    format!("{arr}\n===SUMMARY===\n本轮结论是共享 runtime。\n===FACTS===\n{facts}")
 }
 
 const TWO_CARDS: &str = r#"[{"key":"build.cmd","value":"构建走 pnpm tauri dev","type":"project","tags":"build"},
@@ -171,13 +190,10 @@ async fn cards_switch_off_leaves_the_prompt_byte_identical_and_writes_nothing() 
 /// 而非造近重复」）：库里已有的行必须**带层标**出现在发给记录员的实参里——
 /// 单元面测的是 `existing_keys` 的构造，这里测的是它被拼进了**发给模型的实参**。
 ///
-/// ⚠ 场景 = 「库里先有既有记忆，再整理一次」，不是「整理两次」。换成两次会撞上
-/// 一条本批实测抓到的既有缺陷：`plan_manual`/`plan_auto` 传给 `build_items` 的是
-/// **全量事件**而不是尾巴切片 ⇒ 第二次整理实测 items=7、`event` 区间 [6,12]、
-/// 收束后 `chaptered_until`=13（会话总共只有 7 条事件）。照那个形状写夹具等于把
-/// 缺陷当契约钉进测试，所以两次整理的场景整体退到单元面（`facts/tests.rs` 的
-/// `the_same_key_upserts_instead_of_piling_up_rows` 钉 upsert）。缺陷登记为队列
-/// **Q3b**，不在本批顺手修——它牵动 organize 全族的触发判定与章节区间口径。
+/// ⚠ 本条**故意**用「库里先有既有记忆，再整理一次」这个最短形状：它只依赖
+/// `existing_keys` 的读取面，与"第二次整理"无关，所以缺陷再多也不会互相遮蔽。
+/// 两次整理那一档在 v2.187（队列 Q3b 修好尾巴切片之后）由
+/// [`the_second_organize_is_told_the_first_cards_and_upserts_them`] 补回，两面都钉着。
 #[tokio::test]
 async fn the_organize_prompt_lists_the_keys_that_already_exist() {
     let root = temp_root("cards-dedup");
@@ -229,6 +245,84 @@ async fn the_organize_prompt_lists_the_keys_that_already_exist() {
     // 既有 3 行 + 本次两张新键 = 5 行（落库不碰别的项目）
     let rows = memory.list("", 50).unwrap();
     assert_eq!(rows.len(), 5, "{rows:?}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// **两次整理**的端到端（v2.187 随队列 Q3b 修复回收的那一档覆盖）：第一次落的卡必须
+/// 以**带层标**的形式出现在第二次发给记录员的实参里，且第二次同键写是覆盖不是新增行。
+///
+/// 单元面（`organize/facts/tests.rs`）钉的是 `existing_keys` 的构造与 upsert SQL；
+/// 这里钉的是"第二次整理真的把清单发出去了、并真的刷到了库里"——只有走生产管道才证得出
+/// 接线。⚠ 这一档在 Q3b 之前**测不了**：第二次整理拿到的是全量事件（8 项）而不是新增
+/// 那一轮（2 项），照真实材料数写的夹具会一路"未铺满"掉进降级支，而降级支根本不产卡。
+#[tokio::test]
+async fn the_second_organize_is_told_the_first_cards_and_upserts_them() {
+    let root = temp_root("cards-twice");
+    let settings = settings_with(serde_json::json!({}), &root);
+    let spy = SpyClient::new(vec![
+        Ok(good_reply_with_facts(TWO_CARDS)),
+        Ok(reply_with_facts_for(
+            r#"[{"key":"build.cmd","value":"构建走 pnpm tauri dev（第二次复核）","type":"project","tags":"build"}]"#,
+            2,
+        )),
+    ]);
+    let org = organizer(&root, settings, spy.clone());
+    let task = org.plan_manual(&session(), "s-twice").expect("第一次发起");
+    org.clone().run_task(task).await;
+
+    // 第一次的实参：库里还没东西 ⇒ 要求文本必须写「（暂无）」，不能不提这一段
+    let first_user = spy.seen.lock().unwrap()[0].1.clone();
+    assert!(
+        first_user.contains("（暂无）"),
+        "无既有键时明确说暂无: {first_user}"
+    );
+
+    let mut s2 = session();
+    s2.append(SessionEvent::UserMessage {
+        content: "第四轮问题".into(),
+        parts: Vec::new(),
+    });
+    s2.append(SessionEvent::AssistantMessage {
+        content: "第四轮回答".into(),
+        tool_calls: vec![],
+    });
+    let task = org.plan_manual(&s2, "s-twice").expect("第二次发起");
+    assert_eq!(
+        task.items.len(),
+        2,
+        "第二次只整理新增那一轮（Q3b 修好的那一半）"
+    );
+    org.clone().run_task(task).await;
+
+    let second_user = spy.seen.lock().unwrap()[1].1.clone();
+    assert!(
+        second_user.contains("build.cmd (project)"),
+        "第一次落的项目键必须带层标进第二次实参: {second_user}"
+    );
+    assert!(
+        second_user.contains("user.pref.pkg (global)"),
+        "全局键也要在清单里: {second_user}"
+    );
+    assert!(
+        !second_user.contains("（暂无）"),
+        "有货时不许再写「暂无」（两个串互斥，同时在场说明清单没被替换）"
+    );
+
+    // 前提断言：两次都必须真走记录员支——掉进降级支的话，下面的 upsert 断言红在夹具
+    let tree = tree_at(&root, org.settings.as_ref(), "s-twice");
+    let modes: Vec<&str> = tree.history.iter().map(|h| h.mode.as_str()).collect();
+    assert_eq!(modes, vec!["recorder", "recorder"], "{modes:?}");
+
+    let rows = memory_store(&root).list("", 50).unwrap();
+    assert_eq!(rows.len(), 2, "同键覆盖不新增行: {rows:?}");
+    let build = rows.iter().find(|r| r.key == "build.cmd").unwrap();
+    assert!(build.value.contains("第二次复核"), "值必须被刷新");
+    assert_eq!(build.source, "organized", "出处随覆盖一起写回");
+    assert_eq!(
+        rows.iter().filter(|r| r.key == "user.pref.pkg").count(),
+        1,
+        "第二次没写全局键 ⇒ 那条不该被重复产一遍"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

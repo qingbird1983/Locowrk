@@ -198,6 +198,19 @@ pub fn parse_drafts(
                 "第 {i} 章节区间 [{a},{b}] 与预期起点 {expect} 不衔接"
             )));
         }
+        // **越界必须是 Err 而不是 panic**（v2.187 / 队列 Q3b 逼出来的第二条）：下面
+        // 那句 `items[b].event` 直接按下标取，模型给一个超出材料数的区间就当场
+        // index out of bounds。这不是假设中的风险——本批把材料从"全量事件"改成"尾巴
+        // 切片"之后，第二次整理的 items 只剩新增那一轮（2 项），而记录员照旧可能按
+        // 它看到的整段语境给出 `[0,5]` ⇒ 既有测试当场 panic 在这一行。既然「模型输出
+        // 不可信」是 §5.4 降级设计的第一前提，校验层就不许存在能被打穿的下标访问；
+        // 返回 Coverage 后由重试 → 规则切分那张既有安全网接住。
+        if b >= items.len() {
+            return Err(MemoryManagerError::Coverage(format!(
+                "第 {i} 章节区间 [{a},{b}] 越出材料（共 {} 项）",
+                items.len()
+            )));
+        }
         expect = b + 1;
         let draft = sanitize_draft(&r.title, &r.summary, (items[a].event, items[b].event))
             .ok_or_else(|| MemoryManagerError::BadEntry(format!("第 {i} 章节标题/摘要为空")))?;
