@@ -1,5 +1,7 @@
 # Locowrk UI 设计与壳（UI shell and patterns）
 
+> **⚠ 地位降位（2026-10-11，用户裁定）**：UI 层最高权威已上移至 [《UI Design System.md》](UI%20Design%20System.md)（ZCode DESIGN.md 微调移植）。本文降为**下位细则**——导航模型 / 模式库 / 事件流向 / 弹层规则的细节继续有效，但与《UI Design System》冲突处（其附录 A 冲突裁决表：「不要卡片」红线废止、「零裸 JSON」降级为兜底专用、1px 边框规则修订、常驻动画白名单扩充、思考行流式展开反转、字号相对制升级）**一律以《UI Design System》为准**；逐条修订待办见其附录 C，修订完成前按「Design System > 本文」执行。
+
 > **本文件是 UI 的唯一权威文档。** 阶段：UI 正式设计（2026-10-01 用户裁定范围「**壳 + 对话主区先定稿**，其余视图后续分批」）。 视觉参考：**PI-Desktop**（Electron + React，Codex 风格单色桌面工作台），用户 2026-10-01 指定「照搬」——本文的色板、量纲、行形态均出自其源码与实机截图。 可预览原型：**`docs/design/ui-prototype/index.html`**（静态 HTML，无构建、无 CDN、 无外部字体，浏览器直接打开；11 个状态 + 明暗双主题切换）。 **视觉与交互先在原型里迭代定稿，再落 `desktop/src/`。**
 >
 > 实现落点：`desktop/src/`（`components/shell/` + `components/chat/` + `components/patterns/` + `style.css` tokens）。

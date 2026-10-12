@@ -17,11 +17,13 @@
 | [DESIGN.md](DESIGN.md) | 唯一需求来源：内核架构、ABI 契约、决策表、目录树 | 批 E 已把 §7.1 洋葱链、§7.2 决策表、§8 目录树、§11.3 装载机制、§3.5 接线列订正到代码实况（v2.149） |
 | [ROADMAP.md](ROADMAP.md) | **唯一进度看板**（⬜/◐/✅ + 版本 + 哈希） | 现役 |
 | [CHANGELOG.md](CHANGELOG.md) | **逐批落点日志**（每版一整行，倒序；本文件是"写了什么"的真源，不是进度表） | 现役。检索：`grep -n "^\*文档版本：v2.14" CHANGELOG.md` |
-| [UI shell and patterns.md](UI%20shell%20and%20patterns.md) | UI 唯一权威（导航模型 / 模式库 / 事件流向 / 弹层规则） | v4.30；⚠ 现状表里若干键/命令已退役，**逐条已加批 E 退役注**（§193/§202/§883/§999） |
-| [Front-end Design Guidelines.md](Front-end%20Design%20Guidelines.md) | 前端**唯一形态标准**（15 类唯一形态 + 特例申请制 + 双闸门禁） | v2.1 |
+| [UI Design System.md](UI%20Design%20System.md) | **UI 层最高权威**（色彩令牌映射 / 字号相对制 / 圆角嵌套降档 / 组件规则 / 冲突裁决表；ZCode DESIGN.md 微调移植，用户 2026-10-11 裁定） | v1.0；⚠ 代码面未对齐，逐批兑现；下位两文档冲突处一律以其附录 A 为准 |
+| [UI shell and patterns.md](UI%20shell%20and%20patterns.md) | 导航模型 / 模式库 / 事件流向 / 弹层规则（**降为下位细则**，与 Design System 冲突处以其附录 A 为准，修订待办见其附录 C） | v4.30；⚠ 现状表里若干键/命令已退役，**逐条已加批 E 退役注**（§193/§202/§883/§999） |
+| [Front-end Design Guidelines.md](Front-end%20Design%20Guidelines.md) | 前端形态清单 / 特例申请制 / 双闸门禁（**降为下位细则**，同上） | v2.1 |
 | [Memory Tree Design v2.md](Memory%20Tree%20Design%20v2.md) | 记忆树规范正身（章节捆 L0/L1/L2 / 整理触发 / 记录员） | v2.0（§4.1/§15 已随 v2.137 修订） |
 | [KV Prefix Cache Design v2.md](KV%20Prefix%20Cache%20Design%20v2.md) | 前缀缓存纪律（钉死集 / 预取 / 稳定期） | v2.0；⚠ 稳定期随 ctx-compact 退役，见其 §6.4 |
 | [Context and Memory.md](Context%20and%20Memory.md) | 上下文 + 记忆总纲（注入顺序 / 双层隔离） | §3.2.2/§4 已随 v2.136–v2.138 加注 |
+| [Post-Audit Roadmap v1.md](Post-Audit%20Roadmap%20v1.md) | **后审计施工队列 = 下面「三、待研究」六份稿的实施顺序真源**（Q0–Q20 逐批登记：出处·稿内代号 / 前置 / 体量 + §1 裁定记录 + §5 锚点漂移订正）。ROADMAP 仍是唯一进度看板（打钩与哈希），本表管顺序与依据，两边不重复正文 | v1.0（2026-10-12 立，用户当日裁定六份稿全部实施） |
 
 **专题参考（各管一轨，现役）**
 
@@ -60,9 +62,20 @@
 
 ## 三、待研究 / 未实施（**不是规范，别照它写码**）
 
+> **本节六份稿已于 2026-10-12 全部裁定采纳并排期**（用户裁定「六份文档都是我规划出来的，肯定都要实施，
+> 你帮我梳理先后排序」）⇒ 实施顺序、前置、已结掉的拍板结论一律看
+> [Post-Audit Roadmap v1.md](Post-Audit%20Roadmap%20v1.md)（下称**队列**），本表只把状态标到位、
+> 不复制队列正文。队列里的 Q 号是唯一无歧义的批次指代；**各稿自起的代号（M/L/C/T/P 系）跨稿会撞名**
+> （详见队列 §2），裸写 `M1`/`C1`/`T1` 一律不认。下面每行给的简称（CB/MR/CF/FP/ML/MB）= 队列 §2 的出处简称。
+
 | 文档 | 状态 |
 |---|---|
-| [NEW/Context Budget Closure Design.md](NEW/Context%20Budget%20Closure%20Design.md) | 文首自述「状态：待研究。本文是问题陈述 + 方案候选，**不是已实施设计**」；行号以 v2.137 工作区为准 |
+| [NEW/Context Budget Closure Design.md](NEW/Context%20Budget%20Closure%20Design.md) | 原「待研究」⇒ **已采纳**。**简称 CB**，排期 = §7.5 P2 → **队列 Q4**、§7.1+§7.2 P0-A/P0-B → **Q6**、§7.3+§7.6 P0-C/P3 → **Q7**、§7.4 P1 → **Q8**。⚠ §7.6 死代码清单**已部分随批 C 兑现**（`CtxCompact`/`suggested_threshold` 早已摘掉），动手前逐条重验（队列 §5）；§12 三条待拍板已按可配置原则结掉（队列 §1）
+| [NEW/Memory Redesign (ZCode Alignment) v1.md](NEW/Memory%20Redesign%20(ZCode%20Alignment)%20v1.md) | 原「待研究」⇒ **已采纳**。**简称 MR**，排期 = §4+§6 M1 → **队列 Q2**、§5 M2 → **Q3**（⚠ 用户 2026-10-12 裁定 **走提案 A** = 整理副产物落库产事实卡，同批须登记 v2.136 裁定的**部分反转**）、§8 M3 → **Q10 搭车**（涉用户数据目录，动手前单独确认）。§4.2 即**解冻《Cross-Session Recall v1》批 2** 的那一刀；§6 的 workspace 键位归一化**趁 `memories` 表 0 行的红利窗口已实测仍在**（2026-10-12），过期就变成迁用户数据 |
+| [NEW/Conversation Flow Redesign (ZCode Alignment) v1.md](NEW/Conversation%20Flow%20Redesign%20(ZCode%20Alignment)%20v1.md) | 文首自述「状态：待研究」；对话流完整复刻设计（§2 行模型注入现有投影 / §3 分层折叠 / §4 工具卡全集 / §5 状态三源 / §6 产出物 / §7 文件右栏链路 / §10 分期 C1-C4），上位依据 = 《UI Design System》。原「待研究」⇒ **已采纳**。**简称 CF**，排期 = §10 C1 数据链路 → **队列 Q12**（⚠ 前置 = **Q11 前端测试基建**，队列自立的插入件，它与审计余项 T3「chat.ts 投影纯化」共用同一个洞）、C2 工具卡全集 → **Q17**（体量建议再切 2–3 刀）、C3 产出物与文件页签 → **Q18**、C4 打磨 → ⏸ 搭车（其中 Rewind 的前置 = 磁盘快照能力至今 RESERVED 无生产读写点，属前置未立不是要不要做）。⚠ 本稿的 `C1` 与 FP 稿的 `C1′` 是两件事，FP 那一撇正是为躲开它 |
+| [NEW/Feature Parity Roadmap (ZCode Alignment) v1.md](NEW/Feature%20Parity%20Roadmap%20(ZCode%20Alignment)%20v1.md) | 文首自述「状态：待研究」；**功能面对齐总路线**（§3 差距矩阵 37 项 / §4 归宿原则 / §5 逐域落法 / §6 明确不对齐含账号裁定 / §7 候选批次七群 A-G **不排序待用户安排**）；斜杠命令、skills、hooks、终端、远控、Bots、headless 等缺口全在这；与记忆 M 批、对话流 C 批互引不重复。**简称 FP**，原「待研究」⇒ **已采纳、§7 的"不排序待用户安排"已排定**：群 A 全部 → **队列 Q19**（零依赖，任何时刻可插当调节阀）、依赖对话流 C1 的各条（B4/B5/B6/B7/C1′/C6/E1/E2/B1/B2/B3/B8/E3 + 群 D1/G1/B9/A5）→ **Q20**。该稿 §7 依赖要点点名 **CF 的 C1 是最大汇聚点**（B5 checkpoint / B8 分屏 / C1′ steer / E3 远控四样全踩它），故队列把 C1 排在功能面群之前 |
+| [NEW/Memory Learning Mechanism (SME Alignment) v1.md](NEW/Memory%20Learning%20Mechanism%20(SME%20Alignment)%20v1.md) | 文首自述「状态：待研究」；**记忆学习机制**（§0 实证 Locowrk 记忆纯静态：全仓零 reinforce/hit_count/access_count，召回纯 `updated_at DESC`；§0.3 订正 `access_count` 两列从未存在于 schema / §2 前置 L0 召回可观测性 / §3 加两列 + 4 信号可解释排序 + 强化回路 / §4 不搬 SME 的 Region 与 PPR，SME 已自证伪 / §5 L0–L4 分批 / §6 已知盲区含「全局层 0 行可能无东西可学」）；参照系 Spatial Memory Engine（附录 A 证据表）；**与 Memory Redesign v1 分工不同**（那份治召回不到，本稿治召回之后不演化）。**简称 ML**，原「待研究」⇒ **已采纳**，排期 = §2.3 L0 → **队列 Q1（全队列第一刀，理由见队列 §3 判据 1：改造前的召回基线只有现在能拿）**、§3.2 L1 → **Q5**、§3.3+§3.4 L2/L3 → **Q9**（稿内明写同函数同锁可合批）、§3.1 L4 → **Q10**。⚠ **两处须先处理**：①§2.3(e) 给的落点 `crates/kernel-agent/src/middleware/usage.rs` **该文件不存在**，`usage.sqlite3` 真身 = `desktop/src-tauri/src/usage.rs`（队列 §5）；②§7 五条待拍板已按可配置原则结掉（队列 §1），其中"权重初值照此、有读数后再调"与"§2.3(d) injected-vs-used 本批不做"两条照稿内建议采纳 |
+| [NEW/Memory Tree Board Design v1.md](NEW/Memory%20Tree%20Board%20Design%20v1.md) | 文首自述「状态：待研究」；记忆面板重构（§0 项目移除级联与 v2.113 冲突调和待拍板 / §2 投影四层对位零新存储 / §3 无限画布只读看板交互规格 + 形态特例申请 / §5 一键记忆目录 / §6 落码清单 T1-T3）；配套原型 = [ui-prototype/memory-board.html](ui-prototype/memory-board.html)。**简称 MB**，原「待研究」⇒ **已采纳**，排期 = §7 特例标准修订 → **队列 Q13**、§2.3+§6 看板 T1（含唯一实质后端新增 `memory_tree_stream`）→ **Q14**、§4+§5 T2 → **Q15**、§6 T3 → **Q16**。⚠ 本稿的 `T1–T3` 与《AUDIT-FIX-PLAN-v1》§7 的 `T1–T14` **完全无关**，同名不同物（队列 §2 立了「Q 号 + 出处稿 + 稿内代号」三元写法专治它）。该稿两处待拍板已由用户 2026-10-12 结掉：无限画布属**特例设计、批准落地**（按规矩 Q13 先修订标准再写码）；§0 项目移除级联走稿内推荐 = **默认不勾**保 v2.113 非破坏语义、勾选才物理删两目录 |
 
 ---
 
@@ -94,7 +107,7 @@
 | [../reports/CODE-AUDIT-v1.md](../reports/CODE-AUDIT-v1.md) | 2026-10-10 全仓审计（证据台账在 `_parts/`） |
 | [../reports/AUDIT-FIX-PLAN-v1.md](../reports/AUDIT-FIX-PLAN-v1.md) | **审计修复执行计划 = 逐批证据台账**（批 A–E 已落，F/G/H 排队） |
 | [../上下文与记忆工作流程报告.md](../上下文与记忆工作流程报告.md) | as-built 现状报告（v2.135 生成 + 逐批修订注；§1.2/§1.3 已按代码重写为七监听器） |
-| [ui-prototype/](ui-prototype/) | UI 静态原型（方向参考，不是像素合同） |
+| [ui-prototype/](ui-prototype/) | UI 静态原型（方向参考，不是像素合同）：index.html = 桌面壳全态；memory-board.html = 记忆树看板交互稿（配套《NEW/Memory Tree Board Design v1.md》，复用 css/tokens.css） |
 
 ---
 
@@ -103,6 +116,7 @@
 ```
 docs/design/
   DESIGN.md / ROADMAP.md / CHANGELOG.md / INDEX.md   四个顶层件：规范 / 进度 / 落点 / 本表
+  Post-Audit Roadmap v1.md   第五个顶层件（v2.182 立）：后审计施工队列 = 六份稿的实施顺序真源（Q 号）
   NEW/                    近几轮的设计稿（兑现后不搬走，靠本表标状态）
   BUG/                    工单与限制清单
   archive/                已退役 / 未采纳（含 AGENTS-progress-archive.md = 历史进度流水）

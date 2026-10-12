@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Locowrk · 记忆树看板原型 v1.2（Memory Tree Board）</title>
+<link rel="stylesheet" href="css/tokens.css">
+<style>
+/* ======================================================================
+   记忆树看板原型 v1.2 —— 《Memory Tree Board Design v1.1/1.2》配套交互稿
+   依赖同目录 css/tokens.css（同一套 --lw-* 令牌，明暗双主题）。
+   ⚠ 地位裁定（设计稿 v1.2 头注）：本原型只能作为实现 UI 的参考，
+     真实实施禁止搬运演示件与已知错误——主题切换按钮（设置页已有）、
+     mock 数据、toast 演示文案均不得进生产码。
+   交互：项目下拉 → 按日期会话列表 → 无限画布（拖拽平移 / 滚轮缩放）→
+        总结 →(点)→ 标题 →(点)→ 章节卡 →(点)→ 在会话流中定位；
+        该组全部标题与章节展开后，完整会话流才汇聚出现（逐层展开）。
+   ====================================================================== */
+html, body { height: 100%; }
+body { overflow: hidden; }
+
+/* ---- 外壳：左栏到顶深色 + 画布到顶浅色（无上栏、无发丝线） ---- */
+.mb-app { display: flex; height: 100%; }
+
+.mb-side {
+  width: 280px; flex: none;
+  background: var(--lw-bg-side);
+  display: flex; flex-direction: column;
+  padding: 14px 10px 12px;
+  min-height: 0;
+}
+.mb-side .sel {
+  appearance: none; -webkit-appearance: none;
+  width: 100%; height: 32px; padding: 0 28px 0 10px;
+  font: inherit; font-size: 12px; color: var(--lw-ink-1);
+  background-color: var(--lw-wash-1);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4.6 6.4 8 9.8 11.4 6.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center;
+  border: 1px solid var(--lw-line); border-radius: var(--lw-r-xs);
+  outline: none; cursor: pointer;
+}
+.mb-side .sel:focus { border-color: var(--lw-line-strong); }
+.mb-actions { display: flex; gap: 6px; margin-top: 8px; }
+.mb-abtn {
+  flex: 1; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 11px; color: var(--lw-ink-3);
+  background: var(--lw-wash-1);
+  border-radius: var(--lw-r-xs); cursor: pointer;
+  transition: background .12s var(--ease-out), color .12s var(--ease-out);
+}
+.mb-abtn:hover { background: var(--lw-wash-3); color: var(--lw-ink-1); }
+.mb-abtn svg { width: 13px; height: 13px; }
+
+/* 左栏会话列表：按日期分组，间距分区不用发丝线 */
+.mb-list { flex: 1; overflow-y: auto; margin-top: 14px; min-height: 0; }
+.mb-date {
+  font-size: 10px; color: var(--lw-ink-5);
+  padding: 12px 8px 5px; letter-spacing: .04em;
+}
+.mb-session {
+  width: 100%; text-align: left; cursor: pointer;
+  padding: 8px 10px; border-radius: var(--lw-r-xs);
+  transition: background .12s var(--ease-out);
+}
+.mb-session:hover { background: var(--lw-wash-2); }
+.mb-session.active { background: var(--lw-wash-3); }
+.mb-session .t {
+  font-size: 12px; color: var(--lw-ink-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mb-session .m {
+  margin-top: 2px; font-size: 10px; color: var(--lw-ink-5);
+  display: flex; gap: 8px; align-items: center;
+}
+.mb-chip {
+  font-size: 10px; padding: 0 6px; border-radius: var(--lw-r-full);
+  background: var(--lw-wash-2); color: var(--lw-ink-4);
+}
+.mb-chip.pending { background: color-mix(in oklab, var(--lw-warn) 16%, transparent); color: var(--lw-warn); }
+.mb-empty { padding: 24px 12px; font-size: 11px; color: var(--lw-ink-5); text-align: center; line-height: 1.9; }
+
+/* ---- 画布区：到顶浅色，无上栏 ---- */
+.mb-main { flex: 1; min-width: 0; position: relative; overflow: hidden; background: var(--lw-bg); }
+.mb-viewport { position: absolute; inset: 0; cursor: grab; }
+.mb-viewport.panning { cursor: grabbing; }
+
+/* 世界层：网格点阵是世界的一部分（随平移缩放移动，不是视口贴纸） */
+.mb-world {
+  position: absolute; top: 0; left: 0; width: 8000px; height: 6000px;
+  transform-origin: 0 0;
+  background-image: radial-gradient(color-mix(in oklab, var(--lw-ink-1) 14%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.mb-edges { position: absolute; top: 0; left: 0; pointer-events: none; }
+.mb-edges path { fill: none; stroke: var(--lw-line-strong); stroke-width: 1.1; }
+
+/* ---- 浮层（非节点、非分栏） ---- */
+.mb-session-tag {
+  position: absolute; left: 14px; bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--lw-bg-elevated); border: 1px solid var(--lw-line);
+  border-radius: var(--lw-r-sm); padding: 6px 12px;
+  font-size: 11px; color: var(--lw-ink-3);
+  box-shadow: 0 4px 16px rgb(0 0 0 / .18);
+  pointer-events: none; max-width: 60%;
+}
+.mb-session-tag b { color: var(--lw-ink-1); font-weight: 600; }
+.mb-session-tag .tail { color: var(--lw-ink-5); font-size: 10px; }
+.mb-zoom {
+  position: absolute; right: 14px; bottom: 14px;
+  display: flex; align-items: center; gap: 2px;
+  background: var(--lw-bg-elevated); border: 1px solid var(--lw-line);
+  border-radius: var(--lw-r-sm); padding: 2px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / .18);
+}
+.mb-zoom button {
+  width: 26px; height: 24px; font-size: 13px; color: var(--lw-ink-3);
+  border-radius: var(--lw-r-3xs); cursor: pointer;
+}
+.mb-zoom button:hover { background: var(--lw-wash-2); color: var(--lw-ink-1); }
+.mb-zoom .pct { font-size: 10px; color: var(--lw-ink-5); padding: 0 6px; min-width: 38px; text-align: center; }
+.mb-hint {
+  position: absolute; top: 12px; left: 14px;
+  font-size: 10px; color: var(--lw-ink-5);
+  pointer-events: none;
+}
+.mb-canvas-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--lw-ink-5); text-align: center; line-height: 2;
+  pointer-events: none;
+}
+
+/* ---- 节点通用（四列，列 x 基线恒定） ---- */
+.mb-node {
+  position: absolute;
+  background: var(--lw-bg-elevated);
+  border: 1px solid var(--lw-line);
+  border-radius: var(--lw-r-xs);
+  transition: opacity .15s var(--ease-out), border-color .15s var(--ease-out);
+}
+.mb-node.clickable { cursor: pointer; }
+.mb-node.clickable:hover { border-color: var(--lw-line-strong); }
+
+.col-summary { width: 250px; left: 32px; }
+.col-title   { width: 240px; left: 350px; }
+.col-chapter { width: 270px; left: 650px; }
+.col-stream  { width: 460px; left: 985px; }
+
+/* 第 1 列：总结 */
+.mb-summary { border-left: 3px solid color-mix(in oklab, var(--lw-ink-1) 55%, transparent); }
+.mb-summary .head {
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px 0;
+  font-size: 10px; color: var(--lw-ink-5);
+}
+.mb-summary .head .k { font-weight: 600; letter-spacing: .05em; color: var(--lw-ink-4); }
+.mb-summary .head .n {
+  margin-left: auto; font-size: 10px; color: var(--lw-ink-5);
+  background: var(--lw-wash-2); border-radius: var(--lw-r-full); padding: 0 7px;
+}
+.mb-summary .txt {
+  padding: 6px 12px 10px; font-size: 11.5px; line-height: 1.55; color: var(--lw-ink-2);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.mb-summary .caret { transition: transform .15s var(--ease-out); color: var(--lw-ink-5); flex: none; }
+.mb-summary.open .caret { transform: rotate(90deg); }
+.mb-summary.orphan { border-left-color: color-mix(in oklab, var(--lw-ink-1) 18%, transparent); }
+.mb-summary.orphan .k { color: var(--lw-ink-5); }
+
+/* 第 2 列：标题（窄条） */
+.mb-chtitle { padding: 9px 11px; display: flex; align-items: center; gap: 8px; }
+.mb-chtitle .dot {
+  width: 6px; height: 6px; border-radius: var(--lw-r-full); flex: none;
+  background: color-mix(in oklab, var(--lw-ink-1) 40%, transparent);
+}
+.mb-chtitle .t {
+  font-size: 11.5px; font-weight: 500; color: var(--lw-ink-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mb-chtitle .caret { margin-left: auto; flex: none; transition: transform .15s var(--ease-out); color: var(--lw-ink-5); }
+.mb-chtitle.open .caret { transform: rotate(90deg); }
+
+/* 第 3 列：章节（信息卡，原文在会话流里看） */
+.mb-chapter { padding: 9px 11px; }
+.mb-chapter .row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.mb-chapter .sum {
+  margin-top: 6px; font-size: 10.5px; line-height: 1.55; color: var(--lw-ink-3);
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.mb-chapter .goto {
+  margin-top: 7px; font-size: 10px; color: var(--lw-ink-5);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.mb-chapter .goto svg { width: 10px; height: 10px; }
+.mb-chapter:hover .goto { color: var(--lw-ink-2); }
+.mb-tag {
+  font-size: 9.5px; padding: 0 6px; border-radius: var(--lw-r-full); flex: none;
+  background: var(--lw-wash-2); color: var(--lw-ink-4);
+}
+.mb-tag.rule, .mb-tag.pending { background: color-mix(in oklab, var(--lw-warn) 14%, transparent); color: var(--lw-warn); }
+.mb-tag.manual { background: var(--lw-wash-3); }
+
+/* 第 4 列：完整会话流（一整块汇聚面板） */
+.mb-stream {
+  display: flex; flex-direction: column;
+  border-radius: var(--lw-r-sm);
+  border-left: 3px solid color-mix(in oklab, var(--lw-ink-1) 40%, transparent);
+}
+.mb-stream .shead {
+  flex: none; padding: 8px 12px;
+  display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--lw-line);
+}
+.mb-stream .shead .k { font-size: 11px; font-weight: 600; color: var(--lw-ink-1); }
+.mb-stream .shead .m { margin-left: auto; font-size: 10px; color: var(--lw-ink-5); }
+.mb-stream .scroll { flex: 1; overflow-y: auto; padding: 4px 0 8px; min-height: 0; }
+.mb-stream .sect { padding: 7px 12px 2px; }
+.mb-stream .sect-h {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; color: var(--lw-ink-4);
+  padding-bottom: 4px;
+}
+.mb-stream .sect-h .st { font-weight: 600; color: var(--lw-ink-3); }
+.mb-stream .sect.flash { background: var(--lw-wash-3); border-radius: var(--lw-r-2xs); }
+.mb-stream .r { font-size: 10.5px; line-height: 1.55; word-break: break-word; padding: 1.5px 0; }
+.mb-stream .idx { color: var(--lw-ink-5); user-select: none; margin-right: 4px; font-family: ui-monospace, monospace; font-size: 9.5px; }
+.mb-stream .user { color: var(--lw-ink-1); }
+.mb-stream .assistant { color: var(--lw-ink-3); }
+.mb-stream .tool_call, .mb-stream .tool_result { color: var(--lw-ink-5); font-family: ui-monospace, monospace; font-size: 9.5px; }
+.mb-stream .note { color: var(--lw-ink-5); font-style: italic; }
+
+.mb-toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+  background: var(--lw-bg-elevated); color: var(--lw-ink-2);
+  border: 1px solid var(--lw-line); border-radius: var(--lw-r-sm);
+  padding: 7px 14px; font-size: 11px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / .18);
+  opacity: 0; pointer-events: none;
+  transition: opacity .18s var(--ease-out);
+  z-index: 9;
+}
+.mb-toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 5.2a1.4 1.4 0 0 1 1.4-1.4h2.4l1.4 1.6h4.2a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H4a1.4 1.4 0 0 1-1.4-1.4Z"/></symbol>
+  <symbol id="i-right" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 4.6 9.8 8 6.4 11.4"/></symbol>
+  <symbol id="i-target" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="4.6"/><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/><path d="M8 1.6v2M8 12.4v2M1.6 8h2M12.4 8h2"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.4 3.6 5 8l4.4 4.4M5 8h8"/></symbol>
+</svg>
+
+<div class="mb-app">
+
+  <!-- 左栏：到顶深色（项目 + 动作 + 按日期会话列表 + 底部返回；栏内不用发丝线分区） -->
+  <aside class="mb-side">
+    <select class="sel" id="projectSel" title="选择项目"></select>
+    <div class="mb-actions">
+      <button class="mb-abtn" id="revealBtn" title="打开该项目的事实层记忆目录（memory/projects/&lt;项目&gt;/facts/）">
+        <svg><use href="#i-folder"/></svg>打开记忆目录
+      </button>
+    </div>
+    <div class="mb-list" id="sessionList"></div>
+    <!-- 出口与入口成对：真实实现经侧栏导航返回对话主视图 -->
+    <button class="mb-abtn" id="backBtn" style="margin-top:10px">
+      <svg><use href="#i-back"/></svg>返回主界面
+    </button>
+  </aside>
+
+  <!-- 画布区：到顶浅色，无上栏 -->
+  <main class="mb-main">
+    <div class="mb-viewport" id="viewport">
+      <div class="mb-world" id="world">
+        <svg class="mb-edges" id="edges" width="8000" height="6000"></svg>
+        <div id="nodes"></div>
+      </div>
+    </div>
+    <div class="mb-hint">拖拽平移 · 滚轮缩放 · 总结→标题→章节 逐层展开，全部展开后汇聚为完整会话流</div>
+    <div class="mb-canvas-empty" id="canvasEmpty" style="display:none"></div>
+    <div class="mb-session-tag" id="sessionTag" style="display:none"></div>
+    <div class="mb-zoom">
+      <button id="zoomOut" title="缩小">−</button>
+      <span class="pct" id="zoomPct">100%</span>
+      <button id="zoomIn" title="放大">＋</button>
+      <button id="zoomFit" title="适应全部内容" style="width:34px">⤢</button>
+    </div>
+  </main>
+</div>
+
+<div class="mb-toast" id="toast"></div>
+
+<script>
+/* ======================================================================
+   mock 数据 —— 形状对位现役投影（设计稿 §2.1 对位表）
+   summaries[]: RunSummary{ id,from,to,text,created }（轮级总结链 = 画布第 1 列）
+   chapters[]:  MemoryChapter{ id,title,summary,from,to,source,pending?,edited?,
+                original:[{i,kind,text}] }（标题 = L0；章节卡 = L1；original 进会话流）
+   归组 = chapter.[from,to] ⊆ summary.[from,to]；否则挂「未归总结」组。
+   ====================================================================== */
+const DATA = {
+  "F:\\Projects\\TITY": {
+    label: "TITY · F:\\Projects\\TITY",
+    sessions: [
+      {
+        id: "sess_20261011_board",
+        title: "记忆树看板原型设计",
+        updated: "2026-10-11 11:41",
+        chapteredUntil: 52, tail: 11,
+        summaries: [
+          { id: "s1", from: 0, to: 18, created: "10-11 09:12",
+            text: "用户提出记忆面板混排难用，希望按项目浏览记忆。助手盘点现状（事实库列表 + 树区块上下堆叠、会话下拉混所有项目），确认缺口：无项目维度、无日期维度、无画布。" },
+          { id: "s2", from: 19, to: 34, created: "10-11 10:03",
+            text: "双方对齐看板形态：进入面板先选项目，按日期列会话，点会话出无限画布，总结→标题→章节四层展开，全部展开后汇聚为完整会话流；看板只读不编辑。" },
+          { id: "s3", from: 35, to: 52, created: "10-11 11:20",
+            text: "落定项目关联与目录入口：移除项目时记忆树默认跟随隐藏，可选级联删除（勾选确认）；项目处一键打开缓存记忆目录。产出 HTML 原型。" },
+        ],
+        chapters: [
+          { id: "b1", title: "现状盘点：记忆页混排问题", from: 0, to: 8, source: "recorder", created: "10-11 09:12",
+            summary: "MemoryPage 一页竖向堆事实库列表与 TreeSection；会话下拉混所有项目；总结链与章节列表并列不构成层级；无日期维度（updated_ms 已有未用）。",
+            original: [
+              { i: 0, kind: "user", text: "现在就是我们的记忆面板，这个没有参考项了只能自己设计了。现在的整个是混合在一起的，查看很不方便。" },
+              { i: 2, kind: "assistant", text: "先盘点现状：事实库平铺列表 + TreeSection 上下堆叠，会话选择器把所有项目的会话混在一个下拉里……" },
+              { i: 4, kind: "tool_call", text: "fs_read MemoryPage.vue（303 行）" },
+              { i: 5, kind: "tool_result", text: "→ 事实库区块 + <TreeSection /> 双区块确认" },
+            ] },
+          { id: "b2", title: "数据模型对位：层级映射", from: 9, to: 18, source: "recorder", created: "10-11 09:12",
+            summary: "总结 = RunSummary（轮级总结链）；标题 = 章节 L0；章节 = L1 摘要。归组 = 区间包含；孤儿章节挂未归总结组。",
+            original: [
+              { i: 10, kind: "assistant", text: "看板各层与现役投影一一对应：RunSummary → MemoryChapter.title → .summary，原文走切片读取。" },
+              { i: 13, kind: "user", text: "对，就是总结点开是标题，标题点开是章节。" },
+              { i: 15, kind: "tool_call", text: "fs_read tree.rs chapter.rs" },
+            ] },
+          { id: "b3", title: "交互规格：三段渐进布局", from: 19, to: 26, source: "recorder", created: "10-11 10:03",
+            summary: "顶部项目下拉（锚定 fsRoots）；左栏按今天/昨天/更早分组；主区无限画布横向脑图生长，各列 x 基线恒定，展开不横推兄弟子树。",
+            original: [
+              { i: 21, kind: "assistant", text: "画布支持拖拽平移、滚轮以光标为中心缩放、右下角适应按钮；连线用 SVG 贝塞尔。" },
+              { i: 23, kind: "user", text: "总结后面展开看标题，标题后面展开章节。" },
+            ] },
+          { id: "b4", title: "只读裁定与编辑面去留", from: 27, to: 30, source: "recorder", created: "10-11 10:03",
+            summary: "看板零编辑零删除；TreeSection 编辑能力保留不动，未来合并入口再走标准修订。",
+            original: [
+              { i: 29, kind: "user", text: "记忆树看板只需查看分层记忆内容就可以了，不需要编辑记忆。" },
+            ] },
+          { id: "b5", title: "会话流：汇聚面板定形", from: 31, to: 34, source: "recorder", created: "10-11 10:40",
+            summary: "所有标题和章节展开后，各章原文按事件序汇入最右侧一整块「完整会话流」面板；章节卡点击在流中定位小节。",
+            original: [
+              { i: 32, kind: "user", text: "（手绘草图）总结 → 5 个标题 → 章节 → 全部汇到右边一大块完整会话。" },
+              { i: 33, kind: "assistant", text: "收到：第 4 列 = 汇聚面板，高度等于该总结子树跨度，章节各一条汇入边。" },
+            ] },
+          { id: "b6", title: "项目移除语义与 v2.113 冲突调和", from: 35, to: 44, source: "recorder", created: "10-11 11:20",
+            summary: "现状移除项目 = 摘 fsRoots 非破坏（重加恢复）；调和 = 确认弹窗加勾选「同时删除记忆数据」，默认不勾；无论勾选与否面板即刻不可见。",
+            original: [
+              { i: 37, kind: "user", text: "当这个项目在项目目录里移除，记忆树自然也就跟着移除了。" },
+              { i: 39, kind: "assistant", text: "与 v2.113「移除项目数据不动」裁定相抵，调和方案：默认非破坏，勾选才级联删除。" },
+            ] },
+          { id: "b7", title: "一键打开记忆目录", from: 45, to: 52, source: "rule", edited: true, created: "10-11 11:20",
+            summary: "复用 open_in_explorer 壳；新命令优先开事实层 memory/projects/<项目>/，不存在则先建目录。",
+            original: [
+              { i: 47, kind: "tool_call", text: "grep reveal_folder commands/*.rs" },
+              { i: 48, kind: "tool_result", text: "→ open_in_explorer（explorer/open/xdg-open）已有" },
+            ] },
+          { id: "b8", title: "对话 #53-64", from: 53, to: 64, source: "placeholder", pending: true, created: "10-11 11:41",
+            summary: "整理进行中（占位）。" },
+        ],
+      },
+      {
+        id: "sess_20261011_audit",
+        title: "审计修复批 F-4 讨论",
+        updated: "2026-10-11 08:02",
+        chapteredUntil: 30, tail: 0,
+        summaries: [
+          { id: "s1", from: 0, to: 30, created: "10-11 08:02",
+            text: "审计批 F-4 收尾：暂存路径竞争守卫入库，20 轮零红；抓到两条验证器假绿（copyFileSync 回传旧 mtime、clippy 少 -- 被管道盖退出码），门禁命令块已订正。" },
+        ],
+        chapters: [
+          { id: "b1", title: "暂存路径一人一份落法", from: 0, to: 14, source: "recorder", created: "10-11 08:02",
+            summary: "stage() 落点改 {run_root}/{id}/{version}/stage-{n}/，进程内 AtomicU64；不走原子 rename 的理由 = 永不 dlclose，已装载 dll 被系统映射必撞 os error 32。",
+            original: [
+              { i: 2, kind: "assistant", text: "同一测试二进制内的竞争 12/18 次踩在共享路径上，批 F-2b 那条 fs_fetch 4 failed 正是 ×4 的那个二进制。" },
+              { i: 6, kind: "user", text: "这个竞争为什么不能靠内容相同跳过？" },
+            ] },
+          { id: "b2", title: "两条验证器假绿与门禁订正", from: 15, to: 30, source: "recorder", created: "10-11 08:02",
+            summary: "sha 只证明内容，Compiling 行才证明运行态；门禁脚本 cargo clippy 少写 -- 且被 | tail 盖退出码 = GATE_FAIL=0 假绿，两处已按正确形式复跑 = 0。",
+            original: [
+              { i: 18, kind: "assistant", text: "教训入档：跑闸 && 串联、不套管道；还原变异后必须刷 mtime。" },
+            ] },
+        ],
+      },
+      {
+        id: "sess_20261009_memquery",
+        title: "记忆检索失败排查（TITY 会话）",
+        updated: "2026-10-09 16:47",
+        chapteredUntil: 22, tail: 3,
+        summaries: [
+          { id: "s1", from: 0, to: 22, created: "10-09 16:47",
+            text: "新会话查不到历史记忆：事实层 0 行（写入唯一路径是模型主动 memory_write，从未发生）；树投影 27KB 有货但 memory_project_history 被 Top-20 挤出曝光；guidance 禁开场读记忆。" },
+        ],
+        chapters: [
+          { id: "b1", title: "证据链：audit.jsonl 实证", from: 0, to: 22, source: "recorder", created: "10-09 16:47",
+            summary: "audit.jsonl 尾部实证模型调了 memory_list / memory_search(\"TITY\") 落空后转身翻项目文件夹 handoff.md；记忆树真有货但够不着。",
+            original: [
+              { i: 0, kind: "user", text: "查一下你之前的记忆。" },
+              { i: 3, kind: "tool_call", text: "memory_search(\"TITY\")" },
+              { i: 4, kind: "tool_result", text: "→ 0 hits" },
+              { i: 6, kind: "assistant", text: "没有找到持久记忆库中的相关记录，我在当前项目文件夹里找到了这些产物……" },
+            ] },
+          { id: "b9", title: "遗留：曝光修正清单", from: 23, to: 25, source: "rule", created: "10-09 16:50",
+            summary: "memory_project_history 应升 Always；批 2 常驻进展行解冻；guidance 对显式问过去开口子。",
+            original: [
+              { i: 24, kind: "assistant", text: "修复方向已记入 Memory Redesign v1 批 M1。" },
+            ] },
+        ],
+      },
+    ],
+  },
+  "F:\\Warehouse\\AIwork\\Locowrk": {
+    label: "Locowrk · 本仓库",
+    sessions: [
+      {
+        id: "sess_20261010_zcode_ui",
+        title: "ZCode UI 规范移植",
+        updated: "2026-10-10 21:30",
+        chapteredUntil: 40, tail: 2,
+        summaries: [
+          { id: "s1", from: 0, to: 40, created: "10-10 21:30",
+            text: "把 ZCode DESIGN.md 微调移植为《UI Design System》：text-ui-* 相对字阶、圆角嵌套降档、十项冲突裁决表；两份既有 UI 文档降为下位细则。" },
+        ],
+        chapters: [
+          { id: "b1", title: "冲突裁决表：十项裁定", from: 0, to: 20, source: "recorder", created: "10-10 21:30",
+            summary: "「不要卡片」红线废止（运营型 UI 可用卡）；零裸 JSON 降为兜底；ThinkingRow 默认收起反转；边框规则修订放行结构性分隔。",
+            original: [
+              { i: 5, kind: "user", text: "我们的硬规则清单可以根据 zcode 的做调整，不是死约束。" },
+            ] },
+          { id: "b2", title: "令牌映射与降位注", from: 21, to: 40, source: "recorder", created: "10-10 21:30",
+            summary: "ZCode 角色 → --lw-* 令牌映射表落定；UI shell 与 Guidelines 头部加降位注；INDEX.md 权威表登记。",
+            original: [
+              { i: 30, kind: "tool_call", text: "edit INDEX.md（权威表 + 待研究表）" },
+            ] },
+        ],
+      },
+    ],
+  },
+  "_root": {
+    label: "未归属（无项目目录）",
+    sessions: [
+      {
+        id: "sess_20261008_scratch",
+        title: "临时试验：cron 表达式草案",
+        updated: "2026-10-08 14:05",
+        chapteredUntil: 10, tail: 4,
+        summaries: [],
+        chapters: [
+          { id: "b1", title: "cron crate 选型笔记", from: 0, to: 10, source: "rule", created: "10-08 14:05",
+            summary: "Rust cron 0.13 支持 5/7 段与本地时区；与既有 interval 语义并存，scheduleRule 为权威。",
+            original: [
+              { i: 2, kind: "assistant", text: "草稿：engine 加 cron 字段，run_at/interval/cron 三态并存。" },
+            ] },
+        ],
+      },
+    ],
+  },
+};
+
+/* ---- 四列 x 基线（恒定，展开不横推兄弟子树） ---- */
+const COL = { summary: 32, title: 350, chapter: 650, stream: 985 };
+const GAP_Y = 16;
+
+/* ---- 状态（展开态全部存稳定键：组 = summary.id；标题/章节 = 投影对象引用，
+     会话流开合 = 组键；activeSection = 待定位的章节 id） ---- */
+let state = {
+  project: null, session: null,
+  openSummaries: new Set(),  // 组键字符串
+  openTitles: new Set(),     // 章节 id 字符串（标题展开 = 显示其章节卡）
+  activeSection: null,       // { gkey, chapterId } 待定位
+};
+const $ = (id) => document.getElementById(id);
+const world = $("world"), nodesEl = $("nodes"), edgesEl = $("edges");
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+/* ---- 项目下拉 ---- */
+function initProjects() {
+  const sel = $("projectSel");
+  for (const [key, p] of Object.entries(DATA)) {
+    const o = document.createElement("option");
+    o.value = key; o.textContent = p.label;
+    sel.appendChild(o);
+  }
+  sel.addEventListener("change", () => selectProject(sel.value));
+}
+function selectProject(key) {
+  state.project = key; state.session = null;
+  renderSessionList(); renderBoard();
+}
+
+/* ---- 左栏：按日期分组 ---- */
+function dateGroupOf(updated) {
+  const d = updated.slice(0, 10);
+  if (d === "2026-10-11") return "今天";
+  if (d === "2026-10-10") return "昨天";
+  const m = d.match(/^(\d+)-(\d+)$/);
+  return m ? `${+m[1]}月${+m[2]}日` : d;
+}
+function renderSessionList() {
+  const box = $("sessionList");
+  box.innerHTML = "";
+  const p = DATA[state.project];
+  if (p.sessions.length === 0) {
+    box.innerHTML = `<div class="mb-empty">该项目还没有整理过的会话<br>对会话发送 /整理 后这里会出现记忆树</div>`;
+    return;
+  }
+  const groups = new Map();
+  for (const s of p.sessions) {
+    const g = dateGroupOf(s.updated);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(s);
+  }
+  for (const [g, list] of groups) {
+    const h = document.createElement("div");
+    h.className = "mb-date"; h.textContent = g;
+    box.appendChild(h);
+    for (const s of list) {
+      const b = document.createElement("button");
+      b.className = "mb-session" + (state.session === s ? " active" : "");
+      const pend = s.chapters.filter(c => c.pending).length;
+      b.innerHTML = `
+        <div class="t"></div>
+        <div class="m">
+          <span>${s.summaries.length} 总结</span>
+          <span>${s.chapters.filter(c => !c.pending).length} 章节</span>
+          ${pend ? `<span class="mb-chip pending">整理中 ${pend}</span>` : ""}
+        </div>`;
+      b.querySelector(".t").textContent = s.title;
+      b.addEventListener("click", () => {
+        state.session = s;
+        state.openSummaries = new Set();
+        state.openTitles = new Set();
+        state.activeSection = null;
+        renderSessionList();
+        renderBoard();
+        fitView(); // 切会话自动适应一次
+      });
+      box.appendChild(b);
+    }
+  }
+}
+
+/* ---- 归组：章节 → 总结（区间包含）；否则孤儿。组键 = summary.id / __orphan ---- */
+function groupKey(g) { return g.summary ? g.summary.id : "__orphan"; }
+function groupChapters(session) {
+  const groups = session.summaries.map(sm => ({
+    summary: sm, chapters: session.chapters.filter(c => c.from >= sm.from && c.to <= sm.to),
+  }));
+  const covered = new Set(groups.flatMap(g => g.chapters.map(c => c.id)));
+  const orphans = session.chapters.filter(c => !covered.has(c.id));
+  if (orphans.length) groups.push({ summary: null, chapters: orphans });
+  return groups;
+}
+
+/* ---- 渲染 helpers ---- */
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+function escapeHtml(t) { const d = el("div"); d.textContent = t; return d.innerHTML; }
+function rowHtml(r) {
+  const kindText = { user: "用户", assistant: "助手", tool_call: "工具调用", tool_result: "工具结果" }[r.kind] || r.kind;
+  const note = r.kind.startsWith("tool") ? "" : `<span class="note">${kindText}：</span>`;
+  return `<div class="r ${r.kind}"><span class="idx">[${r.i}]</span>${note}<span>${escapeHtml(r.text)}</span></div>`;
+}
+function tagHtml(c) {
+  return `<span class="mb-tag ${c.source === "rule" ? "rule" : ""}">${c.source === "rule" ? "规则切分" : "记忆管理器"}</span>` +
+    (c.edited ? `<span class="mb-tag manual">手动</span>` : "");
+}
+
+/* ---- 画布渲染：总结 → 标题 → 章节 → 汇聚完整会话流 ---- */
+function renderBoard() {
+  nodesEl.innerHTML = ""; edgesEl.innerHTML = "";
+  const s = state.session;
+  const empty = $("canvasEmpty"), tag = $("sessionTag");
+  if (!s) {
+    tag.style.display = "none";
+    empty.style.display = "flex";
+    empty.innerHTML = "← 从左侧选择一条会话<br>画布将展示它的全部总结，逐层展开直至完整会话流";
+    applyView();
+    return;
+  }
+  empty.style.display = "none";
+  tag.style.display = "flex";
+  tag.innerHTML = `<b></b><span>${s.updated.slice(0, 10)}</span>` +
+    (s.tail ? `<span class="tail">未整理 ${s.tail} 条</span>` : "");
+  tag.querySelector("b").textContent = s.title;
+
+  const groups = groupChapters(s);
+  layoutGroup._cursor = 40; // 组游标复位：每个组占一段纵带，自上而下排布
+
+  for (const g of groups) {
+    const gkey = groupKey(g);
+    const open = state.openSummaries.has(gkey);
+    const okChapters = g.chapters.filter(c => !c.pending);
+    // 逐层展开纪律：该组全部标题与章节都展开后，完整会话流才汇聚出现（不预显）
+    const allTitlesOpen = okChapters.length > 0 && okChapters.every(c => state.openTitles.has(c.id));
+    const streamable = open && allTitlesOpen;
+
+    /* 第 1 列：总结 */
+    const sn = el("div", "mb-node mb-summary col-summary clickable" + (open ? " open" : "") + (g.summary ? "" : " orphan"));
+    sn.innerHTML = `
+      <div class="head">
+        <svg class="caret" width="10" height="10"><use href="#i-right"/></svg>
+        <span class="k"></span>
+        <span>${g.summary ? g.summary.created : ""}</span>
+        <span class="n">${okChapters.length} 标题</span>
+      </div>
+      <div class="txt"></div>`;
+    sn.querySelector(".k").textContent = g.summary ? "总结" : "未归总结（规则切分轮）";
+    sn.querySelector(".txt").textContent = g.summary ? g.summary.text : "该轮由规则切分产出（无总结叙事），章节直接挂载。";
+    sn.addEventListener("click", () => {
+      if (state.openSummaries.has(gkey)) state.openSummaries.delete(gkey);
+      else state.openSummaries.add(gkey);
+      renderBoard();
+    });
+    nodesEl.appendChild(sn);
+
+    if (!open) { layoutGroup(g, sn, null, []); continue; }
+
+    /* 第 2 列：标题；第 3 列：章节卡 */
+    const sub = [];
+    for (const c of g.chapters) {
+      sub.push({ c });
+      if (c.pending) {
+        const p = el("div", "mb-node mb-chtitle col-title");
+        p.innerHTML = `<span class="dot" style="background:var(--lw-warn)"></span><span class="t" style="color:var(--lw-ink-4)">整理中…（占位章节）</span>`;
+        nodesEl.appendChild(p);
+        c._node = p; c._chaps = [];
+        continue;
+      }
+      const tOpen = state.openTitles.has(c.id);
+      const tn = el("div", "mb-node mb-chtitle col-title clickable" + (tOpen ? " open" : ""));
+      tn.innerHTML = `<span class="dot"></span><span class="t"></span>
+        <svg class="caret" width="10" height="10"><use href="#i-right"/></svg>`;
+      tn.querySelector(".t").textContent = c.title;
+      tn.title = c.title;
+      tn.addEventListener("click", () => {
+        if (state.openTitles.has(c.id)) state.openTitles.delete(c.id);
+        else state.openTitles.add(c.id);
+        renderBoard();
+      });
+      nodesEl.appendChild(tn);
+      c._node = tn;
+
+      /* 第 3 列章节卡（标题展开时可见） */
+      c._chaps = [];
+      if (tOpen) {
+        const cn = el("div", "mb-node mb-chapter col-chapter clickable");
+        cn.innerHTML = `
+          <div class="row">${tagHtml(c)}
+            <span style="margin-left:auto;font-size:9.5px;color:var(--lw-ink-5)">事件 ${c.from}–${c.to}</span>
+          </div>
+          <div class="sum"></div>
+          <div class="goto"><svg><use href="#i-target"/></svg><span></span></div>`;
+        cn.querySelector(".sum").textContent = c.summary;
+        cn.querySelector(".goto span").textContent = allTitlesOpen
+          ? "在会话流中定位这段对话"
+          : "展开该组全部标题后，章节将汇聚为完整会话流";
+        cn.addEventListener("click", () => {
+          if (!allTitlesOpen) {
+            toast("先把该总结下的全部标题展开，完整会话流才会汇聚出现");
+            return;
+          }
+          state.activeSection = { gkey, chapterId: c.id };
+          renderBoard();
+        });
+        nodesEl.appendChild(cn);
+        c._chaps = [cn];
+      }
+    }
+
+    /* 第 4 列：完整会话流（汇聚面板）——有可看章节才立 */
+    let streamNode = null;
+    if (streamable) {
+      streamNode = el("div", "mb-node mb-stream col-stream");
+      const totalRows = okChapters.reduce((a, c) => a + c.original.length, 0);
+      streamNode.innerHTML = `
+        <div class="shead"><span class="k">完整会话流</span>
+          <span class="m">${g.summary ? "总结 " + g.summary.id + " · " : "未归章节 · "}${okChapters.length} 章节 · ${totalRows} 条 · 事件序</span>
+        </div>
+        <div class="scroll">
+          ${okChapters.map(c => `
+            <div class="sect" data-sect="${c.id}">
+              <div class="sect-h"><span class="st"></span>${tagHtml(c)}<span style="margin-left:auto;font-size:9.5px;color:var(--lw-ink-5)">${c.from}–${c.to}</span></div>
+              ${c.original.map(rowHtml).join("")}
+            </div>`).join("")}
+        </div>`;
+      for (const c of okChapters) {
+        const st = streamNode.querySelector(`[data-sect="${c.id}"] .st`);
+        if (st) st.textContent = c.title;
+      }
+      nodesEl.appendChild(streamNode);
+    }
+
+    /* 布局本组并画边 */
+    layoutGroup(g, sn, streamNode, sub);
+  }
+
+  /* 定位请求：滚到对应小节并高亮 */
+  if (state.activeSection) {
+    const { gkey, chapterId } = state.activeSection;
+    state.activeSection = null;
+    const panel = [...nodesEl.querySelectorAll(".mb-stream")].find(p => p._gkey === gkey);
+    const sect = panel && panel.querySelector(`[data-sect="${chapterId}"]`);
+    if (panel && sect) {
+      const scroll = panel.querySelector(".scroll");
+      scroll.scrollTop = sect.offsetTop - scroll.offsetTop - 6;
+      sect.classList.add("flash");
+      setTimeout(() => sect.classList.remove("flash"), 1400);
+    }
+  }
+
+  applyView();
+}
+
+/* ---- 组内布局：纵带式（每组占一段 y 区间），标题列纵排，章节卡挂在
+     标题右侧，流面板占子树全跨度（草图右侧大盒），章节卡各一条汇入边 ---- */
+function layoutGroup(g, sn, streamNode, sub) {
+  const H = (n) => n.offsetHeight || 36;
+  const y = layoutGroup._cursor ?? 40;
+
+  // 标题子树高 = 标题开 ? max(标题高, Σ章节卡高+gap) : 标题高
+  const subH = sub.map(({ c }) => {
+    const tH = H(c._node);
+    const cH = c._chaps.reduce((a, n) => a + H(n), 0) + GAP_Y * Math.max(0, c._chaps.length - 1);
+    return { c, h: Math.max(tH, cH) };
+  });
+  const bodyH = subH.reduce((a, x) => a + x.h, 0) + GAP_Y * Math.max(0, subH.length - 1);
+  const totalH = Math.max(H(sn), bodyH);
+
+  // 总结节点（组根）顶对齐纵带起点
+  sn.style.top = y + "px";
+  sn._box = { x: COL.summary, y, w: sn.offsetWidth, h: H(sn) };
+
+  // 流面板：占子树全跨度
+  if (streamNode) {
+    streamNode._gkey = groupKey(g);
+    const sh = Math.max(160, totalH);
+    streamNode.style.top = y + "px";
+    streamNode.style.height = sh + "px";
+    streamNode._box = { x: COL.stream, y, w: streamNode.offsetWidth, h: sh };
+  }
+
+  const edge = (x1, y1, x2, y2) => {
+    const mx = (x1 + x2) / 2;
+    edgesEl.innerHTML += `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`;
+  };
+  const sb = sn._box;
+  let ty = y;
+  for (const { c, h } of subH) {
+    const tH = H(c._node);
+    c._node.style.top = (ty + (h - tH) / 2) + "px";
+    c._node._box = { x: COL.title, y: ty + (h - tH) / 2, w: c._node.offsetWidth, h: tH };
+    edge(sb.x + sb.w, sb.y + sb.h / 2, c._node._box.x, c._node._box.y + c._node._box.h / 2);
+
+    if (c._chaps.length) {
+      const cn = c._chaps[0];
+      cn.style.top = ty + "px";
+      cn._box = { x: COL.chapter, y: ty, w: cn.offsetWidth, h: H(cn) };
+      const tb = c._node._box;
+      edge(tb.x + tb.w, tb.y + tb.h / 2, cn._box.x, cn._box.y + cn._box.h / 2);
+      // 汇聚边：章节卡 → 会话流左缘（草图中的收敛弧线）
+      if (streamNode) {
+        const stb = streamNode._box;
+        const targetY = Math.min(Math.max(cn._box.y + cn._box.h / 2, stb.y + 18), stb.y + stb.h - 18);
+        edge(cn._box.x + cn._box.w, cn._box.y + cn._box.h / 2, stb.x, targetY);
+      }
+    }
+    ty += h + GAP_Y;
+  }
+  layoutGroup._cursor = y + totalH + 34; // 下一组纵带起点（含组间距）
+}
+
+/* ---- 视图：平移 / 缩放 / 适应 ---- */
+function applyView() {
+  const { x, y, k } = state.view;
+  world.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+  $("zoomPct").textContent = Math.round(k * 100) + "%";
+}
+function zoomAt(factor, cx, cy) {
+  const { x, y, k } = state.view;
+  const nk = Math.min(2, Math.max(0.35, k * factor));
+  const r = nk / k;
+  state.view = { k: nk, x: cx - (cx - x) * r, y: cy - (cy - y) * r };
+  applyView();
+}
+function fitView() {
+  const boxes = [...nodesEl.children].map(n => n._box).filter(Boolean);
+  if (!boxes.length) { state.view = { x: 60, y: 40, k: 1 }; applyView(); return; }
+  const minX = Math.min(...boxes.map(b => b.x)), minY = Math.min(...boxes.map(b => b.y));
+  const maxX = Math.max(...boxes.map(b => b.x + b.w)), maxY = Math.max(...boxes.map(b => b.y + b.h));
+  const vp = $("viewport").getBoundingClientRect();
+  const pad = 44;
+  const k = Math.min(1.6, Math.max(0.35, Math.min((vp.width - pad * 2) / (maxX - minX), (vp.height - pad * 2) / (maxY - minY))));
+  state.view = { k, x: (vp.width - (maxX - minX) * k) / 2 - minX * k, y: (vp.height - (maxY - minY) * k) / 2 - minY * k };
+  applyView();
+}
+state.view = { x: 60, y: 40, k: 1 };
+
+const viewport = $("viewport");
+let pan = null;
+viewport.addEventListener("mousedown", (e) => {
+  if (e.target.closest(".mb-node") || e.target.closest(".mb-zoom")) return;
+  pan = { sx: e.clientX, sy: e.clientY, ox: state.view.x, oy: state.view.y };
+  viewport.classList.add("panning");
+});
+window.addEventListener("mousemove", (e) => {
+  if (!pan) return;
+  state.view.x = pan.ox + (e.clientX - pan.sx);
+  state.view.y = pan.oy + (e.clientY - pan.sy);
+  applyView();
+});
+window.addEventListener("mouseup", () => { pan = null; viewport.classList.remove("panning"); });
+viewport.addEventListener("wheel", (e) => {
+  if (e.target.closest(".mb-stream .scroll")) return; // 会话流内部滚动优先
+  e.preventDefault();
+  const rect = viewport.getBoundingClientRect();
+  zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top);
+}, { passive: false });
+$("zoomIn").addEventListener("click", () => { const r = viewport.getBoundingClientRect(); zoomAt(1.2, r.width / 2, r.height / 2); });
+$("zoomOut").addEventListener("click", () => { const r = viewport.getBoundingClientRect(); zoomAt(1 / 1.2, r.width / 2, r.height / 2); });
+$("zoomFit").addEventListener("click", fitView);
+
+/* ---- 左栏动作 ---- */
+$("revealBtn").addEventListener("click", () => {
+  if (state.project === "_root") { toast("未归属会话没有项目记忆目录"); return; }
+  toast("原型演示：将调用 memory_reveal_project 打开 memory/projects/<该项目>/facts/（设计稿 §5）");
+});
+$("backBtn").addEventListener("click", () => {
+  // 真实实现 = 经侧栏导航返回对话主视图（原型仅演示出口存在）
+  toast("原型演示：返回对话主界面");
+});
+
+/* ---- 启动 ---- */
+initProjects();
+selectProject("F:\\Projects\\TITY");
+</script>
+</body>
+</html>
