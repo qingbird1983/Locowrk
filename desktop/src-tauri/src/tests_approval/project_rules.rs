@@ -81,11 +81,15 @@ async fn project_scope_persists_exact_command_rule() {
     assert!(d.allowed, "决策后 step 醒来放行");
     // 精确命令规则落盘
     assert!(
-        rules.allows("ws-A", "shell", Some("node server.js")),
+        rules
+            .verdicts("ws-A", "shell", Some("node server.js"))
+            .allowed,
         "scope=project 必须持久化规则"
     );
     assert!(
-        !rules.allows("ws-A", "shell", Some("node other.js")),
+        !rules
+            .verdicts("ws-A", "shell", Some("node other.js"))
+            .allowed,
         "v1 粘性 = 精确命令，不同命令不得被放宽"
     );
     // 第二次同命令：免卡直行
@@ -118,6 +122,10 @@ async fn project_scope_without_workspace_skips_persistence() {
         .await;
     worker.await.unwrap();
     assert!(d.allowed, "当次放行不受持久化缺席影响");
-    assert!(!rules.allows("ws-A", "shell", Some("node server.js")));
+    assert!(
+        !rules
+            .verdicts("ws-A", "shell", Some("node server.js"))
+            .allowed
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

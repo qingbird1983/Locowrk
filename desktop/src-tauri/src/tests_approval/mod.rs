@@ -2,10 +2,13 @@
 //! （原在 tests.rs，400 行纪律拆出；共用收集器与 kind 从 tests 引入。）
 //! v2.145 追加：项目粘性规则两级（③deny / ⑤allow）+ 子会话审批改道。
 //! 批 F-14 目录化：共享假件留本文件，用例按面分簇见 `hub_basic` / `session_timeout` /
-//! `project_rules` / `child_session`。
+//! `project_rules` / `child_session`；批 F-24a 追加 `ctx_parse`（M-18a 解析次数计数判据）
+//! 与 `m18_equiv`（M-18e② `is_outside` 对 HEAD 原文的等值矩阵）。
 
 mod child_session;
+mod ctx_parse;
 mod hub_basic;
+mod m18_equiv;
 mod project_rules;
 mod session_timeout;
 

@@ -39,6 +39,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use kernel_agent::{ApprovalDecision, ApprovalResolver, ToolCallReq};
+use plugin_api::ffi::CallContext;
 use plugin_api::ToolSpec;
 use tokio::sync::oneshot;
 
@@ -275,6 +276,24 @@ impl ApprovalResolver for ApprovalHub {
             return ApprovalDecision::deny("计划模式只读：不可写/不可逆调用一律拒绝");
         }
 
+        // M-18a：**一次决策只解析一次会话上下文**。生产 resolver
+        // （`workspace.rs::session_context_resolver`）每次调用都读一遍会话
+        // 旁车 `.meta.json`，再对 `[数据根] ∪ settings.fsRoots` 逐个
+        // `canonicalize`（系统调用）；改前 `resolve` 有四个独立解析点（越界门
+        // `scan_roots` + ③deny/⑤allow/卡载荷各一次 `workspace_of`），最坏
+        // 路径把同一份旁车读四遍（实测真值见
+        // `tests_approval/ctx_parse.rs`）。放在①之后 = Plan 档纵深防御直接
+        // 拒绝时不付这笔开销。生产装配三件齐（`kernel_stack.rs`）⇒ 本行
+        // 只减少解析、不新增；只有 `modes`/`rules` 都缺席的最小组装（旧测试）
+        // 会多一次，记档取舍。
+        //
+        // 顺带的一致性收益：③⑤与卡载荷现在看**同一份快照**，改前四次解析
+        // 之间旁车若被改写（关联工作区变更）会让同一次决策内部不自洽。
+        let ctx = root_sid
+            .as_deref()
+            .and_then(|sid| self.ctx_of.as_ref().map(|f| f(sid)));
+        let workspace = ctx.as_ref().and_then(|c| c.workspace.clone());
+
         // ② 硬门：隐私门（privacy.rs 清单，任何档位都拦——完全访问也不例外，
         // 用户裁定"最危险的触及用户隐私的或本地隐私的有拦截"）+ 越界门
         // （㉘·B 外部路径门；围栏改全局声明根后 = 越出声明根才触发）。
@@ -283,26 +302,30 @@ impl ApprovalResolver for ApprovalHub {
             Some(_) => crate::privacy::check(&req.tool, &req.args),
             None => None,
         };
-        let external = match (&self.modes, &self.ctx_of) {
-            (Some(_), ctx) => {
-                command_touches_outside(&req.tool, &req.args, root_sid.as_deref(), ctx.as_ref())
-            }
-            _ => false,
+        let external = match &self.modes {
+            Some(_) => command_touches_outside(&req.tool, &req.args, ctx.as_ref()),
+            None => false,
         };
         if sensitive.is_none() && !external {
             let subject = command_subject(&req.tool, &req.args);
+            // ③ + ⑤ 项目规则**一次读盘两判定**（M-18b）：两级同出一个文件
+            // （`permissions/<hash>.json` 的 deny/allow 两数组），改前各读
+            // 一遍 = 同一份 KB 级 JSON 解析两次、且两次之间被人改就会让
+            // ③⑤看到两个版本。这里一次判完存进 `verdict`，③用 `denied`、
+            // ⑤用 `allowed`——**决策表次序一字未改**（④模式放行仍夹在中间，
+            // 所以 `allowed` 命中也可能被④提前放行，reason 不同）。
+            let verdict = match (&self.rules, workspace.as_deref()) {
+                (Some(rules), Some(ws)) => Some(rules.verdicts(ws, &req.tool, subject)),
+                _ => None,
+            };
             // ③ 项目拒绝规则（v2.145）：UI 不产 deny，手改 JSON 生效；
             // 先于模式放行 = 用户明示拒绝连 Auto 也拦（比 ZCode 的 yolo
             // 先于 deny 更安全，设计稿 §2.1 有意偏离记档）。
-            if let Some(rules) = &self.rules {
-                if let Some(ws) = self.workspace_of(root_sid.as_deref()) {
-                    if rules.denies(&ws, &req.tool, subject) {
-                        return ApprovalDecision::deny(
-                            "项目权限规则拒绝（deny 清单命中）：编辑或删除数据目录 \
-                             permissions/ 下的规则文件以解除",
-                        );
-                    }
-                }
+            if verdict.is_some_and(|v| v.denied) {
+                return ApprovalDecision::deny(
+                    "项目权限规则拒绝（deny 清单命中）：编辑或删除数据目录 \
+                     permissions/ 下的规则文件以解除",
+                );
             }
             // ④ 模式放行（一等公民，㉘·C；审计 reason 带 mode: 前缀，前端
             // 据此不渲染记录条）。只读直通 = 所有档位（隐私门已在上面临过）。
@@ -335,16 +358,13 @@ impl ApprovalResolver for ApprovalHub {
                 _ => {}
             }
             // ⑤ 项目允许规则（v2.145 粘性授权）：工具级或精确命令命中即
-            // 放行（reason 不带 mode: 前缀 = 前端照常渲染记录条，审计可见）
-            if let Some(rules) = &self.rules {
-                if let Some(ws) = self.workspace_of(root_sid.as_deref()) {
-                    if rules.allows(&ws, &req.tool, subject) {
-                        return ApprovalDecision {
-                            allowed: true,
-                            reason: Some("rule:project-allow".into()),
-                        };
-                    }
-                }
+            // 放行（reason 不带 mode: 前缀 = 前端照常渲染记录条，审计可见）。
+            // 判定结果来自上面 ③ 那次读盘的同一份快照（M-18b）。
+            if verdict.is_some_and(|v| v.allowed) {
+                return ApprovalDecision {
+                    allowed: true,
+                    reason: Some("rule:project-allow".into()),
+                };
             }
             // ⑥ 会话豁免：本会话（含子代理，键 = 父根会话）已放行过同工具，
             // 直接放行（Kernel 照写 ApprovalDecided，投影出记录条——转录里
@@ -360,7 +380,7 @@ impl ApprovalResolver for ApprovalHub {
             }
         }
 
-        let workspace = self.workspace_of(root_sid.as_deref());
+        // 卡载荷的环境行直接用 M-18a 那次解析的结果（改前这里再解析一遍）。
         let request = ApprovalRequestPayload {
             request_id: req.id.0.clone(),
             tool: req.tool.clone(),
@@ -436,8 +456,7 @@ impl ApprovalResolver for ApprovalHub {
 pub(crate) fn command_touches_outside(
     tool: &str,
     args: &serde_json::Value,
-    session_id: Option<&str>,
-    ctx: Option<&crate::workspace::SessionContextResolver>,
+    ctx: Option<&CallContext>,
 ) -> bool {
     if tool != "shell" {
         return false;
@@ -450,7 +469,7 @@ pub(crate) fn command_touches_outside(
     if tokens.is_empty() {
         return false;
     }
-    let roots = scan_roots(session_id, ctx);
+    let roots = scan_roots(ctx);
     // 围栏空（连数据根都判不出）= 无法判定，宁可问一次
     if roots.is_empty() {
         return true;
@@ -500,15 +519,13 @@ fn rest_starts_unc(cmd: &str, i: usize) -> bool {
 /// （= 全局声明根 `[数据根] ∪ settings.fsRoots`，`workspace.rs` resolver
 /// 下发）就用它；空（未归属/headless）回落 env 全局（数据根 +
 /// `LOCOWRK_FS_ROOTS`，即 `fsutil::allowed_roots` 同源）——同一集合。
-pub(crate) fn scan_roots(
-    session_id: Option<&str>,
-    ctx: Option<&crate::workspace::SessionContextResolver>,
-) -> Vec<PathBuf> {
+/// M-18a：收**已解析的** `CallContext`（调用方一次决策只解析一次），不再
+/// 自己拿 resolver + session_id 去解析。
+pub(crate) fn scan_roots(ctx: Option<&CallContext>) -> Vec<PathBuf> {
     let data_root = plugin_api::fsutil::data_root()
         .ok()
         .map(|p| Path::new(&p).to_path_buf());
-    if let (Some(ctx), Some(sid)) = (ctx, session_id) {
-        let fs_roots = ctx(sid).fs_roots;
+    if let Some(fs_roots) = ctx.map(|c| &c.fs_roots) {
         if !fs_roots.is_empty() {
             return data_root
                 .into_iter()
@@ -540,6 +557,14 @@ pub(crate) fn is_outside(token: &str, roots: &[PathBuf]) -> bool {
     let t = norm(token);
     roots.iter().all(|r| {
         let r = norm(&r.to_string_lossy());
-        t != r && !t.starts_with(&format!("{r}\\"))
+        // M-18e②：`strip_prefix` 代替 `format!("{r}\\")` + `starts_with`
+        // ——少一次堆分配（每个根每次判定都新建一个 String），语义逐值等价：
+        // 「t 以 r 开头且紧接一个分隔符」= 「剥掉 r 前缀后剩下的以分隔符开头」；
+        // 剥不动（不以 r 开头）= 本就不匹配 ⇒ `is_none_or` 取真。分量边界
+        // （`f:\ab` 不算 `f:\a` 内）由「剥完还得是分隔符」这一位
+        // 保住，与改前同。
+        t != r
+            && t.strip_prefix(&r)
+                .is_none_or(|rest| !rest.starts_with('\\'))
     })
 }

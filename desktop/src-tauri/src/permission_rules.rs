@@ -58,9 +58,29 @@ pub(crate) fn rule_matches(rule: &PermissionRule, tool: &str, subject: Option<&s
         return false;
     };
     match content.strip_suffix(":*") {
-        Some(prefix) => subject == prefix || subject.starts_with(&format!("{prefix} ")),
+        Some(prefix) => {
+            subject == prefix
+                || subject
+                    .strip_prefix(prefix)
+                    .is_some_and(|r| r.starts_with(' '))
+        }
         None => subject == content,
     }
+}
+
+/// 决策表 ③deny 与 ⑤allow **两级一次读盘**的判定结果（M-18b）。
+///
+/// 为什么合并：两级读的是**同一个文件**（`permissions/<hash>.json` 的
+/// `deny` 与 `allow` 两个数组），旧形态 `denies`/`allows` 各自 `read` 一遍
+/// ⇒ 一次审批决策把同一份 KB 级 JSON 解析两次；更糟的是两次读之间文件可能被
+/// 人改（本模块刻意不做缓存 = 人改即生效），旧形态会让 ③ 与 ⑤ 看到**两个
+/// 不同版本**的规则集，同一次决策内部不自洽。合并后一次决策 = 一份快照。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RuleVerdict {
+    /// ③ 项目 deny 清单命中（先于模式放行 = 用户明示拒绝连 Auto 也拦）
+    pub denied: bool,
+    /// ⑤ 项目 allow 粘性规则命中（模式放行之后才生效）
+    pub allowed: bool,
 }
 
 /// 项目规则库：`<数据根>/permissions/` 下每工作区一文件。无进程内缓存
@@ -102,23 +122,18 @@ impl PermissionRuleStore {
         atomic_write(&self.file_of(workspace), &text)
     }
 
-    /// 审批决策表第 ③ 级：项目 deny 规则命中？（v2.145 UI 不产 deny，
-    /// 手改 JSON 生效；先于模式放行 = 用户明示拒绝连 Auto 也拦）
-    pub fn denies(&self, workspace: &str, tool: &str, subject: Option<&str>) -> bool {
+    /// 审批决策表第 ③ + ⑤ 级一次判完（M-18b）：一次读盘、一份快照。
+    /// ③deny 命中 → 调用方立刻拒绝（先于模式放行，v2.145 UI 不产 deny、
+    /// 手改 JSON 生效）；⑤allow 命中 → 调用方在模式放行**之后**才看它。
+    /// 两个字段一次算完是因为它们出自同一个文件，分开算 = 两遍 IO 且可能
+    /// 读到两个版本（见 [`RuleVerdict`] 文档）。
+    pub fn verdicts(&self, workspace: &str, tool: &str, subject: Option<&str>) -> RuleVerdict {
         let _g = self.io.lock().expect("permission rules io poisoned");
-        self.read(workspace)
-            .deny
-            .iter()
-            .any(|r| rule_matches(r, tool, subject))
-    }
-
-    /// 审批决策表第 ⑤ 级：项目 allow 规则命中？
-    pub fn allows(&self, workspace: &str, tool: &str, subject: Option<&str>) -> bool {
-        let _g = self.io.lock().expect("permission rules io poisoned");
-        self.read(workspace)
-            .allow
-            .iter()
-            .any(|r| rule_matches(r, tool, subject))
+        let rs = self.read(workspace);
+        RuleVerdict {
+            denied: rs.deny.iter().any(|r| rule_matches(r, tool, subject)),
+            allowed: rs.allow.iter().any(|r| rule_matches(r, tool, subject)),
+        }
     }
 
     /// 「本项目始终允许」：追加一条 allow 规则并落盘（已存在同条 = 幂等）。

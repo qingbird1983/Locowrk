@@ -140,10 +140,19 @@ async fn external_path_forces_card_even_in_auto() {
             },
         }
     });
+    // 超时从 `ZERO` 改成 500ms（批 F-24a）：ZERO = 不起守夜任务，一旦「声明
+    // 根内不该弹卡」这条断言因为围栏逻辑退化而落进决策卡，本测试会**挂起**
+    // 而不是失败（决断者在断言之后才 spawn，没人回填 oneshot）——挂起的测试
+    // 是零证明力还堵住整轮门禁。给个短超时让它快速失败；500ms 远大于决断者
+    // 2ms 轮询的实际响应，不改变本用例要验的语义（超时面由
+    // `tests_approval/session_timeout.rs` 专责覆盖，这里不是它的钉子）。
     let hub = Arc::new(
-        ApprovalHub::with_timeout(Arc::new(sink.clone()), std::time::Duration::ZERO)
-            .with_modes(Arc::clone(&modes))
-            .with_workspace(Arc::clone(&resolver)),
+        ApprovalHub::with_timeout(
+            Arc::new(sink.clone()),
+            std::time::Duration::from_millis(500),
+        )
+        .with_modes(Arc::clone(&modes))
+        .with_workspace(Arc::clone(&resolver)),
     );
     // 先种豁免：模拟此前「允许本次对话」已发生——越界门必须无视它
     hub.decide_seed_for_test("s1", "shell");
