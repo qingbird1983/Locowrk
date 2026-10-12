@@ -183,11 +183,19 @@ pub async fn session_search(
     limit: Option<usize>,
     state: State<'_, AppState>,
 ) -> Result<Vec<SessionSearchHit>, String> {
-    Ok(crate::session_log::search(
-        &state.sessions_dir,
-        &query,
-        limit.unwrap_or(50).min(200),
-    ))
+    // 批 F-24b / M-18f：这是会话面**唯一** O(全目录) 的同步 IO（逐文件读 jsonl 扫正文），
+    // 改前直接跑在 async 线程上 = 卡 IPC 运行时，故包 `spawn_blocking`。
+    // 其余会话命令（rename / associate / delete / list / truncate）都是单文件小 IO，
+    // 给它们包一层是**无收益的形式主义** ⇒ 不改，口径写进 ROADMAP 边界。
+    // 另：审计给的「`session_history` 锁内取快照、锁外投影」实测**不成立**——
+    // `Session::events()` 返回借用会话锁守卫的切片，锁外投影只能先 `to_vec()` 深克隆，
+    // 比原地投影更贵 ⇒ 那条修法本批不采纳（如实记档，不改口径当修复）。
+    let dir = state.sessions_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        crate::session_log::search(&dir, &query, limit.unwrap_or(50).min(200))
+    })
+    .await
+    .map_err(|e| format!("会话搜索任务被线程池拒绝: {e}"))
 }
 
 /// 会话导出为 Markdown 转录（`pick_save_path` 选定路径后调用）：数据 =

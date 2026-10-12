@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use session_store::{
-    append_event, delete_session, list_sessions, load_session, rewrite_log, search_sessions,
+    append_events, delete_session, list_sessions, load_session, rewrite_log, search_sessions,
     session_file, write_title, write_workspace, SessionMeta, SessionSearchHit,
 };
 use session_store::{Session, SessionEvent};
@@ -65,11 +65,12 @@ pub fn append_slice(dir: &Path, session_id: &str, session: &Session, from: usize
         tracing::warn!(session_id, "session log 文件名非法，本段不落盘");
         return;
     };
-    for e in &session.events()[from..] {
-        if let Err(err) = append_event(&path, e) {
-            tracing::warn!(session_id, "session log 追加失败: {err}");
-            return;
-        }
+    // 批 F-24b / M-18g：改前逐条 `append_event` = 每条事件一次 open/write/close（每轮
+    // 3N–6N 次系统调用），现在一段一次。失败语义照旧「只告警不阻断聊天」，但**失败粒度
+    // 从逐条变逐段**（`BufWriter` 缓冲内未 flush 的尾巴不落盘），已如实记进 persist.rs 的
+    // `append_events` 文档注释与本批 ROADMAP 边界。
+    if let Err(err) = append_events(&path, &session.events()[from..]) {
+        tracing::warn!(session_id, "session log 追加失败: {err}");
     }
 }
 

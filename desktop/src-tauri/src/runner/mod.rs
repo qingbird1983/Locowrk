@@ -74,12 +74,23 @@ pub async fn run_turn(
     // 轮界事件（§4.1 设计，v2.101 起真正写入）：TurnStart 供重放复原计时
     // 起点（配给紧随的 UserMessage），TurnEnd（各收束路径）供冻结读数——
     // 此前日志里没有任何时刻，切会话/重启后计时行只剩发丝线（目检①）。
+    // 批 F-24b / M-18d：改前是「全量重扫数 `TurnStart` 条数 + 1」⇒ 每轮 O(n)、全会话
+    // O(n²)；现在反向找**最后一个 `TurnStart` 自带的 id** 再 +1（O(1) 均摊）。
+    // ⚠ 这一条**有行为变化，且方向是修 bug**，分叉条件不是"编辑重发截断"（那是前缀截断，
+    //   两式恒等）而是**日志缺轮界行**：`load_session` 逐行读 jsonl、坏行跳过（skipped>0），
+    //   于是「`TurnStart` 条数」可以小于「最后一个 `TurnStart` 的 id」⇒ 旧算法会算出一个
+    //   **与日志里已有轮号重复**的号（计时行与冻结读数都按 `TurnId` 配 = 新轮读数冻到旧轮），
+    //   新算法单调不回退。专测 = `tests_hotpath.rs`，驱动 `run_turn` 本体。
     let turn_id = TurnId(
         session
             .events()
             .iter()
-            .filter(|e| matches!(e, SessionEvent::TurnStart { .. }))
-            .count() as u64
+            .rev()
+            .find_map(|e| match e {
+                SessionEvent::TurnStart { turn_id, .. } => Some(turn_id.0),
+                _ => None,
+            })
+            .unwrap_or(0)
             + 1,
     );
     session.append(SessionEvent::TurnStart {

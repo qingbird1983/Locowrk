@@ -51,6 +51,33 @@ pub fn append_event(path: &Path, event: &SessionEvent) -> std::io::Result<()> {
     )
 }
 
+/// 批量追加（批 F-24b / M-18g）：**一个句柄 + `BufWriter` + 显式 `flush()`**，把「每条事件
+/// 一次 open/write/close」压成一段一次。`append_event` 的既有签名一字未动（其它调用点与
+/// 语义仍是它的真源）。
+///
+/// ⚠ 失败语义如实记档（**行为差异不在"是否落盘"而在"落盘的粒度"**）：中途 `Err` 时已
+/// flush 的前缀在盘上、缓冲里未 flush 的那几条不落盘；改前是逐条即时落盘。调用方每轮按
+/// 同一 `from` 游标整段重写 ⇒ 磁盘镜像本就是 at-least-once，改前改后都不因此少行或多行
+/// 之外的新失真（重复行的既有风险不属本批射程，登记为观察项）。空切片 = 不打开句柄。
+pub fn append_events(path: &Path, events: &[SessionEvent]) -> std::io::Result<()> {
+    if events.is_empty() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    let mut w = std::io::BufWriter::new(f);
+    for e in events {
+        writeln!(w, "{}", serde_json::to_string(e).expect("event serialize"))?;
+    }
+    // 显式 flush：BufWriter 的 drop 会吞掉 flush 错误 = 静默丢行，禁止依赖它。
+    w.flush()
+}
+
 /// 全量重写（undo fork 截断后同步磁盘）：先把原文件滚动备份为
 /// `<file>.undo.bak`（每次覆盖，只留最近一次撤销前的完整原文），再写入
 /// 截断后的日志。文件不存在时直接写。

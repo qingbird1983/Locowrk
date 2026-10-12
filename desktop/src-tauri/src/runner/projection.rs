@@ -25,12 +25,19 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
     // has_call_event：只落了声明位、连 ToolCall 事件都没有的调用（死在
     // 两次落盘之间）没有宿主工具行，卡直接挂在 assistant 段之后。
     let uncertain = session_store::scan_uncertain(events);
-    let mut has_call_event: HashSet<String> = HashSet::new();
-    for e in events {
-        if let SessionEvent::ToolCall { call_id, .. } = e {
-            has_call_event.insert(call_id.0.clone());
-        }
-    }
+    // 批 F-24b / M-18e①：这张表**只**被下面那一个查询点消费，而它的守卫
+    // `uncertain.dangling.contains(..)` 短路在前 ⇒ 正常会话里 `dangling` 恒空，改前却
+    // 每次投影都把整条日志的 `call_id` 逐个 clone 建一遍表 = 纯白付。改懒建：
+    // 悬空集非空才扫（有悬空 = 崩溃恢复场景，本来就要付）。
+    let has_call_event: Option<HashSet<String>> = (!uncertain.dangling.is_empty()).then(|| {
+        events
+            .iter()
+            .filter_map(|e| match e {
+                SessionEvent::ToolCall { call_id, .. } => Some(call_id.0.clone()),
+                _ => None,
+            })
+            .collect()
+    });
     for (pos, e) in events.iter().enumerate() {
         match e {
             SessionEvent::TurnStart { ts, .. } => turn_ts = Some(*ts),
@@ -110,7 +117,9 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                 // 也出（重放复现「建卡→裁决收束」序列，同上）。
                 for id in tool_calls {
                     if uncertain.dangling.contains(id.0.as_str())
-                        && !has_call_event.contains(id.0.as_str())
+                        && !has_call_event
+                            .as_ref()
+                            .is_some_and(|s| s.contains(id.0.as_str()))
                     {
                         out.push(AgentEvent::ToolUncertain {
                             session_id: session_id.into(),

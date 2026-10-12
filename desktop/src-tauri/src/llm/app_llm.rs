@@ -164,28 +164,38 @@ impl AppLlm {
     /// （批 F）** → 决策环 model 改写。档位路由经 `flat_profile`（keyring
     /// 双读 + headers + 全区代理随行）。
     pub(crate) fn effective_cfg(&self, req: &LlmRequest) -> LlmSettings {
-        let mut cfg = self.settings.llm();
-        if let (Some(store), Some(sid)) = (&self.overrides, &req.session_id) {
-            if let Some((provider_id, model)) = store.get(sid) {
-                if let Some(p) = self.settings.llm_config().profile(&provider_id) {
-                    cfg = self.settings.llm_config().flat_profile(p);
+        // 批 F-24b / M-18c：一次取锁、零 `LlmConfig` 副本。改前实测本函数最多 **5 次取锁**
+        // （167 的 `llm()` + 170/171 与 179/180 两对 `llm_config()`）——其中每一对里的第二
+        // 次克隆纯属浪费：`profile()` 返回的是**借用**，第一份快照本就活到 `if let` 块尾。
+        // ⚠ 覆盖与路由先在闭包外取好：`with_llm_config` 持着非重入的 `inner` 锁，闭包内
+        //   再调 `self.settings.*` = 自死锁。
+        let covered = match (&self.overrides, &req.session_id) {
+            (Some(store), Some(sid)) => store.get(sid),
+            _ => None,
+        };
+        let route = Self::route_of(req);
+        self.settings.with_llm_config(|llm| {
+            let mut cfg = llm.flat();
+            if let Some((provider_id, model)) = covered {
+                if let Some(p) = llm.profile(&provider_id) {
+                    cfg = llm.flat_profile(p);
                 }
                 cfg.model = model;
             }
-        }
-        // 子代理路由（批 F）：整档换 + 模型名替换。在决策环 req.model 之前
-        // ——route 是组装点意志，决策环改写仍最高优先级。
-        if let Some(route) = Self::route_of(req) {
-            if let Some(p) = self.settings.llm_config().profile(&route.provider_id) {
-                cfg = self.settings.llm_config().flat_profile(p);
+            // 子代理路由（批 F）：整档换 + 模型名替换。在决策环 req.model 之前
+            // ——route 是组装点意志，决策环改写仍最高优先级。
+            if let Some(route) = route {
+                if let Some(p) = llm.profile(&route.provider_id) {
+                    cfg = llm.flat_profile(p);
+                }
+                cfg.model = route.model;
             }
-            cfg.model = route.model;
-        }
-        // §7.2 决策环的 model 改写是最高优先级（会话覆盖只在缺省层生效）
-        if let Some(m) = &req.model {
-            cfg.model = m.clone();
-        }
-        cfg
+            // §7.2 决策环的 model 改写是最高优先级（会话覆盖只在缺省层生效）
+            if let Some(m) = &req.model {
+                cfg.model = m.clone();
+            }
+            cfg
+        })
     }
 
     /// 发送前门控的图像输入三态（批 D）：用户钉死（`pin`，生效模型行的

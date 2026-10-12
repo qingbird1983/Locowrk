@@ -28,27 +28,32 @@ impl AppLlmMemoryManager {
 
     /// 本调用的生效配置（设置现读——保存即生效）。
     fn cfg_for(&self, model: Option<&str>) -> LlmSettings {
+        // `mem` 必须在闭包外取：它是同一个 Store 的另一档区读面，闭包内再取 = 自死锁。
         let mem = self.settings.memory();
         let memory_manager_model = model.filter(|m| !m.trim().is_empty());
-        // 记忆管理器配了服务档 → 整档换（与 v2.58 会话覆盖同一档位语义）
-        if let (Some(m), Some(pid)) = (
-            &memory_manager_model,
-            mem.memory_manager_provider.as_deref(),
-        ) {
-            if !pid.trim().is_empty() {
-                if let Some(p) = self.settings.llm_config().profile(pid) {
-                    // flat_profile：keyring 双读 + headers + 全区代理随行（批 C）
-                    let mut flat = self.settings.llm_config().flat_profile(p);
-                    flat.model = m.to_string();
-                    return flat;
+        // 批 F-24b / M-18c：一次取锁、零 `LlmConfig` 副本（改前同一分支里成对两次全量克隆，
+        // 含各档明文 Key）。
+        self.settings.with_llm_config(|llm| {
+            // 记忆管理器配了服务档 → 整档换（与 v2.58 会话覆盖同一档位语义）
+            if let (Some(m), Some(pid)) = (
+                &memory_manager_model,
+                mem.memory_manager_provider.as_deref(),
+            ) {
+                if !pid.trim().is_empty() {
+                    if let Some(p) = llm.profile(pid) {
+                        // flat_profile：keyring 双读 + headers + 全区代理随行（批 C）
+                        let mut flat = llm.flat_profile(p);
+                        flat.model = m.to_string();
+                        return flat;
+                    }
                 }
             }
-        }
-        let mut cfg = self.settings.llm();
-        if let Some(m) = memory_manager_model {
-            cfg.model = m.to_string();
-        }
-        cfg
+            let mut cfg = llm.flat();
+            if let Some(m) = memory_manager_model {
+                cfg.model = m.to_string();
+            }
+            cfg
+        })
     }
 }
 

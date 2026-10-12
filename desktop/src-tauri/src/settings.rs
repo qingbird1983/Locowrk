@@ -211,6 +211,17 @@ impl SettingsStore {
         self.inner.lock().expect("settings poisoned").llm.clone()
     }
 
+    /// 后端专用（批 F-24b / 审计 M-18c）：一次取锁、把 `&LlmConfig` **按引用**交给闭包，
+    /// 从而免掉「为读一个字段而全量克隆含各档明文 Key 的档位区」。返回闭包的产物。
+    ///
+    /// ⚠ **闭包内绝不能再调本 Store 的任何其它读面**：`inner` 是非重入的
+    /// `std::sync::Mutex`，重入 = 自死锁（要别的区就先在闭包外取好）。
+    /// ⚠ 交付的是引用 ⇒ 不把 `LlmConfig` 本身传出闭包，也就没有副本可泄露。
+    pub fn with_llm_config<R>(&self, f: impl FnOnce(&LlmConfig) -> R) -> R {
+        let s = self.inner.lock().expect("settings poisoned");
+        f(&s.llm)
+    }
+
     /// 后端专用：llm 区原子改写（v2.58 档位命令：save/delete/切活动档）。
     /// 落盘成功才提交内存（update 同款顺序）；`apply` 返回 Err = 拒绝
     /// 且不污染内存态。返回改写后的全量档位区。

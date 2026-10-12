@@ -81,6 +81,8 @@ mod tests;
 #[cfg(test)]
 mod tests_approval;
 #[cfg(test)]
+mod tests_hotpath;
+#[cfg(test)]
 mod tests_permission;
 #[cfg(test)]
 mod tests_plugins_root;

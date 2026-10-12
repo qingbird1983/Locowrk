@@ -80,12 +80,14 @@ pub async fn agent_chat(
     let ov = state.model_overrides.get(&session_id);
     let usage = UsagePolicy {
         threshold_tokens: state.settings.organize_threshold_tokens(),
-        window_tokens: crate::settings::session_window(
-            &state.settings.llm_config(),
-            ov.as_ref(),
-            Some(&state.catalog),
-        )
-        .unwrap_or(0),
+        // 批 F-24b / M-18c：只为算 window_tokens 而全量克隆档位区（含各档明文 Key）改成
+        // 一次取锁 + 借用进闭包；闭包内不碰 Store 的其它读面（非重入锁）。
+        window_tokens: state
+            .settings
+            .with_llm_config(|llm| {
+                crate::settings::session_window(llm, ov.as_ref(), Some(&state.catalog))
+            })
+            .unwrap_or(0),
         tools_est_tokens: runner::catalog_estimate(&state.kernel, &session_id).await,
     };
     let steps = runner::run_turn(
