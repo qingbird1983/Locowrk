@@ -21,6 +21,9 @@
 //!   上收），Rust 便利层，不进 ABI 面（审计 F7 · 批 F-21c）。
 //! - `memlayout`：记忆文件化布局（F1，《Memory File-ization Design》
 //!   v1.1）——md 人类层的路径/格式/索引，插件与宿主共用一份实现。
+//! - `wskey`：workspace **键位归一**（MR 稿 §6，队列 Q2）——记忆主键 `(workspace,
+//!   key)` 里 `workspace` 那半的唯一真源，宿主 `scope_key` 与插件 `WsCtx` 共用；
+//!   Rust 便利层，不进 ABI 面。
 //!
 //! 另外把 `serde_json` / `semver` 原样 re-export 给插件 crate 复用，
 //! 让插件只依赖本 crate 一个依赖即可（§5.3"Rust 是一等公民"）。
@@ -35,6 +38,7 @@ pub mod naming;
 pub mod netsafe;
 pub mod plugin_side;
 pub mod tool;
+pub mod wskey;
 
 pub use ffi::{
     CallFn, DescribeFn, FreeBufFn, HostVtable, InitFn, SYM_CALL, SYM_DESCRIBE, SYM_FREE, SYM_INIT,

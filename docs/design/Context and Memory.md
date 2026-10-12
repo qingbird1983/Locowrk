@@ -434,6 +434,8 @@ CREATE INDEX idx_memories_tags ON memories(tags);
 
 > **⚠ v2.136 注入口径修订（项目侧全提醒制）**：注入只取**全局层**（用户层面的喜好/全局要求，保持简短）；项目层事实不再自动注入（模型 memory_read / memory_search 按需查）；`<repo>/.Locowrk/` 项目记忆以**静态提醒段**指路（正文不注入，主模型按需读写）。
 
+> **⚠ v2.185（后审计队列 Q2 =《Memory Redesign (ZCode Alignment) v1》§4）在本口径之上加一节指针，不反转它**：注入带新增 `<project_memory_index>`（位置 = `<persistent_memory>` 之后、`<memory_guidance>` 之前），内容只允许是本项目已存事实的**一行式指针**（`- <key> — <tags>（N 天前）`；优先取 `<数据根>/memory/projects/<项目>/MEMORY.md` 的指针行，md 缺失或"有文件但一行指针都没有"时由 sqlite 该键位的行现合成、**不回写文件**；200 行 / 25,000 字符双钳，超限附一行指路 WARNING）。**事实正文仍然不自动注入**——v2.136 禁的是把正文灌进 system，而本节治的是那条禁令的副作用：模型连"本项目记了哪些 key"都不知道，空结果容易被读成"这个项目没记过东西"。实现真源 = `desktop/src-tauri/src/memory_index.rs` + `memory.rs::project_index`（`MemorySource` 的默认方法返回 `None` = 内核不拼标签，未归属会话整节缺席）。同批三件：项目级**常驻进展行**（`organize/progress.rs`，解冻《Cross-Session Recall Design v1》批 2）拼在树目录段**之前**并按会话钉死；`memory_project_history` 的 exposure 由 `OnDemand` 提为 `Always`（否则被 Top-20 截断挤出目录，模型看不见工具存在）；`<memory_guidance>` 增两句「空结果 ≠ 没有历史」与把开场禁令限定为「没被问到时不主动翻」（措辞真源 = `memory_inject.rs` 的 `GUIDANCE_BLOCK`，《Prompt Assembly Layering Design》§5.2 的 After 文本已随本批订正）。
+
 在 `agent/request` 里，根据最近用户消息提取 key/tag 候选，查询匹配的记忆。
 
 **第一版用最简单的策略：按 `access_count` + `last_accessed_at` 排序，取 top-5。**
@@ -543,6 +545,16 @@ async fn recall_experiences(
   项目下并存、互不覆盖（覆盖即污染）。旧库（key 单主键）首次访问整表迁移，
   旧行归入未归属键位；插件侧与宿主侧持等价迁移（探针 + BEGIN IMMEDIATE +
   二次探针，并发只有一方执行）。
+* **键位归一化（v2.185 · 队列 Q2 · MR §6，趁 `memories` 表 0 行做掉）**：`(workspace, key)`
+  的 workspace 分量**进记忆层之前**一律过 `plugin_api::wskey::normalize`（词法 canonicalize +
+  剥 Windows verbatim 前缀 `\\?\` / `\\?\UNC\`；仅 Windows 折叠大小写并把 `/` 统一成 `\`，
+  POSIX 只剥尾分隔符且大小写不动；空串/纯空白 = 未归属键位；路径不存在 = 回落词法形式，
+  既不报错也**绝不归成空串**——那会把某项目的记忆污染进全局偏好层）。归一只落在**记忆键位
+  边界**两处：插件 `memory-sqlite` 的 `WsCtx::from_parts`（写侧 scope、读侧过滤、md 目录名三处
+  同源于此）与宿主 `workspace::scope_key`（注入键位 / 观测 `scope_id`），两者逐字同形；
+  **不改 `CallContext.workspace` 的下发串**——权限围栏按 `starts_with` 比原始路径，改下发面会
+  整体失配并要求重编全部插件。树投影目录名（`memory-tree/` 的 fnv8 编码）与 md 项目目录名
+  的换名属 **M3（Q10，涉用户数据目录，动手前单独确认）**，本批未动、存量四个 md 目录照旧。
 * **注入即隔离**：Memory-Inject / Experience-Inject 的召回契约带 `session_id`
   （kernel 只透传 id，workspace 是宿主概念）；宿主解析后按键位过滤。子 Agent
   会话没有旁车（⑮ 黑盒）→ **注入只见全局层、缺省写拒绝**（v2.68 起，见上；

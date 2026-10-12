@@ -1,4 +1,4 @@
-# AGENTS.md 历史进度流水归档（v2.55 → v2.182，共 65 条行首 `* ` 条目 + 1 条历史无前缀段（㉚ v2.58）= 66 个非空条目行）
+# AGENTS.md 历史进度流水归档（v2.55 → v2.183，共 66 条行首 `* ` 条目 + 1 条历史无前缀段（㉚ v2.58）= 67 个非空条目行）
 
 > **来源与地位**：本文件是 `AGENTS.md`「项目概览」里的历史批次流水在 **v2.149 批 E（E4）**
 > 瘦身时**逐字原样搬出**的归档，不是新的进度表。搬出理由：`AGENTS.md` 是每个会话的注入源
@@ -11,6 +11,8 @@
 > [../CHANGELOG.md](../CHANGELOG.md)。
 
 ---
+
+* **后审计队列首刀 Q1a 已完成（v2.183，2026-10-12，提交 `ad873bd`）：召回可观测性的注入侧落地= L0 稿 §2.3 的 (a)+(c) 一半，纯增量、零行为变更**：新产物 `desktop/src-tauri/src/recall_log.rs` 224 行（`memory_inject_log` 表 + `RecallLog` **自持连接**，旁挂进 `usage.sqlite3` 同一个文件）+ `recall_log/tests.rs` 255 行 / 11 用例；`MemoryStore` 加 `with_recall_log()` 与 `recall_quiet` 成功路径埋点。**① 最可迁移的一条 = 用户把我指回 AGENTS 口径**：我最初为把 (b) 检索回执也塞进本批，把 `usage.rs` 从 383 顶到 410 行，并按「不得超过 400」去压注释、合并建表常量——**400 是三问自检的触发器，不是硬闸**；按三问第②问「名字是否准确概括内容」答「否」（统计写入器兼管记忆观测）⇒ 该拆不该挤，而另一条路给 `run_turn` 加参数要牵动 10 处调用点（7 处是测试）⇒ **(b) 与 `injection_yield` 退到队列 Q1b，`usage.rs`/`runner/mod.rs` 退回逐字节零改动**，并撤掉我为凑行数写的「行数额度」式扭曲注释。**② 去重是真承重**：`MemoryInject` 的 `PREFETCH_CAP` 只在**有 session_id** 时保证每会话一次召回，无 session_id 那路每 step 都 `recall()` ⇒ 用部分唯一索引 `ux_mil_inject … WHERE mode='inject'` 守住空块率不被重复行主导；`session_key` 用空串不用 NULL（索引里 NULL ≠ NULL，用 NULL 去重直接失效）。**③ 变异 3 红 + 1 个假目标**：把 `INSERT OR IGNORE` 改 `INSERT` **不红**——承重是那条索引不是关键字（4 次 warn 被「观测不许拖垮被观测者」吞掉）⇒ 我造的是打在非承重点上的假变异；改打「注释掉索引 DDL」才红在 dedup 用例。**④ 等价判据**：`recall()` 原先恒传 `None`（v2.136 起召回恒取全局层），本批透传但**只作观测字段**，接线/不接线两库逐字段比含顺序。**门禁** 桌面 **382→393**（+11）/ 根 **452 持平**，两侧 fmt/clippy `-D warnings` 0，五道闸全 0（`check_length` **22 == BASELINE 22 零新增**）。**边界**：(b) 与 `injection_yield` = Q1b、`stats()` 生产读取点 = Q10、未做真机走查、未跑 doccheck。
 
 * **后审计施工队列已立项（v2.182，2026-10-12）——六份「待研究」稿全部裁定采纳并排定先后**：顺序与裁定的真源 = [docs/design/Post-Audit Roadmap v1.md](docs/design/Post-Audit%20Roadmap%20v1.md)（**Q0–Q20**；与 ROADMAP 分工 = 队列管顺序与依据、ROADMAP 管打钩与哈希，两边不重复正文）。用户当日口径 =「六份文档都是我规划出来的，肯定都要实施，你帮我梳理的就是个先后排序，**不用质疑要不要做**」⇒ 以后推进这批按 Q 号走，别再回头问范围。三条裁定：**M2 走提案 A**（整理副产物产事实卡，同批须登记 v2.136 的部分反转）／**记忆树看板的无限画布属特例设计、批准落地**（Q13 先修订《Front-end Design Guidelines》类目再写码）／**六份全部实施**。首刀 = **Q1 召回可观测性**（纯增量零行为变更；排最前的硬理由 = **改造前的召回基线只有现在能拿**，M1/M2 一落地注入内容就变）。⚠ **代号裸写不认**：六份稿自起的 M/L/C/T/P 系真的撞名（`C1` 两个意思；MB 分期 `T1–T3` 与审计台账 `T1–T14` 同名不同物）⇒ 指代一批必须写「**Q5 · 记忆学习 L1**」三元形式。⚠ **两处锚已漂移**（2026-10-12 实测，队列 §5）：`crates/kernel-agent/src/middleware/usage.rs` **不存在**（`usage.sqlite3` 真身 = `desktop/src-tauri/src/usage.rs`）、CB §7.6 死代码清单**部分已随批 C 兑现**——照稿写码前先重验。仍成立的四条：`memories` 表 **0 行**（workspace 键位归一化的红利窗口还在）／`memory_project_history` 仍 `OnDemand`／`<project_memory_index>` 全仓 0 命中／`llm/retry.rs:47` 超限文案仍指向已退役的压缩阈值设置。
 

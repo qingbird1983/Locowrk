@@ -50,6 +50,15 @@ pub struct MemoryRow {
     pub updated_at: i64,
 }
 
+/// 索引注入用的一行（Q2 / MR §4.1）：**只取指针级三件**，`value` 一个字节都不取
+/// ——「正文永不自动进上下文」是 §4.1 的硬边界，查询里不带 value 列就是它的机器
+/// 保证（要绕过就得改 SQL，而 SQL 有判据盯着）。
+pub(crate) struct FactLine {
+    pub(crate) key: String,
+    pub(crate) tags: String,
+    pub(crate) updated_at: i64,
+}
+
 /// 与 memory-sqlite 插件同源的权威表形状（迁移等价性依赖两侧一致）。
 const CREATE_TABLE: &str = "CREATE TABLE memories (
     workspace  TEXT NOT NULL DEFAULT '',
@@ -159,6 +168,56 @@ impl MemoryStore {
     /// 会话（可缺）→ 键位（未归属 = ""）。context_line / scope_id 共用。
     pub fn scope_of_session(&self, session_id: Option<&str>) -> String {
         scope_key(session_id.and_then(|s| (self.workspace_of)(s)).as_deref())
+    }
+
+    /// 项目 `MEMORY.md` 投影全文（Q2 索引注入的**优先档**，人可编辑的那份）。
+    ///
+    /// `None` = 未接线 / 文件化开关关 / 项目键位为空 / 文件读不到。注意
+    /// "文件在场但只有 `# 记忆索引` 标题"也归入"用不上"——那是本机实测的常态
+    /// （见 `memory_index` 头注），判断在 `memory_index::from_md` 里做。
+    pub(crate) fn md_index_body(&self, workspace: &str) -> Option<String> {
+        if workspace.is_empty() || !(self.files_on)() {
+            return None;
+        }
+        let files = self.files.as_ref()?;
+        let path = files
+            .root()
+            .join("projects")
+            .join(plugin_api::memlayout::project_dir_name(workspace))
+            .join("MEMORY.md");
+        std::fs::read_to_string(path).ok()
+    }
+
+    /// 某键位的**指针级**行（Q2 索引兜底档；`limit` 由调用方给 `上限 + 1`，
+    /// 用来判"还有更多没进索引"）。
+    ///
+    /// 打不开库 = `Err` 上抛给调用方按"整节缺席"降级——**不许**把"读不到"
+    /// 合成成"库里没货"的空索引（Q1a 观测档「库不可用不许冒充库是空的」同纪律）。
+    /// SQL 里不带 `value` 列 = 「正文永不自动进上下文」的机器保证。
+    pub(crate) fn index_rows(
+        &self,
+        workspace: &str,
+        limit: usize,
+    ) -> Result<Vec<FactLine>, String> {
+        let conn = self.open_conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT key, tags, updated_at FROM memories WHERE workspace = ?1
+                 ORDER BY updated_at DESC, key LIMIT ?2",
+            )
+            .map_err(|e| format!("memory index rows: {e}"))?;
+        let rows = stmt
+            .query_map(params![workspace, limit as i64], |r| {
+                Ok(FactLine {
+                    key: r.get(0)?,
+                    tags: r.get(1)?,
+                    updated_at: r.get(2)?,
+                })
+            })
+            .map_err(|e| format!("memory index rows: {e}"))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| format!("memory index rows: {e}"))?;
+        Ok(rows)
     }
 
     /// 按调用开连接、用完即弃（与插件同款）；建表 + 旧库迁移幂等。
@@ -284,6 +343,11 @@ impl MemoryStore {
     /// 插件的 memory_write 工具与管理页 update_value，本方法当前只服务
     /// 测试播种）。键位 = (workspace, key)；source = "explicit" | "extracted"
     /// （v2.136 起 extracted 为历史数据遗留来源，自动提取已退役）。
+    ///
+    /// ⚠ **本方法不做键位归一**（Q2 / MR §6 的归一发生在两侧边界上，不在这里）：
+    /// 生产写路径的 workspace 取自插件 `WsCtx::from_parts`（已过 `wskey::normalize`），
+    /// 而本方法只被测试直接播种——参数就是测试给的字面串。**M2（记录员事实卡落库）
+    /// 若改走宿主 upsert，必须同批把归一接进来**，否则那条路会造回双键位。
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn write(
         &self,
@@ -652,6 +716,34 @@ impl MemorySource for MemoryStore {
             }
         }
         crate::repo_context::build(&repo)
+    }
+
+    /// Q2（MR 稿 §4.1）：项目记忆**索引**（指针行，不含正文）。
+    ///
+    /// 未归属会话 = 没有"本项目"可言 ⇒ `None`（整节缺席）。两档数据的优先关系
+    /// 在 `memory_index` 里：**md 投影优先**（人可编辑的人类层），md 用不上才由
+    /// sqlite 现合成兜底（**不回写文件**）。取数失败 = `None` + 一次告警，
+    /// 绝不合成一条"看起来是空索引"的块——那会把"读不到"骗成"没东西可注入"。
+    fn project_index(&self, session_id: Option<&str>) -> Option<String> {
+        let ws = self.scope_of_session(session_id);
+        if ws.is_empty() {
+            return None;
+        }
+        if let Some(block) = crate::memory_index::from_md(self.md_index_body(&ws).as_deref()) {
+            return Some(block);
+        }
+        match self.index_rows(&ws, crate::memory_index::MAX_INDEX_LINES + 1) {
+            Ok(rows) => crate::memory_index::from_rows(&rows, now_secs()),
+            Err(e) => {
+                // 每 step 都会走到这里，只告警一次（`warned` 那位是给 recall 的，
+                // 不复用——两边失效原因不同，混用会让其中一边永远静默）
+                static ONCE: std::sync::Once = std::sync::Once::new();
+                ONCE.call_once(|| {
+                    tracing::warn!("memory index unavailable（项目索引注入降级为缺席）: {e}")
+                });
+                None
+            }
+        }
     }
 }
 

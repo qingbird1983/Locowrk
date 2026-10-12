@@ -15,7 +15,7 @@
 //! （目录 + 尾巴），不再用全量历史——runner `record_usage` 消费。
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use session_store::{Session, SessionEvent};
@@ -24,8 +24,10 @@ use kernel_agent::{estimate_tokens, TreeContextSource, TreePlan};
 
 use memory_tree::{MemoryTree, TreeStore};
 
+use super::progress;
 use crate::settings::SettingsStore;
 use crate::settings::TailStrategy;
+use crate::timeutil::now_ms;
 use crate::workspace::WorkspaceResolver;
 
 /// 目录头行（稳定字节——追加清单行不改它）。
@@ -85,6 +87,9 @@ pub struct TreeAssembler {
     workspace_of: WorkspaceResolver,
     tree_store: TreeStore,
     sessions_dir: PathBuf,
+    /// Q2（MR 稿 §4.2）：项目级**进展行**的会话级钉死表（见 `super::progress`）。
+    /// 只缓存文本，不缓存树——树内容仍按现行路径每 step 现取（尾巴边界要用）。
+    progress: Mutex<progress::ProgressPin>,
 }
 
 impl TreeAssembler {
@@ -99,6 +104,7 @@ impl TreeAssembler {
             workspace_of,
             tree_store,
             sessions_dir,
+            progress: Mutex::new(progress::ProgressPin::default()),
         }
     }
 
@@ -148,9 +154,48 @@ impl TreeAssembler {
         let workspace = (self.workspace_of)(session_id).unwrap_or_default();
         let tree = self.load_tree(&workspace, session_id);
         let (from, directory) = self.boundary_and_directory(&tree, Some(session.events()));
+        // 用量口径**把进展行一起算**：它确实进 system，漏算等于少报一截
+        let directory = self.with_progress(session_id, &workspace, directory);
         let tail = session.derive_messages_from(from);
         let dir_tokens = (directory.len() as u64) / 4;
         Some(dir_tokens + estimate_tokens(&tail))
+    }
+
+    /// 项目级进展行（Q2 · MR §4.2），**会话内钉死**：首请求扫一遍投影目录，
+    /// 之后逐字节复用——`scan_workspace` 因此每会话至多一次（不是每 step）。
+    ///
+    /// 未归属会话（键位空串）直接 `None`：「这个项目」不成立，目录段照旧。
+    fn progress_line(&self, session_id: &str, workspace: &str) -> Option<String> {
+        if workspace.is_empty() {
+            return None;
+        }
+        let key = progress::pin_key(session_id, workspace);
+        if let Some(hit) = self
+            .progress
+            .lock()
+            .expect("progress pin poisoned")
+            .get(&key)
+        {
+            return hit;
+        }
+        let rows = self.tree_store.scan_workspace(workspace);
+        let line = progress::render(&rows, now_ms());
+        self.progress
+            .lock()
+            .expect("progress pin poisoned")
+            .insert(key, line.clone());
+        line
+    }
+
+    /// 进展行拼在目录**之前**（顺序固定 = 字节形稳定）：它是"这个项目有过什么"
+    /// 的项目级读数，目录是"本会话有过什么"。两者皆空 = 空串（`TreeDirectoryInject`
+    /// 对空串不追加）。
+    fn with_progress(&self, session_id: &str, workspace: &str, directory: String) -> String {
+        match self.progress_line(session_id, workspace) {
+            Some(p) if directory.is_empty() => p,
+            Some(p) => format!("{p}\n\n{directory}"),
+            None => directory,
+        }
     }
 }
 
@@ -166,7 +211,7 @@ impl TreeContextSource for TreeAssembler {
         };
         let (from, directory) = self.boundary_and_directory(&tree, disk.as_deref());
         Some(TreePlan {
-            directory,
+            directory: self.with_progress(session_id, &workspace, directory),
             tail_from_event: from,
             collapsed_chapters: tree.collapsed_ids(),
         })

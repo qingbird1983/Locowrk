@@ -69,7 +69,8 @@ fn delete_is_scoped_and_undo_restores_original_workspace() {
 
     store::memory_write(&proj("F:/ws/a"), &json!({ "key": "k", "value": "a-val" })).unwrap();
     let del = store::memory_delete(&proj("F:/ws/a"), &json!({ "key": "k" })).unwrap();
-    assert_eq!(del["previous_entry"]["workspace"], json!("F:/ws/a"));
+    // 回显取**归一键位**（Q2）：落库串才是补偿层要还原的目标，"这次打进来的写法"不是
+    assert_eq!(del["previous_entry"]["workspace"], json!(key_of("F:/ws/a")));
 
     // 补偿调用发生在别的键位（极端时序）：快照带 workspace → 忠实还原
     // 到原项目，而不是当前调用键位

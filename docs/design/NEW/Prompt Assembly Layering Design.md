@@ -202,6 +202,16 @@ After:
 
 （"do not wait to be asked" 收窄到 write；read 加显式禁令「never as a way to start a conversation」。）
 
+> **⚠ v2.185（队列 Q2 ·《Memory Redesign (ZCode Alignment) v1》§4.4）随批订正，本段的 After 文本不再是现行措辞**：
+> 那句「never as a way to start a conversation」被限定成两句——①「don't probe memory unprompted as a way to
+> start a conversation」+「**when the user explicitly asks about past work or memories, query these tools instead
+> of assuming from injected context**」（原禁令把"用户主动问过往"也一起禁了，与 §4.1 的索引注入、§4.3 的
+> `memory_project_history` 提 `Always` 相互矛盾）；②新增「Empty results from memory_read / memory_search do NOT
+> mean there is no history: project history lives in the memory tree — call `memory_project_history` first, and
+> `memory_search_titles` for topics」。措辞真源 = `crates/kernel-agent/src/middleware/memory_inject.rs` 的
+> `GUIDANCE_BLOCK`；判据 = `memory_inject/tests/render.rs::guidance_appended_at_block_tail`（断新句在场**且旧句
+> 不在场**，两条一起才钉住"这是订正不是叠加"）。
+
 ### 5.3 `<environment>`（原 workspace_context，memory.rs context_line）
 
 Before:

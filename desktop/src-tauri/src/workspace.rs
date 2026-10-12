@@ -74,11 +74,16 @@ pub fn workspace_view(resolver: SessionContextResolver) -> WorkspaceResolver {
 
 /// 键位归一：消费方统一入口——`None`（无会话/未归属）与 `Some("")` 都
 /// 落到未归属键位。sqlite 侧 `workspace` 列 NOT NULL DEFAULT ''。
+///
+/// **Q2（MR 稿 §6）起这里不再"原样返回"**：委托 [`plugin_api::wskey::normalize`]
+/// 做平台收尾（Windows 折叠大小写 + 统一分隔符 + 解析 `..`），因为记忆主键是
+/// `(workspace, key)`，同一个项目的两种写法会落成**两个主键**（事实被劈成几份，
+/// 谁也查不全谁的）。宿主与插件 `WsCtx` 调的是同一个函数 ⇒ 两侧串形恒等；
+/// 归一只作用于**记忆键位**，围栏根 `fs_roots` 的下发串不变（见 `wskey` 头注）。
 pub fn scope_key(workspace: Option<&str>) -> String {
     workspace
-        .filter(|w| !w.is_empty())
-        .unwrap_or("")
-        .to_string()
+        .map(plugin_api::wskey::normalize)
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

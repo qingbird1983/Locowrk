@@ -117,9 +117,19 @@ fn recall_rows_are_identical_with_and_without_instrumentation() {
     ];
     let plain = MemoryStore::new(&temp_dir("plain"), test_resolver());
     let (store, log) = store_with_log("instr", &[]);
-    for (ws, key, value) in SEED {
-        plain.write(ws, key, value, "t", "explicit").unwrap();
-        store.write(ws, key, value, "t", "explicit").unwrap();
+    // ⚠ 时间戳必须**钉死**，不能用常规 `write`（它内部取 `now_secs()`）：两侧各写
+    // 三行，只要跨过一秒边界，同一条就在两侧带上不同的 `updated_at`，排序随之不同
+    // ⇒ 这条等价判据会红在时钟上而不是行为上（2026-10-12 首次撞上：单跑绿、
+    // 全量跑红）。`reconcile_upsert` 是既能指定 `at`、又不触发 md 双写的入口。
+    const BASE: i64 = 1_700_000_000;
+    for (i, (ws, key, value)) in SEED.iter().enumerate() {
+        let at = BASE + i as i64;
+        plain
+            .reconcile_upsert(ws, key, value, "t", "explicit", at)
+            .unwrap();
+        store
+            .reconcile_upsert(ws, key, value, "t", "explicit", at)
+            .unwrap();
     }
 
     let a = shape(&plain.recall(Some("ws-session"), 10));

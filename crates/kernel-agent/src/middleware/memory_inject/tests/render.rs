@@ -146,9 +146,11 @@ async fn scoped_entries_render_tier_prefix() {
     assert!(out.contains("- [project] arch.note = uses pnpm"));
 }
 
-/// 主动记忆指引（F3 起，v2.139 §5.2 改写）：随注入块尾——在事实块之后；
-/// write 主动 / read 按需（「never as a way to start a conversation」
-/// 显式禁令在场）与项目文件自维护的指引语义在场。
+/// 主动记忆指引（F3 起，v2.139 §5.2 改写；**Q2 · MR §4.4 增两句**）：随注入块尾——
+/// 在事实块之后；write 主动 / read 按需的禁令在场，Q2 两条实测订正也在场
+/// （① 用户显式问过去时**必须查工具**而不是从注入上下文假设；② 空结果 ≠ 没有
+/// 历史，项目历史在树里）。旧句「never as a way to start a conversation」必须
+/// **不在场**——它被模型读成"关于过去的提问也别查"（MR 稿 §0-4 的 audit 动线实证）。
 #[tokio::test]
 async fn guidance_appended_at_block_tail() {
     let inject = inject(
@@ -163,10 +165,26 @@ async fn guidance_appended_at_block_tail() {
             let guide = out.find("<memory_guidance>").expect("指引块在");
             assert!(mem < guide, "指引在注入块尾");
             assert!(
-                out.contains("never as a way to start"),
-                "read 侧开场禁令在场"
+                out.contains("don't probe memory unprompted"),
+                "read 侧按需禁令（Q2 换了措辞）: {out}"
             );
-            assert!(out.contains(".Locowrk/"), "项目文件自维护的指引语义在场");
+            assert!(
+                !out.contains("never as a way to start"),
+                "旧句必须已退役，否则改写没落: {out}"
+            );
+            assert!(
+                out.contains("query these tools instead of assuming from injected context"),
+                "Q2 第①句在场: {out}"
+            );
+            assert!(
+                out.contains("do NOT mean there is no history")
+                    && out.contains("memory_project_history first"),
+                "Q2 第②句与它的指路工具点名: {out}"
+            );
+            assert!(
+                out.contains(".Locowrk/"),
+                "项目文件自维护的指引语义保留: {out}"
+            );
         }
         _ => panic!("expected replace"),
     }

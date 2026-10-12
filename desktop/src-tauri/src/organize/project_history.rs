@@ -5,8 +5,9 @@
 //!
 //! 数据源与 view.rs `tree_project` 同源（scan_workspace 全会话 + 旁车标题
 //! 映射），但工具不依赖 Organizer（组装点在 Organizer 构建之前）——自带
-//! 同款聚合。Pure + on_demand：读侧零风险，计划模式围栏天然放行；
-//! TreeToolGate 无需改（只管 collapse）。
+//! 同款聚合。`Pure` + **`Always`**（Q2 · MR §4.3 起，原为 OnDemand）：读侧零风险，
+//! 计划模式围栏按 `side_effect` 放行（**与 exposure 无关**，改档不影响围栏）；
+//! TreeToolGate 无需改（只管 collapse）。提到 Always 的理由见 `spec()` 处注释。
 //!
 //! 钳制：最近 [`MAX_SESSIONS`] 个会话（session_id 升序取尾 = 时间取尾；
 //! 桌面 id 含毫秒时间戳，字典序即时间序），超出置 truncated 指路
@@ -45,7 +46,13 @@ fn spec() -> &'static ToolSpec {
             .into(),
         schema: json!({ "type": "object", "properties": {} }),
         side_effect: SideEffect::Pure,
-        exposure: Exposure::OnDemand,
+        // Q2（MR 稿 §4.3）：`OnDemand → Always`。它是「用户问过去做了什么」这条
+        // 动线的**入口工具**，而读侧是本地 JSON 聚合（零网络、零模型调用）；留在
+        // OnDemand 的实测后果 = MR 稿 §0-2：新会话零会话内用量 + embedding 未配置
+        // ⇒ 语义相似度退化 ⇒ 被 Top-20 截断**挤出目录**，模型根本不知道它存在。
+        // 代价 = Always 名额约 14 → 15（OnDemand 档 6 → 5），`max_tools` 是设置项，
+        // 名额紧张时由用户自己调。
+        exposure: Exposure::Always,
     })
 }
 

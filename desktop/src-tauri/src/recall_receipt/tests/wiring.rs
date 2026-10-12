@@ -45,7 +45,15 @@ async fn resolve_wraps_only_the_observed_tools() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].mode, "memory_search");
     assert_eq!(rows[0].session_key, "sess-9");
-    assert_eq!(rows[0].scope_id, "F:/ws/a");
+    // 键位取**归一形**（Q2 · MR §6 的行为变化）：注入档与回执档都过
+    // `workspace::scope_key`，所以期望值由同一个函数给——这条判据钉的是
+    // "两档同串"，不是某个字面串形（Windows 上它是 `f:\ws\a`、POSIX 上仍是
+    // 原串，钉字面会造出一条平台相关的假判据）。
+    assert_eq!(
+        rows[0].scope_id,
+        crate::workspace::scope_key(Some("F:/ws/a")),
+        "回执的键位必须与注入档同串，否则两档在同一张表里对不上账"
+    );
 
     // 非采集面：同一棵树下 fs_read 不出账
     src.resolve(Some("sess-9"), "fs_read")

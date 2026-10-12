@@ -73,8 +73,35 @@ fn workspace_view_projects_workspace_only() {
 }
 
 #[test]
-fn scope_key_normalizes_to_unfiled() {
+fn scope_key_is_the_normalized_keyside_and_empty_for_unattributed() {
     assert_eq!(scope_key(None), "");
     assert_eq!(scope_key(Some("")), "");
-    assert_eq!(scope_key(Some("F:/ws/a")), "F:/ws/a");
+    assert_eq!(scope_key(Some("   ")), "", "空白串不是某个项目的键位");
+    // Q2（MR §6）：宿主侧的键位由 `plugin_api::wskey` 唯一真源给出。这里钉的是
+    // **「委托发生了 + 两种写法同键位」**，不钉具体串形——折叠是 Windows 专属
+    // 语义，把 `"F:/ws/a"` 的字面形写死会得到一条 Linux 绿、Windows 红的假判据
+    // （串形本身由 `wskey/tests.rs` 各档钉）。
+    assert_eq!(
+        scope_key(Some("F:/ws/a/")),
+        scope_key(Some("F:/ws/a")),
+        "尾分隔符漂移不许造出第二个键位"
+    );
+    // 斜杠方向漂移**只在 Windows 合并**（POSIX 上 `F:\ws\a` 是一个含反斜杠的
+    // 合法名字，与 `F:/ws/a` 是两个不同的串——那里合并才是错）。
+    #[cfg(windows)]
+    assert_eq!(
+        scope_key(Some(r"F:\ws\a")),
+        scope_key(Some("F:/ws/a")),
+        "Windows 上斜杠方向漂移合并"
+    );
+    #[cfg(not(windows))]
+    assert_ne!(
+        scope_key(Some(r"F:\ws\a")),
+        scope_key(Some("F:/ws/a")),
+        "POSIX 上二者本就是不同串，不许合"
+    );
+    assert_eq!(
+        scope_key(Some("F:/ws/a")),
+        plugin_api::wskey::normalize("F:/ws/a")
+    );
 }

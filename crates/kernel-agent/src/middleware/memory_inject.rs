@@ -9,6 +9,12 @@
 //! 当前工作的主模型按需用文件工具查看与维护；结构化项目事实走
 //! memory_read / memory_search 按需查。
 //!
+//! Q2（MR 稿 §4.1）在同一个块里追加一节 [`MemorySource::project_index`]＝
+//! **项目记忆的指针索引**（一行一条 `- key — hook`）。它**不是**对上述裁定的
+//! 反转：裁定禁的是"项目事实全文灌进 system"，索引给的是"本项目记了哪些条"，
+//! 正文一个字都不进——这正是 MR 稿 §0 第三条根因（注入面三重盲：项目层有货
+//! 而模型不知道有货）的对症件。
+//!
 //! 链位（§3.6；v2.139 提示词分层设计 §6 重排）：ToolExposure（⑫）→
 //! BaseSystemInject（静态身份层 = system 前缀）→ **Memory-Inject** →
 //! 思考语言 → 树目录（殿后）——静态段在前、动态块追加，append-only
@@ -93,6 +99,19 @@ pub trait MemorySource: Send + Sync + 'static {
         let _ = session_id;
         None
     }
+
+    /// 项目记忆**索引**（MR 稿 §4.1，队列 Q2）：本项目项目层的**指针行**
+    /// （`- <key> — <hook>`），不是事实正文——v2.136「项目层事实不自动注入」
+    /// 禁的是全文灌进 system，索引给的是"这个项目记了哪些条"，正文仍由模型
+    /// `memory_read` 按需取。宿主实现（md 投影优先、sqlite 现合成兜底、预算钳制
+    /// 都在宿主侧）。
+    ///
+    /// 缺省 `None` = 整节缺席（未归属会话没有"本项目"可言 / 项目层空 / headless
+    /// 装配），组装零变化。文本随块同吃会话预取缓存 = 会话内字节钉死（M1 纪律）。
+    fn project_index(&self, session_id: Option<&str>) -> Option<String> {
+        let _ = session_id;
+        None
+    }
 }
 
 /// 注入参数（settings.json `memory` 区；Context 文档 §6.2 的
@@ -119,21 +138,33 @@ const VALUE_INJECT_MAX_CHARS: usize = 500;
 /// 预取缓存上限（FIFO 驱逐最旧会话）：与 ToolExposure 钉死表同款保险丝。
 const PREFETCH_CAP: usize = 128;
 
-/// 主动记忆指引（F3 起随注入块尾；v2.139 按提示词分层设计 §5.2 改写）。
-/// **无条件注入**（中间件启用即带）。分工不变（v2.136 裁定）：write 侧
-/// 保持主动（当场记，不等被问）；read 侧改按需——显式禁令「never as a
-/// way to start a conversation」治开场仪式（身份段总纲之外的第二道）。
-/// memory 注入关（`memory.enabled=false` / top_k=0）= 整块含指引一起
-/// 缺席。静态文本与块同吃预取缓存（M1 纪律不破）。
+/// 主动记忆指引（F3 起随注入块尾；v2.139 按提示词分层设计 §5.2 改写；
+/// **Q2 · MR §4.4 增两句并给禁令开一个显式口子**）。
+///
+/// 分工不变（v2.136 裁定）：write 侧保持主动（当场记，不等被问）；read 侧改按需。
+/// 两条 Q2 增句的由来 = MR 稿 §0 的实测动线：① 旧措辞「never as a way to
+/// start a conversation」被模型读成"关于过去的提问也别查"，于是用户问"查一下你
+/// 之前的记忆"时它**直接从注入上下文假设**、一个工具都不调 → 现在明确"用户显式
+/// 问过去/记忆时**必须查工具**"；② 事实层空是常态（0 行）而**树里真有货**，模型
+/// 查完 `memory_search` 落空就下结论"没有历史" → 现在明说"空结果 ≠ 没有历史，
+/// 项目历史在树里，先 `memory_project_history`"。
+///
+/// memory 注入关（`memory.enabled=false` / top_k=0）= 整块含指引一起缺席。
+/// 静态文本与块同吃预取缓存（M1 纪律不破）。
 const GUIDANCE_BLOCK: &str = "<memory_guidance>\n\
      Proactive memory: when the user states a lasting preference or a durable \
      decision is made, save it with memory_write on the spot (scope=\"global\" \
      for standing preferences; project scope for durable project facts); \
      prefer updating an existing key over near-duplicates. Reading memory is \
      on-demand: use memory_read / memory_search only when the request touches \
-     past preferences, decisions, or project facts — never as a way to start \
-     a conversation. Project working memory (.Locowrk/ files) you maintain \
-     with file tools; the repo context reminder says when.\n\
+     past preferences, decisions, or project facts — don't probe memory \
+     unprompted as a way to start a conversation. When the user explicitly asks \
+     about past work or memories, query these tools instead of assuming from \
+     injected context. Empty results from memory_read / memory_search do NOT \
+     mean there is no history: project history lives in the memory tree — call \
+     memory_project_history first, and memory_search_titles for topics. Project \
+     working memory (.Locowrk/ files) you maintain with file tools; the repo \
+     context reminder says when.\n\
      </memory_guidance>";
 
 /// 一个会话的预取块（None = 首查即无记忆，也缓存避免每轮重查）。
@@ -309,6 +340,17 @@ impl WaterfallListener for MemoryInject {
         // 由模型 memory_read / memory_search 按需查（见 GUIDANCE_BLOCK）。
         let entries = self.source.recall(req.session_id.as_deref(), cfg.top_k);
         block = Self::append_block(block, Self::build_block(&entries));
+        // 项目记忆索引（Q2 · MR §4.1）：紧随全局层之后——指针行，正文不进。
+        // 宿主给定内文，标签在这里包（与 `<repo_context>` / `<environment>` 同形，
+        // 块命名由内核管、内容真源在宿主）。整节缺席 = 未归属 / 项目层空。
+        if let Some(index) = self.source.project_index(req.session_id.as_deref()) {
+            block = Self::append_block(
+                block,
+                Some(format!(
+                    "<project_memory_index>\n{index}\n</project_memory_index>"
+                )),
+            );
+        }
         // 主动记忆指引（F3 §4）：随注入块尾——静态文本，与块同吃预取
         // 缓存；无条件注入（见 GUIDANCE_BLOCK 注释的"零记忆也要知道"）。
         block = Self::append_block(block, Some(GUIDANCE_BLOCK.to_string()));

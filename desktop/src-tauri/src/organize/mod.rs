@@ -35,6 +35,7 @@ mod collapse;
 mod debug;
 mod edit;
 mod events;
+mod progress;
 mod project_history;
 mod recovery;
 mod search_titles;

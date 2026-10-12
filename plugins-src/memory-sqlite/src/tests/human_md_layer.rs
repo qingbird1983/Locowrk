@@ -11,9 +11,12 @@ use plugin_api::serde_json::json;
 fn write_and_delete_sync_md_human_layer() {
     let _g = ENV_LOCK.lock().unwrap();
     let dir = temp_data_dir("md-sync");
-    let ws = r"F:\proj\MdSync";
+    // **Q2 键位归一**：`proj()` 走 `from_parts`，落库与 md 目录取的都是归一后的串，
+    // 所以这条判据的目录名必须由 `key_of` 给出同一个串（写死原始写法在 Windows
+    // 上会指到一个不存在的目录，Linux 上又恰好指对——那是平台相关的假判据）。
+    let ws = key_of(r"F:\proj\MdSync");
     let out = store::memory_write(
-        &proj(ws),
+        &proj(&ws),
         &json!({ "key": "db.choice", "value": "sqlite", "tags": "pref" }),
     )
     .unwrap();
@@ -21,7 +24,7 @@ fn write_and_delete_sync_md_human_layer() {
     let md = dir
         .join("memory")
         .join("projects")
-        .join(plugin_api::memlayout::project_dir_name(ws))
+        .join(plugin_api::memlayout::project_dir_name(&ws))
         .join("facts")
         .join("db.choice.md");
     let text = std::fs::read_to_string(&md).expect("md 文件在场");
@@ -33,19 +36,19 @@ fn write_and_delete_sync_md_human_layer() {
     assert!(
         dir.join("memory")
             .join("projects")
-            .join(plugin_api::memlayout::project_dir_name(ws))
+            .join(plugin_api::memlayout::project_dir_name(&ws))
             .join("MEMORY.md")
             .exists(),
         "项目索引同步生成"
     );
     // 覆盖写 → md 同步更新
     store::memory_write(
-        &proj(ws),
+        &proj(&ws),
         &json!({ "key": "db.choice", "value": "postgres" }),
     )
     .unwrap();
     assert!(std::fs::read_to_string(&md).unwrap().contains("postgres"));
     // 删除 → md 消失（索引仍存在但为空行）
-    store::memory_delete(&proj(ws), &json!({ "key": "db.choice" })).unwrap();
+    store::memory_delete(&proj(&ws), &json!({ "key": "db.choice" })).unwrap();
     assert!(!md.exists(), "删除同步移除 md");
 }

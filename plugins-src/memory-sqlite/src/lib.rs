@@ -261,11 +261,26 @@ impl WsCtx {
     /// 无项目根但**有会话身份** = Unattributed（桌面归属缝/子 Agent 冒泡）；
     /// 无会话身份 = Headless（一次性进程等价 headless，v2.64 ToolExposure
     /// 同判据——plugin-host 测试装配与 kernel-bin 直调都落此态）。
+    ///
+    /// **Q2（MR 稿 §6）起项目根先过 [`plugin_api::wskey::normalize`】**：记忆主键是
+    /// `(workspace, key)`，同一个项目的两种写法（Windows 大小写 / 斜杠漂移 /
+    /// 尾分隔符）会落成两个主键，事实被劈成几份。归一放在**这里**而不是 SQL
+    /// 边界，因为写侧 `write_scope`、读侧 `scope()`、md 双写的目录名三处都从
+    /// `WsCtx` 取值 ⇒ 一处归一、三处同形；宿主侧 `workspace::scope_key` 调的是
+    /// **同一个函数**，两侧串形恒等（不然注入侧按键位读不到插件写进去的行）。
+    /// 判空用**归一后**的串：`"   "` 这类假串（折叠后为空）不许冒充项目键位。
     pub(crate) fn from_parts(session_id: Option<String>, workspace: Option<String>) -> WsCtx {
-        match workspace {
-            Some(ws) if !ws.is_empty() => WsCtx::Project(ws),
-            _ if session_id.as_deref().map(str::is_empty) == Some(false) => WsCtx::Unattributed,
-            _ => WsCtx::Headless,
+        let key = workspace
+            .as_deref()
+            .map(plugin_api::wskey::normalize)
+            .unwrap_or_default();
+        if !key.is_empty() {
+            return WsCtx::Project(key);
+        }
+        if session_id.as_deref().is_some_and(|s| !s.is_empty()) {
+            WsCtx::Unattributed
+        } else {
+            WsCtx::Headless
         }
     }
 

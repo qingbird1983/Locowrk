@@ -12,8 +12,15 @@ fn temp_dir(tag: &str) -> PathBuf {
 }
 
 /// 测试解析器：`ws-session` → 项目根，其余未归属。
+///
+/// `ws-variant-session` 给的是**同一个项目的另一种写法**（斜杠方向 + 尾分隔符），
+/// 专供 Q2（MR §6）的键位归一判据对——两个会话 id 必须落进同一个键位。
 fn test_resolver() -> crate::workspace::WorkspaceResolver {
-    Arc::new(|sid: &str| (sid == "ws-session").then(|| "F:/ws/a".to_string()))
+    Arc::new(|sid: &str| match sid {
+        "ws-session" => Some("F:/ws/a".to_string()),
+        "ws-variant-session" => Some(r"F:\ws\a\".to_string()),
+        _ => None,
+    })
 }
 
 #[test]
@@ -105,10 +112,14 @@ fn recall_injects_global_layer_only() {
 fn scope_id_and_context_line_follow_attribution() {
     let dir = temp_dir("scope-id");
     let store = MemoryStore::new(&dir, test_resolver());
-    // 归属会话：键位身份 = 项目根；上下文行 = 当前项目工作区
-    assert_eq!(store.scope_id(Some("ws-session")), "F:/ws/a");
+    // 归属会话：键位身份 = 项目根的**归一形**（Q2 / MR §6）；上下文行取同一个串
+    // ——会话里不许同时出现两种项目写法。字面形不在此写死：大小写折叠是 Windows
+    // 专属语义，钉字面串会得到一条 Linux 绿、Windows 红的假判据（串形归
+    // `wskey/tests.rs` 各档管）。
+    let key = plugin_api::wskey::normalize("F:/ws/a");
+    assert_eq!(store.scope_id(Some("ws-session")), key);
     let line = store.context_line(Some("ws-session")).unwrap();
-    assert!(line.contains("F:/ws/a"), "{line}");
+    assert!(line.contains(&key), "{line}");
     assert!(line.contains("this project"), "{line}");
     // v2.139 `<environment>`：日期/平台两行 + 按需查路径（开场先读退役）
     assert!(line.contains("Today: "), "{line}");
@@ -119,6 +130,29 @@ fn scope_id_and_context_line_follow_attribution() {
     assert_eq!(store.scope_id(None), "");
     assert!(store.context_line(Some("other")).is_none());
     assert!(store.context_line(None).is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn two_spellings_of_one_project_share_one_scope_id() {
+    // **本刀在宿主这一侧的承重判据**：预取缓存键 = `(session_id, scope_id)`，
+    // 注入索引与观测表也按 scope_id 取键位——同一个项目若因写法不同给出两个
+    // scope_id，注入面就会把它的记忆读成"另一份"（MR §0 的断点之一）。
+    let dir = temp_dir("scope-collapse");
+    let store = MemoryStore::new(&dir, test_resolver());
+    #[cfg(windows)]
+    assert_eq!(
+        store.scope_id(Some("ws-session")),
+        store.scope_id(Some("ws-variant-session")),
+        "斜杠方向/尾分隔符漂移在 Windows 上必须同键位"
+    );
+    #[cfg(not(windows))]
+    assert!(
+        !store.scope_id(Some("ws-variant-session")).is_empty(),
+        "POSIX 上该串是另一个键位，但不许被归成未归属"
+    );
+    // 两种写法都**不是**未归属（归一不许把项目串吞成 ""，那会污染全局偏好层）
+    assert!(!store.scope_id(Some("ws-session")).is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -233,5 +267,99 @@ fn export_rows_covers_both_scopes() {
     assert!(rows
         .iter()
         .any(|r| r.workspace == "F:/ws/a" && r.source == "extracted"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ---- Q2（MR §4.1）项目记忆索引注入：两档数据源的优先关系与缺席条件 ----
+
+/// 归一键位（Q2 起 `scope_of_session` 出来的串才是查行的键位）。测试用同一个
+/// helper 取键位，跨平台两侧一致（Windows 上它是 `f:\ws\a`，POSIX 上仍是原串）。
+fn keysid() -> String {
+    crate::workspace::scope_key(Some("F:/ws/a"))
+}
+
+#[test]
+fn project_index_uses_the_md_projection_when_it_has_pointer_lines() {
+    let dir = temp_dir("idx-md-first");
+    let store = wired(&dir, true);
+    let ws = keysid();
+    // 照生产路径造 md：宿主 write 会双写 facts/ 并刷新该键位的 MEMORY.md
+    store
+        .write(&ws, "build.cmd", "pnpm tauri dev", "构建", "explicit")
+        .unwrap();
+    let out = store.project_index(Some("ws-session")).expect("项目层有货");
+    assert!(
+        out.contains("- [build.cmd](build.cmd.md)"),
+        "md 投影档（指针行原样搬）: {out}"
+    );
+    assert!(
+        out.contains("构建"),
+        "hook 来自 frontmatter description: {out}"
+    );
+    assert!(!out.contains("pnpm tauri dev"), "正文一个字都不进: {out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn project_index_falls_back_to_sqlite_when_the_md_is_an_empty_shell() {
+    // **本机实测的那一档**：`MEMORY.md` 在场但只有 `# 记忆索引` 标题（或整个文件
+    // 不在）。这一档必须落 sqlite 现合成，而不是"注入一个空节"或"报没有货"。
+    let dir = temp_dir("idx-fallback");
+    let store = wired(&dir, false); // 文件化关 = 一份 md 都不写，正合现场形态
+    let ws = keysid();
+    store
+        .write(&ws, "user.stack", "Rust", "偏好", "explicit")
+        .unwrap();
+    let out = store.project_index(Some("ws-session")).expect("兜底档有货");
+    assert!(out.contains("- user.stack — 偏好"), "sqlite 现合成: {out}");
+    assert!(!out.contains("Rust"), "兜底档也只给指针，正文不进: {out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn project_index_is_absent_for_unattributed_and_empty_projects() {
+    let dir = temp_dir("idx-absent");
+    let store = wired(&dir, true);
+    // 未归属会话：「本项目」不成立 ⇒ 整节缺席（不是空节）
+    store.write("", "g1", "v", "", "explicit").unwrap();
+    assert!(store.project_index(Some("other")).is_none(), "未归属不注入");
+    assert!(store.project_index(None).is_none(), "无会话身份不注入");
+    // 归属会话但项目层空 ⇒ 同样缺席，零开销
+    let empty = MemoryStore::new(&dir.join("nothing"), test_resolver());
+    assert!(empty.project_index(Some("ws-session")).is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn project_index_is_the_same_keyside_the_injection_cache_uses() {
+    // 接线判据：索引取行的键位必须与预取缓存键里那半 (`scope_id`) **同源同串**，
+    // 否则会话改归属后缓存键变了而取行仍用旧串 = 注入到过期项目的索引。
+    let dir = temp_dir("idx-keyside");
+    let store = wired(&dir, false);
+    let ws = keysid();
+    store.write(&ws, "k.one", "v", "t", "explicit").unwrap();
+    assert_eq!(
+        store.scope_id(Some("ws-session")),
+        ws,
+        "scope_id 与查行键位必须同串"
+    );
+    let out = store.project_index(Some("ws-session")).unwrap();
+    assert!(out.contains("- k.one — t"), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_broken_database_degrades_to_no_section_without_touching_recall() {
+    // 「库不可用」不许冒充「项目层空」在**索引这一侧**的形态：整节缺席 + 一次告警，
+    // 而全局层召回（同库）的降级路径不受影响（`recall_quiet` 已有自己的告警位）。
+    let dir = temp_dir("idx-unavailable");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("memory.sqlite3"), b"not a database").unwrap();
+    let store = MemoryStore::new(&dir, test_resolver());
+    assert!(store.project_index(Some("ws-session")).is_none());
+    assert!(
+        store.recall(Some("ws-session"), 5).is_empty(),
+        "recall 照常降级为空"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

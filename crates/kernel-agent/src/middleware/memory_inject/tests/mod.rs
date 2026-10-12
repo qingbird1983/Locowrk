@@ -1,9 +1,11 @@
 //! memory_inject 单测：注入格式 / 配置开关 / 空表降级 / 超长截断 /
 //! 追加语义 / 非 REQUEST 点不碰。
 //! 批 F-16 目录化：共享假件与跑批入口留本文件，用例按面分簇见 `render` /
-//! `prefetch` / `scope_context`。
+//! `prefetch` / `scope_context`；Q2（MR §4.1）加 `project_index`
+//! （项目记忆索引段的落点、缺席条件与随预取钉死）。
 
 mod prefetch;
+mod project_index;
 mod render;
 mod scope_context;
 

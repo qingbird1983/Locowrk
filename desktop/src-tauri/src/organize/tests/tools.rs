@@ -116,6 +116,37 @@ async fn project_history_returns_timeline_grouped_by_summary() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// Q2（MR 稿 §4.3）：`memory_project_history` 的档位必须是 **Always**，
+/// `side_effect` 必须是 **Pure**。
+///
+/// 这两条是"提档"这件事唯一的机器保证，而且不是审美：留在 OnDemand 时，新会话
+/// 零会话内用量 + embedding 未配置 ⇒ 语义相似度退化 ⇒ 被 Top-20 截断**挤出目录**，
+/// 模型根本看不见这个工具（MR 稿 §0-2 的实测成因，也是那次"查一下你之前的记忆"
+/// 答错的直接原因）。`side_effect` 同批钉住是因为**计划模式围栏按 side_effect
+/// 放行、与 exposure 无关**——不钉住这条，后来人会以为"提档要顺手动围栏"。
+#[test]
+fn project_history_is_always_exposed_and_still_pure() {
+    use plugin_api::{Exposure, SideEffect, Tool as _};
+    let root = temp_root("ph-exposure");
+    let tool = crate::organize::ProjectHistoryTool::new(
+        memory_tree::TreeStore::new(&root),
+        resolver(),
+        root.join("sessions"),
+    );
+    let spec = tool.spec();
+    assert_eq!(spec.exposure, Exposure::Always, "档位必须已提到 Always");
+    assert_eq!(
+        spec.side_effect,
+        SideEffect::Pure,
+        "读侧零副作用（围栏据此放行）"
+    );
+    assert_eq!(spec.name, "memory_project_history", "工具身份不变");
+    assert!(
+        spec.description.contains("memory_expand"),
+        "描述仍指路下钻（提档不许顺手改文案语义）"
+    );
+}
+
 /// 时间线钳制：>20 会话取最近 20 + truncated 如实 + 指路 search_titles；
 /// 无总结覆盖的章节落 other_chapters（v2.141 前存量会话形态）。
 #[tokio::test]

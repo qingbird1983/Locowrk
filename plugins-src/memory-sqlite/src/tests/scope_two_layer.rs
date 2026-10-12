@@ -132,15 +132,16 @@ fn global_rows_not_deletable_from_chat_sessions() {
     store::memory_write(&proj("F:/ws/a"), &json!({ "key": "note", "value": "mine" })).unwrap();
     let del = store::memory_delete(&proj("F:/ws/a"), &json!({ "key": "note" })).unwrap();
     assert_eq!(del["deleted"], json!(true));
-    assert_eq!(del["previous_entry"]["workspace"], json!("F:/ws/a"));
+    // 回显取归一键位（Q2），与写入侧落库串同源
+    assert_eq!(del["previous_entry"]["workspace"], json!(key_of("F:/ws/a")));
 }
 
 #[test]
 fn ws_ctx_triage_from_parts() {
-    // 有项目根 = Project；空串根 = 未归属
+    // 有项目根 = Project（键位取**归一形**，Q2）；空串根 = 未归属
     assert!(matches!(
         WsCtx::from_parts(Some("s1".into()), Some("F:/p".into())),
-        WsCtx::Project(ws) if ws == "F:/p"
+        WsCtx::Project(ws) if ws == key_of("F:/p")
     ));
     assert!(matches!(
         WsCtx::from_parts(Some("s1".into()), None),

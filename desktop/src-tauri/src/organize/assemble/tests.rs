@@ -92,7 +92,19 @@ async fn tree_mode_a_slices_at_chaptered_until_and_lists_directory() {
 
     let plan = asm.plan(sid).await.expect("树会话有计划");
     assert_eq!(plan.tail_from_event, 20, "A 档 = chaptered_until 排他游标");
-    assert!(plan.directory.starts_with("[memory tree]"), "稳定头行");
+    // Q2（MR §4.2）：进展行拼在目录**之前**（项目级读数在前、本会话目录在后）。
+    // 目录自己的稳定头行仍在原位——只是不再是整个 directory 的第一个字符，
+    // 所以这里按"位置关系"判而不是"以谁开头"判。
+    let at = plan.directory.find("[memory tree]").expect("目录头行在场");
+    assert!(
+        plan.directory[..at].starts_with("[project memory]"),
+        "进展行必须在目录段之前: {:?}",
+        &plan.directory[..at.min(40)]
+    );
+    assert!(
+        plan.directory[at..].starts_with("[memory tree]"),
+        "稳定头行"
+    );
     assert!(plan.directory.contains("- b1: 章节一"), "章节清单行");
     assert!(!plan.directory.contains("</"), "无闭合标签（追加不破前缀）");
     assert!(plan.collapsed_chapters.is_empty());
@@ -101,7 +113,15 @@ async fn tree_mode_a_slices_at_chaptered_until_and_lists_directory() {
     let s = long_session();
     let tokens = asm.context_tokens(&s, sid).expect("树会话给用量口径");
     let full = kernel_agent::estimate_tokens(&s.derive_messages());
-    assert!(tokens < full / 2, "组装后 {tokens} << 全量 {full}");
+    // 阈值从「< 全量的一半」改成「< 全量的三分之二」是**本批的机器结论**：
+    // Q2 的进展行确实进 system，用量口径必须把它算进去（漏算 = 少报一截），
+    // 于是组装后读数抬到压着 1/2 边界（本轮实测 187 对全量 374 = 恰好一半）。
+    // "显著小于全量"这个原意图由 2/3 继续钉着——尾巴只有四条消息，真值约一半。
+    assert!(
+        tokens * 3 < full * 2,
+        "组装后 {tokens} 应显著低于全量 {full}"
+    );
+    assert!(tokens < full, "组装后必须低于全量");
     assert!(tokens > 0);
 }
 
@@ -191,4 +211,90 @@ fn window_start_event_picks_nth_last_user() {
     assert_eq!(window_start_event(&events, 2), 2);
     assert_eq!(window_start_event(&events, 5), 0, "不足 N = 全部");
     assert_eq!(window_start_event(&[], 3), 0, "空会话安全");
+}
+
+// ---- Q2（MR §4.2）：进展行走生产 `plan` 的接线判据（钉死 + 换归属重算） ----
+
+/// 可改归属的解析器（会话中途被用户关联到另一个项目 = 生产里的真实动作）。
+fn mutable_resolver() -> (
+    Arc<std::sync::Mutex<String>>,
+    crate::workspace::WorkspaceResolver,
+) {
+    let cur = Arc::new(std::sync::Mutex::new(r"F:\ws\demo".to_string()));
+    let flip = Arc::clone(&cur);
+    let r: crate::workspace::WorkspaceResolver =
+        Arc::new(move |_| Some(flip.lock().unwrap().clone()));
+    (cur, r)
+}
+
+#[tokio::test]
+async fn progress_line_is_frozen_per_session_and_recomputes_on_reattribution() {
+    // 稿 §4.5「会话内二次请求字节不变」：**必须走生产 `plan`** 才算接线证明——
+    // 只在 `progress/tests.rs` 里测纯函数，测不到"每 step 都调 plan 而字节不变"。
+    let root = temp_root("progpin");
+    let sid = "s1";
+    seed_tree(&root, r"F:\ws\demo", sid);
+    let settings = settings_with(serde_json::json!({}), &root);
+    let (cur, resolver) = mutable_resolver();
+    let asm = TreeAssembler::new(
+        settings,
+        resolver,
+        memory_tree::TreeStore::new(&root),
+        root.join("sessions"),
+    );
+
+    let first = asm.plan(sid).await.expect("有计划").directory;
+    assert!(
+        first.contains("[project memory]"),
+        "首请求就该带进展行: {first}"
+    );
+
+    // 中途整理产出**第二棵树的章节**（同项目另一个会话）：本会话已注入的字节
+    // 一个字都不许变——变了就打断前缀缓存（KV v2 纪律 2，M1 的成因）。
+    let mut extra = memory_tree::MemoryTree::new(r"F:\ws\demo", "s2");
+    let drafts = vec![memory_tree::sanitize_draft("中途新章", "摘要", (0, 5)).unwrap()];
+    let chapters = extra.build_chapters(&drafts, "recorder", 2);
+    extra.apply_organized(chapters, 5, record(5), None);
+    memory_tree::TreeStore::new(&root).save(&extra).unwrap();
+
+    let second = asm.plan(sid).await.expect("有计划").directory;
+    assert_eq!(first, second, "会话中途产新章不许改写已注入字节");
+
+    // 改归属 = 键位变 = 换钉死键重算（新项目的进展行，不能沿用旧项目的读数）
+    *cur.lock().unwrap() = r"F:\ws\other".to_string();
+    let third = asm.plan(sid).await.expect("有计划").directory;
+    assert!(
+        !third.contains("[project memory]"),
+        "换到无树的项目后进展行应整段缺席: {third}"
+    );
+}
+
+#[tokio::test]
+async fn unattributed_session_gets_no_progress_line_but_keeps_the_directory() {
+    // 未归属（键位空串）= 「这个项目」不成立：目录段照旧、进展行一段都不注。
+    let root = temp_root("progunattr");
+    let sid = "s1";
+    seed_tree(&root, r"F:\ws\demo", sid);
+    let settings = settings_with(serde_json::json!({}), &root);
+    let none: crate::workspace::WorkspaceResolver = Arc::new(|_| None);
+    let asm = TreeAssembler::new(
+        settings,
+        none,
+        memory_tree::TreeStore::new(&root),
+        root.join("sessions"),
+    );
+    let plan = asm.plan(sid).await.expect("有计划");
+    assert!(
+        !plan.directory.contains("[project memory]"),
+        "未归属不注进展行: {}",
+        plan.directory
+    );
+    // 未归属会话的树本来就不在这个键位下 ⇒ 目录也是空的（`TreeDirectoryInject`
+    // 对空串不追加）；这里不重复判目录形状——那由 `tree_mode_a_…` 那条管。
+    assert!(
+        plan.directory.is_empty(),
+        "未归属会话无目录段: {}",
+        plan.directory
+    );
+    assert_eq!(plan.tail_from_event, 0);
 }

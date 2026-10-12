@@ -6,8 +6,8 @@
 //!
 //! 分块两级：**粗块** = system / tools / 逐消息；**system 子块**按稳定
 //! 协议标记切片（environment / persistent_memory / repo_context /
-//! memory_guidance / [memory tree] 目录段；v2.139 workspace_context 升级
-//! 为 environment——提示词分层设计 §4.2）——记忆块与树目录的变化可以
+//! project_memory_index / memory_guidance / [memory tree] 目录段；v2.139
+//! workspace_context 升级为 environment——提示词分层设计 §4.2）——记忆块与树目录的变化可以
 //! 定位到段，不混在「system 变了」里。开关缺省关（开发者分区
 //! `developer.cacheDiagnostics`），开启后
 //! 每轮仅多几次 hash 计算，无额外请求。无会话身份的请求（记录员/摘要
@@ -24,10 +24,15 @@ use serde::Serialize;
 use session_store::Message;
 
 /// system 内稳定标记（按出现序切片；前一个标记起 = 后一个标记止）。
-const SYSTEM_MARKERS: [&str; 5] = [
+///
+/// Q2（MR §4.1）加 `<project_memory_index>`：项目记忆索引是**会话内钉死**的段，
+/// 但它中途变化（M2 落库后 reconcile / 管理页编辑触发重算）就是前缀断裂，
+/// 必须能定位到段而不是混进"system 变了"。
+const SYSTEM_MARKERS: [&str; 6] = [
     "<environment>",
     "<persistent_memory>",
     "<repo_context>",
+    "<project_memory_index>",
     "<memory_guidance>",
     "[memory tree]",
 ];
