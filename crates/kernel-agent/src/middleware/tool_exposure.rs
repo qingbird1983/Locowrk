@@ -28,12 +28,11 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use async_trait::async_trait;
 use cordis_core::{WaterfallDecision, WaterfallListener};
-use plugin_api::{Exposure, ToolSpec};
+use plugin_api::Exposure;
 use serde::Serialize;
 use serde_json::Value;
-use session_store::Message;
 
-use super::tool_retrieval::{RETRIEVAL_WEIGHT, Retriever};
+use super::tool_retrieval::Retriever;
 use crate::waterfall::{RequestPayload, points};
 
 /// 会话内权重（§5.3：本会话用过 → 至少 +1.0，基本稳进）。
@@ -129,102 +128,19 @@ pub struct ExposureSnapshot {
     pub ts: i64,
 }
 
-/// 一次选择的结果（纯函数产出，单测友好）。
-struct Selection {
-    kept: Vec<ToolSpec>,
-    always: Vec<String>,
-    session_hot: Vec<String>,
-    global_hot: Vec<String>,
-    retrieved: Vec<String>,
-}
+// 本文件只留**监听器本体**与配置/钉死缓存/快照类型。两簇实现搬到 sibling 子模块
+// （批 F-23：M-24c 给本文件加了约 60 行计量码，把 465 行推过 400 线；三问自检
+// 「只做一件事 / 名字准确 / 改动不牵连」有两条为否 ⇒ 拆，而不是抬 check_length
+// 基线。形状照批 F-17 的 `session.rs` + `session/project.rs` 先例）。
+mod measure;
+mod selection;
 
-/// 会话内各工具的调用次数：从投影消息数 `ToolResult`（§3.5——调用意图
-/// 以闭合结果计，错误结果也算用过；回填丢失工具名的悬空条目不计）。
-fn session_counts(messages: &[Message]) -> HashMap<String, u32> {
-    let mut counts: HashMap<String, u32> = HashMap::new();
-    for m in messages {
-        if let Message::ToolResult { tool, .. } = m {
-            if !tool.is_empty() {
-                *counts.entry(tool.clone()).or_insert(0) += 1;
-            }
-        }
-    }
-    counts
-}
-
-fn spec_tokens(specs: &[ToolSpec]) -> u64 {
-    serde_json::to_string(specs).map_or(0, |s| s.len() as u64) / 4
-}
-
-/// 检索查询（§4.2：最近 3 条用户消息合并；空会话返回空串 → 调用方跳过）。
-fn retrieval_query(messages: &[Message]) -> String {
-    let mut parts: Vec<&str> = messages
-        .iter()
-        .filter_map(|m| match m {
-            Message::User { content, .. } => Some(content.as_str()),
-            _ => None,
-        })
-        .rev()
-        .take(3)
-        .collect();
-    parts.reverse();
-    let joined = parts.join("\n");
-    // 嵌入输入设上界：查询只是信号源，不是全文检索
-    joined.chars().take(600).collect()
-}
-
-/// 打分选择（§6.2）：always 无条件入选；候选按 `会话 1.0 + 全局 0.7 ×
-/// ewma + 检索 0.5 × similarity` 排序取前 `quota = max_tools - always`
-/// 个。同分保持目录原序（stable sort，目录序 = 注册表确定性序）。选中
-/// 归因：会话用过记 session_hot，否则全局分 > 0 记 global_hot，否则检索
-/// 分 > 0 记 retrieved，纯补位的不归组。
-fn select(
-    catalog: &[ToolSpec],
-    session: &HashMap<String, u32>,
-    ewma: &HashMap<String, f64>,
-    retrieval: &HashMap<String, f64>,
-    max_tools: usize,
-) -> Selection {
-    let (always_specs, candidates): (Vec<&ToolSpec>, Vec<&ToolSpec>) = catalog
-        .iter()
-        .partition(|s| matches!(s.exposure, Exposure::Always));
-    let quota = max_tools.saturating_sub(always_specs.len());
-
-    let mut scored: Vec<(&ToolSpec, f64)> = candidates
-        .into_iter()
-        .map(|s| {
-            let hit = session.contains_key(&s.name);
-            let score = SESSION_WEIGHT * u32::from(hit) as f64
-                + GLOBAL_WEIGHT * ewma.get(&s.name).copied().unwrap_or(0.0)
-                + RETRIEVAL_WEIGHT * retrieval.get(&s.name).copied().unwrap_or(0.0);
-            (s, score)
-        })
-        .collect();
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    let mut kept: Vec<ToolSpec> = always_specs.iter().map(|s| (*s).clone()).collect();
-    let always: Vec<String> = kept.iter().map(|s| s.name.clone()).collect();
-    let mut session_hot = Vec::new();
-    let mut global_hot = Vec::new();
-    let mut retrieved = Vec::new();
-    for (spec, _score) in scored.into_iter().take(quota) {
-        if session.contains_key(&spec.name) {
-            session_hot.push(spec.name.clone());
-        } else if ewma.get(&spec.name).copied().unwrap_or(0.0) > 0.0 {
-            global_hot.push(spec.name.clone());
-        } else if retrieval.get(&spec.name).copied().unwrap_or(0.0) > 0.0 {
-            retrieved.push(spec.name.clone());
-        }
-        kept.push(spec.clone());
-    }
-    Selection {
-        kept,
-        always,
-        session_hot,
-        global_hot,
-        retrieved,
-    }
-}
+// 私有 use：`tests/` 子簇经 `use super::*` 的 glob 拿到这些名字（与 `persist.rs`
+// 底部 `use meta::{invalid_id, meta_file}` 同族，第五道闸 S6 认这一档出处）。
+// `Selection` 不在其中：字段访问不要求类型名在作用域，父与测试都只写 `sel.kept_idx`
+// （clippy `--all-targets` 实测把显式引入判成 unused_imports）。
+use measure::{array_json_len, spec_json_len, tokens_of};
+use selection::{reorder, retrieval_query, select, session_counts};
 
 /// 挂在 `agent/request` 上的工具暴露截断监听器。
 pub struct ToolExposure {
@@ -307,21 +223,27 @@ impl WaterfallListener for ToolExposure {
                     .get(id)
                     .cloned();
                 if let Some(pinned) = pinned {
-                    let mut kept: Vec<ToolSpec> = pinned
+                    // 逐项 JSON 长度只算**一遍**，保留集长度由下标子集求和得出
+                    // （旧写法把全目录与保留集各整体序列化一次；M-24c）。
+                    let lens: Vec<u64> = req.tools.iter().map(spec_json_len).collect();
+                    let mut kept_idx: Vec<usize> = pinned
                         .names
                         .iter()
-                        .filter_map(|n| req.tools.iter().find(|s| &s.name == n).cloned())
+                        .filter_map(|n| req.tools.iter().position(|s| &s.name == n))
                         .collect();
-                    for s in req.tools.iter().filter(|s| {
-                        matches!(s.exposure, Exposure::Always) && !pinned.names.contains(&s.name)
-                    }) {
-                        kept.push(s.clone());
+                    for (i, s) in req.tools.iter().enumerate() {
+                        if matches!(s.exposure, Exposure::Always) && !pinned.names.contains(&s.name)
+                        {
+                            kept_idx.push(i);
+                        }
                     }
-                    let saved = spec_tokens(&req.tools).saturating_sub(spec_tokens(&kept));
+                    let kept_lens: Vec<u64> = kept_idx.iter().map(|&i| lens[i]).collect();
+                    let saved = tokens_of(array_json_len(&lens))
+                        .saturating_sub(tokens_of(array_json_len(&kept_lens)));
                     self.record(ExposureSnapshot {
                         enabled: true,
                         total: req.tools.len(),
-                        exposed: kept.len(),
+                        exposed: kept_idx.len(),
                         always: pinned.always,
                         session_hot: pinned.session_hot,
                         global_hot: pinned.global_hot,
@@ -329,7 +251,7 @@ impl WaterfallListener for ToolExposure {
                         saved_tokens_estimate: saved,
                         ts: now_secs(),
                     });
-                    req.tools = kept;
+                    req.tools = reorder(&mut req.tools, &kept_idx);
                     return super::replace_decision(req);
                 }
             }
@@ -344,12 +266,17 @@ impl WaterfallListener for ToolExposure {
             (Some(r), true) => r.scores(&retrieval_query(&req.messages), &req.tools).await,
             _ => HashMap::new(),
         };
+        // 逐项 JSON 长度在裁剪**之前**算一遍：全目录与保留集的长度都由它得出，
+        // 不再把含 schema 的目录整体序列化两次（M-24c）。
+        let lens: Vec<u64> = req.tools.iter().map(spec_json_len).collect();
         let sel = select(&req.tools, &session, &ewma, &retrieval, cfg.max_tools);
-        let saved = spec_tokens(&req.tools).saturating_sub(spec_tokens(&sel.kept));
+        let kept_lens: Vec<u64> = sel.kept_idx.iter().map(|&i| lens[i]).collect();
+        let saved =
+            tokens_of(array_json_len(&lens)).saturating_sub(tokens_of(array_json_len(&kept_lens)));
         self.record(ExposureSnapshot {
             enabled: true,
             total,
-            exposed: sel.kept.len(),
+            exposed: sel.kept_idx.len(),
             always: sel.always.clone(),
             session_hot: sel.session_hot.clone(),
             global_hot: sel.global_hot.clone(),
@@ -363,7 +290,11 @@ impl WaterfallListener for ToolExposure {
                 self.pins.lock().expect("exposure pins poisoned").insert(
                     id,
                     PinnedSelection {
-                        names: sel.kept.iter().map(|s| s.name.clone()).collect(),
+                        names: sel
+                            .kept_idx
+                            .iter()
+                            .map(|&i| req.tools[i].name.clone())
+                            .collect(),
                         always: sel.always,
                         session_hot: sel.session_hot,
                         global_hot: sel.global_hot,
@@ -372,7 +303,7 @@ impl WaterfallListener for ToolExposure {
                 );
             }
         }
-        req.tools = sel.kept;
+        req.tools = reorder(&mut req.tools, &sel.kept_idx);
         super::replace_decision(req)
     }
 }

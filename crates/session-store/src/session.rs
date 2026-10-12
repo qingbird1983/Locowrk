@@ -141,13 +141,29 @@ impl SessionState {
     }
 
     /// 最近一条 assistant 消息中 call_id 对应的占位条目（§4.2 回填语义）。
+    ///
+    /// **命中即停**（审计 M-24b）：只检查反向遇到的**第一条** assistant，
+    /// 它里面没有该 call_id 就返回 `None`，不再一路扫到日志头。旧写法
+    /// （`find_map` 跳过所有非匹配 assistant）在 call_id 无占位时付
+    /// O(整段历史)——而补偿路径每个 undo 都用从未被任何 assistant 声明过的
+    /// `{id}-undo` 新 id（`kernel-agent/src/compensation.rs:101`），长会话里
+    /// 这类事件越多，`apply`/`state_at`/`load_session` 越接近 O(n²)。
+    ///
+    /// 两种写法在**全部可达输入**上逐事件等价，依据是内核的追加次序恒为
+    /// 一条 assistant 之后紧跟它自己的 tool_call/tool_result、下一条
+    /// assistant 只出现在下一 step（`kernel-agent/src/kernel.rs:257/:310/:335`，
+    /// 工具**串行** await，无并行执行）；崩溃恢复的悬空调用合成只发生在投影层、
+    /// **不回填日志**（`uncertain.rs:15-16`），回放与快照恢复都按日志原序喂
+    /// `apply`（`persist.rs:78-96`、`snapshot.rs:109-121`）。唯一会让两者分岔的
+    /// 形状是「晚到的 ToolResult 跨过一条更新的 assistant 去回填更早的占位」，
+    /// 该形状现网不可达；`session/tests.rs` 的 `pending_slot_stops_at_nearest_assistant`
+    /// 把这一点钉住，将来若真引入乱序追加，那条测试会先说话。
     fn pending_slot(&mut self, call_id: &CallId) -> Option<&mut ToolCallMsg> {
-        self.messages.iter_mut().rev().find_map(|m| match m {
-            Message::Assistant { tool_calls, .. } => {
-                tool_calls.iter_mut().find(|c| &c.id == call_id)
-            }
+        let tool_calls = self.messages.iter_mut().rev().find_map(|m| match m {
+            Message::Assistant { tool_calls, .. } => Some(tool_calls),
             _ => None,
-        })
+        })?;
+        tool_calls.iter_mut().find(|c| &c.id == call_id)
     }
 }
 

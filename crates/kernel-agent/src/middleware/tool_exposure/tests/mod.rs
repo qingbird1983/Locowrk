@@ -10,7 +10,12 @@ mod scoring;
 
 use super::*;
 use cordis_core::WaterfallListener;
-use plugin_api::SideEffect;
+// 批 F-23 起这两个名字**不再**经父 glob 传导：`ToolSpec` 与 `RETRIEVAL_WEIGHT` 随实现
+// 搬进 `tool_exposure::{measure, selection}`，父文件的 import 面收窄成只剩 `Exposure`
+// 与 `Retriever`（clippy `--all-targets` 把留在父里的判成 unused_imports）。测试面
+// 自己引用 ⇒ 按 F-14「`use` 按引用面分派」在这里显式引入，子簇再经 `use super::*` 拿。
+use crate::middleware::tool_retrieval::RETRIEVAL_WEIGHT;
+use plugin_api::{SideEffect, ToolSpec};
 use serde_json::json;
 use session_store::Message;
 

@@ -117,14 +117,24 @@ pub struct SessionMeta {
 /// 列表标题截断宽度（字符）。
 pub const SESSION_TITLE_CHARS: usize = 40;
 
-/// 列出目录下全部会话（`*.jsonl`，按 mtime 降序）；目录不存在 = 空表。
-/// 单遍扫描：事件数 = 可解析行数，顺带抓首条用户消息做标题；旁车
-/// `<id>.meta.json` 有重命名标题时优先（v2.49 会话运营）。
-pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
+/// 目录里一个合法会话文件的枚举项（**不打开 jsonl**）。
+struct SessionEntry {
+    id: String,
+    path: PathBuf,
+    modified: std::time::SystemTime,
+    updated_at: i64,
+}
+
+/// 枚举目录下全部合法会话文件（`*.jsonl`），按 mtime 降序、同 mtime 按 id 升序；
+/// 目录不存在 = 空表。只读目录项与文件元数据，**一个 jsonl 都不打开**——
+/// 审计 M-24d 的病根是 [`list_sessions`] 与 [`search_sessions`] 各自把每个文件
+/// 读一遍解析一遍（搜索只是为了继承次序与旁车标题），共用这一层之后每个文件
+/// 在一次调用里只被读一遍。
+fn list_entries(dir: &Path) -> Vec<SessionEntry> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
-    let mut metas: Vec<(std::time::SystemTime, SessionMeta)> = entries
+    let mut out: Vec<SessionEntry> = entries
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().is_some_and(|x| x == "jsonl"))
         .filter_map(|e| {
@@ -139,56 +149,80 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
                 .duration_since(std::time::UNIX_EPOCH)
                 .ok()?
                 .as_secs() as i64;
-            let (events, title) = std::fs::File::open(&path)
-                .map(|f| {
-                    use std::io::BufRead;
-                    let mut events = 0usize;
-                    let mut title = None;
-                    for line in std::io::BufReader::new(f).lines().map_while(Result::ok) {
-                        if line.trim().is_empty() {
-                            continue;
-                        }
-                        let Ok(ev) = serde_json::from_str::<SessionEvent>(&line) else {
-                            continue;
-                        };
-                        events += 1;
-                        if title.is_none() {
-                            if let SessionEvent::UserMessage { content, .. } = ev {
-                                title = Some(content.chars().take(SESSION_TITLE_CHARS).collect());
-                            }
-                        }
-                    }
-                    (events, title)
-                })
-                .unwrap_or((0, None));
+            Some(SessionEntry {
+                id,
+                path,
+                modified,
+                updated_at,
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.id.cmp(&b.id)));
+    out
+}
+
+/// 单遍读一个会话文件：每条解析成功的事件交给 `visit`，返回（可解析事件数,
+/// 首条用户消息标题）。打不开 = `(0, None)`；空行与坏行跳过不致命（与
+/// [`load_session`] 同口径：崩溃留下的半行只丢自己）。
+fn scan_session_file(path: &Path, mut visit: impl FnMut(&SessionEvent)) -> (usize, Option<String>) {
+    use std::io::BufRead;
+    let Ok(file) = std::fs::File::open(path) else {
+        return (0, None);
+    };
+    let mut events = 0usize;
+    let mut title = None;
+    for line in std::io::BufReader::new(file).lines().map_while(Result::ok) {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(ev) = serde_json::from_str::<SessionEvent>(&line) else {
+            continue;
+        };
+        events += 1;
+        if title.is_none() {
+            if let SessionEvent::UserMessage { content, .. } = &ev {
+                title = Some(content.chars().take(SESSION_TITLE_CHARS).collect());
+            }
+        }
+        visit(&ev);
+    }
+    (events, title)
+}
+
+/// 列出目录下全部会话（`*.jsonl`，按 mtime 降序）；目录不存在 = 空表。
+/// 单遍扫描：事件数 = 可解析行数，顺带抓首条用户消息做标题；旁车
+/// `<id>.meta.json` 有重命名标题时优先（v2.49 会话运营）。
+pub fn list_sessions(dir: &Path) -> Vec<SessionMeta> {
+    list_entries(dir)
+        .into_iter()
+        .map(|e| {
+            let (events, auto_title) = scan_session_file(&e.path, |_| {});
             // 重命名标题覆盖自动标题（v2.49）+ 工作区归属透出（v2.50）+
             // 权限模式透出（㉘·B）+ 模型覆盖透出（v2.58）：旁车一次读，
             // 缺文件 / 无字段时各自回落（整理模式透出已随 v2.137 退役）
-            let sidecar = read_meta(dir, &id);
-            let title = sidecar.as_ref().and_then(|m| m.title.clone()).or(title);
+            let sidecar = read_meta(dir, &e.id);
+            let title = sidecar
+                .as_ref()
+                .and_then(|m| m.title.clone())
+                .or(auto_title);
             let workspace = sidecar.as_ref().and_then(|m| m.workspace.clone());
             let permission_mode = sidecar.as_ref().and_then(|m| m.permission_mode.clone());
             let model = sidecar.as_ref().and_then(|m| m.model.clone());
             let model_provider = sidecar.as_ref().and_then(|m| m.model_provider.clone());
             let thinking_level = sidecar.and_then(|m| m.thinking_level);
-            Some((
-                modified,
-                SessionMeta {
-                    id,
-                    updated_at,
-                    events,
-                    title,
-                    workspace,
-                    permission_mode,
-                    model,
-                    model_provider,
-                    thinking_level,
-                },
-            ))
+            SessionMeta {
+                id: e.id,
+                updated_at: e.updated_at,
+                events,
+                title,
+                workspace,
+                permission_mode,
+                model,
+                model_provider,
+                thinking_level,
+            }
         })
-        .collect();
-    metas.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.id.cmp(&b.1.id)));
-    metas.into_iter().map(|(_, m)| m).collect()
+        .collect()
 }
 
 /// 删除会话的全部磁盘痕迹（v2.49 会话运营）：日志、旁车元数据、undo 备份。
@@ -211,8 +245,12 @@ pub fn delete_session(dir: &Path, session_id: &str) -> std::io::Result<bool> {
 }
 
 /// 正文搜索命中（v2.49 会话搜索）：不区分大小写子串扫 UserMessage /
-/// `AssistantMessage` 内容，每会话记命中数与首处摘录。顺序复用
-/// [`list_sessions`]（mtime 降序），取前 `limit` 条。
+/// `AssistantMessage` 内容，每会话记命中数与首处摘录。顺序与 [`list_sessions`]
+/// 同源（共用 [`list_entries`]：mtime 降序、同 mtime 按 id 升序），取前 `limit` 条。
+///
+/// 每个会话文件**只读一遍、只解析一遍**（审计 M-24d：旧写法先调 `list_sessions`
+/// 把全部文件读一遍解析一遍，再逐个打开重读一遍；命中计数挂在同一遍的 `visit`
+/// 回调上，因此既不重复 IO 也不把正文攒进内存）；旁车只在真有命中时读。
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionSearchHit {
@@ -228,55 +266,49 @@ const SNIPPET_CONTEXT_CHARS: usize = 24;
 
 /// 正文搜索；query trim 后空 = 空表。
 pub fn search_sessions(dir: &Path, query: &str, limit: usize) -> Vec<SessionSearchHit> {
-    use std::io::BufRead;
     let needle: Vec<char> = query.trim().to_lowercase().chars().collect();
     if needle.is_empty() {
         return Vec::new();
     }
     let mut hits = Vec::new();
-    for meta in list_sessions(dir) {
-        let Ok(path) = session_file(dir, &meta.id) else {
-            continue;
-        };
-        let Ok(file) = std::fs::File::open(&path) else {
-            continue;
-        };
+    for e in list_entries(dir) {
         let mut count = 0usize;
         let mut snippet: Option<String> = None;
-        for line in std::io::BufReader::new(file).lines().map_while(Result::ok) {
-            let Ok(ev) = serde_json::from_str::<SessionEvent>(&line) else {
-                continue;
-            };
+        let (_, auto_title) = scan_session_file(&e.path, |ev| {
             let text = match ev {
                 SessionEvent::UserMessage { content, .. } => content,
                 SessionEvent::AssistantMessage { content, .. } => content,
-                _ => continue,
+                _ => return,
             };
-            let folded = ci_fold(&text);
-            let chars: Vec<char> = folded.iter().map(|(c, _)| *c).collect();
-            // 非重叠窗口从左往右数命中；首处命中留摘录
+            let folded = ci_fold(text);
+            // 非重叠窗口从左往右数命中；首处命中留摘录。直接在 `folded` 上比字符，
+            // 不再多分配一份等长 `Vec<char>`（审计 M-24d 的「`ci_fold` 双重分配」）。
             let mut at = 0usize;
-            while at + needle.len() <= chars.len() {
-                match chars[at..].windows(needle.len()).position(|w| w == needle) {
+            while at + needle.len() <= folded.len() {
+                let hit = folded[at..]
+                    .windows(needle.len())
+                    .position(|w| w.iter().map(|(c, _)| *c).eq(needle.iter().copied()));
+                match hit {
                     Some(rel) => {
                         let pos = at + rel;
                         count += 1;
                         if snippet.is_none() {
-                            snippet = Some(snippet_around(&text, folded[pos].1, &needle));
+                            snippet = Some(snippet_around(text, folded[pos].1, &needle));
                         }
                         at = pos + needle.len();
                     }
                     None => break,
                 }
             }
-        }
+        });
         if count > 0 {
+            let sidecar = read_meta(dir, &e.id);
             hits.push(SessionSearchHit {
-                id: meta.id.clone(),
-                title: meta.title.clone(),
+                title: sidecar.and_then(|m| m.title).or(auto_title),
+                id: e.id,
                 snippet: snippet.unwrap_or_default(),
                 match_count: count,
-                updated_at: meta.updated_at,
+                updated_at: e.updated_at,
             });
             if hits.len() >= limit {
                 break;
