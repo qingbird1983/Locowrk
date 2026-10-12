@@ -103,7 +103,7 @@
 | Q | 状态 | 出处 · 代号 | 内容 | 前置 | 体量 |
 |---|---|---|---|---|---|
 | **Q1a** | ✅ **v2.183 · 提交 `ad873bd`** | ML §2.3 (a)+(c) · **L0 注入侧** | 注入埋点落 `memory_inject_log`（按键位去重的部分唯一索引）+ `store_empty_ratio`；**`usage.rs` 零改动**（自持连接、同文件旁挂表） | 无 | S |
-| **Q1b** | ✅ **v2.184 · 提交 `PENDING_HASH`** | ML §2.3 (b) + (c) 余项 · **L0 回执侧** | 三档检索回执 + `injection_yield` ⇒ **§2.3 的 L0 整项收口**。载体 = `KernelToolSource::resolve` 出口的 `Tool` 装饰器（`recall_receipt.rs`）；⚠ **宿主自制洋葱中间件不可行**（`Next::tool_name/spec/args` 全 `pub(crate)`，看不见工具名），`runner::record_stats` 那两条已在 Q1a 否掉。表零迁移：`mode` 加值 = 工具名，检索档**不去重**、`n_candidates` 恒 0。两条实测偏差见 §5（结果无键位串 / (c) 分子不能含 project_history） | Q1a | S–M |
+| **Q1b** | ✅ **v2.184 · 提交 `ea6effd`** | ML §2.3 (b) + (c) 余项 · **L0 回执侧** | 三档检索回执 + `injection_yield` ⇒ **§2.3 的 L0 整项收口**。载体 = `KernelToolSource::resolve` 出口的 `Tool` 装饰器（`recall_receipt.rs`）；⚠ **宿主自制洋葱中间件不可行**（`Next::tool_name/spec/args` 全 `pub(crate)`，看不见工具名），`runner::record_stats` 那两条已在 Q1a 否掉。表零迁移：`mode` 加值 = 工具名，检索档**不去重**、`n_candidates` 恒 0。两条实测偏差见 §5（结果无键位串 / (c) 分子不能含 project_history） | Q1a | S–M |
 | **Q2** | ⬜ | MR §4 + §6 · **M1** | 项目记忆索引注入 `<project_memory_index>` + 常驻进展行（**解冻《Cross-Session Recall v1》批 2**）+ `memory_project_history` 提 `Always` + guidance 两句 + **workspace 键位归一化** | 无技术前置（审计线已收口）；Q1 提供基线 | S–M |
 | **Q3** | ⬜ | MR §5 提案 A · **M2** | 整理收束时记录员追加 ≤3 张事实卡 + `memory.factCards`/`factCardMax` 设置面 + 提示词注入现有 key 清单查重 | Q2（索引得有处可注入）；R1 已裁定 | M |
 | **Q4** | ⬜ | CB §7.5 · **P2** | 项目指令注入：新 waterfall 监听器与 `MemoryInject` 同级注册，四候选名 + 逐层串联；**注入内容进 system 须与会话钉死同等对待**（首轮解析后锁定，人改文件不重算） | 与 Q2/Q3 同属注入带，紧随做省一次上下文重建 | M |
