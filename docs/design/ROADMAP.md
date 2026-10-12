@@ -721,7 +721,7 @@
 | 实机走查 | ✅ CDP 独立数据根 + 构造单轮 jsonl（思考×2+工具×2+汇报）**17/17 PASS**：OFF 五断言（行可见/组全开/组头在场/无明细/容器展开）→ 真点开关+保存切 ON 不重启即收（容器收为计时行）→ 重开容器组折叠一行摘要→组头可展开 → 切回 OFF 即时回扩；settings.json 往返盘证；数据根已清，脚本/截图留 tmp/v126-walk/ |
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
-### v2.185（提交 `PENDING_HASH` · 本条哈希由同批回补提交落下（照 `c052318` 先例，不留悬空账） · **后审计队列 Q2 =《Memory Redesign (ZCode Alignment) v1》§4 + §6 · M1 注入面五族全落**；含 `memory_project_history` 提 `Always`、解冻《Cross-Session Recall v1》批 2、**workspace 键位归一化趁 `memories` 表 0 行做掉**）
+### v2.185（提交 `58c088f` · 本条哈希由同批回补提交落下（照 `c052318` 先例，不留悬空账） · **后审计队列 Q2 =《Memory Redesign (ZCode Alignment) v1》§4 + §6 · M1 注入面五族全落**；含 `memory_project_history` 提 `Always`、解冻《Cross-Session Recall v1》批 2、**workspace 键位归一化趁 `memories` 表 0 行做掉**）
 
 | 项 | 内容 |
 |---|---|
