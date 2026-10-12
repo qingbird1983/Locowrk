@@ -27,8 +27,9 @@ pub mod trigger;
 pub use chapter::{ChapterDraft, ChapterId, EventId, MemoryChapter, sanitize_draft};
 pub use index::EventToChapterIndex;
 pub use manager::{
-    MemoryManagerClient, MemoryManagerError, MemoryManagerUsage, RUN_SUMMARY_MAX_CHARS, family_of,
-    main_prompt, manager_prompt, parse_drafts, rule_split_drafts, run_summary,
+    FACT_VALUE_MAX_CHARS, FactCard, MemoryManagerClient, MemoryManagerError, MemoryManagerUsage,
+    RUN_SUMMARY_MAX_CHARS, fact_cards, fact_request, family_of, main_prompt, manager_prompt,
+    parse_drafts, rule_split_drafts, run_summary,
 };
 pub use material::{MaterialItem, MaterialKind, build_items, transcript, user_count};
 pub use storage::{TreeStore, TreeSummary};

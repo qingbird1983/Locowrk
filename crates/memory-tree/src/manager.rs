@@ -13,6 +13,8 @@ use session_store::SessionEvent;
 use crate::chapter::{ChapterDraft, sanitize_draft};
 use crate::material::MaterialItem;
 
+use facts::split_facts_section;
+
 /// 单次整理输入章节数上限（防失控输出；超出 = 不合规）。
 const MAX_CHAPTERS: usize = 200;
 
@@ -20,6 +22,7 @@ const MAX_CHAPTERS: usize = 200;
 /// JSON 数组 + 本标记 + 总结正文。数组契约不动——解析层先按标记切分再取
 /// 数组，防总结正文里的 `[`/`]` 污染 `extract_array` 的首尾定位。
 const SUMMARY_MARKER: &str = "===SUMMARY===";
+
 /// 轮级总结硬钳字符数（提示词要 ≤500 字，这里防垃圾灌爆；≈600-1K token，
 /// 滚动收编的尺寸预算顶）。
 pub const RUN_SUMMARY_MAX_CHARS: usize = 2400;
@@ -120,17 +123,22 @@ struct RawDraft {
 }
 
 /// 从原始回复提取第一个 JSON 数组文本（容忍 ```json 围栏与前后缀说明）。
-fn extract_array(raw: &str) -> Option<&str> {
+pub(crate) fn extract_array(raw: &str) -> Option<&str> {
     let start = raw.find('[')?;
     let end = raw.rfind(']')?;
     (end > start).then_some(&raw[start..=end])
 }
 
 /// 按尾随标记切出「数组部分 | 总结部分」。无标记 = 全部是数组部分、无总结。
+///
+/// ⚠ 先剥 `===FACTS===` 再剥 `===SUMMARY===`（顺序承重，见 `FACTS_MARKER` 注释）：
+/// 卡段总在总结段之后，若不先摘掉，总结部分就会把卡数组一起吞进去。
+/// **无卡段时本函数的输出与加卡段之前逐字节相同**——那条等价判据钉的就是这一点。
 fn split_summary_section(raw: &str) -> (&str, Option<&str>) {
-    match raw.split_once(SUMMARY_MARKER) {
+    let (head, _) = split_facts_section(raw);
+    match head.split_once(SUMMARY_MARKER) {
         Some((before, after)) => (before, Some(after)),
-        None => (raw, None),
+        None => (head, None),
     }
 }
 
@@ -274,6 +282,10 @@ fn draft_from_items(items: &[MaterialItem]) -> ChapterDraft {
 pub fn count_user_messages(events: &[SessionEvent]) -> u64 {
     crate::material::user_count(events)
 }
+
+mod facts;
+
+pub use facts::{FACT_TYPES, FACT_VALUE_MAX_CHARS, FactCard, fact_cards, fact_request};
 
 #[cfg(test)]
 mod tests;

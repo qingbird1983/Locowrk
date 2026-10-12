@@ -245,6 +245,7 @@ fn shortcut_default_update_and_validation() {
 
 mod appearance;
 mod chat;
+mod fact_cards;
 mod llm;
 mod llm_profile;
 mod llm_provider;

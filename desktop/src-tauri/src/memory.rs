@@ -339,16 +339,20 @@ impl MemoryStore {
         Ok(n > 0)
     }
 
-    /// 写入/覆盖一条记忆（store 基础 upsert；生产写路径 = memory-sqlite
-    /// 插件的 memory_write 工具与管理页 update_value，本方法当前只服务
-    /// 测试播种）。键位 = (workspace, key)；source = "explicit" | "extracted"
-    /// （v2.136 起 extracted 为历史数据遗留来源，自动提取已退役）。
+    /// 写入/覆盖一条记忆（store 基础 upsert）。生产写路径现有三处：
+    /// memory-sqlite 插件的 `memory_write` 工具（模型主动写，键位已在
+    /// `WsCtx::from_parts` 归一）、管理页 `update_value`，以及 **v2.186 起的
+    /// 整理事实卡落库**（`organize/facts.rs`）。键位 = (workspace, key)。
     ///
-    /// ⚠ **本方法不做键位归一**（Q2 / MR §6 的归一发生在两侧边界上，不在这里）：
-    /// 生产写路径的 workspace 取自插件 `WsCtx::from_parts`（已过 `wskey::normalize`），
-    /// 而本方法只被测试直接播种——参数就是测试给的字面串。**M2（记录员事实卡落库）
-    /// 若改走宿主 upsert，必须同批把归一接进来**，否则那条路会造回双键位。
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// `source` 三档 = `"explicit"`（用户或模型亲手写）| `"extracted"`
+    /// （v2.136 退役的旧自动提取遗留）| `"organized"`（v2.186 = 整理副产物，
+    /// 前端 `SourceBadge` 单独一档，用户必须看得出这条不是我写的）。
+    ///
+    /// **键位在这里归一**（Q2 / MR §6 留的欠账由 v2.186 兑现）：本方法的
+    /// workspace 参数来自宿主自己解析的串，不像插件侧已过归一 ⇒ 不接就会造回
+    /// 「同项目双键位」。归一走 `workspace::scope_key`（与注入键位、观测
+    /// `scope_id`、`md_index_body` 的目录名同一个函数）；`md_write` 拿的是同一个
+    /// 归一串 ⇒ sqlite 键位与人类层目录名同形。空串 = 全局层，照原样传下去。
     pub fn write(
         &self,
         workspace: &str,
@@ -363,6 +367,7 @@ impl MemoryStore {
         if value.len() > VALUE_MAX {
             return Err(format!("memory value 超过 {VALUE_MAX} 字节上限"));
         }
+        let ws = crate::workspace::scope_key(Some(workspace));
         let conn = self.open_conn()?;
         let at = now_secs();
         conn.execute(
@@ -371,11 +376,11 @@ impl MemoryStore {
              ON CONFLICT(workspace, key) DO UPDATE SET
                  value = excluded.value, tags = excluded.tags,
                  updated_at = excluded.updated_at, source = excluded.source",
-            params![workspace, key, value, tags, at, source],
+            params![ws, key, value, tags, at, source],
         )
         .map(|_| ())
         .map_err(|e| format!("memory write `{key}`: {e}"))?;
-        self.md_write(workspace, key, value, tags, source, at);
+        self.md_write(&ws, key, value, tags, source, at);
         Ok(())
     }
 

@@ -27,6 +27,10 @@ pub const TAIL_WINDOW_TURNS_RANGE: std::ops::RangeInclusive<u32> = 1..=20;
 /// memory_collapse 自动收起阈值缺省与合法区间（§15：50–95% 缺省 80）。
 pub const COLLAPSE_THRESHOLD_PCT_DEFAULT: u8 = 80;
 pub const COLLAPSE_THRESHOLD_PCT_RANGE: std::ops::RangeInclusive<u8> = 50..=95;
+/// 整理事实卡单次上限缺省与合法区间（MR 稿 §5 提案 A + §6 预算表「≤3 张/次整理」；
+/// 队列 §1 裁定按稿内建议 N=3 且做成可调项）。
+pub const FACT_CARD_MAX_DEFAULT: u32 = 3;
+pub const FACT_CARD_MAX_RANGE: std::ops::RangeInclusive<u32> = 1..=10;
 
 /// F1 记忆文件化总开关缺省（《Memory File-ization Design》§7 已裁定：
 /// 关 = 回纯 sqlite，md 不再读写；缺省开——md 是人类层，写失败不破契约）。
@@ -37,6 +41,12 @@ pub const REPO_CONTEXT_DEFAULT: bool = true;
 /// 指令文件层缺省（提示词分层设计 §4.3：开——有文件就注入，无文件零
 /// 负担；关 = 用户显式不要 AGENTS.md 面）。
 pub const INSTRUCTION_FILES_DEFAULT: bool = true;
+/// 整理事实卡缺省（MR 稿 §5 提案 A，用户 2026-10-12 裁定走 A）：**开**。
+/// 缺省开的理由不是热情而是算术——这条写路径与整理同频（不是每轮），
+/// 成本 = 同一次记录员调用多输出 ≤3 张小 JSON；关掉它的代价 = 事实层
+/// 重新回到「只有模型自觉写」那条实测一次都没走过的老路（`memories` 表
+/// 0 行就是它的结果）。关 = 提示词逐字节回到无卡段形状 + 一张都不落库。
+pub const FACT_CARDS_DEFAULT: bool = true;
 
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,6 +106,12 @@ pub struct MemorySettings {
     /// 与项目根 `AGENTS.md`（回落 `.Locowrk/AGENTS.md`）以合成 user 消息
     /// 注入消息层头部（会话首查快照锁字节）。
     pub instruction_files: bool,
+    /// 整理事实卡（MR §5 提案 A · 队列 Q3，缺省开）：整理收束时记录员在章节 +
+    /// 轮级总结之外顺带产出 ≤`fact_card_max` 张事实卡并 upsert 进记忆层，
+    /// `source = "organized"`。关 = 提示词与落库两面都回到现役形状。
+    pub fact_cards: bool,
+    /// 单次整理的卡片上限（开关开启时生效，1–10 缺省 3）。
+    pub fact_card_max: u32,
 }
 
 impl Default for MemorySettings {
@@ -114,6 +130,8 @@ impl Default for MemorySettings {
             files: FILES_DEFAULT,
             repo_context: REPO_CONTEXT_DEFAULT,
             instruction_files: INSTRUCTION_FILES_DEFAULT,
+            fact_cards: FACT_CARDS_DEFAULT,
+            fact_card_max: FACT_CARD_MAX_DEFAULT,
         }
     }
 }
@@ -137,6 +155,8 @@ pub struct MemorySettingsView {
     pub files: bool,
     pub repo_context: bool,
     pub instruction_files: bool,
+    pub fact_cards: bool,
+    pub fact_card_max: u32,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -161,4 +181,8 @@ pub struct MemoryUpdate {
     pub files: Option<bool>,
     pub repo_context: Option<bool>,
     pub instruction_files: Option<bool>,
+    /// 整理事实卡开关（`Some(false)` = 关掉：提示词不再要卡、落库一张不写）。
+    pub fact_cards: Option<bool>,
+    /// 单次整理卡片上限（出界 = `settings_set` 拒绝，1–10 缺省 3）。
+    pub fact_card_max: Option<u32>,
 }

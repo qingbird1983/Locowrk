@@ -34,6 +34,10 @@ export interface MemorySettingsView {
   repoContext: boolean;
   /** 指令文件层（缺省开）：全局/项目 AGENTS.md 注入消息层头部。 */
   instructionFiles: boolean;
+  /** M2 整理事实卡（缺省开，v2.186）：整理收束时记录员顺带产出 ≤上限 张卡落记忆层。 */
+  factCards: boolean;
+  /** 每次整理最多几张卡（1–10 缺省 3，factCards 开启时生效）。 */
+  factCardMax: number;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -52,10 +56,15 @@ export interface MemoryUpdate {
   files?: boolean;
   repoContext?: boolean;
   instructionFiles?: boolean;
+  /** M2 整理事实卡总开关（v2.186，缺省开）。 */
+  factCards?: boolean;
+  /** 单次整理最多产几张卡（1–10 缺省 3，仅在 factCards 开时生效）。 */
+  factCardMax?: number;
 }
 
 /** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。
- * source = "explicit" | "extracted"（前端按档位渲染人类文案）；
+ * source = "explicit" | "extracted" | "organized"（前端 SourceBadge 按档位
+ * 渲染人类文案；"organized" = v2.186 整理副产物，见 §3.4 来源族）；
  * workspace = 项目归属（㉘），"" = 未归属。 */
 export interface MemoryRow {
   key: string;

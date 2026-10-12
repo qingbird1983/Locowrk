@@ -45,6 +45,8 @@ fn memory_defaults_legacy_compat_and_validation() {
                 files: None,
                 repo_context: None,
                 instruction_files: None,
+                fact_cards: None,
+                fact_card_max: None,
             }),
             None,
             None,
@@ -145,6 +147,8 @@ fn organize_keys_roundtrip_validation_and_bridge() {
                 files: None,
                 repo_context: None,
                 instruction_files: None,
+                fact_cards: None,
+                fact_card_max: None,
             }),
             None,
             None,
@@ -369,6 +373,10 @@ fn retired_keys_are_phantom() {
         "defaultOrganizer",
     ] {
         assert!(!json.contains_key(key), "退役键 {key} 不进投影");
+    }
+    // 本批新增的两个键必须在投影里（管理页读的是 view 面，缺一个就是界面空白）
+    for key in ["factCards", "factCardMax"] {
+        assert!(json.contains_key(key), "新键 {key} 必须进投影");
     }
     std::fs::remove_dir_all(&root).ok();
 }

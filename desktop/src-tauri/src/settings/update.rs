@@ -170,6 +170,19 @@ impl SettingsStore {
             if let Some(e) = u.instruction_files {
                 next.memory.instruction_files = e;
             }
+            if let Some(e) = u.fact_cards {
+                next.memory.fact_cards = e;
+            }
+            if let Some(n) = u.fact_card_max {
+                if !super::memory::FACT_CARD_MAX_RANGE.contains(&n) {
+                    return Err(format!(
+                        "整理事实卡上限 {n} 超出范围（{}–{} 张）",
+                        super::memory::FACT_CARD_MAX_RANGE.start(),
+                        super::memory::FACT_CARD_MAX_RANGE.end()
+                    ));
+                }
+                next.memory.fact_card_max = n;
+            }
         }
         if let Some(u) = tools {
             if let Some(e) = u.enabled {

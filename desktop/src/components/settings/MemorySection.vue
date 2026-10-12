@@ -30,6 +30,8 @@ const form = reactive({
   files: true,
   repoContext: true,
   instructionFiles: true,
+  factCards: true,
+  factCardMax: 3,
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
@@ -59,6 +61,8 @@ watch(
     form.files = v.memory.files;
     form.repoContext = v.memory.repoContext;
     form.instructionFiles = v.memory.instructionFiles;
+    form.factCards = v.memory.factCards;
+    form.factCardMax = v.memory.factCardMax;
   },
   { immediate: true },
 );
@@ -76,6 +80,8 @@ function save() {
     files: form.files,
     repoContext: form.repoContext,
     instructionFiles: form.instructionFiles,
+    factCards: form.factCards,
+    factCardMax: Math.round(form.factCardMax),
   });
 }
 </script>
@@ -200,6 +206,26 @@ function save() {
         type="number"
         min="50"
         max="95"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+    <!-- Q3 整理事实卡（MR §5 提案 A，缺省开）：整理收束时记录员顺带产出
+         ≤N 张事实卡落记忆层；关闭 = 提示词与落库两面都回到不产卡的形状 -->
+    <SettingsRow :title="t('settings.factCards')" :hint="t('settings.factCardsHint')">
+      <SettingsToggle v-model="form.factCards" :label="t('settings.factCards')" />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.factCards"
+      :title="t('settings.factCardMax')"
+      :hint="t('settings.factCardMaxHint')"
+      control-id="memory-fact-card-max"
+    >
+      <input
+        id="memory-fact-card-max"
+        v-model.number="form.factCardMax"
+        type="number"
+        min="1"
+        max="10"
         class="lw-field lw-field-num px-2 text-xs"
       />
     </SettingsRow>

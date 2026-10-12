@@ -430,6 +430,8 @@ CREATE INDEX idx_memories_tags ON memories(tags);
 
 > **⚠ v2.136：隐式提取（autoExtract）已按用户裁定整体退役**（v2.73 曾落地、实践确认无作用：召回无来源加权会被 auto.* 霸榜、与树章节内容两遍整理）。本小节按原设计留档。
 
+> **⚠ v2.186（后审计队列 Q3 =《Memory Redesign (ZCode Alignment) v1》§5 提案 A）＝对上一行那条裁定的部分反转，反转面被刻意压到最小**：整理管道收束时记录员在「章节数组 + 轮级总结」之外**顺带**产出 ≤N 张事实卡并 upsert 进 `memories`（`source = "organized"`，管理页徽章单独一档）。它与 v2.136 退役的那件事不是同一件，五条差别逐条对齐原裁定的理由：①退役的是「**每轮**跑一条独立提取管线」，本件挂在「**整理收束**」上——触发频率 = 整理频率而不是轮频率，节奏/阈值/反弹熔断全部复用 `should_auto_organize`，**零新增调度器**；②不新增任何一次 LLM 调用（记录员本来就在读整段材料，只是让它多吐一段）；③不再造 `auto.*` 前缀族，键名由模型按**既有 key 清单**（带层标进 user 段）查重后自取 ⇒ 「被 auto.* 霸榜」的那个失效面没有回来的入口；④`memory.factCards` 可整面关掉，关掉 = 发给记录员的 user 段**逐字节回到 v2.185 形状**、一张都不落库（判据 `cards_switch_off_leaves_the_prompt_byte_identical_and_writes_nothing`）；⑤**注入面一字不动**——v2.136「项目侧全提醒制 + 正文不自动注入」与 v2.185 的 `<project_memory_index>` 指针节都原样有效，本批只给那节指针多了内容来源（这正是它治的问题：稿 §0-1 实证 `memories` 表 0 行 = 索引节有框架而没货）。实现真源 = `crates/memory-tree/src/manager/facts.rs`（`===FACTS===` 标记、契约文本、解析层四道钳）+ `desktop/src-tauri/src/organize/facts.rs`（`type`→层 的归层映射、查重清单读取、落库失败不反噬整理）。降级语义：规则切分路径**不产卡**（产不出就不产，不硬造）。设置两键 = `memory.factCards`（缺省开）+ `memory.factCardMax`（1–10，缺省 3）。同批兑现 Q2 留的欠账：`MemoryStore::write` 的 workspace 键位改走 `workspace::scope_key` 归一（宿主写路径与插件写路径从此同键位，md 目录名同源）。
+
 #### 4.2.3 检索与注入
 
 > **⚠ v2.136 注入口径修订（项目侧全提醒制）**：注入只取**全局层**（用户层面的喜好/全局要求，保持简短）；项目层事实不再自动注入（模型 memory_read / memory_search 按需查）；`<repo>/.Locowrk/` 项目记忆以**静态提醒段**指路（正文不注入，主模型按需读写）。

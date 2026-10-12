@@ -10,6 +10,7 @@
 //! 夹具是 tests 的私有项，子簇经 `use super::*;` 取用（形状照 `settings/tests/` 先例，
 //! **可见性零改动**）；用例本体逐字搬运，一条断言未增删。
 
+mod fact_cards;
 mod overflow;
 mod pipeline;
 mod recovery;
@@ -125,7 +126,17 @@ fn organizer(
         )),
         std::sync::Arc::new(|_, _| {}), // 哑通知（不触 emit）
         None,                           // 碎片表缺席（本批不测置位面）
+        // 事实卡落库句柄（Q3）：与测试侧 `memory_store` 同一个数据根 ⇒ 同一个
+        // sqlite 文件（两个实例、一份盘）。md 面未接线（`files: None`）= 卡片
+        // 只落 sqlite，人类层文件不该在整理测试目录里凭空长出来。
+        memory_store(root),
     ))
+}
+
+/// 记忆层夹具（Q3 事实卡）：`MemoryStore::new` 只做懒连接、不碰盘 ⇒ 不用卡片
+/// 的既有用例零副作用；断言侧另开一个实例读同一个文件即可。
+pub(super) fn memory_store(root: &std::path::Path) -> Arc<crate::memory::MemoryStore> {
+    Arc::new(crate::memory::MemoryStore::new(root, resolver()))
 }
 
 fn tree_at(

@@ -159,7 +159,12 @@ fn initial_export_skips_existing_files_and_regenerates_trees() {
     let exported = root
         .join("memory")
         .join("projects")
-        .join(plugin_api::memlayout::project_dir_name(r"F:\proj\Exp"))
+        .join(plugin_api::memlayout::project_dir_name(
+            // v2.186：宿主 `write()` 在入口归一键位，md 目录名跟着归一形走
+            // （`write_fact` 拿的是 `write` 里同一个串）。目录名必须由**同一个
+            // 归一串**算出来，否则这条判据钉的是"原始串的落点"而不是生产落点。
+            &crate::workspace::scope_key(Some(r"F:\proj\Exp")),
+        ))
         .join("facts")
         .join("db.choice.md");
     assert!(exported.exists());

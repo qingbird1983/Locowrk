@@ -88,6 +88,7 @@ export default {
     hint: "Memories persist across sessions; injection toggle lives in Settings → Memory. Every entry can be edited or deleted.",
     source_explicit: "Explicit",
     source_extracted: "Auto-extracted",
+    source_organized: "Auto-organized",
     edit: "Edit",
     delete: "Delete",
     deleteConfirm: "Confirm delete",

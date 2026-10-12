@@ -88,6 +88,7 @@ export default {
     hint: "记忆跨会话持久保存；注入开关与条数在 设置 → 记忆。每条都可编辑、删除。",
     source_explicit: "用户显式",
     source_extracted: "自动提取",
+    source_organized: "整理记录",
     edit: "编辑",
     delete: "删除",
     deleteConfirm: "确认删除",

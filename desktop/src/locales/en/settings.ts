@@ -247,6 +247,11 @@ export default {
     collapseEnabledHint: "Off by default; collapsing frees space but causes one cache miss.",
     collapseThreshold: "Auto-collapse threshold",
     collapseThresholdHint: "When occupancy reaches this after a turn, collapse the oldest expanded chapter (50–95%, default 80).",
+    factCards: "Save fact cards while organizing",
+    factCardsHint:
+      "At each organize pass the recorder also records up to N standalone facts (source shows as recorder-made; review and delete on the Memory page). Turning this off stops new cards; existing ones are untouched.",
+    factCardMax: "Fact cards per organize",
+    factCardMaxHint: "1–10, default 3. Runs at organize frequency, not every turn.",
     memoryManagerModel: "Memory manager",
     memoryManagerModelHint:
       "The background role that organizes conversations into chapters; defaults to the main model. Pick a cheaper one to save cost.",

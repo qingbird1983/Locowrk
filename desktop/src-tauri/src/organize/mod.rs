@@ -35,6 +35,7 @@ mod collapse;
 mod debug;
 mod edit;
 mod events;
+mod facts;
 mod progress;
 mod project_history;
 mod recovery;
@@ -74,6 +75,11 @@ pub struct Organizer {
     /// 「历史去哪了、怎么找回」碎片，下一轮开场由 FragmentInject 拼接。
     /// None = 测试装配（不置位）。
     fragments: Option<Arc<crate::fragments::FragmentPending>>,
+    /// 事实卡落库句柄（MR §5 提案 A · 队列 Q3）：整理副产物写进记忆层走的就是
+    /// 这个 store（宿主 upsert + md 双写）。必需字段而非 Option——它是**写路径**，
+    /// 拿不到 store 的装配等于事实卡静默不落地，那种"看起来在跑其实没落"比装配
+    /// 期报错难查得多；测试夹具用临时数据根的 `MemoryStore::open` 实例。
+    memory: Arc<crate::memory::MemoryStore>,
 }
 
 fn elapsed_ms(started: &std::time::Instant) -> u64 {
@@ -92,6 +98,7 @@ impl Organizer {
         catalog: Arc<crate::llm::catalog::CatalogStore>,
         notifier: OrganizeNotifier,
         fragments: Option<Arc<crate::fragments::FragmentPending>>,
+        memory: Arc<crate::memory::MemoryStore>,
     ) -> Self {
         Self {
             settings,
@@ -105,6 +112,7 @@ impl Organizer {
             inflight: StdMutex::new(HashSet::new()),
             notifier,
             fragments,
+            memory,
         }
     }
 
@@ -215,6 +223,7 @@ pub fn build_organizer(
     catalog: Arc<crate::llm::catalog::CatalogStore>,
     notifier: OrganizeNotifier,
     fragments: Option<Arc<crate::fragments::FragmentPending>>,
+    memory: Arc<crate::memory::MemoryStore>,
 ) -> Arc<Organizer> {
     Arc::new(Organizer::new(
         Arc::clone(&settings),
@@ -226,5 +235,6 @@ pub fn build_organizer(
         catalog,
         notifier,
         fragments,
+        memory,
     ))
 }

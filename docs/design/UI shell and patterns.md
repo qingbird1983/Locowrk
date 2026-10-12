@@ -229,9 +229,15 @@
 | 副作用族 | SideEffectBadges.vue | 纯 = 中性（不给绿，保持状态色稀缺）/ 可补偿 = warn / 不可逆 = danger |
 | 闲置族 | IdleBadge.vue | fresh/normal 不显示；idle 中性 / stale+never_used = warn / abandoned = danger |
 | 状态族 | 列表行内 | 运行中 ok / 待激活 warn / 已停用 中性 / 可更新 info |
-| 来源族 | SourceBadge.vue（记忆页） | explicit info / extracted purple / 未知中性 |
+| 来源族 | SourceBadge.vue（记忆页） | explicit info / extracted purple / organized warn（v2.186 新档）/ 未知中性 |
 | 贡献族 | 工作面板启动器（新增） | 插件 中性徽章——插件贡献的 UI 条目必须可辨认 |
 
+* **来源族 v2.186 增 `organized` 档**（整理事实卡落库，队列 Q3）：三档各有语义且互斥
+  ——`explicit` = 用户或模型亲手写（info，最常见所以最不需要提醒）、`extracted` =
+  v2.136 退役前的自动提取遗留（purple，只读历史、不再新增）、`organized` = **整理收束
+  时的副产物**（warn：它不是用户写的、也不是用户要求写的，是系统顺手登记的，这一档
+  必须比"遗留"更显眼，用户要能一眼挑出来删掉或改写）。配色取自 §tokens 语义色，尺寸
+  与其余族同档——**新档位不新造形态**，故不走特例申请制。
 * 闲置徽章铁则：**后端只给结构化 `{level, value, unit}`，前端渲染"多久没用"人类文案**； 14 天试用保护由后端裁决。
 * 新徽章先进对应族，不许在页面里裸写 span 徽章。
 

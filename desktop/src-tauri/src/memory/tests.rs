@@ -218,22 +218,25 @@ fn wired(dir: &std::path::Path, on: bool) -> MemoryStore {
 fn host_writes_sync_md_human_layer() {
     let dir = temp_dir("md-sync");
     let store = wired(&dir, true);
-    let ws = "F:/ws/a";
+    // 传**原始串**（v2.186 起 `write()` 在入口归一键位），落点用 `keysid()` 取：
+    // sqlite 的 workspace 列与 md 目录名必须是同一个归一串——这正是本批接上的
+    // 那条欠账（Q2 留的「宿主 write 未归一 ⇒ 同项目双键位」）。
+    let ws = keysid();
     store
-        .write(ws, "db.choice", "sqlite", "", "explicit")
+        .write("F:/ws/a", "db.choice", "sqlite", "", "explicit")
         .unwrap();
     let md = dir
         .join("memory")
         .join("projects")
-        .join(plugin_api::memlayout::project_dir_name(ws))
+        .join(plugin_api::memlayout::project_dir_name(&ws))
         .join("facts")
         .join("db.choice.md");
     assert!(md.exists(), "提取/宿主写路径同步 md");
-    // 管理页编辑同步
-    store.update_value(ws, "db.choice", "postgres").unwrap();
+    // 管理页编辑同步（管理页拿到的是 list 出来的归一串 ⇒ 按归一键位寻址）
+    store.update_value(&ws, "db.choice", "postgres").unwrap();
     assert!(std::fs::read_to_string(&md).unwrap().contains("postgres"));
     // 管理页删除同步
-    store.delete(ws, "db.choice").unwrap();
+    store.delete(&ws, "db.choice").unwrap();
     assert!(!md.exists());
     // 清空同步（全局层）
     store.write("", "pref.x", "y", "", "explicit").unwrap();
@@ -260,13 +263,15 @@ fn export_rows_covers_both_scopes() {
     let dir = temp_dir("md-export");
     let store = wired(&dir, true);
     store.write("", "g1", "v", "", "explicit").unwrap();
-    store.write("F:/ws/a", "p1", "v", "", "extracted").unwrap();
+    store.write(r"F:\ws\a", "p1", "v", "", "extracted").unwrap(); // **反斜杠原始串**：归一必须由 write() 自己做
     let rows = store.export_rows().unwrap();
     assert_eq!(rows.len(), 2);
     assert!(rows.iter().any(|r| r.workspace.is_empty() && r.key == "g1"));
+    // 钉的是「库里落的键位 = `scope_key` 的归一形」，不钉具体串形（Windows 上
+    // 它是 `f:\ws\a`、POSIX 上仍是原串——写死字面就得到一条跨平台假判据）
     assert!(rows
         .iter()
-        .any(|r| r.workspace == "F:/ws/a" && r.source == "extracted"));
+        .any(|r| r.workspace == keysid() && r.source == "extracted"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -1,7 +1,7 @@
 //! 异步管道面（§5.3/§5.4）：`spawn`（后台 fire-and-forget，不阻塞会话返回值）→
 //! `run_task`（进程内在途去重 + 收束如实记日志）→ `pipeline`（占位章节先落盘 →
-//! 记忆管理器超时重试 → 输出校验 → 不合规降级规则切分 → 落树 + 同步 tree.md +
-//! 通知）。占位先落盘的意义 = 崩在任意点重启都能重投（§5.3）。
+//! 记忆管理器超时重试 → 输出校验 → 不合规降级规则切分 → 落树 + 事实卡落库 +
+//! 同步 tree.md + 通知）。占位先落盘的意义 = 崩在任意点重启都能重投（§5.3）。
 //!
 //! `run_task` 原为私有方法，`organize/tests.rs` 直接驱动它跑全链路 ⇒ 拆簇后
 //! `pub(super)`（可见面不变）；`pipeline` 只被同簇的 `run_task` 调用，**保持私有**。
@@ -15,7 +15,7 @@ use memory_tree::{
 
 use crate::timeutil::now_ms;
 
-use super::{elapsed_ms, TaskPayload};
+use super::{elapsed_ms, facts, TaskPayload};
 
 /// 管道收束台账（run_task 返回值，观测日志用）。
 type Outcome = (String, String, usize, MemoryManagerUsage);
@@ -83,7 +83,26 @@ impl super::Organizer {
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| self.settings.llm().model);
         let system = manager_prompt(family_of(&model));
-        let user = memory_tree::transcript(&task.items);
+        // 事实卡（MR 稿 §5 提案 A · 队列 Q3 · v2.186）：**开关关掉时 user 段逐字节
+        // 回到现役形状**——这条等价关系是判据 `facts_switch_off_…` 钉的对象，所以
+        // 这里写成 `if` 分支而不是"永远拼一段可能为空的文本"。
+        //
+        // 要求文本进 **user 段**而不是 system：system 是 `include_str!` 的四份家族
+        // 提示词，《Memory Tree Design v2》§6.5 立的是「角色提示词会话内逐字节
+        // 稳定、无动态内容」；而"现有 key 清单"每次整理都不同（正是给模型查重用
+        // 的，稿 §5 要求注入），塞进 system 既破那条纪律也打断记录员自己的前缀缓存。
+        let mut user = memory_tree::transcript(&task.items);
+        let fact_limit = if mem.fact_cards {
+            mem.fact_card_max as usize
+        } else {
+            0
+        };
+        if fact_limit > 0 {
+            user.push_str(&memory_tree::fact_request(
+                &facts::existing_keys(&self.memory, &task.workspace),
+                fact_limit,
+            ));
+        }
         let model_override = mem
             .memory_manager_model
             .clone()
@@ -132,6 +151,13 @@ impl super::Organizer {
                             tree.note_organized(task.users_total);
                         }
                         self.tree_store.save(&tree)?;
+                        // 事实卡落库（整理副产物，稿 §5）：**放在主面已经安全之后**——
+                        // 章节与总结此刻已落树并落盘，卡写失败只 warn 计数，不许把
+                        // 已成功的整理拖倒（facts.rs 头注第 3 条）。`fact_limit`
+                        // 为 0（开关关）时这里连解析都不做。
+                        if fact_limit > 0 {
+                            facts::persist(&self.memory, &task.workspace, &raw, fact_limit);
+                        }
                         self.sync_tree_md(&task.workspace);
                         self.notify_done(
                             &task.session_id,
@@ -171,6 +197,9 @@ impl super::Organizer {
             ),
             None, // 规则切分无总结（宁缺勿假，退化到目录行为）
         );
+        // 降级支**不产事实卡**（稿 §5「降级语义：规则切分路径产不出就不产，诚实
+        // 缺省，不硬造」）：这条支根本没有模型回复可解析，写 `persist` 调用点 = 0
+        // 是判据 `rule_split_produces_no_fact_cards` 钉的形状。
         // 溢出整理不碰反弹基线（同上）
         if !matches!(task.reason, OrganizeReason::WindowOverflow) {
             tree.note_organized(task.users_total);

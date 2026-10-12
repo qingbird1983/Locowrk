@@ -105,6 +105,9 @@ pub(crate) fn build(init: Init) -> Stack {
         Arc::clone(&catalog),
         organizer_notifier,
         Some(Arc::clone(&fragments)),
+        // 事实卡落库句柄（MR §5 提案 A · 队列 Q3）：与注入面/管理页同一个
+        // `MemoryStore` ⇒ 卡片写完，索引注入与记忆页立刻读得到同一行（不分两套库）
+        Arc::clone(&memory),
     );
     // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
 

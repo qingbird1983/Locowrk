@@ -249,6 +249,11 @@ export default {
     collapseEnabledHint: "默认关闭，收起可腾出上下文空间，但会让缓存失效一次。",
     collapseThreshold: "自动收起阈值",
     collapseThresholdHint: "轮次收束后占用 ≥ 此值时自动收起最早展开的章节（50–95%，缺省 80）。",
+    factCards: "整理时顺带记事实卡",
+    factCardsHint:
+      "每次整理收束时，记录员在章节与轮级总结之外顺带登记至多 N 条可独立成立的事实（用户来自整理副产物，管理页可辨可删）。关闭后不再产出，已记的不受影响。",
+    factCardMax: "单次整理事实卡上限",
+    factCardMaxHint: "一次整理至多记几张，范围 1–10 缺省 3；只与整理同频，不是每轮都跑。",
     memoryManagerModel: "记忆管理器",
     memoryManagerModelHint: "负责把对话整理成章节的后台角色；默认同主模型，想省钱可换便宜的。",
     thinkingLanguage: "思考语言",
