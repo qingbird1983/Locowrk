@@ -103,7 +103,7 @@
 | Q | 状态 | 出处 · 代号 | 内容 | 前置 | 体量 |
 |---|---|---|---|---|---|
 | **Q1a** | ✅ **v2.183 · 提交 `ad873bd`** | ML §2.3 (a)+(c) · **L0 注入侧** | 注入埋点落 `memory_inject_log`（按键位去重的部分唯一索引）+ `store_empty_ratio`；**`usage.rs` 零改动**（自持连接、同文件旁挂表） | 无 | S |
-| **Q1b** | ⬜ | ML §2.3 (b) · **L0 回执侧** | `memory_read`/`memory_search`/`memory_project_history` 的成功回执 + `injection_yield` 指标。⚠ 挂点在 `runner::record_stats`，两条路都试过：挤进 `UsageRecorder` 让 `usage.rs` 同时做两件事（三问②答否）、给 `run_turn` 加参数要牵动 10 处调用点 ⇒ 独立一刀，先定载体再动 | Q1a | S–M |
+| **Q1b** | ✅ **v2.184 · 提交 `PENDING_HASH`** | ML §2.3 (b) + (c) 余项 · **L0 回执侧** | 三档检索回执 + `injection_yield` ⇒ **§2.3 的 L0 整项收口**。载体 = `KernelToolSource::resolve` 出口的 `Tool` 装饰器（`recall_receipt.rs`）；⚠ **宿主自制洋葱中间件不可行**（`Next::tool_name/spec/args` 全 `pub(crate)`，看不见工具名），`runner::record_stats` 那两条已在 Q1a 否掉。表零迁移：`mode` 加值 = 工具名，检索档**不去重**、`n_candidates` 恒 0。两条实测偏差见 §5（结果无键位串 / (c) 分子不能含 project_history） | Q1a | S–M |
 | **Q2** | ⬜ | MR §4 + §6 · **M1** | 项目记忆索引注入 `<project_memory_index>` + 常驻进展行（**解冻《Cross-Session Recall v1》批 2**）+ `memory_project_history` 提 `Always` + guidance 两句 + **workspace 键位归一化** | 无技术前置（审计线已收口）；Q1 提供基线 | S–M |
 | **Q3** | ⬜ | MR §5 提案 A · **M2** | 整理收束时记录员追加 ≤3 张事实卡 + `memory.factCards`/`factCardMax` 设置面 + 提示词注入现有 key 清单查重 | Q2（索引得有处可注入）；R1 已裁定 | M |
 | **Q4** | ⬜ | CB §7.5 · **P2** | 项目指令注入：新 waterfall 监听器与 `MemoryInject` 同级注册，四候选名 + 逐层串联；**注入内容进 system 须与会话钉死同等对待**（首轮解析后锁定，人改文件不重算） | 与 Q2/Q3 同属注入带，紧随做省一次上下文重建 | M |
@@ -162,7 +162,10 @@ AGENTS 设计纪律 5 的注）——**它不是"要不要做"的问题，是前
 | 超限文案指向退役设置 | CB §5 / §7.3 | ✅ 成立且**原文一字未动**（`desktop/src-tauri/src/llm/retry.rs:47`）⇒ Q7 照做 |
 | **L0 落点 = `crates/kernel-agent/src/middleware/usage.rs`** | ML §2.3(e) | ⚠ **漂移**：该文件**不存在**。`usage.sqlite3`（表 `tool_usage` / `plugin_usage`）的真身在 **`desktop/src-tauri/src/usage.rs`**（56 / 65 行两个 CREATE TABLE）。⇒ **Q1 须按真身落点实施**，"旁挂一张表、不新建库"的目标不变，位置换。**✅ Q1a（v2.183）已按此实施**：`recall_log.rs` 自持 `Connection` + `busy_timeout(3s)` 旁挂同一个 sqlite 文件，不复用 `UsageDb` 任何一句 SQL（也与 L0 稿 §3.2「命中次数与工具热度混起来会互相污染」对齐） |
 | P3 死代码清单 | CB §7.6 | ⚠ **部分已兑现**：`CtxCompact` / `CompactConfig` / `CompactStrategy` / `suggested_threshold` **已随批 C 摘掉**（见 `middleware/compact.rs` 顶部注释与 `compact/tests.rs`），清单里这几行作废；`events.rs:25` 的 `CONTEXT_COMPACTED` 常量与 `:290` 映射仍在，是否真永不 emit 待 Q7 重验。⇒ **Q7 动手前逐条重跑一遍清单** |
-| `hit_count` / `last_hit_at` / `memory_inject_log` | ML §3.2 / §2.3 | ✅ 成立：全仓 0 命中 ⇒ Q1/Q5 都是净新增，不是改已有实现 |
+| `hit_count` / `last_hit_at` / `memory_inject_log` | ML §3.2 / §2.3 | ✅ 成立：全仓 0 命中 ⇒ Q1/Q5 都是净新增，不是改已有实现。**⚠ 本行是立稿日读数**：Q1a（v2.183）已建 `memory_inject_log`、Q1b（v2.184）已往 `mode` 加检索档取值 ⇒ 现在判 `memory_inject_log` 是既有表，Q5 的两列才是净新增 |
+| **检索回执的键位出处** | ML §2.3(b) | ⚠ **实测无此量**（Q1b·v2.184）：`memory-sqlite` 命中行只有层标 `scope`（取值 `global` 与 `project` 两种，见 `plugins-src/memory-sqlite/src/store.rs:129-140`），**没有 workspace 串**，且一次 `memory_search` 可跨层命中 ⇒ 「这一行的键位」在结果里没有单一答案。落码改为**与注入档同出处同函数**（解析器 + `workspace::scope_key` 现算）。别照稿子以为结果里能读到键位 |
+| **`injection_yield` 分子含 `memory_project_history`** | ML §2.3(c) | ⚠ **后半句不成立**（Q1b·v2.184）：该工具交付会话/章节**标题**，结果里没有 memory key ⇒ 与注入档的 key 空间不相交，照原文合分子得到一个恒 0 的假指标。实现改按「非注入档行的 `keys` 并集」（无 key 的工具对交集零贡献），专测 `keyless_receipts_do_not_move_the_yield_numerator` |
+| **观测件的载体能否是中间件** | ML §2.3(b)「挂在 ToolResult 投影上」 | ❌ **不可行**（Q1b 实测）：`kernel_agent::middleware::Next` 的 `tool_name`/`tool_spec`/`args` 三个访问器全是 `pub(crate)` ⇒ 宿主自制的中间件能拿到 `Result<Value>` 却不知道是哪个工具给的。**后续凡要在宿主侧观测工具结果，一律按 `Tool` 装饰器（`resolve` 出口）这条路走**，除非那批明确要放宽内核 API 面 |
 
 另记一条 ML §0.3 已经自我订正过的事实（防返工）：`access_count` 两列**从未存在于 schema**，
 不要按"未实现配置"去补它——稿内已把它从设计里剔除。

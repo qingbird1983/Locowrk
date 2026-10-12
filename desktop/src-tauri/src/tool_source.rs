@@ -7,6 +7,11 @@
 //! ㉘·B：`resolve` / `list` 带会话身份——**计划模式 = 目录级围栏**（非
 //! Pure 工具对模型不可见、解析即拒），由 [`PermissionModeStore`] 按会话
 //! 裁决；未接模式存储时不过滤（与 kernel-bin 桥同形）。
+//!
+//! Q1b（召回可观测性·检索回执）：`resolve` 是**执行面唯一的收敛出口**（内置工具与
+//! 插件工具在此之后是同一个 `Arc<dyn Tool>`），所以采集壳挂在这里而不是任何工具本体
+//! 或 `run_turn` 的参数上——理由与排除的两条路写在 `recall_log.rs` 头注。未接观测句柄
+//! 时一行都不记（kernel-bin 桥与测试路径同形）。
 
 use std::sync::Arc;
 
@@ -48,6 +53,9 @@ pub struct KernelToolSource {
     modes: Option<Arc<PermissionModeStore>>,
     /// M4 树工具会话门控；None = 无树工具（kernel-bin 桥同形）。
     tree_gate: Option<Arc<TreeToolGate>>,
+    /// Q1b 检索回执的采集件（观测表 + 键位解析器，两者必须同批给）；
+    /// None = 不采集（`resolve` 原样返回工具）。
+    receipts: Option<Arc<crate::recall_receipt::ReceiptSink>>,
 }
 
 impl KernelToolSource {
@@ -57,6 +65,7 @@ impl KernelToolSource {
             inner,
             modes: None,
             tree_gate: None,
+            receipts: None,
         }
     }
 
@@ -76,6 +85,16 @@ impl KernelToolSource {
     /// 过滤；legacy 会话目录不含、解析即拒——双保险）。
     pub fn with_tree_gate(mut self, gate: Arc<TreeToolGate>) -> Self {
         self.tree_gate = Some(gate);
+        self
+    }
+
+    /// Q1b：接检索回执的采集件（`memory_read` / `memory_search` /
+    /// `memory_project_history` 的成功结果落一行，见 [`crate::recall_receipt`]）。
+    /// 只接**执行面**那一棵树：`state/tools.rs` 里的 `search_catalog` 不接——它只被
+    /// `search_tools` 拿去 `list_all()` 建索引，从不调 `resolve`，接了也不会有读数，
+    /// 但会把"这棵树是干什么的"讲成一个错误的故事。
+    pub fn with_receipt_sink(mut self, sink: Arc<crate::recall_receipt::ReceiptSink>) -> Self {
+        self.receipts = Some(sink);
         self
     }
 
@@ -112,7 +131,12 @@ impl ToolSource for KernelToolSource {
                 )));
             }
         }
-        Ok(tool)
+        // Q1b：围栏全部放行之后才套采集壳——被拒的调用没有结果可观测，记了就是把
+        // 「模型没查到」冒充「查到了零条」。
+        Ok(match &self.receipts {
+            Some(sink) => crate::recall_receipt::observe(tool, Arc::clone(sink)),
+            None => tool,
+        })
     }
 
     async fn list(&self, session_id: Option<&str>) -> Vec<ToolSpec> {

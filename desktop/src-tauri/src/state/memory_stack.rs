@@ -36,6 +36,10 @@ pub(crate) struct Stack {
     pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
     pub tree_store: memory_tree::TreeStore,
     pub tree_assembler: Arc<crate::organize::TreeAssembler>,
+    /// Q1b：检索回执的采集件（观测表 + 键位解析器，由 `state/tools.rs` 接给执行面的
+    /// 工具树）。与上面 `MemoryStore` 里那个注入档句柄是同一个 `Arc<RecallLog>`——
+    /// 两个档的账才落在同一张表上。
+    pub receipt_sink: Arc<crate::recall_receipt::ReceiptSink>,
 }
 
 pub(crate) fn build(init: Init) -> Stack {
@@ -67,14 +71,20 @@ pub(crate) fn build(init: Init) -> Stack {
         let s = Arc::clone(&settings);
         Arc::new(move || s.memory().repo_context) as Arc<dyn Fn() -> bool + Send + Sync>
     };
+    // Q1a（L0）注入侧 + Q1b 检索侧共用的召回观测句柄：`RecallLog` 无状态、只持路径、
+    // open 时才建表 ⇒ 构造零成本，**不从 boot 借 UsageRecorder**——记忆与观测都不该为了
+    // 写自己的账去依赖统计簇的写入器。一次构造两处消费（注入侧进 MemoryStore，检索侧连同
+    // 键位解析器一起打包成 `ReceiptSink` 交给 `state/tools.rs` 的执行面工具树），于是
+    // `usage.sqlite3` 这个文件名在本簇只有一个出处。
+    let recall_log = crate::recall_log::RecallLog::at(root.join("usage.sqlite3"));
+    let receipt_sink =
+        crate::recall_receipt::ReceiptSink::new(Arc::clone(&recall_log), Arc::clone(&workspace_of));
     let memory = Arc::new(
         MemoryStore::new(&root, Arc::clone(&workspace_of))
             .with_files(Arc::clone(&memory_files), Arc::clone(&files_on))
             .with_repo_context(Arc::clone(&repo_on))
-            // Q1a（L0）：注入侧召回埋点。句柄在本簇内自造（`RecallLog` 无状态、只持
-            // 路径、open 时才建表），**不从 boot 借 UsageRecorder**——记忆簇不该为了
-            // 写自己的观测去依赖统计簇的写入器。未接线时召回行为与改前逐字段一致。
-            .with_recall_log(crate::recall_log::RecallLog::at(root.join("usage.sqlite3"))),
+            // 未接线时召回行为与改前逐字段一致（等价判据在 recall_log/tests.rs）。
+            .with_recall_log(Arc::clone(&recall_log)),
     );
     let permission_modes = Arc::new(crate::permission_mode::PermissionModeStore::new(
         sessions_dir.clone(),
@@ -101,5 +111,6 @@ pub(crate) fn build(init: Init) -> Stack {
         permission_modes,
         tree_store,
         tree_assembler,
+        receipt_sink,
     }
 }

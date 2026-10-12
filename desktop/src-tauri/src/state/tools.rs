@@ -17,6 +17,9 @@
 //!    全目录视图（否则检索结果里出现检索工具自己）；
 //! 3. 树工具四件与 `tree_gate`/`permission_modes` 只挂 `main_source`，**不进
 //!    `search_catalog` 索引**（会话级工具，人的检索面不含）。
+//! 4. Q1b 的检索回执采集壳（`with_receipt_sink`）同样**只挂 `main_source`**——它是
+//!    执行面的观测，`search_catalog` 从不 `resolve`，挂上去既无读数又把"这棵树是什么"
+//!    讲错（v2.184 本批）。
 //!
 //! `pdf_to_images` 缺席 = 随包 pdfium 不在位时不注册（宁缺勿假，注册必然失败
 //! 的工具是谎报能力）。
@@ -60,6 +63,9 @@ pub(crate) struct Init {
     pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
     pub tree_store: memory_tree::TreeStore,
     pub workspace_of: WorkspaceResolver,
+    /// Q1b 检索回执采集件（观测表 + 键位解析器；与注入侧同一个 `Arc<RecallLog>`，
+    /// 见 `state/memory_stack.rs`）。
+    pub receipt_sink: Arc<crate::recall_receipt::ReceiptSink>,
 }
 
 /// 组装两棵工具目录（检索视图 + 主目录）并把主目录注册进 `Context`，
@@ -85,6 +91,7 @@ pub(crate) fn build_and_provide(init: Init) -> Arc<crate::browser::ConsoleStore>
         permission_modes,
         tree_store,
         workspace_of,
+        receipt_sink,
     } = init;
 
     // 工具目录：始终提供（registry 空 → resolve 报 NotAvailable，错误以失败 ToolResult 闭合，§7.2）。
@@ -235,7 +242,11 @@ pub(crate) fn build_and_provide(init: Init) -> Arc<crate::browser::ConsoleStore>
     ))
     .with_tree_gate(tree_gate)
     // ㉘·B 计划模式目录围栏（非 Pure 不出目录、resolve 即拒）
-    .with_modes(Arc::clone(&permission_modes));
+    .with_modes(Arc::clone(&permission_modes))
+    // Q1b（L0·(b)）：检索回执采集壳挂在**执行面**这一棵树上（`search_catalog` 只做
+    // `list_all()` 索引，从不 resolve，因此不接）。第 3 条契约同款推理：观测面也只
+    // 该覆盖真正会被模型调用的那条通路。
+    .with_receipt_sink(receipt_sink);
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(main_source));
 
     browser_console

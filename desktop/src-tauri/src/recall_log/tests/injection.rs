@@ -1,69 +1,11 @@
-//! Q1a（L0 注入侧可观测性）验收判据 —— 对应《Memory Learning Mechanism》§2.4，
-//! 外加四条稿子没写但必须钉住的：**去重口径**、**「库不可用」不许冒充「库是空的」**、
-//! **接线前后召回逐字段相等（零行为变更的机器证明）**、**未接线不许自己建库**。
-//!
-//! 全部驱动 `MemoryStore::recall()` **生产本体**，不是手搓事件再测自己。
-
-use std::path::PathBuf;
-use std::sync::Arc;
+//! 注入档埋点判据（父簇 `mod.rs` 只放夹具，用例在本簇）。
 
 use kernel_agent::MemorySource;
 
 use crate::memory::MemoryStore;
-use crate::recall_log::{RecallLog, RecallRow};
+use crate::recall_log::RecallLog;
 
-/// 拿到手就建好的空目录。
-///
-/// ⚠ `testutil::unique_dir` 只**拼**路径不建目录（它的契约是把"目录不存在"留给调用方），
-/// 而 `RecallLog::at` 同样不碰盘——首条 open 会在不存在的目录里建 `usage.sqlite3`
-/// 并直接失败（实测报错 `unable to open database file`）。**修法在测试侧**：给
-/// `RecallLog` 加 `create_dir_all` 会把「数据根没建好」这个真实故障吞成静默成功。
-fn temp_dir(tag: &str) -> PathBuf {
-    let d = crate::testutil::unique_dir(&format!("recalllog-{tag}"));
-    std::fs::create_dir_all(&d).expect("create recall_log temp dir");
-    d
-}
-
-/// 测试解析器：`ws-session` 归属 `F:/ws/a`，`other-session` 归属另一根，其余未归属。
-fn test_resolver() -> crate::workspace::WorkspaceResolver {
-    Arc::new(|sid: &str| match sid {
-        "ws-session" => Some("F:/ws/a".to_string()),
-        "other-session" => Some("F:/ws/b".to_string()),
-        _ => None,
-    })
-}
-
-/// 记忆库与观测表放在**同一目录**——它就是生产现场的位置关系（`state/boot.rs` 用
-/// `root.join("usage.sqlite3")`，`MemoryStore` 用 `root/memory.sqlite3`）。
-fn store_with_log(tag: &str, seed: &[(&str, &str, &str)]) -> (MemoryStore, Arc<RecallLog>) {
-    let dir = temp_dir(tag);
-    let log = RecallLog::at(dir.join("usage.sqlite3"));
-    let store = MemoryStore::new(&dir, test_resolver()).with_recall_log(Arc::clone(&log));
-    for (ws, key, value) in seed {
-        store.write(ws, key, value, "t", "explicit").unwrap();
-    }
-    (store, log)
-}
-
-fn rows(log: &RecallLog) -> Vec<RecallRow> {
-    log.recent(50).unwrap()
-}
-
-/// 把召回交付压成可比较的元组（不依赖 `MemoryEntry` 的 derive 形状）。
-fn shape(entries: &[kernel_agent::MemoryEntry]) -> Vec<(String, String, String, String, i64)> {
-    entries
-        .iter()
-        .map(|e| {
-            (
-                e.key.clone(),
-                e.value.clone(),
-                e.tags.clone(),
-                e.scope.clone(),
-                e.updated_at,
-            )
-        })
-        .collect()
-}
+use super::{rows, shape, store_with_log, temp_dir, test_resolver};
 
 // ---------------------------------------------------------------- 三档埋点（§2.4）
 
@@ -243,13 +185,4 @@ fn schema_is_idempotent_across_reopen() {
         "inject",
         "阳性对照：写入档就是 'inject'，Q1b 只往 mode 加值不迁移表"
     );
-}
-
-#[test]
-fn stats_report_none_instead_of_zero_when_nothing_was_recorded() {
-    // 空表上 0.0 会被读成「注入了但都不空」——两个不同结论，必须用 None 分开。
-    let log = RecallLog::at(temp_dir("nostats").join("usage.sqlite3"));
-    let st = log.stats().unwrap();
-    assert_eq!((st.injections, st.empty_injections), (0, 0));
-    assert_eq!(st.store_empty_ratio, None);
 }

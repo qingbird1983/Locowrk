@@ -74,6 +74,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         permission_modes,
         tree_store,
         tree_assembler,
+        receipt_sink,
     } = memory_stack::build(memory_stack::Init {
         ctx: Arc::clone(&ctx),
         settings: Arc::clone(&settings),
@@ -140,6 +141,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         permission_modes: Arc::clone(&permission_modes),
         tree_store: tree_store.clone(),
         workspace_of: Arc::clone(&workspace_of),
+        receipt_sink,
     });
 
     // 插件编排簇（§11.2 + §12.3）：服务开启（含数据根降级）→ 启动对账 → 开发态装载 →
