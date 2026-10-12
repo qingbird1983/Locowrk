@@ -721,7 +721,23 @@
 | 实机走查 | ✅ CDP 独立数据根 + 构造单轮 jsonl（思考×2+工具×2+汇报）**17/17 PASS**：OFF 五断言（行可见/组全开/组头在场/无明细/容器展开）→ 真点开关+保存切 ON 不重启即收（容器收为计时行）→ 重开容器组折叠一行摘要→组头可展开 → 切回 OFF 即时回扩；settings.json 往返盘证；数据根已清，脚本/截图留 tmp/v126-walk/ |
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
-### v2.179（**审计修复批 F-24b = F4 的余五条 c/d/e①/f/g ⇒ F4 整项收口 ✅**；热路径与分配面优化，等值由参考实现 + 生产本体驱动测试 + 十四条静态判据给证）
+### v2.180（提交 1a50571 之后的下一刀 · **审计修复批 F-24c = `approval.rs` 571 行两职责拆分** ⇒ 批 F-24a 三问自检登记的那条欠账兑现；**纯搬移、零行为变化、零可见性改动、测试面一字不改**）
+
+**依据**：批 F-24a 边界②新登记的欠账 **F-24c**（三问自检 = 否/否/是）+ 仓库「单文件建议 ≤400 行」纪律。形状照批 F-17（生产码目录化）与批 F-14（`use` 按引用面分派）。
+
+| # | 项 | 内容 |
+|---|---|---|
+| ① 落点与规模（机器真源 = `tmp/v187-verify.mjs`，账串 `571/457/141`） | `approval.rs` **571 行** → `approval/mod.rs` **457**（决策 hub：`ApprovalHub` / `Pending` / `root_session_id` / `command_subject` / `impl ApprovalHub` / `impl ApprovalResolver`）+ `approval/fence.rs` **141**（硬门·越界扫描器：`command_touches_outside` / `extract_windows_abs_paths` / `rest_starts_unc` / `scan_roots` / `is_outside`），**净 +27 行**（两个头注 + 再导出与分档注释）；**`check_length` 22 == BASELINE 22**——摘掉一个超限件（571）新增一个超限件（457）= **净 0、没抬基线**，第五道闸「目录式模块 30 → 31 个」是这次拆分的机器读数 |
+| ② **等价判据 = 逐行字面守恒**（生产码拆分没有「用例登记」可守恒 ⇒ 沿用批 F-17 的口径） | `body_equiv_lines`：HEAD 版 `approval.rs` 的**每一个非空行**都必须原样出现在两半之一，**允许消失的行只有两条并逐条写死**（`use std::path::{Path, PathBuf};` 与 `use plugin_api::ffi::CallContext;` —— 它们随 fence 簇搬走）⇒ 实测缺失 **0**；`body_equiv_sees_split` 阳性对照 = 原文件里**只在 mod.rs 的 369 行**与**只在 fence.rs 的 99 行**两向都非零（防"包含判断"退化成恒真）；`vis_*` 五条 = `pub struct` 1 / `pub const` 2 / `pub(crate) fn` 5 / `fn` 2 / `impl` 2 改前改后**逐档相等且非 0** = 可见性零改动的机器证明 |
+| ③ **测试面一字不改是靠再导出做到的**（不是靠改测试） | `tests_approval/m18_equiv.rs:11` 写 `use crate::approval::{is_outside, scan_roots};`、`tests_permission.rs:269` 写 `use crate::approval::{extract_windows_abs_paths, is_outside};` ⇒ `mod.rs` 里 **分两档**再导出：生产侧 `pub(crate) use fence::command_touches_outside;`（决策表那一句的直接调用名）+ **`#[cfg(test)]` 下** `pub(crate) use fence::{extract_windows_abs_paths, is_outside, scan_roots};`。分档的必要性是实测出来的：不分档第一次 `cargo check` 就报 `unused_imports: is_outside, scan_roots`（非测试编译里它们只被测试用）。判据 `tests_untouched` = 三个测试文件与 HEAD **行尾归一后逐字相同 3/3** |
+| ④ `use` 面按引用面分派（批 F-14 那一课的复用） | 用词频法实测：`Path`/`PathBuf`/`CallContext` **只在 fence 侧出现** ⇒ 整条搬走；其余 17 个绑定（`HashMap`/`HashSet`/`Arc`/`Mutex`/`Duration`/`async_trait`/`ApprovalDecision`/`ApprovalResolver`/`ToolCallReq`/`ToolSpec`/`oneshot`/`side_effect_str`/`AgentEvent`/`ApprovalRequestPayload`/`EventSink`/`AtomicU64`/`Ordering`）**只在 hub 侧出现** ⇒ 留在 `mod.rs`。少搬一条 = unused import（`-D warnings` 红）、多搬一条 = 找不到名字 |
+| ⑤ 变异 3/3（一条断言面 + 两条编译面） | **M1** `is_outside` 的「在所有根之外」→「在任一根之外」→ 红在断言面（`m18_equiv.rs:71` 的 150 格矩阵，**证明搬过去的判定仍被既有测试覆盖**）· **M2** 摘掉生产侧再导出 → 红在**编译面**（正确预期：再导出是承重不是装饰）· **M3** 摘掉测试侧再导出 → 红在**编译面**（证明"测试面一字不改"这条约束真在承重）。批 F-24b 立的 `must_be_test_failure` 在这里**反向使用**：结构变异只能红在编译面，红在编译面就是它的指定判据 |
+| ⑥ **判据自纠第七条**（又是判据自己的错） | `tests_untouched` 首版用 `git show HEAD:<f> === 工作区字节` 比较 ⇒ 恒不等：`git show` 给 **LF**、Windows checkout 的工作区是 **CRLF**（`git diff` 对该文件**零输出** = 内容本就相同，实测 HEAD crlf=0 / 工作区 crlf=312 / 去 \r 后相等 = true）。同族 = 批 F-8「行尾风格陷阱第二次咬人」与「转义串使测量工具自己废判据」⇒ 比较两侧必须先归一行尾。**另一条同批自纠**：`body_equiv_sees_deletion` 首版是恒真断言（拿一个产物里必然不存在的字符串去判"能看见删除"= 空转对照），改成"两向都非零"的 `body_equiv_sees_split` 才有区分度（同族 = 批 F-24a 的 P3 空转） |
+| ⑦ 门禁（本批特有 2 项 + 常规面） | 桌面三件 0 / **3 套件 382 passed 0 failed 持平**；根侧**本批零代码改动**（回归面）三件 0 / **39 套件 452 持平**；五道结构闸全 0（`check_length` **22 == BASELINE 22** · i18n 891=891 · commands 85=85=85 · wiring 10·10·0 · 形状闸 S0…S6 全 0）；本批特有 = `verify`（15 条判据 + 变异 3/3 + 收尾全量复跑，异常 0）+ 前端本批零 `.ts/.vue` 改动故未复跑（记档） |
+| ⑧ 边界 | ①**`approval/mod.rs` 457 行仍超 400**（在 BASELINE 名单内 ⇒ 总数不变、闸照绿）：三问自检的下一层边界 = `impl ApprovalHub`（构造与 pending/exempt/豁免表）与 `impl ApprovalResolver for ApprovalHub`（**七序决策表**）确实是两件事，再拆 `approval/decide.rs` 可把基线 **22 → 21**，但那要把 `impl` 的方法分到两个文件（批 F-7 的 `organize` 先例）⇒ 属又一刀，不在本批顺手做。②**等价证明判据在 `tmp/`**（`v187-verify.mjs`）没入库 = 与批 F-17 同族的边界（第五道闸管形状、body_equiv 管字面守恒，后者仍是提交前判据）。③`git show HEAD:` 类参照只在提交前有效。④未做真机走查、未跑 `doccheck`（拆分的可观测面就是决策结果与围栏判定，由既有 382 条 + 守恒判据覆盖）。⑤本批未重编插件产物（零插件改动） |
+| ⑨ 文档 | PLAN §1 批 F 标题「三十批 → 三十一批」+ 计数串补 `/ F-24c = 31` + **F-24c 欠账行标已兑现** + §5 批 F-24c 段；ROADMAP 本节 + 上一版 v2.179 的哈希回补见下；CHANGELOG v2.180；AGENTS 三条轮转（v2.178 条目从窗口逐字搬进归档正文最前） |
+
+### v2.179（提交 1a50571）· **审计修复批 F-24b = F4 的余五条 c/d/e①/f/g ⇒ F4 整项收口 ✅**；热路径与分配面优化，等值由参考实现 + 生产本体驱动测试 + 十四条静态判据给证）
 
 **依据**：《CODE-AUDIT-v1》M-18 c/d/e/f/g +《AUDIT-FIX-PLAN-v1》§1 F4 行（批 F-24a 记的四条余项 + 本批五条）。改动面 = `desktop/src-tauri`（9 件）+ `crates/session-store`（2 件），**零 ABI、零前端改动**；测试账 桌面 **382**（= HEAD 378 + 本批 4）/ 根 **452 持平**，`check_length` **22 == BASELINE 22**（**没抬基线**）。
 
