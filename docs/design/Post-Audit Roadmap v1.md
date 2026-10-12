@@ -102,7 +102,7 @@
 
 | Q | 状态 | 出处 · 代号 | 内容 | 前置 | 体量 |
 |---|---|---|---|---|---|
-| **Q1a** | ✅ **v2.183** | ML §2.3 (a)+(c) · **L0 注入侧** | 注入埋点落 `memory_inject_log`（按键位去重的部分唯一索引）+ `store_empty_ratio`；**`usage.rs` 零改动**（自持连接、同文件旁挂表） | 无 | S |
+| **Q1a** | ✅ **v2.183 · 提交 `ad873bd`** | ML §2.3 (a)+(c) · **L0 注入侧** | 注入埋点落 `memory_inject_log`（按键位去重的部分唯一索引）+ `store_empty_ratio`；**`usage.rs` 零改动**（自持连接、同文件旁挂表） | 无 | S |
 | **Q1b** | ⬜ | ML §2.3 (b) · **L0 回执侧** | `memory_read`/`memory_search`/`memory_project_history` 的成功回执 + `injection_yield` 指标。⚠ 挂点在 `runner::record_stats`，两条路都试过：挤进 `UsageRecorder` 让 `usage.rs` 同时做两件事（三问②答否）、给 `run_turn` 加参数要牵动 10 处调用点 ⇒ 独立一刀，先定载体再动 | Q1a | S–M |
 | **Q2** | ⬜ | MR §4 + §6 · **M1** | 项目记忆索引注入 `<project_memory_index>` + 常驻进展行（**解冻《Cross-Session Recall v1》批 2**）+ `memory_project_history` 提 `Always` + guidance 两句 + **workspace 键位归一化** | 无技术前置（审计线已收口）；Q1 提供基线 | S–M |
 | **Q3** | ⬜ | MR §5 提案 A · **M2** | 整理收束时记录员追加 ≤3 张事实卡 + `memory.factCards`/`factCardMax` 设置面 + 提示词注入现有 key 清单查重 | Q2（索引得有处可注入）；R1 已裁定 | M |
