@@ -77,6 +77,11 @@ pub struct MemoryStore {
     repo_on: Arc<dyn Fn() -> bool + Send + Sync>,
     /// 已引导过的仓库（每进程每仓库一次 ensure_layout，幂等也兜底防抖）。
     repo_ensured: Mutex<std::collections::HashSet<PathBuf>>,
+    /// Q1a（L0 注入侧可观测性）：埋点落库句柄（`usage.sqlite3` 旁挂的
+    /// `memory_inject_log`）。**未接线（单测、降级启动）= 不记**，召回行为逐字不变。
+    /// 句柄类型是 `recall_log::RecallLog` 而不是 `usage::UsageRecorder`：统计写入器
+    /// 不该兼管记忆观测（L0 稿 §3.2「命中与工具热度混起来会互相污染」）。
+    recall_log: Option<Arc<crate::recall_log::RecallLog>>,
 }
 
 impl MemoryStore {
@@ -89,7 +94,15 @@ impl MemoryStore {
             files_on: Arc::new(|| false),
             repo_on: Arc::new(|| false),
             repo_ensured: Mutex::new(std::collections::HashSet::new()),
+            recall_log: None,
         }
+    }
+
+    /// 接线召回观测（Q1 / L0，state 组装点调用）：注入侧每次交付记一行
+    /// `memory_inject_log`。**只记不改**——召回的 SQL、条数、字节全部与改前同源。
+    pub fn with_recall_log(mut self, log: Arc<crate::recall_log::RecallLog>) -> Self {
+        self.recall_log = Some(log);
+        self
     }
 
     /// 接线交接注入（F2，state 组装点调用）：settings `memory.repoContext`
@@ -434,12 +447,24 @@ impl MemoryStore {
         Ok(rows)
     }
 
-    fn recall_quiet(&self, _session_id: Option<&str>, limit: usize) -> Vec<MemoryRow> {
+    fn recall_quiet(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryRow> {
         // v2.136 裁定「项目侧全提醒制」：注入只取**全局层**（''，用户层
         // 面的喜好/全局要求，保持简短）——项目层事实不自动注入（由模型
         // memory_read / memory_search 按需查），所以召回与会话归属无关。
-        let recalled: Result<Vec<MemoryRow>, String> = (|| {
+        // Q1（L0）：session_id 现在会往下传，但**只作观测字段**（日志的
+        // 会话键与键位），查询条件一个字符没动 = 召回结果与改前同源。
+        let started = std::time::Instant::now();
+        let recalled: Result<(Vec<MemoryRow>, usize), String> = (|| {
             let conn = self.open_conn()?;
+            // n_candidates 与交付条数**同源于同一次连接**：分两次查会在中间被写入
+            // 打乱，读出的「库里有多少 / 这次给了多少」就不是同一时刻的账。
+            let n_candidates: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM memories WHERE workspace = ''",
+                    [],
+                    |r| r.get(0),
+                )
+                .map_err(|e| format!("memory recall count: {e}"))?;
             let mut stmt = conn
                 .prepare(
                     "SELECT workspace, key, value, tags, source, updated_at FROM memories
@@ -452,16 +477,52 @@ impl MemoryStore {
                 .map_err(|e| format!("memory recall: {e}"))?
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| format!("memory recall: {e}"))?;
-            Ok(rows)
+            Ok((rows, n_candidates as usize))
         })();
         match recalled {
-            Ok(rows) => rows,
+            Ok((rows, n_candidates)) => {
+                self.log_inject(session_id, n_candidates, &rows, started);
+                rows
+            }
             Err(e) => {
+                // 打不开库/查询失败：连 n_candidates 都取不到，**不记**（记一条
+                // n_candidates=0 会把「库不可用」冒充成「库是空的」= 指标造假）。
                 if !self.warned.swap(true, std::sync::atomic::Ordering::Relaxed) {
                     tracing::warn!("memory recall unavailable（记忆注入降级为空）: {e}");
                 }
                 Vec::new()
             }
+        }
+    }
+
+    /// Q1（L0）注入侧埋点。未接线 = 直接返回；写失败由 `UsageRecorder` 内部 warn。
+    ///
+    /// 键位在这里现算（`scope_of_session` = 旁车一次读取）：`MemoryInject` 那边为了
+    /// 预取缓存已经算过一次，这里重复一次同成本档——**不为一个日志字段去改内核侧
+    /// trait 形状**。
+    fn log_inject(
+        &self,
+        session_id: Option<&str>,
+        n_candidates: usize,
+        rows: &[MemoryRow],
+        started: std::time::Instant,
+    ) {
+        let Some(log) = &self.recall_log else {
+            return;
+        };
+        let keys: Vec<String> = rows.iter().map(|r| r.key.clone()).collect();
+        let scope = self.scope_of_session(session_id);
+        // 无会话传空串而不是 NULL：部分唯一索引里 NULL ≠ NULL，用 NULL 会让
+        // 「无会话的注入」每 step 插一条，去重直接失效（recall_log.rs 不变量 3）。
+        if let Err(e) = log.note_inject(
+            session_id.unwrap_or_default(),
+            &scope,
+            n_candidates,
+            rows.len(),
+            &keys,
+            started.elapsed(),
+        ) {
+            tracing::warn!("recall observability: {e}");
         }
     }
 }
@@ -529,8 +590,11 @@ fn today_local() -> String {
 /// （预取缓存键成分——归属变更自动重算）与 `context_line`（归属会话告知
 /// 模型当前项目根，"看下这个项目"不再靠旧记忆猜路径）。
 impl MemorySource for MemoryStore {
-    fn recall(&self, _session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
-        self.recall_quiet(None, limit)
+    fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
+        // Q1（L0）：session_id 现在透传给 recall_quiet，但**只作观测字段**——
+        // 召回恒取全局层（recall_quiet 头注的 v2.136 裁定），交付的条目集合
+        // 与改前逐字节一致（等价判据在 memory/tests.rs）。
+        self.recall_quiet(session_id, limit)
             .into_iter()
             .map(|r| MemoryEntry {
                 key: r.key,

@@ -70,7 +70,11 @@ pub(crate) fn build(init: Init) -> Stack {
     let memory = Arc::new(
         MemoryStore::new(&root, Arc::clone(&workspace_of))
             .with_files(Arc::clone(&memory_files), Arc::clone(&files_on))
-            .with_repo_context(Arc::clone(&repo_on)),
+            .with_repo_context(Arc::clone(&repo_on))
+            // Q1a（L0）：注入侧召回埋点。句柄在本簇内自造（`RecallLog` 无状态、只持
+            // 路径、open 时才建表），**不从 boot 借 UsageRecorder**——记忆簇不该为了
+            // 写自己的观测去依赖统计簇的写入器。未接线时召回行为与改前逐字段一致。
+            .with_recall_log(crate::recall_log::RecallLog::at(root.join("usage.sqlite3"))),
     );
     let permission_modes = Arc::new(crate::permission_mode::PermissionModeStore::new(
         sessions_dir.clone(),

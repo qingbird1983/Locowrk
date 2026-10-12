@@ -721,6 +721,27 @@
 | 实机走查 | ✅ CDP 独立数据根 + 构造单轮 jsonl（思考×2+工具×2+汇报）**17/17 PASS**：OFF 五断言（行可见/组全开/组头在场/无明细/容器展开）→ 真点开关+保存切 ON 不重启即收（容器收为计时行）→ 重开容器组折叠一行摘要→组头可展开 → 切回 OFF 即时回扩；settings.json 往返盘证；数据根已清，脚本/截图留 tmp/v126-walk/ |
 | 文档 | ✅ UI shell v4.20（§3.2 行 / §3.7 语义段重写 / §3.8 铁则 / 设置表 / 版本条）+ CHANGELOG v2.126 |
 
+### v2.183（提交 = 本批，哈希由同批回补落下 · **后审计队列首刀 Q1a = 记忆学习 L0 的注入侧召回可观测性**；纯增量、**零行为变更**）
+
+| 项 | 内容 |
+|---|---|
+| 依据 | 《Memory Learning Mechanism (SME Alignment) v1》§2.3 的 (a)+(c) 与 §2.4 验收；队列 **Q1a**（《Post-Audit Roadmap v1》§4 首刀）。(b) 检索回执与 `injection_yield` 单独成批 = **Q1b**，切法见下「为什么切两刀」 |
+| 新文件 | `desktop/src-tauri/src/recall_log.rs` **224 行**（表 DDL + `RecallLog` 自持连接 + `note_inject` + `stats` + `recent`）；`recall_log/tests.rs` **255 行 / 11 用例**；`lib.rs` 加一行 `mod recall_log;` |
+| 改动文件 | `memory.rs` 600→664（基线名单内，**净增超限件 0**）：`MemoryStore` 加 `recall_log` 字段 + `with_recall_log()`（与 `with_files`/`with_repo_context` 同族）+ `recall_quiet` 成功路径埋点；`state/memory_stack.rs` 组装点接线。**`usage.rs` 与 `runner/mod.rs` 一行未改**（退回 HEAD 逐字节相同） |
+| **为什么切两刀（本批最可迁移的一条）** | 初稿把 (b) 也塞进本批，结果是 `usage.rs` 383→410 行；我当时按「不得超过 400」去压注释、合并建表常量——用户当场指回 AGENTS 口径：「**400 行不是硬性门禁**，超过先做三问自检」。正确读法 = 三问第②问（名字是否准确概括内容）答「否」：`usage.rs` 同时做工具热度统计与记忆召回观测 ⇒ 该拆不该挤；另一条路是给 `run_turn` 加参数，而它有 **10 处调用点（其中 7 处是测试）** 为一行日志字段陪绑。两条都不该与埋点本体混在一刀 ⇒ **(b) + `injection_yield` 退到 Q1b**，`usage.rs`/`runner/mod.rs` 退回零改动，并**撤掉我为凑行数写的两处「行数额度」式扭曲注释**（把行数当设计依据写进注释，本身就是错的） |
+| 落点按真身订正 | L0 稿 §2.3(e) 给的 `crates/kernel-agent/src/middleware/usage.rs` **不存在**（队列 §5 已登记），真身 = `desktop/src-tauri/src/usage.rs`。本批**不复用 `UsageDb` 的任何语句**：自持 `Connection` + `busy_timeout(3s)`（与 `tool_usage` 的 5s 刷盘**同文件不同表**，两个写者会撞锁），既满足「不新建库、与工具热度同生命周期」的意图，又与统计面零代码交集——也对上稿子 §3.2「命中次数与工具热度混起来会互相污染」 |
+| ① 表与去重形状 | `memory_inject_log(id, ts, mode, session_key, scope_id, n_candidates, returned, keys, elapsed_us)` + `(mode, ts)` 索引 + **部分唯一索引 `ux_mil_inject(session_key, scope_id) WHERE mode='inject'`**。`session_key` 用**空串而非 NULL** 表示无会话：部分唯一索引里 NULL ≠ NULL，用 NULL 会让「无会话的注入」每 step 插一条 = 去重直接失效 |
+| ② 去重不是洁癖而是必需 | `MemoryInject` 的会话预取缓存（`PREFETCH_CAP`）只在**有 session_id** 时保证每会话一次 `recall()`；无 session_id 的调用每 step 都会走到（`memory.rs` 原注释「每 step 都 recall，别刷日志」就是这个场景）。不去重 ⇒ 日志按 step 膨胀、`store_empty_ratio` 被同一会话的重复行主导 = 指标失真 |
+| ③ 零行为变更的机器证明 | `recall()` 原先**丢弃** session_id（恒 `recall_quiet(None, …)`，因 v2.136 起召回恒取全局层）。本批透传但**只作观测字段**，查询 SQL 一字未动。判据 `recall_rows_are_identical_with_and_without_instrumentation` 用两个库（接线 / 不接线）同数据召回后逐字段比 `(key,value,tags,scope,updated_at)` **含顺序**，并配阳性对照「三行都进比较 + 接线侧确实记了一行」 |
+| ④ `n_candidates` 与交付同源 | 在同一连接里多取一次 `SELECT COUNT(*) … WHERE workspace=''`（分两次查会读出「查中间被写入」的错位账）。变异 **M2**（改成全表计数）红在 `project_only_store_reads_as_empty_injection` ⇒ 证「候选只数全局层」这条口径有人守 |
+| ⑤ 「库不可用」不许冒充「库是空的」 | Err 分支**不记**。变异 **M3**（Err 分支也调 `log_inject`）红在 `unavailable_memory_store_does_not_write_a_row` |
+| ⑥ 指标只交真有读数的一条 | 只交 `store_empty_ratio`，且零注入行时返回 **None 而不是 0.0**（0.0 会被读成「注入了但都不空」，与「一次都没注入」是两个结论）；**不给 `injection_yield` 摆一个恒 None 的空字段**——L0 稿 §3.1 原则 3「每个信号要么影响排序、要么不出现」 |
+| ⑦ **变异账 3 红 + 1 个我造的假目标** | **M1** 把 `INSERT OR IGNORE` 改成 `INSERT` ⇒ **不红**：去重的真承重是**部分唯一索引**，`OR IGNORE` 只是撞索引时不报错，摘掉它行为完全等价（4 次 warn 被「观测不许拖垮被观测者」吞掉）⇒ 这是打在非承重点上的**假变异**。按「红因先怀疑判据」补打 **M1' = 注释掉 DDL 里 `ux_mil_inject` 那行** ⇒ 红在 `same_session_and_scope_dedups_to_one_row`（实测 5 行 vs 断言 1 行）· M2/M3 各红在指定判据。四次变异全部 python 逐字节写回 + sha 相等复核，且每次都看见 `Compiling locowrk-desktop` 行（防过期二进制冒充「已还原」） |
+| 判据自纠两条 | ①12 条测试首跑**全红**：`testutil::unique_dir` 只**拼**路径不建目录，而 `RecallLog::at` 也不碰盘（建表放在每次 open），首条 open 直接 `unable to open database file` ⇒ 修法在**测试侧**建目录；给 `RecallLog` 加 `create_dir_all` 会把「数据根没建好」这个真实故障吞成静默成功。②**Edit 工具裁剪共同前缀**（v2.182 登记的那条）本批再咬一次：改 CHANGELOG 相邻同格式长行时把上一版行首整段吞掉 ⇒ 一律改用 python 定点替换 + 断言锚命中恰好 1 次 |
+| 门禁（最后一次编辑之后全量复跑） | 根侧三件：fmt CLEAN / clippy `--workspace --all-targets -- -D warnings` **0** / **452 passed 持平**（零根侧代码改动 = 回归面复跑）· 桌面侧三件：fmt CLEAN / clippy `-D warnings` **0** / **393 passed 0 failed**（基线 382 + 新增 11）· 五道结构闸：`check_length` **22 == BASELINE 22 零新增** · i18n **891=891** · commands **85=85=85** · wiring **10·10·0** · 形状闸 **S0…S6 全 0**（新目录 `recall_log/tests.rs` 按「父声明带 #[cfg(test)]」认下）。前端四件与插件**未跑**：零 `.ts/.vue` 零插件改动 |
+| 已知边界 | ①**L0 只完成一半**：(b) 检索回执与 `injection_yield` = Q1b，做完之前「模型查了记忆但没查到」这一档最直接的失败证据仍无观测；②`stats()`/`recent()` 的生产读取点 = Q10（L4 管理页），本批仅测试消费，按 `MemoryStore::write` 先例加 `#[cfg_attr(not(test), allow(dead_code))]` 并在模块注释登记——**观测写了暂时读不出来是排队不是丢失**；③未做真机走查（本批 `store_empty_ratio` 现值就该是 1.0 全空，走查增量有限，留 Q2 一起做）；④未跑 `doccheck`；⑤无基准数（台账 T9 同族） |
+| 文档 | 队列 §4 的 Q1 行拆成 **Q1a ✅ / Q1b ⬜** 并写切刀理由、§6 收口口径补「400 是三问自检的触发器不是硬闸」；INDEX 三节 ML 行状态改「L0 半边已落」；ROADMAP 本节；CHANGELOG v2.183；AGENTS「当前进度」轮转（v2.183 当前 / v2.182 前一版 / v2.181+v2.180 逐字进归档） |
+
 ### v2.182（提交 `75de208` · 本条哈希由同批回补提交落下（照 `c052318`/`d2b12d5` 先例：不留「下一批回补」的悬空账） · **后审计施工队列立项 · 文档批，生产码一行未触**：《Post-Audit Roadmap v1》立稿 = 六份「待研究」稿的实施顺序真源（Q0–Q20）+ 代号撞名治理 + 锚点漂移订正）
 
 | 项 | 内容 |

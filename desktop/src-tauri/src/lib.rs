@@ -57,6 +57,7 @@ mod permission_mode;
 mod permission_rules;
 mod plugins_root;
 mod privacy;
+mod recall_log;
 mod repo_context;
 mod runner;
 mod scheduler;
