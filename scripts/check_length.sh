@@ -78,9 +78,11 @@
 set -u
 
 SUGGEST=400
-# 24（批 F-22 / v2.175 净降：`desktop/src/types.ts` 1037 行 → `types/` 六域文件 +
-# index.ts barrel，全部 ≤252 行 ⇒ 超限件 25 → 24。此前 25 里前端占的那批见批 B/F-18 注）
-BASELINE=24
+# 24（批 F-22 / v2.175 净降：`desktop/src/types.ts` 1037 行 → `types/` 六域文件 + index.ts barrel，
+# 全部 ≤252 行 ⇒ 超限件 25 → 24。此前 25 里前端占的那批见批 B/F-18 注）
+# 22（批 F-22b / v2.176 净降：`locales/zh-CN.ts` 1072 与 `locales/en.ts` 1090 两份按 35 个
+# 命名域各切成 6 个域文件 + index.ts，最长产物 en/settings.ts 328 行 ⇒ 超限件 24 → 22）
+BASELINE=22
 
 # 一次 `wc -l` 批量计数（逐文件 fork wc 在这台 Windows 机器上要把整闸拖到
 # 十几秒，pre-commit 不可接受）。

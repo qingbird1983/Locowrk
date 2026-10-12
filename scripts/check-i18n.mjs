@@ -11,13 +11,57 @@
 // 用法：node scripts/check-i18n.mjs [--verbose-orphans] [--strict-orphans]
 //   --strict-orphans = ③ 也判红（批 C 清完孤儿键后 CI 可启用）。
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { join, relative, dirname } from "node:path";
 
 const ROOT = process.argv[2] && !process.argv[2].startsWith("-") ? process.argv[2] : ".";
 const flags = new Set(process.argv.slice(ROOT === "." ? 2 : 3));
 const SRC = join(ROOT, "desktop", "src");
-const LOCALES = { zh: join(SRC, "locales", "zh-CN.ts"), en: join(SRC, "locales", "en.ts") };
+
+// 路径一律归一成 `/` 再输出与比较：本仓在 Windows 上开发，`node:path` 的 relative() 给反斜杠形，
+// 直接拼进提示会写出 `locales\zh-CN.ts`（本闸里既有的三处比较早就各自做了归一，新加的这几处同口径）。
+const rel = (p) => relative(SRC, p).replace(/\\/g, "/");
+
+// ---------- 语言包入口：**跟随装配点**，不硬编码文件名（批 F-22b）----------
+// 旧写法 = `join(SRC, "locales", "zh-CN.ts")` 一条死路径。locales 拆成目录后那条路径不存在，
+// parseLocale 会 ENOENT 直接**崩**（不是判红也不是放行，是没人看得懂的崩）；更糟的是若有人把
+// 崩记成"闸没报错 = 通过"，这道闸就静默瞎了。现在改成从装配点 i18n.ts 读它真正 import 了什么，
+// 单文件与目录两种形态都读得到 ⇒ 以后语言包再怎么挪，闸跟着装配点走。
+const localeFiles = (id) => {
+  const asm = join(SRC, "i18n.ts");
+  if (!existsSync(asm)) throw new Error(`装配点不存在：${asm}`);
+  const src = readFileSync(asm, "utf8");
+  const re = new RegExp(`import\\s+(\\w+)\\s+from\\s+["'](\\./locales/${id}[^"']*)["']`);
+  const m = re.exec(src);
+  if (!m) throw new Error(`装配点里找不到 ${id} 的 import（i18n.ts 的装配形态变了，闸必须有人来看）`);
+  const spec = join(SRC, m[2].replace(/^\.\//, ""));
+  if (existsSync(spec) && statSync(spec).isFile()) return [spec];
+  if (existsSync(spec + ".ts")) return [spec + ".ts"];
+  const idx = join(spec, "index.ts");
+  if (existsSync(idx)) {
+    const dir = spec;
+    const parts = readdirSync(dir).filter((n) => /\.ts$/.test(n) && n !== "index.ts").sort();
+    if (!parts.length) throw new Error(`${dir}/ 是目录但里面没有域文件`);
+    // **漏展开断言**：目录里的域文件必须逐个被 index.ts import 并展开。
+    // 少了 import 或漏了 `...x` ⇒ 那一族的键静默消失；两语言同时漏同一族时，
+    // zh/en 键集仍然相等、被引用键也不缺 ⇒ 除这条断言外无人能发现（静默丢文案）。
+    const idxSrc = readFileSync(idx, "utf8");
+    const imported = new Set([...idxSrc.matchAll(/import\s+(\w+)\s+from\s+["']\.\/([\w-]+)["']/g)].map((x) => x[2]));
+    const spread = new Set([...idxSrc.matchAll(/\.\.\.(\w+)/g)].map((x) => x[1]));
+    const notImported = parts.map((n) => n.replace(/\.ts$/, "")).filter((n) => !imported.has(n));
+    const localNames = new Map([...idxSrc.matchAll(/import\s+(\w+)\s+from\s+["']\.\/([\w-]+)["']/g)].map((x) => [x[2], x[1]]));
+    const notSpread = parts.map((n) => n.replace(/\.ts$/, "")).filter((n) => !spread.has(localNames.get(n)));
+    if (notImported.length || notSpread.length) {
+      throw new Error(`${dir}/index.ts 未纳入域文件：未 import ${notImported.join(",") || "无"} · 未展开 ${notSpread.join(",") || "无"}`);
+    }
+    // 解析面 = 域文件本身，**不含 index.ts**：index 的根对象成员是 `...chat` 展开而不是
+    // `chat: {…}`，交给状态机会被当成嵌套对象解析出一条假键 `chat`（或崩）。index 的正确性
+    // 由上面那条「未 import / 未展开」断言负责，不靠解析它的内容。
+    return parts.map((n) => join(dir, n));
+  }
+  throw new Error(`装配点指向 ${m[2]}，但单文件与目录两种形态都不存在`);
+};
+
 
 // ---------- 语言包解析（token 级，认 prettier 折行）----------
 // 历史教训：正则版 `key:` 后必须同行取值，把 prettier 换行取值判成缺键，
@@ -145,6 +189,33 @@ function parseLocale(path) {
   return keys;
 }
 
+// ---------- 目录形态合并（批 F-22b 新立两条断言）----------
+// ①**命名域跨文件唯一**：拆完一个语言包 = N 个域文件由 `index.ts` 用对象展开合并，
+//   同一个命名域出现在两个文件里时 `{...a, ...b}` **静默覆盖**——键集照样相等（两语言
+//   同表）、被引用的键也不缺 ⇒ 现有三条检查一条都看不见它，只能在这里钉死。
+// ②**整键不许重复**：同一条 `chat.greeting.title` 出现两次说明分组表把同一个域塞了两份。
+// 两条都是 throw（走 exit 2 = 响亮失败），不记进 fail 位：这类是"包结构坏了"，
+// 与"某语言缺个键"不是一档，混在一个退出码里会让人误读严重程度。
+function parseLocalePackage(paths) {
+  const keys = new Map();
+  const owner = new Map(); // 顶层命名域 -> 出处文件
+  for (const p of paths) {
+    const k = parseLocale(p);
+    for (const full of k.keys()) {
+      const ns = full.split(".")[0];
+      if (owner.has(ns) && owner.get(ns) !== p) {
+        throw new Error(`命名域 \`${ns}\` 同时定义在 ${rel(owner.get(ns))} 与 ${rel(p)}`
+          + `（index.ts 用展开合并 ⇒ 后一份静默覆盖前一份，语言包会少一整族文案）`);
+      }
+      if (!owner.has(ns)) owner.set(ns, p);
+      if (keys.has(full)) throw new Error(`键 ${full} 在语言包里出现两次（${rel(p)}）`);
+      keys.set(full, true);
+    }
+  }
+  if (paths.length > 1 && keys.size === 0) throw new Error(`${paths.length} 个域文件解析出 0 条键 = 判据空转`);
+  return keys;
+}
+
 // ---------- 源码引用收集 ----------
 const walk = (dir) => {
   const out = [];
@@ -174,7 +245,7 @@ for (const file of walk(SRC)) {
   // 间接引用形态（键名写在对象表 / 数组里，运行时才喂给 t()）：台账口径把
   // 「源码里带引号出现过且能对上真实键」一律算引用。孤儿判定宁可少报——
   // 误报孤儿 = 诱导人删掉活文案。语言包自身不参与豁免统计。
-  if (!relative(SRC, file).replace(/\\/g, "/").startsWith("locales/"))
+  if (!rel(file).replace(/\\/g, "/").startsWith("locales/"))
     for (const m of text.matchAll(/(['"`])([a-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)\1/g))
       credited.add(m[2]);
   // 动态前缀提取按台账口径**不限 t() 调用点**：`const path = \`approval.
@@ -200,10 +271,10 @@ for (const file of walk(SRC)) {
       // `market.origin_official`，补点就变成永远对不上的 `market.origin_.`——首跑两条假红
       // 之一就是它（另一条是注释里的示例，见 codeOnly）。豁免仍用补点形 = 旧行为不动。
       if (!dynWhere.has(prefix)) dynWhere.set(prefix, new Set());
-      dynWhere.get(prefix).add(relative(SRC, file).replace(/\\/g, "/"));
+      dynWhere.get(prefix).add(rel(file).replace(/\\/g, "/"));
     }
   }
-  if (relative(SRC, file).replace(/\\/g, "/") === "lib/settings-index.ts") {
+  if (rel(file).replace(/\\/g, "/") === "lib/settings-index.ts") {
     for (const m of text.matchAll(/(?:labelKey|group):\s*(['"])([^'"]+)\1/g))
       if (DOTTED_KEY_RE.test(m[2])) dataKeys.add(m[2]);
     for (const m of text.matchAll(/searchKeys:\s*\[([^\]]*)\]/g))
@@ -213,14 +284,20 @@ for (const file of walk(SRC)) {
 }
 
 // ---------- 判定 ----------
-let zh, en;
+let zh, en, zhFiles, enFiles;
 try {
-  zh = parseLocale(LOCALES.zh);
-  en = parseLocale(LOCALES.en);
+  zhFiles = localeFiles("zh-CN");
+  enFiles = localeFiles("en");
+  zh = parseLocalePackage(zhFiles);
+  en = parseLocalePackage(enFiles);
 } catch (e) {
   console.error(`check-i18n: 解析失败（不放行）：${e.message}`);
   process.exit(2);
 }
+// 包形态读数打出来 = 让"闸确实读到了目录里的 N 个域文件"这件事在门禁日志里可见
+// （历批口径：读数必须说破，不能只报一个 891=891 就当作它知道文件长什么样）。
+console.log(`check-i18n: 语言包形态 = zh ${zhFiles.length} 文件 / en ${enFiles.length} 文件`
+  + `（${zhFiles.length > 1 ? rel(dirname(zhFiles[0])) + "/" : rel(zhFiles[0])}）`);
 
 const setDiff = (a, b) => [...a.keys()].filter((k) => !b.has(k)).sort();
 const onlyZh = setDiff(zh, en);
@@ -240,7 +317,10 @@ if (missing.length) {
   fail = 1;
   console.error(`check-i18n: ${missing.length} 个被引用的键在语言包里不存在（界面直显裸键名）`);
   for (const k of missing) console.error(`  缺：${k}`);
-  console.error("  → 在 desktop/src/locales/{zh-CN,en}.ts 同位补键，或改引用点键名。");
+  // 报错教学里的路径必须来自**实际读到的位置**（批 A 的 M-10 同族：写死的提示在拆完目录后
+  // 会指向一个不存在的文件，把人引到错地方）。
+  console.error(`  → 在 ${rel(zhFiles[0])}${zhFiles.length > 1 ? "（及其同目录的域文件）" : ""}`
+    + ` 与 ${rel(enFiles[0])} 同位补键，或改引用点键名。`);
 }
 
 // 「死前缀」断言（v2.168 批 F-18 新立）：上面的豁免只解决「键是拼出来的、静态扫不见」，
