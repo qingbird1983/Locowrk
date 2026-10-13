@@ -109,6 +109,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             cache_hit_alert: s.developer.cache_hit_alert,
             cache_diagnostics: s.developer.cache_diagnostics,
             cache_hit_alert_percent: s.developer.cache_hit_alert_percent,
+            organize_max_rerun: s.developer.organize_max_rerun,
             organize_rebound_k: s.developer.organize_rebound_k,
             organize_rebound_m: s.developer.organize_rebound_m,
             memory_manager_timeout_secs: s.developer.memory_manager_timeout_secs,

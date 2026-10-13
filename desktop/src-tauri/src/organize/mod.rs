@@ -208,8 +208,40 @@ impl Organizer {
         // M4 自动收起（§8.3 空间急救）：先于整理判定——泄压不依赖触发。
         self.auto_collapse(session, session_id);
         if let Some(task) = self.plan_auto(session, session_id) {
+            // 连续补跑的账在**这里**清（队列 Q6 · 判据 `natural_trigger_resets_the_rerun_budget`）：
+            // 能走到这句 = 一次**新的自然触发**到了，说明整理跟得上对话节奏 ⇒ 熔断上限重新计。
+            // 不写进 `plan_auto` 内部，是因为补跑路径也调 `plan_auto`——写在那里面就等于
+            // 续跑自己抹自己的账，上限永远打不到（变异 M3 的靶）。
+            self.clear_rerun_streak(&task.workspace, &task.session_id);
             self.spawn(task);
         }
+    }
+
+    /// 从磁盘会话日志重读会话（队列 Q6：补跑用得上，形状照崩溃恢复那条通路）。
+    /// 定位失败 / 日志已删 = `None`，调用方按"诚实放弃"处理。
+    /// ⚠ `recovery.rs` **没有**复用这里：它要把「定位失败」与「日志已删」分成两条
+    /// 不同的 warn、各记一条 `aborted` 台账——撤占位是同一件事，取证文案不是，
+    /// 合成就丢了粒度（同一对 API 被两处调用 ≠ 同一逻辑写两遍）。
+    fn session_of(&self, session_id: &str) -> Option<Session> {
+        let path = session_store::session_file(&self.sessions_dir, session_id).ok()?;
+        session_store::load_session(&path).ok().map(|(s, _)| s)
+    }
+
+    /// 复位连续补跑账（含消费掉「待整理」标记）。
+    ///
+    /// 为什么这次触发可以顺手清标记：`plan_auto` 在途期只会记标记并返回 `None`，
+    /// 所以能走到这里的必然是「没有在途任务」的轮次，而它产出的材料是从游标起的
+    /// **整条尾巴**——被标记的那次触发想整理的内容天然包含在里面，清掉不丢账。
+    /// 投影本来就声明为可丢（`MemoryTree::organize_needed` 的头注），这里只是让它
+    /// 在"已经补上了"的时刻干净。
+    fn clear_rerun_streak(&self, workspace: &str, session_id: &str) {
+        let mut tree = self.load_tree(workspace, session_id);
+        if tree.rerun_streak == 0 && !tree.organize_needed {
+            return; // 正常节奏下绝大多数轮次都是零：不做无谓的投影往返
+        }
+        tree.rerun_streak = 0;
+        tree.organize_needed = false;
+        self.tree_store.save(&tree).ok();
     }
 
     /// F1 tree.md 同步（文件化设计 §3：整理收束 → 更新人读层）：投影保存

@@ -9,11 +9,13 @@
 //! `views`（观测与编辑面）· `tools`（检索与历史工具）· `summary`（轮级总结）。
 //! 夹具是 tests 的私有项，子簇经 `use super::*;` 取用（形状照 `settings/tests/` 先例，
 //! **可见性零改动**）；用例本体逐字搬运，一条断言未增删。
+//! 队列 Q6（CB §7.1/§8）加 `rerun`（在途期记标记、收束即补跑、连续补跑上限与复位）。
 
 mod fact_cards;
 mod overflow;
 mod pipeline;
 mod recovery;
+mod rerun;
 mod summary;
 mod tail;
 mod tools;

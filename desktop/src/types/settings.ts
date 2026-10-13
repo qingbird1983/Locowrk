@@ -144,6 +144,8 @@ interface DeveloperView {
   recorderMaxRetries: number;
   /** 规则切分块（token，5K–50K 缺省 20K）。 */
   ruleChunkTokens: number;
+  /** 在途收束后允许连续补跑几次（队列 Q6，0–10 缺省 3；0 = 关掉补跑）。 */
+  organizeMaxRerun: number;
 }
 
 /** 开发者选项区部分更新：字段缺省 = 保持不变。 */
@@ -159,6 +161,7 @@ export interface DeveloperUpdate {
   recorderTimeoutSecs?: number;
   recorderMaxRetries?: number;
   ruleChunkTokens?: number;
+  organizeMaxRerun?: number;
 }
 
 /** 网络代理档（§8.5）：system / direct / custom（custom 必带 url）。 */

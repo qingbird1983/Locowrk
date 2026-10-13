@@ -100,6 +100,21 @@ pub struct MemoryTree {
     /// 反弹熔断命中：暂停自动整理（手动 `/整理` 不受限且复位）。
     #[serde(default)]
     pub paused_auto: bool,
+    /// 在途期到达但被丢弃的触发（《Context Budget Closure》§8.1 · 队列 Q6）：
+    /// `pending` 在位时 `plan_auto` 不再静默 return，命中判定就把它置 `true`，
+    /// 任务收束后立即补跑一次，不等下一轮 `after_turn`。
+    /// ⚠ **不是真源**（§8.3 明写的性质，下一个人别把它当强一致状态）：投影丢了
+    /// 就丢了，下一轮 `after_turn` 会按同一个纯函数重新判定；它省的是「用户停止
+    /// 发消息后就没有下一轮」这一段盲区。
+    #[serde(default)]
+    pub organize_needed: bool,
+    /// 连续补跑计数（§12.2 要求的那本账）：每次由标记驱动的续跑 +1，任何一次
+    /// **非补跑**的正常自动触发即清零（= 复位条件是"整理跟得上"，不是"时间过去了"）。
+    /// 到上限不再补跑——模型全挂时「收束→立刻再跑→再失败」不能变成无界循环。
+    /// 与 `rebound` 分开记：那本账的语义是「整理后占用立刻再超」的烧钱信号，
+    /// 塞待办进去会让 `paused_auto` 的翻转判据失真（§8.1「为什么不复用」）。
+    #[serde(default)]
+    pub rerun_streak: u32,
     #[serde(default)]
     pub history: Vec<OrganizeRecord>,
 }
@@ -126,6 +141,8 @@ impl MemoryTree {
             pending: None,
             rebound: ReboundState::default(),
             paused_auto: false,
+            organize_needed: false,
+            rerun_streak: 0,
             history: Vec::new(),
         }
     }

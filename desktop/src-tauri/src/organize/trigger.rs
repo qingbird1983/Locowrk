@@ -5,8 +5,8 @@
 //! 执行管道在 task.rs，空间急救在 collapse.rs。
 
 use memory_tree::{
-    build_items, should_auto_organize, MaterialItem, OrganizeReason, Pacing, ReboundDecision,
-    TriggerInput,
+    build_items, should_auto_organize, MaterialItem, MemoryTree, OrganizeReason, Pacing,
+    ReboundDecision, TriggerInput,
 };
 use session_store::Session;
 
@@ -59,7 +59,26 @@ impl super::Organizer {
                 }
             }
         }
-        if tree.paused_auto || tree.pending.is_some() {
+        if tree.paused_auto {
+            // 熔断暂停期间连「待整理」标记都不记：§8.4 立的是「补跑不是绕过熔断的
+            // 后门」，记了标记就等于给暂停中的会话排了一次自动续跑。
+            return None;
+        }
+        if tree.pending.is_some() {
+            // **在途期不丢触发**（《Context Budget Closure》§7.1 · 队列 Q6）。这句原来是
+            // `if tree.paused_auto || tree.pending.is_some() { return None; }` 的一半，
+            // 等于「整理在跑的最坏 240s 里新到的触发直接蒸发——不排队、不记账、不补跑」。
+            // 现在命中判定就把 `organize_needed` 记进投影，任务收束后立即补跑（task.rs）。
+            //
+            // ⚠ 判定**复用同一个纯函数**而不是照稿内 §8.2 的措辞在这里另写一句
+            // 「anchor 超阈值」：那句话只覆盖 `Batch` 档，`IncrementalChunk` 档的触发
+            // 条件是尾巴增量 token，自造第二套口径正是稿 §11 点名的「阈值口径不一致」
+            // 那个坑（变异 M7 打的就是"这里退成只看 anchor"这一刀）。
+            let (_, inp) = self.trigger_input(session, &tree);
+            if should_auto_organize(&inp).is_some() {
+                tree.organize_needed = true;
+                self.tree_store.save(&tree).ok();
+            }
             return None;
         }
         // ⚠ **尾巴切片**而不是全量事件（Q3b 主修，见 `Organizer::tail_material`）：
@@ -67,18 +86,8 @@ impl super::Organizer {
         // 「把整段对话当未整理的尾巴」——第二次整理实测 items=7、`event` 区间 [6,12]、
         // 收束后游标 13（会话只有 7 条事件）。附带后果是 `tail_tokens` / `tail_events`
         // 两项读数失实 ⇒ `should_auto_organize` 的阈值与增量档判定跟着失实。
-        let (tail, base) = Self::tail_material(session.events(), tree.chaptered_until);
-        let items = build_items(tail, base);
-        let tail_tokens: u64 = items.iter().map(|i| i.tokens).sum();
-        let (anchor_tokens, _) = Self::anchor(session);
-        let reason = should_auto_organize(&TriggerInput {
-            anchor_tokens,
-            threshold_tokens: self.settings.organize_threshold_tokens(),
-            pacing: Pacing::parse(&mem.organize_pacing),
-            chunk_tokens: mem.organize_chunk_tokens,
-            tail_tokens,
-            tail_events: items.len(),
-        })?;
+        let (items, inp) = self.trigger_input(session, &tree);
+        let reason = should_auto_organize(&inp)?;
         // 反弹熔断（§5.5）：连续 m 次反弹 → 暂停本会话自动整理并跳过本次
         let users_total = memory_tree::user_count(session.events());
         if tree.on_auto_trigger(users_total, dev.organize_rebound_k, dev.organize_rebound_m)
@@ -103,6 +112,36 @@ impl super::Organizer {
             users_total,
             reason,
         })
+    }
+
+    /// 触发判定的输入装配（队列 Q6 收成一处）：**在途支与常规支共用同一个**
+    /// `(材料项, TriggerInput)`——稿 §11 立的纪律是「整理用绝对 token、自动收起用
+    /// 百分比，改一处要两处对齐」，同一把尺子写两遍就是它的反面。常规支拿 items 进
+    /// `TaskPayload`，在途支只取判定结果（items 传出去也没人用）。
+    fn trigger_input(
+        &self,
+        session: &Session,
+        tree: &MemoryTree,
+    ) -> (Vec<MaterialItem>, TriggerInput) {
+        let mem = self.settings.memory();
+        let (tail, base) = Self::tail_material(session.events(), tree.chaptered_until);
+        let items = build_items(tail, base);
+        let tail_tokens: u64 = items.iter().map(|i| i.tokens).sum();
+        // 先取长度再移交 `items`：结构体字面量里 `items` 已经是移动进返回值的第一位，
+        // 同一表达式里再 `items.len()` 就是 use-after-move（E0382，本批编译期抓到的）。
+        let tail_events = items.len();
+        let (anchor_tokens, _) = Self::anchor(session);
+        (
+            items,
+            TriggerInput {
+                anchor_tokens,
+                threshold_tokens: self.settings.organize_threshold_tokens(),
+                pacing: Pacing::parse(&mem.organize_pacing),
+                chunk_tokens: mem.organize_chunk_tokens,
+                tail_tokens,
+                tail_events,
+            },
+        )
     }
 
     /// 手动 `/整理`（不受熔断限制且复位熔断态，§3.36①）。

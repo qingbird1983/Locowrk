@@ -40,6 +40,12 @@ impl super::Organizer {
         }
         let started = std::time::Instant::now();
         let outcome = self.pipeline(&task, started).await;
+        // **收束即补跑**（《Context Budget Closure》§7.1② · 队列 Q6）：这一刀必须落在
+        // `inflight` **释放之前**——去重锁还在手里，"补跑"与"下一轮 after_turn 又 spawn
+        // 一个"天然互斥，稿内要求的「走去重路径、不新增并发面」就是这么实现的
+        // （变异 M4 打的是"把这句挪到 remove 之后"，判据钉的是源码顺序而不是线程时序）。
+        self.rerun_while_marked(&task.workspace, &task.session_id)
+            .await;
         self.inflight
             .lock()
             .expect("inflight poisoned")
@@ -51,6 +57,60 @@ impl super::Organizer {
                 ms = elapsed_ms(&started), "整理收束"
             ),
             Err(e) => tracing::warn!(session = %task.session_id, "整理未收束: {e}"),
+        }
+    }
+
+    /// 标记驱动的续跑循环（§7.1② + §12.2 的连续失败熔断）。三个刻意的形状：
+    ///
+    /// ① **串行而不是 spawn**：与首跑同一条 await 链、`inflight` 在手，测试可以
+    ///    await 到终态再断言。历批 Q5 刚写过「并发用例的证据强度依赖并发压力」⇒
+    ///    能做成确定性的就不要做成竞态。
+    /// ② **材料从磁盘会话日志重读**（`Organizer::session_of`，与崩溃恢复同一把钥匙）：
+    ///    续跑发生在后台任务里，手上没有 `&Session`。⚠ 如实边界：桌面是**每 step 批量
+    ///    落盘**，磁盘态最多落后内存半轮 ⇒ 续跑判定读到的 anchor 只可能**偏小**，
+    ///    方向是保守的（宁可少补一次，不会凭空多烧一次整理）。
+    /// ③ **上限复位条件不是"时间过去了"**：`rerun_streak` 只在**新的自然触发**
+    ///    （`after_turn` 那条路径）清零，不在本函数里清——否则补跑自己把自己的账
+    ///    抹掉，上限形同虚设（变异 M3 打的就是这一刀）。到上限时**保留标记**：
+    ///    熔断只该挡住"这一串续跑"，不该把已记账的触发再丢掉。
+    async fn rerun_while_marked(self: &Arc<Self>, workspace: &str, session_id: &str) {
+        let limit = self.settings.developer().organize_max_rerun;
+        loop {
+            let mut tree = self.load_tree(workspace, session_id);
+            if !tree.organize_needed {
+                return;
+            }
+            if tree.rerun_streak >= limit {
+                tracing::warn!(
+                    session = %session_id, streak = tree.rerun_streak, limit,
+                    "整理连续补跑已达上限：本轮不再补跑（标记保留，等新触发的自然轮次）"
+                );
+                return;
+            }
+            tree.organize_needed = false;
+            tree.rerun_streak += 1;
+            if self.tree_store.save(&tree).is_err() {
+                return; // 投影写不进去就别再烧一次整理
+            }
+            let Some(session) = self.session_of(session_id) else {
+                tracing::warn!(session = %session_id, "补跑放弃：会话日志不可读（已删或定位失败）");
+                return;
+            };
+            // 判定与首跑**共用 `plan_auto`**（同一个纯函数、同一条溢出/熔断顺序），
+            // 这里不另写第二套阈值口径。
+            let Some(task) = self.plan_auto(&session, session_id) else {
+                continue; // 这一轮判下来不该整理（标记已消费，下一句就退出）
+            };
+            let started = std::time::Instant::now();
+            let streak = tree.rerun_streak;
+            match self.pipeline(&task, started).await {
+                Ok((mode, status, chapters, usage)) => tracing::info!(
+                    session = %session_id, %mode, %status, chapters, streak,
+                    input = usage.input, output = usage.output,
+                    ms = elapsed_ms(&started), "整理补跑收束"
+                ),
+                Err(e) => tracing::warn!(session = %session_id, streak, "整理补跑未收束: {e}"),
+            }
         }
     }
 

@@ -940,6 +940,7 @@ markdown 本地链接自检 73 条 broken 0（脚本 tmp/v149-linkcheck.mjs，�
 | T12 | 批 G：`cargo clean` 两份 `target/`（约 **57 GB**） | 环境（不入库） | **需明确同意**（不可逆时间成本；Q8 已二次确认推迟） | 全部批次收口之后 | 后续每批都要跑全量 cargo 门禁，中途 clean = 给自己加几十分钟重编 × 批次数 |
 | T13 | 批 H：工具级取消与 deadline 真接线（D2） | `crates/plugin-api` + desktop | **需设计稿先行** | — | §1 批 H 行的原口径不变 |
 | T14 | 批 V：逐批验收与证据核对 | — | 无 | 用户抽查任一批时 | 需要的是"按批出验收清单"，不是新改动 |
+| T15 | `settings/update.rs` 其余分区同样在编排点就地铺开（context / memory / llm / embedding…）——本批只把 **developer 一段**（78 行）搬进 `DeveloperSettings::apply_update`，因为加完 `organizeMaxRerun` 后该文件 401 行被 `check_length` 判成新增超限件 | `desktop/src-tauri/src/settings/update.rs` | 无（纯结构收敛，零行为变化） | 下一刀动设置面任意分区时（那时同批把该分区的校验+应用一并归位，并复跑既有设置测试证等价） | 本批只做 developer 一段是刻意的：**不顺手扩大改动面**；搬移的等价做法已在 v2.190 留痕（机械两条变换 + 自检归一后字符序列相等） |
 
 **在册队列状态（收口事实）**：§1 的批 A–E、批 F 的全部**不需裁定**项（F1–F15 + 子批共三十一刀）、
 批 F-23 的 M-24 b/c/d、批 F-24a/b 的 M-18 全七条、批 F-24c 的拆分欠账 —— **均已落地并提交**。

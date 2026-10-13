@@ -281,75 +281,10 @@ impl SettingsStore {
             super::chat::apply_update(&mut next.chat, u)?;
         }
         if let Some(u) = developer {
-            // v2.49 开发者选项：布尔开关无范围校验；危险开关缺省全关由
-            // Default 保证，这里只做显式覆盖
-            if let Some(e) = u.unlocked {
-                next.developer.unlocked = e;
-            }
-            if let Some(e) = u.allow_delete_running_session {
-                next.developer.allow_delete_running_session = e;
-            }
-            if let Some(e) = u.allow_switch_running_session {
-                next.developer.allow_switch_running_session = e;
-            }
-            // M0 观测：命中率告警开关 + 阈值
-            if let Some(e) = u.cache_hit_alert {
-                next.developer.cache_hit_alert = e;
-            }
-            // M6.1 前缀断裂诊断开关（缺省关）
-            if let Some(e) = u.cache_diagnostics {
-                next.developer.cache_diagnostics = e;
-            }
-            if let Some(p) = u.cache_hit_alert_percent {
-                if !super::developer::valid_alert_percent(p) {
-                    return Err(format!("缓存命中率告警阈值 {p}% 超出范围（1–100）"));
-                }
-                next.developer.cache_hit_alert_percent = p;
-            }
-            // M2 记忆树整理（树 v2 §15 开发者层级）：熔断 k/m / 超时 /
-            // 重试 / 规则切分块
-            if let Some(k) = u.organize_rebound_k {
-                if !super::developer::ORGANIZE_REBOUND_RANGE.contains(&k) {
-                    return Err(format!("反弹熔断 k {k} 超出范围（1–10）"));
-                }
-                next.developer.organize_rebound_k = k;
-            }
-            if let Some(m) = u.organize_rebound_m {
-                if !super::developer::ORGANIZE_REBOUND_RANGE.contains(&m) {
-                    return Err(format!("反弹熔断 m {m} 超出范围（1–10）"));
-                }
-                next.developer.organize_rebound_m = m;
-            }
-            if let Some(secs) = u.memory_manager_timeout_secs {
-                if !super::developer::MANAGER_TIMEOUT_SECS_RANGE.contains(&secs) {
-                    return Err(format!(
-                        "记忆管理器超时 {secs}s 超出范围（{}–{} 秒）",
-                        super::developer::MANAGER_TIMEOUT_SECS_RANGE.start(),
-                        super::developer::MANAGER_TIMEOUT_SECS_RANGE.end()
-                    ));
-                }
-                next.developer.memory_manager_timeout_secs = secs;
-            }
-            if let Some(n) = u.memory_manager_max_retries {
-                if !super::developer::MANAGER_MAX_RETRIES_RANGE.contains(&n) {
-                    return Err(format!(
-                        "记忆管理器重试次数 {n} 超出范围（{}–{}）",
-                        super::developer::MANAGER_MAX_RETRIES_RANGE.start(),
-                        super::developer::MANAGER_MAX_RETRIES_RANGE.end()
-                    ));
-                }
-                next.developer.memory_manager_max_retries = n;
-            }
-            if let Some(n) = u.rule_chunk_tokens {
-                if !super::developer::RULE_CHUNK_TOKENS_RANGE.contains(&n) {
-                    return Err(format!(
-                        "规则切分块 {n} 超出范围（{}–{} token）",
-                        super::developer::RULE_CHUNK_TOKENS_RANGE.start(),
-                        super::developer::RULE_CHUNK_TOKENS_RANGE.end()
-                    ));
-                }
-                next.developer.rule_chunk_tokens = n;
-            }
+            // 分区内的校验与 apply 段（约 40 行）不铺开在这里写：那个文件本批加完
+            // `organizeMaxRerun` 后到 401 行，被 `check_length` 判成新增超限件。职责归位
+            // 到 `DeveloperSettings::apply_update`（搬移是机械的，等价性见那里的注释）。
+            next.developer.apply_update(&u)?;
         }
         if let Some(u) = thinking {
             // 思考语言（docs/design/NEW/language of thought.md）：白名单

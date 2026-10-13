@@ -37,9 +37,14 @@ const form = reactive({
   pinSession: true,
   organizeReboundK: 3,
   organizeReboundM: 3,
-  recorderTimeoutSecs: 60,
-  recorderMaxRetries: 3,
+  recorderTimeoutSecs: 30,
+  recorderMaxRetries: 2,
   ruleChunkTokens: 20_000,
+  // Q6（CB §7.2）超时与重试**同调**后的缺省；⚠ 这里的初值只是"后端 view 还没到之前"
+  // 的闪现占位，真源永远是 `SettingsStore`（watch immediate 会用 view 覆盖）——
+  // 但既然写了数字就必须跟后端一致，否则改缺省改一处就会让首帧说谎（批 Q4 立的
+  // 「同一读数多处出现必须一起改」在这里的落点）。
+  organizeMaxRerun: 3,
 });
 
 watch(
@@ -60,6 +65,7 @@ watch(
     form.recorderTimeoutSecs = v.developer.recorderTimeoutSecs;
     form.recorderMaxRetries = v.developer.recorderMaxRetries;
     form.ruleChunkTokens = v.developer.ruleChunkTokens;
+    form.organizeMaxRerun = v.developer.organizeMaxRerun;
   },
   { immediate: true },
 );
@@ -87,6 +93,7 @@ function saveOrganize() {
     recorderTimeoutSecs: Math.round(form.recorderTimeoutSecs),
     recorderMaxRetries: Math.round(form.recorderMaxRetries),
     ruleChunkTokens: Math.round(form.ruleChunkTokens),
+    organizeMaxRerun: Math.round(form.organizeMaxRerun),
   });
 }
 
@@ -413,6 +420,18 @@ onMounted(() => void refresh());
           min="5000"
           max="50000"
           step="1000"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveOrganize"
+        />
+      </SettingsRow>
+      <!-- 队列 Q6（CB §12.2）：在途收束后的连续补跑上限，0 = 关掉补跑（只记标记） -->
+      <SettingsRow :title="t('developer.organizeMaxRerun')" :hint="t('developer.organizeMaxRerunHint')" control-id="dev-organize-rerun">
+        <input
+          id="dev-organize-rerun"
+          v-model.number="form.organizeMaxRerun"
+          type="number"
+          min="0"
+          max="10"
           class="lw-field lw-field-num px-2 text-xs"
           @change="saveOrganize"
         />

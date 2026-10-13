@@ -64,6 +64,9 @@ export default {
     memoryManagerRetriesHint: "Falls back to rule splitting after failures (0–10).",
     ruleChunk: "Rule-split chunk",
     ruleChunkHint: "5K–50K tokens, default 20K; mechanical split at user-message boundaries.",
+    organizeMaxRerun: "Consecutive reruns",
+    organizeMaxRerunHint:
+      "How many times a finished organize may immediately rerun triggers queued while it was in flight (0–10, default 3; 0 = no rerun, wait for the next turn).",
     treePanelTitle: "Memory tree readout (current session)",
     treeEmpty: "No memory tree projection for this session yet (appears after an organize run).",
     treeChapters: "Chapters: {n} / organized cursor: event #{cursor}",

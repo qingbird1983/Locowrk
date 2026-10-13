@@ -43,6 +43,7 @@ fn dev_update_full(
             memory_manager_timeout_secs: None,
             memory_manager_max_retries: None,
             rule_chunk_tokens: None,
+            organize_max_rerun: None,
         }),
         None,
         None,
@@ -133,8 +134,12 @@ fn organize_developer_keys_roundtrip_and_validation() {
     let v = store.view().developer;
     assert_eq!(v.organize_rebound_k, 3);
     assert_eq!(v.organize_rebound_m, 3);
-    assert_eq!(v.memory_manager_timeout_secs, 60);
-    assert_eq!(v.memory_manager_max_retries, 3);
+    // Q6（CB §7.2）把「超时 × 重试」**同调**：缺省 60→30、3→2 ⇒ 在途最坏窗口
+    // 60×(1+3)=240s 收到 30×(1+2)=90s。这两行断言的改动是**正当改写既有判据**
+    // （本批的交付物之一就是改这两个缺省），不是回归；同调的不变量由
+    // `defaults_keep_the_in_flight_window_at_90_secs` 钉，防止下一批只改一个数。
+    assert_eq!(v.memory_manager_timeout_secs, 30);
+    assert_eq!(v.memory_manager_max_retries, 2);
     assert_eq!(v.rule_chunk_tokens, 20_000);
     // 更新 + 磁盘往返
     store
@@ -161,6 +166,9 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 memory_manager_timeout_secs: Some(120),
                 memory_manager_max_retries: Some(1),
                 rule_chunk_tokens: Some(30_000),
+                // Q6 新字段走同一条"写入—重开—复读"通路（缺省 3 之外给一个非缺省值，
+                // 才证明它真的被应用而不是每次都退回 Default）
+                organize_max_rerun: Some(5),
             }),
             None,
             None,
@@ -174,13 +182,15 @@ fn organize_developer_keys_roundtrip_and_validation() {
     assert_eq!(v.memory_manager_timeout_secs, 120);
     assert_eq!(v.memory_manager_max_retries, 1);
     assert_eq!(v.rule_chunk_tokens, 30_000);
-    // 校验：k/m 1–10、超时 10–600、重试 0–10、规则切分块 5K–50K
+    assert_eq!(v.organize_max_rerun, 5);
+    // 校验：k/m 1–10、超时 10–600、重试 0–10、规则切分块 5K–50K、补跑上限 0–10
     for (field, val, keyword) in [
         ("organize_rebound_k", 11, "反弹熔断 k"),
         ("organize_rebound_m", 0, "反弹熔断 m"),
         ("memory_manager_timeout_secs", 5, "记忆管理器超时"),
         ("memory_manager_max_retries", 11, "记忆管理器重试"),
         ("rule_chunk_tokens", 1_000, "规则切分块"),
+        ("organize_max_rerun", 11, "连续补跑上限"),
     ] {
         let u = DeveloperUpdate {
             organize_rebound_k: (field == "organize_rebound_k").then_some(val),
@@ -189,6 +199,7 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 .then_some(val as u64),
             memory_manager_max_retries: (field == "memory_manager_max_retries").then_some(val),
             rule_chunk_tokens: (field == "rule_chunk_tokens").then_some(val as u64),
+            organize_max_rerun: (field == "organize_max_rerun").then_some(val),
             ..Default::default()
         };
         let err = store
@@ -211,4 +222,28 @@ fn organize_developer_keys_roundtrip_and_validation() {
         assert!(err.contains(keyword), "{field}: {err}");
     }
     std::fs::remove_dir_all(&root).ok();
+}
+
+/// 在途窗口的**同调不变量**（队列 Q6 · CB §7.2 + §11 点名的坑）：缺省组合必须给出
+/// 30s × (1+2) = 90s，且超时与重试**两个数一起改**才算"缩小盲区"。
+///
+/// 为什么必须有这条：稿 §11 写的坑是「60s 超时改 30s 但重试仍 3 次，盲区没变小」——
+/// 那两个数各自看都像改过了，只有乘积能证伪。判据打在缺省常量上而不是打在用户可改的
+/// 内存态上（用户设过的值不该被本批的缺省改动判红），变异 M6 打的就是"只回退一个数"。
+#[test]
+fn defaults_keep_the_in_flight_window_at_90_secs() {
+    use crate::settings::developer as dev;
+    let worst = dev::MANAGER_TIMEOUT_SECS_DEFAULT * (1 + dev::MANAGER_MAX_RETRIES_DEFAULT as u64);
+    assert_eq!(
+        worst, 90,
+        "在途最坏窗口必须 = 30×(1+2)；只调一个数会停在 60 或 120"
+    );
+    assert_eq!(dev::MANAGER_TIMEOUT_SECS_DEFAULT, 30);
+    assert_eq!(dev::MANAGER_MAX_RETRIES_DEFAULT, 2);
+    // 补跑上限的缺省与非零语义（0 是合法值 = 关掉补跑，按可配置原则②）
+    assert_eq!(dev::ORGANIZE_MAX_RERUN_DEFAULT, 3);
+    assert!(dev::ORGANIZE_MAX_RERUN_RANGE.contains(&0));
+    assert!(dev::ORGANIZE_MAX_RERUN_RANGE.contains(&3));
+    assert!(dev::check_max_rerun(0).is_ok());
+    assert!(dev::check_max_rerun(11).is_err());
 }

@@ -64,6 +64,9 @@ export default {
     memoryManagerRetriesHint: "仍失败自动降级规则切分（0–10 次）。",
     ruleChunk: "规则切分块",
     ruleChunkHint: "5K–50K token，缺省 20K；按用户消息边界机械切分。",
+    organizeMaxRerun: "连续补跑上限",
+    organizeMaxRerunHint:
+      "整理在途时攒下的触发，收束后最多连着补跑几次（0–10，缺省 3；0 = 不补跑，等下一次对话轮次）。",
     treePanelTitle: "记忆树读数（当前会话）",
     treeEmpty: "当前会话还没有记忆树投影（触发整理后出现）。",
     treeChapters: "章节：{n} / 已整理游标：事件 #{cursor}",
