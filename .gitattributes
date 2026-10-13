@@ -1,3 +1,8 @@
 # 统一换行处理；bash 脚本强制 LF，防止 Windows 检出 CRLF 导致 hook 执行失败
 * text=auto
 *.sh text eol=lf
+# 文档也钉 LF（v2.195 第 60 条换来的根治）：`* text=auto` + core.autocrlf=true 下，HEAD 存的是 LF，
+# 而每次 checkout / clone / 部分 diff 会把工作区的 .md 写成 CRLF —— 于是"检测原行尾再 join"的脚本
+# 逐批把工作区越写越多 CR，且这份差异被 eol 规范化掩盖在 diff 之外（只有 Read / 渲染层看得见）。
+# 不钉死的话，每个取证脚本都要各自假设"工作区一定是 LF"，而那个假设会在某一次 checkout 之后失效。
+*.md text eol=lf

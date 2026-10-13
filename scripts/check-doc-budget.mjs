@@ -42,6 +42,45 @@ const ARC_DECLARE = '逐字原样';
 const errs = [];
 const rows = [];
 
+// 表格行完整性（v2.195 立、Q7c 批接进本闸）：**以 `|` 开头却不以 `|` 结尾**的行 = 断行，
+// 它会把一张表在渲染层切成两截，而六道 Rust/前端闸看不见文档，历批就靠"顺手加的文档自证"抓过一次
+// （批 Q8c 第㉕条：单反斜杠换行字面把 ROADMAP 表格从中间切断，六道闸一道都不红）。
+// 基线 = 0（Q7c 已把存量 4 处接回），今后新增即判红——这条判据的存在意义就是"不再靠人眼扫文档"。
+const TABLE_BREAK_BASELINE = 0;
+const MD_MIN = 30;                    // 扫描面**地板**，不是当前实测数（v2.195 第 62 条的教训：下限拍成
+//   60 而实测 59 ⇒ 一次完全正确的闸被判红）。"闸瞎了"由 MD_DIRS 的逐目录命中下限独家负责。
+const MD_DIRS = ['docs/design', 'docs/design/NEW', 'docs/design/archive', 'docs/reports'];
+
+function walk(dir, acc) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const abs = path.join(dir, e.name);
+    if (e.isDirectory()) walk(abs, acc);
+    else if (e.name.endsWith('.md')) acc.push(abs);
+  }
+  return acc;
+}
+
+const mdFiles = walk(path.join(ROOT, 'docs'), []);
+const breaks = [];
+for (const abs of mdFiles) {
+  const t = fs.readFileSync(abs, 'utf8').replace(/\r\n/g, '\n');
+  t.split('\n').forEach((l, i) => {
+    if (l.startsWith('|') && !l.trimEnd().endsWith('|')) breaks.push(`${path.relative(ROOT, abs)}:${i + 1}`);
+  });
+}
+const perDir = MD_DIRS.map((d) => [d, mdFiles.filter((f) => f.startsWith(path.join(ROOT, d) + path.sep)).length]);
+if (mdFiles.length < MD_MIN) {
+  errs.push(`md 扫描面 = ${mdFiles.length} < 地板 ${MD_MIN} ⇒ 表格完整性判据几乎看不见文档，闸拒绝空转`);
+}
+// 逐目录命中下限：某个档数到 0 = 遍历瞎了（目录改名 / 递归失效），比总数更能证明"这条判据是活的"
+for (const [d, n] of perDir) {
+  if (n === 0) errs.push(`扫描面里 ${d} 命中 0 份 md ⇒ 遍历瞎了，断行判据在这一档不可信`);
+}
+if (breaks.length > TABLE_BREAK_BASELINE) {
+  errs.push(`表格断行数 ${breaks.length} > 基线 ${TABLE_BREAK_BASELINE} ⇒ 新增断行：${breaks.slice(0, 8).join(' · ')}`);
+}
+
+
 function countAll(text, re) {
   // ⚠ 第一版这里写死 flags='g' ⇒ 把 re 自带的 `m` 丢了，`^###` 只匹配字符串开头，
   //   块数恒 0 —— 「块数 ≤ 窗口」就此退化成**恒真的空转判据**（历批 H1 同族，而且这次长在
@@ -86,17 +125,21 @@ for (const [rel, role] of LIST) {
 if (rows.length !== LIST.length) errs.push(`扫描面 ${rows.length} != 名单 ${LIST.length}`);
 if (!rows.some((r) => r.role === 'live')) errs.push('在役档一条都没有 = 这条闸在空转');
 
-console.log('check-doc-budget（第七道结构闸：文档预算与窗口）');
+console.log(`check-doc-budget（第七道结构闸：文档预算与窗口）`);
+console.log(`  表格完整性：扫描 ${mdFiles.length} 份 md · 断行 ${breaks.length}（基线 ${TABLE_BREAK_BASELINE}）`);
+console.log(`DOC_TABLE_BREAKS=${breaks.length} · MD_SCANNED=${mdFiles.length} · `
+  + perDir.map(([d, n]) => `${d.slice(d.lastIndexOf('/') + 1)}=${n}`).join(' '));
 for (const r of rows) {
   console.log(`  ${r.role.padEnd(10)} ${(String(r.kb) + ' KB').padStart(9)} 块 ${String(r.blocks).padStart(3)} 指针 ${r.ptrs}  ${r.rel}`);
 }
 if (process.argv.includes('--dbg')) {
   console.log(`  窗口 = ${DOC_WINDOW} 批 · 余量口径 = ${MARGIN_KB} KB/份（字节只作兜底，块数才是窗口的判据）`);
+  console.log(`  表格完整性口径：行首 \`|\` 而行尾（rstrip 后）非 \`|\` = 断行；基线 ${TABLE_BREAK_BASELINE}、md 下限 ${MD_MIN}`);
 }
 if (errs.length) {
   console.log('DOC_BUDGET_FAILED=' + errs.length);
   for (const e of errs) console.log('  ✗ ' + e);
   process.exit(1);
 }
-console.log(`check-doc-budget: OK（扫描 ${rows.length} 份 · 在役块数 ≤ ${DOC_WINDOW} · 归档声明在场）`);
+console.log(`check-doc-budget: OK（扫描 ${rows.length} 份 · 在役块数 ≤ ${DOC_WINDOW} · 归档声明在场 · md ${mdFiles.length} 份断行 ${breaks.length}）`);
 console.log('DOC_BUDGET_FAILED=0');
