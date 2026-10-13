@@ -44,7 +44,13 @@ pub fn classify_status(status: u16, body: &str) -> Failure {
             retry_after_ms: None,
         },
         400 | 413 if is_context_overflow(body) => Failure::Fatal(
-            "上下文超出模型窗口：请调低 设置 → 上下文 的压缩阈值，或新开会话后重试".into(),
+            // ⚠ 这句文案原先指「设置 → 上下文 的**压缩阈值**」（队列 Q7 · CB §7.3）。那个设置项
+            // 已随 v2.137 退役（`CtxCompact` 桌面链整条删掉，`settings/context.rs` 只剩
+            // `threshold_tokens` 作**整理**阈值），文案等于把用户指向一个空设置项。现在只许点名
+            // **当下真存在**的手段：整理阈值（调低 ⇒ 记忆树更早接管历史）、新开会话、减少单次
+            // 工具输出。判据 = `llm::tests::transport` 里那条"文案只指现役控件"（正向钉三个现存
+            // 手段、反向钉退役字样），缺任何一侧都能被改回去而测试不红。
+            "上下文超出模型窗口：请新开会话继续，或把 设置 → 上下文 的整理阈值调低（让记忆树更早接管历史），并减少单次工具输出（如 shell / fs_read 的返回量）。".into(),
         ),
         _ => {
             let snippet: String = body.chars().take(300).collect();

@@ -126,7 +126,11 @@ impl super::Organizer {
         let mem = self.settings.memory();
         let (tail, base) = Self::tail_material(session.events(), tree.chaptered_until);
         let items = build_items(tail, base);
-        let tail_tokens: u64 = items.iter().map(|i| i.tokens).sum();
+        // 尾巴 token 只许一个算法（队列 Q7）：`material::tail_tokens` 此前是"生产零调用点
+        // 的死函数"，而这里与 `organize/debug.rs` 各手算了一遍 `items.iter().map(|i| i.tokens).sum()`
+        // ⇒ 同一读数三个出处。处置不是删死函数，而是把它**救活成唯一出处**，两处手算改调它——
+        // 稿 §11「改一处要两处对齐」的纪律靠结构而不是靠人记。
+        let tail_tokens = memory_tree::material::tail_tokens(&items);
         // 先取长度再移交 `items`：结构体字面量里 `items` 已经是移动进返回值的第一位，
         // 同一表达式里再 `items.len()` 就是 use-after-move（E0382，本批编译期抓到的）。
         let tail_events = items.len();

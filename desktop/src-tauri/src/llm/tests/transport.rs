@@ -57,6 +57,33 @@ fn classify_follows_status_and_body() {
     assert!(matches!(f, Failure::Fatal(_)));
 }
 
+/// 超限文案只许点名**现役**控件（队列 Q7 · CB §7.3）。反向半边同样承重：「压缩阈值」
+/// 这个字样在 v2.137 之后已无对应设置项，文案里出现一次就是把用户指向一个空设置项；
+/// 而只判"不含退役字样"的话，把三个现存手段删掉仍然绿 ⇒ 两侧都钉。
+#[test]
+fn context_overflow_message_points_at_live_controls_only() {
+    let msg = match retry::classify_status(400, "maximum context length exceeded") {
+        Failure::Fatal(m) => m,
+        other => panic!("上下文超限必须判 Fatal（重试不会变小），实得 {other:?}"),
+    };
+    for live in ["新开会话", "整理阈值", "shell"] {
+        assert!(
+            msg.contains(live),
+            "现存手段「{live}」必须出现在文案里：{msg}"
+        );
+    }
+    for retired in ["压缩阈值", "压缩策略", "稳定期"] {
+        assert!(
+            !msg.contains(retired),
+            "退役设置「{retired}」不许再出现在文案里：{msg}"
+        );
+    }
+    assert!(
+        msg.contains("设置 → 上下文"),
+        "要给出现役设置项的可点名路径：{msg}"
+    );
+}
+
 /// 退避曲线：限流 2s×2 指数 + 抖动上界、封顶 30s、Retry-After 优先；
 /// 瞬时 1/2/4/8s 后维持 8s。
 #[test]

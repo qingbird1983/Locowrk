@@ -1,5 +1,17 @@
 //! 反向索引（树 v2 §9.2）：事件位 → 所属章节。 locate 用 range(..=e)
 //! 取前驱——事件位落在章节区间内即命中，落在章节之间（过程事件）归前一章节。
+//!
+//! **定性 = 预留待接，不是死码也不是缺陷**（队列 Q7 · v2.191 标注，形态照 `session-store`
+//! 的 `snapshot.rs` v2.148 批 D 先例）：本模块生产零调用点——`locate` 唯一的调用方是本文件
+//! 自己的两条测试。**预留件清单**：EventToChapterIndex
+//!
+//! 它对应《Memory Tree Design v2》**§9「可追溯性」**三个方向里的第二条「原文 → 所属捆
+//! （反向索引）」（稿内结构叫 `EventToBundleIndex`，本 crate 随 bundle→chapter 改名成
+//! `EventToChapterIndex`；`§9.2` 那个编号来自 v1 稿，v2 正文没有 9.2），从未接线。批 Q7 取证时
+//! 《Context Budget Closure》§7.6 把它写成"死代码"，实测它是未接线的预留件而不是坏掉的实现
+//! ⇒ 保留 + 标注，由 `scripts/check-reserved.mjs` 盯住标注与事实一致。
+//! 接上的那天要做的事：检索面得先有"给一个事件位找章节"的**消费者**——当前跨会话检索直接扫
+//! `chapter.event_range`，不建索引。
 
 use std::collections::BTreeMap;
 

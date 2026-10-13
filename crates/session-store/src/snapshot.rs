@@ -9,6 +9,12 @@
 //! 所以 `snapshot_at` / `from_snapshot` / `Upcasters` 三个入口的生产调用点
 //! 为零（`cargo` 层面它们是本 crate 对外 API，编译器不告警）。
 //!
+//! **预留件清单**：snapshot_at, from_snapshot, Upcasters
+//!
+//! （批 Q7 · v2.191 给这行加了机器闸：`scripts/check-reserved.mjs` 按清单逐项验"生产零调用点"，
+//! 一旦接上线而标注没摘就判红。上面那段自然语言叙述是全仓这个形态的正身，本批两处新标注
+//! （`memory-tree` 的 `main_prompt` 与 `index`）就是照它学的。）
+//!
 //! 接上的那天要做的事（留给未来批次，不在本轮凭空接线）：`sessions/<id>.snapshot`
 //! 落盘 + `load_session` 改「快照基线 + 其后事件回放」，并给 schema 版本演进
 //! 补真实 upcaster 链（当前只有恒等的 v1→v2）。

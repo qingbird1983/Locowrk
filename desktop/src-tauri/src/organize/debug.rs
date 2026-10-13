@@ -62,7 +62,9 @@ impl Organizer {
             chaptered_until: tree.chaptered_until,
             chapter_count: tree.chapter_count(),
             tail_events: items.len(),
-            tail_tokens_est: items.iter().map(|i| i.tokens).sum(),
+            // 与 `trigger_input` 同一个出处（队列 Q7：死函数救活成唯一算法，观测面板与
+            // 触发决策不许各算一遍同一把尺子）
+            tail_tokens_est: memory_tree::material::tail_tokens(&items),
             anchor_tokens,
             anchor_source: match anchor_source {
                 AnchorSource::LlmUsage => "llm_usage",

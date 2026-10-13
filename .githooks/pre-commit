@@ -10,7 +10,13 @@
 #   ⑥ 拆分形状           check-split-equivalence.mjs（第五道**结构**闸，v2.161 批 F-11 立：
 #                        目录式模块的 mod 声明↔文件闭合 / 测试 mod.rs 不混住用例 /
 #                        私有项不被兄弟簇引用 / 测试簇名不撞被测子模块的歧义路径）
-# ③–⑥ 只在相关文件暂存时跑（⑥ 亚秒级，其余各自约 5–10s，Windows 文件系统实测）。
+#   ⑦ 预留标注对账        check-reserved.mjs（第六道**结构**闸，v2.191 批 Q7 立：
+#                        写着「定性 = 预留待接」的件必须给得出预留件清单，且清单里的符号
+#                        在生产代码里引用点为 0；接线了没摘标注 = 判红，标注还在而件被删光
+#                        = 也判红。出处 = Q7 取证《Context Budget Closure》§7.6 那份死代码
+#                        清单——八行里四行早已删除、两行其实是历史日志的重放面，"没人盯着
+#                        一句自我声明"就是它漂了三个版本还没被发现的根因）
+# ③–⑦ 只在相关文件暂存时跑（⑥⑦ 亚秒级，其余各自约 5–10s，Windows 文件系统实测）。
 root="$(git rev-parse --show-toplevel)"
 staged="$(git diff --cached --name-only --diff-filter=ACM)"
 fail=0
@@ -44,6 +50,8 @@ fi
 if printf '%s\n' "$staged" | grep -q '\.rs$'; then
   say "拆分形状（第五道结构闸）"
   node "$root/scripts/check-split-equivalence.mjs" || fail=1
+  say "预留标注对账（第六道结构闸）"
+  node "$root/scripts/check-reserved.mjs" || fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then

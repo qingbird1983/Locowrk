@@ -243,8 +243,9 @@ PI-Desktop 的逐层串联 + 四候选名更完整，代价是实现略复杂（
 
 > ✅ **已兑现（v2.190 · 队列 Q6）**：超时与重试**同调** = 60→30、3→2 ⇒ 最坏窗口 60×(1+3)=240s → **30×(1+2)=90s**（本稿原数）。⚠ 排期表《Post-Audit Roadmap v1》§4 的 Q6 行当时写成「30s×(1+1)=最坏 60s」= 把本节的 `1+2` 压错了，已按用户 2026-10-13 裁定**照本稿取 90s**，该表 §4/§5 同批订正。
 > 交付物里加了一条**乘积不变量**判据 `settings/tests::defaults_keep_the_in_flight_window_at_90_secs`（打在缺省常量上而不是打在用户可改的内存态上）——§11 说的「在途时长只调一个数」这个坑只有乘积能证伪；**变异 M8 只回退超时一个数** ⇒ 该用例与形状判据同时见红。既有缺省断言 60/3→30/2 属**正当改写判据**，与批 Q4 立的「可调项缺省必须等于改前写死值」不冲突：那条防的是「顺手做成可调时把缺省改了」，这里是**明令改缺省**。
-
 ### 7.3 P0-C　修超限文案
+> ✅ **已兑现（v2.191 · 队列 Q7，2026-10-13）**：文案改为「上下文超出模型窗口：请新开会话继续，或把 设置 → 上下文 的**整理阈值**调低（让记忆树更早接管历史），并减少单次工具输出（如 shell / fs_read 的返回量）。」两处按实测改口：**① 本节的「判据：i18n 键同步更新（zh/en）」失实**——这句 Fatal 文案在 Rust 侧硬编码（`desktop/src-tauri/src/llm/retry.rs`），`check-i18n` 只覆盖 `desktop/src/locales`，所以本批零 i18n 键改动，判据改由新用例 `context_overflow_message_points_at_live_controls_only` 承担（正向钉三个现役手段 + 可点名路径，反向钉「压缩阈值 / 压缩策略 / 稳定期」不许出现）。**② 本节 §5 的叙述「压缩阈值已不存在」仍然成立**，且实测设置页早就不再出现该字样（`ContextSection.vue` 只剩一句解释退役史的注释）——本批要修的是**文案**而不是界面。
+
 
 **问题**：§5。
 
@@ -275,8 +276,9 @@ PI-Desktop 的逐层串联 + 四候选名更完整，代价是实现略复杂（
 **方案**：新增 waterfall 监听器，与 `MemoryInject` 同级注册（`state/mod.rs:232` 附近）。抄 PI-Desktop 的四候选名 + 逐层串联。
 
 **注意前缀缓存**：注入内容进 `system`，会改写前缀。必须与会话钉死同等对待 —— 首轮解析后按会话锁定，人改文件不重算（与 §7.1 的记忆预取缓存同纪律，`memory_inject.rs:275-328`）。
-
 ### 7.6 P3　清理死代码
+> ✅ **已兑现（v2.191 · 队列 Q7）——但按实测重分类，不照本表开工**：八行里 **6 行不能用**（逐条证据见队列 §5 的订正行）。`CtxCompact` / `CompactConfig` / `CompactStrategy` / `suggested_threshold` 早已随审计批 C 删除；`CompactionOutcome` 与 `CONTEXT_COMPACTED` **不是死码**而是历史会话日志的重放面（`projection.rs` / `notifications.rs` / `export.rs` / `commands.rs` 四条通路 + `compact/tests.rs` 的形状判据）⇒ **判定不做**；`MemoryStore::write` 已随 Q3 接进生产。真正空着的两件（`main_prompt` + 四份 `prompts/main/*.md`、`index.rs`）实测是**未接线的预留件**而不是坏掉的实现 ⇒ **不删文件**，改为照 `snapshot.rs` 的原句统一标注「定性 = 预留待接，不是死码也不是缺陷」+ `**预留件清单**：…` 行，并新立**第六道结构闸** `scripts/check-reserved.mjs` 盯住这句话与磁盘事实是否一致（本表原本没有任何判据覆盖这类声明，这是它能漂三个版本的根因）。本批另外收掉两笔同名重复：`manager::count_user_messages` 死别名删除（它的注释声称「编排层反弹账本用」，实测那个使用者从未存在）+ `material::tail_tokens` 由死函数**救活成唯一出处**（`organize/trigger.rs` 与 `organize/debug.rs` 原本各手算一遍同一个 `sum()`）。
+
 
 **别误删 `compact_messages`** —— 它仍被 `session.rs:136` 快照折叠引用，只是不再走 `CtxCompact`。
 

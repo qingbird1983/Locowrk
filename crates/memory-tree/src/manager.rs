@@ -8,7 +8,6 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use session_store::SessionEvent;
 
 use crate::chapter::{ChapterDraft, sanitize_draft};
 use crate::material::MaterialItem;
@@ -62,7 +61,16 @@ pub fn manager_prompt(family: &str) -> &'static str {
     }
 }
 
-/// 主模型提示词（M4 组装器消费；本批仅供 loader 契约完整）。
+/// **定性 = 预留待接，不是死码也不是缺陷**（队列 Q7 · v2.191 标注，形态照 `session-store`
+/// 的 `snapshot.rs` v2.148 批 D 先例）：`family_of` 的四个家族在这里各带一份
+/// `prompts/main/*.md`，而消费方 `ContextAssembler`（记忆树路线 M4）**至今不存在**，四份 md
+/// 从未被任何生产代码读过。**预留件清单**：main_prompt
+///
+/// 批 Q7 取证时《Context Budget Closure》§7.6 把这条列进"死代码清理"，实测它不是坏掉的实现
+/// 而是未接线的预留件 ⇒ 保留 + 标注，由 `scripts/check-reserved.mjs` 盯住标注与事实一致：
+/// 清单里的件一旦有了生产调用点而标注没摘 = 判红，标注还在而清单里的件被删光 = 也判红
+/// （「以预留之名长期挂着没人复验」和「接了线还标预留」是同一种说谎的两个方向）。
+/// 接上的那天：M4 组装器按 `family_of` 取词，并复看这四份提示词是否还符合当时的规范正文。
 pub fn main_prompt(family: &str) -> &'static str {
     match family {
         "claude" => MAIN_CLAUDE,
@@ -290,12 +298,11 @@ fn draft_from_items(items: &[MaterialItem]) -> ChapterDraft {
     }
 }
 
-/// 会话切片里的用户消息数（编排层反弹账本用；material 同函数的转发，
-/// 放这里省一层 import）。
-pub fn count_user_messages(events: &[SessionEvent]) -> u64 {
-    crate::material::user_count(events)
-}
-
+/// 会话切片里的用户消息数已收回**一个出处**（队列 Q7 · CB §7.6 P3）：这里原先留着一个
+/// `pub fn count_user_messages = material::user_count` 的转发别名，注释写着「编排层反弹账本
+/// 用」——实测编排层四处（`organize/trigger.rs` ×3、`organize/recovery.rs`）调的全是
+/// `memory_tree::user_count`，**注释描述的那个使用者从未存在**。一个零调用点还带着假出处的
+/// 转发，比零调用点更糟：它让下一个读者以为删了会坏事。
 mod facts;
 
 pub use facts::{FACT_TYPES, FACT_VALUE_MAX_CHARS, FactCard, fact_cards, fact_request};
