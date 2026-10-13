@@ -77,6 +77,7 @@ fn organize_threshold_update_validation_and_roundtrip() {
             Some(ContextUpdate {
                 threshold_tokens: Some(300_000),
                 usage_bar: None,
+                ..Default::default()
             }),
             None,
             None,
@@ -103,6 +104,7 @@ fn organize_threshold_update_validation_and_roundtrip() {
                 Some(ContextUpdate {
                     threshold_tokens: Some(bad),
                     usage_bar: None,
+                    ..Default::default()
                 }),
                 None,
                 None,
@@ -127,6 +129,7 @@ fn organize_threshold_update_validation_and_roundtrip() {
                 Some(ContextUpdate {
                     threshold_tokens: Some(ok),
                     usage_bar: None,
+                    ..Default::default()
                 }),
                 None,
                 None,
@@ -159,6 +162,7 @@ fn context_usage_bar_default_and_roundtrip() {
             Some(ContextUpdate {
                 threshold_tokens: None,
                 usage_bar: Some(false),
+                ..Default::default()
             }),
             None,
             None,

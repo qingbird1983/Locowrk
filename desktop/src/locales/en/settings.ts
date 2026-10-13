@@ -333,4 +333,10 @@ export default {
     usageBar: "Threshold usage bar",
     usageBarHint:
       "Thin bar at the top of the chat area; the percentage is computed against the organize threshold. Details live in the usage ring by the composer.",
+    // Q8 (CB §7.4): tool result budget — cap for one tool output entering the
+    // model context. Key carries Kib like Q4's instruction*Kib (both are KiB
+    // allowances; the frontend does no second conversion)
+    toolBudgetKib: "Tool result budget",
+    toolBudgetKibHint:
+      "Cap for a single tool output entering the model context (0–512 KiB, default 24; 0 = unlimited). Overflow is clipped only in the request sent to the model, with a note on how to re-read the rest — the session log still keeps the full output. Raising it means each turn carries more history and organizes sooner.",
   },} as const;

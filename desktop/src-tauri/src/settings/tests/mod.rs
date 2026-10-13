@@ -255,4 +255,5 @@ mod network_proxy;
 mod window;
 
 mod developer;
+mod tool_budget;
 mod tools;

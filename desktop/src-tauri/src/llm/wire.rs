@@ -21,6 +21,36 @@ pub struct WireCaps {
     pub max_output: Option<u64>,
     /// 生效上下文窗口（模型行 context_window ?? 档位 window_tokens）。
     pub ctx_window: Option<u64>,
+    /// Q8 工具结果预算（**字节**，None = 不限制）。由组装点从
+    /// `settings.context.tool_result_budget_kib` 换算带下来——KiB→字节的算式在
+    /// `settings/context.rs::tool_result_budget_bytes` 里只有一份，wire 不再
+    /// 自己乘 1024（同一读数多个出处必漂，§11）。
+    pub tool_result_budget_bytes: Option<usize>,
+}
+
+/// Q8：超预算的工具输出按字节截断，并追加一句**可续读**提示。三点是刻意的：
+/// ①只动发给模型的这一份，会话日志仍是全量真相源（回捞 / 导出 / 崩溃重放读它）；
+/// ②切点回退到 UTF-8 字符边界——中文/emoji 按字节硬切会当场 panic，这不是假设中的
+///   风险，`fs_read` 读一个中文文件就可能让边界落在多字节序列中间；
+/// ③`None`（预算 0）时逐字节原样返回 = 与改动前完全一致，这条等价关系由测试钉住。
+fn clip_tool_output(content: String, budget: Option<usize>) -> String {
+    let Some(limit) = budget else {
+        return content;
+    };
+    if content.len() <= limit {
+        return content;
+    }
+    let mut cut = limit;
+    while cut > 0 && !content.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    let total = content.len();
+    format!(
+        "{}\n\n【工具结果已按「工具结果预算」截断：原输出 {total} 字节，此处只有前 {cut} 字节。\
+         完整内容仍在本会话日志里；需要后面的部分请用同一工具的 offset / max_bytes 参数续取\
+         （该预算在 设置 → 上下文 可调，0 = 不限制）。】",
+        &content[..cut]
+    )
 }
 
 /// 预检钳制下限：估用已吃掉空间时不钳到负数，留给上下文溢出语义接管。
@@ -47,7 +77,7 @@ pub fn build_payload(
         messages.push(json!({ "role": "system", "content": sys }));
     }
     for m in &req.messages {
-        messages.push(message_value(m, assets)?);
+        messages.push(message_value(m, assets, caps.tool_result_budget_bytes)?);
     }
     let mut payload = json!({ "model": model, "messages": messages, "stream": stream });
     if stream {
@@ -271,7 +301,11 @@ fn with_image_note(output: &Value, strip: bool, note: String) -> Value {
 /// 纪律——同图同 asset 同字节 + 图片只追加在尾部 = 追加式变更）+
 /// `image_url` data URL / `file`（PDF）按 parts 序。**空 parts = 字符串
 /// content（字节与现网逐字节一致）**。
-fn message_value(m: &Message, assets: Option<&crate::assets::AssetStore>) -> Result<Value, String> {
+fn message_value(
+    m: &Message,
+    assets: Option<&crate::assets::AssetStore>,
+    budget: Option<usize>,
+) -> Result<Value, String> {
     match m {
         Message::User { content, parts } => {
             if parts.is_empty() {
@@ -332,9 +366,11 @@ fn message_value(m: &Message, assets: Option<&crate::assets::AssetStore>) -> Res
             error,
             ..
         } => {
+            // 错误支也过预算：错误正文可能带一整段 stderr/堆栈，形状与成功支
+            // 同属"一条 tool content"，只截成功支等于留一个绕开闸门的侧门。
             let content = match error {
-                Some(e) => json!({ "error": e }).to_string(),
-                None => output.to_string(),
+                Some(e) => clip_tool_output(json!({ "error": e }).to_string(), budget),
+                None => clip_tool_output(output.to_string(), budget),
             };
             Ok(json!({ "role": "tool", "tool_call_id": call_id.0, "content": content }))
         }

@@ -108,18 +108,23 @@ export interface AppearanceUpdate {
 }
 
 /** 上下文管理区投影（⑨；v2.137 整理阈值 = 绝对 token——「上下文达到
- * 多少 K 就整理」，百分比/策略/稳定期三键随 ctx-compact 桌面链退役）。 */
+ * 多少 K 就整理」，百分比/策略/稳定期三键随 ctx-compact 桌面链退役。
+ * Q8 加第三键工具结果预算：KiB 原样传，**前端不做 KiB→字节的第二套算术**，
+ * 0 = 不限制由文案承担显示）。 */
 interface ContextSettingsView {
   /** 整理阈值（绝对 token，100K–800K 缺省 100K）。 */
   thresholdTokens: number;
   /** 阈值用量进度条显隐（v4.18，缺省开）。 */
   usageBar: boolean;
+  /** 工具结果预算（KiB，0–512 缺省 24；0 = 不限制）。 */
+  toolResultBudgetKib: number;
 }
 
 /** 上下文管理区部分更新（窗口走 LlmUpdate）。 */
 export interface ContextUpdate {
   thresholdTokens?: number;
   usageBar?: boolean;
+  toolResultBudgetKib?: number;
 }
 
 /** 开发者选项区投影（v2.49）：unlocked = 分区可见（安卓式连点版本号

@@ -22,6 +22,35 @@ pub fn valid_organize_threshold(v: u64) -> bool {
     ORGANIZE_THRESHOLD_RANGE.contains(&v)
 }
 
+/// 工具结果预算缺省（24 KiB）：**一条工具输出进入模型上下文的上限**（队列 Q8 ·
+/// 《Context Budget Closure》§7.4）。取值不是拍的——真机压测会话
+/// `desktop-1791871305177` 的 `llm_usage.input = 630_329`：一条 `fs_read` 灌进
+/// 145 KiB 就能把单轮请求顶到 63 万 token，而整理只在轮末起步，于是"每轮全量
+/// 重发、慢到像卡死"。24 KiB ≈ 6k token（换算走全仓唯一粗估尺
+/// `middleware/compact.rs` 的 字节/4），够一次正常读取或命令输出，又挡得住
+/// "一次喂一整篇"。
+pub const TOOL_RESULT_BUDGET_DEFAULT_KIB: u64 = 24;
+/// 工具结果预算合法区间（0–512 KiB）。**0 = 不限制**——可配置原则②要求界面上
+/// 写死的限制必须有开关可关（关掉就是现状行为：源端各家 cap 之外不再加闸）。
+/// 上限取 512：再高就约等于关掉这一层，且会顶穿整理阈值（缺省阈值 100K token
+/// 折合 400 KiB），让"整理先于溢出"这个前提失效。
+pub const TOOL_RESULT_BUDGET_RANGE: std::ops::RangeInclusive<u64> = 0..=512;
+
+/// 工具结果预算合法性（update.rs 校验用）。
+pub fn valid_tool_result_budget(v: u64) -> bool {
+    TOOL_RESULT_BUDGET_RANGE.contains(&v)
+}
+
+/// KiB → 字节的**唯一**换算处（0 = 不限制 ⇒ `None`）。前端不做第二套算术，
+/// wire 层也不自己乘 1024——同一读数只许一个出处。
+pub fn tool_result_budget_bytes(kib: u64) -> Option<usize> {
+    if kib == 0 {
+        None
+    } else {
+        Some((kib as usize) * 1024)
+    }
+}
+
 /// `context` 区（settings.json）。字段级缺省：旧文件无此区 / 带旧键 →
 /// 新键走缺省（旧键幻影），零迁移。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -37,6 +66,10 @@ pub struct ContextSettings {
     /// 分母 = 整理阈值非窗口）：关掉后顶栏下方进度条整根不渲染（读数仍
     /// 走用量浮层）。
     pub usage_bar: bool,
+    /// 工具结果预算（KiB，缺省 24，0 = 不限制）：单条工具输出进模型上下文
+    /// 的上限，截断只发生在**发送侧**——会话日志仍存全量（它是唯一真相源，
+    /// 回捞 / 导出 / 崩溃重放都读它）。
+    pub tool_result_budget_kib: u64,
 }
 
 impl Default for ContextSettings {
@@ -45,12 +78,13 @@ impl Default for ContextSettings {
             window_tokens: None,
             threshold_tokens: ORGANIZE_THRESHOLD_DEFAULT,
             usage_bar: true,
+            tool_result_budget_kib: TOOL_RESULT_BUDGET_DEFAULT_KIB,
         }
     }
 }
 
-/// 上下文管理区投影（v2.137 起只两键——阈值即绝对值，无换算无建议值，
-/// 前端不做第二套算术）。
+/// 上下文管理区投影（v2.137 起阈值即绝对值，无换算无建议值；Q8 加第三键
+/// 工具结果预算——前端不做第二套算术，0 显示成「不限制」由 UI 文案承担）。
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextSettingsView {
@@ -58,6 +92,8 @@ pub struct ContextSettingsView {
     pub threshold_tokens: u64,
     /// 阈值用量进度条显隐（缺省开）。
     pub usage_bar: bool,
+    /// 工具结果预算（KiB，0 = 不限制）。
+    pub tool_result_budget_kib: u64,
 }
 
 /// 上下文管理区部分更新（settings_set 入参）。
@@ -66,4 +102,5 @@ pub struct ContextSettingsView {
 pub struct ContextUpdate {
     pub threshold_tokens: Option<u64>,
     pub usage_bar: Option<bool>,
+    pub tool_result_budget_kib: Option<u64>,
 }

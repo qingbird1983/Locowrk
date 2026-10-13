@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
  * 设置分区：上下文管理（settings.json `context` 区，⑨）。v2.137（用户
- * 裁定「上下文根本不压缩了」）：唯一旋钮 = 整理阈值（绝对 token，
- * 100K–800K 每 100K 一档）——对话上下文达到该 token 数触发记忆树整理；
- * 旧「压缩阈值（百分比）/ 压缩策略 / 稳定期」随 ctx-compact 桌面链退役。
+ * 裁定「上下文根本不压缩了」）：整理阈值（绝对 token，100K–800K 每 100K
+ * 一档）——对话上下文达到该 token 数触发记忆树整理；旧「压缩阈值（百分比）
+ * / 压缩策略 / 稳定期」随 ctx-compact 桌面链退役。Q8（CB §7.4）加第二根
+ * 旋钮 = 工具结果预算（KiB，0 = 不限制）：它挡的是「一条工具输出灌进上下文」
+ * 这件事，与阈值管「多久整理一次」是两回事，所以本区不再只有一根旋钮。
  * 滑动时气泡跟随显示当前档位（100K…800K）。保存即生效（下一轮触发判定
- * 读设置，runner UsagePolicy 同源）。
+ * 读设置，runner UsagePolicy 同源；预算走 llm 组装点 → wire 发送侧）。
  * 行版式（§3.32·七 v3.5）：说明文字走行左 #detail。
  */
 import { computed, reactive, ref, watch } from "vue";
@@ -26,6 +28,8 @@ const STEP = 100_000;
 const form = reactive({
   thresholdTokens: 100_000,
   usageBar: true,
+  // Q8：工具结果预算（KiB，0 = 不限制）。原样传后端，前端不换算成字节
+  toolResultBudgetKib: 24,
 });
 
 watch(
@@ -34,6 +38,7 @@ watch(
     if (!v) return;
     form.thresholdTokens = v.context.thresholdTokens;
     form.usageBar = v.context.usageBar;
+    form.toolResultBudgetKib = v.context.toolResultBudgetKib;
   },
   { immediate: true },
 );
@@ -53,6 +58,9 @@ function save() {
   void settings.saveContext({
     thresholdTokens: Math.round(form.thresholdTokens),
     usageBar: form.usageBar,
+    // 输入框被清空时 v-model.number 给 NaN → JSON 序列化成 null → 后端按
+    // None 处理（保持不变，不是存 0）。0 只能来自用户明确填 0 = 不限制。
+    toolResultBudgetKib: Math.round(form.toolResultBudgetKib),
   });
 }
 </script>
@@ -92,6 +100,24 @@ function save() {
           @blur="dragging = false"
         />
       </div>
+    </SettingsRow>
+
+    <!-- Q8 工具结果预算（CB §7.4）：一条工具输出进上下文的上限，0 = 不限制。
+         数值档与 Q4 的 instruction*Kib 同形（数字输入 + min/max，不换算字节） -->
+    <SettingsRow
+      :title="t('settings.toolBudgetKib')"
+      :hint="t('settings.toolBudgetKibHint')"
+      control-id="context-tool-budget-kib"
+    >
+      <input
+        id="context-tool-budget-kib"
+        v-model.number="form.toolResultBudgetKib"
+        type="number"
+        min="0"
+        max="512"
+        step="8"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
     </SettingsRow>
 
     <!-- 阈值用量进度条显隐（§3.4 v4.18；v2.137 改名——分母 = 整理阈值；

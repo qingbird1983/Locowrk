@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 
 mod appearance;
 mod chat;
-mod context;
+// `pub(crate)` 而不是 `pub use` 抬那两个名字：换算处与缺省常量要被 `llm/tests` 与
+// `settings/tests` 两簇按同一条路径读（缺省档由常量算出，不在测试里手抄 24576）。
+// 走 re-export 的话非 test 目标里没人用它们 = `unused imports`，而门禁是
+// `clippy --all-targets -- -D warnings` ⇒ 本批第一次 desk_clippy 就红在这里（判据自纠④）。
+pub(crate) mod context;
 mod developer;
 mod embedding;
 mod llm;
@@ -270,6 +274,19 @@ impl SettingsStore {
             .expect("settings poisoned")
             .context
             .threshold_tokens
+    }
+
+    /// 后端专用：工具结果预算（队列 Q8 · CB §7.4）——**字节**数，`None` = 不
+    /// 限制。KiB→字节的换算只在 `settings/context.rs` 那一份里，wire / 组装点
+    /// 都读这里，不再各自乘 1024（§11「同一读数只许一个出处」）。
+    pub fn tool_result_budget_bytes(&self) -> Option<usize> {
+        let kib = self
+            .inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .tool_result_budget_kib;
+        context::tool_result_budget_bytes(kib)
     }
 
     /// 后端专用：记忆注入活配置（MemoryInject 共享锁的内容物，⑪）。

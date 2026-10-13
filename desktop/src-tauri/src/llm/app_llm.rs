@@ -222,7 +222,14 @@ impl AppLlm {
         // 模型行能力（settings 钉死面）：按生效模型名在 路由档（批 F）/
         // 覆盖档 / 活动档 的 models 里找；窗口 = 模型行 context_window ??
         // 档位 window_tokens
-        let mut caps = WireCaps::default();
+        // Q8 工具结果预算：组装点带下来（内核读不到 settings，与 instruction 链预算同款
+        // 注入形状）。写进初始化器而不是 `let mut caps = default()` 之后再赋一格：
+        // clippy 的 field_reassign_with_default 在 `-D warnings` 下是硬错（本批首跑红过）。
+        // 这里只取"是否限制"，KiB→字节的换算不在本文件做第二次。
+        let mut caps = WireCaps {
+            tool_result_budget_bytes: self.settings.tool_result_budget_bytes(),
+            ..Default::default()
+        };
         let mut image_pin = None;
         let llm_cfg = self.settings.llm_config();
         let route = Self::route_of(&req);

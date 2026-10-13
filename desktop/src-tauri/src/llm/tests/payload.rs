@@ -246,6 +246,7 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
     let caps = WireCaps {
         max_output: Some(5_000),
         ctx_window: None,
+        ..Default::default()
     };
     let p = build_payload("m", &req, true, Dialect::None, &caps, None).unwrap();
     assert_eq!(p["max_tokens"], 5_000);
@@ -254,6 +255,7 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
     let caps = WireCaps {
         max_output: Some(5_000),
         ctx_window: Some(100_000),
+        ..Default::default()
     };
     let p = build_payload("m", &req, true, Dialect::None, &caps, None).unwrap();
     assert_eq!(p["max_tokens"], 5_000);
@@ -262,6 +264,7 @@ fn max_tokens_only_when_pinned_and_preflight_clamped() {
     let caps = WireCaps {
         max_output: Some(5_000),
         ctx_window: Some(2_000),
+        ..Default::default()
     };
     let p = build_payload("m", &req, true, Dialect::None, &caps, None).unwrap();
     assert_eq!(p["max_tokens"], 1_024);

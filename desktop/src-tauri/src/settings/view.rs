@@ -58,6 +58,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
         context: ContextSettingsView {
             threshold_tokens: s.context.threshold_tokens,
             usage_bar: s.context.usage_bar,
+            tool_result_budget_kib: s.context.tool_result_budget_kib,
         },
         memory: MemorySettingsView {
             enabled: s.memory.enabled,

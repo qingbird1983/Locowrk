@@ -11,6 +11,7 @@
 mod assets;
 mod dispatch;
 mod payload;
+mod tool_budget;
 mod transport;
 
 use std::sync::Arc;

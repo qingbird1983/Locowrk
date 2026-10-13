@@ -93,6 +93,19 @@ impl SettingsStore {
             if let Some(v) = u.usage_bar {
                 next.context.usage_bar = v;
             }
+            // Q8 工具结果预算（0–512 KiB，**0 = 不限制**）：越界一律拒绝而不是
+            // 钳到边界——`plugin-api/args.rs` 那条"钳而不报错"是**工具入参**的
+            // 纪律，设置面写的是用户意图，悄悄改掉等于骗人（他给什么就该存什么）。
+            if let Some(v) = u.tool_result_budget_kib {
+                if !super::context::valid_tool_result_budget(v) {
+                    return Err(format!(
+                        "工具结果预算 {v} 超出范围（{}–{} KiB，0 = 不限制）",
+                        super::context::TOOL_RESULT_BUDGET_RANGE.start(),
+                        super::context::TOOL_RESULT_BUDGET_RANGE.end()
+                    ));
+                }
+                next.context.tool_result_budget_kib = v;
+            }
         }
         if let Some(u) = memory {
             if let Some(e) = u.enabled {
