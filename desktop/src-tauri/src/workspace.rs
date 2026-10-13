@@ -68,8 +68,27 @@ pub fn session_context_resolver(
 }
 
 /// workspace-only 投影：同一份旁车真源的窄视图（不给围栏根）。
+///
+/// ⚠ **Q7c（v2.197）起这里就是记忆键位的唯一收口点**：视图产出的串既进 sqlite 主键
+/// （`memories.workspace`），也进**磁盘目录名**（`memory-tree/<scope_dir(ws)>` 与
+/// `memory/projects/<project_dir_name(ws)>`），而旁车里存的是用户与模型写下的**原样串**。
+/// 原先只有部分消费方各自过 `scope_key`（`memory.rs` 的注入键位、`organize/facts.rs`
+/// 的事实卡落库），树投影与 tree.md 那两条通路漏在外面 ⇒ 同一个项目在磁盘上落成**两个
+/// 目录**、各自被一条通路读写（2026-10-14 本机实测，见《Key Unification and Legacy
+/// Scope Merge v1》§1）。在源头归一 ⇒ 下游所有 `workspace_of` 调用点一次同形，
+/// 不需要各补一遍（历批「每一处调用点补一个参数」那种改动面，这里刻意不复现）。
+///
+/// **语义保持**：未归属仍是 `None`（消费方 `?` 与 `unwrap_or_default` 两种写法都不变），
+/// `Some("")` 归一成 `""`，与 `scope_key` 的既有契约同形；`fs_roots` 那半在
+/// `session_context_resolver` 里下发**原样 canonicalize 串**，本函数不碰（围栏面见
+/// `wskey` 头注「不动文件围栏的根」）。
 pub fn workspace_view(resolver: SessionContextResolver) -> WorkspaceResolver {
-    Arc::new(move |session_id: &str| resolver(session_id).workspace)
+    Arc::new(move |session_id: &str| {
+        resolver(session_id)
+            .workspace
+            .as_deref()
+            .map(|ws| scope_key(Some(ws)))
+    })
 }
 
 /// 键位归一：消费方统一入口——`None`（无会话/未归属）与 `Some("")` 都
