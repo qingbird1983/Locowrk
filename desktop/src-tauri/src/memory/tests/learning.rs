@@ -1,0 +1,202 @@
+//! L1 学习面两列（ML §3.2 · 后审计队列 Q5）：schema 迁移与"学习列不被写路径冲掉"。
+//!
+//! 本批**没有任何读取点**（拿 `hit_count` 做加权排序 = L2 / 队列 Q9），所以这些用例判的
+//! 是两件将来会被依赖的性质：①存量库能自动补列且**不丢行**、②补列之后任何写路径都不许
+//! 把学习量清零。
+
+use super::*;
+use rusqlite::Connection;
+
+/// 当前列名清单（`pragma_table_info` 的返回序 = 建表序，够用）。
+fn cols(conn: &Connection) -> Vec<String> {
+    let mut stmt = conn
+        .prepare("SELECT name FROM pragma_table_info('memories')")
+        .unwrap();
+    stmt.query_map([], |r| r.get::<_, String>(0))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+}
+
+/// 读回学习量（本批只有测试在读，生产读取点属 Q9）。
+fn learning(conn: &Connection, key: &str) -> (i64, Option<i64>) {
+    conn.query_row(
+        "SELECT hit_count, last_hit_at FROM memories WHERE key = ?1",
+        [key],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .unwrap()
+}
+
+/// 手工造库：`extra` 是给旧版 6 列表追加的列定义（半迁夹具用）。
+fn make_db(dir: &std::path::Path, rows: &str, extra: &str) {
+    std::fs::create_dir_all(dir).unwrap();
+    let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
+    conn.execute_batch(&format!(
+        "CREATE TABLE memories (
+             workspace  TEXT NOT NULL DEFAULT '',
+             key        TEXT NOT NULL,
+             value      TEXT NOT NULL,
+             tags       TEXT NOT NULL DEFAULT '',
+             updated_at INTEGER NOT NULL,
+             source     TEXT NOT NULL DEFAULT 'explicit',{extra}
+             PRIMARY KEY (workspace, key)
+         );
+         {rows}"
+    ))
+    .unwrap();
+}
+
+const ONE_ROW: &str = "INSERT INTO memories (workspace, key, value, tags, updated_at, source) \
+     VALUES ('', 'k.a', 'v-a', 't', 100, 'explicit');";
+
+/// 旧库（本批之前的 6 列形状）首次访问补两列，**原行一个字节都不许丢**，且再访问一次
+/// 不许有动静（幂等）。学习列缺省 = `0` / `NULL`（从未被召回过）。
+#[test]
+fn legacy_db_gains_learning_columns_without_losing_rows() {
+    let dir = temp_dir("learn-migrate");
+    make_db(&dir, ONE_ROW, "");
+    let store = MemoryStore::new(&dir, test_resolver());
+    let rows = store.list("", 50).unwrap();
+    assert_eq!(rows.len(), 1, "迁移不许丢行");
+    assert_eq!(rows[0].value, "v-a", "原值不动");
+    assert_eq!(rows[0].updated_at, 100, "原时间戳不动");
+    let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
+    let c = cols(&conn);
+    assert!(
+        c.iter().any(|x| x == "hit_count") && c.iter().any(|x| x == "last_hit_at"),
+        "{c:?}"
+    );
+    assert_eq!(learning(&conn, "k.a"), (0, None), "新列缺省");
+    // 二次访问：没有东西可迁，不许 Err、不许改字节
+    assert_eq!(store.list("", 50).unwrap().len(), 1);
+    assert_eq!(learning(&conn, "k.a"), (0, None));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 半迁状态（有 `hit_count`、无 `last_hit_at` = 两条 ALTER 中途被杀的形状）必须**自愈**。
+/// ⚠ 这条是该设计的**独有点**：判据"两列齐就跳过、缺一就整批两条都跑"的实现会在第一条
+/// 撞 `duplicate column name` ⇒ Err → ROLLBACK ⇒ 这个库永远打不开（比漏列更坏的缺陷形状）。
+#[test]
+fn half_migrated_library_self_heals_instead_of_locking() {
+    let dir = temp_dir("learn-half");
+    make_db(
+        &dir,
+        ONE_ROW,
+        "\n         hit_count INTEGER NOT NULL DEFAULT 0,",
+    );
+    let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
+    assert!(cols(&conn).iter().any(|x| x == "hit_count"));
+    let store = MemoryStore::new(&dir, test_resolver());
+    let rows = store.list("", 50).unwrap();
+    assert_eq!(rows.len(), 1, "半迁库照样能读");
+    let c = cols(&conn);
+    assert!(
+        c.iter().any(|x| x == "last_hit_at"),
+        "缺的那条要补上：{c:?}"
+    );
+    assert_eq!(learning(&conn, "k.a"), (0, None));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 学习列不许被任何写路径冲掉（ML §6.4 的白名单口径）：常规 `write`（模型与管理页共用）、
+/// 管理页 `update_value`、F2 reconcile 直写三条路径覆盖同一键位后，学习量必须原样在场。
+/// 三条现在都靠 `ON CONFLICT DO UPDATE SET` 的**显式列**天然成立，本条钉的是将来有人
+/// 把它改成整行 REPLACE / `INSERT OR REPLACE` 的那一刻。
+#[test]
+fn learning_columns_survive_every_write_path() {
+    let dir = temp_dir("learn-survive");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store = MemoryStore::new(&dir, test_resolver());
+    store.write("", "k.a", "v1", "t", "explicit").unwrap();
+    let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
+    conn.execute(
+        "UPDATE memories SET hit_count = 7, last_hit_at = 999 WHERE key = 'k.a'",
+        [],
+    )
+    .unwrap();
+
+    store.write("", "k.a", "v2", "t", "explicit").unwrap();
+    assert_eq!(
+        learning(&conn, "k.a"),
+        (7, Some(999)),
+        "write 覆盖值不清学习量"
+    );
+    store.update_value("", "k.a", "v3").unwrap();
+    assert_eq!(
+        learning(&conn, "k.a"),
+        (7, Some(999)),
+        "管理页编辑不清学习量"
+    );
+    store
+        .reconcile_upsert("", "k.a", "v4", "t", "organized", 1234)
+        .unwrap();
+    assert_eq!(
+        learning(&conn, "k.a"),
+        (7, Some(999)),
+        "reconcile 直写不清学习量"
+    );
+    assert_eq!(store.list("", 50).unwrap()[0].value, "v4", "值照旧对齐文件");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 并发首访问（4 线程 Barrier 对齐起跑）：宿主与插件开的是**同一个** `memory.sqlite3`，
+/// 四方同时首次访问一个未迁的旧库，都必须成功、都不许丢行。
+/// ⚠ 这条用例的**证据强度依赖并发压力**，实测两次都要如实记：
+///   · 摘掉 `BEGIN IMMEDIATE`（不排队）⇒ 单独跑它也红（那次 `COMMIT;` 失配即 Err）= 稳定独有点；
+///   · 摘掉等锁后的二次探针 ⇒ **整簇并发跑时它红**，但**只跑它这一条时不红**——外层探针
+///     与 BEGIN 之间的窗口需要别的线程同时压着才撞得到。所以"M1 抓到了"这件事成立，
+///     但它是**条件依赖**证据，不是稳定独有点（登记在 ROADMAP 本节边界②，不夸成闭环）。
+#[test]
+fn first_touches_race_on_one_library_all_succeed() {
+    let dir = temp_dir("learn-race");
+    make_db(&dir, ONE_ROW, "");
+    let store = Arc::new(MemoryStore::new(&dir, test_resolver()));
+    // 起点对齐：四个线程都在"库存在、列还没补"这一态上同时冲进首次访问，
+    // 否则撞车窗口太窄（2 线程时对方可能已经迁完，第二个直接走外层早退 = 空过）。
+    let start = Arc::new(std::sync::Barrier::new(4));
+    let handles = (0..4)
+        .map(|_| {
+            let s = Arc::clone(&store);
+            let b = Arc::clone(&start);
+            std::thread::spawn(move || {
+                b.wait();
+                s.list("", 50).map(|r| r.len())
+            })
+        })
+        .collect::<Vec<_>>();
+    for hd in handles {
+        assert_eq!(hd.join().unwrap(), Ok(1), "并发首访问不许失败、也不许丢行");
+    }
+    let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
+    let c = cols(&conn);
+    assert!(
+        c.iter().any(|x| x == "hit_count") && c.iter().any(|x| x == "last_hit_at"),
+        "{c:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 如实边界：删一行 = 连带删掉它的学习量（语义如此，不是漏）。管理页删除与 reconcile
+/// 删除两条路都这样，本条把它写下来，免得后来人把"行没了"当成迁移缺陷。
+#[test]
+fn deleting_a_row_takes_its_learning_with_it() {
+    let dir = temp_dir("learn-delete");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store = MemoryStore::new(&dir, test_resolver());
+    store.write("", "k.a", "v", "t", "explicit").unwrap();
+    let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
+    conn.execute(
+        "UPDATE memories SET hit_count = 3, last_hit_at = 77 WHERE key = 'k.a'",
+        [],
+    )
+    .unwrap();
+    assert!(store.delete("", "k.a").unwrap());
+    let n: i64 = conn
+        .query_row("SELECT COUNT(*) FROM memories WHERE key = 'k.a'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(n, 0, "行与学习量一起走");
+    let _ = std::fs::remove_dir_all(&dir);
+}

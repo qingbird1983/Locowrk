@@ -402,6 +402,13 @@ CREATE INDEX idx_memories_key ON memories(key);
 CREATE INDEX idx_memories_tags ON memories(tags);
 ```
 
+> ⚠ **上面这份 SQL 是历史提案，不是现役形态**（v2.189 记档）：`id` / `created_at` / `access_count` / `last_accessed_at`
+> 这几列**从未进入过 schema**（ML §0.3 已订正）。现役表 = `workspace` + `key` 复合主键、无自增 id，
+> 列集为 `workspace, key, value, tags, updated_at, source`，**v2.189（队列 Q5 · ML §3.2）起再加两列**
+> `hit_count INTEGER NOT NULL DEFAULT 0` 与 `last_hit_at INTEGER`（NULL = 从未被召回过）；存量库由
+> `ensure_learning_schema` 逐列补列（宿主与插件各一份实现，同一个 `memory.sqlite3`）。本批两列**无读写点**，
+> 写入 = L3（队列 Q9）、加权排序 = L2（同批），所以这一版的召回与注入字节逐字不变。
+
 #### 4.2.2 写入时机
 
 **第一版只做显式写入。**

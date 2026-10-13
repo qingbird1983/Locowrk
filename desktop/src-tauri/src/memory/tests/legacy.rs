@@ -1,27 +1,7 @@
-//! memory 存储单测：CRUD / 过滤 / 上限校验 / 旧库迁移 / 项目键位隔离
-//! （㉘）/ MemorySource 投影。全部走临时目录（LOCOWRK_DATA_DIR 无涉——
-//! MemoryStore 显式持目录）。
+//! 既有形状（v2.136 建簇以来累积，本批自 `memory/tests.rs` 整块搬入，
+//! 断言与顺序**一字未改**——它们的原样在场就是「加两列零行为变化」的证据）。
 
-use super::MemoryStore;
-use kernel_agent::MemorySource;
-use std::path::PathBuf;
-use std::sync::Arc;
-
-fn temp_dir(tag: &str) -> PathBuf {
-    crate::testutil::unique_dir(&format!("memstore-{}", tag))
-}
-
-/// 测试解析器：`ws-session` → 项目根，其余未归属。
-///
-/// `ws-variant-session` 给的是**同一个项目的另一种写法**（斜杠方向 + 尾分隔符），
-/// 专供 Q2（MR §6）的键位归一判据对——两个会话 id 必须落进同一个键位。
-fn test_resolver() -> crate::workspace::WorkspaceResolver {
-    Arc::new(|sid: &str| match sid {
-        "ws-session" => Some("F:/ws/a".to_string()),
-        "ws-variant-session" => Some(r"F:\ws\a\".to_string()),
-        _ => None,
-    })
-}
+use super::*;
 
 #[test]
 fn crud_roundtrip() {

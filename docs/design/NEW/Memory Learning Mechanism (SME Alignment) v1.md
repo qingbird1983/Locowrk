@@ -232,6 +232,8 @@ ALTER TABLE memories ADD COLUMN hit_count     INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE memories ADD COLUMN last_hit_at   INTEGER;   -- NULL = 从未被召回过
 ```
 
+> ✅ **已兑现（v2.189 · 队列 Q5，2026-10-13）**：两列按本节原样落地，但实现有两条稿内没写的事实——①`memories` 表**有两个实现**（宿主 `desktop/src-tauri/src/memory.rs` 与插件 `plugins-src/memory-sqlite/src/store.rs`，开同一个 `memory.sqlite3`），所以两列、两条 ALTER、迁移函数都各写了一份，一致性由 `tmp/q5-parity.mjs` 盯着；②迁移**必须逐列补缺**而不是「两列齐就跳过、缺一就两条都跑」——半迁状态（两条 ALTER 中途被杀）下后者会撞 `duplicate column name` ⇒ ROLLBACK ⇒ 那个库永远打不开。**本批不写入也不读这两列**（写入点 = §3.4 / L3，排序 = §3.3 / L2），所以用户可见差异为 0。取证经过见队列 §5 与 ROADMAP v2.189 节。
+
 **不加** `access_count`：语义与 `hit_count` 重合，且名字更容易和现役 `usage.sqlite3` 的工具
 热度混淆。命中次数与工具热度**必须分库**——一个是"这条记忆有用"，一个是"这个工具常用"，
 混在一起会互相污染（这正是 SME 战报里"召回无来源加权会被 auto.* 霸榜"的教训）。
@@ -335,10 +337,9 @@ L2 与 L3 都只改 `MemoryStore::recall()` 一处，**可合并做**（同一�
 
 ### 5.2 迁移注意
 
-- 存量库需 `ALTER TABLE`；Locowrk 侧 schema 迁移路径按 `settings` 区既有 ALTER 惯例
-  （参考 `memory.rs:159-173` 的 `CREATE TABLE IF NOT EXISTS` + 迁移注释区）。
+- 存量库需 `ALTER TABLE`；Locowrk 侧的迁移真身 = `desktop/src-tauri/src/memory.rs` 的 `ensure_workspace_schema`（**603 行起**；本稿原写的 `memory.rs:159-173` 已漂，那段现在是 `open_conn` 的建表语句）——形状是`pragma_table_info` 探针 + `BEGIN IMMEDIATE` + 等锁后**二次探针**，Q5 的 `ensure_learning_schema` 照此同形，并且**逐列**决定补哪一条（半迁状态可自愈）。插件侧 `store.rs` 是第二份实现，两侧都改、都由 `q5-parity.mjs` 钉。
 - **风险**：若用户已有多个 workspace 的 sqlite，迁移必须**逐库执行**且幂等。
-- 迁移不可逆（drop 列会丢学习数据），需在 `DESIGN.md` 的回滚说明里注明。
+- 迁移不可逆（drop 列会丢学习数据）。⚠ 原稿要求「注明在 `DESIGN.md` 的回滚说明里」**没有落点**——DESIGN.md §6 的三层回退讲的是插件版本 / 会话游标 / 补偿事务，不含磁盘表形状；Q5 裁定不为一条注记新开一章，改记在这里与 ROADMAP v2.189 节：`ADD COLUMN` 只增列不动主键，旧库升级安全；要回退只能整库重建。
 
 ### 5.3 性能
 
