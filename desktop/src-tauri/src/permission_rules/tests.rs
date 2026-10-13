@@ -65,7 +65,11 @@ fn roundtrip_add_count_clear() {
     assert_eq!(
         s.list_all(),
         vec![super::ProjectRulesView {
-            workspace: ws.to_string(),
+            // Q7d 主体（v2.199）起 `workspace` 字段 = **归一键**（与文件名同源）。
+            // 期望按 `scope_key` 现算而不是钉字面串：折叠大小写是 Windows 专属
+            // 语义，写死会得到一条 Linux 绿、Windows 红的假判据（同
+            // `workspace/tests.rs` 的口径）。
+            workspace: crate::workspace::scope_key(Some(ws)),
             allow: 2,
             deny: 0,
         }]

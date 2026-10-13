@@ -14,6 +14,18 @@
 //!   清单供手改 JSON 使用。
 //! - **读侧**：坏 JSON / 版本不识别 = 当空（宁缺勿假，与树投影同口径）；
 //!   空规则集清除时整文件删除。
+//! - **键位**（队列 Q7d 主体，v2.199）：文件名与 `workspace` 字段吃的是
+//!   [`plugin_api::wskey::normalize`] 之后的**归一键**，不是调用方喂进来的
+//!   原样串。成因 = 同一个项目的四种写法（`F:\Projects\Alpha`／
+//!   `f:/projects/alpha/`／……）在改前会是**四个规则文件**，于是「本项目
+//!   始终允许」只对其一种写法生效：换一种写法打开项目，deny 规则形同虚设、
+//!   allow 规则形同没批过（第五个键位面 = 取证稿《Approval Keyside Alignment
+//!   and Rules Store Migration v1》§4）。**归一收在本模块一处**（`keyed`）
+//!   而不是十六个调用点：规则目录只有这里能碰，收在 store 层则 `verdicts`／
+//!   `add_allow`／`clear`／`commands.rs` 的删除入口自动同形，且不需要在审批
+//!   决策里多解析一次会话上下文（M-18a「一次决策只解析一次」不破）。
+//!   存量文件的迁移面 = 文件名 + json 里的 `workspace` 字段两半，涉用户
+//!   数据目录，见同稿 §6（`list_all` 走目录遍历，与键位无关，故不改）。
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -99,13 +111,25 @@ impl PermissionRuleStore {
         }
     }
 
-    fn file_of(&self, workspace: &str) -> PathBuf {
-        self.dir
-            .join(format!("{:08x}.json", fnv1a64(workspace.as_bytes())))
+    /// 键位 → 规则文件（**本模块唯一的归一调用点**，语义见模块头「键位」条）。
+    /// 返回 `(路径, 归一键)`：后者进 json 的 `workspace` 字段，让管理页读到
+    /// 的串与文件名同源——只改文件名不改字段是一份假迁移（`list_all` 输出的是
+    /// 字段，Q7c 取证稿 §5 那条「迁移面有两半」在这里同样成立）。
+    fn keyed(&self, workspace: &str) -> (PathBuf, String) {
+        let key = plugin_api::wskey::normalize(workspace);
+        (
+            self.dir
+                .join(format!("{:08x}.json", fnv1a64(key.as_bytes()))),
+            key,
+        )
     }
 
-    fn read(&self, workspace: &str) -> Ruleset {
-        let Ok(text) = std::fs::read_to_string(self.file_of(workspace)) else {
+    fn path_of(&self, workspace: &str) -> PathBuf {
+        self.keyed(workspace).0
+    }
+
+    fn read_at(&self, path: &Path) -> Ruleset {
+        let Ok(text) = std::fs::read_to_string(path) else {
             return Ruleset::default();
         };
         match serde_json::from_str::<Ruleset>(&text) {
@@ -115,11 +139,16 @@ impl PermissionRuleStore {
         }
     }
 
-    fn write(&self, workspace: &str, rs: &Ruleset) -> Result<(), String> {
+    /// 只需路径的读侧便捷入口（`add_allow` 要同时拿归一键，走 `keyed` 一次）。
+    fn read(&self, workspace: &str) -> Ruleset {
+        self.read_at(&self.path_of(workspace))
+    }
+
+    fn write_at(&self, path: &Path, rs: &Ruleset) -> Result<(), String> {
         std::fs::create_dir_all(&self.dir)
             .map_err(|e| format!("create permissions dir failed: {e}"))?;
         let text = serde_json::to_string_pretty(rs).map_err(|e| e.to_string())?;
-        atomic_write(&self.file_of(workspace), &text)
+        atomic_write(path, &text)
     }
 
     /// 审批决策表第 ③ + ⑤ 级一次判完（M-18b）：一次读盘、一份快照。
@@ -144,7 +173,8 @@ impl PermissionRuleStore {
         content: Option<String>,
     ) -> Result<(), String> {
         let _g = self.io.lock().expect("permission rules io poisoned");
-        let mut rs = self.read(workspace);
+        let (path, key) = self.keyed(workspace);
+        let mut rs = self.read_at(&path);
         let rule = PermissionRule {
             tool: tool.to_string(),
             content,
@@ -153,14 +183,14 @@ impl PermissionRuleStore {
             rs.allow.push(rule);
         }
         rs.version = VERSION;
-        rs.workspace = Some(workspace.to_string());
-        self.write(workspace, &rs)
+        rs.workspace = Some(key);
+        self.write_at(&path, &rs)
     }
 
     /// 设置管理行：清除本项目全部规则（文件删除）。
     pub fn clear(&self, workspace: &str) -> Result<(), String> {
         let _g = self.io.lock().expect("permission rules io poisoned");
-        let path = self.file_of(workspace);
+        let path = self.path_of(workspace);
         if path.exists() {
             std::fs::remove_file(&path).map_err(|e| format!("remove rules file failed: {e}"))?;
         }

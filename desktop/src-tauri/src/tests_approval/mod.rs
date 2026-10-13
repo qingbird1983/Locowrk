@@ -3,11 +3,13 @@
 //! v2.145 追加：项目粘性规则两级（③deny / ⑤allow）+ 子会话审批改道。
 //! 批 F-14 目录化：共享假件留本文件，用例按面分簇见 `hub_basic` / `session_timeout` /
 //! `project_rules` / `child_session`；批 F-24a 追加 `ctx_parse`（M-18a 解析次数计数判据）
-//! 与 `m18_equiv`（M-18e② `is_outside` 对 HEAD 原文的等值矩阵）。
+//! 与 `m18_equiv`（M-18e② `is_outside` 对 HEAD 原文的等值矩阵）；
+//! 批 Q7d 主体（v2.199）追加 `keyside`（授权规则库的键位合一走生产链路）。
 
 mod child_session;
 mod ctx_parse;
 mod hub_basic;
+mod keyside;
 mod m18_equiv;
 mod project_rules;
 mod session_timeout;
@@ -22,6 +24,7 @@ use crate::tool_source::KernelToolSource;
 use cordis_core::Context;
 use kernel_agent::{ApprovalResolver, Kernel, LlmService, ToolCallReq, ToolSource};
 use plugin_api::ffi::CallContext;
+use plugin_api::memlayout::fnv1a64;
 use plugin_api::{CallId, Exposure, SideEffect, ToolSpec};
 use plugin_host::{PluginRegistry, RegistryToolSource};
 use serde_json::json;
@@ -57,6 +60,17 @@ fn shell_spec() -> ToolSpec {
 fn tmp_root(tag: &str) -> PathBuf {
     let dir = crate::testutil::work_dir(&format!("appr-{}", tag));
     dir
+}
+
+/// 规则库文件名（队列 Q7d 起 = **归一键**的 fnv，不是调用方喂进来的原样串）。
+/// 测试里凡"手改 JSON 注入 deny"的落点一律走它而不是自己 `format!`：把
+/// `fnv1a64("ws-A")` 写死 = 把改前的键位形状钉进判据，归一后必红（v2.199 实测
+/// 两处），而按 `scope_key` 现算在两个平台都成立。
+fn rules_file_of(workspace: &str) -> String {
+    format!(
+        "{:08x}.json",
+        fnv1a64(crate::workspace::scope_key(Some(workspace)).as_bytes())
+    )
 }
 
 /// ctx 替身：s1 / s1-sub-* 归属 ws-A（子会话改道语义的数据源），其余未归属。

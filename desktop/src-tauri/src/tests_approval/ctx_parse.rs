@@ -27,7 +27,6 @@
 
 use super::*;
 
-use plugin_api::memlayout::fnv1a64;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -79,8 +78,10 @@ fn hub_counting(
 /// 手改 JSON 注入一条 deny（UI 不产 deny，文件面生效——与
 /// `project_rules::project_deny_rule_blocks_even_in_auto_mode` 同法）。
 fn inject_deny(root: &Path, tool: &str, content: &str) {
-    let fname = format!("{:08x}.json", fnv1a64("ws-A".as_bytes()));
-    let f = root.join("data").join("permissions").join(&fname);
+    let f = root
+        .join("data")
+        .join("permissions")
+        .join(rules_file_of("ws-A"));
     let mut v: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&f).unwrap()).unwrap();
     v["deny"] = json!([{ "tool": tool, "content": content }]);
