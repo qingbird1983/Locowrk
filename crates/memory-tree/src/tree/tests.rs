@@ -17,6 +17,8 @@ fn chapter(id: &str, range: (EventId, EventId)) -> MemoryChapter {
         token_count: 0,
         pending: false,
         source: "recorder".into(),
+        summary_pending: false,
+        summary_attempts: 0,
         expanded_at: None,
         collapsed_at: None,
     }

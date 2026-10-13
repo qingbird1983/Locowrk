@@ -46,6 +46,14 @@ impl super::Organizer {
         // （变异 M4 打的是"把这句挪到 remove 之后"，判据钉的是源码顺序而不是线程时序）。
         self.rerun_while_marked(&task.workspace, &task.session_id)
             .await;
+        // **收束即补写**（队列 Q8c）：这一句同样必须落在 `inflight` **释放之前**，
+        // 理由与上一句同族——锁还在手里，补写与「下一轮 `after_turn` 又排一条
+        // `schedule_summary_backfill`」天然互斥，不新增并发面（用户 2026-10-13 对
+        // 补跑给的口径继续兑现）。刚收束的若是记录员通路，它产出的章节
+        // `source="recorder"` 不欠债（候选池为空，一句早退）；欠债的是本轮的泄压
+        // 章节与这条降级支自己。
+        self.backfill_summaries(&task.workspace, &task.session_id)
+            .await;
         self.inflight
             .lock()
             .expect("inflight poisoned")
@@ -136,12 +144,9 @@ impl super::Organizer {
         }
 
         // 记忆管理器调用：模型家族匹配提示词（§6.2；未配记忆管理器模型 = 主模型），
-        // 超时 + 重试（§5.4）
-        let model = mem
-            .memory_manager_model
-            .clone()
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| self.settings.llm().model);
+        // 超时 + 重试（§5.4）。模型对取自 `Organizer::manager_model_pair`（队列 Q8c
+        // 收成一处：这两句原本在这里各写一遍，补写通路是第三个调用方）。
+        let (model, model_override) = self.manager_model_pair();
         let system = manager_prompt(family_of(&model));
         // 事实卡（MR 稿 §5 提案 A · 队列 Q3 · v2.186）：**开关关掉时 user 段逐字节
         // 回到现役形状**——这条等价关系是判据 `facts_switch_off_…` 钉的对象，所以
@@ -163,10 +168,6 @@ impl super::Organizer {
                 fact_limit,
             ));
         }
-        let model_override = mem
-            .memory_manager_model
-            .clone()
-            .filter(|s| !s.trim().is_empty());
         let timeout = Duration::from_secs(dev.memory_manager_timeout_secs.max(1));
         let mut last_err = String::new();
         for _attempt in 0..=dev.memory_manager_max_retries {

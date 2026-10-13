@@ -210,6 +210,10 @@ impl MemoryTree {
             token_count: 0,
             pending: true,
             source: "placeholder".into(),
+            // 占位不欠摘要债：它的 summary 会在收束时被整章节替换（apply_organized
+            // 撤占位），补写通路也按 `pending` 把它排除在外。
+            summary_pending: false,
+            summary_attempts: 0,
             expanded_at: None,
             collapsed_at: None,
         };

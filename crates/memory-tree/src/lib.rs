@@ -14,6 +14,7 @@
 //! - `material`：事件切片 → 记忆管理器转录材料（`[N]` 行号标记）与估算
 //! - `manager`：记忆管理器客户端契约 + 提示词（两层目录 §6.2）+ 输出解析
 //!   校验（不合规 → 规则切分 §5.4）+ 摘要逐字保留纪律在提示词内（§5.6）
+//! - `summary`：摘要补写的树侧写路径（队列 Q8c：规则切分产物欠的那次 L1 补写）
 //! - `storage`：`memory-tree/<scope>/<session>.json` 投影持久化（原子写）
 
 pub mod chapter;
@@ -21,6 +22,7 @@ pub mod index;
 pub mod manager;
 pub mod material;
 pub mod storage;
+pub mod summary;
 pub mod tree;
 pub mod trigger;
 
@@ -29,10 +31,11 @@ pub use index::EventToChapterIndex;
 pub use manager::{
     FACT_VALUE_MAX_CHARS, FactCard, MemoryManagerClient, MemoryManagerError, MemoryManagerUsage,
     RUN_SUMMARY_MAX_CHARS, fact_cards, fact_request, family_of, main_prompt, manager_prompt,
-    parse_drafts, rule_split_drafts, run_summary,
+    parse_drafts, parse_summaries, rule_split_drafts, run_summary, summarizer_prompt,
 };
 pub use material::{MaterialItem, MaterialKind, build_items, transcript, user_count};
 pub use storage::{TreeStore, TreeSummary};
+pub use summary::ChapterSummary;
 pub use tree::{
     MemoryTree, OrganizeRecord, PendingTask, ReboundDecision, ReboundState, RunSummary,
 };

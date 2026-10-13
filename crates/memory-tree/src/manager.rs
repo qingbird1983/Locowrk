@@ -9,8 +9,9 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::chapter::{ChapterDraft, sanitize_draft};
+use crate::chapter::{ChapterDraft, SUMMARY_MAX_CHARS, sanitize_draft};
 use crate::material::MaterialItem;
+use crate::summary::ChapterSummary;
 
 use facts::split_facts_section;
 
@@ -36,6 +37,7 @@ const MAIN_DEFAULT: &str = include_str!("prompts/main/default.md");
 const MAIN_CLAUDE: &str = include_str!("prompts/main/claude.md");
 const MAIN_DEEPSEEK: &str = include_str!("prompts/main/deepseek.md");
 const MAIN_QWEN: &str = include_str!("prompts/main/qwen.md");
+const SUMMARIZER_DEFAULT: &str = include_str!("prompts/summarizer/default.md");
 
 /// 模型名 → 家族（提示词选择用）：子串匹配，其余回落 default。
 pub fn family_of(model: &str) -> &'static str {
@@ -59,6 +61,14 @@ pub fn manager_prompt(family: &str) -> &'static str {
         "qwen" => MANAGER_QWEN,
         _ => MANAGER_DEFAULT,
     }
+}
+
+/// 摘要补写员提示词（队列 Q8c）。签名与 [`manager_prompt`] 同形，但**当前只有
+/// 通用版一份**：补写任务比切分简单（不判断、只叙述），现网没测出家族差异，
+/// 所以没有为它写三张方言稿。将来测出差异 = 往 `prompts/summarizer/` 补三份 md
+/// 并在这个 match 里点名，调用方一行都不用改。
+pub fn summarizer_prompt(_family: &str) -> &'static str {
+    SUMMARIZER_DEFAULT
 }
 
 /// **定性 = 预留待接，不是死码也不是缺陷**（队列 Q7 · v2.191 标注，形态照 `session-store`
@@ -231,6 +241,50 @@ pub fn parse_drafts(
         )));
     }
     Ok(drafts)
+}
+
+#[derive(Debug, Deserialize)]
+struct RawSummary {
+    id: String,
+    summary: String,
+}
+
+/// 解析摘要补写的输出（队列 Q8c）。与 [`parse_drafts`] 有两处**故意的不同**，
+/// 各有一条理由——不是随手写的宽松：
+///
+/// - **允许少给**：补写缺哪一章，那章下次再来，磁盘上仍是那句机械摘要，什么都不丢；
+///   而记录员缺一个区间 = 目录有洞、那段历史永久不再被整理（所以那边判整批废）。
+/// - **未知 id / 空摘要 / 重复 id 逐条跳过而不是整批 Err**：补写是增益操作，
+///   模型编一个不存在的编号不该让另外五条能用的补写陪葬。落笔侧还有一道
+///   `apply_summaries` 的 id 对账（它只认树里存在的章）。
+///
+/// 全部条目都被跳过时返回空 `Vec`（仍是 `Ok`）：调用方把"空结果"按失败记账
+/// （`mark_summary_attempts`），于是这条通路最多烧到上限次数就自动收手。
+pub fn parse_summaries(
+    raw: &str,
+    ids: &[String],
+) -> Result<Vec<ChapterSummary>, MemoryManagerError> {
+    let arr_text = extract_array(raw).ok_or(MemoryManagerError::NoJson)?;
+    let arr: Vec<RawSummary> =
+        serde_json::from_str(arr_text).map_err(|e| MemoryManagerError::BadEntry(e.to_string()))?;
+    let mut out = Vec::with_capacity(arr.len());
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for r in arr {
+        let id = r.id.trim();
+        let summary = r.summary.trim();
+        if id.is_empty() || summary.is_empty() {
+            continue;
+        }
+        if !ids.iter().any(|known| known == id) || !seen.insert(id.to_string()) {
+            continue;
+        }
+        out.push(ChapterSummary {
+            chapter_id: id.to_string(),
+            // 硬钳复用记录员那把尺（同一个出处，Q8c 不再新增一个数字）
+            summary: summary.chars().take(SUMMARY_MAX_CHARS).collect(),
+        });
+    }
+    Ok(out)
 }
 
 /// 规则切分（§5.4 降级，复用现网 ctx-compact 的"切点落在 User 消息之前"

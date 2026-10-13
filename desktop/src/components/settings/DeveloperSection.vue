@@ -48,6 +48,8 @@ const form = reactive({
   // Q8b 同一条纪律：初值必须跟后端缺省常量一致（2 / 90），否则首帧说谎
   organizeMaxRelease: 2,
   organizeReleaseWatermarkPct: 90,
+  organizeSummaryChapters: 6,
+  organizeSummaryAttempts: 2,
 });
 
 watch(
@@ -71,6 +73,8 @@ watch(
     form.organizeMaxRerun = v.developer.organizeMaxRerun;
     form.organizeMaxRelease = v.developer.organizeMaxRelease;
     form.organizeReleaseWatermarkPct = v.developer.organizeReleaseWatermarkPct;
+    form.organizeSummaryChapters = v.developer.organizeSummaryChapters;
+    form.organizeSummaryAttempts = v.developer.organizeSummaryAttempts;
   },
   { immediate: true },
 );
@@ -101,6 +105,8 @@ function saveOrganize() {
     organizeMaxRerun: Math.round(form.organizeMaxRerun),
     organizeMaxRelease: Math.round(form.organizeMaxRelease),
     organizeReleaseWatermarkPct: Math.round(form.organizeReleaseWatermarkPct),
+    organizeSummaryChapters: Math.round(form.organizeSummaryChapters),
+    organizeSummaryAttempts: Math.round(form.organizeSummaryAttempts),
   });
 }
 
@@ -471,6 +477,40 @@ onMounted(() => void refresh());
           type="number"
           min="50"
           max="99"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveOrganize"
+        />
+      </SettingsRow>
+      <!-- 队列 Q8c（泄压留下的机械摘要谁来还）：轮末之后由补写通路换成模型摘要。
+           章数 0 = 关掉补写（关掉后连一次读盘都不发生，判据 =
+           backfill_off_writes_nothing_at_all）；补写只改摘要正文，目录与游标不动，
+           所以它不打断前缀缓存（判据 = backfill_keeps_the_injected_directory_byte_identical） -->
+      <SettingsRow
+        :title="t('developer.organizeSummaryChapters')"
+        :hint="t('developer.organizeSummaryChaptersHint')"
+        control-id="dev-organize-summary-chapters"
+      >
+        <input
+          id="dev-organize-summary-chapters"
+          v-model.number="form.organizeSummaryChapters"
+          type="number"
+          min="0"
+          max="20"
+          class="lw-field lw-field-num px-2 text-xs"
+          @change="saveOrganize"
+        />
+      </SettingsRow>
+      <SettingsRow
+        :title="t('developer.organizeSummaryAttempts')"
+        :hint="t('developer.organizeSummaryAttemptsHint')"
+        control-id="dev-organize-summary-attempts"
+      >
+        <input
+          id="dev-organize-summary-attempts"
+          v-model.number="form.organizeSummaryAttempts"
+          type="number"
+          min="0"
+          max="5"
           class="lw-field lw-field-num px-2 text-xs"
           @change="saveOrganize"
         />

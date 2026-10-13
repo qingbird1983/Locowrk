@@ -79,7 +79,7 @@
 
 ## 5. 本批刻意不做的两件事
 
-* **摘要后台补（Q8c）**：机械切落的章节标题/摘要来自规则切分（首条用户消息前 20 字），
+* **摘要后台补（Q8c）**〔**已随 v2.194 兑现**：通路 = `memory-tree/src/summary.rs`（债、候选、落笔）+ `desktop/src-tauri/src/organize/backfill.rs`（轮末排一次、复用同一把 `inflight` 锁）。⚠ **稿内这句按实测改口**：下面那句「只换 summary/keywords/token_count」落成了**只换 `summary`**——`keywords` 与 `token_count` 现仓只有写点没有读点，为将来的观测面接一个当前无人消费的形状正是批 Q7 抓的那类件。另一处改口 = 补写**不发 `notify_done`、不记 `OrganizeRecord`**（界面仍先看到「摘要从简」，补写是安静发生的）〕
   补写需要一条"保留 chapter_id 与 title、只换 summary/keywords/token_count"的替换通路
   ——目录行的字节形是 `[id]: [title]`，只换正文不破前缀缓存，这条边界必须先写成判据再动手。
   现役降级支（记录员失败 → 规则切分）**同样**永不补摘要，所以 Q8c 一刀能治两个来源。

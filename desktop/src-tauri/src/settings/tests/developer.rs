@@ -46,6 +46,8 @@ fn dev_update_full(
             organize_max_rerun: None,
             organize_max_release: None,
             organize_release_watermark_pct: None,
+            organize_summary_chapters: None,
+            organize_summary_attempts: None,
         }),
         None,
         None,
@@ -143,6 +145,9 @@ fn organize_developer_keys_roundtrip_and_validation() {
     assert_eq!(v.memory_manager_timeout_secs, 30);
     assert_eq!(v.memory_manager_max_retries, 2);
     assert_eq!(v.rule_chunk_tokens, 20_000);
+    // Q8c 两条缺省：一次补 6 章、每章至多试 2 次（都 > 0 = 通路默认是开的）
+    assert_eq!(v.organize_summary_chapters, 6);
+    assert_eq!(v.organize_summary_attempts, 2);
     // 更新 + 磁盘往返
     store
         .update(
@@ -175,6 +180,10 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 // 同一次持久化而不是各自另开一条读写路径
                 organize_max_release: Some(4),
                 organize_release_watermark_pct: Some(75),
+                // Q8c 同一条通路：章数给 3（缺省 6）、尝试上限给 4（缺省 2），
+                // 两个都偏离缺省才证明它们被应用而不是每次退回 Default
+                organize_summary_chapters: Some(3),
+                organize_summary_attempts: Some(4),
             }),
             None,
             None,
@@ -194,8 +203,13 @@ fn organize_developer_keys_roundtrip_and_validation() {
         v.organize_release_watermark_pct, 75,
         "Q8b 泄压水位写入—重开—复读"
     );
+    assert_eq!(v.organize_summary_chapters, 3, "Q8c 补写章数写入—重开—复读");
+    assert_eq!(
+        v.organize_summary_attempts, 4,
+        "Q8c 补写尝试上限写入—重开—复读"
+    );
     // 校验：k/m 1–10、超时 10–600、重试 0–10、规则切分块 5K–50K、补跑上限 0–10、
-    // 泄压上限 0–5、泄压水位 50–99
+    // 泄压上限 0–5、泄压水位 50–99、补写章数 0–20、补写尝试 0–5
     for (field, val, keyword) in [
         ("organize_rebound_k", 11, "反弹熔断 k"),
         ("organize_rebound_m", 0, "反弹熔断 m"),
@@ -205,6 +219,8 @@ fn organize_developer_keys_roundtrip_and_validation() {
         ("organize_max_rerun", 11, "连续补跑上限"),
         ("organize_max_release", 6, "轮内泄压上限"),
         ("organize_release_watermark_pct", 100, "泄压水位"),
+        ("organize_summary_chapters", 21, "摘要补写每次章数"),
+        ("organize_summary_attempts", 6, "摘要补写尝试上限"),
     ] {
         let u = DeveloperUpdate {
             organize_rebound_k: (field == "organize_rebound_k").then_some(val),
@@ -217,6 +233,8 @@ fn organize_developer_keys_roundtrip_and_validation() {
             organize_max_release: (field == "organize_max_release").then_some(val),
             organize_release_watermark_pct: (field == "organize_release_watermark_pct")
                 .then_some(val as u8),
+            organize_summary_chapters: (field == "organize_summary_chapters").then_some(val),
+            organize_summary_attempts: (field == "organize_summary_attempts").then_some(val),
             ..Default::default()
         };
         let err = store

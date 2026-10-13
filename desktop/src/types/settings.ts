@@ -155,6 +155,10 @@ interface DeveloperView {
   organizeMaxRelease: number;
   /** 轮内泄压的水位：占会话生效窗口的百分比（队列 Q8b，50–99 缺省 90）。 */
   organizeReleaseWatermarkPct: number;
+  /** 一次摘要补写至多处理几章（队列 Q8c，0–20 缺省 6；0 = 关掉补写）。 */
+  organizeSummaryChapters: number;
+  /** 同一章至多补写尝试几次（队列 Q8c，0–5 缺省 2；跨轮计数落投影）。 */
+  organizeSummaryAttempts: number;
 }
 
 /** 开发者选项区部分更新：字段缺省 = 保持不变。 */
@@ -173,6 +177,8 @@ export interface DeveloperUpdate {
   organizeMaxRerun?: number;
   organizeMaxRelease?: number;
   organizeReleaseWatermarkPct?: number;
+  organizeSummaryChapters?: number;
+  organizeSummaryAttempts?: number;
 }
 
 /** 网络代理档（§8.5）：system / direct / custom（custom 必带 url）。 */

@@ -2,6 +2,10 @@
 //! 原文一个字不存。`pending` / `source` 是实现追加字段（serde default，
 //! 旧投影文件兼容）——`pending` 标占位章节（§5.3 异步整理期），`source`
 //! 标生成方式（recorder / rule / placeholder，质量抽查与 A/B 用）。
+//!
+//! 队列 Q8c 再追加两个同样走 serde default 的字段：`summary_pending` 标
+//! 「这一章的 L1 摘要还是机械说明，欠一次模型补写」，`summary_attempts`
+//! 记补写试过几次（失败也落账，见 `summary` 模块的注释）。
 
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +42,17 @@ pub struct MemoryChapter {
     /// recorder / rule / placeholder。
     #[serde(default)]
     pub source: String,
+    /// **摘要债标记**（队列 Q8c）：真 = 这条 summary 还是规则切分的机械说明，
+    /// 欠一次模型补写。置位点只有一处（`from_draft` 按 `source == "rule"`），
+    /// 覆盖泄压支与记录员降级支两个来源——写第二处置位点就是第二个出处
+    /// （§11「改一处要两处对齐」的反面）。
+    #[serde(default)]
+    pub summary_pending: bool,
+    /// 补写已尝试次数（失败也落账）：到 `organize_summary_max_attempts` 就不再
+    /// 重烧模型。与 `pending::attempts`（§5.3 重投次数）分开记：那本账的语义是
+    /// 「一次整理任务被崩溃重投了几次」，塞补写进去会让崩溃恢复的观测失真。
+    #[serde(default)]
+    pub summary_attempts: u32,
     /// 最近一次被 memory_expand 的时刻（Unix 毫秒；None = 从未展开）。
     /// M4 惰性加载记账：自动收起（§8.3）按它挑「最早展开」。
     #[serde(default)]
@@ -78,6 +93,10 @@ impl MemoryChapter {
             token_count: 0,
             pending: false,
             source: source.to_string(),
+            // 规则切分的产物一律欠摘要：泄压支（Q8b）与记录员降级支（§5.4）都
+            // 经 `build_chapters(…, "rule")` 走到这一行，所以置位点只需要这一处。
+            summary_pending: source == "rule",
+            summary_attempts: 0,
             expanded_at: None,
             collapsed_at: None,
         }
@@ -148,5 +167,32 @@ mod tests {
         assert_eq!(b.source, "recorder");
         assert!(!b.pending);
         assert!(!b.title_edited_by_user);
+    }
+
+    /// 摘要债只由 `source == "rule"` 决定（队列 Q8c：置位点一处，泄压支与
+    /// 记录员降级支共用）。三种来源逐一钉住，防止将来新增第四种来源时
+    /// 顺手把债判成「非 recorder 都欠」——placeholder 不欠（它没有可补的
+    /// 内容，且补写通路本就把它排除在外）。
+    #[test]
+    fn only_rule_chapters_carry_the_summary_debt() {
+        let d = sanitize_draft("标题", "摘要", (3, 9)).unwrap();
+        for (source, debt) in [("rule", true), ("recorder", false), ("placeholder", false)] {
+            let b = MemoryChapter::from_draft(ChapterId("b1".into()), &d, source, 42);
+            assert_eq!(b.summary_pending, debt, "{source} 的摘要债判定");
+            assert_eq!(b.summary_attempts, 0, "新章节的补写计数从 0 起");
+        }
+    }
+
+    /// 旧投影无这两个键 = false / 0（serde default，零迁移）：磁盘上任何一份
+    /// Q8c 之前写的投影文件读回来都不该凭空欠债。
+    #[test]
+    fn summary_debt_fields_default_on_legacy_projection() {
+        let raw = r#"{"chapter_id":"b1","parent":null,"children":[],"title":"t","title_edited_by_user":false,"summary":"s","summary_edited_by_user":false,"event_range":[0,1],"created_at":1,"keywords":[],"token_count":0,"pending":false,"source":"rule"}"#;
+        let b: MemoryChapter = serde_json::from_str(raw).unwrap();
+        assert!(
+            !b.summary_pending,
+            "旧投影不欠债（它已经是当时那条通路的终态）"
+        );
+        assert_eq!(b.summary_attempts, 0);
     }
 }

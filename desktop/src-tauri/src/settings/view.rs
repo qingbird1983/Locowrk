@@ -118,6 +118,8 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             rule_chunk_tokens: s.developer.rule_chunk_tokens,
             organize_max_release: s.developer.organize_max_release,
             organize_release_watermark_pct: s.developer.organize_release_watermark_pct,
+            organize_summary_chapters: s.developer.organize_summary_chapters,
+            organize_summary_attempts: s.developer.organize_summary_attempts,
         },
         thinking: super::ThinkingView {
             language: s.thinking.language.clone(),

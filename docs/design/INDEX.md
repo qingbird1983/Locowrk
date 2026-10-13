@@ -44,7 +44,7 @@
 
 | 文档 | 兑现批次 |
 |---|---|
-| [NEW/In-turn Pressure Release Design.md](NEW/In-turn%20Pressure%20Release%20Design.md) | v2.193（队列 Q8b：轮内水位 + 有界同步机械泄压；⚠ §5 自陈「摘要后台补 = Q8c 未做」，实现与本稿的偏差以文内落地标注为准） |
+| [NEW/In-turn Pressure Release Design.md](NEW/In-turn%20Pressure%20Release%20Design.md) | v2.193（队列 Q8b：轮内水位 + 有界同步机械泄压；⚠ §5 自陈「摘要后台补 = Q8c 未做」，实现与本稿的偏差以文内落地标注为准） |；**§5 那条「摘要后台补 = Q8c」已随 v2.194 兑现**（落点 = `memory-tree/src/summary.rs` + `organize/backfill.rs`；稿内「只换 summary/keywords/token_count」按实测改成只换 `summary`，理由 = 那两个字段全仓只有写点没有读点）
 | [NEW/Permission Model Redesign (ZCode Alignment) v1.md](NEW/Permission%20Model%20Redesign%20%28ZCode%20Alignment%29%20v1.md) | v2.145（五条裁定全落 + 实机走查） |
 | [NEW/Prompt Assembly Layering Design.md](NEW/Prompt%20Assembly%20Layering%20Design.md) | v2.139（四批全落，偏差三条已标注）；⚠ **§4.3 指令文件层的发现规则与预算已随 v2.188（队列 Q4）扩到三族六站 + 两档链预算**（AGENTS / CLAUDE / override 三族，族内二选一、族间串联、override 排链尾 = 追加不替换；`instructionGlobalKib`/`instructionProjectKib` 8–512 缺省 100 = 原写死值），现役形态以本稿 §4.3 为准；⚠ **§5.2 的 `<memory_guidance>` After 文本已随 v2.185（队列 Q2 · MR §4.4）就地订正**——「never as a way to start a conversation」限定为「没被问到时不主动翻」并加「空结果 ≠ 没有历史」一句，**措辞真源 = `memory_inject.rs` 的 `GUIDANCE_BLOCK`**，本稿只登记演变不重复正文 |
 | [Organize Summary Design v1.md](Organize%20Summary%20Design%20v1.md) | v2.141（四层多分辨率记忆） |

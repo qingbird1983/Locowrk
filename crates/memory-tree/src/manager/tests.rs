@@ -1,5 +1,14 @@
 //! recorder 单测：输出解析校验（铺满/衔接/净化）+ 规则切分（User 边界
 //! 不断工具对）+ 提示词家族匹配。
+//!
+//! 队列 Q8c 把「摘要补写解析」拆到 `manager/tests/summaries.rs`：加完那 5 条用例本
+//! 文件顶到 401 行 = 净增一件超限，三问自检第①问答「否」（同一个文件既管记录员的
+//! 草稿解析与规则切分、又管补写的 `parse_summaries`，改钳制文本不必碰草稿面）
+//! ⇒ 拆簇，不抬 `check_length` 基线、不压注释。形状照同目录 `facts.rs` +
+//! `facts/tests.rs` 先例（宿主文件 + 同名子目录，不建 `mod.rs`）；既有 11 条用例
+//! 与夹具**一字未改**。
+
+mod summaries;
 
 use super::*;
 use crate::material::{MaterialKind, build_items, transcript};

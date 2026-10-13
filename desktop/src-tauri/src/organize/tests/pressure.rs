@@ -275,3 +275,51 @@ fn release_refuses_to_cut_when_nothing_precedes_the_turn() {
     );
     std::fs::remove_dir_all(&root).ok();
 }
+
+/// **增量档到水位也切**（批 Q8b 收口时登记的边界⑤欠账，队列 Q8c 补上）。
+/// 泄压的判定与轮末共用同一个纯函数，而 `should_auto_organize` 在 `Incremental`
+/// 档看的是**尾巴增量 token**，不是 anchor 对阈值。这里把阈值抬到绝不可能命中
+/// （100,000 而 anchor 只有 9,500）、只让增量档命中：切仍然发生。
+/// 少了这条用例，"把判定退成只看 anchor"那种改法（批 Q6 变异 M7 的靶）在增量档
+/// 下不会被任何测试抓到——它只在批量档那一支被证过一次。
+#[test]
+fn release_also_fires_on_the_incremental_pacing() {
+    let root = temp_root("pressure-incremental");
+    let settings = settings_with(
+        serde_json::json!({
+            "context": {"thresholdTokens": 100_000},
+            "memory": {"organizePacing": "incremental", "organizeChunkTokens": 20}
+        }),
+        &root,
+    );
+    let org = organizer(&root, Arc::clone(&settings), FakeClient::new(vec![]));
+    let (session, turn_start) = history_then_turn();
+
+    // 反证先立住：**同一份数字**在批量档口径下确实不该命中（anchor 9,500 <
+    // 100,000）。⚠ 这里必须手改 `pacing` 而不是"另开一个批量档 organizer"去取
+    // 现成输入：`trigger_input` 的 pacing 读自 settings，而本用例的 settings 就是
+    // 增量档，拿它当批量档的反证等于什么都没证（第一次跑就红在这一句）。
+    let (_items, mut inp) = org.trigger_input(&session, &org.load_tree(r"F:\ws\demo", "s-incr"));
+    inp.pacing = memory_tree::Pacing::Batch;
+    assert!(
+        memory_tree::should_auto_organize(&inp).is_none(),
+        "批量档口径下这条输入不该命中，否则下面的断言什么也没证明"
+    );
+    inp.pacing = memory_tree::Pacing::Incremental;
+    assert!(
+        memory_tree::should_auto_organize(&inp).is_some(),
+        "增量档口径下同一份输入必须命中（尾巴 token 过 chunkTokens）"
+    );
+
+    // 同一把尺换到增量档 ⇒ 命中；水位（9,500 / 10,000 = 95%）也过线 ⇒ 必须切
+    assert_eq!(
+        org.release_pressure(&session, "s-incr", window(), 0, turn_start)
+            .chapters(),
+        1,
+        "增量档到水位同样泄压：判定不是只看 anchor 对阈值"
+    );
+    let tree = tree_at(&root, org.settings.as_ref(), "s-incr");
+    assert_eq!(tree.chapter_count(), 1);
+    assert_eq!(tree.chapters["b1"].source, "rule", "泄压仍是机械切分");
+    std::fs::remove_dir_all(&root).ok();
+}

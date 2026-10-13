@@ -6,7 +6,8 @@
 //! plan_manual，含触发判定、溢出整理与反弹裁决）→ `task`（异步管道：记忆管理器
 //! 调用 × 超时重试 → 输出校验 → 不合规转规则切分 → 落树）；`collapse` 管空间
 //! 急救（M4 自动收起），`pressure` 管**轮内水位泄压**（队列 Q8b：step 边界同步
-//! 一次规则切分，不等模型），`events` 管对模型与界面的告知。本文件留编排器本体：
+//! 一次规则切分，不等模型），`backfill` 管**摘要补写**（队列 Q8c：泄压与记录员
+//! 降级留下的机械摘要，轮末之后换成模型摘要，只换正文不动目录），`events` 管对模型与界面的告知。本文件留编排器本体：
 //! 状态与构造、投影与台账小工具、三个门面入口、组装点构造。调用方持有会话锁
 //! 时传 `&Session`（命令层 / agent_chat / 调度引擎三入口同形）。
 //!
@@ -31,6 +32,7 @@ use crate::workspace::WorkspaceResolver;
 use crate::timeutil::now_ms;
 
 mod assemble;
+mod backfill;
 mod client;
 mod collapse;
 mod debug;
@@ -138,6 +140,28 @@ impl Organizer {
         }
     }
 
+    /// 记忆管理器用的模型对（队列 Q8c 收成一处）：
+    /// `(用于家族匹配的模型名, 下发给请求的覆盖句柄)`——没配
+    /// `memory_manager_model` 时两者分别是主模型与 `None`。
+    ///
+    /// 抽出来的理由不是"少写两行"：这两句原来在 `pipeline` 里各写了一遍
+    /// （`model` 走 `unwrap_or_else`、`model_override` 走同一个 `filter`），
+    /// 补写通路是第三个调用方 ⇒ 同一读数三个出处正是 §11 点名的形状（批 Q7
+    /// 把 `tail_tokens` 救活成唯一出处是同族处置）。判据
+    /// `manager_model_pair_is_the_only_source_of_the_aux_handle` 钉调用点数目。
+    fn manager_model_pair(&self) -> (String, Option<String>) {
+        let configured = self
+            .settings
+            .memory()
+            .memory_manager_model
+            .clone()
+            .filter(|s| !s.trim().is_empty());
+        let model = configured
+            .clone()
+            .unwrap_or_else(|| self.settings.llm().model);
+        (model, configured)
+    }
+
     /// 尾巴材料（审计队列 **Q3b** · v2.187）：`memory_tree::build_items(events, base)`
     /// 的 `base` 是「**切片首元素**在会话日志里的绝对位」，契约要求调用方自己传尾巴
     /// 切片（头注原话：「调用方传尾巴切片时带出偏移」）。`recovery.rs`、`view.rs` 和
@@ -216,6 +240,13 @@ impl Organizer {
             // 续跑自己抹自己的账，上限永远打不到（变异 M3 的靶）。
             self.clear_rerun_streak(&task.workspace, &task.session_id);
             self.spawn(task);
+        } else {
+            // 这一轮判下来不整理（含"整理已在途"与"熔断暂停"两支）⇒ 排一次摘要补写
+            // （队列 Q8c）。**这个 `else` 的位置是判据对象**（队列 §6 第 13 条：时机型
+            // 纪律只能用源码次序证明）：补写排在 `plan_auto` 之后，真有整理要跑时它
+            // 让位给那条链——`run_task` 收束末尾自己会补，两条通路抢同一把 `inflight`
+            // 锁，绝不会同一会话同时有两条写路径。
+            self.schedule_summary_backfill(session_id);
         }
     }
 

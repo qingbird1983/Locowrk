@@ -72,7 +72,13 @@ export default {
       "一轮还没跑完、占用已逼近窗口时，先做一次规则切分把本轮之前的历史归档（0–5，缺省 2；0 = 关掉，只等轮末整理）。",
     organizeReleaseWatermark: "轮内泄压水位",
     organizeReleaseWatermarkHint:
-      "占用达到会话生效窗口的这个百分比才在轮内动手（50–99，缺省 90）。切的是历史不是本轮内容，摘要仍由轮末整理补。",
+      "占用达到会话生效窗口的这个百分比才在轮内动手（50–99，缺省 90）。切的是历史不是本轮内容，切出来的摘要由下面的补写通路换成模型摘要。",
+    organizeSummaryChapters: "摘要补写每次章数",
+    organizeSummaryChaptersHint:
+      "泄压与降级切出来的章节，摘要先是一句机械说明；轮末之后由记忆管理器分批补写真摘要（0–20，缺省 6；0 = 关掉补写，机械摘要就留着）。补写只换摘要正文，目录与游标不动，因此不打断前缀缓存。",
+    organizeSummaryAttempts: "单章补写尝试上限",
+    organizeSummaryAttemptsHint:
+      "同一章最多补写几次（0–5，缺省 2）。计数落在投影上、跨轮生效：模型一直给不出可用摘要就到此为止，不会每轮重烧。",
     treePanelTitle: "记忆树读数（当前会话）",
     treeEmpty: "当前会话还没有记忆树投影（触发整理后出现）。",
     treeChapters: "章节：{n} / 已整理游标：事件 #{cursor}",
