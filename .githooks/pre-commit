@@ -16,7 +16,12 @@
 #                        = 也判红。出处 = Q7 取证《Context Budget Closure》§7.6 那份死代码
 #                        清单——八行里四行早已删除、两行其实是历史日志的重放面，"没人盯着
 #                        一句自我声明"就是它漂了三个版本还没被发现的根因）
-# ③–⑦ 只在相关文件暂存时跑（⑥⑦ 亚秒级，其余各自约 5–10s，Windows 文件系统实测）。
+#   ⑧ 文档预算与窗口     check-doc-budget.mjs（第七道结构闸，v2.195 文档预算批立：
+#                        在役 ROADMAP/CHANGELOG 的批次块数 ≤ 窗口 8 批 + 指针行在场 +
+#                        归档头部「逐字原样」声明在场。字节数只作兜底——单批靠压措辞可以混过
+#                        字节闸，但"最老那一批有没有真搬走"只能数块。它自己也带下限：
+#                        块数读数为 0 直接判红，因为那只可能是**闸瞎了**而不是文档真的没批次）
+# ③–⑧ 只在相关文件暂存时跑（⑥⑦ 亚秒级，其余各自约 5–10s，Windows 文件系统实测）。
 root="$(git rev-parse --show-toplevel)"
 staged="$(git diff --cached --name-only --diff-filter=ACM)"
 fail=0
@@ -52,6 +57,11 @@ if printf '%s\n' "$staged" | grep -q '\.rs$'; then
   node "$root/scripts/check-split-equivalence.mjs" || fail=1
   say "预留标注对账（第六道结构闸）"
   node "$root/scripts/check-reserved.mjs" || fail=1
+fi
+
+if printf '%s\n' "$staged" | grep -qE '^docs/|^AGENTS\.md$'; then
+  say "文档预算与窗口（第七道结构闸）"
+  node "$root/scripts/check-doc-budget.mjs" || fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then

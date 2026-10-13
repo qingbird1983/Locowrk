@@ -15,8 +15,8 @@
 | 文档 | 地位 | 现役版本 |
 |---|---|---|
 | [DESIGN.md](DESIGN.md) | 唯一需求来源：内核架构、ABI 契约、决策表、目录树 | 批 E 已把 §7.1 洋葱链、§7.2 决策表、§8 目录树、§11.3 装载机制、§3.5 接线列订正到代码实况（v2.149） |
-| [ROADMAP.md](ROADMAP.md) | **唯一进度看板**（⬜/◐/✅ + 版本 + 哈希） | 现役 |
-| [CHANGELOG.md](CHANGELOG.md) | **逐批落点日志**（每版一整行，倒序；本文件是"写了什么"的真源，不是进度表） | 现役。检索：`grep -n "^\*文档版本：v2.14" CHANGELOG.md` |
+| [ROADMAP.md](ROADMAP.md) | **唯一进度看板**（⬜/◐/✅ + 版本 + 哈希）；批次叙述区只住**最近 8 批**，被挤出的那一批逐字搬进 [archive/ROADMAP-batches.md](archive/ROADMAP-batches.md)（v2.195 文档预算批立的窗口纪律，判据 = 第七道结构闸 scripts/check-doc-budget.mjs） | 现役 |
+| [CHANGELOG.md](CHANGELOG.md) | **逐批落点日志**（每版一整行，倒序；本文件是"写了什么"的真源，不是进度表）；同样只住**最近 8 批**，被挤出的逐字搬进 [archive/CHANGELOG-batches.md](archive/CHANGELOG-batches.md)（v2.195 立） | 现役。检索：`grep -n "^\*文档版本：v2.14" CHANGELOG.md` |
 | [UI Design System.md](UI%20Design%20System.md) | **UI 层最高权威**（色彩令牌映射 / 字号相对制 / 圆角嵌套降档 / 组件规则 / 冲突裁决表；ZCode DESIGN.md 微调移植，用户 2026-10-11 裁定） | v1.0；⚠ 代码面未对齐，逐批兑现；下位两文档冲突处一律以其附录 A 为准 |
 | [UI shell and patterns.md](UI%20shell%20and%20patterns.md) | 导航模型 / 模式库 / 事件流向 / 弹层规则（**降为下位细则**，与 Design System 冲突处以其附录 A 为准，修订待办见其附录 C） | v4.30；⚠ 现状表里若干键/命令已退役，**逐条已加批 E 退役注**（§193/§202/§883/§999） |
 | [Front-end Design Guidelines.md](Front-end%20Design%20Guidelines.md) | 前端形态清单 / 特例申请制 / 双闸门禁（**降为下位细则**，同上） | v2.1 |
@@ -93,6 +93,8 @@
 
 | 文档 | 为什么在这里 |
 |---|---|
+| [archive/ROADMAP-batches.md](archive/ROADMAP-batches.md) | **不是「退役的设计稿」，是「在役文档的历史流水」**：ROADMAP 批次叙述区被挤出「最近 8 批」窗口的那一批，由 v2.195 文档预算批起**逐字原样**搬到这里（倒序，最新在上）。内容未改写，校验 = 行数守恒 / 行多重集守恒 / 每条与搬出前行区间逐字节相同（`tmp/doc-trim.py` 的四条自证）。引用它请写**版本号**而不是行号 |
+| [archive/CHANGELOG-batches.md](archive/CHANGELOG-batches.md) | 同上：CHANGELOG 的落点补记被挤出窗口的那一批搬到这里；`UI shell 文档版本行`（v4.2/v4.1/v4.0/v3.9 那类）随其所属批次同行 |
 | [archive/Sandbox Execution Design.md](archive/Sandbox%20Execution%20Design.md) | **CubeSandbox 集成路线从未采纳、从未实施**（全仓零引用、无相关代码与依赖）；且沙箱主题整体已随 v2.145 退役。v2.149 批 E 移入 `archive/` 并在首行加两行定性 |
 | [icon replacement plan.md](icon%20replacement%20plan.md) | Tabler Icons 替换方案**未采纳**：现役图标 = 自绘 `desktop/src/lib/icons.ts`（lucide 风格 16 格，`grep -ri tabler desktop/src` = 0 命中）。留在原位，改图标前先读它了解曾考虑过的方案，别当待办 |
 
@@ -120,7 +122,7 @@ docs/design/
   Post-Audit Roadmap v1.md   第五个顶层件（v2.182 立）：后审计施工队列 = 六份稿的实施顺序真源（Q 号）
   NEW/                    近几轮的设计稿（兑现后不搬走，靠本表标状态）
   BUG/                    工单与限制清单
-  archive/                已退役 / 未采纳（含 AGENTS-progress-archive.md = 历史进度流水）
+  archive/                已退役 / 未采纳 + **在役文档的历史流水**（AGENTS-progress-archive.md / ROADMAP-batches.md / CHANGELOG-batches.md）
   ui-prototype/           静态原型
 ```
 
