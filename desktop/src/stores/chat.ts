@@ -292,6 +292,20 @@ export const useChatStore = defineStore("chat", {
       // 树文件本身是持久记录；「查看」动作跳记忆页，接线在 ChatTranscript）
       void subscribeOrganizeDone((p) => {
         if (p.sessionId !== this.sessionId) return;
+        // 队列 Q8b：**轮内水位泄压**走同一条推送、同一个通知形态，只有文案不同。
+        // 分流必须按 `reason` 而不是 `status`——泄压的 status 仍是 "ok"（它成功做
+        // 完了一次机械切分），把它说成「已整理 N 轮」是假告：摘要还没补。
+        // ⚠ 这里的字面量与 Rust 侧 `OrganizeReason::PressureRelease::as_str()`
+        //   是**跨文件契约**（队列 §6 第 10 条：跨文件的关系必须有跨文件判据），
+        //   两处同源由 `tmp/q8b-shapes.mjs` 的形状判据钉住，改一边就会红。
+        if (p.reason === "pressure_release") {
+          this.pushOrganizeNotice(
+            "notice.organizeReleased",
+            { chapters: p.chapters },
+            ["view"],
+          );
+          return;
+        }
         this.pushOrganizeNotice(
           p.status === "degraded"
             ? "notice.organizeDoneDegraded"

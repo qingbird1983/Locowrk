@@ -42,6 +42,7 @@ async fn context_usage_persists_and_replays() {
         None,
         None,
         None,
+        None,
     )
     .await
     .expect("turn ok");
@@ -125,6 +126,7 @@ async fn context_usage_prefers_reported_input() {
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
         None,
         None,

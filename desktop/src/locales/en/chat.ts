@@ -99,6 +99,9 @@ export default {
     organizeDone: "Organized {users} turns into {chapters} chapters",
     organizeDoneDegraded:
       "Organized {users} turns into {chapters} chapters (memory manager unavailable, fell back to rule split)",
+    // Queue Q8b: in-turn pressure release (mechanical fold, summaries not backfilled)
+    organizeReleased:
+      "Context is close to the window limit, so the history before this turn was folded into {chapters} chapter(s) (rule split, summaries minimal; this turn untouched)",
     organizePaused:
       "Auto organize paused for this session ({rebounds} consecutive rebounds hit the breaker m={m}); /organize runs it manually and resets.",
     compactUndone:

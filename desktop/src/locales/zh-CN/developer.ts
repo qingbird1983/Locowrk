@@ -67,6 +67,12 @@ export default {
     organizeMaxRerun: "连续补跑上限",
     organizeMaxRerunHint:
       "整理在途时攒下的触发，收束后最多连着补跑几次（0–10，缺省 3；0 = 不补跑，等下一次对话轮次）。",
+    organizeMaxRelease: "轮内泄压上限",
+    organizeMaxReleaseHint:
+      "一轮还没跑完、占用已逼近窗口时，先做一次规则切分把本轮之前的历史归档（0–5，缺省 2；0 = 关掉，只等轮末整理）。",
+    organizeReleaseWatermark: "轮内泄压水位",
+    organizeReleaseWatermarkHint:
+      "占用达到会话生效窗口的这个百分比才在轮内动手（50–99，缺省 90）。切的是历史不是本轮内容，摘要仍由轮末整理补。",
     treePanelTitle: "记忆树读数（当前会话）",
     treeEmpty: "当前会话还没有记忆树投影（触发整理后出现）。",
     treeChapters: "章节：{n} / 已整理游标：事件 #{cursor}",

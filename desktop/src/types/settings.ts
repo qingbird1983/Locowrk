@@ -151,6 +151,10 @@ interface DeveloperView {
   ruleChunkTokens: number;
   /** 在途收束后允许连续补跑几次（队列 Q6，0–10 缺省 3；0 = 关掉补跑）。 */
   organizeMaxRerun: number;
+  /** 一轮之内至多泄压几次（队列 Q8b，0–5 缺省 2；0 = 关掉轮内泄压）。 */
+  organizeMaxRelease: number;
+  /** 轮内泄压的水位：占会话生效窗口的百分比（队列 Q8b，50–99 缺省 90）。 */
+  organizeReleaseWatermarkPct: number;
 }
 
 /** 开发者选项区部分更新：字段缺省 = 保持不变。 */
@@ -167,6 +171,8 @@ export interface DeveloperUpdate {
   recorderMaxRetries?: number;
   ruleChunkTokens?: number;
   organizeMaxRerun?: number;
+  organizeMaxRelease?: number;
+  organizeReleaseWatermarkPct?: number;
 }
 
 /** 网络代理档（§8.5）：system / direct / custom（custom 必带 url）。 */

@@ -67,6 +67,12 @@ export default {
     organizeMaxRerun: "Consecutive reruns",
     organizeMaxRerunHint:
       "How many times a finished organize may immediately rerun triggers queued while it was in flight (0–10, default 3; 0 = no rerun, wait for the next turn).",
+    organizeMaxRelease: "In-turn pressure releases",
+    organizeMaxReleaseHint:
+      "When usage nears the window before a turn finishes, fold the pre-turn history once by rule split (0–5, default 2; 0 = off, only the end-of-turn organizer runs).",
+    organizeReleaseWatermark: "Pressure release watermark",
+    organizeReleaseWatermarkHint:
+      "Usage share of the session window that triggers an in-turn release (50–99, default 90).",
     treePanelTitle: "Memory tree readout (current session)",
     treeEmpty: "No memory tree projection for this session yet (appears after an organize run).",
     treeChapters: "Chapters: {n} / organized cursor: event #{cursor}",

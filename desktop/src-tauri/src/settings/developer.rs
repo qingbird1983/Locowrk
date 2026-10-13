@@ -41,6 +41,21 @@ pub const ORGANIZE_MAX_RERUN_RANGE: std::ops::RangeInclusive<u32> = 0..=10;
 pub const RULE_CHUNK_TOKENS_DEFAULT: u64 = 20_000;
 pub const RULE_CHUNK_TOKENS_RANGE: std::ops::RangeInclusive<u64> = 5_000..=50_000;
 
+// ---- 轮内水位泄压（真机痛点 · 队列 Q8b）----
+
+/// 一轮之内至多泄压几次（0–5 缺省 2）。
+/// **0 = 关掉轮内泄压**（可配置原则②：这条限制自带开关；关掉后的行为与
+/// 本批之前逐字节相同——由测试 `release_count_zero_keeps_the_pre_batch_shape`
+/// 钉，判据形状 = 游标与章节零变化，而不是"没报错"）。
+pub const ORGANIZE_MAX_RELEASE_DEFAULT: u32 = 2;
+pub const ORGANIZE_MAX_RELEASE_RANGE: std::ops::RangeInclusive<u32> = 0..=5;
+/// 泄压水位：占用达到会话生效窗口的这个百分比才在轮内动手（50–99 缺省 90）。
+/// 上限取 99 而不是 100 的理由：100% 这一刀等的是"已经装不下"，而超限报错
+/// 发生在请求侧——到那时切已经晚了。缺省 90 与自动收起的百分比口径同族，
+/// 但**量的是不同的东西**（收起量的是已展开章节，泄压切的是未整理尾巴）。
+pub const ORGANIZE_RELEASE_WATERMARK_PCT_DEFAULT: u8 = 90;
+pub const ORGANIZE_RELEASE_WATERMARK_PCT_RANGE: std::ops::RangeInclusive<u8> = 50..=99;
+
 /// 开发者选项设置（settings.json `developer` 区，字段级缺省零迁移）。
 /// Default = 全关是语义要求：分区隐藏 + 禁止项保持写死语义（阈值是唯一
 /// 带非零缺省的字段，只在告警开启后有意义）。
@@ -84,6 +99,14 @@ pub struct DeveloperSettings {
     /// 任何一次新的自然触发（`after_turn` 真发起了一轮整理）都把这本账清零
     /// （`Organizer::clear_rerun_streak`）。0 = 关掉补跑，标记照记、等下一轮。
     pub organize_max_rerun: u32,
+    /// 一轮之内至多泄压几次（队列 Q8b，0–5 缺省 2）。与上面那条是一对：
+    /// `organize_max_rerun` 管「轮末整理追不上时再补几步」，这条管「轮内窗口
+    /// 快装不下时先切几刀」；0 = 关掉轮内泄压（可配置原则②的开关位）。
+    pub organize_max_release: u32,
+    /// 轮内泄压的水位（占会话生效窗口的百分比，50–99 缺省 90）。锚点与自动
+    /// 整理/进度条**同吃** `Organizer::anchor`（v2.138 一把尺纪律），本项只
+    /// 给「到几成才动手」。
+    pub organize_release_watermark_pct: u8,
 }
 
 impl Default for DeveloperSettings {
@@ -101,6 +124,8 @@ impl Default for DeveloperSettings {
             memory_manager_max_retries: MANAGER_MAX_RETRIES_DEFAULT,
             rule_chunk_tokens: RULE_CHUNK_TOKENS_DEFAULT,
             organize_max_rerun: ORGANIZE_MAX_RERUN_DEFAULT,
+            organize_max_release: ORGANIZE_MAX_RELEASE_DEFAULT,
+            organize_release_watermark_pct: ORGANIZE_RELEASE_WATERMARK_PCT_DEFAULT,
         }
     }
 }
@@ -123,6 +148,8 @@ pub struct DeveloperView {
     pub memory_manager_max_retries: u32,
     pub rule_chunk_tokens: u64,
     pub organize_max_rerun: u32,
+    pub organize_max_release: u32,
+    pub organize_release_watermark_pct: u8,
 }
 
 /// 部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -143,6 +170,8 @@ pub struct DeveloperUpdate {
     pub memory_manager_max_retries: Option<u32>,
     pub rule_chunk_tokens: Option<u64>,
     pub organize_max_rerun: Option<u32>,
+    pub organize_max_release: Option<u32>,
+    pub organize_release_watermark_pct: Option<u8>,
 }
 
 /// 合法性检查（update.rs 校验用）：阈值 1–100。
@@ -234,6 +263,16 @@ impl DeveloperSettings {
             super::developer::check_max_rerun(n)?;
             self.organize_max_rerun = n;
         }
+        // 轮内水位泄压（队列 Q8b）：两条都是"限制 + 水位"，出界文案同样由抽出的
+        // 校验函数现算数字（同一批里把三个文案各写一遍 = 数字有两个出处）。
+        if let Some(n) = u.organize_max_release {
+            super::developer::check_max_release(n)?;
+            self.organize_max_release = n;
+        }
+        if let Some(n) = u.organize_release_watermark_pct {
+            super::developer::check_release_watermark(n)?;
+            self.organize_release_watermark_pct = n;
+        }
         Ok(())
     }
 }
@@ -249,5 +288,29 @@ pub fn check_max_rerun(n: u32) -> Result<(), String> {
         "连续补跑上限 {n} 超出范围（{}–{}）",
         ORGANIZE_MAX_RERUN_RANGE.start(),
         ORGANIZE_MAX_RERUN_RANGE.end()
+    ))
+}
+
+/// 轮内泄压次数的出界文案（队列 Q8b，形状照 `check_max_rerun`）。
+pub fn check_max_release(n: u32) -> Result<(), String> {
+    if ORGANIZE_MAX_RELEASE_RANGE.contains(&n) {
+        return Ok(());
+    }
+    Err(format!(
+        "轮内泄压上限 {n} 超出范围（{}–{}，0 = 关掉泄压）",
+        ORGANIZE_MAX_RELEASE_RANGE.start(),
+        ORGANIZE_MAX_RELEASE_RANGE.end()
+    ))
+}
+
+/// 泄压水位的出界文案（队列 Q8b，同上）。
+pub fn check_release_watermark(n: u8) -> Result<(), String> {
+    if ORGANIZE_RELEASE_WATERMARK_PCT_RANGE.contains(&n) {
+        return Ok(());
+    }
+    Err(format!(
+        "泄压水位 {n}% 超出范围（{}–{}）",
+        ORGANIZE_RELEASE_WATERMARK_PCT_RANGE.start(),
+        ORGANIZE_RELEASE_WATERMARK_PCT_RANGE.end()
     ))
 }

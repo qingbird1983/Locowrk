@@ -201,6 +201,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         Some(&deps.tree_assembler),
         Some(&deps.stop_flags),
         Some(deps.fragments.as_ref()),
+        Some(&deps.organizer),
     )
     .await
     {

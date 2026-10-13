@@ -52,7 +52,11 @@ pub struct UsagePolicy {
 /// 全量历史估算（kernel-bin / 测试路径）。`stop`（v4.11 §3.39④）= 停止
 /// 标记注册表（None = 无停止面，headless/测试）：进场登记 RAII 守卫、
 /// 所有收束路径自动注销；step 边界查到置位即按 TurnDone 收束（流式内的
-/// 截断在 LLM 适配器 delta 回调点，更早）。
+/// 截断在 LLM 适配器 delta 回调点，更早）。`organizer`（队列 Q8b）= 轮内水位
+/// 泄压的写侧通路（None = headless/测试，与改前逐字节同形）：**每个 step 的
+/// 边界**问一次「占用到水位了没、这批历史该不该归档」，命中就同步做一次规则
+/// 切分（不调模型）后接着跑——轮末的 `after_turn` 追不上本轮的第 N 个 step，
+/// 真机那 63 万 token 就是这么攒出来的。
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn(
     kernel: &Kernel,
@@ -68,9 +72,14 @@ pub async fn run_turn(
     tree: Option<&crate::organize::TreeAssembler>,
     stop: Option<&Arc<crate::stop::StopFlags>>,
     fragments: Option<&crate::fragments::FragmentPending>,
+    organizer: Option<&Arc<crate::organize::Organizer>>,
 ) -> Result<u32, String> {
     let _stop_guard = stop.map(|f| f.guard(session_id));
     let log_start = session.len();
+    // 本轮已泄压次数（上限 `developer.organizeMaxRelease` 在 pressure 侧比对）。
+    // **故意是局部变量而不是投影字段**：它的生命周期就是这一轮，落盘只会多出
+    // 一份跨轮脏账（轮被停止/失败掐断时那份账没人清）。
+    let mut released: u32 = 0;
     // 轮界事件（§4.1 设计，v2.101 起真正写入）：TurnStart 供重放复原计时
     // 起点（配给紧随的 UserMessage），TurnEnd（各收束路径）供冻结读数——
     // 此前日志里没有任何时刻，切会话/重启后计时行只剩发丝线（目检①）。
@@ -124,6 +133,20 @@ pub async fn run_turn(
                 steps,
             );
             return Ok(steps);
+        }
+        // 轮内水位泄压（队列 Q8b）：**必须在 `kernel.step_as` 之前**——这一步
+        // 就要发出去的请求才是被泄压救下的那一个（挪到 step 之后 = 本轮第一个
+        // 请求照旧超限，只有第二个开始才受益，等于把救援推迟了一整步）。
+        // `log_start` 是本轮进场时的日志长度 = 切口的上界，本轮的用户消息与
+        // 后续 step 的产物一条都不会被归进章节。
+        if let (Some(org), Some(u)) = (organizer, usage) {
+            if org
+                .release_pressure(session, session_id, u.window_tokens, released, log_start)
+                .chapters()
+                > 0
+            {
+                released += 1;
+            }
         }
         let before = session.len();
         // ⑭：带会话身份 step——CallCtx.session_id 供内置调度工具绑定

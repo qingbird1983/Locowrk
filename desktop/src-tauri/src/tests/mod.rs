@@ -3,9 +3,12 @@
 //! tests_approval.rs——400 行纪律拆出。事件出口用收集器替换 TauriSink。）
 //! 批 F-17 目录化：共享假件（进程内 echo 工具 / 事件收集器 / 内核装配）留本文件，
 //! 用例按面分簇见 `turn_rounds` / `demo_routing` / `convergence`。
+//! 队列 Q8b 加 `pressure_wiring`：驱动 `run_turn` 本体证「step 边界那句泄压调用
+//! 真的在跑」——直接单测 `release_pressure` 的那八条绿了也不证明接线存在。
 
 mod convergence;
 mod demo_routing;
+mod pressure_wiring;
 mod turn_rounds;
 
 use crate::demo_llm::DemoLlm;

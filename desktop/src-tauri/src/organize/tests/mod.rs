@@ -10,10 +10,13 @@
 //! 夹具是 tests 的私有项，子簇经 `use super::*;` 取用（形状照 `settings/tests/` 先例，
 //! **可见性零改动**）；用例本体逐字搬运，一条断言未增删。
 //! 队列 Q6（CB §7.1/§8）加 `rerun`（在途期记标记、收束即补跑、连续补跑上限与复位）。
+//! 队列 Q8b（真机「整理跟不上 ⇒ 一步卡死」）加 `pressure`（轮内水位泄压：
+//! 到线才切、只切本轮之前、0 档逐字节不写盘、在途与熔断让位）。
 
 mod fact_cards;
 mod overflow;
 mod pipeline;
+mod pressure;
 mod recovery;
 mod rerun;
 mod summary;

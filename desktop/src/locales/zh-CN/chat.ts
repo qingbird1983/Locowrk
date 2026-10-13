@@ -97,6 +97,10 @@ export default {
     organizeDone: "已整理 {users} 轮为 {chapters} 个章节",
     organizeDoneDegraded:
       "已整理 {users} 轮为 {chapters} 个章节（记忆管理器不可用，已转规则切分）",
+    // 队列 Q8b：轮内水位泄压（机械切分，摘要未补）——文案不许与「已整理」混用，
+    // 那一刀是救援不是整理
+    organizeReleased:
+      "上下文已逼近窗口上限，先把本轮之前的历史收起 {chapters} 个章节（机械切分，摘要从简；本轮内容未动）",
     organizePaused:
       "本会话自动整理已暂停（连续 {rebounds} 次反弹达到熔断阈值 m={m}）；/整理 可手动整理并复位。",
     compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",

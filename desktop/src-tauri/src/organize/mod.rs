@@ -5,7 +5,8 @@
 //! 结构（v2.157 批 F-7 目录化拆分后）：`trigger`（同步决策：plan_auto /
 //! plan_manual，含触发判定、溢出整理与反弹裁决）→ `task`（异步管道：记忆管理器
 //! 调用 × 超时重试 → 输出校验 → 不合规转规则切分 → 落树）；`collapse` 管空间
-//! 急救（M4 自动收起），`events` 管对模型与界面的告知。本文件留编排器本体：
+//! 急救（M4 自动收起），`pressure` 管**轮内水位泄压**（队列 Q8b：step 边界同步
+//! 一次规则切分，不等模型），`events` 管对模型与界面的告知。本文件留编排器本体：
 //! 状态与构造、投影与台账小工具、三个门面入口、组装点构造。调用方持有会话锁
 //! 时传 `&Session`（命令层 / agent_chat / 调度引擎三入口同形）。
 //!
@@ -36,6 +37,7 @@ mod debug;
 mod edit;
 mod events;
 mod facts;
+mod pressure;
 mod progress;
 mod project_history;
 mod recovery;

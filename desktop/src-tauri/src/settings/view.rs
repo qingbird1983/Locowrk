@@ -116,6 +116,8 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             memory_manager_timeout_secs: s.developer.memory_manager_timeout_secs,
             memory_manager_max_retries: s.developer.memory_manager_max_retries,
             rule_chunk_tokens: s.developer.rule_chunk_tokens,
+            organize_max_release: s.developer.organize_max_release,
+            organize_release_watermark_pct: s.developer.organize_release_watermark_pct,
         },
         thinking: super::ThinkingView {
             language: s.thinking.language.clone(),

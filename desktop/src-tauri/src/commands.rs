@@ -104,6 +104,7 @@ pub async fn agent_chat(
         Some(&state.tree_assembler),
         Some(&state.stop_flags),
         Some(state.fragments.as_ref()),
+        Some(&state.organizer),
     )
     .await?;
     // v2.57 自动标题：旁车无手动标题时一次 LLM 调用生成（fire-and-forget，

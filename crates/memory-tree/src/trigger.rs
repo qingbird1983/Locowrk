@@ -56,6 +56,13 @@ pub enum OrganizeReason {
     /// 尾巴也不在目录，必须及时归档——例行维护，**不记反弹**（§5.5 熔断
     /// 只惩罚「整理后占用立刻再超」的烧钱信号）。
     WindowOverflow,
+    /// **轮内水位泄压**（真机痛点 · 队列 Q8b）：一轮还没跑完，占用已经逼近
+    /// 会话生效窗口，而常规整理要等轮次收束才判定——干等下去就是超限。
+    /// 这一档在 step 边界**同步**做一次规则切分（毫秒级、不调模型），把本轮
+    /// 之前的历史先归档；摘要从简，模型那条通路照旧在轮末跑。与
+    /// `WindowOverflow` 同族：**不记反弹**（它不是「整理后立刻再超」的烧钱
+    /// 信号，是救援）。
+    PressureRelease,
 }
 
 impl OrganizeReason {
@@ -66,6 +73,11 @@ impl OrganizeReason {
             Self::Manual => "manual",
             Self::Recovery => "recovery",
             Self::WindowOverflow => "window_overflow",
+            // ⚠ 这个串是**跨文件契约**：前端告知文案按它分流（`desktop/src/stores/
+            // chat.ts` 判 `reason === "pressure_release"` 才出「泄压」那句）。
+            // 改这里必须同时改那里 = 队列 §6 第 10 条「跨文件的关系必须有跨文件
+            // 判据」，钉它的形状判据见本批 `tmp/q8b-shapes.mjs`。
+            Self::PressureRelease => "pressure_release",
         }
     }
 }
@@ -167,5 +179,24 @@ mod tests {
         assert_eq!(Pacing::parse("incremental"), Pacing::Incremental);
         assert_eq!(Pacing::parse("batch"), Pacing::Batch);
         assert_eq!(Pacing::parse("nonsense"), Pacing::Batch);
+    }
+
+    /// `as_str()` 的**全部**取值是磁盘台账与前端的字符串契约（历史投影里
+    /// 存的就是这些串），所以既钉"新的那一条存在"，也钉"旧的一条没被改名"
+    /// ——只钉新值的话，把 `threshold` 改成 `auto` 这种改法在本批不会红，而
+    /// 它会让既有投影的 reason 读数全部对不上号。
+    #[test]
+    fn reason_strings_are_the_full_frozen_set() {
+        let all = [
+            (OrganizeReason::Threshold, "threshold"),
+            (OrganizeReason::IncrementalChunk, "incremental_chunk"),
+            (OrganizeReason::Manual, "manual"),
+            (OrganizeReason::Recovery, "recovery"),
+            (OrganizeReason::WindowOverflow, "window_overflow"),
+            (OrganizeReason::PressureRelease, "pressure_release"),
+        ];
+        for (reason, text) in all {
+            assert_eq!(reason.as_str(), text);
+        }
     }
 }
