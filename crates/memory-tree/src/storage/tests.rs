@@ -8,6 +8,7 @@
 //! 不红、静默少跑用例 = 历批那个洞，这里不重演）。
 
 use super::*;
+use crate::tree::RunSummary;
 
 fn sample(ws: &str, sid: &str) -> MemoryTree {
     let mut t = MemoryTree::new(ws, sid);
@@ -180,5 +181,55 @@ fn scan_trees_lists_all_sorted_by_recency() {
     let scope = store.root.join(scope_dir("ws-a"));
     std::fs::write(scope.join("bad.json"), b"{ not json").unwrap();
     assert_eq!(store.scan_trees().len(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 队列 Q14 第三刀：清单侧**一次**给出「N 总结」。看板左栏那一行写
+/// `N 总结 · N 章节`（MB §3.1），如果清单不给这个数，前端只能对每个会话再发一次
+/// `load` 才凑得齐——N 次读盘换一个数，比多带一个字段贵得多。
+///
+/// 两条口径在这里钉死：①计数取的是投影里的**总结条数**；②它与章节数是**两把尺**
+/// ——一轮总结可能一个章节都没落成，反向也成立（有章节没总结），互相吞掉就报错了。
+#[test]
+fn scan_trees_reports_summary_count_independently_of_chapters() {
+    let dir = std::env::temp_dir().join(format!("mt-test-sumcount-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let store = TreeStore::new(&dir);
+    let mut t = MemoryTree::new("ws-a", "sess-1");
+    t.insert_placeholder(0, 4, 1).unwrap();
+    t.summaries.push(RunSummary {
+        from: 0,
+        to: 4,
+        text: "第一轮".into(),
+        created_at: 1,
+    });
+    t.summaries.push(RunSummary {
+        from: 5,
+        to: 9,
+        text: "第二轮".into(),
+        created_at: 2,
+    });
+    store.save(&t).unwrap();
+    // 只有总结、一个章节都没有的树：两把尺必须各报各的
+    let mut only_summaries = MemoryTree::new("ws-a", "sess-2");
+    only_summaries.chaptered_until = 3;
+    only_summaries.summaries.push(RunSummary {
+        from: 0,
+        to: 3,
+        text: "降级那一轮".into(),
+        created_at: 3,
+    });
+    store.save(&only_summaries).unwrap();
+
+    let list = store.scan_trees();
+    let with_both = list.iter().find(|s| s.session_id == "sess-1").unwrap();
+    assert_eq!(with_both.summary_count, 2, "总结条数按投影里的条数报");
+    assert_eq!(
+        with_both.chapter_count, 1,
+        "占位章节也计入章节数（与既有口径一致）"
+    );
+    let bare = list.iter().find(|s| s.session_id == "sess-2").unwrap();
+    assert_eq!(bare.summary_count, 1);
+    assert_eq!(bare.chapter_count, 0, "没有章节不把总结吞掉");
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -179,6 +179,8 @@ export interface TreeSummaryView {
   workspace: string;
   sessionId: string;
   chapterCount: number;
+  /** 轮级总结条数（Q14 第三刀）：左栏会话行「N 总结 · N 章节」的数在清单侧一次给出。 */
+  summaryCount: number;
   chapteredUntil: number;
   pending: boolean;
   pausedAuto: boolean;

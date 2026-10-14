@@ -20,6 +20,9 @@ pub struct TreeSummaryView {
     pub workspace: String,
     pub session_id: String,
     pub chapter_count: usize,
+    /// 轮级总结条数（队列 Q14 第三刀）：看板左栏的会话行写「N 总结 · N 章节」，
+    /// 这个数在清单侧一次给出——前端为凑它去逐会话 `load` 就是 N 次读盘。
+    pub summary_count: usize,
     pub chaptered_until: usize,
     pub pending: bool,
     pub paused_auto: bool,
@@ -234,6 +237,7 @@ impl Organizer {
                      workspace,
                      session_id,
                      chapter_count,
+                     summary_count,
                      chaptered_until,
                      pending,
                      paused_auto,
@@ -242,6 +246,7 @@ impl Organizer {
                     workspace,
                     session_id,
                     chapter_count,
+                    summary_count,
                     chaptered_until,
                     pending,
                     paused_auto,

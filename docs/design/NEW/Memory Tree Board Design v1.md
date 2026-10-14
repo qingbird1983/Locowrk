@@ -151,12 +151,14 @@ memory_tree_stream(session_id, workspace, group) -> StreamView
 | 后端 | `view.rs` 总结结构加 `chapter_ids`（或前端区间包含兜底）✅ **Q14 第二刀已落 = 甲案**：后端算、前端不反查（区间包含做兜底那条**没采纳**——归组的权威源是投影里的 `event_range`，前端再算一遍就是第二个出处） | S |
 | 后端 | `memory_reveal_project(workspace)` 命令 | S |
 | 后端 | `project_purge_memory(workspace)` 命令（幂等） | S |
-| 前端 | MemoryPage 改双页签（记忆树默认 / 事实库）；新建 `memory/TreeBoard.vue`（左栏 + 画布 + 四列汇聚布局） | M–L |
+| 前端 | MemoryPage 改双页签（记忆树默认 / 事实库）；新建 `memory/TreeBoard.vue`（左栏 + 画布 + 四列汇聚布局） ✅ **Q14 第三刀已落**〔页签只给了两个名字、没说编辑面归哪档 ⇒ 本刀按「看板 = 只读导航，其余全进事实库」落地，拆三档只改 `MemoryPage.vue` 一行；写码按《Front-end Design Guidelines》§二⑯，不照本稿 §3〕 | M–L |
 | 前端 | ProjectGroup 移除确认弹窗加级联勾选项 | S |
-| i18n | 新键 zh/en 成对（check-i18n 闸） | S |
+| i18n | 新键 zh/en 成对（check-i18n 闸） ✅ **Q14 第三刀已落**（看板面 24 键 ×2 档，闭合闸绿） | S |
 | 标准 | 《Front-end Design Guidelines》新增「无限画布看板」类目（§7 特例获批后） | S |
 
 **分期**：T1 = 看板 MVP（双页签 + 项目下拉 + 日期列表 + 四列展开 + 会话流面板）；T2 = 打开记忆目录 + 移除级联勾选；T3 = 打磨（视口记忆、小节定位动画、尾巴计数）。每批四道结构闸 + fmt/clippy + 走查。
+
+> **分期进度（2026-10-15 补）**：T1 = 队列 **Q14** 三刀已落（第一刀建相对字号基座、第二刀后端 `memory_tree_stream` + `chapter_ids`、第三刀前端双页签与四列汇聚画布）；T2 = 队列 **Q15**；T3 = 队列 **Q16**。⚠ 原话「每批四道结构闸」已被现实超过（现役八道 + 前端测试面），照现役门禁跑，原句不擦。
 
 ---
 

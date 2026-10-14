@@ -19,6 +19,9 @@ import { relativeTimeLabel, relativeTimeMs } from "../../lib/format";
 import { workspaceDisplayName } from "../../lib/session-groups";
 import { useChatStore } from "../../stores/chat";
 import ProjectTree from "./ProjectTree.vue";
+import OriginalRows from "./OriginalRows.vue";
+import TreeBadge from "./TreeBadge.vue";
+import { isDegradedSource, treeSourceLabel } from "../../lib/tree-labels";
 import type {
   TreeChapterView,
   TreeChaptersView,
@@ -226,32 +229,8 @@ function timeText(ms: number): string {
   return relativeTimeLabel(relativeTimeMs(ms), (k, p) => t(k, p));
 }
 
-function kindLabel(kind: TreeOriginalItem["kind"]): string {
-  return t(
-    kind === "user"
-      ? "memory.kindUser"
-      : kind === "assistant"
-        ? "memory.kindAssistant"
-        : kind === "tool_call"
-          ? "memory.kindToolCall"
-          : kind === "summary"
-            ? "memory.kindSummary"
-            : "memory.kindToolResult",
-  );
-}
-
 function originalRows(id: string): TreeOriginalItem[] {
   return originals.value.get(id) ?? [];
-}
-
-function sourceLabel(source: string): string {
-  return t(
-    source === "recorder"
-      ? "memory.sourceMemoryManager"
-      : source === "rule"
-        ? "memory.sourceRule"
-        : "memory.sourcePlaceholder",
-  );
 }
 </script>
 
@@ -374,19 +353,12 @@ function sourceLabel(source: string): string {
               <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink-1">
                 {{ b.title }}
               </span>
-              <span
+              <TreeBadge
                 v-if="b.titleEditedByUser"
-                class="shrink-0 rounded-full bg-wash-3 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
+                :text="t('memory.treeManual')"
                 :title="t('memory.treeManual')"
-              >
-                {{ t("memory.treeManual") }}
-              </span>
-              <span
-                v-if="b.pending"
-                class="shrink-0 rounded-full bg-wash-3 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
-              >
-                {{ sourceLabel(b.source) }}
-              </span>
+              />
+              <TreeBadge v-if="b.pending" :text="treeSourceLabel(b.source, (k) => t(k))" />
               <span class="shrink-0 text-[length:var(--lw-fs-10)] text-ink-5">
                 {{ timeText(b.createdAt) }}
               </span>
@@ -454,24 +426,16 @@ function sourceLabel(source: string): string {
                   {{ b.summary }}
                 </p>
                 <div class="mt-1.5 flex items-center gap-2 pl-5">
-                  <span
-                    class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-10)]"
-                    :class="
-                      b.source === 'recorder'
-                        ? 'bg-wash-3 text-ink-4'
-                        : 'bg-warn/16 text-warn'
-                    "
+                  <TreeBadge
+                    :text="treeSourceLabel(b.source, (k) => t(k))"
+                    :tone="isDegradedSource(b.source) ? 'warn' : 'neutral'"
                     :title="b.source"
-                  >
-                    {{ sourceLabel(b.source) }}
-                  </span>
-                  <span
+                  />
+                  <TreeBadge
                     v-if="b.summaryEditedByUser"
-                    class="rounded-full bg-wash-3 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
+                    :text="t('memory.treeManual')"
                     :title="t('memory.treeManual')"
-                  >
-                    {{ t("memory.treeManual") }}
-                  </span>
+                  />
                   <template v-if="!b.pending">
                     <button
                       class="text-[length:var(--lw-fs-11)] text-ink-4 transition hover:text-ink-1"
@@ -503,24 +467,14 @@ function sourceLabel(source: string): string {
                   </template>
                 </div>
 
-                <!-- 原文切片（与记忆管理器材料同形；只读行渲染） -->
-                <div v-if="originals.has(b.chapterId)" class="mt-2 space-y-1 pl-5">
-                  <p
-                    v-for="row in originalRows(b.chapterId)"
-                    :key="row.index"
-                    class="break-words text-[length:var(--lw-fs-11)] leading-relaxed"
-                    :class="
-                      row.kind === 'user'
-                        ? 'text-ink-1'
-                        : row.kind === 'assistant'
-                          ? 'text-ink-3'
-                          : 'font-mono text-[length:var(--lw-fs-10)] text-ink-5'
-                    "
-                  >
-                    <span class="mr-1.5 select-none text-ink-5">
-                      [{{ row.index }}] {{ kindLabel(row.kind) }}：
-                    </span>{{ row.text }}
-                  </p>
+                <!-- 原文切片（与记忆管理器材料同形；只读行渲染）。
+                     行本体在 `OriginalRows.vue`——画布汇聚面板共用同一件，
+                     不在两处各写一套行（§二⑯「面板内部行不许自造」）。 -->
+                <div
+                  v-if="originals.has(b.chapterId)"
+                  class="mt-2 pl-5"
+                >
+                  <OriginalRows :rows="originalRows(b.chapterId)" />
                 </div>
                 <p
                   v-else-if="originalErrors.has(b.chapterId)"

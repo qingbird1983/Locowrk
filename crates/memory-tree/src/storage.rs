@@ -61,6 +61,10 @@ pub struct TreeSummary {
     pub workspace: String,
     pub session_id: String,
     pub chapter_count: usize,
+    /// 轮级总结条数（队列 Q14 第三刀）：看板左栏的会话行要写「N 总结 · N 章节」
+    /// （MB §3.1），而清单页若拿不到这个数，前端只能对每个会话再发一次
+    /// `load` 才能补齐——N 次读盘换一个数，是比"多带一个字段"更贵的方案。
+    pub summary_count: usize,
     pub chaptered_until: usize,
     pub pending: bool,
     pub paused_auto: bool,
@@ -145,6 +149,7 @@ impl TreeStore {
             out.push((
                 TreeSummary {
                     chapter_count: tree.chapters.len(),
+                    summary_count: tree.summaries.len(),
                     chaptered_until: tree.chaptered_until,
                     pending: tree.pending.is_some(),
                     paused_auto: tree.paused_auto,

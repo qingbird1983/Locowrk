@@ -10,6 +10,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { memoryTreeProject } from "../../lib/api";
+import TreeBadge from "./TreeBadge.vue";
 import { relativeTimeLabel, relativeTimeMs } from "../../lib/format";
 import type { ProjectChapterView, ProjectTreeView, RunSummaryView } from "../../types";
 
@@ -133,12 +134,10 @@ function timeText(ms: number): string {
           <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink-1">
             {{ b.title }}
           </span>
-          <span
+          <TreeBadge
             v-if="b.titleEditedByUser || b.summaryEditedByUser"
-            class="shrink-0 rounded-full bg-wash-3 px-2 py-0.5 text-[length:var(--lw-fs-10)] text-ink-4"
-          >
-            {{ t("memory.treeManual") }}
-          </span>
+            :text="t('memory.treeManual')"
+          />
           <span
             class="max-w-[40%] shrink-0 truncate text-[length:var(--lw-fs-10)] text-ink-5"
           >

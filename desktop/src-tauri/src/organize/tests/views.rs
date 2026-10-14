@@ -27,6 +27,18 @@ async fn view_bundles_and_original_read_from_disk() {
     assert_eq!(list[0].chapter_count, 2);
     assert!(list[0].updated_ms > 0);
     assert!(!list[0].pending);
+    // 队列 Q14 第三刀：清单侧那个「N 总结」必须与明细视图里的总结条数**同源同数**
+    // ——左栏那一行读的是清单，画布读的是明细，两处对不上就是第二把尺。
+    let counts = org.tree_chapters("s-view", r"F:\ws\demo");
+    assert_eq!(
+        list[0].summary_count,
+        counts.summaries.len(),
+        "清单报的总结数 = 投影里的条数（不是章节数顶替）"
+    );
+    assert_ne!(
+        list[0].summary_count, list[0].chapter_count,
+        "两把尺在同一条会话上取值不同，才证明这里没把章节数当总结数抄"
+    );
 
     // 章节清单：数值序 b1、b2（BTreeMap 字典序会把 b10 排到 b2 前）
     let view = org.tree_chapters("s-view", r"F:\ws\demo");

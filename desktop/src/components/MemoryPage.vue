@@ -14,6 +14,8 @@ import { useI18n } from "vue-i18n";
 import ListPage from "./patterns/ListPage.vue";
 import SourceBadge from "./SourceBadge.vue";
 import HoverTip from "./settings/HoverTip.vue";
+import SettingsSegmented from "./settings/SettingsSegmented.vue";
+import TreeBoard from "./memory/TreeBoard.vue";
 import TreeSection from "./memory/TreeSection.vue";
 import InjectSection from "./memory/InjectSection.vue";
 import { relativeTimeLabel, relativeTimeSec } from "../lib/format";
@@ -29,6 +31,20 @@ import {
 import type { MemoryRow } from "../types";
 
 const { t } = useI18n();
+
+/**
+ * 页签（队列 Q14 第三刀 · MB §6 那句「MemoryPage 改双页签（记忆树默认 / 事实库）」
+ * 的兑现）。⚠ 一条需要说明的取舍：稿只点了两个页签的名字，没说**编辑面**归哪一档。
+ * MB §3.2 的只读裁定写的是「编辑留在 TreeSection（现状不动，合并再议）」，所以本刀
+ * 按「看板 = 只读导航、其余全在事实库档」落地——`TreeSection`（章节编辑/删除）与
+ * `InjectSection`（注入解释）一起进「事实库」，一个字节的功能都没改，只换了位置。
+ * 要拆成三档（看板 / 目录 / 事实库）只需要动这里一行，等真机走过一遍再定。
+ */
+const tab = ref<"board" | "facts">("board");
+const tabs = [
+  { value: "board", label: t("memory.tabBoard") },
+  { value: "facts", label: t("memory.tabFacts") },
+];
 
 const search = ref("");
 const entries = ref<MemoryRow[] | null>(null); // null = 加载中
@@ -154,7 +170,24 @@ function timeText(row: MemoryRow): string {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <!-- 目的地壳的内容层是定高块，画布必须有确定高度才能量包围盒/算端点 ⇒ 根给
+       `h-full`（ListPage 与各区块本来就按 overflow-hidden + 内滚设计，行为不变）。 -->
+  <div class="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+    <!-- 页签条（Q14 第三刀）：分段控件的唯一形态 = SettingsSegmented；栏内分区
+         用间距不用发丝线（MB §3.1），所以这里不给 border-bottom。 -->
+    <div class="flex shrink-0 items-center px-5 pb-2 pt-3">
+      <SettingsSegmented
+        v-model="tab"
+        :options="tabs"
+        :label="t('memory.tabLabel')"
+      />
+    </div>
+
+    <!-- 看板档 = 只读导航画布（左栏 + 四列汇聚，MB §3） -->
+    <TreeBoard v-if="tab === 'board'" />
+
+    <!-- 事实库档 = 现役全部内容原样搬进来（事实列表 + 章节编辑 + 注入解释 + 清空） -->
+    <template v-else>
     <!-- M3 §3.37① 双区块之一：事实库区块头（在 ListPage 外，空列表也
          显示——双区块口径一致；现有列表行为零变化）。F2 v4.9：右侧挂
          「打开文件夹」——人的编辑面入口。 -->
@@ -303,5 +336,6 @@ function timeText(row: MemoryRow): string {
       </button>
       <p class="ml-auto text-[length:var(--lw-fs-11)] text-ink-5">{{ t("memory.hint") }}</p>
     </div>
+    </template>
   </div>
 </template>
