@@ -45,7 +45,10 @@ pub use circuit_breaker::CircuitBreaker;
 pub use compact::{CompactionOutcome, estimate_tokens};
 pub use fragments::{FragmentInject, FragmentSource, wrap_system_reminder};
 pub use instruction_files::{InstructionFilesInject, InstructionSource};
-pub use memory_inject::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
+pub use memory_inject::{
+    LearnWeights, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource, RecallQuery,
+    VALUE_INJECT_MAX_CHARS,
+};
 pub use timeout::Timeout;
 pub use tool_exposure::{ExposureSnapshot, GlobalEwma, ToolExposure, ToolExposureConfig};
 pub use tool_retrieval::{EmbedPort, RETRIEVAL_WEIGHT, Retriever, cosine};

@@ -26,7 +26,7 @@ use std::time::Duration;
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
-use kernel_agent::{MemoryEntry, MemorySource};
+use kernel_agent::{MemoryEntry, MemorySource, RecallQuery};
 
 use crate::timeutil::now_secs;
 use crate::workspace::{scope_key, WorkspaceResolver};
@@ -576,10 +576,23 @@ impl MemoryStore {
         rows: &[MemoryRow],
         started: std::time::Instant,
     ) {
+        let keys: Vec<String> = rows.iter().map(|r| r.key.clone()).collect();
+        self.log_inject_keys(session_id, n_candidates, &keys, started);
+    }
+
+    /// 埋点的键位版（Q9 学习路径给的是 `memory_learn::Candidate`，不是管理页
+    /// 行形状）。**拆成两层而不是改上面那个签名**：现役 `recall_quiet` 的调用点
+    /// 因此一字未动，「关掉学习档 = 逐字节回到现役」这条判据里连观测面都算得上。
+    fn log_inject_keys(
+        &self,
+        session_id: Option<&str>,
+        n_candidates: usize,
+        keys: &[String],
+        started: std::time::Instant,
+    ) {
         let Some(log) = &self.recall_log else {
             return;
         };
-        let keys: Vec<String> = rows.iter().map(|r| r.key.clone()).collect();
         let scope = self.scope_of_session(session_id);
         // 无会话传空串而不是 NULL：部分唯一索引里 NULL ≠ NULL，用 NULL 会让
         // 「无会话的注入」每 step 插一条，去重直接失效（recall_log.rs 不变量 3）。
@@ -587,8 +600,8 @@ impl MemoryStore {
             session_id.unwrap_or_default(),
             &scope,
             n_candidates,
-            rows.len(),
-            &keys,
+            keys.len(),
+            keys,
             started.elapsed(),
         ) {
             tracing::warn!("recall observability: {e}");
@@ -710,6 +723,9 @@ fn today_local() -> String {
 /// memory_read / memory_search 按需查）。㉘·A·fix 另供两件：`scope_id`
 /// （预取缓存键成分——归属变更自动重算）与 `context_line`（归属会话告知
 /// 模型当前项目根，"看下这个项目"不再靠旧记忆猜路径）。
+/// 队列 Q9 起**覆写 `recall_relevant`**：排序真源从"SQL 的 `updated_at DESC`"
+/// 变成"候选集内存四信号加权"（`memory_learn.rs`），`recall` 本体保留不动
+/// = 学习档关掉时的现役参照。
 impl MemorySource for MemoryStore {
     fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
         // Q1（L0）：session_id 现在透传给 recall_quiet，但**只作观测字段**——
@@ -726,6 +742,79 @@ impl MemorySource for MemoryStore {
                 scope: "global".into(),
             })
             .collect()
+    }
+
+    /// 队列 Q9（ML 稿 §3.3 排序 + §3.4 强化 = 稿内 L2/L3 合一批）：四信号现算
+    /// 加权排序 + 交付即写回。打分与写回的**全部逻辑在 `memory_learn.rs`**，
+    /// 这里只做装配、连接与观测（同一进程内一次连接读完就排，不重开库）。
+    ///
+    /// ⚠ **关掉学习档走的是 `Self::recall` 本体**，不是"另写一份等价的老 SQL"：
+    /// 稿 §5.4 要求 `learnEnabled=false` 逐字节回到现役，这条由**调用图**给出而不是
+    /// 由测试近似——现役路径只有一个实现，新路径无法在它身上偷偷改点什么还声称等价。
+    ///
+    /// ⚠ **订正：写回粒度是"每会话一次"而不是稿 §3.4 说的"每次 `recall()` 调用"**。
+    /// 桌面链的 `MemoryInject` 带会话预取缓存（M1 纪律：逐轮动态检索会改写
+    /// system 前缀、命中归零），一个会话只有**首查**那一次真走到这里 ⇒ `hit_count`
+    /// 的增长单位是**会话**不是轮次，同一会话追问十轮记忆只 +1。方向上是好事
+    /// （稿 §6.1 担心的"检索即自我强化"被从 ×轮 压到 ×会话），但必须说破：
+    /// A/B 时看到的 `hit_count` 不能按轮次解释，`memory_inject_log` 里一个会话
+    /// 也只有一行注入记录（Q1 的既有形状）。
+    fn recall_relevant(
+        &self,
+        session_id: Option<&str>,
+        limit: usize,
+        query: &RecallQuery,
+    ) -> Vec<MemoryEntry> {
+        if !query.weights.enabled {
+            return self.recall(session_id, limit);
+        }
+        let started = std::time::Instant::now();
+        let now = now_secs();
+        let learned: Result<(Vec<crate::memory_learn::Candidate>, Vec<String>, usize), String> =
+            (|| {
+                let conn = self.open_conn()?;
+                // n_candidates 恒取**全量** COUNT（与 recall_quiet 同口径），不是候选
+                // 上限：Q1 那条指标的分子分母不能随本刀换定义。
+                let n_candidates = crate::memory_learn::count_global(&conn)?;
+                let delivered = crate::memory_learn::rank(
+                    crate::memory_learn::candidates(&conn)?,
+                    query,
+                    limit,
+                    now,
+                );
+                // 写回与埋点吃**同一个 keys 变量**：交付集合、`hit_count` 增量、
+                // `memory_inject_log.keys` 三者不可能分叉（分叉过一次就是"日志说注入了
+                // 三条、库里只加了两条"这种查不出的账）。
+                let keys: Vec<String> = delivered.iter().map(|c| c.key.clone()).collect();
+                crate::memory_learn::reinforce(&conn, &keys, now);
+                Ok((delivered, keys, n_candidates))
+            })();
+        match learned {
+            Ok((rows, keys, n_candidates)) => {
+                self.log_inject_keys(session_id, n_candidates, &keys, started);
+                rows.into_iter()
+                    .map(|c| MemoryEntry {
+                        key: c.key,
+                        value: c.value,
+                        tags: c.tags,
+                        updated_at: c.updated_at,
+                        // 与现役 recall 同一个层标口径：注入只取全局层。
+                        scope: "global".into(),
+                    })
+                    .collect()
+            }
+            Err(e) => {
+                // 与 `recall_quiet` 共用 `warned`：两处失效原因是**同一个** open_conn
+                // （库打不开/查询失败），各开一位会让其中一边在真故障时静默两次
+                // 告警；project_index 那位独立 ONCE 的理由（失效原因不同）在这里不成立。
+                // 同样**不记埋点**：连 n_candidates 都取不到，记 0 会把"库不可用"
+                // 冒充成"库是空的"（指标造假）。
+                if !self.warned.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    tracing::warn!("memory recall unavailable（记忆注入降级为空）: {e}");
+                }
+                Vec::new()
+            }
+        }
     }
 
     fn scope_id(&self, session_id: Option<&str>) -> String {

@@ -51,6 +51,7 @@ async fn disabled_or_zero_top_k_is_noop() {
         MemoryInjectConfig {
             enabled: true,
             top_k: 0,
+            ..MemoryInjectConfig::default()
         },
     ] {
         let inject = inject(

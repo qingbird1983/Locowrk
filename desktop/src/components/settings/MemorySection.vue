@@ -34,6 +34,13 @@ const form = reactive({
   instructionProjectKib: 100,
   factCards: true,
   factCardMax: 3,
+  // Q9 学习档（缺省开；四档千分比，缺省 400/250/200/150 = 后端那份真源，
+  // 这里只作 form 初值，载入后立即被 settings.view 覆盖）
+  learnEnabled: true,
+  relevanceWeight: 400,
+  strengthWeight: 250,
+  freshnessWeight: 200,
+  recencyWeight: 150,
 });
 
 // M2 整理节奏二档（树 v2 §4.3）：分段控件全局规范（§3.32·七）
@@ -67,6 +74,11 @@ watch(
     form.instructionProjectKib = v.memory.instructionProjectKib;
     form.factCards = v.memory.factCards;
     form.factCardMax = v.memory.factCardMax;
+    form.learnEnabled = v.memory.learnEnabled;
+    form.relevanceWeight = v.memory.relevanceWeight;
+    form.strengthWeight = v.memory.strengthWeight;
+    form.freshnessWeight = v.memory.freshnessWeight;
+    form.recencyWeight = v.memory.recencyWeight;
   },
   { immediate: true },
 );
@@ -88,6 +100,11 @@ function save() {
     instructionProjectKib: Math.round(form.instructionProjectKib),
     factCards: form.factCards,
     factCardMax: Math.round(form.factCardMax),
+    learnEnabled: form.learnEnabled,
+    relevanceWeight: Math.round(form.relevanceWeight),
+    strengthWeight: Math.round(form.strengthWeight),
+    freshnessWeight: Math.round(form.freshnessWeight),
+    recencyWeight: Math.round(form.recencyWeight),
   });
 }
 </script>
@@ -264,6 +281,74 @@ function save() {
         type="number"
         min="1"
         max="10"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+    <!-- Q9 学习档（ML 稿 §3.3 加权排序 + §3.4 交付即命中）：关掉 = 注入排序逐字节
+         回到现役、命中写回一起停（稿 §5.4 的对照档）。四档单位千分比、各自独立，
+         **不要求和为 1000**（后端 LEARN_WEIGHT_MAX 的头注给了理由：排序只看相对大小，
+         硬约束会逼出"改一个摊平其余三个"的联动机制）。四档全 0 合法 = 回到现役序。
+         生效时机：当前会话的注入块已按预取缓存钉死，**改权重下一个会话起效**。 -->
+    <SettingsRow :title="t('settings.learnEnabled')" :hint="t('settings.learnEnabledHint')">
+      <SettingsToggle v-model="form.learnEnabled" :label="t('settings.learnEnabled')" />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.learnEnabled"
+      :title="t('settings.learnRelevance')"
+      :hint="t('settings.learnRelevanceHint')"
+      control-id="memory-learn-relevance"
+    >
+      <input
+        id="memory-learn-relevance"
+        v-model.number="form.relevanceWeight"
+        type="number"
+        min="0"
+        max="1000"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.learnEnabled"
+      :title="t('settings.learnStrength')"
+      :hint="t('settings.learnStrengthHint')"
+      control-id="memory-learn-strength"
+    >
+      <input
+        id="memory-learn-strength"
+        v-model.number="form.strengthWeight"
+        type="number"
+        min="0"
+        max="1000"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.learnEnabled"
+      :title="t('settings.learnFreshness')"
+      :hint="t('settings.learnFreshnessHint')"
+      control-id="memory-learn-freshness"
+    >
+      <input
+        id="memory-learn-freshness"
+        v-model.number="form.freshnessWeight"
+        type="number"
+        min="0"
+        max="1000"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+    <SettingsRow
+      v-if="form.learnEnabled"
+      :title="t('settings.learnRecency')"
+      :hint="t('settings.learnRecencyHint')"
+      control-id="memory-learn-recency"
+    >
+      <input
+        id="memory-learn-recency"
+        v-model.number="form.recencyWeight"
+        type="number"
+        min="0"
+        max="1000"
         class="lw-field lw-field-num px-2 text-xs"
       />
     </SettingsRow>

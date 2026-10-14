@@ -7,6 +7,37 @@ fn temp_root(tag: &str) -> PathBuf {
     dir
 }
 
+/// 只更新记忆区的一次设置（其余分区传 None）。
+///
+/// `SettingsStore::update` 是 **13 个位置参数**、返回新视图，第 7 个才是 memory——
+/// 包一层是为了"同一串 None 不在各簇里各抄一遍抄错"（返回值丢掉：各簇一律从
+/// `store.view()` 取，改后读到的是同一份投影由磁盘往返那几条断言去验）。
+///
+/// 由 Q9 从 `instruction_budget.rs` **上收到本文件**：那颗函数原本住在一簇里，
+/// Q9 的 `learn.rs` 需要同一件事时我又写了一份 ⇒ 第五道闸当场报「私有项 set_memory
+/// 被兄弟簇引用」双向两条。判据说的是同一件事：**一个动作有两个出处**，
+/// 而"哪个版本随 Q4 改、哪个随 Q9 改"没有答案。上收 = 夹具留父模块的既有分工
+/// （本文件已经是 temp_root 的家），两簇都走 `use super::*` 拿它。
+fn set_memory(store: &SettingsStore, u: MemoryUpdate) -> Result<(), String> {
+    store
+        .update(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(u),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .map(|_| ())
+}
+
 #[test]
 fn missing_file_yields_defaults() {
     let root = temp_root("defaults");
@@ -247,6 +278,7 @@ mod appearance;
 mod chat;
 mod fact_cards;
 mod instruction_budget;
+mod learn;
 mod llm;
 mod llm_profile;
 mod llm_provider;

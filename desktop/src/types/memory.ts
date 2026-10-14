@@ -44,6 +44,13 @@ export interface MemorySettingsView {
   factCards: boolean;
   /** 每次整理最多几张卡（1–10 缺省 3，factCards 开启时生效）。 */
   factCardMax: number;
+  /** Q9 学习档总开关（缺省开）：关 = 注入排序逐字节回到现役，且命中写回一起停。 */
+  learnEnabled: boolean;
+  /** 四信号权重（千分比 0–1000，各自独立——四档之和不要求等于 1000）。 */
+  relevanceWeight: number;
+  strengthWeight: number;
+  freshnessWeight: number;
+  recencyWeight: number;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -70,6 +77,13 @@ export interface MemoryUpdate {
   factCards?: boolean;
   /** 单次整理最多产几张卡（1–10 缺省 3，仅在 factCards 开时生效）。 */
   factCardMax?: number;
+  /** Q9 学习档开关（`false` = 排序与写回一起回到现役）。 */
+  learnEnabled?: boolean;
+  /** 四信号权重（千分比 0–1000；出界 = 后端拒绝并点名是哪一档）。 */
+  relevanceWeight?: number;
+  strengthWeight?: number;
+  freshnessWeight?: number;
+  recencyWeight?: number;
 }
 
 /** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。

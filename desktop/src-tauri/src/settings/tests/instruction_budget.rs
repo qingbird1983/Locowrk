@@ -6,30 +6,6 @@
 
 use super::*;
 
-/// 更新记忆区两键（其余分区给 None）。`SettingsStore::update` 是 13 个位置参数、
-/// 返回新视图，第 7 个是 memory —— 这里包一层，避免同一串 None 在本簇里抄四遍抄错
-/// 位数（返回值丢掉：本簇一律从 `store.view()` 取，顺带把"改后读到的是同一份投影"
-/// 交给磁盘往返那两条断言去验）。
-fn set_memory(store: &SettingsStore, u: MemoryUpdate) -> Result<(), String> {
-    store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(u),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .map(|_| ())
-}
-
 /// 两档缺省都是 **100 KiB**（= 改前那颗写死的 `MAX_FILE_BYTES`）、区间 8–512、
 /// 往返落盘、两档互不牵连、出界拒。
 #[test]

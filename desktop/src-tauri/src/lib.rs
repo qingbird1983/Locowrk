@@ -49,6 +49,7 @@ mod media;
 mod memory;
 mod memory_files;
 mod memory_index;
+mod memory_learn;
 mod memory_reconcile;
 mod memory_tree_reconcile;
 mod model_override;

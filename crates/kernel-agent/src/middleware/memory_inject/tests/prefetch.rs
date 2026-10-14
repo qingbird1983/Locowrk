@@ -82,6 +82,7 @@ async fn top_k_change_recomputes_prefetch() {
     let cfg = cfg_lock(MemoryInjectConfig {
         enabled: true,
         top_k: 5,
+        ..MemoryInjectConfig::default()
     });
     let inject = inject(src.clone() as std::sync::Arc<dyn MemorySource>, cfg.clone());
     let _ = run_session(&inject, "s1").await.unwrap();

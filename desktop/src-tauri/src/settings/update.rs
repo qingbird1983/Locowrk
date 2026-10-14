@@ -208,6 +208,30 @@ impl SettingsStore {
                 }
                 next.memory.fact_card_max = n;
             }
+            // 学习档（v2.200 · 队列 Q9）：开关直通，四档各走一次区间校验。
+            // 校验体抽在 `settings/memory.rs::check_learn_weight`（同 Q4 那两档的
+            // 理由：区间端点只许一个出处）；这里**四遍各写各的中文档名**——出界
+            // 文案必须点名是哪一档，且不接受用字符串当字段路由那种"看起来省行数"
+            // 的形状（省下的行数由排障时多读的三层 match 还回去）。
+            if let Some(e) = u.learn_enabled {
+                next.memory.learn_enabled = e;
+            }
+            if let Some(n) = u.relevance_weight {
+                super::memory::check_learn_weight("相关性", n)?;
+                next.memory.relevance_weight = n;
+            }
+            if let Some(n) = u.strength_weight {
+                super::memory::check_learn_weight("强度", n)?;
+                next.memory.strength_weight = n;
+            }
+            if let Some(n) = u.freshness_weight {
+                super::memory::check_learn_weight("热度", n)?;
+                next.memory.freshness_weight = n;
+            }
+            if let Some(n) = u.recency_weight {
+                super::memory::check_learn_weight("新鲜度", n)?;
+                next.memory.recency_weight = n;
+            }
         }
         if let Some(u) = tools {
             if let Some(e) = u.enabled {

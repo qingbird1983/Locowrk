@@ -2,8 +2,10 @@
 //! 追加语义 / 非 REQUEST 点不碰。
 //! 批 F-16 目录化：共享假件与跑批入口留本文件，用例按面分簇见 `render` /
 //! `prefetch` / `scope_context`；Q2（MR §4.1）加 `project_index`
-//! （项目记忆索引段的落点、缺席条件与随预取钉死）。
+//! （项目记忆索引段的落点、缺席条件与随预取钉死）；Q9（ML §3.3/§3.4）加
+//! `learn`（相关性词表的切分与下传形状——四信号打分在宿主侧测）。
 
+mod learn;
 mod prefetch;
 mod project_index;
 mod render;

@@ -256,6 +256,18 @@ export default {
       "At each organize pass the recorder also records up to N standalone facts (source shows as recorder-made; review and delete on the Memory page). Turning this off stops new cards; existing ones are untouched.",
     factCardMax: "Fact cards per organize",
     factCardMaxHint: "1–10, default 3. Runs at organize frequency, not every turn.",
+    learnEnabled: "Rank memories by usefulness",
+    learnEnabledHint:
+      "When on, which memories get injected is scored from four weights (match with this conversation, times reinforced, recently used, recently edited). Off restores the plain updated-at ordering byte for byte and stops reinforcement too. Weights are per-mille and independent — they need not sum to 1000. The current session is already pinned; changes apply from the next session.",
+    learnRelevance: "Relevance weight",
+    learnRelevanceHint: "How closely a memory matches the words in this conversation (0–1000, default 400).",
+    learnStrength: "Reinforcement weight",
+    learnStrengthHint:
+      "Times it has been injected, on a saturating curve — 10k uses barely beats 1k (0–1000, default 250).",
+    learnFreshness: "Recently-used weight",
+    learnFreshnessHint: "Time since it was last recalled, 14-day half-life (0–1000, default 200).",
+    learnRecency: "Recently-edited weight",
+    learnRecencyHint: "Time since it was last edited, 30-day half-life (0–1000, default 150).",
     memoryManagerModel: "Memory manager",
     memoryManagerModelHint:
       "The background role that organizes conversations into chapters; defaults to the main model. Pick a cheaper one to save cost.",

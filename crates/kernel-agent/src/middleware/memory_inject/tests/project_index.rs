@@ -57,6 +57,7 @@ fn listener(src: Sourced) -> (MemoryInject, Arc<Mutex<Option<String>>>, Arc<Atom
         cfg_lock(MemoryInjectConfig {
             enabled: true,
             top_k: 5,
+            ..MemoryInjectConfig::default()
         }),
     );
     (inject, index, calls)
@@ -150,6 +151,7 @@ async fn disabled_injection_never_asks_for_the_index() {
         cfg_lock(MemoryInjectConfig {
             enabled: false,
             top_k: 5,
+            ..MemoryInjectConfig::default()
         }),
     );
     match inject.handle(points::REQUEST, &payload_value()).await {

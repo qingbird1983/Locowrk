@@ -130,7 +130,7 @@
 
 | Q | 状态 | 出处 · 代号 | 内容 | 前置 | 体量 |
 |---|---|---|---|---|---|
-| **Q9** | ⬜ | ML §3.3 + §3.4 · **L2 + L3 合一批** | 注入路径改四信号可解释加权（`relevance/recency/strength/freshness`，全部现算不落盘）+ `recall()` 内强化回路 +2 行写回；`learnEnabled=false` 须逐字节回到现役纯 `updated_at DESC` | Q5 + Q2；且库里得有东西（Q3 之后） | M |
+| **Q9** | ✅ **v2.200 · 提交 `__MAIN__`**（本条哈希由同批回补提交落下） | ML §3.3 + §3.4 · **L2 + L3 合一批** | 注入路径改四信号可解释加权（`relevance/recency/strength/freshness`，全部现算不落盘）+ `recall()` 内强化回路 +2 行写回；`learnEnabled=false` 须逐字节回到现役纯 `updated_at DESC`。⚠ **原话留档，落点与原话有三处不同**（全 8 条订正见 ROADMAP v2.200 节）：①加权不做归一除法 ⇒ 四信号与权重都是**千分比整数**，稿 §5.4「权重和为 1」从硬约束降为「缺省恰好和为 1000」；②「每次 recall 都写回」被会话预取缓存限制 ⇒ 实际计数单位是**会话**不是轮次（A/B 读数按此解释）；③`learnEnabled=false` 的等价性**不由测试近似而由调用图给**——trait 缺省支忽略 query 回落 `recall()`，宿主关档支路 `return self.recall(...)` 走的就是现役本体。落点 = 新文件 `desktop/src-tauri/src/memory_learn.rs`（四信号纯函数打分 + 候选 SQL + 写回）· `memory_inject/` 目录化（`mod.rs`+`contract.rs`+`terms.rs`，正文逐字节搬移）· 设置面五键（开关缺省开 + 四档 0–1000，改权重**下一会话**生效）。L4 可解释 breakdown = Q10，本批 `MemoryEntry` 不带学习字段 | Q5 + Q2；且库里得有东西（Q3 之后） | M |
 | **Q10** | ⬜ | ML §3.1 · **L4** ＋ MR §8 · **M3** | 管理页可解释 breakdown（"这条为什么排在这"）搭车遗迹清理（`memory/memory.sqlite3` 0 表遗物、`experiences.sqlite3` 退役空库） | **M3 涉用户数据目录，动手前单独确认** | M |
 
 ### 阶段四 · 对话流、看板与功能面（Q11–Q20，前端集中攻坚）

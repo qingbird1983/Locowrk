@@ -49,91 +49,21 @@ use serde_json::Value;
 
 use crate::waterfall::{RequestPayload, points};
 
-/// 单条记忆（宿主检索实现返回；只带注入需要的字段）。
-#[derive(Debug, Clone)]
-pub struct MemoryEntry {
-    pub key: String,
-    pub value: String,
-    /// 短标签（memory-sqlite 的 tags 为单串，空串 = 无标签）。
-    pub tags: String,
-    /// 更新时间（Unix 秒）；当前仅随条目透出，排序由宿主实现裁决。
-    pub updated_at: i64,
-    /// 层标（㉘·A·fix 双层记忆，Context 文档 §4.6）：`"global"`（用户偏好，
-    /// 全项目可见）| `"project"`（本项目记录）；空串 = 不标层（旧行为）。
-    pub scope: String,
-}
+mod contract;
+mod terms;
 
-/// 记忆检索源契约：宿主实现（desktop 直读 memory.sqlite3，插件侧
-/// schema；ALTER 迁移同样归宿主）。同步短查询，不跨 await；任何失败
-/// 返回空表（实现内部 warn，不向上抛——注入不值得拦聊天）。
-///
-/// `session_id`（㉘）：本 step 的会话 id——宿主据此把召回限定在该会话
-/// 归属的项目内（项目级记忆隔离，Context 文档 §4.6）；内核不解释
-/// workspace 概念，只透传 id。`None` = 无会话上下文（如测试装配）。
-pub trait MemorySource: Send + Sync + 'static {
-    /// 按宿主裁决的相关序（desktop = updated_at 新→旧）取至多 limit 条。
-    fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry>;
-
-    /// 会话的键位身份（㉘·A·fix）：预取缓存键 = `(session_id, scope_id)`。
-    /// 会话中途改归属 = 换键 = 首查重算（键位不变则逐字节复用，M1 纪律
-    /// 不破）。缺省空串 = 不参与键（旧行为，装配测试零负担）。
-    fn scope_id(&self, session_id: Option<&str>) -> String {
-        let _ = session_id;
-        String::new()
-    }
-
-    /// 环境块内文（提示词分层设计 §4.2，v2.139 起 `<environment>`）：
-    /// 归属会话告知项目根 + 日期/平台。逐会话稳定、同吃预取缓存（日期
-    /// 会话锁死）。缺省 `None` = 不带块（未归属/headless）。
-    fn context_line(&self, session_id: Option<&str>) -> Option<String> {
-        let _ = session_id;
-        None
-    }
-
-    /// 仓库交接/提醒段（v2.136 项目侧全提醒制）：归属会话的
-    /// `<repo>/.Locowrk/` **静态提醒文本**——目录里有什么、在什么节点
-    /// 读/更新，正文不再注入，由主模型按需用文件工具查看与维护。宿主
-    /// 实现；缺省 `None` = 无提醒段（headless / 未归属 / 开关关），组装
-    /// 零变化。文本静态 = 跨轮逐字节稳定（M1 纪律不破）。
-    fn repo_context(&self, session_id: Option<&str>) -> Option<String> {
-        let _ = session_id;
-        None
-    }
-
-    /// 项目记忆**索引**（MR 稿 §4.1，队列 Q2）：本项目项目层的**指针行**
-    /// （`- <key> — <hook>`），不是事实正文——v2.136「项目层事实不自动注入」
-    /// 禁的是全文灌进 system，索引给的是"这个项目记了哪些条"，正文仍由模型
-    /// `memory_read` 按需取。宿主实现（md 投影优先、sqlite 现合成兜底、预算钳制
-    /// 都在宿主侧）。
-    ///
-    /// 缺省 `None` = 整节缺席（未归属会话没有"本项目"可言 / 项目层空 / headless
-    /// 装配），组装零变化。文本随块同吃会话预取缓存 = 会话内字节钉死（M1 纪律）。
-    fn project_index(&self, session_id: Option<&str>) -> Option<String> {
-        let _ = session_id;
-        None
-    }
-}
-
-/// 注入参数（settings.json `memory` 区；Context 文档 §6.2 的
-/// max_inject_count，缺省 5——约束清单 §3"注入条数可配"）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MemoryInjectConfig {
-    pub enabled: bool,
-    pub top_k: usize,
-}
-
-impl Default for MemoryInjectConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            top_k: 5,
-        }
-    }
-}
+pub use contract::{LearnWeights, MemoryEntry, MemoryInjectConfig, MemorySource, RecallQuery};
+use terms::relevance_terms;
 
 /// 单条 value 注入上限（字符）：记忆库单条可达 256KiB，原样注入一轮就
 /// 顶爆窗口；超长截断并标注（全文在记忆管理页可看）。
-const VALUE_INJECT_MAX_CHARS: usize = 500;
+///
+/// **`pub` 的理由不是"方便"而是"匹配面必须等于注入面"**（队列 Q9）：宿主侧的
+/// `relevance` 信号要对 value 做关键词匹配，如果它扫全文，一条记忆会**因为模型
+/// 根本看不到的第 8000 字命中而排到前面**——那是在给"注入块里没有的东西"打分。
+/// 所以宿主复用这同一个常量截断匹配面；本仓判据要求宿主侧不得再出现 `500`
+/// 字面量（同一属性两个出处 = 历批立的纪律在这里正适用）。
+pub const VALUE_INJECT_MAX_CHARS: usize = 500;
 
 /// 预取缓存上限（FIFO 驱逐最旧会话）：与 ToolExposure 钉死表同款保险丝。
 const PREFETCH_CAP: usize = 128;
@@ -336,9 +266,22 @@ impl WaterfallListener for MemoryInject {
             );
         }
         // 全局记忆注入（v2.136 裁定）：只取全局层（用户层面的喜好/全局
-        // 要求），按 updated_at 新→旧取 top_k；项目层事实不自动注入，
-        // 由模型 memory_read / memory_search 按需查（见 GUIDANCE_BLOCK）。
-        let entries = self.source.recall(req.session_id.as_deref(), cfg.top_k);
+        // 要求）；项目层事实不自动注入，由模型 memory_read / memory_search
+        // 按需查（见 GUIDANCE_BLOCK）。排序真源在宿主：队列 Q9（ML §3.3/§3.4）
+        // 起为**四信号现算加权**，`learn_enabled=false` 时逐字节回到现役的
+        // `updated_at DESC, key`——内核只负责把相关性词表递下去（取数时刻 =
+        // 会话首查，被下面的预取缓存包住 = 一个会话一次）。
+        let query = RecallQuery {
+            terms: if cfg.learn.enabled {
+                relevance_terms(&req.messages)
+            } else {
+                Vec::new()
+            },
+            weights: cfg.learn,
+        };
+        let entries = self
+            .source
+            .recall_relevant(req.session_id.as_deref(), cfg.top_k, &query);
         block = Self::append_block(block, Self::build_block(&entries));
         // 项目记忆索引（Q2 · MR §4.1）：紧随全局层之后——指针行，正文不进。
         // 宿主给定内文，标签在这里包（与 `<repo_context>` / `<environment>` 同形，
