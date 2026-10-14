@@ -70,6 +70,13 @@ pub mod channels {
     /// 里的行数上报（插件侧真源）聚合产出，实时与重放同一来源。宿主**不读盘**
     /// 算 diff——读盘算出来的数不进日志，重放同一次会话会得到与当场不同的数。
     pub const FILE_CHANGES: &str = "agent://file-changes";
+    /// 轮头（CF §2.1，队列 Q12·第二刀 v2.205）：本轮**收束状态**与**真正干活的
+    /// 毫秒数**（墙钟区间扣掉等待用户审批的那一段）。它**不进会话日志**——不是
+    /// 新事实，而是 `TurnStart` / `TurnEnd` / `ApprovalDecided`（带 `asked_at`
+    /// /`decided_at`）三颗已落盘事件的汇总 ⇒ 实时与重放同一个算式、同一个数。
+    /// 刻意**不带 `steps` 也不带 `ts`**：那两个读数已由 `agent://turn-done` 提供，
+    /// 同一属性只许一个出处（取证批 G6 那句「先例已在场，别另发明」）。
+    pub const TURN_HEADER: &str = "agent://turn-header";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -300,6 +307,51 @@ pub enum AgentEvent {
         turn_id: Option<u64>,
         files: Vec<FileChangePayload>,
     },
+    /// 本轮收束的轮头（见 `channels::TURN_HEADER`）：状态四态 + 扣过等待的工作时长。
+    /// 由 `runner/turn_summary.rs` 在 `TurnEnd` 处产出，实时（`finish_turn`）与
+    /// 重放（`project_events`）**同一个算式**；排在 `FileChanges` 之前、`TurnDone`
+    /// 之前——前端把轮头读数挂在轮尾，TurnDone 一到就冻结。
+    TurnHeader {
+        session_id: String,
+        /// `SessionEvent::TurnEnd.turn_id` 原样带出（与 `FileChanges` 同一来源）。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        turn_id: Option<u64>,
+        state: TurnState,
+        /// 本轮真正干活的毫秒数 = 墙钟区间 − Σ审批等待。
+        /// `None` = 数据层读不出（旧日志无轮界时刻，或本轮的审批没有两刻）
+        /// ⇒ 前端回落到墙钟读数，不拿 0 冒充"没等待"。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        active_ms: Option<i64>,
+    },
+}
+
+/// 轮收束状态（宿主侧三态）。
+///
+/// ⚠ 设计稿 CF §2.1 写的是**四**态（含 `running`），这里刻意只做三态：`running`
+/// 的权威源是容器的本地运行态（前端 `running` 布尔与 `TurnProcess` 的 phase 机
+/// 已经各有一份），而 `turn_header` 是**收束时**才发的结论——把它再带一份 running
+/// 就是给同一件事造第三个出处（同类只许一种形态，§2.1 订正块记此改动）。
+///
+/// 三态一一对应 `SessionEvent::TurnEnd.outcome`，映射写成 `From` 而非字符串比较：
+/// `TurnOutcome` 增加第三颗 `Interrupted`（v2.205）时编译器会点名这里，不会静默走
+/// default 支——那正是取证批抓到的「`interrupted` 与完成同形」的产地。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnState {
+    Completed,
+    Interrupted,
+    Failed,
+}
+
+impl From<session_store::TurnOutcome> for TurnState {
+    fn from(outcome: session_store::TurnOutcome) -> Self {
+        use session_store::TurnOutcome as O;
+        match outcome {
+            O::Completed => Self::Completed,
+            O::Failed => Self::Failed,
+            O::Interrupted => Self::Interrupted,
+        }
+    }
 }
 
 /// 文件改动的一条（±N 的权威源 = 插件写类工具结果里的 `additions`/`deletions`，
@@ -348,6 +400,7 @@ impl AgentEvent {
             AgentEvent::UncertainResolved { .. } => channels::UNCERTAIN_RESOLVED,
             AgentEvent::ToolStatus { .. } => channels::TOOL_STATUS,
             AgentEvent::FileChanges { .. } => channels::FILE_CHANGES,
+            AgentEvent::TurnHeader { .. } => channels::TURN_HEADER,
         }
     }
 }

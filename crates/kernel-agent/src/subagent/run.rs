@@ -10,6 +10,7 @@ use session_store::{Session, SessionEvent, TurnId, TurnOutcome};
 
 use super::SubagentGate;
 use crate::kernel::Kernel;
+use crate::timeutil::now_ms;
 
 /// 缺省/上限预算（工具层钳制输入，这里是唯一事实源）。
 pub const DEFAULT_MAX_TURNS: u32 = 8;
@@ -240,15 +241,6 @@ fn converged(child: &Session) -> bool {
         }),
         Some(true)
     )
-}
-
-/// Unix 毫秒（kernel.rs ContextCompacted 同款口径；时钟不可用 = 0，
-/// 投影按缺失处理不虚构）。
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 /// 摘要 = 子转录**自身段**（`own_from` 之后）最后一条非空 assistant 正文；

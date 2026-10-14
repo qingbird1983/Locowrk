@@ -33,6 +33,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::tool_retrieval::Retriever;
+use crate::timeutil::now_secs;
 use crate::waterfall::{RequestPayload, points};
 
 /// 会话内权重（§5.3：本会话用过 → 至少 +1.0，基本稳进）。
@@ -306,13 +307,6 @@ impl WaterfallListener for ToolExposure {
         req.tools = reorder(&mut req.tools, &sel.kept_idx);
         super::replace_decision(req)
     }
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 #[cfg(test)]

@@ -9,9 +9,11 @@
 //! 纪律：先写 `ToolCall` 事件再执行工具，进程崩溃后可 replay 识别悬空调用；
 //! 模型适配器不特殊，只是经 `use_dyn::<dyn LlmService>` 获取的服务。
 
+mod approval_step;
 mod request;
 mod services;
 
+pub(crate) use approval_step::Consulted;
 pub use services::{
     LlmError, LlmRequest, LlmResponse, LlmService, LlmUsage, ToolCallReq, ToolSource,
     TreeContextSource, TreePlan, collapse_expanded, tail_user_start,
@@ -238,10 +240,7 @@ impl Kernel {
                 from_tokens: c.from_tokens,
                 to_tokens: c.to_tokens,
                 strategy: c.strategy,
-                ts: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as i64)
-                    .unwrap_or(0),
+                ts: crate::timeutil::now_ms(),
             });
         }
 
@@ -320,26 +319,13 @@ impl Kernel {
             // Compensable；㉘·C 起决议者在场 = 全量 consult，含 Pure——隐私
             // 门要能拦住 shell_read 读 `.ssh`，只读直通由决策表自己放行）。
             // 无决议者时 fail-safe（纪律 9）且语义不变：Irreversible 拒绝，
-            // Pure/Compensable 照旧放行不 consult（headless 零变化）。决策
-            // 本身作为 ApprovalDecided 事件写入日志。被拒调用当场以 denied
-            // 的 ToolResult 闭合——replay 只会把"执行中崩溃"视为悬空，被拒
-            // 调用不留悬空（§7.2）。
+            // Pure/Compensable 照旧放行不 consult（headless 零变化）。决议、
+            // 等待的两刻与被拒闭合都由 `kernel/approval_step.rs` 单点写日志
+            // （v2.205）——replay 只把"执行中崩溃"视为悬空，被拒调用不留悬空。
             if self.approval.is_some() || !matches!(tool.spec().side_effect, SideEffect::Pure) {
-                let decision = self.approve(&call, tool.spec()).await;
-                session.append(SessionEvent::ApprovalDecided {
-                    call_id: call.id.clone(),
-                    allowed: decision.allowed,
-                    reason: decision.reason.clone(),
-                });
-                if !decision.allowed {
-                    session.append(SessionEvent::ToolResult {
-                        call_id: call.id.clone(),
-                        output: Value::Null,
-                        error: Some(match decision.reason {
-                            Some(reason) => format!("denied by approval: {reason}"),
-                            None => "denied by approval".into(),
-                        }),
-                    });
+                if let Consulted::Denied { .. } =
+                    self.consult_to_log(&call, tool.spec(), session).await
+                {
                     continue;
                 }
             }

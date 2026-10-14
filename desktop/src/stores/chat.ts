@@ -37,6 +37,7 @@ import type {
   FileChangeDto,
   SessionMeta,
   ToolRowStatus,
+  TurnState,
 } from "../types";
 
 export type ToolItem = {
@@ -82,6 +83,15 @@ export type ChatItem =
        * 实时与重放同一来源（后端在 TurnEnd 处从插件上报聚合）。
        * 缺省 = 本轮没写文件（不发空数组）。 */
       files?: FileChangeDto[];
+      /** 本轮收束状态（队列 Q12·第二刀 v2.205）：`agent://turn-header` 的权威读数。
+       * 它取代的正是此前只能由前端 `stopRequested` 自算的「已停止」标记——那个标记
+       * 不进会话日志，切会话 / 重启就没了。缺省 = 旧日志或旧后端没有这条事件 ⇒
+       * 消费方按"不知道"处理，**不许拿 completed 兜底**。 */
+      turnState?: TurnState;
+      /** 本轮真正干活的毫秒数 = 墙钟区间 − Σ审批等待（等待源 = 日志里的
+       * `ApprovalDecided` 两刻，v2.205 起才有）。缺省 = 数据层读不出 ⇒ 计时行
+       * 回落到 `endTs - ts` 的墙钟读数；**不得折算成 0**（0 是"一秒没干活"的断言）。 */
+      activeMs?: number;
     }
   | {
       id: number;
@@ -580,12 +590,31 @@ export const useChatStore = defineStore("chat", {
             }
           }
           break;
+        case "turn_header":
+          // 轮头（Q12·第二刀 v2.205）：状态与扣过等待的时长挂 user 行——与 files /
+          // endTs 同一个容器、同一条「找不到 user 行 = 调度轮 ⇒ 不虚构归属」的规矩。
+          // `active_ms` 为 null/缺省时**不写 activeMs**：缺 = "数据层读不出"（旧日志
+          // 没有审批两时刻），计时行据此回落到墙钟读数；把它折算成 0 就是谎报
+          // "这轮一秒没干活"（与 ±N 的 NULL 档同一条纪律）。
+          // 顺序上后端保证 turn_header → file_changes → turn_done，本 case 因此
+          // 早于 endTs 落位；两者互不覆盖（一个写状态/时长，一个写收束时刻）。
+          {
+            const head = [...this.items].reverse().find((i) => i.kind === "user");
+            if (head && head.kind === "user") {
+              head.turnState = e.state;
+              if (e.active_ms != null) head.activeMs = e.active_ms;
+            }
+          }
+          break;
         case "file_changes":
           // 本轮文件改动（Q12·C1）：**不作为独立行**，挂在轮头容器上——
           // 与 endTs 挂 user 行同一做法（TranscriptFlow 按 user 行分轮）。
           // 找不到 user 行 = 调度轮（没有用户消息，计时行本就无从起算，同一
-          // 缺口）⇒ 不虚构归属、不造暂存死数据，如实不挂；TurnHeader 那一刀
-          // 给了轮级容器后由它接手（队列 §4 的 Q12 行登记了这一步）。
+          // 缺口）⇒ 不虚构归属、不造暂存死数据，如实不挂。⚠ 订正（v2.205）：
+          // 这里原先写「等 TurnHeader 那一刀的轮级容器再接手」，实落形状 =
+          // **轮级容器就是 user 行的 `turnState` / `activeMs` / `files` 三个字段**
+          // （上一条 case），没有另造一种独立行——CF §2.1 说的"轮头"是读数容器，
+          // 不是新行种（同类只许一种形态：分轮仍以 user 行为界，不并列两套）。
           {
             const head = [...this.items].reverse().find((i) => i.kind === "user");
             if (head && head.kind === "user") {

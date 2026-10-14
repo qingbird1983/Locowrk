@@ -10,7 +10,10 @@ use serde_json::json;
 use session_store::{Session, SessionEvent, TurnId};
 
 use crate::events::AgentEvent;
-use crate::runner::projection::{collect_file_changes, project_events};
+use crate::runner::projection::project_events;
+// 聚合口径自 v2.205 起住在 `runner::turn_summary`（轮末汇总独立成模块）；
+// 本簇跟着改引用路径，函数体与期望值一字未动 = 搬移的等价性由这 4 条用例给。
+use crate::runner::turn_summary::collect_file_changes;
 
 fn tool_result(output: serde_json::Value) -> SessionEvent {
     // ToolCall 先行（纪律 4），投影才认得这条结果属于哪个工具

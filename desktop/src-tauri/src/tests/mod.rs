@@ -109,6 +109,7 @@ pub(crate) fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::UncertainResolved { .. } => "uncertain_resolved",
         AgentEvent::ToolStatus { .. } => "tool_status",
         AgentEvent::FileChanges { .. } => "file_changes",
+        AgentEvent::TurnHeader { .. } => "turn_header",
     }
 }
 

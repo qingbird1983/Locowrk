@@ -25,10 +25,12 @@ use crate::events::{AgentEvent, EventSink};
 use crate::timeutil::now_ms;
 
 pub(crate) mod projection;
+pub(crate) mod turn_summary;
 pub use projection::project_events;
-// 本轮文件改动的聚合口径（Q12·C1）：实时路径在 `finish_turn` 用它，重放路径在
-// `project_events` 的 TurnEnd 支用它——**同一个函数**是"两处同一把尺"的形状判据。
-use projection::{collect_file_changes, turn_slice_start};
+// 轮末汇总（Q12·C1 + 第二刀）：聚合口径住在 `turn_summary`，实时路径经
+// [`emit_turn_summary`]（`finish_turn` 唯一调用点）与重放路径（`project_events`
+// 的 TurnEnd 支）**调同一批函数**——"两处同一把尺"是形状判据钉住的形状。
+use turn_summary::emit_turn_summary;
 
 /// 单轮 step 上限缺省值：防止模型反复发工具调用打转（防御性兜底）。
 /// ㉕·微调③ 起实际值可配（settings `tools.maxTurnSteps`，工具与暴露
@@ -123,15 +125,17 @@ pub async fn run_turn(
     for steps in 1..=max_steps.max(1) {
         // 停止生成（§3.39④）：步间边界检查——流式内的截断发生在 LLM 适配器
         // （delta 回调点，本步已带部分正文收束）；这里兜住"工具跑完后不再
-        // 开下一步"。收束 = TurnDone 正常闭环（前端头行按 stopRequested
-        // 显示「已停止」，不加系统气泡）。
+        // 开下一步"。收束如实记 `Interrupted`（Q12·第二刀 v2.205）：取证批实测过
+        // 旧形状里停止也走 `Completed` ⇒「已停止」与正常完成在日志中**同形**，
+        // 前端只能靠本地 `stopRequested` 自算、切会话/重启后那个标记就没了。现在
+        // 权威态进日志（旧日志读回来仍是 `Completed` = 不事后猜它当时是不是被停的）。
         if stop.is_some_and(|f| f.is_stopped(session_id)) {
             finish_turn(
                 session,
                 log,
                 session_id,
                 turn_id,
-                TurnOutcome::Completed,
+                TurnOutcome::Interrupted,
                 Some(sink),
                 steps,
             );
@@ -260,19 +264,12 @@ fn finish_turn(
         session_log::append_slice(dir, session_id, session, session.len() - 1);
     }
     if let Some(sink) = sink {
-        // 本轮文件改动（Q12·C1）：区间起点由 [`turn_slice_start`] 从日志现推（权威源 =
-        // 落了盘的 `TurnStart`，不是调用方记的变量），上界 = 刚 append 的 TurnEnd 之前一条；
-        // 与重放路径（`project_events` 的 TurnEnd 支）**同一个** `collect_file_changes`。
-        // 轮末汇总先于 TurnDone——前端把清单挂在轮尾，TurnDone 一到就冻结读数。
-        let turn_start = turn_slice_start(session);
-        let files = collect_file_changes(&session.events()[turn_start..session.len() - 1]);
-        if !files.is_empty() {
-            sink.emit(&AgentEvent::FileChanges {
-                session_id: session_id.into(),
-                turn_id: Some(turn_id.0),
-                files,
-            });
-        }
+        // 轮末汇总（`TurnHeader` → `FileChanges`）整体交给 [`emit_turn_summary`]：
+        // 区间起点、墙钟起点、审批等待时长都由日志现推，`finish_turn` 不再自己切区间
+        // ——实时与重放因此共用同一批算式，参数面也停在 7 颗（第八颗会撞
+        // `clippy::too_many_arguments`，上一刀已立「让日志自己回答」的取向）。
+        // 两条都早于 TurnDone：前端把轮头与清单挂在轮尾，TurnDone 一到就冻结读数。
+        emit_turn_summary(session, session_id, turn_id, outcome, ts, sink);
         sink.emit(&AgentEvent::TurnDone {
             session_id: session_id.into(),
             steps: Some(steps),

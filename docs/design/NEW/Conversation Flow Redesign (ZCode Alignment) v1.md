@@ -106,8 +106,13 @@ patch=完整 diff），与内联展开并存；子代理 chip 点击 → 右栏�
 > `tests_session_log/file_changes.rs` 第 4 条钉住。
 > ④ §10 那半格「三向闭合闸扩表」→ 新建**第八道结构闸** `scripts/check-channels.mjs`
 > （四面闭合 + 下限自证），已接 pre-commit 第 ⑩ 段与 CI 的 hygiene 作业。
-> **未落**：`TurnHeader`（含 `state`/`active_ms`/`steps` 与审批两时刻）、`ToolProgress`
+> **未落**：`TurnHeader`（含 `state`/`active_ms`/`steps` 与审批两时刻）〔**v2.205 第二刀已落，见下块**〕、`ToolProgress`
 > （属 C2 的 27 类工具卡）。
+>
+> **⚠ v2.205 落码形状（Q12 第二刀），原表与上面 v2.204 那块一字未擦**：① 上表 `TurnHeader` 那行五个字段里本刀落两个、**且都与稿子不同**——`state` 实为**三值** `completed/interrupted/failed`（`running` 刻意不收，理由同上块末尾）；`started_at` **没有作为字段落进事件**（轮末只需 `active_ms`，再放一份起点 = 同一属性两个出处）；`steps` 沿用 v2.204 那条「宁缺勿假」（日志未记 ⇒ 重放 None，实时也不虚构）。
+> ② `active_ms` = 墙钟区间 − Σ(`decided_at` − `asked_at`)，等待的**时刻源在会话日志里**（`ApprovalDecided` 追加两刻，内核在 consult 前后各取一次）；实时 `emit_turn_summary` 与重放 `project_events` 的 TurnEnd 支**调同一个 `active_ms()`**。三条诚实规则收在 `waited_ms` 一处：任一等待缺数 ⇒ 整轮不给数、负差 ⇒ 不给、本轮无审批 ⇒ 给 `0`（0 是如实读数，不是缺省）。
+> ③ §5「状态三源」里「权威 = 后端 TurnHeader」这一条兑现 = `TranscriptFlow.isStoppedBlock()` 改读后端 `turnState` 优先、前端 `stopRequested` 退为**回落**；轮计时行的走表机器与 `TurnProcess` 合一进 `lib/use-turn-clock.ts`（**只统一机制、不改口径**：运行中仍吃本地时钟，轮末才采用宿主读数）。
+> ④ 未落的一半转挂账：**`AskUser` 提问等待仍没有时刻源**（ask 卡片不进会话日志，v2.203 G3 原判），所以「等用户回答 N 秒」目前扣不掉——这一条不在 Q12 里续刀（同一编号项不续到第三刀）。
 
 **不做**：`inputStreaming`（Locowrk 工具参数调用即知，无流式入参场景）；row.removed
 （编辑重发走既有 `session_history` 重放刷新，不引入截断 op）。
@@ -231,7 +236,7 @@ PermissionCard 形态保留。
 
 | 批 | 内容 | 涉及 |
 |---|---|---|
-| **C1 数据链路** | TurnHeader/ToolStatus/FileChanges 事件 + runner 投影单点扩展 + chat store 行语义 + 三向闭合闸扩表（⚠ **v2.203 实测：`check-commands` 只管命令、事件通道无闸 ⇒ 这一项是「新建通道对账判据」不是「扩表」**） + 重放回归（⚠ 前置 = §2.1 那两条数据源缺口先补，见队列 §5） | src-tauri(events/runner/commands) + stores/chat 〔**v2.204 分段**：第一段 ✅（两条事件 + 行数上报 + 三相位 + 第八道闸 + 重放回归，提交 `02d44cf`）· 第二段 ⬜（`TurnHeader` 与 `asked_at`/`decided_at` 时刻链）〕 |
+| **C1 数据链路** | TurnHeader/ToolStatus/FileChanges 事件 + runner 投影单点扩展 + chat store 行语义 + 三向闭合闸扩表（⚠ **v2.203 实测：`check-commands` 只管命令、事件通道无闸 ⇒ 这一项是「新建通道对账判据」不是「扩表」**） + 重放回归（⚠ 前置 = §2.1 那两条数据源缺口先补，见队列 §5） | src-tauri(events/runner/commands) + stores/chat 〔**v2.204 分段**：第一段 ✅（两条事件 + 行数上报 + 三相位 + 第八道闸 + 重放回归，提交 `02d44cf`）· 第二段 ✅（`TurnHeader` 与 `asked_at`/`decided_at` 时刻链，v2.205 · 提交 `PENDING`）⇒ **C1 两半齐 · Q12 收口**〕 |
 | **C2 工具卡全集** | §4 总表逐类型落地 + §3 折叠规则 + ThinkingRow 反转 + 状态词六态 i18n + 审批卡对齐（§8）+ Stop 状态机 + 重试可见性 | components/chat/* + locales |
 | **C3 产出物与文件页签** | §6 产出物卡 + §7 code-viewer 页签 + fsRoots 校验 + git 色族令牌落地 | WorkPanel + 新组件 + style.css |
 | **C4 打磨（可选）** | 同工具组卡（附录 A #9 挂账）+ 顶部状态条 + diff 短翻页动画 + Rewind 复评（依赖快照立项） | — |

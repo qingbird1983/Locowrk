@@ -300,9 +300,16 @@ function shapeGate() {
         if (d.c === 'mod' || d.vis) continue;
         const bare = baseName(d.name);
         if (!/^[A-Za-z_]\w*$/.test(bare)) continue;
+        // **引用簇自己也有同名定义 ⇒ 不判**（v2.205 批 Q12·第二刀补这一档）。
+        // Rust 的名称解析按模块作用域走：`file_changes.rs` 与 `turn_header.rs` 各写一个
+        // 私有 `turn` 夹具是合法且健康的形态（测试簇互不依赖，谁也不该为了"消歧"去共用
+        // 另一簇的夹具）。原判据只按"别处有同名私有定义"就报越界，把引用方**自己文件里**
+        // 的那份当成了看不见的兄弟私有项 = 误报。真越界的形状（引用方没有同名定义）照判，
+        // 而那一档在 Rust 里本来就是 E0425 编译错误——闸与编译器仍判同一件事。
         const re = new RegExp(`\\b${bare}\\b`);
         for (const { c, src } of clusterSrcs) {
           if (c === d.c) continue;
+          if (hostDefs.some((h) => h.c === c && baseName(h.name) === bare)) continue;
           const stripped = stripCommentsStrings(src);
           for (const u of units(stripped)) {
             if (u.kw === 'use' || u.kw === 'mod' || u.kw === 'impl') continue;

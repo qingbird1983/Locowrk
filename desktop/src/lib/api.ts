@@ -219,6 +219,8 @@ const CHANNELS = [
   "agent://tool-status",
   // 队列 Q12·C1：本轮文件改动汇总（轮末投影，实时与重放同形）。
   "agent://file-changes",
+  // 队列 Q12·第二刀：轮头（收束状态 + 扣过等待的工作时长，轮末投影同形）。
+  "agent://turn-header",
 ] as const;
 
 export function subscribeAgentEvents(

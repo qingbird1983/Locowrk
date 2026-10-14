@@ -6,59 +6,42 @@
  * 下方。v2.101 起轮界时刻落会话日志（TurnStart/TurnEnd），重放复原
  * 读数；旧日志无时刻 = 无读数（只剩发丝线，不虚构时序），调度注入轮
  * 同理（无从起算）。
+ *
+ * v2.205 改两处：①走表机器不再本文件自写——与 `TurnProcess` 同形的那套
+ * `setInterval` + 收束戳移到 `useTurnClock`（同一属性只许一个出处）；
+ * ②收束读数优先用宿主的 `activeMs`（**墙钟区间扣掉等待用户审批的那一段**），
+ * 拿不到才回落墙钟差。文案本就写着「已工作」，扣掉等待才是它说的这件事。
  */
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
+import { useTurnClock } from "../../lib/use-turn-clock";
 
 const props = defineProps<{
   /** 轮起点 = 用户消息实时时刻；undefined = 无从计时（诚实省略读数）。 */
   startTs?: number;
   /** 轮收束时刻（v2.101，重放读数终点；实时收束走本地 finishedAt）。 */
   endTs?: number;
+  /** 本轮真正干活的毫秒数（v2.205，`agent://turn-header`）。undefined =
+   * 旧日志读不出 ⇒ 回落到墙钟差；**不得当 0**。 */
+  activeMs?: number;
   /** 当轮是否在跑（收束即冻结读数）。 */
   running: boolean;
 }>();
 const emit = defineEmits<{ click: [] }>();
 const { t, locale } = useI18n();
 
-const now = ref(Date.now());
-const finishedAt = ref<number | null>(null);
-let timer: number | null = null;
-watch(
-  () => props.running,
-  (r, prev) => {
-    if (r) {
-      // 瞬时翻假回 live（v2.97 实抓）清戳恢复走表；真实收束不回 live
-      if (prev !== undefined) finishedAt.value = null;
-      if (timer === null) {
-        now.value = Date.now();
-        timer = window.setInterval(() => (now.value = Date.now()), 1000);
-      }
-    } else {
-      if (prev !== undefined && prev && finishedAt.value === null) {
-        finishedAt.value = Date.now();
-      }
-      if (timer !== null) {
-        window.clearInterval(timer);
-        timer = null;
-      }
-    }
-  },
-  { immediate: true },
-);
-onBeforeUnmount(() => {
-  if (timer !== null) window.clearInterval(timer);
+const { seconds } = useTurnClock({
+  startTs: () => props.startTs,
+  running: () => props.running,
+  endTs: () => props.endTs,
+  activeMs: () => props.activeMs,
 });
 
-/** 本地化分秒读数（裁定示例「工作中 0 分 1 秒」——分位恒显示）。
- * 终点优先级：本地收束戳（实时）> 重放 endTs（v2.101 轮界事件）> 走表。 */
+/** 本地化分秒读数（裁定示例「工作中 0 分 1 秒」——分位恒显示）。 */
 const text = computed(() => {
-  if (props.startTs === undefined) return "";
-  const end =
-    finishedAt.value ?? props.endTs ?? (props.running ? now.value : null);
-  if (end === null) return "";
-  const sec = Math.max(0, Math.round((end - props.startTs) / 1000));
+  const sec = seconds.value;
+  if (sec === null) return "";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return locale.value === "zh-CN" ? `${m} 分 ${s} 秒` : `${m}m ${s}s`;

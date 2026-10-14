@@ -16,6 +16,7 @@ mod kernel;
 mod middleware;
 mod stream;
 mod subagent;
+mod timeutil;
 mod waterfall;
 
 pub use approval::{ApprovalDecision, ApprovalResolver};

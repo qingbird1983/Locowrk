@@ -17,6 +17,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ChatItem, SystemItem, ToolItem } from "../../stores/chat";
+import type { TurnState } from "../../types";
 import { useSettingsStore } from "../../stores/settings";
 import { toolAction } from "../../lib/tool-summary";
 import { Icon } from "../../lib/icons";
@@ -148,8 +149,14 @@ const lastProcessKey = computed(() => {
   }
   return null;
 });
-function isStoppedBlock(key: number): boolean {
-  return !!props.stopRequested && key === lastProcessKey.value;
+function isStoppedBlock(turn: TurnView, key: number): boolean {
+  // 「已停止」标记（v2.205 起有后端权威态）：该轮的 `turn_header` 读数在场就按它判
+  // （`interrupted` = 日志里真记着这件事），读不出（旧日志 / 旧后端）才回落到前端
+  // 自算的 `stopRequested`——它不进会话日志、切会话即丢，正是 Q12 取证批点名的
+  // 「权威态不在后端」。两个来源不是并列的两把尺：**权威态在场它说话**，回落只是
+  // 如实降级。两者都仍只标**最新**过程组（既有形状，本批不动）。
+  if (key !== lastProcessKey.value) return false;
+  return turn.turnState ? turn.turnState === "interrupted" : !!props.stopRequested;
 }
 
 // ---- 任务容器（v2.99「第 0 层」用户裁定）----
@@ -165,6 +172,12 @@ type TurnView = {
   startTs?: number;
   /** 轮收束时刻（v2.101，turn_done 轮界事件投影——重放读数终点）。 */
   endTs?: number;
+  /** 本轮收束状态（v2.205，`turn_header` 挂在该轮 user 行上）：undefined =
+   * 旧日志读不出 ⇒ 「已停止」标记回落到前端 `stopRequested`。 */
+  turnState?: TurnState;
+  /** 本轮真正干活的毫秒数（v2.205，墙钟区间 − Σ审批等待）：undefined = 读不出
+   * ⇒ 计时行回落墙钟差（不当 0）。 */
+  activeMs?: number;
   running: boolean;
   inner: Block[];
   /** 容器外尾块（构造保证只剩 single——最终报告 + 其后系统条目）。 */
@@ -187,6 +200,8 @@ const turnViews = computed<TurnView[]>(() => {
       userItem: cur.userItem,
       startTs: cur.userItem?.ts,
       endTs: cur.userItem?.endTs,
+      turnState: cur.userItem?.turnState,
+      activeMs: cur.userItem?.activeMs,
       running: false, // 最后一轮在收尾处统一回填
       inner: cur.blocks.slice(0, i),
       tail: cur.blocks.slice(i) as Extract<Block, { kind: "single" }>[],
@@ -310,6 +325,7 @@ function noticeText(item: SystemItem): string {
       <TurnTimerLine
         :start-ts="turn.startTs"
         :end-ts="turn.endTs"
+        :active-ms="turn.activeMs"
         :running="turn.running"
         :aria-expanded="turnBoxOpen(turn.key, turn.running)"
         @click="toggleTurnBox(turn.key, turn.running)"
@@ -321,7 +337,7 @@ function noticeText(item: SystemItem): string {
           <template v-if="block.kind === 'turn'">
             <TurnProcess
               v-if="block.hasProcess"
-              :stopped="isStoppedBlock(block.key)"
+              :stopped="isStoppedBlock(turn, block.key)"
               :tool-count="block.toolCount"
               :failures="block.failures"
               :names="block.names"

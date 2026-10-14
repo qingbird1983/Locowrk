@@ -28,6 +28,7 @@ export type AgentEvent =
   | UncertainResolvedEvent
   | ToolStatusEvent
   | FileChangesEvent
+  | TurnHeaderEvent
   | ContextSummaryEvent;
 
 interface ChunkEvent {
@@ -276,6 +277,29 @@ interface FileChangesEvent {
   session_id: string;
   turn_id?: number | null;
   files: FileChangeDto[];
+}
+
+/** 轮收束状态（队列 Q12·第二刀 v2.205，宿主 `TurnState` 的镜像）。
+ * 三值 = 后端 `TurnEnd.outcome` 的一一对应。⚠ 设计稿 CF §2.1 写的是**四**态
+ * （含 `running`），本实现刻意不收：running 的权威源是容器本地运行态（`running`
+ * 布尔与 TurnProcess 的 phase 机），而 turn_header 只在**收束时**发结论——再带一份
+ * running 就是给同一件事造第三个出处（§2.1 订正块记此改动，原话不擦）。
+ * 后两态里 `interrupted` 是 v2.205 才分出来的：此前停止也记 completed ⇒ 旧会话
+ * 读回来仍是 completed，前端不事后猜。 */
+export type TurnState = "completed" | "interrupted" | "failed";
+
+/** 轮头（agent://turn-header）：本轮的收束状态 + **真正干活的毫秒数**
+ * （墙钟区间扣掉等待用户审批的那一段，等待源 = `ApprovalDecided` 的
+ * `asked_at`/`decided_at`）。
+ * `activeMs` 缺省 = 数据层读不出（旧日志无轮界时刻或无审批两刻）⇒ 前端回落到
+ * 墙钟读数；**不许把它当 0**（0 = "这轮一秒没干活"，是完全不同的断言）。
+ * 刻意不重复 `steps` / `endTs`：那两个读数已由 turn_done 提供（同类只许一个出处）。 */
+interface TurnHeaderEvent {
+  kind: "turn_header";
+  session_id: string;
+  turn_id?: number | null;
+  state: TurnState;
+  active_ms?: number | null;
 }
 
 /** 自动会话标题推送（lw://session-title，v2.57）：旁车落盘后通知前端

@@ -21,6 +21,7 @@ export type {
   FileChangeDto,
   SessionTitlePayload,
   ToolRowStatus,
+  TurnState,
 } from "./events-agent";
 
 export type { BrowserOpenPayload, CacheBreakReport, NotificationItem, OrganizeDonePayload, OrganizePausedPayload, ReconcileSummary, RunSummaryView, SessionMeta, SessionSchedule, SessionSearchHit } from "./session";

@@ -17,7 +17,7 @@ use plugin_api::{CallCtx, CallId};
 use serde_json::{Value, json};
 use session_store::{CompensatedLedger, Compensation, Session, SessionEvent, plan};
 
-use crate::kernel::{Kernel, KernelError, ToolCallReq, ToolSource};
+use crate::kernel::{Consulted, Kernel, KernelError, ToolCallReq, ToolSource};
 
 /// 一次补偿执行的结报。
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -125,23 +125,13 @@ impl Kernel {
                 args: undo_args.clone(),
                 session_id: None,
             };
-            let decision = self.approve(&req, tool.spec()).await;
-            session.append(SessionEvent::ApprovalDecided {
-                call_id: undo_id.clone(),
-                allowed: decision.allowed,
-                reason: decision.reason.clone(),
-            });
-            if !decision.allowed {
-                let msg = match decision.reason {
-                    Some(reason) => format!("denied by approval: {reason}"),
-                    None => "denied by approval".into(),
-                };
-                session.append(SessionEvent::ToolResult {
-                    call_id: undo_id,
-                    output: Value::Null,
-                    error: Some(msg.clone()),
-                });
-                report.failed.push((call_id, msg));
+            // 与主循环同一条 consult 通路（`kernel/approval_step.rs`，v2.205）：决议、
+            // 等待的两刻、被拒时的 denial 闭合都在那个单点里做完——undo 门不另发明
+            // 一套时刻口径（取证批 v2.203 判出的形状，变异靶 T2 钉的就是这里）。
+            if let Consulted::Denied { message } =
+                self.consult_to_log(&req, tool.spec(), session).await
+            {
+                report.failed.push((call_id, message));
                 return;
             }
         }

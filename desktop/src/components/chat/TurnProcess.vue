@@ -18,10 +18,11 @@
  * 工具明细）、开 = 折叠为一行摘要。时长只在实时轮次有（历史
  * 重放无时间戳，不虚构时序）。
  */
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 import { clip } from "../../lib/format";
+import { useTurnClock } from "../../lib/use-turn-clock";
 
 const props = withDefaults(
   defineProps<{
@@ -84,42 +85,18 @@ function onTransitionEnd(e: TransitionEvent) {
   settled.value = level.value === 2;
 }
 
-// 执行中的头行时长每秒走字（收束停在收束时刻）。挂载边沿不造收束戳
-// （重放无 ts 本就无时长）；startTs 晚到也要起表；相位瞬时翻假后回 live
-// 清戳恢复走表，真实收束（不回 live）戳保持。
-const now = ref(Date.now());
-const finishedAt = ref<number | null>(null);
-let timer: number | null = null;
-watch(
-  [running, () => props.startTs],
-  ([r, ts], prev) => {
-    if (r && ts !== undefined) {
-      if (prev !== undefined) finishedAt.value = null;
-      if (timer === null) {
-        now.value = Date.now();
-        timer = window.setInterval(() => (now.value = Date.now()), 1000);
-      }
-    } else {
-      if (prev !== undefined && prev[0] && finishedAt.value === null) {
-        finishedAt.value = Date.now();
-      }
-      if (timer !== null) {
-        window.clearInterval(timer);
-        timer = null;
-      }
-    }
-  },
-  { immediate: true },
-);
-onBeforeUnmount(() => {
-  if (timer !== null) window.clearInterval(timer);
+// 执行中的头行时长每秒走字（收束停在收束时刻）。走表机器与轮计时行共用
+// `useTurnClock`（v2.205 收尺：此前两个组件各写一遍 setInterval + 收束戳）。
+// ⚠ 本容器**不吃** `endTs` 与 `activeMs`：它是"过程组"不是"轮"，重放时本就无
+// 时长、扣等待的语义属轮头读数——收尺只统一机制，不趁势改它的读数。
+const { seconds } = useTurnClock({
+  startTs: () => props.startTs,
+  running: () => running.value,
 });
 
 const durationText = computed(() => {
-  if (props.startTs === undefined) return "";
-  const end = finishedAt.value ?? (running.value ? now.value : null);
-  if (end === null) return "";
-  const sec = Math.max(0, Math.round((end - props.startTs) / 1000));
+  const sec = seconds.value;
+  if (sec === null) return "";
   if (sec < 60) return `${sec}s`;
   if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
   return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;

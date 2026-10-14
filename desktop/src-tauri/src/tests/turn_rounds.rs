@@ -36,11 +36,20 @@ async fn tool_turn_projects_events_in_log_order() {
 
     let events = sink.events();
     // 步1：AssistantMessage 正文为空（无 chunk）→ ToolCall → ToolResult；
-    // 步2：汇总正文（chunk）→ TurnDone
+    // 步2：汇总正文（chunk）→ TurnHeader → TurnDone
+    // ⚠ v2.205 的期望更新：轮末先出 `turn_header`（收束状态 + 扣过等待的时长）再出
+    // turn_done——新增一条事件的自然结果，不是行为回归（顺序本身是前端的承重件：
+    // 轮头与清单挂在轮尾，turn_done 一到就冻结读数）。
     let kinds: Vec<&str> = events.iter().map(kind).collect();
     assert_eq!(
         kinds,
-        vec!["tool_call", "tool_result", "chunk", "turn_done"]
+        vec![
+            "tool_call",
+            "tool_result",
+            "chunk",
+            "turn_header",
+            "turn_done"
+        ]
     );
     let AgentEvent::ToolResult { ok, error, .. } = &events[1] else {
         panic!("expected tool_result")
@@ -117,6 +126,7 @@ async fn plain_reply_turn_is_single_step() {
     .expect("turn ok");
     assert_eq!(steps, 1);
 
+    // v2.205：纯正文轮也要先出轮头再出 turn_done（无审批 ⇒ 等待 0，active_ms = 墙钟差）
     let kinds: Vec<&str> = sink.events().iter().map(kind).collect();
-    assert_eq!(kinds, vec!["chunk", "turn_done"]);
+    assert_eq!(kinds, vec!["chunk", "turn_header", "turn_done"]);
 }

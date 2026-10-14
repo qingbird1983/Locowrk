@@ -206,3 +206,82 @@ async fn resolve_failure_closes_result_without_dangling() {
         );
     }
 }
+
+/// 审批两时刻（队列 Q12·第二刀 v2.205）：等待发生在内核 `approve()` 那一次
+/// `.await` 上，所以 `asked_at` / `decided_at` 由**内核**在调用前后各取一次
+/// ——决议者实现（宿主审批门）不必为"带出请求时刻"改契约，headless 也不必。
+/// 这一条钉住的是 active_ms 的数据源：日志里没有这两刻，前端就只能显示墙钟。
+#[tokio::test]
+async fn resolver_in_writes_both_approval_timestamps() {
+    let resolver = Arc::new(RecordingResolver {
+        decisions: ApprovalDecision::allow(),
+        consulted: Mutex::new(Vec::new()),
+    });
+    let ctx = Arc::new(Context::new());
+    ctx.provide_dyn::<dyn ToolSource>(Arc::new(ProbeSource(specs())));
+    ctx.provide_dyn::<dyn LlmService>(Arc::new(ScriptedLlm {
+        calls: turn_tools(),
+    }));
+    let kernel = Kernel::new(ctx, vec![]).with_approval(resolver as Arc<_>);
+    let mut session = Session::new();
+    kernel.step_as(&mut session, "s1").await.expect("turn ok");
+
+    let rows: Vec<(Option<i64>, Option<i64>)> = session
+        .events()
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::ApprovalDecided {
+                asked_at,
+                decided_at,
+                ..
+            } => Some((*asked_at, *decided_at)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(rows.len(), 2, "两个调用各落一条决策：{rows:?}");
+    for (asked, decided) in rows {
+        let asked = asked.expect("有决议者 ⇒ asked_at 必须在场（那是等待时长的唯一源）");
+        let decided = decided.expect("两刻同生同灭：有请求就有决策时刻");
+        assert!(
+            decided >= asked,
+            "决策不得早于请求（时钟回拨要由投影层判成读不出，不是负等待）：{asked} → {decided}"
+        );
+    }
+}
+
+/// 无决议者的静默放行路径**不写时刻**（v2.205）：这一档的真相是"根本没有请求
+/// 发生"，等待恒为 0；把它写成两刻相同（0 等待）与写成 None 的差别在于——
+/// 投影层要能区分「知道没等待」与「不知道等了多久」，前者才允许 active_ms = 墙钟。
+#[tokio::test]
+async fn headless_passthrough_writes_no_timestamps() {
+    let ctx = Arc::new(Context::new());
+    ctx.provide_dyn::<dyn ToolSource>(Arc::new(ProbeSource(specs())));
+    ctx.provide_dyn::<dyn LlmService>(Arc::new(ScriptedLlm {
+        calls: turn_tools(),
+    }));
+    let kernel = Kernel::new(ctx, vec![]); // 不带 with_approval = headless
+    let mut session = Session::new();
+    kernel.step_as(&mut session, "s1").await.expect("turn ok");
+
+    let rows: Vec<(Option<i64>, Option<i64>)> = session
+        .events()
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::ApprovalDecided {
+                asked_at,
+                decided_at,
+                ..
+            } => Some((*asked_at, *decided_at)),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !rows.is_empty(),
+        "无决议者时非 Pure 调用照旧落决策（纪律 9 的审计面不缩）"
+    );
+    assert!(
+        rows.iter()
+            .all(|(asked, decided)| asked.is_none() && decided.is_none()),
+        "没有请求就没有时刻：{rows:?}"
+    );
+}

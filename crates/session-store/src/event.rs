@@ -13,11 +13,21 @@ use crate::content::ContentPart;
 pub struct TurnId(pub u64);
 
 /// 轮次结局。
+///
+/// `Interrupted`（队列 Q12·第二刀 v2.205 新增）= 用户点了停止、本轮在步间边界
+/// 收束。立第三态的理由 = Q12 取证批实测「停止支也走 `Completed`」⇒ 设计稿要的
+/// `interrupted` 与正常完成**在日志里同形**，前端只能靠 `stopRequested` 自算
+/// 「已停止」（权威态不在后端，切会话 / 重启后那个标记就没了）。旧日志里没有
+/// `"interrupted"` 这个值，读回来照旧是 `Completed` = **不误报**：那一轮究竟是不是
+/// 被停的，日志没记着就不猜（与 `TurnDone.steps` 的「宁缺勿假」同一条纪律）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TurnOutcome {
     Completed,
     Failed,
+    /// 用户主动停止：本轮已完成的工具成果与转录都保留，且**没有错误**
+    /// （这正是它与 `Failed` 的差别——失败要报错，停止只是叫停）。
+    Interrupted,
 }
 
 /// 用户对 uncertain 调用的裁决（G2，可靠性稿 §5.4 收窄）：原稿四选里的
@@ -151,10 +161,29 @@ pub enum SessionEvent {
         reason: String,
     },
     /// 审批决策本身也是事件（纪律 9）。
+    ///
+    /// 两颗时刻（队列 Q12·第二刀 v2.205，用户采纳的决策点一甲案）= 本轮"真正
+    /// 干活的时间"要扣掉等待用户审批的那一段，而取证批实测过：**日志里从来没有
+    /// 审批请求事件**、`ApprovalDecided` 又不带 `ts` ⇒ 等待段在数据层不存在，
+    /// 任何「扣等待」都得先造出时刻源。甲案选的是**给决策事件补两颗时刻**
+    /// 而不是新增请求事件——后者要处理"请求了却没决策"的悬空形状（超时守夜与
+    /// 通道被丢各发一条 deny、进程重启则连 deny 都没有，pending 表纯内存不落盘）。
+    /// 两颗都由**内核**取（发起决议前 / 拿到决策后），因为等待发生在内核的
+    /// `approve()` 那一次 `.await` 上，决议者实现（宿主审批门）不需要为此改契约。
+    /// `None` 有两档且语义不同，投影层不许把它们混成一档：旧日志缺字段 = 不知道；
+    /// 无决议者的直通放行路径 = **压根没有请求发生**，等待恒为 0。
     ApprovalDecided {
         call_id: CallId,
         allowed: bool,
         reason: Option<String>,
+        /// 请求发出时刻（Unix 毫秒）；`None` = 旧日志或无决议者直通路径。
+        /// serde default + skip_serializing ⇒ 旧日志零迁移，新日志无值时不落键。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        asked_at: Option<i64>,
+        /// 决策落地时刻（Unix 毫秒）；与 `asked_at` 同生同灭（要么两颗都有 =
+        /// 真有一次等待，要么两颗都无）。等待时长由投影层算，日志只存发生那一刻。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        decided_at: Option<i64>,
     },
     /// 崩溃恢复的用户裁决（G2，可靠性稿 §5）：进程在 ToolCall 落日志
     /// （纪律 5）与 ToolResult 闭合之间退出时，该调用的副作用未知

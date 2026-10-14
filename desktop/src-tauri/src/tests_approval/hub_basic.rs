@@ -71,6 +71,7 @@ async fn denied_email_closes_result_without_executing() {
     assert!(closed, "被拒调用必须以 denied 的 ToolResult 闭合");
 
     // UI 投影：卡片先出现（tool_call），随后决策记录条 + 失败（tool_result）
+    // v2.205：轮末多出 `turn_header`（本批新增事件的正常结果，非行为回归）。
     let kinds: Vec<&str> = sink.events().iter().map(kind).collect();
     assert_eq!(
         kinds,
@@ -79,6 +80,7 @@ async fn denied_email_closes_result_without_executing() {
             "approval_resolved",
             "tool_result",
             "chunk",
+            "turn_header",
             "turn_done"
         ]
     );
