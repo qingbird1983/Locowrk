@@ -174,6 +174,10 @@ export default {
     tabLabel: "Memory view switch",
     boardProjectLabel: "Project",
     boardUnowned: "Unassigned",
+    // Queue Q15 slice 1 (MB §3.1 / §5): ghost button in the board rail
+    boardOpenDir: "Open memory folder",
+    boardOpenDirHint: "Opens this project's human-layer memory folder — tree.md and the fact cards live here, the machine projection one level up",
+    boardOpenDirUnowned: "Unassigned sessions have no project memory folder",
     boardToday: "Today",
     boardYesterday: "Yesterday",
     boardWeek: "This week",

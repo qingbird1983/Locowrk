@@ -173,6 +173,10 @@ export default {
     tabLabel: "记忆页视图切换",
     boardProjectLabel: "项目",
     boardUnowned: "未归属",
+    // 队列 Q15 第一刀（MB §3.1 / §5）：左栏「打开记忆目录」幽灵按钮
+    boardOpenDir: "打开记忆目录",
+    boardOpenDirHint: "打开本项目的人类层记忆目录（tree.md 与事实卡都在这层，机器投影在它上一级）",
+    boardOpenDirUnowned: "未归属会话没有项目记忆目录",
     boardToday: "今天",
     boardYesterday: "昨天",
     boardWeek: "本周",

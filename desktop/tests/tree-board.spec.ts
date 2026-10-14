@@ -14,11 +14,13 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BoardCanvas from "../src/components/memory/board/BoardCanvas.vue";
 import BoardRail from "../src/components/memory/board/BoardRail.vue";
+import HoverTip from "../src/components/settings/HoverTip.vue";
 import StreamPanel from "../src/components/memory/board/StreamPanel.vue";
 import { buildGroups } from "../src/lib/board-model";
 import { i18n, applyLocalePref } from "../src/i18n";
 import { useChatStore } from "../src/stores/chat";
 import { useShellStore } from "../src/stores/shell";
+import { useToastStore } from "../src/stores/toast";
 import { useTreeBoardStore } from "../src/stores/tree-board";
 import {
   CHAT_TITLE,
@@ -32,7 +34,7 @@ import {
   STREAM_TWO_SECTIONS,
   WS,
 } from "./board-fixture";
-import { onCommand, resetIpc } from "./tauri-stub";
+import { invokeCalls, onCommand, resetIpc } from "./tauri-stub";
 
 const t = (key: string, params?: Record<string, unknown>) =>
   String(i18n.global.t(key, params as never));
@@ -115,6 +117,102 @@ describe("左栏（BoardRail）：会话行那一行读数", () => {
     expect(btn).toBeDefined();
     await btn!.trigger("click");
     expect(shell.destination).toBe("chat");
+    wrapper.unmount();
+  });
+
+  // ---- 队列 Q15 第一刀：「打开记忆目录」幽灵按钮（MB §3.1 左栏第二件）----
+
+  /** 左栏挂载点收成一句：`railButton` 的入参类型由它**推断**，不手写 VTU 泛型
+   *  （`ReturnType<typeof mount>` 取的是重载最后一支，跟着版本走 = 白担风险）。 */
+  function mountRail() {
+    return mount(BoardRail, withGlobal());
+  }
+
+  /** 幽灵按钮按**可见文案**找：HoverTip 的 aria-label 落在外层 span 上，
+   *  而 `findAll("button")` 只回按钮 ⇒ 文本就是那条把手。 */
+  function railButton(wrapper: ReturnType<typeof mountRail>, label: string) {
+    return wrapper.findAll("button").find((b) => b.text() === label);
+  }
+
+  it("按钮把**当前 workspace 串**交给后端，前端不递路径（§5 的安全面形状）", async () => {
+    const board = seededBoard();
+    onCommand("memory_reveal_project", undefined);
+    const wrapper = mountRail();
+    await flushPromises();
+    const btn = railButton(wrapper, t("memory.boardOpenDir"));
+    expect(btn).toBeDefined();
+    expect(btn!.attributes("disabled")).toBeUndefined();
+    await btn!.trigger("click");
+    await flushPromises();
+    const call = invokeCalls().find((c) => c.cmd === "memory_reveal_project");
+    // 断的是**参数键与值**：键 = 后端签名 workspace: String，值 = 项目串本身。
+    // 抄成 { path: WS } 是真机会「拒绝打开」的那种坏法，类型面看不出来。
+    expect(call?.args).toEqual({ workspace: WS });
+    board.workspace = "F:/proj/other"; // 换档后再点：跟着当前档走，不是第一次的快照
+    await wrapper.vm.$nextTick();
+    await railButton(wrapper, t("memory.boardOpenDir"))!.trigger("click");
+    await flushPromises();
+    const all = invokeCalls().filter((c) => c.cmd === "memory_reveal_project");
+    // （不用 `Array.prototype.at`：本包 tsconfig 的 lib 目标不含它，vue-tsc 判
+    //  TS2550——这正是要跑 `pnpm build` 而不是只跑 vitest 的理由，类型面比运行面严。）
+    expect(all[all.length - 1]?.args).toEqual({ workspace: "F:/proj/other" });
+    wrapper.unmount();
+  });
+
+  it("未归属档 = 禁用且点了不发 IPC；气泡文案换成「为什么没有」", async () => {
+    const board = seededBoard();
+    board.workspace = "";
+    onCommand("memory_reveal_project", undefined);
+    const wrapper = mountRail();
+    await flushPromises();
+    const btn = railButton(wrapper, t("memory.boardOpenDir"));
+    expect(btn!.attributes("disabled")).toBeDefined();
+    await btn!.trigger("click");
+    await flushPromises();
+    expect(invokeCalls().some((c) => c.cmd === "memory_reveal_project")).toBe(false);
+    // 悬停气泡的真内容不在 DOM 里（§二⑮：400ms 才弹 + Teleport 出层），
+    // 所以断 HoverTip 收到的 text prop——切文案这件事由 prop 承重，不靠模拟悬停。
+    const tip = wrapper
+      .findAllComponents(HoverTip)
+      .find((h) => h.props("label") === t("memory.boardOpenDir"));
+    expect(tip).toBeDefined();
+    expect(tip!.props("text")).toBe(t("memory.boardOpenDirUnowned"));
+    board.workspace = WS; // 回到项目档：文案换回"开哪个目录"
+    await wrapper.vm.$nextTick();
+    expect(
+      wrapper
+        .findAllComponents(HoverTip)
+        .find((h) => h.props("label") === t("memory.boardOpenDir"))!
+        .props("text"),
+    ).toBe(t("memory.boardOpenDirHint"));
+    wrapper.unmount();
+  });
+
+  it("打开失败进 toast（与项目菜单「在文件夹中显示」同一条形态，不静默）", async () => {
+    seededBoard();
+    const toast = useToastStore();
+    const wrapper = mountRail();
+    await flushPromises();
+    // 刻意**不**预置 memory_reveal_project：替身按设计 reject（"没有预置 = 拒绝"
+    // 正是为了不让"忘了喂数据"长得像通过），这条用例借它当失败注入。
+    await railButton(wrapper, t("memory.boardOpenDir"))!.trigger("click");
+    await flushPromises();
+    expect(toast.items.length).toBe(1);
+    expect(toast.items[0]!.tone).toBe("danger");
+    expect(toast.items[0]!.title).toBe(t("toast.revealFailed"));
+    wrapper.unmount();
+  });
+
+  it("同一份左栏在 en 档下按钮文案跟着换（新键双语都真在场，不是只有中文能用）", async () => {
+    seededBoard();
+    const wrapper = mountRail();
+    await flushPromises();
+    const zh = t("memory.boardOpenDir");
+    applyLocalePref("en");
+    await wrapper.vm.$nextTick();
+    expect(t("memory.boardOpenDir")).not.toBe(zh);
+    expect(railButton(wrapper, t("memory.boardOpenDir"))).toBeDefined();
+    applyLocalePref("zh-CN");
     wrapper.unmount();
   });
 });

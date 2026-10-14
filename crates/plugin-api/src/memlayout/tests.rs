@@ -34,6 +34,66 @@ fn project_dir_name_is_readable_and_collision_safe() {
     );
 }
 
+/// 队列 Q15：「这个项目的人类层家目录在哪」全仓只许一处算法，且它对未归属
+/// **拒答**。断言里的期望路径全部手抄（不叫 `project_dir` 自己给自己当参照），
+/// 变异 M1（把 `''` 那半撤掉）打的正是这里。
+#[test]
+fn project_dir_rejects_unowned_and_is_the_single_formula() {
+    let root = std::path::Path::new(r"X:\data\memory");
+    assert!(
+        project_dir(root, "").is_err(),
+        "未归属不是项目：家目录必须拒答，而不是给一个伪项目目录（那是级联删除能吃下全局键位的入口）"
+    );
+    let ws = r"F:\Warehouse\AIwork\a-proj";
+    let dir = project_dir(root, ws).expect("项目支有落点");
+    assert_eq!(
+        dir,
+        root.join("projects").join(project_dir_name(ws)),
+        "绝对落点 = projects/<可读名-短哈希>"
+    );
+    // 相对支（写事实用的那个）与绝对支必须同出一处：拼上 root 后逐段相等
+    assert_eq!(
+        root.join(fact_rel_path(ws, "k1")),
+        dir.join("facts").join("k1.md"),
+        "事实文件 = 家目录/facts/<stem>.md，两份投影同源"
+    );
+    assert_eq!(
+        unaffiliated_dir(root),
+        root.join("projects").join("_unaffiliated"),
+        "未归属的 tree.md 之家固定 _unaffiliated（走 PROJECTS_DIR 一处字面量）"
+    );
+    assert_ne!(
+        unaffiliated_dir(root),
+        dir,
+        "未归属不得被并成伪项目目录（并了 = 改磁盘形状）"
+    );
+}
+
+/// 恶意 / 畸形 workspace 串只能落进 root 之内：目录名是「安全化 + fnv 短哈希」
+/// 的产物，`..` 与分隔符都进不了那一个名字。新命令收的是 workspace 而不是路径，
+/// 所以这条性质就是它的防线本身（比 `reveal_in_explorer` 的 fsRoots 白名单更窄）。
+#[test]
+fn project_dir_keeps_any_workspace_string_under_the_root() {
+    let root = std::path::Path::new(r"X:\data\memory");
+    for evil in [
+        "../../etc",
+        r"C:\Windows\..",
+        "..",
+        r"..\..\windows",
+        " ",
+        "F:/a/b",
+        "a\\b\\..\\c",
+    ] {
+        let dir = project_dir(root, evil).unwrap_or_else(|e| panic!("{evil:?} 应有家目录: {e}"));
+        assert!(dir.starts_with(root), "{evil:?} 的落点跑出 root: {dir:?}");
+        let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(
+            !name.contains('/') && !name.contains('\\') && !name.contains(".."),
+            "{evil:?} 的目录名含穿越材料: {name}"
+        );
+    }
+}
+
 #[test]
 fn key_file_stem_is_filename_safe_and_reserved_aware() {
     assert_eq!(key_file_stem("user.language"), "user.language", "点号保留");

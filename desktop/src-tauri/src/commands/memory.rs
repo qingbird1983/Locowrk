@@ -87,6 +87,32 @@ pub async fn memory_reveal_folder(state: State<'_, AppState>) -> Result<(), Stri
     super::sessions::open_in_explorer(&dir.to_string_lossy())
 }
 
+/// 队列 Q15（MB §5 · 看板 T2）：打开**该项目**的人类层记忆目录
+/// （`<数据根>/memory/projects/<可读名-哈希>/`，tree.md 与 facts/ 都在这层，
+/// 向上一级即机器投影目录 `memory-tree/`——机器向 JSON 不设按钮，稿 §5 原话）。
+/// 不存在先建再开：首次点击也落对位置，不给用户一个"打开失败"的空目录。
+///
+/// ⚠ 入参是 **workspace 串**而不是路径，路径由 `MemoryFiles::project_dir` 单点
+/// 算出——这比 `reveal_in_explorer` 那条「必须是 fsRoots 之一」的白名单更窄：
+/// 这里连"前端递一个路径"这件事都不存在，`..` / 绝对路径 / 任意串都只能落进
+/// 安全化 + fnv 短哈希之后的那一个目录名里。`''`（未归属）**报错而不是给目录**：
+/// 未归属不是项目，它的 tree.md 在 `_unaffiliated/`、事实在 `global/`。
+/// 这两条性质的承重用例 = `plugin_api::memlayout::tests::project_dir_rejects_unowned_and_is_the_single_formula`
+/// 与 `::project_dir_keeps_any_workspace_string_under_the_root`，句柄转发那一步由
+/// `memory_files::tests::project_dir_is_the_handle_view_of_the_same_formula_and_holds_tree_md`
+/// 钉（命令本体是薄壳，与 `asset_reveal` 同例——`State<'_, AppState>` 不在单测可构造
+/// 面内，逻辑一律归句柄；`tmp/q15-shape.mjs` 的 E 面逐条核这三个名字真在场）。
+#[tauri::command]
+pub async fn memory_reveal_project(
+    workspace: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let dir = state.memory_files.project_dir(&workspace)?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("记忆项目目录创建失败 {}: {e}", dir.display()))?;
+    super::sessions::open_in_explorer(&dir.to_string_lossy())
+}
+
 /// 队列 Q10（L4）：记忆注入的**只读解释面板**数据源——最近一次"真算过四信号"的
 /// 注入回执 + 观测表的三个派生读数。薄适配层：读盘、筛行、解析、降级全在
 /// `crate::inject_view`（那里有两条口径：只找有回执的行、坏字节不上抛）。

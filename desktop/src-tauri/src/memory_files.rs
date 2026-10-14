@@ -65,15 +65,22 @@ impl MemoryFiles {
         memlayout::delete_fact(&self.root, workspace, key)
     }
 
+    /// 该项目的人类层家目录（队列 Q15 · `memory_reveal_project` 与后续级联删除
+    /// 的**唯一**路径来源）。`''` = 上抛 Err：未归属不是项目，不给它目录。
+    pub fn project_dir(&self, workspace: &str) -> Result<PathBuf, String> {
+        memlayout::project_dir(&self.root, workspace)
+    }
+
     /// 项目 tree.md 落点。未归属（''）不是项目——固定 `_unaffiliated`
-    /// 文件夹，不落进伪"项目-哈希"目录。
-    fn tree_md_path(&self, workspace: &str) -> PathBuf {
+    /// 文件夹，不落进伪"项目-哈希"目录（名字与"住在 projects 树下"都归
+    /// memlayout 一处定义，这里只引用）。
+    fn tree_md_path(&self, workspace: &str) -> Result<PathBuf, String> {
         let dir = if workspace.is_empty() {
-            "_unaffiliated".to_string()
+            memlayout::unaffiliated_dir(&self.root)
         } else {
-            memlayout::project_dir_name(workspace)
+            memlayout::project_dir(&self.root, workspace)?
         };
-        self.root.join("projects").join(dir).join("tree.md")
+        Ok(dir.join("tree.md"))
     }
 
     /// 写 tree.md（**人改保护**：文件 mtime 新于全部投影 mtime = 人在
@@ -85,7 +92,7 @@ impl MemoryFiles {
         content: &str,
         newest_projection_ms: i64,
     ) -> Result<bool, String> {
-        let path = self.tree_md_path(workspace);
+        let path = self.tree_md_path(workspace)?;
         if let Ok(meta) = std::fs::metadata(&path) {
             if let Ok(t) = meta.modified() {
                 let md_ms = to_epoch_ms(t);

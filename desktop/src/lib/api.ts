@@ -679,6 +679,14 @@ export function memoryRevealFolder(): Promise<void> {
   return invoke("memory_reveal_folder");
 }
 
+/** 队列 Q15（MB §5 · 看板 T2）：打开**该项目**的人类层记忆目录。入参是
+ * workspace 串而不是路径——路径由后端 `MemoryFiles::project_dir` 单点算出，
+ * 前端递不进任意路径（与 `revealInExplorer` 的 fsRoots 白名单同向、更窄）。
+ * `''`（未归属）后端报错，所以按钮在未归属档禁用（用例各钉一次）。 */
+export function memoryRevealProject(workspace: string): Promise<void> {
+  return invoke("memory_reveal_project", { workspace });
+}
+
 /** 队列 Q10（L4）：注入解释面板——最近一次真算过四信号的注入回执 + 观测表派生读数。
  * 只读：与 memory_tree_view 同款「打开拉一次 + 手动刷新」，不推送不轮询。 */
 export function memoryInjectView(): Promise<InjectView> {

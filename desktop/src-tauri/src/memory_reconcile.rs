@@ -81,7 +81,7 @@ pub fn run(
     if global.is_dir() {
         collect_md(&global, &mut files_to_check, Scope::Global);
     }
-    if let Ok(entries) = std::fs::read_dir(root.join("projects")) {
+    if let Ok(entries) = std::fs::read_dir(memlayout::projects_dir(root)) {
         for e in entries.flatten() {
             let facts = e.path().join("facts");
             if facts.is_dir() {
@@ -101,7 +101,18 @@ pub fn run(
     scopes.extend(known_workspaces.iter().cloned());
     let mut dirty_scopes: Vec<String> = Vec::new();
     for ws in &scopes {
-        let facts_dir = scope_facts_dir(root, ws);
+        // 路径一律经 memlayout（Q15 收口：这里以前自己拼第二份 `projects/<dir>/facts`）。
+        // Err 支在现状不可达（`project_dir` 只对 `''` 报错，而 `''` 上面已分流）——
+        // 保留它而不是 unwrap，是为了让"哪天算式改了"表现为**跳过 + warning**，
+        // 而不是拿着一个错目录去删行。
+        let facts_dir = match scope_facts_dir(root, ws) {
+            Ok(p) => p,
+            Err(e) => {
+                sum.warnings += 1;
+                tracing::warn!("reconcile 跳过键位（{ws}）: {e}");
+                continue;
+            }
+        };
         if !facts_dir.is_dir() {
             continue; // 目录整体缺席 = 复位手势，不删行
         }
@@ -143,14 +154,13 @@ fn collect_md(dir: &Path, out: &mut Vec<(PathBuf, Scope)>, scope: Scope) {
     }
 }
 
-/// 键位的 facts 目录（删除判定用）：全局 = `global/`，项目 = `projects/<dir>/facts/`。
-fn scope_facts_dir(root: &Path, workspace: &str) -> PathBuf {
+/// 键位的 facts 目录（删除判定用）：全局 = `global/`，项目 = `projects/<dir>/facts/`
+/// ——项目支不自拼，转 `memlayout::project_dir`（同一条路径只许一处算法）。
+fn scope_facts_dir(root: &Path, workspace: &str) -> Result<PathBuf, String> {
     if workspace.is_empty() {
-        root.join("global")
+        Ok(root.join("global"))
     } else {
-        root.join("projects")
-            .join(memlayout::project_dir_name(workspace))
-            .join("facts")
+        Ok(memlayout::project_dir(root, workspace)?.join("facts"))
     }
 }
 

@@ -13,6 +13,7 @@
 //! ├── global/<key>.md                  # 全局记忆（'' 键位：用户偏好）
 //! └── projects/<可读名-短哈希>/
 //!     ├── MEMORY.md                    # 该项目事实索引（一文件一行）
+//!     ├── tree.md                      # 该项目记忆树的人读层（宿主 memory_files 写）
 //!     └── facts/<key>.md               # 项目事实
 //! ```
 
@@ -26,6 +27,18 @@ pub use sync::{ParsedFact, atomic_write, mtime_ms, parse_fact, read_marker, writ
 
 /// md 根目录名（数据根下）。
 const DIR_NAME: &str = "memory";
+/// 项目层目录名。**人类层里 `projects` 只许出现在这一处**——所有项目路径一律
+/// 经 `project_rel_dir` / `project_dir` 得出（队列 Q15 立的：新命令
+/// `memory_reveal_project` 是这句话的第四个消费者，不收口就要落第五份抄本；
+/// 收口前实测 4 处：本文件 2 处 + memory_files.rs 的 tree.md 落点 +
+/// memory_reconcile.rs 的 scope_facts_dir）。
+const PROJECTS_DIR: &str = "projects";
+/// 未归属会话（`''` 键位）在 `projects/` 树里的人读层文件夹名。它**不是**项目：
+/// 所以不走 `project_dir_name`（那会造出一个 `<空>-<哈希>` 的伪项目名），但它的
+/// 名字与"住在 projects 树下"这件事归本模块——写侧（memory_files 的 tree.md
+/// 落点）与读侧（memory_tree_reconcile 的目录反查项目）都引用这里，字面量全仓
+/// 只此一处（Q15 探针 P4a：改前散在两个文件）。
+pub const UNAFFILIATED_DIR: &str = "_unaffiliated";
 /// 总开关 env：宿主在 settings `memory.files = false` 时注入 `"0"`；
 /// 插件**每次写前读取**（与 fsutil allowed_roots 同款读 env 热换，保存
 /// 即生效免重启）。env 缺省未设 = 开。
@@ -91,6 +104,41 @@ pub fn project_dir_name(workspace: &str) -> String {
     )
 }
 
+/// 项目在人类层的家目录（**相对** md 根）= `projects/<可读名-短哈希>`。
+/// 空 workspace 不走这里：它的事实落 `global/`、tree.md 落 `_unaffiliated/`，
+/// 两层的特例名本来就不同（Q15 探针 P4a–c 实测），并成一个 = 改磁盘形状。
+pub fn project_rel_dir(workspace: &str) -> PathBuf {
+    PathBuf::from(PROJECTS_DIR).join(project_dir_name(workspace))
+}
+
+/// 项目在人类层的家目录（**绝对**，`root` = `<数据根>/memory`）。队列 Q15：
+/// 「打开记忆目录」与后续级联删除都要问这一句，而答案只许有一处算法——
+/// `''`（未归属）**拒绝回答**而不是给个目录：未归属不是项目，给它一个目录
+/// 名就等于让"删除该项目的记忆数据"这条破坏性通路能吃下全局键位。
+pub fn project_dir(root: &Path, workspace: &str) -> Result<PathBuf, String> {
+    if workspace.is_empty() {
+        return Err(
+            "未归属（空 workspace）没有项目目录：事实层在 global/，tree.md 在 _unaffiliated/"
+                .to_string(),
+        );
+    }
+    Ok(root.join(project_rel_dir(workspace)))
+}
+
+/// `<root>/projects` 本身（**扫描全部项目**的读侧用：记忆 reconcile 与
+/// tree.md 对账各自都抄过这一句，Q15 一并收口）。单个项目的家目录用
+/// [`project_dir`]，别拿这个再拼一次名字。
+pub fn projects_dir(root: &Path) -> PathBuf {
+    root.join(PROJECTS_DIR)
+}
+
+/// 未归属会话的 tree.md 之家 = `<root>/projects/_unaffiliated`（绝对）。与
+/// [`UNAFFILIATED_DIR`] 同处定义，是为了让「projects 这个字面量在人类层只出现
+/// 一次」这条判据成立（Q15 立的 A1）。
+pub fn unaffiliated_dir(root: &Path) -> PathBuf {
+    projects_dir(root).join(UNAFFILIATED_DIR)
+}
+
 /// key → 文件名主干：保留 `[A-Za-z0-9._-]`、其余换 `_`，端点 `.` 剥除，
 /// Windows 保留设备名（con/prn/aux/nul/comN/lptN）前缀 `_` 防创建失败。
 /// 碰撞可能但罕见；权威身份在 frontmatter `name`（F2 reconcile 按它读回）。
@@ -125,16 +173,13 @@ pub fn key_file_stem(key: &str) -> String {
 }
 
 /// 键位 → 相对路径：全局 `''` = `global/<stem>.md`；项目 =
-/// `projects/<dir>/facts/<stem>.md`。
+/// `projects/<dir>/facts/<stem>.md`（项目支一律经 `project_rel_dir`）。
 pub fn fact_rel_path(workspace: &str, key: &str) -> PathBuf {
     let file = format!("{}.md", key_file_stem(key));
     if workspace.is_empty() {
         PathBuf::from("global").join(file)
     } else {
-        PathBuf::from("projects")
-            .join(project_dir_name(workspace))
-            .join("facts")
-            .join(file)
+        project_rel_dir(workspace).join("facts").join(file)
     }
 }
 
@@ -204,14 +249,15 @@ impl FactEntry<'_> {
 }
 
 /// 键位目录与索引文件：全局 = `global/`，项目 = `projects/<dir>/facts/`
-/// （索引坐在项目文件夹根）。
-fn scope_dirs(root: &Path, workspace: &str) -> (PathBuf, PathBuf) {
+/// （索引坐在项目文件夹根）。项目支经 `project_dir` ⇒ `''` 在这里同样**拒**，
+/// 由调用点决定怎么办（`refresh_index` 直接上抛；reconcile 记 warning 跳过）。
+fn scope_dirs(root: &Path, workspace: &str) -> Result<(PathBuf, PathBuf), String> {
     if workspace.is_empty() {
         let dir = root.join("global");
-        (dir.clone(), dir.join("MEMORY.md"))
+        Ok((dir.clone(), dir.join("MEMORY.md")))
     } else {
-        let dir = root.join("projects").join(project_dir_name(workspace));
-        (dir.join("facts"), dir.join("MEMORY.md"))
+        let dir = project_dir(root, workspace)?;
+        Ok((dir.join("facts"), dir.join("MEMORY.md")))
     }
 }
 
@@ -231,7 +277,7 @@ fn parse_description(text: &str) -> Option<String> {
 /// 重建一个键位的 MEMORY.md 索引（一文件一行，文件名稳定序）。facts
 /// 目录不存在时也会创建（空索引自描述）。
 pub fn refresh_index(root: &Path, workspace: &str) -> Result<(), String> {
-    let (dir, index_path) = scope_dirs(root, workspace);
+    let (dir, index_path) = scope_dirs(root, workspace)?;
     let mut lines: Vec<String> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&dir) {
         for f in entries.flatten() {

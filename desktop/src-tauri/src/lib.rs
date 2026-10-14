@@ -211,6 +211,7 @@ pub fn run() {
             commands::memory_clear_all,
             commands::memory_reconcile,
             commands::memory_reveal_folder,
+            commands::memory_reveal_project,
             commands::memory_inject_view,
             commands::tool_exposure_debug,
             commands::pick_directory,

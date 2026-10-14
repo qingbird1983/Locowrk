@@ -57,7 +57,7 @@ pub fn run(
 ) -> TreeReconcileSummary {
     let mut sum = TreeReconcileSummary::default();
     let root = files.root();
-    let projects = root.join("projects");
+    let projects = memlayout::projects_dir(root);
     let Ok(entries) = std::fs::read_dir(&projects) else {
         return sum; // 层缺席 = 没有可对账的文件
     };
@@ -71,7 +71,7 @@ pub fn run(
         if !md.is_file() {
             continue;
         }
-        let workspace = if dir_name == "_unaffiliated" {
+        let workspace = if dir_name == memlayout::UNAFFILIATED_DIR {
             String::new()
         } else {
             match by_dir.get(&dir_name) {

@@ -189,10 +189,11 @@ impl MemoryStore {
             return None;
         }
         let files = self.files.as_ref()?;
-        let path = files
-            .root()
-            .join("projects")
-            .join(plugin_api::memlayout::project_dir_name(workspace))
+        // 家目录经 memlayout 单点算式（Q15 收口：这里此前自己拼过一份
+        // `projects/<可读名-哈希>`，那是同一句话的第三个出处）。`.ok()?`
+        // 而不是 unwrap：算不出来 = 这一节缺席，按同函数头注的降级口径走。
+        let path = plugin_api::memlayout::project_dir(files.root(), workspace)
+            .ok()?
             .join("MEMORY.md");
         std::fs::read_to_string(path).ok()
     }

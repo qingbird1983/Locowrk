@@ -129,6 +129,41 @@ fn sync_writes_tree_md_and_guards_human_edits() {
 }
 
 #[test]
+fn project_dir_is_the_handle_view_of_the_same_formula_and_holds_tree_md() {
+    // 队列 Q15 第一刀：`memory_reveal_project` 走 MemoryFiles::project_dir，
+    // 而它必须与 tree.md 的实际落点**同一个目录**——否则按钮打开的是空文件夹，
+    // 用户看到的就是"我的记忆呢"。期望路径手抄，不拿被测函数自证。
+    let root = tmp_dir("projdir");
+    let files = MemoryFiles::new(&root);
+    let ws = r"F:\proj\Reveal";
+    let expect = root
+        .join("memory")
+        .join("projects")
+        .join(plugin_api::memlayout::project_dir_name(ws));
+    assert_eq!(files.project_dir(ws).unwrap(), expect);
+    assert!(
+        files.project_dir("").is_err(),
+        "未归属（看板下拉末位）没有项目目录：按钮要报错而不是打开一个空壳"
+    );
+
+    let store = TreeStore::new(&root);
+    store.save(&real_tree(ws, "s1")).unwrap();
+    let sessions_dir = root.join("sessions");
+    std::fs::create_dir_all(&sessions_dir).unwrap();
+    assert!(sync_workspace_tree_md(&files, &store, &sessions_dir, ws).unwrap());
+    let names: Vec<String> = std::fs::read_dir(files.project_dir(ws).unwrap())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        names.contains(&"tree.md".to_string()),
+        "tree.md 住在家目录里: {names:?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn initial_export_skips_existing_files_and_regenerates_trees() {
     let root = tmp_dir("export");
     let files = MemoryFiles::new(&root);
