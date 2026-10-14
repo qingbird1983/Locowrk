@@ -284,6 +284,21 @@
   --lw-fs-13: 13px;
   --lw-fs-14: 14px;
 
+  /* 界面字号基座 + 相对制六档（上位《UI Design System》§零.1/§四.4.2 + 附录 B 第一行）。
+   * 队列 Q14 第一刀落地 = 下位 §二⑯「前置条件」条款要求的那一步，同批兑现上位附录 C
+   * 待办 #2「§二⑫ 字号类换相对制」的第一半。缺省 14px 取自上面那颗 --lw-fs-14
+   * （「可调项缺省 = 改前写死值」口径）；六档一律 calc 挂基座 ⇒ 基座一动六档同尺移动，
+   * 全仓不存在第二处要同步的字号数。
+   * ⚠ 本刀只立档、不迁全站：上面那组绝对档按上位附录 A #7 是**迁移期别名**，存量逐批换，
+   * 换完那天再把它们收进门禁豁免清单。基座进设置页「外观」是附录 B 的备注落点，单独一小平刀。 */
+  --lw-ui-font-size: 14px;
+  --lw-fs-ui-xl: calc(var(--lw-ui-font-size) + 4px); /* 18 */
+  --lw-fs-ui-lg: calc(var(--lw-ui-font-size) + 2px); /* 16 */
+  --lw-fs-ui-base: var(--lw-ui-font-size); /* 14 正文/常用按钮/H3–H6 */
+  --lw-fs-ui-caption: calc(var(--lw-ui-font-size) - 1px); /* 13 紧凑说明 */
+  --lw-fs-ui-sm: calc(var(--lw-ui-font-size) - 2px); /* 12 次要信息/tooltip 正文/行内码 */
+  --lw-fs-ui-xs: calc(var(--lw-ui-font-size) - 4px); /* 10 徽章/快捷键/计数 */
+
   /* 间距令牌（前端标准 §二⑬：全站唯一间距族，padding/margin/gap 同源；
    * 3/5/7/9/11 孤值须带「光学修正」行内豁免注释） */
   --lw-gap-2: 2px;
