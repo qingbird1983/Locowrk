@@ -84,6 +84,15 @@ patch=完整 diff），与内联展开并存；子代理 chip 点击 → 右栏�
 | `FileChanges` | `turn_id, files[{path, additions, deletions, kind(edit/create/delete)}]` | turn 收束时由 tool-edit/fs 写入审计聚合（同切片 ToolCall/ToolResult 统计） | turnHeader.fileChanges |
 | `LlmRetry` 已有 | 补前端展示（§5） | — | apiRetry |
 
+> **⚠ Q12 取证批（v2.203）实测订正，原表一字未擦**：上表四条「投影来源」里有**两条在数据层不成立**——
+> ① `active_ms` 的「扣除等待审批/提问时段」拿不到时刻：`ApprovalDecided` 无 `ts`、日志里没有审批请求事件、
+> `SessionEvent` 全集带 `ts` 的只有 4 处、ask 卡片明文「不进会话日志」；② `FileChanges` 的 `additions`/`deletions`
+> 全仓零源（插件与宿主上报的是 `bytes`/`edits`/`hunks_applied`，不是行数），现役 ±N 是前端「读时尽力提取」。
+> 另有三处要跟着改口：`state` 的 `interrupted` 在日志里与 `completed` 同形（停止走 `Completed`）、
+> `cancelled` 没有发生路径（stop 只在步间边界检查）、`ToolStatus` 的 `pending_approval` **重放不可复原**。
+> 七条逐条读数 = 队列 §5（判据 G1–G7，脚本 `tmp/q12-probe.mjs`，`Q12_PROBE_ROWS=21 MISMATCH=0`）。
+> **⇒ 本稿 §10 的 C1 一刀在补数据源之前做不完**；两个决策点（审批等待时刻怎么落、行数由谁上报）交用户裁定。
+
 **不做**：`inputStreaming`（Locowrk 工具参数调用即知，无流式入参场景）；row.removed
 （编辑重发走既有 `session_history` 重放刷新，不引入截断 op）。
 
@@ -195,7 +204,7 @@ PermissionCard 形态保留。
 
 | 批 | 内容 | 涉及 |
 |---|---|---|
-| **C1 数据链路** | TurnHeader/ToolStatus/FileChanges 事件 + runner 投影单点扩展 + chat store 行语义 + 三向闭合闸扩表 + 重放回归 | src-tauri(events/runner/commands) + stores/chat |
+| **C1 数据链路** | TurnHeader/ToolStatus/FileChanges 事件 + runner 投影单点扩展 + chat store 行语义 + 三向闭合闸扩表（⚠ **v2.203 实测：`check-commands` 只管命令、事件通道无闸 ⇒ 这一项是「新建通道对账判据」不是「扩表」**） + 重放回归（⚠ 前置 = §2.1 那两条数据源缺口先补，见队列 §5） | src-tauri(events/runner/commands) + stores/chat |
 | **C2 工具卡全集** | §4 总表逐类型落地 + §3 折叠规则 + ThinkingRow 反转 + 状态词六态 i18n + 审批卡对齐（§8）+ Stop 状态机 + 重试可见性 | components/chat/* + locales |
 | **C3 产出物与文件页签** | §6 产出物卡 + §7 code-viewer 页签 + fsRoots 校验 + git 色族令牌落地 | WorkPanel + 新组件 + style.css |
 | **C4 打磨（可选）** | 同工具组卡（附录 A #9 挂账）+ 顶部状态条 + diff 短翻页动画 + Rewind 复评（依赖快照立项） | — |
@@ -238,7 +247,7 @@ PermissionCard 形态保留。
 | 事项 | 锚点 |
 |---|---|
 | 事件常量/CHANNELS 三向闭合 | `desktop/src-tauri/src/events.rs:15-61`；`desktop/src/lib/api.ts:191-243`；UI shell §4.2:1003 |
-| 投影单点/枚举原文 | `desktop/src-tauri/src/runner.rs:236-494`；`events.rs:100-271` |
+| 投影单点/枚举原文 | ⚠ **v2.203 实测：`runner.rs` 已随目录化不存在** = `desktop/src-tauri/src/runner/mod.rs`（381 行，`project_new_events` 在 273）+ `runner/projection.rs`（259 行，`project_events` 在 14）；`events.rs:98-271`（枚举）与 `events.rs:15-61`（通道常量）仍在位 |
 | ChatItem/ToolItem union | `desktop/src/stores/chat.ts:35-132`；onEvent 开关 `chat.ts:483-689` |
 | 过程行/明细/思考行 | `components/chat/ProcessRow.vue`、`ToolRow.vue`、`ToolDetailView.vue`、`ThinkingRow.vue`；视图模型 `lib/tool-detail.ts:50-77` |
 | 四层折叠相位机/计时行 | `components/chat/TranscriptFlow.vue:55-133,175-256,300-443`；`TurnProcess.vue:1-54` |
