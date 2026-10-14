@@ -57,6 +57,10 @@ export interface RunSummaryView {
   /** 项目视图带会话标注；会话视图内为空串。 */
   sessionId: string;
   sessionTitle: string;
+  /** 本轮区间内已定稿章节 id（数值序，队列 Q14）。归组权威源是后端投影的
+   * event_range ⇒ 前端**不要**再按区间反查章节（反查 = 第二个出处）；
+   * 汇聚流的组键就是这一条的 `eventFrom:eventTo`，成员就是这一串 id。 */
+  chapterIds: string[];
 }
 
 /** 整理收束推送（lw://organize-done；手动/自动/恢复三路同源）。 */

@@ -254,6 +254,7 @@ pub fn run() {
             commands::memory_tree_sessions,
             commands::memory_tree_chapters,
             commands::memory_tree_original,
+            commands::memory_tree_stream,
             commands::memory_tree_project,
             commands::memory_tree_edit_chapter,
             commands::memory_tree_delete_chapter,

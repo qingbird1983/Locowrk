@@ -64,6 +64,19 @@ memory_tree_stream(session_id, workspace, group) -> StreamView
 
 实现 = 现役 `tree_original` 的切片逻辑按区间循环拼装（后端拼装而非前端循环调 N 次命令：一次 IPC、原子视图、行号全局连续）。**落码时若 tree_original 内部可复用则抽公共函数**；这是本设计唯一实质后端新增，其余全是薄壳（§6）。
 
+> **落地注记（队列 Q14 第二刀 · 2026-10-15 · 施工提交，版本号随本格收口一次性落，哈希看队列 Q14 行）**：命令已落 =
+> `desktop/src-tauri/src/organize/stream_view.rs` 的 `tree_stream` + `memory_tree_stream`（`commands/organize.rs`
+> 薄适配）。与本稿字面不同的三处定性，都是落码时判出来的、不是漂移：① **组键没有独立 id**——
+> `RunSummary` 的真身就是整理区间，所以 group 直接用 `"from:to"`（`"orphan"` 是未归总结虚拟组）；
+> ② **本会话总结链里查无此区间 = 拒**而不是给空面板——前端只会拿到 `memory_tree_chapters` 给过的键，
+> 凑出一个不存在的是调用方 bug，演成空态等于把 bug 藏进空状态；③ **小节多一个 `error` 字段**，
+> 那是 §3.3「某章节切片加载失败 → 该小节行内错误文案」的兑现，同时把「读不到」与「这一节没有内容」
+> 分开（越界节 `rows` 为空 + `error` 在场）。抽公共函数那一半落成两处单点：切片口径 `rows_between`
+> 同管单章与整组、未定稿过滤 `settled` 一处定义三处调用；`chapter_ids` 由 `chapters_in` 在后端算，
+> 前端**不再按区间反查**（同一属性只许一个出处）。机器判据 = `tmp/q14b-shape.mjs`（含 Rust↔TS 字段
+> 逐条对账，防「类型全绿而运行时 undefined」）与 `tmp/q14b-mutate.py`（七靶，含一条撤掉事件序排序的
+> 窄靶——正常投影 id 序与事件序同序，只有倒序入树的用例抓得到它）。
+
 ---
 
 ## §3 交互规格（v1.1）
@@ -134,8 +147,8 @@ memory_tree_stream(session_id, workspace, group) -> StreamView
 
 | 侧 | 改动 | 规模 |
 |---|---|---|
-| 后端 | **`memory_tree_stream` 会话流读取命令（§2.3，本设计唯一实质后端新增）** | M |
-| 后端 | `view.rs` 总结结构加 `chapter_ids`（或前端区间包含兜底） | S |
+| 后端 | **`memory_tree_stream` 会话流读取命令（§2.3，本设计唯一实质后端新增）** ✅ **Q14 第二刀已落**（`organize/stream_view.rs`） | M |
+| 后端 | `view.rs` 总结结构加 `chapter_ids`（或前端区间包含兜底）✅ **Q14 第二刀已落 = 甲案**：后端算、前端不反查（区间包含做兜底那条**没采纳**——归组的权威源是投影里的 `event_range`，前端再算一遍就是第二个出处） | S |
 | 后端 | `memory_reveal_project(workspace)` 命令 | S |
 | 后端 | `project_purge_memory(workspace)` 命令（幂等） | S |
 | 前端 | MemoryPage 改双页签（记忆树默认 / 事实库）；新建 `memory/TreeBoard.vue`（左栏 + 画布 + 四列汇聚布局） | M–L |

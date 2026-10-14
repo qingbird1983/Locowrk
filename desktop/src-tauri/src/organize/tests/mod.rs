@@ -24,6 +24,7 @@ mod pipeline;
 mod pressure;
 mod recovery;
 mod rerun;
+mod stream;
 mod summary;
 mod summary_backfill;
 mod summary_debt;

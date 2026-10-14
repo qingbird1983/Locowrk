@@ -14,14 +14,20 @@ vi.mock("@tauri-apps/api/core", async () => {
   return { invoke: stub.invoke };
 });
 
-import { askRespond, memoryInjectView, memoryList, setSettings } from "../src/lib/api";
+import { askRespond, memoryInjectView, memoryList, memoryTreeStream, setSettings } from "../src/lib/api";
 import { invokeCalls, onCommand, resetIpc } from "./tauri-stub";
 
 beforeEach(() => {
   resetIpc();
   // 本组用例只判「发出去的形状」，返回值不参与 ⇒ 预置成 resolve(undefined)。
   // ⚠ 这里**不给假 payload**：编一个后端不会返回的对象，等于让夹具冒充契约。
-  for (const cmd of ["memory_inject_view", "memory_list", "ask_respond", "settings_set"]) {
+  for (const cmd of [
+    "memory_inject_view",
+    "memory_list",
+    "ask_respond",
+    "settings_set",
+    "memory_tree_stream",
+  ]) {
     onCommand(cmd, undefined);
   }
 });
@@ -80,5 +86,21 @@ describe("api 包装层的命令名与参数形状", () => {
     });
     // 键数也是口径：少一键 = 包装忘了转（Q12 加区时这条会红，正是想要的）
     expect(Object.keys(call?.args ?? {})).toHaveLength(12);
+  });
+
+  it("memory_tree_stream 的组键原样上送，不在前端拆成两个数（队列 Q14：组键的身份是字符串）", async () => {
+    await memoryTreeStream("s1", "F:\\ws\\demo", "0:5");
+    await memoryTreeStream("s1", "F:\\ws\\demo", "orphan");
+    const calls = invokeCalls();
+    // 参数键 = 后端命令形参（sessionId / workspace / group）；组键**逐字**上送，
+    // 前端一旦在这里 parse 或改名，后端那条「区间查无 = 拒」的判据就永远打不到。
+    expect(calls[0]).toEqual({
+      cmd: "memory_tree_stream",
+      args: { sessionId: "s1", workspace: "F:\\ws\\demo", group: "0:5" },
+    });
+    expect(calls[1]).toEqual({
+      cmd: "memory_tree_stream",
+      args: { sessionId: "s1", workspace: "F:\\ws\\demo", group: "orphan" },
+    });
   });
 });

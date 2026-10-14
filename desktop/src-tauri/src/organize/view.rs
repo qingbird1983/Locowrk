@@ -2,10 +2,14 @@
 //! 章节原文切片。与开发者观测面板（debug.rs）是两个消费方——面板看
 //! 「触发与管道现状」，本模块看「整理产物」；数据全部直读投影文件，
 //! 不要求会话在内存、不占会话锁。只读批零写操作（编辑/删除属 M5）。
+//! 队列 Q14 的**整组汇聚流**读取在兄弟簇 `stream_view.rs`，它复用本文件的
+//! 三件底座（`chapter_seq` / `chapters_in` / `rows_between`）——切片口径
+//! 全仓一处，不许两条通路各写一遍。
 
 use serde::Serialize;
 
-use memory_tree::{build_items, MaterialKind, TreeSummary};
+use memory_tree::{build_items, MaterialKind, MemoryChapter, MemoryTree, TreeSummary};
+use session_store::SessionEvent;
 
 use super::Organizer;
 
@@ -48,6 +52,12 @@ pub struct RunSummaryView {
     /// 项目视图带会话标注；会话视图内为空串。
     pub session_id: String,
     pub session_title: String,
+    /// 本轮区间内**已定稿**章节的 id（数值序）。队列 Q14·MB §2.1 那句「推荐
+    /// view.rs 返回 chapter_ids，前端区间包含做兜底」的兑现：归组的权威源是
+    /// 投影里的 `event_range`，所以在后端算一次就够，前端不再按区间反查
+    /// （反查 = 第二个出处）。两个构造点（会话视图 / 项目视图）共用
+    /// [`chapters_in`]，不许各写一遍。
+    pub chapter_ids: Vec<String>,
 }
 
 /// 项目联合视图（M6.4 v2.141 扩展）：跨会话捆平铺 + **跨会话总结链**
@@ -104,6 +114,59 @@ pub struct OriginalItem {
     pub text: String,
 }
 
+/// 章节 id 的数值序（`b10` 排在 `b2` 之后）——BTreeMap 是字典序，凡"按创建序呈现"
+/// 的地方都用这把尺，不再各写一次 strip_prefix。
+pub(super) fn chapter_seq(id: &str) -> u64 {
+    id.strip_prefix('b')
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(u64::MAX)
+}
+
+/// 已定稿章节（占位桩 `pending` 一律不进「产物呈现」侧——MB §2.2 第 2 条：会话流
+/// 不含未定稿。唯一例外是 `tree_chapters` 的标题列，它要给出「整理中…」桩，
+/// 所以那里直读 `tree.chapters` 全量并自带 `pending` 字段给前端判档）。
+pub(super) fn settled(tree: &MemoryTree) -> impl Iterator<Item = &MemoryChapter> {
+    tree.chapters.values().filter(|b| !b.pending)
+}
+
+/// 落在 `[from, to]` 区间内的**已定稿**章节（数值序）。总结归组（`chapter_ids`）与
+/// 汇聚流读取（`tree_stream`）共用这一个出处；占位章节（`pending`）两处都不进——
+/// MB §2.2 第 2 条「会话流不含它（未定稿）」。
+pub(super) fn chapters_in<'a>(
+    tree: &'a MemoryTree,
+    from: usize,
+    to: usize,
+) -> Vec<&'a MemoryChapter> {
+    let mut hits: Vec<&'a MemoryChapter> = settled(tree)
+        .filter(|b| b.event_range.0 >= from && b.event_range.1 <= to)
+        .collect();
+    hits.sort_by_key(|b| chapter_seq(&b.chapter_id.0));
+    hits
+}
+
+/// 事件区间 → 原文行。**一处**持有两条读取通路的口径：起点越界 = Err（日志被截断
+/// 重写过，硬给空清单会把"读不到"演成"没有内容"），终点越界 = 钳到日志末尾。单章
+/// 原文（`tree_original`）与整组汇聚流（`tree_stream`）都走这里 ⇒ 行号坐标系与 kind
+/// 形状只有一个定义处（同一属性只许一个出处）。
+pub(super) fn rows_between(
+    events: &[SessionEvent],
+    from: usize,
+    to: usize,
+) -> Result<Vec<OriginalItem>, String> {
+    if from >= events.len() {
+        return Err("章节指向的事件区间超出会话日志（会话可能已截断重写）".into());
+    }
+    let end = (to + 1).min(events.len());
+    Ok(build_items(&events[from..end], from)
+        .into_iter()
+        .map(|i| OriginalItem {
+            index: i.event,
+            kind: i.kind,
+            text: i.text,
+        })
+        .collect())
+}
+
 impl Organizer {
     /// 项目级 L0 联合视图（M6.4，树 v2 §11.4）：该项目**跨会话**全部捆
     /// 平铺（会话标注 + 章节序）。memory_search_titles 工具的候选池与此
@@ -121,15 +184,8 @@ impl Organizer {
         let mut summaries = Vec::new();
         for (tree, session_id, _) in rows.drain(..) {
             let session_title = titles.get(&session_id).cloned().unwrap_or_default();
-            let mut chapters: Vec<&memory_tree::MemoryChapter> =
-                tree.chapters.values().filter(|b| !b.pending).collect();
-            chapters.sort_by_key(|b| {
-                b.chapter_id
-                    .0
-                    .strip_prefix('b')
-                    .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(u64::MAX)
-            });
+            let mut chapters: Vec<&MemoryChapter> = settled(&tree).collect();
+            chapters.sort_by_key(|b| chapter_seq(&b.chapter_id.0));
             for b in chapters {
                 out.push(ProjectChapterView {
                     session_id: session_id.clone(),
@@ -153,6 +209,10 @@ impl Organizer {
                     created_at: s.created_at,
                     session_id: session_id.clone(),
                     session_title: session_title.clone(),
+                    chapter_ids: chapters_in(&tree, s.from, s.to)
+                        .into_iter()
+                        .map(|b| b.chapter_id.0.clone())
+                        .collect(),
                 });
             }
         }
@@ -205,14 +265,8 @@ impl Organizer {
             };
         };
         // BTreeMap 是字典序（b10 < b2），列表按章节序号数值排（创建序）。
-        let mut sorted: Vec<&memory_tree::MemoryChapter> = tree.chapters.values().collect();
-        sorted.sort_by_key(|b| {
-            b.chapter_id
-                .0
-                .strip_prefix('b')
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(u64::MAX)
-        });
+        let mut sorted: Vec<&MemoryChapter> = tree.chapters.values().collect();
+        sorted.sort_by_key(|b| chapter_seq(&b.chapter_id.0));
         let chapters = sorted
             .into_iter()
             .map(|b| ChapterView {
@@ -228,6 +282,24 @@ impl Organizer {
                 summary_edited_by_user: b.summary_edited_by_user,
             })
             .collect();
+        // 总结归组先在 tree 被拆字段 move 之前算完（借用与部分移动不能混在同一个
+        // struct 表达式里）；每轮总结带出自己的 chapter_ids。
+        let summaries: Vec<RunSummaryView> = tree
+            .summaries
+            .iter()
+            .map(|s| RunSummaryView {
+                text: s.text.clone(),
+                event_from: s.from,
+                event_to: s.to,
+                created_at: s.created_at,
+                session_id: String::new(),
+                session_title: String::new(),
+                chapter_ids: chapters_in(&tree, s.from, s.to)
+                    .into_iter()
+                    .map(|b| b.chapter_id.0.clone())
+                    .collect(),
+            })
+            .collect();
         TreeChaptersView {
             exists: true,
             workspace: tree.workspace,
@@ -235,18 +307,7 @@ impl Organizer {
             chaptered_until: tree.chaptered_until,
             paused_auto: tree.paused_auto,
             chapters,
-            summaries: tree
-                .summaries
-                .iter()
-                .map(|s| RunSummaryView {
-                    text: s.text.clone(),
-                    event_from: s.from,
-                    event_to: s.to,
-                    created_at: s.created_at,
-                    session_id: String::new(),
-                    session_title: String::new(),
-                })
-                .collect(),
+            summaries,
         }
     }
 
@@ -271,18 +332,6 @@ impl Organizer {
         let (session, _) =
             session_store::load_session(&path).map_err(|e| format!("会话日志读取失败: {e}"))?;
         let (from, to) = chapter.event_range;
-        let events = session.events();
-        if from >= events.len() {
-            return Err("章节指向的事件区间超出会话日志（会话可能已截断重写）".into());
-        }
-        let end = (to + 1).min(events.len());
-        Ok(build_items(&events[from..end], from)
-            .into_iter()
-            .map(|i| OriginalItem {
-                index: i.event,
-                kind: i.kind,
-                text: i.text,
-            })
-            .collect())
+        rows_between(session.events(), from, to)
     }
 }

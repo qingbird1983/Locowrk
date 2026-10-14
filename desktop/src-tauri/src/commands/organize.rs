@@ -7,7 +7,7 @@
 use tauri::State;
 
 use crate::organize::{
-    OriginalItem, ProjectTreeView, TreeChaptersView, TreeDebug, TreeSummaryView,
+    OriginalItem, ProjectTreeView, StreamView, TreeChaptersView, TreeDebug, TreeSummaryView,
 };
 
 use crate::state::AppState;
@@ -74,6 +74,19 @@ pub async fn memory_tree_project(
     state: State<'_, AppState>,
 ) -> Result<ProjectTreeView, String> {
     Ok(state.organizer.tree_project(&workspace))
+}
+
+/// 整组会话流（队列 Q14 · MB §2.3）：一轮总结区间（或 `"orphan"` 未归组）内
+/// 全部已定稿章节的原文，按事件序汇成一块原子视图。看板第 4 列数据源；
+/// 薄适配——区间过滤与切片口径全在 `organize::stream_view`。
+#[tauri::command]
+pub async fn memory_tree_stream(
+    session_id: String,
+    workspace: String,
+    group: String,
+    state: State<'_, AppState>,
+) -> Result<StreamView, String> {
+    state.organizer.tree_stream(&session_id, &workspace, &group)
 }
 
 /// 编辑章节标题/摘要（M5 §3.37 编辑面；直读直写投影文件，不占会话锁、

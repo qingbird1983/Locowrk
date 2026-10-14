@@ -43,6 +43,7 @@ import type {
   TreeSummaryView,
   TreeChaptersView,
   ProjectTreeView,
+  StreamView,
   TreeOriginalItem,
   BrowserOpenPayload,
   OrganizeDonePayload,
@@ -731,6 +732,18 @@ export function memoryTreeOriginal(
 /** 项目级 L0 联合视图（M6.4；跨会话捆平铺 + v2.141 总结链，时间正序）。 */
 export function memoryTreeProject(workspace: string): Promise<ProjectTreeView> {
   return invoke("memory_tree_project", { workspace });
+}
+
+/** 整组会话流（队列 Q14 · MB §2.3）：一轮总结区间（组键 `"from:to"`，取自
+ * memory_tree_chapters 的 summaries）或 `"orphan"` 未归组的原文，按事件序一次
+ * 汇成一块原子视图。投影缺失 / 会话日志读不出 / 组键不成立 = reject；
+ * 单节切片失败在 section.error 里，不撤整组。 */
+export function memoryTreeStream(
+  sessionId: string,
+  workspace: string,
+  group: string,
+): Promise<StreamView> {
+  return invoke("memory_tree_stream", { sessionId, workspace, group });
 }
 
 // ---- 记忆树编辑面（M5 §3.37；树是投影——只动投影不碰原文） ----

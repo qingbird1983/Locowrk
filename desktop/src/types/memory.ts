@@ -243,6 +243,30 @@ export interface TreeOriginalItem {
   text: string;
 }
 
+/** 会话流小节（队列 Q14 · MB §2.3）：一个已定稿章节的原文切片。
+ * rows 的 index 是会话日志**绝对**事件位，跨节连续 ⇒ 定位语义成立。
+ * error 非空 = 本节切片读不出（区间越出日志），此时 rows 为空、其余小节照常。 */
+export interface StreamSection {
+  chapterId: string;
+  title: string;
+  source: string;
+  /** 该章有人改过（标题或摘要任一手动标记；逐字段区分看 TreeChapterView）。 */
+  edited: boolean;
+  from: number;
+  to: number;
+  rows: TreeOriginalItem[];
+  error: string | null;
+}
+
+/** 整组会话流（看板第 4 列一块面板；sections 按事件区间升序 = 事件序）。
+ * sections 为空时 from/to 是 0 ⇒ 判空态看 sections.length，别看区间。 */
+export interface StreamView {
+  sections: StreamSection[];
+  from: number;
+  to: number;
+  totalRows: number;
+}
+
 /** embedding 模型区投影（⑬ 智能层共享基建）：无秘钥字段。 */
 export interface EmbeddingView {
   /** 设置原值；null = 未填（后端按 provider 兜底：ollama → 本机 11434）。 */

@@ -38,6 +38,7 @@ export type {
   MemoryUpdate,
   ProjectChapterView,
   ProjectTreeView,
+  StreamView,
   TreeChapterView,
   TreeChaptersView,
   TreeDebug,
