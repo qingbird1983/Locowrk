@@ -7,8 +7,11 @@ name: CI
 #   desktop  = desktop/src-tauri（被 Cargo.toml exclude 在根 workspace 外，
 #              必须显式 --manifest-path；Windows runner 贴合实际资产：
 #              pdfium.dll / WebView2 / Credential Manager 都是 Windows 面）
-#   hygiene  = 四道机械闸（行数基线 / i18n 双向闭合 / 命令三向闭合 /
-#              中间件接线），纯脚本秒级，谁破了当场知道是哪一条。
+#   hygiene  = 机械闸群（行数基线 / i18n 双向闭合 / 命令三向闭合 / 中间件接线 /
+#              拆分形状 / 拆分登记表复验），纯脚本秒级，谁破了当场知道是哪一条。
+#              ⚠ 这里刻意**不写"几道"**：闸的只数会随批增删，写死的数字必然漂
+#              （历批第 116 条「同一读数两处手写一遍」的同族），现役只数看 AGENTS
+#              「每批收尾门禁」那段与 pre-commit 的实跑清单。
 
 on:
   push:
@@ -46,12 +49,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # ⚠ Q11 把这一作业的 node 从 20 抬到 24、pnpm 从 9 抬到 11，**不是顺手升版本**：
+      # 实测 `npm view vitest@5.0.4 engines` = `^22.12.0 || ^24.0.0 || >=26.0.0` ⇒
+      # 前端测试面在 node 20 上根本跑不起来；`24` 又是本机实测档位（v24.14.0），
+      # 类型与运行同档（happy-dom 要 >=20 ✓、jsdom 30 要 >=24.15 ⇒ 本仓因此选 happy-dom）。
+      # pnpm 取 11 = 与本机 `pnpm -v` 同档，避免 lockfileVersion 9.0 由不同大版本读写。
+      # hygiene 作业留在 node 20：它只跑 scripts/*.mjs 与 bash，不含 vitest。
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
@@ -59,6 +68,8 @@ jobs:
         run: pnpm -C desktop install --frozen-lockfile && pnpm -C desktop run build
       - name: Style lint (design tokens + template rules)
         run: pnpm -C desktop run lint:style
+      - name: Frontend tests (Q11 运行面：IPC 替身 / store 行语义 / 组件双档)
+        run: pnpm -C desktop run test:run
       - name: Format (desktop)
         run: cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --check
       - name: Clippy (desktop)

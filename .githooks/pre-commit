@@ -21,7 +21,13 @@
 #                        归档头部「逐字原样」声明在场。字节数只作兜底——单批靠压措辞可以混过
 #                        字节闸，但"最老那一批有没有真搬走"只能数块。它自己也带下限：
 #                        块数读数为 0 直接判红，因为那只可能是**闸瞎了**而不是文档真的没批次）
-# ③–⑧ 只在相关文件暂存时跑（⑥⑦ 亚秒级，其余各自约 5–10s，Windows 文件系统实测）。
+#   ⑨ 前端测试面          pnpm run test:run（Q11·v2.202 立：vitest + happy-dom 的运行面，
+#                        四条用例族 = IPC 包装形状 / chat store 行语义 / 组件双档渲染 / 夹具自证。
+#                        触发面 = desktop/src/**、desktop/tests/**、vitest.config.ts、
+#                        desktop/package.json、desktop/tsconfig.json。放它进提交闸的理由 =
+#                        一条"只活在人工纪律里"的门禁等于没有门禁（H1 给 CI 立的那句话，
+#                        对本地同样成立）；代价是每次提交多约 2–3s，比 stylelint 那一档便宜）
+# ③–⑨ 只在相关文件暂存时跑（⑥⑦ 亚秒级，⑨ 约 2–3s，其余各自约 5–10s，Windows 文件系统实测）。
 root="$(git rev-parse --show-toplevel)"
 staged="$(git diff --cached --name-only --diff-filter=ACM)"
 fail=0
@@ -62,6 +68,13 @@ fi
 if printf '%s\n' "$staged" | grep -qE '^docs/|^AGENTS\.md$'; then
   say "文档预算与窗口（第七道结构闸）"
   node "$root/scripts/check-doc-budget.mjs" || fail=1
+fi
+
+# ⑨ 前端测试面（Q11）。`^desktop/(src|tests)/` 特意要求 src 后紧跟斜杠：
+# desktop/src-tauri/** 属 Rust 面，不该被这条拖进提交闸。
+if printf '%s\n' "$staged" | grep -qE '^desktop/(src|tests)/|^desktop/(package\.json|vitest\.config\.ts|tsconfig\.json)$'; then
+  say "前端测试（Q11 运行面）"
+  (cd "$root/desktop" && pnpm run test:run) || fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then
