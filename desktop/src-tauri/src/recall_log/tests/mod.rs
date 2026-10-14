@@ -63,6 +63,8 @@ fn shape(entries: &[kernel_agent::MemoryEntry]) -> Vec<(String, String, String, 
         .collect()
 }
 
+/// `breakdown` 那一列的三档语义 + 去重先到先得 + 存量库补列（队列 Q10 / L4）。
+mod breakdown;
 /// 注入档埋点（Q1a 的十一条：三档形状 / 去重口径 / 零行为变更 / 不反噬被观测者）。
 mod injection;
 /// 派生指标口径（`stats()`：空块率与 `injection_yield` 的分子分母，Q1b 加的后四条）。

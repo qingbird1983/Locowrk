@@ -1,5 +1,5 @@
 //! 队列 Q9 宿主端到端：`MemorySource::recall_relevant` 的**生产实现**——
-//! 真库、真 SQL、真写回。与 `memory_learn/tests.rs`（纯函数面）分工：
+//! 真库、真 SQL、真写回。与 `memory_learn/tests/`（纯函数面）分工：
 //! 那里判"四条式子对不对"，这里判"式子接没接到数据库上、写回有没有只碰该碰的列"。
 
 use super::*;

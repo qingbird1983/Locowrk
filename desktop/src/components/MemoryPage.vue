@@ -15,6 +15,7 @@ import ListPage from "./patterns/ListPage.vue";
 import SourceBadge from "./SourceBadge.vue";
 import HoverTip from "./settings/HoverTip.vue";
 import TreeSection from "./memory/TreeSection.vue";
+import InjectSection from "./memory/InjectSection.vue";
 import { relativeTimeLabel, relativeTimeSec } from "../lib/format";
 import { workspaceDisplayName } from "../lib/session-groups";
 import {
@@ -281,6 +282,10 @@ function timeText(row: MemoryRow): string {
     <!-- M3 §3.37① 双区块之二：记忆树（情景）只读区块（TreeSection 自持
          状态；影子运行零写操作，编辑/删除属 M5） -->
     <TreeSection />
+
+    <!-- 队列 Q10（L4）：注入解释只读区块（自持状态；读的是观测表里最近一次
+         真算过四信号的回执，一个字节都不写） -->
+    <InjectSection />
 
     <!-- 底部：清空（二次确认）+ 提示行 -->
     <div class="flex items-center gap-2 border-t border-line px-5 py-2">

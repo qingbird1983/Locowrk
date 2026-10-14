@@ -40,6 +40,10 @@ pub(crate) struct Stack {
     /// 工具树）。与上面 `MemoryStore` 里那个注入档句柄是同一个 `Arc<RecallLog>`——
     /// 两个档的账才落在同一张表上。
     pub receipt_sink: Arc<crate::recall_receipt::ReceiptSink>,
+    /// Q10：同一张观测表的**读取**句柄（管理页 `memory_inject_view` 走它）。
+    /// 与上面 `receipt_sink` 里那个是同一个 `Arc`——写侧两处、读侧一处，全仓一个
+    /// `usage.sqlite3` 的 `memory_inject_log`。
+    pub recall_log: Arc<crate::recall_log::RecallLog>,
 }
 
 pub(crate) fn build(init: Init) -> Stack {
@@ -83,7 +87,7 @@ pub(crate) fn build(init: Init) -> Stack {
         MemoryStore::new(&root, Arc::clone(&workspace_of))
             .with_files(Arc::clone(&memory_files), Arc::clone(&files_on))
             .with_repo_context(Arc::clone(&repo_on))
-            // 未接线时召回行为与改前逐字段一致（等价判据在 recall_log/tests.rs）。
+            // 未接线时召回行为与改前逐字段一致（等价判据在 recall_log/tests/）。
             .with_recall_log(Arc::clone(&recall_log)),
     );
     let permission_modes = Arc::new(crate::permission_mode::PermissionModeStore::new(
@@ -112,5 +116,6 @@ pub(crate) fn build(init: Init) -> Stack {
         tree_store,
         tree_assembler,
         receipt_sink,
+        recall_log,
     }
 }

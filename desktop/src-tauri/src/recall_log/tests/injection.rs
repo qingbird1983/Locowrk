@@ -184,6 +184,7 @@ fn schema_is_idempotent_across_reopen() {
         1,
         &["a".to_string()],
         std::time::Duration::from_micros(7),
+        None,
     )
     .unwrap();
     let log2 = RecallLog::at(&path);

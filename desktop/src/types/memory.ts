@@ -99,6 +99,44 @@ export interface MemoryRow {
   updated_at: number;
 }
 
+/** 队列 Q10（L4 / ML 稿 §3.1 原则 4）：一次注入里**一条交付**的四信号回执。
+ * `share` 是千分比四档，**按位** = [相关性, 强度, 新鲜度, 时间]（与内核
+ * `LearnWeights` 字段序同源，Rust 侧 `inject_view::ExplainRow`）。 */
+export interface InjectRow {
+  key: string;
+  share: number[];
+  total: number;
+}
+
+/** 最近一次"真算过四信号"的注入回执。`present=false` = 库里没有带回执的行
+ * （学习档关着或一次注入都没发生）；`unreadable=true` = 有回执但那串读不成
+ * 面板认得的形状（两种状态在界面上必须分开说，见 `inject_view.rs` 头注）。 */
+export interface InjectExplain {
+  present: boolean;
+  unreadable: boolean;
+  ts: number;
+  session_key: string;
+  scope_id: string;
+  weights: number[];
+  rows: InjectRow[];
+}
+
+/** 观测表的派生读数（L0 那两个比率 + 三个计数）。两个比率 **null 与 0 不是一回事**：
+ * null = "没注入过 / 没键可算"，0 = "注入了但结果为空 / 一个没用上"。 */
+export interface InjectOverview {
+  injections: number;
+  injected_keys: number;
+  yielded_keys: number;
+  store_empty_ratio: number | null;
+  injection_yield: number | null;
+}
+
+/** memory_inject_view 命令载荷（管理页只读解释区块）。snake_case 与既有 IPC 投影一致。 */
+export interface InjectView {
+  explain: InjectExplain;
+  overview: InjectOverview;
+}
+
 /** 记忆树影子运行观测（M2 §3.36③；memory_tree_view 命令载荷）。 */
 export interface TreeDebug {
   exists: boolean;

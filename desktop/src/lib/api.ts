@@ -49,6 +49,7 @@ import type {
   OrganizePausedPayload,
   ImportApplyReport,
   ImportScanOutcome,
+  InjectView,
 } from "../types";
 
 /** 发起一轮对话；返回实际 step 数。内容经事件到达，不经返回值。
@@ -669,6 +670,12 @@ export function memoryReconcile(): Promise<ReconcileSummary> {
 /** F2 人的编辑面入口：打开（必要时先建）记忆人类层目录。 */
 export function memoryRevealFolder(): Promise<void> {
   return invoke("memory_reveal_folder");
+}
+
+/** 队列 Q10（L4）：注入解释面板——最近一次真算过四信号的注入回执 + 观测表派生读数。
+ * 只读：与 memory_tree_view 同款「打开拉一次 + 手动刷新」，不推送不轮询。 */
+export function memoryInjectView(): Promise<InjectView> {
+  return invoke("memory_inject_view");
 }
 
 /** 最近一次工具暴露截断快照（⑫ 开发者面板；打开分区时拉取）。 */

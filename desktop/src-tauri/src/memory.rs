@@ -577,25 +577,30 @@ impl MemoryStore {
         started: std::time::Instant,
     ) {
         let keys: Vec<String> = rows.iter().map(|r| r.key.clone()).collect();
-        self.log_inject_keys(session_id, n_candidates, &keys, started);
+        // 现役路径没有四信号可交代 ⇒ `None`（落 NULL）。这不是"忘了填"：学习档关掉时
+        // 排序发生在 SQL 的 `ORDER BY updated_at DESC` 里，那一步根本不算分。
+        self.log_inject_keys(session_id, n_candidates, &keys, started, None);
     }
 
     /// 埋点的键位版（Q9 学习路径给的是 `memory_learn::Candidate`，不是管理页
     /// 行形状）。**拆成两层而不是改上面那个签名**：现役 `recall_quiet` 的调用点
     /// 因此一字未动，「关掉学习档 = 逐字节回到现役」这条判据里连观测面都算得上。
+    ///
+    /// Q10 起多带一个 `breakdown`（四信号回执 JSON，`None` = 这一档没有分数）。
     fn log_inject_keys(
         &self,
         session_id: Option<&str>,
         n_candidates: usize,
         keys: &[String],
         started: std::time::Instant,
+        breakdown: Option<&str>,
     ) {
         let Some(log) = &self.recall_log else {
             return;
         };
         let scope = self.scope_of_session(session_id);
         // 无会话传空串而不是 NULL：部分唯一索引里 NULL ≠ NULL，用 NULL 会让
-        // 「无会话的注入」每 step 插一条，去重直接失效（recall_log.rs 不变量 3）。
+        // 「无会话的注入」每 step 插一条，去重直接失效（recall_log/mod.rs 不变量 3）。
         if let Err(e) = log.note_inject(
             session_id.unwrap_or_default(),
             &scope,
@@ -603,6 +608,7 @@ impl MemoryStore {
             keys.len(),
             keys,
             started.elapsed(),
+            breakdown,
         ) {
             tracing::warn!("recall observability: {e}");
         }
@@ -724,7 +730,7 @@ fn today_local() -> String {
 /// （预取缓存键成分——归属变更自动重算）与 `context_line`（归属会话告知
 /// 模型当前项目根，"看下这个项目"不再靠旧记忆猜路径）。
 /// 队列 Q9 起**覆写 `recall_relevant`**：排序真源从"SQL 的 `updated_at DESC`"
-/// 变成"候选集内存四信号加权"（`memory_learn.rs`），`recall` 本体保留不动
+/// 变成"候选集内存四信号加权"（`memory_learn/`，Q10 起目录化），`recall` 本体保留不动
 /// = 学习档关掉时的现役参照。
 impl MemorySource for MemoryStore {
     fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
@@ -745,7 +751,7 @@ impl MemorySource for MemoryStore {
     }
 
     /// 队列 Q9（ML 稿 §3.3 排序 + §3.4 强化 = 稿内 L2/L3 合一批）：四信号现算
-    /// 加权排序 + 交付即写回。打分与写回的**全部逻辑在 `memory_learn.rs`**，
+    /// 加权排序 + 交付即写回。打分与写回的**全部逻辑在 `memory_learn/` 模块**，
     /// 这里只做装配、连接与观测（同一进程内一次连接读完就排，不重开库）。
     ///
     /// ⚠ **关掉学习档走的是 `Self::recall` 本体**，不是"另写一份等价的老 SQL"：
@@ -770,34 +776,41 @@ impl MemorySource for MemoryStore {
         }
         let started = std::time::Instant::now();
         let now = now_secs();
-        let learned: Result<(Vec<crate::memory_learn::Candidate>, Vec<String>, usize), String> =
-            (|| {
-                let conn = self.open_conn()?;
-                // n_candidates 恒取**全量** COUNT（与 recall_quiet 同口径），不是候选
-                // 上限：Q1 那条指标的分子分母不能随本刀换定义。
-                let n_candidates = crate::memory_learn::count_global(&conn)?;
-                let delivered = crate::memory_learn::rank(
-                    crate::memory_learn::candidates(&conn)?,
-                    query,
-                    limit,
-                    now,
-                );
-                // 写回与埋点吃**同一个 keys 变量**：交付集合、`hit_count` 增量、
-                // `memory_inject_log.keys` 三者不可能分叉（分叉过一次就是"日志说注入了
-                // 三条、库里只加了两条"这种查不出的账）。
-                let keys: Vec<String> = delivered.iter().map(|c| c.key.clone()).collect();
-                crate::memory_learn::reinforce(&conn, &keys, now);
-                Ok((delivered, keys, n_candidates))
-            })();
+        let learned: Result<
+            (Vec<crate::memory_learn::Scored>, Vec<String>, usize, String),
+            String,
+        > = (|| {
+            let conn = self.open_conn()?;
+            // n_candidates 恒取**全量** COUNT（与 recall_quiet 同口径），不是候选
+            // 上限：Q1 那条指标的分子分母不能随本刀换定义。
+            let n_candidates = crate::memory_learn::count_global(&conn)?;
+            let delivered = crate::memory_learn::rank(
+                crate::memory_learn::candidates(&conn)?,
+                query,
+                limit,
+                now,
+            );
+            // 写回与埋点吃**同一个 keys 变量**：交付集合、`hit_count` 增量、
+            // `memory_inject_log.keys` 三者不可能分叉（分叉过一次就是"日志说注入了
+            // 三条、库里只加了两条"这种查不出的账）。
+            let keys: Vec<String> = delivered.iter().map(|s| s.cand.key.clone()).collect();
+            crate::memory_learn::reinforce(&conn, &keys, now);
+            // ⚠ Q10（L4）：四信号回执**只走观测旁路**——它进 `memory_inject_log.breakdown`
+            // 由管理页回放，**不进** `MemoryEntry`（那等于把机器状态摆进 system，还花
+            // token；上批判据 S10 钉的那条原样在场）。回执与 keys 同样取自 `delivered`
+            // 这同一个变量 ⇒ "日志里的分数"与"真正交付的那几条"不可能各说一套。
+            let breakdown = crate::memory_learn::breakdown_json(&delivered, query);
+            Ok((delivered, keys, n_candidates, breakdown))
+        })();
         match learned {
-            Ok((rows, keys, n_candidates)) => {
-                self.log_inject_keys(session_id, n_candidates, &keys, started);
+            Ok((rows, keys, n_candidates, breakdown)) => {
+                self.log_inject_keys(session_id, n_candidates, &keys, started, Some(&breakdown));
                 rows.into_iter()
-                    .map(|c| MemoryEntry {
-                        key: c.key,
-                        value: c.value,
-                        tags: c.tags,
-                        updated_at: c.updated_at,
+                    .map(|s| MemoryEntry {
+                        key: s.cand.key,
+                        value: s.cand.value,
+                        tags: s.cand.tags,
+                        updated_at: s.cand.updated_at,
                         // 与现役 recall 同一个层标口径：注入只取全局层。
                         scope: "global".into(),
                     })

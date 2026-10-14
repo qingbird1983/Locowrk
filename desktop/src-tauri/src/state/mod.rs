@@ -75,6 +75,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         tree_store,
         tree_assembler,
         receipt_sink,
+        recall_log,
     } = memory_stack::build(memory_stack::Init {
         ctx: Arc::clone(&ctx),
         settings: Arc::clone(&settings),
@@ -202,6 +203,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         llm_diagnoser,
         memory_cfg,
         memory,
+        recall_log,
         memory_files,
         memory_files_on: files_on,
         usage,

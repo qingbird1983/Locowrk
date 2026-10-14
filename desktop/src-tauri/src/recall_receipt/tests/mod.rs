@@ -12,7 +12,7 @@
 //! `recall_receipt.rs` 头注），下面 `scope_id_is_the_same_keyside_string_as_the_injection_side`
 //! 钉住这条。
 //!
-//! 命中率的分子/分母口径判据在 `recall_log/tests.rs`（那是 `stats()` 的地盘）。
+//! 命中率的分子/分母口径判据在 `recall_log/tests/`（那是 `stats()` 的地盘）。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -87,7 +87,7 @@ impl Tool for FakeRetrieval {
     }
 }
 
-/// 键位解析器：与 `recall_log/tests.rs` 同口径（`s1`/`sess-1`/`sess-9` 归 `F:/ws/a`，
+/// 键位解析器：与 `recall_log/tests/` 同口径（`s1`/`sess-1`/`sess-9` 归 `F:/ws/a`，
 /// 其余未归属 ⇒ `scope_key` 归一为空串）。
 fn scope_of() -> crate::workspace::WorkspaceResolver {
     Arc::new(|sid: &str| match sid {

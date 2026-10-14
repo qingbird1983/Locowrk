@@ -70,7 +70,7 @@ async fn unobserved_tool_is_returned_untouched() {
     assert!(lg.recent(10).unwrap().is_empty());
 }
 
-/// **观测不许拖垮被观测者**（`recall_log.rs` 不变量 2 的检索侧同族）：库写不进去
+/// **观测不许拖垮被观测者**（`recall_log/mod.rs` 不变量 2 的检索侧同族）：库写不进去
 /// （父目录不存在）时调用仍返回原 payload，不抛、不 panic，也不自己把目录建出来。
 #[tokio::test]
 async fn unwritable_log_does_not_break_the_call() {

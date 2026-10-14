@@ -20,7 +20,22 @@ export type { BrowserOpenPayload, CacheBreakReport, NotificationItem, OrganizeDo
 
 export type { AppearanceUpdate, BatchResult, ChatUpdate, ContextUpdate, DeveloperUpdate, ExposureDebug, SettingsView, ToolsUpdate } from "./settings";
 
-export type { EmbeddingUpdate, MemoryRow, MemoryUpdate, ProjectChapterView, ProjectTreeView, TreeChapterView, TreeChaptersView, TreeDebug, TreeOriginalItem, TreeSummaryView } from "./memory";
+export type {
+  EmbeddingUpdate,
+  InjectExplain,
+  InjectOverview,
+  InjectRow,
+  InjectView,
+  MemoryRow,
+  MemoryUpdate,
+  ProjectChapterView,
+  ProjectTreeView,
+  TreeChapterView,
+  TreeChaptersView,
+  TreeDebug,
+  TreeOriginalItem,
+  TreeSummaryView,
+} from "./memory";
 
 export type { CatalogModelInfo, CatalogStatus, ImportApplyReport, ImportCandidate, ImportScanOutcome, LlmSettingsView, LlmUpdate, ModelTestResult, ProbeOutcome, ProviderInput, ProviderModelPricing, ProviderModelSources, ProviderModelView, ProviderModels, ProviderView, SubagentPin } from "./llm";
 

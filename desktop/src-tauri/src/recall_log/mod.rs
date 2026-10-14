@@ -46,34 +46,17 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection};
 
-/// 表 + 两个索引，每次开连接重跑（`IF NOT EXISTS` 幂等）——本模块因此不需要假设启动
-/// 顺序，也不给 `usage.rs` 的建表函数加一个字。
-///
-/// `mode` = **召回的通道**，两个出处共用一行（Q1a 立表时就把这列留成了可扩展的取值面，
-/// Q1b 因此零迁移）：`'inject'` = 注入侧每键位一行；`'memory_read'` / `'memory_search'` /
-/// `'memory_project_history'` = 检索侧每次成功调用一行（不去重）。
-///
-/// `session_key` 用空串表示无会话（**不用 NULL**：部分唯一索引里 NULL ≠ NULL，用 NULL 会让
-/// 无会话的注入每 step 插一条，去重直接失效）。
-const DDL: &str = "
-CREATE TABLE IF NOT EXISTS memory_inject_log (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts           INTEGER NOT NULL,
-    mode         TEXT NOT NULL,
-    session_key  TEXT NOT NULL,
-    scope_id     TEXT NOT NULL,
-    n_candidates INTEGER NOT NULL,
-    returned     INTEGER NOT NULL,
-    keys         TEXT NOT NULL,
-    elapsed_us   INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_mil_mode_ts ON memory_inject_log(mode, ts);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_mil_inject ON memory_inject_log(session_key, scope_id) WHERE mode = 'inject';";
+mod schema;
+// 库形状（建表 DDL / `mode` 取值 / 加列迁移）在 `schema.rs`：本文件其余部分只管
+// "怎么写、怎么读"。队列 Q10 拆出，正文逐字节搬移，不改一条 SQL 的字面量。
+/// 注入通道的 `mode` 取值：**生产读取点 `inject_view` 要用它筛行**，所以这里
+/// `pub(crate) use` 出去而不是私用。字符串只有 `schema.rs` 一个出处（部分唯一索引
+/// 的谓词必须是字面量，其余一律绑这个常量）。
+pub(crate) use schema::MODE_INJECT;
+use schema::{ensure_breakdown_column, DDL};
 
-/// 注入通道在 `mode` 列里的取值（检索通道直接用工具名，与 `ToolSpec.name` 同串）。
-/// SQL 里的这个串只有 DDL 的索引谓词是字面量（部分唯一索引的谓词不能参数化），
-/// 写入与读取都绑这一个常量——同一读数两处写必漂，是本仓库登记过一次的教训。
-pub(crate) const MODE_INJECT: &str = "inject";
+// `DDL` 与 `MODE_INJECT` 的正身在 `schema.rs`（上面 `use` 进来）——同一张表的形状两处各
+// 存一份才是真事故，所以这里只引用、不复制。
 
 // 回执行的 `mode` = 工具名，`keys` = 该次结果里返回的 memory key（写入面见
 // `RecallLog::note_receipt`，读取面见 `RecallLog::stats`）。
@@ -104,29 +87,39 @@ struct Row<'a> {
     returned: usize,
     keys: &'a [String],
     elapsed: Duration,
+    /// Q10（L4）：**这次排序算出来的四信号回执**（JSON）。`None` = 这一档没有可解释
+    /// 的分数——现役注入（学习档关掉）与检索回执都是 `None`，落 NULL 而不是空串：
+    /// 空串会被读成"有回执但回执是空的"，与"这一路根本没有分数"是两个结论
+    /// （与 `store_empty_ratio` 用 `None` 不用 `0.0` 同一条口径）。
+    breakdown: Option<&'a str>,
 }
 
 /// 表内一行（[`RecallLog::recent`] 的形状）。
 ///
-/// ⚠ 生产读取点 = 队列 Q10（L4 管理页），本批只有测试消费——登记为已知边界而不是删掉：
-/// 埋点写了却读不出来，Q9 改排序时照样两眼一抹黑。豁免写法与本仓库 `MemoryStore::write`
-/// （「本方法当前只服务测试播种」）同款。
-#[cfg_attr(not(test), allow(dead_code))]
+/// ⚠ 生产读取点已经在 **Q10** 落位（`memory_inject_view` → 管理页的只读注入解释区块），
+/// 所以这里的 `allow(dead_code)` 豁免摘掉了——留着一句"还没有读取点"的注释而它已经接线，
+/// 就是第六道闸立时要抓的那种漂移。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RecallRow {
+    /// 落盘时刻（epoch 秒）。Q10 的面板要说"这是哪一次的注入"，没有它就只能说
+    /// "最近一次"——那等于把观测表里现成的一个数藏起来。
+    pub ts: i64,
     pub mode: String,
     pub session_key: String,
     pub scope_id: String,
     pub n_candidates: i64,
     pub returned: i64,
     pub keys: Vec<String>,
+    /// Q10（L4）四信号回执的**原始 JSON**（`None` = 这一行没有回执：现役注入档与检索档）。
+    /// 这里刻意不解析成结构：解析由读取层 `crate::inject_view` 做，本层只保证"读回来的是
+    /// 库里那一串"，坏 JSON 在读取层降级为"无法解释"而不是把整条观测通路带崩。
+    pub breakdown: Option<String>,
 }
 
 /// 派生指标（L0 稿 §2.3(c)：只从表里算，不额外埋点）。
 ///
 /// 两个比率都按**键位集合**算而不是按次数：同一 key 被查三遍不会把命中率抬高
 /// （稿 §6.1「学习信号可能被『检索即命中』污染」的第一道防线就是把计数换成集合）。
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct InjectStats {
     /// 注入行数（= 参与统计的会话键位数）。
@@ -170,6 +163,11 @@ impl RecallLog {
             .map_err(|e| format!("recall log busy_timeout: {e}"))?;
         conn.execute_batch(DDL)
             .map_err(|e| format!("recall log schema: {e}"))?;
+        // 队列 Q10（L4）：`CREATE TABLE IF NOT EXISTS` 对**已存在的表不补列**，所以存量库
+        // 的 `breakdown` 必须显式迁。形状逐字照 `memory.rs::ensure_learning_schema`（探针 →
+        // `BEGIN IMMEDIATE` → 等锁后二次探针 → 补列 → COMMIT/ROLLBACK）——同一把尺在本仓
+        // 只该有一套写法，两处各发明一份迟早会漂。
+        ensure_breakdown_column(&conn)?;
         Ok(conn)
     }
 
@@ -178,6 +176,15 @@ impl RecallLog {
     /// 打不开库时不许走到这里：那种情况下连 `n_candidates` 都取不到，记一行 0 会把
     /// 「库不可用」冒充成「库是空的」= 指标造假（判据
     /// `unavailable_memory_store_does_not_write_a_row`）。
+    ///
+    /// ⚠ `too_many_arguments` 在这里**带理由允许**而不是收束：Q10 加第七个参数
+    /// `breakdown` 之后正好过界。两种收束法都赔得更多——① 把 [`Row`] 开放给调用方，
+    /// 等于把 `mode` 这个"哪一档"的身份字段也交出去（那样一行既不在部分唯一索引的
+    /// 谓词里、又带着 `OR IGNORE`，去重静默失效而没人报错）；② 再造一个与 `Row`
+    /// 逐字段重复的入参结构 = 同一份列形状两个出处，正是本仓立过纪律要挡的漂移。
+    /// 这条 lint 在仓里的既有处置同样是带理由的 `allow`（`organize/mod.rs` 三处、
+    /// `runner/mod.rs`、`llm/client.rs` 两处、`commands.rs`）。
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn note_inject(
         &self,
         session_key: &str,
@@ -186,6 +193,7 @@ impl RecallLog {
         returned: usize,
         keys: &[String],
         elapsed: Duration,
+        breakdown: Option<&str>,
     ) -> Result<(), String> {
         self.insert_row(
             Row {
@@ -196,6 +204,7 @@ impl RecallLog {
                 returned,
                 keys,
                 elapsed,
+                breakdown,
             },
             Dedup::ByKeyside,
         )
@@ -204,7 +213,7 @@ impl RecallLog {
     /// 检索档埋点（Q1b·(b)：`memory_read` / `memory_search` / `memory_project_history`
     /// 的**成功回执**，由 [`crate::recall_receipt`] 在工具本体返回后调用）。
     ///
-    /// 与注入档的三处不同，都是"检索本来就是一次一次发生的"：
+    /// 与注入档的四处不同，都是"检索本来就是一次一次发生的"：
     /// 1. `mode` = 工具名（不是 `'inject'`）⇒ 部分唯一索引管不到它，**不去重**，一次成功
     ///    调用一行（判据 `receipts_are_not_deduplicated_unlike_injections`）；
     /// 2. `n_candidates` 恒 **0** —— 工具结果里没有"库内候选总数"这个量（`memory_search`
@@ -212,6 +221,10 @@ impl RecallLog {
     ///    「库里没货」**，那是注入档 `n_candidates` 的专属含义；
     /// 3. 走严格 `INSERT`（不带 `OR IGNORE`）⇒ NOT NULL 之类的真错误会如实上抛，不会被
     ///    "冲突也忽略"顺手吞掉。
+    /// 4. ⚠ Q10 起 `breakdown` 恒 **NULL**：检索档没有"四信号加权"这一步（工具走的是
+    ///    `memory_search`/`memory_read` 那两条 SQL，排序与注入路径无关），所以它**没有**
+    ///    可解释回执可给。这里补一份"看着像 breakdown 的东西"就是造假——面板读到 NULL
+    ///    时该显示"这一档不参与加权排序"，判据盯着这条不许被后来的批填上假数据。
     pub(crate) fn note_receipt(
         &self,
         tool: &str,
@@ -230,6 +243,7 @@ impl RecallLog {
                 returned,
                 keys,
                 elapsed,
+                breakdown: None,
             },
             Dedup::EveryCall,
         )
@@ -242,10 +256,10 @@ impl RecallLog {
         let conn = self.open_conn()?;
         let sql = match dedup {
             Dedup::ByKeyside => {
-                "INSERT OR IGNORE INTO memory_inject_log (ts, mode, session_key, scope_id, n_candidates, returned, keys, elapsed_us) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+                "INSERT OR IGNORE INTO memory_inject_log (ts, mode, session_key, scope_id, n_candidates, returned, keys, elapsed_us, breakdown) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
             }
             Dedup::EveryCall => {
-                "INSERT INTO memory_inject_log (ts, mode, session_key, scope_id, n_candidates, returned, keys, elapsed_us) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+                "INSERT INTO memory_inject_log (ts, mode, session_key, scope_id, n_candidates, returned, keys, elapsed_us, breakdown) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
             }
         };
         conn.execute(
@@ -260,14 +274,15 @@ impl RecallLog {
                 keys_json(row.keys),
                 // u128 → i64 钳制：真实时长远不到上限，但类型转换不许静默截断。
                 row.elapsed.as_micros().min(i64::MAX as u128) as i64,
+                row.breakdown,
             ],
         )
         .map_err(|e| format!("recall log insert: {e}"))?;
         Ok(())
     }
 
-    /// 空块率 + 注入产出率（L0 稿 §2.3(c) 的两个派生指标）。读取点 = Q10，本批仅测试消费。
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// 空块率 + 注入产出率（L0 稿 §2.3(c) 的两个派生指标）。读取点 = Q10 的
+    /// `memory_inject_view`（管理页顶部那一行汇总），豁免因此摘掉。
     pub(crate) fn stats(&self) -> Result<InjectStats, String> {
         let conn = self.open_conn()?;
         let (injections, empty_injections): (i64, i64) = conn
@@ -293,25 +308,27 @@ impl RecallLog {
         })
     }
 
-    /// 最近 N 行（倒序）。测试断言用；生产读取点 = Q10（L4 管理页）。
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// 最近 N 行（倒序）。生产读取点 = Q10 的 `memory_inject_view`（管理页只读解释区块），
+    /// 测试也用它断言。
     pub(crate) fn recent(&self, limit: i64) -> Result<Vec<RecallRow>, String> {
         let conn = self.open_conn()?;
         let mut stmt = conn
             .prepare(
-                "SELECT mode, session_key, scope_id, n_candidates, returned, keys
+                "SELECT ts, mode, session_key, scope_id, n_candidates, returned, keys, breakdown
                  FROM memory_inject_log ORDER BY id DESC LIMIT ?1",
             )
             .map_err(|e| format!("recall log recent: {e}"))?;
         let rows = stmt
             .query_map([limit], |r| {
                 Ok(RecallRow {
-                    mode: r.get(0)?,
-                    session_key: r.get(1)?,
-                    scope_id: r.get(2)?,
-                    n_candidates: r.get(3)?,
-                    returned: r.get(4)?,
-                    keys: parse_keys(&r.get::<_, String>(5)?),
+                    ts: r.get(0)?,
+                    mode: r.get(1)?,
+                    session_key: r.get(2)?,
+                    scope_id: r.get(3)?,
+                    n_candidates: r.get(4)?,
+                    returned: r.get(5)?,
+                    keys: parse_keys(&r.get::<_, String>(6)?),
+                    breakdown: r.get::<_, Option<String>>(7)?,
                 })
             })
             .map_err(|e| format!("recall log recent rows: {e}"))?;

@@ -86,3 +86,13 @@ pub async fn memory_reveal_folder(state: State<'_, AppState>) -> Result<(), Stri
     std::fs::create_dir_all(&dir).map_err(|e| format!("memory 目录创建失败: {e}"))?;
     super::sessions::open_in_explorer(&dir.to_string_lossy())
 }
+
+/// 队列 Q10（L4）：记忆注入的**只读解释面板**数据源——最近一次"真算过四信号"的
+/// 注入回执 + 观测表的三个派生读数。薄适配层：读盘、筛行、解析、降级全在
+/// `crate::inject_view`（那里有两条口径：只找有回执的行、坏字节不上抛）。
+#[tauri::command]
+pub async fn memory_inject_view(
+    state: State<'_, AppState>,
+) -> Result<crate::inject_view::InjectView, String> {
+    crate::inject_view::view(&state.recall_log)
+}
