@@ -231,7 +231,7 @@ PermissionCard 形态保留。
 
 | 批 | 内容 | 涉及 |
 |---|---|---|
-| **C1 数据链路** | TurnHeader/ToolStatus/FileChanges 事件 + runner 投影单点扩展 + chat store 行语义 + 三向闭合闸扩表（⚠ **v2.203 实测：`check-commands` 只管命令、事件通道无闸 ⇒ 这一项是「新建通道对账判据」不是「扩表」**） + 重放回归（⚠ 前置 = §2.1 那两条数据源缺口先补，见队列 §5） | src-tauri(events/runner/commands) + stores/chat 〔**v2.204 分段**：第一段 ✅（两条事件 + 行数上报 + 三相位 + 第八道闸 + 重放回归，提交 `PENDING`）· 第二段 ⬜（`TurnHeader` 与 `asked_at`/`decided_at` 时刻链）〕 |
+| **C1 数据链路** | TurnHeader/ToolStatus/FileChanges 事件 + runner 投影单点扩展 + chat store 行语义 + 三向闭合闸扩表（⚠ **v2.203 实测：`check-commands` 只管命令、事件通道无闸 ⇒ 这一项是「新建通道对账判据」不是「扩表」**） + 重放回归（⚠ 前置 = §2.1 那两条数据源缺口先补，见队列 §5） | src-tauri(events/runner/commands) + stores/chat 〔**v2.204 分段**：第一段 ✅（两条事件 + 行数上报 + 三相位 + 第八道闸 + 重放回归，提交 `02d44cf`）· 第二段 ⬜（`TurnHeader` 与 `asked_at`/`decided_at` 时刻链）〕 |
 | **C2 工具卡全集** | §4 总表逐类型落地 + §3 折叠规则 + ThinkingRow 反转 + 状态词六态 i18n + 审批卡对齐（§8）+ Stop 状态机 + 重试可见性 | components/chat/* + locales |
 | **C3 产出物与文件页签** | §6 产出物卡 + §7 code-viewer 页签 + fsRoots 校验 + git 色族令牌落地 | WorkPanel + 新组件 + style.css |
 | **C4 打磨（可选）** | 同工具组卡（附录 A #9 挂账）+ 顶部状态条 + diff 短翻页动画 + Rewind 复评（依赖快照立项） | — |
