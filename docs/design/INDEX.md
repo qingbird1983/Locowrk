@@ -17,9 +17,9 @@
 | [DESIGN.md](DESIGN.md) | 唯一需求来源：内核架构、ABI 契约、决策表、目录树 | 批 E 已把 §7.1 洋葱链、§7.2 决策表、§8 目录树、§11.3 装载机制、§3.5 接线列订正到代码实况（v2.149） |
 | [ROADMAP.md](ROADMAP.md) | **唯一进度看板**（⬜/◐/✅ + 版本 + 哈希）；批次叙述区只住**最近 8 批**，被挤出的那一批逐字搬进 [archive/ROADMAP-batches.md](archive/ROADMAP-batches.md)（v2.195 文档预算批立的窗口纪律，判据 = 第七道结构闸 scripts/check-doc-budget.mjs） | 现役 |
 | [CHANGELOG.md](CHANGELOG.md) | **逐批落点日志**（每版一整行，倒序；本文件是"写了什么"的真源，不是进度表）；同样只住**最近 8 批**，被挤出的逐字搬进 [archive/CHANGELOG-batches.md](archive/CHANGELOG-batches.md)（v2.195 立） | 现役。检索：`grep -n "^\*文档版本：v2.14" CHANGELOG.md` |
-| [UI Design System.md](UI%20Design%20System.md) | **UI 层最高权威**（色彩令牌映射 / 字号相对制 / 圆角嵌套降档 / 组件规则 / 冲突裁决表；ZCode DESIGN.md 微调移植，用户 2026-10-11 裁定） | v1.0；⚠ 代码面未对齐，逐批兑现；下位两文档冲突处一律以其附录 A 为准 |
+| [UI Design System.md](UI%20Design%20System.md) | **UI 层最高权威**（色彩令牌映射 / 字号相对制 / 圆角嵌套降档 / 组件规则 / 冲突裁决表；ZCode DESIGN.md 微调移植，用户 2026-10-11 裁定） | v1.1；⚠ 代码面未对齐，逐批兑现；下位两文档冲突处一律以其附录 A 为准。v1.1 = §八 新增「画布与节点」特例类目（Q13），画布自 Q14 起生效、现役无画布 |
 | [UI shell and patterns.md](UI%20shell%20and%20patterns.md) | 导航模型 / 模式库 / 事件流向 / 弹层规则（**降为下位细则**，与 Design System 冲突处以其附录 A 为准，修订待办见其附录 C） | v4.30；⚠ 现状表里若干键/命令已退役，**逐条已加批 E 退役注**（§193/§202/§883/§999） |
-| [Front-end Design Guidelines.md](Front-end%20Design%20Guidelines.md) | 前端形态清单 / 特例申请制 / 双闸门禁（**降为下位细则**，同上） | v2.1 |
+| [Front-end Design Guidelines.md](Front-end%20Design%20Guidelines.md) | 前端形态清单 / 特例申请制 / 双闸门禁（**降为下位细则**，同上；类目清单**不设总数**，编号只用于引用） | v2.2：新立 §二⑯「无限画布看板」（= MB 稿 §7 特例申请落地，含对稿的三处订正）+ §六 第 4 条「门禁实测边界」（整值子串匹配盲区与一批不在射程的属性，只有正文承重）+ §五 过期措辞订正（字号族与间距族早已建成、同为一级判错）。⚠ 画布类目自队列 Q14 起生效，现役代码尚无画布 |
 | [Memory Tree Design v2.md](Memory%20Tree%20Design%20v2.md) | 记忆树规范正身（章节捆 L0/L1/L2 / 整理触发 / 记录员） | v2.0（§4.1/§15 已随 v2.137 修订） |
 | [KV Prefix Cache Design v2.md](KV%20Prefix%20Cache%20Design%20v2.md) | 前缀缓存纪律（钉死集 / 预取 / 稳定期） | v2.0；⚠ 稳定期随 ctx-compact 退役，见其 §6.4 |
 | [Context and Memory.md](Context%20and%20Memory.md) | 上下文 + 记忆总纲（注入顺序 / 双层隔离） | §3.2.2/§4 已随 v2.136–v2.138 加注 |
