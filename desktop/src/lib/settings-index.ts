@@ -58,7 +58,15 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     group: "prefs",
     labelKey: "settings.nav.appearance",
     icon: "sparkle",
-    searchKeys: ["settings.themeTitle", "settings.themeSystem", "settings.themeLight", "settings.themeDark"],
+    searchKeys: [
+      "settings.themeTitle",
+      "settings.themeSystem",
+      "settings.themeLight",
+      "settings.themeDark",
+      // Q14 第四刀：字号基座行。口径同上面四键——只收行名与选项标签，不收
+      // *Hint（分区里没有任何一行的提示语进搜索面）。
+      "settings.fontSizeTitle",
+    ],
   },
   {
     id: "language",

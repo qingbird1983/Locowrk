@@ -13,6 +13,7 @@ import { defineStore } from "pinia";
 import { getSettings, llmProviderDelete, llmProviderSave, setSettings } from "../lib/api";
 import { applyLocalePref } from "../i18n";
 import { applyThemePref } from "../lib/theme";
+import { applyUiFontPref } from "../lib/ui-font";
 import type {
   ChatUpdate,
   ContextUpdate,
@@ -49,12 +50,15 @@ export const useSettingsStore = defineStore("settings", {
     flashTimer: undefined as ReturnType<typeof setTimeout> | undefined,
   }),
   actions: {
-    /** App 启动时调用：拉投影 + 应用已存语言偏好。失败不阻塞启动。 */
+    /** App 启动时调用：拉投影 + 应用三项呈现偏好（语言 / 主题 / 字号基座）。
+     * 三项各有唯一执行者（i18n.ts、lib/theme.ts、lib/ui-font.ts），这里只搬运。
+     * 失败不阻塞启动。 */
     async init() {
       try {
         this.view = await getSettings();
         applyLocalePref(this.view.locale);
         applyThemePref(this.view.appearance.theme);
+        applyUiFontPref(this.view.appearance.uiFontSize);
       } catch (e) {
         this.error = String(e);
       }
@@ -80,6 +84,23 @@ export const useSettingsStore = defineStore("settings", {
       } catch (e) {
         this.error = String(e);
         if (this.view) applyThemePref(this.view.appearance.theme);
+      }
+    },
+    /** 调字号基座（队列 Q14 第四刀）：立即生效（lib/ui-font.ts 写
+     * `--lw-ui-font-size`，六档同尺移动），成功后以返回投影为准、失败按旧投影
+     * 回滚——与 setTheme/setLocale 同一条「即时生效类」形态。
+     * ⚠ 这三份是同构的（`patch → apply(投影) → catch → 用旧投影重 apply`），
+     * 与 C13 那次收掉的 10 份「保存类」副本同源。**本刀不顺手合**：合它要同时
+     * 改动语言与主题两条现网通路，而它们的失败回滚时序目前没有用例承重；
+     * 「施工只做列出的条目」这条纪律在这里优先于顺手还债。登记见台账。 */
+    async setUiFontSize(px: number) {
+      this.error = "";
+      try {
+        this.view = await setSettings({ appearance: { uiFontSize: px } });
+        applyUiFontPref(this.view.appearance.uiFontSize);
+      } catch (e) {
+        this.error = String(e);
+        if (this.view) applyUiFontPref(this.view.appearance.uiFontSize);
       }
     },
     /** 重拉投影（v2.58 档位命令后刷新 llm 区视图——llm_provider_save/

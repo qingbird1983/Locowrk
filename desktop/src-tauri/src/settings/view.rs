@@ -17,6 +17,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
         locale: s.locale.clone(),
         appearance: AppearanceView {
             theme: s.appearance.theme.clone(),
+            ui_font_size: s.appearance.ui_font_size,
         },
         shortcut: s.shortcut.clone(),
         data_dir: data_dir.display().to_string(),

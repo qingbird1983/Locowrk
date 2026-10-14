@@ -212,6 +212,10 @@ export default {
     themeLight: "Light",
     themeDark: "Dark",
     themeHint: "Applies immediately and is remembered. \"System\" tracks your OS light/dark setting.",
+    // 队列 Q14 第四刀：字号基座。值域数字走 {min}/{max} 插值（同 zh-CN 那份的理由）。
+    fontSizeTitle: "Base text size",
+    fontSizeHint:
+      "The six UI text steps are all derived from this base, so changing it scales that whole group together. Note: the legacy absolute steps do not follow it (migration unfinished), so older pages stay put. Range {min}–{max}px; applies on blur and is remembered.",
     shortcutTitle: "Global shortcut",
     shortcut: "Toggle main window",
     shortcutHint: "Re-registers immediately on save; press it in any app to show/hide the main window.",

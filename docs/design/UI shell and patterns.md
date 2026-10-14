@@ -196,7 +196,7 @@
 | LlmSection | llm | ✅（v4.5 起默认项组内增会话记录员行——同主模型 ▾，树 v2 §5.2） |
 | SessionsSection | —（只读 dataDir） | ✅ |
 | LanguageSection | locale | ✅ |
-| AppearanceSection | appearance | ✅（theme 三档；缺省 light，用户 2026-10-01 裁定） |
+| AppearanceSection | appearance | ✅（theme 三档；缺省 light，用户 2026-10-01 裁定）+ ✅ **字号基座可调**（`appearance.uiFontSize`，12–18、越界拒而不钳，Q14 第四刀 v2.207；生效点 = `lib/ui-font.ts` 在 `<html>` 上写 `--lw-ui-font-size`，与 theme 走 `lib/theme.ts` 同族分工） |
 | ChatSection | chat（🆕 本批新增） | 对话行为偏好：折叠工具执行过程（v4.20 改名+语义反转：缺省 关 = 轮次保持展开、唯一折叠的是工具明细；开 = 收束收缩为计时行 + 过程组折为一行摘要 = 完整折叠三层（含第 0 层容器），§3.7）、回车发送、思考过程展示模式（详细 / 精简）、上下文用量读数（剩余 / 已用） |
 | ShortcutSection | shortcut | ✅ |
 | ShellSection | shell | ✅（高危解锁开关；重启生效） |

@@ -97,14 +97,20 @@ export interface ToolsUpdate {
   pinSession?: boolean;
 }
 
-/** 外观区投影（⑰）：明暗主题。生效在前端 lib/theme.ts（§六）。 */
+/** 外观区投影（⑰）：明暗主题 + 字号基座。生效点分别在前端 lib/theme.ts（写
+ * `<html data-theme>`）与 lib/ui-font.ts（写 `--lw-ui-font-size`），后端只存取校验。 */
 interface AppearanceView {
   theme: string;
+  /** 相对字号六档的共同基座（px）。缺省 14 = 本可调项出现前 style.css 里写死的那颗；
+   *  值域 12–18 与后端 `settings/appearance.rs` 的 `UI_FONT_{MIN,MAX}` 同一把尺，
+   *  由 tmp/q14d-shape.mjs 三面（Rust 常量 / TS 常量 / CSS 字面）对账钉住。 */
+  uiFontSize: number;
 }
 
 /** 外观区部分更新：字段缺省 = 保持不变。 */
 export interface AppearanceUpdate {
   theme?: string;
+  uiFontSize?: number;
 }
 
 /** 上下文管理区投影（⑨；v2.137 整理阈值 = 绝对 token——「上下文达到

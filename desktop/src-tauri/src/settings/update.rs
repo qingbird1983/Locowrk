@@ -47,6 +47,20 @@ impl SettingsStore {
                 }
                 next.appearance.theme = theme.clone();
             }
+            // 字号基座（队列 Q14 第四刀）：越界一律**拒**，不钳到 12/18。口径同 Q8
+            // 工具结果预算那段——设置面存的是用户意图，悄悄改掉等于骗人；钳而不报
+            // 只成立于工具入参（`plugin-api/args.rs`）。值域端点只有
+            // `UI_FONT_MIN/MAX` 一个出处，文案从它们生成，不在这里重抄数字。
+            if let Some(px) = u.ui_font_size {
+                if !super::appearance::valid_ui_font_size(px) {
+                    return Err(format!(
+                        "字号基座 {px} 超出范围（{}–{}px）",
+                        super::appearance::UI_FONT_MIN,
+                        super::appearance::UI_FONT_MAX
+                    ));
+                }
+                next.appearance.ui_font_size = px;
+            }
         }
         if let Some(sc) = shortcut {
             // 校验用全局快捷键解析器本身（与 tray.rs 注册同一套语义）；
