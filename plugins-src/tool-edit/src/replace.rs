@@ -14,8 +14,8 @@ use std::path::Path;
 
 use plugin_api::HostVtable;
 use plugin_api::fsutil::{
-    arg_expected_revision, backup_original, check_revision, content_revision, effective_roots,
-    resolve_existing,
+    arg_expected_revision, backup_original, check_revision, content_line_count, content_revision,
+    effective_roots, resolve_existing,
 };
 use plugin_api::serde_json::{Value, json};
 
@@ -102,10 +102,17 @@ pub(crate) fn edit_replace(args: &Value, host: *const HostVtable) -> Result<Valu
     // 备份先行：失败则整体报错，目标不动
     let backup = backup_original(&resolved, "tool-edit")?;
     write_atomic(&resolved, &new_content)?;
+    // ±N（队列 Q12·C1 甲案）：行数的**权威源在插件结果载荷里**——进 ToolResult 就进
+    // 会话日志 ⇒ 重放同得，宿主投影只搬运不现算（与 Q10「解释在发生那一次存回执」同族）。
+    // 尺子全仓一份 `content_line_count`（与 `content_revision` 同一条 LF 归一支）；
+    // old/new 各是一行片段，实际落了几处就乘几（`edits` = 落盘的替换次数）。
+    let span_lines = |s: &str| content_line_count(s) * edits as i64;
     Ok(json!({
         "path": display,
         "bytes": new_content.len(),
         "edits": edits,
+        "additions": span_lines(new),
+        "deletions": span_lines(old),
         "match_type": match_type,
         "byte_range": [first_span.0, first_span.1],
         "existed": true,

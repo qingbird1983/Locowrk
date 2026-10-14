@@ -1,37 +1,10 @@
 //! edit_replace / edit_lines 单测：正常 / 边界（多重命中、越界）/ 恶意
 //! （根外路径拒绝）/ Revision Guard（陈旧观察拒绝）四态。涉 env 用例串行。
 
-use std::path::Path;
-
 use super::lines::edit_lines;
 use super::replace::edit_replace;
-use crate::testutil::ENV_LOCK;
-use plugin_api::HostVtable;
-use plugin_api::fsutil::file_revision;
+use crate::testutil::{ENV_LOCK, no_host, rev_of, temp_root};
 use plugin_api::serde_json::json;
-
-/// 直呼函数的单测没有调用期 vtable——空指针 = `context_roots` 返回
-/// None，回落 env 全局围栏（与未接围栏前的语义一致）。
-fn no_host() -> *const HostVtable {
-    std::ptr::null()
-}
-
-/// 测试里的「当前 revision」：外部 std::fs::write 之后取一次，随调用传入
-/// （模拟模型从 fs_read / 上一次编辑输出拿到的值）。
-fn rev_of(path: &Path) -> String {
-    file_revision(path).unwrap().unwrap()
-}
-
-fn temp_root(tag: &str) -> std::path::PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "locowrk-tool-edit-{tag}-{}-{nanos}",
-        std::process::id()
-    ))
-}
 
 #[test]
 fn replace_matrix() {
@@ -55,6 +28,8 @@ fn replace_matrix() {
     )
     .expect("replace ok");
     assert_eq!(out["edits"], json!(1));
+    assert_eq!(out["additions"], json!(1)); // ±N（Q12·C1 甲案）：单行片段换单行 = +1 −1
+    assert_eq!(out["deletions"], json!(1));
     assert!(out["backup"].as_str().is_some());
     assert!(out["revision"].as_str().unwrap().starts_with("sha256:"));
     assert!(std::fs::read_to_string(&path).unwrap().contains("println!"));
@@ -118,6 +93,8 @@ fn replace_matrix() {
     )
     .unwrap();
     assert_eq!(out["edits"], json!(2));
+    assert_eq!(out["additions"], json!(2));
+    assert_eq!(out["deletions"], json!(2)); // ×edits：两处命中各 +1 −1
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "y\ny\n");
 
     // 恶意：old 不存在 / 空 old / 根外路径
@@ -328,6 +305,8 @@ fn lines_matrix() {
     )
     .expect("lines ok");
     assert_eq!(out["replaced"], json!(2));
+    assert_eq!(out["additions"], json!(2)); // ±N：删 2 行、写 2 行（按行区间替换 = 天然读数）
+    assert_eq!(out["deletions"], json!(2));
     assert!(out["revision"].as_str().unwrap().starts_with("sha256:"));
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),

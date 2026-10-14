@@ -71,6 +71,10 @@ pub(crate) fn edit_lines(args: &Value, host: *const HostVtable) -> Result<Value,
             .collect()
     };
     let replaced = (end - start + 1) as usize;
+    // ±N 的真源（后审计队列 Q12·C1 甲案）：本工具按行区间替换，行数是**天然读数**
+    // 不需要另算 diff——deletions = 被替换掉的行数，additions = 新内容拆出的行数。
+    // 取数必须在 `new_lines` 被 move 进 out 之前。
+    let additions = new_lines.len() as i64;
     let mut out: Vec<String> = Vec::with_capacity(lines.len() - replaced + new_lines.len());
     out.extend_from_slice(&lines[..(start - 1) as usize]);
     out.extend(new_lines);
@@ -82,6 +86,8 @@ pub(crate) fn edit_lines(args: &Value, host: *const HostVtable) -> Result<Value,
         "path": display,
         "bytes": bytes,
         "replaced": replaced,
+        "additions": additions,
+        "deletions": replaced as i64,
         "existed": true,
         "backup": backup.display().to_string(),
         "revision": revision,

@@ -38,6 +38,30 @@ mod tests;
 pub(crate) mod testutil {
     use std::sync::Mutex;
     pub(crate) static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// 直呼函数的单测没有调用期 vtable——空指针 = `context_roots` 返回
+    /// None，回落 env 全局围栏（与未接围栏前的语义一致）。
+    pub(crate) fn no_host() -> *const plugin_api::HostVtable {
+        std::ptr::null()
+    }
+
+    /// 测试里的「当前 revision」：外部 fs::write 之后取一次随调用传入
+    /// （模拟模型从 fs_read / 上一次编辑输出拿到的值）。
+    pub(crate) fn rev_of(path: &std::path::Path) -> String {
+        plugin_api::fsutil::file_revision(path).unwrap().unwrap()
+    }
+
+    /// 每簇一个临时数据根（tag 防撞名）：`LOCOWRK_DATA_DIR` + 允许根围栏都按它建。
+    pub(crate) fn temp_root(tag: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "locowrk-tool-edit-{tag}-{}-{nanos}",
+            std::process::id()
+        ))
+    }
 }
 
 use std::ffi::CString;

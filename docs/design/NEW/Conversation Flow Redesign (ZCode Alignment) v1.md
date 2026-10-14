@@ -92,6 +92,22 @@ patch=完整 diff），与内联展开并存；子代理 chip 点击 → 右栏�
 > `cancelled` 没有发生路径（stop 只在步间边界检查）、`ToolStatus` 的 `pending_approval` **重放不可复原**。
 > 七条逐条读数 = 队列 §5（判据 G1–G7，脚本 `tmp/q12-probe.mjs`，`Q12_PROBE_ROWS=21 MISMATCH=0`）。
 > **⇒ 本稿 §10 的 C1 一刀在补数据源之前做不完**；两个决策点（审批等待时刻怎么落、行数由谁上报）交用户裁定。
+> **⚠ v2.204 落码形状（Q12 主体·第一段），原表一字未擦**：上表四条里本批落了
+> `ToolStatus` 与 `FileChanges` 两条，且两条的载荷与稿子不同——
+> ① `ToolStatus.status` 实落 = **单值 `pending_approval`**、**实时专属不落日志**（稿子的
+> `cancelled` 无发生路径，明确不做）；前端工具行的相位因此**不是** §2.2 那五档，而是
+> `ToolRowStatus = awaiting_approval / running / settled` **三相位**，成败仍读 `ok`——
+> 把 ok/error 塞进 status 就是同一件事两个出处（本仓纪律）。
+> ② `FileChanges` 是**独立事件 + 独立通道 `agent://file-changes`**，不是 `TurnHeader` 的
+> 字段（`TurnHeader` 属第二刀）；`kind` 四档 = created/modified/overwritten/deleted；
+> ±N 取自**插件上报**的 `additions`/`deletions`，算不出 diff 的是 **NULL 而不是 0**。
+> ③ 「runner 投影单点」这一格兑现为：实时（`finish_turn`）与重放（`project_events` 的
+> TurnEnd 支）**调同一个 `collect_file_changes`**——逐字节同尺由
+> `tests_session_log/file_changes.rs` 第 4 条钉住。
+> ④ §10 那半格「三向闭合闸扩表」→ 新建**第八道结构闸** `scripts/check-channels.mjs`
+> （四面闭合 + 下限自证），已接 pre-commit 第 ⑩ 段与 CI 的 hygiene 作业。
+> **未落**：`TurnHeader`（含 `state`/`active_ms`/`steps` 与审批两时刻）、`ToolProgress`
+> （属 C2 的 27 类工具卡）。
 
 **不做**：`inputStreaming`（Locowrk 工具参数调用即知，无流式入参场景）；row.removed
 （编辑重发走既有 `session_history` 重放刷新，不引入截断 op）。
@@ -105,6 +121,17 @@ patch=完整 diff），与内联展开并存；子代理 chip 点击 → 右栏�
   不改行）；CHANNELS 同批补新事件名（三向闭合闸）。
 - 会话切换/重放：全量重投影已单点，天然得到 snapshot 语义；不做 resync 水位（单进程
   不需要）。
+
+- **⚠ v2.204 实落订正（本批改的是 `ToolItem`，原句一字不擦）**：上面那条 `status` 五档**没有照抄**——
+  实落 = 三相位 `awaiting_approval / running / settled`，成败仍读 `ok`；`preview_line` 与 turn 容器
+  元数据 `{turnId, state, activeMs, fileChanges?}` 属第二刀（`FileChanges` 本批先作为**独立事件**
+  挂在最近一条用户行的 `files` 上，不撑长过程组）。「CHANNELS 同批补新事件名（三向闭合闸）」
+  那句的落点也订正过：`check-commands.mjs` 不认识事件通道（v2.203 实测命中 0）⇒ 现役兜它的是
+  第八道闸 `check-channels.mjs`。
+  ⚠ **迁移教训（累计第 152 条）**：布尔 `pending` 换成枚举 `status` 时，`x` 与 `!x` 两侧都变成合法
+  比较 ⇒ **vue-tsc 全瞎**、既有 store 用例也全瞎。本批就在这里把一处取反弄丢了（表现 = 工具结果
+  一回来 ±N 与图片缩略当场消失），由新增的**组件级用例**（`desktop/tests/tool-row-status.spec.ts`
+  第三族）抓到并钉住方向。
 
 ## §3 分层与折叠（逐层规则，取代/对齐现役相位机）
 
@@ -204,7 +231,7 @@ PermissionCard 形态保留。
 
 | 批 | 内容 | 涉及 |
 |---|---|---|
-| **C1 数据链路** | TurnHeader/ToolStatus/FileChanges 事件 + runner 投影单点扩展 + chat store 行语义 + 三向闭合闸扩表（⚠ **v2.203 实测：`check-commands` 只管命令、事件通道无闸 ⇒ 这一项是「新建通道对账判据」不是「扩表」**） + 重放回归（⚠ 前置 = §2.1 那两条数据源缺口先补，见队列 §5） | src-tauri(events/runner/commands) + stores/chat |
+| **C1 数据链路** | TurnHeader/ToolStatus/FileChanges 事件 + runner 投影单点扩展 + chat store 行语义 + 三向闭合闸扩表（⚠ **v2.203 实测：`check-commands` 只管命令、事件通道无闸 ⇒ 这一项是「新建通道对账判据」不是「扩表」**） + 重放回归（⚠ 前置 = §2.1 那两条数据源缺口先补，见队列 §5） | src-tauri(events/runner/commands) + stores/chat 〔**v2.204 分段**：第一段 ✅（两条事件 + 行数上报 + 三相位 + 第八道闸 + 重放回归，提交 `PENDING`）· 第二段 ⬜（`TurnHeader` 与 `asked_at`/`decided_at` 时刻链）〕 |
 | **C2 工具卡全集** | §4 总表逐类型落地 + §3 折叠规则 + ThinkingRow 反转 + 状态词六态 i18n + 审批卡对齐（§8）+ Stop 状态机 + 重试可见性 | components/chat/* + locales |
 | **C3 产出物与文件页签** | §6 产出物卡 + §7 code-viewer 页签 + fsRoots 校验 + git 色族令牌落地 | WorkPanel + 新组件 + style.css |
 | **C4 打磨（可选）** | 同工具组卡（附录 A #9 挂账）+ 顶部状态条 + diff 短翻页动画 + Rewind 复评（依赖快照立项） | — |

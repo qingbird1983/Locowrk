@@ -5,32 +5,8 @@
 use std::path::Path;
 
 use super::edit_diff;
-use crate::testutil::ENV_LOCK;
-use plugin_api::HostVtable;
-use plugin_api::fsutil::file_revision;
+use crate::testutil::{ENV_LOCK, no_host, rev_of, temp_root};
 use plugin_api::serde_json::json;
-
-/// 直呼函数的单测没有调用期 vtable——空指针 = 回落 env 全局围栏（与
-/// 未接围栏前的语义一致）。
-fn no_host() -> *const HostVtable {
-    std::ptr::null()
-}
-
-/// 「当前 revision」：外部写入后取一次随调用传入（模拟模型从 fs_read 拿值）。
-fn rev_of(path: &Path) -> String {
-    file_revision(path).unwrap().unwrap()
-}
-
-fn temp_root(tag: &str) -> std::path::PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "locowrk-tool-edit-{tag}-{}-{nanos}",
-        std::process::id()
-    ))
-}
 
 fn write_file(root: &Path, name: &str, content: &str) -> String {
     std::fs::create_dir_all(root).unwrap();
@@ -71,6 +47,8 @@ fn multi_hunk_apply_with_trailing_newline() {
     )
     .expect("apply ok");
     assert_eq!(out["hunks_applied"], json!(2));
+    assert_eq!(out["additions"], json!(2));
+    assert_eq!(out["deletions"], json!(1)); // ±N：hunk1 一增一删 + hunk2 一增
     assert!(out["revision"].as_str().unwrap().starts_with("sha256:"));
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),

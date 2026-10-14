@@ -49,6 +49,10 @@ fn write_overwrite_backup_restore_roundtrip() {
     )
     .expect("write ok");
     assert_eq!(out["existed"], json!(true));
+    assert!(
+        out["additions"].is_null() && out["deletions"].is_null(),
+        "覆盖不猜 ±N（无真 diff 源）"
+    );
     assert_eq!(out["revision"], json!(content_revision(b"v2 longer")));
     assert!(out["backup"].as_str().is_some(), "backup path recorded");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "v2 longer");
@@ -90,6 +94,8 @@ fn write_new_file_then_restore_removes_it() {
     )
     .expect("write ok");
     assert_eq!(out["existed"], json!(false));
+    assert_eq!(out["additions"], json!(1));
+    assert_eq!(out["deletions"], json!(0)); // 新建支给得出 ±N
     assert!(out["backup"].is_null(), "new file has nothing to back up");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "hello");
 

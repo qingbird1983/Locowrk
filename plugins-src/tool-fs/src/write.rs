@@ -19,8 +19,9 @@ use std::path::{Path, PathBuf};
 
 use plugin_api::HostVtable;
 use plugin_api::fsutil::{
-    arg_expected_revision, backup_original, check_revision, content_revision, effective_roots,
-    file_revision, is_not_found, resolve_existing, resolve_for_write, restore_via_rename,
+    arg_expected_revision, backup_original, check_revision, content_line_count, content_revision,
+    effective_roots, file_revision, is_not_found, resolve_existing, resolve_for_write,
+    restore_via_rename,
 };
 use plugin_api::serde_json::{Value, json};
 
@@ -95,10 +96,22 @@ pub(crate) fn fs_write(args: &Value, host: *const HostVtable) -> Result<Value, S
         }
     }
     std::fs::write(&resolved, content).map_err(|e| format!("fs_write `{display}`: {e}"))?;
+    // ±N 的真源边界（后审计队列 Q12·C1 甲案）：**新建**给得出——文件从无到有，
+    // additions = 新内容行数、deletions = 0（尺子 = `fsutil::content_line_count`，
+    // 与 tool-edit 三个写工具同一把）。**覆盖**给不出 diff ⇒ 两个字段留 null 而
+    // 不猜数：整文件重写报"+N −M"会把没动的行也算成变更（宿主投影据此把 kind
+    // 定成 overwritten、行数在 UI 上不渲染）。缺省是如实读数，不是漏报。
+    let (additions, deletions): (Value, Value) = if existed {
+        (Value::Null, Value::Null)
+    } else {
+        (json!(content_line_count(content)), json!(0))
+    };
     Ok(json!({
         "path": display,
         "bytes": content.len(),
         "existed": existed,
+        "additions": additions,
+        "deletions": deletions,
         "backup": backup.map(|p| p.display().to_string()),
         "revision": content_revision(content.as_bytes()),
     }))

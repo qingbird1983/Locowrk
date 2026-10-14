@@ -215,6 +215,10 @@ const CHANNELS = [
   "agent://uncertain-resolved",
   // v2.141 整理段落总结：轮开场排空落日志后的实时推送（重放同形）。
   "agent://context-summary",
+  // 队列 Q12·C1：工具行相位（实时专属，审批请求一发出就点亮等待态）。
+  "agent://tool-status",
+  // 队列 Q12·C1：本轮文件改动汇总（轮末投影，实时与重放同形）。
+  "agent://file-changes",
 ] as const;
 
 export function subscribeAgentEvents(

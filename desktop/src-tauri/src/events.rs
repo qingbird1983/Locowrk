@@ -58,6 +58,18 @@ pub mod channels {
     /// 后实时回推（与重放投影同形，uncertain-resolved 同款纪律）。前端渲染
     /// 淡色总结块（断层交接：此前工作段的浓缩叙事）。
     pub const CONTEXT_SUMMARY: &str = "agent://context-summary";
+    /// 工具行状态（CF §2.1，队列 Q12·C1）：**只在实时路径 emit，不进会话日志**
+    /// （ApprovalRequest 同款纪律）。现役唯一取值 = `pending_approval`——行的
+    /// 其余状态由 `ToolCall` / `ToolResult` / 裁决事件自己推出，一份事实只许
+    /// 一个出处，不在这里重复投递。重放**不产生**本事件：日志里那次的决策早已
+    /// 落成 `ApprovalDecided`，行按"经审批放行/拒绝"的事实闭合，不虚构等待态。
+    /// `cancelled` 刻意不存在——停止只检查步间（`stop::StopFlags`），在途调用
+    /// 会跑完并落 ToolResult ⇒ 日志里没有"被取消"这件事（宁缺勿假）。
+    pub const TOOL_STATUS: &str = "agent://tool-status";
+    /// 本轮文件改动汇总（CF §2.1，队列 Q12·C1）：投影层在轮末从写类工具结果
+    /// 里的行数上报（插件侧真源）聚合产出，实时与重放同一来源。宿主**不读盘**
+    /// 算 diff——读盘算出来的数不进日志，重放同一次会话会得到与当场不同的数。
+    pub const FILE_CHANGES: &str = "agent://file-changes";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -268,6 +280,40 @@ pub enum AgentEvent {
         #[serde(default)]
         note: String,
     },
+    /// 工具行状态前置补投（见 `channels::TOOL_STATUS` 的实时/重放边界）：
+    /// 审批请求发出时对那条在途调用补投 `pending_approval`，让行上的
+    /// 「等待审批」不必等到结果才出现。不进日志 ⇒ 重放不产生本事件。
+    ToolStatus {
+        session_id: String,
+        call_id: String,
+        status: String,
+    },
+    /// 本轮文件改动（`channels::FILE_CHANGES`）：投影层在 `TurnEnd` 处从本轮
+    /// 写类工具结果聚合而成——实时增量与历史重放**同一个投影函数**产出，
+    /// 所以"这次改了哪些文件、各 ±几行"重启后还在。
+    /// `additions`/`deletions` = `None` 是如实读数（该工具给不出真 diff，例如
+    /// fs_write 覆盖已有文件），不是零；UI 对 `None` 不渲染数字（§2.1 订正块）。
+    FileChanges {
+        session_id: String,
+        /// `SessionEvent::TurnStart.turn_id` 原样带出（u64，不是新造的字符串标识）。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        turn_id: Option<u64>,
+        files: Vec<FileChangePayload>,
+    },
+}
+
+/// 文件改动的一条（±N 的权威源 = 插件写类工具结果里的 `additions`/`deletions`，
+/// 见 `plugins-src/tool-edit` 三个写工具与 `tool-fs` 的 fs_write 新建支）。
+/// `kind` 由宿主投影单点定形（`file_change_kind`），**不由插件自报**——四个写
+/// 工具各报一套 kind 名词，前端就得各有分支（同类只许一种形态）。
+#[derive(Debug, Clone, Serialize)]
+pub struct FileChangePayload {
+    pub path: String,
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additions: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deletions: Option<i64>,
 }
 
 /// `ask_user` 的选项载荷（§3.39①）：label 必填，description 可选。
@@ -300,6 +346,8 @@ impl AgentEvent {
             AgentEvent::TurnCapped { .. } => channels::TURN_CAPPED,
             AgentEvent::ToolUncertain { .. } => channels::TOOL_UNCERTAIN,
             AgentEvent::UncertainResolved { .. } => channels::UNCERTAIN_RESOLVED,
+            AgentEvent::ToolStatus { .. } => channels::TOOL_STATUS,
+            AgentEvent::FileChanges { .. } => channels::FILE_CHANGES,
         }
     }
 }

@@ -4,7 +4,7 @@
  * TranscriptFlow 渲染（主对话整个流程原样复用），投影按**主对话历史重放
  * 同形**补齐：用户消息带事件位与轮起点时刻（v2.101）、思考行整段落项
  * （无时戳 = 首句摘要形态）、轮收束时刻挂最后一条用户消息（第 0 层计时
- * 行读数终点）、悬空 tool_call 如实挂 pending（与重放一致）。只读一次性
+ * 行读数终点）、悬空 tool_call 如实挂 `running`（与重放一致）。只读一次性
  * 投影：数据来自全量重放（整段 chunk，无流式时序）。审批决策记录行
  * （已允许/已拒绝）随主对话 v2.98 同规**全隐藏**（v2.105 目检裁定：页签
  * = 主对话消息流原样，系统条审计形态退役），不投影。
@@ -52,8 +52,8 @@ export function projectSubTranscript(events: AgentEvent[]): ChatItem[] {
           args: e.args,
           sideEffect: e.side_effect,
           pluginVersion: e.plugin_version,
-          // 与主对话重放同形：结果未落（崩溃截断）如实挂 pending
-          pending: true,
+          // 与主对话重放同形：结果未落（崩溃截断）如实挂 running
+          status: "running",
           ok: null,
         });
         break;
@@ -62,7 +62,7 @@ export function projectSubTranscript(events: AgentEvent[]): ChatItem[] {
           .reverse()
           .find((i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id);
         if (item) {
-          item.pending = false;
+          item.status = "settled";
           item.ok = e.ok;
           item.output = e.output;
           item.error = e.error;

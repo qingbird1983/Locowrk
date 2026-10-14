@@ -24,8 +24,11 @@ use crate::usage::UsageRecorder;
 use crate::events::{AgentEvent, EventSink};
 use crate::timeutil::now_ms;
 
-mod projection;
+pub(crate) mod projection;
 pub use projection::project_events;
+// 本轮文件改动的聚合口径（Q12·C1）：实时路径在 `finish_turn` 用它，重放路径在
+// `project_events` 的 TurnEnd 支用它——**同一个函数**是"两处同一把尺"的形状判据。
+use projection::{collect_file_changes, turn_slice_start};
 
 /// 单轮 step 上限缺省值：防止模型反复发工具调用打转（防御性兜底）。
 /// ㉕·微调③ 起实际值可配（settings `tools.maxTurnSteps`，工具与暴露
@@ -257,6 +260,19 @@ fn finish_turn(
         session_log::append_slice(dir, session_id, session, session.len() - 1);
     }
     if let Some(sink) = sink {
+        // 本轮文件改动（Q12·C1）：区间起点由 [`turn_slice_start`] 从日志现推（权威源 =
+        // 落了盘的 `TurnStart`，不是调用方记的变量），上界 = 刚 append 的 TurnEnd 之前一条；
+        // 与重放路径（`project_events` 的 TurnEnd 支）**同一个** `collect_file_changes`。
+        // 轮末汇总先于 TurnDone——前端把清单挂在轮尾，TurnDone 一到就冻结读数。
+        let turn_start = turn_slice_start(session);
+        let files = collect_file_changes(&session.events()[turn_start..session.len() - 1]);
+        if !files.is_empty() {
+            sink.emit(&AgentEvent::FileChanges {
+                session_id: session_id.into(),
+                turn_id: Some(turn_id.0),
+                files,
+            });
+        }
         sink.emit(&AgentEvent::TurnDone {
             session_id: session_id.into(),
             steps: Some(steps),

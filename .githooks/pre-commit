@@ -27,7 +27,14 @@
 #                        desktop/package.json、desktop/tsconfig.json。放它进提交闸的理由 =
 #                        一条"只活在人工纪律里"的门禁等于没有门禁（H1 给 CI 立的那句话，
 #                        对本地同样成立）；代价是每次提交多约 2–3s，比 stylelint 那一档便宜）
-# ③–⑨ 只在相关文件暂存时跑（⑥⑦ 亚秒级，⑨ 约 2–3s，其余各自约 5–10s，Windows 文件系统实测）。
+#   ⑩ 事件通道对账        check-channels.mjs（第八道结构闸，Q12 主体·v2.204 立：一条通道的
+#                        四面 = events.rs 常量 / channel() 映射 / api.ts CHANNELS /
+#                        stores 的 case 标签。为什么不是扩 ④——G7 实测 check-commands.mjs
+#                        对 `agent://` 与 CHANNELS 命中 0，它只管命令三向；事件通道至今
+#                        零机器对账，api.ts 那份清单是手抄的，漏一条就静默成死分支
+#                        （v2.105 前真漏过 schedule-fired，靠人眼）。触发面 = 那四个出处
+#                        加行数尺子的消费文件；亚秒级，纯读源码）
+# ③–⑩ 只在相关文件暂存时跑（⑥⑦⑩ 亚秒级，⑨ 约 2–3s，其余各自约 5–10s，Windows 文件系统实测）。
 root="$(git rev-parse --show-toplevel)"
 staged="$(git diff --cached --name-only --diff-filter=ACM)"
 fail=0
@@ -75,6 +82,13 @@ fi
 if printf '%s\n' "$staged" | grep -qE '^desktop/(src|tests)/|^desktop/(package\.json|vitest\.config\.ts|tsconfig\.json)$'; then
   say "前端测试（Q11 运行面）"
   (cd "$root/desktop" && pnpm run test:run) || fail=1
+fi
+
+# ⑩ 事件通道对账（Q12 主体·v2.204）。触发面就是那四面的出处本身 + 行数尺子的
+# 消费文件——不在面上的改动不需要它，别把它做成常驻耗时。
+if printf '%s\n' "$staged" | grep -qE '^desktop/src-tauri/src/events\.rs$|^desktop/src/lib/api\.ts$|^desktop/src/stores/|^desktop/src/types/|^crates/plugin-api/src/fsutil\.rs$|^plugins-src/tool-(fs|edit)/src/'; then
+  say "事件通道对账（第八道结构闸）"
+  node "$root/scripts/check-channels.mjs" || fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then

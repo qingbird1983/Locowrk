@@ -14,7 +14,14 @@
  * 不产生运行时环，登记在此说明而不是藏着。
  */
 
-export type { AgentEvent, ApprovalRequest, AskUserEvent, SessionTitlePayload } from "./events-agent";
+export type {
+  AgentEvent,
+  ApprovalRequest,
+  AskUserEvent,
+  FileChangeDto,
+  SessionTitlePayload,
+  ToolRowStatus,
+} from "./events-agent";
 
 export type { BrowserOpenPayload, CacheBreakReport, NotificationItem, OrganizeDonePayload, OrganizePausedPayload, ReconcileSummary, RunSummaryView, SessionMeta, SessionSchedule, SessionSearchHit } from "./session";
 

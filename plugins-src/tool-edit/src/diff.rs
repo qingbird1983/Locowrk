@@ -101,6 +101,20 @@ pub(crate) fn edit_diff(args: &Value, host: *const HostVtable) -> Result<Value, 
     }
     out.extend_from_slice(&lines[src..]);
 
+    // ±N 的真源（后审计队列 Q12·C1 甲案）：patch 自己就是 diff——`Add` 计数
+    // = additions、`Del` 计数 = deletions，`Context` 行没变不计。这里数的是
+    // **试算通过的** hunks（前面的严格匹配任一失败就已报错返回），所以报出的
+    // 数与落盘结果同源，不是"照请求文本猜"。
+    let (additions, deletions) =
+        hunks
+            .iter()
+            .flat_map(|h| h.lines.iter())
+            .fold((0i64, 0i64), |(a, d), (op, _)| match op {
+                Op::Add => (a + 1, d),
+                Op::Del => (a, d + 1),
+                Op::Context => (a, d),
+            });
+
     // 全部匹配 → 备份先行，再落盘
     let backup = backup_original(&resolved, "tool-edit")?;
     let bytes = store_lines(&display, &out, had_nl)?;
@@ -109,6 +123,8 @@ pub(crate) fn edit_diff(args: &Value, host: *const HostVtable) -> Result<Value, 
         "path": display,
         "bytes": bytes,
         "hunks_applied": hunks.len(),
+        "additions": additions,
+        "deletions": deletions,
         "existed": true,
         "backup": backup.display().to_string(),
         "revision": revision,

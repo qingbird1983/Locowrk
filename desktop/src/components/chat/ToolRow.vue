@@ -22,11 +22,7 @@ import { useViewerStore } from "../../stores/viewer";
 import type { AssetRefDto } from "../../types";
 import type { ToolItem } from "../../stores/chat";
 
-const props = defineProps<{
-  item: ToolItem;
-  /** 该调用的审批未决（§3.17）：状态词"等待审批"——还没跑，不是运行中。 */
-  awaiting?: boolean;
-}>();
+const props = defineProps<{ item: ToolItem }>();
 
 /** §3.10 入口（subagent 转录页签）与 §3.28（edit_diff 审阅页签）。 */
 const emit = defineEmits<{
@@ -37,12 +33,12 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 // ---- 工具产物图片（批 E §8.3）：output.asset/assets 的 image/*，行头下
-// 预览缩略（点击入查看器）+ 查看大图/保存两钮。设计稿三行形态；pending
-// 与无产物不渲染。缩略读 asset_read data URL（模块级缓存防重复读盘）。----
+// 预览缩略（点击入查看器）+ 查看大图/保存两钮。设计稿三行形态；结果未回
+// （`status !== "settled"`）与无产物不渲染。缩略读 asset_read data URL（模块级缓存防重复读盘）。----
 const viewer = useViewerStore();
 const toast = useToastStore();
 const assets = computed<AssetRefDto[]>(() =>
-  props.item.pending ? [] : toolImageAssets(props.item.output),
+  props.item.status !== "settled" ? [] : toolImageAssets(props.item.output),
 );
 const assetThumbs = ref<Record<string, string>>({});
 const thumbCache = new Map<string, string>();
@@ -87,7 +83,7 @@ const desc = computed(() => toolDescribe(props.item.tool, props.item.args));
 
 /** 写/编辑类行描述尾的变更统计（取不到不渲染，不虚构）。 */
 const diff = computed(() =>
-  props.item.pending ? {} : toolDiffStats(props.item.output),
+  props.item.status !== "settled" ? {} : toolDiffStats(props.item.output),
 );
 const hasDiff = computed(
   () =>
@@ -104,10 +100,11 @@ const durationText = computed(() =>
 );
 
 const statusWord = computed(() => {
-  if (props.item.pending) {
+  if (props.item.status === "awaiting_approval") return t("tool.awaitingApproval");
+  if (props.item.status === "running") {
     // G2：悬空未裁决 = 「结果未知」（不是执行中——进程已退出，不会再跑）
     if (props.item.uncertain) return t("tool.unknown");
-    return props.awaiting ? t("tool.awaitingApproval") : t("tool.running");
+    return t("tool.running");
   }
   if (props.item.ok) return "";
   return t("tool.failed");
@@ -115,7 +112,7 @@ const statusWord = computed(() => {
 
 /** §3.28 审阅：edit_diff 的 unified diff 随 args.patch，路径随 args.path。 */
 const reviewItem = computed(() => {
-  if (props.item.tool !== "edit_diff" || props.item.pending) return null;
+  if (props.item.tool !== "edit_diff" || props.item.status !== "settled") return null;
   const args = props.item.args as { path?: unknown; patch?: unknown } | null;
   if (typeof args?.path !== "string" || typeof args.patch !== "string") return null;
   return { callId: props.item.callId, path: args.path, diff: args.patch };
@@ -150,7 +147,7 @@ function onToggle() {
         <!-- 克制（§3.8）：进行中 = 脉动点 + 弱化词；完成 = 时长或弱对勾；
              失败 = danger 叉 + 红词（唯一高亮态）；G2 结果未知 = warn 点
              + warn 词（不确定态，非失败非运行） -->
-        <template v-if="item.pending">
+        <template v-if="item.status !== 'settled'">
           <span class="dot lw-pulse" :class="{ 'dot--unknown': item.uncertain }" />
           <span :class="{ 'tool__unknown': item.uncertain }">{{ statusWord }}</span>
         </template>

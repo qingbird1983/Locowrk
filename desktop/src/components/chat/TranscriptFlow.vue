@@ -17,7 +17,6 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ChatItem, SystemItem, ToolItem } from "../../stores/chat";
-import { useApprovalsStore } from "../../stores/approvals";
 import { useSettingsStore } from "../../stores/settings";
 import { toolAction } from "../../lib/tool-summary";
 import { Icon } from "../../lib/icons";
@@ -50,7 +49,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const settings = useSettingsStore();
-const approvals = useApprovalsStore();
 
 /** 过程项（§3.7 v4.11 组内都是扁平行）：工具行 / 思考行 / 错误行。
  * 决策记录行 v2.98 全隐藏，不入组。 */
@@ -92,7 +90,7 @@ const blocks = computed<Block[]>(() => {
       const label =
         i.tool === "subagent_run"
           ? `${base} · ${
-              i.pending
+              i.status !== "settled"
                 ? t("tool.running")
                 : i.ok
                   ? t("turn.done")
@@ -279,16 +277,10 @@ const finalAssistantIds = computed(() => {
   return ids;
 });
 
-/** 待决审批按 call_id 索引（工具行「等待审批」状态词的数据源；决策卡
- * 本体在 composer 坞，§3.17 v4.11）。 */
-const pendingByCall = computed(() => {
-  const m = new Map<string, boolean>();
-  for (const p of approvals.pending) m.set(p.request_id, true);
-  return m;
-});
-function isAwaiting(callId: string): boolean {
-  return pendingByCall.value.has(callId);
-}
+// 「等待审批」的读数改由 agent://tool-status 事件写进行状态（队列 Q12·C1）。
+// 这里原先是拿 approvals.pending 反查 call_id——同一件事两个出处，且
+// 重放时待决表恒空，历史行永远显不出它当时等过审批（现已一并如实退役：
+// 重放本来就不该有等待态，见 events.rs::channels::TOOL_STATUS 的注释）。
 
 /** 系统消息文本：__raw__ 条渲染原文，其余按 i18n key 翻译。 */
 function noticeText(item: SystemItem): string {
@@ -347,7 +339,6 @@ function noticeText(item: SystemItem): string {
                 <ToolRow
                   v-else-if="item.kind === 'tool'"
                   :item="item"
-                  :awaiting="isAwaiting(item.callId)"
                   @open-transcript="(id, title) => emit('openTranscript', id, title)"
                   @open-diff="(callId, path, diff) => emit('openDiff', callId, path, diff)"
                 />

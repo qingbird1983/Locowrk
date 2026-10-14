@@ -147,7 +147,19 @@ fn missing_path_outside_roots_reports_outside_not_os_error() {
 
 // ---------- Revision Guard（G3） ----------
 
-use super::{check_revision, content_revision, file_revision};
+use super::{check_revision, content_line_count, content_revision, file_revision};
+
+#[test]
+fn line_count_shares_the_revision_normalization() {
+    // ±N 的唯一尺子（后审计队列 Q12·C1）：三个写工具报的行数全靠它，所以口径
+    // 必须与 content_revision 同一条归一支——一次 CRLF 保存不许变出整文件的行数。
+    assert_eq!(content_line_count("a\nb\n"), 2); // 末尾换行不产生空行
+    assert_eq!(content_line_count("a\nb"), 2); // 无尾换行同数（had_nl 不参与）
+    assert_eq!(content_line_count("a\r\nb\r\n"), 2);
+    assert_eq!(content_line_count(""), 0);
+    assert_eq!(content_line_count("\n\n"), 0); // 纯换行 = 空内容，不是 3 行
+    assert_eq!(content_line_count("一\n二\n三"), 3); // 只按换行切，多字节不参与
+}
 
 #[test]
 fn revision_hash_is_lf_normalized_and_stable() {

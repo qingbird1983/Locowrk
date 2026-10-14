@@ -53,7 +53,7 @@ function rowOf(item: ToolItem): SubagentRow {
   const o = asRecord(item.output);
   const prompt = typeof a.prompt === "string" ? a.prompt.trim() : "";
   const task = prompt || t("topbar.subagents");
-  if (item.pending) {
+  if (item.status !== "settled") {
     return {
       key: item.callId,
       task,

@@ -336,3 +336,4 @@ fn truncate_after_resolves_pos_and_rewrites_disk() {
 /// 上下文用量快照两测（v2.62 持久化 + v2.138 真实锚点）拆入子模块——
 /// 母文件守 400 行纪律（compact/tests 先例）。
 mod context_usage;
+mod file_changes;

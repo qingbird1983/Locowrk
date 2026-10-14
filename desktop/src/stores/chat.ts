@@ -30,7 +30,14 @@ import { i18n } from "../i18n";
 import { useAsksStore } from "./asks";
 import { useSettingsStore } from "./settings";
 import { useToastStore } from "./toast";
-import type { AgentEvent, AssetRefDto, ContentPartDto, SessionMeta } from "../types";
+import type {
+  AgentEvent,
+  AssetRefDto,
+  ContentPartDto,
+  FileChangeDto,
+  SessionMeta,
+  ToolRowStatus,
+} from "../types";
 
 export type ToolItem = {
   id: number;
@@ -40,7 +47,10 @@ export type ToolItem = {
   args: unknown;
   sideEffect: string;
   pluginVersion: string;
-  pending: boolean;
+  /** 行相位（队列 Q12·C1）：`running` = 结果未回；`settled` = 结果已闭合
+   * （成败仍读 `ok`，不在这里复制第二份真相）；`awaiting_approval` = 实时
+   * 专属——审批请求一发出就点亮，**不落会话日志**，故重放永不出现在这里。 */
+  status: ToolRowStatus;
   ok: boolean | null;
   output?: unknown;
   error?: string | null;
@@ -68,6 +78,10 @@ export type ChatItem =
       pos?: number;
       /** 附件部件（批 D）：图片/PDF 引用；缺省 = 纯文本（旧消息渲染零变化）。 */
       parts?: ContentPartDto[];
+      /** 本轮文件改动（队列 Q12·C1）：轮头容器数据，不是独立行——
+       * 实时与重放同一来源（后端在 TurnEnd 处从插件上报聚合）。
+       * 缺省 = 本轮没写文件（不发空数组）。 */
+      files?: FileChangeDto[];
     }
   | {
       id: number;
@@ -276,7 +290,7 @@ export const useChatStore = defineStore("chat", {
       for (const it of state.items) {
         if (it.kind === "user" && it.parts) {
           for (const p of it.parts) if (p.type === "image") out.push(p.asset);
-        } else if (it.kind === "tool" && !it.pending && it.output) {
+        } else if (it.kind === "tool" && it.status === "settled" && it.output) {
           out.push(...toolImageAssets(it.output));
         }
       }
@@ -530,7 +544,7 @@ export const useChatStore = defineStore("chat", {
             args: e.args,
             sideEffect: e.side_effect,
             pluginVersion: e.plugin_version,
-            pending: true,
+            status: "running",
             ok: null,
             ...(this.replaying ? {} : { ts: Date.now() }),
           });
@@ -542,7 +556,7 @@ export const useChatStore = defineStore("chat", {
             (i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id,
           );
           if (item) {
-            item.pending = false;
+            item.status = "settled";
             item.ok = e.ok;
             item.output = e.output;
             item.error = e.error;
@@ -552,6 +566,33 @@ export const useChatStore = defineStore("chat", {
           }
           break;
         }
+        case "tool_status":
+          // 行相位补投（Q12·C1）：审批请求一发出就把那条在途调用点亮。
+          // 只认 pending_approval——后端刻意不给其余取值，成败与悬空由
+          // tool_result / tool_uncertain 各自负责（不许一个事实两个出处）。
+          // 结果已回（乱序/竞态）时**不许**回退成等待态，故加 status 守卫。
+          {
+            const item = this.items.find(
+              (i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id,
+            );
+            if (item && item.status === "running" && e.status === "pending_approval") {
+              item.status = "awaiting_approval";
+            }
+          }
+          break;
+        case "file_changes":
+          // 本轮文件改动（Q12·C1）：**不作为独立行**，挂在轮头容器上——
+          // 与 endTs 挂 user 行同一做法（TranscriptFlow 按 user 行分轮）。
+          // 找不到 user 行 = 调度轮（没有用户消息，计时行本就无从起算，同一
+          // 缺口）⇒ 不虚构归属、不造暂存死数据，如实不挂；TurnHeader 那一刀
+          // 给了轮级容器后由它接手（队列 §4 的 Q12 行登记了这一步）。
+          {
+            const head = [...this.items].reverse().find((i) => i.kind === "user");
+            if (head && head.kind === "user") {
+              head.files = e.files;
+            }
+          }
+          break;
         case "tool_uncertain":
           // G2 崩溃恢复：悬空未裁决——行进「结果未知」态 + 组外决策卡。
           // 只在重放产出（悬空只在崩溃后出现）；找不到宿主行（声明位

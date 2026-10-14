@@ -26,6 +26,8 @@ export type AgentEvent =
   | TurnCappedEvent
   | ToolUncertainEvent
   | UncertainResolvedEvent
+  | ToolStatusEvent
+  | FileChangesEvent
   | ContextSummaryEvent;
 
 interface ChunkEvent {
@@ -241,6 +243,39 @@ interface UncertainResolvedEvent {
   tool: string;
   decision: "completed" | "not_executed" | "inspected";
   note: string;
+}
+
+/** 工具行相位（队列 Q12·C1，agent://tool-status）。**实时专属**：审批请求一
+ * 发出就给那条在途调用点亮「等待审批」，不落会话日志 ⇒ 重放永不出现在这里
+ * （重放时那次决策已落成 approval_resolved，行按事实闭合，不虚构等待态）。
+ * 值集只有一个也是真的：行的成败由 tool_result 自带（`ok`），悬空由
+ * tool_uncertain 自带 ⇒ 一份事实一个出处，本事件不许复制它们。 */
+export type ToolRowStatus = "awaiting_approval" | "running" | "settled";
+
+interface ToolStatusEvent {
+  kind: "tool_status";
+  session_id: string;
+  call_id: string;
+  status: "pending_approval";
+}
+
+/** 本轮文件改动（队列 Q12·C1，agent://file-changes）：投影层在轮末从本轮
+ * 写类工具结果里的**插件上报行数**聚合而成，实时与重放同一个来源。
+ * `additions`/`deletions` 为 null = 该工具算不出 diff（如 fs_write 覆盖已有
+ * 文件），是如实读数不是 0 ⇒ UI 不渲染数字（也不渲染 +0 −0）。
+ * `kind` 由宿主单点定形：created / modified / overwritten / deleted。 */
+export interface FileChangeDto {
+  path: string;
+  kind: "created" | "modified" | "overwritten" | "deleted";
+  additions?: number | null;
+  deletions?: number | null;
+}
+
+interface FileChangesEvent {
+  kind: "file_changes";
+  session_id: string;
+  turn_id?: number | null;
+  files: FileChangeDto[];
 }
 
 /** 自动会话标题推送（lw://session-title，v2.57）：旁车落盘后通知前端

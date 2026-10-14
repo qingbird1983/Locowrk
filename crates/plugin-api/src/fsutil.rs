@@ -269,6 +269,26 @@ pub fn content_revision(bytes: &[u8]) -> String {
     out
 }
 
+/// 行数口径（后审计队列 Q12·C1 的 ±N 唯一尺子）：LF 归一后按 `\n` 切，
+/// **末尾换行不产生空行**，空内容（含纯换行）= 0 行。归一支与
+/// [`content_revision`] 同一条（`\r\n` 视作 `\n`）——两个读数必须同源，
+/// 否则一次 CRLF 保存会让 ±N 凭空变出一批行。
+///
+/// 谁该用它：写类工具在结果里报 `additions` / `deletions` 时（tool-edit 三个
+/// 写工具 + tool-fs 的 fs_write 新建支）。**没有真 diff 源的不许报数**——
+/// 整文件覆盖（fs_write 改已存在文件）给不出 ±N，宁可缺省（纪律 = TurnDone
+/// 的 `steps`「日志未记录 ⇒ 宁缺勿假」同款），由宿主投影把该文件的 kind
+/// 定成 `overwritten` 而行数留 NULL，UI 对 NULL 不渲染数字。
+pub fn content_line_count(text: &str) -> i64 {
+    let norm = text.replace("\r\n", "\n");
+    let body = norm.trim_end_matches('\n');
+    if body.is_empty() {
+        0
+    } else {
+        body.split('\n').count() as i64
+    }
+}
+
 /// 文件当前 revision；不存在 = `None`（fs_write 新建语义的判定依据），
 /// 其余 IO 错误如实上抛。
 pub fn file_revision(path: &Path) -> Result<Option<String>, String> {

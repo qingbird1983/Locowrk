@@ -423,6 +423,20 @@ impl ApprovalResolver for ApprovalHub {
 
         self.sink.emit(&AgentEvent::ApprovalRequest(request));
 
+        // 工具行状态前置补投（CF §2.1，后审计队列 Q12·C1）：审批请求一发出，
+        // 那条在途调用就在行上显示「等待审批」，不必等结果才出现。
+        // **只走实时通道、不进会话日志**——重放时那次的决策早已落成
+        // `ApprovalDecided`，行按"经审批放行/拒绝"的事实闭合，不虚构等待态
+        // （一份事实只许一个出处：等待态的真源是"卡片正挂着"这件事本身）。
+        // `req.id` 与载荷里的 `request_id` 同串（审批与工具调用同一标识）。
+        if let Some(session_id) = req.session_id.clone() {
+            self.sink.emit(&AgentEvent::ToolStatus {
+                session_id,
+                call_id: req.id.0.clone(),
+                status: "pending_approval".into(),
+            });
+        }
+
         // 守夜任务（§3.17 超时自动拒绝）：抢到移除权 = 用户未决策，
         // fail-closed 拒绝并唤醒挂起的 step；decide 先移除则此处为空转。
         // 表句柄是 Arc 克隆，任务不借用 self。超时 0（设置"不限"）不起

@@ -30,7 +30,7 @@ const subItems = computed(() => {
   const out: { childId: string; title: string }[] = [];
   const seen = new Set<string>();
   for (const item of chat.items) {
-    if (item.kind !== "tool" || item.pending || !item.ok) continue;
+    if (item.kind !== "tool" || item.status !== "settled" || !item.ok) continue;
     const tool = item as ToolItem;
     if (tool.tool !== "subagent_run") continue;
     const childId = (tool.output as { child_session_id?: string } | null)?.child_session_id;
@@ -49,7 +49,7 @@ const reviewItems = computed(() => {
   const out: { callId: string; path: string; diff: string }[] = [];
   const seen = new Set<string>();
   for (const item of chat.items) {
-    if (item.kind !== "tool" || item.pending) continue;
+    if (item.kind !== "tool" || item.status !== "settled") continue;
     const tool = item as ToolItem;
     if (tool.tool !== "edit_diff") continue;
     const args = tool.args as { path?: unknown; patch?: unknown } | null;

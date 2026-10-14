@@ -13,6 +13,7 @@ mod keyside;
 mod m18_equiv;
 mod project_rules;
 mod session_timeout;
+mod tool_status;
 
 use crate::approval::ApprovalHub;
 use crate::demo_llm::DemoLlm;
