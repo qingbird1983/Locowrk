@@ -3,10 +3,9 @@ name: CI
 # 三条线各一个作业（审计报告 H1：旧 CI 只有根 workspace 一条线，
 # desktop 与前端**完全不编译、不 lint、不测试**——项目自报的 desktop /
 # vue-tsc / stylelint 门禁只活在人工纪律里）。
-#   kernel   = 根 workspace（crates + plugins-src）
-#   desktop  = desktop/src-tauri（被 Cargo.toml exclude 在根 workspace 外，
-#              必须显式 --manifest-path；Windows runner 贴合实际资产：
-#              pdfium.dll / WebView2 / Credential Manager 都是 Windows 面）
+#   kernel   = 根 workspace（crates + plugins-src），跑测试前先构建市场夹具（二进制不入库）
+#   desktop  = 前端三件事（构建含类型检查 / 形态 / vitest）。2026-10-17 起不再在云端编译
+#              `desktop/src-tauri` 的 Rust——那部分由本机 `make check` 管，见下面作业注释
 #   hygiene  = 机械闸群，纯脚本秒级。**它只调 `sh scripts/tasks.sh gates`**：
 #              闸的清单住在 scripts/tasks.sh 一处，这个文件不再逐条抄写——
 #              抄一次就多一个会漂的副本（v2.209 实测：手抄的那份漏了两道闸，
@@ -53,12 +52,19 @@ jobs:
           cargo machete
 
   desktop:
-    runs-on: windows-latest
+    # 2026-10-17 瘦身（用户嫌等太久，实测上一轮：hygiene 15s / kernel 244s / 本作业 564s，
+    # 三个作业并行 ⇒ 每次等的基本就是它，而且它跑在 Windows 机器上还要额外排队）。
+    # 云端只留**前端三件事**：装依赖+构建（含 vue-tsc 类型检查）/ 界面形态检查 / 前端用例。
+    # 拿掉的是 `desktop/src-tauri` 的 fmt + clippy + test —— 那三步要在 Windows 上冷编译
+    # 整个 Tauri 依赖树，占掉这个作业绝大部分时间，而它们本来就在本机 `make check` 里每次都跑。
+    # 留下的代价（如实）：云端不再证明"桌面端 Rust 能编译"；哪天本机 make check 被跳过，
+    # 这一面就没有第二双眼睛。真出问题时最坏是本机发现，不会伤数据。
+    # 因此 runner 从 windows-latest 换成 ubuntu-latest：前端三件事不需要 WebView2 / pdfium 这些
+    # Windows 资产。⚠ 若 ubuntu 上 `pnpm install --frozen-lockfile` 因平台可选依赖过不去，
+    # 回退方向是**换回 windows runner 但保持这三步**（省 Rust 编译才是大头），别顺手把 Rust 三步加回来。
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
       # ⚠ Q11 把这一作业的 node 从 20 抬到 24、pnpm 从 9 抬到 11，**不是顺手升版本**：
       # 实测 `npm view vitest@5.0.4 engines` = `^22.12.0 || ^24.0.0 || >=26.0.0` ⇒
       # 前端测试面在 node 20 上根本跑不起来；`24` 又是本机实测档位（v24.14.0），
@@ -71,21 +77,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: desktop/src-tauri
-      - name: Frontend build (generate_context! 需要 dist/)
+      - name: Frontend build (vue-tsc 类型检查 + 打包)
         run: pnpm -C desktop install --frozen-lockfile && pnpm -C desktop run build
       - name: Style lint (design tokens + template rules)
         run: pnpm -C desktop run lint:style
       - name: Frontend tests (Q11 运行面：IPC 替身 / store 行语义 / 组件双档)
         run: pnpm -C desktop run test:run
-      - name: Format (desktop)
-        run: cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --check
-      - name: Clippy (desktop)
-        run: cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
-      - name: Tests (desktop)
-        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml
 
   hygiene:
     runs-on: ubuntu-latest
