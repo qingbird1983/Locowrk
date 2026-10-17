@@ -63,16 +63,24 @@
 - [ ] **T14** 逐批验收与证据核对
       · 需要的是"按批出一份验收清单"，不是新改动 ⇒ 你要抽查哪一批，说编号我出清单
 - [ ] **T17** `docs/design/authority/DESIGN.md` 文档版本行里那处指向 `docs/history/` 的链接是裸链接
-      · 本机层不入库之后（[`ADR-0003`](../adr/0003-private-doc-layers.md)），别人 clone 过去点不开；
+      · 本机层不入库之后（[`ADR-0003`](../../docs/adr/0003-private-doc-layers.md)），别人 clone 过去点不开；
         改它要动 `[LOCK]` 文件 ⇒ **等你点头**（`check-docs.mjs` 的 R10 对这两处网开，所以闸不报）
-- [x] **T18** 云端 CI 的内核测试有 4 条在 Linux 上红、在你本机全绿（2026-10-17 首次推送 run 39032117025 实测）
-      · 逐条查过：断言按 Windows 路径语义出题（反斜杠当分隔符、`/tmp` 造越界样本、靠 Windows 的 `canonicalize`
-        折叠 `..`、还有一个模块本就 `cfg!(windows)` 分平台实现），**代码行为一个字没动**，不是新 bug
-      · 处置（用户 2026-10-17 定"Linux 暂时不出，先选二"）：四条加 `#[cfg(windows)]` 并在上方写清"Linux 上为什么不成立"；
-        CI 保持在 Linux 上跑其余 49 条内核用例；口径写进 AGENTS §1（不在范围内的项目加上 Linux）。
-        取舍与否决路径见 [`docs/adr/0004-ci-paths-windows-only.md`](../../docs/adr/0004-ci-paths-windows-only.md)
-      · 留下的代价（如实）：Linux 上的目录名、键位与围栏判定从此**没有证据**；真要出 Linux 版时要另立一批 POSIX 用例
-        （符号链接 / `..` / 大小写三面），而不是解开这四个标记
+- [ ] **T18** 内核在 Linux 上的账**正面修**（用户 2026-10-17 推翻"选二"，原话：这样不行，把 Linux 这块账彻底修复，包括前面禁止绕开的）
+      · 曾按"选二"给四条加 `#[cfg(windows)]` 绕开 ⇒ **那四个标记要撤掉**，[`ADR-0004`](../../docs/adr/0004-ci-paths-windows-only.md) 与新口径冲突，由新 ADR 取代；
+        AGENTS §1 的"不在范围内：Linux 支持"随之改回
+      · 待修五处（CI 实测原文见提交正文）：`wskey` 的 `..` 折叠、`memlayout` 目录名安全化、`fsutil` 越界围栏，
+        外加 `plugin-service` 一条**不是断言失败而是 SIGSEGV** 的崩溃 —— 那条要查明为什么 Windows 不崩 Linux 崩，
+        不许靠猜改代码
+      · 复现阵地改到本机 WSL（Ubuntu-24.04）：不再靠推送等云端；WSL 里缺什么、装了什么、慢在哪，登记在提交正文
+      · 判据落点：同一份断言在 Windows 与 Linux **两侧都跑通**才算这条账清了，`#[cfg(...)]` 只许用于"平台本就该有不同的既定语义"
+- [ ] **T19** `check-docs.mjs` 的扫描面比它自称的口径小 ⇒ 对 `specs/` 层的断链与旧用词**零证明力**（2026-10-17 实测抓到）
+      · 根因一句话：`mdAll` 只从 `docs/` 一棵根往下走，可 R6 的注释写着"扫描面含 specs/**"、
+        R8 与 R10 也都在 `live` 上跑 —— `live` 里根本没有 specs 文件，那句 `startsWith('specs/')` 恒假
+      · 证据：T17 原写法 `../adr/0003-private-doc-layers.md` 从 `specs/03-structural-debt/` 出发少一级，
+        `fs.existsSync` 实测 `false`，而 `make doc` 当场报 OK —— 已在本条同批把这处链接改成 `../../docs/adr/…`
+      · 怎么修才算修好：把 specs 并进扫描根之后，必须给"specs 里插一条断链"**补一条窄变异**
+        （`make selftest` 里要报红），否则只是换个目录名走一遍，下次照样漏
+      · 为什么不在 T18 那一刀里顺手做：这是判据自己的账，动它会改变全体文档的通过线，与 Linux 语义无关
 
 ## 验收标准
 
