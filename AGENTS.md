@@ -12,7 +12,8 @@
   两条通路都经同一 `ToolSource` 进工具池。
 - 沙箱插件已随 v2.145 **整目录退役**：不隔离文件与网络就不是安全边界；命令执行面收敛为 `shell` 单一入口。
 - 技术栈：Rust（根 Cargo workspace 8 个 crate + `desktop/src-tauri` 独立包）· Tauri 2 · Vue 3 + TypeScript · pnpm · vitest。
-- 当前阶段：单人自用内测。**不在范围内**：多用户服务端、云同步、生产部署。
+- 当前阶段：单人自用内测。**不在范围内**：多用户服务端、云同步、生产部署，以及 Linux 支持
+  （路径语义只在 Windows 上验证，理由见 [`docs/adr/0004-ci-paths-windows-only.md`](docs/adr/0004-ci-paths-windows-only.md)）。
 - 权威设计文档 = [`docs/design/authority/DESIGN.md`](docs/design/authority/DESIGN.md)：改核心模块前先读对应章节，实现与它冲突时先对齐文档；
   其中 `agent-kernel/` 指内核 Cargo 工作区，crate 名沿用文档，对外项目名叫 Locowrk。
 

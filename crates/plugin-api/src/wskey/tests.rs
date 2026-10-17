@@ -62,6 +62,10 @@ fn trailing_slash_and_dot_never_split_a_keyside() {
     }
 }
 
+// 只在 Windows 跑：这条靠 canonicalize 把 `..\` 折叠掉，而 Windows 的路径 API 对**不存在的中间段**
+// 会做词法折叠、POSIX 不会（Linux 上这条回落成原文，`/a/x/../b` 与 `/a/b` 就得到两个键位）。
+// 想让 POSIX 也同键位得自己实现一套词法折叠并处理符号链接 —— 那是"支持 Linux"的活，本项目不做。
+#[cfg(windows)]
 #[test]
 fn dotdot_inside_the_path_is_resolved_not_left_as_text() {
     // `F:\proj\a\..\b` 与 `F:\proj\b` 是同一个目录。词法上"看着在一处"而 OS

@@ -92,6 +92,11 @@ fn backup_lands_under_data_root_and_is_readable() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+// 只在 Windows 跑：这条夹具断言的是「根外且不存在 ⇒ 报越界而不是报读失败」这条裁决顺序，
+// 而 POSIX 上同一条路径先撞上「中间段解析不到」，文案与裁决顺序本就不同（云端 Linux 实测：
+// got: cannot resolve any existing ancestor）。本项目不出 Linux 版，所以这里不假装它成立 ——
+// 处置登记在 specs/03 的 T18，取舍与理由见 docs/adr/0004-paths-verified-on-windows-only.md。
+#[cfg(windows)]
 #[test]
 fn missing_path_outside_roots_reports_outside_not_os_error() {
     // 2026-09 冒烟误读教训：根外且不存在的路径，拒绝理由必须仍是

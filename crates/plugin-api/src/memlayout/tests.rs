@@ -13,6 +13,9 @@ fn entry<'a>(ws: &'a str, key: &'a str, value: &'a str) -> FactEntry<'a> {
     }
 }
 
+// 只在 Windows 跑：`F:\Warehouse\AIwork\Locowrk` 这类反斜杠串在 POSIX 上是**一个合法文件名**
+// 而不是一串目录，"取末段"这件事在两个平台上语义不同（Linux 侧算式不剥 `\` 不是缺陷）。
+#[cfg(windows)]
 #[test]
 fn project_dir_name_is_readable_and_collision_safe() {
     let a = project_dir_name(r"F:\Warehouse\AIwork\Locowrk");
@@ -72,6 +75,10 @@ fn project_dir_rejects_unowned_and_is_the_single_formula() {
 /// 恶意 / 畸形 workspace 串只能落进 root 之内：目录名是「安全化 + fnv 短哈希」
 /// 的产物，`..` 与分隔符都进不了那一个名字。新命令收的是 workspace 而不是路径，
 /// 所以这条性质就是它的防线本身（比 `reveal_in_explorer` 的 fsRoots 白名单更窄）。
+// 只在 Windows 跑：这批恶意串（`C:\Windows\..`、`a\b\..\c`）按 Windows 分隔符判"有没有穿越材料"。
+// POSIX 上反斜杠是普通字符，`a\b\..\c` 就是**一个目录名**、不构成穿越 ⇒ 安全性质仍在，
+// 只是这条判读法不适用（Linux 上该用 `/` 形态的串重做一批用例 = 真要支持 Linux 时的活，见 T18）。
+#[cfg(windows)]
 #[test]
 fn project_dir_keeps_any_workspace_string_under_the_root() {
     let root = std::path::Path::new(r"X:\data\memory");

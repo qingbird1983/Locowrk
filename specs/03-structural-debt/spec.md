@@ -65,14 +65,14 @@
 - [ ] **T17** `docs/design/authority/DESIGN.md` 文档版本行里那处指向 `docs/history/` 的链接是裸链接
       · 本机层不入库之后（[`ADR-0003`](../adr/0003-private-doc-layers.md)），别人 clone 过去点不开；
         改它要动 `[LOCK]` 文件 ⇒ **等你点头**（`check-docs.mjs` 的 R10 对这两处网开，所以闸不报）
-- [ ] **T18** 云端 CI 的内核测试有 4 条在 Linux 上红、在你本机全绿（2026-10-17 首次推送 run 39032117025 实测）
-      · 红的是 `fsutil::missing_path_outside_roots…`、`memlayout::project_dir_keeps_any_workspace_string…`、
-        `memlayout::project_dir_name_is_readable…`、`wskey::dotdot_inside_the_path…` —— 它们照 Windows 的路径写法出题
-        （反斜杠当分隔符、拿 `/tmp` 造越界样本、还有一个模块本就 `cfg!(windows)` 分平台实现）。**代码行为一个字没动**，
-        不是新 bug，是"测试假设的平台"与"云端机器的平台"不一致
-      · 三条路等你选（我已把取舍摆给他，没擅自动）：① 云端换成 Windows 机器跑（要动 `[LOCK]` 的 `.github/workflows/`）；
-        ② 这几条按平台跳过（不动禁区，代价是 Linux 路径行为从此没证据）；③ 正面改成两边都成立（要动 `plugin-api`
-        内部的目录名算式，记忆目录名会变）
+- [x] **T18** 云端 CI 的内核测试有 4 条在 Linux 上红、在你本机全绿（2026-10-17 首次推送 run 39032117025 实测）
+      · 逐条查过：断言按 Windows 路径语义出题（反斜杠当分隔符、`/tmp` 造越界样本、靠 Windows 的 `canonicalize`
+        折叠 `..`、还有一个模块本就 `cfg!(windows)` 分平台实现），**代码行为一个字没动**，不是新 bug
+      · 处置（用户 2026-10-17 定"Linux 暂时不出，先选二"）：四条加 `#[cfg(windows)]` 并在上方写清"Linux 上为什么不成立"；
+        CI 保持在 Linux 上跑其余 49 条内核用例；口径写进 AGENTS §1（不在范围内的项目加上 Linux）。
+        取舍与否决路径见 [`docs/adr/0004-ci-paths-windows-only.md`](../../docs/adr/0004-ci-paths-windows-only.md)
+      · 留下的代价（如实）：Linux 上的目录名、键位与围栏判定从此**没有证据**；真要出 Linux 版时要另立一批 POSIX 用例
+        （符号链接 / `..` / 大小写三面），而不是解开这四个标记
 
 ## 验收标准
 
