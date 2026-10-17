@@ -71,6 +71,15 @@
       · 待修五处（CI 实测原文见提交正文）：`wskey` 的 `..` 折叠、`memlayout` 目录名安全化、`fsutil` 越界围栏，
         外加 `plugin-service` 一条**不是断言失败而是 SIGSEGV** 的崩溃 —— 那条要查明为什么 Windows 不崩 Linux 崩，
         不许靠猜改代码
+      · **已在本机 WSL 复现并定位（2026-10-17）**：崩溃前面真正红的是 `lifecycle.rs` 那句"回退后 update 该报无新版"——
+        Windows 上它 Err 是**平台副作用**（覆盖正在使用的 dll、同 .so 的第二次 dlopen 被挡），Linux 上 update 成功 ⇒
+        这条**是出题错了，不是平台语义不适用**；回退到旧版后市场里明明有更新版，按 §1 的"可回退"语义就该能升回去
+      · SIGSEGV 的栈也拿到了：`NativeBackend::drop` → `agent_plugin_shutdown` → `Box::from_raw(handle)` 的 drop_glue
+        里 vtable 槽为 `0x0` ⇒ 同一个 handle 被释放过两次。窗口 = 停用/回退把实例挪进 graveyard 后，
+        `registry.load` 的幂等闸门查不到它 ⇒ 同一份 `.so` 被第二次 dlopen，而 dlclose 按名合并引用计数 ⇒ 代码页先没
+      · 修法（三条都要，缺一不可）：① 停用/回退过的版本仍算"已在场"，load 不许再 dlopen 一次；
+        ② `Drop` 里不许真 dlclose（把"永不 dlclose"从注释变成代码，只留"加载即失败"那条豁免）；
+        ③ 那句断言按正确语义重写（回退后 update 应升回最新版；"无新版"分支改由"当前已是最新"来验），两侧都跑
       · 复现阵地改到本机 WSL（Ubuntu-24.04）：不再靠推送等云端；WSL 里缺什么、装了什么、慢在哪，登记在提交正文
       · 判据落点：同一份断言在 Windows 与 Linux **两侧都跑通**才算这条账清了，`#[cfg(...)]` 只许用于"平台本就该有不同的既定语义"
 - [ ] **T19** `check-docs.mjs` 的扫描面比它自称的口径小 ⇒ 对 `specs/` 层的断链与旧用词**零证明力**（2026-10-17 实测抓到）
