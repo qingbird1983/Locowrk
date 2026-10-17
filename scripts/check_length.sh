@@ -40,7 +40,6 @@ desktop/src/components/settings/DeveloperSection.vue
 desktop/src-tauri/src/commands/llm.rs
 desktop/src/components/memory/TreeSection.vue
 desktop/src-tauri/src/commands.rs
-desktop/src-tauri/src/approval/mod.rs
 desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue
 desktop/src-tauri/src/commands/sessions.rs

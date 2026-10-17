@@ -20,9 +20,13 @@
 
 ### 一、可直接做（不需要你点头，零行为变化）
 
-- [ ] **T1** 把 `approval/mod.rs`（457 行）里"决策"那半拆成 `approval/decide.rs`
-      · 落点 `desktop/src-tauri/src/approval/` · 做完 `check_length` 名单少一行
-      · 时机：下次改七序决策表那一侧时顺手
+- [x] **T1** 把 `approval/mod.rs`（470 行）里"决策"那半拆成 `approval/decide.rs`
+      · 落点 `desktop/src-tauri/src/approval/` · `check_length` 名单 22 → **21**（实测，不是估计）
+      · 拆分口径 = 纯搬移：等价证明用"HEAD 版逐行必须活在新 mod ∪ decide 里"，
+        缺失只剩 8 行且全是文档注释与一行 `use` 的合并，**实现体一行未改**；
+        阳性对照（把 reason 改一个字母）实测把缺失从 8 抬到 9 ⇒ 这套判据真的在盯代码
+      · 测试面一字未改（579 条桌面用例全绿）：trait 实现不产生调用点，`Pending` 等私有项
+        靠"子模块看得见祖先模块的私有项"这条可见性规则直接引用，没有为了拆分放宽到 `pub`
 - [ ] **T5** 去掉 `llm/app_llm.rs::prepare` 里剩下的那一处重复 `llm_config()` 取用
       · ⚠ 它有一条既有判据钉着"恰好 1 次"，改代码必须同批改判据，否则判据先红
 - [ ] **T6** 会话命令两处取数方式改正：`session_export` 里为了拿标题扫了整个目录（正解 = 读旁车 `read_meta`）；

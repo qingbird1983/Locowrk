@@ -62,7 +62,7 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   │   ├── runner/ llm/ prompts/ events.rs tool_source.rs
 │   │   │                             #         执行循环 · 模型接入与线格式（client.rs · wire.rs）· 提示词分层 · 事件通道常量 · 工具接线
 │   │   ├── approval/ permission_mode/ permission_rules/ privacy/ autodisable.rs
-│   │   │                             #         审批与决策表（approval/mod.rs：一次调用先查哪条、后查哪条的固定七步）· 四档权限 · 粘性授权规则 · 底线 · 自动禁用
+│   │   │                             #         审批与决策表（approval/decide.rs：固定七步的裁决序；approval/mod.rs：问人、挂起等待、豁免、守夜超时）· 四档权限 · 粘性授权规则 · 底线 · 自动禁用
 │   │   ├── memory/ memory.rs memory_learn/ memory_files/ memory_index/ memory_reconcile/ memory_tree_reconcile/
 │   │   │                             #         宿主侧记忆族 · 学习列 · 文件化 · 索引 · 两条对账（memory.rs 与插件那侧同源）
 │   │   ├── settings/ state/ workspace.rs data_root.rs plugins_root.rs timeutil.rs
