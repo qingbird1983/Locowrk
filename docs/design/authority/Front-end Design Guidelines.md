@@ -67,7 +67,19 @@
 - 结构：组与组之间 = **两头不到端的发丝线分割**（`--lw-line-subtle`，两端缩进 12px）。
 - 对齐三则：**靠左出的面板与触发钮左对齐；居中弹出居中对齐；靠右出的右对齐**。
 - **视口钳制义务**：渲染后必须量**实际尺寸**（不得用预估宽）——右对齐触发器右缘、四边钳 8px、底部放不下向上翻（实抓教训：SettingsSelect 预估宽定位致裁切）。
-- 收口：一律 Esc + 外点自持（现状 3 处无 Esc 收敛批补齐）。
+- 收口：一律 Esc + 外点自持。**实测现状（2026-10-18 · 台账 T10 逐站复核）= 九个外点站点里三处没有 Esc**：
+  `chat/PermissionCard.vue` 的 scope 下拉、`shell/SubagentsMenu.vue`、`shell/NotificationPopover.vue`
+  （现查：`grep -rlE 'document\.addEventListener\("pointerdown"|useDismissOnOutside\(' desktop/src/components`）。
+  补齐的阻碍**不是忘了**，而是这条规则还缺一句"一次 Esc 该由谁吃"：这三处的焦点通常就在输入框，
+  而输入框自己已经有一条 Esc 链（`Composer.vue:288`：斜杠面板 → 跳过 ask → 拒绝审批 → 停止 → 交出焦点，
+  且浮层开着时它已经会给 `showModels` 让位）。直接给这三处加 document 级 Esc 的结果是
+  **按一次同时关掉一层并拒掉一次审批**——把不可逆动作放进误触路径，比不补更糟。
+  等用户裁定：**(a)** 建"浮层优先"的 Esc 路由（把 `Composer` 那份让位判定扩到这三处，一处判定全站生效）；
+  **(b)** 本条收窄成"可被键盘聚焦的浮层一律 Esc"，这三处登记进 §七。
+  - 已经收敛的部分：Esc 判定本身只有 `lib/use-popover.ts::escHandler` 一个出处，
+    `useDismissOnEsc` 是给"外点各有真语义、只缺 Esc"的站点用的注册面（`dismissHandlers` 的 Esc 半边
+    也已复用它）；`settings/model/DefaultModelMenu.vue` 从自写的 `window keydown` 换过去，
+    并把外点事件名从 `mousedown` 归一到 `pointerdown`（同族唯一形状，实测无第二处 mousedown）。
 - 验收矩阵**必含贴边位**：触发器贴窗口右缘/下缘时不得裁切（每浮层必测）。
 
 ### ④ 按钮（16 种收敛为 4 种）
@@ -249,6 +261,8 @@
 | 吉祥物 / UsageRing 内联 svg | 插画/仪表，非图标 | §二⑪ |
 | 模型设置区 tailwind 豁免 | **待收敛**（v2.58 遗留，收敛批清除后本行删除） | style.css:640 |
 | 守夜倒计时条 ×2（PermissionCard/AskCard）+ 队列行 li（QueueCard）+ toast 正文溢出提示（ToastStack）保留原生 title | 包裹层会抢走 `position:absolute` 细条的定位锚点 / 压缩 `li` 全宽点击区 / 整条气泡包 HoverTip 破坏 flex 布局——HoverTip 化必破版式 | 批③（2026-10-06）静态复核 |
+| 浮层"关掉谁"三种写法并存：`emit("close")`（所有权在父）/ 写本地 `open` ref / 遮罩 `@pointerdown.self` | 由渲染归属决定——`RowMenu`、`NotificationPopover`、`DefaultModelMenu` 由父组件 `v-if` 渲染，本地根本没有 ref 可写；两个对话框走遮罩。**"怎么关"是真语义差，不许为统一而塞一组开关**；共用的只有 Esc 判定那半边（`lib/use-popover.ts::escHandler`） | 台账 T10 逐站取证（2026-10-18） |
+| `RowMenu` 光标坐标开层 + 两步 `keepOpen` 确认；`SettingsSelect`/`RowMenu` 自持整套键盘链（焦点回还 / ↑↓ / Enter / `stopPropagation`） | 右键式上下文菜单与可搜索列表的固有交互；族 A 那个"两个 ref + 冒泡 + 写本地 ref"的形状承载不了，硬合并会先把"一次按键只做一件事"打散 | 同上 |
 
 ## 八、暂定值（缺省按推荐生效，报编号即翻案）
 

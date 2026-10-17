@@ -142,6 +142,34 @@
       · 本条从台账移出后，欠账没有消失，只是换页记：做「度量基线」阶段时那十二条的"快了多少"要在那里补
 - [ ] **T10** 弹层行为族 B/族 C 的处置（族 A 四处已收进 `lib/use-popover.ts`）
       · 我的推荐 = 认可现状，登记进《Front-end Design Guidelines》§七 特例清单
+      · 2026-10-18 用户点头收账后**逐站取证，我自己的推荐被实测推翻**：族 B/C 的差异里只有两类是
+        真需求（「关掉谁」的所有权差异、Esc 带门控条件），其余三条是漂移——`DefaultModelMenu` 的
+        外点挂 `mousedown` 而同族九处都挂 `pointerdown`；它自己那份 `window keydown + Escape`
+        与族 A 那份逐字同形 = 同一判定的第二个出处；三处**根本没有 Esc**
+      · 已做（无争议那半）：`lib/use-popover.ts` 抽出 `escHandler`（Esc 判定唯一出处，
+        `dismissHandlers` 的 Esc 半边改为复用它）+ `useDismissOnEsc`（只补 Esc 的注册面，
+        **不给族 A 加开关**——`capture?`/`onDismiss?`/`escapeGate?` 那种"把差异从十处搬进一处"
+        仍然判为搬家不是收敛）；`DefaultModelMenu` 归一到 `pointerdown` 并换用共享件；
+        新增 `desktop/tests/popover-esc.spec.ts` 四条 + 两发变异各打中不同用例
+        （放宽成"任何键都关" ⇒ 红在 ①③；摘掉 `onBeforeUnmount` ⇒ 红在 ②，卸载后监听器还在、
+        计数从 1 变 2），还原逐字节写回 + `cmp` + `sha256sum`（b3684c47…）
+      · ★ 卡住的那半不是技术活：**「一次 Esc 该由谁吃」没有规则**。实测无 Esc 的三处 =
+        `chat/PermissionCard.vue` 的 scope 下拉、`shell/SubagentsMenu.vue`、
+        `shell/NotificationPopover.vue`（与标准那句"现状 3 处无 Esc"逐字对上，这条债不是新造的）。
+        它们的焦点通常在输入框，而 `Composer.vue:288` 已经有一条 Esc 链（斜杠面板 → 跳过 ask →
+        **拒绝审批** → 停止 → 交出焦点，且浮层开着时它已给 `showModels` 让位）。
+        直接给这三处加 document 级 Esc 的结果 = 按一次键同时关一层 + 拒一次审批
+        ⇒ **把不可逆动作放进误触路径，比不补更糟**。所以本条不许自决勾掉，等二选一：
+        **(a)** 建"浮层优先"的 Esc 路由：把 `Composer` 那份让位判定扩到这三处（一处判定全站生效），
+        标准 §二③ 那句"一律 Esc"随之兑现，代价是新增一条路由规则；
+        **(b)** 标准 §二③ 收窄成"可被键盘聚焦的浮层一律 Esc"，这三处按现状登记 §七，
+        零新机制，代价是"三处按 Esc 不关"成为定面
+      · 标准已同步（不含待裁那半）：§二③ 那句"现状 3 处无 Esc 收敛批补齐"改成带文件行号的实况 +
+        写明阻碍与两条路；§七 新增两行——「关掉谁」三种写法并存（`emit` / 本地 ref / 遮罩 `self`）与
+        `RowMenu` 光标跟随 + 自持键盘链，来源都写"台账 T10 逐站取证（2026-10-18）"
+      · 取证读数（现查命令一并写进标准，避免下次又靠人记）：外点站点 9（+ `lib/use-popover.ts`
+        本身）＝族 A 4 + `SettingsSelect` + `DefaultModelMenu` + `NotificationPopover` + `RowMenu` +
+        `SubagentsMenu`；其中 Esc 已有 6、缺 3；`mousedown` 残留 0（归一后）
 - [x] **T11** 插件展示元数据以谁为准：代码里的 `describe` 还是 `manifest.json` 的徽章（2026-10-18 用户点头收账）
       · 方向由实测决定，而**两个候选谁都不能全盘胜出**。逐插件比对十份，重叠区漂的是：工具描述 15/30、
         schema 6 处、`exposure` 4 处，`side_effect` 0 处（它历史漂过一次 = 审计 H8，清单写 `Pure`

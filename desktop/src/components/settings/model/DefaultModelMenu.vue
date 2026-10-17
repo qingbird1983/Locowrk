@@ -10,6 +10,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../../lib/icons";
 import { hasImageInput } from "../../../lib/model-catalog";
+import { useDismissOnEsc } from "../../../lib/use-popover";
 import SearchInput from "../../patterns/SearchInput.vue";
 import { formatPricingShort } from "../../../lib/model-catalog";
 import type { ProviderModelPricing, ProviderView } from "../../../types";
@@ -30,6 +31,11 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+// Esc 收口用全站唯一那份判定（标准 §二③「一律 Esc + 外点自持」）。这里原本自己挂了
+// 一份 `window keydown + Escape`，与 `lib/use-popover.ts` 里那份逐字同形 = 同一件事
+// 的第二个出处；挂 window 还是 document 在这个页面没有可观测差异（keydown 一路冒泡到
+// document），换过去行为不变。
+useDismissOnEsc(() => emit("close"));
 const query = ref("");
 const popEl = ref<HTMLElement | null>(null);
 const listEl = ref<HTMLElement | null>(null);
@@ -89,18 +95,14 @@ function place() {
   style.value = { left: `${left}px`, top: `${top}px` };
 }
 
-function onDocMouseDown(e: MouseEvent) {
+function onDocPointerDown(e: PointerEvent) {
   const t = e.target as Node;
   if (popEl.value?.contains(t) || props.anchor?.contains(t)) return;
   emit("close");
 }
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") emit("close");
-}
 
 onMounted(async () => {
-  document.addEventListener("mousedown", onDocMouseDown);
-  window.addEventListener("keydown", onKeydown);
+  document.addEventListener("pointerdown", onDocPointerDown);
   await nextTick();
   place();
   // 打开聚焦搜索 + 滚到当前项（必须可见；手设 scrollTop——scrollIntoView
@@ -114,8 +116,7 @@ onMounted(async () => {
   }
 });
 onBeforeUnmount(() => {
-  document.removeEventListener("mousedown", onDocMouseDown);
-  window.removeEventListener("keydown", onKeydown);
+  document.removeEventListener("pointerdown", onDocPointerDown);
 });
 </script>
 
