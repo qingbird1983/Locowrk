@@ -1,6 +1,11 @@
 //! 阶段四验收叙事（DESIGN.md §14）：审批插件经 `agent/request` 改写参数；
 //! 两 Agent（Scope）工具视图隔离。运行前置同 demo：
 //! `bash scripts/build_plugins.sh`。
+//!
+//! 这条叙事**自带判定**（台账 T21）：末尾三条读数（danger 执行次数 / 以
+//! `denied by approval` 闭合的调用数 / upper 档的结果在场）任何一条不成立就返回 Err，
+//! 经 `cli::run()` 交成非零退出码。加它的理由就是这条叙事原来"跑通"过一段时间——
+//! 它打印的"预期 1"与实测的 2 从来没有人比较过，而 `main` 还把退出码丢掉了。
 
 use std::path::Path;
 use std::sync::Arc;
@@ -86,9 +91,9 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     });
 
     banner("phase A: 审批插件经 agent/request 改写参数 + 审批门");
-    step(&kernel_a, &mut session_a).await?; // echo（params.mode 被改写成 upper）
-    step(&kernel_a, &mut session_a).await?; // danger → 首次审批拒绝
-    step(&kernel_a, &mut session_a).await?; // danger → 复核后放行
+    step(&kernel_a, &mut session_a).await?; // danger → 首次审批拒绝（未执行）
+    step(&kernel_a, &mut session_a).await?; // danger → 复核后放行（执行这一次）
+    step(&kernel_a, &mut session_a).await?; // echo → params.mode 被改写成 upper
 
     // ---- 2) Agent B（作用域层非空：同名工具解析到自己的 stub）----
     let key_b = ScopeKey::new();
@@ -123,10 +128,49 @@ pub async fn run(plugins_root: &Path) -> Result<(), String> {
     print_session(&session_a);
     println!("\n=== Agent B 的会话日志 ===");
     print_session(&session_b);
+    // ---- 自判（台账 T21）：这条叙事必须自己判定成立，不能只把数打出来给人看 ----
+    // 三条读数各对应上面文案里的一句承诺；任何一条不成立就 Err（main 非零退出）。
+    // 加这三条的直接起因：改之前末行写着"预期 1"而两侧实测都是 2 —— 数打出来了、
+    // 预期也写了，但**没有任何东西把它俩比过**，于是一条坏掉的验收叙事可以一直"跑通"
+    // （退出码 0），下一个改内核的人看见的还是那句绿话。
+    let danger_calls = danger.calls();
+    let denied = session_a
+        .events()
+        .iter()
+        .filter(|e| matches!(
+            e,
+            SessionEvent::ToolResult { error: Some(err), .. } if err.contains("denied by approval")
+        ))
+        .count();
+    // upper 档的实测输出形状 = `{"echo":"HELLO LOCOWRK","plugin_version":"0.2.0"}`
+    // （照生产造出来的结果抄，不是照想象写：`mode` 若没被改写，这里就是小写原句）
+    let upper_ok = session_a.events().iter().any(|e| {
+        matches!(
+            e,
+            SessionEvent::ToolResult { output, .. } if output.to_string().contains("HELLO LOCOWRK")
+        )
+    });
     println!(
-        "\ndanger 工具实际执行 {} 次（预期 1：首次审批拒绝未执行，复核放行后执行）",
-        danger.calls()
+        "\ndanger 实际执行 {danger_calls} 次（预期 1）· 被拒闭合 {denied} 条（预期 1）· echo 吃到改写后的 mode = {upper_ok}（预期 true）"
     );
+    if danger_calls != 1 {
+        return Err(format!(
+            "验收叙事不成立：danger 执行 {danger_calls} 次，预期 1 次 \
+             （首次应当被审批门拦住且未执行；0 次 = 复核后也没放行，≥2 次 = 拒绝那次仍然执行了）"
+        ));
+    }
+    if denied != 1 {
+        return Err(format!(
+            "验收叙事不成立：以「denied by approval」闭合的调用有 {denied} 条，预期 1 条 \
+             （0 = 审批门没拦过任何东西，≥2 = 拦过头了）"
+        ));
+    }
+    if !upper_ok {
+        return Err(
+            "验收叙事不成立：会话日志里没有 upper 档的结果 ⇒ 无法证明 params 被 request 决策环改写之后真的被工具吃到"
+                .into(),
+        );
+    }
     Ok(())
 }
 

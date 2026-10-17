@@ -20,6 +20,10 @@ mod inline_tools;
 mod scaffold;
 mod tool_source;
 
-fn main() {
-    cli::run();
+/// 退出码必须交出去（台账 T21 查出来的第二条）：这里原来是 `fn main() { cli::run(); }`
+/// ——`cli::run()` 明明返回 `ExitCode::FAILURE`，被这个函数**丢掉**，于是 `demo` / `demo4`
+/// 无论内部判定成不成立，进程一律退出 0。AGENTS §2 把这两条写成"改内核后必跑"的验收
+/// 叙事，而一条恒零的叙事等于没有叙事：坏掉的形状照样"跑通"，看见的还是那句绿话。
+fn main() -> std::process::ExitCode {
+    cli::run()
 }
