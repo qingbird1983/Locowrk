@@ -933,7 +933,7 @@ markdown 本地链接自检 73 条 broken 0（脚本 tmp/v149-linkcheck.mjs，�
 | T5 | 批 F-24b 的 c 项欠账：`llm/app_llm.rs::prepare` 里剩的那一处 `llm_config()` | `desktop/src-tauri/src/llm/app_llm.rs` | 无（但要把 `llm_cfg` 的多行借用消费重构掉 = 另一类变量） | 下次动 LLM 派发路径 | ⚠ 判据 `c_prepare_debt_visible` 把「全文件残留恰好 1」钉成读数；顺收那批**必须同批改判据为 0**，否则它会红在"漏改"上 |
 | T6 | f 项余两处：`session_export` 里的 `session_log::list()` 是一次 **O(全目录) 扫描**（只为取标题，正解 = 改读旁车 `read_meta`）；`session_list` 本身未包 `spawn_blocking` | `desktop/src-tauri/src/commands/sessions.rs` | 无 | 下次动会话命令 | 批 F-24b 只做真成立的那一半（`session_search`），这两条当时如实报小账（该批边界②） |
 | T7 | 挂起脆弱性**同形状排查**：`ApprovalHub::with_timeout(…, Duration::ZERO)` + 决断者在断言之后才 `spawn` | `desktop/src-tauri/src/tests_permission.rs` 及其余审批测试 | 无 | 下次动审批测试 | 批 F-24a 只修了撞上的那一条（该批边界⑨）；挂起的测试是零证明力还会堵住整轮门禁 |
-| T8 | 拆分等价判据 `body_equiv` / `row_ledger` / `doccheck` 仍在 `tmp/` **未入库** | `scripts/` | 需配套变异验证 + pre-commit 接线 | 下一刀生产码目录化 | Q10 兑现的是第五道闸的**形状**不变量（S0…S6）；**逐行字面守恒**与**文档↔真源对账**这两类至今无人管（批 F-17/F-23/F-24a/F-24c 同族边界） |
+| T8 | 拆分等价判据 `body_equiv` / `row_ledger` / `doccheck` 仍在 `tmp/` **未入库** | `scripts/` | 需配套变异验证 + pre-commit 接线 | 下一刀生产码目录化 | Q10 兑现的是第五道闸的**形状**不变量（S0…S6）；**逐行字面守恒**与**文档↔真源对账**这两类至今无人管（批 F-17/F-23/F-24a/F-24c 同族边界）。〔**v2.208 补记**：本条"未入库"面已扩到历批的**形状判据与探针**（`tmp/q11…q15-shape.mjs` / `-probe.mjs` / `-mutate.py` / `-rotate.py` 各份）⇒ 文档治理批要一次性判「哪些升成 `scripts/` 常驻闸、哪些随批作废归档」，**禁止逐批继续累加**（现状 = 每批新增三四份脚本、没有一份进过库）〕 |
 | T9 | 性能收益**没有基准数**：F-23（3 条）/ F-24a（4 条）/ F-24b（5 条）共十二条优化都只说"消除了什么"、没说"快了多少" | 新建基准夹具 | 立夹具本身就是一批 | 想量化任何一条时 | 三条批的同族边界都写了"要量化得先立基准夹具（未做）"；这是台账级欠账，不是小事 |
 | T10 | **Q11** C12 族 B/C 的处置（正文见 §4 同名列，勿在此重复） | `desktop/src/lib` | 需点头 | — | 我的推荐 = 认可现状并登记为《Front-end Design Guidelines》§七 特例 |
 | T11 | 插件展示元数据真源：`describe` vs `manifest.json` 徽章 | `crates/plugin-api` + `plugin-host` | 需裁定谁为准 | 插件元数据批 | 批 F-21 段登记的（该批边界内） |
@@ -941,6 +941,7 @@ markdown 本地链接自检 73 条 broken 0（脚本 tmp/v149-linkcheck.mjs，�
 | T13 | 批 H：工具级取消与 deadline 真接线（D2） | `crates/plugin-api` + desktop | **需设计稿先行** | — | §1 批 H 行的原口径不变 |
 | T14 | 批 V：逐批验收与证据核对 | — | 无 | 用户抽查任一批时 | 需要的是"按批出验收清单"，不是新改动 |
 | T15 | `settings/update.rs` 其余分区同样在编排点就地铺开（context / memory / llm / embedding…）——本批只把 **developer 一段**（78 行）搬进 `DeveloperSettings::apply_update`，因为加完 `organizeMaxRerun` 后该文件 401 行被 `check_length` 判成新增超限件 | `desktop/src-tauri/src/settings/update.rs` | 无（纯结构收敛，零行为变化） | 下一刀动设置面任意分区时（那时同批把该分区的校验+应用一并归位，并复跑既有设置测试证等价） | 本批只做 developer 一段是刻意的：**不顺手扩大改动面**；搬移的等价做法已在 v2.190 留痕（机械两条变换 + 自检归一后字符序列相等） |
+| T16 | **三份「即时生效」同构体的收口**：`setLocale` / `setTheme` / `setUiFontSize` 同一动作三种写法 | `desktop/src/lib/stores/` | 无（纯结构收敛，零行为变化） | 下次动任一即时生效通路时（同批先补"失败回滚时序"用例再合） | 〔**v2.208 补登**〕v2.207 的 CHANGELOG／ROADMAP 都写「三份即时生效同构体…登记见台账 **T11**」，而 T11 实际是「插件展示元数据真源」那件事 ⇒ **这条欠账从未在册**，失实引用已随 v2.208 订正。Q14 第四刀刻意不顺手合的理由仍然成立：合它要同时改动语言与主题两条现网通路，而它们的失败回滚时序没有用例承重（C13 收掉的是十份**保存类**副本，本条是它的同族欠账） |
 
 **在册队列状态（收口事实）**：§1 的批 A–E、批 F 的全部**不需裁定**项（F1–F15 + 子批共三十一刀）、
 批 F-23 的 M-24 b/c/d、批 F-24a/b 的 M-18 全七条、批 F-24c 的拆分欠账 —— **均已落地并提交**。
