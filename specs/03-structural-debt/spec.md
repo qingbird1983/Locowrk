@@ -106,8 +106,25 @@
         两条各配一条窄变异，`make selftest` 八档全中
       · 实测：Windows `make check` 全绿，桌面 584 条（`settings/tests/*` **一字未改**仍然绿 = 等价第二证）；
         前端未动 ⇒ vitest 13 文件 104 条照旧
-- [ ] **T16** 三份"即时生效"的写法合一：`setLocale` / `setTheme` / `setUiFontSize` 同一件事三种实现
+- [x] **T16** 三份"即时生效"的写法合一：`setLocale` / `setTheme` / `setUiFontSize` 同一件事三种实现
       · 合之前要先补"失败时回滚时序"的用例，否则两条现网通路没有兜底
+      · 先出题后动刀：`desktop/tests/instant-pref.spec.ts` 九条（三通路 × 三态）先落在**改前实现**上跑，
+        读数是 `3 failed | 6 passed (9)` —— 红的正是 ③「呈现层自己抛错」那三条。这不是测试写坏了：
+        三份都写 `catch { apply(this.view…) }`，若 `setSettings` 已成功而 `apply` 抛错，
+        `this.view` 此刻已是**新**投影 ⇒ "回滚"回到新值 = 等于没回滚。界面表现为"设置项没改成、
+        但呈现卡在一个既不是旧值也不是磁盘值的中间态"。
+      · 合一 = 新增 `applyInstant(patch, apply)`（与批 F-19 收十份「保存类」的 `patchSettings` 同款做法），
+        三个 action 退化成"带自己那个 patch 键与呈现闭包的委托"。**不直接复用 `patchSettings`** 的理由
+        是可观测差异：即时生效不吃防连点门、不闪「已保存」（下拉挡一挡就闪"已保存"是噪声），
+        但它多一条责任——失败时把**呈现与投影一起**退回进来那一份。
+      · 三态判据各配一发变异：删 `this.view = before` ⇒ ③ 三条红；删 `if (before) apply(before)` ⇒
+        ② ③ 六条红；把语言那路的呈现闭包改成吃入参 ⇒ `setLocale` 三条红。还原逐字节 + `cmp` + sha 复核
+      · 常驻判据：`check-single-source.mjs` 加档 SS6（`this.applyInstant(` 3 / `const before = this.view;` 1 /
+        `this.view = before;` 1 / `if (before) apply(before);` 1）。**第一版写成"数反面字面缺席"当场假红**——
+        我的注释里正引用着旧形状那句 `apply(this.view…)`，被数成了 2。判据改数"正形状成对在场"；
+        这条教训写进档位文案里（假红教人绕闸，比漏红更贵）
+      · 实测：前端 14 文件 113 条（+1 文件 / +9 条），`make selftest` 九档全中；
+        `appearance-store.spec.ts` 那四条真 DOM 面一字未改仍然绿（合一没动呈现层的实际行为）
 
 ### 二、卡在人的一侧（要点头或要裁定，我不会自己动）
 
@@ -174,8 +191,14 @@
 
 - [ ] 第一节七条全部做完或明确转入第二节（附理由），没有第三条状态
 - [ ] 每条做完后，路线图「结构性欠账清零」那行的"现在到哪了"由**实测**给剩余条数（不手写计数）
-- [ ] T1/T15/T16 做完后 `check_length` 的名单**只减不增**，且 i18n 键集读数不变（纯结构收敛不该动文案）
-- [ ] T6/T7 做完各自有一条能红的行为用例（不是只改代码不看结果）
+- [x] T1/T15/T16 做完后 `check_length` 的名单**只减不增**，且 i18n 键集读数不变（纯结构收敛不该动文案）
+      · 实测：名单 22 → **21**（T1 那刀撤掉 `approval/mod.rs` 一行，此后 T15/T16 两批 `超限 21 · 名单 21 · 零新增`）；
+        i18n 三批同数 `zh=970 en=970`、`引用字面量键=793 + 索引键=50`
+- [x] T6/T7 做完各自有一条能红的行为用例（不是只改代码不看结果）
+      · T6 = `tests_session_log/export_title.rs` 两条（旁车真读盘的三档优先 / 截断宽度吃共享常量），
+        窄变异两发各打一条
+      · T7 = `tests_approval/hang_guard.rs` 三条（没卡片必须在预算内失败 / `bounded` 喂永不完成的
+        future 必须报出来 / 有卡片时照旧正常决议 = 阴性对照），变异三发各打不同读数
 - [x] T8 收口后，仓库里"判据脚本"只有一个地方：`scripts/`；`tmp/` 里的历史脚本整体处置完毕（删或明确作废）。
       加对账仍然**不新建闸**，只分两支走：同一个数字/名字在几处必须相等 → 往 `check-single-source.mjs` 的
       CHECKS 加一项；两侧各有一份实现、要比整段代码块同源 → `check-schema-parity.mjs`（本次升格就是这类，

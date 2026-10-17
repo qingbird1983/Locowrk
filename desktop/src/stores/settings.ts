@@ -63,45 +63,44 @@ export const useSettingsStore = defineStore("settings", {
         this.error = String(e);
       }
     },
-    /** 切语言：立即生效，成功后以返回投影为准（失败时 select 回滚）。 */
+    /** 即时生效类的唯一实现（台账 T16）。三份同构体（语言 / 主题 / 字号基座）
+     *  收成一处，形状与批 F-19 收掉十份「保存类」副本的 `patchSettings` 同款。
+     *  为什么它不直接复用 `patchSettings`（那才是"少一个函数"的做法）：两者有**可观测
+     *  的不同**——本条不吃防连点门、不闪「已保存」（下拉一挡就闪「已保存」是噪声），
+     *  但多一条 `patchSettings` 没有的责任：**失败时把呈现与投影一起退回进来的那一份**。
+     *  ⚠ 回滚必须读 `before`（进来时那份），不能读 `this.view`：`setSettings` 已成功而
+     *  `apply` 抛错时 `this.view` 已是新值，照 `this.view` 回滚 = 回到新投影 = 没回滚。
+     *  改前三份正是都写成 `catch { apply(this.view…) }`，这条时序由
+     *  `tests/instant-pref.spec.ts` ③ 钉住（合一之前三条通路各红一次）。 */
+    async applyInstant(patch: SettingsPatch, apply: (v: SettingsView) => void) {
+      this.error = "";
+      const before = this.view;
+      try {
+        this.view = await setSettings(patch);
+        apply(this.view);
+      } catch (e) {
+        this.error = String(e);
+        this.view = before;
+        if (before) apply(before);
+      }
+    },
+    /** 切语言：立即生效（`i18n.ts`），成功后以返回投影为准，失败回滚呈现。 */
     async setLocale(locale: string) {
-      this.error = "";
-      try {
-        this.view = await setSettings({ locale });
-        applyLocalePref(this.view.locale);
-      } catch (e) {
-        this.error = String(e);
-        if (this.view) applyLocalePref(this.view.locale);
-      }
+      await this.applyInstant({ locale }, (v) => applyLocalePref(v.locale));
     },
-    /** 切主题（⑰）：立即生效（lib/theme.ts 写 <html data-theme>），
-     * 成功后以返回投影为准（失败时 select 回滚）。 */
+    /** 切主题（⑰）：立即生效（`lib/theme.ts` 写 `<html data-theme>`），
+     * 成功后以返回投影为准，失败回滚呈现。 */
     async setTheme(theme: string) {
-      this.error = "";
-      try {
-        this.view = await setSettings({ appearance: { theme } });
-        applyThemePref(this.view.appearance.theme);
-      } catch (e) {
-        this.error = String(e);
-        if (this.view) applyThemePref(this.view.appearance.theme);
-      }
+      await this.applyInstant({ appearance: { theme } }, (v) =>
+        applyThemePref(v.appearance.theme),
+      );
     },
-    /** 调字号基座（队列 Q14 第四刀）：立即生效（lib/ui-font.ts 写
-     * `--lw-ui-font-size`，六档同尺移动），成功后以返回投影为准、失败按旧投影
-     * 回滚——与 setTheme/setLocale 同一条「即时生效类」形态。
-     * ⚠ 这三份是同构的（`patch → apply(投影) → catch → 用旧投影重 apply`），
-     * 与 C13 那次收掉的 10 份「保存类」副本同源。**本刀不顺手合**：合它要同时
-     * 改动语言与主题两条现网通路，而它们的失败回滚时序目前没有用例承重；
-     * 「施工只做列出的条目」这条纪律在这里优先于顺手还债。登记见台账。 */
+    /** 调字号基座（队列 Q14 第四刀）：立即生效（`lib/ui-font.ts` 写
+     * `--lw-ui-font-size`，六档同尺移动），成功后以返回投影为准、失败回滚呈现。 */
     async setUiFontSize(px: number) {
-      this.error = "";
-      try {
-        this.view = await setSettings({ appearance: { uiFontSize: px } });
-        applyUiFontPref(this.view.appearance.uiFontSize);
-      } catch (e) {
-        this.error = String(e);
-        if (this.view) applyUiFontPref(this.view.appearance.uiFontSize);
-      }
+      await this.applyInstant({ appearance: { uiFontSize: px } }, (v) =>
+        applyUiFontPref(v.appearance.uiFontSize),
+      );
     },
     /** 重拉投影（v2.58 档位命令后刷新 llm 区视图——llm_provider_save/
      * delete 有自己的返回值，但 SettingsView 是唯一前端真源）。 */

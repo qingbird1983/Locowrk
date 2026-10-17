@@ -50,6 +50,7 @@ const F = {
   css: 'desktop/src/style.css',
   appLlm: 'desktop/src-tauri/src/llm/app_llm.rs',
   settingsUpdate: 'desktop/src-tauri/src/settings/update.rs',
+  settingsStore: 'desktop/src/stores/settings.ts',
 };
 
 /**
@@ -176,6 +177,24 @@ const CHECKS = [
     (m) => String(m.settingsParts.reduce((a, s) => a + countOf(s, /fn apply_update\(/), 0)),
     '11',
   ],
+  [
+    'SS6',
+    '「即时生效」三份只走同一个 `applyInstant`，且失败回滚读的是**进来时那份投影**：' +
+      '`this.applyInstant(` 委托 = 3、`const before = this.view;` = 1、`this.view = before;` = 1、' +
+      '`if (before) apply(before);` = 1' +
+      '（T16 抓到的洞：三份都写 `catch` 里照 `this.view` 回滚，而 `setSettings` 已成功、' +
+      '呈现层自己抛错时 `this.view` 已是新值 ⇒ "回滚"回到新投影 = 没回滚。' +
+      '判据数的是**正形状成对在场**而不是"缺陷字面缺席"——注释里提到那个旧形状是正常的，' +
+      '数反面会假红，假红教人绕闸）',
+    (m) =>
+      [
+        countOf(m.settingsStore, /this\.applyInstant\(/),
+        countOf(m.settingsStore, /const before = this\.view;/),
+        countOf(m.settingsStore, /this\.view = before;/),
+        countOf(m.settingsStore, /if \(before\) apply\(before\);/),
+      ].join('|'),
+    '3|1|1|1',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -188,6 +207,7 @@ const FLOORS = [
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
   // 现值 12（settings/ 树里的 .rs，含 memory/ 与 llm/ 子目录），下限取八成
   ['设置分区面文件数', (m) => m.settingsParts.length, 9],
+  ['前端设置 store 含 applyInstant 定义', (m) => countOf(m.settingsStore, /async applyInstant\(/), 1],
 ];
 
 function runChecks(m) {
@@ -236,6 +256,9 @@ if (SELFTEST) {
     )),
     // 另一侧的变异：把某个分区的自持实现改名（转发还在、定义没了 = 编排层在替它做事）
     SS5b: (m) => (m.settingsParts = m.settingsParts.map((s) => (s.includes('fn apply_update(&mut self, u: ToolsUpdate') ? s.replace('fn apply_update(&mut self, u: ToolsUpdate', 'fn apply_update_renamed(&mut self, u: ToolsUpdate') : s))),
+    // 窄变异（T16）：把"失败时按 this.view 回滚"那个缺陷形状原样写回去。
+    // SS6 要能为它报红，否则 '3|0|1' 只是在抄三个当下的数字。
+    SS6: (m) => (m.settingsStore = m.settingsStore.replace('if (before) apply(before);', 'if (this.view) apply(this.view);')),
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {
