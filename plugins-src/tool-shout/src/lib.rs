@@ -8,6 +8,9 @@
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 //! 与 tool-echo 的差别：它是"从市场安装"的演示品，不进开发态 plugins/。
 
+#[cfg(test)]
+mod tests;
+
 use std::ffi::CString;
 
 use plugin_api::ffi::log_level;
@@ -51,7 +54,10 @@ fn describe_manifest() -> CString {
     official_meta(
         &mut manifest,
         ("大小写转换", "Shout"),
-        ("把文本转换成大写输出", "Shouts text back in uppercase"),
+        (
+            "把文本转换成大写输出（repeat 模式自 1.1.0 起提供）",
+            "Shouts text back in uppercase (repeat mode from 1.1.0)",
+        ),
     );
     manifest.to_describe_json()
 }

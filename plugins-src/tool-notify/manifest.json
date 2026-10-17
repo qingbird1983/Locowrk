@@ -3,37 +3,62 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "消息推送",
-    "en-US": "Push Notify"
+    "en-US": "Push Notify",
+    "zh-CN": "消息推送"
   },
   "description": {
-    "zh-CN": "桌面系统通知 / Webhook 推送（SSRF 防线、限超时）",
-    "en-US": "Desktop notification / webhook push (SSRF-guarded, timeout-capped)"
+    "en-US": "Desktop notification / webhook push (SSRF-guarded, timeout-capped)",
+    "zh-CN": "桌面系统通知 / Webhook 推送（SSRF 防线、限超时）"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
+      "description": "Send a notification with title + body. Channels (exactly one): `channel: \"desktop\"` shows a system notification on this machine; `channel: \"webhook\"` POSTs {title, body, source} as JSON to `url` (http/https only; private/loopback addresses refused by the SSRF guard, redirects not followed; non-2xx counts as failed delivery). Requires approval (webhook sends data off-machine).",
+      "exposure": "on_demand",
       "name": "notify",
-      "description": "Send a notification with title + body. Channels (exactly one): channel \"desktop\" shows a system notification on this machine; channel \"webhook\" POSTs {title, body, source} as JSON to url (http/https only; private/loopback addresses refused by the SSRF guard, redirects not followed; non-2xx counts as failed delivery). Args: channel, title (max 200 chars), body (max 2000 chars), url (webhook only), timeout_secs (default 10, max 60).",
       "schema": {
-        "type": "object",
         "properties": {
-          "channel": { "type": "string", "enum": ["desktop", "webhook"], "description": "where to deliver" },
-          "title": { "type": "string", "description": "short headline (max 200 chars)" },
-          "body": { "type": "string", "description": "message content (max 2000 chars)" },
-          "url": { "type": "string", "description": "absolute http(s) URL; required for webhook channel" },
-          "timeout_secs": { "type": "number", "description": "webhook request timeout (default 10, max 60)" }
+          "body": {
+            "description": "message content (max 2000 chars)",
+            "type": "string"
+          },
+          "channel": {
+            "description": "where to deliver",
+            "enum": [
+              "desktop",
+              "webhook"
+            ],
+            "type": "string"
+          },
+          "timeout_secs": {
+            "description": "webhook request timeout (default 10, max 60)",
+            "type": "number"
+          },
+          "title": {
+            "description": "short headline (max 200 chars)",
+            "type": "string"
+          },
+          "url": {
+            "description": "absolute http(s) URL; required for webhook channel",
+            "type": "string"
+          }
         },
-        "required": ["channel", "title", "body"]
+        "required": [
+          "channel",
+          "title",
+          "body"
+        ],
+        "type": "object"
       },
-      "side_effect": "Irreversible"
+      "side_effect": {
+        "kind": "irreversible"
+      }
     }
   ]
 }

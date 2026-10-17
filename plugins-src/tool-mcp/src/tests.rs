@@ -259,3 +259,28 @@ fn describe_and_make_state_share_discovery() {
     drop(state);
     super::registry::reset();
 }
+
+/// 台账 T11 的对账：磁盘 `manifest.json` 必须与代码 `describe_manifest()` 同源
+/// （比对规则与"为什么要有这条"写在 `plugin_api::meta::manifest_drift`）。
+/// `version` 有意不比——它由 `scripts/build_plugins.sh` 的 PLAN 清单注入两侧
+/// （代码侧 env 宏 + 产物 JSON 的 sed），源码里那份只是占位。
+#[test]
+fn manifest_json_and_describe_agree() {
+    let described = crate::describe_manifest();
+    // 维护通道（不是判据的一部分）：`LOCOWRK_MANIFEST_SYNC=1` 时把清单对齐到代码。
+    // 默认路径永远**只报不改**——判据不许顺手改受版本控制的文件，对齐之后还要人看 diff。
+    // ⚠ tool-mcp 尤其要走这里：它的远端工具是**运行期**发现的，describe 会追加在
+    //   两个管理工具之后，比对器按"磁盘必须是代码的前缀"放行（见 manifest_drift）。
+    if std::env::var("LOCOWRK_MANIFEST_SYNC").is_ok_and(|v| v == "1") {
+        let written = plugin_api::meta::sync_manifest_file(&described, env!("CARGO_MANIFEST_DIR"))
+            .expect("同步需要能读写清单文件");
+        println!("已把 {written} 对齐到代码 describe，核对 diff 后提交");
+        return;
+    }
+    let drift = plugin_api::meta::drift_of_describe(&described, env!("CARGO_MANIFEST_DIR"));
+    assert!(
+        drift.is_empty(),
+        "磁盘 manifest.json 与代码 describe 漂了（能力字段以代码为真、展示字段两边同步）：\n{}",
+        drift.join("\n")
+    );
+}

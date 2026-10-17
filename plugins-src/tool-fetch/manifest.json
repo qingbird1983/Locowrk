@@ -3,35 +3,48 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "网页抓取",
-    "en-US": "Web Fetch"
+    "en-US": "Web Fetch",
+    "zh-CN": "网页抓取"
   },
   "description": {
-    "zh-CN": "抓取 HTTP(S) 页面正文（限长、限超时）",
-    "en-US": "Fetch an HTTP(S) page body (size-capped, timeout-capped)"
+    "en-US": "Fetch an HTTP(S) page body (size-capped, timeout-capped)",
+    "zh-CN": "抓取 HTTP(S) 页面正文（限长、限超时）"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
+      "description": "Fetch a URL over HTTP GET and return the response body as text. Only http/https. Returns {url, status, content_type, truncated, body}; body is capped at max_bytes (default 256KiB). HTTP error statuses (4xx/5xx) are returned as data, not failures. Private/loopback/link-local hosts are refused by the SSRF guard and redirects are not followed. Performs an outbound network request to the target host (the visit shows up in its server logs; the URL may carry sensitive tokens) — classified Irreversible, so approval follows the session's permission mode; it is not a read-only lookup.",
+      "exposure": "on_demand",
       "name": "fetch",
-      "description": "HTTP GET a URL and return status + body (transport errors fail; 4xx/5xx come back as data). Args: url (http/https; private/loopback addresses refused by the SSRF guard, redirects not followed), max_bytes (default 262144, max 1048576), timeout_secs (default 10, max 60).",
       "schema": {
-        "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "http(s) URL" },
-          "max_bytes": { "type": "number", "description": "default 262144, max 1048576" },
-          "timeout_secs": { "type": "number", "description": "request timeout (default 10, max 60)" }
+          "max_bytes": {
+            "description": "cap returned body (default 262144, max 1048576)",
+            "type": "number"
+          },
+          "timeout_secs": {
+            "description": "request timeout (default 10, max 60)",
+            "type": "number"
+          },
+          "url": {
+            "description": "absolute http(s) URL",
+            "type": "string"
+          }
         },
-        "required": ["url"]
+        "required": [
+          "url"
+        ],
+        "type": "object"
       },
-      "side_effect": "Irreversible"
+      "side_effect": {
+        "kind": "irreversible"
+      }
     }
   ]
 }

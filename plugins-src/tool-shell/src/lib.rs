@@ -34,6 +34,9 @@ mod paths;
 mod policy;
 mod proof;
 
+#[cfg(test)]
+mod tests;
+
 use std::ffi::CString;
 
 use plugin_api::ffi::log_level;
@@ -129,8 +132,8 @@ fn describe_manifest() -> CString {
         &mut manifest,
         ("命令终端", "Shell"),
         (
-            "分级命令执行：可证明只读的命令免审批（shell_read，解析器证明层），其余命令进审批卡；无命令级禁令",
-            "Tiered command execution: provably read-only commands run without approval (shell_read, parser proof layer); everything else goes to user approval (shell); no command is banned outright",
+            "命令执行两态：可证明只读的命令免审批（shell_read，解析器证明层）；其余任何单条简单命令一律放行进审批卡（shell）——无命令级禁令（v2.145 对齐 ZCode）",
+            "Two-tier command execution: provably read-only commands run without approval (shell_read, parser proof layer); any other single simple command is allowed into the approval card (shell) — no command-level bans since v2.145 (ZCode alignment)",
         ),
     );
     manifest.to_describe_json()

@@ -27,6 +27,9 @@
 mod read;
 mod write;
 
+#[cfg(test)]
+mod tests;
+
 use std::ffi::CString;
 
 use plugin_api::ffi::log_level;

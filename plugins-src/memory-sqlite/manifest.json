@@ -3,101 +3,173 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "持久记忆",
-    "en-US": "Persistent Memory"
+    "en-US": "Persistent Memory",
+    "zh-CN": "持久记忆"
   },
   "description": {
-    "zh-CN": "跨会话持久记忆：写 / 读 / 列举 / 搜索 / 删除（写入可机械撤销）",
-    "en-US": "Cross-session memory: write / read / list / search / delete (writes undoable)"
+    "en-US": "Cross-session memory: write / read / list / search / delete (writes undoable)",
+    "zh-CN": "跨会话持久记忆：写 / 读 / 列举 / 搜索 / 删除（写入可机械撤销）"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
+      "description": "Store a value under a key in the persistent memory database (survives across sessions). Args: key (required, unique identifier), value (required, text), tags (optional, short label), scope (optional: \"project\" default | \"global\" for user preferences that apply across ALL projects, e.g. \"always use pnpm\"). Overwrites any existing value; the overwritten entry is returned in `previous` and can be restored via memory_undo. Project entries are scoped to the current project: the same key in another project holds a different value. An unassociated session cannot write project memories (associate a project first, or pass scope=\"global\"). Use it for facts, decisions and user preferences worth remembering; do NOT store secrets or large blobs.",
+      "exposure": "always",
       "name": "memory_write",
-      "description": "Store a value under a key in the persistent memory database (survives across sessions). Args: key (required, unique identifier), value (required, text), tags (optional, short label). Overwrites any existing value; the overwritten entry is returned in `previous` and can be restored via memory_undo. Use it for facts, decisions and user preferences worth remembering; do NOT store secrets or large blobs.",
       "schema": {
-        "type": "object",
         "properties": {
-          "key": { "type": "string", "description": "unique identifier, max 512 bytes; use dotted namespaces like `user.language`" },
-          "value": { "type": "string", "description": "text to store, max 256KiB" },
-          "tags": { "type": "string", "description": "optional short label, searchable" }
+          "key": {
+            "description": "unique identifier, max 512 bytes; use dotted namespaces like `user.language`",
+            "type": "string"
+          },
+          "scope": {
+            "description": "project (default) = current project only; global = user preference visible in every project",
+            "enum": [
+              "project",
+              "global"
+            ],
+            "type": "string"
+          },
+          "tags": {
+            "description": "optional short label, searchable",
+            "type": "string"
+          },
+          "value": {
+            "description": "text to store, max 256KiB",
+            "type": "string"
+          }
         },
-        "required": ["key", "value"]
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "memory_undo" },
-      "exposure": "always"
+      "side_effect": {
+        "kind": "compensable",
+        "undo_tool": "memory_undo"
+      }
     },
     {
+      "description": "Read one memory entry by exact key. Looks in the current project first, then falls back to global user preferences. Returns {found, key, value, tags, updated_at, scope: \"project\"|\"global\"}; found=false when absent from both. Use on demand when the request touches prior context — not as an opening step.",
+      "exposure": "always",
       "name": "memory_read",
-      "description": "Read one memory entry by exact key. Returns {found, key, value, tags, updated_at}; found=false when the key is absent.",
       "schema": {
-        "type": "object",
         "properties": {
-          "key": { "type": "string", "description": "exact key to read" }
+          "key": {
+            "description": "exact key to read",
+            "type": "string"
+          }
         },
-        "required": ["key"]
+        "required": [
+          "key"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure",
-      "exposure": "always"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
+      "description": "List memory entries of the current project plus global user preferences, ordered by key; each entry carries scope (\"project\"|\"global\"). Args: prefix (optional key-prefix filter), limit (default 50, max 200), offset (default 0). Returns {total, entries: [{key, value, tags, updated_at, scope}]} where total counts ALL matching entries.",
+      "exposure": "on_demand",
       "name": "memory_list",
-      "description": "List memory entries ordered by key. Args: prefix (optional key-prefix filter), limit (default 50, max 200), offset (default 0). Returns {total, entries: [{key, value, tags, updated_at}]} where total counts ALL matching entries.",
       "schema": {
-        "type": "object",
         "properties": {
-          "prefix": { "type": "string", "description": "optional key prefix filter" },
-          "limit": { "type": "number", "description": "default 50, max 200" },
-          "offset": { "type": "number", "description": "default 0" }
-        }
+          "limit": {
+            "description": "default 50, max 200",
+            "type": "number"
+          },
+          "offset": {
+            "description": "default 0",
+            "type": "number"
+          },
+          "prefix": {
+            "description": "optional key prefix filter",
+            "type": "string"
+          }
+        },
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
+      "description": "Substring search across keys, values and tags of the current project plus global user preferences (ASCII case-insensitive). Args: query (required), limit (default 20, max 100). Returns {query, matches: [{key, value, tags, updated_at, scope}]} — scope tells project records from global preferences. Wildcards in the query are matched literally. Use on demand when the request touches prior context — not as an opening step.",
+      "exposure": "always",
       "name": "memory_search",
-      "description": "Substring search across keys, values and tags (ASCII case-insensitive). Args: query (required), limit (default 20, max 100). Returns {query, matches}. Wildcards in the query are matched literally.",
       "schema": {
-        "type": "object",
         "properties": {
-          "query": { "type": "string", "description": "substring to search for; % and _ are literal" },
-          "limit": { "type": "number", "description": "default 20, max 100" }
+          "limit": {
+            "description": "default 20, max 100",
+            "type": "number"
+          },
+          "query": {
+            "description": "substring to search for; % and _ are literal",
+            "type": "string"
+          }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure",
-      "exposure": "always"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
+      "description": "Delete one memory entry by exact key from the CURRENT project scope only. Global user preferences cannot be deleted here — they are managed from the human memory management page. The deleted entry is returned in `previous_entry` and can be restored via memory_undo; deleting a missing key is a no-op.",
+      "exposure": "on_demand",
       "name": "memory_delete",
-      "description": "Delete one memory entry by exact key. The deleted entry is returned in `previous_entry` and can be restored via memory_undo; deleting a missing key is a no-op.",
       "schema": {
-        "type": "object",
         "properties": {
-          "key": { "type": "string", "description": "exact key to delete" }
+          "key": {
+            "description": "exact key to delete",
+            "type": "string"
+          }
         },
-        "required": ["key"]
+        "required": [
+          "key"
+        ],
+        "type": "object"
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "memory_undo" }
+      "side_effect": {
+        "kind": "compensable",
+        "undo_tool": "memory_undo"
+      }
     },
     {
+      "description": "Undo a previous memory_write or memory_delete by restoring the entry captured in its result. Can be invoked directly after a mistaken write/delete. Args mirror the compensation payload {call_id, args, output}; only output.previous (for write) or output.previous_entry (for delete) is used. Restoring overwrites the entry's current content with the old value — classified Irreversible, so approval follows the session's permission mode (asked by default, auto-approved in full-access mode).",
+      "exposure": "on_demand",
       "name": "memory_undo",
-      "description": "Undo a previous memory_write or memory_delete by restoring the entry captured in its result. Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.previous (for write) or output.previous_entry (for delete) is used. Irreversible — restoring overwrites the entry's current content, so the call requires user approval.",
       "schema": {
-        "type": "object",
         "properties": {
-          "call_id": { "type": "string", "description": "id of the original memory_write / memory_delete call" },
-          "args": { "type": "object", "description": "original call args" },
-          "output": { "type": "object", "description": "original call result carrying previous or previous_entry" }
-        }
+          "args": {
+            "description": "original call args",
+            "type": "object"
+          },
+          "call_id": {
+            "description": "id of the original memory_write / memory_delete call",
+            "type": "string"
+          },
+          "output": {
+            "description": "original call result carrying previous or previous_entry",
+            "type": "object"
+          }
+        },
+        "type": "object"
       },
-      "side_effect": "Irreversible"
+      "side_effect": {
+        "kind": "irreversible"
+      }
     }
   ]
 }

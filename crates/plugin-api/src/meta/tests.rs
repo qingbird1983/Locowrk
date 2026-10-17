@@ -7,7 +7,7 @@
 //! 两条腿合起来才覆盖"行为逐字等价"这句话。
 use std::collections::BTreeMap;
 
-use super::{official_meta, zh_en};
+use super::{drift_against_file, drift_of_describe, manifest_drift, official_meta, zh_en};
 use crate::manifest::{
     Author, LocalizedOrString, LocalizedString, PluginKind, PluginManifest, PluginOrigin,
 };
@@ -147,4 +147,137 @@ fn zh_en_builds_both_locale_keys_exactly_like_the_deleted_helper() {
     }
     // 回退链（packaging §2.3）：未知语言落到 en-US，不是崩
     assert_eq!(zh_en("甲", "A").pick("ja-JP"), Some("A"), "缺省回退链变了");
+}
+
+// ---------------------------------------------------------- manifest_drift（台账 T11）
+
+/// 磁盘那份的"同源态"：除 `version` 外全部照抄代码那份。
+/// `version` 故意不同——它是**唯一不该比**的字段（构建脚本按 PLAN 清单注入两侧，
+/// 源码里那份只是占位），所以这条同时是"不比 version"的实证 + 下面几条的阴性对照。
+fn disk_twin(code: &PluginManifest) -> PluginManifest {
+    let mut m = code.clone();
+    m.version = "9.9.9".into();
+    m
+}
+
+/// 运行期才存在的工具形态（`tool-mcp` 的远端发现就是这个形状）。
+fn tool(name: &str, se: SideEffect) -> ToolSpec {
+    ToolSpec {
+        name: name.into(),
+        description: format!("remote tool {name}"),
+        schema: serde_json::json!({ "type": "object" }),
+        side_effect: se,
+        exposure: Default::default(),
+    }
+}
+
+fn filled(id: &str) -> PluginManifest {
+    let mut m = base(id);
+    official_meta(&mut m, ("回显", "Echo"), ("甲", "A"));
+    m
+}
+
+#[test]
+fn drift_is_silent_when_the_two_manifests_are_the_same_plugin() {
+    let code = filled("tool-drift");
+    assert_eq!(
+        manifest_drift(&code, &disk_twin(&code)),
+        Vec::<String>::new(),
+        "只差 version 的同源两份必须零差异（这条不成立，下面几条报的红就不可信）"
+    );
+}
+
+#[test]
+fn drift_names_each_changed_field_instead_of_merging_them() {
+    let code = filled("tool-a");
+    let mut disk = code.clone();
+    disk.id = "tool-b".into();
+    disk.kind = PluginKind::Middleware;
+    disk.abi_version = crate::PLUGIN_ABI_VERSION + 1;
+    disk.tools[0].description = "换了个说法".into();
+    disk.tools[0].schema = serde_json::json!({ "type": "string" });
+    disk.tools[0].side_effect = SideEffect::Irreversible;
+    disk.tools[0].exposure = Exposure::OnDemand;
+    disk.display_name = Some(zh_en("别的", "Other"));
+    disk.origin = PluginOrigin::Community;
+
+    let d = manifest_drift(&code, &disk);
+    for frag in [
+        "id:",
+        "kind:",
+        "abi_version:",
+        "`t`.description:",
+        "`t`.schema:",
+        "`t`.side_effect:",
+        "`t`.exposure:",
+        "display_name:",
+        "origin:",
+    ] {
+        assert!(
+            d.iter().any(|x| x.contains(frag)),
+            "漏报 `{frag}`，实际清单: {d:?}"
+        );
+    }
+    // 九处改动 = 九条，不许把两条并成一句含糊话（要能照抄改对）
+    assert_eq!(d.len(), 9, "差异条数变了: {d:?}");
+}
+
+#[test]
+fn code_may_only_append_tools_that_the_disk_list_never_saw() {
+    let mut code = filled("tool-mcp-like");
+    code.tools.push(tool("mcp_github_whoami", SideEffect::Pure));
+    let mut disk = code.clone();
+    disk.version = "9.9.9".into();
+    disk.tools.truncate(1); // 清单只声明两个管理工具里的那一个静态位
+    assert!(
+        manifest_drift(&code, &disk).is_empty(),
+        "「追加在后」是 tool-mcp 的真实形状，不该报: {:?}",
+        manifest_drift(&code, &disk)
+    );
+
+    // 反例一：清单多报一个代码里根本没有的工具
+    let mut ghost = disk.clone();
+    ghost
+        .tools
+        .push(tool("never_implemented", SideEffect::Pure));
+    let d = manifest_drift(&code, &ghost);
+    assert_eq!(d.len(), 1, "该只报一条: {d:?}");
+    assert!(d[0].contains("前缀"), "实际: {d:?}");
+
+    // 反例二：把运行期才有的工具名塞进清单的第一位（替代而不是追加）——
+    // 顺序在这里就是那条边界，不报就等于给"漏声明"开了后门
+    let mut shuffled = disk.clone();
+    shuffled.tools[0].name = "mcp_github_whoami".into();
+    let d = manifest_drift(&code, &shuffled);
+    assert!(d.iter().any(|x| x.contains("前缀")), "替代位没报: {d:?}");
+}
+
+#[test]
+fn drift_against_file_reports_what_it_could_not_read() {
+    let code = base("tool-file");
+    // 目录在、`manifest.json` 不在 ⇒ 一条人话说清缺哪个文件，绝不 panic
+    let d = drift_against_file(&code, concat!(env!("CARGO_MANIFEST_DIR"), "/src"));
+    assert_eq!(d.len(), 1, "实际: {d:?}");
+    assert!(
+        d[0].contains("读不到") && d[0].contains("manifest.json"),
+        "实际: {d:?}"
+    );
+}
+
+/// 插件侧那条测试的真实入口形状：`CString`（describe 的返回）→ 解析 → 比磁盘。
+/// 这里指到本 crate 的 `src/`（没有 manifest.json）拿"读不到"这一条，证的是
+/// **管道通**；每个插件那条测试负责证**同源**。
+#[test]
+fn drift_of_describe_takes_the_cstring_the_plugin_hands_over() {
+    let d = drift_of_describe(
+        &filled("tool-of-desc").to_describe_json(),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/src"),
+    );
+    assert_eq!(d.len(), 1, "实际: {d:?}");
+    assert!(d[0].contains("读不到"), "实际: {d:?}");
+    // 反面对照：坏 JSON 走差异而不是 panic（一声 panic 报出来的是栈，不是这句话）
+    let broken = std::ffi::CString::new(b"{ not json".to_vec()).unwrap();
+    let d = drift_of_describe(&broken, env!("CARGO_MANIFEST_DIR"));
+    assert_eq!(d.len(), 1, "实际: {d:?}");
+    assert!(d[0].contains("解析不回来"), "实际: {d:?}");
 }

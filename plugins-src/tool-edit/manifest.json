@@ -3,64 +3,132 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "代码编辑",
-    "en-US": "Code Edit"
+    "en-US": "Code Edit",
+    "zh-CN": "代码编辑"
   },
   "description": {
-    "zh-CN": "精确代码编辑：字符串替换 / 行区间替换 / unified diff，全部带备份可撤销",
-    "en-US": "Precise edits: string replace / line range / unified diff, all undoable via backup"
+    "en-US": "Precise edits: string replace / line range / unified diff, all undoable via backup",
+    "zh-CN": "精确代码编辑：字符串替换 / 行区间替换 / unified diff，全部带备份可撤销"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
+      "description": "Replace a string in a text file (the file must exist). PREFERRED editing tool for most edits: copy old_string character-for-character from fs_read output; fall back to edit_diff only for structural changes across many places, edit_lines only with known line numbers. Args: path (absolute), old_string (must match exactly once unless replace_all), new_string, replace_all (bool, default false), expected_revision (the `revision` from fs_read or from the previous edit's result — the call is rejected with a stale-observation error if the file changed since you observed it; re-read and rebuild). If the exact match fails, a tolerant pass retries ignoring line-ending (CRLF/LF), trailing-whitespace and BOM differences — the result reports match_type so you can tell; uniqueness is always enforced (multi-match errors list candidate lines). The original file is backed up automatically; the result carries {path, bytes, edits, match_type, byte_range, backup, revision} — pass that `revision` to your next edit of this file, and the output to fs_restore to undo.",
+      "exposure": "always",
       "name": "edit_replace",
-      "description": "Exact string replacement in a text file (the file must exist). Args: path (absolute), old_string (must match exactly once unless replace_all), new_string, replace_all (bool, default false). The original file is backed up automatically; the result carries {path, bytes, edits, backup} for fs_restore to undo.",
       "schema": {
-        "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
-          "old_string": { "type": "string", "description": "exact text to find" },
-          "new_string": { "type": "string", "description": "replacement text" },
-          "replace_all": { "type": "boolean", "description": "replace every occurrence (default false)" }
+          "expected_revision": {
+            "description": "revision from fs_read or the previous edit's result; rejected if stale",
+            "type": "string"
+          },
+          "new_string": {
+            "description": "replacement text",
+            "type": "string"
+          },
+          "old_string": {
+            "description": "exact text to find",
+            "type": "string"
+          },
+          "path": {
+            "description": "absolute file path (must be inside the allowed workspace roots)",
+            "type": "string"
+          },
+          "replace_all": {
+            "description": "replace every occurrence (default false)",
+            "type": "boolean"
+          }
         },
-        "required": ["path", "old_string", "new_string"]
+        "required": [
+          "path",
+          "old_string",
+          "new_string",
+          "expected_revision"
+        ],
+        "type": "object"
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "fs_restore" }
+      "side_effect": {
+        "kind": "compensable",
+        "undo_tool": "fs_restore"
+      }
     },
     {
+      "description": "Replace a 1-based inclusive line range in a text file (the file must exist). Args: path (absolute), start_line, end_line, content (new text for the range; empty content deletes it), expected_revision (the `revision` from fs_read or from the previous edit's result; stale observations are rejected — re-read and rebuild). The original file is backed up automatically; the result carries {path, bytes, replaced, backup, revision} for fs_restore to undo and for your next edit of this file.",
+      "exposure": "on_demand",
       "name": "edit_lines",
-      "description": "Replace a 1-based inclusive line range in a text file (the file must exist). Args: path (absolute), start_line, end_line, content (new text for the range; empty content deletes it). The original file is backed up automatically; the result carries {path, bytes, replaced, backup} for fs_restore to undo.",
       "schema": {
-        "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
-          "start_line": { "type": "number", "description": "1-based, inclusive" },
-          "end_line": { "type": "number", "description": "1-based, inclusive" },
-          "content": { "type": "string", "description": "new text for the range; empty string deletes" }
+          "content": {
+            "description": "new text for the range; empty string deletes",
+            "type": "string"
+          },
+          "end_line": {
+            "description": "1-based, inclusive",
+            "type": "number"
+          },
+          "expected_revision": {
+            "description": "revision from fs_read or the previous edit's result; rejected if stale",
+            "type": "string"
+          },
+          "path": {
+            "description": "absolute file path (must be inside the allowed workspace roots)",
+            "type": "string"
+          },
+          "start_line": {
+            "description": "1-based, inclusive",
+            "type": "number"
+          }
         },
-        "required": ["path", "start_line", "end_line", "content"]
+        "required": [
+          "path",
+          "start_line",
+          "end_line",
+          "content",
+          "expected_revision"
+        ],
+        "type": "object"
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "fs_restore" }
+      "side_effect": {
+        "kind": "compensable",
+        "undo_tool": "fs_restore"
+      }
     },
     {
+      "description": "Apply a unified diff to a text file (the file must exist). Prefer edit_replace for most edits; use this only for structural changes across many places. Args: path (absolute), patch (unified diff text with @@ hunks), expected_revision (the `revision` from fs_read or from the previous edit's result; stale observations are rejected — re-read and rebuild). Context lines must match exactly — no fuzz; on mismatch the tool errors and the file is untouched. The original file is backed up automatically; the result carries {path, bytes, hunks_applied, backup, revision} for fs_restore to undo and for your next edit of this file.",
+      "exposure": "on_demand",
       "name": "edit_diff",
-      "description": "Apply a unified diff to a text file (the file must exist). Args: path (absolute), patch (unified diff text with @@ hunks). Context lines must match exactly — no fuzz; on mismatch the tool errors and the file is untouched. The original file is backed up automatically; the result carries {path, bytes, hunks_applied, backup} for fs_restore to undo.",
       "schema": {
-        "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
-          "patch": { "type": "string", "description": "unified diff text" }
+          "expected_revision": {
+            "description": "revision from fs_read or the previous edit's result; rejected if stale",
+            "type": "string"
+          },
+          "patch": {
+            "description": "unified diff text",
+            "type": "string"
+          },
+          "path": {
+            "description": "absolute file path (must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["path", "patch"]
+        "required": [
+          "path",
+          "patch",
+          "expected_revision"
+        ],
+        "type": "object"
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "fs_restore" }
+      "side_effect": {
+        "kind": "compensable",
+        "undo_tool": "fs_restore"
+      }
     }
   ]
 }

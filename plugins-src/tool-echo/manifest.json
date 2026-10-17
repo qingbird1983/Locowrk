@@ -3,34 +3,48 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "回显",
-    "en-US": "Echo"
+    "en-US": "Echo",
+    "zh-CN": "回显"
   },
   "description": {
-    "zh-CN": "把文本原样或变换后回显",
-    "en-US": "Echoes text back, optionally transformed"
+    "en-US": "Echoes text back, optionally transformed",
+    "zh-CN": "把文本原样或变换后回显"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
-      "name": "echo",
       "description": "echoes text back, optionally transformed (modes: plain/upper/reverse/panic)",
+      "exposure": "on_demand",
+      "name": "echo",
       "schema": {
-        "type": "object",
         "properties": {
-          "text": { "type": "string" },
-          "mode": { "type": "string", "enum": ["plain", "upper", "reverse", "panic"] }
+          "mode": {
+            "enum": [
+              "plain",
+              "upper",
+              "reverse",
+              "panic"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
         },
-        "required": ["text"]
+        "required": [
+          "text"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     }
   ]
 }

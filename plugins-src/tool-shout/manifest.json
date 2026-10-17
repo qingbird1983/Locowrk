@@ -3,34 +3,46 @@
   "version": "1.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "大小写转换",
-    "en-US": "Shout"
+    "en-US": "Shout",
+    "zh-CN": "大小写转换"
   },
   "description": {
-    "zh-CN": "把文本转换成大写输出（repeat 模式自 1.1.0 起提供）",
-    "en-US": "Shouts text back in uppercase (repeat mode from 1.1.0)"
+    "en-US": "Shouts text back in uppercase (repeat mode from 1.1.0)",
+    "zh-CN": "把文本转换成大写输出（repeat 模式自 1.1.0 起提供）"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
-      "name": "shout",
       "description": "shouts text back in uppercase (optionally repeated)",
+      "exposure": "on_demand",
+      "name": "shout",
       "schema": {
-        "type": "object",
         "properties": {
-          "text": { "type": "string" },
-          "mode": { "type": "string", "enum": ["plain", "repeat"] }
+          "mode": {
+            "enum": [
+              "plain",
+              "repeat"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
         },
-        "required": ["text"]
+        "required": [
+          "text"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     }
   ]
 }

@@ -3,33 +3,44 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "MCP 桥接",
-    "en-US": "MCP Bridge"
+    "en-US": "MCP Bridge",
+    "zh-CN": "MCP 桥接"
   },
   "description": {
-    "zh-CN": "桥接 MCP 生态：远端工具在加载时从 <数据根>/mcp.json 发现并冻结进工具清单（此处只列管理工具）",
-    "en-US": "Bridges the MCP ecosystem: remote tools are discovered from <data root>/mcp.json at load time and frozen into the catalog (only management tools listed here)"
+    "en-US": "Bridges the MCP ecosystem: remote tools are discovered from <data root>/mcp.json at load time and frozen into the catalog (only management tools listed here)",
+    "zh-CN": "桥接 MCP 生态：远端工具在加载时从 <数据根>/mcp.json 发现并冻结进工具清单（此处只列管理工具）"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
-      "name": "mcp_status",
       "description": "List the configured MCP servers: connection state, tool count and the last connection error (if any), plus config-level errors. Pure.",
-      "schema": { "type": "object", "properties": {} },
-      "side_effect": "Pure"
+      "exposure": "on_demand",
+      "name": "mcp_status",
+      "schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
-      "name": "mcp_reload",
       "description": "Re-read the MCP config and re-establish every server connection. The tool list was frozen when the plugin loaded — servers added to mcp.json afterwards only appear after reloading the plugin. Pure.",
-      "schema": { "type": "object", "properties": {} },
-      "side_effect": "Pure"
+      "exposure": "on_demand",
+      "name": "mcp_reload",
+      "schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "side_effect": {
+        "kind": "pure"
+      }
     }
   ]
 }

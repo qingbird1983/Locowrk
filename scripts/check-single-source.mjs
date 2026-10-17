@@ -87,14 +87,53 @@ function settingsPartitionFiles() {
 
 const countOf = (s, re) => (s.match(new RegExp(re.source, 'g')) || []).length;
 
+/**
+ * 插件对账面（台账 T11）：`plugins-src/<id>/src/` 下的全部 .rs + 每个插件的 `manifest.json` 在场数。
+ *
+ * 期望值**取插件目录数而不是写死 10**：第十一个插件没配上对账用例就当场红，而写死数字的话
+ * 它可以永久没人对账。`plugins-src` 整个改名/删掉会让两边都数到 0 而"相等"——那种空转由
+ * FLOORS 里「内置插件数」那条下限兜住。
+ */
+function pluginDrift() {
+  const base = path.join(ROOT, 'plugins-src');
+  const ids = fs.existsSync(base)
+    ? fs
+        .readdirSync(base, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+    : [];
+  const testSrc = [];
+  let manifests = 0;
+  for (const id of ids) {
+    if (fs.existsSync(path.join(base, id, 'manifest.json'))) manifests++;
+    const srcDir = path.join(base, id, 'src');
+    if (!fs.existsSync(srcDir)) continue;
+    const walk = (d) => {
+      for (const f of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, f.name);
+        if (f.isDirectory()) walk(p);
+        else if (f.name.endsWith('.rs')) {
+          testSrc.push(read(path.relative(ROOT, p).replace(/\\/g, '/')));
+        }
+      }
+    };
+    walk(srcDir);
+  }
+  return { count: ids.length, testSrc, manifests };
+}
+
 /** 一次读盘，快照进内存；之后所有判据只读快照。 */
 function snapshot() {
   const files = prodRustFiles();
+  const pd = pluginDrift();
   const snap = {
     files,
     rust: files.map((f) => read(path.relative(ROOT, f).replace(/\\/g, '/'))),
     apprTests: approvalTestFiles().map(read),
     settingsParts: settingsPartitionFiles().map(read),
+    plugins: pd.count,
+    pluginTests: pd.testSrc,
+    pluginManifests: pd.manifests,
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -195,6 +234,23 @@ const CHECKS = [
       ].join('|'),
     '3|1|1|1',
   ],
+  [
+    'SS7',
+    '每个内置插件都有一条「磁盘清单 ↔ 代码 describe」对账用例（T11：这两处各写各的，' +
+      '2026-10-18 实测漂的是**能力**字段——`fs_write`/`fs_delete` 与三个 `edit_*` 的 ' +
+      '`expected_revision`、`memory_write` 的 `scope`、四处 `exposure: always` 在清单里根本不存在；' +
+      'UI 与审批各读一份真相。条数期望 = 插件目录数，加插件不结对账当场红；' +
+      '数的是 `fn 名字(` 这个**定义形状**而不是裸名字——改名成 `…_retired` 仍含裸名字，' +
+      '第一版对照就是这样打空的（判据自己太宽，盯不住任何东西）',
+    (m) => `${m.pluginTests.reduce((a, s) => a + countOf(s, /fn manifest_json_and_describe_agree\s*\(/), 0)}|${m.plugins}`,
+    (m) => `${m.plugins}|${m.plugins}`,
+  ],
+  [
+    'SS7b',
+    '且每个插件目录里真有那份 `manifest.json`（对账用例读它；缺一个 = 那条对账在替空气报绿）',
+    (m) => `${m.pluginManifests}|${m.plugins}`,
+    (m) => `${m.plugins}|${m.plugins}`,
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -208,6 +264,11 @@ const FLOORS = [
   // 现值 12（settings/ 树里的 .rs，含 memory/ 与 llm/ 子目录），下限取八成
   ['设置分区面文件数', (m) => m.settingsParts.length, 9],
   ['前端设置 store 含 applyInstant 定义', (m) => countOf(m.settingsStore, /async applyInstant\(/), 1],
+  // 现值 10（内置插件目录数），下限取八成：plugins-src 整个改名或删掉时，SS7 的
+  // "用例数 = 目录数"会变成 0 = 0 而照样绿——这种"两边一起消失"只能由下限兜。
+  ['内置插件数', (m) => m.plugins, 8],
+  // 对账用例的扫描面本身也要有下限：十份用例散在 10 个 src/ 树里，文件数掉一半 = 面瞎了
+  ['插件 src 面文件数', (m) => m.pluginTests.length, 12],
 ];
 
 function runChecks(m) {
@@ -259,12 +320,31 @@ if (SELFTEST) {
     // 窄变异（T16）：把"失败时按 this.view 回滚"那个缺陷形状原样写回去。
     // SS6 要能为它报红，否则 '3|0|1' 只是在抄三个当下的数字。
     SS6: (m) => (m.settingsStore = m.settingsStore.replace('if (before) apply(before);', 'if (this.view) apply(this.view);')),
+    // 窄变异（T11）：把**一个**插件的对账用例改名——清单与 describe 都还在，但那条对账
+    // 不再跑，于是"UI 读的那份"与"审批读的那份"又可以各写各的。只摘第一个：全摘会让
+    // 实测与期望一起掉（期望是插件数、不随用例变），反而更像"少一个"的真形状。
+    SS7: (m) => {
+      const hit = m.pluginTests.findIndex((s) => s.includes('fn manifest_json_and_describe_agree('));
+      m.pluginTests = m.pluginTests.map((s, i) =>
+        i === hit
+          ? s.replace('fn manifest_json_and_describe_agree', 'fn manifest_json_and_describe_agree_retired')
+          : s,
+      );
+    },
+    // 另一侧：一个插件的清单被删走（用例还在跑、读的是空气）——SS7b 要单独能为它红
+    SS7b: (m) => (m.pluginManifests -= 1),
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {
     const mut = MUT[id];
     if (!mut) { console.log(`  ?? ${id} 没有对照 ⇒ 该项证明力未知`); miss++; continue; }
-    const copy = { ...snap, rust: [...snap.rust], apprTests: [...snap.apprTests], settingsParts: [...snap.settingsParts] };
+    const copy = {
+      ...snap,
+      rust: [...snap.rust],
+      apprTests: [...snap.apprTests],
+      settingsParts: [...snap.settingsParts],
+      pluginTests: [...snap.pluginTests],
+    };
     mut(copy);
     const row = runChecks(copy).find((r) => r.id === id);
     const caught = row && row.bad;

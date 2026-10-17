@@ -3,51 +3,84 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "命令终端",
-    "en-US": "Shell"
+    "en-US": "Shell",
+    "zh-CN": "命令终端"
   },
   "description": {
-    "zh-CN": "命令执行两态：可证明只读的命令免审批（shell_read，解析器证明层）；其余任何单条简单命令一律放行进审批卡（shell）——无命令级禁令（v2.145 对齐 ZCode）",
-    "en-US": "Two-tier command execution: provably read-only commands run without approval (shell_read, parser proof layer); any other single simple command is allowed into the approval card (shell) — no command-level bans since v2.145 (ZCode alignment)"
+    "en-US": "Two-tier command execution: provably read-only commands run without approval (shell_read, parser proof layer); any other single simple command is allowed into the approval card (shell) — no command-level bans since v2.145 (ZCode alignment)",
+    "zh-CN": "命令执行两态：可证明只读的命令免审批（shell_read，解析器证明层）；其余任何单条简单命令一律放行进审批卡（shell）——无命令级禁令（v2.145 对齐 ZCode）"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
-      "name": "shell",
       "description": "Run ONE simple command and return {command, program, exit_code, success, timed_out, truncated, stdout, stderr}. Any single simple command is allowed — it will ask the user for approval first (approve once, for this session, or always for this project). No command is banned outright, but prefer `shell_read` for read-only work (no approval needed). Pipes, command substitution and shell metacharacters are rejected — pass a single simple command. Commands run WITHOUT a shell: the first word is spawned directly via PATH. On Windows hosts PATH usually resolves to Unix coreutils (Git's usr/bin) — use Unix-style commands; cmd builtins (dir, del, copy, `rmdir /s /q`) do not exist.",
+      "exposure": "on_demand",
+      "name": "shell",
       "schema": {
-        "type": "object",
         "properties": {
-          "command": { "type": "string", "description": "single simple command, e.g. \"git status\"; no pipes/semicolons/backticks" },
-          "cwd": { "type": "string", "description": "optional working directory (absolute path, must exist)" },
-          "timeout_secs": { "type": "number", "description": "default 20, max 120" },
-          "max_bytes": { "type": "number", "description": "cap stdout/stderr each (default 65536, max 262144)" }
+          "command": {
+            "description": "single simple command, e.g. \"git status\"; no pipes/semicolons/backticks",
+            "type": "string"
+          },
+          "cwd": {
+            "description": "optional working directory (absolute path, must exist)",
+            "type": "string"
+          },
+          "max_bytes": {
+            "description": "cap stdout/stderr each (default 65536, env LOCOWRK_SHELL_MAX_BYTES, max 262144)",
+            "type": "number"
+          },
+          "timeout_secs": {
+            "description": "default 20 (env LOCOWRK_SHELL_TIMEOUT), max 120",
+            "type": "number"
+          }
         },
-        "required": ["command"]
+        "required": [
+          "command"
+        ],
+        "type": "object"
       },
-      "side_effect": "Irreversible"
+      "side_effect": {
+        "kind": "irreversible"
+      }
     },
     {
-      "name": "shell_read",
       "description": "Run ONE PROVEN read-only command WITHOUT user approval: ls, cat, grep, git status/log/diff/show/--version, pwd, node -v/--version, python/python3 --version. A proof layer parses the command (lexing + structure + semantics): it must be a single simple command — no unquoted pipes/redirection/`$()`/backticks/subshells, no `$` or backticks inside double quotes; no git global options (`-c`, `--git-dir`, ... can launch external programs via config); no write or external-program flags (`--output`, `--ext-diff`, `--textconv`); no credential paths (.env, .ssh, credentials, key material). Anything that cannot be PROVEN read-only is refused: re-run via the `shell` tool (asks the user) or pass a simpler command. Same result shape as `shell`. Paths must stay inside the allowed file roots (LOCOWRK_FS_ROOTS, default = app data root) — this includes the optional cwd argument; anything resolving outside is refused. Commands run WITHOUT a shell: the first word is spawned directly via PATH. On Windows hosts PATH usually resolves to Unix coreutils (Git's usr/bin) — use Unix-style commands; cmd builtins (dir, del, copy, `rmdir /s /q`) do not exist.",
+      "exposure": "on_demand",
+      "name": "shell_read",
       "schema": {
-        "type": "object",
         "properties": {
-          "command": { "type": "string", "description": "single simple command, e.g. \"git status\"; no pipes/semicolons/backticks" },
-          "cwd": { "type": "string", "description": "optional working directory (absolute path, must exist)" },
-          "timeout_secs": { "type": "number", "description": "default 20, max 120" },
-          "max_bytes": { "type": "number", "description": "cap stdout/stderr each (default 65536, max 262144)" }
+          "command": {
+            "description": "single simple command, e.g. \"git status\"; no pipes/semicolons/backticks",
+            "type": "string"
+          },
+          "cwd": {
+            "description": "optional working directory (absolute path, must exist)",
+            "type": "string"
+          },
+          "max_bytes": {
+            "description": "cap stdout/stderr each (default 65536, env LOCOWRK_SHELL_MAX_BYTES, max 262144)",
+            "type": "number"
+          },
+          "timeout_secs": {
+            "description": "default 20 (env LOCOWRK_SHELL_TIMEOUT), max 120",
+            "type": "number"
+          }
         },
-        "required": ["command"]
+        "required": [
+          "command"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     }
   ]
 }

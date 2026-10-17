@@ -3,103 +3,187 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "Git 工具",
-    "en-US": "Git Tools"
+    "en-US": "Git Tools",
+    "zh-CN": "Git 工具"
   },
   "description": {
-    "zh-CN": "Git 操作：状态 / 差异 / 日志 / 提交（可撤销）/ 推送",
-    "en-US": "Git ops: status / diff / log / commit (undoable) / push"
+    "en-US": "Git ops: status / diff / log / commit (undoable) / push",
+    "zh-CN": "Git 操作：状态 / 差异 / 日志 / 提交（可撤销）/ 推送"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
-      "name": "git_status",
       "description": "Show git working-tree status: current branch, ahead/behind vs upstream, and changed entries (x = index status, y = worktree status; '??' = untracked, 'A' = staged add, 'M' = modified, 'D' = deleted). Args: repo (required).",
+      "exposure": "on_demand",
+      "name": "git_status",
       "schema": {
-        "type": "object",
         "properties": {
-          "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" }
+          "repo": {
+            "description": "absolute path to the repository (must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["repo"]
+        "required": [
+          "repo"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
-      "name": "git_diff",
       "description": "Show the unified diff of unstaged changes (default) or staged changes. Args: repo (required), staged (bool, default false), path (optional, restrict the diff to one file). Output is capped at 256KiB and flags `truncated`.",
+      "exposure": "on_demand",
+      "name": "git_diff",
       "schema": {
-        "type": "object",
         "properties": {
-          "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" },
-          "staged": { "type": "boolean", "description": "diff the index instead of the worktree (default false)" },
-          "path": { "type": "string", "description": "optional path relative to the repo root" }
+          "path": {
+            "description": "optional path relative to the repo root",
+            "type": "string"
+          },
+          "repo": {
+            "description": "absolute path to the repository (must be inside the allowed workspace roots)",
+            "type": "string"
+          },
+          "staged": {
+            "description": "diff the index instead of the worktree (default false)",
+            "type": "boolean"
+          }
         },
-        "required": ["repo"]
+        "required": [
+          "repo"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
-      "name": "git_log",
       "description": "List recent commits, newest first. Args: repo (required), limit (default 20, max 100), path (optional, only commits touching that path). Returns {commits: [{hash, short, author, date, subject}]}; empty list for a repo without commits.",
+      "exposure": "on_demand",
+      "name": "git_log",
       "schema": {
-        "type": "object",
         "properties": {
-          "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" },
-          "limit": { "type": "number", "description": "default 20, max 100" },
-          "path": { "type": "string", "description": "optional path relative to the repo root" }
+          "limit": {
+            "description": "default 20, max 100",
+            "type": "number"
+          },
+          "path": {
+            "description": "optional path relative to the repo root",
+            "type": "string"
+          },
+          "repo": {
+            "description": "absolute path to the repository (must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["repo"]
+        "required": [
+          "repo"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
+      "description": "Stage files and create a commit. Args: repo (required), message (required), add (array of paths relative to the repo root) OR add_all (bool, stage everything including deletions) — exactly one of the two. Returns {commit, short}. Undoable via git_undo_commit (soft reset keeps the changes staged) as long as HEAD is still the created commit — except the repo's ROOT (first) commit, which has no parent and cannot be undone this way.",
+      "exposure": "on_demand",
       "name": "git_commit",
-      "description": "Stage files and create a commit. Args: repo (required), message (required), add (array of paths relative to the repo root) OR add_all (bool, stage everything including deletions) — exactly one of the two. Returns {commit, short}. Undoable via git_undo_commit (soft reset keeps the changes staged) as long as HEAD is still the created commit.",
       "schema": {
-        "type": "object",
         "properties": {
-          "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" },
-          "message": { "type": "string", "description": "commit message (first line = subject)" },
-          "add": { "type": "array", "items": { "type": "string" }, "description": "paths to stage, relative to the repo root (new files allowed)" },
-          "add_all": { "type": "boolean", "description": "stage all changes including deletions (default false)" }
+          "add": {
+            "description": "paths to stage, relative to the repo root (new files allowed)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "add_all": {
+            "description": "stage all changes including deletions (default false)",
+            "type": "boolean"
+          },
+          "message": {
+            "description": "commit message (first line = subject)",
+            "type": "string"
+          },
+          "repo": {
+            "description": "absolute path to the repository (must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["repo", "message"]
+        "required": [
+          "repo",
+          "message"
+        ],
+        "type": "object"
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "git_undo_commit" }
+      "side_effect": {
+        "kind": "compensable",
+        "undo_tool": "git_undo_commit"
+      }
     },
     {
-      "name": "git_push",
       "description": "Push a branch to a remote. Args: repo (required), remote (default 'origin'), branch (required). Irreversible — publishing to the remote requires user approval.",
+      "exposure": "on_demand",
+      "name": "git_push",
       "schema": {
-        "type": "object",
         "properties": {
-          "repo": { "type": "string", "description": "absolute path to the repository (must be inside the allowed workspace roots)" },
-          "remote": { "type": "string", "description": "remote name, default 'origin'" },
-          "branch": { "type": "string", "description": "branch name to push, e.g. 'main'" }
+          "branch": {
+            "description": "branch name to push, e.g. 'main'",
+            "type": "string"
+          },
+          "remote": {
+            "description": "remote name, default 'origin'",
+            "type": "string"
+          },
+          "repo": {
+            "description": "absolute path to the repository (must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["repo", "branch"]
+        "required": [
+          "repo",
+          "branch"
+        ],
+        "type": "object"
       },
-      "side_effect": "Irreversible"
+      "side_effect": {
+        "kind": "irreversible"
+      }
     },
     {
+      "description": "Undo a previous git_commit by soft-resetting one commit (the changes stay staged). Can be called directly after a mistaken commit. Args mirror the compensation payload {call_id, args, output}; only output.{repo, commit} is used. Refuses when HEAD has moved past the recorded commit (manual intervention required), and refuses the repo's ROOT commit (no parent to reset to — the error names the manual way out). Rewrites repository state: classified Irreversible, so approval follows the session's permission mode (asked by default, auto-approved in full-access mode).",
+      "exposure": "on_demand",
       "name": "git_undo_commit",
-      "description": "Undo a previous git_commit by soft-resetting one commit (the changes stay staged). Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.{repo, commit} is used. Refuses when HEAD has moved past the recorded commit (manual intervention required). Irreversible — it rewrites repository state, so the call requires user approval.",
       "schema": {
-        "type": "object",
         "properties": {
-          "call_id": { "type": "string", "description": "id of the original git_commit call" },
-          "args": { "type": "object", "description": "original git_commit args" },
-          "output": { "type": "object", "description": "original git_commit result carrying repo/commit" }
-        }
+          "args": {
+            "description": "original git_commit args",
+            "type": "object"
+          },
+          "call_id": {
+            "description": "id of the original git_commit call",
+            "type": "string"
+          },
+          "output": {
+            "description": "original git_commit result carrying repo/commit",
+            "type": "object"
+          }
+        },
+        "type": "object"
       },
-      "side_effect": "Irreversible"
+      "side_effect": {
+        "kind": "irreversible"
+      }
     }
   ]
 }

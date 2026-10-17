@@ -15,6 +15,9 @@
 //!
 //! 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION（见 build.rs）。
 
+#[cfg(test)]
+mod tests;
+
 use std::ffi::CString;
 
 use plugin_api::ffi::log_level;
@@ -39,7 +42,10 @@ fn describe_manifest() -> CString {
         kind: PluginKind::Tool,
         tools: vec![ToolSpec {
             name: "echo".into(),
-            description: "echoes text back, optionally transformed".into(),
+            // 描述取清单里那份完整句（它列全了 schema enum 的四个模式）：台账 T11 之后
+            // 两份必须同源，所以补到代码侧，而不是把清单削短。
+            description:
+                "echoes text back, optionally transformed (modes: plain/upper/reverse/panic)".into(),
             schema: json!({
                 "type": "object",
                 "properties": {

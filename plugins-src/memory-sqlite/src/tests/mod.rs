@@ -7,12 +7,14 @@
 //! `project_isolation` / `scope_two_layer` / `human_md_layer`；Q2（MR §6）加
 //! `keyside_norm`（键位归一：同项目两种写法在库里只有一行）；Q5（ML §3.2 · L1）加
 //! `learning`（学习面两列的迁移与"写路径不清学习量"——宿主侧同题另有一簇，两侧各测各的
-//! 因为谁先访问谁执行 ALTER）。
+//! 因为谁先访问谁执行 ALTER）；台账 T11 加 `manifest_json`（磁盘清单 ↔ 代码 describe
+//! 同源对账，十份插件各一条，形状相同、由 `check-single-source.mjs` 的 SS7 数条数）。
 
 mod human_md_layer;
 mod keyside_norm;
 mod kv_basic;
 mod learning;
+mod manifest_json;
 mod project_isolation;
 mod scope_two_layer;
 

@@ -3,100 +3,185 @@
   "version": "0.1.0",
   "abi_version": 1,
   "kind": "tool",
-
   "display_name": {
-    "zh-CN": "文件工具",
-    "en-US": "File Tools"
+    "en-US": "File Tools",
+    "zh-CN": "文件工具"
   },
   "description": {
-    "zh-CN": "文件读写与检索：读 / 列目录 / 搜索 / 写（带备份可撤销）/ 删除",
-    "en-US": "File ops: read / list / grep / write (undoable via backup) / delete"
+    "en-US": "File ops: read / list / grep / write (undoable via backup) / delete",
+    "zh-CN": "文件读写与检索：读 / 列目录 / 搜索 / 写（带备份可撤销）/ 删除"
   },
   "icon": "assets/icon.svg",
-
-  "author": { "name": "Locowrk Team" },
+  "author": {
+    "name": "Locowrk Team"
+  },
   "origin": "official",
   "license": "MIT",
-
   "tools": [
     {
+      "description": "Read a UTF-8 text file from the local filesystem. Pass an absolute path. Returns {path, size, truncated, revision, content}; content is capped at max_bytes (default 32KiB) but `revision` always covers the FULL file. Read before edit_replace so old_string can be copied character-for-character, and pass the `revision` as `expected_revision` on any later fs_write / edit / fs_delete of this file — write tools reject stale observations.",
+      "exposure": "always",
       "name": "fs_read",
-      "description": "Read a UTF-8 text file. Args: path (string, absolute), max_bytes (number, default 32768, max 1048576). Output is truncated at max_bytes; the response flags `truncated`.",
       "schema": {
-        "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
-          "max_bytes": { "type": "number", "description": "default 32768, max 1048576" }
+          "max_bytes": {
+            "description": "cap returned content (default 32768, max 1048576)",
+            "type": "number"
+          },
+          "path": {
+            "description": "absolute file path (required; must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["path"]
+        "required": [
+          "path"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
+      "description": "List a directory. Pass an absolute path. Returns {path, entries: [{name, kind: file|dir|other, size}]}; directories come first, then names sorted.",
+      "exposure": "on_demand",
       "name": "fs_list",
-      "description": "List a directory (dirs first, then files, with type and size). Args: path (string, absolute).",
       "schema": {
-        "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute directory path (required; must be inside the allowed workspace roots)" }
+          "path": {
+            "description": "absolute directory path (required; must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["path"]
+        "required": [
+          "path"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
+      "description": "Case-insensitive substring search in a text file, or recursively under a directory. Pass an absolute path. Returns {query, matches: [{file, line, text}], truncated, scanned}. Use this instead of shell grep/findstr pipelines for content search — it is scoped to the workspace roots and returns structured matches.",
+      "exposure": "always",
       "name": "fs_grep",
-      "description": "Case-insensitive substring search over text files in a directory tree. Args: path (absolute), query (string), max_results (default 50, max 200), max_depth (default 3, max 8).",
       "schema": {
-        "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute directory path (required; must be inside the allowed workspace roots)" },
-          "query": { "type": "string", "description": "case-insensitive substring" },
-          "max_results": { "type": "number", "description": "default 50, max 200" },
-          "max_depth": { "type": "number", "description": "recursion depth, default 3, max 8" }
+          "max_depth": {
+            "description": "recursion depth, default 3, max 8",
+            "type": "number"
+          },
+          "max_results": {
+            "description": "default 50, max 200",
+            "type": "number"
+          },
+          "path": {
+            "description": "absolute file or directory path (required; must be inside the allowed workspace roots)",
+            "type": "string"
+          },
+          "query": {
+            "description": "case-insensitive substring",
+            "type": "string"
+          }
         },
-        "required": ["path", "query"]
+        "required": [
+          "path",
+          "query"
+        ],
+        "type": "object"
       },
-      "side_effect": "Pure"
+      "side_effect": {
+        "kind": "pure"
+      }
     },
     {
+      "description": "Write a UTF-8 text file (create or overwrite). Args: path (absolute), content, create_dirs (bool, default false), expected_revision — the `revision` from a previous fs_read of this file; pass null ONLY to create a file that must not exist yet (the call is rejected if the file already exists without a revision, so blind overwrites are impossible). The previous content, if any, is backed up automatically; the result carries {path, bytes, existed, backup, revision} — pass that `revision` as `expected_revision` on your next write to this file, or pass the original output to fs_restore to undo.",
+      "exposure": "on_demand",
       "name": "fs_write",
-      "description": "Write a UTF-8 text file (create or overwrite). Args: path (absolute), content, create_dirs (bool, default false). The previous content, if any, is backed up automatically and the result carries {path, bytes, existed, backup}; pass that result to fs_restore to undo.",
       "schema": {
-        "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" },
-          "content": { "type": "string", "description": "full new file content" },
-          "create_dirs": { "type": "boolean", "description": "create missing parent dirs (default false)" }
+          "content": {
+            "description": "full new file content",
+            "type": "string"
+          },
+          "create_dirs": {
+            "description": "create missing parent dirs (default false)",
+            "type": "boolean"
+          },
+          "expected_revision": {
+            "description": "revision from fs_read or the previous write's result; null = create a new file (rejected if the file exists)",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "description": "absolute file path (required; must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["path", "content"]
+        "required": [
+          "path",
+          "content",
+          "expected_revision"
+        ],
+        "type": "object"
       },
-      "side_effect": { "kind": "compensable", "undo_tool": "fs_restore" }
+      "side_effect": {
+        "kind": "compensable",
+        "undo_tool": "fs_restore"
+      }
     },
     {
+      "description": "Delete a file (directories are rejected in v1). Args: path (absolute), expected_revision (the `revision` from fs_read — deleting must prove the file hasn't changed since you observed it, so an externally modified file is never deleted blind). Irreversible — no backup is kept, the call requires user approval.",
+      "exposure": "on_demand",
       "name": "fs_delete",
-      "description": "Delete a file (directories are rejected in v1). Args: path (absolute). Irreversible — no backup is kept, the call requires user approval.",
       "schema": {
-        "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "absolute file path (required; must be inside the allowed workspace roots)" }
+          "expected_revision": {
+            "description": "revision from fs_read; the call is rejected if the file changed since you observed it",
+            "type": "string"
+          },
+          "path": {
+            "description": "absolute file path (required; must be inside the allowed workspace roots)",
+            "type": "string"
+          }
         },
-        "required": ["path"]
+        "required": [
+          "path",
+          "expected_revision"
+        ],
+        "type": "object"
       },
-      "side_effect": "Irreversible"
+      "side_effect": {
+        "kind": "irreversible"
+      }
     },
     {
+      "description": "Undo a previous fs_write / edit_replace / edit_lines / edit_diff by restoring its automatic backup (the backup is consumed; restoring twice is a no-op). Either the compensation layer or you can invoke it: pass the original call's {call_id, args, output} from the transcript; only output.{path, backup, existed} is used. The result carries the restored file's `revision` — pass it as expected_revision on your next edit. Irreversible — restoring overwrites the file's current content, so the call requires user approval.",
+      "exposure": "always",
       "name": "fs_restore",
-      "description": "Undo a previous fs_write by restoring its backup (the backup is consumed; restoring twice is a no-op). Usually invoked by the compensation layer, not by the model. Args mirror the compensation payload {call_id, args, output}; only output.{path, backup, existed} is used. Irreversible — restoring overwrites the file's current content, so the call requires user approval.",
       "schema": {
-        "type": "object",
         "properties": {
-          "call_id": { "type": "string", "description": "id of the original fs_write call" },
-          "args": { "type": "object", "description": "original fs_write args" },
-          "output": { "type": "object", "description": "original fs_write result carrying path/backup/existed" }
-        }
+          "args": {
+            "description": "original fs_write args",
+            "type": "object"
+          },
+          "call_id": {
+            "description": "id of the original fs_write call",
+            "type": "string"
+          },
+          "output": {
+            "description": "original fs_write result carrying path/backup/existed",
+            "type": "object"
+          }
+        },
+        "type": "object"
       },
-      "side_effect": "Irreversible"
+      "side_effect": {
+        "kind": "irreversible"
+      }
     }
   ]
 }

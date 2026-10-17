@@ -20,6 +20,9 @@
 
 mod ssrf;
 
+#[cfg(test)]
+mod tests;
+
 use std::ffi::CString;
 use std::io::Read;
 use std::time::Duration;

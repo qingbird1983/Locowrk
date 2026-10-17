@@ -78,7 +78,6 @@ fn describe_manifest() -> CString {
     registry::stash(Arc::clone(&registry));
     let mut tools = management_specs();
     tools.extend(registry.tool_specs());
-    let discovered = tools.len() - 2;
     let mut manifest = PluginManifest {
         id: PLUGIN_ID.into(),
         version: plugin_version!().into(),
@@ -89,14 +88,17 @@ fn describe_manifest() -> CString {
         // origin / homepage / license）由 plugin_api::meta 单点给出（审计 F7）。
         ..Default::default()
     };
+    // 展示文案**不写"本次发现 N 个"**（原形状是 `&format!` 把运行期计数拼进去）：
+    // 台账 T11 之后代码侧 describe 与磁盘 `manifest.json` 必须同源，而这个数是每次装载
+    // 都变的快照，钉进清单就永远写着一个过期的数。审计批 F-21c 当年把它登记成"设计使然
+    // 的例外"，前提是展示文案有消费者——实测没有：UI 读磁盘清单，`plugin-host` 只用
+    // `.tools`，而"发现了几个"本来就由 `mcp_status` 这个管理工具报。所以这里收成静态句。
     official_meta(
         &mut manifest,
         ("MCP 桥接", "MCP Bridge"),
         (
-            &format!("桥接 MCP 生态：本次发现 {discovered} 个远端工具（配置 <数据根>/mcp.json）"),
-            &format!(
-                "Bridges the MCP ecosystem: {discovered} remote tool(s) discovered (config <data root>/mcp.json)"
-            ),
+            "桥接 MCP 生态：远端工具在加载时从 <数据根>/mcp.json 发现并冻结进工具清单（此处只列管理工具）",
+            "Bridges the MCP ecosystem: remote tools are discovered from <data root>/mcp.json at load time and frozen into the catalog (only management tools listed here)",
         ),
     );
     manifest.to_describe_json()

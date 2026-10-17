@@ -142,7 +142,52 @@
       · 本条从台账移出后，欠账没有消失，只是换页记：做「度量基线」阶段时那十二条的"快了多少"要在那里补
 - [ ] **T10** 弹层行为族 B/族 C 的处置（族 A 四处已收进 `lib/use-popover.ts`）
       · 我的推荐 = 认可现状，登记进《Front-end Design Guidelines》§七 特例清单
-- [ ] **T11** 插件展示元数据以谁为准：代码里的 `describe` 还是 `manifest.json` 的徽章
+- [x] **T11** 插件展示元数据以谁为准：代码里的 `describe` 还是 `manifest.json` 的徽章（2026-10-18 用户点头收账）
+      · 方向由实测决定，而**两个候选谁都不能全盘胜出**。逐插件比对十份，重叠区漂的是：工具描述 15/30、
+        schema 6 处、`exposure` 4 处，`side_effect` 0 处（它历史漂过一次 = 审计 H8，清单写 `Pure`
+        而代码早已 `Irreversible` ⇒ 用户看到的徽章与内核真实的审批行为不一致）。决定性的那条是
+        **磁盘那份在能力面上是旧的**：`fs_write`/`fs_delete` 与三个 `edit_*` 缺 `expected_revision`
+        （模型目录里那份并发写保护的说明与 required 项）、`memory_write` 缺 `scope`（项目层/全局层）、
+        四处 `exposure: always` 缺失 ⇒ "以 manifest.json 为准"会把这些保护抹掉，那是行为退化不是收敛
+      · 落定的划分已写成 [`ADR-0006`](../../docs/adr/0006-plugin-metadata-authority.md)：
+        **能力字段以代码 `describe` 为权威、展示字段以磁盘 `manifest.json` 为权威、重叠区必须逐字段相等**；
+        等值由每个插件自带的**一条 `cargo test`** 承重（插件 crate 都在根 workspace 里 ⇒ `make check` 自动跑到）
+      · 载体三件都在 `plugin_api::meta`（非 ABI 面、插件源码级依赖，`PLUGIN_ABI_VERSION` 不动）：
+        `manifest_drift`（逐字段差异清单，报错就能照抄改对）、`drift_of_describe`（插件侧唯一入口，
+        十份测试同形状）、`sync_manifest_file`（**只在 `LOCOWRK_MANIFEST_SYNC=1` 下动文件**的维护通道——
+        判据不许顺手改受版本控制的文件，且只回写**静态前缀**：`tool-mcp` 运行期发现的远端工具
+        不能被钉进静态清单）
+      · 为什么比对器放基座而不是十个插件各写一遍：与 `official_meta` 同一条理由——让十个插件各写
+        "怎么读磁盘、比哪些字段"，第九个一定漏比某个字段，而漏掉的那个正是漂移藏身的地方
+        （本轮实测就藏在 `expected_revision` 与 `exposure` 上）
+      · 防回潮 = `check-single-source.mjs` 新增 **SS7 / SS7b**（用例条数与清单在场数的期望都取
+        **插件目录数**，不是写死条数 ⇒ 加插件不结对账当场红）+ 两条下限（内置插件数、插件 src 面文件数：
+        `plugins-src` 整目录改名时两边会一起数到 0 而"相等"，这种"一起消失"只能由下限兜）。
+        `make selftest` 现 **11 档全中**
+      · ★ SS7 的第一版变异**打空**：期望"把一个用例改名 ⇒ SS7 红"，实测仍 `10|10`——因为我数的正则
+        `fn manifest_json_and_describe_agree` 连改名后的 `…_retired` 照样命中（子串包含）。
+        判据自己太宽就盯不住任何东西 ⇒ 收紧成 `fn …(` 这个**定义形状**，并把这次打空写进 SS7 的说明里
+      · 顺带改四处代码侧文案（规则 = 哪份信息更全就把它升为权威，而不是机械"一律取代码"）：
+        tool-echo 的工具描述补回 modes 列举、tool-shout 补"repeat 模式自 1.1.0 起提供"、tool-shell
+        取清单那份更细的两态文案、**tool-mcp 去掉运行期计数**（原描述用 `&format!` 拼"本次发现 N 个"，
+        审计批 F-21c 把它记成"设计使然的例外"，其前提是展示文案有消费者——实测**展示面零消费者**：
+        UI 读磁盘清单、`plugin-host` 只用 `.tools`，而"发现了几个"本来就由 `mcp_status` 报）
+      · 变异两发各打中不同面：① 把 tool-fs 代码里 `fs_read` 描述改一个词（filesystem → file system）
+        ⇒ 红在 tool-fs 那条对账，报的就是 `fs_read.description`；② 把 memory-sqlite **清单**里
+        `memory_write` 的 `exposure` 从 `always` 改成 `on_demand` ⇒ 红在那一条并解释后果
+        （"少了 `always` 就是把它踢回候选池，可能被 Top-N 挤出目录"）。两发都逐字节写回 + `cmp` + `sha256sum`
+      · 界面侧：`read_display` 与前端**一行未动**，变的只是数据（清单里 `side_effect` 从裸串 `"Pure"`
+        变成 tagged 对象、`exposure` 显式写出、工具描述变长）——新形态能被同一份
+        `PluginManifest::from_json` 解析，已由十条对账用例实证；市场页徽章要不要改成运行期来源
+        留在 ADR-0006 的后续里等你定
+      · 两侧读数（同一份代码）：Windows `sh scripts/tasks.sh check` 末行"check 全绿"——
+        workspace **534**（= T20 的 519 + 基座 5 条 + 对账 10 条）、`desktop/src-tauri` **584**、
+        vitest **113**、`check_length` 超限 21 · 名单 21 · 零新增；产物重跑 `build_plugins.sh` rc=0，
+        暂存面 `plugins/tool-fs/0.1.6/manifest.json` 里 `expected_revision` 已在（与源文件只差
+        `version` 那一行 = 脚本 sed 注入，`cmp` 定位到 byte 40 line 3）；`demo` 与 `demo4` rc=0、
+        demo4 三条自判读数不变。Linux（本机 WSL）`cargo test --workspace --no-fail-fast` **rc=0**、
+        **533** 条通过（= 518 + 15）、39 个 test target 全 ok、十条对账在 Linux 也各 ok；
+        两侧差的仍是那一条正当的 `#[cfg(windows)]` 大小写折叠档
 - [x] **T12** 编译产物清不清（两份 `target/`）（2026-10-18 用户点头收账：给取舍依据并判定**不清**）
       · 不可逆的时间成本（清完下次全量重编很久），**需你明确同意**，Q8 已二次确认推迟
       · 实测（本机 `du -sh` + `df -h /f`，2026-10-18）：`target` = **25G**、`desktop/src-tauri/target` = **42G**，
