@@ -12,10 +12,11 @@
  * store.setModel（会话内 = 会话级覆盖，首页 = 写设置缺省）；会话覆盖生效
  * 时顶部一行「跟随默认」清除覆盖。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, Transition } from "vue";
+import { computed, nextTick, onMounted, ref, Transition } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ProviderView } from "../../types";
 import { formatPricingShort } from "../../lib/model-catalog";
+import { useDismissOnEsc } from "../../lib/use-popover";
 import { Icon } from "../../lib/icons";
 import SearchInput from "../patterns/SearchInput.vue";
 
@@ -90,14 +91,12 @@ const visible = computed(() => {
 
 // v-if 挂载即打开：滚到当前项（当前项必须可见，§3.30）。**只滚弹窗内部
 // 清单**（手设 scrollTop）——scrollIntoView 会连祖先滚动容器一起滚，把
-// 整个界面拖动（用户目检实抓「点击后整个内容上移」）；挂载期 Esc 收口
-// （外点关闭由 Composer 锚点监听——走查实抓：本浮层曾是五弹层中唯一
-// 无外点/Esc 收口的）
-function onDocKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") emit("close");
-}
+// 整个界面拖动（用户目检实抓「点击后整个内容上移」）；挂载期 Esc 收口走
+// 全站唯一那份（外点关闭由 Composer 锚点监听——走查实抓：本浮层曾是五弹层
+// 中唯一无外点/Esc 收口的）。挂载即打开 = `useDismissOnEsc` 的省略 `open`
+// 那种归属，占优先级到卸载为止。
+useDismissOnEsc(() => emit("close"));
 onMounted(() => {
-  document.addEventListener("keydown", onDocKeydown);
   query.value = "";
   void nextTick(() => {
     const list = container.value?.querySelector<HTMLElement>(".ms-list");
@@ -109,7 +108,6 @@ onMounted(() => {
     }
   });
 });
-onBeforeUnmount(() => document.removeEventListener("keydown", onDocKeydown));
 
 function pick(providerId: string, model: string) {
   emit("select", providerId, model);

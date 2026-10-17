@@ -34,7 +34,8 @@ const { t } = useI18n();
 // Esc 收口用全站唯一那份判定（标准 §二③「一律 Esc + 外点自持」）。这里原本自己挂了
 // 一份 `window keydown + Escape`，与 `lib/use-popover.ts` 里那份逐字同形 = 同一件事
 // 的第二个出处；挂 window 还是 document 在这个页面没有可观测差异（keydown 一路冒泡到
-// document），换过去行为不变。
+// document），换过去行为不变。省略 `open` = 本菜单由 LlmSection `v-if` 渲染、挂载即打开
+// ⇒ 整段挂载期占 Esc 优先级（输入框那条链在此期间让位）。
 useDismissOnEsc(() => emit("close"));
 const query = ref("");
 const popEl = ref<HTMLElement | null>(null);

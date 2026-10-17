@@ -88,6 +88,50 @@ function settingsPartitionFiles() {
 const countOf = (s, re) => (s.match(new RegExp(re.source, 'g')) || []).length;
 
 /**
+ * 浮层收口面（台账 T10 的扫描面）：`desktop/src/components` 整棵树的 .vue，动态取——
+ * 新增一个浮层不必改判据（写死名单的失效方向是"少扫一个文件 = 闸瞎了"）。
+ *
+ * 口径：左 = 挂了 **document/window 级** `pointerdown` 外点收口的组件数
+ * （族 A 四处走 `useDismissOnOutside`，本文件里没有这两串字符 ⇒ 不进这条账，它们由
+ * SS9b/SS9c 与 `popover-esc.spec.ts` 盯）；右 = 其中同一文件内出现 `Escape`
+ * 或引用 `lib/use-popover` 的数。标准 §二③「一律 Esc + 外点自持」的机械面就是这个
+ * 左=右；差一个就是"补了外点忘了补 Esc"——T10 逐站取证实测那种（三处缺 Esc）。
+ */
+function walkExt(base, re) {
+  const out = [];
+  const walk = (rel) => {
+    for (const f of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+      const p = `${rel}/${f.name}`;
+      if (f.isDirectory()) walk(p);
+      else if (re.test(f.name)) out.push(p);
+    }
+  };
+  if (fs.existsSync(path.join(ROOT, base))) walk(base);
+  return out;
+}
+function popoverFace() {
+  const comps = walkExt('desktop/src/components', /\.vue$/).map(read);
+  return { comps, frontSrc: walkExt('desktop/src', /\.(ts|vue)$/).map(read) };
+}
+
+/** 外点收口形状 = 挂到 document/window 上的 `pointerdown`（口径见上方注释）。 */
+const DISMISS_SHAPE = /(?:document|window)\.addEventListener\(\s*"pointerdown"/;
+const dismissCount = (m) => m.comps.filter((s) => DISMISS_SHAPE.test(s)).length;
+const withEscCount = (m) =>
+  m.comps.filter((s) => DISMISS_SHAPE.test(s) && /Escape|use-popover/.test(s)).length;
+
+/**
+ * 浮层优先级那一侧的两个读数（SS9b / SS9c）。口径写在 `popoverFace()` 注释里：
+ * 定义侧数"计数器在几个文件"，消费侧数"除定义处还有几个文件在问 `anyLayerOpen()`"。
+ * 期望 `1|1` 是有意的窄：将来真出现第二个消费者（另一条自己的 Esc 链），改这一行
+ * 必须显式改判据，而不是让闸默认通过——与 SS8c 点名名单同一条理由。
+ */
+const LAYER_DEF = /export function anyLayerOpen/;
+const layerDefs = (m) => m.frontSrc.filter((s) => /let openLayers/.test(s)).length;
+const layerConsumers = (m) =>
+  m.frontSrc.filter((s) => /anyLayerOpen\(\)/.test(s) && !LAYER_DEF.test(s)).length;
+
+/**
  * 插件对账面（台账 T11）：`plugins-src/<id>/src/` 下的全部 .rs + 每个插件的 `manifest.json` 在场数。
  *
  * 期望值**取插件目录数而不是写死 10**：第十一个插件没配上对账用例就当场红，而写死数字的话
@@ -174,6 +218,7 @@ const ringImpls = (m) => countOf(ringCode(m), RING_SHAPE);
 function snapshot() {
   const files = prodRustFiles();
   const pd = pluginDrift();
+  const pf = popoverFace();
   const snap = {
     files,
     rust: files.map((f) => read(path.relative(ROOT, f).replace(/\\/g, '/'))),
@@ -183,6 +228,8 @@ function snapshot() {
     plugins: pd.count,
     pluginTests: pd.testSrc,
     pluginManifests: pd.manifests,
+    comps: pf.comps,
+    frontSrc: pf.frontSrc,
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -338,6 +385,33 @@ const CHECKS = [
     },
     String(RINGS.length),
   ],
+  [
+    'SS9',
+    '挂了 document/window 级 `pointerdown` 外点收口的浮层组件，**同一文件必须有 Esc**' +
+      '（《Front-end Design Guidelines》§二③「一律 Esc + 外点自持」的机械面）。' +
+      '左 = 外点站点数，右 = 其中带 `Escape` 判定或引用 `lib/use-popover` 收口件的数。' +
+      '台账 T10 逐站取证的缺陷形状正是这个差（6 个外点站点里 3 个没有 Esc）——' +
+      '族 A 那四处走 `useDismissOnOutside`、文件里没有这两串字符，由 `popover-esc.spec.ts` 盯',
+    (m) => `${dismissCount(m)}|${withEscCount(m)}`,
+    (m) => `${dismissCount(m)}|${dismissCount(m)}`,
+  ],
+  [
+    'SS9b',
+    '浮层优先级的**让位判定还在**：`Composer.vue` 那条输入框 Esc 链必须问 `anyLayerOpen()`' +
+      '（T10 (a) 路线的全部承重——这行退回改前的 `if (showModels.value) return;`，' +
+      '那三处补的 Esc 立刻重新变成"按一次键关一层 + 顺手拒一次审批"）。' +
+      '左 = 计数器定义所在文件数，右 = 除定义处以外还在读 `anyLayerOpen()` 的文件数',
+    (m) => `${layerDefs(m)}|${layerConsumers(m)}`,
+    '1|1',
+  ],
+  [
+    'SS9c',
+    '同一条优先级的**计数器只许一个出处**（左 = 定义文件数，期望 1）。' +
+      '第二个 `let openLayers` 一旦出现在别处，"谁开着"就有两本账：两边各自增减，' +
+      '漏还的那本会让输入框的 Esc 永久失效而不报错——与 SS1 那条"算式只许一个出口"同形',
+    (m) => String(layerDefs(m)),
+    '1',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -360,6 +434,14 @@ const FLOORS = [
   // 扫描面时分子分母一起掉 ⇒ 只能由这条下限兜。下限取 6：留一点重构余量（把一个环
   // 拆成两个文件只会更多，不会更少）。
   ['注入环 impl 块数', (m) => ringImpls(m), 6],
+  // 现值 99（components 树的 .vue）。SS9 的期望是"左=右"，扫描面整个塌掉时 0|0 照样绿
+  // ——那种"一起消失"只能由下限兜（与 SS7 那条同一条理由）。
+  ['前端组件 .vue 数', (m) => m.comps.length, 70],
+  // 现值 6（挂了 document/window 级外点的浮层组件）。下限取一半多一档：少于这个数就说明
+  // 扫描面或形状口径漂了，此时 SS9 的"左=右"没有意义。
+  ['浮层外点站点数', (m) => dismissCount(m), 4],
+  // 现值 178（desktop/src 的 .ts+.vue）：SS9b/SS9c 的分子分母都从这份面里数
+  ['前端 src 扫描面文件数', (m) => m.frontSrc.length, 120],
 ];
 
 function runChecks(m) {
@@ -454,6 +536,24 @@ if (SELFTEST) {
           : s,
       );
     },
+    // 窄变异（T10）：新增一个"只挂外点、没挂 Esc"的浮层——正是逐站取证抓到的那三处的
+    // 形状。SS9 要能为它报红，否则这条判据只是在抄两个当下的数字。
+    SS9: (m) =>
+      m.comps.push(
+        '<script setup>\nconst open = ref(false)\nonMounted(() => document.addEventListener("pointerdown", onDoc))\n</script>\n',
+      ),
+    // 窄变异（T10）：把输入框那条链的让位判定退回改前的 `showModels`——优先级面失去唯一
+    // 消费者，那三处补的 Esc 立刻又变成"按一次键关一层 + 顺手拒一次审批"。
+    // SS9b 要单独能为它红（SS9 看不见它：外点与 Esc 两侧都没动）。
+    SS9b: (m) => {
+      const hit = m.frontSrc.findIndex((s) => s.includes('if (anyLayerOpen()) return;'));
+      m.frontSrc = m.frontSrc.map((s, i) =>
+        i === hit ? s.replace('if (anyLayerOpen()) return;', 'if (showModels.value) return;') : s,
+      );
+    },
+    // 另一侧：别处再写一份计数器 = 两本账，漏还不报错。SS9c 要单独能为它红。
+    SS9c: (m) =>
+      m.frontSrc.push('let openLayers = 0\nexport function anyLayerOpen() { return openLayers > 0 }\n'),
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {
@@ -466,6 +566,9 @@ if (SELFTEST) {
       settingsParts: [...snap.settingsParts],
       rings: [...snap.rings],
       pluginTests: [...snap.pluginTests],
+      // SS9 与 SS9c 会往这两份面里 push：不各拷一份的话，第一档变异会污染后面每一档
+      comps: [...snap.comps],
+      frontSrc: [...snap.frontSrc],
     };
     mut(copy);
     const row = runChecks(copy).find((r) => r.id === id);

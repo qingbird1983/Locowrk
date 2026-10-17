@@ -2,7 +2,7 @@
 
 > **⚠ 地位降位（2026-10-11，用户裁定）**：UI 层最高权威已上移至 [《UI Design System.md》](UI%20Design%20System.md)。本文降为**下位细则**——§二 唯一形态清单与特例申请制继续有效，但与《UI Design System》冲突处（其附录 A：卡片形态解禁、原始 JSON 降级兜底、边框引导分离、动画白名单第四条、字号相对制 `fs-ui-*`）**一律以《UI Design System》为准**；修订待办见其附录 C。特例申请的批准对象自即日起 = 《UI Design System》+ 本文两者。
 
-> **文档版本：v2.3（2026-10-15）**。地位：前端**唯一**形态标准（用户 2026-10-06 裁定「必须制定标准，并加约束，所有自发明的一律判错」）。全部数值绑定 `desktop/src/style.css` 的真实 `--lw-*` 令牌体系（v1.0 草稿的虚构 `--lk-*`/LK 组件内容废弃）。本标准与任何实现冲突时，**判实现错**，不判标准错。v2.1：z 阶梯执行修订（§二⑭，弹层族压过模态）+ `--ease-spring`/`--lw-shadow-pop`/z 令牌建成（§五）。**v2.2（2026-10-15）：新增 §二⑯「无限画布看板」类目**（队列 Q13 = MB 稿 §7 申请书落地，特例已批 R2、按 §零.5 先修订标准再写码；含对 MB 稿的三处订正 + 两条门禁实测边界）+ §二/§八 标题**去数**：类目数与暂定项数不再钉进正文（同一读数三处手写必漂，历批第 116 条同族）。**v2.3（2026-10-15）**：§二⑯ 的「前置条件」条目做一次状态订正——基座进设置页「外观」可调**已兑现**（队列 Q14 第四刀 = v2.207），并加写一句实话：绝对档 `--lw-fs-10..14` 不随基座动，「整界面同尺」要等上位附录 C 第二半做完。本节形态规则**一条未改**（改的只是一句会漂的自我声明——第六道闸立的正是「自我声明没人盯就会漂」）。
+> **文档版本：v2.4（2026-10-18）**。地位：前端**唯一**形态标准（用户 2026-10-06 裁定「必须制定标准，并加约束，所有自发明的一律判错」）。全部数值绑定 `desktop/src/style.css` 的真实 `--lw-*` 令牌体系（v1.0 草稿的虚构 `--lk-*`/LK 组件内容废弃）。本标准与任何实现冲突时，**判实现错**，不判标准错。v2.1：z 阶梯执行修订（§二⑭，弹层族压过模态）+ `--ease-spring`/`--lw-shadow-pop`/z 令牌建成（§五）。**v2.2（2026-10-15）：新增 §二⑯「无限画布看板」类目**（队列 Q13 = MB 稿 §7 申请书落地，特例已批 R2、按 §零.5 先修订标准再写码；含对 MB 稿的三处订正 + 两条门禁实测边界）+ §二/§八 标题**去数**：类目数与暂定项数不再钉进正文（同一读数三处手写必漂，历批第 116 条同族）。**v2.3（2026-10-15）**：§二⑯ 的「前置条件」条目做一次状态订正——基座进设置页「外观」可调**已兑现**（队列 Q14 第四刀 = v2.207），并加写一句实话：绝对档 `--lw-fs-10..14` 不随基座动，「整界面同尺」要等上位附录 C 第二半做完。本节形态规则**一条未改**（改的只是一句会漂的自我声明——第六道闸立的正是「自我声明没人盯就会漂」）。**v2.4（2026-10-18）**：§二③ 收口那行补上缺的那半句规矩 = **「一次 Esc 只许有一个消费者 = 开着的那层吃掉它」**（台账 T10 裁定 (a) 路线：优先级判定收成 `lib/use-popover.ts::anyLayerOpen` 一处，输入框那条链不再点名认识某一个浮层），并据此补齐缺 Esc 的三处 + `RowMenu`；§七 那两行随之订正（豁免只覆盖整套方向键链，不覆盖 Esc）。形态规则仍**一条未改**，改的是收口规则与它名下的实现。
 
 ---
 
@@ -67,19 +67,29 @@
 - 结构：组与组之间 = **两头不到端的发丝线分割**（`--lw-line-subtle`，两端缩进 12px）。
 - 对齐三则：**靠左出的面板与触发钮左对齐；居中弹出居中对齐；靠右出的右对齐**。
 - **视口钳制义务**：渲染后必须量**实际尺寸**（不得用预估宽）——右对齐触发器右缘、四边钳 8px、底部放不下向上翻（实抓教训：SettingsSelect 预估宽定位致裁切）。
-- 收口：一律 Esc + 外点自持。**实测现状（2026-10-18 · 台账 T10 逐站复核）= 九个外点站点里三处没有 Esc**：
-  `chat/PermissionCard.vue` 的 scope 下拉、`shell/SubagentsMenu.vue`、`shell/NotificationPopover.vue`
-  （现查：`grep -rlE 'document\.addEventListener\("pointerdown"|useDismissOnOutside\(' desktop/src/components`）。
-  补齐的阻碍**不是忘了**，而是这条规则还缺一句"一次 Esc 该由谁吃"：这三处的焦点通常就在输入框，
-  而输入框自己已经有一条 Esc 链（`Composer.vue:288`：斜杠面板 → 跳过 ask → 拒绝审批 → 停止 → 交出焦点，
-  且浮层开着时它已经会给 `showModels` 让位）。直接给这三处加 document 级 Esc 的结果是
-  **按一次同时关掉一层并拒掉一次审批**——把不可逆动作放进误触路径，比不补更糟。
-  等用户裁定：**(a)** 建"浮层优先"的 Esc 路由（把 `Composer` 那份让位判定扩到这三处，一处判定全站生效）；
-  **(b)** 本条收窄成"可被键盘聚焦的浮层一律 Esc"，这三处登记进 §七。
-  - 已经收敛的部分：Esc 判定本身只有 `lib/use-popover.ts::escHandler` 一个出处，
-    `useDismissOnEsc` 是给"外点各有真语义、只缺 Esc"的站点用的注册面（`dismissHandlers` 的 Esc 半边
-    也已复用它）；`settings/model/DefaultModelMenu.vue` 从自写的 `window keydown` 换过去，
-    并把外点事件名从 `mousedown` 归一到 `pointerdown`（同族唯一形状，实测无第二处 mousedown）。
+- 收口：**一律 Esc + 外点自持**，并且**一次 Esc 只许有一个消费者 = 开着的那层吃掉它**
+  （2026-10-18 台账 T10 按当时给的 **(a)** 路线裁定；**(b)**「把缺 Esc 的三处登记进 §七」作废——
+  那三处按 Esc 不关若成为定面，就是标准自己欠的债被洗成特例）。
+  - 优先级只许一个出处：`lib/use-popover.ts` 的 `anyLayerOpen()` + 内部 `useLayerPriority`。
+    浮层经 `useDismissOnEsc(close, open?)` / `useDismissOnOutside(root, open)` 收口时**自动**占位与
+    归还：省略 `open` = 由父 `v-if` 渲染、挂载即打开（`chat/ModelSelector.vue`、
+    `shell/NotificationPopover.vue`、`settings/model/DefaultModelMenu.vue` 那一族）；有本地开关的
+    必须传（`shell/SubagentsMenu.vue` 常驻顶栏、`chat/PermissionCard.vue` 的 scope 下拉）——
+    不传的后果是常驻组件长期占位，输入框那条 Esc 链（停止 / 拒审批）整条哑掉。
+    占位与归还都由注册面自己管，站点没有"忘记归还"这个可犯的错误（卸载无条件归还）。
+  - 输入框那条链（`Composer.vue`：斜杠面板 → **让位给开着的浮层** → 跳过 ask → 拒绝审批 →
+    停止 → 交出焦点）改问 `anyLayerOpen()`，不再点名认识某一个浮层。改前它只认识 `showModels`
+    一个，于是每给别的浮层补 Esc 就多一个双动作，而双动作的另一半是**不可逆**的（拒审批）——
+    这正是当时判定"直接补比不补更糟"的那条。
+  - 实测（2026-10-18 · T10 收尾）：外点站点 **6** 处全部带 Esc，缺 Esc 的三处已补齐
+    （现查 `grep -rlE 'document\.addEventListener\("pointerdown"|useDismissOnOutside\(' desktop/src/components`）；
+    `chat/ModelSelector.vue` 自写的那份 document keydown 换成共享件 ⇒ 同一判定的第二个出处消失。
+    机械闸 = `scripts/check-single-source.mjs` 的 **SS9**（外点与 Esc 成对在场）/ **SS9b**
+    （让位判定还在）/ **SS9c**（计数器只许一个出处），`make selftest` **17 档全中**；
+    行为面 = `desktop/tests/popover-esc.spec.ts` **9 条**（四发变异各打中一条，含"卸载不归还"
+    与"把计数写成布尔"两种缺陷形状）。
+  - 沿用原裁定、不动的两半：「关掉谁」三种写法并存见 §七；外点事件名 `mousedown`→`pointerdown`
+    已归一（实测残留 0）。
 - 验收矩阵**必含贴边位**：触发器贴窗口右缘/下缘时不得裁切（每浮层必测）。
 
 ### ④ 按钮（16 种收敛为 4 种）
@@ -261,8 +271,8 @@
 | 吉祥物 / UsageRing 内联 svg | 插画/仪表，非图标 | §二⑪ |
 | 模型设置区 tailwind 豁免 | **待收敛**（v2.58 遗留，收敛批清除后本行删除） | style.css:640 |
 | 守夜倒计时条 ×2（PermissionCard/AskCard）+ 队列行 li（QueueCard）+ toast 正文溢出提示（ToastStack）保留原生 title | 包裹层会抢走 `position:absolute` 细条的定位锚点 / 压缩 `li` 全宽点击区 / 整条气泡包 HoverTip 破坏 flex 布局——HoverTip 化必破版式 | 批③（2026-10-06）静态复核 |
-| 浮层"关掉谁"三种写法并存：`emit("close")`（所有权在父）/ 写本地 `open` ref / 遮罩 `@pointerdown.self` | 由渲染归属决定——`RowMenu`、`NotificationPopover`、`DefaultModelMenu` 由父组件 `v-if` 渲染，本地根本没有 ref 可写；两个对话框走遮罩。**"怎么关"是真语义差，不许为统一而塞一组开关**；共用的只有 Esc 判定那半边（`lib/use-popover.ts::escHandler`） | 台账 T10 逐站取证（2026-10-18） |
-| `RowMenu` 光标坐标开层 + 两步 `keepOpen` 确认；`SettingsSelect`/`RowMenu` 自持整套键盘链（焦点回还 / ↑↓ / Enter / `stopPropagation`） | 右键式上下文菜单与可搜索列表的固有交互；族 A 那个"两个 ref + 冒泡 + 写本地 ref"的形状承载不了，硬合并会先把"一次按键只做一件事"打散 | 同上 |
+| 浮层"关掉谁"三种写法并存：`emit("close")`（所有权在父）/ 写本地 `open` ref / 遮罩 `@pointerdown.self` | 由渲染归属决定——`RowMenu`、`NotificationPopover`、`DefaultModelMenu` 由父组件 `v-if` 渲染，本地根本没有 ref 可写；两个对话框走遮罩。**"怎么关"是真语义差，不许为统一而塞一组开关**；共用的是 Esc 那两半：判定（`lib/use-popover.ts::escHandler`）与优先级（`anyLayerOpen`，见 §二③） | 台账 T10 逐站取证（2026-10-18） |
+| `RowMenu` 光标坐标开层 + 两步 `keepOpen` 确认；`SettingsSelect`/`RowMenu` 自持整套键盘链（焦点回还 / ↑↓ / Enter / `stopPropagation`） | 右键式上下文菜单与可搜索列表的固有交互；族 A 那个"两个 ref + 冒泡 + 写本地 ref"的形状承载不了，硬合并会先把"一次按键只做一件事"打散。**订正（T10 收尾）= 这条豁免只覆盖"整套方向键链"，不覆盖 Esc**：`RowMenu` 开层时焦点不进层（`focusActive()` 只在按过方向键后才调），元素级 Esc 接不到键 ⇒ 已补 document 级 `useDismissOnEsc`；`SettingsSelect` 的 `openList()` 在 nextTick 里 `pop.focus()`，焦点在层内 ⇒ 元素级那份真能吃到键，**不补** document 监听（补了就是同一件事两个出处） | 同上 + T10 实施时实测 |
 
 ## 八、暂定值（缺省按推荐生效，报编号即翻案）
 

@@ -8,13 +8,15 @@
  * 无 id 如实不可点（与 §3.10 明细「查看完整对话」入口同一门槛）。
  * 数据源 = 当前会话 items 里的 subagent_run 工具行（与过程行/L1 极简
  * 摘要同源，零新链路）；弹层 = §五 popover 家族（teleport body + fixed
- * 锚钮下弹 + 外点收口；Esc 不抢 composer 的 Esc 链，同 §3.13 先例）。
+ * 锚钮下弹 + 外点收口 + Esc 收口：浮层开着时它吃掉这一键，输入框那条链
+ * 让位——优先级判定唯一出处 `lib/use-popover.ts`）。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useChatStore, type ToolItem } from "../../stores/chat";
 import { useWorkPanelStore } from "../../stores/work-panel";
 import { Icon } from "../../lib/icons";
+import { useDismissOnEsc } from "../../lib/use-popover";
 import HoverTip from "../settings/HoverTip.vue";
 
 const { t } = useI18n();
@@ -125,6 +127,15 @@ function onDocPointerDown(e: PointerEvent) {
 onMounted(() => document.addEventListener("pointerdown", onDocPointerDown, true));
 onBeforeUnmount(() =>
   document.removeEventListener("pointerdown", onDocPointerDown, true),
+);
+// Esc 收口（标准 §二③「一律 Esc」）：本面板开着时按 Esc 只关面板。传 `open`
+// 是有要求的——本组件常驻顶栏（触发钮与面板同一个组件），不传就成了"永久占
+// 着 Esc 优先级"，输入框那条链（停止 / 拒审批）会整条哑掉。
+useDismissOnEsc(
+  () => {
+    open.value = false;
+  },
+  open,
 );
 </script>
 

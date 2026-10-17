@@ -24,6 +24,7 @@ import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
 import { Icon } from "../../lib/icons";
+import { anyLayerOpen } from "../../lib/use-popover";
 import type { SlashCommand } from "../../lib/slash-commands";
 import type { ContentPartDto } from "../../types";
 import AskCard from "./AskCard.vue";
@@ -282,15 +283,17 @@ function onSendClick() {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  // §3.25/§3.39⑤ Esc 链：斜杠面板 → 跳过 ask → 拒绝审批 → 停止 → 交出
-  // 焦点；模型浮层开着时 Esc 归它（自持收口），这里不抢。输入法组合中
-  // 是取消候选。
+  // §3.25/§3.39⑤ Esc 链：斜杠面板 → 让位给开着的浮层 → 跳过 ask → 拒绝审批
+  // → 停止 → 交出焦点。输入法组合中是取消候选。
+  // 「让位」不问具体是哪个浮层（改前只认识 `showModels` 一个，别的浮层一补
+  // Esc 就变成"按一次键关一层 + 顺手拒一次审批"= 把不可逆动作放进误触路径）：
+  // 浮层开着时它自己会吃掉这一键，优先级判定唯一出处 = `lib/use-popover.ts`。
   if (e.key === "Escape" && !e.isComposing) {
     if (slashOpen.value) {
       slashDismissed.value = true;
       return;
     }
-    if (showModels.value) return;
+    if (anyLayerOpen()) return;
     const ask = asks.pending[0];
     if (ask) {
       void asks.skip(ask.request_id).catch(() => {});

@@ -14,6 +14,7 @@ import { useNotificationsStore } from "../../stores/notifications";
 import { useShellStore } from "../../stores/shell";
 import { compactNumber, relativeTimeLabel, relativeTimeSec } from "../../lib/format";
 import { Icon } from "../../lib/icons";
+import { useDismissOnEsc } from "../../lib/use-popover";
 import HoverTip from "../settings/HoverTip.vue";
 import SettingsSegmented from "../settings/SettingsSegmented.vue";
 import type { NotificationItem } from "../../types";
@@ -57,6 +58,10 @@ onMounted(() => {
 onBeforeUnmount(() =>
   document.removeEventListener("pointerdown", onOutside, true),
 );
+// Esc 收口（标准 §二③「一律 Esc」）。省略 `open` = 本组件由 Sidebar `v-if`
+// 渲染、挂载即打开，所以整段挂载期占 Esc 优先级；退场动画那一两百毫秒里还占
+// 着不算缺陷——那期间输入框的 Esc 本来也该先关这层。
+useDismissOnEsc(() => emit("close"));
 
 function kindTitle(item: NotificationItem): string {
   switch (item.kind) {

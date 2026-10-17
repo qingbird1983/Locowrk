@@ -20,6 +20,7 @@ import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { Icon } from "../../lib/icons";
 import { toolAction, toolArgSummary } from "../../lib/tool-summary";
+import { useDismissOnOutside } from "../../lib/use-popover";
 import HoverTip from "../settings/HoverTip.vue";
 import type { ApprovalRequest } from "../../types";
 
@@ -73,17 +74,12 @@ const workspace = computed(
 );
 
 /** 「允许本次对话」下拉（v4.11 收进 chevron：主路径 = 允许一次，最小
- * 授权是缺省；会话豁免是显式升级动作）。 */
+ * 授权是缺省；会话豁免是显式升级动作）。收口 = 全站唯一那份（外点 + Esc，
+ * 标准 §二③）：按 Esc 只关这个下拉，**不会**顺带走输入框那条链的「拒绝审批」
+ * ——浮层开着时它占 Esc 优先级，链上一律让位（`lib/use-popover.ts`）。 */
 const showScope = ref(false);
-function onDocPointerDown(e: PointerEvent) {
-  if (!showScope.value) return;
-  if (!(scopeAnchor.value?.contains(e.target as Node) ?? false)) {
-    showScope.value = false;
-  }
-}
 const scopeAnchor = ref<HTMLElement | null>(null);
-onMounted(() => document.addEventListener("pointerdown", onDocPointerDown));
-onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointerDown));
+useDismissOnOutside(scopeAnchor, showScope);
 
 /** 守夜倒计时只做显示（真执行者是后端 fail-closed）；0 = 不限不渲染。 */
 const limit = computed(() => props.req.timeout_secs ?? 0);

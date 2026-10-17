@@ -200,36 +200,55 @@
       · 为什么不在本台账里顺手做：夹具要立的是"同一份负载改前改后各跑 N 次"，那需要**先冻结负载**，
         而本台账其余条目全在动前端与路径语义 —— 边改边量出来的差值没有出处，量了等于没量
       · 本条从台账移出后，欠账没有消失，只是换页记：做「度量基线」阶段时那十二条的"快了多少"要在那里补
-- [ ] **T10** 弹层行为族 B/族 C 的处置（族 A 四处已收进 `lib/use-popover.ts`）
-      · 我的推荐 = 认可现状，登记进《Front-end Design Guidelines》§七 特例清单
-      · 2026-10-18 用户点头收账后**逐站取证，我自己的推荐被实测推翻**：族 B/C 的差异里只有两类是
-        真需求（「关掉谁」的所有权差异、Esc 带门控条件），其余三条是漂移——`DefaultModelMenu` 的
-        外点挂 `mousedown` 而同族九处都挂 `pointerdown`；它自己那份 `window keydown + Escape`
-        与族 A 那份逐字同形 = 同一判定的第二个出处；三处**根本没有 Esc**
-      · 已做（无争议那半）：`lib/use-popover.ts` 抽出 `escHandler`（Esc 判定唯一出处，
-        `dismissHandlers` 的 Esc 半边改为复用它）+ `useDismissOnEsc`（只补 Esc 的注册面，
-        **不给族 A 加开关**——`capture?`/`onDismiss?`/`escapeGate?` 那种"把差异从十处搬进一处"
-        仍然判为搬家不是收敛）；`DefaultModelMenu` 归一到 `pointerdown` 并换用共享件；
-        新增 `desktop/tests/popover-esc.spec.ts` 四条 + 两发变异各打中不同用例
-        （放宽成"任何键都关" ⇒ 红在 ①③；摘掉 `onBeforeUnmount` ⇒ 红在 ②，卸载后监听器还在、
-        计数从 1 变 2），还原逐字节写回 + `cmp` + `sha256sum`（b3684c47…）
-      · ★ 卡住的那半不是技术活：**「一次 Esc 该由谁吃」没有规则**。实测无 Esc 的三处 =
-        `chat/PermissionCard.vue` 的 scope 下拉、`shell/SubagentsMenu.vue`、
-        `shell/NotificationPopover.vue`（与标准那句"现状 3 处无 Esc"逐字对上，这条债不是新造的）。
-        它们的焦点通常在输入框，而 `Composer.vue:288` 已经有一条 Esc 链（斜杠面板 → 跳过 ask →
-        **拒绝审批** → 停止 → 交出焦点，且浮层开着时它已给 `showModels` 让位）。
-        直接给这三处加 document 级 Esc 的结果 = 按一次键同时关一层 + 拒一次审批
-        ⇒ **把不可逆动作放进误触路径，比不补更糟**。所以本条不许自决勾掉，等二选一：
-        **(a)** 建"浮层优先"的 Esc 路由：把 `Composer` 那份让位判定扩到这三处（一处判定全站生效），
-        标准 §二③ 那句"一律 Esc"随之兑现，代价是新增一条路由规则；
-        **(b)** 标准 §二③ 收窄成"可被键盘聚焦的浮层一律 Esc"，这三处按现状登记 §七，
-        零新机制，代价是"三处按 Esc 不关"成为定面
-      · 标准已同步（不含待裁那半）：§二③ 那句"现状 3 处无 Esc 收敛批补齐"改成带文件行号的实况 +
-        写明阻碍与两条路；§七 新增两行——「关掉谁」三种写法并存（`emit` / 本地 ref / 遮罩 `self`）与
-        `RowMenu` 光标跟随 + 自持键盘链，来源都写"台账 T10 逐站取证（2026-10-18）"
-      · 取证读数（现查命令一并写进标准，避免下次又靠人记）：外点站点 9（+ `lib/use-popover.ts`
-        本身）＝族 A 4 + `SettingsSelect` + `DefaultModelMenu` + `NotificationPopover` + `RowMenu` +
-        `SubagentsMenu`；其中 Esc 已有 6、缺 3；`mousedown` 残留 0（归一后）
+- [x] **T10** 弹层行为族 B/族 C 的处置（族 A 四处已收进 `lib/use-popover.ts`）（2026-10-18 用户点头"剩下四条也收账"⇒ 二选一由我代裁定 **(a)** 并落地）
+      · 上一批已做的（无争议那半）：`escHandler` 收成 Esc 判定的唯一出处 + `useDismissOnEsc` 注册面 +
+        `DefaultModelMenu` 外点从 `mousedown` 归一到 `pointerdown`；两发变异各打中一条（还原逐字节写回 +
+        `cmp` + `sha256sum` b3684c47…）
+      · **为什么代裁定选 (a)**：(b) 的代价是"三处按 Esc 不关"成为定面 —— 那是标准自己欠的债被洗成特例，
+        不是取舍而是赖账。而 (a) 的"新增一条路由规则"其实**不是新机制**：`Composer` 那份
+        `if (showModels.value) return;` 已经是同一个形状的第 1 个实例（浮层自持 Esc + 链点名让位），
+        (a) 只是把它从"点名认识 1 个"收成"问 1 个数"⇒ 出处从 N 个减到 1 个，符合标准 §零.2「不得同类多套」
+      · 落地形状（`lib/use-popover.ts`）：模块级计数器 `openLayers` + `anyLayerOpen()`，占位与归还全在
+        注册面内部（`useDismissOnEsc(close, open?)` / `useDismissOnOutside(root, open)` 自动登记，
+        **站点没有"忘记归还"这个可犯的错误**：`onBeforeUnmount` 无条件归还，卸载时开着也还得掉）。
+        省略 `open` = 父 `v-if` 渲染、挂载即打开那一族；有本地开关必须传——不传的后果我自己在上一批
+        写进了本条（常驻组件长期占位 = 输入框整条 Esc 链哑掉），所以 `escHandler` 也加了 `isOpen` 门控
+      · 输入框那条链改问 `anyLayerOpen()`（不再点名 `showModels`）⇒ 链上第 2 个"浮层优先"实例消失，
+        浮层加多少个都不必再动这条链
+      · 补齐的站点：**`chat/PermissionCard.vue` 的 scope 下拉**（它那份外点与族 A 逐字同形 ⇒ 整段换成
+        `useDismissOnOutside(scopeAnchor, showScope)`，删掉自写的 7 行）、`shell/SubagentsMenu.vue`、
+        `shell/NotificationPopover.vue`；另 `chat/ModelSelector.vue` 自写的那份 document keydown 换共享件
+        （同一判定的第 2 个出处消失）
+      · ★ 逐站补做取证时发现**第 4 处**、不在原三条里：`shell/RowMenu.vue` 的 Esc 原本只挂在菜单元素上，
+        而**开层时焦点不进层**（`focusActive()` 只在按过方向键后才调）⇒ 右键或点 `…` 开层后按 Esc 谁也不吃，
+        焦点若还在输入框那一键就直接落到拒审批上。补 document 级一份（元素那份连 `stopPropagation` 一字未动，
+        焦点在层内时仍由它先吃）。`SettingsSelect` **不补**：实测它的 `openList()` 在 nextTick 里
+        `pop.focus()`，焦点在层内 ⇒ 元素级那份真能接到键 ⇒ 补了才是同一件事两个出处
+      · 防回潮 = `check-single-source.mjs` 新增 **SS9**（挂了 document/window 级 `pointerdown` 外点的组件
+        必须同文件带 Esc，左=右）/ **SS9b**（让位判定还在：`1|1` = 计数器 1 个定义 + 1 个消费者）/
+        **SS9c**（计数器只许一个出处）+ 三条扫描面下限（组件 .vue 数、外点站点数、前端 src 文件数）。
+        `make selftest` **17 档全中**；变异三发各打中一条：SS9 = 塞一个"只挂外点没挂 Esc"的浮层、
+        SS9b = 把 Composer 那行退回 `showModels`、SS9c = 在别处再写一份 `let openLayers`
+      · 行为面 = `desktop/tests/popover-esc.spec.ts` 从 4 条扩到 **9 条**（新增 ⑤ `isOpen` 门控 +
+        ⑥⑦⑧⑨ 优先级登记/归还/两层叠开），四发窄变异各打中它自己那一条（摘掉卸载归还 ⇒ 红 4 条；
+        挂载时无视 `open` ⇒ 首红在 ⑦ 并级联 ⑧⑨；计数写成布尔 ⇒ 独红在 ⑨；`escHandler` 丢门控 ⇒ 独红在 ⑤）；
+        新写 `desktop/tests/esc-routing.spec.ts` **2 条** = mount 真实 `Composer`，同一条 textarea 上按 Esc
+        跑三段（无浮层 ⇒ 拒审批 1 次；浮层开着 ⇒ 0 次且关的是浮层；浮层关掉后 ⇒ 又 1 次）——
+        这三段互相兜，任何一段假绿都会把另一段顶红；第 4 条打在 `PermissionCard` 的下拉上（Esc 关下拉、
+        `decide` 零调用、优先级归还）。变异三发：让位判定写恒真 ⇒ 红在①③；删掉让位 ⇒ 红在②（正是本刀修的
+        那个缺陷形状）；PermissionCard 退回"只挂外点没 Esc" ⇒ 红在第四条。三次还原均逐字节 `cmp` +
+        `sha256sum` 复核（Composer 3698ebd01613 / PermissionCard 197daa4753fe）
+      · 标准同步：《Front-end Design Guidelines》升 **v2.4** —— §二③ 收口那行补上缺的半句规矩
+        （「一次 Esc 只许有一个消费者 = 开着的那层吃掉它」+ 两种归属怎么写 + 现查命令 + 实测读数），
+        §七 原那两行**订正**：豁免只覆盖"整套方向键链"、不覆盖 Esc（`RowMenu` 那条按实况改写法）
+      · 读数（本刀口径，现查命令写进标准 §二③）：自己挂了 document/window 级 `pointerdown` 的浮层组件
+        **6** 个，带 Esc **6** 个（改前 3 缺）；引用 `lib/use-popover` 的组件 **11** 个 = 收口侧 10 +
+        让位侧 1（`Composer.vue`）；`mousedown` 残留 0
+      · 未动的一侧（有意不收）：`ImageViewer` / `CommandPalette` / `ToastStack` / 两份对话框 / 画布那五处
+        Esc 消费者不在这条债的射程内——它们不是"外点自持的小浮层"，各自的条件（`saving` 门控、清 toast、
+        退出画布）是真语义；标准 §二③ 那句"一律 Esc"管的仍是 §五 那族
+      · 门禁：`make quick` 全绿（含 17 档自证 + stylelint + check-style 99 文件干净）、`vue-tsc --noEmit` rc=0、
+        vitest **151 条全绿**（改前 144 = +5 优先级 +2 路由）
 - [x] **T11** 插件展示元数据以谁为准：代码里的 `describe` 还是 `manifest.json` 的徽章（2026-10-18 用户点头收账）
       · 方向由实测决定，而**两个候选谁都不能全盘胜出**。逐插件比对十份，重叠区漂的是：工具描述 15/30、
         schema 6 处、`exposure` 4 处，`side_effect` 0 处（它历史漂过一次 = 审计 H8，清单写 `Pure`
@@ -467,6 +486,40 @@
 - [ ] 第二节那一组**没有任何一条被我自作主张做掉**（尤其 T4/T12 属删除与不可逆类）
       · 条数不写在这里（原句写着"九条"，登记 T17 之后就漂成十条 —— 正是本页禁止的那种数）；
         现查 = 本节区间内 `- [ ]` 的个数。本条要等这一节全部裁定完才勾，不是现在勾
+
+## 按批验收清单（T14 的交付物）
+
+分成两组是因为**能核的方式不同**，不是一组重要一组不重要。A 组要你自己在窗口里点；
+B 组机器已经钉住了，你复跑那一条命令、对一下读数就行——我不在这里放"看看代码"这种没有判读的条目。
+
+### A 组：打开哪 · 点哪 · 该看到什么
+
+| 批 | 你做什么 | 该看到什么 | 不对的话说明 |
+| --- | --- | --- | --- |
+| T10 浮层 Esc（本刀补的那一半） | 四处各开一层再按一次 Esc：① 顶栏「子代理」面板（本会话跑过 subagent 才有那颗钮）② 侧栏底部通知浮层 ③ 审批卡右侧 `⌄` 上弹的「允许本次对话」下拉 ④ 会话行 `…` 菜单或右键菜单 | 每处**按一次就关那一层**，关掉后现场不变：审批卡还在、默认模型没被换、通知没被读掉 | 按 Esc 没反应 = 那层没吃到 document 级 Esc（④ 是这一刀的第 4 处：菜单元素那份 Esc 只在焦点进层后才接得到键，而开层时焦点不进层）；按 Esc 顺手拒了审批 = `anyLayerOpen()` 让位没生效（SS9b 会红） |
+| T10 链没被自己的补丁堵死 | 有 pending 审批、**什么浮层都没开**时，在输入框里按 Esc | 照旧拒掉这一次审批：卡消失、过程行里落下一条 deny 记录 | 什么都不发生 = 让位判定写成恒真（变异①那个形状），链被堵死比不补更糟 |
+| T16 即时生效 | 设置页依次改：界面语言 → 主题 → 界面字号 | 每一项**当场**生效，不用重开窗口；关掉再开仍是这个值 | 某项要重开才生效 = 那份"即时"又退回各自实现；改完闪回原值 = 回滚读的是新投影（T16 抓到的原缺陷形状） |
+| T15 设置分区 | 设置页每个分区各改一项并保存（共 11 个分区），重开应用 | 11 项全部保留；报错文案点名**是哪个分区**出界 | 某分区保存后丢失 = 那个分区没自持 `apply_update`；报错不点名 = 编排层又在替分区铺校验 |
+| T11 插件卡 | 改**暂存面**的 `plugins/<id>/<ver>/manifest.json` 里的 `description`，重进插件页（源清单 `plugins-src/` 改完不重跑 `bash scripts/build_plugins.sh` 是不会变的——展示面读的是暂存目录，不是源） | 卡片文案随暂存清单变；徽章与该工具代码声明的副作用等级一致 | 改清单界面不动 = 展示面又去读了代码那份；徽章与实际副作用不符 = 重叠区没被对账钉住 |
+
+### B 组：复跑一条命令对的读数
+
+| 批 | 命令（在仓库根） | 该看到的末行 |
+| --- | --- | --- |
+| T2 注入环 | `node scripts/check-single-source.mjs` | `SINGLE_SOURCE_OK`，其中 SS8 实测与期望同为「7 对 7」、SS8b 实测 0、SS8c 实测 7 |
+| T2 内核 | `cargo test -p kernel-agent --test waterfall` | 6 条通过 0 失败，含 `guard_writes_back_identical_bytes_when_nothing_changed` |
+| T3 分发表 | `pnpm -C desktop run test:run` | `Test Files 16 passed` / `Tests 144 passed`（原 117 + 本批 27） |
+| T21 + T2 叙事 | `cargo run -p kernel-bin -- demo4` 然后 `echo $?` | 退出码 0，末行三条读数自洽：danger 实际执行 1 次、被拒闭合 1 条、echo 吃到改写后的 `mode=upper`（结果行里是 `HELLO LOCOWRK`） |
+| T18 + T20 Linux | `wsl -d Ubuntu-24.04` 里按 `AGENTS §7` 那行做（先补两份产物再 `cargo test --workspace`） | 每条 `test result:` 都是 `0 failed` 且 **`0 ignored`**——有用例被平台跳过就是这批要消灭的形状 |
+| T7 审批测试 | `cd desktop/src-tauri && cargo test tests_approval` | 全过；若某条挂了，它是**在预算内报失败**而不是把测试进程卡住 |
+| T17 + T19 闸自己 | `make doc && make selftest` | `check-docs: OK` 与 `DOCS_SELFTEST_ALL_CAUGHT`——闸要能为插进去的断链报红，打空就是零证明力 |
+| T5 + T6 热路径 | `cargo test -p kernel-agent -p session-store` | 全过；这两批的判据（少一次取锁 / 两处取数改源）在 `check-single-source.mjs` 的 SS3 与对账用例里 |
+| 全量收尾 | `make check` | 末行 `▶ check 全绿` |
+
+### 这两批没有可核对象
+
+- **T9**（度量基线）：转入路线图的独立阶段，现在那一行写着 ⬜ 没开始——它的验收物本身还不存在，没有"该看到什么"可给。
+- **T12**（两份 `target/` 约 67G）：已给判定"不清"，依据是实测 25G + 42G 而盘剩 1.3T。你哪天改主意要清，只需要删两处目录再重跑一次构建，不需要我这边动代码。
 
 ## 非目标
 

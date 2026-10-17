@@ -9,6 +9,7 @@
  * 动画由挂载点的 Teleport + Transition 接管（本组件根 = 单元素）。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { useDismissOnEsc } from "../../lib/use-popover";
 
 export interface RowMenuItem {
   id: string;
@@ -104,6 +105,13 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onOutside, true);
 });
+// Esc 收口（标准 §二③ + 「一次 Esc 只许一个消费者」）。本组件那份 Esc 原本只挂在
+// 菜单元素上，而**开层时焦点并不进来**（`focusActive()` 只在按过方向键后才调），
+// 于是右键/点 `…` 开层后按 Esc 谁也不吃——焦点若还在输入框里，那一键直接落到
+// Composer 的 Esc 链上 = 拒一次审批。补 document 级这一半后：焦点在层内 ⇒ 元素那份
+// 先吃并 `stopPropagation`（既有行为，一字未动）；焦点在层外 ⇒ 这里吃。
+// 省略 `open` = 父组件 `v-if` 渲染、挂载即打开 ⇒ 整段挂载期占 Esc 优先级。
+useDismissOnEsc(() => emit("close"));
 </script>
 
 <template>
