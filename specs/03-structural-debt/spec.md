@@ -155,6 +155,14 @@
         demo4 里"审批插件经 `Replace` 注入的 `mode=upper` 被 echo 吃到"= 外部改写环与七个就地环混跑的
         端到端证据（那条 `Replace` 通路由 `kernel-bin/approval_plugin.rs` 故意留作活样本，
         否则 `Replace` 在本仓只剩测试在用）
+      · Linux 侧同 commit 全新 clone 复跑：`cargo test --workspace` = **39 套件 ok / 537 条通过 / 0 失败**
+        （`uname` = Linux 6.18.54.1-microsoft-standard-WSL2）
+      · 取证路上撞到一个**流程缺口，已当场补进 AGENTS §7**（不另立欠账）：新 clone 照 §7 字面直接跑会红
+        7 条，全红在 `plugin-service/src/service/tests/mod.rs:67` 那句拷市场产物的 `unwrap()`——开发态
+        `plugins/` 与市场态 `market/` 两份产物都不入库，而 §7 只写了 `cargo test`。第一次我按名字猜、
+        补跑 `build_plugins.sh`：它 rc=0 却一个 `.so` 也没落进 `market/`（那脚本 stage 到 `plugins/`），
+        市场侧归 `build_market.sh`。补完 plugin-service 31/31、全面 0 失败。两侧口径本来就一致
+        （`artifact_file_name` 非 Windows 返回 `libtool_shout.so`，脚本找的也是这个名字）
       · ★ 遗留（不在本条里清）：链上传的仍是 JSON ⇒ 每环还剩 `from_value` + `to_value` 两次整包转换
         （改前是 clone + from_value + to_value 三次）。要归零得把链的载体换成类型化
         （`&mut RequestPayload` 一路传下去、只在进出链各转一次），那要动"决策点 = JSON 契约"这条与
