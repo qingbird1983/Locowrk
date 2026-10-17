@@ -39,3 +39,15 @@ plugins/*
 
 # 用户问题批次工作目录（docs/issue，不入库）
 docs/issue/
+
+# ── 只在本机、永不推送远端的四层（用户 2026-10-17 定）────────────────────
+# 判据 = 「它是我的过程与私人史料，还是别人接手必须读的契约？」前者不入库。
+# 注意两件事：① 已跟踪的老文件要 `git rm -r --cached` 才真的停跟踪（本批已做）；
+# ② 它们仍留在**已有提交记录**里——本仓裁定是"只管以后，不动历史"，
+#    所以别人翻 git log 还是能看到旧内容，这条不是可撤销的保密措施。
+# docs/design/ 只排根上那些「待开发/待重构的方案稿」与 archive，
+# authority/ 是唯一说法类规矩，留在库里（AGENTS.md 天天指它）。
+/docs/design/*.md
+/docs/design/archive/
+/docs/history/
+/docs/references/

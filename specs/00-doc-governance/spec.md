@@ -5,7 +5,7 @@
 - 日期：2026-10-17
 - 出处 / 上游：用户 2026-10-17 指令 —— 全部依照 `F:\Users\Warehouse template` 的方向；
   旧文档约束废除，历史归类加索引，未来工作按新规则重排；当时的成本底数与提案见
-  [`docs/history/doc-governance-plan-v1.md`](../../docs/history/doc-governance-plan-v1.md)
+  [`docs/history/doc-governance-plan-v1.md`](../../docs/history/doc-governance-plan-v1.md)（⊘ 这一层不入库，只在作者本机）
 
 ## 目标
 

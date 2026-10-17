@@ -7,7 +7,8 @@
   旧施工队列的 Q1–Q10 交付形状已整体归档，重构后可能替换
   （旧逐批叙述：[`docs/history/CHANGELOG-legacy.md`](../../docs/history/CHANGELOG-legacy.md)、
   [`docs/history/CHANGELOG-batches.md`](../../docs/history/CHANGELOG-batches.md)、
-  施工队列：[`docs/history/post-audit-roadmap-v1.md`](../../docs/history/post-audit-roadmap-v1.md)）
+  施工队列：[`docs/history/post-audit-roadmap-v1.md`](../../docs/history/post-audit-roadmap-v1.md)；
+  ⊘ `docs/history/` 不入库，这些只在作者的机器上，clone 下来没有）
 
 ## 目标
 

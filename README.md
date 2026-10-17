@@ -61,9 +61,11 @@ pnpm -C desktop tauri dev        # 起桌面端：聊天、看工具调用、看
 | 各主题"现在有效的那一份"清单（含冲突时谁说了算） | [`docs/design/authority/README.md`](docs/design/authority/README.md) |
 | 前端形态标准（同类只许一种形态） | [`docs/design/authority/Front-end Design Guidelines.md`](docs/design/authority/Front-end%20Design%20Guidelines.md) |
 | 插件清单与"哪些是插件、哪些是宿主内置" | [`docs/design/authority/plugins.md`](docs/design/authority/plugins.md) |
-| 还没实现的想法与设计稿 | [`docs/design/`](docs/design)（根上散着的那几份） |
-| 已全部做完 / 已退役的设计稿（只读） | [`docs/design/archive/README.md`](docs/design/archive/README.md) |
-| 以前的批次流水与旧路线表（只读） | [`docs/history/README.md`](docs/history/README.md) |
+| 还没实现的想法与设计稿 | [`docs/design/`](docs/design)（根上散着的那几份 · ⊘ 不入库） |
+| 已全部做完 / 已退役的设计稿（只读 · ⊘ 不入库） | [`docs/design/archive/README.md`](docs/design/archive/README.md) |
+| 以前的批次流水与旧路线表（只读 · ⊘ 不入库） | [`docs/history/README.md`](docs/history/README.md) |
+
+标 ⊘ 的几层只在作者的机器上，`.gitignore` 里排除了，clone 下来是空的 —— 里面写的东西你要看，我查给你。
 
 ## 结构一览
 

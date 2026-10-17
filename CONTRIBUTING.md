@@ -59,6 +59,11 @@ Conventional Commits：`feat:` `fix:` `docs:` `refactor:` `test:` `chore:`。
 | 用户可感知的变化 | `README.md` 或发版说明 | 只在有可感知变化/发版时写 |
 | 欠账 / 挂账 | 所在 spec 的「风险」节或路线图一行 | 一条一行，引用只写编号 |
 
+**设计稿的进出**（判据在 [`STRUCTURE.md`](STRUCTURE.md) 的 ⊘ 行，这里只写动作）：一份稿子上的设计**全部做完**了、
+或者**换了做法重开**了，就把它整份挪进 `docs/design/archive/`，新方向在 `docs/design/` 根另起一稿。
+搬的时候两件配套动作：① 在 `docs/design/archive/README.md` 里点名它（`make doc` 的 R7 会查"归档件没被索引点名"）；
+② 在它末尾补一行"何时、为什么搬进来"——这一层不入库，移动**不会留下 git 的改名记录**，不补就成了无主文件。
+
 **已废除的旧约束**（不要再做，也不要"顺手补回来"）：AGENTS.md 装进度、三条轮转与 6,000 字节预算、
 ROADMAP/CHANGELOG 各 8 批窗口与逐字搬出脚本、每版一整行万字 CHANGELOG、往设计稿正文追加落地注记、
 把"判据自纠累计数"写进正文。历史都在 `docs/history/`，只读不写。

@@ -120,8 +120,10 @@ t_quick() {
 }
 
 t_adr() {
-  n=$(ls docs/adr 2>/dev/null | grep -c '^[0-9]' || true)
-  id=$(printf '%04d' "$((10#$n + 1))")
+  # 编号 = 现有最大编号 + 1。此前用「文件条数 + 1」，把 0000-template 也数进去，
+  # 于是下一篇会跳到 0004 而 0003 永远空着（实测：docs/adr 三份时它报 0004）。
+  last=$(ls docs/adr 2>/dev/null | grep -oE '^[0-9]{4}' | sort -n | tail -1)
+  id=$(printf '%04d' "$((10#${last:-0000} + 1))")
   f="docs/adr/${id}-untitled.md"
   [ -e "$f" ] && die "$f 已存在（编号冲突）"
   cp docs/adr/0000-template.md "$f"

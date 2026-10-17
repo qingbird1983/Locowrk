@@ -7,7 +7,7 @@
 要么缺前置条件，要么需要你点头，要么当时判过"不值得为它单独开一批"。
 
 现在它们只在这里是**在册的**：勾掉一条就少一条，做完就从这张表删掉。
-原文在 [`docs/history/audit/AUDIT-FIX-PLAN-v1.md`](../../docs/history/audit/AUDIT-FIX-PLAN-v1.md) §7，
+原文在 [`docs/history/audit/AUDIT-FIX-PLAN-v1.md`](../../docs/history/audit/AUDIT-FIX-PLAN-v1.md) §7（⊘ 不入库，只在作者本机），
 那里的措辞不改写（历史只读），要更新的东西写在这里。
 
 ## 现在到哪了
@@ -62,6 +62,9 @@
       · 前置 = 设计稿先行；现状 = `CallCtx.cancel/deadline` 两端都没接，取消信号过不去 ABI 边界
 - [ ] **T14** 逐批验收与证据核对
       · 需要的是"按批出一份验收清单"，不是新改动 ⇒ 你要抽查哪一批，说编号我出清单
+- [ ] **T17** `docs/design/authority/DESIGN.md` 文档版本行里那处指向 `docs/history/` 的链接是裸链接
+      · 本机层不入库之后（[`ADR-0003`](../adr/0003-private-doc-layers.md)），别人 clone 过去点不开；
+        改它要动 `[LOCK]` 文件 ⇒ **等你点头**（`check-docs.mjs` 的 R10 对这两处网开，所以闸不报）
 
 ## 验收标准
 

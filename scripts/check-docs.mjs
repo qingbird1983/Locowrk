@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 文档规则闸（取代 check-doc-budget.mjs，2026-10-17 文档治理刀）。
 //
-// 它只判**新规则**，七条，每条都直白可判定：
+// 它只判**新规则**，每条都直白可判定：
 //   R1 AGENTS.md 别写胖          —— ≤100 行
 //   R2 地图别说谎                —— STRUCTURE.md 必须点名每一个在役目录 + 根入口件 + 所有 ★ 件
 //   R3 决策记录格式              —— docs/adr/NNNN-短横线主题.md，编号唯一，四节齐
@@ -11,6 +11,8 @@
 //   R7 历史层要有索引            —— docs/history/ 下每一份 .md 都要被 docs/history/README.md 点名
 //   R8 断链                     —— 在役文档里的相对链接必须指得到一个真实文件（搬完忘改旧址 = 下一个人只能猜）
 //   R9 design 层的形状          —— docs/design 下只许 archive/ 与 authority/ 两个子目录（状态不靠目录名表示）
+//   R10 不入库指针要标注        —— 指向被 .gitignore 排除层的链接，同行必须写「不入库」（本机点得开、clone 是死路）
+import { execFileSync } from 'node:child_process';
 //
 // 闸自己也是活的（同旧闸的教训）：扫描面读数为 0 直接判红，因为那只能是**闸瞎了**。
 // 用法：node scripts/check-docs.mjs          全量报告 + 判红退出 1
@@ -200,11 +202,58 @@ if (fs.existsSync(designDir)) {
     bad(`docs/design 下的子目录 = ${sub.join('/') || '（无）'}，规定的形状是 ${allow.join('/')} 两个；新目录要么并进这两个，要么搬到 docs/ 下别的位置`);
 }
 
+// ---- R10 指向「不入库层」的链接必须写明不入库 ----------------------------------------
+// 用户 2026-10-17 裁定：`docs/design/` 根上的方案稿、`docs/design/archive/`、`docs/history/`、
+// `docs/issue/`、`docs/references/` 移出 git 跟踪（`authority/` 留下）。于是多出一类 R8 看不见的错：
+// 链接**在作者本机点得开、clone 之后是死路径** —— R8 只判存在性，它永远绿。
+// 不入库名单绝不在这里写第二份：直接问 `git check-ignore`，`.gitignore` 是唯一出处。
+// 豁免两处：`docs/adr/`（只增不改，老链接是当时的事实）、`DESIGN.md`（[LOCK]，那处指针已登记等点头）。
+const IGNORE_EXEMPT = (r) => r.startsWith('docs/adr/') || r === 'docs/design/authority/DESIGN.md';
+const pointerRows = [];
+for (const f of live) {
+  const r = rel(f);
+  if (IGNORE_EXEMPT(r)) continue;
+  read(f).split('\n').forEach((l, i) => {
+    for (const m of l.replace(/`[^`]*`/g, '').matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)) {
+      let t = m[2];
+      if (/^(https?:|mailto:|file:|#)/.test(t)) continue;
+      t = t.split('#')[0].split('?')[0];
+      if (!t || t.startsWith('/')) continue;
+      let target;
+      try { target = decodeURIComponent(t); } catch { continue; }
+      const abs = path.isAbsolute(target) ? target : path.join(path.dirname(f), target);
+      const rr = rel(abs).replace(/\\/g, '/');
+      if (!rr || rr.startsWith('../') || rr === '.') continue;
+      pointerRows.push({ r, line: i + 1, text: l, target: rr });
+    }
+  });
+}
+const probe = [...new Set([...pointerRows.map((p) => p.r), ...pointerRows.flatMap((p) => [p.target, path.posix.dirname(p.target)])])];
+let ignoredSet = null;
+try {
+  const out = execFileSync('git', ['check-ignore', '--stdin'], { cwd: ROOT, input: probe.join('\n') + '\n', encoding: 'utf8' });
+  ignoredSet = new Set(out.split('\n').filter(Boolean).map((s) => s.replace(/\\/g, '/')));
+} catch (e) {
+  if (e.status !== 1) bad(`R10 问不了 git（${e.message}）⇒ 这条判据作废，不许静默当绿`);
+}
+if (ignoredSet) {
+  // 自己也住在不入库层里的文件（docs/issue、docs/references、archive）互链不算：
+  // 那一层根本不会出现在别人机器上，标注是给**入库文档**的读者看的。
+  const hits = pointerRows.filter((p) => !ignoredSet.has(p.r))
+    .filter((p) => ignoredSet.has(p.target) || ignoredSet.has(path.posix.dirname(p.target)));
+  if (!pointerRows.length) bad(`R10 扫描面为 0 条链接 ⇒ 判据空转（先查在役文档口径是不是变了）`);
+  if (pointerRows.length && !hits.length) bad(`R10 一条都没命中忽略规则 ⇒ .gitignore 那五条排除规则或链接面变了，判据作废`);
+  for (const p of hits) {
+    if (!/不入库/.test(p.text)) bad(`${p.r}:${p.line} 指向不入库的 ${p.target}，却没写「不入库」——本机点得开、别人 clone 后是死路径`);
+  }
+  if (dbg) console.log(`  R10 链接 ${pointerRows.length} 条 · 落在不入库层 ${hits.length} 条`);
+}
+
 // ---- 下限：闸不许瞎 -----------------------------------------------------------------
 if (mdAll.length < 10) bad(`md 扫描面只有 ${mdAll.length} 份 ⇒ 这条闸几乎看不见文档，拒绝空转`);
 if (live.length < 10) bad(`在役文档读数 ${live.length} 过低 ⇒ 目录口径坏了`);
 
-console.log(`check-docs（文档规则闸：入口厚度 / 地图 / ADR / spec / 长行 / 旧仪式 / 历史索引）`);
+console.log(`check-docs（文档规则闸：入口厚度 / 地图 / ADR / spec / 长行 / 旧仪式 / 历史索引 / design 形状 / 不入库指针）`);
 console.log(`DOC_FILES=${mdAll.length} LIVE=${live.length} HISTORY=${hist.length} ADR=${adrFiles.length} SPEC=${specFiles.length} LONG=${[...longByFile.values()].reduce((a, b) => a + b, 0)}处在${longByFile.size}个文件/名单${LONG_FILES.length}个`);
 if (dbg) console.log(`  在役目录：${[...new Set(mdAll.map((f) => path.dirname(rel(f))))].join(' ')}`);
 if (errs.length) {

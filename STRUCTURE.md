@@ -4,10 +4,12 @@
 > **新增 / 移动 / 删除文件后同步更新本文件** —— 一张说谎的地图比没有地图更糟。
 > 本树是**当前实际状态**，不写愿望。若本文件与仓库不符，相信仓库，并修正本文件。
 
-只有两个标记：
+只有三个标记：
 
 - `★` **唯一事实源**：改这里，其他地方只引用、不复制
 - `[LOCK]` **禁区**：改动前必须向人说明并获批准
+- `⊘` **不入库**：`.gitignore` 排除了、永不推送远端 ⇒ 别人 clone 后这些路径是**空的**，
+  在役文档里指向它们的链接必须带「不入库」字样（这条由 `check-docs.mjs` 的 R10 判，判据直接问 `git check-ignore`，不写第二份名单）
 
 ## 根目录
 
@@ -55,23 +57,28 @@ pre-commit 只按暂存面挑要跑哪几条 —— 三处都不抄清单（v2.2
 | 路径 | 属性 | 说明 |
 | --- | --- | --- |
 | `docs/roadmap/` | ★ | **唯一进度表**（2026-10-17 从 design 里提出来放 docs 根）：只列未完成阶段 + 勾选 + 一句人话状态；做完的删掉 |
-| `docs/design/authority/` | ★ | **各主题现在有效的那一份规范**（15 份）。判据：改了代码必须回来同步它。清单、层级与冲突裁决顺序见 `docs/design/authority/README.md` |
+| `docs/design/authority/` | ★ | **各主题现在有效的那一份规范**。判据：改了代码必须回来同步它。清单、层级与冲突裁决顺序见 `docs/design/authority/README.md` |
 | `docs/design/authority/DESIGN.md` | ★ [LOCK] | 内核权威设计文档（唯一需求来源）：改核心模块前先读对应章节，附录 C 是内核八条纪律的完整版 |
 | `docs/design/authority/UI Design System.md` | ★ | UI 层最高权威（令牌映射 / 字号相对制 / 圆角嵌套 / 冲突裁决表） |
 | `docs/design/authority/Front-end Design Guidelines.md` | ★ | 前端**唯一形态标准**：同类只许一种形态 + 特例申请制 + 两道机械闸 |
-| `docs/design/authority/`（其余 12 份） | ★ | 上下文与记忆族 · `LLM.md` · `plugins.md`（§一 是"哪些是插件 / 宿主内置 / 已退役"的唯一真源）· `Plug-in packaging.md` · 工具暴露统计 · 设置与约束 · `edit_replace.md` · 整理摘要 |
-| `docs/design/`（散在根上的 7 份） | — | **还有用但还不是正身**：未开工或部分开工的设计稿 + 下位细则（`UI shell and patterns.md`）。其中 `Memory-KV Roadmap.md` 是 ⚠ 待并档的第二张进度表，未完成项并进 `docs/roadmap/` 后归档 |
-| `docs/design/archive/` | 只读 | **已兑现 / 已退役 / 被新版本取代的设计稿**（15 份）。不再追加、不再改写；索引 = `docs/design/archive/README.md`（含"首行状态滞后"这个坑的说明） |
-| `docs/issue/` | — | 工单与缺陷清单（含从 design 里并过来的三份）；状态行须与自身处理记录一致 |
+| `docs/design/authority/`（其余几份） | ★ | 上下文与记忆族 · `LLM.md` · `plugins.md`（§一 是"哪些是插件 / 宿主内置 / 已退役"的唯一真源）· `Plug-in packaging.md` · 工具暴露统计 · 设置与约束 · `edit_replace.md` · 整理摘要 |
+| `docs/design/`（根上的散稿） | ⊘ | **接下来要开发的、或需要重构的设计方案稿**。规矩（用户 2026-10-17 定）：这份稿子上的设计**全部做完**了，或者**换了做法重新设计**了 ⇒ 它在这里就没用了，整份搬进 `archive/`，新方向另起一稿。下位细则 `UI shell and patterns.md`（导航模型 / 页面模式库 / 弹层规则）也住这一层，与 `authority/UI Design System.md` 冲突时以上位为准。其中 `Memory-KV Roadmap.md` 是 ⚠ 待并档的第二张进度表，未完成项并进 `docs/roadmap/` 后归档 |
+| `docs/design/archive/` | 只读 ⊘ | **已兑现 / 已退役 / 被新版本取代的设计稿**。不再追加、不再改写；索引 = `docs/design/archive/README.md`（含"首行状态滞后"这个坑的说明） |
+| `docs/issue/` | ⊘ | 工单与缺陷清单；状态行须与自身处理记录一致 |
 | `docs/prototype/` | — | 静态原型 = 方向参考，**不是像素合同**；演示件禁止搬进生产码 |
-| `docs/references/` | — | 外部参考笔记 |
+| `docs/references/` | ⊘ | 外部参考笔记 |
 | `docs/adr/` | ★ | 决策记录：`NNNN-<主题>.md`，**只增不改**；规则与模板见 `docs/adr/0000-template.md` |
 | `specs/` | ★ | 阶段计划：一阶段一目录 `specs/<编号>-<名>/spec.md`，含**可测验收标准**与**非目标** |
-| `docs/history/` | 只读 | **历史归档**：流水、旧路线表、旧变更日志、已批准的计划。不再追加、不改写；索引 = `docs/history/README.md` |
-| `docs/history/audit/` 与 `docs/history/audit/parts/` | 只读 | 审计报告 + 修复台账 + 六份分区明细。§7 的 T1–T16 未结欠账**已先抄进** [`specs/03-structural-debt`](specs/03-structural-debt/spec.md) 再归档到这里 |
+| `docs/history/` | 只读 ⊘ | **历史归档**：流水、旧路线表、旧变更日志、已批准的计划。不再追加、不改写；索引 = `docs/history/README.md` |
+| `docs/history/audit/` 与 `docs/history/audit/parts/` | 只读 ⊘ | 审计报告 + 修复台账 + 分区明细。§7 的 T1–T16 未结欠账**已先抄进** [`specs/03-structural-debt`](specs/03-structural-debt/spec.md) 再归档到这里 |
 
-文档只有四个去处，别新建第五个：**现役规范**进 `docs/design/authority/`，**还没做的想法**放 `docs/design/` 根，
-**做完的**进 `docs/design/archive/`，**过程与流水**进 `docs/history/`。进度只在 `docs/roadmap/` 一行里。
+文档只有四个去处，别新建第五个：**要开发的方案**放 `docs/design/` 根，**唯一说法**进 `docs/design/authority/`，
+**做完或被推倒的**进 `docs/design/archive/`，**过程与流水**进 `docs/history/`。进度只在 `docs/roadmap/` 一行里。
+
+`⊘` 那几层是 2026-10-17 的裁定（authority 留在库里，其余排除）。两件实话写在地图上而不是只在脑子里：
+① 光加 `.gitignore` 不会让**已跟踪**的文件停止跟踪，必须 `git rm -r --cached`（本批已做，本地文件一个没删）；
+② 它们**仍留在已有的提交记录里** —— 本批裁定「只管以后、不动历史」，所以这套排除不是保密措施，
+只是不让远端继续长出这些内容。真要清干净得重写历史，那是一刀不可逆操作，没做。
 
 ## 产物与临时件（一律不入库）
 
