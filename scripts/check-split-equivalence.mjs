@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 第五道结构闸：拆分等价性守卫（v2.161 批 F-11 立，用户 2026-10-11 裁定「入库成第五道闸」）
+ * 结构闸：拆分形状守卫（v2.161 批 F-11 立，用户 2026-10-11 裁定「入库成第五道闸」）
  *
  * 为什么要有它：批 F-6…F-10 五刀的等价证明全写在 tmp/ 的一次性脚本里，跑完就没人再跑。
  * 批 F-10 的驱动自纠 (e) 就是这条边界的注脚——变异驱动把整个 `tree.rs` 压成一行，
@@ -8,20 +8,31 @@
  *
  * 两种模式：
  *  ① 默认 = **形状不变量**（对活代码永远成立，可进 pre-commit 与 CI）
- *     S1 `mod` 声明 ↔ 兄弟文件双向闭合……文件写了没接线 = 那部分代码根本没参与编译，
- *        测试会"静默消失"（批 F-9/F-10 的 M8 就是这个形状）
- *     S2 测试目录的 `mod.rs` 内不许有用例……夹具与用例混住 = 拆分没做完
- *     S3 **私有项被兄弟簇引用**……Rust 私有项只对"定义模块及其后代"可见，兄弟簇看不见，
- *        这是编译器 `E0425` 的活，但本闸在编译之前就能点名（批 F-10 拆分器 U2 抓过 `ProbeTool`）
- *     S4 测试簇名不得与被测父模块已有的子模块同名……`super::wire::X` 会指向测试簇自己
- *        （批 F-9 首跑撞 `llm::wire`，E0255+E0425 共 12 条）
- *     S5 子簇引用了父模块私有项却没有 `use super::…` 引用句……Rust 允许"向上看"但要先
- *        把名字带进作用域（批 F-14 拆分器给每簇写 `use super::*;`，去掉它只有 cargo 会抓）
- *  ② `--split` = **一次性拆分等价证明**（七段，输入 = 原文 + 产物目录 + 归属登记表）
- *     供返工与新拆分使用；登记表随批入库（`scripts/split-ledger/*.json`），
- *     于是"这一刀怎么证明的"变成仓库里的东西，而不是对话里的话。
+ *     S0 词法剥离器的自我体检（尺子坏了 ⇒ 该文件判据作废并判红，绝不允许坏尺量出零偏差）
+ *     S1 **孤儿源文件**：`x.rs` 在目录里但没有 `mod x;` 声明。
+ *        v2.209 取证（rustc 1.x 实跑最小夹具，见 docs/adr/0002）：这种形状 **rustc 不报、
+ *        rc=0**——文件根本不参与编译，于是里面的测试"静默消失"（批 F-9/F-10 的 M8 形态）。
+ *        这一档是本闸唯一不可替代的存在理由，别处买不到。
+ *     S2 测试目录的 `mod.rs` 内不许有用例（夹具与用例混住 = 拆分没做完）——语言不管，形态纪律。
+ *     S4 观察项：测试簇名撞父模块已有子模块名。**只报告不判红**（v2.209 降档）。
  *
- * 口径纪律（每条都对应一次真实踩坑）：
+ *  ② `--split` = **一次性拆分等价证明**（七段，输入 = 原文 + 产物目录 + 归属登记表）
+ *     拆分那一刀当场跑；登记表随批留在 `scripts/split-ledger/` 作证据档案。
+ *     ⚠ v2.209 起**不再进常驻门禁与 CI**：它比的是"历史原文 vs 当前产物"，而产物在拆分之后
+ *     继续演化是正常开发，不是事故。实测 9 份登记表里 **8 份已红**（红在段3/段4「新增代码无登记」
+ *     ——Q12 之后 tests_approval/ 又加了簇），每次 CI 重放的都是同一条历史结论，白跑且必红。
+ *
+ * **v2.209 删掉的档**（曾经的 S1 前半 / S3 / S4 判红 / S5 / S6）：这些档判的是 Rust 可见性与
+ * 名称解析，而 `cargo clippy --all-targets`（在 `make check` 与 CI 的 kernel/desktop 作业里必跑）
+ * 权威地管这些。用文本正则近似一门语言的作用域规则 = 本闸 8 次踩坑的全部来源（父模块三种布局、
+ * raw string、局部变量撞名、DECL 缺 static、名字吃掉类型冒号、glob 档位、前缀切片 off-by-one、
+ * 负向后行断言排两级上跳）。删档的证据是**实跑错误号**而不是推断：
+ *   · `mod x;` 而无 x.rs        → rustc **E0583**（file not found for module）
+ *   · 兄弟簇引用另一簇私有项    → rustc **E0433**（cannot find … in `crate`）
+ *   · 子簇裸用父私有项缺引用句  → rustc **E0425**（cannot find … in this scope）
+ *   · 摘掉 mod.rs 的 glob 传导  → rustc **E0425**（同上）
+ *   · 簇名撞父模块子模块        → rustc **E0255** + E0425（批 F-9 首跑实测 12 条）
+ * 保留的档都是"编译器不报而后果真实"的那几类。口径纪律仍然有效：
  *  - 判据消费的每份解析结果都打印条目数，并为它设硬闸：解析面为空 ⇒ 宣布相关段作废
  *  - 引用面匹配前**剥注释与字符串字面量**（批 F-6：注释里写了下沉项的名字 ⇒ "引用 0" 是假绿）
  *  - 计数型断言不许把"N 条 = 匹配面为空"和"N 条全部可解释"渲染成同一句 true
@@ -221,9 +232,9 @@ function shapeGate() {
     return false;
   };
 
-  let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, s6 = 0, checked = 0, testDirs = 0;
-  const observed = []; // 撞名但当前无歧义的形状：只报告不判红（见 S4 注释）
-  const testList = []; // S2/S3/S4 管辖名单——口径漂移必须当场可见（批 F-9「显示层不许藏口径差」）
+  let s0 = 0, s1 = 0, s2 = 0, checked = 0, testDirs = 0;
+  const observed = []; // S4：撞名清单（含"当前带歧义引用"的点名，但都由 cargo 拦，见头注）
+  const testList = []; // S2/S4 管辖名单——口径漂移必须当场可见（批 F-9「显示层不许藏口径差」）
   const bad = (msg) => console.log('   !! ' + msg);
   for (const dir of dirs) {
     checked++;
@@ -251,15 +262,10 @@ function shapeGate() {
       if (why) { s0++; bad(`${rel}/${f}：${why}`); }
     }
 
-    // S1 双向闭合
+    // S1 孤儿源文件：目录里有 `x.rs`（或 `x/mod.rs`）却没有 `mod x;` 声明。
+    // 另一半（声明了却查无文件）v2.209 起交还给 rustc E0583 —— 见文件头实测表。
     if (!isIntegrationCommon(dir)) {
-      for (const c of sib) if (!decl.has(c)) { s1++; bad(`${rel}/${c}.rs 存在但没有 \`mod ${c};\` 声明（不参与编译）`); }
-      for (const [name, u] of decl) {
-        const childDir = path.join(dir, name);
-        const hasFile = fs.existsSync(path.join(dir, `${name}.rs`)) || (fs.existsSync(childDir) && fs.existsSync(path.join(childDir, 'mod.rs')));
-        const inline = /\{/.test(u.body.replace(/\/\/[^\n]*/g, '')) && !/;\s*$/.test(u.body.trim().split(/\r?\n/).pop());
-        if (!hasFile && !inline) { s1++; bad(`${rel}/mod.rs 声明了 \`mod ${name};\` 但查无文件`); }
-      }
+      for (const c of sib) if (!decl.has(c)) { s1++; bad(`${rel}/${c}.rs 存在但没有 \`mod ${c};\` 声明（不参与编译，里面的测试静默消失）`); }
     }
     // S2 测试目录的 `mod.rs` 内不许有用例（夹具与用例混住 = 拆分没做完）。
     // **历史基线**（与 check_length 的 BASELINE 同一手法：只拦新增，基线只能降不能升）：
@@ -282,173 +288,13 @@ function shapeGate() {
         console.log(`   ~ ${rel} 混住用例已降到 ${inMod} < 基线 ${want}：顺手收紧 KNOWN_MIXED`);
       }
     }
-    // S3 私有项被兄弟簇引用 —— **只对测试目录生效**（这里的名字都是本地夹具，字段名/宏名冲突面小），
-    // 且只取"真正的定义点"（struct/enum/trait/type/fn/const）：`impl X` 没有可见性是语言事实，
-    // 把它当定义点会把 `pub struct X` 误报成私有项（第一版就在这里造出 30+ 条误报）。
-    // 宿主在 `mod.rs` ⇒ 该父模块的私有项对子簇可见（Rust：私有项对定义模块及其后代可见），不判。
-    if (isTests) {
-      const clusterSrcs = sib.map((c) => ({ c, src: readCluster(dir, c) }));
-      const hostDefs = [];
-      for (const { c, src } of [{ c: 'mod', src: modSrc }, ...clusterSrcs]) {
-        for (const u of units(src)) {
-          if (u.isTest || u.kw === 'mod' || u.kw === 'use' || u.kw === 'impl') continue;
-          if (!/^(fn|struct|enum|trait|type|const|static)$/.test(u.kw)) continue;
-          hostDefs.push({ c, name: u.name, vis: u.vis });
-        }
-      }
-      for (const d of hostDefs) {
-        if (d.c === 'mod' || d.vis) continue;
-        const bare = baseName(d.name);
-        if (!/^[A-Za-z_]\w*$/.test(bare)) continue;
-        // **引用簇自己也有同名定义 ⇒ 不判**（v2.205 批 Q12·第二刀补这一档）。
-        // Rust 的名称解析按模块作用域走：`file_changes.rs` 与 `turn_header.rs` 各写一个
-        // 私有 `turn` 夹具是合法且健康的形态（测试簇互不依赖，谁也不该为了"消歧"去共用
-        // 另一簇的夹具）。原判据只按"别处有同名私有定义"就报越界，把引用方**自己文件里**
-        // 的那份当成了看不见的兄弟私有项 = 误报。真越界的形状（引用方没有同名定义）照判，
-        // 而那一档在 Rust 里本来就是 E0425 编译错误——闸与编译器仍判同一件事。
-        const re = new RegExp(`\\b${bare}\\b`);
-        for (const { c, src } of clusterSrcs) {
-          if (c === d.c) continue;
-          if (hostDefs.some((h) => h.c === c && baseName(h.name) === bare)) continue;
-          const stripped = stripCommentsStrings(src);
-          for (const u of units(stripped)) {
-            if (u.kw === 'use' || u.kw === 'mod' || u.kw === 'impl') continue;
-            if (u.name === d.name) continue; // 自身定义不算引用
-            if (re.test(u.body)) {
-              s3++; bad(`${rel}: 私有项 \`${bare}\`（宿主 ${d.c}）被 ${c}/${u.name} 引用 ⇒ 兄弟簇看不见它（E0425 的成因；处置 = 上收 mod.rs 或提 pub(super)，别改正文）`);
-            }
-          }
-        }
-      }
-    }
-    // S5 「子簇引用父模块私有项但没有引用句」= `E0425` 的另一半成因（批 F-14 立）。
-    // S3 管"兄弟簇之间看不见"；S5 管"向上看"：Rust 语言事实 = 子模块**可以**用父模块的
-    // 私有项，但必须有一条 `use super::…`（glob 或具名）把名字带进作用域。
-    // 批 F-14 的拆分器给每个簇写 `use super::*;`（共享夹具靠它），删掉这句只有 cargo 会抓
-    // —— 而"要编译过才知道"正是本闸要消掉的成本（批 F-10 的 M9/M10 就是这个形态）。
-    if (isTests) {
-      const modDefs = [...units(modSrc)]
-        .filter((u) => !u.vis && !u.isTest && /^(fn|struct|enum|trait|type|const|static)$/.test(u.kw))
-        .map((u) => baseName(u.name))
-        .filter((n) => /^[A-Za-z_]\w*$/.test(n));
-      for (const c of sib) {
-        if (!modDefs.length) break;
-        const src = readCluster(dir, c);
-        if (/^\s*use\s+super::/m.test(src)) continue; // 有引用句（glob 或具名都算）
-        const stripped = stripCommentsStrings(src);
-        const hit = modDefs.filter((n) => new RegExp(`(?<!::)\\b${n}\\b`).test(stripped));
-        if (hit.length) { s5++; bad(`${rel}/${c}.rs 引用父模块私有项 ${hit.slice(0, 3).join(', ')} 但没有 \`use super::…\` ⇒ E0425（补 glob 或具名引用句，别改正文）`); }
-      }
-    }
-    // S6 「glob 传导链断裂」（批 F-15 立）。子簇正文用到的名字，出处只有三种：
-    //   ① 本簇自己的 `use` 绑定；② mod.rs 的顶层定义（父私有项对后代可见）；
-    //   ③ **mod.rs 的 `use` 绑定**——`use super::*;` 会把父模块 import 进来的名字一起带过来，
-    //   批 F-15 的 `store` 就是这样被四个簇用上的（mod.rs 自己并不调 store）。
-    // 三种都没有 ⇒ `E0433`/`E0425`。③ 这条链此前只有 cargo 会断：摘掉 mod.rs 的
-    // `use super::store;` 会让四个簇同时坏，而闸一声不响（S5 只检查簇侧有没有引用句）。
-    // 口径与 S3 同：只在测试目录生效（这里的候选名字都是本地夹具与显式 import，
-    // 生产目录里字段名/宏名会让 `\bname\b` 误报）。
-    if (isTests) {
-      const bindOf = (name) => {
-        const t = String(name).replace(/^use\s+/, '').replace(/;$/, '').trim();
-        if (/\*$/.test(t)) return [];
-        const br = /\{([^}]*)\}/.exec(t);
-        const parts = br ? br[1].split(',') : [t];
-        return parts.map((x) => x.trim().split(/\s+as\s+/).pop()).filter(Boolean)
-          .map((x) => x.split('::').pop()).filter((x) => /^[A-Za-z_]\w*$/.test(x));
-      };
-      const defsOf = (src) => [...units(src)]
-        .filter((u) => !u.isTest && /^(fn|struct|enum|trait|type|const|static)$/.test(u.kw))
-        .map((u) => baseName(u.name)).filter((n) => /^[A-Za-z_]\w*$/.test(n));
-      const usesOf = (src) => [...units(src)].filter((u) => u.kw === 'use').flatMap((u) => bindOf(u.name));
-      const modSrc2 = fs.readFileSync(path.join(dir, 'mod.rs'), 'utf8');
-      const modUseBinds = usesOf(modSrc2), modDefs = defsOf(modSrc2);
-      const modDecls = [...units(modSrc2)].filter((u) => u.kw === 'mod').map((u) => u.name);
-      /* 第四类候选源 = **父模块文件（grandparent）里的类型面名字**（批 F-16 的 Z3 变异抓出来的洞）。
-       * `tool_exposure/tests/` 这一刀整层靠 mod.rs 的 `use super::*;` 从父模块传导：`Exposure`、
-       * `ToolSpec`、`RequestPayload`、`WaterfallDecision`…… 而 `bindOf` 对 glob 返回空数组 ⇒
-       * 这些名字一个都进不了候选集 ⇒ 摘掉 mod.rs 那句 glob，四个簇当场 E0412 而 S6 读数 0。
-       * **变异没红 = 判据有洞**，不是"测试挑错了目标"。
-       * 收窄到类型面（CamelCase / 全大写）的原因 = 批 F-15 的 (b) 假红教训：`let kernel = …`
-       * 这种局部变量撞小写名会把绿基线红成一片；函数/夹具这类小写名本来也由 mod 层候选覆盖。
-       * mod.rs 有没有向上 glob 决定这些名字算不算"有出处"：有 = 传导得到，没有 = 判红。
-       * 父模块文件三种布局都试（S4 已经因为漏一种形态整段静默跳过栽过一次）。 */
-      const gpDir = path.dirname(dir), gpName = path.basename(gpDir);
-      const gpFile = [path.join(gpDir, `${gpName}.rs`), path.join(gpDir, 'mod.rs'),
-        path.join(gpDir, '..', `${gpName}.rs`), path.join(gpDir, 'lib.rs'), path.join(gpDir, 'main.rs')]
-        .find((p) => fs.existsSync(p) && path.resolve(p) !== path.resolve(path.join(dir, 'mod.rs')));
-      const gpSrc = gpFile ? fs.readFileSync(gpFile, 'utf8') : '';
-      const isTypeish = (n) => /^[A-Z][A-Za-z0-9]*$/.test(n) || /^[A-Z0-9_]+$/.test(n);
-      const gpNames = [...new Set([...defsOf(gpSrc), ...usesOf(gpSrc)])].filter(isTypeish);
-      const modHasGlob = /^\s*use\s+[\w:]*\*;/m.test(modSrc2);
-
-      // 第三类候选源（Y3 变异抓出来的缺口）：**crate root 的 mod 名单**。像 `store` 这种
-      // 「只有父模块 import 了、各簇全靠 glob 传导」的名字，一旦摘掉 mod.rs 那条 import，
-      // 目录内任何一面都不再 import 它 ⇒ 只按"目录内 import 并集"取候选就查不到它，
-      // S6 会静默不红（第一版就在这里假绿）。crate root 的 mod 名单给的是**语言里真实存在
-      // 的模块名**，既精确又不会把 prelude（`Vec::`）与外部 crate（`rusqlite::`）拉进来误报。
-      let rootDir = dir, rootSrc = null;
-      for (let up = 0; up < 6 && rootSrc === null; up++) {
-        for (const cand of ['lib.rs', 'main.rs']) {
-          const p = path.join(rootDir, cand);
-          if (fs.existsSync(p)) { rootSrc = p; break; }
-        }
-        if (rootSrc === null) rootDir = path.dirname(rootDir);
-      }
-      const rootMods = rootSrc
-        ? [...units(fs.readFileSync(rootSrc, 'utf8'))].filter((u) => u.kw === 'mod').map((u) => u.name)
-        : [];
-      // 候选名 → 匹配档位。同名两例并存时以 `local` 的宽松档为准（目录内的夹具/import
-      // 才是本闸主战场）。第一版这里用 `local:xxx` 前缀串 + `slice(5)` 取名字，
-      // 于是 `mod:store` 被切成 `tore`（4 字符前缀按 5 切），Y3 变异照样不红——
-      // 判据的实现细节也会造假，必须靠变异反证才暴露。
-      const candMap = new Map();
-      const PREC = { local: 3, gp: 2, mod: 1 };
-      const addCand = (kind, n) => {
-        if (!/^[A-Za-z_]\w*$/.test(n)) return;
-        const cur = candMap.get(n);
-        if (!cur || PREC[kind] > PREC[cur]) candMap.set(n, kind);
-      };
-      [...modUseBinds, ...modDefs].forEach((n) => addCand('local', n));
-      rootMods.forEach((n) => addCand('mod', n));
-      // gp 档压过 mod 档：父模块里既叫得上又是个类型名时，宽松匹配才是对的口径
-      gpNames.forEach((n) => addCand('gp', n));
-      for (const c of sib) {
-        const s = readCluster(dir, c);
-        [...usesOf(s), ...defsOf(s)].forEach((n) => addCand('local', n));
-      }
-      const candidates = [...candMap].map(([name, kind]) => ({ name, kind }));
-      const uses = (u, n, kind) => {
-        // `mod:` 档 = crate root 的模块名，只认**裸路径形** `name::…`（前面不能是 `::`，
-        // 因为 `crate::store::x` 那种全路径本来就不需要任何 import）。
-        // 为什么必须分档：这一档如果也用宽松 `\bname\b`，`let kernel = Kernel::new(…)`
-        // 这类**局部变量撞模块名**会当场造出 10+ 条假红（第一版就在这里红了一片），
-        // 与批 F-11 边界①「生产目录里 `\bname\b` 会误报」完全同族。
-        const re = kind === 'mod' ? new RegExp(`(?<![:\\w])\\b${n}::`) : new RegExp(`(?<!::)\\b${n}\\b`);
-        return re.test(u.body);
-      };
-      for (const c of sib) {
-        const src = readCluster(dir, c);
-        const hasGlob = /^\s*use\s+super::\*/m.test(src);
-        const supplied = new Set([...usesOf(src), ...defsOf(src),
-          ...(hasGlob ? [...modUseBinds, ...modDefs, ...modDecls, ...(modHasGlob ? gpNames : [])] : [])]);
-        const stripped = stripCommentsStrings(src);
-        const missing = candidates.filter((k) => !supplied.has(k.name) && /^[A-Za-z_]\w*$/.test(k.name))
-          .filter((k) => units(stripped).some((u) => u.kw !== 'use' && u.kw !== 'mod' && u.name !== k.name
-            && uses(u, k.name, k.kind)))
-          .map((k) => k.name);
-        if (missing.length) {
-          s6++;
-          bad(`${rel}/${c}.rs 用到 ${missing.slice(0, 4).join(', ')} 但没有任何出处（本簇 use / mod.rs 定义 / mod.rs 的 import / **mod.rs 的 glob 向上传导的父模块类型面**）⇒ E0433·E0412 的成因；处置 = 在 mod.rs 补 import 或补「use super::*;」，别改正文`);
-        }
-      }
-    }
-    // S4 测试簇名不得与被测父模块已有的子模块同名 —— 但**撞名本身不是缺陷**，
-    // 只有真的产生歧义才红（批 F-9 首跑 `wire` 撞 `llm::wire` 就是这两种形态之一）：
-    //  (i) `tests/mod.rs` 里另有 `use super::<name>` 绑定 ⇒ 与 `mod <name>;` 在同一定义两次 = `E0255`
+    // S4 观察项：测试簇名撞被测父模块已有的子模块名。**v2.209 起整档降为报告**。
+    // 两种真歧义形态都由 rustc 权威判定，不在本闸判红：
+    //  (i) `tests/mod.rs` 里另有 `use super::<name>` 绑定 ⇒ 与 `mod <name>;` 同一定义两次 = `E0255`
     //  (ii) 任一簇正文出现 `super::<name>…` 路径 ⇒ 解析到测试簇自己 = `E0425`
-    // 只撞名、两条都不触发的（organize/tests 的 recovery/summary）记为观察项不判红——
+    // 只撞名、两条都不触发的（organize/tests 的 recovery/summary）本来就是合法形状；
     // 判据一旦开始误报历史形状，人们就会绕过它（项目口径：一级判错不可绕过 ⇒ 闸必须准）。
+    // 报告留着是因为它给了改名线索——批 F-9 首跑 `wire` 撞 `llm::wire` 就是靠这份名单改的名。
     if (isTests) {
       const parentDir = path.dirname(dir);
       const parentName = path.basename(parentDir);
@@ -476,19 +322,19 @@ function shapeGate() {
           // 布局漏检后立刻在 `settings/tests/{developer,tools}.rs` 上造出两条假红（现役代码、
           // 编译与 438 测试全绿），靠负向后行断言才分清"歧义"与"本来就该这么写"。
           const pathUse = sibSrcs.some(({ src }) => new RegExp(`(?<!super::)\\bsuper::${c}\\b`).test(stripCommentsStrings(src)));
-          if (useBind || pathUse) {
-            s4++; bad(`${rel}: 测试簇名 \`${c}\` 与被测父模块 ${parentName} 的子模块同名，且${useBind ? '`tests/mod.rs` 里有 `use super::' + c + '`（E0255）' : '簇正文出现 `super::' + c + '::`（E0425）'} ⇒ 改名或按职责重命名`);
-          } else observed.push(`${rel}/${c}`);
+          const tag = useBind ? 'tests/mod.rs 里有 `use super::' + c + '` ⇒ cargo E0255'
+            : pathUse ? '簇正文出现 `super::' + c + '` ⇒ cargo E0425' : '';
+          observed.push(`${rel}/${c}${tag ? '〔带歧义引用：' + tag + '〕' : ''}`);
         }
       }
     }
   }
   console.log(`check-split-equivalence: 目录式模块 ${dirs.length} 个（测试目录 ${testDirs} 个）`);
-  console.log(`  测试目录名单（= S2/S3/S4 管辖面，判据 = 父声明带 #[cfg(test)]）：${testList.join(' · ') || '（空）'}`);
-  console.log(`  S0 解析面不可靠文件 = ${s0} | S1 mod 声明↔文件闭合偏差 = ${s1} | S2 测试 mod.rs 内用例 = ${s2} | S3 私有项跨簇引用 = ${s3} | S4 簇名撞父模块子模块 = ${s4} | S5 子簇缺 \`use super::\` 引用句 = ${s5} | S6 glob 传导链断裂 = ${s6}`);
+  console.log(`  测试目录名单（= S2/S4 管辖面，判据 = 父声明带 #[cfg(test)]）：${testList.join(' · ') || '（空）'}`);
+  console.log(`  S0 解析面不可靠文件 = ${s0} | S1 孤儿源文件（rustc 不报）= ${s1} | S2 测试 mod.rs 内用例 = ${s2}`);
   // 命中统计必须打出来：判据扫到 0 个对象时"零偏差"是空转不是干净（批 F-8 教训）。
-  console.log(`  S4 观察项（撞名但当前无歧义引用；正文一旦出现 \`super::同名\` 即判红）= ${observed.length}${observed.length ? ': ' + observed.join(', ') : ''}`);
-  const total = s0 + s1 + s2 + s3 + s4 + s5 + s6;
+  console.log(`  S4 撞名观察项（只报告；真歧义那两类由 cargo 拦）= ${observed.length}${observed.length ? ': ' + observed.join(', ') : ''}`);
+  const total = s0 + s1 + s2;
   if (!checked) { console.log('  !! 扫到 0 个目录式模块 ⇒ 本闸空转（判据失效，不是"没有偏差"）'); return 1; }
   return total ? 1 : 0;
 }

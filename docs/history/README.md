@@ -20,11 +20,19 @@
 | `sandbox-execution-design.md` | 沙箱执行设计 —— 随 v2.145 权限模型重设计整目录退役，命令执行面收敛为 `shell` 单一入口 | `docs/design/archive/Sandbox Execution Design.md` |
 | `icon-replacement-plan.md` | 图标替换计划（已执行完） | `docs/design/icon replacement plan.md` |
 | `context-memory-workflow-report.md` | 上下文与记忆工作流程报告（过程记录） | `docs/上下文与记忆工作流程报告.md` |
+| `check-length-baseline.md` | `check_length.sh` 旧版头注原文：超限文件计数基线从 40 一路收到 22 的 16 次收紧记录。v2.209 该闸改成点名名单制，计数基线不再存在，这段历史整体搬来 | `scripts/check_length.sh` 的头注释 |
+| `audit/CODE-AUDIT-v1.md` | 全仓代码审计报告 v1（分域发现清单，H/M/C/L 编号的出处） | `docs/reports/CODE-AUDIT-v1.md` |
+| `audit/AUDIT-FIX-PLAN-v1.md` | 审计修复执行台账：§1–§6 是批 A–F 逐批落点，**§7 的 T1–T16 未结欠账已逐条抄进 [`specs/03-structural-debt`](../../specs/03-structural-debt/spec.md)** 之后本文才归档 | `docs/reports/AUDIT-FIX-PLAN-v1.md` |
+| `audit/parts/`（六份） | 审计分区明细：`0-mechanical.md`、`1-i18n-orphans.md`、`A-root-crates.md`、`B-desktop-rust.md`、`C-frontend.md`、`D-plugins-build-docs.md` | `docs/reports/_parts/` |
 
-## 还没搬进来的
+审计线本身**已收口**（用户 2026-10-12 裁定「审计修复到此为止」）；留在这里是为了让"当时为什么这么判"可查，
+不是为了再开一批。未结的事一律从 `specs/03-structural-debt` 进，不要从本文进。
 
-`docs/reports/`（两份审计报告与修复台账）暂时留在原处：台账 §7 里还挂着**没结的欠账**，
-要先把它们抄进路线图与阶段计划，再整体归档 —— 这一步在"路线图重写"那一刀做，别在这里留口头账。
+## 这一层不放什么
+
+不放**还没结的事**。台账里的未结欠账一律先抄进对应的 [`../../specs/`](../../specs/) 阶段计划，
+原文再搬进来——所以 `audit/AUDIT-FIX-PLAN-v1.md` 的 §7 那张表在这层是"当年的登记"，
+在册的活计看路线图与 spec，不看这里。
 
 ## 旧链接怎么办
 

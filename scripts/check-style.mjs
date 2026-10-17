@@ -8,8 +8,12 @@
  *   任意 px 字号 text-[..px] 同为一级判错（v2.87 起 --lw-fs-* 令牌已建齐、
  *   全站迁移完成——标准 §二⑫/§五；特例走上一行 lw-waive 注释凭证）。
  *
- * 用法：node scripts/check-style.mjs            全量报告（不拦截）
- *       node scripts/check-style.mjs --staged   暂存 .vue 判错 = 退出 1（pre-commit）
+ * 用法（两个档，语义相同 = 有一级判错就失败；只差在扫哪些文件）：
+ *       node scripts/check-style.mjs            全量 .vue
+ *       node scripts/check-style.mjs --staged   只扫暂存的 .vue（pre-commit 用，快）
+ *   ⚠ v2.209 起改了语义：此前"不带 --staged = 只报告、恒 rc=0"，同一个名字两种
+ *     行为——门禁档里套上它就成了空转。存量已实测为 0 处判错，因此全量档直接拦截。
+ *   二级观察档（warn）仍只报告不拦：那是"先观察、迁完翻判错"的固定工位。
  */
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -73,8 +77,14 @@ for (const file of files) {
   }
 }
 
-const scope = staged ? "暂存 .vue（一级判错=提交被拒）" : "全量（收敛工作清单）";
+const scope = staged ? "暂存 .vue" : "全量 .vue";
 console.log(`== check-style · 模板维度 · ${scope} · ${files.length} 文件 ==`);
+// 下限：全量档扫到 0 个文件只可能是**闸自己瞎了**（glob 没展开 / 目录搬家），
+// 而不是"前端真的没有 .vue"。一条永不命中的判据和没有判据是同一件事。
+if (!staged && files.length === 0) {
+  console.error("  ✗ 全量档扫到 0 个 .vue ⇒ 判据无扫描面，视为闸失效（查 listFiles 的 glob）");
+  process.exit(1);
+}
 const errors = hits.filter((v) => v.level === "error");
 const warns = hits.filter((v) => v.level === "warn");
 for (const v of errors) console.log(`  ✗ ${v.rel}:${v.line} [${v.name}] ${v.text}`);
@@ -87,4 +97,4 @@ if (hits.length) {
 } else {
   console.log("  干净。");
 }
-if (staged && errors.length) process.exit(1);
+if (errors.length) process.exit(1);

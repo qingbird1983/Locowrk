@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 第八道结构闸：事件通道对账（后审计队列 Q12·C1 立）。
+// 结构闸：事件通道对账（后审计队列 Q12·C1 立；闸序号 v2.209 起不再写——加一道就得全体重排）。
 //
 // 为什么必须新造而不是扩 `check-commands.mjs`：Q12 取证批实测（G7）——
 // `check-commands.mjs` 里 `agent://` 与 `CHANNELS` 命中 **0**，它只管
@@ -15,7 +15,7 @@
 //   D stores 里的 `case "<kind>"`             —— 前端消费面
 // 外加一张「有意不订阅 / 不消费」白名单，每条必须自带理由且必须实存。
 //
-// 两道「闸自己也得是活的」下限（同第六/第七道）：任一面的读数算成 0 就判红，
+// 两道「闸自己也得是活的」下限（同其他闸）：任一面的读数算成 0 就判红，
 // 而不是 OK——扫描瞎掉长得跟一切正常一模一样。
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";

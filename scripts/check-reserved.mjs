@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * check-reserved.mjs —— 第六道结构闸（v2.191 / 队列 Q7 立）
+ * check-reserved.mjs —— 结构闸：预留标注对账（v2.191 / 队列 Q7 立）
  *
  * 治什么：代码里写着「这块是预留待接、生产零调用点」，却没有任何机器盯着这句话。
  * 出处 = 批 Q7 取证《Context Budget Closure》§7.6 那份死代码清单：八行里四行早已不存在

@@ -20,7 +20,7 @@ run() { # run <显示名> <命令...>：失败就把名字和退出码一起报�
   if "$@"; then ok "$name"; else rc=$?; die "$name 失败（rc=$rc）"; fi
 }
 
-targets="help setup fmt fmt-check clippy type lint test gates check quick doc adr specs"
+targets="help setup fmt fmt-check clippy type lint test gates selftest ledger check quick doc adr specs"
 
 help() {
   cat <<'TXT'
@@ -30,7 +30,9 @@ help() {
   make clippy       两处 clippy（-D warnings）
   make type         前端类型检查 + 构建   make lint        前端形态（stylelint + check-style）
   make test         根 / 桌面 / 前端三处测试
-  make gates        全部结构闸            make doc         文档规则闸
+  make gates      ★ 全部结构闸（清单只在这里列一次：CI 的 hygiene 作业调的就是它）
+  make selftest   闸的自证：给判据施内存变异，它必须报红（打空 = 该项零证明力）
+  make doc        文档规则闸
   make check    ★ 提交前门禁：fmt-check + type + lint + gates + clippy + test
   make quick        秒级档（gates + lint），给 pre-commit 用
   make adr          新建一篇决策记录（复制模板）
@@ -72,10 +74,7 @@ t_type() {
 t_lint() {
   say "前端形态两闸"
   run "stylelint" pnpm -C desktop run lint:style
-  # ⚠ 已知问题：check-style.mjs 不带 --staged 时是**报告档**（恒 rc=0），带 --staged 才拦截。
-  #   全量档在这里只报不拦——G5 门禁刀会把它拆成两个明确入口，届时删掉这条注释。
-  echo "  node scripts/check-style.mjs（全量 = 报告档，不拦截；拦截档见 pre-commit 的 --staged）"
-  node scripts/check-style.mjs || true
+  run "check-style（模板维度）" node scripts/check-style.mjs
 }
 
 t_test() {
@@ -87,7 +86,7 @@ t_test() {
 
 t_gates() {
   say "结构闸（逐条单独跑，红在哪条点名哪条）"
-  run "长度基线"     bash scripts/check_length.sh
+  run "长度名单"     bash scripts/check_length.sh
   run "i18n 闭合"    node scripts/check-i18n.mjs
   run "命令三向"     node scripts/check-commands.mjs
   run "中间件接线"   node scripts/check-middleware-wiring.mjs
@@ -95,6 +94,12 @@ t_gates() {
   run "预留对账"     node scripts/check-reserved.mjs
   run "文档规则"     node scripts/check-docs.mjs
   run "事件通道"     node scripts/check-channels.mjs
+  run "同源对账"     node scripts/check-single-source.mjs
+}
+
+t_selftest() {
+  say "闸的自证（判据必须能为变异报红；打空 = 该项零证明力）"
+  run "同源对账自测" node scripts/check-single-source.mjs --selftest
 }
 
 t_doc() {
@@ -103,12 +108,12 @@ t_doc() {
 }
 
 t_check() {
-  t_fmt_check; t_type; t_lint; t_gates; t_clippy; t_test
+  t_fmt_check; t_type; t_lint; t_gates; t_selftest; t_clippy; t_test
   say "check 全绿"
 }
 
 t_quick() {
-  t_gates; t_lint
+  t_gates; t_selftest; t_lint
   say "quick 全绿"
 }
 
@@ -125,6 +130,22 @@ t_specs() {
   [ -d specs ] && ls -1 specs || echo "specs/ 还没有阶段目录（按需生长，不预留空壳）"
 }
 
+t_ledger() {
+  say "拆分登记表重放（一次性历史证明，**不进常驻门禁**）"
+  # 它比的是「git 历史里的原文 vs 当前产物」，而产物在拆分之后继续演化是正常开发不是事故。
+  # 实测：9 份登记表里 8 份已红（红在「新增代码无登记」）。所以 v2.209 把它从 CI 撤到这里，
+  # 只在「重做某一刀」或「把旧拆分在新形状下再验一遍」时手动跑：make ledger LEDGER=<name>
+  if [ -z "${LEDGER:-}" ]; then
+    ls -1 scripts/split-ledger/*.json 2>/dev/null | sed 's/^/  /'
+    die "用法：make ledger LEDGER=settings-llm（不带 LEDGER 只列可用登记表，不静默全跑）"
+  fi
+  f=scripts/split-ledger/${LEDGER}.json
+  [ -f "$f" ] || die "查无登记表 $f"
+  echo "  说明：这份登记表证明的是**当年那一刀**（历史原文 vs 当时产物）。"
+  echo "  若它红在「新增代码无登记」，那是那一刀之后代码继续演化的正常结果，不代表现在有问题。"
+  node scripts/check-split-equivalence.mjs --split --ledger "$f"
+}
+
 target=${1:-help}
 case "$target" in
   help) help ;;
@@ -136,6 +157,8 @@ case "$target" in
   lint) t_lint ;;
   test) t_test ;;
   gates) t_gates ;;
+  selftest) t_selftest ;;
+  ledger) t_ledger ;;
   doc) t_doc ;;
   check) t_check ;;
   quick) t_quick ;;

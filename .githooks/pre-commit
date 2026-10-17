@@ -1,41 +1,16 @@
 #!/usr/bin/env bash
-# pre-commit（规则出处见 AGENTS.md「模块与文件规模纪律」+《Front-end Design
-# Guidelines.md》§六 + 审计报告 §7.1–7.4 的四道新防线）：
-#   ① 行数基线          scripts/check_length.sh（改基线比较后**真的会拦**——
-#                        旧版 `|| exit 1` 配恒 exit 0 的脚本 = 空转，H1）
-#   ② 前端统一标准       stylelint（CSS 声明维度）+ check-style.mjs（模板维度）
-#   ③ i18n 双向闭合      check-i18n.mjs（zh/en 键集相等 + 引用键必存在）
-#   ④ 命令三向闭合       check-commands.mjs（定义 = generate_handler! = invoke）
-#   ⑤ 中间件接线         check-middleware-wiring.mjs（未接线必须显式白名单）
-#   ⑥ 拆分形状           check-split-equivalence.mjs（第五道**结构**闸，v2.161 批 F-11 立：
-#                        目录式模块的 mod 声明↔文件闭合 / 测试 mod.rs 不混住用例 /
-#                        私有项不被兄弟簇引用 / 测试簇名不撞被测子模块的歧义路径）
-#   ⑦ 预留标注对账        check-reserved.mjs（第六道**结构**闸，v2.191 批 Q7 立：
-#                        写着「定性 = 预留待接」的件必须给得出预留件清单，且清单里的符号
-#                        在生产代码里引用点为 0；接线了没摘标注 = 判红，标注还在而件被删光
-#                        = 也判红。出处 = Q7 取证《Context Budget Closure》§7.6 那份死代码
-#                        清单——八行里四行早已删除、两行其实是历史日志的重放面，"没人盯着
-#                        一句自我声明"就是它漂了三个版本还没被发现的根因）
-#   ⑧ 文档规则          check-docs.mjs（2026-10-17 文档治理刀换掉的旧窗口闸的接班，七条判据：
-#                        AGENTS.md ≤100 行 / STRUCTURE.md 要点名每一个在役目录与每个自称唯一的文件 /
-#                        docs/adr 文件名与四节齐 / specs 必须有可测验收与非目标 / 在役文档单行 ≤2KB
-#                        （存量 32 处按基线放行，新增判红）/ 已废除的旧规矩用词不许回到在役文档 /
-#                        docs/history 每一份都要被它的 README 点名。
-#                        下限自证：md 扫描面读数过低直接判红——那只能是闸瞎了，不是文档没了）
-#   ⑨ 前端测试面          pnpm run test:run（Q11·v2.202 立：vitest + happy-dom 的运行面，
-#                        四条用例族 = IPC 包装形状 / chat store 行语义 / 组件双档渲染 / 夹具自证。
-#                        触发面 = desktop/src/**、desktop/tests/**、vitest.config.ts、
-#                        desktop/package.json、desktop/tsconfig.json。放它进提交闸的理由 =
-#                        一条"只活在人工纪律里"的门禁等于没有门禁（H1 给 CI 立的那句话，
-#                        对本地同样成立）；代价是每次提交多约 2–3s，比 stylelint 那一档便宜）
-#   ⑩ 事件通道对账        check-channels.mjs（第八道结构闸，Q12 主体·v2.204 立：一条通道的
-#                        四面 = events.rs 常量 / channel() 映射 / api.ts CHANNELS /
-#                        stores 的 case 标签。为什么不是扩 ④——G7 实测 check-commands.mjs
-#                        对 `agent://` 与 CHANNELS 命中 0，它只管命令三向；事件通道至今
-#                        零机器对账，api.ts 那份清单是手抄的，漏一条就静默成死分支
-#                        （v2.105 前真漏过 schedule-fired，靠人眼）。触发面 = 那四个出处
-#                        加行数尺子的消费文件；亚秒级，纯读源码）
-# ③–⑩ 只在相关文件暂存时跑（⑥⑦⑩ 亚秒级，⑨ 约 2–3s，其余各自约 5–10s，Windows 文件系统实测）。
+# pre-commit —— 按暂存面挑要跑哪几条闸。
+#
+# 闸的**清单**唯一出处 = scripts/tasks.sh 的 t_gates（`make gates` 全量跑，CI 的 hygiene 作业也调它）。
+# 这个文件只回答"哪一面改动触发哪一条"，**不复述每条闸挡什么错**：复述一遍就多一份会漂的副本。
+# 实测教训（v2.209）：这里的旧头注把已删的三个档写成现役、把长度闸的基线抄成 32 而真值是 30、
+# 还引用了一个上一批就改名掉的 AGENTS 章节标题 —— 全是静默漂，没人被提醒。
+# 反过来说，`scripts/check-xxx.mjs` 这个**路径**留在这里是安全的：路径写错会当场"命令不存在"，
+# 响亮失败；描述写错不报错，只会骗人。
+#
+# 各段耗时：亚秒级 = 拆分形状 / 预留对账 / 文档规则 / 事件通道 / 同源对账；
+# 约 5–10s = i18n / 命令三向 / 中间件接线（Windows 文件系统实测）；约 2–3s = 前端测试面。
+
 root="$(git rev-parse --show-toplevel)"
 staged="$(git diff --cached --name-only --diff-filter=ACM)"
 fail=0
@@ -62,34 +37,38 @@ if printf '%s\n' "$staged" | grep -qE '^desktop/src-tauri/src/|^desktop/src/lib/
 fi
 
 if printf '%s\n' "$staged" | grep -qE '^crates/kernel-agent/src/|^desktop/src-tauri/src/state/'; then
-  say "中间件接线检查"
+  say "中间件接线"
   node "$root/scripts/check-middleware-wiring.mjs" || fail=1
 fi
 
 if printf '%s\n' "$staged" | grep -q '\.rs$'; then
-  say "拆分形状（第五道结构闸）"
+  say "拆分形状"
   node "$root/scripts/check-split-equivalence.mjs" || fail=1
-  say "预留标注对账（第六道结构闸）"
+  say "预留标注对账"
   node "$root/scripts/check-reserved.mjs" || fail=1
 fi
 
 if printf '%s\n' "$staged" | grep -qE '^docs/|^specs/|^(AGENTS|STRUCTURE|README|CONTRIBUTING)\.md$'; then
-  say "文档规则（check-docs）"
+  say "文档规则"
   node "$root/scripts/check-docs.mjs" || fail=1
 fi
 
-# ⑨ 前端测试面（Q11）。`^desktop/(src|tests)/` 特意要求 src 后紧跟斜杠：
+# 前端测试面：`^desktop/(src|tests)/` 特意要求 src 后紧跟斜杠——
 # desktop/src-tauri/** 属 Rust 面，不该被这条拖进提交闸。
 if printf '%s\n' "$staged" | grep -qE '^desktop/(src|tests)/|^desktop/(package\.json|vitest\.config\.ts|tsconfig\.json)$'; then
-  say "前端测试（Q11 运行面）"
+  say "前端测试"
   (cd "$root/desktop" && pnpm run test:run) || fail=1
 fi
 
-# ⑩ 事件通道对账（Q12 主体·v2.204）。触发面就是那四面的出处本身 + 行数尺子的
-# 消费文件——不在面上的改动不需要它，别把它做成常驻耗时。
 if printf '%s\n' "$staged" | grep -qE '^desktop/src-tauri/src/events\.rs$|^desktop/src/lib/api\.ts$|^desktop/src/stores/|^desktop/src/types/|^crates/plugin-api/src/fsutil\.rs$|^plugins-src/tool-(fs|edit)/src/'; then
-  say "事件通道对账（第八道结构闸）"
+  say "事件通道对账"
   node "$root/scripts/check-channels.mjs" || fail=1
+fi
+
+# 同源对账：触发面 = 它的判据真正消费的那几个出处（记忆目录算式 + 字号基座三投影）。
+if printf '%s\n' "$staged" | grep -qE '^crates/plugin-api/src/memlayout/|^desktop/src-tauri/src/settings/appearance\.rs$|^desktop/src/lib/ui-font\.ts$|^desktop/src/style\.css$'; then
+  say "同源对账"
+  node "$root/scripts/check-single-source.mjs" || fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then

@@ -7,11 +7,10 @@ name: CI
 #   desktop  = desktop/src-tauri（被 Cargo.toml exclude 在根 workspace 外，
 #              必须显式 --manifest-path；Windows runner 贴合实际资产：
 #              pdfium.dll / WebView2 / Credential Manager 都是 Windows 面）
-#   hygiene  = 机械闸群，纯脚本秒级，谁破了当场知道是哪一条。
-#              ⚠ 这里刻意**不写"几道"、也不列举闸名**：闸的只数与名字都会随批增删，
-#              写死在头注里必然漂（历批第 116 条「同一读数两处手写一遍」的同族——
-#              本文件此前的那份列举就已经漏了预留对账与文档预算两道）。
-#              现役清单以下面的 `name:` 步骤与 AGENTS「每批收尾门禁」那段为准。
+#   hygiene  = 机械闸群，纯脚本秒级。**它只调 `sh scripts/tasks.sh gates`**：
+#              闸的清单住在 scripts/tasks.sh 一处，这个文件不再逐条抄写——
+#              抄一次就多一个会漂的副本（v2.209 实测：手抄的那份漏了两道闸，
+#              而本仓库从未 push ⇒ 漏了也没人知道）。
 
 on:
   push:
@@ -81,28 +80,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        # 拆分登记表复验要从历史 blob 取原文（`git show <ref>:<path>`），浅克隆取不到 ⇒ 全量拉历史
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: File length vs baseline (report + 不许新增)
-        run: bash scripts/check_length.sh
-      - name: i18n 双向闭合（zh/en 键集相等 + 引用键必存在）
-        run: node scripts/check-i18n.mjs
-      - name: Tauri 命令三向闭合（定义 = 注册表 = 前端引用）
-        run: node scripts/check-commands.mjs
-      - name: 中间件接线（未接线必须显式白名单）
-        run: node scripts/check-middleware-wiring.mjs
-      - name: 事件通道对账（第八道结构闸：常量 / channel() / CHANNELS / stores case 四面）
-        run: node scripts/check-channels.mjs
-      - name: 拆分形状（第五道结构闸：mod 闭合 / 用例不混住 / 私有项跨簇 / 簇名撞名）
-        run: node scripts/check-split-equivalence.mjs
-      - name: 拆分登记表复验（每刀入库的 ledger 都要能从历史原文重放，--no-cargo）
-        run: |
-          shopt -s nullglob
-          for f in scripts/split-ledger/*.json; do
-            echo "── $f"
-            node scripts/check-split-equivalence.mjs --split --ledger "$f" --no-cargo
-          done
+      # ★ 闸的清单只有一个出处：这里**不再逐条手抄**。
+      #   v2.209 之前的这个作业把八道闸抄成了六条 `run:`，加闸时漏掉了「预留对账」与
+      #   「文档规则」两道——而且因为本仓库 main 从未 push（298 个提交、零个 remote），
+      #   CI 一次也没跑过，漏得无人知晓，连"拆分登记表重放"这条**必红**的步骤（9 份里
+      #   8 份已红）也一直躺在这里。手抄清单的真正问题不是漏，是没人会被它提醒。
+      #   现在新增/删除闸只改 scripts/tasks.sh 的 t_gates，这里跟着它一起变。
+      - name: 全部结构闸（清单 = scripts/tasks.sh 的 t_gates）
+        run: sh scripts/tasks.sh gates

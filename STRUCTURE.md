@@ -37,6 +37,19 @@ scripts/                 ★ 工程脚本与门禁实现（任务定义只在这
 .github/workflows/ci.yml [LOCK] CI：改前先申请
 ```
 
+## 门禁
+
+`scripts/tasks.sh` 是**任务与闸清单的唯一出处**（★）。Makefile 只转发、CI 只调 `sh scripts/tasks.sh gates`、
+pre-commit 只按暂存面挑要跑哪几条 —— 三处都不抄清单（v2.209 之前 CI 手抄过一份，漏了两道闸且因为从未 push 而无人发现）。
+
+| 档 | 命令 | 跑什么 | 什么时候用 |
+| --- | --- | --- | --- |
+| 提交档 | `git commit`（自动） | 按暂存面触发的结构闸 + 前端测试 | 每次提交，pre-commit 拦住 |
+| 秒级档 | `make quick` | 全部结构闸 + 闸的自证 + 前端形态 | 改完一轮就想确认时 |
+| 全量档 | `make check` | 上者 + 类型 + clippy + 三处测试 | 一批收口之前，最后一次编辑之后 |
+| 自证档 | `make selftest` | 给判据施内存变异，它必须报红 | 改过闸本身之后 |
+| 一次性 | `make ledger LEDGER=<名>` | 重放某刀的拆分等价证明 | 只有重做那一刀时才跑；**不在常驻门禁里**（历史原文 vs 当前产物必然漂） |
+
 ## 文档
 
 | 路径 | 属性 | 说明 |
@@ -57,7 +70,7 @@ scripts/                 ★ 工程脚本与门禁实现（任务定义只在这
 | `docs/adr/` | ★ | 决策记录：`NNNN-<主题>.md`，**只增不改**；规则与模板见 `docs/adr/0000-template.md` |
 | `specs/` | ★ | 阶段计划：一阶段一目录 `specs/<编号>-<名>/spec.md`，含**可测验收标准**与**非目标** |
 | `docs/history/` | 只读 | **历史归档**：流水、旧路线表、旧变更日志、已退役设计稿、已批准的计划。不再追加、不改写；索引 = `docs/history/README.md` |
-| `docs/reports/` · `docs/reports/_parts/` | ⚠ 待归位 | 两份审计报告与修复台账；§7 台账里还有没结的欠账，**先抄进路线图**再整体搬 `docs/history/` |
+| `docs/history/audit/` 与 `docs/history/audit/parts/` | 只读 | 审计报告 + 修复台账 + 六份分区明细。§7 的 T1–T16 未结欠账**已先抄进** [`specs/03-structural-debt`](specs/03-structural-debt/spec.md) 再归档到这里 |
 | `docs/references/` | — | 外部参考笔记 |
 
 ## 产物与临时件（一律不入库）

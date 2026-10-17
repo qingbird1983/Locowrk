@@ -6,9 +6,10 @@
 //   R2 地图别说谎                —— STRUCTURE.md 必须点名每一个在役目录 + 根入口件 + 所有 ★ 件
 //   R3 决策记录格式              —— docs/adr/NNNN-短横线主题.md，编号唯一，四节齐
 //   R4 阶段计划可测              —— specs/<id>/spec.md 必须有「验收标准」(含复选框) 与「非目标」
-//   R5 不许再来万字长行          —— 在役文档单行 ≤2048B；存量按基线放行（不改写历史）
+//   R5 不许再来万字长行          —— 在役文档单行 ≤2048B；存量按**文件名单**放行（数不写在脚本里）
 //   R6 旧仪式不许偷偷回来        —— 在役文档里出现「在役窗口 / 进度三条 / 本次搬出 / 判据自纠 / 逐字原样搬出」判红
 //   R7 历史层要有索引            —— docs/history/ 下每一份 .md 都要被 docs/history/README.md 点名
+//   R8 断链                     —— 在役文档里的相对链接必须指得到一个真实文件（搬完忘改旧址 = 下一个人只能猜）
 //
 // 闸自己也是活的（同旧闸的教训）：扫描面读数为 0 直接判红，因为那只能是**闸瞎了**。
 // 用法：node scripts/check-docs.mjs          全量报告 + 判红退出 1
@@ -44,7 +45,9 @@ const rootDocs = ['AGENTS.md', 'STRUCTURE.md', 'README.md', 'CONTRIBUTING.md'].f
 const agents = path.join(ROOT, 'AGENTS.md');
 if (!fs.existsSync(agents)) bad('AGENTS.md 不存在 = agent 入口没了');
 else {
-  const n = read(agents).split('\n').length;
+  // 行数口径 = 换行符个数，与 `wc -l` 一致。用 split('\n').length 会让每个以换行结尾的文件
+  // 都多报 1 行（实测 103 行的文件报成 104）——判据的读数错一位也是错，尤其这种"卡上限"的。
+  const n = (read(agents).match(/\n/g) || []).length;
   if (n > 100) bad(`AGENTS.md ${n} 行 > 100 行上限（细则请放 docs/design/ 或 specs/，入口只留规则与指针）`);
   if (dbg) console.log(`  R1 AGENTS ${n} 行 / 100`);
 }
@@ -101,26 +104,66 @@ for (const f of specFiles) {
   if (!t.includes('## 非目标')) bad(`${rel(f)} 缺「## 非目标」——防止顺手过度设计`);
 }
 
-// ---- R5 长行基线（存量不动，新增判红）------------------------------------------------
-const LONG_BASELINE = 30;  // 2026-10-17 搬迁后**实测当前值**（旧规范稿遗留的 >2048B 行）
-//   基线必须等于现值：留余量 = 给免费额度。第一版写成 32（实测 30），自测当场抓出
-//   "插一条 3KB 长行竟不报红"⇒ 那条判据形同虚设。降基线要真去分行，不是改这个数字。
-const longLines = [];
+// ---- R5 长行：按**文件名单**判，不写总数 ----------------------------------------------
+// 与 check_length 同一条道理：把"现在有几处"钉进脚本 = 一颗每批都会变、且变得和文档
+// 好坏无关的数字（v2.195 那版就写错过一次，写成 32 而实测 30，白送两条免费额度）。
+// 名单 = 已知含 >2048B 长行的存量文件（多半是旧规范稿里没分段的整块）。
+// 名单外任何在役文档写出一行 2KB 以上 = 判红；把某文件分行干净了就从名单里删一行。
+const LONG_FILES = [
+  'docs/design/Memory-KV Roadmap.md',
+  'docs/design/NEW/Model Capability and Multimodal Phase Plan.md',
+  'docs/design/UI shell and patterns.md',
+  'docs/design/Context and Memory.md',
+  'docs/design/NEW/Reliability Reinforcement Design.md',
+];
+const longByFile = new Map();
 for (const f of [...live, ...rootDocs.map((d) => path.join(ROOT, d))]) {
-  read(f).split('\n').forEach((l, i) => { if (Buffer.byteLength(l) > 2048) longLines.push(`${rel(f)}:${i + 1}`); });
+  const n = read(f).split('\n').filter((l) => Buffer.byteLength(l) > 2048).length;
+  if (n) longByFile.set(rel(f), n);
 }
-if (longLines.length > LONG_BASELINE)
-  bad(`在役文档出现超长行 ${longLines.length} > 基线 ${LONG_BASELINE}（新写东西请分行；一份文件一行 1 万字 = 读不了、也比不出改动）\n      ${longLines.slice(0, 8).join(' · ')}`);
+for (const [f, n] of longByFile) {
+  if (!LONG_FILES.includes(f))
+    bad(`${f} 有 ${n} 行超过 2048 字节（一份文件一行 1 万字 = 读不了、也比不出改动）⇒ 分行，别加名单`);
+}
+const staleLong = LONG_FILES.filter((f) => !longByFile.has(f));
+if (staleLong.length) console.log(`  ~ 长行名单里 ${staleLong.length} 个文件现已干净，删掉这几行收紧：${staleLong.join(' · ')}`);
 
 // ---- R6 旧仪式词汇不许回来 -----------------------------------------------------------
 //   扫描面 = 入口 + 规范 + 计划（AGENTS.md / docs/design/** / specs/**）。
-//   docs/history/ 与 docs/reports/ 里的旧措辞属于历史正文，按规矩不改写，所以不进这一条。
+//   docs/history/ 里的旧措辞属于历史正文，按规矩不改写，所以不进这一条。
 const OLD_WORDS = ['在役窗口', '进度三条', '本次搬出', '判据自纠', '逐字原样搬出'];
 const r6Face = [...live.filter((f) => rel(f).startsWith('docs/design/') || rel(f).startsWith('specs/')), path.join(ROOT, 'AGENTS.md')];
 for (const f of r6Face) {
   if (!fs.existsSync(f)) continue;
   const t = read(f);
   for (const w of OLD_WORDS) if (t.includes(w)) bad(`${rel(f)} 里出现已废除的旧规矩用语「${w}」——它属于 docs/history/，别再写进在役文档`);
+}
+
+// ---- R8 断链：在役文档里的相对链接必须指得到东西 --------------------------------------
+// 为什么要有它：文档搬迁最大的风险不是搬错，是**搬完留下指向旧址的链接**——下一个 agent
+// 顺着链接走过去查无此文件，就只能猜，而"猜"正是本仓库反复出事的那个根因。
+// 口径（每条都是为了不假红）：只看 markdown 链接语法；**先剥掉行内代码** `...`
+// ——文档描述别的系统的语法时常写成示例链接（本仓实测：`- [Title](file.md) — hook`
+// 是在讲 MEMORY.md 的格式，不是指向本仓文件的引用）；排掉外链与纯锚点；
+// 目标做 decodeURIComponent（含空格的文件名写作 %20）；去掉 # 之后的锚再判存在。
+const BROKEN_BASELINE = [];  // 已知例外（一条一个「文件:行 → 目标」）；降它要真去修链接
+const broken = [];
+for (const f of [...live, ...rootDocs.map((d) => path.join(ROOT, d))]) {
+  read(f).split('\n').forEach((l, i) => {
+    for (const m of l.replace(/`[^`]*`/g, '').matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)) {
+      let t = m[2];
+      if (/^(https?:|mailto:|file:|#)/.test(t)) continue;
+      t = t.split('#')[0].split('?')[0];
+      if (!t || t.startsWith('/')) continue;
+      let target;
+      try { target = decodeURIComponent(t); } catch { continue; }
+      const abs = path.isAbsolute(target) ? target : path.join(path.dirname(f), target);
+      if (!fs.existsSync(abs)) broken.push(`${rel(f)}:${i + 1} → ${target}`);
+    }
+  });
+}
+for (const b of broken) {
+  if (!BROKEN_BASELINE.includes(b)) bad(`断链 ${b}（旧址还留着引用 = 下一个读的人只能猜）`);
 }
 
 // ---- R7 历史层要有索引 ---------------------------------------------------------------
@@ -136,12 +179,12 @@ if (mdAll.length < 10) bad(`md 扫描面只有 ${mdAll.length} 份 ⇒ 这条闸
 if (live.length < 10) bad(`在役文档读数 ${live.length} 过低 ⇒ 目录口径坏了`);
 
 console.log(`check-docs（文档规则闸：入口厚度 / 地图 / ADR / spec / 长行 / 旧仪式 / 历史索引）`);
-console.log(`DOC_FILES=${mdAll.length} LIVE=${live.length} HISTORY=${hist.length} ADR=${adrFiles.length} SPEC=${specFiles.length} LONG=${longLines.length}/${LONG_BASELINE}`);
+console.log(`DOC_FILES=${mdAll.length} LIVE=${live.length} HISTORY=${hist.length} ADR=${adrFiles.length} SPEC=${specFiles.length} LONG=${[...longByFile.values()].reduce((a, b) => a + b, 0)}处在${longByFile.size}个文件/名单${LONG_FILES.length}个`);
 if (dbg) console.log(`  在役目录：${[...new Set(mdAll.map((f) => path.dirname(rel(f))))].join(' ')}`);
 if (errs.length) {
   console.log('DOC_FAILED=' + errs.length);
   for (const e of errs) console.log('  ✗ ' + e);
   process.exit(1);
 }
-console.log(`check-docs: OK（七条判据全过 · 长行 ${longLines.length} ≤ 基线 ${LONG_BASELINE}）`);
+console.log(`check-docs: OK（八条判据全过 · 长行只在名单内 ${LONG_FILES.length} 个存量文件里）`);
 console.log('DOC_FAILED=0');
