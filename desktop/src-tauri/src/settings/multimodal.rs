@@ -63,6 +63,35 @@ impl MultimodalSettings {
         }
         Ok(())
     }
+
+    /// 校验 + 应用（台账 T15 从 `settings/update.rs` **机械搬移**：两条变换 =
+    /// `next.multimodal.` → `self.`、缩进减一层，其余逐字节不动；签名吃消费型值，
+    /// 理由与等价性证据同 `plugins.rs`）。落值之后仍由本区 `validate()` 裁决
+    /// （"校验体在本区、编排层不复制规则"这条原样保留）。
+    pub(crate) fn apply_update(&mut self, u: MultimodalUpdate) -> Result<(), String> {
+        // 多模态区（批 D）：数值界 + 白名单格式校验在
+        // MultimodalSettings::validate；失败不污染内存态
+        if let Some(v) = u.max_dimension {
+            self.max_dimension = v;
+        }
+        if let Some(v) = u.max_size_mb {
+            self.max_size_mb = v;
+        }
+        if let Some(v) = u.image_formats {
+            self.image_formats = v.iter().map(|s| s.trim().to_lowercase()).collect();
+        }
+        if let Some(v) = u.file_formats {
+            self.file_formats = v.iter().map(|s| s.trim().to_lowercase()).collect();
+        }
+        if let Some(v) = u.auto_gc {
+            self.auto_gc = v;
+        }
+        if let Some(v) = u.gc_threshold_days {
+            self.gc_threshold_days = v;
+        }
+        self.validate()?;
+        Ok(())
+    }
 }
 
 /// IPC 投影（无秘钥，全量展示）。

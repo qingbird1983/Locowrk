@@ -51,3 +51,22 @@ pub struct ThinkingView {
 pub struct ThinkingUpdate {
     pub language: String,
 }
+
+impl ThinkingSettings {
+    /// 校验 + 应用（台账 T15 从 `settings/update.rs` **机械搬移**：两条变换 =
+    /// `next.thinking.` → `self.`、缩进减一层，其余逐字节不动；签名吃消费型值，
+    /// 理由与等价性证据同 `plugins.rs` 的注释）。
+    pub(crate) fn apply_update(&mut self, u: ThinkingUpdate) -> Result<(), String> {
+        // 思考语言（docs/design/archive/language of thought.md）：白名单
+        // 校验。会话内锁死由注入侧缓存保证——中途改这里不影响已开
+        // 会话的 system 前缀，新会话才吃新值。
+        if !THINKING_LANGUAGE_VALUES.contains(&u.language.as_str()) {
+            return Err(format!(
+                "思考语言 {:?} 非法（可选 follow_ui / zh-CN / en-US / none）",
+                u.language
+            ));
+        }
+        self.language = u.language;
+        Ok(())
+    }
+}

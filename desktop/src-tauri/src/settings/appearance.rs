@@ -75,3 +75,35 @@ pub fn valid_theme(theme: &str) -> bool {
 pub fn valid_ui_font_size(px: u32) -> bool {
     (UI_FONT_MIN..=UI_FONT_MAX).contains(&px)
 }
+
+impl AppearanceSettings {
+    /// 校验 + 应用（台账 T15 从 `settings/update.rs` **机械搬移**：两条变换 =
+    /// `next.appearance.` → `self.`、缩进减一层，其余逐字节不动；`super::appearance::`
+    /// 在本模块内解析到自身，原样保留。签名吃消费型值，理由与等价性证据同
+    /// `plugins.rs`。`&u.theme` 那行不改——u 现在是本地值，借用它仍然成立）。
+    pub(crate) fn apply_update(&mut self, u: AppearanceUpdate) -> Result<(), String> {
+        if let Some(theme) = &u.theme {
+            if !super::appearance::valid_theme(theme) {
+                return Err(format!(
+                    "不支持的主题: {theme}（可选 dark / light / system）"
+                ));
+            }
+            self.theme = theme.clone();
+        }
+        // 字号基座（队列 Q14 第四刀）：越界一律**拒**，不钳到 12/18。口径同 Q8
+        // 工具结果预算那段——设置面存的是用户意图，悄悄改掉等于骗人；钳而不报
+        // 只成立于工具入参（`plugin-api/args.rs`）。值域端点只有
+        // `UI_FONT_MIN/MAX` 一个出处，文案从它们生成，不在这里重抄数字。
+        if let Some(px) = u.ui_font_size {
+            if !super::appearance::valid_ui_font_size(px) {
+                return Err(format!(
+                    "字号基座 {px} 超出范围（{}–{}px）",
+                    super::appearance::UI_FONT_MIN,
+                    super::appearance::UI_FONT_MAX
+                ));
+            }
+            self.ui_font_size = px;
+        }
+        Ok(())
+    }
+}

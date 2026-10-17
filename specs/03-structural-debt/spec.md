@@ -81,8 +81,31 @@
         `q14b`/`q14d`，随记忆与上下文重构时重立）；测试断言不许锁中文文案（原 `q11-shape` S5，
         改由「断言实参引用夹具常量」这个代码形状承重）
       · `pre-commit` 的暂存面触发**没加**（`.githooks/` 属禁区）⇒ 动 `memory.rs` / `store.rs` 时靠 `make quick` 兜
-- [ ] **T15** `settings/update.rs` 其余分区（context / memory / llm / embedding…）照 developer 那一段的形状收进各自的 `apply_update`
+- [x] **T15** `settings/update.rs` 其余分区（context / memory / llm / embedding…）照 developer 那一段的形状收进各自的 `apply_update`
       · 现状 = 本批只搬了 developer 一段（78 行），其余仍在编排点就地铺开
+      · 收完的形状：十一个分区各自持有 `apply_update`（`appearance` / `embedding` / `context` /
+        `memory` / `tools` / `plugins` / `chat` / `developer` / `thinking` / `multimodal`，`llm` 自 v2.58 就是），
+        编排层只按 settings.json 的字段顺序转发 ⇒ `update.rs` 381 → **111 行**
+      · 两个根字段 `locale` / `shortcut` 留在编排层：它们不属于任何分区结构、各自只有 1–2 条拒绝语句，
+        为两行代码再造一层是凭空加机制（这条留在头注里，别让下一个人在"为什么它们不一样"上花时间）
+      · `chat` 原来是**自由函数** `apply_update(next, u)`，本批改成方法——它是这十一份里的第二种写法，
+        也是 `update.rs` 里唯一一处 `super::chat::…` 转发；签名一族现在统一成"分区自己 + 吃消费型值"
+      · 签名吃消费型值（`u: XxxUpdate`）而不是 developer/llm 那个 `&u`：十一区里有 12 处 `String` /
+        `Vec<String>` 字段是"从 u 里搬出来落值"，改 `&u` 就得给每处补 `.clone()`——那是**新写的代码**
+        而不是搬移，等价性从此只能靠人读（理由写进 `memory/update.rs` 头注，其余九处引它）
+      · `settings/memory.rs` → `settings/memory/{mod.rs,update.rs}`：并回 `mod.rs` 是 419 行 = 新增超限件，
+        三问自检第三问为"否"（300+ 行字段清单里找某一档）⇒ 按纪律拆目录式子模块。`check_length` 名单不动
+      · 等价性不靠人读：一次性脚本 `tmp/t15-equivalence.mjs`（**不入库**，性质同 `make ledger`——比的是
+        改前原文与当前产物，越用越红），声明四条变换（`next.<分区>.`→`self.`、去一层缩进、
+        仅 memory 的 `super::memory::`→`super::`、函数末尾补那一行 `Ok(())`），
+        十三条读数全部"逐行相同"：appearance 22 / embedding 9 / context 29 / memory 124 / tools 67 /
+        plugins 10 / thinking 10 / multimodal 21 / chat 41 / locale 4 / shortcut 10 / llm 3 / developer 4；
+        阳性对照 = 把 memory 段的 `1..=20` 改成 `1..=21`，脚本当场报漂移（打不中就是脚本自己没在比东西）
+      · 常驻判据：`check-single-source.mjs` 加两档。SS5 = 编排层 `return Err(` 3 次与 `.apply_update(` 转发
+        11 次（写回第三处就地校验就红）；SS5b = 分区面 `fn apply_update` 定义 11 个（转发还在、定义没了就红）。
+        两条各配一条窄变异，`make selftest` 八档全中
+      · 实测：Windows `make check` 全绿，桌面 584 条（`settings/tests/*` **一字未改**仍然绿 = 等价第二证）；
+        前端未动 ⇒ vitest 13 文件 104 条照旧
 - [ ] **T16** 三份"即时生效"的写法合一：`setLocale` / `setTheme` / `setUiFontSize` 同一件事三种实现
       · 合之前要先补"失败时回滚时序"的用例，否则两条现网通路没有兜底
 

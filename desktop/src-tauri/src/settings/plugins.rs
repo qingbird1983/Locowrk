@@ -34,3 +34,28 @@ pub struct PluginsUpdate {
 pub fn valid_days(days: u32) -> bool {
     days == 0 || (AUTO_DISABLE_MIN_DAYS..=AUTO_DISABLE_MAX_DAYS).contains(&days)
 }
+
+impl PluginsSettings {
+    /// 校验 + 应用（台账 T15 从 `settings/update.rs` **机械搬移**，编排层只留
+    /// 一行转发）。搬移只做两条变换：`next.plugins.` → `self.`、缩进减一层，
+    /// 其余逐字节不动（`super::plugins::` 在本模块内解析到自身，故原样保留）。
+    /// 等价性证据 = 既有 settings 测试面一字未改仍然绿 + 行集合差脚本为空。
+    ///
+    /// 签名吃**消费型值**（与 `chat::apply_update` 同形，不是 `developer` 那个 `&u`）：
+    /// 本批十个分区里有 12 处 `String` / `Vec<String>` 字段是"从 u 里搬出来落值"，
+    /// 改成 `&u` 就得给每一处补 `.clone()`——那是**新写的代码**而不是搬移，
+    /// 等价性从此只能靠人读。分区的 `apply_update` 本来就是这条通路的唯一消费者。
+    pub(crate) fn apply_update(&mut self, u: PluginsUpdate) -> Result<(), String> {
+        if let Some(days) = u.auto_disable_idle_days {
+            if !super::plugins::valid_days(days) {
+                return Err(format!(
+                    "自动停用天数 {days} 非法（0 = 关闭，或 {}–{} 天）",
+                    super::plugins::AUTO_DISABLE_MIN_DAYS,
+                    super::plugins::AUTO_DISABLE_MAX_DAYS
+                ));
+            }
+            self.auto_disable_idle_days = days;
+        }
+        Ok(())
+    }
+}

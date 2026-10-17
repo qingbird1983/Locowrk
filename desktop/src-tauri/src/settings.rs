@@ -40,9 +40,7 @@ pub use llm::{
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use multimodal::{MultimodalSettings, MultimodalUpdate, MultimodalView};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
-pub use thinking::{
-    ThinkingSettings, ThinkingUpdate, ThinkingView, THINKING_LANGUAGE_VALUES, THINKING_NONE,
-};
+pub use thinking::{ThinkingSettings, ThinkingUpdate, ThinkingView, THINKING_NONE};
 pub use tools::{ToolsSettings, ToolsSettingsView, ToolsUpdate};
 
 /// locale 取值：`system`（跟随系统，缺省）/ `zh-CN` / `en`（§13.5）。

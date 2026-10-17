@@ -49,6 +49,7 @@ const F = {
   tsFont: 'desktop/src/lib/ui-font.ts',
   css: 'desktop/src/style.css',
   appLlm: 'desktop/src-tauri/src/llm/app_llm.rs',
+  settingsUpdate: 'desktop/src-tauri/src/settings/update.rs',
 };
 
 /**
@@ -65,6 +66,24 @@ function approvalTestFiles() {
   return out.filter((rel) => fs.existsSync(path.join(ROOT, rel)));
 }
 
+/**
+ * 设置分区面（台账 T15 的扫描面）：`settings/` 整棵树，排掉测试目录。
+ * 也是动态取——以后再加一个分区（或把一个分区拆成目录），它自动在面内。
+ */
+function settingsPartitionFiles() {
+  const out = [];
+  const base = 'desktop/src-tauri/src/settings';
+  const walk = (rel) => {
+    for (const f of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+      const p = `${rel}/${f.name}`;
+      if (f.isDirectory()) walk(p);
+      else if (f.name.endsWith('.rs') && !/(^|\/)tests(_?\.rs|\/)/.test(p)) out.push(p);
+    }
+  };
+  if (fs.existsSync(path.join(ROOT, base))) walk(base);
+  return out;
+}
+
 const countOf = (s, re) => (s.match(new RegExp(re.source, 'g')) || []).length;
 
 /** 一次读盘，快照进内存；之后所有判据只读快照。 */
@@ -74,6 +93,7 @@ function snapshot() {
     files,
     rust: files.map((f) => read(path.relative(ROOT, f).replace(/\\/g, '/'))),
     apprTests: approvalTestFiles().map(read),
+    settingsParts: settingsPartitionFiles().map(read),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -139,6 +159,23 @@ const CHECKS = [
     (m) => String(m.apprTests.reduce((a, s) => a + countOf(s, /\.pending\(\)\.first\(\)/), 0)),
     '1',
   ],
+  [
+    'SS5',
+    '设置分区的"校验 + 落值"只有一个写法：编排层 `settings/update.rs` 里 `return Err(` = 3' +
+      '（只剩 locale 与 shortcut 两个根字段各自的拒绝语句）、`.apply_update(` 转发 = 11' +
+      '（T15：改前 310 行就地铺开在编排层，而批 Q6 早就把 developer 收进分区自己——同一件事两种写法，' +
+      '且丑的那种正在长新字段；写回第三处就地校验 = 让下一个改设置的人再猜一次该放哪）',
+    (m) =>
+      [countOf(m.settingsUpdate, /return Err\(/), countOf(m.settingsUpdate, /\.apply_update\(/)].join('|'),
+    '3|11',
+  ],
+  [
+    'SS5b',
+    '且那 11 次转发背后真有 11 个自持的 `fn apply_update` 定义（少一个 = 编排层在替某个分区做事，' +
+      '多一个 = 有分区自己留着但已不在链上）',
+    (m) => String(m.settingsParts.reduce((a, s) => a + countOf(s, /fn apply_update\(/), 0)),
+    '11',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -149,6 +186,8 @@ const FLOORS = [
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
+  // 现值 12（settings/ 树里的 .rs，含 memory/ 与 llm/ 子目录），下限取八成
+  ['设置分区面文件数', (m) => m.settingsParts.length, 9],
 ];
 
 function runChecks(m) {
@@ -189,12 +228,20 @@ if (SELFTEST) {
       m.apprTests.push(
         '#[tokio::test]\nasync fn sneaky_decider() {\n    let r = decider.pending().first().cloned();\n}\n',
       ),
+    // 窄变异（T15）：把一段"就地铺开"的校验塞回编排层——这正是本刀搬空的那形状。
+    // SS5 要能为它报红，否则 '3|11' 只是抄了两个当下的数字。
+    SS5: (m) => (m.settingsUpdate = m.settingsUpdate.replace(
+      '        if let Some(u) = embedding {',
+      '        if let Some(u) = embedding {\n            if u.model.is_none() {\n                return Err("模型未填".into());\n            }',
+    )),
+    // 另一侧的变异：把某个分区的自持实现改名（转发还在、定义没了 = 编排层在替它做事）
+    SS5b: (m) => (m.settingsParts = m.settingsParts.map((s) => (s.includes('fn apply_update(&mut self, u: ToolsUpdate') ? s.replace('fn apply_update(&mut self, u: ToolsUpdate', 'fn apply_update_renamed(&mut self, u: ToolsUpdate') : s))),
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {
     const mut = MUT[id];
     if (!mut) { console.log(`  ?? ${id} 没有对照 ⇒ 该项证明力未知`); miss++; continue; }
-    const copy = { ...snap, rust: [...snap.rust], apprTests: [...snap.apprTests] };
+    const copy = { ...snap, rust: [...snap.rust], apprTests: [...snap.apprTests], settingsParts: [...snap.settingsParts] };
     mut(copy);
     const row = runChecks(copy).find((r) => r.id === id);
     const caught = row && row.bad;

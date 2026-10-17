@@ -130,6 +130,83 @@ pub fn normalize_fs_roots(roots: &[String]) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+impl ToolsSettings {
+    /// 校验 + 应用（台账 T15 从 `settings/update.rs` **机械搬移**：两条变换 =
+    /// `next.tools.` → `self.`、缩进减一层，其余逐字节不动；`super::tools::` 与
+    /// `crate::permission_mode::` 都是绝对/自身路径，原样保留。签名吃消费型值，
+    /// 理由与等价性证据同 `plugins.rs`）。
+    pub(crate) fn apply_update(&mut self, u: ToolsUpdate) -> Result<(), String> {
+        if let Some(e) = u.enabled {
+            self.enabled = e;
+        }
+        if let Some(n) = u.max_per_request {
+            if !(1..=200).contains(&n) {
+                return Err(format!("每次请求最大工具数 {n} 超出范围（1–200）"));
+            }
+            self.max_per_request = n;
+        }
+        if let Some(secs) = u.call_timeout_secs {
+            if !super::tools::CALL_TIMEOUT_RANGE.contains(&secs) {
+                return Err(format!(
+                    "单次工具调用超时 {secs}s 超出范围（{}–{} 秒）",
+                    super::tools::CALL_TIMEOUT_RANGE.start(),
+                    super::tools::CALL_TIMEOUT_RANGE.end()
+                ));
+            }
+            self.call_timeout_secs = secs;
+        }
+        if let Some(steps) = u.max_turn_steps {
+            if !super::tools::MAX_TURN_STEPS_RANGE.contains(&steps) {
+                return Err(format!(
+                    "单轮步数上限 {steps} 非法（{}–{}）",
+                    super::tools::MAX_TURN_STEPS_RANGE.start(),
+                    super::tools::MAX_TURN_STEPS_RANGE.end()
+                ));
+            }
+            self.max_turn_steps = steps;
+        }
+        if let Some(roots) = u.fs_roots {
+            self.fs_roots = super::tools::normalize_fs_roots(&roots)?;
+        }
+        if let Some(secs) = u.approval_timeout_secs {
+            // v2.49 可配置原则：审批守夜阈值可调（0 = 不限等待）
+            if !super::tools::APPROVAL_TIMEOUT_RANGE.contains(&secs) {
+                return Err(format!(
+                    "审批等待时长 {secs}s 非法（0 = 不限，或 {}–{} 秒）",
+                    super::tools::APPROVAL_TIMEOUT_RANGE.start(),
+                    super::tools::APPROVAL_TIMEOUT_RANGE.end()
+                ));
+            }
+            self.approval_timeout_secs = secs;
+        }
+        if let Some(secs) = u.ask_timeout_secs {
+            // v4.11 §3.39①：ask_user 守夜时长可调（0 = 不限等待）
+            if !super::tools::ASK_TIMEOUT_RANGE.contains(&secs) {
+                return Err(format!(
+                    "选择等待时长 {secs}s 非法（0 = 不限，或 {}–{} 秒）",
+                    super::tools::ASK_TIMEOUT_RANGE.start(),
+                    super::tools::ASK_TIMEOUT_RANGE.end()
+                ));
+            }
+            self.ask_timeout_secs = secs;
+        }
+        if let Some(mode) = u.default_permission_mode {
+            // ㉘·B 新会话权限档缺省：只收四档合法值（会话级覆盖存旁车）
+            if crate::permission_mode::PermissionMode::parse(&mode).is_none() {
+                return Err(format!(
+                    "权限档缺省 {mode:?} 非法（plan / ask / acceptEdits / auto）"
+                ));
+            }
+            self.default_permission_mode = mode;
+        }
+        if let Some(pin) = u.pin_session {
+            // KV v2 §4.2 工具集会话钉死（无范围校验，布尔开关）
+            self.pin_session = pin;
+        }
+        Ok(())
+    }
+}
+
 impl crate::settings::SettingsStore {
     /// 后端专用：生效截断配置（ToolExposure 共享锁的内容物，⑫）。
     pub(crate) fn exposure_config(&self) -> ToolExposureConfig {

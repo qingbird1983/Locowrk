@@ -46,6 +46,23 @@ impl EmbeddingSettings {
                 .resolved_base_url(provider, llm_base)
                 .is_some_and(|b| !b.is_empty())
     }
+
+    /// 校验 + 应用（台账 T15 从 `settings/update.rs` **机械搬移**：两条变换 =
+    /// `next.embedding.` → `self.`、缩进减一层，其余逐字节不动；签名吃消费型值，
+    /// 理由与等价性证据同 `plugins.rs`）。本区无区间校验——"传空串 = 清除"
+    /// 就是它的校验（`(!x.is_empty()).then_some(x)` 那三行原样搬来）。
+    pub(crate) fn apply_update(&mut self, u: EmbeddingUpdate) -> Result<(), String> {
+        if let Some(b) = u.base_url {
+            self.base_url = (!b.is_empty()).then_some(b);
+        }
+        if let Some(m) = u.model {
+            self.model = (!m.is_empty()).then_some(m);
+        }
+        if let Some(k) = u.api_key {
+            self.api_key = (!k.is_empty()).then_some(k);
+        }
+        Ok(())
+    }
 }
 
 /// embedding 区投影（无秘钥字段）。

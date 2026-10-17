@@ -1,8 +1,14 @@
 //! 记忆注入区类型（⑪，Context 文档 §6.2 MemorySettings 的落地子集——
 //! 开关 + 注入条数 + ⑬ 隐式提取开关）：设置原值 / IPC 投影 / 部分更新。
-//! 校验与应用逻辑在 settings.rs 的 `update` / `memory_inject_config`。
+//! 校验与应用**本区自持**（`memory/update.rs` 的 `apply_update`，台账 T15 从
+//! `settings/update.rs` 搬来；编排层只留一行转发）。取用侧的
+//! `memory_inject_config` 仍在 `settings.rs`。
 //! M2（Memory-KV Roadmap）起追加记忆树整理三键：整理节奏 / 增量块 X /
 //! 记忆管理器模型（《Memory Tree Design v2》§4.3 / §5.2，§15 可调项）。
+
+/// 本区的应用与校验（24 个字段 × 区间/白名单）。单独成文件是因为并回本文件
+/// 就是 419 行 = 新增超限件，理由与三条搬移变换写在那个头注里。
+mod update;
 
 use serde::{Deserialize, Serialize};
 

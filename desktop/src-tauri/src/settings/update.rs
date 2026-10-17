@@ -1,13 +1,25 @@
-//! settings_set 的校验与应用（settings.json 各分区一一对应；从
-//! settings.rs 拆出只为本体守住 400 行纪律——逻辑不变）。
+//! settings_set 的校验与应用（**编排层**：分区一律转发，两个根字段就地处理）。
 //!
-//! 顺序纪律：校验全部通过 → 应用到副本 → 落盘成功才提交内存。任何
+//! 台账 T15 收的形状：本文件原来 381 行，其中约 310 行是十个分区"就地铺开"的
+//! 校验与落值——而批 Q6 早就把 `developer` 那一段收进了分区自己。同一件事两种
+//! 写法，且写法更丑的那个正在长新字段。现在每个分区自己持有
+//! `apply_update(消费型值) -> Result<(), String>`，本文件按 settings.json 的字段
+//! 顺序转发一遍：`appearance` / `embedding` / `context` / `memory` / `tools` /
+//! `plugins` / `chat` / `developer` / `thinking` / `multimodal`（`llm` 自 v2.58
+//! 就是这个形状）。两个根字段 `locale` / `shortcut` 不属于任何分区结构、各自只有
+//! 3–6 行校验，为它们再造一层是凭空加机制 ⇒ 留在这里。
+//!
+//! 搬移的等价性不靠人读：十条变换只有"去一层缩进"与"next.<分区>. → self."
+//! （`memory/update.rs` 多一条 `super::memory:: → super::`），行集合差由脚本核
+//! （脚本与读数在提交正文）；既有 `settings/tests/*` 一字未改仍然绿是第二重证据。
+//!
+//! 顺序纪律（未改）：校验全部通过 → 应用到副本 → 落盘成功才提交内存。任何
 //! 校验失败提前返回 Err，不污染内存态（测试 `rejects_*` 系列锁定）。
 
 use super::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
     MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsStore, SettingsView, ThinkingUpdate,
-    ToolsUpdate, FILE_NAME, LOCALES, THINKING_LANGUAGE_VALUES,
+    ToolsUpdate, FILE_NAME, LOCALES,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -32,35 +44,16 @@ impl SettingsStore {
         multimodal: Option<MultimodalUpdate>,
     ) -> Result<SettingsView, String> {
         let mut next = self.inner.lock().expect("settings poisoned").clone();
+        // ---- 根字段（不属于任何分区结构，校验就三行，不另造一层）----
         if let Some(loc) = locale {
             if !LOCALES.contains(&loc.as_str()) {
                 return Err(format!("不支持的语言: {loc}（可选 system / zh-CN / en）"));
             }
             next.locale = loc;
         }
+        // ---- 以下每个分区一行转发：校验与落值在该分区自己的文件里 ----
         if let Some(u) = appearance {
-            if let Some(theme) = &u.theme {
-                if !super::appearance::valid_theme(theme) {
-                    return Err(format!(
-                        "不支持的主题: {theme}（可选 dark / light / system）"
-                    ));
-                }
-                next.appearance.theme = theme.clone();
-            }
-            // 字号基座（队列 Q14 第四刀）：越界一律**拒**，不钳到 12/18。口径同 Q8
-            // 工具结果预算那段——设置面存的是用户意图，悄悄改掉等于骗人；钳而不报
-            // 只成立于工具入参（`plugin-api/args.rs`）。值域端点只有
-            // `UI_FONT_MIN/MAX` 一个出处，文案从它们生成，不在这里重抄数字。
-            if let Some(px) = u.ui_font_size {
-                if !super::appearance::valid_ui_font_size(px) {
-                    return Err(format!(
-                        "字号基座 {px} 超出范围（{}–{}px）",
-                        super::appearance::UI_FONT_MIN,
-                        super::appearance::UI_FONT_MAX
-                    ));
-                }
-                next.appearance.ui_font_size = px;
-            }
+            next.appearance.apply_update(u)?;
         }
         if let Some(sc) = shortcut {
             // 校验用全局快捷键解析器本身（与 tray.rs 注册同一套语义）；
@@ -80,256 +73,22 @@ impl SettingsStore {
             next.llm.apply_update(&u)?;
         }
         if let Some(u) = embedding {
-            if let Some(b) = u.base_url {
-                next.embedding.base_url = (!b.is_empty()).then_some(b);
-            }
-            if let Some(m) = u.model {
-                next.embedding.model = (!m.is_empty()).then_some(m);
-            }
-            if let Some(k) = u.api_key {
-                next.embedding.api_key = (!k.is_empty()).then_some(k);
-            }
+            next.embedding.apply_update(u)?;
         }
         if let Some(u) = context {
-            // v2.137 整理阈值（绝对 token，100K–800K）：折算键
-            // threshold_pct / strategy / stability_rounds 随 ctx-compact
-            // 桌面链退役（settings 里为幻影键）。
-            if let Some(n) = u.threshold_tokens {
-                if !super::context::valid_organize_threshold(n) {
-                    return Err(format!(
-                        "整理阈值 {n} 超出范围（{}–{} token）",
-                        super::context::ORGANIZE_THRESHOLD_RANGE.start(),
-                        super::context::ORGANIZE_THRESHOLD_RANGE.end()
-                    ));
-                }
-                next.context.threshold_tokens = n;
-            }
-            if let Some(v) = u.usage_bar {
-                next.context.usage_bar = v;
-            }
-            // Q8 工具结果预算（0–512 KiB，**0 = 不限制**）：越界一律拒绝而不是
-            // 钳到边界——`plugin-api/args.rs` 那条"钳而不报错"是**工具入参**的
-            // 纪律，设置面写的是用户意图，悄悄改掉等于骗人（他给什么就该存什么）。
-            if let Some(v) = u.tool_result_budget_kib {
-                if !super::context::valid_tool_result_budget(v) {
-                    return Err(format!(
-                        "工具结果预算 {v} 超出范围（{}–{} KiB，0 = 不限制）",
-                        super::context::TOOL_RESULT_BUDGET_RANGE.start(),
-                        super::context::TOOL_RESULT_BUDGET_RANGE.end()
-                    ));
-                }
-                next.context.tool_result_budget_kib = v;
-            }
+            next.context.apply_update(u)?;
         }
         if let Some(u) = memory {
-            if let Some(e) = u.enabled {
-                next.memory.enabled = e;
-            }
-            if let Some(k) = u.top_k {
-                if !(1..=20).contains(&k) {
-                    return Err(format!("记忆注入条数 {k} 超出范围（1–20）"));
-                }
-                next.memory.top_k = k;
-            }
-            // M2 记忆树整理三键（树 v2 §4.3/§5.2/§15）：节奏白名单 +
-            // 增量块区间 + 记忆管理器模型（空串按清除处理，回落同主模型）
-            if let Some(p) = u.organize_pacing {
-                if !super::memory::ORGANIZE_PACING_VALUES.contains(&p.as_str()) {
-                    return Err(format!("整理节奏 {p:?} 非法（可选 batch / incremental）"));
-                }
-                next.memory.organize_pacing = p;
-            }
-            if let Some(n) = u.organize_chunk_tokens {
-                if !super::memory::ORGANIZE_CHUNK_TOKENS_RANGE.contains(&n) {
-                    return Err(format!(
-                        "增量块 {n} 超出范围（{}–{} token）",
-                        super::memory::ORGANIZE_CHUNK_TOKENS_RANGE.start(),
-                        super::memory::ORGANIZE_CHUNK_TOKENS_RANGE.end()
-                    ));
-                }
-                next.memory.organize_chunk_tokens = n;
-            }
-            // 记忆管理器模型（空串 = 清除，回落同主模型；与 base_url/api_key
-            // 同约定——双层 Option 的 null 在 JSON 里无法表达清除）
-            if let Some(m) = u.memory_manager_model {
-                next.memory.memory_manager_model = (!m.trim().is_empty()).then_some(m);
-            }
-            if let Some(p) = u.memory_manager_provider {
-                next.memory.memory_manager_provider = (!p.trim().is_empty()).then_some(p);
-            }
-            // M4 尾巴策略 + collapse（树 v2 §7.2/§8.3/§15）：策略白名单 +
-            // 窗口轮数区间 + 收起阈值区间
-            if let Some(p) = u.tail_strategy {
-                if !super::memory::TAIL_STRATEGY_VALUES.contains(&p.as_str()) {
-                    return Err(format!("尾巴策略 {p:?} 非法（可选 boundary / window）"));
-                }
-                next.memory.tail_strategy = p;
-            }
-            if let Some(n) = u.tail_window_turns {
-                if !super::memory::TAIL_WINDOW_TURNS_RANGE.contains(&n) {
-                    return Err(format!(
-                        "固定窗口 {n} 超出范围（{}–{} 轮）",
-                        super::memory::TAIL_WINDOW_TURNS_RANGE.start(),
-                        super::memory::TAIL_WINDOW_TURNS_RANGE.end()
-                    ));
-                }
-                next.memory.tail_window_turns = n;
-            }
-            if let Some(e) = u.collapse_enabled {
-                next.memory.collapse_enabled = e;
-            }
-            if let Some(p) = u.collapse_threshold_pct {
-                if !super::memory::COLLAPSE_THRESHOLD_PCT_RANGE.contains(&p) {
-                    return Err(format!(
-                        "自动收起阈值 {p}% 超出范围（{}–{}%）",
-                        super::memory::COLLAPSE_THRESHOLD_PCT_RANGE.start(),
-                        super::memory::COLLAPSE_THRESHOLD_PCT_RANGE.end()
-                    ));
-                }
-                next.memory.collapse_threshold_pct = p;
-            }
-            if let Some(e) = u.files {
-                next.memory.files = e;
-            }
-            if let Some(e) = u.repo_context {
-                next.memory.repo_context = e;
-            }
-            if let Some(e) = u.instruction_files {
-                next.memory.instruction_files = e;
-            }
-            // 指令文件两档链预算（v2.188 · 队列 Q4）：区间端点只有 `INSTRUCTION_KIB_RANGE`
-            // 一个出处，校验体在 `settings/memory.rs::check_instruction_kib`（本文件
-            // 393 行，就地写两遍会顶成新增超限件 ⇒ 抽函数，见那里的头注），
-            // **标签各写各的**：出界文案必须点名是哪一档。
-            if let Some(n) = u.instruction_global_kib {
-                super::memory::check_instruction_kib("全局", n)?;
-                next.memory.instruction_global_kib = n;
-            }
-            if let Some(n) = u.instruction_project_kib {
-                super::memory::check_instruction_kib("项目", n)?;
-                next.memory.instruction_project_kib = n;
-            }
-            if let Some(e) = u.fact_cards {
-                next.memory.fact_cards = e;
-            }
-            if let Some(n) = u.fact_card_max {
-                if !super::memory::FACT_CARD_MAX_RANGE.contains(&n) {
-                    return Err(format!(
-                        "整理事实卡上限 {n} 超出范围（{}–{} 张）",
-                        super::memory::FACT_CARD_MAX_RANGE.start(),
-                        super::memory::FACT_CARD_MAX_RANGE.end()
-                    ));
-                }
-                next.memory.fact_card_max = n;
-            }
-            // 学习档（v2.200 · 队列 Q9）：开关直通，四档各走一次区间校验。
-            // 校验体抽在 `settings/memory.rs::check_learn_weight`（同 Q4 那两档的
-            // 理由：区间端点只许一个出处）；这里**四遍各写各的中文档名**——出界
-            // 文案必须点名是哪一档，且不接受用字符串当字段路由那种"看起来省行数"
-            // 的形状（省下的行数由排障时多读的三层 match 还回去）。
-            if let Some(e) = u.learn_enabled {
-                next.memory.learn_enabled = e;
-            }
-            if let Some(n) = u.relevance_weight {
-                super::memory::check_learn_weight("相关性", n)?;
-                next.memory.relevance_weight = n;
-            }
-            if let Some(n) = u.strength_weight {
-                super::memory::check_learn_weight("强度", n)?;
-                next.memory.strength_weight = n;
-            }
-            if let Some(n) = u.freshness_weight {
-                super::memory::check_learn_weight("热度", n)?;
-                next.memory.freshness_weight = n;
-            }
-            if let Some(n) = u.recency_weight {
-                super::memory::check_learn_weight("新鲜度", n)?;
-                next.memory.recency_weight = n;
-            }
+            next.memory.apply_update(u)?;
         }
         if let Some(u) = tools {
-            if let Some(e) = u.enabled {
-                next.tools.enabled = e;
-            }
-            if let Some(n) = u.max_per_request {
-                if !(1..=200).contains(&n) {
-                    return Err(format!("每次请求最大工具数 {n} 超出范围（1–200）"));
-                }
-                next.tools.max_per_request = n;
-            }
-            if let Some(secs) = u.call_timeout_secs {
-                if !super::tools::CALL_TIMEOUT_RANGE.contains(&secs) {
-                    return Err(format!(
-                        "单次工具调用超时 {secs}s 超出范围（{}–{} 秒）",
-                        super::tools::CALL_TIMEOUT_RANGE.start(),
-                        super::tools::CALL_TIMEOUT_RANGE.end()
-                    ));
-                }
-                next.tools.call_timeout_secs = secs;
-            }
-            if let Some(steps) = u.max_turn_steps {
-                if !super::tools::MAX_TURN_STEPS_RANGE.contains(&steps) {
-                    return Err(format!(
-                        "单轮步数上限 {steps} 非法（{}–{}）",
-                        super::tools::MAX_TURN_STEPS_RANGE.start(),
-                        super::tools::MAX_TURN_STEPS_RANGE.end()
-                    ));
-                }
-                next.tools.max_turn_steps = steps;
-            }
-            if let Some(roots) = u.fs_roots {
-                next.tools.fs_roots = super::tools::normalize_fs_roots(&roots)?;
-            }
-            if let Some(secs) = u.approval_timeout_secs {
-                // v2.49 可配置原则：审批守夜阈值可调（0 = 不限等待）
-                if !super::tools::APPROVAL_TIMEOUT_RANGE.contains(&secs) {
-                    return Err(format!(
-                        "审批等待时长 {secs}s 非法（0 = 不限，或 {}–{} 秒）",
-                        super::tools::APPROVAL_TIMEOUT_RANGE.start(),
-                        super::tools::APPROVAL_TIMEOUT_RANGE.end()
-                    ));
-                }
-                next.tools.approval_timeout_secs = secs;
-            }
-            if let Some(secs) = u.ask_timeout_secs {
-                // v4.11 §3.39①：ask_user 守夜时长可调（0 = 不限等待）
-                if !super::tools::ASK_TIMEOUT_RANGE.contains(&secs) {
-                    return Err(format!(
-                        "选择等待时长 {secs}s 非法（0 = 不限，或 {}–{} 秒）",
-                        super::tools::ASK_TIMEOUT_RANGE.start(),
-                        super::tools::ASK_TIMEOUT_RANGE.end()
-                    ));
-                }
-                next.tools.ask_timeout_secs = secs;
-            }
-            if let Some(mode) = u.default_permission_mode {
-                // ㉘·B 新会话权限档缺省：只收四档合法值（会话级覆盖存旁车）
-                if crate::permission_mode::PermissionMode::parse(&mode).is_none() {
-                    return Err(format!(
-                        "权限档缺省 {mode:?} 非法（plan / ask / acceptEdits / auto）"
-                    ));
-                }
-                next.tools.default_permission_mode = mode;
-            }
-            if let Some(pin) = u.pin_session {
-                // KV v2 §4.2 工具集会话钉死（无范围校验，布尔开关）
-                next.tools.pin_session = pin;
-            }
+            next.tools.apply_update(u)?;
         }
         if let Some(u) = plugins {
-            if let Some(days) = u.auto_disable_idle_days {
-                if !super::plugins::valid_days(days) {
-                    return Err(format!(
-                        "自动停用天数 {days} 非法（0 = 关闭，或 {}–{} 天）",
-                        super::plugins::AUTO_DISABLE_MIN_DAYS,
-                        super::plugins::AUTO_DISABLE_MAX_DAYS
-                    ));
-                }
-                next.plugins.auto_disable_idle_days = days;
-            }
+            next.plugins.apply_update(u)?;
         }
         if let Some(u) = chat {
-            super::chat::apply_update(&mut next.chat, u)?;
+            next.chat.apply_update(u)?;
         }
         if let Some(u) = developer {
             // 分区内的校验与 apply 段（约 40 行）不铺开在这里写：那个文件本批加完
@@ -338,39 +97,10 @@ impl SettingsStore {
             next.developer.apply_update(&u)?;
         }
         if let Some(u) = thinking {
-            // 思考语言（docs/design/archive/language of thought.md）：白名单
-            // 校验。会话内锁死由注入侧缓存保证——中途改这里不影响已开
-            // 会话的 system 前缀，新会话才吃新值。
-            if !THINKING_LANGUAGE_VALUES.contains(&u.language.as_str()) {
-                return Err(format!(
-                    "思考语言 {:?} 非法（可选 follow_ui / zh-CN / en-US / none）",
-                    u.language
-                ));
-            }
-            next.thinking.language = u.language;
+            next.thinking.apply_update(u)?;
         }
         if let Some(u) = multimodal {
-            // 多模态区（批 D）：数值界 + 白名单格式校验在
-            // MultimodalSettings::validate；失败不污染内存态
-            if let Some(v) = u.max_dimension {
-                next.multimodal.max_dimension = v;
-            }
-            if let Some(v) = u.max_size_mb {
-                next.multimodal.max_size_mb = v;
-            }
-            if let Some(v) = u.image_formats {
-                next.multimodal.image_formats = v.iter().map(|s| s.trim().to_lowercase()).collect();
-            }
-            if let Some(v) = u.file_formats {
-                next.multimodal.file_formats = v.iter().map(|s| s.trim().to_lowercase()).collect();
-            }
-            if let Some(v) = u.auto_gc {
-                next.multimodal.auto_gc = v;
-            }
-            if let Some(v) = u.gc_threshold_days {
-                next.multimodal.gc_threshold_days = v;
-            }
-            next.multimodal.validate()?;
+            next.multimodal.apply_update(u)?;
         }
         let bytes = serde_json::to_vec_pretty(&next).expect("settings serialize");
         std::fs::write(self.root.join(FILE_NAME), bytes)

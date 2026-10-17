@@ -104,3 +104,41 @@ pub struct ContextUpdate {
     pub usage_bar: Option<bool>,
     pub tool_result_budget_kib: Option<u64>,
 }
+
+impl ContextSettings {
+    /// 校验 + 应用（台账 T15 从 `settings/update.rs` **机械搬移**：两条变换 =
+    /// `next.context.` → `self.`、缩进减一层，其余逐字节不动；签名吃消费型值，
+    /// 理由与等价性证据同 `plugins.rs`）。
+    pub(crate) fn apply_update(&mut self, u: ContextUpdate) -> Result<(), String> {
+        // v2.137 整理阈值（绝对 token，100K–800K）：折算键
+        // threshold_pct / strategy / stability_rounds 随 ctx-compact
+        // 桌面链退役（settings 里为幻影键）。
+        if let Some(n) = u.threshold_tokens {
+            if !super::context::valid_organize_threshold(n) {
+                return Err(format!(
+                    "整理阈值 {n} 超出范围（{}–{} token）",
+                    super::context::ORGANIZE_THRESHOLD_RANGE.start(),
+                    super::context::ORGANIZE_THRESHOLD_RANGE.end()
+                ));
+            }
+            self.threshold_tokens = n;
+        }
+        if let Some(v) = u.usage_bar {
+            self.usage_bar = v;
+        }
+        // Q8 工具结果预算（0–512 KiB，**0 = 不限制**）：越界一律拒绝而不是
+        // 钳到边界——`plugin-api/args.rs` 那条"钳而不报错"是**工具入参**的
+        // 纪律，设置面写的是用户意图，悄悄改掉等于骗人（他给什么就该存什么）。
+        if let Some(v) = u.tool_result_budget_kib {
+            if !super::context::valid_tool_result_budget(v) {
+                return Err(format!(
+                    "工具结果预算 {v} 超出范围（{}–{} KiB，0 = 不限制）",
+                    super::context::TOOL_RESULT_BUDGET_RANGE.start(),
+                    super::context::TOOL_RESULT_BUDGET_RANGE.end()
+                ));
+            }
+            self.tool_result_budget_kib = v;
+        }
+        Ok(())
+    }
+}

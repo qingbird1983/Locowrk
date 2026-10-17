@@ -103,49 +103,54 @@ pub fn valid_fold_lines(v: u32) -> bool {
     (FOLD_LINES_MIN..=FOLD_LINES_MAX).contains(&v)
 }
 
-/// chat 区部分更新（update.rs 编排调用）：本区校验与落值收敛在区模块内，
-/// 编排层只留一行转发。
-pub fn apply_update(next: &mut ChatSettings, u: ChatUpdate) -> Result<(), String> {
-    if let Some(w) = u.content_max_width {
-        if !(CONTENT_MAX_WIDTH_MIN..=CONTENT_MAX_WIDTH_MAX).contains(&w) {
-            return Err(format!(
-                "对话宽度 {w}px 超出范围（{CONTENT_MAX_WIDTH_MIN}–{CONTENT_MAX_WIDTH_MAX}）"
-            ));
+impl ChatSettings {
+    /// chat 区部分更新（台账 T15 从自由函数改成**方法**：本批把十个分区的收口
+    /// 形状拧成同一种 = `分区.apply_update(消费型值) -> Result<(), String>`，
+    /// 原来这个 `apply_update(next, u)` 是同一件事的第二种写法，调用点也因此
+    /// 分成 `super::chat::apply_update(&mut next.chat, u)` 与 `next.x.apply_update(&u)`
+    /// 两族）。体内 8 处 `next.` → `self.`，其余逐字节不动。
+    pub(crate) fn apply_update(&mut self, u: ChatUpdate) -> Result<(), String> {
+        if let Some(w) = u.content_max_width {
+            if !(CONTENT_MAX_WIDTH_MIN..=CONTENT_MAX_WIDTH_MAX).contains(&w) {
+                return Err(format!(
+                    "对话宽度 {w}px 超出范围（{CONTENT_MAX_WIDTH_MIN}–{CONTENT_MAX_WIDTH_MAX}）"
+                ));
+            }
+            self.content_max_width = Some(w);
         }
-        next.content_max_width = Some(w);
-    }
-    if let Some(e) = u.collapse_tool_process {
-        next.collapse_tool_process = e;
-    }
-    if let Some(e) = u.enter_to_send {
-        next.enter_to_send = e;
-    }
-    if let Some(r) = u.usage_readout {
-        if !valid_usage_readout(&r) {
-            return Err(format!(
-                "不支持的用量读数口径: {r}（可选 used / remaining）"
-            ));
+        if let Some(e) = u.collapse_tool_process {
+            self.collapse_tool_process = e;
         }
-        next.usage_readout = r;
-    }
-    if let Some(a) = u.auto_title {
-        next.auto_title = a;
-    }
-    // M0 观测（KV v2 §7）：命中率显示开关（v2.137 单价两键退役）
-    if let Some(e) = u.cache_stats {
-        next.cache_stats = e;
-    }
-    // 长消息折叠（组件规格）：开关 + 行数（3–20）
-    if let Some(e) = u.fold_long_messages {
-        next.fold_long_messages = e;
-    }
-    if let Some(n) = u.fold_lines {
-        if !valid_fold_lines(n) {
-            return Err(format!(
-                "折叠行数 {n} 超出范围（{FOLD_LINES_MIN}–{FOLD_LINES_MAX}）"
-            ));
+        if let Some(e) = u.enter_to_send {
+            self.enter_to_send = e;
         }
-        next.fold_lines = n;
+        if let Some(r) = u.usage_readout {
+            if !valid_usage_readout(&r) {
+                return Err(format!(
+                    "不支持的用量读数口径: {r}（可选 used / remaining）"
+                ));
+            }
+            self.usage_readout = r;
+        }
+        if let Some(a) = u.auto_title {
+            self.auto_title = a;
+        }
+        // M0 观测（KV v2 §7）：命中率显示开关（v2.137 单价两键退役）
+        if let Some(e) = u.cache_stats {
+            self.cache_stats = e;
+        }
+        // 长消息折叠（组件规格）：开关 + 行数（3–20）
+        if let Some(e) = u.fold_long_messages {
+            self.fold_long_messages = e;
+        }
+        if let Some(n) = u.fold_lines {
+            if !valid_fold_lines(n) {
+                return Err(format!(
+                    "折叠行数 {n} 超出范围（{FOLD_LINES_MIN}–{FOLD_LINES_MAX}）"
+                ));
+            }
+            self.fold_lines = n;
+        }
+        Ok(())
     }
-    Ok(())
 }
