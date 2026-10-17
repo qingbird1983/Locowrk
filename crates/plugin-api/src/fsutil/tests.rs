@@ -210,3 +210,63 @@ fn check_revision_mismatch_teaches_reread() {
     );
     assert!(err.contains("fs_read"), "got: {err}");
 }
+
+// ---- 符号链接面（台账 T20 · 围栏那半，键位那半见 `wskey::tests`）----
+
+/// 建「目录链接」。两个分支只是**夹具的建法**不同（POSIX symlink / Windows junction
+/// `mklink /J`，后者不需要管理员权限而 `symlink_dir` 在未开开发者模式时必失败），
+/// 要证的性质只有一条。建不起来直接 panic——跨平台的性质不许因为夹具难造就单侧跳过
+/// （AGENTS §7），跳过之后测试显示绿而这条性质在该机根本没有证据。
+fn link_dir(link: &std::path::Path, target: &std::path::Path) {
+    #[cfg(unix)]
+    let r = std::os::unix::fs::symlink(target, link);
+    #[cfg(windows)]
+    let r = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .output()
+        .map(|o| {
+            if o.status.success() {
+                Ok(())
+            } else {
+                Err(std::io::Error::other(
+                    String::from_utf8_lossy(&o.stderr).into_owned(),
+                ))
+            }
+        })
+        .and_then(|x: std::io::Result<()>| x);
+    r.unwrap_or_else(|e| panic!("夹具建不起目录链接 ⇒ 这条性质在本机无证据（不许跳过）：{e}"));
+}
+
+/// 借**中段目录链接**逃逸围栏必须被拦。
+/// 布局：`<base>/root/` 是允许根，`<base>/outside/` 在根外，`<base>/root/link → outside`。
+/// 内核把 `<base>/root/link/../evil.txt` 打开时先展开 `link` ⇒ 落到 `<base>` ⇒ 写的是
+/// **根外**的 `evil.txt`；而改前的形状（整串 canonicalize 失败 ⇒ 纯词法折叠）把它折成
+/// `<base>/root/evil.txt` ⇒ 判成根内合法 ⇒ **守卫放行 = 越界写入**。
+/// 所以这条断言在改前红（红法：`unwrap_err` 拿到 Ok），在改后绿。
+#[test]
+fn a_middle_directory_link_is_judged_where_the_kernel_writes() {
+    let base = temp_root("link-fence");
+    let root = base.join("root");
+    let outside = base.join("outside");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    link_dir(&root.join("link"), &outside);
+    let roots = vec![root.canonicalize().unwrap()];
+
+    let escape = root.join("link").join("..").join("evil.txt");
+    let err = resolve_for_write(&escape, &roots).unwrap_err();
+    assert!(
+        err.contains("outside the allowed roots"),
+        "链接中段的 `..` 必须按内核真正落笔的位置判越界，got: {err}"
+    );
+
+    // 同一条串去掉链接那一跳，确实该是根内——证明上面那条红不是"什么都拒"造成的
+    let legit = root.join("sub").join("..").join("ok.txt");
+    assert!(
+        resolve_for_write(&legit, &roots).is_ok(),
+        "根内的 `..` 回退不许被误伤"
+    );
+    let _ = std::fs::remove_dir_all(&base);
+}

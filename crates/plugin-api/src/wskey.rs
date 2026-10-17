@@ -13,10 +13,15 @@
 //! 变成**脏数据**，那时再归一要迁用户库（队列 §3 判据 2「0 行红利窗口」）。
 //!
 //! 归一三步（顺序有讲究）：
-//! 1. `canonicalize`——解析符号链接/junction 与 `..`、`.`，并顺手统一分隔符；
-//!    **失败（路径不存在）时回落 [`lexical_fold`]**：`.` 与 `..` 由词法折叠处理掉，
-//!    其余一律原样。这一步两侧都需要——Windows 的路径 API 对不存在的中间段也会折叠，
-//!    POSIX 的 realpath 遇缺失段直接报错，不折叠就会让同一个目录落成两个键位。
+//! 1. [`resolve_partial`]——解析符号链接/junction 与 `..`、`.`，并顺手统一分隔符。
+//!    口径是「**最深存在的祖先做真实解析，剩下的尾巴按字面走**」，不是
+//!    「整条 `canonicalize`，失败就纯词法」：键位与写入目标**常常还不存在**
+//!    （第一次写进某个项目目录），那种输入会掉进词法兜底，而词法不认链接 ⇒
+//!    `<根>/link/../b` 归成 `<根>/root/b`，内核打开的却是 `<根>/b`
+//!    （台账 T20 的实测，Windows junction 与 Linux symlink 同形）。
+//!    尾巴里的 `.` 与 `..` 仍由词法处理掉——这一步两侧都需要：Windows 的路径 API
+//!    对不存在的中间段也会折叠，POSIX 的 realpath 遇缺失段直接报错，不折叠就会让
+//!    同一个目录落成两个键位。
 //! 2. 剥 Windows verbatim 前缀 `\\?\` / `\\?\UNC\`（canonicalize 在 Windows 必然
 //!    加上它；留着会进管理页列表、md 目录名与模型可见的 `<environment>` 行，
 //!    既难看又和旁车串不同形）。
@@ -44,22 +49,108 @@ pub fn normalize(raw: &str) -> String {
     if trimmed.is_empty() {
         return String::new();
     }
-    // canonicalize 失败 = 项目目录不存在（被删 / 还没建），回落词法归一而不是报错：
-    // 键位是标识符不是路径访问，"打不开"不该让记忆读写因此拒落，更不该把它
-    // 归成 `""`（那等于把某个项目的记忆污染进全局偏好层）。
-    let lexical = match Path::new(trimmed).canonicalize() {
-        Ok(p) => strip_verbatim(&p.to_string_lossy()),
-        // 路径不存在才走词法兜底。Windows 的路径 API 对**不存在的中间段**也会折叠
-        // `..`，POSIX 的 realpath 遇缺失段直接报错 ⇒ 兜底必须自己做一遍折叠，否则
-        // `/proj/x/../b` 与 `/proj/b` 会落成两个键位（Linux 实测见 specs/03 的 T18）。
-        // 折叠是纯字符串操作，不碰大小写、不假装解析符号链接，所以两侧同源。
-        Err(_) => lexical_fold(trimmed, cfg!(windows)),
-    };
+    // 解析与收尾都走 [`resolve_partial`]：能解析多少就解析多少，剩下的按字面折叠。
+    // 改前的形状是「整条 `canonicalize` 成功就用，失败就纯词法」——记忆键位与写入目标
+    // **本来就常常还不存在**（第一次写进某个项目目录），于是这类输入一律掉进词法兜底，
+    // 而词法兜底不认符号链接 ⇒ `<根>/link/../b` 归成 `<根>/root/b`，内核打开的却是
+    // `<根>/b`（台账 T20，两侧同现）。
+    // `strip_verbatim` 放在**统一出口**而不是成功分支里：祖先解析必然带 `\\?\` 回来，
+    // 只在成功分支剥会让"路径不存在"那条路的键位留着前缀（实测：`\\?\c:\…\b` 与
+    // `c:\…\b` 两个串 = 同一个项目两个主键）。
+    let resolved = strip_verbatim(&resolve_partial(trimmed, cfg!(windows)));
     if cfg!(windows) {
-        win_form(&lexical)
+        win_form(&resolved)
     } else {
-        posix_form(&lexical)
+        posix_form(&resolved)
     }
+}
+
+/// 与内核同语义的"能解析多少解析多少"：从根开始**逐段推进**，每遇到一个还存在的
+/// 段就对它做一次 `canonicalize`（链接在这里被展开），进入"尚不存在的尾巴"之后按字面
+/// 接下去。`..` 的回退始终作用在**当前已推进到的真实前缀**上。
+///
+/// 为什么不能用 `Path::ancestors()` + `Path::components()`（第一版就是这么写的，
+/// 实测红）：std 的 `Components` 自己会做**词法抵消**——`<根>\link\..\b` 交给它，
+/// 回来的是 `<根>\b`（`link` 与 `..` 被消掉了），`..` 根本没机会落到链接目标上；
+/// 而本函数要算的正是"内核会不会消掉它们"（答案：消，但消在**解析之后**）。
+/// 于是这里按分隔符手工切原始串，`..` 由我们自己处理。
+///
+/// 四条边界与 [`lexical_fold`] 同口径，不另起一套：
+/// - 相对串（没有"从哪个根开始解析"这件事）⇒ 整个交给 `lexical_fold`；
+/// - UNC（`\\srv\share`）⇒ 回落，共享名不许被 `..` 弹掉；
+/// - 出现连续分隔符 ⇒ 回落（词法兜底本来就声明不碰这类怪形）；
+/// - `canonicalize` 自身失败（权限等）⇒ 用原样段继续，**不报错**：键位是标识符不是
+///   路径访问，"打不开"不该让记忆读写拒落，更不该归成 `""`（那等于把某个项目的记忆
+///   污染进全局偏好层）。
+///
+/// `win` 由调用方显式给（同 [`lexical_fold`]）：它是"这套规则本来就有两份"，不是
+/// 平台分支——于是两种分隔符形态在同一台机器上都能被测。
+pub(crate) fn resolve_partial(s: &str, win: bool) -> String {
+    let is_sep = |c: char| c == '/' || (win && c == '\\');
+    let parts: Vec<&str> = s.split(is_sep).collect();
+    let sep: &str = if win { "\\" } else { "/" };
+    let drive = |p: &str| {
+        let b = p.as_bytes();
+        win && b.len() == 2 && b[0].is_ascii_alphabetic() && b[1] == b':'
+    };
+    // ---- 定根 ----
+    let head = *parts.first().unwrap_or(&"");
+    let (mut cur, body): (String, &[&str]) = if head.is_empty() {
+        // POSIX 的 `/a` 与 Windows 的 `\a`：首段为空 = 绝对。
+        // UNC（`\\srv\…`）与连续分隔符（`//a`）一律回落：怪形不在本函数射程内
+        if parts.get(1).is_some_and(|q| q.is_empty()) {
+            return lexical_fold(s, win);
+        }
+        (sep.to_string(), &parts[1..])
+    } else if drive(head) {
+        // Windows 盘符头
+        (head.to_string(), &parts[1..])
+    } else {
+        return lexical_fold(s, win); // 相对串没有"从哪个根开始解析"这件事
+    };
+    if body.iter().any(|p| p.is_empty()) {
+        return lexical_fold(s, win); // 尾巴里也有连续分隔符 ⇒ 同样不碰
+    }
+    // ---- 逐段推进 ----
+    let mut unresolved = false; // 已经进入"尚不存在的尾巴"：后面不再问文件系统
+    for p in body {
+        match *p {
+            "" | "." => {}
+            ".." => {
+                // 物理回退：`cur` 到这里是**已解析**的真实前缀，它的上一段就是内核
+                // 在这个位置会去的地方——链接中段那个 `..` 与词法折叠就在这里分岔。
+                if let Some(pos) = cur.rfind(is_sep) {
+                    let cut = &cur[..pos];
+                    cur = if cut.is_empty() || drive(cut) {
+                        format!("{cut}{sep}")
+                    } else {
+                        cut.to_string()
+                    };
+                }
+            }
+            name => {
+                let joined = if cur.ends_with(sep) {
+                    format!("{cur}{name}")
+                } else {
+                    // 盘符头 `F:` 也走这条：`F:` + `\` + 段 = `F:\段`（少那个分隔符就变成了
+                    // "F: 上的相对路径"，实测会把 `f:\warehouse` 写成 `f:warehouse`）
+                    format!("{cur}{sep}{name}")
+                };
+                if unresolved {
+                    cur = joined;
+                } else if Path::new(&joined).exists() {
+                    cur = Path::new(&joined)
+                        .canonicalize()
+                        .map(|q| q.to_string_lossy().into_owned())
+                        .unwrap_or(joined);
+                } else {
+                    cur = joined;
+                    unresolved = true;
+                }
+            }
+        }
+    }
+    cur
 }
 
 /// Windows 收尾：分隔符统一成反斜杠 + 大小写折叠 + 剥尾部冗余分隔符。

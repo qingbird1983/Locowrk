@@ -129,13 +129,16 @@ pub fn resolve_existing(path: &Path, roots: &[PathBuf]) -> Result<PathBuf, Strin
 /// 再校验前缀——**纯校验，不动文件系统**（create_dirs 由调用方在校验
 /// 通过后自己执行，避免"先建目录后发现越权"的外泄副作用）。
 pub fn resolve_for_write(path: &Path, roots: &[PathBuf]) -> Result<PathBuf, String> {
-    // **先做词法折叠**，再往上找最深存在祖先。缺这一步会在 POSIX 上判错拒绝理由：
-    // Windows 的 canonicalize 对不存在的中间段也会把 `..` 折掉，POSIX 的 realpath 遇
-    // 缺失段直接报错；而 `<根>/sub/no_such/../../..` 这种串最后一个组件是 `..`，
-    // `Path::file_name()` 返回 None ⇒ 本该判成"越界"的路径提前撞上
-    // "cannot resolve any existing ancestor"（2026-10-17 本机 WSL 实测，specs/03 T18）。
-    // 折叠用的算式与记忆键位是**同一个出处**（`wskey::lexical_fold`），不另写一份。
-    let folded = PathBuf::from(crate::wskey::lexical_fold(
+    // **先做"能解析多少解析多少"**（最深存在祖先按真实目录解析 + 尾巴按字面走），
+    // 再往下判前缀。两代形状都留了痕：
+    //  · 只 `canonicalize` 整条、失败就当纯词法处理 ⇒ `<根>/link/../b` 折成 `<根>/b`
+    //    判成"根内合法"，而内核真正打开的是 `<根>` 之外的那个 `b`（**越界写入就这样过关**，
+    //    台账 T20，Windows junction 与 Linux symlink 同形）；
+    //  · 完全不折叠 ⇒ POSIX 上 `<根>/sub/no_such/../../..` 最后一组件是 `..`，
+    //    `file_name()` 返回 None ⇒ 本该判"越界"的路径提前撞上
+    //    "cannot resolve any existing ancestor"（2026-10-17 本机 WSL 实测，T18）。
+    // 算式与记忆键位**同一个出处**（`wskey::resolve_partial`），不另写第二份。
+    let folded = PathBuf::from(crate::wskey::resolve_partial(
         &path.to_string_lossy(),
         cfg!(windows),
     ));

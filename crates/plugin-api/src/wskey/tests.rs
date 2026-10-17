@@ -273,3 +273,88 @@ fn lexical_fold_collapses_dot_and_dotdot_on_both_separator_styles() {
         "UNC 的共享名不许被 `..` 弹掉"
     );
 }
+
+// ------------------------------------------------------------ 符号链接面（台账 T20）
+
+/// 一个干净的临时基准目录（带 pid 防并发撞名）。
+///
+/// ⚠ **不做 `canonicalize`**：Windows 的 canonicalize 会带 `\\?\` verbatim 头回来，
+/// 而真实喂进 `normalize` 的旁车串不长那样（那是用户粘的路径或程序里的普通路径），
+/// 拿带前缀的串当夹具等于给这条判据加了一个生产中不存在的变量。基准目录上层万一
+/// 有链接也无妨：下面比的是**同一个函数对两个输入的输出**，上层解析对两边一致。
+fn link_base() -> std::path::PathBuf {
+    let raw = std::env::temp_dir().join(format!("lw-t20-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&raw);
+    std::fs::create_dir_all(&raw).expect("建临时基准目录");
+    raw
+}
+
+/// 建「目录链接」这一形态。POSIX 用 symlink；Windows 用 junction（`mklink /J`，
+/// 不需要管理员，而 `symlink_dir` 在未开开发者模式的机器上必失败）。
+///
+/// ⚠ 两个分支只是**夹具的建法**不同，要证的性质只有一条。建不起来直接 panic，
+/// 绝不 `return`：跨平台的性质不许因为夹具难造就单侧跳过（AGENTS §7），
+/// 跳过之后测试显示绿而这条性质在该机根本没有证据。
+fn make_dir_link(link: &std::path::Path, target: &std::path::Path) {
+    #[cfg(unix)]
+    let r = std::os::unix::fs::symlink(target, link);
+    #[cfg(windows)]
+    let r = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .output()
+        .map(|o| {
+            if o.status.success() {
+                Ok(())
+            } else {
+                Err(std::io::Error::other(
+                    String::from_utf8_lossy(&o.stderr).into_owned(),
+                ))
+            }
+        })
+        .and_then(|x: std::io::Result<()>| x);
+    r.unwrap_or_else(|e| panic!("夹具建不起目录链接 ⇒ 这条性质在本机无证据（不许跳过）：{e}"));
+}
+
+/// `..` 排在目录链接之后时，键位必须落在**内核真正打开的位置**。
+///
+/// 布局（两平台同形）：`<base>/root/`（工作区）· `<base>/elsewhere/b`（真实文件）·
+/// `<base>/root/link → <base>/elsewhere`。
+/// 内核解析 `<base>/root/link/../b` 时先把 `link` 展开成 `<base>/elsewhere`，
+/// 再由 `..` 回到 `<base>`，于是读的是 **`<base>/b`**；而"这几个字面段指向哪儿"
+/// 的词法折叠给 `<base>/root/b` —— 两个不同的目录（Linux 侧实测见 specs/03 T20：
+/// `realpath` 给 `/tmp/t20/b`、`normpath` 给 `/tmp/t20/root/b`）。
+/// 键位落成两个 = 同一个项目的记忆劈成两份；更糟的是围栏把
+/// `<根>/link/../b` 当成根内的合法路径，越界读取就此过关。
+///
+/// 最后那条 `assert_ne!` 是本用例的**防空转对照**：如果被比的两个串本来就相等，
+/// `assert_eq!` 会恒真，这条判据什么都没盯。
+#[test]
+fn dotdot_after_a_directory_link_lands_where_the_kernel_opens_it() {
+    use std::path::Path;
+    let base = link_base();
+    let root = base.join("root");
+    let elsewhere = base.join("elsewhere");
+    std::fs::create_dir_all(&root).expect("建 root");
+    std::fs::create_dir_all(&elsewhere).expect("建 elsewhere");
+    std::fs::write(elsewhere.join("b"), "x").expect("建 elsewhere/b");
+    make_dir_link(&root.join("link"), &elsewhere);
+
+    let via_link = root.join("link").join("..").join("b");
+    let physical = base.join("b");
+    let lexical_shape = root.join("b");
+    let norm = |p: &Path| normalize(&p.to_string_lossy());
+
+    assert_eq!(
+        norm(&via_link),
+        norm(&physical),
+        "`link` 之后的 `..` 必须回链接**目标**的父目录（内核语义），不是字面父目录"
+    );
+    assert_ne!(
+        norm(&via_link),
+        norm(&lexical_shape),
+        "对照失效：`<根>/b` 与 `<根>/link/../b` 若归一成同一个串，上面那条断言就是空转"
+    );
+    let _ = std::fs::remove_dir_all(&base);
+}
