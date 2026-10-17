@@ -14,7 +14,7 @@ async fn always_pass_through_and_top_n_fills_quota() {
     ];
     let l = listener(HashMap::new(), cfg_lock(true, 3));
     let (decision, out) = run(&l, tools, Vec::new()).await;
-    assert!(matches!(decision, WaterfallDecision::Replace(_)));
+    assert!(matches!(decision, WaterfallDecision::Continue));
     // always 2 个直通不占额度，quota = 3 - 2 = 1，只补一个候选
     let names: Vec<&str> = out.tools.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(names, vec!["fs_read", "search_tools", "a1"]);

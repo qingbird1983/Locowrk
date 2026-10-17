@@ -134,11 +134,14 @@ impl MemorySource for DriftingMemory {
 }
 
 /// 末位监听器：记录决策环出口 payload（LLM 实际收到的请求形状）。
+///
+/// 台账 T2 之后它顺带成了"守卫有没有还回载荷"的活体探针：注入环若漏写回，
+/// 这里记到的是 `null` 而不是带 system/tools 的完整请求。
 struct Spy(Mutex<Vec<String>>);
 
 #[async_trait]
 impl WaterfallListener for Spy {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key == points::REQUEST {
             self.0.lock().unwrap().push(payload.to_string());
         }

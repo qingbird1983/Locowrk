@@ -60,12 +60,19 @@ fn payload(session: Option<&str>) -> serde_json::Value {
     .unwrap()
 }
 
+/// 跑一环并回传载荷。`None` = 本环没改过一个字节。
+///
+/// 判据从"看决策"改成"比进出字节"的理由同 `fragments/tests.rs`（台账 T2：
+/// 注入环改成就地写，收束恒为 `Continue`，决策不再携带"改没改"）。
+/// 夹具的输入恒由 `to_value(RequestPayload)` 生成 ⇒ round-trip 幂等，
+/// 字节差只可能来自业务改写。
 async fn run(inj: &InstructionFilesInject, v: &serde_json::Value) -> Option<RequestPayload> {
-    match inj.handle(points::REQUEST, v).await {
-        WaterfallDecision::Replace(out) => Some(serde_json::from_value(out).unwrap()),
-        WaterfallDecision::Continue => None,
-        _ => panic!("unexpected decision"),
+    let mut out = v.clone();
+    match inj.handle(points::REQUEST, &mut out).await {
+        WaterfallDecision::Continue => {}
+        other => panic!("unexpected decision {other:?}"),
     }
+    (out != *v).then(|| serde_json::from_value(out).unwrap())
 }
 
 /// 合成消息插在位置 0（第一条 user 之前），带 system-reminder 包裹与
@@ -122,8 +129,11 @@ async fn repeated_steps_insert_identical_bytes() {
 #[tokio::test]
 async fn non_request_key_is_noop() {
     let inj = InstructionFilesInject::new(Arc::new(Fixed::some("x")));
+    let mut v = payload(Some("s"));
+    let before = v.clone();
     assert_eq!(
-        inj.handle(points::PRE_STEP, &payload(Some("s"))).await,
+        inj.handle(points::PRE_STEP, &mut v).await,
         WaterfallDecision::Continue
     );
+    assert_eq!(v, before, "非 request 点：载荷一字未动（守卫根本没建立）");
 }

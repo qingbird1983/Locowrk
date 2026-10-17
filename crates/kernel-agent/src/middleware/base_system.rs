@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use cordis_core::{WaterfallDecision, WaterfallListener};
 use serde_json::Value;
 
-use crate::waterfall::{RequestPayload, points};
+use crate::waterfall::{append_block, points, take_request};
 
 const SECTION_INTRO: &str = include_str!("../prompts/base/01-intro.md");
 const SECTION_IDENTITY: &str = include_str!("../prompts/base/02-identity.md");
@@ -55,25 +55,27 @@ pub struct BaseSystemInject;
 
 #[async_trait]
 impl WaterfallListener for BaseSystemInject {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key != points::REQUEST {
             return WaterfallDecision::Continue;
         }
-        let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
-            return WaterfallDecision::Continue;
+        // T2（2026-10-18）：载荷 move 进环、守卫在作用域结束时 move 回 payload——
+        // 这一环不再 `payload.clone()` 整包（一份 = 全部对话历史 + 工具目录）。
+        // 改写就地发生 ⇒ 收束是 Continue（原形状每环一次 Replace = 一次 to_value 整包）。
+        let mut guard = match take_request(payload, "BaseSystemInject") {
+            Ok(g) => g,
+            Err(d) => return d,
         };
-        req.system = match req.system.take() {
-            Some(prev) => Some(format!("{prev}\n\n{}", base_system())),
-            None => Some(base_system().to_string()),
-        };
-        // to_value 失败按 fail-open 放行（与 Memory-Inject 同纪律）
-        super::replace_decision(req)
+        let req = guard.req();
+        append_block(&mut req.system, Some(base_system()));
+        WaterfallDecision::Continue
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::waterfall::RequestPayload;
     use serde_json::json;
     use session_store::Message;
 
@@ -91,15 +93,20 @@ mod tests {
         .unwrap()
     }
 
+    /// 过一环并回读 payload（T2 之后的固定形状：改写就地、收束是 Continue）。
+    /// `Continue` 也断言——若哪天又返回 Replace，这里先红，不会静默漂回整包克隆。
+    async fn run(v: Value) -> RequestPayload {
+        let mut v = v;
+        assert_eq!(
+            BaseSystemInject.handle(points::REQUEST, &mut v).await,
+            WaterfallDecision::Continue
+        );
+        serde_json::from_value(v).unwrap()
+    }
+
     #[tokio::test]
     async fn injects_static_layer_as_whole_system() {
-        let out = match BaseSystemInject.handle(points::REQUEST, &payload()).await {
-            WaterfallDecision::Replace(v) => {
-                let req: RequestPayload = serde_json::from_value(v).unwrap();
-                req.system.unwrap()
-            }
-            _ => panic!("expected replace"),
-        };
+        let out = run(payload()).await.system.unwrap();
         assert!(out.starts_with("You are Locowrk"), "静态段 = system 前缀");
         assert!(out.contains("# First principles"));
         assert!(out.contains("never a task list of its own"));
@@ -110,15 +117,7 @@ mod tests {
     /// 结果只由编译期内嵌常量决定，无任何运行时输入。
     #[tokio::test]
     async fn byte_stable_across_calls() {
-        let run = || async {
-            match BaseSystemInject.handle(points::REQUEST, &payload()).await {
-                WaterfallDecision::Replace(v) => {
-                    serde_json::from_value::<RequestPayload>(v).unwrap().system
-                }
-                _ => panic!("expected replace"),
-            }
-        };
-        assert_eq!(run().await, run().await);
+        assert_eq!(run(payload()).await.system, run(payload()).await.system);
         assert_eq!(base_system(), base_system());
     }
 
@@ -128,22 +127,35 @@ mod tests {
     async fn appends_after_existing_system() {
         let mut v = payload();
         v["system"] = json!("prior section");
-        match BaseSystemInject.handle(points::REQUEST, &v).await {
-            WaterfallDecision::Replace(out) => {
-                let req: RequestPayload = serde_json::from_value(out).unwrap();
-                let system = req.system.unwrap();
-                assert!(system.starts_with("prior section"));
-                assert!(system.contains("You are Locowrk"));
-            }
-            _ => panic!("expected replace"),
-        }
+        let system = run(v).await.system.unwrap();
+        assert!(system.starts_with("prior section"));
+        assert!(system.contains("You are Locowrk"));
     }
 
     #[tokio::test]
     async fn non_request_key_is_noop() {
+        let mut v = payload();
+        let before = v.clone();
         assert_eq!(
-            BaseSystemInject.handle(points::PRE_STEP, &payload()).await,
+            BaseSystemInject.handle(points::PRE_STEP, &mut v).await,
             WaterfallDecision::Continue
         );
+        assert_eq!(v, before, "非 request 点：payload 一字未动");
+    }
+
+    /// 坏载荷 = 当场拒并点名（台账 T2）。原形状是 `else { Continue }` 放行——
+    /// 但那份载荷出环照样在 `from_value(out.payload)?` 上失败，所以这条测的
+    /// 不是"从放行变拒绝"，而是失败提前发生、且 `by` 报了是谁先发现的。
+    #[tokio::test]
+    async fn malformed_payload_is_rejected_by_name() {
+        let mut v = json!({ "messages": "garbage" });
+        let d = BaseSystemInject.handle(points::REQUEST, &mut v).await;
+        match d {
+            WaterfallDecision::Reject(r) => {
+                assert_eq!(r.by, "BaseSystemInject");
+                assert!(r.reason.contains("agent/request"), "文案点出决策点");
+            }
+            other => panic!("expected reject, got {other:?}"),
+        }
     }
 }

@@ -4,8 +4,7 @@
 
 use super::*;
 
-use crate::waterfall::{RequestPayload, points};
-use cordis_core::{WaterfallDecision, WaterfallListener};
+use crate::waterfall::points;
 use serde_json::json;
 
 #[tokio::test]
@@ -109,17 +108,15 @@ async fn appends_to_existing_system() {
         std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
         cfg_lock(MemoryInjectConfig::default()),
     );
-    let mut payload = payload_value();
-    payload["system"] = json!("base instructions");
-    match inject.handle(points::REQUEST, &payload).await {
-        WaterfallDecision::Replace(v) => {
-            let req: RequestPayload = serde_json::from_value(v).unwrap();
-            let system = req.system.unwrap();
-            assert!(system.starts_with("base instructions"));
-            assert!(system.contains("<persistent_memory>"));
-        }
-        _ => panic!("expected replace"),
-    }
+    let mut v = payload_value();
+    v["system"] = json!("base instructions");
+    let system = pass(&inject, points::REQUEST, v)
+        .await
+        .expect("这一环改写过 payload")
+        .system
+        .expect("system 在场");
+    assert!(system.starts_with("base instructions"));
+    assert!(system.contains("<persistent_memory>"));
 }
 
 #[tokio::test]
@@ -158,35 +155,33 @@ async fn guidance_appended_at_block_tail() {
         std::sync::Arc::new(Fixed(vec![entry("a", "1")])),
         cfg_lock(MemoryInjectConfig::default()),
     );
-    match inject.handle(points::REQUEST, &payload_value()).await {
-        WaterfallDecision::Replace(v) => {
-            let out: RequestPayload = serde_json::from_value(v).unwrap();
-            let out = out.system.unwrap();
-            let mem = out.find("<persistent_memory>").expect("事实块在");
-            let guide = out.find("<memory_guidance>").expect("指引块在");
-            assert!(mem < guide, "指引在注入块尾");
-            assert!(
-                out.contains("don't probe memory unprompted"),
-                "read 侧按需禁令（Q2 换了措辞）: {out}"
-            );
-            assert!(
-                !out.contains("never as a way to start"),
-                "旧句必须已退役，否则改写没落: {out}"
-            );
-            assert!(
-                out.contains("query these tools instead of assuming from injected context"),
-                "Q2 第①句在场: {out}"
-            );
-            assert!(
-                out.contains("do NOT mean there is no history")
-                    && out.contains("memory_project_history first"),
-                "Q2 第②句与它的指路工具点名: {out}"
-            );
-            assert!(
-                out.contains(".Locowrk/"),
-                "项目文件自维护的指引语义保留: {out}"
-            );
-        }
-        _ => panic!("expected replace"),
-    }
+    let out = run(&inject, points::REQUEST)
+        .await
+        .expect("这一环改写过 payload")
+        .system
+        .expect("system 在场");
+    let mem = out.find("<persistent_memory>").expect("事实块在");
+    let guide = out.find("<memory_guidance>").expect("指引块在");
+    assert!(mem < guide, "指引在注入块尾");
+    assert!(
+        out.contains("don't probe memory unprompted"),
+        "read 侧按需禁令（Q2 换了措辞）: {out}"
+    );
+    assert!(
+        !out.contains("never as a way to start"),
+        "旧句必须已退役，否则改写没落: {out}"
+    );
+    assert!(
+        out.contains("query these tools instead of assuming from injected context"),
+        "Q2 第①句在场: {out}"
+    );
+    assert!(
+        out.contains("do NOT mean there is no history")
+            && out.contains("memory_project_history first"),
+        "Q2 第②句与它的指路工具点名: {out}"
+    );
+    assert!(
+        out.contains(".Locowrk/"),
+        "项目文件自维护的指引语义保留: {out}"
+    );
 }

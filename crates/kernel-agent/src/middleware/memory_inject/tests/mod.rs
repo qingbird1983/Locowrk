@@ -59,21 +59,31 @@ fn inject(
     MemoryInject::new(source, cfg)
 }
 
-async fn run(inject: &MemoryInject, key: &str) -> Option<RequestPayload> {
-    match inject.handle(key, &payload_value()).await {
-        WaterfallDecision::Replace(v) => Some(serde_json::from_value(v).unwrap()),
-        WaterfallDecision::Continue => None,
-        _ => panic!("unexpected decision"),
+/// 跑一环并回传载荷。`None` = 本环没改过一个字节。
+///
+/// 判据原来取自决策（`Replace` = 改过），台账 T2 之后注入环就地写、收束恒为
+/// `Continue`，只能比进出的载荷。输入由 `to_value(RequestPayload)` 造 ⇒ round-trip
+/// 幂等 ⇒ 字节差只可能是业务改写。
+async fn pass(
+    inject: &MemoryInject,
+    key: &str,
+    input: serde_json::Value,
+) -> Option<RequestPayload> {
+    let mut v = input.clone();
+    match inject.handle(key, &mut v).await {
+        WaterfallDecision::Continue => {}
+        other => panic!("unexpected decision {other:?}"),
     }
+    (v != input).then(|| serde_json::from_value(v).unwrap())
+}
+
+async fn run(inject: &MemoryInject, key: &str) -> Option<RequestPayload> {
+    pass(inject, key, payload_value()).await
 }
 
 /// 带会话身份的请求。
 async fn run_session(inject: &MemoryInject, session_id: &str) -> Option<RequestPayload> {
     let mut v = payload_value();
     v["session_id"] = serde_json::json!(session_id);
-    match inject.handle(points::REQUEST, &v).await {
-        WaterfallDecision::Replace(v) => Some(serde_json::from_value(v).unwrap()),
-        WaterfallDecision::Continue => None,
-        _ => panic!("unexpected decision"),
-    }
+    pass(inject, points::REQUEST, v).await
 }

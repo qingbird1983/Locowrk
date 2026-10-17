@@ -186,7 +186,7 @@ pub struct PreStepRejector;
 
 #[async_trait]
 impl WaterfallListener for PreStepRejector {
-    async fn handle(&self, key: &str, _payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, _payload: &mut Value) -> WaterfallDecision {
         assert_eq!(key, points::PRE_STEP);
         WaterfallDecision::Reject(RejectReason {
             by: "policy".into(),
@@ -196,11 +196,15 @@ impl WaterfallListener for PreStepRejector {
 }
 
 /// 把 request payload 的 params.mode 改写成 upper（§14 验收：插件改写参数）。
+///
+/// 走 clone + `Replace` 是**有意的**：这个夹具模拟的是外部决策方（插件经 C ABI
+/// 只能整包换入），内核七个注入环在台账 T2 后已改成就地写 + `Continue`。
+/// 留着它 = `Replace` 这条语义在内核测试面也有真实使用者。
 pub struct ModeRewriter;
 
 #[async_trait]
 impl WaterfallListener for ModeRewriter {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         assert_eq!(key, points::REQUEST);
         let mut p = payload.clone();
         if let Some(obj) = p.as_object_mut() {
@@ -218,7 +222,7 @@ pub struct RetryDecider;
 
 #[async_trait]
 impl WaterfallListener for RetryDecider {
-    async fn handle(&self, key: &str, _payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, _payload: &mut Value) -> WaterfallDecision {
         assert_eq!(key, points::REQUEST_ERROR);
         WaterfallDecision::Retry {
             delay: Duration::from_millis(1),

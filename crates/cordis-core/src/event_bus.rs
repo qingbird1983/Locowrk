@@ -36,11 +36,17 @@ pub trait SerialListener: Send + Sync + 'static {
     async fn on_event(&self, key: &str, payload: &Value) -> bool;
 }
 
-/// waterfall 监听器：读借用 payload，返回决策（§3.5）。要改写就克隆
-/// payload 返回 `Replace`——借用签名让 Continue / Reject / Retry 都不付克隆。
+/// waterfall 监听器：拿 payload 的**可变引用**，返回决策（§3.5）。
+///
+/// 签名沿革（台账 T2，2026-10-18 由 `&Value` 改成 `&mut Value`）：原注释写的是
+/// "要改写就克隆 payload 返回 `Replace`——借用签名让 Continue/Reject/Retry 都不付克隆"。
+/// 那个判断漏算了一件事：`agent/request` 这个决策点上**每一环都要改写**（七个注入环），
+/// 于是"只让改写者付费"变成"每次请求付七份整包克隆"，而整包 = 全部对话历史 + 工具目录。
+/// 现在改写就地发生（`Continue`），`Replace` 留给真要把整个 payload 换掉的外部监听器
+/// （`approval_plugin` 夹具与测试里那三个仍在用，行为一字不变）。
 #[async_trait::async_trait]
 pub trait WaterfallListener: Send + Sync + 'static {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision;
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision;
 }
 
 /// waterfall 单环决策（§3.5）。
@@ -214,11 +220,11 @@ impl EventBus {
     }
 
     /// 顺序经过决策环（§3.5 表：Agent 循环插桩、请求改写、审批）：
-    /// Continue 传原 payload，Replace 传改写后的，Reject / Retry 当场
-    /// 短路并作为终态决策返回。无监听器 = 原样放行。
+    /// Continue 表示这一环已就地改过（或没改），Replace 整包替换，
+    /// Reject / Retry 当场短路并作为终态决策返回。无监听器 = 原样放行。
     pub async fn waterfall(&self, key: &str, mut payload: Value) -> WaterfallOutcome {
         for listener in Self::snapshot(&self.waterfalls, key) {
-            match listener.handle(key, &payload).await {
+            match listener.handle(key, &mut payload).await {
                 WaterfallDecision::Continue => {}
                 WaterfallDecision::Replace(v) => payload = v,
                 WaterfallDecision::Reject(reason) => {

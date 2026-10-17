@@ -3,8 +3,9 @@
 //! `<system-reminder>` 包裹拼在**最后一条 user 消息**尾部。
 //!
 //! 落点裁决（设计稿 §6 二选一已查证）：kernel waterfall 的 payload 携带
-//! 完整 `messages` 且 Replace 决策整体换入（旧 ctx-compact 改写消息走的
-//! 就是这条通路）——内核中间件可落，headless 同享。pending 表归宿主：内核定
+//! 完整 `messages` 且决策环拿的是它的可变引用（台账 T2 之前是"克隆后
+//! Replace 整包换入"，旧 ctx-compact 改写消息走的就是这条通路）——内核
+//! 中间件可落，headless 同享。pending 表归宿主：内核定
 //! [`FragmentSource`] 契约、组装点实现（MemorySource 同款模式）——碎片
 //! 事件全是桌面面（整理收束/权限切换/步数到顶），内核不解释。
 //!
@@ -25,7 +26,7 @@ use cordis_core::{WaterfallDecision, WaterfallListener};
 use serde_json::Value;
 use session_store::Message;
 
-use crate::waterfall::{RequestPayload, points};
+use crate::waterfall::{points, take_request};
 
 /// 会话态碎片源契约：宿主实现持有 pending 表（按会话键位）。`take`
 /// = 取走并清空（drain）；无身份（`None`）返回空表——碎片从不进
@@ -55,13 +56,15 @@ impl FragmentInject {
 
 #[async_trait]
 impl WaterfallListener for FragmentInject {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key != points::REQUEST {
             return WaterfallDecision::Continue;
         }
-        let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
-            return WaterfallDecision::Continue;
+        let mut guard = match take_request(payload, "FragmentInject") {
+            Ok(g) => g,
+            Err(d) => return d,
         };
+        let req = guard.req();
         // 轮开场判据：最后一条消息是 User 才取件拼接——轮中 step 不改
         // 历史消息（前缀纪律），碎片留在 pending 表等下一轮开场。
         let Some(Message::User { content, .. }) = req.messages.last_mut() else {
@@ -75,8 +78,7 @@ impl WaterfallListener for FragmentInject {
         let reminder = wrap_system_reminder(&frags.join("\n\n"));
         content.push_str("\n\n");
         content.push_str(&reminder);
-        // to_value 失败按 fail-open 放行（与 Memory-Inject 同纪律）
-        super::replace_decision(req)
+        WaterfallDecision::Continue
     }
 }
 

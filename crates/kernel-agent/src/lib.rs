@@ -39,4 +39,7 @@ pub use subagent::{
     ChildModelFactory, ChildModelHandle, ChildModelReport, FilterToolSource, SubTranscriptSink,
     SubagentGate, SubagentTool,
 };
-pub use waterfall::{RequestErrorPayload, RequestPayload, RetryBudget, points};
+pub use waterfall::{
+    RequestErrorPayload, RequestGuard, RequestPayload, RetryBudget, append_block, points,
+    take_request,
+};

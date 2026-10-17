@@ -31,10 +31,13 @@ impl Default for ApprovalPlugin {
 
 #[async_trait]
 impl WaterfallListener for ApprovalPlugin {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key != points::REQUEST {
             return WaterfallDecision::Continue;
         }
+        // 故意保持 `clone → 改 → Replace` 的**外部决策方形状**（台账 T2 之后内核七个
+        // 注入环已改为就地写 + Continue）。这一环是 Replace 语义在本仓唯一的真实
+        // 使用者：留着它，`Replace` 就不是"只有测试在用"的死分支。
         let mut p = payload.clone();
         // 策略注入：强制 echo 用 upper 模式（对下游 LLM 脚本可见）
         if let Some(obj) = p.as_object_mut() {

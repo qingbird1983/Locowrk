@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use cordis_core::{WaterfallDecision, WaterfallListener};
 use kernel_agent::{points, RequestPayload};
-use serde_json::json;
+use serde_json::{json, Value};
 
 use super::{resolve, ThinkingLanguageInject};
 use crate::settings::{SettingsStore, ThinkingUpdate};
@@ -41,11 +41,16 @@ fn store_with(root: &std::path::Path, locale: &str, language: &str) -> SettingsS
     store
 }
 
+/// 跑一环，返回**最终 payload**（并断言收束 = `Continue`）。
+///
+/// 台账 T2 之前这一环返回 `Replace(整包)`，测试要从决策里取载荷；现在改写就地
+/// 发生，决策只剩"放行"这一种，结果必须从 payload 读。调用点形状
+/// `system_of(handle_request(..).await)` 保持不变。
 async fn handle_request(
     listener: &ThinkingLanguageInject,
     session: Option<&str>,
     system: Option<&str>,
-) -> WaterfallDecision {
+) -> Value {
     let mut payload = json!({ "messages": [] });
     if let Some(s) = session {
         payload["session_id"] = json!(s);
@@ -53,17 +58,18 @@ async fn handle_request(
     if let Some(sys) = system {
         payload["system"] = json!(sys);
     }
-    listener.handle(points::REQUEST, &payload).await
+    let d = listener.handle(points::REQUEST, &mut payload).await;
+    assert!(
+        matches!(d, WaterfallDecision::Continue),
+        "就地改写后应 Continue，实际 {d:?}"
+    );
+    payload
 }
 
-fn system_of(decision: WaterfallDecision) -> Option<String> {
-    match decision {
-        WaterfallDecision::Replace(v) => {
-            serde_json::from_value::<RequestPayload>(v).unwrap().system
-        }
-        WaterfallDecision::Continue => None,
-        other => panic!("unexpected decision: {other:?}"),
-    }
+fn system_of(payload: Value) -> Option<String> {
+    serde_json::from_value::<RequestPayload>(payload)
+        .unwrap()
+        .system
 }
 
 #[test]
@@ -103,8 +109,9 @@ async fn none_mode_touches_nothing() {
     let listener = ThinkingLanguageInject::new(Arc::new(store_with(&root, "zh-CN", "none")));
 
     assert_eq!(
-        handle_request(&listener, Some("s1"), None).await,
-        WaterfallDecision::Continue
+        system_of(handle_request(&listener, Some("s1"), None).await).as_deref(),
+        None::<&str>,
+        "none 档：system 一个字节都没加"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -150,9 +157,15 @@ async fn hint_locks_per_session_across_setting_change() {
 async fn non_request_key_ignored() {
     let root = temp_root("key");
     let listener = ThinkingLanguageInject::new(Arc::new(store_with(&root, "en", "en-US")));
+    let mut v = json!({});
     assert_eq!(
-        listener.handle("agent/other", &json!({})).await,
+        listener.handle("agent/other", &mut v).await,
         WaterfallDecision::Continue
+    );
+    assert_eq!(
+        v,
+        json!({}),
+        "非 request 点：载荷一字未动（守卫根本没建立）"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

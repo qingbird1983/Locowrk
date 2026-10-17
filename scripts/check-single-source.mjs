@@ -122,6 +122,54 @@ function pluginDrift() {
   return { count: ids.length, testSrc, manifests };
 }
 
+/**
+ * 注入环面（台账 T2 的扫描面）：内核中间件树 + 宿主 src 树的生产 .rs（排测试目录）。
+ *
+ * 口径要写清它**不含 kernel-bin**：`approval_plugin` 是"外部决策方只能 clone + Replace"
+ * 的活样本，那条 clone 按设计就该留着（否则 `Replace` 语义在本仓没有真实使用者）。
+ * 把它扫进来只会逼人把样本改成假形状。
+ */
+function ringFiles() {
+  const bases = ['crates/kernel-agent/src/middleware', 'desktop/src-tauri/src'];
+  const out = [];
+  const walk = (rel) => {
+    for (const f of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+      const p = `${rel}/${f.name}`;
+      if (f.isDirectory()) walk(p);
+      else if (f.name.endsWith('.rs') && !/(^|\/)tests(_?\.rs|\/)/.test(p)) out.push(p);
+    }
+  };
+  for (const b of bases) if (fs.existsSync(path.join(ROOT, b))) walk(b);
+  return out.map(read);
+}
+
+/**
+ * T2 两条读数的口径 = **环文件的代码行**，两道收窄各挡一类假红：
+ *   ① 只取面内含 `impl WaterfallListener for` 的那几份——`browser/tools.rs` 也写
+ *      `payload.clone()`，但那是往事件通道发载荷，与 `agent/request` 无关；
+ *   ② 剥掉行注释——沿革注释里出现 `payload.clone()` 是正常的（SS6 立过的教训：
+ *      连注释一起数 ⇒ 假红，而假红只会教人绕闸）。
+ * 分母（实现块数）也在剥注释后的文本上数，两侧口径必须同一个出处。
+ */
+const RING_SHAPE = /impl\s+WaterfallListener\s+for\s+\w+/;
+/** 链位名单（提示词分层设计 §6）：注册序 = system 拼装序，SS8c 按此点名。 */
+const RINGS = [
+  'ToolExposure',
+  'BaseSystemInject',
+  'MemoryInject',
+  'ThinkingLanguageInject',
+  'TreeDirectoryInject',
+  'InstructionFilesInject',
+  'FragmentInject',
+];
+function ringCode(m) {
+  return m.rings
+    .filter((s) => RING_SHAPE.test(s))
+    .map((s) => s.replace(/\/\/[^\n]*/g, ''))
+    .join('\n');
+}
+const ringImpls = (m) => countOf(ringCode(m), RING_SHAPE);
+
 /** 一次读盘，快照进内存；之后所有判据只读快照。 */
 function snapshot() {
   const files = prodRustFiles();
@@ -131,6 +179,7 @@ function snapshot() {
     rust: files.map((f) => read(path.relative(ROOT, f).replace(/\\/g, '/'))),
     apprTests: approvalTestFiles().map(read),
     settingsParts: settingsPartitionFiles().map(read),
+    rings: ringFiles(),
     plugins: pd.count,
     pluginTests: pd.testSrc,
     pluginManifests: pd.manifests,
@@ -251,6 +300,44 @@ const CHECKS = [
     (m) => `${m.pluginManifests}|${m.plugins}`,
     (m) => `${m.plugins}|${m.plugins}`,
   ],
+  [
+    'SS8',
+    '每个 `agent/request` 注入环都走共用的取还形状（T2：改前七环各写一遍 `payload.clone()` + ' +
+      'Replace，一次请求 = 七份"全部对话历史 + 工具目录"的深拷贝）。' +
+      '左 = 环文件代码行里的 `take_request(` 数，右 = `impl WaterfallListener for` 块数；' +
+      '**分母用实现块数而不是写死 7**，第八个环漏接就当场红。' +
+      '环整体消失时分子分母一起掉 ⇒ 那种"环静静没了"由 SS8c 点名兜，FLOORS 的下限只挡扫描面整体塌掉。' +
+      '口径见 `ringCode()`：只数环文件、只数代码行',
+    (m) => {
+      const j = ringCode(m);
+      return `${countOf(j, /take_request\(/)}|${countOf(j, /impl\s+WaterfallListener\s+for\s+\w+/)}`;
+    },
+    (m) => {
+      const impls = countOf(ringCode(m), /impl\s+WaterfallListener\s+for\s+\w+/);
+      return `${impls}|${impls}`;
+    },
+  ],
+  [
+    'SS8b',
+    '且环文件里没有一处 `payload.clone()` 代码行（SS8 管"环有没有接上"，这条管' +
+      '"有没有一边接上又一边退回整包克隆"——两个方向各要一条能单独报红的读数）。' +
+      '面外的 clone 是有意留的活样本：`kernel-bin/approval_plugin.rs` 代表"外部决策方' +
+      '只能 clone + Replace"，`browser/tools.rs` 是事件通道载荷，都不属于这条账',
+    (m) => String(countOf(ringCode(m), /payload\.clone\(\)/)),
+    '0',
+  ],
+  [
+    'SS8c',
+    '链上七个注入环**各自还在**（点名清单 = 提示词分层设计 §6 的链位序）。' +
+      'SS8 数的是"接上取还形状的环数 = 实现块数"，一个环被整体改名/搬走时它分子分母一起掉、' +
+      '照样绿——那种"环静静消失"只能靠点名兜。名单写死是有意的：动这行 = 改链位，' +
+      '必须让人显式改判据而不是让闸替他默认通过',
+    (m) => {
+      const j = ringCode(m);
+      return String(RINGS.filter((n) => new RegExp(`impl\\s+WaterfallListener\\s+for\\s+${n}\\b`).test(j)).length);
+    },
+    String(RINGS.length),
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -269,6 +356,10 @@ const FLOORS = [
   ['内置插件数', (m) => m.plugins, 8],
   // 对账用例的扫描面本身也要有下限：十份用例散在 10 个 src/ 树里，文件数掉一半 = 面瞎了
   ['插件 src 面文件数', (m) => m.pluginTests.length, 12],
+  // 现值 7（六个内核环 + 宿主思考语言环）。SS8 的期望分母是"实现块数"，环整体被搬出
+  // 扫描面时分子分母一起掉 ⇒ 只能由这条下限兜。下限取 6：留一点重构余量（把一个环
+  // 拆成两个文件只会更多，不会更少）。
+  ['注入环 impl 块数', (m) => ringImpls(m), 6],
 ];
 
 function runChecks(m) {
@@ -333,6 +424,36 @@ if (SELFTEST) {
     },
     // 另一侧：一个插件的清单被删走（用例还在跑、读的是空气）——SS7b 要单独能为它红
     SS7b: (m) => (m.pluginManifests -= 1),
+    // 窄变异（T2）：把一个环摘回"自己 from_value"的旧形状——take_request 调用数掉 1，
+    // 实现块数不动。只摘第一个：全摘会把两侧一起改掉，反而看不出少了谁。
+    SS8: (m) => {
+      const hit = m.rings.findIndex((s) => s.includes('take_request(payload,'));
+      m.rings = m.rings.map((s, i) =>
+        i === hit ? s.replace('take_request(payload,', 'take_request_legacy(payload,') : s,
+      );
+    },
+    // 本刀真正的缺陷形状：环还接共用取还，却又加一次整包克隆。SS8b 要单独能为它红
+    // （SS8 看不见它——两侧读数都不变），这条对照就是为了证明"两个方向各有人盯"。
+    SS8b: (m) => {
+      const hit = m.rings.findIndex((s) => s.includes('take_request(payload,'));
+      m.rings = m.rings.map((s, i) =>
+        i === hit
+          ? s.replace('let mut guard = match', 'let _dup = payload.clone();\n        let mut guard = match')
+          : s,
+      );
+    },
+    // 窄变异（T2）：一个环**整体改名**（impl 块还在、take_request 也还在，只有名单点不到它）。
+    // SS8 对这种变异两侧一起掉、看不见——那条对照就是为了把这个"分子分母同源"的盲区
+    // 摆出来，并证明点名确实补上了它。
+    SS8c: (m) => {
+      const name = RINGS.find((n) => m.rings.some((s) => s.includes(`impl WaterfallListener for ${n}`)));
+      if (!name) return;
+      m.rings = m.rings.map((s) =>
+        s.includes(`impl WaterfallListener for ${name}`)
+          ? s.replace(`impl WaterfallListener for ${name}`, `impl WaterfallListener for ${name}_retired`)
+          : s,
+      );
+    },
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {
@@ -343,6 +464,7 @@ if (SELFTEST) {
       rust: [...snap.rust],
       apprTests: [...snap.apprTests],
       settingsParts: [...snap.settingsParts],
+      rings: [...snap.rings],
       pluginTests: [...snap.pluginTests],
     };
     mut(copy);

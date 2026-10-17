@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use cordis_core::{WaterfallDecision, WaterfallListener};
-use kernel_agent::{points, RequestPayload};
+use kernel_agent::{append_block, points, take_request};
 use serde_json::Value;
 
 use crate::settings::{SettingsStore, THINKING_NONE};
@@ -117,13 +117,17 @@ fn sys_locale() -> String {
 
 #[async_trait]
 impl WaterfallListener for ThinkingLanguageInject {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key != points::REQUEST {
             return WaterfallDecision::Continue;
         }
-        let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
-            return WaterfallDecision::Continue;
+        // 台账 T2（2026-10-18）：这一环用的是内核同一个取还形状——宿主内外
+        // 各写一份"这份 payload 是不是 request"必然漂。
+        let mut guard = match take_request(payload, "ThinkingLanguageInject") {
+            Ok(g) => g,
+            Err(d) => return d,
         };
+        let req = guard.req();
         let hint = self.hint_for(&req.session_id);
         if hint.is_empty() {
             return WaterfallDecision::Continue; // none 档：零参与
@@ -134,15 +138,8 @@ impl WaterfallListener for ThinkingLanguageInject {
             had_system = req.system.is_some(),
             "思考语言注入"
         );
-        req.system = match req.system.take() {
-            Some(prev) => Some(format!("{prev}\n\n{hint}")),
-            None => Some(hint),
-        };
-        // 序列化失败按 fail-open 放行（与 Memory-Inject 同纪律）
-        match serde_json::to_value(&req) {
-            Ok(v) => WaterfallDecision::Replace(v),
-            Err(_) => WaterfallDecision::Continue,
-        }
+        append_block(&mut req.system, Some(&hint));
+        WaterfallDecision::Continue
     }
 }
 

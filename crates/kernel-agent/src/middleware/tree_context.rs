@@ -18,30 +18,27 @@ use async_trait::async_trait;
 use cordis_core::{WaterfallDecision, WaterfallListener};
 use serde_json::Value;
 
-use crate::waterfall::{RequestPayload, points};
+use crate::waterfall::{append_block, points, take_request};
 
 /// 目录注入监听器（无状态——所有会话态都在 payload 里）。
 pub struct TreeDirectoryInject;
 
 #[async_trait]
 impl WaterfallListener for TreeDirectoryInject {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key != points::REQUEST {
             return WaterfallDecision::Continue;
         }
-        let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
-            return WaterfallDecision::Continue;
+        let mut guard = match take_request(payload, "TreeDirectoryInject") {
+            Ok(g) => g,
+            Err(d) => return d,
         };
-        let Some(dir) = req.tree_directory.clone() else {
-            return WaterfallDecision::Continue; // legacy 会话：零参与
-        };
-        if !dir.is_empty() {
-            req.system = match req.system.take() {
-                Some(prev) => Some(format!("{prev}\n\n{dir}")),
-                None => Some(dir),
-            };
-        }
-        // to_value 失败按 fail-open 放行（与 Memory-Inject 同纪律）
-        super::replace_decision(req)
+        let req = guard.req();
+        // Some("") = 树会话尚无捆：marker 随 payload 走，但不追加（空段会
+        // 在 system 尾部留一个孤立换行）。原形状靠 `.clone()` + `is_empty()`
+        // 判；append_block 收 Option<&str> 后 filter 一次就够，少一份拷贝。
+        let dir = req.tree_directory.as_deref().filter(|d| !d.is_empty());
+        append_block(&mut req.system, dir);
+        WaterfallDecision::Continue
     }
 }

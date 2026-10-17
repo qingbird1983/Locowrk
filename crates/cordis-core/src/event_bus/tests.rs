@@ -155,7 +155,7 @@ struct Rewriter {
 
 #[async_trait::async_trait]
 impl WaterfallListener for Rewriter {
-    async fn handle(&self, _key: &str, _payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, _key: &str, _payload: &mut Value) -> WaterfallDecision {
         self.decisions
             .lock()
             .unwrap()

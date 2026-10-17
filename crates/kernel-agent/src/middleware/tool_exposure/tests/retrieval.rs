@@ -43,7 +43,7 @@ async fn retrieval_signal_fills_quota_and_attributes() {
         Some(Arc::new(Retriever::new(Arc::new(Kw)))),
     );
     let (decision, out) = run(&l, tools, messages).await;
-    assert!(matches!(decision, WaterfallDecision::Replace(_)));
+    assert!(matches!(decision, WaterfallDecision::Continue));
     assert_eq!(out.tools.len(), 1);
     assert_eq!(out.tools[0].name, "rust_commit");
     let snap = l.snapshot();
@@ -57,7 +57,7 @@ async fn no_retriever_keeps_legacy_scoring() {
     let tools = vec![spec("a", Exposure::OnDemand), spec("b", Exposure::OnDemand)];
     let l = listener(HashMap::new(), cfg_lock(true, 1));
     let (decision, out) = run(&l, tools, Vec::new()).await;
-    assert!(matches!(decision, WaterfallDecision::Replace(_)));
+    assert!(matches!(decision, WaterfallDecision::Continue));
     assert_eq!(out.tools.len(), 1);
     assert!(l.snapshot().retrieved.is_empty());
 }

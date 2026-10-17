@@ -76,8 +76,11 @@ async fn probe_run(cfg: MemoryInjectConfig, texts: &[&str]) -> Calls {
     );
     let v = payload_with_users(texts);
     for _ in 0..2 {
-        match mw.handle(points::REQUEST, &v).await {
-            WaterfallDecision::Replace(_) | WaterfallDecision::Continue => {}
+        // 每轮重造 payload：与生产同形（kernel 每 step 从会话日志重建，`system`
+        // 恒从 None 起算）。T2 之前 handle 收 `&Value` 天然如此，现在必须显式重建。
+        let mut v = v.clone();
+        match mw.handle(points::REQUEST, &mut v).await {
+            WaterfallDecision::Continue => {}
             other => panic!("unexpected decision {other:?}"),
         }
     }

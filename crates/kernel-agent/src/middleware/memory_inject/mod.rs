@@ -47,7 +47,7 @@ use async_trait::async_trait;
 use cordis_core::{WaterfallDecision, WaterfallListener};
 use serde_json::Value;
 
-use crate::waterfall::{RequestPayload, points};
+use crate::waterfall::{append_block, points, take_request};
 
 mod contract;
 mod terms;
@@ -181,15 +181,6 @@ impl MemoryInject {
         lines.push_str("</persistent_memory>");
         Some(lines)
     }
-
-    /// system 现值追加注入块（现值为 None = 原样；块为 None = 不动）。
-    fn append_block(system: Option<String>, block: Option<String>) -> Option<String> {
-        match (system, block) {
-            (Some(prev), Some(b)) => Some(format!("{prev}\n\n{b}")),
-            (None, Some(b)) => Some(b),
-            (prev, None) => prev,
-        }
-    }
 }
 
 /// 单条注入上限（字符）：与事实记忆同口径——超长截断并标注，全文在
@@ -215,7 +206,7 @@ fn tag_suffix(tags: &str) -> String {
 
 #[async_trait]
 impl WaterfallListener for MemoryInject {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key != points::REQUEST {
             return WaterfallDecision::Continue;
         }
@@ -223,9 +214,13 @@ impl WaterfallListener for MemoryInject {
         if !cfg.enabled || cfg.top_k == 0 {
             return WaterfallDecision::Continue;
         }
-        let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
-            return WaterfallDecision::Continue;
+        // 取载荷排在两道配置门之后：它们一个字节都不碰 payload，早退就不必
+        // move 进出（守卫的 Drop 也要一次 to_value）。
+        let mut guard = match take_request(payload, "MemoryInject") {
+            Ok(g) => g,
+            Err(d) => return d,
         };
+        let req = guard.req();
         // ㉘·A·fix：缓存键并上键位身份——会话中途改归属 = 换键 = 重算；
         // 键位不变则命中同一字节（M1 纪律不破）。scope_id 逐请求查询
         // （desktop = 旁车一次读取，与围栏/审批同成本档）。
@@ -242,8 +237,8 @@ impl WaterfallListener for MemoryInject {
                 .get(key, cfg.top_k);
             match cached {
                 Some(Some(block)) => {
-                    req.system = Self::append_block(req.system.take(), Some(block));
-                    return super::replace_decision(req);
+                    append_block(&mut req.system, Some(&block));
+                    return WaterfallDecision::Continue;
                 }
                 Some(None) => return WaterfallDecision::Continue,
                 None => {}
@@ -260,10 +255,8 @@ impl WaterfallListener for MemoryInject {
         // 提醒段（v2.136 项目侧全提醒制）：与工作区行同族，紧随其后；
         // 静态文本宿主给定（正文不注入，主模型按需读文件）。
         if let Some(repo) = self.source.repo_context(req.session_id.as_deref()) {
-            block = Self::append_block(
-                block,
-                Some(format!("<repo_context>\n{repo}\n</repo_context>")),
-            );
+            let seg = format!("<repo_context>\n{repo}\n</repo_context>");
+            append_block(&mut block, Some(&seg));
         }
         // 全局记忆注入（v2.136 裁定）：只取全局层（用户层面的喜好/全局
         // 要求）；项目层事实不自动注入，由模型 memory_read / memory_search
@@ -282,21 +275,18 @@ impl WaterfallListener for MemoryInject {
         let entries = self
             .source
             .recall_relevant(req.session_id.as_deref(), cfg.top_k, &query);
-        block = Self::append_block(block, Self::build_block(&entries));
+        let mem = Self::build_block(&entries);
+        append_block(&mut block, mem.as_deref());
         // 项目记忆索引（Q2 · MR §4.1）：紧随全局层之后——指针行，正文不进。
         // 宿主给定内文，标签在这里包（与 `<repo_context>` / `<environment>` 同形，
         // 块命名由内核管、内容真源在宿主）。整节缺席 = 未归属 / 项目层空。
         if let Some(index) = self.source.project_index(req.session_id.as_deref()) {
-            block = Self::append_block(
-                block,
-                Some(format!(
-                    "<project_memory_index>\n{index}\n</project_memory_index>"
-                )),
-            );
+            let seg = format!("<project_memory_index>\n{index}\n</project_memory_index>");
+            append_block(&mut block, Some(&seg));
         }
         // 主动记忆指引（F3 §4）：随注入块尾——静态文本，与块同吃预取
         // 缓存；无条件注入（见 GUIDANCE_BLOCK 注释的"零记忆也要知道"）。
-        block = Self::append_block(block, Some(GUIDANCE_BLOCK.to_string()));
+        append_block(&mut block, Some(GUIDANCE_BLOCK));
         // 首次注入结果入缓存（None 也缓存：无块会话不做每轮空查）
         if let Some(key) = prefetch_key {
             self.prefetch
@@ -310,14 +300,12 @@ impl WaterfallListener for MemoryInject {
                     },
                 );
         }
-        let Some(block) = block else {
-            return WaterfallDecision::Continue;
-        };
         // kernel 每 step 重建 payload，system 恒为 None；仍按"追加"合并，
-        // 未来若有其他决策方先写 system 也不覆盖
-        req.system = Self::append_block(req.system.take(), Some(block));
-        // to_value 失败按 fail-open 放行（Replace 收口统一纪律，见 replace_decision）
-        super::replace_decision(req)
+        // 未来若有其他决策方先写 system 也不覆盖。
+        // GUIDANCE_BLOCK 无条件追加过 ⇒ 此处 block 必为 Some，原 `let Some(block)
+        // … else 早退` 在新形状下由 append_block 的"add=None 不动"承担。
+        append_block(&mut req.system, block.as_deref());
+        WaterfallDecision::Continue
     }
 }
 

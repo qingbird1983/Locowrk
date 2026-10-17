@@ -15,6 +15,9 @@ use cordis_core::WaterfallListener;
 // 与 `Retriever`（clippy `--all-targets` 把留在父里的判成 unused_imports）。测试面
 // 自己引用 ⇒ 按 F-14「`use` 按引用面分派」在这里显式引入，子簇再经 `use super::*` 拿。
 use crate::middleware::tool_retrieval::RETRIEVAL_WEIGHT;
+// 台账 T2 起父文件不再 import `RequestPayload`（它的 handle 只经 take_request 取载荷），
+// 测试面按同款纪律自己显式引用，子簇再经 `use super::*` 拿。
+use crate::waterfall::RequestPayload;
 use plugin_api::{SideEffect, ToolSpec};
 use serde_json::json;
 use session_store::Message;
@@ -82,7 +85,7 @@ async fn run_session(
     messages: Vec<Message>,
     session_id: Option<&str>,
 ) -> (WaterfallDecision, RequestPayload) {
-    let payload = serde_json::to_value(RequestPayload {
+    let mut payload = serde_json::to_value(RequestPayload {
         messages,
         model: None,
         params: json!({}),
@@ -93,11 +96,14 @@ async fn run_session(
         tree_directory: None,
     })
     .expect("payload");
-    let decision = listener.handle(points::REQUEST, &payload).await;
-    let source = match &decision {
-        WaterfallDecision::Replace(v) => v.clone(),
-        _ => payload,
-    };
-    let out = serde_json::from_value::<RequestPayload>(source).expect("payload parses");
+    let decision = listener.handle(points::REQUEST, &mut payload).await;
+    // 内核注入环的收束是 `Continue`，改写已经在 payload 里（T2 之前要从
+    // `Replace` 的载荷取结果）。这里断言而不是容忍两种形状：哪天漂回整包
+    // 换入就红。
+    assert!(
+        matches!(decision, WaterfallDecision::Continue),
+        "ToolExposure 应就地改写后 Continue，实际 {decision:?}"
+    );
+    let out = serde_json::from_value::<RequestPayload>(payload).expect("payload parses");
     (decision, out)
 }

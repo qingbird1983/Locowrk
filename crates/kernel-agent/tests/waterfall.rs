@@ -112,3 +112,81 @@ async fn request_error_retry_budget_exhausts() {
     );
     assert_eq!(llm.requests.lock().unwrap().len(), 2);
 }
+
+// ---------- 台账 T2：`agent/request` 的取还形状 ----------
+
+/// 守卫的地基：一个字段都没碰 ⇒ 写回的字节必须与输入**逐字节相同**。
+/// 这条撑着两件事——① 各模块测试里"进出 payload 相等 = 本环零参与"那种断言；
+/// ② 供应商前缀缓存：若 round-trip 会重排键序或把 `None` 补成 `null`，七环连跑
+/// 就等于每次请求重写一遍 system，M1 那条字节纪律当场作废。
+#[test]
+fn guard_writes_back_identical_bytes_when_nothing_changed() {
+    let input = serde_json::to_value(kernel_agent::RequestPayload {
+        messages: vec![session_store::Message::user("hi")],
+        model: None,
+        // 故意打乱键序并放一个 null 值：round-trip 若重排/丢字段，这里就会露出来
+        params: json!({ "temperature": 0.5, "z": 1, "top_p": null }),
+        tools: Vec::new(),
+        compacted: None,
+        system: None,
+        session_id: Some("s1".into()),
+        tree_directory: Some(String::new()),
+    })
+    .unwrap();
+    let mut payload = input.clone();
+    {
+        let guard = kernel_agent::take_request(&mut payload, "test").expect("可解析");
+        drop(guard);
+    }
+    assert_eq!(payload, input, "空改写必须逐字节原样还");
+}
+
+/// 故意**不走守卫**的环：自己把载荷 replace 走却不还。
+struct Naked;
+
+#[async_trait::async_trait]
+impl cordis_core::WaterfallListener for Naked {
+    async fn handle(
+        &self,
+        _key: &str,
+        payload: &mut serde_json::Value,
+    ) -> cordis_core::WaterfallDecision {
+        let parsed = serde_json::from_value::<kernel_agent::RequestPayload>(std::mem::replace(
+            payload,
+            serde_json::Value::Null,
+        ));
+        assert!(parsed.is_ok(), "测试前提：进来的确实是 request 载荷");
+        cordis_core::WaterfallDecision::Continue // 明知 payload 已是 Null 却放行
+    }
+}
+
+/// 漏还要被下一环当场响（这条是"为什么用 RAII 守卫而不是手写 take+put"的反面证明）。
+///
+/// 原形状下 `Null` 会被后面每一环的 `else { Continue }` 一路放行到出环才失败；
+/// 现在第一个用共用形状的环就拒，并把"是谁先发现的"报出来。
+#[tokio::test]
+async fn a_ring_that_forgets_to_give_back_is_caught_by_the_next_ring() {
+    use kernel_agent::{BaseSystemInject, points};
+    let bus = cordis_core::EventBus::new();
+    bus.on_waterfall(points::REQUEST, Arc::new(Naked));
+    bus.on_waterfall(points::REQUEST, Arc::new(BaseSystemInject));
+    let payload = serde_json::to_value(kernel_agent::RequestPayload {
+        messages: vec![session_store::Message::user("hi")],
+        model: None,
+        params: json!({}),
+        tools: Vec::new(),
+        compacted: None,
+        system: None,
+        session_id: None,
+        tree_directory: None,
+    })
+    .unwrap();
+
+    let out = bus.waterfall(points::REQUEST, payload).await;
+    match out.decision {
+        cordis_core::WaterfallDecision::Reject(r) => {
+            assert_eq!(r.by, "BaseSystemInject", "该点名第一个用共用形状的环");
+        }
+        other => panic!("漏还该被下一环当场拒，实际 {other:?}"),
+    }
+}

@@ -14,7 +14,7 @@ use cordis_core::{WaterfallDecision, WaterfallListener};
 
 use super::{
     MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource, RequestPayload, cfg_lock, entry,
-    inject, payload_value,
+    inject, pass, payload_value,
 };
 use crate::waterfall::points;
 
@@ -63,18 +63,21 @@ fn listener(src: Sourced) -> (MemoryInject, Arc<Mutex<Option<String>>>, Arc<Atom
     (inject, index, calls)
 }
 
-/// 带会话身份地跑一次，取回最终 system 文本。
+/// 带会话身份地跑一次，取回最终 system 文本（未注入 = 空串）。
 async fn system_of(inject: &MemoryInject, session_id: &str) -> String {
     let mut v = payload_value();
     v["session_id"] = serde_json::json!(session_id);
-    match inject.handle(points::REQUEST, &v).await {
-        WaterfallDecision::Replace(v) => serde_json::from_value::<RequestPayload>(v)
-            .expect("payload 可解")
-            .system
-            .unwrap_or_default(),
-        WaterfallDecision::Continue => String::new(),
-        _ => panic!("记忆件只会 Replace 或 Continue"),
-    }
+    assert!(
+        matches!(
+            inject.handle(points::REQUEST, &mut v).await,
+            WaterfallDecision::Continue
+        ),
+        "注入环的收束恒为 `Continue`，改写就地发生在 payload 里（台账 T2）"
+    );
+    serde_json::from_value::<RequestPayload>(v)
+        .expect("payload 可解")
+        .system
+        .unwrap_or_default()
 }
 
 #[tokio::test]
@@ -154,10 +157,12 @@ async fn disabled_injection_never_asks_for_the_index() {
             ..MemoryInjectConfig::default()
         }),
     );
-    match inject.handle(points::REQUEST, &payload_value()).await {
-        WaterfallDecision::Continue => {}
-        _ => panic!("关闭后不该改写 payload"),
-    }
+    assert!(
+        pass(&inject, points::REQUEST, payload_value())
+            .await
+            .is_none(),
+        "关闭后 payload 一字未动"
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 0, "关了就一个字节都不取");
 }
 
@@ -168,10 +173,10 @@ async fn other_waterfall_points_never_take_the_index() {
     let calls = Arc::clone(&src.calls);
     let inject = inject(Arc::new(src), cfg_lock(MemoryInjectConfig::default()));
     for key in [points::PRE_STEP, points::REQUEST_ERROR, "agent/respond"] {
-        match inject.handle(key, &payload_value()).await {
-            WaterfallDecision::Continue => {}
-            _ => panic!("非 REQUEST 点不该参与: {key}"),
-        }
+        assert!(
+            pass(&inject, key, payload_value()).await.is_none(),
+            "非 REQUEST 点不该参与: {key}"
+        );
     }
     assert_eq!(calls.load(Ordering::SeqCst), 0, "零次取数");
 }

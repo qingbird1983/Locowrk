@@ -128,8 +128,37 @@
 
 ### 二、卡在人的一侧（要点头或要裁定，我不会自己动）
 
-- [ ] **T2** 七个 `agent/request` 监听器各自把整包参数复制一遍再解析
-      · 要你三选一：① 监听器改吃消费型值；② 链位之间传类型化的可变引用；③ 认可现状并登记为特例
+- [x] **T2** 七个 `agent/request` 监听器各自把整包参数复制一遍再解析（2026-10-18 用户点头，按取舍清单选②）
+      · 落地形状 = `WaterfallListener::handle` 收 `&mut Value`，加一个共用取还件
+        `take_request(payload, 环名)` 返回 RAII 守卫（`RequestGuard::req()` 取一次裸引用、`Drop` 里写回）。
+        没用手写 `take` + `put`：这些环各有十几个早退分支（legacy 会话零参与 / 无指令文件 / 无碎片 /
+        消息列为空 / 检索为空），漏写一次 `put` 就是把 `Value::Null` 交给下一环——那种错只在真实会话里出现，
+        单测穷举不了（先例 = `desktop/src-tauri/src/stop.rs` 的注销守卫）
+      · 一并收掉的：`replace_decision` 调用数归零后删除（不留死码）；`system` 追加的**四份**实现
+        （memory_inject 私有 `append_block` + base_system / tree_context / thinking_language 三份手写
+        `match req.system.take()`）合成 `waterfall::append_block` 一处。这不是顺手打扫：环握
+        `&mut RequestPayload` 之后"读同一字段再写同一字段"那个形状撞 borrowck，每处本来就必须改写，
+        各留一种绕法必然漂
+      · 口径如实说清：坏载荷**不是"放行改成拒绝"**。出环本来就是 `from_value(out.payload)?`，
+        原 `else { Continue }` 放行的是一份注定在下一行失败的载荷，只多白跑几环且不说是谁先发现的；
+        而且载荷被 move 走之后"原样放行"结构上已不可能——剩下只有当场响与把 `Null` 往下传两种结局
+      · 判据 `SS8 / SS8b / SS8c`（接 T11 那族，加在 `check-single-source.mjs`）：接上取还形状的环数 =
+        实现块数 / 环文件里 `payload.clone()` = 0 / 七环点名。分工用**真实磁盘变异**各验一发：
+        插一次 clone 只有 SS8b 红（SS8 仍 7|7）、摘一次 `take_request` 只有 SS8 红（6|7）、
+        把一个环整体改名只有 SS8c 红（6≠7 —— impl 块数下限抓不到，这个盲区已写进判据说明，点名就是为它存在的）；
+        变异全部逐字节写回 + `sha256sum -c` OK
+      · 测试面：`prompt_layering` 的链跑改成逐环断言 `Continue` 并回读 payload——哪一环漏还，
+        下一环 `take_request` 就返回 `Reject`，所以这条断言同时是"守卫还没还回载荷"的探针。
+        新增两条地基用例：空改写必须逐字节原样还（撑着前缀缓存与所有"零参与"断言）、
+        漏还被下一环当场点名。把守卫改成不写回 ⇒ 内核侧 47 条用例红；把点名改成固定串 ⇒ 3 条点名断言红
+      · 实测：`make check` 全绿 · `make selftest` 全档 `ALL_CAUGHT` · `demo` 与 `demo4` 各 exit 0；
+        demo4 里"审批插件经 `Replace` 注入的 `mode=upper` 被 echo 吃到"= 外部改写环与七个就地环混跑的
+        端到端证据（那条 `Replace` 通路由 `kernel-bin/approval_plugin.rs` 故意留作活样本，
+        否则 `Replace` 在本仓只剩测试在用）
+      · ★ 遗留（不在本条里清）：链上传的仍是 JSON ⇒ 每环还剩 `from_value` + `to_value` 两次整包转换
+        （改前是 clone + from_value + to_value 三次）。要归零得把链的载体换成类型化
+        （`&mut RequestPayload` 一路传下去、只在进出链各转一次），那要动"决策点 = JSON 契约"这条与
+        C ABI 同源的纪律 ⇒ 另开 spec，不是本刀能顺手收的
 - [ ] **T3** `stores/chat.ts` 的事件投影改成可单测的纯函数
       · 原前置"前端零测试基建"**已由 Q11（v2.202）解除** ⇒ 现在没有前置，等你排期
 - [ ] **T4** 把演示夹具 `lab/BuiApprovalCard.vue`（635 行）移出生产目录

@@ -23,7 +23,7 @@ impl MemorySource for EmptySource {
 }
 
 async fn chain(dir: &str) -> String {
-    let payload = serde_json::to_value(kernel_agent::RequestPayload {
+    let mut payload = serde_json::to_value(kernel_agent::RequestPayload {
         messages: vec![Message::user("hi")],
         model: None,
         params: json!({}),
@@ -35,24 +35,36 @@ async fn chain(dir: &str) -> String {
     })
     .unwrap();
     // 注册序即执行序（state/mod.rs 同序）：Base → Memory → 目录殿后。
-    let base = BaseSystemInject.handle(points::REQUEST, &payload).await;
-    let WaterfallDecision::Replace(v) = base else {
-        panic!("base replaces");
+    //
+    // 台账 T2 之后每一环就地改 payload、收束是 `Continue`。逐环断言 `Continue`
+    // 因此同时是两件事的证据：① 改写没有漂回整包 `Replace`；② 上一环的守卫
+    // 真的把载荷还回来了——任何一环漏还，下一环 `take_request` 解析 `Null`
+    // 会返回 `Reject`，这里当场红。
+    let ring = |name: &str, d: WaterfallDecision| {
+        assert!(
+            matches!(d, WaterfallDecision::Continue),
+            "{name} 应就地改写后 Continue，实际 {d:?}"
+        );
     };
+    ring(
+        "BaseSystemInject",
+        BaseSystemInject.handle(points::REQUEST, &mut payload).await,
+    );
     let memory = MemoryInject::new(
         Arc::new(EmptySource),
         Arc::new(std::sync::RwLock::new(MemoryInjectConfig::default())),
-    )
-    .handle(points::REQUEST, &v)
-    .await;
-    let WaterfallDecision::Replace(v) = memory else {
-        panic!("memory replaces");
-    };
-    let dir_out = TreeDirectoryInject.handle(points::REQUEST, &v).await;
-    let WaterfallDecision::Replace(v) = dir_out else {
-        panic!("directory replaces");
-    };
-    serde_json::from_value::<kernel_agent::RequestPayload>(v)
+    );
+    ring(
+        "MemoryInject",
+        memory.handle(points::REQUEST, &mut payload).await,
+    );
+    ring(
+        "TreeDirectoryInject",
+        TreeDirectoryInject
+            .handle(points::REQUEST, &mut payload)
+            .await,
+    );
+    serde_json::from_value::<kernel_agent::RequestPayload>(payload)
         .unwrap()
         .system
         .unwrap()
@@ -85,5 +97,23 @@ async fn directory_growth_leaves_prefix_intact() {
         &before[..before.find("[memory tree]").expect("目录标记在")],
         &after[..cut],
         "目录之前的全部段逐字节一致"
+    );
+}
+
+/// 目录 = 空串（`Some("")` = 树会话尚无捆）：marker 仍随 payload 走，但一个字
+/// 都不追加（台账 T2 把 `.clone()` + `is_empty()` 收成 `as_deref().filter(...)`，
+/// 这条钉住那次形状改动没漂语义——空段会在 system 尾部留孤立换行）。
+#[tokio::test]
+async fn empty_directory_appends_nothing() {
+    let bare = chain("").await;
+    assert!(
+        !bare.ends_with('\n') && !bare.ends_with("  "),
+        "空目录不留尾部空白: {:?}",
+        bare.chars().rev().take(8).collect::<String>()
+    );
+    let with_dir = chain("[memory tree]\n- b1: title").await;
+    assert!(
+        with_dir.starts_with(bare.as_str()),
+        "有目录 = 在无目录结果的**尾部**追加，前面各段逐字节不变"
     );
 }

@@ -34,7 +34,7 @@ use serde_json::Value;
 
 use super::tool_retrieval::Retriever;
 use crate::timeutil::now_secs;
-use crate::waterfall::{RequestPayload, points};
+use crate::waterfall::{points, take_request};
 
 /// 会话内权重（§5.3：本会话用过 → 至少 +1.0，基本稳进）。
 pub const SESSION_WEIGHT: f64 = 1.0;
@@ -188,14 +188,16 @@ impl ToolExposure {
 
 #[async_trait]
 impl WaterfallListener for ToolExposure {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key != points::REQUEST {
             return WaterfallDecision::Continue;
         }
         let cfg = self.config();
-        let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
-            return WaterfallDecision::Continue;
+        let mut guard = match take_request(payload, "ToolExposure") {
+            Ok(g) => g,
+            Err(d) => return d,
         };
+        let req = guard.req();
         // 停用 / 上限 0：直通全目录（fail-open，行为与 ⑩ 直通态一致）
         if !cfg.enabled || cfg.max_tools == 0 {
             self.record(ExposureSnapshot {
@@ -252,8 +254,9 @@ impl WaterfallListener for ToolExposure {
                         saved_tokens_estimate: saved,
                         ts: now_secs(),
                     });
-                    req.tools = reorder(&mut req.tools, &kept_idx);
-                    return super::replace_decision(req);
+                    let tools = &mut req.tools;
+                    *tools = reorder(tools, &kept_idx);
+                    return WaterfallDecision::Continue;
                 }
             }
         }
@@ -304,8 +307,9 @@ impl WaterfallListener for ToolExposure {
                 );
             }
         }
-        req.tools = reorder(&mut req.tools, &sel.kept_idx);
-        super::replace_decision(req)
+        let tools = &mut req.tools;
+        *tools = reorder(tools, &sel.kept_idx);
+        WaterfallDecision::Continue
     }
 }
 

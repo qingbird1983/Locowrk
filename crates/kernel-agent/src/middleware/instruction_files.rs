@@ -23,7 +23,7 @@ use serde_json::Value;
 use session_store::Message;
 
 use crate::middleware::fragments::wrap_system_reminder;
-use crate::waterfall::{RequestPayload, points};
+use crate::waterfall::{points, take_request};
 
 /// 指令文件加载契约：宿主实现。返回**内文**（含 `# agentsMd` 头部与
 /// 各文件段），None = 无指令文件（不插消息，组装零变化）。
@@ -44,13 +44,15 @@ impl InstructionFilesInject {
 
 #[async_trait]
 impl WaterfallListener for InstructionFilesInject {
-    async fn handle(&self, key: &str, payload: &Value) -> WaterfallDecision {
+    async fn handle(&self, key: &str, payload: &mut Value) -> WaterfallDecision {
         if key != points::REQUEST {
             return WaterfallDecision::Continue;
         }
-        let Ok(mut req) = serde_json::from_value::<RequestPayload>(payload.clone()) else {
-            return WaterfallDecision::Continue;
+        let mut guard = match take_request(payload, "InstructionFilesInject") {
+            Ok(g) => g,
+            Err(d) => return d,
         };
+        let req = guard.req();
         let Some(body) = self.source.load(req.session_id.as_deref()) else {
             return WaterfallDecision::Continue;
         };
@@ -61,8 +63,7 @@ impl WaterfallListener for InstructionFilesInject {
         }
         req.messages
             .insert(0, Message::user(wrap_system_reminder(&body)));
-        // to_value 失败按 fail-open 放行（与 Memory-Inject 同纪律）
-        super::replace_decision(req)
+        WaterfallDecision::Continue
     }
 }
 

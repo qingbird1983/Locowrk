@@ -35,12 +35,19 @@ fn payload(session: Option<&str>, last: Message) -> serde_json::Value {
     .unwrap()
 }
 
+/// 跑一环并回传载荷。`None` = 本环没改过一个字节。
+///
+/// 台账 T2 之前这个判据取自决策（`Replace` = 改过、`Continue` = 没改）；注入环
+/// 改成就地写之后收束恒为 `Continue`，决策不再携带"改没改"，只能比进出的载荷。
+/// 这里 clone 的是**测试夹具的输入副本**——生产请求路径上不许再有整包 clone，
+/// 那条判据只扫 `src` 生产面与宿主生产面。
 async fn run(inj: &FragmentInject, v: &serde_json::Value) -> Option<RequestPayload> {
-    match inj.handle(points::REQUEST, v).await {
-        WaterfallDecision::Replace(out) => Some(serde_json::from_value(out).unwrap()),
-        WaterfallDecision::Continue => None,
-        _ => panic!("unexpected decision"),
+    let mut out = v.clone();
+    match inj.handle(points::REQUEST, &mut out).await {
+        WaterfallDecision::Continue => {}
+        other => panic!("unexpected decision {other:?}"),
     }
+    (out != *v).then(|| serde_json::from_value(out).unwrap())
 }
 
 /// 三拍：置位 → 第一次请求拼接 + 清标记 → 第二次请求不再出现。
@@ -140,9 +147,11 @@ fn wrap_escapes_closing_tag() {
 #[tokio::test]
 async fn non_request_key_is_noop() {
     let inj = FragmentInject::new(Arc::new(Table::default()));
+    let mut v = payload(Some("s"), Message::user("x"));
+    let before = v.clone();
     assert_eq!(
-        inj.handle(points::PRE_STEP, &payload(Some("s"), Message::user("x")))
-            .await,
+        inj.handle(points::PRE_STEP, &mut v).await,
         WaterfallDecision::Continue
     );
+    assert_eq!(v, before, "非 request 点：载荷一字未动（守卫根本没建立）");
 }
