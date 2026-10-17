@@ -336,5 +336,8 @@ fn truncate_after_resolves_pos_and_rewrites_disk() {
 /// 上下文用量快照两测（v2.62 持久化 + v2.138 真实锚点）拆入子模块——
 /// 母文件守 400 行纪律（compact/tests 先例）。
 mod context_usage;
+/// T6 导出标题三档（旁车 → 首条用户消息 → 会话 id）：这块规则以前藏在
+/// "扫全目录再找自己"的实现里、从来没有用例，改动它必须先把判据立起来。
+mod export_title;
 mod file_changes;
 mod turn_header;

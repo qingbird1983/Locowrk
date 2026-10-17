@@ -27,11 +27,25 @@
         阳性对照（把 reason 改一个字母）实测把缺失从 8 抬到 9 ⇒ 这套判据真的在盯代码
       · 测试面一字未改（579 条桌面用例全绿）：trait 实现不产生调用点，`Pending` 等私有项
         靠"子模块看得见祖先模块的私有项"这条可见性规则直接引用，没有为了拆分放宽到 `pub`
-- [ ] **T5** 去掉 `llm/app_llm.rs::prepare` 里剩下的那一处重复 `llm_config()` 取用
-      · ⚠ 它有一条既有判据钉着"恰好 1 次"，改代码必须同批改判据，否则判据先红
-- [ ] **T6** 会话命令两处取数方式改正：`session_export` 里为了拿标题扫了整个目录（正解 = 读旁车 `read_meta`）；
+- [x] **T5** 去掉 `llm/app_llm.rs::prepare` 里剩下的那一处重复 `llm_config()` 取用
+      · 复核发现台账原先那句"它有一条既有判据钉着'恰好 1 次'"**是假的**：`tests_hotpath.rs`
+        注释点名的门禁 `no_llm_clone_hotpath` 全仓查无此文（那个名字只出现在注释里），
+        所以次数从来没人盯，那次多余的克隆才活到现在
+      · 现在真有一条：`check-single-source.mjs` 新增 **SS3**（`with_llm_config(` 1 次、
+        `.llm_config()` / `.llm()` 各 0 次），并配一条内存变异（把克隆塞回去 ⇒ SS3 报红），
+        `make selftest` 五档全中；注释同步改成指向 SS3 并写明"当初那条不存在"
+      · 实现侧：`effective_cfg_facts` 在同一次快照里顺手选出"最终生效的那个档位"并读三个钉死值，
+        `prepare` 不再第二次取锁、不再第二次克隆含各档明文 Key 的档位区；
+        `effective_cfg` 收成 `#[cfg(test)]` 的解析档（那 4 条 dispatch 用例钉的是**解析次序**，
+        不该被钉死值干扰），既有测试一字未改仍绿
+- [x] **T6** 会话命令两处取数方式改正：`session_export` 里为了拿标题扫了整个目录（正解 = 读旁车 `read_meta`）；
       `session_list` 没包 `spawn_blocking`（会卡住异步线程）
-      · 落点 `desktop/src-tauri/src/commands/sessions.rs`
+      · 落点 `desktop/src-tauri/src/commands/sessions.rs` + `commands.rs`
+      · 导出标题三档（旁车重命名 → 本会话首条用户消息截 `SESSION_TITLE_CHARS` → 会话 id）抽成纯函数
+        `export_title` 并被新用例 `tests_session_log/export_title.rs` 钉住：以前这三档藏在
+        "扫全目录再找自己"的实现里、导出通路从来没有判据。截断宽度用共享常量，不在测试里重抄 40
+      · `session_list` 走 `spawn_blocking`（与 assets / llm_import 同一族先例），不再占住 tokio worker
+      · 窄变异实测：把三档次序换成"自动标题压过旁车" ⇒ 用例红在那条断言上，另一条仍绿（各打一处）
 - [ ] **T7** 审批测试里的挂起脆弱性做同形状排查：超时给 0 + 决断者在断言之后才 spawn
       · 落点 `desktop/src-tauri/src/tests_permission.rs` 及其余审批测试
       · 危害：挂起的测试没有证明力，还会把整轮门禁堵住

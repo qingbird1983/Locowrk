@@ -48,6 +48,7 @@ const F = {
   rsFont: 'desktop/src-tauri/src/settings/appearance.rs',
   tsFont: 'desktop/src/lib/ui-font.ts',
   css: 'desktop/src/style.css',
+  appLlm: 'desktop/src-tauri/src/llm/app_llm.rs',
 };
 
 const countOf = (s, re) => (s.match(new RegExp(re.source, 'g')) || []).length;
@@ -100,6 +101,18 @@ const CHECKS = [
     (m) => String(countOf(m.css, /--lw-ui-font-size:\s*\d+px/)),
     '1',
   ],
+  [
+    'SS3',
+    '模型热路径每个请求只取一次 llm 区快照：`with_llm_config(` 1 次、`.llm_config()` 与 `.llm()` 各 0 次' +
+      '（后两者各返回**含各档明文 Key 的全量副本**，为读几个字段调它 = 又取锁又克隆）',
+    (m) =>
+      [
+        countOf(m.appLlm, /self\.settings\.with_llm_config\(/),
+        countOf(m.appLlm, /\.llm_config\(\)/),
+        countOf(m.appLlm, /self\.settings\.llm\(\)/),
+      ].join('|'),
+    '1|0|0',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -135,6 +148,13 @@ if (SELFTEST) {
     SS1b: (m) => (m.memlayout = m.memlayout.replace('const PROJECTS_DIR: &str = "projects";', 'const PROJECTS_DIR: &str = "proj";')),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
+    // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。
+    // 判据要能为它报红，否则 SS3 只是抄了个数字、不在盯任何东西。
+    SS3: (m) =>
+      (m.appLlm = m.appLlm.replace(
+        'let image_pin = facts.supports_image;',
+        'let _dup = self.settings.llm_config();\n        let image_pin = facts.supports_image;',
+      )),
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {

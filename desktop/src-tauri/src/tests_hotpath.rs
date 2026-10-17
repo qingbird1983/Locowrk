@@ -16,7 +16,11 @@
 //!
 //! c 项（`with_llm_config`）的等值不在这里：`llm/tests/dispatch.rs` 已有 4 条
 //! `effective_cfg` 用例（会话覆盖 / 子代理路由 / 决策环改写 / 无覆盖），本批改的是
-//! **取锁与克隆次数**而不是解析顺序，由门禁 `no_llm_clone_hotpath` 静态计数钉住。
+//! **取锁与克隆次数**而不是解析顺序。⚠ 这句原先写着"由门禁 `no_llm_clone_hotpath`
+//! 静态计数钉住"，而那个门禁**全仓查无此文**（台账 T5 复核时实测：`no_llm_clone_hotpath`
+//! 在本仓库只出现在这一行注释里）——次数从来没人盯，所以 `prepare` 里那次多余的
+//! `llm_config()` 克隆一直活着。现在真有一条了：`check-single-source.mjs` 的 **SS3**
+//! （`with_llm_config(` 1 次、`.llm_config()` / `.llm()` 各 0 次，配一条内存变异）。
 
 use session_store::{append_event, append_events, Session, SessionEvent, TurnId};
 

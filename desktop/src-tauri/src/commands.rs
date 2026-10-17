@@ -24,6 +24,13 @@ pub use organize::*;
 pub use plugins::*;
 pub use schedule::*;
 pub use sessions::*;
+// 台账 T6：导出标题的两块纯逻辑要被用例钉住——命令本体要 Tauri `State`，测试打不进去。
+// `pub use sessions::*` 只带得出 `pub` 项，这两个是 `pub(crate)`，所以在这里点名再导出，
+// 不把命令层内部件顺手抬成公开 API。⚠ 必须收在 `#[cfg(test)]` 里：生产面没有人用它们，
+// 不带 cfg 的话非测试编译报 `unused_imports`，`-D warnings` 当场红（`fence` 那两个再导出
+// 分档是同一课，见 `approval/mod.rs` 的注释）。
+#[cfg(test)]
+pub(crate) use sessions::{export_title, first_user_headline};
 
 use tauri::{AppHandle, State};
 
@@ -162,7 +169,15 @@ pub async fn context_undo_compact(
 /// 首条消息发出前不创建任何后端状态）。
 #[tauri::command]
 pub async fn session_list(state: State<'_, AppState>) -> Result<Vec<SessionMeta>, String> {
-    Ok(crate::session_log::list(&state.sessions_dir))
+    // 台账 T6：这条命令是本仓最重的一次同步 IO（read_dir + 每个会话逐行扫日志
+    // 数事件 + 逐个读旁车 + 排序）。以前它直接在 async 命令线程上跑 = 占住一个
+    // tokio worker，会话一多就把并发请求一起拖住（同一族的 assets / llm_import
+    // 早就走 spawn_blocking，这里补齐，不是新发明）。
+    let dir = state.sessions_dir.clone();
+    let metas = tokio::task::spawn_blocking(move || crate::session_log::list(&dir))
+        .await
+        .map_err(|e| format!("会话列表读取失败: {e}"))?;
+    Ok(metas)
 }
 
 /// 会话全量投影：整个日志按 runner 同一映射转 UI 事件序列，前端重放

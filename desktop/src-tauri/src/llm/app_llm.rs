@@ -26,11 +26,22 @@ use super::dialect;
 use super::wire::WireCaps;
 use crate::demo_llm::DemoLlm;
 use crate::model_override::ModelOverrideStore;
-use crate::settings::{LlmSettings, SettingsStore, SubagentPin};
+use crate::settings::{LlmSettings, ProviderProfile, SettingsStore, SubagentPin};
 
 /// 重试通知出口（组装点闭包 emit `agent://llm-retry`；v2.66 同款组装闭包
 /// 模式——AppHandle 不进 llm 模块）。
 pub type RetryNotify = Arc<dyn Fn(&str, u32, u64) + Send + Sync>;
+
+/// 一次生效快照里顺手读出的**模型行钉死值**（台账 T5 的产物）。
+///
+/// 三个字段都只可能来自 settings（用户钉死面，save 时打 `source=user`）：
+/// 档位里没有这个模型行 ⇒ 整组 None ⇒ 不发明能力。之所以不直接叫 `WireCaps`：
+/// caps 还有一格来自 context 分区，而 llm 区的锁内不许跨区读（非重入 `inner`）。
+struct RowFacts {
+    max_output: Option<u64>,
+    ctx_window: Option<u64>,
+    supports_image: Option<bool>,
+}
 
 pub struct AppLlm {
     settings: Arc<SettingsStore>,
@@ -160,10 +171,31 @@ impl AppLlm {
         })
     }
 
-    /// 本请求的生效配置：设置活动档 → 会话覆盖改写 → **子代理路由改写
-    /// （批 F）** → 决策环 model 改写。档位路由经 `flat_profile`（keyring
-    /// 双读 + headers + 全区代理随行）。
+    /// 本请求的生效配置（只有解析结果那一半）。
+    ///
+    /// T5 之后生产路径不再单独调它——`prepare` 要的是"配置 + 该档钉死值"，
+    /// 一次快照就够。留着是因为 `llm/tests/dispatch.rs` 那 4 条用例钉的正是
+    /// **解析次序**（会话覆盖 / 子代理路由 / 决策环改写 / 无覆盖），它们应当
+    /// 不被钉死值那三个字段干扰；把测试面与本函数的存在理由写死在这里，
+    /// 下次谁想把钉死值塞回 `LlmSettings` 就知道动的是谁的判据。
+    #[cfg(test)]
     pub(crate) fn effective_cfg(&self, req: &LlmRequest) -> LlmSettings {
+        self.effective_cfg_facts(req).0
+    }
+
+    /// 生效配置 **+ 同一次快照里顺手读到的模型行钉死值**（台账 T5）。
+    ///
+    /// 为什么要这一层：`prepare` 以前为了拿 `max_output` / `context_window` /
+    /// `supports_image` 三个值，在 `effective_cfg` 之后**又取了一次锁、又把整个
+    /// 档位区克隆了一遍**（`llm_config()` 返回的是含各档明文 Key 的全量副本）。
+    /// 这三个值本来就长在"最后一次生效的那个档位"上——而那个档位正是
+    /// `effective_cfg` 闭包里已经选定、正要丢掉的那个借用。同一次快照里读出来，
+    /// 第二次取锁就没有存在的理由。
+    ///
+    /// 返回 `(LlmSettings, RowFacts)` 而不是直接返回 `WireCaps`：`caps` 里还有一格
+    /// `tool_result_budget_bytes` 来自**别的分区**（context），而 `with_llm_config`
+    /// 持着非重入的 `inner` 锁，闭包内不许再读别的区（自死锁，见下方既有警告注释）。
+    fn effective_cfg_facts(&self, req: &LlmRequest) -> (LlmSettings, RowFacts) {
         // 批 F-24b / M-18c：一次取锁、零 `LlmConfig` 副本。改前实测本函数最多 **5 次取锁**
         // （167 的 `llm()` + 170/171 与 179/180 两对 `llm_config()`）——其中每一对里的第二
         // 次克隆纯属浪费：`profile()` 返回的是**借用**，第一份快照本就活到 `if let` 块尾。
@@ -176,9 +208,14 @@ impl AppLlm {
         let route = Self::route_of(req);
         self.settings.with_llm_config(|llm| {
             let mut cfg = llm.flat();
+            // `chosen` = 本请求最终生效的那个档位（与 `flat_profile` 的选取同步记下来）；
+            // 没走任何档位改写时它留空，收尾回落到活动档——与 `prepare` 改前三段
+            // `or_else` 的次序（route → 覆盖 → 活动档）逐字对应。
+            let mut chosen: Option<&ProviderProfile> = None;
             if let Some((provider_id, model)) = covered {
                 if let Some(p) = llm.profile(&provider_id) {
                     cfg = llm.flat_profile(p);
+                    chosen = Some(p);
                 }
                 cfg.model = model;
             }
@@ -187,14 +224,26 @@ impl AppLlm {
             if let Some(route) = route {
                 if let Some(p) = llm.profile(&route.provider_id) {
                     cfg = llm.flat_profile(p);
+                    chosen = Some(p);
                 }
                 cfg.model = route.model;
             }
+            let chosen = chosen.or_else(|| llm.active_profile());
             // §7.2 决策环的 model 改写是最高优先级（会话覆盖只在缺省层生效）
             if let Some(m) = &req.model {
                 cfg.model = m.clone();
             }
-            cfg
+            // 钉死值按**生效模型名**在选定的档位里找；找不到行就整组留 None
+            // （不发明能力：目录里没有的、档位里没钉的，一律不发）。
+            let row = chosen.and_then(|p| p.models.iter().find(|m| m.id == cfg.model));
+            let facts = RowFacts {
+                max_output: row.and_then(|m| m.max_output),
+                ctx_window: row
+                    .and_then(|m| m.context_window)
+                    .or_else(|| chosen.and_then(|p| p.window_tokens)),
+                supports_image: row.and_then(|m| m.supports_image),
+            };
+            (cfg, facts)
         })
     }
 
@@ -218,38 +267,20 @@ impl AppLlm {
     /// 或剥除）；`params["aux"]=true`（辅助调用标记）则取方言最低档。内核
     /// 零改动——params 是 opaque Value（§7.2 决策环同通道）。
     fn prepare(&self, mut req: LlmRequest) -> (LlmRequest, LlmSettings, WireCaps, Option<bool>) {
-        let cfg = self.effective_cfg(&req);
-        // 模型行能力（settings 钉死面）：按生效模型名在 路由档（批 F）/
-        // 覆盖档 / 活动档 的 models 里找；窗口 = 模型行 context_window ??
-        // 档位 window_tokens
+        // T5：生效配置与该档里钉死的三个能力值**同一次快照读出**，本函数不再为
+        // 读几个字段而第二次取锁、第二次克隆含明文 Key 的档位区。
+        let (cfg, facts) = self.effective_cfg_facts(&req);
         // Q8 工具结果预算：组装点带下来（内核读不到 settings，与 instruction 链预算同款
         // 注入形状）。写进初始化器而不是 `let mut caps = default()` 之后再赋一格：
         // clippy 的 field_reassign_with_default 在 `-D warnings` 下是硬错（本批首跑红过）。
         // 这里只取"是否限制"，KiB→字节的换算不在本文件做第二次。
         let mut caps = WireCaps {
             tool_result_budget_bytes: self.settings.tool_result_budget_bytes(),
-            ..Default::default()
+            max_output: facts.max_output,
+            ctx_window: facts.ctx_window,
         };
-        let mut image_pin = None;
-        let llm_cfg = self.settings.llm_config();
+        let image_pin = facts.supports_image;
         let route = Self::route_of(&req);
-        let profile = route
-            .as_ref()
-            .and_then(|r| llm_cfg.profile(&r.provider_id))
-            .or_else(|| {
-                req.session_id
-                    .as_deref()
-                    .and_then(|sid| self.overrides.as_ref().and_then(|o| o.get(sid)))
-                    .and_then(|(pid, _)| llm_cfg.profile(&pid))
-            })
-            .or_else(|| llm_cfg.active_profile());
-        if let Some(p) = profile {
-            let row = p.models.iter().find(|m| m.id == cfg.model);
-            // settings 只存用户钉死值（save 时打 source=user），有值即钉死
-            caps.max_output = row.and_then(|m| m.max_output);
-            caps.ctx_window = row.and_then(|m| m.context_window).or(p.window_tokens);
-            image_pin = row.and_then(|m| m.supports_image);
-        }
         // 推理档位解析：辅助降档优先（aux 标记），否则子代理钉档档位
         // （批 F，路由后档位的方言 clamp），否则会话旁车档
         let dialect = dialect::dialect_of(cfg.base_url.as_deref());
