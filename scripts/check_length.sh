@@ -43,6 +43,7 @@ desktop/src-tauri/src/commands.rs
 desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue
 desktop/src-tauri/src/commands/sessions.rs
+desktop/tests/chat-projection.spec.ts
 "
 
 # **扫描面只有一个出处**：下面这一条 find 的产物既用来数超限、也用来验下限。
