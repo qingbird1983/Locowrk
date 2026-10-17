@@ -48,15 +48,20 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 ├── desktop/                          # ★       Tauri 2 + Vue 3 桌面端
 │   ├── src/                          #         前端（界面永远不直接碰 PluginRegistry，只经 PluginService）
 │   │   ├── App.vue  main.ts  i18n.ts  style.css          # 外壳 · 语言切换 · 字号基座 --lw-ui-font-size
-│   │   ├── components/shell/ chat/ memory/ plugins/ settings/ schedule/ patterns/ lab/
-│   │   │                                                 # 界面分区：外壳 · 对话流 · 记忆页 · 插件页 · 设置 · 定时 · 通用模式 · 演示夹具
+│   │   ├── components/shell/ chat/ memory/ plugins/ settings/ schedule/ patterns/
+│   │   │                                                 # 界面分区：外壳 · 对话流 · 记忆页 · 插件页 · 设置 · 定时 · 通用模式
 │   │   ├── stores/                   #         pinia：状态与 IPC 编排的唯一去处（组件不许自己 apply）；最厚的是 chat.ts
 │   │   ├── lib/                      #         api.ts（command 薄封装）· tool-detail.ts · use-popover.ts · ui-font.ts
 │   │   ├── locales/                  # ★       zh-CN 与 en 双语包，键集必须相等（check-i18n 判）
 │   │   ├── types/                    #         前端这边的类型声明：字段名要和后端返回的对上（漂一个字母 ⇒ 类型检查全绿而界面空白）
 │   │   └── 最容易改坏的几处（超限点名名单里的前端件）：components/chat/Composer.vue · TranscriptFlow.vue ·
-│   │     MessageRow.vue · PermissionCard.vue · BuiApprovalCard.vue，设置侧 ModelPanes.vue · LlmSection.vue ·
-│   │     ProviderSetupDialog.vue
+│   │     MessageRow.vue · PermissionCard.vue，设置侧 ModelPanes.vue · LlmSection.vue ·
+│   │     ProviderSetupDialog.vue（名单另有一份 lab 夹具，见下）
+│   ├── lab/                          #         【实验室】beautiful-ui-vue 移植件试挂（BuiApprovalCard 等）：**在 src 之外**
+│   │   │                             #         ⇒ 生产构建不含它（入口 = DeveloperSection 里 `import.meta.env.DEV` 门控的动态
+│   │   │                             #         import，台账 T4），生产形态闸 stylelint/check-style 也不扫它——待裁决的形态样本
+│   │   │                             #         不受「同类只许一种形态」管；采纳哪一等 = 搬回 src/components/ 再当场过闸。
+│   │   │                             #         类型面仍管（tsconfig include 有 lab），文案引用也算（check-i18n 的 REF_ROOTS）
 │   ├── src-tauri/                    #         组装点：独立 Cargo 包。形状约定 = 模块文件与同名目录成对（孤儿文件由拆分形状闸判）
 │   │   ├── commands/ commands.rs     #         Tauri command 薄适配层：只做参数转换，不写业务（llm.rs · sessions.rs 最厚）
 │   │   ├── runner/ llm/ prompts/ events.rs tool_source.rs

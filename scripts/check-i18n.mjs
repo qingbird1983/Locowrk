@@ -17,6 +17,10 @@ import { join, relative, dirname } from "node:path";
 const ROOT = process.argv[2] && !process.argv[2].startsWith("-") ? process.argv[2] : ".";
 const flags = new Set(process.argv.slice(ROOT === "." ? 2 : 3));
 const SRC = join(ROOT, "desktop", "src");
+// 引用面 = 生产 src + `desktop/lab/`（台账 T4：实验室夹具住在 src 之外，但它照样引用
+// `bui.*` 那批文案）。不把这一根算进来，那批键会立刻变成"孤儿"被报出来——而本闸自己的
+// 注释写着「误报孤儿比漏报危险：人会照着清单删活文案」。
+const REF_ROOTS = [SRC, join(ROOT, "desktop", "lab")];
 
 // 路径一律归一成 `/` 再输出与比较：本仓在 Windows 上开发，`node:path` 的 relative() 给反斜杠形，
 // 直接拼进提示会写出 `locales\zh-CN.ts`（本闸里既有的三处比较早就各自做了归一，新加的这几处同口径）。
@@ -230,6 +234,9 @@ const walk = (dir) => {
   return out;
 };
 
+/** 多根展开：缺根跳过而不是崩（`desktop/lab/` 哪天被清掉，本闸不该 ENOENT）。 */
+const walkAll = (dirs) => dirs.filter((d) => existsSync(d)).flatMap(walk);
+
 const CALL_RE = /(?:^|[^\w$.])(?:\$t|t|te|tm|tr)\(\s*(['"`])([^'"`]*)\1/g;
 const DOTTED_KEY_RE = /^[a-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$/;
 
@@ -239,7 +246,7 @@ const dynPrefixes = []; // 动态键前缀（'effect.' 这种）
 const dynWhere = new Map(); // 前缀 → 出处文件（'死前缀'断言要点名，v2.168 批 F-18）
 const dataKeys = new Set(); // settings-index.ts 的 labelKey / searchKeys
 
-for (const file of walk(SRC)) {
+for (const file of walkAll(REF_ROOTS)) {
   const text = readFileSync(file, "utf8");
   for (const m of text.matchAll(CALL_RE)) if (DOTTED_KEY_RE.test(m[2])) refs.add(m[2]);
   // 间接引用形态（键名写在对象表 / 数组里，运行时才喂给 t()）：台账口径把

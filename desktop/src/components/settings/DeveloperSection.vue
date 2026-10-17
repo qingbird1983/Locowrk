@@ -6,7 +6,7 @@
  * 的解锁面），缺省全关。⑫ 的暴露调试面板同属开发者信息，自工具与分发
  * 面板迁入。行版式（§3.32·七 v3.5）。
  */
-import { onMounted, reactive, ref, watch } from "vue";
+import { defineAsyncComponent, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { llmCacheDiagnose, memoryReconcile, toolExposureDebug } from "../../lib/api";
 import type { CacheBreakReport, ReconcileSummary } from "../../types";
@@ -20,7 +20,19 @@ import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import SettingsToggle from "./SettingsToggle.vue";
 import MemoryTreePanel from "./MemoryTreePanel.vue";
-import LabPanel from "../lab/LabPanel.vue";
+
+/**
+ * 【实验室】入口（台账 T4）：这块是**待裁决的形态样本**，不住在生产组件树里，
+ * 2026-10-18 搬到 `desktop/lab/`（`src/` 之外）。入口照留在本分区、文案与那 15 个
+ * `bui.*` 键一个不删（用户定过的口径：未点名的删除一律保留），变的只有归属——
+ * 下面那个 DEV 编译期常量在生产构建里折成假 ⇒ 这条动态 import 整条被 Rollup 摇掉
+ * ⇒ 989 行夹具不再进产物（改前实测：它的串在 dist 的 index 那个 chunk 里，改后零命中）。
+ * 生产构建下这里 = null，模板那一行的 v-if 于是根本不挂载（不是挂载后渲染空，
+ * 那样还得留一个假组件顶着）。
+ */
+const LabPanel = import.meta.env.DEV
+  ? defineAsyncComponent(() => import("../../../lab/LabPanel.vue"))
+  : null;
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -521,7 +533,8 @@ onMounted(() => void refresh());
 
     <MemoryTreePanel />
 
-    <!-- 【实验室】形态库试挂（beautiful-ui-vue 移植件，目检用，随实验去留） -->
-    <LabPanel />
+    <!-- 【实验室】形态库试挂（beautiful-ui-vue 移植件，目检用，随实验去留）。
+         T4：夹具本体在 `desktop/lab/`，生产构建里 LabPanel = null ⇒ 这一行不挂载 -->
+    <component :is="LabPanel" v-if="LabPanel" />
   </div>
 </template>
