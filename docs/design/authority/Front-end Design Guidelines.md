@@ -234,7 +234,7 @@
    - 默认全量报告 = 收敛工作清单。**订正（v2.2 实测）**：裸字号与裸间距早就是**一级判错**（stylelint `declaration-property-value-disallowed-list` severity=error，`--lw-fs-*`/`--lw-gap-*` 已建齐），本条原文那句「二级：裸字号、裸间距；令牌建齐后升级判错」是过期措辞——`check-style.mjs` 的 `warn` 分支当前无数据，它是「先观察、迁完翻判错」那条流程的固定工位，不是还有尾巴。
 2. **验收矩阵**（每批目检 + 走查）：每类至少测 默认/hover/选中/禁用 × 明暗 五态；浮层加测贴边位（右缘/下缘）；**同类不同样 = 判不通过**。§二⑯ 另带四条画布专属增项（双主题网格可见性 / 拖拽无过渡残影 / 缩放两极端连线端点 / 键盘全路径 + 450px 地板可达）。
 3. **文档先行**：需要清单外形态 = 先修订本标准（说明为什么清单不够用），再写码。
-4. **门禁实测边界（v2.2 用两份探针夹具实测得出，`tmp/q13-probe/Probe*.vue`，未入库=台账 T8）**——下列两面**闸管不到，只有本标准正文承重**，写新形态时不许假设"门禁会替我拦"：
+4. **门禁实测边界（v2.2 用两份探针夹具实测得出；夹具曾住 `tmp/q13-probe/Probe*.vue`，属一次性件、不入库，已随台账 T8 清理作废——实测结论以本条正文为准，规范语义未变）**——下列两面**闸管不到，只有本标准正文承重**，写新形态时不许假设"门禁会替我拦"：
    - **整值子串匹配**：`declaration-property-value-allowed-list` 的配置正正则无锚（`/var\(--lw-/i`），实测一条声明只要**任意一段**含 `var(--lw-` 即整条放行 ⇒ `transition: transform 0s, background-color var(--dur-fast) var(--ease-standard)` 这种夹带裸时长的多段写法能过闸（§二⑯ 已明令禁止）；`transition-duration: 0s` 单写**判错**，合法写法是 `transition: none`。同一机制下 `background-image: radial-gradient(color-mix(in oklab, var(--lw-ink-1) 14%, transparent) 1px, transparent 1px)`（原型现写的网格档）实测**也放行**——注意 `box-shadow` 那条配置是**专门为 `color-mix(in oklab, var(--lw-` 写了一个分支**才允许就地混色的，`background-image` 这边没有这种授权，它只是被子串放过 ⇒ §二⑯ 按上位 §3.3「禁临时透明度拼接」判错。
    - **完全不在射程的属性**：`background-size` / `background-position` / `background-repeat` / `stroke-width` / `fill`（`none` 与 `var(--lw-` 之外仍受色档管）/ `cursor` / `will-change` / `image-rendering` / `overflow` / `z-index` / 任意 `width`·`height` 的裸 px——实测全部放行。§二⑯ 对其中每一项钉了唯一值，这就是那一刀的实际产出。
    - **反向确认夹具是活的**：同一份探针里各放一条已知必红的裸值（`padding: 10px 12px`、`font-size: 13px`、`border-radius: 14px`、`transition: transform 240ms ease-out`），四条全被报出 ⇒ "通过"不是扫描瞎（同族纪律 = 零命中要配正对照，这里是放行要配正对照）。

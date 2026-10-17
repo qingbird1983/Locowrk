@@ -240,7 +240,7 @@ ALTER TABLE memories ADD COLUMN hit_count     INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE memories ADD COLUMN last_hit_at   INTEGER;   -- NULL = 从未被召回过
 ```
 
-> ✅ **已兑现（v2.189 · 队列 Q5，2026-10-13）**：两列按本节原样落地，但实现有两条稿内没写的事实——①`memories` 表**有两个实现**（宿主 `desktop/src-tauri/src/memory.rs` 与插件 `plugins-src/memory-sqlite/src/store.rs`，开同一个 `memory.sqlite3`），所以两列、两条 ALTER、迁移函数都各写了一份，一致性由 `tmp/q5-parity.mjs` 盯着；②迁移**必须逐列补缺**而不是「两列齐就跳过、缺一就两条都跑」——半迁状态（两条 ALTER 中途被杀）下后者会撞 `duplicate column name` ⇒ ROLLBACK ⇒ 那个库永远打不开。**本批不写入也不读这两列**（写入点 = §3.4 / L3，排序 = §3.3 / L2），所以用户可见差异为 0。取证经过见队列 §5 与 ROADMAP v2.189 节。
+> ✅ **已兑现（v2.189 · 队列 Q5，2026-10-13）**：两列按本节原样落地，但实现有两条稿内没写的事实——①`memories` 表**有两个实现**（宿主 `desktop/src-tauri/src/memory.rs` 与插件 `plugins-src/memory-sqlite/src/store.rs`，开同一个 `memory.sqlite3`），所以两列、两条 ALTER、迁移函数都各写了一份，一致性由 `scripts/check-schema-parity.mjs` 盯着（10 档，含「两侧各调用一次、顺序 workspace 在前」；它原本是 `tmp/q5-parity.mjs`，台账 T8 收口时升进常驻闸）；②迁移**必须逐列补缺**而不是「两列齐就跳过、缺一就两条都跑」——半迁状态（两条 ALTER 中途被杀）下后者会撞 `duplicate column name` ⇒ ROLLBACK ⇒ 那个库永远打不开。**本批不写入也不读这两列**（写入点 = §3.4 / L3，排序 = §3.3 / L2），所以用户可见差异为 0。取证经过见队列 §5 与 ROADMAP v2.189 节。
 
 **不加** `access_count`：语义与 `hit_count` 重合，且名字更容易和现役 `usage.sqlite3` 的工具
 热度混淆。命中次数与工具热度**必须分库**——一个是"这条记忆有用"，一个是"这个工具常用"，

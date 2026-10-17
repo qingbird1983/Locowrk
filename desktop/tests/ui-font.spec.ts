@@ -7,11 +7,11 @@
 //  ② 非法输入不许演成一次生效：`applyUiFontPref(99)` 之后 DOM 上仍是 14px。
 //
 // ⚠ **第三件事不在这里**：后端常量 / 前端常量 / `style.css` 首帧字面值是同一声明的
-// 三个投影，"三处必须同数"这条跨文件对账住在 `tmp/q14d-shape.mjs`（D 面），与本仓
-// 历批的 Rust↔TS 字段镜像判据同一落点。分工理由有两条：形状对账要按绝对路径读盘
+// 三个投影，"三处必须同数"这条跨文件对账住在 `scripts/check-single-source.mjs`（SS2/SS2b 两档），
+// 与本仓历批的 Rust↔TS 字段镜像判据同一落点。分工理由有两条：形状对账要按绝对路径读盘
 // （happy-dom 环境里 `import.meta.url` 不是 `file:` scheme，测试内读同级文件会
-// `TypeError: The URL must be of scheme file` —— 本批第一跑实测到的），而 shape
-// 脚本本来就必跑，判据不必两个载体各写一遍。
+// `TypeError: The URL must be of scheme file` —— 本批第一跑实测到的），而对账闸本来就
+// 在必跑清单里，判据不必两个载体各写一遍。
 import { afterEach, describe, expect, it } from "vitest";
 
 import {

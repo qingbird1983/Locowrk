@@ -95,11 +95,13 @@ t_gates() {
   run "文档规则"     node scripts/check-docs.mjs
   run "事件通道"     node scripts/check-channels.mjs
   run "同源对账"     node scripts/check-single-source.mjs
+  run "库表两侧对账" node scripts/check-schema-parity.mjs
 }
 
 t_selftest() {
   say "闸的自证（判据必须能为变异报红；打空 = 该项零证明力）"
   run "同源对账自测" node scripts/check-single-source.mjs --selftest
+  run "库表对账自测" node scripts/check-schema-parity.mjs --selftest
 }
 
 t_doc() {

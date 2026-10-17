@@ -90,7 +90,7 @@ patch=完整 diff），与内联展开并存；子代理 chip 点击 → 右栏�
 > 全仓零源（插件与宿主上报的是 `bytes`/`edits`/`hunks_applied`，不是行数），现役 ±N 是前端「读时尽力提取」。
 > 另有三处要跟着改口：`state` 的 `interrupted` 在日志里与 `completed` 同形（停止走 `Completed`）、
 > `cancelled` 没有发生路径（stop 只在步间边界检查）、`ToolStatus` 的 `pending_approval` **重放不可复原**。
-> 七条逐条读数 = 队列 §5（判据 G1–G7，脚本 `tmp/q12-probe.mjs`，`Q12_PROBE_ROWS=21 MISMATCH=0`）。
+> 七条逐条读数 = 队列 §5（判据 G1–G7，脚本 `tmp/q12-probe.mjs`，`Q12_PROBE_ROWS=21 MISMATCH=0`；这份取证脚本是一次性件，已随台账 T8 清理作废，读数就记在这里）。
 > **⇒ 本稿 §10 的 C1 一刀在补数据源之前做不完**；两个决策点（审批等待时刻怎么落、行数由谁上报）交用户裁定。
 > **⚠ v2.204 落码形状（Q12 主体·第一段），原表一字未擦**：上表四条里本批落了
 > `ToolStatus` 与 `FileChanges` 两条，且两条的载荷与稿子不同——

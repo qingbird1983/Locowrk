@@ -30,10 +30,14 @@
 - [ ] **T7** 审批测试里的挂起脆弱性做同形状排查：超时给 0 + 决断者在断言之后才 spawn
       · 落点 `desktop/src-tauri/src/tests_permission.rs` 及其余审批测试
       · 危害：挂起的测试没有证明力，还会把整轮门禁堵住
-- [ ] **T8** 把散在 `tmp/` 的历史判据**收口**：该常驻的升进 `scripts/`，其余明确作废
-      · ◐ 部分已做（v2.209）：新增 `scripts/check-single-source.mjs` 作为"同一事实只许一个出处"这类
-        对账的**唯一收口处**，今后加对账 = 往它的 CHECKS 里加一项，**不再新建一道闸**
-      · 未做：其余 280+ 份一次性脚本的逐条处置（判据 = 下一条那条规矩）
+- [x] **T8** 把散在 `tmp/` 的历史判据**收口**：该常驻的升进 `scripts/`，其余明确作废
+      · 升格一条：`tmp/q5-parity.mjs` → `scripts/check-schema-parity.mjs`（`memories` 表在宿主与插件
+        **各有一份实现**、开同一个库文件，只改一侧时 cargo 与 vitest 全绿、运行时才炸）；十档每档
+        都有独立的内存变异对照，已接进 `make quick` 与 `make check`
+      · **明确作废且没有升格的两族**（记在这儿，别以为还有闸在盯）：Rust↔TS 字段逐条镜像（原
+        `q14b`/`q14d`，随记忆与上下文重构时重立）；测试断言不许锁中文文案（原 `q11-shape` S5，
+        改由「断言实参引用夹具常量」这个代码形状承重）
+      · `pre-commit` 的暂存面触发**没加**（`.githooks/` 属禁区）⇒ 动 `memory.rs` / `store.rs` 时靠 `make quick` 兜
 - [ ] **T15** `settings/update.rs` 其余分区（context / memory / llm / embedding…）照 developer 那一段的形状收进各自的 `apply_update`
       · 现状 = 本批只搬了 developer 一段（78 行），其余仍在编排点就地铺开
 - [ ] **T16** 三份"即时生效"的写法合一：`setLocale` / `setTheme` / `setUiFontSize` 同一件事三种实现
@@ -65,8 +69,10 @@
 - [ ] 每条做完后，路线图「结构性欠账清零」那行的"现在到哪了"由**实测**给剩余条数（不手写计数）
 - [ ] T1/T15/T16 做完后 `check_length` 的名单**只减不增**，且 i18n 键集读数不变（纯结构收敛不该动文案）
 - [ ] T6/T7 做完各自有一条能红的行为用例（不是只改代码不看结果）
-- [ ] T8 收口后，仓库里"判据脚本"只有一个地方：`scripts/`；`tmp/` 里的历史脚本整体处置完毕（删或明确作废），
-      并且新增对账只能走 `check-single-source.mjs` 的 CHECKS 表 —— 这条由 `STRUCTURE.md` 的口径承重
+- [x] T8 收口后，仓库里"判据脚本"只有一个地方：`scripts/`；`tmp/` 里的历史脚本整体处置完毕（删或明确作废）。
+      加对账仍然**不新建闸**，只分两支走：同一个数字/名字在几处必须相等 → 往 `check-single-source.mjs` 的
+      CHECKS 加一项；两侧各有一份实现、要比整段代码块同源 → `check-schema-parity.mjs`（本次升格就是这类，
+      它的顺序档与 SET 白名单档塞进 CHECKS 会变成把三种形状硬压成一个读数，故独立成支）。这条由 `STRUCTURE.md` 的口径承重
 - [ ] 第二节的九条**没有任何一条被我自作主张做掉**（尤其 T4/T12 属删除与不可逆类）
 
 ## 非目标
