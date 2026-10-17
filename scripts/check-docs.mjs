@@ -283,8 +283,12 @@ if (!fs.existsSync(designDir)) {
 
 // ---- R10 指向「不入库层」的链接必须写明不入库 ----------------------------------------
 // 与 R8 同一个链接面，判的是另一半：链接**在作者本机点得开、clone 之后是死路径**。
-// 豁免两处：`docs/adr/`（只增不改，老链接是当时的事实）、`DESIGN.md`（[LOCK]，那处指针已登记等点头）。
-const IGNORE_EXEMPT = (r) => r.startsWith('docs/adr/') || r === 'docs/design/authority/DESIGN.md';
+// 豁免只剩一处：`docs/adr/`（只增不改，老链接是当时的事实）。
+// `DESIGN.md` 那条**已撤**（2026-10-18，台账 T17 经用户点头）：它版本行里那处指向 `docs/history/`
+// 的指针补上了「⊘ 不入库」标注，于是这个 [LOCK] 文件重新吃 R10。原先那条豁免的理由写着
+// "已登记等点头"——那是**一件事**，不是这个文件的永久属性；点头之后还留着它，就等于让整个
+// 规范正文对这条判据免检，而下面那条下限（命中数为 0 就判红）恰恰是防这种静默失效的。
+const IGNORE_EXEMPT = (r) => r.startsWith('docs/adr/');
 // 来源自己也住在不入库层（docs/issue 与 docs/references 的内部互链、archive 之间互链）不算：
 // 那一层根本不会出现在别人机器上，「不入库」标注是给**入库文档**的读者看的。
 const scanned = allLinks.filter((p) => !IGNORE_EXEMPT(p.from) && !isIgnored(p.from));

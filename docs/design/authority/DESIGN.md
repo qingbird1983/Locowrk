@@ -2806,8 +2806,8 @@ export const usePluginStore = defineStore('plugins', {
 
 ## 附录 B：参考实现
 
-- **cordis-rs**：cordiverse/cordis（Koishi 4 TS 内核）的 Rust 重写（dshbox/cordis-rs，MIT 双版权，pre-1.0 活跃开发）。cordis-core 含 Context、Effect（generation 清理账本）、Events（emit/parallel/query/waterfall 四原语）、Fiber（六态收敛）、Service（字符串名 + realm 槽）、依赖索引与反应式收敛、Registry、observation。**定位为参考实现而非移植对照**；其服务键是字符串名而非 TypeId，与我们 v2.1 的分歧见 [docs/references/cordis-rs-notes.md](../../references/cordis-rs-notes.md)
-- **rutis**：cordis 范式的另一 Rust 实现（eric8810/rutis，MIT 双版权，MSRV 1.85）。五支柱同源同名；服务键同为 TypeId 路线（TypeId 主键 + 可选限定名，`?Sized` trait 对象经 `Box<Arc<T>>` 擦除），Fiber 六态 + 意图邮箱驱动 + 依赖等值合并重载可直接对表；无 FFI/ABI、无事件溯源，阶段三与会话日志无参考。借鉴点与冲突见 [docs/references/rutis-notes.md](../../references/rutis-notes.md)
+- **cordis-rs**：cordiverse/cordis（Koishi 4 TS 内核）的 Rust 重写（dshbox/cordis-rs，MIT 双版权，pre-1.0 活跃开发）。cordis-core 含 Context、Effect（generation 清理账本）、Events（emit/parallel/query/waterfall 四原语）、Fiber（六态收敛）、Service（字符串名 + realm 槽）、依赖索引与反应式收敛、Registry、observation。**定位为参考实现而非移植对照**；其服务键是字符串名而非 TypeId，与我们 v2.1 的分歧见 [docs/references/cordis-rs-notes.md](../../references/cordis-rs-notes.md)（⊘ 不入库，只在作者本机）
+- **rutis**：cordis 范式的另一 Rust 实现（eric8810/rutis，MIT 双版权，MSRV 1.85）。五支柱同源同名；服务键同为 TypeId 路线（TypeId 主键 + 可选限定名，`?Sized` trait 对象经 `Box<Arc<T>>` 擦除），Fiber 六态 + 意图邮箱驱动 + 依赖等值合并重载可直接对表；无 FFI/ABI、无事件溯源，阶段三与会话日志无参考。借鉴点与冲突见 [docs/references/rutis-notes.md](../../references/rutis-notes.md)（⊘ 不入库，只在作者本机）
 - **dsh-rs**：DeepSeek Harness 的 Rust 完整移植
 - **Cordis 论文**：时空可组合性的理论基础（效应 / 余效应）
 - **Tauri 2 官方文档**：IPC、事件系统、插件系统
@@ -2829,4 +2829,4 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.58。逐批落点补记已迁至 [docs/history/CHANGELOG-legacy.md](../../history/CHANGELOG-legacy.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*
+*文档版本：v2.58。逐批落点补记已迁至 [docs/history/CHANGELOG-legacy.md](../../history/CHANGELOG-legacy.md)（⊘ 不入库，只在作者本机；v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*

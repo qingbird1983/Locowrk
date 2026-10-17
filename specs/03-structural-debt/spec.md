@@ -145,9 +145,22 @@
       · 前置 = 设计稿先行；现状 = `CallCtx.cancel/deadline` 两端都没接，取消信号过不去 ABI 边界
 - [ ] **T14** 逐批验收与证据核对
       · 需要的是"按批出一份验收清单"，不是新改动 ⇒ 你要抽查哪一批，说编号我出清单
-- [ ] **T17** `docs/design/authority/DESIGN.md` 文档版本行里那处指向 `docs/history/` 的链接是裸链接
+- [x] **T17** `docs/design/authority/DESIGN.md` 文档版本行里那处指向 `docs/history/` 的链接是裸链接
       · 本机层不入库之后（[`ADR-0003`](../../docs/adr/0003-private-doc-layers.md)），别人 clone 过去点不开；
         改它要动 `[LOCK]` 文件 ⇒ **等你点头**（`check-docs.mjs` 的 R10 对这两处网开，所以闸不报）
+      · 2026-10-18 点头（原话"这 10 条可以收账，同意"），本条结清。动的不是规范正文，是指针标注 + 豁免面
+      · ★ 台账原先那句"对这两处网开"**低估了一处**：豁免写的是 `r === 'docs/design/authority/DESIGN.md'`
+        ——**整个文件免检**，不是两处。所以撤掉豁免的同一秒闸当场报出 2 条从没被看过的：
+        `DESIGN.md:2809` 与 `:2810` 指向 `docs/references/{cordis-rs,rutis}-notes.md`（同属不入库层）。
+        登记时只数到版本行那一处，因为那一处是"人看出来的"，另两处藏在免检面里根本没有入口
+      · 处置 = 三处各补「⊘ 不入库，只在作者本机」+ **豁免只剩 `docs/adr/`**（那条理由不同且成立：
+        ADR 只增不改，老链接是当时的事实）。长行读数不变（`LONG=9处在3个文件/名单3个`）
+      · 变异承重：把 2809 那行的标注删掉 ⇒ `DOC_FAILED=1` 且点名 `DESIGN.md:2809`，不是靠下面那条
+        "命中数为 0 判红"的下限兜底；还原逐字节写回 + `cmp` + `sha256sum`（sha 前后一致 8e35225f…）
+      · 副作用如实记：`--selftest` 的 ST2 样本是**动态取现网真实指针**的，撤豁免后它从
+        `Front-end Design Guidelines.md:148` 变成 `DESIGN.md:2809`，三档仍全中
+      · 版本行 **不升号**（仍 v2.58）：那一行自己写着"只随批次改规范正文与本行版本号"，本刀没动规范正文；
+        先例是同一行在 G6（`e0739c9`）改指针时也没升
 - [x] **T18** 内核在 Linux 上的账**正面修**（用户 2026-10-17 推翻"选二"，原话：这样不行，把 Linux 这块账彻底修复，包括前面禁止绕开的）
       · 四个 `#[cfg(windows)]` 绕开标记**已全部撤掉**；[`ADR-0004`](../../docs/adr/0004-ci-paths-windows-only.md)
         标为被取代，新口径写在 [`ADR-0005`](../../docs/adr/0005-linux-verified-on-both-platforms.md)；AGENTS §1 改回"Linux 在范围内"
