@@ -64,17 +64,7 @@ async fn project_scope_persists_exact_command_rule() {
 
     // 第一次：弹卡（后台抓 request_id 后按 project 放行）
     let decider = Arc::clone(&hub);
-    let worker = tokio::spawn(async move {
-        loop {
-            if let Some(req) = decider.pending().first().cloned() {
-                decider
-                    .decide(&req.request_id, true, None, Some("project"))
-                    .expect("decision accepted");
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    });
+    let worker = Decider::new(decider).scope("project").spawn(|_| {});
     let d = hub
         .resolve(&shell_req("s1", "node server.js"), &shell_spec())
         .await;
@@ -107,17 +97,7 @@ async fn project_scope_persists_exact_command_rule() {
 async fn project_scope_without_workspace_skips_persistence() {
     let (hub, rules, _modes, root) = hub_v145("nows", PermissionMode::Ask);
     let decider = Arc::clone(&hub);
-    let worker = tokio::spawn(async move {
-        loop {
-            if let Some(req) = decider.pending().first().cloned() {
-                decider
-                    .decide(&req.request_id, true, None, Some("project"))
-                    .expect("decision accepted");
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    });
+    let worker = Decider::new(decider).scope("project").spawn(|_| {});
     let d = hub
         .resolve(&shell_req("other-session", "node server.js"), &shell_spec())
         .await;

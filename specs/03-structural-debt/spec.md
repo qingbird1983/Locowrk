@@ -46,9 +46,33 @@
         "扫全目录再找自己"的实现里、导出通路从来没有判据。截断宽度用共享常量，不在测试里重抄 40
       · `session_list` 走 `spawn_blocking`（与 assets / llm_import 同一族先例），不再占住 tokio worker
       · 窄变异实测：把三档次序换成"自动标题压过旁车" ⇒ 用例红在那条断言上，另一条仍绿（各打一处）
-- [ ] **T7** 审批测试里的挂起脆弱性做同形状排查：超时给 0 + 决断者在断言之后才 spawn
+- [x] **T7** 审批测试里的挂起脆弱性做同形状排查：超时给 0 + 决断者无界轮询
       · 落点 `desktop/src-tauri/src/tests_permission.rs` 及其余审批测试
       · 危害：挂起的测试没有证明力，还会把整轮门禁堵住
+      · **同形排查的实数**（改前 9 处各写一份 `loop { 有卡 → decide → break ; 否则 sleep }`，全仓再无第二族）：
+        `tests_permission` 3 / `hub_basic` 1 / `keyside` 1 / `project_rules` 2 / `session_timeout` 2 / `tool_status` 1。
+        两类挂起分开数：① 被调用方 `worker.await.unwrap()` 的 3 处（`keyside` + `project_rules` 两条）卡片不出现就永挂；
+        ② hub 超时给 `ZERO` / `from_secs(0)` 的 4 处（`tests_permission` 3 + `unlimited_timeout…`）没人回填 oneshot 就永等。
+        另外 2 处（`hub_basic` / `tool_status`）靠测试缺省 100s 守夜兜底——不永挂，但要等满 100 秒才失败，
+        且失败原因被守夜伪装成"超时拒绝"，看不出真正退化的是弹卡那一步。
+      · 收口 = 一个共享形状 + 两个上界（`tests_approval/mod.rs` 末尾）：`Decider`（builder：`deny` / `reason` /
+        `scope` / `after` / `within`，轮询到 `DECIDER_BUDGET = 10s` 仍没卡片就 **panic 点名"问人通路没弹卡"**）
+        与 `bounded(名称, 上界, future)`（给"要靠别人回填才收束"的 `resolve` / `run_turn` 加上界——
+        光把决断者收住不够，不限档那 4 处等的是另一侧）。9 处调用点一律改成这一个形状。
+      · 撤销一处局部补丁：批 F-24a 曾把 `external_path_forces_card_even_in_auto` 的 `ZERO` 改成 500ms 来躲挂起
+        （注释里写的就是这个理由）。那是把通用缺陷摊成一条用例的私人魔法数 ⇒ 本批**恢复 `ZERO`**（= 生产那一档），
+        挂起风险改由 `Decider` + `bounded` 承担；超时语义本身仍由 `session_timeout.rs` 专责覆盖，没有动它。
+      · 判据两族都新立：行为侧 `tests_approval/hang_guard.rs` 三条（没卡片必须**在预算内**失败 / `bounded` 喂
+        永不完成的 future 必须报出来 / 有卡片时照旧正常决议——最后这条是阴性对照，防前两条退化成"永远 panic"）；
+        静态侧 `check-single-source.mjs` 加档 **SS4**：审批测试面里 `.pending().first()` 只许 1 个出处
+        （= `Decider::spawn` 内部），扫描面 = `tests_permission.rs` + `tests_approval/` 整个目录动态取，
+        下限 8 个文件（现值 11）。`make selftest` 六档全中。
+      · 变异四发各自打中不同读数（还原逐字节写回 + `cmp` + sha 复核）：删掉上界 `assert` ⇒ 红在保护网
+        "又退化成无界轮询了"；把上界改成静默 `return` ⇒ 红在 `is_err`（实测 `Ok(())`）；
+        `bounded` 去掉 `timeout` ⇒ 红在第二条；SS4 塞回第二处手写轮询 ⇒ 闸红。
+        hang_guard 的外层保护网**故意不用 `bounded`** 而用 `tokio::time::timeout`——自测的兜底不能和被测机制同源，
+        否则 `bounded` 自己失去上界时那条自测会和它一起挂住（同义反复 = 零证明力，这是 M3 第一版踩到的）。
+      · 耗时读数：`tests_approval` 面 25 条 1.25 秒、`tests_permission` 面 8 条 0.02 秒 ⇒ 上界只兜退化，不拖正常路径
 - [x] **T8** 把散在 `tmp/` 的历史判据**收口**：该常驻的升进 `scripts/`，其余明确作废
       · 升格一条：`tmp/q5-parity.mjs` → `scripts/check-schema-parity.mjs`（`memories` 表在宿主与插件
         **各有一份实现**、开同一个库文件，只改一侧时 cargo 与 vitest 全绿、运行时才炸）；十档每档

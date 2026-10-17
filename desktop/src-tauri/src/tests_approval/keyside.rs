@@ -72,17 +72,7 @@ async fn same_project_written_differently_shares_one_allow_rule() {
     // 第一次（原样写法）：Ask 档弹卡 → 后台按「本项目始终允许」决议
     let hub = hub_on(first);
     let decider = Arc::clone(&hub);
-    let worker = tokio::spawn(async move {
-        loop {
-            if let Some(req) = decider.pending().first().cloned() {
-                decider
-                    .decide(&req.request_id, true, None, Some("project"))
-                    .expect("decision accepted");
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    });
+    let worker = Decider::new(decider).scope("project").spawn(|_| {});
     let d = hub
         .resolve(&shell_req("s1", "npm test"), &shell_spec())
         .await;

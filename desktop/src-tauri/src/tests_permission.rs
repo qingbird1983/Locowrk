@@ -10,7 +10,10 @@ use serde_json::json;
 use crate::approval::ApprovalHub;
 use crate::events::AgentEvent;
 use crate::permission_mode::{PermissionMode, PermissionModeStore};
+// 台账 T7：本文件三处「后台决断者」与「等人回填 oneshot 的那一步」都改用共享形状
+// （上界由 `tests_approval/mod.rs` 统一定义，不再各写一份无界 loop）。
 use crate::tests::{kind, Collector};
+use crate::tests_approval::{bounded, Decider, DECIDER_BUDGET};
 
 /// 临时会话目录 + 指定缺省档的存储。
 fn store(tag: &str, default: PermissionMode) -> Arc<PermissionModeStore> {
@@ -82,21 +85,18 @@ async fn accept_edits_allows_compensable_but_cards_irreversible() {
     assert!(comp.allowed && comp.reason.as_deref() == Some("mode:acceptEdits"));
 
     let decider = Arc::clone(&hub);
-    tokio::spawn(async move {
-        loop {
-            if let Some(r) = decider.pending().first().cloned() {
-                let _ = decider.decide(&r.request_id, false, None, None);
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
-        }
-    });
-    let irr = hub
-        .resolve(
+    Decider::new(decider).deny().spawn(|_| {});
+    // 本 hub 的超时是 ZERO（= 不起守夜），所以这一步也得有上界：
+    // 卡片没出现 ⇒ 报"挂起"，而不是把整轮门禁等死。
+    let irr = bounded(
+        "hub.resolve",
+        DECIDER_BUDGET,
+        hub.resolve(
             &req("shell", json!({ "command": "echo hi" })),
             &spec(SideEffect::Irreversible),
-        )
-        .await;
+        ),
+    )
+    .await;
     assert!(!irr.allowed, "自动编辑档不可逆动作仍要问");
     assert!(sink.events().iter().any(|e| kind(e) == "approval_request"));
 }
@@ -142,52 +142,48 @@ async fn external_path_forces_card_even_in_auto() {
     });
     // 超时从 `ZERO` 改成 500ms（批 F-24a）：ZERO = 不起守夜任务，一旦「声明
     // 根内不该弹卡」这条断言因为围栏逻辑退化而落进决策卡，本测试会**挂起**
-    // 而不是失败（决断者在断言之后才 spawn，没人回填 oneshot）——挂起的测试
-    // 是零证明力还堵住整轮门禁。给个短超时让它快速失败；500ms 远大于决断者
-    // 2ms 轮询的实际响应，不改变本用例要验的语义（超时面由
-    // `tests_approval/session_timeout.rs` 专责覆盖，这里不是它的钉子）。
+    // 而不是失败（决断者无界轮询 + 没人回填 oneshot）——挂起的测试是零证明力
+    // 还堵住整轮门禁。
+    // 台账 T7 订正：躲挂起不该靠调短超时（那是把通用缺陷摊成一条用例的私人补丁），
+    // 上界现在由 `Decider` + `bounded` 统一提供 ⇒ 这里恢复 `ZERO`（= 生产缺省那一档），
+    // 500ms 这个魔法数从本文件消失；挂起风险由下面两处 bounded 兜住。
     let hub = Arc::new(
-        ApprovalHub::with_timeout(
-            Arc::new(sink.clone()),
-            std::time::Duration::from_millis(500),
-        )
-        .with_modes(Arc::clone(&modes))
-        .with_workspace(Arc::clone(&resolver)),
+        ApprovalHub::with_timeout(Arc::new(sink.clone()), std::time::Duration::ZERO)
+            .with_modes(Arc::clone(&modes))
+            .with_workspace(Arc::clone(&resolver)),
     );
     // 先种豁免：模拟此前「允许本次对话」已发生——越界门必须无视它
     hub.decide_seed_for_test("s1", "shell");
 
     // 声明根内（工作区自身）：不弹卡，`完全` 档直接放行
     let inside = ws_path.to_string_lossy().replace('\\', "/");
-    let d = hub
-        .resolve(
+    let d = bounded(
+        "hub.resolve（声明根内）",
+        DECIDER_BUDGET,
+        hub.resolve(
             &req(
                 "shell",
                 json!({ "command": format!("type {inside}/a.txt") }),
             ),
             &spec(SideEffect::Irreversible),
-        )
-        .await;
+        ),
+    )
+    .await;
     assert!(d.allowed, "声明根内命令在完全档直接放行（围栏让路）");
 
-    let decider = Arc::clone(&hub);
-    tokio::spawn(async move {
-        loop {
-            if let Some(r) = decider.pending().first().cloned() {
-                assert!(r.external, "decider 侧也看到 external 标记");
-                let _ = decider.decide(&r.request_id, false, None, None);
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
-        }
-    });
+    Decider::new(Arc::clone(&hub))
+        .deny()
+        .spawn(|r| assert!(r.external, "decider 侧也看到 external 标记"));
     let outside = r"X:\outside\secret.txt";
-    let d = hub
-        .resolve(
+    let d = bounded(
+        "hub.resolve（越界卡）",
+        DECIDER_BUDGET,
+        hub.resolve(
             &req("shell", json!({ "command": format!("type {outside}") })),
             &spec(SideEffect::Irreversible),
-        )
-        .await;
+        ),
+    )
+    .await;
     assert!(!d.allowed, "external 卡被拒收束（测试决断者拒绝）");
     let p = sink.events().iter().find_map(|e| match e {
         AgentEvent::ApprovalRequest(p) => Some(p.clone()),
@@ -212,24 +208,20 @@ async fn privacy_gate_forces_card_even_in_auto_and_pure() {
     // 豁免已发生也拦不住
     hub.decide_seed_for_test("s1", "shell_read");
 
-    let decider = Arc::clone(&hub);
-    tokio::spawn(async move {
-        loop {
-            if let Some(r) = decider.pending().first().cloned() {
-                assert_eq!(r.sensitive.as_deref(), Some("ssh"));
-                let _ = decider.decide(&r.request_id, false, None, None);
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
-        }
-    });
+    Decider::new(Arc::clone(&hub))
+        .deny()
+        .spawn(|r| assert_eq!(r.sensitive.as_deref(), Some("ssh")));
     // Pure 工具（决策表③ 原本直通）也被隐私门拦下
-    let d = hub
-        .resolve(
+    // 本 hub 超时 = ZERO（不起守夜）⇒ 这一步必须有界，否则没人点卡就永远等。
+    let d = bounded(
+        "hub.resolve（隐私卡）",
+        DECIDER_BUDGET,
+        hub.resolve(
             &req("shell_read", json!({ "path": "C:/Users/x/.ssh/id_rsa" })),
             &spec(SideEffect::Pure),
-        )
-        .await;
+        ),
+    )
+    .await;
     assert!(!d.allowed, "隐私卡被拒收束（测试决断者拒绝）");
     let p = sink.events().iter().find_map(|e| match e {
         AgentEvent::ApprovalRequest(p) => Some(p.clone()),

@@ -23,32 +23,28 @@ async fn session_scope_exempts_same_tool_next_call() {
 
     // 第一轮：看到请求后按「允许本次对话」放行
     let decider = Arc::clone(&hub);
-    tokio::spawn(async move {
-        loop {
-            if let Some(req) = decider.pending().first().cloned() {
-                decider
-                    .decide(&req.request_id, true, None, Some("session"))
-                    .expect("decision accepted");
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    });
-    run_turn(
-        &kernel,
-        &mut session,
-        "s1",
-        "发邮件".into(),
-        Vec::new(),
-        None,
-        &sink,
-        None,
-        None,
-        crate::runner::DEFAULT_MAX_STEPS,
-        None,
-        None,
-        None,
-        None,
+    Decider::new(decider).scope("session").spawn(|_| {});
+    // 这一步要靠决断者回填才收束（本 hub = 测试缺省 100s 守夜）⇒ 包上界，
+    // 卡片没出现时 10 秒内报"挂起"，而不是等满 100 秒再由守夜伪装成超时拒绝。
+    bounded(
+        "run_turn（第一轮要点卡）",
+        DECIDER_BUDGET,
+        run_turn(
+            &kernel,
+            &mut session,
+            "s1",
+            "发邮件".into(),
+            Vec::new(),
+            None,
+            &sink,
+            None,
+            None,
+            crate::runner::DEFAULT_MAX_STEPS,
+            None,
+            None,
+            None,
+            None,
+        ),
     )
     .await
     .expect("turn 1 ok");
@@ -170,33 +166,31 @@ async fn unlimited_timeout_keeps_waiting_for_decision() {
 
     // 决策者：300ms 后才放行——若守夜存在早已抢先拒绝
     let decider = Arc::clone(&hub);
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        loop {
-            if let Some(req) = decider.pending().first().cloned() {
-                decider
-                    .decide(&req.request_id, true, None, None)
-                    .expect("decision accepted");
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    });
-    run_turn(
-        &kernel,
-        &mut session,
-        "s1",
-        "发邮件".into(),
-        Vec::new(),
-        None,
-        &sink,
-        None,
-        None,
-        crate::runner::DEFAULT_MAX_STEPS,
-        None,
-        None,
-        None,
-        None,
+    Decider::new(decider)
+        .after(std::time::Duration::from_millis(300))
+        .spawn(|_| {});
+    // 本用例的"超时 = 0（不起守夜）"正是要锁的语义，不能为了躲挂起改短它
+    // （批 F-24a 在 `tests_permission.rs` 里那种做法就是这条台账要收的账）。
+    // 挂起保护放在等待这一侧：决断者有界 + 这一步有界，两边都在预算内失败。
+    bounded(
+        "run_turn（不限档等手动决策）",
+        DECIDER_BUDGET,
+        run_turn(
+            &kernel,
+            &mut session,
+            "s1",
+            "发邮件".into(),
+            Vec::new(),
+            None,
+            &sink,
+            None,
+            None,
+            crate::runner::DEFAULT_MAX_STEPS,
+            None,
+            None,
+            None,
+            None,
+        ),
     )
     .await
     .expect("turn ok（不限档等待手动决策后收束）");

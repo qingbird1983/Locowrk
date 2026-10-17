@@ -138,33 +138,30 @@ async fn approval_hub_roundtrip_through_pending_map() {
 
     // 后台决策者：轮询 pending 表，看到请求后拒绝（模拟用户点"拒绝"）
     let decider = Arc::clone(&hub);
-    tokio::spawn(async move {
-        loop {
-            if let Some(req) = decider.pending().first().cloned() {
-                decider
-                    .decide(&req.request_id, false, Some("用户拒绝".into()), None)
-                    .expect("decision accepted");
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    });
+    Decider::new(decider)
+        .deny()
+        .reason("用户拒绝")
+        .spawn(|_| {});
 
-    run_turn(
-        &kernel,
-        &mut session,
-        "s1",
-        "发邮件".into(),
-        Vec::new(),
-        None,
-        &sink,
-        None,
-        None,
-        crate::runner::DEFAULT_MAX_STEPS,
-        None,
-        None,
-        None,
-        None,
+    bounded(
+        "run_turn（端到端要点卡）",
+        DECIDER_BUDGET,
+        run_turn(
+            &kernel,
+            &mut session,
+            "s1",
+            "发邮件".into(),
+            Vec::new(),
+            None,
+            &sink,
+            None,
+            None,
+            crate::runner::DEFAULT_MAX_STEPS,
+            None,
+            None,
+            None,
+            None,
+        ),
     )
     .await
     .expect("turn ok");

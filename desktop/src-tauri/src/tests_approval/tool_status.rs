@@ -25,33 +25,27 @@ async fn pending_approval_is_live_only_and_never_enters_the_log() {
     let mut session = Session::new();
 
     let decider = Arc::clone(&hub);
-    tokio::spawn(async move {
-        loop {
-            if let Some(req) = decider.pending().first().cloned() {
-                decider
-                    .decide(&req.request_id, true, None, None)
-                    .expect("decision accepted");
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    });
+    Decider::new(decider).spawn(|_| {});
 
-    run_turn(
-        &kernel,
-        &mut session,
-        "s-live",
-        "发邮件".into(),
-        Vec::new(),
-        None,
-        &sink,
-        None,
-        None,
-        crate::runner::DEFAULT_MAX_STEPS,
-        None,
-        None,
-        None,
-        None,
+    bounded(
+        "run_turn（活态投影片要点卡）",
+        DECIDER_BUDGET,
+        run_turn(
+            &kernel,
+            &mut session,
+            "s-live",
+            "发邮件".into(),
+            Vec::new(),
+            None,
+            &sink,
+            None,
+            None,
+            crate::runner::DEFAULT_MAX_STEPS,
+            None,
+            None,
+            None,
+            None,
+        ),
     )
     .await
     .expect("turn ok");

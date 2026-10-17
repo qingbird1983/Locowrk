@@ -51,12 +51,30 @@ const F = {
   appLlm: 'desktop/src-tauri/src/llm/app_llm.rs',
 };
 
+/**
+ * 审批测试面（台账 T7 的扫描面）：`tests_permission.rs` + `tests_approval/` 整个目录。
+ * 目录式分簇**动态取**，以后新增分簇文件自动在面内——写死文件名的名单会随拆分失效，
+ * 而失效的方向是"少扫一个文件 = 闸瞎了"，不是报错。
+ */
+function approvalTestFiles() {
+  const out = ['desktop/src-tauri/src/tests_permission.rs'];
+  const dir = path.join(ROOT, 'desktop/src-tauri/src/tests_approval');
+  if (fs.existsSync(dir)) {
+    for (const f of fs.readdirSync(dir)) if (f.endsWith('.rs')) out.push(`desktop/src-tauri/src/tests_approval/${f}`);
+  }
+  return out.filter((rel) => fs.existsSync(path.join(ROOT, rel)));
+}
+
 const countOf = (s, re) => (s.match(new RegExp(re.source, 'g')) || []).length;
 
 /** 一次读盘，快照进内存；之后所有判据只读快照。 */
 function snapshot() {
   const files = prodRustFiles();
-  const snap = { files, rust: files.map((f) => read(path.relative(ROOT, f).replace(/\\/g, '/'))) };
+  const snap = {
+    files,
+    rust: files.map((f) => read(path.relative(ROOT, f).replace(/\\/g, '/'))),
+    apprTests: approvalTestFiles().map(read),
+  };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
 }
@@ -113,6 +131,14 @@ const CHECKS = [
       ].join('|'),
     '1|0|0',
   ],
+  [
+    'SS4',
+    '审批测试面里"轮询 pending 找卡片"只许 1 个出处 = `tests_approval/mod.rs` 的 `Decider::spawn` 内部' +
+      '（T7：改前 9 处各写一份**无界** loop，其中 3 处被 await ⇒ 卡片没出现就永挂、' +
+      '4 处所在 hub 的超时给 0 ⇒ 没人回填 oneshot 就永等；写回第二份就等于把挂起脆弱性再种一遍）',
+    (m) => String(m.apprTests.reduce((a, s) => a + countOf(s, /\.pending\(\)\.first\(\)/), 0)),
+    '1',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -121,6 +147,8 @@ const FLOORS = [
   ['生产 .rs 文件数', (m) => m.rust.length, 200],
   ['快照里 memlayout 非空', (m) => (m.memlayout.length > 200 ? 1 : 0), 1],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
+  // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
+  ['审批测试面文件数', (m) => m.apprTests.length, 8],
 ];
 
 function runChecks(m) {
@@ -155,12 +183,18 @@ if (SELFTEST) {
         'let image_pin = facts.supports_image;',
         'let _dup = self.settings.llm_config();\n        let image_pin = facts.supports_image;',
       )),
+    // 窄变异（T7）：把改前那种"在自己用例里手写一份轮询"塞回测试面。
+    // SS4 要能为它报红，否则这条档只在盯一个数字、不在盯挂起脆弱性有没有回潮。
+    SS4: (m) =>
+      m.apprTests.push(
+        '#[tokio::test]\nasync fn sneaky_decider() {\n    let r = decider.pending().first().cloned();\n}\n',
+      ),
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {
     const mut = MUT[id];
     if (!mut) { console.log(`  ?? ${id} 没有对照 ⇒ 该项证明力未知`); miss++; continue; }
-    const copy = { ...snap, rust: [...snap.rust] };
+    const copy = { ...snap, rust: [...snap.rust], apprTests: [...snap.apprTests] };
     mut(copy);
     const row = runChecks(copy).find((r) => r.id === id);
     const caught = row && row.bad;
