@@ -102,11 +102,13 @@ t_selftest() {
   say "闸的自证（判据必须能为变异报红；打空 = 该项零证明力）"
   run "同源对账自测" node scripts/check-single-source.mjs --selftest
   run "库表对账自测" node scripts/check-schema-parity.mjs --selftest
+  run "文档规则自测" node scripts/check-docs.mjs --selftest
 }
 
 t_doc() {
   say "文档规则闸"
   run "文档规则" node scripts/check-docs.mjs
+  run "文档规则自测" node scripts/check-docs.mjs --selftest
 }
 
 t_check() {

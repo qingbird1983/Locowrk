@@ -15,13 +15,17 @@
 import { execFileSync } from 'node:child_process';
 //
 // 闸自己也是活的（同旧闸的教训）：扫描面读数为 0 直接判红，因为那只能是**闸瞎了**。
-// 用法：node scripts/check-docs.mjs          全量报告 + 判红退出 1
-//       node scripts/check-docs.mjs --dbg    打印每条判据的实测构成
+// 用法：node scripts/check-docs.mjs             全量报告 + 判红退出 1
+//       node scripts/check-docs.mjs --dbg       打印每条判据的实测构成
+//       node scripts/check-docs.mjs --selftest  内存变异自证：R8/R10 必须为变异报红
+//         （台账 T19 要求的那条"给 specs 里插一条断链补窄变异"就在这里；变异只改内存
+//          里的链接数组，**不碰磁盘**。已接进 `make selftest`）
 import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const rel = (p) => path.relative(ROOT, p).replace(/\\/g, '/');
+const SELFTEST = process.argv.includes('--selftest');
 
 function walk(dir, acc = []) {
   if (!fs.existsSync(dir)) return acc;
@@ -39,7 +43,7 @@ const errs = [];
 const dbg = process.argv.includes('--dbg');
 const bad = (m) => errs.push(m);
 
-const mdAll = walk(path.join(ROOT, 'docs')).filter((f) => f.endsWith('.md'));
+const mdAll = [...walk(path.join(ROOT, 'docs')), ...walk(path.join(ROOT, 'specs'))].filter((f) => f.endsWith('.md'));
 // 历史层两个去处，同等对待（不改写、不进在役检查面）：docs/history/ 装流水与旧进度表，
 // docs/design/archive/ 装已兑现或已退役的设计稿。判据 = 路径前缀，不靠文件里的措辞。
 const HIST_DIRS = ['docs/history/', 'docs/design/archive/'];
@@ -67,7 +71,14 @@ else {
   const dirs = new Set();
   for (const f of mdAll) {
     const r = rel(f).split('/');
-    if (r.length > 2) dirs.add(r.slice(0, r.length - 1).join('/'));
+    if (r.length <= 2) continue;
+    // `specs/<编号-阶段>/` 点的是**实例**而不是**层**：一阶段一目录、随阶段开与结
+    // （STRUCTURE.md 里"开工才建 specs/04-…"就是这个意思）。要求地图逐一点名它们
+    // = 每开一个阶段都得改 STRUCTURE.md，那种红只会教人绕开地图（台账 T19 把 specs
+    // 并进扫描根之后实测冒出 5 条这种红，正是本条要排除的形状）。`specs/` 这一层
+    // 仍由下面 `dirs.add('specs')` 承重，一个都不能少。
+    if (r[0] === 'specs') continue;
+    dirs.add(r.slice(0, r.length - 1).join('/'));
   }
   dirs.add('docs');
   dirs.add('docs/design');
@@ -153,24 +164,31 @@ for (const f of r6Face) {
 //   · 目标没被排除却不存在 ⇒ 真断链，判红（谁想靠删排除规则蒙混，正好落回这条）；
 //   · 入库层（authority / roadmap / adr / specs）不在场 ⇒ 恒红，那才是真事故。
 // 排除名单唯一出处仍是 `.gitignore`：一次 `git check-ignore --stdin` 批量问，脚本里不抄第二份。
-function linksIn(f) {
+function linksInText(text, fromRel) {
   const out = [];
-  read(f).split('\n').forEach((l, i) => {
-    for (const m of l.replace(/`[^`]*`/g, '').matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)) {
+  text.split('\n').forEach((l, i) => {
+    // 目标字符类不能写成 `[^)\s]+`：本仓**真有这么叫的文件**——`docs/design/`
+    // 根上那批方案稿的标题里带括号（`Conversation Flow Redesign (ZCode Alignment) v1.md`），
+    // 那种写法在第一个 `)` 就截断，截出来的半截路径既不匹配 `/docs/design/*.md`
+    // 也不是任何目录 ⇒ 一条本机点得开的"不入库"指针被判成**真断链**（台账 T19 并入
+    // specs 后实测抓到）。这里按 CommonMark 的"一层平衡括号"取目标：非括号字符
+    // 或一对不带嵌套的括号交替，仍然不允许裸空格（空格必须写 %20，与本仓惯例一致）。
+    for (const m of l.replace(/`[^`]*`/g, '').matchAll(/\[([^\]]*)\]\(((?:[^()\s]|\([^()]*\))*)\)/g)) {
       let t = m[2];
       if (/^(https?:|mailto:|file:|#)/.test(t)) continue;
       t = t.split('#')[0].split('?')[0];
       if (!t || t.startsWith('/')) continue;
       let target;
       try { target = decodeURIComponent(t); } catch { continue; }
-      const abs = path.isAbsolute(target) ? target : path.join(path.dirname(f), target);
+      const abs = path.isAbsolute(target) ? target : path.join(path.dirname(fromRel), target);
       const rr = rel(abs).replace(/\\/g, '/');
       if (!rr || rr.startsWith('..') || rr === '.') continue;
-      out.push({ from: rel(f), line: i + 1, text: l, target: rr, exists: fs.existsSync(abs) });
+      out.push({ from: fromRel, line: i + 1, text: l, target: rr, exists: fs.existsSync(path.join(ROOT, rr)) });
     }
   });
   return out;
 }
+const linksIn = (f) => linksInText(read(f), rel(f));
 const allLinks = [...live, ...rootDocs.map((d) => path.join(ROOT, d))].flatMap(linksIn);
 // 探测项代表"本机层应当被排除"这件事本身；少了它们，删掉 .gitignore 那五条就能让判据全体跳过。
 const PROBE_SELF = ['docs/history/README.md', 'docs/design/archive/README.md', 'docs/issue/probe.md', 'docs/references/probe.md', 'docs/design/probe.md'];
@@ -200,14 +218,26 @@ const skipped = [];   // 因"不入库层不在检出面"而跳过的判据，�
 // 是在讲 MEMORY.md 的格式，不是指向本仓文件的引用）；排掉外链与纯锚点；
 // 目标做 decodeURIComponent（含空格的文件名写作 %20）；去掉 # 之后的锚再判存在。
 const BROKEN_BASELINE = [];  // 已知例外（一条一个「文件:行 → 目标」）；降它要真去修链接
-const localOnly = [];
-for (const p of allLinks) {
-  if (p.exists) continue;
-  if (isIgnored(p.target)) { localOnly.push(p); continue; }
-  const key = `${p.from}:${p.line} → ${p.target}`;
-  if (!BROKEN_BASELINE.includes(key)) bad(`断链 ${key}（旧址还留着引用 = 下一个读的人只能猜）`);
+/**
+ * R8 的判体抽成函数：`--selftest` 要拿**变异过的链接面**喂它（台账 T19 要求的那条
+ * "给 specs 里插一条断链必须报红"）。判体留在 for 循环里的话，自测只能去改磁盘上
+ * 的文档——那是污染现役文件来证明判据，本仓明确不干（`check-single-source.mjs`
+ * 的自测也只改内存快照）。
+ */
+function judgeBroken(links) {
+  const msgs = [];
+  const localOnly = [];
+  for (const p of links) {
+    if (p.exists) continue;
+    if (isIgnored(p.target)) { localOnly.push(p); continue; }
+    const key = `${p.from}:${p.line} → ${p.target}`;
+    if (!BROKEN_BASELINE.includes(key)) msgs.push(`断链 ${key}（旧址还留着引用 = 下一个读的人只能猜）`);
+  }
+  return { msgs, localOnly };
 }
-if (dbg) console.log(`  R8 链接 ${allLinks.length} 条 · 指向本机层 ${localOnly.length} 条（不计断链，交给 R10 标注）`);
+const r8 = judgeBroken(allLinks);
+r8.msgs.forEach(bad);
+if (dbg) console.log(`  R8 链接 ${allLinks.length} 条 · 指向本机层 ${r8.localOnly.length} 条（不计断链，交给 R10 标注）`);
 
 // ---- R7 每个历史层都要有自己的索引 ---------------------------------------------------
 // 判据从"只盯 docs/history"泛化成"每个历史目录都要有一份 README 点名它内部的每一件"：
@@ -258,17 +288,64 @@ const IGNORE_EXEMPT = (r) => r.startsWith('docs/adr/') || r === 'docs/design/aut
 // 来源自己也住在不入库层（docs/issue 与 docs/references 的内部互链、archive 之间互链）不算：
 // 那一层根本不会出现在别人机器上，「不入库」标注是给**入库文档**的读者看的。
 const scanned = allLinks.filter((p) => !IGNORE_EXEMPT(p.from) && !isIgnored(p.from));
-const pointers = scanned.filter((p) => isIgnored(p.target));
-if (!scanned.length) bad('R10 扫描面为 0 条链接 ⇒ 判据空转（先查在役文档口径是不是变了）');
-if (scanned.length && !pointers.length) bad('R10 一条都没命中忽略规则 ⇒ .gitignore 那五条排除规则或链接面变了，判据作废');
-for (const p of pointers) {
-  if (!/不入库/.test(p.text)) bad(`${p.from}:${p.line} 指向不入库的 ${p.target}，却没写「不入库」——本机点得开、别人 clone 后是死路径`);
+/**
+ * R10 的判体抽成函数（同 R8 的理由：`--selftest` 要能拿变异面喂它，而不去改磁盘上的文档）。
+ * 两条"扫描面/命中数为 0"的下限**留在主流程**——它们是给现役面把门的，混进判体里
+ * 会让自测那一条变异自己触发下限，报出来的红说不清是哪件事。
+ */
+function judgePointers(links) {
+  const msgs = [];
+  const pointers = links.filter((p) => isIgnored(p.target));
+  for (const p of pointers) {
+    if (!/不入库/.test(p.text)) msgs.push(`${p.from}:${p.line} 指向不入库的 ${p.target}，却没写「不入库」——本机点得开、别人 clone 后是死路径`);
+  }
+  return { msgs, pointers };
 }
-if (dbg) console.log(`  R10 可判链接 ${scanned.length} 条 · 落在不入库层 ${pointers.length} 条`);
+const r10 = judgePointers(scanned);
+r10.msgs.forEach(bad);
+if (!scanned.length) bad('R10 扫描面为 0 条链接 ⇒ 判据空转（先查在役文档口径是不是变了）');
+if (scanned.length && !r10.pointers.length) bad('R10 一条都没命中忽略规则 ⇒ .gitignore 那五条排除规则或链接面变了，判据作废');
+if (dbg) console.log(`  R10 可判链接 ${scanned.length} 条 · 落在不入库层 ${r10.pointers.length} 条`);
 
 // ---- 下限：闸不许瞎 -----------------------------------------------------------------
 if (mdAll.length < 10) bad(`md 扫描面只有 ${mdAll.length} 份 ⇒ 这条闸几乎看不见文档，拒绝空转`);
 if (live.length < 10) bad(`在役文档读数 ${live.length} 过低 ⇒ 目录口径坏了`);
+// 台账 T19 的**防回潮**读数：扫描面里必须真有 specs/ 层的在役文档。谁把 `walk(specs)` 删掉，
+// 这闸就退回"自称管全体、实际只看见 docs/"那种状态——而那种退回是**静默**的（少扫一层
+// 不会让任何一条现有判据变红），只能靠一条点名在场的下限盯住。
+const specLive = live.filter((f) => rel(f).startsWith('specs/'));
+if (!specLive.length) bad('在役面里一份 specs/ 文档都没有 ⇒ 扫描根又只剩 docs/（T19 的账原样回来）');
+
+// ---- 自证：判据必须为变异报红（台账 T19 要求的那条）----------------------------------
+// 三条变异只改**内存里的链接数组**，一个磁盘文件都不碰。
+// 为什么变异面用现网真实存在的那条指针而不是凭空造一条：R10 要判"命中忽略规则"，
+// 而 `ignored` 集合是拿现役链接的形态去问 `git check-ignore` 得来的 —— 现造的路径
+// 不在集合里，喂进去只会得到"没命中"，那种对照打空之后看起来像判据红、其实是自测自己错。
+if (SELFTEST) {
+  let miss = 0;
+  // ST1：specs 层里插一条断链 ⇒ R8 必须为它报红（这条才让"扫描面含 specs"不再是嘴上说的）
+  const s1 = judgeBroken([{
+    from: 'specs/03-structural-debt/spec.md',
+    line: 1,
+    text: '[验收](./nope-not-here.md)',
+    target: 'specs/03-structural-debt/nope-not-here.md',
+    exists: false,
+  }]).msgs.length > 0;
+  console.log(`  ${s1 ? '✓' : '✗'} ST1 specs 层的断链可见${s1 ? '' : ' ⇒ R8 对 specs 零证明力'}`);
+  if (!s1) miss++;
+  // ST2：把一条真实的不入库指针去掉「不入库」三字 ⇒ R10 必须报红
+  const sample = r10.pointers[0];
+  const s2 = sample ? judgePointers([{ ...sample, text: sample.text.replace(/不入库/g, '') }]).msgs.length > 0 : false;
+  console.log(`  ${s2 ? '✓' : '✗'} ST2 去掉「不入库」标注可见${s2 ? `（样本 = ${sample?.from}:${sample?.line}）` : ' ⇒ R10 空转或在自测里没拿到样本'}`);
+  if (!s2) miss++;
+  // ST3：括号文件名必须整条解析出来（T19 实测到的那条截断）
+  const parsed = linksInText('- 上游 [`A (B) v1.md`](../../docs/design/A%20(B)%20v1.md)', 'specs/x/spec.md');
+  const s3 = parsed.length === 1 && parsed[0].target === 'docs/design/A (B) v1.md';
+  console.log(`  ${s3 ? '✓' : '✗'} ST3 括号文件名不被截断${s3 ? '' : ` ⇒ 实测 target = ${JSON.stringify(parsed[0] && parsed[0].target)}（解析了 ${parsed.length} 条）`}`);
+  if (!s3) miss++;
+  console.log(miss ? `DOCS_SELFTEST_MISSED=${miss}` : 'DOCS_SELFTEST_ALL_CAUGHT');
+  process.exit(miss ? 1 : 0);
+}
 
 console.log(`check-docs（文档规则闸：入口厚度 / 地图 / ADR / spec / 长行 / 旧仪式 / 历史索引 / design 形状 / 不入库指针）`);
 console.log(`DOC_FILES=${mdAll.length} LIVE=${live.length} HISTORY=${hist.length} ADR=${adrFiles.length} SPEC=${specFiles.length} LONG=${[...longByFile.values()].reduce((a, b) => a + b, 0)}处在${longByFile.size}个文件/名单${LONG_FILES.length}个`);

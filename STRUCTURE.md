@@ -171,7 +171,7 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 
 | 何时 | 建 / 改什么 |
 | --- | --- |
-| 已建（别当待办再建一遍） | 十道闸与两支自证都在 `scripts/`，清单唯一出处 = `tasks.sh` 的 `t_gates` · 进度只在 `docs/roadmap/README.md` 一张表 · 决策在 `docs/adr/`（编号只增，篇数别抄进文档） · 阶段计划在 `specs/` · 规范正身在 `docs/design/authority/` 一层 |
+| 已建（别当待办再建一遍） | 结构闸与闸的自证都在 `scripts/`，两份清单唯一出处 = `tasks.sh` 的 `t_gates` 与 `t_selftest`（条数别抄进文档，加一档改一次就又漂） · 进度只在 `docs/roadmap/README.md` 一张表 · 决策在 `docs/adr/`（编号只增，篇数别抄进文档） · 阶段计划在 `specs/`（一阶段一目录，实例逐条增减 ⇒ 地图点 `specs/` 这一层，不逐个点名） · 规范正身在 `docs/design/authority/` 一层 |
 | 阶段 02 开工（对话流工具卡做全） | `desktop/src/components/chat/` 里各工具卡组件 + `lib/tool-detail.ts` 的对应投影；形态先过 `Front-end Design Guidelines.md` 的类目，新形态要走特例申请 |
 | 阶段「产出物与文件页签」开工 | 先建 `specs/04-…/spec.md`（模板复制），再动界面；页签的数据源若后端没有，欠账先登记进 specs/03 |
 | 阶段「常用命令与技能包」「子任务与后台任务」开工 | 各自一个 spec；新命令要同时过 `check-commands.mjs` 的三向对账（定义 / 注册 / 前端引用） |

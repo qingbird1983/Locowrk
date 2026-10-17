@@ -3,9 +3,9 @@
 - 状态：待确认（可以现在开工，不依赖别的阶段）
 - 负责人：青鸟（看效果定取舍） / Qoder（实现）
 - 日期：2026-10-17
-- 出处 / 上游：设计稿 [`docs/design/Conversation Flow Redesign (ZCode Alignment) v1.md`](../../docs/design/Conversation%20Flow%20Redesign%20(ZCode%20Alignment)%20v1.md)
+- 出处 / 上游：设计稿 [`docs/design/Conversation Flow Redesign (ZCode Alignment) v1.md`](../../docs/design/Conversation%20Flow%20Redesign%20(ZCode%20Alignment)%20v1.md)（⊘ 不入库）
   §4 工具类型总表 + §3 折叠规则 + §10 的 C2 一节；旧施工队列里编号 Q17（现归档在
-  [`docs/history/post-audit-roadmap-v1.md`](../../docs/history/post-audit-roadmap-v1.md)）。
+  [`docs/history/post-audit-roadmap-v1.md`](../../docs/history/post-audit-roadmap-v1.md)（⊘ 不入库））。
   ⊘ 这两份都在不入库的层（`docs/design/` 根上的方案稿与 `docs/history/`），只在作者的机器上。
   它的前置（对话流数据链路：工具行数、轮头状态、事件通道）已交付。
 
