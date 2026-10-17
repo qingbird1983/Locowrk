@@ -13,9 +13,9 @@ fn entry<'a>(ws: &'a str, key: &'a str, value: &'a str) -> FactEntry<'a> {
     }
 }
 
-// 只在 Windows 跑：`F:\Warehouse\AIwork\Locowrk` 这类反斜杠串在 POSIX 上是**一个合法文件名**
-// 而不是一串目录，"取末段"这件事在两个平台上语义不同（Linux 侧算式不剥 `\` 不是缺陷）。
-#[cfg(windows)]
+// 两侧都跑（2026-10-17 撤掉曾经的 `#[cfg(windows)]`）：这条要的是"目录名可读 + 同名
+// 不同路径不冲突"，跟平台怎么解析路径无关——只要 `project_dir_name` 取末段时
+// 把 `\` 与 `/` 同等当边界（实现里写了为什么这不是搬 Windows 语义）。
 #[test]
 fn project_dir_name_is_readable_and_collision_safe() {
     let a = project_dir_name(r"F:\Warehouse\AIwork\Locowrk");
@@ -75,10 +75,9 @@ fn project_dir_rejects_unowned_and_is_the_single_formula() {
 /// 恶意 / 畸形 workspace 串只能落进 root 之内：目录名是「安全化 + fnv 短哈希」
 /// 的产物，`..` 与分隔符都进不了那一个名字。新命令收的是 workspace 而不是路径，
 /// 所以这条性质就是它的防线本身（比 `reveal_in_explorer` 的 fsRoots 白名单更窄）。
-// 只在 Windows 跑：这批恶意串（`C:\Windows\..`、`a\b\..\c`）按 Windows 分隔符判"有没有穿越材料"。
-// POSIX 上反斜杠是普通字符，`a\b\..\c` 就是**一个目录名**、不构成穿越 ⇒ 安全性质仍在，
-// 只是这条判读法不适用（Linux 上该用 `/` 形态的串重做一批用例 = 真要支持 Linux 时的活，见 T18）。
-#[cfg(windows)]
+// 两侧都跑（2026-10-17 撤掉曾经的 `#[cfg(windows)]`）：这条断言的是**安全性质**，
+// 而 Windows 的出题法把两种分隔符形态混在一起，正好能在 POSIX 上验同一件事——
+// 恶意串里既有 `\` 也有 `/`，目录名都不许带上穿越材料。
 #[test]
 fn project_dir_keeps_any_workspace_string_under_the_root() {
     let root = std::path::Path::new(r"X:\data\memory");
@@ -90,6 +89,13 @@ fn project_dir_keeps_any_workspace_string_under_the_root() {
         " ",
         "F:/a/b",
         "a\\b\\..\\c",
+        // POSIX 形态：同一件事在 `/` 侧的写法（撤掉平台标记时补的，不是新语义）
+        "/etc/passwd",
+        "/../../..",
+        "//..//..//",
+        "/",
+        "....",
+        r"a\..\..\b",
     ] {
         let dir = project_dir(root, evil).unwrap_or_else(|e| panic!("{evil:?} 应有家目录: {e}"));
         assert!(dir.starts_with(root), "{evil:?} 的落点跑出 root: {dir:?}");

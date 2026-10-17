@@ -105,3 +105,50 @@ fn loader_rejects_mismatched_identity_and_missing_files() {
         .expect_err("missing dylib must fail");
     assert!(matches!(err, LoadError::Open { .. }));
 }
+
+/// 逻辑卸载之后再装载**同一份产物**，必须复用保留区里那个实例，不许第二次 dlopen。
+///
+/// 为什么单独立一条：`load` 的幂等闸门原本只看在册表，而 `deactivate` 是把 Arc 从
+/// 在册表**挪进**保留区（映像仍在内存里）——于是停用一次就把幂等保护弄丢了。Linux
+/// 上这条缺口是会崩的：同一份 `.so` 被 dlopen 两次，释放时 dlclose 按 so 名合并引用
+/// 计数，先归零的那份把代码页带走，后到的 Drop 跳进空 vtable ⇒ SIGSEGV（复现读数
+/// 与根因链登记在 specs/03 的 T18，2026-10-17 本机 WSL 实测）。Windows 上"正在使用
+/// 的 dll 卸不掉"碰巧挡住了这一层，所以这台机器上从来没有证据。
+///
+/// 判读用的是 `Arc::ptr_eq`——它是"有没有第二次 dlopen"的可观测差异：改前这里拿到
+/// 的是新实例（两个不同 Arc），改后是同一个。
+#[test]
+fn a_deactivated_version_revives_from_the_graveyard_instead_of_dlopening_twice() {
+    let registry = PluginRegistry::new();
+    let v: Version = "0.1.0".parse().unwrap();
+    let p = build_and_stage("tool-echo", "0.1.0");
+
+    let first = registry.load("tool-echo", &v, &p).expect("load 0.1.0");
+    registry.activate("tool-echo", &v).expect("activate 0.1.0");
+    registry.deactivate("tool-echo");
+    assert!(
+        !registry.has_version("tool-echo", &v),
+        "停用后在册表应已摘除（否则这条测试根本没走进保留区）"
+    );
+    assert!(
+        registry.current("tool-echo").is_none(),
+        "active 指针应已摘除"
+    );
+
+    let again = registry
+        .load("tool-echo", &v, &p)
+        .expect("停用后重新装载同一份产物");
+    assert!(
+        std::sync::Arc::ptr_eq(&first, &again),
+        "同一 (id, version, path) 的第二次 load 必须复用保留区里的实例，不许再 dlopen"
+    );
+
+    // 复用之后调用面照常可用：回退目标没有被"卸走"
+    registry
+        .activate("tool-echo", &v)
+        .expect("re-activate 0.1.0");
+    let source = RegistryToolSource::new(std::sync::Arc::new(registry));
+    let echo = source.resolve("echo").expect("resolve echo 仍然可用");
+    let out = call(echo.as_ref(), json!({ "text": "ping" })).unwrap();
+    assert_eq!(out["echo"], "ping");
+}

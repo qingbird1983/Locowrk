@@ -62,10 +62,10 @@ fn trailing_slash_and_dot_never_split_a_keyside() {
     }
 }
 
-// 只在 Windows 跑：这条靠 canonicalize 把 `..\` 折叠掉，而 Windows 的路径 API 对**不存在的中间段**
-// 会做词法折叠、POSIX 不会（Linux 上这条回落成原文，`/a/x/../b` 与 `/a/b` 就得到两个键位）。
-// 想让 POSIX 也同键位得自己实现一套词法折叠并处理符号链接 —— 那是"支持 Linux"的活，本项目不做。
-#[cfg(windows)]
+// 两侧都跑（2026-10-17 撤掉曾经的 `#[cfg(windows)]`）：这条要的性质是"同一个目录的两种
+// 写法必须落成一个键位"，两侧都需要。Windows 的路径 API 对**不存在的中间段**也会折叠 `..`，
+// POSIX 的 realpath 遇缺失段直接报错 ⇒ 靠 `lexical_fold` 在回落分支里补上这一步，
+// 于是 `<parent>/x/../<name>` 与 `<parent>/<name>` 在两个平台上同键位。
 #[test]
 fn dotdot_inside_the_path_is_resolved_not_left_as_text() {
     // `F:\proj\a\..\b` 与 `F:\proj\b` 是同一个目录。词法上"看着在一处"而 OS
@@ -230,4 +230,46 @@ fn drive_root_shape_is_only_a_two_char_letter_colon() {
     assert!(!is_drive_root("1:"), "首位必须是字母");
     assert!(!is_drive_root("c"), "必须有冒号");
     assert!(!is_drive_root(""), "空串不进这条分支");
+}
+
+#[test]
+fn lexical_fold_collapses_dot_and_dotdot_on_both_separator_styles() {
+    // 纯函数档：`win` 是**显式参数**，所以同一台机器上两种分隔符形态都能跑一遍——
+    // 它不是"平台分支"，而是"这套规则本来就有两份"（Q2 撤平台标记时补的判读）。
+    assert_eq!(lexical_fold("/a/x/../b", false), "/a/b");
+    assert_eq!(lexical_fold("/a/./b", false), "/a/b");
+    assert_eq!(lexical_fold("/a/b/..", false), "/a");
+    assert_eq!(
+        lexical_fold("/..", false),
+        "/",
+        "根之上 clamp，不许弹成空串"
+    );
+    assert_eq!(lexical_fold("/a/../../..", false), "/");
+    assert_eq!(
+        lexical_fold("../a", false),
+        "../a",
+        "相对路径没到顶：`..` 留在串里"
+    );
+    assert_eq!(
+        lexical_fold("a/..", false),
+        ".",
+        "全弹光要给 `.`，绝不给空串（空串 = 未归属键位）"
+    );
+    assert_eq!(lexical_fold(r"C:\a\x\..\b", true), r"C:\a\b");
+    assert_eq!(lexical_fold(r"C:\a\.\b", true), r"C:\a\b");
+    // 反斜杠在 POSIX 是合法文件名字符 ⇒ 不许当边界切
+    assert_eq!(lexical_fold(r"/a/b..\c", false), r"/a/b..\c");
+    // 三条保守边界：没有 `.`/`..` 段、连续分隔符、UNC 头 ⇒ 一律原样返回
+    assert_eq!(lexical_fold("/a/b", false), "/a/b");
+    assert_eq!(lexical_fold(r"\\srv\share\x", true), r"\\srv\share\x");
+    assert_eq!(
+        lexical_fold("//a/x/../b", false),
+        "//a/x/../b",
+        "连续分隔符不动"
+    );
+    assert_eq!(
+        lexical_fold(r"\\srv\share\..\x", true),
+        r"\\srv\share\..\x",
+        "UNC 的共享名不许被 `..` 弹掉"
+    );
 }

@@ -12,8 +12,8 @@
   两条通路都经同一 `ToolSource` 进工具池。
 - 沙箱插件已随 v2.145 **整目录退役**：不隔离文件与网络就不是安全边界；命令执行面收敛为 `shell` 单一入口。
 - 技术栈：Rust（根 Cargo workspace 8 个 crate + `desktop/src-tauri` 独立包）· Tauri 2 · Vue 3 + TypeScript · pnpm · vitest。
-- 当前阶段：单人自用内测。**不在范围内**：多用户服务端、云同步、生产部署，以及 Linux 支持
-  （路径语义只在 Windows 上验证，理由见 [`docs/adr/0004-ci-paths-windows-only.md`](docs/adr/0004-ci-paths-windows-only.md)）。
+- 当前阶段：单人自用内测。**不在范围内**：多用户服务端、云同步、生产部署。Linux **在范围内**：
+  路径语义与插件生命周期要在 Windows 与本机 WSL 两侧都有证据（口径与代价见 [`docs/adr/0005`](docs/adr/0005-linux-verified-on-both-platforms.md)）。
 - 权威设计文档 = [`docs/design/authority/DESIGN.md`](docs/design/authority/DESIGN.md)：改核心模块前先读对应章节，实现与它冲突时先对齐文档；
   其中 `agent-kernel/` 指内核 Cargo 工作区，crate 名沿用文档，对外项目名叫 Locowrk。
 
@@ -97,3 +97,4 @@ plugin-api 宿主侧、不进 C ABI；plugin-host 只给固有 API `RegistryTool
 5. 动了界面，交付前先自己在真实窗口跑一遍并截图核对，再请你亲自看；给你的永远是"打开哪、点哪、该看到什么"。
 6. Windows 开发机：shell 是 Git Bash，路径写正斜杠；插件产物在 Windows 是 `.dll`；
    vite dev 已钉 `server.host: "::1"` 绕开本机回环过滤驱动（**别改回双栈**，否则首帧回到 30 秒以上）。
+7. Linux 侧取证 = 本机 WSL（Ubuntu-24.04）里 clone 一份跑 `cargo test --workspace`；跨平台的性质不许用 `#[cfg]` 单侧跳过。

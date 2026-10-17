@@ -74,9 +74,16 @@ pub fn fnv1a64(data: &[u8]) -> u64 {
 /// hex8——同名目录不冲突、异名同路径恒等。与 memory-tree 的 scope_dir
 /// **编码独立**（那是机器投影目录，这是人读目录）。
 pub fn project_dir_name(workspace: &str) -> String {
-    let readable = Path::new(workspace)
-        .file_name()
-        .and_then(|s| s.to_str())
+    // 取末段时 `\` 与 `/` **同等**当边界。这不是把 Windows 语义搬给 Linux：
+    // ① 同一模块里的 `key_file_stem` 一直就是把两种分隔符都当危险字符处理的；
+    // ② 这一段只是给人读的名字，唯一性由后面的 fnv 短哈希承担（同名不同路径不冲突），
+    //    所以按哪个字符切都不影响寻址；
+    // ③ 而在 POSIX 上把整串 `F:\A\B` 当一个名字，会得到一个含反斜杠的目录名——合法，
+    //    但白占 40 字符截断额度，还把 `..` 留在名字里（Linux 实测：`a\b\..\c` →
+    //    `a_b_.._c`，穿越材料进得了目录名）。
+    let readable = workspace
+        .rsplit(['/', '\\'])
+        .find(|s| !s.is_empty())
         .unwrap_or(workspace);
     let safe: String = readable
         .chars()
@@ -93,6 +100,12 @@ pub fn project_dir_name(workspace: &str) -> String {
         .chars()
         .take(40)
         .collect();
+    // 第二道：连续的点一律压掉。上面那道靠"剥首尾点"挡 `..`，但它管不住 `a..b`
+    // 这种夹在中间的形态——目录名里只要还剩 `..`，拼接就有走出 root 的可能。
+    let head = head.replace("..", "_");
+    let head = head
+        .trim_matches(|c: char| c == '.' || c == '_')
+        .to_string();
     let head = if head.is_empty() {
         "project".to_string()
     } else {

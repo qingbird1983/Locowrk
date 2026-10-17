@@ -226,8 +226,20 @@ impl PluginService {
                 "no newer version: installed {snapshot_ver}, market latest {latest}"
             ));
         }
-        let src = self.market.package(id, &latest)?;
-        let final_path = installer::extract(&src, &self.install_root(), id, &latest)?;
+        // 回退之后再更新时，目标版本**本来就在盘上**（多版本并存是 §6.1 第 1 层回退的
+        // 基础），而且大概率还在内存里（回退只挪 active 指针）。这时候再拷一遍同一份
+        // 产物没有任何意义，却会撞上平台差异：Windows 上产物正被装载 ⇒ 覆盖被文件锁拒绝
+        // （本机实测 `os error 32 另一个程序正在使用此文件`），Linux 上没有这把锁 ⇒ 覆盖
+        // 成功并把同一份映像再 dlopen 一次。两侧都不该发生，所以这里先认已安装的产物。
+        let installed_dir = self.install_root().join(id).join(latest.to_string());
+        let artifact = installed_dir.join(artifact_file_name(id));
+        let freshly_extracted = !artifact.is_file();
+        let final_path = if freshly_extracted {
+            let src = self.market.package(id, &latest)?;
+            installer::extract(&src, &self.install_root(), id, &latest)?
+        } else {
+            installed_dir
+        };
         match self
             .registry
             .load(id, &latest, &final_path.join(artifact_file_name(id)))
@@ -255,7 +267,9 @@ impl PluginService {
             }
             Err(e) => {
                 let _ = self.registry.activate(id, &snapshot_ver);
-                if std::fs::remove_dir_all(&final_path).is_err() {
+                // 只清理**本次新建**的目录：走"已在盘上"那条路时 final_path 里可能是
+                // 仍在使用的安装，删它等于把回退目标的字节也带走（破坏性，绝不允许）。
+                if freshly_extracted && std::fs::remove_dir_all(&final_path).is_err() {
                     let mut lf = self.lockfile.lock().expect("lockfile poisoned");
                     lf.push_pending_delete(final_path.clone());
                     lf.save(&self.lockfile_path())?;

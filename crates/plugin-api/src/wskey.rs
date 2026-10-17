@@ -14,7 +14,9 @@
 //!
 //! 归一三步（顺序有讲究）：
 //! 1. `canonicalize`——解析符号链接/junction 与 `..`、`.`，并顺手统一分隔符；
-//!    **失败（路径不存在）回落原串**做纯词法归一（不假装能解析）。
+//!    **失败（路径不存在）时回落 [`lexical_fold`]**：`.` 与 `..` 由词法折叠处理掉，
+//!    其余一律原样。这一步两侧都需要——Windows 的路径 API 对不存在的中间段也会折叠，
+//!    POSIX 的 realpath 遇缺失段直接报错，不折叠就会让同一个目录落成两个键位。
 //! 2. 剥 Windows verbatim 前缀 `\\?\` / `\\?\UNC\`（canonicalize 在 Windows 必然
 //!    加上它；留着会进管理页列表、md 目录名与模型可见的 `<environment>` 行，
 //!    既难看又和旁车串不同形）。
@@ -47,7 +49,11 @@ pub fn normalize(raw: &str) -> String {
     // 归成 `""`（那等于把某个项目的记忆污染进全局偏好层）。
     let lexical = match Path::new(trimmed).canonicalize() {
         Ok(p) => strip_verbatim(&p.to_string_lossy()),
-        Err(_) => trimmed.to_string(),
+        // 路径不存在才走词法兜底。Windows 的路径 API 对**不存在的中间段**也会折叠
+        // `..`，POSIX 的 realpath 遇缺失段直接报错 ⇒ 兜底必须自己做一遍折叠，否则
+        // `/proj/x/../b` 与 `/proj/b` 会落成两个键位（Linux 实测见 specs/03 的 T18）。
+        // 折叠是纯字符串操作，不碰大小写、不假装解析符号链接，所以两侧同源。
+        Err(_) => lexical_fold(trimmed, cfg!(windows)),
     };
     if cfg!(windows) {
         win_form(&lexical)
@@ -81,6 +87,58 @@ fn posix_form(s: &str) -> String {
         return "/".to_string(); // 根不许剥成空串（空串 = 未归属键位）
     }
     bare.to_string()
+}
+
+/// 纯词法折叠（只在 `canonicalize` 失败时兜底）：丢 `.` 段、让 `..` 抵消前一段。
+/// 不碰大小写、不解析符号链接——它只回答"这几个字面段指向哪儿"。
+///
+/// `win` 由调用方**显式**给（`normalize` 传 `cfg!(windows)`），这样两种分隔符形态
+/// 在同一台机器上都能被测；它是"这套规则本来就有两份"，不是平台分支。
+///
+/// 为什么 `pub(crate)`：文件围栏（[`crate::fsutil::resolve_for_write`]）也要同一套
+/// 折叠——两处各写一份就必然漂，而它们判的是同一件事"这几个字面段指向哪儿"。
+///
+/// 三条刻意收窄的边界，都是为了不顺手改变没被测过的行为：
+/// - 串里没有 `.` / `..` 段 ⇒ 原样返回；
+/// - 出现连续分隔符（POSIX 的 `//x`、Windows 的 UNC `\\srv\share`）⇒ 原样返回，
+///   折叠规则不碰这类怪形；
+/// - 绝对路径弹到顶就 clamp 在根（`/a/..` → `/`），相对路径弹到顶时 `..` 留在串里
+///   （`../a` 原样）——弹掉它会指到别处；`a/..` 全弹光时给 `.`，**绝不给空串**
+///   （空串 = 未归属键位，会把某个项目的记忆污染成全局偏好层）。
+pub(crate) fn lexical_fold(s: &str, win: bool) -> String {
+    let is_sep = |c: char| c == '/' || (win && c == '\\');
+    let parts: Vec<&str> = s.split(is_sep).collect();
+    if !parts.iter().any(|p| matches!(*p, "." | "..")) {
+        return s.to_string();
+    }
+    let leading = parts.first().is_some_and(|p| p.is_empty());
+    let body = if leading { &parts[1..] } else { &parts[..] };
+    if body.iter().any(|p| p.is_empty()) {
+        return s.to_string();
+    }
+    let sep: &str = if win { "\\" } else { "/" };
+    let mut out: Vec<&str> = Vec::new();
+    for p in body {
+        match *p {
+            "." => {}
+            ".." => {
+                if let Some(pos) = out.iter().rposition(|q| !q.is_empty()) {
+                    out.remove(pos);
+                } else if !leading {
+                    out.push("..");
+                }
+            }
+            other => out.push(other),
+        }
+    }
+    let joined = out.join(sep);
+    if leading {
+        format!("{sep}{joined}")
+    } else if joined.is_empty() {
+        ".".to_string()
+    } else {
+        joined
+    }
 }
 
 /// 剥 Windows verbatim 前缀：`\\?\C:\x` → `C:\x`；`\\?\UNC\srv\share` → `\\srv\share`。

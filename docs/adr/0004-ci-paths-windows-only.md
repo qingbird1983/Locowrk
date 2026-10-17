@@ -1,11 +1,11 @@
 # ADR-0004：路径语义只在 Windows 上验证
 
-- 状态：已接受
+- 状态：被取代（2026-10-17，同一天复核后推翻；见 [`ADR-0005`](0005-linux-verified-on-both-platforms.md)）
 - 日期：2026-10-17
 - 决策人：青鸟（"Linux 暂时没打算出，先选二"）/ Qoder（逐条判定哪些断言真依赖平台）
 - 出处：首次推送后的真 CI run 39032117025（`kernel / Tests (workspace root)` 红 4 条）；台账 T18
 - 取代：无
-- 被取代：无
+- 被取代：Superseded by [`ADR-0005`](0005-linux-verified-on-both-platforms.md)
 
 ## 背景
 

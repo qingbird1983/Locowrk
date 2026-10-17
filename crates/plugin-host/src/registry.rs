@@ -8,7 +8,8 @@
 //!   （`scripts/build_plugins.sh` 头注 F15-A，v2.162）
 //! - 逻辑卸载 = 把 Arc 挪进 graveyard（物理保留，永不 dlclose）；
 //!   在途调用持有各自的 Arc 克隆，结束后引用计数自然归一
-//! - load 的幂等：同 (id, version) 重复加载返回既有实例，不重复 dlopen
+//! - load 的幂等：同 (id, version) 重复加载返回既有实例，不重复 dlopen——判据同时
+//!   查在册表与 graveyard，因为保留区里那份映像**还在内存里**（见 `revive_from_graveyard`）
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -64,6 +65,15 @@ impl PluginRegistry {
         path: &Path,
     ) -> Result<Arc<PluginInstance>, LoadError> {
         if let Some(inst) = self.instance(id, ver) {
+            return Ok(inst);
+        }
+        // 幂等闸门必须**同时看见 graveyard**：逻辑卸载只是把 Arc 从在册表挪进保留区，
+        // 那份模块映像仍在内存里。只查 versions 会让同一个 (id, version, path) 被
+        // 第二次 dlopen —— Linux 实测（本机 WSL 2026-10-17，specs/03 T18）这是
+        // SIGSEGV 的入口：dlclose 按 so 名合并引用计数，先释放的那份把代码页带走了，
+        // 后到的 Drop 就跳进空 vtable。Windows 靠"正在使用的 dll 卸不掉"碰巧挡住，
+        // 所以这台机器上从来没有证据。路径不同 = 两份不同映像，允许各自装载。
+        if let Some(inst) = self.revive_from_graveyard(id, ver, path) {
             return Ok(inst);
         }
         let inst = if is_wasm_artifact(path) {
@@ -229,6 +239,33 @@ impl PluginRegistry {
             .get(id)
             .and_then(|m| m.get(ver))
             .cloned()
+    }
+
+    /// 保留区里若已有**同一份映像**（同 id + 同版本 + 同路径），把它放回在册表并复用。
+    ///
+    /// 保留区里那份 Arc 故意留着：在途调用可能还持有它，挪走就等于破坏"逻辑卸载
+    /// 物理保留"这条纪律。返回的是同一个 Arc 的克隆，`Arc::ptr_eq` 可验。
+    fn revive_from_graveyard(
+        &self,
+        id: &str,
+        ver: &Version,
+        path: &Path,
+    ) -> Option<Arc<PluginInstance>> {
+        let found = self
+            .graveyard
+            .lock()
+            .expect("graveyard lock poisoned")
+            .iter()
+            .find(|i| i.id() == id && i.version() == ver && i.path() == path)
+            .cloned();
+        let inst = found?;
+        self.versions
+            .write()
+            .expect("versions lock poisoned")
+            .entry(id.to_string())
+            .or_default()
+            .insert(ver.clone(), Arc::clone(&inst));
+        Some(inst)
     }
 }
 

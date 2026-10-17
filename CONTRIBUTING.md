@@ -23,6 +23,22 @@
 （那会让每次提交变成分钟级，人就会开始用 `--no-verify`，那时闸真的没了）。
 所以改了 Rust 行为，提交档绿 ≠ 测过——**必须自己跑 `make check`**。
 
+## Linux 侧取证（本机 WSL，不用推送等云端）
+
+内核的跨平台性质要在 Linux 上有读数，阵地是这台机器的 WSL（Ubuntu-24.04）：仓库另 clone 一份在
+WSL **自己的文件系统**里（`/root/work/Locowrk`，不放 `/mnt/f` —— 那会把本机 `target/` 搞脏），
+`cargo test --workspace` 与 `cargo clippy --workspace --all-targets -- -D warnings` 都在那儿跑。
+三条环境坑都有实测代价，别再踩：
+
+1. 从 Git Bash 往 `wsl -e bash -c '…'` 里传**带 `$` 的命令串会被外层先展开**（`$PATH` 一展开就
+   带上 `Program Files (x86)` 的括号，语法当场炸，且失败是静默的）——所以所有 Linux 侧操作都写成
+   脚本文件，`tr -d "\r"` 之后在 WSL 里执行。
+2. 同步源码用 `cp -R` 而不是 `cp -a`：`cp -a` 把 Windows 侧的 mtime 一起搬过去，cargo 判定"没变"
+   就**拿过期二进制跑测试**（同族的坑本机踩过）。
+3. rustup 与 crates.io 都走 rsproxy 镜像：官方源实测 11KB/s（下不完），rsproxy 实测 5.2MB/s、
+   稀疏索引单请求 0.46s 对 crates.io 的 2.55s。镜像配置只写在 WSL 的 `~/.cargo/config.toml`，
+   本机 Windows 的全局配置一个字不动（AGENTS §2 的口径）。
+
 ## 加一道闸的规矩
 
 闸的清单唯一出处 = `scripts/tasks.sh` 的 `t_gates`（CI 调它，`make` 调它）。加一条闸要做四件事：

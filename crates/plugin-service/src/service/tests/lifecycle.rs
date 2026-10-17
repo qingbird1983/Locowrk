@@ -216,8 +216,30 @@ async fn update_then_rollback_switches_active_version() {
     assert_eq!(listed[0].active_version, Some(old.to_string()));
     assert!(listed[0].loaded_versions.contains(&new.to_string()));
 
-    // 没有更新版本的 update 报"无新版"
-    assert!(svc.update("tool-shout").await.is_err());
+    // 回退之后再更新：市场里明明摆着更新版本，按 §1「可回退」的语义就该升得回去。
+    // 这里原本写的是 `assert!(…is_err())`，而它在 Windows 上"绿"靠的是平台副作用——
+    // 覆盖一个正在使用的 dll 会被系统拒绝，update 报错恰好让 is_err() 成立；Linux
+    // 没有这把锁，update 真的成功 ⇒ 断言当场红，紧接着 panic 展开时又踩到 dlclose
+    // 卸载代码页那一层（复现读数与根因链登记在 specs/03 的 T18）。
+    let back = svc
+        .update("tool-shout")
+        .await
+        .expect("回退后市场仍有更新版本，update 该升回去而不是报错");
+    assert_eq!(back, new);
+    let listed = svc.list_installed();
+    assert_eq!(listed[0].version, new.to_string());
+    assert_eq!(
+        listed[0].active_version,
+        Some(new.to_string()),
+        "升回去之后 active 指针也该跟着走"
+    );
+
+    // 真·没有更新版本：已经升到市场最新，再点更新才该报"无新版"——两侧同判读。
+    let again = svc.update("tool-shout").await;
+    assert!(
+        again.is_err(),
+        "已是最新时 update 该报错，实际返回 {again:?}"
+    );
 }
 
 /// 开发态直载（不经 install → 无 lockfile 条目）的插件必须出现在

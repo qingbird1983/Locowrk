@@ -14,8 +14,11 @@
 //!
 //! 纪律：
 //! - 永不 dlclose：逻辑卸载 + 物理保留，进程重启才真正释放（§5.6 纪律一）。
-//!   全进程唯一的 dlclose 路径是 NativeBackend::drop，正常运转时不可达
-//!   （registry 只把 Arc 挪 graveyard）；可达的只有"加载即失败"豁免（附录 C-3）。
+//!   这条现在是**类型层面的事实**：`NativeBackend::_lib` 是 `ManuallyDrop<Library>`，
+//!   所以 Drop 只 shutdown 句柄、不卸载模块。真会 dlclose 的只剩"加载即失败"豁免
+//!   （附录 C-3：那时 init 未执行、没有代码指针流出）。2026-10-17 之前它只是注释，
+//!   Linux 实测（本机 WSL）真的卸载会让后到的 Drop 跳进空 vtable ⇒ SIGSEGV。
+//!   登记面的另一处：`PluginRegistry::load` 的幂等闸门现在也看 graveyard。
 //!   wasm 后端没有 dlclose 语义：Drop 只做 guest shutdown，内存随引用释放
 //! - FFI 调用放 `spawn_blocking`，插件与宿主两侧都 `catch_unwind`（纪律 3）
 //! - 在途调用靠 `Arc` 引用计数，drain 时轮询 `Arc::strong_count`（§9.6）
