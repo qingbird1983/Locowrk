@@ -27,7 +27,7 @@
 //!
 //! ⚠ **锚点漂移已登记**：稿子 §2.3(e) 给的落点 `crates/kernel-agent/src/middleware/usage.rs`
 //! **在本仓库不存在**，`usage.sqlite3` 的真身是 [`crate::usage`]（由 `state/boot.rs` 开库）。
-//! 见《Post-Audit Roadmap v1》§5。
+//! 见已归档的施工队列 `docs/history/post-audit-roadmap-v1.md` §5。
 //!
 //! **三条不变量**（动了就是造假观测）：
 //! 1. **零行为变更**——只读召回的产物，不参与召回决策；`recall()` 的 SQL 与交付结果必须
@@ -66,7 +66,7 @@ use schema::{ensure_breakdown_column, DDL};
 // 「被 `memory_search` / `memory_project_history` 检索到的 key 数」，后半句在真实数据结构上
 // **不成立**（两个 key 空间不相交，硬凑只会得到一个恒 0 的假指标）。本实现因此按「非注入档
 // 行的 `keys` 并集」取分子：不带 key 的工具落一行空表，对交集零贡献 = 不污染读数，而它的
-// `returned` 仍然是有用观测（模型到底走不走时间线）。见《Post-Audit Roadmap v1》§5。
+// `returned` 仍然是有用观测（模型到底走不走时间线）。见已归档的施工队列 `docs/history/post-audit-roadmap-v1.md` §5。
 
 /// `insert_row` 的语句形状：注入档按键位去重（同键位重复召回不重复出账），检索档一次成功
 /// 调用一行（一次检索就是一次真实发生，去重会把"模型查了三遍"读成"查了一遍"）。

@@ -93,13 +93,13 @@ t_gates() {
   run "中间件接线"   node scripts/check-middleware-wiring.mjs
   run "拆分形状"     node scripts/check-split-equivalence.mjs
   run "预留对账"     node scripts/check-reserved.mjs
-  run "文档规则"     node scripts/check-doc-budget.mjs
+  run "文档规则"     node scripts/check-docs.mjs
   run "事件通道"     node scripts/check-channels.mjs
 }
 
 t_doc() {
   say "文档规则闸"
-  run "文档规则" node scripts/check-doc-budget.mjs
+  run "文档规则" node scripts/check-docs.mjs
 }
 
 t_check() {

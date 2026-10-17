@@ -2534,7 +2534,7 @@ export const usePluginStore = defineStore('plugins', {
 > 两文档末段向量/提取均 ★★★ 且共享 embedding 基建，归⑬看需求。**动因**：
 > 功能越多 UI 越乱的根因是缺落位规则——顶层视图 3→5 在即（+记忆页/
 > 开发者面板），⑩ 是最大 UI 变更波（PluginMarket.vue 291 行必拆），故壳
-> 批次先行。**进度看板单列 `docs/design/ROADMAP.md`**（完成打钩 / 未完
+> 批次先行。**进度看板单列 `docs/design/roadmap/`**（完成打钩 / 未完
 > 排期，每批同步勾选），本节只记落点细节。
 >
 > **壳批次（UI 骨架，先于⑨）**：skeleton-first 的"骨架"而非"抛光"——壳

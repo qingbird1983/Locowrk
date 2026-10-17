@@ -42,11 +42,22 @@ scripts/                 ★ 工程脚本与门禁实现（任务定义只在这
 | 路径 | 属性 | 说明 |
 | --- | --- | --- |
 | `docs/design/` | ★ | **现在有效的设计**（规范正文 + 设计稿原件）；无固定格式，只固定位置 |
-| `docs/design/DESIGN.md` | ★ [LOCK] | 内核权威设计文档：改核心模块前先读对应章节 |
-| `docs/design/roadmap/` | ★ | **路线图**：只列每一阶段的简称 + 勾选标记，已完成的不写 |
-| `docs/adr/` | ★ | 决策记录：`NNNN-<主题>.md`，**只增不改**（规则见 `docs/adr/0000-template.md`） |
-| `specs/` | ★ | 需求规格：一阶段一目录 `specs/<编号>-<名>/spec.md`，含**可测验收标准**与**非目标** |
-| `docs/history/` | — | **历史归档**（过程与记忆）：流水、批次叙述、已退役审计件；**不再追加**，索引 = `docs/history/README.md` |
+| `docs/design/DESIGN.md` | ★ [LOCK] | 内核权威设计文档（唯一需求来源）：改核心模块前先读对应章节，附录 C 是内核八条纪律的完整版 |
+| `docs/design/UI Design System.md` | ★ | UI 层最高权威（令牌映射 / 字号相对制 / 圆角嵌套 / 冲突裁决表） |
+| `docs/design/UI shell and patterns.md` | — | 下位细则：导航模型 / 页面模式库 / 事件流向 / 弹层规则（与上一行冲突时以 Design System 为准） |
+| `docs/design/Front-end Design Guidelines.md` | ★ | 前端**唯一形态标准**：同类只许一种形态 + 特例申请制 + 两道机械闸 |
+| `docs/design/Context and Memory.md` · `Memory Tree Design v2.md` · `KV Prefix Cache Design v2.md` · `Memory File-ization Design.md` · `Cross-Session Recall Design v1.md` | ★ | 上下文与记忆族的规范正身（v1 两份留作对照，见下） |
+| `docs/design/LLM.md` · `plugins.md` · `Plug-in packaging.md` · `Tool exposure strategy and usage statistics.md` · `Setting and Constrained Optimization.md` · `edit_replace.md` · `Organize Summary Design v1.md` | ★ | 其余各主题的现役规范（`plugins.md §一` 是"哪些是插件 / 宿主内置 / 已退役"的唯一真源） |
+| `docs/design/roadmap/` | ★ | **唯一进度表**：只列未完成阶段 + 勾选 + 一句人话状态；做完的删掉去 `docs/history/` |
+| `docs/design/Memory-KV Roadmap.md` | ⚠ 待并档 | 它自称"记忆树 × KV 专项唯一进度表"= **第二张进度表**，与上一行冲突；未完成项并入路线图后整份归档（挂在路线图的并档项） |
+| `docs/design/NEW/` | — | 设计稿原件（含已兑现与未开工的）；状态看路线图，不靠目录名 |
+| `docs/design/BUG/` · `docs/issue/` | — | 工单与缺陷清单（按目录归位，状态行须与自身处理记录一致） |
+| `docs/design/ui-prototype/` | — | 静态原型 = 方向参考，**不是像素合同**；演示件禁止搬进生产码 |
+| `docs/design/archive/` | — | 退役与未采纳的设计稿（还剩若干份，随设计稿归位一并搬 `docs/history/`） |
+| `docs/adr/` | ★ | 决策记录：`NNNN-<主题>.md`，**只增不改**；规则与模板见 `docs/adr/0000-template.md` |
+| `specs/` | ★ | 阶段计划：一阶段一目录 `specs/<编号>-<名>/spec.md`，含**可测验收标准**与**非目标** |
+| `docs/history/` | 只读 | **历史归档**：流水、旧路线表、旧变更日志、已退役设计稿、已批准的计划。不再追加、不改写；索引 = `docs/history/README.md` |
+| `docs/reports/` · `docs/reports/_parts/` | ⚠ 待归位 | 两份审计报告与修复台账；§7 台账里还有没结的欠账，**先抄进路线图**再整体搬 `docs/history/` |
 | `docs/references/` | — | 外部参考笔记 |
 
 ## 产物与临时件（一律不入库）
@@ -56,8 +67,6 @@ scripts/                 ★ 工程脚本与门禁实现（任务定义只在这
 什么该入库，一句话判据：**下一个 clone 的人（或他的 agent）手里没有它，会不会做错事？**
 会 → 入库（它是契约）；不会 → 不入库（它是过程或记忆）。机器可再生产物同理。
 
-## 待归位（G2 之后本表才与实际一致）
+**一次性脚本的去处**：能长期挡错的少数几条升进 `scripts/`，其余用完即弃（要看当初怎么验的，翻提交记录）。
+临时件一律放 `tmp/`，不放仓库根目录。
 
-`docs/design/archive/`（退役与未采纳稿）、`docs/design/NEW/`（设计稿原件，兑现状态看路线图）、
-`docs/design/BUG/`（工单）、`docs/reports/`（审计与台账）目前仍在旧位置；搬迁映射与索引将在
-`docs/history/README.md` 给出。**本节在 G2 完成时删除。**

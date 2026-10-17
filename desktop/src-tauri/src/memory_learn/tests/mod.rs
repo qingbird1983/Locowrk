@@ -3,7 +3,7 @@
 //! 全部打在 `rank` / `count_hits` / 各 `*_permille` 这些**纯函数层**——它们不碰
 //! sqlite，所以这些式子能不能兑现稿 §3.3 的说法，在没有数据库的情况下就能钉死。
 //! SQL 面（候选 SELECT 的列、`reinforce` 的 SET 列表）**不在这里假装有覆盖**：
-//! 它由跨文件形状判据盯，判据本体与台账条目见 docs/design/ROADMAP.md 的相应批次行
+//! 它由跨文件形状判据盯；判据本体与当时怎么验的见对应提交的正文与 `docs/history/`
 //! （历批的 `tmp/q101-shape.mjs` 那种出处是 gitignore 的临时件，不该当判据的名字写进注释）。
 //!
 //! 队列 Q10 起分三个簇：`formulas` 钉算式，`ordering` 钉排法，`receipt` 钉回执

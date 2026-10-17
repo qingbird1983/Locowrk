@@ -16,11 +16,12 @@
 #                        = 也判红。出处 = Q7 取证《Context Budget Closure》§7.6 那份死代码
 #                        清单——八行里四行早已删除、两行其实是历史日志的重放面，"没人盯着
 #                        一句自我声明"就是它漂了三个版本还没被发现的根因）
-#   ⑧ 文档预算与窗口     check-doc-budget.mjs（第七道结构闸，v2.195 文档预算批立：
-#                        在役 ROADMAP/CHANGELOG 的批次块数 ≤ 窗口 8 批 + 指针行在场 +
-#                        归档头部「逐字原样」声明在场。字节数只作兜底——单批靠压措辞可以混过
-#                        字节闸，但"最老那一批有没有真搬走"只能数块。它自己也带下限：
-#                        块数读数为 0 直接判红，因为那只可能是**闸瞎了**而不是文档真的没批次）
+#   ⑧ 文档规则          check-docs.mjs（2026-10-17 文档治理刀换掉的旧窗口闸的接班，七条判据：
+#                        AGENTS.md ≤100 行 / STRUCTURE.md 要点名每一个在役目录与每个自称唯一的文件 /
+#                        docs/adr 文件名与四节齐 / specs 必须有可测验收与非目标 / 在役文档单行 ≤2KB
+#                        （存量 32 处按基线放行，新增判红）/ 已废除的旧规矩用词不许回到在役文档 /
+#                        docs/history 每一份都要被它的 README 点名。
+#                        下限自证：md 扫描面读数过低直接判红——那只能是闸瞎了，不是文档没了）
 #   ⑨ 前端测试面          pnpm run test:run（Q11·v2.202 立：vitest + happy-dom 的运行面，
 #                        四条用例族 = IPC 包装形状 / chat store 行语义 / 组件双档渲染 / 夹具自证。
 #                        触发面 = desktop/src/**、desktop/tests/**、vitest.config.ts、
@@ -72,9 +73,9 @@ if printf '%s\n' "$staged" | grep -q '\.rs$'; then
   node "$root/scripts/check-reserved.mjs" || fail=1
 fi
 
-if printf '%s\n' "$staged" | grep -qE '^docs/|^AGENTS\.md$'; then
-  say "文档预算与窗口（第七道结构闸）"
-  node "$root/scripts/check-doc-budget.mjs" || fail=1
+if printf '%s\n' "$staged" | grep -qE '^docs/|^specs/|^(AGENTS|STRUCTURE|README|CONTRIBUTING)\.md$'; then
+  say "文档规则（check-docs）"
+  node "$root/scripts/check-docs.mjs" || fail=1
 fi
 
 # ⑨ 前端测试面（Q11）。`^desktop/(src|tests)/` 特意要求 src 后紧跟斜杠：

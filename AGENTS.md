@@ -1,184 +1,96 @@
-# [AGENTS.md](http://AGENTS.md)
+# AGENTS.md — Locowrk 施工指南
 
-## 项目概览
+> 本文件是 agent 指令的**唯一事实源**，保持 ≤100 行、规则**可判定**。
+> 每个文件是干什么的、能不能动 → [`STRUCTURE.md`](STRUCTURE.md)。还没做完的阶段 → [`docs/design/roadmap/`](docs/design/roadmap/)。
+> 一版变更写哪几处 → [`CONTRIBUTING.md`](CONTRIBUTING.md)。旧流水（只读）→ [`docs/history/`](docs/history/)。
 
-* **项目名 / 仓库名 / 文件夹名**：`Locowrk`（用户指定，三者一致）
-* **定位**：可热插拔、可回退、带桌面端（Tauri 2）的 Rust Agent 内核。"一切皆插件"约束的是**无特权模块**，不是"所有代码都打成 DLL"：工具、会话存储、Agent 循环扩展面走插件契约；现役形态 = 9 个动态库插件（`plugins-src/`）+ 一批**宿主内置**能力（LLM 客户端按 v2.75 架构定性 = 宿主内置服务，审批、子 Agent 调度、定时任务、记忆树工具、浏览器预览同理），两条通路都经同一 `ToolSource`/目录机制进工具池。**沙箱插件（tool-sandbox）已随 v2.145 整目录退役**——不隔离 fs/网络即非安全边界，命令执行面收敛为 `shell` 单一入口
-* **权威设计文档**：[docs/design/DESIGN.md](docs/design/DESIGN.md)。修改任何核心模块前先读对应章节，不要凭猜测实现；实现与文档冲突时先对齐文档。文档 §8 中的 `agent-kernel/` 指内核 Cargo 工作区，其 crate 命名（`plugin-api`、`cordis-core` 等）沿用文档，对外项目名是 Locowrk
-* **读文档先分清状态**：`docs/design/` 里既有现役规范也有**已退役/未采纳**的历史稿——动手前先查 [docs/design/INDEX.md](docs/design/INDEX.md)（v2.149 批 E 新立，权威 / 已兑现 / 存档三类 + 逐篇状态）。这条纪律的来源 = 审计 H9「DESIGN.md 0 处 v2.145、照它实现会写出一套与代码相反的策略层」
-* **队列 Q15（v2.208，2026-10-17，提交 `8299622`）= 看板 T2「打开记忆目录」落地 + 人类层路径算式从 6 处收成 1 处；级联删除与 Q16 按用户裁定跳过 ⇒ 主线转 Q17（本格 ◐）**。①新命令 `memory_reveal_project(workspace)` 三面同批 ⇒ 第三道闸 **88/88/88**；**入参是 workspace 串不是路径** ⇒ 比「必须 ∈ fsRoots」白名单更窄：恶意串只能落进安全化+短哈希那一个目录名。②**同一句话六处抄本**（写侧／键位／tree.md／对账／M1 索引／投影扫描）收成 `memlayout::project_dir` 一处出口，生产面 `"projects"` 字面量 **6→1**——不收就落第七份，而"开错目录"在界面上看不出来；`''` **拒答而不给目录**（未归属的 tree.md 在 `_unaffiliated/`、事实在 `global/`）。③**未落那一半取证在先**：MB 稿「删两目录、幂等」在现役纪律下**等于什么都没删**（判定矩阵「目录缺席 = 复位手势 → 不删行」+ 首启按 sqlite 补写 ⇒ 下次启动全写回来），真实状态面是四处；「不可恢复」也不成立（投影可重建）；确认弹窗现役不存在 ⇒ 稿估 **S** 实为「新建确认 + 扩展组件」。跳过不等于取消：四条取证转为**重构的输入**登记队列 §5，Q16 标 ⏭，重构后两格重判。④**判据自纠 166–169（累计 169）**：下限式（≥3）看不见"6 处没收完" ⇒ 判统一只许判**精确数**；扫描面必须是被对照的那份；**锚与对照都要窄**（`workspace: String` 三条命令都有、N4/N10 打在兄弟身上）；注释里的自述也是文本（形态判据先剥注释）。按「变异不掉的就别留着」删 `if (unowned) return`（加回零转红：disabled 不派发 click）。⑤**门禁**：27 项 rc 全 0 · 根 **515**／桌面 **579**／前端 **104** Files 13 · 八道闸全 0（超限 22==22、i18n **970=970**）· 判据 **46 行 MISMATCH=0** + 负对照 **15/15** · 变异 **12/12 全见红**、还原 sha 全等 · ⚠ **本格无回补提交**（写已知哈希）。⑥**边界**：破坏面零实现（v2.113 非破坏语义原样保留）；三层未归属特例名并存是刻意的，已由判据钉住；指针行「本次搬出」那处历批漂读数改按实测；画布真机走查等四条挂账**不因跳过而消失**（点名见队列 §5）。
-* **此前进度**：**队列 Q14（v2.207，2026-10-15，提交 `cdedd89`）= 记忆树看板 MVP 四刀齐：后端 `memory_tree_stream` 一次 IPC 出原子视图 + 前端双页签与四列汇聚画布 + 字号基座成可调项（本格收口）**。①**归组的权威源收成后端一处**：`RunSummaryView.chapter_ids` 由 `chapters_in` 算、两个构造点共用 ⇒ 前端区间反查归零；切片口径 `rows_between` 同管单章与整组，「读不到」与「没有内容」用 `section.error` 分开、区间查无 = **拒**而不是给空面板。②**画布的唯一形态依据是《Guidelines》§二⑯，不是 MB 稿 §3**：几何收成三层（`lib/board-model.ts` 纯函数 → `stores/tree-board.ts` 两层展开只判一次 → `components/memory/board/`），世界尺寸全由 DOM 实测算（原型那颗 8000×6000 桩没搬）、网格底全站只此一处渐变、台面件不写 z-index、拖拽期唯一写法 `transition: none`、键盘六键路径齐。③**合掉同类多形态三处**（原文行 `OriginalRows.vue`／徽章 `TreeBadge.vue`／来源文案 `tree-labels.ts`）。④**「可调项缺省 = 改前写死值 14」由三面同源承重**：后端常量、`style.css` 首帧兜底、前端常量三个投影做成 `q14d-shape.mjs` 一条读数；越界**拒而不钳**（口径同 Q8 预算），生效点 `lib/ui-font.ts` 是那个 CSS 变量的唯一写者。⑤**抓到两处自己的洞**：M1 变异（缺省 14→16）第一跑**打空**——用例全写 `== 常量` 时缺省面零证明力 ⇒ 补三行字面锚 + 判据 E7；⇒ **判据自纠 161–165，累计 165**。⑥**门禁按改动面**：22 项 rc 全 0 + 3 项 SKIP（根侧 `ROOT_SURFACE_FILES=0` 现算、非零却跳由 BADSKIP 计入 failed）· 桌面 **578**／前端 Tests **100** Files 13（本批 +3／+22）· 八道闸全 0（超限 **22==22**、i18n **967=967**、命令 87/87/87）· 本批判据 **37 行 MISMATCH=0** + 负对照 **11/11** · 变异 **11/11 全见红**、还原 sha 全等。⑦**边界**：⚠ **半迁移态的真实后果 = 调基座只带动相对档，旧页面不跟**（上位附录 C 第二半未完，设置页提示语已照实写、没许诺做不到的事）；画布真机走查未做；`b2 起号` 那条挂账因第 4 列渲染轮总结原文而**已在界面上可见**，甲／乙两条仍交用户判；T2→Q15、T3→Q16 未启。
-* **更早批次流水已归档（v2.149 批 E / E4 立，v2.150–v2.207 五十八批沿用并更新）**：**v2.206 及其之前共 90 个非空条目行**（行首 `* ` 89 条 + 1 条历史无前缀段 ㉚ v2.58）逐批流水 = [docs/design/archive/AGENTS-progress-archive.md](docs/design/archive/AGENTS-progress-archive.md)（**逐字原样搬出，内容未改写**；终态校验 = 与 `git show HEAD:AGENTS.md` 逐行比对 missing 0 / extra 0。**条数一律按实测并写清口径**（按行首 `* ` 数与按非空行数差一条：历史段 ㉚ v2.58 无前缀）。为什么搬：本文件是每个会话的注入源且有 65,536 字节预算，此前 94% 的字节是历史流水（最大单条 48,838 字节），真正要读的现行纪律反而被挤出预算。**写入纪律（批 E 立，v2.150–v2.207 五十五批沿用并更新本行）**：批完成后「当前进度」写本文件、只保留 **当前 + 前一版 + 归档指针**三条（三条合计 ≤6,000 字节；本批实测 2396 + 2410 + 1192 = 5998，重细节进 CHANGELOG/ROADMAP 而不是这里）；被挤出的那条整体搬进归档文件**正文最前**（倒序），不在本文件留残段。
+## 1. 这是什么
 
-## 目录结构
+- 项目名 = 仓库名 = 文件夹名：`Locowrk`。可热插拔、可回退、带桌面端（Tauri 2 + Vue 3）的 Rust Agent 内核。
+- 「一切皆插件」约束的是**无特权模块**，不是"所有代码都打成动态库"：工具、会话存储、Agent 循环扩展面走插件契约；
+  现役 = 9 个动态库插件（`plugins-src/`）+ 一批宿主内置能力（模型接入、审批、子代理、定时、记忆树工具、浏览器预览）。
+  两条通路都经同一 `ToolSource` 进工具池。
+- 沙箱插件已随 v2.145 **整目录退役**：不隔离文件与网络就不是安全边界；命令执行面收敛为 `shell` 单一入口。
+- 技术栈：Rust（根 Cargo workspace 8 个 crate + `desktop/src-tauri` 独立包）· Tauri 2 · Vue 3 + TypeScript · pnpm · vitest。
+- 当前阶段：单人自用内测。**不在范围内**：多用户服务端、云同步、生产部署。
+- 权威设计文档 = [`docs/design/DESIGN.md`](docs/design/DESIGN.md)：改核心模块前先读对应章节，实现与它冲突时先对齐文档；
+  其中 `agent-kernel/` 指内核 Cargo 工作区，crate 名沿用文档，对外项目名叫 Locowrk。
 
-```
-docs/design/INDEX.md   **文档索引——动手前先查它分清「权威 / 已兑现 / 待研究 / 存档·未采纳」**
-docs/design/DESIGN.md   权威设计文档（唯一需求来源）
-docs/design/ROADMAP.md  进度看板（唯一进度表：完成打钩 / 未完排期，每批完成先勾它）
-docs/design/CHANGELOG.md  逐批落点补记日志（DESIGN.md 不堆补记，新批次写这里；每版一整行倒序）
-docs/design/LLM.md      模型接入轨：单线 OpenAI 兼容协议 + 传输韧性 + 推理档位 + 多模态 + 子代理模型档
-docs/design/plugins.md  必备能力清单与落地顺序（§一 带「现役状态」列：哪些是插件 / 宿主内置 / 已退役）
-docs/design/Plug-in packaging.md  插件元数据与打包 v2（多语言/图标/manifest.json/版本策略 §9.4）
-docs/design/Tool exposure strategy and usage statistics.md  工具暴露策略与使用统计（exposure 三层 / EWMA / 闲置分级）
-docs/design/Context and Memory.md  上下文与记忆总纲（注入顺序 / 双层项目隔离；压缩三档已随 v2.137 退役）
-docs/design/UI shell and patterns.md  UI 唯一权威：导航模型 / 页面模式库 / 事件→UI 流向图 / 弹层规则 / tokens
-docs/design/Front-end Design Guidelines.md  前端唯一形态标准（§二 类别唯一形态清单 + 特例申请制 + stylelint/check-style 双闸；清单**不设总数**，类目数随批会变，钉进正文即成必漂读数）
-docs/design/Memory Tree Design v2.md · KV Prefix Cache Design v2.md  记忆树与前缀缓存规范正身（v1 两份留作对照）
-docs/design/NEW/        近几轮设计稿（兑现后不搬走，状态看 INDEX.md）；BUG/ 工单；archive/ 退役与未采纳
-crates/
-  plugin-api/           冻结 ABI 契约（ffi/manifest/plugin_side/tool）+ 宿主侧共享基座
-                        （fsutil/memlayout/naming/policy/args/netsafe/meta，全是 Rust 便利层不进 C ABI 面）
-  cordis-core/          Context / Effect / Fiber / Scope / EventBus
-  kernel-agent/         Agent 主循环 / Waterfall 监听器 / 洋葱中间件 / subagent 子 Agent 调度
-  plugin-host/          dlopen Loader / 多版本 Registry / FFI→Tool 适配 / wasmtime WASM 沙箱加载器
-  plugin-service/       插件安装·卸载·更新编排（CLI 与桌面端共用；lockfile + 市场）
-  session-store/        会话事件日志 / 快照 / 回放 / 补偿 / uncertain 崩溃恢复扫描
-  memory-tree/          记忆树（章节捆 L0-L2 / 整理触发 / 记录员 / 投影存储 / 跨会话检索）
-  kernel-bin/           CLI 可执行入口（headless 组装点）
-plugins-src/            内置插件源码（workspace 成员，9 个 id；tool-echo 双版本 = 热插拔验收夹具，tool-shout = 市场夹具）
-desktop/                Tauri 2 + Vue 3 桌面端（src/ 前端 + src-tauri/ 内核组装；src-tauri 是
-                        独立 Cargo 包、不进根 workspace，见根 Cargo.toml 的 exclude）
-plugins/                开发态插件安装目录，布局 plugins/{id}/{version}/（产物已 gitignore，版本真源见 scripts/build_plugins.sh）
-market/                 本地目录市场（bash scripts/build_market.sh 暂存，产物已 gitignore）
-scripts/                构建与门禁脚本（build_plugins / build_market / check_length / check-i18n / check-commands / check-middleware-wiring / check-style / check-reserved / check-doc-budget）
-```
+## 2. 常用命令（唯一入口，不要自创调用方式）
 
-各 crate 的 `lib.rs` 顶部注释列有计划模块和对应 [DESIGN.md](http://DESIGN.md) 章节号。
+| 命令 | 作用 |
+| --- | --- |
+| `make setup` | 装依赖 + 打印一次性手动项 |
+| `make check` | ★ 提交前全量门禁：格式 + 类型 + 形态 + 全部结构闸 + 两处 clippy + 三面测试 |
+| `make quick` | 秒级档（结构闸 + 形态），pre-commit 用的就是它 |
+| `make doc` | 文档规则闸（入口厚度 / 地图 / 决策记录 / 阶段计划 / 长行 / 旧规矩用词 / 历史索引） |
+| `make fmt` `make test` `make gates` `make adr` | 只跑其中一项；`make adr` 新建一篇决策记录 |
 
-## 常用命令
+没装 make 就 `sh scripts/tasks.sh <target>`，参数完全等价。**三条命令纪律**（本仓真踩过）：
 
-**日常开发（根 workspace）**
+1. 别把门禁接进管道（`cmd | tail` 的退出码是 tail 的 = 假绿）。
+2. `cargo clippy --workspace --all-targets -- -D warnings` 的 `-D warnings` 必须写在 `--` 之后。
+3. `desktop/src-tauri` 不在根 workspace，cargo 要在那个目录单独跑；它的 `generate_context!` 需要
+   `desktop/dist/` 存在 ⇒ 先 `pnpm -C desktop run build` 一次。
 
-```bash
-cargo check / cargo build / cargo test            # 全部测试（workspace）
-cargo test -p cordis-core                         # 只测某个 crate
-cargo clippy --workspace --all-targets
-cargo fmt --all
-bash scripts/build_plugins.sh                     # 插件产物暂存到 plugins/（**版本真源 = 脚本内 PLAN 清单**；每 id 单版本，仅 tool-echo 双份 = 机制夹具，重复 stage 判错——F15-A）
-cargo run -p kernel-bin -- demo                   # 热插拔验收叙事（需先跑上一条）
-cargo run -p kernel-bin -- demo4                  # waterfall 插桩 + 两 Agent 工具视图隔离
-```
+其余：`bash scripts/build_plugins.sh`（插件产物，版本真源 = 脚本内 PLAN 清单）·
+`cargo run -p kernel-bin -- demo` / `demo4`（热插拔与回退、审批改写参数与工具视图隔离的**验收叙事**，改内核后必跑）·
+`pnpm -C desktop tauri dev`（起桌面端看效果）。[crates.io](https://crates.io) 直连超时时给 cargo 加
+`--config 'source.crates-io.replace-with="rsproxy"' --config 'source.rsproxy.registry="sparse+https://rsproxy.cn/index/"'`
+（命令行级覆盖，别改全局 `~/.cargo/config.toml`）。
 
-**每批收尾门禁（批 B 立的整套；最后一次编辑之后全量复跑，不要在中间态报绿）**
+## 3. 代码硬规则（违反即返工）
 
-```bash
-# 根侧三件（clippy 的 `-D warnings` 必须在 `--` 之后：写成
-# `cargo clippy --workspace --all-targets -D warnings` 会被 cargo 当成自己的
-# 参数并报 `error: unexpected argument '-D'`——v2.154 批 F-4 的门禁脚本就踩在
-# 这里，且因为它把 clippy 接进了管道（`| tail`），退出码被 tail 盖住 = 假绿）
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-
-# 桌面侧三件（src-tauri 不在根 workspace，必须单独跑）
-cd desktop/src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
-
-# 前端四件（Q11·v2.202 起含测试面）
-cd desktop && pnpm build            # vue-tsc 类型检查 + vite 构建（generate_context! 也吃 dist/；tsconfig 现含 tests/**，测试代码也在类型面内）
-cd desktop && pnpm run lint:style   # stylelint：CSS 声明维度，一级判错**不可绕过**
-node scripts/check-style.mjs        # 模板维度（tailwind 圆角类之类）
-cd desktop && pnpm run test:run     # vitest + happy-dom：IPC 替身形状 / chat store 行语义 / 组件双档渲染 / 夹具自证
-
-# 七道结构闸
-bash scripts/check_length.sh                     # 单文件 400 行「基线比较」报告闸（新增超限判红；三问自检可不拆）
-node scripts/check-i18n.mjs                      # zh/en 键集双向闭合 + 被引用键缺失/无静态引用键报告
-node scripts/check-commands.mjs                  # #[tauri::command] ↔ generate_handler! ↔ 前端 invoke 三向闭合
-node scripts/check-middleware-wiring.mjs         # 中间件「有定义、无生产构造点」判红（KNOWN_UNWIRED 白名单现为空）
-node scripts/check-split-equivalence.mjs         # 第五道（v2.161 批 F-11 立）：目录式模块形状——mod 声明↔文件闭合 /
-                                                 #   测试 mod.rs 不混住用例 / 私有项不被兄弟簇引用 / 测试簇名不撞被测子模块 /
-                                                 #   子簇引用父模块私有项必须有 `use super::`（v2.164 批 F-14 加）/
-                                                 #   glob 传导链不断裂：簇用到的名字须有出处（本簇 use·父定义·父 use 经 glob）
-                                                 #   （v2.165 批 F-15 加；「父模块类型面经 mod.rs 的 glob 传导」一档随 v2.166 批 F-16 补）。
-                                                 #   测试目录判据 = 父声明带 #[cfg(test)]（现管 10 个目录）
-node scripts/check-split-equivalence.mjs --dbg-tests   # 测试目录识别口径漂移时用它打印判定过程
-node scripts/check-split-equivalence.mjs --split --ledger scripts/split-ledger/<name>.json   # 从历史原文重放某一刀的等价证明
-node scripts/check-reserved.mjs                     # 第六道（v2.191 批 Q7 立）：「定性 = 预留待接」标注 ↔ 预留件清单对账——
-                                                 #   标注必须给得出清单（反之亦然，同类只许一种形态）/ 清单里的符号在**代码面**
-                                                 #   引用点必须为 0（接线了没摘标注 = 判红）/ 清单里的件必须还存在（删了没登记 = 判红）。
-                                                 #   出处 = Q7 取证《Context Budget Closure》§7.6：八行"死代码"里四行早已删除、两行其实是
-                                                 #   历史会话日志的重放面——一句自我声明没人盯，就是它漂了三个版本没被发现的原因
-                                                 #   它自带两道"闸自己也得是活的"下限（扫描 .rs 数、标注数），数不到就判红而不是 OK
-```
-
-Git hooks 在 `.githooks/`（随仓库提交），pre-commit 按暂存面触发上面的结构闸与**前端测试面**（Q11 起：暂存含 `desktop/src/**`、`desktop/tests/**`、`vitest.config.ts`、`desktop/package.json`、`desktop/tsconfig.json` 任一项就跑 `pnpm run test:run`）；⚠ 这里刻意**不写"几道"**——闸的只数随批增删，写死的数字必然漂（同一纪律见 CI 头注与 `.githooks/pre-commit` 的编号段注释），实跑清单以脚本内为准。重新克隆后需重新执行一次 `git config core.hooksPath .githooks`。CI = `.github/workflows/ci.yml` 三作业（kernel / desktop(windows-latest，Q11 起含前端测试步，node 档抬到 24 = vitest 5 的 engines 下限) / hygiene），批 B 立：此前桌面端与前端在 CI 上完全不存在。
-
-**验收叙事**（前置 `bash scripts/build_plugins.sh`）：
-
-```bash
-cargo run -p kernel-bin -- demo    # 装载 tool-echo 0.1.0 → 激活 0.2.0 → 回退 0.1.0（切 active 指针），全程不重启
-cargo run -p kernel-bin -- demo4   # 审批中间件经 agent/request 改写参数；两 Agent 工具视图隔离
-```
-
-桌面端（desktop/，Tauri 2 + Vue 3；前置 `pnpm install` 一次、插件产物已构建）：
-
-```bash
-cd desktop && pnpm tauri dev        # 开发模式（窗口 + 热重载）：聊天、观察工具调用与审批卡
-cd desktop && pnpm build            # 仅前端：vue-tsc 类型检查 + vite 构建
-cd desktop/src-tauri && cargo test  # 桌面端 Rust 单测（runner 投影 / llm 轨 / 组装点）
-```
-
-注意：`desktop/src-tauri` 被 exclude 在根 workspace 之外，`cargo check` 等要在 `desktop/src-tauri` 目录下单独执行；其 `generate_context!` 编译期要求 `desktop/dist/` 存在（先 `pnpm build` 一次）。
-
-网络提示：[crates.io](http://crates.io) 直连超时时，给 cargo 命令加 `--config 'source.crates-io.replace-with="rsproxy"' --config 'source.rsproxy.registry="sparse+https://rsproxy.cn/index/"'` 走镜像（命令行级覆盖，勿改全局 \~/.cargo/config.toml）。
-
-## 架构边界（依赖严格单向，违反即设计错误）
+**依赖严格单向**（违反 = 设计错误，与 DESIGN §8 一致）：
 
 ```
-kernel-bin        → kernel-agent + plugin-service + session-store   （组装点）
-desktop/src-tauri → kernel-agent + plugin-service + session-store   （组装点）
-kernel-agent      → cordis-core + plugin-api + session-store
-plugin-service    → plugin-host + cordis-core
-cordis-core       → plugin-api
-plugin-host       → plugin-api
-session-store     → plugin-api
+kernel-bin / desktop/src-tauri → kernel-agent + plugin-service + session-store   （两个组装点）
+kernel-agent → cordis-core + plugin-api + session-store
+plugin-service → plugin-host + cordis-core
+cordis-core / plugin-host / session-store → plugin-api
 ```
 
-（`X → Y` 表示 X 依赖 Y，与 [DESIGN.md](http://DESIGN.md) §8 一致。kernel-agent 与 plugin-host 互不依赖： 共用的 `Tool` / `CallCtx` 定义在 plugin-api 宿主侧、不进入 C ABI。内核经 `ToolSource` 服务 trait 解析工具；依赖图禁止 plugin-host 依赖 kernel-agent，故 plugin-host 只提供 同语义的固有 API（`RegistryToolSource::resolve`），由组装点（kernel-bin 的 `tool_source.rs`）桥接成该 trait 并注册进 Context）
+`plugin-api` 不依赖任何其他 crate；kernel-agent 与 plugin-host 互不依赖（共用的 `Tool` / `CallCtx` 定义在
+plugin-api 宿主侧、不进 C ABI；plugin-host 只给固有 API `RegistryToolSource::resolve`，由组装点桥接）。
 
-* `plugin-api` 不依赖任何其他 crate；`cordis-core` 只依赖 `plugin-api`
-* `kernel-bin`（CLI）和 `desktop`（GUI）是仅有的两个组装点，业务逻辑不写在这里
-* **UI 永远不直接操作 `PluginRegistry`**，只通过 `PluginService`；Tauri command 是薄适配层，只做参数转换，不写业务逻辑
-* 流式输出走事件推送（`agent://chunk` 等），不塞进 command 返回值
+- `plugin-api` 是**冻结 ABI**：只许把字段追加到结构体末尾，改已有签名 = breaking；`PLUGIN_ABI_VERSION` 变更是大事。
+- UI 永远不直接操作 `PluginRegistry`，只经 `PluginService`；Tauri command 是薄适配层，只做参数转换，不写业务逻辑。
+- 流式输出走事件推送（`agent://chunk` 等），不塞进 command 返回值。
+- 内核八条设计纪律（副作用带逆操作、永不 dlclose、FFI 进 blocking、先写 `ToolCall` 事件、事件只追加、
+  不可逆默认审批、补偿幂等用 `call_id`、多版本切 `active` 指针）+ 它们的**实况订正**（每步批量落盘、
+  磁盘快照从未接线、现在是七序决策表而非必弹卡、开发态每 id 只暂存当前版本）=
+  [`docs/design/DESIGN.md`](docs/design/DESIGN.md) 附录 C，写内核代码前读。
+- 单文件建议 ≤400 行：超了先做三问自检（只管一件事？名字概括得住？改它常牵动无关部分？），
+  三问皆是 → 可不拆并在提交正文给理由；任一否 → 拆成目录式子模块。`check_length.sh` 只拦"新增超限"。
+- `lib.rs` / `main.rs` 只放模块声明与文档注释；实现必须落到 DESIGN 规划的模块文件；
+  `#[cfg(test)]` 测试放独立文件；内部类型一律 `pub(crate)`。动手前先列"新建/修改哪些文件、各放什么"。
 
-## 模块与文件规模纪律
+## 4. 产品与界面硬规则
 
-* `lib.rs` / `main.rs` 只放模块声明、re-export 和文档注释，不写实现
-* 实现必须落到 [DESIGN.md](http://DESIGN.md) 规划的模块文件（如 cordis-core 的 `context.rs` / `effect.rs` / `fiber.rs` / `scope.rs` / `event_bus.rs` / `runtime.rs`）； 文档未规划的新职责 = 先建新文件并加 `mod` 声明，禁止堆进已有文件
-* **单文件建议不超过 400 行**（2026-10-05 用户裁定，替代原"超限必拆"的机械门禁）：超过时先做**三问自检**——①这个文件是否只做一件事？②它的名字是否准确概括内容？③修改它是否经常牵动不相关的部分？三问皆「是」= 高内聚，可以不拆（提交说明里给理由）；有任一「否」= 即使没到 400 行也应拆成目录式子模块（`context/` + `context/mod.rs`）。`scripts/check_length.sh` 是**基线比较闸**（v2.146 批 B 改造，此前它恒 `exit 0` = 空转门禁）：超限文件总数与脚本内 `BASELINE` 比较，**新增超限判红拦截**、净降则提醒收紧基线；三问判断仍是人的职责，基线只防"顺手把文件写胖"
-* `#\\\[cfg(test)\\\]` 测试放独立文件（如 `effect/tests.rs`，模块内以 `#\\\[cfg(test)\\\] mod tests;` 声明）
-* 内部类型一律 `pub(crate)`，只有跨 crate 需要的才 `pub`
-* 动手写码前，先列出"将新建/修改哪些文件、各放什么"的清单，再按清单实现
-* 超长文件的拆分是独立任务：按职责拆子模块，保持外部 API 与既有测试不变
+- **可配置原则**（两条同源，用户 2026-10-03 定）：① 凡是有不确定性的数值，一律做成设置页可调项并给合理缺省；
+  ② 界面上写死的禁止/限制，都要有开关可开可关（含最危险的动作）；开发类与危险类开关和数值收进「开发者」分区
+  （侧栏版本号连点 7 次解锁）。
+- **前端唯一形态标准** = [`docs/design/Front-end Design Guidelines.md`](docs/design/Front-end%20Design%20Guidelines.md)：
+  同类只许一种形态；动前端代码前先查对应类目；要新形态 = 先申请（是什么/在哪/为什么/影响）→ 批准 → **先改标准再写码**；
+  豁免要登记标准 §七 并在行内留凭证。机械闸 = stylelint（CSS 声明维度）+ `scripts/check-style.mjs`（模板维度）。
+  界面文案一律中英成对（`check-i18n.mjs` 拦漏一边）。
 
-## 设计纪律（写内核代码必须遵守；完整版见 [DESIGN.md](http://DESIGN.md) 附录 C）
+## 5. 禁区（[LOCK]，动前先停下来向人说明并等确认）
 
-1. 所有对 `Context` 的修改必须走 `effect()` 并携带逆操作（Disposer），撤销按 LIFO
-2. 永不 dlclose：逻辑卸载 + 物理保留（graveyard），进程重启才真正释放
-3. FFI 调用放 `spawn_blocking`；插件与宿主两侧都必须 `catch_unwind`
-4. 先写 `ToolCall` 事件再执行工具——崩溃后 replay 能识别悬空调用
-   ⚠ **落盘粒度实况（v2.149 批 E 订正）**：桌面端是**每 step 批量落盘**（`run_turn` 在 step 收束后一次 `append_slice`），工具执行中途崩溃时 jsonl 里**没有**该条 `ToolCall`——悬空调用只在 mid-flush 崩溃（步刷盘中途死亡）出现。崩溃恢复的诚实闭合面 = `session-store/src/uncertain.rs`（v2.134）+ 投影层合成 ToolResult（`derive_messages`）；**per-event 落盘是挂账未做**（需内核持久化钩子）
-5. 会话事件只追加不删除：回退 = 移动游标 + replay；快照带 `schema_version` upcaster
-   ⚠ **磁盘快照从未接线（v2.148 批 D 标 RESERVED）**：`snapshot.rs` 的实现与测试都在位，但**没有任何生产读写点**——恢复真源 = JSONL 逐行回放。别把"快照存在"当成性能优化已生效，也别与内存态 `Session::snapshots` 混
-6. `SideEffect::Irreversible` 工具调用前**默认**审批，审批结果也是一条事件
-   ⚠ **v2.145 权限模型重设计后不是"必弹卡"（批 E 订正措辞）**：现役是七序决策表（DESIGN §7.2）——计划档硬拒 → 硬门（隐私门 + 越界门，**全档位含 Auto 都拦、只许一次**）→ 项目 deny 规则 → 模式放行（Auto 全放行 / AcceptEdits 放行 Compensable）→ 项目 allow 粘性规则 → 会话豁免 → 决策卡。所以免审路径有五条；写新工具时 `side_effect` 标错=谎报（v2.146 批 A 的 `tool-fetch` manifest 就是反面教材）
-7. 补偿工具必须幂等，用 `call_id` 做去重键
-8. 多版本并存：回退 = 切换 `active` 指针；更新失败自动回滚。⚠ **"旧版本永远保留"成立于注册表内（load 进来的实例常驻）与安装态磁盘（installer 复制的是当时字节），不成立于开发态暂存面**：`build_plugins.sh` 永远用当前 HEAD 重编，多 stage 一个版本只会造出"版本串不同、字节相同"的**假历史目录**并把 UI「回退」入口指到行为如新的产物（v2.162 F15-A 裁定：开发态每 id 只 stage 当前版本，双版本仅 `tool-echo` 这类**机制夹具**——其可观察差异来自插件自身的运行时版本闸门，脚本里有预校验把守）
+- `crates/plugin-api` 的既有对外签名 · `Cargo.lock` 与任何 lock 文件（由包管理器更新，禁止手改）
+- `.githooks/` · `.github/workflows/` · `docs/design/DESIGN.md` 的规范语义
+- `.env` 与任何真实密钥、token、密码、私钥：**不许写进任何项目文件**
+- 不要自行执行：递归删除、强制推送、hard reset、发布部署、访问生产环境、装系统级依赖、
+  `curl | sh`、**改 git 配置**、改操作系统设置
+- 删除 / 覆盖 / 迁移 / 发布、动用户数据目录：先向人确认。发现问题就登记，别在同一刀里顺手修无关代码。
 
-## 平台注意事项（Windows 开发机）
+## 6. 工作流（每次任务按此执行）
 
-* Shell 是 Git Bash，路径写正斜杠
-* 设计文档示例中的插件产物 `.so`，在 Windows 构建下是 `.dll`（见 plugins/README.md）
-* dlopen 路径区分平台后缀，`plugin-host` 实现时注意 `lib`/`.dll`/`.so`/`.dylib` 前后缀差异
-* 本机 IPv4 回环被过滤驱动拖 \~2s/连接（127.0.0.1 curl 2.02s vs ::1 0.02s，疑 clash TUN/杀软钩子；㉕·微调② v2.45 核查）——vite dev 已钉 `server.host: "::1"` 绕开 （冷启动稳态首帧 108–140ms），**勿改回双栈**，否则 dev 首帧回到 30s+
-
-## 工作规则
-
-* `plugin-api` 是冻结 ABI：对外发布后只允许把字段追加到结构体末尾，不改已有签名；`PLUGIN_ABI_VERSION` 变更是 breaking 事件
-* 临时实验文件放 `tmp/`（已 gitignore）或系统临时目录，不要放仓库根目录
-* 不要把 API Key、Token、密码、私钥写进任何项目文件
-* **可配置原则（用户 2026-10-03 裁定，两条同源）**：①**数值**——凡需要数值设定且存在不确定性的参数，一律进设置页成为可调项，不为用户做死限定（给合理缺省值）；②**禁止项**——所有界面上写死的禁止/限制都要有开关可打开或关闭（含最危险的动作），开发相关与危险相关的开关/数值统一收进\*\*「开发者」设置分区\*\*（默认隐藏：侧栏版本号连点 7 次解锁，安卓式；分区内可锁回）。可控项分「用户」「开发者」两层各归其位
-* 删除、覆盖、迁移、发布等高风险操作先向用户确认
-* **前端统一标准（用户 2026-10-06 裁定「所有自发明的一律判错」+「特例申请制」）**：《docs/design/Front-end Design Guidelines.md》是前端**唯一**形态标准——同类只许一种形态；动任何前端代码前先查标准对应类目；清单外的新形态/特例 = **先申请（说明是什么/在哪/为什么/影响）→ 用户批准 → 先修订标准再写码**。机械门禁：pre-commit 跑 stylelint（CSS 声明维度，desktop/stylelint.config.cjs）+ `scripts/check-style.mjs`（模板维度），一级判错提交即拒、不可绕过；豁免必须登记标准 §七 + 行内 `stylelint-disable-line` 注释引用批准条目。v2.87 起 --lw-fs-*/--lw-gap-* 令牌已建齐，裸字号/裸间距同为一级判错（豁免 = 行内凭证注释：style 维度 stylelint-disable-line 引 §七 或 §二⑬ 光学修正，模板维度上一行内 lw-waive 注释）
-* 完成任务后说明：改了哪些文件、解决了什么问题、是否运行了测试、遗留风险
-* 每完成一批，先勾 docs/design/ROADMAP.md（⬜/◐ → ✅ 并补版本与提交哈希），再写 docs/design/CHANGELOG.md 落点补记（**[DESIGN.md](http://DESIGN.md) 不再堆补记**——用户 2026-10-03 裁定：堆数据既危险又会破坏最原始设计，也让文档无限膨胀；DESIGN 只随批次改规范正文与版本行）。**在役窗口（v2.195 文档预算批立）**：ROADMAP 与 CHANGELOG 的批次叙述各只住最近 8 批，被挤出的那一批**逐字原样**追加进 docs/design/archive/ 下对应归档的正文最前，在役文件只留一条指针；判据 = 第七道结构闸 scripts/check-doc-budget.mjs（数块数不只比字节 —— 单批靠压措辞能混过字节闸，混不过「块数不超过窗口」这条）
+1. 需求模糊不要猜 → 先写 `specs/<编号>-<名>/spec.md`（含**可测验收**与**非目标**）等确认。
+2. 任务较大先给计划（步骤 + 影响文件）等确认。
+3. 实现 + 同步补测试 → `make check` 全绿才算完成；**不许为了过闸删测试或放宽规则**。
+4. 收尾按 [`CONTRIBUTING.md`](CONTRIBUTING.md)：进度只在 `docs/design/roadmap/` 那一行改勾选，
+   细节（改了哪些文件、实测读数、遗留风险）写在提交正文；有长期影响的取舍新写一篇 `docs/adr/`。
+5. 动了界面，交付前先自己在真实窗口跑一遍并截图核对，再请你亲自看；给你的永远是"打开哪、点哪、该看到什么"。
+6. Windows 开发机：shell 是 Git Bash，路径写正斜杠；插件产物在 Windows 是 `.dll`；
+   vite dev 已钉 `server.host: "::1"` 绕开本机回环过滤驱动（**别改回双栈**，否则首帧回到 30 秒以上）。
