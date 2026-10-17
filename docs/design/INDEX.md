@@ -15,6 +15,7 @@
 | 文档 | 地位 | 现役版本 |
 |---|---|---|
 | [DESIGN.md](DESIGN.md) | 唯一需求来源：内核架构、ABI 契约、决策表、目录树 | 批 E 已把 §7.1 洋葱链、§7.2 决策表、§8 目录树、§11.3 装载机制、§3.5 接线列订正到代码实况（v2.149） |
+| [DOC-GOVERNANCE-PLAN-v1.md](DOC-GOVERNANCE-PLAN-v1.md) | **文档规范治理计划**（用户 2026-10-17 指令：参照 `F:\Users\Warehouse template` 治"记一版变更要动 10 个文件落 14 处"这个成本；含实测底数 + 目标结构 + D1–D7 分刀 + 五个待拍板点 + 新「每批收口清单」） | ⚠ **提议 / 待批准**（v1，2026-10-17）——批准前不授权动任何既有文档，本行只登记它的存在与状态 |
 | [ROADMAP.md](ROADMAP.md) | **唯一进度看板**（⬜/◐/✅ + 版本 + 哈希）；批次叙述区只住**最近 8 批**，被挤出的那一批逐字搬进 [archive/ROADMAP-batches.md](archive/ROADMAP-batches.md)（v2.195 文档预算批立的窗口纪律，判据 = 第七道结构闸 scripts/check-doc-budget.mjs） | 现役 |
 | [CHANGELOG.md](CHANGELOG.md) | **逐批落点日志**（每版一整行，倒序；本文件是"写了什么"的真源，不是进度表）；同样只住**最近 8 批**，被挤出的逐字搬进 [archive/CHANGELOG-batches.md](archive/CHANGELOG-batches.md)（v2.195 立） | 现役。检索：`grep -n "^\*文档版本：v2.14" CHANGELOG.md` |
 | [UI Design System.md](UI%20Design%20System.md) | **UI 层最高权威**（色彩令牌映射 / 字号相对制 / 圆角嵌套降档 / 组件规则 / 冲突裁决表；ZCode DESIGN.md 微调移植，用户 2026-10-11 裁定） | v1.2；⚠ 代码面未对齐，逐批兑现；下位两文档冲突处一律以其附录 A 为准。v1.1 = §八 新增「画布与节点」特例类目（Q13），画布自 Q14 起生效、现役无画布〔**该句是 v1.1 当时状态**：画布已于 Q14 第三刀落地 = `components/memory/board/`〕。v1.2 = 附录 B 那两行的状态订正（Q14 第四刀 v2.207：基座进设置页「外观」可调已兑现，style.css 那颗降为首帧兜底；⚠ 半迁移态边界写进行内——调基座只带动相对档，旧页面不跟） |
