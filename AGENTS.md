@@ -2,7 +2,7 @@
 
 > 本文件是 agent 指令的**唯一事实源**，保持 ≤100 行、规则**可判定**。
 > 每个文件是干什么的、能不能动 → [`STRUCTURE.md`](STRUCTURE.md)。还没做完的阶段 → [`docs/roadmap/`](docs/roadmap)。
-> 一版变更写哪几处 → [`CONTRIBUTING.md`](CONTRIBUTING.md)。旧流水（只读）→ [`docs/history/`](docs/history)。
+> 一版变更写哪几处 → [`CONTRIBUTING.md`](CONTRIBUTING.md)。旧流水（只读 · ⊘ 不入库，只在作者本机）→ [`docs/history/`](docs/history)。
 
 ## 1. 这是什么
 

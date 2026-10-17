@@ -144,16 +144,17 @@ for (const f of r6Face) {
   for (const w of OLD_WORDS) if (t.includes(w)) bad(`${rel(f)} 里出现已废除的旧规矩用语「${w}」——它属于 docs/history/，别再写进在役文档`);
 }
 
-// ---- R8 断链：在役文档里的相对链接必须指得到东西 --------------------------------------
-// 为什么要有它：文档搬迁最大的风险不是搬错，是**搬完留下指向旧址的链接**——下一个 agent
-// 顺着链接走过去查无此文件，就只能猜，而"猜"正是本仓库反复出事的那个根因。
-// 口径（每条都是为了不假红）：只看 markdown 链接语法；**先剥掉行内代码** `...`
-// ——文档描述别的系统的语法时常写成示例链接（本仓实测：`- [Title](file.md) — hook`
-// 是在讲 MEMORY.md 的格式，不是指向本仓文件的引用）；排掉外链与纯锚点；
-// 目标做 decodeURIComponent（含空格的文件名写作 %20）；去掉 # 之后的锚再判存在。
-const BROKEN_BASELINE = [];  // 已知例外（一条一个「文件:行 → 目标」）；降它要真去修链接
-const broken = [];
-for (const f of [...live, ...rootDocs.map((d) => path.join(ROOT, d))]) {
+// ---- 链接面与「本机层」探测（R8 / R7 / R9 / R10 共用一遍，不重复解析） ----------------
+// 用户 2026-10-17 裁定：`docs/design/` 根稿、`docs/design/archive/`、`docs/history/`、`docs/issue/`、
+// `docs/references/` 不入库。于是这些目录**在 CI 的检出面里根本不存在** —— 把它们当"必须在场"来判，
+// CI 必然假红（首次推送实测红在 18 条这种判法上：13 条断链 + 2 条缺索引 + 1 条形状 + 2 条连带）。
+// 正确口径是把三种缺席分开：
+//   · 目标被 `.gitignore` 排除 ⇒ 属本机层：R8 不判它断链（改由 R10 要求标注），那一层不在场就跳过并记账；
+//   · 目标没被排除却不存在 ⇒ 真断链，判红（谁想靠删排除规则蒙混，正好落回这条）；
+//   · 入库层（authority / roadmap / adr / specs）不在场 ⇒ 恒红，那才是真事故。
+// 排除名单唯一出处仍是 `.gitignore`：一次 `git check-ignore --stdin` 批量问，脚本里不抄第二份。
+function linksIn(f) {
+  const out = [];
   read(f).split('\n').forEach((l, i) => {
     for (const m of l.replace(/`[^`]*`/g, '').matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)) {
       let t = m[2];
@@ -163,13 +164,50 @@ for (const f of [...live, ...rootDocs.map((d) => path.join(ROOT, d))]) {
       let target;
       try { target = decodeURIComponent(t); } catch { continue; }
       const abs = path.isAbsolute(target) ? target : path.join(path.dirname(f), target);
-      if (!fs.existsSync(abs)) broken.push(`${rel(f)}:${i + 1} → ${target}`);
+      const rr = rel(abs).replace(/\\/g, '/');
+      if (!rr || rr.startsWith('..') || rr === '.') continue;
+      out.push({ from: rel(f), line: i + 1, text: l, target: rr, exists: fs.existsSync(abs) });
     }
   });
+  return out;
 }
-for (const b of broken) {
-  if (!BROKEN_BASELINE.includes(b)) bad(`断链 ${b}（旧址还留着引用 = 下一个读的人只能猜）`);
+const allLinks = [...live, ...rootDocs.map((d) => path.join(ROOT, d))].flatMap(linksIn);
+// 探测项代表"本机层应当被排除"这件事本身；少了它们，删掉 .gitignore 那五条就能让判据全体跳过。
+const PROBE_SELF = ['docs/history/README.md', 'docs/design/archive/README.md', 'docs/issue/probe.md', 'docs/references/probe.md', 'docs/design/probe.md'];
+// 一个路径要问三种形态：`git check-ignore` 对**磁盘上不存在**的路径不敢猜它是不是目录，
+// 而带尾斜杠的规则（`/docs/history/`）只认目录形态 —— 实测在 clone 面上 `docs/history` 不命中、
+// `docs/history/README.md` 命中。CI 检出面恰恰就是"路径不存在"的那种情形，只问裸路径会让本机层
+// 链接被误判断链。（形态里**不含** `p + '/'`：实测 `STRUCTURE.md/` 会被 git 回一个空规则号当成命中，
+// 把入库文件误判成不入库 —— 用 `p + '/probe.md'` 达到同样目的且没有这个边界。）
+const forms = (p) => [p, p + '/probe.md', path.posix.dirname(p)];
+const probeSet = [...new Set([...allLinks.flatMap((p) => forms(p.target)), ...allLinks.map((p) => p.from), ...PROBE_SELF, ...PROBE_SELF.map((p) => path.posix.dirname(p))])];
+let ignored = new Set();
+try {
+  const out = execFileSync('git', ['check-ignore', '--stdin'], { cwd: ROOT, input: probeSet.join('\n') + '\n', encoding: 'utf8' });
+  ignored = new Set(out.split('\n').filter(Boolean).map((s) => s.replace(/\\/g, '/')));
+} catch (e) {
+  if (e.status !== 1) bad(`问不了 git（${e.message}）⇒ 本机层判据全部作废，不许静默当绿`);
 }
+// 判"这条路径属不入库层"必须与上面探测用的**同一组形态**，否则两处口径会漂。
+const isIgnored = (p) => forms(p).some((f) => ignored.has(f));
+const skipped = [];   // 因"不入库层不在检出面"而跳过的判据，末行要报数，不许静默
+
+// ---- R8 断链：在役文档里的相对链接必须指得到东西 --------------------------------------
+// 为什么要有它：文档搬迁最大的风险不是搬错，是**搬完留下指向旧址的链接**——下一个 agent
+// 顺着链接走过去查无此文件，就只能猜，而"猜"正是本仓库反复出事的那个根因。
+// 口径（每条都是为了不假红）：只看 markdown 链接语法；**先剥掉行内代码** `...`
+// ——文档描述别的系统的语法时常写成示例链接（本仓实测：`- [Title](file.md) — hook`
+// 是在讲 MEMORY.md 的格式，不是指向本仓文件的引用）；排掉外链与纯锚点；
+// 目标做 decodeURIComponent（含空格的文件名写作 %20）；去掉 # 之后的锚再判存在。
+const BROKEN_BASELINE = [];  // 已知例外（一条一个「文件:行 → 目标」）；降它要真去修链接
+const localOnly = [];
+for (const p of allLinks) {
+  if (p.exists) continue;
+  if (isIgnored(p.target)) { localOnly.push(p); continue; }
+  const key = `${p.from}:${p.line} → ${p.target}`;
+  if (!BROKEN_BASELINE.includes(key)) bad(`断链 ${key}（旧址还留着引用 = 下一个读的人只能猜）`);
+}
+if (dbg) console.log(`  R8 链接 ${allLinks.length} 条 · 指向本机层 ${localOnly.length} 条（不计断链，交给 R10 标注）`);
 
 // ---- R7 每个历史层都要有自己的索引 ---------------------------------------------------
 // 判据从"只盯 docs/history"泛化成"每个历史目录都要有一份 README 点名它内部的每一件"：
@@ -178,7 +216,11 @@ for (const b of broken) {
 const HIST_INDEXES = ['docs/history/README.md', 'docs/design/archive/README.md'];
 for (const idx of HIST_INDEXES) {
   const p = path.join(ROOT, idx);
-  if (!fs.existsSync(p)) { bad(`${idx} 不存在 = 那一层历史没有索引`); continue; }
+  if (!fs.existsSync(p)) {
+    if (isIgnored(idx)) { skipped.push(idx); continue; }   // 那一层不入库：CI 检出面没有它，属正常
+    bad(`${idx} 不存在 = 那一层历史没有索引`);
+    continue;
+  }
   const t = read(p);
   const own = hist.filter((f) => rel(f).startsWith(idx.replace(/README\.md$/, '')));
   if (!own.length) bad(`${idx} 存在但那一层查无归档件 ⇒ 判据空转（先查历史目录是不是改名或搬空了）`);
@@ -190,64 +232,39 @@ for (const idx of HIST_INDEXES) {
 }
 
 // ---- R9 design 层的形状不许长回原样 -------------------------------------------------
-// 用户 2026-10-17 定的形状：docs/design 里只有两个文件夹 —— authority（现役正身）与
-// archive（已兑现/已退役），其余有用稿散在 design 根。这条存在的理由很具体：
+// 用户 2026-10-17 定的形状：docs/design 里只有两个文件夹 —— authority（现役正身，入库）与
+// archive（已兑现/已退役，不入库），其余有用稿散在 design 根。这条存在的理由很具体：
 // 旧结构里 `NEW/` 这种**用目录名表示状态**的做法，时间一长就没人知道 NEW 里哪些已经做完了，
 // 于是又得多写一份状态表。状态只在 docs/roadmap/ 那一行里，不靠目录名。
+// archive 在不入库层里 ⇒ 缺席只记跳过；authority 是入库层 ⇒ 缺席恒红；多出来的目录 ⇒ 恒红。
 const designDir = path.join(ROOT, 'docs/design');
-if (fs.existsSync(designDir)) {
+if (!fs.existsSync(designDir)) {
+  bad('docs/design 整层不存在：authority/ 是入库层，这一层不可能整个缺席');
+} else {
   const sub = fs.readdirSync(designDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  const allow = ['archive', 'authority'];
-  if (sub.join(',') !== allow.join(','))
-    bad(`docs/design 下的子目录 = ${sub.join('/') || '（无）'}，规定的形状是 ${allow.join('/')} 两个；新目录要么并进这两个，要么搬到 docs/ 下别的位置`);
+  const extra = sub.filter((s) => s !== 'archive' && s !== 'authority');
+  if (extra.length) bad(`docs/design 下多出目录 ${extra.join('/')}：规定的形状是 archive/ 与 authority/ 两个，新目录要么并进这两个，要么搬到 docs/ 下别的位置`);
+  if (!sub.includes('authority')) bad('docs/design/authority 不在 = 各主题规范正身没了（它是入库层，缺席是真事故）');
+  if (!sub.includes('archive')) {
+    if (isIgnored('docs/design/archive/README.md')) skipped.push('docs/design/archive/');
+    else bad('docs/design/archive 不存在又没被排除 = 归档层被删或改名了');
+  }
 }
 
 // ---- R10 指向「不入库层」的链接必须写明不入库 ----------------------------------------
-// 用户 2026-10-17 裁定：`docs/design/` 根上的方案稿、`docs/design/archive/`、`docs/history/`、
-// `docs/issue/`、`docs/references/` 移出 git 跟踪（`authority/` 留下）。于是多出一类 R8 看不见的错：
-// 链接**在作者本机点得开、clone 之后是死路径** —— R8 只判存在性，它永远绿。
-// 不入库名单绝不在这里写第二份：直接问 `git check-ignore`，`.gitignore` 是唯一出处。
+// 与 R8 同一个链接面，判的是另一半：链接**在作者本机点得开、clone 之后是死路径**。
 // 豁免两处：`docs/adr/`（只增不改，老链接是当时的事实）、`DESIGN.md`（[LOCK]，那处指针已登记等点头）。
 const IGNORE_EXEMPT = (r) => r.startsWith('docs/adr/') || r === 'docs/design/authority/DESIGN.md';
-const pointerRows = [];
-for (const f of live) {
-  const r = rel(f);
-  if (IGNORE_EXEMPT(r)) continue;
-  read(f).split('\n').forEach((l, i) => {
-    for (const m of l.replace(/`[^`]*`/g, '').matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)) {
-      let t = m[2];
-      if (/^(https?:|mailto:|file:|#)/.test(t)) continue;
-      t = t.split('#')[0].split('?')[0];
-      if (!t || t.startsWith('/')) continue;
-      let target;
-      try { target = decodeURIComponent(t); } catch { continue; }
-      const abs = path.isAbsolute(target) ? target : path.join(path.dirname(f), target);
-      const rr = rel(abs).replace(/\\/g, '/');
-      if (!rr || rr.startsWith('../') || rr === '.') continue;
-      pointerRows.push({ r, line: i + 1, text: l, target: rr });
-    }
-  });
+// 来源自己也住在不入库层（docs/issue 与 docs/references 的内部互链、archive 之间互链）不算：
+// 那一层根本不会出现在别人机器上，「不入库」标注是给**入库文档**的读者看的。
+const scanned = allLinks.filter((p) => !IGNORE_EXEMPT(p.from) && !isIgnored(p.from));
+const pointers = scanned.filter((p) => isIgnored(p.target));
+if (!scanned.length) bad('R10 扫描面为 0 条链接 ⇒ 判据空转（先查在役文档口径是不是变了）');
+if (scanned.length && !pointers.length) bad('R10 一条都没命中忽略规则 ⇒ .gitignore 那五条排除规则或链接面变了，判据作废');
+for (const p of pointers) {
+  if (!/不入库/.test(p.text)) bad(`${p.from}:${p.line} 指向不入库的 ${p.target}，却没写「不入库」——本机点得开、别人 clone 后是死路径`);
 }
-const probe = [...new Set([...pointerRows.map((p) => p.r), ...pointerRows.flatMap((p) => [p.target, path.posix.dirname(p.target)])])];
-let ignoredSet = null;
-try {
-  const out = execFileSync('git', ['check-ignore', '--stdin'], { cwd: ROOT, input: probe.join('\n') + '\n', encoding: 'utf8' });
-  ignoredSet = new Set(out.split('\n').filter(Boolean).map((s) => s.replace(/\\/g, '/')));
-} catch (e) {
-  if (e.status !== 1) bad(`R10 问不了 git（${e.message}）⇒ 这条判据作废，不许静默当绿`);
-}
-if (ignoredSet) {
-  // 自己也住在不入库层里的文件（docs/issue、docs/references、archive）互链不算：
-  // 那一层根本不会出现在别人机器上，标注是给**入库文档**的读者看的。
-  const hits = pointerRows.filter((p) => !ignoredSet.has(p.r))
-    .filter((p) => ignoredSet.has(p.target) || ignoredSet.has(path.posix.dirname(p.target)));
-  if (!pointerRows.length) bad(`R10 扫描面为 0 条链接 ⇒ 判据空转（先查在役文档口径是不是变了）`);
-  if (pointerRows.length && !hits.length) bad(`R10 一条都没命中忽略规则 ⇒ .gitignore 那五条排除规则或链接面变了，判据作废`);
-  for (const p of hits) {
-    if (!/不入库/.test(p.text)) bad(`${p.r}:${p.line} 指向不入库的 ${p.target}，却没写「不入库」——本机点得开、别人 clone 后是死路径`);
-  }
-  if (dbg) console.log(`  R10 链接 ${pointerRows.length} 条 · 落在不入库层 ${hits.length} 条`);
-}
+if (dbg) console.log(`  R10 可判链接 ${scanned.length} 条 · 落在不入库层 ${pointers.length} 条`);
 
 // ---- 下限：闸不许瞎 -----------------------------------------------------------------
 if (mdAll.length < 10) bad(`md 扫描面只有 ${mdAll.length} 份 ⇒ 这条闸几乎看不见文档，拒绝空转`);
@@ -256,6 +273,9 @@ if (live.length < 10) bad(`在役文档读数 ${live.length} 过低 ⇒ 目录�
 console.log(`check-docs（文档规则闸：入口厚度 / 地图 / ADR / spec / 长行 / 旧仪式 / 历史索引 / design 形状 / 不入库指针）`);
 console.log(`DOC_FILES=${mdAll.length} LIVE=${live.length} HISTORY=${hist.length} ADR=${adrFiles.length} SPEC=${specFiles.length} LONG=${[...longByFile.values()].reduce((a, b) => a + b, 0)}处在${longByFile.size}个文件/名单${LONG_FILES.length}个`);
 if (dbg) console.log(`  在役目录：${[...new Set(mdAll.map((f) => path.dirname(rel(f))))].join(' ')}`);
+// 跳过必须**可见**（红时也打）：否则"靠缺席跳过"就成了掩盖真问题的暗门。
+// 在本机这个数应为 0（四层都在），在 CI 检出面它应是那几项 —— 两边都印出来，谁变了立刻看得见。
+if (skipped.length) console.log(`  不入库层缺席而跳过 ${skipped.length} 项：${skipped.join(' ')}`);
 if (errs.length) {
   console.log('DOC_FAILED=' + errs.length);
   for (const e of errs) console.log('  ✗ ' + e);

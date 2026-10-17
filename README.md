@@ -18,7 +18,7 @@
 [`specs/01-memory-context-redesign/spec.md`](specs/01-memory-context-redesign/spec.md)。
 
 版本号、测试条数、命令条数这类**每次改动都会变的数字**不写在这里：跑 `make gates` 会打印当前读数，
-历史轨迹在 git 与 [`docs/history/`](docs/history) 里。（本文件此前长期挂着 v2.149 那批规模数字，
+历史轨迹在 git 与 [`docs/history/`](docs/history)（⊘ 不入库，只在作者本机）里。（本文件此前长期挂着 v2.149 那批规模数字，
 就是这种写法留下的结果——它落后了 148 个版本。）
 
 ## 三分钟跑起来
