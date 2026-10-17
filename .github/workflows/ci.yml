@@ -11,6 +11,10 @@ name: CI
 #              闸的清单住在 scripts/tasks.sh 一处，这个文件不再逐条抄写——
 #              抄一次就多一个会漂的副本（v2.209 实测：手抄的那份漏了两道闸，
 #              而本仓库从未 push ⇒ 漏了也没人知道）。
+# 2026-10-17 首次推送后两次真实运行各暴一类"本机有、检出面没有"的前置，都在这个文件外面解决：
+#   hygiene 红 18 条 = 文档闸把不入库的 ⊘ 层当"必须在场"（改成"缺席且被排除 ⇒ 跳过并打印条数"）；
+#   kernel  红 7 条 = 市场夹具二进制不入库而 CI 没构建它（下面多的一步 build_market.sh）。
+# 动本文件经用户 2026-10-17 明确批准（AGENTS.md §5 把它列为禁区）。
 
 on:
   push:
@@ -30,6 +34,13 @@ jobs:
         run: cargo fmt --all --check
       - name: Clippy (workspace root)
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Stage market fixtures (binaries are not committed by design)
+        # plugin-service 的市场安装 / 版本切换 / 回退那批用例读 market/tool-shout/<ver>/ 下的
+        # 插件二进制，而二进制按 .gitignore 不入库 ⇒ 检出面里没有。本机一直是绿的，因为那些产物
+        # 早先就构建过留在本地；2026-10-17 云端首次跑 kernel 作业，7 条红全在 `NotFound`。
+        # 脚本本身跨平台（find_artifact 认 dll / .so / .dylib 三种产物名）。
+        # 若将来还有用例依赖 plugins/ 侧暂存产物，同法再加 build_plugins.sh —— 别把测试改成跳过。
+        run: bash scripts/build_market.sh
       - name: Tests (workspace root)
         run: cargo test --workspace
       - name: Unused dependencies (advisory)
