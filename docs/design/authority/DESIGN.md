@@ -2296,7 +2296,7 @@ export const usePluginStore = defineStore('plugins', {
 > 全离线）；kernel-agent / desktop 单测含审计记录与 JSONL 落盘。
 >
 > **排期更新（v2.10，2026-09-29）**：新增权威文档
-> `docs/design/Plug-in packaging.md`（插件元数据与打包 v2：LocalizedString
+> `docs/design/authority/Plug-in packaging.md`（插件元数据与打包 v2：LocalizedString
 > 多语言、图标 data URL、author/homepage/license、manifest.json 落盘且
 > dll 文件名不假设、前端 PluginCard 与 Fallback 矩阵、`locowrk new plugin`
 > 脚手架）。**④ 重定义为"插件元数据 v2 + 市场打磨"**，子步骤：
@@ -2324,7 +2324,7 @@ export const usePluginStore = defineStore('plugins', {
 > 直接改名不做迁移，同步 §11、plugins/README.md 与 `data_root.rs`）。
 > ⑥ WASM 不变。
 >
-> **实现落点（v2.11，④a–④c 已完成）**：依 docs/design/Plug-in packaging.md
+> **实现落点（v2.11，④a–④c 已完成）**：依 docs/design/authority/Plug-in packaging.md
 > v2.1——
 > **④a 解析层**（plugin-api）：`PluginManifest` 追加 v2 可选字段
 > （display_name / description / icon / author / origin / homepage / license，
@@ -2523,9 +2523,9 @@ export const usePluginStore = defineStore('plugins', {
 > 布局、native+wasm 混载同 registry 工具目录共存）。
 >
 > **排期重排：壳批次 + ⑨–⑬（v2.17，用户 2026-09-29 确认）**：依两份新配套
-> 文档落地——`docs/design/Tool exposure strategy and usage statistics.md`
+> 文档落地——`docs/design/authority/Tool exposure strategy and usage statistics.md`
 > （工具暴露策略与使用统计 v1.0：§4 exposure 三层 / §5 EWMA / §8 闲置
-> 分级 / §9 UI）与 `docs/design/Context and Memory.md`（上下文与记忆管理
+> 分级 / §9 UI）与 `docs/design/authority/Context and Memory.md`（上下文与记忆管理
 > v1.0：§3 压缩策略 / §4 记忆管理 / §5 协同工作流）。**排序依据**：Context
 > 文档把上下文管理标 P0"不做就不可用"、记忆 P1，且以工具暴露文档为前置；
 > 中间件链序 ToolExposure → Memory-Inject → ctx-compact（先定工具集、
@@ -2534,7 +2534,7 @@ export const usePluginStore = defineStore('plugins', {
 > 两文档末段向量/提取均 ★★★ 且共享 embedding 基建，归⑬看需求。**动因**：
 > 功能越多 UI 越乱的根因是缺落位规则——顶层视图 3→5 在即（+记忆页/
 > 开发者面板），⑩ 是最大 UI 变更波（PluginMarket.vue 291 行必拆），故壳
-> 批次先行。**进度看板单列 `docs/design/roadmap/`**（完成打钩 / 未完
+> 批次先行。**进度看板单列 `docs/roadmap/`**（完成打钩 / 未完
 > 排期，每批同步勾选），本节只记落点细节。
 >
 > **壳批次（UI 骨架，先于⑨）**：skeleton-first 的"骨架"而非"抛光"——壳
@@ -2806,8 +2806,8 @@ export const usePluginStore = defineStore('plugins', {
 
 ## 附录 B：参考实现
 
-- **cordis-rs**：cordiverse/cordis（Koishi 4 TS 内核）的 Rust 重写（dshbox/cordis-rs，MIT 双版权，pre-1.0 活跃开发）。cordis-core 含 Context、Effect（generation 清理账本）、Events（emit/parallel/query/waterfall 四原语）、Fiber（六态收敛）、Service（字符串名 + realm 槽）、依赖索引与反应式收敛、Registry、observation。**定位为参考实现而非移植对照**；其服务键是字符串名而非 TypeId，与我们 v2.1 的分歧见 [docs/references/cordis-rs-notes.md](../references/cordis-rs-notes.md)
-- **rutis**：cordis 范式的另一 Rust 实现（eric8810/rutis，MIT 双版权，MSRV 1.85）。五支柱同源同名；服务键同为 TypeId 路线（TypeId 主键 + 可选限定名，`?Sized` trait 对象经 `Box<Arc<T>>` 擦除），Fiber 六态 + 意图邮箱驱动 + 依赖等值合并重载可直接对表；无 FFI/ABI、无事件溯源，阶段三与会话日志无参考。借鉴点与冲突见 [docs/references/rutis-notes.md](../references/rutis-notes.md)
+- **cordis-rs**：cordiverse/cordis（Koishi 4 TS 内核）的 Rust 重写（dshbox/cordis-rs，MIT 双版权，pre-1.0 活跃开发）。cordis-core 含 Context、Effect（generation 清理账本）、Events（emit/parallel/query/waterfall 四原语）、Fiber（六态收敛）、Service（字符串名 + realm 槽）、依赖索引与反应式收敛、Registry、observation。**定位为参考实现而非移植对照**；其服务键是字符串名而非 TypeId，与我们 v2.1 的分歧见 [docs/references/cordis-rs-notes.md](../../references/cordis-rs-notes.md)
+- **rutis**：cordis 范式的另一 Rust 实现（eric8810/rutis，MIT 双版权，MSRV 1.85）。五支柱同源同名；服务键同为 TypeId 路线（TypeId 主键 + 可选限定名，`?Sized` trait 对象经 `Box<Arc<T>>` 擦除），Fiber 六态 + 意图邮箱驱动 + 依赖等值合并重载可直接对表；无 FFI/ABI、无事件溯源，阶段三与会话日志无参考。借鉴点与冲突见 [docs/references/rutis-notes.md](../../references/rutis-notes.md)
 - **dsh-rs**：DeepSeek Harness 的 Rust 完整移植
 - **Cordis 论文**：时空可组合性的理论基础（效应 / 余效应）
 - **Tauri 2 官方文档**：IPC、事件系统、插件系统
@@ -2829,4 +2829,4 @@ export const usePluginStore = defineStore('plugins', {
 
 ---
 
-*文档版本：v2.58。逐批落点补记已迁至 [docs/history/CHANGELOG-legacy.md](../history/CHANGELOG-legacy.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*
+*文档版本：v2.58。逐批落点补记已迁至 [docs/history/CHANGELOG-legacy.md](../../history/CHANGELOG-legacy.md)（v2.49 起本文件不堆补记，只随批次改规范正文与本行版本号）。*

@@ -338,7 +338,7 @@ impl SettingsStore {
             next.developer.apply_update(&u)?;
         }
         if let Some(u) = thinking {
-            // 思考语言（docs/design/NEW/language of thought.md）：白名单
+            // 思考语言（docs/design/archive/language of thought.md）：白名单
             // 校验。会话内锁死由注入侧缓存保证——中途改这里不影响已开
             // 会话的 system 前缀，新会话才吃新值。
             if !THINKING_LANGUAGE_VALUES.contains(&u.language.as_str()) {

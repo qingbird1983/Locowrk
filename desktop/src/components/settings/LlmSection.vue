@@ -72,7 +72,7 @@ function onSelectRecorder(providerId: string, model: string) {
   );
 }
 
-// ---- 思考语言（docs/design/NEW/language of thought.md）：reasoning 用的
+// ---- 思考语言（docs/design/archive/language of thought.md）：reasoning 用的
 // 语言。会话首请求锁死（前缀缓存红线），中途修改保存后提示「下个会话
 // 生效」；同值重选不保存不提示。
 const thinkingPref = computed({

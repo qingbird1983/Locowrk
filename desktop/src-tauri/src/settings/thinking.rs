@@ -1,4 +1,4 @@
-//! 思考语言设置区（docs/design/NEW/language of thought.md）：控制模型
+//! 思考语言设置区（docs/design/archive/language of thought.md）：控制模型
 //! reasoning（思考过程）用什么语言。定位是**设置项**——宿主在组装
 //! system prompt 时注入一段提示词，非插件、非内核中间件、不跨 ABI。
 //!

@@ -18,7 +18,7 @@
 [`specs/01-memory-context-redesign/spec.md`](specs/01-memory-context-redesign/spec.md)。
 
 版本号、测试条数、命令条数这类**每次改动都会变的数字**不写在这里：跑 `make gates` 会打印当前读数，
-历史轨迹在 git 与 [`docs/history/`](docs/history/) 里。（本文件此前长期挂着 v2.149 那批规模数字，
+历史轨迹在 git 与 [`docs/history/`](docs/history) 里。（本文件此前长期挂着 v2.149 那批规模数字，
 就是这种写法留下的结果——它落后了 148 个版本。）
 
 ## 三分钟跑起来
@@ -54,12 +54,15 @@ pnpm -C desktop tauri dev        # 起桌面端：聊天、看工具调用、看
 | --- | --- |
 | 这个文件能不能动、谁是唯一真源 | [`STRUCTURE.md`](STRUCTURE.md) |
 | 施工规则、硬约束、禁区 | [`AGENTS.md`](AGENTS.md) |
-| 还没做完的阶段、现在到哪了 | [`docs/design/roadmap/`](docs/design/roadmap/) |
-| 某个阶段具体做什么、怎么算做完 | [`specs/`](specs/) |
-| 当初为什么这么定、否掉了什么方案 | [`docs/adr/`](docs/adr/) |
-| 内核架构与模块规划 | [`docs/design/DESIGN.md`](docs/design/DESIGN.md) |
-| 前端形态标准（同类只许一种形态） | [`docs/design/Front-end Design Guidelines.md`](docs/design/Front-end%20Design%20Guidelines.md) |
-| 插件清单与"哪些是插件、哪些是宿主内置" | [`docs/design/plugins.md`](docs/design/plugins.md) |
+| 还没做完的阶段、现在到哪了 | [`docs/roadmap/`](docs/roadmap) |
+| 某个阶段具体做什么、怎么算做完 | [`specs/`](specs) |
+| 当初为什么这么定、否掉了什么方案 | [`docs/adr/`](docs/adr) |
+| 内核架构与模块规划 | [`docs/design/authority/DESIGN.md`](docs/design/authority/DESIGN.md) |
+| 各主题"现在有效的那一份"清单（含冲突时谁说了算） | [`docs/design/authority/README.md`](docs/design/authority/README.md) |
+| 前端形态标准（同类只许一种形态） | [`docs/design/authority/Front-end Design Guidelines.md`](docs/design/authority/Front-end%20Design%20Guidelines.md) |
+| 插件清单与"哪些是插件、哪些是宿主内置" | [`docs/design/authority/plugins.md`](docs/design/authority/plugins.md) |
+| 还没实现的想法与设计稿 | [`docs/design/`](docs/design)（根上散着的那几份） |
+| 已全部做完 / 已退役的设计稿（只读） | [`docs/design/archive/README.md`](docs/design/archive/README.md) |
 | 以前的批次流水与旧路线表（只读） | [`docs/history/README.md`](docs/history/README.md) |
 
 ## 结构一览
@@ -70,7 +73,9 @@ crates/          内核 crate：plugin-api（冻结 ABI）· cordis-core · kern
 plugins-src/     内置插件源码（9 个 id，与内核同一个 Cargo workspace；见 plugins/README.md 的版本表）
 plugins/ market/ 开发态插件安装目录与本地市场（产物不入库）
 desktop/         桌面端：src/ 前端 · src-tauri/ 组装点（独立 Cargo 包）· tests/ 界面用例
-docs/            design/ 现役规范与设计稿 · design/roadmap/ 进度 · adr/ 决策 · history/ 归档 · reports/ 审计台账
+docs/            roadmap/ 唯一进度表 · design/authority/ 各主题现役正身 · design/ 根上散着待做的稿子
+                 design/archive/ 已兑现与已退役（只读）· adr/ 决策记录 · issue/ 工单 · prototype/ 原型
+                 history/ 批次流水与旧表（只读）· references/ 外部参考笔记
 specs/           阶段计划（一阶段一目录，含可测验收）
 scripts/         构建与检查脚本（任务实现唯一位置）
 tmp/             一次性实验（不入库）

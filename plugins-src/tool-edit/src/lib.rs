@@ -5,7 +5,7 @@
 //! 的 `fs_restore`（跨插件 undo：官方捆绑保证同装；备份布局与恢复契约
 //! 见 tool-fs 文档，实现共享 `plugin_api::fsutil`）：
 //! - `edit_replace`：old_string → new_string 替换——**编辑首选**，exposure
-//!   always（v2.114，设计文档 docs/design/edit_replace.md：精确零命中后
+//!   always（v2.114，设计文档 docs/design/authority/edit_replace.md：精确零命中后
 //!   容错匹配行尾空白/CRLF/BOM；Timo 实测教训 = on_demand 截断下模型
 //!   根本用不上它，退而整文件重写）。唯一性仍是安全底线。
 //! - `edit_lines`：按 1-based 行号区间替换

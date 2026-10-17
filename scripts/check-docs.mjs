@@ -10,6 +10,7 @@
 //   R6 旧仪式不许偷偷回来        —— 在役文档里出现「在役窗口 / 进度三条 / 本次搬出 / 判据自纠 / 逐字原样搬出」判红
 //   R7 历史层要有索引            —— docs/history/ 下每一份 .md 都要被 docs/history/README.md 点名
 //   R8 断链                     —— 在役文档里的相对链接必须指得到一个真实文件（搬完忘改旧址 = 下一个人只能猜）
+//   R9 design 层的形状          —— docs/design 下只许 archive/ 与 authority/ 两个子目录（状态不靠目录名表示）
 //
 // 闸自己也是活的（同旧闸的教训）：扫描面读数为 0 直接判红，因为那只能是**闸瞎了**。
 // 用法：node scripts/check-docs.mjs          全量报告 + 判红退出 1
@@ -37,8 +38,12 @@ const dbg = process.argv.includes('--dbg');
 const bad = (m) => errs.push(m);
 
 const mdAll = walk(path.join(ROOT, 'docs')).filter((f) => f.endsWith('.md'));
-const live = mdAll.filter((f) => !rel(f).startsWith('docs/history/'));   // 在役文档
-const hist = mdAll.filter((f) => rel(f).startsWith('docs/history/'));    // 历史层
+// 历史层两个去处，同等对待（不改写、不进在役检查面）：docs/history/ 装流水与旧进度表，
+// docs/design/archive/ 装已兑现或已退役的设计稿。判据 = 路径前缀，不靠文件里的措辞。
+const HIST_DIRS = ['docs/history/', 'docs/design/archive/'];
+const isHist = (r) => HIST_DIRS.some((h) => r.startsWith(h));
+const live = mdAll.filter((f) => !isHist(rel(f)));   // 在役文档
+const hist = mdAll.filter((f) => isHist(rel(f)));    // 历史层
 const rootDocs = ['AGENTS.md', 'STRUCTURE.md', 'README.md', 'CONTRIBUTING.md'].filter((f) => fs.existsSync(path.join(ROOT, f)));
 
 // ---- R1 入口文档别写胖 ---------------------------------------------------------------
@@ -111,10 +116,8 @@ for (const f of specFiles) {
 // 名单外任何在役文档写出一行 2KB 以上 = 判红；把某文件分行干净了就从名单里删一行。
 const LONG_FILES = [
   'docs/design/Memory-KV Roadmap.md',
-  'docs/design/NEW/Model Capability and Multimodal Phase Plan.md',
   'docs/design/UI shell and patterns.md',
-  'docs/design/Context and Memory.md',
-  'docs/design/NEW/Reliability Reinforcement Design.md',
+  'docs/design/authority/Context and Memory.md',
 ];
 const longByFile = new Map();
 for (const f of [...live, ...rootDocs.map((d) => path.join(ROOT, d))]) {
@@ -166,12 +169,35 @@ for (const b of broken) {
   if (!BROKEN_BASELINE.includes(b)) bad(`断链 ${b}（旧址还留着引用 = 下一个读的人只能猜）`);
 }
 
-// ---- R7 历史层要有索引 ---------------------------------------------------------------
-const histIndex = path.join(ROOT, 'docs/history/README.md');
-if (!fs.existsSync(histIndex)) bad('docs/history/README.md 不存在 = 历史没有索引');
-else {
-  const t = read(histIndex);
-  for (const f of hist) if (rel(f) !== 'docs/history/README.md' && !t.includes(path.basename(f))) bad(`历史件 ${rel(f)} 没被 docs/history/README.md 点名`);
+// ---- R7 每个历史层都要有自己的索引 ---------------------------------------------------
+// 判据从"只盯 docs/history"泛化成"每个历史目录都要有一份 README 点名它内部的每一件"：
+// 现在有两个历史去处（docs/history/ 与 docs/design/archive/），只盯一个就等于给另一个开了
+// 无人认领的口子——归档件没人点名，后来人就分不清它是不是还在用。
+const HIST_INDEXES = ['docs/history/README.md', 'docs/design/archive/README.md'];
+for (const idx of HIST_INDEXES) {
+  const p = path.join(ROOT, idx);
+  if (!fs.existsSync(p)) { bad(`${idx} 不存在 = 那一层历史没有索引`); continue; }
+  const t = read(p);
+  const own = hist.filter((f) => rel(f).startsWith(idx.replace(/README\.md$/, '')));
+  if (!own.length) bad(`${idx} 存在但那一层查无归档件 ⇒ 判据空转（先查历史目录是不是改名或搬空了）`);
+  for (const f of own) {
+    if (rel(f) === idx) continue;
+    if (!t.includes(path.basename(f))) bad(`历史件 ${rel(f)} 没被 ${idx} 点名`);
+  }
+  if (dbg) console.log(`  R7 ${idx} 点名面 ${own.length} 件`);
+}
+
+// ---- R9 design 层的形状不许长回原样 -------------------------------------------------
+// 用户 2026-10-17 定的形状：docs/design 里只有两个文件夹 —— authority（现役正身）与
+// archive（已兑现/已退役），其余有用稿散在 design 根。这条存在的理由很具体：
+// 旧结构里 `NEW/` 这种**用目录名表示状态**的做法，时间一长就没人知道 NEW 里哪些已经做完了，
+// 于是又得多写一份状态表。状态只在 docs/roadmap/ 那一行里，不靠目录名。
+const designDir = path.join(ROOT, 'docs/design');
+if (fs.existsSync(designDir)) {
+  const sub = fs.readdirSync(designDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  const allow = ['archive', 'authority'];
+  if (sub.join(',') !== allow.join(','))
+    bad(`docs/design 下的子目录 = ${sub.join('/') || '（无）'}，规定的形状是 ${allow.join('/')} 两个；新目录要么并进这两个，要么搬到 docs/ 下别的位置`);
 }
 
 // ---- 下限：闸不许瞎 -----------------------------------------------------------------
@@ -186,5 +212,5 @@ if (errs.length) {
   for (const e of errs) console.log('  ✗ ' + e);
   process.exit(1);
 }
-console.log(`check-docs: OK（八条判据全过 · 长行只在名单内 ${LONG_FILES.length} 个存量文件里）`);
+console.log(`check-docs: OK（全部判据通过 · 长行只在名单内 ${LONG_FILES.length} 个存量文件里）`);
 console.log('DOC_FAILED=0');

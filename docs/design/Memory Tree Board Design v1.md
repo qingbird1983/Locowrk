@@ -4,7 +4,7 @@
 > 立稿依据：用户 2026-10-11 需求——①记忆面板「现在整个是混合在一起的，查看很不方便」；②顶部下拉选项目；③项目下按日期列出每条会话；④点会话出「类似无限画布的看板」展示该会话所有总结；⑤总结展开标题 → 标题展开章节 → **全部展开后所有章节汇聚成完整会话流**（用户手绘草图定形：左总结、中标题×章节两列、最右一整块汇聚面板）；⑥看板**只查看不编辑**；⑦项目移除后记忆树跟着移除；⑧项目处一键进入缓存记忆目录；⑨先出 HTML 原型。
 > **v1.1（同日走查反馈修订）**：ⓐ 层级终点改为「完整会话流」——一整块按事件序汇集该轮全部章节原文的面板，不是散在每张章节卡里；ⓑ **产品形态优先**：前端不为现役代码的半成品状态打折，代码喂不出的形态（会话流读取）列为后端必改项（§2.3）；ⓒ 外壳对齐现役 UI：左栏到顶深色 / 画布到顶浅色，**无上栏分色条、无发丝线分隔**；ⓓ 画布加**暗网格点阵底**（随画布平移缩放），防展开后卡片视觉发糊发乱。
 > **v1.2（同日二次走查修订）**：ⓐ **原型地位裁定：原型只能作为实现 UI 的参考**——真实实施时禁止把原型里的演示性内容与已知错误搬进生产码。明确禁搬清单：**明暗主题按钮**（真实界面不放，设置页已有该能力，重复入口判错）；mock 数据、toast 演示文案、写死的日期分组同样只是演示件。ⓑ 左栏**底部补「返回主界面」按钮**——记忆页有入口必须有出口。ⓒ 修会话流**预显 bug**：点开总结时汇聚面板不得立刻出现，**该组全部标题与章节都展开后才汇聚出现**（逐层展开纪律，§3.2）。
-> 配套原型：`docs/design/ui-prototype/memory-board.html`（v1.2，静态无构建，复用 `css/tokens.css`；**地位 = UI 参考，不是实现合同**，禁搬清单见上）。
+> 配套原型：`docs/prototype/memory-board.html`（v1.2，静态无构建，复用 `css/tokens.css`；**地位 = UI 参考，不是实现合同**，禁搬清单见上）。
 
 ---
 
@@ -184,4 +184,4 @@ memory_tree_stream(session_id, workspace, group) -> StreamView
 - 打开目录壳：`desktop/src-tauri/src/commands/sessions.rs:357`（open_in_explorer）、`commands/memory.rs:87`（memory_reveal_folder）
 - 项目移除现状：`desktop/src/components/shell/ProjectGroup.vue:70-80`（摘 fsRoots 非破坏，v2.113）；归属规则 `desktop/src/lib/session-groups.ts:42`
 - 现有记忆页：`desktop/src/components/MemoryPage.vue`、`memory/TreeSection.vue`（会话档章节列表 + M5 编辑面）、`memory/ProjectTree.vue`（项目联合只读视图）
-- 原型：`docs/design/ui-prototype/memory-board.html`（v1.1：四列汇聚 + 暗网格底 + 左栏到顶骨架）
+- 原型：`docs/prototype/memory-board.html`（v1.1：四列汇聚 + 暗网格底 + 左栏到顶骨架）

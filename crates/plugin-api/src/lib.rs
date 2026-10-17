@@ -63,7 +63,7 @@ pub const PLUGIN_ABI_VERSION: u32 = 1;
 mod tests {
     use super::*;
 
-    /// docs/design/Plug-in packaging.md §2.1 完整示例（manifest 测试共用；
+    /// docs/design/authority/Plug-in packaging.md §2.1 完整示例（manifest 测试共用；
     /// 含工具级 display_name 与 manifest 级 reversible 等被忽略的未知字段）。
     pub const DOC_EXAMPLE: &str = r#"{
       "id": "tool-shout",

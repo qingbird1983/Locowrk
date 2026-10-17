@@ -1,4 +1,4 @@
-//! 思考语言注入（docs/design/NEW/language of thought.md）：`agent/request`
+//! 思考语言注入（docs/design/archive/language of thought.md）：`agent/request`
 //! waterfall 监听器，把「思考过程用什么语言」的提示词追加到 system 尾部。
 //!
 //! 设计对齐文档：

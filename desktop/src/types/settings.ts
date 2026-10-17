@@ -30,7 +30,7 @@ export interface SettingsView {
   chat: ChatSettingsView;
   /** 开发者选项区（v2.49，默认隐藏分区）。 */
   developer: DeveloperView;
-  /** 思考语言区（docs/design/NEW/language of thought.md）：reasoning 用的
+  /** 思考语言区（docs/design/archive/language of thought.md）：reasoning 用的
    * 语言；会话首请求锁死，中途修改只影响新会话。 */
   thinking: ThinkingView;
 }

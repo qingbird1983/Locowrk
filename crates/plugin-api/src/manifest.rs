@@ -1,4 +1,4 @@
-//! 插件元数据契约（DESIGN.md §5.2 + docs/design/Plug-in packaging.md v2）。
+//! 插件元数据契约（DESIGN.md §5.2 + docs/design/authority/Plug-in packaging.md v2）。
 //! JSON 是传输形态：describe 符号返回 NUL 结尾 UTF-8 JSON（长度协议见
 //! `ffi::DescribeFn`），安装目录里的 manifest.json（开发态布局见
 //! plugins/README.md）读出的也是同一份结构。

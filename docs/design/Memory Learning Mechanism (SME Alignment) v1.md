@@ -520,7 +520,7 @@ md 是人读投影，学习量是机器状态，二者不同源。若将来要�
 | 章节 expanded_at（落盘但不参与排序） | `crates/memory-tree/src/chapter.rs:86-94`、`tree.rs:289-301` |
 | 章节 keywords/token_count 死字段 | `crates/memory-tree/src/chapter.rs:77-78` |
 | 树目录只含当前会话 | `desktop/src-tauri/src/organize/assemble.rs:65-80`、`:159-173` |
-| 既有设计稿（主轨道） | `docs/design/NEW/Memory Redesign (ZCode Alignment) v1.md` |
+| 既有设计稿（主轨道） | `docs/design/Memory Redesign (ZCode Alignment) v1.md` |
 
 ---
 

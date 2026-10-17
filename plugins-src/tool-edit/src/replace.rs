@@ -3,7 +3,7 @@
 //! 看不见尾随空格，这是「照抄也失败」的主流失败面）。缩进、大小写、编辑
 //! 距离不做（误改风险）；唯一性是安全底线：不唯一不替换。
 //!
-//! 容错实现（docs/design/edit_replace.md §三·八）：把原文与 old_string 各自
+//! 容错实现（docs/design/authority/edit_replace.md §三·八）：把原文与 old_string 各自
 //! 归一化成字节流（只删 ASCII 字节，多字节字符不动），在归一化流上做普通
 //! 子串搜索，命中区间经 per-line kept 映射表映射回原缓冲字节区间后整体
 //! 替换；new_string 的行尾随命中区域的行尾风格适配（CRLF 文件插入 LF 会

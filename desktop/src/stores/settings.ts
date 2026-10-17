@@ -202,7 +202,7 @@ export const useSettingsStore = defineStore("settings", {
     async saveDeveloper(developer: DeveloperUpdate) {
       await this.patchSettings({ developer });
     },
-    /** 保存思考语言（docs/design/NEW/language of thought.md）：落盘即
+    /** 保存思考语言（docs/design/archive/language of thought.md）：落盘即
      * 成功——当前会话的 system 前缀已锁死不受影响，「下个会话生效」
      * 的提示由调用方（LlmSection）负责 ⇒ 这里**不闪**「已保存」。 */
     async saveThinking(thinking: { language: string }) {

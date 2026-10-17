@@ -4,7 +4,7 @@
 
 /*
  * design tokens v2（UI 正式设计，docs/design/UI shell and patterns.md §六；
- * 可执行版本 = docs/design/ui-prototype/css/tokens.css，两处冲突以文档为准：
+ * 可执行版本 = docs/prototype/css/tokens.css，两处冲突以文档为准：
  * content-max 760 而非原型的 820；动效 token 用 --dur- 系与 --ease- 系
  * 四档四缓动，原型 --motion- 系是历史残留）。
  *

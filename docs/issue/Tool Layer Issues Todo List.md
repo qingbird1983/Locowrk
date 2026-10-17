@@ -163,7 +163,7 @@
 | P1-1 push 报错截断 | ✅ `require_ok` 保留 stderr 末 **6 条**非空行（关键行在倒数第 4 行被旧「只取末行」截掉）；共享 helper，全部 git 工具受益 | tool-git 0.1.3 |
 | P2-1 schedule 多模式 | ✅ **实现互斥校验**（描述承诺 exactly one of 是对的，错在代码静默优先级 interval > at > delay）：多模式同给显式拒绝并列出收到的字段；`start_at` 双锚点歧义路徠除 | desktop scheduler |
 | P2-2 memory_undo 描述 | ✅ 改描述（行为正确，描述撒谎）：删「usually invoked by the compensation layer」劝退措辞（v2.115 在 fs_restore 同款裁定）；「requires user approval」改「跟随会话权限档」——决策表实况：**完全档 Irreversible 直接放行不出卡**（复测所见「没弹窗」即此档）；git_undo_commit 同款措辞一并修 | memory-sqlite 0.1.4 |
-| 事实 1 出站网络 | ✅ 长期文档 [环境已知限制.md](环境已知限制.md)（LLM/fetch/未来市场三方影响 + 排查口诀 + 国内外二分对照法）；代理配置不做（记档） | docs/design/BUG/ |
+| 事实 1 出站网络 | ✅ 长期文档 [环境已知限制.md](环境已知限制.md)（LLM/fetch/未来市场三方影响 + 排查口诀 + 国内外二分对照法）；代理配置不做（记档） | docs/issue/ |
 | 事实 2 shell 环境 | ✅ 根因探明：tool-shell **无 shell** 直 spawn（`Command::new(首词)`），命令经 PATH 解析——本机 PATH 有 Git 的 usr/bin（Unix coreutils），故 `rm -rf` 可用、`rmdir /s /q` 把 `/s` `/q` 当路径、cmd 内建（dir/del/copy）无 exe 不存在。**不是「跑在 Git Bash 里」**。shell/shell_read 描述已写明「用 Unix 风格命令，cmd 内建不存在」（模型工具清单可见，不再试错）；跨平台策略维持现状、单独排期记档 | tool-shell 0.1.3 |
 | 6 shell 跨平台策略 | ⏸ 短期缓解已做（描述如实）；长期策略（宿主声明环境 / 兼容层 / 不做）维持现状待评估 | 单独排期 |
 

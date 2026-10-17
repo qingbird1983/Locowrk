@@ -30,7 +30,7 @@
 - 根目录立四件入口文档：`AGENTS.md`（agent 规则唯一事实源，**≤100 行**，只写可判定规则与指针）、
   `STRUCTURE.md`（全仓唯一地图，只用两个标记：`★` 唯一事实源 / `[LOCK]` 禁区）、
   `README.md`（给人看的入口）、`CONTRIBUTING.md`（提交与记账约定）。
-- 位置固定、格式不固定：现役设计放 `docs/design/`；**进度只写在 `docs/design/roadmap/`**，
+- 位置固定、格式不固定：现役设计放 `docs/design/`；**进度只写在 `docs/roadmap/`**，
   一行一个未完成阶段 + 勾选 + 一句人话状态，已完成的从这张表删掉。
 - 每阶段的详细计划与**可测验收**放 `specs/<编号>-<名>/spec.md`；目录按需生长，不为将来预留空壳。
 - 长期取舍与"否掉了什么"放 `docs/adr/NNNN-*.md`，**只增不改**；决策变了新写一篇并互相指向。
@@ -60,7 +60,7 @@
 **正面：** 一版变更的落点从 10 个文件降到"进度表那一行 + 一次提交"；agent 注入源从 26.9 KB 降到约 7.9 KB；
 读得到、比得出、不必再用脚本改文档；每件事只有一个真源，"两处手写必漂"这一族从根上少掉。
 
-**负面 / 需要接受的代价：** 在役文档与代码注释里的旧链接要逐个重放（本刀已改 4 处，含 `docs/design/DESIGN.md`
+**负面 / 需要接受的代价：** 在役文档与代码注释里的旧链接要逐个重放（本刀已改 4 处，含 `docs/design/authority/DESIGN.md`
 里那句进度表路径 —— 只换路径不动语义）；历史件正文里的旧链接**故意不改**，靠 `docs/history/README.md`
 的映射表兜底；细节搬进提交正文后，"翻文档看历史"变成"翻 git 看历史"，需要一点习惯；
 `make` 成为默认入口，但本机仍需 `pnpm`/`cargo` 在位。
@@ -76,5 +76,5 @@
 ## 参考
 
 [`STRUCTURE.md`](../../STRUCTURE.md) · [`CONTRIBUTING.md`](../../CONTRIBUTING.md) ·
-[`docs/design/roadmap/README.md`](../design/roadmap/README.md) · [`specs/00-doc-governance/spec.md`](../../specs/00-doc-governance/spec.md) ·
+[`docs/roadmap/README.md`](../roadmap/README.md) · [`specs/00-doc-governance/spec.md`](../../specs/00-doc-governance/spec.md) ·
 [`scripts/check-docs.mjs`](../../scripts/check-docs.mjs) · 仓库模板 `F:\Users\Warehouse template`

@@ -1,8 +1,8 @@
 # AGENTS.md — Locowrk 施工指南
 
 > 本文件是 agent 指令的**唯一事实源**，保持 ≤100 行、规则**可判定**。
-> 每个文件是干什么的、能不能动 → [`STRUCTURE.md`](STRUCTURE.md)。还没做完的阶段 → [`docs/design/roadmap/`](docs/design/roadmap/)。
-> 一版变更写哪几处 → [`CONTRIBUTING.md`](CONTRIBUTING.md)。旧流水（只读）→ [`docs/history/`](docs/history/)。
+> 每个文件是干什么的、能不能动 → [`STRUCTURE.md`](STRUCTURE.md)。还没做完的阶段 → [`docs/roadmap/`](docs/roadmap)。
+> 一版变更写哪几处 → [`CONTRIBUTING.md`](CONTRIBUTING.md)。旧流水（只读）→ [`docs/history/`](docs/history)。
 
 ## 1. 这是什么
 
@@ -13,7 +13,7 @@
 - 沙箱插件已随 v2.145 **整目录退役**：不隔离文件与网络就不是安全边界；命令执行面收敛为 `shell` 单一入口。
 - 技术栈：Rust（根 Cargo workspace 8 个 crate + `desktop/src-tauri` 独立包）· Tauri 2 · Vue 3 + TypeScript · pnpm · vitest。
 - 当前阶段：单人自用内测。**不在范围内**：多用户服务端、云同步、生产部署。
-- 权威设计文档 = [`docs/design/DESIGN.md`](docs/design/DESIGN.md)：改核心模块前先读对应章节，实现与它冲突时先对齐文档；
+- 权威设计文档 = [`docs/design/authority/DESIGN.md`](docs/design/authority/DESIGN.md)：改核心模块前先读对应章节，实现与它冲突时先对齐文档；
   其中 `agent-kernel/` 指内核 Cargo 工作区，crate 名沿用文档，对外项目名叫 Locowrk。
 
 ## 2. 常用命令（唯一入口，不要自创调用方式）
@@ -61,7 +61,7 @@ plugin-api 宿主侧、不进 C ABI；plugin-host 只给固有 API `RegistryTool
 - 内核八条设计纪律（副作用带逆操作、永不 dlclose、FFI 进 blocking、先写 `ToolCall` 事件、事件只追加、
   不可逆默认审批、补偿幂等用 `call_id`、多版本切 `active` 指针）+ 它们的**实况订正**（每步批量落盘、
   磁盘快照从未接线、现在是七序决策表而非必弹卡、开发态每 id 只暂存当前版本）=
-  [`docs/design/DESIGN.md`](docs/design/DESIGN.md) 附录 C，写内核代码前读。
+  [`docs/design/authority/DESIGN.md`](docs/design/authority/DESIGN.md) 附录 C，写内核代码前读。
 - 单文件建议 ≤400 行：超了先做三问自检（只管一件事？名字概括得住？改它常牵动无关部分？），
   三问皆是 → 可不拆并在提交正文给理由；任一否 → 拆成目录式子模块。`check_length.sh` 只拦"新增超限"。
 - `lib.rs` / `main.rs` 只放模块声明与文档注释；实现必须落到 DESIGN 规划的模块文件；
@@ -72,7 +72,7 @@ plugin-api 宿主侧、不进 C ABI；plugin-host 只给固有 API `RegistryTool
 - **可配置原则**（两条同源，用户 2026-10-03 定）：① 凡是有不确定性的数值，一律做成设置页可调项并给合理缺省；
   ② 界面上写死的禁止/限制，都要有开关可开可关（含最危险的动作）；开发类与危险类开关和数值收进「开发者」分区
   （侧栏版本号连点 7 次解锁）。
-- **前端唯一形态标准** = [`docs/design/Front-end Design Guidelines.md`](docs/design/Front-end%20Design%20Guidelines.md)：
+- **前端唯一形态标准** = [`docs/design/authority/Front-end Design Guidelines.md`](docs/design/authority/Front-end%20Design%20Guidelines.md)：
   同类只许一种形态；动前端代码前先查对应类目；要新形态 = 先申请（是什么/在哪/为什么/影响）→ 批准 → **先改标准再写码**；
   豁免要登记标准 §七 并在行内留凭证。机械闸 = stylelint（CSS 声明维度）+ `scripts/check-style.mjs`（模板维度）。
   界面文案一律中英成对（`check-i18n.mjs` 拦漏一边）。
@@ -80,7 +80,7 @@ plugin-api 宿主侧、不进 C ABI；plugin-host 只给固有 API `RegistryTool
 ## 5. 禁区（[LOCK]，动前先停下来向人说明并等确认）
 
 - `crates/plugin-api` 的既有对外签名 · `Cargo.lock` 与任何 lock 文件（由包管理器更新，禁止手改）
-- `.githooks/` · `.github/workflows/` · `docs/design/DESIGN.md` 的规范语义
+- `.githooks/` · `.github/workflows/` · `docs/design/authority/DESIGN.md` 的规范语义
 - `.env` 与任何真实密钥、token、密码、私钥：**不许写进任何项目文件**
 - 不要自行执行：递归删除、强制推送、hard reset、发布部署、访问生产环境、装系统级依赖、
   `curl | sh`、**改 git 配置**、改操作系统设置
@@ -91,7 +91,7 @@ plugin-api 宿主侧、不进 C ABI；plugin-host 只给固有 API `RegistryTool
 1. 需求模糊不要猜 → 先写 `specs/<编号>-<名>/spec.md`（含**可测验收**与**非目标**）等确认。
 2. 任务较大先给计划（步骤 + 影响文件）等确认。
 3. 实现 + 同步补测试 → 按改动面选档跑门禁（见 §2 那张表），**全绿才算完成**；不许为了过闸删测试或放宽规则。
-4. 收尾按 [`CONTRIBUTING.md`](CONTRIBUTING.md)：进度只在 `docs/design/roadmap/` 那一行改勾选，
+4. 收尾按 [`CONTRIBUTING.md`](CONTRIBUTING.md)：进度只在 `docs/roadmap/` 那一行改勾选，
    细节（改了哪些文件、实测读数、遗留风险）写在提交正文；有长期影响的取舍新写一篇 `docs/adr/`。
 5. 动了界面，交付前先自己在真实窗口跑一遍并截图核对，再请你亲自看；给你的永远是"打开哪、点哪、该看到什么"。
 6. Windows 开发机：shell 是 Git Bash，路径写正斜杠；插件产物在 Windows 是 `.dll`；

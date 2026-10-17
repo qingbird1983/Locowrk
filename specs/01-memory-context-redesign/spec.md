@@ -79,7 +79,7 @@
 | 文件 / 目录 | 改动 |
 | --- | --- |
 | `crates/memory-tree/` `desktop/src-tauri/src/memory*.rs` `desktop/src-tauri/src/memory_*.rs` `crates/plugin-api/src/memlayout/` | 待定（很可能大范围替换） |
-| `docs/design/Context and Memory.md` `Memory Tree Design v2.md` `Memory File-ization Design.md` `Cross-Session Recall Design v1.md` | 新形状定了之后重写或退役 |
+| `docs/design/authority/Context and Memory.md` `Memory Tree Design v2.md` `Memory File-ization Design.md` `Cross-Session Recall Design v1.md` | 新形状定了之后重写或退役 |
 
 ## 风险与回滚
 

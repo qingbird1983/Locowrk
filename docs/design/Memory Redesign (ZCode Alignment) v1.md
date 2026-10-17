@@ -343,4 +343,4 @@ origin-session 盖章 + 权限放行 + 无 undo——保留现役工具面，判
 | v2.136 退役三键 | `desktop/src-tauri/src/settings/memory.rs:59-64` |
 | repo 交接层 | `desktop/src-tauri/src/repo_context.rs:17,30-43,69-80` |
 | 实测数据（2026-10-11 只读） | `memories` 0 行；`memory/global/MEMORY.md` 17 字节；`memory-tree/` 仅 TITY(27KB)+Timo 两 scope；`experiences.sqlite3` 0 行；`memory/memory.sqlite3` 0 表遗物；embedding 三键 null；audit.jsonl 尾部检索动线（§0-4） |
-| 相关现行规范 | `docs/design/Context and Memory.md`（§3.6 注入顺序 / §4.6 双层隔离）；`docs/design/Memory Tree Design v2.md`（v2.0 权威）；`docs/design/Cross-Session Recall Design v1.md`（批 1 已兑现、批 2 挂账 ：6,:77,:94）；`docs/design/Tool exposure strategy and usage statistics.md` |
+| 相关现行规范 | `docs/design/authority/Context and Memory.md`（§3.6 注入顺序 / §4.6 双层隔离）；`docs/design/authority/Memory Tree Design v2.md`（v2.0 权威）；`docs/design/authority/Cross-Session Recall Design v1.md`（批 1 已兑现、批 2 挂账 ：6,:77,:94）；`docs/design/authority/Tool exposure strategy and usage statistics.md` |

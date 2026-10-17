@@ -93,7 +93,7 @@ pub(crate) fn build(init: Init) -> Stack {
         )),
     );
 
-    // 思考语言（docs/design/NEW/language of thought.md）：**排在树目录
+    // 思考语言（docs/design/archive/language of thought.md）：**排在树目录
     // 之前**（提示词分层设计 §6 重排）——思考语言是静态段，树目录是
     // append-only，动态段必须殿后；旧序（目录之后）每整理一次就把思考
     // 语言句的前缀缓存断一次。会话首请求解析并锁死（前缀缓存红线 §5）

@@ -15,10 +15,11 @@
 
 ## 验收标准（必须可测：跑什么命令、看到什么结果）
 
-- [x] AC-1 跑 `make doc`：全绿，末行输出 `DOC_FAILED=0`；八条判据逐条能解释（入口厚度 / 地图 / 决策记录 / 阶段计划 / 长行 / 旧规矩用词 / 历史索引 / 断链）
+- [x] AC-1 跑 `make doc`：全绿，末行输出 `DOC_FAILED=0`；文档闸的每一条都能一句话说清它挡什么错
+      （清单唯一出处 = `scripts/check-docs.mjs` 的头注，条数随批会变，所以这里不抄数字）
 - [x] AC-2 故意把 `AGENTS.md` 加到 101 行再跑 `make doc`：**必须报红**并点名 AGENTS.md（改回后转绿）—— 证明这条判据不是摆设
       · 实测 100 行绿 / 101 行红；顺手修掉了判据自己的读数错（`split('\n').length` 让以换行结尾的文件多报 1 行，103 行的文件报成 104）
-- [x] AC-3 在 `docs/design/roadmap/README.md` 里加一段 3 KB 的超长行再跑 `make doc`：**必须报红**（证明"不许再来万字长行"真的在管）
+- [x] AC-3 在 `docs/roadmap/README.md` 里加一段 3 KB 的超长行再跑 `make doc`：**必须报红**（证明"不许再来万字长行"真的在管）
 - [x] AC-4 把 `docs/history/` 里任一文件从 `docs/history/README.md` 的表里删掉一行再跑 `make doc`：**必须报红**（历史有索引、不漏件）
 - [x] AC-5 在役文档里的相对链接**必须指得到真实文件**，读数 = 0（判据 R8）
       · 这条原本是"跑一次确认"的人工承诺，闸里**并没有**它 —— G5 把它补成了真判据，
@@ -28,6 +29,12 @@
         没做成判据的原因是形态太杂、假红风险高，硬凑一条会训练人去绕过它 —— 记为遗留，见下
 - [x] AC-6 你在根目录打开 `STRUCTURE.md`：能找到"某个文件能不能动"的答案；打开 `AGENTS.md`：≤100 行且读完知道下一步该看哪（实测 98 行）
 - [x] AC-7 你随便挑一个已完成阶段（例如记忆看板），在 `docs/history/README.md` 里能找到它的旧文件与它原来在哪
+- [x] AC-8 design 层的形状按用户 2026-10-17 指定的落地：`docs/design/` 下**只有** `authority/`（15 份现役正身）
+      与 `archive/`（15 份已兑现/已退役）两个子目录，7 份待做的稿子散在 design 根，进度表提到 `docs/roadmap/`；
+      旧的 `NEW/`、`BUG/`、`ui-prototype/` 三个目录不再存在（工单并进 `docs/issue/`，原型挪到 `docs/prototype/`）
+      · 这条由文档闸的"形状判据"承重：实测在 `docs/design/` 里新建一个 `NEW/` 目录，闸立刻红并点名多余目录，删掉转绿
+      · 为什么禁止"用目录名表示状态"：`NEW/` 这个词时间一长就没人知道哪些做完了，于是又得多写一份状态表——
+        状态只在 `docs/roadmap/` 那一行
 
 ## 非目标
 
@@ -49,7 +56,7 @@
 4. 入口文档重写：`AGENTS.md` ≤100 行（实测 98）、`README.md` 说人话并纠正过期数字 ✅
 5. 审计件归位：§7 的 T1–T16 未结欠账先抄进 `specs/03-structural-debt`，两份报告与六份分区明细
    整体搬进 `docs/history/audit/` ✅
-   · **设计稿原件不搬**（`docs/design/NEW/` 留着）：已兑现与未开工的稿子混在同一目录，
+   · **设计稿原件不搬**（`docs/design/` 留着）：已兑现与未开工的稿子混在同一目录，
      靠目录名判状态会造假信号；状态一律看路线图那一行。这是取舍不是漏做。
 6. 检查脚本合并修订：逐条给"留 / 改 / 合 / 删"并说明为什么卡、卡了会怎样 ✅ → 成文为
    [ADR-0002](../../docs/adr/0002-gates-rewritten-to-template.md)
@@ -69,10 +76,11 @@
 
 | 文件 / 目录 | 改动 |
 | --- | --- |
-| `STRUCTURE.md` `CONTRIBUTING.md` `Makefile` `scripts/tasks.sh` `docs/adr/` `specs/` `docs/history/` `docs/design/roadmap/` | 新建 |
+| `STRUCTURE.md` `CONTRIBUTING.md` `Makefile` `scripts/tasks.sh` `docs/adr/` `specs/` `docs/history/` `docs/roadmap/` | 新建 |
 | `AGENTS.md` `README.md` | 重写 |
 | `docs/design/ROADMAP.md` `CHANGELOG.md` `INDEX.md` `Post-Audit Roadmap v1.md` `docs/design/archive/*` | 搬进 `docs/history/` |
 | `docs/reports/`（两份报告 + 六份分区明细） | 搬进 `docs/history/audit/`，目录消失 |
+| G6（2026-10-17 追加）：`docs/design/roadmap/` → `docs/roadmap/`；`docs/design/authority/` 新建装 15 份现役正身；`docs/design/archive/` 收 15 份已兑现与已退役稿；design 根留 7 份待做的稿；`docs/design/BUG/` 并进 `docs/issue/`；`docs/design/ui-prototype/` → `docs/prototype/` | 用户 2026-10-17 指定的形状：design 内只留 archive 与 authority 两个文件夹 |
 | `scripts/check-doc-budget.mjs` | 退役删除，由 `scripts/check-docs.mjs` 接管 |
 | `scripts/check_length.sh` | 计数基线 → 点名名单；16 次收紧史搬进 `docs/history/check-length-baseline.md` |
 | `scripts/check-split-equivalence.mjs` | 删掉 rustc 已承重的四档（657 → 502 行）；登记表重放撤出常驻门禁 |

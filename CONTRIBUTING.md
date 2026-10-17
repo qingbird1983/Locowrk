@@ -52,7 +52,7 @@ Conventional Commits：`feat:` `fix:` `docs:` `refactor:` `test:` `chore:`。
 
 | 要记的东西 | 唯一落点 | 形态 |
 | --- | --- | --- |
-| 阶段做完没有 | `docs/design/roadmap/` 那一行的勾选标记 | ⬜ / ◐ / ✅，不写叙述 |
+| 阶段做完没有 | `docs/roadmap/` 那一行的勾选标记 | ⬜ / ◐ / ✅，不写叙述 |
 | 该阶段的详细计划与验收 | `specs/<编号>-<名>/spec.md` | 任务复选框随进度打钩 |
 | 为什么这么定 / 否掉了什么 | `docs/adr/NNNN-*.md` | 只增不改；没有新决策就不写 |
 | 实测读数、踩坑、判据、门禁数字 | **commit 正文** | 一次提交一件事 |

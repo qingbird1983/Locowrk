@@ -29,7 +29,7 @@ crates/                  ★ 内核 crate（依赖单向图见 AGENTS.md §4；�
   session-store/ memory-tree/ kernel-bin/
 plugins-src/             内置插件源码（workspace 成员；版本真源 = scripts/build_plugins.sh 内 PLAN 清单）
 desktop/                 Tauri 2 + Vue 3 桌面端
-  src/                   前端（形态标准 = docs/design/Front-end Design Guidelines.md）
+  src/                   前端（形态标准 = docs/design/authority/Front-end Design Guidelines.md）
   src-tauri/             组装点：独立 Cargo 包、不进根 workspace（根 Cargo.toml 的 exclude）
   tests/                 vitest 用例（跑法见 AGENTS.md §2）
 scripts/                 ★ 工程脚本与门禁实现（任务定义只在这里，Makefile 只转发）
@@ -54,24 +54,24 @@ pre-commit 只按暂存面挑要跑哪几条 —— 三处都不抄清单（v2.2
 
 | 路径 | 属性 | 说明 |
 | --- | --- | --- |
-| `docs/design/` | ★ | **现在有效的设计**（规范正文 + 设计稿原件）；无固定格式，只固定位置 |
-| `docs/design/DESIGN.md` | ★ [LOCK] | 内核权威设计文档（唯一需求来源）：改核心模块前先读对应章节，附录 C 是内核八条纪律的完整版 |
-| `docs/design/UI Design System.md` | ★ | UI 层最高权威（令牌映射 / 字号相对制 / 圆角嵌套 / 冲突裁决表） |
-| `docs/design/UI shell and patterns.md` | — | 下位细则：导航模型 / 页面模式库 / 事件流向 / 弹层规则（与上一行冲突时以 Design System 为准） |
-| `docs/design/Front-end Design Guidelines.md` | ★ | 前端**唯一形态标准**：同类只许一种形态 + 特例申请制 + 两道机械闸 |
-| `docs/design/Context and Memory.md` · `Memory Tree Design v2.md` · `KV Prefix Cache Design v2.md` · `Memory File-ization Design.md` · `Cross-Session Recall Design v1.md` | ★ | 上下文与记忆族的规范正身（v1 两份留作对照，见下） |
-| `docs/design/LLM.md` · `plugins.md` · `Plug-in packaging.md` · `Tool exposure strategy and usage statistics.md` · `Setting and Constrained Optimization.md` · `edit_replace.md` · `Organize Summary Design v1.md` | ★ | 其余各主题的现役规范（`plugins.md §一` 是"哪些是插件 / 宿主内置 / 已退役"的唯一真源） |
-| `docs/design/roadmap/` | ★ | **唯一进度表**：只列未完成阶段 + 勾选 + 一句人话状态；做完的删掉去 `docs/history/` |
-| `docs/design/Memory-KV Roadmap.md` | ⚠ 待并档 | 它自称"记忆树 × KV 专项唯一进度表"= **第二张进度表**，与上一行冲突；未完成项并入路线图后整份归档（挂在路线图的并档项） |
-| `docs/design/NEW/` | — | 设计稿原件（含已兑现与未开工的）；状态看路线图，不靠目录名 |
-| `docs/design/BUG/` · `docs/issue/` | — | 工单与缺陷清单（按目录归位，状态行须与自身处理记录一致） |
-| `docs/design/ui-prototype/` | — | 静态原型 = 方向参考，**不是像素合同**；演示件禁止搬进生产码 |
-| `docs/design/archive/` | — | 退役与未采纳的设计稿（还剩若干份，随设计稿归位一并搬 `docs/history/`） |
+| `docs/roadmap/` | ★ | **唯一进度表**（2026-10-17 从 design 里提出来放 docs 根）：只列未完成阶段 + 勾选 + 一句人话状态；做完的删掉 |
+| `docs/design/authority/` | ★ | **各主题现在有效的那一份规范**（15 份）。判据：改了代码必须回来同步它。清单、层级与冲突裁决顺序见 `docs/design/authority/README.md` |
+| `docs/design/authority/DESIGN.md` | ★ [LOCK] | 内核权威设计文档（唯一需求来源）：改核心模块前先读对应章节，附录 C 是内核八条纪律的完整版 |
+| `docs/design/authority/UI Design System.md` | ★ | UI 层最高权威（令牌映射 / 字号相对制 / 圆角嵌套 / 冲突裁决表） |
+| `docs/design/authority/Front-end Design Guidelines.md` | ★ | 前端**唯一形态标准**：同类只许一种形态 + 特例申请制 + 两道机械闸 |
+| `docs/design/authority/`（其余 12 份） | ★ | 上下文与记忆族 · `LLM.md` · `plugins.md`（§一 是"哪些是插件 / 宿主内置 / 已退役"的唯一真源）· `Plug-in packaging.md` · 工具暴露统计 · 设置与约束 · `edit_replace.md` · 整理摘要 |
+| `docs/design/`（散在根上的 7 份） | — | **还有用但还不是正身**：未开工或部分开工的设计稿 + 下位细则（`UI shell and patterns.md`）。其中 `Memory-KV Roadmap.md` 是 ⚠ 待并档的第二张进度表，未完成项并进 `docs/roadmap/` 后归档 |
+| `docs/design/archive/` | 只读 | **已兑现 / 已退役 / 被新版本取代的设计稿**（15 份）。不再追加、不再改写；索引 = `docs/design/archive/README.md`（含"首行状态滞后"这个坑的说明） |
+| `docs/issue/` | — | 工单与缺陷清单（含从 design 里并过来的三份）；状态行须与自身处理记录一致 |
+| `docs/prototype/` | — | 静态原型 = 方向参考，**不是像素合同**；演示件禁止搬进生产码 |
+| `docs/references/` | — | 外部参考笔记 |
 | `docs/adr/` | ★ | 决策记录：`NNNN-<主题>.md`，**只增不改**；规则与模板见 `docs/adr/0000-template.md` |
 | `specs/` | ★ | 阶段计划：一阶段一目录 `specs/<编号>-<名>/spec.md`，含**可测验收标准**与**非目标** |
-| `docs/history/` | 只读 | **历史归档**：流水、旧路线表、旧变更日志、已退役设计稿、已批准的计划。不再追加、不改写；索引 = `docs/history/README.md` |
+| `docs/history/` | 只读 | **历史归档**：流水、旧路线表、旧变更日志、已批准的计划。不再追加、不改写；索引 = `docs/history/README.md` |
 | `docs/history/audit/` 与 `docs/history/audit/parts/` | 只读 | 审计报告 + 修复台账 + 六份分区明细。§7 的 T1–T16 未结欠账**已先抄进** [`specs/03-structural-debt`](specs/03-structural-debt/spec.md) 再归档到这里 |
-| `docs/references/` | — | 外部参考笔记 |
+
+文档只有四个去处，别新建第五个：**现役规范**进 `docs/design/authority/`，**还没做的想法**放 `docs/design/` 根，
+**做完的**进 `docs/design/archive/`，**过程与流水**进 `docs/history/`。进度只在 `docs/roadmap/` 一行里。
 
 ## 产物与临时件（一律不入库）
 

@@ -83,7 +83,7 @@ pub struct AppSettings {
     pub chat: ChatSettings,
     /// 开发者选项区（v2.49，默认隐藏；类型见 `developer` 子模块）。
     pub developer: DeveloperSettings,
-    /// 思考语言区（docs/design/NEW/language of thought.md；类型见
+    /// 思考语言区（docs/design/archive/language of thought.md；类型见
     /// `thinking` 子模块）。缺省 follow_ui，旧 settings.json 无此区零迁移。
     pub thinking: ThinkingSettings,
     /// 多模态区（批 D：上传校验上限 + 孤儿资产 GC；类型见 `multimodal`
@@ -136,7 +136,7 @@ pub struct SettingsView {
     pub chat: ChatView,
     /// 开发者选项区（v2.49，默认隐藏分区）。
     pub developer: DeveloperView,
-    /// 思考语言区（docs/design/NEW/language of thought.md）。
+    /// 思考语言区（docs/design/archive/language of thought.md）。
     pub thinking: ThinkingView,
     /// 多模态区（批 D：上传校验上限 + 孤儿资产 GC）。
     pub multimodal: MultimodalView,
