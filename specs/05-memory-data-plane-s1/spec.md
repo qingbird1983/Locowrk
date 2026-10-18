@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀① ✅ / 刀②a ✅ / 刀②b 施工中）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀① ✅ / 刀②a ✅ / 刀②b-1 ✅ / 刀②b-2 ✅ / 刀②b-3 施工中）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -124,9 +124,26 @@
     总开关档撤掉 / limit 钳撤掉）。第一版那条"md 分支撤掉"写的是 `if false {`，
     红在**编译错误**上、零证明力 ⇒ 改成 `None::<&MemoryFiles>` 才是"读源没换"那个
     缺陷形状的真红（这条教训与本仓"一句话机制描述不许直接翻译成变异代码"同源）。
-  - **②b-2 召回正文**：`recall.rs::recall_quiet` 取全局层那一条 SQL 换成 `iter_facts`
-    （`<persistent_memory>` 就此停读 sqlite）。**这才是要给决策人看的那半证据**，
-    但它同时牵动注入字节与 `n_candidates` 埋点口径，所以不跟 ②b-1 混在一提交里。
+  - **②b-2 召回正文 ✅（2026-10-18 落地）**：`recall.rs::recall_quiet` 取全局层那条 SQL 换成
+    `iter_facts` ⇒ **`<persistent_memory>` 就此停读 sqlite**。三件机械后果一并处理掉：
+    ① 两条读源共用一个读数形状 `RecallOutcome{rows, n_candidates, partial}`，埋点口径因此
+    只有一个出处；② "不许冒充源是空的"那条纪律抽成纯函数 `inject_loggable` 并扩到
+    "读数不完整同样不记"，`warned` 闸门收成 `warn_once` 一处（两类降级各写一份 `swap`
+    的话第二类会被第一类永久静音）；③ `StoredFact → MemoryRow` 的装配收进 `shapes.rs`
+    的 `From`（原先 `crud::md_rows` 内联一份，召回再来一份就是同一件事两个出处）。
+    证据 = 把 `memory.sqlite3` 改名后召回照常出全局层两条、项目层那条依然不注入、
+    limit 照样钳；埋点那半**落成磁盘行数**（`memory_inject_log` 先记一行、partial 那轮不记第二行）。
+    踩到的两处：Rust **不许在 `impl` 里定义类型**（第一版把 `RecallOutcome` 放进 impl，
+    `cargo fmt` 直接拒绝解析）；替换 `.take(limit)` 那行时我把它整行丢了，
+    补一条"limit 在召回支路也生效"的断言正是这种丢法的红证。
+    **两条"验证器自己错"当场抓到（都写进代码注释留痕）**：① 变异 15（`partial` 恒 false）
+    第一次跑**打空**——那组用例两轮都用 `None` 会话，而 `ux_mil_inject` 的唯一键是
+    `(session_key, scope_id)`，第二行被 `INSERT OR IGNORE` 吃掉 ⇒ "仍然只有一行"在两种
+    实现下都成立。改法 = 两轮各用一个真实会话 id，并加一组**正对照**（同两轮、无扫不动
+    条目 ⇒ 必须记到第二行），否则那个"= 1"也可能只是埋点通路整条没接上。
+    ② 变异器的"选择器打空"自检第一版判据是"输出里出现 `0 passed; 0 failed`"，而 cargo
+    会为 `src/main.rs` 那个零测试 target **恒打**这一行 ⇒ 每条变异都误报；改成把所有
+    `test result:` 行的 passed+failed 加总、总和为 0 才叫打空。
   - **②b-3 项目索引兜底**：`memory_index.rs` 的第二档（`index_rows` 从库里现合成指针行）摘掉，
     md 用不上 = 该层就是空，如实空；连同 `TRUNCATED_NOTE` 一起退役（注入侧不再自己算截断）。
   - **②b-4 语义召回**：`source.rs::recall_relevant` 自己开连接取行做向量匹配，还带学习列
@@ -192,7 +209,10 @@
 - [ ] AC-S1-1 写路径唯一：工具或管理页写一条记忆 → 数据根只新增 1 个 `.md` + 索引多 1 行；
       `SELECT COUNT(*) FROM memories` 前后**不变**（sqlite 不再是落点）
 - [ ] AC-S1-2 读不碰 sqlite：把 `memories.db` 改名造损坏态 → 管理页列表、`<project_memory_index>`
-      注入、`memory_read/search` 全部照常出数（这条是"真源翻转"最硬的证据，也是刀②的收口判据）
+      注入、`memory_read/search` 全部照常出数（这条是"真源翻转"最硬的证据，也是刀②的收口判据）。
+      **已证两格**：管理页列表（②b-1 `listing_survives_the_db_being_renamed_away`）、
+      全局层注入（②b-2 `recall_takes_the_global_layer_from_md_with_the_db_gone`）；
+      剩 `<project_memory_index>` 的兜底档（②b-3）与插件两枚工具（刀③）⇒ 整条不勾
 - [ ] AC-S1-3 四类型落位：`type=feedback` 缺省落 `global/`、`type=project` 缺省落
       `projects/<可读名>-<hash>/facts/`；显式给 `scope` 时按覆盖落，frontmatter 回读一致
 - [ ] AC-S1-4 排除清单生效：一句"我测试过了 / 我改了 store.rs"收束后**不产文件**；
@@ -266,6 +286,12 @@
   但那是改配置，等决策人点头；本刀不动。复查（刀②a 收尾）：工作区 `.gitignore` 里
   **已有 `+.pnpm-store/` 这一行**（非本刀产出、仍未提交 ⇒ 本刀不认领也不 `git add` 它）；
   剩下的不是"要不要加"而是"谁来提这一行"。
+- 挂账（刀②b-2 复查后**故意不坐实**的一档）：`iter_facts` 的 `unreadable` 只数
+  "读得到目录、读不动文件"，某层目录本身读不动时不进账 ⇒ 那种故障下会是"空 + 零计数"，
+  看起来像"从没记过"。补法三行（失败后 `metadata().is_dir()` 分类），但**没有任何跨平台
+  可造的夹具能让它报红**：POSIX `chmod 000` 造得出，Windows 要动 ACL（`icacls`），
+  不可移植。写一段没人盯的守卫比不写更糟——它会让人以为那条纪律已经闭环。
+  现实侧的兜底：真出现整层不可用，管理页是**整体空白**而不是少几条，看得见。
 - 挂账（刀②a 取证时抓到的保留名盲区）：读侧跳过索引与投影用的是**文件名**
   （`read.rs::is_fact_file` 排 `MEMORY` / `tree` 两个 stem），而写侧的 `key_file_stem`
   只安全化路径字符与 Windows 保留名，**没把 `MEMORY` / `tree` 列成保留键** ⇒

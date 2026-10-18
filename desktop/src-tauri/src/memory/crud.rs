@@ -91,14 +91,7 @@ impl MemoryStore {
             .iter()
             .filter(|f| hit(&f.key) || hit(&f.value) || hit(&f.tags))
             .take(limit)
-            .map(|f| MemoryRow {
-                key: f.key.clone(),
-                value: f.value.clone(),
-                tags: f.tags.clone(),
-                source: f.source.clone(),
-                workspace: f.workspace.clone(),
-                updated_at: f.updated_at,
-            })
+            .map(MemoryRow::from)
             .collect()
     }
 

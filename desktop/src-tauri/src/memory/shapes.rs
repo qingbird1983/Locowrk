@@ -28,6 +28,23 @@ pub struct MemoryRow {
     pub updated_at: i64,
 }
 
+/// 人类层读回的一条事实 → 行形状。**md 成真源之后，这一份映射就是唯一的装配点**：
+/// 管理页列举（`crud::md_rows`）与召回注入（`recall::recall_once`）都走它。
+/// 各写一份内联拷贝的话，字段一漂两侧表现就不一样（管理页看得见、模型看不见），
+/// 而两边的单测会各自绿——这正是本仓"同一属性只许一个出处"那族判据的形状。
+impl From<&plugin_api::memlayout::StoredFact> for MemoryRow {
+    fn from(f: &plugin_api::memlayout::StoredFact) -> Self {
+        Self {
+            key: f.key.clone(),
+            value: f.value.clone(),
+            tags: f.tags.clone(),
+            source: f.source.clone(),
+            workspace: f.workspace.clone(),
+            updated_at: f.updated_at,
+        }
+    }
+}
+
 /// 索引注入用的一行（Q2 / MR §4.1）：**只取指针级三件**，`value` 一个字节都不取
 /// ——「正文永不自动进上下文」是 §4.1 的硬边界，查询里不带 value 列就是它的机器
 /// 保证（要绕过就得改 SQL，而 SQL 有判据盯着）。

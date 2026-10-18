@@ -1,10 +1,13 @@
-//! 刀②b 的**读源**用例（管理页列举）：人类层可用时读文件，一条 SQL 都不发。
+//! 刀②b 的**读源**用例：管理页列举与全局层召回都读 md，可用时一条 SQL 都不发。
 //!
-//! 为什么单独一簇而不是往 `legacy.rs` 后面接三条：那个文件已经 350 行，再加就撞
+//! 为什么单独一簇而不是往 `legacy.rs` 后面接几条：那个文件已经 350 行，再加就撞
 //! 400 闸；更要紧的是它管的是"既有形状一字未改"，而这一簇管的是**语义正在反转**
 //! 的那件事——两种证据混在一个文件里，以后谁也说不清哪条是等价值、哪条是新行为。
 
 use super::*;
+use crate::memory::recall::{inject_loggable, RecallOutcome};
+use crate::memory::MemoryRow;
+use crate::recall_log::RecallLog;
 
 /// 键位只存在于库里、md 里没有 ⇒ 人类层开着时它**不许出现**在列表里。
 ///
@@ -138,4 +141,152 @@ fn listing_filter_matches_tags_and_folds_case_like_sql_like() {
     assert_eq!(n("npm%"), 0, "通配符按字面量（SQL 侧 ESCAPE 同义）");
     assert_eq!(n("nope"), 0, "不命中就是零条，不许回落到全量");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// **②b-2 的硬证据（AC-S1-2 那一半）**：把库改名之后，注入通路照常从 md 出全局层，
+/// 而项目层那条依然不注入（v2.136 裁定的"项目侧全提醒制"不许因为换读源而走样）。
+/// 实现里若还剩一处 `open_conn`，这条以 `Err` 红、不是少几行。
+#[test]
+fn recall_takes_the_global_layer_from_md_with_the_db_gone() {
+    let dir = temp_dir("recall-nodb");
+    let store = wired(&dir, true);
+    let ws = keysid();
+    store
+        .write("", "pref.lang", "中文", "语言", "explicit")
+        .unwrap();
+    store
+        .write("", "pref.style", "简短", "文风", "explicit")
+        .unwrap();
+    store
+        .write(&ws, "proj.only", "不该自动注入", "", "explicit")
+        .unwrap();
+    std::fs::rename(dir.join("memory.sqlite3"), dir.join("memory.sqlite3.gone")).unwrap();
+
+    let rows = store.recall_quiet(None, 10);
+    let keys: Vec<&str> = rows.iter().map(|r| r.key.as_str()).collect();
+    assert_eq!(
+        keys,
+        vec!["pref.lang", "pref.style"],
+        "只取全局层、且取的是 md（同秒时按 key 升序 = SQL 那条 ORDER BY 同形）：{keys:?}"
+    );
+    assert_eq!(
+        rows[0].tags, "语言",
+        "tags 走的是同一份 From 装配（不是再抄一遍字段）"
+    );
+    // limit 在 md 支路同样生效——这条就是"`.take(limit)` 被丢掉"那种改动的红证
+    assert_eq!(store.recall_quiet(None, 1).len(), 1, "召回条数照样钳 limit");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 埋点判据的三档（纯函数，不需要接 `RecallLog` 就有可观测面）。
+/// 这一档要是漂成"总是记"，`memory_inject_log` 的使用率会系统性偏高而**没有任何
+/// 一条行为测试会红**——所以它必须在这儿钉住。
+#[test]
+fn inject_loggable_requires_a_complete_reading() {
+    let row = || MemoryRow {
+        key: "k".into(),
+        value: "v".into(),
+        tags: String::new(),
+        source: "explicit".into(),
+        workspace: String::new(),
+        updated_at: 1,
+    };
+    let full = |partial: bool| {
+        Ok::<_, String>(RecallOutcome {
+            rows: vec![row()],
+            n_candidates: 3,
+            partial,
+        })
+    };
+    assert!(inject_loggable(&full(false)), "完整读数才记");
+    assert!(
+        !inject_loggable(&full(true)),
+        "有扫不动的部分 ⇒ 不记（候选数偏低=指标造假）"
+    );
+    let err: Result<RecallOutcome, String> = Err("源不可用".into());
+    assert!(
+        !inject_loggable(&err),
+        "取不到候选数 ⇒ 不记（旧纪律原样在场）"
+    );
+}
+
+/// 有一条扫不动时**注入照常交付其余**（"注入不拦聊天"那条裁定优先于记账洁癖）。
+/// 本条只管交付；"那一轮不写埋点"由下面那条接 `RecallLog` 的用乐视，判据本身
+/// 再由 `inject_loggable_requires_a_complete_reading` 单独钉。
+#[test]
+fn recall_still_delivers_the_readable_ones_when_a_fact_is_unreadable() {
+    let dir = temp_dir("recall-partial");
+    let store = wired(&dir, true);
+    let ws = keysid();
+    store
+        .write("", "pref.ok", "读得到", "", "explicit")
+        .unwrap();
+    // 一个"事实文件"其实是目录 ⇒ 文件级 read 失败 ⇒ 扫描带 partial
+    std::fs::create_dir_all(
+        dir.join("memory")
+            .join("projects")
+            .join(plugin_api::memlayout::project_dir_name(&ws))
+            .join("facts")
+            .join("broken.md"),
+    )
+    .unwrap();
+
+    let rows = store.recall_quiet(None, 10);
+    assert_eq!(rows.len(), 1, "扫不动一条不许连累其余：{rows:?}");
+    assert_eq!(rows[0].key, "pref.ok");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 有扫不动的条目时**不写埋点行**。观测量落成文件行数（进程内计数换个进程就没了），
+/// 所以这里读的是 `memory_inject_log` 的真实计数。
+///
+/// 上一条纯函数证的是判据本身，这一条证的是**判据真的接到了召回通路上**：少了它，
+/// `partial: scan.unreadable > 0` 漂成恒 false 也不会有任何测试报红（这条红过一次就是
+/// 这么发现的——第一版两轮都用 `None` 会话跑，而 `ux_mil_inject` 的唯一键是
+/// `(session_key, scope_id)`：第二行被 `INSERT OR IGNORE` 吃掉，于是"仍然只有一行"
+/// 在两种实现下都成立 = 零证明力）。所以这里两轮各用一个真实会话 id，并配一组
+/// **正对照**：同样的两轮、没有扫不动条目时必须记到第二行，否则上面那个"= 1"
+/// 也可能只是因为埋点通路整条没接上。
+#[test]
+fn an_incomplete_scan_writes_no_inject_row() {
+    let dir = temp_dir("recall-partial-log");
+    let log = RecallLog::at(dir.join("usage.sqlite3"));
+    let store = wired(&dir, true).with_recall_log(log.clone());
+    store
+        .write("", "pref.ok", "读得到", "", "explicit")
+        .unwrap();
+
+    store.recall_quiet(Some("ws-session"), 10);
+    assert_eq!(
+        log.stats().unwrap().injections,
+        1,
+        "前提一：完整读数确实记了一行"
+    );
+
+    // 全局层里塞一个"文件"其实是目录 ⇒ 扫描带 partial
+    std::fs::create_dir_all(dir.join("memory").join("global").join("broken.md")).unwrap();
+    let rows = store.recall_quiet(Some("ws-variant-session"), 10);
+    assert_eq!(rows.len(), 1, "注入不拦聊天：照样交付读得到的那些");
+    assert_eq!(
+        log.stats().unwrap().injections,
+        1,
+        "partial 那一轮不许记第二行（宁缺毋伪接到通路上）"
+    );
+
+    // 正对照：同两轮、无扫不动条目 ⇒ 必须记两行
+    let dir2 = temp_dir("recall-full-log");
+    let log2 = RecallLog::at(dir2.join("usage.sqlite3"));
+    let store2 = wired(&dir2, true).with_recall_log(log2.clone());
+    store2
+        .write("", "pref.ok", "读得到", "", "explicit")
+        .unwrap();
+    store2.recall_quiet(Some("ws-session"), 10);
+    store2.recall_quiet(Some("ws-variant-session"), 10);
+    assert_eq!(
+        log2.stats().unwrap().injections,
+        2,
+        "正对照：完整两轮就该记两行（否则上面那个 1 是空集里的真话）"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&dir2);
 }
