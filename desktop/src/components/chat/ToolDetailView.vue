@@ -182,18 +182,19 @@ async function copyCall() {
   color: var(--lw-danger);
   overflow-wrap: anywhere;
 }
-/* 标签 + 值两列属性行（§3.8/§五）：无卡片框，标签列定宽对齐 */
+/* 标签 + 值两列属性行（§3.8/§五）：无卡片框。两列提到 dl 上（dt/dd 经
+   display:contents 直接参与），标签列按最长标签自适应——原先每行各自定宽 72px，
+   「路径」这类两字标签后面会空出一大段（用户 2026-10-18 反馈）。 */
 .tdetail__props {
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--lw-gap-8);
+  row-gap: 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  align-items: baseline;
 }
 .tdetail__prop {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  column-gap: var(--lw-gap-8);
-  align-items: baseline;
+  display: contents;
 }
 .tdetail__prop dt {
   font-size: var(--lw-fs-11);
