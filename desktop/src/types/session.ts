@@ -101,12 +101,12 @@ export interface CacheBreakReport {
   tsMs: number;
 }
 
-/** F2 reconcile 结果（memory_reconcile 命令返回；计数如实透出）。 */
+/** F2 reconcile 结果（memory_reconcile 命令返回；计数如实透出）。
+ *  「影子 → 文件」方向的写动作随 S1 刀②c-2 退役，`healed`（愈合文件数）计数就此消失。 */
 export interface ReconcileSummary {
   scanned: number;
   created: number;
   updated: number;
-  healed: number;
   deleted: number;
   warnings: number;
 }

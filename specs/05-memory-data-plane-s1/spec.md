@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1 已落地 / 刀②c-2 与刀③④ 待做）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2 已落地 / 刀③④ 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -231,14 +231,41 @@
   `recall_log` 那条等价判据换 `write_fact` 造数据、`initial_export_skips…` 用 `reconcile_upsert`
   造"库有文件无"的存量形状）；新增 10 条。**断言的语义一条没放宽**。
   具体 passed 读数不落在本篇（每批都会漂的数只写提交正文，唯一出处 = 闸自己的输出行）。
-- **刀②c-2（反向通路退役 + 学习档待拍板）⏳ 待做**，两件事，第二件要决策人点头：
-  1. **"库 → 文件"那两条反向写入通路必须停**（这条不是可选优化，是遗忘验证的前置）：
+- **刀②c-2（反向通路退役 ✅ 2026-10-18 已落地 / 学习档仍待拍板 ⏳）**。
+  1. **"库 → 文件"那两条反向写入通路已全部停止**（这条不是可选优化，是遗忘验证的前置）：
      `run_initial_export` 的"行在文件缺 ⇒ 补文件"与 `memory_reconcile` 的 `healed` 支
      "文件未动而索引先行 ⇒ 从索引愈合文件"，在真源 = md 之后的含义是**把已删除的记忆复活**。
      刀②c-1 之后 `delete` 只看文件 ⇒ 文件删了、影子没跟上时，下次启动就会按影子把文件写回来
-     ⇒ AC-S1-6 那三条遗忘验证不成立。`memory_reconcile.rs` 在 v1.1 标准里本就整项作废
-     （只有一个真源就无处对账），随这一刀退役；连带 `commands/memory.rs::memory_reconcile`
-     那一枚命令与 MemoryPage 上那颗按钮（动界面 ⇒ 与刀④ 同批做，界面文案一起订正）。
+     ⇒ AC-S1-6 那三条遗忘验证不成立。落地形状：`healed` 那一支改成**一个字节都不写**、
+     只 `sum.warnings += 1` + `tracing::warn!` 点名（`rows` 里那份值留在原地不动，刀③ 摘影子后
+     这一格连"出现"都不可能）；`run_initial_export` 的事实循环整段删除，签名跟着从
+     `(memory, tree_store, files, sessions_dir) -> (usize, usize)` 收成
+     `(tree_store, files, sessions_dir) -> usize`——**留下一个恒 0 的 `facts` 返回值就是死 API**，
+     日志字段（`facts=`）与两处用例跟着换通道。
+     ⚠ **一处对上一轮判断的订正**（写在这里是因为它改变刀④ 的范围）：本节原文说过
+     "`memory_reconcile.rs` 在 v1.1 标准里本就整项作废、随这一刀退役、连带命令与按钮"——
+     **不退**。理由：插件那六枚工具（刀③ 才改道）仍在读 sqlite，所以"文件 → 影子"的对齐在
+     刀③ 落地之前是**必要过渡机制**——否则人在文件夹里改的记忆模型根本读不到，那正是本阶段
+     要消灭的"另一种双真源"。于是本刀只拆"副本反写文件"这一个方向，命令与按钮留到刀③ 之后
+     评估（影子一旦没有生产者，对账自然无处可对齐）。
+     **判据**：新增 `SS12`（对账 / 启动导出面里"影子 → 文件"反写：调用档 0、转发档 2；
+     两档一起报，`0|0` 那种"两边一起消失"读法兜不住面瞎）。它与两条行为测试的分工写进了判据
+     说明，也写进了变异设计：`CASE 30` **故意长成一条没人调用的反写函数**——行为测试对它全绿
+     （不在任何调用路径上），只有秒级档看得见（`make quick` 不跑 cargo），这一档才是 SS12 独有的；
+     `CASE 31`（healed 支塞回）与 `CASE 32`（导出多写一条事实文件）各打中一条行为用例，双证。
+     **测试去向**（AGENTS §6.3）：`stale_file_is_healed_from_index` **反转**为
+     `a_shadow_ahead_of_the_file_is_reported_but_never_written`（正向"文件被愈合"断言换成反向
+     "字节相同"断言 + 重跑一轮不许升级 + 一条内联负对照：mtime 推进后走的是"文件为准"那格，
+     证明命中的确实是"影子先行"）；`initial_export_skips_existing_files_and_regenerates_trees`
+     **改写**为 `initial_export_rebuilds_tree_md_and_writes_no_fact_files`（只验投影半区，
+     真源侧断言 = 磁盘上事实文件计数不增；计数按**文件名**数而不猜目录名算法，
+     因为事实落点由键位串决定、投影落点由 `TreeStore` 里存的 workspace 决定，两者不保证同串）。
+     **一条登记**：`memory_reconcile.rs` 里 `"global"` 字面量仍有两处（第 85 行收集、第 166 行
+     删除判定），而算式唯一出口 `GLOBAL_DIR` 在 plugin-api 里是 `pub(crate)` ⇒ 宿主拿不到。
+     收口要先把那个常量升面，与本刀无关，留在这里等下一次动寻址面时一起做。
+     连带的前端读数（`healed` 从 `ReconcileSummary` 六处一起退役：Rust 字段 / `has_action` /
+     启动日志字段 / TS interface / `DeveloperSection.vue` 插值 / zh+en 两枚文案）只删插值、
+     不动形态；**开发者分区那两行读数随刀④ 一起截图核对**。
   2. **学习档仍读 sqlite**（`source.rs::recall_relevant`，settings `memory.learnEnabled` 打开时才走）：
      它是宿主读面里最后一条按库寻址的通路，也是 ②b-4 推过来的那一格。**不能顺手改**的理由有两条，
      都写进代码注释留痕：① `hit_count` / `last_hit_at` 这两个学习量**不能进 md frontmatter**——

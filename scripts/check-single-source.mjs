@@ -154,6 +154,24 @@ function hostMemoryFace() {
   return [...tree, ...heads].map((rel) => read(rel)).join('\n');
 }
 
+/**
+ * 对账 / 启动导出面（S1 刀②c-2 加，SS12 的扫描面）：两份「读影子 + 写投影」编排模块的
+ * 主文件（tests 不进面）。
+ *
+ * 口径**刻意不含** `memory/` 树：那里 `crud.rs` 走的是**正向**写路径（真源 md 先落、
+ * 影子跟后），合法在场。把它数进来这条判据就变成"宿主不许写 md"，说的不是本刀的事；
+ * 本刀要说的话只有一句：**副本不许反写文件**。
+ */
+function reconcileFace() {
+  return [
+    'desktop/src-tauri/src/memory_reconcile.rs',
+    'desktop/src-tauri/src/memory_files.rs',
+  ]
+    .filter((rel) => fs.existsSync(path.join(ROOT, rel)))
+    .map(read)
+    .join('\n');
+}
+
 /** 外点收口形状 = 挂到 document/window 上的 `pointerdown`（口径见上方注释）。 */
 const DISMISS_SHAPE = /(?:document|window)\.addEventListener\(\s*"pointerdown"/;
 const dismissCount = (m) => m.comps.filter((s) => DISMISS_SHAPE.test(s)).length;
@@ -272,6 +290,7 @@ function snapshot() {
     frontSrc: pf.frontSrc,
     memlayoutTree: memlayoutFace(),
     hostMemoryTree: hostMemoryFace(),
+    reconcileTree: reconcileFace(),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -513,6 +532,26 @@ const CHECKS = [
       ].join('|'),
     '0|0|0',
   ],
+  [
+    'SS12',
+    '「影子 → 文件」这个方向的反写在**对账 / 启动导出面**里：调用档恒 0、转发档恒 2' +
+      '（两档一起报——`0|0` 那种"两边一起消失"的读法兜不住面瞎）。刀②c-2 停掉的旧通路正是' +
+      '两条 `files.write_fact(...)`：①`memory_reconcile::process_file` 的 `healed` 支（文件没动' +
+      '而索引先行 ⇒ 从索引愈合文件）、②`memory_files::run_initial_export` 的补洞段（库里有一行' +
+      '而文件没有 ⇒ 按索引把文件写出来）。真源 = md 之后它们的含义反过来：**把人已经删掉的记忆' +
+      '在下次启动写回来** ⇒ AC-S1-6 那三条遗忘验证不成立。转发档 2 = `MemoryFiles` 自己的' +
+      '`memlayout::write_fact` / `memlayout::delete_fact` 两条出口，数字变了就是长出第二个' +
+      '对真源落笔的出口，那是有意事件、要显式改这里。' +
+      '与行为测试的分工：那两格各有用例钉着（`a_shadow_ahead_of_the_file_is_reported_but_never_written`' +
+      '/ `initial_export_rebuilds_tree_md_and_writes_no_fact_files`），这条判据**独有**的是' +
+      '"没人调用的一条新反写分支"——它不经过任何测试，只有秒级档看得见（`make quick` 不跑 cargo）',
+    (m) =>
+      [
+        countOf(m.reconcileTree, /\b(?:files|self)\s*\.\s*(?:write|delete)_fact\s*\(/),
+        countOf(m.reconcileTree, /\bmemlayout::(?:write|delete)_fact\s*\(/),
+      ].join('|'),
+    '0|2',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -528,6 +567,10 @@ const FLOORS = [
   // 第一条挡面为空，第二条挡"面里连被换掉的那个函数本体都没有"（= 扫错了树）。
   ['宿主记忆面非空', (m) => (m.hostMemoryTree.length > 4000 ? 1 : 0), 1],
   ['宿主记忆面含列举实现', (m) => countOf(m.hostMemoryTree, /fn md_rows/), 1],
+  // SS12 的扫描面是**两份**文件，而它的两档读数恰好都住在其中一份（`memory_files.rs`）：
+  // 另一份改名/删掉时 0|2 照样绿。所以按文件各点一个本体函数，缺哪个红哪个。
+  ['对账面含 process_file 本体', (m) => countOf(m.reconcileTree, /fn process_file/), 1],
+  ['对账面含启动导出本体', (m) => countOf(m.reconcileTree, /fn run_initial_export/), 1],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
@@ -603,6 +646,13 @@ if (SELFTEST) {
     SS11: (m) =>
       (m.hostMemoryTree +=
         '\nif self.files_face().is_none() { return self.index_rows(&ws, 200); }\n'),
+    // 刀②c-2 的墓碑变异。它**故意长成一条没人调用的分支**：SS12 与那两条行为测试的分工
+    // 就靠这个形状证明——行为测试对"新增一条未接线的反写函数"是全绿的（它不在任何调用
+    // 路径上），只有结构档看得见。若把这条变异写成"把 healed 支塞回 process_file"，
+    // 它同时会打掉行为测试，证不出 SS12 独有哪一档。
+    SS12: (m) =>
+      (m.reconcileTree +=
+        '\nfn resurrect_from_shadow(r: &MemoryRow, files: &MemoryFiles) {\n    let _ = files.write_fact(&r.workspace, &r.key, &r.value, &r.tags, &r.source, r.updated_at);\n}\n'),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

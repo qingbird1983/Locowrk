@@ -163,61 +163,101 @@ fn project_dir_is_the_handle_view_of_the_same_formula_and_holds_tree_md() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// md 层里全部 `.md` 的**文件名**清单（按名字数落点数，不去猜目录名算法——
+/// 事实文件的落点由键位串决定，而投影的落点由 `TreeStore` 里存的 workspace 决定，
+/// 两者不保证同串，所以本文件的判据只看"磁盘上多了哪几种文件、各几个"）。
+fn md_names(root: &std::path::Path) -> Vec<String> {
+    fn walk(p: &std::path::Path, out: &mut Vec<String>) {
+        let Ok(entries) = std::fs::read_dir(p) else {
+            return;
+        };
+        for e in entries.flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if let Some(n) = path.file_name().and_then(|x| x.to_str()) {
+                if n.ends_with(".md") {
+                    out.push(n.to_owned());
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(&root.join("memory"), &mut out);
+    out
+}
+
+/// 事实文件数 = 排除每层索引 `MEMORY.md` 与投影 `tree.md`。
+fn fact_count(names: &[String]) -> usize {
+    names
+        .iter()
+        .filter(|n| n.as_str() != "MEMORY.md" && n.as_str() != "tree.md")
+        .count()
+}
+
+fn count_of(names: &[String], name: &str) -> usize {
+    names.iter().filter(|n| n.as_str() == name).count()
+}
+
 #[test]
-fn initial_export_skips_existing_files_and_regenerates_trees() {
+fn initial_export_rebuilds_tree_md_and_writes_no_fact_files() {
     let root = tmp_dir("export");
     let files = MemoryFiles::new(&root);
     let store = TreeStore::new(&root);
     let sessions_dir = root.join("sessions");
     std::fs::create_dir_all(&sessions_dir).unwrap();
     let memory = MemoryStore::new(&root, resolver());
-    // 存量形状 = **库里已有行、md 还没有**（首启导出要补的正是这个洞）。刀②c-1 之后
-    // `write()` 两边都落 ⇒ 用它造不出这个形状，只能经 `reconcile_upsert` 那条
-    // 「直写行、绝不反写 md」的专用面（`memory/reconcile.rs` 中间那段 `----` 注释就是
-    // 这句话的出处）。它不归一键位 ⇒ 这里显式过 `scope_key`，与生产 `write()` 同串。
+    let ws = crate::workspace::scope_key(Some(r"F:\proj\Exp"));
+    // 存量形状 = **库里已有行、md 还没有**。旧形状要补这个洞，S1 刀②c-2 起**不补**：
+    // 真源 = md 之后，"库里有而文件没有"绝不等于"文件缺了"——它同样可能是人已经把
+    // 这条记忆删了（删文件 + 库里那行由插件侧写出来）。由副本补 = 复活。
+    // 造这个形状只能经 `reconcile_upsert`（直写行、绝不反写 md）——刀②c-1 之后
+    // `write()` 两边都落，用它造不出来。它不归一键位 ⇒ 上面先过 `scope_key`。
     memory
         .reconcile_upsert("", "pref.pnpm", "always pnpm", "", "explicit", 100)
         .unwrap();
     memory
-        .reconcile_upsert(
-            &crate::workspace::scope_key(Some(r"F:\proj\Exp")),
-            "db.choice",
-            "sqlite",
-            "",
-            "explicit",
-            100,
-        )
+        .reconcile_upsert(&ws, "db.choice", "sqlite", "", "explicit", 100)
         .unwrap();
     store.save(&real_tree(r"F:\proj\Exp", "s1")).unwrap();
 
-    // 人在 sqlite 之外已有一份编辑（同键位）——导出不得覆盖
+    // 人在 md 侧已有的一份编辑（同键位）——更不许被覆盖
     let human = root.join("memory").join("global").join("pref.pnpm.md");
     std::fs::create_dir_all(human.parent().unwrap()).unwrap();
     std::fs::write(&human, "HUMAN EDIT").unwrap();
 
-    let (facts, trees) = run_initial_export(&memory, &store, &files, &sessions_dir).unwrap();
-    assert_eq!((facts, trees), (1, 1), "全局键被跳过 = 只导出项目事实");
+    let trees = run_initial_export(&store, &files, &sessions_dir).unwrap();
+    assert_eq!(trees, 1, "重建的只有投影 tree.md");
+    let names = md_names(&root);
+    assert_eq!(
+        fact_count(&names),
+        1,
+        "一条事实文件都不许由影子写出来（那 1 份是人自己写的）：{names:?}"
+    );
+    assert_eq!(
+        count_of(&names, "tree.md"),
+        1,
+        "投影确实重建了一份：{names:?}"
+    );
     assert_eq!(
         std::fs::read_to_string(&human).unwrap(),
         "HUMAN EDIT",
         "人编辑不动"
     );
-    let exported = root
+    let would_be = root
         .join("memory")
         .join("projects")
-        .join(plugin_api::memlayout::project_dir_name(
-            // 目录名必须由**同一个归一串**算出来（上面造存量时过的就是 `scope_key`，
-            // 与生产 `write()` 里那一个函数），否则这条判据钉的是"原始串的落点"
-            // 而不是生产落点。
-            &crate::workspace::scope_key(Some(r"F:\proj\Exp")),
-        ))
+        .join(plugin_api::memlayout::project_dir_name(&ws))
         .join("facts")
         .join("db.choice.md");
-    assert!(exported.exists());
+    assert!(!would_be.exists(), "库里那行没被补成文件");
 
-    // 幂等：重跑零新增（含 tree.md 已在、投影无更新）
-    let (facts2, trees2) = run_initial_export(&memory, &store, &files, &sessions_dir).unwrap();
-    assert_eq!((facts2, trees2), (0, 0), "重跑幂等");
+    // 幂等：重跑零新增（tree.md 已在 = 人改保护/已在场都不再写）
+    assert_eq!(
+        run_initial_export(&store, &files, &sessions_dir).unwrap(),
+        0,
+        "重跑幂等"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

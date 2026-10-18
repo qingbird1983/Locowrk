@@ -1,5 +1,10 @@
 //! memory_reconcile 单测：文件为准回写 / 新增吸纳 / 人删文件删行 /
-//! 索引先行愈合 / 目录缺席不删行。全部走临时目录。
+//! **影子先行只点名不写文件** / 整层缺席不删行。全部走临时目录。
+//!
+//! S1 刀②c-2 把"索引先行愈合"那一格的正向断言（`sum.healed`）换成了反向判据：影子比
+//! 真源新时文件一个字节不许变。理由见模块头注——旧形状在真源 = 文件的时代等于"把人删掉
+//! 的记忆写回来"。同族另一条（启动导出不补事实文件）在 `memory_files::tests`，因为
+//! 被删的那段代码住在那里。
 //!
 //! **取数通道写死 `export_rows()`，不许换成 `store.list()`**：本模块的职责是
 //! 「以文件为准回写**行**」，而 S1 刀②b-1 起 `list()` 的读源 = md。用 list 当"库里有哪几行"
@@ -102,7 +107,8 @@ fn deleted_file_removes_row_but_missing_dir_keeps_rows() {
     let sum = run(&store, &files, &[]).unwrap();
     assert_eq!(sum.deleted, 1, "{sum:?}");
     assert!(store.export_rows().unwrap().is_empty());
-    // 整层缺席 = 复位手势：行保留（首启导出按索引重建文件）
+    // 整层缺席 = 复位手势：行保留（不删行是因为"目录没了"无法区分"人清空了记忆"
+    // 与"这层还没建过"；刀②c-2 起也**不补文件**，两份都不动才是安全的那一档）
     store.write("", "kept.key", "v", "", "explicit").unwrap();
     let global = md_root(&dir).join("global");
     std::fs::remove_dir_all(&global).unwrap();
@@ -112,18 +118,39 @@ fn deleted_file_removes_row_but_missing_dir_keeps_rows() {
 }
 
 #[test]
-fn stale_file_is_healed_from_index() {
-    let (store, files, dir) = setup("heal");
+fn a_shadow_ahead_of_the_file_is_reported_but_never_written() {
+    let (store, files, dir) = setup("shadow-ahead");
     store.write("", "k", "old", "", "explicit").unwrap();
     let rel = memlayout::fact_rel_path("", "k");
-    // 索引先行（模拟 md 同步失败的历史）：行更新而文件未动（标记仍 == mtime）
+    let path = md_root(&dir).join(&rel);
+    let before = std::fs::read(&path).unwrap();
+    // 影子先行：库落笔而文件没跟上（标记仍 == mtime = 我们没写过这个文件的新形态）
     store
         .reconcile_upsert("", "k", "new value", "", "explicit", 1728200000)
         .unwrap();
     let sum = run(&store, &files, &[]).unwrap();
-    assert_eq!(sum.healed, 1, "{sum:?}");
-    let text = std::fs::read_to_string(md_root(&dir).join(&rel)).unwrap();
-    assert!(text.contains("new value"), "文件从索引愈合");
+    assert_eq!(sum.warnings, 1, "只点名：{sum:?}");
+    assert_eq!(
+        (sum.created, sum.updated, sum.deleted),
+        (0, 0, 0),
+        "一个对齐动作都不许有：{sum:?}"
+    );
+    let after = std::fs::read(&path).unwrap();
+    assert_eq!(
+        before, after,
+        "真源一个字节都不改（旧形状在这里会把 new value 写进文件）"
+    );
+    assert!(String::from_utf8_lossy(&after).contains("old"));
+    // 再跑一轮：同一状态照样只点名，不许"看第二次就顺手补上"
+    let sum2 = run(&store, &files, &[]).unwrap();
+    assert_eq!(sum2.warnings, 1, "{sum2:?}");
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    // 负对照：同一文件推进 mtime（= 人动过）⇒ 走「文件为准」那格，
+    // 证明上面命中"影子先行"靠的是标记而不是别的原因
+    human_edit(&dir, &rel, "人写的版本");
+    let sum3 = run(&store, &files, &[]).unwrap();
+    assert_eq!(sum3.updated, 1, "人改过 ⇒ 文件为准：{sum3:?}");
+    assert_eq!(sum3.warnings, 0, "{sum3:?}");
 }
 
 #[test]

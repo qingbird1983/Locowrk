@@ -1,11 +1,13 @@
 //! 记忆人类层文件（F1，《Memory File-ization Design v1.1》）：宿主侧
 //! `~/.Locowrk/memory/` 的读写编排——事实 md 转发给共享布局
 //! （plugin_api::memlayout，插件与宿主同一份实现），tree.md 渲染、
-//! **人改保护**与**首启导出**归本模块。
+//! **人改保护**与**启动导出投影**归本模块。
 //!
-//! 纪律：md 是人读面，sqlite/投影是机器真源——本模块所有写操作都是
-//! "真源已落之后的同步"，失败只 warn（降级不拦聊天）；导出幂等（已有
-//! 文件一律不动，人的编辑永不被首启覆盖）。
+//! 纪律（S1 刀②c-2 后）：这些 md **就是真源**，不是任何库的镜像。写事实 = 先落
+//! 文件、失败上抛（见 `memory::crud`）；本模块内仍"失败只 warn"的只剩投影
+//! `tree.md`——它是可重建的派生物，不是记忆本身。sqlite 侧在本模块只保留
+//! `reconcile_*`（文件 → 影子单向对齐）与 `export_rows`（对账读影子），
+//! **"影子 → 文件"方向的写动作已全部停止**（判定矩阵见 `memory_reconcile` 头注）。
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -204,36 +206,17 @@ pub fn sync_workspace_tree_md(
     files.write_tree_md(workspace, &content, newest)
 }
 
-/// 首启导出（设计 §6 F1）：存量 sqlite 事实 → md（**文件已存在 = 跳过**，
-/// 人的编辑永不被覆盖）+ 各工作区 tree.md（有人改保护）。幂等，每次启动
-/// 可跑；返回 (新写事实数, 新写 tree.md 数)。
+/// 启动导出（设计 §6 F1）：**只导 tree.md**（投影，有人改保护），幂等，返回新写数。
+///
+/// 旧形状里还有一段"存量 sqlite 行 → md 事实文件（文件已在 = 跳过）"，S1 刀②c-2
+/// 起**整段退役**：真源 = md 之后，"库里有一行而文件没有"只有两种成因——插件写库
+/// 未落文件（刀③ 之后不可能）、人已删文件（副本补回来 = 复活）。作者 2026-10-18
+/// 明确裁定存量库**不回填**（"免得污染，我到时会清理掉的"），所以这里一行文件都不写。
 pub fn run_initial_export(
-    memory: &MemoryStore,
     tree_store: &TreeStore,
     files: &MemoryFiles,
     sessions_dir: &Path,
-) -> Result<(usize, usize), String> {
-    let mut facts = 0usize;
-    for r in memory.export_rows()? {
-        if files
-            .root()
-            .join(memlayout::fact_rel_path(&r.workspace, &r.key))
-            .exists()
-        {
-            continue;
-        }
-        match files.write_fact(
-            &r.workspace,
-            &r.key,
-            &r.value,
-            &r.tags,
-            &r.source,
-            r.updated_at,
-        ) {
-            Ok(_) => facts += 1,
-            Err(e) => tracing::warn!("导出记忆 `{}` 失败: {e}", r.key),
-        }
-    }
+) -> Result<usize, String> {
     let mut trees = 0usize;
     let workspaces: BTreeSet<String> = tree_store
         .scan_trees()
@@ -247,15 +230,15 @@ pub fn run_initial_export(
             Err(e) => tracing::warn!("导出 tree.md（{ws}）失败: {e}"),
         }
     }
-    Ok((facts, trees))
+    Ok(trees)
 }
 
 /// 首启对账 + 导出入口（state 组装点调用）：后台线程 fire-and-forget；
-/// 总开关关 = 什么都不做（回纯 sqlite）。
+/// 总开关关 = 什么都不做（连 md 层都不碰）。
 ///
-/// 顺序纪律：**先 reconcile 再导出**——reconcile 以文件为准（人删的文件
-/// 把行删掉），导出只补"行在文件缺"的洞；反过来导出先行会把人删的文件
-/// 按旧索引写回来。
+/// 顺序纪律：**先 reconcile 再导投影**——reconcile 以文件为准（人删的文件把行
+/// 删掉），投影只重建 `tree.md`，两者互不遮挡。事实补洞已随刀②c-2 退役，
+/// 所以这里不再存在"导出把已删文件写回来"的风险。
 pub fn spawn_initial_export(
     memory: std::sync::Arc<MemoryStore>,
     tree_store: TreeStore,
@@ -277,7 +260,6 @@ pub fn spawn_initial_export(
             Ok(s) if s.has_action() => tracing::info!(
                 created = s.created,
                 updated = s.updated,
-                healed = s.healed,
                 deleted = s.deleted,
                 warnings = s.warnings,
                 "记忆文件启动对账完成"
@@ -296,10 +278,10 @@ pub fn spawn_initial_export(
                 "tree.md 启动对账完成"
             );
         }
-        match run_initial_export(&memory, &tree_store, &files, &sessions_dir) {
-            Ok((0, 0)) => {}
-            Ok((f, t)) => tracing::info!(facts = f, trees = t, "记忆文件化首启导出完成"),
-            Err(e) => tracing::warn!("记忆文件化首启导出失败: {e}"),
+        match run_initial_export(&tree_store, &files, &sessions_dir) {
+            Ok(0) => {}
+            Ok(t) => tracing::info!(trees = t, "记忆投影启动导出完成"),
+            Err(e) => tracing::warn!("记忆投影启动导出失败: {e}"),
         }
     });
 }

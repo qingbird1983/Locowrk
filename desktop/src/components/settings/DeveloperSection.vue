@@ -135,7 +135,6 @@ async function runReconcile() {
         created: r.created,
         updated: r.updated,
         deleted: r.deleted,
-        healed: r.healed,
       }),
     );
   } catch (e) {

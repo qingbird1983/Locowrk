@@ -1,23 +1,28 @@
-//! 记忆文件 reconcile（F2，《Memory File-ization Design》§3/§7）：人的
-//! 编辑面落地——md 是权威编辑面，sqlite 是机器索引（衍生，可重建）。
-//! diff 文件 ↔ 索引，**以文件为准回写索引**；触发 = 启动 + 记忆页打开
-//! + 手动命令。
+//! 记忆文件对账（《Memory File-ization Design v1.1》§8 决策点 1 之后**只剩一个方向**）：
+//! **真源 = md 文件**，sqlite 是刀③ 之前插件那六枚工具仍在读的**影子**。本模块做的
+//! 是"文件为准，把影子对齐过去"；触发 = 启动（后台）+ 记忆页挂载 + 开发者手动按钮。
+//!
+//! ⚠ S1 刀②c-2 起**「影子 → 文件」这个方向的所有写动作全部停止**（旧形状里有两条：
+//! 首启导出按索引补文件、`healed` 那一支"文件未动而索引先行 ⇒ 从索引愈合文件"）。
+//! 它们在真源 = 镜像的时代是对的，在真源 = 文件之后含义正好反过来：**把用户已经删掉
+//! 的记忆在下次启动时写回来** ⇒ AC-S1-6 那三条遗忘验证不成立。这两条留下的痕迹：
+//! 遇到"影子比真源新而文件没动过"这种状态，现在只记 warning 并落日志，**一个字节都不写文件**。
 //!
 //! 判定矩阵（per 文件，标记 = 本进程族上次落笔的 mtime 快照）：
 //! * 正文 == 索引值（尾空白不敏感）→ 已同步：补标记即走（不产生更新噪声，
 //!   人格式化过的文件不被改写）
-//! * 正文 ≠ 索引值 且 标记 == mtime → 文件自落笔未动、索引先行（历史
-//!   同步失败）→ 从索引**愈合**文件
+//! * 正文 ≠ 索引值 且 标记 == mtime → 影子比真源新（插件写过而文件没跟上）→
+//!   **不动文件**，记 warning（刀③ 摘掉影子之后这一格不可能再出现）
 //! * 正文 ≠ 索引值 且（无标记 或 mtime ≠ 标记）→ 文件被外部改过（或从未
-//!   纳入管理）→ **文件为准**：更新 / 新增索引行
-//! * 行在而文件缺 且 标记在 → 人删了该文件（单文件手势）→ 删索引行
-//! * scope 目录整体缺席 / memory 根缺席 = 复位手势 → 不删行（首启导出按
-//!   索引重建文件）
+//!   纳入管理）→ **文件为准**：更新 / 新增影子行
+//! * 行在而文件缺 且 标记在 → 人删了该文件（单文件手势）→ 删影子行
+//! * scope 目录整体缺席 / memory 根缺席 = 复位手势 → 不删行（**也不再补文件**：
+//!   真源里没有的东西，不该由一份副本重新造出来）
 //!
-//! 索引写走 `MemoryStore::reconcile_*` 专用路径（绝不反向同步 md）；备份
-//! 文件（`· 人工编辑备份`，写路径冲突保护产物）按 frontmatter name 当普通
-//! 新事实吸纳。tree.md 不在本批范围（人改保护 F1 已挡覆盖；标题/摘要回写
-//! 投影随 M5 编辑面——避免两处编辑回写实现）。
+//! 影子写走 `MemoryStore::reconcile_*` 专用路径（绝不反向同步 md）；备份文件
+//! （`· 人工编辑备份`，写路径冲突保护产物）按 frontmatter name 当普通新事实吸纳。
+//! tree.md 不在本件范围（那是投影不是真源，人改保护与重建另走
+//! `memory_tree_reconcile` 与 `memory_files`）。
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -39,15 +44,17 @@ pub struct ReconcileSummary {
     pub scanned: u32,
     pub created: u32,
     pub updated: u32,
-    pub healed: u32,
     pub deleted: u32,
+    /// 两种"看见了但没动"都记在这里：单文件处理失败 + 影子比真源新（②c-2 起不写文件）。
+    /// 后者在刀③ 摘掉影子写之后不可能再出现。
     pub warnings: u32,
 }
 
 impl ReconcileSummary {
-    /// 是否有任何实际动作（启动日志只在有动作时打印）。
+    /// 是否有**对齐动作**（启动日志只在有动作时打印）。
+    /// `warnings` 不算动作——它恰恰是"什么都没改"那一档。
     pub fn has_action(&self) -> bool {
-        self.created + self.updated + self.healed + self.deleted > 0
+        self.created + self.updated + self.deleted > 0
     }
 }
 
@@ -212,10 +219,15 @@ fn process_file(
             // 已同步：补标记（人重存过 / 首次纳入管理都不产生更新噪声）
             let _ = memlayout::write_marker(files.root(), &rel, actual);
         }
-        Some(r) if marker == Some(actual) => {
-            // 文件未动、索引先行（历史 md 同步失败）→ 从索引愈合文件
-            files.write_fact(&workspace, &key, &r.value, &r.tags, &r.source, r.updated_at)?;
-            sum.healed += 1;
+        Some(_) if marker == Some(actual) => {
+            // 影子比真源新而文件没动过（sqlite 落笔成功、md 侧没跟上）。旧形状在这里
+            // 是"从索引愈合文件"，真源 = 文件之后**不许再写**：文件里没这句话，而索引
+            // 只是副本，副本单方面把真源改掉 = 人删掉的记忆下次启动复活（AC-S1-6）。
+            // 只点名、不写盘，刀③ 摘掉影子写之后这一格不可能再出现。
+            sum.warnings += 1;
+            tracing::warn!(
+                "reconcile：影子比真源新，未写文件 ws={workspace:?} key={key:?}（刀③ 摘影子后不可达）"
+            );
         }
         Some(r) => {
             // 文件被外部改过 → 文件为准更新行（tags/source 沿行；updated = 现在）
