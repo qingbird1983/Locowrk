@@ -5,7 +5,7 @@
 //! 夹具纪律照 `tests/mod.rs`：全部正文经生产 `write_fact` 渲染，不手写 md。
 //! 断言一律不猜目录名算法（项目层用 `project_dir_name` 取，回收区按 `list_obsolete` 读）。
 
-use super::super::obsolete::slot_stamp;
+use super::super::obsolete::shift::slot_stamp;
 use super::*;
 
 /// 软删的三件同时成立：原位置没了、回收区里有一条镜像、读面与索引都不再看见它。
@@ -194,6 +194,107 @@ fn a_soft_clear_moves_every_layer_and_reports_the_count() {
     }
     // 再清一次 = 0（幂等，且不报错）
     assert_eq!(soft_clear_facts(&root).unwrap(), 0);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 回收区那枚"恢复"按钮把 `rel` 暴露到了 IPC 面上（刀④c），所以越界形状必须当场被拒：
+/// `..` 往上走、绝对路径、空串三种都要拦。放过去的话，一次点击就成了"把数据根外一个
+/// 文件搬进真源"——那已经不是删除动作，而是任意路径读写。
+#[test]
+fn a_restore_refuses_anything_that_is_not_a_trash_relative_path() {
+    let root = tmp_root("ob-restore-escape");
+    write_fact(&root, &entry("", "k.a", "v1")).unwrap();
+    soft_delete_fact(&root, "", "k.a").unwrap();
+    let outside = root
+        .parent()
+        .expect("tmp_root 有父目录")
+        .join("ob-escape-victim.md");
+    std::fs::write(&outside, b"i live outside the data root").unwrap();
+
+    for bad in [
+        std::path::Path::new("../../ob-escape-victim.md"),
+        outside.as_path(),
+        std::path::Path::new(""),
+    ] {
+        let e = restore_obsolete(&root, bad).expect_err("三种形状都要拒");
+        assert!(e.contains("不合法"), "报错要点名是路径不合法：{e}");
+    }
+    assert!(
+        std::fs::read(&outside).unwrap() == b"i live outside the data root"[..],
+        "根外那个文件一个字都没被碰"
+    );
+    assert_eq!(list_obsolete(&root).entries.len(), 1, "回收区也没少一条");
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_file(&outside);
+}
+
+/// **单层软删**（刀④c 界面上"删除该层"那一枚动作）。这一档是上面那条给不出的：
+/// 那条只证"全都搬走"，把这一条的实现改成"永远搬全局层"或"顺手把所有层索引都刷一遍"
+/// 它照样绿。所以两边都要断言：被清那层重写空索引，**没被碰那层连索引都不许动**。
+#[test]
+fn clearing_one_layer_leaves_the_other_layer_and_its_index_alone() {
+    let root = tmp_root("ob-clear-layer");
+    let ws = r"F:\proj\Beta";
+    let hint = project_dir_name(ws);
+    write_fact(&root, &entry("", "g1", "v")).unwrap();
+    write_fact(&root, &entry("", "g2", "v")).unwrap();
+    write_fact(&root, &entry(ws, "p1", "v")).unwrap();
+    write_fact(&root, &entry(ws, "p2", "v")).unwrap();
+    let global_index = std::fs::read_to_string(root.join("global").join("MEMORY.md")).unwrap();
+
+    let n = soft_clear_layer(&root, &hint).expect("清项目层");
+    assert_eq!(n, 2, "只搬那一层的两条");
+    let left: Vec<String> = iter_facts(&root)
+        .facts
+        .iter()
+        .map(|f| f.key.clone())
+        .collect();
+    assert_eq!(
+        left,
+        vec!["g1".to_string(), "g2".to_string()],
+        "全局层两条照旧：{left:?}"
+    );
+    assert_eq!(list_obsolete(&root).entries.len(), 2, "回收区只多了那两条");
+    assert_eq!(
+        std::fs::read_to_string(root.join("global").join("MEMORY.md")).unwrap(),
+        global_index,
+        "没被碰的那层，索引一个字都不许改"
+    );
+    let idx = std::fs::read_to_string(root.join("projects").join(&hint).join("MEMORY.md")).unwrap();
+    assert!(!idx.contains(".md)"), "被清那层的索引必须重写空：{idx}");
+    // hint 对不上 = 那层不存在 ⇒ Ok(0) 而不是 Err：删一个没建过的层不该弹错误给人看
+    assert_eq!(soft_clear_layer(&root, "no-such-layer").unwrap(), 0);
+    // 再清同一层 = 0（幂等）
+    assert_eq!(soft_clear_layer(&root, &hint).unwrap(), 0);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 单层版**同样**吃那道"有层扫不动就中止"的闸（两个入口共用 `check_blocked` 那一份判据）。
+/// 夹具用 `projects/<x>/facts` 位置上放一个普通文件：那正是 [`layers`] 第二个返回值的
+/// 进账口，与上面那条 `global` 被冒充（走的是软删自己的那句"层不是目录"）不是同一档。
+#[test]
+fn clearing_one_layer_also_refuses_when_a_layer_is_unreadable() {
+    let root = tmp_root("ob-clear-blocked");
+    write_fact(&root, &entry("", "g1", "v")).unwrap();
+    write_fact(&root, &entry(r"F:\proj\Beta", "p1", "v")).unwrap();
+    let fake = root.join("projects").join("Gamma-00000000");
+    std::fs::create_dir_all(&fake).unwrap();
+    std::fs::write(fake.join("facts"), "not a directory").unwrap();
+
+    let e = soft_clear_layer(&root, "").expect_err("有一层扫不动 ⇒ 单层版也必须中止");
+    assert!(e.contains("扫不动"), "报错要说清为什么没删：{e}");
+    assert_eq!(
+        iter_facts(&root).facts.len(),
+        2,
+        "中止 = 一条都不搬（不许留下半空的状态）"
+    );
+    assert_eq!(
+        list_obsolete(&root).entries.len(),
+        0,
+        "回收区也不许多出东西"
+    );
+    // 同一道闸对"全清"也生效：撤掉 `soft_clear_facts` 里那一句调用，这条当场红
+    assert!(soft_clear_facts(&root).is_err(), "全清同样中止");
     let _ = std::fs::remove_dir_all(&root);
 }
 

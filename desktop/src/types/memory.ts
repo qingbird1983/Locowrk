@@ -100,14 +100,55 @@ export interface MemoryUpdate {
 /** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。
  * source = "explicit" | "extracted" | "organized"（前端 SourceBadge 按档位
  * 渲染人类文案；"organized" = v2.186 整理副产物，见 §3.4 来源族）；
- * workspace = 项目归属（㉘），"" = 未归属。 */
+ * workspace = 项目归属（㉘），"" = 未归属。
+ * type = 分类，值域固定六个：`user` / `feedback` / `project` / `reference` 四类型 +
+ * `fact`（= 未分类，读侧 `normalize_type` 把四类型之外的一切——旧文件的 `fact`、人乱写的、
+ * 根本没这行——都收成它）。所以前端**不必**再判一次合法性，只需按六个键出文案。 */
 export interface MemoryRow {
   key: string;
   value: string;
   tags: string;
+  type: string;
   source: string;
   workspace: string;
   updated_at: number;
+}
+
+// ---- 层区与回收区（S1 刀④c · ADR-0007 §18「每层一行」）----
+
+/** 一层的一行。`hint` 是层的身份（`''` = 全局层，其余是 `<可读名>-<哈希>` 目录名），
+ * 「删除该层」「打开该层文件夹」都拿它原样传回——显示、清除、打开三件事指的是后端
+ * 同一个 `LayerDir`，前端不参与算路径。 */
+export interface LayerRow {
+  hint: string;
+  fact_count: number;
+  /** 该层最新一条的 `metadata.updated`（秒）；一条都没有 = 0，界面显示"—"。 */
+  newest_updated_at: number;
+  /** 该层没能读出来的文件数（不许让 `fact_count` 冒充全量）。 */
+  unreadable: number;
+}
+
+/** 层区载荷。两个"没能读出来"的数必须显示：少了它们，"整层读不动"就冒充"这层没记过"。 */
+export interface LayersView {
+  rows: LayerRow[];
+  blocked_layers: number;
+  unreadable_files: number;
+}
+
+/** 回收区一行（`obsolete/` 里的一份镜像）。`rel` 是相对回收区根的路径，恢复时原样传回。 */
+export interface ObsoleteRow {
+  rel: string;
+  key: string;
+  /** 原来在哪一层（同样是 hint）。 */
+  workspace: string;
+  /** 删除时刻（毫秒）。 */
+  deleted_at_ms: number;
+}
+
+export interface ObsoleteView {
+  rows: ObsoleteRow[];
+  /** 回收区里没能列出来的条目数（同上，"空列表"与"读不动"必须是两句话）。 */
+  unreadable: number;
 }
 
 /** 队列 Q10（L4 / ML 稿 §3.1 原则 4）：一次注入里**一条交付**的四信号回执。

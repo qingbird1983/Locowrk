@@ -122,3 +122,62 @@ pub async fn memory_inject_view(
 ) -> Result<crate::inject_view::InjectView, String> {
     crate::inject_view::view(&state.recall_log)
 }
+
+// ---- 层区与回收区（S1 刀④c · ADR-0007 §18「每层一行」+ 刀④a 留下的三个入口） ----
+// 这一族一律**不发 SQL**：读源 = 真源 md，取数与聚合全在 `crate::memory::layers`，
+// 这里只做参数转换（AGENTS §3「Tauri command 是薄适配层」）。
+
+/// 「每层一行」的读数：每层一条（条数 / 最新更新时间），外加两个"没能读出来"的数
+/// （层数与篇数）。那两个数必须在载荷里——少了它们，"整层读不动"就冒充"这层没记过"。
+#[tauri::command]
+pub async fn memory_layers(
+    state: State<'_, AppState>,
+) -> Result<crate::memory::LayersView, String> {
+    Ok(crate::memory::layers_view(state.memory_files.root()))
+}
+
+/// 「删除该层」：把那一层的事实文件全部搬进回收区。**可恢复** —— 真删只发生在
+/// `memory_obsolete_purge` 那一次，而界面上那一下带二次确认。
+/// `hint` 是 `memory_layers` 给回来的层身份，原样传回；对不上任何一层 ⇒ 搬 0 条（不报错：
+/// "删一个没建过的层"与"那层本来就是空的"对用户是同一件事）。
+#[tauri::command]
+pub async fn memory_clear_layer(hint: String, state: State<'_, AppState>) -> Result<usize, String> {
+    crate::memory::clear_layer(state.memory_files.root(), &hint)
+}
+
+/// 回收区清单（`obsolete/` 里的镜像，按删除时刻倒序）。
+#[tauri::command]
+pub async fn memory_obsolete_list(
+    state: State<'_, AppState>,
+) -> Result<crate::memory::ObsoleteView, String> {
+    Ok(crate::memory::obsolete_view(state.memory_files.root()))
+}
+
+/// 恢复一条：按镜像路径原路搬回（剥删除戳）。`false` = 回收区里已经没这条了
+/// （列表过期 ⇒ 前端据此刷新）。原位置被占 ⇒ `Err` 且回收条目原地不动，不静默覆盖。
+/// `rel` 必须是清单里给回来的那种相对形状，越界的当场被 `is_trash_relative` 拒。
+#[tauri::command]
+pub async fn memory_obsolete_restore(
+    rel: String,
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    crate::memory::restore_obsolete(state.memory_files.root(), &rel)
+}
+
+/// **真删**：清空回收区。这是整个记忆面唯一一处不可逆动作，所以界面上它是
+/// 「再点一次」那一道确认（§11.3 同款），返回删掉的条数。
+#[tauri::command]
+pub async fn memory_obsolete_purge(state: State<'_, AppState>) -> Result<usize, String> {
+    crate::memory::purge_obsolete(state.memory_files.root())
+}
+
+/// 「打开该层文件夹」。前端只传层身份 `hint`，路径由 `layers()` 的那个 `LayerDir` 给出
+/// ——与 `memory_reveal_project` 同一条防线：这里连"前端递一个路径"这件事都不存在。
+/// 找不到那一层 ⇒ 报错，不静默开一个相邻目录（那种"看着成功了其实开错了"最难查）。
+#[tauri::command]
+pub async fn memory_reveal_layer(hint: String, state: State<'_, AppState>) -> Result<(), String> {
+    let dir = crate::memory::layer_dir_to_open(state.memory_files.root(), &hint)?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("记忆层目录创建失败 {}: {e}", dir.display()))?;
+    super::sessions::open_in_explorer(&dir.to_string_lossy())
+}

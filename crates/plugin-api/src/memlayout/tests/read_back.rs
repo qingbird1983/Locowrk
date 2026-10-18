@@ -233,3 +233,92 @@ fn clear_facts_refuses_when_a_layer_cannot_be_scanned() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// 「每层一行」的读数（S1 刀④c · ADR-0007 §18）：条数与最新时间都按**目录**算。
+///
+/// 为什么单独钉：让界面拿 `iter_facts` 的结果按 `workspace` 字段分组，就会把同一层的
+/// 东西拆成两堆——那个字段在写了 frontmatter 的文件里是权威原串，在人自己新建的文件里
+/// 只是目录名兜底（第五处 hint 陷阱的同族）。这一条把"分组依据 = 一个 `LayerDir` 一行"写死。
+#[test]
+fn layer_stats_give_one_row_per_directory_not_per_workspace_field() {
+    let root = tmp_root("stat-layers");
+    let ws = r"F:\proj\Beta";
+    write_fact(&root, &entry("", "g.one", "全局一条")).unwrap();
+    write_fact(&root, &entry(ws, "p.one", "项目一条")).unwrap();
+    // 人手工建的一篇：整份没有 frontmatter ⇒ workspace 字段只是目录名兜底
+    let hand = project_dir(&root, ws)
+        .unwrap()
+        .join("facts")
+        .join("hand-written.md");
+    std::fs::write(&hand, "人手写的一篇\n").unwrap();
+
+    let (stats, blocked) = layer_stats(&root);
+    assert_eq!(blocked, 0, "{stats:?}");
+    assert_eq!(stats.len(), 2, "全局 + 那一层，两行：{stats:?}");
+    let global = stats
+        .iter()
+        .find(|s| s.hint.is_empty())
+        .expect("全局层那行");
+    assert_eq!((global.count, global.unreadable), (1, 0), "{global:?}");
+    let proj = stats
+        .iter()
+        .find(|s| s.hint == project_dir_name(ws))
+        .expect("项目层那行");
+    assert_eq!(
+        proj.count, 2,
+        "两篇坐在**同一个目录层**里，不许按字段拆堆：{proj:?}"
+    );
+    assert!(proj.newest_at > 0, "写进去的那条带着 updated：{proj:?}");
+
+    // 一层都没记过：全局层那一行仍然在场、count = 0（界面上"这层 0 条"比"这层消失"诚实）
+    let fresh = tmp_root("stat-fresh");
+    let (rows, blocked) = layer_stats(&fresh);
+    assert_eq!(blocked, 0);
+    assert_eq!(rows.len(), 1, "至少给出全局层那一行：{rows:?}");
+    assert_eq!((rows[0].count, rows[0].newest_at), (0, 0));
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&fresh);
+}
+
+/// 读不动的那一篇进 `unreadable`，**不混进 count**：界面上那个数字会被读成"我这层有几条
+/// 记忆"，把它算进去是虚报、从读数里彻底抹掉是瞒报，两边都不许（与召回侧"库不可用不许
+/// 冒充库是空的"是同一条纪律）。
+#[test]
+fn a_file_layer_stats_cannot_read_is_counted_separately() {
+    let root = tmp_root("stat-unreadable");
+    write_fact(&root, &entry("", "g.one", "读得动")).unwrap();
+    // 事实位上放一个**目录**冒充文件：名字认得、`read_to_string` 必然失败
+    std::fs::create_dir_all(root.join("global").join("g.two.md")).unwrap();
+
+    let (stats, _blocked) = layer_stats(&root);
+    let g = stats
+        .iter()
+        .find(|s| s.hint.is_empty())
+        .expect("全局层那行");
+    assert_eq!(
+        (g.count, g.unreadable),
+        (1, 1),
+        "一条读数 + 一条读不动，两个数分开：{g:?}"
+    );
+
+    // 整层扫不动那一档：那一层**不在清单里**（`layers()` 只枚举读得动的目录），只在第二个
+    // 返回值里进账 ⇒ 调用方必须把那个数交代出去（界面上"另有 n 层读不到"那一行）。
+    // 这一句是刀④c 实测撞出来的：我原先以为清单里会留一行标着 blocked，断言当场红——
+    // 红得对，那种"行级 blocked"字段当时根本没有生产者，是死 API。
+    let fake = projects_dir(&root).join("Gamma-00000000");
+    std::fs::create_dir_all(&fake).unwrap();
+    std::fs::write(fake.join("facts"), "not a directory").unwrap();
+    let (stats, blocked) = layer_stats(&root);
+    assert_eq!(blocked, 1, "扫不动那一层要进总数：{stats:?}");
+    assert_eq!(
+        stats.len(),
+        1,
+        "扫不动那层根本不在清单里，只剩全局层那一行：{stats:?}"
+    );
+    assert!(
+        stats[0].hint.is_empty(),
+        "在场那行仍是全局层：{:?}",
+        stats[0]
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

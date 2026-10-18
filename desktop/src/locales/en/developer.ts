@@ -45,9 +45,14 @@ export default {
     pinSession: "Pin tool set per session",
     pinSessionHint: "Tool list fixed per session; search_tools finds new ones; off lowers hit rate.",
     filesTitle: "Memory files",
-    filesHint: "Markdown is the authoritative edit surface (human-readable and editable); sqlite is the machine index.",
+    // Corrected after S1 flipped the source of truth (specs/05 blade ④c): this used to say
+    // "markdown is the authoritative edit surface, sqlite is the machine index" — that was the
+    // mirror era. The .md files ARE the store now.
+    filesHint:
+      "The .md files are the store itself (one fact per file); the sqlite copy is only a shadow index — if it breaks, reads still work and writes still succeed.",
     reconcileTitle: "Merge memory files",
-    reconcileHint: "Merges manual edits into the index; runs when the memory page opens.",
+    reconcileHint:
+      "Rebuilds the index and the shadow rows from the .md files, which are authoritative; runs when the memory page opens.",
     reconcileRun: "Merge now",
     reconcileRunning: "Merging…",
     reconcileDone: "Merged: +{created} ~{updated} -{deleted}",
@@ -114,6 +119,34 @@ export default {
     workspace: "Project",
     // ㉘·A·fix two-tier memory: '' keyspace = global preference tier
     globalTier: "Global preference",
+    // S1 blade ④c: one row per layer (ADR-0007 §18) + recycle bin + the category column
+    layerRowsHint:
+      "One row per layer; counts come from the directories. “Delete layer” moves that layer into the recycle bin, where every file can be restored.",
+    layerFacts: "{n} facts",
+    layerUpdated: "Latest {time}",
+    layerNever: "Nothing yet",
+    layerOpen: "Open folder",
+    layerClear: "Delete layer",
+    layerClearConfirm: "Click again to confirm",
+    layerUnreadable: "{n} file(s) unreadable",
+    layerUnreadableTotal:
+      "{n} file(s) could not be read — the counts above are not the whole store",
+    layerBlocked: "{n} layer(s) could not be listed (unreadable ≠ empty)",
+    trashTitle: "Recycle bin",
+    trashHint:
+      "Deleted memories land here first and can be restored one by one; only “Empty recycle bin” really deletes them.",
+    trashCount: "{n} pending",
+    trashEmpty: "Recycle bin is empty",
+    trashDeletedAt: "Deleted {time}",
+    trashRestore: "Restore",
+    trashPurge: "Empty recycle bin",
+    trashPurgeConfirm: "Click again to delete for good",
+    trashUnreadable: " · {n} entr(ies) unreadable",
+    typeUser: "About user",
+    typeFeedback: "Feedback",
+    typeProject: "Project rule",
+    typeReference: "Reference",
+    typeUnclassified: "Uncategorized",
     // M3 §3.37① dual blocks: facts label + read-only tree section
     factsTitle: "Memory (facts)",
     openFolder: "Open folder",

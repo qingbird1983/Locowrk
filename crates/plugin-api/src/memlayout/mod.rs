@@ -50,13 +50,16 @@ pub use kind::{
 };
 pub use obsolete::{
     OBSOLETE_DIR, ObsoleteEntry, ObsoleteScan, list_obsolete, obsolete_root, purge_obsolete,
-    restore_obsolete, soft_clear_facts, soft_delete_fact,
+    restore_obsolete, soft_clear_facts, soft_clear_layer, soft_delete_fact,
 };
 pub use paths::{
     LayerDir, UNAFFILIATED_DIR, fact_rel_path, files_enabled, fnv1a64, key_file_stem, layers,
     memory_root, project_dir, project_dir_name, project_rel_dir, projects_dir, unaffiliated_dir,
 };
-pub use read::{FactsScan, StoredFact, clear_facts, fact_matches, facts_of, iter_facts, read_fact};
+pub use read::{
+    FactsScan, LayerStat, StoredFact, clear_facts, fact_matches, facts_of, iter_facts, layer_stats,
+    read_fact,
+};
 pub use sync::{ParsedFact, atomic_write, mtime_ms, parse_fact, read_marker, write_marker};
 
 /// 给 `index.rs`（写索引）与 `read.rs`（读一层）共用的按键位算路径——不对外，

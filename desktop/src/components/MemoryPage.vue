@@ -18,7 +18,9 @@ import SettingsSegmented from "./settings/SettingsSegmented.vue";
 import TreeBoard from "./memory/TreeBoard.vue";
 import TreeSection from "./memory/TreeSection.vue";
 import InjectSection from "./memory/InjectSection.vue";
-import LayerSwitches from "./memory/LayerSwitches.vue";
+import LayerSection from "./memory/LayerSection.vue";
+import ObsoleteSection from "./memory/ObsoleteSection.vue";
+import TypeBadge from "./TypeBadge.vue";
 import { relativeTimeLabel, relativeTimeSec } from "../lib/format";
 import { workspaceDisplayName } from "../lib/session-groups";
 import {
@@ -48,6 +50,19 @@ const tabs = [
 ];
 
 const search = ref("");
+
+/**
+ * 层区与回收区管的是**同一批文件**（清一层 / 恢复一条都会改变事实列表），所以两边的动作
+ * 之后统一由这里重拉：列表自己拉，另外两块各暴露一个 `reload` 把手（`defineExpose`）。
+ * 不用 `:key` 重建整棵子树——那会让开关区闪一下、把未消散的 hover 提示打掉。
+ */
+const layerSection = ref<InstanceType<typeof LayerSection> | null>(null);
+const trashSection = ref<InstanceType<typeof ObsoleteSection> | null>(null);
+async function onMemoryChanged() {
+  await load();
+  layerSection.value?.reload();
+  trashSection.value?.reload();
+}
 const entries = ref<MemoryRow[] | null>(null); // null = 加载中
 const loadError = ref("");
 
@@ -189,9 +204,9 @@ function timeText(row: MemoryRow): string {
 
     <!-- 事实库档 = 现役全部内容原样搬进来（事实列表 + 章节编辑 + 注入解释 + 清空） -->
     <template v-else>
-    <!-- 层区（S1 刀④b · ADR-0007 §18 三枚行为开关，每层一行）。组件里装着版式与
-         写回，理由与开关语义边界都写在 memory/LayerSwitches.vue 的头注。 -->
-    <LayerSwitches />
+    <!-- 层区（刀④b 三枚行为开关 + 刀④c「每层一行」= ADR-0007 §18 那一整句）。版式、写回
+         与「删除该层」的二次确认都在组件里，理由写在 memory/LayerSection.vue 的头注。 -->
+    <LayerSection ref="layerSection" @changed="onMemoryChanged" />
     <!-- M3 §3.37① 双区块之一：事实库区块头（在 ListPage 外，空列表也
          显示——双区块口径一致；现有列表行为零变化）。F2 v4.9：右侧挂
          「打开文件夹」——人的编辑面入口。 -->
@@ -237,6 +252,9 @@ function timeText(row: MemoryRow): string {
               {{ row.key }}
             </span>
             <SourceBadge :source="row.source" />
+            <!-- 分类（刀④c · ADR-0007 §18 管理页那一列）：与来源同族同形态，值域六个档
+                 由后端 `normalize_type` 收，前端只出文案。 -->
+            <TypeBadge :type="row.type" />
             <!-- ㉘·A·fix 双层记忆：'' = 全局偏好层，显式标层 -->
             <HoverTip
               v-if="row.workspace"
@@ -315,6 +333,11 @@ function timeText(row: MemoryRow): string {
         </li>
       </ul>
     </ListPage>
+
+    <!-- 回收区（刀④c）：已删但还没真删的那一批，逐条可恢复；「清空回收区」才是不可逆
+         那一次（带"再点一次"）。落在事实列表之后、两块只读区之前——它是这一页删除动作的
+         后续，不该沉到页面最底。 -->
+    <ObsoleteSection ref="trashSection" @changed="onMemoryChanged" />
 
     <!-- M3 §3.37① 双区块之二：记忆树（情景）只读区块（TreeSection 自持
          状态；影子运行零写操作，编辑/删除属 M5） -->

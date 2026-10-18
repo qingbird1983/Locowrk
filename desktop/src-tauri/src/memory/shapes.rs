@@ -28,6 +28,15 @@ pub struct MemoryRow {
     pub key: String,
     pub value: String,
     pub tags: String,
+    /// `metadata.type` 收档后的分类：四类型（`user` / `feedback` / `project` /
+    /// `reference`）之一，或 `UNCLASSIFIED_TYPE`（`"fact"`）= 未分类。值域之所以能假定
+    /// 成这六个：读侧过 [`plugin_api::memlayout::normalize_type`] 收档，四类型之外的任何
+    /// 值（旧文件的 `fact`、人乱写的、根本没这行）都归未分类。
+    /// 刀③a 工具参数开始写真值，刀④c 管理页才读得回来——中间那段"写进去读不回"的挂账
+    /// 就在这一格收掉（specs/05）。
+    /// ⚠ IPC 上的键名是 `type`：`type` 是 Rust 关键字 ⇒ 字段名 `ty` + serde rename。
+    #[serde(rename = "type")]
+    pub ty: String,
     /// "explicit" | "extracted"（前端按档位渲染人类文案，§8.1 结构化）。
     pub source: String,
     /// 项目归属（㉘）：会话关联的项目根，`""` = 未归属（§2.3 关联）。
@@ -45,6 +54,7 @@ impl From<&plugin_api::memlayout::StoredFact> for MemoryRow {
             key: f.key.clone(),
             value: f.value.clone(),
             tags: f.tags.clone(),
+            ty: f.ty.clone(),
             source: f.source.clone(),
             workspace: f.workspace.clone(),
             updated_at: f.updated_at,

@@ -29,6 +29,9 @@ fn inject_loggable_requires_a_complete_reading() {
         key: "k".into(),
         value: "v".into(),
         tags: String::new(),
+        // 取常量而不是再打一遍 `"fact"`：分类的值域只有 `UNCLASSIFIED_TYPE` 一个出处
+        // （本条用例判的是"完整读数才记"，这一维给谁都不影响它）。
+        ty: plugin_api::memlayout::UNCLASSIFIED_TYPE.into(),
         source: "explicit".into(),
         workspace: String::new(),
         updated_at: 1,

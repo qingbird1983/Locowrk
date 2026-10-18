@@ -158,6 +158,82 @@ pub fn iter_facts(root: &Path) -> FactsScan {
     scan
 }
 
+/// 一层的**磁盘读数**（S1 刀④c 管理页「每层一行」= ADR-0007 §18 那一行）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerStat {
+    /// 层身份 = [`super::LayerDir::hint`]（`''` = 全局层，其余是 `<可读名>-<哈希>` 目录名）。
+    pub hint: String,
+    /// 读得出来的事实条数。
+    pub count: usize,
+    /// 该层最晚的一条 `metadata.updated`；一条都没有 = 0。
+    pub newest_at: i64,
+    /// **没能读出来的文件数**（文件级：目录读得动、某一篇读不动）。它与 `count` 分开记，
+    /// 因为界面上的那个数字会被当成"我这层有几条记忆"——把读不动的算进 count 是虚报，
+    /// 从读数里彻底抹掉它们是**瞒报**，两边都不许。
+    pub unreadable: usize,
+}
+
+/// 按层给读数（一次扫描，不碰库）。第二返回值 = 没能扫出来的**层**数，与
+/// [`iter_facts`] 的 `FactsScan::unreadable` 同一条口径（`layers()` 的第二个返回值
+/// 加上文件级进账）。
+///
+/// ⚠ **扫不动的那一层不在这份清单里**：[`super::layers`] 只枚举读得动的目录（`facts/`
+/// 被一个普通文件冒充时，那一层根本进不了 `dirs`）。所以调用方必须把第二个返回值交代
+/// 出去——界面上是"另有 n 层读不到"那一行；把它当 0 处理，"读不到"就成了"没列出来"，
+/// 那是瞒报（与召回侧"库不可用不许冒充库是空的"同族）。
+///
+/// 为什么单列一个读数、而不是让调用方拿 [`iter_facts`] 的结果按 `workspace` 分组：
+/// 那一维在写了 frontmatter 的文件上是**权威原串**，在人自己新建的文件上是**目录名兜底**
+/// （第五处 hint 陷阱）⇒ 按它分组会把同一层的东西拆成两堆。层的身份只认目录，所以这里
+/// 直接按 [`super::layers`] 的 `LayerDir` 数 —— 界面上"显示哪一层 / 清哪一层 /
+/// 开哪个文件夹"三件事从此指的是同一个 `LayerDir`。
+///
+/// 层目录不存在 = 这一层还没记过 ⇒ 仍然给出一行（`count = 0`）：全局层是惰性建的，
+/// 一行"0 条"比"这一层凭空消失"诚实。
+pub fn layer_stats(root: &Path) -> (Vec<LayerStat>, usize) {
+    let (dirs, mut unreadable_layers) = layers(root);
+    let mut out = Vec::with_capacity(dirs.len());
+    for layer in &dirs {
+        let mut st = LayerStat {
+            hint: layer.hint.clone(),
+            count: 0,
+            newest_at: 0,
+            unreadable: 0,
+        };
+        let rd = match std::fs::read_dir(&layer.facts) {
+            Ok(rd) => rd,
+            Err(e) if fsutil::is_not_found(&e) => {
+                out.push(st);
+                continue;
+            }
+            // 与 [`iter_facts`] 同一处置。到得了这一支的只能是"检查之后目录被人换掉"
+            // 那种竞态：`layers()` 已经把非目录的层挡在 `dirs` 外面了。
+            Err(_) => {
+                unreadable_layers += 1;
+                out.push(st);
+                continue;
+            }
+        };
+        for f in rd.flatten() {
+            let p = f.path();
+            if !is_fact_file(&p) {
+                continue;
+            }
+            match std::fs::read_to_string(&p) {
+                Ok(text) => {
+                    st.count += 1;
+                    st.newest_at = st
+                        .newest_at
+                        .max(sync::parse_fact(&text).updated_at.unwrap_or(0));
+                }
+                Err(_) => st.unreadable += 1,
+            }
+        }
+        out.push(st);
+    }
+    (out, unreadable_layers)
+}
+
 /// 读**某一层**的全部事实（按键位算目录 ⇒ 只扫那一层，新→旧同一条排序口径）。
 ///
 /// 为什么不让调用方拿 [`iter_facts`] 的结果按 `workspace` 字段自己过滤：那个字段在

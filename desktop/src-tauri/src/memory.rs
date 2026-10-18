@@ -32,9 +32,10 @@
 //! 台账第三节 · 第二批第一刀（916 → 本文件只留声明）：宿主侧访问按**面**沉进 `memory/`，
 //! 靠 `pub use X::*` 让 `crate::memory::*` 的公开面与此前逐字相同——`pub(crate)` 项
 //! （`KEY_MAX` / `VALUE_MAX`）由 glob 按**收窄后的可见性**带出，不点名再导出。
-//! 七片 = `shapes`（上限常量与行/表形状）· `store`（结构与装配 + 开库、行装配）·
+//! 八片 = `shapes`（上限常量与行/表形状）· `store`（结构与装配 + 开库、行装配）·
 //! `crud`（管理页五条读写）· `reconcile`（首启导出与对账直写）· `recall`（全局层召回与
-//! 埋点）· `schema`（旧库迁移两条）· `source`（`MemorySource` 实现与组装点便利函数）。
+//! 埋点）· `schema`（旧库迁移两条）· `source`（`MemorySource` 实现与组装点便利函数）·
+//! `layers`（S1 刀④c：每层一行与回收区的读数装配，一片自由函数）。
 //! `impl MemoryStore` 分进四个文件 ⇒ 原文那对花括号只归两处（开在 `store`、合在 `recall`），
 //! 于是 `store` 补一条合、`crud` 与 `reconcile` 各补一对、`recall` 补一条开 = 共 6 行外壳，
 //! 逐条声明在 spec 的 `wrap` 里，对账先剥掉它再比连续与守恒。
@@ -43,6 +44,7 @@
 //! `mod tests;` 留在本文件：用例是 `memory` 的子模块，它吃的正是上面三个 glob 带出来的名字。
 
 mod crud;
+mod layers;
 mod recall;
 mod reconcile;
 mod schema;
@@ -50,6 +52,7 @@ mod shapes;
 mod source;
 mod store;
 
+pub use layers::*;
 pub use shapes::*;
 pub use source::*;
 pub use store::*;

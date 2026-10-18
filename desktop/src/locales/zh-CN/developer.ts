@@ -45,9 +45,12 @@ export default {
     pinSession: "工具集会话钉死",
     pinSessionHint: "工具清单本会话固定，新工具用 search_tools 找；关闭后每轮重新挑选，命中率会下降。",
     filesTitle: "记忆文件化",
-    filesHint: "md 是权威编辑面（人可查可读可写），sqlite 是机器索引。",
+    // S1 真源翻转之后的订正（specs/05 刀④c）：这句原来写的是"md 是权威编辑面、
+    // sqlite 是机器索引"——那是镜像时代的说法，现在 md 就是真源本体。
+    filesHint:
+      "md 就是真源本体（一条记忆一个文件），sqlite 那份只是影子索引：它坏了不影响读面，也不拦写入。",
     reconcileTitle: "记忆文件合并",
-    reconcileHint: "把手动改动合并进记忆索引，平时打开记忆页会自动执行。",
+    reconcileHint: "以 .md 为准把手工改动重建进索引与影子表，平时打开记忆页会自动跑一轮。",
     reconcileRun: "立即合并",
     reconcileRunning: "合并中…",
     reconcileDone: "合并完成：新增 {created} · 更新 {updated} · 删除 {deleted}",
@@ -114,6 +117,33 @@ export default {
     workspace: "项目",
     // ㉘·A·fix 双层记忆：'' 键位 = 全局偏好层
     globalTier: "全局偏好",
+    // S1 刀④c：每层一行（ADR-0007 §18）+ 回收区 + 分类那一列
+    layerRowsHint:
+      "一层一行：条数按目录算。「删除该层」是把那一层搬进回收区，可以逐条恢复。",
+    layerFacts: "{n} 条",
+    layerUpdated: "最新 {time}",
+    layerNever: "没记过",
+    layerOpen: "打开该层",
+    layerClear: "删除该层",
+    layerClearConfirm: "再点一次确认",
+    layerUnreadable: "另有 {n} 篇读不出",
+    layerUnreadableTotal: "另有 {n} 篇没能读出来——上面那些数字不是全量",
+    layerBlocked: "另有 {n} 层没能列出来（读不动不等于没记过）",
+    trashTitle: "回收区",
+    trashHint:
+      "删掉的内容先进这里，随时可以逐条恢复；只有点「清空回收区」才是真的删掉。",
+    trashCount: "{n} 条待处理",
+    trashEmpty: "回收区是空的",
+    trashDeletedAt: "删于 {time}",
+    trashRestore: "恢复",
+    trashPurge: "清空回收区",
+    trashPurgeConfirm: "再点一次确认真删",
+    trashUnreadable: " · 另有 {n} 条读不出",
+    typeUser: "用户信息",
+    typeFeedback: "反馈纠正",
+    typeProject: "项目约定",
+    typeReference: "参考资源",
+    typeUnclassified: "未分类",
     // M3 §3.37① 双区块：事实库标签 + 记忆树只读区块
     factsTitle: "记忆库（事实）",
     openFolder: "打开文件夹",

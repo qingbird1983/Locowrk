@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a③b-1③b-2④a④b 已落地 / 刀④c 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a③b-1③b-2④a④b④c 已落地 ⇒ S1 那四刀的代码面齐了；欠的是真实窗口走查与 AC-S1-1/2/5/6/7/10 的实测读数；②c-2 的学习档那一格仍待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -491,12 +491,32 @@
   实测那些用例一条都不红（它们拿的是 `MemoryStore::new` 里那枚未接线缺省，与 settings 常量不同源）
   ⇒ 这套东西有**两处缺省要同向**，各自都得有守卫：settings 簇守常量那枚，
   `both_switches_default_to_open_on_an_unwired_store` 守未接线那枚。
-- **刀④c（每层一行 + `type` 那一列 + 回收区入口 + 文案订正）⏳ 待做**：管理页加"每层一行
-  （文件数 / 更新时间 / 打开文件夹 / 删除该层）"、`MemoryRow` 补 `type` 字段并显示、
-  回收区的列出 / 恢复 / 清空三枚命令。**命令与前端调用必须同批落**——`check-commands` 对
-  "后端有、前端无"要显式进 RESERVED 名单，分两批就会多一条豁免债。再订正 `memoryFilesHint` /
-  `filesHint` 那两句镜像时代文案，并给 `memory.files` 定去处（关掉 = 记忆面停止写入并如实报错，
-  或直接退役）。中英成对。
+- **刀④c（每层一行 + 分类那一列 + 回收区入口 + 文案订正）✅ 2026-10-19 已落地**。
+  界面 = `components/memory/LayerSection.vue`（刀④b 那三枚开关与「每层一行」合成一块——§18 那句
+  本来就是一件事：这一层的身份、它进不进上下文、它对人的磁盘动作要在同一处对齐）+
+  `components/memory/ObsoleteSection.vue` + `components/TypeBadge.vue`（与 `SourceBadge`
+  **同形态**那颗，不裸写 span、不另造形状）。后端 = 六枚新命令（`memory_layers` /
+  `memory_clear_layer` / `memory_obsolete_list` / `memory_obsolete_restore` /
+  `memory_obsolete_purge` / `memory_reveal_layer`）与前端 invoke **同批落**——`check-commands`
+  那条「后端有、前端无要进 RESERVED」的债没欠，三向闭合直接绿。
+  ⚠ 三条实现裁定：① 恢复的 `rel` 必须过**越界闸** `is_trash_relative`——这枚按钮把它暴露到
+  IPC 面之后，一条 `../../x.md` 就能把数据根外的文件搬进真源，那已经不是删除动作而是任意路径
+  读写；闸在 memlayout 里而不是命令壳里，因为薄壳拦不住下一个调用者。② 「打开该层」「删除该层」
+  都按 `hint` 回到 `layers()` 的**同一个** `LayerDir`，不复用 `memory_reveal_project`（那颗吃
+  权威原串，而原串在真源 = 文件之后已经读不回来 = 第五处 hint 陷阱）。③ 两个「没能读出来」的数
+  （`blocked_layers` / `unreadable_files`）必须在载荷里并显示出来：扫不动那一层**根本不进清单**
+  （`layers()` 只枚举读得动的目录），不交代它就会把"读不到"演成"没记过"——这一条是实测撞出来的：
+  我原先以为清单里会留一行标着 `blocked`，断言当场红，那个字段当时根本没有生产者。
+  `memory.files` 的去处 = **保留字段 + 如实文案**（不改义、不退役）：它剩下的作用面是"启动那一轮
+  reconcile 与首启导出跑不跑"，那仍然是一句真话；`settings.memoryFilesHint`（刀④b 已改）与
+  `developer.filesHint` / `developer.reconcileHint` 三句镜像时代说法一并订正成"md 就是真源、
+  sqlite 只是影子"。退役它等于删一个用户已经习惯看得见的设置项，那要单独点头。
+  证据 = plugin-api 96 → **101**（`obsolete.rs` 长成目录式：身份与镜像留 `obsolete.rs`、四个磁盘
+  动作进 `obsolete/shift.rs`，加单层清空 / 越界拒 / 层读数三族）、宿主 603 → **608**（新簇 `memory/tests/layers.rs` 5 条）、
+  前端 151 → **153**（`tests/memory-type.spec.ts`）；红证 = `tmp/mut-rust.mjs` CASE 7–12
+  （越界闸 / hint 选层 / unreadable 混进 count / 两个汇总数各一 / 宿主转发目标）。
+  界面上「先进回收区、可恢复；要真正抹掉请清空回收区」这句话已经写进 `layerRowsHint` 与
+  `trashHint`——AC-S1-6 与 AC-S1-7 的分界不能只留在注释里（隐私那一档要的是不可逆）。
 - **刀④ 不动的面**：**TreeBoard / TreeSection / InjectSection 三处嵌入**（看板整体删除是 S4 的事，
   混在一刀里回滚不掉）；应用内记忆列表/详情视图按 ADR §18 是**目标态退役**，但删它 = 移除用户
   在用的能力，未列入本轮 ⇒ 走查之后单独点头。

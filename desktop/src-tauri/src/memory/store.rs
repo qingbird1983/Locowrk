@@ -220,6 +220,12 @@ impl MemoryStore {
             key: r.get(1)?,
             value: r.get(2)?,
             tags: r.get(3)?,
+            // ⚠ 影子表**没有** `type` 这一列（`CREATE_TABLE` 八列里没有它，分类只住 md）。
+            // 所以库里读回来一律是未分类，这不是"丢了值"而是"那一侧从来就没有这一维"。
+            // 现在不会出事：本函数的两个消费者（`reconcile.rs` 的行比对）都不比 type。
+            // 哪天要让对账比分类，得先给影子表加列并过 `check-schema-parity.mjs` 的
+            // H1–H7，不能就这么把一个常量当成数据用。
+            ty: plugin_api::memlayout::UNCLASSIFIED_TYPE.into(),
             source: r.get(4)?,
             updated_at: r.get(5)?,
         })
