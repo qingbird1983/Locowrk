@@ -9,7 +9,7 @@
 
 | 阶段 | 状态 | 现在到哪了 | 详细计划 |
 | --- | --- | --- | --- |
-| 记忆与上下文重构 | ◐ 在做 | 方向 2026-10-17 定稿（U1–U5 根因 + 五项开放决策全按推荐案裁定），AC-3 那份决策记录已落 = [`ADR-0007`](../adr/0007-memory-flat-files-context-mechanical-compaction.md)（记忆 = 扁平事实文件一处落盘 / 上下文 = 四层机械压缩零 LLM / 七条被否决方案留档）；你 2026-10-18 下令拆分线暂停转本线 ⇒ 下一步 = S1 数据面起步（文件库布局 + frontmatter 索引读写 + memory 工具改道 + 存量 sqlite 一次性导出 + 管理页改道） | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
+| 记忆与上下文重构 | ◐ 在做 | 方向 2026-10-17 定稿（U1–U5 根因 + 五项开放决策全按推荐案裁定），AC-3 那份决策记录已落 = [`ADR-0007`](../adr/0007-memory-flat-files-context-llm-compaction-primary.md)：记忆 = 扁平事实文件一处落盘，上下文 = **LLM 深度压缩主位 + 机械层前置减速与保护网**（这条层序 2026-10-18 由你核对 spec 时重定，ADR 里带「订正记」并把被推翻的"只做机械层"形状留在被否决表里；被否决方案共 8 行留档）；你 2026-10-18 下令拆分线暂停转本线 ⇒ 下一步 = S1 数据面起步（文件库布局 + frontmatter 索引读写 + memory 工具改道 + 存量 sqlite 一次性导出 + 管理页改道） | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ⬜ 没开始 | 现在只有基础卡；要补 27 类工具各自的样式、折叠分层、六种状态词、停止与重试的表现 | [specs/02-tool-cards](../../specs/02-tool-cards/spec.md) |
 | 工具级取消与 deadline | ◐ 在做 | C1 已落地（内核活动调用登记表 + 停止按会话逐个置位，4 条行为用例 + 4 发变异各打中一条）；三问 2026-10-18 由 Qoder 代裁定（答案与代价都写在该稿里，可翻案）。剩下 C2（`deadline` 生产者，前置是先测现网两个超时的实际关系）与 C3/C4/C5（要过 ABI 的那半，每一刀单独等你点头） | [specs/04-tool-cancel-deadline](../../specs/04-tool-cancel-deadline/spec.md) |
 | 对话流：产出物与文件页签 | ⬜ 没开始 | 一轮跑完给了哪些文件、能不能就地看代码与差异，这块还没有 | 开工时建 spec |
