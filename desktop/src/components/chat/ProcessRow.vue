@@ -16,9 +16,16 @@
  * （`思考 · 12 秒`），若摘要段照常吃满剩余宽度，元信息会被顶到行尾去。
  * 元信息段自带「·」分隔点，消费方只给值。
  *
- * 行 = 真 <button>（aria-expanded、键盘可达）；三角恒占位，行 hover / 键盘聚焦
- * 淡入（悬停不位移）；`foldable === false` 的身份（notify / browser_open /
- * dev_echo）三角 `aria-disabled` 且不响应点击。明细体不在本组件——展开只是
+ * 行 = `<div role="button" tabindex="0">`（**不是** `<button>`）：行内要放可点的
+ * 文件名（`#desc` 槽里的 `.tool__file`），button 里嵌 button 是非法 HTML，浏览器会把
+ * 内层剥出去——ZCode 的 `ToolSummaryRow.tsx` 注释写明同一理由。键盘可达性手写
+ * （Enter / Space）。`foldable === false` 的身份（notify / browser_open / dev_echo）
+ * 不给 role / tabindex，保持「不是开关」。
+ *
+ * 两种行行为：缺省整行 = 展开开关（`toggle`）；`activatable` 为真时整行 = 打开右栏
+ * 条目（`activate`），展开改由三角单独承担（子代理行：点整行开右栏转录，三角才展明细）。
+ *
+ * 三角恒占位，行 hover / 键盘聚焦淡入（悬停不位移）。明细体不在本组件——展开只是
  * 追加缩进子行，各消费方自己 v-show。
  */
 import { Icon, type IconName } from "../../lib/icons";
@@ -30,26 +37,40 @@ const props = defineProps<{
   expanded?: boolean;
   /** 缺省 true；false = 该身份不可折，三角占位但不响应（设计稿 §5.3）。 */
   foldable?: boolean;
+  /** 缺省 false；true = 整行点击走 `activate`（开右栏），展开交给三角。 */
+  activatable?: boolean;
   /** 展开整行的原生 title（描述省略时的完整摘要）。 */
   title?: string;
 }>();
 
-const emit = defineEmits<{ toggle: [] }>();
+const emit = defineEmits<{ toggle: []; activate: [] }>();
 
-function onClick() {
+function onRowClick() {
+  if (props.foldable === false) return;
+  if (props.activatable) emit("activate");
+  else emit("toggle");
+}
+
+/** 三角：只有 `activatable` 的行才自己接管——否则交给整行（一次点击一次切换）。 */
+function onChevron(e: MouseEvent) {
+  if (!props.activatable) return;
+  e.stopPropagation();
   if (props.foldable === false) return;
   emit("toggle");
 }
 </script>
 
 <template>
-  <button
+  <div
     class="prow"
     :class="{ 'prow--fixed': foldable === false }"
-    type="button"
-    :aria-expanded="expanded ?? false"
+    :role="foldable === false ? undefined : 'button'"
+    :tabindex="foldable === false ? undefined : 0"
+    :aria-expanded="foldable === false ? undefined : (expanded ?? false)"
     :title="title"
-    @click="onClick"
+    @click="onRowClick"
+    @keydown.enter.prevent="onRowClick"
+    @keydown.space.prevent="onRowClick"
   >
     <span class="prow__icon"><Icon :name="icon" :size="14" /></span>
     <span class="prow__type">{{ type }}</span>
@@ -61,10 +82,14 @@ function onClick() {
       ><span class="prow__sep" aria-hidden="true">·</span><slot name="meta"
     /></span>
     <span v-if="$slots.status" class="prow__status"><slot name="status" /></span>
-    <span class="prow__chev" :aria-disabled="foldable === false || undefined">
+    <span
+      class="prow__chev"
+      :aria-disabled="foldable === false || undefined"
+      @click="onChevron"
+    >
       <Icon :name="expanded ? 'chevronDown' : 'chevronRight'" :size="14" />
     </span>
-  </button>
+  </div>
 </template>
 
 <style scoped>
@@ -80,6 +105,8 @@ function onClick() {
   font-size: var(--lw-fs-ui-base);
   line-height: 1.3;
   color: var(--lw-ink-2);
+  /* 光标：行是 div（去 button 化），button 缺省那只手要自己给；`--fixed` 行不是开关 */
+  cursor: pointer;
   text-align: left;
   transition: background var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);

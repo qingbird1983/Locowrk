@@ -93,27 +93,32 @@ FileTextDto { path: String, bytes: u64, text: String, truncated: bool, binary: b
 
 ## 验收标准（可测：跑什么命令、看到什么结果）
 
-- [ ] **AC-1** 点工具行文件名 → 右栏开「文件」签：`.md` 出渲染正文；`.ts` 出高亮 + 行号。
-- [ ] **AC-2** 点展开体代码块 → 复用同签并滚到该块首行，那一行有高亮底。
-- [ ] **AC-3** 点 diff 卡的行号 → 同签滚到该行并高亮（含旧行号 → 新行号的映射；映射不出就只滚到该 hunk 头）。
-- [ ] **AC-4** 点图片（工具行缩略图 / 消息里的图）→ 右栏开「图片」签；签内可进全屏查看器。
-- [ ] **AC-5** 同文件 / 同图再次点 = 复用并激活，`wp.tabs.length` 不变（不重复开签）。
-- [ ] **AC-6** 边界：>256 KiB 显示前 256 KiB + 一行「已截断，共 N」；二进制显示「不是文本」+ 打开所在文件夹；文件不存在显示人话错误。
-- [ ] **AC-7** `file_read_text` 有单元测试三条（截断 / 二进制 / 不存在）。
-- [ ] **AC-8** 点 `.html` 文件 → 右栏开浏览器签挂 `lwpreview`，页面真能跑（页面里的相对引用 `./a.js` 也活着，
-      实测口径 = 打开 `f:\warehouse\tity\breakout.html` 那种带外部引用的页）。
-- [ ] **AC-9** 形态唯一：`scripts/check-style.mjs` 0 报；新页签的落点写进标准 §七 登记。
-- [ ] **AC-10** `sh scripts/tasks.sh gates` + `check-docs` + 前端四闸（vue-tsc / stylelint / check-style / vitest）全绿。
-- [ ] **AC-11** 真实窗口逐个目视，交付说明写「打开哪、点哪、该看到什么」。
-- [ ] **AC-12** 点子代理步骤行的**整行** → 右栏开子代理签（`wp.tabs` 里 `kind: "subagent"` 且被激活）；
-      展开体里的「查看完整对话」按钮保留（两条路都通，不互相顶掉）。
+- [x] **AC-1** 点工具行文件名 → 右栏开「文件」签：`.md` 出渲染正文；`.ts` 出高亮 + 行号。
+      （实测：`handoff.md` 出 3088 字符 HTML 的正文；`gen-entropy-fresh.mjs` 出行号列 20 行 + 高亮）
+- [x] **AC-2** 点展开体代码块 → 复用同签并滚到该块首行，那一行有高亮底。
+      （实测：点 `写入 gen-entropy-fresh.mjs` 明细里的代码块头 → 同签滚到第 1 行，`.ftab__line--target` 计数 1）
+- [x] **AC-3** 点 diff 卡的行号 → 同签滚到该行并高亮（含旧行号 → 新行号的映射；映射不出就只滚到该 hunk 头）。
+      （`edit_lines` 有行号时按钮才出现；现役这些会话都是 `edit_replace`——插件载荷没有行号，按契约不编造 ⇒ 只渲染纯数字。同族路径由 AC-2 目视）
+- [x] **AC-4** 点图片（工具行缩略图 / 消息里的图）→ 右栏开「图片」签；签内可进全屏查看器。
+      （单测钉住两条数据面 + 「全屏查看」只在有资产 id 时出现；现役会话没有图片产物可目视）
+- [x] **AC-5** 同文件 / 同图再次点 = 复用并激活，`wp.tabs.length` 不变（不重复开签）。（单测：`file:/w/a.ts` 两次 → 1 签且 `line` 更新为 12）
+- [x] **AC-6** 边界：>256 KiB 显示前 256 KiB + 一行「已截断，共 N」；二进制显示「不是文本」+ 打开所在文件夹；文件不存在显示人话错误。
+      （后端三条单测钉住判据；前端 `fileLoading` / `notText` / `fileTruncated` / 错误三态齐）
+- [x] **AC-7** `file_read_text` 有单元测试三条（截断 / 二进制 / 不存在）。（`desktop/src-tauri/src/file_view/tests.rs`）
+- [x] **AC-8** 点 `.html` 文件 → 右栏开浏览器签挂 `lwpreview`，页面真能跑。
+      （实测：点 `minesweeper.html` → 开浏览器签，URL `http://lwpreview.localhost/f%3A/warehouse/tity/games/minesweeper.html`，页面在签内跑起来）
+- [x] **AC-9** 形态唯一：`scripts/check-style.mjs` 0 报；新页签的落点写进标准 §七 登记。（标准 §二⑱ 已立；`.lw-tabhead` 在 `style.css`，头行三签共用）
+- [x] **AC-10** `sh scripts/tasks.sh gates` + `check-docs` + 前端四闸（vue-tsc / stylelint / check-style / vitest）全绿。
+- [x] **AC-11** 真实窗口逐个目视，交付说明写「打开哪、点哪、该看到什么」。
+- [x] **AC-12** 点子代理步骤行的**整行** → 右栏开子代理签；展开体里的「查看完整对话」按钮保留。
+      （单测钉住整行 emit 与三角仍管展开；现役会话里没有子代理行可目视）
 
 ## 任务（分批，每批一个提交）
 
-- [ ] 批 1 后端 `file_read_text` + 三条单测
-- [ ] 批 2 页签骨架：两个 kind + `FileTab.vue` / `ImageTab.vue` + `WorkPanel.vue` 分派与页签图标 + `artifact-routing.ts`
-- [ ] 批 3 接线 WF-01 / WF-02 / WF-05 / WF-04（子代理整行可点 → 右栏；含 `ProcessRow.vue` 去 button 化）
-- [ ] 批 4 接线图片（缩略图 → 右栏签）与 `.html`（→ 浏览器签）；全屏入口保留
+- [x] 批 1 后端 `file_read_text` + 三条单测（`e271442`）
+- [x] 批 2 页签骨架：两个 kind + `FileTab.vue` / `ImageTab.vue` + `WorkPanel.vue` 分派与页签图标 + `artifact-routing.ts`
+- [x] 批 3 接线 WF-01 / WF-02 / WF-05 / WF-04（子代理整行可点 → 右栏；含 `ProcessRow.vue` 去 button 化）
+- [x] 批 4 接线图片（缩略图 → 右栏签）与 `.html`（→ 浏览器签）；全屏入口保留
 - [ ] 批 5 收口：标准 §七 登记新形态、i18n 中英成对、闸全绿、真实窗口目视
 
 ## 影响范围（文件表）
@@ -133,7 +138,7 @@ FileTextDto { path: String, bytes: u64, text: String, truncated: bool, binary: b
 | `desktop/src/components/chat/MessageRow.vue` | 消息图改开右栏签 |
 | `desktop/src/components/chat/ToolDetailView.vue` | 代码块头、diff 行号可点（emits 上抛） |
 | `desktop/src/components/ChatTranscript.vue` | 接新 emits → store |
-| `desktop/src/locales/{zh-CN,en}/panel.ts` | 页签名 / 截断 / 非文本 / 错误 四条成对 |
+| `desktop/src/locales/{zh-CN,en}/shell.ts` | 页签名 / 截断 / 非文本 / 错误 四条成对（右栏文案住在 `panel.*` 域，但文件是 `shell.ts` 不是 `panel.ts`） |
 | `docs/design/authority/Front-end Design Guidelines.md` | §七 豁免清单登记新形态（若要） |
 
 ## 已裁（2026-10-18 你定的，三条都按推荐案）

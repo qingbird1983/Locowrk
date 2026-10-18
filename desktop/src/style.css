@@ -684,6 +684,36 @@
   border-left: 1px solid var(--lw-line-subtle);
 }
 
+/* 右栏页签的文件名头行（标准 §二⑱，specs/08 批 2，唯一落点）：审阅 / 文件 / 图片
+ * 三类产物页签共用一套——左 = mono 省略路径（HoverTip 给全文），右 = 元信息。
+ * 同族不许两种头行，所以三类都挂这里，组件里不再各写一份。 */
+.lw-tabhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lw-gap-8);
+  border-radius: var(--lw-r-md);
+  background: var(--lw-wash-1);
+  padding: var(--lw-gap-12) var(--lw-gap-14);
+  font-size: var(--lw-fs-12);
+}
+.lw-tabhead__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  color: var(--lw-ink-2);
+}
+.lw-tabhead__meta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: var(--lw-gap-6);
+  font-family: var(--font-mono);
+  font-size: var(--lw-fs-11);
+  color: var(--lw-ink-4);
+}
+
 /* 可折叠行公共头形态：hover 填充向列外溢 3px，chevron 只换字形不旋转。
  * padding-inline 3px（v2.74·fix 裁定⑪ 对齐收口：外溢 -3px 与 padding 3px
  * 相抵，头行标签与正文/决策行同一 0 左缘——旧 7px 使标签右移 4px） */

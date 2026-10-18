@@ -20,8 +20,11 @@ import { toolView } from "../../lib/chat/render-matrix";
 import { isRowExpanded, isRowMounted, toggleRow } from "../../lib/chat/fold-state";
 import { toolDescribe } from "../../lib/tool-detail";
 import { assetRead, assetSaveAs } from "../../lib/api";
+import { routeArtifact } from "../../lib/artifact-routing";
+import { previewUrlFor } from "../../lib/preview-url";
 import { useToastStore } from "../../stores/toast";
 import { useViewerStore } from "../../stores/viewer";
+import { useWorkPanelStore } from "../../stores/work-panel";
 import type { AssetRefDto } from "../../types";
 import type { ToolItem } from "../../stores/chat";
 
@@ -39,6 +42,7 @@ const { t } = useI18n();
 // 预览缩略（点击入查看器）+ 查看大图/保存两钮。设计稿三行形态；结果未回
 // （`status !== "settled"`）与无产物不渲染。缩略读 asset_read data URL（模块级缓存防重复读盘）。----
 const viewer = useViewerStore();
+const wp = useWorkPanelStore();
 const toast = useToastStore();
 const assets = computed<AssetRefDto[]>(() =>
   props.item.status !== "settled" ? [] : toolImageAssets(props.item.output),
@@ -68,6 +72,42 @@ function thumbOf(a: AssetRefDto): string {
 }
 function openViewer(a: AssetRefDto) {
   viewer.openAsset(a);
+}
+/** 缩略图点击（用户 2026-10-18：「点击图片 右边 打开图片」）：去右栏图片页签就地看；
+ * 全屏交给页签里的「全屏查看」（复用既有 ViewerOverlay），不再抢先弹浮层。 */
+function openThumb(a: AssetRefDto) {
+  wp.openImageTab(a.name, a.id, a.mime);
+}
+/** 点文件名（以及明细里的代码块头 / diff 行号）的唯一判定入口（specs/08 批 2、标准
+ * §二⑱）：`.html` 去浏览器页签、图去图片页签、其余去文件页签；判定只在
+ * `lib/artifact-routing.ts` 一处，本函数只负责「拿到路径后怎么开」。 */
+function openArtifactIn(rawPath: string, line?: number, endLine?: number) {
+  if (!rawPath) return;
+  const route = routeArtifact(rawPath);
+  if (route === "browser") {
+    wp.openBrowserTab({
+      tabId: `br-${rawPath}`,
+      kind: "file",
+      title: rawPath.split(/[\\/]/).pop() ?? rawPath,
+      url: previewUrlFor(rawPath),
+      target: rawPath,
+    });
+    return;
+  }
+  if (route === "image") {
+    wp.openImageTab(rawPath);
+    return;
+  }
+  wp.openFileTab(rawPath, line, endLine);
+}
+
+function openArtifact(line?: number, endLine?: number) {
+  openArtifactIn(badgePath.value, line, endLine);
+}
+
+/** 明细里点代码块头 / diff 行号（WF-01/02/05）：明细只报位置，判定仍走上面的唯一入口。 */
+function onOpenFile(path: string, line: number, endLine: number) {
+  openArtifactIn(path, line, endLine);
 }
 async function saveAsset(a: AssetRefDto) {
   const dest = await assetSaveAs(a.id, a.mime, a.name);
@@ -128,6 +168,23 @@ const reviewItem = computed(() => {
 function onToggle() {
   toggleRow(props.item.id);
 }
+
+/** 子代理整行可点（specs/08 批 3 / AC-12，用户 2026-10-18：「还有子代理 点击 右栏 展开」）：
+ *  判据是**数据**不是身份——`output.child_session_id` 在才给整行入口（父侧拿不到就仍是
+ *  普通开关行，不虚构）；标题取任务的 `prompt`，明细里的「查看完整对话」两条路并存。 */
+const subagentEntry = computed(() => {
+  const o = props.item.output as { child_session_id?: unknown } | null;
+  const childId = typeof o?.child_session_id === "string" ? o.child_session_id : "";
+  if (!childId) return null;
+  const a = props.item.args as { prompt?: unknown } | null;
+  const title = typeof a?.prompt === "string" ? a.prompt : props.item.tool;
+  return { childId, title };
+});
+
+function onActivate() {
+  const s = subagentEntry.value;
+  if (s) emit("openTranscript", s.childId, s.title);
+}
 </script>
 
 <template>
@@ -137,12 +194,29 @@ function onToggle() {
       :type="typeLabel"
       :expanded="expanded"
       :foldable="view.fold === 'always'"
+      :activatable="!!subagentEntry"
       :title="desc"
       @toggle="onToggle"
+      @activate="onActivate"
     >
       <template #desc>
         <span class="tool__desc">
-          <FileIcon v-if="badgePath" :path="badgePath" />{{ desc }}
+          <!-- 文件名可点（用户 2026-10-18：点「写入」后面的文件名跳右栏）：行壳是
+               div + role="button"（ProcessRow 去 button 化的原因就是让行内能嵌可点元素），
+               这里同款给 role + 键盘处理（同 .panel-tab__close 先例） -->
+          <span
+            v-if="badgePath"
+            class="tool__file"
+            role="button"
+            tabindex="0"
+            :aria-label="t('panel.openFile')"
+            @click.stop="openArtifact()"
+            @keydown.enter.stop="openArtifact()"
+            @keydown.space.stop.prevent="openArtifact()"
+          >
+            <FileIcon :path="badgePath" />{{ desc }}
+          </span>
+          <template v-else>{{ desc }}</template>
         </span>
         <span v-if="hasDiff" class="tool__diff">
           <template v-if="diff.added !== undefined || diff.removed !== undefined">
@@ -178,7 +252,7 @@ function onToggle() {
           type="button"
           :aria-label="`${a.name} · ${t('mm.viewLarge')}`"
           :title="`${a.name} · ${t('mm.viewLarge')}`"
-          @click="openViewer(a)"
+          @click="openThumb(a)"
         >
           <img v-if="thumbOf(a)" :src="thumbOf(a)" alt="" draggable="false" />
           <span v-else class="tool__thumb-loading" />
@@ -199,7 +273,11 @@ function onToggle() {
     <!-- 展开体 = 公共外壳 `.lw-expand`（发丝竖线落在行首图标居中位、内容左边缘与类型词
          对齐，与思考行同壳；懒挂载 + v-show 保 DOM，首开后收展零重渲染） -->
     <div v-if="everExpanded" v-show="expanded" class="lw-expand tool__sub">
-      <ToolDetailView :item="item" @open-transcript="(id, title) => emit('openTranscript', id, title)" />
+      <ToolDetailView
+        :item="item"
+        @open-transcript="(id, title) => emit('openTranscript', id, title)"
+        @open-file="onOpenFile"
+      />
       <!-- edit_diff 审阅入口（§3.28）：明细动作行的文本钮 -->
       <button
         v-if="reviewItem"
@@ -233,6 +311,15 @@ function onToggle() {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+/* 文件名 = 可点入口（specs/08 批 2）：hover 抬到主墨色给「可点」的反馈，
+   不做下划线也不换底（行本身 hover 已有 wash-2）。 */
+.tool__file {
+  cursor: pointer;
+}
+.tool__file:hover,
+.tool__file:focus-visible {
+  color: var(--lw-ink-1);
 }
 .tool__diff {
   display: inline-flex;

@@ -34,12 +34,12 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
       {{ t("panel.diffEmpty") }}
     </div>
     <template v-else>
-      <!-- 文件名头（§3.28）：wash-1 底，左路径 mono / 右统计 -->
-      <div class="diff-head">
+      <!-- 文件名头（§3.28）：几何在 style.css 的 .lw-tabhead（三类产物页签共用） -->
+      <div class="lw-tabhead">
         <HoverTip class="min-w-0" :text="props.path" :label="props.path">
-          <span class="diff-head__path">{{ fileName }}</span>
+          <span class="lw-tabhead__path">{{ fileName }}</span>
         </HoverTip>
-        <span class="diff-head__stats">
+        <span class="lw-tabhead__meta">
           <span class="text-ok">+{{ parsed.added }}</span>
           <span class="text-danger">−{{ parsed.removed }}</span>
         </span>
@@ -79,31 +79,7 @@ const fileName = computed(() => props.path.split(/[\\/]/).pop() ?? props.path);
 </template>
 
 <style scoped>
-.diff-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--lw-gap-8);
-  border-radius: var(--lw-r-md);
-  background: var(--lw-wash-1);
-  padding: var(--lw-gap-12) var(--lw-gap-14);
-  font-size: var(--lw-fs-12);
-}
-.diff-head__path {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  color: var(--lw-ink-2);
-}
-.diff-head__stats {
-  flex: 0 0 auto;
-  display: inline-flex;
-  gap: var(--lw-gap-6);
-  font-family: var(--font-mono);
-  font-size: var(--lw-fs-11);
-}
+/* 文件名头行几何在 style.css 的 .lw-tabhead（审阅 / 文件 / 图片三类共用，标准 §二⑱） */
 
 /* 行（§3.28）：整行染底 8% + 行首 1px 实色条 + 行号 32px 右对齐 mono */
 .diff-line {

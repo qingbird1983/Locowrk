@@ -16,7 +16,12 @@ import { useSettingsStore } from "../../stores/settings";
 import type { ToolItem } from "../../stores/chat";
 
 const props = defineProps<{ item: ToolItem }>();
-const emit = defineEmits<{ openTranscript: [childId: string, title: string] }>();
+const emit = defineEmits<{
+  openTranscript: [childId: string, title: string];
+  /** 点代码块头 / diff 行号 → 右栏文件页签（specs/08 批 2 WF-01/WF-02/WF-05）。
+   * 判定与开签在 ToolRow 里（`lib/artifact-routing.ts` 是唯一判定面），这里只报位置。 */
+  openFile: [path: string, line: number, endLine: number];
+}>();
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -53,6 +58,37 @@ const codeHtml = computed(() => {
 
 // 复制反馈（§3.7 v4.18）：代码块委托钮走 DOM class、复制调用钮走 ref
 const { copiedId, copyWithFeedback, copyDelegatedCode } = useCopyFeedback();
+
+/** 这些块对应的磁盘文件（代码块 / diff / 终端都源自它）：点行号、点头行跳右栏。
+ * 取不到路径就不接线（宁缺勿假）——不编造「未知文件」页签。 */
+const filePath = computed(() => {
+  const a = props.item.args as Record<string, unknown> | null;
+  const p = a?.path ?? a?.file;
+  return typeof p === "string" ? p : "";
+});
+
+/** 代码块头点击（WF-02）：代码块是 `v-html` 出来的 DOM，头行由 markdown.ts 造成
+ * `.code-block__head`——只能委托判定；点到复制钮不算。块内容就是文件内容本身，
+ * 所以首行恒为 1（没有偏移可算）。 */
+function openCodeHead(e: MouseEvent) {
+  const el = e.target as HTMLElement | null;
+  if (!el || !filePath.value) return;
+  if (el.closest(".copy-btn")) return;
+  if (!el.closest(".code-block__head")) return;
+  emit("openFile", filePath.value, 1, 1);
+}
+
+/** 代码区点击 = 复制（既有）+ 点头行（本次）；两件事共用一次点击。 */
+function onCodeArea(e: MouseEvent) {
+  copyDelegatedCode(e);
+  openCodeHead(e);
+}
+
+/** diff 行号点击（WF-05）：新行号才是文件里的当前行（删行没有新行号 ⇒ 不可点）。 */
+function gotoLine(no: number | null) {
+  if (no === null || !filePath.value) return;
+  emit("openFile", filePath.value, no, no);
+}
 
 
 const rawJson = computed(() => {
@@ -109,7 +145,16 @@ async function copyCall() {
               <td v-if="r.kind === 'hunk'" colspan="4" class="tdetail__diff-hunk">{{ r.text }}</td>
               <template v-else>
                 <td class="tdetail__diff-no">{{ r.oldNo ?? '' }}</td>
-                <td class="tdetail__diff-no">{{ r.newNo ?? '' }}</td>
+                <td class="tdetail__diff-no">
+                  <button
+                    v-if="r.newNo !== null && filePath"
+                    type="button"
+                    class="tdetail__diff-goto"
+                    :title="t('panel.openFile')"
+                    @click="gotoLine(r.newNo)"
+                  >{{ r.newNo }}</button>
+                  <template v-else>{{ r.newNo ?? '' }}</template>
+                </td>
                 <td class="tdetail__diff-sign">{{ r.kind === 'add' ? '+' : r.kind === 'del' ? '-' : '' }}</td>
                 <td class="tdetail__diff-text">{{ r.text }}</td>
               </template>
@@ -144,7 +189,7 @@ async function copyCall() {
       v-if="codeHtml"
       class="md tdetail__code"
       v-html="codeHtml"
-      @click="copyDelegatedCode"
+      @click="onCodeArea"
     />
 
     <!-- 原始数据入口 + 复制调用（文本钮，默认收起） -->
@@ -298,6 +343,18 @@ async function copyCall() {
   font-variant-numeric: tabular-nums;
   color: var(--lw-ink-4);
   user-select: none;
+}
+/* 可点的新行号（WF-05）：继承行号字形，hover 才亮成链接色（静态态不喧哗）。
+   color/font 都要显式给——按钮不继承父级 UA 样式。 */
+.tdetail__diff-goto {
+  font: inherit;
+  color: var(--lw-ink-4);
+  cursor: pointer;
+}
+.tdetail__diff-goto:hover,
+.tdetail__diff-goto:focus-visible {
+  color: var(--lw-accent-ink);
+  text-decoration: underline;
 }
 .tdetail__diff-sign {
   width: 24px;
