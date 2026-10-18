@@ -101,6 +101,33 @@ async function copyCall() {
 
       <pre v-else-if="b.kind === 'text'" class="tdetail__text" :class="{ 'is-danger': b.danger }">{{ b.content }}</pre>
 
+      <!-- 差异表（§7.1）：四列 = 旧行号 / 新行号 / 符号 / 内容；加删行底色走
+           --lw-diff-add/del-wash（不借 ok/danger 色相）。超过 200 行只渲染前 200。 -->
+      <div v-else-if="b.kind === 'diff'" class="tdetail__diff">
+        <table>
+          <tbody>
+            <tr v-for="(r, i) in b.rows.slice(0, 200)" :key="i" :class="`is-${r.kind}`">
+              <td v-if="r.kind === 'hunk'" colspan="4" class="tdetail__diff-hunk">{{ r.text }}</td>
+              <template v-else>
+                <td class="tdetail__diff-no">{{ r.oldNo ?? '' }}</td>
+                <td class="tdetail__diff-no">{{ r.newNo ?? '' }}</td>
+                <td class="tdetail__diff-sign">{{ r.kind === 'add' ? '+' : r.kind === 'del' ? '-' : '' }}</td>
+                <td class="tdetail__diff-text">{{ r.text }}</td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="b.rows.length > 200" class="tdetail__note">
+          {{ t('tool.moreLines', { n: b.rows.length - 200 }) }}
+        </p>
+      </div>
+
+      <!-- 终端块（§7.3）：$ 命令行 + 输出合并，深底；运行中吸底由外壳管 -->
+      <div v-else-if="b.kind === 'term'" class="tdetail__term">
+        <div v-if="b.command" class="tdetail__term-cmd"><span>$&nbsp;</span>{{ b.command }}</div>
+        <pre v-if="b.output" class="tdetail__term-out">{{ b.output }}</pre>
+      </div>
+
       <button
         v-else-if="b.kind === 'entry'"
         class="tdetail__entry"
@@ -240,6 +267,93 @@ async function copyCall() {
 }
 .tdetail__text.is-danger {
   color: var(--lw-danger);
+}
+/* 差异表（§7.1）：四列定宽 + 加删行底色，行号列 tabular-nums 右对齐 */
+.tdetail__diff {
+  max-height: 260px;
+  overflow: auto;
+  border-radius: var(--lw-r-2xs);
+}
+.tdetail__diff table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--lw-fs-ui-sm);
+  line-height: 1.55;
+}
+.tdetail__diff tr.is-add {
+  background: var(--lw-diff-add-wash);
+}
+.tdetail__diff tr.is-del {
+  background: var(--lw-diff-del-wash);
+}
+.tdetail__diff-no {
+  width: 40px;
+  padding-right: var(--lw-gap-6);
+  text-align: right;
+  font-size: var(--lw-fs-ui-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--lw-ink-4);
+  user-select: none;
+}
+.tdetail__diff-sign {
+  width: 24px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--lw-ink-3);
+}
+.tdetail__diff tr.is-add .tdetail__diff-sign {
+  color: var(--lw-diff-add);
+}
+.tdetail__diff tr.is-del .tdetail__diff-sign {
+  color: var(--lw-diff-del);
+}
+.tdetail__diff-text {
+  padding-left: var(--lw-gap-6);
+  white-space: pre;
+  color: var(--lw-ink-2);
+}
+.tdetail__diff-hunk {
+  position: sticky;
+  top: 0;
+  padding: var(--lw-gap-2) var(--lw-gap-6);
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-3);
+  font-size: var(--lw-fs-ui-xs);
+}
+.tdetail__note {
+  margin: var(--lw-gap-6) 0 0;
+  font-size: var(--lw-fs-ui-xs);
+  color: var(--lw-ink-3);
+}
+/* 终端块（§7.3）：深底井 + $ 命令行 + 输出 */
+.tdetail__term {
+  border-radius: var(--lw-r-xs);
+  background: var(--lw-bg-inset);
+  overflow: hidden;
+}
+.tdetail__term-cmd {
+  padding: var(--lw-gap-6) var(--lw-gap-8);
+  font-family: var(--font-mono);
+  font-size: var(--lw-fs-ui-sm);
+  color: var(--lw-ink-1);
+  overflow-wrap: anywhere;
+}
+.tdetail__term-cmd span {
+  color: var(--lw-ink-3);
+  user-select: none;
+}
+.tdetail__term-out {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: var(--lw-gap-8);
+  font-family: var(--font-mono);
+  font-size: var(--lw-fs-ui-sm);
+  line-height: 1.55;
+  color: var(--lw-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 /* 代码内容 = .md 代码块组件复用；长内容同样框内滚动 */
 .tdetail__code {

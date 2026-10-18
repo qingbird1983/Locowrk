@@ -4,6 +4,8 @@
  *
  * 这些名字由 `lib/tool-detail.ts` 原样再导出，消费点（`ToolRow.vue` / `ToolDetailView.vue`）
  * 的 import 路径一个字不改。 */
+import type { DiffRow } from "../chat/diff";
+
 /** 渲染期翻译函数（调用方从 useI18n 传入，lib 层不持有 i18n 实例）。 */
 export type Tr = (key: string, params?: Record<string, unknown>) => string;
 
@@ -35,7 +37,13 @@ export type DetailBlock =
   | { kind: "text"; content: string; danger?: boolean }
   | { kind: "list"; items: ListRow[] }
   /** 子代理转录入口（查看完整对话文本钮）。 */
-  | { kind: "entry"; childId: string; title: string };
+  | { kind: "entry"; childId: string; title: string }
+  /** 差异表（设计稿 §7.1）：写操作改了什么。四列 = 旧行号/新行号/符号/内容，
+   * 加删行底色走 `--lw-diff-add-wash` / `-del-wash`（不借 ok/danger 色相）。 */
+  | { kind: "diff"; rows: DiffRow[] }
+  /** 终端块（设计稿 §7.3）：`$ 命令` 行 + stdout/stderr 合并输出，深底；
+   * 运行中吸底跟随由渲染侧管，这里只给数据。 */
+  | { kind: "term"; command: string; output: string; running?: boolean };
 
 export interface ToolDetail {
   blocks: DetailBlock[];

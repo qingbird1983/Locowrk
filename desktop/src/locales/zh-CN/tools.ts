@@ -12,6 +12,7 @@ export default {
     copyCode: "复制代码",
     thinkingNow: "思考中…",
     rawData: "原始数据",
+    moreLines: "还有 {n} 行",
     fullConversation: "查看完整对话",
     // 类型词（§3.8 五列栅格第二列；v4.13《Tool Execution Process Display》）
     type: {

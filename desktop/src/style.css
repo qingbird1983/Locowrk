@@ -86,6 +86,12 @@
   --lw-ok: #40c977;
   --lw-warn: #ff8549;
   --lw-danger: #ff6764;
+  /* 差异表专用（设计稿 §7.1 / 上位附录 B「与 ok/danger 区分色相」）：只做
+   * 加删行的底色（-wash）与符号色，不参与状态语义 */
+  --lw-diff-add: #2ea043;
+  --lw-diff-del: #e5534b;
+  --lw-diff-add-wash: rgb(46 160 67 / 0.14);
+  --lw-diff-del-wash: rgb(229 83 75 / 0.14);
   --lw-info: #afafaf;
   --lw-purple: #c27aff;
 
@@ -174,6 +180,11 @@
   --lw-ok: #00a240;
   --lw-warn: #e25507;
   --lw-danger: #e02e2a;
+  /* 差异表专用（同暗色段口径） */
+  --lw-diff-add: #1a7f37;
+  --lw-diff-del: #cf222e;
+  --lw-diff-add-wash: rgb(26 127 55 / 0.1);
+  --lw-diff-del-wash: rgb(207 34 46 / 0.1);
   --lw-info: #5d5d5d;
   --lw-purple: #7c3aed;
 

@@ -23,6 +23,7 @@ import {
   shellDetail,
   textFieldOut,
   truncatedRow,
+  writeDiffRows,
 } from "./tool-detail/blocks";
 import { asRecord, baseName, str } from "./tool-detail/describe";
 import { fmtBytes, fmtEnum, fmtTime } from "./tool-detail/labels";
@@ -154,6 +155,14 @@ export function toolDetail(
     ]);
     const backup = typeof o.backup === "string" ? o.backup : "";
     if (backup) pushProps(blocks, [prop(tr("tool.label.backup"), relativizeDetail(backup, roots), "mono")]);
+    // 内容块排在属性块之后（§7.5「属性是这份东西是什么，内容是它做了什么」）
+    const rows = writeDiffRows(tool, a);
+    if (rows && rows.length > 0) {
+      blocks.push({ kind: "diff", rows });
+    } else if (tool === "fs_write") {
+      const content = str(a, "content");
+      if (content) blocks.push({ kind: "code", language: codeLanguage(p), content });
+    }
     return { blocks };
   }
 

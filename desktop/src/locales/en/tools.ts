@@ -12,6 +12,7 @@ export default {
     copyCode: "Copy code",
     thinkingNow: "Thinking…",
     rawData: "Raw data",
+    moreLines: "{n} more lines",
     fullConversation: "View full conversation",
     // Type words (§3.8 five-column grid, v4.13)
     type: {
