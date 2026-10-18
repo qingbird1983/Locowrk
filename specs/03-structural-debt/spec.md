@@ -639,9 +639,9 @@
 | `settings/LlmSection.vue`（577） | 是：七块行全走 SettingsGroup+SettingsRow 唯一形态 | 是，但方向相反 | **留** | 该文件实测 5 处组件直调 IPC + 4 处 `settings.refresh()`，已偏离「编排只在 stores」（新登 **T24**）⇒ 先收编排，拆是后面的事 |
 | `llm/client.rs`（575 → 493 · 仍留名单） | 半：装配 + 重试环 + 单次尝试是一件事，逐模型 ping 是另一件 | 是：`repair_*` 修复旗标跨 6 处 | 拆（薄）✅T32 | 只切走 ping 那条旁路 = `llm/client/test_probe.rs`(105)，**主环一字未动也没再切**（再切就出现第二条线路形状，违「同类只许一种形态」⇒ 本件留在名单里，理由在此列与提交正文）；表写的落点是 `llm/test_probe.rs`，落地改成 `client/` 的**子模块**更好：私有超时常量经 `super::` 就够得着 ⇒ 0 处可见性抬升、`llm/mod.rs` 不必动 |
 | `llm/wire.rs`（548 → 24） | 否：预检 / 媒体投影 / 序列化 / 累积器 / usage 五簇 | 是：预算参数在 80/128/307/372 四处 | 拆 ✅T31 | 已沉 `llm/wire/{payload,media,messages,stream}.rs` 四片（五簇落四片：usage 只有 `parse_usage` 一个函数、只被累积器调用，单立 = 为行数造结构 ⇒ 并进 `stream`）；跨片 2 处 `pub(super)` 抬升枚举成声明式改动；判据里那句"`super::wire::` 遮蔽有案底"复核结果 = **没发生**（tests 的 9 处引用靠 glob 再导出照旧解析，见 T31 条目的磁盘变异） |
-| `chat/TranscriptFlow.vue`（540） | 否：约 180 行**零 DOM** 的投影算法住在组件里 | 是：inner 单块分支与 tail 两段**逐字重复** ⇒ 新增一类 kind 必改两处 | 拆 | `use-flow-projection.ts`（≈190）+ `FlowSingle.vue`（≈60）把两遍并一遍；composable 不触形态标准 |
+| `chat/TranscriptFlow.vue`（540） | 否：约 180 行**零 DOM** 的投影算法住在组件里 | 是：inner 单块分支与 tail 两段**逐字重复** ⇒ 新增一类 kind 必改两处 | 拆（**要先 T41 定判据**） | `use-flow-projection.ts`（≈190）+ `FlowSingle.vue`（≈60）把两遍并一遍；composable 不触形态标准。⚠ 原样搬行做不到：抄那段进隔离探针让 `vue-tsc` 说话 = 点名 5 条缺绑定（`props` 一处 + `t` 四处）⇒ 搬它必须新增参数与传参语句，那是"产物独有行"，得先有 T41 那两档判据才好判等价 |
 | `src-tauri/src/events.rs`（531） | 是：通道常量 + 事件 enum + `channel()` 映射 = **同一张契约表** | 是，但那是这张表**固有的形状**（加一条事件本来就要同时动三处） | **留** | 三问皆是的一族：一份契约的三个侧面，拆开 = 把一条事实摊成三个出处。T23 之前它还多一条"拆了闸会安静少一条"的外力，现在那条已消（C4 实测数得到）⇒ 本件**只按形态判**，判留 |
-| `settings/DeveloperSection.vue`（523） | 否：写值区 + 三个**只读观测面板**（⑫ 暴露调试 / 缓存诊断 / reconcile 触发） | 是：`refresh()` 拿写值字段 `cacheDiagnostics` 当取数门 | 拆 | `ExposureDebugPanel.vue` + `CacheObservationPanel.vue` → 主件 ≈360；先例就在同目录（`MemoryTreePanel.vue` 116 行是从它拆出去的） |
+| `settings/DeveloperSection.vue`（523） | 否：写值区 + 三个**只读观测面板**（⑫ 暴露调试 / 缓存诊断 / reconcile 触发） | 是：`refresh()` 拿写值字段 `cacheDiagnostics` 当取数门 | 拆（**T38 之后实测搬不动** ⇒ 排在 T40 解绳 + T41 定判据之后） | `ExposureDebugPanel.vue` + `CacheObservationPanel.vue` → 主件 ≈360；先例就在同目录（`MemoryTreePanel.vue` 116 行是从它拆出去的）。⚠ 判定当时不知道的是这三面被**一根绳**拴着：`refresh()` 一次喂两个面板、`diag` 的声明又卡在 reconcile 两段中间 —— 实证（C1 报未覆盖行）与解法都在 **T40** |
 | `commands/llm.rs`（523 → 30） | 否：清单+推荐 / 连通测试 / 代理与档位 CRUD / 目录诊断 四簇 | 是：`enrich` 与 `apply_dialect_ladder` 被两簇共读（44/298/478） | 拆（只切面）✅T30 | 已沉 `commands/llm/{views,models,probe,test,providers,catalog}.rs` 六片：共读段单立 `views` 片（不塞进命令片当"顺手的公共文件"），`清单` 与 `推荐` 分家；`apply_dialect_ladder` 抬 `pub(super)` 是本刀**唯一声明式改动**；`llm_provider_save` 的业务下沉仍归 **T25**，本刀没碰 |
 | `src-tauri/src/commands.rs`（519 → 56） | 否：9 簇（聊天与停止 / undo / 列表投影 / 审批与规则 / 设置 / 探测 / 暴露调试 / 原生对话框 / 通知） | 是：跨文件调 `sessions::ensure_associatable`，还有 `cfg(test)` 补丁式再导出 | 拆 ✅T26 | 已沉 `commands/{chat,approvals,settings,probe,dialog,notifications}.rs` 六片（判定时的 4 片切法里 `system` 一片装四件事 = 违 ①，落地时按簇分成四片）；`check-commands.mjs` 走目录扫全部 .rs ⇒ **不动任何闸**，实测该闸在本刀后读数不变 |
 | `memory/TreeSection.vue`（505） | 否：会话导航与档位 / 章节展开与原文缓存 / M5 编辑面 三簇 | 是：`loadBundles` 一次重置六个本地态，新增任一编辑态都要动它 | 拆 | `use-tree-chapters.ts`（≈120，先例 = 同目录 `use-model-probe.ts`）；保存就地改引用与两步删除互斥必须同处 |
@@ -1057,13 +1057,53 @@
         （纯搬行的保序判据 T6 判的就是不许重排），所以单独一刀：改完 `vue-tsc` 与 vitest 必须仍全绿，
         且每一处移动都要能说出"它本来属于哪一族"
       · 价值不高，可以直接砍；留着是因为它让第四批组件刀不必再重复这套解释
+- [ ] **T40** `DeveloperSection.vue` 三个观测/触出面互相拴死，按搬行规格**拆不动**（T38 之后实测，不是推断）
+      · 实证 = 拿 `tmp/split-cut.mjs` 试切一次，C1 当场报：
+        `✗ 原文第 123 行非空却没进任何片段：/** M6.1 断裂诊断：面板打开拉一次…`
+        `✗ 原文第 124 行非空却没进任何片段：const diag = ref<CacheBreakReport | null…`
+        —— reconcile 面（120–122 + 126–146）被夹在中间的 `diag` 声明切断，想连 `diag` 一起搬走就
+        必须同时搬掉它的显示面（M0 缓存面板 313–336），而 `diag` 的**取数**在 `refresh()` 里（166–173），
+        那个 `refresh()` 又同时是 ⑫ 暴露调试面板的刷新钮（237–245）⇒ 三面一根绳，动一面就牵另两面
+      · 解开它要改的是行为不是摆放：`refresh()` 一分为二（各面板只拉自己那份）+ 缓存观测面板补自己的
+        刷新钮（先例 = `MemoryTreePanel.vue` 自带钮，"⑫ 同款"那句注释就在那文件头注里）+
+        `form.cacheDiagnostics` 这道门改由面板自己从 `settings.view` 读（同一真源，不是新数据）
+      · 与 **T24** 同族（那条管"组件直调 IPC 与编排没收进 stores"，这条是它在一个分区里的具体形状）⇒
+        顺序上 T40 / T24 都排在 DeveloperSection 的拆刀之前；判定表那行的"拆"要等这三件面解开之后
+- [ ] **T41** 第四批组件刀**缺一把等价判据**：Vue 的兄弟文件之间只能靠 props / emits 传数据
+      · 事实：把 `ExposureDebugPanel.vue` / `FlowSingle.vue` / `HeaderEditor.vue` 这类面搬出宿主组件，
+        宿主与该片之间必然新增 `defineProps` / `defineEmits` / 传参语句 —— 它是拆分的**机械后果**
+        （与 Rust 刀抬 `pub(super)` 同一类），但它是**产物独有的新行**，T4 行守恒只会把它判成红，
+        判不出它"该不该在那儿"
+      · 所以组件刀的等价判据不能只吃"规范化后逐单元比"，要两条一起：① 新增行**逐条枚举**（沿用
+        `--split` 那套 `registeredNew` / `rewroteOut` 双向闭合口径：登记的行必须在产物真实出现，
+        产物独有的行必须登记）；② 渲染层证明 —— 拆前先给该面写 vitest 挂载断言（先例 =
+        `appearance-section.spec.ts` / `inject-section.spec.ts` / `esc-routing.spec.ts` 已经在挂载真实
+        组件断 DOM 文本），拆后同一套测试一字不改仍绿 ⇒ 这才是"消费点与渲染结果都没变"的机器证据
+      · 顺带一条必须先解决的落盘事实：本仓 `.vue` 工作区与 blob **都是 CRLF**（实测 `DeveloperSection.vue`
+        523 行 523 个 CR；`.gitattributes` 只把 `*.sh` 与 `*.md` 钉成 LF），而 `split-cut.mjs` 第一道
+        判据就是「原文含 CR ⇒ 产物会混行尾」直接 abort。组件刀要么让切割器**按源文件行尾写回**
+        （读入归一 LF 判定、落盘按源 join），要么全仓统一行尾 —— 前者是这一族的事，后者是大得多的事
+      · 未定：这两档判据的成本（每刀先写测试）与是否值得，等用户拍一下再开第四批
+      · ★ **两把实测，不是推断**：① `DeveloperSection.vue` 见 T40 的 C1 输出；② `TranscriptFlow.vue`
+        把那段零 DOM 投影算法（原 54–132 行）**原样**抄进一个隔离探针文件让编译器说话 ⇒
+        `vue-tsc` 点名 5 条缺绑定：`Cannot find name 'props'`（116 行 `for (const item of props.items)`）
+        + `Cannot find name 't'`（88/95/97/98 四处 i18n）⇒ 搬走它必须新增参数与传参语句，
+        正是"产物独有行"那一档。探针文件当场删除、复跑 `vue-tsc` rc=0（工作区只剩本篇与用户自己的
+        `specs/01`，`git status` 可查）
   第一批 Rust 无锁件 = **清完**（T26 / T27 / T30 / T31 / T32）
   第二批 Rust 侧 schema 两件 = **清完**（T33 `memory.rs` ✅ / T35 `store.rs` ✅）：建表串与两条迁移
   两侧都搬过家，T23 那道"整根恰 1 处"的闸两侧读数各自跟着搬、判据一行没改（实测记在两条条目里）
   第三批 前端 lib 两件 = **清完**（T36 `tool-detail.ts` ✅ / T38 `api.ts` ✅）：T36 铺好"TS 刀怎么接面、
   怎么判接上了"，T38 吃它并把一张通道表连它的三个订阅入口搬进子目录 —— 那道"整根恰 1 处"的闸
   于是在前端侧也跟到了定位（判据一行没改）。剩下的都在组件
-  第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`
+  第四批 组件七件（`DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue`
+  → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`）= **停在门口**（2026-10-18 T38 之后实测）：
+  这一批与前八把的形状差别是硬事实而不是难度 —— 前三批的公开面靠 `pub use` / `export *` 接住，而
+  Vue 的兄弟文件之间只能靠 props / emits 传数据 ⇒ 搬行必然新增接口行，T4 行守恒只会把它判成红、
+  判不出它该不该在那儿（两把实测记在 **T41**，第一件还被一根绳拴死 ⇒ **T40**）。
+  要么先按 T41 把那两档判据定下来（新增行逐条枚举 + 拆前给该面补渲染断言），要么先转去做已登记的
+  缺陷刀（T24 / T34 / T28 / T40 —— 其中 T24 与 T40 还会把组件刀的工作量往下压）
+
   一件一刀，每刀按 T22 那刀的规格交：公开面不减 · 消费点不动 · 等价判据（规范化后逐单元比）· 窄变异各红在指定档
 · 这一节不承诺做完，也**不在话里钉"几件几刀"**：判与理由都在上面那张表的「判」列里，数一次漂一次
   —— `store.rs` 从判留改成判拆就是现例子（判留的外力一消失，三问自己的答案浮出来了）。
