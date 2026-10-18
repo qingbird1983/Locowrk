@@ -1079,10 +1079,22 @@
         产物独有的行必须登记）；② 渲染层证明 —— 拆前先给该面写 vitest 挂载断言（先例 =
         `appearance-section.spec.ts` / `inject-section.spec.ts` / `esc-routing.spec.ts` 已经在挂载真实
         组件断 DOM 文本），拆后同一套测试一字不改仍绿 ⇒ 这才是"消费点与渲染结果都没变"的机器证据
-      · 顺带一条必须先解决的落盘事实：本仓 `.vue` 工作区与 blob **都是 CRLF**（实测 `DeveloperSection.vue`
-        523 行 523 个 CR；`.gitattributes` 只把 `*.sh` 与 `*.md` 钉成 LF），而 `split-cut.mjs` 第一道
-        判据就是「原文含 CR ⇒ 产物会混行尾」直接 abort。组件刀要么让切割器**按源文件行尾写回**
-        （读入归一 LF 判定、落盘按源 join），要么全仓统一行尾 —— 前者是这一族的事，后者是大得多的事
+      · ★ 行尾这条已经**做完并自证**（不是待办）：`split-cut` / `split-assemble` / `split-verify` /
+        `split-mut` 四处改成"读入归一 LF 判定 · 落盘按源文件自己的行尾写回 · 还原本体走原字节 Buffer"，
+        四条路径各有实测：纯 CRLF 源（`DeveloperSection.vue`）切装对账全绿且产物 30 行 30 CR、
+        纯 LF 源（`api.ts` 备份）产物仍零 CR、"LF 里夹一行 CRLF"与"CRLF 里夹一行裸 CR"两型混行尾
+        都当场 abort（`CRLF=1 · LF=814 · CR=1` / `CRLF=498 · LF=498 · CR=499`）、改完重放
+        T33 / T35 / T36 / T38 四把 = `SPLIT_VERIFY_OK` + `SPLIT_SELFTEST_ALL_CAUGHT`
+      · ✗ 订正本条第一版写下的**假实测**（第 15 种说谎形状）：原文是"本仓 `.vue` 工作区与 blob 都是
+        CRLF（实测 523 行 523 个 CR）"。那条读数来自 `grep -c $'\r' 文件` —— 这个 shell 里 `$'\r'`
+        在命令替换中展开成**空串**，而空 pattern 匹配**每一行** ⇒ 打出来的"CR 数"永远等于行数，
+        与真·纯 CRLF 的读数**一模一样**，所以合理性检查一点没拦住。重测（node 逐字符重数）：
+        **库内 blob 212 份全是 LF**（`* text=auto` 在 commit 时归一，所以我写 LF 产物不会让库里长出
+        第二种形态）；**工作区才是混的**——`.ts` 8 份 CRLF / 107 份 LF，`.vue` 13 份 CRLF / 84 份 LF，
+        且**没有任何文件内部混行尾**。⇒ 结论换掉但机制照旧必要：组件刀的源文件**可能**是 CRLF
+        （`DeveloperSection.vue` 就是），切割器必须按源写回；而"要不要全仓统一行尾"这个问题**不存在**，
+        库里本来就统一。教训：读数必须来自**逐字符重数**，`grep -c` 只能证明"匹配到了东西"，
+        不能证明匹配的是什么
       · 未定：这两档判据的成本（每刀先写测试）与是否值得，等用户拍一下再开第四批
       · ★ **两把实测，不是推断**：① `DeveloperSection.vue` 见 T40 的 C1 输出；② `TranscriptFlow.vue`
         把那段零 DOM 投影算法（原 54–132 行）**原样**抄进一个隔离探针文件让编译器说话 ⇒
