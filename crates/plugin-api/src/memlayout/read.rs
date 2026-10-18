@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use crate::fsutil;
 
-use super::{fact_rel_path, layers, sync};
+use super::{fact_rel_path, layers, normalize_type, sync};
 use sync::ParsedFact;
 
 /// 一条已落盘事实的读回形状（字段 = frontmatter 各行的并集，缺失按渲染侧同一兜底）。
@@ -30,6 +30,10 @@ pub struct StoredFact {
     pub tags: String,
     /// metadata.source（缺 = `"explicit"`，与渲染侧同一兜底）。
     pub source: String,
+    /// `metadata.type`，**已经过 [`super::normalize_type`] 收档**：四类型之外的任何值
+    /// （含旧文件的 `fact`、人乱写的、根本没这行的）都读成 [`super::UNCLASSIFIED_TYPE`]。
+    /// 消费侧因此可以假定值域只有五种（四类型 + 未分类），不必自己再判一次。
+    pub ty: String,
     /// metadata.updated（缺 / 坏 = 0）。
     pub updated_at: i64,
     pub path: PathBuf,
@@ -74,6 +78,7 @@ fn stored_from(path: &Path, parsed: &ParsedFact, workspace_fallback: &str) -> St
             .source
             .clone()
             .unwrap_or_else(|| "explicit".to_string()),
+        ty: normalize_type(parsed.ty.as_deref().unwrap_or_default()),
         updated_at: parsed.updated_at.unwrap_or(0),
         path: path.to_path_buf(),
     }

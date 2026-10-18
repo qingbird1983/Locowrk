@@ -54,7 +54,8 @@ pub(crate) fn memory_undo(ctx: &super::WsCtx, args: &Value) -> Result<Value, Str
             .unwrap_or(ws.as_str());
         restore_entry(&conn, at_ws, key, value, tags, updated_at)?;
         let mut out = json!({ "key": key, "undone": true, "restored": true });
-        if let Some(w) = mdsync::sync_write(at_ws, key, value, tags, updated_at) {
+        // `None` = 载荷里没有分类这一维（库里没有 `type` 列）⇒ 沿用现存文件里的那个值
+        if let Some(w) = mdsync::sync_write(at_ws, key, value, tags, None, updated_at) {
             out["md_warning"] = json!(w);
         }
         return Ok(out);
@@ -83,7 +84,8 @@ pub(crate) fn memory_undo(ctx: &super::WsCtx, args: &Value) -> Result<Value, Str
             .unwrap_or(ws.as_str());
         restore_entry(&conn, at_ws, key, value, tags, updated_at)?;
         let mut out = json!({ "key": key, "undone": true, "restored": true });
-        if let Some(w) = mdsync::sync_write(at_ws, key, value, tags, updated_at) {
+        // `None` = 载荷里没有分类这一维（库里没有 `type` 列）⇒ 沿用现存文件里的那个值
+        if let Some(w) = mdsync::sync_write(at_ws, key, value, tags, None, updated_at) {
             out["md_warning"] = json!(w);
         }
         return Ok(out);

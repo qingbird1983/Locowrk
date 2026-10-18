@@ -39,27 +39,12 @@ impl MemoryFiles {
         &self.root
     }
 
-    /// 写一条事实 md（转发共享布局）。调用方保证 sqlite 已落。
-    pub fn write_fact(
-        &self,
-        workspace: &str,
-        key: &str,
-        value: &str,
-        tags: &str,
-        source: &str,
-        updated_at: i64,
-    ) -> Result<PathBuf, String> {
-        memlayout::write_fact(
-            &self.root,
-            &FactEntry {
-                workspace,
-                key,
-                value,
-                tags,
-                source,
-                updated_at,
-            },
-        )
+    /// 写一条事实 md（转发共享布局）。收 [`FactEntry`] 而不是六个平铺参数：
+    /// 那个结构体是**唯一**的渲染输入，将来再加 frontmatter 字段（刀③ 就加了一个 `ty`）
+    /// 不必把每一层签名都跟着改一遍——平铺参数的那次改动牵动了这里和两个调用点，
+    /// 收成一条结构体引用之后，同一次改动的宿主侧落点只剩 `store.rs::write_md`。
+    pub fn write_fact(&self, e: &FactEntry) -> Result<PathBuf, String> {
+        memlayout::write_fact(&self.root, e)
     }
 
     /// 删一条事实 md（幂等）。

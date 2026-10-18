@@ -51,19 +51,26 @@ fn describe_manifest() -> CString {
         tools: vec![
             ToolSpec {
                 name: "memory_write".into(),
-                description: "Store a value under a key in the persistent memory database \
-                              (survives across sessions). Args: key (required, unique \
-                              identifier), value (required, text), tags (optional, short \
-                              label), scope (optional: \"project\" default | \"global\" for \
-                              user preferences that apply across ALL projects, e.g. \"always \
-                              use pnpm\"). Overwrites any existing value; the overwritten \
+                description: "Store a value under a key in the persistent memory (survives \
+                              across sessions). Args: key (required, unique identifier), \
+                              value (required, text), tags (optional, short label), type \
+                              (optional: \"user\" | \"feedback\" | \"project\" | \
+                              \"reference\" — it decides which layer the entry lands in by \
+                              default: \"user\" / \"feedback\" are global preferences that \
+                              apply in every project, \"project\" / \"reference\" stay in \
+                              the current project), scope (optional override: \"project\" | \
+                              \"global\"; wins over the type default). A \"feedback\" or \
+                              \"project\" entry should carry two lines in the value — `Why:` \
+                              (the reason, which is what makes edge cases judgeable) and \
+                              `How to apply:` — a missing one comes back as `hint` but is \
+                              still written. Overwrites any existing value; the overwritten \
                               entry is returned in `previous` and can be restored via \
                               memory_undo. Project entries are scoped to the current project: \
                               the same key in another project holds a different value. An \
                               unassociated session cannot write project memories (associate a \
-                              project first, or pass scope=\"global\"). Use it for facts, \
-                              decisions and user preferences worth remembering; do NOT store \
-                              secrets or large blobs."
+                              project first, or pass type=\"user\" / scope=\"global\"). Use it \
+                              for facts, decisions and user preferences worth remembering; do \
+                              NOT store secrets or large blobs."
                     .into(),
                 schema: json!({
                     "type": "object",
@@ -71,7 +78,8 @@ fn describe_manifest() -> CString {
                         "key": { "type": "string", "description": "unique identifier, max 512 bytes; use dotted namespaces like `user.language`" },
                         "value": { "type": "string", "description": "text to store, max 256KiB" },
                         "tags": { "type": "string", "description": "optional short label, searchable" },
-                        "scope": { "type": "string", "enum": ["project", "global"], "description": "project (default) = current project only; global = user preference visible in every project" }
+                        "type": { "type": "string", "enum": ["user", "feedback", "project", "reference"], "description": "what kind of memory this is; decides the default layer (see scope)" },
+                        "scope": { "type": "string", "enum": ["project", "global"], "description": "explicit layer override; wins over the type default" }
                     },
                     "required": ["key", "value"]
                 }),

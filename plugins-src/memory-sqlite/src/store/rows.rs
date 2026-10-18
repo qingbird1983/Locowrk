@@ -61,13 +61,24 @@ pub(super) fn exists(conn: &Connection, ws: &str, key: &str) -> Result<bool, Str
     Ok(n > 0)
 }
 
-/// 写入键位裁决（Context 文档 §4.6 双层记忆）：缺省 = 当前项目；显式
-/// `"global"` = 全局偏好层（`''`）；未归属会话缺省写**拒绝**（没有项目
+/// 写入键位裁决（Context 文档 §4.6 双层记忆）：显式 `"global"` = 全局偏好层（`''`）；
+/// 没给 scope 时**由类型算缺省层**（S1 刀③a，设计 §2.1 分级规则：`user` / `feedback`
+/// 落全局，`project` / `reference` 落当前项目）；未归属会话缺省写**拒绝**（没有项目
 /// 的"项目记忆"不许落地污染全局层——先归属，或显式升格为偏好）；
 /// headless 无会话上下文 = `''` 单一宇宙（旧行为）。
-pub(super) fn write_scope(ctx: &super::WsCtx, scope_arg: Option<&Value>) -> Result<String, String> {
+///
+/// `ty` 传空串或值域外的值 ⇒ [`plugin_api::memlayout::layer_for`] 给 `Project` ⇒ 与四类型
+/// 落地之前**逐字同形**（红证 = `tests/type_layer.rs::an_entry_with_no_type_lands_where_it_always_landed`）。
+/// 值域外的 `scope` 串照旧直接 Err（那是既有契约，不由类型缺省兜底——两档判据不许互相掩盖）。
+pub(super) fn write_scope(
+    ctx: &super::WsCtx,
+    scope_arg: Option<&Value>,
+    ty: &str,
+) -> Result<String, String> {
     let want_global = match scope_arg {
-        None | Some(Value::Null) => false,
+        None | Some(Value::Null) => {
+            plugin_api::memlayout::layer_for(ty, None) == plugin_api::memlayout::Layer::Global
+        }
         Some(v) => match v.as_str() {
             Some("project") => false,
             Some("global") => true,

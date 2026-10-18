@@ -17,6 +17,7 @@ mod learning;
 mod manifest_json;
 mod project_isolation;
 mod scope_two_layer;
+mod type_layer;
 
 use super::WsCtx;
 use super::store;

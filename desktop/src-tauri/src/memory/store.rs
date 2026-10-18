@@ -121,7 +121,18 @@ impl MemoryStore {
         at: i64,
     ) -> Result<(), String> {
         self.files
-            .write_fact(ws, key, value, tags, source, at)
+            .write_fact(&plugin_api::memlayout::FactEntry {
+                workspace: ws,
+                key,
+                value,
+                tags,
+                source,
+                updated_at: at,
+                // 宿主这四条写路径（管理页新建 / 编辑 / 整理回写 / 迁移）今天都不带分类：
+                // 四类型的**生产者**是记忆工具的 `type` 参数（S1 刀③），管理页那半在刀④。
+                // 空串 = 未分类 ⇒ 落盘字节形与四类型落地之前一字不差。
+                ty: "",
+            })
             .map(|_| ())
             // 报错必须**点名是哪条记忆**：这一句现在会一路走到管理页的错误条与整理管线的
             // 日志，只给路径的话用户看不出是自己刚写的那条失败了（旧 warn 文案就带 key，

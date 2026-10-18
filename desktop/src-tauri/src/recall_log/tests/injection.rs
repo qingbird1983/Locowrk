@@ -140,6 +140,9 @@ fn recall_rows_are_identical_with_and_without_instrumentation() {
                     tags: "t",
                     source: "explicit",
                     updated_at: at,
+                    // 等价判据要比的是"召回出来的行逐字段相同"，分类这一维两边都给未分类
+                    // ⇒ 它不参与这条判据（带 type 的往返在 `memlayout/tests/kind.rs`）。
+                    ty: "",
                 },
             )
             .unwrap();

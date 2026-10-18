@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2 已落地 / 刀③④ 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a 已落地 / 刀③b 与刀④ 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -275,11 +275,54 @@
      属产品决策而不是机械迁移 ⇒ 要决策人点头（要么关掉学习档、要么给学习量另找一个不进人读面的家）。
      在这一格收口之前，"`<persistent_memory>` 停读 sqlite"这句话只在 `learnEnabled=false`（缺省）时成立，
      代码头注与本节都按这个口径写，不许说满。
-- **刀③（四类型打通 + 工具内部改道）**：`FactEntry` 末尾追加 `ty`、`render()` 写
-  `metadata.type`、`ParsedFact` 读回 type（未知值 = 未分类，存量不重写）、type→层映射纯函数、
-  `feedback`/`project` 缺 `Why:` / `How to apply:` 时提醒不拦写；这几件必须与工具参数**同刀**，
-  否则枚举值没有任何生产者。save / read / search / delete 四枚工具内部实现从 sqlite 改 md
-  （名字与参数面不动，提示词与审批面才不会跟着漂）。
+- **刀③a（四类型打通 + 工具参数面）✅ 2026-10-18 已落地**，六件事：
+  1. `FactEntry` 末尾追加 `ty`（`plugin-api` 的规矩：只往结构体尾部加字段）；`render()` 写
+     `metadata.type`，值由 `normalize_type` 收档 ⇒ **没给类型与写 `fact` 同形**，
+     所以宿主 598 条与插件既有 28 条用例**一字未改仍绿**（这就是"加档不是改档"的实证）。
+  2. 新建类型面 `memlayout/kind.rs`：`MEMORY_TYPES` / `UNCLASSIFIED_TYPE` / `normalize_type`
+     （值域外与大小写、空白漂都收进未分类）/ `Layer` / `layer_for`（纯函数算落点）/
+     `missing_guidance`（提醒文案点名缺哪一段，三种缺法三条文案）。
+  3. `ParsedFact` 加 `ty`（`parse_fact` 认 `  type:` 那一行）、`StoredFact` 加**已收档**的 `ty`
+     ⇒ 消费侧可以假定值域只有五种，不必各自再判一次。旧文件没那行 = 读成未分类且
+     **读一次不许改写文件**（回填存量 = 摧毁人的 mtime 保护，那条用例直接断言字节相同）。
+  4. **工具参数面**（四类型的生产者，必须与枚举同刀——否则挂在那里就是一圈死 API）：
+     `memory_write` 加 `type` 枚举参数，描述与 schema 一起改，磁盘 `manifest.json` 由
+     `LOCOWRK_MANIFEST_SYNC=1` 那条维护通道对齐（T11 同源对账随后复绿）。
+  5. **落点由类型算**：`write_scope` 在"没给 scope"那一档改问 `layer_for(ty, None)`。
+     未分类 ⇒ `Project` ⇒ 与四类型之前逐字同形；`user` / `feedback` ⇒ 全局层，于是未归属
+     会话多了一条**正当**出路（报 `type="user"` 说的是"这是全局偏好"，不再需要假装成
+     `scope` 参数）。值域外的 `scope` 照旧直接 Err，两档判据不许互相掩盖。
+     `Why:` / `How to apply:` 只提醒不拦写：先落盘，缺的段数以 `hint` 字段带回（两段齐 = 无 hint）。
+  6. 顺手收的一处形状：`MemoryFiles::write_fact` 从六个平铺参数改成收 `&FactEntry`——
+     加一个字段就要改一遍每层签名，那次改动在宿主侧的落点本来可以有 `write_md` 一处。
+     插件侧的 `mdsync::sync_write` **没有**跟着收（它整个随刀③b 消失），它改的是
+     `ty: Option<&str>`：`None` = 调用方不知道分类（undo 的载荷取自库行，库里没这一维）
+     ⇒ 沿用现存文件里的 `type`，否则一次 undo 会把四类型抹平成 `fact`。
+  判据：本刀不加新闸（四类型是**加档**，没有需要墓碑的退役形状）；AC-S1-9 那条属于刀③b。
+  **证据 = 六发窄变异**（`CASE 33–38`，各打一条用例、全部 sha 逐字节还原复核一致）：
+  未分类被算成全局层 / 值域外的 type 不收档 / 提醒不挑类型 / 工具不带回提醒 /
+  `render` 把 type 写死回 `fact`（四类型没有落盘通路）/ undo 把分类抹平。
+  ⚠ `CASE 38` 第一版**打空**过一次，打的不是代码而是脚本自己的过滤串（用例名抄错 ⇒
+  cargo 报 0 条仍然 rc=0）——是"命中用例数 = 0 就叫停"那条自检把它拦下来的，
+  否则这条会被记成"零证明力"而实际上一行都没跑。
+  测试去向：`memlayout/tests/kind.rs` 新簇 6 条（同形担保 / 四类型逐个往返 / 值域外两侧收档 /
+  旧文件无那行且不回填 / `layer_for` 十三档 / 提醒只咬两个类型）+ 插件 `tests/type_layer.rs`
+  新簇 7 条（无类型照旧落项目 / user+feedback 落全局且不留第二份 / 显式 scope 两个方向都赢 /
+  未归属会话被类型救场 / 提醒不拦写 / 撤销保留文件里的分类 / 值域外不落进真源文件）。
+  ⚠ 本刀踩到的一条**夹具脆弱性**（登记，未修）：插件测试簇共用 `ENV_LOCK`，一条断言失败时
+   panic 线程带着锁下去 ⇒ 同批后面每条拿到的都是 `PoisonError` 而不是它自己的结论。
+  我自己刚踩了一次（feedback 落全局却断言项目层文件在场 ⇒ 三条红，其中两条是被污染的），
+  所以那种"一片红"永远要先读第一条的 panic 行再下结论。
+- **刀③b（工具内部改道 md）⏳ 待做**：`plugins-src/memory-sqlite` 那**六枚**工具
+  （`memory_write` / `memory_read` / `memory_list` / `memory_search` / `memory_delete` /
+  `memory_undo`——本节原文写的是"save / read / search / delete 四枚"，按 `lib.rs` 实况订正：
+  漏了 `list` 与 `undo`，而它们同样按库寻址，只改四枚会留下半改状态）内部实现从 sqlite 改 md，
+  工具名字与参数面不动（提示词与审批面才不会跟着漂）；摘掉 `mdsync` 与宿主影子写、
+  `LOCOWRK_MEMORY_FILES` 开关退役，新立 AC-S1-9 那条判据并配窄变异。
+  两处连锁要先想清楚：① 插件不再开库 ⇒ `store/schema.rs` 的建表与迁移整片退役 ⇒
+  `check-db-schema-parity` 那把"两侧逐字节相同"的闸失去一侧（要跟着退役或改判据）；
+  ② 学习档 `recall_relevant` 仍读 `memories` 表（刀②c-2 第 2 件，等点头）——它是这一表
+  在刀③b 之后**唯一**的读者，所以本刀的默认形状是"表留着、只由 reconcile 从真源重建"。
 - **刀④（`obsolete/` 与管理页）**：软删 + 清空真删（清空要确认）；管理页六枚命令读源换 md、
   加"三枚行为开关 + 每层一行"。**TreeBoard / TreeSection / InjectSection 三处嵌入不在本阶段动**
   （看板整体删除是 S4 的事，混在一刀里回滚不掉）。
@@ -344,10 +387,16 @@
       （`a_shell_index_file_means_the_section_is_absent_even_if_the_db_has_rows`，库里留着行而
       md 是空壳 ⇒ 如实缺席）、**影子库本身坏掉**（`a_broken_shadow_db_changes_nothing_on_the_read_or_write_path`，
       `memory.sqlite3` 写成非数据库字节之后读写两面一个字节都不变）。整条仍不勾，两个缺口：
-      ① 插件那两枚工具（`memory_read` / `memory_search`）仍按库寻址 ⇒ 归刀③；
+      ① 插件那六枚工具（`memory_write` / `read` / `list` / `search` / `delete` / `undo`）仍按库寻址
+      ⇒ 归刀③b；
       ② `learnEnabled=true` 时语义召回档（`recall_relevant`）仍读库 ⇒ 见刀②c-2 第 2 件，等点头
-- [ ] AC-S1-3 四类型落位：`type=feedback` 缺省落 `global/`、`type=project` 缺省落
-      `projects/<可读名>-<hash>/facts/`；显式给 `scope` 时按覆盖落，frontmatter 回读一致
+- [x] AC-S1-3 四类型落位：`type=feedback` 缺省落 `global/`、`type=project` 缺省落
+      `projects/<可读名>-<hash>/facts/`；显式给 `scope` 时按覆盖落，frontmatter 回读一致。
+      **刀③a 落地**：落位与覆盖由 `plugins-src/memory-sqlite/src/tests/type_layer.rs` 六条钉
+      （含"未分类照旧落项目 = 与四类型之前同形"与"值域外的 `scope` 照旧报错"两条负对照），
+      frontmatter 往返由 `memlayout/tests/kind.rs` 的逐个类型回读钉。**一句残留**：这四档说的都是
+      "真源文件里落对了"，而工具侧 `memory_read` 目前仍从库里读、回显不出 `type`（那一维在
+      刀③b 接上；界面那一列在刀④）⇒ 见挂账"类型写进去了但读不回来"
 - [ ] AC-S1-4 排除清单生效：一句"我测试过了 / 我改了 store.rs"收束后**不产文件**；
       同一句里"以后都用 pnpm"产 1 个 `type=user` 文件（正反对照同批跑）
 - [ ] AC-S1-5 索引硬钳在写侧：造 250 条 → 落盘的 `MEMORY.md` ≤ 200 行且末行带 WARNING 指路，
@@ -442,16 +491,24 @@
   自己带上权威键位），而不是在宿主侧再猜一次目录。现状登记，本刀不顺手改。
 - 挂账（刀②c-1 之后 `memory.files` 这个设置项**管不到宿主读写面**）：真源没有可退的第二处，
   所以"要不要文件化"这个问题在宿主这边已经没有可开关的东西。它现在剩下的作用面是两处——
-  ① 插件侧 env `LOCOWRK_MEMORY_FILES`（刀③ 随工具改道一起摘），② 对账/首启导出的空转开关
-  （刀②c-2 随 `memory_reconcile` 退役一起消失）。两处都摘完之后这一项要么**改义**
+  ① 插件侧 env `LOCOWRK_MEMORY_FILES`（刀③b 随工具改道一起摘），② 对账/启动导出的空转开关
+  （②c-2 裁定 `memory_reconcile` **不整项退役** ⇒ 它要留到刀③b 之后影子没有读者时一起评估）。
+  两处都摘完之后这一项要么**改义**
   （建议：关掉 = 记忆面停止写入并如实报错，仍是一个真的开关，符合 AGENTS §4 可配置原则），
   要么整项退役 ⇒ 归刀④ 与界面文案一起定。⚠ 现在设置页那句 hint 写的是"把记忆**同步存为**
   Markdown 文件"——那是镜像时代的说法，与实况不符 ⇒ 刀④ 一起订正（同类"文字与实况不符"）。
 - 挂账（刀②c-1 留下的**影子写**）：`crud.rs` 那四条 `shadow_*` 仍是写库的 SQL，唯一理由是
-  `plugins-src/memory-sqlite` 那六枚工具还按库寻址。**刀③ 改道之后这一整块连同 `CREATE_TABLE`
+  `plugins-src/memory-sqlite` 那六枚工具还按库寻址。**刀③b 改道之后这一整块连同 `CREATE_TABLE`
   必须退役**——在此之前，《Memory File-ization Design v1.1》§3 那句"无第二存储"尚未真正成立
   （标准写的是目标态，别把它读成现状）。不在刀②c-1 顺手停的原因已写进 spec：停掉之后
   管理页写的记忆模型读不到，而插件写的记忆管理页看不见，中间态用户立刻能发现。
+- 挂账（刀③a 留下的**中间态：类型写进去了但读不回来**）：`metadata.type` 从刀③a 起由
+  `memory_write` 的 `type` 参数生产并落在真源文件里，人打开文件夹看得见；但两条读路都还没有
+  这一维——① 工具侧 `memory_read` / `memory_list` / `memory_search` 仍按库寻址（库里没有 `type`
+  列，刀③b 改道后从 `StoredFact.ty` 取，那才是"回读一致"）；② 宿主管理页的 `MemoryRow` 也没有
+  这一字段（`md_rows` 把 `StoredFact` 投影成行时丢掉了它），所以界面上看不出这条是 `user` 还是
+  `project` ⇒ 归刀④ 那一列。`memory_write` 的返回值里那个 `type` 是**本次调用的回显**，
+  代码注释已写破这一层，不许读成"从存储读回"。
 - 挂账（刀②a 取证时抓到的保留名盲区）：读侧跳过索引与投影用的是**文件名**
   （`read.rs::is_fact_file` 排 `MEMORY` / `tree` 两个 stem），而写侧的 `key_file_stem`
   只安全化路径字符与 Windows 保留名，**没把 `MEMORY` / `tree` 列成保留键** ⇒

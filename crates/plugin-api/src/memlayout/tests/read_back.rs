@@ -83,24 +83,19 @@ fn iter_facts_orders_like_the_sql_and_counts_unreadable_separately() {
     let _ = std::fs::remove_dir_all(&root);
     let ws = r"F:\proj\Iter";
     for (key, at) in [("a.old", 1_000i64), ("b.new", 3_000), ("c.mid", 2_000)] {
+        // 结构体更新语法（`..entry(…)`）而不是逐字段重列：FactEntry 在 S1 刀③ 会加
+        // `ty` 字段，逐字段写死的夹具每加一个字段就要改一遍，而漏掉的那遍是**编译错误**
+        // 而不是"测到的东西变少"——用 FRU 之后未列的字段自动沿默认。
         let e = FactEntry {
-            workspace: ws,
-            key,
-            value: key,
-            tags: "",
-            source: "explicit",
             updated_at: at,
+            ..entry(ws, key, key)
         };
         write_fact(&root, &e).unwrap();
     }
     // 全局层一条（跨层必须一起扫到）
     let g = FactEntry {
-        workspace: "",
-        key: "g.global",
-        value: "g",
-        tags: "",
-        source: "explicit",
         updated_at: 2_500,
+        ..entry("", "g.global", "g")
     };
     write_fact(&root, &g).unwrap();
     // 一个"文件"其实是目录 ⇒ read_to_string 失败 ⇒ 只能进 unreadable，不许被当成没有

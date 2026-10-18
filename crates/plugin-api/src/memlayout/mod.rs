@@ -2,8 +2,9 @@
 //! `<数据根>/memory/` 下的 Markdown——人可查可读可写，编辑即权威写入。
 //! 本模块只放**渲染与写删**（frontmatter 怎么落、一条事实写到哪、删完刷谁）——
 //! 寻址面（目录命名、文件名安全、层枚举）在 `paths.rs`，索引面在 `index.rs`，
-//! 读回与清点名在 `read.rs`，同步机械件（标记 / 原子写 / 解析 / 冲突备份）在 `sync.rs`。
-//! 四片都经这里 `pub use` 出去 ⇒ 插件侧（memory-sqlite）与宿主侧（desktop memory /
+//! 读回与清点名在 `read.rs`，同步机械件（标记 / 原子写 / 解析 / 冲突备份）在 `sync.rs`，
+//! 四类型与落点层在 `kind.rs`。
+//! 五片都经这里 `pub use` 出去 ⇒ 插件侧（memory-sqlite）与宿主侧（desktop memory /
 //! `memory_files`）吃的仍是同一个 `memlayout::…` 路径，同一键位必落同一文件。
 //! 写入边界（宁严勿松）：全部落点都在数据根 `memory/` 之内。
 //!
@@ -11,7 +12,9 @@
 //! "sqlite = 机器索引层 + md = 人类层"双层双写**已撤销**。⚠ 但**别照这句话读现状**——
 //! 撤销是逐面完成的，两侧进度不同：宿主读面（管理页列举 / `<persistent_memory>` 正文 /
 //! 项目索引）自 S1 刀②b 起只读这里，宿主写面自刀②c-1 起**先落这里、失败就是失败**；
-//! `plugins-src/memory-sqlite` 那六枚工具仍按库寻址，那是刀③ 的"工具内部改道"。
+//! `plugins-src/memory-sqlite` 那六枚工具仍按库寻址，那是刀③b 的"工具内部改道"。
+//! 四类型（`metadata.type`）自刀③a 起有了生产者（工具参数 `type`），值域、落点层与
+//! `Why:` / `How to apply:` 提醒三件都在 `kind.rs`。
 //! 谁在反着写（库 → 文件）也记在 `write_fact` 上方与 specs/05，不靠本段记忆。
 //!
 //! 布局（设计 §2.1，与 `scope_dirs` 实况一致）：
@@ -32,6 +35,7 @@ use std::path::{Path, PathBuf};
 use crate::fsutil;
 
 mod index;
+mod kind;
 mod paths;
 mod read;
 mod sync;
@@ -39,6 +43,9 @@ mod sync;
 // 索引面与读面各自成片，对外路径仍走这里 ⇒ 消费点（宿主 memory_files /
 // memory_reconcile / memory_index、插件 store）一个字都不用动。
 pub use index::{INDEX_TRUNCATED_NOTE, MAX_INDEX_CHARS, MAX_INDEX_LINES, refresh_index};
+pub use kind::{
+    Layer, MEMORY_TYPES, UNCLASSIFIED_TYPE, layer_for, missing_guidance, normalize_type,
+};
 pub use paths::{
     LayerDir, UNAFFILIATED_DIR, fact_rel_path, files_enabled, fnv1a64, key_file_stem, layers,
     memory_root, project_dir, project_dir_name, project_rel_dir, projects_dir, unaffiliated_dir,
@@ -62,6 +69,11 @@ pub struct FactEntry<'a> {
     /// explicit | extracted（zcode 式 frontmatter 之外 Locowrk 自有溯源）。
     pub source: &'a str,
     pub updated_at: i64,
+    /// `metadata.type` 的输入（设计 §2.1 四类型）。**追加在末尾** = `plugin-api`
+    /// 的规矩（只往结构体尾部加字段，既有签名不动）。空串与值域外的值由
+    /// [`normalize_type`] 收成 [`UNCLASSIFIED_TYPE`] ⇒ 四类型落地之前落的每个文件
+    /// 形状一字不变（担保 = `memlayout/tests/kind.rs::an_entry_without_a_type_renders_the_old_bytes`）。
+    pub ty: &'a str,
 }
 
 /// YAML 双引号标量（手渲染足够：值域受控，换行先被 one_line 折掉）。
@@ -105,12 +117,16 @@ impl FactEntry<'_> {
     /// `tags` 单独一行是**读侧迁移的前置**：`description` 是"tags，空则正文首行"的
     /// 有损 hook，从它反推不出"这串是标签还是正文第一句"。真源 = 文件之后，管理页
     /// 过滤与 `memory_search` 的 tags 匹配只能从这行取（设计 §2.1）。
+    ///
+    /// `metadata.type` 走 [`normalize_type`]：调用方给什么串（含空）都落进值域，
+    /// 未给 = `fact`（未分类）⇒ 与四类型落地前的字节形完全一致。
     pub fn render(&self) -> String {
         format!(
-            "---\nname: {}\ndescription: {}\ntags: {}\nmetadata:\n  type: fact\n  source: {}\n  workspace: {}\n  updated: {}\n---\n\n{}\n",
+            "---\nname: {}\ndescription: {}\ntags: {}\nmetadata:\n  type: {}\n  source: {}\n  workspace: {}\n  updated: {}\n---\n\n{}\n",
             yaml_str(self.key),
             yaml_str(&self.description()),
             yaml_str(self.tags),
+            yaml_str(&normalize_type(self.ty)),
             yaml_str(if self.source.is_empty() {
                 "explicit"
             } else {

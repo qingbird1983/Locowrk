@@ -143,13 +143,10 @@ fn format_upgrade_does_not_fabricate_a_human_edit_backup() {
     write_marker(&root, &rel, ms).unwrap();
 
     // 第二次：格式已升级（多一行 tags），但**没动过 mtime** ⇒ 不该有备份
+    // （`..entry(…)` = 结构体更新语法，理由见 `read_back.rs` 里那句注释）
     let new_form = FactEntry {
-        workspace: ws,
-        key: "k",
-        value: "v1",
-        tags: "",
-        source: "explicit",
         updated_at: 1700000000,
+        ..entry(ws, "k", "v1")
     };
     assert!(
         new_form.render().contains("tags: \"\""),

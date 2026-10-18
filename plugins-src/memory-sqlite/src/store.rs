@@ -33,6 +33,11 @@ pub(crate) use undo::*;
 /// 同步 `<数据根>/memory/` 下的 md。**失败不破契约**——sqlite 是召回真源，
 /// md 是人读面；失败只以 `md_warning` 字段如实带回（F2 reconcile 可修复），
 /// 总开关关 = 完全跳过。
+///
+/// ⚠ 这一段"sqlite 是召回真源"在 S1 刀② 之后已经不成立（宿主的读面全扳到 md 了），
+/// 本刀（③a）只给 `sync_write` 加了一个 `ty` 参数把四类型带进 md；整个 mdsync 与
+/// 它上面那句话随**刀③b**（六枚工具内部改道 md）一起消失——所以这里不给它做
+/// `&FactEntry` 收口（宿主侧 `MemoryFiles::write_fact` 收了，因为它要继续活着）。
 mod mdsync {
     use plugin_api::memlayout::{self, FactEntry};
 
@@ -40,11 +45,15 @@ mod mdsync {
         f().err().map(|e| format!("md sync failed: {e}"))
     }
 
+    /// `ty = None` = **调用方不知道分类**（undo 的载荷是从库里那一行取的，库里没有这一维）
+    /// ⇒ 沿用现存文件里的那一行；文件也不在 = 未分类。这里不许写死 `""`：那会让一次
+    /// undo 把四类型抹平成 `fact`（刀③b 之后 previous 改从文件取，这一档自动消失）。
     pub(super) fn sync_write(
         ws: &str,
         key: &str,
         value: &str,
         tags: &str,
+        ty: Option<&str>,
         at: i64,
     ) -> Option<String> {
         if !memlayout::files_enabled() {
@@ -52,6 +61,14 @@ mod mdsync {
         }
         let Ok(root) = memlayout::memory_root() else {
             return Some("md sync failed: data root unavailable".into());
+        };
+        let kept = match ty {
+            Some(t) => t.to_string(),
+            None => memlayout::read_fact(&root, ws, key)
+                .ok()
+                .flatten()
+                .map(|f| f.ty)
+                .unwrap_or_default(),
         };
         sync(|| {
             memlayout::write_fact(
@@ -63,6 +80,9 @@ mod mdsync {
                     tags,
                     source: "explicit",
                     updated_at: at,
+                    // 四类型里唯一由模型报的一维（工具参数 `type`）；空 / 值域外由
+                    // `normalize_type` 收成未分类，落盘仍是旧形状。
+                    ty: &kept,
                 },
             )
             .map(|_| ())

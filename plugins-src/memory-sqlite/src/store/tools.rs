@@ -8,6 +8,7 @@
 //! 把它接住 ⇒ 本刀**没有一处**是为了改路径而改正文。
 
 use plugin_api::args::arg_u64;
+use plugin_api::memlayout;
 use plugin_api::serde_json::{Value, json};
 use rusqlite::{Error, params};
 
@@ -23,7 +24,11 @@ pub(crate) fn memory_write(ctx: &super::WsCtx, args: &Value) -> Result<Value, St
     let key = arg_str(args, "key")?;
     let value = arg_str(args, "value")?;
     let tags = args.get("tags").and_then(Value::as_str).unwrap_or("");
-    let ws = write_scope(ctx, args.get("scope"))?;
+    // 四类型（S1 刀③a，设计 §2.1）里唯一由模型报的一维。值域外 / 没给 = 未分类，
+    // 于是"落哪一层"与"frontmatter 落什么串"两处都由同一个 `normalize_type` 决定，
+    // 这条通路在四类型之前写出来的字节形一字不变。
+    let ty = memlayout::normalize_type(args.get("type").and_then(Value::as_str).unwrap_or(""));
+    let ws = write_scope(ctx, args.get("scope"), &ty)?;
     if key.is_empty() {
         return Err("memory_write: `key` must not be empty".into());
     }
@@ -58,9 +63,22 @@ pub(crate) fn memory_write(ctx: &super::WsCtx, args: &Value) -> Result<Value, St
     )
     .map_err(|e| format!("memory_write `{key}`: {e}"))?;
     let scope = json!(if ws.is_empty() { "global" } else { "project" });
-    let mut out =
-        json!({ "key": key, "scope": scope, "created": previous.is_none(), "previous": previous });
-    if let Some(w) = mdsync::sync_write(&ws, &key, &value, tags, at) {
+    // `type` 这里是**本次调用的回显**（模型刚报的那个值，已经过 normalize），不是从存储
+    // 读回来的——sqlite 那一侧没有这一列，读回真值要等刀③b 把这几枚工具扳到 md 上。
+    // 把它放在返回里是为了让模型看见"这条被算成了哪一类、落到哪一层"，不是谎称读得回。
+    let mut out = json!({
+        "key": key,
+        "scope": scope,
+        "type": ty,
+        "created": previous.is_none(),
+        "previous": previous,
+    });
+    // `Why:` / `How to apply:` 的纪律是**提醒不是拒绝**（设计 §2.1）：先落，再把缺的那一段
+    // 报回去——拦写的后果是"这条记忆没记上"，比格式不齐更坏。
+    if let Some(h) = memlayout::missing_guidance(&ty, &value) {
+        out["hint"] = json!(h);
+    }
+    if let Some(w) = mdsync::sync_write(&ws, &key, &value, tags, Some(&ty), at) {
         out["md_warning"] = json!(w);
     }
     Ok(out)

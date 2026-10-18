@@ -74,6 +74,12 @@ pub struct ParsedFact {
     pub tags: Option<String>,
     /// metadata.source（无 = None）。
     pub source: Option<String>,
+    /// `metadata.type` 原值（无 = None ⇒ 调用方按"未分类"读，**不回填、不重写存量**）。
+    /// 值域由 [`super::normalize_type`] 判：四类型之外的串（含旧 `fact`）都读成未分类，
+    /// 所以这里的 `Some("fact")` 与 `None` 在语义上同档——区别只在"文件里写了这行"。
+    /// 字段插在元数据那组里而不是结构体末尾：`ParsedFact` 是普通 Rust 结构、不进 C ABI，
+    /// 全仓没有按位置构造它的调用点（`FactEntry` 那位才受"只往末尾追加"的规矩约束）。
+    pub ty: Option<String>,
     /// metadata.updated（无 / 坏 = None）。
     pub updated_at: Option<i64>,
     /// 正文（闭合 `---` 之后，剥一个紧随空行；保留到行粒度）。
@@ -93,7 +99,7 @@ pub(crate) fn yaml_unquote(v: &str) -> String {
 /// 解析单文件（宽松：无 frontmatter = 全文正文；未闭合块按无 frontmatter）。
 /// 身份以 frontmatter `name` 为准（设计 §3——文件名只是键位的净空编码）。
 ///
-/// 顶层认 `name` / `tags` 两行，`metadata:` 块内认 `workspace` / `source` /
+/// 顶层认 `name` / `tags` 两行，`metadata:` 块内认 `workspace` / `source` / `type` /
 /// `updated`——**缩进就是判据**：`strip_prefix("tags: ")` 要求顶格，所以块内万一
 /// 出现 `  tags:` 不会被当成顶层标签读错。
 pub fn parse_fact(text: &str) -> ParsedFact {
@@ -103,6 +109,7 @@ pub fn parse_fact(text: &str) -> ParsedFact {
         let mut workspace = None;
         let mut tags = None;
         let mut source = None;
+        let mut ty = None;
         let mut updated_at = None;
         let mut in_meta = false;
         for (i, line) in lines.iter().enumerate().skip(1) {
@@ -119,6 +126,7 @@ pub fn parse_fact(text: &str) -> ParsedFact {
                     workspace,
                     tags,
                     source,
+                    ty,
                     updated_at,
                     body: rest.join("\n"),
                 };
@@ -134,6 +142,8 @@ pub fn parse_fact(text: &str) -> ParsedFact {
                     workspace = Some(yaml_unquote(v));
                 } else if let Some(v) = line.strip_prefix("  source: ") {
                     source = Some(yaml_unquote(v));
+                } else if let Some(v) = line.strip_prefix("  type: ") {
+                    ty = Some(yaml_unquote(v));
                 } else if let Some(v) = line.strip_prefix("  updated: ") {
                     updated_at = v.trim().parse::<i64>().ok();
                 } else if !line.starts_with(' ') && !line.trim().is_empty() {
@@ -147,6 +157,7 @@ pub fn parse_fact(text: &str) -> ParsedFact {
         workspace: None,
         tags: None,
         source: None,
+        ty: None,
         updated_at: None,
         body: text.to_string(),
     }
@@ -196,6 +207,10 @@ pub fn stash_human_edit(
         tags: "",
         source: "human",
         updated_at: millis / 1000,
+        // 备份的是**人那一版**，type 沿它自己文件里的那行（人没写 / 写了值域外的 ⇒
+        // `normalize_type` 收成未分类）；不许拿 incoming.ty 顶替——那会把模型的分类
+        // 盖到人的版本上。
+        ty: parsed.ty.as_deref().unwrap_or(""),
     };
     atomic_write(&backup_path, &backup.render())?;
     if let Some(ms) = mtime_ms(&backup_path) {

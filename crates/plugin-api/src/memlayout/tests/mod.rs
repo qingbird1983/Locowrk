@@ -10,6 +10,7 @@
 //! 抄的本子 = `render()` 去掉那一行，不是凭想象。
 
 mod index_budget;
+mod kind;
 mod layout;
 mod read_back;
 mod render_parse;
@@ -27,6 +28,10 @@ pub(crate) use paths::{GLOBAL_DIR, enabled_from};
 
 /// 一条最小事实（`tags` 与 `source` 走默认，要变的字段由用例自己改）。
 /// updated_at 钉死一个常数：索引按 mtime 排序的分支要靠它保持稳定。
+///
+/// `ty` 走**未分类**（空串）：那正是四类型落地之前每个文件的形状，
+/// 所以 `render_parse` / `write_delete` 那些既有断言（含手抄的旧 frontmatter 本子）
+/// 一字不改仍然绿——这条担保由 `kind.rs::an_entry_without_a_type_renders_the_old_bytes` 直说。
 pub(super) fn entry<'a>(ws: &'a str, key: &'a str, value: &'a str) -> FactEntry<'a> {
     FactEntry {
         workspace: ws,
@@ -35,6 +40,7 @@ pub(super) fn entry<'a>(ws: &'a str, key: &'a str, value: &'a str) -> FactEntry<
         tags: "",
         source: "explicit",
         updated_at: 1728100000,
+        ty: "",
     }
 }
 
