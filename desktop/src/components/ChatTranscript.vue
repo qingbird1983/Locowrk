@@ -16,6 +16,7 @@ import { useChatStore, type SystemItem } from "../stores/chat";
 import { useShellStore } from "../stores/shell";
 import { useWorkPanelStore } from "../stores/work-panel";
 import { clip } from "../lib/format";
+import { resetRowFolds } from "../lib/chat/fold-state";
 import { Icon } from "../lib/icons";
 import HoverTip from "./settings/HoverTip.vue";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
@@ -101,6 +102,8 @@ watch(
   () => chat.sessionId,
   () => {
     following.value = true;
+    // 层 3 展开记忆只在会话内有效（设计稿 §8，台账 AF-12）：换会话从零开始
+    resetRowFolds();
     void scrollToBottom();
   },
 );

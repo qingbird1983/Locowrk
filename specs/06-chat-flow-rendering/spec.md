@@ -66,15 +66,15 @@
 | AF-04 | 状态词六态只落地三态：`chat.tool.state.*` 的 waiting/running/done/failed/rejected/stopped，现役只用到 等待审批 / 执行中 / 执行失败 | `ToolRow.vue` 的 `statusWord`；设计稿 §4.2 | 相位与状态位 | ◐ |
 | AF-05 | 思考行两套形态：实时轮给时长（`思考 · 12 秒`），重放轮给首句摘要 | 落盘投影不带时间戳（`desktop/src-tauri/src/events.rs:221` 只有 `session_id`/`text`），口径写在 `stores/chat/types.ts:74-75`。**两套是刻意的**，要在标准里写明，别再当 bug 修 | 相位与状态位 | ✅ 口径已定 |
 | AF-06 | 过程组头（`TurnProcess.vue`）自一套渲染：裸工具 id 已修，但段序/几何/状态位与工具行不同源 | `TurnProcess.vue` 的 `minimalText = clip(props.names.join(" + "), 32)`；`.cv-head` 原写死 `gap: 6px` / `font-size: 13px` / 三角 `margin-left: auto` | 行壳几何 | ✅ 几何与段序已同源：`gap` 走 `--lw-gap-6`、`font-size` 走 `--lw-fs-ui-caption`、三角紧跟末段；真实窗口实测组头左缘 456 = `.prow` 左缘 456。组头 meta 的构成（时长 + N 个工具）另见 AF-14 |
-| AF-07 | `edit_replace` 的 diff 卡行号恒空 | 插件 output 只有 `additions`/`deletions`/`byte_range`（`plugins-src/tool-edit/src/replace.rs:110-121`），没有行号 ⇒ 宁缺勿假 | 展开体形态 | ⬜ 待裁：接受空格 vs 后端补行号 |
+| AF-07 | `edit_replace` 的 diff 卡行号恒空 | 插件 output 只有 `additions`/`deletions`/`byte_range`（`plugins-src/tool-edit/src/replace.rs:110-121`），没有行号 ⇒ 宁缺勿假 | 展开体形态 | ◐ 已裁：**列在、号空**（不编造行号）。要真行号得先让插件把行号写进载荷——属后端改动，归批 E 与接线一起做 |
 | AF-08 | 折叠行 ±N 只能在 v2.204 之后的会话里出数 | `additions`/`deletions` 2026-10-14（`02d44cf`）才进插件载荷；更早日志没有 ⇒ 不显示是对的 | 身份数据 | ✅ 口径已定 |
 | AF-09 | 滚动抖动未验：设计稿 §9.1 认定主因是禁掉原生锚定 | `ChatTranscript.vue:191` 的 `overflow-anchor: none` | 滚动与跟随 | ⬜ 要一次真实流式轮才有证据 |
 | AF-10 | 状态段自带 `justify-content: flex-end`，与「所有段左靠」相冲 | `ProcessRow.vue:139-148` | 行壳几何 | ✅ 已删该声明（`ProcessRow.vue`），与 AF-01 同一条规则 |
 | AF-11 | 回合产出物行（`N files changed · +A −D`）未做 | 设计稿 §6；`file_changes` 事件已有（挂用户行） | 行壳几何 | ⬜ |
-| AF-12 | 三层折叠的层 3（单行展开体按 `item.id` 记忆）未做 | 设计稿 §8；现役只有 `everExpanded` 懒挂载 | 折叠与状态记忆 | ⬜ |
-| AF-13 | 展开体收起态安全三条（`overflow:hidden` / `pointer-events:none` / 高度 0）未按新形态核 | 设计稿 §8.3，是 v4.17「透明点击盾」的根因修复 | 折叠与状态记忆 | ⬜ |
+| AF-12 | 三层折叠的层 3（单行展开体按 `item.id` 记忆）未做 | 设计稿 §8；现役只有 `everExpanded` 懒挂载 | 折叠与状态记忆 | ✅ 记忆搬到 `desktop/src/lib/chat/fold-state.ts`（模块级 `reactive(Map)`：键在表里 = 挂载过、值 = 展开着），`ToolRow.vue` 的 `expanded`/`everExpanded` 改成读它，`ChatTranscript.vue` 在 `watch(chat.sessionId)` 里 `resetRowFolds()` 清空。钉住用例 `desktop/tests/tool-row-fold.spec.ts`（换组件实例后仍展开）。思考行的展开体不做记忆：它没有懒挂载（`v-show` 常挂）且缺省收起就是设计缺省 |
+| AF-13 | 展开体收起态安全三条（`overflow:hidden` / `pointer-events:none` / 高度 0）未按新形态核 | 设计稿 §8.3，是 v4.17「透明点击盾」的根因修复 | 折叠与状态记忆 | ✅ 核过：两条展开体都用 `v-show` ⇒ 收起即 `display:none`，三条天然成立。真实窗口实测收起态 `.tool__sub`：`display: none` · 高度 `0` · `checkVisibility() === false`（不参与命中测试），展开态 `display: flex` · 高度 `72` |
 | AF-14 | 组头计时行 `已工作 N 分 N 秒` 与 `✦ 已完成` 分两行显示 | 2026-10-18 真实窗口读数 | 行壳几何 | ⬜ 待裁：是否并一行 |
-| AF-15 | 摘要截断口径按工具逐个写死（shell 40 / fetch 40 / subagent 24 / grep 24 / 路径 32） | `desktop/src/lib/tool-detail/describe.ts` | 摘要文本 | ⬜ |
+| AF-15 | 摘要截断口径按工具逐个写死（shell 40 / fetch 40 / subagent 24 / grep 24 / 路径 32） | `desktop/src/lib/tool-detail/describe.ts` | 摘要文本 | ✅ 收成一处：`describe.ts` 只留 `export const SUMMARY_CLIP = 40` 一道**病态长值兜底**，真正的截断交给可用宽度（`.tool__desc` 上 `overflow:hidden` + `white-space:nowrap` + `text-overflow:ellipsis`）。真实窗口实测：注入 250 字符文件名后 `scrollWidth 1711 > clientWidth 785`（出省略号），而行宽仍 `867`、三角右缘 `1320 ≤ 行右缘 1323`（行没被撑爆） |
 | AF-16 | 语言徽章：按扩展名逐级回退到素材图标，彩色 + 专属字形 | `desktop/src/lib/file-icons.ts`；用户 2026-10-18 裁定，推翻设计稿 §2.2 的「不画各语言 logo」 | 身份数据 | ✅ |
 | AF-17 | **同一个「展开体」并存多套外壳与底色**：思考行 = 一个 `--lw-bg-inset` 灰底圆角框包住全文；工具行的属性行 = 无底裸排；终端块 = 又一层 `--lw-bg-inset`；代码块 = 自带深底。两条路径的内容起点 x 也差约 6px（同窗口实测：思考框 x≈622、工具属性行 x≈628） | `ThinkingRow.vue:103-109`（`.thinking__body` 自己带底/圆角/内边距）vs `ToolRow.vue` 的 `.tool__sub`（只有 `border-left` 发丝线、无底）＋ `ToolDetailView.vue:331-334`（`.tdetail__term` 再一层 `background: var(--lw-bg-inset)`）与 `.tdetail__code`。用户 2026-10-18 目检：「思考 和 读取 同时展开…属于同一属性 同一状态 但你却做出了 2 种展示样式」 | 展开体外壳 | ✅ 已立唯一落点 `style.css` 的 `.lw-expand`（`margin-left: calc(14px/2)` + `padding-left: calc(14px/2 + gap-6 - 1px)` + `border-left: 1px var(--lw-line-subtle)`，**无底无圆角**），思考行与工具行都挂它；真实窗口实测两条路径的 `getBoundingClientRect().left` 同为 `557.5`、`padding-left` 同为 `12px`、`background` 同为透明。底层 `--lw-bg-inset` 只留给「井」（代码/终端/diff） |
 
@@ -171,6 +171,10 @@ AF-03 空段（已修，回归确认）→ AF-14 组头两行（待裁）→ AF-
 **批 C 展开体清账**：**AF-17 外壳统一优先**——两条路径共用同一个底/圆角/内边距/起点 x，内部形态不再各带一层底；
 这一条改完，「思考」与「读取」展开后必然同形（现在是一个灰框 vs 一串裸行）→ AF-02 属性行取宽口径 →
 AF-15 截断口径收成一处 → AF-07 行号裁定 → AF-12 层 3 折叠 → AF-13 收起态安全三条。
+**状态**：AF-17 / AF-02 / AF-15 / AF-12 / AF-13 已清（`98d000b` + 本刀）；AF-07 裁定为
+「列在、号空」——插件载荷里没有行号（`plugins-src/tool-edit/src/replace.rs:110-121`
+只回 `path/bytes/edits/additions/deletions/match_type/byte_range/existed/backup/revision`），
+要补行号得先改插件载荷（另刀，归批 E 一并接线）；宁缺勿假，先留空列。
 
 **批 D 状态与相位**：AF-04 六态状态词成对（中英）→ 失败唯一高亮复核 → AF-05 两套思考形态写进标准。
 
@@ -188,9 +192,9 @@ AF-15 残留复核 → `make check` 全绿 → 标准与 roadmap 指针同步。
 - [x] 批 0 = C3 展开体形态库（提交 `7f9c221`）
 - [x] 批 0 = C4 滚动两档 + 思考行收起 + `bulb` 字形（提交 `dfcfb49`）
 - [x] 批 0 附带：语言徽章改听矩阵 `badge` 字段（提交 `575a0e7`）、属性并块与行壳空段（`862db71`）
-- [ ] 批 A 统一模型落标准
-- [ ] 批 B 行壳几何清账
-- [ ] 批 C 展开体清账
+- [x] 批 A 统一模型落标准（提交 `463bc0d`）
+- [x] 批 B 行壳几何清账（提交 `463bc0d`）
+- [x] 批 C 展开体清账（`98d000b` + 本刀：AF-17/02/15/12/13 已清，AF-07 裁定为列在号空）
 - [ ] 批 D 状态与相位
 - [ ] 批 E 接线做全（依赖 roadmap 第 15 行那个阶段）
 - [ ] 批 F 滚动与收口 + 机器判据

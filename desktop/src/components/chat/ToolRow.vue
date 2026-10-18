@@ -17,6 +17,7 @@ import FileIcon from "./FileIcon.vue";
 import ToolDetailView from "./ToolDetailView.vue";
 import { toolDiffStats, toolImageAssets } from "../../lib/tool-summary";
 import { toolView } from "../../lib/chat/render-matrix";
+import { isRowExpanded, isRowMounted, toggleRow } from "../../lib/chat/fold-state";
 import { toolDescribe } from "../../lib/tool-detail";
 import { assetRead, assetSaveAs } from "../../lib/api";
 import { useToastStore } from "../../stores/toast";
@@ -72,12 +73,13 @@ async function saveAsset(a: AssetRefDto) {
   const dest = await assetSaveAs(a.id, a.mime, a.name);
   if (dest) toast.push("ok", t("mm.savedAs", { path: dest }));
 }
-/** 明细恒默认收起（v4.20：设置开关只作用过程组，明细不再接开关）。 */
-const expanded = ref(false);
-/** 明细懒挂载（v-if+v-show 组合）：多数步骤从不展开，不为它们在挂载期
- * 跑 marked/DOMPurify、建整棵隐藏大 DOM（步数多的轮次流式/重放/展开
- * 都背着这些隐藏子树卡）；首次展开一次性渲染，此后保 DOM 秒开。 */
-const everExpanded = ref(false);
+/** 明细恒默认收起（v4.20：设置开关只作用过程组，明细不再接开关）。
+ * 展开记忆活在 `lib/chat/fold-state.ts`（台账 AF-12）：行是 `v-for` 出来的，组件内
+ * `ref` 会被重投影/回收清掉，记忆必须按 `item.id` 住在组件外。
+ * 懒挂载语义不变（挂载过才保 DOM）：多数步骤从不展开，不为它们在挂载期跑
+ * marked/DOMPurify、建整棵隐藏大 DOM；首次展开一次性渲染，此后保 DOM 秒开。 */
+const expanded = computed(() => isRowExpanded(props.item.id));
+const everExpanded = computed(() => isRowMounted(props.item.id));
 
 const view = computed(() => toolView(props.item.tool));
 const typeLabel = computed(() => t(`tool.type.${view.value.verb}`));
@@ -124,8 +126,7 @@ const reviewItem = computed(() => {
 });
 
 function onToggle() {
-  expanded.value = !expanded.value;
-  if (expanded.value) everExpanded.value = true;
+  toggleRow(props.item.id);
 }
 </script>
 
@@ -224,6 +225,14 @@ function onToggle() {
 /* 语言图标与文件名的间距（图标是行内元素，吃不到 flex gap） */
 .tool__desc :deep(.ficon) {
   margin-right: var(--lw-gap-4);
+}
+/* 截断由**实际可用宽度**决定（台账 AF-15）：`describe.ts` 只留一道病态长值的兜底
+ * 上限，不再按工具逐个写死 40/32/24——段位多宽就显多宽，超了这里出省略号。 */
+.tool__desc {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .tool__diff {
   display: inline-flex;
