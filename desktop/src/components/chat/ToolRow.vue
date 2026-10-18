@@ -82,10 +82,14 @@ const everExpanded = ref(false);
 const view = computed(() => toolView(props.item.tool));
 const typeLabel = computed(() => t(`tool.type.${view.value.verb}`));
 const desc = computed(() => toolDescribe(props.item.tool, props.item.args));
-/** 行内语言图标认的那个文件（工具 args 里的 path/file/key；取不到不渲染图标）。 */
-const filePath = computed(() => {
+/** 行内语言徽章认的那个文件：**只在这个身份的矩阵登记 `badge: "file"` 时**才取路径。
+ *  记忆族的 `key` 是记忆树路径、`fs_list` 的 path 是目录，都不是文件——早先无条件
+ *  取 `args.key` 会把记忆键也挂上文件徽章（矩阵的 `badge` 字段曾是死的，
+ *  见设计稿 §2.2「按身份挂徽章」）。 */
+const badgePath = computed(() => {
+  if (view.value.badge !== "file") return "";
   const a = props.item.args as Record<string, unknown> | null;
-  const p = a?.path ?? a?.file ?? a?.key;
+  const p = a?.path ?? a?.file;
   return typeof p === "string" ? p : "";
 });
 
@@ -137,7 +141,7 @@ function onToggle() {
     >
       <template #desc>
         <span class="tool__desc">
-          <FileIcon v-if="filePath" :path="filePath" />{{ desc }}
+          <FileIcon v-if="badgePath" :path="badgePath" />{{ desc }}
         </span>
         <span v-if="hasDiff" class="tool__diff">
           <template v-if="diff.added !== undefined || diff.removed !== undefined">
