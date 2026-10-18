@@ -22,7 +22,6 @@ SUGGEST=400
 
 # 名单 = 已按三问判定为「高内聚、暂不拆」的文件。一行一个，路径相对仓库根。
 OVERLIST="
-desktop/src-tauri/src/memory.rs
 desktop/src/components/chat/Composer.vue
 desktop/src/lib/api.ts
 desktop/src/components/settings/model/ProviderSetupDialog.vue

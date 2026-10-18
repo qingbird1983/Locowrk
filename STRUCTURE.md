@@ -67,7 +67,7 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   │   ├── approval/ permission_mode/ permission_rules/ privacy/ autodisable.rs
 │   │   │                             #         审批与决策表（approval/decide.rs：固定七步的裁决序；approval/mod.rs：问人、挂起等待、豁免、守夜超时）· 四档权限 · 粘性授权规则 · 底线 · 自动禁用
 │   │   ├── memory/ memory.rs memory_learn/ memory_files/ memory_index/ memory_reconcile/ memory_tree_reconcile/
-│   │   │                             #         宿主侧记忆族 · 学习列 · 文件化 · 索引 · 两条对账（memory.rs 与插件那侧同源）
+│   │   │                             #         宿主侧记忆族 · 学习列 · 文件化 · 索引 · 两条对账（memory.rs 只留 mod + pub use，七个面在 memory/ · 与插件那侧同源）
 │   │   ├── settings/ state/ workspace.rs data_root.rs plugins_root.rs timeutil.rs
 │   │   │                             #         设置页分区 · 全局状态 · 工作区解析 · 数据根 %USERPROFILE%\.Locowrk · 插件根 · 时间口径
 │   │   ├── scheduler/ subagent_verify/ sub_transcript/ idle/ ask.rs stop.rs

@@ -629,7 +629,7 @@
 
 | 文件（现行数） | ①只管一件事 | ③改它常牵动无关部分 | 判 | 依据与切法（一句） |
 | --- | --- | --- | --- | --- |
-| `src-tauri/src/memory.rs`（916） | 否：5 簇 | 是：`KEY_MAX`/`VALUE_MAX` 三段校验**逐字重复**（304/365/475），upsert SQL 两份（374/482） | 拆 | `memory/{admin,reconcile,inject,source}.rs`；T23 之后建表串搬到哪都跟得到，"整侧只许一处定义"由闸钉着 |
+| `src-tauri/src/memory.rs`（916 → 48） | 否：5 簇 | 是：`KEY_MAX`/`VALUE_MAX` 三段校验**逐字重复**（304/365/475），upsert SQL 两份（374/482） | 拆 ✅T33 | 已沉 `memory/{shapes,store,crud,reconcile,recall,schema,source}.rs` 七片（判定时写的是四片 `{admin,reconcile,inject,source}`：一片要装四件事 = 违 ①，落地按面开七片，`admin`→`crud`、`inject`→`recall`+`source`）；建表串进 `shapes`、迁移进 `schema` ⇒ **T23 那道"整根恰 1 处"的闸第一次真起作用**，出处读数自己跟着搬、判据一行没改；14 处 `pub(super)` + 6 行 impl 外壳全部枚举在 spec 里；那两组重复本刀没并，新登 **T34** |
 | `src/lib/api.ts`（814） | 否：10 个后端子域 + 一张通道表，域间零共享符号 | 是：加一个 `ChatUpdate` 字段要与两处探测/流式走同一 diff | 拆 | 域包装下到 `lib/api/*.ts` 再 `export *`；通道表在 `lib` 整根里**恰好 1 处**即可（T23 起跟定位，不必钉在 api.ts） |
 | `components/chat/Composer.vue`（835） | 否：7 簇（模型 chip / 推理档 / 斜杠面板 / 附件 / 输入与发送键状态机 / 坞卡贴合 / 坞高上报） | 是：附件条高动一次 ⇒ `App.vue` 的 composerH 与转录回底钮位跟着算 | 拆 | `ComposerAttachments.vue` + `ModelChip.vue`；**Esc 让位链与发送键必须留本文件**（SS9b 判的就是"只许 1 个出处"） |
 | `settings/model/ProviderSetupDialog.vue`（650） | 否：4 簇，其中自定义请求头编辑器 ≈117 行、自带三态四操作 | 是：`maybeAdoptSweep` 写 baseUrl → watch 再探测 → 喂 ModelPanes | 拆 | `HeaderEditor.vue`（≈140，v-model 整表）；落值那条"整表替换 + 空键跳过"只许一处实现 |
@@ -858,9 +858,62 @@
         新片是 `client` 的**子**模块，`super` = `llm::client` 而不是 `llm` ⇒ 外部件一律 `crate::` 锚定
       · 跨平台：纯结构面，不取 WSL 证据（ADR-0005 口径）
 
-· 拆的顺序（原本按"动刀前必须先解哪道锁"排；**T23 已把那些锁解掉** ⇒ 现在只按风险与体量排）：
+- [x] **T33** 拆 `src-tauri/src/memory.rs`（916 → 48 行只留声明）⇒ 同名子目录加七片（2026-10-18 第二批第一刀）
+      · 七片 = `shapes`(58) 三个上限常量与行/表形状 · `store`(208) 结构与装配 + 开库、行装配 ·
+        `crud`(186) 管理页五条读写 · `reconcile`(110) 首启导出与对账直写 · `recall`(115) 全局层召回与埋点 ·
+        `schema`(112) 旧库迁移两条 · `source`(215) `MemorySource` 实现与组装点便利函数。
+        最大一片 215 行 ⇒ 七片全在 400 以下，本件从名单上**整行删掉**（不是换个路径继续挂着）
+      · ★ **`impl MemoryStore` 也分家**（分进 4 个文件）：留成 517 行一整块 = 加一条管理页功能要顺手
+        读懂召回埋点，那是三问 ③ 说的牵动；Rust 允许同一类型多个 impl 块，分家不破任何调用点。
+        机械后果 = **产物里多出 6 行语法外壳**：原文那对花括号只归两处（开在 `store` 第 105 行、合在
+        `recall` 第 617 行），于是 `store` 补一条合、`crud`/`reconcile` 各补一对、`recall` 补一条开。
+        外壳必须在 spec 的 `wrap` 里逐片声明，对账**先剥掉声明过的壳**再比连续（T3）与守恒（T4）⇒
+        "多写的行只有这 6 行、且只补在声明的那几片"是被判出来的，不是被相信的。判据为此长出
+        X4「外壳多补一行（没声明）」与 X5「声明了外壳却没写」两发定向变异
+      · 14 处可见性抬升一律 `pub(super)`（`shapes` 两个常量 · `store` 四个字段 + 四个方法 ·
+        `recall` 两个入口 · `schema` 两个迁移函数），逐条枚举在 spec 的 `edits` 里，判据吃"施加之后
+        的基线"。`pub(super)` = 只在 `memory` 子树内可见 ⇒ **模块外的公开面一字未变**：
+        `crate::memory::{MemoryStore, MemoryRow, memory_source, KEY_MAX, VALUE_MAX, FactLine}` 的
+        消费点（`organize/` · `state/` · `instruction_files.rs` · `recall_log/tests/` · `tests/pressure_wiring.rs`）
+        零改动，靠装配文件那三条 glob 带出；`LIST_MAX`/`CREATE_TABLE` 从私有抬到 `pub(super)` 也出不了模块
+      · ★ **T23 那道闸第一次真起作用**：`check-schema-parity.mjs` 十档读数与拆前**逐字相同**
+        （`same / all / 0 / 1 / 1 / same / 0 / 1/1 / ok/ok / clean/clean`），而两条"出处"读数自己跟着搬了：
+        建表串 `memory.rs` → `memory/shapes.rs`、迁移函数 `memory.rs` → `memory/schema.rs`，
+        判据一行没改、闸没瞎 —— 这正是 T23 把闸门从"钉死两个文件"改成"整根恰 1 处"要买的东西
+      · 磁盘变异两发，都带"还原后仍定位到搬入的新文件"这条期望（`--expect` 吃闸的出处那行）：
+        改 `shapes.rs` 的 `const CREATE` ⇒ `SCHEMA_PARITY_FAIL（锚取不到 = 闸瞎了）` rc=1；
+        改 `schema.rs` 的 `pub(super) fn ensure_learning` ⇒ 同 rc=1；两发还原 sha 逐字节复核 + rc=0 ⇒
+        `SPLIT_MUT_ALL_CAUGHT`
+      · ✗ 变异打空登记（自造判据的第 12 种说谎形状）：第二发最初锚的是 `fn ensure_learning`，命中的是
+        本片**头注里那句**"锚从 \`fn ensure_learning_schema(\` 起算" ⇒ 改的是注释，而闸吃 `code()` 剥注释
+        ⇒ 定义纹丝不动、闸照绿 = 打空。锚必须锚到**定义行本身**（连 `pub(super) ` 前缀一起锚）；
+        判据没错，是这发对照自己没使上劲 —— 打空时先怀疑锚，别急着说闸瞎
+      · 判据本身被这刀改了三个地方，改完全部回归：`split-main.mjs` 的 `assembly.extra` 允许单行
+        `#[cfg(...)]`（`memory.rs` 的 `#[cfg(test)] mod tests;` 必须留在装配文件，上一版把它当实现行判红）·
+        `split-verify.mjs` 的 X1 从"钉死 `NAMES[0]`"改成"挑正文含 `fn`、没声明外壳、本来就有 `pub` 顶项的片"
+        （T33 第一片是纯常量文件，旧锚打空）· T3 增加"外壳没声明/声明了没写"这条读数。
+        回跑 T31 / T32 两把已提交产物 = `SPLIT_VERIFY_OK` + `SPLIT_SELFTEST_ALL_CAUGHT` ⇒ 上一刀的判据
+        没被这一刀弄弱
+      · 等价判据：`split-verify` T1–T7 全绿（848 非空行逐种守恒 · 逐字节同序 · 装配文件 48 行与重算
+        逐字节相同）· `--selftest` 全中（T1–T7 七档 + X1/X2/X3/X4/X5 五发定向）
+      · 编译与测试：`cargo clippy --all-targets -- -D warnings` rc=0（片头 import 一次写对，零 `unused_imports`）·
+        `cargo fmt --check` rc=0 · `cargo test` 584 passed / 0 failed（`memory/tests/` 四簇 777 行
+        **一字未改**仍然绿 = "只搬不改"的行为证据）· `make check` 全绿 ·
+        `check_length` 超限 16→15（名单删一行走**与 HEAD 的行集差**：只少一行、多出为空）
+      · 判定表点的两组重复（`KEY_MAX`/`VALUE_MAX` 校验三份 · memories upsert 两份）本刀**一组都没并**
+        ⇒ 登记 **T34**
+      · 跨平台：纯 Rust 结构面，不取 WSL 证据（ADR-0005 口径）
+- [ ] **T34** `memory*` 里两组「同一事实多个出处」并成一处（T33 判定表点的，那把刀刻意不夹带）
+      · 实测出处：`key`/`value` 上限校验这一句三份（`memory/crud.rs::update_value`、`memory/crud.rs::write`、
+        `memory/reconcile.rs::reconcile_upsert`）；memories 的 upsert SQL 两份（`crud.rs::write` 与
+        `reconcile.rs::reconcile_upsert`）—— SET 列表**不许含学习列**这条由 `check-schema-parity.mjs`
+        E1 按"整侧每一份都干净"判，抄两份就是它盯的风险面
+      · 插件侧 `plugins-src/memory-sqlite/src/store.rs` 另有同形抄写（判定表登记的 276/522 两份），
+        两侧能不能并、并到哪一侧，要等第二批第二件（拆 `store.rs`）把形状摆好之后再判 ⇒ 顺序在后
+      · 与拆刀分家：这一刀改的是**内容**。判据 = 既有记忆面用例一字未改仍然绿 + 三条错误文案逐字节相同
+        （不许"顺手统一文案"，那是要单独登记的语义改动）
   第一批 Rust 无锁件 = **清完**（T26 / T27 / T30 / T31 / T32）
-  第二批 Rust 侧 schema 两件 = `memory.rs` → `store.rs`（建表串不必再钉在主文件：定义处"整根恰 1 处"由闸自己盯）
+  第二批 Rust 侧 schema 两件 = `memory.rs` ✅T33 → `store.rs`（建表串不必再钉在主文件：定义处"整根恰 1 处"由闸自己盯 —— T33 实测：搬到 `memory/shapes.rs` 与 `memory/schema.rs` 之后十档读数一字未变）
   第三批 前端 lib = `tool-detail.ts` → `api.ts`（通道表同样不必钉文件名）
   第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`
   一件一刀，每刀按 T22 那刀的规格交：公开面不减 · 消费点不动 · 等价判据（规范化后逐单元比）· 窄变异各红在指定档
@@ -949,6 +1002,7 @@ B 组机器已经钉住了，你复跑那一条命令、对一下读数就行—
 | T7 审批测试 | `cd desktop/src-tauri && cargo test tests_approval` | 全过；若某条挂了，它是**在预算内报失败**而不是把测试进程卡住 |
 | T17 + T19 闸自己 | `make doc && make selftest` | `check-docs: OK` 与 `DOCS_SELFTEST_ALL_CAUGHT`——闸要能为插进去的断链报红，打空就是零证明力 |
 | T5 + T6 热路径 | `cargo test -p kernel-agent -p session-store` | 全过；这两批的判据（少一次取锁 / 两处取数改源）在 `check-single-source.mjs` 的 SS3 与对账用例里 |
+| T33 记忆库搬家后闸还跟得到 | `node scripts/check-schema-parity.mjs` | 出处那行两条宿主路径已是 `desktop/src-tauri/src/memory/shapes.rs`（建表串）与 `…/memory/schema.rs`（迁移函数），十档全绿、末行 `SCHEMA_PARITY_OK`；还写 `memory.rs` = 闸又退回钉死文件的老写法（那正是 T23 拆掉的锁） |
 | 全量收尾 | `make check` | 末行 `▶ check 全绿` |
 
 ### 这两批没有可核对象
