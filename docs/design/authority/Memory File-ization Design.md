@@ -1,130 +1,179 @@
 # Locowrk 记忆文件化设计（Memory File-ization）
 
-> 版本：v1.0 草案（2026-10-05，用户方向口述 → 设计稿，**待用户裁定后生效为规范**）
+> 版本：**v1.1 生效规范**（2026-10-18 升版）。v1.0 是 2026-10-05 的方向草案，长期停在"待用户裁定"，
+> 而 `crates/plugin-api/src/memlayout/mod.rs:1`、`desktop/src-tauri/src/memory_files.rs:1` 与
+> `docs/design/Memory-KV Roadmap.md:9`/`:174` 三处早就按「v1.1」实现与引用 —— **实现先于标准升版**
+> 就是这次漂移的根因；本版把标准补到已被引用的那个版本号上，并按 [`ADR-0007`](../../adr/0007-memory-flat-files-context-llm-compaction-primary.md) 扳正真源方向。
 >
-> **用户方向原话记录（2026-10-05，三条）**： ①「我们的记忆树，记录存盘是要以 .md 格式存进 .Locowrk 的缓存目录的，人可查可读可写。分为全局记忆，只记录用户偏好，全局要求等。项目记忆，分为在缓存目录里建立各项目的 ID 文件夹，然后在里面再分级存储项目记忆。缓存目录里主要存储项目级的记忆。也就是上下文主要要拼装的记忆，连同全局记忆。然后在项目仓库建立 .Locowrk 文件夹。里面记录项目工作过程的记录，与项目的要求等等，这部分记忆主要适应做上下文交接用的。另外会主动要求讲这个 .Locowrk 文件夹加入 git 排除不跟踪的。」 ②「最主要，记忆不如用户提醒才记，是主动记忆。不是被动记忆。」 ③「参考 ZCode 是怎么文件化存储的；WorkBuddy 的记忆文件化存储有参考价值（闭源，网络资料）。」
+> **用户方向原话记录（2026-10-05，三条）**： ①「我们的记忆树，记录存盘是要以 .md 格式存进 .Locowrk 的缓存目录的，人可查可读可写。分为全局记忆，只记录用户偏好，全局要求等。项目记忆，分为在缓存目录里建立各项目的 ID 文件夹，然后在里面再分级存储项目记忆。缓存目录里主要存储项目级的记忆。也就是上下文主要拼装的记忆，连同全局记忆。然后在项目仓库建立 .Locowrk 文件夹。里面记录项目工作过程的记录，与项目的要求等等，这部分记忆主要适应做上下文交接用的。另外会主动要求讲这个 .Locowrk 文件夹加入 git 排除不跟踪的。」 ②「最主要，记忆不如用户提醒才记，是主动记忆。不是被动记忆。」 ③「参考 ZCode 是怎么文件化存储的；WorkBuddy 的记忆文件化存储有参考价值（闭源，网络资料）。」
+>
+> **v1.1 勘误表（改了什么，逐条可查）**
+>
+> | 节 | v1.0 草案说的 | v1.1 生效的 | 依据 |
+> |---|---|---|---|
+> | §8 决策点 1 | 推荐**双层双写**（md 权威编辑面 + sqlite 机器索引），"全迁 md、sqlite 退役"列为不建议本阶段的备选 | **采纳那条备选**：md = 唯一真源，无第二存储；sqlite 存量一次性导出后原地保留不读不删 | ADR-0007 第 1 条 + 被否决表（双真源正是"记忆始终是混乱的"根因） |
+> | §1 原则 1/3 | "reconcile 进机器索引、冲突以文件为准" + "双层存储" | reconcile 这个概念**整体消失**（只有一个真源就无处对账）；§3 那张"写索引 ✅"表作废 | ADR-0007 第 1/6 条 |
+> | §2.1 frontmatter | `metadata.type: fact\|preference\|decision\|handoff` | 四类型改 `user\|feedback\|project\|reference`（Qoder/agent-sdk 硬编码枚举），`tags` 降级为自由标签；`feedback`/`project` 正文带 `Why:` 与 `How to apply:` | ADR-0007 第 2 条 |
+> | §2.1 布局 | 全局索引 `MEMORY.md` 画在根上 | 索引坐在 `global/MEMORY.md`（与 `scope_dirs`(:264-275) 实况一致），未归属键位另有 `_unaffiliated/` | 2026-10-18 现状取证，决策人裁定"布局照现状" |
+> | §2.1 索引尺寸 | 只说"一文件一行" | **钳落在写侧**：`refresh_index` 出 `MEMORY.md` 时截到 200 行 / 25_000 字符并在末行写 WARNING；注入侧不再现算 | 人打开看到的就该是模型看到的那份（同 §2.2 替换语义一条物理定律） |
+> | §5 不变量 | "Memory-Inject / memory-sqlite 插件契约零变化——召回仍走索引" | 作废：召回改读 md 与索引，插件契约要改（工具名与参数面不动，实现改道） | ADR-0007 第 5/16 条 |
+> | §8 决策点 3/4 | handoff 收束更新、autoExtract 缺省开 | 这两条随 organize 管线退役一并作废（记录员整面下线，交接层形态改两文档制） | ADR-0007 第 16/17 条 |
+> | §4 | 主动记忆 = 整理收束顺带产事实卡 | 目标形态 = 回合收束后**增量**抽取（只取游标之后的新消息 + 前次产出快照去重）；**不在 S1 范围**，另立批 | ADR-0007 第 5 条；范围界定见 [`specs/05`](../../../specs/05-memory-data-plane-s1/spec.md) 非目标 |
 
 ---
 
-## 0\. 定位与裁定关系
+## 0. 定位与裁定关系
 
-本设计**修订**《Memory Tree Design v2》§11.3 的一条裁定——原裁定「不发明第二套声明式记忆存储，[USER.md/PROJECT.md](http://USER.md/PROJECT.md) 概念映射到 memory-sqlite 键位」修订为：**memory-sqlite 保留为机器索引层，.md 文件为人类层与权威编辑面**（WorkBuddy 同款形态：官方本体 workbuddy.db SQLite + 社区生态 `.workbuddy/memory/` Markdown 层并存）。
+本设计取代《Memory Tree Design v2》§11.3「不发明第二套声明式记忆存储，`USER.md`/`PROJECT.md`
+概念映射到 memory-sqlite 键位」那条裁定，并把 v1.0 推荐的"memory-sqlite 保留为机器索引层"
+**再往回扳一步**：md 文件既是人类层也是**唯一真源**，机器索引层不再存在。记忆树与整理管线
+（organize）整体退役，交接层 `<repo>/.Locowrk/` 改两文档制（见 §2.2）——完整取舍与被否决的
+方案表在 `docs/adr/0007`，本文不复制理由。
 
-**与 M 轨（M4 数据 → M5 裁决）正交**：M5 的输入 = 会话日志 `llm_usage`（命中率）+ 树台账（记录员成本/熔断），文件化不写这两处；M5 的动作 = 会话级缺省开关翻转与退役决策，与存储格式无关。唯一交点 = M5「记忆页开放编辑/删除捆」——文件化先落地则该功能直接写 .md，是更好的落点。两轨互不等待。
+**与 M 轨（M4 数据 → M5 裁决）正交**：M5 的输入 = 会话日志 `llm_usage`（命中率）+ 树台账，
+文件化不写这两处；M5 的动作 = 会话级缺省开关翻转与退役决策，与存储格式无关。
 
-## 1\. 设计原则
+## 1. 设计原则
 
-1. **文件即记忆**：人可查、可读、可写；人的编辑是权威（reconcile 进机器索引，冲突以文件为准）。
-2. **原文不动**：会话 `sessions/<id>.jsonl` 仍是唯一事件真相源（append-only）；树仍是指针投影，原文不复制进记忆文件。
-3. **双层存储**（WorkBuddy 同款）：SQLite = 机器索引与查询层（模型工具走这里，快）；.md = 人类层（编辑、交接、git diff 之外的个人记录）。
-4. **主动记忆**：模型主动记录与更新，不等用户提醒；人的角色从「提醒」变「审阅与改写」。
-5. **随仓库走**：交接文件住项目仓库 `.Locowrk/`，自动引导 gitignore；全局与项目缓存记忆住 `\~/.Locowrk/memory/`。
-6. **宁严勿松**：写用户仓库仅限 `.Locowrk/` 目录内；全局记忆文件不进任何项目仓库；删除全局偏好仍走记忆管理页（人的操作，v2.68 纪律延续）。
+1. **文件即记忆，且是唯一的记忆**：人可查、可读、可写；人的编辑就是权威写入，不存在"回写
+   某个索引"这一步。
+2. **原文不动**：会话 `sessions/*.jsonl` 仍是唯一事件真相源（append-only）；记忆文件里只放
+   事实本身，原文靠 event_range 回日志现场切片。
+3. **无第二存储**：不建 sqlite / JSON 投影 / 内存索引中的任何一份作为真源。召回慢就修文件读，
+   不加层——多加一层就多一个说谎的地方（v1.0 那版推荐的双写正是这么坏的）。
+4. **主动记忆**：模型主动记录与更新，不等用户提醒；人的角色是审阅与改写。
+5. **随仓库走**：交接文件住项目仓库 `.Locowrk/`，自动引导 gitignore；全局与项目记忆住
+   `~/.Locowrk/memory/`。
+6. **宁严勿松**：写用户仓库仅限 `.Locowrk/` 目录内；全局记忆文件不进任何项目仓库；
+   删除 / 覆盖数据根任何内容前单独向人确认。
 
-## 2\. 存储布局
+## 2. 存储布局
 
 ### 2.1 缓存目录（上下文拼装的记忆源）
 
 ```
 ~/.Locowrk/memory/
-├── MEMORY.md                     # 全局索引：一文件一行（ZCode 式，每会话注入）
-├── global/
-│   ├── prefers-pnpm.md           # 全局记忆：用户偏好、全局要求（一事实一文件）
-│   └── ...
-└── projects/
-    └── Locowrk-8223ad13/         # 项目 ID 文件夹 = <可读名>-<fnv 短哈希>（ZCode 式 slug+哈希）
-        ├── MEMORY.md             # 项目级索引
-        ├── facts/
-        │   └── *.md              # 项目事实（原 memory-sqlite 项目层的文件化）
-        └── tree.md               # 记忆树目录+摘要（L0/L1 人类层；L2 指针留在 JSON 投影）
+├── global/                       # 全局层 = 键位 workspace 为空
+│   ├── MEMORY.md                 # 全局索引：一文件一行，每会话注入；写侧硬钳 200 行 / 25_000 字符
+│   └── prefers-pnpm.md           # 全局事实：跨项目成立的用户偏好、全局要求（一事实一文件）
+├── projects/
+│   └── Locowrk-8223ad13/         # 项目 ID 文件夹 = <可读名>-<fnv 短哈希>（§8 决策点 2 已兑现）
+│       ├── MEMORY.md             # 项目级索引（坐在项目文件夹根）
+│       ├── facts/
+│       │   └── *.md              # 项目事实
+│       └── tree.md               # 记忆树人类层（随 organize 退役，S4 停写）
+└── _unaffiliated/                # 未归属键位兜底（'' 不是项目，不建进 projects/）
 ```
 
-* 单文件格式（ZCode 式）：frontmatter（`name` / `description` / `metadata.type: fact|preference|decision|handoff`）+ 正文；相关记忆 `\[\[互相链接\]\]`。
-* **分级规则**：全局 = 跨项目成立的偏好与要求（「永远用 pnpm」）；项目 = 只在本项目成立的事实与决定。召回 = 本项目 ∪ 全局（与 v2.68 双层语义一一对应，键位 `(workspace, key)` → `(projects/<id>/, 文件名)`）。
-* 记忆树 **[tree.md](http://tree.md)**：每捆一节——`## b3 · 缓存设计讨论` + 摘要段 + 隐性指针注释（`<!-- range: 37-82, source: recorder -->`）。看原文仍走 event_range 回会话 jsonl 现场切片（原文不进 md）。
+* 单文件格式：frontmatter（`name` / `description` / `metadata{type, source, workspace, updated}`）
+  + 正文。`metadata.type` ∈ `user | feedback | project | reference`（旧文件读回 `fact` = 未分类，
+  不重写存量）。`feedback` 与 `project` 正文带 `Why:` 与 `How to apply:` ——知道为什么才判得了边界情况。
+* **分级规则**：`user` / `feedback` 缺省落全局，`project` / `reference` 缺省落项目，显式
+  `scope` 可覆盖；映射由 `plugin-api::memlayout` 的一个纯函数算，模型只报 type、不自己算目录
+  （记忆工具有宿主与插件两条通路，放任何一侧都算不出另一侧的落点）。
+* 相对日期一律转绝对（"下周三"进文件必须是某个 `YYYY-MM-DD`）。
+* **排除清单**（写进工具说明与抽取提示词，不配进记忆的）：代码可推导的（模式 / 约定 / 架构 /
+  路径 / 项目结构）、git 查得到的（历史 / 谁改了什么）、`AGENTS.md` 与 `.Locowrk/` 已写的、
+  临时任务状态（改了哪些文件、分支与 commit 态、测试过没过、重试）。用户明说"记住"这类内容，
+  先反问"哪里令人意外"——那才是值得记的部分。
 
-### 2.2 项目仓库内（上下文交接层）
+### 2.2 项目仓库内（上下文交接层，两文档制）
 
 ```
 <repo>/.Locowrk/
-├── handoff.md                    # 当前状态摘要（模型收束后主动更新；交接主入口：进行到哪/下一步）
-├── requirements.md               # 项目要求（用户为主编辑；模型只读注入）
-└── notes/                        # 工作过程记录（按主题分级，吸收 workdsh .agents/notes 形态）
-    ├── 2026-10-05-记忆文件化.md    #   `<日期>-<主题>.md`，固定骨架：状态 / 问题 / 决定
-    └── ...
+├── MEMORY.md                     # 现状 = 交接主入口：按主题分节、原地替换、每条带日期戳、硬顶 200 行 / 10KB
+├── journal/<YYYY-MM-DD>.md       # 流水：一天一文件，当天可写、昨日封卷不可变
+└── requirements.md               # 项目要求（用户为主编辑；模型只读）
 ```
 
-* notes/ 文件骨架（借 workdsh `.agents/notes` 实践——它是「项目仓库内 AI 协作过程记录」的成熟样本）：标题 + `Status: 进行中|已收束` + **问题** + **决定**；模型收束或应要求落一篇，人可读可改。
-* 首次创建时：检查仓库根 `.gitignore`，无则创建，追加一行 `.Locowrk/`（幂等，已有则跳过）——用户要求「主动要求加入 git 排除」。
-* 写入边界（宁严勿松）：模型的仓库写权限**仅限** `.Locowrk/` 目录内；`requirements.md` 模型只读。
-* 注入：归属会话的上下文块新增交接段（`<repo_context>`：handoff 摘要 + requirements 全文；notes/ 按需 expand），与 `workspace_context` 行同族；**M1 预取纪律兼容**——文件 mtime 进预取缓存键，人改文件 = 显式变更自动重算。
+* 旧形态（`handoff.md` 单文件 + `notes/` 按主题）实测会无限膨胀——病根是把"流水"写进"现状文档"：
+  只追加不替换、没有尺寸顶。两文档制的纪律 = **原地替换** + **按天封卷**，超顶逼蒸馏。
+* 首次创建时检查仓库根 `.gitignore`，无则创建、追加一行 `.Locowrk/`（幂等，已有则跳过）。
+* 写入边界（宁严勿松）：模型的仓库写权限仅限 `.Locowrk/` 内；`requirements.md` 模型只读。
+* 注入：`<repo_context>` 带 `MEMORY.md` 正文 + `requirements.md` 提醒行；journal 不注入、按需读。
+  **M1 预取纪律兼容**——文件 mtime 进预取缓存键，人改文件 = 显式变更自动重算。
 
 ### 2.3 不文件化的部分（明确边界）
 
-* 会话原文 `sessions/\*.jsonl`：机器真相源，体积大、append-only，不搬（人的入口是树与导出）。
-* 树的 L2 指针 / 整理台账 / 熔断账本：机器簿记，留 JSON 投影（ContextAssembler 组装读投影**零变化**）。
+* 会话原文 `sessions/*.jsonl`：机器真相源，体积大、append-only，不搬。
+* 熔断账本、整理台账一类机器簿记：留原处，不冒充记忆（organize 退役后大部分消失）。
 * usage / audit：纯机器数据，不动。
 
-## 3\. 读写路径与双向同步
+## 3. 读写路径
 
-| 动作 | 写 .md | 写索引（sqlite/投影） |
-|---|---|---|
-| 模型 memory_write（含主动提取） | ✅ 追加/更新文件 | ✅ 现有路径不变 |
-| 模型 memory_delete（忘记） | ✅ 删文件 + 索引行 | ✅ |
-| 人直接编辑 .md | （编辑本身） | ⭕ reconcile：启动时 + memory_reconcile 命令 + 记忆页打开时——diff 文件 ↔ 索引，以文件为准回写索引 |
-| 人经记忆管理页编辑/删除 | ✅ 同步写文件 | ✅ |
-| 树整理收束（记录员产出 L0/L1） | ✅ 更新 tree.md 对应节 | ✅ 投影 JSON 照写 |
-| 人编辑 tree.md 的标题/摘要 | （编辑本身） | ⭕ reconcile 回写投影（title_edited_by_user 置真，纪律 5 不被覆盖） |
-| 模型更新 handoff.md | ✅ 仅 .Locowrk/ 内 | —（mtime 触发注入缓存键更新） |
+真源只有一份 ⇒ 只有一条写路径：**写文件 + 刷该层索引**，失败就是失败（上抛，不 `warn` 降级）。
 
-**同步纪律**：md 是权威（人对文件的编辑永不静默覆盖）；索引是衍生（可随时由 md + 事件流重建）。冲突场景（人改了 md、模型在旧索引上又写同键）= 保留双方并以 `updated` 时间戳新者为准 + 冲突行标注（宁可见勿丢失）。
+| 动作 | 落盘 |
+|---|---|
+| 模型 `memory_save`（含主动抽取） | 写 `<层>/<stem>.md` + 刷该层 `MEMORY.md`；同键查重提示 |
+| 模型 `memory_delete`（忘记） | 删文件 + 索引行即真忘；管理页删除走 `obsolete/` 软删，清空才算真删（仍要点头） |
+| 人直接编辑 .md | 就是权威写入，无需任何同步动作；下一轮请求生效（mtime 进缓存键） |
+| 人经记忆管理页编辑 / 删除 | 同一批文件操作，不开第二条写路径 |
+| 交接层现状 / 流水更新 | 见 §2.2（原地替换 / 按天封卷） |
 
-## 4\. 主动记忆机制（WorkBuddy 语义 + ZCode 机制）
+冲突保护只剩一种场景值得处理：机器准备覆盖一个**被人改过**的文件。做法沿用现实现
+（`memlayout/sync.rs` 的 `stash_human_edit` + mtime 标记）= 先备份再写，双方都留，宁可见勿丢失。
 
-> **⚠ v2.136 修订（用户裁定，2026-10-09）**：三机制中 ①提取常开（autoExtract）与 ②收束交接更新（handoff 后台改写）**双双退役**——项目记忆由当前工作的**主模型**自己在工作中读/写/改（记忆管理器只负责当前上下文的打包整理，不碰项目记忆），软件不代劳，只在 `<repo_context>` **静态提醒段**给出节点提醒钩子（开场先读 requirements.md + handoff.md；项目状态实质变化时主模型自行更新 handoff.md / 追加 dated notes）。③提示词主动指引保留并按新模型改写（全局走 memory_write scope="global"；结构化项目事实 memory_write + memory_read/search 按需查；项目文件主模型维护）。experiences 向量经历层一并退役（唯一写入方是 autoExtract 的 episode）。项目记忆正文不进流水线（注入面 = 全局记忆 + 提醒段）。本节其余文字按 v1.0 原稿留档。
+## 4. 主动记忆机制
+
+> **v2.136 修订（用户裁定，2026-10-09）**：三机制中 ①提取常开（autoExtract）与 ②收束交接更新
+> （handoff 后台改写）双双退役——项目记忆由当前工作的**主模型**自己在工作中读 / 写 / 改，软件不
+> 代劳，只在 `<repo_context>` 静态提醒段给出节点提醒钩子。③提示词主动指引保留。experiences 向量
+> 经历层一并退役（唯一写入方是 autoExtract 的 episode）。
+
+v1.1 的生效形状：
 
 | 机制 | 说明 | 缺省 |
 |---|---|---|
-| 提取常开 | memory.autoExtract 缺省改开——v2.68 双层隔离（未归属拒绝项目写、全局层只进显式 global）已解除「污染」顾虑；提取落 facts/（项目）与 global/（显式偏好） | 开【待裁定④】 |
-| 收束交接更新 | 归属会话轮次收束后，模型主动更新 <repo>/.Locowrk/handoff.md（进展/下一步），fire-and-forget；未归属会话跳过 | 开【待裁定③】 |
-| 提示词主动指引 | 注入块尾追加主动记忆指引（遇「永远/以后都」类指令主动升格 global；重要决定当场记录不等收束） | 随注入块 |
-| 忘记 | 模型 memory_delete 删文件+索引行；全局层删除仍限记忆管理页（人的操作）；WorkBuddy「过期记忆污染」教训 → 记忆页按 updated 排序暴露陈旧条目 | 沿用 |
+| 工具写入 | `memory_save` / `read` / `search` / `delete` 四枚操作文件；用户明说"记住 / 忘掉"立即执行不排队 | 开 |
+| 回合收束增量抽取 | 按游标只取上次之后的新消息，带前次已产出快照去重，一次性并行写完；"创建零条记忆是正常的"。**不在 S1 范围**（要 LLM 通道，随 S2 之后另立批） | 待立批 |
+| 静态提醒钩子 | 开场读 `requirements.md` + 交接层 `MEMORY.md`；现状实质变化时主模型自行更新（v2.136 裁定沿用） | 开 |
+| 忘记 | 删文件 + 删索引行；验证只看文件系统（文件不在 = 不在）；社区教训"过期记忆污染新任务" ⇒ 管理页按 `updated` 排序暴露陈旧条目 | 沿用 |
 
-## 5\. 与现有机器的对接（不变量）
+## 5. 与现有机器的对接
 
-* **ContextAssembler（M4）组装读投影 JSON 零变化**——[tree.md](http://tree.md) 是编辑面/人读面，不进组装热路径（F2 可选优化：目录文本由 [tree.md](http://tree.md) 生成，语义等价）。
-* **Memory-Inject / memory-sqlite 插件契约零变化**——召回仍走索引；md 层是插件背后双写的新落点。
-* **M1 前缀纪律兼容**——交接段/索引进 system 的部分按会话冻结；md 编辑 = 显式变更（缓存键含 mtime）。
-* **召回键位映射**：sqlite `(workspace, key)` ↔ 文件 `(projects/<id>/facts/, <key>.md)`；全局 `''` ↔ `global/`。迁移 = 首启导出（F1），sqlite 不删（机器索引长存）。
+* **ContextAssembler 组装读投影**：树目录段随树退役移除，注入面改吃索引指针行（`specs/01` C 节）。
+* **记忆工具**：插件 `memory-sqlite` 那 6 枚工具**名字与参数面不动**（提示词与审批面才不会跟着漂），
+  内部实现改道文件；插件本身按 ADR-0007 第 16 条在 S4 退役，搬不搬进宿主单独点头。
+* **M1 前缀纪律兼容**：索引文本按会话冻结；md 编辑 = 显式变更（缓存键含 mtime）。
+* **存量迁移**：首启导出（幂等，已有文件一律不动、人的编辑永不被覆盖），之后 sqlite 不读不删。
 
-## 6\. 迁移阶段（每阶段独立可回退）
+## 6. 施工阶段
 
-| 阶段 | 内容 | 风险 |
-|---|---|---|
-| F1 双写与导出 | 布局落地：memory_write/整理收束双写 .md；首启把存量 sqlite 事实导出 global/ 与 projects/\*/facts/、树 L0/L1 导出 tree.md；组装零变化 | 低（纯增量，删 md 目录零损失） |
-| F2 人的编辑面 | reconcile（人编辑 md 生效）+ 记忆页「打开文件夹」（reveal_in_explorer 现成）+ <repo>/.Locowrk/ 引导（gitignore + handoff/requirements 注入组装） | 中（同步逻辑） |
-| F3 主动记忆 | autoExtract 缺省开 + handoff 收束更新 + 提示词指引 | 低（开关可退） |
+本篇是标准；阶段计划与可测验收在 [`specs/01-memory-context-redesign/spec.md`](../../../specs/01-memory-context-redesign/spec.md)（总表）与 [`specs/05-memory-data-plane-s1/spec.md`](../../../specs/05-memory-data-plane-s1/spec.md)（S1 数据面，三刀）。v1.0 那张 F1/F2/F3 迁移表已被取代：F1 双写、F2 reconcile 都已落地过，正是本刀要扳的存量。
 
-## 7\. 可调项总表（§ 可配置原则）
+## 7. 可调项总表（可配置原则）
 
 | 项 | 缺省 | 层级 |
 |---|---|---|
-| 记忆文件化总开关 | 开（关 = 回纯 sqlite，md 不再读写） | 用户（记忆设置） |
-| autoExtract（主动提取） | 改开【待裁定④】 | 用户（记忆设置） |
-| handoff 收束更新 | 开【待裁定③】 | 用户（记忆设置） |
-| reconcile 时机 | 启动 + 记忆页打开 + 手动命令 | 开发者 |
-| 交接注入（requirements/handoff 段） | 开 | 用户（记忆设置） |
-| 项目文件夹命名 | 可读名-短哈希【待裁定②】 | — |
+| 记忆文件化总开关（`memory.files`） | 开（v1.1 起"关"的语义要重定：md 已是唯一真源，关掉它 = 记忆功能整体不可用，不是"回纯 sqlite"） | 用户（记忆设置） |
+| 全局记忆 / 项目记忆 / 项目交接层三枚行为开关 | 各开各的；关 = 该层不读、不更新、不注入 | 用户（记忆设置） |
+| 索引硬顶 | 200 行 / 25_000 字符（写侧）；交接层 200 行 / 10KB | 开发者 |
+| reconcile 时机 | **整项作废**（无第二存储可 reconcile） | — |
+| 交接注入（`MEMORY.md` / `requirements.md` 段） | 开 | 用户（记忆设置） |
+| 项目文件夹命名 | `<可读名>-<fnv 短哈希>`（已兑现） | — |
 
-## 8\. 开放决策点（待用户裁定）
+## 8. 裁定状态
 
-1. **事实记忆存储形态**：推荐**双层双写**（md 权威编辑面 + sqlite 机器索引，WorkBuddy/ZCode 生态同款）——memory_read/search/undo 插件生态不动、风险小。备选 = 全迁 md、sqlite 退役（更纯粹，但召回/undo/管理页全重写，不建议本阶段）。
-2. **项目文件夹命名**：推荐 `<可读名>-<fnv 短哈希>`（ZCode 式，可读且防重名）；备选纯可读名（重名冲突需处理）。
-3. **[handoff.md](http://handoff.md) 收束自动更新缺省**：推荐开（写仓库仅限 `.Locowrk/` 内 + 首次创建 toast 告知 + 开关可关）。
-4. **autoExtract 缺省改开**：推荐改开（主动记忆的核心；v2.68 隔离已解污染顾虑）。
+1. ~~双层双写~~ → **md 唯一真源**（2026-10-17 裁定，见 ADR-0007；sqlite 存量一次性导出，
+   原地保留不读不删）。
+2. 项目文件夹命名 `<可读名>-<fnv 短哈希>` → **照推荐已落地**，本条关闭。
+3. handoff 收束自动更新 → 随 organize 退役作废，交接层改两文档制（§2.2）。
+4. autoExtract 缺省开 → 随 organize 退役作废，替换为"回合收束增量抽取"，另立批。
 
-## 9\. 参考资料
+## 9. 参考资料
 
-* **ZCode（本地开源，F:\\Warehouse\\Github\\ZCode）**：`packages/services/src/memory/memoryService.ts`——`<dataRoot>/cli/memories/projects/<slug>-<16hex>/memory/\*.md` + `MEMORY.md` 索引；一事实一文件 + frontmatter；模型自主写（主动记忆）+ 索引每会话注入 + 按需召回；symlink/大小写别名防护。
-* **WorkBuddy（闭源，网络资料）**：官方记忆 = 「自动从对话提取偏好与习惯，定期更新长期留存」，用户可**查看/编辑/导入/忘记**；官方本体 `workbuddy.db`（SQLite+WAL），社区生态流行 `.workbuddy/memory/` Markdown 目录层（BFLABS Memory「用户级 [MEMORY.md](http://MEMORY.md) + 项目 .workbuddy/memory/」、DSH Memory Palace「可编辑 Markdown 保存跨会话记忆、日志与摘要」）；社区教训：**过期记忆会污染新任务**，要定期检查删除。来源：[awesome-workbuddy RESOURCES.md](https://github.com/sandbaseai/awesome-workbuddy/blob/main/RESOURCES.md)、[WorkBuddy 从入门到精通（什么值得买）](https://post.smzdm.com)、[腾讯云开发者社区 WorkBuddy 评测](https://cloud.tencent.com/developer)。
-* **workdsh（开源，[gitee.com/techflag/workdsh](https://gitee.com/techflag/workdsh) / GitHub 同步）**：WorkBuddy 式桌面工作台（DeepSeek Harness 插件生态，MIT）。**核查结论：主仓库无记忆模块实现**（全仓 grep 无 memory 功能，记忆仍在闭源上游 workbuddy.db）——它可借鉴的不是记忆本体，而是 **`.agents/notes/` 交接笔记形态**：按主题分文件（`<日期>-<主题>.md`）+ `implemented/proposed` 状态目录 + 固定骨架（Status/Problem/Decision）+ 中英双语——本设计 §2.2 notes/ 直接吸收。
+* **ZCode（本地开源，`F:\Warehouse\Github\ZCode`）**：`packages/services/src/memory/memoryService.ts`
+  ——`<dataRoot>/cli/memories/projects/<slug>-<16hex>/memory/*.md` + `MEMORY.md` 索引；一事实一文件
+  + frontmatter；模型自主写（主动记忆）+ 索引每会话注入 + 按需召回；symlink / 大小写别名防护。
+  CLI 侧还有 `apps/zcode-cli/packages/core/src/memory/`（`directory.ts` 布局、`extraction.ts` 抽取、
+  `dream.ts` 后台整理通道——最后这个正是本设计非目标里"不预造机制"所指的是物）。
+* **Qoder CN（本机逆向，2026-10-17 取证）**：`~/.qoder-cn/memory/` 全局 55 个事实文件 +
+  `projects/<项目>/` 两层，四类型枚举硬编码在官方 agent-sdk 提示词里；无向量层、无机器索引层。
+* **WorkBuddy（闭源，网络资料）**：官方记忆 = 自动从对话提取偏好与习惯，用户可查看 / 编辑 /
+  导入 / 忘记；官方本体 `workbuddy.db`（SQLite+WAL），社区生态流行 `.workbuddy/memory/` Markdown 层；
+  本机实物 `qingbird-git/.workbuddy`（7 文件 85KB）给的是**两文档制**。社区教训：**过期记忆会污染
+  新任务**，要定期检查删除。来源：[awesome-workbuddy RESOURCES.md](https://github.com/sandbaseai/awesome-workbuddy/blob/main/RESOURCES.md)、[什么值得买 WorkBuddy 介绍](https://post.smzdm.com)、[腾讯云开发者社区评测](https://cloud.tencent.com/developer)。
+* **workdsh（开源，[gitee.com/techflag/workdsh](https://gitee.com/techflag/workdsh)）**：核查结论 =
+  主仓库无记忆模块实现；可借鉴的不是记忆本体，而是 `.agents/notes/` 交接笔记形态（按主题分文件 +
+  固定骨架 + 中英双语），§2.2 的 journal 条目骨架直接吸收它。

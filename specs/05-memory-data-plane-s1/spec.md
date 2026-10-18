@@ -52,39 +52,51 @@
 **结论（改工作量）**：S1 ≈ 扳真源方向 + 补四类型与排除清单 + 加 `obsolete/` + 存量导出改道，
 **不是**从零建库。原先估的"布局 + 读写 + 索引 + 工具改道 + 管理页"里，前两项大半已存在。
 
-## 要你定的四处（我没替你猜）
+## 四处落点（2026-10-18 决策人已裁定：四条全按推荐案，"准备开刀"）
 
-1. **布局照现状还是照方案稿改**：方案稿那张图画的是"全局事实与 `MEMORY.md` 直接住
-   `~/.Locowrk/memory/` 根，项目层 `projects/<项目-id>/`"；现状多两节（全局在 `global/` 子目录，
-   项目事实再套一层 `facts/`，根目录还坐着 `tree.md`）。
-   **建议照现状**（索引与事实分层、根目录不混投文件），把方案稿 A① 那张图订正。
-2. **四类型怎么进 frontmatter**：建议新增枚举值填进已有的 `metadata.type`（现在恒 `"fact"`），
-   `tags` 保留当自由标签不动 —— 这样旧文件读回 `type=fact` 视为"未分类"即可，不重写存量。
-   另一条路是拿 `tags` 当 type，我不选：tags 是多值、type 是单值，混用必漂。
-3. **type → 层 的映射放在哪**：建议放在**宿主侧一个纯函数**里（`feedback`/`user` 缺省全局、
-   `project`/`reference` 缺省项目，显式 `scope` 参数可覆盖），模型只报 type、不必知道目录。
-   放提示词里 = 每条记忆落点都要模型自己算，出错没人拦得住。
-4. **`refresh_index` 要不要带上尺寸硬钳**：现状钳只在注入侧现算，落盘的 `MEMORY.md` 无上限。
-   建议把钳搬到**写侧**（超限即截断并在索引末行写 WARNING），理由 = 索引文件本身也要能被
-   人在资源管理器里看，人看到的就该是模型看到的那份（同一物理定律见方案稿 F 节）。
+1. **布局照现状**：方案稿那张图原先画的是"全局事实与 `MEMORY.md` 直接住 `~/.Locowrk/memory/` 根，
+   项目层 `projects/<项目-id>/`"；实况多两节（全局在 `global/` 子目录、项目事实再套一层 `facts/`、
+   根目录还坐着 `tree.md`）。裁定 = 照现状，索引与事实分层、根目录不混投文件；方案稿 A① 已同步订正。
+2. **四类型进已有的 `metadata.type`**（现在恒 `"fact"`），`tags` 保留当自由标签不动 ——
+   旧文件读回 `type=fact` 视为"未分类"，不重写存量。不拿 `tags` 当 type：tags 多值、type 单值，混用必漂。
+3. **type → 层 的映射做成一个纯函数**（`user` / `feedback` 缺省全局、`project` / `reference` 缺省项目，
+   显式 `scope` 参数可覆盖），模型只报 type、不自己算目录。
+   **落点订正**：我原先写"放宿主侧"是错的——记忆工具有两条通路（宿主 `MemoryStore` 与
+   `plugins-src/memory-sqlite` 插件），插件不依赖宿主，放宿主 = 插件那条路算不出落点。
+   放在 `plugin-api/src/memlayout/`（宿主与插件共用同一份布局实现，这正是它存在的原因）。
+4. **尺寸硬钳搬到写侧**：现状钳只在注入侧现算、落盘的 `MEMORY.md` 无上限。裁定 = 搬到
+   `refresh_index` 写侧（超限即截断 + 末行写 WARNING），人打开看到的就该是模型看到的那份
+   （同一物理定律见方案稿 F 节）。代价如实登记在风险③：人改索引 = 直接改注入面。
 
-另有一条我不打算问、直接按规矩办的：**动 `plugin-api` 只往结构体末尾追加字段**，
-`FactEntry` 不进 C ABI（Rust 侧结构），`PLUGIN_ABI_VERSION` 不动 —— 开工第一刀会用一个
+另有一条不提问、直接按规矩办：**动 `plugin-api` 只往结构体末尾追加字段**，
+`FactEntry` 不进 C ABI（Rust 侧结构），`PLUGIN_ABI_VERSION` 不动 —— 刀① 用一个
 "追加字段后既有测试一字未改仍绿"的实证来担保这句话，不靠我说。
 
 ## 施工拆法（三刀，每刀独立可回退、一提交）
 
-- **刀①（纯新增，行为零变化）**：`memlayout` 补 type 枚举 + `render()` 写 `metadata.type` +
-  `Why:` / `How to apply:` 正文段 + `refresh_index` 写侧硬钳与 WARNING + 索引/落点映射的纯函数
-  与测试。sqlite 写路径一行不动 ⇒ 做完仍是旧形状，随时可停。
+- **刀①（✅ 2026-10-18 已落地）**：索引硬钳搬到**写侧** + 预算数字收成一处出处。
+  `memlayout` 新增 `MAX_INDEX_LINES` / `MAX_INDEX_CHARS` / `INDEX_TRUNCATED_NOTE` 与 `clamp_index`，
+  `refresh_index` 落盘前按预算截（行尾换行与头部都算进字符预算，只丢整行不写半行）；
+  宿主 `memory_index.rs` 两份 `const` 换成一条 `pub(crate) use` 再导出。
+  判据 = 新增 `SS10` / `SS10b` 两条同源对账（基线 `1|1` 与 `2|1`）；测试 = `memlayout/tests.rs`
+  三条新用例，**既有 66 条一字未改仍绿**。sqlite 写路径一行未动 ⇒ 仍是旧形状，随时可停。
 - **刀②（扳真源）**：`md_write` / `md_delete` 的 `warn` 改成 `Err` 上抛；读路径（`memory/crud.rs`
   列举、`recall.rs` 取数、`memory_index.rs` 兜底档）改**只读 md**，把 sqlite 兜底那档摘掉；
   `hit_count` / `last_hit_at` 学习列停止读写（文件制没有时间信号以外的权重，v2.136 那条教训）。
-  这一刀才是 AC-S1-2 的证据所在。
-- **刀③（工具与管理页改道）**：save / read / search / delete 四枚工具的内部实现从 sqlite 改 md
-  （名字与参数面不动，提示词与审批面才不会跟着漂）；`obsolete/` 软删 + 清空真删（清空要确认）；
-  管理页六枚命令读源换 md、加"三枚行为开关 + 每层一行"。**TreeBoard / TreeSection /
-  InjectSection 三处嵌入这一刀不碰**（看板整体删除是 S4 的事，混在一刀里回滚不掉）。
+  这一刀才是 AC-S1-2 的证据所在。**顺带消掉一处暂时状态**：注入侧现在还在自己算截断（算法与
+  写侧的 `clamp_index` 各一份），它改读落盘的 `MEMORY.md` 之后这两份合一，数字与文案都不可能漂。
+- **刀③（四类型打通 + 工具内部改道）**：`FactEntry` 末尾追加 `ty`、`render()` 写
+  `metadata.type`、`ParsedFact` 读回 type（未知值 = 未分类，存量不重写）、type→层映射纯函数、
+  `feedback`/`project` 缺 `Why:` / `How to apply:` 时提醒不拦写；这几件必须与工具参数**同刀**，
+  否则枚举值没有任何生产者。save / read / search / delete 四枚工具内部实现从 sqlite 改 md
+  （名字与参数面不动，提示词与审批面才不会跟着漂）。
+- **刀④（`obsolete/` 与管理页）**：软删 + 清空真删（清空要确认）；管理页六枚命令读源换 md、
+  加"三枚行为开关 + 每层一行"。**TreeBoard / TreeSection / InjectSection 三处嵌入不在本阶段动**
+  （看板整体删除是 S4 的事，混在一刀里回滚不掉）。
+
+拆刀订正的理由留在仓里：**原先那份刀① 想"先补 type 枚举 + frontmatter"，但 type 的值只能从
+工具参数来——只加枚举没有任何调用能写出 `user` / `feedback`，挂在那里就是一圈死 API**。
+所以四类型挪到刀③ 与工具参数一起做，刀① 只留有真实消费者的那块。
 
 工具归属那条（开放决策 5 说记忆工具归宿主内置）在刀③ 只做到"内部改调 md"，**不把插件那 6 枚
 搬进宿主**——搬 = 摘插件注册面 + 动 SS7 十档对账，按禁区相邻规矩单独说明、单独点头。
@@ -100,7 +112,9 @@
 - [ ] AC-S1-4 排除清单生效：一句"我测试过了 / 我改了 store.rs"收束后**不产文件**；
       同一句里"以后都用 pnpm"产 1 个 `type=user` 文件（正反对照同批跑）
 - [ ] AC-S1-5 索引硬钳在写侧：造 250 条 → 落盘的 `MEMORY.md` ≤ 200 行且末行带 WARNING 指路，
-      注入侧读到的就是这份（不再现算）
+      注入侧读到的就是这份（不再现算）。**前半已由刀① 实证**（`refresh_index_clamps_at_the_shared_budget`
+      等三条 + `SS10`/`SS10b` 两道判据，四条磁盘变异里撤钳/只钳行数/不写截断行三档都报红）；
+      后半要刀② 摘掉注入侧那档现算才算数，所以整条不勾
 - [ ] AC-S1-6 遗忘三条全过：删一条 → grep 数据根该 stem 零命中 → 该层 `MEMORY.md` 零命中 →
       下一会话注入块零命中
 - [ ] AC-S1-7 软删可恢复、清空才算数：管理页删除 → 文件进 `obsolete/`、注入零命中、能恢复；
@@ -134,7 +148,7 @@
 | `desktop/src-tauri/src/commands/memory.rs` | 刀③：列举/删除/清空读源换 md；新增层读数与 `obsolete` 清空两枚薄命令 |
 | `plugins-src/memory-sqlite/src/{lib,store}.rs` | 刀③：内部改调 md；**工具名与参数面不动**；插件注册面不摘 |
 | `desktop/src/components/MemoryPage.vue` + `lib/api/memory*.ts` | 刀③：三枚行为开关 + 每层一行；文案中英成对 |
-| `docs/design/authority/Memory File-ization Design.md`（**入库件**） | 它现在的身份是「v1.0 草案 · 待用户裁定后生效为规范」，而 §8 推荐的正是双层双写 = 被 ADR-0007 否掉的那条。刀① 前先把「md = 唯一真源」写进这篇并升版（先改标准再写码） |
+| `docs/design/authority/Memory File-ization Design.md`（**入库件**） | ✅ 本刀前已改：v1.0 草案升 **v1.1 生效规范**（md 唯一真源、四类型 frontmatter、写侧索引硬钳、§8 决策点 1 撤销双层双写、reconcile 整项作废，带逐条勘误表）；三处既有《v1.1》代码引用就此对齐 |
 | `scripts/check-single-source.mjs` + `scripts/tasks.sh` | 新判据一条（写路径唯一出处）+ 它的窄变异 |
 
 ## 风险与回滚
@@ -147,15 +161,28 @@
 - 风险③：`MEMORY.md` 从"注入侧现算"改成"写侧落盘"后，人改索引 = 直接改注入面。这正是要的
   （人编辑权威），但 mtime 进预取缓存键这条得实测一次（现有关键 `(session_id, scope_id)` 不含
   mtime ⇒ 大概率要加，属 S3 的接线，刀② 先只登记不偷偷改）。
-- 回滚：三刀各一提交；`memory.files=false`（→ env `LOCOWRK_MEMORY_FILES=0`）是现成开关，
+- 回滚：四刀各一提交（刀① 已在工作区、按并发那条挂账等提交时机）；`memory.files=false`（→ env `LOCOWRK_MEMORY_FILES=0`）是现成开关，
   刀② 之后关它 = 只剩 md、不写 sqlite（语义要写清，别让"关"字含糊）。
 - 挂账：方案稿 A① 那张布局图按上面待定项 1 的结论订正；`data_root` 两份实现（plugin-api 权威 +
   宿主一份）是否并成一个出处，另立条目，不塞进 S1。
-- 挂账（取证时抓到的版本号漂移）：`desktop/src-tauri/src/memory_files.rs:1` 的模块注释引
-  《Memory File-ization Design **v1.1**》，而 `docs/design/authority/Memory File-ization Design.md`
-  正文版本行写的是「**v1.0 草案**（2026-05 口述 → 设计稿，待用户裁定后生效为规范）」，全篇 grep
-  不到 `v1.1` 字样 ⇒ 代码引了一个文档里不存在的版本号。刀① 改那篇标准时一并把注释的版本指回
-  真实文件与真实版本号，之后版本只许有一个出处。
+- 挂账（刀① 收口时撞见的并发施工，2026-10-18）：本仓**同期有另一条线在写**——
+  `scripts/check-i18n.mjs`（+51 行，新增「设置说明文案一行封顶」判据：zh ≤32 字 / en ≤80 字符，
+  口径 = 全部 `*Hint` 键）、`desktop/src/components/settings/SettingsRow.vue:49`（`line-clamp-1` 兜底）、
+  `docs/design/authority/Front-end Design Guidelines.md` ② 那节（补条款 + 新实测读数，明写"取代原
+  51 条 / 最长 84 字"）三件一套自洽，**不是本刀产出、本刀不碰**。刀① 因此停在"代码写完、
+  `make check` rc=0、未提交"这个状态：现在提，提交正文里那句"全绿"读数会混进对方当时的闸状态。
+  这正是 `specs/01` 那道开工闸当初写的理由（同仓并发施工会冲突），它被 2026-10-18 的转线令顶掉之后，
+  并发本身并没有消失。
+- 挂账（一处真隐患）：仓根出现未跟踪 `.pnpm-store/`（实测 162M，`make check` 跑 pnpm 时建在仓内），
+  `.gitignore` 没覆盖它 ⇒ 谁执行一次 `git add -A` 就把 162M 提进库。加一行 ignore 即可，
+  但那是改配置，等决策人点头；本刀不动。
+- 挂账（取证时抓到的版本号漂移，**本刀已消**）：`desktop/src-tauri/src/memory_files.rs:1` 与
+  `crates/plugin-api/src/memlayout/mod.rs:1` 两处模块注释都引《Memory File-ization Design **v1.1**》，
+  而 `docs/design/authority/Memory File-ization Design.md` 正文版本行停在「**v1.0 草案**
+  （2026-10-05 方向口述 → 设计稿，待用户裁定后生效为规范）」，全篇 grep 不到 `v1.1` 字样
+  ⇒ 代码引了一个文档里不存在的版本号。处置 = 把标准升到 v1.1（带逐条勘误表）而不是把注释改回
+  v1.0，理由是 `docs/design/Memory-KV Roadmap.md:9` 与 `:174` 也按 v1.1 引它，四处一次对齐；
+  根因是「实现先于标准升版」，往后版本只许有一个出处。
 
 ## 参考
 

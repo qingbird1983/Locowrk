@@ -23,7 +23,7 @@
 | `Context and Memory.md` | 上下文与记忆总纲：注入顺序、双层项目隔离 | 改注入带形状、记忆分层、项目隔离 |
 | `Memory Tree Design v2.md` | 记忆树规范正身（章节 / 整理 / 记录员 / 投影） | 改记忆树任何一面 |
 | `KV Prefix Cache Design v2.md` | 前缀缓存规范正身（块字节按会话钉死那套纪律） | 改缓存键、块装配、失效条件 |
-| `Memory File-ization Design.md` | 记忆的文件化（人读 md 落盘的形状） | 改 `~/.Locowrk` 下目录与文件布局 |
+| `Memory File-ization Design.md` | 记忆文件化（v1.1 生效：md = **唯一真源**，四类型 frontmatter、写侧索引硬钳） | 改 `~/.Locowrk` 下目录与文件布局 |
 | `Cross-Session Recall Design v1.md` | 跨会话取回 | 改检索通路、召回排序的对外语义 |
 | `LLM.md` | 模型接入轨：单线 OpenAI 兼容协议 + 传输韧性 + 推理档位 + 多模态 + 子代理档 | 加协议分支、改重试与预算、动多模态 |
 | `plugins.md` | 必备能力清单（§一「现役状态」列是"哪些是插件 / 宿主内置 / 已退役"的唯一真源） | 新增或退役任何能力 |
