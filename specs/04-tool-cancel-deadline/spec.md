@@ -95,8 +95,9 @@ C1 之后信号能到达的是**宿主内建的 Rust 工具**；第三方插件�
       · 两侧读数：Windows `cargo test --workspace` **542 通过 / 0 失败 / 1 ignored**（含本刀 4 条）、
         `desktop/src-tauri` **584 / 0 失败**、`make check` 末行 `▶ check 全绿`、
         `demo` 与 `demo4` rc=0 且 demo4 三条自判读数不变（danger 执行 1 次 / 被拒闭合 1 条 /
-        echo 吃到改写后的 `mode=true`）；**Linux 侧复跑读数在紧随其后的取证提交里**
-        （`AGENTS §7` 那两条前置：新 clone 先补 `build_plugins.sh` + `build_market.sh` 再 `cargo test --workspace`）
+        echo 吃到改写后的 `mode=true`）；Linux（本机 WSL）`cargo test --workspace --no-fail-fast`
+        **rc=0 · 40 个 test target · 541 通过 / 0 失败 / 1 ignored**，这四条在 Linux 上逐条 ok
+        （取证前置两条见 `AGENTS §7`：先 `build_plugins.sh` + `build_market.sh` 再测）
 
 - [ ] **C2** `deadline` 的生产者接线：调用前把「本次剩余预算」与「审批等待剩余时间」取小写进去
       （今天恒 `None`，`timeout.rs:90-96` 那个"取小"分支从没被走过）。

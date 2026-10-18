@@ -371,11 +371,14 @@
         每一刀单独等你点头"，且 AGENTS §5 把 `crates/plugin-api` 列为 [LOCK] ⇒ **我没有自决做**，
         也没碰任何既有签名。C2（`deadline` 生产者）同样没做：它的前置是"先测出审批卡超时与
         全局 `callTimeoutSecs` 在现网的实际关系"，没测就接会把所有调用提前掐死
-      · 读数：Windows `cargo test --workspace` **542 通过 / 0 失败 / 1 ignored**、
+      · 读数（同一份代码两侧各一次）：Windows `cargo test --workspace` **542 通过 / 0 失败 / 1 ignored**、
         `desktop/src-tauri` **584 / 0 失败**、`make check` 末行 `▶ check 全绿`、
-        `demo` / `demo4` rc=0 且 demo4 三条自判读数不变。**Linux 侧还没跑**——复跑读数落在紧随其后的
-        那一提交（取证前置两条 = `AGENTS §7`：新 clone 先 `build_plugins.sh && build_market.sh`），
-        这条与 T2 那批的做法一致（代码一刀、两侧取证一刀），不许拿 Windows 的绿灯代替 Linux
+        `demo` / `demo4` rc=0 且 demo4 三条自判读数不变（danger 执行 1 次 / 被拒闭合 1 条 /
+        echo 吃到改写后的 `mode=true`）。Linux（本机 WSL，热 target 的 clone 先补
+        `build_plugins.sh` + `build_market.sh` 两条前置，产物落点 10 + 2 个 `.so` 已核）
+        `cargo test --workspace --no-fail-fast` **rc=0 · 40 个 test target · 541 通过 / 0 失败 /
+        1 ignored**，本刀那四条 `active_calls` 在 Linux 上逐条 ok；两侧仍差那**一条**
+        `#[cfg(windows)]` 的大小写折叠档（与 T11/T2 记录的同一处，不是新增缺口）
       · 剩下的 C2/C3/C4/C5 不在本台账里记，只记在 specs/04 的勾选框里（进度唯一出处）；
         写设计稿时顺带查出的那条文档失实（AGENTS §3 说"内核八条设计纪律"而 `DESIGN.md`
         附录 C 实测 **11 条**）也仍挂在 specs/04 风险③，**不在这条里顺手修**——
