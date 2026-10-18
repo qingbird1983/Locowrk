@@ -638,7 +638,7 @@
 | `plugins-src/memory-sqlite/src/store.rs`（581） | 是：存储层四簇同族 | 是：同一条 UPSERT 两份抄写（276/522） | **拆**（T23 后重判） | 原判"留"混进了一个外部约束（闸只读这一个路径），而三问里 ③ 本来就答"是"⇒ 约束一消失就该回到三问：`store/{schema,open,crud,undo,mdsync}.rs`，顺手把那份 UPSERT 抄写并成一处 |
 | `settings/LlmSection.vue`（577） | 是：七块行全走 SettingsGroup+SettingsRow 唯一形态 | 是，但方向相反 | **留** | 该文件实测 5 处组件直调 IPC + 4 处 `settings.refresh()`，已偏离「编排只在 stores」（新登 **T24**）⇒ 先收编排，拆是后面的事 |
 | `llm/client.rs`（575） | 半：装配 + 重试环 + 单次尝试是一件事，逐模型 ping 是另一件 | 是：`repair_*` 修复旗标跨 6 处 | 拆（薄） | 只切逐模型 ping → `llm/test_probe.rs`（≈100）；**主环不许再切**，切了就出现第二条线路（违「同类只许一种形态」） |
-| `llm/wire.rs`（548） | 否：预检 / 媒体投影 / 序列化 / 累积器 / usage 五簇 | 是：预算参数在 80/128/307/372 四处 | 拆 | `wire/{payload,messages,media,stream}.rs`；私有函数跨片要提 `pub(super)`，测试簇里 `super::wire::` 的命名空间遮蔽有案底 |
+| `llm/wire.rs`（548 → 24） | 否：预检 / 媒体投影 / 序列化 / 累积器 / usage 五簇 | 是：预算参数在 80/128/307/372 四处 | 拆 ✅T31 | 已沉 `llm/wire/{payload,media,messages,stream}.rs` 四片（五簇落四片：usage 只有 `parse_usage` 一个函数、只被累积器调用，单立 = 为行数造结构 ⇒ 并进 `stream`）；跨片 2 处 `pub(super)` 抬升枚举成声明式改动；判据里那句"`super::wire::` 遮蔽有案底"复核结果 = **没发生**（tests 的 9 处引用靠 glob 再导出照旧解析，见 T31 条目的磁盘变异） |
 | `chat/TranscriptFlow.vue`（540） | 否：约 180 行**零 DOM** 的投影算法住在组件里 | 是：inner 单块分支与 tail 两段**逐字重复** ⇒ 新增一类 kind 必改两处 | 拆 | `use-flow-projection.ts`（≈190）+ `FlowSingle.vue`（≈60）把两遍并一遍；composable 不触形态标准 |
 | `src-tauri/src/events.rs`（531） | 是：通道常量 + 事件 enum + `channel()` 映射 = **同一张契约表** | 是，但那是这张表**固有的形状**（加一条事件本来就要同时动三处） | **留** | 三问皆是的一族：一份契约的三个侧面，拆开 = 把一条事实摊成三个出处。T23 之前它还多一条"拆了闸会安静少一条"的外力，现在那条已消（C4 实测数得到）⇒ 本件**只按形态判**，判留 |
 | `settings/DeveloperSection.vue`（523） | 否：写值区 + 三个**只读观测面板**（⑫ 暴露调试 / 缓存诊断 / reconcile 触发） | 是：`refresh()` 拿写值字段 `cacheDiagnostics` 当取数门 | 拆 | `ExposureDebugPanel.vue` + `CacheObservationPanel.vue` → 主件 ≈360；先例就在同目录（`MemoryTreePanel.vue` 116 行是从它拆出去的） |
@@ -799,10 +799,40 @@
         抓手 = **与 HEAD 做行集差**（`comm -23/-13`）：要求"只少一行、多出行集为空"，
         当场看到少了两个文件 ⇒ 补回。口径：删名单行不许靠肉眼，必须做集合差
       · 跨平台：纯 Rust 结构面，不取 WSL 证据（ADR-0005 口径）；`llm_provider_save` 的业务面属 T25，没动
+- [x] **T31** 拆 `llm/wire.rs`（548 → 24 行只留声明）⇒ 同名子目录加四片（2026-10-18 第一批第四刀）
+      · 四片按线路上的位置 = `media`(176) 发送前门控 + 工具结果图片投影 · `stream`(172) 流式累积器与
+        用量映射 · `payload`(131) 请求装配 + 能力上限 + Q8 截断 · `messages`(105) 中立消息 → 线上消息。
+        判定表列五簇、落四片：`usage` 只有 `parse_usage` 一个函数且只被累积器调用，
+        单立一片 = **为行数造结构** ⇒ 并进 `stream`（表给的切法本来就是这四片）
+      · ★ 声明式改动第一次真用上：2 处 = `clip_tool_output` 与 `message_value` 抬 `pub(super)`
+        （都是"被兄弟片共读"的私有函数；抬完 `clip_tool_output` 那行 82 列仍在 100 内 ⇒ 单行终形）。
+        预算参数那四处（80/128/307/372）本刀**没并**：它们是穿参不是重复读数，拆完仍是一条链
+        （`payload` 取 caps → 形参传给 `messages`），没有新增第二出处
+      · ★ 编译器一次抓到两件事，都不是"搬行"能预判的：
+        ① `use super::dialect::Dialect` 在新层级指到 `wire` 而不是 `llm` ⇒ 头部 import 改 `crate::` 锚定
+          （头部是我写的、不进守恒判据；动手前实查过**正文里没有一条 `super::`**，才敢只改头）
+        ② `messages` 片没有任何 `pub` 顶项 ⇒ 给它写 `pub use messages::*;` 编译器直接判红
+          （"glob 导不出任何 pub 项"）。判据跟着改强：T5 从"每片都要有 mod + glob"改成
+          **有 `pub` 顶项的片必须有 glob、没有的不许有**，装配器 `split-assemble.mjs` 同规则先判一遍
+          —— 把编译器的规则前移成机器判据，而不是等 clippy 红了回来猜
+      · 公开面与消费点：`app_llm.rs` 的 `use super::wire::WireCaps` 与四处 `super::wire::{…}`、
+        `client.rs` 的 `use super::wire::{build_payload, Delta, StreamAcc, WireCaps}`、
+        `llm/tests/assets.rs` 的 9 处 `super::wire::project_tool_assets` 全部一字未改；
+        判据里那句"`super::wire::` 命名空间遮蔽有案底"本刀复核 = **没发生**
+      · 磁盘变异（这一刀的"闸活着"由 Rust 测试面担保，不是 `check-commands`）：把 `wire/media.rs` 里
+        `project_tool_assets` 改名 ⇒ `cargo test --lib llm::tests::assets` 编译红 **9 处**
+        （正是 tests 的 9 个引用点）；逐字节写回 + sha 复核回 rc=0 = `SPLIT_MUT_ALL_CAUGHT`
+      · ★ 判据四件套成型：`split-cut`（落盘前 C1–C3）· `split-verify`（磁盘后 T1–T6 + X1/X2）·
+        `split-assemble`（装配文件 A1–A4）· `split-mut`（磁盘变异 + sha 还原）。
+        改过判据先回归：T26 / T27 / T30 三把已提交产物重跑通用对账全部 `SPLIT_VERIFY_OK`
+      · 编译与测试：`cargo clippy --all-targets -- -D warnings` rc=0 · `cargo fmt --check` rc=0 ·
+        `cargo test` 584 passed / 0 failed（含 `llm::tests::assets` 全跑）· `make check` 全绿 ·
+        `check_length` 超限 17→16（名单行删除走**与 HEAD 的行集差**：只少一行、多出为空）
+      · 跨平台：线路格式层不碰路径语义与插件生命周期 ⇒ 不取 WSL 侧证据（ADR-0005 口径）
 
 · 拆的顺序（原本按"动刀前必须先解哪道锁"排；**T23 已把那些锁解掉** ⇒ 现在只按风险与体量排）：
-  第一批 Rust 无锁件 = `llm/wire.rs` → `llm/client.rs`（薄）
-  （`commands.rs` / `commands/sessions.rs` / `commands/llm.rs` 已做完 = T26 / T27 / T30；看勾不看这行）
+  第一批 Rust 无锁件 = `llm/client.rs`（薄）
+  （`commands.rs` / `commands/sessions.rs` / `commands/llm.rs` / `llm/wire.rs` 已做完 = T26 / T27 / T30 / T31；看勾不看这行）
   第二批 Rust 侧 schema 两件 = `memory.rs` → `store.rs`（建表串不必再钉在主文件：定义处"整根恰 1 处"由闸自己盯）
   第三批 前端 lib = `tool-detail.ts` → `api.ts`（通道表同样不必钉文件名）
   第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`

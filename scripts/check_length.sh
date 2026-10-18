@@ -31,7 +31,6 @@ desktop/src/lib/tool-detail.ts
 plugins-src/memory-sqlite/src/store.rs
 desktop/src/components/settings/LlmSection.vue
 desktop/src-tauri/src/llm/client.rs
-desktop/src-tauri/src/llm/wire.rs
 desktop/src/components/chat/TranscriptFlow.vue
 desktop/src-tauri/src/events.rs
 desktop/src/components/settings/DeveloperSection.vue
