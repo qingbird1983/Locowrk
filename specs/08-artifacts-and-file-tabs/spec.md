@@ -107,7 +107,9 @@ FileTextDto { path: String, bytes: u64, text: String, truncated: bool, binary: b
 - [x] **AC-7** `file_read_text` 有单元测试三条（截断 / 二进制 / 不存在）。（`desktop/src-tauri/src/file_view/tests.rs`）
 - [x] **AC-8** 点 `.html` 文件 → 右栏开浏览器签挂 `lwpreview`，页面真能跑。
       （实测：点 `minesweeper.html` → 开浏览器签，URL `http://lwpreview.localhost/f%3A/warehouse/tity/games/minesweeper.html`，页面在签内跑起来）
-- [x] **AC-9** 形态唯一：`scripts/check-style.mjs` 0 报；新页签的落点写进标准 §七 登记。（标准 §二⑱ 已立；`.lw-tabhead` 在 `style.css`，头行三签共用）
+- [x] **AC-9** 形态唯一：`scripts/check-style.mjs` 0 报；新页签的落点写进标准。
+      （落点在标准 §二⑱「右栏产物页签」这条**新类目**里登记，不需要 §七 豁免——豁免表登记的是「偏离既有判错条款」，
+      本批没有偏离任何条款；`.lw-tabhead*` 住 `style.css`，由 `scripts/check-css-ownership.mjs` 的 `alsoGlobal` 口径放行）
 - [x] **AC-10** `sh scripts/tasks.sh gates` + `check-docs` + 前端四闸（vue-tsc / stylelint / check-style / vitest）全绿。
 - [x] **AC-11** 真实窗口逐个目视，交付说明写「打开哪、点哪、该看到什么」。
 - [x] **AC-12** 点子代理步骤行的**整行** → 右栏开子代理签；展开体里的「查看完整对话」按钮保留。
@@ -119,7 +121,9 @@ FileTextDto { path: String, bytes: u64, text: String, truncated: bool, binary: b
 - [x] 批 2 页签骨架：两个 kind + `FileTab.vue` / `ImageTab.vue` + `WorkPanel.vue` 分派与页签图标 + `artifact-routing.ts`
 - [x] 批 3 接线 WF-01 / WF-02 / WF-05 / WF-04（子代理整行可点 → 右栏；含 `ProcessRow.vue` 去 button 化）
 - [x] 批 4 接线图片（缩略图 → 右栏签）与 `.html`（→ 浏览器签）；全屏入口保留
-- [ ] 批 5 收口：标准 §七 登记新形态、i18n 中英成对、闸全绿、真实窗口目视
+- [x] 批 5 收口：标准 §二⑱ 登记新形态（无需 §七 豁免）、i18n 中英成对、闸全绿、真实窗口目视
+      （目视覆盖：文件签三种内容面 / 代码块头定位 / `.html` 进浏览器签并真跑；子代理整行与图片签在现役
+      会话里没有数据，由 `desktop/tests/artifact-tabs.spec.ts` 钉住）
 
 ## 影响范围（文件表）
 
