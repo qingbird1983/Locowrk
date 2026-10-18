@@ -104,7 +104,7 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 ├── specs/                            # ★       阶段计划：一阶段一目录，必须有可测验收与非目标
 │   ├── _template/spec.md             #         模板（复制它才许开新阶段）
 │   ├── 00-doc-governance/            #         文档规范治理：立规矩、历史归位、门禁重写、四个去处（进行中，剩检查脚本合并）
-│   ├── 01-memory-context-redesign/   #         记忆与上下文重构：⏸ 等你给方向，里面列着"重构必须回答的四件事"
+│   ├── 01-memory-context-redesign/   #         记忆与上下文重构：◐ 方案已定稿（正文 = `docs/design/` 根的方案稿 ⊘），本层只放计划与 AC
 │   ├── 02-tool-cards/                #         工具卡做全：27 类工具样式 · 折叠分层 · 状态词 · 停止与重试表现
 │   └── 03-structural-debt/           #         结构性欠账台账 T1–T22：分「可直接做」与「卡在人的一侧」两节
 │
@@ -178,7 +178,7 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 | 阶段 02 开工（对话流工具卡做全） | `desktop/src/components/chat/` 里各工具卡组件 + `lib/tool-detail.ts` 的对应投影；形态先过 `Front-end Design Guidelines.md` 的类目，新形态要走特例申请 |
 | 阶段「产出物与文件页签」开工 | 先建 `specs/04-…/spec.md`（模板复制），再动界面；页签的数据源若后端没有，欠账先登记进 specs/03 |
 | 阶段「常用命令与技能包」「子任务与后台任务」开工 | 各自一个 spec；新命令要同时过 `check-commands.mjs` 的三向对账（定义 / 注册 / 前端引用） |
-| 记忆与上下文重构拿到方向 | 新方案稿进 `docs/design/` 根（⊘），旧形状按稿上写清"被哪份取代"；兑现后 `authority/` 里那几份要回来同步，退役稿搬 `archive/` |
+| 记忆与上下文重构（方向 2026-10-17 已拿到 ⇒ 方案稿已进 `docs/design/` 根 ⊘） | 剩两件：被取代的旧形状稿搬 `archive/` 并在索引点名（2026-10-18 定"先不搬"，挂账在 `specs/01` 风险段）；S5 把 `authority/` 里那几篇回来同步 |
 | 有第一个"为什么这么定"的决策 | `docs/adr/NNNN-<主题>.md`（`make adr` 复制模板并算编号；**只增不改**，「被否决的方案」必填） |
 | 加了第一个新工具 / 新插件 | `plugins-src/<id>/`，并在 `scripts/build_plugins.sh` 的 PLAN 登记版本（版本真源只在这里） |
 | 同一事实出现第二个出处 | **不新建文档、不新建闸**：往 `scripts/check-single-source.mjs` 的 CHECKS 加一项；跨实现的代码块同源才走 `check-schema-parity.mjs` |
