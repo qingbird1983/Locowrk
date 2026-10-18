@@ -1,4 +1,4 @@
-// locales/zh-CN/chat.ts —— 12 个命名域：chat / turn / ask / queue / composer / uncertain / notice / slash / idle / toast / notify / bui
+// locales/zh-CN/chat.ts —— 11 个命名域：chat / turn / ask / queue / composer / uncertain / notice / slash / idle / toast / notify
 // 由批 F-22b 从 locales/zh-CN.ts 逐字节搬来；命名域必须**只在本文件**定义一次
 // （index.ts 用对象展开合并，重复定义 = 后一份静默覆盖前一份，scripts/check-i18n.mjs 判红）。
 export default {
@@ -175,23 +175,4 @@ export default {
     savedTokens: "省下 {n} token",
     approvalTimeout: "审批超时，已自动拒绝",
   },
-  // 【实验室】beautiful-ui-vue 移植验证件文案（lab 组件，去留随实验定）
-  bui: {
-    rc: {
-      defaultTitle: "要我下这单补货吗？",
-      otherOptions: "其它选项",
-      alternatives: "其它方案",
-      accepted: "已采纳",
-    },
-    openApproval: "打开审批",
-    answersSent: "已提交",
-    startOver: "重新填写",
-    dismiss: "收起",
-    customPlaceholder: "输入自定义回答…",
-    customAnswer: "自定义回答",
-    prev: "上一题",
-    next: "下一题",
-    gotoQuestion: "去第 {n} 题",
-    sendAnswers: "提交回答",
-    nextQuestion: "下一题",
-  },} as const;
+} as const;

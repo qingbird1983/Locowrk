@@ -1,4 +1,4 @@
-// locales/en/chat.ts —— 12 个命名域：chat / turn / ask / queue / composer / uncertain / notice / slash / idle / toast / notify / bui
+// locales/en/chat.ts —— 11 个命名域：chat / turn / ask / queue / composer / uncertain / notice / slash / idle / toast / notify
 // 由批 F-22b 从 locales/en.ts 逐字节搬来；命名域必须**只在本文件**定义一次
 // （index.ts 用对象展开合并，重复定义 = 后一份静默覆盖前一份，scripts/check-i18n.mjs 判红）。
 export default {
@@ -179,23 +179,4 @@ export default {
     savedTokens: "{n} tokens saved",
     approvalTimeout: "Approval timed out, denied automatically",
   },
-  // [Lab] beautiful-ui-vue port strings (lab component; keep or drop with the experiment)
-  bui: {
-    rc: {
-      defaultTitle: "Want me to place this restock order?",
-      otherOptions: "Other options",
-      alternatives: "Alternatives",
-      accepted: "Accepted",
-    },
-    openApproval: "Open approval",
-    answersSent: "Answers sent",
-    startOver: "Start over",
-    dismiss: "Dismiss",
-    customPlaceholder: "Type something…",
-    customAnswer: "Custom answer",
-    prev: "Previous",
-    next: "Next",
-    gotoQuestion: "Go to question {n}",
-    sendAnswers: "Send answers",
-    nextQuestion: "Next question",
-  },} as const;
+} as const;

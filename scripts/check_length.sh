@@ -27,7 +27,6 @@ desktop/src-tauri/src/memory.rs
 desktop/src/components/chat/Composer.vue
 desktop/src/lib/api.ts
 desktop/src/components/settings/model/ProviderSetupDialog.vue
-desktop/lab/BuiApprovalCard.vue
 desktop/src/components/settings/model/ModelPanes.vue
 desktop/src/lib/tool-detail.ts
 plugins-src/memory-sqlite/src/store.rs
