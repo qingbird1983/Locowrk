@@ -41,6 +41,7 @@ function onClick() {
 <template>
   <button
     class="prow"
+    :class="{ 'prow--fixed': foldable === false }"
     type="button"
     :aria-expanded="expanded ?? false"
     :title="title"
@@ -141,8 +142,12 @@ function onClick() {
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
-.prow:hover .prow__chev,
-.prow:focus-visible .prow__chev {
+/* fold:never 的身份整行不是开关：不给手型，三角也不提示可点 */
+.prow--fixed {
+  cursor: default;
+}
+.prow:not(.prow--fixed):hover .prow__chev,
+.prow:not(.prow--fixed):focus-visible .prow__chev {
   opacity: 1;
 }
 </style>

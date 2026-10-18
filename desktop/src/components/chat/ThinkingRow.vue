@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 思考行（UI shell doc §3.9，与工具行同吃 ProcessRow 行骨架）：brain 字形 +
+ * 思考行（UI shell doc §3.9，与工具行同吃 ProcessRow 行骨架）：bulb 字形 +
  * 类型「思考」+ 描述 =
  * 首句摘要（剥 markdown 记号，单行省略）+ 状态列（实时轮 = N s 走表；
  * 流式中 = 脉动点 + 「思考中…」；历史重放无时间戳不虚构，状态列留空）。
@@ -68,7 +68,7 @@ watch(
 
 <template>
   <div class="thinking">
-    <ProcessRow icon="brain" :type="t('tool.type.thinking')" :expanded="expanded" :title="summary" @toggle="onToggle">
+    <ProcessRow icon="bulb" :type="t('tool.type.thinking')" :expanded="expanded" :foldable="!streaming" :title="summary" @toggle="onToggle">
       <template #desc>{{ summary }}</template>
       <template #status>
         <template v-if="streaming">

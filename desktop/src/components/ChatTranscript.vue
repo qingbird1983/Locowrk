@@ -68,14 +68,19 @@ async function onEditResend(pos: number | undefined, text: string) {
 // ---- §3.39③⑤ 跟随滚动 + 回到底部（v4.11 裁定⑨）----
 // 默认贴底：任何条目变化（含流式 delta）都滚到底；用户上滚（距底
 // > 48px）即让位，回到底部钮在 composer 坞上方伺服。
+// 两档阈值（§3.39③ / spec 06 AC-8）：**跟随** 48px 内算「就在底部」，一上滚就让位；
+// **按钮** 要等离底 > 120px 才出现——刚滚一点就弹钮会跟「轻微回看」抢手。
 const scroller = ref<HTMLElement | null>(null);
 const following = ref(true);
+const showBackBottom = ref(false);
 const BOTTOM_EPSILON = 48;
+const BACK_BOTTOM_GAP = 120;
 function onScroll() {
   const el = scroller.value;
   if (!el) return;
-  following.value =
-    el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_EPSILON;
+  const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+  following.value = gap <= BOTTOM_EPSILON;
+  showBackBottom.value = gap > BACK_BOTTOM_GAP;
 }
 async function scrollToBottom(smooth = false) {
   await nextTick();
@@ -155,7 +160,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
     >
       <Transition name="lw-pop-up">
         <button
-          v-if="!following"
+          v-if="showBackBottom"
           class="back-bottom"
           type="button"
           :aria-label="t('chat.backToLatest')"
