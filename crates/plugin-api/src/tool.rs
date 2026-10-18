@@ -181,12 +181,14 @@ pub enum ToolError {
 ///   中间件每次调用都会读它做「剩余预算 vs 全局超时」取小，但两个组装点都
 ///   没写过 → 现网恒走 `None` 分支（= 只吃全局 `callTimeoutSecs`）。
 /// * `cancelled`（[`CallCtx::cancel`] / [`CallCtx::is_cancelled`]）=
-///   **两端都没接**：没有任何地方持有「本会话进行中调用」的登记表去逐个
-///   cancel，而用户的「停止」现在落在宿主侧 `StopFlags`（按会话，v2.75 起
-///   只作用于 LLM 流式与重试等待）。更硬的一条 = **取消信号过不去 C ABI
-///   边界**：插件的 `call` 是同步 `extern "C"`（[`ffi::CallFn`]），
+///   **内核侧两端已接上（2026-10-18，specs/04 · C1）**：登记表在
+///   `kernel-agent::active_calls`（键 = 会话 + call_id + 登记序号），停止命令
+///   `agent_stop` 按会话逐个 `cancel()`，调用收束由 RAII 守卫注销。
+///   仍**过不去 C ABI 边界**：插件的 `call` 是同步 `extern "C"`（[`ffi::CallFn`]），
 ///   [`ffi::HostVtable`] 五个槽里没有取消/轮询入口，调用还跑在
-///   `spawn_blocking` 里——所以哪怕宿主翻了标志，第三方与 wasm 插件也看不见。
+///   `spawn_blocking` 里 ⇒ 这个标志现在只有**宿主内建的 Rust 工具**读得到，
+///   第三方与 wasm 插件读不到（那要 `HostVtable` 末尾追加 `call_cancelled` 槽 =
+///   specs/04 的 C3，动 ABI 面、需单独点头）。
 ///
 /// 真接线的最小完整形态（另立批做，不在清理批里造半接线）：内核加活动调用
 /// 登记表（按 `(session_id, call_id)`）→ 停止请求逐个 `cancel()` → 调用前把

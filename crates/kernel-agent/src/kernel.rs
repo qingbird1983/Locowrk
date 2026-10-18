@@ -78,6 +78,10 @@ pub struct Kernel {
     /// 子 Agent 快照表（⑮）：`Some` 时每步刷新 session_id → 转录前缀，
     /// `subagent_run` 工具据此 fork 子会话。
     sub: Option<Arc<crate::subagent::SubagentGate>>,
+    /// 在途工具调用登记表（specs/04 · C1）：停止请求按会话逐个置取消标志。
+    /// `Arc` 而非裸结构——组装点要在轮次之外拿到它（`active_calls()`），
+    /// 而子内核与父内核共用同一张表（"什么在途"是一件事实，不该有两本账）。
+    active: Arc<crate::active_calls::ActiveCalls>,
 }
 
 #[cfg(test)]
@@ -92,6 +96,7 @@ impl Kernel {
             approval: None,
             retry_budget: RetryBudget::default(),
             sub: None,
+            active: Arc::new(crate::active_calls::ActiveCalls::default()),
         }
     }
 
@@ -124,6 +129,13 @@ impl Kernel {
     pub fn with_subagent(mut self, gate: Arc<crate::subagent::SubagentGate>) -> Self {
         self.sub = Some(gate);
         self
+    }
+
+    /// 在途调用登记表（specs/04 · C1）：组装点的停止命令拿它按会话逐个置取消标志。
+    /// 返回 `Arc` 而不是 `&ActiveCalls`——宿主那边是 `State<'_, AppState>`，
+    /// `agent_stop` 要在不借 `state.kernel` 的位置上把句柄传下去。
+    pub fn active_calls(&self) -> Arc<crate::active_calls::ActiveCalls> {
+        Arc::clone(&self.active)
     }
 
     /// 派生子内核（⑮）：同一 Context / 中间件 / 审批门 / 重试预算，
@@ -159,6 +171,10 @@ impl Kernel {
             retry_budget: self.retry_budget,
             // 子不再挂快照表：单层派生在目录层已硬剔除，双保险
             sub: None,
+            // 子内核共用父的在途登记表（C1）：按父会话停止时要能看见子会话里
+            // 正在跑的那次调用——"什么在途"是一件事实，不该因为派生了一个作用域
+            // 就变成两本账。会话归属仍按各自的 session_id 匹配（不误伤别人）。
+            active: Arc::clone(&self.active),
         })
     }
 
@@ -334,6 +350,10 @@ impl Kernel {
             let mut cctx = CallCtx::new();
             cctx.call_id = Some(call.id.clone());
             cctx.session_id = session_id.map(str::to_owned);
+            // C1（specs/04）：登记必须在进链**之前**，守卫活到这次调用收束（含所有早退
+            // 路径）后自动注销。工具手里那份 ctx 与表里那份是同一个取消标志——
+            // `CallCtx` 内部是 `Arc<AtomicBool>`，克隆共享的是标志位本身而不是副本。
+            let _active = self.active.track(&cctx);
             let out = crate::chain::ToolChain::new(self.mw.as_slice(), Arc::clone(&tool))
                 .call(&mut cctx, call.args.clone())
                 .await;

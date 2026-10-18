@@ -129,15 +129,26 @@ pub async fn agent_chat(
     Ok(steps)
 }
 
-/// 停止生成（v4.11 §3.39④）：三路同收——① 停止标记置位（流式 delta 点
+/// 停止生成（v4.11 §3.39④）：四路同收——① 停止标记置位（流式 delta 点
 /// 带部分正文收束 + runner 步间边界 TurnDone）；② 挂起的审批卡 fail-closed
 /// 拒绝（与守夜超时同方向，留 ApprovalDecided 审计）；③ 该会话全部待决
-/// ask 卡按跳过收束。幂等：轮未在跑 = 各路空转。
+/// ask 卡按跳过收束；④ 该会话**在途的工具调用**逐个置取消标志
+/// （specs/04 · C1）。幂等：轮未在跑 = 各路空转。
+///
+/// ④ 的诚实边界（现在能做到的全部）：置位之后，只有**宿主内建的 Rust 工具**在
+/// 自己的轮询点上看得见这个标志（第三方插件隔着冻结的 C ABI 看不见，那是 C3；
+/// `tool-shell` / `tool-fetch` 这类长任务真去查是 C4）。所以这一路现在的效果是
+/// "信号送达"，不是"调用立刻停"——日志里那句条数说的是置位了几条，不是打断了几条。
 #[tauri::command]
 pub async fn agent_stop(session_id: String, state: State<'_, AppState>) -> Result<(), String> {
     state.stop_flags.request(&session_id);
     state.approval.deny_session(&session_id, "用户停止了任务");
     state.ask.skip_session(&session_id);
+    // ④：置位在途调用的取消标志，并把条数落一行日志（specs/04 C4 要的叙事读数）。
+    let cancelled = state.kernel.active_calls().cancel_session(&session_id);
+    if cancelled > 0 {
+        tracing::info!(session_id = %session_id, cancelled, "停止时置位了在途工具调用");
+    }
     Ok(())
 }
 

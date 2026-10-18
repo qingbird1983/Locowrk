@@ -9,6 +9,7 @@
 //! 纪律：先写 `ToolCall` 事件再执行工具，进程崩溃后可 replay 识别悬空调用；
 //! 模型适配器不特殊，只是经 `use_dyn::<dyn LlmService>` 获取的服务。
 
+mod active_calls;
 mod approval;
 mod chain;
 mod compensation;
@@ -19,6 +20,7 @@ mod subagent;
 mod timeutil;
 mod waterfall;
 
+pub use active_calls::{ActiveCalls, ActiveGuard};
 pub use approval::{ApprovalDecision, ApprovalResolver};
 pub use chain::{ToolChain, build_chain};
 pub use compensation::CompensationReport;

@@ -138,6 +138,11 @@ impl Kernel {
 
         let mut cctx = CallCtx::new();
         cctx.call_id = Some(undo_id.clone());
+        // 补偿调用**故意不进** `active_calls` 登记表（specs/04 · C1 的一侧）：
+        // 它没有 session_id（上面两行只填 call_id），而登记表只收带会话身份的调用；
+        // 就算能收也不该收——按停止去取消一条正在回滚的写操作，得到的正是纪律 1
+        // 要避免的"半途状态"（specs/04 风险①）。取消信号到不了回滚这条路是有意的，
+        // 不是漏接。
         // 复用主循环同一条中间件链：审计 / 超时 / 熔断对补偿调用同样生效
         let out = crate::chain::ToolChain::new(self.mw.as_slice(), Arc::clone(&tool))
             .call(&mut cctx, undo_args)
