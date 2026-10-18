@@ -101,6 +101,36 @@
 工具归属那条（开放决策 5 说记忆工具归宿主内置）在刀③ 只做到"内部改调 md"，**不把插件那 6 枚
 搬进宿主**——搬 = 摘插件注册面 + 动 SS7 十档对账，按禁区相邻规矩单独说明、单独点头。
 
+## 刀② 前置取证（2026-10-18 已读到消费端，动手前的事实）
+
+风险①要求"动手前把 `md_write` 各调用点的失败后果读一遍"，读完的五条：
+
+1. **两条写路径的失败语义本来就不一样**（这条决定刀② 要动几处）：宿主管理页通路的
+   `md_write` / `md_delete` 返回 `()`、内部 `if let Err(e) = … { tracing::warn!(…) }`
+   （`memory/store.rs:99-125`），四个调用点（`memory/crud.rs:98`/`:145`/`:159`/`:182`）**看不见失败**；
+   插件工具通路的 `sync_write` / `sync_delete` 返回 `Option<String>`，六个消费点
+   （`store/tools.rs:63`/`:166`/`:189`、`store/undo.rs:36`/`:57`/`:86`）把它塞进工具输出的
+   `md_warning` 字段 ⇒ 旧形状是"部分成功 + 如实带回警告"，**不是静默**。扳真源后两边收敛成
+   "md 落盘失败 = 操作失败"，`md_warning` 这个字段从此不该再出现。
+2. **旧形状有测试锁着**：`plugins-src/memory-sqlite/src/tests/human_md_layer.rs:23` 断
+   `out.get("md_warning").is_none()`（"双写成功不带回警告"）。新语义下它照样绿，但**成立的理由变了**
+   （字段根本不存在）⇒ 不许一删了事，要补一条反向用例"故意让 md 写失败 → 工具返回 Err 且输出里
+   没有成功标记"，让这条判据继续承重（AGENTS §6.3：不许为了过闸删测试）。
+3. **两段 SQL 写的列集合不一致**（真源翻转后会以"文件与库不一致"的形式暴露）：宿主 `update_value`
+   走 `UPDATE memories SET value, updated_at`（`crud.rs:75-77`，不动 tags / source）；插件
+   `memory_write` 走 `INSERT … ON CONFLICT DO UPDATE SET value, tags, updated_at`
+   （`tools.rs:53-56`，**不动 source**）。刀② 之后这两段一起下线、分歧自然消失，但
+   **导出脚本必须按文件侧字段并集取数**（value / tags / source / updated_at 四件都要进
+   frontmatter 或正文），否则导完就丢信息。
+4. **`md_delete` 挂在 `if n > 0` 后面**（`crud.rs:158-160`）⇒ "库里没这行" 现在直接当 no-op，
+   连文件都不碰。真源翻转后这个判据必须**反过来**：以文件是否存在为准（库里没行、文件有 = 该删掉
+   文件）。AC-S1-6 那三条遗忘验证能不能成立，正卡在这一步。
+5. 一条实测纠正了我的推断：我原先以为"决策人开了 `.worktrees` 工作树会把结构闸的扫描面污染成
+   双份读数"，实测否掉了——`check-single-source.mjs:29-43` 的 `prodRustFiles()` 写死从
+   `['crates','desktop','plugins-src']` 三个根 walk，工作树副本不在面内（工作树存在时
+   "生产 .rs 337 个"读数不变、SS1 仍 `1`、gates rc=0）。残余风险登记在此：那个 walk 只排
+   `target|node_modules|dist`，**不排 `.worktrees`**，哪天把扫描根扩到仓库根就会重算一遍。
+
 ## 验收标准（跑什么、看到什么）
 
 - [ ] AC-S1-1 写路径唯一：工具或管理页写一条记忆 → 数据根只新增 1 个 `.md` + 索引多 1 行；
