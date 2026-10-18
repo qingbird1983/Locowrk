@@ -139,18 +139,23 @@ impl MemoryStore {
     ///
     /// no-op 判据 = **文件原本在不在**（`delete_fact` 的返回值；旧判据是库里删了几行）。
     /// 真源翻转后这条必须反过来，否则"库里没行、文件有"的那种形状会连文件都不碰——
-    /// AC-S1-6 那三条遗忘验证能不能成立正卡在这一步（specs/05 刀② 前置取证④）。
+    /// AC-S1-6 那三条遗忘验证能不能成立正卡在这一步。
+    ///
+    /// 刀④a 起它**不删文件，是搬进 `obsolete/`**（镜像原路径 + 删除戳）：界面上的删除
+    /// 因此是可逆的，恢复 = 原路搬回，真删只发生在"清空回收区"那一次。这一层不通知模型侧
+    /// ——`memory_delete` 工具自己走同一条软删（同一片 `memlayout::soft_delete_fact`）。
     pub fn delete(&self, workspace: &str, key: &str) -> Result<bool, String> {
         self.delete_md(workspace, key)
     }
 
     /// 管理页清空（§11.3 一键清空，UI 只加一次确认；全键位）。返回条数。
     ///
-    /// 计数与判据都来自真源：`clear_facts` 报的是**删掉的事实文件数**（旧实现报的是
-    /// 库里的行数）。有一层扫不动时它中止并 Err，一条也不动——"说清了其实没清"比
-    /// 失败更难被发现。`obsolete/` 软删随刀④ 替换这里的直接删文件，签名不变。
+    /// 计数与判据都来自真源：`soft_clear_facts` 报的是**搬进回收区的事实文件数**（旧实现
+    /// 报的是库里的行数）。有一层扫不动时它中止并 Err，一条也不动——"说清了其实没清"比
+    /// 失败更难被发现。刀④a 把它从"直接删文件"换成软删整层（签名不变），真删的另一半 =
+    /// `purge_obsolete`，它要界面上的二次确认才许调。
     pub fn clear_all(&self) -> Result<usize, String> {
-        plugin_api::memlayout::clear_facts(self.files().root())
+        plugin_api::memlayout::soft_clear_facts(self.files().root())
     }
 
     // ---- 刀③b-2 退役位：四条 `shadow_*` 与 `note_shadow` ----

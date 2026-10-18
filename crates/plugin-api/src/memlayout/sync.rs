@@ -46,6 +46,17 @@ pub fn mtime_ms(path: &Path) -> Option<i64> {
     Some(t.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as i64)
 }
 
+/// 墙钟毫秒（取不到 = 0，与 [`mtime_ms`] 同一条兜底口径）。这一族里"现在几点"只许
+/// 一个出处：删除戳（`obsolete.rs`）与人工编辑备份的 key（[`stash_human_edit`]）都吃它，
+/// 分两处写迟早一个用 `as_millis` 一个用 `as_secs`，那种差别正好落在"同一毫秒内两篇"
+/// 这种只有实测才能撞出的形状上。
+pub(crate) fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 /// 原子写：临时文件（唯一名，同目录）+ rename——并发写不再产生撕裂的
 /// md / 索引 / 标记（Windows `rename` 覆盖既有目标）。
 pub fn atomic_write(path: &Path, data: &str) -> Result<(), String> {
@@ -189,10 +200,7 @@ pub fn stash_human_edit(
         return Ok(None); // 内容相同（打开没改）
     }
     let parsed = parse_fact(&current);
-    let millis = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
+    let millis = now_ms();
     let backup_key = format!("{} · 人工编辑备份 {}", incoming.key, millis);
     let backup_rel = fact_rel_path(incoming.workspace, &backup_key);
     let backup_path = root.join(&backup_rel);

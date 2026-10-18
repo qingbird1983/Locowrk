@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a③b-1③b-2 已落地 / 只剩刀④ 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a③b-1③b-2④a 已落地 / 刀④b ④c 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -429,9 +429,62 @@
   代价如实登记（与 ③b-1 那条同族，现在覆盖到宿主自己）：任何一侧写完记忆，`memories` 表里的
   内容都要等下一轮 reconcile 才更新 ⇒ `learnEnabled=true` 时语义召回看到的集合滞后一轮。
   `settings.memory.files` 至此**彻底没有副作用**（env 注入已摘、影子写已摘），去处 = 刀④ 定改义或退役。
-- **刀④（`obsolete/` 与管理页）**：软删 + 清空真删（清空要确认）；管理页六枚命令读源换 md、
-  加"三枚行为开关 + 每层一行"。**TreeBoard / TreeSection / InjectSection 三处嵌入不在本阶段动**
-  （看板整体删除是 S4 的事，混在一刀里回滚不掉）。
+- **刀④a（`obsolete/` 软删数据面）✅ 2026-10-19 已落地**。
+  `memlayout` 长第六片 `obsolete.rs`：`soft_delete_fact` / `soft_clear_facts` / `list_obsolete` /
+  `restore_obsolete` / `purge_obsolete`（+ 防撞算法 `slot_stamp` 纯函数）。删除从此是**搬移**：
+  文件进 `<根>/memory/obsolete/`，**镜像原 rel**（`global/x.md`、`projects/<dir>/facts/x.md`）
+  并把主干加上 `~<删除毫秒>`——人打开回收区就看得见"它原来住在哪一层、什么时候删的"，
+  恢复 = 原路搬回，真删只发生在 `purge_obsolete`（界面上的清空回收区，要二次确认）。
+  三条布局纪律，各自都有机器判据或用例：
+  ① 恢复按**镜像路径**搬回，不拿 frontmatter 的 `workspace` 寻址（那是本项目**第五处 hint
+     陷阱**：人自建的文件那一维可能整个缺失，缺了就恢复不回它来的地方）；
+  ② 读面（`layers` / `iter_facts` / `facts_of` / `read_fact` / `clear_facts`）天然看不见回收区
+     ——它是那些目录的**兄弟**不是子目录，所以不需要额外判据；
+  ③ 软删**不动 `.sync/` 标记**：留着它，reconcile 才会走"标记在 + 行在 + 文件缺 ⇒ 删行"那一支；
+     连标记一起删 = 影子行成为没有主人的幽灵（红证 = `CASE 44`）。
+  接线四处全改软删：宿主 `MemoryStore::delete`（经 `delete_md`）、`clear_all`（`soft_clear_facts`）、
+  `MemoryFiles::delete_fact` → `soft_delete_fact`、插件 `memory_delete` 两个分支。
+  **唯一容许的硬删点** = `memory_undo` 撤销一次**新建**（那条用户从没见过，进回收区会把回收区
+  变成补偿日志）；`delete_fact` / `clear_facts` 两个既有签名**不删不改名**（`plugin-api` 的对外
+  签名属 AGENTS §5 禁区），改为在 doc 上把用法钉死 + 判据看着调用点。
+  新判据 `SS15a/SS15b`：硬删调用点的**文件集合**——`SS15a` 期望恰好那一个 undo 文件，
+  `SS15b`（硬删整层）期望 `none`。两处形状都带 `(?<!soft_)` 那段 lookbehind，它是**判据的
+  承重件**：`soft_delete_fact(` 里含着 `delete_fact(`，不剥前缀每条合法软删都会被打红
+  （第一版就错在这儿，一上手全红）。面排掉 `memlayout` 自身（那是定义处，`purge_obsolete`
+  在里面删回收区的文件是它的职责）。`SS12` 的转发档跟着换形态：第二条出口从
+  `memlayout::delete_fact` 变成 `memlayout::soft_delete_fact`，**条数仍是 2**——这一档报的是
+  "对真源落笔的出口有几个"，不是它们叫什么名字。
+  **撞出来的一处测试设计错误**（登记，因为它改了实现形状）：防撞逻辑第一版拿集成用例
+  `two_soft_deletes…` 做红证，变异**打空**——要撞出名得靠两次 `now_ms()` 落在同一毫秒里，
+  那是运气，跑一次绿一次等于零证明力。于是把"槽被占就 +1ms"抽成收 `taken` 闭包的纯函数
+  `slot_stamp`，测试可以确定性地造"前 100 格占满"（撞满 = `Err`，绝不静默覆盖）。
+  挪的是**戳**不是名字：`strip_stamp` 只认 `~<全数字>`，加 `-2` 那种后缀会让恢复把文件
+  放回一个名叫 `x~1728-2` 的 key 上。
+  红证四条：`CASE 42`（撤防撞 ⇒ 两条纯函数用例红）/ `CASE 43`（恢复改成静默覆盖 ⇒ 拒绝那条红）
+  / `CASE 44`（软删连标记一起清 ⇒ marker 那条红）/ `CASE 45`（往 `crud.rs` 塞一条**没人调用**的
+  硬删 ⇒ 闸点名 `SS15a` 报红，而宿主 598 条全绿——这一档同样是行为面看不见的）。
+  测试去向：新增一簇 10 条（`memlayout/tests/obsolete.rs`）；**既有 31 条插件接口用例与 598 条
+  宿主用例一字未改全绿** = "删除的实现换了、契约没换"的实证（工具的 `deleted` / `previous_entry`
+  字段与管理页的 no-op 判据都不感知"搬移 vs 删除"）。
+  ⚠ **AC-S1-6 与 AC-S1-7 在这一步撞上了，判读要登记**：AC-S1-6 第一条写的是"删一条 → grep
+  数据根该 stem 零命中"，而软删之后那句话在字节层面**不成立**——回收区里正躺着那份内容，
+  全文 grep 会命中。两条 AC 的本意是不同的：AC-S1-7 的标题就叫"软删可恢复、**清空才算数**"。
+  所以走查时按这个口径验：AC-S1-6 的三条落点是"**读面 + 该层索引 + 下一会话注入块**三处零命中"，
+  而"字节也从磁盘上消失"属于 AC-S1-7 的清空动作（要确认）。界面上这一维不能藏：④c 的删除
+  文案必须写清"先进回收区、可恢复；要真正抹掉请清空回收区"——用户删一条可能是为了删掉一句
+  含隐私的话，那他要的是不可逆那一档。
+- **刀④b（三枚行为开关）⏳ 待做**：全局记忆 / 项目记忆 / 项目交接层各一枚（ADR-0007 §18），
+  关 = 该层**不读、不更新、不注入**。接线点三处：`recall_quiet` 与 `list` 的全局层、
+  `project_index` 与项目层读写、`repo_context` 携带的 `<repo>/.Locowrk/MEMORY.md`。
+- **刀④c（每层一行 + `type` 那一列 + 回收区入口 + 文案订正）⏳ 待做**：管理页加"每层一行
+  （文件数 / 更新时间 / 打开文件夹 / 删除该层）"、`MemoryRow` 补 `type` 字段并显示、
+  回收区的列出 / 恢复 / 清空三枚命令。**命令与前端调用必须同批落**——`check-commands` 对
+  "后端有、前端无"要显式进 RESERVED 名单，分两批就会多一条豁免债。再订正 `memoryFilesHint` /
+  `filesHint` 那两句镜像时代文案，并给 `memory.files` 定去处（关掉 = 记忆面停止写入并如实报错，
+  或直接退役）。中英成对。
+- **刀④ 不动的面**：**TreeBoard / TreeSection / InjectSection 三处嵌入**（看板整体删除是 S4 的事，
+  混在一刀里回滚不掉）；应用内记忆列表/详情视图按 ADR §18 是**目标态退役**，但删它 = 移除用户
+  在用的能力，未列入本轮 ⇒ 走查之后单独点头。
 
 拆刀订正的理由留在仓里：**原先那份刀① 想"先补 type 枚举 + frontmatter"，但 type 的值只能从
 工具参数来——只加枚举没有任何调用能写出 `user` / `feedback`，挂在那里就是一圈死 API**。
@@ -515,10 +568,16 @@
       那不是"另算一份口径"，而是真源 = 可被人改写的文件时的保护网（`the_budget_still_bites…`）。
       **整条仍不勾**：两半都只有单测证据，还差真实窗口那一次——造 250 条、打开管理页与
       新会话的注入块亲眼核对
-- [ ] AC-S1-6 遗忘三条全过：删一条 → grep 数据根该 stem 零命中 → 该层 `MEMORY.md` 零命中 →
-      下一会话注入块零命中
+- [ ] AC-S1-6 遗忘三条全过：删一条 → 该 stem 在**读面**零命中（`iter_facts` / `facts_of` /
+      `read_fact` 三路）→ 该层 `MEMORY.md` 零命中 → 下一会话注入块零命中。
+      ⚠ 这条的判据落点自刀④a 起**重述过**：原文写的是"grep 数据根该 stem 零命中"，而删除
+      改成软删之后那句话在字节层面必然不成立（回收区里正躺着那份内容）。与 AC-S1-7 的分工
+      是："不再被模型看见"归本条，"字节也从磁盘上消失"归 S1-7 的清空动作。
+      数据面三处零命中已由 `obsolete.rs` 那簇第一条钉住；**整条仍不勾**，缺真实窗口那一次
 - [ ] AC-S1-7 软删可恢复、清空才算数：管理页删除 → 文件进 `obsolete/`、注入零命中、能恢复；
-      清空 `obsolete/` 弹确认，取消 = 文件还在
+      清空 `obsolete/` 弹确认，取消 = 文件还在。
+      **数据面已落地**（刀④a：搬移 / 镜像路径 / 逐字节恢复 / 拒绝覆盖 / `purge_obsolete`，
+      红证 = `CASE 42`–`CASE 45`）；界面上的"恢复"与"清空要弹确认"两格在刀④c
 - [ ] AC-S1-8 存量导出幂等：导出脚本跑两次 → 第二次零新增、**人工编辑过的文件 sha 不变**
       （复用 `memory_files.rs:225` 首启导出那套"已有文件一律不动"）
 - [x] AC-S1-9 新判据要报红：给"记忆写路径只许一个出处"这条判据做窄变异（把 md 写退回
@@ -544,7 +603,7 @@
 
 | 文件 / 目录 | 改动 |
 | --- | --- |
-| `crates/plugin-api/src/memlayout/{mod,sync,index,read}.rs` | 刀①：索引写侧硬钳 + 预算常量收一处（`index.rs`）；刀②a：读回面 `read.rs` + `render()`/`parse_fact` 补 `tags`；`FactEntry` 只末尾追加字段、既有签名不动 |
+| `crates/plugin-api/src/memlayout/{mod,paths,index,read,sync,kind,obsolete}.rs` | 刀①：索引写侧硬钳 + 预算常量收一处（`index.rs`）；刀②a：读回面 `read.rs` + `render()`/`parse_fact` 补 `tags`；`FactEntry` 只末尾追加字段、既有签名不动；刀③a：四类型面 `kind.rs`；刀④a：**软删面 `obsolete.rs`**（新片，六件对外 + 一个防撞纯函数） |
 | `crates/plugin-api/src/memlayout/tests.rs` | 四类型落位、钳、Why 段的用例 |
 | `desktop/src-tauri/src/memory_files.rs` | 刀①③：写语义从"同步"改"落盘"；`obsolete/` 移入与清空 |
 | `desktop/src-tauri/src/memory/{store,crud,recall,reconcile}.rs` | 刀②：`warn` → `Err`；读路径改 md；学习列停读 |

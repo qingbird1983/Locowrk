@@ -53,7 +53,7 @@ pub struct FactsScan {
 
 /// 索引与树投影不是事实文件，一律跳过（`MEMORY.md` 由 `index.rs` 生成，`tree.md`
 /// 是宿主 `memory_files` 写的投影）。
-fn is_fact_file(p: &Path) -> bool {
+pub(crate) fn is_fact_file(p: &Path) -> bool {
     let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else {
         return false;
     };

@@ -142,10 +142,11 @@ impl MemoryStore {
 
     /// 从真源删一条。返回值 = **文件原本在不在**（刀②c-1 起这是 no-op 的唯一判据；
     /// 旧判据是"库里删掉了几行"，真源翻转后那个数说的已经不是"这条记忆存在过"）。
-    /// `obsolete/` 软删随刀④ 替换这里的 `delete_fact`，签名不变。
+    /// 刀④a 把底下的落点换成 `soft_delete_fact`（搬进 `obsolete/`，不是 `remove_file`），
+    /// 签名与这两条判据都没动——"没搬走"与"本来就没有"仍然是同一档，"层读不动"才是 Err。
     pub(super) fn delete_md(&self, ws: &str, key: &str) -> Result<bool, String> {
         self.files
-            .delete_fact(ws, key)
+            .soft_delete_fact(ws, key)
             .map_err(|e| format!("记忆 `{key}` 删除失败: {e}"))
     }
 

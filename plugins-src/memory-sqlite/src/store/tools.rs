@@ -141,12 +141,16 @@ pub(crate) fn memory_search(ctx: &super::WsCtx, args: &Value) -> Result<Value, S
 pub(crate) fn memory_delete(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
     let r = facts::root()?;
+    // 删除 = **软删**（S1 刀④a）：文件搬进 `obsolete/`，不 `remove_file`。这一枚工具的
+    // 删除与管理页那条走同一个出口，所以"模型删掉的"与"人删掉的"同样可恢复——旧形状里
+    // 只有 `previous_entry` 载荷能救，而载荷随会话结束就没了。真删的两个合法出口见
+    // `memlayout::obsolete` 头注（清空回收区 / 补偿回滚丢弃），判据 = `SS15a/b`。
     // 双层纪律（Context 文档 §4.6）：'' 键位 = 全局偏好层，聊天工具删除只
     // 对 headless 开放（其单一宇宙本就是 ''）；桌面会话（归属/未归属）
     // 删全局行一律拒绝——全局偏好的增删是人的操作，走记忆管理页。
     if let super::WsCtx::Headless = ctx {
         let previous = read_one(&r, "", &key)?.map(|h| h.json());
-        let removed = memlayout::delete_fact(&r, "", &key)
+        let removed = memlayout::soft_delete_fact(&r, "", &key)
             .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
         return Ok(json!({ "key": key, "deleted": removed, "previous_entry": previous }));
     }
@@ -154,7 +158,7 @@ pub(crate) fn memory_delete(ctx: &super::WsCtx, args: &Value) -> Result<Value, S
     if !ws.is_empty() {
         if let Some(h) = read_one(&r, ws, &key)? {
             let previous = h.json();
-            let removed = memlayout::delete_fact(&r, ws, &key)
+            let removed = memlayout::soft_delete_fact(&r, ws, &key)
                 .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
             return Ok(json!({ "key": key, "deleted": removed, "previous_entry": previous }));
         }

@@ -3,16 +3,16 @@
 //! 本模块只放**渲染与写删**（frontmatter 怎么落、一条事实写到哪、删完刷谁）——
 //! 寻址面（目录命名、文件名安全、层枚举）在 `paths.rs`，索引面在 `index.rs`，
 //! 读回与清点名在 `read.rs`，同步机械件（标记 / 原子写 / 解析 / 冲突备份）在 `sync.rs`，
-//! 四类型与落点层在 `kind.rs`。
-//! 五片都经这里 `pub use` 出去 ⇒ 插件侧（memory-sqlite）与宿主侧（desktop memory /
+//! 四类型与落点层在 `kind.rs`，软删回写在 `obsolete.rs`。
+//! 六片都经这里 `pub use` 出去 ⇒ 插件侧（memory-sqlite）与宿主侧（desktop memory /
 //! `memory_files`）吃的仍是同一个 `memlayout::…` 路径，同一键位必落同一文件。
 //! 写入边界（宁严勿松）：全部落点都在数据根 `memory/` 之内。
 //!
 //! 真源归属按 `docs/adr/0007`（记忆 = 扁平事实文件一处落盘）扳正：v1.0 草案推荐的
-//! "sqlite = 机器索引层 + md = 人类层"双层双写**已撤销**。⚠ 但**别照这句话读现状**——
-//! 撤销是逐面完成的，两侧进度不同：宿主读面（管理页列举 / `<persistent_memory>` 正文 /
-//! 项目索引）自 S1 刀②b 起只读这里，宿主写面自刀②c-1 起**先落这里、失败就是失败**；
-//! `plugins-src/memory-sqlite` 那六枚工具仍按库寻址，那是刀③b 的"工具内部改道"。
+//! "sqlite = 机器索引层 + md = 人类层"双层双写**已撤销**，撤销到 S1 刀③b 为止**四面全部落地**
+//! （宿主读面 = 刀②b、宿主写面 = 刀②c-1、插件那六枚工具 = 刀③b-1、宿主影子写 = 刀③b-2）——
+//! 现在两侧读写都只经这片布局，`memory.sqlite3` 那张表只剩"影子内容 + 学习量两列"，
+//! 而它的内容列**只由 `memory_reconcile` 从真源重建**（判据 = `SS13` + `SS14a/b/c`）。
 //! 四类型（`metadata.type`）自刀③a 起有了生产者（工具参数 `type`），值域、落点层与
 //! `Why:` / `How to apply:` 提醒三件都在 `kind.rs`。
 //! 谁在反着写（库 → 文件）也记在 `write_fact` 上方与 specs/05，不靠本段记忆。
@@ -23,10 +23,11 @@
 //! ├── global/
 //! │   ├── MEMORY.md                    # 全局索引（一文件一行，落盘前钳 200 行 / 25_000 字符）
 //! │   └── <key>.md                     # 全局记忆（'' 键位：用户偏好、全局要求）
-//! └── projects/<可读名-短哈希>/
-//!     ├── MEMORY.md                    # 该项目事实索引（坐在项目文件夹根）
-//!     ├── tree.md                      # 该项目记忆树的人读层（宿主 memory_files 写）
-//!     └── facts/<key>.md               # 项目事实
+//! ├── projects/<可读名-短哈希>/
+//! │   ├── MEMORY.md                    # 该项目事实索引（坐在项目文件夹根）
+//! │   ├── tree.md                      # 该项目记忆树的人读层（宿主 memory_files 写）
+//! │   └── facts/<key>.md               # 项目事实
+//! └── obsolete/                        # 软删回收区（镜像上面两支的路径 + `~<删除毫秒>`）
 //! ```
 //! 未归属会话的树另有 `_unaffiliated/`（它**不是**项目，见 `UNAFFILIATED_DIR`）。
 
@@ -36,6 +37,7 @@ use crate::fsutil;
 
 mod index;
 mod kind;
+mod obsolete;
 mod paths;
 mod read;
 mod sync;
@@ -45,6 +47,10 @@ mod sync;
 pub use index::{INDEX_TRUNCATED_NOTE, MAX_INDEX_CHARS, MAX_INDEX_LINES, refresh_index};
 pub use kind::{
     Layer, MEMORY_TYPES, UNCLASSIFIED_TYPE, layer_for, missing_guidance, normalize_type,
+};
+pub use obsolete::{
+    OBSOLETE_DIR, ObsoleteEntry, ObsoleteScan, list_obsolete, obsolete_root, purge_obsolete,
+    restore_obsolete, soft_clear_facts, soft_delete_fact,
 };
 pub use paths::{
     LayerDir, UNAFFILIATED_DIR, fact_rel_path, files_enabled, fnv1a64, key_file_stem, layers,
@@ -143,8 +149,10 @@ impl FactEntry<'_> {
 /// 返回值 = 文件路径（日志/测试用）。
 ///
 /// ⚠ 这句话在 S1 刀②c-1 之前是「调用方保证 sqlite 已是真源」——**次序已经反过来**：
-/// 宿主四条写路径先调这里，这里成功才去写 sqlite 影子（`desktop/src-tauri/src/memory/crud.rs`
-/// 的 `write_md` + `shadow_*`）。插件那侧仍按旧次序，直到刀③ 改道。
+/// 写一条事实（真源落盘的**唯一**入口）：宿主四条写路径与插件那六枚工具都先调这里
+/// ——S1 刀②c-1 反转写序、刀③b-1 工具改道、刀③b-2 摘掉宿主影子写。写失败就是失败
+/// （`Err` 上抛到工具结果），不再"库里落了、文件同步失败只 warn"。
+/// 库里那份影子的内容列现在只由 `memory_reconcile` 从真源重建（判据 = `SS13` + `SS14`）。
 pub fn write_fact(root: &Path, e: &FactEntry) -> Result<PathBuf, String> {
     let rel = fact_rel_path(e.workspace, e.key);
     let path = root.join(&rel);
@@ -164,7 +172,12 @@ pub fn write_fact(root: &Path, e: &FactEntry) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// 删一条事实 md + 删标记 + 刷新索引。文件不存在 = Ok(false)（幂等）。
+/// **硬删**一条事实 md + 删标记 + 刷新索引。文件不存在 = Ok(false)（幂等）。
+///
+/// ⚠ 界面上的"删除"不许调这里——那是不可逆动作，走 `soft_delete_fact`（本模块再导出，
+/// 实现见 `obsolete.rs`）。全生产面上这个函数**只许有一个调用点** = `memory_undo` 撤销
+/// 一次新建（那条用户从没见过，进回收区会把回收区变成补偿日志），闸 = `SS15a` 的白名单。
+/// 它是 `plugin-api` 的既有对外签名，删除属 AGENTS §5 禁区 ⇒ 留着并把用法钉死。
 ///
 /// ⚠ "不存在"与"所在那一层根本不是目录"在 **Windows 上是同一个错误码**
 /// （`ERROR_PATH_NOT_FOUND`，路径里任何一段不是目录就报它），POSIX 上才是两个

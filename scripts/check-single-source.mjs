@@ -223,10 +223,38 @@ const MEM_INSERT = /INSERT INTO memories\s*\(/;
 const MEM_CONTENT_UPDATE = /UPDATE memories\s+SET\s+(?:value|tags|source|updated_at)\b/;
 const MEM_DELETE = /DELETE FROM memories/;
 /** 命中形状的文件集合（排序拼接；一个都没有 = `none`）。 */
-const memWriters = (m, re) => {
-  const hit = m.hostDesktop.filter((f) => re.test(f.code)).map((f) => f.rel);
+const filesWith = (list, re) => {
+  const hit = list.filter((f) => re.test(f.code)).map((f) => f.rel);
   return hit.length ? [...new Set(hit)].sort().join('|') : 'none';
 };
+const memWriters = (m, re) => filesWith(m.hostDesktop, re);
+
+/**
+ * 硬删调用面（S1 刀④a 加，SS15a / SS15b 的扫描面）：全生产 .rs（`prodRustFiles` 已经排掉
+ * tests），再**排掉 `plugin-api/src/memlayout` 自己**——那一片是 `delete_fact` / `clear_facts`
+ * 的定义处与内部实现，把它们算进来这两个集合永远非空、判据就成了自证空转。剥行注释同族口径。
+ *
+ * 为什么"排定义处"而不是像 SS14 那样把定义处列进白名单：memlayout 内部调用硬删是**它自己的
+ * 职责**（`obsolete.rs` 的 `purge_obsolete` 就在删文件），那片的路径一旦进集合，"回收区里
+ * 谁能删文件"这条纪律就得靠一串会漂的路径来表达。
+ */
+function hardDeleteFace() {
+  return prodRustFiles()
+    .map((abs) => path.relative(ROOT, abs).replace(/\\/g, '/'))
+    .filter((rel) => !rel.includes('plugin-api/src/memlayout'))
+    .map((rel) => ({
+      rel,
+      code: read(rel)
+        .split('\n')
+        .filter((l) => !/^\s*\/\//.test(l))
+        .join('\n'),
+    }));
+}
+
+/** 硬删形状。`(?<!soft_)` 这段 lookbehind 是**判据的承重件**：`soft_delete_fact(` 里含着
+ * `delete_fact(`，不剥前缀的话每一条合法软删都会被打红——第一版就是这么错的。 */
+const HARD_DELETE_CALL = /(?<!soft_)delete_fact\s*\(/;
+const HARD_CLEAR_CALL = /(?<!soft_)clear_facts\s*\(/;
 
 /** 外点收口形状 = 挂到 document/window 上的 `pointerdown`（口径见上方注释）。 */
 const DISMISS_SHAPE = /(?:document|window)\.addEventListener\(\s*"pointerdown"/;
@@ -349,6 +377,7 @@ function snapshot() {
     reconcileTree: reconcileFace(),
     plugMemory: plugMemoryCode(),
     hostDesktop: hostDesktopFace(),
+    hardDelete: hardDeleteFace(),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -598,15 +627,17 @@ const CHECKS = [
       '而索引先行 ⇒ 从索引愈合文件）、②`memory_files::run_initial_export` 的补洞段（库里有一行' +
       '而文件没有 ⇒ 按索引把文件写出来）。真源 = md 之后它们的含义反过来：**把人已经删掉的记忆' +
       '在下次启动写回来** ⇒ AC-S1-6 那三条遗忘验证不成立。转发档 2 = `MemoryFiles` 自己的' +
-      '`memlayout::write_fact` / `memlayout::delete_fact` 两条出口，数字变了就是长出第二个' +
+      '`memlayout::write_fact` / `memlayout::soft_delete_fact` 两条出口（第二条是刀④a 把' +
+      '`delete_fact` 换成软删之后的形态，**条数不变**——这两档报的就是"对真源落笔的出口有几个"），' +
+      '数字变了就是长出第二个' +
       '对真源落笔的出口，那是有意事件、要显式改这里。' +
       '与行为测试的分工：那两格各有用例钉着（`a_shadow_ahead_of_the_file_is_reported_but_never_written`' +
       '/ `initial_export_rebuilds_tree_md_and_writes_no_fact_files`），这条判据**独有**的是' +
       '"没人调用的一条新反写分支"——它不经过任何测试，只有秒级档看得见（`make quick` 不跑 cargo）',
     (m) =>
       [
-        countOf(m.reconcileTree, /\b(?:files|self)\s*\.\s*(?:write|delete)_fact\s*\(/),
-        countOf(m.reconcileTree, /\bmemlayout::(?:write|delete)_fact\s*\(/),
+        countOf(m.reconcileTree, /\b(?:files|self)\s*\.\s*(?:write_fact|(?:soft_)?delete_fact)\s*\(/),
+        countOf(m.reconcileTree, /\bmemlayout::(?:write_fact|(?:soft_)?delete_fact)\s*\(/),
       ].join('|'),
     '0|2',
   ],
@@ -661,6 +692,25 @@ const CHECKS = [
     (m) => memWriters(m, MEM_DELETE),
     'memory/reconcile.rs',
   ],
+  [
+    'SS15a',
+    '硬删一条记忆的调用点在全生产面上**只许一个白名单文件**（S1 刀④a · AC-S1-7：删除改成' +
+      '软删进 `obsolete/` 之后，"把文件真删掉"只剩一处合法身份 = `memory_undo` 撤销一次' +
+      '**新建**（那条用户从来没见过，留在回收区会让那个目录变成补偿日志））。管理页删除、' +
+      '工具删除、清空全部走 `soft_*`。形状是 `delete_fact(` 且**前面不是 `soft_`**（那段 ' +
+      'lookbehind 是承重件：不剥前缀每条合法软删都会被打红）；面排掉 `memlayout` 自己' +
+      '（那是定义处，`purge_obsolete` 在里面删回收区的文件是它的职责）',
+    (m) => filesWith(m.hardDelete, HARD_DELETE_CALL),
+    'plugins-src/memory-sqlite/src/store/undo.rs',
+  ],
+  [
+    'SS15b',
+    '硬删整层的调用点恒 0（`clear_facts(`，同样剥 `soft_` 前缀）：管理页"清空"自刀④a 起是' +
+      '`soft_clear_facts`——一次动作影响整个记忆面，可逆与不可逆的差别必须落在实现里而不落在' +
+      '按钮文案里。这一档期望 `none` ⇒ 由 FLOORS 的面下限兜"扫不到东西"那种假绿',
+    (m) => filesWith(m.hardDelete, HARD_CLEAR_CALL),
+    'none',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -689,6 +739,10 @@ const FLOORS = [
   // 自己钉住：文件数（现值 200，取七成）+ 白名单那两处 INSERT 本体必须真在面上。
   ['宿主生产文件数（排 tests）', (m) => m.hostDesktop.length, 140],
   ['宿主生产面含影子维护本体', (m) => m.hostDesktop.filter((f) => MEM_INSERT.test(f.code)).length, 2],
+  // SS15 两档同样是文件集合，SS15b 期望 `none` ⇒ "面瞎了"与"真的没有"在读数上一模一样。
+  // 第一条下限挡"整个面塌掉"，第二条挡"把 plugins-src 一并排掉"那种改法（白名单点正在那儿）。
+  ['硬删面文件数（全生产排 memlayout）', (m) => m.hardDelete.length, 150],
+  ['硬删面含工具删除本体', (m) => m.hardDelete.filter((f) => /fn memory_delete/.test(f.code)).length, 1],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
@@ -796,6 +850,18 @@ if (SELFTEST) {
         rel: 'memory/crud.rs',
         code: 'let _ = conn.execute("DELETE FROM memories WHERE key = ?1", []);',
       }),
+    // 刀④a 的两块墓碑。**故意用 `soft_` 反例形状**（一条没人调用的硬删）自证那个
+    // lookbehind 在承重：写成 `soft_delete_fact(` 的话这两档必须不红，红了就是判据错。
+    SS15a: (m) =>
+      m.hardDelete.push({
+        rel: 'desktop/src-tauri/src/memory/crud.rs',
+        code: 'fn wipe_now(root: &std::path::Path, ws: &str, key: &str) {\n    let _ = memlayout::delete_fact(root, ws, key);\n}',
+      }),
+    SS15b: (m) =>
+      m.hardDelete.push({
+        rel: 'desktop/src-tauri/src/memory/crud.rs',
+        code: 'fn wipe_all(root: &std::path::Path) {\n    let _ = memlayout::clear_facts(root);\n}',
+      }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。
@@ -900,6 +966,7 @@ if (SELFTEST) {
       frontSrc: [...snap.frontSrc],
       // SS14a/b/c 同样 push 面元素 ⇒ 同一份拷贝纪律
       hostDesktop: [...snap.hostDesktop],
+      hardDelete: [...snap.hardDelete],
     };
     mut(copy);
     const row = runChecks(copy).find((r) => r.id === id);

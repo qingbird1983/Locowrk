@@ -47,9 +47,14 @@ impl MemoryFiles {
         memlayout::write_fact(&self.root, e)
     }
 
-    /// 删一条事实 md（幂等）。
-    pub fn delete_fact(&self, workspace: &str, key: &str) -> Result<bool, String> {
-        memlayout::delete_fact(&self.root, workspace, key)
+    /// **软删**一条事实 md（S1 刀④a · AC-S1-7）：搬进 `obsolete/`，索引跟着刷。
+    /// `false` = 这条本来不在。名字里带 `soft_` 是刻意的——这片里曾经只有一个
+    /// `delete_fact`，它直接 `remove_file`；真源 = 文件之后"删掉"就成了不可逆动作，
+    /// 而界面上的删除按钮不该承担不可逆（真删只发生在清空回收区那一次，且要确认）。
+    /// 硬删出口现在是 `memlayout::purge_obsolete`，全生产面上对 `delete_fact` /
+    /// `clear_facts` 的调用点必须恒 0（闸 = `SS15`）。
+    pub fn soft_delete_fact(&self, workspace: &str, key: &str) -> Result<bool, String> {
+        memlayout::soft_delete_fact(&self.root, workspace, key)
     }
 
     /// 该项目的人类层家目录（队列 Q15 · `memory_reveal_project` 与后续级联删除

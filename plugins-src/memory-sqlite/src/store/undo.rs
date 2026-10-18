@@ -39,6 +39,11 @@ pub(crate) fn memory_undo(ctx: &super::WsCtx, args: &Value) -> Result<Value, Str
             "memory_undo: missing `output.key` (pass the original memory_write result)".to_string()
         })?;
         if prev.is_null() {
+            // 撤销一次**新建** = 当作没发生过 ⇒ 这里是全仓唯一容许的硬删调用点
+            // （闸 `SS15a` 的白名单就它一个）。为什么不进 `obsolete/`：回收区的用途是
+            // "用户删错了想找回"，而这一条他从来没见过（写入刚被回滚），把它留在回收区
+            // 会让那个目录变成补偿日志。撤销"覆盖写"（下面那一支）与撤销"删除"
+            // （`previous_entry`）都是往真源写回，不涉及删除形状。
             let removed = memlayout::delete_fact(&r, &ws, key)
                 .map_err(|e| format!("memory_undo `{key}`: {e}"))?;
             return Ok(json!({ "key": key, "undone": true, "removed": removed }));
