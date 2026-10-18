@@ -105,16 +105,25 @@ fn half_migrated_library_self_heals_instead_of_locking() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 学习列不许被任何写路径冲掉（ML §6.4 的白名单口径）：常规 `write`（模型与管理页共用）、
-/// 管理页 `update_value`、F2 reconcile 直写三条路径覆盖同一键位后，学习量必须原样在场。
-/// 三条现在都靠 `ON CONFLICT DO UPDATE SET` 的**显式列**天然成立，本条钉的是将来有人
-/// 把它改成整行 REPLACE / `INSERT OR REPLACE` 的那一刻。
+/// 学习列不许被写路径冲掉（ML §6.4 的白名单口径）。
+///
+/// 三条路径里现在**只有 `reconcile_upsert` 还会写这张表**（S1 刀③b-2 摘掉四条
+/// `shadow_*` ⇒ 常规 `write` 与管理页 `update_value` 一条 SQL 都不发）。那两段留在
+/// 这里不是恒真的装饰：它们各自防的是"将来有人往真源写路径加回一条 upsert、顺手把
+/// 学习列整行 REPLACE 掉"——那时 `learning()` 这两个断言立刻红。三条现在都靠
+/// `ON CONFLICT DO UPDATE SET` 的**显式列**天然成立，本条钉的是将来有人把它改成
+/// 整行 REPLACE / `INSERT OR REPLACE` 的那一刻。
 #[test]
 fn learning_columns_survive_every_write_path() {
     let dir = temp_dir("learn-survive");
     std::fs::create_dir_all(&dir).unwrap();
     let store = MemoryStore::new(&dir, test_resolver());
     store.write("", "k.a", "v1", "t", "explicit").unwrap();
+    // 影子那一行经生产入口落（它同时把表建出来 —— 写路径不开库之后，
+    // 没有这一步就没有 `memories` 这张表可查）
+    store
+        .reconcile_upsert("", "k.a", "v1", "t", "explicit", 1)
+        .unwrap();
     let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
     conn.execute(
         "UPDATE memories SET hit_count = 7, last_hit_at = 999 WHERE key = 'k.a'",
@@ -193,21 +202,26 @@ fn first_touches_race_on_one_library_all_succeed() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 如实边界：删一行 = 连带删掉它的学习量（语义如此，不是漏）。管理页删除与 reconcile
-/// 删除两条路都这样，本条把它写下来，免得后来人把"行没了"当成迁移缺陷。
+/// 如实边界：删一行 = 连带删掉它的学习量（语义如此，不是漏）。刀③b-2 之后**删影子只有
+/// 一条通路** = 对账（`reconcile_delete`：人删了文件 ⇒ 行跟着走）；管理页 `delete` 只删
+/// 真源，库里那行要等下一轮对账（那一维由 `host_writes_land_in_md_and_never_touch_the_shadow`
+/// 钉着）。本条把它写下来，免得后来人把"行没了"当成迁移缺陷。
 #[test]
 fn deleting_a_row_takes_its_learning_with_it() {
     let dir = temp_dir("learn-delete");
     std::fs::create_dir_all(&dir).unwrap();
     let store = MemoryStore::new(&dir, test_resolver());
     store.write("", "k.a", "v", "t", "explicit").unwrap();
+    store
+        .reconcile_upsert("", "k.a", "v", "t", "explicit", 1)
+        .unwrap();
     let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
     conn.execute(
         "UPDATE memories SET hit_count = 3, last_hit_at = 77 WHERE key = 'k.a'",
         [],
     )
     .unwrap();
-    assert!(store.delete("", "k.a").unwrap());
+    assert!(store.reconcile_delete("", "k.a").unwrap());
     let n: i64 = conn
         .query_row("SELECT COUNT(*) FROM memories WHERE key = 'k.a'", [], |r| {
             r.get(0)

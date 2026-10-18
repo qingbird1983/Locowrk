@@ -54,6 +54,11 @@ fn human_edit_flows_back_into_index() {
     store
         .write("", "pref.tool", "pnpm", "pref", "explicit")
         .unwrap();
+    // 先把真源灌进影子（S1 刀③b-2 之后写路径不碰库 ⇒ 对账是唯一通路），下面那句
+    // "文件为准**更新**一行"才有"更新"可谈；不补这一轮的话它变成 created=1，
+    // 判的就是另一件事了。
+    let seed = run(&store, &files, &[]).unwrap();
+    assert_eq!(seed.created, 1, "对账第一轮从真源建行：{seed:?}");
     let rel = memlayout::fact_rel_path("", "pref.tool");
     human_edit(&dir, &rel, "永远用 pnpm，不要用 npm");
     let sum = run(&store, &files, &[]).unwrap();
@@ -81,7 +86,7 @@ fn human_created_file_is_ingested_as_new_row() {
     std::fs::create_dir_all(md_root(&dir).join("global")).unwrap();
     std::fs::write(
         md_root(&dir).join(&rel),
-        "---\nname: \"hand.made\"\ndescription: \"人建\"\nmetadata:\n  type: fact\n  source: \"explicit\"\n  workspace: \"\"\n  updated: 1728100000\n---\n\n我手写的事实\n",
+        "---\nname: \"hand.made\"\ndescription: \"人建\"\ntags: \"人建\"\nmetadata:\n  type: fact\n  source: \"explicit\"\n  workspace: \"\"\n  updated: 1728100000\n---\n\n我手写的事实\n",
     )
     .unwrap();
     let sum = run(&store, &files, &[]).unwrap();
@@ -95,12 +100,19 @@ fn human_created_file_is_ingested_as_new_row() {
     assert_eq!(row.value, "我手写的事实");
     assert_eq!(row.source, "explicit", "frontmatter source 优先");
     assert_eq!(row.updated_at, 1728100000, "frontmatter updated 优先");
+    // S1 刀③b-2 之后这一行才是这条用例的承重断言：影子行的 tags **只**能从文件来
+    // （四条 `shadow_*` 退役 ⇒ 再没有第二个出处）。写死空串时管理页看见的标签会集体消失，
+    // 而这一维在 created 支落地之前没有任何用例盯着——旧世界里 shadow_upsert 把它盖住了。
+    assert_eq!(row.tags, "人建", "文件里的 tags 是对账新增行的唯一来源");
 }
 
 #[test]
 fn deleted_file_removes_row_but_missing_dir_keeps_rows() {
     let (store, files, dir) = setup("delete");
     store.write("", "gone.key", "v", "", "explicit").unwrap();
+    // 两段都要先跑一轮对账把行建出来：S1 刀③b-2 之后 `write` 不再落库，
+    // "删掉一行"这个动作的前提（行在）现在只能由 reconcile 自己给。
+    run(&store, &files, &[]).unwrap();
     let rel = memlayout::fact_rel_path("", "gone.key");
     // 单文件删除（标记在 = 我们写过）→ 行删
     std::fs::remove_file(md_root(&dir).join(&rel)).unwrap();
@@ -110,6 +122,7 @@ fn deleted_file_removes_row_but_missing_dir_keeps_rows() {
     // 整层缺席 = 复位手势：行保留（不删行是因为"目录没了"无法区分"人清空了记忆"
     // 与"这层还没建过"；刀②c-2 起也**不补文件**，两份都不动才是安全的那一档）
     store.write("", "kept.key", "v", "", "explicit").unwrap();
+    run(&store, &files, &[]).unwrap();
     let global = md_root(&dir).join("global");
     std::fs::remove_dir_all(&global).unwrap();
     let sum2 = run(&store, &files, &[]).unwrap();

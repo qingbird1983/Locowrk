@@ -101,6 +101,11 @@ fn a_row_in_the_db_without_a_file_is_not_a_fact() {
     let dir = temp_dir("shadow-only");
     let store = wired(&dir);
     store.write("", "shadow.row", "v", "", "explicit").unwrap();
+    // 影子那一行由 `reconcile_upsert` 造（刀③b-2 之后 `write` 不碰库；它也是生产里
+    // 唯一还写内容列的入口 ⇒ 夹具照生产，不照方便）
+    store
+        .reconcile_upsert("", "shadow.row", "v", "", "explicit", 1)
+        .unwrap();
     // 只删文件、不动影子 ⇒ 造出"库里有行、真源没有"的形状
     std::fs::remove_file(dir.join("memory").join("global").join("shadow.row.md")).unwrap();
     assert_eq!(
@@ -129,6 +134,10 @@ fn a_row_in_the_db_without_a_file_is_not_a_fact() {
 /// 后半句"影子里没有那行"才是这条用例的承重部分：只断言 `write()` 返回 Err 的话，
 /// "先写影子、再写 md、md 失败照样 Err"那种实现也能绿——而那种顺序里库里已经躺着
 /// 一条用户以为没写进去的记忆，下次启动还会被对账写回文件。
+/// 刀③b-2 摘掉四条 `shadow_*` 之后这一句**结构上恒真**，它留在这里防的是"将来有人
+/// 往写路径加回一条补偿写库"：那时 md 失败仍会 Err，但库里会多出一行幽灵。
+/// 与 `host_writes_land_in_md_and_never_touch_the_shadow` 的分工：那条测成功路径
+/// 全程不碰库，这条测失败路径也不许碰。
 #[test]
 fn a_failed_md_write_is_an_error_and_writes_no_shadow() {
     let dir = temp_dir("md-write-fails");
@@ -273,15 +282,21 @@ fn limit_is_clamped() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// ---- 真源落盘 + 影子跟随（《Memory File-ization Design v1.1》，刀②c-1 定形）----
+// ---- 真源落盘 = 唯一的落盘动作（《Memory File-ization Design v1.1》，刀③b-2 定形）----
 
-/// 四条宿主写路径都**先落真源**，影子（sqlite）随后跟到同一个归一键位。
-/// 传**原始串**（v2.186 起 `write()` 在入口归一键位），落点用 `keysid()` 取：
-/// 目录名与 sqlite 的 workspace 列必须是同一个归一串——这正是那批接上的欠账
-/// （Q2 留的「宿主 write 未归一 ⇒ 同项目双键位」）。
+/// 四条宿主写路径**只落真源**，影子表全程不动。传**原始串**（v2.186 起 `write()` 在
+/// 入口归一键位），落点用 `keysid()` 取：目录名必须与注入键位、观测 `scope_id`
+/// 同一个函数（Q2 留的「宿主 write 未归一 ⇒ 同项目双键位」那笔欠账由它担保）。
+///
+/// 这条用例是**反转**过来的：它旧名 `host_writes_land_in_md_and_the_db_shadows_them`，
+/// 后半句断言的是"影子跟到同一个归一键位"。刀③b-2 摘掉四条 `shadow_*` 之后那个形状
+/// 不再是正确行为，于是断言改成**影子恒空**——这才是"宿主写路径不发 SQL"的红证：
+/// 任何一条写路径偷偷加回一次 upsert，`export_rows()` 立刻非空。
+/// "目录名 = sqlite 的 workspace 列"那一档也不归写路径管了：影子的内容列现在只由
+/// `memory_reconcile` 从真源重建，键位同源的红证随之住在 `memory_reconcile/tests.rs`。
 #[test]
-fn host_writes_land_in_md_and_the_db_shadows_them() {
-    let dir = temp_dir("md-sync");
+fn host_writes_land_in_md_and_never_touch_the_shadow() {
+    let dir = temp_dir("md-only-writes");
     let store = wired(&dir);
     let ws = keysid();
     store
@@ -295,12 +310,8 @@ fn host_writes_land_in_md_and_the_db_shadows_them() {
         .join("db.choice.md");
     assert!(md.exists(), "宿主写路径落真源");
     assert!(
-        store
-            .export_rows()
-            .unwrap()
-            .iter()
-            .any(|r| r.workspace == ws && r.key == "db.choice"),
-        "影子跟着落到**同一个归一键位**（键位不同源 = 对账永远对不平）"
+        store.export_rows().unwrap().is_empty(),
+        "写路径不许再碰影子表（内容列的唯一维护者是对账）"
     );
     // 管理页编辑（管理页拿到的是 list 读回来的归一串 ⇒ 按归一键位寻址）
     store.update_value(&ws, "db.choice", "postgres").unwrap();
@@ -313,14 +324,16 @@ fn host_writes_land_in_md_and_the_db_shadows_them() {
     // 管理页删除
     store.delete(&ws, "db.choice").unwrap();
     assert!(!md.exists());
-    assert!(store.export_rows().unwrap().is_empty(), "删除也跟着影子");
     // 清空（全局层）
     store.write("", "pref.x", "y", "", "explicit").unwrap();
     let g = dir.join("memory").join("global").join("pref.x.md");
     assert!(g.exists());
     store.clear_all().unwrap();
     assert!(!g.exists(), "清空删真源");
-    assert!(store.export_rows().unwrap().is_empty(), "清空也清影子");
+    assert!(
+        store.export_rows().unwrap().is_empty(),
+        "四轮写路径全程没往库里落过一行"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -328,8 +341,20 @@ fn host_writes_land_in_md_and_the_db_shadows_them() {
 fn export_rows_covers_both_scopes() {
     let dir = temp_dir("md-export");
     let store = wired(&dir);
+    let ws = keysid();
     store.write("", "g1", "v", "", "explicit").unwrap();
-    store.write(r"F:\ws\a", "p1", "v", "", "extracted").unwrap(); // **反斜杠原始串**：归一必须由 write() 自己做
+    // **反斜杠原始串**：归一由 `write()` 自己做——这一维现在只能从真源那一侧证明
+    // （落盘的目录名 = `plugin_api::memlayout::project_dir_name(&ws)`，见
+    // `host_writes_land_in_md_and_never_touch_the_shadow`），因为刀③b-2 之后 `write`
+    // 不再往库里落行。库里这两行改用生产里唯一写内容列的入口造，键位由调用方负责 ⇒
+    // 这里显式传归一形，钉的还是原来那句话：**库里落的键位 = `scope_key` 的归一形**。
+    store.write(r"F:\ws\a", "p1", "v", "", "extracted").unwrap();
+    store
+        .reconcile_upsert("", "g1", "v", "", "explicit", 1)
+        .unwrap();
+    store
+        .reconcile_upsert(&ws, "p1", "v", "", "extracted", 2)
+        .unwrap();
     let rows = store.export_rows().unwrap();
     assert_eq!(rows.len(), 2);
     assert!(rows.iter().any(|r| r.workspace.is_empty() && r.key == "g1"));

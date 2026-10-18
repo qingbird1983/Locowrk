@@ -251,7 +251,13 @@ fn process_file(
             }
             let at = parsed.updated_at.unwrap_or(actual / 1000);
             let source = parsed.source.as_deref().unwrap_or("human");
-            memory.reconcile_upsert(&workspace, &key, &parsed.body, "", source, at)?;
+            // tags 取自文件（`ParsedFact.tags` 的注释就写着它是**读侧的唯一标签来源**）。
+            // 这一句在 S1 刀③b-2 之前是"少写一维"（管理页还能看见 shadow_upsert 带进去的
+            // 真 tags），之后是**唯一来源**——写死空串会让每一条新建影子行的标签都消失，
+            // 界面上就是"我写的标签没了、搜索也搜不到"。无那行 = 存量形状，按空串读，
+            // 不回填、不重写（决策人 2026-10-18 裁定）。
+            let tags = parsed.tags.as_deref().unwrap_or("");
+            memory.reconcile_upsert(&workspace, &key, &parsed.body, tags, source, at)?;
             let _ = memlayout::write_marker(files.root(), &rel, actual);
             sum.created += 1;
         }

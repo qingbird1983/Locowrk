@@ -1,24 +1,31 @@
 //! 记忆库的**读写面**（台账 T33）：管理页列举 `list`、编辑 `update_value`、写入
-//! `write`（生产写路径三处共用这条 upsert）、删除 `delete`、清空 `clear_all`，加上
-//! 四条 `shadow_*`——sqlite 影子写。
+//! `write`（生产写路径三处共用这条 upsert）、删除 `delete`、清空 `clear_all`。
+//! 本片**一条 SQL 都不发**（S1 刀③b-2 起）——见下面"影子写退役"那一段。
 //!
 //! S1 刀②c-1 把这里的**次序反了过来**：旧形状是"先写 sqlite（真源）、成功后同步 md，
-//! md 失败只 warn"；现在是"**先落 md**（真源，失败 = 整个操作失败并上抛）、成功后再更新
-//! sqlite 影子（失败只 warn）"。这不是措辞变化，是同一句 `if let Err(e) = …` 换了主语：
-//! 掉哪一份会导致什么，从"镜像旧了"变成"这条记忆没写进去"。四条写路径的存在性判据
-//! 因此全部改成**文件在不在**（`update_value` / `delete` 旧判据是 SQL 影响行数）。
+//! md 失败只 warn"；现在是"**先落 md**（真源，失败 = 整个操作失败并上抛）"。这不是措辞
+//! 变化，是同一句 `if let Err(e) = …` 换了主语：掉哪一份会导致什么，从"镜像旧了"变成
+//! "这条记忆没写进去"。四条写路径的存在性判据因此全部改成**文件在不在**
+//! （`update_value` / `delete` 旧判据是 SQL 影响行数）。
+//!
+//! **四条 `shadow_*` 随刀③b-2 退役**（连同它们那句 warn-only 的 `note_shadow`）。它们
+//! 留在最后的唯一理由写在旧头注里——"`memory-sqlite` 那六枚工具仍按库寻址"——刀③b-1
+//! 之后那个理由消失了。表还留着，但**宿主写内容的 SQL 只剩 `reconcile.rs` 一个出处**
+//! （从真源重建影子），`memory_learn/mod.rs` 那条 `UPDATE … hit_count` 学的是使用量、
+//! 不是记忆内容，按形状区分、不在这条判据里。代价如实登记：宿主写完到下一轮对账之前，
+//! 库里是真源的旧快照 ⇒ 仍按库算的学习档（`recall_relevant`）看到的集合滞后一次
+//! （`learnEnabled` 缺省关；那一格等拍板，specs/05 刀②c-2 第 2 件）。
 //!
 //! 五条读写全部不再问 settings `memory.files`：真源没有可退的第二处（句柄由数据根算出，
-//! 见 `store.rs`）。剩下还会走到 SQL 的只有 `shadow_*` 与 `reconcile.rs` 那份直写面。
+//! 见 `store.rs`），那个开关现在**没有任何副作用**（去处 = 刀④ 定改义或退役）。
 //!
 //! ⚠ 登记不合并：`key`/`value` 上限校验这一句话在本片出现两次、在 `reconcile.rs` 出现
-//! 一次（三个出处），memories 的 upsert 同理两处——那是台账 T28 同族的欠账，本刀只搬
-//! 不改（"搬动"和"改语义"混进一份 diff 就没法用行守恒判据了）。
+//! 一次（三个出处），memories 的 upsert 现在只剩 `reconcile.rs` 一处（`shadow_upsert`
+//! 随本刀消失）——那是台账 T28 同族的欠账，本刀只搬不改（"搬动"和"改语义"混进一份 diff
+//! 就没法用行守恒判据了）。
 //!
 //! 首尾两行（`impl MemoryStore {` 与闭合）是本片自补的语法外壳，不是搬来的内容；
 //! 字段与方法经同一棵模块树可见 ⇒ 本片不新增任何抬升。
-
-use rusqlite::params;
 
 use crate::timeutil::now_secs;
 
@@ -89,7 +96,6 @@ impl MemoryStore {
         };
         let at = now_secs();
         self.write_md(workspace, key, value, &current.tags, &current.source, at)?;
-        self.shadow_update_value(workspace, key, value, at);
         Ok(true)
     }
 
@@ -124,9 +130,8 @@ impl MemoryStore {
         let ws = crate::workspace::scope_key(Some(workspace));
         let at = now_secs();
         // 真源先落：这一句失败就是**这条记忆没写进去**，Err 上抛（旧形状里它只 warn，
-        // 因为那时库才是真源）。影子随后，失败只 warn——见 `shadow_upsert` 头注。
+        // 因为那时库才是真源）。刀③b-2 之后这里**没有"随后"了**——影子不归写路径管。
         self.write_md(&ws, key, value, tags, source, at)?;
-        self.shadow_upsert(&ws, key, value, tags, source, at);
         Ok(())
     }
 
@@ -136,11 +141,7 @@ impl MemoryStore {
     /// 真源翻转后这条必须反过来，否则"库里没行、文件有"的那种形状会连文件都不碰——
     /// AC-S1-6 那三条遗忘验证能不能成立正卡在这一步（specs/05 刀② 前置取证④）。
     pub fn delete(&self, workspace: &str, key: &str) -> Result<bool, String> {
-        let removed = self.delete_md(workspace, key)?;
-        if removed {
-            self.shadow_delete(workspace, key);
-        }
-        Ok(removed)
+        self.delete_md(workspace, key)
     }
 
     /// 管理页清空（§11.3 一键清空，UI 只加一次确认；全键位）。返回条数。
@@ -149,82 +150,19 @@ impl MemoryStore {
     /// 库里的行数）。有一层扫不动时它中止并 Err，一条也不动——"说清了其实没清"比
     /// 失败更难被发现。`obsolete/` 软删随刀④ 替换这里的直接删文件，签名不变。
     pub fn clear_all(&self) -> Result<usize, String> {
-        let n = plugin_api::memlayout::clear_facts(self.files().root())?;
-        self.shadow_clear();
-        Ok(n)
+        plugin_api::memlayout::clear_facts(self.files().root())
     }
 
-    // ---- sqlite 影子写（刀②c-1）----
+    // ---- 刀③b-2 退役位：四条 `shadow_*` 与 `note_shadow` ----
     //
-    // 真源已是 md，库里这一份**没有任何宿主读点**（`list` / `recall_quiet` /
-    // `project_index` 三条读面全部改道）。它还留着的唯一理由是
-    // `plugins-src/memory-sqlite` 那六枚工具仍按库寻址——刀③ 把它们改成内部调 md 之后，
-    // 这一整块连同 `CREATE_TABLE` 一起退役（已登记 specs/05 挂账；不在这刀顺手删，
-    // 否则中间态是"管理页写的记忆模型读不到"这种用户立刻能发现的裂缝）。
+    // 摘掉的是 `shadow_upsert` / `shadow_update_value` / `shadow_delete` / `shadow_clear`
+    // 四条按列写 memories 的通路，以及它们共用的那句 warn-only 文案。旧注释给它们留的
+    // 唯一理由是"`memory-sqlite` 那六枚工具仍按库寻址"——刀③b-1 之后那句话不再成立。
+    // "写一条记忆"现在只有一种落盘动作：真源 md。
     //
-    // 所以这里失败**只 warn**：掉的是副本，不是真源。把它 Err 上抛会让"写一条记忆"
-    // 因为一份没人读的拷贝而失败——那是把影子抬成了契约，方向正好反了。
-
-    fn shadow_upsert(&self, ws: &str, key: &str, value: &str, tags: &str, source: &str, at: i64) {
-        let Ok(conn) = self.open_conn() else {
-            tracing::warn!("记忆影子写跳过 `{key}`：sqlite 不可用");
-            return;
-        };
-        let r = conn.execute(
-            "INSERT INTO memories (workspace, key, value, tags, updated_at, source) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(workspace, key) DO UPDATE SET
-                 value = excluded.value, tags = excluded.tags,
-                 updated_at = excluded.updated_at, source = excluded.source",
-            params![ws, key, value, tags, at, source],
-        );
-        note_shadow("写", key, r.map(|_| ()).map_err(|e| e.to_string()));
-    }
-
-    fn shadow_update_value(&self, ws: &str, key: &str, value: &str, at: i64) {
-        let Ok(conn) = self.open_conn() else {
-            tracing::warn!("记忆影子编辑跳过 `{key}`：sqlite 不可用");
-            return;
-        };
-        let r = conn.execute(
-            "UPDATE memories SET value = ?3, updated_at = ?4
-             WHERE workspace = ?1 AND key = ?2",
-            params![ws, key, value, at],
-        );
-        note_shadow("编辑", key, r.map(|_| ()).map_err(|e| e.to_string()));
-    }
-
-    fn shadow_delete(&self, ws: &str, key: &str) {
-        let Ok(conn) = self.open_conn() else {
-            tracing::warn!("记忆影子删跳过 `{key}`：sqlite 不可用");
-            return;
-        };
-        let r = conn.execute(
-            "DELETE FROM memories WHERE workspace = ?1 AND key = ?2",
-            params![ws, key],
-        );
-        note_shadow("删", key, r.map(|_| ()).map_err(|e| e.to_string()));
-    }
-
-    fn shadow_clear(&self) {
-        let Ok(conn) = self.open_conn() else {
-            tracing::warn!("记忆影子清空跳过：sqlite 不可用");
-            return;
-        };
-        let r = conn.execute("DELETE FROM memories", []);
-        note_shadow("清空", "", r.map(|_| ()).map_err(|e| e.to_string()));
-    }
-}
-
-/// 影子写失败的**唯一**文案出处（四类动作 × 一处措辞；分四处写迟早漂成四种说法，
-/// 而日志里同族事件的说法一多，人就再也 grep 不动它）。
-fn note_shadow(op: &str, key: &str, e: Result<(), String>) {
-    if let Err(e) = e {
-        let target = if key.is_empty() {
-            String::new()
-        } else {
-            format!(" `{key}`")
-        };
-        tracing::warn!("记忆 sqlite 影子{op}{target}失败（真源已落，不影响本次操作）: {e}");
-    }
+    // 为什么这里**不**留一条 warn-only 的影子写：那等于把副本抬成契约（旧形状里"掉一份
+    // 只 warn"正是因为掉的是副本），而副本现在有了唯一的维护者 `memory_reconcile`——
+    // 它按真源重建，写路径多塞一条增量 upsert 只会让两张嘴对同一张表发言。
+    // 判据 = `check-single-source.mjs` 的 SS14a/b/c（宿主生产面里"写 memories 内容"的
+    // 三种形状各自只许出现在白名单文件里）。
 }

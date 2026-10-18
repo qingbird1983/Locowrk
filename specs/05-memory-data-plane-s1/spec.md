@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a 已落地 / 刀③b 与刀④ 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a③b-1③b-2 已落地 / 只剩刀④ 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -382,14 +382,53 @@
   那句 `md_warning.is_none()` 已经没有可失败的对应物，换成断言回显的层标与分类；
   `recall_takes_the_global_layer…` 见上面②）。新增 3 条（上面两条长度红证 + `fact_matches`
   抽成唯一口径后宿主管理页那条过滤用例照旧）。**零断言放宽**。
-- **刀③b-2（宿主影子写退役）⏳ 待做**：`crud.rs` 那四条 `shadow_*` 是最后一批"记忆内容的
-  SQL 写"（②c-1 留下的，唯一理由曾是"插件还按库寻址"，现在那理由消失）。
-  摘完之后影子的维护者只剩 `memory_reconcile` 一处 ⇒ AC-S1-9 那句"记忆写路径只许一个出处"
-  才在**宿主 + 插件两侧**同时成立。配套判据 = 宿主记忆面里"写 memories 内容的 SQL"
-  只许出现在 `reconcile.rs`（学习列的 `UPDATE … hit_count` 是另一件事，要按形状区分）。
-  连锁的测试：`a_failed_md_write_is_an_error_and_writes_no_shadow` 与
-  `host_writes_land_in_md_and_the_db_shadows_them` 测的都是被这一刀取消的形状，
-  要么反转要么随 `shadow_*` 一起退役——按 §6.3 交代，不静默删。
+- **刀③b-2（宿主影子写退役）✅ 2026-10-19 已落地**。
+  `crud.rs` 那四条 `shadow_*`（`shadow_upsert` / `shadow_update_value` / `shadow_delete` /
+  `shadow_clear`）连同它们共用的 `note_shadow` 一起摘掉——它们留在最后的唯一理由"那六枚工具
+  仍按库寻址"随刀③b-1 消失。**AC-S1-9 那句"记忆写路径只许一个出处"从此在两侧同时成立**：
+  插件面三形状恒 0（`SS13`），宿主面"写 `memories` 内容"的三种形状各自只许出现在白名单文件里
+  （`SS14a/b/c`）。`delete` / `clear_all` 现在就是 `delete_md` / `clear_facts` 的直通，
+  `write` / `update_value` 只落真源——**宿主写路径一条 SQL 都不发**。
+  判据为什么是**文件集合**而不是计数：计数只挡"多一处"，挡不住"白名单那两处搬到了别的文件"
+  与"某处消失了"；集合形状一变就红，红得能直接看见是谁。第二档（按列 UPDATE 内容）期望 `none`，
+  而 `memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1` 合法在场 ⇒
+  口径**按列名收窄**到 `value|tags|source|updated_at`，不收窄一上手就假红。面 =
+  `desktop/src-tauri/src` 整根、排 tests、剥行注释：排 tests 是因为夹具手写 `INSERT INTO memories`
+  是"造损坏库"的唯一办法，剥注释与 SS11/SS13 同一个洞。`none` 这一档会被"面瞎了"读成绿 ⇒
+  FLOORS 加两条下限（生产文件数 + 白名单那两处 INSERT 本体必须在面上）。
+  磁盘红证 = `CASE 40`：往 `crud.rs` 塞一条没人调用的 `legacy_shadow_upsert`，闸点名 `SS14a` 报红，
+  而同一份损坏态下宿主 **598 条全绿**（`also` 档二次取证）——"宿主还写不写库"这件事在行为面上
+  同样不可见，所以它必须由结构档守。
+  **撞出来的真 bug（一处，已修）**：`memory_reconcile::process_file` 的 `created` 支把 tags
+  **写死空串**（`reconcile_upsert(&workspace, &key, &parsed.body, "", source, at)`）。在旧世界这
+  只是"少写一维"——`shadow_upsert` 随后会用真 tags 覆盖同一行，所以**没有任何用例盯它**；
+  影子写一退役，这一支就成了影子行 tags 的**唯一来源**，后果是人打开管理页看见"标签集体消失、
+  搜索也搜不到"。改成取 `parsed.tags`（[`ParsedFact.tags`] 的注释本来就写着它是"读侧的唯一标签
+  来源"），无那行 = 存量形状按空串读、不回填。红证 = `CASE 41`（改回空串 ⇒
+  `human_created_file_is_ingested_as_new_row` 那条新加的 tags 断言红）。
+  ⚠ 同族留一处挂账：`updated` 支沿的是**行里的** tags（"文件为准"只落到正文那一维）⇒ 人改了
+  frontmatter 的 `tags:` 行不会回灌影子。这是既有的语义、不是本刀改坏的，改它要一并裁"谁赢"，
+  登记待裁。
+  测试去向（AGENTS §6.3）：造"库里有一行"的夹具统一换到生产里唯一还写内容列的入口
+  `reconcile_upsert`（`md_read.rs` 两条 / `legacy.rs` 两条 / `learning.rs` 两条 / `recall_log`
+  的共用夹具 `store_with_log`）——手法跟着真源形状走，不跟着方便走，`md_read.rs` 那段
+  "造法换了一次"的注释现在如实记成换了两次。两条 reconcile 用例（`human_edit_flows_back_into_index`
+  / `deleted_file_removes_row_but_missing_dir_keeps_rows`）补"先跑一轮对账"，否则它们断言的
+  "更新一行 / 删一行"没有前提。反转 1 条：`host_writes_land_in_md_and_the_db_shadows_them` →
+  `host_writes_land_in_md_and_never_touch_the_shadow`，判据从"影子跟到同一归一键位"改成
+  **影子恒空**（键位同源那一维的家随之搬去 md 目录名那条 + `memory_reconcile/tests.rs`）。
+  改通路 1 条：`deleting_a_row_takes_its_learning_with_it` 走 `reconcile_delete`（现在删影子
+  只有这一条路）。订正注释 3 处（`learning_columns_survive_every_write_path` 说破那两段现在
+  防的是什么、`a_broken_shadow_db_changes_nothing_on_the_read_or_write_path` 的成因从"只 warn"
+  变成"根本不开库"、`a_failed_md_write_is_an_error_and_writes_no_shadow` 现在结构上恒真、
+  留着防"加回补偿写"）。**零断言放宽**。
+  还有一处**按面拆簇**：这批夹具注释把 `md_read.rs` 抬到 408 行越过 400 闸，而它那时已经同时
+  管着两件事（读源 / 注入记账与埋点）。没有抬基线、没有压注释，把"降级照常交付 + 埋点宁缺
+  毋伪"那一族四条逐字搬进新簇 `memory/tests/inject_row.rs`（拆完 264 + 161 行）。
+  行守恒的证据 = 拆前拆后**用例总数一字未动仍是 598 条全绿**；要改语义的话这个数不会刚好对上。
+  代价如实登记（与 ③b-1 那条同族，现在覆盖到宿主自己）：任何一侧写完记忆，`memories` 表里的
+  内容都要等下一轮 reconcile 才更新 ⇒ `learnEnabled=true` 时语义召回看到的集合滞后一轮。
+  `settings.memory.files` 至此**彻底没有副作用**（env 注入已摘、影子写已摘），去处 = 刀④ 定改义或退役。
 - **刀④（`obsolete/` 与管理页）**：软删 + 清空真删（清空要确认）；管理页六枚命令读源换 md、
   加"三枚行为开关 + 每层一行"。**TreeBoard / TreeSection / InjectSection 三处嵌入不在本阶段动**
   （看板整体删除是 S4 的事，混在一刀里回滚不掉）。
@@ -482,8 +521,12 @@
       清空 `obsolete/` 弹确认，取消 = 文件还在
 - [ ] AC-S1-8 存量导出幂等：导出脚本跑两次 → 第二次零新增、**人工编辑过的文件 sha 不变**
       （复用 `memory_files.rs:225` 首启导出那套"已有文件一律不动"）
-- [ ] AC-S1-9 新判据要报红：给"记忆写路径只许一个出处"这条判据做窄变异（把 md 写退回
+- [x] AC-S1-9 新判据要报红：给"记忆写路径只许一个出处"这条判据做窄变异（把 md 写退回
       sqlite 权威那侧）必须红；红不出来 = 这条判据零证明力，不许留着
+      ✅ 2026-10-18（刀③b-1 + ③b-2 两批合上）：判据 = `SS13`（插件面三形状恒 0）+
+      `SS14a/b/c`（宿主面"写 memories 内容"的三种形状各自只许出现在白名单文件里）；
+      红证 = 磁盘变异 `CASE 39` / `CASE 40`——两条都故意长成**没人调用**的函数，
+      闸点名报红、cargo 全绿（同一份损坏态二次取证），"独有一档"因此是实测而不是论证
 - [ ] AC-S1-10 `make check` 全绿；涉界面那半（三枚开关 + 每层一行）在真实窗口自截图核对后再给你看
 
 ## 非目标
@@ -564,18 +607,19 @@
   （建议：关掉 = 记忆面停止写入并如实报错，仍是一个真的开关，符合 AGENTS §4 可配置原则），
   要么整项退役 ⇒ 归刀④ 与界面文案一起定。⚠ 现在设置页那句 hint 写的是"把记忆**同步存为**
   Markdown 文件"——那是镜像时代的说法，与实况不符 ⇒ 刀④ 一起订正（同类"文字与实况不符"）。
-- 挂账（刀②c-1 留下的**影子写**）：`crud.rs` 那四条 `shadow_*` 仍是写库的 SQL，唯一理由是
-  `plugins-src/memory-sqlite` 那六枚工具还按库寻址。**刀③b 改道之后这一整块连同 `CREATE_TABLE`
-  必须退役**——在此之前，《Memory File-ization Design v1.1》§3 那句"无第二存储"尚未真正成立
-  （标准写的是目标态，别把它读成现状）。不在刀②c-1 顺手停的原因已写进 spec：停掉之后
-  管理页写的记忆模型读不到，而插件写的记忆管理页看不见，中间态用户立刻能发现。
+- ~~挂账（刀②c-1 留下的**影子写**）~~ **刀③b-2 已消**：`crud.rs` 那四条 `shadow_*` 与
+  `note_shadow` 一起退役，宿主写路径从此一条 SQL 都不发；判据 = `SS14a/b/c`。
+  这里保留原话的一句作为理由存档："不在刀②c-1 顺手停的原因 = 停掉之后管理页写的记忆模型读不到，
+  而插件写的记忆管理页看不见，中间态用户立刻能发现"——那两个"看不见"分别由刀③b-1（插件改道 md）
+  与刀②b-1（管理页读源换 md）接上，所以本刀落地时中间态已经不存在。`CREATE_TABLE` 与两份迁移
+  **留着**：表还在（影子 + 学习量），只是它的内容列从此只由 reconcile 写。
 - 挂账（刀③a 留下的**中间态：类型写进去了但读不回来**）：`metadata.type` 从刀③a 起由
-  `memory_write` 的 `type` 参数生产并落在真源文件里，人打开文件夹看得见；但两条读路都还没有
-  这一维——① 工具侧 `memory_read` / `memory_list` / `memory_search` 仍按库寻址（库里没有 `type`
-  列，刀③b 改道后从 `StoredFact.ty` 取，那才是"回读一致"）；② 宿主管理页的 `MemoryRow` 也没有
-  这一字段（`md_rows` 把 `StoredFact` 投影成行时丢掉了它），所以界面上看不出这条是 `user` 还是
-  `project` ⇒ 归刀④ 那一列。`memory_write` 的返回值里那个 `type` 是**本次调用的回显**，
-  代码注释已写破这一层，不许读成"从存储读回"。
+  `memory_write` 的 `type` 参数生产并落在真源文件里，人打开文件夹看得见。**① 已随刀③b-1 消**：
+  工具侧 `memory_read` / `memory_list` / `memory_search` 现在从真源读，那一维由
+  `StoredFact.ty` 出来、经 `Hit::json()` 连同权威的 `type` / `scope` / `workspace` 一起回给模型
+  （回读一致由此成立，"本次调用的回显"那句旧话不再适用）。**只剩 ②**：宿主管理页的 `MemoryRow`
+  还没有这一字段（`md_rows` 把 `StoredFact` 投影成行时丢掉了它），所以界面上看不出这条是 `user`
+  还是 `project` ⇒ 归刀④ 那一列。
 - 挂账（刀②a 取证时抓到的保留名盲区）：读侧跳过索引与投影用的是**文件名**
   （`read.rs::is_fact_file` 排 `MEMORY` / `tree` 两个 stem），而写侧的 `key_file_stem`
   只安全化路径字符与 Windows 保留名，**没把 `MEMORY` / `tree` 列成保留键** ⇒

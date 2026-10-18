@@ -127,8 +127,9 @@ fn an_aged_index_line_carries_its_staleness_to_the_model() {
 ///
 /// 它取代了原来那条"库不可用 ⇒ 索引整节缺席 + 一次告警"：那一档的因果链是
 /// "索引的兜底数据源是库"，而兜底档已经连 `index_rows` 一起删了。现在把
-/// `memory.sqlite3` 写成非数据库字节，四条读面照常出数，而写路径**仍然成功**
-/// （影子失败只 warn——`crud.rs` 的 `shadow_*` 头注说的那句话的实证）。
+/// `memory.sqlite3` 写成非数据库字节，四条读面照常出数，写路径也照常成功——
+/// 刀③b-2 之后这半档的成因从"影子失败只 warn"变成**写路径根本不开这张表**
+/// （`crud.rs` 一条 SQL 都不发），断言一字未改仍然绿，这就是它的新读法。
 #[test]
 fn a_broken_shadow_db_changes_nothing_on_the_read_or_write_path() {
     let dir = temp_dir("idx-unavailable");

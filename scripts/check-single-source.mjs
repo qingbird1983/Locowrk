@@ -193,6 +193,41 @@ function plugMemoryCode() {
     .join('\n');
 }
 
+/**
+ * 宿主生产面（S1 刀③b-2 加，SS14 的扫描面）：`desktop/src-tauri/src` 整根、**排 tests**、
+ * 剥行注释，返回 `[{rel, code}]`。`rel` 从 `desktop/src-tauri/src/` 起算——这条判据的读数
+ * 是"**哪些文件**在写那张表的内容列"，所以文件名本身就是有信息量的形状，比计数强：
+ * 白名单里那个文件被改名 ⇒ 红，别处多出一个出处 ⇒ 也红，两者都不会被"总数没变"糊过去。
+ *
+ * 排 tests 是刻意的：测试夹具里手写 `INSERT INTO memories` 是"造一个损坏态的库"的唯一办法
+ * （`memory/tests/learning.rs` 那批就是这么造的），数进来这条判据永远红。
+ * 剥注释与 SS11/SS13 同一个洞：本刀退役的说明要在头注里写清"被摘掉的是哪三种形状"，
+ * 按字面数名字会得到一片假红。
+ */
+function hostDesktopFace() {
+  return walkExt('desktop/src-tauri/src', /\.rs$/)
+    .filter((rel) => !/(^|\/)tests(_?\.rs|\/)/.test(rel))
+    .map((rel) => ({
+      rel: rel.replace(/^desktop\/src-tauri\/src\//, ''),
+      code: read(rel)
+        .split('\n')
+        .filter((l) => !/^\s*\/\//.test(l))
+        .join('\n'),
+    }));
+}
+
+/** `memories` 内容列的三种写形状（SS14 的三个靶子）。第二档**按列名收窄**是有意的：
+ *  `memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1` 合法在场，
+ *  它学的是使用量、不是记忆内容——不收窄的话这条判据一上手就假红。 */
+const MEM_INSERT = /INSERT INTO memories\s*\(/;
+const MEM_CONTENT_UPDATE = /UPDATE memories\s+SET\s+(?:value|tags|source|updated_at)\b/;
+const MEM_DELETE = /DELETE FROM memories/;
+/** 命中形状的文件集合（排序拼接；一个都没有 = `none`）。 */
+const memWriters = (m, re) => {
+  const hit = m.hostDesktop.filter((f) => re.test(f.code)).map((f) => f.rel);
+  return hit.length ? [...new Set(hit)].sort().join('|') : 'none';
+};
+
 /** 外点收口形状 = 挂到 document/window 上的 `pointerdown`（口径见上方注释）。 */
 const DISMISS_SHAPE = /(?:document|window)\.addEventListener\(\s*"pointerdown"/;
 const dismissCount = (m) => m.comps.filter((s) => DISMISS_SHAPE.test(s)).length;
@@ -313,6 +348,7 @@ function snapshot() {
     hostMemoryTree: hostMemoryFace(),
     reconcileTree: reconcileFace(),
     plugMemory: plugMemoryCode(),
+    hostDesktop: hostDesktopFace(),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -595,6 +631,36 @@ const CHECKS = [
       ].join('|'),
     '0|0|0',
   ],
+  [
+    'SS14a',
+    '宿主生产面（`desktop/src-tauri/src` 整根，排 tests、剥行注释）里 `INSERT INTO memories (` ' +
+      '这一形状**只许出现在白名单文件里**（S1 刀③b-2：四条 `shadow_*` 退役之后，影子内容列' +
+      '的唯一维护者 = `memory/reconcile.rs`，另一处是 `memory/schema.rs` 那份旧库整表重建迁移）。' +
+      '读数用**文件集合**而不是计数：计数只挡得住"多一处"，挡不住"白名单里那两处搬到了别的文件"' +
+      '与"某处消失了"——集合形状一变就红，红得能直接看见是谁。' +
+      '与行为测试的分工同 SS12/SS13：往写路径塞一条**没被调用**的影子 upsert，cargo 全绿' +
+      '（磁盘变异 CASE 40 就是这么证的），只有这一档看得见',
+    (m) => memWriters(m, MEM_INSERT),
+    'memory/reconcile.rs|memory/schema.rs',
+  ],
+  [
+    'SS14b',
+    '同一面上**没有任何**按列 UPDATE 记忆内容的形状（`UPDATE memories SET value|tags|source|' +
+      'updated_at`）——这是 `shadow_update_value` 的墓碑。口径按列名收窄是有意的：' +
+      '`memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1` 合法在场，' +
+      '它学的是使用量不是内容；不收窄的话这条判据一上手就假红。' +
+      '期望 `none` 的两档（本档与 SS14c 的反面）都由 FLOORS 的面下限兜着，面瞎了不会读成绿',
+    (m) => memWriters(m, MEM_CONTENT_UPDATE),
+    'none',
+  ],
+  [
+    'SS14c',
+    '同一面上 `DELETE FROM memories` 只许 `memory/reconcile.rs` 一处（对账删幽灵行）。' +
+      '`shadow_delete` 与 `shadow_clear` 随刀③b-2 消失 ⇒ 这一档现在也挡住"清空走 SQL"的回头路：' +
+      '真源是文件，清空 = 删文件（`memlayout::clear_facts`），走 DELETE 就是拿副本当契约',
+    (m) => memWriters(m, MEM_DELETE),
+    'memory/reconcile.rs',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -618,6 +684,11 @@ const FLOORS = [
   // 两条下限各挡一种瞎法：面为空、以及"扫错了树（连工具入口本体都不在）"。
   ['插件记忆面非空', (m) => (m.plugMemory.length > 2000 ? 1 : 0), 1],
   ['插件记忆面含工具入口本体', (m) => countOf(m.plugMemory, /fn memory_write/), 1],
+  // SS14 的三档读数全是**文件名集合**：面瞎了（扫描根改名 / walkExt 写错 / tests 过滤器
+  // 过宽）会得到 `none`，其中 SS14b 恰好期望 `none` ⇒ 那一档会"绿着瞎掉"。两条下限把面
+  // 自己钉住：文件数（现值 200，取七成）+ 白名单那两处 INSERT 本体必须真在面上。
+  ['宿主生产文件数（排 tests）', (m) => m.hostDesktop.length, 140],
+  ['宿主生产面含影子维护本体', (m) => m.hostDesktop.filter((f) => MEM_INSERT.test(f.code)).length, 2],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
@@ -706,6 +777,25 @@ if (SELFTEST) {
     SS13: (m) =>
       (m.plugMemory +=
         '\nfn legacy_upsert(conn: &rusqlite::Connection, ws: &str, key: &str) {\n    let _ = conn.execute("INSERT INTO memories (workspace, key) VALUES (?1, ?2)", []);\n}\n'),
+    // 刀③b-2 的三块墓碑（同一族形状，各自要能为自己的变异报红）。这里的 push 是
+    // **自证**（判据不为空转），真正的红证是磁盘变异 CASE 40（真往 crud.rs 塞一条
+    // 没人调用的影子写）——内存 push 与磁盘变异证的是不同的东西，前者证"读数会动"，
+    // 后者证"读数盯的是真实代码形状，且行为面看不见它"。
+    SS14a: (m) =>
+      m.hostDesktop.push({
+        rel: 'memory/crud.rs',
+        code: 'let _ = conn.execute("INSERT INTO memories (workspace, key) VALUES (?1, ?2)", []);',
+      }),
+    SS14b: (m) =>
+      m.hostDesktop.push({
+        rel: 'memory/crud.rs',
+        code: 'let _ = conn.execute("UPDATE memories SET value = ?3 WHERE key = ?2", []);',
+      }),
+    SS14c: (m) =>
+      m.hostDesktop.push({
+        rel: 'memory/crud.rs',
+        code: 'let _ = conn.execute("DELETE FROM memories WHERE key = ?1", []);',
+      }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。
@@ -808,6 +898,8 @@ if (SELFTEST) {
       // SS9 与 SS9c 会往这两份面里 push：不各拷一份的话，第一档变异会污染后面每一档
       comps: [...snap.comps],
       frontSrc: [...snap.frontSrc],
+      // SS14a/b/c 同样 push 面元素 ⇒ 同一份拷贝纪律
+      hostDesktop: [...snap.hostDesktop],
     };
     mut(copy);
     const row = runChecks(copy).find((r) => r.id === id);

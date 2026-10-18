@@ -39,6 +39,20 @@ fn store_with_log(tag: &str, seed: &[(&str, &str, &str)]) -> (MemoryStore, Arc<R
     let store = MemoryStore::new(&dir, test_resolver()).with_recall_log(Arc::clone(&log));
     for (ws, key, value) in seed {
         store.write(ws, key, value, "t", "explicit").unwrap();
+        // 影子那一行改用**生产里唯一还写内容列的入口**造（S1 刀③b-2 之后 `write` 不发
+        // SQL）。这一步不能省：学习档 `recall_relevant` 仍按库取候选，库里没行时它的
+        // 候选集是空的 ⇒ 整簇变成"在空集上断言"。键位与 `write` 同一个归一函数，
+        // 否则真源与影子落在两个键位上（那是本批判据要防的形状，不是夹具该造的）。
+        store
+            .reconcile_upsert(
+                &crate::workspace::scope_key(Some(ws)),
+                key,
+                value,
+                "t",
+                "explicit",
+                crate::timeutil::now_secs(),
+            )
+            .unwrap();
     }
     (store, log)
 }
