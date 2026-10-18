@@ -637,7 +637,7 @@
 | `lib/tool-detail.ts`（612） | 否：两个渲染面 + 三套表 | 是：`shell` 系三个工具名在三处各写一遍（67/131/512）⇒ 加一个工具改三处 | 拆 | `kinds` / `labels` / `blocks` 三片 + 主分派留 index，导入路径不变 |
 | `plugins-src/memory-sqlite/src/store.rs`（581） | 是：存储层四簇同族 | 是：同一条 UPSERT 两份抄写（276/522） | **拆**（T23 后重判） | 原判"留"混进了一个外部约束（闸只读这一个路径），而三问里 ③ 本来就答"是"⇒ 约束一消失就该回到三问：`store/{schema,open,crud,undo,mdsync}.rs`，顺手把那份 UPSERT 抄写并成一处 |
 | `settings/LlmSection.vue`（577） | 是：七块行全走 SettingsGroup+SettingsRow 唯一形态 | 是，但方向相反 | **留** | 该文件实测 5 处组件直调 IPC + 4 处 `settings.refresh()`，已偏离「编排只在 stores」（新登 **T24**）⇒ 先收编排，拆是后面的事 |
-| `llm/client.rs`（575） | 半：装配 + 重试环 + 单次尝试是一件事，逐模型 ping 是另一件 | 是：`repair_*` 修复旗标跨 6 处 | 拆（薄） | 只切逐模型 ping → `llm/test_probe.rs`（≈100）；**主环不许再切**，切了就出现第二条线路（违「同类只许一种形态」） |
+| `llm/client.rs`（575 → 493 · 仍留名单） | 半：装配 + 重试环 + 单次尝试是一件事，逐模型 ping 是另一件 | 是：`repair_*` 修复旗标跨 6 处 | 拆（薄）✅T32 | 只切走 ping 那条旁路 = `llm/client/test_probe.rs`(105)，**主环一字未动也没再切**（再切就出现第二条线路形状，违「同类只许一种形态」⇒ 本件留在名单里，理由在此列与提交正文）；表写的落点是 `llm/test_probe.rs`，落地改成 `client/` 的**子模块**更好：私有超时常量经 `super::` 就够得着 ⇒ 0 处可见性抬升、`llm/mod.rs` 不必动 |
 | `llm/wire.rs`（548 → 24） | 否：预检 / 媒体投影 / 序列化 / 累积器 / usage 五簇 | 是：预算参数在 80/128/307/372 四处 | 拆 ✅T31 | 已沉 `llm/wire/{payload,media,messages,stream}.rs` 四片（五簇落四片：usage 只有 `parse_usage` 一个函数、只被累积器调用，单立 = 为行数造结构 ⇒ 并进 `stream`）；跨片 2 处 `pub(super)` 抬升枚举成声明式改动；判据里那句"`super::wire::` 遮蔽有案底"复核结果 = **没发生**（tests 的 9 处引用靠 glob 再导出照旧解析，见 T31 条目的磁盘变异） |
 | `chat/TranscriptFlow.vue`（540） | 否：约 180 行**零 DOM** 的投影算法住在组件里 | 是：inner 单块分支与 tail 两段**逐字重复** ⇒ 新增一类 kind 必改两处 | 拆 | `use-flow-projection.ts`（≈190）+ `FlowSingle.vue`（≈60）把两遍并一遍；composable 不触形态标准 |
 | `src-tauri/src/events.rs`（531） | 是：通道常量 + 事件 enum + `channel()` 映射 = **同一张契约表** | 是，但那是这张表**固有的形状**（加一条事件本来就要同时动三处） | **留** | 三问皆是的一族：一份契约的三个侧面，拆开 = 把一条事实摊成三个出处。T23 之前它还多一条"拆了闸会安静少一条"的外力，现在那条已消（C4 实测数得到）⇒ 本件**只按形态判**，判留 |
@@ -829,10 +829,37 @@
         `cargo test` 584 passed / 0 failed（含 `llm::tests::assets` 全跑）· `make check` 全绿 ·
         `check_length` 超限 17→16（名单行删除走**与 HEAD 的行集差**：只少一行、多出为空）
       · 跨平台：线路格式层不碰路径语义与插件生命周期 ⇒ 不取 WSL 侧证据（ADR-0005 口径）
+- [x] **T32** 薄切 `llm/client.rs`（575 → 493 行，**仍在名单**）⇒ 只切出旁路 `client/test_probe.rs`（2026-10-18 第一批第五刀 · 第一批到此清完）
+      · 判定是"拆（薄）"：搬走的只有逐模型连通测试那条旁路（`TestFailure` 五分类 + `snippet` +
+        `test_model`，原 457–548），主环（装配 / 重试环 / 单次尝试）**一字未动也没再切** ——
+        再切就出现第二条线路形状，违「同类只许一种形态」。本件因此仍留在 `check_length` 名单里，
+        493 行是有理由的超限，不是漏网
+      · ★ 这一刀是**第一种"部分提取"形状**：表写的落点是 `llm/test_probe.rs`（兄弟模块），
+        落地改成 `llm/client/test_probe.rs`（子模块）更好 —— 子模块经 `super::` 就够得着主环的
+        私有超时常量与两个 `pub(super)` 装配函数 ⇒ **0 处可见性抬升、`llm/mod.rs` 不必动**，
+        "15 秒"这个读数仍只在 `client.rs` 出现一处
+      · 判据为此长出新的一条 **T7 主文件可重算**：主文件不许"手工改成看起来对"，它必须等于
+        **由备份 + spec 重算出来的字节**（算法只有一份 = `split-main.mjs`，切割/装配/对账三处共用）。
+        full 刀与 partial 刀同一条判据；T31 那把回跑也过 ⇒ 上一刀的装配文件同样是可重算的
+      · T5 随之称重：`partial` 刀的主文件**本来就该保留其余实现**，"不许含实现"只对 full 刀判。
+        这不是放宽 —— 换它的是更强的 T7 逐字节重算，且自测里有一条专门证明：
+        X3「往主文件手工塞一条实现」在 partial 下红在 T7、在 full 下红在 T5（`SPLIT_SELFTEST_ALL_CAUGHT`）
+      · 主文件的声明式改动 1 处（枚举在 `assembly.mainEdits`）：`Instant` 随旁路搬走，
+        那条 use 收成 `use std::time::Duration;` —— 不改就 `unused_imports` ⇒ `-D warnings` 红。
+        被搬段取 **457 起**（含段前那个空行）：取 458 起主文件会留下两个连续空行，rustfmt 折叠后
+        重算结果与磁盘必差一行 ⇒ T7 假红，这种坑只能靠"边界含空行"这条规矩躲
+      · 公开面：`llm/mod.rs` 的 `pub use client::{test_model, CompatLlm}` 与 `commands/llm/test.rs`
+        两处调用点全部一字未改（靠 `client.rs` 里新增的 `mod test_probe;` + `pub use test_probe::*;`）
+      · 磁盘变异：把 `client/test_probe.rs` 里 `pub async fn test_model` 改名 ⇒ `cargo check --all-targets`
+        编译红（调用点找不到），逐字节写回 + sha 复核回 rc=0 = `SPLIT_MUT_ALL_CAUGHT`
+      · 编译与测试：`cargo clippy --all-targets -- -D warnings` rc=0 · `cargo fmt --check` rc=0 ·
+        `cargo test` 584 / 0 · `make check` 全绿 · `check_length` 超限 16 · 名单 16（本件**不删行**）
+      · 踩坑登记：片头 import 我又写成 `use super::models::apply_proxy`（T31 同一门课重犯一次）——
+        新片是 `client` 的**子**模块，`super` = `llm::client` 而不是 `llm` ⇒ 外部件一律 `crate::` 锚定
+      · 跨平台：纯结构面，不取 WSL 证据（ADR-0005 口径）
 
 · 拆的顺序（原本按"动刀前必须先解哪道锁"排；**T23 已把那些锁解掉** ⇒ 现在只按风险与体量排）：
-  第一批 Rust 无锁件 = `llm/client.rs`（薄）
-  （`commands.rs` / `commands/sessions.rs` / `commands/llm.rs` / `llm/wire.rs` 已做完 = T26 / T27 / T30 / T31；看勾不看这行）
+  第一批 Rust 无锁件 = **清完**（T26 / T27 / T30 / T31 / T32）
   第二批 Rust 侧 schema 两件 = `memory.rs` → `store.rs`（建表串不必再钉在主文件：定义处"整根恰 1 处"由闸自己盯）
   第三批 前端 lib = `tool-detail.ts` → `api.ts`（通道表同样不必钉文件名）
   第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`

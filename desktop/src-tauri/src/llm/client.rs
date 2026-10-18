@@ -2,9 +2,14 @@
 //! （`POST {base}/chat/completions` + SSE）+ 传输韧性（重试不设上限——限流
 //! /网关抖动/断流对用户不可见，退避封顶、可随时停止）。非流式 `complete`
 //! 与流式共用同一条管道（一套线上代码）。
+//!
+//! `client/` 目录只有一片：`test_probe.rs` = 逐模型连通测试那条旁路（台账第三节 · 第一批第五刀）。
+//! 主环（装配 + 重试环 + 单次尝试）**刻意不再切** —— 切成两片就会出现第二条线路形状，
+//! 违「同类只许一种形态」；所以本文件仍留在 `check_length` 名单里，三问理由写在
+//! `specs/03` 第三节的判定表与提交正文里（名单只放路径，不放理由 = 不造第二个出处）。
 
 use std::sync::atomic::AtomicU64;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -22,6 +27,10 @@ use super::models::{
 use super::retry::{self, Failure};
 use super::sse::{SseEvent, SseParser};
 use super::wire::{build_payload, Delta, StreamAcc, WireCaps};
+
+mod test_probe;
+
+pub use test_probe::*;
 
 /// 连接建立上限（流式总时长不设限——长输出合法）。
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -452,98 +461,6 @@ fn merge_retry_after(f: Failure, retry_after_ms: Option<u64>) -> Failure {
         Failure::RateLimit { .. } => Failure::RateLimit { retry_after_ms },
         Failure::Transient { .. } => Failure::Transient { retry_after_ms },
         Failure::Fatal(msg) => Failure::Fatal(msg),
-    }
-}
-
-/// 逐模型连通测试失败（§8.3 五分类 + unknown；message 面向用户如实）。
-#[derive(Debug, Clone)]
-pub enum TestFailure {
-    Auth(String),
-    ModelNotFound(String),
-    RateLimit(String),
-    Network(String),
-    Server(String),
-    Unknown(String),
-}
-
-impl TestFailure {
-    /// 分类标识（IPC `category` 字段，前端如实渲染徽章）。
-    pub fn category(&self) -> &'static str {
-        match self {
-            TestFailure::Auth(_) => "auth",
-            TestFailure::ModelNotFound(_) => "model_not_found",
-            TestFailure::RateLimit(_) => "rate_limit",
-            TestFailure::Network(_) => "network",
-            TestFailure::Server(_) => "server",
-            TestFailure::Unknown(_) => "unknown",
-        }
-    }
-
-    pub fn message(&self) -> String {
-        match self {
-            TestFailure::Auth(m)
-            | TestFailure::ModelNotFound(m)
-            | TestFailure::RateLimit(m)
-            | TestFailure::Network(m)
-            | TestFailure::Server(m)
-            | TestFailure::Unknown(m) => m.clone(),
-        }
-    }
-}
-
-/// 报文截断（200 字符，探测同款）。
-fn snippet(body: &str) -> String {
-    let s: String = body.chars().take(200).collect();
-    s
-}
-
-/// 逐模型连通测试（§8.3）：最小请求（单条 user "ping"，非流式、无工具、
-/// 无 max_tokens）+ 15s 总超时。成功返回耗时 ms；失败按五分类如实归类。
-pub async fn test_model(cfg: &LlmSettings, model: &str) -> Result<u64, TestFailure> {
-    let started = Instant::now();
-    let client = apply_proxy(
-        reqwest::Client::builder().timeout(TEST_TIMEOUT),
-        cfg.network_proxy.as_ref(),
-    )
-    .build()
-    .map_err(|e| TestFailure::Network(format!("HTTP 客户端构建失败: {e}")))?;
-    let payload = serde_json::json!({
-        "model": model,
-        "messages": [{ "role": "user", "content": "ping" }],
-        "stream": false,
-    });
-    let key = cfg.api_key.clone().unwrap_or_default();
-    let resp = client
-        .post(CompatLlm::endpoint(cfg))
-        .headers(CompatLlm::build_headers(cfg, &key))
-        .json(&payload)
-        .send()
-        .await;
-    let resp = match resp {
-        Ok(r) => r,
-        Err(e) => {
-            // 超时 / DNS / 连接拒绝统一 network（不细分——前端只渲染徽章）
-            return Err(TestFailure::Network(format!("连接失败: {e}")));
-        }
-    };
-    let status = resp.status();
-    let body = resp.text().await.unwrap_or_default();
-    let detail = snippet(&body);
-    match status.as_u16() {
-        200..=299 => Ok(started.elapsed().as_millis() as u64),
-        401 | 403 => Err(TestFailure::Auth(format!(
-            "鉴权失败（HTTP {status}）: {detail}"
-        ))),
-        404 => Err(TestFailure::ModelNotFound(format!(
-            "模型 {model} 不存在（HTTP 404）: {detail}"
-        ))),
-        429 => Err(TestFailure::RateLimit(format!(
-            "触发限流（HTTP 429）: {detail}"
-        ))),
-        s if (500..=599).contains(&s) => Err(TestFailure::Server(format!(
-            "服务端错误（HTTP {status}）: {detail}"
-        ))),
-        s => Err(TestFailure::Unknown(format!("HTTP {s}: {detail}"))),
     }
 }
 
