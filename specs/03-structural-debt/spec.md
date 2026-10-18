@@ -634,7 +634,7 @@
 | `components/chat/Composer.vue`（835） | 否：7 簇（模型 chip / 推理档 / 斜杠面板 / 附件 / 输入与发送键状态机 / 坞卡贴合 / 坞高上报） | 是：附件条高动一次 ⇒ `App.vue` 的 composerH 与转录回底钮位跟着算 | 拆 | `ComposerAttachments.vue` + `ModelChip.vue`；**Esc 让位链与发送键必须留本文件**（SS9b 判的就是"只许 1 个出处"） |
 | `settings/model/ProviderSetupDialog.vue`（650） | 否：4 簇，其中自定义请求头编辑器 ≈117 行、自带三态四操作 | 是：`maybeAdoptSweep` 写 baseUrl → watch 再探测 → 喂 ModelPanes | 拆 | `HeaderEditor.vue`（≈140，v-model 整表）；落值那条"整表替换 + 空键跳过"只许一处实现 |
 | `settings/model/ModelPanes.vue`（616） | 否：4 簇 | 是：`mergeCatalog` 的 watch 触发 `emit("update")` 回父置 touched = 跨文件回环 | 拆 | `ModelAdvancedRow.vue`（≈190）；`pinEdit` 那条"编辑即钉死 sources=user"只许一处 |
-| `lib/tool-detail.ts`（612） | 否：两个渲染面 + 三套表 | 是：`shell` 系三个工具名在三处各写一遍（67/131/512）⇒ 加一个工具改三处 | 拆 | `kinds` / `labels` / `blocks` 三片 + 主分派留 index，导入路径不变 |
+| `lib/tool-detail.ts`（612 → 270） | 否：两个渲染面 + 三套表 | 是：`shell` 系三个工具名在三处各写一遍（67/131/512）⇒ 加一个工具改三处 | 拆 ✅T36 | 已沉 `tool-detail/{types,kinds,describe,labels,blocks}.ts` 五片 + 主分派留本文件（判定表写的三片少了两件：视图类型与"折叠行那句话"各自是独立一面 ⇒ 落地开五片）；消费点两处 import 一字未改 ⇒ 对账里"接上面"这一刀判的是"每片都被主文件引用一次"（TS 没有 `mod` + `pub use`）；那三处 `shell` 名字重复**没并** = 语义改动 ⇒ **T34** |
 | `plugins-src/memory-sqlite/src/store.rs`（581 → 82） | 是：存储层四簇同族 | 是：同一条 UPSERT 两份抄写（276/522） | **拆**（T23 后重判）✅T35 | 已沉 `store/{limits,schema,rows,tools,undo}.rs` 五片 + 装配文件留 82 行；判定表的第六片 `mdsync` **没提成本级文件**（提成本级要给 45 行统一减四个空格 = 把"逐字节等价"换成"缩进归一后等价"），整块原样留在 `store.rs` 由 T7 重算担保一个字节没动；那两份 UPSERT 抄写本刀没并 ⇒ **T34**（两侧同族欠账一并判） |
 | `settings/LlmSection.vue`（577） | 是：七块行全走 SettingsGroup+SettingsRow 唯一形态 | 是，但方向相反 | **留** | 该文件实测 5 处组件直调 IPC + 4 处 `settings.refresh()`，已偏离「编排只在 stores」（新登 **T24**）⇒ 先收编排，拆是后面的事 |
 | `llm/client.rs`（575 → 493 · 仍留名单） | 半：装配 + 重试环 + 单次尝试是一件事，逐模型 ping 是另一件 | 是：`repair_*` 修复旗标跨 6 处 | 拆（薄）✅T32 | 只切走 ping 那条旁路 = `llm/client/test_probe.rs`(105)，**主环一字未动也没再切**（再切就出现第二条线路形状，违「同类只许一种形态」⇒ 本件留在名单里，理由在此列与提交正文）；表写的落点是 `llm/test_probe.rs`，落地改成 `client/` 的**子模块**更好：私有超时常量经 `super::` 就够得着 ⇒ 0 处可见性抬升、`llm/mod.rs` 不必动 |
@@ -955,10 +955,53 @@
         `SPLIT_SELFTEST_ALL_CAUGHT`（新机制没弄弱上一刀）
       · 跨平台：本刀没碰路径语义与插件生命周期（纯 Rust 结构面）⇒ 与 T33 同口径不取 WSL 证据；
         证据方向说破在这儿：这一族的**平台面**要等 `store.rs` 的内容改动（T34）或插件面功能变化时再取
+- [x] **T36** 拆 `desktop/src/lib/tool-detail.ts`（612 → 270 行留主分派）⇒ 同名子目录加五片（2026-10-18 第三批第一刀 · 第一把前端刀）
+      · 五片 = `types`(43) 视图模型类型 · `kinds`(49) 折叠行的类型词与字形分派 · `describe`(81) 折叠行
+        那句话 + 三个参数读取小件 · `labels`(117) 值格式化与标签表 · `blocks`(125) 明细块构造件；
+        本文件留"按工具类型分派"那条 if 链（判定表说"主分派留 index，导入路径不变"⇒ 这就是判据）
+      · ★ **前端刀与 Rust 刀的形状差别**：TS 没有 `mod X;` + `pub use X::*;`，接面由主文件的
+        import / export 承担 ⇒ 判据长出 `assembly.noDecl`：T5 那一档从"每片有 mod + 该有不有 glob"
+        改判"**每个片名都被主文件引用一次**"（少一片 = 孤儿源文件，bundler 无声丢掉、功能却没了，
+        所以这条必须有）。自测同步长出对应的 noDecl 变异：删掉一条引用 ⇒ T5 必须红
+      · 公开面 = 三个函数（`toolKind` / `toolDescribe` / `toolDetail`）+ 六个类型，一个不多一个不少：
+        15 个 helper 从片里 `export`（兄弟片与主分派要读）但**主文件不再导出** ⇒ 组件要取它们得写全路径，
+        现状无人取 ⇒ 模块对外面逐字不变。消费点两处（`ToolRow.vue` 两个函数、`ToolDetailView.vue` 一个）
+        的 import 语句一个字未改，靠主文件那段再导出接住
+      · 15 处声明式改动全是加 `export ` 前缀（机械后果，枚举在 spec 的 `edits` 里）；被搬段的**路径写法
+        一个字没改**：分片后 `../format` / `../tool-args` / `./types` 这些新写法全在每片的**头部**
+        （说明书块 + import 块），正文保持原样 ⇒ T3/T4/T6 照旧逐字判
+      · 判据为前端刀改了四处并全部回归：`splitHead` 认 TS 的 `/** */` 块与 `import` 行算头，但
+        **只吃开头那一块**（第二块起就是正文——T36 第一跑就栽在 `types` 片正文第一行是原文 16 行那段
+        JSDoc，被当抬头吞掉 ⇒ T4/T6 当场红，这正是"吞掉的行守恒不住"的正面证据）· T2 认块注释
+        也算说明书，且它的窄变异改成"挑撕掉后真正开头不再是注释的那一片"（钉死第一片 = 打空）·
+        `isDocOnly` 允许 `//` 注释行 · X1 从只认 `fn ` 扩到也认 `export function `（TS 刀的"改一个词"
+        是降可见性）。回跑 T30 / T31 / T32 / T33 / T35 五把已提交产物 = `SPLIT_VERIFY_OK` +
+        `SPLIT_SELFTEST_ALL_CAUGHT` ⇒ 上一刀的判据没被这一刀弄弱
+      · ✗ 登记新缺陷 **T37**（发现即登记，本刀不顺手修）：`check-i18n` 的"间接引用键"宽正则会把
+        **模块路径**当键计入豁免——本刀头注里写了 `labels.ts` / `types.ts` 这类名字时读数从 1129 涨到
+        1134（实测多出的集合 = `["labels.ts","describe.ts","types.ts","format.ts","blocks.ts"]`）。
+        断言不受影响（这些串对不上任何真实键，遮不住真孤儿），但**被 judged 的读数被污染** ⇒
+        本刀的做法是把头注里的 `X.ts` 改成"X 片"，改完实测回到 1129 与拆前逐字相同
+      · 实测：split-verify T1–T7 全绿（339 非空行逐种守恒 · 逐字节同序 · 主文件 270 行与重算逐字节
+        相同）· `--selftest` 十发全中 · `vue-tsc --noEmit` rc=0（第一跑报 `Cannot find name 'ListRow'`
+        ⇒ 主文件少一个类型 import，补上即绿——**类型检查就是前端刀的编译器**，Rust 那侧靠 clippy）·
+        `pnpm -C desktop run test:run` 17 文件 / 151 条与基线同数 · `make check` 全绿 ·
+        `check-i18n` zh=955 en=955 · 间接豁免=1129（与拆前逐字相同）· `check_length` 超限 14→13
+        （名单删一行走与 HEAD 的行集差：只少一行、多出为空）· `SPLIT_SHAPE_OK` 与
+        `check-commands` 88/88/88 不受影响
+      · 跨平台：纯前端结构面，不取 WSL 证据（ADR-0005 口径）
+- [ ] **T37** `check-i18n` 的"间接引用键"正则会把模块路径计入豁免，读数被污染（T36 实测撞到）
+      · 现正则把源码里任何"带引号的点分字面量"都收进 `credited`，于是 `` `labels.ts` `` 这种**文件名**
+        也算一条豁免，读数 +5（假键名对不上真实键，遮不住真孤儿，但数字不再是"引用了几处键"）
+      · 这一刀要答的问题：怎么把"像 i18n 键"与"像模块路径"分开——候选口径 = 排除含 `/` 或以 `.ts` /
+        `.vue` / `.json` 结尾的串，并要求首段命中语言包命名空间；判据 = 收紧后 `credited` 与"逐条能
+        对上真实键"的集合相等，且既有用例一条不红（防"为过闸放宽"）
+      · 与本刀分家：这是**闸的口径**，不在搬行刀里顺手改（红了好回退，且改闸必须重跑 `make selftest`）
   第一批 Rust 无锁件 = **清完**（T26 / T27 / T30 / T31 / T32）
   第二批 Rust 侧 schema 两件 = **清完**（T33 `memory.rs` ✅ / T35 `store.rs` ✅）：建表串与两条迁移
   两侧都搬过家，T23 那道"整根恰 1 处"的闸两侧读数各自跟着搬、判据一行没改（实测记在两条条目里）
-  第三批 前端 lib = `tool-detail.ts` → `api.ts`（通道表同样不必钉文件名）
+  第三批 前端 lib = `tool-detail.ts` ✅T36 → `api.ts`（通道表同样不必钉文件名；T36 已把"TS 刀怎么接面、
+  怎么判接上了"这套机制铺好，`api.ts` 与组件刀都吃它）
   第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`
   一件一刀，每刀按 T22 那刀的规格交：公开面不减 · 消费点不动 · 等价判据（规范化后逐单元比）· 窄变异各红在指定档
 · 这一节不承诺做完，也**不在话里钉"几件几刀"**：判与理由都在上面那张表的「判」列里，数一次漂一次
