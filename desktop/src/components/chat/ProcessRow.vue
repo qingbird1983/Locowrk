@@ -139,10 +139,11 @@ function onClick() {
 .prow__sep {
   color: var(--lw-ink-4);
 }
+/* 状态段左靠（台账 AF-10）：与「所有段左靠、三角紧跟最后一段」同一规则，
+ * 不许自带 `justify-content: flex-end` 与别的段争右侧位置。 */
 .prow__status {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
   flex: none;
   white-space: nowrap;

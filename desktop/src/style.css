@@ -690,14 +690,14 @@
 .cv-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--lw-gap-6);
   /* <button> 的 width:auto 是 shrink-to-fit——显式给足宽度（含两侧各 3px
      外溢）后，内部 flex 项才会正常收缩（原型注释原样保留） */
   width: calc(100% + 6px);
   margin-inline: -3px;
   padding: 5px 3px;
   border-radius: var(--lw-r-xs);
-  font-size: 13px;
+  font-size: var(--lw-fs-ui-caption);
   line-height: 1.3;
   color: var(--lw-ink-2);
   text-align: left;
@@ -718,9 +718,10 @@
 .cv-head__meta {
   color: var(--lw-ink-3);
 }
+/* 三角紧跟最后一段（台账 AF-01 组头半边 + AF-06）：与 .prow 同行壳规则——
+ * 不许 `margin-left: auto` 把组头三角甩到整行最右（那是同一属性第二种位置）。 */
 .cv-head__chev {
   color: var(--lw-ink-4);
-  margin-left: auto;
   flex: 0 0 auto;
 }
 
