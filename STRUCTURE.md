@@ -61,7 +61,7 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   │     MessageRow.vue · PermissionCard.vue，设置侧 ModelPanes.vue · LlmSection.vue ·
 │   │     ProviderSetupDialog.vue
 │   ├── src-tauri/                    #         组装点：独立 Cargo 包。形状约定 = 模块文件与同名目录成对（孤儿文件由拆分形状闸判）
-│   │   ├── commands/ commands.rs     #         Tauri command 薄适配层：只做参数转换，不写业务（llm.rs · sessions.rs 最厚）
+│   │   ├── commands/ commands.rs     #         Tauri command 薄适配层：commands.rs 只留 mod + pub use 声明，命令本体按簇在目录里（llm.rs · sessions.rs 最厚）
 │   │   ├── runner/ llm/ prompts/ events.rs tool_source.rs
 │   │   │                             #         执行循环 · 模型接入与线格式（client.rs · wire.rs）· 提示词分层 · 事件通道常量 · 工具接线
 │   │   ├── approval/ permission_mode/ permission_rules/ privacy/ autodisable.rs

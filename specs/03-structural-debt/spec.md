@@ -20,7 +20,8 @@
 "可翻案"与翻案代价。不可逆动作做过一件，正是他点名的那件（T4 那两块实验室夹具连名下 15 条文案键
 已删净）；**未点名的删除一条没做**，[LOCK] 与 push 未动。第三组（超限名单 20 件的逐件三问判定）
 是同日按同一口径新加的，那张表已由用户点头（「认了，从 T23 开始按你排的顺拆」）⇒ 判定里三笔新登记的
-欠账，T23 已落地，T24/T25 与表里判拆的那些件按批次连着走。
+欠账，T23 已落地，表里第一批的第一刀（拆 `commands.rs` = T26）也已落地，剩下的按内文那个顺序连着走
+（T24/T25 与其余判拆的件各自一刀）。
 
 ## 计划
 
@@ -642,7 +643,7 @@
 | `src-tauri/src/events.rs`（531） | 是：通道常量 + 事件 enum + `channel()` 映射 = **同一张契约表** | 是，但那是这张表**固有的形状**（加一条事件本来就要同时动三处） | **留** | 三问皆是的一族：一份契约的三个侧面，拆开 = 把一条事实摊成三个出处。T23 之前它还多一条"拆了闸会安静少一条"的外力，现在那条已消（C4 实测数得到）⇒ 本件**只按形态判**，判留 |
 | `settings/DeveloperSection.vue`（523） | 否：写值区 + 三个**只读观测面板**（⑫ 暴露调试 / 缓存诊断 / reconcile 触发） | 是：`refresh()` 拿写值字段 `cacheDiagnostics` 当取数门 | 拆 | `ExposureDebugPanel.vue` + `CacheObservationPanel.vue` → 主件 ≈360；先例就在同目录（`MemoryTreePanel.vue` 116 行是从它拆出去的） |
 | `commands/llm.rs`（523） | 否：清单+推荐 / 连通测试 / 代理与档位 CRUD / 目录诊断 四簇 | 是：`enrich` 与 `apply_dialect_ladder` 被两簇共读（44/298/478） | 拆（只切面） | `commands/llm/{models,probe,providers}.rs`；但 `llm_provider_save` 闭包就地做档位装配与 keyring 写 = 业务进命令层（新登 **T25**，本刀不顺手） |
-| `src-tauri/src/commands.rs`（519） | 否：9 簇（聊天与停止 / undo / 列表投影 / 审批与规则 / 设置 / 探测 / 暴露调试 / 原生对话框 / 通知） | 是：跨文件调 `sessions::ensure_associatable`，还有 `cfg(test)` 补丁式再导出 | 拆 | 沉 `commands/{chat,approvals,settings,system}.rs`；`check-commands.mjs` 走目录扫全部 .rs ⇒ **不动任何闸，单刀性价比最高** |
+| `src-tauri/src/commands.rs`（519 → 56） | 否：9 簇（聊天与停止 / undo / 列表投影 / 审批与规则 / 设置 / 探测 / 暴露调试 / 原生对话框 / 通知） | 是：跨文件调 `sessions::ensure_associatable`，还有 `cfg(test)` 补丁式再导出 | 拆 ✅T26 | 已沉 `commands/{chat,approvals,settings,probe,dialog,notifications}.rs` 六片（判定时的 4 片切法里 `system` 一片装四件事 = 违 ①，落地时按簇分成四片）；`check-commands.mjs` 走目录扫全部 .rs ⇒ **不动任何闸**，实测该闸在本刀后读数不变 |
 | `memory/TreeSection.vue`（505） | 否：会话导航与档位 / 章节展开与原文缓存 / M5 编辑面 三簇 | 是：`loadBundles` 一次重置六个本地态，新增任一编辑态都要动它 | 拆 | `use-tree-chapters.ts`（≈120，先例 = 同目录 `use-model-probe.ts`）；保存就地改引用与两步删除互斥必须同处 |
 | `commands/sessions.rs`（474） | 否：元数据 / 删除与搜索 / 导出与标题 / 截断与悬空裁决 / 子转录与外壳 五簇 | 是：忙守卫文案两份（296/326）、`fsRoots` 校验两份（32/434）、shell 三分支两份（403/452） | 拆 | `sessions/{meta,lifecycle,export,heal,shell}.rs`；那三组重复正是「同一事实两个出处」要消灭的形状 |
 | `chat/MessageRow.vue`（468） | 否：附件部件簇与 `ToolRow.vue` 的 thumbCache/thumbOf **逐字同形** | 是：`.msg--brief` 的 padding 归零靠 TranscriptFlow 的兄弟规则补（注释自陈实抓过） | 拆（薄） | `lib/use-asset-thumb.ts`（≈35，ToolRow 同用）+ `MessageParts.vue`（≈95）→ 余 ≈330 |
@@ -695,9 +696,37 @@
 - [ ] **T25** `commands/llm.rs` 的 `llm_provider_save` 就地做档位装配 / keyring 写 / 清单去重，业务进了命令层
       · 违 §3「Tauri command 薄适配层：只做参数转换，不写业务」；实测 = 该闭包 327–407 行 ≈ 80 行
       · 下沉目标 = `src-tauri/src/settings/llm.rs`；与 commands/llm.rs 的切面分开两刀，别混
+- [x] **T26** 拆 `src-tauri/src/commands.rs`（519 → 56 行只留声明）⇒ 同名目录加六片（2026-10-18 第一批第一刀）
+      · 六片按**簇**分：`chat`(179) = 跑轮次 / 停止 / 回退压缩 / 会话列表 / 全量投影 ·
+        `settings`(142) = 读写 + 保存后的热更新广播 · `approvals`(56) = 审批决策 + 粘性规则 ·
+        `probe`(60) = 探测与诊断读数（全不落盘）· `dialog`(56) = OS 原生对话框 · `notifications`(31)。
+        判定表里预写的四片切法有一片叫 `system`，装的是"探测 + 对话框 + 通知 + 调试"= 违三问 ①，
+        落地时按簇拆成四片 —— **表的切法是草案，不是合约**
+      · 公开面与消费点：`commands.rs` 靠 `pub use X::*` 转发，`lib.rs` 的 `generate_handler!` 与
+        前端 invoke **一个字没改**；`check-commands.mjs` 读数与切割前逐字相同
+        （`定义=88 · 注册=88 · 前端引用=88 · 预留名单=0`）
+      · 等价判据（本刀不吃"我以为搬对了"）：切割脚本 `tmp/t26-cut.mjs` 落盘前判三条
+        （区间无缝覆盖 48–519 / 每片正文是原文连续子串 / **非空行多重集逐种守恒 445 行**，任一红就不写盘）；
+        事后对账 `tmp/t26-verify.mjs` 五档 T1–T5 独立吃磁盘（原文备份 + 六片 + 装配文件），
+        **不复制区间** —— 区间只在切割脚本出现一次，两处手写必漂
+      · 窄变异各红在指定档：`--selftest` 五档 = `T26_SELFTEST_ALL_CAUGHT`（T1 下限与 T4 行守恒**同因共红**，
+        已登记为 `EXPECT_CO`，不伪装成独立档）；另加一条磁盘变异 `tmp/t26-mut.mjs`：把 `commands/chat.rs`
+        里一条命令改名 ⇒ `check-commands` 定义 88→87 且 rc=1（证"闸在子目录布局上是活的"，
+        这是 T23 那批"闸钉死路径"教训的正面验证），逐字节写回 + sha 复核后回到 88/88/88 = `T26_MUT_ALL_CAUGHT`
+      · 编译与测试：`cargo clippy --all-targets -- -D warnings` rc=0 · `cargo test` 584 passed / 0 failed（与改前同数）·
+        `cargo fmt --check` rc=0
+      · 闸与名单：`check_length.sh` 的 OVERLIST 删掉 `commands.rs` 那一行（现 超限 19 · 名单 19 · 零新增）·
+        `STRUCTURE.md` 那行地图改成"commands.rs 只留 mod + pub use 声明"
+      · ★ 两条踩坑说破（都写进本条就是为了不靠记忆）：
+        ① **变异动作看着改了、其实没改判据吃的东西** —— T4 的对照第一版写 `bl.pop()`，删掉的是
+        `split("\n")` 产物末尾那个恒有的空元素，非空行一条没少 ⇒ 判据仍绿（对照打空）。改成"倒序找
+        最后一条非空行再删"才红。与历批"负对照打空"同族，新形态：**尾部空元素**
+        ② **删实现不等于删干净** —— 切割按 48–519 划，把原文件第 15–46 行那批顶层 `use` 留在装配文件里，
+        clippy 当场红 `unused_imports: std::sync::Arc`。装配文件的 use 面只能由编译器裁，不能由我以为
+      · 跨平台：纯 Rust 模块结构面，不涉及路径语义与插件生命周期 ⇒ 本刀不取 WSL 侧证据（口径见 ADR-0005）
 
 · 拆的顺序（原本按"动刀前必须先解哪道锁"排；**T23 已把那些锁解掉** ⇒ 现在只按风险与体量排）：
-  第一批 Rust 无锁件 = `commands.rs` → `commands/sessions.rs` → `commands/llm.rs`（只切面）→ `llm/wire.rs` → `llm/client.rs`（薄）
+  第一批 Rust 无锁件 = `commands/sessions.rs` → `commands/llm.rs`（只切面）→ `llm/wire.rs` → `llm/client.rs`（薄）（`commands.rs` 已由 T26 做完）
   第二批 Rust 侧 schema 两件 = `memory.rs` → `store.rs`（建表串不必再钉在主文件：定义处"整根恰 1 处"由闸自己盯）
   第三批 前端 lib = `tool-detail.ts` → `api.ts`（通道表同样不必钉文件名）
   第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`
