@@ -78,6 +78,19 @@ describe("toolDetail 的内容块（§7.1 / §7.3）", () => {
     expect(d.blocks.map((b) => b.kind)).toEqual(["props", "code"]);
   });
 
+  it("写入的备份行并进同一个属性块（两个 dl 会让值列错位）", () => {
+    const d = toolDetail(
+      "fs_write",
+      { path: "/w/a.ts", content: "hi" },
+      { path: "/w/a.ts", bytes: 2, edits: 1, existed: true, backup: "bak/a.ts" },
+      ctx,
+    );
+    const props = d.blocks.filter((b) => b.kind === "props");
+    expect(props.length).toBe(1);
+    const labels = props[0].kind === "props" ? props[0].rows.map((r) => r.label) : [];
+    expect(labels).toContain("tool.label.backup");
+  });
+
   it("shell 展开是终端块，命令与 stdout 合并", () => {
     const d = toolDetail("shell", { command: "ls" }, { exit_code: 0, stdout: "a.ts\n" }, ctx);
     const term = d.blocks.find((b) => b.kind === "term");

@@ -12,6 +12,10 @@
  * 一段——它跟在文件名的前面（用户 2026-10-18 参考图裁定：两者并存，不是二选一），
  * 由消费方在 `#desc` 槽里放 `FileIcon`。
  *
+ * 摘要段只在有 `#desc` / `#tail` 时占位：思考行的收起态是「类型 + 元信息」
+ * （`思考 · 12 秒`），若摘要段照常吃满剩余宽度，元信息会被顶到行尾去。
+ * 元信息段自带「·」分隔点，消费方只给值。
+ *
  * 行 = 真 <button>（aria-expanded、键盘可达）；三角恒占位，行 hover / 键盘聚焦
  * 淡入（悬停不位移）；`foldable === false` 的身份（notify / browser_open /
  * dev_echo）三角 `aria-disabled` 且不响应点击。明细体不在本组件——展开只是
@@ -49,11 +53,13 @@ function onClick() {
   >
     <span class="prow__icon"><Icon :name="icon" :size="14" /></span>
     <span class="prow__type">{{ type }}</span>
-    <span class="prow__desc">
+    <span v-if="$slots.desc || $slots.tail" class="prow__desc">
       <span class="prow__name"><slot name="desc" /></span>
       <span v-if="$slots.tail" class="prow__tail"><slot name="tail" /></span>
     </span>
-    <span v-if="$slots.meta" class="prow__meta"><slot name="meta" /></span>
+    <span v-if="$slots.meta" class="prow__meta"
+      ><span class="prow__sep" aria-hidden="true">·</span><slot name="meta"
+    /></span>
     <span v-if="$slots.status" class="prow__status"><slot name="status" /></span>
     <span class="prow__chev" :aria-disabled="foldable === false || undefined">
       <Icon :name="expanded ? 'chevronDown' : 'chevronRight'" :size="14" />
@@ -118,10 +124,17 @@ function onClick() {
   font-size: var(--lw-fs-ui-sm);
 }
 .prow__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lw-gap-4);
   flex: none;
   color: var(--lw-ink-3);
   font-size: var(--lw-fs-ui-sm);
   font-variant-numeric: tabular-nums;
+}
+/* 元信息前的分隔点由行壳统一给（各消费方不再各自写「·」） */
+.prow__sep {
+  color: var(--lw-ink-4);
 }
 .prow__status {
   display: inline-flex;

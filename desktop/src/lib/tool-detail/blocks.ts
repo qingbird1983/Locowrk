@@ -38,12 +38,18 @@ export function codeLanguage(path: string): string {
   return map[ext.toLowerCase()] ?? (ext || "text");
 }
 
+/** 属性行入块：**并进紧邻的那个属性块**，不另起一个。
+ *  标签列宽是「本块最长标签」（max-content），拆成两个块就会各自量一次，
+ *  值列错位——写入类的「备份」行原先就是这样跟上面几行对不齐的。 */
 export function pushProps(
   blocks: DetailBlock[],
   rows: (PropRow | null | undefined)[],
 ) {
   const clean = rows.filter((r): r is PropRow => !!r && r.value !== "");
-  if (clean.length > 0) blocks.push({ kind: "props", rows: clean });
+  if (clean.length === 0) return;
+  const last = blocks[blocks.length - 1];
+  if (last?.kind === "props") last.rows.push(...clean);
+  else blocks.push({ kind: "props", rows: clean });
 }
 
 export function prop(
