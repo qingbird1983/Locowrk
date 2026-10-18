@@ -35,7 +35,6 @@ desktop/src-tauri/src/llm/wire.rs
 desktop/src/components/chat/TranscriptFlow.vue
 desktop/src-tauri/src/events.rs
 desktop/src/components/settings/DeveloperSection.vue
-desktop/src-tauri/src/commands/llm.rs
 desktop/src/components/memory/TreeSection.vue
 desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue

@@ -642,7 +642,7 @@
 | `chat/TranscriptFlow.vue`（540） | 否：约 180 行**零 DOM** 的投影算法住在组件里 | 是：inner 单块分支与 tail 两段**逐字重复** ⇒ 新增一类 kind 必改两处 | 拆 | `use-flow-projection.ts`（≈190）+ `FlowSingle.vue`（≈60）把两遍并一遍；composable 不触形态标准 |
 | `src-tauri/src/events.rs`（531） | 是：通道常量 + 事件 enum + `channel()` 映射 = **同一张契约表** | 是，但那是这张表**固有的形状**（加一条事件本来就要同时动三处） | **留** | 三问皆是的一族：一份契约的三个侧面，拆开 = 把一条事实摊成三个出处。T23 之前它还多一条"拆了闸会安静少一条"的外力，现在那条已消（C4 实测数得到）⇒ 本件**只按形态判**，判留 |
 | `settings/DeveloperSection.vue`（523） | 否：写值区 + 三个**只读观测面板**（⑫ 暴露调试 / 缓存诊断 / reconcile 触发） | 是：`refresh()` 拿写值字段 `cacheDiagnostics` 当取数门 | 拆 | `ExposureDebugPanel.vue` + `CacheObservationPanel.vue` → 主件 ≈360；先例就在同目录（`MemoryTreePanel.vue` 116 行是从它拆出去的） |
-| `commands/llm.rs`（523） | 否：清单+推荐 / 连通测试 / 代理与档位 CRUD / 目录诊断 四簇 | 是：`enrich` 与 `apply_dialect_ladder` 被两簇共读（44/298/478） | 拆（只切面） | `commands/llm/{models,probe,providers}.rs`；但 `llm_provider_save` 闭包就地做档位装配与 keyring 写 = 业务进命令层（新登 **T25**，本刀不顺手） |
+| `commands/llm.rs`（523 → 30） | 否：清单+推荐 / 连通测试 / 代理与档位 CRUD / 目录诊断 四簇 | 是：`enrich` 与 `apply_dialect_ladder` 被两簇共读（44/298/478） | 拆（只切面）✅T30 | 已沉 `commands/llm/{views,models,probe,test,providers,catalog}.rs` 六片：共读段单立 `views` 片（不塞进命令片当"顺手的公共文件"），`清单` 与 `推荐` 分家；`apply_dialect_ladder` 抬 `pub(super)` 是本刀**唯一声明式改动**；`llm_provider_save` 的业务下沉仍归 **T25**，本刀没碰 |
 | `src-tauri/src/commands.rs`（519 → 56） | 否：9 簇（聊天与停止 / undo / 列表投影 / 审批与规则 / 设置 / 探测 / 暴露调试 / 原生对话框 / 通知） | 是：跨文件调 `sessions::ensure_associatable`，还有 `cfg(test)` 补丁式再导出 | 拆 ✅T26 | 已沉 `commands/{chat,approvals,settings,probe,dialog,notifications}.rs` 六片（判定时的 4 片切法里 `system` 一片装四件事 = 违 ①，落地时按簇分成四片）；`check-commands.mjs` 走目录扫全部 .rs ⇒ **不动任何闸**，实测该闸在本刀后读数不变 |
 | `memory/TreeSection.vue`（505） | 否：会话导航与档位 / 章节展开与原文缓存 / M5 编辑面 三簇 | 是：`loadBundles` 一次重置六个本地态，新增任一编辑态都要动它 | 拆 | `use-tree-chapters.ts`（≈120，先例 = 同目录 `use-model-probe.ts`）；保存就地改引用与两步删除互斥必须同处 |
 | `commands/sessions.rs`（474 → 35） | 否：元数据 / 删除与搜索 / 导出与标题 / 截断与悬空裁决 / 子转录与外壳 五簇 | 是：忙守卫文案两份（296/326）、`fsRoots` 校验两份（32/434）、shell 三分支两份（403/452） | 拆 ✅T27 | 已沉 `sessions/{meta,lifecycle,export,heal,transcript,shell}.rs` 六片（判定表把"子转录"与"外壳"合成一片 = 违三问 ①，落地拆开）；那三组重复本刀**没并**（纯搬行不许夹带），新登 **T28** 单独一刀 |
@@ -772,9 +772,37 @@
         ⇒ `-D warnings` 红），本条只更正机制断言；要不要顺手删冗余点名行由那一刀判，
         判据 = 删了之后 `cargo clippy --all-targets` 仍 rc=0 且 `tests_session_log/export_title.rs` 仍绿
 
+- [x] **T30** 拆 `commands/llm.rs`（523 → 30 行只留声明）⇒ 同名子目录加六片（2026-10-18 第一批第三刀）
+      · 六片 = `providers`(228) 代理与档位 CRUD · `test`(100) 连通测试两路 · `probe`(92) 表单探测与推荐 ·
+        `views`(55) IPC 视图与目录合成的共读段 · `models`(58) 选择器清单 · `catalog`(46) 目录三件与诊断。
+        判定表写的是四片切法，本刀落六片：`清单`（全档并行）与 `推荐`（单档扫描 + 预选）合成一片违三问 ①；
+        被两簇共读的 `enrich_with_catalog` + `apply_dialect_ladder` 单立 `views` 片 ——
+        **不塞进任何一个命令片当"顺手的公共文件"**（那样公共段会寄生在某一簇里，下一个人无从找）
+      · ★ 这一刀起，拆刀获得**声明式改动**机制（`tmp/split-edits.mjs`）：搬行刀允许
+        "除了枚举出来的这几处，其余逐字节相同"。为什么必须有：私有函数拆到兄弟模块必须抬可见性，
+        抬完那行超 100 列又被 rustfmt 折成四行 —— 这是拆分的**机械后果**不是语义改动；
+        没有枚举机制时只有两条坏路：判据假红，或为了绿放宽整行守恒（= 判据作废）
+        口径三条：每条 `find` 在该段最多命中 1 次；各片分到的改动合计 == 声明条数
+        （少 = 有条款没进任何片，多 = 进重了）；`edits` 写的是**折好行的终形**（否则"改完再让 fmt 改一遍"
+        = 第二处未声明改动）。本刀的 1 条 = `fn apply_dialect_ladder(…) {` → `pub(super) fn apply_dialect_ladder(` 换行参数换行 `) {`
+      · 机制自身的证明 = 自测里两发**定向**变异：X1"改一个词却没声明" ⇒ 红在 T3/T4/T6；
+        X2"片里多一行原文没有的语句" ⇒ 红在 T3/T4/T6（`SPLIT_SELFTEST_ALL_CAUGHT（含 X1/X2）`）。
+        改完判据先回归：拿 T26 / T27 已提交的产物重跑通用对账，两把都仍 `SPLIT_VERIFY_OK` 才算通用化没削弱
+      · 公开面与消费点：`lib.rs` 注册表、`commands/settings.rs` 的 `use super::llm::enrich_with_catalog`、
+        前端 invoke 全部不改字；`check-commands.mjs` = `定义=88 · 注册=88 · 前端引用=88 · 预留名单=0`；
+        磁盘变异 = 把 `llm/providers.rs` 里 `llm_provider_reorder` 改名 ⇒ 定义 88→87 且 rc=1，
+        逐字节写回 + sha 复核回 88/88/88 = `SPLIT_MUT_ALL_CAUGHT`
+      · 编译与测试：`cargo clippy --all-targets -- -D warnings` rc=0 · `cargo fmt --check` rc=0 ·
+        `cargo test` 584 / 0 · `make check` 全绿 · `check_length` 名单再减一行
+      · ★ 对账抓到我自己的一处误删：改 OVERLIST 时用 Edit 删 `commands/llm.rs` 那一行，
+        连带把相邻的 `chat/TranscriptFlow.vue` 一起吞了（`old_string` 圈大了）。
+        抓手 = **与 HEAD 做行集差**（`comm -23/-13`）：要求"只少一行、多出行集为空"，
+        当场看到少了两个文件 ⇒ 补回。口径：删名单行不许靠肉眼，必须做集合差
+      · 跨平台：纯 Rust 结构面，不取 WSL 证据（ADR-0005 口径）；`llm_provider_save` 的业务面属 T25，没动
+
 · 拆的顺序（原本按"动刀前必须先解哪道锁"排；**T23 已把那些锁解掉** ⇒ 现在只按风险与体量排）：
-  第一批 Rust 无锁件 = `commands/llm.rs`（只切面）→ `llm/wire.rs` → `llm/client.rs`（薄）
-  （`commands.rs` 与 `commands/sessions.rs` 已做完 = T26 / T27；做没做完看上面的勾，不看这行）
+  第一批 Rust 无锁件 = `llm/wire.rs` → `llm/client.rs`（薄）
+  （`commands.rs` / `commands/sessions.rs` / `commands/llm.rs` 已做完 = T26 / T27 / T30；看勾不看这行）
   第二批 Rust 侧 schema 两件 = `memory.rs` → `store.rs`（建表串不必再钉在主文件：定义处"整根恰 1 处"由闸自己盯）
   第三批 前端 lib = `tool-detail.ts` → `api.ts`（通道表同样不必钉文件名）
   第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`
