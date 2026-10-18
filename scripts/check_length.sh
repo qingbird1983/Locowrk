@@ -27,7 +27,6 @@ desktop/src/lib/api.ts
 desktop/src/components/settings/model/ProviderSetupDialog.vue
 desktop/src/components/settings/model/ModelPanes.vue
 desktop/src/lib/tool-detail.ts
-plugins-src/memory-sqlite/src/store.rs
 desktop/src/components/settings/LlmSection.vue
 desktop/src-tauri/src/llm/client.rs
 desktop/src/components/chat/TranscriptFlow.vue
