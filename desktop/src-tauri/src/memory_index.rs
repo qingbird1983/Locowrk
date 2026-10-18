@@ -26,10 +26,10 @@
 
 use crate::memory::FactLine;
 
-/// 索引注入行数上限（稿 §6，与 ZCode 同数）。
-pub(crate) const MAX_INDEX_LINES: usize = 200;
-/// 索引注入字符上限（稿 §6）。
-pub(crate) const MAX_INDEX_CHARS: usize = 25_000;
+/// 索引预算的**唯一出处在 `plugin_api::memlayout`**（写侧落盘的 `MEMORY.md` 与
+/// 注入侧共用同一份数字——两头各写一份迟早会漂成"文件里 210 行、注入只给看 200 行"）。
+/// 这里只做再导出，让本模块与它的测试继续按裸名取用。
+pub(crate) use plugin_api::memlayout::{MAX_INDEX_CHARS, MAX_INDEX_LINES};
 /// 陈旧标注门槛：48 h（稿 §6「>48 h 才标」）。
 pub(crate) const STALE_AFTER_SECS: i64 = 48 * 3600;
 

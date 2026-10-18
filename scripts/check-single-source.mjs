@@ -45,6 +45,7 @@ function prodRustFiles() {
 
 const F = {
   memlayout: 'crates/plugin-api/src/memlayout/mod.rs',
+  memIndex: 'desktop/src-tauri/src/memory_index.rs',
   rsFont: 'desktop/src-tauri/src/settings/appearance.rs',
   tsFont: 'desktop/src/lib/ui-font.ts',
   css: 'desktop/src/style.css',
@@ -412,6 +413,29 @@ const CHECKS = [
     (m) => String(layerDefs(m)),
     '1',
   ],
+  [
+    'SS10',
+    '索引预算那两个数字在全生产 Rust 面各只许 1 处定义（S1 刀①：钳搬到写侧后，落盘的 ' +
+      '`MEMORY.md` 与注入侧共用同一份预算——两处各写一份迟早漂成"文件里 210 行、注入说只有 200 行"，' +
+      '而人打开文件夹看到的那份就不再是模型看到的那份）',
+    (m) =>
+      [
+        countOf(m.rust.join('\n'), /const MAX_INDEX_LINES: usize = [\d_]+/),
+        countOf(m.rust.join('\n'), /const MAX_INDEX_CHARS: usize = [\d_]+/),
+      ].join('|'),
+    '1|1',
+  ],
+  [
+    'SS10b',
+    '且定义确实落在 memlayout（两条 = 2），宿主注入侧取的是**再导出**而不是自己 `const` 一份' +
+      '（左 = memlayout 里的定义数，右 = memory_index.rs 里那条 `pub(crate) use plugin_api::memlayout::{…}`）',
+    (m) =>
+      [
+        countOf(m.memlayout, /pub const MAX_INDEX_(?:LINES|CHARS): usize =/),
+        countOf(m.memIndex, /pub\(crate\) use plugin_api::memlayout::\{[^}]*MAX_INDEX_LINES[^}]*\};/),
+      ].join('|'),
+    '2|1',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -467,6 +491,18 @@ if (SELFTEST) {
   const MUT = {
     SS1: (m) => m.rust.push('pub fn sneaky() -> String { format!("{}/x", "projects") }'),
     SS1b: (m) => (m.memlayout = m.memlayout.replace('const PROJECTS_DIR: &str = "projects";', 'const PROJECTS_DIR: &str = "proj";')),
+    // 索引预算（S1 刀①）：SS10 数"全仓是不是只有一份数字"，SS10b 数"那份数字在不在 memlayout、
+    // 宿主是不是真的再导出"。两档各一条窄变异——宿主退回自定义时只该 SS10b 红（m.rust 与
+    // m.memIndex 是两次独立读盘，改一份不动另一份，这正是分工能证成立的原因）。
+    SS10: (m) =>
+      m.rust.push(
+        'pub(crate) const MAX_INDEX_LINES: usize = 200;\npub(crate) const MAX_INDEX_CHARS: usize = 25_000;',
+      ),
+    SS10b: (m) =>
+      (m.memIndex = m.memIndex.replace(
+        'pub(crate) use plugin_api::memlayout::{MAX_INDEX_CHARS, MAX_INDEX_LINES};',
+        'pub(crate) const MAX_INDEX_LINES: usize = 200;',
+      )),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

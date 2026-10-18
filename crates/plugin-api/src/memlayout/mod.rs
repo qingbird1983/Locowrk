@@ -1,21 +1,27 @@
-//! 记忆文件化布局（F1，《Memory File-ization Design v1.1》）：记忆的人类
-//! 层 = `<数据根>/memory/` 下的 Markdown——人可查可读可写，编辑是权威；
-//! memory.sqlite3 保留为机器索引与召回快路径（WorkBuddy / ZCode 同款
-//! 双层）。本模块只放**布局与格式**（目录命名、文件名安全、frontmatter
-//! 渲染、写删与 MEMORY.md 索引刷新）——插件侧（memory-sqlite）与宿主侧
-//! （desktop memory / memory_files）共用同一份实现，同一键位必落同一
-//! 文件。写入边界（宁严勿松）：全部落点都在数据根 `memory/` 之内。
+//! 记忆文件化布局（F1，《Memory File-ization Design v1.1》）：记忆的唯一真源 =
+//! `<数据根>/memory/` 下的 Markdown——人可查可读可写，编辑即权威写入。
+//! 本模块只放**布局与格式**（目录命名、文件名安全、frontmatter 渲染、写删与
+//! MEMORY.md 索引刷新）——插件侧（memory-sqlite）与宿主侧（desktop memory /
+//! memory_files）共用同一份实现，同一键位必落同一文件。写入边界（宁严勿松）：
+//! 全部落点都在数据根 `memory/` 之内。
 //!
-//! 布局（设计 §2.1）：
+//! 真源归属按 `docs/adr/0007`（记忆 = 扁平事实文件一处落盘）扳正：v1.0 草案推荐的
+//! "sqlite = 机器索引层 + md = 人类层"双层双写**已撤销**，sqlite 侧的读写在 S1 刀② 摘除
+//! （本刀只把索引预算钳搬到写侧，sqlite 一行未动 ⇒ 本模块当前仍是"真源已落之后的同步"
+//! 那个旧次序，别照这段话理解现状）。
+//!
+//! 布局（设计 §2.1，与 `scope_dirs` 实况一致）：
 //! ```text
 //! memory/
-//! ├── MEMORY.md                        # （预留给全局视图，本模块不写）
-//! ├── global/<key>.md                  # 全局记忆（'' 键位：用户偏好）
+//! ├── global/
+//! │   ├── MEMORY.md                    # 全局索引（一文件一行，落盘前钳 200 行 / 25_000 字符）
+//! │   └── <key>.md                     # 全局记忆（'' 键位：用户偏好、全局要求）
 //! └── projects/<可读名-短哈希>/
-//!     ├── MEMORY.md                    # 该项目事实索引（一文件一行）
+//!     ├── MEMORY.md                    # 该项目事实索引（坐在项目文件夹根）
 //!     ├── tree.md                      # 该项目记忆树的人读层（宿主 memory_files 写）
 //!     └── facts/<key>.md               # 项目事实
 //! ```
+//! 未归属会话的树另有 `_unaffiliated/`（它**不是**项目，见 `UNAFFILIATED_DIR`）。
 
 use std::path::{Path, PathBuf};
 
@@ -39,6 +45,17 @@ const PROJECTS_DIR: &str = "projects";
 /// 落点）与读侧（memory_tree_reconcile 的目录反查项目）都引用这里，字面量全仓
 /// 只此一处（Q15 探针 P4a：改前散在两个文件）。
 pub const UNAFFILIATED_DIR: &str = "_unaffiliated";
+/// 索引硬顶：指针行数（设计 §2.1）。**这条预算的全仓唯一出处就在这里**——
+/// 写侧（本模块 `refresh_index` 落盘）与注入侧（宿主 `memory_index`）都引用
+/// 这两个常量，两份数字一旦各写各的，就会出现"文件里 210 行、注入只给看 200
+/// 行"这种人在资源管理器里看到的和模型看到的不一致（v1.1 把钳搬到写侧的目的
+/// 正是让人看到的那份 = 模型看到的那份）。
+pub const MAX_INDEX_LINES: usize = 200;
+/// 索引硬顶：正文字符数（与行数任一先撞线就截，长 key 会先撞字符预算）。
+pub const MAX_INDEX_CHARS: usize = 25_000;
+/// 截断必须自描述：末行留一条指路，否则人打开索引会以为"本项目就记了这些"。
+pub const INDEX_TRUNCATED_NOTE: &str =
+    "… index truncated — open this folder to see every file, or use memory_search";
 /// 总开关 env：宿主在 settings `memory.files = false` 时注入 `"0"`；
 /// 插件**每次写前读取**（与 fsutil allowed_roots 同款读 env 热换，保存
 /// 即生效免重启）。env 缺省未设 = 开。
@@ -287,8 +304,26 @@ fn parse_description(text: &str) -> Option<String> {
     None
 }
 
-/// 重建一个键位的 MEMORY.md 索引（一文件一行，文件名稳定序）。facts
-/// 目录不存在时也会创建（空索引自描述）。
+/// 写侧预算钳：行数与字符数**任一先撞线即截**，且只丢整行不写半行。
+/// 返回 `(保留的指针行, 是否发生截断)`。头部与每行行尾换行都算进字符预算——
+/// 头部不算就会被它悄悄撑爆，行尾不算则 200 行实际比预算多出 200 字符。
+fn clamp_index(lines: Vec<String>) -> (Vec<String>, bool) {
+    let head = "# 记忆索引\n\n";
+    let mut kept: Vec<String> = Vec::new();
+    let mut used = head.chars().count();
+    for line in lines {
+        let cost = line.chars().count() + 1;
+        if kept.len() >= MAX_INDEX_LINES || used + cost > MAX_INDEX_CHARS {
+            return (kept, true);
+        }
+        used += cost;
+        kept.push(line);
+    }
+    (kept, false)
+}
+
+/// 重建一个键位的 MEMORY.md 索引（一文件一行，文件名稳定序，**落盘前按 §2.1
+/// 预算钳**）。facts 目录不存在时也会创建（空索引自描述）。
 pub fn refresh_index(root: &Path, workspace: &str) -> Result<(), String> {
     let (dir, index_path) = scope_dirs(root, workspace)?;
     let mut lines: Vec<String> = Vec::new();
@@ -311,13 +346,15 @@ pub fn refresh_index(root: &Path, workspace: &str) -> Result<(), String> {
         }
     }
     lines.sort();
+    let (kept, truncated) = clamp_index(lines);
+    let mut body = format!("# 记忆索引\n\n{}", kept.join("\n"));
+    if truncated {
+        body.push_str(&format!("\n{INDEX_TRUNCATED_NOTE}"));
+    }
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("memory 目录创建失败 {}: {e}", dir.display()))?;
-    sync::atomic_write(
-        &index_path,
-        &format!("# 记忆索引\n\n{}\n", lines.join("\n")),
-    )
-    .map_err(|e| format!("memory 索引写入失败 {}: {e}", index_path.display()))
+    sync::atomic_write(&index_path, &format!("{body}\n"))
+        .map_err(|e| format!("memory 索引写入失败 {}: {e}", index_path.display()))
 }
 
 /// 写一条事实 md（目录惰性建 + **冲突备份** + 刷新该键位索引）。幂等
