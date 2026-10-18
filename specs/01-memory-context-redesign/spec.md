@@ -78,7 +78,7 @@
 
 | 阶段 | 内容 | 依赖 | 方案稿对应 |
 | --- | --- | --- | --- |
-| S1 数据面 | 文件库布局 + frontmatter/索引读写 + memory 工具改道 + 存量 sqlite 导出 + 管理页改道 | 无 | A / E |
+| S1 数据面 | **施工 spec 已开 = [`specs/05-memory-data-plane-s1`](../05-memory-data-plane-s1/spec.md)**（2026-10-18 现状取证后重写范围：文件库与索引已在，S1 做的是把"sqlite 真源 + md 镜像"扳成 md 唯一真源，四类型与排除清单补进 frontmatter 与提示词，`obsolete/` 软删，存量导出改道） | 无 | A / E |
 | S2 压缩面 | 主层深度压缩（模板 / 续接框架 / 熔断）+ 落盘 + 微压缩 + 滑窗保护网 + 阈值接线 + `ContextCompacted` 复用 + 设置项 | 无（可与 S1 并行） | B |
 | S3 注入面 | 索引注入替换 + guidance 改写 + 预取键适配 | S1 | C |
 | S4 退役面 | organize 管线 / 树工具族 / sqlite 读路径下线（数据冻结），`/整理` 去向落地 | S1+S2+S3 稳定一轮 | D |
@@ -86,9 +86,11 @@
 
 ## 任务
 
-- [ ] S1 开工前置：读现状代码（memory_* Tauri 命令与两条工具通路、`memory_index.rs`、
-      数据根目录口径、四个注入块清单、MemoryPage.vue 与看板族文件面）
-- [ ] 交一份 S1 施工 spec（`specs/01-…/s1.md` 或另立编号）等确认，**过完才动代码**
+- [x] S1 开工前置：读现状代码完成（2026-10-18）——**关键读数：文件库、frontmatter 渲染、
+      `MEMORY.md` 索引与注入侧 200 行硬钳都已存在**，真源却仍是 sqlite（宿主 `memory/store.rs`
+      自开连接，md 写失败只 `warn`），双写点共四处 ⇒ S1 的实质是**扳真源方向**不是从零建库
+- [x] 交 S1 施工 spec 等确认 = [`specs/05-memory-data-plane-s1/spec.md`](../05-memory-data-plane-s1/spec.md)
+      （含四处要你定的落点）；**过完才动代码**
 - [ ] S1 落地：布局 + frontmatter/索引读写 + 工具改道 + 存量导出 + 管理页改道
 - [ ] S2 落地：方案稿 B 节那四条"容易漏的实证"必须逐条进实现与判据
 - [ ] 补测试 → `make check` 全绿

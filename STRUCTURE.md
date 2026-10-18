@@ -106,7 +106,9 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   ├── 00-doc-governance/            #         文档规范治理：立规矩、历史归位、门禁重写、四个去处（进行中，剩检查脚本合并）
 │   ├── 01-memory-context-redesign/   #         记忆与上下文重构：◐ 方案已定稿（正文 = `docs/design/` 根的方案稿 ⊘），本层只放计划与 AC
 │   ├── 02-tool-cards/                #         工具卡做全：27 类工具样式 · 折叠分层 · 状态词 · 停止与重试表现
-│   └── 03-structural-debt/           #         结构性欠账台账 T1–T22：分「可直接做」与「卡在人的一侧」两节
+│   ├── 03-structural-debt/           #         结构性欠账台账 T1–T41：分「可直接做」与「卡在人的一侧」两节（拆分层 2026-10-18 由你下令暂停，原地留档）
+│   ├── 04-tool-cancel-deadline/      #         工具级取消与 deadline：C1 已落地，C2/C3 各要单独点头
+│   └── 05-memory-data-plane-s1/      #         记忆数据面 S1：把「sqlite 真源 + md 镜像」扳成 md 唯一真源（待你过）
 │
 ├── docs/
 │   ├── roadmap/README.md             # ★       唯一进度表：只列未完成阶段，一行一阶段 + 勾选 + 一句人话状态
