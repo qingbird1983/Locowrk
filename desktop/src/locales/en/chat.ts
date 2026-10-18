@@ -34,13 +34,12 @@ export default {
     queueAdd: "Queue message",
     backToLatest: "Back to latest",
   },
-  // Turn timer row (container header) and action-block folded rows
+  // Turn timer row (the container's only head row; AF-14 final: the group
+  // header layer was removed)
   turn: {
     working: "Working {t}",
     worked: "Worked {t}",
-    done: "Completed",
     stopped: "Stopped",
-    toolCount: "{n} tools",
     problemCount: "{n} problems",
   },
   // ask_user choice card (v4.11 §3.39①): blocking question, answered in dock

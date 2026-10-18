@@ -19,7 +19,6 @@ import { useI18n } from "vue-i18n";
 import type { ChatItem, SystemItem, ToolItem } from "../../stores/chat";
 import type { TurnState } from "../../types";
 import { useSettingsStore } from "../../stores/settings";
-import { toolView } from "../../lib/chat/render-matrix";
 import { Icon } from "../../lib/icons";
 import ContextSummaryBlock from "./ContextSummaryBlock.vue";
 import MessageRow from "./MessageRow.vue";
@@ -58,10 +57,8 @@ type TurnBlock = {
   kind: "turn";
   key: number;
   items: ProcessItem[];
+  /** 失败的工具调用数（轮头「N 个问题」标记的来源）。 */
   failures: number;
-  toolCount: number;
-  /** L1 极简摘要用：块内动作名（§3.18 中文动作名，去重保序）。 */
-  names: string[];
   /** 组内有真过程（工具/思考）= 套组壳；纯错误行平铺不套壳。 */
   hasProcess: boolean;
   startTs?: number;
@@ -81,32 +78,14 @@ const blocks = computed<Block[]>(() => {
     const tsList = cur
       .map((i) => ("ts" in i ? i.ts : undefined))
       .filter((v): v is number => v !== undefined);
-    // L1 极简摘要：块内动作名去重保序（走身份矩阵的类型词，设计稿 §5.3 硬规矩
-    // 「动词永不出现裸工具 id」——表外身份由矩阵兜底成「工具」，不再是裸 id）
-    const names: string[] = [];
-    for (const i of tools) {
-      const base = t(`tool.type.${toolView(i.tool).verb}`);
-      // v2.105 裁定：派生子代理的两条告知框（已派生/收束）退役，简洁状态
-      // 收进动作名后——L1 极简行读作「派生子代理 · 已完成」
-      const label =
-        i.tool === "subagent_run"
-          ? `${base} · ${
-              i.status !== "settled"
-                ? t("tool.state.running")
-                : i.ok
-                  ? t("turn.done")
-                  : t("tool.state.failed")
-            }`
-          : base;
-      if (!names.includes(label)) names.push(label);
-    }
+    // AF-14 终版（用户 2026-10-19 裁定「保留 ✓ + 时长那层，删掉组头那层」）：组头
+    // 整层已删 ⇒ 原先喂给组头摘要的 `names`（动作名串联）与 `toolCount`（· N 个工具）
+    // 一并作废——同一件事只写一次，轮内动作行自己看得见有几件工具。
     out.push({
       kind: "turn",
       key: cur[0]!.id,
       items: cur,
       failures: tools.filter((i) => i.ok === false).length,
-      toolCount: tools.length,
-      names: names,
       hasProcess: cur.some((i) => i.kind === "tool" || i.kind === "thinking"),
       // 组内最早的过程项时刻（工具与思考都算——计时从思考开始）
       startTs: tsList.length > 0 ? Math.min(...tsList) : undefined,
@@ -136,11 +115,6 @@ function userPos(item: ChatItem): number | undefined {
   return item.kind === "user" ? item.pos : undefined;
 }
 
-/** 「折叠工具执行过程」（v4.20 改名+语义反转）：开 = 过程组默认折叠为
- * 一行摘要（完整折叠三层）；关（缺省）= 过程组默认展开（行可见）——唯一
- * 被默认折叠的层是工具明细（层 3，恒收起，不再接开关）。实时/重放同口径。 */
-const expandDefault = computed(() => !settings.view?.chat.collapseToolProcess);
-
 /** 「已停止」只标最新过程组（stopRequested 轮次收束后保持到下次发送）。 */
 const lastProcessKey = computed(() => {
   for (let i = blocks.value.length - 1; i >= 0; i--) {
@@ -149,14 +123,27 @@ const lastProcessKey = computed(() => {
   }
   return null;
 });
-function isStoppedBlock(turn: TurnView, key: number): boolean {
+/** AF-14 终版（用户 2026-10-19 裁定「保留 ✓ + 时长那层，删掉组头这层」）：原先挂在
+ * 组头上的两个标记随组头一起下沉到轮头（容器计时行）——判据不变，落点从「该轮最新
+ * 过程组」上移到那一轮的容器行。 */
+function turnStopped(turn: TurnView): boolean {
+  const isNewest = turn.inner.some(
+    (b) => b.kind === "turn" && b.hasProcess && b.key === lastProcessKey.value,
+  );
+  if (!isNewest) return false;
   // 「已停止」标记（v2.205 起有后端权威态）：该轮的 `turn_header` 读数在场就按它判
   // （`interrupted` = 日志里真记着这件事），读不出（旧日志 / 旧后端）才回落到前端
-  // 自算的 `stopRequested`——它不进会话日志、切会话即丢，正是 Q12 取证批点名的
-  // 「权威态不在后端」。两个来源不是并列的两把尺：**权威态在场它说话**，回落只是
-  // 如实降级。两者都仍只标**最新**过程组（既有形状，本批不动）。
-  if (key !== lastProcessKey.value) return false;
+  // 自算的 `stopRequested`——它不进会话日志、切会话即丢。两个来源不是并列的两把尺：
+  // **权威态在场它说话**，回落只是如实降级。
   return turn.turnState ? turn.turnState === "interrupted" : !!props.stopRequested;
+}
+
+/** 轮头「N 个问题」：轮内各块失败工具数之和（原为逐块组头各显一份，现在一行汇总）。 */
+function turnProblems(turn: TurnView): number {
+  return turn.inner.reduce(
+    (n, b) => n + (b.kind === "turn" ? b.failures : 0),
+    0,
+  );
 }
 
 // ---- 任务容器（v2.99「第 0 层」用户裁定）----
@@ -242,47 +229,10 @@ function toggleTurnBox(key: number, running: boolean) {
   turnBoxOverride.value = m;
 }
 
-/** 组相位（v2.99 层层折叠）：live = L3 执行中（组体全展开、无组头）；
- * replied = L2 回复已到（半折叠为一行摘要，仅当仍是当轮末位过程组）；
- * done = L1 已被下一动作接替 / 整轮收束（极简一行）。判定按轮内序列：
- * 末位块 = live（尚无回复）；末位过程组（回复已落在其后）= replied；
- * 其余全部 done。 */
-type GroupPhase = "live" | "replied" | "done";
-const phaseByKey = computed(() => {
-  const m = new Map<number, GroupPhase>();
-  for (const turn of turnViews.value) {
-    const seq = [...turn.inner, ...turn.tail];
-    const lastKey = seq[seq.length - 1]?.key;
-    let lastProcKey: number | null = null;
-    for (const b of seq) {
-      if (b.kind === "turn" && b.hasProcess) lastProcKey = b.key;
-    }
-    for (const b of seq) {
-      if (b.kind !== "turn" || !b.hasProcess) continue;
-      if (!turn.running) m.set(b.key, "done");
-      else if (b.key === lastKey) m.set(b.key, "live");
-      else if (b.key === lastProcKey) m.set(b.key, "replied");
-      else m.set(b.key, "done");
-    }
-  }
-  return m;
-});
-
-/** AF-14（用户 2026-10-18 裁定）：容器那条计时读数**并进首个动作块的组头**，
- * 容器就不再单独占一行。只有「容器开着 + 首块是过程组 + 首块有组头（非
- * live）」才托管；收束态、执行中（live 无组头）、首块不是动作块时，读数仍
- * 归 `TurnTimerLine`（本 map 里没有该轮的键）。 */
-const timerHostKey = computed(() => {
-  const m = new Map<number, number>();
-  for (const turn of turnViews.value) {
-    if (!turnBoxOpen(turn.key, turn.running)) continue;
-    const first = turn.inner[0];
-    if (first?.kind !== "turn" || !first.hasProcess) continue;
-    if ((phaseByKey.value.get(first.key) ?? "done") === "live") continue;
-    m.set(turn.key, first.key);
-  }
-  return m;
-});
+/** 组相位（v2.99 层层折叠）与「计时行让位」集合：AF-14 终版（用户 2026-10-19 裁定
+ * 「保留 ✓ + 时长那层，删掉组头这层」）之后一起作废——组头整层已删，一轮只有一个
+ * 头行（容器计时行），轮内过程块一律平铺在它下面，没有 live/replied/done 三种形态
+ * 可分。 */
 
 /** 复制钮收敛（用户裁定）：只出现在用户消息与每轮最终汇报/总结之下——
  * 判据 = 该助手条目到下一个用户消息之间再无任何过程项（工具/思考/错误；
@@ -338,43 +288,24 @@ function noticeText(item: SystemItem): string {
          工作 + 发丝线），执行中内容全开；收束收缩为计时行，点击重开
          逐层看全程。最终报告与其后系统条目在容器外尾段 -->
     <div class="turn-box">
-      <!-- AF-14：容器那条计时读数并进首个动作块的组头（见 timerHostKey），
-           此时本行不再单独占一行；收束态 / 执行中（live 无组头）/ 首个块
-           不是动作块时，仍由本行承担 -->
+      <!-- AF-14 终版（用户 2026-10-19 裁定「保留 ✓ + 时长那层，删掉组头这层」）：本行
+           是一轮**唯一**的头行——组头整层已删，「已停止」「N 个问题」两个标记随之
+           落到本行；点击折叠 / 展开整个轮容器。 -->
       <TurnTimerLine
-        v-if="!timerHostKey.has(turn.key)"
         :start-ts="turn.startTs"
         :end-ts="turn.endTs"
         :active-ms="turn.activeMs"
         :running="turn.running"
+        :stopped="turnStopped(turn)"
+        :problems="turnProblems(turn)"
         :aria-expanded="turnBoxOpen(turn.key, turn.running)"
         @click="toggleTurnBox(turn.key, turn.running)"
       />
       <template v-if="turnBoxOpen(turn.key, turn.running)">
         <template v-for="block in turn.inner" :key="block.key">
-          <!-- 动作块：L3 执行中全展开（无组头）/ L2 摘要行 / L1 极简
-               行（折叠形态由相位机给，TurnProcess 内部落层） -->
+          <!-- 动作块（AF-14 终版）：组头整层已删，块内过程行平铺在轮头下面 -->
           <template v-if="block.kind === 'turn'">
-            <TurnProcess
-              v-if="block.hasProcess"
-              :stopped="isStoppedBlock(turn, block.key)"
-              :tool-count="block.toolCount"
-              :failures="block.failures"
-              :names="block.names"
-              :timer="
-                timerHostKey.get(turn.key) === block.key
-                  ? {
-                      startTs: turn.startTs,
-                      endTs: turn.endTs,
-                      activeMs: turn.activeMs,
-                      running: turn.running,
-                    }
-                  : undefined
-              "
-              :phase="phaseByKey.get(block.key) ?? 'done'"
-              :default-expanded="expandDefault"
-              @toggle-turn="toggleTurnBox(turn.key, turn.running)"
-            >
+            <TurnProcess v-if="block.hasProcess">
               <template v-for="item in block.items" :key="item.id">
                 <ThinkingRow
                   v-if="item.kind === 'thinking'"

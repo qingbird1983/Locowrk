@@ -34,13 +34,11 @@ export default {
     queueAdd: "排队发送",
     backToLatest: "回到最新消息",
   },
-  // 轮计时行（容器头部）与动作块折叠行（UI shell doc §3.7 / §3.9）
+  // 轮计时行（容器唯一的头行，AF-14 终版：组头层已删）
   turn: {
     working: "工作中 {t}",
     worked: "已工作 {t}",
-    done: "已完成",
     stopped: "已停止",
-    toolCount: "{n} 个工具",
     problemCount: "{n} 个问题",
   },
   // ask_user 选择卡（v4.11 §3.39①）：模型反向提问，composer 坞内作答
