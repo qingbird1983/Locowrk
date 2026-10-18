@@ -268,6 +268,22 @@ const phaseByKey = computed(() => {
   return m;
 });
 
+/** AF-14（用户 2026-10-18 裁定）：容器那条计时读数**并进首个动作块的组头**，
+ * 容器就不再单独占一行。只有「容器开着 + 首块是过程组 + 首块有组头（非
+ * live）」才托管；收束态、执行中（live 无组头）、首块不是动作块时，读数仍
+ * 归 `TurnTimerLine`（本 map 里没有该轮的键）。 */
+const timerHostKey = computed(() => {
+  const m = new Map<number, number>();
+  for (const turn of turnViews.value) {
+    if (!turnBoxOpen(turn.key, turn.running)) continue;
+    const first = turn.inner[0];
+    if (first?.kind !== "turn" || !first.hasProcess) continue;
+    if ((phaseByKey.value.get(first.key) ?? "done") === "live") continue;
+    m.set(turn.key, first.key);
+  }
+  return m;
+});
+
 /** 复制钮收敛（用户裁定）：只出现在用户消息与每轮最终汇报/总结之下——
  * 判据 = 该助手条目到下一个用户消息之间再无任何过程项（工具/思考/错误；
  * 决策记录行已隐藏不参与判据）；任务执行中间的简短回话后面跟着动作，
@@ -322,7 +338,11 @@ function noticeText(item: SystemItem): string {
          工作 + 发丝线），执行中内容全开；收束收缩为计时行，点击重开
          逐层看全程。最终报告与其后系统条目在容器外尾段 -->
     <div class="turn-box">
+      <!-- AF-14：容器那条计时读数并进首个动作块的组头（见 timerHostKey），
+           此时本行不再单独占一行；收束态 / 执行中（live 无组头）/ 首个块
+           不是动作块时，仍由本行承担 -->
       <TurnTimerLine
+        v-if="!timerHostKey.has(turn.key)"
         :start-ts="turn.startTs"
         :end-ts="turn.endTs"
         :active-ms="turn.activeMs"
@@ -341,9 +361,19 @@ function noticeText(item: SystemItem): string {
               :tool-count="block.toolCount"
               :failures="block.failures"
               :names="block.names"
-              :start-ts="block.startTs"
+              :timer="
+                timerHostKey.get(turn.key) === block.key
+                  ? {
+                      startTs: turn.startTs,
+                      endTs: turn.endTs,
+                      activeMs: turn.activeMs,
+                      running: turn.running,
+                    }
+                  : undefined
+              "
               :phase="phaseByKey.get(block.key) ?? 'done'"
               :default-expanded="expandDefault"
+              @toggle-turn="toggleTurnBox(turn.key, turn.running)"
             >
               <template v-for="item in block.items" :key="item.id">
                 <ThinkingRow

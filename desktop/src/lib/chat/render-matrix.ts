@@ -188,7 +188,7 @@ export const IDENTITY_TABLE: Record<ToolIdentity, ToolView> = {
     rail: "subagent", fold: "always", badge: "none", diff: "none",
   },
   ask_user: {
-    icon: "chat", verb: "tool", summary: "prompt", body: "text",
+    icon: "chat", verb: "ask", summary: "prompt", body: "text",
     rail: "none", fold: "always", badge: "none", diff: "none",
   },
   notify: {
@@ -220,7 +220,7 @@ export const IDENTITY_TABLE: Record<ToolIdentity, ToolView> = {
     rail: "none", fold: "always", badge: "none", diff: "none",
   },
   dev_echo: {
-    icon: "plug", verb: "tool", summary: "field", body: "text",
+    icon: "plug", verb: "echo", summary: "field", body: "text",
     rail: "none", fold: "never", badge: "none", diff: "none",
   },
   git: {

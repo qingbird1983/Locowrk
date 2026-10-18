@@ -5,7 +5,7 @@
  *   L3 = 正在执行：完全展开、流式显示（无组头，chrome 由容器计时行承担；
  *        思考行流式即展开，ThinkingRow streaming 驱动）；
  *   L2 = 动作完成且模型出简短回复：半折叠为一行摘要（sparkle + 已完成
- *        + · 耗时 + · N 个工具）；
+ *        + 轮计时读数 + · N 个工具）；
  *   L1 = 下一个动作开始 / 整轮收束：全折叠为一行极简摘要（动作名串联，
  *        失败时附 · N 个问题）。
  * 容器整体（计时行 + 全部动作块 + 简短回复）在 ChatTranscript 的
@@ -16,13 +16,15 @@
  * 行过程」开关（v4.20 语义反转，缺省关）= 非执行块的规格层，保存即时
  * 生效（已挂载组随开关重落规格层）：关 = 展开（唯一被默认折叠的层是
  * 工具明细）、开 = 折叠为一行摘要。时长只在实时轮次有（历史
- * 重放无时间戳，不虚构时序）。
+ * 重放无时间戳，不虚构时序）——AF-14 起读数只有一份（`TurnTimerReadout`），
+ * 且**组头不再自带组内耗时**：容器第 0 层已经写着整轮的时长，组头再写一次
+ * 就是同一属性两种形态（用户 2026-10-18 裁定）。
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 import { clip } from "../../lib/format";
-import { useTurnClock } from "../../lib/use-turn-clock";
+import TurnTimerReadout from "./TurnTimerReadout.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -32,8 +34,15 @@ const props = withDefaults(
     failures: number;
     /** L1 极简摘要：块内动作名（去重保序，父层算好）。 */
     names?: string[];
-    /** 组内最早的过程项时刻；undefined = 历史重放（不显示时长）。 */
-    startTs?: number;
+    /** AF-14：容器计时读数的四个入参（与 `TurnTimerLine` 同形）。父层只在
+     * **本块吞下了那条容器计时行**时才给（容器开着 + 本块是首个动作块 +
+     * 非 live 相位）；undefined = 本块不显示读数。 */
+    timer?: {
+      startTs?: number;
+      endTs?: number;
+      activeMs?: number;
+      running: boolean;
+    };
     /** 块相位（父层按四层状态机计算）：live / replied / done。 */
     phase: "live" | "replied" | "done";
     defaultExpanded?: boolean;
@@ -43,13 +52,14 @@ const props = withDefaults(
 
 const { t } = useI18n();
 
-/** 执行中 = live 相位（父层状态机唯一真源）：组体常开、无组头，时长
- * 走表也吃它——动作间隙相位不变，走表不被间隙打断冻结（v2.98）。 */
-const running = computed(() => props.phase === "live");
+/** AF-14：组头行内的计时读数点了要折叠**整个轮容器**（第 0 层）——那是
+ * `TranscriptFlow` 的事，本组件不自持容器开关。 */
+const emit = defineEmits<{ toggleTurn: [] }>();
 
-/** 规格层 = live 恒开（组体常开）；非执行块按开关（关 = 展开、开 = 折叠）。
- * computed：开关保存即时生效——已挂载组也随开关重落规格层（v4.20 实机
- * 走查裁定：「不追溯」让开关看起来没生效）。 */
+/** 规格层：执行中（live 相位，父层状态机唯一真源）恒开 = 组体常开、无组头
+ * （读数也不再吃它——AF-14 起走表归 `TurnTimerReadout`）；非执行块按开关
+ * （关 = 展开、开 = 折叠）。computed：开关保存即时生效——已挂载组也随开关
+ * 重落规格层（v4.20 实机走查裁定：「不追溯」让开关看起来没生效）。 */
 const specLevel = computed<1 | 2>(() =>
   props.phase === "live" ? 2 : props.defaultExpanded ? 2 : 1,
 );
@@ -85,30 +95,13 @@ function onTransitionEnd(e: TransitionEvent) {
   settled.value = level.value === 2;
 }
 
-// 执行中的头行时长每秒走字（收束停在收束时刻）。走表机器与轮计时行共用
-// `useTurnClock`（v2.205 收尺：此前两个组件各写一遍 setInterval + 收束戳）。
-// ⚠ 本容器**不吃** `endTs` 与 `activeMs`：它是"过程组"不是"轮"，重放时本就无
-// 时长、扣等待的语义属轮头读数——收尺只统一机制，不趁势改它的读数。
-const { seconds } = useTurnClock({
-  startTs: () => props.startTs,
-  running: () => running.value,
-});
-
-const durationText = computed(() => {
-  const sec = seconds.value;
-  if (sec === null) return "";
-  if (sec < 60) return `${sec}s`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
-  return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
-});
-
-const metaText = computed(() => {
-  const parts = [
-    durationText.value,
-    t("turn.toolCount", { n: props.toolCount }),
-  ].filter(Boolean);
-  return `· ${parts.join(" · ")}`;
-});
+// AF-14（用户 2026-10-18 裁定）：本组**不再自带组内耗时**。走表机器与读数文案
+// 都搬进 `TurnTimerReadout`；组头原先这枚耗时（`34s`）与容器计时行（`0 分 34 秒`）
+// 是同一属性两套写法、两个数字各算各的。容器那条读数现在并进本行走（`timer`
+// 入参），本行只剩工具数。
+const metaText = computed(
+  () => `· ${t("turn.toolCount", { n: props.toolCount })}`,
+);
 
 /** L1 极简摘要（裁定示例「读取 + 分析」）：动作名串联，超长截断。 */
 const minimalText = computed(() =>
@@ -121,13 +114,17 @@ const minimalText = computed(() =>
 <template>
   <div class="turn" :class="{ 'is-open': level === 2 }">
     <!-- L2 摘要行 / L1 极简行（live 无此行——组体全展开，chrome 在容器
-         计时行）；点击开合组体 -->
-    <button
+         计时行）；点击开合组体。AF-14：行根由 `<button>` 改 `role="button"`
+         的 div——行内要再嵌一颗「折叠轮容器」的按钮，按钮不能套按钮。 -->
+    <div
       v-if="phase !== 'live'"
       class="cv-head"
-      type="button"
+      role="button"
+      tabindex="0"
       :aria-expanded="level === 2"
       @click="onToggle"
+      @keydown.enter.prevent="onToggle"
+      @keydown.space.prevent="onToggle"
     >
       <Icon name="sparkle" :size="14" class="shrink-0 text-ink-1" />
       <span class="cv-head__label">
@@ -139,6 +136,19 @@ const minimalText = computed(() =>
               : t("turn.done")
         }}
       </span>
+      <!-- AF-14：容器计时读数并进本行（父层只在把容器那条读数交给本块时才
+           给 `timer`）。点它是折叠**整个轮容器**（第 0 层），与点行内别处
+           （开合本组）是两件事 -->
+      <template v-if="timer && timer.startTs !== undefined">
+        <span class="cv-head__sep" aria-hidden="true">·</span>
+        <button
+          type="button"
+          class="cv-head__timer"
+          @click.stop="emit('toggleTurn')"
+        >
+          <TurnTimerReadout v-bind="timer" />
+        </button>
+      </template>
       <span v-if="phase === 'replied'" class="cv-head__meta">{{
         metaText
       }}</span>
@@ -154,7 +164,7 @@ const minimalText = computed(() =>
         :size="12"
         class="cv-head__chev"
       />
-    </button>
+    </div>
     <!-- §6.6 ④：grid-rows 0fr→1fr 滑动；内容 opacity 展开延后 40ms -->
     <div
       class="turn__grid"

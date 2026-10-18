@@ -11,13 +11,14 @@
  * `setInterval` + 收束戳移到 `useTurnClock`（同一属性只许一个出处）；
  * ②收束读数优先用宿主的 `activeMs`（**墙钟区间扣掉等待用户审批的那一段**），
  * 拿不到才回落墙钟差。文案本就写着「已工作」，扣掉等待才是它说的这件事。
+ *
+ * AF-14：读数本体（图标 + 文案 + 走表）搬进 `TurnTimerReadout`，与动作块组头
+ * 共用一份——同一个读数原先有两套写法（本行 `0 分 34 秒`、组头 `34s`，同一
+ * 属性两种形态）。本行仍是容器第 0 层的头：整行可点 = 折叠/展开整个轮容器。
  */
-import { computed } from "vue";
-import { useI18n } from "vue-i18n";
-import { Icon } from "../../lib/icons";
-import { useTurnClock } from "../../lib/use-turn-clock";
+import TurnTimerReadout from "./TurnTimerReadout.vue";
 
-const props = defineProps<{
+defineProps<{
   /** 轮起点 = 用户消息实时时刻；undefined = 无从计时（诚实省略读数）。 */
   startTs?: number;
   /** 轮收束时刻（v2.101，重放读数终点；实时收束走本地 finishedAt）。 */
@@ -29,36 +30,16 @@ const props = defineProps<{
   running: boolean;
 }>();
 const emit = defineEmits<{ click: [] }>();
-const { t, locale } = useI18n();
-
-const { seconds } = useTurnClock({
-  startTs: () => props.startTs,
-  running: () => props.running,
-  endTs: () => props.endTs,
-  activeMs: () => props.activeMs,
-});
-
-/** 本地化分秒读数（裁定示例「工作中 0 分 1 秒」——分位恒显示）。 */
-const text = computed(() => {
-  const sec = seconds.value;
-  if (sec === null) return "";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return locale.value === "zh-CN" ? `${m} 分 ${s} 秒` : `${m}m ${s}s`;
-});
 </script>
 
 <template>
   <button class="turn-timer" type="button" @click="emit('click')">
-    <Icon
-      v-if="startTs !== undefined"
-      :name="running ? 'clock' : 'check'"
-      :size="12"
-      class="shrink-0 text-ink-4"
+    <TurnTimerReadout
+      :start-ts="startTs"
+      :end-ts="endTs"
+      :active-ms="activeMs"
+      :running="running"
     />
-    <span v-if="text">{{
-      running ? t("turn.working", { t: text }) : t("turn.worked", { t: text })
-    }}</span>
   </button>
 </template>
 
@@ -75,7 +56,7 @@ const text = computed(() => {
   font-variant-numeric: tabular-nums;
   text-align: left;
 }
-.turn-timer:hover span {
+.turn-timer:hover {
   color: var(--lw-ink-2);
 }
 </style>

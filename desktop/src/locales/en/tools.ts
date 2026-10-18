@@ -35,7 +35,11 @@ export default {
       notify: "Notify",
       screenshot: "Screen",
       plugin: "Plugin",
-      tool: "Tool",
+      ask: "Ask",
+      echo: "Echo",
+      // Fallback identity (matrix fallback, ledger AF-18): "Call", not "Tool" —
+      // "Tool" names a category and collides with `.tool__*` code identifiers.
+      tool: "Call",
     },
     // Detail property labels (§3.8: no raw field names in default detail)
     label: {

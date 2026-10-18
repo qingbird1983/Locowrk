@@ -75,11 +75,11 @@
 | AF-11 | 回合产出物行（`N files changed · +A −D`）未做 | 设计稿 §6；`file_changes` 事件已有（挂用户行） | 行壳几何 | ⬜ |
 | AF-12 | 三层折叠的层 3（单行展开体按 `item.id` 记忆）未做 | 设计稿 §8；现役只有 `everExpanded` 懒挂载 | 折叠与状态记忆 | ✅ 记忆搬到 `desktop/src/lib/chat/fold-state.ts`（模块级 `reactive(Map)`：键在表里 = 挂载过、值 = 展开着），`ToolRow.vue` 的 `expanded`/`everExpanded` 改成读它，`ChatTranscript.vue` 在 `watch(chat.sessionId)` 里 `resetRowFolds()` 清空。钉住用例 `desktop/tests/tool-row-fold.spec.ts`（换组件实例后仍展开）。思考行的展开体不做记忆：它没有懒挂载（`v-show` 常挂）且缺省收起就是设计缺省 |
 | AF-13 | 展开体收起态安全三条（`overflow:hidden` / `pointer-events:none` / 高度 0）未按新形态核 | 设计稿 §8.3，是 v4.17「透明点击盾」的根因修复 | 折叠与状态记忆 | ✅ 核过：两条展开体都用 `v-show` ⇒ 收起即 `display:none`，三条天然成立。真实窗口实测收起态 `.tool__sub`：`display: none` · 高度 `0` · `checkVisibility() === false`（不参与命中测试），展开态 `display: flex` · 高度 `72` |
-| AF-14 | 组头计时行 `已工作 N 分 N 秒` 与 `✦ 已完成` 分两行显示 | 2026-10-18 真实窗口读数 | 行壳几何 | ⬜ 待裁：是否并一行 |
+| AF-14 | 组头计时行 `已工作 N 分 N 秒` 与 `✦ 已完成` 分两行显示，且组头另有一枚 `34s` 与容器行同一属性两套写法 | 2026-10-18 真实窗口读数；用户 2026-10-18 裁定「同意你的意见，收掉吧」 | 行壳几何 | ✅ 读数收成一份：新件 `desktop/src/components/chat/TurnTimerReadout.vue`（图标 + 文案 + `useTurnClock` 走表），`TurnTimerLine.vue` 只剩壳、`TurnProcess.vue` 删掉 `durationText`/`useTurnClock`。落点二选一：容器行 **或** 首个动作块组头（`TranscriptFlow.vue` 的 `timerHostKey`：容器开着 + 首块是过程组 + 该组非 live 时才托管，`TurnTimerLine` 加 `v-if="!timerHostKey.has(turn.key)"`）。组头行根由 `<button>` 改 `role="button"` div（行内要嵌一颗「折叠整个轮容器」的按钮，故 `emit('toggleTurn')` + `@click.stop`），`.cv-head` 补 `cursor: pointer`。**真实窗口实测**：box0 `timerLine: true`（无组头，读数归容器行）；box1 组头 = `记忆 + 读取 · 已工作 0 分 12 秒`、`readouts=1`；box2 = `终端 · 已工作 0 分 5 秒`；三箱各只有一处时长；点组头读数 → container 收起、`TurnTimerLine` 接回（`已工作 0 分 12 秒`）；再点 → 回到组头托管。标准 `§二⑰` 同步（轮计时读数只有一份 + 不授权第二处落点） |
 | AF-15 | 摘要截断口径按工具逐个写死（shell 40 / fetch 40 / subagent 24 / grep 24 / 路径 32） | `desktop/src/lib/tool-detail/describe.ts` | 摘要文本 | ✅ 收成一处：`describe.ts` 只留 `export const SUMMARY_CLIP = 40` 一道**病态长值兜底**，真正的截断交给可用宽度（`.tool__desc` 上 `overflow:hidden` + `white-space:nowrap` + `text-overflow:ellipsis`）。真实窗口实测：注入 250 字符文件名后 `scrollWidth 1711 > clientWidth 785`（出省略号），而行宽仍 `867`、三角右缘 `1320 ≤ 行右缘 1323`（行没被撑爆） |
 | AF-16 | 语言徽章：按扩展名逐级回退到素材图标，彩色 + 专属字形 | `desktop/src/lib/file-icons.ts`；用户 2026-10-18 裁定，推翻设计稿 §2.2 的「不画各语言 logo」 | 身份数据 | ✅ |
 | AF-17 | **同一个「展开体」并存多套外壳与底色**：思考行 = 一个 `--lw-bg-inset` 灰底圆角框包住全文；工具行的属性行 = 无底裸排；终端块 = 又一层 `--lw-bg-inset`；代码块 = 自带深底。两条路径的内容起点 x 也差约 6px（同窗口实测：思考框 x≈622、工具属性行 x≈628） | `ThinkingRow.vue:103-109`（`.thinking__body` 自己带底/圆角/内边距）vs `ToolRow.vue` 的 `.tool__sub`（只有 `border-left` 发丝线、无底）＋ `ToolDetailView.vue:331-334`（`.tdetail__term` 再一层 `background: var(--lw-bg-inset)`）与 `.tdetail__code`。用户 2026-10-18 目检：「思考 和 读取 同时展开…属于同一属性 同一状态 但你却做出了 2 种展示样式」 | 展开体外壳 | ✅ 已立唯一落点 `style.css` 的 `.lw-expand`（`margin-left: calc(14px/2)` + `padding-left: calc(14px/2 + gap-6 - 1px)` + `border-left: 1px var(--lw-line-subtle)`，**无底无圆角**），思考行与工具行都挂它；真实窗口实测两条路径的 `getBoundingClientRect().left` 同为 `557.5`、`padding-left` 同为 `12px`、`background` 同为透明。底层 `--lw-bg-inset` 只留给「井」（代码/终端/diff） |
-| AF-18 | 身份矩阵兜底项（`fallback`）的类型词读作「工具」，说不清是哪个动作 | 真实窗口实测 `.prow__type` 出现「工具」（`render-matrix.ts` 的 `fallback` → verb `tool` → `tool.type.tool`） | 身份数据 | ⬜ 待裁：改词（zh「工具调用」/ en「Tool call」）还是保留 |
+| AF-18 | 身份矩阵里三个身份共用类型词「工具」：兜底 `fallback`、`ask_user`、`dev_echo`——「工具」说不清是哪个动作，且与 `.tool__*` 这类**代码标识**同名 | `desktop/src/lib/chat/render-matrix.ts:191/223/243` 都是 `verb: "tool"` → `tool.type.tool`；真实窗口 session 3 实测该行读作「工具」 | 身份数据 | ✅ 三个身份各自归词（用户 2026-10-18 裁定）：`ask_user` → `ask`「询问」、`dev_echo` → `echo`「回声」、兜底 `fallback` 保留 `tool` 但 `tool.type.tool` 的值由「工具」改「调用」（en `Tool` → `Call`），**「工具」这个类型词自此不存在**。为什么改兜底而不是给 `ask_user` 单开键：`tool.type.tool` 本来就只服务兜底，改值即可、不留死键。**真实窗口实测**：session 3/6 的类型词序列里出现「询问」（原先那行是「工具」），七个会话再无一处「工具」 |
 
 ## 接线欠账（不许留空）
 
@@ -146,7 +146,9 @@
 1. ~~AF-02：标签列取宽口径~~ —— **已定**：行级 `max-content` + `column-gap: 8px`（2026-10-18 落盘，
    真实窗口实测每行标签↔值恒 8px；代价是值列不跨行对齐）。
 2. AF-07：`edit_replace` 的 diff 行号——接受空列，还是让插件补行号（要动插件载荷）。
-3. AF-14：组头计时行与状态词是否并一行。
+3. ~~AF-14：组头计时行与状态词是否并一行~~ —— **已定**（用户 2026-10-18「同意你的意见，收掉吧」）：
+   轮计时读数收成一份（新件 `desktop/src/components/chat/TurnTimerReadout.vue`），落点二选一 =
+   容器计时行 **或** 首个动作块的组头（见下表 AF-14 行）；**组头不自带组内耗时**。
 4. AF-01 组头半边：过程组头（`TurnProcess.vue`）的三角是否也改成紧跟标签（现在是整行右对齐）。
 5. WF-03 与 WF-01/02 是否合并成同一右栏页签族。
 
@@ -167,9 +169,9 @@
 状态位规则、组头同规则；并登记 §七 豁免（语言徽章已有）。**标准没落定，下面的批不许开工**（AGENTS.md §4）。
 
 **批 B 行壳几何清账**（一处改，全部行/所有状态同时受益）：AF-01 三角位置 → AF-10 状态段左靠 →
-AF-03 空段（已修，回归确认）→ AF-14 组头两行（待裁）→ AF-06 组头并入同一几何。
-**状态**：AF-01 / AF-06 / AF-10 已清（提交 `98d000b` + 本刀）；AF-11 产出物行**移入批 E**
-（它要 `file_changes` 事件的接线，属接线不属几何）；AF-14 仍待裁。
+AF-03 空段（已修，回归确认）→ AF-14 组头两行 → AF-06 组头并入同一几何。
+**状态**：AF-01 / AF-06 / AF-10 / AF-14 已清（提交 `98d000b` + 批 A/B + 本刀）；AF-11 产出物行
+**移入批 E**（它要 `file_changes` 事件的接线，属接线不属几何）。
 
 **批 C 展开体清账**：**AF-17 外壳统一优先**——两条路径共用同一个底/圆角/内边距/起点 x，内部形态不再各带一层底；
 这一条改完，「思考」与「读取」展开后必然同形（现在是一个灰框 vs 一串裸行）→ AF-02 属性行取宽口径 →
