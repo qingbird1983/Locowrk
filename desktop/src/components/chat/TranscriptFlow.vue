@@ -92,10 +92,10 @@ const blocks = computed<Block[]>(() => {
         i.tool === "subagent_run"
           ? `${base} · ${
               i.status !== "settled"
-                ? t("tool.running")
+                ? t("tool.state.running")
                 : i.ok
                   ? t("turn.done")
-                  : t("tool.failed")
+                  : t("tool.state.failed")
             }`
           : base;
       if (!names.includes(label)) names.push(label);

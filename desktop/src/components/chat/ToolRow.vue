@@ -107,14 +107,14 @@ const hasDiff = computed(
 );
 
 const statusWord = computed(() => {
-  if (props.item.status === "awaiting_approval") return t("tool.awaitingApproval");
+  if (props.item.status === "awaiting_approval") return t("tool.state.waiting");
   if (props.item.status === "running") {
     // G2：悬空未裁决 = 「结果未知」（不是执行中——进程已退出，不会再跑）
-    if (props.item.uncertain) return t("tool.unknown");
-    return t("tool.running");
+    if (props.item.uncertain) return t("tool.state.unknown");
+    return t("tool.state.running");
   }
   if (props.item.ok) return "";
-  return t("tool.failed");
+  return t("tool.state.failed");
 });
 
 /** §3.28 审阅：edit_diff 的 unified diff 随 args.patch，路径随 args.path。 */
@@ -243,10 +243,10 @@ function onToggle() {
   font-size: var(--lw-fs-11);
 }
 .tool__add {
-  color: var(--lw-ok);
+  color: var(--lw-diff-add);
 }
 .tool__del {
-  color: var(--lw-danger);
+  color: var(--lw-diff-del);
 }
 .tool__size {
   color: var(--lw-ink-2);

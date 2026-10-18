@@ -38,7 +38,7 @@
 | 过程组头 | `desktop/src/components/chat/TurnProcess.vue` | 头行与过程行同吃同一段序规则与同一几何，不自成一套 | AF-06 |
 | 身份数据（图标/动词/摘要来源/展开形态/徽章/diff/可折） | `desktop/src/lib/chat/render-matrix.ts` | 加工具 = 加一行；闸 `check-render-matrix.mjs` 双向对账 | ✅ |
 | 摘要文本的截断 | `desktop/src/lib/format.ts` + `tool-detail/describe.ts` | 文件名中段省略保扩展名（`clipName`）；命令/查询按**段位宽度**截断，不按工具逐个写死 40/32/24 | AF-15 |
-| 相位与状态位 | `render-matrix.ts` 的 `toolPhase()` + 行壳 status 段 | 5 相位 → 6 态词（`chat.tool.state.*`）；成功**什么都不出**；失败是整屏唯一 danger | AF-04 |
+| 相位与状态位 | `render-matrix.ts` 的 `toolPhase()` + 行壳 status 段 | 5 相位 → 状态词唯一落点 `tool.state.*`（表见标准 §二⑰）；成功**什么都不出**；失败是整屏唯一 danger | AF-04 |
 | 展开体形态 | `desktop/src/components/chat/ToolDetailView.vue` | 7 种形态（code/list/diff/props/term/text/media）；默认零裸 JSON | AF-07 |
 | 展开体外壳（底 / 圆角 / 内边距 / 起止 x） | `ToolRow.vue` 与 `ThinkingRow.vue` **共用同一个外壳** | 展开体只有**一种**外壳：同一个底、同一个圆角、同一个内边距、同一个起点 x。内部形态（代码/终端/diff/属性行/文本）只负责自身内容，**不许再各带一层底** | AF-17 AF-02 |
 | 展开体属性行 | `ToolDetailView.vue` | 标签与值两列；**标签列取宽口径一处定** = 行级 `max-content` + `column-gap: 8px`（已定，见 AF-02；值列不跨行对齐是明知的代价） | AF-02 |
@@ -63,7 +63,7 @@
 | AF-01 | 展开三角位置随行内容漂移：有描述段的行三角被推到最右，无描述段的行（思考）紧跟文字 | 两处根因：`ProcessRow.vue:108` 的 `.prow__desc { flex: 1 1 auto }` 吃掉剩余宽度；`style.css` 的 `.cv-head__chev { margin-left: auto }` 把组头三角甩到整行最右。用户 2026-10-18 目检点名「一会是紧跟着的 一会又变成右对齐的」 | 行壳几何 | ✅ 两半都修：行壳改 `flex: 0 1 auto`、组头去 `margin-left: auto`；真实窗口实测每行与组头的三角距最后一段恒 6px |
 | AF-02 | 展开体属性行「标签与值间距太大」 | 两版都被驳：① 每行定宽 72px ⇒ 两字标签后空一大段；② 两列栅格挂 `<dl>` 上 ⇒ 标签列按**全块最长标签**取宽，记忆行里 `sessions` 被 `total_sessions` 撑出约 50px 空档（真实窗口实测 502→524）。用户两次点名（2026-10-18 上/下） | 展开体属性行 | ✅ 定为**行级** `max-content` + `column-gap: 8px`（取宽口径见「统一模型」行）；真实窗口实测每行标签↔值恒 8px。代价：值列不再跨行对齐 |
 | AF-03 | 行壳空段占位时会出现「类型词 · · 状态」双分隔 | 已修：描述段改成有插槽才渲染，`·` 由行壳统一给（提交 `862db71`） | 行壳几何 | ✅ |
-| AF-04 | 状态词六态只落地三态：`chat.tool.state.*` 的 waiting/running/done/failed/rejected/stopped，现役只用到 等待审批 / 执行中 / 执行失败 | `ToolRow.vue` 的 `statusWord`；设计稿 §4.2 | 相位与状态位 | ◐ |
+| AF-04 | 状态词曾散在各组件里各写一套（`tool.running` / `tool.failed` 等四个平铺键，词表无处可查） | 已修：收进唯一落点 `desktop/src/locales/*/tools.ts` 的 `tool.state.*`，词表进标准 §二⑰。**剩下的不是缺词是缺数据**：`已拒绝`（拒绝后那一步不落行——`TranscriptFlow.vue` 跳过 `kind === "decision"`，v2.98 裁定）与 `已停止`（只标轮级组头 `turn.stopped`，不逐行重复） | 相位与状态位 | ◐ 词表已收口；两态待数据/待裁 |
 | AF-05 | 思考行两套形态：实时轮给时长（`思考 · 12 秒`），重放轮给首句摘要 | 落盘投影不带时间戳（`desktop/src-tauri/src/events.rs:221` 只有 `session_id`/`text`），口径写在 `stores/chat/types.ts:74-75`。**两套是刻意的**，要在标准里写明，别再当 bug 修 | 相位与状态位 | ✅ 口径已定 |
 | AF-06 | 过程组头（`TurnProcess.vue`）自一套渲染：裸工具 id 已修，但段序/几何/状态位与工具行不同源 | `TurnProcess.vue` 的 `minimalText = clip(props.names.join(" + "), 32)`；`.cv-head` 原写死 `gap: 6px` / `font-size: 13px` / 三角 `margin-left: auto` | 行壳几何 | ✅ 几何与段序已同源：`gap` 走 `--lw-gap-6`、`font-size` 走 `--lw-fs-ui-caption`、三角紧跟末段；真实窗口实测组头左缘 456 = `.prow` 左缘 456。组头 meta 的构成（时长 + N 个工具）另见 AF-14 |
 | AF-07 | `edit_replace` 的 diff 卡行号恒空 | 插件 output 只有 `additions`/`deletions`/`byte_range`（`plugins-src/tool-edit/src/replace.rs:110-121`），没有行号 ⇒ 宁缺勿假 | 展开体形态 | ◐ 已裁：**列在、号空**（不编造行号）。要真行号得先让插件把行号写进载荷——属后端改动，归批 E 与接线一起做 |
@@ -77,6 +77,7 @@
 | AF-15 | 摘要截断口径按工具逐个写死（shell 40 / fetch 40 / subagent 24 / grep 24 / 路径 32） | `desktop/src/lib/tool-detail/describe.ts` | 摘要文本 | ✅ 收成一处：`describe.ts` 只留 `export const SUMMARY_CLIP = 40` 一道**病态长值兜底**，真正的截断交给可用宽度（`.tool__desc` 上 `overflow:hidden` + `white-space:nowrap` + `text-overflow:ellipsis`）。真实窗口实测：注入 250 字符文件名后 `scrollWidth 1711 > clientWidth 785`（出省略号），而行宽仍 `867`、三角右缘 `1320 ≤ 行右缘 1323`（行没被撑爆） |
 | AF-16 | 语言徽章：按扩展名逐级回退到素材图标，彩色 + 专属字形 | `desktop/src/lib/file-icons.ts`；用户 2026-10-18 裁定，推翻设计稿 §2.2 的「不画各语言 logo」 | 身份数据 | ✅ |
 | AF-17 | **同一个「展开体」并存多套外壳与底色**：思考行 = 一个 `--lw-bg-inset` 灰底圆角框包住全文；工具行的属性行 = 无底裸排；终端块 = 又一层 `--lw-bg-inset`；代码块 = 自带深底。两条路径的内容起点 x 也差约 6px（同窗口实测：思考框 x≈622、工具属性行 x≈628） | `ThinkingRow.vue:103-109`（`.thinking__body` 自己带底/圆角/内边距）vs `ToolRow.vue` 的 `.tool__sub`（只有 `border-left` 发丝线、无底）＋ `ToolDetailView.vue:331-334`（`.tdetail__term` 再一层 `background: var(--lw-bg-inset)`）与 `.tdetail__code`。用户 2026-10-18 目检：「思考 和 读取 同时展开…属于同一属性 同一状态 但你却做出了 2 种展示样式」 | 展开体外壳 | ✅ 已立唯一落点 `style.css` 的 `.lw-expand`（`margin-left: calc(14px/2)` + `padding-left: calc(14px/2 + gap-6 - 1px)` + `border-left: 1px var(--lw-line-subtle)`，**无底无圆角**），思考行与工具行都挂它；真实窗口实测两条路径的 `getBoundingClientRect().left` 同为 `557.5`、`padding-left` 同为 `12px`、`background` 同为透明。底层 `--lw-bg-inset` 只留给「井」（代码/终端/diff） |
+| AF-18 | 身份矩阵兜底项（`fallback`）的类型词读作「工具」，说不清是哪个动作 | 真实窗口实测 `.prow__type` 出现「工具」（`render-matrix.ts` 的 `fallback` → verb `tool` → `tool.type.tool`） | 身份数据 | ⬜ 待裁：改词（zh「工具调用」/ en「Tool call」）还是保留 |
 
 ## 接线欠账（不许留空）
 
@@ -176,7 +177,7 @@ AF-15 截断口径收成一处 → AF-07 行号裁定 → AF-12 层 3 折叠 →
 只回 `path/bytes/edits/additions/deletions/match_type/byte_range/existed/backup/revision`），
 要补行号得先改插件载荷（另刀，归批 E 一并接线）；宁缺勿假，先留空列。
 
-**批 D 状态与相位**：AF-04 六态状态词成对（中英）→ 失败唯一高亮复核 → AF-05 两套思考形态写进标准。
+**批 D 状态与相位**：AF-04 状态词收进 `tool.state.*` 唯一落点 + 标准 §二⑰ 给表（✅ 本批）→ 失败唯一高亮复核 → AF-05 两套思考形态写进标准（✅ 批 A 已写）。剩余两态（已拒绝 / 已停止）**卡在数据与轮级裁定**，不属本批能清的范围——要动先翻 v2.98 的「decision 行全隐藏」与 v2.205 的「只标最新组」。
 
 **批 E 接线做全**：WF-01…WF-05（**依赖 roadmap「对话流：产出物与文件页签」阶段**；
 该阶段开工前先把它建成本稿的子规格或独立 spec，不许只在口头）。

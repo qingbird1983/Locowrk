@@ -34,7 +34,7 @@ const detail = computed(() =>
 
 /** 失败轮：错误文本是第一块（danger），输出缺席不虚构。 */
 const errorText = computed(() =>
-  props.item.ok === false ? (props.item.error ?? t("tool.failed")) : "",
+  props.item.ok === false ? (props.item.error ?? t("tool.state.failed")) : "",
 );
 
 /** 代码块经 renderMarkdown（DOMPurify 消毒 + 代码块增强）。围栏按内容里

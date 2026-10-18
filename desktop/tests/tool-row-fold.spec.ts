@@ -17,6 +17,8 @@ const item = (id: number): ToolItem => ({
   args: { path: "/w/a.ts" },
   status: "settled",
   ok: true,
+  sideEffect: "read",
+  pluginVersion: "0.1.0",
   output: { path: "/w/a.ts", bytes: 2 },
   ts: 1,
   doneTs: 2,

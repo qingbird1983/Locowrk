@@ -4,10 +4,14 @@
 export default {
 
   tool: {
-    running: "执行中…",
-    awaitingApproval: "等待审批",
-    unknown: "结果未知",
-    failed: "失败",
+    // 状态词唯一落点（标准 §二⑰）。今日可渲染四态在此；等待中/已执行/已拒绝/已停止
+    // 缺数据或缺决策，登记在 spec 06 AF-04，别在组件里另造词。
+    state: {
+      waiting: "等待审批",
+      running: "执行中…",
+      failed: "执行失败",
+      unknown: "结果未知",
+    },
     copyCall: "复制调用",
     copyCode: "复制代码",
     thinkingNow: "思考中…",

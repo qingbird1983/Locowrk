@@ -4,10 +4,13 @@
 export default {
 
   tool: {
-    running: "Running…",
-    awaitingApproval: "Awaiting approval",
-    unknown: "Outcome unknown",
-    failed: "Failed",
+    // 状态词唯一落点（标准 §二⑰）。今日可渲染四态在此；waiting 之外的六态欠账见 spec 06 AF-04。
+    state: {
+      waiting: "Awaiting approval",
+      running: "Running…",
+      failed: "Failed",
+      unknown: "Outcome unknown",
+    },
     copyCall: "Copy call",
     copyCode: "Copy code",
     thinkingNow: "Thinking…",
