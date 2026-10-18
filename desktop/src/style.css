@@ -413,6 +413,14 @@
   }
 
   html,
+  body {
+    /* 视口锁死。展开行或聚焦行内按钮时，浏览器会把元素滚进视口，滚的是 body
+       （documentElement 同理）—— overflow: hidden 拦不住程序化滚动，只有 clip
+       拦得住。缺这条，整个壳会被顶上去：页头被切、底部露白。 */
+    overflow: clip;
+  }
+
+  html,
   body,
   #app {
     height: 100%;
@@ -426,7 +434,6 @@
     font-size: 13px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
-    overflow: hidden;
     /* §6.6 显式禁止：主题切换不给 * 挂全局过渡，只让根容器过渡一次 */
     transition:
       background-color var(--dur-base) var(--ease-standard),
