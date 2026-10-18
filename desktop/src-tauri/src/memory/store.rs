@@ -1,9 +1,16 @@
-//! `MemoryStore` 的**结构与装配面**（台账 T33）：字段、构造、三条接线（召回观测 /
-//! 交接注入 / 人类层 md）、作用域解析、md 双写与项目索引取数，外加所有分片共用的两件
-//! 底层件——`open_conn`（开连接 + 建表 + 两侧迁移都挂在这一条线上）与行装配 `row`。
+//! `MemoryStore` 的**结构与装配面**（台账 T33）：字段、构造、两条接线（召回观测 /
+//! 交接注入）、作用域解析，外加所有分片共用的三件底层件——`open_conn`（开连接 + 建表 +
+//! 两侧迁移都挂在这一条线上）、行装配 `row`、人类层句柄 `files` 与它的两条落盘动作
+//! `write_md` / `delete_md`。
+//!
+//! S1 刀②c-1 起**人类层不是"接线"而是结构**：`files` 不再是 `Option`，也不再问
+//! settings `memory.files` ——它和 `memory.sqlite3` 一样由数据根算出（`<根>/memory`），
+//! 构造时自算 ⇒ 没有"未接线 = 退回纯 sqlite"那一档可退。`with_files` 因此删除，
+//! `state/memory_stack.rs` 那一处调用同步消失（句柄本身仍在 `AppState` 里另持一份，
+//! 给 reconcile 与「打开文件夹」两枚命令用）。
 //!
 //! 本片对同类型的其余分片（`crud` / `reconcile` / `recall` / `source`）给出四个
-//! `pub(super)` 入口：`open_conn`、`row`、`md_write`、`md_delete`；跨片读到的四个字段
+//! `pub(super)` 入口：`open_conn`、`row`、`write_md`、`delete_md`；跨片读到的四个字段
 //! `warned` / `repo_on` / `repo_ensured` / `recall_log` 同口径抬升，其余字段保持私有
 //! （只有本片碰得到）。抬升只到 `memory` 子树，出不了模块 ⇒ 模块外的公开面与此前逐字相同。
 //!
@@ -14,12 +21,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::time::Duration;
 
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 
 use crate::workspace::{scope_key, WorkspaceResolver};
 
 use super::schema::{ensure_learning_schema, ensure_workspace_schema};
-use super::shapes::{FactLine, MemoryRow, CREATE_TABLE};
+use super::shapes::{MemoryRow, CREATE_TABLE};
 
 pub struct MemoryStore {
     dir: PathBuf,
@@ -27,12 +34,13 @@ pub struct MemoryStore {
     workspace_of: WorkspaceResolver,
     /// 检索失败只告警一次（每 step 都 recall，别刷日志）。
     pub(super) warned: AtomicBool,
-    /// F1 人类层（md 双写，文件化设计 §3）：sqlite 为真源，宿主写
-    /// 路径（store write / 管理页 update·delete·clear）成功后同步 md；
-    /// 未接线（单测）= 纯 sqlite。
-    files: Option<Arc<crate::memory_files::MemoryFiles>>,
-    /// 文件化总开关（settings `memory.files` 闭包；缺省无接线 = 恒关）。
-    files_on: Arc<dyn Fn() -> bool + Send + Sync>,
+    /// **真源所在**（《Memory File-ization Design v1.1》）：`<dir>/memory/` 下的一事实
+    /// 一文件。刀②c-1 起它是结构而不是可选项——`MemoryFiles` 只是路径持有者
+    /// （构造不碰盘、克隆很便宜），所以这里连 `Arc` 都不需要共享，自己建一份即可。
+    /// ⚠ settings `memory.files` 这一档**管不到它**：真源没有可退回的第二处，
+    /// "关掉文件化"在宿主读写面上已经没有任何语义（该项剩下的作用面与收口见
+    /// `specs/05` 刀②c 挂账）。
+    files: crate::memory_files::MemoryFiles,
     /// F2 交接注入开关（settings `memory.repoContext` 闭包；缺省恒关）。
     pub(super) repo_on: Arc<dyn Fn() -> bool + Send + Sync>,
     /// 已引导过的仓库（每进程每仓库一次 ensure_layout，幂等也兜底防抖）。
@@ -50,8 +58,7 @@ impl MemoryStore {
             dir: dir.to_path_buf(),
             workspace_of,
             warned: AtomicBool::new(false),
-            files: None,
-            files_on: Arc::new(|| false),
+            files: crate::memory_files::MemoryFiles::new(dir),
             repo_on: Arc::new(|| false),
             repo_ensured: Mutex::new(std::collections::HashSet::new()),
             recall_log: None,
@@ -85,33 +92,26 @@ impl MemoryStore {
         repo.is_dir().then_some(repo)
     }
 
-    /// 接线人类层（state 组装点调用）：md 句柄 + 总开关闭包。
-    pub fn with_files(
-        mut self,
-        files: Arc<crate::memory_files::MemoryFiles>,
-        on: Arc<dyn Fn() -> bool + Send + Sync>,
-    ) -> Self {
-        self.files = Some(files);
-        self.files_on = on;
-        self
-    }
-
-    /// 人类层句柄的**唯一取用档**：接线了**且**总开关开着才给句柄。
+    /// 人类层句柄（**真源的唯一取用档**）。
     ///
-    /// 为什么现在收：这句判断此前散在三处（`md_write` / `md_delete` /
-    /// `md_index_body` 各写一份 `(Some(files), true)` 或 `!(files_on)()`），
-    /// 刀②b 的读侧是第四个消费者 ⇒ 不收成一处，"人类层到底开没开"就有四本账。
-    /// ⚠ 返回 `None` 的语义是"这一刀还走 sqlite"，那是**暂时状态**：刀②c 要把它
-    /// 改成 `Err`（真源 = md 之后，读不到文件就是读不到，不许静默换源）。
-    pub(super) fn files_face(&self) -> Option<&crate::memory_files::MemoryFiles> {
-        if !(self.files_on)() {
-            return None;
-        }
-        self.files.as_deref()
+    /// 为什么现在不再是 `Option`：这句判断此前散在三处（`md_write` / `md_delete` /
+    /// `md_index_body` 各写一份 `(Some(files), true)` 或 `!(files_on)()`），刀②b 的读侧
+    /// 是第四个消费者 ⇒ 收成一处之后，刀②c-1 把它变成"根本没有第二档"。
+    pub(super) fn files(&self) -> &crate::memory_files::MemoryFiles {
+        &self.files
     }
 
-    /// 双写一条事实 md（失败只 warn——人类层降级不破契约）。
-    pub(super) fn md_write(
+    /// 真源根（`<数据根>/memory`）。给 `memory` 子树**外**的读点用（目前唯一消费者是
+    /// `organize/facts.rs` 的事实卡查重清单）；子树内一律走 [`Self::files`]，两处
+    /// 各拿一次根路径 = 同一句话两个出处。
+    pub fn md_root(&self) -> &std::path::Path {
+        self.files.root()
+    }
+
+    /// 落一条事实到真源。**失败 = 上抛**（刀②c-1 的语义反转）：旧形状是"sqlite 已落，
+    /// md 只是同步、失败只 warn"，那句"调用方保证 sqlite 已是真源"现在反过来由
+    /// `crud.rs` 的四条写路径兑现——先落这里，成功了才去碰影子。
+    pub(super) fn write_md(
         &self,
         ws: &str,
         key: &str,
@@ -119,23 +119,23 @@ impl MemoryStore {
         tags: &str,
         source: &str,
         at: i64,
-    ) {
-        let Some(files) = self.files_face() else {
-            return;
-        };
-        if let Err(e) = files.write_fact(ws, key, value, tags, source, at) {
-            tracing::warn!("记忆 md 同步失败 `{key}`: {e}");
-        }
+    ) -> Result<(), String> {
+        self.files
+            .write_fact(ws, key, value, tags, source, at)
+            .map(|_| ())
+            // 报错必须**点名是哪条记忆**：这一句现在会一路走到管理页的错误条与整理管线的
+            // 日志，只给路径的话用户看不出是自己刚写的那条失败了（旧 warn 文案就带 key，
+            // 换成 Err 之后这一维不许丢）。
+            .map_err(|e| format!("记忆 `{key}` 落盘失败: {e}"))
     }
 
-    /// 同步删除一条事实 md。
-    pub(super) fn md_delete(&self, ws: &str, key: &str) {
-        let Some(files) = self.files_face() else {
-            return;
-        };
-        if let Err(e) = files.delete_fact(ws, key) {
-            tracing::warn!("记忆 md 删除同步失败 `{key}`: {e}");
-        }
+    /// 从真源删一条。返回值 = **文件原本在不在**（刀②c-1 起这是 no-op 的唯一判据；
+    /// 旧判据是"库里删掉了几行"，真源翻转后那个数说的已经不是"这条记忆存在过"）。
+    /// `obsolete/` 软删随刀④ 替换这里的 `delete_fact`，签名不变。
+    pub(super) fn delete_md(&self, ws: &str, key: &str) -> Result<bool, String> {
+        self.files
+            .delete_fact(ws, key)
+            .map_err(|e| format!("记忆 `{key}` 删除失败: {e}"))
     }
 
     /// 会话（可缺）→ 键位（未归属 = ""）。context_line / scope_id 共用。
@@ -143,55 +143,22 @@ impl MemoryStore {
         scope_key(session_id.and_then(|s| (self.workspace_of)(s)).as_deref())
     }
 
-    /// 项目 `MEMORY.md` 投影全文（Q2 索引注入的**优先档**，人可编辑的那份）。
+    /// 项目 `MEMORY.md` 投影全文（Q2 索引注入的**唯一档**，人可编辑的那份）。
     ///
-    /// `None` = 未接线 / 文件化开关关 / 项目键位为空 / 文件读不到。注意
-    /// "文件在场但只有 `# 记忆索引` 标题"也归入"用不上"——那是本机实测的常态
-    /// （见 `memory_index` 头注），判断在 `memory_index::from_md` 里做。
+    /// `None` = 项目键位为空 / 文件读不到。注意"文件在场但只有 `# 记忆索引` 标题"
+    /// 也归入"用不上"——那是本机实测的常态（见 `memory_index` 头注），判断在
+    /// `memory_index::from_md` 里做。
     pub(crate) fn md_index_body(&self, workspace: &str) -> Option<String> {
         if workspace.is_empty() {
             return None;
         }
-        let files = self.files_face()?;
         // 家目录经 memlayout 单点算式（Q15 收口：这里此前自己拼过一份
         // `projects/<可读名-哈希>`，那是同一句话的第三个出处）。`.ok()?`
         // 而不是 unwrap：算不出来 = 这一节缺席，按同函数头注的降级口径走。
-        let path = plugin_api::memlayout::project_dir(files.root(), workspace)
+        let path = plugin_api::memlayout::project_dir(self.files.root(), workspace)
             .ok()?
             .join("MEMORY.md");
         std::fs::read_to_string(path).ok()
-    }
-
-    /// 某键位的**指针级**行（Q2 索引兜底档；`limit` 由调用方给 `上限 + 1`，
-    /// 用来判"还有更多没进索引"）。
-    ///
-    /// 打不开库 = `Err` 上抛给调用方按"整节缺席"降级——**不许**把"读不到"
-    /// 合成成"库里没货"的空索引（Q1a 观测档「库不可用不许冒充库是空的」同纪律）。
-    /// SQL 里不带 `value` 列 = 「正文永不自动进上下文」的机器保证。
-    pub(crate) fn index_rows(
-        &self,
-        workspace: &str,
-        limit: usize,
-    ) -> Result<Vec<FactLine>, String> {
-        let conn = self.open_conn()?;
-        let mut stmt = conn
-            .prepare(
-                "SELECT key, tags, updated_at FROM memories WHERE workspace = ?1
-                 ORDER BY updated_at DESC, key LIMIT ?2",
-            )
-            .map_err(|e| format!("memory index rows: {e}"))?;
-        let rows = stmt
-            .query_map(params![workspace, limit as i64], |r| {
-                Ok(FactLine {
-                    key: r.get(0)?,
-                    tags: r.get(1)?,
-                    updated_at: r.get(2)?,
-                })
-            })
-            .map_err(|e| format!("memory index rows: {e}"))?
-            .collect::<Result<_, _>>()
-            .map_err(|e| format!("memory index rows: {e}"))?;
-        Ok(rows)
     }
 
     /// 按调用开连接、用完即弃（与插件同款）；建表 + 旧库迁移幂等。

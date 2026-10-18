@@ -1,13 +1,24 @@
-//! 既有形状（v2.136 建簇以来累积，本批自 `memory/tests.rs` 整块搬入，
-//! 断言与顺序**一字未改**——它们的原样在场就是「加两列零行为变化」的证据）。
+//! 既有形状（v2.136 建簇以来累积，本批自 `memory/tests.rs` 整块搬入）。
+//!
+//! ⚠ S1 刀②c-1 对本簇做了一次**观测点订正**，不是放宽断言：`list` / `recall` 的读源
+//! 已是真源 md，所以"验证库里落了几行""验证旧库迁移动作"这两类用例一律改吃
+//! `export_rows()` 那条直读影子的通路——`memory_reconcile/tests.rs` 早就为同一件事改过
+//! 一次，纪律写在 `md_read.rs` 头注（拿管理页当"库里有哪几行"的代理，读源一翻就失真）。
+//! 断言的**语义**没动；动了语义的是那几条"测的就是本刀取消的那一档"的用例，逐条去向
+//! 写在提交正文与 `specs/05`。
+//!
+//! 另外三条用例的造数据从"往库里 INSERT"改成走 `write()`：真源 = 文件之后，只有这条
+//! 路造出来的东西才看得见（`a_row_in_the_db_without_a_file_is_not_a_fact` 钉的正是反面）。
 
 use super::*;
 
+/// 旧库（插件早期版本建的 4 列表）第一次被访问时必须整表重建到新列形状，并把两行
+/// 迁进未归属键位、补上 `source`。**观测点 = `export_rows()`**：这一段验的是影子迁移，
+/// 拿 `list()` 看会读到 md（那儿当然没有这些行）——那是观测点错位，不是迁移坏了。
+/// 迁移本身挂在 `open_conn` 这条线上（两侧同源），所以这里一次访问就够触发。
 #[test]
-fn crud_roundtrip() {
-    let dir = temp_dir("crud");
-    // 先手工建"旧版"4 列表（模拟老插件建的库），MemoryStore 首次访问走
-    // 整表重建（workspace 键位 + source 列）——迁移路径本身被本用例覆盖
+fn an_old_four_column_db_migrates_into_the_shadow() {
+    let dir = temp_dir("old-db");
     std::fs::create_dir_all(&dir).unwrap();
     {
         let conn = rusqlite::Connection::open(dir.join("memory.sqlite3")).unwrap();
@@ -22,12 +33,37 @@ fn crud_roundtrip() {
     }
     let store = MemoryStore::new(&dir, test_resolver());
 
-    let rows = store.list("", 200).unwrap();
+    let rows = store.export_rows().unwrap();
     assert_eq!(rows.len(), 2, "旧库两行迁入未归属键位");
     assert!(rows.iter().all(|r| r.workspace.is_empty()));
-    assert_eq!(rows[0].key, "b", "新→旧排序");
-    assert_eq!(rows[0].source, "explicit", "旧行迁移补 explicit 来源");
-    assert_eq!(rows[1].updated_at, 100);
+    assert!(
+        rows.iter().all(|r| r.source == "explicit"),
+        "旧行迁移补 explicit 来源"
+    );
+    let a = rows.iter().find(|r| r.key == "a").expect("a 那行还在");
+    assert_eq!(a.value, "old");
+    assert_eq!(a.tags, "t", "tags 列跟着迁过来");
+    assert_eq!(a.updated_at, 100);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 管理页四条动作（写 / 编辑 / 删除 / 清空）在**真源**上的往返。断言形状与搬来之时
+/// 逐字相同，只有两处随语义订正：① 造数据走 `write()`（见本簇头注）；② 排序那一维
+/// 不在这里钉——同一秒写两条时 `updated_at` 相同，新→旧的判据由 `md_read.rs`
+/// 那条带时间差用例管（在这儿钉会得到一条"同秒按 key 升序"的假判据）。
+#[test]
+fn crud_roundtrip() {
+    let dir = temp_dir("crud");
+    let store = MemoryStore::new(&dir, test_resolver());
+    store.write("", "a", "old", "t", "explicit").unwrap();
+    store.write("", "b", "bee", "", "explicit").unwrap();
+
+    assert_eq!(store.list("", 200).unwrap().len(), 2);
+    assert!(store
+        .list("", 200)
+        .unwrap()
+        .iter()
+        .all(|r| r.workspace.is_empty()));
 
     // 经 update 语义没有"新增"，编辑不存在的键返回 false
     assert!(!store.update_value("", "ghost", "v1").unwrap());
@@ -39,6 +75,7 @@ fn crud_roundtrip() {
     // 编辑：只改 value + 时间，key/source 不动
     assert!(store.update_value("", "a", "new").unwrap());
     let rows = store.list("new", 200).unwrap();
+    assert_eq!(rows.len(), 1, "编辑之后按新值命中：{rows:?}");
     assert_eq!(rows[0].value, "new");
     assert_eq!(rows[0].key, "a");
     assert!(rows[0].updated_at > 100);
@@ -46,9 +83,71 @@ fn crud_roundtrip() {
     // 删除 + 清空（全按键位）
     assert!(store.delete("", "a").unwrap());
     assert!(!store.delete("", "a").unwrap(), "重复删除 = 不存在");
-    assert_eq!(store.clear_all().unwrap(), 1);
+    assert_eq!(store.clear_all().unwrap(), 1, "清空报的是真源里剩的那几条");
     assert!(store.list("", 200).unwrap().is_empty());
 
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// **库里有一行、真源里没这个文件 ⇒ 这条记忆不存在**（刀②c-1 的语义反转本体）。
+///
+/// 它是"存在性判据从 SQL 影响行数换成文件在不在"这句话的唯一机械证明：`update_value`
+/// 与 `delete` 都必须在这一形状上返回 `false`（旧实现一个返回 true、一个返回 false，
+/// 两者说的都是影子的话）。存量库里正有一批这个形状（2026-10-18 只读探针：库里 10 条
+/// 全带 tags，md 侧一条 `tags:` 行都没有），决策人裁定不回填、由他清理 ⇒ 这条用例
+/// 钉的是"清理之前它按真源算没有"，不是"回填之后"。
+#[test]
+fn a_row_in_the_db_without_a_file_is_not_a_fact() {
+    let dir = temp_dir("shadow-only");
+    let store = wired(&dir);
+    store.write("", "shadow.row", "v", "", "explicit").unwrap();
+    // 只删文件、不动影子 ⇒ 造出"库里有行、真源没有"的形状
+    std::fs::remove_file(dir.join("memory").join("global").join("shadow.row.md")).unwrap();
+    assert_eq!(
+        store.export_rows().unwrap().len(),
+        1,
+        "前提：影子里那一行还在（我们只删了文件）"
+    );
+
+    assert!(
+        store.list("", 200).unwrap().is_empty(),
+        "列表不许从库里把它捞回来"
+    );
+    assert!(
+        !store.update_value("", "shadow.row", "v2").unwrap(),
+        "文件不在 = 没这条记忆，编辑不该把它当已存在"
+    );
+    assert!(!store.delete("", "shadow.row").unwrap(), "删除同理");
+    assert_eq!(store.clear_all().unwrap(), 0, "清空的计数只认真源");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// **md 写失败 = 操作失败，且影子一行都不写**（刀②c-1 的顺序证据）。
+///
+/// 夹具 = 在 `memory/global` 这个位置放一个普通文件冒充目录 ⇒ 写侧
+/// `create_dir_all` 必失败（两侧同形，不需要权限、不需要平台特判）。
+/// 后半句"影子里没有那行"才是这条用例的承重部分：只断言 `write()` 返回 Err 的话，
+/// "先写影子、再写 md、md 失败照样 Err"那种实现也能绿——而那种顺序里库里已经躺着
+/// 一条用户以为没写进去的记忆，下次启动还会被对账写回文件。
+#[test]
+fn a_failed_md_write_is_an_error_and_writes_no_shadow() {
+    let dir = temp_dir("md-write-fails");
+    std::fs::create_dir_all(dir.join("memory")).unwrap();
+    std::fs::write(dir.join("memory").join("global"), "not a directory").unwrap();
+    let store = wired(&dir);
+
+    let e = store
+        .write("", "never.lands", "v", "", "explicit")
+        .expect_err("真源写不进去就必须报错，不许 warn 之后当成功");
+    assert!(e.contains("never.lands"), "报错得点名是哪条：{e}");
+    assert!(
+        store.export_rows().unwrap().is_empty(),
+        "顺序判据：真源没落成 ⇒ 影子一行都不许落"
+    );
+    assert!(
+        store.delete("", "never.lands").is_err(),
+        "同一处层级故障在删除这一侧也得报错，不许读成「没这条记忆」然后谎称删除成功"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -136,65 +235,54 @@ fn two_spellings_of_one_project_share_one_scope_id() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 召回交付的是**行形状**（key / value / tags 三件都从 frontmatter 读回），整根扫不动
+/// 时降级为空、不 panic（"注入不拦聊天"那条裁定：读不到最多是不注入，不许打断聊天）。
+///
+/// 造数据从"往库里 INSERT"改走 `write()`（本簇头注那条观测点订正）。坏根夹具 =
+/// md 根的位置上坐着一个普通文件 ⇒ 刀②c-1 起这种层级故障会进 `unreadable` 账
+/// （⇒ partial ⇒ 那一轮不写埋点），但**交付面仍是空而不是 Err**——两半各管一半。
 #[test]
 fn recall_projects_memory_entries_and_degrades_to_empty() {
     let dir = temp_dir("recall");
     let store = MemoryStore::new(&dir, test_resolver());
-    std::fs::create_dir_all(&dir).unwrap();
-    // 打不开的目录（用文件路径当目录制造失败）→ 空表不 panic
-    let bad = MemoryStore::new(&dir.join("file-not-dir"), test_resolver());
-    std::fs::write(dir.join("file-not-dir"), "x").unwrap();
-    assert!(bad.recall(None, 5).is_empty());
-    {
-        let conn = rusqlite::Connection::open(dir.join("memory.sqlite3")).unwrap();
-        conn.execute_batch(
-            "CREATE TABLE memories (
-                 key TEXT PRIMARY KEY, value TEXT NOT NULL,
-                 tags TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL,
-                 source TEXT NOT NULL DEFAULT 'explicit');
-             INSERT INTO memories VALUES ('k', 'v', 'tg', 1, 'explicit');",
-        )
-        .unwrap();
-    }
+    store.write("", "k", "v", "tg", "explicit").unwrap();
+
     let got = store.recall(None, 5);
     assert_eq!(got.len(), 1);
     assert_eq!(got[0].key, "k");
     assert_eq!(got[0].value, "v");
-    assert_eq!(got[0].tags, "tg");
+    assert_eq!(got[0].tags, "tg", "tags 从 frontmatter 那行读回");
+
+    // 打不开的根（用一个文件当目录）→ 空表不 panic
+    let bad = MemoryStore::new(&dir.join("file-not-dir"), test_resolver());
+    std::fs::write(dir.join("file-not-dir"), "x").unwrap();
+    assert!(bad.recall(None, 5).is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 列举条数钳制（下限 1、上限 `LIST_MAX`）。与 `md_read.rs` 那条同判据的两份夹具
+/// 都留着：这里钉"0 收敛到 1"，那里钉"钳到上限但不许丢真货"。
 #[test]
 fn limit_is_clamped() {
     let dir = temp_dir("limit");
     let store = MemoryStore::new(&dir, test_resolver());
-    {
-        std::fs::create_dir_all(&dir).unwrap();
-        let conn = rusqlite::Connection::open(dir.join("memory.sqlite3")).unwrap();
-        conn.execute_batch(
-            "CREATE TABLE memories (
-                 key TEXT PRIMARY KEY, value TEXT NOT NULL,
-                 tags TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL,
-                 source TEXT NOT NULL DEFAULT 'explicit');
-             INSERT INTO memories VALUES ('a', 'v', '', 1, 'explicit'),
-                                          ('b', 'v', '', 2, 'explicit');",
-        )
-        .unwrap();
-    }
+    store.write("", "a", "v", "", "explicit").unwrap();
+    store.write("", "b", "v", "", "explicit").unwrap();
     assert_eq!(store.list("", 0).unwrap().len(), 1, "0 收敛到下限 1");
     assert_eq!(store.list("", 1).unwrap().len(), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// ---- F1 人类层双写（《Memory File-ization Design》§3）----
+// ---- 真源落盘 + 影子跟随（《Memory File-ization Design v1.1》，刀②c-1 定形）----
 
+/// 四条宿主写路径都**先落真源**，影子（sqlite）随后跟到同一个归一键位。
+/// 传**原始串**（v2.186 起 `write()` 在入口归一键位），落点用 `keysid()` 取：
+/// 目录名与 sqlite 的 workspace 列必须是同一个归一串——这正是那批接上的欠账
+/// （Q2 留的「宿主 write 未归一 ⇒ 同项目双键位」）。
 #[test]
-fn host_writes_sync_md_human_layer() {
+fn host_writes_land_in_md_and_the_db_shadows_them() {
     let dir = temp_dir("md-sync");
-    let store = wired(&dir, true);
-    // 传**原始串**（v2.186 起 `write()` 在入口归一键位），落点用 `keysid()` 取：
-    // sqlite 的 workspace 列与 md 目录名必须是同一个归一串——这正是本批接上的
-    // 那条欠账（Q2 留的「宿主 write 未归一 ⇒ 同项目双键位」）。
+    let store = wired(&dir);
     let ws = keysid();
     store
         .write("F:/ws/a", "db.choice", "sqlite", "", "explicit")
@@ -205,37 +293,41 @@ fn host_writes_sync_md_human_layer() {
         .join(plugin_api::memlayout::project_dir_name(&ws))
         .join("facts")
         .join("db.choice.md");
-    assert!(md.exists(), "提取/宿主写路径同步 md");
-    // 管理页编辑同步（管理页拿到的是 list 出来的归一串 ⇒ 按归一键位寻址）
+    assert!(md.exists(), "宿主写路径落真源");
+    assert!(
+        store
+            .export_rows()
+            .unwrap()
+            .iter()
+            .any(|r| r.workspace == ws && r.key == "db.choice"),
+        "影子跟着落到**同一个归一键位**（键位不同源 = 对账永远对不平）"
+    );
+    // 管理页编辑（管理页拿到的是 list 读回来的归一串 ⇒ 按归一键位寻址）
     store.update_value(&ws, "db.choice", "postgres").unwrap();
     assert!(std::fs::read_to_string(&md).unwrap().contains("postgres"));
-    // 管理页删除同步
+    assert!(store
+        .list("postgres", 200)
+        .unwrap()
+        .iter()
+        .any(|r| r.value == "postgres"));
+    // 管理页删除
     store.delete(&ws, "db.choice").unwrap();
     assert!(!md.exists());
-    // 清空同步（全局层）
+    assert!(store.export_rows().unwrap().is_empty(), "删除也跟着影子");
+    // 清空（全局层）
     store.write("", "pref.x", "y", "", "explicit").unwrap();
     let g = dir.join("memory").join("global").join("pref.x.md");
     assert!(g.exists());
     store.clear_all().unwrap();
-    assert!(!g.exists(), "清空逐条删 md");
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn files_switch_off_keeps_pure_sqlite() {
-    let dir = temp_dir("md-off");
-    let store = wired(&dir, false);
-    store.write("F:/ws/b", "k", "v", "", "explicit").unwrap();
-    assert!(!dir.join("memory").exists(), "总开关关 = 不写 md");
-    let rows = store.export_rows().unwrap();
-    assert_eq!(rows.len(), 1, "sqlite 照常");
+    assert!(!g.exists(), "清空删真源");
+    assert!(store.export_rows().unwrap().is_empty(), "清空也清影子");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn export_rows_covers_both_scopes() {
     let dir = temp_dir("md-export");
-    let store = wired(&dir, true);
+    let store = wired(&dir);
     store.write("", "g1", "v", "", "explicit").unwrap();
     store.write(r"F:\ws\a", "p1", "v", "", "extracted").unwrap(); // **反斜杠原始串**：归一必须由 write() 自己做
     let rows = store.export_rows().unwrap();
@@ -246,95 +338,5 @@ fn export_rows_covers_both_scopes() {
     assert!(rows
         .iter()
         .any(|r| r.workspace == keysid() && r.source == "extracted"));
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-// ---- Q2（MR §4.1）项目记忆索引注入：两档数据源的优先关系与缺席条件 ----
-// （`keysid()` 与 `wired()` 已上移到本目录 `mod.rs`：刀②b 的 `md_read` 簇也要用，
-//  夹具留一份。）
-
-#[test]
-fn project_index_uses_the_md_projection_when_it_has_pointer_lines() {
-    let dir = temp_dir("idx-md-first");
-    let store = wired(&dir, true);
-    let ws = keysid();
-    // 照生产路径造 md：宿主 write 会双写 facts/ 并刷新该键位的 MEMORY.md
-    store
-        .write(&ws, "build.cmd", "pnpm tauri dev", "构建", "explicit")
-        .unwrap();
-    let out = store.project_index(Some("ws-session")).expect("项目层有货");
-    assert!(
-        out.contains("- [build.cmd](build.cmd.md)"),
-        "md 投影档（指针行原样搬）: {out}"
-    );
-    assert!(
-        out.contains("构建"),
-        "hook 来自 frontmatter description: {out}"
-    );
-    assert!(!out.contains("pnpm tauri dev"), "正文一个字都不进: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn project_index_falls_back_to_sqlite_when_the_md_is_an_empty_shell() {
-    // **本机实测的那一档**：`MEMORY.md` 在场但只有 `# 记忆索引` 标题（或整个文件
-    // 不在）。这一档必须落 sqlite 现合成，而不是"注入一个空节"或"报没有货"。
-    let dir = temp_dir("idx-fallback");
-    let store = wired(&dir, false); // 文件化关 = 一份 md 都不写，正合现场形态
-    let ws = keysid();
-    store
-        .write(&ws, "user.stack", "Rust", "偏好", "explicit")
-        .unwrap();
-    let out = store.project_index(Some("ws-session")).expect("兜底档有货");
-    assert!(out.contains("- user.stack — 偏好"), "sqlite 现合成: {out}");
-    assert!(!out.contains("Rust"), "兜底档也只给指针，正文不进: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn project_index_is_absent_for_unattributed_and_empty_projects() {
-    let dir = temp_dir("idx-absent");
-    let store = wired(&dir, true);
-    // 未归属会话：「本项目」不成立 ⇒ 整节缺席（不是空节）
-    store.write("", "g1", "v", "", "explicit").unwrap();
-    assert!(store.project_index(Some("other")).is_none(), "未归属不注入");
-    assert!(store.project_index(None).is_none(), "无会话身份不注入");
-    // 归属会话但项目层空 ⇒ 同样缺席，零开销
-    let empty = MemoryStore::new(&dir.join("nothing"), test_resolver());
-    assert!(empty.project_index(Some("ws-session")).is_none());
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn project_index_is_the_same_keyside_the_injection_cache_uses() {
-    // 接线判据：索引取行的键位必须与预取缓存键里那半 (`scope_id`) **同源同串**，
-    // 否则会话改归属后缓存键变了而取行仍用旧串 = 注入到过期项目的索引。
-    let dir = temp_dir("idx-keyside");
-    let store = wired(&dir, false);
-    let ws = keysid();
-    store.write(&ws, "k.one", "v", "t", "explicit").unwrap();
-    assert_eq!(
-        store.scope_id(Some("ws-session")),
-        ws,
-        "scope_id 与查行键位必须同串"
-    );
-    let out = store.project_index(Some("ws-session")).unwrap();
-    assert!(out.contains("- k.one — t"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn a_broken_database_degrades_to_no_section_without_touching_recall() {
-    // 「库不可用」不许冒充「项目层空」在**索引这一侧**的形态：整节缺席 + 一次告警，
-    // 而全局层召回（同库）的降级路径不受影响（`recall_quiet` 已有自己的告警位）。
-    let dir = temp_dir("idx-unavailable");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("memory.sqlite3"), b"not a database").unwrap();
-    let store = MemoryStore::new(&dir, test_resolver());
-    assert!(store.project_index(Some("ws-session")).is_none());
-    assert!(
-        store.recall(Some("ws-session"), 5).is_empty(),
-        "recall 照常降级为空"
-    );
     let _ = std::fs::remove_dir_all(&dir);
 }

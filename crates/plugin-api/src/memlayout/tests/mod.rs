@@ -15,7 +15,15 @@ mod read_back;
 mod render_parse;
 mod write_delete;
 
+use super::paths;
 use super::*;
+
+/// 拆进 `paths.rs`（S1 刀②c-1）之后由测试**直接点名**取的两件：开关语义的纯函数判据
+/// `enabled_from`、层级目录常量 `GLOBAL_DIR`（夹具里算落点用）。它们不经 `mod.rs`
+/// 再导出——生产代码不引用它们，挂在 `mod.rs` 上就是一条 `unused imports` warning，
+/// 而本仓 clippy 是 `-D warnings`：为了消除 warning 而把测试要的东西塞进公开面，
+/// 那是让闸的形状决定 API 的形状，方向反了。
+pub(crate) use paths::{GLOBAL_DIR, enabled_from};
 
 /// 一条最小事实（`tags` 与 `source` 走默认，要变的字段由用例自己改）。
 /// updated_at 钉死一个常数：索引按 mtime 排序的分支要靠它保持稳定。

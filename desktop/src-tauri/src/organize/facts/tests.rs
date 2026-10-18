@@ -86,11 +86,12 @@ fn persist_counts_written_dropped_and_the_absence_of_a_section() {
     assert_eq!(rep.dropped, 0, "非法类型那张死在解析层，不归这里的账");
     assert_eq!(rep.failed, 0);
     let proj = crate::workspace::scope_key(Some(WS));
-    let rows = store.index_rows(&proj, 10).unwrap();
+    let rows = plugin_api::memlayout::facts_of(store.md_root(), &proj).unwrap();
     assert_eq!(rows.len(), 1, "项目层只剩 build.cmd");
     assert_eq!(rows[0].key, "build.cmd");
-    // 出处与键位从**管理页那条读取面**（全键位、带 source）验，而不是
-    // index_rows——它没有 source 列（Q2 故意不取 value 也不取多余列）。
+    // 出处与键位从**管理页那条读取面**（全键位、带 source）验。`facts_of` 也带全字段，
+    // 但 organize 落库的可见后果最终要在管理页上兑现 ⇒ 证据留在那一侧
+    // （S1 刀②c-1 把读面从 `index_rows` 换到真源，这条分工不变）。
     let all = store.list("", 50).unwrap();
     let pref = all
         .iter()
@@ -148,13 +149,14 @@ fn the_same_key_upserts_instead_of_piling_up_rows() {
         raw_with_facts(r#"[{"key":"arch.store","value":"sqlite + md 双写","type":"project"}]"#);
     assert_eq!(persist(&store, WS, &first, 3).written, 1);
     assert_eq!(persist(&store, WS, &second, 3).written, 1);
-    let rows = store
-        .index_rows(&crate::workspace::scope_key(Some(WS)), 10)
-        .unwrap();
+    let rows =
+        plugin_api::memlayout::facts_of(store.md_root(), &crate::workspace::scope_key(Some(WS)))
+            .unwrap();
     assert_eq!(rows.len(), 1, "同键两次整理必须仍是一行");
     assert_eq!(rows[0].tags, "", "第二次没带 tags ⇒ 覆盖为空（不叠加）");
-    // 行数是"没新增"，**值变了才是"覆盖了"**：`index_rows` 按 Q2 的口径不取
-    // value 列（指针级三件），所以这一档必须从管理页那条读取面（`list`）验。
+    // 行数是"没新增"，**值变了才是"覆盖了"**：值这一档从管理页那条读取面（`list`）验
+    // ——organize 落库的可见后果以管理页为准（`facts_of` 同样带 value，两处同源，
+    // 但证据只留一个出处）。
     // 缺这条断言时，摘掉 `ON CONFLICT … SET value = excluded.value` 的变异不会红
     // ——判据覆盖面只钉了一半（历批「四面齐查」同族）。
     let all = store.list("", 50).unwrap();
@@ -188,9 +190,9 @@ fn a_failing_card_does_not_take_the_rest_down_with_it() {
     assert_eq!(rep.failed, 1, "key 超长那条写失败");
     assert_eq!(rep.written, 1, "另一条必须照样落库");
     assert_eq!(rep.dropped, 0);
-    let rows = store
-        .index_rows(&crate::workspace::scope_key(Some(WS)), 10)
-        .unwrap();
+    let rows =
+        plugin_api::memlayout::facts_of(store.md_root(), &crate::workspace::scope_key(Some(WS)))
+            .unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].key, "slim.ok");
 }

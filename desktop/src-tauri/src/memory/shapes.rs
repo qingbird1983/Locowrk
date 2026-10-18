@@ -1,11 +1,14 @@
 //! 记忆库的**形状与上限**（台账 T33 七片之首）：三个上限常量、管理页行形状
-//! `MemoryRow`、索引注入的指针行 `FactLine`、两侧同源的权威建表串 `CREATE_TABLE`。
+//! `MemoryRow`、两侧同源的权威建表串 `CREATE_TABLE`。
 //! 这里只有形状，没有访问路径——读写在 `store.rs` / `crud.rs` / `reconcile.rs` /
 //! `recall.rs`，改表形状（迁移）在 `schema.rs`。
 //!
 //! `LIST_MAX` 与 `CREATE_TABLE` 抬成 `pub(super)` 是本刀的机械后果：定义处仍然各只有
 //! 一份（建表串被 `open_conn` 与 `ensure_workspace_schema` 共同读，那正是当初把它们
 //! 收成一份的理由），可见范围收在 `memory` 子树内，模块外取不到。
+//!
+//! S1 刀②c-1 删掉了 `FactLine`（索引注入的指针行形状）：它唯一的消费者是"从库里现
+//! 合成索引"那一档，那一档连同 `index_rows` 一起退役之后这个结构没人构造也没人读。
 
 use serde::Serialize;
 
@@ -43,15 +46,6 @@ impl From<&plugin_api::memlayout::StoredFact> for MemoryRow {
             updated_at: f.updated_at,
         }
     }
-}
-
-/// 索引注入用的一行（Q2 / MR §4.1）：**只取指针级三件**，`value` 一个字节都不取
-/// ——「正文永不自动进上下文」是 §4.1 的硬边界，查询里不带 value 列就是它的机器
-/// 保证（要绕过就得改 SQL，而 SQL 有判据盯着）。
-pub(crate) struct FactLine {
-    pub(crate) key: String,
-    pub(crate) tags: String,
-    pub(crate) updated_at: i64,
 }
 
 /// 与 memory-sqlite 插件**逐字节同源**的权威表形状（两侧各持一份，迁移等价性依赖它

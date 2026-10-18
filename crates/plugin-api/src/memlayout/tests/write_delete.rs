@@ -196,3 +196,29 @@ fn filetime_set(path: &std::path::Path, millis: i64) {
         .set_modified(t)
         .unwrap();
 }
+
+/// 「这一层读不动」与「没有这条记忆」必须是**两个答案**（S1 刀②c-1）。
+///
+/// 逼出这条的是一个跨平台差异，不是猜测：Windows 的 `remove_file` 对"路径里有一段
+/// 不是目录"报 `ERROR_PATH_NOT_FOUND`，而它与"文件不存在"是**同一个错误码**；
+/// POSIX 才分成 `ENOTDIR` 与 `ENOENT`。不特判就会得到一条"Linux 报错、Windows 说
+/// 没这条记忆"的假性质——正好是本刀要消灭的那种"把读不动冒充成没有"。
+/// 对照那半条同样承重：层不存在时仍必须是 `Ok(false)`（幂等删除），否则实现漂成
+/// "什么都报错"也不会红。
+#[test]
+fn deleting_into_a_blocked_layer_errors_instead_of_claiming_absence() {
+    let root = tmp_root("delete-blocked");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join(GLOBAL_DIR), "not a directory").unwrap();
+
+    let e = delete_fact(&root, "", "any.key").expect_err("层不是目录时要报错，不许谎称没这条");
+    assert!(e.contains("不是目录"), "报错得说是哪种故障：{e}");
+
+    let absent = tmp_root("delete-absent");
+    assert!(
+        !delete_fact(&absent, "", "any.key").unwrap(),
+        "对照：层根本不在场 = 没有这条（幂等），不是故障"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&absent);
+}

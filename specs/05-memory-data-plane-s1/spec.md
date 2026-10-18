@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀①②a②b-1②b-2②b-3 已落地 / 刀②c 待做，卡一次存量回填的点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1 已落地 / 刀②c-2 与刀③④ 待做）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -120,6 +120,10 @@
     或删测试都是错的方向）。同族口径还散在 `organize/facts/tests.rs`（4 处）与
     `organize/tests/fact_cards.rs`（6 处）：它们用的是未接线 store，这刀没红，
     但"验落库却读管理页"迟早同样失真 ⇒ 登记待收，改法与这里一样换 `export_rows()`。
+    **进展订正（刀②c-1）**：`organize/facts/tests.rs` 那几处随 `index_rows` 退役已经挪走
+    （改吃 `memlayout::facts_of`，断言语义一字未动）；`organize/tests/fact_cards.rs` 那 6 处
+    仍是 `list()` 代理——它们验的本来就是"管理页看得见"这一侧，同源所以不是缺陷，
+    但**"库里落了几行"这一维至今没有独立证据**，仍登记待补。
     五发窄变异各打中一条（md 分支撤掉 / 折叠大小写撤掉 / tags 那一维撤掉 /
     总开关档撤掉 / limit 钳撤掉）。第一版那条"md 分支撤掉"写的是 `if false {`，
     红在**编译错误**上、零证明力 ⇒ 改成 `None::<&MemoryFiles>` 才是"读源没换"那个
@@ -163,10 +167,87 @@
   它改读落盘的 `MEMORY.md` 之后这两份合一，数字与文案都不可能漂——文案也是两份
   （注入侧 `memory_index.rs` 的 `TRUNCATED_NOTE` 与写侧 `index.rs` 的 `INDEX_TRUNCATED_NOTE`），
   读迁移那一步前者应当退役而不是留着各说各话。
-- **刀②c（存储退役）**：`md_write` / `md_delete` 的 `warn` 改成 `Err` 上抛（含取消
-  `files: Option` 与 `files_on` 的"未接线 = 纯 sqlite"兜底档），`hit_count` / `last_hit_at`
-  学习列停止读写（文件制没有时间信号以外的权重，v2.136 那条教训；牵动 `memory_learn` / `recall_log`，
-  可能得推给 S4），`md_delete` 的 no-op 判据按现状画像第 4 条反过来。
+- **刀②c-1（写侧真源反转 + 读面摘档）✅（2026-10-18 落地）**：这一刀是本线**语义反转的主体**——
+  四条宿主写路径从"先写 sqlite（真源）、成功后同步 md、md 失败只 warn"扳成
+  "**先落 md（真源，失败 = 操作失败并上抛）、成功后再更新 sqlite 影子（失败只 warn）**"。
+  同一句 `if let Err(e) = …` 换了主语：掉哪一份会导致什么，从"镜像旧了"变成"这条记忆没写进去"。
+  七件事一起落地，逐件点名：
+  1. **真源不是接线而是结构**：`files: Option<Arc<MemoryFiles>>` 与 `files_on` 两个字段删除，
+     `MemoryStore::new(dir, …)` 自己按数据根算出 `<dir>/memory`（`MemoryFiles` 只是路径持有者、
+     构造不碰盘）。**这一条形状选择省掉了整批夹具改动**——原先估"约 16 处依赖未接线档的夹具要改"，
+     实际一处 `MemoryStore::new` 调用点都没动（只有 `wired(dir, on)` 少了那个已经无意义的 `on` 参数）。
+  2. **读面只剩一档**：`list()` 里那条 SQL、`recall_once()` 的 sqlite 支路、`project_index` 的
+     "未接线 ⇒ 库里现合成"档全部删除；连带退役 `index_rows` / `memory_index::from_rows` /
+     `FactLine`（三件都没有生产者也没有读者了）。
+  3. **存在性判据按真源**：`update_value` / `delete` / `clear_all` 的判据从"SQL 影响行数"换成
+     "文件在不在"（`delete_fact` 的返回值天生就是这个判据）。新用例
+     `a_row_in_the_db_without_a_file_is_not_a_fact` 钉住反面：库里留一行而文件不在 ⇒
+     列表读不到、编辑返回 false、删除返回 false、清空不计它。
+  4. **顺序有独立证据**：`a_failed_md_write_is_an_error_and_writes_no_shadow` 不只断言
+     `write()` 报 Err，还断言**影子里一行都不许落**——只报 Err 的话"先写影子、再写 md、
+     md 失败也 Err"那种实现照样绿，而那种顺序里库里已经躺着一条用户以为没写进去的记忆。
+  5. **层级故障进账**（订正刀②a 那条"故意不坐实"）：`unreadable` 过去只数文件级，
+     `projects/` 或某层 `facts/` 读不动时 `facts` 空而计数 0 = 与"从没记过"逐字同形。
+     当时说"没有跨平台夹具"——**这个理由被一条更普通的夹具推翻**：在同一位置放一个普通文件
+     冒充目录，两侧 `read_dir` 都失败且都不是 `NotFound`。现在层级也进账 ⇒ `partial` 一档
+     盖住"整源不可用"与"部分读不动"两种故障，`RecallOutcome` 因此不再是 `Result`
+     （留一条恒不 Err 的 `Result` 就是死 API），`inject_loggable` 从三档收成两档并说破理由。
+  6. **层枚举与两个清点名收成一处**：`memlayout::layers()`（按磁盘在场枚举，第二返回值 =
+     扫不动的层数）、`facts_of(root, ws)`（按键位读一层）、`clear_facts(root)`（清空真源并报数）。
+     三者存在的理由同一条：**`StoredFact::workspace` 在人新建的无 frontmatter 文件上只是目录名兜底，
+     不是权威原串**——拿它再去算 `fact_rel_path` 会指到别的目录（`clear_all` 逐条删就会"删不到也不报错"，
+     这条坑是实现时撞出来的，不是设想）。`organize/facts.rs::existing_keys` 与
+     `memory_index::ages_of_layer` 都改吃 `facts_of`。
+  7. **补回一处 ②b-3 静默丢掉的功能**：陈旧标注 `（N days old）`。`from_md` 拿到的是纯文本行，
+     里面没有 `updated_at` ⇒ 那一维原先只在已退役的 `from_rows` 里算，切读源时就丢了。
+     现在由 `ages_of_layer` 现算并追加到行尾（**必须站在注入侧算**：落盘时写死的"3 天前"
+     在没人再写它的日子里永远不会自己变陈旧）。配一条负对照（新写的那条不许带标注）与
+     一条"对不上号就不标也不丢行"。
+  另两处随这一刀发生：`delete_fact` 里**「层不是目录」与「没有这条」在 Windows 上是同一个错误码**
+  （`ERROR_PATH_NOT_FOUND`），不特判就得到一条"Linux 报错、Windows 谎称不存在"的跨平台假性质 ⇒
+  现在两侧都 Err；`memlayout/mod.rs` 涨到 416 行 ⇒ 寻址面整块拆进 `paths.rs`（逐字未改），
+  于是 `SS1b` 那条写死扫 `mod.rs` 的判据第二次撞同一个洞（刀②a 时 `SS10b` 撞过一次），
+  按学到的口径改成吃子树面；`legacy.rs` 涨到 481 行 ⇒ 项目索引面拆进 `memory/tests/index.rs`。
+  **判据**：新增 `SS11`（兜底档那五个名字在宿主记忆面里**调用/定义/字段三档形状**恒 0）。
+  它为什么必须是结构判据：`files_switch_off_keeps_pure_sqlite` 测的正是被本刀取消的那一档，
+  而"未接线的 store"在新形状里**类型上就无法构造** ⇒ 编不出等价的行为测试，删掉那条测试之后
+  只剩这块墓碑挡得住有人把兜底档塞回来。这条判据自己错过两次、都写进它的说明了：
+  第一版按**名字**数 ⇒ 撞上一堆"解释为什么它没了"的必要留痕，得 8 条假红（SS6 早立过同一口径）；
+  第二版把 `memory_files.rs` 里 `spawn_initial_export(files_on=…)` 那个**合法的空转开关参数**
+  也数进去 ⇒ 得 1 条假红。窄变异 = CASE 12（往 `crud.rs` 塞回一行兜底档调用，闸必须**点名 SS11**）。
+  **证据**：CASE 21–29 九发窄变异（层级不进账 / facts 槽被文件冒充不进账 / 删除不区分两种故障 /
+  写序退回影子先落 / partial 恒 false / 陈旧标注不追加 / 清空遇到扫不动的层不中止 /
+  编辑存在性判据退回影子 / 清空计数退回影子）各打中一条，全部 sha 复核原样还原；
+  既有 CASE 1–4（锚随 `index.rs` 拆分改指）与 9/12/14/16/19（锚随兜底档退役重指）逐条复跑仍红。
+  ⚠ 其中 CASE 4 是**按预期打空**并已在脚本里标 `expectNull`：改一份共用常量时两侧一起漂，
+  行为测试结构上抓不到它，承重的是 `SS10`——把这种打空算成"零证明力"会把责任推给错的档。
+  **测试去向**（按 AGENTS §6.3 逐条交代，不静默删）：删 2 条
+  （`files_switch_off_keeps_pure_sqlite`、`project_index_falls_back_to_sqlite_when_the_md_is_an_empty_shell`，
+  两条测的都是被本刀取消的档，接管者分别是 `SS11` 与 `a_shell_index_file…`）；改写 9 条
+  （观测点从"拿 `list()`/SQL 直插当库的代理"挪回真源或 `export_rows()`：`crud_roundtrip` 拆成
+  影子迁移 + 真源往返两条、`limit_is_clamped`、`recall_projects_memory_entries_and_degrades_to_empty`、
+  `a_broken_database_degrades_to_no_section…` → `a_broken_shadow_db_changes_nothing…`、
+  `project_index_is_the_same_keyside…` 钉 md 字面形、learning 簇 4 条换 `export_rows()`、
+  `recall_log` 那条等价判据换 `write_fact` 造数据、`initial_export_skips…` 用 `reconcile_upsert`
+  造"库有文件无"的存量形状）；新增 10 条。**断言的语义一条没放宽**。
+  具体 passed 读数不落在本篇（每批都会漂的数只写提交正文，唯一出处 = 闸自己的输出行）。
+- **刀②c-2（反向通路退役 + 学习档待拍板）⏳ 待做**，两件事，第二件要决策人点头：
+  1. **"库 → 文件"那两条反向写入通路必须停**（这条不是可选优化，是遗忘验证的前置）：
+     `run_initial_export` 的"行在文件缺 ⇒ 补文件"与 `memory_reconcile` 的 `healed` 支
+     "文件未动而索引先行 ⇒ 从索引愈合文件"，在真源 = md 之后的含义是**把已删除的记忆复活**。
+     刀②c-1 之后 `delete` 只看文件 ⇒ 文件删了、影子没跟上时，下次启动就会按影子把文件写回来
+     ⇒ AC-S1-6 那三条遗忘验证不成立。`memory_reconcile.rs` 在 v1.1 标准里本就整项作废
+     （只有一个真源就无处对账），随这一刀退役；连带 `commands/memory.rs::memory_reconcile`
+     那一枚命令与 MemoryPage 上那颗按钮（动界面 ⇒ 与刀④ 同批做，界面文案一起订正）。
+  2. **学习档仍读 sqlite**（`source.rs::recall_relevant`，settings `memory.learnEnabled` 打开时才走）：
+     它是宿主读面里最后一条按库寻址的通路，也是 ②b-4 推过来的那一格。**不能顺手改**的理由有两条，
+     都写进代码注释留痕：① `hit_count` / `last_hit_at` 这两个学习量**不能进 md frontmatter**——
+     文件的 mtime 是"人在整理之后动过它"的唯一信号（`write_tree_md` 的人改保护、AC-S1-8 的
+     "人工编辑过的文件 sha 不变"都挂在这一维上），机器每交付一次就写一次文件会永久摧毁它；
+     ② 把它改成"候选集取 md + 去掉强化信号"是一次**排序口径变更**（四信号里 frequency 那一维失效），
+     属产品决策而不是机械迁移 ⇒ 要决策人点头（要么关掉学习档、要么给学习量另找一个不进人读面的家）。
+     在这一格收口之前，"`<persistent_memory>` 停读 sqlite"这句话只在 `learnEnabled=false`（缺省）时成立，
+     代码头注与本节都按这个口径写，不许说满。
 - **刀③（四类型打通 + 工具内部改道）**：`FactEntry` 末尾追加 `ty`、`render()` 写
   `metadata.type`、`ParsedFact` 读回 type（未知值 = 未分类，存量不重写）、type→层映射纯函数、
   `feedback`/`project` 缺 `Why:` / `How to apply:` 时提醒不拦写；这几件必须与工具参数**同刀**，
@@ -209,6 +290,11 @@
    （那一行是刀②a 才进渲染的），而库里 10 条全带标签 ⇒ 现在就切读源，管理页标签列整列变空、
    按标签搜索全部落空。所以②b-3 之后必须先跑一次**带 tags 的存量回填**（= AC-S1-8 那条导出脚本），
    而动的是他的数据文件 ⇒ 要他点头，不许我顺手写。
+   **→ 2026-10-18 决策人裁定：不回填**（原话"库里的不回填了 免得污染 我到时会清理掉的"）。
+   这条裁定把上面那句"必须先跑一次带 tags 的存量回填"的前置**取消**了，代价如实落地成一条
+   新语义并已有用例钉住：存量里"只在库里"的那些行从此按**不存在**处理
+   （`a_row_in_the_db_without_a_file_is_not_a_fact`），管理页标签列对那 10 条也是空的
+   ——读的就是文件，文件里没那一行。他清理之后两边一起消失，不留"看起来丢数据"的中间态。
 4. **`md_delete` 挂在 `if n > 0` 后面**（`crud.rs:158-160`）⇒ "库里没这行" 现在直接当 no-op，
    连文件都不碰。真源翻转后这个判据必须**反过来**：以文件是否存在为准（库里没行、文件有 = 该删掉
    文件）。AC-S1-6 那三条遗忘验证能不能成立，正卡在这一步。
@@ -225,11 +311,14 @@
       `SELECT COUNT(*) FROM memories` 前后**不变**（sqlite 不再是落点）
 - [ ] AC-S1-2 读不碰 sqlite：把 `memories.db` 改名造损坏态 → 管理页列表、`<project_memory_index>`
       注入、`memory_read/search` 全部照常出数（这条是"真源翻转"最硬的证据，也是刀②的收口判据）。
-      **已证三格**：管理页列表（②b-1 `listing_survives_the_db_being_renamed_away`）、
-      全局层注入（②b-2 `recall_takes_the_global_layer_from_md_with_the_db_gone`）、
-      项目索引（②b-3 `a_shell_index_file_means_the_section_is_absent_even_if_the_db_has_rows`
-      走的是同一批夹具形状：库里留着行而 md 是空壳 ⇒ 如实缺席）；
-      只剩插件那两枚工具（`memory_read` / `memory_search`，归刀③）⇒ 整条暂不勾
+      **刀②c-1 之后这四格都有证据且读面已无兜底档**：管理页列表
+      （`listing_survives_the_db_being_renamed_away`）、全局层注入
+      （`recall_takes_the_global_layer_from_md_with_the_db_gone`）、项目索引
+      （`a_shell_index_file_means_the_section_is_absent_even_if_the_db_has_rows`，库里留着行而
+      md 是空壳 ⇒ 如实缺席）、**影子库本身坏掉**（`a_broken_shadow_db_changes_nothing_on_the_read_or_write_path`，
+      `memory.sqlite3` 写成非数据库字节之后读写两面一个字节都不变）。整条仍不勾，两个缺口：
+      ① 插件那两枚工具（`memory_read` / `memory_search`）仍按库寻址 ⇒ 归刀③；
+      ② `learnEnabled=true` 时语义召回档（`recall_relevant`）仍读库 ⇒ 见刀②c-2 第 2 件，等点头
 - [ ] AC-S1-3 四类型落位：`type=feedback` 缺省落 `global/`、`type=project` 缺省落
       `projects/<可读名>-<hash>/facts/`；显式给 `scope` 时按覆盖落，frontmatter 回读一致
 - [ ] AC-S1-4 排除清单生效：一句"我测试过了 / 我改了 store.rs"收束后**不产文件**；
@@ -309,12 +398,33 @@
   但那是改配置，等决策人点头；本刀不动。复查（刀②a 收尾）：工作区 `.gitignore` 里
   **已有 `+.pnpm-store/` 这一行**（非本刀产出、仍未提交 ⇒ 本刀不认领也不 `git add` 它）；
   剩下的不是"要不要加"而是"谁来提这一行"。
-- 挂账（刀②b-2 复查后**故意不坐实**的一档）：`iter_facts` 的 `unreadable` 只数
-  "读得到目录、读不动文件"，某层目录本身读不动时不进账 ⇒ 那种故障下会是"空 + 零计数"，
-  看起来像"从没记过"。补法三行（失败后 `metadata().is_dir()` 分类），但**没有任何跨平台
-  可造的夹具能让它报红**：POSIX `chmod 000` 造得出，Windows 要动 ACL（`icacls`），
-  不可移植。写一段没人盯的守卫比不写更糟——它会让人以为那条纪律已经闭环。
-  现实侧的兜底：真出现整层不可用，管理页是**整体空白**而不是少几条，看得见。
+- ~~挂账（刀②b-2 复查后**故意不坐实**的一档）~~ **刀②c-1 已坐实**：原先登记的理由是
+  "层级读不动没有跨平台夹具"（POSIX `chmod 000` 造得出、Windows 要动 ACL）。那条理由被一个
+  更普通的形态推翻：**在同一位置放一个普通文件冒充目录**，两侧 `read_dir` 都失败且都不是
+  `NotFound` ⇒ 不需要权限、不需要 `#[cfg]`。现在 `memlayout::layers()` 把这类故障数进
+  `unreadable`（负对照同样在场：层不存在仍不是故障），红证两条在
+  `memlayout/tests/read_back.rs`，宿主端到端那一条是 `a_blocked_layer_also_suppresses_the_inject_row`。
+  ⚠ 教训留在这里：**"证不了"要区分"想不到夹具"与"真造不出"**，我把前者写成了后者并据此
+  决定不写守卫——那是一段纪律被一句未经复查的判断挂起来，本仓不接受这种挂法。
+- 挂账（刀②c-1 撞出来的第三处 `hint` 陷阱）：**人自己在项目层新建、没写 frontmatter 的文件**
+  读回的 `workspace` 是目录名兜底（`proj-a-67ed0df8` 这种），而目录名反推不出权威原串 ⇒
+  拿它再算一次 `fact_rel_path` 就指到别的目录。后果分两半：清点名已经绕开它
+  （`clear_facts` 按扫到的 `path` 删，不按键位反推）；但**管理页对这种行的编辑与删除仍会失败**
+  （`MemoryRow.workspace` 给的就是那个目录名，前端把它原样传回来 ⇒ 报"记忆不存在"）。
+  收口办法 = 刀②c-2 退役反向通路时，把"吸纳人新建文件"改成**回写 frontmatter**（让文件
+  自己带上权威键位），而不是在宿主侧再猜一次目录。现状登记，本刀不顺手改。
+- 挂账（刀②c-1 之后 `memory.files` 这个设置项**管不到宿主读写面**）：真源没有可退的第二处，
+  所以"要不要文件化"这个问题在宿主这边已经没有可开关的东西。它现在剩下的作用面是两处——
+  ① 插件侧 env `LOCOWRK_MEMORY_FILES`（刀③ 随工具改道一起摘），② 对账/首启导出的空转开关
+  （刀②c-2 随 `memory_reconcile` 退役一起消失）。两处都摘完之后这一项要么**改义**
+  （建议：关掉 = 记忆面停止写入并如实报错，仍是一个真的开关，符合 AGENTS §4 可配置原则），
+  要么整项退役 ⇒ 归刀④ 与界面文案一起定。⚠ 现在设置页那句 hint 写的是"把记忆**同步存为**
+  Markdown 文件"——那是镜像时代的说法，与实况不符 ⇒ 刀④ 一起订正（同类"文字与实况不符"）。
+- 挂账（刀②c-1 留下的**影子写**）：`crud.rs` 那四条 `shadow_*` 仍是写库的 SQL，唯一理由是
+  `plugins-src/memory-sqlite` 那六枚工具还按库寻址。**刀③ 改道之后这一整块连同 `CREATE_TABLE`
+  必须退役**——在此之前，《Memory File-ization Design v1.1》§3 那句"无第二存储"尚未真正成立
+  （标准写的是目标态，别把它读成现状）。不在刀②c-1 顺手停的原因已写进 spec：停掉之后
+  管理页写的记忆模型读不到，而插件写的记忆管理页看不见，中间态用户立刻能发现。
 - 挂账（刀②a 取证时抓到的保留名盲区）：读侧跳过索引与投影用的是**文件名**
   （`read.rs::is_fact_file` 排 `MEMORY` / `tree` 两个 stem），而写侧的 `key_file_stem`
   只安全化路径字符与 Windows 保留名，**没把 `MEMORY` / `tree` 列成保留键** ⇒

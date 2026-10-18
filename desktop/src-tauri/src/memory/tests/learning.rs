@@ -3,6 +3,12 @@
 //! 本批**没有任何读取点**（拿 `hit_count` 做加权排序 = L2 / 队列 Q9），所以这些用例判的
 //! 是两件将来会被依赖的性质：①存量库能自动补列且**不丢行**、②补列之后任何写路径都不许
 //! 把学习量清零。
+//!
+//! ⚠ S1 刀②c-1 把取数通道从 `store.list()` 换成 `store.export_rows()`：这两件事说的都是
+//! **库里那一行**，而 `list()` 的读源已是真源 md（拿它当"库里有哪几行"的代理在本仓红过
+//! 两次，纪律见 `md_read.rs` 与本簇第 3 条用例里那句"分歧由刀②c-2 收"）。
+//! 第 4 条（并发首访问）换通道还有一层必要理由：迁移挂在 `open_conn` 上，而 `list()`
+//! 现在根本不开库 ⇒ 用它当触发器，测的就是"什么都没发生"。
 
 use super::*;
 use rusqlite::Connection;
@@ -57,7 +63,7 @@ fn legacy_db_gains_learning_columns_without_losing_rows() {
     let dir = temp_dir("learn-migrate");
     make_db(&dir, ONE_ROW, "");
     let store = MemoryStore::new(&dir, test_resolver());
-    let rows = store.list("", 50).unwrap();
+    let rows = store.export_rows().unwrap();
     assert_eq!(rows.len(), 1, "迁移不许丢行");
     assert_eq!(rows[0].value, "v-a", "原值不动");
     assert_eq!(rows[0].updated_at, 100, "原时间戳不动");
@@ -69,7 +75,7 @@ fn legacy_db_gains_learning_columns_without_losing_rows() {
     );
     assert_eq!(learning(&conn, "k.a"), (0, None), "新列缺省");
     // 二次访问：没有东西可迁，不许 Err、不许改字节
-    assert_eq!(store.list("", 50).unwrap().len(), 1);
+    assert_eq!(store.export_rows().unwrap().len(), 1);
     assert_eq!(learning(&conn, "k.a"), (0, None));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -88,7 +94,7 @@ fn half_migrated_library_self_heals_instead_of_locking() {
     let conn = Connection::open(dir.join("memory.sqlite3")).unwrap();
     assert!(cols(&conn).iter().any(|x| x == "hit_count"));
     let store = MemoryStore::new(&dir, test_resolver());
-    let rows = store.list("", 50).unwrap();
+    let rows = store.export_rows().unwrap();
     assert_eq!(rows.len(), 1, "半迁库照样能读");
     let c = cols(&conn);
     assert!(
@@ -136,7 +142,16 @@ fn learning_columns_survive_every_write_path() {
         (7, Some(999)),
         "reconcile 直写不清学习量"
     );
-    assert_eq!(store.list("", 50).unwrap()[0].value, "v4", "值照旧对齐文件");
+    assert_eq!(
+        store.export_rows().unwrap()[0].value,
+        "v4",
+        "影子跟着 reconcile 直写走到 v4"
+    );
+    // ⚠ 说破一处**已知的分歧**（不是本条的判据，也不许被读成"对齐了文件"）：
+    // `reconcile_upsert` 是"索引向文件对齐"的专用直写面，它只动影子、**故意不反写 md**
+    // （那条纪律原文在 `memory/reconcile.rs` 中间的 `----` 注释里）⇒ 这一跑之后真源停在
+    // v3、库里是 v4。两边不再同值正是 `memory_reconcile` 整项要退役的理由（v1.1 §8 已判、
+    // 刀②c-2 收口），本条只负责"学习量不被任何写路径冲掉"那一维。
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -161,7 +176,7 @@ fn first_touches_race_on_one_library_all_succeed() {
             let b = Arc::clone(&start);
             std::thread::spawn(move || {
                 b.wait();
-                s.list("", 50).map(|r| r.len())
+                s.export_rows().map(|r| r.len())
             })
         })
         .collect::<Vec<_>>();

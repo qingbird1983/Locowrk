@@ -1,14 +1,18 @@
-//! 事实文件的**读回面**（S1 刀②a：真源 = 文件之后，"读"只能从这里来）。
+//! 事实文件的**读回与清点名**（S1 刀②a 立读回面，刀②c-1 加清空）：按键位取一条、
+//! 扫全根、把整根清空——三种"从磁盘拿事实"的查法。
 //!
-//! 单独一片的理由：它管的是"按键位取一条"和"扫全根"两种查法，跟渲染、写路径、
-//! 索引各是不同件事。硬约束一条：**frontmatter 只有 `sync::parse_fact` 一种读法**，
-//! 这片不许自己再 split 一遍——两处解析同一格式迟早读出不一致的字段。
+//! 单独一片的理由：它管的是查法，跟渲染、写路径、索引各是不同件事。硬约束一条：
+//! **frontmatter 只有 `sync::parse_fact` 一种读法**，这片不许自己再 split 一遍——
+//! 两处解析同一格式迟早读出不一致的字段。
+//!
+//! 清点名（`iter_facts` / `clear_facts`）一律经 [`super::layers`] 问"有哪些层"，
+//! 本片不自拼任何 `projects/<x>/facts` 路径——目录形状只许有一处算法。
 
 use std::path::{Path, PathBuf};
 
 use crate::fsutil;
 
-use super::{GLOBAL_DIR, fact_rel_path, projects_dir, sync};
+use super::{fact_rel_path, layers, sync};
 use sync::ParsedFact;
 
 /// 一条已落盘事实的读回形状（字段 = frontmatter 各行的并集，缺失按渲染侧同一兜底）。
@@ -31,7 +35,10 @@ pub struct StoredFact {
     pub path: PathBuf,
 }
 
-/// 一个键位目录的扫描结果。`unreadable` 是**读得到目录、读不动文件**的条数：
+/// 一个键位目录的扫描结果。`unreadable` 是**没能扫出来的东西的条数**，两档同源计数：
+/// ① 读得到目录、读不动某个事实文件（文件级）；② 整个层目录读不动 / 在场但不是
+/// 目录（层级，S1 刀②c-1 起进账，理由见 [`iter_facts`]）。
+///
 /// 召回侧那条「库不可用不许冒充库是空的」的纪律（宿主 `memory/recall.rs`）搬到
 /// 文件制之后就靠这个字段活着——空 `facts` 与"扫不动"必须能分开。
 #[derive(Debug, Default)]
@@ -102,33 +109,32 @@ pub fn read_fact(root: &Path, workspace: &str, key: &str) -> Result<Option<Store
 /// `memory/crud.rs:28-29` 与 `recall.rs:38-40` 都是这条），所以读侧迁移那一步能拿
 /// "既有测试一字未改仍绿"来担保显示顺序没变。
 ///
-/// ⚠ 一处**故意留着没坐实**的盲区（刀②a 登记、刀②b-2 复查后维持原状）：`unreadable`
-/// 只数"读得到目录、读不动文件"那一层。`projects/` 或某层 `facts/` 本身读不动时只被
-/// `continue` 掉、不进账 ⇒ 那种故障下 `facts` 空而 `unreadable = 0`，消费侧看成的正是"没有"。
+/// ⚠ 一处**先前登记为"故意不坐实"、刀②c-1 已坐实**的盲区（订正留痕）：
+/// `unreadable` 过去只数"读得到目录、读不动文件"那一层，`projects/` 或某层 `facts/`
+/// 本身读不动时只被 `continue` 掉 ⇒ 那种故障下 `facts` 空而 `unreadable = 0`，
+/// 消费侧看成的正是"没有"。当时的理由是"没有跨平台可造的夹具"（POSIX `chmod 000`
+/// 造得出、Windows 要动 ACL）。**这个理由被一条更普通的夹具推翻了**：在同一位置上
+/// 放一个**普通文件**冒充目录，`read_dir` 两侧都失败（POSIX `ENOTDIR` / Windows
+/// `ERROR_DIRECTORY`），且都不是 `NotFound` ⇒ 与"层不存在"天然可分。夹具不需要权限、
+/// 不需要平台特判，所以这一档现在进账并有红证（`tests/read_back.rs` 两条）。
 ///
-/// 为什么不顺手补上：补法是先 `read_dir` 失败再 `metadata().is_dir()` 分类，代码三行，
-/// 但**没有任何跨平台可造的夹具能让它报红**——POSIX 上 `chmod 000` 造得出"目录读不动"，
-/// Windows 上要动 ACL（`icacls`），既不可移植也属本仓禁区分级之外不该碰的东西。
-/// 写一段没人盯的守卫比不写更糟：它会让人以为那条纪律已经闭环（AGENTS §7 不许跨平台
-/// 性质单侧跳过，同一条理由反过来也成立——不能两侧都证不了的性质就不谎称已证）。
-/// 现实规避：召回侧的 `partial` 判据（宿主 `memory/recall.rs`）现在按**文件级**计数走，
-/// 权限整层不可用属运维事故级形态，出现时管理页会整体空白而不是少几条——看得见。
+/// 为什么刀②c 必须补而不是继续挂着：sqlite 兜底档还在的时候，层级读不动最多让 md
+/// 侧少一路、库里照样出数；真源翻转之后 md 是**唯一**读数来源，"整层扫不动"与
+/// "从没记过"在用户面前就只剩同一个形状（管理页空白），而那正是这一刀要消灭的
+/// 撒谎形态。
 pub fn iter_facts(root: &Path) -> FactsScan {
     let mut scan = FactsScan::default();
-    // 键位 → 该层目录反查兜底：全局层给 ''，项目层给目录名（不是权威原串）。
-    let mut dirs: Vec<(PathBuf, String)> = vec![(root.join(GLOBAL_DIR), String::new())];
-    if let Ok(rd) = std::fs::read_dir(projects_dir(root)) {
-        for d in rd.flatten() {
-            let facts = d.path().join("facts");
-            if facts.is_dir() {
-                let name = d.file_name().to_string_lossy().into_owned();
-                dirs.push((facts, name));
+    let (dirs, blocked) = layers(root);
+    scan.unreadable = blocked;
+    for layer in &dirs {
+        let rd = match std::fs::read_dir(&layer.facts) {
+            Ok(rd) => rd,
+            // 层不存在 = 该层没记过（`global/` 是惰性建的），不是故障
+            Err(e) if fsutil::is_not_found(&e) => continue,
+            Err(_) => {
+                scan.unreadable += 1;
+                continue;
             }
-        }
-    }
-    for (dir, fallback) in dirs {
-        let Ok(rd) = std::fs::read_dir(&dir) else {
-            continue; // 层不存在 = 该层没记过（不是故障，`global/` 就是惰性建的）
         };
         for f in rd.flatten() {
             let p = f.path();
@@ -138,15 +144,101 @@ pub fn iter_facts(root: &Path) -> FactsScan {
             match std::fs::read_to_string(&p) {
                 Ok(text) => scan
                     .facts
-                    .push(stored_from(&p, &sync::parse_fact(&text), &fallback)),
+                    .push(stored_from(&p, &sync::parse_fact(&text), &layer.hint)),
                 Err(_) => scan.unreadable += 1,
             }
         }
     }
-    scan.facts.sort_by(|a, b| {
+    sort_facts(&mut scan.facts);
+    scan
+}
+
+/// 读**某一层**的全部事实（按键位算目录 ⇒ 只扫那一层，新→旧同一条排序口径）。
+///
+/// 为什么不让调用方拿 [`iter_facts`] 的结果按 `workspace` 字段自己过滤：那个字段在
+/// 人新建的无 frontmatter 文件上是**目录名兜底**（见 [`super::LayerDir::hint`]），
+/// 不是权威原串 ⇒ 按它过滤会把那个项目的文件漏掉、或错归到别的层去。按
+/// [`super::scope_dirs`] 先算出目录再扫，拿到的才是"这一层"这个答案本身。
+///
+/// 层目录不存在 = 这一层还没记过 ⇒ 返回空表（不是故障）。读得动目录却读不动
+/// 某个文件时**跳过那条**（与 `iter_facts` 同一处置）；调用方要的是清单，
+/// 一条坏文件不该把整层报成不可用——那一维由 [`iter_facts`] 的计数负责。
+pub fn facts_of(root: &Path, workspace: &str) -> Result<Vec<StoredFact>, String> {
+    let (dir, _) = super::scope_dirs(root, workspace)?;
+    let rd = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd,
+        Err(e) if fsutil::is_not_found(&e) => return Ok(Vec::new()),
+        Err(e) => return Err(format!("memory 层读取失败 {}: {e}", dir.display())),
+    };
+    let mut out = Vec::new();
+    for f in rd.flatten() {
+        let p = f.path();
+        if !is_fact_file(&p) {
+            continue;
+        }
+        if let Ok(text) = std::fs::read_to_string(&p) {
+            out.push(stored_from(&p, &sync::parse_fact(&text), workspace));
+        }
+    }
+    sort_facts(&mut out);
+    Ok(out)
+}
+
+/// 唯一的排序口径（`updated_at DESC, key ASC`）。
+///
+/// 与现役 SQL 逐字同形的理由见 [`iter_facts`]；抽成函数是因为现在有两个消费者
+/// （全根扫描与单层读取），各写一份闭包迟早漂成两种顺序。
+fn sort_facts(facts: &mut [StoredFact]) {
+    facts.sort_by(|a, b| {
         b.updated_at
             .cmp(&a.updated_at)
             .then_with(|| a.key.cmp(&b.key))
     });
-    scan
+}
+
+/// 清空真源里全部事实文件（逐层删 + 刷该层索引），返回**删掉的条数**。
+///
+/// 为什么住在这片、而不是让宿主自己遍历再逐条 `delete_fact`：只有这里知道
+/// "哪些文件算事实"（[`is_fact_file`] 排 `MEMORY.md` / `tree.md`），也只有
+/// [`super::layers`] 知道层的目录形状。宿主若按扫到的行反推 workspace 再算一次路径，
+/// 会在"人新建的无 frontmatter 文件"上拿到**目录名兜底**当键位 ⇒ 指到别的目录、
+/// 删不到也不报错（`LayerDir::hint` 那句警告就是这个坑的登记处）。
+///
+/// 扫不动的层**中止并 Err**，而不是静默少删：清空是个要报数的动作，"说清了其实
+/// 没清"比失败更难发现。半路 Err 时前面几层已经删了——清空不是事务，这一点如实
+/// 上抛给调用方（管理页据此报错、不显示成功计数）。
+pub fn clear_facts(root: &Path) -> Result<usize, String> {
+    let (dirs, blocked) = layers(root);
+    if blocked > 0 {
+        return Err(format!(
+            "memory 真源有 {blocked} 个层目录扫不动（清空中止，未改动任何文件）"
+        ));
+    }
+    let mut n = 0usize;
+    for layer in &dirs {
+        let rd = match std::fs::read_dir(&layer.facts) {
+            Ok(rd) => rd,
+            Err(e) if fsutil::is_not_found(&e) => continue,
+            Err(e) => {
+                return Err(format!(
+                    "memory 清空时读不动 {}: {e}",
+                    layer.facts.display()
+                ));
+            }
+        };
+        let doomed: Vec<PathBuf> = rd
+            .flatten()
+            .map(|f| f.path())
+            .filter(|p| is_fact_file(p))
+            .collect();
+        for p in doomed {
+            match std::fs::remove_file(&p) {
+                Ok(()) => n += 1,
+                Err(ref e) if fsutil::is_not_found(e) => {}
+                Err(e) => return Err(format!("memory 清空删不掉 {}: {e}", p.display())),
+            }
+        }
+        super::index::refresh_layer(&layer.facts, &layer.index)?;
+    }
+    Ok(n)
 }

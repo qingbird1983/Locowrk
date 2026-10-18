@@ -131,6 +131,29 @@ function memlayoutFace() {
     .join('\n');
 }
 
+/**
+ * 宿主记忆面（S1 刀②c-1 加，SS11 的扫描面）：`memory.rs` + `memory/` 整棵树（排 tests）
+ * + `memory_index.rs` + `memory_files.rs`（这两处是目录式，各自只取主文件，tests 不进面）。
+ *
+ * 口径**刻意不含** `memory_learn/` 与 `recall_log/`：学习档仍按库算 `hit_count`
+ * （specs/05 刀②c-2 待拍板），把它们的 SELECT 数进来这条判据就立不住，而把
+ * "读源已换"这件事说成"全簇无库访问"是谎报。面为什么按名字列而不是整棵
+ * `desktop/src-tauri/src` 扫：那棵树里 `organize/`、`state/`、`commands/` 各自有
+ * 与兜底档无关的同名字段（`files_on` 在 `state/` 里 legitimately 仍存在），
+ * 判据一宽就变成"这个名字全仓不许出现"——那不是这条判据要说的话。
+ */
+function hostMemoryFace() {
+  const tree = walkExt('desktop/src-tauri/src/memory', /\.rs$/).filter(
+    (rel) => !/(^|\/)tests(_?\.rs|\/)/.test(rel),
+  );
+  const heads = [
+    'desktop/src-tauri/src/memory.rs',
+    'desktop/src-tauri/src/memory_index.rs',
+    'desktop/src-tauri/src/memory_files.rs',
+  ].filter((rel) => fs.existsSync(path.join(ROOT, rel)));
+  return [...tree, ...heads].map((rel) => read(rel)).join('\n');
+}
+
 /** 外点收口形状 = 挂到 document/window 上的 `pointerdown`（口径见上方注释）。 */
 const DISMISS_SHAPE = /(?:document|window)\.addEventListener\(\s*"pointerdown"/;
 const dismissCount = (m) => m.comps.filter((s) => DISMISS_SHAPE.test(s)).length;
@@ -248,6 +271,7 @@ function snapshot() {
     comps: pf.comps,
     frontSrc: pf.frontSrc,
     memlayoutTree: memlayoutFace(),
+    hostMemoryTree: hostMemoryFace(),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -266,8 +290,11 @@ const CHECKS = [
   ],
   [
     'SS1b',
-    '且那 1 处必须落在 memlayout/mod.rs 的 PROJECTS_DIR 常量上（漂到别处就是第二个出处）',
-    (m) => String(countOf(m.memlayout, /const PROJECTS_DIR: &str = "projects";/)),
+    '且那 1 处必须落在 memlayout **子树**的 `PROJECTS_DIR` 常量上（漂到别处就是第二个出处）。' +
+      '⚠ 口径订正（S1 刀②c-1）：这条原先写死扫 `memlayout/mod.rs` 单文件，而寻址面拆进 ' +
+      '`paths.rs` 之后左值 2→0、报了一条"定义丢了"的**假红**——与刀②a 时 `SS10b` 撞过的' +
+      '同一个洞（目录式模块面会把写死单文件的扫描面搞瞎），这次直接按学到的改，不再留第二处',
+    (m) => String(countOf(m.memlayoutTree, /const PROJECTS_DIR: &str = "projects";/)),
     '1',
   ],
   [
@@ -458,6 +485,34 @@ const CHECKS = [
       String(countOf(m.memIndex, /pub\(crate\) use plugin_api::memlayout::\{[^}]*MAX_INDEX_LINES[^}]*\};/)),
     '1',
   ],
+  [
+    'SS11',
+    '「sqlite 兜底档」这套概念在宿主记忆面里**调用/定义/字段三档形状**出现次数恒 0' +
+      '（S1 刀②c-1 拆掉的五个名字：`files_face` / `with_files` / `files_on` 是真源可不可选的旧判据，' +
+      '`index_rows` / `from_rows` 是"没接线就去库里现合成"那条通路本体）。' +
+      '⚠ 数的是**形状**不是名字：注释里提旧名字是必要留痕（那五处头注都在解释为什么它没了），' +
+      '按名字数会得到 8 条假红——SS6 早就为同一件事立过这条口径。' +
+      '为什么用结构判据而不是行为测试："未接线的 store"在新形状里**根本无法构造**' +
+      '（句柄由数据根算出），那条旧用例 `files_switch_off_keeps_pure_sqlite` 一删就没有任何' +
+      '测试还挡得住有人把那一档塞回来 ⇒ 这三档 0 就是那块墓碑。' +
+      '口径不含 `memory_learn/` 与 `recall_log/`：学习档仍按库算 `hit_count`，' +
+      '那是**另一个功能**不是兜底档（specs/05 刀②c-2 待拍板），把它们数进来这条判据就立不住。' +
+      '第三档数的是**字段被读**（`self.files_on`）而不是任何同名参数：' +
+      '`memory_files.rs` 里 `spawn_initial_export` 的 `files_on` 是对账/首启导出的空转开关，' +
+      '它决定"要不要跑后台那一轮"，不决定"数据存哪儿"⇒ 合法在场（判据第一版把它数进去过，' +
+      '得到 1 条假红）',
+    (m) =>
+      [
+        countOf(m.hostMemoryTree, /\.\s*(?:files_face|with_files|index_rows|from_rows)\s*\(/),
+        countOf(m.hostMemoryTree, /\bfn\s+(?:files_face|with_files|index_rows|from_rows)\b/),
+        // 第三档数的是**字段读取**形状而不是声明：`memory_files.rs` 里
+        // `spawn_initial_export(… files_on: Arc<dyn Fn() -> bool …)` 那个参数是
+        // **对账/首启导出的空转开关**（它决定要不要跑后台那一轮，不决定数据存哪儿），
+        // 合法在场。兜底档的特征形状是"store 自己存了这个闭包并在读写路径上问它"。
+        countOf(m.hostMemoryTree, /\bself\.files_on\b/),
+      ].join('|'),
+    '0|0|0',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -468,6 +523,11 @@ const FLOORS = [
   // 刀②a 起 memlayout 是目录式模块：子树面为空 = 目录改名或 walkExt 路径写错，
   // 那时 SS10b 的"读不到定义"会被读成"定义丢了"——先让下限把面本身的问题报出来。
   ['memlayout 子树面非空', (m) => (m.memlayoutTree.length > 2000 ? 1 : 0), 1],
+  // SS11 的期望是"0 次"——面瞎了（目录改名 / walkExt 路径写错 / 忘了 .map(read)）
+  // 会把"什么都没扫到"读成"一个都没出现"= 恒绿。两条下限各挡一种瞎法：
+  // 第一条挡面为空，第二条挡"面里连被换掉的那个函数本体都没有"（= 扫错了树）。
+  ['宿主记忆面非空', (m) => (m.hostMemoryTree.length > 4000 ? 1 : 0), 1],
+  ['宿主记忆面含列举实现', (m) => countOf(m.hostMemoryTree, /fn md_rows/), 1],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
@@ -515,7 +575,11 @@ if (SELFTEST) {
   // 每项一条内存变异：判据必须为它变红。打不中 ⇒ 对照无效；不红 ⇒ 该项零证明力。
   const MUT = {
     SS1: (m) => m.rust.push('pub fn sneaky() -> String { format!("{}/x", "projects") }'),
-    SS1b: (m) => (m.memlayout = m.memlayout.replace('const PROJECTS_DIR: &str = "projects";', 'const PROJECTS_DIR: &str = "proj";')),
+    SS1b: (m) =>
+      (m.memlayoutTree = m.memlayoutTree.replace(
+        'const PROJECTS_DIR: &str = "projects";',
+        'const PROJECTS_DIR: &str = "proj";',
+      )),
     // 索引预算三档各一条窄变异（S1 刀①②a）：SS10 数"全仓是不是只有一份数字"，
     // SS10b 数"那一份在不在 memlayout 子树"，SS10c 数"宿主是不是真的再导出"。
     // 三条互不遮挡靠的是同一机制：m.rust / m.memlayoutTree / m.memIndex 是三次独立读盘，
@@ -531,6 +595,14 @@ if (SELFTEST) {
         'pub(crate) use plugin_api::memlayout::{MAX_INDEX_CHARS, MAX_INDEX_LINES};',
         'pub(crate) const MAX_INDEX_LINES: usize = 200;',
       )),
+    // 刀②c-1 的墓碑变异：把"没接线就回库里查"那一档塞回宿主记忆面。
+    // 这条变异**必须存在**的理由写在 SS11 的说明里：旧用例 `files_switch_off_keeps_pure_sqlite`
+    // 测的正是被本刀取消的行为，删掉它之后没有任何行为测试还能构造"未接线的 store"
+    // （句柄由数据根算出 ⇒ 那个状态在类型上就不存在）⇒ 挡复活只剩结构判据这一层，
+    // 而结构判据不配变异就等于"抄了一个当前恰好为 0 的数字"。
+    SS11: (m) =>
+      (m.hostMemoryTree +=
+        '\nif self.files_face().is_none() { return self.index_rows(&ws, 200); }\n'),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

@@ -63,8 +63,13 @@ pub(crate) fn build(init: Init) -> Stack {
         crate::workspace::session_context_resolver(sessions_dir.clone(), root.clone(), fs_roots_of);
     plugin_host::set_session_context_resolver(Arc::clone(&session_ctx));
     let workspace_of = crate::workspace::workspace_view(Arc::clone(&session_ctx));
-    // F1 人类层（文件化设计 §3）：md 句柄 + 总开关闭包——MemoryStore 四条
-    // 宿主写路径（提取 write / 管理页 update·delete·clear）成功后同步 md。
+    // F1 人类层（文件化设计 §3）：md 句柄。**S1 刀②c-1 起它是真源而不是"同步对象"**，
+    // 所以 `MemoryStore` 自己按同一个数据根算一份（`MemoryFiles` 只是路径持有者、
+    // 构造不碰盘），这里这份是给 reconcile 与「打开文件夹」两枚命令用的。
+    // 两份句柄同一算式（`<根>/memory`）⇒ 不存在"两个家"的漂移面。
+    // settings `memory.files` 那个闭包（下面的 `files_on`）现在**管不到宿主读写面**：
+    // 真源没有可退的第二处。它剩下的作用面是插件侧 env 与 reconcile/导出空转，
+    // 收口（改义或退役）登记在 specs/05 刀④。
     let memory_files = Arc::new(crate::memory_files::MemoryFiles::new(&root));
     let files_on = {
         let s = Arc::clone(&settings);
@@ -85,7 +90,6 @@ pub(crate) fn build(init: Init) -> Stack {
         crate::recall_receipt::ReceiptSink::new(Arc::clone(&recall_log), Arc::clone(&workspace_of));
     let memory = Arc::new(
         MemoryStore::new(&root, Arc::clone(&workspace_of))
-            .with_files(Arc::clone(&memory_files), Arc::clone(&files_on))
             .with_repo_context(Arc::clone(&repo_on))
             // 未接线时召回行为与改前逐字段一致（等价判据在 recall_log/tests/）。
             .with_recall_log(Arc::clone(&recall_log)),

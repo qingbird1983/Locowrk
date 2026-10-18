@@ -120,16 +120,30 @@ fn recall_rows_are_identical_with_and_without_instrumentation() {
     // ⚠ 时间戳必须**钉死**，不能用常规 `write`（它内部取 `now_secs()`）：两侧各写
     // 三行，只要跨过一秒边界，同一条就在两侧带上不同的 `updated_at`，排序随之不同
     // ⇒ 这条等价判据会红在时钟上而不是行为上（2026-10-12 首次撞上：单跑绿、
-    // 全量跑红）。`reconcile_upsert` 是既能指定 `at`、又不触发 md 双写的入口。
+    // 全量跑红）。
+    //
+    // ⚠ 造数据从 `reconcile_upsert` 换成 **`memlayout::write_fact`**（S1 刀②c-1 的必然后果）：
+    // 前者只写影子不写真源，读源换到 md 之后它造的三行一条也读不到 ⇒ 这条判据会红在
+    // 最后那句"阳性对照：不是空对空"上。**那次红是判据在正常工作**：它拒绝让
+    // "两侧都召回 0 行" 冒充 "召回逐字段相等"。`write_fact` 是既能指定 `at`、又走
+    // 生产渲染（frontmatter 落 `metadata.updated`）的那个入口。
     const BASE: i64 = 1_700_000_000;
     for (i, (ws, key, value)) in SEED.iter().enumerate() {
         let at = BASE + i as i64;
-        plain
-            .reconcile_upsert(ws, key, value, "t", "explicit", at)
+        for store in [&plain, &store] {
+            plugin_api::memlayout::write_fact(
+                store.md_root(),
+                &plugin_api::memlayout::FactEntry {
+                    workspace: ws,
+                    key,
+                    value,
+                    tags: "t",
+                    source: "explicit",
+                    updated_at: at,
+                },
+            )
             .unwrap();
-        store
-            .reconcile_upsert(ws, key, value, "t", "explicit", at)
-            .unwrap();
+        }
     }
 
     let a = shape(&plain.recall(Some("ws-session"), 10));
@@ -157,18 +171,33 @@ fn unwired_store_recalls_normally_and_builds_no_database() {
     );
 }
 
+/// **影子坏了不再等于"源不可用"**（S1 刀②c-1 之后这一句才是这一族的正解）。
+///
+/// 原先这条叫 `unavailable_memory_store_does_not_write_a_row`，内容是"打不开库 ⇒ 一行
+/// 都不记"（`n_candidates` 取不到，记 0 就是把"库不可用"冒充成"库是空的"）。读源换成
+/// 真源之后，`memory.sqlite3` 坏了根本问不到召回什么事：真源读得动、读数完整 ⇒
+/// **该记就记**。那条"宁缺毋伪"的纪律没有消失，它转到了 `partial` 那一维上，红证在
+/// `memory/tests/md_read.rs` 的 `an_incomplete_scan_writes_no_inject_row`（文件级）与
+/// `a_blocked_layer_also_suppresses_the_inject_row`（层级）。
+///
+/// 这条留在本簇的理由：它盯的是"**观测面不许因为一份没人读的副本坏掉而改写现场**"——
+/// 写路径不能被影子拖倒，也不能因为影子失败就不记本可以记的账。
 #[test]
-fn unavailable_memory_store_does_not_write_a_row() {
-    // 「库不可用」不许冒充「库是空的」：连 n_candidates 都取不到时**不记**。
-    // 现场 = memory.sqlite3 的位置被一个普通文件占着（memory/tests.rs 的同类构造）。
+fn a_broken_shadow_db_still_recalls_and_still_logs() {
     let dir = temp_dir("unavailable");
     std::fs::write(dir.join("memory.sqlite3"), b"not a database").unwrap();
     let log = RecallLog::at(dir.join("usage.sqlite3"));
     let store = MemoryStore::new(&dir, test_resolver()).with_recall_log(log.clone());
+    store
+        .write("", "pref.lang", "中文", "", "explicit")
+        .expect("真源写得动：影子打不开不算失败");
 
-    assert!(store.recall(Some("ws-session"), 10).is_empty(), "降级为空");
-    assert!(rows(&log).is_empty(), "打不开库时一行都不许记");
-    assert_eq!(log.stats().unwrap().store_empty_ratio, None);
+    assert_eq!(store.recall(Some("ws-session"), 10).len(), 1);
+    assert_eq!(
+        log.stats().unwrap().injections,
+        1,
+        "读数完整就该记这一行（影子坏了不是不记的理由）"
+    );
 }
 
 #[test]

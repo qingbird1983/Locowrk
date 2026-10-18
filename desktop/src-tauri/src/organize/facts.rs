@@ -59,10 +59,17 @@ pub(crate) fn layer_of(card_type: &str, workspace: &str) -> Option<String> {
 
 /// 读现有 key 清单（全局层 + 本项目层），输出**带层标**的行（`key (project)`）。
 ///
-/// 带层标不是装饰：同名 key 允许在两层各存一行（主键含 workspace），模型若看
+/// 带层标不是装饰：同名 key 允许在两层各存一行（键位含 workspace），模型若看
 /// 不到层，就会把一条项目事实标成 `user` 去"更新"全局行 —— 那正是我们最不想要
 /// 的污染。读不到 = 空清单（提示词写「（暂无）」），**不把"读不到"说成"没货"**
 /// （Q1a 那条口径同源）。
+///
+/// **读源 = 真源 md**（S1 刀②c-1）：走 `memlayout::facts_of` 按**键位算出那一层的目录**
+/// 再扫。这里刻意不拿 `store.list()` 当代理——那是管理页钳过上限的跨层视图，而本清单
+/// 要的是"这一层有哪些 key"；拿高层 API 当底层代理在这个仓库里已经红过两次
+/// （`memory_reconcile/tests.rs` 与 `memory/tests/md_read.rs` 的头注各记一次）。
+/// 也不按 `iter_facts` 结果的 `workspace` 字段过滤：人新建的无 frontmatter 文件那一格
+/// 读到的是目录名兜底，不是权威串，按它分组会漏掉该层的文件（`LayerDir::hint` 的警告）。
 pub(crate) fn existing_keys(store: &MemoryStore, workspace: &str) -> Vec<String> {
     let ws = crate::workspace::scope_key(Some(workspace));
     let mut out: Vec<String> = Vec::new();
@@ -72,10 +79,10 @@ pub(crate) fn existing_keys(store: &MemoryStore, workspace: &str) -> Vec<String>
             // 未归属会话：项目层不存在，别把全局行报成项目行
             continue;
         }
-        match store.index_rows(side, MAX_EXISTING_KEYS) {
-            Ok(rows) => {
-                for r in rows {
-                    let line = format!("{} ({label})", r.key);
+        match plugin_api::memlayout::facts_of(store.md_root(), side) {
+            Ok(facts) => {
+                for f in facts {
+                    let line = format!("{} ({label})", f.key);
                     if seen.insert(line.clone()) {
                         out.push(line);
                     }

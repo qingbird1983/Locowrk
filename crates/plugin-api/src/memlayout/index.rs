@@ -52,12 +52,23 @@ fn clamp_index(lines: Vec<String>) -> (Vec<String>, bool) {
     (kept, false)
 }
 
-/// 重建一个键位的 MEMORY.md 索引（一文件一行，文件名稳定序，**落盘前按 §2.1
-/// 预算钳**）。facts 目录不存在时也会创建（空索引自描述）。
+/// 重建一个键位的 MEMORY.md 索引（按键位算目录 ⇒ 写侧用这条）。
 pub fn refresh_index(root: &Path, workspace: &str) -> Result<(), String> {
     let (dir, index_path) = scope_dirs(root, workspace)?;
+    refresh_layer(&dir, &index_path)
+}
+
+/// 重建**已知某一层**的索引（拿事实目录 + 索引路径，不按键位算）。
+///
+/// 为什么要有这一条而不是都走 [`refresh_index`]：项目层里"这个文件属于哪个权威
+/// workspace 串"只有按键位算的那条路能回答，而读侧与清空侧手里只有磁盘在场
+/// （[`super::layers`] 给的正是目录，不是键位）。硬要反推就会拿目录名再去拼一次
+/// 路径 ⇒ 指到别的目录，删不掉也不报错。
+/// facts 目录不存在时**照旧创建**（与改前的 `refresh_index` 逐字节同形：项目层的
+/// 索引坐在 `facts/` 的上一层，只建父目录会让"空 facts 自描述"这个既有形状变掉）。
+pub(crate) fn refresh_layer(facts_dir: &Path, index_path: &Path) -> Result<(), String> {
     let mut lines: Vec<String> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
+    if let Ok(entries) = std::fs::read_dir(facts_dir) {
         for f in entries.flatten() {
             let name = f.file_name();
             let Some(stem) = name.to_str().and_then(|s| s.strip_suffix(".md")) else {
@@ -81,8 +92,8 @@ pub fn refresh_index(root: &Path, workspace: &str) -> Result<(), String> {
     if truncated {
         body.push_str(&format!("\n{INDEX_TRUNCATED_NOTE}"));
     }
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("memory 目录创建失败 {}: {e}", dir.display()))?;
-    sync::atomic_write(&index_path, &format!("{body}\n"))
+    std::fs::create_dir_all(facts_dir)
+        .map_err(|e| format!("memory 目录创建失败 {}: {e}", facts_dir.display()))?;
+    sync::atomic_write(index_path, &format!("{body}\n"))
         .map_err(|e| format!("memory 索引写入失败 {}: {e}", index_path.display()))
 }

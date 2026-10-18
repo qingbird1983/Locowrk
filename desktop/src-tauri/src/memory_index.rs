@@ -10,13 +10,12 @@
 //! 那条禁的是把事实全文灌进 system）：一行一条 `- <key> — <hook>`，正文仍按需
 //! `memory_read`。这与 ZCode 的 `MEMORY.md` 常驻索引同构（MR 稿 §1.2）。
 //!
-//! 两档数据源，S1 刀②b-3 起**判据是"人类层有没有接线"**，不是"md 像不像有货"：
-//! 1. 接线 ⇒ **只读** `<数据根>/memory/projects/<项目目录>/MEMORY.md` 的指针行；文件缺失
-//!    或只有 `# 记忆索引` 空壳标题（2026-10-12 本机实测就是这个形态：`TITY` 目录里根本没有
-//!    `MEMORY.md`，另外三个项目都只有空壳）⇒ **整节如实缺席**。真源就是文件，
-//!    "文件里没有指针行"等于"这个项目没记过"，不许再去库里补一份已不再是真源的副本。
-//! 2. 未接线（单测 / 降级启动）才由 sqlite 该键位的行现合成，**不回写文件**——
-//!    这一档是暂时状态，刀②c 连同 `index_rows` 一起删。
+//! 数据源**只有一个**（S1 刀②c-1 起）：`<数据根>/memory/projects/<项目目录>/MEMORY.md`
+//! 里的指针行。文件缺失或只有 `# 记忆索引` 空壳标题（2026-10-12 本机实测就是这个形态：
+//! `TITY` 目录里根本没有 `MEMORY.md`，另外三个项目都只有空壳）⇒ **整节如实缺席**。
+//! 真源就是文件，"文件里没有指针行"等于"这个项目没记过"——先前还有一档"人类层没接线
+//! 才由 sqlite 该键位的行现合成"，刀②c-1 连同 `MemoryStore::index_rows` 一起删了：
+//! 库里那份副本不再是同一件事的答案，而"没接线"这个状态本身也没了。
 //!
 //! 预算（稿 §6）：200 行 / 25,000 字符，与写侧**同一份常量**（`memlayout`，SS10 三档盯着），
 //! 超限附的那句 WARNING 也与写侧**同一串**；文件里本来就带着这句时（写侧钳出来的）
@@ -28,7 +27,8 @@
 //! 字节钉死不在本件里做：整块随 [`crate::memory`] 的 `MemorySource` 交付，
 //! 吃 `MemoryInject` 既有的会话预取缓存（键 = `(session_id, scope_id)`）。
 
-use crate::memory::FactLine;
+use std::collections::HashMap;
+use std::path::Path;
 
 /// 索引预算的**唯一出处在 `plugin_api::memlayout`**（写侧落盘的 `MEMORY.md` 与
 /// 注入侧共用同一份数字——两头各写一份迟早会漂成"文件里 210 行、注入只给看 200 行"）。
@@ -50,41 +50,64 @@ const LEAD_IN: &str = "Project memory index — pointers only, never the bodies 
 /// 消掉的暂时状态。裸名 `TRUNCATED_NOTE` 保留，本模块与它的测试继续按旧名取用。
 const TRUNCATED_NOTE: &str = plugin_api::memlayout::INDEX_TRUNCATED_NOTE;
 
-/// 由 `MEMORY.md` 投影合成索引内文（S1 刀②b-3 起这是**人类层可用时唯一的一档**）。
+/// 由 `MEMORY.md` 投影合成索引内文（**唯一一档**）。
 ///
-/// 返回 `None` = 这一节缺席（文件化未接线 / 读不到 / 只有标题 / 一行指针都没有）。
-/// 刀②b-3 把两档的关系**反过来**了：原先"md 空壳就退回库里现合成"是双写时代的
-/// 人可编辑优先；md 成真源之后，"文件里没指针行"就是**这个项目确实没记过**，
-/// 如实缺席，不再去库里找一份已经不再是真源的副本。
+/// 返回 `None` = 这一节缺席（读不到 / 只有标题 / 一行指针都没有）。"文件里没指针行"
+/// 就是**这个项目确实没记过**，如实缺席，不去库里找一份已不再是真源的副本。
 ///
-/// 另外这里要把写侧那句截断说明**认出来并交给 `finish`**：`pointer_lines_from_md`
-/// 只收 `- ` 开头的指针行，那句 WARNING 会被剥掉 ⇒ 若不当标记处理，索引被截断这件事
-/// 到模型那一侧就消失了（正是"人打开文件夹看到截断、模型看不到"的那种分叉）。
-pub(crate) fn from_md(md_body: Option<&str>) -> Option<String> {
+/// 两件必须在这里做的事：
+/// ① **认出文件里那句截断说明并透传**：`pointer_lines_from_md` 只收 `- ` 开头的指针行，
+///    那句 WARNING 会被剥掉 ⇒ 若不当标记处理，索引被截断这件事到模型那一侧就消失了
+///    （正是"人打开文件夹看到截断、模型看不到"的那种分叉）。
+/// ② **按 `ages` 现算陈旧标注**（`- [stem](stem.md) — hook` 里那个 stem 对应的事实
+///    最近改动时间）。这一维必须站在注入侧现算，不能由写侧落进文件：落盘时写死的
+///    "3 天前"在没人再写它的时候**永远不会自己变陈旧**。刀②b-3 把读源扳到 md 时
+///    把这条静默丢了（当时只有已退役的 `from_rows` 那档在算），刀②c-1 补回并留测试。
+pub(crate) fn from_md(
+    md_body: Option<&str>,
+    ages: &HashMap<String, i64>,
+    now: i64,
+) -> Option<String> {
     let body = md_body?;
     let truncated_by_file = body.lines().any(|l| l.trim_end() == TRUNCATED_NOTE);
-    finish(pointer_lines_from_md(Some(body))?, truncated_by_file)
+    let mut lines = pointer_lines_from_md(body)?;
+    for line in &mut lines {
+        // `unwrap_or_default` = 对不上号就不标（宁缺毋假）：人可以在索引里写自由的一行，
+        // 而"这行没有新鲜度"与"这行是新的"是两个不同的话。
+        let marker = stem_of(line)
+            .and_then(|stem| ages.get(stem))
+            .map(|at| stale_marker(*at, now))
+            .unwrap_or_default();
+        line.push_str(&marker);
+    }
+    finish(lines, truncated_by_file)
 }
 
-/// 由 sqlite 该键位的行现合成（**兜底档**，不回写文件——稿 §3 真源声明）。
+/// 从一行指针文本里取出文件名主干（`- [x](x.md) — hook` → `x`）。
 ///
-/// 刀②b-3 之后这一档的**触发条件变了**：不再是"md 空壳就退到这里"，而是"人类层
-/// 压根没接线"（单测与降级启动）。md 是真源，空壳文件就是"这个项目没记过"。
-pub(crate) fn from_rows(rows: &[FactLine], now: i64) -> Option<String> {
-    let lines = rows
-        .iter()
-        .map(|r| {
-            // `- <key> — <tags>（N 天前）`（稿 §4.1 原文形状；无 tags 就不留空钩子）
-            let hook = one_line(&r.tags);
-            let stale = stale_marker(r.updated_at, now);
-            if hook.is_empty() {
-                format!("- {}{stale}", r.key)
-            } else {
-                format!("- {} — {hook}{stale}", r.key)
-            }
-        })
-        .collect::<Vec<_>>();
-    finish(lines, false)
+/// 取的是**链接目标**而不是方括号里的显示名：`refresh_index` 按磁盘文件名写这一行，
+/// 而 key 与文件名主干可以不同（key 里的非法字符被安全化、Windows 保留名前缀 `_`），
+/// 所以能与事实文件对上的只有那个 `(...md)`。不是这个形状的行 = `None`。
+fn stem_of(line: &str) -> Option<&str> {
+    let tail = line.split("](").nth(1)?;
+    let target = tail.split(')').next()?;
+    target.strip_suffix(".md")
+}
+
+/// 某一层「文件名主干 → 最近改动时间」（陈旧标注的输入）。
+///
+/// 按 **stem** 建表而不是按 key：索引行里写的是文件名，而 key 与文件名主干可以不同
+/// （安全化 / Windows 保留名前缀 `_`）。取这一层走 `memlayout::facts_of`（按键位算目录）
+/// 而不是 `iter_facts` 之后按 `workspace` 字段过滤——那个字段在人新建的无 frontmatter
+/// 文件上只是目录名兜底，按它过滤会把这种文件漏掉。
+pub(crate) fn ages_of_layer(root: &Path, workspace: &str) -> Result<HashMap<String, i64>, String> {
+    let mut map = HashMap::new();
+    for fact in plugin_api::memlayout::facts_of(root, workspace)? {
+        if let Some(stem) = fact.path.file_stem().and_then(|s| s.to_str()) {
+            map.insert(stem.to_string(), fact.updated_at);
+        }
+    }
+    Ok(map)
 }
 
 /// 共用的收尾：导语 + 钳制 + 截断指路。
@@ -115,9 +138,10 @@ fn finish(lines: Vec<String>, truncated_by_file: bool) -> Option<String> {
 /// 从 `MEMORY.md` 里取指针行（`- [Title](file.md) — hook` 形态，与
 /// `plugin_api::memlayout::refresh_index` 的写出格式同源——**照生产构造代码抄**）。
 ///
-/// `None` = 一个指针行都没有（只有标题 / 全是注释 / 空文件 / 读不到）。
-fn pointer_lines_from_md(md_body: Option<&str>) -> Option<Vec<String>> {
-    let body = md_body?;
+/// `None` = 一个指针行都没有（只有标题 / 全是注释 / 空文件）。参数是 `&str` 而不是
+/// `Option<&str>`：文件读不到那一档由调用方（`from_md` 的 `md_body?`）处理，
+/// 在这里再套一层 Option 只会让"没有文件"与"文件里没指针行"两个意思混成一个。
+fn pointer_lines_from_md(body: &str) -> Option<Vec<String>> {
     let mut out = Vec::new();
     let mut in_html_comment = false;
     for raw in body.lines() {
@@ -174,27 +198,6 @@ fn stale_marker(updated_at: i64, now: i64) -> String {
     }
     let days = age / 86_400;
     format!("（{days} days old）")
-}
-
-/// 单行化 + 截断（与 `memlayout::one_line` 同纪律，这里自带一份以免跨模块
-/// 依赖把"注入面"和"文件层"耦在一起）。
-fn one_line(s: &str) -> String {
-    let flat: String = s
-        .chars()
-        .map(|c| {
-            if c == '\n' || c == '\r' || c == '\t' {
-                ' '
-            } else {
-                c
-            }
-        })
-        .collect();
-    let trimmed = flat.trim();
-    if trimmed.chars().count() > 80 {
-        format!("{}…", trimmed.chars().take(80).collect::<String>())
-    } else {
-        trimmed.to_string()
-    }
 }
 
 #[cfg(test)]

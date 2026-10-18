@@ -6,8 +6,13 @@
 //!
 //! 本片是 trait 实现，整块自包含（原文那对花括号就在此起此落，不需要补外壳）。用的都是
 //! 别片已抬到 `pub(super)` 的入口（`open_conn` / `recall_quiet` / `log_inject_keys` 与
-//! 那四个字段），加上原本就 `pub(crate)` 的 `md_index_body` / `index_rows`；
-//! 没有一处为"方便"而抬宽。
+//! 那四个字段），加上原本就 `pub(crate)` 的 `md_index_body`；没有一处为"方便"而抬宽。
+//!
+//! ⚠ **本片是宿主读面里最后一条仍按库寻址的通路**：`recall_relevant`（学习档，
+//! `weights.enabled=true` 时才走）从库里取候选并读 `hit_count` / `last_hit_at` 加权。
+//! 它不是"兜底档"而是**另一个功能**（四信号语义排序 + 写回强化），摘掉它 = 关掉学习档，
+//! 那是排序口径的产品决策，已登记 specs/05 刀②c-2 待拍板；`recall` 本体（现役参照系）
+//! 与 `project_index` 都只读 md。
 
 use std::sync::Arc;
 
@@ -182,37 +187,22 @@ impl MemorySource for MemoryStore {
 
     /// Q2（MR 稿 §4.1）：项目记忆**索引**（指针行，不含正文）。
     ///
-    /// 未归属会话 = 没有"本项目"可言 ⇒ `None`（整节缺席）。S1 刀②b-3 起**读源 = md**，
-    /// 库里现合成那一档只在"人类层没接线"时才有资格（暂态，刀②c 取消）；md 里
-    /// 没有指针行就如实缺席，**不回写文件、也不去库里补一份不再是真源的副本**。
-    /// 取数失败 = `None` + 一次告警，绝不合成一条"看起来是空索引"的块——
-    /// 那会把"读不到"骗成"没东西可注入"。
+    /// 未归属会话 = 没有"本项目"可言 ⇒ `None`（整节缺席）。S1 刀②b-3 把两档的关系
+    /// 反了过来（md 里没指针行就是**这个项目确实没记过**，如实缺席），刀②c-1 把剩下
+    /// 那档——"人类层没接线 ⇒ 去库里现合成"——连同 `index_rows` 一起删掉：真源 = 文件
+    /// 之后，库里那份副本已经不是同一件事的答案了，而且现在也没有"没接线"这个状态。
+    /// 取数失败同样 `None`，**绝不合成一条"看起来是空索引"的块**——那会把"读不到"
+    /// 骗成"没东西可注入"。
     fn project_index(&self, session_id: Option<&str>) -> Option<String> {
         let ws = self.scope_of_session(session_id);
         if ws.is_empty() {
             return None;
         }
-        // 刀②b-3：**两档的关系反过来了**。原先"md 优先、空壳就退库里现合成"是双写
-        // 时代的人可编辑优先；md 成真源之后"文件里没指针行"就是这个项目确实没记过，
-        // 如实缺席。库里那一档现在只剩一种资格——人类层没接线（单测 / 降级启动），
-        // 那一档由刀②c 取消。判据因此是 `files_face()` 有没有句柄，不是 md 内容
-        // 像不像有货（后者正是上一版会"读到空气"的地方：本机实测 TITY 目录里
-        // 根本没有 `MEMORY.md`，另外三个项目都只有空壳标题）。
-        if self.files_face().is_none() {
-            return match self.index_rows(&ws, crate::memory_index::MAX_INDEX_LINES + 1) {
-                Ok(rows) => crate::memory_index::from_rows(&rows, now_secs()),
-                Err(e) => {
-                    // 每 step 都会走到这里，只告警一次（`warned` 那位是给 recall 的，
-                    // 不复用——两边失效原因不同，混用会让其中一边永远静默）
-                    static ONCE: std::sync::Once = std::sync::Once::new();
-                    ONCE.call_once(|| {
-                        tracing::warn!("memory index unavailable（项目索引注入降级为缺席）: {e}")
-                    });
-                    None
-                }
-            };
-        }
-        crate::memory_index::from_md(self.md_index_body(&ws).as_deref())
+        // 陈旧标注的输入 = 这一层「文件名主干 → updated_at」。取不到（算不出目录）
+        // 就当没有 ages ⇒ 那一行不标注，**而不是整节缺席**：新鲜度是派生量，
+        // 它缺席不该把索引本身一起带走。每 step 都会走到这里 ⇒ 不 warn（刷日志）。
+        let ages = crate::memory_index::ages_of_layer(self.files().root(), &ws).unwrap_or_default();
+        crate::memory_index::from_md(self.md_index_body(&ws).as_deref(), &ages, now_secs())
     }
 }
 

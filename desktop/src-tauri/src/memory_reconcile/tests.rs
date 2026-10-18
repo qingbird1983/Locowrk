@@ -19,13 +19,13 @@ fn temp_dir(tag: &str) -> PathBuf {
     crate::testutil::unique_dir(&format!("reconcile-{}", tag))
 }
 
-/// 开着文件层的宿主存储（sqlite 与 md 同根）。
+/// 宿主存储 + 同一数据根下的人类层句柄（刀②c-1 起 store 自己按数据根算 md 根，
+/// 这里这份只是本模块函数签名要一个 `&MemoryFiles`；两份句柄同一算式 = 同一个目录）。
 fn setup(tag: &str) -> (MemoryStore, MemoryFiles, PathBuf) {
     let dir = temp_dir(tag);
     std::fs::create_dir_all(&dir).unwrap();
     let files = MemoryFiles::new(&dir);
-    let store = MemoryStore::new(&dir, Arc::new(|_| None))
-        .with_files(Arc::new(files.clone()), Arc::new(|| true));
+    let store = MemoryStore::new(&dir, Arc::new(|_| None));
     (store, files, dir)
 }
 

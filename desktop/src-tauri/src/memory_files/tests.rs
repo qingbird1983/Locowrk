@@ -171,11 +171,22 @@ fn initial_export_skips_existing_files_and_regenerates_trees() {
     let sessions_dir = root.join("sessions");
     std::fs::create_dir_all(&sessions_dir).unwrap();
     let memory = MemoryStore::new(&root, resolver());
+    // 存量形状 = **库里已有行、md 还没有**（首启导出要补的正是这个洞）。刀②c-1 之后
+    // `write()` 两边都落 ⇒ 用它造不出这个形状，只能经 `reconcile_upsert` 那条
+    // 「直写行、绝不反写 md」的专用面（`memory/reconcile.rs` 中间那段 `----` 注释就是
+    // 这句话的出处）。它不归一键位 ⇒ 这里显式过 `scope_key`，与生产 `write()` 同串。
     memory
-        .write("", "pref.pnpm", "always pnpm", "", "explicit")
+        .reconcile_upsert("", "pref.pnpm", "always pnpm", "", "explicit", 100)
         .unwrap();
     memory
-        .write(r"F:\proj\Exp", "db.choice", "sqlite", "", "explicit")
+        .reconcile_upsert(
+            &crate::workspace::scope_key(Some(r"F:\proj\Exp")),
+            "db.choice",
+            "sqlite",
+            "",
+            "explicit",
+            100,
+        )
         .unwrap();
     store.save(&real_tree(r"F:\proj\Exp", "s1")).unwrap();
 
@@ -195,9 +206,9 @@ fn initial_export_skips_existing_files_and_regenerates_trees() {
         .join("memory")
         .join("projects")
         .join(plugin_api::memlayout::project_dir_name(
-            // v2.186：宿主 `write()` 在入口归一键位，md 目录名跟着归一形走
-            // （`write_fact` 拿的是 `write` 里同一个串）。目录名必须由**同一个
-            // 归一串**算出来，否则这条判据钉的是"原始串的落点"而不是生产落点。
+            // 目录名必须由**同一个归一串**算出来（上面造存量时过的就是 `scope_key`，
+            // 与生产 `write()` 里那一个函数），否则这条判据钉的是"原始串的落点"
+            // 而不是生产落点。
             &crate::workspace::scope_key(Some(r"F:\proj\Exp")),
         ))
         .join("facts")

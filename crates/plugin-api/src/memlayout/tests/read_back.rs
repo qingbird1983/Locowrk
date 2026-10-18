@@ -127,3 +127,114 @@ fn iter_facts_orders_like_the_sql_and_counts_unreadable_separately() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// 层级故障进账（S1 刀②c-1 坐实）。夹具 = **在同一位置放一个普通文件冒充目录**：
+/// `read_dir` 两侧都失败（POSIX `ENOTDIR` / Windows `ERROR_DIRECTORY`），且都不是
+/// `NotFound` ⇒ 与"层不存在"天然可分。刀②a 登记这一档时说"没有跨平台夹具"（当时想的
+/// 是 `chmod 000` / ACL），这条更普通的形态把那个理由推翻了，所以补上并留红证。
+///
+/// 同一份夹具里先跑两遍**负对照**（根都不在场、以及只有 `global/` 在场）：少了它们，
+/// 实现漂成"任何 `read_dir` 失败都算故障"也不会红——而那种漂法会把每个新用户的空库
+/// 读成"有东西扫不动"，正是这一族判据要防的另一半。
+#[test]
+fn a_blocked_layer_dir_is_counted_and_not_read_as_nothing() {
+    let root = tmp_root("blocked-layer");
+    let absent = tmp_root("blocked-absent");
+
+    assert_eq!(
+        iter_facts(&absent).unreadable,
+        0,
+        "负对照①：整个 md 根还不存在 = 从没记过，不是故障"
+    );
+
+    write_fact(&root, &entry("", "g.one", "全局那条")).unwrap();
+    assert_eq!(
+        iter_facts(&root).unreadable,
+        0,
+        "负对照②：`projects/` 缺席同样不是故障（只有全局层的新库是常态）"
+    );
+    assert_eq!(iter_facts(&root).facts.len(), 1);
+
+    std::fs::write(projects_dir(&root), "not a directory").unwrap();
+    let blocked = iter_facts(&root);
+    assert_eq!(blocked.facts.len(), 1, "读得到的那一层照常交付");
+    assert_eq!(
+        blocked.unreadable, 1,
+        "整层扫不动必须进账：真源 = 文件之后，不进账就与「这个项目从没记过」逐字同形"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&absent);
+}
+
+/// 层级故障的第二档：项目文件夹在场，但它 `facts/` 的位置上坐着一个文件。
+/// 这一档与上一条**不同源**——它由 `is_dir()` 那个分支管，把上面那条计数撤掉
+/// 这里照样绿（反之亦然），所以必须单独一条。
+#[test]
+fn a_facts_slot_held_by_a_file_counts_that_project_as_blocked() {
+    let root = tmp_root("blocked-facts");
+    let alpha = r"F:\proj\Alpha";
+    let beta = r"F:\proj\Beta";
+    write_fact(&root, &entry(alpha, "a.one", "甲项目那条")).unwrap();
+
+    let beta_dir = project_dir(&root, beta).unwrap();
+    std::fs::create_dir_all(&beta_dir).unwrap();
+    std::fs::write(beta_dir.join("facts"), "not a directory").unwrap();
+
+    let scan = iter_facts(&root);
+    assert_eq!(scan.facts.len(), 1, "另一个项目照常读到");
+    assert_eq!(
+        scan.unreadable, 1,
+        "乙项目的 facts 位上是文件 ⇒ 它一条也扫不出来，得进账而不是隐身"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 清空真源（刀②c-1 的新清点名）。三条性质一条用例里跑完，因为它们同一个根：
+/// ① 每条事实都算数，**包括人手写的那种**——它没 frontmatter，读回的 workspace 是
+/// 目录名兜底，清空若按"逐行反推键位再 `delete_fact`"实现就会指到别的目录，
+/// 结果是删不掉也不报错（`LayerDir::hint` 的警告就是这条红证逼出来的）；
+/// ② 索引留在原地并被刷成空壳（"这层现在没东西"要自描述，不是文件失踪）；
+/// ③ 清完之后 `unreadable` 仍是 0（不许留下一堆扫不动的残骸冒充"已清空"）。
+#[test]
+fn clear_facts_removes_every_fact_including_one_a_human_wrote_by_hand() {
+    let root = tmp_root("clear");
+    let ws = r"F:\proj\Clear";
+    write_fact(&root, &entry(ws, "p.one", "项目那条")).unwrap();
+    write_fact(&root, &entry("", "g.one", "全局那条")).unwrap();
+    let facts = project_dir(&root, ws).unwrap().join("facts");
+    std::fs::write(facts.join("hand.md"), "hand written body\n").unwrap();
+
+    let n = clear_facts(&root).unwrap();
+    assert_eq!(n, 3, "三条全部数进去（含人手建那条）：{n}");
+    assert!(!facts.join("hand.md").exists(), "人手写那条也得删掉");
+    assert!(!root.join(GLOBAL_DIR).join("g.one.md").exists());
+
+    let index = std::fs::read_to_string(root.join(GLOBAL_DIR).join("MEMORY.md")).unwrap();
+    assert!(
+        index.starts_with("# 记忆索引"),
+        "索引文件还在，只是空了：{index}"
+    );
+    assert!(!index.contains("g.one"), "索引跟着刷空：{index}");
+    let after = iter_facts(&root);
+    assert!(after.facts.is_empty());
+    assert_eq!(after.unreadable, 0, "清空之后不许留下扫不动的残骸");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 有一层扫不动 ⇒ 清空**中止且不改动任何文件**。这不是过度谨慎：清空是要向用户
+/// 报数的动作（"已清空 n 条"），半删状态下一句谎话比一次失败更难被发现。
+#[test]
+fn clear_facts_refuses_when_a_layer_cannot_be_scanned() {
+    let root = tmp_root("clear-blocked");
+    write_fact(&root, &entry("", "g.one", "全局那条")).unwrap();
+    std::fs::write(projects_dir(&root), "not a directory").unwrap();
+
+    let e = clear_facts(&root).unwrap_err();
+    assert!(e.contains("扫不动"), "报错要点名是层级故障：{e}");
+    assert_eq!(
+        iter_facts(&root).facts.len(),
+        1,
+        "中止必须真的中止：原有事实一条也不许动"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
