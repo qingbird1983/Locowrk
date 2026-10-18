@@ -39,7 +39,6 @@ desktop/src-tauri/src/commands/llm.rs
 desktop/src/components/memory/TreeSection.vue
 desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue
-desktop/src-tauri/src/commands/sessions.rs
 desktop/tests/chat-projection.spec.ts
 "
 

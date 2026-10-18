@@ -20,8 +20,8 @@
 "可翻案"与翻案代价。不可逆动作做过一件，正是他点名的那件（T4 那两块实验室夹具连名下 15 条文案键
 已删净）；**未点名的删除一条没做**，[LOCK] 与 push 未动。第三组（超限名单 20 件的逐件三问判定）
 是同日按同一口径新加的，那张表已由用户点头（「认了，从 T23 开始按你排的顺拆」）⇒ 判定里三笔新登记的
-欠账，T23 已落地，表里第一批的第一刀（拆 `commands.rs` = T26）也已落地，剩下的按内文那个顺序连着走
-（T24/T25 与其余判拆的件各自一刀）。
+欠账，T23 已落地；表里判拆的件从这一日起**按上面那个顺序一件一刀连着走**（做没做完看第三节的勾，
+不在这里逐把点名 —— 点名 = 每做完一刀就得改一次这段话，迟早变成假信息）。
 
 ## 计划
 
@@ -645,7 +645,7 @@
 | `commands/llm.rs`（523） | 否：清单+推荐 / 连通测试 / 代理与档位 CRUD / 目录诊断 四簇 | 是：`enrich` 与 `apply_dialect_ladder` 被两簇共读（44/298/478） | 拆（只切面） | `commands/llm/{models,probe,providers}.rs`；但 `llm_provider_save` 闭包就地做档位装配与 keyring 写 = 业务进命令层（新登 **T25**，本刀不顺手） |
 | `src-tauri/src/commands.rs`（519 → 56） | 否：9 簇（聊天与停止 / undo / 列表投影 / 审批与规则 / 设置 / 探测 / 暴露调试 / 原生对话框 / 通知） | 是：跨文件调 `sessions::ensure_associatable`，还有 `cfg(test)` 补丁式再导出 | 拆 ✅T26 | 已沉 `commands/{chat,approvals,settings,probe,dialog,notifications}.rs` 六片（判定时的 4 片切法里 `system` 一片装四件事 = 违 ①，落地时按簇分成四片）；`check-commands.mjs` 走目录扫全部 .rs ⇒ **不动任何闸**，实测该闸在本刀后读数不变 |
 | `memory/TreeSection.vue`（505） | 否：会话导航与档位 / 章节展开与原文缓存 / M5 编辑面 三簇 | 是：`loadBundles` 一次重置六个本地态，新增任一编辑态都要动它 | 拆 | `use-tree-chapters.ts`（≈120，先例 = 同目录 `use-model-probe.ts`）；保存就地改引用与两步删除互斥必须同处 |
-| `commands/sessions.rs`（474） | 否：元数据 / 删除与搜索 / 导出与标题 / 截断与悬空裁决 / 子转录与外壳 五簇 | 是：忙守卫文案两份（296/326）、`fsRoots` 校验两份（32/434）、shell 三分支两份（403/452） | 拆 | `sessions/{meta,lifecycle,export,heal,shell}.rs`；那三组重复正是「同一事实两个出处」要消灭的形状 |
+| `commands/sessions.rs`（474 → 35） | 否：元数据 / 删除与搜索 / 导出与标题 / 截断与悬空裁决 / 子转录与外壳 五簇 | 是：忙守卫文案两份（296/326）、`fsRoots` 校验两份（32/434）、shell 三分支两份（403/452） | 拆 ✅T27 | 已沉 `sessions/{meta,lifecycle,export,heal,transcript,shell}.rs` 六片（判定表把"子转录"与"外壳"合成一片 = 违三问 ①，落地拆开）；那三组重复本刀**没并**（纯搬行不许夹带），新登 **T28** 单独一刀 |
 | `chat/MessageRow.vue`（468） | 否：附件部件簇与 `ToolRow.vue` 的 thumbCache/thumbOf **逐字同形** | 是：`.msg--brief` 的 padding 归零靠 TranscriptFlow 的兄弟规则补（注释自陈实抓过） | 拆（薄） | `lib/use-asset-thumb.ts`（≈35，ToolRow 同用）+ `MessageParts.vue`（≈95）→ 余 ≈330 |
 | `tests/chat-projection.spec.ts`（456） | 是：5 个 describe / 24 条用例只驱动同一个 `onEvent` 入口 | 是：共用夹具 `rowOf`/`kinds`/`fresh` 是用例立得住的前提 | **留** | 拆开要么复制夹具、要么新造共享夹具 = **为了行数造结构**（前端侧也没有"测试目录不许有用例"的等价规矩可依据） |
 | `chat/PermissionCard.vue`（451） | 是：倒计时 / 硬门 / 决策防重 / 分体钮与 scope 上弹 / 预览元信息，都只服务这一张卡 | 否：改细条不动按钮 | **留** | 卡面归 Composer 的 `dock-cards` 持有，本卡刻意不 `overflow:hidden` 让上弹冒出卡顶；再包一层直接打断贴合柱面，上弹皮属 §二③ 唯一浮层式 |
@@ -724,9 +724,57 @@
         ② **删实现不等于删干净** —— 切割按 48–519 划，把原文件第 15–46 行那批顶层 `use` 留在装配文件里，
         clippy 当场红 `unused_imports: std::sync::Arc`。装配文件的 use 面只能由编译器裁，不能由我以为
       · 跨平台：纯 Rust 模块结构面，不涉及路径语义与插件生命周期 ⇒ 本刀不取 WSL 侧证据（口径见 ADR-0005）
+- [x] **T27** 拆 `commands/sessions.rs`（474 → 35 行只留声明）⇒ 同名子目录加六片（2026-10-18 第一批第二刀）
+      · 六片 = `meta`(140) 元数据写侧 · `lifecycle`(63) 删除与搜索 · `heal`(116) 截断回退与悬空裁决 ·
+        `export`(89) 导出与标题三层 · `shell`(85) 打开目录与链接 · `transcript`(32) 子 Agent 转录。
+        判定表那行把"子转录"与"外壳"写成一片 = 违三问 ①（两件事只共用"都碰文件"这一点），落地拆开 ——
+        又一次证明**表的切法是草案不是合约**
+      · 公开面与消费点：`sessions.rs` 用 `pub use X::*` 转发 ⇒ `lib.rs`、前端 invoke、
+        三个 crate 内消费点（`chat.rs` 调 `ensure_associatable`、`assets.rs` 与 `memory.rs` 调
+        `open_in_explorer`、`tests_session_log` 用两个标题纯函数）**一个字没改**；
+        `check-commands.mjs` 读数与切割前逐字相同（`定义=88 · 注册=88 · 前端引用=88 · 预留名单=0`）
+      · ★ 判据从这一刀起**通用化**（`tmp/split-cut.mjs` + `tmp/split-verify.mjs` + `tmp/split-mut.mjs`，
+        各刀只交一份 spec）：每刀重打一遍档位 = 制造"某档被悄悄放宽"的机会，判据只许写一次。
+        切割器落盘前 C1–C3（区间无缝 / 连续子串 / 行守恒）任一红就一个文件都不写；
+        事后对账 T1–T6 独立吃磁盘；通用版先回头跑 T26 那六片复现全绿，才拿来判本刀
+      · 新档 **T6 保序**：各片正文按给定顺序拼接必须逐字节等于原文区间（去掉片间空行）。
+        T4 只守恒**多重集**，把两片内容对调它看不见 —— 上一刀没有这一档，这一档是补上的
+        （自测里 T6 的变异 = 整片对调，T3/T4 全绿、只有 T6 红）。T1/T3/T4 与 T6 **同因共红**已登记：
+        T6 在数学上强于 T4，T4 留着只为失配时直接点名是哪一行漂了
+      · 磁盘变异 `SPLIT_MUT_ALL_CAUGHT`：把 `sessions/meta.rs` 里一条命令改名 ⇒
+        `check-commands` 定义 88→87 且 rc=1；逐字节写回 + sha 复核后回 88/88/88（= 本刀之后
+        常驻闸在新布局上仍然扫得到，不靠"它本来就是递归扫的"这种相信）
+      · 编译与测试：`cargo clippy --all-targets -- -D warnings` rc=0（**一次就过** —— 上一刀的
+        `unused_imports` 教训落地为"装配文件的 use 面交给编译器，不靠自己数"）· `cargo fmt --check` rc=0 ·
+        `cargo test` 584 passed / 0 failed · `make check` 全绿 · `check_length` 名单再减一行
+      · ★ 两条**实测**发现，都不在"搬行"职责里 ⇒ 只登记不动（AGENTS §5「发现问题就登记」）：
+        ① glob 再导出会把 `pub(crate)` 项一起带出来，可见性取"再导出声明"与"项自身可见性"的较小者。
+          做法 = 把点名行注释掉再编译，`rc=0` 且消费点照旧解析（两次实验：`sessions.rs` 内点名、
+          `commands.rs` 内点名，各自注释掉都仍然绿）⇒ 本刀不在 `sessions.rs` 写重复点名
+        ② `commands.rs` 里台账 T6 那条注释的机制断言（"`pub use sessions::*` 只带得出 `pub` 项"）
+          与 ① 的实测**相反** ⇒ 登记 **T29**（纯注释更正，另一刀）
+      · 判定表点的三组「同一事实两个出处」（忙守卫文案 / `fsRoots` 校验 / `#[cfg]` 三分法）本刀
+        **一组都没并** —— 并 = 语义改动，不许夹带在搬行刀里 ⇒ 登记 **T28**
+      · 跨平台：同 T26，纯结构面不取 WSL 证据
+- [ ] **T28** `commands/sessions*` 里三组「同一事实两个出处」并成一处（T27 判定表点的，本刀刻意不夹带）
+      · 实测出处：忙守卫拒删/拒编辑重发/拒裁决的文案三份（`lifecycle.rs` 内 1 份 + `heal.rs` 内 2 份）、
+        `fsRoots` 白名单校验两份（`meta.rs::ensure_associatable` 与 `shell.rs::reveal_in_explorer`，
+        错误文案的**后半句**不同是刻意的，前半句同一句话）、`#[cfg]` 三分法两份
+        （`shell.rs::open_in_explorer` 与 `shell.rs::open_external_url`）
+      · 这一刀要答的问题：并成一处之后**用户看到的文案不许漂** ⇒ 需要先把三份文案的差异登记成夹具用例
+        （同 T22 的做法：先有用例再动形状），不许"顺手统一文案"
+      · 与拆刀分家：T27 已经把形状摆好，本片改的是**内容**，风险方向不同，红了好回退
+- [ ] **T29** `commands.rs` 里台账 T6 那条注释把 glob 机制说反了（T27 实测推翻）
+      · 现文字说"`pub use sessions::*` 只带得出 `pub` 项，这两个是 `pub(crate)`，所以在这里点名再导出"；
+        实测（T27 条目 ① 的两次注释实验）glob 会按收窄后的可见性把 `pub(crate)` 项一起带出来，
+        所以那条点名是**冗余**而非必需
+      · 该注释的其余部分仍然成立（`#[cfg(test)]` 是必需的：非测试编译没人用这两条 ⇒ `unused_imports`
+        ⇒ `-D warnings` 红），本条只更正机制断言；要不要顺手删冗余点名行由那一刀判，
+        判据 = 删了之后 `cargo clippy --all-targets` 仍 rc=0 且 `tests_session_log/export_title.rs` 仍绿
 
 · 拆的顺序（原本按"动刀前必须先解哪道锁"排；**T23 已把那些锁解掉** ⇒ 现在只按风险与体量排）：
-  第一批 Rust 无锁件 = `commands/sessions.rs` → `commands/llm.rs`（只切面）→ `llm/wire.rs` → `llm/client.rs`（薄）（`commands.rs` 已由 T26 做完）
+  第一批 Rust 无锁件 = `commands/llm.rs`（只切面）→ `llm/wire.rs` → `llm/client.rs`（薄）
+  （`commands.rs` 与 `commands/sessions.rs` 已做完 = T26 / T27；做没做完看上面的勾，不看这行）
   第二批 Rust 侧 schema 两件 = `memory.rs` → `store.rs`（建表串不必再钉在主文件：定义处"整根恰 1 处"由闸自己盯）
   第三批 前端 lib = `tool-detail.ts` → `api.ts`（通道表同样不必钉文件名）
   第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`
