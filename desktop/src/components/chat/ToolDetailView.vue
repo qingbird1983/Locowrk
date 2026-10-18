@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
- * 工具明细呈现（UI shell doc §3.8 v4.13）：吃 lib/tool-detail.ts 的视图
- * 模型，按块渲染——props（标签+值两列属性行）/ code（.md 代码块组件复用：
- * 语言标签头行 + 复制钮，走 renderMarkdown 围栏注入）/ text（mono 输出块，
- * 220px 框内滚动）/ list（条目列表）/ entry（子代理「查看完整对话」文本钮）。
- * 失败态 = error 文本 danger 块。底部「原始数据 ▸」默认收起（给工程师）——
- * 展开才是 pretty JSON。默认视图零裸 JSON（自检红线 §3.8）。
+ * 工具明细呈现（UI shell doc §3.8 v4.13；设计稿 §7 形态库）：吃 lib/tool-detail.ts 的
+ * 视图模型按块渲染 —— props（标签+值两列属性行）/ code（.md 代码块复用：语言标签头行
+ * + 复制钮，走 renderMarkdown 围栏注入）/ diff（四列带行号表）/ term（终端块，220px
+ * 框内滚动）/ text（mono）/ list / entry（子代理「查看完整对话」）。失败态 = error 文本
+ * danger 块。底部「原始数据 ▸」默认收起（给工程师）；默认视图零裸 JSON（红线 §3.8）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";

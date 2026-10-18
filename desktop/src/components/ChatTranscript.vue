@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 会话转录（UI shell doc §8.4 ChatTranscript）：滚动区（overscroll contain /
- * scrollbar-gutter stable / overflow-anchor none）+ 列（宽 = --lw-content-max
+ * scrollbar-gutter stable / 原生锚定保留 ⇒ 不写 overflow-anchor）+ 列（宽 = --lw-content-max
  * 覆盖值，§2.7 三处同源）+ 底部渐隐 mask。消息流的分组/任务容器/相位渲染
  * 在共享核心 chat/TranscriptFlow.vue（v2.104 提取，子代理转录页签同吃），
  * 本组件只负责主对话的容器面：⑤⑨ 跟随滚动（默认贴底，用户上滚即让位）
@@ -191,7 +191,11 @@ async function onNoticeAction(item: SystemItem, action: string) {
    * 列同以主区中线居中，正文不再整体左偏（旧 stable 只在右缘留槽，列中心
    * 左移半个槽宽） */
   scrollbar-gutter: stable both-edges;
-  overflow-anchor: none;
+  /* 原生锚定**保留**（缺省 auto，不写声明 = AF-09 的修法）：旧写 `overflow-anchor: none`
+   * 之后，视口上方任何高度变化（shiki 换掉代码块那一下）都会把读者原位推走。同窗口实测
+   * （CDP，在列首注入 200px 块）：`none` ⇒ scrollTop 300 不动、探测行视口 top 693→893
+   * （被推走 200px）；`auto` ⇒ scrollTop 300→500、探测行 top 恒 693（视角钉住）。
+   * 跟随态由下面的 `scrollToBottom` 负责，两者同向不打架。 */
   padding: var(--lw-gap-8) var(--lw-gap-24) 0;
   /* 底部渐隐：内容浮到输入卡下方时淡出（遮罩盖住 composer 预留区）。
    * 渐隐色 = --lw-mask-fade 令牌（§六标准：.vue 禁字面色） */

@@ -302,6 +302,7 @@
    - **完全不在射程的属性**：`background-size` / `background-position` / `background-repeat` / `stroke-width` / `fill`（`none` 与 `var(--lw-` 之外仍受色档管）/ `cursor` / `will-change` / `image-rendering` / `overflow` / `z-index` / 任意 `width`·`height` 的裸 px——实测全部放行。§二⑯ 对其中每一项钉了唯一值，这就是那一刀的实际产出。
    - **反向确认夹具是活的**：同一份探针里各放一条已知必红的裸值（`padding: 10px 12px`、`font-size: 13px`、`border-radius: 14px`、`transition: transform 240ms ease-out`），四条全被报出 ⇒ "通过"不是扫描瞎（同族纪律 = 零命中要配正对照，这里是放行要配正对照）。
    - 扩闸（逐段校验 transition、给 background 族加档）需要自定义 stylelint 规则，**不在 Q13 范围**，登记为 Q14 之后的可选项；在那之前本节这一条是唯一防线。
+5. **样式落点闸** `scripts/check-css-ownership.mjs`（2026-10-18 建，接进 `sh scripts/tasks.sh gates` 与 `selftest`）：把 §二⑰ 那条「落点唯一」红线变成机器判据——`.prow__*` / `.tdetail__*` / `.tool__*` 的**定义**（`.vue` 的 `<style>` 块或 `.css` 里的选择器）只许出现在各自归属组件；跨组件公共面 `desktop/src/style.css` 对这三族也算合法落点（它管选择策略、滚动这类全局事，不是行骨几何）。`.lw-expand` 只许定义在 `style.css`，且必须有组件在用（0 = 死代码）。别的文件**用**这些类名不算错，注释里提到也不算（先剥注释）。读数 `PREFIXES=4 VIOLATIONS=0 USES=N`；`--map` 打印实测归属表；`--selftest` 六项变异自证（复制行骨 / 抢外壳定义 / 外壳没人用 / 各归其位放行 / 行骨进全局表放行 / 注释不算）。
 
 ## 七、豁免清单（判错豁免必须有案可查）
 

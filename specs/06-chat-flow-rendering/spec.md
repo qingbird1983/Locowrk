@@ -46,8 +46,10 @@
 | 滚动与跟随 | `desktop/src/components/ChatTranscript.vue` | 跟随判定 48px / 出钮 120px；锚定策略一处定 | AF-09 |
 | 行内可点元素 → 右栏 | `stores/work-panel.ts` + 各行的接线 | 凡行内出现文件名/代码块/diff，必须有对应右栏页签 | WF-01…WF-05 |
 
-**红线（要有机器判据钉住，见 批 F）**：`.prow__*` 的布局只许出现在 `ProcessRow.vue`；
-`.tdetail__*` 只许出现在 `ToolDetailView.vue`。实测目前合规——**纪律靠不住，得靠闸**。
+**红线（已由机器判据钉住，见 批 F）**：`.prow__*` 的布局只许出现在 `ProcessRow.vue`；
+`.tdetail__*` 只许出现在 `ToolDetailView.vue`。判据 = `scripts/check-css-ownership.mjs`
+（`.prow__*` / `.tdetail__*` / `.tool__*` 定义只许在各自归属组件，跨组件公共面 `style.css`
+对这三族也算合法；`.lw-expand` 只许在 `style.css` 且必须有人在用；注释里的类名不算）。
 
 ## 问题台账
 
@@ -68,7 +70,7 @@
 | AF-06 | 过程组头（`TurnProcess.vue`）自一套渲染：裸工具 id 已修，但段序/几何/状态位与工具行不同源 | `TurnProcess.vue` 的 `minimalText = clip(props.names.join(" + "), 32)`；`.cv-head` 原写死 `gap: 6px` / `font-size: 13px` / 三角 `margin-left: auto` | 行壳几何 | ✅ 几何与段序已同源：`gap` 走 `--lw-gap-6`、`font-size` 走 `--lw-fs-ui-caption`、三角紧跟末段；真实窗口实测组头左缘 456 = `.prow` 左缘 456。组头 meta 的构成（时长 + N 个工具）另见 AF-14 |
 | AF-07 | `edit_replace` 的 diff 卡行号恒空 | 插件 output 只有 `additions`/`deletions`/`byte_range`（`plugins-src/tool-edit/src/replace.rs:110-121`），没有行号 ⇒ 宁缺勿假 | 展开体形态 | ◐ 已裁：**列在、号空**（不编造行号）。要真行号得先让插件把行号写进载荷——属后端改动，归批 E 与接线一起做 |
 | AF-08 | 折叠行 ±N 只能在 v2.204 之后的会话里出数 | `additions`/`deletions` 2026-10-14（`02d44cf`）才进插件载荷；更早日志没有 ⇒ 不显示是对的 | 身份数据 | ✅ 口径已定 |
-| AF-09 | 滚动抖动未验：设计稿 §9.1 认定主因是禁掉原生锚定 | `ChatTranscript.vue:191` 的 `overflow-anchor: none` | 滚动与跟随 | ⬜ 要一次真实流式轮才有证据 |
+| AF-09 | 滚动抖动：禁掉原生锚定 + 每 chunk 自己 `scrollTo` 是主因 | `ChatTranscript.vue:191` 的 `overflow-anchor: none`（设计稿 §9.1 同判） | 滚动与跟随 | ✅ 已删该声明（回落浏览器缺省 `auto`）。真实窗口实测：在距底 200px 处往 `.scroller` 里注入一个 200px 高的块，`scrollTop` 前后都是 221（不再被拽回视口底部）；点「回到底部」后 `.back-bottom` 消失 |
 | AF-10 | 状态段自带 `justify-content: flex-end`，与「所有段左靠」相冲 | `ProcessRow.vue:139-148` | 行壳几何 | ✅ 已删该声明（`ProcessRow.vue`），与 AF-01 同一条规则 |
 | AF-11 | 回合产出物行（`N files changed · +A −D`）未做 | 设计稿 §6；`file_changes` 事件已有（挂用户行） | 行壳几何 | ⬜ |
 | AF-12 | 三层折叠的层 3（单行展开体按 `item.id` 记忆）未做 | 设计稿 §8；现役只有 `everExpanded` 懒挂载 | 折叠与状态记忆 | ✅ 记忆搬到 `desktop/src/lib/chat/fold-state.ts`（模块级 `reactive(Map)`：键在表里 = 挂载过、值 = 展开着），`ToolRow.vue` 的 `expanded`/`everExpanded` 改成读它，`ChatTranscript.vue` 在 `watch(chat.sessionId)` 里 `resetRowFolds()` 清空。钉住用例 `desktop/tests/tool-row-fold.spec.ts`（换组件实例后仍展开）。思考行的展开体不做记忆：它没有懒挂载（`v-show` 常挂）且缺省收起就是设计缺省 |
@@ -182,8 +184,10 @@ AF-15 截断口径收成一处 → AF-07 行号裁定 → AF-12 层 3 折叠 →
 **批 E 接线做全**：WF-01…WF-05（**依赖 roadmap「对话流：产出物与文件页签」阶段**；
 该阶段开工前先把它建成本稿的子规格或独立 spec，不许只在口头）。
 
-**批 F 滚动与收口**：AF-09 证实抖动与锚定策略 → 加「布局落点唯一」机器判据（红线那条）→
-AF-15 残留复核 → `make check` 全绿 → 标准与 roadmap 指针同步。
+**批 F 滚动与收口**（✅ 本刀）：AF-09 锚定策略已改（删 `overflow-anchor: none`，真实窗口实测注入内容不再拽视口）→
+「布局落点唯一」机器判据已建（`scripts/check-css-ownership.mjs`，接进 `sh scripts/tasks.sh gates` 与 `selftest`）→
+AF-15 残留复核（截断收成 `SUMMARY_CLIP` + 宽度交给 `text-overflow: ellipsis`）→ 标准 §六 第 5 条同步。
+留待批 E 完后跑最终 `make check` 与 roadmap 指针同步（第 13 行仍指向已取代的 `specs/02-tool-cards`）。
 
 **每批完**：先把当批的 AF 逐条在真实窗口量一遍（AC-9 的口径），给人看完再进下一批。
 
@@ -196,10 +200,10 @@ AF-15 残留复核 → `make check` 全绿 → 标准与 roadmap 指针同步。
 - [x] 批 A 统一模型落标准（提交 `463bc0d`）
 - [x] 批 B 行壳几何清账（提交 `463bc0d`）
 - [x] 批 C 展开体清账（`98d000b` + 本刀：AF-17/02/15/12/13 已清，AF-07 裁定为列在号空）
-- [ ] 批 D 状态与相位
+- [x] 批 D 状态与相位（提交 `b1c76a1`：`tool.state.*` 唯一落点 + 标准 §二⑰ 词表；已拒绝/已停止 两态记明卡在数据面）
 - [ ] 批 E 接线做全（依赖 roadmap 第 15 行那个阶段）
-- [ ] 批 F 滚动与收口 + 机器判据
-- [ ] `make check` 全绿
+- [x] 批 F 滚动与收口 + 机器判据（本刀：`scripts/check-css-ownership.mjs` + AF-09 锚定修复）
+- [ ] `make check` 全绿（批 E 做完后跑最终一次；本刀已跑 `sh scripts/tasks.sh gates` + 前端四闸全绿）
 
 ## 影响范围
 
