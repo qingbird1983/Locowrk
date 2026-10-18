@@ -182,30 +182,37 @@ impl MemorySource for MemoryStore {
 
     /// Q2（MR 稿 §4.1）：项目记忆**索引**（指针行，不含正文）。
     ///
-    /// 未归属会话 = 没有"本项目"可言 ⇒ `None`（整节缺席）。两档数据的优先关系
-    /// 在 `memory_index` 里：**md 投影优先**（人可编辑的人类层），md 用不上才由
-    /// sqlite 现合成兜底（**不回写文件**）。取数失败 = `None` + 一次告警，
-    /// 绝不合成一条"看起来是空索引"的块——那会把"读不到"骗成"没东西可注入"。
+    /// 未归属会话 = 没有"本项目"可言 ⇒ `None`（整节缺席）。S1 刀②b-3 起**读源 = md**，
+    /// 库里现合成那一档只在"人类层没接线"时才有资格（暂态，刀②c 取消）；md 里
+    /// 没有指针行就如实缺席，**不回写文件、也不去库里补一份不再是真源的副本**。
+    /// 取数失败 = `None` + 一次告警，绝不合成一条"看起来是空索引"的块——
+    /// 那会把"读不到"骗成"没东西可注入"。
     fn project_index(&self, session_id: Option<&str>) -> Option<String> {
         let ws = self.scope_of_session(session_id);
         if ws.is_empty() {
             return None;
         }
-        if let Some(block) = crate::memory_index::from_md(self.md_index_body(&ws).as_deref()) {
-            return Some(block);
+        // 刀②b-3：**两档的关系反过来了**。原先"md 优先、空壳就退库里现合成"是双写
+        // 时代的人可编辑优先；md 成真源之后"文件里没指针行"就是这个项目确实没记过，
+        // 如实缺席。库里那一档现在只剩一种资格——人类层没接线（单测 / 降级启动），
+        // 那一档由刀②c 取消。判据因此是 `files_face()` 有没有句柄，不是 md 内容
+        // 像不像有货（后者正是上一版会"读到空气"的地方：本机实测 TITY 目录里
+        // 根本没有 `MEMORY.md`，另外三个项目都只有空壳标题）。
+        if self.files_face().is_none() {
+            return match self.index_rows(&ws, crate::memory_index::MAX_INDEX_LINES + 1) {
+                Ok(rows) => crate::memory_index::from_rows(&rows, now_secs()),
+                Err(e) => {
+                    // 每 step 都会走到这里，只告警一次（`warned` 那位是给 recall 的，
+                    // 不复用——两边失效原因不同，混用会让其中一边永远静默）
+                    static ONCE: std::sync::Once = std::sync::Once::new();
+                    ONCE.call_once(|| {
+                        tracing::warn!("memory index unavailable（项目索引注入降级为缺席）: {e}")
+                    });
+                    None
+                }
+            };
         }
-        match self.index_rows(&ws, crate::memory_index::MAX_INDEX_LINES + 1) {
-            Ok(rows) => crate::memory_index::from_rows(&rows, now_secs()),
-            Err(e) => {
-                // 每 step 都会走到这里，只告警一次（`warned` 那位是给 recall 的，
-                // 不复用——两边失效原因不同，混用会让其中一边永远静默）
-                static ONCE: std::sync::Once = std::sync::Once::new();
-                ONCE.call_once(|| {
-                    tracing::warn!("memory index unavailable（项目索引注入降级为缺席）: {e}")
-                });
-                None
-            }
-        }
+        crate::memory_index::from_md(self.md_index_body(&ws).as_deref())
     }
 }
 

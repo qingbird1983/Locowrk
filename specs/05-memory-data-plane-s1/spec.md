@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀① ✅ / 刀②a ✅ / 刀②b-1 ✅ / 刀②b-2 ✅ / 刀②b-3 施工中）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀①②a②b-1②b-2②b-3 已落地 / 刀②c 待做，卡一次存量回填的点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -144,8 +144,18 @@
     ② 变异器的"选择器打空"自检第一版判据是"输出里出现 `0 passed; 0 failed`"，而 cargo
     会为 `src/main.rs` 那个零测试 target **恒打**这一行 ⇒ 每条变异都误报；改成把所有
     `test result:` 行的 passed+failed 加总、总和为 0 才叫打空。
-  - **②b-3 项目索引兜底**：`memory_index.rs` 的第二档（`index_rows` 从库里现合成指针行）摘掉，
-    md 用不上 = 该层就是空，如实空；连同 `TRUNCATED_NOTE` 一起退役（注入侧不再自己算截断）。
+  - **②b-3 项目索引 ✅（2026-10-18 落地）**：两档的关系**反过来**而不是删掉一档——
+    `project_index` 现在只看"人类层有没有接线"来决定走哪档，md 里没指针行就是**这个项目
+    确实没记过**，如实缺席，不再去库里补一份已不再是真源的副本（`index_rows` 那一档
+    剩下的唯一资格 = 未接线/降级启动，由刀②c 取消）。
+    **原先写的"`TRUNCATED_NOTE` 退役"是错的措辞，这里订正**：它不是消失，而是**值改成
+    写侧那一句**（`memlayout::INDEX_TRUNCATED_NOTE`），两支共用一串 ⇒ 文案合一、
+    注入侧仍保留预算保护（真源 = 文件，而文件正是人会去改的东西，钳必须站在通路上）。
+    动手时抓到一个**先前就存在的静默缺陷**：`pointer_lines_from_md` 只收 `- ` 开头的行，
+    写侧那句 WARNING 会被剥掉 ⇒ 索引被截断时**人打开文件夹看到"还有更多没进来"，
+    模型拿到的却是一份看起来完整的索引**。现在 from_md 认出那一行、把标记并进取决条件
+    （`clamped || truncated_by_file`）。四条窄变异各打中一条（并集撤掉 / md 支预算撤掉 /
+    档序没反过来 / 文案退回自造一份）。
   - **②b-4 语义召回**：`source.rs::recall_relevant` 自己开连接取行做向量匹配，还带学习列
     （`hit_count` / `last_hit_at`）⇒ 与"学习列停读"是同一件事，**推给刀②c**，
     不在本刀偷偷做（那要连 `memory_learn` / `recall_log` 一起改，混进来就回滚不掉）。
@@ -215,9 +225,11 @@
       `SELECT COUNT(*) FROM memories` 前后**不变**（sqlite 不再是落点）
 - [ ] AC-S1-2 读不碰 sqlite：把 `memories.db` 改名造损坏态 → 管理页列表、`<project_memory_index>`
       注入、`memory_read/search` 全部照常出数（这条是"真源翻转"最硬的证据，也是刀②的收口判据）。
-      **已证两格**：管理页列表（②b-1 `listing_survives_the_db_being_renamed_away`）、
-      全局层注入（②b-2 `recall_takes_the_global_layer_from_md_with_the_db_gone`）；
-      剩 `<project_memory_index>` 的兜底档（②b-3）与插件两枚工具（刀③）⇒ 整条不勾
+      **已证三格**：管理页列表（②b-1 `listing_survives_the_db_being_renamed_away`）、
+      全局层注入（②b-2 `recall_takes_the_global_layer_from_md_with_the_db_gone`）、
+      项目索引（②b-3 `a_shell_index_file_means_the_section_is_absent_even_if_the_db_has_rows`
+      走的是同一批夹具形状：库里留着行而 md 是空壳 ⇒ 如实缺席）；
+      只剩插件那两枚工具（`memory_read` / `memory_search`，归刀③）⇒ 整条暂不勾
 - [ ] AC-S1-3 四类型落位：`type=feedback` 缺省落 `global/`、`type=project` 缺省落
       `projects/<可读名>-<hash>/facts/`；显式给 `scope` 时按覆盖落，frontmatter 回读一致
 - [ ] AC-S1-4 排除清单生效：一句"我测试过了 / 我改了 store.rs"收束后**不产文件**；
@@ -225,7 +237,13 @@
 - [ ] AC-S1-5 索引硬钳在写侧：造 250 条 → 落盘的 `MEMORY.md` ≤ 200 行且末行带 WARNING 指路，
       注入侧读到的就是这份（不再现算）。**前半已由刀① 实证**（`refresh_index_clamps_at_the_shared_budget`
       等三条 + `SS10`/`SS10b`/`SS10c` 三道判据，四条磁盘变异里撤钳/只钳行数/不写截断行三档都报红）；
-      后半要刀② 摘掉注入侧那档现算才算数，所以整条不勾
+      后半由刀②b-3 落地：注入侧与写侧共用**同一份预算常量与同一句截断文案**
+      （`MAX_INDEX_LINES` / `MAX_INDEX_CHARS` / `INDEX_TRUNCATED_NOTE`，出处判据 = SS10 三档），
+      且文件里那句 WARNING 现在会**透传给模型**（`pointer_lines_from_md` 只收指针行，
+      先前会把这句剥掉 ⇒ 截断对模型静默）。残留一条：注入侧仍保留一次同预算的钳制，
+      那不是"另算一份口径"，而是真源 = 可被人改写的文件时的保护网（`the_budget_still_bites…`）。
+      **整条仍不勾**：两半都只有单测证据，还差真实窗口那一次——造 250 条、打开管理页与
+      新会话的注入块亲眼核对
 - [ ] AC-S1-6 遗忘三条全过：删一条 → grep 数据根该 stem 零命中 → 该层 `MEMORY.md` 零命中 →
       下一会话注入块零命中
 - [ ] AC-S1-7 软删可恢复、清空才算数：管理页删除 → 文件进 `obsolete/`、注入零命中、能恢复；

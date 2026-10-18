@@ -290,3 +290,48 @@ fn an_incomplete_scan_writes_no_inject_row() {
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&dir2);
 }
+/// **②b-3 的正证**：这个键位的 `MEMORY.md` 是空壳（只有标题）而库里还留着行 ⇒
+/// 注入通路必须**如实缺席**。这一条测的就是"两档关系反过来"那个动作本身——
+/// 上一版这里会拿到库里那一行，而这正是"库里那份已不再是真源却还在被读"的形状。
+/// 对照同批给：把同一行写进 md ⇒ 立刻出块，否则那个 `None` 可能只是因为整条通路没接上。
+#[test]
+fn a_shell_index_file_means_the_section_is_absent_even_if_the_db_has_rows() {
+    let dir = temp_dir("index-shell");
+    let store = wired(&dir, true);
+    let ws = keysid();
+    {
+        // 绕开双写直插一行：模拟"库里有货、人类层是空壳"的存量形状
+        // （`temp_dir` 只算路径不建目录 ⇒ 开库前得先建，`legacy.rs` 同款）
+        std::fs::create_dir_all(&dir).unwrap();
+        let conn = rusqlite::Connection::open(dir.join("memory.sqlite3")).unwrap();
+        conn.execute_batch(crate::memory::CREATE_TABLE).unwrap();
+        conn.execute(
+            "INSERT INTO memories (workspace, key, value, tags, updated_at, source) \
+             VALUES (?1, 'k.from.db', 'v', '标签', 1700000000, 'explicit')",
+            [ws.as_str()],
+        )
+        .unwrap();
+    }
+    let home = dir
+        .join("memory")
+        .join("projects")
+        .join(plugin_api::memlayout::project_dir_name(&ws));
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("MEMORY.md"), "# 记忆索引\n\n").unwrap();
+
+    assert_eq!(
+        store.project_index(Some("ws-session")),
+        None,
+        "md 空壳 ⇒ 整节缺席，不许退到库里现合成"
+    );
+    std::fs::write(
+        home.join("MEMORY.md"),
+        "# 记忆索引\n\n- [k.from.db](k.from.db.md) — 标签\n",
+    )
+    .unwrap();
+    let out = store
+        .project_index(Some("ws-session"))
+        .expect("md 里有指针行就该出块");
+    assert!(out.contains("k.from.db"), "指针行原样进块：{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

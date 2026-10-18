@@ -213,3 +213,50 @@ fn exactly_at_the_line_budget_no_warning_is_added() {
     assert!(!out.contains(TRUNCATED_NOTE), "刚好 200 条不算截断");
     assert_eq!(body_lines(&out).len(), MAX_INDEX_LINES);
 }
+
+// ------------------------------------------ md 支路的截断标记与预算（S1 刀②b-3）
+
+/// 写侧已经把那句截断说明**写进文件**了，注入通路必须原样把它带给模型。
+/// 少了这一半，形状就是"人打开文件夹看到『还有更多没进来』，而模型拿到的是一份
+/// 看起来完整的索引"——比不钳更糟，因为它静默。
+#[test]
+fn a_truncated_index_file_keeps_the_warning_for_the_model() {
+    let md = format!("# 记忆索引\n\n- [a](a.md) — 甲\n- [b](b.md) — 乙\n\n{TRUNCATED_NOTE}\n");
+    let out = from_md(Some(&md)).expect("两条指针行");
+    let lines = body_lines(&out);
+    assert_eq!(lines.len(), 3, "两条指针 + 那句截断说明：{lines:?}");
+    assert_eq!(
+        *lines.last().unwrap(),
+        TRUNCATED_NOTE,
+        "远不到预算也要留着——**文件说截断了就是截断了**，注入侧不参与判断"
+    );
+}
+
+/// 人把 `MEMORY.md` 手工编辑成超出预算的形状时，注入通路仍然要钳。
+/// 预算保护站在通路上不是冗余：真源 = 文件，而文件正是**人会去改**的那个东西。
+#[test]
+fn the_budget_still_bites_when_a_human_grows_the_index() {
+    let mut md = String::from("# 记忆索引\n\n");
+    for i in 0..MAX_INDEX_LINES + 40 {
+        md.push_str(&format!("- [k{i}](k{i}.md) — 钩\n"));
+    }
+    let out = from_md(Some(&md)).expect("指针行充足");
+    let lines = body_lines(&out);
+    assert_eq!(
+        lines.len(),
+        MAX_INDEX_LINES + 1,
+        "钳到 {MAX_INDEX_LINES} 条 + 1 条截断说明，实际 {}",
+        lines.len()
+    );
+    assert!(out.contains(TRUNCATED_NOTE), "钳过必须自描述");
+    // 断言里用裸 key：写成 `- k239` 永远命中不到（文件里的形状是 `- [k239](…)`），
+    // 那就是一条空转判据。
+    assert!(!out.contains("k239"), "超出的那条不该进来");
+}
+
+/// 两支共用**同一句**截断说明（刀②b-3 要消的那处暂时状态）：以前文件里写一句给人看、
+/// 注入里另写一句给模型看 = 同一件事两个出处。这条断言防的是有人重新自造一份文案。
+#[test]
+fn both_sides_share_the_one_truncation_sentence() {
+    assert_eq!(TRUNCATED_NOTE, plugin_api::memlayout::INDEX_TRUNCATED_NOTE);
+}
