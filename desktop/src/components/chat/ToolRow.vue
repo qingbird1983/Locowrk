@@ -2,8 +2,9 @@
 /**
  * 工具行（UI shell doc §3.8 v4.13，《Tool Execution Process Display》）：
  * 五列栅格行（ProcessRow 共享列轨）+ 展开明细（缩进竖线子行 = 明细视图
- * ToolDetailView + subagent 标签值行）。状态克制：成功弱化（时长或弱对勾），
- * 失败才高亮（danger 叉 + 红「失败」）；明细恒默认收起（v2.98，v4.20 起
+ * ToolDetailView + subagent 标签值行）。状态克制（设计稿 §4.3）：**成功行尾完全
+ * 为空**（既无对勾也无时长——成功不喧哗），失败才高亮（danger 叉 + 红「失败」）；
+ * 明细恒默认收起（v2.98，v4.20 起
  * 不接设置开关——开关只作用过程组）。subagent_run = §3.10 紧凑行（大卡片 SubagentCard 已退役）：展开为
  * 任务/状态/轮次/工具/摘要标签值行 + 「查看完整对话」入口（不虚构——父侧
  * 拿不到的字段不渲染，⑮ 黑盒边界不变）。
@@ -17,7 +18,6 @@ import ToolDetailView from "./ToolDetailView.vue";
 import { toolDiffStats, toolImageAssets } from "../../lib/tool-summary";
 import { toolView } from "../../lib/chat/render-matrix";
 import { toolDescribe } from "../../lib/tool-detail";
-import { formatDuration } from "../../lib/format";
 import { assetRead, assetSaveAs } from "../../lib/api";
 import { useToastStore } from "../../stores/toast";
 import { useViewerStore } from "../../stores/viewer";
@@ -100,13 +100,6 @@ const hasDiff = computed(
     diff.value.size !== undefined,
 );
 
-/** 实时轮时长（重放无时间戳不虚构）。 */
-const durationText = computed(() =>
-  props.item.ts !== undefined && props.item.doneTs !== undefined
-    ? formatDuration(props.item.doneTs - props.item.ts)
-    : "",
-);
-
 const statusWord = computed(() => {
   if (props.item.status === "awaiting_approval") return t("tool.awaitingApproval");
   if (props.item.status === "running") {
@@ -155,18 +148,14 @@ function onToggle() {
         </span>
       </template>
       <template #status>
-        <!-- 克制（§3.8）：进行中 = 脉动点 + 弱化词；完成 = 时长或弱对勾；
-             失败 = danger 叉 + 红词（唯一高亮态）；G2 结果未知 = warn 点
-             + warn 词（不确定态，非失败非运行） -->
+        <!-- 克制（设计稿 §4.3）：进行中 = 脉动点 + 弱化词；**成功 = 行尾完全
+             为空**（既无对勾也无时长——成功不喧哗）；失败 = danger 叉 + 红词
+             （整屏唯一高亮态）；G2 结果未知 = warn 点 + warn 词 -->
         <template v-if="item.status !== 'settled'">
           <span class="dot lw-pulse" :class="{ 'dot--unknown': item.uncertain }" />
           <span :class="{ 'tool__unknown': item.uncertain }">{{ statusWord }}</span>
         </template>
-        <template v-else-if="item.ok">
-          <span v-if="durationText">{{ durationText }}</span>
-          <Icon v-else name="check" :size="12" />
-        </template>
-        <template v-else>
+        <template v-else-if="!item.ok">
           <Icon name="close" :size="11" class="tool__fail-icon" />
           <span class="tool__fail">{{ statusWord }}</span>
         </template>

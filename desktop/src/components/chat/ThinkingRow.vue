@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * 思考行（UI shell doc §3.9，v4.13 照《Tool Execution Process Display》与
- * 工具行同吃 ProcessRow 五列栅格）：brain 字形 + 类型「思考」+ 描述 =
+ * 思考行（UI shell doc §3.9，与工具行同吃 ProcessRow 行骨架）：brain 字形 +
+ * 类型「思考」+ 描述 =
  * 首句摘要（剥 markdown 记号，单行省略）+ 状态列（实时轮 = N s 走表；
  * 流式中 = 脉动点 + 「思考中…」；历史重放无时间戳不虚构，状态列留空）。
- * 点击展开 = 缩进竖线下的完整文本（12.5px / 1.55，无卡片底，220px 框内
- * 滚动，v2.97 裁定）；流式强制展开 + 自动跟随滚动、收口即折叠（v2.99）
- * 不变——只改展示层，折叠语义零改动。
+ * 点击展开 = 灰底块内的完整文本（12.5px / 1.55，`--lw-bg-inset` + `--lw-r-sm`，
+ * 220px 框内滚动；v2.97 的框约束不变，灰底块取代缩进竖线见设计稿 §7 /
+ * AC-7）；流式强制展开 + 自动跟随滚动、收口即折叠（v2.99）不变——只改
+ * 展示层，折叠语义零改动。
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -96,9 +97,11 @@ watch(
   background: var(--lw-ink-2);
 }
 .thinking__body {
-  margin-left: var(--lw-gap-12);
-  padding-left: var(--lw-gap-12);
-  border-left: 1px solid var(--lw-line-subtle);
+  /* 设计稿 §7 + AC-7：思考展开体 = 灰底块（井类 = --lw-bg-inset + r-sm），
+     不用缩进竖线——竖线留给工具明细的子行 */
+  padding: var(--lw-gap-8) var(--lw-gap-12);
+  border-radius: var(--lw-r-sm);
+  background: var(--lw-bg-inset);
   font-size: var(--lw-fs-12half);
   line-height: 1.55;
   color: var(--lw-ink-2);

@@ -19,7 +19,7 @@ import { useI18n } from "vue-i18n";
 import type { ChatItem, SystemItem, ToolItem } from "../../stores/chat";
 import type { TurnState } from "../../types";
 import { useSettingsStore } from "../../stores/settings";
-import { toolAction } from "../../lib/tool-summary";
+import { toolView } from "../../lib/chat/render-matrix";
 import { Icon } from "../../lib/icons";
 import ContextSummaryBlock from "./ContextSummaryBlock.vue";
 import MessageRow from "./MessageRow.vue";
@@ -81,11 +81,11 @@ const blocks = computed<Block[]>(() => {
     const tsList = cur
       .map((i) => ("ts" in i ? i.ts : undefined))
       .filter((v): v is number => v !== undefined);
-    // L1 极简摘要：块内动作名去重保序（§3.18 中文动作名，表外回落工具 id）
+    // L1 极简摘要：块内动作名去重保序（走身份矩阵的类型词，设计稿 §5.3 硬规矩
+    // 「动词永不出现裸工具 id」——表外身份由矩阵兜底成「工具」，不再是裸 id）
     const names: string[] = [];
     for (const i of tools) {
-      const a = toolAction(i.tool);
-      const base = a ? t(a.key, a.params ?? {}) : i.tool;
+      const base = t(`tool.type.${toolView(i.tool).verb}`);
       // v2.105 裁定：派生子代理的两条告知框（已派生/收束）退役，简洁状态
       // 收进动作名后——L1 极简行读作「派生子代理 · 已完成」
       const label =
