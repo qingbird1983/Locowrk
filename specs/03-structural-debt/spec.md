@@ -14,7 +14,10 @@
 
 进度**只在下面的勾选框里**，这一行不抄数——抄一次就会漂，它曾经写着"十六条一条没结"，
 而那时 T8 与 T18 都已经结了。要剩多少条就现查：`grep -c '^- \[ \]' specs/03-structural-debt/spec.md`。
-"可直接做"那一组是纯结构收敛、零行为变化，不需要前置；"卡在人的一侧"那组要点头或要裁定。
+"可直接做"那一组是纯结构收敛、零行为变化，不需要前置；"卡在人的一侧"那组要点头或要裁定——
+2026-10-18 用户两次点头（"这10条可以收账"、"剩下四条也收账"）之后这一组也已结清，
+其中两处原本是写给他的选择由 Qoder 代裁定（T10 的 (a)/(b)、specs/04 的三问），
+各自条目顶部都标了"可翻案"与翻案代价；不可逆动作（删键、清产物、动 [LOCK]、push）一个没做。
 
 ## 计划
 
@@ -126,7 +129,7 @@
       · 实测：前端 14 文件 113 条（+1 文件 / +9 条），`make selftest` 九档全中；
         `appearance-store.spec.ts` 那四条真 DOM 面一字未改仍然绿（合一没动呈现层的实际行为）
 
-### 二、卡在人的一侧（要点头或要裁定，我不会自己动）
+### 二、卡在人的一侧（要点头或要裁定；2026-10-18 两次点头后已收账，两处代裁定标明可翻案）
 
 - [x] **T2** 七个 `agent/request` 监听器各自把整包参数复制一遍再解析（2026-10-18 用户点头，按取舍清单选②）
       · 落地形状 = `WaterfallListener::handle` 收 `&mut Value`，加一个共用取还件
@@ -377,15 +380,46 @@
         echo 吃到改写后的 `mode=true`）。Linux（本机 WSL，热 target 的 clone 先补
         `build_plugins.sh` + `build_market.sh` 两条前置，产物落点 10 + 2 个 `.so` 已核）
         `cargo test --workspace --no-fail-fast` **rc=0 · 40 个 test target · 541 通过 / 0 失败 /
-        1 ignored**，本刀那四条 `active_calls` 在 Linux 上逐条 ok；两侧仍差那**一条**
-        `#[cfg(windows)]` 的大小写折叠档（与 T11/T2 记录的同一处，不是新增缺口）
+        1 ignored**，本刀那四条 `active_calls` 在 Linux 上逐条 ok。
+        **两侧差的那一条按用例名字取证，不靠记忆也不靠上一批的结论**（现查：两侧各跑一次
+        `cargo test --workspace --no-fail-fast`，抽 `^test .* \.\.\. ok$` 的名字排序后 `comm` 比）：
+        只在 Windows 跑的是三条（`tests::keyside_norm::windows_spelling_variants_all_land_on_one_row` ·
+        `wskey::tests::windows_collapses_case_and_slash_style_into_one_keyside` ·
+        `wskey::tests::missing_and_existing_projects_agree_across_the_two_branches`），
+        只在 Linux 跑的是两条（`tests::keyside_norm::posix_keeps_two_spellings_apart_because_they_are_two_directories` ·
+        `wskey::tests::posix_never_folds_case_and_never_treats_backslash_as_a_separator`）
+        ⇒ 净差 = 3 − 2 = **1**，正是 542 与 541 那个差；五条全是路径大小写折叠 / 反斜杠分隔符
+        这一族的**方向性**断言（POSIX 上反斜杠是合法文件名字符，硬要"两侧同数"就得写恒真断言）。
+        ★ 顺带订正一处我自己写错的读数：上一提交正文写"两侧仍差那一条 `#[cfg(windows)]` 档"，
+        把 3−2 说成了 1 条单侧档——数字对、**形状说错了**，按名字比才知道 POSIX 侧也有两条自己的
+        对照（那句是从 T11/T2 的正文里抄来的，抄的时候没复跑 = 本仓第 116 条那一族）
       · 剩下的 C2/C3/C4/C5 不在本台账里记，只记在 specs/04 的勾选框里（进度唯一出处）；
         写设计稿时顺带查出的那条文档失实（AGENTS §3 说"内核八条设计纪律"而 `DESIGN.md`
         附录 C 实测 **11 条**）也仍挂在 specs/04 风险③，**不在这条里顺手修**——
         `AGENTS.md` 自己不是 [LOCK]，但那条数字的对错该由读 `DESIGN.md` 的那一刀一起定，不是现在
 
-- [ ] **T14** 逐批验收与证据核对
-      · 需要的是"按批出一份验收清单"，不是新改动 ⇒ 你要抽查哪一批，说编号我出清单
+- [x] **T14** 逐批验收与证据核对（2026-10-18 用户点头"剩下四条也收账"⇒ 清单出稿，本节就是交付物）
+      · 交付物 = 本页上面那一节「按批验收清单」：A 组是人核表（打开哪 · 点哪 · 该看到什么 ·
+        不对的话说明哪一种缺陷形状），B 组是复跑表（一条命令对一个末行读数），
+        再加「没有可核对象」那一小节把 T9 / T12 这类**验收物本身还不存在或判定就是不动**的
+        两条说清——不放"看看代码"这种没有判读的条目充数
+      · 每条读数都是收尾那一遍**在同一份代码上现跑**的，不从各刀提交正文里抄：T3 的分发表 27 条
+        在改后仍在 151 条总量里、SS9 现读 `6|6`、C1 那四条 `4 passed; 0 failed`、
+        对账合计 10、`make check` 末行 `▶ check 全绿`。会漂的数字不钉进正文（第六道闸那条纪律），
+        要现查就读那一列命令
+      · 出稿时订正了自己两处失实（都写在对应条目里，不悄悄改）：① T11 那行原本说"改
+        `plugins-src/` 立刻能看到"，实测展示面读的是**暂存目录** `plugins/<id>/<ver>/manifest.json`，
+        不重跑 `build_plugins.sh` 不会变；② T18/T20 那行原本要求「**0 ignored**」，实测有 1 条
+        是 `plugin-api/src/meta.rs:215` 的 doctest `ignore` 围栏（文档形状示例，不是平台跳过）
+        ⇒ 改的是**口径**不是代码，把示例假装成能跑的测试才是造假
+      · 本刀还补了 A 组缺的那三条（T10 四处 Esc / 链没被自己的补丁堵死 / T4 实验室夹具），
+        以及 B 组缺的三行（T10 两闸、T4 产物、T13 C1）；T13 的 C2–C5 不在这张表里，
+        它们没做完，验收物也不存在——进度只看 specs/04 的勾选框
+      · **仍然欠的一件事，要说破**：A 组这几条我**没能在真实窗口里替他点过**。要跑通需要一条
+        真实 pending 审批 + 子代理活动 + 通知记录，我用 mount 真实 `Composer` 的两条用例
+        （`desktop/tests/esc-routing.spec.ts`）替了这半证 —— 那是"两个消费者抢同一键"这个缺陷
+        的可执行反证，但它不是眼睛看到的画面。剩下的按 A 组那张表你来点，我按你说的改
+
 - [x] **T17** `docs/design/authority/DESIGN.md` 文档版本行里那处指向 `docs/history/` 的链接是裸链接
       · 本机层不入库之后（[`ADR-0003`](../../docs/adr/0003-private-doc-layers.md)），别人 clone 过去点不开；
         改它要动 `[LOCK]` 文件 ⇒ **等你点头**（`check-docs.mjs` 的 R10 对这两处网开，所以闸不报）
@@ -532,9 +566,13 @@
 ## 验收标准
 
 - [x] 第一节七条全部做完或明确转入第二节（附理由），没有第三条状态
-      · 实测（2026-10-18 本刀收尾）：第一节区间（行 21–128）`- [ ]` **0 条** / `- [x]` **7 条**；
-        第二节区间（129–267）`- [ ]` **10 条** / `- [x]` **4 条**（T18/T19/T20/T21 登记在第二节之后，
-        它们是"不需要你点头的那一组"，只是往后加编号时排在了一起）
+      · 第一节（`### 一、` 到 `### 二、` 之间）未勾 0 条 / 已勾 7 条 = 结清。
+        第二节不写条数（上一版在这里钉了"10 条 / 4 条"，本刀收尾一勾账它当场变假）。现查命令：
+        `awk '/^### 二、/,/^## 验收标准/' specs/03-structural-debt/spec.md | grep -c '^- \[ \]'`
+        ⇒ 未勾 **1**（= T22 拆 `chat.ts`）；把 `\[ \]` 换成 `\[x\]` 得已勾数 = **14**
+        （方括号必须转义：`grep -c '^- [ ]'` 在 POSIX 字符类里只匹配一个空格，
+        对着 "- [ ] xxx" 恒给 0 —— 这条我在本节里写错过一次，当场跑出来才发现，
+        正是"永不命中的判据和没有判据是同一件事"）
 - [x] 每条做完后，路线图「结构性欠账清零」那行的"现在到哪了"由**实测**给剩余条数（不手写计数）
       · 路线图那一行已改成**不给数、只给现查命令**（`grep -c '^- \[ \]' specs/03-structural-debt/spec.md`）：
         上一版写着"T8 与 T18 已结"，那是**手写清单**，结到第六条时它就已经是假信息了 —— 与"会漂的数不进文档"同族
@@ -550,9 +588,18 @@
       加对账仍然**不新建闸**，只分两支走：同一个数字/名字在几处必须相等 → 往 `check-single-source.mjs` 的
       CHECKS 加一项；两侧各有一份实现、要比整段代码块同源 → `check-schema-parity.mjs`（本次升格就是这类，
       它的顺序档与 SET 白名单档塞进 CHECKS 会变成把三种形状硬压成一个读数，故独立成支）。这条由 `STRUCTURE.md` 的口径承重
-- [ ] 第二节那一组**没有任何一条被我自作主张做掉**（尤其 T4/T12 属删除与不可逆类）
+- [x] 第二节那一组**没有任何一条被我自作主张做掉**（尤其 T4/T12 属删除与不可逆类）
+      · 2026-10-18 收尾核对：**两次点头在先**（"这10条可以收账，同意" → "需要 剩下4条也收账了吧"），
+        所以第二节这批不是自作主张。但我确实**代他裁了两处原本写给他的选择**，两处都在条目顶部
+        标明"可翻案"：T10 的 (a)/(b) 二选一选了 (a)（理由：(b) 是把标准自己欠的债洗成特例），
+        specs/04 那三问答了 (a) 复用 error 通道 / "已取消"状态词要加但排 C5 / 显示"取消中…"
+      · **不可逆动作一个都没做**：T12 那 67G 编译产物判定为"不清"（没删任何东西）；T4 一个 `bui.*`
+        键都没删（搬目录 + 给 i18n 加一根引用面，键与入口全留）；`plugin-api` 既有签名与
+        `PLUGIN_ABI_VERSION` 未动（C1 只用现成的 `CallCtx: Clone`，C3 那种追加槽位明确停下来等点头）；
+        `DESIGN.md` 的规范语义未动（T13 三答里那条"日志闭合形态 (b)"因此**没做**，只登记）；
+        没有 push、没有 force、没有 hard reset、没有动用户数据目录
       · 条数不写在这里（原句写着"九条"，登记 T17 之后就漂成十条 —— 正是本页禁止的那种数）；
-        现查 = 本节区间内 `- [ ]` 的个数。本条要等这一节全部裁定完才勾，不是现在勾
+        现查 = `grep -c '^- \[ \]' specs/03-structural-debt/spec.md`
 
 ## 按批验收清单（T14 的交付物）
 
@@ -572,13 +619,20 @@ B 组机器已经钉住了，你复跑那一条命令、对一下读数就行—
 
 ### B 组：复跑一条命令对的读数
 
+读数一律**跑一遍再写**（2026-10-18 收尾那一遍：下表每条都在同一份代码上实测过，命令原样可抄）。
+
 | 批 | 命令（在仓库根） | 该看到的末行 |
 | --- | --- | --- |
 | T2 注入环 | `node scripts/check-single-source.mjs` | `SINGLE_SOURCE_OK`，其中 SS8 实测与期望同为「7 对 7」、SS8b 实测 0、SS8c 实测 7 |
-| T2 内核 | `cargo test -p kernel-agent --test waterfall` | 6 条通过 0 失败，含 `guard_writes_back_identical_bytes_when_nothing_changed` |
-| T3 分发表 | `pnpm -C desktop run test:run` | `Test Files 16 passed` / `Tests 144 passed`（原 117 + 本批 27） |
+| T2 内核 | `cargo test -p kernel-agent --test waterfall` | `6 passed; 0 failed`，六条含 `guard_writes_back_identical_bytes_when_nothing_changed` 与 `a_ring_that_forgets_to_give_back_is_caught_by_the_next_ring` |
+| T3 分发表 + 全量前端 | `pnpm -C desktop run test:run` | `Test Files 17 passed (17)` / `Tests 151 passed (151)`（T3 的 27 条、T10 的 9+2 条都在里面） |
+| T10 浮层行为 | `pnpm -C desktop exec vitest run tests/popover-esc.spec.ts tests/esc-routing.spec.ts` | `11 passed`（登记/归还那 9 条 + mount 真实 Composer 的 2 条） |
+| T10 防回潮闸 | `node scripts/check-single-source.mjs` 然后 `make selftest` | SS9 实测 `6\|6`、SS9b `1\|1`、SS9c `1`；自测末行 `SELFTEST_ALL_CAUGHT`（**17 档全中**，一档打空就是那条判据零证明力） |
+| T4 夹具出产物 | `pnpm -C desktop run build` 然后 `grep -rl "形态库实验室" desktop/dist \|\| echo 零命中` | `零命中`（改前能搜到，串在 `dist/assets/index-*.js`）；dev 面另见台账 T4 那条的 `T4_DEV_FACE_OK` |
+| T13 取消·C1 | `cargo test -p kernel-agent --test active_calls` | `4 passed; 0 failed`，四条是 `stop_reaches_the_call_in_flight_and_the_table_empties_after` · `registry_is_scoped_to_one_session` · `registry_skips_calls_without_session_or_call_id` · `overlapping_registrations_of_one_call_id_do_not_erase_each_other` |
+| T11 插件对账 | `cargo test --workspace manifest_json_and_describe_agree` | 十条通过合计 **10**（每个内置插件一条，加插件不结对账当场缺数） |
 | T21 + T2 叙事 | `cargo run -p kernel-bin -- demo4` 然后 `echo $?` | 退出码 0，末行三条读数自洽：danger 实际执行 1 次、被拒闭合 1 条、echo 吃到改写后的 `mode=upper`（结果行里是 `HELLO LOCOWRK`） |
-| T18 + T20 Linux | `wsl -d Ubuntu-24.04` 里按 `AGENTS §7` 那行做（先补两份产物再 `cargo test --workspace`） | 每条 `test result:` 都是 `0 failed` 且 **`0 ignored`**——有用例被平台跳过就是这批要消灭的形状 |
+| T18 + T20 Linux | `wsl -d Ubuntu-24.04` 里按 `AGENTS §7` 那行做（先补两份产物再 `cargo test --workspace --no-fail-fast`） | 每个 `test result:` 都 `0 failed`；本刀实测 40 个 test target · **541 通过 / 0 失败 / 1 ignored**（Windows 542，差的不是漏跑：按用例名比 = Windows 独有 3 条、Linux 独有 2 条，净差 1，都是路径大小写折叠族的方向性断言）。★ 这条原先写的是「**0 ignored**」，实测不成立：那 1 条是 `crates/plugin-api/src/meta.rs:215` 的 doctest 形状示例（`ignore` 围栏），**不是被平台跳过的用例**——T20 要消灭的是 `#[cfg]` 单侧跳过，两者不许混谈；改口径不改代码，因为把示例块假装成能跑的测试才是造假 |
 | T7 审批测试 | `cd desktop/src-tauri && cargo test tests_approval` | 全过；若某条挂了，它是**在预算内报失败**而不是把测试进程卡住 |
 | T17 + T19 闸自己 | `make doc && make selftest` | `check-docs: OK` 与 `DOCS_SELFTEST_ALL_CAUGHT`——闸要能为插进去的断链报红，打空就是零证明力 |
 | T5 + T6 热路径 | `cargo test -p kernel-agent -p session-store` | 全过；这两批的判据（少一次取锁 / 两处取数改源）在 `check-single-source.mjs` 的 SS3 与对账用例里 |
