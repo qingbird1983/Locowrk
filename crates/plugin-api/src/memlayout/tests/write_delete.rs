@@ -219,3 +219,24 @@ fn deleting_into_a_blocked_layer_errors_instead_of_claiming_absence() {
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&absent);
 }
+
+/// 一条**合法但很长**的 key 必须写得进、读得回（S1 刀③b 的实测缺陷落在这里才有红证：
+/// 工具参数面允许 key 到 512 字节，而 Windows 的路径上限会把它咬成
+/// `os error 123`，于是那次写的后果是"这条记忆没记上"）。
+/// 纯函数那一半在 `layout.rs::an_overlong_key_stem_is_bounded_and_still_distinguishes`；
+/// 这一半要的是**真的落一次盘**——长度问题住在文件系统，不住在算式里。
+#[test]
+fn a_key_at_the_interface_ceiling_round_trips_through_the_disk() {
+    let root = tmp_root("long-key");
+    let key = "k".repeat(512);
+    write_fact(&root, &entry("", &key, "长键位的正文")).unwrap();
+    let back = read_fact(&root, "", &key)
+        .unwrap()
+        .expect("512 字节的合法 key 写得进也读得回");
+    assert_eq!(back.value, "长键位的正文");
+    assert_eq!(back.key, key, "身份在 frontmatter `name`，不靠文件名");
+    // 删除也按同一条算式找得到（幂等判据 = 文件在不在）
+    assert!(delete_fact(&root, "", &key).unwrap(), "删得掉同一文件");
+    assert!(!delete_fact(&root, "", &key).unwrap(), "再删 = 没有这条");
+    let _ = std::fs::remove_dir_all(&root);
+}

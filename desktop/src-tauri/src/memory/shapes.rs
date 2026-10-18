@@ -12,7 +12,11 @@
 
 use serde::Serialize;
 
-/// 与 memory-sqlite 插件同限：key 主键不能无限长，value 防 runaway 写。
+/// 写进来的东西有多大：**key** 是主键（现在还是文件名的一部分）不能无限长，
+/// **value** 防 runaway 写。
+/// ⚠ 同一对数字在插件侧 `store/limits.rs` 还有一份（两个出处，改上限要两边一起改）。
+/// 刀③b 把存储收成了一个，这两个常量没收——收它要动工具参数面与宿主校验的共享方向，
+/// 已登记 specs/05 挂账，不在本刀顺手改。
 pub(crate) const KEY_MAX: usize = 512;
 pub(crate) const VALUE_MAX: usize = 256 * 1024;
 /// 管理页单次列举上限（页内滚动不分页，200 条对"用户的笔记"足够）。
@@ -48,8 +52,9 @@ impl From<&plugin_api::memlayout::StoredFact> for MemoryRow {
     }
 }
 
-/// 与 memory-sqlite 插件**逐字节同源**的权威表形状（两侧各持一份，迁移等价性依赖它
-/// 一致；收尾判据 = `tmp/q5-parity.mjs` 剥注释后比常量本体与两条 ALTER 语句）。
+/// **权威表形状**——自 S1 刀③b 起这是它唯一的出处（原本"与 memory-sqlite 插件逐字节
+/// 同源、两侧各持一份"，插件那一份连同 `store/schema.rs` 一起退役了；收尾判据也从
+/// "两侧比"改成宿主单侧的 `scripts/check-schema-parity.mjs` H1–H7）。
 /// ⚠ `IF NOT EXISTS` 是新加的：这一条串此前只服务 `ensure_workspace_schema` 的旧表重建，
 /// `open_conn` 里另写了一份带 `IF NOT EXISTS` 的同义字面量 = **同一属性两个出处**（历批
 /// 立的「统一与否要数还剩几个出处」在这里正好适用）⇒ 现在收成一份。

@@ -1,19 +1,22 @@
 //! memory 三态用例：正常（roundtrip / undo 还原 / 搜索 / 列举）/ 边界
-//! （缺失键 no-op、参数上限、缺字段拒绝）/ 恶意（SQL 注入惰性、LIKE
-//! 通配符按字面量）/ 项目隔离（㉘：同名 key 各项目互不覆盖互不可见、
-//! undo 忠实还原原键位、旧库迁移归入未归属）。涉 env（LOCOWRK_DATA_DIR）
-//! 用例全程持锁串行。
+//! （缺失键 no-op、参数上限、缺字段拒绝）/ 恶意（键位里的路径与 SQL 注入形态都只是
+//! 数据）/ 项目隔离（㉘：同名 key 各项目互不覆盖互不可见、undo 忠实还原原键位）。
+//! 涉 env（LOCOWRK_DATA_DIR）用例全程持锁串行。
 //! 批 F-15 目录化：共享假件与 env 锁留本文件，用例按面分簇见 `kv_basic` /
 //! `project_isolation` / `scope_two_layer` / `human_md_layer`；Q2（MR §6）加
-//! `keyside_norm`（键位归一：同项目两种写法在库里只有一行）；Q5（ML §3.2 · L1）加
-//! `learning`（学习面两列的迁移与"写路径不清学习量"——宿主侧同题另有一簇，两侧各测各的
-//! 因为谁先访问谁执行 ALTER）；台账 T11 加 `manifest_json`（磁盘清单 ↔ 代码 describe
+//! `keyside_norm`（键位归一：同项目两种写法只有一个落点）；S1 刀③a 加 `type_layer`
+//! （四类型与落点层）；台账 T11 加 `manifest_json`（磁盘清单 ↔ 代码 describe
 //! 同源对账，十份插件各一条，形状相同、由 `check-single-source.mjs` 的 SS7 数条数）。
+//!
+//! 随 S1 刀③b 退役的簇：`learning`（L1 学习面两列在**插件侧**的迁移与"写路径不清
+//! 学习量"）。它测的是"宿主与插件开同一个库、谁先访问谁执行 ALTER"，而那两侧中的一侧
+//! 在本刀不再开库 ⇒ 被测对象消失，不是把判据放宽。学习量那两列仍然活着，迁移与
+//! 不清零的判据留在宿主那一侧（`desktop/src-tauri/src/memory/tests/learning.rs`），
+//! 那里现在是无副作用的那一侧。
 
 mod human_md_layer;
 mod keyside_norm;
 mod kv_basic;
-mod learning;
 mod manifest_json;
 mod project_isolation;
 mod scope_two_layer;

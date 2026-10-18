@@ -42,10 +42,10 @@ impl MemoryStore {
     /// 顺手改掉管理页的行为：
     /// ① 排序 = `updated_at DESC, key`（`memlayout::iter_facts` 里已按这条排，
     ///    对齐的理由与后果写在那片头注）；
-    /// ② 过滤 = key / value / tags 任一子串命中。SQLite 的 `LIKE` 默认对 **ASCII
-    ///    大小写不敏感** ⇒ 这里必须折叠大小写：写成裸 `contains` 就变成"搜 rust
-    ///    搜不到 Rust"那种没人会立刻发现的小退化（`%` `_` 在 SQL 侧被 ESCAPE 成
-    ///    字面量，在 `contains` 侧天然是字面量 ⇒ 这一维不用做转义）；
+    /// ② 过滤 = key / value / tags 任一子串命中，ASCII 大小写不敏感——这一维现在住在
+    ///    [`plugin_api::memlayout::fact_matches`]（S1 刀③b 抽过去的）。原先这里是一份
+    ///    本地闭包，而插件的 `memory_search` 改道 md 之后就是同一条谓词的第二个消费者：
+    ///    两处各写一份迟早漂成"管理页搜得到、工具搜不到"，那种漂移在界面上看就是"记忆丢了"；
     /// ③ 条数上限 = 同一个钳过的 `limit`。
     /// `unreadable` 只 warn、不报错也不静默：列表照常出其余那些，但"没给看的条数"
     /// 必须落到日志里——它与"没记过"是两个意思（刀②c-1 起这计数也含整层扫不动）。
@@ -57,11 +57,9 @@ impl MemoryStore {
                 scan.unreadable
             );
         }
-        let needle = query.to_ascii_lowercase();
-        let hit = |s: &str| needle.is_empty() || s.to_ascii_lowercase().contains(&needle);
         scan.facts
             .iter()
-            .filter(|f| hit(&f.key) || hit(&f.value) || hit(&f.tags))
+            .filter(|f| plugin_api::memlayout::fact_matches(f, query))
             .take(limit)
             .map(MemoryRow::from)
             .collect()

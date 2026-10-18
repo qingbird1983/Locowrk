@@ -304,25 +304,92 @@
   `render` 把 type 写死回 `fact`（四类型没有落盘通路）/ undo 把分类抹平。
   ⚠ `CASE 38` 第一版**打空**过一次，打的不是代码而是脚本自己的过滤串（用例名抄错 ⇒
   cargo 报 0 条仍然 rc=0）——是"命中用例数 = 0 就叫停"那条自检把它拦下来的，
-  否则这条会被记成"零证明力"而实际上一行都没跑。
+  否则这条会被记成"零证明力"而实际上一行都没跑。刀③b-1 之后它的锚搬了位置
+  （`store.rs` 里"载荷没 type 就去读现存文件"那一支随 mdsync 消失 ⇒ 改指
+  `store/undo.rs::payload_type`），复跑仍红、命中 1 条。
   测试去向：`memlayout/tests/kind.rs` 新簇 6 条（同形担保 / 四类型逐个往返 / 值域外两侧收档 /
   旧文件无那行且不回填 / `layer_for` 十三档 / 提醒只咬两个类型）+ 插件 `tests/type_layer.rs`
   新簇 7 条（无类型照旧落项目 / user+feedback 落全局且不留第二份 / 显式 scope 两个方向都赢 /
-  未归属会话被类型救场 / 提醒不拦写 / 撤销保留文件里的分类 / 值域外不落进真源文件）。
+  未归属会话被类型救场 / 提醒不拦写 / 撤销把载荷里的分类一起还原 / 值域外不落进真源文件）。
   ⚠ 本刀踩到的一条**夹具脆弱性**（登记，未修）：插件测试簇共用 `ENV_LOCK`，一条断言失败时
    panic 线程带着锁下去 ⇒ 同批后面每条拿到的都是 `PoisonError` 而不是它自己的结论。
   我自己刚踩了一次（feedback 落全局却断言项目层文件在场 ⇒ 三条红，其中两条是被污染的），
   所以那种"一片红"永远要先读第一条的 panic 行再下结论。
-- **刀③b（工具内部改道 md）⏳ 待做**：`plugins-src/memory-sqlite` 那**六枚**工具
-  （`memory_write` / `memory_read` / `memory_list` / `memory_search` / `memory_delete` /
-  `memory_undo`——本节原文写的是"save / read / search / delete 四枚"，按 `lib.rs` 实况订正：
-  漏了 `list` 与 `undo`，而它们同样按库寻址，只改四枚会留下半改状态）内部实现从 sqlite 改 md，
-  工具名字与参数面不动（提示词与审批面才不会跟着漂）；摘掉 `mdsync` 与宿主影子写、
-  `LOCOWRK_MEMORY_FILES` 开关退役，新立 AC-S1-9 那条判据并配窄变异。
-  两处连锁要先想清楚：① 插件不再开库 ⇒ `store/schema.rs` 的建表与迁移整片退役 ⇒
-  `check-db-schema-parity` 那把"两侧逐字节相同"的闸失去一侧（要跟着退役或改判据）；
-  ② 学习档 `recall_relevant` 仍读 `memories` 表（刀②c-2 第 2 件，等点头）——它是这一表
-  在刀③b 之后**唯一**的读者，所以本刀的默认形状是"表留着、只由 reconcile 从真源重建"。
+- **刀③b-1（插件六枚工具改道 md）✅ 2026-10-18 已落地**。
+  工具面按 `lib.rs` 实况是**六枚**（`memory_write` / `read` / `list` / `search` / `delete` /
+  `undo`），本节原文写的"save / read / search / delete 四枚"漏了 `list` 与 `undo`——它们
+  同样按库寻址，只改四枚会留下半改状态。名字、参数面与返回字段名一律不动，
+  所以**既有 31 条接口用例一字未改全绿**（双层纪律、undo 契约、分页与 total 口径、
+  大小写与通配符字面量这些都在里面）——这就是"换存储不换契约"的实证。
+  新增 `store/facts.rs`（真源读件 + 键位裁决）承担原来 `rows.rs` 的职责，两处形状值得点名：
+  ① `Hit { ws, fact }`——从磁盘读到内存的第一站就把"我问的是哪一层"带在身上，因为
+  `StoredFact.workspace` 在人新建的无 frontmatter 文件上是**目录名兜底**（第四处 hint 陷阱），
+  拿它当 undo 的还原目标会把记忆写进一个不存在的键位；
+  ② 列举的排序仍是 `ORDER BY key` 的**字节序**（大小写敏感），与搜索那条
+  `updated_at DESC, key` + 折叠大小写不是同一口径——照抄退役掉的 SQL，不顺手"改对"。
+  退役清单（都写在 `store.rs` 头注里，免得下一轮再被问"怎么没了"）：`rusqlite` 依赖 ·
+  `store/schema.rs`（建表 + 两份旧库迁移）· `rows.rs` 的 SQL 件 · `mdsync` 那层同步与它
+  带回的 `md_warning` 字段 · 宿主两处 env 注入（`state/boot.rs` 与 `commands/settings.rs`）。
+  **`memlayout::files_enabled` 本身留着**：它是 `plugin-api` 的既有对外签名，删除属
+  AGENTS §5 禁区 ⇒ 只把注释改成"自刀③b 起无人调用"并挂账（要退役得先向人申请）。
+  两处连锁按预告落地：① `check-schema-parity.mjs` 从"两侧逐字节相同"改成**宿主单侧形状**
+  ——A1/C1/D1/D2 那四档"两侧比"没有对象了，摘掉；留成 H1–H7 七档（学习两列在场 / 两条
+  ALTER 原文在场 / 建表字面量一个出处 / 迁移四片段 / open 调一次 / 顺序 workspace 在前 /
+  SET 不含学习列），`--selftest` 七档变异全可见。脚本**没改名**：改名要动
+  `.github/workflows/ci.yml` 的步骤名，那是禁区。② 学习档 `recall_relevant` 仍读
+  `memories` 表，所以本刀的形状是"表留着、由宿主 reconcile 与 shadow 维护"，
+  **代价如实登记**：插件写的记忆不再即时进影子，要等下一轮对账 ⇒ `learnEnabled=true`
+  时语义召回看到的集合会滞后一次（缺省关，且那一格本来就等你拍板）。
+  撞出来的三个真问题（前两条是代码问题，第三条是测试耦合）：
+  ① **一条合法 key 写不进去**：工具参数面允许 key 到 512 字节（`KEY_MAX`，写给模型的契约），
+  而 Windows 的路径上限 260 会咬长文件名——实测 512 个 `k` 得到 `os error 123`。
+  由布局吸收而不是降接口上限：`key_file_stem` 现在按 `STEM_MAX_CHARS = 100` 收口，
+  手法与 `project_dir_name` 同源（可读前缀 + 全串 fnv 短哈希，确定性、不撞、按**字符**
+  切不按字节切）。红证两条：`layout.rs::an_overlong_key_stem_is_bounded_and_still_distinguishes`
+  （有界 + 前缀相同尾部不同 ⇒ 两个文件）与
+  `write_delete.rs::a_key_at_the_interface_ceiling_round_trips_through_the_disk`
+  （**真的落一次盘**——长度问题住在文件系统，不住在算式里）。
+  ② **一条讲排序的用例每隔若干次全量跑假红一次**：`recall_takes_the_global_layer…`
+  断言"同秒按 key 升序"，而它的夹具走 `store.write` 取墙钟 ⇒ 两次写入跨过秒边界时前提就没了
+  （实测抓到一回，报 `[pref.style, pref.lang]`）。改成经 `memlayout::write_fact` 把
+  `updated_at` 钉死，顺手把"库不在场"那半档换成更强的夹具（放一份**非数据库字节**：
+  实现里若还剩一处开库拿到的是 `Err`，而 rename 之后 open 会静悄悄新建空库、红只剩"少行"）。
+  ③ **一条端到端用例把库路径写进了断言**（`crates/plugin-host/tests/tools_batch3.rs`）：它测的
+  本来就是"写进去的记忆真的落了盘"，而那一半档取的是 `memory.sqlite3.is_file()` ⇒ 插件不再建库
+  之后必红（同文件另两条是 `ENV_LOCK` 的 `PoisonError` 连锁带红，不是它们自己的结论）。
+  订正按"断言语义不动、只换取数通道"：改成在数据根子树里找一个文件名 `user.lang.md`，
+  **不写目录名**——落点由布局算，端到端把布局写死就是下一次改布局的债。这一版比改前更强：
+  空库也算"库在场"，而现在要求那条 key 真的寻成了一个文件。
+  ⚠ 它为什么漏到 `make check` 才撞出来：分面自测跑的是 `-p plugin-api -p memory-sqlite` 加宿主
+  `cargo test --lib`，而 `plugin-host` 的**集成测试**（真实 dlopen）两边都不覆盖 ⇒ 改存储面的刀
+  分面绿不等于改动面绿，收尾仍要按改动面跑一次 `make check`。
+  **判据**：新增 `SS13`——插件记忆面（排 tests、**剥掉行注释**）里 `rusqlite` 引用 /
+  `… memories` 表名 SQL / `Connection::open` 三档形状恒 0。它为什么必须是结构判据：
+  "把某枚工具退回先写库"这种形状，那 31 条接口用例**一条都不会红**（它们判的是工具契约），
+  换存储在行为面上是不可见的。剥注释的原因与 SS11 同一个洞：退役说明在注释里留痕极多，
+  按名字数会得一片假红。
+  红证 = **磁盘变异 `CASE 39`**（不是 `--selftest` 那种内存变异——它等于让判据吃自己编的数，
+  零证明力）：往 `store/tools.rs` 塞一条**没人调用**的 `legacy_shadow_write`，字符串里同时含
+  `Connection::open` 与 `INSERT INTO … memories` 两个形状。同一份损坏态跑两遍：① 闸报红且
+  点名的就是 `SS13`；② `cargo test -p memory-sqlite` = **31 passed / 0 failed**。
+  两条合起来才叫"独有一档"——结构档看得见，行为面照旧全绿。为此给变异器加了 `also` 档
+  （在损坏态还原**之前**跑第二个命令，`expectGreen` 不绿就叫停，因为那说明立论要重估）。
+  **测试去向**（AGENTS §6.3 逐条交代）：删 4 条——`learning` 簇 3 条（测"宿主与插件两个实现
+  谁先访问谁 ALTER"，插件不再开库 ⇒ 没有对象）与 `legacy_key_only_table_migrates_into_unfiled_scope`
+  （测插件那两份旧库迁移）；两条都在簇头注里写了"被删的是什么、为什么没有等价形状可写"，
+  学习量两列的迁移与不清零判据仍留在宿主那一侧。改写 2 条
+  （`write_and_delete_sync_md_human_layer` → `write_and_delete_land_in_the_md_layer`，
+  那句 `md_warning.is_none()` 已经没有可失败的对应物，换成断言回显的层标与分类；
+  `recall_takes_the_global_layer…` 见上面②）。新增 3 条（上面两条长度红证 + `fact_matches`
+  抽成唯一口径后宿主管理页那条过滤用例照旧）。**零断言放宽**。
+- **刀③b-2（宿主影子写退役）⏳ 待做**：`crud.rs` 那四条 `shadow_*` 是最后一批"记忆内容的
+  SQL 写"（②c-1 留下的，唯一理由曾是"插件还按库寻址"，现在那理由消失）。
+  摘完之后影子的维护者只剩 `memory_reconcile` 一处 ⇒ AC-S1-9 那句"记忆写路径只许一个出处"
+  才在**宿主 + 插件两侧**同时成立。配套判据 = 宿主记忆面里"写 memories 内容的 SQL"
+  只许出现在 `reconcile.rs`（学习列的 `UPDATE … hit_count` 是另一件事，要按形状区分）。
+  连锁的测试：`a_failed_md_write_is_an_error_and_writes_no_shadow` 与
+  `host_writes_land_in_md_and_the_db_shadows_them` 测的都是被这一刀取消的形状，
+  要么反转要么随 `shadow_*` 一起退役——按 §6.3 交代，不静默删。
 - **刀④（`obsolete/` 与管理页）**：软删 + 清空真删（清空要确认）；管理页六枚命令读源换 md、
   加"三枚行为开关 + 每层一行"。**TreeBoard / TreeSection / InjectSection 三处嵌入不在本阶段动**
   （看板整体删除是 S4 的事，混在一刀里回滚不掉）。

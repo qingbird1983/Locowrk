@@ -138,7 +138,7 @@ fn the_why_hint_names_what_is_missing_without_blocking_the_write() {
 }
 
 #[test]
-fn an_undo_restores_the_value_but_keeps_the_type_that_is_in_the_file() {
+fn an_undo_restores_the_value_and_the_type_in_its_payload() {
     let _g = ENV_LOCK.lock().unwrap();
     let dir = temp_data_dir("type-undo");
     let ws = key_of(r"F:\proj\TypeUndo");
@@ -152,9 +152,10 @@ fn an_undo_restores_the_value_but_keeps_the_type_that_is_in_the_file() {
         &json!({ "key": "k.u", "value": "第二版", "type": "project" }),
     )
     .unwrap();
-    // undo 的载荷取自**库里那一行**，而库里没有 `type` 列 ⇒ `sync_write` 拿到的是 `None`。
-    // 那一档的语义是"沿用现存文件里的分类"，不是"当成没分类"：后者会让一次撤销
-    // 把人或模型定的类型抹平成 `fact`（值回滚与分类是两件事）。
+    // 刀③a 时这条载荷取自**库里那一行**（那里没有 `type` 列），所以要靠"读现存文件"把
+    // 分类接住；刀③b 之后载荷直接从真源读、天生带 `type` ⇒ 这一档现在断言的是
+    // **载荷通路**没把分类丢掉。跨版本的旧载荷仍缺这一维，代价写在 `store/undo.rs` 的
+    // `payload_type` 上（内容忠实回来、类型退回未分类）。
     store::memory_undo(
         &proj(&ws),
         &contract("call-2", json!({ "key": "k.u" }), second),

@@ -9,11 +9,11 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
-# 本地 SQLite 记忆库（bundled 特性自带源码编译，免系统 sqlite 依赖）；
+# S1 刀③b 起本插件不再链 SQLite：六枚工具读写的就是 `<数据根>/memory/` 下的 md
+# （`rusqlite` 与 `store/schema.rs` 一起退役，理由写在 `src/store.rs` 头注）。
 # serde_json / semver 经 plugin-api re-export。
 [dependencies]
 plugin-api = { workspace = true }
-rusqlite = { version = "0.32", features = ["bundled"] }
 
 # manifest 版本号来自编译期环境变量 LOCOWRK_PLUGIN_VERSION
 # （版本真源 = scripts/build_plugins.sh 的 stage 调用清单，此处不写死版本号）。

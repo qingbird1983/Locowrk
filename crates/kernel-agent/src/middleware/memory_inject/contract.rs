@@ -19,9 +19,10 @@ pub struct MemoryEntry {
     pub scope: String,
 }
 
-/// 记忆检索源契约：宿主实现（desktop 直读 memory.sqlite3，插件侧
-/// schema；ALTER 迁移同样归宿主）。同步短查询，不跨 await；任何失败
-/// 返回空表（实现内部 warn，不向上抛——注入不值得拦聊天）。
+/// 记忆检索源契约：宿主实现（desktop 直读**真源 md**——S1 刀②b-2 起这条通路不再读
+/// `memory.sqlite3`；那张影子表连同它的 ALTER 迁移仍归宿主，插件侧的建表与迁移随刀③b
+/// 退役）。同步短查询，不跨 await；任何失败返回空表（实现内部 warn，不向上抛——
+/// 注入不值得拦聊天）。
 ///
 /// `session_id`（㉘）：本 step 的会话 id——宿主据此把召回限定在该会话
 /// 归属的项目内（项目级记忆隔离，Context 文档 §4.6）；内核不解释

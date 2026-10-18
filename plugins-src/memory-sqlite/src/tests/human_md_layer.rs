@@ -1,14 +1,17 @@
-//! 人类层双写（F1，《Memory File-ization Design》§3）（自 `tests.rs` 批 F-15 拆出，
-//! 用例本体逐字未改）：写与删同步 memory md 文件。
+//! 真源 md 面（自 `tests.rs` 批 F-15 拆出，本刀改名）：写与删直接落
+//! `<数据根>/memory/` 下的文件。
+//!
+//! 这一簇原本叫"人类层**双写**"，测的是 F1 那套"sqlite 已落、md 是同步出去的人读面"。
+//! S1 刀③b 之后本插件只有一份存储 ⇒ 原名与那句 `md_warning` 断言都没有可失败的对应物了
+//! （字段本身已从实现里消失），所以断言搬去它现在真正管的事：**文件在不在、正文对不对**。
+//! 双写时代那条"md 失败只 warn 不破契约"的档就此退役，理由写在 `store.rs` 头注。
 
 use super::*;
 
 use plugin_api::serde_json::json;
 
-// ---- F1 人类层双写（《Memory File-ization Design》§3）----
-
 #[test]
-fn write_and_delete_sync_md_human_layer() {
+fn write_and_delete_land_in_the_md_layer() {
     let _g = ENV_LOCK.lock().unwrap();
     let dir = temp_data_dir("md-sync");
     // **Q2 键位归一**：`proj()` 走 `from_parts`，落库与 md 目录取的都是归一后的串，
@@ -20,7 +23,15 @@ fn write_and_delete_sync_md_human_layer() {
         &json!({ "key": "db.choice", "value": "sqlite", "tags": "pref" }),
     )
     .unwrap();
-    assert!(out.get("md_warning").is_none(), "双写成功不带回警告：{out}");
+    // 旧断言是 `md_warning.is_none()`（"同步成功不带回警告"）。那个字段随双写一起消失
+    // ⇒ 它已经没有任何可失败的对应物，所以换成这次写入真正的对外读数：落在哪一层、
+    // 被算成哪一类。
+    assert_eq!(
+        out["scope"],
+        json!("project"),
+        "归属会话缺省落项目层：{out}"
+    );
+    assert_eq!(out["type"], json!("fact"), "没报类型 = 未分类：{out}");
     let md = dir
         .join("memory")
         .join("projects")

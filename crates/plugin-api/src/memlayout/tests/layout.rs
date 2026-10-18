@@ -106,6 +106,39 @@ fn key_file_stem_is_filename_safe_and_reserved_aware() {
     assert_eq!(key_file_stem("..."), "_", "全点剥成占位");
 }
 
+/// 长度这一维由**布局**吸收，不由工具参数面吸收（S1 刀③b 实测撞到的缺陷：
+/// 一条 512 字节的合法 key 在 Windows 上得到 `os error 123` ⇒ 记忆写不进去）。
+/// 判据要钉的是三件事：有界、可读前缀还在、两个只差尾巴的长 key 不撞同一个文件。
+#[test]
+fn an_overlong_key_stem_is_bounded_and_still_distinguishes() {
+    let long = "k".repeat(512);
+    let stem = key_file_stem(&long);
+    assert!(
+        stem.chars().count() <= 100,
+        "stem 必须长度有界，实测 {}: {stem}",
+        stem.chars().count()
+    );
+    assert!(
+        stem.starts_with(&"k".repeat(50)),
+        "可读前缀要留在名字里（人打开文件夹还得认得出）"
+    );
+    // 同一个长 key 两次算出的必须**是同一个串**：寻址靠它，不稳定就等于写进去读不回来
+    assert_eq!(stem, key_file_stem(&long), "算式必须确定");
+    // 只有尾巴不同的两条不许塌成同一个文件（那会互相覆盖，而 SQLite 主键不会）
+    let mut other = "k".repeat(512);
+    other.pop();
+    other.push('z');
+    assert_ne!(stem, key_file_stem(&other), "前缀相同、尾部不同 ⇒ 两个文件");
+    // 中文 key 按**字符**收口而不是字节：按字节切会截在 UTF-8 中间（panic 或乱码名）
+    let cjk = "记".repeat(300);
+    let cs = key_file_stem(&cjk);
+    assert!(cs.chars().count() <= 100, "多字节同样有界");
+    assert!(
+        std::str::from_utf8(cs.as_bytes()).is_ok(),
+        "不许截出半个字符"
+    );
+}
+
 #[test]
 fn enabled_from_env_semantics() {
     assert!(enabled_from(None), "env 未设 = 开");

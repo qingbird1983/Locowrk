@@ -3,9 +3,10 @@
 //! 职责边界：本插件只做"跨会话记忆"（Agent 的持久笔记）；会话事件的
 //! 持久化本身归 kernel `session-store`（DESIGN §6），不在此重复。
 //!
-//! 存储：`<数据根>/memory.sqlite3`（固定路径，模型不可指定——没有路径
-//! 参数就没有路径逃逸面）。数据根 = `LOCOWRK_DATA_DIR` 或 HOME 下
-//! `.Locowrk`（权威实现在 `plugin_api::fsutil`）。
+//! 存储：`<数据根>/memory/` 下的 Markdown（S1 刀③b 起就是真源；插件名里的
+//! "sqlite" 是历史包袱，改名要动注册面与市场暂存产物 ⇒ 见 specs/05 刀③b 末段）。
+//! 路径由 `plugin_api::memlayout` 算（宿主与插件同一份实现，同一键位必落同一文件），
+//! 模型不可指定——没有路径参数就没有路径逃逸面。
 //!
 //! 副作用分级（plugins.md §三表格把本插件整体标为 Pure；这里按用户
 //! "宁严勿松"原则对写操作收紧一档——Compensable 不触发审批、无 UX 代价，
@@ -272,9 +273,10 @@ impl WsCtx {
     ///
     /// **Q2（MR 稿 §6）起项目根先过 [`plugin_api::wskey::normalize`】**：记忆主键是
     /// `(workspace, key)`，同一个项目的两种写法（Windows 大小写 / 斜杠漂移 /
-    /// 尾分隔符）会落成两个主键，事实被劈成几份。归一放在**这里**而不是 SQL
-    /// 边界，因为写侧 `write_scope`、读侧 `scope()`、md 双写的目录名三处都从
-    /// `WsCtx` 取值 ⇒ 一处归一、三处同形；宿主侧 `workspace::scope_key` 调的是
+    /// 尾分隔符）会落成两个主键，事实被劈成几份。归一放在**这里**而不是存储边界
+    /// （自刀③b 起"边界"就是 `memlayout::fact_rel_path`），因为写侧 `write_scope`、
+    /// 读侧 `scope()`、md 目录名（`project_dir_name`）三处都从 `WsCtx` 取值
+    /// ⇒ 一处归一、三处同形；宿主侧 `workspace::scope_key` 调的是
     /// **同一个函数**，两侧串形恒等（不然注入侧按键位读不到插件写进去的行）。
     /// 判空用**归一后**的串：`"   "` 这类假串（折叠后为空）不许冒充项目键位。
     pub(crate) fn from_parts(session_id: Option<String>, workspace: Option<String>) -> WsCtx {

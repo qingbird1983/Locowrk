@@ -11,8 +11,8 @@
 //! - `settings`：设置存储——settings.json 于数据根；API Key 只落盘不出
 //!   IPC，投影仅 api_key_set（§13.1 / §13.5）
 //! - `memory`：记忆库宿主访问（⑪）——Memory-Inject 检索源（kernel-agent
-//!   MemorySource trait 的桌面实现）+ 记忆管理页存储支撑（memory.sqlite3
-//!   归 memory-sqlite 插件所有，宿主只做管理面访问）
+//!   MemorySource trait 的桌面实现）+ 记忆管理页存储支撑（读源 = 真源 md；
+//!   那张 `memory.sqlite3` 影子表现在只由宿主自己维护：学习量两列 + reconcile）
 //! - `llm`：真实模型接入（阶段八②，LLM.md v3.0）——自建 OpenAI 兼容统一客户端
 //!   适配器（openai / anthropic / ollama），由设置面板驱动分发
 //! - `demo_llm`：阶段五脚本模型（现为 llm 模块的未配置回落替身）

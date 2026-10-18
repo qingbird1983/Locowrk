@@ -26,8 +26,9 @@
 //! `system` 字段里，任何改写消息的决策方（历史上是 ctx-compact）都只动
 //! `messages`，会话日志也不落注入内容——投影零改动。
 //!
-//! 与 mw-audit 同理落在宿主侧：事实记忆库归 memory-sqlite
-//! 插件所有，内核不碰 SQL——检索经 [`MemorySource`] trait（组装点提供
+//! 与 mw-audit 同理落在宿主侧：事实记忆的真源是 md 文件（S1 刀③ 之后连插件都不开库，
+//! `memory-sqlite` 这个 ID 只拥有那六枚工具的入口），内核不碰存储——检索经
+//! [`MemorySource`] trait（组装点提供
 //! 实现，与 ApprovalResolver 同款"内核定契约、组装点实现"模式；不经
 //! ToolSource 走工具管道，否则每 step 一次 memory_list 会污染 ⑩ 的使用
 //! 统计与审计日志）。kernel 每 step 从会话重建 payload，`system` 恒从

@@ -58,7 +58,6 @@ pub async fn settings_set(
 ) -> Result<SettingsView, String> {
     let plugins_section_touched = plugins.is_some();
     let tools_section_touched = tools.is_some();
-    let memory_section_touched = memory.is_some();
     let view = state.settings.update(
         locale.clone(),
         appearance,
@@ -111,18 +110,10 @@ pub async fn settings_set(
     if tools_section_touched {
         crate::data_root::apply_fs_roots_env(&state.settings);
     }
-    // F1：记忆文件化总开关热更新（插件侧 memlayout 每次写前读 env，保存
-    // 即生效；宿主侧 MemoryStore/导出走 files_on 闭包本就实时）。
-    if memory_section_touched {
-        std::env::set_var(
-            "LOCOWRK_MEMORY_FILES",
-            if state.settings.memory().files {
-                "1"
-            } else {
-                "0"
-            },
-        );
-    }
+    // F1 记忆文件化总开关的热更新随 S1 刀③b 摘掉：env `LOCOWRK_MEMORY_FILES` 的最后
+    // 一个读者是插件侧那层"sqlite 成功后同步 md"，六枚工具直接写真源之后它无人可读
+    // （boot.rs 同款说明）。settings `memory.files` 这一项的去处（改义 / 退役 + 界面文案
+    // 订正）归刀④，见 specs/05 挂账——在那之前它是"存着但没有任何副作用"的一项。
     // ⑬：embedding 客户端热重建（检索信号/search_tools/经历/提取共用）
     state.reload_embed();
     // ⑬：插件自动停用巡检（缺省关；仅在天数 > 0 时跑，0 不复活已停用项）

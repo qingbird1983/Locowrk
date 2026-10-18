@@ -1,7 +1,8 @@
 //! 端到端集成测试：阶段八⑦第三批官方工具（真实 dlopen）。
 //!
 //! - memory-sqlite 1.2.0：memory_write→覆盖（previous 捕获）→ undo 契约
-//!   还原、memory_delete→undo 整条还原、库文件落在数据根
+//!   还原、memory_delete→undo 整条还原、**真源事实文件**落在数据根的 md 树里
+//!   （S1 刀③b 起插件不再开库，"持久化实体在场"这一档看的不再是 `memory.sqlite3`）
 //! - tool-git 1.1.0：真实 git 仓库 git_status/git_commit→undo_commit 契约、
 //!   git_push 到本地 bare 远端、允许根外仓库拒绝
 //! - tool-mcp 1.1.0：mcp.json → dlopen 后 describe 阶段发现 mcp_fake_*
@@ -36,6 +37,24 @@ fn git(cwd: &std::path::Path, argv: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+/// 在 `dir` 子树里找某个文件名（存在即可）。真源的落点目录名是布局细节
+/// （`global/` vs `projects/<可读名>-<哈希>/facts/`，还受未归属键位影响），
+/// 端到端断言把它写死就等于让测试跟着布局漂——刀③b 之前那条断言写的是库文件路径，
+/// 库一退役就必然红，正是同一种耦合。
+fn find_file_named(dir: &std::path::Path, name: &str) -> bool {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    rd.flatten().any(|e| {
+        let p = e.path();
+        if p.is_dir() {
+            find_file_named(&p, name)
+        } else {
+            p.file_name().and_then(|s| s.to_str()) == Some(name)
+        }
+    })
+}
+
 #[test]
 fn memory_write_overwrite_undo_and_delete_undo_end_to_end() {
     let _env = env_lock().lock().unwrap();
@@ -47,8 +66,9 @@ fn memory_write_overwrite_undo_and_delete_undo_end_to_end() {
     load_activate("memory-sqlite", "1.2.0", &registry);
     let source = RegistryToolSource::new(Arc::clone(&registry));
 
-    // 库文件固定在数据根（模型无路径参数——无逃逸面）
-    let db = root.join("memory.sqlite3");
+    // 真源 = `<数据根>/memory/` 下的一条 md（模型无路径参数——无逃逸面）。
+    // 落点目录由布局算，端到端不猜它的名字，只认"这个 key 变成了一个文件"。
+    let fact_file = "user.lang.md";
 
     let write = |args: Value| {
         call(source.resolve("memory_write").unwrap().as_ref(), args).expect("memory_write ok")
@@ -90,8 +110,13 @@ fn memory_write_overwrite_undo_and_delete_undo_end_to_end() {
     .expect("undo delete ok");
     assert_eq!(get("user.lang")["value"], json!("zh"));
 
-    // 持久化实体在数据根生成
-    assert!(db.is_file(), "memory db expected at {}", db.display());
+    // 持久化实体在数据根生成：undo 之后磁盘上那条真源还在（不是只在内存里演了一遍）。
+    // 这一档在刀③b 之前是 `memory.sqlite3.is_file()`——空库也算在场，其实比现在这版弱。
+    assert!(
+        find_file_named(&root, fact_file),
+        "expected the fact file `{fact_file}` under {}",
+        root.display()
+    );
 
     unsafe { std::env::remove_var("LOCOWRK_DATA_DIR") };
     let _ = std::fs::remove_dir_all(&root);

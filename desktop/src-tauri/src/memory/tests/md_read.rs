@@ -152,24 +152,43 @@ fn listing_filter_matches_tags_and_folds_case_like_sql_like() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// **②b-2 的硬证据（AC-S1-2 那一半）**：把库改名之后，注入通路照常从 md 出全局层，
+/// **②b-2 的硬证据（AC-S1-2 那一半）**：影子库是坏字节时，注入通路照常从 md 出全局层，
 /// 而项目层那条依然不注入（v2.136 裁定的"项目侧全提醒制"不许因为换读源而走样）。
-/// 实现里若还剩一处 `open_conn`，这条以 `Err` 红、不是少几行。
+/// 实现里若还剩一处开库读它，这条以 `Err` 红、不是少几行。
 #[test]
 fn recall_takes_the_global_layer_from_md_with_the_db_gone() {
     let dir = temp_dir("recall-nodb");
     let store = wired(&dir);
     let ws = keysid();
-    store
-        .write("", "pref.lang", "中文", "语言", "explicit")
+    // 三条的 `updated_at` **钉死成同一个值**：这条断言判的是"同秒时按 key 升序"，
+    // 而 `store.write` 取的是墙钟 ⇒ 两次写入跨过秒边界时"同秒"这个前提就没了，
+    // 一条讲排序口径的用例会每隔若干次全量跑假红一次（实测抓到一回，报的是
+    // `[pref.style, pref.lang]`）。改走 `memlayout::write_fact` 既能钉住这一维，
+    // 落的又仍然是生产渲染与生产寻址——不是把断言放宽。
+    for (workspace, key, value, tags) in [
+        ("", "pref.lang", "中文", "语言"),
+        ("", "pref.style", "简短", "文风"),
+        (ws.as_str(), "proj.only", "不该自动注入", ""),
+    ] {
+        plugin_api::memlayout::write_fact(
+            store.md_root(),
+            &plugin_api::memlayout::FactEntry {
+                workspace,
+                key,
+                value,
+                tags,
+                source: "explicit",
+                updated_at: 1_700_000_000,
+                ty: "",
+            },
+        )
         .unwrap();
-    store
-        .write("", "pref.style", "简短", "文风", "explicit")
-        .unwrap();
-    store
-        .write(&ws, "proj.only", "不该自动注入", "", "explicit")
-        .unwrap();
-    std::fs::rename(dir.join("memory.sqlite3"), dir.join("memory.sqlite3.gone")).unwrap();
+    }
+    // 库这一侧现在**根本没被写过**（上面三条走的是真源通路，不碰 sqlite），所以夹具
+    // 直接在那条路径上放一份"不是数据库"的字节：实现里若还剩一处开库读它，拿到的会是
+    // `Err` 而不是"少几行"。这比原先那步 rename 更硬——rename 之后 open 会静悄悄
+    // 新建一个空库，那条用例的红色就只剩"少行"一种形态了。
+    std::fs::write(dir.join("memory.sqlite3"), b"not a database at all").unwrap();
 
     let rows = store.recall_quiet(None, 10);
     let keys: Vec<&str> = rows.iter().map(|r| r.key.as_str()).collect();

@@ -37,9 +37,14 @@ pub const UNAFFILIATED_DIR: &str = "_unaffiliated";
 /// ⚠ 宿主侧还有两处字面量在 `memory_reconcile.rs`（该模块在 v1.1 里整项作废、待退役），
 /// 收口跟那一刀一起做，已登记进 specs/05 挂账——本刀不顺手搬。
 pub(crate) const GLOBAL_DIR: &str = "global";
-/// 总开关 env：宿主在 settings `memory.files = false` 时注入 `"0"`；
-/// 插件**每次写前读取**（与 fsutil allowed_roots 同款读 env 热换，保存
-/// 即生效免重启）。env 缺省未设 = 开。
+/// 总开关 env。**S1 刀③b 之后本仓没有任何生产读者了**：它的最后一个读者是插件那侧
+/// "sqlite 成功后同步 md"，而六枚工具现在直接写真源——"关掉就不落文件"这件事在
+/// 真源 = 文件的世界里等于"关掉就没有记忆"，不是同一个开关。宿主也不再注入它
+/// （`state/boot.rs` 与 `commands/settings.rs` 那两处随本刀摘掉）。
+///
+/// 为什么这一对函数还留着而不是顺手删：`files_enabled` 是 `plugin-api` 的**既有对外
+/// 签名**，删它属 AGENTS §5 禁区（要退役得先向人申请并说明）。它的判据
+/// `enabled_from` 仍是纯函数单测的对象（`tests/layout.rs`）。登记在 specs/05 挂账。
 const ENV_FILES: &str = "LOCOWRK_MEMORY_FILES";
 
 /// 总开关判定（纯函数，可测）：`Some("0")` = 关，其余（含 None）= 开。
@@ -47,7 +52,7 @@ pub(crate) fn enabled_from(v: Option<&str>) -> bool {
     v != Some("0")
 }
 
-/// 当前进程的文件化总开关（插件侧调用；宿主侧以 settings 为准）。
+/// 当前进程的文件化总开关（**自刀③b 起无人调用**，见 [`ENV_FILES`] 上面那段）。
 pub fn files_enabled() -> bool {
     enabled_from(std::env::var(ENV_FILES).ok().as_deref())
 }
@@ -150,8 +155,30 @@ pub fn unaffiliated_dir(root: &Path) -> PathBuf {
     projects_dir(root).join(UNAFFILIATED_DIR)
 }
 
+/// stem 的**字符**上限。为什么布局层要管这件事：工具的参数面允许 key 长到 512 字节
+/// （`plugins-src/memory-sqlite/src/store/limits.rs` 的 `KEY_MAX`，写死给模型看的），
+/// 而 Windows 的路径上限是 260 字符——S1 刀③b 把六枚工具扳成"直接写文件"之后当场撞到：
+/// 512 个 `k` 的 key 得到 `os error 123`（文件名、目录名或卷标语法不正确）⇒
+/// **一条合法的记忆写不进去**。
+///
+/// 这一维由布局吸收而不是把 `KEY_MAX` 降到 100：降上限 = 改工具参数面（模型与既有会话
+/// 历史看到的契约跟着变），而"文件系统有多长"从来是实现细节。手法与
+/// [`project_dir_name`] 同源——可读前缀 + 全串 fnv 短哈希，确定性、不撞、
+/// 人打开文件夹仍然认得出是哪条。
+const STEM_MAX_CHARS: usize = 100;
+
+/// 超上限的 stem 收口：前 91 字符 + `-` + 完整 stem 的 fnv 高 32 位 hex8 = 恰好 100。
+fn bound_stem(s: &str) -> String {
+    if s.chars().count() <= STEM_MAX_CHARS {
+        return s.to_string();
+    }
+    let head: String = s.chars().take(STEM_MAX_CHARS - 9).collect();
+    format!("{head}-{:08x}", (fnv1a64(s.as_bytes()) >> 32) as u32)
+}
+
 /// key → 文件名主干：保留 `[A-Za-z0-9._-]`、其余换 `_`，端点 `.` 剥除，
-/// Windows 保留设备名（con/prn/aux/nul/comN/lptN）前缀 `_` 防创建失败。
+/// Windows 保留设备名（con/prn/aux/nul/comN/lptN）前缀 `_` 防创建失败，
+/// 最后按 [`STEM_MAX_CHARS`] 收口成长度有界的形态（见那条注释里的实测缺陷）。
 /// 碰撞可能但罕见；权威身份在 frontmatter `name`（F2 reconcile 按它读回）。
 pub fn key_file_stem(key: &str) -> String {
     let safe: String = key
@@ -176,11 +203,15 @@ pub fn key_file_stem(key: &str) -> String {
         && (base.starts_with("com") || base.starts_with("lpt"))
         && base[3..].chars().all(|c| c.is_ascii_digit());
     let looks_reserved = reserved.contains(&base.as_str()) || com_lpt_digit;
-    if looks_reserved {
+    // 保留名防护在前、长度收口在后。这个次序是有意的：`_` 前缀那一条只在短名字上发生，
+    // 而截断只会发生在几十字符以上——反过来的话，一条以 `con` 开头又长得离谱的 key
+    // 会在截断之后丢掉防护又或者是白加一个前缀。
+    let guarded = if looks_reserved {
         format!("_{stem}")
     } else {
         stem
-    }
+    };
+    bound_stem(&guarded)
 }
 
 /// 键位 → 相对路径：全局 `''` = `global/<stem>.md`；项目 =

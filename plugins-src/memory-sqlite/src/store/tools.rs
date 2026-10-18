@@ -1,34 +1,33 @@
-//! **五个记忆工具的入口**（台账 T35）：`memory_write` / `memory_read` / `memory_list` /
-//! `memory_search` / `memory_delete`——`lib.rs` 的分发表按名字派到这里，SQL 与键位裁决
-//! 全在 `store` 子树内，命令面不写业务。
+//! **五枚记忆工具的入口**（台账 T35，S1 刀③b 起读写的就是真源 md）：
+//! `memory_write` / `memory_read` / `memory_list` / `memory_search` / `memory_delete`
+//! ——`lib.rs` 的分发表按名字派到这里，第六枚 `memory_undo`（补偿入口）在 `undo` 片。
 //!
-//! 读侧件来自 `rows`、上限来自 `limits`、开连接来自 `schema`、人类层双写经
-//! `use super::mdsync;`（那个 mod 留在父文件里，见 `store.rs` 的说明）。键位上下文
-//! `super::WsCtx` 写法和被搬之前逐字相同：装配文件里 `pub(crate) use crate::WsCtx;`
-//! 把它接住 ⇒ 本刀**没有一处**是为了改路径而改正文。
+//! 这一片**一条 SQL 都不发**：`rusqlite` 与 `store/schema.rs`（建表 + 两份旧库迁移）
+//! 随本刀退役，键位裁决仍走 `rows`→`facts` 那件（`write_scope` 的判断逻辑一字未动，
+//! 只是它下面接的存储换了）。工具名字、参数面与返回字段名保持原形 ⇒ 提示词、审批面
+//! 与既有会话历史都不会因为"换存储"而漂。
+//!
+//! 写侧的失败语义与宿主 S1 刀②c-1 同一条律：**先落真源，失败就是失败**（`Err` 一路
+//! 上抛到工具结果）。旧形状"sqlite 已落、md 只是同步、失败只 warn"连同那个
+//! `md_warning` 字段一起消失——没有第二份存储，就没有"另一半没同步上"这种状态。
 
 use plugin_api::args::arg_u64;
 use plugin_api::memlayout;
 use plugin_api::serde_json::{Value, json};
-use rusqlite::{Error, params};
 
 use crate::arg_str;
 
+use super::facts::{self, read_one};
 use super::limits::{KEY_MAX, VALUE_MAX};
-use super::mdsync;
-use super::rows::{
-    escape_like, exists, now, row_scoped_json, row_with_workspace_json, write_scope,
-};
-use super::schema::open;
 pub(crate) fn memory_write(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
     let value = arg_str(args, "value")?;
     let tags = args.get("tags").and_then(Value::as_str).unwrap_or("");
-    // 四类型（S1 刀③a，设计 §2.1）里唯一由模型报的一维。值域外 / 没给 = 未分类，
-    // 于是"落哪一层"与"frontmatter 落什么串"两处都由同一个 `normalize_type` 决定，
-    // 这条通路在四类型之前写出来的字节形一字不变。
+    // 四类型（S1 刀③a）里唯一由模型报的一维；值域外与没给都收进未分类。
     let ty = memlayout::normalize_type(args.get("type").and_then(Value::as_str).unwrap_or(""));
-    let ws = write_scope(ctx, args.get("scope"), &ty)?;
+    let ws = super::facts::write_scope(ctx, args.get("scope"), &ty)?;
+    // 三条校验的次序与错误文案照退役掉的 SQL 版逐字保留（上限是"能被写进来的东西
+    // 有多大"这一件事，与存储换没换无关）。
     if key.is_empty() {
         return Err("memory_write: `key` must not be empty".into());
     }
@@ -44,28 +43,25 @@ pub(crate) fn memory_write(ctx: &super::WsCtx, args: &Value) -> Result<Value, St
             value.len()
         ));
     }
-    let conn = open()?;
-    let previous = conn
-        .query_row(
-            "SELECT workspace, key, value, tags, updated_at FROM memories \
-             WHERE workspace = ?1 AND key = ?2",
-            params![ws, key],
-            row_with_workspace_json,
-        )
-        .ok();
-    let at = now();
-    conn.execute(
-        "INSERT INTO memories (workspace, key, value, tags, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT(workspace, key) DO UPDATE SET value = excluded.value,
-             tags = excluded.tags, updated_at = excluded.updated_at",
-        params![ws, key, value, tags, at],
+    let r = facts::root()?;
+    // 覆盖前的快照 = undo 载荷。它从真源读，所以天生带 `type`（旧形状里这个载荷
+    // 取自库行，那一维根本不存在）。
+    let previous = read_one(&r, &ws, &key)?.map(|h| h.json());
+    let at = facts::now();
+    memlayout::write_fact(
+        &r,
+        &memlayout::FactEntry {
+            workspace: &ws,
+            key: &key,
+            value: &value,
+            tags,
+            source: "explicit",
+            updated_at: at,
+            ty: &ty,
+        },
     )
     .map_err(|e| format!("memory_write `{key}`: {e}"))?;
     let scope = json!(if ws.is_empty() { "global" } else { "project" });
-    // `type` 这里是**本次调用的回显**（模型刚报的那个值，已经过 normalize），不是从存储
-    // 读回来的——sqlite 那一侧没有这一列，读回真值要等刀③b 把这几枚工具扳到 md 上。
-    // 把它放在返回里是为了让模型看见"这条被算成了哪一类、落到哪一层"，不是谎称读得回。
     let mut out = json!({
         "key": key,
         "scope": scope,
@@ -73,37 +69,26 @@ pub(crate) fn memory_write(ctx: &super::WsCtx, args: &Value) -> Result<Value, St
         "created": previous.is_none(),
         "previous": previous,
     });
-    // `Why:` / `How to apply:` 的纪律是**提醒不是拒绝**（设计 §2.1）：先落，再把缺的那一段
-    // 报回去——拦写的后果是"这条记忆没记上"，比格式不齐更坏。
+    // `Why:` / `How to apply:` 的纪律是提醒不是拒绝：先落盘，再把缺的那一段报回去。
     if let Some(h) = memlayout::missing_guidance(&ty, &value) {
         out["hint"] = json!(h);
-    }
-    if let Some(w) = mdsync::sync_write(&ws, &key, &value, tags, Some(&ty), at) {
-        out["md_warning"] = json!(w);
     }
     Ok(out)
 }
 
 pub(crate) fn memory_read(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
-    let conn = open()?;
-    // 归属会话：项目键位优先，未命中回落全局偏好层；未归属/headless 的
-    // 当前键位本来就是 ''（IN ('', '') 恒等）
-    match conn.query_row(
-        "SELECT key, value, tags, updated_at, workspace FROM memories \
-         WHERE key = ?2 AND workspace IN (?1, '') \
-         ORDER BY (workspace = ?1) DESC LIMIT 1",
-        params![ctx.scope(), key],
-        row_scoped_json,
-    ) {
-        Ok(mut entry) => {
+    let r = facts::root()?;
+    // 归属会话：项目键位优先，未命中回落全局偏好层（口径见 `facts::read_preferred`）
+    match facts::read_preferred(&r, ctx.scope(), &key)? {
+        Some(h) => {
+            let mut entry = h.json();
             if let Value::Object(map) = &mut entry {
                 map.insert("found".into(), json!(true));
             }
             Ok(entry)
         }
-        Err(Error::QueryReturnedNoRows) => Ok(json!({ "found": false, "key": key })),
-        Err(e) => Err(format!("memory_read `{key}`: {e}")),
+        None => Ok(json!({ "found": false, "key": key })),
     }
 }
 
@@ -111,105 +96,70 @@ pub(crate) fn memory_list(ctx: &super::WsCtx, args: &Value) -> Result<Value, Str
     let prefix = args.get("prefix").and_then(Value::as_str).unwrap_or("");
     let limit = arg_u64(args, "limit", 50, 200)?;
     let offset = arg_u64(args, "offset", 0, u64::MAX)?;
-    let conn = open()?;
-    // 双层：本项目键位 ∪ 全局偏好层（未归属/headless 两条件重合 = 只 ''）
-    let filter = "WHERE (workspace = ?1 OR workspace = '') \
-                  AND (?2 = '' OR key LIKE ?2 || '%' ESCAPE '\\')";
-    let total: i64 = conn
-        .query_row(
-            &format!("SELECT COUNT(*) FROM memories {filter}"),
-            params![ctx.scope(), prefix],
-            |r| r.get(0),
-        )
-        .map_err(|e| format!("memory_list: {e}"))?;
-    let mut stmt = conn
-        .prepare(&format!(
-            "SELECT key, value, tags, updated_at, workspace FROM memories {filter}
-             ORDER BY key LIMIT ?3 OFFSET ?4"
-        ))
-        .map_err(|e| format!("memory_list: {e}"))?;
-    let entries: Vec<Value> = stmt
-        .query_map(params![ctx.scope(), prefix, limit, offset], row_scoped_json)
-        .map_err(|e| format!("memory_list: {e}"))?
-        .collect::<Result<_, _>>()
-        .map_err(|e| format!("memory_list: {e}"))?;
+    let r = facts::root()?;
+    // 双层：本项目键位 ∪ 全局偏好层（未归属/headless 两条件重合 = 只 ''）。
+    // 同名 key 两层各有一条时**两条都算**，与退役掉的那条 `OR workspace = ''` 同形。
+    let mut hits = facts::both_layers(&r, ctx.scope())?;
+    hits.retain(|h| h.fact.key.starts_with(prefix));
+    // `ORDER BY key`：SQLite TEXT 的默认 BINARY 排序 = 字节序，Rust 的 `String` 序也是
+    // 字节序 ⇒ 这一条**大小写敏感**，与 `memory_search` 那条不敏感的不是同一口径
+    // （那一条在 `memlayout::fact_matches` 里折叠，理由写在那片）。
+    hits.sort_by(|a, b| a.fact.key.cmp(&b.fact.key));
+    let total = hits.len();
+    let entries: Vec<Value> = hits
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .map(|h| h.json())
+        .collect();
     Ok(json!({ "total": total, "entries": entries }))
 }
 
 pub(crate) fn memory_search(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let query = arg_str(args, "query")?;
     let limit = arg_u64(args, "limit", 20, 100)?;
-    let pattern = format!("%{}%", escape_like(&query));
-    let conn = open()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT key, value, tags, updated_at, workspace FROM memories
-             WHERE (workspace = ?1 OR workspace = '')
-                AND (key LIKE ?2 ESCAPE '\\' OR value LIKE ?2 ESCAPE '\\'
-                     OR tags LIKE ?2 ESCAPE '\\')
-             ORDER BY updated_at DESC, key LIMIT ?3",
-        )
-        .map_err(|e| format!("memory_search: {e}"))?;
-    let matches: Vec<Value> = stmt
-        .query_map(params![ctx.scope(), pattern, limit], row_scoped_json)
-        .map_err(|e| format!("memory_search: {e}"))?
-        .collect::<Result<_, _>>()
-        .map_err(|e| format!("memory_search: {e}"))?;
+    let r = facts::root()?;
+    let mut hits = facts::both_layers(&r, ctx.scope())?;
+    // 三维子串 + ASCII 大小写不敏感 + 通配符按字面量：这一条谓词与宿主管理页的列举
+    // 过滤共用同一个函数（`memlayout::fact_matches`），两处各写一份迟早漂成
+    // "管理页搜得到、工具搜不到"。
+    hits.retain(|h| memlayout::fact_matches(&h.fact, &query));
+    hits.sort_by(|a, b| {
+        b.fact
+            .updated_at
+            .cmp(&a.fact.updated_at)
+            .then_with(|| a.fact.key.cmp(&b.fact.key))
+    });
+    let matches: Vec<Value> = hits
+        .into_iter()
+        .take(limit as usize)
+        .map(|h| h.json())
+        .collect();
     Ok(json!({ "query": query, "matches": matches }))
 }
 
 pub(crate) fn memory_delete(ctx: &super::WsCtx, args: &Value) -> Result<Value, String> {
     let key = arg_str(args, "key")?;
-    let conn = open()?;
+    let r = facts::root()?;
     // 双层纪律（Context 文档 §4.6）：'' 键位 = 全局偏好层，聊天工具删除只
     // 对 headless 开放（其单一宇宙本就是 ''）；桌面会话（归属/未归属）
     // 删全局行一律拒绝——全局偏好的增删是人的操作，走记忆管理页。
     if let super::WsCtx::Headless = ctx {
-        let previous = conn
-            .query_row(
-                "SELECT workspace, key, value, tags, updated_at FROM memories \
-                 WHERE workspace = '' AND key = ?1",
-                params![key],
-                row_with_workspace_json,
-            )
-            .ok();
-        let deleted = conn
-            .execute(
-                "DELETE FROM memories WHERE workspace = '' AND key = ?1",
-                params![key],
-            )
+        let previous = read_one(&r, "", &key)?.map(|h| h.json());
+        let removed = memlayout::delete_fact(&r, "", &key)
             .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
-        let mut out = json!({ "key": key, "deleted": deleted > 0, "previous_entry": previous });
-        if deleted > 0 {
-            if let Some(w) = mdsync::sync_delete("", &key) {
-                out["md_warning"] = json!(w);
-            }
-        }
-        return Ok(out);
+        return Ok(json!({ "key": key, "deleted": removed, "previous_entry": previous }));
     }
     let ws = ctx.scope();
-    let in_project = !ws.is_empty() && exists(&conn, ws, &key)?;
-    if in_project {
-        let previous = conn
-            .query_row(
-                "SELECT workspace, key, value, tags, updated_at FROM memories \
-                 WHERE workspace = ?1 AND key = ?2",
-                params![ws, key],
-                row_with_workspace_json,
-            )
-            .ok();
-        conn.execute(
-            "DELETE FROM memories WHERE workspace = ?1 AND key = ?2",
-            params![ws, key],
-        )
-        .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
-        let mut out = json!({ "key": key, "deleted": true, "previous_entry": previous });
-        if let Some(w) = mdsync::sync_delete(ws, &key) {
-            out["md_warning"] = json!(w);
+    if !ws.is_empty() {
+        if let Some(h) = read_one(&r, ws, &key)? {
+            let previous = h.json();
+            let removed = memlayout::delete_fact(&r, ws, &key)
+                .map_err(|e| format!("memory_delete `{key}`: {e}"))?;
+            return Ok(json!({ "key": key, "deleted": removed, "previous_entry": previous }));
         }
-        return Ok(out);
     }
-    if exists(&conn, "", &key)? {
+    if read_one(&r, "", &key)?.is_some() {
         return Err(format!(
             "memory_delete `{key}`: exists only as a global user preference — global \
              entries are managed from the human memory management page, not deletable \

@@ -201,6 +201,27 @@ fn sort_facts(facts: &mut [StoredFact]) {
     });
 }
 
+/// 子串匹配的**唯一**口径：`key` / `value` / `tags` 三维，ASCII 大小写不敏感，
+/// 通配符按字面量。
+///
+/// 为什么必须只有一处：这条谓词有两个消费者（宿主管理页的列举过滤与插件
+/// `memory_search`），而它们今天读的是**同一份文件**。各写一遍迟早漂成
+/// "管理页搜得到、工具搜不到"（或反过来），那种漂移在界面上表现为"记忆丢了"。
+///
+/// SQL 时代那句 `LIKE ? ESCAPE '\'` 的转义只为语法层服务（把用户数据里的 `%` `_`
+/// 从通配符降级成字面字符）；文件侧没有语法层，字面量就是 `contains`。
+/// 大小写折叠同样照 SQL 侧口径只折 ASCII——POSIX 上 `LIKE` 对非 ASCII 也是敏感的，
+/// 折全 Unicode 会让 Linux 与 Windows 搜出不同结果。
+pub fn fact_matches(f: &StoredFact, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    let n = needle.to_ascii_lowercase();
+    [f.key.as_str(), f.value.as_str(), f.tags.as_str()]
+        .into_iter()
+        .any(|s| s.to_ascii_lowercase().contains(&n))
+}
+
 /// 清空真源里全部事实文件（逐层删 + 刷该层索引），返回**删掉的条数**。
 ///
 /// 为什么住在这片、而不是让宿主自己遍历再逐条 `delete_fact`：只有这里知道

@@ -172,7 +172,9 @@ impl MemoryStore {
         std::fs::read_to_string(path).ok()
     }
 
-    /// 按调用开连接、用完即弃（与插件同款）；建表 + 旧库迁移幂等。
+    /// 按调用开连接、用完即弃；建表 + 旧库迁移幂等。
+    /// ⚠ 这个"同款"原本是照着插件写的（两侧各开同一个库），自 S1 刀③b 起
+    /// **只有宿主开它**了——连接策略本身不变（宿主自己就是多线的）。
     pub(super) fn open_conn(&self) -> Result<Connection, String> {
         std::fs::create_dir_all(&self.dir)
             .map_err(|e| format!("memory db dir `{}`: {e}", self.dir.display()))?;

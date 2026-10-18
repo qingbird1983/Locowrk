@@ -2,20 +2,23 @@
 //! 未归属键位）与 `ensure_learning_schema`（L1 补 `hit_count` / `last_hit_at`，逐列决定
 //! 补哪条 ⇒ 半迁状态可自愈）。
 //!
-//! 两个函数与插件侧 `plugins-src/memory-sqlite/src/store.rs` 同源，两侧对账那道闸
-//! （`scripts/check-schema-parity.mjs`）从 T23 起按**整根**定位定义处，所以搬到本片
-//! 不需要改闸；`pub(super)` 前缀也不影响它的取段锚——锚从 `fn ensure_learning_schema(`
-//! 起算，前面那几个字节本来就不进比对。建表串在 `shapes.rs`，这里经 `super::shapes::`
-//! 读它，不抄第二份。
+//! ⚠ 这里曾经是**两份实现**：宿主这一份 + 插件 `plugins-src/memory-sqlite/src/store/schema.rs`
+//! 那一份，两侧开同一个 `memory.sqlite3`、谁先访问谁执行 ALTER。插件那一份随 S1 刀③b
+//! 整片退役（插件不再开库）⇒ **本文件是这张表现在唯一的实现**。
+//! `scripts/check-schema-parity.mjs` 也跟着从"两侧逐字节相同"改成宿主单侧的形状档
+//! （H1–H7），它仍按**整根**定位定义处，所以将来搬到别的片不用改闸；`pub(super)` 前缀
+//! 不影响取段锚——锚从 `fn ensure_learning_schema(` 起算。建表串在 `shapes.rs`，
+//! 这里经 `super::shapes::` 读它，不抄第二份。
 
 use rusqlite::{params, Connection};
 
 use super::shapes::CREATE_TABLE;
 
 /// 旧库迁移：无 workspace 列 = key 单主键时代，整表重建进未归属键位。
-/// 与插件侧（memory-sqlite store.rs）等价幂等：BEGIN IMMEDIATE + 二次
-/// 探针，两侧并发只有一方真正执行；旧表 source 列可有可无（headless
-/// 时代插件建的库没有）——探针决定 SELECT 中的 source 表达式。
+/// `BEGIN IMMEDIATE` + 等锁后的二次探针这两件**照旧承重**，但承重对象变了：
+/// 原来防的是"宿主与插件两个进程族同时首访问"，插件退场之后防的是**宿主自己**的
+/// 多线程（记忆命令线程与 `memory_learn` 后台线程开的是同一个库文件）；
+/// 旧表 source 列可有可无（headless 时代建的库没有）——探针决定 SELECT 中的 source 表达式。
 pub(super) fn ensure_workspace_schema(conn: &Connection) -> Result<(), String> {
     let has_col = |name: &str| -> Result<i64, String> {
         conn.query_row(
@@ -61,7 +64,9 @@ pub(super) fn ensure_workspace_schema(conn: &Connection) -> Result<(), String> {
 
 /// L1 学习面迁移（ML §3.2 · 后审计队列 Q5）：旧库补 `hit_count` / `last_hit_at` 两列。
 /// 形状照上面的 `ensure_workspace_schema`（探针 + `BEGIN IMMEDIATE` + 等锁后二次探针），
-/// 理由是宿主与插件开的是**同一个** `memory.sqlite3`——两侧并发时只有一方真正执行 ALTER。
+/// 理由自 S1 刀③b 起变了对象但没变分量：插件不再开这张表，可**宿主自己**就是多线的
+/// ——记忆命令线程与 `memory_learn` 后台线程开的是同一个 `memory.sqlite3`，
+/// 并发首访问时仍然只有一方真正执行 ALTER，另一方必须靠二次探针认出"已经迁完了"。
 /// ⚠ **逐列**决定补哪一条，而不是「缺一就两条都跑」：两条 ALTER 在同一批次里顺序执行，
 /// 中间被杀（进程崩 / 掉电）会留下「有 `hit_count`、无 `last_hit_at`」的半迁状态，那时
 /// 重跑第一条会撞 `duplicate column name` ⇒ Err → ROLLBACK ⇒ 这个库**永远打不开**（缺陷

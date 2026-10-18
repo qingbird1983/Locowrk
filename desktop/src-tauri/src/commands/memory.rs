@@ -1,5 +1,5 @@
-//! 记忆管理命令（⑪ 记忆管理页）：薄适配层，SQL 全在 memory::MemoryStore
-//! （memory.sqlite3 归 memory-sqlite 插件所有，宿主只做管理面访问）。
+//! 记忆管理命令（⑪ 记忆管理页）：薄适配层，读源 = 真源 md（S1 刀②b-1 起管理页
+//! 列举与过滤不再发 SQL；`memory::MemoryStore` 里剩下的 SQL 只碰影子表那一侧）。
 //! 来源徽章 / 时间文案由前端按结构化字段渲染（§8.1）。
 
 use tauri::State;
@@ -7,9 +7,9 @@ use tauri::State;
 use crate::memory::MemoryRow;
 use crate::state::AppState;
 
-// ---- 记忆管理命令（⑪，Context and Memory.md §7.2）：薄适配层，SQL 全在
-// memory::MemoryStore（memory.sqlite3 归 memory-sqlite 插件所有，宿主只做
-// 管理页访问）。来源徽章 / 时间文案由前端按结构化字段渲染（§8.1）。 ----
+// ---- 记忆管理命令（⑪，Context and Memory.md §7.2）：薄适配层，读源 = 真源 md，
+// 取数全在 memory::MemoryStore（影子表那一侧的 SQL 不从这里走）。来源徽章 / 时间文案
+// 由前端按结构化字段渲染（§8.1）。 ----
 
 /// 列举记忆：query 空 = 全量（新→旧），否则 key/value/tags 子串过滤。
 #[tauri::command]

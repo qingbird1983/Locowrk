@@ -122,11 +122,10 @@ pub(crate) fn build(init: Init) -> Stack {
 
     // ⑱ 工作区目录 env 注入：fsutil 每次调用读 env，settings_set 后重注入即生效免重启
     crate::data_root::apply_fs_roots_env(&settings);
-    // F1 记忆文件化总开关（settings_set 热换在 commands.rs）：关 = 插件侧
-    // 双写整体跳过（env 缺省未设 = 开，与 memlayout::files_enabled 对齐）。
-    if !settings.memory().files {
-        std::env::set_var("LOCOWRK_MEMORY_FILES", "0");
-    }
+    // F1 记忆文件化总开关的 env 注入随 S1 刀③b 摘掉：最后一个读者是插件那侧
+    // "sqlite 成功后同步 md"，而它现在直接写真源 ⇒ 这个 env 已经无人读（写它 = 冒充
+    // "关掉就不落文件"，那是镜像时代的语义）。settings `memory.files` 这一项本身
+    // 怎么处置（改义 / 退役）归刀④ 与界面文案一起定，见 specs/05 挂账。
 
     Stack {
         ctx,

@@ -172,6 +172,27 @@ function reconcileFace() {
     .join('\n');
 }
 
+/**
+ * 插件记忆面（S1 刀③b 加，SS13 的扫描面）：`plugins-src/memory-sqlite/src` 整棵树，
+ * **排 tests** 且**剥掉行注释**后拼接。
+ *
+ * 剥注释是刻意的，而且是这条判据能不能立住的关键：本刀退役的东西在注释里留了大量痕
+ * （`store.rs` 头注整段在写"退役掉了 schema.rs / rusqlite / mdsync"）。按字面数名字
+ * 会得到一片假红——那是 SS11 第一版撞过的同一个洞（"数的是形状不是名字"）。
+ * 而这条判据要说的是「**代码里**不再有打开那张表的通路」，形状本来就只存在于代码行。
+ */
+function plugMemoryCode() {
+  return walkExt('plugins-src/memory-sqlite/src', /\.rs$/)
+    .filter((rel) => !/(^|\/)tests(_?\.rs|\/)/.test(rel))
+    .map((rel) =>
+      read(rel)
+        .split('\n')
+        .filter((l) => !/^\s*\/\//.test(l))
+        .join('\n'),
+    )
+    .join('\n');
+}
+
 /** 外点收口形状 = 挂到 document/window 上的 `pointerdown`（口径见上方注释）。 */
 const DISMISS_SHAPE = /(?:document|window)\.addEventListener\(\s*"pointerdown"/;
 const dismissCount = (m) => m.comps.filter((s) => DISMISS_SHAPE.test(s)).length;
@@ -291,6 +312,7 @@ function snapshot() {
     memlayoutTree: memlayoutFace(),
     hostMemoryTree: hostMemoryFace(),
     reconcileTree: reconcileFace(),
+    plugMemory: plugMemoryCode(),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -552,6 +574,27 @@ const CHECKS = [
       ].join('|'),
     '0|2',
   ],
+  [
+    'SS13',
+    '记忆插件（`plugins-src/memory-sqlite/src`，排 tests、**剥掉行注释**）里"打开那张表"的' +
+      '三个形状恒 0：`rusqlite` 引用 / `… memories` 表名 SQL / `Connection::open`' +
+      '（S1 刀③b 的墓碑 = AC-S1-9 要的那条"记忆写路径只许一个出处"）。' +
+      '为什么这条必须是结构判据而不是行为测试：把某枚工具退回"先写库再同步文件"这种形状，' +
+      '既有那 31 条接口用例**一条都不会红**——它们判的是工具契约（返回字段、双层纪律、' +
+      'undo 还原），存储换成什么都照样绿；换句话说"换了存储"这件事在行为面上是不可见的，' +
+      '那就只能由形状判据来守。剥注释的原因写在 `plugMemoryCode()` 上：本刀退役的东西' +
+      '在注释里留痕极多（`store.rs` 头注整段在解释它删了什么），按名字数会得到一片假红' +
+      '——与 SS11 第一版撞的是同一个洞。' +
+      '口径不含宿主：宿主那一侧仍合法地开着这张表（影子 + 学习量两列，' +
+      'specs/05 刀②c-2 第 2 件等拍板），要盯的是"插件不许把库捡回来"',
+    (m) =>
+      [
+        countOf(m.plugMemory, /\brushqlite\b/),
+        countOf(m.plugMemory, /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|FROM)\s+memories\b/),
+        countOf(m.plugMemory, /\bConnection::open\b/),
+      ].join('|'),
+    '0|0|0',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -571,6 +614,10 @@ const FLOORS = [
   // 另一份改名/删掉时 0|2 照样绿。所以按文件各点一个本体函数，缺哪个红哪个。
   ['对账面含 process_file 本体', (m) => countOf(m.reconcileTree, /fn process_file/), 1],
   ['对账面含启动导出本体', (m) => countOf(m.reconcileTree, /fn run_initial_export/), 1],
+  // SS13 期望的是三个 0——面如果因为路径写错而变空，"什么都没扫到"会被读成"一个都没有"。
+  // 两条下限各挡一种瞎法：面为空、以及"扫错了树（连工具入口本体都不在）"。
+  ['插件记忆面非空', (m) => (m.plugMemory.length > 2000 ? 1 : 0), 1],
+  ['插件记忆面含工具入口本体', (m) => countOf(m.plugMemory, /fn memory_write/), 1],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
@@ -653,6 +700,12 @@ if (SELFTEST) {
     SS12: (m) =>
       (m.reconcileTree +=
         '\nfn resurrect_from_shadow(r: &MemoryRow, files: &MemoryFiles) {\n    let _ = files.write_fact(&r.workspace, &r.key, &r.value, &r.tags, &r.source, r.updated_at);\n}\n'),
+    // 刀③b 的墓碑变异：把"先写库、库才是真源"那一步塞回插件。它长成一段没人调用的函数
+    // 是有意的（同 SS12 那一档的分工）——真正的红证是"既有 31 条接口用例对它全绿"，
+    // 那句话只有结构档说得出。三档里命中两档就够报红，读数 1|1|0 ≠ 0|0|0。
+    SS13: (m) =>
+      (m.plugMemory +=
+        '\nfn legacy_upsert(conn: &rusqlite::Connection, ws: &str, key: &str) {\n    let _ = conn.execute("INSERT INTO memories (workspace, key) VALUES (?1, ?2)", []);\n}\n'),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

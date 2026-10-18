@@ -1,10 +1,14 @@
 //! 项目隔离（㉘）（自 `tests.rs` 批 F-15 拆出，用例本体逐字未改）：同名 key 跨项目共存且
-//! 互不可见 / 删除按键位定域且 undo 还原原 workspace / 旧库（仅 key 列）迁移归入未归属。
+//! 互不可见 / 删除按键位定域且 undo 还原原 workspace。
+//!
+//! 随 S1 刀③b 退役的一条：`legacy_key_only_table_migrates_into_unfiled_scope`
+//! （手工造一张 v2.54 时代"key 单主键、无 workspace"的旧表，首次访问触发迁移、旧行归入
+//! 未归属键位）。被测对象是本插件的 `store/schema.rs` 那两份旧库迁移，而它随本刀整片
+//! 消失 ⇒ 这条没有等价形状可写。存量库不回填的裁定与后果见 specs/05 取证③。
 
 use super::*;
 
 use plugin_api::serde_json::json;
-use rusqlite::Connection;
 
 // ---- 项目隔离（㉘）--------------------------------------------------------
 
@@ -82,47 +86,5 @@ fn delete_is_scoped_and_undo_restores_original_workspace() {
     assert_eq!(
         store::memory_read(&h(), &json!({ "key": "k" })).unwrap()["found"],
         json!(false)
-    );
-}
-
-#[test]
-fn legacy_key_only_table_migrates_into_unfiled_scope() {
-    let _g = ENV_LOCK.lock().unwrap();
-    let dir = temp_data_dir("legacy-migrate");
-    let db = dir.join("memory.sqlite3");
-
-    // 手工造一张 v2.54 时代的旧表（key 单主键、无 workspace/source）
-    {
-        std::fs::create_dir_all(&dir).unwrap();
-        let conn = Connection::open(&db).unwrap();
-        conn.execute_batch(
-            "CREATE TABLE memories (
-                 key        TEXT PRIMARY KEY,
-                 value      TEXT NOT NULL,
-                 tags       TEXT NOT NULL DEFAULT '',
-                 updated_at INTEGER NOT NULL
-             );
-             INSERT INTO memories (key, value, tags, updated_at)
-                 VALUES ('old.k', 'old-value', '', 123);",
-        )
-        .unwrap();
-    }
-
-    // 首次访问触发迁移：旧行归入未归属键位，读写照常
-    let got = store::memory_read(&h(), &json!({ "key": "old.k" })).unwrap();
-    assert_eq!(got["value"], json!("old-value"));
-    // 迁移后新键位生效：同 key 在项目下是另一条
-    store::memory_write(
-        &proj("F:/ws/a"),
-        &json!({ "key": "old.k", "value": "project-value" }),
-    )
-    .unwrap();
-    assert_eq!(
-        store::memory_read(&proj("F:/ws/a"), &json!({ "key": "old.k" })).unwrap()["value"],
-        json!("project-value")
-    );
-    assert_eq!(
-        store::memory_read(&h(), &json!({ "key": "old.k" })).unwrap()["value"],
-        json!("old-value")
     );
 }
