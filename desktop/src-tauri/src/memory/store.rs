@@ -43,6 +43,13 @@ pub struct MemoryStore {
     files: crate::memory_files::MemoryFiles,
     /// F2 交接注入开关（settings `memory.repoContext` 闭包；缺省恒关）。
     pub(super) repo_on: Arc<dyn Fn() -> bool + Send + Sync>,
+    /// 全局记忆层开关（S1 刀④b · settings `memory.globalLayer` 闭包）。
+    /// ⚠ 缺省**恒开**，与上面那枚 `repo_on` 的"缺省恒关"相反——不是随手写的两个
+    /// 布尔：交接段是 v2.136 才加的注入，而全局层记忆从这套机制存在第一天起就在注入，
+    /// 所以后者关掉"未接线"这一档才等于改前形状（未接线 = 单测与降级启动）。
+    pub(super) global_on: Arc<dyn Fn() -> bool + Send + Sync>,
+    /// 项目记忆层开关（S1 刀④b · settings `memory.projectLayer` 闭包；缺省恒开，同上）。
+    pub(super) project_on: Arc<dyn Fn() -> bool + Send + Sync>,
     /// 已引导过的仓库（每进程每仓库一次 ensure_layout，幂等也兜底防抖）。
     pub(super) repo_ensured: Mutex<std::collections::HashSet<PathBuf>>,
     /// Q1a（L0 注入侧可观测性）：埋点落库句柄（`usage.sqlite3` 旁挂的
@@ -60,6 +67,8 @@ impl MemoryStore {
             warned: AtomicBool::new(false),
             files: crate::memory_files::MemoryFiles::new(dir),
             repo_on: Arc::new(|| false),
+            global_on: Arc::new(|| true),
+            project_on: Arc::new(|| true),
             repo_ensured: Mutex::new(std::collections::HashSet::new()),
             recall_log: None,
         }
@@ -76,6 +85,21 @@ impl MemoryStore {
     /// 闭包——归属会话注入 `<repo>/.Locowrk/` 交接段 + 引导建目录。
     pub fn with_repo_context(mut self, on: Arc<dyn Fn() -> bool + Send + Sync>) -> Self {
         self.repo_on = on;
+        self
+    }
+
+    /// 接线两枚**行为开关**（S1 刀④b · ADR-0007 §18 的前两枚；第三枚就是上面那枚
+    /// `repoContext`，它早已存在，所以这里不另立一份"交接层开关"）。
+    /// 吃闭包而不是 `bool`：设置页保存即生效，不重启（`files_on` / `repo_on` 同一模式）。
+    /// 判的是"哪一层进不进上下文"，不是"数据存在吗"——关掉之后文件一字不动、
+    /// 管理页照旧全量、模型主动查仍读得到（边界写在 `settings::MemorySettings::global_layer`）。
+    pub fn with_layer_switches(
+        mut self,
+        global_on: Arc<dyn Fn() -> bool + Send + Sync>,
+        project_on: Arc<dyn Fn() -> bool + Send + Sync>,
+    ) -> Self {
+        self.global_on = global_on;
+        self.project_on = project_on;
         self
     }
 

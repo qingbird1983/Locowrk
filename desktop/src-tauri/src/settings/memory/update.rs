@@ -93,6 +93,15 @@ impl MemorySettings {
         if let Some(e) = u.repo_context {
             self.repo_context = e;
         }
+        // S1 刀④b 三枚行为开关里的两枚（第三枚 = 上面那 `repoContext`）。两枚都是
+        // **只出不进**的档：关掉只停掉"这一层进上下文"，一个文件都不删、管理页照旧全量，
+        // 所以这里没有"要不要先清空"的分支——那种分支会把一个显示开关变成数据破坏动作。
+        if let Some(e) = u.global_layer {
+            self.global_layer = e;
+        }
+        if let Some(e) = u.project_layer {
+            self.project_layer = e;
+        }
         if let Some(e) = u.instruction_files {
             self.instruction_files = e;
         }

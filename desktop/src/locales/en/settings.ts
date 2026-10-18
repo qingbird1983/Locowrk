@@ -238,7 +238,17 @@ export default {
     memoryRepoContextHint:
       "Project sessions inject a reminder for the handoff directory (content is not injected; the model reads and maintains it on demand).",
     memoryFiles: "Memory files",
-    memoryFilesHint: "Memories are also saved as Markdown files you can view and edit.",
+    memoryFilesHint:
+      "Only decides whether the startup reconcile and first-run export round run. It does not change where memories live—they are Markdown files.",
+    memoryLayers: "Memory layers",
+    memoryLayersHint:
+      "Each layer switches on its own. Off = that layer stops being injected automatically. Nothing is deleted, this page still lists everything, and the model can still read it on demand (memory_read / memory_search)—these switches gate injection, not data.",
+    memoryGlobalLayer: "Global memory layer",
+    memoryGlobalLayerHint:
+      "User-level preferences and global requirements (memory/global/ in the data root). Off = those preferences stop arriving automatically in the conversation.",
+    memoryProjectLayer: "Project memory layer",
+    memoryProjectLayerHint:
+      "This project's memory index (memory/projects/<project>/). Off = the pointer lines for this section are no longer injected each turn. <environment> stays untouched—it carries the project root and date, not memory content.",
     organizePacing: "Memory tree pacing",
     organizePacingHint: "Batch organizes at a threshold; incremental per filled chunk.",
     organizePacingBatch: "Batch",

@@ -51,6 +51,13 @@ impl MemoryStore {
     }
 
     pub(super) fn recall_quiet(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryRow> {
+        // 全局记忆层开关（S1 刀④b）：关 = **一次扫描都不发、也不记注入埋点**，直接空表。
+        // 门放在这里而不是塞进 `recall_once` 的 filter，为的是让观测面诚实：走 filter 会
+        // 留下一条"候选 0 条、注入 0 条"的账，那个形状与"这层本来就没记过东西"完全一样，
+        // 而它想说的其实是"用户把这层关了"。
+        if !(self.global_on)() {
+            return Vec::new();
+        }
         // v2.136 裁定「项目侧全提醒制」：注入只取**全局层**（''，用户层
         // 面的喜好/全局要求，保持简短）——项目层事实不自动注入（由模型
         // memory_read / memory_search 按需查），所以召回与会话归属无关。

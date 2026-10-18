@@ -283,6 +283,7 @@ mod llm;
 mod llm_profile;
 mod llm_provider;
 mod memory;
+mod memory_tree;
 mod network_proxy;
 mod window;
 

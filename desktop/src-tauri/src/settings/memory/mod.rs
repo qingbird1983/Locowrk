@@ -71,10 +71,26 @@ pub fn check_instruction_kib(label: &str, n: u32) -> Result<(), String> {
 
 /// F1 记忆文件化总开关缺省（《Memory File-ization Design》§7 已裁定：
 /// 关 = 回纯 sqlite，md 不再读写；缺省开——md 是人类层，写失败不破契约）。
+/// ⚠ 这**两句裁定都已过时**：真源 = md 之后"关 = 回纯 sqlite"那一档随刀②c-1 / 刀③b
+/// 一起消失，字段剩下的唯一读者是 reconcile 与首启导出的**空转门**（决定"要不要跑后台
+/// 那一轮"，不决定数据存哪儿）。留着而不删：删 settings 字段是既有形状的变更，
+/// 去处（改义成"记忆面停止写入并如实报错"还是退役）登记在 specs/05 刀④。
 pub const FILES_DEFAULT: bool = true;
 /// F2 交接提醒缺省（v2.136 项目侧全提醒制：开）——归属会话注入
 /// `<repo>/.Locowrk/` 静态提醒段（节点钩子）+ 首次引导建目录。
+/// 这一枚就是 ADR-0007 §18 那三枚行为开关里的**第三枚**（交接层），所以不另立第二份缺省。
 pub const REPO_CONTEXT_DEFAULT: bool = true;
+/// 全局记忆层缺省（S1 刀④b · ADR §18 三枚行为开关的第一枚）。
+/// ⚠ 两枚新开关的缺省必须是 `true`，那不是"倾向开"而是一条不变量：**缺省要等于加开关
+/// 之前唯一的形状**。守卫 = `settings/tests/memory.rs::layer_switches_default_on_and_roundtrip`。
+/// ⚠ 这句担保**订正过一次**：原先写的是"改 false 会当场红在既有注入用例上"，跑变异
+/// （`tmp/mut-rust.mjs` CASE 1）实测那些用例**一条都不红**——它们构造的是 `MemoryStore::new`
+/// 里那枚未接线缺省，与这里的常量不同源，settings 面漂了它们照绿。⇒ 这套东西里有**两处**
+/// 缺省要同向，各自都得有人守：这一枚归 settings 簇，未接线那一枚归
+/// `memory::tests::layer_switches::both_switches_default_to_open_on_an_unwired_store`。
+pub const GLOBAL_LAYER_DEFAULT: bool = true;
+/// 项目记忆层缺省（第二枚，同上一条不变量）。
+pub const PROJECT_LAYER_DEFAULT: bool = true;
 /// 指令文件层缺省（提示词分层设计 §4.3：开——有文件就注入，无文件零
 /// 负担；关 = 用户显式不要 AGENTS.md 面）。
 pub const INSTRUCTION_FILES_DEFAULT: bool = true;
@@ -165,6 +181,18 @@ pub struct MemorySettings {
     /// 交接提醒（F2 §7 缺省开；v2.136 提醒制）：归属会话注入
     /// `<repo>/.Locowrk/` 静态提醒段 + 首次引导建目录。
     pub repo_context: bool,
+    /// 全局记忆层（S1 刀④b · ADR §18 三枚行为开关第一枚）：关 = `''` 键位那批偏好
+    /// **不再自动进上下文**（`<persistent_memory>` 整块缺席，召回不发一次扫描、
+    /// 也不记注入埋点——"没注入"与"注入了零条"在观测面上必须是两件事）。
+    /// ⚠ 它不管两件事，两件都不是本开关的语义，读文案的人要看得见这条边界：
+    /// ① 模型主动查（`memory_read` / `memory_search` 仍读得到）——那两枚工具在插件侧、
+    ///    不吃宿主 settings，拦它们要跨冻结 ABI 传新形状，代价与收益不匹配；
+    /// ② 管理页仍列全量——关掉开关不等于假装数据不存在，人的管理面看的是文件。
+    pub global_layer: bool,
+    /// 项目记忆层（第二枚）：关 = `<project_memory_index>` 整节缺席。
+    /// 只管这一节索引，**不管 `<environment>` 那行**（里面是项目根与日期，不是记忆内容；
+    /// 一起关掉会把两件事绑成一个开关）。
+    pub project_layer: bool,
     /// 指令文件层（提示词分层设计 §4.3，缺省开）：全局 `<数据根>/AGENTS.md`
     /// 与项目层指令文件以合成 user 消息注入消息层头部（会话首查快照锁字节）。
     /// 项目层 v2.188 起认**三族**（`AGENTS.md` / `CLAUDE.md` / `AGENTS.override.md`，
@@ -211,6 +239,8 @@ impl Default for MemorySettings {
             collapse_threshold_pct: COLLAPSE_THRESHOLD_PCT_DEFAULT,
             files: FILES_DEFAULT,
             repo_context: REPO_CONTEXT_DEFAULT,
+            global_layer: GLOBAL_LAYER_DEFAULT,
+            project_layer: PROJECT_LAYER_DEFAULT,
             instruction_files: INSTRUCTION_FILES_DEFAULT,
             instruction_global_kib: INSTRUCTION_GLOBAL_KIB_DEFAULT,
             instruction_project_kib: INSTRUCTION_PROJECT_KIB_DEFAULT,
@@ -247,6 +277,8 @@ pub struct MemorySettingsView {
     pub collapse_threshold_pct: u8,
     pub files: bool,
     pub repo_context: bool,
+    pub global_layer: bool,
+    pub project_layer: bool,
     pub instruction_files: bool,
     pub instruction_global_kib: u32,
     pub instruction_project_kib: u32,
@@ -280,6 +312,11 @@ pub struct MemoryUpdate {
     pub collapse_threshold_pct: Option<u8>,
     pub files: Option<bool>,
     pub repo_context: Option<bool>,
+    /// 全局记忆层开关（S1 刀④b）：`Some(false)` = 偏好不再自动进上下文，
+    /// 文件与工具检索面都不动（边界见 `MemorySettings::global_layer` 那条注释）。
+    pub global_layer: Option<bool>,
+    /// 项目记忆层开关：`Some(false)` = `<project_memory_index>` 整节缺席。
+    pub project_layer: Option<bool>,
     pub instruction_files: Option<bool>,
     /// 全局指令链预算（KiB，出界 = `settings_set` 拒绝，8–512 缺省 100）。
     pub instruction_global_kib: Option<u32>,

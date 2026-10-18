@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a③b-1③b-2④a 已落地 / 刀④b ④c 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀①②a②b-1②b-2②b-3②c-1②c-2③a③b-1③b-2④a④b 已落地 / 刀④c 待做；②c-2 的学习档那一格待点头）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -473,9 +473,24 @@
   而"字节也从磁盘上消失"属于 AC-S1-7 的清空动作（要确认）。界面上这一维不能藏：④c 的删除
   文案必须写清"先进回收区、可恢复；要真正抹掉请清空回收区"——用户删一条可能是为了删掉一句
   含隐私的话，那他要的是不可逆那一档。
-- **刀④b（三枚行为开关）⏳ 待做**：全局记忆 / 项目记忆 / 项目交接层各一枚（ADR-0007 §18），
-  关 = 该层**不读、不更新、不注入**。接线点三处：`recall_quiet` 与 `list` 的全局层、
-  `project_index` 与项目层读写、`repo_context` 携带的 `<repo>/.Locowrk/MEMORY.md`。
+- **刀④b（三枚行为开关）✅ 2026-10-19 已落地**。三枚 = 全局层 / 项目层 / 交接层（ADR-0007 §18）；
+  交接层那枚 `memory.repoContext` 早已存在 ⇒ 本刀只新增前两枚，并把三枚收到**同一个界面分区**
+  （`components/memory/LayerSwitches.vue`；设置页那行 `repoContext` 撤掉——同一属性在两页各放一枚
+  开关就是两处真相，字段仍随 view 回填、原样保存）。
+  ⚠ **对原计划的订正**：这里原先写的是"关 = 该层**不读、不更新、不注入**"，实做的裁定是
+  **只停注入**——一个文件都不删、管理页照旧全量、模型主动查（`memory_read` / `memory_search`）
+  不受影响。理由不是偷懒：那两枚工具在插件侧、不吃宿主 settings，拦它们要跨冻结 ABI 传新形状。
+  接线点 = `recall_quiet` 与 `recall_relevant` 共用同一枚 `global_on`（**早退**而不是 filter，
+  否则账本上留下一行"候选 0 条"，把"用户关了开关"冒充成"记忆是空的"）、`project_index` 用
+  `project_on`（**不**管 `<environment>` 那行：那里面是项目根与日期，不是记忆内容）。
+  证据 = 宿主 598 → **603** 条（`memory/tests/layer_switches.rs` 4 条 + `settings/tests/memory.rs`
+  1 条），红证 = `tmp/mut-rust.mjs` CASE 1–6（六发各打中一条）。
+  ⚠ 两笔自纠都要留在仓里：① **CASE 3 第一版打空**——`memory_inject_log` 的唯一键含 session_id，
+  测试全程用同一个会话（或都用 `None`）就数不出"关档那轮多记了一行"，改成每轮换 session 才有证明力；
+  ② **一处说谎的注释已订正**——`GLOBAL_LAYER_DEFAULT` 上方原先写"改 false 会当场红在既有注入用例上"，
+  实测那些用例一条都不红（它们拿的是 `MemoryStore::new` 里那枚未接线缺省，与 settings 常量不同源）
+  ⇒ 这套东西有**两处缺省要同向**，各自都得有守卫：settings 簇守常量那枚，
+  `both_switches_default_to_open_on_an_unwired_store` 守未接线那枚。
 - **刀④c（每层一行 + `type` 那一列 + 回收区入口 + 文案订正）⏳ 待做**：管理页加"每层一行
   （文件数 / 更新时间 / 打开文件夹 / 删除该层）"、`MemoryRow` 补 `type` 字段并显示、
   回收区的列出 / 恢复 / 清空三枚命令。**命令与前端调用必须同批落**——`check-commands` 对

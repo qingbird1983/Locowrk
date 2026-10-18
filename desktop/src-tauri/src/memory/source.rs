@@ -79,6 +79,12 @@ impl MemorySource for MemoryStore {
         limit: usize,
         query: &RecallQuery,
     ) -> Vec<MemoryEntry> {
+        // 全局记忆层开关（S1 刀④b）：两档吃**同一枚门**——"关掉全局层"不等于"换一条
+        // 通路继续注入"，那样这枚开关就成了排序器的装饰。早退放在权重判断之前，
+        // 于是关档连库都不开（学习档那条路是唯一还按库寻址的读路，见 specs/05 刀②c-2）。
+        if !(self.global_on)() {
+            return Vec::new();
+        }
         if !query.weights.enabled {
             return self.recall(session_id, limit);
         }
@@ -194,6 +200,13 @@ impl MemorySource for MemoryStore {
     /// 取数失败同样 `None`，**绝不合成一条"看起来是空索引"的块**——那会把"读不到"
     /// 骗成"没东西可注入"。
     fn project_index(&self, session_id: Option<&str>) -> Option<String> {
+        // 项目记忆层开关（S1 刀④b）：关 = 这一节整节缺席，与"未归属会话没有本项目"
+        // 走的是同一个出口（`None` = 块不生成，不是生成一个空块）。
+        // ⚠ 它**不**管 `context_line`：那行里是项目根与今天日期，不是记忆内容——
+        // 把它一起关掉就是拿两个语义不同的东西共用一个开关。
+        if !(self.project_on)() {
+            return None;
+        }
         let ws = self.scope_of_session(session_id);
         if ws.is_empty() {
             return None;

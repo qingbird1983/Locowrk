@@ -74,6 +74,8 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             collapse_threshold_pct: s.memory.collapse_threshold_pct,
             files: s.memory.files,
             repo_context: s.memory.repo_context,
+            global_layer: s.memory.global_layer,
+            project_layer: s.memory.project_layer,
             instruction_files: s.memory.instruction_files,
             instruction_global_kib: s.memory.instruction_global_kib,
             instruction_project_kib: s.memory.instruction_project_kib,

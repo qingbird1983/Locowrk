@@ -234,7 +234,17 @@ export default {
     memoryTopK: "每轮注入条数",
     memoryTopKHint: "1–20 条，缺省 5；注入内容可在「记忆」页查看和删除。",
     memoryFiles: "记忆文件化",
-    memoryFilesHint: "把记忆同步存为 Markdown 文件，方便直接查看和修改。",
+    memoryFilesHint:
+      "只决定启动时那一轮对账与首启导出跑不跑，不改变记忆存在哪里——记忆一直存在 Markdown 文件里。",
+    memoryLayers: "记忆层",
+    memoryLayersHint:
+      "三层各自开关，关 = 这一层不再自动进上下文。文件一个都不动，记忆页照旧列全量，模型主动查（memory_read / memory_search）也照样读得到——这几枚开关管的是注入，不是数据。",
+    memoryGlobalLayer: "全局记忆层",
+    memoryGlobalLayerHint:
+      "用户级偏好与全局要求（数据根 memory/global/）。关 = 对话里不再自动带上这些偏好。",
+    memoryProjectLayer: "项目记忆层",
+    memoryProjectLayerHint:
+      "本项目的记忆索引（数据根 memory/projects/<项目>/）。关 = 每轮不再自动带上这一节的指针行。<environment> 那行不受影响——里面有项目根与日期，不是记忆内容。",
     memoryRepoContext: "交接提醒",
     memoryInstructionFiles: "指令文件",
     memoryInstructionFilesHint: "全局（数据根）与项目层指令文件注入会话开头：项目层认 AGENTS.md / CLAUDE.md / AGENTS.override.md 三族，族内二选一（先到先得）、族间串联，override 排在最后（追加不替换）。每会话首查定格——中途改文件当前会话不变、新会话生效；项目文件优先于默认行为，但不与安全边界冲突。",

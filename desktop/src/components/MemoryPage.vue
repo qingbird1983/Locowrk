@@ -18,6 +18,7 @@ import SettingsSegmented from "./settings/SettingsSegmented.vue";
 import TreeBoard from "./memory/TreeBoard.vue";
 import TreeSection from "./memory/TreeSection.vue";
 import InjectSection from "./memory/InjectSection.vue";
+import LayerSwitches from "./memory/LayerSwitches.vue";
 import { relativeTimeLabel, relativeTimeSec } from "../lib/format";
 import { workspaceDisplayName } from "../lib/session-groups";
 import {
@@ -188,6 +189,9 @@ function timeText(row: MemoryRow): string {
 
     <!-- 事实库档 = 现役全部内容原样搬进来（事实列表 + 章节编辑 + 注入解释 + 清空） -->
     <template v-else>
+    <!-- 层区（S1 刀④b · ADR-0007 §18 三枚行为开关，每层一行）。组件里装着版式与
+         写回，理由与开关语义边界都写在 memory/LayerSwitches.vue 的头注。 -->
+    <LayerSwitches />
     <!-- M3 §3.37① 双区块之一：事实库区块头（在 ListPage 外，空列表也
          显示——双区块口径一致；现有列表行为零变化）。F2 v4.9：右侧挂
          「打开文件夹」——人的编辑面入口。 -->

@@ -28,10 +28,17 @@ export interface MemorySettingsView {
   collapseEnabled: boolean;
   /** 自动收起占用阈值（collapse 开启时生效，50–95% 缺省 80）。 */
   collapseThresholdPct: number;
-  /** F1 记忆文件化总开关（缺省开；关 = 回纯 sqlite 不再读写 md）。 */
+  /** F1 记忆文件化设置项。⚠ 它现在**没有作用面**：真源 = md，"关 = 回纯 sqlite"
+   * 那一档随 S1 刀②c/③b 消失，字段只剩 reconcile 与首启导出的空转门（去处见 specs/05 刀④）。 */
   files: boolean;
-  /** F2 交接提醒（缺省开，v2.136 提醒制）：归属会话注入静态提醒段。 */
+  /** F2 交接提醒（缺省开，v2.136 提醒制）：归属会话注入静态提醒段。
+   * 这一枚就是 ADR-0007 §18 三枚行为开关里的**交接层**那一枚。 */
   repoContext: boolean;
+  /** 全局记忆层（S1 刀④b，缺省开）：关 = `''` 键位那批偏好不再自动进上下文。
+   * 不管两件事：模型主动查仍读得到、管理页仍列全量（关的是注入，不是数据）。 */
+  globalLayer: boolean;
+  /** 项目记忆层（缺省开）：关 = `<project_memory_index>` 整节缺席。 */
+  projectLayer: boolean;
   /** 指令文件层（缺省开）：全局 `<数据根>/AGENTS.md` + 项目层三族候选
    * （AGENTS.md / CLAUDE.md / AGENTS.override.md，族内二选一、族间串联）
    * 注入消息层头部。 */
@@ -68,6 +75,10 @@ export interface MemoryUpdate {
   collapseThresholdPct?: number;
   files?: boolean;
   repoContext?: boolean;
+  /** 全局记忆层开关（`false` = 只停注入，不删文件、不动管理页）。 */
+  globalLayer?: boolean;
+  /** 项目记忆层开关（同上，管的是那一节索引）。 */
+  projectLayer?: boolean;
   instructionFiles?: boolean;
   /** 全局指令链预算（KiB，出界 = 后端拒绝并点名档位）。 */
   instructionGlobalKib?: number;

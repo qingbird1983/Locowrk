@@ -80,6 +80,16 @@ pub(crate) fn build(init: Init) -> Stack {
         let s = Arc::clone(&settings);
         Arc::new(move || s.memory().repo_context) as Arc<dyn Fn() -> bool + Send + Sync>
     };
+    // S1 刀④b 两枚行为开关（ADR-0007 §18）：全局层 / 项目层各自关各自的。
+    // 闭包档 = 保存即生效，与 `repo_on` 同一模式（这里不复制布尔，复制的是形状）。
+    let global_on = {
+        let s = Arc::clone(&settings);
+        Arc::new(move || s.memory().global_layer) as Arc<dyn Fn() -> bool + Send + Sync>
+    };
+    let project_on = {
+        let s = Arc::clone(&settings);
+        Arc::new(move || s.memory().project_layer) as Arc<dyn Fn() -> bool + Send + Sync>
+    };
     // Q1a（L0）注入侧 + Q1b 检索侧共用的召回观测句柄：`RecallLog` 无状态、只持路径、
     // open 时才建表 ⇒ 构造零成本，**不从 boot 借 UsageRecorder**——记忆与观测都不该为了
     // 写自己的账去依赖统计簇的写入器。一次构造两处消费（注入侧进 MemoryStore，检索侧连同
@@ -91,6 +101,7 @@ pub(crate) fn build(init: Init) -> Stack {
     let memory = Arc::new(
         MemoryStore::new(&root, Arc::clone(&workspace_of))
             .with_repo_context(Arc::clone(&repo_on))
+            .with_layer_switches(Arc::clone(&global_on), Arc::clone(&project_on))
             // 未接线时召回行为与改前逐字段一致（等价判据在 recall_log/tests/）。
             .with_recall_log(Arc::clone(&recall_log)),
     );

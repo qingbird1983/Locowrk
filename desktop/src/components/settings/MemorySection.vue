@@ -29,6 +29,9 @@ const form = reactive({
   collapseThresholdPct: 80,
   files: true,
   repoContext: true,
+  // S1 刀④b 两枚行为开关（缺省开 = 与加开关之前唯一的形状一致，真源是后端那两个常量）
+  globalLayer: true,
+  projectLayer: true,
   instructionFiles: true,
   instructionGlobalKib: 100,
   instructionProjectKib: 100,
@@ -69,6 +72,8 @@ watch(
     form.collapseThresholdPct = v.memory.collapseThresholdPct;
     form.files = v.memory.files;
     form.repoContext = v.memory.repoContext;
+    form.globalLayer = v.memory.globalLayer;
+    form.projectLayer = v.memory.projectLayer;
     form.instructionFiles = v.memory.instructionFiles;
     form.instructionGlobalKib = v.memory.instructionGlobalKib;
     form.instructionProjectKib = v.memory.instructionProjectKib;
@@ -95,6 +100,8 @@ function save() {
     collapseThresholdPct: Math.round(form.collapseThresholdPct),
     files: form.files,
     repoContext: form.repoContext,
+    globalLayer: form.globalLayer,
+    projectLayer: form.projectLayer,
     instructionFiles: form.instructionFiles,
     instructionGlobalKib: Math.round(form.instructionGlobalKib),
     instructionProjectKib: Math.round(form.instructionProjectKib),
@@ -130,19 +137,16 @@ function save() {
       />
     </SettingsRow>
 
-    <!-- F1 记忆文件化（文件化设计 §7）：关 = 回纯 sqlite，md 不再读写 -->
+    <!-- F1 记忆文件化设置项。⚠ 这句是实况，不是旧稿那句话：真源 = md 之后"关 = 回纯
+         sqlite"那一档已随 S1 刀②c-1 / 刀③b 消失，这一项现在只决定**启动时对账与首启
+         导出那一轮跑不跑**，不决定数据存哪儿（去处 = 刀④c 定改义或退役）。 -->
     <SettingsRow :title="t('settings.memoryFiles')" :hint="t('settings.memoryFilesHint')">
       <SettingsToggle v-model="form.files" :label="t('settings.memoryFiles')" />
     </SettingsRow>
-    <SettingsRow
-      :title="t('settings.memoryRepoContext')"
-      :hint="t('settings.memoryRepoContextHint')"
-    >
-      <SettingsToggle
-        v-model="form.repoContext"
-        :label="t('settings.memoryRepoContext')"
-      />
-    </SettingsRow>
+    <!-- 交接层那一枚行为开关**不在这儿显示**：ADR-0007 §18 把三枚行为开关（全局记忆 /
+         项目记忆 / 项目交接层）定在同一处，而记忆页（MemoryPage）已经落地那三枚并排。
+         同一属性两处开关 = 两处真相，所以这里撤行、`form.repoContext` 仍随 view 回填并
+         原样保存（字段没退出数据面，只是不再有两个开关可以拨它）。 -->
     <!-- 指令文件层（提示词分层设计 §4.3）：全局 + 项目三族候选注入消息层头部 -->
     <SettingsRow
       :title="t('settings.memoryInstructionFiles')"
