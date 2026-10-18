@@ -1,6 +1,6 @@
 # 05-记忆数据面 S1（把 md 从人读镜像扳成唯一真源）
 
-- 状态：**待确认（未开工）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中（刀① ✅ / 刀②a ✅ / 刀②b 施工中）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
@@ -72,19 +72,45 @@
 `FactEntry` 不进 C ABI（Rust 侧结构），`PLUGIN_ABI_VERSION` 不动 —— 刀① 用一个
 "追加字段后既有测试一字未改仍绿"的实证来担保这句话，不靠我说。
 
-## 施工拆法（三刀，每刀独立可回退、一提交）
+## 施工拆法（每刀独立可回退、一提交）
 
 - **刀①（✅ 2026-10-18 已落地）**：索引硬钳搬到**写侧** + 预算数字收成一处出处。
   `memlayout` 新增 `MAX_INDEX_LINES` / `MAX_INDEX_CHARS` / `INDEX_TRUNCATED_NOTE` 与 `clamp_index`，
   `refresh_index` 落盘前按预算截（行尾换行与头部都算进字符预算，只丢整行不写半行）；
   宿主 `memory_index.rs` 两份 `const` 换成一条 `pub(crate) use` 再导出。
-  判据 = 新增 `SS10` / `SS10b` 两条同源对账（基线 `1|1` 与 `2|1`）；测试 = `memlayout/tests.rs`
+  判据 = 新增 `SS10` / `SS10b` 两条同源对账（基线与口径的唯一出处 = 闸自己的输出行，本篇不钉）；
+  测试 = `memlayout/tests.rs`
   三条新用例，**既有 66 条一字未改仍绿**。sqlite 写路径一行未动 ⇒ 仍是旧形状，随时可停。
-- **刀②（扳真源）**：`md_write` / `md_delete` 的 `warn` 改成 `Err` 上抛；读路径（`memory/crud.rs`
-  列举、`recall.rs` 取数、`memory_index.rs` 兜底档）改**只读 md**，把 sqlite 兜底那档摘掉；
-  `hit_count` / `last_hit_at` 学习列停止读写（文件制没有时间信号以外的权重，v2.136 那条教训）。
-  这一刀才是 AC-S1-2 的证据所在。**顺带消掉一处暂时状态**：注入侧现在还在自己算截断（算法与
-  写侧的 `clamp_index` 各一份），它改读落盘的 `MEMORY.md` 之后这两份合一，数字与文案都不可能漂。
+- **刀②a（✅ 2026-10-18 已落地）**：`memlayout` 长出**读回面**——新建 `read.rs`（`StoredFact` /
+  `FactsScan` / `read_fact` / `iter_facts`，排序与现役 SQL 逐字同形 `updated_at DESC, key`），
+  `tags` 升成 frontmatter 一等字段（`render()` 写、`parse_fact` 读；升级前的旧文件缺这行 = 读回空串，
+  不是错，也不得因此造一份"人工编辑备份"）；`mod.rs` 涨到 405 行 ⇒ 索引面拆进 `index.rs`，
+  消费点经 `pub use` 再导出**一字未动**。
+  **判据随拆分订正（这条红过一次是真红）**：常量搬到 `index.rs` 后 `SS10b` 左值 2→0——写死单文件的
+  扫描面在目录式模块面前会瞎。改法是让它吃 **memlayout 子树**（动态取、排 `tests.rs`，再加文件不必改判据），
+  宿主"是不是吃再导出"那半独立成 `SS10c`，三档各配一条窄变异；下限另加一条"子树面非空"，
+  它在本刀当场抓到过我一次漏 `.map(read)`（面只剩路径串 ⇒ 判据会读成"定义丢了"）。
+  sqlite 读写两侧一行未动 ⇒ 这一刀只添面、不改行为，随时可停。
+  两处顺带撞出来的事实：**① `tests.rs` 涨到 565 行撞 400 纪律**（三问第 1 问答"否"：它同时管
+  寻址/渲染/写删同步/索引预算/读回五件事）⇒ 按面分簇拆成 `tests/`（`layout` / `render_parse` /
+  `write_delete` / `index_budget` / `read_back`），用例本体逐字搬、**73 条一条没多没少**（拆前拆后
+  同为 73 passed 就是"只搬不改"的判据）；搬完 `tmp/mut-clamp.mjs` 里那些 `memlayout::tests::xxx`
+  过滤串当场失效——全名多了一段 `tests::<簇>::`，cargo 打的是 `0 passed; 0 failed` 而 rc=0，
+  会被误读成"变异打空"，故给变异器加了"选择器打空 = 对照无效"的自检并**重跑 5–8 四条确认仍红**。
+  **② `GLOBAL_DIR` 请客没请到底**：本刀刚给 `mod.rs` 写上"`"global"` 字面量只许一处"，
+  同文件 `fact_rel_path:209` 还硬编码着第二处 ⇒ 已改为吃常量；宿主 `memory_reconcile.rs`
+  另有两处（该模块在 v1.1 里整项作废、待退役）跟着一起收，本刀不顺手搬。
+- **刀②b（读迁移 · 扳真源的证据所在）**：读路径（`memory/crud.rs` 列举、`recall.rs` 取数、
+  `memory_index.rs` 兜底档、插件侧 read / list / search / undo 六消费点）改**只读 md**，
+  把 sqlite 兜底那档摘掉，`<persistent_memory>` 停读 sqlite。这一刀是 AC-S1-2 的证据所在。
+  **顺带消掉一处暂时状态**：注入侧现在还在自己算截断（算法与写侧的 `clamp_index` 各一份），
+  它改读落盘的 `MEMORY.md` 之后这两份合一，数字与文案都不可能漂——文案也是两份
+  （注入侧 `memory_index.rs` 的 `TRUNCATED_NOTE` 与写侧 `index.rs` 的 `INDEX_TRUNCATED_NOTE`），
+  读迁移那一步前者应当退役而不是留着各说各话。
+- **刀②c（存储退役）**：`md_write` / `md_delete` 的 `warn` 改成 `Err` 上抛（含取消
+  `files: Option` 与 `files_on` 的"未接线 = 纯 sqlite"兜底档），`hit_count` / `last_hit_at`
+  学习列停止读写（文件制没有时间信号以外的权重，v2.136 那条教训；牵动 `memory_learn` / `recall_log`，
+  可能得推给 S4），`md_delete` 的 no-op 判据按现状画像第 4 条反过来。
 - **刀③（四类型打通 + 工具内部改道）**：`FactEntry` 末尾追加 `ty`、`render()` 写
   `metadata.type`、`ParsedFact` 读回 type（未知值 = 未分类，存量不重写）、type→层映射纯函数、
   `feedback`/`project` 缺 `Why:` / `How to apply:` 时提醒不拦写；这几件必须与工具参数**同刀**，
@@ -127,8 +153,9 @@
    文件）。AC-S1-6 那三条遗忘验证能不能成立，正卡在这一步。
 5. 一条实测纠正了我的推断：我原先以为"决策人开了 `.worktrees` 工作树会把结构闸的扫描面污染成
    双份读数"，实测否掉了——`check-single-source.mjs:29-43` 的 `prodRustFiles()` 写死从
-   `['crates','desktop','plugins-src']` 三个根 walk，工作树副本不在面内（工作树存在时
-   "生产 .rs 337 个"读数不变、SS1 仍 `1`、gates rc=0）。残余风险登记在此：那个 walk 只排
+   `['crates','desktop','plugins-src']` 三个根 walk，工作树副本不在面内（工作树存在时"生产 .rs
+   文件数"读数与工作树之前一致、SS1 仍 `1`、gates rc=0；具体数不落进本篇——那是每刀都会漂的数，
+   唯一出处是闸自己的输出行）。残余风险登记在此：那个 walk 只排
    `target|node_modules|dist`，**不排 `.worktrees`**，哪天把扫描根扩到仓库根就会重算一遍。
 
 ## 验收标准（跑什么、看到什么）
@@ -143,7 +170,7 @@
       同一句里"以后都用 pnpm"产 1 个 `type=user` 文件（正反对照同批跑）
 - [ ] AC-S1-5 索引硬钳在写侧：造 250 条 → 落盘的 `MEMORY.md` ≤ 200 行且末行带 WARNING 指路，
       注入侧读到的就是这份（不再现算）。**前半已由刀① 实证**（`refresh_index_clamps_at_the_shared_budget`
-      等三条 + `SS10`/`SS10b` 两道判据，四条磁盘变异里撤钳/只钳行数/不写截断行三档都报红）；
+      等三条 + `SS10`/`SS10b`/`SS10c` 三道判据，四条磁盘变异里撤钳/只钳行数/不写截断行三档都报红）；
       后半要刀② 摘掉注入侧那档现算才算数，所以整条不勾
 - [ ] AC-S1-6 遗忘三条全过：删一条 → grep 数据根该 stem 零命中 → 该层 `MEMORY.md` 零命中 →
       下一会话注入块零命中
@@ -170,7 +197,7 @@
 
 | 文件 / 目录 | 改动 |
 | --- | --- |
-| `crates/plugin-api/src/memlayout/{mod,sync}.rs` | 刀①：type 枚举、render 加字段、索引写侧硬钳（末尾追加、不动既有签名） |
+| `crates/plugin-api/src/memlayout/{mod,sync,index,read}.rs` | 刀①：索引写侧硬钳 + 预算常量收一处（`index.rs`）；刀②a：读回面 `read.rs` + `render()`/`parse_fact` 补 `tags`；`FactEntry` 只末尾追加字段、既有签名不动 |
 | `crates/plugin-api/src/memlayout/tests.rs` | 四类型落位、钳、Why 段的用例 |
 | `desktop/src-tauri/src/memory_files.rs` | 刀①③：写语义从"同步"改"落盘"；`obsolete/` 移入与清空 |
 | `desktop/src-tauri/src/memory/{store,crud,recall,reconcile}.rs` | 刀②：`warn` → `Err`；读路径改 md；学习列停读 |
@@ -191,7 +218,8 @@
 - 风险③：`MEMORY.md` 从"注入侧现算"改成"写侧落盘"后，人改索引 = 直接改注入面。这正是要的
   （人编辑权威），但 mtime 进预取缓存键这条得实测一次（现有关键 `(session_id, scope_id)` 不含
   mtime ⇒ 大概率要加，属 S3 的接线，刀② 先只登记不偷偷改）。
-- 回滚：四刀各一提交（刀① 已在工作区、按并发那条挂账等提交时机）；`memory.files=false`（→ env `LOCOWRK_MEMORY_FILES=0`）是现成开关，
+- 回滚：**每刀一提交**（决策人 2026-10-18 定"每轮收尾落一个提交"；提交号只认 `git log`，本篇不抄）；
+  `memory.files=false`（→ env `LOCOWRK_MEMORY_FILES=0`）是现成开关，
   刀② 之后关它 = 只剩 md、不写 sqlite（语义要写清，别让"关"字含糊）。
 - 挂账：方案稿 A① 那张布局图按上面待定项 1 的结论订正；`data_root` 两份实现（plugin-api 权威 +
   宿主一份）是否并成一个出处，另立条目，不塞进 S1。
@@ -199,13 +227,22 @@
   `scripts/check-i18n.mjs`（+51 行，新增「设置说明文案一行封顶」判据：zh ≤32 字 / en ≤80 字符，
   口径 = 全部 `*Hint` 键）、`desktop/src/components/settings/SettingsRow.vue:49`（`line-clamp-1` 兜底）、
   `docs/design/authority/Front-end Design Guidelines.md` ② 那节（补条款 + 新实测读数，明写"取代原
-  51 条 / 最长 84 字"）三件一套自洽，**不是本刀产出、本刀不碰**。刀① 因此停在"代码写完、
-  `make check` rc=0、未提交"这个状态：现在提，提交正文里那句"全绿"读数会混进对方当时的闸状态。
+  51 条 / 最长 84 字"）三件一套自洽，**不是本刀产出、本刀不碰**。当时的僵局是"本刀全绿但不敢提"
+  ——一提就把对方当时的闸状态抄进我的提交正文。现已按决策人的"每轮收尾落一个提交"解开：提交正文
+  只写本刀改动面内的事实，不抄任何非本刀的读数。
   这正是 `specs/01` 那道开工闸当初写的理由（同仓并发施工会冲突），它被 2026-10-18 的转线令顶掉之后，
   并发本身并没有消失。
 - 挂账（一处真隐患）：仓根出现未跟踪 `.pnpm-store/`（实测 162M，`make check` 跑 pnpm 时建在仓内），
   `.gitignore` 没覆盖它 ⇒ 谁执行一次 `git add -A` 就把 162M 提进库。加一行 ignore 即可，
-  但那是改配置，等决策人点头；本刀不动。
+  但那是改配置，等决策人点头；本刀不动。复查（刀②a 收尾）：工作区 `.gitignore` 里
+  **已有 `+.pnpm-store/` 这一行**（非本刀产出、仍未提交 ⇒ 本刀不认领也不 `git add` 它）；
+  剩下的不是"要不要加"而是"谁来提这一行"。
+- 挂账（刀②a 取证时抓到的保留名盲区）：读侧跳过索引与投影用的是**文件名**
+  （`read.rs::is_fact_file` 排 `MEMORY` / `tree` 两个 stem），而写侧的 `key_file_stem`
+  只安全化路径字符与 Windows 保留名，**没把 `MEMORY` / `tree` 列成保留键** ⇒
+  模型或人真写一条 key=`MEMORY` 的事实，文件落得名正言顺，却永远读不回来（静默失踪）。
+  两侧对"哪些名字不许当键位"必须同源：要收的是把这两个 stem 挪进 `key_file_stem`
+  的保留名单（写侧就拒绝或加前缀），而不是读侧继续按名字猜。属改写侧行为，本刀只做登记。
 - 挂账（取证时抓到的版本号漂移，**本刀已消**）：`desktop/src-tauri/src/memory_files.rs:1` 与
   `crates/plugin-api/src/memlayout/mod.rs:1` 两处模块注释都引《Memory File-ization Design **v1.1**》，
   而 `docs/design/authority/Memory File-ization Design.md` 正文版本行停在「**v1.0 草案**

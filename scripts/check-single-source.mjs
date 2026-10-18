@@ -115,6 +115,22 @@ function popoverFace() {
   return { comps, frontSrc: walkExt('desktop/src', /\.(ts|vue)$/).map(read) };
 }
 
+/**
+ * memlayout 子树面（S1 刀②a 加）。口径 = 整棵树的生产 .rs，排掉 `tests.rs`。
+ *
+ * 为什么不能再吃单文件：目录式模块把一件事拆成了好几个文件（索引面住 `index.rs`、
+ * 读回面住 `read.rs`），写死 `mod.rs` 的扫描面会**随拆分瞎掉**——本次实测就是常量搬到
+ * `index.rs` 后左值从 2 变 0，报了一条"定义丢了"的红。那条红方向对、结论假，
+ * 而假红的下场和真瞎一样是被人绕过去（SS6 立的教训同一头）。动态取整棵树以后，
+ * memlayout 再加文件不必改判据；失效方向也从"少扫一个文件"变成"扫多一个无害文件"。
+ */
+function memlayoutFace() {
+  return walkExt('crates/plugin-api/src/memlayout', /\.rs$/)
+    .filter((rel) => !/(^|\/)tests(_?\.rs|\/)/.test(rel))
+    .map(read)
+    .join('\n');
+}
+
 /** 外点收口形状 = 挂到 document/window 上的 `pointerdown`（口径见上方注释）。 */
 const DISMISS_SHAPE = /(?:document|window)\.addEventListener\(\s*"pointerdown"/;
 const dismissCount = (m) => m.comps.filter((s) => DISMISS_SHAPE.test(s)).length;
@@ -231,6 +247,7 @@ function snapshot() {
     pluginManifests: pd.manifests,
     comps: pf.comps,
     frontSrc: pf.frontSrc,
+    memlayoutTree: memlayoutFace(),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -427,14 +444,19 @@ const CHECKS = [
   ],
   [
     'SS10b',
-    '且定义确实落在 memlayout（两条 = 2），宿主注入侧取的是**再导出**而不是自己 `const` 一份' +
-      '（左 = memlayout 里的定义数，右 = memory_index.rs 里那条 `pub(crate) use plugin_api::memlayout::{…}`）',
+    '且那两处定义确实落在 memlayout 子树（刀②a 起 = `index.rs`，不再在 `mod.rs`；' +
+      '真源住在"谁产出这份文件"那一侧，宿主与插件都从它吃数字）',
+    (m) => String(countOf(m.memlayoutTree, /pub const MAX_INDEX_(?:LINES|CHARS): usize =/)),
+    '2',
+  ],
+  [
+    'SS10c',
+    '且宿主注入侧取的是**再导出**而不是自己 `const` 一份（`memory_index.rs` 里那条 ' +
+      '`pub(crate) use plugin_api::memlayout::{…}`）——退回自定义时 SS10 也会红，' +
+      '但那条红说的是"全仓多了一份数字"，说的是另一件事',
     (m) =>
-      [
-        countOf(m.memlayout, /pub const MAX_INDEX_(?:LINES|CHARS): usize =/),
-        countOf(m.memIndex, /pub\(crate\) use plugin_api::memlayout::\{[^}]*MAX_INDEX_LINES[^}]*\};/),
-      ].join('|'),
-    '2|1',
+      String(countOf(m.memIndex, /pub\(crate\) use plugin_api::memlayout::\{[^}]*MAX_INDEX_LINES[^}]*\};/)),
+    '1',
   ],
 ];
 
@@ -443,6 +465,9 @@ const CHECKS = [
 const FLOORS = [
   ['生产 .rs 文件数', (m) => m.rust.length, 200],
   ['快照里 memlayout 非空', (m) => (m.memlayout.length > 200 ? 1 : 0), 1],
+  // 刀②a 起 memlayout 是目录式模块：子树面为空 = 目录改名或 walkExt 路径写错，
+  // 那时 SS10b 的"读不到定义"会被读成"定义丢了"——先让下限把面本身的问题报出来。
+  ['memlayout 子树面非空', (m) => (m.memlayoutTree.length > 2000 ? 1 : 0), 1],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
@@ -491,14 +516,17 @@ if (SELFTEST) {
   const MUT = {
     SS1: (m) => m.rust.push('pub fn sneaky() -> String { format!("{}/x", "projects") }'),
     SS1b: (m) => (m.memlayout = m.memlayout.replace('const PROJECTS_DIR: &str = "projects";', 'const PROJECTS_DIR: &str = "proj";')),
-    // 索引预算（S1 刀①）：SS10 数"全仓是不是只有一份数字"，SS10b 数"那份数字在不在 memlayout、
-    // 宿主是不是真的再导出"。两档各一条窄变异——宿主退回自定义时只该 SS10b 红（m.rust 与
-    // m.memIndex 是两次独立读盘，改一份不动另一份，这正是分工能证成立的原因）。
+    // 索引预算三档各一条窄变异（S1 刀①②a）：SS10 数"全仓是不是只有一份数字"，
+    // SS10b 数"那一份在不在 memlayout 子树"，SS10c 数"宿主是不是真的再导出"。
+    // 三条互不遮挡靠的是同一机制：m.rust / m.memlayoutTree / m.memIndex 是三次独立读盘，
+    // 改一份不动另一份——所以每条变异只该红自己那一项（刀②a 前 SS10b/SS10c 还是同一项，
+    // 那时"宿主退回自定义"会同时打掉左右两档，分工证不成立，故拆）。
     SS10: (m) =>
       m.rust.push(
         'pub(crate) const MAX_INDEX_LINES: usize = 200;\npub(crate) const MAX_INDEX_CHARS: usize = 25_000;',
       ),
-    SS10b: (m) =>
+    SS10b: (m) => (m.memlayoutTree = m.memlayoutTree.replace('pub const MAX_INDEX_LINES: usize = 200;', '')),
+    SS10c: (m) =>
       (m.memIndex = m.memIndex.replace(
         'pub(crate) use plugin_api::memlayout::{MAX_INDEX_CHARS, MAX_INDEX_LINES};',
         'pub(crate) const MAX_INDEX_LINES: usize = 200;',

@@ -65,9 +65,13 @@
 └── _unaffiliated/                # 未归属键位兜底（'' 不是项目，不建进 projects/）
 ```
 
-* 单文件格式：frontmatter（`name` / `description` / `metadata{type, source, workspace, updated}`）
+* 单文件格式：frontmatter（`name` / `description` / `tags` / `metadata{type, source, workspace, updated}`）
   + 正文。`metadata.type` ∈ `user | feedback | project | reference`（旧文件读回 `fact` = 未分类，
   不重写存量）。`feedback` 与 `project` 正文带 `Why:` 与 `How to apply:` ——知道为什么才判得了边界情况。
+* **`tags` 必须单独一行，不能靠 `description` 反推**：`description` 装的是"tags，tags 空则正文首行"
+  （渲染侧有意做的 hook），是个**有损**字段——从它读不回"这是标签还是正文第一句"。真源一旦是文件，
+  管理页的列举过滤与 `memory_search` 的 tags 匹配都只能从 `tags:` 这行取，所以它是一等字段。
+  旧文件没这行 ⇒ 读回空串（不回填、不重写存量）。
 * **分级规则**：`user` / `feedback` 缺省落全局，`project` / `reference` 缺省落项目，显式
   `scope` 可覆盖；映射由 `plugin-api::memlayout` 的一个纯函数算，模型只报 type、不自己算目录
   （记忆工具有宿主与插件两条通路，放任何一侧都算不出另一侧的落点）。

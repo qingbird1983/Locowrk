@@ -85,7 +85,8 @@
     （现查 `grep -rlE 'document\.addEventListener\("pointerdown"|useDismissOnOutside\(' desktop/src/components`）；
     `chat/ModelSelector.vue` 自写的那份 document keydown 换成共享件 ⇒ 同一判定的第二个出处消失。
     机械闸 = `scripts/check-single-source.mjs` 的 **SS9**（外点与 Esc 成对在场）/ **SS9b**
-    （让位判定还在）/ **SS9c**（计数器只许一个出处），`make selftest` **17 档全中**；
+    （让位判定还在）/ **SS9c**（计数器只许一个出处），`make selftest` 为这三档各留一条窄变异、
+    末行 `SELFTEST_ALL_CAUGHT`（总档数每刀都会漂，唯一出处 = 闸自己的输出行，标准里不钉）；
     行为面 = `desktop/tests/popover-esc.spec.ts` **9 条**（四发变异各打中一条，含"卸载不归还"
     与"把计数写成布尔"两种缺陷形状）。
   - 沿用原裁定、不动的两半：「关掉谁」三种写法并存见 §七；外点事件名 `mousedown`→`pointerdown`

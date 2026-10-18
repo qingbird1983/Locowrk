@@ -69,6 +69,9 @@ pub struct ParsedFact {
     pub name: Option<String>,
     /// metadata.workspace 原值（F1 落盘身份；无 = None → 调用方按目录反查）。
     pub workspace: Option<String>,
+    /// frontmatter `tags` 原值（**读侧的唯一标签来源**；None = 这文件是
+    /// tags 一等字段之前落的，调用方按空串读，不回填、不重写存量）。
+    pub tags: Option<String>,
     /// metadata.source（无 = None）。
     pub source: Option<String>,
     /// metadata.updated（无 / 坏 = None）。
@@ -89,11 +92,16 @@ pub(crate) fn yaml_unquote(v: &str) -> String {
 
 /// 解析单文件（宽松：无 frontmatter = 全文正文；未闭合块按无 frontmatter）。
 /// 身份以 frontmatter `name` 为准（设计 §3——文件名只是键位的净空编码）。
+///
+/// 顶层认 `name` / `tags` 两行，`metadata:` 块内认 `workspace` / `source` /
+/// `updated`——**缩进就是判据**：`strip_prefix("tags: ")` 要求顶格，所以块内万一
+/// 出现 `  tags:` 不会被当成顶层标签读错。
 pub fn parse_fact(text: &str) -> ParsedFact {
     let lines: Vec<&str> = text.split('\n').collect();
     if lines.first().copied() == Some("---") {
         let mut name = None;
         let mut workspace = None;
+        let mut tags = None;
         let mut source = None;
         let mut updated_at = None;
         let mut in_meta = false;
@@ -109,6 +117,7 @@ pub fn parse_fact(text: &str) -> ParsedFact {
                 return ParsedFact {
                     name,
                     workspace,
+                    tags,
                     source,
                     updated_at,
                     body: rest.join("\n"),
@@ -116,6 +125,8 @@ pub fn parse_fact(text: &str) -> ParsedFact {
             }
             if let Some(v) = line.strip_prefix("name: ") {
                 name = Some(yaml_unquote(v));
+            } else if let Some(v) = line.strip_prefix("tags: ") {
+                tags = Some(yaml_unquote(v));
             } else if line.trim_end() == "metadata:" {
                 in_meta = true;
             } else if in_meta {
@@ -134,6 +145,7 @@ pub fn parse_fact(text: &str) -> ParsedFact {
     ParsedFact {
         name: None,
         workspace: None,
+        tags: None,
         source: None,
         updated_at: None,
         body: text.to_string(),

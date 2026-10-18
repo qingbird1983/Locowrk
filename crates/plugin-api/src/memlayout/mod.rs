@@ -27,8 +27,14 @@ use std::path::{Path, PathBuf};
 
 use crate::fsutil;
 
+mod index;
+mod read;
 mod sync;
 
+// 索引面与读面各自成片，对外路径仍走这里 ⇒ 消费点（宿主 memory_files /
+// memory_reconcile / memory_index、插件 store）一个字都不用动。
+pub use index::{INDEX_TRUNCATED_NOTE, MAX_INDEX_CHARS, MAX_INDEX_LINES, refresh_index};
+pub use read::{FactsScan, StoredFact, iter_facts, read_fact};
 pub use sync::{ParsedFact, atomic_write, mtime_ms, parse_fact, read_marker, write_marker};
 
 /// md 根目录名（数据根下）。
@@ -45,17 +51,13 @@ const PROJECTS_DIR: &str = "projects";
 /// 落点）与读侧（memory_tree_reconcile 的目录反查项目）都引用这里，字面量全仓
 /// 只此一处（Q15 探针 P4a：改前散在两个文件）。
 pub const UNAFFILIATED_DIR: &str = "_unaffiliated";
-/// 索引硬顶：指针行数（设计 §2.1）。**这条预算的全仓唯一出处就在这里**——
-/// 写侧（本模块 `refresh_index` 落盘）与注入侧（宿主 `memory_index`）都引用
-/// 这两个常量，两份数字一旦各写各的，就会出现"文件里 210 行、注入只给看 200
-/// 行"这种人在资源管理器里看到的和模型看到的不一致（v1.1 把钳搬到写侧的目的
-/// 正是让人看到的那份 = 模型看到的那份）。
-pub const MAX_INDEX_LINES: usize = 200;
-/// 索引硬顶：正文字符数（与行数任一先撞线就截，长 key 会先撞字符预算）。
-pub const MAX_INDEX_CHARS: usize = 25_000;
-/// 截断必须自描述：末行留一条指路，否则人打开索引会以为"本项目就记了这些"。
-pub const INDEX_TRUNCATED_NOTE: &str =
-    "… index truncated — open this folder to see every file, or use memory_search";
+/// 全局层的目录名。**与上面 `PROJECTS_DIR` 同一条纪律**：人类层里 `"global"` 这个
+/// 字面量在本模块只许出现在这一处——写侧两条（`fact_rel_path` 的相对支与
+/// `scope_dirs` 的绝对支）与读侧（`read::iter_facts`）全部经这里取，多一个消费者
+/// 也不会散出第二份抄本（索引预算那两个数字同理住在 `index.rs`）。
+/// ⚠ 宿主侧还有两处字面量在 `memory_reconcile.rs`（该模块在 v1.1 里整项作废、待退役），
+/// 收口跟那一刀一起做，已登记进 specs/05 挂账——本刀不顺手搬。
+pub(crate) const GLOBAL_DIR: &str = "global";
 /// 总开关 env：宿主在 settings `memory.files = false` 时注入 `"0"`；
 /// 插件**每次写前读取**（与 fsutil allowed_roots 同款读 env 热换，保存
 /// 即生效免重启）。env 缺省未设 = 开。
@@ -207,7 +209,7 @@ pub fn key_file_stem(key: &str) -> String {
 pub fn fact_rel_path(workspace: &str, key: &str) -> PathBuf {
     let file = format!("{}.md", key_file_stem(key));
     if workspace.is_empty() {
-        PathBuf::from("global").join(file)
+        PathBuf::from(GLOBAL_DIR).join(file)
     } else {
         project_rel_dir(workspace).join("facts").join(file)
     }
@@ -259,13 +261,18 @@ impl FactEntry<'_> {
         }
     }
 
-    /// 单文件全文：frontmatter（name / description / metadata）+ 正文。
+    /// 单文件全文：frontmatter（name / description / tags / metadata）+ 正文。
     /// workspace 与 name 落盘 = F2 reconcile 的身份读回依据。
+    ///
+    /// `tags` 单独一行是**读侧迁移的前置**：`description` 是"tags，空则正文首行"的
+    /// 有损 hook，从它反推不出"这串是标签还是正文第一句"。真源 = 文件之后，管理页
+    /// 过滤与 `memory_search` 的 tags 匹配只能从这行取（设计 §2.1）。
     pub fn render(&self) -> String {
         format!(
-            "---\nname: {}\ndescription: {}\nmetadata:\n  type: fact\n  source: {}\n  workspace: {}\n  updated: {}\n---\n\n{}\n",
+            "---\nname: {}\ndescription: {}\ntags: {}\nmetadata:\n  type: fact\n  source: {}\n  workspace: {}\n  updated: {}\n---\n\n{}\n",
             yaml_str(self.key),
             yaml_str(&self.description()),
+            yaml_str(self.tags),
             yaml_str(if self.source.is_empty() {
                 "explicit"
             } else {
@@ -281,80 +288,16 @@ impl FactEntry<'_> {
 /// 键位目录与索引文件：全局 = `global/`，项目 = `projects/<dir>/facts/`
 /// （索引坐在项目文件夹根）。项目支经 `project_dir` ⇒ `''` 在这里同样**拒**，
 /// 由调用点决定怎么办（`refresh_index` 直接上抛；reconcile 记 warning 跳过）。
-fn scope_dirs(root: &Path, workspace: &str) -> Result<(PathBuf, PathBuf), String> {
+/// `pub(crate)` 是给 `index.rs`（写索引）与 `read.rs`（读一层）共用的——目录形状
+/// 只这一处算法，两片各自再拼一遍就是第二个出处。
+pub(crate) fn scope_dirs(root: &Path, workspace: &str) -> Result<(PathBuf, PathBuf), String> {
     if workspace.is_empty() {
-        let dir = root.join("global");
+        let dir = root.join(GLOBAL_DIR);
         Ok((dir.clone(), dir.join("MEMORY.md")))
     } else {
         let dir = project_dir(root, workspace)?;
         Ok((dir.join("facts"), dir.join("MEMORY.md")))
     }
-}
-
-/// 从 frontmatter 读回 description（索引 hook 用；无 = None）。
-fn parse_description(text: &str) -> Option<String> {
-    for line in text.lines().skip(1) {
-        if line.trim_end() == "---" {
-            break;
-        }
-        if let Some(v) = line.strip_prefix("description: ") {
-            return Some(sync::yaml_unquote(v));
-        }
-    }
-    None
-}
-
-/// 写侧预算钳：行数与字符数**任一先撞线即截**，且只丢整行不写半行。
-/// 返回 `(保留的指针行, 是否发生截断)`。头部与每行行尾换行都算进字符预算——
-/// 头部不算就会被它悄悄撑爆，行尾不算则 200 行实际比预算多出 200 字符。
-fn clamp_index(lines: Vec<String>) -> (Vec<String>, bool) {
-    let head = "# 记忆索引\n\n";
-    let mut kept: Vec<String> = Vec::new();
-    let mut used = head.chars().count();
-    for line in lines {
-        let cost = line.chars().count() + 1;
-        if kept.len() >= MAX_INDEX_LINES || used + cost > MAX_INDEX_CHARS {
-            return (kept, true);
-        }
-        used += cost;
-        kept.push(line);
-    }
-    (kept, false)
-}
-
-/// 重建一个键位的 MEMORY.md 索引（一文件一行，文件名稳定序，**落盘前按 §2.1
-/// 预算钳**）。facts 目录不存在时也会创建（空索引自描述）。
-pub fn refresh_index(root: &Path, workspace: &str) -> Result<(), String> {
-    let (dir, index_path) = scope_dirs(root, workspace)?;
-    let mut lines: Vec<String> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for f in entries.flatten() {
-            let name = f.file_name();
-            let Some(stem) = name.to_str().and_then(|s| s.strip_suffix(".md")) else {
-                continue;
-            };
-            if stem == "MEMORY" {
-                continue;
-            }
-            let desc = std::fs::read(f.path())
-                .ok()
-                .and_then(|b| {
-                    parse_description(&String::from_utf8_lossy(&b)).map(|d| one_line(&d, 80))
-                })
-                .unwrap_or_default();
-            lines.push(format!("- [{stem}]({stem}.md) — {desc}"));
-        }
-    }
-    lines.sort();
-    let (kept, truncated) = clamp_index(lines);
-    let mut body = format!("# 记忆索引\n\n{}", kept.join("\n"));
-    if truncated {
-        body.push_str(&format!("\n{INDEX_TRUNCATED_NOTE}"));
-    }
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("memory 目录创建失败 {}: {e}", dir.display()))?;
-    sync::atomic_write(&index_path, &format!("{body}\n"))
-        .map_err(|e| format!("memory 索引写入失败 {}: {e}", index_path.display()))
 }
 
 /// 写一条事实 md（目录惰性建 + **冲突备份** + 刷新该键位索引）。幂等

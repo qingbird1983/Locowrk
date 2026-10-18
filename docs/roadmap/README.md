@@ -9,7 +9,7 @@
 
 | 阶段 | 状态 | 现在到哪了 | 详细计划 |
 | --- | --- | --- | --- |
-| 记忆与上下文重构 | ◐ 在做 | 方向 2026-10-17 定稿（U1–U5 根因 + 五项开放决策全按推荐案裁定），AC-3 那份决策记录已落 = [`ADR-0007`](../adr/0007-memory-flat-files-context-llm-compaction-primary.md)：记忆 = 扁平事实文件一处落盘，上下文 = **LLM 深度压缩主位 + 机械层前置减速与保护网**（这条层序 2026-10-18 由你核对 spec 时重定，ADR 里带「订正记」并把被推翻的"只做机械层"形状留在被否决表里；被否决方案共 8 行留档）；你 2026-10-18 下令拆分线暂停转本线 ⇒ S1 施工 spec 已开 = [`specs/05-memory-data-plane-s1`](../../specs/05-memory-data-plane-s1/spec.md)（等你过）；范围按同日现状取证重写：**文件库、frontmatter 渲染、`MEMORY.md` 索引与注入侧硬钳都已存在，S1 做的是把"sqlite 真源 + md 镜像"扳成 md 唯一真源**。文档三处分工 2026-10-18 订正：方案稿住 `docs/design/` 根（⊘ 不入库，只在作者本机）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
+| 记忆与上下文重构 | ◐ 在做 | 方向 2026-10-17 定稿（U1–U5 根因 + 五项开放决策全按推荐案裁定），AC-3 那份决策记录已落 = [`ADR-0007`](../adr/0007-memory-flat-files-context-llm-compaction-primary.md)：记忆 = 扁平事实文件一处落盘，上下文 = **LLM 深度压缩主位 + 机械层前置减速与保护网**（这条层序 2026-10-18 由你核对 spec 时重定，ADR 里带「订正记」并把被推翻的"只做机械层"形状留在被否决表里；被否决方案共 8 行留档）；你 2026-10-18 下令拆分线暂停转本线 ⇒ S1 施工 spec 已开且已过（[`specs/05-memory-data-plane-s1`](../../specs/05-memory-data-plane-s1/spec.md) 状态 = 进行中）；范围按同日现状取证重写：**文件库、frontmatter 渲染、`MEMORY.md` 索引与注入侧硬钳都已存在，S1 做的是把"sqlite 真源 + md 镜像"扳成 md 唯一真源**。刀序进度（2026-10-18）：刀① 索引硬钳搬写侧 ✅、刀②a `memlayout` 读回面（`read.rs` + `tags` 一等字段）✅、刀②b 读路径迁 md 在做。文档三处分工 2026-10-18 订正：方案稿住 `docs/design/` 根（⊘ 不入库，只在作者本机）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ⬜ 没开始 | 现在只有基础卡；要补 27 类工具各自的样式、折叠分层、六种状态词、停止与重试的表现 | [specs/02-tool-cards](../../specs/02-tool-cards/spec.md) |
 | 工具级取消与 deadline | ◐ 在做 | C1 已落地（内核活动调用登记表 + 停止按会话逐个置位，4 条行为用例 + 4 发变异各打中一条）；三问 2026-10-18 由 Qoder 代裁定（答案与代价都写在该稿里，可翻案）。剩下 C2（`deadline` 生产者，前置是先测现网两个超时的实际关系）与 C3/C4/C5（要过 ABI 的那半，每一刀单独等你点头） | [specs/04-tool-cancel-deadline](../../specs/04-tool-cancel-deadline/spec.md) |
 | 对话流：产出物与文件页签 | ⬜ 没开始 | 一轮跑完给了哪些文件、能不能就地看代码与差异，这块还没有 | 开工时建 spec |
@@ -23,7 +23,8 @@
 
 | 事 | 为什么卡在这 |
 | --- | --- |
-| 记忆与上下文重构 S1 起步 | 形状已定稿（[`ADR-0007`](../adr/0007-memory-flat-files-context-llm-compaction-primary.md) 18 条决策 + 方案稿 A–F 目标形态），不再等你给设计；等你一句"S1 开工"——开工第一份交付 = S1 施工 spec（先给你过，过完才动代码） |
+| 攒下的提交要不要 push | ahead 条数只认 `git log origin/main..HEAD`，本篇不抄数；push 属"一步一停"，不自动做——但攒得越久，回退与对照越难对齐 |
+| worktree 并发的三条自守规矩要不要写进 CONTRIBUTING | 「公共文件谁改谁当场提 / 只 `git add <路径>` 不用 `-A` / authority 件按文件认领」——本刀一直在照做，落成规矩要你点头 |
 | 要不要清磁盘上的旧记忆数据 | 你说过那些是测试残留无所谓，但删除动作按规矩要你点头 |
 | 章节编号差一位怎么修（两条路）+ 旧数据要不要重编号 | 改旧数据 = 动你的东西；且这条在看板上已经看得见 |
 | 界面英文档的一处显示选择 | 需要你实际看一眼再定 |
