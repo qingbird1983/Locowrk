@@ -195,9 +195,9 @@ function onToggle() {
       </div>
     </div>
 
-    <!-- 展开体 = 左竖线 + 不缩进的子行：竖线落在行首图标居中位，内容左边缘与类型词
-         对齐（不换布局；懒挂载 + v-show 保 DOM，首开后收展零重渲染） -->
-    <div v-if="everExpanded" v-show="expanded" class="tool__sub">
+    <!-- 展开体 = 公共外壳 `.lw-expand`（发丝竖线落在行首图标居中位、内容左边缘与类型词
+         对齐，与思考行同壳；懒挂载 + v-show 保 DOM，首开后收展零重渲染） -->
+    <div v-if="everExpanded" v-show="expanded" class="lw-expand tool__sub">
       <ToolDetailView :item="item" @open-transcript="(id, title) => emit('openTranscript', id, title)" />
       <!-- edit_diff 审阅入口（§3.28）：明细动作行的文本钮 -->
       <button
@@ -260,13 +260,9 @@ function onToggle() {
   background: var(--lw-ink-2);
 }
 /* 展开体：左竖线 + 内容不缩进；垂直间距由父级 gap 给。
-   竖线落在行首语义图标的居中位——`.prow` 的 margin-inline:-3px 配 padding-left:3px
-   把 14px 图标顶到本容器 x=0，中心即 7px；内容左边缘与上方类型词对齐
-   （图标 14 + gap 6 = 20px）。光学修正：这两处只对行骨格的实测尺寸，不是间距档。 */
+   几何在 style.css 的 `.lw-expand`（唯一落点，台账 AF-17）：思考行与工具行共用同一条
+   竖线与同一个内容起点，两条路径都不许各自再写一套。这里只管纵向排列。 */
 .tool__sub {
-  margin-left: calc(14px / 2);
-  padding-left: calc(14px / 2 + var(--lw-gap-6) - 1px);
-  border-left: 1px solid var(--lw-line-subtle);
   display: flex;
   flex-direction: column;
   gap: var(--lw-gap-8);

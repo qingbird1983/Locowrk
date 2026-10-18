@@ -674,6 +674,16 @@
   background: var(--lw-danger);
 }
 
+/* 层 3 展开体外壳（唯一落点，台账 AF-17）：思考行与工具行**共用同一几何**——
+ * 发丝竖线落在语义图标中心（14px / 2），内容起点与类型词左边缘对齐（图标 + gap-6）。
+ * 两条路径都挂 .lw-expand，禁止各自再写一套（那正是「思考一个灰框、工具一串裸行」
+ * 的成因）。外壳本身**不带底也不带圆角**：底只给「井」（代码/终端/diff）。 */
+.lw-expand {
+  margin-left: calc(14px / 2);
+  padding-left: calc(14px / 2 + var(--lw-gap-6) - 1px);
+  border-left: 1px solid var(--lw-line-subtle);
+}
+
 /* 可折叠行公共头形态：hover 填充向列外溢 3px，chevron 只换字形不旋转。
  * padding-inline 3px（v2.74·fix 裁定⑪ 对齐收口：外溢 -3px 与 padding 3px
  * 相抵，头行标签与正文/决策行同一 0 左缘——旧 7px 使标签右移 4px） */

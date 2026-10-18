@@ -101,11 +101,14 @@ function onClick() {
   font-weight: 500;
   white-space: nowrap;
 }
+/* 摘要段**不吃**剩余宽度（台账 AF-01）：`flex: 0 1 auto` 让剩余空间留在行尾，
+ * 三角因此恒紧跟最后一段；旧 `1 1 auto` 把有摘要的行三角推到最右、无摘要的行紧跟
+ * 文字——同一属性两种位置，用户 2026-10-18 驳回。长溢出仍由 shrink + min-width:0 兜。 */
 .prow__desc {
   display: flex;
   align-items: center;
   gap: var(--lw-gap-4);
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;

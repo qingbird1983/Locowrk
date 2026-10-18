@@ -182,19 +182,22 @@ async function copyCall() {
   color: var(--lw-danger);
   overflow-wrap: anywhere;
 }
-/* 标签 + 值两列属性行（§3.8/§五）：无卡片框。两列提到 dl 上（dt/dd 经
-   display:contents 直接参与），标签列按最长标签自适应——原先每行各自定宽 72px，
-   「路径」这类两字标签后面会空出一大段（用户 2026-10-18 反馈）。 */
+/* 标签 + 值两列属性行（§3.8/§五）：无卡片框。栅格挂在**行**上、标签列按本行
+   `max-content` 取宽 ⇒ 任何标签后面都只有 8px。原先两列提到 dl 上（列宽 = 全块最长
+   标签），`sessions` 被 `total_sessions` 撑出约 50px 空档；更早是每行定宽 72px，两字
+   标签同样空一大段——两版都被用户 2026-10-18 驳回（台账 AF-02）。代价：值列不再跨行
+   对齐，这是「同一属性一种形态」下的取舍：宁可值不齐，不留大段空。 */
 .tdetail__props {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  row-gap: 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+}
+.tdetail__prop {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   column-gap: var(--lw-gap-8);
-  row-gap: 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
   align-items: baseline;
-}
-.tdetail__prop {
-  display: contents;
 }
 .tdetail__prop dt {
   font-size: var(--lw-fs-11);

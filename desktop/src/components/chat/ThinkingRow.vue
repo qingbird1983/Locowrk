@@ -7,10 +7,9 @@
  * 首句摘要仍留着，只当整行的原生 title（悬停可见，不占版面）。
  * 流式中 = 元信息「思考中…」+ 状态位脉动点 + 强制展开；历史重放无时间戳
  * 不虚构，元信息段整个不渲染。
- * 点击展开 = 灰底块内的完整文本（12.5px / 1.55，`--lw-bg-inset` + `--lw-r-sm`，
- * 220px 框内滚动；v2.97 的框约束不变，灰底块取代缩进竖线见设计稿 §7 /
- * AC-7）；流式强制展开 + 自动跟随滚动、收口即折叠（v2.99）不变——只改
- * 展示层，折叠语义零改动。
+ * 点击展开 = 完整文本（12.5px / 1.55，220px 框内滚动），外壳与工具行共用
+ * `.lw-expand`（发丝竖线 + 无底，用户 2026-10-18 裁定「同一属性一种形态」）；
+ * 流式强制展开 + 自动跟随滚动、收口即折叠（v2.99）不变——只改展示层，折叠语义零改动。
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -82,9 +81,9 @@ watch(
         <span class="dot lw-pulse" />
       </template>
     </ProcessRow>
-    <!-- 展开体：缩进 + 左竖线（§3.9 v4.13，无卡片底）；v-show 保留 DOM，
-         流式自动跟随（上方 watcher） -->
-    <div v-show="expanded" ref="bodyEl" class="thinking__body">{{ text }}</div>
+    <!-- 展开体 = 公共外壳 `.lw-expand`（与工具行同一竖线、同一内容起点；§3.9 v4.13
+         的「缩进竖线、无卡片底」）；v-show 保留 DOM，流式自动跟随（上方 watcher） -->
+    <div v-show="expanded" ref="bodyEl" class="lw-expand thinking__body">{{ text }}</div>
   </div>
 </template>
 
@@ -101,11 +100,9 @@ watch(
   background: var(--lw-ink-2);
 }
 .thinking__body {
-  /* 设计稿 §7 + AC-7：思考展开体 = 灰底块（井类 = --lw-bg-inset + r-sm），
-     不用缩进竖线——竖线留给工具明细的子行 */
-  padding: var(--lw-gap-8) var(--lw-gap-12);
-  border-radius: var(--lw-r-sm);
-  background: var(--lw-bg-inset);
+  /* 用户 2026-10-18 裁定：思考展开体与工具展开体**同壳**——发丝竖线 + 无底。
+     原先那个 `--lw-bg-inset` + `--lw-r-sm` 的灰底框是错的：同一个「展开体」属性
+     被做成了两种外观（台账 AF-17）。几何在 style.css 的 `.lw-expand`，唯一落点。 */
   font-size: var(--lw-fs-12half);
   line-height: 1.55;
   color: var(--lw-ink-2);
