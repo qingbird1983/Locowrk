@@ -247,6 +247,13 @@
       · 门禁终态读数：`make quick` 全绿、`check_length` 超限 **21 · 名单 21 · 零新增**（22 → 21 =
         那条名单行随文件一起消失，不是把基线调小）、前端形态 **96 文件**干净、`pnpm build`（含
         `vue-tsc`）rc=0、vitest **17 文件 / 151 条**全绿
+      · 开发面反向取证（探针 `tmp/t4b-devcheck.mjs`，起一次 vite dev、只改端口，没动
+        `vite.config.ts` 里那条 `host: "::1"` 结论）：① `DeveloperSection.vue` 的转译产物里不再指
+        夹具 ② `/lab/LabPanel.vue` 取不到 ③ **同一份产物里记忆树面板还在**（它与夹具住同一层，
+        删多了就在这里露）。**判据自己先错过一次**：第一版拿 status 当判据，读出来是"夹具还在"——
+        vite 对不存在的模块走 SPA fallback，**status 恒 200**，只有 content-type 掉回 text/html；
+        补一条从未存在过的路径当负对照（两条形同）才让"取不到"成为一条判读。被测文件按行尾归一后
+        与 `git show HEAD:` 同 sha（e13279bd…）⇒ 取证对象就是刚提交那份，不是工作区旧态
 
 - [x] **T9** 十二条性能优化只有"消除了什么"，没有"快了多少"（2026-10-18 用户点头收账：明确转入，不留第三条状态）
       · 立基准夹具本身就是一批 ⇒ 已单列为路线图的「度量基线」阶段（[`docs/roadmap/README.md`](../../docs/roadmap/README.md)
