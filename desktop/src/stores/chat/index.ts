@@ -1,44 +1,41 @@
 // 聊天状态（DESIGN.md §10.2：store 管状态，组件只渲染）。
 // UI 事件是会话日志的投影（后端 runner.rs），本 store 只消费不生产。
+/**
+ * T22（2026-10-18）把这个 1148 行的单体拆成了同目录的功能片：
+ *   types.ts / state.ts / ids.ts / getters.ts —— 形状、状态面、发号、三个派生读数
+ *   projection.ts —— `AgentEvent` → items 的分发表（唯一投影，实时与重放共用）
+ *   notices.ts —— 系统通知条四个生产口 + M0 命中率告警
+ *   session.ts —— 会话生命周期与列表层 · config.ts —— 会话级配置写穿
+ *   attachments.ts —— 附件预览条 · send.ts —— 发送 / 斜杠命令 / 停止 / 排队
+ * 本文件只剩**装配 + 薄转发**，公开面（`useChatStore` 的 39 个 action、3 个 getter、
+ * 21 个 state 字段、7 个导出类型）一条没减 ⇒ 41 处消费点一行没改。
+ *
+ * 为什么是「片函数收 `st: ChatState`、action 里转发」而不是「actions 直接拆到各片用 `this`」：
+ * 后者要给每片写 `this: ChatStore`，而 ChatStore 的类型又来自本文件的 defineStore
+ * ⇒ 类型自引用环（TS 7022 / 2502 一族，vue-tsc 会直接看不见成员）。收 ChatState 只依赖
+ * state.ts 那一份声明，片与片之间变成**显式函数调用**（projection → send → session），
+ * 谁调谁一眼看得见，不再靠 `this` 这层隐式全通道。
+ *
+ * 参数一律叫 `st` 不叫 `s`：原实现内部的 `.find((s) => …)` 用的是 `s`，同名会形成遮蔽。
+ * 转发处的 `chatSend.send(this, …)` 读起来像递归，其实是命名空间导入的那个函数——
+ * 所以每片都用 `import * as chatXxx`，歧义在名字里就断掉。
+ */
+import * as chatAttachments from "./attachments";
+import * as chatConfig from "./config";
+import * as chatNotices from "./notices";
+import * as chatProjection from "./projection";
+import * as chatSend from "./send";
+import * as chatSession from "./session";
+import { chatGetters } from "./getters";
+import { initialChatState } from "./state";
 import { defineStore } from "pinia";
-import {
-  chat,
-  agentStop,
-  assetPut,
-  assetPutPath,
-  sessionAssociate,
-  sessionDelete,
-  sessionExport,
-  sessionHistory,
-  sessionList,
-  sessionRename,
-  sessionSetModel,
-  sessionSetThinking,
-  sessionSetPermissionMode,
-  sessionTruncateAfter,
-  pickSavePath,
-  subscribeAgentEvents,
-  subscribeSessionTitle,
-  subscribeOrganizeDone,
-  subscribeOrganizePaused,
-  organizeNow,
-  sessionResolveUncertain,
-} from "../../lib/api";
-import { compactNumber } from "../../lib/format";
-import { toolImageAssets } from "../../lib/tool-summary";
-import { i18n } from "../../i18n";
-import { useAsksStore } from "../asks";
-import { useSettingsStore } from "../settings";
-import { useToastStore } from "../toast";
-import type {
-  AgentEvent,
-  AssetRefDto,
-  ContentPartDto,
-  SessionMeta,
-} from "../../types";
+import type { AgentEvent } from "../../types";
 
-// 类型面搬到 ./types.ts；这里原样转发 ⇒ 消费面（组件 / stores / tests 共 41 处）
-// 一行都不用改。名单 = 外部真 import 过的类型名（vue-tsc 与 tests 两头都验得到）。
+// 类型面在 ./types.ts；这里把它按**原 chat.ts 的公开面**原样转发（7 条，一条没减）。
+// 外部真 import 过的只有四条（实测 grep）：ChatItem / SystemItem / ToolItem / AttachmentItem，
+// 其余三条（SummaryItem / TurnUsage / SessionUsage）外面暂时没人用 —— 收窄导出面是**删除类**
+// 动作（批 F-22 那次是用户点名的），本刀不动它。`ChatState` 只在片与片之间流转，
+// 故意不进对外名单（对外名单的职责是"谁在用"，不是"内部布线表"）。
 export type {
   AttachmentItem,
   ChatItem,
@@ -49,964 +46,144 @@ export type {
   TurnUsage,
 } from "./types";
 
-// 本文件内部仍在用其中五个名字（state 与 actions 的签名）。`export type {…} from` 只
-// 对外转发、**不引入本地作用域**，所以两处都要写 —— vue-tsc 第一版就红在少了这一条。
-import type {
-  AttachmentItem,
-  ChatItem,
-  SessionUsage,
-  ToolItem,
-  TurnUsage,
-} from "./types";
-
-let nextId = 1;
-
-let nextAttachmentKey = 1;
-
 export const useChatStore = defineStore("chat", {
-  state: () => ({
-    sessionId: `desktop-${Date.now()}`,
-    items: [] as ChatItem[],
-    running: false,
-    steps: null as number | null,
-    /** 会话列表（⑲，session_list mtime 降序）：切换器数据源。 */
-    sessions: [] as SessionMeta[],
-    /** 上下文用量（阈值用量进度条投影；agent://context-usage 驱动）。
-     * threshold = 整理阈值（绝对 token，分母）；windowTokens = 会话生效
-     * 窗口（v2.137 四层链自动识别，0 = 未识别，比例段隐藏）。 */
-    contextUsage: null as {
-      used: number;
-      threshold: number;
-      windowTokens: number;
-      toolsEstTokens: number;
-    } | null,
-    /** 系统消息"查看详情"的内容（id → 文本，如压缩摘要预览）。 */
-    noticeDetails: {} as Record<number, string>,
-    /** 历史重放中（switchSession / init 恢复）：不记时间戳、工具行不吃
-     * 「默认展开」设置（§3.8 历史重放默认折叠）。 */
-    replaying: false,
-    /** ㉘·B 当前会话权限模式（null = 未显式设置，显示取设置缺省档）。 */
-    permissionMode: null as "plan" | "ask" | "acceptEdits" | "auto" | null,
-    /** v2.58 §3.30 当前会话模型覆盖（null = 跟随设置缺省）。 */
-    modelOverride: null as { providerId: string; model: string } | null,
-    /** 批 B 会话级推理档位（null = 未设置，模型走自家缺省）。 */
-    thinkingLevel: null as string | null,
-    /** v2.58 §3.30 本轮用量聚合（null = 本轮尚无供应商报告的用量）。 */
-    turnUsage: null as TurnUsage | null,
-    /** M0 观测（KV v2 §7）：会话累计用量——只随会话切换/新建重置，
-     * 实时与重放同源累计。 */
-    sessionUsage: null as SessionUsage | null,
-    /** M0 观测告警已触发标记（每会话至多一次，随会话重置）。 */
-    cacheAlertFired: false,
-    /** §3.6 v3.9 项目下新建任务：挂起的归属目标，首聊建会话后消费。 */
-    pendingWorkspace: null as string | null,
-    /** v4.11 §3.39④ 本轮已请求停止（过程组头行显示「已停止」）；轮次
-     * 收束复位。前端记忆，不进会话日志。 */
-    stopRequested: false,
-    /** v4.11 §3.39② 运行中排队（前端态，不入会话日志）：autoDrain =
-     * 当前轮收束后自动派发；手动停止/轮次出错置 false，用户恢复。 */
-    queue: [] as { id: number; text: string }[],
-    queueDraining: true,
-    /** v4.11 §3.39② 正在派发队首（防重入；收束回调里消费）。 */
-    dispatching: false,
-    /** §3.39② 「立即发送」的打断目标：当前轮被停止收束后立即发送。 */
-    preempt: null as string | null,
-    /** 批 D §9.2 附件预览条（三条入口同进：按钮选择/粘贴/拖拽）。 */
-    attachments: [] as AttachmentItem[],
-  }),
-  getters: {
-    /** M0 观测（KV v2 §7）：会话累计缓存统计。命中率 = cacheRead /
-     * input（**分母不含 cacheWrite**——纪律 7，加了会把命中率压低）。
-     * v2.137：节省估算随两档单价设置退役（真实价格模型各异，不发明
-     * 全局估算）。cacheRead 为 0 = 供应商未报告缓存字段或全 miss →
-     * null（行不渲染，宁缺勿假）。 */
-    cacheStats(state): {
-      hitRate: number;
-      input: number;
-      cacheRead: number;
-      cacheWrite: number;
-      total: number;
-      steps: number;
-    } | null {
-      const u = state.sessionUsage;
-      if (!u || u.input <= 0 || u.cacheRead <= 0) return null;
-      return {
-        hitRate: Math.round((u.cacheRead / u.input) * 100),
-        input: u.input,
-        cacheRead: u.cacheRead,
-        cacheWrite: u.cacheWrite,
-        total: u.total,
-        steps: u.steps,
-      };
-    },
-    /** 当前归属——工作区 chip 与欢迎页问候的**唯一同源真源**（v2.61 用户
-     * 裁定「把欢迎语项目名跟对话框下面的项目名关联」）：会话态 = 活动会话
-     * 旁车 workspace；首页空态 = 挂起归属。此前问候另有「最近活动会话 /
-     * 第一个 fsRoot」回落，chip 显示「选择文件夹」时问候仍挂旧项目名——
-     * 回落退役，两边永远同变。null = 未选项目（chip「选择文件夹」+ 问候
-     * 不带名）。 */
-    currentWorkspace(state): string | null {
-      const inSession =
-        state.sessions.some((s) => s.id === state.sessionId) || state.running;
-      if (inSession) {
-        return (
-          state.sessions.find((s) => s.id === state.sessionId)?.workspace ??
-          null
-        );
-      }
-      return state.pendingWorkspace;
-    },
-    /** 转录图片清单（批 E 查看器）：用户 parts 图片 + 工具产物图片
-     * （output.asset/assets，mime image/*）按转录序——查看器左右切换的
-     * 列表真源。打开时求值一次（打开后新增图不回填游标，关闭重开即可）。 */
-    viewerImages(state): AssetRefDto[] {
-      const out: AssetRefDto[] = [];
-      for (const it of state.items) {
-        if (it.kind === "user" && it.parts) {
-          for (const p of it.parts) if (p.type === "image") out.push(p.asset);
-        } else if (it.kind === "tool" && it.status === "settled" && it.output) {
-          out.push(...toolImageAssets(it.output));
-        }
-      }
-      return out;
-    },
-  },
+  state: initialChatState,
+  getters: chatGetters,
   actions: {
-    async init() {
-      await subscribeAgentEvents((e) => this.onEvent(e));
-      // v2.57 自动标题：旁车落盘后推送（侧栏 + 顶栏即时换名）
-      void subscribeSessionTitle((p) => this.applySessionTitle(p.sessionId, p.title));
-      // M3 §3.37③：整理收束 / 熔断翻转 → SystemNotice（非当前会话忽略，
-      // 树文件本身是持久记录；「查看」动作跳记忆页，接线在 ChatTranscript）
-      void subscribeOrganizeDone((p) => {
-        if (p.sessionId !== this.sessionId) return;
-        // 队列 Q8b：**轮内水位泄压**走同一条推送、同一个通知形态，只有文案不同。
-        // 分流必须按 `reason` 而不是 `status`——泄压的 status 仍是 "ok"（它成功做
-        // 完了一次机械切分），把它说成「已整理 N 轮」是假告：摘要还没补。
-        // ⚠ 这里的字面量与 Rust 侧 `OrganizeReason::PressureRelease::as_str()`
-        //   是**跨文件契约**（队列 §6 第 10 条：跨文件的关系必须有跨文件判据），
-        //   两处同源由 `tmp/q8b-shapes.mjs` 的形状判据钉住，改一边就会红。
-        if (p.reason === "pressure_release") {
-          this.pushOrganizeNotice(
-            "notice.organizeReleased",
-            { chapters: p.chapters },
-            ["view"],
-          );
-          return;
-        }
-        this.pushOrganizeNotice(
-          p.status === "degraded"
-            ? "notice.organizeDoneDegraded"
-            : "notice.organizeDone",
-          { users: p.users, chapters: p.chapters },
-          p.status === "degraded" ? undefined : ["view"],
-        );
-      });
-      void subscribeOrganizePaused((p) => {
-        if (p.sessionId !== this.sessionId) return;
-        this.pushOrganizeNotice("notice.organizePaused", {
-          rebounds: p.rebounds,
-          m: p.m,
-        });
-      });
-      // ㉕·对话区①（用户裁定）：启动落首页空态——不再自动接最近会话，
-      // 继续哪条由用户从侧栏点开；列表照常拉（侧栏要有内容）。
-      await this.refreshSessions();
+    // ---- 会话生命周期与列表层（./session.ts）----
+    init() {
+      return chatSession.init(this);
     },
-    /** 拉会话列表（⑲）：init 与每轮收束后刷新。 */
-    async refreshSessions() {
-      try {
-        this.sessions = await sessionList();
-      } catch {
-        /* 列表拉取失败不打断聊天 */
-      }
+    refreshSessions() {
+      return chatSession.refreshSessions(this);
     },
-    /** 切换会话（⑲）：清视图 → 全量投影重放（恢复气泡/工具卡/系统
-     * 通知）。运行中不允许切（会话锁内轮次未收束，投影会半截）。 */
-    async switchSession(id: string) {
-      if (id === this.sessionId || this.running) return;
-      this.sessionId = id;
-      this.items = [];
-      this.steps = null;
-      this.contextUsage = null;
-      this.noticeDetails = {};
-      // §3.39②：队列是会话级 UI 态，切会话即清（诚实——预览不跨会话漂移）
-      this.queue = [];
-      this.preempt = null;
-      this.stopRequested = false;
-      this.dispatching = false;
-      this.queueDraining = true;
-      // ㉘·B：档位随会话走（无显式设置 = null，显示取设置缺省）
-      this.permissionMode =
-        this.sessions.find((s) => s.id === id)?.permissionMode ?? null;
-      // v2.58：模型覆盖随会话走（成对字段，null = 跟随设置缺省）
-      const meta = this.sessions.find((s) => s.id === id);
-      this.modelOverride =
-        meta?.model && meta?.modelProvider
-          ? { providerId: meta.modelProvider, model: meta.model }
-          : null;
-      this.thinkingLevel = meta?.thinkingLevel ?? null;
-      this.turnUsage = null;
-      // M0 观测：会话累计随会话切换重置（重放同源重建），告警标记同理
-      this.sessionUsage = null;
-      this.cacheAlertFired = false;
-      this.pendingWorkspace = null; // 挂起归属只属于触发它的那个新会话
-      const events = await sessionHistory(id).catch(() => [] as AgentEvent[]);
-      this.replaying = true;
-      try {
-        for (const e of events) this.onEvent(e);
-      } finally {
-        this.replaying = false;
-      }
+    switchSession(id: string) {
+      return chatSession.switchSession(this, id);
     },
-    /** 重命名会话（v2.49 §3.6）：后端旁车标题（trim 后空 = 回落自动
-     * 标题），列表层生效。 */
-    async renameSession(id: string, title: string) {
-      await sessionRename(id, title);
-      await this.refreshSessions();
+    renameSession(id: string, title: string) {
+      return chatSession.renameSession(this, id, title);
     },
-    /** §3.11 v3.9 工作区 chip 首页语义：直接改挂起归属（首聊自动关联）。 */
     setPendingWorkspace(ws: string | null) {
-      this.pendingWorkspace = ws;
+      chatSession.setPendingWorkspace(this, ws);
     },
-    /** 工作区关联（v2.50 §2.3）：workspace = fsRoots 根目录，null =
-     * 移出；后端校验必须是其一根，列表层生效。 */
-    async associateSession(id: string, workspace: string | null) {
-      await sessionAssociate(id, workspace);
-      await this.refreshSessions();
+    associateSession(id: string, workspace: string | null) {
+      return chatSession.associateSession(this, id, workspace);
     },
-    /** 删除会话（v2.49）：后端忙锁守卫（运行中默认拒绝，开发者开关可
-     * 强制）。删的是当前会话 = 回首页空态（newSession 语义，首条消息
-     * 前不产生后端状态）。 */
-    async deleteSession(id: string) {
-      await sessionDelete(id);
-      if (id === this.sessionId) this.newSession();
-      await this.refreshSessions();
+    deleteSession(id: string) {
+      return chatSession.deleteSession(this, id);
     },
-    /** 导出会话（v2.49）：原生存储对话框 → Markdown 转录；取消 = null。 */
-    async exportSession(id: string): Promise<string | null> {
-      const meta = this.sessions.find((s) => s.id === id);
-      const base =
-        (meta?.title ?? id)
-          .replace(/["\/:*?<>|]/g, "_")
-          .trim()
-          .slice(0, 40) || id;
-      const path = await pickSavePath(`${base}.md`);
-      if (!path) return null;
-      return sessionExport(id, path);
+    exportSession(id: string) {
+      return chatSession.exportSession(this, id);
     },
-    /** 新会话（⑲）：前端生成 id 清空视图；首条消息发出前不创建任何
-     * 后端状态（空会话不落盘不进列表，§3.6）。`workspace` = §2.3 v3.9
-     * 「在项目下新建任务」：记账挂起，首条消息建会话后自动关联（§3.6）。 */
     newSession(workspace?: string | null) {
-      if (this.running) return;
-      this.sessionId = `desktop-${Date.now()}`;
-      this.items = [];
-      this.steps = null;
-      this.contextUsage = null;
-      this.noticeDetails = {};
-      this.queue = [];
-      this.preempt = null;
-      this.stopRequested = false;
-      this.dispatching = false;
-      this.queueDraining = true;
-      this.permissionMode = null;
-      this.modelOverride = null;
-      this.thinkingLevel = null;
-      this.turnUsage = null;
-      this.sessionUsage = null;
-      this.cacheAlertFired = false;
-      this.pendingWorkspace = workspace ?? null;
+      chatSession.newSession(this, workspace);
     },
-    /** v2.58 §3.30 选择模型：会话内 = 写会话级覆盖（设置不动）；首页
-     * 空态 = 写设置缺省（切活动档 + 该档模型——"接下来聊什么模型"）。 */
-    async setModel(providerId: string, model: string) {
-      const inSession = this.sessions.some((s) => s.id === this.sessionId);
-      if (!inSession) {
-        await useSettingsStore().saveLlm({ active: providerId, model });
-        return;
-      }
-      const prev = this.modelOverride;
-      this.modelOverride = { providerId, model };
-      try {
-        await sessionSetModel(this.sessionId, providerId, model);
-      } catch (err) {
-        // 写穿失败回滚本地（后端仍按旧模型跑——本地显示必须如实）
-        this.modelOverride = prev;
-        throw err;
-      }
+    applySessionTitle(id: string, title: string) {
+      chatSession.applySessionTitle(this, id, title);
     },
-    /** v2.58 清除会话模型覆盖（选择器「跟随默认」行）。 */
-    async clearModelOverride() {
-      const prev = this.modelOverride;
-      this.modelOverride = null;
-      try {
-        await sessionSetModel(this.sessionId, "", "");
-      } catch (err) {
-        this.modelOverride = prev;
-        throw err;
-      }
+    // ---- 会话级配置写穿（./config.ts）----
+    setModel(providerId: string, model: string) {
+      return chatConfig.setModel(this, providerId, model);
     },
-    /** 批 B §5.2 设置会话推理档位（循环钮）：写旁车 + 缓存，下一请求即
-     * 生效；level null = 清除（模型走自家缺省）。失败回滚本地。 */
-    async setThinking(level: string | null) {
-      const prev = this.thinkingLevel;
-      this.thinkingLevel = level;
-      try {
-        await sessionSetThinking(this.sessionId, level ?? "");
-      } catch (err) {
-        this.thinkingLevel = prev;
-        throw err;
-      }
+    clearModelOverride() {
+      return chatConfig.clearModelOverride(this);
     },
-    /** ㉘·B 设置会话权限档（§3.33 切换器）：写穿后端旁车 + 本地即时
-     * 生效（下一笔工具调用即按新档裁决，运行中可切）。 */
-    async setPermissionMode(mode: "plan" | "ask" | "acceptEdits" | "auto") {
-      this.permissionMode = mode;
-      try {
-        await sessionSetPermissionMode(this.sessionId, mode);
-      } catch (err) {
-        // 写穿失败回滚本地（后端仍按旧档裁决——本地显示必须如实）
-        await this.refreshSessions();
-        this.permissionMode =
-          this.sessions.find((s) => s.id === this.sessionId)?.permissionMode ?? null;
-        throw err;
-      }
+    setThinking(level: string | null) {
+      return chatConfig.setThinking(this, level);
     },
-    /** G2 崩溃恢复裁决：落日志并实时回推（uncertain_resolved + 合成
-     * tool_result 由 onEvent 同一开关收束卡与工具行，本地不预改）。 */
-    async resolveUncertain(
+    setPermissionMode(mode: "plan" | "ask" | "acceptEdits" | "auto") {
+      return chatConfig.setPermissionMode(this, mode);
+    },
+    resolveUncertain(
       callId: string,
       decision: "completed" | "not_executed" | "inspected",
       note = "",
     ) {
-      await sessionResolveUncertain(this.sessionId, callId, decision, note);
+      return chatConfig.resolveUncertain(this, callId, decision, note);
     },
+    // ---- 事件投影（./projection.ts，实时与重放同一张表）----
     onEvent(e: AgentEvent) {
-      switch (e.kind) {
-        case "user_message":
-          // ㉕·fix 重放恢复用户气泡（此前投影漏 UserMessage，重启后历史
-          // 会话只剩模型回复）。实时轮发送即本地回显，本事件不实时到达。
-          // pos（v2.57）：编辑重发的定位键随行保存。ts（v2.101）：轮起点
-          // 时刻随重放到达（旧日志无 → 不虚构，计时行诚实省略读数）。
-          // v2.58 §3.12：新轮开始——用量聚合重置（重放同序重建）
-          this.turnUsage = null;
-          this.items.push({
-            id: nextId++,
-            kind: "user",
-            text: e.content,
-            pos: e.pos,
-            ...(e.ts != null ? { ts: e.ts } : this.replaying ? {} : { ts: Date.now() }),
-            ...(e.parts?.length ? { parts: e.parts } : {}),
-          });
-          break;
-        case "thinking":
-          // v2.57 §3.9：推理行点亮（实时 delta 与重放整段同形，追加到
-          // 末尾思考行或新起一行——连续思考行在 §3.7 过程组里本就成组）
-          this.appendThinking(e.text);
-          break;
-        case "chunk":
-          this.appendAssistant(e.delta);
-          break;
-        case "tool_call":
-          this.settleThinking();
-          this.items.push({
-            id: nextId++,
-            kind: "tool",
-            callId: e.call_id,
-            tool: e.tool,
-            args: e.args,
-            sideEffect: e.side_effect,
-            pluginVersion: e.plugin_version,
-            status: "running",
-            ok: null,
-            ...(this.replaying ? {} : { ts: Date.now() }),
-          });
-          // ⑮ 派生不再发「已派生子 Agent」告知条（v2.105 目检裁定：两条
-          // 状态盒退役，简洁状态收进动作名后——TranscriptFlow L1 极简行）
-          break;
-        case "tool_result": {
-          const item = this.items.find(
-            (i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id,
-          );
-          if (item) {
-            item.status = "settled";
-            item.ok = e.ok;
-            item.output = e.output;
-            item.error = e.error;
-            if (!this.replaying) item.doneTs = Date.now();
-            // ⑮ 收束不再发「子 Agent 收束」告知条（v2.105 目检裁定，同上
-            // ——状态与摘要看工具行明细 / 子代理卡 / 转录页签）
-          }
-          break;
-        }
-        case "tool_status":
-          // 行相位补投（Q12·C1）：审批请求一发出就把那条在途调用点亮。
-          // 只认 pending_approval——后端刻意不给其余取值，成败与悬空由
-          // tool_result / tool_uncertain 各自负责（不许一个事实两个出处）。
-          // 结果已回（乱序/竞态）时**不许**回退成等待态，故加 status 守卫。
-          {
-            const item = this.items.find(
-              (i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id,
-            );
-            if (item && item.status === "running" && e.status === "pending_approval") {
-              item.status = "awaiting_approval";
-            }
-          }
-          break;
-        case "turn_header":
-          // 轮头（Q12·第二刀 v2.205）：状态与扣过等待的时长挂 user 行——与 files /
-          // endTs 同一个容器、同一条「找不到 user 行 = 调度轮 ⇒ 不虚构归属」的规矩。
-          // `active_ms` 为 null/缺省时**不写 activeMs**：缺 = "数据层读不出"（旧日志
-          // 没有审批两时刻），计时行据此回落到墙钟读数；把它折算成 0 就是谎报
-          // "这轮一秒没干活"（与 ±N 的 NULL 档同一条纪律）。
-          // 顺序上后端保证 turn_header → file_changes → turn_done，本 case 因此
-          // 早于 endTs 落位；两者互不覆盖（一个写状态/时长，一个写收束时刻）。
-          {
-            const head = [...this.items].reverse().find((i) => i.kind === "user");
-            if (head && head.kind === "user") {
-              head.turnState = e.state;
-              if (e.active_ms != null) head.activeMs = e.active_ms;
-            }
-          }
-          break;
-        case "file_changes":
-          // 本轮文件改动（Q12·C1）：**不作为独立行**，挂在轮头容器上——
-          // 与 endTs 挂 user 行同一做法（TranscriptFlow 按 user 行分轮）。
-          // 找不到 user 行 = 调度轮（没有用户消息，计时行本就无从起算，同一
-          // 缺口）⇒ 不虚构归属、不造暂存死数据，如实不挂。⚠ 订正（v2.205）：
-          // 这里原先写「等 TurnHeader 那一刀的轮级容器再接手」，实落形状 =
-          // **轮级容器就是 user 行的 `turnState` / `activeMs` / `files` 三个字段**
-          // （上一条 case），没有另造一种独立行——CF §2.1 说的"轮头"是读数容器，
-          // 不是新行种（同类只许一种形态：分轮仍以 user 行为界，不并列两套）。
-          {
-            const head = [...this.items].reverse().find((i) => i.kind === "user");
-            if (head && head.kind === "user") {
-              head.files = e.files;
-            }
-          }
-          break;
-        case "tool_uncertain":
-          // G2 崩溃恢复：悬空未裁决——行进「结果未知」态 + 组外决策卡。
-          // 只在重放产出（悬空只在崩溃后出现）；找不到宿主行（声明位
-          // 缺失的极端形态）卡照出，细节缺失如实渲染。
-          {
-            const item = this.items.find(
-              (i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id,
-            );
-            if (item) item.uncertain = true;
-            this.items.push({
-              id: nextId++,
-              kind: "uncertain",
-              callId: e.call_id,
-              tool: e.tool,
-              args: e.args,
-            });
-          }
-          break;
-        case "uncertain_resolved":
-          // G2：裁决落日志——卡收为记录行、行复位（随后的合成 tool_result
-          // 同源闭合行明细；找不到行/卡时各自静默，重放幂等）。
-          {
-            const item = this.items.find(
-              (i): i is ToolItem => i.kind === "tool" && i.callId === e.call_id,
-            );
-            if (item) item.uncertain = false;
-            const card = this.items.find(
-              (i): i is Extract<ChatItem, { kind: "uncertain" }> =>
-                i.kind === "uncertain" && i.callId === e.call_id,
-            );
-            if (card) card.resolved = { decision: e.decision, note: e.note };
-          }
-          break;
-        case "turn_done":
-          this.running = false;
-          // steps（v2.101 起可选）：TurnEnd 的重放投影不带，保留 null 如实
-          this.steps = e.steps ?? this.steps;
-          // v2.101：轮收束时刻挂在最后一条用户消息上（第 0 层计时行重放
-          // 读数终点）。调度轮没有用户消息——找不到就跳过，不虚构；
-          // endTs 已有（该轮已记过）不覆盖。
-          if (e.ts != null) {
-            for (let i = this.items.length - 1; i >= 0; i--) {
-              const it = this.items[i]!;
-              if (it.kind === "user") {
-                if (it.endTs === undefined) it.endTs = e.ts;
-                break;
-              }
-            }
-          }
-          // §3.39②：轮次收束 → 消费打断目标 / 自动派发队首
-          void this.dispatchQueue();
-          break;
-        case "schedule_fired":
-          // ⑭ 定时触发：SystemNotice 告知（无动作按钮；触发的助手回复
-          // 以 chunk 跟进。窗口不在位时后端另发系统通知兜底）
-          this.pushNotice("notice.scheduleFired", { title: e.title });
-          break;
-        case "approval_resolved":
-          // §3.7 v4.11（裁定①）：决策记录 = 过程组内的平铺行（无卡片底、
-          // 无独立气泡；被拒调用的失败工具行由 tool_result 分支自理）。
-          // 投影唯一来源（实时增量与历史重放同源，无双条）。
-          this.items.push({
-            id: nextId++,
-            kind: "decision",
-            tool: e.tool,
-            allowed: e.allowed,
-          });
-          break;
-        case "ask_user":
-          // §3.39①：选择卡走 composer 坞（asks store），对话流零气泡。
-          // ask 事件不进会话日志（与审批请求同纪律），重放不会出现。
-          useAsksStore().push(e);
-          break;
-        case "ask_resolved":
-          // 四路同源摘卡（应答/跳过/超时/停止）
-          useAsksStore().resolve(e.request_id);
-          break;
-        case "llm_retry":
-          // LLM.md v3.0 传输重试：清掉本步未完成的流式缓冲（重试轮 delta
-          // 从零重建同一气泡），平铺状态行如实告知（不吓人也不装没事）
-          this.resetAssistant();
-          if (!this.replaying) {
-            this.pushNotice("notice.llmRetried", { attempt: e.attempt });
-          }
-          break;
-        case "turn_capped":
-          // 单轮步数到顶（不再硬报错）：如实告知 + 「继续」指引
-          this.pushNotice("notice.turnCapped", { steps: e.steps });
-          break;
-        case "context_usage":
-          this.contextUsage = { used: e.used, threshold: e.threshold, windowTokens: e.window_tokens ?? 0, toolsEstTokens: e.tools_est_tokens ?? 0 };
-          break;
-        case "llm_usage": {
-          // v2.58 §3.12：按轮累计（speed = 最后一步生成速度）
-          const u = this.turnUsage ?? {
-            input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
-            reasoning: 0, total: 0, speed: null, steps: 0,
-          };
-          u.input += e.input;
-          u.output += e.output;
-          u.cacheRead += e.cache_read;
-          u.cacheWrite += e.cache_write;
-          u.reasoning += e.reasoning;
-          u.total += e.total;
-          u.steps += 1;
-          if (e.duration_ms > 0) {
-            u.speed = Math.round((e.output / e.duration_ms) * 1000);
-          }
-          this.turnUsage = u;
-          // M0 观测（KV v2 §7）：会话累计同步累加——与轮级重置解耦，
-          // 重放同源重建，供命中率/节省/告警消费
-          const su = this.sessionUsage ?? {
-            input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
-            reasoning: 0, total: 0, steps: 0,
-          };
-          su.input += e.input;
-          su.output += e.output;
-          su.cacheRead += e.cache_read;
-          su.cacheWrite += e.cache_write;
-          su.reasoning += e.reasoning;
-          su.total += e.total;
-          su.steps += 1;
-          this.sessionUsage = su;
-          this.checkCacheAlert(su);
-          break;
-        }
-        case "context_compacted": {
-          // 压缩系统消息（Context 文档 §3.8.3）：[查看详情][撤销]，
-          // 撤销经 context_undo_compact（rewind_to，ChatMessages 接线）
-          const id = nextId++;
-          const saved = Math.max(0, e.from_tokens - e.to_tokens);
-          this.items.push({
-            id,
-            kind: "system",
-            key: "notice.contextCompacted",
-            params: { saved: compactNumber(saved), strategy: e.strategy },
-            actions: ["details", "undo"],
-          });
-          if (e.summary_preview) this.noticeDetails[id] = e.summary_preview;
-          break;
-        }
-        case "context_summary": {
-          // 整理段落总结（v2.141）：断层缝合处的浓缩叙事块——实时与重放
-          // 同一分支（历史消息面，切会话回来照常在）。
-          this.items.push({ id: nextId++, kind: "summary", text: e.text });
-          break;
-        }
-      }
-    },
-    /** M0 观测告警（KV v2 §7.4，开发者开关缺省关）：会话累计命中率跌破
-     * 阈值时 toast 一次（每会话至多一次）。≥3 步才判——冷启动首请求无
-     * 缓存可命不是断裂；供应商从未报告过缓存字段（cacheRead/cacheWrite
-     * 全 0）不判——未报告 ≠ 命中率塌方，宁缺勿假。 */
-    checkCacheAlert(su: SessionUsage) {
-      if (this.cacheAlertFired || this.replaying) return;
-      const dev = useSettingsStore().view?.developer;
-      if (!dev?.cacheHitAlert) return;
-      if (su.steps < 3 || su.input <= 0) return;
-      if (su.cacheRead + su.cacheWrite <= 0) return;
-      if (su.cacheRead / su.input >= dev.cacheHitAlertPercent / 100) return;
-      this.cacheAlertFired = true;
-      useToastStore().push(
-        "warn",
-        i18n.global.t("usage.cacheAlert", { pct: dev.cacheHitAlertPercent }),
-      );
+      chatProjection.applyEvent(this, e);
     },
     appendAssistant(delta: string) {
-      this.settleThinking();
-      const last = this.items[this.items.length - 1];
-      if (last && last.kind === "assistant") {
-        last.text += delta;
-      } else {
-        this.items.push({
-          id: nextId++,
-          kind: "assistant",
-          text: delta,
-          ...(this.replaying ? {} : { ts: Date.now() }),
-        });
-      }
+      chatProjection.appendAssistant(this, delta);
     },
-    /** 流式重置（LLM.md v3.0）：传输重试前清空末尾未完成的流式正文——
-     * 重试轮的 delta 从零重建同一气泡。末项不是流式正文时无事可做。 */
     resetAssistant() {
-      const last = this.items[this.items.length - 1];
-      if (last && last.kind === "assistant") {
-        last.text = "";
-      }
+      chatProjection.resetAssistant(this);
     },
-    /** 思考行收口（§3.9 v4.11）：下一条过程项到达时，给末尾仍在"思考中"
-     * 的行补 doneTs（`持续了 N 秒`）。重放条目无 ts，天然空转。 */
     settleThinking() {
-      if (this.replaying) return;
-      const last = this.items[this.items.length - 1];
-      if (last && last.kind === "thinking" && last.ts !== undefined && last.doneTs === undefined) {
-        last.doneTs = Date.now();
-      }
+      chatProjection.settleThinking(this);
     },
-    /** 思考行追加（v2.57 §3.9）：实时 delta / 重放整段共用 append-or-create
-     * ——与 appendAssistant 同构；Thinking 事件在日志里从不相邻（每步后
-     * 必有 AssistantMessage/ToolCall），重放不会误并两条。 */
     appendThinking(text: string) {
-      if (!text) return;
-      const last = this.items[this.items.length - 1];
-      if (last && last.kind === "thinking") {
-        last.text += text;
-      } else {
-        this.items.push({
-          id: nextId++,
-          kind: "thinking",
-          text,
-          ...(this.replaying ? {} : { ts: Date.now() }),
-        });
-      }
+      chatProjection.appendThinking(this, text);
     },
-    /** 消息编辑重发（v2.57 §3.34）：后端截断到该消息之前 → 本地从该气泡
-     * 起丢条目 → 走既有 send 通道重发（审批/用量/提取零新链路）。
-     * `pos = null` = 当前最后一条用户消息（实时发送无事件位的解析口）。
-     * 批 D：原消息 parts 随重发（asset 引用复用，零重新上传）。 */
-    async editResend(pos: number | null, text: string) {
-      const t = text.trim();
-      if (!t || this.running) return;
-      await sessionTruncateAfter(this.sessionId, pos);
-      let idx = -1;
-      if (pos === null) {
-        for (let i = this.items.length - 1; i >= 0; i--) {
-          if (this.items[i]!.kind === "user") {
-            idx = i;
-            break;
-          }
-        }
-      } else {
-        idx = this.items.findIndex((i) => i.kind === "user" && i.pos === pos);
-      }
-      let parts: ContentPartDto[] | undefined;
-      if (idx >= 0) {
-        const it = this.items[idx]!;
-        if (it.kind === "user" && it.parts?.length) parts = it.parts;
-        this.items.splice(idx);
-      }
-      await this.send(t, parts);
+    // ---- 通知条与观测告警（./notices.ts）----
+    checkCacheAlert(su: Parameters<typeof chatNotices.checkCacheAlert>[1]) {
+      chatNotices.checkCacheAlert(this, su);
     },
-    /** 自动标题落地（v2.57）：只更新列表层标题（顶栏数据源同源）。 */
-    applySessionTitle(id: string, title: string) {
-      const row = this.sessions.find((s) => s.id === id);
-      if (row) row.title = title;
+    pushNotice(
+      key: string,
+      params?: Record<string, unknown>,
+      actions?: string[],
+    ) {
+      chatNotices.pushNotice(this, key, params, actions);
     },
-    /** 系统消息入列（SystemNotice 模式的唯一生产入口；首个生产者 ⑨
-     * 压缩通知，随后 ⑪ "已记住"）。 */
-    pushNotice(key: string, params?: Record<string, unknown>, actions?: string[]) {
-      this.items.push({ id: nextId++, kind: "system", key, params, actions });
+    pushOrganizeNotice(
+      key: string,
+      params?: Record<string, unknown>,
+      actions?: string[],
+    ) {
+      chatNotices.pushOrganizeNotice(this, key, params, actions);
     },
-    /** 整理发丝线（v2.143 用户裁定「两卡片改一根发丝线，状态居中盖在线
-     * 上」）：发起/收束/熔断共用同一根线——在途线（organizeRunning）被
-     * 收束事件**就地改写**（一条线从「整理中」变「已整理」），无在途线
-     * （自动整理）直接落收束线。tag="organize" 标记本族条目。 */
-    pushOrganizeNotice(key: string, params?: Record<string, unknown>, actions?: string[]) {
-      const items = this.items;
-      for (let i = items.length - 1; i >= 0; i--) {
-        const it = items[i]!;
-        if (it.kind === "system" && it.tag === "organize" && it.key === "notice.organizeRunning") {
-          it.key = key;
-          it.params = params;
-          it.actions = actions;
-          return;
-        }
-      }
-      this.items.push({
-        id: nextId++,
-        kind: "system",
-        key,
-        params,
-        actions,
-        tone: "hairline",
-        tag: "organize",
-      });
-    },
-    /** 收走在途整理线（发起失败时用——线是「整理中」的陈述，失败后不再
-     * 成立；就地摘除，错误由 pushRawSystem 另行陈述）。 */
     dropOrganizeRunning() {
-      for (let i = this.items.length - 1; i >= 0; i--) {
-        const it = this.items[i]!;
-        if (it.kind === "system" && it.tag === "organize" && it.key === "notice.organizeRunning") {
-          this.items.splice(i, 1);
-          return;
-        }
-      }
+      chatNotices.dropOrganizeRunning(this);
     },
-    /** 原文系统条（key = "__raw__"，ChatMessages 按 params.text 渲染）：
-     * 用于"查看详情"展开压缩摘要等内容型陈述。 */
     pushRawSystem(text: string) {
-      this.items.push({
-        id: nextId++,
-        kind: "system",
-        key: "__raw__",
-        params: { text },
-      });
+      chatNotices.pushRawSystem(this, text);
     },
-    /** 批 D §9.2 附件动作：入条即后台上传（asset_put；本地 objectURL 预
-     * 览）。`file` = 内存文件（粘贴/拖拽），`path` = 已选文件路径。失败
-     * 留条可移除重加（错误文案来自后端校验，如实展示）。 */
-    async addAttachmentFile(file: File) {
-      const kind = file.type.startsWith("image/") ? "image" : "file";
-      const item: AttachmentItem = {
-        key: nextAttachmentKey++,
-        name: file.name || "clipboard",
-        mime: file.type || "application/octet-stream",
-        kind,
-        status: "uploading",
-        ...(kind === "image" ? { localUrl: URL.createObjectURL(file) } : {}),
-      };
-      this.attachments.push(item);
-      try {
-        const buf = await file.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let bin = "";
-        const CH = 0x8000;
-        for (let i = 0; i < bytes.length; i += CH) {
-          bin += String.fromCharCode(...bytes.subarray(i, i + CH));
-        }
-        const asset = await assetPut(btoa(bin), item.mime, item.name);
-        if (item.status === "uploading") {
-          item.asset = asset;
-          item.mime = asset.mime;
-          item.status = "ready";
-        }
-      } catch (err) {
-        item.status = "error";
-        item.error = String(err);
-      }
+    // ---- 附件预览条（./attachments.ts）----
+    addAttachmentFile(file: File) {
+      return chatAttachments.addAttachmentFile(this, file);
     },
-    /** 已选文件路径上传（asset_put_path，零 IPC 大载荷）。 */
-    async addAttachmentPath(path: string) {
-      const item: AttachmentItem = {
-        key: nextAttachmentKey++,
-        name: path.split(/[\\/]/).pop() || path,
-        mime: "",
-        kind: "file",
-        status: "uploading",
-      };
-      this.attachments.push(item);
-      try {
-        const asset = await assetPutPath(path);
-        item.asset = asset;
-        item.mime = asset.mime;
-        item.kind = asset.mime.startsWith("image/") ? "image" : "file";
-        if (item.kind === "image") {
-          // 本地预览：读一次 data URL（小图，无 objectURL 可用）
-          const { assetRead } = await import("../../lib/api");
-          item.localUrl = await assetRead(asset.id, asset.mime);
-        }
-        item.status = "ready";
-      } catch (err) {
-        item.status = "error";
-        item.error = String(err);
-      }
+    addAttachmentPath(path: string) {
+      return chatAttachments.addAttachmentPath(this, path);
     },
     removeAttachment(key: number) {
-      const idx = this.attachments.findIndex((a) => a.key === key);
-      if (idx >= 0) {
-        const [it] = this.attachments.splice(idx, 1);
-        if (it?.localUrl?.startsWith("blob:")) URL.revokeObjectURL(it.localUrl);
-      }
+      chatAttachments.removeAttachment(this, key);
     },
-    /** 「仅发送文字」门控动作（§9.5）：剥掉图片附件，PDF 与文本保留。 */
     dropImageAttachments() {
-      for (const it of [...this.attachments]) {
-        if (it.kind === "image") this.removeAttachment(it.key);
-      }
+      chatAttachments.dropImageAttachments(this);
     },
-    /** 发送前收口：全部就绪才发（上传中等待完成；有失败 = 不发，留条
-     * 如实展示）。返回 parts（空表 = 纯文本）。 */
-    async settleAttachments(): Promise<ContentPartDto[] | null> {
-      const deadline = Date.now() + 30_000;
-      while (this.attachments.some((a) => a.status === "uploading")) {
-        if (Date.now() > deadline) break;
-        await new Promise((r) => setTimeout(r, 80));
-      }
-      if (this.attachments.some((a) => a.status === "error")) return null;
-      return this.attachments
-        .filter((a) => a.asset)
-        .map((a) =>
-          a.kind === "image"
-            ? ({ type: "image", asset: a.asset } as ContentPartDto)
-            : ({ type: "file", asset: a.asset } as ContentPartDto),
-        );
+    settleAttachments() {
+      return chatAttachments.settleAttachments(this);
     },
-    async send(text: string, parts?: ContentPartDto[]) {
-      const t = text.trim();
-      if (!t && !(parts && parts.length)) return;
-      if (this.running) return;
-      this.stopRequested = false;
-      // §3.39②：手动发送恢复自动派发（停止/出错后的暂停态由用户解）
-      this.queueDraining = true;
-      this.items.push({
-        id: nextId++,
-        kind: "user",
-        text: t,
-        ts: Date.now(),
-        ...(parts?.length ? { parts } : {}),
-      });
-      this.running = true;
-      this.steps = null;
-      this.turnUsage = null;
-      // §3.6 v3.9 项目下新建任务：挂起归属随首轮请求带入（㉘·A·fix 归属
-      // 先行）——后端建会话即写旁车，首轮注入/围栏/提取就在正确键位上；
-      // 旧时序（轮次收束后才 sessionAssociate）有首查键位缝，已退役。
-      const ws = this.pendingWorkspace;
-      this.pendingWorkspace = null;
-      try {
-        await chat(this.sessionId, t, ws, parts);
-      } catch (err) {
-        // 失败轮次不发 turn_done（后端约定），在这里收尾；§3.39② 队列
-        // 转暂停（恢复键由用户按，失败后不打连发）。附件条不清——后端
-        // 门控拒发（UnsupportedModality）后换模型重试还要用。
-        this.items.push({ id: nextId++, kind: "error", text: String(err) });
-        this.queueDraining = false;
-        this.running = false;
-        void this.refreshSessions();
-        void this.dispatchQueue();
-        return;
-      }
-      this.running = false;
-      // 发送成功后清空预览条（引用已随消息入会话日志，asset 常驻存储）
-      for (const it of [...this.attachments]) this.removeAttachment(it.key);
-      // ⑲ 新会话首聊后进列表（列表更新不阻塞输入）
-      void this.refreshSessions();
-      // §3.39②：轮次收束（成功/失败）→ 消费打断目标 / 自动派发
-      void this.dispatchQueue();
+    // ---- 发送 / 斜杠命令 / 停止 / 排队（./send.ts）----
+    send(text: string, parts?: Parameters<typeof chatSend.send>[2]) {
+      return chatSend.send(this, text, parts);
     },
-    // ---- §3.39 停止与排队（v4.11）----
-
-    /** 统一提交口（composer Enter/发送键）：斜杠命令拦截 → 空闲直发，
-     * 运行中入队（§3.39②）。 */
-    async submit(text: string) {
-      const t = text.trim();
-      if (!t) return;
-      // M2 斜杠命令 /整理（UI shell §3.36①）：前端拦截——元操作不进对话
-      // 流、不建用户气泡；手动整理不受反弹熔断限制且复位熔断态（后端）。
-      // v2.143：发起提示改发丝线（在途态），收束事件就地改写同一条线。
-      if (t === "/整理" || t === "/organize") {
-        this.pushOrganizeNotice("notice.organizeRunning");
-        try {
-          await organizeNow(this.sessionId);
-        } catch (err) {
-          // 发起线随失败一并收走（宁缺勿假——不留悬着的「整理中」线），
-          // 错误原文照常出原文系统条。
-          this.dropOrganizeRunning();
-          this.pushRawSystem(String(err));
-        }
-        return;
-      }
-      if (this.running) {
-        this.queue.push({ id: nextId++, text: t });
-        return;
-      }
-      await this.send(t);
+    submit(text: string) {
+      return chatSend.submit(this, text);
     },
-    /** 停止生成（§3.39④）：后端流式截断 + 待决卡 fail-closed；队列转
-     * 暂停（draining=false），「已停止」头行由 stopRequested 驱动。 */
-    async stop() {
-      if (!this.running) return;
-      this.stopRequested = true;
-      this.queueDraining = false;
-      try {
-        await agentStop(this.sessionId);
-      } catch (err) {
-        // 命令失败如实回滚（轮次仍在跑，不停留在假停止态）
-        this.stopRequested = false;
-        if (this.queue.length > 0) this.queueDraining = true;
-        this.pushRawSystem(String(err));
-      }
+    stop() {
+      return chatSend.stop(this);
     },
-    /** 删除一条排队消息。 */
     removeQueued(id: number) {
-      this.queue = this.queue.filter((q) => q.id !== id);
+      chatSend.removeQueued(this, id);
     },
-    /** 排队卡头垃圾桶（§3.39② v4.11 参考图）：一键清空全部排队。 */
     clearQueue() {
-      this.queue = [];
+      chatSend.clearQueue(this);
     },
-    /** 「立即发送」= 打断通道（§3.39②）：移出队列 → 停止当前轮 →
-     * 收束后立即发送该条（其余保持排队）。空闲时直接发。 */
-    async sendQueuedNow(id: number) {
-      const idx = this.queue.findIndex((q) => q.id === id);
-      if (idx < 0) return;
-      const [item] = this.queue.splice(idx, 1);
-      if (this.running) {
-        this.preempt = item.text;
-        await this.stop();
-      } else {
-        await this.send(item.text);
-      }
+    sendQueuedNow(id: number) {
+      return chatSend.sendQueuedNow(this, id);
     },
-    /** 恢复自动派发（暂停态的「继续」键）。 */
     resumeDrain() {
-      this.queueDraining = true;
-      void this.dispatchQueue();
+      chatSend.resumeDrain(this);
     },
-    /** 轮次收束后的派发口：先消费打断目标，再逐条自动派发队首（一条
-     * 一轮——send 收束后再进下一轮）。 */
-    async dispatchQueue() {
-      if (this.dispatching) return;
-      if (this.preempt && !this.running) {
-        this.dispatching = true;
-        const text = this.preempt;
-        this.preempt = null;
-        try {
-          await this.send(text);
-        } finally {
-          this.dispatching = false;
-        }
-      }
-      while (!this.running && this.queueDraining && this.queue.length > 0) {
-        this.dispatching = true;
-        const head = this.queue.shift()!;
-        try {
-          await this.send(head.text);
-        } finally {
-          this.dispatching = false;
-        }
-      }
+    dispatchQueue() {
+      return chatSend.dispatchQueue(this);
+    },
+    editResend(pos: number | null, text: string) {
+      return chatSend.editResend(this, pos, text);
     },
   },
 });

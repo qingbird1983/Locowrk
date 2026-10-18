@@ -1,0 +1,101 @@
+// stores/chat/notices.ts —— 系统通知条的四个生产口 + M0 观测告警（T22 刀二搬出）。
+// 这一族只做一件事：**往 items 里落「UI 陈述」**（SystemNotice 模式），不发请求、不碰后端。
+// 参数名一律 `st`（不是 `s`）：原实现内部的 `.find((s) => …)` 用的是 `s`，
+// 把 store 状态参数也叫 `s` 会形成遮蔽 ⇒ 等价比对时看不清哪层是谁。
+import { i18n } from "../../i18n";
+import { useSettingsStore } from "../settings";
+import { useToastStore } from "../toast";
+import type { SessionUsage } from "./types";
+import { nextId } from "./ids";
+import type { ChatState } from "./state";
+
+/** 系统消息入列（SystemNotice 模式的唯一生产入口；首个生产者 ⑨
+ * 压缩通知，随后 ⑪ "已记住"）。 */
+export function pushNotice(
+  st: ChatState,
+  key: string,
+  params?: Record<string, unknown>,
+  actions?: string[],
+) {
+  st.items.push({ id: nextId(), kind: "system", key, params, actions });
+}
+
+/** 整理发丝线（v2.143 用户裁定「两卡片改一根发丝线，状态居中盖在线上」）：
+ * 发起/收束/熔断共用同一根线——在途线（organizeRunning）被收束事件**就地改写**
+ * （一条线从「整理中」变「已整理」），无在途线（自动整理）直接落收束线。
+ * tag="organize" 标记本族条目。 */
+export function pushOrganizeNotice(
+  st: ChatState,
+  key: string,
+  params?: Record<string, unknown>,
+  actions?: string[],
+) {
+  const items = st.items;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (
+      it.kind === "system" &&
+      it.tag === "organize" &&
+      it.key === "notice.organizeRunning"
+    ) {
+      it.key = key;
+      it.params = params;
+      it.actions = actions;
+      return;
+    }
+  }
+  st.items.push({
+    id: nextId(),
+    kind: "system",
+    key,
+    params,
+    actions,
+    tone: "hairline",
+    tag: "organize",
+  });
+}
+
+/** 收走在途整理线（发起失败时用——线是「整理中」的陈述，失败后不再
+ * 成立；就地摘除，错误由 pushRawSystem 另行陈述）。 */
+export function dropOrganizeRunning(st: ChatState) {
+  for (let i = st.items.length - 1; i >= 0; i--) {
+    const it = st.items[i]!;
+    if (
+      it.kind === "system" &&
+      it.tag === "organize" &&
+      it.key === "notice.organizeRunning"
+    ) {
+      st.items.splice(i, 1);
+      return;
+    }
+  }
+}
+
+/** 原文系统条（key = "__raw__"，ChatMessages 按 params.text 渲染）：
+ * 用于"查看详情"展开压缩摘要等内容型陈述。 */
+export function pushRawSystem(st: ChatState, text: string) {
+  st.items.push({
+    id: nextId(),
+    kind: "system",
+    key: "__raw__",
+    params: { text },
+  });
+}
+
+/** M0 观测告警（KV v2 §7.4，开发者开关缺省关）：会话累计命中率跌破
+ * 阈值时 toast 一次（每会话至多一次）。≥3 步才判——冷启动首请求无
+ * 缓存可命不是断裂；供应商从未报告过缓存字段（cacheRead/cacheWrite
+ * 全 0）不判——未报告 ≠ 命中率塌方，宁缺勿假。 */
+export function checkCacheAlert(st: ChatState, su: SessionUsage) {
+  if (st.cacheAlertFired || st.replaying) return;
+  const dev = useSettingsStore().view?.developer;
+  if (!dev?.cacheHitAlert) return;
+  if (su.steps < 3 || su.input <= 0) return;
+  if (su.cacheRead + su.cacheWrite <= 0) return;
+  if (su.cacheRead / su.input >= dev.cacheHitAlertPercent / 100) return;
+  st.cacheAlertFired = true;
+  useToastStore().push(
+    "warn",
+    i18n.global.t("usage.cacheAlert", { pct: dev.cacheHitAlertPercent }),
+  );
+}

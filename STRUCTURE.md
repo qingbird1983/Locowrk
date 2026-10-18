@@ -50,7 +50,10 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   │   ├── App.vue  main.ts  i18n.ts  style.css          # 外壳 · 语言切换 · 字号基座 --lw-ui-font-size
 │   │   ├── components/shell/ chat/ memory/ plugins/ settings/ schedule/ patterns/
 │   │   │                                                 # 界面分区：外壳 · 对话流 · 记忆页 · 插件页 · 设置 · 定时 · 通用模式
-│   │   ├── stores/                   #         pinia：状态与 IPC 编排的唯一去处（组件不许自己 apply）；最厚的是 chat.ts
+│   │   ├── stores/                   #         pinia：状态与 IPC 编排的唯一去处（组件不许自己 apply）；
+│   │   │                             #         chat/ 是目录式（台账 T22 拆刀 2026-10-18）：types · state · ids ·
+│   │   │                             #         getters · projection · notices · session · config · attachments ·
+│   │   │                             #         send，index.ts 只剩装配与薄转发（公开面 39 个 action 一字未减）
 │   │   ├── lib/                      #         api.ts（command 薄封装）· tool-detail.ts · use-popover.ts · ui-font.ts
 │   │   ├── locales/                  # ★       zh-CN 与 en 双语包，键集必须相等（check-i18n 判）
 │   │   ├── types/                    #         前端这边的类型声明：字段名要和后端返回的对上（漂一个字母 ⇒ 类型检查全绿而界面空白）
