@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 工具行（UI shell doc §3.8 v4.13，《Tool Execution Process Display》）：
- * 五列栅格行（ProcessRow 共享列轨）+ 展开明细（缩进竖线子行 = 明细视图
+ * flex 行骨（ProcessRow 共享段位）+ 展开明细（左竖线子行 = 明细视图
  * ToolDetailView + subagent 标签值行）。状态克制（设计稿 §4.3）：**成功行尾完全
  * 为空**（既无对勾也无时长——成功不喧哗），失败才高亮（danger 叉 + 红「失败」）；
  * 明细恒默认收起（v2.98，v4.20 起
@@ -191,8 +191,8 @@ function onToggle() {
       </div>
     </div>
 
-    <!-- 展开体 = 缩进 + 左竖线的子行（不换布局；懒挂载 + v-show 保 DOM，
-         首开后收展零重渲染） -->
+    <!-- 展开体 = 左竖线 + 不缩进的子行：竖线落在行首图标居中位，内容左边缘与类型词
+         对齐（不换布局；懒挂载 + v-show 保 DOM，首开后收展零重渲染） -->
     <div v-if="everExpanded" v-show="expanded" class="tool__sub">
       <ToolDetailView :item="item" @open-transcript="(id, title) => emit('openTranscript', id, title)" />
       <!-- edit_diff 审阅入口（§3.28）：明细动作行的文本钮 -->
@@ -255,10 +255,13 @@ function onToggle() {
 .tool :deep(.dot) {
   background: var(--lw-ink-2);
 }
-/* 展开体：缩进 12px + 左竖线（层级语法，保留）；垂直间距由父级 gap 给 */
+/* 展开体：左竖线 + 内容不缩进；垂直间距由父级 gap 给。
+   竖线落在行首语义图标的居中位——`.prow` 的 margin-inline:-3px 配 padding-left:3px
+   把 14px 图标顶到本容器 x=0，中心即 7px；内容左边缘与上方类型词对齐
+   （图标 14 + gap 6 = 20px）。光学修正：这两处只对行骨格的实测尺寸，不是间距档。 */
 .tool__sub {
-  margin-left: var(--lw-gap-12);
-  padding-left: var(--lw-gap-12);
+  margin-left: calc(14px / 2);
+  padding-left: calc(14px / 2 + var(--lw-gap-6) - 1px);
   border-left: 1px solid var(--lw-line-subtle);
   display: flex;
   flex-direction: column;
