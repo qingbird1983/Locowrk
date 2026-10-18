@@ -96,6 +96,20 @@ impl MemoryStore {
         self
     }
 
+    /// 人类层句柄的**唯一取用档**：接线了**且**总开关开着才给句柄。
+    ///
+    /// 为什么现在收：这句判断此前散在三处（`md_write` / `md_delete` /
+    /// `md_index_body` 各写一份 `(Some(files), true)` 或 `!(files_on)()`），
+    /// 刀②b 的读侧是第四个消费者 ⇒ 不收成一处，"人类层到底开没开"就有四本账。
+    /// ⚠ 返回 `None` 的语义是"这一刀还走 sqlite"，那是**暂时状态**：刀②c 要把它
+    /// 改成 `Err`（真源 = md 之后，读不到文件就是读不到，不许静默换源）。
+    pub(super) fn files_face(&self) -> Option<&crate::memory_files::MemoryFiles> {
+        if !(self.files_on)() {
+            return None;
+        }
+        self.files.as_deref()
+    }
+
     /// 双写一条事实 md（失败只 warn——人类层降级不破契约）。
     pub(super) fn md_write(
         &self,
@@ -106,7 +120,7 @@ impl MemoryStore {
         source: &str,
         at: i64,
     ) {
-        let (Some(files), true) = (self.files.as_ref(), (self.files_on)()) else {
+        let Some(files) = self.files_face() else {
             return;
         };
         if let Err(e) = files.write_fact(ws, key, value, tags, source, at) {
@@ -116,7 +130,7 @@ impl MemoryStore {
 
     /// 同步删除一条事实 md。
     pub(super) fn md_delete(&self, ws: &str, key: &str) {
-        let (Some(files), true) = (self.files.as_ref(), (self.files_on)()) else {
+        let Some(files) = self.files_face() else {
             return;
         };
         if let Err(e) = files.delete_fact(ws, key) {
@@ -135,10 +149,10 @@ impl MemoryStore {
     /// "文件在场但只有 `# 记忆索引` 标题"也归入"用不上"——那是本机实测的常态
     /// （见 `memory_index` 头注），判断在 `memory_index::from_md` 里做。
     pub(crate) fn md_index_body(&self, workspace: &str) -> Option<String> {
-        if workspace.is_empty() || !(self.files_on)() {
+        if workspace.is_empty() {
             return None;
         }
-        let files = self.files.as_ref()?;
+        let files = self.files_face()?;
         // 家目录经 memlayout 单点算式（Q15 收口：这里此前自己拼过一份
         // `projects/<可读名-哈希>`，那是同一句话的第三个出处）。`.ok()?`
         // 而不是 unwrap：算不出来 = 这一节缺席，按同函数头注的降级口径走。

@@ -188,12 +188,6 @@ fn limit_is_clamped() {
 
 // ---- F1 人类层双写（《Memory File-ization Design》§3）----
 
-fn wired(dir: &std::path::Path, on: bool) -> MemoryStore {
-    let files = Arc::new(crate::memory_files::MemoryFiles::new(dir));
-    let flag: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || on);
-    MemoryStore::new(dir, test_resolver()).with_files(files, flag)
-}
-
 #[test]
 fn host_writes_sync_md_human_layer() {
     let dir = temp_dir("md-sync");
@@ -256,12 +250,8 @@ fn export_rows_covers_both_scopes() {
 }
 
 // ---- Q2（MR §4.1）项目记忆索引注入：两档数据源的优先关系与缺席条件 ----
-
-/// 归一键位（Q2 起 `scope_of_session` 出来的串才是查行的键位）。测试用同一个
-/// helper 取键位，跨平台两侧一致（Windows 上它是 `f:\ws\a`，POSIX 上仍是原串）。
-fn keysid() -> String {
-    crate::workspace::scope_key(Some("F:/ws/a"))
-}
+// （`keysid()` 与 `wired()` 已上移到本目录 `mod.rs`：刀②b 的 `md_read` 簇也要用，
+//  夹具留一份。）
 
 #[test]
 fn project_index_uses_the_md_projection_when_it_has_pointer_lines() {

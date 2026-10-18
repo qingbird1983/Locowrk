@@ -100,9 +100,38 @@
   **② `GLOBAL_DIR` 请客没请到底**：本刀刚给 `mod.rs` 写上"`"global"` 字面量只许一处"，
   同文件 `fact_rel_path:209` 还硬编码着第二处 ⇒ 已改为吃常量；宿主 `memory_reconcile.rs`
   另有两处（该模块在 v1.1 里整项作废、待退役）跟着一起收，本刀不顺手搬。
-- **刀②b（读迁移 · 扳真源的证据所在）**：读路径（`memory/crud.rs` 列举、`recall.rs` 取数、
-  `memory_index.rs` 兜底档、插件侧 read / list / search / undo 六消费点）改**只读 md**，
-  把 sqlite 兜底那档摘掉，`<persistent_memory>` 停读 sqlite。这一刀是 AC-S1-2 的证据所在。
+- **刀②b（读迁移 · 扳真源的证据所在）**：**宿主侧**读路径改**只读 md**，把 sqlite 兜底那档摘掉。
+  **边界订正（本刀收尾时定，防两刀抢同一件事）**：插件那六枚消费点（read / list / search / undo）
+  **不在本刀**——它们是"工具内部改道"，归刀③；本刀只搬宿主读面。判据落在改动面上：
+  刀②b 之后 `desktop/src-tauri/src/memory*/` 里不许再有对 `memories` 表的 `SELECT`
+  （写侧仍在，那是刀②c 的事）。
+  开工后发现它内部还得分四级（按"改了会牵动谁"分，不是按文件分）：
+  - **②b-1 管理页列举 ✅（2026-10-18 落地）**：只有 `commands/memory.rs:23` 一个消费者，
+    且**不碰注入字节** ⇒ 聊天面零风险，最适合作为第一块多米诺。`files_face()` 收成一处
+    （原先 `(Some(files), true)` 那份判断散在 `md_write` / `md_delete` / `md_index_body` 三处），
+    `list()` 先问人类层；新簇 `memory/tests/md_read.rs` 四条 + 五发窄变异各打中一条。
+    留着一档兜底（未接线 / 开关关 ⇒ 仍走 SQL）是**有意的暂时状态**，测试里那条
+    "墓碑断言"就是它必须被刀②c 删掉的凭据。
+    **本刀撞红两条、根因是观测点错位而不是实现**：`memory_reconcile/tests.rs` 有五处把
+    `store.list()` 当"库里有哪几行"的代理，读源一翻就失真——一条比出目录反查名
+    `proj-a-67ed0df8` 而权威键位是 `F:/ws/proj-a`（md 侧只能给目录名），一条比出 0 行
+    而库里明明还留着 1 行（文件删了、行按"目录缺席不删行"保留）。处置 = 把眼睛挪回
+    `export_rows()`，**断言语义一字未动**，并把"不许换成 list"写进该文件头注（放宽断言
+    或删测试都是错的方向）。同族口径还散在 `organize/facts/tests.rs`（4 处）与
+    `organize/tests/fact_cards.rs`（6 处）：它们用的是未接线 store，这刀没红，
+    但"验落库却读管理页"迟早同样失真 ⇒ 登记待收，改法与这里一样换 `export_rows()`。
+    五发窄变异各打中一条（md 分支撤掉 / 折叠大小写撤掉 / tags 那一维撤掉 /
+    总开关档撤掉 / limit 钳撤掉）。第一版那条"md 分支撤掉"写的是 `if false {`，
+    红在**编译错误**上、零证明力 ⇒ 改成 `None::<&MemoryFiles>` 才是"读源没换"那个
+    缺陷形状的真红（这条教训与本仓"一句话机制描述不许直接翻译成变异代码"同源）。
+  - **②b-2 召回正文**：`recall.rs::recall_quiet` 取全局层那一条 SQL 换成 `iter_facts`
+    （`<persistent_memory>` 就此停读 sqlite）。**这才是要给决策人看的那半证据**，
+    但它同时牵动注入字节与 `n_candidates` 埋点口径，所以不跟 ②b-1 混在一提交里。
+  - **②b-3 项目索引兜底**：`memory_index.rs` 的第二档（`index_rows` 从库里现合成指针行）摘掉，
+    md 用不上 = 该层就是空，如实空；连同 `TRUNCATED_NOTE` 一起退役（注入侧不再自己算截断）。
+  - **②b-4 语义召回**：`source.rs::recall_relevant` 自己开连接取行做向量匹配，还带学习列
+    （`hit_count` / `last_hit_at`）⇒ 与"学习列停读"是同一件事，**推给刀②c**，
+    不在本刀偷偷做（那要连 `memory_learn` / `recall_log` 一起改，混进来就回滚不掉）。
   **顺带消掉一处暂时状态**：注入侧现在还在自己算截断（算法与写侧的 `clamp_index` 各一份），
   它改读落盘的 `MEMORY.md` 之后这两份合一，数字与文案都不可能漂——文案也是两份
   （注入侧 `memory_index.rs` 的 `TRUNCATED_NOTE` 与写侧 `index.rs` 的 `INDEX_TRUNCATED_NOTE`），

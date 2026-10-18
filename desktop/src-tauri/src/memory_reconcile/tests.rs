@@ -1,5 +1,12 @@
 //! memory_reconcile 单测：文件为准回写 / 新增吸纳 / 人删文件删行 /
 //! 索引先行愈合 / 目录缺席不删行。全部走临时目录。
+//!
+//! **取数通道写死 `export_rows()`，不许换成 `store.list()`**：本模块的职责是
+//! 「以文件为准回写**行**」，而 S1 刀②b-1 起 `list()` 的读源 = md。用 list 当"库里有哪几行"
+//! 的代理，会在那一刀落地当场失真——实测两条红就是证据：一条比出目录反查名 `proj-a-67ed0df8`
+//! 而权威键位是 `F:/ws/proj-a`（md 那边只能给目录名），一条比出 0 行而库里明明还有 1 行
+//! （文件被删了、行按"目录缺席不删行"保留）。断言的语义一个字没动，只是把眼睛挪回它本来
+//! 该看的地方。
 
 use super::run;
 use crate::memory::MemoryStore;
@@ -47,7 +54,7 @@ fn human_edit_flows_back_into_index() {
     let sum = run(&store, &files, &[]).unwrap();
     assert_eq!(sum.updated, 1, "文件为准更新一行：{sum:?}");
     let row = store
-        .list("", 200)
+        .export_rows()
         .unwrap()
         .into_iter()
         .find(|r| r.key == "pref.tool")
@@ -75,7 +82,7 @@ fn human_created_file_is_ingested_as_new_row() {
     let sum = run(&store, &files, &[]).unwrap();
     assert_eq!(sum.created, 1, "{sum:?}");
     let row = store
-        .list("", 200)
+        .export_rows()
         .unwrap()
         .into_iter()
         .find(|r| r.key == "hand.made")
@@ -94,14 +101,14 @@ fn deleted_file_removes_row_but_missing_dir_keeps_rows() {
     std::fs::remove_file(md_root(&dir).join(&rel)).unwrap();
     let sum = run(&store, &files, &[]).unwrap();
     assert_eq!(sum.deleted, 1, "{sum:?}");
-    assert!(store.list("", 200).unwrap().is_empty());
+    assert!(store.export_rows().unwrap().is_empty());
     // 整层缺席 = 复位手势：行保留（首启导出按索引重建文件）
     store.write("", "kept.key", "v", "", "explicit").unwrap();
     let global = md_root(&dir).join("global");
     std::fs::remove_dir_all(&global).unwrap();
     let sum2 = run(&store, &files, &[]).unwrap();
     assert_eq!(sum2.deleted, 0, "目录缺席不删行：{sum2:?}");
-    assert_eq!(store.list("", 200).unwrap().len(), 1);
+    assert_eq!(store.export_rows().unwrap().len(), 1);
 }
 
 #[test]
@@ -131,7 +138,7 @@ fn project_file_without_frontmatter_workspace_resolves_via_dir() {
     let sum = run(&store, &files, &[ws.to_string()]).unwrap();
     assert_eq!(sum.created, 1, "{sum:?}");
     let row = store
-        .list("", 200)
+        .export_rows()
         .unwrap()
         .into_iter()
         .find(|r| r.key == "bare")

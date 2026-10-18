@@ -20,8 +20,15 @@ impl MemoryStore {
     /// 管理页列举（全键位）：query 空 = 全量（新→旧），否则 key/value/tags
     /// 子串过滤（LIKE 通配符按字面量，与 memory_search 同纪律）。
     pub fn list(&self, query: &str, limit: u32) -> Result<Vec<MemoryRow>, String> {
-        let conn = self.open_conn()?;
         let limit = limit.clamp(1, LIST_MAX);
+        // 刀②b-1：人类层可用 ⇒ **读源就是 md**，一条 SQL 都不发。
+        // 还能落到下面那条 SQL 通路的只剩"未接线（单测）/ 总开关关"这一档，
+        // 它按刀②c 取消；现在留着是为了让既有那些 `MemoryStore::new()` 的用例
+        // 一字未改仍然绿（否则这一刀的 diff 里就分不清"行为变了"还是"夹具变了"）。
+        if let Some(files) = self.files_face() {
+            return Ok(Self::md_rows(files.root(), query, limit as usize));
+        }
+        let conn = self.open_conn()?;
         if query.is_empty() {
             let mut stmt = conn
                 .prepare(
@@ -57,6 +64,42 @@ impl MemoryStore {
             .collect::<Result<_, _>>()
             .map_err(|e| format!("memory list: {e}"))?;
         Ok(rows)
+    }
+
+    /// 人类层列举（刀②b-1 的读源）。三条口径与上面那条 SQL 通路**逐字对齐**，
+    /// 因为"换读源"不该顺手改掉管理页的行为：
+    /// ① 排序 = `updated_at DESC, key`（`memlayout::iter_facts` 里已按这条排，
+    ///    对齐的理由与后果写在那片头注）；
+    /// ② 过滤 = key / value / tags 任一子串命中。SQLite 的 `LIKE` 默认对 **ASCII
+    ///    大小写不敏感** ⇒ 这里必须折叠大小写：写成裸 `contains` 就变成"搜 rust
+    ///    搜不到 Rust"那种没人会立刻发现的小退化（`%` `_` 在 SQL 侧被 ESCAPE 成
+    ///    字面量，在 `contains` 侧天然是字面量 ⇒ 这一维不用做转义）；
+    /// ③ 条数上限 = 同一个钳过的 `limit`。
+    /// `unreadable` 只 warn、不报错也不静默：列表照常出其余那些，但"扫不动几条"
+    /// 必须落到日志里——它记的是"没给看的条数"，不是"库里没有"。
+    fn md_rows(root: &std::path::Path, query: &str, limit: usize) -> Vec<MemoryRow> {
+        let scan = plugin_api::memlayout::iter_facts(root);
+        if scan.unreadable > 0 {
+            tracing::warn!(
+                "记忆 md 列举：{} 条读不动（未计进本次列表）",
+                scan.unreadable
+            );
+        }
+        let needle = query.to_ascii_lowercase();
+        let hit = |s: &str| needle.is_empty() || s.to_ascii_lowercase().contains(&needle);
+        scan.facts
+            .iter()
+            .filter(|f| hit(&f.key) || hit(&f.value) || hit(&f.tags))
+            .take(limit)
+            .map(|f| MemoryRow {
+                key: f.key.clone(),
+                value: f.value.clone(),
+                tags: f.tags.clone(),
+                source: f.source.clone(),
+                workspace: f.workspace.clone(),
+                updated_at: f.updated_at,
+            })
+            .collect()
     }
 
     /// 管理页编辑（§7.2 memory_update：只改 value，来源与键名不动）。
