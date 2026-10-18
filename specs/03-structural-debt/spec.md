@@ -14,10 +14,12 @@
 
 进度**只在下面的勾选框里**，这一行不抄数——抄一次就会漂，它曾经写着"十六条一条没结"，
 而那时 T8 与 T18 都已经结了。要剩多少条就现查：`grep -c '^- \[ \]' specs/03-structural-debt/spec.md`。
-"可直接做"那一组是纯结构收敛、零行为变化，不需要前置；"卡在人的一侧"那组要点头或要裁定——
-2026-10-18 用户两次点头（"这10条可以收账"、"剩下四条也收账"）之后这一组也已结清，
-其中两处原本是写给他的选择由 Qoder 代裁定（T10 的 (a)/(b)、specs/04 的三问），
-各自条目顶部都标了"可翻案"与翻案代价；不可逆动作（删键、清产物、动 [LOCK]、push）一个没做。
+"可直接做"那一组是纯结构收敛、零行为变化，不需要前置；"卡在人的一侧"那组要点头或要裁定 ——
+2026-10-18 三次点头（"这10条可以收账"、"剩下四条也收账"、"能拆肯定是拆啊"）之后第二组**已全结**，
+其中两处原本是写给他的选择由 Qoder 代裁定（T10 的 (a)/(b)、specs/04 的三问），各自条目顶部都标了
+"可翻案"与翻案代价。不可逆动作做过一件，正是他点名的那件（T4 那两块实验室夹具连名下 15 条文案键
+已删净）；**未点名的删除一条没做**，[LOCK] 与 push 未动。第三组（超限名单 20 件的逐件三问判定）
+是同日按同一口径新加的，那张表的"留 5 件"与三条新登记欠账（T23/T24/T25）都等他过目。
 
 ## 计划
 
@@ -616,12 +618,71 @@
         否则闸的读数不再只反映代码；定位方法 = 把改前改后两侧的命中做多重集差，一条就点名
       · 跨平台：纯前端 TS 结构面，不涉及路径语义与插件生命周期 ⇒ 本刀不取 WSL 侧证据（口径见 ADR-0005）
 
+### 三、超限名单 20 件的逐件三问判定（2026-10-18 用户口径「能拆肯定是拆啊，除非是必须不能拆的」）
+
+判定做法：四路并行**通读文件**（不是我按行数猜），每件把三问各附证据 —— ①列职责簇带行号与体量、
+③举一个真实耦合；结论落成「拆 15 / 留 5」，**留的每一件都给不许用行数的硬理由**。
+判定顺带数出三笔新欠账 ⇒ 当场登记 T23/T24/T25（在下面未勾）。
+
+| 文件（现行数） | ①只管一件事 | ③改它常牵动无关部分 | 判 | 依据与切法（一句） |
+| --- | --- | --- | --- | --- |
+| `src-tauri/src/memory.rs`（916） | 否：5 簇 | 是：`KEY_MAX`/`VALUE_MAX` 三段校验**逐字重复**（304/365/475），upsert SQL 两份（374/482） | 拆 | `memory/{admin,reconcile,inject,source}.rs`，但建表串必须留主文件（见下面的锁） |
+| `src/lib/api.ts`（814） | 否：10 个后端子域 + 一张通道表，域间零共享符号 | 是：加一个 `ChatUpdate` 字段要与两处探测/流式走同一 diff | 拆 | 通道表与全部专用 `listen` **留在原文件**，域包装下到 `lib/api/*.ts` 再 `export *` |
+| `components/chat/Composer.vue`（835） | 否：7 簇（模型 chip / 推理档 / 斜杠面板 / 附件 / 输入与发送键状态机 / 坞卡贴合 / 坞高上报） | 是：附件条高动一次 ⇒ `App.vue` 的 composerH 与转录回底钮位跟着算 | 拆 | `ComposerAttachments.vue` + `ModelChip.vue`；**Esc 让位链与发送键必须留本文件**（SS9b 判的就是"只许 1 个出处"） |
+| `settings/model/ProviderSetupDialog.vue`（650） | 否：4 簇，其中自定义请求头编辑器 ≈117 行、自带三态四操作 | 是：`maybeAdoptSweep` 写 baseUrl → watch 再探测 → 喂 ModelPanes | 拆 | `HeaderEditor.vue`（≈140，v-model 整表）；落值那条"整表替换 + 空键跳过"只许一处实现 |
+| `settings/model/ModelPanes.vue`（616） | 否：4 簇 | 是：`mergeCatalog` 的 watch 触发 `emit("update")` 回父置 touched = 跨文件回环 | 拆 | `ModelAdvancedRow.vue`（≈190）；`pinEdit` 那条"编辑即钉死 sources=user"只许一处 |
+| `lib/tool-detail.ts`（612） | 否：两个渲染面 + 三套表 | 是：`shell` 系三个工具名在三处各写一遍（67/131/512）⇒ 加一个工具改三处 | 拆 | `kinds` / `labels` / `blocks` 三片 + 主分派留 index，导入路径不变 |
+| `plugins-src/memory-sqlite/src/store.rs`（581） | 是：存储层四簇同族 | 是：同一条 UPSERT 两份抄写（276/522） | **留** | `check-schema-parity.mjs` 只读这一个路径，且 B2 要建表串恰 1 处 ⇒ 25–151 那 127 行一行搬不动；要搬先解下面的锁 |
+| `settings/LlmSection.vue`（577） | 是：七块行全走 SettingsGroup+SettingsRow 唯一形态 | 是，但方向相反 | **留** | 该文件实测 5 处组件直调 IPC + 4 处 `settings.refresh()`，已偏离「编排只在 stores」（新登 **T24**）⇒ 先收编排，拆是后面的事 |
+| `llm/client.rs`（575） | 半：装配 + 重试环 + 单次尝试是一件事，逐模型 ping 是另一件 | 是：`repair_*` 修复旗标跨 6 处 | 拆（薄） | 只切逐模型 ping → `llm/test_probe.rs`（≈100）；**主环不许再切**，切了就出现第二条线路（违「同类只许一种形态」） |
+| `llm/wire.rs`（548） | 否：预检 / 媒体投影 / 序列化 / 累积器 / usage 五簇 | 是：预算参数在 80/128/307/372 四处 | 拆 | `wire/{payload,messages,media,stream}.rs`；私有函数跨片要提 `pub(super)`，测试簇里 `super::wire::` 的命名空间遮蔽有案底 |
+| `chat/TranscriptFlow.vue`（540） | 否：约 180 行**零 DOM** 的投影算法住在组件里 | 是：inner 单块分支与 tail 两段**逐字重复** ⇒ 新增一类 kind 必改两处 | 拆 | `use-flow-projection.ts`（≈190）+ `FlowSingle.vue`（≈60）把两遍并一遍；composable 不触形态标准 |
+| `src-tauri/src/events.rs`（531） | 是：通道常量 + 事件 enum + `channel()` 映射 = **同一张契约表** | 是，而那正是闸要的 | **留** | 拆出 sink 后 `DIRECT_EMIT` 扫不到文内 `emit(channels::` ⇒ 它**只会安静少一条**（假绿，不是判红），比判红危险；这张表的"同文件数条数"就是判据本体 |
+| `settings/DeveloperSection.vue`（523） | 否：写值区 + 三个**只读观测面板**（⑫ 暴露调试 / 缓存诊断 / reconcile 触发） | 是：`refresh()` 拿写值字段 `cacheDiagnostics` 当取数门 | 拆 | `ExposureDebugPanel.vue` + `CacheObservationPanel.vue` → 主件 ≈360；先例就在同目录（`MemoryTreePanel.vue` 116 行是从它拆出去的） |
+| `commands/llm.rs`（523） | 否：清单+推荐 / 连通测试 / 代理与档位 CRUD / 目录诊断 四簇 | 是：`enrich` 与 `apply_dialect_ladder` 被两簇共读（44/298/478） | 拆（只切面） | `commands/llm/{models,probe,providers}.rs`；但 `llm_provider_save` 闭包就地做档位装配与 keyring 写 = 业务进命令层（新登 **T25**，本刀不顺手） |
+| `src-tauri/src/commands.rs`（519） | 否：9 簇（聊天与停止 / undo / 列表投影 / 审批与规则 / 设置 / 探测 / 暴露调试 / 原生对话框 / 通知） | 是：跨文件调 `sessions::ensure_associatable`，还有 `cfg(test)` 补丁式再导出 | 拆 | 沉 `commands/{chat,approvals,settings,system}.rs`；`check-commands.mjs` 走目录扫全部 .rs ⇒ **不动任何闸，单刀性价比最高** |
+| `memory/TreeSection.vue`（505） | 否：会话导航与档位 / 章节展开与原文缓存 / M5 编辑面 三簇 | 是：`loadBundles` 一次重置六个本地态，新增任一编辑态都要动它 | 拆 | `use-tree-chapters.ts`（≈120，先例 = 同目录 `use-model-probe.ts`）；保存就地改引用与两步删除互斥必须同处 |
+| `commands/sessions.rs`（474） | 否：元数据 / 删除与搜索 / 导出与标题 / 截断与悬空裁决 / 子转录与外壳 五簇 | 是：忙守卫文案两份（296/326）、`fsRoots` 校验两份（32/434）、shell 三分支两份（403/452） | 拆 | `sessions/{meta,lifecycle,export,heal,shell}.rs`；那三组重复正是「同一事实两个出处」要消灭的形状 |
+| `chat/MessageRow.vue`（468） | 否：附件部件簇与 `ToolRow.vue` 的 thumbCache/thumbOf **逐字同形** | 是：`.msg--brief` 的 padding 归零靠 TranscriptFlow 的兄弟规则补（注释自陈实抓过） | 拆（薄） | `lib/use-asset-thumb.ts`（≈35，ToolRow 同用）+ `MessageParts.vue`（≈95）→ 余 ≈330 |
+| `tests/chat-projection.spec.ts`（456） | 是：5 个 describe / 24 条用例只驱动同一个 `onEvent` 入口 | 是：共用夹具 `rowOf`/`kinds`/`fresh` 是用例立得住的前提 | **留** | 拆开要么复制夹具、要么新造共享夹具 = **为了行数造结构**（前端侧也没有"测试目录不许有用例"的等价规矩可依据） |
+| `chat/PermissionCard.vue`（451） | 是：倒计时 / 硬门 / 决策防重 / 分体钮与 scope 上弹 / 预览元信息，都只服务这一张卡 | 否：改细条不动按钮 | **留** | 卡面归 Composer 的 `dock-cards` 持有，本卡刻意不 `overflow:hidden` 让上弹冒出卡顶；再包一层直接打断贴合柱面，上弹皮属 §二③ 唯一浮层式 |
+
+· ★ **本节最值钱的一条不是那张表，是判定过程中摸到的三道锁**：四路结论里有三件的"留 / 切法"被同一个
+  形状卡住 —— 闸把**文件路径钉死了**。实测（不是推断）：`check-channels.mjs:25-26` 写死
+  `desktop/src-tauri/src/events.rs` 与 `desktop/src/lib/api.ts`；`check-schema-parity.mjs:25` 写死
+  `memory.rs` 与 `store.rs`。所以：① 拆 `api.ts` 只能搬域包装，通道表与专用 `listen` 一动就是
+  BLOCK 或 R4 假红；② 拆 `memory.rs` 时建表串得留在主文件才不动 B1；③ `store.rs` 的 25–151 行
+  根本搬不动；④ `events.rs` 拆出 sink 是**安静少一条**那种坏法。⇒ 这四条锁本身可以解，
+  `check-i18n.mjs` 已有现成先例（从装配点读它真正 import 了什么 ⇒ 语言包再怎么挪闸跟着走），
+  登记成 **T23**；解掉之后表里"留"那 5 件至少 2 件要重判。
+- [ ] **T23** 两道对账闸的硬编码路径改成"跟随定位"（`check-channels` 的两面 + `check-schema-parity` 的两侧）
+      · 现状 = 死路径 ⇒ 谁想拆 `events.rs` / `api.ts` / `memory.rs` / `store.rs`，第一个动的不是文件而是闸，
+        而"拆文件必须同批改闸"会让一刀塞两件事（T4 那批就是这么给 i18n 加了第二根引用面的）
+      · 做法照 `check-i18n.mjs` 的装配点跟随；每档必须补一条"扫不到即判红"的负对照 —— 不许安静少一条
+      · 这条做完后，上面表里 `events.rs` 与 `store.rs` 两件的"留"就不再是形态问题，要重新判
+- [ ] **T24** `LlmSection.vue` 里 5 处组件直调 IPC + 4 处 `settings.refresh()` 收进 `stores/`
+      · 违 AGENTS §3「状态与 IPC 编排的唯一去处是 stores（组件不许自己 apply）」；实测出处 =
+        该文件 103/123/249/297/314 行直调、298/315/323/566 行 refresh
+      · 这条是 T22 判定顺带数出来的（不是"感觉违反"）；把它列成独立一条就是**不**在拆刀里顺手改
+- [ ] **T25** `commands/llm.rs` 的 `llm_provider_save` 就地做档位装配 / keyring 写 / 清单去重，业务进了命令层
+      · 违 §3「Tauri command 薄适配层：只做参数转换，不写业务」；实测 = 该闭包 327–407 行 ≈ 80 行
+      · 下沉目标 = `src-tauri/src/settings/llm.rs`；与 commands/llm.rs 的切面分开两刀，别混
+
+· 拆的顺序（按"动刀前必须先解哪道锁"排，不按行数排）：
+  第一批 Rust 无锁件 = `commands.rs` → `commands/sessions.rs` → `commands/llm.rs`（只切面）→ `llm/wire.rs` → `llm/client.rs`（薄）
+  第二批 Rust 有锁件 = `memory.rs`（建表串留主文件）；或先做 T23 再回来
+  第三批 前端 lib = `tool-detail.ts` → `api.ts`（通道表留原文件，或先 T23）
+  第四批 组件 = `DeveloperSection.vue` → `TreeSection.vue` → `ProviderSetupDialog.vue` → `ModelPanes.vue` → `Composer.vue` → `TranscriptFlow.vue` → `MessageRow.vue`
+  一件一刀，每刀按 T22 那刀的规格交：公开面不减 · 消费点不动 · 等价判据（规范化后逐单元比）· 窄变异各红在指定档
+· 这一节不承诺做完（该拆 15 件 ≈ 15 刀）：表先给你过一眼，认哪几件就拆哪几件；"留"那 5 件如果不服，说一声我重判
+
 ## 验收标准
 
 - [x] 第一节七条全部做完或明确转入第二节（附理由），没有第三条状态
       · 第一节（`### 一、` 到 `### 二、` 之间）未勾 0 条 / 已勾 7 条 = 结清。
-        第二节不写条数（上一版在这里钉了"10 条 / 4 条"，本刀收尾一勾账它当场变假）。现查命令：
-        `awk '/^### 二、/,/^## 验收标准/' specs/03-structural-debt/spec.md | grep -c '^- \[ \]'`
+        第二节不写条数（上一版在这里钉了"10 条 / 4 条"，本刀收尾一勾账它当场变假）。现查命令（区间取到
+        第三节标题为止，否则会把第三节新登记的欠账算进第二节的结账单）：
+        `awk '/^### 二、/,/^### 三、/' specs/03-structural-debt/spec.md | grep -c '^- \[ \]'`
         （这条命令跑出来的就是当前真数，不在这里钉：T22 结账之后它已经是 0，
         把 `\[ \]` 换成 `\[x\]` 得已勾数 —— 两个数都不写进文档）
         （方括号必须转义：`grep -c '^- [ ]'` 在 POSIX 字符类里只匹配一个空格，
@@ -658,7 +719,8 @@
         `DESIGN.md` 的规范语义未动（T13 三答里那条"日志闭合形态 (b)"因此**没做**，只登记）；
         没有 push、没有 force、没有 hard reset、没有动用户数据目录
       · 条数不写在这里（原句写着"九条"，登记 T17 之后就漂成十条 —— 正是本页禁止的那种数）；
-        现查 = `grep -c '^- \[ \]' specs/03-structural-debt/spec.md`
+        现查 = `awk '/^### 二、/,/^### 三、/' specs/03-structural-debt/spec.md | grep -c '^- \[ \]'`
+        （区间必须截到第三节：第三节的 T23/T24/T25 是**没做完的**，混进这张结账单就读成假账了）
 
 ## 按批验收清单（T14 的交付物）
 
