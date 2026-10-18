@@ -85,6 +85,19 @@ export function clip(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
 
+/** 文件名摘引（§3.18 折叠行）：超长时**中段省略、保住扩展名**
+ * （`permission-model-rewrite.ts` → `permission-mo…e.ts`）。与 `clip` 的差别只在
+ * 尾部——切尾会把 `.ts` 吃掉，而文件类型正是折叠行里"这是什么文件"的唯一线索。
+ * 无扩展名（或未超长）时退化为普通截断。 */
+export function clipName(name: string, n: number): string {
+  if (name.length <= n) return name;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot) : "";
+  const head = n - ext.length - 1;
+  if (head < 1) return clip(name, n);
+  return name.slice(0, head) + "…" + ext;
+}
+
 /** 时长人类呈现（§3.7 头行 / §3.10 子 Agent 卡共用一把尺）：`36s` /
  * `1m 6s` / `1h 2m`。 */
 export function formatDuration(ms: number): string {

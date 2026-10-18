@@ -12,9 +12,11 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Icon } from "../../lib/icons";
 import ProcessRow from "./ProcessRow.vue";
+import FileIcon from "./FileIcon.vue";
 import ToolDetailView from "./ToolDetailView.vue";
 import { toolDiffStats, toolImageAssets } from "../../lib/tool-summary";
-import { toolKind, toolDescribe } from "../../lib/tool-detail";
+import { toolView } from "../../lib/chat/render-matrix";
+import { toolDescribe } from "../../lib/tool-detail";
 import { formatDuration } from "../../lib/format";
 import { assetRead, assetSaveAs } from "../../lib/api";
 import { useToastStore } from "../../stores/toast";
@@ -77,9 +79,15 @@ const expanded = ref(false);
  * 都背着这些隐藏子树卡）；首次展开一次性渲染，此后保 DOM 秒开。 */
 const everExpanded = ref(false);
 
-const kind = computed(() => toolKind(props.item.tool));
-const typeLabel = computed(() => t(`tool.type.${kind.value.type}`));
+const view = computed(() => toolView(props.item.tool));
+const typeLabel = computed(() => t(`tool.type.${view.value.verb}`));
 const desc = computed(() => toolDescribe(props.item.tool, props.item.args));
+/** 行内语言图标认的那个文件（工具 args 里的 path/file/key；取不到不渲染图标）。 */
+const filePath = computed(() => {
+  const a = props.item.args as Record<string, unknown> | null;
+  const p = a?.path ?? a?.file ?? a?.key;
+  return typeof p === "string" ? p : "";
+});
 
 /** 写/编辑类行描述尾的变更统计（取不到不渲染，不虚构）。 */
 const diff = computed(() =>
@@ -127,14 +135,17 @@ function onToggle() {
 <template>
   <div class="tool">
     <ProcessRow
-      :icon="kind.icon"
+      :icon="view.icon"
       :type="typeLabel"
       :expanded="expanded"
+      :foldable="view.fold === 'always'"
       :title="desc"
       @toggle="onToggle"
     >
       <template #desc>
-        <span class="tool__desc">{{ desc }}</span>
+        <span class="tool__desc">
+          <FileIcon v-if="filePath" :path="filePath" />{{ desc }}
+        </span>
         <span v-if="hasDiff" class="tool__diff">
           <template v-if="diff.added !== undefined || diff.removed !== undefined">
             <span class="tool__add">+{{ diff.added ?? 0 }}</span>
@@ -216,6 +227,10 @@ function onToggle() {
   flex-direction: column;
   gap: var(--lw-gap-8);
   min-width: 0;
+}
+/* 语言图标与文件名的间距（图标是行内元素，吃不到 flex gap） */
+.tool__desc :deep(.ficon) {
+  margin-right: var(--lw-gap-4);
 }
 .tool__diff {
   display: inline-flex;

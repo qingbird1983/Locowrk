@@ -1,26 +1,41 @@
 <script setup lang="ts">
 /**
- * 过程行共享五列栅格（UI shell doc §3.8 v4.13，《Tool Execution Process
- * Display》：图标 20px / 类型 38px（v4.15 用户目测定案，原文 64px；最宽
- * 类型词「子代理」三字 ≈37.5px 恰容纳）/ 描述 1fr / 状态 80px / 展开三角 24px，
- * CSS Grid 实现——思考行（§3.9）与工具行（§3.8）同吃一套列轨，所有行的
- * 同列严格对齐。行 = 真 <button>（aria-expanded、键盘可达）；三角默认
- * opacity 0，行 hover / 键盘聚焦淡入且列恒占位（悬停不位移）；描述单行
- * 省略；状态右对齐。明细体不在本组件——行展开只是追加缩进子行（各消费
- * 方自己 v-show，竖线层级在消费方），展开不换布局。
+ * 过程行共享行壳（《Conversation Flow Rendering Spec v1.md》§6.2）：
+ * flex 顺排六段 = 图标(14) / 类型词 / 摘要(1fr) / 元信息 / 状态 / 三角，
+ * 思考行（§3.9）与工具行（§3.8）同吃一条行壳。
+ *
+ * 从 v4.13 五列栅格（20/38/1fr/80/24）退役而来：栅格能保证跨行同列对齐，
+ * 但代价是类型词被定宽（最宽「子代理」≈37.5px 倒推），加不进语言徽章
+ * 也换不了摘要形态；设计稿 §附录 A 取 flex（Claude 与 ZCode 都是 flex）。
+ *
+ * 图标位恒为**单色语义字形**（行首的铅笔 / 放大镜 / 终端）。语言 logo 不在这
+ * 一段——它跟在文件名的前面（用户 2026-10-18 参考图裁定：两者并存，不是二选一），
+ * 由消费方在 `#desc` 槽里放 `FileIcon`。
+ *
+ * 行 = 真 <button>（aria-expanded、键盘可达）；三角恒占位，行 hover / 键盘聚焦
+ * 淡入（悬停不位移）；`foldable === false` 的身份（notify / browser_open /
+ * dev_echo）三角 `aria-disabled` 且不响应点击。明细体不在本组件——展开只是
+ * 追加缩进子行，各消费方自己 v-show。
  */
 import { Icon, type IconName } from "../../lib/icons";
 
-defineProps<{
+const props = defineProps<{
   icon: IconName;
   /** 类型词（i18n 后缀由调用方翻好传入）。 */
   type: string;
   expanded?: boolean;
+  /** 缺省 true；false = 该身份不可折，三角占位但不响应（设计稿 §5.3）。 */
+  foldable?: boolean;
   /** 展开整行的原生 title（描述省略时的完整摘要）。 */
   title?: string;
 }>();
 
-defineEmits<{ toggle: [] }>();
+const emit = defineEmits<{ toggle: [] }>();
+
+function onClick() {
+  if (props.foldable === false) return;
+  emit("toggle");
+}
 </script>
 
 <template>
@@ -29,30 +44,33 @@ defineEmits<{ toggle: [] }>();
     type="button"
     :aria-expanded="expanded ?? false"
     :title="title"
-    @click="$emit('toggle')"
+    @click="onClick"
   >
     <span class="prow__icon"><Icon :name="icon" :size="14" /></span>
     <span class="prow__type">{{ type }}</span>
-    <span class="prow__desc"><slot name="desc" /></span>
-    <span class="prow__status"><slot name="status" /></span>
-    <span class="prow__chev">
-      <Icon :name="expanded ? 'chevronDown' : 'chevronRight'" :size="12" />
+    <span class="prow__desc">
+      <span class="prow__name"><slot name="desc" /></span>
+      <span v-if="$slots.tail" class="prow__tail"><slot name="tail" /></span>
+    </span>
+    <span v-if="$slots.meta" class="prow__meta"><slot name="meta" /></span>
+    <span v-if="$slots.status" class="prow__status"><slot name="status" /></span>
+    <span class="prow__chev" :aria-disabled="foldable === false || undefined">
+      <Icon :name="expanded ? 'chevronDown' : 'chevronRight'" :size="14" />
     </span>
   </button>
 </template>
 
 <style scoped>
 .prow {
-  display: grid;
-  /* 五列栅格（§3.8 表）：图标/类型/描述/状态/三角——列宽恒定即全表对齐 */
-  grid-template-columns: 20px 38px minmax(0, 1fr) 80px 24px;
+  /* flex 六段（§6.2）：段宽随内容，摘要吃剩余 */
+  display: flex;
   align-items: center;
-  column-gap: var(--lw-gap-6);
+  gap: var(--lw-gap-6);
   width: calc(100% + 6px);
   margin-inline: -3px;
   padding: 4px 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值4/3,§二⑬) */
   border-radius: var(--lw-r-xs);
-  font-size: var(--lw-fs-12half);
+  font-size: var(--lw-fs-ui-base);
   line-height: 1.3;
   color: var(--lw-ink-2);
   text-align: left;
@@ -66,40 +84,60 @@ defineEmits<{ toggle: [] }>();
 .prow__icon {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  /* v4.14 第 2 层统一次要色：文字与图标同色，不再分层灰 */
+  flex: none;
   color: var(--lw-ink-2);
 }
 .prow__type {
-  color: var(--lw-ink-2);
+  flex: none;
+  color: var(--lw-ink-3);
+  font-size: var(--lw-fs-ui-sm);
   font-weight: 500;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .prow__desc {
+  display: flex;
+  align-items: center;
+  gap: var(--lw-gap-4);
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.prow__name {
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--lw-ink-2);
+}
+.prow__tail {
+  flex: none;
+  color: var(--lw-ink-4);
+  font-size: var(--lw-fs-ui-sm);
+}
+.prow__meta {
+  flex: none;
+  color: var(--lw-ink-3);
+  font-size: var(--lw-fs-ui-sm);
+  font-variant-numeric: tabular-nums;
 }
 .prow__status {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 5px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值5,§二⑬) */
-  min-width: 0;
+  flex: none;
   white-space: nowrap;
-  font-size: var(--lw-fs-12);
+  font-size: var(--lw-fs-ui-sm);
   color: var(--lw-ink-2);
 }
-/* 展开三角：恒占位 24px 列，hover/键盘聚焦才显形（§3.8 红线：不位移） */
+/* 展开三角：恒占位，hover/键盘聚焦才显形（§3.8 红线：不位移） */
 .prow__chev {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  color: var(--lw-ink-2);
+  flex: none;
+  color: var(--lw-ink-3);
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }

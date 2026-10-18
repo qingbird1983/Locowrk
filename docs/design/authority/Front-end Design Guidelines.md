@@ -126,6 +126,7 @@
 
 - 唯一公式 = **胶囊 `--lw-r-full` + 10.5px/500 + 状态色 16% 底同色字**；中性 = wash-3 底 + 次字色。
 - tint 档位只留 **16%** 一档（现状 danger 7/8/10/16% 四档全并）；「已安装」徽章改胶囊。
+- **文件语言徽章**（对话流过程行专用，与上面那套胶囊并列而不是其中一档）：14×14 见方、**无底无框**，直接用素材自带的语言 logo（`desktop/public/file-icons/*.svg`，颜色写在 svg 的 `fill` 属性里）。判定按**扩展名逐级回退**（`lib/file-icons.ts::resolveFileIcon`：整名 alias → 扩展名 alias → 扩展名同名 → `document`）。它紧跟文件名之前，**不与行首的语义图标合并**（用户 2026-10-18 参考图裁定：铅笔/放大镜与语言 logo 并存）。素材来源与许可见 `desktop/public/file-icons/ATTRIBUTION.md`，形态豁免见 §七。
 
 ### ⑨ 分组标题与次要文字
 
@@ -273,6 +274,7 @@
 | 守夜倒计时条 ×2（PermissionCard/AskCard）+ 队列行 li（QueueCard）+ toast 正文溢出提示（ToastStack）保留原生 title | 包裹层会抢走 `position:absolute` 细条的定位锚点 / 压缩 `li` 全宽点击区 / 整条气泡包 HoverTip 破坏 flex 布局——HoverTip 化必破版式 | 批③（2026-10-06）静态复核 |
 | 浮层"关掉谁"三种写法并存：`emit("close")`（所有权在父）/ 写本地 `open` ref / 遮罩 `@pointerdown.self` | 由渲染归属决定——`RowMenu`、`NotificationPopover`、`DefaultModelMenu` 由父组件 `v-if` 渲染，本地根本没有 ref 可写；两个对话框走遮罩。**"怎么关"是真语义差，不许为统一而塞一组开关**；共用的是 Esc 那两半：判定（`lib/use-popover.ts::escHandler`）与优先级（`anyLayerOpen`，见 §二③） | 台账 T10 逐站取证（2026-10-18） |
 | `RowMenu` 光标坐标开层 + 两步 `keepOpen` 确认；`SettingsSelect`/`RowMenu` 自持整套键盘链（焦点回还 / ↑↓ / Enter / `stopPropagation`） | 右键式上下文菜单与可搜索列表的固有交互；族 A 那个"两个 ref + 冒泡 + 写本地 ref"的形状承载不了，硬合并会先把"一次按键只做一件事"打散。**订正（T10 收尾）= 这条豁免只覆盖"整套方向键链"，不覆盖 Esc**：`RowMenu` 开层时焦点不进层（`focusActive()` 只在按过方向键后才调），元素级 Esc 接不到键 ⇒ 已补 document 级 `useDismissOnEsc`；`SettingsSelect` 的 `openList()` 在 nextTick 里 `pop.focus()`，焦点在层内 ⇒ 元素级那份真能吃到键，**不补** document 监听（补了就是同一件事两个出处） | 同上 + T10 实施时实测 |
+| 文件语言徽章用素材自带的彩色 logo（绕开 §二⑪ 的 `currentColor` 单色） | 语言 logo 的可辨识性就在它的形状与颜色里：单色化之后 `.rs` 与 `.ts` 无从区分，等于把这个功能本身删掉 | 用户 2026-10-18 裁定 · 设计稿 §2.2 |
 
 ## 八、暂定值（缺省按推荐生效，报编号即翻案）
 

@@ -6,7 +6,7 @@
  * `stripCommandWrapping` 的实现在 `lib/tool-args.ts`（v2.168 批 F-18 收成一份），这里只调它。
  * ⚠ 那句外层 `clip` 冗余是**改前既有形态**，注释里已登记 F6 顺带发现，本刀逐字保住不动它。 */
 
-import { clip } from "../format";
+import { clip, clipName } from "../format";
 import { stripCommandWrapping } from "../tool-args";
 // ---------------------------------------------------------------------------
 // 折叠行描述（一句话 ≤40 字，单行省略）
@@ -64,7 +64,8 @@ export function toolDescribe(tool: string, args: unknown): string {
   if (tool.startsWith("memory_")) return clip(str(a, "key", "query"), 32);
   if (tool.startsWith("fs_") || tool.startsWith("edit_")) {
     const p = str(a, "path", "file", "key");
-    if (p) return clip(baseName(p), 32);
+    // 中段省略保扩展名（旧 `clip` 会把 `.ts` 切掉，折叠行就看不出文件类型了）
+    if (p) return clipName(baseName(p), 32);
   }
   if (tool.startsWith("git_")) return clip(str(a, "repo") || (Array.isArray(a.args) ? a.args.filter((v) => typeof v === "string").join(" ") : ""), 32);
   // 兜底：第一个有信息量的原始值

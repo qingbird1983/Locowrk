@@ -96,6 +96,7 @@ t_gates() {
   run "事件通道"     node scripts/check-channels.mjs
   run "同源对账"     node scripts/check-single-source.mjs
   run "库表两侧对账" node scripts/check-schema-parity.mjs
+  run "渲染矩阵"     node scripts/check-render-matrix.mjs
 }
 
 t_selftest() {
@@ -103,6 +104,7 @@ t_selftest() {
   run "同源对账自测" node scripts/check-single-source.mjs --selftest
   run "库表对账自测" node scripts/check-schema-parity.mjs --selftest
   run "文档规则自测" node scripts/check-docs.mjs --selftest
+  run "渲染矩阵自测" node scripts/check-render-matrix.mjs --selftest
 }
 
 t_doc() {
