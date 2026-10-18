@@ -1,7 +1,7 @@
 # 08-对话流：产出物与文件页签
 
 > 状态：**开工中**（2026-10-18 开页，三条待裁已按推荐案裁定）。上游 = [`specs/06-chat-flow-rendering/spec.md`](../06-chat-flow-rendering/spec.md)
-> 的「接线欠账 WF-01…WF-05」+ 你 2026-10-18 追加的两条：「点击图片，右边打开图片」「点击 html，浏览器打开」。
+> 的「接线欠账 WF-01…WF-05」+ 你 2026-10-18 追加的三条：「点击图片，右边打开图片」「点击 html，浏览器打开」「点子代理，右栏展开」。
 > 对应阶段清单那一行 = `docs/roadmap/README.md` 的「对话流：产出物与文件页签」。
 
 ## 目标
@@ -28,6 +28,7 @@
 | 展开体代码块（`ToolDetailView.vue` 的 `code` 块） | 有语言标记与复制钮 | 文件名 / 块头点不开 |
 | diff 卡行号（`ToolDetailView.vue` 的 `.tdetail__diff`） | 无点击 | 不能跳到右栏对应行 |
 | 缩略图（`ToolRow.vue:70` 与 `MessageRow.vue:73` 的 `viewer.openAsset(a)`） | 开全屏浮层 `ImageViewer.vue` | 右栏没有图片面 |
+| 子代理步骤行（`ToolRow.vue` 的整行） | 只有**展开体里**的「查看完整对话」按钮开得了右栏（`ToolDetailView.vue:134` → emits `openTranscript`）；整行点击无反应（`fold: never` 的行连折叠都不响应） | 整行没有点击面 |
 | 右栏页签族（`desktop/src/stores/work-panel.ts:20`） | 只有 `"subagent" \| "review" \| "browser"` | 没有 file / image 两类 |
 | 后端读文本的入口（`desktop/src-tauri/src/lib.rs` 的 `generate_handler!`） | 只有 `asset_read`（按资产 id 读） | **没有「按路径读文本」的命令** |
 | 网页预览 | **基建已在**：`desktop/src/lib/preview-url.ts` 的 `previewUrlFor(absPath)` → `http://lwpreview.localhost/<逐段编码>`，Rust 侧 `browser::preview` 解这个协议（相对引用落回同目录） | 工具行里的 `.html` 没有点进去的入口 |
@@ -104,12 +105,14 @@ FileTextDto { path: String, bytes: u64, text: String, truncated: bool, binary: b
 - [ ] **AC-9** 形态唯一：`scripts/check-style.mjs` 0 报；新页签的落点写进标准 §七 登记。
 - [ ] **AC-10** `sh scripts/tasks.sh gates` + `check-docs` + 前端四闸（vue-tsc / stylelint / check-style / vitest）全绿。
 - [ ] **AC-11** 真实窗口逐个目视，交付说明写「打开哪、点哪、该看到什么」。
+- [ ] **AC-12** 点子代理步骤行的**整行** → 右栏开子代理签（`wp.tabs` 里 `kind: "subagent"` 且被激活）；
+      展开体里的「查看完整对话」按钮保留（两条路都通，不互相顶掉）。
 
 ## 任务（分批，每批一个提交）
 
 - [ ] 批 1 后端 `file_read_text` + 三条单测
 - [ ] 批 2 页签骨架：两个 kind + `FileTab.vue` / `ImageTab.vue` + `WorkPanel.vue` 分派与页签图标 + `artifact-routing.ts`
-- [ ] 批 3 接线 WF-01 / WF-02 / WF-05（含 `ProcessRow.vue` 去 button 化）
+- [ ] 批 3 接线 WF-01 / WF-02 / WF-05 / WF-04（子代理整行可点 → 右栏；含 `ProcessRow.vue` 去 button 化）
 - [ ] 批 4 接线图片（缩略图 → 右栏签）与 `.html`（→ 浏览器签）；全屏入口保留
 - [ ] 批 5 收口：标准 §七 登记新形态、i18n 中英成对、闸全绿、真实窗口目视
 
@@ -126,7 +129,7 @@ FileTextDto { path: String, bytes: u64, text: String, truncated: bool, binary: b
 | `desktop/src/components/shell/FileTab.vue` | 新建 |
 | `desktop/src/components/shell/ImageTab.vue` | 新建 |
 | `desktop/src/components/chat/ProcessRow.vue` | 整行去 `<button>`，支持内嵌可点元素 |
-| `desktop/src/components/chat/ToolRow.vue` | 文件名可点；缩略图改开右栏签 |
+| `desktop/src/components/chat/ToolRow.vue` | 文件名可点；缩略图改开右栏签；子代理整行 → 右栏子代理签 |
 | `desktop/src/components/chat/MessageRow.vue` | 消息图改开右栏签 |
 | `desktop/src/components/chat/ToolDetailView.vue` | 代码块头、diff 行号可点（emits 上抛） |
 | `desktop/src/components/ChatTranscript.vue` | 接新 emits → store |

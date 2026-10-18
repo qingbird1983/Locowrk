@@ -48,4 +48,4 @@ export type {
 
 export type { CatalogModelInfo, CatalogStatus, ImportApplyReport, ImportCandidate, ImportScanOutcome, LlmSettingsView, LlmUpdate, ModelTestResult, ProbeOutcome, ProviderInput, ProviderModelPricing, ProviderModelSources, ProviderModelView, ProviderModels, ProviderView, SubagentPin } from "./llm";
 
-export type { AssetRefDto, ContentPartDto, IdleInfo, InstalledPlugin, MarketplaceItem, PluginStateChange, PluginUsageView, PluginsUpdate } from "./plugins";
+export type { AssetRefDto, ContentPartDto, FileTextDto, IdleInfo, InstalledPlugin, MarketplaceItem, PluginStateChange, PluginUsageView, PluginsUpdate } from "./plugins";
