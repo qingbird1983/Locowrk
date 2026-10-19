@@ -2,9 +2,12 @@
 
 - 状态：**进行中 · S1 已做到刀④d 且两轮真窗口实测过（刀①②a②b-1/-2/-3②c-1/-2③a③b-1/-2
   ④a④b④c④d 全 ✅，只剩三件：真删与"删后下一会话看不见"那两发读数、AC-S1-2 库改名那一次、
-  ②c-2 学习档那一格等点头）；**S2 已开工** =
-  [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)（三处待定项 2026-10-19
-  全定，刀① 锚点与有效阈值搬家已 ✅，刀②-⑦ 待做）**（方案定稿 2026-10-17 · 压缩侧层序 2026-10-18 核对后重定 ·
+  ②c-2 学习档那一格等点头）；**S2 压缩面全线收口** =
+  [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)（刀①…⑦b 十二条验收全绿
+  + 收口后追加的刀⑧）；**S3 注入面已开工** =
+  [`specs/10-context-injection-s3`](../10-context-injection-s3/spec.md)（2026-10-20 现状取证成稿，
+  四刀计划 + 三处待定项**等你点头才动代码**；S2 账 ⓟ 由决策人同日指令并进去、不单立一刀）**
+  （方案定稿 2026-10-17 · 压缩侧层序 2026-10-18 核对后重定 ·
   ADR-0007 已成文并提交）。开工闸原写"`specs/03-structural-debt` 线完成后再启动"，
   由用户 2026-10-18 指令改为**先转本线、拆分层暂停**
 - 负责人：青鸟（定目标形态） / Qoder（取证 + 实现）
@@ -84,7 +87,7 @@
 | --- | --- | --- | --- |
 | S1 数据面 | **施工 spec 已开 = [`specs/05-memory-data-plane-s1`](../05-memory-data-plane-s1/spec.md)**（2026-10-18 现状取证后重写范围：文件库与索引已在，S1 做的是把"sqlite 真源 + md 镜像"扳成 md 唯一真源，四类型与排除清单补进 frontmatter 与提示词，`obsolete/` 软删，存量导出改道） | 无 | A / E |
 | S2 压缩面 | **施工 spec 已开 = [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)**（2026-10-19 现状取证：压缩本体已随审计批 C 删除、只剩 `CompactionOutcome` 与 `ContextCompacted` 重放链两件活物，而占用锚点与自动收起现在长在 S4 要退役的 `organize/` 里 ⇒ 第一刀是搬家不是新建）；主层深度压缩（模板 / 续接框架 / 熔断）+ 落盘 + 微压缩 + 滑窗保护网 + 阈值接线 + `ContextCompacted` 复用 + 设置项；**刀① ✅ 2026-10-19**（锚点与有效阈值搬进 `context_budget`，判据 `SS16a/b/c`） | 无（可与 S1 并行） | B |
-| S3 注入面 | 索引注入替换 + guidance 改写 + 预取键适配 | S1 | C |
+| S3 注入面 | **施工 spec 已开 = [`specs/10-context-injection-s3`](../10-context-injection-s3/spec.md)**（2026-10-20 取证六条实况写在那份 spec 里：五个段的现组装点、`learnEnabled` 那档是**残留的第二真源**、全局 `MEMORY.md` 从未进过注入面、预取键不含 mtime、`<repo_context>` 至今是静态串、占用读数两制并存）；内容 = 索引注入替换 + guidance 改写 + 预取键适配（+ S2 账 ⓟ 并进来那一刀） | S1 | C |
 | S4 退役面 | organize 管线 / 树工具族 / sqlite 读路径下线（数据冻结），`/整理` 去向落地 | S1+S2+S3 稳定一轮 | D |
 | S5 收尾 | `docs/design/authority/` 五篇重写合一 + ADR 定稿 + roadmap 勾选 | S4 | — |
 
@@ -98,9 +101,13 @@
 - [x] S1 落地：布局 + frontmatter/索引读写 + 工具改道 + 存量导出 + 管理页改道
       （刀①…④d 全 ✅，2026-10-19 两轮真窗口实测过；剩三件见
       [`specs/05`](../05-memory-data-plane-s1/spec.md) 状态行）
-- [ ] S2 落地：方案稿 B 节那四条"容易漏的实证"必须逐条进实现与判据
-      ——**开工前置已完成**：`specs/09` 那份取证节把四条实证的落点逐条对上现状代码，
-      其中第 3 条（窗口取不到时走哪边）现在就是"没决定"的状态 ⇒ 列成 spec 里第一处待点头
+- [x] S2 落地：方案稿 B 节那四条"容易漏的实证"必须逐条进实现与判据 ✅ 2026-10-20
+      ——**实况订正（本父 spec 此前停在开工口径）**：四条实证逐条对上现状代码后落进
+      `specs/09` 的取证节与刀①–⑧，**S2 十二条验收全绿、这条线已收口**（刀⑧ 补掉 ⓜ 的
+      自锁那一半）；"窗口取不到时走哪边"那处待点头已由裁定 A 落进
+      `context_budget::effective_threshold` 的 `None` 分支
+- [ ] S3 落地：交施工 spec 等确认 = [`specs/10-context-injection-s3`](../10-context-injection-s3/spec.md)
+      （2026-10-20 取证成稿：四刀计划 + 三处待定项，其中 ⓟ 归刀④）；**过完才动代码**
 - [ ] 补测试 → `make check` 全绿
 - [ ] 数据侧改动前把相关目录复制进备份目录
 
