@@ -637,6 +637,44 @@
 输入框内容原样留着、`sessions/` 零新写入（所以不是"发出去没记"，是没发出去）。
 ⇒ 交给你动手那一条，判读清单在汇报里。
 
+### 推上去之后 CI 报的两条红（同日订正 · 跨平台性质）
+
+`origin/main` 推到 `7b33f5d` 之后，CI run 39187445795：**hygiene ✓**（上一轮红的那条
+R10 已消，干净 clone 面本地也复现过）、**desktop ✓**，**kernel ✗** 两条：
+`memlayout::tests::obsolete::a_blocked_layer_is_an_error_not_a_missing_fact` 与
+`memlayout::tests::write_delete::deleting_into_a_blocked_layer_errors_instead_of_claiming_absence`。
+
+两条都红在**断言文案那一行**（`e.contains("层不是目录")`），不是红在"没报错"——报错发生了，
+只是 Linux 报的是另一句。根因：这两条性质在两个平台上读的不是同一个码，POSIX 对"路径中间有
+一段是普通文件"给 `ENOTDIR`，Windows 把它折叠成 `ERROR_PATH_NOT_FOUND`，而后者与"文件不存在"
+**同一个码**；实现原先只在 `is_not_found` 那一条支里顺手看一眼父目录 ⇒ Windows 命中、
+Linux 落到通用 Err 支。**测试头注里写着要防的正是这件事，但防的方向对了、落点选错了**：
+拿错误码当判据，就注定两侧不一样。
+
+修法（`7cbc1b7`）：不是给测试加平台标记（AGENTS §7 明令跨平台性质不许 `#[cfg]` 单侧跳过），
+也不是放宽那句 `contains`（那是把差异塞进测试）——让判定**不读错误码、读磁盘事实**：
+`remove_file` / `rename` 一失败，先看父路径在场且不是目录 ⇒ 同一句「层不是目录」，两平台
+同文案；不是 ⇒ 再按"确实不存在"（幂等 `Ok(false)`）或真 IO 错误分流。**顺序是承重的**：
+层级故障那一条必须先判，否则 Windows 上它会被"不存在"那条吞掉（那正是改前的形状）。
+
+| 取证面 | 命令 | 读数 |
+| --- | --- | --- |
+| Windows（本机） | `cargo test -p plugin-api` | **103 passed**，含那两条 |
+| Windows 全量 | `sh scripts/tasks.sh check` | 全绿：43 套件 **1194 条** + vitest 24 文件 181 条 |
+| Linux（本机 WSL Ubuntu-24.04，新 clone `7cbc1b7`） | 先 `build_plugins.sh`（10 个 `.so`）+ `build_market.sh`（2 个），再 `cargo test --workspace` | **rc=0** · 40 套件 · **581 passed** · `test result: FAILED` 0 处；那两条定点重跑都是 `ok` |
+
+⚠ 两轮自纠都留在这儿，因为它们都是**取证方式**的错而不是代码的错：
+① 前一轮脚本写成 `cargo test --workspace | tail -40`，那个 `RC=0` 是 `tail` 的退出码
+（AGENTS §2 纪律第 1 条在本仓第三次咬人）——它从来没有证明过任何事；这一轮改成完整落盘、
+退出码单独取。② 两侧 `--list` 用例清单逐行比过：差的 3 条是 `wskey` 那族平台专属用例
+（Linux 有 `posix_never_folds_case…`，Windows 有 `windows_collapses_case…` 与
+`missing_and_existing_projects_agree…`）加一处路径分隔符的显示差异，**不是漏跑**；
+581 与 1194 的差 = Linux 侧不含 `desktop/src-tauri` 那个独立包（CI 同口径，见 `ci.yml` 作业注释）。
+
+⚠ 这一格的红字是**第二轮才发现的**：上一轮 CI 红在 hygiene（16 秒就退），kernel 作业当时是
+绿的——因为那两条测试是刀④a/④c 写的，而那三刀从没 push 过。"CI 绿"在这仓里一直是
+**上一次推的东西**绿，不是当前 HEAD 绿；本地领先 45 个提交时，这个差别就是这一格。
+
 ## 验收标准（跑什么、看到什么）
 
 - [ ] AC-S1-1 写路径唯一：工具或管理页写一条记忆 → 数据根只新增 1 个 `.md` + 索引多 1 行；
