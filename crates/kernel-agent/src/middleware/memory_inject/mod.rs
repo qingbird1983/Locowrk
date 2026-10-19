@@ -13,12 +13,14 @@
 //! 的是"这个项目/这个用户记过哪些条"，正文照旧按需读——也正是 MR 稿 §0 那条真实失败的
 //! 对症件（注入面三重盲：库里有货而模型不知道有货）。
 //!
-//! 链位（§3.6；v2.139 提示词分层设计 §6 重排）：ToolExposure（⑫）→
-//! BaseSystemInject（静态身份层 = system 前缀）→ **Memory-Inject** →
-//! 思考语言 → 树目录（殿后）——静态段在前、动态块追加，append-only
-//! 目录永远最后。上下文压缩件（ctx-compact）自 v2.137 桌面链退役、并随
-//! 审计修复批 C 删除本体（headless 侧其实从未注册过它），节奏改由记忆树
-//! 的整理边界承担。
+//! 链位（§3.6；v2.139 提示词分层设计 §6 重排；**S3 刀③a 去掉殿后那一环**）：
+//! ToolExposure（⑫）→ BaseSystemInject（静态身份层 = system 前缀）→
+//! **Memory-Inject** → 思考语言 → 指令文件 → 碎片。静态段在前、动态块追加；
+//! 原先排在最后的树目录段（TreeDirectoryInject）随 §C 退役，所以
+//! **本环之后仍有静态段**（指令文件层），"目录增长只动尾部"那条前缀论证
+//! 一并移交——它的前提（尾部只有目录）不再成立，见 `prompt_layering.rs` 的订正。
+//! 上下文压缩件（ctx-compact）自 v2.137 桌面链退役、并随
+//! 审计修复批 C 删除本体（headless 侧其实从未注册过它）。
 //!
 //! 系统提示永不压缩（§5.3 冲突 2）由结构保证：记忆写在消息列表之外的
 //! `system` 字段里，任何改写消息的决策方（历史上是 ctx-compact）都只动
@@ -75,33 +77,35 @@ pub const VALUE_INJECT_MAX_CHARS: usize = 500;
 /// 预取缓存上限（FIFO 驱逐最旧会话）：与 ToolExposure 钉死表同款保险丝。
 const PREFETCH_CAP: usize = 128;
 
-/// 主动记忆指引（F3 起随注入块尾；v2.139 按提示词分层设计 §5.2 改写；
-/// **Q2 · MR §4.4 增两句并给禁令开一个显式口子**）。
+/// 主动记忆指引（F3 起随注入块尾；**S3 刀③a 按 §C 与 §A③ 重写**）。
 ///
-/// 分工不变（v2.136 裁定）：write 侧保持主动（当场记，不等被问）；read 侧改按需。
-/// 两条 Q2 增句的由来 = MR 稿 §0 的实测动线：① 旧措辞「never as a way to
-/// start a conversation」被模型读成"关于过去的提问也别查"，于是用户问"查一下你
-/// 之前的记忆"时它**直接从注入上下文假设**、一个工具都不调 → 现在明确"用户显式
-/// 问过去/记忆时**必须查工具**"；② 事实层空是常态（0 行）而**树里真有货**，模型
-/// 查完 `memory_search` 落空就下结论"没有历史" → 现在明说"空结果 ≠ 没有历史，
-/// 项目历史在树里，先 `memory_project_history`"。
+/// 这一版管四件事，每件都对应一处实测漂移：① 索引段是**指针**，读正文有两条通路
+/// （`memory_read` 或按指针打开那篇文件）；② 写入时机与"优先更新既有 key"；
+/// ③ **排除清单**（§A③ 那四条：代码可推导的 / git 可查的 / AGENTS.md 与 `.Locowrk/`
+/// 已写的 / 手头上这一步的临时状态）——旧版一个字没提，于是模型会把"刚跑完哪个测试"
+/// 也记成事实；④ 空结果的语义换了指向（旧版写"项目历史在记忆树里，先调
+/// `memory_project_history`"，那三枚树工具是 §D 点名的退役物，S4 一拔这句就指空）。
 ///
-/// memory 注入关（`memory.enabled=false` / top_k=0）= 整块含指引一起缺席。
+/// ⚠ 判据 `SS28` 扫的就是这一段与两枚导语：§D 那四枚退役工具名不许再出现在注入面。
+///
+/// memory 注入关（`memory.enabled=false`）= 整块含指引一起缺席。
 /// 静态文本与块同吃预取缓存（M1 纪律不破）。
 const GUIDANCE_BLOCK: &str = "<memory_guidance>\n\
-     Proactive memory: when the user states a lasting preference or a durable \
-     decision is made, save it with memory_write on the spot (scope=\"global\" \
-     for standing preferences; project scope for durable project facts); \
-     prefer updating an existing key over near-duplicates. Reading memory is \
-     on-demand: use memory_read / memory_search only when the request touches \
-     past preferences, decisions, or project facts — don't probe memory \
-     unprompted as a way to start a conversation. When the user explicitly asks \
-     about past work or memories, query these tools instead of assuming from \
-     injected context. Empty results from memory_read / memory_search do NOT \
-     mean there is no history: project history lives in the memory tree — call \
-     memory_project_history first, and memory_search_titles for topics. Project \
-     working memory (.Locowrk/ files) you maintain with file tools; the repo \
-     context reminder says when.\n\
+     The two index sections above list what has been saved (global = holds across \
+     projects, project = this repo only); they are pointers, never bodies. Read a body \
+     on demand — memory_read(key=…) or open the file the pointer names — when the \
+     request touches past preferences, decisions, or project facts; don't probe memory \
+     unprompted as a way to start a conversation. When the user states a lasting \
+     preference or a durable decision, save it with memory_write on the spot \
+     (scope=\"global\" for standing preferences, project scope for durable project \
+     facts) and prefer updating an existing key over creating a near-duplicate. Not \
+     everything belongs in memory: skip what the code or git already answers (patterns, \
+     conventions, structure, who changed what), what AGENTS.md or .Locowrk/ already \
+     states, and the state of the task at hand (files touched, branch or test status, \
+     retries). An empty index means nothing was saved as a fact, NOT that there is no \
+     history: the project's current state lives in .Locowrk/MEMORY.md and its dated log \
+     in .Locowrk/journal/. When the user explicitly asks about past work, read those or \
+     query the tools instead of assuming from injected context.\n\
      </memory_guidance>";
 
 /// 一个会话的预取块（None = 首查即无记忆，也缓存避免每轮重查）。

@@ -1,6 +1,6 @@
 # 10-上下文注入面 S3（索引常驻、正文按需 + 占用读数一嘴到底）
 
-- 状态：**进行中 · 刀①② ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
+- 状态：**进行中 · 刀①②③a ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
   采纳，裁定结果记在下面「开工三问与裁定」那节；本文件是
   [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   **S3 注入面** 那一行的施工 spec；方案稿对应 = **§C**（+ §A④ 索引制、§F 交接层），
@@ -109,13 +109,17 @@
 - [ ] AC-S3-4 `<repo_context>` 换成读真实交接层：注入内文来自 `<repo>/.Locowrk/MEMORY.md`
       正文（不是静态串），文案不再点名 `handoff.md`；文件不存在时**整段缺席**而不是
       注入一句"还没有"。
-- [ ] AC-S3-5 指引改写不自相矛盾：`<memory_guidance>` 新文覆盖「写入时机 / 按需读文件 /
-      排除清单 / 空结果 ≠ 没历史」四要点，且**不出现** §D 点名退役的四个工具名与
-      "memory tree"承诺；判据 = 退役名清单 ↔ 提示词扫描面（配一发变异）。
-- [ ] AC-S3-6 树目录段移除不留死码：`TreeDirectoryInject` 从 `waterfall.rs` 摘除，
-      `prompt_layering.rs` 那两条用例按新形状订正（不许为过闸删断言）；被摘掉的
-      `recall_relevant` 通路上的 `memory_learn` 族、`terms.rs`、`learnEnabled` 设置格
-      **按要你定 ② 的裁定处置**，本仓审计报告那条「存在但从未接线」的判据不许再判到我们头上。
+- [x] AC-S3-5 指引改写不自相矛盾（✅ 2026-10-20 刀③a）：四要点全在场（排除清单四条是
+      旧版完全缺的那一格），§D 那四枚退役工具名与"memory tree"承诺在**交给模型读的文案面**
+      零命中；判据 = `SS28` 两段读数实测 `0|2`（① 退役名 0 / ② 新要点恰 2，防"删光文案
+      也算通过"），`make selftest` 给 `✓ SS28 变异可见`。
+- [ ] AC-S3-6 移除不留死码（**拆两半**）：① 树目录那半 ✅ 刀③a——`TreeDirectoryInject`
+      连定义带注册一并摘除；`prompt_layering.rs` 三条用例不是"删两条留一条"就完事：留下的
+      那条改证"静态身份段恒为 system 字节前缀"，被删那条的**纪律继承者**写进文件头注与
+      提交正文，`kernel/tests/tree.rs` 的断言反转成"plan() 交了目录也不许进上下文"。
+      ② 学习档那半待 ③b——`memory_learn` 族、`terms` 面（刀① 已走）、`learnEnabled`
+      设置格与后端字段按裁定同刀退役（影子库 `hit_count` / `last_hit_at` 两列留 S4）。
+      本仓审计报告那条「存在但从未接线」的判据不许再判到我们头上。
 - [ ] AC-S3-7 占用只有一个出处（ⓟ 本体）：界面分子与 `Compactor::used` **同一个函数**
       （新判据钉等值 + 双向变异：任一侧单独改尺即红）；构造"上一轮被超窗拒收"的会话态
       ⇒ 事件里的 `used` ≥ 拒收那颗数（这条就是 ⓟ 说的"失败期间停在旧数"的反证）。
@@ -149,8 +153,11 @@
    `<project_memory_index>` 两块下线；标签判据 + AC-S3-1/2。**施工记录见下面那节**。
 2. **刀② 缓存键与注入源** ✅ 2026-10-20：mtime 进预取缓存键（全局 + 项目 + 交接层三处指纹）；
    `<repo_context>` 从静态串改成读 `.Locowrk/MEMORY.md`；AC-S3-3/4。**施工记录见下面那节**。
-3. **刀③ 指引与退役段**：`<memory_guidance>` 改写；`TreeDirectoryInject` 摘除；
-   学习档按裁定处置；AC-S3-5/6。
+3. **刀③ 指引与退役段**（按上面那节清点拆成两步）：
+   **3a ✅ 2026-10-20** = `<memory_guidance>` 与两枚导语改写（补排除清单、空结果换指向、
+   去掉对退役树工具的承诺）+ `TreeDirectoryInject` 摘除 + 判据 `SS28` 新增 / `SS8c` 名单
+   显式改；**3b 待做** = 学习档族删除（`memory_learn/` 933 行 + 20 处触点 + 设置面与
+   前端那一格；影子库 `hit_count` / `last_hit_at` 两列留 S4）；AC-S3-5 ✅ / AC-S3-6 半。
 4. **刀④ 占用一嘴到底（ⓟ 归这一刀）**：`record_usage` 的分子改吃 `Compactor::used`
    （或两者共同下沉成一个函数）+ 拒收读数进 `ContextUsage` 载荷 + 扣减链上界面；
    AC-S3-7/8。
@@ -303,6 +310,43 @@ vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。首跑在 clippy 红过两条——
    各自跑绿各自提交；③b 里**影子库那两列不动**（属 S4 的 sqlite 退役面），本刀只摘
    生产引用与设置面，并把"列还在、没人读写"这一格如实登记。
 
+## 刀③a 施工记录（✅ 2026-10-20）
+
+**文案面**：`<memory_guidance>` 按 §A③ 重写，四件事各挡一处实测漂移——索引是指针、
+读正文有两条通路（`memory_read` 或按指针打开那篇文件）、写入时机与"优先更新既有 key"、
+**排除清单四条**（代码可推导的 / git 可查的 / `AGENTS.md` 与 `.Locowrk/` 已写的 /
+手头上这一步的临时状态；旧版一个字没提，于是"刚跑完哪个测试"也会被记成事实）、
+空结果的新指向（旧版写"项目历史在记忆树里，先调 `memory_project_history`"）。
+两枚导语末尾各写一遍的"空结果 ≠ 没历史"**收进指引说一次**——同一句话在两档导语里各说
+一遍就是双出处，而它跟"这一层是什么"是两件事。
+
+**摘除**：`middleware/tree_context.rs` 删除 + `middleware/mod.rs` 的 `mod`/`pub use` +
+`lib.rs` 导出 + `state/waterfall.rs` 那一环注册。`RequestPayload.tree_directory` 字段与
+`TreeContextSource::plan()` **一律留着**（理由见上面清点节第 1 条：它还管消息切片与
+树会话标记，生产者在 organize/ = S4 地盘）。
+
+**测试**：`prompt_layering.rs` 三条用例的对象都是那个监听器 ⇒ 留一条改写成
+`static_identity_stays_the_byte_prefix`（只证"静态身份段恒为 system 字节前缀"这半），
+另两条随道具删除，**纪律的继承者**（`memory_inject/tests/{prefetch,project_index}.rs`）
+写在文件头注里而不是悄悄消失。`kernel/tests/tree.rs` 那条改名成
+`tree_session_slices_to_tail_but_no_longer_injects_the_directory` 并把断言**反转**：
+FakeTrees 照旧交目录文本，用例现在证"有目录也不许进上下文"，同时保留
+`payload.tree_directory.is_some()` 那一格（marker 仍随 payload 走）；
+`directory_growth_keeps_system_prefix` 删除，原地留一段指路注释。
+
+**判据两处**：① `SS8c` 的链位名单从 7 条显式改成 6 条——这条判据本来就是为
+"改链位必须换人来改判据"而写死名单的，所以改动记在名单自己的注释里；顺手把描述里
+"链上七个注入环"那句数字删了（**描述与名单漂开过一回**，改成"条数由名单自己给"）。
+② 新增 `SS28`（扫描面 = 交给模型读的三份文案本体、剥行注释；① 四枚退役工具名与
+"memory tree" 零命中，② 排除清单句 + `.Locowrk/journal/` 新指向恰为 2 处——只挡退役名
+的判据会为"把整段文案删光"而绿，所以必须有正向在场那一半）。
+**首跑红的是判据自己**：第一版拿整句 `Not everything belongs in memory` 去比，实测恒 1，
+成因是源码里那句被 Rust 续行符 ` \` + 换行折断了 ⇒ 换成不被拆的片段，实测 `0|2`。
+两条变异在 `make selftest` 里都 `✓ 变异可见`。
+
+**门禁**：`make check` 末行 `▶ check 全绿`（内核 98 条 + 全部集成套件 / 宿主 712 条 /
+vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。
+
 ## 开工三问与裁定（2026-10-20 决策人「三问照推荐案，开跑」⇒ 三处全按推荐案落地）
 
 ① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）
@@ -337,7 +381,7 @@ vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。首跑在 clippy 红过两条——
 | --- | --- |
 | `crates/kernel-agent/src/middleware/memory_inject/{mod,contract}.rs` | 刀①：块形状与标签换成索引段（内核管标签、内容真源在宿主的分工不破）；刀②：缓存键 + mtime；刀③：`GUIDANCE_BLOCK` 改写 |
 | `crates/kernel-agent/src/middleware/memory_inject/terms.rs` | 刀① ✅ **已删除**（107 行，随唯一消费者 `recall_relevant` 调用点一起离场；`tests/learn.rs` 那 7 条同刀删，其中的 M1 承重迁进 `prefetch.rs`） |
-| `crates/kernel-agent/src/middleware/tree_context.rs` | 刀③：移除（`kernel.rs:216-227` 的 `tree_directory` 带入通路一并订正） |
+| `crates/kernel-agent/src/middleware/tree_context.rs` | 刀③a ✅ **已删除**（连同 `middleware/mod.rs` 声明、`lib.rs` 导出、`state/waterfall.rs` 那一环注册）；`RequestPayload.tree_directory` 字段与 `kernel.rs:215-227` 的 `plan()` 带入通路**留着**——它还管消息切片与树会话标记，生产者在 organize/（S4 面） |
 | `desktop/src-tauri/src/memory/{source,recall}.rs` `memory.rs` | 刀①：读面新增全局索引段；`recall_relevant` 摘除或保留按裁定 ② |
 | `desktop/src-tauri/src/memory_index.rs` | 刀①：全局段复用同一把钳（现在只钳项目段） |
 | `desktop/src-tauri/src/repo_context.rs` | 刀② ✅：`build()` 从静态串改成读 `.Locowrk/MEMORY.md` 正文 + 提醒行 + §F 双钳；`ensure_layout` 多写一份骨架；`HANDOFF`/`HANDOFF_MAX_*` 成常量；该簇 3 条用例（含反转掉的那条静态断言） |

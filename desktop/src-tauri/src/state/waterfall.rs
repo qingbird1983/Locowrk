@@ -125,14 +125,9 @@ pub(crate) fn build(init: Init) -> Stack {
         )),
     );
 
-    // M4 树目录注入（§3.38②）：system **真尾部**（append-only 殿后，其后
-    // 不再有静态段）。v2.137：ctx-compact 桌面链退役（用户裁定「上下文
-    // 根本不压缩了」，压缩语义由记忆树整理边界承担；headless 内核侧
-    // 中间件保留不动）。
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(kernel_agent::TreeDirectoryInject) as Arc<_>,
-    );
+    // S3 刀③a：树目录注入环（TreeDirectoryInject）已摘除——方案稿 §C 把这一段列为
+    // "随树整体退役"。`tree_directory` 字段与 `TreeContextSource::plan()` 仍留在组装侧
+    // （它还管消息切片与树会话标记，生产者在 organize/ = S4 的退役面），本线不提前动它。
 
     // 指令文件层（提示词分层设计 §4.3）：全局 <数据根>/AGENTS.md + 项目层三族候选
     // （AGENTS.md / CLAUDE.md / AGENTS.override.md，族内二选一、族间串联）→

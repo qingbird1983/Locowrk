@@ -371,13 +371,19 @@ function ringFiles() {
  * 分母（实现块数）也在剥注释后的文本上数，两侧口径必须同一个出处。
  */
 const RING_SHAPE = /impl\s+WaterfallListener\s+for\s+\w+/;
-/** 链位名单（提示词分层设计 §6）：注册序 = system 拼装序，SS8c 按此点名。 */
+/**
+ * 链位名单（提示词分层设计 §6）：注册序 = system 拼装序，SS8c 按此点名。
+ *
+ * ⚠ **S3 刀③a 显式改过这张名单**（摘掉 `TreeDirectoryInject` 那一环）。这条判据本来
+ * 就是为"改链位必须换人来改判据"而写死的，所以这次改动的账记在这里：树目录注入随
+ * 方案稿 §C 退役，`RequestPayload::tree_directory` 字段与 `TreeContextSource::plan()`
+ * 仍在（它还管消息切片与树会话标记，生产者在 organize/ = S4 退役面）。
+ */
 const RINGS = [
   'ToolExposure',
   'BaseSystemInject',
   'MemoryInject',
   'ThinkingLanguageInject',
-  'TreeDirectoryInject',
   'InstructionFilesInject',
   'FragmentInject',
 ];
@@ -574,7 +580,8 @@ const CHECKS = [
   ],
   [
     'SS8c',
-    '链上七个注入环**各自还在**（点名清单 = 提示词分层设计 §6 的链位序）。' +
+    '链上注入环**各自还在**（点名清单 = 提示词分层设计 §6 的链位序；条数由名单自己给，' +
+      '不在描述里写死数字——刀③a 摘掉一环时描述就与名单漂开过一回）。' +
       'SS8 数的是"接上取还形状的环数 = 实现块数"，一个环被整体改名/搬走时它分子分母一起掉、' +
       '照样绿——那种"环静静消失"只能靠点名兜。名单写死是有意的：动这行 = 改链位，' +
       '必须让人显式改判据而不是让闸替他默认通过',
@@ -1147,6 +1154,41 @@ const CHECKS = [
     },
     '0|1|crates/kernel-agent/src/middleware/memory_inject/mod.rs|desktop/src-tauri/src/llm/diagnose.rs',
   ],
+  [
+    'SS28',
+    'S3 刀③a 的注入文案面（两段读数）。扫描面 = 交给模型读的那三份文案本体' +
+      '（`memory_inject/mod.rs` 的指引块 + `memory_index.rs` 两枚导语 + `repo_context.rs` ' +
+      '的交接段文本），**剥行注释**（注释里提退役物是正常叙述，SS6 那条"数反面会假红"的' +
+      '教训在这里同样适用）。① §D 点名的四枚退役树工具名与 "memory tree" 这一句承诺必须' +
+      '**零命中**——刀③a 改写指引与导语就是为了不再向模型承诺 S4 要拔的东西；' +
+      '② 新写进去的两个要点（排除清单那句"everything belongs in memory" + 空结果的' +
+      '新指向 `.Locowrk/journal/`）必须**恰为 2 处**：只挡退役名的判据可以为"把整段文案' +
+      '删光"而绿，那一段在场但被掏空同样是事故。⚠ 关键词一律取**不被 Rust 续行符拆开**的' +
+      '片段：第一版拿整句 "Not everything belongs in memory" 去比，实测恒 1——源码里那句' +
+      '被 ` \\` + 换行折断了，红的是判据自己，不是文案没落。',
+    (m) => {
+      const face = [
+        'crates/kernel-agent/src/middleware/memory_inject/mod.rs',
+        'desktop/src-tauri/src/memory_index.rs',
+        'desktop/src-tauri/src/repo_context.rs',
+      ];
+      const code = m.files
+        .map((f, i) => ({
+          rel: path.relative(ROOT, f).replace(/\\/g, '/'),
+          code: m.rust[i],
+        }))
+        .filter((f) => face.includes(f.rel))
+        .map((f) => stripComments(f.code))
+        .join('\n');
+      const retired = countOf(
+        code,
+        /memory_project_history|memory_search_titles|memory_expand|memory_collapse|memory tree/,
+      );
+      const kept = countOf(code, /everything belongs in memory|\.Locowrk\/journal\//);
+      return `${retired}|${kept}`;
+    },
+    '0|2',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -1467,6 +1509,17 @@ if (SELFTEST) {
       m.rust.push(
         'pub fn _revive(s: &str) -> String {\n    format!("<persistent_memory>\\n{s}\\n</persistent_memory>")\n}\n',
       ),
+    // 窄变异（刀③a）：把"过往去查 memory_project_history"这句承诺塞回**交给模型读**的
+    // 文案里（注释里写它不算——那条口径由 stripComments 守）。它证的正是这一档独有的
+    // 那一格：指引与导语重新向模型承诺 S4 要拔的工具，行为测试一条都不会红。
+    SS28: (m) => {
+      const rel = 'desktop/src-tauri/src/memory_index.rs';
+      m.rust = m.rust.map((s, i) =>
+        path.relative(ROOT, m.files[i]).replace(/\\/g, '/') === rel
+          ? s + '\nconst _LEAD_OLD: &str = "for past work use memory_project_history";\n'
+          : s,
+      );
+    },
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

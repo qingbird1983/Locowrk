@@ -15,13 +15,15 @@
 //! 只因同属「中间件类」：`tool_exposure`（工具暴露截断，exposure 文档
 //! §5/§6）、`base_system`（静态身份层 = system 字节前缀）、`memory_inject`
 //! （记忆原料，Context 文档 §4/§5）、`thinking_language`（宿主注册）、
-//! `tree_context`（树目录，append-only 殿后于 system 面）、
 //! `instruction_files`（指令文件层）、`fragments`（尾部碎片）。注册次序 =
 //! ToolExposure → BaseSystemInject → MemoryInject → 思考语言 →
-//! TreeDirectoryInject → InstructionFilesInject → FragmentInject
+//! InstructionFilesInject → FragmentInject
 //! （静态段在前、只增目录殿后 = 前缀缓存友好，提示词分层设计 §6）。
 //! `compact` 已降级为历史契约面（载荷类型 + token 尺子，见该模块注释），
-//! 不再是监听器。
+//! 不再是监听器。`tree_context`（树目录注入）随 **S3 刀③a 移除**：方案稿 §C 把
+//! 树目录段列为"随树整体退役"，而 `RequestPayload::tree_directory` 字段与
+//! `TreeContextSource::plan()` **仍在**（它还管消息切片与树会话标记，生产者住在
+//! `organize/` = S4 的退役面）——本线只摘注入这一档，不提前动 organize。
 
 mod audit;
 mod base_system;
@@ -34,7 +36,6 @@ mod timeout;
 mod tool_exposure;
 mod tool_retrieval;
 mod trace;
-mod tree_context;
 
 #[cfg(test)]
 mod tests;
@@ -53,7 +54,6 @@ pub use timeout::Timeout;
 pub use tool_exposure::{ExposureSnapshot, GlobalEwma, ToolExposure, ToolExposureConfig};
 pub use tool_retrieval::{EmbedPort, RETRIEVAL_WEIGHT, Retriever, cosine};
 pub use trace::Tracing;
-pub use tree_context::TreeDirectoryInject;
 
 use std::sync::Arc;
 

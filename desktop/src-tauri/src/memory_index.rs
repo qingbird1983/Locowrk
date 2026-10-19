@@ -41,18 +41,21 @@ pub(crate) const STALE_AFTER_SECS: i64 = 48 * 3600;
 /// 项目段索引导语（给模型的说明）。S3 刀① 起导语**按层给**——同一段话写在
 /// "本项目"上对全局层是假话（全局层跨项目成立），所以两档各写一条，由调用方
 /// （[`crate::memory::source`]）挑，`from_md` 自己不猜。
+///
+/// ⚠ 刀③a 删掉了两档导语末尾各写一句的"空结果 ≠ 没历史，过往去查 X"：那两枚工具名
+/// （`memory_project_history` 等）是方案稿 §D 点名的退役物，S4 一拔这句就指空；而这件
+/// 话**两层的导语各说一遍**本身就是双出处。现在统一收进 `<memory_guidance>` 说一次
+/// （判据 `SS28` 盯着注入面不许再出现退役工具名）。
 pub(crate) const LEAD_IN_PROJECT: &str =
     "Project memory index — pointers only, never the bodies (one line \
-     per saved fact of THIS project). Read a value with memory_read(key=…), search with \
-     memory_search. Empty results here mean this project has no saved facts, not that it \
-     has no history — for past work use memory_project_history.";
+     per saved fact of THIS project). Read a value with memory_read(key=…), or open the \
+     file a pointer names; search with memory_search.";
 
 /// 全局段索引导语（S3 刀① 新增，方案稿 §A④ 里"两个索引"的那一个）。
 pub(crate) const LEAD_IN_GLOBAL: &str =
     "Global memory index — pointers only, never the bodies (one line \
-     per saved fact that holds across ALL projects). Read a value with memory_read(key=…), \
-     search with memory_search. An empty section here means nothing has been saved as a \
-     standing preference, not that this user has no history.";
+     per saved fact that holds across ALL projects). Read a value with \
+     memory_read(key=…), or open the file a pointer names; search with memory_search.";
 
 /// 超限时的指路行（截断必须自描述，否则模型以为"就这些"）。
 ///

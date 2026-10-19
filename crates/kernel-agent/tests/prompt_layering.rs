@@ -1,14 +1,23 @@
-//! 提示词分层（提示词分层设计 §6）：waterfall 注册序 = system 拼装序的
-//! 纪律锁——静态段在前缀、记忆/指引块居中、树目录殿后（append-only 段
-//! 之后不再有静态段）；目录增长不打断任何静态段的前缀（M1 关键断言：
-//! 整理一次断一次缓存的 v2.137 前排序缺陷在此杜绝）。
+//! 提示词分层（提示词分层设计 §6）：waterfall 注册序 = system 拼装序的纪律锁——
+//! 静态身份段是 system 的字节前缀，记忆块随后。
+//!
+//! ⚠ **S3 刀③a 订正过这个文件的职责**。原先三条用例全拿 `TreeDirectoryInject` 当道具，
+//! 证的是"append-only 目录殿后 ⇒ 目录增长不打断任何静态段前缀"（v2.137 那次
+//! "整理一次断一次缓存"的排序缺陷就靠它杜绝）。树目录注入随方案稿 §C 退役后，
+//! "本环之后不再有静态段"这个前提已经不成立（指令文件层还在后面），所以：
+//! - `directory_growth_leaves_prefix_intact` 与 `empty_directory_appends_nothing`
+//!   两条随道具一起删除——它们断言的那个东西不在生产面上了，不是为过闸删测试；
+//! - "动态段不改写静态前缀"这条纪律的**继承者**写在
+//!   `memory_inject/tests/prefetch.rs` 与 `project_index.rs`（同会话逐字节复用 +
+//!   每会话至多取数一次 + 新鲜度档变了才重算）。留在这里的这条只证它还管得住的那半：
+//!   静态身份段恒为 system 的字节前缀。
 
 use std::sync::Arc;
 
 use cordis_core::{WaterfallDecision, WaterfallListener};
 use kernel_agent::{
-    BaseSystemInject, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource,
-    TreeDirectoryInject, base_system, points,
+    BaseSystemInject, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource, base_system,
+    points,
 };
 use serde_json::json;
 use session_store::Message;
@@ -22,7 +31,7 @@ impl MemorySource for EmptySource {
     }
 }
 
-async fn chain(dir: &str) -> String {
+async fn chain() -> String {
     let mut payload = serde_json::to_value(kernel_agent::RequestPayload {
         messages: vec![Message::user("hi")],
         model: None,
@@ -31,10 +40,10 @@ async fn chain(dir: &str) -> String {
         compacted: None,
         system: None,
         session_id: Some("s1".into()),
-        tree_directory: Some(dir.into()),
+        tree_directory: None,
     })
     .unwrap();
-    // 注册序即执行序（state/mod.rs 同序）：Base → Memory → 目录殿后。
+    // 注册序即执行序（state/waterfall.rs 同序）：Base → Memory。
     //
     // 台账 T2 之后每一环就地改 payload、收束是 `Continue`。逐环断言 `Continue`
     // 因此同时是两件事的证据：① 改写没有漂回整包 `Replace`；② 上一环的守卫
@@ -58,12 +67,6 @@ async fn chain(dir: &str) -> String {
         "MemoryInject",
         memory.handle(points::REQUEST, &mut payload).await,
     );
-    ring(
-        "TreeDirectoryInject",
-        TreeDirectoryInject
-            .handle(points::REQUEST, &mut payload)
-            .await,
-    );
     serde_json::from_value::<kernel_agent::RequestPayload>(payload)
         .unwrap()
         .system
@@ -71,49 +74,18 @@ async fn chain(dir: &str) -> String {
 }
 
 #[tokio::test]
-async fn static_prefix_memory_middle_directory_last() {
-    let system = chain("[memory tree]\n- b1: title").await;
-    let (i_base, i_guide, i_dir) = (
-        system.find("You are Locowrk").expect("静态段在最前"),
-        system.find("<memory_guidance>").expect("指引块居中"),
-        system.find("[memory tree]").expect("目录殿后"),
-    );
+async fn static_identity_stays_the_byte_prefix() {
+    let system = chain().await;
+    let i_base = system.find("You are Locowrk").expect("静态段在最前");
+    let i_guide = system.find("<memory_guidance>").expect("指引块在场");
     assert!(
         system.starts_with(base_system()),
-        "静态段 = system 字节前缀"
+        "静态段 = system 字节前缀（记忆块只能往后追加）"
     );
-    assert!(i_base < i_guide && i_guide < i_dir, "静态 → 记忆 → 目录");
-    assert!(system.ends_with("- b1: title"), "目录之后无任何段");
-}
-
-/// 目录增长（整理追加一捆）只动尾部：前一个标记起的前缀逐字节不变——
-/// 思考语言/记忆块不再随整理断缓存。
-#[tokio::test]
-async fn directory_growth_leaves_prefix_intact() {
-    let before = chain("[memory tree]\n- b1: title").await;
-    let after = chain("[memory tree]\n- b1: title\n- b2: more").await;
-    let cut = after.find("[memory tree]").expect("目录标记在");
-    assert_eq!(
-        &before[..before.find("[memory tree]").expect("目录标记在")],
-        &after[..cut],
-        "目录之前的全部段逐字节一致"
-    );
-}
-
-/// 目录 = 空串（`Some("")` = 树会话尚无捆）：marker 仍随 payload 走，但一个字
-/// 都不追加（台账 T2 把 `.clone()` + `is_empty()` 收成 `as_deref().filter(...)`，
-/// 这条钉住那次形状改动没漂语义——空段会在 system 尾部留孤立换行）。
-#[tokio::test]
-async fn empty_directory_appends_nothing() {
-    let bare = chain("").await;
+    assert_eq!(i_base, 0, "静态段从第 0 字节起");
+    assert!(i_base < i_guide, "静态 → 记忆");
     assert!(
-        !bare.ends_with('\n') && !bare.ends_with("  "),
-        "空目录不留尾部空白: {:?}",
-        bare.chars().rev().take(8).collect::<String>()
-    );
-    let with_dir = chain("[memory tree]\n- b1: title").await;
-    assert!(
-        with_dir.starts_with(bare.as_str()),
-        "有目录 = 在无目录结果的**尾部**追加，前面各段逐字节不变"
+        !system.contains("[memory tree]"),
+        "树目录注入已随刀③a 退役: {system}"
     );
 }

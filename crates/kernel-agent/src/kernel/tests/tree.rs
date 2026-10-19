@@ -55,19 +55,16 @@ fn echo_kernel(ctx: &Arc<Context>) -> (Kernel, Arc<Spy>) {
 }
 
 #[tokio::test]
-async fn tree_session_slices_to_tail_and_appends_directory() {
+async fn tree_session_slices_to_tail_but_no_longer_injects_the_directory() {
     let ctx = Arc::new(Context::new());
-    // Memory-Inject 在前 → TreeDirectoryInject 在后（目录在记忆块之后）
+    // 只挂 MemoryInject：树目录注入环（TreeDirectoryInject）已随 S3 刀③a 摘除，
+    // 这一格要的读数正是"**有**目录文本也不进 system"，所以 FakeTrees 照旧交目录。
     ctx.events.on_waterfall(
         points::REQUEST,
         Arc::new(MemoryInject::new(
             Arc::new(DriftingMemory(std::sync::atomic::AtomicUsize::new(0))),
             Arc::new(std::sync::RwLock::new(MemoryInjectConfig::default())),
         )) as Arc<_>,
-    );
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(crate::TreeDirectoryInject) as Arc<_>,
     );
     ctx.provide_dyn::<dyn TreeContextSource>(Arc::new(FakeTrees::with(
         "s1",
@@ -100,21 +97,22 @@ async fn tree_session_slices_to_tail_and_appends_directory() {
 
     let recorded = spy.0.lock().unwrap().clone();
     let payload: crate::RequestPayload = serde_json::from_str(&recorded[0]).unwrap();
-    // 消息 = 尾巴两条；system = 记忆块 + 目录（次序 = 树 v2 §7.1）
+    // 消息 = 尾巴两条；system 里**只有**记忆块——目录文本不再注入（§C 随树退役）。
     assert_eq!(payload.messages.len(), 2);
     assert!(matches!(
         &payload.messages[0],
         session_store::Message::User { content, .. } if content == "tail q"
     ));
     let system = payload.system.expect("system 在场");
-    let mem_at = system.find("<memory_index>").expect("记忆块在前");
-    let tree_at = system.find("[memory tree]").expect("目录在后");
-    assert!(mem_at < tree_at, "目录必须排在记忆块之后（§7.1 [2]→[3]）");
+    assert!(system.contains("<memory_index>"), "记忆块在场: {system}");
     assert!(
-        system.ends_with("- b2: 缓存讨论"),
-        "目录挂 system 尾部（清单行收尾，无闭合标签——闭合标签会随追加移动破坏前缀）"
+        !system.contains("[memory tree]") && !system.contains("- b2: 缓存讨论"),
+        "plan() 交了目录也不许再进上下文: {system}"
     );
-    assert!(payload.tree_directory.is_some(), "树会话标记随 payload 走");
+    assert!(
+        payload.tree_directory.is_some(),
+        "但树会话标记仍随 payload 走——它还管消息切片与 tail 起点，本刀只摘注入那一档"
+    );
 }
 
 #[tokio::test]
@@ -245,59 +243,12 @@ async fn legacy_sessions_keep_full_assembly() {
     }
 }
 
-#[tokio::test]
-async fn directory_growth_keeps_system_prefix() {
-    // 只增不改（纪律 3）：章节 b3 追加后，旧 system 必须是新 system 的字节前缀
-    let ctx = Arc::new(Context::new());
-    ctx.provide_dyn::<dyn TreeContextSource>(Arc::new(FakeTrees::with(
-        "s1",
-        tail_plan(
-            1,
-            "[memory tree] Earlier turns are organized below.\n- b2: 旧章节",
-            &[],
-        ),
-    )));
-    ctx.events.on_waterfall(
-        points::REQUEST,
-        Arc::new(crate::TreeDirectoryInject) as Arc<_>,
-    );
-    let (kernel, spy) = echo_kernel(&ctx);
-    let mut s = Session::new();
-    s.append(SessionEvent::UserMessage {
-        content: "u1".into(),
-        parts: Vec::new(),
-    });
-    s.append(SessionEvent::AssistantMessage {
-        content: "a1".into(),
-        tool_calls: vec![],
-    });
-    kernel.step_as(&mut s, "s1").await.expect("step 1");
-
-    // b3 出现：目录追加一行
-    ctx.provide_dyn::<dyn TreeContextSource>(Arc::new(FakeTrees::with(
-        "s1",
-        tail_plan(
-            1,
-            "[memory tree] Earlier turns are organized below.\n- b2: 旧章节\n- b3: 新章节",
-            &[],
-        ),
-    )));
-    s.append(SessionEvent::UserMessage {
-        content: "u2".into(),
-        parts: Vec::new(),
-    });
-    kernel.step_as(&mut s, "s1").await.expect("step 2");
-
-    let recorded = spy.0.lock().unwrap().clone();
-    let v1: crate::RequestPayload = serde_json::from_str(&recorded[0]).unwrap();
-    let v2: crate::RequestPayload = serde_json::from_str(&recorded[1]).unwrap();
-    let s1 = v1.system.unwrap();
-    let s2 = v2.system.unwrap();
-    assert!(
-        s2.starts_with(&s1),
-        "目录只增不改：旧前缀逐字节保留 (s1={s1:?} s2={s2:?})"
-    );
-}
+// 原先这里有一条 `directory_growth_keeps_system_prefix`（**S3 刀③a 删除**）：它拿
+// TreeDirectoryInject 造"目录长一行"的前后两份 system，证旧前缀逐字节保留。注入环
+// 摘除之后目录文本根本不再进 system（上面那条用例正面证的就是这件事），这条断言
+// 失去对象——删它不是为过闸删测试。"动态段不改写静态前缀"这条纪律的继承者 =
+// `memory_inject/tests/prefetch.rs` 与 `project_index.rs`（逐字节复用 + 取数次数 +
+// 新鲜度档变了才重算）。
 
 #[test]
 fn tail_user_start_and_collapse_helpers() {

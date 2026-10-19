@@ -33,8 +33,8 @@ pub use middleware::{
     ExposureSnapshot, FragmentInject, FragmentSource, GlobalEwma, InstructionFilesInject,
     InstructionSource, JsonlAuditSink, LearnWeights, MemoryEntry, MemoryInject, MemoryInjectConfig,
     MemorySource, Middleware, Next, RETRIEVAL_WEIGHT, RecallQuery, Retriever, Timeout,
-    ToolExposure, ToolExposureConfig, Tracing, TreeDirectoryInject, VALUE_INJECT_MAX_CHARS,
-    base_system, cosine, estimate_tokens, wrap_system_reminder,
+    ToolExposure, ToolExposureConfig, Tracing, VALUE_INJECT_MAX_CHARS, base_system, cosine,
+    estimate_tokens, wrap_system_reminder,
 };
 pub use stream::{LlmStreamSink, NoLlmStreamSink};
 pub use subagent::{
