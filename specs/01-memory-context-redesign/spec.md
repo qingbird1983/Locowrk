@@ -1,6 +1,10 @@
 # 01-记忆与上下文重构
 
-- 状态：**进行中 · S1 施工中（刀①②a②b-1②b-2②b-3②c-1②c-2③a 已落地 / 刀③b④ 待做；②c-2 的学习档那一格待点头）**（方案定稿 2026-10-17 · 压缩侧层序 2026-10-18 核对后重定 ·
+- 状态：**进行中 · S1 已做到刀④d 且两轮真窗口实测过（刀①②a②b-1/-2/-3②c-1/-2③a③b-1/-2
+  ④a④b④c④d 全 ✅，只剩三件：真删与"删后下一会话看不见"那两发读数、AC-S1-2 库改名那一次、
+  ②c-2 学习档那一格等点头）；S2 施工 spec 已开 =
+  [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)（状态 = 待确认，
+  含三处要你先定的落点，过完才动代码）**（方案定稿 2026-10-17 · 压缩侧层序 2026-10-18 核对后重定 ·
   ADR-0007 已成文并提交）。开工闸原写"`specs/03-structural-debt` 线完成后再启动"，
   由用户 2026-10-18 指令改为**先转本线、拆分层暂停**
 - 负责人：青鸟（定目标形态） / Qoder（取证 + 实现）
@@ -79,7 +83,7 @@
 | 阶段 | 内容 | 依赖 | 方案稿对应 |
 | --- | --- | --- | --- |
 | S1 数据面 | **施工 spec 已开 = [`specs/05-memory-data-plane-s1`](../05-memory-data-plane-s1/spec.md)**（2026-10-18 现状取证后重写范围：文件库与索引已在，S1 做的是把"sqlite 真源 + md 镜像"扳成 md 唯一真源，四类型与排除清单补进 frontmatter 与提示词，`obsolete/` 软删，存量导出改道） | 无 | A / E |
-| S2 压缩面 | 主层深度压缩（模板 / 续接框架 / 熔断）+ 落盘 + 微压缩 + 滑窗保护网 + 阈值接线 + `ContextCompacted` 复用 + 设置项 | 无（可与 S1 并行） | B |
+| S2 压缩面 | **施工 spec 已开 = [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)**（2026-10-19 现状取证：压缩本体已随审计批 C 删除、只剩 `CompactionOutcome` 与 `ContextCompacted` 重放链两件活物，而占用锚点与自动收起现在长在 S4 要退役的 `organize/` 里 ⇒ 第一刀是搬家不是新建）；主层深度压缩（模板 / 续接框架 / 熔断）+ 落盘 + 微压缩 + 滑窗保护网 + 阈值接线 + `ContextCompacted` 复用 + 设置项 | 无（可与 S1 并行） | B |
 | S3 注入面 | 索引注入替换 + guidance 改写 + 预取键适配 | S1 | C |
 | S4 退役面 | organize 管线 / 树工具族 / sqlite 读路径下线（数据冻结），`/整理` 去向落地 | S1+S2+S3 稳定一轮 | D |
 | S5 收尾 | `docs/design/authority/` 五篇重写合一 + ADR 定稿 + roadmap 勾选 | S4 | — |
@@ -91,8 +95,12 @@
       自开连接，md 写失败只 `warn`），双写点共四处 ⇒ S1 的实质是**扳真源方向**不是从零建库
 - [x] 交 S1 施工 spec 等确认 = [`specs/05-memory-data-plane-s1/spec.md`](../05-memory-data-plane-s1/spec.md)
       （含四处要你定的落点）；**过完才动代码**
-- [ ] S1 落地：布局 + frontmatter/索引读写 + 工具改道 + 存量导出 + 管理页改道
+- [x] S1 落地：布局 + frontmatter/索引读写 + 工具改道 + 存量导出 + 管理页改道
+      （刀①…④d 全 ✅，2026-10-19 两轮真窗口实测过；剩三件见
+      [`specs/05`](../05-memory-data-plane-s1/spec.md) 状态行）
 - [ ] S2 落地：方案稿 B 节那四条"容易漏的实证"必须逐条进实现与判据
+      ——**开工前置已完成**：`specs/09` 那份取证节把四条实证的落点逐条对上现状代码，
+      其中第 3 条（窗口取不到时走哪边）现在就是"没决定"的状态 ⇒ 列成 spec 里第一处待点头
 - [ ] 补测试 → `make check` 全绿
 - [ ] 数据侧改动前把相关目录复制进备份目录
 
@@ -106,7 +114,7 @@
 | `desktop/src-tauri/src/organize/`（约 25 文件） | S4 冻结退役 |
 | `desktop/src-tauri/src/memory*.rs` `memory_*.rs` `memory_index.rs` | S1 改道文件库；S4 删 sqlite 读路径 |
 | `plugins-src/memory-sqlite`（现役 9 插件之一） | S4 退役（plugin-service 注册面同步摘除） |
-| 前端记忆页 / 记忆树看板（TreeBoard 族）/ 设置页 / 用量环文案 | S1/S3 改道重建；S4 看板整体删除；文案中英成对 |
+| 前端记忆页 / 记忆树看板（TreeBoard 族）/ 设置页 / 用量环文案 | **订正（2026-10-19 决策人口径）**：`MemoryPage` 那两个 tab（记忆树看板 + 事实库）**整体退役删除**，不在上面改道重建；§E①② 那两件事（三枚行为开关 + 每层一行）在**设置应用**重建，归 S4 一并做。S1/S3 只动数据与注入面。文案中英成对 |
 | `<repo>/.Locowrk/`（handoff.md → `MEMORY.md` + `journal/`） | 布局迁移 + `<repo_context>` 注入源切换 + 收束更新提示词改写；存量 handoff 一次性按主题归并 |
 | `docs/design/authority/`（Context and Memory / Memory Tree v2 / Organize Summary v1 / Cross-Session Recall v1 / Memory File-ization 五篇） | S5 重写合一（先改标准再写码）；S1 开工前的"标准"= 方案稿 + ADR-0007 |
 
