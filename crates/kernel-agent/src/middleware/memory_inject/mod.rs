@@ -34,11 +34,17 @@
 //!
 //! 会话级预取（KV v2 纪律 2，M1）：逐轮动态检索是缓存头号杀手——记忆库
 //! 中途写入会改写 system 前缀使命中归零。带会话身份的请求在**首次注入
-//! 时检索一次并缓存块文本**，后续轮复用同一字节；`memory_write` 中途
-//! 写入不再改写本会话前缀。top_k 配置变更 = 显式变更，重算接受失效。
-//! 缓存键 = `(session_id, scope_id)`（㉘·A·fix）：键位不变逐字节复用，
-//! 会话改归属自动重算。无会话身份 = 每轮检索（一次性进程等价会话，
-//! headless 语义不变）。
+//! 时检索一次并缓存块文本**，后续轮复用同一字节。top_k 配置变更 = 显式变更，
+//! 重算接受失效。缓存键 = `(session_id, scope_id, index_stamp)`
+//! （㉘·A·fix 起前两段；S3 刀② 加第三段）：键位不变**且注入面的输入文件没动**
+//! 才逐字节复用。无会话身份 = 每轮检索（一次性进程等价会话，headless 语义不变）。
+//!
+//! ⚠ **刀② 是一次语义放宽，代价要说破**（不许把它说成"延续 M1 纪律"）：
+//! 旧形状下本会话内索引字节恒冻结，`memory_write` 中途写库也看不见自己写了什么；
+//! 新形状下"文件 mtime 变"就重算 ⇒ 于是**分不清改的是人还是模型**，模型自己写一条
+//! 事实之后，下一轮会付一次前缀缓存断裂。买到的东西：人编辑 `MEMORY.md` 当场生效
+//! （§C/§F 的硬要求）+ 模型新记的那条本会话内可见。付掉的东西：每次写入后一轮全价
+//! input（与 S2 刀④ 主层压缩那种"一次性前缀重置"同量级，不是每轮都付）。
 
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -179,11 +185,15 @@ impl WaterfallListener for MemoryInject {
         // ㉘·A·fix：缓存键并上键位身份——会话中途改归属 = 换键 = 重算；
         // 键位不变则命中同一字节（M1 纪律不破）。scope_id 逐请求查询
         // （desktop = 旁车一次读取，与围栏/审批同成本档）。
+        // S3 刀② 再加第三段 `stamp`：注入面那三份输入的 mtime 指纹。它把"会话锁死"
+        // 放宽成"文件没动就锁死"——人改 MEMORY.md / 交接正文 = 下一轮生效（方案稿 §C
+        // 与 §F 都要这一格）。串不变 ⇒ 字节不变 ⇒ 前缀照旧命中。
         let scope = self.source.scope_id(req.session_id.as_deref());
+        let stamp = self.source.index_stamp(req.session_id.as_deref());
         let prefetch_key = req
             .session_id
             .as_deref()
-            .map(|id| format!("{id}\u{1}{scope}"));
+            .map(|id| format!("{id}\u{1}{scope}\u{1}{stamp}"));
         if let Some(key) = &prefetch_key {
             let cached = self
                 .prefetch

@@ -65,6 +65,45 @@ async fn index_is_frozen_with_the_prefetched_block() {
     );
 }
 
+/// S3 刀②：第三段缓存键 = 新鲜度指纹。**正反两条都要**（只写一条就是假绿）：
+/// ① 指纹不变 ⇒ 跨轮逐字节复用、不重复取数（证 M1 纪律没被顺手放宽成"每轮重算"）；
+/// ② 指纹变 ⇒ 下一轮重算并带上**新**内文（证"人改 `MEMORY.md` 当场生效"真成立）。
+/// ② 里必须连内文一起改——只改指纹而内容不变，"重算了但看不出差别"这一格红不出来。
+#[tokio::test]
+async fn a_fresh_stamp_recomputes_while_a_stale_one_freezes() {
+    let src = std::sync::Arc::new(Sourced::new(Some("- g1 — 第一版"), Some("- p1 — 项目")));
+    src.set_stamp("g-100");
+    let inject = inject(
+        std::sync::Arc::clone(&src) as std::sync::Arc<dyn MemorySource>,
+        cfg_lock(MemoryInjectConfig::default()),
+    );
+    let first = system_of(&inject, "s1").await;
+    assert!(first.contains("- g1 — 第一版"), "{first}");
+
+    // ① 指纹没变、内文也没被问第二遍
+    let same = system_of(&inject, "s1").await;
+    assert_eq!(first, same, "指纹不变 ⇒ 逐字节复用");
+    assert_eq!(src.handles().2.load(Ordering::SeqCst), 2, "两段各取一次");
+
+    // ② 人改了那份文件：指纹变 + 内文变 ⇒ 下一轮就该看见新的
+    *src.handles().0.lock().unwrap() = Some("- g2 — 改过了".to_string());
+    src.set_stamp("g-200");
+    let after = system_of(&inject, "s1").await;
+    assert!(
+        after.contains("- g2 — 改过了"),
+        "指纹变更触发重算，新内文必须进块: {after}"
+    );
+    assert!(!after.contains("第一版"), "旧份不许留着: {after}");
+    assert_eq!(
+        src.handles().2.load(Ordering::SeqCst),
+        4,
+        "重算 = 两段各再取一次（共 4）"
+    );
+    // 新指纹下继续冻结（不是从此每轮重算）
+    assert_eq!(after, system_of(&inject, "s1").await, "新键位下重新钉死");
+    assert_eq!(src.handles().2.load(Ordering::SeqCst), 4, "钉死后不再取数");
+}
+
 #[tokio::test]
 async fn other_waterfall_points_never_take_the_index() {
     // 索引只属于 `agent/request`（system 装配点）。其它点零参与，也不该顺手取数。

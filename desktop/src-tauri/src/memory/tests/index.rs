@@ -35,6 +35,96 @@ fn project_index_uses_the_md_projection_when_it_has_pointer_lines() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 把 `g{n}p{n}r{n}` 拆回三档。用例要分别断言"**只有该动的那一档**动了"，
+/// 只比整串不同的话，"改全局顺带把项目档也刷了"这种过度失效看不出来——
+/// 而那正是把 mtime 接进缓存键最可能砸前缀的方式。
+fn split_stamp(s: &str) -> (i64, i64, i64) {
+    let (g, tail) = s
+        .trim_start_matches('g')
+        .split_once('p')
+        .expect("指纹形状 g/p/r");
+    let (p, r) = tail.split_once('r').expect("指纹形状 p/r");
+    (
+        g.parse().expect("g 档是整数"),
+        p.parse().expect("p 档是整数"),
+        r.parse().expect("r 档是整数"),
+    )
+}
+
+/// S3 刀②：预取指纹 = 注入面三份输入的 mtime（全局索引 / 项目索引 / 交接正文）。
+/// 四条断语各挡一种假绿：
+/// ① 什么都没动 ⇒ 逐字节相同（没有这一条，"改了会生效"那条用例可以靠"每轮都重算"绿）；
+/// ② 写一条全局事实 ⇒ 只有 `g` 档变；
+/// ③ 写一条项目事实 ⇒ 只有 `p` 档变；
+/// ④ 改交接正文 ⇒ 只有 `r` 档变（这一档**不在数据根下**，走的是 `repo_root`，
+///    前三档都对时它最容易漂成"恒 0"——所以必须给一个真实存在的仓库目录）。
+#[test]
+fn the_index_stamp_follows_each_injected_input_and_only_that_one() {
+    let dir = temp_dir("stamp-inputs");
+    let repo = dir.join("repo");
+    std::fs::create_dir_all(repo.join(crate::repo_context::DIR)).unwrap();
+    let repo_for_resolver = repo.clone();
+    let resolver: crate::workspace::WorkspaceResolver =
+        Arc::new(move |_| Some(repo_for_resolver.display().to_string()));
+    let store = MemoryStore::new(&dir, resolver);
+    let ws = store.scope_of_session(Some("any"));
+
+    let base = split_stamp(&store.index_stamp(Some("any")));
+    assert_eq!(
+        base,
+        split_stamp(&store.index_stamp(Some("any"))),
+        "① 没动就逐字节相同"
+    );
+
+    store.write("", "g1", "全局一条", "", "explicit").unwrap();
+    let after_global = split_stamp(&store.index_stamp(Some("any")));
+    assert_ne!(after_global.0, base.0, "② 全局索引被刷新 ⇒ g 档要变");
+    assert_eq!(after_global.1, base.1, "改全局不许惊动项目档");
+    assert_eq!(after_global.2, base.2, "改全局不许惊动交接档");
+
+    store.write(&ws, "p1", "项目一条", "", "explicit").unwrap();
+    let after_project = split_stamp(&store.index_stamp(Some("any")));
+    assert_ne!(
+        after_project.1, after_global.1,
+        "③ 项目索引被刷新 ⇒ p 档要变"
+    );
+    assert_eq!(after_project.0, after_global.0, "改项目不许惊动全局档");
+
+    let handoff = repo.join(crate::repo_context::DIR).join("MEMORY.md");
+    std::fs::write(&handoff, "# 现状\n\n- 改过一次\n").unwrap();
+    // 显式拨一个远未来的 mtime：同一毫秒内连写两次的话，`set_modified` 之前那一版
+    // 会让这一档"该变而没变"，用例就红得让人以为是实现错了。
+    let f = std::fs::File::options().write(true).open(&handoff).unwrap();
+    f.set_modified(
+        std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_900_000_000),
+    )
+    .unwrap();
+    let after_handoff = split_stamp(&store.index_stamp(Some("any")));
+    assert_ne!(after_handoff.2, after_global.2, "④ 交接正文被改 ⇒ r 档要变");
+    assert_eq!(after_handoff.0, after_global.0, "改交接不许惊动全局档");
+    assert_eq!(after_handoff.1, after_project.1, "改交接不许惊动项目档");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 未归属会话：`p` / `r` 两档恒 0（没有"本项目"可言），但 `g` 档照旧参与——
+/// 这一条挡住"顺手把整个指纹在开头早退"那种写法（那样全局索引改了也不会重算）。
+#[test]
+fn an_unattributed_session_still_carries_the_global_stamp() {
+    let dir = temp_dir("stamp-unattributed");
+    let store = wired(&dir);
+    let before = split_stamp(&store.index_stamp(None));
+    assert_eq!(before.1, 0, "无会话身份没有项目档");
+    assert_eq!(before.2, 0, "无会话身份没有交接档");
+    store.write("", "g1", "v", "", "explicit").unwrap();
+    assert_ne!(
+        split_stamp(&store.index_stamp(None)).0,
+        before.0,
+        "全局档必须仍然参与指纹: {:?}",
+        store.index_stamp(None)
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn project_index_is_absent_for_unattributed_and_empty_projects() {
     let dir = temp_dir("idx-absent");

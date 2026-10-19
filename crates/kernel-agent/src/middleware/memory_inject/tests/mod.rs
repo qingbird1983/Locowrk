@@ -36,6 +36,8 @@ impl MemorySource for Empty {
 pub struct Sourced {
     global: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     project: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// S3 刀② 的第三段缓存键（新鲜度指纹）：用例靠它证"指纹变 = 重算、没变 = 复用"。
+    stamp: std::sync::Arc<std::sync::Mutex<String>>,
     calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
@@ -49,8 +51,14 @@ impl Sourced {
         Self {
             global: std::sync::Arc::new(std::sync::Mutex::new(global.map(str::to_string))),
             project: std::sync::Arc::new(std::sync::Mutex::new(project.map(str::to_string))),
+            stamp: std::sync::Arc::new(std::sync::Mutex::new(String::new())),
             calls: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         }
+    }
+
+    /// 改指纹 = 模拟"人动了注入面读的那份文件"。
+    pub fn set_stamp(&self, s: &str) {
+        *self.stamp.lock().unwrap() = s.to_string();
     }
 
     /// 三枚句柄（内文两枚 + 取数计数一枚），用例改内文与读计数都靠它。
@@ -79,6 +87,12 @@ impl MemorySource for Sourced {
     fn project_index(&self, _session_id: Option<&str>) -> Option<String> {
         self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.project.lock().unwrap().clone()
+    }
+
+    /// ⚠ 这一档**不计进 `calls`**：指纹每 step 都要读（它排在缓存查询之前），
+    /// 计进去就把"每会话至多取数一次"那条读数搅浑了。
+    fn index_stamp(&self, _session_id: Option<&str>) -> String {
+        self.stamp.lock().unwrap().clone()
     }
 }
 

@@ -146,9 +146,54 @@ impl MemorySource for MemoryStore {
     }
 
     fn scope_id(&self, session_id: Option<&str>) -> String {
-        // v2.136：提醒段改静态文本后，交接文件 mtime 指纹退出缓存键——
-        // 人改 .Locowrk/ 文件不再触发记忆块重算（正文本就不注入）。
+        // v2.136 起交接文件 mtime 一度退出缓存键（那时提醒段是静态文本、正文不注入，
+        // 重算买不到任何东西）。**S3 刀② 把它接回来了**，但接在 `index_stamp` 那一段
+        // 而不是这里——键位身份与新鲜度是两件事，混在一个返回值里就没法分别判读。
         self.scope_of_session(session_id)
+    }
+
+    /// S3 刀②：注入面三份输入的 mtime 指纹（`g` = 全局索引 / `p` = 项目索引 /
+    /// `r` = 交接正文 `MEMORY.md`）。读不到记 0——"没这份文件"与"刚被改过"必须是
+    /// 两个不同的串，否则第一条用例就能假绿。
+    ///
+    /// 三处路径**全部复用既有单点算式**（`memlayout::layers` / `memlayout::project_dir`
+    /// / `Self::repo_root` + `repo_context::{DIR, HANDOFF}`）：这里再拼一遍 `global/`
+    /// 或 `MEMORY.md` 字面量就是第二个出处，而 S1 那一整批就是在清这种重复。
+    ///
+    /// ⚠ 代价如实记在这里：`layers()` 会**枚举层目录**（不止 stat），所以这一档每 step
+    /// 一次的开销是"读目录项"级。真成了热点，正解是往 `memlayout` 抬一个
+    /// `global_index_path()`（新增 pub fn 不动既有签名），而不是在这里复制字面量。
+    fn index_stamp(&self, session_id: Option<&str>) -> String {
+        use plugin_api::memlayout::{layers, mtime_ms, project_dir};
+        let root = self.files().root();
+        let global = || {
+            layers(root)
+                .0
+                .into_iter()
+                .find(|layer| layer.hint.is_empty())
+                .and_then(|layer| mtime_ms(&layer.index))
+        };
+        let project = || {
+            let ws = self.scope_of_session(session_id);
+            if ws.is_empty() {
+                return None;
+            }
+            mtime_ms(&project_dir(root, &ws).ok()?.join("MEMORY.md"))
+        };
+        let handoff = || {
+            let repo = self.repo_root(session_id)?;
+            mtime_ms(
+                &repo
+                    .join(crate::repo_context::DIR)
+                    .join(crate::repo_context::HANDOFF),
+            )
+        };
+        format!(
+            "g{}p{}r{}",
+            global().unwrap_or(0),
+            project().unwrap_or(0),
+            handoff().unwrap_or(0)
+        )
     }
 
     fn context_line(&self, session_id: Option<&str>) -> Option<String> {
@@ -171,11 +216,12 @@ impl MemorySource for MemoryStore {
         ))
     }
 
-    /// v2.136 提醒段（项目侧全提醒制）：归属会话注入 `<repo>/.Locowrk/`
-    /// **静态提醒文本**（目录里有什么、在什么节点读/更新）——正文不再
-    /// 注入，项目记忆由当前工作的主模型按需用文件工具查看与维护。首次
-    /// 调用顺手引导建目录（幂等，每仓库一次）；开关关 / 未归属 / 非目录
-    /// = None（组装零变化）。
+    /// 交接段（v2.136 起有这一段；**S3 刀② 起注入真实正文**）：归属会话注入
+    /// `<repo>/.Locowrk/MEMORY.md` 的**现状正文** + requirements 提醒行（方案稿 §F
+    /// 那句"它就是为新会话一眼见现状而生的交接主入口"）。首次调用顺手引导建目录
+    /// 与骨架（幂等，每仓库一次）；开关关 / 未归属 / 非目录 / 那份文件读不动
+    /// = `None`（整段缺席，**不退回旧的静态提醒**）。
+    /// 正文会随人编辑而变 ⇒ 它的 mtime 是 `index_stamp` 的第三档。
     fn repo_context(&self, session_id: Option<&str>) -> Option<String> {
         if !(self.repo_on)() {
             return None;

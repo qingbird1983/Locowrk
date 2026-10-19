@@ -1,6 +1,6 @@
 # 10-上下文注入面 S3（索引常驻、正文按需 + 占用读数一嘴到底）
 
-- 状态：**进行中 · 刀① ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
+- 状态：**进行中 · 刀①② ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
   采纳，裁定结果记在下面「开工三问与裁定」那节；本文件是
   [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   **S3 注入面** 那一行的施工 spec；方案稿对应 = **§C**（+ §A④ 索引制、§F 交接层），
@@ -147,8 +147,8 @@
 1. **刀① 索引段替换** ✅ 2026-10-20：新块（全局段 + 项目段，钳 200 行 / 25 000 字符，复用
    `memlayout` 那颗常量与 `memory_index.rs` 的钳）；`<persistent_memory>` 与
    `<project_memory_index>` 两块下线；标签判据 + AC-S3-1/2。**施工记录见下面那节**。
-2. **刀② 缓存键与注入源**：mtime 进预取缓存键（全局 + 项目 + 交接层三处指纹）；
-   `<repo_context>` 从静态串改成读 `.Locowrk/MEMORY.md`；AC-S3-3/4。
+2. **刀② 缓存键与注入源** ✅ 2026-10-20：mtime 进预取缓存键（全局 + 项目 + 交接层三处指纹）；
+   `<repo_context>` 从静态串改成读 `.Locowrk/MEMORY.md`；AC-S3-3/4。**施工记录见下面那节**。
 3. **刀③ 指引与退役段**：`<memory_guidance>` 改写；`TreeDirectoryInject` 摘除；
    学习档按裁定处置；AC-S3-5/6。
 4. **刀④ 占用一嘴到底（ⓟ 归这一刀）**：`record_usage` 的分子改吃 `Compactor::used`
@@ -222,6 +222,57 @@
 宿主 `memory_inject_config` 仍在填）——它随刀③ 的 `learnEnabled` 族一起清，本刀不偷删
 （删它要动 settings 面，属刀③ 的改动面）。
 
+## 刀② 施工记录（✅ 2026-10-20）
+
+**键**：预取缓存键从 `(session_id, scope_id)` 变三段 `(…, index_stamp)`。契约新增
+`MemorySource::index_stamp()`（缺省空串 = 不参与键），宿主实现交 `g{ms}p{ms}r{ms}`
+三档（全局索引 / 项目索引 / 交接正文），**只 stat 不读内容**（它每 step 都跑，排在缓存
+查询之前）。三处路径全部复用既有单点算式（`memlayout::layers` / `project_dir` /
+`MemoryStore::repo_root` + `repo_context::{DIR, HANDOFF}`），宿主没有再拼一遍 `global/`
+或 `MEMORY.md` 字面量；`HANDOFF` 抬成 `pub(crate)` 的理由写在它自己的注释里。
+`scope_id` 与 `index_stamp` **分成两枚方法**而不是合成一个串：键位身份与新鲜度是两件
+事，混在一个返回值里就没法分别判读（`scope_id` 那条"mtime 退出缓存键"的旧注释同步订正）。
+
+**注入源**：`repo_context::build()` 从静态串改成读 `<repo>/.Locowrk/MEMORY.md` 正文 +
+三行维护提醒。三个决定要记：① **读不到 ⇒ 整段 `None`**，不退回旧的静态提醒——留一份
+与文件无关的提醒会把"这层没接线"与"接了但暂时没内容"混成同一个形状；② 因此
+`ensure_layout` 同刀多写一份 §F 主题分节骨架（否则第一个会话什么都收不到，"注入源切换"
+就成了空头话），骨架与 requirements 模板都是"缺则写、有则一个字不碰"；③ 正文按 §F 硬顶
+做行 + 字节双钳，**超预算那一行整个吐掉**（半行会被模型读成一条完整事实）。旧静态串里
+那三个退役物（`handoff.md` / `notes/` / `memory_project_history` 等三枚树工具）随文本
+一起消失。
+
+**一处语义放宽，不许说成"延续 M1 纪律"**：旧形状下模型自己 `memory_write` 之后本会话
+看不见自己写了什么（那是刻意的，防逐轮换字节砸前缀）；mtime 进键之后**分不清改的是人
+还是模型** ⇒ 模型每写一条事实，下一轮付一次前缀缓存断裂。买到的是"人编辑 `MEMORY.md`
+当场生效"（§C/§F 硬要求）+ 新记的那条本会话内可见；付掉的是每次写入后一轮全价 input
+（与 S2 刀④ 主层压缩那种一次性前缀重置同量级，不是每轮都付）。这段记在
+`memory_inject/mod.rs` 头注里，不在文档里粉饰。
+
+**删掉一条用例**：`repo_context/tests.rs::build_is_static_reminder_independent_of_files`
+断言的正是本刀要**反转**的形状（"与文件状态无关"）。删它不是删测试凑绿，替代它的断言
+写在同一簇里（"改了正文输出必须跟着变"是同一格的反面证据），删除理由记在该文件头注。
+
+**用例**：内核 1 条正反同体（`a_fresh_stamp_recomputes_while_a_stale_one_freezes`：
+不变 ⇒ 逐字节复用且取数次数不涨；变 ⇒ 重算、带新内文、旧份消失、新键下重新钉死）；
+宿主 2 条（`the_index_stamp_follows_each_injected_input_and_only_that_one` 钉"只有该动的
+那一档动"——防止过度失效砸前缀；`an_unattributed_session_still_carries_the_global_stamp`
+挡住"在开头顺手整体早退"）；`repo_context` 3 条（骨架幂等且不覆盖人写的 / 正文进段 +
+缺席 + journal 不注入 + 退役名不在场 / 超预算钳 + "没超就不许说超了"的负对照）。
+
+**门禁**：`make check` 末行 `▶ check 全绿`（宿主 711 条 / 内核注入簇 21 条 /
+vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。首跑在 clippy 红过两条——
+`explicit_counter_loop`（钳制函数拿 `lines` 当计数器）与 `&PathBuf` 该写 `&Path`，
+两条都是真信号，改的是写法而不是加 `#[allow]`。
+
+**这一刀新增的挂账**：
+- ⓠ 交接层 `MEMORY.md` 的**写侧钳不存在**（S1 只给记忆库两层做了写侧钳）⇒ 今天只有
+  读侧钳在挡，§F 那句"超顶 = 逼蒸馏"没有生产者；补它要动收束更新那一侧，不属注入面。
+- ⓡ §F 的另两件没跟着落地：`journal/<YYYY-MM-DD>.md` 的**按天封卷**与"轮次收束后模型
+  主动更新"的提示词改写。刀② 只切了注入源（本刀的承诺面）。存量 `handoff.md` 归并
+  **不需要做**——本机实测本仓 `.Locowrk/` 从未存在过，没有存量可归并（这条不是欠账）。
+- 真窗口那一发（AC-S3-1/3/4 的"跑一轮看 system"）仍欠，见下面风险③ 的登记。
+
 ## 开工三问与裁定（2026-10-20 决策人「三问照推荐案，开跑」⇒ 三处全按推荐案落地）
 
 ① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）
@@ -259,7 +310,7 @@
 | `crates/kernel-agent/src/middleware/tree_context.rs` | 刀③：移除（`kernel.rs:216-227` 的 `tree_directory` 带入通路一并订正） |
 | `desktop/src-tauri/src/memory/{source,recall}.rs` `memory.rs` | 刀①：读面新增全局索引段；`recall_relevant` 摘除或保留按裁定 ② |
 | `desktop/src-tauri/src/memory_index.rs` | 刀①：全局段复用同一把钳（现在只钳项目段） |
-| `desktop/src-tauri/src/repo_context.rs` | 刀②：`build()` 从静态串改成读 `.Locowrk/MEMORY.md` |
+| `desktop/src-tauri/src/repo_context.rs` | 刀② ✅：`build()` 从静态串改成读 `.Locowrk/MEMORY.md` 正文 + 提醒行 + §F 双钳；`ensure_layout` 多写一份骨架；`HANDOFF`/`HANDOFF_MAX_*` 成常量；该簇 3 条用例（含反转掉的那条静态断言） |
 | `desktop/src-tauri/src/memory_learn/`（+ `settings/memory/*` 的 `learnEnabled`） | 刀③：按裁定 ② 处置 |
 | `desktop/src-tauri/src/state/waterfall.rs` | 刀③：摘 `TreeDirectoryInject` 一环（头注那"注册序就是执行序"的段要订正） |
 | `desktop/src-tauri/src/runner/mod.rs` `compact/deep.rs` `events.rs` `runner/projection.rs` | 刀④：占用收成一处 + `ContextUsage` 载荷补拒收档 |
