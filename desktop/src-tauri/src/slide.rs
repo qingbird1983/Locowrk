@@ -65,12 +65,12 @@ use crate::compact::Failures;
 use crate::microcompact::MainThreshold;
 use crate::settings::SettingsStore;
 
-/// 保留最近多少个**过程段**（一段 = 两条提问之间连续出现的 assistant / 工具回执）。
-///
-/// 1 是我们拍的：这层的目的是"发得出去"，不是"保住工作记忆"；熔断时模型已经拿不到
-/// 摘要，最近一段过程是它唯一知道自己刚做过什么的机会——再少就没有了。它不做成设置项
-/// 是**刀⑤ 的欠账**，登记在 specs/09 挂账 ⓕ（可配置原则①：不确定的数值要能调）。
-pub(crate) const KEEP_RECENT_RUNS: usize = 1;
+// 保留最近多少个**过程段**（一段 = 两条提问之间连续出现的 assistant / 工具回执）——
+// ⚠ 这颗数**不住在这里**（刀⑥ 把刀⑤ 的挂账 ⓕ 落成设置项）：它是
+// `context.slideKeepRuns`，缺省那颗 1 的唯一出处在
+// `settings/context.rs::SLIDE_KEEP_RUNS_DEFAULT`。为什么缺省是 1、为什么它是**我们
+// 的裁定**（两家参照都没有这一层）= 上面头注那段，这里不重抄数字（判据 SS23a）。
+// 写成 `//` 而不是 `///`：它不文档化任何 item，挂在 struct 之前会让 doc 注释悬空。
 
 /// 一次判定要吃的所有读数（**纯函数**，监听器只负责把它们凑齐）。
 pub(crate) struct SlideInput<'a> {
@@ -82,6 +82,9 @@ pub(crate) struct SlideInput<'a> {
     /// 主层此刻熔断了没（`Failures::fused` 的读数）。**false ⇒ 零动作**是 AC-S2-8
     /// 要单独断言的那一档：保护网不许在正常会话里悄悄吃掉过程。
     pub fused: bool,
+    /// 保留最近多少段过程（设置项 `context.slideKeepRuns`，缺省那颗 1 的唯一出处
+    /// 在 `settings/context.rs`）。
+    pub keep_runs: usize,
 }
 
 /// 判定结果：`dropped` = 要从消息列里摘掉的**下标**（升序）。
@@ -125,7 +128,7 @@ pub(crate) fn plan(input: &SlideInput<'_>) -> SlidePlan {
 
     let runs = process_runs(msgs);
     // 段数不够 ⇒ 没有"旧的"可丢（全是要保留的最近一段）。
-    let drop_count = runs.len().saturating_sub(KEEP_RECENT_RUNS.max(1));
+    let drop_count = runs.len().saturating_sub(input.keep_runs.max(1));
     if drop_count == 0 {
         return SlidePlan::stop("no-process", from_tokens);
     }
@@ -260,6 +263,7 @@ impl WaterfallListener for Slide {
             messages: &req.messages,
             main_threshold: (self.main_threshold)(sid),
             fused,
+            keep_runs: self.settings.context_slide_keep_runs(),
         });
         if p.reason != "planned" {
             tracing::debug!(reason = p.reason, from = p.from_tokens, "滑窗保护网未介入");

@@ -43,7 +43,9 @@ use crate::settings::SettingsStore;
 pub(crate) const CLEARED: &str = "[旧工具结果已清理]";
 
 /// 保留最近多少**组**工具结果（一组 = 一次 assistant 发起的调用及其全部返回）。
-pub(crate) const KEEP_RECENT_GROUPS: usize = 5;
+/// ⚠ 这颗数**不住在这里**（刀⑥）：它是设置项 `context.microKeepGroups`，缺省那颗 5
+/// 的唯一出处在 `settings/context.rs::MICRO_KEEP_GROUPS_DEFAULT`。本模块再写一遍
+/// `= 5` 就是"界面上改了、行为照旧"那种双出处形状（判据 SS23a 拦它）。
 /// 第二条触发通路：距上次收束超过多少分钟就清（不看 token 线）。
 pub(crate) const IDLE_THRESHOLD_MINUTES: u64 = 60;
 /// 省不到这个 token 数就整批还原（机械层不值得为一点点字节破一次前缀形状）。
@@ -86,6 +88,9 @@ pub(crate) struct MicroInput<'a> {
     /// 距上次活动多少毫秒（`None` = 本进程还没有这个会话的活动记录，也没有日志
     /// 文件可播种 ⇒ 没有 idle 可依）。
     pub idle_ms: Option<u64>,
+    /// 保留最近多少**组**（设置项 `context.microKeepGroups`）。缺省那颗 5 的唯一
+    /// 出处在 `settings/context.rs`——本模块不许再写一遍数字（判据 SS23a）。
+    pub keep_groups: usize,
 }
 
 /// 判定结果：`cleared` 是要置为占位的 call_id 集合。
@@ -194,7 +199,7 @@ pub(crate) fn plan(input: &MicroInput<'_>) -> MicroPlan {
         base.reason = "no-candidates";
         return base;
     }
-    let keep = KEEP_RECENT_GROUPS.max(1);
+    let keep = input.keep_groups.max(1);
     let clear_count = groups.len().saturating_sub(keep);
     if clear_count == 0 {
         base.reason = "nothing-to-clear";
@@ -348,10 +353,14 @@ impl WaterfallListener for MicroCompact {
             };
             seen.observe(sid, now_ms, || self.mtime_ms(sid).unwrap_or(now_ms))
         });
+        // 保留组数**取一次存局部**：判定与下面那句记账文本要用同一个数，读两次设置
+        // 就可能在中途被用户保存插队（同一轮里两个数 = 账对不上行为）。
+        let keep_groups = self.settings.context_micro_keep_groups();
         let p = plan(&MicroInput {
             messages: &req.messages,
             main_threshold: (self.main_threshold)(req.session_id.as_deref()),
             idle_ms,
+            keep_groups,
         });
         if p.reason != "applied" {
             tracing::debug!(reason = p.reason, from = p.from_tokens, "微压缩未介入");
@@ -378,7 +387,7 @@ impl WaterfallListener for MicroCompact {
             strategy: "micro".into(),
             summary: format!(
                 "{CLEARED}：清 {touched} 条旧工具结果（保留最近 {} 组），节省 {} token",
-                KEEP_RECENT_GROUPS,
+                keep_groups,
                 p.from_tokens.saturating_sub(p.to_tokens)
             ),
             kept_messages: req.messages.len(),

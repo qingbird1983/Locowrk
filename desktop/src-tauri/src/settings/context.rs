@@ -11,6 +11,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::SettingsStore;
+
 /// 整理阈值缺省（100K）：主流大窗口模型安全（需低于模型窗口，否则上下文
 /// 超限会先于整理发生——设置行提示同文）。
 pub const ORGANIZE_THRESHOLD_DEFAULT: u64 = 100_000;
@@ -70,6 +72,35 @@ pub fn valid_compact_keep_tokens(v: u64) -> bool {
     COMPACT_KEEP_TOKENS_RANGE.contains(&v)
 }
 
+/// 微压缩保留最近多少**组**工具结果，缺省 5（ZCode `microcompact.ts:16` 逐字）。
+///
+/// ⚠ **这个数字只许有一个出处**（判据 SS23a）：刀③ 时它住在 `microcompact.rs` 的
+/// `const KEEP_RECENT_GROUPS`，刀⑥ 把它抬成可调项之后那颗常量必须不存在——两处一份
+/// 数字就是"界面上改了、行为照旧"那种形状。缺省 = 改前那颗常量（AC-S2-10 的等价性
+/// 要求），实证方式 = 微压缩那批既有用例一字未改仍然绿。
+pub const MICRO_KEEP_GROUPS_DEFAULT: u64 = 5;
+/// 合法区间 **1**–50。下界不取 0：0 组 = 连刚拿到的那份结果都清成占位，模型下一步
+/// 就不知道自己刚读到了什么，这一层从"减速"变成"致盲"。上界 50 只是防手滑输五位数，
+/// 没有语义边界（组数超过 50 的会话里这一层本来就不会动到最近这些组）。
+pub const MICRO_KEEP_GROUPS_RANGE: std::ops::RangeInclusive<u64> = 1..=50;
+/// 滑窗保护网保留最近多少个**过程段**，缺省 1（S2 刀⑤ 挂账 ⓕ 落地）。
+/// 1 = 只留"刚做完的那一段"：熔断时模型已经拿不到摘要，这一段是它唯一知道自己刚
+/// 做过什么的机会。两家参照都没有这一层，所以这颗数**是我们的裁定**、不是照抄谁。
+pub const SLIDE_KEEP_RUNS_DEFAULT: u64 = 1;
+/// 合法区间 **1**–20。下界不取 0 的理由与上面同一条且更硬：保护网丢掉最后一段过程
+/// 之后，发出去的就是一串光秃秃的提问，模型连"用户在问第几轮"都看不出来。
+pub const SLIDE_KEEP_RUNS_RANGE: std::ops::RangeInclusive<u64> = 1..=20;
+
+/// 微压缩保留组数合法性。
+pub fn valid_micro_keep_groups(v: u64) -> bool {
+    MICRO_KEEP_GROUPS_RANGE.contains(&v)
+}
+
+/// 保护网保留段数合法性。
+pub fn valid_slide_keep_runs(v: u64) -> bool {
+    SLIDE_KEEP_RUNS_RANGE.contains(&v)
+}
+
 /// KiB → 字节的**唯一**换算处（0 = 不限制 ⇒ `None`）。前端不做第二套算术，
 /// wire 层也不自己乘 1024——同一读数只许一个出处。
 pub fn tool_result_budget_bytes(kib: u64) -> Option<usize> {
@@ -88,8 +119,12 @@ pub struct ContextSettings {
     /// 旧版窗口字段（S2 前的落点）。仅作迁移来源；新写入走 `llm` 区，
     /// open() 把它搬到 llm 后置 None。
     pub window_tokens: Option<u64>,
-    /// 整理阈值（绝对 token，缺省 100K）：对话上下文达到该 token 数触发
-    /// 记忆树整理（批量档；增量的第二把尺在 memory.organizeChunkTokens）。
+    /// 压缩**全局**阈值（绝对 token，缺省 100K）——裁定 B（2026-10-19）改判：它不再只管
+    /// 记忆树整理，而是整条压缩面的共同分母（进度条的分母 / 微压缩那条线的母数 / 深度压缩
+    /// 的触发线），界面上因此改名「压缩阈值」。
+    /// ⚠ 内部标识符（`ORGANIZE_THRESHOLD_*`、`organize_threshold_tokens()`）**没跟着改**：
+    /// 改名要牵动十几个消费点而零行为变化，登记为待办、不在这一刀顺手做。名字与界面不一致
+    /// 会误导读代码的人，所以在这里写破一次，而不是等下一个人自己撞。
     pub threshold_tokens: u64,
     /// 阈值用量进度条显隐（UI shell §3.4 v4.18，缺省开；v2.137 改名——
     /// 分母 = 整理阈值非窗口）：关掉后顶栏下方进度条整根不渲染（读数仍
@@ -102,7 +137,10 @@ pub struct ContextSettings {
     /// 微压缩开关（S2 刀③，缺省**开**）：把很旧的可再生工具结果清成一行占位，
     /// 先于主层压缩触发。开关系放在这一刀是因为它是**第一个会改变发给模型内容**
     /// 的压缩层——没有可关的那一格就不能默认开（AGENTS §4 可配置原则②）。
-    /// 参数仍照 ZCode 逐字（保留 5 组 / 最小节省 256 / idle 60 分钟），数值设置化归刀⑥。
+    /// 参数照 ZCode 逐字。刀⑥ 把「保留几组」抬成可调项（缺省仍是那颗 5，见
+    /// [`MICRO_KEEP_GROUPS_DEFAULT`]），而最小节省 256 token / idle 60 分钟 / 触发线
+    /// 那两式**故意不做设置项**：它们是外部读实值，且用户没法负责地调（256 token
+    /// 这种量连换算都得猜）——登记在 specs/09 刀⑥ 的「故意不做」段。
     pub micro_enabled: bool,
     /// 深度压缩开关（S2 刀④c，缺省**开**）：占用到有效阈值时把较旧的一段交给
     /// 模型写成摘要。这是三层里唯一"一段原文换一份摘要"的、不可逆（对上下文而言）
@@ -118,6 +156,11 @@ pub struct ContextSettings {
     /// 自定义压缩指令（空 = 与没设同形）。插在四段骨架之后、尾部那次"只用文本回答"
     /// 之前（用例 `custom_instructions_are_appended_only_when_meaningful` 钉住）。
     pub compact_instructions: String,
+    /// 微压缩保留最近多少组工具结果（缺省 5，ZCode 逐字）。刀⑥ 从 `microcompact.rs`
+    /// 的常量抬上来，缺省 = 改前那颗数。
+    pub micro_keep_groups: u64,
+    /// 滑窗保护网保留最近多少段过程（缺省 1，刀⑤ 挂账 ⓕ 在这一格销账）。
+    pub slide_keep_runs: u64,
 }
 
 impl Default for ContextSettings {
@@ -133,6 +176,8 @@ impl Default for ContextSettings {
             compact_keep_tokens: COMPACT_KEEP_TOKENS_DEFAULT,
             compact_model: String::new(),
             compact_instructions: String::new(),
+            micro_keep_groups: MICRO_KEEP_GROUPS_DEFAULT,
+            slide_keep_runs: SLIDE_KEEP_RUNS_DEFAULT,
         }
     }
 }
@@ -160,6 +205,10 @@ pub struct ContextSettingsView {
     pub compact_model: String,
     /// 自定义压缩指令（空 = 不加）。
     pub compact_instructions: String,
+    /// 微压缩保留组数（缺省 5）。
+    pub micro_keep_groups: u64,
+    /// 保护网保留段数（缺省 1）。
+    pub slide_keep_runs: u64,
 }
 
 /// 上下文管理区部分更新（settings_set 入参）。
@@ -175,6 +224,8 @@ pub struct ContextUpdate {
     pub compact_keep_tokens: Option<u64>,
     pub compact_model: Option<String>,
     pub compact_instructions: Option<String>,
+    pub micro_keep_groups: Option<u64>,
+    pub slide_keep_runs: Option<u64>,
 }
 
 impl ContextSettings {
@@ -263,6 +314,28 @@ impl ContextSettings {
         if let Some(v) = u.compact_instructions {
             self.compact_instructions = v.trim().to_string();
         }
+        // 刀⑥ 两枚"保留几段"的整数：越界同样拒绝（与上面几枚同一条纪律——设置面写的是
+        // 用户意图，悄悄钳等于骗人）。下界都是 1，理由各写在区间常量的注释里。
+        if let Some(v) = u.micro_keep_groups {
+            if !super::context::valid_micro_keep_groups(v) {
+                return Err(format!(
+                    "微压缩保留组数 {v} 超出范围（{}–{} 组）",
+                    super::context::MICRO_KEEP_GROUPS_RANGE.start(),
+                    super::context::MICRO_KEEP_GROUPS_RANGE.end()
+                ));
+            }
+            self.micro_keep_groups = v;
+        }
+        if let Some(v) = u.slide_keep_runs {
+            if !super::context::valid_slide_keep_runs(v) {
+                return Err(format!(
+                    "滑窗保留段数 {v} 超出范围（{}–{} 段）",
+                    super::context::SLIDE_KEEP_RUNS_RANGE.start(),
+                    super::context::SLIDE_KEEP_RUNS_RANGE.end()
+                ));
+            }
+            self.slide_keep_runs = v;
+        }
         // Q8 工具结果预算（0–512 KiB，**0 = 不限制**）：越界一律拒绝而不是
         // 钳到边界——`plugin-api/args.rs` 那条"钳而不报错"是**工具入参**的
         // 纪律，设置面写的是用户意图，悄悄改掉等于骗人（他给什么就该存什么）。
@@ -277,5 +350,84 @@ impl ContextSettings {
             self.tool_result_budget_kib = v;
         }
         Ok(())
+    }
+}
+
+/// 上下文区的**后端读面**（S2 刀⑥ 自 `settings.rs` 原样搬入，一条语义未改）。
+///
+/// 为什么搬：这个区的类型、缺省常量、校验、投影、更新与读面从此同住一个文件——
+/// 加一枚设置项只动一处，而不是"类型在子文件、读面在总入口"两头发。搬的直接起因是
+/// 刀⑥ 那两枚 getter 把 `settings.rs` 顶到 419 行撞长度闸；按三问自检第③问（"改它
+/// 常牵动无关部分"= 是，每加一个区都要动总入口）该拆，而**该搬的正是本区自己那一族**
+/// ——把别的区的读面挪进来凑数、或为通过而放宽闸，都是这一条纪律明确禁掉的两种走法。
+///
+/// `inner` 是父模块的私有字段，子模块看得到（Rust 的私有对后代开放），所以这一族
+/// 不必为此抬宽任何可见性。
+impl SettingsStore {
+    /// 后端专用：压缩全局阈值（绝对 token，v2.137 起是绝对值、不再折算窗口百分比；
+    /// UsagePolicy / 记忆树批量触发 / 进度条分母同源）。名字里的 `organize` 是裁定 B
+    /// 改判**之前**留下的，见 [`ContextSettings::threshold_tokens`] 那段写破的话。
+    pub fn organize_threshold_tokens(&self) -> u64 {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .threshold_tokens
+    }
+
+    /// 后端专用：微压缩开关（S2 刀③，缺省开）。监听器每请求读一次，
+    /// 保存即生效——它是"要不要动"的门，不是数值，锁死到会话内反而违背
+    /// 可配置原则「改了就看见」。
+    pub fn context_micro_enabled(&self) -> bool {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .micro_enabled
+    }
+
+    /// 后端专用：微压缩保留组数（刀⑥，缺省 = 刀③ 那颗硬编码常量 5）。与上面那枚
+    /// 开关同一条"改了就看见"：监听器每请求读一次，不锁进会话。
+    /// ⚠ 调用点只许一个（判据 SS23b）——同一轮里读两次会被中途保存插队。
+    pub fn context_micro_keep_groups(&self) -> usize {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .micro_keep_groups as usize
+    }
+
+    /// 后端专用：滑窗保护网保留段数（刀⑥ 把刀⑤ 的挂账 ⓕ 落成可调项，缺省 1）。
+    /// 同样只许一个调用点（判据 SS23b）。
+    pub fn context_slide_keep_runs(&self) -> usize {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .slide_keep_runs as usize
+    }
+
+    /// 后端专用：深度压缩一组的活配置（S2 刀④c，缺省 = 刀④ 之前的硬编码常量）。
+    /// **一次取锁取齐五枚**，理由与空串读成 `None` 的口径都在
+    /// [`ContextSettings::compact_config`]，这里只是加锁的那一层薄壳。
+    pub fn compact_config(&self) -> CompactConfig {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .compact_config()
+    }
+
+    /// 后端专用：工具结果预算（队列 Q8 · CB §7.4）——**字节**数，`None` = 不
+    /// 限制。KiB→字节的换算只在本文件上面那一份里，wire / 组装点都读这里，
+    /// 不再各自乘 1024（§11「同一读数只许一个出处」）。
+    pub fn tool_result_budget_bytes(&self) -> Option<usize> {
+        let kib = self
+            .inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .tool_result_budget_kib;
+        tool_result_budget_bytes(kib)
     }
 }

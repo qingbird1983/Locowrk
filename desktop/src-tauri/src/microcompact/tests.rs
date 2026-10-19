@@ -62,6 +62,9 @@ fn plan_of(messages: &[Message], main: Option<u64>, idle_ms: Option<u64>) -> Mic
         messages,
         main_threshold: main,
         idle_ms,
+        // 刀⑥：保留组数从常量改成设置项。**夹具给缺省那颗 5**，于是这个文件里
+        // 所有断言（"清 c0..c3"那类）一字未改仍然绿 = "缺省 = 改前行为"的实证。
+        keep_groups: crate::settings::context::MICRO_KEEP_GROUPS_DEFAULT as usize,
     })
 }
 

@@ -12,29 +12,8 @@ use super::*;
 // 常量/函数那一份取，测试里不许手抄 24576 之类的数
 use crate::settings::context::{tool_result_budget_bytes, TOOL_RESULT_BUDGET_DEFAULT_KIB};
 
-/// 更新上下文区三键（其余分区给 None）。`SettingsStore::update` 是 13 个位置
-/// 参数，第 6 个是 context——这里包一层，避免同一串 None 在本簇抄四遍抄错位
-/// 数（返回值丢掉：本簇一律从 `store.view()` 取，顺带把「改后读到的是同一份
-/// 投影」交给磁盘往返那条断言去验）。
-fn set_context(store: &SettingsStore, u: ContextUpdate) -> Result<(), String> {
-    store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(u),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .map(|_| ())
-}
+// `set_context` 在刀⑥ 上收到 `settings/tests/mod.rs`（新簇要用同一枚包装），本簇
+// 走 `use super::*` 拿它——形状闸拦"一个动作两个出处"，这里留一行指路。
 
 /// 只改预算一个键。
 fn set_budget(store: &SettingsStore, kib: u64) -> Result<(), String> {

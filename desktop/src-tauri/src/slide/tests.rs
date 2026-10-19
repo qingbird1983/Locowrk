@@ -11,12 +11,16 @@ use serde_json::json;
 use session_store::{summarized_message, SUMMARIZED_MARKER};
 
 use super::*;
+use crate::settings::context::SLIDE_KEEP_RUNS_DEFAULT;
 
 fn plan_of(messages: &[Message], main: Option<u64>, fused: bool) -> SlidePlan {
     plan(&SlideInput {
         messages,
         main_threshold: main,
         fused,
+        // 刀⑥：段数从常量改成设置项，夹具给缺省那颗 1 ⇒ 本文件所有断言一字未改
+        // 仍然绿，这就是"缺省 = 改前行为"的实证（AC-S2-10 那条等价性要求）。
+        keep_runs: crate::settings::context::SLIDE_KEEP_RUNS_DEFAULT as usize,
     })
 }
 
@@ -123,7 +127,7 @@ fn every_question_survives_and_old_process_is_gone() {
     assert_eq!(
         kept_calls(&msgs, &p.dropped),
         vec!["c5"],
-        "只留最近 {KEEP_RECENT_RUNS} 段过程，旧轮的过程该一条不剩"
+        "只留最近 {SLIDE_KEEP_RUNS_DEFAULT} 段过程，旧轮的过程该一条不剩"
     );
     assert!(
         p.to_tokens < p.from_tokens,

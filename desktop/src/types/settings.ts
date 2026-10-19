@@ -138,6 +138,10 @@ interface ContextSettingsView {
   compactModel: string;
   /** 自定义压缩指令（空 = 不加）。 */
   compactInstructions: string;
+  /** 微压缩保留最近几组工具结果（1–50，缺省 5 · 刀⑥ 从常量抬上来）。 */
+  microKeepGroups: number;
+  /** 滑窗保护网保留最近几段过程（1–20，缺省 1 · 刀⑥ 销刀⑤ 挂账 ⓕ）。 */
+  slideKeepRuns: number;
 }
 
 /** 上下文管理区部分更新（窗口走 LlmUpdate）。 */
@@ -151,6 +155,8 @@ export interface ContextUpdate {
   compactKeepTokens?: number;
   compactModel?: string;
   compactInstructions?: string;
+  microKeepGroups?: number;
+  slideKeepRuns?: number;
 }
 
 /** 开发者选项区投影（v2.49）：unlocked = 分区可见（安卓式连点版本号

@@ -265,50 +265,10 @@ impl SettingsStore {
             .clone()
     }
 
-    /// 后端专用：整理阈值（绝对 token，v2.137——「上下文达到多少 K 就
-    /// 整理」；UsagePolicy / 记忆树批量触发同源，不再折算窗口百分比）。
-    pub fn organize_threshold_tokens(&self) -> u64 {
-        self.inner
-            .lock()
-            .expect("settings poisoned")
-            .context
-            .threshold_tokens
-    }
-
-    /// 后端专用：微压缩开关（S2 刀③，缺省开）。监听器每请求读一次，
-    /// 保存即生效——它是"要不要动"的门，不是数值，锁死到会话内反而违背
-    /// 可配置原则「改了就看见」。
-    pub fn context_micro_enabled(&self) -> bool {
-        self.inner
-            .lock()
-            .expect("settings poisoned")
-            .context
-            .micro_enabled
-    }
-
-    /// 后端专用：深度压缩一组的活配置（S2 刀④c，缺省 = 刀④ 之前的硬编码常量）。
-    /// **一次取锁取齐五枚**，理由与空串读成 `None` 的口径都在
-    /// [`context::ContextSettings::compact_config`]，这里只是加锁的那一层薄壳。
-    pub fn compact_config(&self) -> context::CompactConfig {
-        self.inner
-            .lock()
-            .expect("settings poisoned")
-            .context
-            .compact_config()
-    }
-
-    /// 后端专用：工具结果预算（队列 Q8 · CB §7.4）——**字节**数，`None` = 不
-    /// 限制。KiB→字节的换算只在 `settings/context.rs` 那一份里，wire / 组装点
-    /// 都读这里，不再各自乘 1024（§11「同一读数只许一个出处」）。
-    pub fn tool_result_budget_bytes(&self) -> Option<usize> {
-        let kib = self
-            .inner
-            .lock()
-            .expect("settings poisoned")
-            .context
-            .tool_result_budget_kib;
-        context::tool_result_budget_bytes(kib)
-    }
+    // 上下文区（`context`）的六枚后端读面在 S2 刀⑥ 搬进 `settings/context.rs`：
+    // 那个区的**类型、缺省、校验、投影、读面**从此同住一个文件，加一枚设置项不再
+    // 牵动本文件（搬之前 `settings.rs` 因两枚新 getter 撞上 419 > 400 长度闸，
+    // 而"为凑行数搬别人的代码"是要禁止的——搬的正是本区自己那一族，见提交正文）。
 
     /// 后端专用：记忆注入活配置（MemoryInject 共享锁的内容物，⑪）。
     ///

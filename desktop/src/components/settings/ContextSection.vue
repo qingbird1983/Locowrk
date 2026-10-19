@@ -17,6 +17,12 @@
  * 另四枚数值/文本（目标比、保留额度、摘要模型、自定义指令）后端已可读可写，
  * 界面行按刀序归刀⑥——这一节先把"要不要动"这一格交到人手上。
  * 行版式（§3.32·七 v3.5）：说明文字走行左 #detail。
+ * S2 刀⑥ 补齐这一区的**数值档**：目标比、近期原文额度、微压缩保留组数、滑窗保留段数
+ * 四枚数字输入（与上面「工具结果预算」同一种 `.lw-field-num` 紧凑档，不新造形态），
+ * 每枚**紧跟它所要调的那枚开关**排布——一层一组的读法是"这层动不动 → 这层动多狠"。
+ * 两枚后端字段（摘要模型 / 自定义压缩指令）没在这一节出现：前者与「记忆管理器」是
+ * 同一类东西（后台角色用哪个模型），按"同类只许一种形态"跟着它住进模型分区；后者要
+ * 设置页多行输入框这一**新形态**，按 §4 得先改标准再写码，已登记为待批。
  */
 import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -42,6 +48,13 @@ const form = reactive({
   microEnabled: true,
   // S2 刀④c：深度压缩开关（缺省开）。同上——这一层的判据在 compact 侧
   compactEnabled: true,
+  // S2 刀⑥：四枚数值档。缺省照后端 `ContextSettings::default` 那一份（目标比 50 /
+  // 近期原文 15000 / 微压缩保留 5 组 / 滑窗保留 1 段）——**照生产抄，不照想象编**：
+  // 这里写错一个数，投影未到之前界面就会替用户"预填"一个后端不认的缺省。
+  compactTargetPct: 50,
+  compactKeepTokens: 15_000,
+  microKeepGroups: 5,
+  slideKeepRuns: 1,
 });
 
 watch(
@@ -53,6 +66,10 @@ watch(
     form.toolResultBudgetKib = v.context.toolResultBudgetKib;
     form.microEnabled = v.context.microEnabled;
     form.compactEnabled = v.context.compactEnabled;
+    form.compactTargetPct = v.context.compactTargetPct;
+    form.compactKeepTokens = v.context.compactKeepTokens;
+    form.microKeepGroups = v.context.microKeepGroups;
+    form.slideKeepRuns = v.context.slideKeepRuns;
   },
   { immediate: true },
 );
@@ -76,10 +93,14 @@ function save() {
     // None 处理（保持不变，不是存 0）。0 只能来自用户明确填 0 = 不限制。
     toolResultBudgetKib: Math.round(form.toolResultBudgetKib),
     microEnabled: form.microEnabled,
-    // 只发**界面上真渲染过**的键：深度压缩另四枚（目标比/保留额度/摘要模型/自定义
-    // 指令）这一节还没有输入控件，发过去等于替用户把他没看过的值写一遍（缺省键在
-    // ContextUpdate 里是 optional，不传即不动）。
     compactEnabled: form.compactEnabled,
+    // 刀⑥ 四枚数值档，仍然守同一条纪律：**只发界面上真渲染过的键**。摘要模型与自定义
+    // 指令两枚依旧不发（前者住进模型分区、后者等新形态批准），发过去等于替用户把他
+    // 没看过的值写一遍——`ContextUpdate` 里它们是 optional，不传即不动。
+    compactTargetPct: Math.round(form.compactTargetPct),
+    compactKeepTokens: Math.round(form.compactKeepTokens),
+    microKeepGroups: Math.round(form.microKeepGroups),
+    slideKeepRuns: Math.round(form.slideKeepRuns),
   });
 }
 </script>
@@ -148,6 +169,27 @@ function save() {
       <SettingsToggle v-model="form.microEnabled" :label="t('settings.microCompact')" />
     </SettingsRow>
 
+    <!-- 微压缩保留组数（刀⑥）：紧跟它所要调的那枚开关排——一层的读法是"动不动 →
+         动多狠"。数值档仍用 `.lw-field-num` 紧凑形态（与工具结果预算同一族）。
+         ⚠ min/max 是后端 `MICRO_KEEP_GROUPS_RANGE` 的**手抄镜像**（前端拿不到 Rust
+         常量，与上面那枚预算行同一条既有处境）：改后端区间要同步这里，不同步的后果
+         是界面让人填一个后端会拒的值——拒得如实（错误消息带范围），不是静默钳制。 -->
+    <SettingsRow
+      :title="t('settings.microKeepGroups')"
+      :hint="t('settings.microKeepGroupsHint')"
+      control-id="context-micro-keep-groups"
+    >
+      <input
+        id="context-micro-keep-groups"
+        v-model.number="form.microKeepGroups"
+        type="number"
+        min="1"
+        max="50"
+        step="1"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+
     <!-- 深度压缩开关（S2 刀④c）：到线时把较旧的一段换成一份七节摘要。
          与上面那枚的分工要说得出口：微压缩只清"很旧的工具输出"（不动提问与回答），
          这一层才真的把一段原文换成摘要 ⇒ 必须有独立的可关那一格 -->
@@ -156,6 +198,61 @@ function save() {
         <p class="mt-1 text-xs text-ink-3">{{ t("settings.deepCompactHint") }}</p>
       </template>
       <SettingsToggle v-model="form.compactEnabled" :label="t('settings.deepCompact')" />
+    </SettingsRow>
+
+    <!-- 压缩目标比（刀⑥）：这一成**是我们自己的裁定**（两家参照都没有这颗数），
+         所以它必须看得见、改得动——界面说明里不假装照抄谁。 -->
+    <SettingsRow
+      :title="t('settings.compactTargetPct')"
+      :hint="t('settings.compactTargetPctHint')"
+      control-id="context-compact-target-pct"
+    >
+      <input
+        id="context-compact-target-pct"
+        v-model.number="form.compactTargetPct"
+        type="number"
+        min="1"
+        max="100"
+        step="5"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+
+    <!-- 近期原文额度（刀⑥）：与上面那枚是一对——共同决定"压完窗口里剩什么"。
+         0 = 全交给摘要（不留一句原话），所以这一档允许 0，不等同于"关掉"。 -->
+    <SettingsRow
+      :title="t('settings.compactKeepTokens')"
+      :hint="t('settings.compactKeepTokensHint')"
+      control-id="context-compact-keep-tokens"
+    >
+      <input
+        id="context-compact-keep-tokens"
+        v-model.number="form.compactKeepTokens"
+        type="number"
+        min="0"
+        max="400000"
+        step="1000"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
+    </SettingsRow>
+
+    <!-- 滑窗保留段数（刀⑥ 销刀⑤ 挂账 ⓕ）：这一层**没有自己的开关**——它只在主层
+         连败三次之后自动醒，所以界面上只有"醒过来之后留几段"这一枚可调。
+         说明要把"什么时候才轮到它"讲清，否则用户会以为调它就能少压。 -->
+    <SettingsRow
+      :title="t('settings.slideKeepRuns')"
+      :hint="t('settings.slideKeepRunsHint')"
+      control-id="context-slide-keep-runs"
+    >
+      <input
+        id="context-slide-keep-runs"
+        v-model.number="form.slideKeepRuns"
+        type="number"
+        min="1"
+        max="20"
+        step="1"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
     </SettingsRow>
 
     <!-- 阈值用量进度条显隐（§3.4 v4.18；v2.137 改名——分母 = 整理阈值；

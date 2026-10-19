@@ -57,25 +57,28 @@ fn classify_follows_status_and_body() {
     assert!(matches!(f, Failure::Fatal(_)));
 }
 
-/// 超限文案只许点名**现役**控件（队列 Q7 · CB §7.3）。反向半边同样承重：「压缩阈值」
-/// 这个字样在 v2.137 之后已无对应设置项，文案里出现一次就是把用户指向一个空设置项；
-/// 而只判"不含退役字样"的话，把三个现存手段删掉仍然绿 ⇒ 两侧都钉。
+/// 超限文案只许点名**现役**控件（队列 Q7 · CB §7.3）。反向半边同样承重，而且它在
+/// S2 刀⑥ 换过一次方向：「压缩阈值」曾经是 v2.137 退役掉的旧设置项（那时反向钉它、
+/// 正向钉「整理阈值」）；裁定 B 把 `threshold_tokens` 那枚滑杆**改判为整条压缩面的
+/// 全局阈值**并在界面上改名「压缩阈值」之后，被退役的那一侧换成了「整理阈值」⇒
+/// 正反两侧随之对调。这一格就是"文案与界面同名"的机器证明：改了界面名而文案没跟上，
+/// 这里当场红。而只判"不含退役字样"的话，把三个现存手段删掉仍然绿 ⇒ 两侧都钉。
 #[test]
 fn context_overflow_message_points_at_live_controls_only() {
     let msg = match retry::classify_status(400, "maximum context length exceeded") {
         Failure::Fatal(m) => m,
         other => panic!("上下文超限必须判 Fatal（重试不会变小），实得 {other:?}"),
     };
-    for live in ["新开会话", "整理阈值", "shell"] {
+    for live in ["新开会话", "压缩阈值", "shell"] {
         assert!(
             msg.contains(live),
             "现存手段「{live}」必须出现在文案里：{msg}"
         );
     }
-    for retired in ["压缩阈值", "压缩策略", "稳定期"] {
+    for retired in ["整理阈值", "压缩策略", "稳定期"] {
         assert!(
             !msg.contains(retired),
-            "退役设置「{retired}」不许再出现在文案里：{msg}"
+            "界面上已不存在的名字「{retired}」不许再出现在文案里：{msg}"
         );
     }
     assert!(

@@ -181,10 +181,18 @@
       ①每轮真实 input ≤ 阈值 ×1.1（压缩执行轮瞬时除外）②全程不出现"必须重开会话 /
       手动压缩才能继续"的状态（`llm/retry.rs:53` 那句在整轮日志里零命中）
       ③后半程每轮 input 均值 ≤ 前半程 ×1.2
-- [ ] AC-S2-10 设置面全数落地且缺省 = 现状：压缩总开关（关 = 完全不压、接近窗口只提醒）、
-      深度压缩开关（缺省开）、spill 阈值字符数、微压缩保留条数与比例、目标比（50%）、
-      压缩模型、自定义压缩指令——**每一枚的缺省值必须等于本刀之前那颗硬编码常量**，
-      等价性用"既有测试一字未改仍绿"实证；文案中英成对（`check-i18n` 读数两侧相等）
+- [x] AC-S2-10 设置面落地且缺省 = 现状（刀⑥ ✅ 2026-10-19；原清单七格逐格对账，两格按裁定不做）：
+      ①深度压缩开关 ✅（刀④c `compactEnabled`）②spill 阈值 ✅（**清单原文写"字符数"是错的**，
+      Q8 那枚真身是 `toolResultBudgetKib`，单位 KiB；本条按实况订正）③微压缩保留组数 ✅
+      （`microKeepGroups`；"与比例"里那枚 `THRESHOLD_RATIO = 0.9` 是**触发线**相对主阈值的比例，
+      不是"保留多少"的比例——这一层没有保留比例这个维度，且 0.9 按 2026-10-19 裁定不抬）
+      ④目标比 ✅（`compactTargetPct`，缺省 50）⑤近期原文额度 ✅（`compactKeepTokens`，缺省
+      15000；清单漏列，刀④ 后端已有字段）⑥滑窗保留段数 ✅（`slideKeepRuns`，缺省 1，
+      **销刀⑤ 挂账 ⓕ**）⑦"压缩总开关"按**分闸**兑现：三层里能自主动手的两层各有一枚自己的开关
+      （`microEnabled` / `compactEnabled`），两枚同关 = 完全不压、接近窗口只剩 `llm/retry.rs`
+      那句提醒；**没有**再压一枚凌驾两枚分闸之上的总闸（理由与代价见任务区刀⑥ 条目）。
+      每一枚缺省必须等于本刀之前那颗硬编码常量，等价性两头实证：`settings/tests/context_numbers.rs`
+      第①条（缺省 = 常量）+ 既有压缩测试一字未改仍绿；文案中英成对（`check-i18n` 两侧读数相等）
 - [ ] AC-S2-11 `/整理` 改语义 = 当场跑主层（三参照同位按钮），跑完界面上能看到
       "压掉了多少 / 摘要落在哪"，且它**不**再触发 organize 那套章节整理
 - [ ] AC-S2-12 `make check` 全绿；新闸一律带变异红证（`tmp/mut-rust.mjs` 续 CASE 号）
@@ -292,8 +300,14 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
    `Compactor` 里提出来做组装点注入的 `compact::Failures`——它是两个使用方共用的状态，
    与刀④a/④c 搬直呼通路同一条纪律（判据 SS22a/b/c 各盯一处：比较点唯一、表只 new
    一枚、写侧与读侧分工）。
-6. **刀⑥ 设置面与文案**：全部数值设置化（缺省 = 现状常量）+ `thresholdTokens` 语义改判 +
-   中英成对 + 设置页那一条分区（按《Front-end Design Guidelines》现有形态，不新造）。
+6. **刀⑥ 设置面与文案**（✅ 2026-10-19）：数值档上界面（目标比 / 近期原文额度 / 微压缩保留组数 /
+   滑窗保留段数，缺省 = 改前那颗常量）+ `thresholdTokens` 语义改判（裁定 B：界面改名「压缩阈值」，
+   内部标识仍 `ORGANIZE_THRESHOLD_*`，这处不一致写进 `settings/context.rs` 的字段说明）+
+   中英成对 + 设置页那一条分区（按《Front-end Design Guidelines》现有形态，不新造：四枚全部沿用
+   工具结果预算那一行的 `.lw-field-num` 紧凑档）。
+   **原清单"全部数值设置化"这句按实况收窄**：两枚后端字段没上界面（摘要模型、自定义压缩指令）、
+   四颗参数按 2026-10-19 裁定不抬（微压缩的 0.9 触发线比例 / 60 分钟 idle / 256 最小节省 /
+   2000 缓冲），理由与代价都在任务区刀⑥ 条目里——不是漏做，是这一刀的边界。
 7. **刀⑦ `/整理` 改语义** + 北极星长会话实测（AC-S2-9 那三条跑一次并留读数）。
 8. 每刀收尾按 [`CONTRIBUTING.md`](../../CONTRIBUTING.md)：进度只在 roadmap 那一行改勾选，
    实测读数与遗留风险写提交正文。
@@ -343,9 +357,46 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
       `compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上来就被它
       读成两个落点）。现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐。
       两件如实挂着：① 主层压缩的**真机长会话一轮**没跑（到线时转录里那行"省了多少"要
-      你亲自看），与刀② 的 spill 那一格一起等桌面端重启；② 设置页只渲染了开关那一枚，
-      目标比 / 保留额度 / 摘要模型 / 自定义指令四枚后端可读可写、界面行归刀⑥。
-- [ ] 刀⑤→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成
+      你亲自看），与刀② 的 spill 那一格一起等桌面端重启；② ~~设置页只渲染了开关那一枚~~
+      ⇒ 已销（刀⑥ ✅ 2026-10-19，四枚数值档进界面；摘要模型与自定义指令两枚按下面刀⑥
+      条目的理由另归）。
+- [x] **刀⑥ 设置面与文案 ✅**（2026-10-19）：AC-S2-10 打勾（七格逐格对账在那条里）。
+      抬上界面的四枚 = `microKeepGroups`（5）/ `compactTargetPct`（50）/ `compactKeepTokens`
+      （15000）/ `slideKeepRuns`（1，销 ⓕ）；判据 `SS23a`（那两颗旧常量在生产面必须为 0）+
+      `SS23b`（读侧只许 `microcompact.rs` / `slide.rs` 各一处）；`settings/context.rs` 里补
+      区间常量与校验，六枚上下文 getter 从 `settings.rs` 搬进同族文件（长度闸逼出来的搬家，
+      搬的是**同一族**不是别人的代码）。文案侧：`thresholdTokens` 改名「压缩阈值」（裁定 B）、
+      `toolBudgetKibHint` 按台账 ⓓ 订正（spill 是"落盘 + 预览"，不定位 ⇒ 读不到预览之后的内容，
+      原文案教人往下读）、`microCompactHint` 不再硬写"5 组"、四枚新行各配中英两条。
+      **这一刀不做两枚、不抬四颗，都是边界不是遗漏**：① 摘要模型（`compactModel`）与
+      「记忆管理器」是同一类东西（后台角色用哪个模型），本仓这一类的既有形态是
+      **provider + model 成对**，界面里没有"单个字符串模型名"这种控件，硬塞一个等于新造形态；
+      ② 自定义压缩指令（`compactInstructions`）要多行输入框——设置页现在只有单行 `.lw-field`
+      这一种文本控件，按 §4「同类只许一种形态、新形态先改标准再写码」得先申请，已登记为待批；
+      ③ 微压缩那四颗参数（0.9 / 60 分钟 / 256 token / 2000 token）是你 2026-10-19 明确点头
+      "这四颗别抬"的，它们留在 `microcompact.rs` 并各带出处注释。
+      界面上"每层动不动"与"这层动多狠"两组读法是否真的看得清，见下面这条真窗口走查。
+- [x] **刀⑥ 真窗口走查 ✅**（2026-10-19 20:54 起的 debug 窗口，exe md5 `2c6116af…`、
+      前端由 18:26 那台 vite 供（取走查前用 `curl localhost:5173/src/components/settings/ContextSection.vue`
+      实证服务的是**改后**的组件：新键名命中 21 处）：
+      ① **九行齐、顺序对**——压缩阈值 / 工具结果预算 / 微压缩 / 微压缩保留组数 / 深度压缩 /
+      压缩目标比 / 近期原文额度 / 滑窗保留段数 / 阈值用量进度条，每枚数值档紧跟它所要调的那枚开关；
+      ② **初值 = 投影 = 缺省**：5 / 50 / 15000 / 1（旧 settings.json 里**根本没有**
+      `microKeepGroups` 与 `slideKeepRuns` 两键，界面仍显示缺省 ⇒ 字段级缺省那条在真窗口里也成立）；
+      ③ **越界如实拒**：保留组数填 0 → 保存 → 顶部红条「微压缩保留组数 0 超出范围（1–50 组）」，
+      盘上 `context` 块**没多出那两键**（整笔拒 = 不污染，与 `context_numbers.rs` 第③条同一件事的
+      真窗口面），改回合法值再保存后红条自己清掉；
+      ④ **合法值跨进程落盘**：填 8 / 2 → 保存 →「已保存」→ 直接读 `~/.Locowrk/settings.json`
+      得 `microKeepGroups: 8, slideKeepRuns: 2`；测完已还原 5 / 1，语言档从 English 还原「跟随系统」；
+      ⑤ **英文档九行同屏**：无截断、无溢出、行距与中文档一致（`check-i18n` 的键级成对之外再补一眼）。
+      **走查抓到两件登记不修**（都不是本刀引入，且都在"要动板面/要动后端消息面"的那一层）：
+      ⓘ **错误条住板面顶部、保存按钮住分区底部**——上下文区现在九行，点完保存时视线在底部，
+      失败原因看不见（我这次就是滚回顶部才看到红条）。既有板面级布局，改它牵动所有分区，
+      不属压缩这一刀；要么错误条随保存行就近再显一份，要么分区内锚点跳过去，两条路都要先定形态。
+      ⓙ **校验消息与 `llm/retry.rs` 那句是后端硬编码中文**，英文档下界面说明只能引用它的英译
+      （「深度压缩」那行的 "near the window, reopen the session" 就是这个样子），与实际所见的
+      中文串不一致。这是"后端消息不走 i18n"这一整面的既有处境，不在本刀单点改。
+- [ ] 刀⑥→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成
 - [ ] 数据侧改动前把相关目录复制进备份目录（specs/01 那条纪律在本线同样适用：
       压缩虽不改日志，但 spill 会往会话附件目录写文件）
 
@@ -373,14 +424,14 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 | `desktop/src-tauri/src/spill.rs`（+ `spill/tests.rs`） | 刀② ✅：落盘句柄（数据根 + 会话子目录 + 内容寻址文件名）与两句文本（`<persisted-output>` 模板 / 降级提示）的唯一出处 |
 | `desktop/src-tauri/src/llm/wire/{payload,messages}.rs` | 刀② ✅：`clip_tool_output` → `project_tool_output`（一处判定、两种后果），`WireCaps` 带落盘句柄因而从 `Copy` 降为 `Clone`，`attempt_stream` 改吃借用 |
 | `desktop/src-tauri/src/llm/{app_llm,client}.rs` `state/llm_stack.rs` | 刀② ✅：`AppLlm.spill` 字段 + `with_spill` 注入器；组装点交**数据根**（不手拼目录名）。app_llm 由此 394→411 行，按三问入 `check_length` 名单（理由写在该脚本注释与提交正文） |
-| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限；刀④ ✅ SS20a/SS20b/SS21a/SS21b/SS21c + 压缩面两条下限；刀⑤ ✅ SS22a/SS22b/SS22c + 保护网面两条下限。五批共 17 档，每档配一条窄变异（selftest 那条"同时打红谁"的分工读数在刀① 那一批加上）。刀④ 顺带修掉**闸自己的一个口径洞**：宿主面与模块面原先各写一遍同一条测试排除式，那式子只排得掉 `tests.rs` 与 `tests/` 两种，排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、`compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上新架构就被读成两个落点）；现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐 |
+| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限；刀④ ✅ SS20a/SS20b/SS21a/SS21b/SS21c + 压缩面两条下限；刀⑤ ✅ SS22a/SS22b/SS22c + 保护网面两条下限。五批共 17 档，每档配一条窄变异（selftest 那条"同时打红谁"的分工读数在刀① 那一批加上）。刀⑥ ✅ 再加两档 `SS23a/SS23b` ⇒ **六批共 19 档**。刀④ 顺带修掉**闸自己的一个口径洞**：宿主面与模块面原先各写一遍同一条测试排除式，那式子只排得掉 `tests.rs` 与 `tests/` 两种，排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、`compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上新架构就被读成两个落点）；现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐 |
 | `desktop/src-tauri/src/microcompact.rs`（+ `microcompact/tests.rs`） | 刀③ ✅：微压缩判据本体（七颗参数、候选分组、idle 播种表、`agent/request` 监听器） |
 | `desktop/src-tauri/src/state/waterfall.rs` `state/mod.rs` | 刀③ ✅：第八环注册位 + 主层阈值闭包（`Init` 新增 `catalog` / `model_overrides` / `sessions_dir` 三份读数）；头注把"八环"的序与"为什么这一环可以在红线之后"补全 |
-| `desktop/src-tauri/src/settings/{context,view}.rs` `settings.rs` | 刀③ ✅：`context.microEnabled` 一枚（缺省开）+ 后端读面 `context_micro_enabled()`；刀⑥ 剩下的才是其余数值 |
+| `desktop/src-tauri/src/settings/{context,view}.rs` `settings.rs` | 刀③ ✅：`context.microEnabled` 一枚（缺省开）+ 后端读面 `context_micro_enabled()`。刀⑥ ✅：其余四枚数值字段落在 `settings/context.rs`，六枚上下文 getter 从 `settings.rs` 搬进同族文件（长度闸逼出来的搬家，搬的是同一族；`settings.rs` 实测 400→360 行，原处留指针注释，账目见 `check_length.sh` 刀⑥ 那段） |
 | `desktop/src/{types/settings.ts,components/settings/ContextSection.vue,locales/{zh-CN,en}/settings.ts}` | 刀③ ✅：视图多一个键、分区多一枚开关、中英各一条文案（`check-i18n` 读数两侧相等） |
 | `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | **刀③ 没进内核**（微压缩落在宿主监听器 + 发送侧，内核只提供 `compacted` 带回位）；**刀④ 也没进**——主层压缩本体住在宿主 `compact.rs`（落点订正见上面计划第 4 条），这一格到此**清空**：内核侧不再欠任何东西 |
 | `crates/kernel-agent/src/kernel/request.rs` `waterfall.rs` | 只**用**现有 `compacted` 带回位；契约形状零改动 |
-| `desktop/src-tauri/src/settings/context.rs` + 设置页「上下文」分区 | 刀⑥：新字段 + 文案（中英成对） |
+| `desktop/src-tauri/src/settings/context.rs` + 设置页「上下文」分区 | 刀⑥ ✅：四枚数值字段（区间常量 + 越界拒且不污染内存态）+ 中英各四条文案 + 「压缩阈值」改名（裁定 B）+ 四行 `.lw-field-num`；两枚后端字段按 ⓖ/ⓗ 不进界面 |
 | `desktop/src-tauri/src/llm/retry.rs` | 刀①/刀⑥：那句"请新开会话"的指向改对；压缩全关时它仍是最终兜底 |
 | `crates/session-store/` | 刀④b ✅：形状没动，`strategy` 多了 `compact` 一个取值；动的是**文本出口**——`SUMMARIZED_MARKER` / `summarized_message()` 从 `session/project.rs` 提到 crate 面（折叠路径与压缩层共用同一个构造函数，判据 SS20a），`event.rs` 里 `strategy` 的取值列举按现役两档订正（并写清"前端不许按枚举分支"） |
 | 前端用量环 / 开发者面板 | 只读展示"这一轮压了什么"，不在 `MemoryPage` 上加东西 |
@@ -422,8 +473,10 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
   ⓓ 设置页那句「工具结果预算」说明（`locales/zh-CN/settings.ts` 的 `toolBudgetKibHint`
   与 en 同键）还写着"超出只在发给模型时**截断**并附一句**续读指引**"——刀② 之后超出是
   **落盘 + 预览**，且那句占位明说"比预览更靠后的部分读不回来"（没有 offset 可续读）。
-  这是文案与事实不符，属刀⑥「设置面与文案」那一刀的正文，不在刀③ 顺手改（改它要连
-  同 ⓐ 的 `fs_read` offset 一起定：等真有了 offset，那句"续读指引"才该回来）。
+  这是文案与事实不符，属刀⑥「设置面与文案」那一刀的正文，不在刀③ 顺手改。
+  **✅ 刀⑥ 已按实况订正**（中英两条同批改：说清"全文落盘、上下文只留路径 + 预览，
+  预览之后的部分读不回来"）。ⓐ 那件仍然欠着：等 `fs_read` 真有了 `offset`，
+  那句"续读指引"才该回来——那时要连 ⓑ 钉着的断言一起改。
   ⓔ 微压缩的账在**会话日志里那一行**还没被断言：环级用例证到 `compacted` 带回位被写入，
   落盘那一跳由 `kernel.rs:253` 既有代码承担。北极星长会话那轮（AC-S2-9）读整轮日志时
   顺带取这个数，不在本刀为它单独搭一套内核夹具。
@@ -432,5 +485,23 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
   不确定性的数值一律做成设置页可调项并给合理缺省"，这颗数正属不确定那类（两家参照都
   没有这一层 ⇒ 没有可照抄的外部真源，见 AC-S2-8 末段），而 AC-S2-10 那份清单成文时
   还没有它 ⇒ 清单要补一行。归刀⑥ 与其余四枚界面行一起做（要连着落中英两条文案），
-  不在刀⑤ 顺手铺开设置面。
-- 回滚：每刀一提交；总开关关 = 行为回到本线开工前；数据侧（会话附件目录）改动前先备份。
+  不在刀⑤ 顺手铺开设置面。**✅ 刀⑥ 已销**：`context.slideKeepRuns`（缺省 1，区间 1..=20）
+  进后端字段 + 设置页一行 + 中英两条文案，旧常量在生产面必须为 0（判据 `SS23a`）。
+  **刀⑥ 收下来登记两件，都是"要你先批形态"而不是我能自己定的**：
+  ⓖ **摘要模型（`compactModel`）没有控件可配**。后端字段可读可写，界面上进不去：本仓
+  "选一个后台角色用哪个模型"这一类的既有形态是 provider + model **成对**（记忆管理器、
+  空会话开场都用它），而这一枚在 Rust 侧只是**一个字符串**。要做对就得把它挪到模型分区、
+  与那一个成对角色合并——那是"记忆管理器"那一行的归属改动，不在压缩这一刀里顺手做。
+  暂不做，`compactModel` 保持后端可写、界面不显示（保存载荷不带它 ⇒ 界面永远不会替用户
+  写回他没看过的值）。
+  ⓗ **自定义压缩指令（`compactInstructions`）要一个新控件形态**。它是自由文本（可以写
+  "摘要里务必保留文件路径"这类），单行 `.lw-field` 装不下；设置页目前没有多行输入框这一种
+  形态，按 §4 与《Front-end Design Guidelines》「同类只许一种形态 ⇒ 新形态先申请、批准后
+  先改标准再写码」。要批的内容：是什么（设置页多行文本域）/ 在哪（上下文分区，紧跟目标比
+  那行）/ 为什么（这一枚只能靠自由文本表达，不是数值）/ 影响（标准 §七 加一类 + stylelint
+  与 `check-style.mjs` 两闸要认它）。未批之前界面不出现它。
+- 回滚：每刀一提交；**订正（刀⑥ 2026-10-19）**：这句原文写"总开关关 = 行为回到本线开工前"
+  与实况不符——现网**没有一枚凌驾各层之上的总闸**，能自主动手的两层各有分闸
+  （`microEnabled` 关微压缩、`compactEnabled` 关主层，滑窗跟主层同命且只在熔断后醒），
+  **两枚同关**才等于回到开工前；spill（`toolResultBudgetKib`）是第四格，填 0 = 不限制。
+  数据侧（会话附件目录）改动前先备份。

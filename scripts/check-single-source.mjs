@@ -836,13 +836,16 @@ const CHECKS = [
       '读实来的（2026-10-19 按本地源码逐行核对），它们决定的是"清得太狠还是太松"——' +
       '漂一枚的表现是历史莫名缺一截工具输出、或者减速层从不工作，两种都得靠人肉跑长会话才发现。' +
       '别处再写一份同样的 `= 5` / `= 256` 就是第二条参数通路 ⇒ 改动这里 = 显式改判据。' +
-      '⚠ 数的是**全生产 .rs 原文**（含注释）：头注里若出现 `const KEEP_RECENT_GROUPS: usize = 5;` ' +
+      '**刀⑥ 的一次搬家已按本档自己的规矩改判**：「保留 5 组」抬成设置项，声明从 ' +
+      '`microcompact.rs` 搬到 `settings/context.rs::MICRO_KEEP_GROUPS_DEFAULT`，' +
+      '第二档钉的仍是那颗 5（值没漂，漂的只有住处）。' +
+      '⚠ 数的是**全生产 .rs 原文**（含注释）：头注里若出现 `const MICRO_KEEP_GROUPS_DEFAULT: u64 = 5;` ' +
       '这种完整声明句式会被算进来，所以注释一律写成中文散文而不是复刻声明',
     (m) => {
       const all = m.rust.join('\n');
       return [
         countOf(all, /pub\(crate\) const CLEARED: &str = "\[旧工具结果已清理\]";/),
-        countOf(all, /const KEEP_RECENT_GROUPS: usize = 5;/),
+        countOf(all, /const MICRO_KEEP_GROUPS_DEFAULT: u64 = 5;/),
         countOf(all, /const IDLE_THRESHOLD_MINUTES: u64 = 60;/),
         countOf(all, /const MIN_TOKEN_SAVINGS: u64 = 256;/),
         countOf(all, /const THRESHOLD_RATIO: f64 = 0\.9;/),
@@ -1019,6 +1022,30 @@ const CHECKS = [
     (m) =>
       `${filesWith(m.hostDesktop, /self\.failures\.(?:of|record|clear)\s*\(/)}|${filesWith(m.hostDesktop, /failures\.fused\s*\(/)}`,
     'compact/deep.rs|slide.rs',
+  ],
+  [
+    'SS23a',
+    '刀⑥ 把两颗硬编码常量抬成设置项之后，**旧常量名不许留在原地**：`KEEP_RECENT_GROUPS` ' +
+      '在微压缩面恒 0、`KEEP_RECENT_RUNS` 在保护网面恒 0（缺省那两份现在只住在 ' +
+      '`settings/context.rs` 的 `MICRO_KEEP_GROUPS_DEFAULT` / `SLIDE_KEEP_RUNS_DEFAULT`）。' +
+      '留着它的后果不是编译错而是**双出处**：有人拿界面值传进来、又有一处继续读常量，' +
+      '表现是"改了保留组数，某一层的边界还是老样子"，而编译器与行为测试都说不出是谁。',
+    (m) =>
+      `${countOf(m.micro, /KEEP_RECENT_GROUPS/)}|${countOf(m.slide, /KEEP_RECENT_RUNS/)}`,
+    '0|0',
+  ],
+  [
+    'SS23b',
+    '两枚新读面各只有一个调用点：`context_micro_keep_groups(` 只住 `microcompact.rs`、' +
+      '`context_slide_keep_runs(` 只住 `slide.rs`。这条盯的不是"有没有接上"（接不上会编译错），' +
+      '而是**同一轮里读了几次设置**：微压缩那一环刻意"取一次存局部"，因为判定与它下面那句' +
+      '记账文本要用同一个数——读第二次就可能在中途被用户保存插队，账上写的组数与实际清掉的' +
+      '组数不是同一个。多一个调用点就是把这个窗口重新打开。' +
+      '⚠ 两条正则都**带前导点**：不带点会把 `settings.rs` 里那两枚 getter 自己的**定义**' +
+      '也数成调用点（第一版就是这么红的）——本档要数的是"谁读了它"，不是"谁定义了它"。',
+    (m) =>
+      `${filesWith(m.hostDesktop, /\.context_micro_keep_groups\s*\(/)}|${filesWith(m.hostDesktop, /\.context_slide_keep_runs\s*\(/)}`,
+    'microcompact.rs|slide.rs',
   ],
 ];
 
@@ -1305,6 +1332,13 @@ if (SELFTEST) {
       m.hostDesktop.push({
         rel: 'slide.rs',
         code: 'self.failures.record(sid);\n',
+      }),
+    // S2 刀⑥（SS23a/b）两条窄变异：旧常量名回到微压缩面 / 保护网多读一次设置。
+    SS23a: (m) => (m.micro += '\npub(crate) const KEEP_RECENT_GROUPS: usize = 5;\n'),
+    SS23b: (m) =>
+      m.hostDesktop.push({
+        rel: 'commands/chat.rs',
+        code: 'let again = settings.context_slide_keep_runs();\n',
       }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),

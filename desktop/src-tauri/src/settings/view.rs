@@ -66,6 +66,8 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             compact_keep_tokens: s.context.compact_keep_tokens,
             compact_model: s.context.compact_model.clone(),
             compact_instructions: s.context.compact_instructions.clone(),
+            micro_keep_groups: s.context.micro_keep_groups,
+            slide_keep_runs: s.context.slide_keep_runs,
         },
         memory: MemorySettingsView {
             enabled: s.memory.enabled,
