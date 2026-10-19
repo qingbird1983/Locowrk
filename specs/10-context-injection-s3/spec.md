@@ -273,6 +273,36 @@ vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。首跑在 clippy 红过两条——
   **不需要做**——本机实测本仓 `.Locowrk/` 从未存在过，没有存量可归并（这条不是欠账）。
 - 真窗口那一发（AC-S3-1/3/4 的"跑一轮看 system"）仍欠，见下面风险③ 的登记。
 
+## 刀③ 拆成两刀的清点（2026-10-20 读实，这一节决定下一轮从哪儿动码）
+
+清点结果推翻了"刀③ 是一刀"的写法，两处非做不可的拆分理由都记在这里：
+
+1. **`tree_directory` 不只是目录文本**。`TreePlan`（`kernel/services.rs:145`
+   `TreeContextSource::plan`）一次交出三样东西：目录文本、**树会话标记**、
+   `tail_user_start`（消息切到"未整理尾巴"的起点）。内核组装侧
+   `kernel.rs:215-227` 拿它做的是三件事，而生产者在
+   `desktop/src-tauri/src/organize/assemble.rs` —— **那是 S4 要整片冻结退役的地方**。
+   ⇒ 本线只能摘**监听器**（`middleware/tree_context.rs` + `waterfall.rs:132-135` 那一环
+   注册），`RequestPayload.tree_directory` 字段与 `plan()` 通路**一律留着**（S4 随
+   organize 一起拔）。刀① 我对 `memory_learn` 的裁定是"不留存在但从未接线"，这一处
+   为什么可以留：它的字段仍被消费（marker 与切片），消失的只是"文本进 system"这一档，
+   而那一档的**生产者**住在别的阶段。这条边界不写下来，下一刀就会顺手去动 organize。
+2. **摘掉监听器会撤掉一条纪律的证明**。`crates/kernel-agent/tests/prompt_layering.rs`
+   三条用例（`static_prefix_memory_middle_directory_last` /
+   `directory_growth_leaves_prefix_intact` / 空串那条）的对象**就是** `TreeDirectoryInject`：
+   它们证的是"append-only 段只动尾部 ⇒ 目录增长不砸前缀"。摘掉注入器之后 system 尾部
+   不再有目录，这三条失去对象 ⇒ 同刀删除，但**纪律本身要交代继承者**：静态前缀不被动态
+   段改写这件事，此后由 `memory_inject/tests/{prefetch,project_index}.rs` 那几条
+   （逐字节复用 + 取数次数）守。这一句必须写进提交正文，否则"删了三条测试"看起来就像
+   为了过闸删测试。
+3. **学习档删除面实测比裁定时那一行大**：`memory_learn/` 本体 **933 行**，
+   `learn_enabled` / `LearnWeights` / `memory_learn` 的触点铺开 **20 个文件**，除后端字段
+   与前端那一格外还牵到 `inject_view.rs`（管理页注入视图）、`recall_log` 的 `breakdown`
+   埋点面、`memory/schema.rs` 那两列 `hit_count` / `last_hit_at`（影子库的列）。
+   ⇒ 拆成 **③a**（指引改写 + 树目录段摘除，约 8 文件）与 **③b**（学习档族删除），
+   各自跑绿各自提交；③b 里**影子库那两列不动**（属 S4 的 sqlite 退役面），本刀只摘
+   生产引用与设置面，并把"列还在、没人读写"这一格如实登记。
+
 ## 开工三问与裁定（2026-10-20 决策人「三问照推荐案，开跑」⇒ 三处全按推荐案落地）
 
 ① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）
