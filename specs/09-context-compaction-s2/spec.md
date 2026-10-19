@@ -111,10 +111,19 @@
       第一轮被清的那批工具结果在第二轮仍是占位；且被清前缀**逐字节稳定**
       （前缀缓存判据：同一投影重放两次的 hash 相同），记账走
       `SessionEvent::ContextCompacted{strategy:"micro"}`，组装侧从日志重放即得边界
-- [ ] AC-S2-5 微压缩的三条"容易漏"都在实现里：只清白名单九个可再生工具
-      （Read / Bash / Grep / Glob / WebFetch / WebSearch / Edit / Write / ApplyPatch）、
+- [ ] AC-S2-5 微压缩的三条"容易漏"都在实现里：只清白名单**可再生且可枚举**的工具——
+      ZCode 那九枚（`Read/Bash/Grep/Glob/WebFetch/WebSearch/Edit/Write/ApplyPatch`，
+      `microcompact.ts:21-31`）在我方的真实对应名是**九枚但不同名**：
+      `fs_read` / `fs_list` / `fs_grep` / `shell` / `shell_read` / `fetch` /
+      `git_status` / `git_diff` / `git_log`（2026-10-19 按注册面取证实名：
+      Glob→`fs_list`，WebFetch/WebSearch 我方只有 `fetch` 一枚，Write/Edit 那一族**不放行**
+      ——我方写侧要 `expected_revision`，清掉回执会让模型丢掉它刚拿到的版本号，
+      比 ZCode 那种"重写一次"的代价更高；`mcp_*` 名字动态拼成、不可枚举 ⇒ 缺省不清）。
       **错误结果缺省不清**（给一条 `clearErrorResults` 关的负对照：失败输出仍在）、
-      idle 60 分钟是第二条触发通路（构造 token 未过线但 idle 过线的夹具）
+      idle 60 分钟是第二条触发通路（构造 token 未过线但 idle 过线的夹具）、
+      媒体结果不清（我方 `screenshot` / `read_image` / `pdf_to_images` 三个名字本身就不在白名单里，
+      另加一条按结果字段形状 `asset`/`assets` 的兜底判据——投影侧已经有这条形状，
+      见 `llm/wire/media.rs:44`）
 - [ ] AC-S2-6 主层深度压缩（AC-13 全四条）：构造机械层压不到目标的会话 → 主层触发 →
       ①摘要落断层且含用户意图 / 待办 / 下一步（对照七节模板判据，逐节非空或如实标"无"）
       ②被摘要段出上下文、日志原文 sha 不变 ③近期原文仍在 ④连续失败 3 次熔断生效不再重试；
@@ -275,7 +284,17 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 - 风险③：本线一旦落地，`llm/retry.rs:53` 那句话的命中率应该掉到零——**如果没掉**，
   说明触发线或锚点算错，这一条本身就是 AC-S2-9-② 的判据。
 - 挂账 / 遗留：S4 退役 organize 时要复查刀①搬走的那两块地有没有被留成双份；
-  按模型覆盖阈值留后续（落点 = 模型管理页）。**刀① 收下来又读到的三件，都登记不修**：
+  按模型覆盖阈值留后续（落点 = 模型管理页）。**刀② 落地时读实工具面，抓到三件登记**：
+  ⓐ `fs_read` **没有 `offset` 入参**（`tool-fs/src/read.rs` 全量读入后 `truncate(max_bytes)`，
+  缺省 32 KiB、上限 1 MiB）⇒ 刀② 第一版占位文案里"传 offset / max_bytes"是教模型用一个
+  不存在的参数，已当场订正为如实措辞（见 `spill::persisted` 的头注）；给 `fs_read` 补
+  `offset` 要同时改 manifest 与 describe（SS7 那条清单↔describe 对账会盯着），单独立一刀。
+  ⓑ **同一句假措辞在改前的截断提示里也存在**（`llm/tests/tool_budget.rs:91` 还钉着
+  "含 offset / max_bytes"）——那是 v2.192 Q8 留下的既有缺陷，本刀**故意不动**：
+  降级文案与改前逐字节相同是刀② 的等价性证据，动它就等于用另一件事换掉这条证明。
+  等 ⓐ 那刀一起改（届时同步更新那条断言，不许悄悄放宽）。
+  ⓒ 白名单不能按名字放行 `mcp_<server>_<local>` 那一族（名字是动态拼的，
+  `tool-mcp/src/registry.rs:157`）⇒ 刀③ 的微压缩白名单只列可枚举的真实名，MCP 结果缺省不清。**刀① 收下来又读到的三件，都登记不修**：
   ① "生效窗口"仍有两条链——上下文节奏走 `session_capacity`（四层，含 models.dev 目录），
   发送侧走 `app_llm.rs:240-243` 的 `RowFacts`（两级，故意不查目录，理由是"不发明能力"）；
   合并它会改请求下发行为，不属于搬家这一刀。② 无供应商上报时进度条回落树组装口径、

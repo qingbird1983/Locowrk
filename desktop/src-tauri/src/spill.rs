@@ -100,13 +100,22 @@ pub(crate) fn clipped(content: &str, cut: usize) -> String {
 /// `shell` / `fs_grep` 这类输出没有 offset 语义，改前那种提示对它们等于"内容就是没了"；
 /// 落盘之后任何超预算输出都变成一份可寻址文件，读回通路只剩 `fs_read` 一条。
 /// 数据根本来就在归属会话的 `fs_roots` 围栏内（`workspace.rs:41`），读回不需要新权限。
+///
+/// ⚠ 文案里**不许出现 `offset`**：刀② 第一版写了"传 offset / max_bytes"，而
+/// `fs_read` 的入参只有 `path` 与 `max_bytes`（`tool-fs/src/read.rs` 全量读入后
+/// `truncate(max)`，manifest 的 schema 里没有 offset）——那等于教模型传一个不存在的参数，
+/// 而且它拿到的仍然只是文件开头。现在的措辞说的是真事：默认 32 KiB、上限 1 MiB
+/// （都大于缺省那枚 24 KiB 预算，所以一次读回就能拿到比预览更多的内容），
+/// 超过 1 MiB 那一档读不干净、只在日志里，就如实说"超过的部分读不到"。
+/// 给 `fs_read` 补 `offset` 是另一刀（要同时改 manifest 与 describe，SS7 那条对账会盯着）。
 pub(crate) fn persisted(path: &str, preview: &str, cut: usize, total: usize) -> String {
     format!(
         "<persisted-output path=\"{path}\" total_bytes=\"{total}\" preview_bytes=\"{cut}\">\n\
          {preview}\n\
          【工具结果超过「工具结果预算」，完整输出已落盘在上面 path 指向的文件\
          （会话日志仍保原文，本文件只由发送侧投影产生）。上面只是前 {cut} 字节；\
-         要看后面的部分用 fs_read 读该路径并传 offset / max_bytes\
+         要看后面的部分用 fs_read 读该路径——它默认返回前 32 KiB、可传 max_bytes 提到 1 MiB，\
+         但没有 offset，比它更靠后的部分读不回来。\
          （该预算在 设置 → 上下文 可调，0 = 不限制）。】\n\
          </persisted-output>"
     )
