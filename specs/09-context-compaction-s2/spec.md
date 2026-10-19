@@ -101,9 +101,12 @@
       而我们的滑杆不承担那颗缓冲（方案稿 §B 的"只扣一次"就是这一条），所以是 179K
       而不是 166K。**判据数字必须来自重读原文，不来自回忆**——这一条本来写在
       「两家参照源码逐行核对」的纪律里，初稿仍犯了，记下来是为了让下一刀别再靠回忆
-- [ ] AC-S2-3 落盘（spill）：一条超阈值的工具输出 ⇒ 附件目录多一个文件 +
-      上下文里是 `<persisted-output> 路径 + 预览 </persisted-output>` +
-      日志原文 sha **不变**（AC-8-② 的第一次兑现）
+- [x] AC-S2-3 落盘（spill）（✅ 2026-10-19 刀②，盘上一半）：一条超阈值的工具输出 ⇒
+      spill 目录多一个文件 + 上下文里是 `<persisted-output> 路径 + 预览 </persisted-output>` +
+      日志原文**没被改写**（`llm/tests/spill.rs` 两条各钉一半：落盘文件 = 全文、
+      投影后 `req.messages` 里仍是全文——发送侧结构上碰不到日志，这条断言钉的是
+      "别哪天顺手把投影写回日志"）。⚠ 三条里"日志 sha 对比"的实跑形态留给刀⑦
+      的长会话北极星实测（AC-S2-9 那一轮里顺带取 sha 前后值），本刀只有结构证据
 - [ ] AC-S2-4 微压缩边界单调（AC-8-③）：二次构造**不回收**——同一会话连跑两轮，
       第一轮被清的那批工具结果在第二轮仍是占位；且被清前缀**逐字节稳定**
       （前缀缓存判据：同一投影重放两次的 hash 相同），记账走
@@ -178,8 +181,26 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
    （窗口 + 输出上限一次解析，`session_window` 退成薄封装）。判据 = `SS16a/b/c` +
    `context_budget/tests.rs` 六条 + 变异红证。**不在本刀预造** `armed()`（裁定 A 第二半
    归刀④），不统一无上报回落尺（取证⑦）。
-2. **刀② spill（落盘）**：大工具输出 → 会话附件目录 + `<persisted-output>` 占位；
-   阈值字符数进设置面。先做它：内容定值判定 ⇒ 前缀天然稳定，风险最低。
+2. **刀② spill（落盘）**（✅ 2026-10-19）：新 `desktop/src-tauri/src/spill.rs`——
+   `<数据根>/spill/<会话>/<sha256>.txt`（内容寻址 ⇒ 同内容同路径 ⇒ 占位文本逐字节相同 =
+   M1 前缀稳定判据在这一刀免费拿到），会话 id 先过 `plugin_api::naming::valid_session_id`
+   （那把唯一尺），组装点只交数据根、目录名由 `SPILL_DIR` 一枚常量决定。
+   **发送侧是一处判定、两种后果**：`clip_tool_output` 升成 `project_tool_output`
+   ——落得下就发 `<persisted-output path=… total_bytes=… preview_bytes=…>` 包裹的预览 +
+   一句"用 fs_read 读该路径并传 offset"，落不下（无句柄 / 无会话身份 / 写失败）就
+   退回**改前逐字节相同**的那句截断提示并 warn。没有新增第二枚设置：阈值仍是
+   「工具结果预算」（`toolResultBudgetKib`，0 = 不限制 = 既不截也不落）。
+   取证抓到的一条：**不能落进 `assets/`**——那里的 GC 按"文件名的 sha 是否出现在会话
+   日志文本里"判孤儿，而 spill 文件的 sha 不在日志里 ⇒ 天生孤儿，宽限期一过就被删，
+   模型回头就读空（理由写在 `spill.rs` 头注，判据 SS17b 钉住目录名零手拼）。
+   判据 = `spill/tests.rs` 7 条 + `llm/tests/spill.rs` 6 条 + `SS17a/b/c` 三条形状档
+   （各自窄变异、selftest 无连带打红）；`tool_budget.rs` 那批**一字未改仍绿** = 降级
+   通路字节等价的证据。
+   ⚠ 两件如实挂着：① **spill 目录还没有清理通路**（按会话分子目录就是为了让"删会话
+   顺手删它的 spill"成为可能，但那要动删除路径 = 禁区动作，单独点头那一刀做）；
+   ② 真机跑一轮（发一条 >24 KiB 的工具输出，看 `spill/<会话>/` 出现文件、转录里工具
+   内容变成 `<persisted-output …>`）没做——单测覆盖了两个分支与注入点调用，
+   但端到端那一格只有实跑才算证，等桌面端重启时一起给你看。
 3. **刀③ micro（微压缩）**：白名单九工具 + 错误不清 + 保留最近 5 条 + 最小节省 256 +
    idle 60 分钟第二通路 + **边界单调**（`ContextCompacted{strategy:"micro"}` 记账、
    组装侧重放取边界、被清前缀逐字节稳定）。
@@ -208,7 +229,7 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
       能测出差别的配方（留给刀⑥ 与设置页文案一起目检）：会话里选 `MiniMax-M2.7` 那一行 +
       把滑杆推到 300K ⇒ 期望看到进度条**分母 = 241,144**（而不是 300,000），
       百分比按它重算；`anchor_source` 与"窗口未知时按未设置呈现"那条现状行为不变
-- [ ] 刀②→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成- [ ] 数据侧改动前把相关目录复制进备份目录（specs/01 那条纪律在本线同样适用：
+- [ ] 刀③→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成- [ ] 数据侧改动前把相关目录复制进备份目录（specs/01 那条纪律在本线同样适用：
       压缩虽不改日志，但 spill 会往会话附件目录写文件）
 
 ## 要你定的（三处 · 2026-10-19 全部已定，采纳建议）
@@ -233,7 +254,11 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 | `desktop/src-tauri/src/settings/llm/persist.rs` `llm/mod.rs` `settings.rs` | 刀① ✅：新增 `session_capacity`（窗口 + 输出上限一次解析），`session_window` 退成薄封装；`settings/tests/window.rs` 加一条同源用例 |
 | `desktop/src-tauri/src/commands/chat.rs` `scheduler/engine.rs` | 刀① ✅：两个组装点的 `UsagePolicy.threshold_tokens` 改吃有效阈值 |
 | `scripts/check-single-source.mjs` | 刀① ✅：SS16a/b/c 三条 + 两条扫描面下限 + 三条窄变异；selftest 的分工读数（"同时打红谁"）也在这一刀加上 |
-| `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | 刀②③④：压缩本体与 `agent/request` 决策方 |
+| `desktop/src-tauri/src/spill.rs`（+ `spill/tests.rs`） | 刀② ✅：落盘句柄（数据根 + 会话子目录 + 内容寻址文件名）与两句文本（`<persisted-output>` 模板 / 降级提示）的唯一出处 |
+| `desktop/src-tauri/src/llm/wire/{payload,messages}.rs` | 刀② ✅：`clip_tool_output` → `project_tool_output`（一处判定、两种后果），`WireCaps` 带落盘句柄因而从 `Copy` 降为 `Clone`，`attempt_stream` 改吃借用 |
+| `desktop/src-tauri/src/llm/{app_llm,client}.rs` `state/llm_stack.rs` | 刀② ✅：`AppLlm.spill` 字段 + `with_spill` 注入器；组装点交**数据根**（不手拼目录名）。app_llm 由此 394→411 行，按三问入 `check_length` 名单（理由写在该脚本注释与提交正文） |
+| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限 + selftest 的"同时打红谁"分工读数 |
+| `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | 刀③④：微压缩与主层压缩本体（刀② 没动内核——落盘发生在宿主发送侧） |
 | `crates/kernel-agent/src/kernel/request.rs` `waterfall.rs` | 只**用**现有 `compacted` 带回位；契约形状零改动 |
 | `desktop/src-tauri/src/settings/context.rs` + 设置页「上下文」分区 | 刀⑥：新字段 + 文案（中英成对） |
 | `desktop/src-tauri/src/llm/retry.rs` | 刀①/刀⑥：那句"请新开会话"的指向改对；压缩全关时它仍是最终兜底 |

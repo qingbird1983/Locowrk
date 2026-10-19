@@ -21,6 +21,12 @@ set -u
 SUGGEST=400
 
 # 名单 = 已按三问判定为「高内聚、暂不拆」的文件。一行一个，路径相对仓库根。
+# `llm/app_llm.rs` 于 S2 刀② 入名单（394→411 行）：三问皆是——①只管一件事
+# （把宿主设置面 + 注入句柄翻译成一次 LLM 请求与它的 caps/钩子）；②名字概括得住
+# （AppLlm = 宿主侧 LlmService 适配器）；③改它牵动的都是同一件事（每枚能力都要进
+# caps，这正是它的职责而不是无关部分）。刀② 只加了 17 行（一枚注入句柄 + 一个
+# builder + caps 那一格），为凑 400 把 builder 面拆出去 = 在本刀里做无关重构，
+# 且拆完仍是同一个 struct 的两半。若后续刀再加格，届时按三问重判并真拆。
 OVERLIST="
 desktop/src/components/chat/Composer.vue
 desktop/src/components/chat/ToolDetailView.vue
@@ -29,6 +35,7 @@ desktop/src/components/settings/model/ProviderSetupDialog.vue
 desktop/src/components/settings/model/ModelPanes.vue
 desktop/src/components/settings/LlmSection.vue
 desktop/src-tauri/src/llm/client.rs
+desktop/src-tauri/src/llm/app_llm.rs
 desktop/src/components/chat/TranscriptFlow.vue
 desktop/src-tauri/src/events.rs
 desktop/src/components/settings/DeveloperSection.vue

@@ -185,7 +185,7 @@ impl CompatLlm {
                 .attempt_stream(
                     cfg,
                     dialect,
-                    caps,
+                    &caps,
                     &req,
                     assets,
                     on_delta,
@@ -241,12 +241,15 @@ impl CompatLlm {
     /// 解析）与「已推 delta」标记。
     /// `assets`（批 D）：带附件请求的 asset 字节读取器（AppLlm 注入；
     /// build_payload 编码 content 数组时读，读失败 = Fatal）。
+    /// `caps`（S2 刀②）：改吃借用——这份里现在住着一个 `Arc`（落盘句柄），
+    /// `WireCaps` 因此从 `Copy` 降成 `Clone`；重试循环每轮复用同一个借用，
+    /// 比每轮克隆一次更准（克隆会把"每轮一份上限快照"这种错觉留在代码里）。
     #[allow(clippy::too_many_arguments)]
     async fn attempt_stream(
         &self,
         cfg: &LlmSettings,
         dialect: Dialect,
-        caps: WireCaps,
+        caps: &WireCaps,
         req: &LlmRequest,
         assets: Option<&crate::assets::AssetStore>,
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
@@ -270,7 +273,7 @@ impl CompatLlm {
         )
         .build()
         .map_err(|e| AttemptError::Fatal(format!("HTTP 客户端构建失败: {e}")))?;
-        let mut payload = build_payload(&cfg.model, req, true, dialect, &caps, assets)
+        let mut payload = build_payload(&cfg.model, req, true, dialect, caps, assets)
             .map_err(AttemptError::Fatal)?;
         if drop_stream_options {
             payload

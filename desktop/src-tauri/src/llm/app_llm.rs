@@ -61,6 +61,9 @@ pub struct AppLlm {
     /// 模型能力目录（批 A）：发送前门控的目录模态数据源（用户钉死缺席时
     /// 目录说了算；两者都未知 = 放行，宁缺勿假）。
     catalog: Option<Arc<super::catalog::CatalogStore>>,
+    /// 超预算工具输出的落盘句柄（S2 刀②）：None = 不落盘，行为退回改前的纯截断
+    /// （headless 与测试装配就走这一档，所以它是 Option 而不是必需字段）。
+    spill: Option<Arc<crate::spill::SpillStore>>,
 }
 
 impl AppLlm {
@@ -75,6 +78,7 @@ impl AppLlm {
             diagnoser: Arc::new(super::diagnose::Diagnoser::default()),
             assets: None,
             catalog: None,
+            spill: None,
         }
     }
 
@@ -93,6 +97,7 @@ impl AppLlm {
             diagnoser: Arc::new(super::diagnose::Diagnoser::default()),
             assets: None,
             catalog: None,
+            spill: None,
         }
     }
 
@@ -104,6 +109,15 @@ impl AppLlm {
     ) -> Self {
         self.assets = Some(assets);
         self.catalog = Some(catalog);
+        self
+    }
+
+    /// 组装点注入落盘句柄（S2 刀②：超预算工具输出写进 `<数据根>/spill/<会话>/`）。
+    /// 与 `with_multimodal` 分开两枚而不并成一枚：两者服务的判定不同（附件字节源
+    /// 缺席是 Fatal——用户附件不能静默丢，落盘句柄缺席是**降级**——退回纯截断），
+    /// 把"必须在场"和"可以不在场"塞进同一个注入器，迟早有一侧的语义被读错。
+    pub fn with_spill(mut self, spill: Arc<crate::spill::SpillStore>) -> Self {
+        self.spill = Some(spill);
         self
     }
 
@@ -278,6 +292,9 @@ impl AppLlm {
             tool_result_budget_bytes: self.settings.tool_result_budget_bytes(),
             max_output: facts.max_output,
             ctx_window: facts.ctx_window,
+            // 刀②：句柄是 Arc，clone 一次进 caps（WireCaps 从 Copy 改成 Clone 的
+            // 全部代价）。这里只带句柄，"要不要真落盘"由发送侧按会话身份判定。
+            spill: self.spill.clone(),
         };
         let image_pin = facts.supports_image;
         let route = Self::route_of(&req);

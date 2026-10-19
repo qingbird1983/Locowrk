@@ -70,6 +70,7 @@ mod scheduler;
 mod search_tools;
 mod session_log;
 mod settings;
+mod spill;
 mod state;
 mod stop;
 mod sub_transcript;

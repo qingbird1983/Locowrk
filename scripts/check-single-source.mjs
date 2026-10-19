@@ -409,6 +409,7 @@ function snapshot() {
       'desktop/src-tauri/src/organize/mod.rs',
       'desktop/src-tauri/src/organize',
     ),
+    spill: moduleFace('desktop/src-tauri/src/spill.rs', 'desktop/src-tauri/src/spill'),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -778,6 +779,39 @@ const CHECKS = [
       ].join('|'),
     '1|1|1',
   ],
+  [
+    'SS17a',
+    '「一条工具输出超预算该怎么办」**在宿主生产面只有一个解释者** = ' +
+      '`llm/wire/payload.rs` 的 `project_tool_output`，而改前那枚 `clip_tool_output` 是墓碑（恒 none）。' +
+      '这条说的是"一条判定、两种后果"：落盘与截断若拆成两层，界面上那一枚「工具结果预算」就同时管两层' +
+      '（"24K 到底是截断线还是落盘线"没人答得出），而两层迟早漂成"截断层说 24K、落盘层说 20K"。' +
+      '用文件集合而不是计数：计数挡不住"搬家到别的文件"，集合一变就红得能看见是谁（SS14a 同一条理由）',
+    (m) =>
+      `${filesWith(m.hostDesktop, /\bfn project_tool_output\s*\(/)}|${filesWith(m.hostDesktop, /\bclip_tool_output\b/)}`,
+    'llm/wire/payload.rs|none',
+  ],
+  [
+    'SS17b',
+    'spill 目录名只有一个定义（`spill.rs` 里那枚 `SPILL_DIR`），且**全宿主面零处手拼 ' +
+      '`join("spill")`**（SS1 那条"路径算式只许一个出口"的同族）。组装点只许把**数据根**交给 ' +
+      '`SpillStore::new`；它要是自己 `join("spill")`，将来改目录名就是"构造侧与读侧各半个真相"，' +
+      '表现为落盘成功而回捞/清理找不到地方。期望含 none 的那一档 ⇒ 由 FLOORS 兜"面瞎了"',
+    (m) =>
+      `${filesWith(m.hostDesktop, /const SPILL_DIR: &str = "spill";/)}|${filesWith(m.hostDesktop, /join\("spill"\)/)}`,
+    'spill.rs|none',
+  ],
+  [
+    'SS17c',
+    '发给模型的两句文本各只有一个出处：`<persisted-output>` 模板与降级那句 ' +
+      '`fn clipped` 都只住在 `spill.rs`（宿主面文件集合两个都 = `spill.rs`）。' +
+      '为什么盯文本而不是盯调用：这两句是模型行为的一部分（它照 `path=` 去 fs_read、' +
+      '照"0 = 不限制"知道设置在哪），漂成两个变体就等于对模型撒两次不一样的谎；' +
+      '而 `clip_tool_output` 里那段原文在沿革注释里出现是必要留痕，所以数的是代码行' +
+      '（`hostDesktop` 面已剥行注释，SS11/SS13 同一口径）',
+    (m) =>
+      `${filesWith(m.hostDesktop, /<persisted-output/)}|${filesWith(m.hostDesktop, /\bfn clipped\s*\(/)}`,
+    'spill.rs|spill.rs',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -810,6 +844,9 @@ const FLOORS = [
   // 第一条下限挡"整个面塌掉"，第二条挡"把 plugins-src 一并排掉"那种改法（白名单点正在那儿）。
   ['硬删面文件数（全生产排 memlayout）', (m) => m.hardDelete.length, 150],
   ['硬删面含工具删除本体', (m) => m.hardDelete.filter((f) => /fn memory_delete/.test(f.code)).length, 1],
+  // SS17 三档同样是文件集合，其中 SS17b 的右档期望 `none` ⇒ 靠下限把面钉住：
+  // spill 面（现值 1 个主文件 + 将来的子树）剥注释后不会短，落盘本体必须在面里。
+  ['spill 面含落盘本体', (m) => countOf(m.spill, /fn put\s*\(/), 1],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
@@ -951,6 +988,26 @@ if (SELFTEST) {
       (m.organize +=
         '\nlet real = crate::runner::reported_input_tokens(session).unwrap_or(0);\n'),
     SS16c: (m) => m.rust.push('\npub const OUTPUT_RESERVE_CAP_TOKENS: u64 = 21_000;\n'),
+    // S2 刀② 的三档变异，同样各打中自己那一项：
+    //  SS17a 长出第二个"超预算怎么办"的解释者（并把改前那枚名字从墓碑里扶起来）；
+    //  SS17b 组装点自己手拼目录名——这一档**只碰右档**，左档（那枚 const）不动，
+    //          否则它就成了 SS17b 在罚同一件事的两遍；
+    //  SS17c 第二份 `<persisted-output` 模板（文本漂成两个变体）。
+    SS17a: (m) =>
+      m.hostDesktop.push({
+        rel: 'llm/wire/messages.rs',
+        code: 'fn project_tool_output_alt(c: String) -> String {\n    clip_tool_output(c, None)\n}\n',
+      }),
+    SS17b: (m) =>
+      m.hostDesktop.push({
+        rel: 'state/llm_stack.rs',
+        code: 'let spill = SpillStore::new(&root.join("spill"));\n',
+      }),
+    SS17c: (m) =>
+      m.hostDesktop.push({
+        rel: 'llm/wire/messages.rs',
+        code: 'const ALT_TEMPLATE: &str = "<persisted-output path=…>";\nfn clipped_alt() {}\n',
+      }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

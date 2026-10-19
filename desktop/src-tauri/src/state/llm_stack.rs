@@ -92,13 +92,19 @@ pub(crate) fn build(init: Init) -> Stack {
     let catalog = Arc::new(crate::llm::catalog::CatalogStore::new(catalog_bundled));
     // 批 D 资产存储：`<数据根>/assets/` 内容寻址（wire 编码字节源 + GC 根）
     let assets = Arc::new(crate::assets::AssetStore::new(root.join("assets")));
+    // S2 刀② 落盘层：这里给的是**数据根**，`spill/` 那一格由 `spill::SPILL_DIR`
+    // 决定（组装点自己拼目录名 = 第二个出处）。它与 assets 不同目录是刻意的：
+    // assets 有 GC（按"sha 是否出现在日志文本里"判孤儿），spill 文件的 sha 不在
+    // 日志里，混进去会被当孤儿删掉——理由写在 `spill.rs` 头注。
+    let spill = Arc::new(crate::spill::SpillStore::new(&root));
     // 批 F：AppLlm 保具体类型句柄——子代理模型面工厂（SubagentLlm 内层）
     // 与全局服务共用同一实例。
     let app_llm = Arc::new(
         AppLlm::with_overrides(Arc::clone(&settings), Arc::clone(&model_overrides))
             .with_retry_surface(Arc::clone(&stop_flags), llm_notify)
             .with_diagnoser(Arc::clone(&llm_diagnoser))
-            .with_multimodal(Arc::clone(&assets), Arc::clone(&catalog)),
+            .with_multimodal(Arc::clone(&assets), Arc::clone(&catalog))
+            .with_spill(Arc::clone(&spill)),
     );
     let llm: Arc<dyn LlmService> = Arc::clone(&app_llm) as Arc<dyn LlmService>;
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
