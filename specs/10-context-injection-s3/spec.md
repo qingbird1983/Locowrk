@@ -153,6 +153,36 @@
    （或两者共同下沉成一个函数）+ 拒收读数进 `ContextUsage` 载荷 + 扣减链上界面；
    AC-S3-7/8。
 
+## 刀① 施工形状（本线第一刀；与三问无关，点头即照此动码）
+
+- **契约**：`MemorySource` 新增 `global_index(session_id) -> Option<String>`，**缺省 `None`**
+  ⇒ 五个测试 fake 与 headless 装配零改动（与 `repo_context` / `project_index` 同一惯例）；
+  `project_index` 语义一字不动。内核把两段包成**一个** `<memory_index>` 块，段头
+  `[global]` / `[project]`，两段各自可缺席（由 `append_block` 的"add=None 不动"承担，
+  不写第二种早退分支）。块名与段头是我定的，可翻案，不为它单开一问。
+- **同刀删**：`build_block` / `clip` / `tag_suffix` 三个私有件——摘掉 `recall_relevant`
+  那唯一一次调用（`mod.rs:276-280`）之后它们必成 dead code，`clippy -D warnings` 当场红，
+  所以删它们是这一刀的必经之路，不是"顺手清"。
+- **同刀不动**：`recall` / `recall_relevant` / `MemoryEntry` / `VALUE_INJECT_MAX_CHARS`
+  全部原样留着——宿主 `relevance` 信号还在复用那颗常量（`mod.rs:62-67` 写明了"匹配面必须
+  等于注入面"这条纪律与它的判据），而 `learnEnabled` 一族的去留是**三问②**，不在本刀偷做。
+- **`top_k` 只改一处**：早退条件从 `!cfg.enabled || cfg.top_k == 0`（`mod.rs:215`）改成只看
+  `enabled`——索引常驻之后"条数设 0 连索引一起关掉"是说不清的隐藏耦合。但
+  `MemoryInjectConfig.top_k` 字段、`settings/memory` 那三处、`PrefetchEntry.top_k`
+  **一律不动**：`settings.rs:279-287` 那段注释把"字段集只有 `block`/`top_k`"写成**有意承重**
+  （破它 = 有人能把权重塞进失效判据），要改得单独带理由。登记：`memory.topK` 自本刀起
+  在注入面**无消费者**，去留随 §E 那一批（S4）。
+- **宿主侧**：`global_index()` 读 `~/.Locowrk/memory/global/MEMORY.md` 的**落盘正文**
+  （真源 = 文件、不现算排序 = specs/01 的 AC-7）；钳制复用 `memory_index.rs:173 clamp` 与
+  `memlayout/index.rs:30` 那颗常量——**同一把钳不许出现第二个出处**，全局段与项目段
+  走同一个 `clamp`，只是喂进去的 body 不同。
+- **判据**：新 SS 项钉「`<persistent_memory>` 与 `<project_memory_index>` 两标签在生产扫描面
+  0 命中」+「`<memory_index>` 恰好 1 处」；变异必须是**在生产文件里**复活旧标签
+  （测试夹具里出现旧标签不算红，否则这条判据挡不住"生产还留着、只是没人调"）。
+- **用例**：`memory_inject/tests/project_index.rs:89-95` 那条「facts < index < guide」的内部序
+  按新形状改写（旧的两块没了）；`crates/kernel-agent/tests/prompt_layering.rs` 两条**不动**
+  （环序没变）；`tests/prefetch.rs:80-101` 的「top_k 变 = 重算」仍绿（字段没动）。
+
 ## 要你定的（三处，点头后我按裁定动代码）
 
 ① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）：
