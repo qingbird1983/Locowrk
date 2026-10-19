@@ -1,17 +1,20 @@
-// S2 刀③：上下文分区那枚「微压缩」开关（`components/settings/ContextSection.vue`）。
+// S2 刀③ + 刀④c：上下文分区那两枚压缩开关（`components/settings/ContextSection.vue`）。
 //
 // 形状照 `appearance-section.spec.ts`（同一种"挂一个分区、灌一份投影、点保存"的
 // 取证载体），断言一律走 **i18n key 的当前档解析值**而不是中文串。
 //
-// 四条各抓一层，彼此不重叠：
+// 各条抓一层，彼此不重叠：
 //  ① 开关初值来自**投影** ⇒ 抓"设置页显示开、后端其实关着"（打开面板看到的和实际生效的
 //     必须是同一份，这是 v2.138 那条「看到的 = 触发用的」在开关维度上的同一条纪律）；
 //  ② 翻开关**不自动**发 IPC，点保存才发一趟 ⇒ 抓"每点一下发一趟往返"（本区是显式保存制）；
-//  ③ 保存载荷四个键全数带上，`microEnabled` 是翻过的那个值 ⇒ 抓"新字段漏在后端边界上、
-//     界面永远关不掉这一层"（漏带一个键时 `ContextUpdate` 走 serde default = 保持不变，
-//     于是按钮看着按下去了、其实什么都没改）；
-//  ④ 区里两枚开关的 `aria-label` 互不相同 ⇒ 抓"label 抄漏 = 两个开关同名"（读屏无法区分，
-//     而本文件的选择器也会立刻打空——这是那条"按标签取、不按类型捞第一个"的口径）。
+//  ③ 保存载荷把**界面上真渲染过的键**全数带上 ⇒ 抓"新字段漏在后端边界上、界面永远关不掉
+//     这一层"（漏带一个键时 `ContextUpdate` 走 serde default = 保持不变，于是按钮看着按下
+//     去了、其实什么都没改）。反过来，没渲染的四枚（目标比 / 保留额度 / 摘要模型 / 自定义
+//     指令）**不许**出现在载荷里——替用户写回他没看过的值，是另一种骗；
+//  ④ 区里三枚开关的 `aria-label` 互不相同 ⇒ 抓"label 抄漏 = 两个开关同名"（读屏无法区分，
+//     而本文件的选择器也会立刻打空——这是"按标签取、不按类型捞第一个"那条口径）；
+//  ⑤ 深度压缩单独可关 ⇒ 抓"两枚开关串在一起"（关了深度压缩不该把微压缩一起带走，
+//     三层减速是三条独立的可关那一格，这正是可配置原则②在这里的落点）。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => {
@@ -35,13 +38,19 @@ const withGlobal = () => ({ global: { plugins: [i18n] } });
 
 const viewWith = (context: Context) => ({ locale: "zh-CN", context }) as SettingsView;
 
-/** 上下文分区的四键（缺省值照后端 `ContextSettings::default`，**照生产抄不照想象编**：
- *  滑杆 100_000 / 进度条开 / 预算 24 KiB / 微压缩开）。 */
+/** 上下文分区投影的九键。缺省值**照后端 `ContextSettings::default` 抄，不照想象编**：
+ *  滑杆 100_000 / 进度条开 / 预算 24 KiB / 微压缩开 / 深度压缩开 / 目标比 50 /
+ *  近期原文额度 15_000 / 摘要模型空 / 自定义指令空。 */
 const ctx = (over: Partial<Context> = {}): Context => ({
   thresholdTokens: 100_000,
   usageBar: true,
   toolResultBudgetKib: 24,
   microEnabled: true,
+  compactEnabled: true,
+  compactTargetPct: 50,
+  compactKeepTokens: 15_000,
+  compactModel: "",
+  compactInstructions: "",
   ...over,
 });
 
@@ -69,30 +78,36 @@ beforeEach(() => {
   resetIpc();
 });
 
-describe("上下文分区的微压缩开关", () => {
-  it("行名与说明渲染出来，且切到 en 后同一 key 换成英文（中英成对的实跑面）", () => {
+describe("上下文分区的压缩开关", () => {
+  it("两枚压缩开关的行名与说明都渲染出来，切到 en 后同一 key 换成英文（中英成对的实跑面）", () => {
     seed();
     const wrapper = mount(ContextSection, withGlobal());
     const zhLabel = t("settings.microCompact");
     expect(wrapper.text()).toContain(zhLabel);
     expect(wrapper.text()).toContain(t("settings.microCompactHint"));
+    expect(wrapper.text()).toContain(t("settings.deepCompact"));
+    expect(wrapper.text()).toContain(t("settings.deepCompactHint"));
 
     applyLocalePref("en");
     const en = mount(ContextSection, withGlobal());
     expect(en.text()).toContain(t("settings.microCompact"));
+    expect(en.text()).toContain(t("settings.deepCompact"));
     expect(en.text()).not.toContain(zhLabel);
     applyLocalePref("zh-CN");
   });
 
-  it("开关初值 = 投影里的 microEnabled，不是本地缺省", () => {
-    seed({ microEnabled: false });
+  it("两枚开关的初值都 = 投影里那两枚，不是本地缺省", () => {
+    seed({ microEnabled: false, compactEnabled: false });
     const wrapper = mount(ContextSection, withGlobal());
     expect(switchByLabel(wrapper, t("settings.microCompact")).attributes("aria-checked")).toBe(
       "false",
     );
+    expect(switchByLabel(wrapper, t("settings.deepCompact")).attributes("aria-checked")).toBe(
+      "false",
+    );
   });
 
-  it("翻开关不发 IPC，点保存才发一趟，且载荷四个键齐全", async () => {
+  it("翻开关不发 IPC，点保存才发一趟，且载荷只含界面上渲染过的那五键", async () => {
     seed({ microEnabled: false });
     onCommand("settings_set", viewWith(ctx({ microEnabled: true })));
     const wrapper = mount(ContextSection, withGlobal());
@@ -111,18 +126,33 @@ describe("上下文分区的微压缩开关", () => {
       usageBar: true,
       toolResultBudgetKib: 24,
       microEnabled: true,
+      compactEnabled: true,
     });
   });
 
-  it("区里两枚开关各有自己的标签（进度条 / 微压缩不同名）", () => {
+  it("区里三枚开关各有自己的标签（进度条 / 微压缩 / 深度压缩互不同名）", () => {
     seed();
     const wrapper = mount(ContextSection, withGlobal());
     const labels = wrapper
       .findAll('button[role="switch"]')
       .map((b) => b.attributes("aria-label") ?? "");
-    expect(labels).toHaveLength(2);
-    expect(new Set(labels).size).toBe(2);
+    expect(labels).toHaveLength(3);
+    expect(new Set(labels).size).toBe(3);
     expect(labels).toContain(t("settings.usageBar"));
     expect(labels).toContain(t("settings.microCompact"));
+    expect(labels).toContain(t("settings.deepCompact"));
+  });
+
+  it("深度压缩单独关得掉：载荷里 compactEnabled=false 而 microEnabled 保持原值", async () => {
+    seed({ microEnabled: true, compactEnabled: true });
+    onCommand("settings_set", viewWith(ctx({ compactEnabled: false })));
+    const wrapper = mount(ContextSection, withGlobal());
+
+    await switchByLabel(wrapper, t("settings.deepCompact")).trigger("click");
+    await clickSave(wrapper);
+    const calls = invokeCalls();
+    const sent = calls[calls.length - 1]?.args?.context as Record<string, unknown>;
+    expect(sent.compactEnabled).toBe(false);
+    expect(sent.microEnabled, "两枚开关不许串在一起（三层减速各有关的那一格）").toBe(true);
   });
 });

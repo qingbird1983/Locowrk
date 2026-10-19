@@ -164,6 +164,16 @@ function hostMemoryFace() {
  * 沿革注释里必然提到被搬走的那个名字，按字面数就是一片假红。
  */
 const stripComments = (s) => s.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+/**
+ * 测试面的形状口径（S2 刀④c 的口径订正，`hostDesktopFace()` 与 `moduleFace()` 共用）：
+ * `tests.rs` / `tests/` 目录 / `tests_*.rs` / `*_tests.rs` 四种都是测试，一个都不许进
+ * 生产面。先前两处各写了一遍 `/(^|\/)tests(_?\.rs|\/)/`，那个式子只排得掉前两种，
+ * 排不掉 `tests_approval/hub_basic.rs`、`tests_hotpath.rs`、`compact/tests_deep.rs`
+ * 这两族 ⇒ "宿主生产面"里一直混着测试代码。今天之前没造成假红，是因为那些文件里恰好
+ * 没有被判据点名的形状；刀④c 一新增 `compact/tests_deep.rs` 就当场把 SS21c 读成两个
+ * 文件——那是一条**真红**（判据说的"只有一个落点"没被满足），但红的原因在闸自己身上。
+ */
+const TEST_SHAPED = /(^|\/)(tests\.rs$|tests\/|tests_|_tests\.rs$)/;
 function moduleFace(mainRel, dirRel) {
   // Set 去重：目录式模块（`organize/mod.rs`）的主文件本来就在子树里，数两遍会让
   // "定义唯一"这种读数凭空 +1——那是假红，而假红的下场和真瞎一样是被人绕过去。
@@ -171,7 +181,7 @@ function moduleFace(mainRel, dirRel) {
   if (mainRel && fs.existsSync(path.join(ROOT, mainRel))) rels.add(mainRel);
   if (dirRel && fs.existsSync(path.join(ROOT, dirRel))) {
     for (const r of walkExt(dirRel, /\.rs$/)) {
-      if (!/(^|\/)tests(_?\.rs|\/)/.test(r)) rels.add(r);
+      if (!TEST_SHAPED.test(r)) rels.add(r);
     }
   }
   return [...rels].map((rel) => stripComments(read(rel))).join('\n');
@@ -229,7 +239,7 @@ function plugMemoryCode() {
  */
 function hostDesktopFace() {
   return walkExt('desktop/src-tauri/src', /\.rs$/)
-    .filter((rel) => !/(^|\/)tests(_?\.rs|\/)/.test(rel))
+    .filter((rel) => !TEST_SHAPED.test(rel))
     .map((rel) => ({
       rel: rel.replace(/^desktop\/src-tauri\/src\//, ''),
       code: read(rel)
@@ -414,6 +424,7 @@ function snapshot() {
       'desktop/src-tauri/src/microcompact.rs',
       'desktop/src-tauri/src/microcompact',
     ),
+    compact: moduleFace('desktop/src-tauri/src/compact.rs', 'desktop/src-tauri/src/compact'),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -882,30 +893,32 @@ const CHECKS = [
   ],
   [
     'SS19b',
-    'organize 面上**只剩调用方、没有所有权**（刀④a 的墓碑，与 SS16b 同族）：' +
+    'organize 面上**只剩调用方、连所有权都没有**（刀④a 立、刀④c 收到底的那块墓碑）：' +
       '`struct AppLlmMemoryManager` 恒 0（定义不许回来）、`pub use client::` 恒 0（再导出' +
-      '也不许留一条——它就是"organize 也拥有这个类型"的假象），而限定路径的构造 ' +
-      '`crate::llm::AppLlmMemoryManager::new(` 恒 1（`build_organizer` 那一处，它确实是' +
-      '整理编排要用的件，只是不再 owned 它）。为什么不数裸名字：SS19a 已经盯住定义与实现块，' +
+      '也不许留一条——它就是"organize 也拥有这个类型"的假象），而 `AppLlmMemoryManager::new(` ' +
+      '**也恒 0**：刀④c 起 organize 连"造"都不做，客户端由组装点注入，整理章节总结与主层' +
+      '压缩摘要共用同一个实例（两张实例 = 两份路由状态，而"连败三次"这件事会各自数各自的）。' +
+      '第三档故意不收窄成限定路径：非限定的 `AppLlmMemoryManager::new(` 出现在 organize ' +
+      '面里同样是自己拿了一条通路。为什么不数裸类型名：SS19a 已经盯住定义与实现块，' +
       '而裸名出现在注释里是必要留痕——数它会一片假红。⚠ 三档都数代码行（organize 头注正在' +
-      '解释这次搬家）；前两档期望 0 ⇒ 由 FLOORS 的 organize 面下限兜"面瞎了"（面为空与' +
+      '解释这次搬家）；三档期望 0 ⇒ 由 FLOORS 的 organize 面下限兜"面瞎了"（面为空与' +
       '真的没有在这一档读数上长得一模一样）',
     (m) =>
-      `${countOf(m.organize, /struct AppLlmMemoryManager/)}|${countOf(m.organize, /\bpub use client::/)}|${countOf(m.organize, /crate::llm::AppLlmMemoryManager::new\s*\(/)}`,
-    '0|0|1',
+      `${countOf(m.organize, /struct AppLlmMemoryManager/)}|${countOf(m.organize, /\bpub use client::/)}|${countOf(m.organize, /AppLlmMemoryManager::new\s*\(/)}`,
+    '0|0|0',
   ],
   [
     'SS19b2',
-    '补 SS19b 的另一半：它第三档**期望 1**，而 1 是"限定构造恰好在组织点上"，所以' +
-      '"构造点被改名 / 整块删掉 / 换成裸名 import"这三种漂法里，前两种会让 SS19b 从 1 掉到 0 而报红，' +
-      '第三种（organize 里出现**非限定**的 `AppLlmMemoryManager::new(`）SS19b 看不见。' +
-      '本档把左=限定构造数、右=宿主面构造总数放在一起比：两者恒等 ⇒ organize 只能通过' +
-      '限定路径拿这一件，共享它不会悄悄变回"organize 的私有件"（同 SS16a 左右两档一起报的那条理由）',
-    (m) => {
-      const host = m.hostDesktop.map((f) => f.code).join('\n');
-      return `${countOf(m.organize, /crate::llm::AppLlmMemoryManager::new\s*\(/)}|${countOf(host, /AppLlmMemoryManager::new\s*\(/)}`;
-    },
-    '1|1',
+    '补 SS19b 的另一半：它三档全期望 0，于是"构造点被改名 / 整块搬走 / 组装点漏接"这类' +
+      '漂法一条也报不出来（0|0|0 照样绿）。这一档改数**落点文件集合**：宿主生产面上 ' +
+      '`AppLlmMemoryManager::new(` 必须恰好住在 `state/background.rs` 一个文件里。刀④c ' +
+      '把它从 `organize::build_organizer` 提到组装点，为的是让共用件不归属任何一个使用方' +
+      '（organize 在 S4 整面退役，压缩不留在那里）。用集合而不是计数：计数只挡得住"多一处"，' +
+      '挡不住"搬去别处"与"消失"，集合一变当场看得见是谁（SS14a 同一条理由）。' +
+      '⚠ 这一档不许与 SS21c 的 `Compactor::new(` 合并成一条：两个字符串住在同一个文件、' +
+      '同一段代码里，合并之后删掉其中一次构造，另一条读数照样绿。',
+    (m) => filesWith(m.hostDesktop, /AppLlmMemoryManager::new\s*\(/),
+    'state/background.rs',
   ],
   [
     'SS19c',
@@ -916,6 +929,65 @@ const CHECKS = [
       '而设置页上只有一枚记忆管理器模型，没人能从界面上看出两份路由',
     (m) => filesWith(m.hostDesktop, /\bfn cfg_for\s*\(/),
     'llm/aux_client.rs',
+  ],
+  // ---------- S2 刀④：主层深度压缩 ----------
+  [
+    'SS20a',
+    '折叠摘要消息开头那串标记 `[earlier conversation summarized]`：全生产 Rust 面只许 1 处' +
+      '（真源 = `session-store` 的 `SUMMARIZED_MARKER`，宿主侧要同一条消息必须调 ' +
+      '`summarized_message()`）。为什么盯这串字面量而不是函数名：宿主自己敲一份同样的文本，' +
+      '编译器与行为测试都不红（两条字符串长得一样），但落进日志的摘要头一行与压缩层' +
+      '`to_tokens` 量出来的那一条从此可以不同字——表现是"撤销后窗口对不上"以及' +
+      '"界面上说省了 3 万，重放时只省 2.8 万"。',
+    (m) => String(m.rust.reduce((a, s) => a + countOf(s, /\[earlier conversation summarized\]/), 0)),
+    '1',
+  ],
+  [
+    'SS20b',
+    '`prompts/compact/` 那四份稿子各只被 `include_str!` 一次，且唯一读者是 ' +
+      '`compact/prompt.rs`（刀④b 的"两套逐字条款不许合成一句话"在**结构面**那一半：' +
+      '条款各有自己的文件，才谈得上"没被合并"）。同一个稿子被 include 两次 = 有人复制了' +
+      '第二份装配表，日后改文案的人只改一处，表现是"设置里写的自定义压缩指令在某些会话里' +
+      '像没生效"——其实生效的是另一份旧表。',
+    (m) =>
+      ['no-tools', 'template', 'keep-security', 'keep-verbatim']
+        .map(
+          (k) =>
+            String(m.compact.match(new RegExp(`include_str!\\("[^"]*${k}\\.md"\\)`, 'g'))?.length ?? 0),
+        )
+        .join('|'),
+    '1|1|1|1',
+  ],
+  [
+    'SS21a',
+    '压缩层写进日志的 `strategy` 字面量各只有一处：`"micro"` 在微压缩那一层，`"compact"` ' +
+      '在主层（唯一出处 = `compact/deep.rs` 的 `STRATEGY` 常量）。前端按这个串分流文案 ' +
+      '（`projection.ts` 把它原样放进 `notice.contextCompacted` 的参数），同一层出现两个名字 ' +
+      '= 界面上"同一层压缩说两种说法"，而开发者面板按 strategy 计数会直接算错。',
+    (m) =>
+      `${countOf(m.micro, /strategy:\s*"micro"/)}|${countOf(m.compact, /STRATEGY:\s*&str\s*=\s*"compact"/)}`,
+    '1|1',
+  ],
+  [
+    'SS21b',
+    '主层压缩面上**不许自己拿尺**：`effective_threshold(` 与 `session_capacity(` 各恒 0' +
+      '（对微压缩的 SS18b 同族要求，也是刀①"organize 不许自己拿尺"的第三次落地）。触发线' +
+      '由组装点算好经 `UsagePolicy` 交进来；这里再算一遍就是两个出处，改了滑杆压缩照旧阈值走。' +
+      '⚠ 读 `policy.window_tokens` 是合法的（那是接组装点的数，不是自己算窗口），所以本档' +
+      '故意不数 `window_tokens`——数了会红在正确的代码上。',
+    (m) => `${countOf(m.compact, /effective_threshold\s*\(/)}|${countOf(m.compact, /session_capacity\s*\(/)}`,
+    '0|0',
+  ],
+  [
+    'SS21c',
+    '两处跨文件关系各只许一处：`Compactor::new(` 只在组装点 `state/background.rs`，' +
+      'step 边界那一句 `cp.run(` 只在 `runner/mod.rs`。多一个构造点 = 两张熔断表（"连败三次' +
+      '就不再试"这件事变成每个调用方各数各的，界面上看不出这一层已经坏了）；多一个调用点 ' +
+      '= 一轮压两遍，摘要模型的钱花两遍而窗口只缩一次。行为测试对这两种漂法都是绿的' +
+      '（假客户端被调两次它只会数次数，说不出该是谁），所以这两条只能长在结构面上。',
+    (m) =>
+      `${filesWith(m.hostDesktop, /Compactor::new\s*\(/)}|${filesWith(m.hostDesktop, /\bcp\.run\s*\(/)}`,
+    'state/background.rs|runner/mod.rs',
   ],
 ];
 
@@ -989,6 +1061,12 @@ const FLOORS = [
   // ——它不是任何一档读数的分子，所以不会与 SS18b 同生同灭（"扫错了树"那种瞎法兜得住）。
   ['微压缩面字节数（剥注释）', (m) => m.micro.length, 3500],
   ['微压缩面含分组本体', (m) => countOf(m.micro, /fn candidate_groups/), 1],
+  // S2 刀④（SS20/SS21）同一条瞎法：SS21b 期望两个 0、SS21a 期望 1|1，面塌掉时
+  // "0|0"与"没扫到"读数相同。下限取现值 16288 的三成；再加一条点名判定本体
+  // `fn plan(`——它不是这一簇任何一档读数的分子（SS20b 数 include、SS21a 数
+  // STRATEGY、SS21c 数构造点与调用点），所以"扫错了树"这种瞎法兜得住。
+  ['主层压缩面字节数（剥注释）', (m) => m.compact.length, 4800],
+  ['主层压缩面含判定本体', (m) => countOf(m.compact, /fn plan\s*\(/), 1],
 ];
 
 function runChecks(m) {
@@ -1141,19 +1219,39 @@ if (SELFTEST) {
         code:
           'pub(crate) struct AppLlmMemoryManager2 {}\nimpl memory_tree::MemoryManagerClient for AppLlmMemoryManager2 {}\n',
       }),
-    // SS19b：organize 面上复活"所有权"痕迹（再导出 + 自己的定义）。数的是 m.organize 那份
-    // 独立读盘 ⇒ 不会与 SS19a（hostDesktop 面）互相遮挡。
+    // SS19b：organize 面上复活"所有权"的三种痕迹（再导出 + 自己的定义 + 自己造一个）。
+    // 数的是 m.organize 那份独立读盘 ⇒ 不会与 SS19a（hostDesktop 面）互相遮挡。
     SS19b: (m) =>
       (m.organize +=
-        '\npub use client::AppLlmMemoryManager;\npub struct AppLlmMemoryManager {}\n'),
-    // SS19b2：宿主面多一个构造方（不走限定路径、也不进 organize 面）⇒ 只有右档会动。
+        '\npub use client::AppLlmMemoryManager;\npub struct AppLlmMemoryManager {}\nlet own = AppLlmMemoryManager::new(s);\n'),
+    // SS19b2：宿主面多一个构造方（不进 organize 面）⇒ 只有落点集合会动。
     SS19b2: (m) =>
-      m.hostDesktop.push({ rel: 'compact.rs', code: 'AppLlmMemoryManager::new(s)\n' }),
+      m.hostDesktop.push({ rel: 'commands/organize.rs', code: 'AppLlmMemoryManager::new(s)\n' }),
     // SS19c：为新调用方又写一遍档位路由。
     SS19c: (m) =>
       m.hostDesktop.push({
         rel: 'compact.rs',
         code: 'fn cfg_for(&self, m: Option<&str>) -> LlmSettings { todo!() }\n',
+      }),
+    // ---------- S2 刀④ 五档各一条窄变异（每条只该红自己那一项）----------
+    // SS20a：宿主侧再敲一遍摘要消息的标记文本（编译器与行为测试都看不出）。
+    SS20a: (m) =>
+      m.rust.push(
+        'pub(crate) const SNEAKY_SUMMARY: &str = "[earlier conversation summarized]\\n{x}";\n',
+      ),
+    // SS20b：把某份稿子再 include 一次 = 出现第二份装配表。
+    SS20b: (m) =>
+      (m.compact += '\nconst TEMPLATE_AGAIN: &str = include_str!("../prompts/compact/template.md");\n'),
+    // SS21a：主层的 strategy 名字出现第二处字面量定义（同一层两个名字）。
+    SS21a: (m) => (m.compact += '\npub(crate) const STRATEGY: &str = "compact";\n'),
+    // SS21b：压缩层自己拿尺再算一遍有效阈值。
+    SS21b: (m) =>
+      (m.compact += '\nlet line = effective_threshold(settings.organize_threshold_tokens(), window, max_out);\n'),
+    // SS21c：多一个构造点 + 多一个调用点（两张熔断表 / 一轮压两遍）。
+    SS21c: (m) =>
+      m.hostDesktop.push({
+        rel: 'commands/organize.rs',
+        code: 'let extra = Compactor::new(settings, client);\n    let out = cp.run(&mut session, &id, &policy).await;\n',
       }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),

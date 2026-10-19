@@ -61,7 +61,11 @@ pub struct UsagePolicy {
 /// 泄压的写侧通路（None = headless/测试，与改前逐字节同形）：**每个 step 的
 /// 边界**问一次「占用到水位了没、这批历史该不该归档」，命中就同步做一次规则
 /// 切分（不调模型）后接着跑——轮末的 `after_turn` 追不上本轮的第 N 个 step，
-/// 真机那 63 万 token 就是这么攒出来的。
+/// 真机那 63 万 token 就是这么攒出来的。`compactor`（S2 刀④）= 主层深度压缩（None =
+/// headless/测试，与改前逐字节同形）：紧接在泄压**之后**、`kernel.step_as` **之前**问
+/// 一次「占用到有效阈值了没、机械层压完还超吗」，到线就调一次摘要模型、把较旧的一段
+/// 折成一条 `ContextCompacted` 落进日志（为什么挂这儿而不是挂 `agent/request` 环上 =
+/// `compact.rs` 头注那三条；为什么排在泄压之后 = 上面那句裁定 C）。
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn(
     kernel: &Kernel,
@@ -78,6 +82,7 @@ pub async fn run_turn(
     stop: Option<&Arc<crate::stop::StopFlags>>,
     fragments: Option<&crate::fragments::FragmentPending>,
     organizer: Option<&Arc<crate::organize::Organizer>>,
+    compactor: Option<&Arc<crate::compact::deep::Compactor>>,
 ) -> Result<u32, String> {
     let _stop_guard = stop.map(|f| f.guard(session_id));
     let log_start = session.len();
@@ -154,6 +159,21 @@ pub async fn run_turn(
             {
                 released += 1;
             }
+        }
+        // 主层深度压缩（S2 刀④）：**同样在 `kernel.step_as` 之前，但在泄压之后**。
+        // 这一条序是裁定 C 的另一半：机械层（泄压 = 纯 CPU 的规则切分，不调模型）
+        // 能省下一条模型往返就该先省，主层只在"机械层压完仍到线"时才起步——反过来
+        // 排的话，每个 step 边界都会先烧一条摘要，再发现泄压本来就够了。
+        // 落盘单独一趟：`ContextCompacted` 必须在本步之前就已在磁盘上（内核下一步的
+        // 投影与崩溃重放都要看得见它），而下面那个 `before` 是"本步新增段"的起点，
+        // 两个游标不能混用。
+        let compact_start = session.len();
+        if let (Some(cp), Some(u)) = (compactor, usage) {
+            let out = cp.run(session, session_id, &u).await;
+            if let Some(dir) = log {
+                session_log::append_slice(dir, session_id, session, compact_start);
+            }
+            tracing::debug!(session = session_id, ?out, "步间主层压缩读数");
         }
         let before = session.len();
         // ⑭：带会话身份 step——CallCtx.session_id 供内置调度工具绑定

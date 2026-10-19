@@ -35,6 +35,7 @@ mod assets;
 mod autodisable;
 mod browser;
 mod commands;
+mod compact;
 mod context_budget;
 mod data_root;
 mod demo_llm;

@@ -13,6 +13,9 @@ use crate::snapshot::SNAPSHOT_SCHEMA_VERSION;
 
 mod project;
 use project::{compact_messages, project_messages};
+// S2 刀④b：摘要消息的形状搬成**共享出口**——折叠路径自己用，宿主的压缩层
+// （当轮就要发截断窗口）也用它，两边不许各写一份字面量（判据 SS20）。
+pub use project::{SUMMARIZED_MARKER, summarized_message};
 
 /// 每 N 个事件落一个内部快照，`state_at` 从快照起步折算（§6.2）。
 pub const SNAPSHOT_EVERY: usize = 64;

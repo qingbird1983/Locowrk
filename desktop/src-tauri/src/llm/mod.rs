@@ -32,4 +32,5 @@ pub(crate) use aux_client::AppLlmMemoryManager;
 pub use client::{test_model, CompatLlm};
 pub use dialect::dialect_of;
 pub use embed::{CooledEmbed, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
+pub(crate) use retry::is_overflow_message;
 pub use subagent_llm::SubagentLlm;

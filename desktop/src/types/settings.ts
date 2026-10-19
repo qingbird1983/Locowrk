@@ -116,7 +116,9 @@ export interface AppearanceUpdate {
 /** 上下文管理区投影（⑨；v2.137 整理阈值 = 绝对 token——「上下文达到
  * 多少 K 就整理」，百分比/策略/稳定期三键随 ctx-compact 桌面链退役。
  * Q8 加第三键工具结果预算：KiB 原样传，**前端不做 KiB→字节的第二套算术**，
- * 0 = 不限制由文案承担显示。S2 刀③ 加第四键 microEnabled = 微压缩开关）。 */
+ * 0 = 不限制由文案承担显示。S2 刀③ 加第四键 microEnabled = 微压缩开关；
+ * 刀④c 加深度压缩五键（本节面上先只渲染 compactEnabled 那一枚开关，其余四枚
+ * 后端已可读可写、界面行归刀⑥——投影里有而界面上没有，不等于设置项不存在）。 */
 interface ContextSettingsView {
   /** 整理阈值（绝对 token，100K–800K 缺省 100K）。 */
   thresholdTokens: number;
@@ -126,6 +128,16 @@ interface ContextSettingsView {
   toolResultBudgetKib: number;
   /** 微压缩开关（S2 刀③，缺省开）：很旧的可再生工具结果清成一行占位。 */
   microEnabled: boolean;
+  /** 深度压缩开关（S2 刀④c，缺省开）：到线时把较旧的一段换成一份七节摘要。 */
+  compactEnabled: boolean;
+  /** 压到有效阈值的这一成（1–100，缺省 50）。 */
+  compactTargetPct: number;
+  /** 摘要之外保留多少 token 的近期原文（0–400K，缺省 15_000）。 */
+  compactKeepTokens: number;
+  /** 摘要用哪个模型（空 = 跟随设置里的记忆管理器档位 → 主模型）。 */
+  compactModel: string;
+  /** 自定义压缩指令（空 = 不加）。 */
+  compactInstructions: string;
 }
 
 /** 上下文管理区部分更新（窗口走 LlmUpdate）。 */
@@ -134,6 +146,11 @@ export interface ContextUpdate {
   usageBar?: boolean;
   toolResultBudgetKib?: number;
   microEnabled?: boolean;
+  compactEnabled?: boolean;
+  compactTargetPct?: number;
+  compactKeepTokens?: number;
+  compactModel?: string;
+  compactInstructions?: string;
 }
 
 /** 开发者选项区投影（v2.49）：unlocked = 分区可见（安卓式连点版本号

@@ -26,6 +26,9 @@ pub use persist::{
     search_sessions, session_file, write_model_override, write_permission_mode,
     write_thinking_level, write_title, write_workspace,
 };
-pub use session::{Message, SNAPSHOT_EVERY, Session, SessionState, ToolCallMsg};
+pub use session::{
+    Message, SNAPSHOT_EVERY, SUMMARIZED_MARKER, Session, SessionState, ToolCallMsg,
+    summarized_message,
+};
 pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, Snapshot, Upcaster, Upcasters, V1ToV2Upcaster};
 pub use uncertain::{UncertainCall, UncertainScan, closure, scan_uncertain};

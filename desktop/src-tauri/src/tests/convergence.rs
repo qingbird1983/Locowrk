@@ -67,6 +67,7 @@ async fn usage_reporting_provider_converges_on_final_text_step() {
         None,
         None,
         None,
+        None,
     )
     .await
     .expect("轮次必须正常收束");
@@ -139,6 +140,7 @@ async fn usage_reporting_provider_still_loops_for_tool_calls() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
         None,
         None,

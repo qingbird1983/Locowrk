@@ -95,6 +95,7 @@ pub(crate) struct EngineDeps {
     pub app: AppHandle,
     /// M2 记忆树影子运行：调度触发的轮次与手聊同一整理钩子。
     pub organizer: Arc<crate::organize::Organizer>,
+    pub compactor: Arc<crate::compact::deep::Compactor>,
     /// M4 树组装器：触发的轮次与手聊同一用量口径（组装后估算）。
     pub tree_assembler: Arc<crate::organize::TreeAssembler>,
     /// v4.11 停止生成：调度触发的轮次与手聊同一停止面（发送键停止对
@@ -208,6 +209,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         Some(&deps.stop_flags),
         Some(deps.fragments.as_ref()),
         Some(&deps.organizer),
+        Some(&deps.compactor),
     )
     .await
     {

@@ -370,4 +370,9 @@ export default {
     microCompact: "Micro-compact",
     microCompactHint:
       "Replaces very old tool outputs with a one-line placeholder, touching only results a re-run can restore: the last 5 groups stay, errors and screenshots are never cleared. Runs when usage reaches 90% of the organize threshold, or after an hour of silence (the second one ignores usage). Turning it off removes this deceleration layer and leaves organize alone; the session log is never rewritten.",
+    // S2 knife ④c: deep compaction — once usage hits the threshold, the older
+    // stretch becomes a seven-section summary while recent turns stay verbatim.
+    deepCompact: "Deep-compact",
+    deepCompactHint:
+      "Once usage reaches the compaction threshold (the smaller of the organize threshold and the model window minus the output reserve), the older stretch of history becomes a seven-section summary written by the model while the recent turns stay verbatim. The summary costs one extra model call on the memory-manager tier. Nothing in the session log is rewritten, and the compaction notice in the transcript can be undone. Turn it off and the only paths left are organize plus the 'near the window, start a new chat' hint.",
   },} as const;

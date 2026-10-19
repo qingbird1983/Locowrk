@@ -75,6 +75,19 @@ fn is_context_overflow(body: &str) -> bool {
     PATTERNS.iter().any(|p| lower.contains(p))
 }
 
+/// 判一条**错误文本**是不是"上下文超限"（S2 刀④d 的压缩层用它决定要不要递减
+/// 重试）。
+///
+/// 为什么不许压缩层自己写一份关键词表：那是同一件事的第二个出处——上面那张
+/// `PATTERNS` 改一字（新接一家供应商），压缩层不会跟着改，表现是"摘要请求超窗时
+/// 不递减、直接放弃"，而这恰恰是唯一能自愈的那一档。直呼通路
+/// （`llm/aux_client.rs`）把 [`classify_status`] 的结果 `to_string()` 之后交回来，
+/// 交回来的是**中文文案**而不是原始报文，所以这里在并集之外还要认那句中文；
+/// 两者的关系由用例 `the_overflow_message_is_recognised_by_the_same_predicate` 钉住。
+pub(crate) fn is_overflow_message(msg: &str) -> bool {
+    is_context_overflow(msg) || msg.contains("上下文超出模型窗口")
+}
+
 /// 限流退避：服务器声明优先（封顶 30s），否则 2s × 2^(attempt-1) 指数 +
 /// 25% 抖动（同 PI：`random ∈ [0,1)`）。`attempt` 从 1 计。
 pub fn rate_limit_delay_ms(attempt: u32, retry_after_ms: Option<u64>, random: f64) -> u64 {

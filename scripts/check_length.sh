@@ -34,6 +34,22 @@ SUGGEST=400
 # "纯函数 vs 接线面"再切两半只是把行数搬开、判据读者要看的东西一处都没少 ⇒ 不拆。
 # ⚠ 这条不是"永远不拆"：若它同时开始装两件不相关的事（例如又把别的模块的用例放进来），
 # 届时按三问重判。
+# `compact/tests.rs`（422）与 `compact/tests_deep.rs`（434）于 S2 刀④b/④c 入名单，
+# 两条各按三问判过：①各自只管一件事（前者 = 主层的**纯判据**：切点、目标位、提示词
+# 装配与摘要验收；后者 = **接线半**：占用读数、摘要请求、落账、熔断与递减重试）；
+# ②名字概括得住（就是 `compact` 那两爿的 tests 子模块，文件名直接点名被测的那一爿）；
+# ③改它牵动的全是同一件事（动节名表必动前者、动落账形状必动后者，两者互不牵连——
+# 这正是把它们分成两个文件的原因，而不是为了凑行数）。
+# 再往下切就是按用例数拆文件：`plan()` 那六条 reason 与 `choose_cut()` 的四种边界本来
+# 是同一件事的两侧（判据读者要一起看才知道"不动"的每一档都有人盯），拆开只会让人
+# 在两个文件之间找一条红的那条。
+# `runner/mod.rs`（414 行）于 S2 刀④c 入名单：三问皆是——①只管一件事（一轮对话的编排：
+# 轮界事件、step 循环、步间两个检查、落盘游标、收束路径）；②名字概括得住；③刀④ 加的
+# 那 16 行（参数一枚 + 头注一段 + 步间那三行调用）动的正是它本职的那件事。
+# ⚠ 躲得过这一格的两条路都被否掉：把 `record_usage` / `finish_turn` 搬去子文件 = 为了
+# 凑行数在文件间转字段（AGENTS 那条"不许为过闸搬代码"），把步间注释挪进 `compact.rs`
+# = 让 runner 的读者看不见"为什么这一句在泄压之后"。真拆的时机是它开始装第二件事
+# （例如把工具执行也搬进来），届时按三问重判并真拆。
 OVERLIST="
 desktop/src/components/chat/Composer.vue
 desktop/src/components/chat/ToolDetailView.vue
@@ -51,6 +67,9 @@ desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue
 desktop/tests/chat-projection.spec.ts
 desktop/src-tauri/src/microcompact/tests.rs
+desktop/src-tauri/src/compact/tests.rs
+desktop/src-tauri/src/compact/tests_deep.rs
+desktop/src-tauri/src/runner/mod.rs
 "
 
 # **扫描面只有一个出处**：下面这一条 find 的产物既用来数超限、也用来验下限。

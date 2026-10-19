@@ -29,6 +29,7 @@ async fn tool_turn_projects_events_in_log_order() {
         None,
         None,
         None,
+        None,
     )
     .await
     .expect("turn ok");
@@ -85,6 +86,7 @@ async fn step_cap_force_closes_with_configured_limit() {
         None,
         None,
         None,
+        None,
     )
     .await
     .expect("到顶按正常收束返回");
@@ -117,6 +119,7 @@ async fn plain_reply_turn_is_single_step() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
         None,
         None,

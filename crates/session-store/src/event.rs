@@ -202,8 +202,10 @@ pub enum SessionEvent {
         #[serde(default)]
         ts: i64,
     },
-    /// 上下文压缩（Context and Memory.md §3.7）：ctx-compact 在
-    /// `agent/request` 决策环完成压缩后由 kernel 落日志。折叠语义
+    /// 上下文压缩（Context and Memory.md §3.7）：投影式折叠的事件锚点，日志原文一行
+    /// 不动。两个写入者（S2 起）：`agent/request` 决策环改写过载荷后由 kernel 在本步
+    /// 落这一条（微压缩走这条通路），以及 runner 在 step 边界压完**自己落**（主层深度
+    /// 压缩走这条，理由见 `desktop/src-tauri/src/compact.rs` 头注）。折叠语义
     /// （session.rs）：把已累计消息留尾部 `kept_messages` 条，其余替换为
     /// 一条摘要 User 消息；撤销 = rewind_to(本事件序号)（前缀游标，
     /// 其后的轮次一并回退）。字段全 `serde(default)`：后续演进向后兼容
@@ -217,7 +219,10 @@ pub enum SessionEvent {
         from_tokens: u64,
         #[serde(default)]
         to_tokens: u64,
-        /// sliding_window / layered / summary_only（文案由前端按 locale 渲染）。
+        /// 是哪个压缩层写的这一条。现役两个值：`micro`（S2 刀③）与 `compact`
+        /// （S2 刀④）；`slide`（刀⑤ 滑窗）是预留。旧 ctx-compact 桌面链退役前留下
+        /// 的 `sliding_window / layered / summary_only` 仍可能在历史日志里读到 ⇒
+        /// 前端**按字符串原样显示**，不许按枚举分支（枚举一分支，老日志就渲染成空白）。
         #[serde(default)]
         strategy: String,
         #[serde(default)]

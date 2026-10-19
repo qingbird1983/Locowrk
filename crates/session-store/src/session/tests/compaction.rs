@@ -88,3 +88,40 @@ fn compaction_event_serializes_roundtrip() {
     let back: SessionEvent = serde_json::from_value(v).unwrap();
     assert_eq!(back, e);
 }
+
+/// 摘要那条消息的**文本形状只有一个出处**（S2 刀④b）：折叠路径产出的头一条必须
+/// 逐字节等于 `summarized_message(summary)`。为什么这一条要现在写——宿主压缩层
+/// （S2 刀④c）**当轮就要发截断后的窗口**，来不及等事件落盘再重放，所以它自己也要
+/// 造同一条消息；两边各写一份字面量，表现是"同一份摘要在两种时刻长成两个样子"，
+/// 而那条文本正是模型判断"上面不是原话、是摘要"的唯一依据（判据 = SS20）。
+#[test]
+fn folded_summary_message_is_exactly_the_shared_constructor() {
+    let mut s = Session::new();
+    for i in 0..4 {
+        s.append(user(format!("q{i}")));
+    }
+    s.append(compacted(2, "earlier notes"));
+    let msgs = s.derive_messages();
+    assert_eq!(
+        msgs[0],
+        crate::summarized_message("earlier notes"),
+        "折叠写的与构造函数给的必须是同一条消息"
+    );
+    let crate::Message::User { content, .. } = &msgs[0] else {
+        panic!("摘要必须是 User 消息");
+    };
+    assert!(
+        content.starts_with(crate::SUMMARIZED_MARKER),
+        "标记只认那一枚常量，实测 {content}"
+    );
+    // 反面：空摘要不造消息（滑窗那一档纯丢头部）
+    let mut s2 = Session::new();
+    s2.append(user("q0"));
+    s2.append(user("q1"));
+    s2.append(compacted(1, ""));
+    assert_eq!(
+        s2.derive_messages().len(),
+        1,
+        "无摘要就纯丢头部，不许顶一条空标记进去"
+    );
+}

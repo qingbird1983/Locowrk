@@ -44,6 +44,7 @@ async fn session_scope_exempts_same_tool_next_call() {
             None,
             None,
             None,
+            None,
         ),
     )
     .await
@@ -74,6 +75,7 @@ async fn session_scope_exempts_same_tool_next_call() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
         None,
         None,
@@ -123,6 +125,7 @@ async fn timeout_guard_denies_when_unanswered() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
+        None,
         None,
         None,
         None,
@@ -186,6 +189,7 @@ async fn unlimited_timeout_keeps_waiting_for_decision() {
             None,
             None,
             crate::runner::DEFAULT_MAX_STEPS,
+            None,
             None,
             None,
             None,

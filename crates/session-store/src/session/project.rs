@@ -131,11 +131,24 @@ pub(super) fn compact_messages(messages: &mut Vec<Message>, kept: usize, summary
     let tail = messages.split_off(head_len);
     let head = std::mem::take(messages);
     if !summary.is_empty() && !head.is_empty() {
-        messages.push(Message::user(format!(
-            "[earlier conversation summarized]\n{summary}"
-        )));
+        messages.push(summarized_message(summary));
     }
     messages.extend(tail);
+}
+
+/// 压缩摘要在**投影里长成的样子**的那一行标记（S2 刀④b 抽成唯一出处）。
+///
+/// 为什么必须只有一个出处：这条文本是模型判断"上面那段不是我读过的原话、而是
+/// 一份摘要"的唯一依据，而它有两个写入者——本 crate 的折叠路径（重放/快照恢复）
+/// 与宿主的压缩层（**当轮**就要把截断后的窗口发出去，来不及等事件落盘再重放）。
+/// 两边各写一份字符串，表现是同一件事在两种时刻长成两个样子，而界面上看不出来。
+/// 参照同族：ZCode `manual.ts` 的 `COMPACT_PROMPT_TOO_LONG_RETRY_MARKER` 也是一枚常量。
+pub const SUMMARIZED_MARKER: &str = "[earlier conversation summarized]";
+
+/// 由摘要正文造那条投影消息 = [`SUMMARIZED_MARKER`] + 换行 + 正文。
+/// 折叠路径与宿主压缩层**都只有这一个入口**（判据 SS20）。
+pub fn summarized_message(summary: &str) -> Message {
+    Message::user(format!("{SUMMARIZED_MARKER}\n{summary}"))
 }
 
 fn backfill(found: Option<&(&str, &Value)>) -> (String, Value) {

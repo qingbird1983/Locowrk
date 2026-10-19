@@ -286,6 +286,17 @@ impl SettingsStore {
             .micro_enabled
     }
 
+    /// 后端专用：深度压缩一组的活配置（S2 刀④c，缺省 = 刀④ 之前的硬编码常量）。
+    /// **一次取锁取齐五枚**，理由与空串读成 `None` 的口径都在
+    /// [`context::ContextSettings::compact_config`]，这里只是加锁的那一层薄壳。
+    pub fn compact_config(&self) -> context::CompactConfig {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .compact_config()
+    }
+
     /// 后端专用：工具结果预算（队列 Q8 · CB §7.4）——**字节**数，`None` = 不
     /// 限制。KiB→字节的换算只在 `settings/context.rs` 那一份里，wire / 组装点
     /// 都读这里，不再各自乘 1024（§11「同一读数只许一个出处」）。

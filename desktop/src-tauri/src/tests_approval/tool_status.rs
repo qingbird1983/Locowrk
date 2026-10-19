@@ -45,6 +45,7 @@ async fn pending_approval_is_live_only_and_never_enters_the_log() {
             None,
             None,
             None,
+            None,
         ),
     )
     .await

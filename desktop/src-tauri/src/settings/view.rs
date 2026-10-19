@@ -61,6 +61,11 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             usage_bar: s.context.usage_bar,
             tool_result_budget_kib: s.context.tool_result_budget_kib,
             micro_enabled: s.context.micro_enabled,
+            compact_enabled: s.context.compact_enabled,
+            compact_target_pct: s.context.compact_target_pct,
+            compact_keep_tokens: s.context.compact_keep_tokens,
+            compact_model: s.context.compact_model.clone(),
+            compact_instructions: s.context.compact_instructions.clone(),
         },
         memory: MemorySettingsView {
             enabled: s.memory.enabled,

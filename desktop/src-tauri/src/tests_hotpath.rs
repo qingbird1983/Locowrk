@@ -160,6 +160,7 @@ async fn turn_id_keeps_monotonic_when_the_log_lost_a_turn_start_row() {
         None,
         None,
         None,
+        None,
     )
     .await
     .expect("turn ok");

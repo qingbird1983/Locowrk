@@ -95,6 +95,10 @@ pub struct AppState {
     /// 记忆树影子运行编排器（M2）：轮次收束钩子 / `/整理` / 启动重投 /
     /// 开发者观测的数据源；只写 memory-tree/ 投影，不改请求组装。
     pub organizer: Arc<crate::organize::Organizer>,
+    /// 主层深度压缩执行体（S2 刀④c）：runner 在每个 step 边界问它一次「到线了没」，
+    /// 到线就把较旧的一段交给摘要模型并落一条 `ContextCompacted`。与 `organizer`
+    /// 共用同一条直呼通路（实例在 `state/background.rs` 构造，理由写在那儿）。
+    pub compactor: Arc<crate::compact::deep::Compactor>,
     /// 树投影存储句柄（M5 收敛：组装点原来四处各建一份，这里单例共享
     /// ——便宜克隆句柄，命令层 tree.md 对账也用它）。
     pub tree_store: memory_tree::TreeStore,

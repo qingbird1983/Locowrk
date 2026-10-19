@@ -84,6 +84,35 @@ fn context_overflow_message_points_at_live_controls_only() {
     );
 }
 
+/// 压缩层（S2 刀④d 的 overflow 递减带）判"是不是超窗"吃的是**错误文本**：直呼通路
+/// 把上面的分类结果 `to_string()` 之后交回来（`llm/aux_client.rs`），交回来的是这句
+/// **中文**而不是原始报文。所以中文文案与英文并集必须由同一个谓词认出——改了文案而
+/// 谓词没跟上，表现是"摘要请求超窗时不递减、直接放弃"，也就是把唯一能自愈的那一档
+/// 悄悄删掉，而且没有任何一条其它用例会红。
+#[test]
+fn the_overflow_message_is_recognised_by_the_same_predicate() {
+    let Failure::Fatal(text) = retry::classify_status(413, "This prompt is too long") else {
+        panic!("413 + 超限措辞该判 Fatal");
+    };
+    assert!(
+        retry::is_overflow_message(&text),
+        "中文 Fatal 文案要与英文并集同源可判：{text}"
+    );
+    // 正向另一半：直呼通路原样透传的供应商报文（还没进 classify 的那一档）
+    assert!(retry::is_overflow_message(
+        "HTTP 400: This model's maximum context length is 8192 tokens"
+    ));
+    // 反向两条：认错了方向就是白花几条往返 / 把能自愈的那一档当死错
+    assert!(
+        !retry::is_overflow_message("网络断了"),
+        "普通失败不许触发递减"
+    );
+    assert!(
+        !retry::is_overflow_message("鉴权失败（HTTP 401）：API Key 无效"),
+        "鉴权失败不是超窗，不许被认成'缩一缩内容就好'的事"
+    );
+}
+
 /// 退避曲线：限流 2s×2 指数 + 抖动上界、封顶 30s、Retry-After 优先；
 /// 瞬时 1/2/4/8s 后维持 8s。
 #[test]

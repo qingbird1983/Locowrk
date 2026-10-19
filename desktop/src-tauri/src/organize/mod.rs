@@ -341,14 +341,17 @@ impl Organizer {
 #[cfg(test)]
 mod tests;
 
-/// 组装点构造（state/init_state 调用）：记忆管理器客户端 = 设置路由的兼容
-/// 直呼；㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）；
+/// 组装点构造（state/init_state 调用）：记忆管理器客户端由**组装点**注入（S2 刀④c
+/// 起不再在这里 `new`——整理章节总结与主层压缩摘要共用同一条直呼通路，一个实例
+/// 就够，构造点提上去之后 organize 连"造"都不做，判据 = SS19b/b2 的期望同步改判）；
+/// ㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）；
 /// 事件推送闭包由 state 组装（emit 调用留在 state/mod.rs，见其注释）；
 /// v2.137 起持模型覆盖旁车 + 目录（自动收起的生效窗口四层链）。
 #[allow(clippy::too_many_arguments)]
 pub fn build_organizer(
     settings: Arc<SettingsStore>,
     sessions_dir: PathBuf,
+    client: Arc<dyn memory_tree::MemoryManagerClient>,
     workspace_of: WorkspaceResolver,
     data_root: PathBuf,
     model_overrides: Arc<crate::model_override::ModelOverrideStore>,
@@ -358,9 +361,9 @@ pub fn build_organizer(
     memory: Arc<crate::memory::MemoryStore>,
 ) -> Arc<Organizer> {
     Arc::new(Organizer::new(
-        Arc::clone(&settings),
+        settings,
         sessions_dir,
-        Arc::new(crate::llm::AppLlmMemoryManager::new(settings)),
+        client,
         workspace_of,
         data_root,
         model_overrides,

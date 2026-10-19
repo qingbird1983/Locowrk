@@ -11,6 +11,11 @@
  * S2 刀③ 加第三根旋钮 = 微压缩开关（context.microEnabled，缺省开）：它管的不是
  * 「一条多大」（预算）也不是「多久整理」（阈值），而是「很旧的工具输出要不要
  * 先换成一行占位」——同一区各挡一件事。布尔一律开关（§3.32·七）。
+ * S2 刀④c 加第四根旋钮 = 深度压缩开关（context.compactEnabled，缺省开）：占用到
+ * 有效阈值时把**较旧的一段**交给模型写成一份七节摘要、近期原文保持原样。它是三层
+ * 里唯一"一段原文换一份摘要"的一层，所以必须有可关的那一格（可配置原则②）；同区
+ * 另四枚数值/文本（目标比、保留额度、摘要模型、自定义指令）后端已可读可写，
+ * 界面行按刀序归刀⑥——这一节先把"要不要动"这一格交到人手上。
  * 行版式（§3.32·七 v3.5）：说明文字走行左 #detail。
  */
 import { computed, reactive, ref, watch } from "vue";
@@ -35,6 +40,8 @@ const form = reactive({
   toolResultBudgetKib: 24,
   // S2 刀③：微压缩开关（缺省开）。前端只传布尔，判据全在后端
   microEnabled: true,
+  // S2 刀④c：深度压缩开关（缺省开）。同上——这一层的判据在 compact 侧
+  compactEnabled: true,
 });
 
 watch(
@@ -45,6 +52,7 @@ watch(
     form.usageBar = v.context.usageBar;
     form.toolResultBudgetKib = v.context.toolResultBudgetKib;
     form.microEnabled = v.context.microEnabled;
+    form.compactEnabled = v.context.compactEnabled;
   },
   { immediate: true },
 );
@@ -68,6 +76,10 @@ function save() {
     // None 处理（保持不变，不是存 0）。0 只能来自用户明确填 0 = 不限制。
     toolResultBudgetKib: Math.round(form.toolResultBudgetKib),
     microEnabled: form.microEnabled,
+    // 只发**界面上真渲染过**的键：深度压缩另四枚（目标比/保留额度/摘要模型/自定义
+    // 指令）这一节还没有输入控件，发过去等于替用户把他没看过的值写一遍（缺省键在
+    // ContextUpdate 里是 optional，不传即不动）。
+    compactEnabled: form.compactEnabled,
   });
 }
 </script>
@@ -134,6 +146,16 @@ function save() {
         <p class="mt-1 text-xs text-ink-3">{{ t("settings.microCompactHint") }}</p>
       </template>
       <SettingsToggle v-model="form.microEnabled" :label="t('settings.microCompact')" />
+    </SettingsRow>
+
+    <!-- 深度压缩开关（S2 刀④c）：到线时把较旧的一段换成一份七节摘要。
+         与上面那枚的分工要说得出口：微压缩只清"很旧的工具输出"（不动提问与回答），
+         这一层才真的把一段原文换成摘要 ⇒ 必须有独立的可关那一格 -->
+    <SettingsRow :title="t('settings.deepCompact')">
+      <template #detail>
+        <p class="mt-1 text-xs text-ink-3">{{ t("settings.deepCompactHint") }}</p>
+      </template>
+      <SettingsToggle v-model="form.compactEnabled" :label="t('settings.deepCompact')" />
     </SettingsRow>
 
     <!-- 阈值用量进度条显隐（§3.4 v4.18；v2.137 改名——分母 = 整理阈值；

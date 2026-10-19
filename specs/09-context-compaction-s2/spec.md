@@ -136,12 +136,18 @@
       另加一条按结果字段形状 `asset`/`assets` 的兜底判据——投影侧已经有这条形状，
       见 `llm/wire/media.rs:44`；用例 `media_bearing_results_are_protected` 把带 asset 的那条
       顶到"够旧"的位置再验它不动）
-- [ ] AC-S2-6 主层深度压缩（AC-13 全四条）：构造机械层压不到目标的会话 → 主层触发 →
+- [x] AC-S2-6 主层深度压缩（AC-13 全四条）（✅ 2026-10-19 刀④b/④c/④d）：构造机械层压不到目标的会话 → 主层触发 →
       ①摘要落断层且含用户意图 / 待办 / 下一步（对照七节模板判据，逐节非空或如实标"无"）
       ②被摘要段出上下文、日志原文 sha 不变 ③近期原文仍在 ④连续失败 3 次熔断生效不再重试；
-      另两档：overflow 应急按 SHRINK_STEPS `[0.7, 0.5, 0.35]` 递减重试直至成功、
-      含媒体失败降级去媒体重试
-- [ ] AC-S2-7 逐字保留两套条款**没有被合成一句话**：安全约束 / 用户消息 / 下一步原文引用
+      另两档：overflow 应急按 SHRINK_STEPS `[0.7, 0.5, 0.35]` 递减重试直至成功（✅ 已落，
+      `the_whole_shrink_band_costs_exactly_one_failure` 钉边界）、含媒体失败降级去媒体重试
+      ——**第二档按实现读实后撤销**（不是"没做"）：摘要请求的输入是
+      `compact/prompt.rs::render_history` 渲染出的**纯文本**（`ContentPart::Image|File` 被写成
+      一行「附件名字（mime）」，用例 `rendered_history_keeps_intent_and_caps_bulk` 钉着），
+      发送侧 `llm/aux_client.rs` 只发一条 `Message::user(String)`——类型上就没有部件可去。
+      参照里那一档的病因（把原生 image part 一起送进摘要请求）在我们这形状里不存在，
+      做一个"去媒体重试"就是给不存在的病开药
+- [x] AC-S2-7 逐字保留两套条款**没有被合成一句话**（✅ 2026-10-19 刀④b）：安全约束 / 用户消息 / 下一步原文引用
       （ZCode 面）与路径 / 符号 / 命令 / 错误串 / URL / 标识符（OpenCode 面）在模板里
       分节写、各有自己的用例；判据 = 把任一套并成一句时测试报红
 - [ ] AC-S2-8 滑窗保护网：只在主层熔断打开后可用，且**丢过程留提问**——
@@ -246,8 +252,16 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
    ⚠ 一件**故意没做**：界面上那枚开关保存即生效、没有按会话锁死——它是"要不要动"的门
    而不是数值，锁进会话反而违背可配置原则；对照之下思考语言那类**数值/文本**才需要锁字节。
 4. **刀④ 主层 compact**：七节骨架模板 + 两套逐字条款 + 压到 50% + 近期原文保留 +
-   熔断 3 + overflow `SHRINK_STEPS` + 媒体降级 + 压缩模型可配 + 自定义指令钩子；
-   写入点挂在 `agent/request` 决策环（`compacted` 带回位）。
+   熔断 3 + overflow `SHRINK_STEPS` + 压缩模型可配 + 自定义指令钩子。
+   **落点订正（2026-10-19，刀④c 动手前读实 `kernel/request.rs` 之后改判）**：本条原写
+   "写入点挂在 `agent/request` 决策环（`compacted` 带回位）"，实际挂在 **runner 的 step
+   边界**（与轮内泄压同一位置、同一把尺）。三条理由都是读实出来的，不是口味：
+   ① `request_with_retry` 是 `loop`，每趟重试都重跑 REQUEST 环（`kernel/request.rs:149-157`）
+   ⇒ 环上调模型 = 重试几次烧几份摘要（微压缩在环上无所谓，因为它纯 CPU 且天然幂等）；
+   ② `compacted` 只在 `Ok` 分支带回、失败走 `?` 丢弃（`:188-199`）⇒ 超限失败那一轮（最需要
+   摘要的那一轮）摘要被丢、下一轮重算；③ 环上监听器只拿得到载荷，吃的是字符估算，
+   与进度条 / 整理触发线那把 `context_budget::anchor`（读 `LlmUsage`）不同尺，违裁定 C。
+   "媒体降级"那一档已按同一节 AC-S2-6 的订正撤销（形状上不可表示）。
 5. **刀⑤ slide（滑窗保护网）**：仅熔断打开后可用，丢过程留提问。
 6. **刀⑥ 设置面与文案**：全部数值设置化（缺省 = 现状常量）+ `thresholdTokens` 语义改判 +
    中英成对 + 设置页那一条分区（按《Front-end Design Guidelines》现有形态，不新造）。
@@ -276,7 +290,24 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 - [x] **刀③ 微压缩 ✅**（2026-10-19）：AC-S2-4 / AC-S2-5 两条打勾，判据 SS18a/b/c +
       16 条用例（含三条接线面）+ 两轮磁盘变异（七条破判据 / 四条破环本体，全部窄红、
       还原逐字节相同）；设置面加了 `context.microEnabled`（缺省开）与开关一枚
-- [ ] 刀④→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成
+- [x] **刀④ 主层 compact ✅**（2026-10-19，分 ④a/④b/④c/④d 四步）：AC-S2-6 / AC-S2-7 两条打勾。
+      新增 `compact.rs`（251 行 · 判据）+ `compact/prompt.rs`（227 · 装配与验收）+
+      `compact/deep.rs`（286 · 落账与递减）+ 四份 `prompts/compact/*.md`；用例 29 条
+      （判据 18 / 接线半 9 / 驱动 `run_turn` 本体 2）；设置面加五枚 `context.compact*`
+      （**缺省 = 刀④ 之前 `compact.rs` 里那两颗硬编码常量**：目标比 50、保留额度 15_000）；
+      `run_turn` 加第 15 枚参数 `compactor`（24 个测试调用点由 `tmp/add-compactor-arg.mjs`
+      批量补 `None,`）；判据 `SS20a/SS20b/SS21a/SS21b/SS21c` 五档，selftest 五条窄变异
+      各自报红且**无连带**；两轮磁盘变异各证一档独有：把 `cp.run(` 那一行换成常数 ⇒
+      只有 `tests/compact_wiring.rs` 那条红（九条单测全绿 ⇒ 跨文件判据不是空转），
+      把 `used()` 的陈旧换尺分支打桩成 `if false` ⇒ 只有 `a_stale_usage_report_…` 一条红。
+      ⚠ 同一批还订正了闸自己的一个口径洞：`hostDesktopFace()` / `moduleFace()` 原先各写
+      一遍 `/(^|\/)tests(_?\.rs|\/)/`，那式子排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、
+      `compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上来就被它
+      读成两个落点）。现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐。
+      两件如实挂着：① 主层压缩的**真机长会话一轮**没跑（到线时转录里那行"省了多少"要
+      你亲自看），与刀② 的 spill 那一格一起等桌面端重启；② 设置页只渲染了开关那一枚，
+      目标比 / 保留额度 / 摘要模型 / 自定义指令四枚后端可读可写、界面行归刀⑥。
+- [ ] 刀⑤→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成
 - [ ] 数据侧改动前把相关目录复制进备份目录（specs/01 那条纪律在本线同样适用：
       压缩虽不改日志，但 spill 会往会话附件目录写文件）
 
@@ -301,21 +332,25 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 | `desktop/src-tauri/src/organize/{mod,collapse,pressure,trigger,debug}.rs` | 刀① ✅：`Organizer::anchor` 删除、四处改吃中立锚点；批量档触发线改吃 `Organizer::budget_threshold`（观测面 `debug.rs` 同改，不留"界面一个数、决策另一个数"） |
 | `desktop/src-tauri/src/settings/llm/persist.rs` `llm/mod.rs` `settings.rs` | 刀① ✅：新增 `session_capacity`（窗口 + 输出上限一次解析），`session_window` 退成薄封装；`settings/tests/window.rs` 加一条同源用例 |
 | `desktop/src-tauri/src/commands/chat.rs` `scheduler/engine.rs` | 刀① ✅：两个组装点的 `UsagePolicy.threshold_tokens` 改吃有效阈值 |
-| `scripts/check-single-source.mjs` | 刀① ✅：SS16a/b/c 三条 + 两条扫描面下限 + 三条窄变异；selftest 的分工读数（"同时打红谁"）也在这一刀加上 |
 | `desktop/src-tauri/src/spill.rs`（+ `spill/tests.rs`） | 刀② ✅：落盘句柄（数据根 + 会话子目录 + 内容寻址文件名）与两句文本（`<persisted-output>` 模板 / 降级提示）的唯一出处 |
 | `desktop/src-tauri/src/llm/wire/{payload,messages}.rs` | 刀② ✅：`clip_tool_output` → `project_tool_output`（一处判定、两种后果），`WireCaps` 带落盘句柄因而从 `Copy` 降为 `Clone`，`attempt_stream` 改吃借用 |
 | `desktop/src-tauri/src/llm/{app_llm,client}.rs` `state/llm_stack.rs` | 刀② ✅：`AppLlm.spill` 字段 + `with_spill` 注入器；组装点交**数据根**（不手拼目录名）。app_llm 由此 394→411 行，按三问入 `check_length` 名单（理由写在该脚本注释与提交正文） |
-| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限 + 三条窄变异 |
+| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限；刀④ ✅ SS20a/SS20b/SS21a/SS21b/SS21c + 压缩面两条下限。四批共 14 档，每档配一条窄变异（selftest 那条"同时打红谁"的分工读数在刀① 那一批加上）。刀④ 顺带修掉**闸自己的一个口径洞**：宿主面与模块面原先各写一遍同一条测试排除式，那式子只排得掉 `tests.rs` 与 `tests/` 两种，排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、`compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上新架构就被读成两个落点）；现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐 |
 | `desktop/src-tauri/src/microcompact.rs`（+ `microcompact/tests.rs`） | 刀③ ✅：微压缩判据本体（七颗参数、候选分组、idle 播种表、`agent/request` 监听器） |
 | `desktop/src-tauri/src/state/waterfall.rs` `state/mod.rs` | 刀③ ✅：第八环注册位 + 主层阈值闭包（`Init` 新增 `catalog` / `model_overrides` / `sessions_dir` 三份读数）；头注把"八环"的序与"为什么这一环可以在红线之后"补全 |
 | `desktop/src-tauri/src/settings/{context,view}.rs` `settings.rs` | 刀③ ✅：`context.microEnabled` 一枚（缺省开）+ 后端读面 `context_micro_enabled()`；刀⑥ 剩下的才是其余数值 |
 | `desktop/src/{types/settings.ts,components/settings/ContextSection.vue,locales/{zh-CN,en}/settings.ts}` | 刀③ ✅：视图多一个键、分区多一枚开关、中英各一条文案（`check-i18n` 读数两侧相等） |
-| `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | **刀③ 没进内核**（微压缩落在宿主监听器 + 发送侧，内核只提供 `compacted` 带回位）；这一格只剩**刀④** 的主层压缩本体 |
+| `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | **刀③ 没进内核**（微压缩落在宿主监听器 + 发送侧，内核只提供 `compacted` 带回位）；**刀④ 也没进**——主层压缩本体住在宿主 `compact.rs`（落点订正见上面计划第 4 条），这一格到此**清空**：内核侧不再欠任何东西 |
 | `crates/kernel-agent/src/kernel/request.rs` `waterfall.rs` | 只**用**现有 `compacted` 带回位；契约形状零改动 |
 | `desktop/src-tauri/src/settings/context.rs` + 设置页「上下文」分区 | 刀⑥：新字段 + 文案（中英成对） |
 | `desktop/src-tauri/src/llm/retry.rs` | 刀①/刀⑥：那句"请新开会话"的指向改对；压缩全关时它仍是最终兜底 |
-| `crates/session-store/` | 不动形状，只新增 `strategy` 取值 |
+| `crates/session-store/` | 刀④b ✅：形状没动，`strategy` 多了 `compact` 一个取值；动的是**文本出口**——`SUMMARIZED_MARKER` / `summarized_message()` 从 `session/project.rs` 提到 crate 面（折叠路径与压缩层共用同一个构造函数，判据 SS20a），`event.rs` 里 `strategy` 的取值列举按现役两档订正（并写清"前端不许按枚举分支"） |
 | 前端用量环 / 开发者面板 | 只读展示"这一轮压了什么"，不在 `MemoryPage` 上加东西 |
+| `desktop/src-tauri/src/compact.rs` + `compact/{prompt,deep,tests,tests_deep}.rs` + `prompts/compact/{no-tools,template,keep-security,keep-verbatim}.md` | 刀④b/④c/④d ✅：主层压缩本体（判定 / 提示词装配与验收 / 落账与 overflow 递减），四份稿子是资产文件走 `include_str!`（改文案不动代码） |
+| `desktop/src-tauri/src/runner/mod.rs` `state/{background,app_state,mod}.rs` `scheduler/{mod,engine}.rs` `commands/chat.rs` `tests/{mod,compact_wiring}.rs` | 刀④c ✅：`run_turn` 第 15 枚参数 `compactor` 与 step 边界那一句（在泄压**之后**、`kernel.step_as` **之前**）；`Compactor` 在组装点构造、与 organize 共用同一个直呼客户端实例 |
+| `desktop/src-tauri/src/organize/mod.rs` `llm/{mod,aux_client,retry}.rs` `llm/tests/transport.rs` | 刀④a/④c/④d ✅：客户端搬出 organize（④a）→ 构造点再上移到组装点（④c，判据 SS19b/b2 随之改判为"organize 面三档全 0 + 落点集合 = `state/background.rs`"）；`retry::is_overflow_message`（④d，与那句中文 Fatal 文案同源可判） |
+| `desktop/src-tauri/src/settings/{context,view}.rs` `settings.rs` + `desktop/src/{types/settings.ts,components/settings/ContextSection.vue,locales/{zh-CN,en}/settings.ts}` + `desktop/tests/context-section.spec.ts` | 刀④c ✅：五枚 `context.compact{Enabled,TargetPct,KeepTokens,Model,Instructions}`（缺省 = 刀④ 之前的硬编码常量）+ 后端一次取锁的 `compact_config()` + 界面一枚「深度压缩」开关（中英各一条，spec 5 条含"单独关得掉"那一档） |
+| `scripts/check_length.sh` | 刀④ ✅：两份 compact 测试文件（422 / 434 行）入 OVERLIST，三问理由写在名单上方 |
 
 ## 风险与回滚
 

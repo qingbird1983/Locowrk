@@ -5,7 +5,9 @@
 //! 用例按面分簇见 `turn_rounds` / `demo_routing` / `convergence`。
 //! 队列 Q8b 加 `pressure_wiring`：驱动 `run_turn` 本体证「step 边界那句泄压调用
 //! 真的在跑」——直接单测 `release_pressure` 的那八条绿了也不证明接线存在。
+//! S2 刀④ 加 `compact_wiring`：同一形状的**主层压缩**接线判据（含落盘同数那一半）。
 
+mod compact_wiring;
 mod convergence;
 mod demo_routing;
 mod pressure_wiring;

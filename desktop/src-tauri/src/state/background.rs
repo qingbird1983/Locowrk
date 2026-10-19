@@ -54,6 +54,7 @@ pub(crate) struct Init {
 
 pub(crate) struct Stack {
     pub organizer: Arc<crate::organize::Organizer>,
+    pub compactor: Arc<crate::compact::deep::Compactor>,
 }
 
 pub(crate) fn build(init: Init) -> Stack {
@@ -96,9 +97,18 @@ pub(crate) fn build(init: Init) -> Stack {
             }
         })
     };
+    // 一条直呼通路 = 一个客户端实例（S2 刀④c）：整理章节总结（`organize/task.rs`、
+    // `organize/backfill.rs`）与主层压缩摘要（`compact/deep.rs`）共用
+    // `AppLlmMemoryManager`。构造点从 `build_organizer` 提到组装点，为的是让**共用件
+    // 不归属于任何一个使用方**——organize 在 S4 整面退役而压缩留下（刀④a 搬文件的
+    // 同一条理由，这一步搬的是实例）。判据 = SS19b/b2 的期望随之改判（organize 面
+    // 构造 0 次、组装点 1 次）。
+    let aux: Arc<dyn memory_tree::MemoryManagerClient> =
+        Arc::new(crate::llm::AppLlmMemoryManager::new(Arc::clone(&settings)));
     let organizer = crate::organize::build_organizer(
         Arc::clone(&settings),
         sessions_dir.clone(),
+        Arc::clone(&aux),
         Arc::clone(&workspace_of),
         root.clone(),
         Arc::clone(&model_overrides),
@@ -109,6 +119,10 @@ pub(crate) fn build(init: Init) -> Stack {
         // `MemoryStore` ⇒ 卡片写完，索引注入与记忆页立刻读得到同一行（不分两套库）
         Arc::clone(&memory),
     );
+    let compactor = Arc::new(crate::compact::deep::Compactor::new(
+        Arc::clone(&settings),
+        Arc::clone(&aux),
+    ));
     // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
 
     // 6. ⑭ 调度引擎（库可用时）：1s tick；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑
@@ -126,6 +140,7 @@ pub(crate) fn build(init: Init) -> Stack {
             Arc::clone(&last_chat),
             app.clone(),
             Arc::clone(&organizer),
+            Arc::clone(&compactor),
             Arc::clone(&tree_assembler),
             Arc::clone(&stop_flags),
             Arc::clone(&fragments),
@@ -179,5 +194,8 @@ pub(crate) fn build(init: Init) -> Stack {
         });
     }
 
-    Stack { organizer }
+    Stack {
+        organizer,
+        compactor,
+    }
 }
