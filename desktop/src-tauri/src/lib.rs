@@ -72,6 +72,7 @@ mod scheduler;
 mod search_tools;
 mod session_log;
 mod settings;
+mod slide;
 mod spill;
 mod state;
 mod stop;

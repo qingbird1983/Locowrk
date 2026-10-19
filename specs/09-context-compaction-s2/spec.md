@@ -150,9 +150,33 @@
 - [x] AC-S2-7 逐字保留两套条款**没有被合成一句话**（✅ 2026-10-19 刀④b）：安全约束 / 用户消息 / 下一步原文引用
       （ZCode 面）与路径 / 符号 / 命令 / 错误串 / URL / 标识符（OpenCode 面）在模板里
       分节写、各有自己的用例；判据 = 把任一套并成一句时测试报红
-- [ ] AC-S2-8 滑窗保护网：只在主层熔断打开后可用，且**丢过程留提问**——
+- [x] AC-S2-8 滑窗保护网：只在主层熔断打开后可用，且**丢过程留提问**——
       每轮 `UserMessage` 保留、assistant 往返与工具对丢弃；用例断言"提问一条不少、
-      过程一条不留"，并断言熔断未开时这一层零动作
+      过程一条不留"，并断言熔断未开时这一层零动作（✅ 2026-10-19 刀⑤）。
+      三条落地的形状，每件都要说破它为什么长成这样：
+      ① 落点 = **REQUEST 环末位**（微压缩之后），不是主层那个 step 边界——
+        `CompactionOutcome` 与 `ContextCompacted` 只能表达"截掉头部 + 插一条摘要"
+        （折叠实现 = `session-store::compact_messages`），表达不了**散布式**丢弃。
+        刀④ 那三条"不许挂环上"的理由对它一条都不成立：它不调模型（所以重试不烧钱）、
+        不落账（所以失败不丢账）、它量的就是自己即将发出去那份消息列的估算
+        （与微压缩同一把尺，不需要锚点）。
+      ② **这一层不落 `ContextCompacted`**（与微压缩不同族，理由在 `slide.rs` 头注）：
+        微压缩的账能重放，因为它的判据全在日志与时间里；这一层的开关是**熔断态**，而
+        熔断表故意是进程内的（跨重启没有意义）。落一条 `strategy:"slide"` 等于在日志里
+        记一笔"当时丢了这些"、而重放时再也算不出当时熔没熔断——那是无法重现的假账，
+        比没有账更糟。观测面 = `tracing::info!` 那一条读数；撤销天然（主层某次压成
+        ⇒ 计数清零 ⇒ 下一轮过程自动回来）。
+      ③ 丢弃按"连续过程段"整段进行，另加一步**闭合修正**：被丢的 assistant 如果还有
+        回执留在保留集里，就把它拉回来。拆对 = 发出一份"工具回执没有前置声明"的请求，
+        供应商整单拒收，保护网反而把会话弄死（G2 悬空闭合同一条硬约束）。用例
+        `a_dropped_assistant_takes_its_own_result_with_it` 造的就是那个畸形残段。
+      **两家参照都没有这一层**（2026-10-19 逐行读实）：ZCode `compact/policy.ts:138`
+      熔断（`reason: "circuit_breaker"`）之后 `shouldCompact = false`，OpenCode
+      `session/compaction.ts:209` 注释原话 "Only the user compacts when automatic
+      compaction is off, overflow included"——两家在"摘要模型坏了"这一格上的答案都是
+      **把问题交还给用户**。AC-S2-9-② 明令不许出现那种状态，所以才需要这层参照里没有
+      的东西；`KEEP_RECENT_RUNS = 1` 与"丢过程留提问"因此都是**我们的裁定**（同刀④ 那颗
+      目标比 50%），这颗数挂账 ⓕ 归刀⑥ 做设置项。
 - [ ] AC-S2-9 北极星（AC-11 三条）：模拟重负载长会话（≥40 轮、含大工具输出）连续跑 →
       ①每轮真实 input ≤ 阈值 ×1.1（压缩执行轮瞬时除外）②全程不出现"必须重开会话 /
       手动压缩才能继续"的状态（`llm/retry.rs:53` 那句在整轮日志里零命中）
@@ -262,7 +286,12 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
    摘要的那一轮）摘要被丢、下一轮重算；③ 环上监听器只拿得到载荷，吃的是字符估算，
    与进度条 / 整理触发线那把 `context_budget::anchor`（读 `LlmUsage`）不同尺，违裁定 C。
    "媒体降级"那一档已按同一节 AC-S2-6 的订正撤销（形状上不可表示）。
-5. **刀⑤ slide（滑窗保护网）**：仅熔断打开后可用，丢过程留提问。
+5. **刀⑤ slide（滑窗保护网）**（✅ 2026-10-19）：仅熔断打开后可用，丢过程留提问。
+   落点从"跟主层一样挂 step 边界"**改判为 REQUEST 环末位**（散布式丢弃在
+   `CompactionOutcome` 里根本表达不出来，三条理由见 AC-S2-8-①）；顺带把熔断表从
+   `Compactor` 里提出来做组装点注入的 `compact::Failures`——它是两个使用方共用的状态，
+   与刀④a/④c 搬直呼通路同一条纪律（判据 SS22a/b/c 各盯一处：比较点唯一、表只 new
+   一枚、写侧与读侧分工）。
 6. **刀⑥ 设置面与文案**：全部数值设置化（缺省 = 现状常量）+ `thresholdTokens` 语义改判 +
    中英成对 + 设置页那一条分区（按《Front-end Design Guidelines》现有形态，不新造）。
 7. **刀⑦ `/整理` 改语义** + 北极星长会话实测（AC-S2-9 那三条跑一次并留读数）。
@@ -300,6 +329,15 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
       各自报红且**无连带**；两轮磁盘变异各证一档独有：把 `cp.run(` 那一行换成常数 ⇒
       只有 `tests/compact_wiring.rs` 那条红（九条单测全绿 ⇒ 跨文件判据不是空转），
       把 `used()` 的陈旧换尺分支打桩成 `if false` ⇒ 只有 `a_stale_usage_report_…` 一条红。
+- [x] **刀⑤ 滑窗保护网 ✅**（2026-10-19，含熔断表搬家）：AC-S2-8 打勾。新增 `slide.rs`
+      （334 行 · 判据与环上那半同住一个文件——这一层没有第三块地）+ 两个测试文件
+      12 条（`slide/tests.rs` 判据 9 / `slide/tests_ring.rs` 接线 3，共用夹具
+      `rounds`/`over_line` 收进被测模块，同 `compact.rs::sample_summary` 那条理由）；
+      熔断表提为 `compact::Failures` 并由 `state/mod.rs` 注入两个使用方（写侧
+      `compact/deep.rs`、读侧 `slide.rs`）；判据 `SS22a/SS22b/SS22c` 三档 + 面下限两条，
+      selftest 三条窄变异各自报红且**无连带**。等价性证据：`compact/tests_deep.rs` 那三条
+      熔断用例（连败一次数一格、第 4 次 `Skipped("fused")`、递减带只算一个失败）
+      **一字未改仍绿**——搬的只是这张表的住处，不是它的语义。
       ⚠ 同一批还订正了闸自己的一个口径洞：`hostDesktopFace()` / `moduleFace()` 原先各写
       一遍 `/(^|\/)tests(_?\.rs|\/)/`，那式子排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、
       `compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上来就被它
@@ -335,7 +373,7 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 | `desktop/src-tauri/src/spill.rs`（+ `spill/tests.rs`） | 刀② ✅：落盘句柄（数据根 + 会话子目录 + 内容寻址文件名）与两句文本（`<persisted-output>` 模板 / 降级提示）的唯一出处 |
 | `desktop/src-tauri/src/llm/wire/{payload,messages}.rs` | 刀② ✅：`clip_tool_output` → `project_tool_output`（一处判定、两种后果），`WireCaps` 带落盘句柄因而从 `Copy` 降为 `Clone`，`attempt_stream` 改吃借用 |
 | `desktop/src-tauri/src/llm/{app_llm,client}.rs` `state/llm_stack.rs` | 刀② ✅：`AppLlm.spill` 字段 + `with_spill` 注入器；组装点交**数据根**（不手拼目录名）。app_llm 由此 394→411 行，按三问入 `check_length` 名单（理由写在该脚本注释与提交正文） |
-| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限；刀④ ✅ SS20a/SS20b/SS21a/SS21b/SS21c + 压缩面两条下限。四批共 14 档，每档配一条窄变异（selftest 那条"同时打红谁"的分工读数在刀① 那一批加上）。刀④ 顺带修掉**闸自己的一个口径洞**：宿主面与模块面原先各写一遍同一条测试排除式，那式子只排得掉 `tests.rs` 与 `tests/` 两种，排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、`compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上新架构就被读成两个落点）；现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐 |
+| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限；刀④ ✅ SS20a/SS20b/SS21a/SS21b/SS21c + 压缩面两条下限；刀⑤ ✅ SS22a/SS22b/SS22c + 保护网面两条下限。五批共 17 档，每档配一条窄变异（selftest 那条"同时打红谁"的分工读数在刀① 那一批加上）。刀④ 顺带修掉**闸自己的一个口径洞**：宿主面与模块面原先各写一遍同一条测试排除式，那式子只排得掉 `tests.rs` 与 `tests/` 两种，排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、`compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上新架构就被读成两个落点）；现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐 |
 | `desktop/src-tauri/src/microcompact.rs`（+ `microcompact/tests.rs`） | 刀③ ✅：微压缩判据本体（七颗参数、候选分组、idle 播种表、`agent/request` 监听器） |
 | `desktop/src-tauri/src/state/waterfall.rs` `state/mod.rs` | 刀③ ✅：第八环注册位 + 主层阈值闭包（`Init` 新增 `catalog` / `model_overrides` / `sessions_dir` 三份读数）；头注把"八环"的序与"为什么这一环可以在红线之后"补全 |
 | `desktop/src-tauri/src/settings/{context,view}.rs` `settings.rs` | 刀③ ✅：`context.microEnabled` 一枚（缺省开）+ 后端读面 `context_micro_enabled()`；刀⑥ 剩下的才是其余数值 |
@@ -347,6 +385,8 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 | `crates/session-store/` | 刀④b ✅：形状没动，`strategy` 多了 `compact` 一个取值；动的是**文本出口**——`SUMMARIZED_MARKER` / `summarized_message()` 从 `session/project.rs` 提到 crate 面（折叠路径与压缩层共用同一个构造函数，判据 SS20a），`event.rs` 里 `strategy` 的取值列举按现役两档订正（并写清"前端不许按枚举分支"） |
 | 前端用量环 / 开发者面板 | 只读展示"这一轮压了什么"，不在 `MemoryPage` 上加东西 |
 | `desktop/src-tauri/src/compact.rs` + `compact/{prompt,deep,tests,tests_deep}.rs` + `prompts/compact/{no-tools,template,keep-security,keep-verbatim}.md` | 刀④b/④c/④d ✅：主层压缩本体（判定 / 提示词装配与验收 / 落账与 overflow 递减），四份稿子是资产文件走 `include_str!`（改文案不动代码） |
+| `desktop/src-tauri/src/slide.rs` + `slide/{tests,tests_ring}.rs` | 刀⑤ ✅：滑窗保护网（散布式丢弃的判据 + REQUEST 环末位那半）。**不落 `ContextCompacted`**（理由三条在文件头注），所以这一层在日志里没有自己的行——它是九环里唯一"每轮现算、无账可查"的那一环 |
+| `desktop/src-tauri/src/compact.rs`（`Failures` + `is_fused`）+ `state/{mod,waterfall,background}.rs` | 刀⑤ ✅：熔断表从 `Compactor` 的私有字段提为组装点注入的共用件（写侧 = `compact/deep.rs`，读侧 = `slide.rs`），`waterfall.rs` 头注的注册序补第九环与"为什么它也可以在红线之后" |
 | `desktop/src-tauri/src/runner/mod.rs` `state/{background,app_state,mod}.rs` `scheduler/{mod,engine}.rs` `commands/chat.rs` `tests/{mod,compact_wiring}.rs` | 刀④c ✅：`run_turn` 第 15 枚参数 `compactor` 与 step 边界那一句（在泄压**之后**、`kernel.step_as` **之前**）；`Compactor` 在组装点构造、与 organize 共用同一个直呼客户端实例 |
 | `desktop/src-tauri/src/organize/mod.rs` `llm/{mod,aux_client,retry}.rs` `llm/tests/transport.rs` | 刀④a/④c/④d ✅：客户端搬出 organize（④a）→ 构造点再上移到组装点（④c，判据 SS19b/b2 随之改判为"organize 面三档全 0 + 落点集合 = `state/background.rs`"）；`retry::is_overflow_message`（④d，与那句中文 Fatal 文案同源可判） |
 | `desktop/src-tauri/src/settings/{context,view}.rs` `settings.rs` + `desktop/src/{types/settings.ts,components/settings/ContextSection.vue,locales/{zh-CN,en}/settings.ts}` + `desktop/tests/context-section.spec.ts` | 刀④c ✅：五枚 `context.compact{Enabled,TargetPct,KeepTokens,Model,Instructions}`（缺省 = 刀④ 之前的硬编码常量）+ 后端一次取锁的 `compact_config()` + 界面一枚「深度压缩」开关（中英各一条，spec 5 条含"单独关得掉"那一档） |
@@ -387,4 +427,10 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
   ⓔ 微压缩的账在**会话日志里那一行**还没被断言：环级用例证到 `compacted` 带回位被写入，
   落盘那一跳由 `kernel.rs:253` 既有代码承担。北极星长会话那轮（AC-S2-9）读整轮日志时
   顺带取这个数，不在本刀为它单独搭一套内核夹具。
+  **刀⑤ 收下来登记一件**：
+  ⓕ `KEEP_RECENT_RUNS = 1`（保护网保留几段过程）还没做设置项。可配置原则①说"凡是有
+  不确定性的数值一律做成设置页可调项并给合理缺省"，这颗数正属不确定那类（两家参照都
+  没有这一层 ⇒ 没有可照抄的外部真源，见 AC-S2-8 末段），而 AC-S2-10 那份清单成文时
+  还没有它 ⇒ 清单要补一行。归刀⑥ 与其余四枚界面行一起做（要连着落中英两条文案），
+  不在刀⑤ 顺手铺开设置面。
 - 回滚：每刀一提交；总开关关 = 行为回到本线开工前；数据侧（会话附件目录）改动前先备份。

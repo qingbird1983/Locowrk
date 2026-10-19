@@ -83,7 +83,12 @@ pub fn init_state(app: AppHandle) -> AppState {
         root: root.clone(),
     });
 
-    // waterfall 七监听器簇（提示词分层设计 §6）：**注册序 = 执行序 = 前缀缓存红线**，
+    // 主层压缩的熔断表（S2 刀⑤a）：两个使用方——step 边界的 `Compactor`（写它）与
+    // REQUEST 环上的滑窗保护网（读它）——必须看同一张表，所以它在两者之前构造、各注
+    // 一份 `Arc`。为什么不许各 new 一张 = `compact::Failures` 头注。
+    let compact_failures = Arc::new(crate::compact::Failures::default());
+
+    // waterfall 监听器簇（提示词分层设计 §6）：**注册序 = 执行序 = 前缀缓存红线**，
     // 序本体与三道交叉验证防线（prompt_layering.rs / check-middleware-wiring.mjs /
     // DESIGN §7.1）写在 state/waterfall.rs 头注——要动顺序先读它。
     let waterfall::Stack {
@@ -101,6 +106,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         catalog: Arc::clone(&catalog),
         model_overrides: Arc::clone(&model_overrides),
         sessions_dir: sessions_dir.clone(),
+        compact_failures: Arc::clone(&compact_failures),
     });
 
     // 中间件链 + 审批 + 内核簇（§7.1 / 纪律 6 / ⑮）：洋葱序与「sink 先于 approval」
@@ -188,6 +194,8 @@ pub fn init_state(app: AppHandle) -> AppState {
         memory_files: Arc::clone(&memory_files),
         files_on: Arc::clone(&files_on),
         assets: Arc::clone(&assets),
+        // 最后一枚用 move：waterfall 那一头已经拿走一份，这张表从此由两个使用方共有。
+        compact_failures,
     });
 
     AppState {

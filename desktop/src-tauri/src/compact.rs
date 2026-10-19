@@ -37,11 +37,24 @@
 pub(crate) mod deep;
 pub(crate) mod prompt;
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use kernel_agent::estimate_tokens;
 use session_store::Message;
 
 /// 连续失败几次就熔断不再压（ZCode `manual.ts:55`）。
 pub(crate) const MAX_COMPACT_FAILURES: u32 = 3;
+
+/// 熔断线：失败计数到这颗数就断（[`MAX_COMPACT_FAILURES`] 的**唯一比较点**）。
+///
+/// 为什么是一枚函数而不是一处 `>=`：两个调用方要吃同一个判断——[`plan`] 决定"主层还压不压"，
+/// [`slide`](crate::slide) 决定"保护网开不开"。两边各写一遍 `failures >= 3`，将来调那颗数
+/// 就会出现"主层已经熔断、保护网还没醒"或反过来的空档，而这两档在界面上是同一个症状
+/// （请求发不出去）。判据 SS22a 拦的就是第二个比较点。
+pub(crate) fn is_fused(failures: u32) -> bool {
+    failures >= MAX_COMPACT_FAILURES
+}
 /// 喂给摘要器时单条工具输出的字符上限（OpenCode `compaction.ts:100`）。
 /// 这条不是为了省字：摘要请求本身也占窗口，不封顶就是"为了压缩而先撑爆"。
 pub(crate) const TOOL_OUTPUT_MAX_CHARS: usize = 1_250;
@@ -116,7 +129,7 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
     if input.used < threshold {
         return Plan::stop("below-line");
     }
-    if input.failures >= MAX_COMPACT_FAILURES {
+    if is_fused(input.failures) {
         return Plan::stop("fused");
     }
     // 组数与"有没有 assistant"（ZCode `hasEnoughMessagesToCompact`：`rounds >= 2 &&
@@ -223,6 +236,55 @@ fn advance_to_user(messages: &[Message], from: usize) -> usize {
     (from..messages.len())
         .find(|&i| is_user(&messages[i]))
         .unwrap_or(messages.len())
+}
+
+/// 主层的连续失败表（熔断的输入）。
+///
+/// 为什么它不待在 [`Compactor`](crate::compact::deep::Compactor) 里：这张表有两个读者——
+/// 写它的是主层自己（失败 +1、压成清零），而刀⑤ 的滑窗保护网要在**另一条通路上**读
+/// "此刻熔断了没"来决定开不开。计数留在 `Compactor` 里，保护网就得持有 `Compactor`，
+/// 而后者是 runner 的 step 边界依赖（带摘要客户端、带设置）——为一个只读布尔拖来一整套。
+/// 与刀④a/④c 把 `AppLlmMemoryManager` 提到组装点同一条理由：**共用件不归属任何一方**。
+/// 构造点因此在 `state/mod.rs`，两个使用方各收一枚 `Arc`。
+///
+/// 进程内、不落盘（沿用 `Compactor` 原来那段理由）：它管的是"这条通路此刻是不是坏了"，
+/// 跨重启没有意义——重启后设置可能都换了，该重新给它一次机会。
+#[derive(Default)]
+pub(crate) struct Failures {
+    map: Mutex<HashMap<String, u32>>,
+}
+
+impl Failures {
+    /// 该会话当前累计的连续失败次数（没有记录 = 0）。
+    pub(crate) fn of(&self, session_id: &str) -> u32 {
+        *self
+            .map
+            .lock()
+            .expect("compact failures poisoned")
+            .get(session_id)
+            .unwrap_or(&0)
+    }
+
+    /// 记一次失败并返回累计数（观测面要报"这是第几次"）。
+    pub(crate) fn record(&self, session_id: &str) -> u32 {
+        let mut map = self.map.lock().expect("compact failures poisoned");
+        let n = map.entry(session_id.to_string()).or_insert(0);
+        *n += 1;
+        *n
+    }
+
+    /// 压成了 ⇒ 整格清零（熔断随之解除，保护网下一轮自动退场）。
+    pub(crate) fn clear(&self, session_id: &str) {
+        self.map
+            .lock()
+            .expect("compact failures poisoned")
+            .remove(session_id);
+    }
+
+    /// 这条会话熔断了没（= [`is_fused`] 作用在它的计数上）。
+    pub(crate) fn fused(&self, session_id: &str) -> bool {
+        is_fused(self.of(session_id))
+    }
 }
 
 #[cfg(test)]

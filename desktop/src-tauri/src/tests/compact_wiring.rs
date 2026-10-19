@@ -105,6 +105,7 @@ fn compactor_with(root: &std::path::Path) -> (Arc<crate::compact::deep::Compacto
         Arc::new(crate::compact::deep::Compactor::new(
             settings,
             Arc::clone(&cli) as Arc<dyn MemoryManagerClient>,
+            Arc::new(crate::compact::Failures::default()),
         )),
         cli,
     )

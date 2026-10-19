@@ -17,8 +17,7 @@
 //! ④ **overflow 递减只认超窗**（刀④d）：判别用 `llm::retry` 那一份，一次压缩无论
 //! 试了几档都只算一个失败计数——把 4 趟算成 4 次失败，等于一轮就把这一层锁死。
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 
 use kernel_agent::estimate_tokens;
 use memory_tree::MemoryManagerClient;
@@ -27,7 +26,7 @@ use session_store::{summarized_message, Session, SessionEvent};
 use super::{
     plan,
     prompt::{build_prompt, format_summary, missing_sections, render_history, shrink_history},
-    PlanInput, SHRINK_STEPS,
+    Failures, PlanInput, SHRINK_STEPS,
 };
 use crate::runner::UsagePolicy;
 use crate::settings::SettingsStore;
@@ -66,17 +65,22 @@ pub(crate) struct Compactor {
     /// 摘要走**辅助补全的直呼通路**（`llm/aux_client.rs`，与整理章节总结同一条）：
     /// 压缩不是本轮对话的一部分，不该带工具目录、也不该吃会话级模型覆盖。
     aux: Arc<dyn MemoryManagerClient>,
-    /// 连续失败计数（熔断的输入）。按会话一张进程内的表：它管的是"这条通路现在
-    /// 是不是坏了"，跨重启没有意义（重启后设置可能都换了），所以不落盘。
-    failures: StdMutex<HashMap<String, u32>>,
+    /// 连续失败表（熔断的输入）。**由组装点注入**而不是自己 new 一枚：滑窗保护网
+    /// （`slide.rs`）要读同一个熔断态，两张表 = "主层已熔断但保护网没醒"。
+    /// 为什么这张表长什么样、为什么它不待在结构体里 = [`super::Failures`] 头注。
+    failures: Arc<Failures>,
 }
 
 impl Compactor {
-    pub(crate) fn new(settings: Arc<SettingsStore>, aux: Arc<dyn MemoryManagerClient>) -> Self {
+    pub(crate) fn new(
+        settings: Arc<SettingsStore>,
+        aux: Arc<dyn MemoryManagerClient>,
+        failures: Arc<Failures>,
+    ) -> Self {
         Self {
             settings,
             aux,
-            failures: StdMutex::new(HashMap::new()),
+            failures,
         }
     }
 
@@ -101,29 +105,6 @@ impl Compactor {
         } else {
             crate::context_budget::anchor(session).0
         }
-    }
-
-    fn failures_of(&self, session_id: &str) -> u32 {
-        *self
-            .failures
-            .lock()
-            .expect("compact failures poisoned")
-            .get(session_id)
-            .unwrap_or(&0)
-    }
-
-    fn record_failure(&self, session_id: &str) -> u32 {
-        let mut map = self.failures.lock().expect("compact failures poisoned");
-        let n = map.entry(session_id.to_string()).or_insert(0);
-        *n += 1;
-        *n
-    }
-
-    fn clear_failures(&self, session_id: &str) {
-        self.failures
-            .lock()
-            .expect("compact failures poisoned")
-            .remove(session_id);
     }
 
     /// step 边界那一句。`policy` 带的是**组装点已经算好的有效阈值**（刀① 把两个
@@ -152,7 +133,7 @@ impl Compactor {
             used,
             target_pct: cfg.target_pct,
             keep_tokens: cfg.keep_tokens,
-            failures: self.failures_of(session_id),
+            failures: self.failures.of(session_id),
         });
         if plan.reason != "planned" {
             tracing::debug!(
@@ -191,7 +172,7 @@ impl Compactor {
                         .then(|| SHRINK_STEPS.get(attempts as usize - 1).copied())
                         .flatten();
                     let Some(ratio) = ratio else {
-                        let failures = self.record_failure(session_id);
+                        let failures = self.failures.record(session_id);
                         tracing::warn!(
                             session = session_id,
                             failures,
@@ -223,7 +204,7 @@ impl Compactor {
         let summary = format_summary(&raw);
         let missing = missing_sections(&summary);
         if !missing.is_empty() {
-            let failures = self.record_failure(session_id);
+            let failures = self.failures.record(session_id);
             tracing::warn!(
                 session = session_id,
                 failures,
@@ -255,7 +236,7 @@ impl Compactor {
             strategy: STRATEGY.to_string(),
             ts: crate::timeutil::now_ms(),
         });
-        self.clear_failures(session_id);
+        self.failures.clear(session_id);
         tracing::info!(
             session = session_id,
             from_tokens,

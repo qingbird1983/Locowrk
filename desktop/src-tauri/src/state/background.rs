@@ -50,6 +50,10 @@ pub(crate) struct Init {
     pub memory_files: Arc<crate::memory_files::MemoryFiles>,
     pub files_on: Arc<dyn Fn() -> bool + Send + Sync>,
     pub assets: Arc<crate::assets::AssetStore>,
+    /// S2 刀⑤：熔断表由组装点注入，与滑窗保护网（`state/waterfall.rs` 那一环）**同一份**。
+    /// 它不在这里 new：两张表 = 主层已熔断而保护网没醒（或反过来），而两档在界面上是
+    /// 同一个症状。为什么这张表是共用件 = `compact::Failures` 头注。
+    pub compact_failures: Arc<crate::compact::Failures>,
 }
 
 pub(crate) struct Stack {
@@ -80,6 +84,7 @@ pub(crate) fn build(init: Init) -> Stack {
         memory_files,
         files_on,
         assets,
+        compact_failures,
     } = init;
 
     // M2 记忆树影子运行编排器：记忆管理器客户端 = 设置路由的兼容客户端直呼；
@@ -122,6 +127,9 @@ pub(crate) fn build(init: Init) -> Stack {
     let compactor = Arc::new(crate::compact::deep::Compactor::new(
         Arc::clone(&settings),
         Arc::clone(&aux),
+        // 熔断表与直呼通路同一条纪律（刀⑤a）：它是**两个使用方共用的状态**，
+        // 所以构造点在组装点，不在任何一个使用方体内。
+        compact_failures,
     ));
     // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
 

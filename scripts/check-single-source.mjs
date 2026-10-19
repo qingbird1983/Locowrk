@@ -425,6 +425,7 @@ function snapshot() {
       'desktop/src-tauri/src/microcompact',
     ),
     compact: moduleFace('desktop/src-tauri/src/compact.rs', 'desktop/src-tauri/src/compact'),
+    slide: moduleFace('desktop/src-tauri/src/slide.rs', 'desktop/src-tauri/src/slide'),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -989,6 +990,36 @@ const CHECKS = [
       `${filesWith(m.hostDesktop, /Compactor::new\s*\(/)}|${filesWith(m.hostDesktop, /\bcp\.run\s*\(/)}`,
     'state/background.rs|runner/mod.rs',
   ],
+  [
+    'SS22a',
+    '熔断线只许**一处比较**：`>= MAX_COMPACT_FAILURES` 在整个压缩簇里恒 1（唯一出处 = ' +
+      '`compact.rs::is_fused`）。刀⑤ 起有两个读者要吃同一个判断——主层用它决定"还压不压"、' +
+      '滑窗保护网用它决定"醒不醒"。两处各写一遍 `>= 3`，将来调那颗数就会出现"主层已熔断' +
+      '而保护网还没醒"或反过来的空档，而这两档在界面上是同一个症状（请求发不出去），' +
+      '没有一行日志会说清是谁没跟上。',
+    (m) => `${countOf(m.compact, />=\s*MAX_COMPACT_FAILURES/)}`,
+    '1',
+  ],
+  [
+    'SS22b',
+    '熔断表全宿主只许在组装点 new 一枚：`Failures::default()` 只住在 `state/mod.rs`。' +
+      '多一处 = 两张表，而这张表的全部意义就是"两个使用方看同一份账"（刀④a/④c 把直呼' +
+      '通路提到组装点是同一条纪律，这一步搬的是状态）。行为测试对这种漂法完全无感：' +
+      '两张表各自连败三次照样各压各的，只有结构面看得见。',
+    (m) => filesWith(m.hostDesktop, /Failures::default\s*\(/),
+    'state/mod.rs',
+  ],
+  [
+    'SS22c',
+    '同一张表的写侧与读侧分工各只一处：`failures.of|record|clear` 只在 `compact/deep.rs`' +
+      '（失败 +1、压成清零），`failures.fused(` 只在 `slide.rs`（保护网读它决定开不开）。' +
+      '主层若开始读 `fused` = 在 [`SS21c`] 那一步之外又多一处"要不要压"的判断；保护网若' +
+      '开始 record = 它自己把自己锁死，而这一层根本没有解锁通路（它不调模型，永远不' +
+      '"压成"）。两种都在编译器与行为测试的眼皮底下。',
+    (m) =>
+      `${filesWith(m.hostDesktop, /self\.failures\.(?:of|record|clear)\s*\(/)}|${filesWith(m.hostDesktop, /failures\.fused\s*\(/)}`,
+    'compact/deep.rs|slide.rs',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -1067,6 +1098,12 @@ const FLOORS = [
   // STRATEGY、SS21c 数构造点与调用点），所以"扫错了树"这种瞎法兜得住。
   ['主层压缩面字节数（剥注释）', (m) => m.compact.length, 4800],
   ['主层压缩面含判定本体', (m) => countOf(m.compact, /fn plan\s*\(/), 1],
+  // S2 刀⑤（SS22b/c）的期望是**文件名**与 1 ⇒ 面塌掉时 `none` 与"只有一个文件"、
+  // 0 与"没有第二处"读数相同。同一条瞎法两条下限：字节数现值 5429 取三成；
+  // 再加一条点名 `fn process_runs`——分段本体不被 SS22 任何一档当分子，
+  // 所以"扫错了树 / 模块改名"这种瞎法只有它能报出来。
+  ['滑窗保护网面字节数（剥注释）', (m) => m.slide.length, 1600],
+  ['滑窗保护网面含分段本体', (m) => countOf(m.slide, /fn process_runs/), 1],
 ];
 
 function runChecks(m) {
@@ -1252,6 +1289,22 @@ if (SELFTEST) {
       m.hostDesktop.push({
         rel: 'commands/organize.rs',
         code: 'let extra = Compactor::new(settings, client);\n    let out = cp.run(&mut session, &id, &policy).await;\n',
+      }),
+    // S2 刀⑤（SS22a/b/c）三条窄变异，各打红一档且**不许连带**：熔断线在第二处再比
+    // 一遍 / 组装点之外多 new 一枚表 / 保护网开始自己记失败（它没有解锁通路，记一次
+    // 就永久锁死自己）。三条都长在编译器与行为测试看不见的位置上。
+    SS22a: (m) =>
+      (m.compact +=
+        '\nfn sneaky_fused(n: u32) -> bool {\n    n >= MAX_COMPACT_FAILURES\n}\n'),
+    SS22b: (m) =>
+      m.hostDesktop.push({
+        rel: 'commands/chat.rs',
+        code: 'let second_table = crate::compact::Failures::default();\n',
+      }),
+    SS22c: (m) =>
+      m.hostDesktop.push({
+        rel: 'slide.rs',
+        code: 'self.failures.record(sid);\n',
       }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),

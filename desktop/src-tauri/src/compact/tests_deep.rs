@@ -114,7 +114,13 @@ fn policy_at(session: &Session) -> UsagePolicy {
 
 fn compactor(settings: Arc<SettingsStore>, cli: Arc<Scripted>) -> (Compactor, Arc<Scripted>) {
     (
-        Compactor::new(settings, Arc::clone(&cli) as Arc<dyn MemoryManagerClient>),
+        Compactor::new(
+            settings,
+            Arc::clone(&cli) as Arc<dyn MemoryManagerClient>,
+            // 熔断表由组装点注入（刀⑤a）：测试里每条用例一枚新的，语义与原来
+            // "Compactor 自带一张"完全相同——只是构造点换了地方。
+            Arc::new(crate::compact::Failures::default()),
+        ),
         cli,
     )
 }

@@ -5,13 +5,14 @@
 //! **注册序就是执行序，一条不许重排**——这是前缀缓存红线（§5 / v2.139）：
 //! ToolExposure → BaseSystemInject（静态身份层 = system 字节前缀）→
 //! MemoryInject → ThinkingLanguage → TreeDirectoryInject（append-only 殿后）→
-//! InstructionFilesInject → FragmentInject → MicroCompact（S2 刀③）。
+//! InstructionFilesInject → FragmentInject → MicroCompact（S2 刀③）→ Slide（S2 刀⑤）。
 //! 静态段排在目录之前一旦反过来，每整理一次就把思考语言句的缓存断一次；
 //! 目录之后若再挂任何**静态段**，目录增长会连带破前缀。
-//! 第八环为什么可以在红线之后：它不往 system 里写任何东西，改的是 messages 里
-//! 若干条**旧工具结果的正文**——前缀缓存里那段静态字节它一个字都不碰；而消息列
-//! 每轮本来就在增长，缓存断在"最旧的那批结果"上正是这一层的用途（参照实现
-//! ZCode 同形：microcompact 就在组装末位）。
+//! 第八、九两环为什么可以在红线之后：它们都不往 system 里写任何东西，改的是 messages
+//! 里的内容或存在性——前缀缓存里那段静态字节它们一个字都不碰；而消息列每轮本来就在
+//! 增长，缓存断在"最旧的那批"上正是这两层的用途（参照实现 ZCode 同形：microcompact
+//! 就在组装末位）。两环的分工：微压缩清**旧结果的正文**（骨架还在），滑窗保护网丢
+//! **旧过程的整段**（骨架也不发），后者只在前者的账主层连败三次之后才醒。
 //!
 //! 三道防线交叉验证（改这里之前先读它们）：
 //! · `crates/kernel-agent/tests/prompt_layering.rs` 锁「静态段前缀 + 记忆居中 +
@@ -47,6 +48,10 @@ pub(crate) struct Init {
     pub catalog: Arc<crate::llm::catalog::CatalogStore>,
     pub model_overrides: Arc<crate::model_override::ModelOverrideStore>,
     pub sessions_dir: PathBuf,
+    /// S2 刀⑤：滑窗保护网那一环要的熔断表（与主层压缩**同一份**，由 `state/mod.rs`
+    /// 在两个使用方之前构造）。它不自己 new：两张表就会出现"主层已熔断、保护网没醒"
+    /// 或反过来的空档，而两档在界面上是同一个症状（请求发不出去）。
+    pub compact_failures: Arc<crate::compact::Failures>,
 }
 
 /// 三件要进 `AppState`（命令层热换）与后续簇（碎片置位）的句柄。
@@ -68,6 +73,7 @@ pub(crate) fn build(init: Init) -> Stack {
         catalog,
         model_overrides,
         sessions_dir,
+        compact_failures,
     } = init;
 
     // agent/request 决策环（exposure 文档 §7 / 提示词分层设计 §6，注册次序
@@ -195,7 +201,21 @@ pub(crate) fn build(init: Init) -> Stack {
         Arc::new(crate::microcompact::MicroCompact::new(
             Arc::clone(&settings),
             sessions_dir,
-            main_threshold,
+            Arc::clone(&main_threshold),
+        )) as Arc<_>,
+    );
+
+    // 滑窗保护网（S2 刀⑤ · AC-S2-8）：主层熔断之后才醒的最后一层——把旧轮的过程整段
+    // 摘掉，只留每轮的提问与最近一段过程。它不调模型也不落账，所以可以挂在环上
+    // （刀④ 那三条「不许挂环上」的理由，一条都不适用于它，见 `slide.rs` 头注）。
+    // 注册在微压缩**之后** = 它看到的是前两层已经压过的形状；前缀缓存红线与微压缩同档
+    // 豁免：不往 system 里写任何东西，只在熔断期间改消息列，而熔断本身就断在缓存上。
+    ctx.events.on_waterfall(
+        points::REQUEST,
+        Arc::new(crate::slide::Slide::new(
+            Arc::clone(&settings),
+            compact_failures,
+            Arc::clone(&main_threshold),
         )) as Arc<_>,
     );
 
