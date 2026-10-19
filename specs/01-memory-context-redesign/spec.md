@@ -2,9 +2,9 @@
 
 - 状态：**进行中 · S1 已做到刀④d 且两轮真窗口实测过（刀①②a②b-1/-2/-3②c-1/-2③a③b-1/-2
   ④a④b④c④d 全 ✅，只剩三件：真删与"删后下一会话看不见"那两发读数、AC-S1-2 库改名那一次、
-  ②c-2 学习档那一格等点头）；S2 施工 spec 已开 =
-  [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)（状态 = 待确认，
-  含三处要你先定的落点，过完才动代码）**（方案定稿 2026-10-17 · 压缩侧层序 2026-10-18 核对后重定 ·
+  ②c-2 学习档那一格等点头）；**S2 已开工** =
+  [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)（三处待定项 2026-10-19
+  全定，刀① 锚点与有效阈值搬家已 ✅，刀②-⑦ 待做）**（方案定稿 2026-10-17 · 压缩侧层序 2026-10-18 核对后重定 ·
   ADR-0007 已成文并提交）。开工闸原写"`specs/03-structural-debt` 线完成后再启动"，
   由用户 2026-10-18 指令改为**先转本线、拆分层暂停**
 - 负责人：青鸟（定目标形态） / Qoder（取证 + 实现）
@@ -83,7 +83,7 @@
 | 阶段 | 内容 | 依赖 | 方案稿对应 |
 | --- | --- | --- | --- |
 | S1 数据面 | **施工 spec 已开 = [`specs/05-memory-data-plane-s1`](../05-memory-data-plane-s1/spec.md)**（2026-10-18 现状取证后重写范围：文件库与索引已在，S1 做的是把"sqlite 真源 + md 镜像"扳成 md 唯一真源，四类型与排除清单补进 frontmatter 与提示词，`obsolete/` 软删，存量导出改道） | 无 | A / E |
-| S2 压缩面 | **施工 spec 已开 = [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)**（2026-10-19 现状取证：压缩本体已随审计批 C 删除、只剩 `CompactionOutcome` 与 `ContextCompacted` 重放链两件活物，而占用锚点与自动收起现在长在 S4 要退役的 `organize/` 里 ⇒ 第一刀是搬家不是新建）；主层深度压缩（模板 / 续接框架 / 熔断）+ 落盘 + 微压缩 + 滑窗保护网 + 阈值接线 + `ContextCompacted` 复用 + 设置项 | 无（可与 S1 并行） | B |
+| S2 压缩面 | **施工 spec 已开 = [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)**（2026-10-19 现状取证：压缩本体已随审计批 C 删除、只剩 `CompactionOutcome` 与 `ContextCompacted` 重放链两件活物，而占用锚点与自动收起现在长在 S4 要退役的 `organize/` 里 ⇒ 第一刀是搬家不是新建）；主层深度压缩（模板 / 续接框架 / 熔断）+ 落盘 + 微压缩 + 滑窗保护网 + 阈值接线 + `ContextCompacted` 复用 + 设置项；**刀① ✅ 2026-10-19**（锚点与有效阈值搬进 `context_budget`，判据 `SS16a/b/c`） | 无（可与 S1 并行） | B |
 | S3 注入面 | 索引注入替换 + guidance 改写 + 预取键适配 | S1 | C |
 | S4 退役面 | organize 管线 / 树工具族 / sqlite 读路径下线（数据冻结），`/整理` 去向落地 | S1+S2+S3 稳定一轮 | D |
 | S5 收尾 | `docs/design/authority/` 五篇重写合一 + ADR 定稿 + roadmap 勾选 | S4 | — |

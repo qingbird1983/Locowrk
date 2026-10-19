@@ -90,10 +90,10 @@ impl super::Organizer {
         // 水位只读日志尾部的 `LlmUsage`（`anchor` 反向扫，均摊 O(1)），没到水位
         // 就一行投影 IO 都不做。两个条件是合取（&&），顺序不改变结论——变的只是
         // "哪个先拦下来"，而拦下来的理由仍然逐条如实返回。
-        // 锚点 = `Organizer::anchor`（provider 真实 input，v2.138「进度条 =
-        // 触发 = 自动收起」那把尺），比较式照 `auto_collapse` 的
-        // `anchor×100 ≥ window×pct`——同一个乘比式不留两处（批 Q7 §11 口径）。
-        let (anchor, _) = Self::anchor(session);
+        // 锚点 = `context_budget::anchor`（provider 真实 input，v2.138「进度条 =
+        // 触发 = 自动收起」那把尺；S2 刀① 起这把尺住在中立模块），比较式照
+        // `auto_collapse` 的 `anchor×100 ≥ window×pct`——同一个乘比式不留两处（批 Q7 §11 口径）。
+        let (anchor, _) = crate::context_budget::anchor(session);
         if anchor.saturating_mul(100)
             < window_tokens.saturating_mul(dev.organize_release_watermark_pct as u64)
         {

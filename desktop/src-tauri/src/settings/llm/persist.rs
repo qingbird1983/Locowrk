@@ -122,45 +122,72 @@ pub struct LlmConfig {
     pub subagent: Option<SubagentPin>,
 }
 
-/// 会话生效上下文窗口（v2.137 自动识别，四层链）：会话模型覆盖（旁车
-/// `{providerId, model}`，缺 = 活动档）→ 模型行 `context_window`（用户
-/// 钉死面）→ 目录命中（批 A models.dev 快照/在线刷新）→ 档位
-/// `window_tokens`。全未知 = None（调用方按「未设置」呈现）。与子代理
-/// 回退链的窗口口径同形（subagent_llm「模型行 ?? 目录 ?? 档位」）——
-/// 不读 keyring（flat() 会碰凭据库，此函数走纯档位字段）。
+/// 会话生效模型的**容量读数**（specs/09 刀① 新增）：`(上下文窗口, 输出上限)`。
+///
+/// 选取链沿用 v2.137 的四层自动识别（会话模型覆盖 → 模型行钉死 → 目录命中
+/// （批 A models.dev 快照/在线刷新）→ 档位字段），不读 keyring（`flat()` 会碰
+/// 凭据库，这里只走纯档位字段）；与子代理回退链的窗口口径同形。
+///
+/// 为什么两个读数要一次解析：它们长在同一行上（同一个生效档位里的同一个模型），
+/// 分两次解析就得把「会话覆盖 → 活动档 → 模型名」那条选取链写两遍——而选取链
+/// 一旦有两份，"窗口按覆盖档取、输出上限按活动档取"这种错配就是迟早的事。
+/// `session_window` 由此退成薄封装（签名与语义不动，既有 `settings/tests/window.rs`
+/// 的链用例一字未改仍绿 = 等价性证据）。
+///
+/// 返回元组而不是新结构体：本仓的组装点只用这两个数，包一层类型要连带把它挤进
+/// `settings` 的导出面（未命名的重导出会被 `unused_imports` 判死），形状收益抵不过
+/// 门禁成本。调用方一律解构成 `window` / `max_output` 命名，位置写法（`.0`/`.1`）
+/// 不许出现在生产代码里。
+///
+/// ⚠ 两半的**未知语义不同**：窗口全未知 = `None`（调用方按「未设置」呈现，压缩侧
+/// 见 `context_budget` 的裁定 A）；输出上限全未知 = `None` ⇒ 压缩侧按缺省预留
+/// （`context_budget::output_reserve`）。输出上限的链只有两档（模型行钉死 ?? 目录命中，
+/// 档位没有输出上限这颗字段）。
+pub fn session_capacity(
+    cfg: &LlmConfig,
+    session_override: Option<&(String, String)>,
+    catalog: Option<&crate::llm::catalog::CatalogStore>,
+) -> (Option<u64>, Option<u64>) {
+    let profile = match session_override {
+        Some((pid, _)) => cfg.profile(pid).or_else(|| cfg.active_profile()),
+        None => cfg.active_profile(),
+    };
+    let Some(profile) = profile else {
+        return (None, None);
+    };
+    // 覆盖带的模型名优先（与原实现同形：覆盖换档也换名，档位解析失败仍回落活动档）。
+    let model = session_override
+        .map(|(_, m)| m.as_str())
+        .unwrap_or_else(|| profile.model.as_str());
+    if model.is_empty() {
+        return (None, None);
+    }
+    let row = profile.models.iter().find(|m| m.id == model);
+    let hit =
+        catalog.and_then(|c| c.lookup_model(&profile.kind, profile.base_url.as_deref(), model));
+    (
+        // 窗口四层：模型行钉死 ?? 目录 ?? 档位（与改前三段 early return 同序同值）。
+        row.and_then(|m| m.context_window)
+            .or_else(|| hit.as_ref().and_then(|h| h.context_window))
+            .or(profile.window_tokens),
+        // 输出上限两档：模型行钉死 ?? 目录。
+        // ⚠ 与发送侧的**有意差别**：`llm/app_llm.rs` 的 `RowFacts.max_output` 只取
+        // 用户钉死值，目录值不下发（原话「不发明能力：目录里没有的、档位里没钉的，
+        // 一律不发」——那是"往请求里写参数"的纪律）。预算这一面读的是"这台模型
+        // 物理上能给多少上下文"，目录命中就是可用证据，所以允许落第二档。
+        row.and_then(|m| m.max_output)
+            .or_else(|| hit.as_ref().and_then(|h| h.max_output)),
+    )
+}
+
+/// 会话生效上下文窗口（[`session_capacity`] 的窗口那一半；签名与语义与
+/// v2.137 起一直是的那份逐字相同，四个调用方无需改动）。
 pub fn session_window(
     cfg: &LlmConfig,
     session_override: Option<&(String, String)>,
     catalog: Option<&crate::llm::catalog::CatalogStore>,
 ) -> Option<u64> {
-    let (profile, model) = match session_override {
-        Some((pid, model)) => (
-            cfg.profile(pid).or_else(|| cfg.active_profile())?,
-            model.as_str(),
-        ),
-        None => {
-            let p = cfg.active_profile()?;
-            (p, p.model.as_str())
-        }
-    };
-    if model.is_empty() {
-        return None;
-    }
-    if let Some(w) = profile
-        .models
-        .iter()
-        .find(|m| m.id == model)
-        .and_then(|m| m.context_window)
-    {
-        return Some(w);
-    }
-    if let Some(w) = catalog.and_then(|c| {
-        c.lookup_model(&profile.kind, profile.base_url.as_deref(), model)
-            .and_then(|m| m.context_window)
-    }) {
-        return Some(w);
-    }
-    profile.window_tokens
+    session_capacity(cfg, session_override, catalog).0
 }
 
 impl LlmConfig {

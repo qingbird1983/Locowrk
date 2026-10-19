@@ -175,14 +175,20 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         }
     }
 
+    let (window, max_output) = crate::settings::session_capacity(
+        &deps.settings.llm_config(),
+        deps.model_overrides.get(&session_id).as_ref(),
+        Some(&deps.catalog),
+    );
+    // S2 刀①：与 `agent_chat` 同形——分母吃有效阈值（算式只住 `context_budget`，
+    // 两个组装点不许各写一遍加减）。
     let policy = UsagePolicy {
-        threshold_tokens: deps.settings.organize_threshold_tokens(),
-        window_tokens: crate::settings::session_window(
-            &deps.settings.llm_config(),
-            deps.model_overrides.get(&session_id).as_ref(),
-            Some(&deps.catalog),
-        )
-        .unwrap_or(0),
+        threshold_tokens: crate::context_budget::effective_threshold(
+            deps.settings.organize_threshold_tokens(),
+            window,
+            max_output,
+        ),
+        window_tokens: window.unwrap_or(0),
         tools_est_tokens: runner::catalog_estimate(&deps.kernel, &session_id).await,
     };
     // 失败也照常收尾：一次性删行（重试多半还是错），周期滚到下槽；

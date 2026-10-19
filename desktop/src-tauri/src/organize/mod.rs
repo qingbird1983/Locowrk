@@ -15,14 +15,21 @@
 //! 行）整块搬进目标簇，块内字节原样、簇内保持原相对次序；唯一一处字面改动 = 五个
 //! 跨簇被调用的私有方法加 `pub(super)`（**可见面与拆分前逐字相同**）。判据脚本
 //! `tmp/v157-*` 留在台账里可复跑。
+//!
+//! **S2 刀①（2026-10-19）改过本模块的一格地**：占用锚点 `anchor()` 原来住在这里，
+//! 现搬进中立模块 [`crate::context_budget`]。搬的理由不是"顺手重构"而是依赖方向——
+//! organize 按 specs/01 阶段表 D 节在 **S4 整面退役**，而压缩触发线必须吃这把尺；
+//! 留在树里等于把 S2 的形状押在一个要删的模块上。四个调用方（`collapse` /
+//! `pressure` / `trigger` / `debug`）现在都调那一份、本模块**不再自己拿尺**
+//! （机器面 = 判据 SS16b：organize 面上 `reported_input_tokens` 出现 0 次）。
+//! 数值与回落口径逐字未动，等价性证据 = 本模块既有测试一字未改仍绿。
 
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use memory_tree::{
-    AnchorSource, MemoryManagerClient, MemoryManagerUsage, MemoryTree, OrganizeReason,
-    OrganizeRecord, TreeStore,
+    MemoryManagerClient, MemoryManagerUsage, MemoryTree, OrganizeReason, OrganizeRecord, TreeStore,
 };
 use session_store::{Session, SessionEvent};
 
@@ -128,18 +135,25 @@ impl Organizer {
             .unwrap_or_else(|| MemoryTree::new(workspace, session_id))
     }
 
-    /// 占用锚点（§4.2：优先 provider 真实 input——日志最后一条 LlmUsage；
-    /// 无上报回落字符估算，锚点来源如实标注）。扫描逻辑与用量面共用
-    /// `runner::reported_input_tokens`（v2.138 统一锚点：进度条 = 触发 =
-    /// 自动收起，一把尺）。
-    fn anchor(session: &Session) -> (u64, AnchorSource) {
-        match crate::runner::reported_input_tokens(session) {
-            Some(input) => (input, AnchorSource::LlmUsage),
-            None => (
-                kernel_agent::estimate_tokens(&session.derive_messages()),
-                AnchorSource::Estimate,
-            ),
-        }
+    /// 整理批量档用的**有效阈值**（S2 刀① 接线的第二个消费点）：读齐三份配置后
+    /// 调中立算式 [`crate::context_budget::effective_threshold`]，本模块不再自己
+    /// 加减窗口。为什么 organize 也要吃封顶后的数：进度条分母与触发线必须是同一把
+    /// 尺（v2.138「看到的 = 触发用的」）——只封顶界面不封顶触发，就变成"进度条
+    /// 说满了、整理却说没到"，正是那一年修过的分裂形状。
+    /// 窗口未知 ⇒ 原样吃滑杆（裁定 A 那一档不封顶）；缺省设置（滑杆 100K、
+    /// 窗口 ≥ 121K）下封顶取不到小者 ⇒ 读数与改前逐字相同。
+    pub(super) fn budget_threshold(&self, session_id: &str) -> u64 {
+        let ov = self.model_overrides.get(session_id);
+        let (window, max_output) = crate::settings::session_capacity(
+            &self.settings.llm_config(),
+            ov.as_ref(),
+            Some(&self.catalog),
+        );
+        crate::context_budget::effective_threshold(
+            self.settings.organize_threshold_tokens(),
+            window,
+            max_output,
+        )
     }
 
     /// 记忆管理器用的模型对（队列 Q8c 收成一处）：

@@ -2,7 +2,8 @@
 //! 活触发配置 + 尾巴/锚点读数。只读数据源——`memory_tree_view` 命令
 //! （前端打开面板拉一次，不推送不轮询，⑫ 暴露面板同款）。
 //!
-//! 自 organize/mod.rs 拆出守 400 行纪律；`anchor` 与编排共用（mod.rs）。
+//! 自 organize/mod.rs 拆出守 400 行纪律；占用锚点自 S2 刀① 起与编排不再同住，
+//! 与本模块共用的是中立模块 `crate::context_budget`（全仓唯一那把尺）。
 
 use serde::Serialize;
 use session_store::Session;
@@ -53,7 +54,7 @@ impl Organizer {
         // 只读 ⇒ 不在这里钳游标（修数据是 plan_* 的决策面干的，见 `Organizer::clamp_cursor`）。
         let (tail, base) = Self::tail_material(session.events(), tree.chaptered_until);
         let items = build_items(tail, base);
-        let (anchor_tokens, anchor_source) = Self::anchor(session);
+        let (anchor_tokens, anchor_source) = crate::context_budget::anchor(session);
         let pacing = Pacing::parse(&mem.organize_pacing);
         TreeDebug {
             exists: self.tree_store.load(&workspace, session_id).is_some(),
@@ -70,7 +71,7 @@ impl Organizer {
                 AnchorSource::LlmUsage => "llm_usage",
                 AnchorSource::Estimate => "estimate",
             },
-            threshold_tokens: self.settings.organize_threshold_tokens(),
+            threshold_tokens: self.budget_threshold(session_id),
             pacing: pacing.as_str(),
             chunk_tokens: mem.organize_chunk_tokens,
             paused_auto: tree.paused_auto,

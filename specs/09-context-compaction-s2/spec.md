@@ -1,8 +1,9 @@
 # 09-上下文压缩面 S2（把"超限请重开会话"换成有界可续的压缩管线）
 
-- 状态：**待确认（草案 · 未动一行代码）**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md)
+- 状态：**已确认 · 刀① 施工中**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md)
   阶段表里 **S2 压缩面** 那一行的施工 spec（方案稿对应 = B 节，⊘ 不入库，关键条款抄在下面
-  「取证」与「设计要点」两节里；决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
+  「取证」与「设计要点」两节里；决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）。
+  三处待定项已由用户 **2026-10-19「开工吧」** 一并采纳（见下面「要你定的」那节的裁定结果）
 - 负责人：Qoder（取证 + 实现） / 青鸟（三处待定项点头）
 - 日期：2026-10-19（现状取证同日）
 - 出处 / 上游：方案稿 §B「上下文侧：压缩管线（LLM 深度压缩主位，机械层前置减速 + 护航）」
@@ -52,21 +53,53 @@
    spill 阈值、微压缩保留条数与比例、目标比、压缩模型、自定义压缩指令**一枚都不存在**。
    ⇒ 语义变更要写清：`context.thresholdTokens` 从"整理阈值"改判成"压缩全局阈值"，
    设置页那句文案（中英成对）跟着改，不许留一句指向空设置项的话（`retry.rs:49` 已经在抱怨这个）。
-6. **窗口链与"拿不到窗口"没有写死**：`llm/app_llm.rs:242-243` 是
-   `模型目录 context_window ?? 档位 window_tokens` 两级。方案稿支撑层实证③要求
-   "我们的窗口自动识别链拿不到窗口时走哪边要写死一个，别留给实现临场决定"——
-   现在就是"没决定"的状态。
+6. **"生效窗口"其实有两条链，而且都还没处理"取不到"**（草案初稿只看到第二条，
+   开工当日读全）：① 上下文节奏这条 = `settings::session_window`
+   （`settings/llm/persist.rs:131`，四层：会话覆盖 → 模型行 `context_window` →
+   models.dev 目录命中 → 档位 `window_tokens`），整理触发 / 自动收起 / 两个组装点的
+   进度条分母都吃它；② 发送侧这条 = `llm/app_llm.rs:240-243` 的 `RowFacts`
+   （两级：模型行 ?? 档位，**故意不查目录**——注释原话"不发明能力：目录里没有的、
+   档位里没钉的一律不发"，那是往请求里写参数的纪律）。两条并存是既成事实，本刀
+   不合并（合并 = 改发送行为，与刀① 的搬家性质无关，登记在下面「挂账」）。
+   方案稿支撑层实证③要求"拿不到窗口时走哪边要写死一个"——改前就是"没决定"的状态；
+   裁定 A 已落在 `context_budget::effective_threshold` 的 `None` 分支。
+7. **刀① 新增读到的两把"回落尺"**（登记，不在本刀统一）：有供应商上报时进度条与
+   锚点确实是同一个数（v2.138 那句「看到的 = 触发用的」证的是这一档）；**无上报**时
+   `runner::record_usage`（`runner/mod.rs:358-365`）回落**树组装后口径**（目录 + 尾巴），
+   而 `anchor()` 回落**全量历史字符估算**。统一它会改整理的触发读数 = 改行为，
+   归刀④（主层触发线接入时一起定，判据形态 = 那一刀的"到线就跑"用例必须说明白的
+   到底是哪一个数）。
 
 ## 验收标准（必须可测：跑什么命令、看到什么结果）
 
-- [ ] AC-S2-1 锚点搬家不改读数：把占用锚点从 `organize` 拔到中立模块后，
-      同一份会话日志上 `anchor` 的两档来源（LlmUsage / Estimate）与搬前**逐条同值**，
-      且 `grep -c reported_input_tokens` 在生产面上只剩一个出处（新判据进
-      `check-single-source`，红证 = 磁盘变异把 organize 那份抄回来）
-- [ ] AC-S2-2 有效阈值只扣一次：`有效阈值 = min(滑杆值, 窗口 − min(输出上限 ?? 32K, 21K))`
-      这一式**只有一个出处**；构造"窗口 200K / 输出上限 64K / 滑杆 150K"与
-      "滑杆 400K"两组夹具，断言算出的有效阈值分别是 150K 与 157K（不是 136K——那正是
-      扣了两遍的形状）；窗口取不到时按写死的那一档走，且**如实记 `anchor_source`**
+- [x] AC-S2-1 锚点搬家不改读数（✅ 2026-10-19 刀①）：同一份会话日志上两档来源
+      （LlmUsage / Estimate）与搬前同值——证据不是"我抄了一遍原代码"，而是
+      **organize 既有测试一字未改仍绿**（619 passed / 0 failed，其中 `organize::tests::pressure`
+      那批的 anchor = 9,500 断言就是这一档的行为面）。判据表述订正：草案写的
+      "`grep -c reported_input_tokens` 只剩一个出处"太宽——那个名字在生产面上本来就有
+      两个合法位置（尺的定义在 `runner/mod.rs:336`、消费者是锚点与进度条），数它等于
+      把"共用一把尺"误报成"两个出处"。实际落的三条形状档是 `SS16a`（`fn anchor(` 全生产 1 处
+      且在中立面）/ `SS16b`（organize 面上 `reported_input_tokens` 与 `fn anchor(` 各恒 0）/
+      `SS16c`（预留两常量 + 算式各 1 处），三条互不遮挡由 `--selftest` 实测（无"同时打红"），
+      另加一发磁盘变异（`tmp/mut-s16-disk.mjs`）：把 organize 那把锚点**原样抄回**（能编译、
+      行为等价）⇒ `cargo test --lib` 仍 619 全绿，而 SS16a 读 2|1、SS16b 读 1|1 双双报红，
+      SS16c 不动，还原后复绿——这一发证的才是"形状档独有、行为面看不见"
+- [x] AC-S2-2 有效阈值只扣一次（✅ 2026-10-19 刀① 的算式面）：`context_budget::effective_threshold`
+      是全仓唯一出处（SS16c），夹具 150K / 179K + 两个负对照 158K / 136K 由
+      `context_budget/tests.rs::effective_threshold_is_capped_by_the_window_once` 钉住，
+      预留三档（None→21K / 64K→21K / 8_192→8_192）由 `reserve_takes_the_smaller_of_ceiling_and_cap`
+      钉住；裁定 A 那一档 = `unknown_window_keeps_the_slider`。
+      ⚠ **界面上的封顶还没实测**：本刀改了进度条分母（两个组装点），真实窗口读数需要
+      重启 dev 后目检（滑杆 100K 在窗口 ≥ 121K 时不变，窗口更小的档位才会看到分母变化）
+      ——这一格留给刀⑥ 与设置页文案一起目检，不在这里报"已验证"。
+      ⚠ **草案数字订正**（同一日，开工当天自己读到 ZCode 原文才发现）：本节初稿把
+      封顶那档写成"157K 而非 136K"——两个数都是从回忆里的算式倒推的，按你给的本地源码
+      `ZCode/apps/zcode-cli/packages/core/src/compact/policy.ts:67-88` 逐行重核后才订正：
+      预留 = `min(maxOutput ?? 32_000, 21_000)`（`policy.ts:75-82`），200K − 21K = 179K；
+      ZCode 自己在 `policy.ts:84-88` 还再减 13K 的 `AUTOCOMPACT_BUFFER_TOKENS`，
+      而我们的滑杆不承担那颗缓冲（方案稿 §B 的"只扣一次"就是这一条），所以是 179K
+      而不是 166K。**判据数字必须来自重读原文，不来自回忆**——这一条本来写在
+      「两家参照源码逐行核对」的纪律里，初稿仍犯了，记下来是为了让下一刀别再靠回忆
 - [ ] AC-S2-3 落盘（spill）：一条超阈值的工具输出 ⇒ 附件目录多一个文件 +
       上下文里是 `<persisted-output> 路径 + 预览 </persisted-output>` +
       日志原文 sha **不变**（AC-8-② 的第一次兑现）
@@ -134,10 +167,16 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 
 ## 计划（刀序草案，每刀独立可回退、一提交一刀）
 
-1. **刀① 锚点与阈值搬家**：中立模块（候选 `desktop/src-tauri/src/context_budget.rs`）
-   收 `anchor()` + `reported_input_tokens` + 有效阈值算式（含"窗口取不到时写死哪一档"这条裁定）；
-   organize 改吃这一份；新判据 + 变异红证。影响：`organize/mod.rs` `organize/collapse.rs`
-   `commands/chat.rs` `settings/context.rs` 新文件一个。
+1. **刀① 锚点与阈值搬家**（✅ 2026-10-19）：中立模块 `desktop/src-tauri/src/context_budget.rs`
+   收 `anchor()`（从 `Organizer::anchor` 整块搬，数值与回落表达式逐字未动）+
+   `output_reserve()` + `effective_threshold()`（含裁定 A 那一档）。四个真实消费点：
+   `organize/{collapse,pressure,trigger,debug}` 改吃中立锚点，**两个组装点**
+   （`commands/chat.rs` / `scheduler/engine.rs`）与 **organize 的批量档触发线**
+   （`Organizer::budget_threshold`）改吃有效阈值——分母与触发线不许一个封顶一个不封顶
+   （那就是 v2.138 修过的分裂形状）。取数面加 `settings::session_capacity`
+   （窗口 + 输出上限一次解析，`session_window` 退成薄封装）。判据 = `SS16a/b/c` +
+   `context_budget/tests.rs` 六条 + 变异红证。**不在本刀预造** `armed()`（裁定 A 第二半
+   归刀④），不统一无上报回落尺（取证⑦）。
 2. **刀② spill（落盘）**：大工具输出 → 会话附件目录 + `<persisted-output>` 占位；
    阈值字符数进设置面。先做它：内容定值判定 ⇒ 前缀天然稳定，风险最低。
 3. **刀③ micro（微压缩）**：白名单九工具 + 错误不清 + 保留最近 5 条 + 最小节省 256 +
@@ -155,30 +194,39 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 
 ## 任务
 
-- [ ] 三处待定项等你点头（见下面「要你定的」）
-- [ ] 刀①→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成
+- [x] 三处待定项已定（2026-10-19「开工吧」= 三条建议全采纳，见上面「要你定的」的裁定结果）
+- [x] **刀① 锚点与有效阈值搬家 ✅**（2026-10-19）：AC-S2-1 / AC-S2-2 两条打勾，判据 SS16a/b/c +
+      六条单测 + 一条同源用例 + 一发磁盘变异全绿（`cargo test --lib` 619 passed / 0 failed，
+      `make check` 见提交正文）
+- [ ] **刀① 留下一格没验的**：进度条分母封顶在真实窗口里看不看得到——需要重启 dev 后目检
+      一次（缺省滑杆 100K 在窗口 ≥ 121K 时不改变读数，所以要拿一个窗口小的档位才测得出来），
+      与刀⑥ 的设置页文案一起交给你看，不在这里报"已验证"
+- [ ] 刀②→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成
 - [ ] 数据侧改动前把相关目录复制进备份目录（specs/01 那条纪律在本线同样适用：
       压缩虽不改日志，但 spill 会往会话附件目录写文件）
 
-## 要你定的（三处，不动代码就先定）
+## 要你定的（三处 · 2026-10-19 全部已定，采纳建议）
 
-1. **窗口取不到时走哪边**（方案稿实证③要求写死一个）：A = 不触发自动压缩（OpenCode 形，
-   保守、但用户就回到"超限报错"）；B = 按 200K 假定照触发（OpenCode 压缩请求本身那半）。
-   建议 **A 不触发 + 界面上如实说"窗口未知，压缩未启用"**——把成本赌在假定的窗口上，
-   比少压一次贵得多，而且这条失败是用户看得见的。
-2. **`context.thresholdTokens` 的语义改判**：从"整理阈值"改成"压缩全局阈值"（整理继续吃同一枚
-   直到 S4 退役）。设置页那句话要重写、`retry.rs:53` 那句报错要跟着改指向。要不要现在就改
-   （我建议改：不改则新阈值与旧文案并存，正是 §11 点名的"两个出处"形状）。
-3. **主层压缩是否允许在"机械层已把占用压到线下"时仍跑**（ZCode 是 micro 先触发、
-   auto 到线才跑）：建议照 ZCode——**到线就跑，不因机械层压过而推迟**，
-   否则"更小的总结面"变成"更晚的重置"，北极星那条占用有界会被拖长。
+1. **窗口取不到时走哪边**（方案稿支撑层实证③要求写死一个）⇒ **裁定 A**：不触发自动
+   压缩，且界面上如实说"窗口未知，压缩未启用"。落地节奏：阈值那一半已在刀① 落地
+   （`context_budget::effective_threshold` 的 `None` 分支 = 不假定窗口、原样吃滑杆）；
+   "因此不自动压"那一半**不在刀① 预造**——现网还没有自动压缩的执行者，先写一个
+   `armed()` 判据就是取证①点名的"存在但从未接线"，它归刀④ 的主层触发线。
+2. **`context.thresholdTokens` 的语义改判**：从"整理阈值"改成"压缩全局阈值"（整理继续
+   吃同一枚直到 S4 退役）⇒ **定：改**。设置页文案与 `llm/retry.rs:53` 那句报错的指向
+   跟着改（那两处归刀⑥，因为要和其余压缩设置一次成对，见刀序）。
+3. **机械层压过之后主层是否仍到线就跑** ⇒ **定：照 ZCode，到线就跑**，不因机械层压过
+   而推迟（推迟会把"更小的总结面"变成"更晚的重置"，北极星那条占用有界被拖长）。
 
 ## 影响范围
 
 | 文件 / 目录 | 改动 |
 | --- | --- |
-| `desktop/src-tauri/src/context_budget.rs`（新） | 刀①：锚点 + 有效阈值 + 窗口缺失那档的唯一出处 |
-| `desktop/src-tauri/src/organize/mod.rs` `organize/collapse.rs` | 刀①：改吃中立锚点，自身逻辑零变化（等价性用既有测试一字未改仍绿实证） |
+| `desktop/src-tauri/src/context_budget.rs`（+ `context_budget/tests.rs`） | 刀① ✅：锚点 + 输出侧预留 + 有效阈值 + 裁定 A 那一档的唯一出处 |
+| `desktop/src-tauri/src/organize/{mod,collapse,pressure,trigger,debug}.rs` | 刀① ✅：`Organizer::anchor` 删除、四处改吃中立锚点；批量档触发线改吃 `Organizer::budget_threshold`（观测面 `debug.rs` 同改，不留"界面一个数、决策另一个数"） |
+| `desktop/src-tauri/src/settings/llm/persist.rs` `llm/mod.rs` `settings.rs` | 刀① ✅：新增 `session_capacity`（窗口 + 输出上限一次解析），`session_window` 退成薄封装；`settings/tests/window.rs` 加一条同源用例 |
+| `desktop/src-tauri/src/commands/chat.rs` `scheduler/engine.rs` | 刀① ✅：两个组装点的 `UsagePolicy.threshold_tokens` 改吃有效阈值 |
+| `scripts/check-single-source.mjs` | 刀① ✅：SS16a/b/c 三条 + 两条扫描面下限 + 三条窄变异；selftest 的分工读数（"同时打红谁"）也在这一刀加上 |
 | `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | 刀②③④：压缩本体与 `agent/request` 决策方 |
 | `crates/kernel-agent/src/kernel/request.rs` `waterfall.rs` | 只**用**现有 `compacted` 带回位；契约形状零改动 |
 | `desktop/src-tauri/src/settings/context.rs` + 设置页「上下文」分区 | 刀⑥：新字段 + 文案（中英成对） |
@@ -196,5 +244,11 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 - 风险③：本线一旦落地，`llm/retry.rs:53` 那句话的命中率应该掉到零——**如果没掉**，
   说明触发线或锚点算错，这一条本身就是 AC-S2-9-② 的判据。
 - 挂账 / 遗留：S4 退役 organize 时要复查刀①搬走的那两块地有没有被留成双份；
-  按模型覆盖阈值留后续（落点 = 模型管理页）。
+  按模型覆盖阈值留后续（落点 = 模型管理页）。**刀① 收下来又读到的三件，都登记不修**：
+  ① "生效窗口"仍有两条链——上下文节奏走 `session_capacity`（四层，含 models.dev 目录），
+  发送侧走 `app_llm.rs:240-243` 的 `RowFacts`（两级，故意不查目录，理由是"不发明能力"）；
+  合并它会改请求下发行为，不属于搬家这一刀。② 无供应商上报时进度条回落树组装口径、
+  锚点回落全量估算（取证⑦），统一它 = 改整理触发读数，归刀④。
+  ③ `AnchorSource` 这个枚举仍住在 `memory-tree`（搬家只动位置不动形状），S4 退役树时
+  它的落点就是 `context_budget`。
 - 回滚：每刀一提交；总开关关 = 行为回到本线开工前；数据侧（会话附件目录）改动前先备份。

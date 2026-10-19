@@ -31,8 +31,8 @@ mod synthesize;
 pub use ipc::{LlmSettingsView, LlmUpdate, ProviderInput, ProviderView};
 pub(super) use migrate::migrate_flat_llm;
 pub use persist::{
-    new_profile_id, session_window, LlmConfig, LlmSettings, ProviderModel, ProviderProfile,
-    SubagentPin,
+    new_profile_id, session_capacity, session_window, LlmConfig, LlmSettings, ProviderModel,
+    ProviderProfile, SubagentPin,
 };
 pub use policy::{validate_headers, NetworkProxy, PROVIDERS};
 pub use synthesize::{synthesize_view, synthesize_view_raw, ProviderModelView};

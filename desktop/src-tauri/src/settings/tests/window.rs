@@ -1,6 +1,6 @@
 //! 上下文管理区（⑨）与模型窗口（S2 迁 llm 区）设置测试：缺省值 /
 //! 旧字段迁移幂等 / 整理阈值（v2.137 绝对 token）校验 / 幻影键 /
-//! session_window 四层窗口链。
+//! session_window 四层窗口链 / session_capacity（S2 刀①：窗口与输出上限一次解析）。
 
 use super::*;
 
@@ -237,5 +237,73 @@ fn session_window_resolution_chain() {
         ),
         None,
         "全未知 = None（前端按未设置呈现）"
+    );
+}
+
+/// S2 刀① 新增：窗口与输出上限**同一次解析**（`session_capacity`）。
+///
+/// 为什么这条要单独立着而不是并入上面那条：上面那条判的是"窗口四层链的值"，
+/// 本条判的是"两个读数不许来自两条链"——错配的形状是"窗口按覆盖档取、
+/// 输出上限按活动档取"，那种数在界面上看不出来，只在压缩线上表现为
+/// "该封顶时没封顶"。目录命中那一档不在这里断言：本夹具造不出目录内容
+/// （`CatalogStore::new` 读空文件 = 空快照），那一档的证据在
+/// `llm/catalog/tests.rs`（lookup 带出 `max_output = Some(393_216)`）。
+#[test]
+fn session_capacity_resolves_window_and_output_in_one_pass() {
+    let mut cfg = LlmConfig {
+        active: "p1".into(),
+        ..Default::default()
+    };
+    cfg.providers.push(ProviderProfile {
+        id: "p1".into(),
+        label: "deepseek".into(),
+        kind: "deepseek".into(),
+        base_url: Some("https://api.deepseek.com/v1".into()),
+        model: "deepseek-flash".into(),
+        window_tokens: Some(65_536),
+        enabled: true,
+        models: vec![ProviderModel {
+            id: "deepseek-v4-pro".into(),
+            context_window: Some(131_072),
+            // 用户钉死的输出上限（settings 只存钉死值，与批 A 的口径一致）
+            max_output: Some(8_192),
+            max_output_source: Some("user".into()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    });
+
+    // 活动档模型没有行 ⇒ 窗口回落档位，输出上限两档都无 = None（不许从档位瞎猜）
+    assert_eq!(
+        crate::settings::session_capacity(&cfg, None, None),
+        (Some(65_536), None),
+        "档位有窗口、没有输出上限这颗字段"
+    );
+
+    // 覆盖到有行的模型 ⇒ 两个读数都落在**同一行**上
+    let ov = ("p1".to_string(), "deepseek-v4-pro".to_string());
+    assert_eq!(
+        crate::settings::session_capacity(&cfg, Some(&ov), None),
+        (Some(131_072), Some(8_192)),
+        "模型行钉死窗口与钉死输出上限同源"
+    );
+
+    // 薄封装等价性：窗口那一半与 `session_window` 逐次同值（刀① 不许改窗口口径）
+    for probe in [None, Some(&ov)] {
+        assert_eq!(
+            session_window(&cfg, probe, None),
+            crate::settings::session_capacity(&cfg, probe, None).0,
+            "session_window 只是取第一半，没有第二套算术"
+        );
+    }
+
+    // 全未知 ⇒ 两半都 None（压缩侧据此走裁定 A，见 `context_budget`）
+    cfg.providers[0].window_tokens = None;
+    cfg.providers[0].models[0].context_window = None;
+    cfg.providers[0].models[0].max_output = None;
+    assert_eq!(
+        crate::settings::session_capacity(&cfg, Some(&ov), None),
+        (None, None),
+        "未配置就报未配置，不许发明一个窗口或输出上限"
     );
 }

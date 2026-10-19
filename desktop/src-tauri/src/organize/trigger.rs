@@ -139,12 +139,12 @@ impl super::Organizer {
         // 先取长度再移交 `items`：结构体字面量里 `items` 已经是移动进返回值的第一位，
         // 同一表达式里再 `items.len()` 就是 use-after-move（E0382，本批编译期抓到的）。
         let tail_events = items.len();
-        let (anchor_tokens, _) = Self::anchor(session);
+        let (anchor_tokens, _) = crate::context_budget::anchor(session);
         (
             items,
             TriggerInput {
                 anchor_tokens,
-                threshold_tokens: self.settings.organize_threshold_tokens(),
+                threshold_tokens: self.budget_threshold(&tree.session_id),
                 pacing: Pacing::parse(&mem.organize_pacing),
                 chunk_tokens: mem.organize_chunk_tokens,
                 tail_tokens,

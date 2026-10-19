@@ -33,9 +33,10 @@ pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
 pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
 pub use llm::{
-    new_profile_id, session_window, synthesize_view, synthesize_view_raw, validate_headers,
-    LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, NetworkProxy, ProviderInput, ProviderModel,
-    ProviderModelView, ProviderProfile, ProviderView, SubagentPin, PROVIDERS,
+    new_profile_id, session_capacity, session_window, synthesize_view, synthesize_view_raw,
+    validate_headers, LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, NetworkProxy,
+    ProviderInput, ProviderModel, ProviderModelView, ProviderProfile, ProviderView, SubagentPin,
+    PROVIDERS,
 };
 pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
 pub use multimodal::{MultimodalSettings, MultimodalUpdate, MultimodalView};

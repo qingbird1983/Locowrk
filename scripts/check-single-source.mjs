@@ -155,6 +155,29 @@ function hostMemoryFace() {
 }
 
 /**
+ * 模块面通用取法（S2 刀① 加，SS16 的扫描面）：`主文件 + 同名目录子树`，排 tests、剥行注释。
+ *
+ * 为什么要"主文件 + 子树"两个入口一起给：`context_budget.rs` 现在只有一个文件，但本仓
+ * 的惯例是超 400 行就拆目录（`settings/context.rs` 那种"主文件 + settings/tests/"也算），
+ * 写死单文件的扫描面会在下一次拆分时**瞎掉**——SS10b 与 SS1b 都栽过这一个洞，口径订正
+ * 已经写过两次了，这里直接按学到的形状取。剥注释同 SS11/SS13 那条教训：搬家那一刀的
+ * 沿革注释里必然提到被搬走的那个名字，按字面数就是一片假红。
+ */
+const stripComments = (s) => s.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+function moduleFace(mainRel, dirRel) {
+  // Set 去重：目录式模块（`organize/mod.rs`）的主文件本来就在子树里，数两遍会让
+  // "定义唯一"这种读数凭空 +1——那是假红，而假红的下场和真瞎一样是被人绕过去。
+  const rels = new Set();
+  if (mainRel && fs.existsSync(path.join(ROOT, mainRel))) rels.add(mainRel);
+  if (dirRel && fs.existsSync(path.join(ROOT, dirRel))) {
+    for (const r of walkExt(dirRel, /\.rs$/)) {
+      if (!/(^|\/)tests(_?\.rs|\/)/.test(r)) rels.add(r);
+    }
+  }
+  return [...rels].map((rel) => stripComments(read(rel))).join('\n');
+}
+
+/**
  * 对账 / 启动导出面（S1 刀②c-2 加，SS12 的扫描面）：两份「读影子 + 写投影」编排模块的
  * 主文件（tests 不进面）。
  *
@@ -378,6 +401,14 @@ function snapshot() {
     plugMemory: plugMemoryCode(),
     hostDesktop: hostDesktopFace(),
     hardDelete: hardDeleteFace(),
+    budget: moduleFace(
+      'desktop/src-tauri/src/context_budget.rs',
+      'desktop/src-tauri/src/context_budget',
+    ),
+    organize: moduleFace(
+      'desktop/src-tauri/src/organize/mod.rs',
+      'desktop/src-tauri/src/organize',
+    ),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -711,6 +742,42 @@ const CHECKS = [
     (m) => filesWith(m.hardDelete, HARD_CLEAR_CALL),
     'none',
   ],
+  [
+    'SS16a',
+    '占用锚点这把尺**只有一个定义处**，且那个定义落在中立模块里' +
+      '（S2 刀①：它原来长在 `organize/mod.rs`，而 organize 按 specs/01 D 节在 S4 整面退役——' +
+      '压缩触发线要吃锚点，锚点押在一个要删的模块上就是依赖方向错）。' +
+      '左 = 全生产 .rs 面里 `fn anchor(` 的定义数，右 = 中立面里同一形状数；两档一起报是' +
+      '为了分清"多了一份"与"那份搬出了中立模块"这两种不同的漂法',
+    (m) => `${m.rust.reduce((a, s) => a + countOf(s, /\bfn anchor\s*\(/), 0)}|${countOf(m.budget, /\bfn anchor\s*\(/)}`,
+    '1|1',
+  ],
+  [
+    'SS16b',
+    'organize 面上**自己不再拿尺**：`reported_input_tokens` 与 `fn anchor(` 两档各恒 0' +
+      '（刀① 的墓碑。搬完不许 organize 一边调中立锚点、一边留一条自己的取数通路——' +
+      '那正是 S1 各批点过名的"两个出处"形状）。⚠ 数的是代码行：organize 的沿革注释里' +
+      '必然提到这两个名字（`mod.rs` 头注就在解释搬家），按字面连注释数会得到一片假红——' +
+      'SS11/SS13 立过的同一口径。期望 0 ⇒ 由 FLOORS 的点名下限兜"面瞎了"' +
+      '（面为空与真的没有，在这一档读数上长得一模一样）',
+    (m) => `${countOf(m.organize, /reported_input_tokens/)}|${countOf(m.organize, /\bfn anchor\s*\(/)}`,
+    '0|0',
+  ],
+  [
+    'SS16c',
+    '有效阈值那三颗零件各只有一个定义：输出侧缺省预留 `32_000` / 预留上限 `21_000` /' +
+      ' `fn effective_threshold(`（specs/09 AC-S2-2「这一式只有一个出处」的机械面）。' +
+      '为什么盯常量而不盯数值：ZCode `policy.ts:9-10` 那两颗数是要逐字对齐的参照，' +
+      '别处再写一份 `21_000` 就是第二条加减通路——表现是"进度条离满还差一截就压"或' +
+      '反过来"撞窗了才压"，两种都靠人肉才发现。改动这里 = 显式改判据',
+    (m) =>
+      [
+        countOf(m.rust.join('\n'), /const DEFAULT_OUTPUT_RESERVE_TOKENS: u64 = 32_000;/),
+        countOf(m.rust.join('\n'), /const OUTPUT_RESERVE_CAP_TOKENS: u64 = 21_000;/),
+        countOf(m.rust.join('\n'), /\bfn effective_threshold\s*\(/),
+      ].join('|'),
+    '1|1|1',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -766,6 +833,15 @@ const FLOORS = [
   ['浮层外点站点数', (m) => dismissCount(m), 4],
   // 现值 178（desktop/src 的 .ts+.vue）：SS9b/SS9c 的分子分母都从这份面里数
   ['前端 src 扫描面文件数', (m) => m.frontSrc.length, 120],
+  // S2 刀① 的两块地（SS16 的扫描面）。中立尺面期望的是"1 处定义"，organize 面期望的是
+  // 两个 0——后者在"面瞎了"（目录改名 / walkExt 写错）与"真的没有"之间读数完全相同，
+  // 所以两条下限各挡一种瞎法：面塌掉、以及"扫错了树（连本体都不在面里）"。
+  // ⚠ 中立尺这条下限取的是**字节数现值 919 的四成**而不是点名定义本体：本模块的注释比
+  // 代码长（整条理由就是"为什么要封顶、为什么预留是这两颗数"），剥掉注释只剩 919 字节，
+  // 阈值取 1200 会天天假红；而拿 `fn anchor(` 当下限又与 SS16a 的右档同分子分母
+  // （定义改名时报的是"闸瞎了"，说的却是假话）。拆树只会让面变大，所以字节数够用。
+  ['中立尺面字节数（剥注释）', (m) => m.budget.length, 400],
+  ['organize 面含轮次收束本体', (m) => countOf(m.organize, /fn after_turn/), 1],
 ];
 
 function runChecks(m) {
@@ -862,6 +938,19 @@ if (SELFTEST) {
         rel: 'desktop/src-tauri/src/memory/crud.rs',
         code: 'fn wipe_all(root: &std::path::Path) {\n    let _ = memlayout::clear_facts(root);\n}',
       }),
+    // S2 刀① 的三档变异。**互不遮挡是这组对照的全部要点**：SS16a 只加定义（organize 面
+    // 不动 ⇒ SS16b 不红）、SS16b 只让 organize 自己再拿一次尺（不含 `fn anchor(` ⇒ SS16a
+    // 不红）、SS16c 只再写一颗预留常量。三条都长成"没人调用的分支"是有意的（同
+    // SS12/SS13 的分工）：cargo 对它们全绿，只有形状档看得见——而这正是刀① 之后
+    // 唯一还剩的证明面（搬家本身没有新行为，行为测试无靶子）。
+    SS16a: (m) =>
+      m.rust.push(
+        'impl OrganizerTwin {\n    fn anchor(session: &Session) -> (u64, u64) { (0, 0) }\n}\n',
+      ),
+    SS16b: (m) =>
+      (m.organize +=
+        '\nlet real = crate::runner::reported_input_tokens(session).unwrap_or(0);\n'),
+    SS16c: (m) => m.rust.push('\npub const OUTPUT_RESERVE_CAP_TOKENS: u64 = 21_000;\n'),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。
@@ -969,9 +1058,15 @@ if (SELFTEST) {
       hardDelete: [...snap.hardDelete],
     };
     mut(copy);
-    const row = runChecks(copy).find((r) => r.id === id);
+    const after = runChecks(copy);
+    const row = after.find((r) => r.id === id);
     const caught = row && row.bad;
-    console.log(`  ${caught ? '✓' : '✗'} ${id} 变异可见：${desc.slice(0, 34)}…${caught ? '' : ` ⇒ 实测仍 = ${row?.got}（对照打空）`}`);
+    // 分工读数：这条变异**还**打红了谁。只有自己一条 = 窄变异（证这一档独有）；
+    // 连带别条 = 宽变异（证整体承重，但要说破，不然会误以为每档各有人盯）。
+    const also = after.filter((r) => r.bad && r.id !== id).map((r) => r.id);
+    console.log(
+      `  ${caught ? '✓' : '✗'} ${id} 变异可见：${desc.slice(0, 34)}…${caught ? '' : ` ⇒ 实测仍 = ${row?.got}（对照打空）`}${also.length ? `｜同时打红 ${also.join(',')}` : ''}`,
+    );
     if (!caught) miss++;
   }
   console.log(miss ? `SELFTEST_MISSED=${miss}` : 'SELFTEST_ALL_CAUGHT');

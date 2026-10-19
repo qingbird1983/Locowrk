@@ -29,7 +29,7 @@ impl super::Organizer {
         if window == 0 {
             return;
         }
-        let (anchor, _) = Self::anchor(session);
+        let (anchor, _) = crate::context_budget::anchor(session);
         if anchor.saturating_mul(100) < window.saturating_mul(threshold_pct as u64) {
             return;
         }

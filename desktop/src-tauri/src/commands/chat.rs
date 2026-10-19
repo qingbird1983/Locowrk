@@ -52,16 +52,24 @@ pub async fn agent_chat(
         });
     }
     let ov = state.model_overrides.get(&session_id);
+    // S2 刀①（2026-10-19）：进度条分母改吃**有效阈值** = `min(滑杆, 窗口 − 输出侧
+    // 预留)`，算式只住 `context_budget` 一处。为什么必须一起改：分母与整理触发线
+    // 本来就是同一把尺（v2.138「看到的 = 触发用的」），而滑杆允许设得比窗口还高
+    // ——设置行那句提示「需低于模型窗口，否则上下文超限会先于整理发生」承认的就是
+    // 这个洞；封顶之后洞自动关闭。**缺省设置下读数不变**（滑杆 100K < 窗口 179K
+    // 时封顶取不到小者，`min` 拿回的还是滑杆），只有滑杆高过窗口才生效。
+    // 批 F-24b / M-18c：不为算几个数而全量克隆档位区（含各档明文 Key）——一次取锁 +
+    // 借用进闭包；闭包内不碰 Store 的其它读面（非重入锁）。
+    let (window, max_output) = state.settings.with_llm_config(|llm| {
+        crate::settings::session_capacity(llm, ov.as_ref(), Some(&state.catalog))
+    });
     let usage = UsagePolicy {
-        threshold_tokens: state.settings.organize_threshold_tokens(),
-        // 批 F-24b / M-18c：只为算 window_tokens 而全量克隆档位区（含各档明文 Key）改成
-        // 一次取锁 + 借用进闭包；闭包内不碰 Store 的其它读面（非重入锁）。
-        window_tokens: state
-            .settings
-            .with_llm_config(|llm| {
-                crate::settings::session_window(llm, ov.as_ref(), Some(&state.catalog))
-            })
-            .unwrap_or(0),
+        threshold_tokens: crate::context_budget::effective_threshold(
+            state.settings.organize_threshold_tokens(),
+            window,
+            max_output,
+        ),
+        window_tokens: window.unwrap_or(0),
         tools_est_tokens: runner::catalog_estimate(&state.kernel, &session_id).await,
     };
     let steps = runner::run_turn(
