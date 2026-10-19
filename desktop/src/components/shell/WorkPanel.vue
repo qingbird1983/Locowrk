@@ -17,6 +17,8 @@ import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import SubagentTranscriptTab from "./SubagentTranscriptTab.vue";
 import ReviewTab from "./ReviewTab.vue";
+import FileTab from "./FileTab.vue";
+import ImageTab from "./ImageTab.vue";
 import BrowserTab from "./BrowserTab.vue";
 import WorkPanelLauncher from "./WorkPanelLauncher.vue";
 
@@ -142,6 +144,18 @@ function openReview(item: { callId: string; path: string; diff: string }) {
               :size="12"
               aria-hidden="true"
             />
+            <Icon
+              v-else-if="tab.kind === 'file'"
+              name="file"
+              :size="12"
+              aria-hidden="true"
+            />
+            <Icon
+              v-else-if="tab.kind === 'image'"
+              name="eye"
+              :size="12"
+              aria-hidden="true"
+            />
             <span class="panel-tab__title">{{ tab.title }}</span>
             <span
               class="panel-tab__close"
@@ -196,6 +210,20 @@ function openReview(item: { callId: string; path: string; diff: string }) {
         :key="activeTab.id"
         :path="activeTab.path"
         :diff="activeTab.diff"
+      />
+      <FileTab
+        v-else-if="activeTab && activeTab.kind === 'file' && activeTab.path"
+        :key="activeTab.id"
+        :path="activeTab.path"
+        :line="activeTab.line"
+        :end-line="activeTab.endLine"
+      />
+      <ImageTab
+        v-else-if="activeTab && activeTab.kind === 'image' && activeTab.path"
+        :key="activeTab.id"
+        :path="activeTab.path"
+        :asset-id="activeTab.assetId"
+        :asset-mime="activeTab.assetMime"
       />
       <template v-for="bt in browserTabs" :key="bt.id">
         <BrowserTab :tab="bt" v-show="wp.activeTabId === bt.id" />

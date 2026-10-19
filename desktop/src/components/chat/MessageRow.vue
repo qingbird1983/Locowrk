@@ -20,8 +20,8 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { assetRead, assetReveal } from "../../lib/api";
-import { useViewerStore } from "../../stores/viewer";
-import type { ContentPartDto } from "../../types";
+import { useWorkPanelStore } from "../../stores/work-panel";
+import type { AssetRefDto, ContentPartDto } from "../../types";
 import { Icon } from "../../lib/icons";
 import HoverTip from "../settings/HoverTip.vue";
 import { renderMarkdown } from "../../lib/markdown";
@@ -66,11 +66,11 @@ const html = computed(() =>
 );
 
 // ---- 附件部件渲染（批 D §9.3）：图片缩略（asset_read data URL，模块级
-// 缓存防重复读盘）/ PDF chip；图片点击 = 查看器（批 E，左右切换/缩放/
-// 另存），文件 chip 点击 = 在文件夹中显示（reveal 语义保留）----
-const viewer = useViewerStore();
-function openViewer(asset: { id: string; mime: string; name: string }) {
-  viewer.openAsset(asset);
+// 缓存防重复读盘）/ PDF chip；图片点击 = 右栏图片页签（specs/08 批 2，全屏从
+// 页签里的「全屏查看」走既有查看器），文件 chip 点击 = 在文件夹中显示 ----
+const wp = useWorkPanelStore();
+function openImageAsset(asset: AssetRefDto) {
+  wp.openImageTab(asset.name, asset.id, asset.mime);
 }
 const assetCache = new Map<string, string>();
 const mediaParts = computed(() => (props.parts ?? []).filter((p) => p.type !== "text"));
@@ -231,9 +231,9 @@ async function copySelf() {
           v-if="p.type === 'image'"
           class="msg-part-img"
           type="button"
-          :aria-label="`${p.asset.name} · ${t('mm.viewLarge')}`"
-          :title="`${p.asset.name} · ${t('mm.viewLarge')}`"
-          @click="openViewer(p.asset)"
+          :aria-label="`${p.asset.name} · ${t('panel.openImage')}`"
+          :title="`${p.asset.name} · ${t('panel.openImage')}`"
+          @click="openImageAsset(p.asset)"
         >
           <img v-if="thumbOf(p.asset)" :src="thumbOf(p.asset)" alt="" draggable="false" />
           <span v-else class="msg-part-img__loading" />

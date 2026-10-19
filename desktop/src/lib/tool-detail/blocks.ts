@@ -6,6 +6,7 @@
  * 认工具名的是主分派那条 if 链——把链和件混在一个文件里，就是"加一个工具要同时动两张表"的由来。
  * 值格式化与标签查表来自 labels 片，参数取值来自 describe 片，形状来自 types 片。 */
 
+import { diffFromReplacement, parseUnifiedDiff, type DiffRow } from "../chat/diff";
 import { clip } from "../format";
 
 import { str } from "./describe";
@@ -37,12 +38,18 @@ export function codeLanguage(path: string): string {
   return map[ext.toLowerCase()] ?? (ext || "text");
 }
 
+/** 属性行入块：**并进紧邻的那个属性块**，不另起一个。
+ *  标签列宽是「本块最长标签」（max-content），拆成两个块就会各自量一次，
+ *  值列错位——写入类的「备份」行原先就是这样跟上面几行对不齐的。 */
 export function pushProps(
   blocks: DetailBlock[],
   rows: (PropRow | null | undefined)[],
 ) {
   const clean = rows.filter((r): r is PropRow => !!r && r.value !== "");
-  if (clean.length > 0) blocks.push({ kind: "props", rows: clean });
+  if (clean.length === 0) return;
+  const last = blocks[blocks.length - 1];
+  if (last?.kind === "props") last.rows.push(...clean);
+  else blocks.push({ kind: "props", rows: clean });
 }
 
 export function prop(
@@ -57,21 +64,47 @@ export function truncatedRow(v: unknown, tr: Tr): PropRow | null {
   return v === true ? prop(labelFor("truncated", tr), tr("tool.value.yes"), "danger") : null;
 }
 
-/** shell / shell_read / sandbox_run 共用输出形状（exec.rs 同源）。 */
+/** shell / shell_read / sandbox_run 共用输出形状（exec.rs 同源）。设计稿 §7.3：
+ * 正文形态是**终端块**（`$ 命令` + 合并输出，深底），参数属性行只留异常信号
+ * （超时 / 截断）；退出码细节随属性行给（不单开一行，§7.3 口径）。 */
 export function shellDetail(a: Record<string, unknown>, o: Record<string, unknown>, ctx: ToolDetailCtx): DetailBlock[] {
   const { tr } = ctx;
   const blocks: DetailBlock[] = [];
+  const command = str(a, "command") || str(o, "command");
   pushProps(blocks, [
-    prop(tr("tool.label.command"), str(a, "command") || str(o, "command"), "mono"),
     prop(tr("tool.label.exit"), String(o.exit_code ?? ""), (o.exit_code ?? 0) === 0 ? "ok" : "danger"),
     o.timed_out === true ? prop(tr("tool.label.timedOut"), tr("tool.value.yes"), "danger") : null,
     truncatedRow(o.truncated, tr),
   ]);
   const stdout = typeof o.stdout === "string" ? o.stdout.trim() : "";
   const stderr = typeof o.stderr === "string" ? o.stderr.trim() : "";
-  if (stdout) blocks.push({ kind: "text", content: stdout });
-  if (stderr) blocks.push({ kind: "text", content: stderr, danger: true });
+  const output = [stdout, stderr].filter(Boolean).join("\n");
+  if (command || output) blocks.push({ kind: "term", command, output });
   return blocks;
+}
+
+/** 写/编辑类工具的内容块（设计稿 §7.1）：有 unified diff 就解析；只有
+ * old/new 两段文本（edit_replace）或行区间 + 新内容（edit_lines）就退化构造；
+ * 拿不到旧文本（fs_write 整文覆盖）返回 null——整文写入没有差异可言，
+ * 调用方改用代码块。 */
+export function writeDiffRows(
+  tool: string,
+  a: Record<string, unknown>,
+): DiffRow[] | null {
+  if (tool === "fs_write") return null;
+  const patch = str(a, "patch");
+  if (patch) {
+    const rows = parseUnifiedDiff(patch);
+    if (rows) return rows;
+  }
+  if (tool === "edit_replace") {
+    return diffFromReplacement(str(a, "old_string"), str(a, "new_string"), null);
+  }
+  if (tool === "edit_lines") {
+    const start = typeof a.start_line === "number" ? a.start_line : null;
+    return diffFromReplacement("", str(a, "content"), start);
+  }
+  return null;
 }
 
 /** 字符串型输出的通用出口（git_* / search_tools 等带 text/stdout/output 的）。 */

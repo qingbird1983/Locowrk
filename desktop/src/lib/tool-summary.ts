@@ -5,6 +5,7 @@
 // `tool-detail.ts` 各写一遍的同族重复收成一份，两种显示语义按出口名区分）。
 import { clip } from "./format";
 import { relativizeBare, stripCommandWrapping } from "./tool-args";
+import { toolView } from "./chat/render-matrix";
 import type { AssetRefDto } from "../types";
 
 /** 动作名 i18n 定位；null = 表外工具（回落工具 id + 「插件」徽章）。 */
@@ -59,7 +60,10 @@ export function toolAction(
     }
     return { key: "tool.action.mcpStatus" };
   }
-  return null;
+  // 表外工具（memory_expand / ask_user / browser_* 等宿主内置）不再回落裸工具
+  // id——设计稿 §5.3 硬规矩「动词永不出现裸工具 id」：统一拿身份矩阵的类型词
+  // 兜底（`tool.type.*`，表外的表外还是「工具」）；加工具时只改矩阵那一行。
+  return { key: `tool.type.${toolView(tool).verb}` };
 }
 
 const OBJECT_KEYS = ["prompt", "query", "url", "key", "text", "pattern", "name"];

@@ -103,6 +103,13 @@ export default {
     browserExternal: "在系统浏览器打开",
     browserConsole: "控制台",
     browserConsoleEmpty: "还没有 console 报错/警告",
+    fileLoading: "文件读取中…",
+    openFile: "在右栏打开文件",
+    fileTruncated: "已截断：文件共 {n} 字节，这里只显示前 256 KiB",
+    notText: "这是二进制文件，不在这里显示内容",
+    imageLoading: "图片读取中…",
+    openImage: "在右栏打开图片",
+    imageOpenFull: "全屏查看",
     browserEmptyHint:
       "打开工作区内的 HTML 页面或 http(s) 地址；对话中让模型「打开看看」也能自动开到这里，页面报错会回到对话里。",
   },

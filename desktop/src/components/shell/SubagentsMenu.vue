@@ -49,7 +49,7 @@ function asRecord(v: unknown): Record<string, unknown> {
     : {};
 }
 
-/** 状态词与过程行/L1 摘要同源（tool.running / tool.failed / tool.value.*）。 */
+/** 状态词与过程行/L1 摘要同源（tool.state.* / tool.value.*）。 */
 function rowOf(item: ToolItem): SubagentRow {
   const a = asRecord(item.args);
   const o = asRecord(item.output);
@@ -59,7 +59,7 @@ function rowOf(item: ToolItem): SubagentRow {
     return {
       key: item.callId,
       task,
-      label: t("tool.running"),
+      label: t("tool.state.running"),
       state: "running",
       childId: null,
     };
@@ -68,7 +68,7 @@ function rowOf(item: ToolItem): SubagentRow {
     return {
       key: item.callId,
       task,
-      label: t("tool.failed"),
+      label: t("tool.state.failed"),
       state: "danger",
       childId: null,
     };

@@ -17,6 +17,7 @@ dist/
 .DS_Store
 Thumbs.db
 .mimosa/
+.pnpm-store/
 
 # 临时实验文件
 /tmp/

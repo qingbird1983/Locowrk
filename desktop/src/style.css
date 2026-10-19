@@ -86,6 +86,12 @@
   --lw-ok: #40c977;
   --lw-warn: #ff8549;
   --lw-danger: #ff6764;
+  /* 差异表专用（设计稿 §7.1 / 上位附录 B「与 ok/danger 区分色相」）：只做
+   * 加删行的底色（-wash）与符号色，不参与状态语义 */
+  --lw-diff-add: #2ea043;
+  --lw-diff-del: #e5534b;
+  --lw-diff-add-wash: rgb(46 160 67 / 0.14);
+  --lw-diff-del-wash: rgb(229 83 75 / 0.14);
   --lw-info: #afafaf;
   --lw-purple: #c27aff;
 
@@ -174,6 +180,11 @@
   --lw-ok: #00a240;
   --lw-warn: #e25507;
   --lw-danger: #e02e2a;
+  /* 差异表专用（同暗色段口径） */
+  --lw-diff-add: #1a7f37;
+  --lw-diff-del: #cf222e;
+  --lw-diff-add-wash: rgb(26 127 55 / 0.1);
+  --lw-diff-del-wash: rgb(207 34 46 / 0.1);
   --lw-info: #5d5d5d;
   --lw-purple: #7c3aed;
 
@@ -402,6 +413,14 @@
   }
 
   html,
+  body {
+    /* 视口锁死。展开行或聚焦行内按钮时，浏览器会把元素滚进视口，滚的是 body
+       （documentElement 同理）—— overflow: hidden 拦不住程序化滚动，只有 clip
+       拦得住。缺这条，整个壳会被顶上去：页头被切、底部露白。 */
+    overflow: clip;
+  }
+
+  html,
   body,
   #app {
     height: 100%;
@@ -415,7 +434,6 @@
     font-size: 13px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
-    overflow: hidden;
     /* §6.6 显式禁止：主题切换不给 * 挂全局过渡，只让根容器过渡一次 */
     transition:
       background-color var(--dur-base) var(--ease-standard),
@@ -656,44 +674,44 @@
   background: var(--lw-danger);
 }
 
-/* 可折叠行公共头形态：hover 填充向列外溢 3px，chevron 只换字形不旋转。
- * padding-inline 3px（v2.74·fix 裁定⑪ 对齐收口：外溢 -3px 与 padding 3px
- * 相抵，头行标签与正文/决策行同一 0 左缘——旧 7px 使标签右移 4px） */
-.cv-head {
+/* 层 3 展开体外壳（唯一落点，台账 AF-17）：思考行与工具行**共用同一几何**——
+ * 发丝竖线落在语义图标中心（14px / 2），内容起点与类型词左边缘对齐（图标 + gap-6）。
+ * 两条路径都挂 .lw-expand，禁止各自再写一套（那正是「思考一个灰框、工具一串裸行」
+ * 的成因）。外壳本身**不带底也不带圆角**：底只给「井」（代码/终端/diff）。 */
+.lw-expand {
+  margin-left: calc(14px / 2);
+  padding-left: calc(14px / 2 + var(--lw-gap-6) - 1px);
+  border-left: 1px solid var(--lw-line-subtle);
+}
+
+/* 右栏页签的文件名头行（标准 §二⑱，specs/08 批 2，唯一落点）：审阅 / 文件 / 图片
+ * 三类产物页签共用一套——左 = mono 省略路径（HoverTip 给全文），右 = 元信息。
+ * 同族不许两种头行，所以三类都挂这里，组件里不再各写一份。 */
+.lw-tabhead {
   display: flex;
   align-items: center;
-  gap: 6px;
-  /* <button> 的 width:auto 是 shrink-to-fit——显式给足宽度（含两侧各 3px
-     外溢）后，内部 flex 项才会正常收缩（原型注释原样保留） */
-  width: calc(100% + 6px);
-  margin-inline: -3px;
-  padding: 5px 3px;
-  border-radius: var(--lw-r-xs);
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--lw-ink-2);
-  text-align: left;
-  transition: background var(--dur-fast) var(--ease-standard),
-    color var(--dur-fast) var(--ease-standard);
+  justify-content: space-between;
+  gap: var(--lw-gap-8);
+  border-radius: var(--lw-r-md);
+  background: var(--lw-wash-1);
+  padding: var(--lw-gap-12) var(--lw-gap-14);
+  font-size: var(--lw-fs-12);
 }
-.cv-head:hover {
-  background: var(--lw-wash-2);
-  color: var(--lw-ink-1);
-}
-.cv-head__label {
-  color: var(--lw-ink-1);
-  font-weight: 500;
-  /* 状态词/动作名不参与收缩（v2.74·fix：窄列下「思考」竖排换行的实抓） */
-  flex: 0 0 auto;
+.lw-tabhead__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-mono);
+  color: var(--lw-ink-2);
 }
-.cv-head__meta {
-  color: var(--lw-ink-3);
-}
-.cv-head__chev {
-  color: var(--lw-ink-4);
-  margin-left: auto;
+.lw-tabhead__meta {
   flex: 0 0 auto;
+  display: inline-flex;
+  gap: var(--lw-gap-6);
+  font-family: var(--font-mono);
+  font-size: var(--lw-fs-11);
+  color: var(--lw-ink-4);
 }
 
 /* 行内复制钮（消息行 hover / 代码块头行） */

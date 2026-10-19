@@ -109,3 +109,13 @@ export type ContentPartDto =
   | { type: "text"; text: string }
   | { type: "image"; asset: AssetRefDto }
   | { type: "file"; asset: AssetRefDto };
+
+/** 按路径读回的文本（后端 `file_read_text`，specs/08 批 1）：`truncated` 为真时
+ * `text` 只是前缀、`bytes` 是文件真实大小；`binary` 为真时 `text` 为空串。 */
+export interface FileTextDto {
+  path: string;
+  bytes: number;
+  text: string;
+  truncated: boolean;
+  binary: boolean;
+}

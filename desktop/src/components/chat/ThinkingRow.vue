@@ -1,12 +1,15 @@
 <script setup lang="ts">
 /**
- * 思考行（UI shell doc §3.9，v4.13 照《Tool Execution Process Display》与
- * 工具行同吃 ProcessRow 五列栅格）：brain 字形 + 类型「思考」+ 描述 =
- * 首句摘要（剥 markdown 记号，单行省略）+ 状态列（实时轮 = N s 走表；
- * 流式中 = 脉动点 + 「思考中…」；历史重放无时间戳不虚构，状态列留空）。
- * 点击展开 = 缩进竖线下的完整文本（12.5px / 1.55，无卡片底，220px 框内
- * 滚动，v2.97 裁定）；流式强制展开 + 自动跟随滚动、收口即折叠（v2.99）
- * 不变——只改展示层，折叠语义零改动。
+ * 思考行（UI shell doc §3.9，与工具行同吃 ProcessRow 行骨架）：bulb 字形 +
+ * 类型「思考」+ 元信息（`思考 · 12 秒`）。
+ * **收起态不念思考正文**——正文只在展开体里（用户 2026-10-18 按 ZCode
+ * 参考图裁定：收起行是「思考 · 持续了几秒」+ 展开三角，三角 hover 才显形）。
+ * 首句摘要仍留着，只当整行的原生 title（悬停可见，不占版面）。
+ * 流式中 = 元信息「思考中…」+ 状态位脉动点 + 强制展开；历史重放无时间戳
+ * 不虚构，元信息段整个不渲染。
+ * 点击展开 = 完整文本（12.5px / 1.55，220px 框内滚动），外壳与工具行共用
+ * `.lw-expand`（发丝竖线 + 无底，用户 2026-10-18 裁定「同一属性一种形态」）；
+ * 流式强制展开 + 自动跟随滚动、收口即折叠（v2.99）不变——只改展示层，折叠语义零改动。
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -42,15 +45,19 @@ const summary = computed(() => {
   return flat[0] ?? "";
 });
 
-/** 状态列：流式中 = 脉动点 + 「思考中…」；实时已收口 = 时长；重放留空。 */
-const statusText = computed(() => {
+/** 元信息段（行壳自带给「·」分隔）：流式中 = 「思考中…」；实时已收口 = 时长；
+ *  历史重放无时间戳不虚构 = 空（此时元信息段整个不渲染）。 */
+const metaText = computed(() => {
   if (streaming.value) return t("tool.thinkingNow");
-  if (props.ts !== undefined) {
-    const sec = Math.max(1, Math.round(((props.doneTs ?? Date.now()) - props.ts) / 1000));
-    return formatDuration(sec * 1000);
-  }
-  return "";
+  if (props.ts === undefined) return "";
+  const sec = Math.max(1, Math.round(((props.doneTs ?? Date.now()) - props.ts) / 1000));
+  return formatDuration(sec * 1000);
 });
+
+/** 首句摘要只在**重放**时占摘要段：那条路径的落盘投影（`Thinking` 事件）
+ *  不带时间戳，算不出时长，总得让行上有字；实时轮一律用时长，不露思考正文
+ *  （用户 2026-10-18 按 ZCode 参考图裁定）。 */
+const showSummary = computed(() => props.ts === undefined && summary.value !== "");
 
 // 流式跟随：delta 追加后贴底，用户上滚（距底 > 32px）即让位不再拽
 const bodyEl = ref<HTMLElement | null>(null);
@@ -67,19 +74,16 @@ watch(
 
 <template>
   <div class="thinking">
-    <ProcessRow icon="brain" :type="t('tool.type.thinking')" :expanded="expanded" :title="summary" @toggle="onToggle">
-      <template #desc>{{ summary }}</template>
-      <template #status>
-        <template v-if="streaming">
-          <span class="dot lw-pulse" />
-          <span>{{ statusText }}</span>
-        </template>
-        <template v-else-if="statusText">{{ statusText }}</template>
+    <ProcessRow icon="bulb" :type="t('tool.type.thinking')" :expanded="expanded" :foldable="!streaming" :title="summary" @toggle="onToggle">
+      <template v-if="showSummary" #desc>{{ summary }}</template>
+      <template v-if="metaText" #meta>{{ metaText }}</template>
+      <template v-if="streaming" #status>
+        <span class="dot lw-pulse" />
       </template>
     </ProcessRow>
-    <!-- 展开体：缩进 + 左竖线（§3.9 v4.13，无卡片底）；v-show 保留 DOM，
-         流式自动跟随（上方 watcher） -->
-    <div v-show="expanded" ref="bodyEl" class="thinking__body">{{ text }}</div>
+    <!-- 展开体 = 公共外壳 `.lw-expand`（与工具行同一竖线、同一内容起点；§3.9 v4.13
+         的「缩进竖线、无卡片底」）；v-show 保留 DOM，流式自动跟随（上方 watcher） -->
+    <div v-show="expanded" ref="bodyEl" class="lw-expand thinking__body">{{ text }}</div>
   </div>
 </template>
 
@@ -96,9 +100,9 @@ watch(
   background: var(--lw-ink-2);
 }
 .thinking__body {
-  margin-left: var(--lw-gap-12);
-  padding-left: var(--lw-gap-12);
-  border-left: 1px solid var(--lw-line-subtle);
+  /* 用户 2026-10-18 裁定：思考展开体与工具展开体**同壳**——发丝竖线 + 无底。
+     原先那个 `--lw-bg-inset` + `--lw-r-sm` 的灰底框是错的：同一个「展开体」属性
+     被做成了两种外观（台账 AF-17）。几何在 style.css 的 `.lw-expand`，唯一落点。 */
   font-size: var(--lw-fs-12half);
   line-height: 1.55;
   color: var(--lw-ink-2);

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 会话转录（UI shell doc §8.4 ChatTranscript）：滚动区（overscroll contain /
- * scrollbar-gutter stable / overflow-anchor none）+ 列（宽 = --lw-content-max
+ * scrollbar-gutter stable / 原生锚定保留 ⇒ 不写 overflow-anchor）+ 列（宽 = --lw-content-max
  * 覆盖值，§2.7 三处同源）+ 底部渐隐 mask。消息流的分组/任务容器/相位渲染
  * 在共享核心 chat/TranscriptFlow.vue（v2.104 提取，子代理转录页签同吃），
  * 本组件只负责主对话的容器面：⑤⑨ 跟随滚动（默认贴底，用户上滚即让位）
@@ -16,6 +16,7 @@ import { useChatStore, type SystemItem } from "../stores/chat";
 import { useShellStore } from "../stores/shell";
 import { useWorkPanelStore } from "../stores/work-panel";
 import { clip } from "../lib/format";
+import { resetRowFolds } from "../lib/chat/fold-state";
 import { Icon } from "../lib/icons";
 import HoverTip from "./settings/HoverTip.vue";
 import ConversationWidthHandles from "./chat/ConversationWidthHandles.vue";
@@ -68,14 +69,19 @@ async function onEditResend(pos: number | undefined, text: string) {
 // ---- §3.39③⑤ 跟随滚动 + 回到底部（v4.11 裁定⑨）----
 // 默认贴底：任何条目变化（含流式 delta）都滚到底；用户上滚（距底
 // > 48px）即让位，回到底部钮在 composer 坞上方伺服。
+// 两档阈值（§3.39③ / spec 06 AC-8）：**跟随** 48px 内算「就在底部」，一上滚就让位；
+// **按钮** 要等离底 > 120px 才出现——刚滚一点就弹钮会跟「轻微回看」抢手。
 const scroller = ref<HTMLElement | null>(null);
 const following = ref(true);
+const showBackBottom = ref(false);
 const BOTTOM_EPSILON = 48;
+const BACK_BOTTOM_GAP = 120;
 function onScroll() {
   const el = scroller.value;
   if (!el) return;
-  following.value =
-    el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_EPSILON;
+  const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+  following.value = gap <= BOTTOM_EPSILON;
+  showBackBottom.value = gap > BACK_BOTTOM_GAP;
 }
 async function scrollToBottom(smooth = false) {
   await nextTick();
@@ -96,6 +102,8 @@ watch(
   () => chat.sessionId,
   () => {
     following.value = true;
+    // 层 3 展开记忆只在会话内有效（设计稿 §8，台账 AF-12）：换会话从零开始
+    resetRowFolds();
     void scrollToBottom();
   },
 );
@@ -155,7 +163,7 @@ async function onNoticeAction(item: SystemItem, action: string) {
     >
       <Transition name="lw-pop-up">
         <button
-          v-if="!following"
+          v-if="showBackBottom"
           class="back-bottom"
           type="button"
           :aria-label="t('chat.backToLatest')"
@@ -183,7 +191,11 @@ async function onNoticeAction(item: SystemItem, action: string) {
    * 列同以主区中线居中，正文不再整体左偏（旧 stable 只在右缘留槽，列中心
    * 左移半个槽宽） */
   scrollbar-gutter: stable both-edges;
-  overflow-anchor: none;
+  /* 原生锚定**保留**（缺省 auto，不写声明 = AF-09 的修法）：旧写 `overflow-anchor: none`
+   * 之后，视口上方任何高度变化（shiki 换掉代码块那一下）都会把读者原位推走。同窗口实测
+   * （CDP，在列首注入 200px 块）：`none` ⇒ scrollTop 300 不动、探测行视口 top 693→893
+   * （被推走 200px）；`auto` ⇒ scrollTop 300→500、探测行 top 恒 693（视角钉住）。
+   * 跟随态由下面的 `scrollToBottom` 负责，两者同向不打架。 */
   padding: var(--lw-gap-8) var(--lw-gap-24) 0;
   /* 底部渐隐：内容浮到输入卡下方时淡出（遮罩盖住 composer 预留区）。
    * 渐隐色 = --lw-mask-fade 令牌（§六标准：.vue 禁字面色） */

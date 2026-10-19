@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
- * 工具明细呈现（UI shell doc §3.8 v4.13）：吃 lib/tool-detail.ts 的视图
- * 模型，按块渲染——props（标签+值两列属性行）/ code（.md 代码块组件复用：
- * 语言标签头行 + 复制钮，走 renderMarkdown 围栏注入）/ text（mono 输出块，
- * 220px 框内滚动）/ list（条目列表）/ entry（子代理「查看完整对话」文本钮）。
- * 失败态 = error 文本 danger 块。底部「原始数据 ▸」默认收起（给工程师）——
- * 展开才是 pretty JSON。默认视图零裸 JSON（自检红线 §3.8）。
+ * 工具明细呈现（UI shell doc §3.8 v4.13；设计稿 §7 形态库）：吃 lib/tool-detail.ts 的
+ * 视图模型按块渲染 —— props（标签+值两列属性行）/ code（.md 代码块复用：语言标签头行
+ * + 复制钮，走 renderMarkdown 围栏注入）/ diff（四列带行号表）/ term（终端块，220px
+ * 框内滚动）/ text（mono）/ list / entry（子代理「查看完整对话」）。失败态 = error 文本
+ * danger 块。底部「原始数据 ▸」默认收起（给工程师）；默认视图零裸 JSON（红线 §3.8）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -17,7 +16,12 @@ import { useSettingsStore } from "../../stores/settings";
 import type { ToolItem } from "../../stores/chat";
 
 const props = defineProps<{ item: ToolItem }>();
-const emit = defineEmits<{ openTranscript: [childId: string, title: string] }>();
+const emit = defineEmits<{
+  openTranscript: [childId: string, title: string];
+  /** 点代码块头 / diff 行号 → 右栏文件页签（specs/08 批 2 WF-01/WF-02/WF-05）。
+   * 判定与开签在 ToolRow 里（`lib/artifact-routing.ts` 是唯一判定面），这里只报位置。 */
+  openFile: [path: string, line: number, endLine: number];
+}>();
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -34,7 +38,7 @@ const detail = computed(() =>
 
 /** 失败轮：错误文本是第一块（danger），输出缺席不虚构。 */
 const errorText = computed(() =>
-  props.item.ok === false ? (props.item.error ?? t("tool.failed")) : "",
+  props.item.ok === false ? (props.item.error ?? t("tool.state.failed")) : "",
 );
 
 /** 代码块经 renderMarkdown（DOMPurify 消毒 + 代码块增强）。围栏按内容里
@@ -54,6 +58,37 @@ const codeHtml = computed(() => {
 
 // 复制反馈（§3.7 v4.18）：代码块委托钮走 DOM class、复制调用钮走 ref
 const { copiedId, copyWithFeedback, copyDelegatedCode } = useCopyFeedback();
+
+/** 这些块对应的磁盘文件（代码块 / diff / 终端都源自它）：点行号、点头行跳右栏。
+ * 取不到路径就不接线（宁缺勿假）——不编造「未知文件」页签。 */
+const filePath = computed(() => {
+  const a = props.item.args as Record<string, unknown> | null;
+  const p = a?.path ?? a?.file;
+  return typeof p === "string" ? p : "";
+});
+
+/** 代码块头点击（WF-02）：代码块是 `v-html` 出来的 DOM，头行由 markdown.ts 造成
+ * `.code-block__head`——只能委托判定；点到复制钮不算。块内容就是文件内容本身，
+ * 所以首行恒为 1（没有偏移可算）。 */
+function openCodeHead(e: MouseEvent) {
+  const el = e.target as HTMLElement | null;
+  if (!el || !filePath.value) return;
+  if (el.closest(".copy-btn")) return;
+  if (!el.closest(".code-block__head")) return;
+  emit("openFile", filePath.value, 1, 1);
+}
+
+/** 代码区点击 = 复制（既有）+ 点头行（本次）；两件事共用一次点击。 */
+function onCodeArea(e: MouseEvent) {
+  copyDelegatedCode(e);
+  openCodeHead(e);
+}
+
+/** diff 行号点击（WF-05）：新行号才是文件里的当前行（删行没有新行号 ⇒ 不可点）。 */
+function gotoLine(no: number | null) {
+  if (no === null || !filePath.value) return;
+  emit("openFile", filePath.value, no, no);
+}
 
 
 const rawJson = computed(() => {
@@ -101,6 +136,42 @@ async function copyCall() {
 
       <pre v-else-if="b.kind === 'text'" class="tdetail__text" :class="{ 'is-danger': b.danger }">{{ b.content }}</pre>
 
+      <!-- 差异表（§7.1）：四列 = 旧行号 / 新行号 / 符号 / 内容；加删行底色走
+           --lw-diff-add/del-wash（不借 ok/danger 色相）。超过 200 行只渲染前 200。 -->
+      <div v-else-if="b.kind === 'diff'" class="tdetail__diff">
+        <table>
+          <tbody>
+            <tr v-for="(r, i) in b.rows.slice(0, 200)" :key="i" :class="`is-${r.kind}`">
+              <td v-if="r.kind === 'hunk'" colspan="4" class="tdetail__diff-hunk">{{ r.text }}</td>
+              <template v-else>
+                <td class="tdetail__diff-no">{{ r.oldNo ?? '' }}</td>
+                <td class="tdetail__diff-no">
+                  <button
+                    v-if="r.newNo !== null && filePath"
+                    type="button"
+                    class="tdetail__diff-goto"
+                    :title="t('panel.openFile')"
+                    @click="gotoLine(r.newNo)"
+                  >{{ r.newNo }}</button>
+                  <template v-else>{{ r.newNo ?? '' }}</template>
+                </td>
+                <td class="tdetail__diff-sign">{{ r.kind === 'add' ? '+' : r.kind === 'del' ? '-' : '' }}</td>
+                <td class="tdetail__diff-text">{{ r.text }}</td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="b.rows.length > 200" class="tdetail__note">
+          {{ t('tool.moreLines', { n: b.rows.length - 200 }) }}
+        </p>
+      </div>
+
+      <!-- 终端块（§7.3）：$ 命令行 + 输出合并，深底；运行中吸底由外壳管 -->
+      <div v-else-if="b.kind === 'term'" class="tdetail__term">
+        <div v-if="b.command" class="tdetail__term-cmd"><span>$&nbsp;</span>{{ b.command }}</div>
+        <pre v-if="b.output" class="tdetail__term-out">{{ b.output }}</pre>
+      </div>
+
       <button
         v-else-if="b.kind === 'entry'"
         class="tdetail__entry"
@@ -118,7 +189,7 @@ async function copyCall() {
       v-if="codeHtml"
       class="md tdetail__code"
       v-html="codeHtml"
-      @click="copyDelegatedCode"
+      @click="onCodeArea"
     />
 
     <!-- 原始数据入口 + 复制调用（文本钮，默认收起） -->
@@ -155,16 +226,20 @@ async function copyCall() {
   color: var(--lw-danger);
   overflow-wrap: anywhere;
 }
-/* 标签 + 值两列属性行（§3.8/§五）：无卡片框，标签列定宽对齐 */
+/* 标签 + 值两列属性行（§3.8/§五）：无卡片框。栅格挂在**行**上、标签列按本行
+   `max-content` 取宽 ⇒ 任何标签后面都只有 8px。原先两列提到 dl 上（列宽 = 全块最长
+   标签），`sessions` 被 `total_sessions` 撑出约 50px 空档；更早是每行定宽 72px，两字
+   标签同样空一大段——两版都被用户 2026-10-18 驳回（台账 AF-02）。代价：值列不再跨行
+   对齐，这是「同一属性一种形态」下的取舍：宁可值不齐，不留大段空。 */
 .tdetail__props {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
+  row-gap: 3px; /* stylelint-disable-line declaration-property-value-disallowed-list -- 光学修正(孤值3,§二⑬) */
 }
 .tdetail__prop {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   column-gap: var(--lw-gap-8);
   align-items: baseline;
 }
@@ -240,6 +315,105 @@ async function copyCall() {
 }
 .tdetail__text.is-danger {
   color: var(--lw-danger);
+}
+/* 差异表（§7.1）：四列定宽 + 加删行底色，行号列 tabular-nums 右对齐 */
+.tdetail__diff {
+  max-height: 260px;
+  overflow: auto;
+  border-radius: var(--lw-r-2xs);
+}
+.tdetail__diff table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--lw-fs-ui-sm);
+  line-height: 1.55;
+}
+.tdetail__diff tr.is-add {
+  background: var(--lw-diff-add-wash);
+}
+.tdetail__diff tr.is-del {
+  background: var(--lw-diff-del-wash);
+}
+.tdetail__diff-no {
+  width: 40px;
+  padding-right: var(--lw-gap-6);
+  text-align: right;
+  font-size: var(--lw-fs-ui-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--lw-ink-4);
+  user-select: none;
+}
+/* 可点的新行号（WF-05）：继承行号字形，hover 才亮成链接色（静态态不喧哗）。
+   color/font 都要显式给——按钮不继承父级 UA 样式。 */
+.tdetail__diff-goto {
+  font: inherit;
+  color: var(--lw-ink-4);
+  cursor: pointer;
+}
+.tdetail__diff-goto:hover,
+.tdetail__diff-goto:focus-visible {
+  color: var(--lw-accent-ink);
+  text-decoration: underline;
+}
+.tdetail__diff-sign {
+  width: 24px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--lw-ink-3);
+}
+.tdetail__diff tr.is-add .tdetail__diff-sign {
+  color: var(--lw-diff-add);
+}
+.tdetail__diff tr.is-del .tdetail__diff-sign {
+  color: var(--lw-diff-del);
+}
+.tdetail__diff-text {
+  padding-left: var(--lw-gap-6);
+  white-space: pre;
+  color: var(--lw-ink-2);
+}
+.tdetail__diff-hunk {
+  position: sticky;
+  top: 0;
+  padding: var(--lw-gap-2) var(--lw-gap-6);
+  background: var(--lw-wash-2);
+  color: var(--lw-ink-3);
+  font-size: var(--lw-fs-ui-xs);
+}
+.tdetail__note {
+  margin: var(--lw-gap-6) 0 0;
+  font-size: var(--lw-fs-ui-xs);
+  color: var(--lw-ink-3);
+}
+/* 终端块（§7.3）：深底井 + $ 命令行 + 输出 */
+.tdetail__term {
+  border-radius: var(--lw-r-xs);
+  background: var(--lw-bg-inset);
+  overflow: hidden;
+}
+.tdetail__term-cmd {
+  padding: var(--lw-gap-6) var(--lw-gap-8);
+  font-family: var(--font-mono);
+  font-size: var(--lw-fs-ui-sm);
+  color: var(--lw-ink-1);
+  overflow-wrap: anywhere;
+}
+.tdetail__term-cmd span {
+  color: var(--lw-ink-3);
+  user-select: none;
+}
+.tdetail__term-out {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: var(--lw-gap-8);
+  font-family: var(--font-mono);
+  font-size: var(--lw-fs-ui-sm);
+  line-height: 1.55;
+  color: var(--lw-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 /* 代码内容 = .md 代码块组件复用；长内容同样框内滚动 */
 .tdetail__code {

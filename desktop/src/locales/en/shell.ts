@@ -103,6 +103,13 @@ export default {
     browserExternal: "Open in system browser",
     browserConsole: "Console",
     browserConsoleEmpty: "No console errors/warnings yet",
+    fileLoading: "Reading file…",
+    openFile: "Open file in panel",
+    fileTruncated: "Truncated: {n} bytes total, only the first 256 KiB is shown",
+    notText: "Binary file — contents are not shown here",
+    imageLoading: "Loading image…",
+    openImage: "Open image in panel",
+    imageOpenFull: "View full screen",
     browserEmptyHint:
       "Open an HTML page from a workspace or an http(s) URL. Ask the model to \"open it up\" in chat and it lands here; page errors flow back into the conversation.",
   },

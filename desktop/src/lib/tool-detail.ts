@@ -3,11 +3,12 @@
 // 三条红线：不出现卡片、列对齐、默认明细零裸 JSON——字段名翻中文标签、
 // 枚举翻中文、字节带单位、时间转相对时间、路径相对化；原始 JSON 只活在
 // 「原始数据」折叠入口里（ToolDetailView 承担）。
-// 台账第三节 · 第三批第一刀（612 → 本文件留主分派）：五个面沉进 `tool-detail/`，
-// `types`（视图模型类型）· `kinds`（折叠行的类型词与字形）· `describe`（折叠行那句话 +
-// 三个参数读取小件）· `labels`（值格式化与标签表）· `blocks`（明细块构造件），
-// 本文件只剩"按工具类型分派"那条链。消费点 `import { toolKind, toolDescribe, toolDetail}
-// from "../../lib/tool-detail"` 一字不改：三个函数与六个类型都由上面那段 import/export 接面
+// 台账第三节 · 第三批第一刀（612 → 本文件留主分派）：四个面沉进 `tool-detail/`，
+// `types`（视图模型类型）· `describe`（折叠行那句话 + 三个参数读取小件）·
+// `labels`（值格式化与标签表）· `blocks`（明细块构造件），
+// 本文件只剩"按工具类型分派"那条链。原 `kinds`（折叠行的类型词与字形分派）已随 C1
+// 并入 `lib/chat/render-matrix.ts` 的 38 身份矩阵。消费点 `import { toolDescribe, toolDetail}
+// from "../../lib/tool-detail"`：两个函数与六个类型都由上面那段 import/export 接面
 // （TS 没有 `mod` + `pub use`，对账里这一刀的"接上面"判的是"每个片名都被主文件引用一次"）。
 // 片里导出而主文件**不再导出**的 15 个 helper 不算公开面——组件取它们要写全路径，现状无人取。
 import { clip, relativeTimeMs, relativeTimeSec } from "./format";
@@ -22,12 +23,12 @@ import {
   shellDetail,
   textFieldOut,
   truncatedRow,
+  writeDiffRows,
 } from "./tool-detail/blocks";
 import { asRecord, baseName, str } from "./tool-detail/describe";
 import { fmtBytes, fmtEnum, fmtTime } from "./tool-detail/labels";
 import type { DetailBlock, ListRow, ToolDetail, ToolDetailCtx } from "./tool-detail/types";
 
-export { toolKind } from "./tool-detail/kinds";
 export { toolDescribe } from "./tool-detail/describe";
 export type {
   DetailBlock,
@@ -154,6 +155,14 @@ export function toolDetail(
     ]);
     const backup = typeof o.backup === "string" ? o.backup : "";
     if (backup) pushProps(blocks, [prop(tr("tool.label.backup"), relativizeDetail(backup, roots), "mono")]);
+    // 内容块排在属性块之后（§7.5「属性是这份东西是什么，内容是它做了什么」）
+    const rows = writeDiffRows(tool, a);
+    if (rows && rows.length > 0) {
+      blocks.push({ kind: "diff", rows });
+    } else if (tool === "fs_write") {
+      const content = str(a, "content");
+      if (content) blocks.push({ kind: "code", language: codeLanguage(p), content });
+    }
     return { blocks };
   }
 

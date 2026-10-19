@@ -15,9 +15,10 @@ import { useShellStore } from "./shell";
 
 export interface WorkPanelTab {
   /** 页签 id：子会话 = childId（§3.16）；审阅 = `rev:<callId>`（§3.28）；
-   * 浏览器 = 工具开签 `br-*`（v2.144）/ 手动签 = `browser`。 */
+   * 浏览器 = 工具开签 `br-*`（v2.144）/ 手动签 = `browser`；文件 = `file:<路径>`；
+   * 图片 = `img:<assetId 或路径>`（specs/08 批 2）。 */
   id: string;
-  kind: "subagent" | "review" | "browser";
+  kind: "subagent" | "review" | "browser" | "file" | "image";
   /** 子页签名 = 子 Agent + 任务 prompt 截断；审阅页签名 = 文件路径末段。 */
   title: string;
   /** 审阅页签数据快照（edit_diff 的 unified diff，进程内跨会话保持）。 */
@@ -27,6 +28,12 @@ export interface WorkPanelTab {
   url?: string;
   /** 浏览器页签：原始输入（文件绝对路径或 http(s) 地址，URL 栏回显）。 */
   target?: string;
+  /** 文件页签：要滚到并高亮的行区间（1 起；不填 = 从头看）。specs/08 批 2。 */
+  line?: number;
+  endLine?: number;
+  /** 图片页签：资产引用（有 assetId 走 `asset_read`，否则路径走 lwpreview）。 */
+  assetId?: string;
+  assetMime?: string;
 }
 
 const prefs = loadPanelPrefs();
@@ -111,6 +118,30 @@ export const useWorkPanelStore = defineStore("workPanel", {
       };
       if (idx === -1) this.tabs.push(tab);
       else this.tabs.splice(idx, 1, tab);
+      this.activeTabId = id;
+      this.setOpen(true);
+    },
+    /** 文件页签（specs/08 批 2；标准 §二⑱）：同路径只开一签，再点 = 激活并换行区间。 */
+    openFileTab(path: string, line?: number, endLine?: number) {
+      const id = `file:${path}`;
+      const existing = this.tabs.find((t) => t.id === id);
+      if (existing) {
+        existing.line = line;
+        existing.endLine = endLine;
+      } else {
+        const title = path.split(/[\\/]/).pop() ?? path;
+        this.tabs.push({ id, kind: "file", title, path, line, endLine });
+      }
+      this.activeTabId = id;
+      this.setOpen(true);
+    },
+    /** 图片页签（specs/08 批 2）：同资产（或同路径）只开一签。 */
+    openImageTab(path: string, assetId?: string, assetMime?: string) {
+      const id = `img:${assetId ?? path}`;
+      if (!this.tabs.some((t) => t.id === id)) {
+        const title = path.split(/[\\/]/).pop() ?? path;
+        this.tabs.push({ id, kind: "image", title, path, assetId, assetMime });
+      }
       this.activeTabId = id;
       this.setOpen(true);
     },

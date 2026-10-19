@@ -4,14 +4,19 @@
 export default {
 
   tool: {
-    running: "执行中…",
-    awaitingApproval: "等待审批",
-    unknown: "结果未知",
-    failed: "失败",
+    // 状态词唯一落点（标准 §二⑰）。今日可渲染四态在此；等待中/已执行/已拒绝/已停止
+    // 缺数据或缺决策，登记在 spec 06 AF-04，别在组件里另造词。
+    state: {
+      waiting: "等待审批",
+      running: "执行中…",
+      failed: "执行失败",
+      unknown: "结果未知",
+    },
     copyCall: "复制调用",
     copyCode: "复制代码",
     thinkingNow: "思考中…",
     rawData: "原始数据",
+    moreLines: "还有 {n} 行",
     fullConversation: "查看完整对话",
     // 类型词（§3.8 五列栅格第二列；v4.13《Tool Execution Process Display》）
     type: {
@@ -31,7 +36,11 @@ export default {
       notify: "通知",
       screenshot: "截图",
       plugin: "插件",
-      tool: "工具",
+      ask: "询问",
+      echo: "回声",
+      // 兜底身份（矩阵 fallback，台账 AF-18）：词是「调用」不是「工具」——
+      // 「工具」把兜底说成了一种类别，且与 .tool__ 这类**代码标识**同名。
+      tool: "调用",
     },
     // 明细属性行的中文标签（§3.8：字段名不许裸显）
     label: {

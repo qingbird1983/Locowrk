@@ -41,6 +41,7 @@ mod demo_tools;
 mod desktop_notify;
 mod events;
 mod export;
+mod file_view;
 mod fragments;
 mod idle;
 mod inject_view;
@@ -182,6 +183,7 @@ pub fn run() {
             commands::browser_report_errors,
             commands::asset_gc,
             commands::asset_save_as,
+            commands::file_read_text,
             commands::ask_respond,
             commands::ask_snooze,
             commands::list_pending_asks,

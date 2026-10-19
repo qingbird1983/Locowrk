@@ -135,4 +135,38 @@ describe("轮计时行的读数来源（宿主 active_ms 优先，缺省回落�
     expect(wrapper.text()).toBe("");
     wrapper.unmount();
   });
+
+  // AF-14 终版（用户 2026-10-19 裁定「保留 ✓ + 时长那层、删掉组头这层」）：组头整层
+  // 已删，「已停止」与「N 个问题」两个标记从组头下沉到本行 —— 钉住这层归属，防止有人
+  // 把标记留在已经删掉的组头里（那时它两个都不显示，且没有任何测试会红）。
+  it("组头删除后，轮头接手「已停止」与「N 个问题」两个标记", async () => {
+    i18n.global.locale.value = "en";
+    const wrapper = mount(TurnTimerLine, {
+      props: {
+        startTs: START,
+        endTs: END,
+        activeMs: ACTIVE,
+        running: false,
+        stopped: true,
+        problems: 2,
+      },
+      global: { plugins: [i18n] },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Worked 1m 10s");
+    expect(wrapper.text()).toContain("Stopped");
+    expect(wrapper.text()).toContain("2 problems");
+    wrapper.unmount();
+  });
+
+  it("无从计时时不给标记补前导分隔点（行首不许以「·」开头）", async () => {
+    i18n.global.locale.value = "en";
+    const wrapper = mount(TurnTimerLine, {
+      props: { running: false, stopped: true },
+      global: { plugins: [i18n] },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toBe("Stopped");
+    wrapper.unmount();
+  });
 });

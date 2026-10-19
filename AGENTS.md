@@ -94,7 +94,7 @@ plugin-api 宿主侧、不进 C ABI；plugin-host 只给固有 API `RegistryTool
 3. 实现 + 同步补测试 → 按改动面选档跑门禁（见 §2 那张表），**全绿才算完成**；不许为了过闸删测试或放宽规则。
 4. 收尾按 [`CONTRIBUTING.md`](CONTRIBUTING.md)：进度只在 `docs/roadmap/` 那一行改勾选，改了哪些文件、实测
    读数、遗留风险写在提交正文；长期取舍新写 `docs/adr/`；**每轮收尾落一个提交**（commit 不必问，2026-10-18 定；push / 合并 / 禁区仍一步一停）。
-5. 动了界面，交付前先自己在真实窗口跑一遍并截图核对，再请你亲自看；给你的永远是"打开哪、点哪、该看到什么"。
+5. 动了界面，交付前先自己在真实窗口跑一遍并截图核对，再请你亲自看；给你的永远是"打开哪、点哪、该看到什么"； **截图里一眼能看出的不合理（错位、留白、裁切、间距）当场修，别攒到下一刀**（2026-10-19 对话流线补）。
 6. Windows 开发机：shell 是 Git Bash，路径写正斜杠；插件产物在 Windows 是 `.dll`；
    vite dev 已钉 `server.host: "::1"` 绕开本机回环过滤驱动（**别改回双栈**，否则首帧回到 30 秒以上）。
 7. Linux 侧取证 = 本机 WSL（Ubuntu-24.04）里 clone 一份，**先补两份不入库的产物**（`bash scripts/build_plugins.sh && bash scripts/build_market.sh`）再跑 `cargo test --workspace`；跨平台的性质不许用 `#[cfg]` 单侧跳过。
