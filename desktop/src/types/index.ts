@@ -24,7 +24,7 @@ export type {
   TurnState,
 } from "./events-agent";
 
-export type { BrowserOpenPayload, CacheBreakReport, NotificationItem, OrganizeDonePayload, OrganizePausedPayload, ReconcileSummary, RunSummaryView, SessionMeta, SessionSchedule, SessionSearchHit } from "./session";
+export type { BrowserOpenPayload, CacheBreakReport, CompactNowView, NotificationItem, OrganizeDonePayload, OrganizePausedPayload, ReconcileSummary, RunSummaryView, SessionMeta, SessionSchedule, SessionSearchHit } from "./session";
 
 export type { AppearanceUpdate, BatchResult, ChatUpdate, ContextUpdate, DeveloperUpdate, ExposureDebug, SettingsView, ToolsUpdate } from "./settings";
 

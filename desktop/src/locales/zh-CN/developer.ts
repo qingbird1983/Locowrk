@@ -60,7 +60,7 @@ export default {
     reboundK: "反弹熔断 k",
     reboundKHint: "整理后 k 个用户轮内再触发阈值 = 反弹（1–10）。",
     reboundM: "反弹熔断 m",
-    reboundMHint: "连续 m 次反弹暂停本会话自动整理；/整理 不受限并复位（1–10）。",
+    reboundMHint: "连续 m 次反弹暂停本会话自动整理；下方「手动整理并复位」不受限并复位（1–10）。",
     memoryManagerTimeout: "记忆管理器超时（秒）",
     memoryManagerTimeoutHint: "记忆管理器单次调用等待上限（10–600 秒）。",
     memoryManagerRetries: "记忆管理器重试次数",
@@ -83,6 +83,10 @@ export default {
     organizeSummaryAttemptsHint:
       "同一章最多补写几次（0–5，缺省 2）。计数落在投影上、跨轮生效：模型一直给不出可用摘要就到此为止，不会每轮重烧。",
     treePanelTitle: "记忆树读数（当前会话）",
+    // S2 刀⑦：`/整理` 改成了 `/压缩`（压上下文），手动整理这条动作搬进本面板——
+    // 它是自动整理熔断后唯一的复位口，删不得。
+    organizeNow: "手动整理并复位",
+    organizeStarted: "已发起整理（后台跑，收束结果落在会话区那条线上）；自动整理熔断已复位。",
     treeEmpty: "当前会话还没有记忆树投影（触发整理后出现）。",
     treeChapters: "章节：{n} / 已整理游标：事件 #{cursor}",
     treeTail: "未整理尾巴：{events} 个内容事件 ≈ {tokens} token",
@@ -150,7 +154,7 @@ export default {
     openFolderHint: "打开 ~/.Locowrk/memory/ ——直接编辑 .md 即改记忆，重进本页生效",
     treeTitle: "记忆树（情景）",
     treeHint: "编辑后不会被自动整理覆盖",
-    treeEmpty: "还没有整理记录。/整理 或自动触发整理后，会话会按「章节」归档在这里。",
+    treeEmpty: "还没有整理记录。自动触发整理，或在 设置 → 开发者 → 记忆树 点「手动整理并复位」之后，会话会按「章节」归档在这里。",
     treeSearch: "搜索章节标题或摘要…",
     treeSessionLabel: "会话",
     treeSessionCount: "{n} 个章节",
@@ -224,7 +228,7 @@ export default {
     boardStreamEmpty: "这一组一个原文小节都没有。",
     boardSectionFailed: "这一节的原文读不出来：{reason}",
     boardSectionEmpty: "这一节没有可读的原文行。",
-    boardEmptyProject: "该项目还没有整理过的会话——对话里跑过几轮后用 /整理 就会出现在这里。",
+    boardEmptyProject: "该项目还没有整理过的会话——对话里跑过几轮后，本页「手动整理并复位」或自动触发整理就会把它填进来。",
     boardNoProjection: "这条会话的树投影读不出来（可能已被清理）。",
     boardZoomIn: "放大一档",
     boardZoomOut: "缩小一档",

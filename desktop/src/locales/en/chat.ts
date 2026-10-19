@@ -93,8 +93,9 @@ export default {
     editResendFailed: "Edit & resend failed: {reason}",
     // ⑨ Compaction notice ([View details][Undo], Context doc §3.8.3)
     contextCompacted: "Compacted earlier messages, saved {saved} tokens",
-    // v2.143 organize hairline: start/done/paused rewrite one line in place
-    organizeRunning: "Organizing conversation context…",
+    // v2.143 organize hairline: done/paused land one line in place. The in-flight
+    // "Organizing…" line is gone with S2 knife ⑦ — manual organize moved into the
+    // developer panel, so nothing pushes a running state here anymore.
     organizeDone: "Organized {users} turns into {chapters} chapters",
     organizeDoneDegraded:
       "Organized {users} turns into {chapters} chapters (memory manager unavailable, fell back to rule split)",
@@ -102,7 +103,27 @@ export default {
     organizeReleased:
       "Context is close to the window limit, so the history before this turn was folded into {chapters} chapter(s) (rule split, summaries minimal; this turn untouched)",
     organizePaused:
-      "Auto organize paused for this session ({rebounds} consecutive rebounds hit the breaker m={m}); /organize runs it manually and resets.",
+      "Auto organize paused for this session ({rebounds} consecutive rebounds hit the breaker m={m}); to resume, run \"Organize and reset\" in Settings → Developer → Memory tree.",
+    // S2 knife ⑦ `/compact`: the backend only returns the *name* of the criterion
+    // that stopped it; the human sentence lives here. Names stay in sync with the
+    // Rust side via check SS24, and an unrecognized name falls through to
+    // compactUnknown with the name shown verbatim — never silently "compacted".
+    compactRunning: "Compacting conversation context…",
+    compactUnknownWindow:
+      "Not compacted: the model window is unknown, so there is no target to compact to. Set the window size for this model in Settings → Model.",
+    compactTooFewRounds:
+      "Not compacted: the conversation is too short to summarize (needs at least two rounds).",
+    compactNothingToSummarize:
+      "Not compacted: the recent-text allowance already covers the whole history. Lower \"Recent-text allowance\" or \"Compaction target\" in Settings → Context to actually shrink it.",
+    compactCallFailed:
+      "Not compacted: the summary model did not answer (network or quota). See which profile it uses in Settings → Context.",
+    compactOverflow:
+      "Not compacted: the summary request itself exceeded the model window, even at the smallest shrink step. Pick a summary profile with a larger window, or lower the compaction target.",
+    compactRejected:
+      "Not compacted: the summary the model wrote was missing sections, so nothing was recorded (this counts toward the breaker).",
+    compactSwitchOff:
+      "Not compacted: deep compaction is currently switched off (Settings → Context → Deep compaction).",
+    compactUnknown: "Not compacted: {reason}",
     compactUndone:
       "Compaction undone: full pre-compaction context restored (later turns were rewound too).",
     compactUndoFailed: "Failed to undo compaction: {reason}",
@@ -119,7 +140,7 @@ export default {
     hint: "↑↓ to navigate, Enter or click to run, Esc to close",
     none: "No matching commands",
     desc: {
-      organize: "Organize this session's context (manual runs ignore the breaker and reset it)",
+      compact: "Compact the context right now (ignores the trigger line and the breaker; undoable)",
     },
   },
   // Idle badge (IdleBadge, ⑩ wired per exposure doc §8.4/§11.3): backend

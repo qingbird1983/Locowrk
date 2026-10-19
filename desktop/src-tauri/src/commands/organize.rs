@@ -1,8 +1,12 @@
-//! 记忆树影子运行命令（M2，UI shell §3.36）：`/整理` 发起入口 + 开发者
+//! 记忆树影子运行命令（M2，UI shell §3.36）：手动整理发起入口 + 开发者
 //! 观测面板数据源；M3（§3.37④）只读呈现三命令（清单 / 章节清单 / 原文切片
 //! ——直读投影文件，不占会话锁）。薄适配层——决策与管道全在 organize
 //! 模块；会话锁只在 `organize_now` / `memory_tree_view` 内短暂持有，
 //! 整理本体后台跑不占锁。
+//!
+//! S2 刀⑦ 订正：`organize_now` 的入口**不再是主对话流的 `/整理`**（那条命令改成了
+//! `/压缩`、干的是压缩这件事），而是设置 → 开发者 → 记忆树 那颗「手动整理并复位」。
+//! 它留着不删的理由也写在那儿：这是自动整理熔断唯一的复位口。
 
 use tauri::State;
 
@@ -12,8 +16,8 @@ use crate::organize::{
 
 use crate::state::AppState;
 
-/// 手动整理（`/整理` / `/organize`）：立即整理当前未整理尾巴。Err =
-/// 发起失败（已有任务在途 / 没有可整理的尾巴），文案直显。
+/// 手动整理（开发者面板「手动整理并复位」那颗按钮）：立即整理当前未整理尾巴并复位
+/// 自动整理熔断。Err = 发起失败（已有任务在途 / 没有可整理的尾巴），文案直显。
 #[tauri::command]
 pub async fn organize_now(session_id: String, state: State<'_, AppState>) -> Result<(), String> {
     let organizer = std::sync::Arc::clone(&state.organizer);

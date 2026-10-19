@@ -63,6 +63,18 @@ export interface RunSummaryView {
   chapterIds: string[];
 }
 
+/** `/压缩` 的返回值（S2 刀⑦ · AC-S2-11）。它**只说"这一趟没动，因为"**：压成的那份
+ * 负载（省了多少 / 摘要预览）走 `agent://context-compacted` 推送——AGENTS §3 那条
+ * "流式输出不塞进 command 返回值"，而且这样手动与自动共用前端那一条断层条构造，
+ * 界面上不可能长出两种"压缩完成"。
+ * `reason` = 后端**判据名**（不是人话）：文案住语言包，前端按名取（同
+ * `OrganizeDonePayload.reason` 那处分支的先例）。取值域与 Rust 侧同源，
+ * 由 `check-single-source` 的 SS24 钉住。 */
+export interface CompactNowView {
+  compacted: boolean;
+  reason: string | null;
+}
+
 /** 整理收束推送（lw://organize-done；手动/自动/恢复三路同源）。 */
 export interface OrganizeDonePayload {
   sessionId: string;

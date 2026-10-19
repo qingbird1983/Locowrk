@@ -2,11 +2,12 @@
 // 这一族是**唯一会往会话里发东西**的一片：send 起轮、submit 决定直发还是入队、
 // stop 打断、dispatchQueue 在轮次收束后消费打断目标与队首。
 // 排队是前端态（不入会话日志）：切会话由 session.ts 清空，重放里不会出现。
-import { agentStop, chat, organizeNow, sessionTruncateAfter } from "../../lib/api";
+import { agentStop, chat, compactNow, sessionTruncateAfter } from "../../lib/api";
+import { isSlashCommand } from "../../lib/slash-commands";
 import { removeAttachment } from "./attachments";
 import {
-  dropOrganizeRunning,
-  pushOrganizeNotice,
+  dropCompactRunning,
+  pushCompactNotice,
   pushRawSystem,
 } from "./notices";
 import { refreshSessions } from "./session";
@@ -60,22 +61,57 @@ export async function send(st: ChatState, text: string, parts?: ContentPartDto[]
 
 // ---- §3.39 停止与排队（v4.11）----
 
+/** 后端判据名 → 语言包那条 key（S2 刀⑦ `/压缩`）。取值域与 Rust 侧同源，由
+ * `check-single-source` 的 SS24 钉住：那边新增一条 stop 而这边没补文案，闸就红
+ * （同 `session.ts` 里 `reason === "pressure_release"` 那处分支的处境）。
+ *
+ * ⚠ 兜底那条不许省：认不出的 reason 也要如实说"没压成"并把判据名原样带出来，
+ * 绝不许悄悄显示成"已压缩"——那正是本项目一路在反的假告。 */
+const COMPACT_SKIP_KEYS: Record<string, string> = {
+  "unknown-window": "notice.compactUnknownWindow",
+  "too-few-rounds": "notice.compactTooFewRounds",
+  "nothing-to-summarize": "notice.compactNothingToSummarize",
+  "summary-call": "notice.compactCallFailed",
+  overflow: "notice.compactOverflow",
+  rejected: "notice.compactRejected",
+  // 手动通路理论上到不了这一格（后端 run_manual 不看那枚开关）；留着是为了
+  // "真到了也如实说"，而不是让它掉进兜底那条。
+  off: "notice.compactSwitchOff",
+};
+
+function compactSkip(reason: string | null): {
+  key: string;
+  params?: Record<string, unknown>;
+} {
+  const known = reason ? COMPACT_SKIP_KEYS[reason] : undefined;
+  if (known) return { key: known };
+  return { key: "notice.compactUnknown", params: { reason: reason ?? "unknown" } };
+}
+
 /** 统一提交口（composer Enter/发送键）：斜杠命令拦截 → 空闲直发，
  * 运行中入队（§3.39②）。 */
 export async function submit(st: ChatState, text: string) {
   const t = text.trim();
   if (!t) return;
-  // M2 斜杠命令 /整理（UI shell §3.36①）：前端拦截——元操作不进对话
-  // 流、不建用户气泡；手动整理不受反弹熔断限制且复位熔断态（后端）。
-  // v2.143：发起提示改发丝线（在途态），收束事件就地改写同一条线。
-  if (t === "/整理" || t === "/organize") {
-    pushOrganizeNotice(st, "notice.organizeRunning");
+  // S2 刀⑦（AC-S2-11）：`/压缩` = **当场跑一次主层深度压缩**，不再触发记忆树那套
+  // 章节整理（旧名 `/整理` 到此退役，两家参照的同位按钮都叫 compact）。元操作照旧
+  // 不进对话流、不建用户气泡；发丝线形态沿用 v2.143 那一根，只是 tag 换成 compact。
+  // 压成了什么**不走返回值**：后端 emit 一条 `agent://context-compacted`，前端那条
+  // 断层条（省了多少 / [查看详情] / [撤销]）与自动压缩共用同一个构造——所以这里
+  // 压成时只把在途线收走，不留两句同义的话。
+  if (isSlashCommand(t, "压缩")) {
+    pushCompactNotice(st, "notice.compactRunning");
     try {
-      await organizeNow(st.sessionId);
+      const out = await compactNow(st.sessionId);
+      if (out.compacted) dropCompactRunning(st);
+      else {
+        const skip = compactSkip(out.reason);
+        pushCompactNotice(st, skip.key, skip.params);
+      }
     } catch (err) {
-      // 发起线随失败一并收走（宁缺勿假——不留悬着的「整理中」线），
+      // 发起线随失败一并收走（宁缺勿假——不留悬着的「压缩中」线），
       // 错误原文照常出原文系统条。
-      dropOrganizeRunning(st);
+      dropCompactRunning(st);
       pushRawSystem(st, String(err));
     }
     return;

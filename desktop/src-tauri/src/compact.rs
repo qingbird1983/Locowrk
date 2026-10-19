@@ -91,6 +91,9 @@ pub(crate) struct PlanInput<'a> {
     pub keep_tokens: u64,
     /// 该会话已累计的连续失败次数（熔断判据的输入）。
     pub failures: u32,
+    /// **人主动按的那一格**（S2 刀⑦：`/压缩` 手动通路）。它只让开两条"线"，
+    /// 不让开任何一条"形状"——理由逐条写在 [`plan`] 里那两处。
+    pub manual: bool,
 }
 
 /// 判定结果：`reason` = 为什么不动 / 动了，`cut` = 切在哪一条。
@@ -120,16 +123,25 @@ impl Plan {
 const SUMMARY_RESERVE_PER_SECTION_TOKENS: u64 = 200;
 
 /// 纯判定：要不要压、切在哪。任何一步不满足都如实带回 `reason`（观测面读它）。
+///
+/// `manual = true`（人主动按 `/压缩`）只让开**下面两条"线"**，三条"形状"一条不让：
+/// 线是"值不值得自动花这一趟"，形状是"压了会不会把上下文压坏"——后者对人同样成立，
+/// 所以一轮都凑不齐时（`too-few-rounds`）没有可压的一段（`nothing-to-summarize`）
+/// 手动照旧如实拒。窗口未知（`unknown-window`）也照旧拒：目标位算不出来，
+/// 强行压一次只能靠猜，压完仍然可能超窗 = 假装有进展（裁定 A 的同一条姿态）。
 pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
     let msgs = input.messages;
     if input.threshold.is_none() {
         return Plan::stop("unknown-window");
     }
     let threshold = input.threshold.unwrap_or(0);
-    if input.used < threshold {
+    if !input.manual && input.used < threshold {
         return Plan::stop("below-line");
     }
-    if is_fused(input.failures) {
+    // 这张表管的是"自动路径别连着白花模型往返"（没人看着时连败三次就该停手）；
+    // 手动那一下正是"人在看着、要它再试"。计数器本身照旧走（失败仍 record、
+    // 成功仍 clear）——让开的只是这一格的判定，不是它的账。
+    if !input.manual && is_fused(input.failures) {
         return Plan::stop("fused");
     }
     // 组数与"有没有 assistant"（ZCode `hasEnoughMessagesToCompact`：`rounds >= 2 &&

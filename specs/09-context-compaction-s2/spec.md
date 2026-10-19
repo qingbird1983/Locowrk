@@ -193,8 +193,21 @@
       那句提醒；**没有**再压一枚凌驾两枚分闸之上的总闸（理由与代价见任务区刀⑥ 条目）。
       每一枚缺省必须等于本刀之前那颗硬编码常量，等价性两头实证：`settings/tests/context_numbers.rs`
       第①条（缺省 = 常量）+ 既有压缩测试一字未改仍绿；文案中英成对（`check-i18n` 两侧读数相等）
-- [ ] AC-S2-11 `/整理` 改语义 = 当场跑主层（三参照同位按钮），跑完界面上能看到
-      "压掉了多少 / 摘要落在哪"，且它**不**再触发 organize 那套章节整理
+- [x] AC-S2-11 `/整理` 改语义 ✅（刀⑦a 2026-10-19）= 当场跑主层（三参照同位按钮），跑完界面上能看到
+      "压掉了多少 / 摘要落在哪"，且它**不**再触发 organize 那套章节整理。三条落地口径：
+      ① **命令改名 `/压缩`（别名 `compact`），旧名不留别名**——依据逐行核过：OpenCode
+      `packages/tui/src/mini/footer.command.tsx:446-452` 的 `name: "compact"` /
+      `footer: "/compact"`，ZCode `apps/.../core/src/compact/manual.ts:57` 那句
+      "Try /compact again"；留 `/整理` 指向压缩就是 ⓓ/裁定 B 一路在清的那种名字与事实不符。
+      ② **压成的负载走事件、返回值只说"这一趟没动，因为"**（AGENTS §3「流式输出不塞进
+      command 返回值」）：后端 emit 一条 `agent://context-compacted`，前端那条断层条
+      （省了多少 / [查看详情] / [撤销]）与自动压缩**共用同一个构造** ⇒ 界面上不可能长出
+      两种"压缩完成"。③ **手动只让开两条"线"（到线判定、熔断），三条"形状"一条不让**
+      （窗口未知 / 一轮凑不齐 / 没东西可摘）——理由与"为什么人手不例外"写在
+      `compact::plan` 的 `manual` 段；那枚深度压缩开关也挡不住手动（可配置原则②的反面：
+      开关不许长成禁止）。**旧 `organize_now` 不删**：它是自动整理熔断唯一的复位口
+      （`memory-tree/tree.rs::mark_manual` 只被这条链吃），入口搬进
+      设置 → 开发者 → 记忆树 那颗「手动整理并复位」。
 - [ ] AC-S2-12 `make check` 全绿；新闸一律带变异红证（`tmp/mut-rust.mjs` 续 CASE 号）
 
 ## 非目标
@@ -308,7 +321,10 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
    **原清单"全部数值设置化"这句按实况收窄**：两枚后端字段没上界面（摘要模型、自定义压缩指令）、
    四颗参数按 2026-10-19 裁定不抬（微压缩的 0.9 触发线比例 / 60 分钟 idle / 256 最小节省 /
    2000 缓冲），理由与代价都在任务区刀⑥ 条目里——不是漏做，是这一刀的边界。
-7. **刀⑦ `/整理` 改语义** + 北极星长会话实测（AC-S2-9 那三条跑一次并留读数）。
+7. **刀⑦ `/整理` 改语义 + 北极星长会话实测**：拆两半落地——**刀⑦a ✅（2026-10-19）**
+   `/整理` 改语义（AC-S2-11，含改名 `/压缩`、手动通路的"让两格不让三格"、旧整理入口搬进
+   开发者面板）；**刀⑦b ⬜** 北极星长会话实测（AC-S2-9 那三条跑一次并留读数）+ AC-S2-12
+   终确认。
 8. 每刀收尾按 [`CONTRIBUTING.md`](../../CONTRIBUTING.md)：进度只在 roadmap 那一行改勾选，
    实测读数与遗留风险写提交正文。
 
@@ -396,7 +412,56 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
       ⓙ **校验消息与 `llm/retry.rs` 那句是后端硬编码中文**，英文档下界面说明只能引用它的英译
       （「深度压缩」那行的 "near the window, reopen the session" 就是这个样子），与实际所见的
       中文串不一致。这是"后端消息不走 i18n"这一整面的既有处境，不在本刀单点改。
-- [ ] 刀⑥→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成
+- [x] **刀⑦a `/整理` 改语义 ✅**（2026-10-19）：AC-S2-11 打勾（三条落地口径在那条里）。
+      后端：`PlanInput` 加 `manual`（`plan()` 里两格让路、三条形状不让）+
+      `Compactor::run_manual`（不看 `cfg.enabled`）与私有 `try_compact` **共用同一段落账**
+      ⇒ 手动压出来的那份摘要与自动的同形；新命令 `compact_now` 住 `commands/compact.rs`，
+      它的用量口径调 `commands::chat::usage_policy`（刀⑦ 把那段从 `agent_chat` 里提出来，
+      就是为了这里不抄第二遍）。`deep.rs` 里那三条 `why` 从就地字符串收成 `WHY_*` 常量
+      （与 `STRATEGY` 同一条纪律），`off` 收成 `REASON_OFF`。
+      前端：`/压缩` 走 `isSlashCommand`（命令名原来在注册表与提交口各敲一遍字面量，
+      这次改名正是要动它的时候，顺手收成一处）；发丝线族把 `tag` 与"在途 key"提成参数
+      （`rewriteOrPushLine` / `pushLine` / `dropRunningLine` 三份共用实现），整理那一族
+      因此只剩"落一条收束线"——它的在途线本来只由 `/整理` 发，那条命令已经改名了；
+      `organizeNow` 从"寄居"变成名副其实（消费者就是开发者面板），按钮加在记忆树读数那一行。
+      用例：plan 层 4 条（两条线让开 + 两条形状不让，全部与自动那一路**成对**写：
+      同一份夹具、只差 `manual` 一枚）+ deep 层 2 条（开关关掉手动仍压成；熔断合上手动
+      仍压成且**把表清零**——第三段专门证"不是只绕过、表还合着"）+ 前端 6 条
+      （`tests/compact-command.spec.ts`：只发 compact_now 不发 agent_chat / 压成时整条线
+      收走不留第二句同义 / 没压成就地改写一根线 / 认不出的名字走兜底并原样带出 /
+      `/整理` 不再被拦的负对照 / 发起抛错收线出原文条）。
+      新档判据 `SS24`（后端判据名 ↔ 前端 `COMPACT_SKIP_KEYS` 两侧相等，"手动让开的那两条"
+      从 `!input.manual` 的**代码结构**里推、不写死在闸里）与 `SS25`（前端恰好 7 条），
+      各配一条窄变异：SS24 = 后端多一条没人配文案的 stop，SS25 = 前端多一句显示不出来的
+      文案（selftest 读数里 SS25 变异**同时打红 SS24**，正是"相等型读数分不清谁漂"的实证）。
+- [x] **刀⑦a 真窗口走查 ✅**（2026-10-19 22:32 编的 debug exe，md5 `15546ab6…`）：
+      ① 命令面板只剩一条 `/压缩 当场压缩一次上下文（不受触发线与熔断限制；压完可撤销）`，
+      旧 `/整理` 不在列；② 新建会话里直接按 ⇒ 一根发丝线「没压缩：对话还太短，没有可摘的
+      一段（至少两轮往返）」，**没有用户气泡**（元操作不进对话流）；③ 真发两轮（收到 /
+      好的）后把「压缩目标比」临时调到 1 并保存 ⇒ `/压缩` 真压一次，断层条
+      「已压缩早期对话，节省 0 token」+ [查看详情][撤销]，点撤销出
+      「已撤销压缩：恢复压缩前的完整上下文」；④ 后端日志那行是这件事的硬证：
+      `深度压缩落账 … from_tokens=52 to_tokens=160 kept_messages=2 manual=true`
+      （`manual` 字段就是这一刀加的）；⑤ 开发者面板「记忆树读数（当前会话）」那行两个按钮
+      （刷新 / 手动整理并复位，同一种 `lw-btn`），点下去 toast「已发起整理…自动整理熔断
+      已复位」且面板当场刷出「章节：1」与「在途任务：事件 #1–#10」⇒ 那颗按钮不是空壳。
+      测完把目标比**调回 50 并保存**。
+      **走查抓到三件，一件当场改、两件登记**：
+      ‧当场改：改名后的文案残留一共五处（`reboundMHint` 中英、`boardEmptyProject` 中英——
+      英文那条里还直接夹着中文命令名、`thresholdHint` 中文那条还写着「手动 /整理 不受此限」
+      而英文已经是 manual /compact、`Composer.vue` 那句注释），全数改成指向 `/压缩` 或
+      「手动整理并复位」那颗按钮；Rust 侧四处同源注释（`commands/organize.rs` 头注与命令
+      文档、`organize/mod.rs`、`organize/tests/pipeline.rs`、`compact/deep.rs` +
+      `tests_deep.rs` 的引用）一并订正。
+      ‧ⓚ **主层没有"省不到就不落账"那一格**：上面那行实测就是证据——52 token 的一段摘完
+      变成 160，**压完更大了**，界面如实显示"节省 0 token"但这一趟模型往返是白花掉的。
+      机械层有这一格（微压缩 `MIN_TOKEN_SAVINGS = 256`：省不到就整批还原），主层没有。
+      不在本刀补：补它要先定"摘要实测比原文长时到底落账还是还原"（还原 = 摘要是模型写的、
+      我们没有第二份可退回），这是判据设计不是接线，单独一刀。
+      ‧ⓛ `UsagePolicy` 那三枚在 `scheduler/engine.rs` 仍是手抄第二遍（刀① 当时的既有双份）：
+      本刀把 `agent_chat` 那份提成了 `commands::chat::usage_policy`，`/压缩` 吃它 ⇒ UI 这一侧
+      收成一个出处；定时那条链在 S2 线外，没顺手改（改它要动 `deps` 的取数形状）。
+- [ ] 刀⑦b 北极星长会话实测（AC-S2-9 三条 + AC-S2-12 终确认）→ 跑完按改动面选档跑门禁
 - [ ] 数据侧改动前把相关目录复制进备份目录（specs/01 那条纪律在本线同样适用：
       压缩虽不改日志，但 spill 会往会话附件目录写文件）
 
@@ -424,7 +489,7 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 | `desktop/src-tauri/src/spill.rs`（+ `spill/tests.rs`） | 刀② ✅：落盘句柄（数据根 + 会话子目录 + 内容寻址文件名）与两句文本（`<persisted-output>` 模板 / 降级提示）的唯一出处 |
 | `desktop/src-tauri/src/llm/wire/{payload,messages}.rs` | 刀② ✅：`clip_tool_output` → `project_tool_output`（一处判定、两种后果），`WireCaps` 带落盘句柄因而从 `Copy` 降为 `Clone`，`attempt_stream` 改吃借用 |
 | `desktop/src-tauri/src/llm/{app_llm,client}.rs` `state/llm_stack.rs` | 刀② ✅：`AppLlm.spill` 字段 + `with_spill` 注入器；组装点交**数据根**（不手拼目录名）。app_llm 由此 394→411 行，按三问入 `check_length` 名单（理由写在该脚本注释与提交正文） |
-| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限；刀④ ✅ SS20a/SS20b/SS21a/SS21b/SS21c + 压缩面两条下限；刀⑤ ✅ SS22a/SS22b/SS22c + 保护网面两条下限。五批共 17 档，每档配一条窄变异（selftest 那条"同时打红谁"的分工读数在刀① 那一批加上）。刀⑥ ✅ 再加两档 `SS23a/SS23b` ⇒ **六批共 19 档**。刀④ 顺带修掉**闸自己的一个口径洞**：宿主面与模块面原先各写一遍同一条测试排除式，那式子只排得掉 `tests.rs` 与 `tests/` 两种，排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、`compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上新架构就被读成两个落点）；现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐 |
+| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限；刀④ ✅ SS20a/SS20b/SS21a/SS21b/SS21c + 压缩面两条下限；刀⑤ ✅ SS22a/SS22b/SS22c + 保护网面两条下限。五批共 17 档，每档配一条窄变异（selftest 那条"同时打红谁"的分工读数在刀① 那一批加上）。刀⑥ ✅ 再加两档 `SS23a/SS23b` ⇒ 六批共 19 档；刀⑦a ✅ 再加两档 `SS24/SS25` ⇒ **七批共 21 档**（SS25 那条变异同时打红 SS24，是"相等型读数分不清哪侧漂"的实证，两档因此都留着）。刀④ 顺带修掉**闸自己的一个口径洞**：宿主面与模块面原先各写一遍同一条测试排除式，那式子只排得掉 `tests.rs` 与 `tests/` 两种，排不掉 `tests_approval/*.rs`、`tests_hotpath.rs`、`compact/tests_deep.rs` 这两族 ⇒ "生产面"里一直混着测试代码（SS21c 一上新架构就被读成两个落点）；现四处共用一条 `TEST_SHAPED`，口径与 `prodRustFiles()` 对齐 |
 | `desktop/src-tauri/src/microcompact.rs`（+ `microcompact/tests.rs`） | 刀③ ✅：微压缩判据本体（七颗参数、候选分组、idle 播种表、`agent/request` 监听器） |
 | `desktop/src-tauri/src/state/waterfall.rs` `state/mod.rs` | 刀③ ✅：第八环注册位 + 主层阈值闭包（`Init` 新增 `catalog` / `model_overrides` / `sessions_dir` 三份读数）；头注把"八环"的序与"为什么这一环可以在红线之后"补全 |
 | `desktop/src-tauri/src/settings/{context,view}.rs` `settings.rs` | 刀③ ✅：`context.microEnabled` 一枚（缺省开）+ 后端读面 `context_micro_enabled()`。刀⑥ ✅：其余四枚数值字段落在 `settings/context.rs`，六枚上下文 getter 从 `settings.rs` 搬进同族文件（长度闸逼出来的搬家，搬的是同一族；`settings.rs` 实测 400→360 行，原处留指针注释，账目见 `check_length.sh` 刀⑥ 那段） |
@@ -432,6 +497,8 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 | `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | **刀③ 没进内核**（微压缩落在宿主监听器 + 发送侧，内核只提供 `compacted` 带回位）；**刀④ 也没进**——主层压缩本体住在宿主 `compact.rs`（落点订正见上面计划第 4 条），这一格到此**清空**：内核侧不再欠任何东西 |
 | `crates/kernel-agent/src/kernel/request.rs` `waterfall.rs` | 只**用**现有 `compacted` 带回位；契约形状零改动 |
 | `desktop/src-tauri/src/settings/context.rs` + 设置页「上下文」分区 | 刀⑥ ✅：四枚数值字段（区间常量 + 越界拒且不污染内存态）+ 中英各四条文案 + 「压缩阈值」改名（裁定 B）+ 四行 `.lw-field-num`；两枚后端字段按 ⓖ/ⓗ 不进界面 |
+| `desktop/src-tauri/src/compact.rs` `compact/deep.rs` `commands/compact.rs`（新）`commands.rs` `lib.rs` `commands/chat.rs` | 刀⑦a ✅：`PlanInput.manual` + `run_manual`/`try_compact` 两路共用落账 + `WHY_*`/`REASON_OFF` 收成常量 + 新命令 `compact_now`（压成走事件、返回值只给判据名）+ `usage_policy` 从 `agent_chat` 提出供两路共用 |
+| `desktop/src/lib/slash-commands.ts` `stores/chat/{send,notices,index}.ts` `lib/api/{context,developer}.ts` `types/{session,index}.ts` `components/settings/MemoryTreePanel.vue` `components/chat/Composer.vue` `locales/{zh-CN,en}/{chat,developer,settings}.ts` `tests/compact-command.spec.ts`（新） | 刀⑦a ✅：`/压缩` 改名与 `isSlashCommand` 收口 + 发丝线族参数化（tag / 在途 key）+ 手动整理入口迁进开发者面板 + 改名后的五处文案订正 + 六条前端用例 |
 | `desktop/src-tauri/src/llm/retry.rs` | 刀①/刀⑥：那句"请新开会话"的指向改对；压缩全关时它仍是最终兜底 |
 | `crates/session-store/` | 刀④b ✅：形状没动，`strategy` 多了 `compact` 一个取值；动的是**文本出口**——`SUMMARIZED_MARKER` / `summarized_message()` 从 `session/project.rs` 提到 crate 面（折叠路径与压缩层共用同一个构造函数，判据 SS20a），`event.rs` 里 `strategy` 的取值列举按现役两档订正（并写清"前端不许按枚举分支"） |
 | 前端用量环 / 开发者面板 | 只读展示"这一轮压了什么"，不在 `MemoryPage` 上加东西 |

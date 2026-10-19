@@ -20,30 +20,32 @@ export function pushNotice(
   st.items.push({ id: nextId(), kind: "system", key, params, actions });
 }
 
-/** 整理发丝线（v2.143 用户裁定「两卡片改一根发丝线，状态居中盖在线上」）：
- * 发起/收束/熔断共用同一根线——在途线（organizeRunning）被收束事件**就地改写**
- * （一条线从「整理中」变「已整理」），无在途线（自动整理）直接落收束线。
- * tag="organize" 标记本族条目。 */
-export function pushOrganizeNotice(
+/** 发丝线族的**唯一实现**（v2.143 用户裁定「两卡片改一根发丝线，状态居中盖在线上」）：
+ * 发起/收束/熔断共用同一根线——在途线被收束事件**就地改写**（一条线从「整理中」变
+ * 「已整理」），无在途线（自动整理）直接落收束线。
+ *
+ * S2 刀⑦ 把两枚常数（`tag` 与"在途那条的 key"）提成参数：`/压缩` 要的是同一根线，
+ * 复制一份实现就是"同一属性两个出处"（改写规则、落点、`tone` 三件都会各自漂）。
+ * 两个入口各自保留原名，只把参数填进去。 */
+/** 收走在途线（发起失败时用——线是「正在做」的陈述，失败后不再成立；就地摘除，
+ * 错误由 pushRawSystem 另行陈述）。 */
+function dropRunningLine(st: ChatState, tag: string, runningKey: string) {
+  for (let i = st.items.length - 1; i >= 0; i--) {
+    const it = st.items[i]!;
+    if (it.kind === "system" && it.tag === tag && it.key === runningKey) {
+      st.items.splice(i, 1);
+      return;
+    }
+  }
+}
+
+function pushLine(
   st: ChatState,
+  tag: string,
   key: string,
   params?: Record<string, unknown>,
   actions?: string[],
 ) {
-  const items = st.items;
-  for (let i = items.length - 1; i >= 0; i--) {
-    const it = items[i]!;
-    if (
-      it.kind === "system" &&
-      it.tag === "organize" &&
-      it.key === "notice.organizeRunning"
-    ) {
-      it.key = key;
-      it.params = params;
-      it.actions = actions;
-      return;
-    }
-  }
   st.items.push({
     id: nextId(),
     kind: "system",
@@ -51,24 +53,56 @@ export function pushOrganizeNotice(
     params,
     actions,
     tone: "hairline",
-    tag: "organize",
+    tag,
   });
 }
 
-/** 收走在途整理线（发起失败时用——线是「整理中」的陈述，失败后不再
- * 成立；就地摘除，错误由 pushRawSystem 另行陈述）。 */
-export function dropOrganizeRunning(st: ChatState) {
-  for (let i = st.items.length - 1; i >= 0; i--) {
-    const it = st.items[i]!;
-    if (
-      it.kind === "system" &&
-      it.tag === "organize" &&
-      it.key === "notice.organizeRunning"
-    ) {
-      st.items.splice(i, 1);
+function rewriteOrPushLine(
+  st: ChatState,
+  tag: string,
+  runningKey: string,
+  key: string,
+  params?: Record<string, unknown>,
+  actions?: string[],
+) {
+  const items = st.items;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (it.kind === "system" && it.tag === tag && it.key === runningKey) {
+      it.key = key;
+      it.params = params;
+      it.actions = actions;
       return;
     }
   }
+  pushLine(st, tag, key, params, actions);
+}
+
+/** 整理发丝线（tag="organize"）。刀⑦ 之后这一族**只剩"落一条收束线"**：
+ * 整理是后台跑的，从来没有"人按下去等它"那一种在途态（旧的那条「正在整理…」由
+ * `/整理` 发，而这条命令已经改成 `/压缩` 了）。改写那半仍留在共用实现里给压缩用——
+ * 它才有在途态（一次摘要往返要几秒，人得知道按钮生效了）。 */
+export function pushOrganizeNotice(
+  st: ChatState,
+  key: string,
+  params?: Record<string, unknown>,
+  actions?: string[],
+) {
+  pushLine(st, "organize", key, params, actions);
+}
+
+/** 压缩发丝线（tag="compact"，S2 刀⑦ `/压缩`）：与整理那根同一份实现，只差两枚常数。 */
+export function pushCompactNotice(
+  st: ChatState,
+  key: string,
+  params?: Record<string, unknown>,
+  actions?: string[],
+) {
+  rewriteOrPushLine(st, "compact", "notice.compactRunning", key, params, actions);
+}
+
+export function dropCompactRunning(st: ChatState) {
+  dropRunningLine(st, "compact", "notice.compactRunning");
 }
 
 /** 原文系统条（key = "__raw__"，ChatMessages 按 params.text 渲染）：

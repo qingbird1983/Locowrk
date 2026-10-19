@@ -12,6 +12,36 @@ use crate::events::AgentEvent;
 use crate::runner::{self, UsagePolicy};
 use crate::state::AppState;
 
+/// 一次轮次与一次手动压缩**共用的用量口径**（S2 刀⑦ 从 `agent_chat` 里提出：
+/// `/压缩` 也要吃这把尺，抄第二遍就是两个出处——刀① 那条纪律的反面）。
+///
+/// S2 刀①（2026-10-19）：进度条分母改吃**有效阈值** = `min(滑杆, 窗口 − 输出侧
+/// 预留)`，算式只住 `context_budget` 一处。为什么必须一起改：分母与整理触发线
+/// 本来就是同一把尺（v2.138「看到的 = 触发用的」），而滑杆允许设得比窗口还高
+/// ——设置行那句提示「需低于模型窗口，否则上下文超限会先于整理发生」承认的就是
+/// 这个洞；封顶之后洞自动关闭。**缺省设置下读数不变**（滑杆 100K < 窗口 179K
+/// 时封顶取不到小者，`min` 拿回的还是滑杆），只有滑杆高过窗口才生效。
+/// 批 F-24b / M-18c：不为算几个数而全量克隆档位区（含各档明文 Key）——一次取锁 +
+/// 借用进闭包；闭包内不碰 Store 的其它读面（非重入锁）。
+///
+/// ⚠ 定时任务那条链（`scheduler/engine.rs`）今天仍自己写一遍同样的三枚——那是刀①
+/// 当时的既有双份，本刀没动它（specs/09 挂账 ⓛ）。
+pub(crate) async fn usage_policy(state: &AppState, session_id: &str) -> UsagePolicy {
+    let ov = state.model_overrides.get(session_id);
+    let (window, max_output) = state.settings.with_llm_config(|llm| {
+        crate::settings::session_capacity(llm, ov.as_ref(), Some(&state.catalog))
+    });
+    UsagePolicy {
+        threshold_tokens: crate::context_budget::effective_threshold(
+            state.settings.organize_threshold_tokens(),
+            window,
+            max_output,
+        ),
+        window_tokens: window.unwrap_or(0),
+        tools_est_tokens: runner::catalog_estimate(&state.kernel, session_id).await,
+    }
+}
+
 /// 聊天命令。轮次内容全部经 `agent://` 事件推送（§12.2），返回值只表达
 /// 轮次是否成功收束（返回实际 step 数）。用量口径（v2.137）：阈值 =
 /// 整理阈值（绝对 token）；窗口 = 会话模型四层链自动识别（模型行 ??
@@ -51,27 +81,7 @@ pub async fn agent_chat(
             text,
         });
     }
-    let ov = state.model_overrides.get(&session_id);
-    // S2 刀①（2026-10-19）：进度条分母改吃**有效阈值** = `min(滑杆, 窗口 − 输出侧
-    // 预留)`，算式只住 `context_budget` 一处。为什么必须一起改：分母与整理触发线
-    // 本来就是同一把尺（v2.138「看到的 = 触发用的」），而滑杆允许设得比窗口还高
-    // ——设置行那句提示「需低于模型窗口，否则上下文超限会先于整理发生」承认的就是
-    // 这个洞；封顶之后洞自动关闭。**缺省设置下读数不变**（滑杆 100K < 窗口 179K
-    // 时封顶取不到小者，`min` 拿回的还是滑杆），只有滑杆高过窗口才生效。
-    // 批 F-24b / M-18c：不为算几个数而全量克隆档位区（含各档明文 Key）——一次取锁 +
-    // 借用进闭包；闭包内不碰 Store 的其它读面（非重入锁）。
-    let (window, max_output) = state.settings.with_llm_config(|llm| {
-        crate::settings::session_capacity(llm, ov.as_ref(), Some(&state.catalog))
-    });
-    let usage = UsagePolicy {
-        threshold_tokens: crate::context_budget::effective_threshold(
-            state.settings.organize_threshold_tokens(),
-            window,
-            max_output,
-        ),
-        window_tokens: window.unwrap_or(0),
-        tools_est_tokens: runner::catalog_estimate(&state.kernel, &session_id).await,
-    };
+    let usage = usage_policy(&state, &session_id).await;
     let steps = runner::run_turn(
         &state.kernel,
         &mut session,

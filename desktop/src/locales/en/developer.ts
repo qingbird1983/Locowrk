@@ -62,7 +62,7 @@ export default {
     reboundK: "Refill breaker k",
     reboundKHint: "A trigger within k user turns after organizing counts as a rebound (1–10).",
     reboundM: "Refill breaker m",
-    reboundMHint: "m consecutive rebounds pause auto-organizing; /organize bypasses and resets (1–10).",
+    reboundMHint: "m consecutive rebounds pause auto-organizing; \"Organize and reset\" below bypasses that and resets it (1–10).",
     memoryManagerTimeout: "Memory manager timeout (s)",
     memoryManagerTimeoutHint: "Per-call wait limit (10–600 s).",
     memoryManagerRetries: "Memory manager retries",
@@ -85,6 +85,11 @@ export default {
     organizeSummaryAttemptsHint:
       "How many times one chapter may be retried (0–5, default 2). The counter lives in the projection and spans turns: a chapter that keeps failing stops being picked, instead of burning a request every turn.",
     treePanelTitle: "Memory tree readout (current session)",
+    // S2 knife ⑦: `/organize` became `/compact`, so manual organize moved into this
+    // panel — it is the only reset path for the auto-organize breaker.
+    organizeNow: "Organize and reset",
+    organizeStarted:
+      "Organize started (runs in the background; the result lands on the transcript line). Auto-organize breaker reset.",
     treeEmpty: "No memory tree projection for this session yet (appears after an organize run).",
     treeChapters: "Chapters: {n} / organized cursor: event #{cursor}",
     treeTail: "Unorganized tail: {events} content events ≈ {tokens} tokens",
@@ -154,7 +159,7 @@ export default {
     treeTitle: "Memory tree (episodes)",
     treeHint: "Edits survive auto-organizing",
     treeEmpty:
-      "No chapters yet. /organize or automatic triggers archive sessions here as chapters.",
+      "No chapters yet. Sessions get archived here as chapters after an automatic organize run, or when you press \"Organize and reset\" in Settings → Developer → Memory tree.",
     treeSearch: "Search chapter titles or summaries…",
     treeSessionLabel: "Session",
     treeSessionCount: "{n} chapters",
@@ -228,7 +233,7 @@ export default {
     boardStreamEmpty: "This group has no original-text section at all.",
     boardSectionFailed: "This section's original text could not be read: {reason}",
     boardSectionEmpty: "This section has no readable original lines.",
-    boardEmptyProject: "Nothing organized in this project yet — run a few turns, then /整理 fills this in.",
+    boardEmptyProject: "Nothing organized in this project yet — run a few turns, then use \"Organize and reset\" on this page (or let auto-organize do it).",
     boardNoProjection: "This session's tree projection can't be read (it may have been cleared).",
     boardZoomIn: "Zoom in one step",
     boardZoomOut: "Zoom out one step",

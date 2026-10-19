@@ -48,13 +48,14 @@ fn at_line(messages: &[Message]) -> Option<u64> {
     Some(estimate_tokens(messages))
 }
 
-fn plan_of(
+fn plan_with(
     messages: &[Message],
     threshold: Option<u64>,
     used: u64,
     target_pct: u64,
     keep: u64,
     failures: u32,
+    manual: bool,
 ) -> Plan {
     plan(&PlanInput {
         messages,
@@ -63,7 +64,34 @@ fn plan_of(
         target_pct,
         keep_tokens: keep,
         failures,
+        manual,
     })
+}
+
+/// 自动通路（既有全部用例的口径）。刀⑦ 加 `manual` 那一枚时**没有**动这些调用点：
+/// 它们逐字未改仍然绿，就是"自动那一路的判定一个字没变"的证据（同刀⑤ 搬熔断表、
+/// 刀⑥ 抬数值档用的是同一招）。手动那一路另开 [`plan_of_manual`]，只差这一枚参数。
+fn plan_of(
+    messages: &[Message],
+    threshold: Option<u64>,
+    used: u64,
+    target_pct: u64,
+    keep: u64,
+    failures: u32,
+) -> Plan {
+    plan_with(messages, threshold, used, target_pct, keep, failures, false)
+}
+
+/// 手动通路（`/压缩`，S2 刀⑦）：与 [`plan_of`] 只差 `manual` 一枚，其余同一套参数。
+fn plan_of_manual(
+    messages: &[Message],
+    threshold: Option<u64>,
+    used: u64,
+    target_pct: u64,
+    keep: u64,
+    failures: u32,
+) -> Plan {
+    plan_with(messages, threshold, used, target_pct, keep, failures, true)
 }
 
 // ---------- 要不要压 ----------
@@ -152,6 +180,103 @@ fn three_consecutive_failures_fuse_the_layer() {
         );
         assert_eq!(p.reason, want, "失败 {failures} 次时应当 {}", want);
     }
+}
+
+// ---------- 手动那一路（刀⑦ `/压缩`）----------
+
+/// 手动让开的**第一条线**：没到线也能压。与
+/// [`below_the_line_does_not_compact_even_when_huge`] 用同一份夹具、同一个 `used`，
+/// 只差 `manual` 一枚——所以这一条红的时候，只会是这一枚参数的判据写错，不会是
+/// 别的量变了（成对写法的全部意义在这里）。
+#[test]
+fn a_manual_run_ignores_the_trigger_line() {
+    let msgs = rounds(6, 4_000);
+    let used = estimate_tokens(&msgs) - 1;
+    let auto = plan_of(
+        &msgs,
+        at_line(&msgs),
+        used,
+        50,
+        COMPACT_KEEP_TOKENS_DEFAULT,
+        0,
+    );
+    assert_eq!(auto.reason, "below-line", "先证自动那一路照旧不动");
+    let manual = plan_of_manual(
+        &msgs,
+        at_line(&msgs),
+        used,
+        50,
+        COMPACT_KEEP_TOKENS_DEFAULT,
+        0,
+    );
+    assert_eq!(manual.reason, "planned", "人主动要的那一下不该先撞线");
+    assert!(manual.cut > 0, "让开线之后还得真给出切点");
+}
+
+/// 手动让开的**第二条线**：熔断合上了也再试一次。这张表管的是"没人看着时别连着
+/// 白花模型往返"，而手动正是"有人看着、要它再试"那一下。计数器本身照旧走
+/// （失败仍 record、成功仍 clear）——让开的只是这一格的判定，不是它的账。
+#[test]
+fn a_manual_run_ignores_the_fuse() {
+    let msgs = rounds(6, 4_000);
+    let used = estimate_tokens(&msgs);
+    let auto = plan_of(
+        &msgs,
+        at_line(&msgs),
+        used,
+        50,
+        COMPACT_KEEP_TOKENS_DEFAULT,
+        MAX_COMPACT_FAILURES,
+    );
+    assert_eq!(auto.reason, "fused", "先证熔断确实合上了");
+    let manual = plan_of_manual(
+        &msgs,
+        at_line(&msgs),
+        used,
+        50,
+        COMPACT_KEEP_TOKENS_DEFAULT,
+        MAX_COMPACT_FAILURES,
+    );
+    assert_eq!(manual.reason, "planned", "熔断不许把人手上那一下也挡掉");
+}
+
+/// 手动**一条形状都不让开**（三条各测一次，与上面两条"线"配成完整的两格/三格分工）：
+/// 窗口未知 ⇒ 目标位算不出来，强行压一次只能靠猜，压完仍可能超窗 = 假装有进展。
+/// 人手不例外这一句是裁定 A 在同一条姿态上的延伸，不是保守。
+#[test]
+fn a_manual_run_still_refuses_an_unknown_window() {
+    let msgs = rounds(6, 4_000);
+    let p = plan_of_manual(&msgs, None, u64::MAX, 50, COMPACT_KEEP_TOKENS_DEFAULT, 0);
+    assert_eq!(p.reason, "unknown-window");
+    assert_eq!(p.cut, 0, "拒就得真拒，不许给个半截切点");
+}
+
+/// 另两条形状同样不让开：一轮凑不齐 / 保留额度宽到没东西可摘。这两格挡的是
+/// "把唯一的上下文换成一份空洞摘要"，对人一样成立——人不能靠按按钮让一轮对话
+/// 变成两轮。
+#[test]
+fn a_manual_run_still_refuses_the_thin_shapes() {
+    let one = rounds(1, 4_000);
+    let p = plan_of_manual(
+        &one,
+        at_line(&one),
+        estimate_tokens(&one),
+        50,
+        COMPACT_KEEP_TOKENS_DEFAULT,
+        0,
+    );
+    assert_eq!(p.reason, "too-few-rounds", "一轮都凑不齐时手动也不许压");
+    let msgs = rounds(6, 4_000);
+    let used = estimate_tokens(&msgs);
+    // 配方照 [`a_generous_keep_allowance_leaves_nothing_to_summarize`]：这一档要
+    // **两个前提都宽**（保留额度装得下全部 + 目标位不比到线更紧）才叫"没东西可摘"，
+    // 只把额度放宽会得到 `planned`——那不是形状，是我把夹具凑错了。
+    let line = used + summary_reserve();
+    let wide = plan_of_manual(&msgs, Some(line), line, 100, used + 100_000, 0);
+    assert_eq!(
+        wide.reason, "nothing-to-summarize",
+        "保留额度与目标位都宽到没东西可摘时，手动也不许硬压"
+    );
 }
 
 // ---------- 切在哪 ----------

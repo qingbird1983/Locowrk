@@ -82,7 +82,7 @@ async fn incremental_trigger_then_rebound_pauses_auto() {
     let tree = tree_at(&root, org.settings.as_ref(), "s-rb");
     assert!(tree.paused_auto);
 
-    // 手动 /整理 不受限且复位
+    // 手动整理不受熔断限制且复位（入口现在是开发者面板那颗按钮，不再是 `/整理`）
     let task = org
         .plan_manual(&session2, "s-rb")
         .expect("手动不受熔断限制");

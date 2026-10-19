@@ -336,6 +336,90 @@ async fn three_rejected_summaries_fuse_the_layer() {
     assert_eq!(cli.count(), 3, "熔断那一格必须一次都不花钱");
 }
 
+/// 开关关掉挡的是**自动**动手，挡不住人手上那一下（S2 刀⑦ · AC-S2-11）。与
+/// [`the_switch_off_never_reaches_the_model`] 同一份设置、同一个会话夹具，只差调
+/// `run` 还是 `run_manual`——所以这一条红的时候，只会是这一枚门的差别。
+/// 为什么它必须存在：可配置原则②要的是"可关"，不是"不许用"。把开关做成连手动都
+/// 挡 = 界面上那一格长成硬禁止，正是本项目一路在反的形状（同设置页那句
+/// 「手动 `/压缩` 不受此限」在压缩层的延伸）。
+#[tokio::test]
+async fn a_manual_run_goes_ahead_even_with_the_switch_off() {
+    let (settings, _) = settings_with(
+        serde_json::json!({"context": {"compactEnabled": false}}),
+        "compact-manual-off",
+    );
+    let (cp, cli) = compactor(settings, Scripted::new(vec![Ok(good_summary())]));
+    let mut s = session_with(6);
+    let p = policy_at(&s);
+    let out = cp.run_manual(&mut s, "s-manual-off", &p).await;
+    assert!(
+        matches!(out, Outcome::Compacted { .. }),
+        "开关关掉不该挡人主动要的那一次，实测 {out:?}"
+    );
+    assert_eq!(cli.count(), 1, "压成就是发了一条往返，不多发");
+    assert!(
+        s.events()
+            .iter()
+            .any(|e| matches!(e, SessionEvent::ContextCompacted { .. })),
+        "手动压成的账与自动同形：日志里就得有那条压缩事件"
+    );
+}
+
+/// 熔断合上之后，自动那一路一次都不花钱，而**手动那一路照样压成**，并且这次成功
+/// 把表清零（下一趟自动又能动）。这条不是重复 `compact/tests.rs` 里 plan 层那两条
+/// 对照：那一层只证判据本身，这一层证的是"deep 真把 `manual` 带到了 plan"——把
+/// [`Compactor::run_manual`] 里那枚 `true` 改成 `false`，只有这一条会红
+/// （判据层那两条自己传参，仍然绿）。
+#[tokio::test]
+async fn a_manual_run_goes_ahead_even_when_fused() {
+    let fuse = crate::compact::MAX_COMPACT_FAILURES;
+    let (settings, _) = settings_with(serde_json::json!({}), "compact-manual-fused");
+    let mut script = Vec::new();
+    for _ in 0..fuse {
+        script.push(Err("网络断了".to_string()));
+    }
+    // 熔断之后：手动那一次 + 表清零后自动那一次，各要一条能过的摘要
+    script.push(Ok(good_summary()));
+    script.push(Ok(good_summary()));
+    let (cp, cli) = compactor(settings, Scripted::new(script));
+    for i in 0..fuse {
+        let mut s = session_with(6);
+        let p = policy_at(&s);
+        let out = cp.run(&mut s, "s-manual-fuse", &p).await;
+        assert!(
+            matches!(out, Outcome::Failed { .. }),
+            "第 {} 次应当 Failed，实测 {out:?}",
+            i + 1
+        );
+    }
+    let mut s = session_with(6);
+    let p = policy_at(&s);
+    assert_eq!(
+        cp.run(&mut s, "s-manual-fuse", &p).await,
+        Outcome::Skipped("fused"),
+        "先证表已经合上（否则下面那一步什么也没证）"
+    );
+    let spent = cli.count();
+    assert_eq!(spent, fuse as usize, "熔断那一格自动路必须一次都不花钱");
+    let mut s2 = session_with(6);
+    let p2 = policy_at(&s2);
+    let out = cp.run_manual(&mut s2, "s-manual-fuse", &p2).await;
+    assert!(
+        matches!(out, Outcome::Compacted { .. }),
+        "熔断不许挡人手那一下，实测 {out:?}"
+    );
+    assert_eq!(cli.count(), spent + 1, "手动那一次才是一条往返");
+    let mut s3 = session_with(6);
+    let p3 = policy_at(&s3);
+    assert!(
+        matches!(
+            cp.run(&mut s3, "s-manual-fuse", &p3).await,
+            Outcome::Compacted { .. }
+        ),
+        "这次成功要把表清零——手动只是绕过、表还合着 = 自动那一路永远醒不过来"
+    );
+}
+
 /// 摘要请求带的三样东西：设置里那颗模型名、四段骨架 + 用户的附加指令、
 /// 以及**只有被压掉的那半段**历史（最新那句问题必须留在窗口里，不进摘要请求）。
 #[tokio::test]

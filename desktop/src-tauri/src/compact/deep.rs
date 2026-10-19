@@ -35,6 +35,16 @@ use crate::settings::SettingsStore;
 /// 不许在第二处敲同一个字面量）。
 pub(crate) const STRATEGY: &str = "compact";
 
+/// 失败缘由的三枚名字——**唯一出处**，与 [`STRATEGY`] 同一条纪律。
+///
+/// 为什么它们要当常量而不是就地敲字符串：刀⑦ 的 `/压缩` 把"这一趟为什么没动"
+/// **原样交给界面**（后端不拼人话，文案住语言包），于是这三枚串成了跨语言契约：
+/// 改名字而前端 `COMPACT_SKIP_KEYS` 没跟着改，界面上那句准确说明会掉进兜底、
+/// 变成 `没压缩：overflow` 这种半吊子。判据 `SS24` 钉两侧相等。
+pub(crate) const WHY_CALL: &str = "summary-call";
+pub(crate) const WHY_OVERFLOW: &str = "overflow";
+pub(crate) const WHY_REJECTED: &str = "rejected";
+
 /// 一次尝试的读数。四个变体各对应"界面上该说什么"——判据不许靠"返回 0"
 /// 反推是哪一步拦的（`organize::Release::Skip` 同一条纪律）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,17 +117,43 @@ impl Compactor {
         }
     }
 
-    /// step 边界那一句。`policy` 带的是**组装点已经算好的有效阈值**（刀① 把两个
-    /// 组装点的 `UsagePolicy.threshold_tokens` 都改吃 `effective_threshold`，主层
-    /// 不许在这儿再算第二遍）与窗口读数。
+    /// step 边界那一句 = **自动**通路（runner 到线时调）。`policy` 带的是**组装点
+    /// 已经算好的有效阈值**（刀① 把两个组装点的 `UsagePolicy.threshold_tokens`
+    /// 都改吃 `effective_threshold`，主层不许在这儿再算第二遍）与窗口读数。
     pub(crate) async fn run(
         &self,
         session: &mut Session,
         session_id: &str,
         policy: &UsagePolicy,
     ) -> Outcome {
+        self.try_compact(session, session_id, policy, false).await
+    }
+
+    /// `/压缩` 那一句 = **手动**通路（S2 刀⑦ · AC-S2-11）。与自动通路共用同一段判定
+    /// 与落账（[`Self::try_compact`] ⇒ 手动压出来的那份摘要与自动的**同形**），只差
+    /// 两格门：① 不看 `cfg.enabled`——那枚开关关的是"这一层**自己**动不动手"，人主动
+    /// 按的这一下不该被它挡（同设置页那句「手动 `/压缩` 不受此限」在压缩层的同一条姿态，
+    /// 也是可配置原则②的反面：开关不许长成禁止）；② [`super::plan`] 带 `manual`，
+    /// 让开到线与熔断两格（为什么只让这两格、三条"形状"一条不让，见那里）。
+    pub(crate) async fn run_manual(
+        &self,
+        session: &mut Session,
+        session_id: &str,
+        policy: &UsagePolicy,
+    ) -> Outcome {
+        self.try_compact(session, session_id, policy, true).await
+    }
+
+    /// 两条通路的共用主体。`manual` 一路带到 [`super::plan`]，中间不改变量。
+    async fn try_compact(
+        &self,
+        session: &mut Session,
+        session_id: &str,
+        policy: &UsagePolicy,
+        manual: bool,
+    ) -> Outcome {
         let cfg = self.settings.compact_config();
-        if !cfg.enabled {
+        if !manual && !cfg.enabled {
             return Outcome::Off;
         }
         // 裁定 A 在这一层的同一条姿态：窗口未知 ⇒ 不压。`window_tokens == 0` 是
@@ -134,15 +170,17 @@ impl Compactor {
             target_pct: cfg.target_pct,
             keep_tokens: cfg.keep_tokens,
             failures: self.failures.of(session_id),
+            manual,
         });
         if plan.reason != "planned" {
             tracing::debug!(
                 session = session_id,
                 reason = plan.reason,
                 used,
+                manual,
                 threshold = policy.threshold_tokens,
                 window = policy.window_tokens,
-                "深度压缩本轮不动"
+                "深度压缩这一趟没动"
             );
             return Outcome::Skipped(plan.reason);
         }
@@ -182,7 +220,7 @@ impl Compactor {
                             "深度压缩：摘要调用失败，不落账"
                         );
                         return Outcome::Failed {
-                            why: if overflow { "overflow" } else { "summary-call" },
+                            why: if overflow { WHY_OVERFLOW } else { WHY_CALL },
                             failures,
                             attempts,
                         };
@@ -213,7 +251,7 @@ impl Compactor {
                 "深度压缩：摘要不合格，不落账"
             );
             return Outcome::Failed {
-                why: "rejected",
+                why: WHY_REJECTED,
                 failures,
                 attempts,
             };
@@ -242,6 +280,7 @@ impl Compactor {
             from_tokens,
             to_tokens,
             kept_messages,
+            manual,
             strategy = STRATEGY,
             "深度压缩落账"
         );

@@ -15,11 +15,25 @@ export interface SlashCommand {
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
-    name: "整理",
-    aliases: ["organize"],
-    descKey: "slash.desc.organize",
+    // S2 刀⑦（AC-S2-11）：旧名 `/整理` 退役。它现在做的是"当场跑一次主层压缩"，
+    // 与记忆树那套章节整理无关 ⇒ 名字跟着行为改，两家参照的同位按钮也都叫 compact。
+    // 旧名**不留别名**：让 `/整理` 继续被拦却干压缩的事，就是 ⓓ/裁定 B 一路在清的
+    // 那种名字与事实不符。
+    name: "压缩",
+    aliases: ["compact"],
+    descKey: "slash.desc.compact",
   },
 ];
+
+/** 这条文本是不是命令 `name`（含别名）。提交口用它而不是再敲一遍 `"/压缩"` 字面量：
+ * 原先名字在注册表与 `send.ts` 各存一份，改一次名要记得动两处（刀⑦ 正是那次改名，
+ * 所以顺手收成一处——漏一处的后果是"面板里有这条、敲下去却当普通消息发出去"）。 */
+export function isSlashCommand(text: string, name: string): boolean {
+  const cmd = SLASH_COMMANDS.find((c) => c.name === name);
+  if (!cmd) return false;
+  const typed = text.trim().replace(/^\/+/, "");
+  return typed === cmd.name || (cmd.aliases ?? []).includes(typed);
+}
 
 /** 按键入前缀过滤（匹配 name 或别名，大小写不敏感；空前缀 = 全列）。 */
 export function filterSlashCommands(query: string): SlashCommand[] {

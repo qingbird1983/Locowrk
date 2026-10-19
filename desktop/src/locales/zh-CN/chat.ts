@@ -89,8 +89,8 @@ export default {
     editResendFailed: "编辑重发失败：{reason}",
     // ⑨ 压缩通知（[查看详情][撤销]，Context 文档 §3.8.3）
     contextCompacted: "已压缩早期对话，节省 {saved} token",
-    // v2.143 整理发丝线：发起/收束/熔断同一条线就地改写（pushOrganizeNotice）
-    organizeRunning: "正在整理对话上下文…",
+    // v2.143 整理发丝线：收束/熔断就地落一条线（手动整理入口已随 S2 刀⑦ 搬进
+    // 开发者面板，所以这一族不再有「正在整理…」那条在途线）
     // M3 §3.37③：整理收束 / 熔断翻转（lw://organize-done / -paused）
     organizeDone: "已整理 {users} 轮为 {chapters} 个章节",
     organizeDoneDegraded:
@@ -100,7 +100,22 @@ export default {
     organizeReleased:
       "上下文已逼近窗口上限，先把本轮之前的历史收起 {chapters} 个章节（机械切分，摘要从简；本轮内容未动）",
     organizePaused:
-      "本会话自动整理已暂停（连续 {rebounds} 次反弹达到熔断阈值 m={m}）；/整理 可手动整理并复位。",
+      "本会话自动整理已暂停（连续 {rebounds} 次反弹达到熔断阈值 m={m}）；要重开请到 设置 → 开发者 → 记忆树 点「手动整理并复位」。",
+    // S2 刀⑦ `/压缩`：后端只回「这一趟没动，因为」的**判据名**，人话一律在这儿。
+    // 名字与 Rust 侧取值域同源（判据 SS24）；认不出的名字走 compactUnknown 兜底，
+    // 原样带出判据名——绝不悄悄说成「已压缩」。
+    compactRunning: "正在压缩对话上下文…",
+    compactUnknownWindow:
+      "没压缩：模型窗口未知，压缩算不出该压到哪儿。请在 设置 → 模型 里补上该档的窗口大小。",
+    compactTooFewRounds: "没压缩：对话还太短，没有可摘的一段（至少两轮往返）。",
+    compactNothingToSummarize:
+      "没压缩：近期原文额度宽到装得下整段历史，没有可摘的内容。要真压一次，把 设置 → 上下文 的「近期原文额度」或「压缩目标比」调小。",
+    compactCallFailed: "没压缩：摘要模型没答上（网络或额度）。可在 设置 → 上下文 看用的是哪一档。",
+    compactOverflow:
+      "没压缩：摘要请求本身超出模型窗口，递减到最小一档仍放不下。换一档窗口更大的摘要模型，或把「压缩目标比」调小。",
+    compactRejected: "没压缩：模型写的摘要七节不齐，这次没落账（连续失败会计入熔断）。",
+    compactSwitchOff: "没压缩：深度压缩这一层当前是关的（设置 → 上下文 → 深度压缩）。",
+    compactUnknown: "没压缩：{reason}",
     compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",
     compactUndoFailed: "撤销压缩失败：{reason}",
     // ⑭ 定时触发（调度引擎注入轮前的告知）
@@ -115,7 +130,7 @@ export default {
     hint: "↑↓ 选择，Enter 或点击触发，Esc 关闭",
     none: "没有匹配的命令",
     desc: {
-      organize: "整理当前会话上下文（手动整理不受熔断限制并复位熔断）",
+      compact: "当场压缩一次上下文（不受触发线与熔断限制；压完可撤销）",
     },
   },
   // 闲置徽章（IdleBadge，⑩ 接线 exposure 文档 §8.4/§11.3）：后端只给

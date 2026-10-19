@@ -1047,6 +1047,64 @@ const CHECKS = [
       `${filesWith(m.hostDesktop, /\.context_micro_keep_groups\s*\(/)}|${filesWith(m.hostDesktop, /\.context_slide_keep_runs\s*\(/)}`,
     'microcompact.rs|slide.rs',
   ],
+  [
+    'SS24',
+    '刀⑦ `/压缩` 的**判据名两侧对账**：后端交给界面的那批名字（`compact.rs` 里 `Plan::stop("…")` ' +
+      '∪ `deep.rs` 的三枚 `WHY_*` ∪ `commands/compact.rs` 的 `REASON_OFF`）与前端 ' +
+      '`COMPACT_SKIP_KEYS` 的键集合必须相等——但**手动通路让开的那两条除外**，而那两条也是从代码里 ' +
+      '推出来的（`if !input.manual … Plan::stop("x")` 那两格），不写死在闸里。' +
+      '为什么这条必须有：后端只回名字、人话住语言包（AGENTS「文案住语言包」+ 同类只许一种形态），' +
+      '所以 Rust 侧新增一条 stop 而前端没补文案时，**编译与行为测试都说不出**——界面只会掉进兜底那条，' +
+      '把一句本来有准确说法的判据显示成 `没压缩：brand-new-name`。反方向同样要红：前端多一条键 ' +
+      '= 一句永远显示不出来的文案留在语言包里。' +
+      '⚠ why 那三枚原来是就地敲的字符串，本档把它们收成 `WHY_*` 常量（与 `STRATEGY` 同一条纪律）——' +
+      '不收的话，闸只能去匹配 `if overflow { "overflow" }` 这种句子，那式子一改措辞就假绿。',
+    (m) => {
+      const rust = new Set([
+        ...[...m.compact.matchAll(/Plan::stop\("([a-z-]+)"\)/g)].map((x) => x[1]),
+        ...[...m.compact.matchAll(/const WHY_[A-Z]+: &str = "([a-z-]+)"/g)].map((x) => x[1]),
+        ...m.hostDesktop
+          .flatMap((f) => [...f.code.matchAll(/const REASON_OFF: &str = "([a-z-]+)"/g)])
+          .map((x) => x[1]),
+      ]);
+      // 手动让开的那两条：从 `!input.manual` 那两格的**结构**里推，不在这里抄名单
+      const yielded = new Set(
+        [...m.compact.matchAll(/!input\.manual[\s\S]{0,120}?Plan::stop\("([a-z-]+)"\)/g)].map(
+          (x) => x[1],
+        ),
+      );
+      const front = new Set(
+        m.frontSrc
+          .flatMap((s) => [...s.matchAll(/^ {2}"?([a-z-]+)"?: "notice\.compact/gm)])
+          .map((x) => x[1]),
+      );
+      const want = new Set([...rust].filter((r) => !yielded.has(r)));
+      const same =
+        want.size === front.size && [...want].every((r) => front.has(r)) && rust.size === 9;
+      return same
+        ? `same(${want.size})`
+        : `RUST=[${[...rust].sort()}] YIELDED=[${[...yielded].sort()}] FRONT=[${[...front].sort()}]`;
+    },
+    'same(7)',
+  ],
+  [
+    'SS25',
+    '前端 `COMPACT_SKIP_KEYS` 恰好 7 条（= 后端取值域 9 枚减去手动让开的那两条）。' +
+      '与 [`SS24`] 分两档不是为了凑数：SS24 比的是**两侧相等**，它能为"后端多一条而前端没配"红，' +
+      '但前端自己多敲一条键时它同样红，红出来的读数长得一样，看不出是谁漂的。这一档只数前端，' +
+      '所以"语言包里躺着一句永远显示不出来的文案"这种漂移有它自己的红。' +
+      '（两档都得活着：只留 SS24 的话，两侧同时各少一条会读成 `same(6)` 而它红不了——那正是 ' +
+      '`rust.size === 9` 那一格在盯的形状。）',
+    (m) =>
+      String(
+        new Set(
+          m.frontSrc
+            .flatMap((s) => [...s.matchAll(/^ {2}"?([a-z-]+)"?: "notice\.compact/gm)])
+            .map((x) => x[1]),
+        ).size,
+      ),
+    '7',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -1340,6 +1398,12 @@ if (SELFTEST) {
         rel: 'commands/chat.rs',
         code: 'let again = settings.context_slide_keep_runs();\n',
       }),
+    // S2 刀⑦（SS24 / SS25）两条窄变异：后端多一条没人配文案的判据 / 前端多一句显示不出来的文案。
+    // 分两档各埋一侧，是因为相等型读数一旦两侧同时漂就看不出是谁动的（SS25 说明里那条）。
+    SS24: (m) =>
+      (m.compact += '\nfn _drift() { Plan::stop("brand-new-reason"); }\n'),
+    SS25: (m) =>
+      m.frontSrc.push('const keys = {\n  "brand-new-reason": "notice.compactBrandNew",\n};\n'),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

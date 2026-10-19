@@ -108,7 +108,7 @@ function save() {
 <template>
   <SettingsGroup :hint="t('settings.contextHint')">
     <!-- 整理阈值滑条（100K–800K，100K 一档）：滑动时气泡跟随显示当前
-         档位；说明走左列 #detail（窗口红线 + 手动 /整理 不受限） -->
+         档位；说明走左列 #detail（窗口红线 + 手动 `/压缩` 不受限） -->
     <SettingsRow :title="t('settings.threshold')" wide>
       <template #detail>
         <p class="mt-1 text-xs text-ink-3">

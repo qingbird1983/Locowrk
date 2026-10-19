@@ -320,7 +320,7 @@ impl Organizer {
         }
     }
 
-    /// `/整理` 命令入口（命令层锁内调用）。Err = 发起失败（文案直显）。
+    /// 手动整理入口（开发者面板那颗按钮经命令层锁内调用）。Err = 发起失败（文案直显）。
     pub fn organize_now(
         self: &Arc<Self>,
         session: &Session,

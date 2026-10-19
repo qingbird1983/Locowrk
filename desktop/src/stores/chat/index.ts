@@ -128,16 +128,6 @@ export const useChatStore = defineStore("chat", {
     ) {
       chatNotices.pushNotice(this, key, params, actions);
     },
-    pushOrganizeNotice(
-      key: string,
-      params?: Record<string, unknown>,
-      actions?: string[],
-    ) {
-      chatNotices.pushOrganizeNotice(this, key, params, actions);
-    },
-    dropOrganizeRunning() {
-      chatNotices.dropOrganizeRunning(this);
-    },
     pushRawSystem(text: string) {
       chatNotices.pushRawSystem(this, text);
     },
