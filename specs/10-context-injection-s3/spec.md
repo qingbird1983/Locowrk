@@ -357,7 +357,9 @@ vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。
 
 ## 刀③b 施工记录（✅ 2026-10-20 · 学习档族同刀退役）
 
-**删的清单**（按裁定② 执行；`git diff HEAD --stat` 实测 **59 文件 / +517 / −2660**，净减 2143 行）：
+**删的清单**（按裁定② 执行；**代码面** `git diff HEAD --stat` 实测 **59 文件 / +517 / −2660**，
+净减 2143 行——这个数不含本 spec 与 roadmap 的文档改动，落地那一发提交 `cbced26`
+含文档共 **62 文件 / +710 / −2666**，两个数各说各的事，别当成一个）：
 
 1. **`desktop/src-tauri/src/memory_learn/` 整目录**（8 个文件 · 933 行：`signals.rs` 四信号
    算式、`order.rs` 排序与 E5 保留槽、`explain.rs` 回执 JSON、`mod.rs` 候选 SQL 与
