@@ -196,7 +196,12 @@ pub fn delete_fact(root: &Path, workspace: &str, key: &str) -> Result<bool, Stri
     let path = root.join(&rel);
     match std::fs::remove_file(&path) {
         Ok(()) => {}
-        Err(e) if fsutil::is_not_found(&e) => {
+        // 「那一层被一个普通文件冒充」在两个平台上报的**不是同一个码**：POSIX 给
+        // `ENOTDIR`，Windows 把它折叠成 `ERROR_PATH_NOT_FOUND`——而后者与"文件不存在"
+        // 是同一个码（2026-10-19 CI 就是撞在这上面：Linux 侧走通用 Err 支，报出另一句
+        // 文案，同一条性质两侧各说各话）。所以判定不读错误码，读**磁盘事实**：父路径
+        // 在场且不是目录 ⇒ 层级故障，先于"不存在"那一条判。
+        Err(e) => {
             if let Some(parent) = path.parent() {
                 if parent.exists() && !parent.is_dir() {
                     return Err(format!(
@@ -205,10 +210,12 @@ pub fn delete_fact(root: &Path, workspace: &str, key: &str) -> Result<bool, Stri
                     ));
                 }
             }
+            if !fsutil::is_not_found(&e) {
+                return Err(format!("memory md 删除失败 {}: {e}", path.display()));
+            }
             sync::remove_marker(root, &rel);
             return Ok(false);
         }
-        Err(e) => return Err(format!("memory md 删除失败 {}: {e}", path.display())),
     }
     sync::remove_marker(root, &rel);
     refresh_index(root, workspace)?;

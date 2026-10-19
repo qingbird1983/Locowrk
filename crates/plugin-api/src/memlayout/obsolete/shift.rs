@@ -65,7 +65,11 @@ pub fn soft_delete_fact(root: &Path, workspace: &str, key: &str) -> Result<bool,
     }
     match std::fs::rename(&from, &target) {
         Ok(()) => {}
-        Err(e) if fsutil::is_not_found(&e) => {
+        // 与 `delete_fact` 同一条跨平台裁定：层级故障不靠错误码认（POSIX 给 `ENOTDIR`，
+        // Windows 折叠成与"不存在"同码的 `ERROR_PATH_NOT_FOUND`），而是**先看父路径这个
+        // 磁盘事实**再决定报哪一句 ⇒ 两侧同一句文案。2026-10-19 CI 上红的那条
+        // `a_blocked_layer_is_an_error_not_a_missing_fact` 判的就是这件事。
+        Err(e) => {
             if let Some(parent) = from.parent() {
                 if parent.exists() && !parent.is_dir() {
                     return Err(format!(
@@ -74,9 +78,11 @@ pub fn soft_delete_fact(root: &Path, workspace: &str, key: &str) -> Result<bool,
                     ));
                 }
             }
+            if !fsutil::is_not_found(&e) {
+                return Err(format!("memory 软删失败 {}: {e}", from.display()));
+            }
             return Ok(false);
         }
-        Err(e) => return Err(format!("memory 软删失败 {}: {e}", from.display())),
     }
     refresh_layer_of(root, &rel)?;
     Ok(true)
