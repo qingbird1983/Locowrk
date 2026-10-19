@@ -70,6 +70,11 @@ pub struct ContextSettings {
     /// 的上限，截断只发生在**发送侧**——会话日志仍存全量（它是唯一真相源，
     /// 回捞 / 导出 / 崩溃重放都读它）。
     pub tool_result_budget_kib: u64,
+    /// 微压缩开关（S2 刀③，缺省**开**）：把很旧的可再生工具结果清成一行占位，
+    /// 先于主层压缩触发。开关系放在这一刀是因为它是**第一个会改变发给模型内容**
+    /// 的压缩层——没有可关的那一格就不能默认开（AGENTS §4 可配置原则②）。
+    /// 参数仍照 ZCode 逐字（保留 5 组 / 最小节省 256 / idle 60 分钟），数值设置化归刀⑥。
+    pub micro_enabled: bool,
 }
 
 impl Default for ContextSettings {
@@ -79,6 +84,7 @@ impl Default for ContextSettings {
             threshold_tokens: ORGANIZE_THRESHOLD_DEFAULT,
             usage_bar: true,
             tool_result_budget_kib: TOOL_RESULT_BUDGET_DEFAULT_KIB,
+            micro_enabled: true,
         }
     }
 }
@@ -94,6 +100,8 @@ pub struct ContextSettingsView {
     pub usage_bar: bool,
     /// 工具结果预算（KiB，0 = 不限制）。
     pub tool_result_budget_kib: u64,
+    /// 微压缩开关（缺省开）。
+    pub micro_enabled: bool,
 }
 
 /// 上下文管理区部分更新（settings_set 入参）。
@@ -103,6 +111,7 @@ pub struct ContextUpdate {
     pub threshold_tokens: Option<u64>,
     pub usage_bar: Option<bool>,
     pub tool_result_budget_kib: Option<u64>,
+    pub micro_enabled: Option<bool>,
 }
 
 impl ContextSettings {
@@ -125,6 +134,9 @@ impl ContextSettings {
         }
         if let Some(v) = u.usage_bar {
             self.usage_bar = v;
+        }
+        if let Some(v) = u.micro_enabled {
+            self.micro_enabled = v;
         }
         // Q8 工具结果预算（0–512 KiB，**0 = 不限制**）：越界一律拒绝而不是
         // 钳到边界——`plugin-api/args.rs` 那条"钳而不报错"是**工具入参**的

@@ -275,6 +275,17 @@ impl SettingsStore {
             .threshold_tokens
     }
 
+    /// 后端专用：微压缩开关（S2 刀③，缺省开）。监听器每请求读一次，
+    /// 保存即生效——它是"要不要动"的门，不是数值，锁死到会话内反而违背
+    /// 可配置原则「改了就看见」。
+    pub fn context_micro_enabled(&self) -> bool {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .micro_enabled
+    }
+
     /// 后端专用：工具结果预算（队列 Q8 · CB §7.4）——**字节**数，`None` = 不
     /// 限制。KiB→字节的换算只在 `settings/context.rs` 那一份里，wire / 组装点
     /// 都读这里，不再各自乘 1024（§11「同一读数只许一个出处」）。

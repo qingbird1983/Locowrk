@@ -1,6 +1,6 @@
 # 09-上下文压缩面 S2（把"超限请重开会话"换成有界可续的压缩管线）
 
-- 状态：**已确认 · 刀① 施工中**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md)
+- 状态：**已确认 · 刀①②③ 已收 · 刀④ 待做**——本文件是 [`specs/01`](../01-memory-context-redesign/spec.md)
   阶段表里 **S2 压缩面** 那一行的施工 spec（方案稿对应 = B 节，⊘ 不入库，关键条款抄在下面
   「取证」与「设计要点」两节里；决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）。
   三处待定项已由用户 **2026-10-19「开工吧」** 一并采纳（见下面「要你定的」那节的裁定结果）
@@ -107,11 +107,18 @@
       投影后 `req.messages` 里仍是全文——发送侧结构上碰不到日志，这条断言钉的是
       "别哪天顺手把投影写回日志"）。⚠ 三条里"日志 sha 对比"的实跑形态留给刀⑦
       的长会话北极星实测（AC-S2-9 那一轮里顺带取 sha 前后值），本刀只有结构证据
-- [ ] AC-S2-4 微压缩边界单调（AC-8-③）：二次构造**不回收**——同一会话连跑两轮，
-      第一轮被清的那批工具结果在第二轮仍是占位；且被清前缀**逐字节稳定**
-      （前缀缓存判据：同一投影重放两次的 hash 相同），记账走
-      `SessionEvent::ContextCompacted{strategy:"micro"}`，组装侧从日志重放即得边界
-- [ ] AC-S2-5 微压缩的三条"容易漏"都在实现里：只清白名单**可再生且可枚举**的工具——
+- [x] AC-S2-4 微压缩边界单调（AC-8-③）（✅ 2026-10-19 刀③）：**不回收**与**重放稳定**两条
+      都有两级证据——纯函数级 `the_boundary_only_moves_forward`（第一轮清 c0..c3，把输出
+      再喂一次 ⇒ `nothing-to-clear`，且同一输入重放两次给同一批），与**环级**
+      `the_ring_rewrites_the_payload_and_books_the_outcome`（注册到 `agent/request` 决策环
+      上跑到终态：改写落在发出去的载荷上、账写进 `compacted` 带回位、同一消息列再过一遍
+      这一环 ⇒ 字节完全相同且不再记空账）。单调性的机制不是额外的状态表而是
+      **内容自证**（正文等于 `CLEARED` 就不进候选），所以已清的占据不了"最近 5 组"的名额。
+      记账 = `SessionEvent::ContextCompacted{strategy:"micro"}`，写回位复用
+      `kernel.rs:253` 那条既有通路（内核零改动）。⚠ 一格**留给刀⑦**：本条没在真窗口里
+      断言"会话日志磁盘上多了一行 `strategy:"micro"`"——环级用例证到的是带回位被写入，
+      落盘那一跳由内核既有代码承担；北极星长会话那轮本来要读整轮日志，顺带取这个数
+- [x] AC-S2-5 微压缩的三条"容易漏"都在实现里（✅ 2026-10-19 刀③）：只清白名单**可再生且可枚举**的工具——
       ZCode 那九枚（`Read/Bash/Grep/Glob/WebFetch/WebSearch/Edit/Write/ApplyPatch`，
       `microcompact.ts:21-31`）在我方的真实对应名是**九枚但不同名**：
       `fs_read` / `fs_list` / `fs_grep` / `shell` / `shell_read` / `fetch` /
@@ -119,11 +126,16 @@
       Glob→`fs_list`，WebFetch/WebSearch 我方只有 `fetch` 一枚，Write/Edit 那一族**不放行**
       ——我方写侧要 `expected_revision`，清掉回执会让模型丢掉它刚拿到的版本号，
       比 ZCode 那种"重写一次"的代价更高；`mcp_*` 名字动态拼成、不可枚举 ⇒ 缺省不清）。
-      **错误结果缺省不清**（给一条 `clearErrorResults` 关的负对照：失败输出仍在）、
-      idle 60 分钟是第二条触发通路（构造 token 未过线但 idle 过线的夹具）、
+      **错误结果缺省不清**（`error_results_survive_by_default`：既断言失败输出不在 cleared，
+      也断言它**不占名额**——清的是 c1..c3 而不是 c0..c2）、
+      idle 60 分钟是第二条触发通路（`idle_is_a_second_trigger_path` 用 token 明确够不到的
+      夹具，60 分钟整 vs 60 分零 1 秒两侧各一条；另有冷启那一格
+      `cold_start_seeds_idle_from_the_session_log_mtime`：日志 mtime 拨到 61 分钟前 ⇒ 触发，
+      新会话无日志 ⇒ 一条都不清），
       媒体结果不清（我方 `screenshot` / `read_image` / `pdf_to_images` 三个名字本身就不在白名单里，
       另加一条按结果字段形状 `asset`/`assets` 的兜底判据——投影侧已经有这条形状，
-      见 `llm/wire/media.rs:44`）
+      见 `llm/wire/media.rs:44`；用例 `media_bearing_results_are_protected` 把带 asset 的那条
+      顶到"够旧"的位置再验它不动）
 - [ ] AC-S2-6 主层深度压缩（AC-13 全四条）：构造机械层压不到目标的会话 → 主层触发 →
       ①摘要落断层且含用户意图 / 待办 / 下一步（对照七节模板判据，逐节非空或如实标"无"）
       ②被摘要段出上下文、日志原文 sha 不变 ③近期原文仍在 ④连续失败 3 次熔断生效不再重试；
@@ -196,7 +208,8 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
    （那把唯一尺），组装点只交数据根、目录名由 `SPILL_DIR` 一枚常量决定。
    **发送侧是一处判定、两种后果**：`clip_tool_output` 升成 `project_tool_output`
    ——落得下就发 `<persisted-output path=… total_bytes=… preview_bytes=…>` 包裹的预览 +
-   一句"用 fs_read 读该路径并传 offset"，落不下（无句柄 / 无会话身份 / 写失败）就
+   一句如实措辞（`fs_read` 现在**没有** `offset`，所以那句写的是"读该路径、比预览更靠后的
+   部分读不回来"，见下面挂账 ⓐ 与 `70f0cc6`），落不下（无句柄 / 无会话身份 / 写失败）就
    退回**改前逐字节相同**的那句截断提示并 warn。没有新增第二枚设置：阈值仍是
    「工具结果预算」（`toolResultBudgetKib`，0 = 不限制 = 既不截也不落）。
    取证抓到的一条：**不能落进 `assets/`**——那里的 GC 按"文件名的 sha 是否出现在会话
@@ -210,9 +223,28 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
    ② 真机跑一轮（发一条 >24 KiB 的工具输出，看 `spill/<会话>/` 出现文件、转录里工具
    内容变成 `<persisted-output …>`）没做——单测覆盖了两个分支与注入点调用，
    但端到端那一格只有实跑才算证，等桌面端重启时一起给你看。
-3. **刀③ micro（微压缩）**：白名单九工具 + 错误不清 + 保留最近 5 条 + 最小节省 256 +
-   idle 60 分钟第二通路 + **边界单调**（`ContextCompacted{strategy:"micro"}` 记账、
-   组装侧重放取边界、被清前缀逐字节稳定）。
+3. **刀③ micro（微压缩）**（✅ 2026-10-19）：新 `desktop/src-tauri/src/microcompact.rs`
+   （+ `microcompact/tests.rs` 16 条）——七颗参数逐字照 ZCode `microcompact.ts:12-31`
+   （保留 5 组 / idle 60 分钟 / 最小节省 256 / 触发线 `min(0.9×主层, 主层−2000)` /
+   错误结果缺省不清 / 省不够整批还原 `:151-156` / 幂等靠正文与占位全等 `:230`）。
+   **两处与参照不同、各有理由**：白名单按我方真实名九枚（写侧回执与 `mcp_*` 不放，见
+   AC-S2-5），主层阈值由**组装点经闭包供给**（`state/waterfall.rs` 里
+   `session_capacity` + `context_budget::effective_threshold` 现场算，本模块面里那三个
+   形状恒 0 = 判据 SS18b，与刀① "organize 不许自己拿尺"同族）。
+   **idle 的时间源换了实现**：计划原写"runner 把轮末时间戳传给环"，那要动 `run_turn`
+   的长签名与全部调用点；实际做成环内一张 `会话 → 上次活动` 的表，本进程没见过这个会话时
+   用**会话日志的 mtime 播种**（轮末 append ⇒ mtime 天然等于最后收束时刻，一次 stat 就够），
+   于是"隔天回来接着聊"那一格跨重启没有空窗。与 ZCode 的 `lastAssistantCompletedAtMs`
+   差一轮时长，注释里说破、不写成同一个东西。
+   **注册位**：`agent/request` 决策环第八环（末尾）。前缀缓存红线管的是 system 静态段序，
+   这一环不往 system 写东西、只改若干条最旧工具结果的正文 ⇒ 可以在红线之后（理由写在
+   `state/waterfall.rs` 头注，那条注释同时把"八环"的序补全）。
+   判据 = 16 条用例（13 条纯函数 + 3 条**接线面**：改写落回载荷 / 开关关得掉 / 冷启播种）
+   + `SS18a/b/c` 三条形状档（各配窄变异，selftest 无连带打红）+ 两轮磁盘变异红证：
+   `tmp/mut-s18-rust.mjs` 七条（M1..M7 各红 1–3 条用例、还原逐字节相同）与
+   `tmp/mut-s18b-ring.mjs` 四条（N1..N4 破的是环本体：不改写、不记账、开关不参与、不播种）。
+   ⚠ 一件**故意没做**：界面上那枚开关保存即生效、没有按会话锁死——它是"要不要动"的门
+   而不是数值，锁进会话反而违背可配置原则；对照之下思考语言那类**数值/文本**才需要锁字节。
 4. **刀④ 主层 compact**：七节骨架模板 + 两套逐字条款 + 压到 50% + 近期原文保留 +
    熔断 3 + overflow `SHRINK_STEPS` + 媒体降级 + 压缩模型可配 + 自定义指令钩子；
    写入点挂在 `agent/request` 决策环（`compacted` 带回位）。
@@ -238,7 +270,14 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
       能测出差别的配方（留给刀⑥ 与设置页文案一起目检）：会话里选 `MiniMax-M2.7` 那一行 +
       把滑杆推到 300K ⇒ 期望看到进度条**分母 = 241,144**（而不是 300,000），
       百分比按它重算；`anchor_source` 与"窗口未知时按未设置呈现"那条现状行为不变
-- [ ] 刀③→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成- [ ] 数据侧改动前把相关目录复制进备份目录（specs/01 那条纪律在本线同样适用：
+- [x] **刀② spill 落盘 ✅**（2026-10-19）：AC-S2-3 打勾（盘上一半），判据 SS17a/b/c +
+      `spill/tests.rs` 7 条 + `llm/tests/spill.rs` 6 条 + `tool_budget.rs` 那批一字未改仍绿；
+      真机端到端那一格按内文登记，等桌面端重启时一起给你看
+- [x] **刀③ 微压缩 ✅**（2026-10-19）：AC-S2-4 / AC-S2-5 两条打勾，判据 SS18a/b/c +
+      16 条用例（含三条接线面）+ 两轮磁盘变异（七条破判据 / 四条破环本体，全部窄红、
+      还原逐字节相同）；设置面加了 `context.microEnabled`（缺省开）与开关一枚
+- [ ] 刀④→刀⑦ 逐刀落地 + 补测试 → 按改动面选档跑门禁，全绿才算完成
+- [ ] 数据侧改动前把相关目录复制进备份目录（specs/01 那条纪律在本线同样适用：
       压缩虽不改日志，但 spill 会往会话附件目录写文件）
 
 ## 要你定的（三处 · 2026-10-19 全部已定，采纳建议）
@@ -266,8 +305,12 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
 | `desktop/src-tauri/src/spill.rs`（+ `spill/tests.rs`） | 刀② ✅：落盘句柄（数据根 + 会话子目录 + 内容寻址文件名）与两句文本（`<persisted-output>` 模板 / 降级提示）的唯一出处 |
 | `desktop/src-tauri/src/llm/wire/{payload,messages}.rs` | 刀② ✅：`clip_tool_output` → `project_tool_output`（一处判定、两种后果），`WireCaps` 带落盘句柄因而从 `Copy` 降为 `Clone`，`attempt_stream` 改吃借用 |
 | `desktop/src-tauri/src/llm/{app_llm,client}.rs` `state/llm_stack.rs` | 刀② ✅：`AppLlm.spill` 字段 + `with_spill` 注入器；组装点交**数据根**（不手拼目录名）。app_llm 由此 394→411 行，按三问入 `check_length` 名单（理由写在该脚本注释与提交正文） |
-| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限 + selftest 的"同时打红谁"分工读数 |
-| `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | 刀③④：微压缩与主层压缩本体（刀② 没动内核——落盘发生在宿主发送侧） |
+| `scripts/check-single-source.mjs` | 刀① ✅ SS16a/b/c；刀② ✅ SS17a/b/c + spill 面下限；刀③ ✅ SS18a/b/c + micro 面两条下限 + 三条窄变异 |
+| `desktop/src-tauri/src/microcompact.rs`（+ `microcompact/tests.rs`） | 刀③ ✅：微压缩判据本体（七颗参数、候选分组、idle 播种表、`agent/request` 监听器） |
+| `desktop/src-tauri/src/state/waterfall.rs` `state/mod.rs` | 刀③ ✅：第八环注册位 + 主层阈值闭包（`Init` 新增 `catalog` / `model_overrides` / `sessions_dir` 三份读数）；头注把"八环"的序与"为什么这一环可以在红线之后"补全 |
+| `desktop/src-tauri/src/settings/{context,view}.rs` `settings.rs` | 刀③ ✅：`context.microEnabled` 一枚（缺省开）+ 后端读面 `context_micro_enabled()`；刀⑥ 剩下的才是其余数值 |
+| `desktop/src/{types/settings.ts,components/settings/ContextSection.vue,locales/{zh-CN,en}/settings.ts}` | 刀③ ✅：视图多一个键、分区多一枚开关、中英各一条文案（`check-i18n` 读数两侧相等） |
+| `crates/kernel-agent/src/middleware/`（新目录或 `compact/` 下新文件） | **刀③ 没进内核**（微压缩落在宿主监听器 + 发送侧，内核只提供 `compacted` 带回位）；这一格只剩**刀④** 的主层压缩本体 |
 | `crates/kernel-agent/src/kernel/request.rs` `waterfall.rs` | 只**用**现有 `compacted` 带回位；契约形状零改动 |
 | `desktop/src-tauri/src/settings/context.rs` + 设置页「上下文」分区 | 刀⑥：新字段 + 文案（中英成对） |
 | `desktop/src-tauri/src/llm/retry.rs` | 刀①/刀⑥：那句"请新开会话"的指向改对；压缩全关时它仍是最终兜底 |
@@ -300,5 +343,13 @@ idle 60 分钟）照 ZCode `microcompact.ts:16-20`/`:79-83` **逐字**，不做"
   合并它会改请求下发行为，不属于搬家这一刀。② 无供应商上报时进度条回落树组装口径、
   锚点回落全量估算（取证⑦），统一它 = 改整理触发读数，归刀④。
   ③ `AnchorSource` 这个枚举仍住在 `memory-tree`（搬家只动位置不动形状），S4 退役树时
-  它的落点就是 `context_budget`。
+  它的落点就是 `context_budget`。**刀③ 收下来登记两件，都不在本刀修**：
+  ⓓ 设置页那句「工具结果预算」说明（`locales/zh-CN/settings.ts` 的 `toolBudgetKibHint`
+  与 en 同键）还写着"超出只在发给模型时**截断**并附一句**续读指引**"——刀② 之后超出是
+  **落盘 + 预览**，且那句占位明说"比预览更靠后的部分读不回来"（没有 offset 可续读）。
+  这是文案与事实不符，属刀⑥「设置面与文案」那一刀的正文，不在刀③ 顺手改（改它要连
+  同 ⓐ 的 `fs_read` offset 一起定：等真有了 offset，那句"续读指引"才该回来）。
+  ⓔ 微压缩的账在**会话日志里那一行**还没被断言：环级用例证到 `compacted` 带回位被写入，
+  落盘那一跳由 `kernel.rs:253` 既有代码承担。北极星长会话那轮（AC-S2-9）读整轮日志时
+  顺带取这个数，不在本刀为它单独搭一套内核夹具。
 - 回滚：每刀一提交；总开关关 = 行为回到本线开工前；数据侧（会话附件目录）改动前先备份。

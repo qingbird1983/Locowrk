@@ -55,6 +55,7 @@ mod memory_index;
 mod memory_learn;
 mod memory_reconcile;
 mod memory_tree_reconcile;
+mod microcompact;
 mod model_override;
 mod notifications;
 mod organize;

@@ -27,6 +27,13 @@ SUGGEST=400
 # caps，这正是它的职责而不是无关部分）。刀② 只加了 17 行（一枚注入句柄 + 一个
 # builder + caps 那一格），为凑 400 把 builder 面拆出去 = 在本刀里做无关重构，
 # 且拆完仍是同一个 struct 的两半。若后续刀再加格，届时按三问重判并真拆。
+# `microcompact/tests.rs` 于 S2 刀③ 入名单（新建即 529 行）：三问皆是——①只管一件事
+# （微压缩那一层的判据集）；②名字概括得住（就是 `microcompact` 的 tests 子模块）；
+# ③改它牵动的全是同一件事（动白名单/触发线必然要动这些用例，不存在"牵动无关部分"）。
+# 本仓的测试按 AGENTS「#[cfg(test)] 放独立文件」本来就集中在一个文件里，把它按
+# "纯函数 vs 接线面"再切两半只是把行数搬开、判据读者要看的东西一处都没少 ⇒ 不拆。
+# ⚠ 这条不是"永远不拆"：若它同时开始装两件不相关的事（例如又把别的模块的用例放进来），
+# 届时按三问重判。
 OVERLIST="
 desktop/src/components/chat/Composer.vue
 desktop/src/components/chat/ToolDetailView.vue
@@ -43,6 +50,7 @@ desktop/src/components/memory/TreeSection.vue
 desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue
 desktop/tests/chat-projection.spec.ts
+desktop/src-tauri/src/microcompact/tests.rs
 "
 
 # **扫描面只有一个出处**：下面这一条 find 的产物既用来数超限、也用来验下限。

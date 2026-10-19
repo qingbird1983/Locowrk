@@ -365,4 +365,9 @@ export default {
     toolBudgetKib: "Tool result budget",
     toolBudgetKibHint:
       "Cap for a single tool output entering the model context (0–512 KiB, default 24; 0 = unlimited). Overflow is clipped only in the request sent to the model, with a note on how to re-read the rest — the session log still keeps the full output. Raising it means each turn carries more history and organizes sooner.",
+    // S2 knife ③: micro-compact — stale tool results become a one-line
+    // placeholder before the organize layer ever runs.
+    microCompact: "Micro-compact",
+    microCompactHint:
+      "Replaces very old tool outputs with a one-line placeholder, touching only results a re-run can restore: the last 5 groups stay, errors and screenshots are never cleared. Runs when usage reaches 90% of the organize threshold, or after an hour of silence (the second one ignores usage). Turning it off removes this deceleration layer and leaves organize alone; the session log is never rewritten.",
   },} as const;

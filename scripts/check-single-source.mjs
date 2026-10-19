@@ -410,6 +410,10 @@ function snapshot() {
       'desktop/src-tauri/src/organize',
     ),
     spill: moduleFace('desktop/src-tauri/src/spill.rs', 'desktop/src-tauri/src/spill'),
+    micro: moduleFace(
+      'desktop/src-tauri/src/microcompact.rs',
+      'desktop/src-tauri/src/microcompact',
+    ),
   };
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
@@ -812,6 +816,54 @@ const CHECKS = [
       `${filesWith(m.hostDesktop, /<persisted-output/)}|${filesWith(m.hostDesktop, /\bfn clipped\s*\(/)}`,
     'spill.rs|spill.rs',
   ],
+  [
+    'SS18a',
+    '微压缩那七颗参数**各只有一个定义处，而且钉的是值**（S2 刀③）：占位文本 + ' +
+      '保留 5 组 + idle 60 分钟 + 最小节省 256 + 比例 0.9 + 定值缓冲 2000 + 九工具名单。' +
+      '为什么连值一起钉（同 SS16c 的口径）：这七枚是逐字照 ZCode `microcompact.ts:12-31` ' +
+      '读实来的（2026-10-19 按本地源码逐行核对），它们决定的是"清得太狠还是太松"——' +
+      '漂一枚的表现是历史莫名缺一截工具输出、或者减速层从不工作，两种都得靠人肉跑长会话才发现。' +
+      '别处再写一份同样的 `= 5` / `= 256` 就是第二条参数通路 ⇒ 改动这里 = 显式改判据。' +
+      '⚠ 数的是**全生产 .rs 原文**（含注释）：头注里若出现 `const KEEP_RECENT_GROUPS: usize = 5;` ' +
+      '这种完整声明句式会被算进来，所以注释一律写成中文散文而不是复刻声明',
+    (m) => {
+      const all = m.rust.join('\n');
+      return [
+        countOf(all, /pub\(crate\) const CLEARED: &str = "\[旧工具结果已清理\]";/),
+        countOf(all, /const KEEP_RECENT_GROUPS: usize = 5;/),
+        countOf(all, /const IDLE_THRESHOLD_MINUTES: u64 = 60;/),
+        countOf(all, /const MIN_TOKEN_SAVINGS: u64 = 256;/),
+        countOf(all, /const THRESHOLD_RATIO: f64 = 0\.9;/),
+        countOf(all, /const THRESHOLD_BUFFER_TOKENS: u64 = 2_000;/),
+        countOf(all, /const COMPACTABLE_TOOLS: &\[&str\] = &\[/),
+      ].join('|');
+    },
+    '1|1|1|1|1|1|1',
+  ],
+  [
+    'SS18b',
+    '微压缩这一层**自己也不拿尺**（SS16b 的同族墓碑）：`effective_threshold(` / ' +
+      '`session_capacity(` / `window_tokens` 三档在 `microcompact` 模块面里各恒 0——' +
+      '它吃的主层阈值必须由组装点经闭包供给。为什么这一档要紧：微压缩线是"主层阈值 × 0.9"，' +
+      '一旦它自己去读窗口，就有了第二条窗口换算通路，表现是减速层与整理触发线**不再同尺**' +
+      '（要么提前清得不像话，要么永远轮不到它清）。三档读数在同一个面 ⇒ 由 FLOORS 的 micro 面字节' +
+      '下限兜"面瞎了"（面为空与真的没有在这一档读数上长得一模一样）',
+    (m) =>
+      `${countOf(m.micro, /effective_threshold\s*\(/)}|${countOf(m.micro, /session_capacity\s*\(/)}|${countOf(m.micro, /window_tokens/)}`,
+    '0|0|0',
+  ],
+  [
+    'SS18c',
+    '接线与记账各只有一个落点：`MicroCompact::new(` 只住在 `state/waterfall.rs`（注册一次），' +
+      '策略名 `strategy: "micro"` 只住在 `microcompact.rs`。前者防"接了两遍"——这一环每请求' +
+      '都要重算并改写消息，注册两次就是同一批结果被清两遍、`ContextCompacted` 落两条事件；' +
+      '后者防别处（前端或 organize）再发明一个 "micro" 字符串：`ContextCompacted{strategy}` ' +
+      '是按名字渲染的，名字有了第二个出处，界面就会把同一件事显示成两件事。' +
+      '数的是 `hostDesktop` 面（已剥行注释 ⇒ 沿革注释里提这两个名字不算在场，SS11/SS13 同一口径）',
+    (m) =>
+      `${filesWith(m.hostDesktop, /MicroCompact::new\s*\(/)}|${filesWith(m.hostDesktop, /strategy:\s*"micro"/)}`,
+    'state/waterfall.rs|microcompact.rs',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -879,6 +931,11 @@ const FLOORS = [
   // （定义改名时报的是"闸瞎了"，说的却是假话）。拆树只会让面变大，所以字节数够用。
   ['中立尺面字节数（剥注释）', (m) => m.budget.length, 400],
   ['organize 面含轮次收束本体', (m) => countOf(m.organize, /fn after_turn/), 1],
+  // S2 刀③（SS18b）期望三个 0 ⇒ 面塌掉（模块改名 / moduleFace 路径写错）与"真的没有"
+  // 读数相同。两条下限各挡一种瞎法：面字节数现值 9326 取三成半；再加一条点名分组本体
+  // ——它不是任何一档读数的分子，所以不会与 SS18b 同生同灭（"扫错了树"那种瞎法兜得住）。
+  ['微压缩面字节数（剥注释）', (m) => m.micro.length, 3500],
+  ['微压缩面含分组本体', (m) => countOf(m.micro, /fn candidate_groups/), 1],
 ];
 
 function runChecks(m) {
@@ -1007,6 +1064,22 @@ if (SELFTEST) {
       m.hostDesktop.push({
         rel: 'llm/wire/messages.rs',
         code: 'const ALT_TEMPLATE: &str = "<persisted-output path=…>";\nfn clipped_alt() {}\n',
+      }),
+    // 刀③ 三档各一条窄变异（每条只该红自己那一档，分工才证得出来）。
+    // SS18a：别处再抄一颗参数值。挑 `MIN_TOKEN_SAVINGS` 是因为它的**数值**在场时
+    // 只有这一档在数——推一份进全生产面就把左档从 1 顶成 2。
+    SS18a: (m) => m.rust.push('\npub(crate) const MIN_TOKEN_SAVINGS: u64 = 256;\n'),
+    // SS18b：微压缩那一环自己去拿尺（多一条窗口换算通路）。这一档只数 micro 面里的
+    // `effective_threshold(` 等三个形状，SS16a/SS16c 数的是定义处 ⇒ 互不遮挡。
+    SS18b: (m) =>
+      (m.micro +=
+        '\nfn ruler(slider: u64, w: Option<u64>) -> u64 { effective_threshold(slider, w, None) }\n'),
+    // SS18c：环被接第二遍（同一批结果清两次、`ContextCompacted` 落两条）。
+    // 左档数的是**哪些文件**在构造它，多一个文件就红，与"总数没变"无关。
+    SS18c: (m) =>
+      m.hostDesktop.push({
+        rel: 'state/llm_stack.rs',
+        code: 'let micro_ring = Arc::new(MicroCompact::new(s, d, f));\n',
       }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),

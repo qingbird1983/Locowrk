@@ -8,6 +8,9 @@
  * 这件事，与阈值管「多久整理一次」是两回事，所以本区不再只有一根旋钮。
  * 滑动时气泡跟随显示当前档位（100K…800K）。保存即生效（下一轮触发判定
  * 读设置，runner UsagePolicy 同源；预算走 llm 组装点 → wire 发送侧）。
+ * S2 刀③ 加第三根旋钮 = 微压缩开关（context.microEnabled，缺省开）：它管的不是
+ * 「一条多大」（预算）也不是「多久整理」（阈值），而是「很旧的工具输出要不要
+ * 先换成一行占位」——同一区各挡一件事。布尔一律开关（§3.32·七）。
  * 行版式（§3.32·七 v3.5）：说明文字走行左 #detail。
  */
 import { computed, reactive, ref, watch } from "vue";
@@ -30,6 +33,8 @@ const form = reactive({
   usageBar: true,
   // Q8：工具结果预算（KiB，0 = 不限制）。原样传后端，前端不换算成字节
   toolResultBudgetKib: 24,
+  // S2 刀③：微压缩开关（缺省开）。前端只传布尔，判据全在后端
+  microEnabled: true,
 });
 
 watch(
@@ -39,6 +44,7 @@ watch(
     form.thresholdTokens = v.context.thresholdTokens;
     form.usageBar = v.context.usageBar;
     form.toolResultBudgetKib = v.context.toolResultBudgetKib;
+    form.microEnabled = v.context.microEnabled;
   },
   { immediate: true },
 );
@@ -61,6 +67,7 @@ function save() {
     // 输入框被清空时 v-model.number 给 NaN → JSON 序列化成 null → 后端按
     // None 处理（保持不变，不是存 0）。0 只能来自用户明确填 0 = 不限制。
     toolResultBudgetKib: Math.round(form.toolResultBudgetKib),
+    microEnabled: form.microEnabled,
   });
 }
 </script>
@@ -118,6 +125,15 @@ function save() {
         step="8"
         class="lw-field lw-field-num px-2 text-xs"
       />
+    </SettingsRow>
+
+    <!-- 微压缩开关（S2 刀③）：旧工具结果清成一行占位，先于整理触发。
+         布尔项一律开关（§3.32·七），说明走 #detail 与进度条那行同形 -->
+    <SettingsRow :title="t('settings.microCompact')">
+      <template #detail>
+        <p class="mt-1 text-xs text-ink-3">{{ t("settings.microCompactHint") }}</p>
+      </template>
+      <SettingsToggle v-model="form.microEnabled" :label="t('settings.microCompact')" />
     </SettingsRow>
 
     <!-- 阈值用量进度条显隐（§3.4 v4.18；v2.137 改名——分母 = 整理阈值；
