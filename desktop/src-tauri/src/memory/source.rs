@@ -1,18 +1,19 @@
 //! **Memory-Inject 的检索源**（台账 T33）：`impl MemorySource for MemoryStore` 的
 //! 全部方法（现役 `recall` / 学习档 `recall_relevant` / 缓存键 `scope_id` / 归属告知
-//! `context_line` / 交接提醒段 `repo_context` / 项目索引 `project_index`）、组装点便利
-//! 函数 `memory_source`，以及只被 `context_line` 用的 `today_local`——它的唯一调用点
-//! 就在本片，所以跟着搬，不留第二个出处。
+//! `context_line` / 交接提醒段 `repo_context` / **两层索引** `global_index` 与
+//! `project_index`）、组装点便利函数 `memory_source`，以及只被 `context_line` 用的
+//! `today_local`——它的唯一调用点就在本片，所以跟着搬，不留第二个出处。
 //!
 //! 本片是 trait 实现，整块自包含（原文那对花括号就在此起此落，不需要补外壳）。用的都是
 //! 别片已抬到 `pub(super)` 的入口（`open_conn` / `recall_quiet` / `log_inject_keys` 与
 //! 那四个字段），加上原本就 `pub(crate)` 的 `md_index_body`；没有一处为"方便"而抬宽。
 //!
-//! ⚠ **本片是宿主读面里最后一条仍按库寻址的通路**：`recall_relevant`（学习档，
-//! `weights.enabled=true` 时才走）从库里取候选并读 `hit_count` / `last_hit_at` 加权。
-//! 它不是"兜底档"而是**另一个功能**（四信号语义排序 + 写回强化），摘掉它 = 关掉学习档，
-//! 那是排序口径的产品决策，已登记 specs/05 刀②c-2 待拍板；`recall` 本体（现役参照系）
-//! 与 `project_index` 都只读 md。
+//! ⚠ **S3 刀① 之后 `recall_relevant` 在生产面已经没有调用点了**：注入环改吃两层索引，
+//! 那块 `<persistent_memory>` 正文（连同"内核把相关性词表递下去"这条通路）一起下线。
+//! 本方法**暂时保留**（trait 方法、宿主实现、`memory_learn/` 一族都在，只是没人调），
+//! 去留按 `specs/10-context-injection-s3` 的裁定 = **刀③
+//! 同刀退役删除**——留着它跨三刀就是审计报告 H2 判过的那个形状（"存在但从未接线"）。
+//! `recall` 本体（现役参照系）与 `project_index` 都只读 md。
 
 use std::sync::Arc;
 
@@ -191,6 +192,38 @@ impl MemorySource for MemoryStore {
         crate::repo_context::build(&repo)
     }
 
+    /// S3 刀①（方案稿 §A④「两个索引」里缺的那一个）：全局层记忆**索引**——
+    /// `<数据根>/memory/global/MEMORY.md` 的指针行。它取代的是旧 `<persistent_memory>`
+    /// 那块**正文** top-K：全局层从此也只出指针，与项目段同形、同吃一把钳。
+    ///
+    /// 层身份**不自己拼路径**：`global/` 这个目录名在 `memlayout` 里只有一处定义
+    /// （`GLOBAL_DIR`），宿主再写一遍就是第二个出处——同一类坑 S1 刀②c-1 踩过
+    /// （`projects/<可读名-哈希>` 曾被拼三遍）。所以这里从 [`plugin_api::memlayout::layers`]
+    /// 的枚举结果里取"身份为空串的那一层"的索引文件，读不动那一层时它压根不在清单里
+    /// ⇒ 整段如实缺席，与项目段"文件没指针行 = 没记过"同一个出口。
+    ///
+    /// 吃 `global_on` 那枚开关（§E 三枚行为开关之一）：关 = 该层不读、不注入。
+    fn global_index(&self, _session_id: Option<&str>) -> Option<String> {
+        if !(self.global_on)() {
+            return None;
+        }
+        let root = self.files().root();
+        let index = plugin_api::memlayout::layers(root)
+            .0
+            .into_iter()
+            .find(|layer| layer.hint.is_empty())?
+            .index;
+        let body = std::fs::read_to_string(index).ok();
+        // 陈旧标注的输入：全局层走 `facts_of(root, "")`（空键位 = 全局，与写侧同一条算式）。
+        let ages = crate::memory_index::ages_of_layer(root, "").unwrap_or_default();
+        crate::memory_index::from_md(
+            body.as_deref(),
+            &ages,
+            now_secs(),
+            crate::memory_index::LEAD_IN_GLOBAL,
+        )
+    }
+
     /// Q2（MR 稿 §4.1）：项目记忆**索引**（指针行，不含正文）。
     ///
     /// 未归属会话 = 没有"本项目"可言 ⇒ `None`（整节缺席）。S1 刀②b-3 把两档的关系
@@ -215,7 +248,12 @@ impl MemorySource for MemoryStore {
         // 就当没有 ages ⇒ 那一行不标注，**而不是整节缺席**：新鲜度是派生量，
         // 它缺席不该把索引本身一起带走。每 step 都会走到这里 ⇒ 不 warn（刷日志）。
         let ages = crate::memory_index::ages_of_layer(self.files().root(), &ws).unwrap_or_default();
-        crate::memory_index::from_md(self.md_index_body(&ws).as_deref(), &ages, now_secs())
+        crate::memory_index::from_md(
+            self.md_index_body(&ws).as_deref(),
+            &ages,
+            now_secs(),
+            crate::memory_index::LEAD_IN_PROJECT,
+        )
     }
 }
 

@@ -1,19 +1,17 @@
-//! Memory-Inject（Context and Memory.md §4.2.3 / §5）：`agent/request`
-//! waterfall 监听器——把**全局层**持久记忆按更新时间取 top-K，注入
-//! 请求级 system prompt（`RequestPayload::system`）。
+//! Memory-Inject（Context and Memory.md §4.2.3 / §5 + 方案稿 §C）：`agent/request`
+//! waterfall 监听器——把**两层记忆索引的指针行**注入请求级 system prompt
+//! （`RequestPayload::system`），正文一个字都不注入。
 //!
-//! **注入面（v2.136 裁定「项目侧全提醒制」）**：流水线只自动携带全局
-//! 记忆（用户层面的喜好/全局要求，保持简短）——项目层事实与项目记忆
-//! 文件（`<repo>/.Locowrk/`）不再整段注入，改为 [`MemorySource::repo_context`]
-//! 提供的**静态提醒段**（记忆目录里有什么、在什么节点读/更新），由
-//! 当前工作的主模型按需用文件工具查看与维护；结构化项目事实走
-//! memory_read / memory_search 按需查。
+//! **注入面（S3 刀① 起 = 「索引常驻，正文按需」）**：一个 `<memory_index>` 块装两段
+//! ——全局层 `MEMORY.md` 与本项目 `MEMORY.md` 的指针行（`- [标题](文件.md) — 钩子`）。
+//! 模型由此知道"记了哪些条、各在哪一篇"，要用哪条就自己读那篇文件。它取代的是旧形状
+//! 那两块：`<persistent_memory>`（全局层事实**正文** top-K，还挂一条按 sqlite 加权的
+//! 排序档）与 `<project_memory_index>`（只有项目层索引）。方案稿 §C 那句"并进同一处、
+//! 消灭双出处"指的就是这两块各说一套。
 //!
-//! Q2（MR 稿 §4.1）在同一个块里追加一节 [`MemorySource::project_index`]＝
-//! **项目记忆的指针索引**（一行一条 `- key — hook`）。它**不是**对上述裁定的
-//! 反转：裁定禁的是"项目事实全文灌进 system"，索引给的是"本项目记了哪些条"，
-//! 正文一个字都不进——这正是 MR 稿 §0 第三条根因（注入面三重盲：项目层有货
-//! 而模型不知道有货）的对症件。
+//! 这不是对 v2.136「项目侧全提醒制」的反转：那条禁的是把事实全文灌进 system，而索引给
+//! 的是"这个项目/这个用户记过哪些条"，正文照旧按需读——也正是 MR 稿 §0 那条真实失败的
+//! 对症件（注入面三重盲：库里有货而模型不知道有货）。
 //!
 //! 链位（§3.6；v2.139 提示词分层设计 §6 重排）：ToolExposure（⑫）→
 //! BaseSystemInject（静态身份层 = system 前缀）→ **Memory-Inject** →
@@ -51,13 +49,15 @@ use serde_json::Value;
 use crate::waterfall::{append_block, points, take_request};
 
 mod contract;
-mod terms;
 
 pub use contract::{LearnWeights, MemoryEntry, MemoryInjectConfig, MemorySource, RecallQuery};
-use terms::relevance_terms;
 
 /// 单条 value 注入上限（字符）：记忆库单条可达 256KiB，原样注入一轮就
 /// 顶爆窗口；超长截断并标注（全文在记忆管理页可看）。
+///
+/// ⚠ **S3 刀① 之后它已经不在注入面上**：`<persistent_memory>` 那块正文被索引段取代，
+/// 本仓今天唯一还在用它的是宿主侧的 `relevance` 匹配面（见下一段那条纪律）。它的去留
+/// 随刀③（`memory_learn` 一族按裁定同刀退役 ⇒ 那时这颗常量彻底无使用者）。
 ///
 /// **`pub` 的理由不是"方便"而是"匹配面必须等于注入面"**（队列 Q9）：宿主侧的
 /// `relevance` 信号要对 value 做关键词匹配，如果它扫全文，一条记忆会**因为模型
@@ -153,56 +153,6 @@ impl MemoryInject {
     fn config(&self) -> MemoryInjectConfig {
         self.cfg.read().map(|c| *c).unwrap_or_default()
     }
-
-    /// 记忆块文本（给 LLM 的英文说明 + `key = value [tags: …]` 行）。
-    /// 空条目表返回 None（无可注入）。
-    fn build_block(entries: &[MemoryEntry]) -> Option<String> {
-        if entries.is_empty() {
-            return None;
-        }
-        let mut lines = String::from(
-            "<persistent_memory>\n\
-             Facts below were saved to the user's persistent memory in earlier \
-             sessions (key = value). They persist across sessions; apply them \
-             when relevant to this conversation.\n",
-        );
-        for e in entries {
-            let tier = if e.scope.is_empty() {
-                String::new()
-            } else {
-                format!("[{}] ", e.scope)
-            };
-            lines.push_str(&format!(
-                "- {tier}{} = {}{}\n",
-                e.key,
-                clip(&e.value),
-                tag_suffix(&e.tags)
-            ));
-        }
-        lines.push_str("</persistent_memory>");
-        Some(lines)
-    }
-}
-
-/// 单条注入上限（字符）：与事实记忆同口径——超长截断并标注，全文在
-/// 记忆管理页可看。
-fn clip(value: &str) -> String {
-    let char_count = value.chars().count();
-    if char_count > VALUE_INJECT_MAX_CHARS {
-        let mut s: String = value.chars().take(VALUE_INJECT_MAX_CHARS).collect();
-        s.push_str(" …(truncated)");
-        s
-    } else {
-        value.to_string()
-    }
-}
-
-fn tag_suffix(tags: &str) -> String {
-    if tags.is_empty() {
-        String::new()
-    } else {
-        format!(" [tags: {tags}]")
-    }
 }
 
 #[async_trait]
@@ -212,7 +162,11 @@ impl WaterfallListener for MemoryInject {
             return WaterfallDecision::Continue;
         }
         let cfg = self.config();
-        if !cfg.enabled || cfg.top_k == 0 {
+        // 早退只看 `enabled`：旧形状里 top_k 数的是**正文条数**，那个东西随刀① 一起没了，
+        // 再留一条 `top_k == 0` 就等于"把条数设 0 会连索引一起关掉"这种说不清的隐藏耦合。
+        // top_k 字段本身与"它进预取缓存判据"的形状照旧不动（那是有意的承重，
+        // 理由写在 `desktop/src-tauri/src/settings.rs` 的 `memory_inject_config` 头注里）。
+        if !cfg.enabled {
             return WaterfallDecision::Continue;
         }
         // 取载荷排在两道配置门之后：它们一个字节都不碰 payload，早退就不必
@@ -259,30 +213,23 @@ impl WaterfallListener for MemoryInject {
             let seg = format!("<repo_context>\n{repo}\n</repo_context>");
             append_block(&mut block, Some(&seg));
         }
-        // 全局记忆注入（v2.136 裁定）：只取全局层（用户层面的喜好/全局
-        // 要求）；项目层事实不自动注入，由模型 memory_read / memory_search
-        // 按需查（见 GUIDANCE_BLOCK）。排序真源在宿主：队列 Q9（ML §3.3/§3.4）
-        // 起为**四信号现算加权**，`learn_enabled=false` 时逐字节回到现役的
-        // `updated_at DESC, key`——内核只负责把相关性词表递下去（取数时刻 =
-        // 会话首查，被下面的预取缓存包住 = 一个会话一次）。
-        let query = RecallQuery {
-            terms: if cfg.learn.enabled {
-                relevance_terms(&req.messages)
-            } else {
-                Vec::new()
-            },
-            weights: cfg.learn,
-        };
-        let entries = self
-            .source
-            .recall_relevant(req.session_id.as_deref(), cfg.top_k, &query);
-        let mem = Self::build_block(&entries);
-        append_block(&mut block, mem.as_deref());
-        // 项目记忆索引（Q2 · MR §4.1）：紧随全局层之后——指针行，正文不进。
-        // 宿主给定内文，标签在这里包（与 `<repo_context>` / `<environment>` 同形，
-        // 块命名由内核管、内容真源在宿主）。整节缺席 = 未归属 / 项目层空。
-        if let Some(index) = self.source.project_index(req.session_id.as_deref()) {
-            let seg = format!("<project_memory_index>\n{index}\n</project_memory_index>");
+        // 两段记忆索引（S3 刀① · 方案稿 §C「索引常驻，正文按需」）：全局层与项目层的
+        // `MEMORY.md` 指针行合成**一个** `<memory_index>` 块，段头 `[global]` / `[project]`。
+        // 内文、钳制、陈旧标注全在宿主侧（与 `<environment>` / `<repo_context>` 同一分工：
+        // 块命名归内核、内容真源归宿主）。**两段各自可缺席**，都缺席 ⇒ 整块不生成——
+        // 留一对空标签会被读成"有索引但没条目"，与"这两层都没记过"是两个不同结论。
+        // 被摘掉的旧形状：`<persistent_memory>`（全局层正文 top-K，还挂着一条按 sqlite
+        // 四信号加权的排序档）与独立的 `<project_memory_index>`——设计稿要消灭的正是
+        // 这两块各说一套。相关性词表（`terms.rs`）随它的唯一消费者一起离场。
+        let mut segs: Vec<String> = Vec::new();
+        if let Some(global) = self.source.global_index(req.session_id.as_deref()) {
+            segs.push(format!("[global]\n{global}"));
+        }
+        if let Some(project) = self.source.project_index(req.session_id.as_deref()) {
+            segs.push(format!("[project]\n{project}"));
+        }
+        if !segs.is_empty() {
+            let seg = format!("<memory_index>\n{}\n</memory_index>", segs.join("\n"));
             append_block(&mut block, Some(&seg));
         }
         // 主动记忆指引（F3 §4）：随注入块尾——静态文本，与块同吃预取

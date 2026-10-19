@@ -33,6 +33,11 @@ pub trait MemorySource: Send + Sync + 'static {
 
     /// 队列 Q9（ML 稿 §3.3/§3.4 = L2+L3 合一批）：带**相关性词表 + 四信号权重**的召回。
     ///
+    /// ⚠ **S3 刀① 起本方法在生产面没有调用点了**：唯一那个调用点住在
+    /// `<persistent_memory>` 正文块的组装处，那块已并入 `<memory_index>` 索引段。
+    /// 方法与宿主实现**暂时都留着**（去留按 `specs/10-context-injection-s3` 的裁定
+    /// = 刀③ 同刀退役），本条文档描述的是"它还连着时"的契约形状。
+    ///
     /// **缺省实现 = 忽略 `query` 回落 [`MemorySource::recall`]，这是等价性装置而不是便利**：
     /// ① 五个测试 fake 与 headless 装配零改动；② [`LearnWeights::default`] 的
     /// `enabled = false` + 本缺省支 = 「关掉学习档必须逐字节回到现役」这条要求直接由
@@ -71,6 +76,17 @@ pub trait MemorySource: Send + Sync + 'static {
     /// 实现；缺省 `None` = 无提醒段（headless / 未归属 / 开关关），组装
     /// 零变化。文本静态 = 跨轮逐字节稳定（M1 纪律不破）。
     fn repo_context(&self, session_id: Option<&str>) -> Option<String> {
+        let _ = session_id;
+        None
+    }
+
+    /// 全局层记忆**索引**（S3 刀① · 方案稿 §C「索引常驻，正文按需」）：全局层
+    /// `MEMORY.md` 的**指针行**（`- [标题](文件.md) — 钩子`），不是事实正文。
+    ///
+    /// 它是 `<memory_index>` 块的第一段，与 [`MemorySource::project_index`] 同一套规矩：
+    /// 宿主给内文、内核包标签、钳制与陈旧标注都在宿主侧。缺省 `None` = 该段缺席
+    /// （headless 与测试装配零负担）；**两段都缺席 ⇒ 整块不生成**，不留一对空标签。
+    fn global_index(&self, session_id: Option<&str>) -> Option<String> {
         let _ = session_id;
         None
     }

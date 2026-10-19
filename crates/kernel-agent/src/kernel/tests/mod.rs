@@ -117,19 +117,21 @@ fn specs() -> Vec<ToolSpec> {
     ]
 }
 
-/// 逐次漂移的记忆源：每次召回 value = 调用序号——预取生效 = 只查一次。
+/// 逐次漂移的记忆源：每次取数交一行"指针行 = 调用序号"——预取生效 = 只查一次。
+///
+/// ⚠ **S3 刀① 换了取数通道**：原来漂移的是 `recall` 交的**正文条目**，那条通路随
+/// `<persistent_memory>` 一起下线 ⇒ 现在漂移的是 `global_index` 的指针行。断言语义
+/// 一个字没动（证的还是"跨轮逐字节冻结 + 每会话至多取数一次"），只换取数的地方。
 struct DriftingMemory(std::sync::atomic::AtomicUsize);
 
 impl MemorySource for DriftingMemory {
     fn recall(&self, _session_id: Option<&str>, _limit: usize) -> Vec<MemoryEntry> {
+        Vec::new()
+    }
+
+    fn global_index(&self, _session_id: Option<&str>) -> Option<String> {
         let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        vec![MemoryEntry {
-            key: "drift".into(),
-            value: n.to_string(),
-            tags: String::new(),
-            updated_at: 0,
-            scope: String::new(),
-        }]
+        Some(format!("- [drift](drift.md) — {n}"))
     }
 }
 

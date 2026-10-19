@@ -1,19 +1,20 @@
-//! 项目记忆**索引**注入（MR 稿 §4.1，队列 Q2）。
+//! 记忆**索引**注入（MR 稿 §4.1 队列 Q2 起，S3 刀① 起管两层）。
 //!
-//! **这块治什么**：`<persistent_memory>` 只注全局层，而全局层实测常年为空
-//! （`memories` 表 0 行）；项目层的事实库里明明有行，模型也**看不见**——它得先
-//! 想到要调 `memory_list` 才知道本项目记了什么。MR 稿 §0 那条真实失败的第三条
-//! 根因就是这个：「注入面三重盲」。本件把**指针级索引**放进 system，让新会话
-//! 第一句话之前就知道"这个项目记了哪些条"。
+//! **这块治什么**：旧形状注入的是 `<persistent_memory>`——全局层事实**正文** top-K，
+//! 而全局层实测常年为空（`memories` 表 0 行）；项目层明明有货，模型也**看不见**，它得先
+//! 想到要调 `memory_list` 才知道本项目记了什么。MR 稿 §0 那条真实失败的第三条根因就是
+//! 这个：「注入面三重盲」。本件把**指针级索引**放进 system，让新会话第一句话之前就知道
+//! "记了哪些条、各在哪一篇"。刀① 之后全局层也走这里（旧正文块退役），所以本件同时给
+//! [`LEAD_IN_PROJECT`] 与 [`LEAD_IN_GLOBAL`] 两条导语，由 `memory/source.rs` 按层挑。
 //!
 //! **注入的是指针不是正文**（与 v2.136「项目层事实不自动注入」裁定不冲突，
 //! 那条禁的是把事实全文灌进 system）：一行一条 `- <key> — <hook>`，正文仍按需
 //! `memory_read`。这与 ZCode 的 `MEMORY.md` 常驻索引同构（MR 稿 §1.2）。
 //!
-//! 数据源**只有一个**（S1 刀②c-1 起）：`<数据根>/memory/projects/<项目目录>/MEMORY.md`
+//! 数据源**只有一个**（S1 刀②c-1 起）：`<数据根>/memory/{global|projects/<项目目录>}/MEMORY.md`
 //! 里的指针行。文件缺失或只有 `# 记忆索引` 空壳标题（2026-10-12 本机实测就是这个形态：
 //! `TITY` 目录里根本没有 `MEMORY.md`，另外三个项目都只有空壳）⇒ **整节如实缺席**。
-//! 真源就是文件，"文件里没有指针行"等于"这个项目没记过"——先前还有一档"人类层没接线
+//! 真源就是文件，"文件里没有指针行"等于"这一层没记过"——先前还有一档"人类层没接线
 //! 才由 sqlite 该键位的行现合成"，刀②c-1 连同 `MemoryStore::index_rows` 一起删了：
 //! 库里那份副本不再是同一件事的答案，而"没接线"这个状态本身也没了。
 //!
@@ -37,11 +38,21 @@ pub(crate) use plugin_api::memlayout::{MAX_INDEX_CHARS, MAX_INDEX_LINES};
 /// 陈旧标注门槛：48 h（稿 §6「>48 h 才标」）。
 pub(crate) const STALE_AFTER_SECS: i64 = 48 * 3600;
 
-/// 索引块导语（给模型的说明，中英与 `<persistent_memory>` 同档英文）。
-const LEAD_IN: &str = "Project memory index — pointers only, never the bodies (one line \
+/// 项目段索引导语（给模型的说明）。S3 刀① 起导语**按层给**——同一段话写在
+/// "本项目"上对全局层是假话（全局层跨项目成立），所以两档各写一条，由调用方
+/// （[`crate::memory::source`]）挑，`from_md` 自己不猜。
+pub(crate) const LEAD_IN_PROJECT: &str =
+    "Project memory index — pointers only, never the bodies (one line \
      per saved fact of THIS project). Read a value with memory_read(key=…), search with \
      memory_search. Empty results here mean this project has no saved facts, not that it \
      has no history — for past work use memory_project_history.";
+
+/// 全局段索引导语（S3 刀① 新增，方案稿 §A④ 里"两个索引"的那一个）。
+pub(crate) const LEAD_IN_GLOBAL: &str =
+    "Global memory index — pointers only, never the bodies (one line \
+     per saved fact that holds across ALL projects). Read a value with memory_read(key=…), \
+     search with memory_search. An empty section here means nothing has been saved as a \
+     standing preference, not that this user has no history.";
 
 /// 超限时的指路行（截断必须自描述，否则模型以为"就这些"）。
 ///
@@ -67,6 +78,7 @@ pub(crate) fn from_md(
     md_body: Option<&str>,
     ages: &HashMap<String, i64>,
     now: i64,
+    lead_in: &str,
 ) -> Option<String> {
     let body = md_body?;
     let truncated_by_file = body.lines().any(|l| l.trim_end() == TRUNCATED_NOTE);
@@ -80,7 +92,7 @@ pub(crate) fn from_md(
             .unwrap_or_default();
         line.push_str(&marker);
     }
-    finish(lines, truncated_by_file)
+    finish(lines, truncated_by_file, lead_in)
 }
 
 /// 从一行指针文本里取出文件名主干（`- [x](x.md) — hook` → `x`）。
@@ -112,18 +124,22 @@ pub(crate) fn ages_of_layer(root: &Path, workspace: &str) -> Result<HashMap<Stri
 
 /// 共用的收尾：导语 + 钳制 + 截断指路。
 ///
+/// `lead_in` = 这一层的导语（[`LEAD_IN_PROJECT`] / [`LEAD_IN_GLOBAL`]）。它**由调用方
+/// 传进来而不是在这里按参数猜**：两层的指针行形状完全相同，能区分它们的只有这句话，
+/// 让 `finish` 自己判"是哪一层"就要多引一个层身份参数——那才是把一件事拆成两处问。
+///
 /// `truncated_by_file` = 文件里本来就带着那句截断说明（写侧钳出来的）。它和
 /// "注入侧这一轮又钳了一次"**取并集**：两条都必须写那句话，否则——只认注入侧那一半
 /// 的话，文件被写侧截断而注入侧没超限时，模型看到的是一份**看起来完整**的索引。
 /// 钳制本身留着不是冗余：人可以把 `MEMORY.md` 手工编辑成超出预算的形状，
 /// 预算保护必须站在注入通路上（数字与文案都只有一个出处 = `memlayout`）。
-fn finish(lines: Vec<String>, truncated_by_file: bool) -> Option<String> {
+fn finish(lines: Vec<String>, truncated_by_file: bool, lead_in: &str) -> Option<String> {
     if lines.is_empty() {
         return None;
     }
     let (kept, clamped) = clamp(lines);
     let truncated = clamped || truncated_by_file;
-    let mut out = String::from(LEAD_IN);
+    let mut out = String::from(lead_in);
     for l in kept {
         out.push('\n');
         out.push_str(&l);

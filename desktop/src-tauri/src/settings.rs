@@ -282,9 +282,11 @@ impl SettingsStore {
     /// 从 400 拖到 500 若立刻重算，代价是打断这一轮对话的缓存前缀，而它买不到
     /// 任何正确性——记忆块的**归属**变了必须重算（那是另一份库的内容），**偏好**
     /// 变了不必。这个形状**已有承重**：`PrefetchEntry` 的字段集只有 `block`/`top_k`，
-    /// 而内核用例 `memory_inject/tests/learn.rs::cjk_query_produces_terms_and_hits_prefetch_once`
-    /// 断言同会话跑两轮 `seen.len() == 1` —— 将来有人"顺手"把权重塞进失效判据，第二轮
-    /// 就会重查，那条用例当场见红。真机走查要按这个口径判读，否则会误判成 bug。
+    /// 而内核用例 `memory_inject/tests/prefetch.rs::top_k_change_recomputes_prefetch`
+    /// 断言同会话跑两轮只取数一次、top_k 一变就重算 —— 将来有人"顺手"把权重塞进失效判据，
+    /// 第二轮就会重查，那条用例当场见红。真机走查要按这个口径判读，否则会误判成 bug。
+    /// （S3 刀① 订正：这条用例原先住在 `tests/learn.rs`，那一簇随正文注入通路一起
+    /// 离场，M1 承重迁到了 `prefetch.rs`；`top_k` 字段与它进失效判据的形状本刀没动。）
     pub fn memory_inject_config(&self) -> MemoryInjectConfig {
         let m = self.inner.lock().expect("settings poisoned").memory.clone();
         MemoryInjectConfig {

@@ -1,6 +1,8 @@
 # 10-上下文注入面 S3（索引常驻、正文按需 + 占用读数一嘴到底）
 
-- 状态：**草稿 · 待确认**（本文件是 [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
+- 状态：**进行中 · 刀① ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
+  采纳，裁定结果记在下面「开工三问与裁定」那节；本文件是
+  [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   **S3 注入面** 那一行的施工 spec；方案稿对应 = **§C**（+ §A④ 索引制、§F 交接层），
   ⊘ 不入库、只在作者本机，关键条款抄在下面「取证」与「目标」里；决策依据 =
   [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
@@ -142,9 +144,9 @@
 
 ## 计划（四刀，每刀一提交、跑绿再走下一刀）
 
-1. **刀① 索引段替换**：新块（全局段 + 项目段，钳 200 行 / 25 000 字符，复用
+1. **刀① 索引段替换** ✅ 2026-10-20：新块（全局段 + 项目段，钳 200 行 / 25 000 字符，复用
    `memlayout` 那颗常量与 `memory_index.rs` 的钳）；`<persistent_memory>` 与
-   `<project_memory_index>` 两块下线；标签判据 + AC-S3-1/2。
+   `<project_memory_index>` 两块下线；标签判据 + AC-S3-1/2。**施工记录见下面那节**。
 2. **刀② 缓存键与注入源**：mtime 进预取缓存键（全局 + 项目 + 交接层三处指纹）；
    `<repo_context>` 从静态串改成读 `.Locowrk/MEMORY.md`；AC-S3-3/4。
 3. **刀③ 指引与退役段**：`<memory_guidance>` 改写；`TreeDirectoryInject` 摘除；
@@ -183,34 +185,77 @@
   按新形状改写（旧的两块没了）；`crates/kernel-agent/tests/prompt_layering.rs` 两条**不动**
   （环序没变）；`tests/prefetch.rs:80-101` 的「top_k 变 = 重算」仍绿（字段没动）。
 
-## 要你定的（三处，点头后我按裁定动代码）
+## 刀① 施工记录（✅ 2026-10-20 · 22 文件 +622 / −862）
 
-① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）：
-   - **推荐案**：进度条浮层加一行只读扣减链（`窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值`，
+按上面那版形状落地，**四处偏差与连带**都要记（都是"不这么做就当场红"的那种）：
+
+1. `terms.rs`（107 行）与 `tests/learn.rs`（7 条用例）**随唯一消费者同刀离场**：原计划
+   只写"摘调用点"，实际不摘这两件，`clippy -D warnings` 的 `dead_code` 当场红。
+   learn.rs 里那条 M1 承重（"同会话只取数一次、不许把权重塞进失效判据"）**迁到
+   `prefetch.rs`**，道具从"正文条目漂移"换成"索引内文漂移"，断言语义一个字没改；
+   `settings.rs::memory_inject_config` 头注点名的是 learn.rs 那条 ⇒ 注释同步订正并留
+   "原先住哪"的记号（不改它 = 留下一条指向已删用例的假指针）。
+2. `top_k` 早退条件按计划改掉，并**新增一条用例** `zero_top_k_no_longer_switches_the_block_off`
+   钉这次语义变更本身（旧形状下 `top_k = 0` 关整块，现在不关）。
+3. **观测通道同步**：`llm/diagnose.rs` 的 `SYSTEM_MARKERS` 从 6 枚改 5 枚（旧两块合并），
+   顺序跟着新组装序走；它的夹具与断言（`diagnose/tests.rs`）同步换成 `<memory_index>`。
+   漏改这一处的症状不是编译错，而是"索引段中途变化被报成 system 变了"——缓存诊断
+   从此看不见这一格，而刀② 要接 mtime 时最需要盯的就是它。
+4. 内核侧三处假件换通道：`memory_inject/tests/mod.rs`（`Fixed` → `Empty` + 新增 `Sourced`）、
+   `kernel/tests/mod.rs` 的 `DriftingMemory`（`recall` 漂移 → `global_index` 漂移）、
+   `kernel/tests/prefix.rs` 与 `tree.rs` 的定位标签。
+5. **判据 `SS27`**（三段读数：旧标签 0 命中 / `format!("<memory_index>` 恒 1 / 字面量所在
+   文件集合 = 内核 + `llm/diagnose.rs` 两处）实测读数 = `0|1|...mod.rs|...diagnose.rs`；
+   窄变异 = 在生产面复活 `<persistent_memory>`，`make selftest` 读数 `✓ SS27 变异可见`。
+6. **真机数据根核对**（不是假件）：`~/.Locowrk/memory/global/MEMORY.md` 在场，形状
+   `# 记忆索引` + 一条 `- [user.pref.techstack-agnostic](user.pref.techstack-agnostic.md) — 技术栈无关 规范设计`
+   ⇒ 与 `pointer_lines_from_md` 的解析形状匹配；全局层目录经 `memlayout::layers()` 枚举，
+   宿主没有第二处 `global/` 字面量。
+7. **门禁**：`make check` 末行 `▶ check 全绿`（宿主 709 条 / 内核 98 条 + 全部集成套件 /
+   vitest 193 条 / 两处 clippy 干净）；`make selftest` = `SELFTEST_ALL_CAUGHT`。
+
+**这一刀欠的一发读数**：AC-S3-1 里"真窗口跑一轮看 system"未取——刀① 没动任何界面组件，
+而真窗口那趟要看的 `repo_context` 还在刀② 改，所以这一发**随刀② 一起补**（届时一次
+起窗口取两刀的证）。登记在册，不算已验。
+
+**新增的挂账**：`MemoryInjectConfig.learn` 那枚字段现在**无读者**（内核不再读它，
+宿主 `memory_inject_config` 仍在填）——它随刀③ 的 `learnEnabled` 族一起清，本刀不偷删
+（删它要动 settings 面，属刀③ 的改动面）。
+
+## 开工三问与裁定（2026-10-20 决策人「三问照推荐案，开跑」⇒ 三处全按推荐案落地）
+
+① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）
+   —— **裁定 = 案 A**：
+   - **✅ 采纳**：进度条浮层加一行只读扣减链（`窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值`，
      式子照 `context_budget.rs:73-82` 不另造），
      设置页「压缩阈值」那行的说明文案跟着引用它——**复用既有的"只读读数 + 文案"形态**，
      不加新控件、不做保存拒绝（拒绝会让用户改不动，且 §4 要求限制可关）。
      代价：关系仍然是"看得见但不拦"，撞窗还得等真撞。
-   - 备选 B：再加一道后端 `Err`（输出上限 × 阈值 跨字段校验，保存即拒）——最硬，
-     但它把"预留 ≥ 一轮增量"这条**没有外部真源**的关系钉成禁令，违背 §4「限制可关」，
-     我不推荐。
-   - 备选 C：只做纯文案（现 `thresholdHint` 那种），不加读数——最省，但 ⓟ 要的正是
+   - **❌ 否掉的 B**：再加一道后端 `Err`（输出上限 × 阈值 跨字段校验，保存即拒）——最硬，
+     但它把"预留 ≥ 一轮增量"这条**没有外部真源**的关系钉成禁令，违背 §4「限制可关」。
+   - **❌ 否掉的 C**：只做纯文案（现 `thresholdHint` 那种），不加读数——最省，但 ⓟ 要的正是
      "当场看见这一档动了多少"，纯文案给不了读数，等于没销账。
 
-② **`learnEnabled` 那一档与 `memory_learn` 族**在刀③ 摘掉唯一调用点之后：**同刀退役删除**
-   （推荐：md 是唯一真源，加权档是残留的第二真源，留着就是 H2 那种死码）还是
-   **登记到 S4 一起拔**（代价：三刀期间它"存在但从未接线"，且设置页还留一格骗人的开关）？
+② **`learnEnabled` 那一档与 `memory_learn` 族**在刀③ 摘掉唯一调用点之后
+   —— **裁定 = 同刀退役删除**：md 是唯一真源，加权档是残留的第二真源，跨三刀留着
+   就是审计报告 H2 判过的那个形状（"存在但从未接线"），且设置页会留一格拨了没反应的开关。
+   删除面：`memory_learn/` 整族 + `terms` 面（刀① 已走）+ `learnEnabled` 后端字段与
+   设置格 + `MemoryInjectConfig.learn` + `recall_relevant`（trait 方法与宿主实现）。
+   **被否的另一案**：登记到 S4 一起拔（代价如上）。
 
 ③ **输出预留那颗封顶常量（21 000）**：按 §4「有不确定性的数值一律做成设置项」要不要
    在本线做成可调项（缺省 = 改前那颗常量，越界整笔拒，照刀⑥ 的形状）？还是刀④ 只把它
    作为**只读读数**显形、可调性等 §E/ⓖ/ⓗ 那一批一起做？
+   —— **裁定 = 刀④ 做成可调项**（照 §4 那条硬规矩与刀⑥ 先例：后端字段 + 区间常量 +
+   越界整笔拒 + 中英两条文案 + **缺省 = 改前那颗 21 000**，等价性用"既有
+   `context_budget` 测试一字未改仍然绿"实证，不靠我说）。
 
 ## 影响范围
 
 | 文件 / 目录 | 改动 |
 | --- | --- |
 | `crates/kernel-agent/src/middleware/memory_inject/{mod,contract}.rs` | 刀①：块形状与标签换成索引段（内核管标签、内容真源在宿主的分工不破）；刀②：缓存键 + mtime；刀③：`GUIDANCE_BLOCK` 改写 |
-| `crates/kernel-agent/src/middleware/memory_inject/terms.rs` | 刀③：按要你定 ② 处置（大概率随学习档一起去留） |
+| `crates/kernel-agent/src/middleware/memory_inject/terms.rs` | 刀① ✅ **已删除**（107 行，随唯一消费者 `recall_relevant` 调用点一起离场；`tests/learn.rs` 那 7 条同刀删，其中的 M1 承重迁进 `prefetch.rs`） |
 | `crates/kernel-agent/src/middleware/tree_context.rs` | 刀③：移除（`kernel.rs:216-227` 的 `tree_directory` 带入通路一并订正） |
 | `desktop/src-tauri/src/memory/{source,recall}.rs` `memory.rs` | 刀①：读面新增全局索引段；`recall_relevant` 摘除或保留按裁定 ② |
 | `desktop/src-tauri/src/memory_index.rs` | 刀①：全局段复用同一把钳（现在只钳项目段） |

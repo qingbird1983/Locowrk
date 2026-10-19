@@ -1121,6 +1121,32 @@ const CHECKS = [
       )}`,
     'llm/app_llm.rs|3',
   ],
+  [
+    'SS27',
+    'S3 刀① 的注入面标签分工（三段读数）。① 旧两块 `<persistent_memory>` / ' +
+      '`<project_memory_index>` 在全生产 .rs（已排 tests、剥行注释）里必须**零命中**；' +
+      '② 包新块标签的 `format!("<memory_index>` 恰好 1 处 = 组装点唯一（内核那一行）；' +
+      '③ `<memory_index>` 这个字面量只许出现在两个文件里：内核（包标签）与 ' +
+      '`llm/diagnose.rs`（按出现序切 system 子块，那是观测通道不是第二出处）。' +
+      '为什么行为簇不够：内核那 20 条用例全拿假件源跑，它们证"装配对"，证不了' +
+      '"旧标签没被谁悄悄接回去"——把 `<persistent_memory>` 再包一处，测试面可以一条' +
+      '不改全绿，而注入面当场回到双出处（正是这一刀要消灭的那个形状）。' +
+      '③ 用**文件集合**而不是计数：计数只挡得住"多一处"，挡不住"把标签搬到第三个' +
+      '文件里再包一遍"（SS14a 同一条理由）。',
+    (m) => {
+      const code = m.rust.map(stripComments).join('\n');
+      const withRel = m.files.map((f, i) => ({
+        rel: path.relative(ROOT, f).replace(/\\/g, '/'),
+        code: stripComments(m.rust[i]),
+      }));
+      return (
+        `${countOf(code, /<persistent_memory>|<project_memory_index>/)}|` +
+        `${countOf(code, /format!\("<memory_index>/)}|` +
+        filesWith(withRel, /<memory_index>/)
+      );
+    },
+    '0|1|crates/kernel-agent/src/middleware/memory_inject/mod.rs|desktop/src-tauri/src/llm/diagnose.rs',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -1434,6 +1460,13 @@ if (SELFTEST) {
           : f,
       );
     },
+    // 窄变异（S3 刀①）：在**生产面**复活旧标签。它证的正是这一档独有的那一格——
+    // 内核那 20 条注入用例全拿假件源跑，把 `<persistent_memory>` 再包一处它们一条都不红，
+    // 只有这条读数会红，且红话说的是"旧标签回来了"。
+    SS27: (m) =>
+      m.rust.push(
+        'pub fn _revive(s: &str) -> String {\n    format!("<persistent_memory>\\n{s}\\n</persistent_memory>")\n}\n',
+      ),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

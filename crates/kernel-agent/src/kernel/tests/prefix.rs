@@ -111,7 +111,10 @@ async fn adjacent_turns_keep_request_prefix_stable() {
     assert_eq!(systems[0], systems[1], "相邻 step system 冻结");
     assert_eq!(systems[1], systems[2], "跨轮 system 冻结");
     assert!(
-        systems[0].as_ref().unwrap().contains("drift = 0"),
+        systems[0]
+            .as_ref()
+            .unwrap()
+            .contains("- [drift](drift.md) — 0"),
         "块内容 = 首查值（预取后不再漂移）"
     );
 }

@@ -3,7 +3,8 @@
 //! 自有访问——
 //! ① `MemorySource` 实现：Memory-Inject（kernel-agent）每 step 的检索源。
 //!    不走工具管道（否则每 step 一次 memory_list 会污染使用统计与审计），
-//!    直读真源（`<persistent_memory>` 正文与 `<project_memory_index>` 都是文件面）。
+//!    直读真源（S3 刀① 之后注入面只有**两层索引**：`global_index` 与 `project_index`，
+//!    都是文件面——正文一个字都不进 system）。
 //! ② 记忆管理页的存储支撑（Context and Memory.md §7.2）：列举 / 编辑 /
 //!    删除 / 清空——Tauri 命令薄适配到这里，命令层不碰落盘细节。
 //!

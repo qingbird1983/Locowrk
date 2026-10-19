@@ -5,9 +5,11 @@
 //! token 级精度。
 //!
 //! 分块两级：**粗块** = system / tools / 逐消息；**system 子块**按稳定
-//! 协议标记切片（environment / persistent_memory / repo_context /
-//! project_memory_index / memory_guidance / [memory tree] 目录段；v2.139
-//! workspace_context 升级为 environment——提示词分层设计 §4.2）——记忆块与树目录的变化可以
+//! 协议标记切片（environment / repo_context / memory_index /
+//! memory_guidance / [memory tree] 目录段；v2.139
+//! workspace_context 升级为 environment——提示词分层设计 §4.2；S3 刀① 把
+//! persistent_memory 与 project_memory_index 两块合成一个 memory_index）——
+//! 记忆块与树目录的变化可以
 //! 定位到段，不混在「system 变了」里。开关缺省关（开发者分区
 //! `developer.cacheDiagnostics`），开启后
 //! 每轮仅多几次 hash 计算，无额外请求。无会话身份的请求（记录员/摘要
@@ -28,11 +30,17 @@ use session_store::Message;
 /// Q2（MR §4.1）加 `<project_memory_index>`：项目记忆索引是**会话内钉死**的段，
 /// 但它中途变化（M2 落库后 reconcile / 管理页编辑触发重算）就是前缀断裂，
 /// 必须能定位到段而不是混进"system 变了"。
-const SYSTEM_MARKERS: [&str; 6] = [
+///
+/// ⚠ **S3 刀① 换表**：`<persistent_memory>` 与 `<project_memory_index>` 两块合并成
+/// 一个 `<memory_index>`（两层索引段），所以这张表从 6 枚变 5 枚、顺序跟着组装序走
+/// （environment → repo_context → memory_index → memory_guidance → 目录段）。
+/// 这一处是**观测通道**不是装饰：漏改它，索引段中途变化会被报成"system 变了"，
+/// 缓存诊断从此看不见这一段的断裂——而它正是刀② 要把 mtime 接进缓存键之前
+/// 最需要盯住的那一格。
+const SYSTEM_MARKERS: [&str; 5] = [
     "<environment>",
-    "<persistent_memory>",
     "<repo_context>",
-    "<project_memory_index>",
+    "<memory_index>",
     "<memory_guidance>",
     "[memory tree]",
 ];

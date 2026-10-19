@@ -30,9 +30,11 @@ fn req(system: &str, msgs: &[&str], session: &str) -> LlmRequest {
     }
 }
 
-const SYS_V1: &str = "base prefix\n<persistent_memory>\n- a = 1\n</persistent_memory>";
+/// S3 刀① 换标签：旧夹具用的是 `<persistent_memory>`（那块已并入 `<memory_index>`）。
+/// 夹具形状照**生产实际写出的那一行**抄（段头 `[global]` + 指针行），不照想象编。
+const SYS_V1: &str = "base prefix\n<memory_index>\n[global]\n- [a](a.md) — 1\n</memory_index>";
 const SYS_V2_MEMORY_CHANGED: &str =
-    "base prefix\n<persistent_memory>\n- a = 2\n</persistent_memory>";
+    "base prefix\n<memory_index>\n[global]\n- [a](a.md) — 2\n</memory_index>";
 
 #[test]
 fn pure_append_is_healthy() {
@@ -52,7 +54,7 @@ fn memory_block_change_is_located_to_sub_block() {
     let r = d
         .record(&req(SYS_V2_MEMORY_CHANGED, &["hi", "x"], "s2"))
         .unwrap();
-    assert_eq!(r.breaks, vec!["<persistent_memory>"], "定位到记忆子块");
+    assert_eq!(r.breaks, vec!["<memory_index>"], "定位到记忆子块");
     assert!(!r.breaks.iter().any(|b| b == "base"), "base 未动不误报");
 }
 

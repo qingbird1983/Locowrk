@@ -37,7 +37,7 @@ export interface MemorySettingsView {
   /** 全局记忆层（S1 刀④b，缺省开）：关 = `''` 键位那批偏好不再自动进上下文。
    * 不管两件事：模型主动查仍读得到、管理页仍列全量（关的是注入，不是数据）。 */
   globalLayer: boolean;
-  /** 项目记忆层（缺省开）：关 = `<project_memory_index>` 整节缺席。 */
+  /** 项目记忆层（缺省开）：关 = `<memory_index>` 里的 `[project]` 段整节缺席。 */
   projectLayer: boolean;
   /** 指令文件层（缺省开）：全局 `<数据根>/AGENTS.md` + 项目层三族候选
    * （AGENTS.md / CLAUDE.md / AGENTS.override.md，族内二选一、族间串联）

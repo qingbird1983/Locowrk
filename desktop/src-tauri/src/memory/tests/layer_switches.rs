@@ -65,6 +65,10 @@ fn both_switches_default_to_open_on_an_unwired_store() {
         store.project_index(Some("ws-session")).is_some(),
         "未接线的 store 必须照常注入项目索引"
     );
+    assert!(
+        store.global_index(Some("ws-session")).is_some(),
+        "未接线的 store 必须照常注入全局索引（S3 刀① 新增的那个出口）"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -111,7 +115,7 @@ fn closing_the_global_layer_stops_injection_without_touching_the_layer() {
     global.store(false, Ordering::Relaxed);
     assert!(
         store.recall(Some("s-closed"), 10).is_empty(),
-        "关 = `<persistent_memory>` 整块缺席"
+        "关 = 全局层不出内容（S3 刀① 之后它的注入出口是 `global_index`，见下面那条）"
     );
     assert!(
         store
@@ -188,6 +192,59 @@ fn closing_the_project_layer_removes_only_the_index_section() {
         store.list("build.cmd", 200).unwrap().len(),
         1,
         "管理页仍列得项目层那一条"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// S3 刀① 新增的注入出口 = **全局层索引段**。它吃的是同一枚 `global_on`：关掉全局层
+/// 之后若只有 `recall` 早退而索引段照出，这枚开关就成了"少注一块正文"的装饰——
+/// §E 那条「关 = 该层不读、不更新、不注入」要的是整层从上下文里消失。
+///
+/// 三条断语各挡一种漂法：① 指针行原样进段（挡"合成了一份新的"）；② 导语必须是
+/// **全局那一档**（拿 `LEAD_IN_GLOBAL` 常量本身比，不抄字面量 = 不留第二出处；
+/// 挡"两层的导语漂成同一条"，那样全局段会对模型谎称"THIS project"）；
+/// ③ 关档 ⇒ `None` 而不是空块，且项目段不受牵连。
+#[test]
+fn the_global_layer_injects_its_index_section_under_the_same_switch() {
+    let dir = temp_dir("switch-global-index");
+    let (global, global_on) = flag();
+    let (_keep, project_on) = flag();
+    let store = wired(&dir).with_layer_switches(global_on, project_on);
+    let ws = keysid();
+    store
+        .write("", "pref.lang", "中文", "语言偏好", "explicit")
+        .unwrap();
+    store.write(&ws, "build.cmd", "v", "", "explicit").unwrap();
+
+    let out = store
+        .global_index(Some("ws-session"))
+        .expect("前提：全局层有货就该出段");
+    assert!(
+        out.contains("- [pref.lang](pref.lang.md)"),
+        "指针行原样进段: {out}"
+    );
+    assert!(
+        out.starts_with(crate::memory_index::LEAD_IN_GLOBAL),
+        "全局段吃全局导语: {out}"
+    );
+    assert!(
+        !out.contains("THIS project"),
+        "不许拿项目导语糊全局段: {out}"
+    );
+    assert!(
+        !out.contains("中文"),
+        "索引段只有指针，正文一个字都不进: {out}"
+    );
+
+    global.store(false, Ordering::Relaxed);
+    assert_eq!(
+        store.global_index(Some("ws-session")),
+        None,
+        "关 = 整段缺席（与「这层没记过」同一个出口，不留空段头）"
+    );
+    assert!(
+        store.project_index(Some("ws-session")).is_some(),
+        "两枚开关不许互相牵连"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

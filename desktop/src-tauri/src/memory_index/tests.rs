@@ -29,7 +29,7 @@ fn ages(pairs: &[(&str, i64)]) -> HashMap<String, i64> {
 /// 字符是导语与内容之间那个换行符——它不是内容行。判据若不 trim 就会全体
 /// off-by-one（首跑就在这连错三条，是判据的口径漏了，不是实现多写了一行）。
 fn body_lines(out: &str) -> Vec<&str> {
-    out.strip_prefix(LEAD_IN)
+    out.strip_prefix(LEAD_IN_PROJECT)
         .expect("导语在最前")
         .trim_start_matches('\n')
         .lines()
@@ -47,13 +47,13 @@ fn pointer_lines_from_the_index_file_are_passed_through_verbatim() {
         &pointer("build.cmd", "pnpm tauri dev"),
         &pointer("stack", "Rust 桌面端"),
     ]);
-    let out = from_md(Some(&md), &ages(&[]), NOW).expect("md 有指针行");
+    let out = from_md(Some(&md), &ages(&[]), NOW, LEAD_IN_PROJECT).expect("md 有指针行");
     assert!(
         out.contains("- [build.cmd](build.cmd.md) — pnpm tauri dev"),
         "{out}"
     );
     assert!(out.contains("- [stack](stack.md)"), "{out}");
-    assert!(out.contains(LEAD_IN), "导语在场: {out}");
+    assert!(out.contains(LEAD_IN_PROJECT), "导语在场: {out}");
     assert!(!out.contains(TRUNCATED_NOTE), "两行远不到预算: {out}");
 }
 
@@ -64,18 +64,21 @@ fn pointer_lines_from_the_index_file_are_passed_through_verbatim() {
 /// （那层才能同时握着库和文件两边）。
 #[test]
 fn an_empty_shell_index_file_produces_no_section() {
-    assert!(from_md(Some("# 记忆索引\n\n"), &ages(&[]), NOW).is_none());
+    assert!(from_md(Some("# 记忆索引\n\n"), &ages(&[]), NOW, LEAD_IN_PROJECT).is_none());
     let with_one = index_md(&[&pointer("a", "甲")]);
     assert!(
-        from_md(Some(&with_one), &ages(&[]), NOW).is_some(),
+        from_md(Some(&with_one), &ages(&[]), NOW, LEAD_IN_PROJECT).is_some(),
         "对照：同一份夹具里加一行指针就该出块"
     );
 }
 
 #[test]
 fn a_missing_or_empty_file_is_just_no_section() {
-    assert!(from_md(None, &ages(&[]), NOW).is_none());
-    assert!(from_md(Some(""), &ages(&[]), NOW).is_none(), "空文件同档");
+    assert!(from_md(None, &ages(&[]), NOW, LEAD_IN_PROJECT).is_none());
+    assert!(
+        from_md(Some(""), &ages(&[]), NOW, LEAD_IN_PROJECT).is_none(),
+        "空文件同档"
+    );
 }
 
 #[test]
@@ -103,7 +106,7 @@ fn headings_blank_lines_and_html_comments_are_stripped() {
     // 人写的批注（HTML 注释）不许进上下文；跨行注释也要吞掉
     let md = "# 记忆索引\n\n<!-- 这是批注\n还有第二行\n-->\n\n\
               - [a](a.md) — 甲\n<!-- 单行批注 -->\n- [b](b.md) — 乙\n";
-    let out = from_md(Some(md), &ages(&[]), NOW).expect("两条指针行");
+    let out = from_md(Some(md), &ages(&[]), NOW, LEAD_IN_PROJECT).expect("两条指针行");
     assert!(!out.contains("批注"), "注释被剥掉: {out}");
     assert!(!out.contains("# 记忆索引"), "标题不进上下文: {out}");
     assert!(
@@ -117,7 +120,7 @@ fn only_pointer_lines_count_as_index_content() {
     // 既非 `- ` 开头也非标题/注释的散句（人随手写的备忘）不进索引，
     // 否则正文会顺着"备忘"这条路混进 system——那是 §4.1 的硬边界。
     let md = "# 记忆索引\n\n随手写的一句话，不是指针行\n- [a](a.md) — 甲\n";
-    let out = from_md(Some(md), &ages(&[]), NOW).unwrap();
+    let out = from_md(Some(md), &ages(&[]), NOW, LEAD_IN_PROJECT).unwrap();
     assert!(!out.contains("随手写的一句话"), "非指针行不进: {out}");
     assert!(out.contains("- [a](a.md)"), "{out}");
 }
@@ -142,7 +145,7 @@ fn an_aged_pointer_line_is_marked_and_a_fresh_one_is_not() {
         ("proj.rule", NOW - 3 * DAY), // >48h = 标
         ("no.tag", NOW - 10 * DAY),
     ]);
-    let out = from_md(Some(&md), &table, NOW).unwrap();
+    let out = from_md(Some(&md), &table, NOW, LEAD_IN_PROJECT).unwrap();
     let lines = body_lines(&out);
     assert!(
         lines[0].ends_with("— 中文"),
@@ -167,7 +170,7 @@ fn an_aged_pointer_line_is_marked_and_a_fresh_one_is_not() {
 #[test]
 fn a_pointer_line_that_matches_no_fact_carries_no_marker() {
     let md = index_md(&[&pointer("hand.written", "人手加的一行")]);
-    let out = from_md(Some(&md), &ages(&[]), NOW).unwrap();
+    let out = from_md(Some(&md), &ages(&[]), NOW, LEAD_IN_PROJECT).unwrap();
     let lines = body_lines(&out);
     assert_eq!(lines.len(), 1, "对不上号也不许丢行：{lines:?}");
     assert_eq!(
@@ -186,7 +189,13 @@ fn fat_index(n: usize) -> String {
 
 #[test]
 fn line_budget_truncates_with_a_pointing_note() {
-    let out = from_md(Some(&fat_index(MAX_INDEX_LINES + 7)), &ages(&[]), NOW).unwrap();
+    let out = from_md(
+        Some(&fat_index(MAX_INDEX_LINES + 7)),
+        &ages(&[]),
+        NOW,
+        LEAD_IN_PROJECT,
+    )
+    .unwrap();
     let lines = body_lines(&out);
     assert_eq!(
         lines.len(),
@@ -213,7 +222,7 @@ fn char_budget_truncates_before_the_line_budget_when_lines_are_fat() {
         .map(|i| pointer(&format!("{wide}k{i}"), "t"))
         .collect();
     let md = index_md(&lines.iter().map(|s| s.as_str()).collect::<Vec<_>>());
-    let out = from_md(Some(&md), &ages(&[]), NOW).unwrap();
+    let out = from_md(Some(&md), &ages(&[]), NOW, LEAD_IN_PROJECT).unwrap();
     let lines = body_lines(&out);
     assert!(
         out.contains(TRUNCATED_NOTE),
@@ -234,7 +243,13 @@ fn char_budget_truncates_before_the_line_budget_when_lines_are_fat() {
 #[test]
 fn exactly_at_the_line_budget_no_warning_is_added() {
     // 阳性对照的反面：预算**内**不许出现 WARNING（它一旦出现就该是真截断）
-    let out = from_md(Some(&fat_index(MAX_INDEX_LINES)), &ages(&[]), NOW).unwrap();
+    let out = from_md(
+        Some(&fat_index(MAX_INDEX_LINES)),
+        &ages(&[]),
+        NOW,
+        LEAD_IN_PROJECT,
+    )
+    .unwrap();
     assert!(!out.contains(TRUNCATED_NOTE), "刚好 200 条不算截断");
     assert_eq!(body_lines(&out).len(), MAX_INDEX_LINES);
 }
@@ -250,7 +265,7 @@ fn a_truncated_index_file_keeps_the_warning_for_the_model() {
         "{}\n{TRUNCATED_NOTE}\n",
         index_md(&[&pointer("a", "甲"), &pointer("b", "乙")])
     );
-    let out = from_md(Some(&md), &ages(&[]), NOW).expect("两条指针行");
+    let out = from_md(Some(&md), &ages(&[]), NOW, LEAD_IN_PROJECT).expect("两条指针行");
     let lines = body_lines(&out);
     assert_eq!(lines.len(), 3, "两条指针 + 那句截断说明：{lines:?}");
     assert_eq!(
@@ -265,7 +280,7 @@ fn a_truncated_index_file_keeps_the_warning_for_the_model() {
 #[test]
 fn the_budget_still_bites_when_a_human_grows_the_index() {
     let md = fat_index(MAX_INDEX_LINES + 40);
-    let out = from_md(Some(&md), &ages(&[]), NOW).expect("指针行充足");
+    let out = from_md(Some(&md), &ages(&[]), NOW, LEAD_IN_PROJECT).expect("指针行充足");
     let lines = body_lines(&out);
     assert_eq!(
         lines.len(),

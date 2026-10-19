@@ -107,7 +107,7 @@ async fn tree_session_slices_to_tail_and_appends_directory() {
         session_store::Message::User { content, .. } if content == "tail q"
     ));
     let system = payload.system.expect("system 在场");
-    let mem_at = system.find("<persistent_memory>").expect("记忆块在前");
+    let mem_at = system.find("<memory_index>").expect("记忆块在前");
     let tree_at = system.find("[memory tree]").expect("目录在后");
     assert!(mem_at < tree_at, "目录必须排在记忆块之后（§7.1 [2]→[3]）");
     assert!(
