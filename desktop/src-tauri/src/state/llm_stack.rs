@@ -40,6 +40,10 @@ pub(crate) struct Stack {
     pub assets: Arc<crate::assets::AssetStore>,
     pub app_llm: Arc<AppLlm>,
     pub llm: Arc<dyn LlmService>,
+    /// 超窗拒收读数表（S2 刀⑧）：构造点在这里，因为**写它的那一手**在发送侧；
+    /// 交回组装点再注给压缩侧（`state/background.rs` 的 `Compactor`）。两个使用方
+    /// 共用一张表的理由与代价 = [`crate::compact::Overflow`] 头注。
+    pub refusals: Arc<crate::compact::Overflow>,
 }
 
 pub(crate) fn build(init: Init) -> Stack {
@@ -97,6 +101,9 @@ pub(crate) fn build(init: Init) -> Stack {
     // assets 有 GC（按"sha 是否出现在日志文本里"判孤儿），spill 文件的 sha 不在
     // 日志里，混进去会被当孤儿删掉——理由写在 `spill.rs` 头注。
     let spill = Arc::new(crate::spill::SpillStore::new(&root));
+    // S2 刀⑧ 拒收读数：一次超窗被拒不会有用量上报，触发线因此追不上已经涨过的窗口
+    // ⇒ 压缩面自锁。表在这里 new（写它的是下面这台 AppLlm），mod.rs 把它交给压缩侧。
+    let refusals = Arc::new(crate::compact::Overflow::default());
     // 批 F：AppLlm 保具体类型句柄——子代理模型面工厂（SubagentLlm 内层）
     // 与全局服务共用同一实例。
     let app_llm = Arc::new(
@@ -104,7 +111,8 @@ pub(crate) fn build(init: Init) -> Stack {
             .with_retry_surface(Arc::clone(&stop_flags), llm_notify)
             .with_diagnoser(Arc::clone(&llm_diagnoser))
             .with_multimodal(Arc::clone(&assets), Arc::clone(&catalog))
-            .with_spill(Arc::clone(&spill)),
+            .with_spill(Arc::clone(&spill))
+            .with_refusals(Arc::clone(&refusals)),
     );
     let llm: Arc<dyn LlmService> = Arc::clone(&app_llm) as Arc<dyn LlmService>;
     ctx.provide_dyn::<dyn LlmService>(Arc::clone(&llm));
@@ -122,5 +130,6 @@ pub(crate) fn build(init: Init) -> Stack {
         assets,
         app_llm,
         llm,
+        refusals,
     }
 }

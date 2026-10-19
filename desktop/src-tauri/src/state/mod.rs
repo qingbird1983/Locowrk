@@ -54,6 +54,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         assets,
         app_llm,
         llm,
+        refusals,
     } = llm_stack::build(llm_stack::Init {
         app: app.clone(),
         ctx: Arc::clone(&ctx),
@@ -194,6 +195,9 @@ pub fn init_state(app: AppHandle) -> AppState {
         memory_files: Arc::clone(&memory_files),
         files_on: Arc::clone(&files_on),
         assets: Arc::clone(&assets),
+        // S2 刀⑧：拒收读数表——发送侧（llm_stack 里那台 AppLlm）写，压缩侧读，
+        // 两边都在组装点拿到同一份 `Arc` ⇒ 与下面那枚熔断表同一条共用件纪律。
+        compact_refusals: Arc::clone(&refusals),
         // 最后一枚用 move：waterfall 那一头已经拿走一份，这张表从此由两个使用方共有。
         compact_failures,
     });

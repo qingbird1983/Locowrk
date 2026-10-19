@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmService};
+use kernel_agent::{estimate_tokens, LlmError, LlmRequest, LlmResponse, LlmService};
 use serde_json::Value;
 
 use super::client::{CompatLlm, RetryHooks};
@@ -64,6 +64,11 @@ pub struct AppLlm {
     /// 超预算工具输出的落盘句柄（S2 刀②）：None = 不落盘，行为退回改前的纯截断
     /// （headless 与测试装配就走这一档，所以它是 Option 而不是必需字段）。
     spill: Option<Arc<crate::spill::SpillStore>>,
+    /// 超窗拒收读数（S2 刀⑧）：None = 不记（headless 与测试装配走这一档，与上面那枚
+    /// 同形）。**写它的是这里**（只有发送侧知道自己这一次被拒了），读它的是
+    /// `compact::deep::Compactor`——两个使用方，所以表由组装点构造、注给双方
+    /// （[`crate::compact::Overflow`] 头注：为什么必须有这张表、代价是什么）。
+    refusals: Option<Arc<crate::compact::Overflow>>,
 }
 
 impl AppLlm {
@@ -79,6 +84,7 @@ impl AppLlm {
             assets: None,
             catalog: None,
             spill: None,
+            refusals: None,
         }
     }
 
@@ -98,6 +104,7 @@ impl AppLlm {
             assets: None,
             catalog: None,
             spill: None,
+            refusals: None,
         }
     }
 
@@ -118,6 +125,13 @@ impl AppLlm {
     /// 把"必须在场"和"可以不在场"塞进同一个注入器，迟早有一侧的语义被读错。
     pub fn with_spill(mut self, spill: Arc<crate::spill::SpillStore>) -> Self {
         self.spill = Some(spill);
+        self
+    }
+
+    /// 组装点注入拒收读数表（S2 刀⑧）：与压缩侧共用同一张 ⇒ 一次超窗被拒，下一趟
+    /// step 边界的主层判定就读得到它（不这样这一层会被"上一次成功上报"那颗旧数钉死）。
+    pub fn with_refusals(mut self, refusals: Arc<crate::compact::Overflow>) -> Self {
+        self.refusals = Some(refusals);
         self
     }
 
@@ -167,6 +181,35 @@ impl AppLlm {
             should_stop: Box::new(move || stop.is_stopped(&sid_stop)),
             on_retry: Box::new(move |attempt, delay| notify(&sid_notify, attempt, delay)),
         })
+    }
+
+    /// 拒收现场记账（S2 刀⑧）。三条发送收口各调一次（与 [`Self::diagnose`] 同一条
+    /// 惯例），算式因此只有一份。
+    ///
+    /// 只认**超窗**：判别复用 `llm::retry` 那一份 `is_overflow_message`（不许有第二种
+    /// "这算超窗"的说法——限流、鉴权、模态拒发都各有自己的收口，把它们也记进来就等于
+    /// 让压缩层去追一堆跟窗口无关的失败）。占用尺用发送侧同一把
+    /// `estimate_tokens(&req.messages)`（与 `wire::payload` 那处预检钳制、与机械层的
+    /// `from_tokens` 同尺 ⇒ 不是第四把尺）。
+    pub(crate) fn refusal_note(
+        &self,
+        sid: Option<&str>,
+        est: u64,
+        out: &Result<LlmResponse, LlmError>,
+    ) {
+        let (Some(table), Some(sid), Some(err)) =
+            (self.refusals.as_deref(), sid, out.as_ref().err())
+        else {
+            return;
+        };
+        if super::is_overflow_message(&err.to_string()) {
+            tracing::info!(
+                session = sid,
+                tokens = est,
+                "这一趟被按超窗拒收：把占用读数交给压缩面（它不会有用量上报）"
+            );
+            table.note(sid, est);
+        }
     }
 
     /// 批 F 路由面：`params["route"] = {provider, model, thinking?}`（§7.2
@@ -347,7 +390,11 @@ impl LlmService for AppLlm {
         // 发送前模态门控（批 D §5.3 第二道）：拒发 = Fatal（重试无意义）
         super::wire::check_modalities(&req, image_allowed).map_err(LlmError::Backend)?;
         let assets = self.assets.as_deref();
-        self.real.complete_with(&cfg, caps, req, assets).await
+        let sid = req.session_id.clone();
+        let est = estimate_tokens(&req.messages);
+        let out = self.real.complete_with(&cfg, caps, req, assets).await;
+        self.refusal_note(sid.as_deref(), est, &out);
+        out
     }
 
     /// ⑳ 流式分发：同 complete 的设置驱动——未配置走演示替身（缺省实现
@@ -366,7 +413,10 @@ impl LlmService for AppLlm {
         super::wire::check_modalities(&req, image_allowed).map_err(LlmError::Backend)?;
         let hooks = self.hooks(req.session_id.as_deref());
         let assets = self.assets.as_deref();
-        self.real
+        let sid = req.session_id.clone();
+        let est = estimate_tokens(&req.messages);
+        let out = self
+            .real
             .complete_streaming_with(
                 &cfg,
                 caps,
@@ -376,7 +426,9 @@ impl LlmService for AppLlm {
                 &|_| false,
                 hooks.as_ref(),
             )
-            .await
+            .await;
+        self.refusal_note(sid.as_deref(), est, &out);
+        out
     }
 
     /// v2.57 推理通道分发：演示替身走缺省回落（无推理），真实模型把
@@ -396,7 +448,10 @@ impl LlmService for AppLlm {
         super::wire::check_modalities(&req, image_allowed).map_err(LlmError::Backend)?;
         let hooks = self.hooks(req.session_id.as_deref());
         let assets = self.assets.as_deref();
-        self.real
+        let sid = req.session_id.clone();
+        let est = estimate_tokens(&req.messages);
+        let out = self
+            .real
             .complete_streaming_with(
                 &cfg,
                 caps,
@@ -406,6 +461,8 @@ impl LlmService for AppLlm {
                 on_reasoning,
                 hooks.as_ref(),
             )
-            .await
+            .await;
+        self.refusal_note(sid.as_deref(), est, &out);
+        out
     }
 }

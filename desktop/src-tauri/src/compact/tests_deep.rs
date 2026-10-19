@@ -113,6 +113,15 @@ fn policy_at(session: &Session) -> UsagePolicy {
 }
 
 fn compactor(settings: Arc<SettingsStore>, cli: Arc<Scripted>) -> (Compactor, Arc<Scripted>) {
+    compactor_with(settings, cli, Arc::new(crate::compact::Overflow::default()))
+}
+
+/// 带指定拒收读数表的那一半（刀⑧ 的用例要自己 note 一张表，所以夹具拆开）。
+fn compactor_with(
+    settings: Arc<SettingsStore>,
+    cli: Arc<Scripted>,
+    refusals: Arc<crate::compact::Overflow>,
+) -> (Compactor, Arc<Scripted>) {
     (
         Compactor::new(
             settings,
@@ -120,9 +129,32 @@ fn compactor(settings: Arc<SettingsStore>, cli: Arc<Scripted>) -> (Compactor, Ar
             // 熔断表由组装点注入（刀⑤a）：测试里每条用例一枚新的，语义与原来
             // "Compactor 自带一张"完全相同——只是构造点换了地方。
             Arc::new(crate::compact::Failures::default()),
+            refusals,
         ),
         cli,
     )
+}
+
+/// 刀④ 那档占用读数的**改动之前原文**（只把刀⑧ 新加的拒收那一格去掉，其余一字未动）。
+/// 本刀有行为变化 ⇒ 按仓里口径（`tests_hotpath.rs` 那三条的同形做法）留一份参考实现
+/// 同场对比：同一份"被拒之后"的夹具，旧式读到的还是被拒之前那颗上报数（= ⓜ 说的自锁），
+/// 新式读到的顶到线上。没有这一式，新用例红与绿都说明不了"这一格真的变了"。
+fn used_old_shape(session: &Session) -> u64 {
+    // 生产里那两枚谓词是 `deep.rs` 的私有的；这里按它原式逐字重述（语义一字不动）。
+    let is_usage = |e: &SessionEvent| matches!(e, SessionEvent::LlmUsage { .. });
+    let is_compacted = |e: &SessionEvent| matches!(e, SessionEvent::ContextCompacted { .. });
+    let stale = match (
+        session.events().iter().rposition(is_usage),
+        session.events().iter().rposition(is_compacted),
+    ) {
+        (Some(u), Some(c)) => u < c,
+        _ => false,
+    };
+    if stale {
+        estimate_tokens(&session.derive_messages())
+    } else {
+        crate::context_budget::anchor(session).0
+    }
 }
 
 /// 夹具自证：脚本给的那份摘要必须过验收。它红了就不是被测对象的问题。
@@ -258,7 +290,7 @@ async fn a_stale_usage_report_does_not_make_us_compact_twice() {
         duration_ms: 1,
     });
     assert_eq!(
-        Compactor::used(&s),
+        cp.used(&s, "s-stale"),
         900_000,
         "上报新鲜就该吃上报（与进度条同一把尺）"
     );
@@ -273,7 +305,7 @@ async fn a_stale_usage_report_does_not_make_us_compact_twice() {
     );
     // 压完之后：那条上报已经是"压缩之前"的数了 ⇒ 换吃压后投影
     assert_eq!(
-        Compactor::used(&s),
+        cp.used(&s, "s-stale"),
         estimate_tokens(&s.derive_messages()),
         "上报陈旧就必须换尺，否则每一步都重压一次"
     );
@@ -281,6 +313,70 @@ async fn a_stale_usage_report_does_not_make_us_compact_twice() {
         cp.run(&mut s, "s-stale", &p).await,
         Outcome::Skipped("below-line"),
         "压后已经在线下 ⇒ 第二次不许再花钱"
+    );
+    assert_eq!(cli.count(), 1, "两次判定只发一条摘要往返");
+}
+
+/// 刀⑧ · ⓜ 那一格：一次请求被供应商按超窗拒掉 ⇒ **它不会有用量上报**，锚点因此停在
+/// 被拒之前那颗数，而历史照长在涨。旧形状在同一份夹具上读到的就是那颗偏低的上报数
+/// （= 长跑实测到的"41 个失败轮、微压缩与主层各 0 条落账"那个自锁），新形状吃拒收
+/// 读数、下一趟当场起步；压成之后那颗读数必须被清掉——留着它 = 一次旧拒收把这层
+/// 永久顶在线上方，正好撞回刀④ 那条"每个 step 重压一次"的坑。
+#[tokio::test]
+async fn a_refused_request_makes_the_next_pass_compact() {
+    let (settings, _) = settings_with(serde_json::json!({}), "compact-refusal");
+    let refusals = Arc::new(crate::compact::Overflow::default());
+    let (cp, cli) = compactor_with(
+        settings,
+        Scripted::new(vec![Ok(good_summary()), Ok(good_summary())]),
+        Arc::clone(&refusals),
+    );
+    let mut s = session_with(6);
+    let window = estimate_tokens(&s.derive_messages());
+    // 上报数只到当前窗口的一半：锚点那一路读到的永远"在线下"，这就是 ⓜ 的形状
+    s.append(SessionEvent::LlmUsage {
+        input: window / 2,
+        output: 10,
+        cache_read: 0,
+        cache_write: 0,
+        reasoning: 0,
+        total: window / 2 + 10,
+        duration_ms: 1,
+    });
+    let p = UsagePolicy {
+        threshold_tokens: window,
+        window_tokens: 1_000_000,
+        tools_est_tokens: 0,
+    };
+    // 参考实现同场对比：旧形状在这一格里分子只有那颗偏低的上报数 ⇒ 永远不动手。
+    assert_eq!(used_old_shape(&s), window / 2);
+    assert!(
+        used_old_shape(&s) < p.threshold_tokens,
+        "旧形状读到的是被拒之前那颗上报数 = 自锁的那一手（实测 {} < 阈值 {}）",
+        used_old_shape(&s),
+        p.threshold_tokens
+    );
+    // 现场：那一次请求确实发出去了、大小就是这个窗口，然后被拒收
+    refusals.note("s-refuse", window);
+    assert_eq!(
+        cp.used(&s, "s-refuse"),
+        window,
+        "拒收读数要顶到分子上（三档取最大）"
+    );
+    let out = cp.run(&mut s, "s-refuse", &p).await;
+    assert!(
+        matches!(out, Outcome::Compacted { .. }),
+        "被拒之后下一趟必须起步，实测 {out:?}"
+    );
+    assert_eq!(
+        refusals.of("s-refuse"),
+        None,
+        "压成之后旧读数要清掉，否则每一步都重压一次"
+    );
+    assert_eq!(
+        cp.run(&mut s, "s-refuse", &p).await,
+        Outcome::Skipped("below-line"),
+        "窗口已经小了 ⇒ 第二次不该再花钱"
     );
     assert_eq!(cli.count(), 1, "两次判定只发一条摘要往返");
 }

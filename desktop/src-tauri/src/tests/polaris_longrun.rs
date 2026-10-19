@@ -11,10 +11,12 @@
 //!   真链路上它是供应商 400/413 之后才出现的字面串）。
 //! - **③** 后半程每轮 input 均值 ≤ 前半程 ×1.2（每轮取"末次请求"= 那一轮真正发出去的形状）。
 //!
-//! 三腿分工：腿 1 三层齐着 = 判据本体；腿 2 两枚开关全关 = 证明这副装置能红（否则腿 1
+//! 四腿分工：腿 1 三层齐着 = 判据本体；腿 2 两枚开关全关 = 证明这副装置能红（否则腿 1
 //! 的绿可能只是负载压根没到线）；腿 3 只留主层 = 机械层不抢先时主层单独扛得住，同时给
 //! "主层在长会话里真起过作用"一个正面读数（腿 1 里微压缩先动手，主层可能一次都不起步，
-//! 那是裁定 C 的正常结果，不许拿它当主层没接线的证据，也不许拿它当压过了的证据）。
+//! 那是裁定 C 的正常结果，不许拿它当主层没接线的证据，也不许拿它当压过了的证据）；
+//! **腿 4 是刀⑧加的**：把输出预留钉成 512 复现台账 ⓜ 那个"预留小于一轮净增"的现场，
+//! 但要证的却是另一件事——撞窗之后这一层必须**自愈**，而不是从某一轮起全灭。
 
 use super::polaris_rig::*;
 use super::*;
@@ -39,6 +41,9 @@ struct RunReport {
     failed_turns: Vec<(u32, String)>,
     rejected: usize,
     summary_calls: usize,
+    /// 跑完那一刻拒收读数表里**还留着**的数（`Some` = 有一次被拒的现场从没被任何一趟
+    /// 压缩消掉，也就是"顶起步"没兑现）
+    leftover_refusal: Option<u64>,
     micro_entries: usize,
     deep_entries: usize,
     /// 日志只追加那一半：中点取的前缀字节数与终态同长度前缀是否逐字节相同
@@ -65,8 +70,8 @@ fn log_bytes(log: &std::path::Path) -> Vec<u8> {
     std::fs::read(&path).expect("日志读得回")
 }
 
-async fn long_run(tag: &str, micro_on: bool, deep_on: bool) -> RunReport {
-    let rig = rig(tag, micro_on, deep_on);
+async fn long_run(tag: &str, micro_on: bool, deep_on: bool, reserve: u64) -> RunReport {
+    let rig = rig(tag, micro_on, deep_on, reserve);
     let log = rig.root.join("sessions");
     let mut session = Session::new();
     let sink = Collector::default();
@@ -81,6 +86,7 @@ async fn long_run(tag: &str, micro_on: bool, deep_on: bool) -> RunReport {
         failed_turns: Vec::new(),
         rejected: 0,
         summary_calls: 0,
+        leftover_refusal: None,
         micro_entries: 0,
         deep_entries: 0,
         prefix_equal: false,
@@ -136,6 +142,7 @@ async fn long_run(tag: &str, micro_on: bool, deep_on: bool) -> RunReport {
     r.overflow_hits = raw.matches(OVERFLOW_SENTENCE).count();
     r.rejected = rig.gate.rejected();
     r.summary_calls = rig.summarizer.calls();
+    r.leftover_refusal = rig.refusals.of("s-polar");
     if let Some(probe) = prefix_probe {
         r.prefix_len = probe.len();
         // `starts_with` 就是"只追加"那句话的形状：终态必须以中点那份前缀开头。
@@ -174,7 +181,7 @@ fn dump(r: &RunReport) {
     s.push_str(&format!(
         concat!(
             "\n拒收（超窗的因）{} 次 · 失败轮 {} 个 · 日志里「{}」命中（超窗的果）{} 次\n",
-            "落账累计：微压缩 {} 条 / 主层 {} 条 · 摘要往返 {} 趟\n",
+            "落账累计：微压缩 {} 条 / 主层 {} 条 · 摘要往返 {} 趟 · 跑完仍挂着的拒收读数 {}\n",
             "前半均值 {:.0} · 后半均值 {:.0} ⇒ 比值 {:.3}\n",
             "峰值最大 {} · 中点前缀 {} 字节，终态同长度逐字节相同 = {}\n"
         ),
@@ -185,6 +192,7 @@ fn dump(r: &RunReport) {
         r.micro_entries,
         r.deep_entries,
         r.summary_calls,
+        r.leftover_refusal.unwrap_or(0),
         head,
         tail,
         ratio,
@@ -241,7 +249,7 @@ fn judge_ac_s2_9(r: &RunReport) {
 /// 腿 1：三层齐着跑 44 轮 —— AC-S2-9 三条 + ⓔ（微压缩那笔账落到会话日志那一行）。
 #[tokio::test]
 async fn a_hundred_heavy_turns_stay_inside_the_window() {
-    let r = long_run("s2-polaris-on", true, true).await;
+    let r = long_run("s2-polaris-on", true, true, MAX_OUTPUT_TOKENS).await;
     dump(&r);
     judge_ac_s2_9(&r);
     assert!(
@@ -261,7 +269,7 @@ async fn a_hundred_heavy_turns_stay_inside_the_window() {
 /// 没到预算边界，那腿 1 的绿就没有证明力（那是"什么都没测"而不是"测过且通过"）。
 #[tokio::test]
 async fn with_the_layers_off_the_same_script_breaks_through() {
-    let r = long_run("s2-polaris-off", false, false).await;
+    let r = long_run("s2-polaris-off", false, false, MAX_OUTPUT_TOKENS).await;
     dump(&r);
     let broke = r.rejected > 0 || !r.failed_turns.is_empty();
     assert!(
@@ -281,12 +289,51 @@ async fn with_the_layers_off_the_same_script_breaks_through() {
 /// 真起过作用（落账 > 0）。
 #[tokio::test]
 async fn the_deep_layer_alone_holds_the_window() {
-    let r = long_run("s2-polaris-deep-only", false, true).await;
+    let r = long_run("s2-polaris-deep-only", false, true, MAX_OUTPUT_TOKENS).await;
     dump(&r);
     judge_ac_s2_9(&r);
     assert!(
         r.deep_entries > 0,
         "主层一次都没落账（摘要往返 {} 趟）⇒ 这条链上深度压缩没起作用，腿 3 不算过",
         r.summary_calls
+    );
+}
+
+/// 腿 4（S2 刀⑧ · ⓜ 的跨进程证据）：把输出预留钉成 512，**并把微压缩关掉**——机械层
+/// 帮不上时，那一格预留才是唯一挡在窗口前面的东西，而这正是登记 ⓜ 时的现场（开着微压缩
+/// 时它把占用摁在自己那条线下面，这一腿压根撞不到窗，实测过一次：拒收 0 次 ⇒ 什么也没测）。
+/// 要看到三件事：确实撞了窗（`rejected > 0`）、被拒之后主层被顶起步（落账 > 0）、失败轮是
+/// **稀疏的**而不是从某轮起全灭。旧形状就是实测记下的那一版：44 轮里 41 个失败轮、微压缩与
+/// 主层各 0 条落账——开关全开着，界面上连一句"压缩没起作用"都没有。
+#[tokio::test]
+async fn a_refused_turn_does_not_lock_the_layer() {
+    let r = long_run("s2-polaris-tight-reserve", false, true, 512).await;
+    dump(&r);
+    assert!(
+        r.rejected > 0,
+        "这一腿得先真的撞窗（预留 512 远小于一轮净增），一次都没拒就说明配方不对"
+    );
+    assert!(
+        r.deep_entries > 0,
+        "撞窗之后主层一条账都没落（摘要往返 {} 趟）= ⓜ 那个自锁还在：被拒的那一次\
+         没有用量上报，只吃锚点的触发线永远追不上已经涨过的窗口",
+        r.summary_calls
+    );
+    let last_failed = r.failed_turns.iter().map(|(n, _)| *n).max().unwrap_or(0);
+    assert!(
+        last_failed < RUNS,
+        "最后一个失败轮 {last_failed} 之后再没有跑完的轮 = 从那儿起全灭 = 自锁没解开"
+    );
+    assert!(
+        r.failed_turns.len() * 4 <= RUNS as usize,
+        "失败轮 {} 个超过四分之一的轮数（首个 {}）= 被拒之后没立刻把这一层顶起步，\
+         后面每轮都在撞窗",
+        r.failed_turns.len(),
+        r.failed_turns.first().map(|(n, _)| *n).unwrap_or(0)
+    );
+    assert!(
+        r.leftover_refusal.is_none(),
+        "跑完那一刻表里还留着读数 {:?} = 有次被拒的现场从没被任何一趟压缩消掉",
+        r.leftover_refusal
     );
 }

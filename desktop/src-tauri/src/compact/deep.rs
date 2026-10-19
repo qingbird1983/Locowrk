@@ -9,7 +9,9 @@
 //!
 //! 这一刀真正要小心的四件事，各在下面的对应位置展开：
 //! ① [`Compactor::used`] 的**新鲜度**——压完之后 `LlmUsage` 还是压之前那个数，
-//! 不换尺就会每个 step 再烧一条摘要往返；
+//! 不换尺就会每个 step 再烧一条摘要往返；刀⑧ 又补了第三档：**被供应商按超窗拒收的
+//! 那一次压根没有 `LlmUsage`**（它在处理之前就吃了闭门羹），不另记这一笔，触发线就
+//! 永远读不到"已经超了"，这一层当场自锁（台账 ⓜ，读数与形状见 [`super::Overflow`]）；
 //! ② **先验货再落账**——验的是归一化之后那一份文本（模型把整份摘要包进代码块、
 //! 剥完什么都不剩，也算不合格），不合格只进失败计数（熔断的输入），不进日志；
 //! ③ `to_tokens` 用**实测**（摘要文本此刻才存在），与判定时的目标位分属"预估"与
@@ -26,7 +28,7 @@ use session_store::{summarized_message, Session, SessionEvent};
 use super::{
     plan,
     prompt::{build_prompt, format_summary, missing_sections, render_history, shrink_history},
-    Failures, PlanInput, SHRINK_STEPS,
+    Failures, Overflow, PlanInput, SHRINK_STEPS,
 };
 use crate::runner::UsagePolicy;
 use crate::settings::SettingsStore;
@@ -79,6 +81,9 @@ pub(crate) struct Compactor {
     /// （`slide.rs`）要读同一个熔断态，两张表 = "主层已熔断但保护网没醒"。
     /// 为什么这张表长什么样、为什么它不待在结构体里 = [`super::Failures`] 头注。
     failures: Arc<Failures>,
+    /// 超窗拒收的读数（刀⑧ · [`super::Overflow`]）：**写它的是发送侧**，本层只读 +
+    /// 压成之后清。同一条"两个使用方不各建一张"的纪律 ⇒ 由组装点注入。
+    refusals: Arc<Overflow>,
 }
 
 impl Compactor {
@@ -86,23 +91,30 @@ impl Compactor {
         settings: Arc<SettingsStore>,
         aux: Arc<dyn MemoryManagerClient>,
         failures: Arc<Failures>,
+        refusals: Arc<Overflow>,
     ) -> Self {
         Self {
             settings,
             aux,
             failures,
+            refusals,
         }
     }
 
-    /// 占用读数（"到线了没"的分子）。
+    /// 占用读数（"到线了没"的分子）。三档，取最大：
     ///
-    /// 与进度条、整理触发线同一把尺 = [`crate::context_budget::anchor`]（优先供应商
-    /// 上报的 `LlmUsage`）。**唯一多出来的一条纪律是新鲜度**：若最后一次 `LlmUsage`
-    /// 落在最后一次 `ContextCompacted` **之前**，那个数量的是压缩之前的窗口，照它
-    /// 判定会得出"仍然超线"⇒ 本轮每个 step 再压一次、每次一条模型往返。那一档改吃
-    /// 压后投影的估算——用的仍是 anchor 自己"无上报"那一档的同一把估算尺，
-    /// 不是为压缩另造第三把尺。
-    pub(crate) fn used(session: &Session) -> u64 {
+    /// 1. **供应商上报**（新鲜时）——与进度条、整理触发线同一把尺
+    ///    = [`crate::context_budget::anchor`]（优先最后一次 `LlmUsage`）。
+    /// 2. **压后投影估算**——若最后一次 `LlmUsage` 落在最后一次 `ContextCompacted`
+    ///    **之前**，那个数量的是压缩之前的窗口，照它判定会得出"仍然超线"⇒ 本轮每个
+    ///    step 再压一次、每次一条模型往返。这一档用的仍是 anchor 自己"无上报"那一档
+    ///    的同一把估算尺，不是为压缩另造尺。
+    /// 3. **超窗拒收的读数**（刀⑧ · [`super::Overflow`]）——被拒的那一次**既没有上报
+    ///    也没有压缩事件**，上面两式都追不到它，于是触发线永远停在"被拒之前"那颗数，
+    ///    这一层当场自锁（实测形状：连续 41 个失败轮、两层各 0 条落账）。
+    ///
+    /// 三档取**最大**而不是"换尺"：窗口在被压小之前只会变大，任何一档读数都是下界。
+    pub(crate) fn used(&self, session: &Session, session_id: &str) -> u64 {
         let stale = match (
             session.events().iter().rposition(is_usage),
             session.events().iter().rposition(is_compacted),
@@ -110,11 +122,12 @@ impl Compactor {
             (Some(u), Some(c)) => u < c,
             _ => false,
         };
-        if stale {
+        let window = if stale {
             estimate_tokens(&session.derive_messages())
         } else {
             crate::context_budget::anchor(session).0
-        }
+        };
+        window.max(self.refusals.of(session_id).unwrap_or(0))
     }
 
     /// step 边界那一句 = **自动**通路（runner 到线时调）。`policy` 带的是**组装点
@@ -162,7 +175,7 @@ impl Compactor {
         // "窗口已知"的证据，必须单独看这一枚。
         let threshold = (policy.window_tokens > 0).then_some(policy.threshold_tokens);
         let messages = session.derive_messages();
-        let used = Self::used(session);
+        let used = self.used(session, session_id);
         let plan = plan(&PlanInput {
             messages: &messages,
             threshold,
@@ -275,6 +288,9 @@ impl Compactor {
             ts: crate::timeutil::now_ms(),
         });
         self.failures.clear(session_id);
+        // 拒收读数一并清掉：窗口此刻已经比被拒那一次小了，留着它 = 一次旧拒收把这层
+        // 永久顶在线上方（与刀④ 那条"每个 step 重压一次"同一个坑）。
+        self.refusals.clear(session_id);
         tracing::info!(
             session = session_id,
             from_tokens,

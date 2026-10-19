@@ -1105,6 +1105,22 @@ const CHECKS = [
       ),
     '7',
   ],
+  [
+    'SS26',
+    '刀⑧ 的**写入点分工**：`.refusal_note(` 的调用只住在 `llm/app_llm.rs`，且恒 3 处' +
+      '（三条发送收口各一次，与同文件里 `.diagnose(` 那条惯例同形）。为什么行为簇不够：' +
+      '`llm/tests/refusals.rs` 那三条是把这方法**直接调**出来的，它证"该写的时候写不写、' +
+      '不该写的时候别乱写"——把生产里那三处调用全删掉，四条照样全绿，而那颗读数永远不会' +
+      '被记，台账 ⓜ 那个自锁原样回来，且比改前更难发现（表、字段、判定、测试全在场，' +
+      '看着就是"有人写过这个机制"）。次数恒 3 盯的是另一半：漏掉一条收口 = 流式那两路' +
+      '不记账，界面上的症状恰好就是长跑腿 4 实测到的那个（每轮失败而开关开着）。',
+    (m) =>
+      `${filesWith(m.hostDesktop, /\.refusal_note\s*\(/)}|${m.hostDesktop.reduce(
+        (a, f) => a + ((f.code.match(/\.refusal_note\s*\(/g) || []).length),
+        0,
+      )}`,
+    'llm/app_llm.rs|3',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -1404,6 +1420,20 @@ if (SELFTEST) {
       (m.compact += '\nfn _drift() { Plan::stop("brand-new-reason"); }\n'),
     SS25: (m) =>
       m.frontSrc.push('const keys = {\n  "brand-new-reason": "notice.compactBrandNew",\n};\n'),
+    // 窄变异（刀⑧）：把三条发送收口里的**第一条** `refusal_note` 调用删掉 ⇒ 次数 3→2 而
+    // 文件集合不变，证的正是这一档独有的那一格：漏一条收口 = 那一路请求被拒之后不记账，
+    // 自锁照旧存在。用 map 换新对象而不是原地改 `f.code`：selftest 的快照只做了浅拷贝，
+    // 原地改会让这一档污染后面每一档（SS9/SS9c 那对注释记过同一个坑）。
+    SS26: (m) => {
+      m.hostDesktop = m.hostDesktop.map((f) =>
+        f.rel === 'llm/app_llm.rs'
+          ? {
+              ...f,
+              code: f.code.replace('        self.refusal_note(sid.as_deref(), est, &out);\n', ''),
+            }
+          : f,
+      );
+    },
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

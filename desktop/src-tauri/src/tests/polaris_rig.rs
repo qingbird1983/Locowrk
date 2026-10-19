@@ -118,15 +118,19 @@ impl ToolSource for RegenSource {
 /// `fs_read`；拿到工具结果→汇总作答（本轮收束）。
 pub(crate) struct Gate {
     window: u64,
+    /// 拒收读数表（刀⑧）：真链路里写它的是 `AppLlm`，替身链路里就是这里——
+    /// 同一件事（被拒那一次没有用量上报，得把读数交给压缩面），同一个尺。
+    refusals: Arc<crate::compact::Overflow>,
     inputs: StdMutex<Vec<u64>>,
     rejected: AtomicUsize,
     next_call: AtomicUsize,
 }
 
 impl Gate {
-    fn new(window: u64) -> Arc<Self> {
+    fn new(window: u64, refusals: Arc<crate::compact::Overflow>) -> Arc<Self> {
         Arc::new(Self {
             window,
+            refusals,
             inputs: StdMutex::new(Vec::new()),
             rejected: AtomicUsize::new(0),
             next_call: AtomicUsize::new(0),
@@ -147,6 +151,12 @@ impl LlmService for Gate {
         self.inputs.lock().unwrap().push(input);
         if input > self.window {
             self.rejected.fetch_add(1, Ordering::SeqCst);
+            // ⓜ 那条链的替身现场：被拒的这一次**永远不会有用量上报**（供应商在处理
+            // 之前就关门），所以得像 `AppLlm::refusal_note` 那样把这颗读数交给压缩面，
+            // 否则触发线追不上已经涨过的窗口 = 整面自锁。
+            if let Some(sid) = req.session_id.as_deref() {
+                self.refusals.note(sid, input);
+            }
             return Err(LlmError::Backend(format!(
                 "模拟供应商 413：请求 {input} token 超过窗口 {}",
                 self.window
@@ -222,6 +232,8 @@ pub(crate) struct Rig {
     pub(crate) compactor: Arc<Compactor>,
     pub(crate) gate: Arc<Gate>,
     pub(crate) summarizer: Arc<Summarizer>,
+    /// 长跑里"被拒现场"的读数表（腿 4 判它有没有把主层顶起步）
+    pub(crate) refusals: Arc<crate::compact::Overflow>,
     pub(crate) threshold: u64,
     pub(crate) window: u64,
     pub(crate) root: std::path::PathBuf,
@@ -237,7 +249,9 @@ impl Rig {
     }
 }
 
-pub(crate) fn rig(tag: &str, micro_on: bool, deep_on: bool) -> Rig {
+/// `reserve` = 档位上钉死的输出上限（也就是输出侧预留，见 `context_budget::output_reserve`）。
+/// 腿 4 用它造出"预留小于一轮增量"那一版配方——ⓜ 登记的自锁现场。
+pub(crate) fn rig(tag: &str, micro_on: bool, deep_on: bool, reserve: u64) -> Rig {
     let root = crate::testutil::work_dir(tag);
     std::fs::write(
         root.join("settings.json"),
@@ -245,7 +259,7 @@ pub(crate) fn rig(tag: &str, micro_on: bool, deep_on: bool) -> Rig {
             "llm": {"active": "p", "providers": [{
                 "id": "p", "kind": "openai", "model": "m",
                 "windowTokens": WINDOW_TOKENS,
-                "models": [{"id": "m", "maxOutput": MAX_OUTPUT_TOKENS}]
+                "models": [{"id": "m", "maxOutput": reserve}]
             }]},
             "context": {"microEnabled": micro_on, "compactEnabled": deep_on}
         })
@@ -260,7 +274,7 @@ pub(crate) fn rig(tag: &str, micro_on: bool, deep_on: bool) -> Rig {
         Some(WINDOW_TOKENS),
         "窗口必须从 llm 档位真读进来（读不到 = 夹具坏了，不是压缩面坏了）"
     );
-    assert_eq!(max_output, Some(MAX_OUTPUT_TOKENS));
+    assert_eq!(max_output, Some(reserve));
     // 阈值走生产那把尺，不在这里手填（取数纪律：一个出处）。
     let threshold = effective_threshold(settings.organize_threshold_tokens(), window, max_output);
     let main: MainThreshold = {
@@ -271,7 +285,8 @@ pub(crate) fn rig(tag: &str, micro_on: bool, deep_on: bool) -> Rig {
         })
     };
     let failures = Arc::new(Failures::default());
-    let gate = Gate::new(window.unwrap());
+    let refusals = Arc::new(crate::compact::Overflow::default());
+    let gate = Gate::new(window.unwrap(), Arc::clone(&refusals));
     let summarizer = Arc::new(Summarizer::default());
     let ctx = Arc::new(Context::new());
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(RegenSource));
@@ -296,12 +311,14 @@ pub(crate) fn rig(tag: &str, micro_on: bool, deep_on: bool) -> Rig {
         settings,
         Arc::clone(&summarizer) as Arc<dyn MemoryManagerClient>,
         failures,
+        Arc::clone(&refusals),
     ));
     Rig {
         kernel: Kernel::new(ctx, vec![]),
         compactor,
         gate,
         summarizer,
+        refusals,
         threshold,
         window: window.unwrap(),
         root,
