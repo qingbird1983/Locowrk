@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use super::{one_line, scope_dirs, sync};
+use super::{layers, one_line, scope_dirs, sync};
 
 /// 从 frontmatter 读回 description（索引 hook 用；无 = None）。只服务索引，
 /// 所以住在这片；整块 frontmatter 的读回面在 `sync::parse_fact`（那边字段全）。
@@ -56,6 +56,30 @@ fn clamp_index(lines: Vec<String>) -> (Vec<String>, bool) {
 pub fn refresh_index(root: &Path, workspace: &str) -> Result<(), String> {
     let (dir, index_path) = scope_dirs(root, workspace)?;
     refresh_layer(&dir, &index_path)
+}
+
+/// 重建**盘上每一层**的索引（对账侧用这条）。返回 `(刷成功的层数, 没刷到的层数)`。
+///
+/// 为什么需要它而不是让调用方按 workspace 逐层调 [`refresh_index`]：真源 = 文件之后，
+/// "盘上有几层"只有 [`layers`] 能回答（它给的是目录），而人在文件管理器里手工建出来、
+/// 或手工丢进去的那个项目层**根本没有权威 workspace 原串**——拿目录名去反推就是第五处
+/// hint 陷阱（`ADR-0007` §18 那一段），算出来的目录指到别处，既不报错也不生效。
+///
+/// 第二返回值必须被调用方记进 warning：扫不动的层**不进清单**（`layers()` 只枚举读得动的
+/// 目录），不交代它就会把"读不到"演成"这里没东西"——与刀④c 裁定③那两个数同一件事。
+/// 单层写盘失败也算进这一档：它的含义同样是"这一层的索引现在不是文件的现状"。
+pub fn refresh_all_indexes(root: &Path) -> (usize, usize) {
+    let (dirs, blocked) = layers(root);
+    let mut done = 0usize;
+    let mut skipped = blocked;
+    for l in &dirs {
+        if refresh_layer(&l.facts, &l.index).is_ok() {
+            done += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+    (done, skipped)
 }
 
 /// 重建**已知某一层**的索引（拿事实目录 + 索引路径，不按键位算）。

@@ -197,3 +197,42 @@ fn project_file_without_frontmatter_workspace_resolves_via_dir() {
     assert_eq!(sum2.warnings, 1, "{sum2:?}");
     assert_eq!(sum2.created, 0, "bare.md 已同步零噪声");
 }
+
+/// 人手工丢出来的那一层，索引也必须被重建（2026-10-19 真实窗口走查抓到的洞）。
+///
+/// 改前 `run()` 只刷"这一轮删过幽灵行的层"（那份 `dirty_scopes`）⇒ 往一个影子表与
+/// `known_workspaces` 都不知道的项目层里丢一个 `.md`，管理页层区的条数会涨（那是
+/// `layer_stats` 扫盘算的），而 `MEMORY.md` 一行不长 ⇒ 注入侧读的正是那份索引，
+/// 模型永远看不见这条记忆。`MemoryPage` 的 `onMounted` 那句"人改 .md 打开本页即生效——
+/// 文件为准回写索引"承诺的就是这件事，改前它没有实现者。
+#[test]
+fn a_layer_nobody_declared_still_gets_its_index_rebuilt() {
+    let (store, files, dir) = setup("orphan-index");
+    // ⚠ 键位必须过 `scope_key`：`MemoryStore::write` 内部归一之后才落盘（crud.rs 头注），
+    // 测试拿未归一的原串去算 `fact_rel_path` 会指到**另一个目录名**上——第一版就是这么
+    // 红在 `fs::write(...).unwrap()` 的 NotFound 上的（夹具自己算错了落点，不是实现坏了）。
+    let ws = crate::workspace::scope_key(Some("F:/ws/proj-x"));
+    store
+        .write(&ws, "note.deploy", "先跑迁移再重启", "ops", "explicit")
+        .unwrap();
+    let rel = memlayout::fact_rel_path(&ws, "note.deploy");
+    let facts = md_root(&dir).join(&rel).parent().unwrap().to_path_buf();
+    let index = facts.parent().unwrap().join("MEMORY.md");
+    // 把索引砸成明显不是文件现状的样子。这一层不在 `scopes` 里（写路径不碰库 ⇒ 影子表
+    // 没有它，`known` 又传空），所以改前没有任何一条通路会回来修它。
+    std::fs::write(&index, "# 记忆索引\n\n- [stale](stale.md) — 旧行\n").unwrap();
+    let sum = run(&store, &files, &[]).unwrap();
+    let text = std::fs::read_to_string(&index).unwrap();
+    assert!(
+        text.contains("[note.deploy](note.deploy.md)"),
+        "对账要以文件为准重建这一层的索引：{text}\n{sum:?}"
+    );
+    assert!(
+        !text.contains("stale"),
+        "重建 = 换掉旧内容，不是往后追加：{text}"
+    );
+    assert!(
+        facts.join("note.deploy.md").is_file(),
+        "夹具自己得先在场（否则上面两条断言判的是空气）"
+    );
+}

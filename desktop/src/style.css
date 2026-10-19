@@ -965,3 +965,12 @@
 #welcome-composer-slot .composer__wsrow {
   width: min(100%, 720px);
 }
+
+/* 「堆叠页里的列表区」下限（唯一落点，S1 刀④c 真实窗口走查）：一个页面里纵向堆了
+ * 固定块 + ListPage 时，`flex-1 min-h-0` 允许列表被压到 0 高——记忆页实测过：层区
+ * 加进来之后 768px 窗口里事实列表一行都看不见。组件里各写一份 `min-h-64` 就是
+ * 同一属性两个出处，所以收在这条共用类上（与 `.lw-expand` / `.lw-tabhead` 同族做法）。
+ * 定义在 utilities 之后 ⇒ 与 ListPage 根上的 `min-h-0` 同权重、后者被覆盖。 */
+.lw-list-floor {
+  min-height: 16rem;
+}

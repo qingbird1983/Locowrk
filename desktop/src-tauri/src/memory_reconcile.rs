@@ -108,7 +108,6 @@ pub fn run(
     // ---- 行优先：行在文件缺（标记在 = 我们曾写过）→ 人删文件 → 删行 ----
     let mut scopes: BTreeSet<String> = memory.all_workspaces()?.into_iter().collect();
     scopes.extend(known_workspaces.iter().cloned());
-    let mut dirty_scopes: Vec<String> = Vec::new();
     for ws in &scopes {
         // 路径一律经 memlayout（Q15 收口：这里以前自己拼第二份 `projects/<dir>/facts`）。
         // Err 支在现状不可达（`project_dir` 只对 `''` 报错，而 `''` 上面已分流）——
@@ -130,16 +129,24 @@ pub fn run(
             if !root.join(&rel).exists() && memlayout::read_marker(root, &rel).is_some() {
                 memory.reconcile_delete(ws, &r.key)?;
                 sum.deleted += 1;
-                dirty_scopes.push(ws.clone());
             }
         }
     }
-    for ws in &dirty_scopes {
-        if let Err(e) = memlayout::refresh_index(root, ws) {
-            sum.warnings += 1;
-            tracing::warn!("reconcile 索引刷新失败（{ws}）: {e}");
-        }
+    // ---- 索引以文件为准重建**每一层**（2026-10-19 真实窗口走查补）------------------
+    // 改前这里只刷"这一轮删过幽灵行"的层 ⇒ 人在文件管理器里往 `global/` 或某个
+    // `projects/*/facts/` 丢进一个 `.md`，打开管理页看到的层条数会涨（那是扫盘算的），
+    // 而 `MEMORY.md` 一行都不长 ⇒ 注入侧读那份索引，模型就永远看不见它。本组件
+    // `onMounted` 那句注释（"人改 .md 打开本页即生效——文件为准回写索引"）承诺的
+    // 就是这个动作，改前它没有实现者。
+    // 为什么走 `refresh_all_indexes` 而不是按 `scopes` 逐层 `refresh_index`：`scopes` 来自
+    // 影子表与已知工作区，**手工建出来的那一层不在里面**（没有权威 workspace 原串），
+    // 拿目录名反推就是第五处 hint 陷阱。能回答"盘上有几层"的只有磁盘本身。
+    let (refreshed, skipped) = memlayout::refresh_all_indexes(root);
+    sum.warnings += skipped as u32;
+    if skipped > 0 {
+        tracing::warn!("reconcile 有 {skipped} 层索引没重建（扫不动或写盘失败），读数不含它们");
     }
+    tracing::debug!("reconcile 重建了 {refreshed} 层索引");
     Ok(sum)
 }
 

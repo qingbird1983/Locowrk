@@ -149,7 +149,15 @@ async function saveEdit() {
   }
 }
 
-/** 删除：第一次点进入确认态，再点执行；点其他处/重选行会复位。 */
+/**
+ * 删除：第一次点进入确认态（文案变「确认删除」），再点执行。
+ *
+ * ⚠ 复位只有两条路：切去编辑另一行（`startEdit` 里那句 `confirmingDelete = null`）、
+ * 或整页重建。原先这句注释写着"点其他处会复位"——**实现里没有 clickoutside**，
+ * 2026-10-19 真实窗口走查实测：确认态挂着，点页面空白处它仍然在。注释说了一件没发生的
+ * 事，比没有注释更糟（下一个人会以为已经安全了）。要不要给"再点一次"这类确认态加
+ * 超时或外点复位 = 新形态，已登记 specs/05 待拍板（回收区「清空」那枚同形）。
+ */
 async function remove(row: MemoryRow) {
   const id = rowId(row);
   if (confirmingDelete.value !== id) {
@@ -159,7 +167,11 @@ async function remove(row: MemoryRow) {
   confirmingDelete.value = null;
   try {
     await memoryDelete(row.workspace, row.key);
-    await load();
+    // 走 onMemoryChanged 而不是只 load()：软删之后"这条去了哪儿"就在回收区那一块，
+    // 列表刷新了而回收区不刷新 = 人刚点完删除却看不到"还能恢复"这件事（2026-10-19
+    // 真实窗口走查实测：磁盘上 obsolete/global/xxx~<ms>.md 已经落好，界面上仍写
+    // "回收区是空的"）。层区那一行的条数同理。
+    await onMemoryChanged();
   } catch (e) {
     loadError.value = String(e);
   }
@@ -173,7 +185,8 @@ async function clearAll() {
   confirmingClear.value = false;
   try {
     await memoryClearAll();
-    await load();
+    // 同 remove()：清空 = 一批条目整体进回收区，回收区与层区条数必须跟着动。
+    await onMemoryChanged();
   } catch (e) {
     loadError.value = String(e);
   }
@@ -202,8 +215,13 @@ function timeText(row: MemoryRow): string {
     <!-- 看板档 = 只读导航画布（左栏 + 四列汇聚，MB §3） -->
     <TreeBoard v-if="tab === 'board'" />
 
-    <!-- 事实库档 = 现役全部内容原样搬进来（事实列表 + 章节编辑 + 注入解释 + 清空） -->
-    <template v-else>
+    <!-- 事实库档 = 现役全部内容原样搬进来（事实列表 + 章节编辑 + 注入解释 + 清空）。
+         ⚠ 这一支**整支可滚**（2026-10-19 真实窗口走查实测）：刀④b/④c 把「记忆层」那块
+         加进来之后，固定块吃掉 ~500px，而列表区 `flex-1 min-h-0` 允许被压到 0 高 ⇒
+         768px 窗口里事实列表**一行都看不见**（搜索框也被裁掉），下面的只读区同样够不着。
+         根容器仍 `overflow-hidden` 是给「看板」那一支的定高画布用的，不能动 ⇒ 滚动只加在
+         这一支里面，列表区另给 `.lw-list-floor` 下限。 -->
+    <div v-else class="flex min-h-0 flex-1 flex-col overflow-y-auto">
     <!-- 层区（刀④b 三枚行为开关 + 刀④c「每层一行」= ADR-0007 §18 那一整句）。版式、写回
          与「删除该层」的二次确认都在组件里，理由写在 memory/LayerSection.vue 的头注。 -->
     <LayerSection ref="layerSection" @changed="onMemoryChanged" />
@@ -229,6 +247,7 @@ function timeText(row: MemoryRow): string {
     </div>
     <ListPage
       v-model:search="search"
+      class="lw-list-floor"
       :is-empty="isEmpty"
       :empty-text="emptyText"
       :search-placeholder="t('memory.search')"
@@ -363,6 +382,6 @@ function timeText(row: MemoryRow): string {
       </button>
       <p class="ml-auto text-[length:var(--lw-fs-11)] text-ink-5">{{ t("memory.hint") }}</p>
     </div>
-    </template>
+    </div>
   </div>
 </template>

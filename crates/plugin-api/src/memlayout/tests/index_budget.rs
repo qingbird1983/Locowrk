@@ -87,3 +87,61 @@ fn refresh_index_char_budget_bites_before_line_budget() {
     assert!(index.contains(INDEX_TRUNCATED_NOTE), "先撞线同样要自描述");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// `refresh_all_indexes` 管的是**盘上所有层**，不是"调用方知道的那几个 workspace"。
+///
+/// 与宿主 `memory_reconcile::tests` 里那条的分工：那条证"对账真的调了它"（红在改前——
+/// 改前只刷"这一轮删过幽灵行的层"），这条证它自己交出的两个数：刷了几层、有几层没刷到。
+/// 后者是 `layers()` 的既有纪律——扫不动的层**不进清单**，不单独交代就会被读成"这里没东西"
+/// （刀④c 裁定③同一件事，那里是两个数，这里是其中一个）。
+#[test]
+fn refresh_all_indexes_rebuilds_every_layer_on_disk() {
+    let root = std::env::temp_dir().join(format!("memlayout-all-layers-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let global = root.join(paths::GLOBAL_DIR);
+    std::fs::create_dir_all(&global).unwrap();
+    for key in ["alpha", "beta"] {
+        std::fs::write(
+            global.join(format!("{key}.md")),
+            entry("", key, "v").render(),
+        )
+        .unwrap();
+    }
+    // 一个项目层：目录照算式建出来，而**权威原串此后不告诉任何调用方**——这正是人在文件
+    // 管理器里手工丢出来的那一层的形状。按 `scopes` 逐层刷的那种写法在这里会漏掉它。
+    let ws = r"F:\proj\Orphan";
+    seed_facts(&root, ws, 1, 1);
+    let (done, skipped) = refresh_all_indexes(&root);
+    assert_eq!(skipped, 0, "两层都该刷得动，刷了 {done} 层");
+    assert_eq!(done, 2, "全局层 + 那个没人声明过的项目层：{done}");
+    let gtext = std::fs::read_to_string(global.join("MEMORY.md")).unwrap();
+    assert!(
+        gtext.contains("[alpha](alpha.md)") && gtext.contains("[beta](beta.md)"),
+        "全局层索引要按盘上文件重建：{gtext}"
+    );
+    let ptext = index_text(&root, ws);
+    assert!(ptext.contains("[k.0](k.0.md)"), "项目层同样要重建：{ptext}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 扫不动的那一层必须从**第二返回值**交代（夹具 = `projects/broken/facts` 拿一个普通文件
+/// 冒充目录，与 `read_back.rs` 那两条同形）。不交代的话"这一层读不动"和"这一层没记过东西"
+/// 就是同一个答案——真源 = 文件之后没有第二个源能揭穿它。
+#[test]
+fn refresh_all_indexes_reports_layers_it_could_not_reach() {
+    let root = std::env::temp_dir().join(format!("memlayout-skipped-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let broken = paths::projects_dir(&root).join("broken");
+    std::fs::create_dir_all(&broken).unwrap();
+    std::fs::write(broken.join("facts"), "这不是目录").unwrap();
+    let global = root.join(paths::GLOBAL_DIR);
+    std::fs::create_dir_all(&global).unwrap();
+    std::fs::write(global.join("a.md"), entry("", "a", "v").render()).unwrap();
+    let (done, skipped) = refresh_all_indexes(&root);
+    assert_eq!(done, 1, "只有全局层刷得动，实际 {done}");
+    assert_eq!(
+        skipped, 1,
+        "那一层要被点名，不许演成『这里没东西』（全局层永远在场，所以它不该是 0）"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

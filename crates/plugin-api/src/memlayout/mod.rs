@@ -44,7 +44,9 @@ mod sync;
 
 // 索引面与读面各自成片，对外路径仍走这里 ⇒ 消费点（宿主 memory_files /
 // memory_reconcile / memory_index、插件 store）一个字都不用动。
-pub use index::{INDEX_TRUNCATED_NOTE, MAX_INDEX_CHARS, MAX_INDEX_LINES, refresh_index};
+pub use index::{
+    INDEX_TRUNCATED_NOTE, MAX_INDEX_CHARS, MAX_INDEX_LINES, refresh_all_indexes, refresh_index,
+};
 pub use kind::{
     Layer, MEMORY_TYPES, UNCLASSIFIED_TYPE, layer_for, missing_guidance, normalize_type,
 };
