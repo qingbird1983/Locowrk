@@ -66,14 +66,15 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   │   │                             #         执行循环 · 模型接入与线格式（client.rs · wire.rs）· 提示词分层 · 事件通道常量 · 工具接线
 │   │   ├── approval/ permission_mode/ permission_rules/ privacy/ autodisable.rs
 │   │   │                             #         审批与决策表（approval/decide.rs：固定七步的裁决序；approval/mod.rs：问人、挂起等待、豁免、守夜超时）· 四档权限 · 粘性授权规则 · 底线 · 自动禁用
-│   │   ├── memory/ memory.rs memory_learn/ memory_files/ memory_index/ memory_reconcile/ memory_tree_reconcile/
+│   │   ├── memory/ memory.rs memory_files/ memory_index/ memory_reconcile/ memory_tree_reconcile/
 │   │   │                             #         宿主侧记忆族 · 学习列 · 文件化 · 索引 · 两条对账（memory.rs 只留 mod + pub use，七个面在 memory/ · 与插件那侧同源）
+│   │   │                             #         `memory_learn/`（四信号加权排序 + 命中写回）随 S3 刀③b 整族退役 ⇒ 学习两列在场而没人读写，去处随 S4
 │   │   ├── settings/ state/ workspace.rs data_root.rs plugins_root.rs timeutil.rs
 │   │   │                             #         设置页分区 · 全局状态 · 工作区解析 · 数据根 %USERPROFILE%\.Locowrk · 插件根 · 时间口径
 │   │   ├── scheduler/ subagent_verify/ sub_transcript/ idle/ ask.rs stop.rs
 │   │   │                             #         定时任务 · 子代理校验与转录 · 空闲态 · 追问卡 · 叫停
 │   │   ├── instruction_files/ fragments/ inject_view/ repo_context/ search_tools/ text/ title/
-│   │   │                             #         指令文件 · 片段 · 注入视图 · 工作区上下文 · 工具检索 · 正文与标题
+│   │   │                             #         指令文件 · 片段 · 注入观测读数 · 工作区上下文 · 工具检索 · 正文与标题
 │   │   ├── organize/ recall_log/ recall_receipt/ usage/ export/ session_log.rs thinking_language.rs model_override.rs
 │   │   │                             #         记忆整理 · 取回日志与回执 · 用量 · 导出 · 会话日志 · 思考语言 · 逐轮改模型
 │   │   ├── browser/ media/ assets/ notifications.rs desktop_notify.rs tray.rs

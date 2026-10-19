@@ -304,7 +304,6 @@ mod chat;
 mod context_numbers;
 mod fact_cards;
 mod instruction_budget;
-mod learn;
 mod llm;
 mod llm_profile;
 mod llm_provider;

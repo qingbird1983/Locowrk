@@ -89,11 +89,6 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             instruction_project_kib: s.memory.instruction_project_kib,
             fact_cards: s.memory.fact_cards,
             fact_card_max: s.memory.fact_card_max,
-            learn_enabled: s.memory.learn_enabled,
-            relevance_weight: s.memory.relevance_weight,
-            strength_weight: s.memory.strength_weight,
-            freshness_weight: s.memory.freshness_weight,
-            recency_weight: s.memory.recency_weight,
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,

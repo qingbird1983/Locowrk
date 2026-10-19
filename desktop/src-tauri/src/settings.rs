@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use kernel_agent::{LearnWeights, MemoryInjectConfig};
+use kernel_agent::MemoryInjectConfig;
 use serde::{Deserialize, Serialize};
 
 mod appearance;
@@ -272,33 +272,27 @@ impl SettingsStore {
 
     /// 后端专用：记忆注入活配置（MemoryInject 共享锁的内容物，⑪）。
     ///
-    /// 队列 Q9 起带上学习档：这里是 `MemorySettings`（持久化面）到
-    /// `MemoryInjectConfig`（生效面）**唯一的换算点**——四个权重原样搬、不做
-    /// 归一也不设"和为 1000"的门槛（理由见 `settings/memory.rs::LEARN_WEIGHT_MAX`）。
-    ///
-    /// ⚠ **改权重的生效时机 = 下一个会话，当前会话不动**（不是疏漏，是选型）：
-    /// 内核的会话预取缓存只认 `(session_id, scope_id)` + `top_k`，块字节在会话内
-    /// 钉死是 M1 纪律（KV v2：逐轮换字节 = 前缀命中归零）。会话中途把 relevance
-    /// 从 400 拖到 500 若立刻重算，代价是打断这一轮对话的缓存前缀，而它买不到
-    /// 任何正确性——记忆块的**归属**变了必须重算（那是另一份库的内容），**偏好**
-    /// 变了不必。这个形状**已有承重**：`PrefetchEntry` 的字段集只有 `block`/`top_k`，
-    /// 而内核用例 `memory_inject/tests/prefetch.rs::top_k_change_recomputes_prefetch`
-    /// 断言同会话跑两轮只取数一次、top_k 一变就重算 —— 将来有人"顺手"把权重塞进失效判据，
+    /// ⚠ **改 `top_k` 的生效时机 = 下一个会话，当前会话不动**（不是疏漏，是形状）：
+    /// 内核的会话预取缓存键 = `(session_id, scope_id, index_stamp)`，`top_k` 另参与
+    /// 失效判据（S3 刀② 订正：原先这句写的是 `(session_id, scope_id)` 两段，
+    /// 新鲜度档是那一带才加上的），块字节在会话内钉死是 M1 纪律（KV v2：逐轮换字节 =
+    /// 前缀命中归零）。会话中途把 top_k 从 5 拖到 8 若立刻重算，代价是打断这一轮对话的
+    /// 缓存前缀，而它买不到任何正确性——记忆块的**归属**变了必须重算（那是另一份库的
+    /// 内容），**偏好**变了不必。这个形状**已有承重**：`PrefetchEntry` 的字段集只有
+    /// `block`/`top_k`，而内核用例
+    /// `memory_inject/tests/prefetch.rs::top_k_change_recomputes_prefetch` 断言同会话跑
+    /// 两轮只取数一次、top_k 一变就重算 —— 将来有人"顺手"把别的配置塞进失效判据，
     /// 第二轮就会重查，那条用例当场见红。真机走查要按这个口径判读，否则会误判成 bug。
     /// （S3 刀① 订正：这条用例原先住在 `tests/learn.rs`，那一簇随正文注入通路一起
     /// 离场，M1 承重迁到了 `prefetch.rs`；`top_k` 字段与它进失效判据的形状本刀没动。）
+    /// （S3 刀③b 订正：这里原先还换算着学习档——`learn: LearnWeights { enabled:
+    /// m.learn_enabled, 四枚权重 }`。那一族按 `specs/10-context-injection-s3` 三问②
+    /// 的裁定整族退役，`MemoryInjectConfig` 现在只剩 `enabled` + `top_k` 两枚字段。）
     pub fn memory_inject_config(&self) -> MemoryInjectConfig {
         let m = self.inner.lock().expect("settings poisoned").memory.clone();
         MemoryInjectConfig {
             enabled: m.enabled,
             top_k: m.top_k as usize,
-            learn: LearnWeights {
-                enabled: m.learn_enabled,
-                relevance: m.relevance_weight,
-                strength: m.strength_weight,
-                freshness: m.freshness_weight,
-                recency: m.recency_weight,
-            },
         }
     }
 

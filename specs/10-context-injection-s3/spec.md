@@ -1,6 +1,6 @@
 # 10-上下文注入面 S3（索引常驻、正文按需 + 占用读数一嘴到底）
 
-- 状态：**进行中 · 刀①②③a ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
+- 状态：**进行中 · 刀①②③a③b ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
   采纳，裁定结果记在下面「开工三问与裁定」那节；本文件是
   [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   **S3 注入面** 那一行的施工 spec；方案稿对应 = **§C**（+ §A④ 索引制、§F 交接层），
@@ -113,13 +113,18 @@
       旧版完全缺的那一格），§D 那四枚退役工具名与"memory tree"承诺在**交给模型读的文案面**
       零命中；判据 = `SS28` 两段读数实测 `0|2`（① 退役名 0 / ② 新要点恰 2，防"删光文案
       也算通过"），`make selftest` 给 `✓ SS28 变异可见`。
-- [ ] AC-S3-6 移除不留死码（**拆两半**）：① 树目录那半 ✅ 刀③a——`TreeDirectoryInject`
+- [x] AC-S3-6 移除不留死码（**拆两半都完成**）：① 树目录那半 ✅ 刀③a——`TreeDirectoryInject`
       连定义带注册一并摘除；`prompt_layering.rs` 三条用例不是"删两条留一条"就完事：留下的
       那条改证"静态身份段恒为 system 字节前缀"，被删那条的**纪律继承者**写进文件头注与
       提交正文，`kernel/tests/tree.rs` 的断言反转成"plan() 交了目录也不许进上下文"。
-      ② 学习档那半待 ③b——`memory_learn` 族、`terms` 面（刀① 已走）、`learnEnabled`
-      设置格与后端字段按裁定同刀退役（影子库 `hit_count` / `last_hit_at` 两列留 S4）。
-      本仓审计报告那条「存在但从未接线」的判据不许再判到我们头上。
+      ② 学习档那半 ✅ 刀③b——`memory_learn/` 整族、契约侧 `recall_relevant` /
+      `LearnWeights` / `RecallQuery` / `LEARN_WEIGHT_DEFAULT`、`MemoryInjectConfig.learn`、
+      `VALUE_INJECT_MAX_CHARS`、设置面 `learnEnabled` + 四枚权重（后端字段 / 校验 / 投影 /
+      前端那一格 / 中英两条文案）、`breakdown` 观测通路（写侧参数 → DDL 列 → 迁移件 →
+      解释面板 → 前端 `explain` 区块）**一条不留**；**影子库 `hit_count` / `last_hit_at`
+      两列按清点不动**（S4 的 sqlite 退役面），连同 `memory_inject_log.breakdown` 那列一起
+      登记为「在场、无人读写」。审计报告那条「存在但从未接线」现在由判据 `SS29`/`SS29b`/
+      `SS29c` 三档机械挡住（含 ③ 那档正对照，防"删光也算通过"）。
 - [ ] AC-S3-7 占用只有一个出处（ⓟ 本体）：界面分子与 `Compactor::used` **同一个函数**
       （新判据钉等值 + 双向变异：任一侧单独改尺即红）；构造"上一轮被超窗拒收"的会话态
       ⇒ 事件里的 `used` ≥ 拒收那颗数（这条就是 ⓟ 说的"失败期间停在旧数"的反证）。
@@ -156,8 +161,11 @@
 3. **刀③ 指引与退役段**（按上面那节清点拆成两步）：
    **3a ✅ 2026-10-20** = `<memory_guidance>` 与两枚导语改写（补排除清单、空结果换指向、
    去掉对退役树工具的承诺）+ `TreeDirectoryInject` 摘除 + 判据 `SS28` 新增 / `SS8c` 名单
-   显式改；**3b 待做** = 学习档族删除（`memory_learn/` 933 行 + 20 处触点 + 设置面与
-   前端那一格；影子库 `hit_count` / `last_hit_at` 两列留 S4）；AC-S3-5 ✅ / AC-S3-6 半。
+   显式改；**3b ✅ 2026-10-20** = 学习档族删除（`memory_learn/` 933 行 + 20 处触点 + 设置面
+   与前端那一格 + `breakdown` 观测通路；影子库 `hit_count` / `last_hit_at` 两列留 S4）
+   + 墓碑判据三档 `SS29`/`SS29b`/`SS29c`；AC-S3-5 ✅ / AC-S3-6 ✅。
+   **刀① 留下的一格连带后果在本刀登记为新欠账 ⓠ**（注入侧埋点失去生产调用点），见下面
+   刀③b 施工记录第 5 条。
 4. **刀④ 占用一嘴到底（ⓟ 归这一刀）**：`record_usage` 的分子改吃 `Compactor::used`
    （或两者共同下沉成一个函数）+ 拒收读数进 `ContextUsage` 载荷 + 扣减链上界面；
    AC-S3-7/8。
@@ -347,6 +355,90 @@ FakeTrees 照旧交目录文本，用例现在证"有目录也不许进上下文
 **门禁**：`make check` 末行 `▶ check 全绿`（内核 98 条 + 全部集成套件 / 宿主 712 条 /
 vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。
 
+## 刀③b 施工记录（✅ 2026-10-20 · 学习档族同刀退役）
+
+**删的清单**（按裁定② 执行；`git diff HEAD --stat` 实测 **59 文件 / +517 / −2660**，净减 2143 行）：
+
+1. **`desktop/src-tauri/src/memory_learn/` 整目录**（8 个文件 · 933 行：`signals.rs` 四信号
+   算式、`order.rs` 排序与 E5 保留槽、`explain.rs` 回执 JSON、`mod.rs` 候选 SQL 与
+   `reinforce` 写回、四簇用例）。
+2. **契约面**（`memory_inject/contract.rs`）：`recall_relevant`（trait 方法 + 那条"缺省实现
+   = 等价性装置"）、`LearnWeights`、`LEARN_WEIGHT_DEFAULT`、`RecallQuery`、
+   `MemoryInjectConfig.learn` ⇒ 生效配置只剩 `enabled` + `top_k`；`VALUE_INJECT_MAX_CHARS`
+   同批摘除（刀① 就说过"唯一使用者是 relevance 匹配面"，匹配面没了它就是纯死 API），
+   `middleware/mod.rs` 与 `lib.rs` 的再导出同步瘦身。
+3. **宿主实现**：`memory/source.rs` 的 `recall_relevant` 覆写（85 行）摘掉；
+   `memory/recall.rs` 的**两层埋点合回一层**（`log_inject_keys` 与它的
+   `breakdown: Option<&str>` 参数收回——没有第二个 caller 的恒 `None` 参数就是死 API 形状）。
+4. **观测通路**：`recall_log` 的 `Row.breakdown` / `note_inject` 第七参数 /
+   `insert_row` 两条 SQL 的第九列 / `RecallRow.breakdown` / `#[allow(clippy::too_many_arguments)]`
+   （**七个参数变六个 ⇒ allow 连它那段理由一起摘**，留着就是把"这里曾经是七个"当成当前事实）/
+   `schema.rs` 的 `ensure_breakdown_column` 迁移件与 DDL 里那一列。
+5. **面板**：`inject_view.rs` 从 167 行缩到 60 行——`InjectExplain` / `ExplainRow` /
+   `arr4` / `explain_of` / "往回扫 50 行找有回执的那一条"整块离场，`recent()` 与 `RecallRow`
+   因此**没有生产读者** ⇒ 降进 `#[cfg(test)] impl`（而不是戴一句 `#[allow(dead_code)]`
+   假装活着）；`InjectView` 载荷只剩 `overview`；`commands/memory.rs::memory_inject_view`
+   名字保留（改它要动 IPC 契约 + 前端 api + `check-commands` 三向闭合，收益只有一句更准的名字）。
+6. **设置面**：`MemorySettings` / `MemorySettingsView` / `MemoryUpdate` 三张形状各删五项，
+   `LEARN_WEIGHT_MAX` / `check_learn_weight` / `learn_default()` 三个件删除，`apply_update`
+   里那 24 行校验应用段摘干净，`settings.rs::memory_inject_config` 的 `learn` 换算删除。
+7. **前端**：`MemorySection.vue` 那一格开关 + 四枚权重输入（模板 68 行 + form/载入/保存
+   各 5 行）、`types/memory.ts` 的 `learnEnabled` / 四枚 weight / `InjectExplain` / `InjectRow`、
+   `InjectSection.vue` 的占比与权重读数、中英两条 locale 各删 11 键（`check-i18n` 全程绿 = 成对删净）。
+
+**两件有意留下的东西**（不是漏删）：① `MemorySource::recall` 与它身后的 `recall_quiet`
+注入埋点；② 三列遗物 = `memories.hit_count` / `memories.last_hit_at` /
+`memory_inject_log.breakdown`。**在场、无人读写**，`check-schema-parity.mjs` 的 H1–H7 与
+`ensure_learning_schema` 迁移件照旧承重（存量库形状是既成事实，删迁移 = 让旧库停在缺列状态）。
+新库不再建 `breakdown` 那一列，老库留着——这条**不是口头结论**：新用例
+`recall_log/tests/legacy_table.rs::a_legacy_table_with_the_retired_column_still_opens_reads_and_writes`
+拿"退役前的建表串 + 一条旧行"造现场，断言开库、读旧行、按八列写新行三件事都不撞那一列。
+
+**5 ⚠ 本刀查实的一个洞（刀① 留下的，登记为新欠账 ⓠ）**：`recall_relevant` 摘掉之后，
+`MemorySource::recall` 在生产面上**一个调用点都不剩**——而它是注入埋点
+`recall_quiet → log_inject → memory_inject_log` 唯一的挂点。后果实测得出：L0 那三个指标
+（注入次数 / 空块率 / 注入产出率）自刀① 起**不再增长**，管理页那块读数停在刀① 之前的历史值，
+`injection_yield` 的注入侧分母从此只由检索回执贡献。这不是"顺手能修"的东西：S3 之后进上下文的
+是索引指针行，"这一轮注入了什么"的口径要重定（每条指针算一条？每个会话算一次？空段算不算空块？）。
+三条出路留给决策人：**ⓠa** 给索引段埋点（`global_index` / `project_index` 交出指针行时记一行，
+口径重写成"注入过几个键位 / 有几段是空的"）；**ⓠb** 观测面板整块退役（连 `recall_log` 注入档
+一起摘，检索档留给 ⓜ/ⓝ 那批用）；**ⓠc** 保持现状并在面板文案上如实写"该读数自本版停止累计"。
+本刀按"发现问题就登记，不在同一刀顺手改无关面"处理：**`recall` 形状一字未动**，
+判据 `SS29c` 钉住它还在（前两档的 0 因此不会与"整条通路被删空"混淆）。
+
+**测试面净变化**：删 4 簇（`memory_learn/tests/` 16 条、`memory/tests/recall_learn.rs` 5 条、
+`settings/tests/learn.rs` 4 条、`recall_log/tests/breakdown.rs` 5 条）+ 新增 4 条
+（`legacy_table` 1 + `inject_view/tests` 重写后 3）+ 改写 3 簇（`inject_view/tests` 原 6→3、
+`inject-section.spec.ts` 三态→两态并**新增逐数断言**、`inject-fixture.spec.ts` 占比算式→
+比率自洽）。**`layer_switches.rs` 那条"两档共用一枚门要两条独立红证"没有作废**：第三档
+`recall_relevant` 随实现离场，红证改由 `recall` 与 `global_index` 各断一次担（同一条用例内，
+所以是"同一个 store 实例上两档同时早退"），原用例位置留了指路注释点名继承者。
+宿主 712 → **676** 条、内核 98 条不变、vitest 193 条不变。
+
+**判据三档** `SS29` / `SS29b` / `SS29c`（墓碑）：① 七个名字在全生产 .rs（剥行注释）恒 0；
+② 三个形状在 `desktop/src` 的 .ts/.vue（剥 `//` + JSDoc + `<!-- -->`）恒 0；③ 正对照
+`fn recall(` 的定义恰在 contract.rs + source.rs 两个文件。三条各配窄变异，`make selftest`
+给 `✓ SS29 / SS29b / SS29c 变异可见` + `SELFTEST_ALL_CAUGHT`。
+**首跑没有红在实现上，红在判据自己的扫描面**：`types/memory.ts` 的退役注释合法提到
+`InjectExplain`，第一版数名字会假红 ⇒ ② 改数**代码形状**并新增 `stripFrontComments`
+（前端面此前没有剥块注释的先例——SS6/SS11/SS13 之后这是第四次为同一件事改口径）。
+`SS11` / `SS14b` / `check-schema-parity.mjs` 三处描述里那句"`memory_learn` 合法在场"的
+**理由已过期**，逐条订正为墓碑口径（形状保留，豁免的理由不再成立）。
+
+**顺带抓出的真实界面缺陷**（本刀重写 `InjectSection.vue` 时由新用例抓出来）：注入产出率那个
+读数**在界面上从来没显示过**——组件传的是 `yielded`，两份文案里写的占位符是 `{yield}`，
+vue-i18n 对取不到的参数吐空串，于是那句话一直渲染成"注入过的键被用上 （4/5）"。
+旧用例只断 title 与占比行有没有上屏，从没断过这个数 ⇒ 缺陷活了至少四个版本。
+修法 = 两边统一成 `{rate}`，新用例直接断言 `80%` 上屏。**这不是本刀引入的**，
+但它属于 AGENTS §4 那句"截图里一眼能看出的不合理当场修"。
+
+**门禁**：`make check` 末行 `▶ check 全绿`（内核 98 条 + 全部集成套件 / 宿主 676 条 /
+vitest 193 条 / `SELFTEST_ALL_CAUGHT` × 三处 / `DOCS_SELFTEST_ALL_CAUGHT` /
+`check-middleware-wiring: 监听器实现=9 · 已接线=9 · 未接线=0`）；不可见字符扫描 0 命中。
+过程中 clippy 打回三条，都是**删除面的直接后果**而非新写代码的质量问题：两处
+`needless_update`（配置只剩两个字段，测试里的 `..MemoryInjectConfig::default()` 失去作用）、
+一处 `empty_line_after_doc_comments`（退役记号写成 `///` 会变成下面那个枚举的文档 ⇒ 改 `//`）。
+
 ## 开工三问与裁定（2026-10-20 决策人「三问照推荐案，开跑」⇒ 三处全按推荐案落地）
 
 ① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）
@@ -385,7 +477,7 @@ vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。
 | `desktop/src-tauri/src/memory/{source,recall}.rs` `memory.rs` | 刀①：读面新增全局索引段；`recall_relevant` 摘除或保留按裁定 ② |
 | `desktop/src-tauri/src/memory_index.rs` | 刀①：全局段复用同一把钳（现在只钳项目段） |
 | `desktop/src-tauri/src/repo_context.rs` | 刀② ✅：`build()` 从静态串改成读 `.Locowrk/MEMORY.md` 正文 + 提醒行 + §F 双钳；`ensure_layout` 多写一份骨架；`HANDOFF`/`HANDOFF_MAX_*` 成常量；该簇 3 条用例（含反转掉的那条静态断言） |
-| `desktop/src-tauri/src/memory_learn/`（+ `settings/memory/*` 的 `learnEnabled`） | 刀③：按裁定 ② 处置 |
+| `desktop/src-tauri/src/memory_learn/` | 刀③b ✅ **整目录已删除**（8 文件 · 933 行）；契约侧 `recall_relevant`/`LearnWeights`/`RecallQuery`/`VALUE_INJECT_MAX_CHARS`、设置面 `learnEnabled`+四枚权重、前端那一格与中英文案、`breakdown` 观测通路与解释面板同批离场；`inject_view.rs` 缩到 60 行只管 `overview` |
 | `desktop/src-tauri/src/state/waterfall.rs` | 刀③：摘 `TreeDirectoryInject` 一环（头注那"注册序就是执行序"的段要订正） |
 | `desktop/src-tauri/src/runner/mod.rs` `compact/deep.rs` `events.rs` `runner/projection.rs` | 刀④：占用收成一处 + `ContextUsage` 载荷补拒收档 |
 | `desktop/src/{components/ContextProgressBar.vue,components/chat/UsageRing.vue,components/chat/ContextUsagePopover.vue,stores/chat/{projection,state}.ts,types/events-agent.ts,lib/api/channels.ts}` | 刀④：分子换源 + 扣减链一行（文案中英成对） |
@@ -406,3 +498,8 @@ vitest 193 条 / `SELFTEST_ALL_CAUGHT`）。
   `mod.rs:215-217`），刀④ 是读数口径，回滚 = revert 该提交（不动数据）。
 - 挂账：本线不销 ⓝ/ⓞ；ⓖ/ⓗ 仍等你批形态；specs/09 的「主层与 spill 的**真机**长会话一轮」
   与「spill 目录清理通路」两欠与本线无关，仍挂在 roadmap 表上。
+- **新欠账 ⓠ（刀③b 查实，刀① 留下）**：`MemorySource::recall` 在生产面已无调用点，而它是
+  注入埋点 `recall_quiet → memory_inject_log` 的唯一挂点 ⇒ **L0 那三个指标自刀① 起停止增长**
+  （管理页那块读数停在历史值）。三条出路（ⓠa 给索引段埋点并重定口径 / ⓠb 观测面板整块退役 /
+  ⓠc 保持现状并在文案上如实写"本版起停止累计"）在刀③b 施工记录末尾那条里写清了，
+  **等决策人挑一条**；本刀不动它的形状，`SS29c` 钉着它还在。

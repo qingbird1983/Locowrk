@@ -28,31 +28,17 @@ pub struct MemoryEntry {
 /// 归属的项目内（项目级记忆隔离，Context 文档 §4.6）；内核不解释
 /// workspace 概念，只透传 id。`None` = 无会话上下文（如测试装配）。
 pub trait MemorySource: Send + Sync + 'static {
-    /// 按宿主裁决的相关序（desktop = updated_at 新→旧）取至多 limit 条。
+    /// 按宿主裁决的相关序（desktop = updated_at 新→旧）取至多 limit 条**正文**条目。
+    ///
+    /// ⚠ **S3 刀③b 起它在生产注入面上没有调用点了**。刀① 摘掉 `<persistent_memory>`
+    /// 正文块时它还有"学习档关掉时的那条回落支"这一个调用者（宿主
+    /// `recall_relevant` 内部），那条随学习档一起退役 ⇒ 现在**一个生产调用者都没有**，
+    /// 只有宿主的埋点通路 `recall_quiet → memory_inject_log` 还挂在它身上。
+    /// 它留下的理由不是"注入面还要它"而是那一格欠账：方案稿 §C 之后"这一轮注入了什么"
+    /// 的答案变成了索引指针行，L0 那三个指标（空块率 / 注入产出率 / 注入次数）的口径
+    /// 要重定 = specs/10 登记的欠账 ⓠ。**ⓠ 收口之前本方法与 [`MemoryEntry`] 的形状一律
+    /// 不动**，也别在这里长出第四个索引段之外的语义。
     fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry>;
-
-    /// 队列 Q9（ML 稿 §3.3/§3.4 = L2+L3 合一批）：带**相关性词表 + 四信号权重**的召回。
-    ///
-    /// ⚠ **S3 刀① 起本方法在生产面没有调用点了**：唯一那个调用点住在
-    /// `<persistent_memory>` 正文块的组装处，那块已并入 `<memory_index>` 索引段。
-    /// 方法与宿主实现**暂时都留着**（去留按 `specs/10-context-injection-s3` 的裁定
-    /// = 刀③ 同刀退役），本条文档描述的是"它还连着时"的契约形状。
-    ///
-    /// **缺省实现 = 忽略 `query` 回落 [`MemorySource::recall`]，这是等价性装置而不是便利**：
-    /// ① 五个测试 fake 与 headless 装配零改动；② [`LearnWeights::default`] 的
-    /// `enabled = false` + 本缺省支 = 「关掉学习档必须逐字节回到现役」这条要求直接由
-    /// 类型给出（收口判据 = 既有记忆面用例一字未改仍然绿）。生产实现（宿主
-    /// `MemoryStore`）覆写它 = 四信号现算加权排序 + 命中写回强化计数。
-    /// `terms` 为空 = 相关性档不贡献分数（其余三信号仍生效）。
-    fn recall_relevant(
-        &self,
-        session_id: Option<&str>,
-        limit: usize,
-        query: &RecallQuery,
-    ) -> Vec<MemoryEntry> {
-        let _ = query;
-        self.recall(session_id, limit)
-    }
 
     /// 会话的键位身份（㉘·A·fix）：预取缓存键 = `(session_id, scope_id)`。
     /// 会话中途改归属 = 换键 = 首查重算（键位不变则逐字节复用，M1 纪律
@@ -123,66 +109,15 @@ pub trait MemorySource: Send + Sync + 'static {
 
 /// 注入参数（settings.json `memory` 区；Context 文档 §6.2 的
 /// max_inject_count，缺省 5——约束清单 §3"注入条数可配"）。
+///
+/// **S3 刀③b 起这里只剩两个字段**：原先第三枚 `learn: LearnWeights`（学习档总开关 +
+/// 四信号权重）随 `memory_learn/` 一族同刀退役——md 是唯一真源之后，"按 sqlite 命中数
+/// 加权排序"是残留的第二真源，且设置页会留一格拨了没反应的开关（裁定见
+/// `specs/10-context-injection-s3` 开工三问②）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryInjectConfig {
     pub enabled: bool,
     pub top_k: usize,
-    /// 队列 Q9 学习档（总开关 + 四信号权重）：形状见 [`LearnWeights`]，
-    /// **权重只在这一处存**——设置面、注入调用点、召回契约共用同一个类型，
-    /// 不在别处再摊平一份四字段（同一份权重两个出处 = 下一刀必漂）。
-    pub learn: LearnWeights,
-}
-
-/// 学习档 = 一个布尔 + 四个千分比权重（队列 Q9 · ML 稿 §3.3 排序、§3.4 强化、
-/// §5.4 配置面）。它同时是**内核递给宿主的召回契约载荷**（见
-/// [`MemorySource::recall_relevant`]）与**设置页的可调项形状**，两副担子用
-/// 同一个类型挑，是为了让「配置改了但没传下去」这类漂移在类型上就不成立。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LearnWeights {
-    /// **false = 排序与写回一起关**，注入字节逐字节回到现役
-    /// （`ORDER BY updated_at DESC, key`）。稿 §5.4 只要求排序回退，本批把写回
-    /// 也纳入同一档：对照组若仍在累积 `hit_count`，A/B 比的就不是同一份库。
-    pub enabled: bool,
-    /// 四信号权重，**千分比整数**（和 = 1000，校验在 `settings/memory.rs`）。
-    /// ⚠ 对稿 §5.4 的实现层订正：稿写的是 float，换成整数是因为配置面靠
-    /// `PartialEq` 判「变更即失效重算」，而 float 既不进 `Eq`、四权重相加也不闭合
-    /// ⇒ 「权重和为 1」这条无法机器判。
-    pub relevance: u16,
-    pub strength: u16,
-    pub freshness: u16,
-    pub recency: u16,
-}
-
-/// 权重缺省（稿 §3.3 表的 0.40 / 0.25 / 0.20 / 0.15 ⇒ 千分比）。
-/// 四档之和 = 1000 由这个数组一处给定，别处不重抄数字。
-pub const LEARN_WEIGHT_DEFAULT: [u16; 4] = [400, 250, 200, 150];
-
-impl Default for LearnWeights {
-    /// **`enabled = false`**：这是契约载荷的保守缺省，不是产品缺省——未覆写
-    /// [`MemorySource::recall_relevant`] 的装配（五个测试 fake、headless）拿到的
-    /// 就是现役行为。产品缺省（开）在 [`MemoryInjectConfig::default`] 里显式写出。
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            relevance: LEARN_WEIGHT_DEFAULT[0],
-            strength: LEARN_WEIGHT_DEFAULT[1],
-            freshness: LEARN_WEIGHT_DEFAULT[2],
-            recency: LEARN_WEIGHT_DEFAULT[3],
-        }
-    }
-}
-
-/// 一次召回的请求载荷（队列 Q9）：相关性词表 + 权重。
-///
-/// 为什么把两者捆成一个类型而不是两个参数：**「learn 关掉」这件事必须只有一个
-/// 表达方式**。分两个参数时调用点可以传 `terms = 非空, weights = 关`，宿主实现
-/// 就得再判一次"到底算不算开"；捆起来后这种半开状态在构造时就不成立——
-/// `RecallQuery::default()` 是空词表 + 关档 = 现役。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RecallQuery {
-    /// 最近用户消息里取到的关键词表（空 = 相关性档不贡献分数，其余三信号仍生效）。
-    pub terms: Vec<String>,
-    pub weights: LearnWeights,
 }
 
 impl Default for MemoryInjectConfig {
@@ -190,10 +125,6 @@ impl Default for MemoryInjectConfig {
         Self {
             enabled: true,
             top_k: 5,
-            learn: LearnWeights {
-                enabled: true,
-                ..LearnWeights::default()
-            },
         }
     }
 }

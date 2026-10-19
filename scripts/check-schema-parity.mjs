@@ -9,7 +9,10 @@
  * 刀③b 之后插件不再开库（`rusqlite` 依赖与 `store/schema.rs` 一起退役），"两侧"塌成
  * 一侧 ⇒ A1/C1/D1/D2 那几档"两侧逐字节相同 / 两侧各调一次"没有对象了，一起摘掉；
  * 留下的五档管的仍是同一件事：**影子表形状只有一个真相，且学习量不被写路径冲掉**
- * （影子现在唯一的维护者是宿主 `memory_reconcile` + `memory_learn`）。
+ * （影子现在唯一的维护者是宿主 `memory_reconcile` —— 原先并列点名的 `memory_learn`
+ * 在 S3 刀③b 整族退役，`hit_count` / `last_hit_at` 两列至此**没人读写**，去处随 S4 一起裁。
+ * H7 那条因此从"防 upsert 冲掉学习档正在累积的数"变成"防 upsert 冲掉一列遗物"——
+ * 判据照旧承重：列的形状与写它的语句都是既成事实，改哪一边都要显式来改这里）。
  * "插件不许把这张表再捡回来"那一维不在本闸，它是 `check-single-source.mjs` 的 `SS13`。
  * 为什么不改名：改名要动 `.github/workflows/ci.yml` 里的步骤名——那是 AGENTS §5 禁区。
  *

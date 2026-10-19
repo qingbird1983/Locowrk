@@ -64,8 +64,9 @@ pub struct AppState {
     pub memory_cfg: Arc<RwLock<MemoryInjectConfig>>,
     /// 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
     pub memory: Arc<MemoryStore>,
-    /// 召回观测表句柄（Q1a/Q1b 写侧的同一个 `Arc`）：Q10 起有了**读侧**——
-    /// `memory_inject_view` 经 `inject_view` 取最近一次可解释的注入。
+    /// 召回观测表句柄（Q1a/Q1b 写侧的同一个 `Arc`）：读侧 = `memory_inject_view` 经
+    /// `inject_view` 取那三个派生读数。S3 刀③b 之后"最近一次四信号解释"那半随学习档退役，
+    /// 逐行读口（`RecallLog::recent`）因此只服务测试。
     pub recall_log: Arc<crate::recall_log::RecallLog>,
     /// 记忆人类层句柄（F1/F2）：reconcile 与「打开文件夹」命令的数据源。
     pub memory_files: Arc<crate::memory_files::MemoryFiles>,

@@ -6,8 +6,10 @@
 //! M2（Memory-KV Roadmap）起追加记忆树整理三键：整理节奏 / 增量块 X /
 //! 记忆管理器模型（《Memory Tree Design v2》§4.3 / §5.2，§15 可调项）。
 
-/// 本区的应用与校验（24 个字段 × 区间/白名单）。单独成文件是因为并回本文件
+/// 本区的应用与校验（逐字段的区间/白名单）。单独成文件是因为并回本文件
 /// 就是 419 行 = 新增超限件，理由与三条搬移变换写在那个头注里。
+/// ⚠ 原先这句写的是"24 个字段"——S3 刀③b 摘掉学习档五项之后它就是错的，
+/// 而**手写的字段数本身就是会漂的读数**（本仓为这类数立过判据），改成这句不带数的说法。
 mod update;
 
 use serde::{Deserialize, Serialize};
@@ -101,31 +103,22 @@ pub const INSTRUCTION_FILES_DEFAULT: bool = true;
 /// 0 行就是它的结果）。关 = 提示词逐字节回到无卡段形状 + 一张都不落库。
 pub const FACT_CARDS_DEFAULT: bool = true;
 
-// ---- 队列 Q9（ML 稿 §3.3/§3.4 · L2+L3）：学习档 ----
+// ---- 队列 Q9 学习档（v2.200 立 · **S3 刀③b 整族退役**）----
 
-/// 学习档权重上限（千分比刻度）。**四档各自独立可调，不要求和 = 1000**——
-/// 排序只取决于 Σ 权重×信号 的相对大小（`memory_learn::total` 刻意不做归一除法），
-/// 硬约束"和为 1"会逼出一个"改一个就把余量摊给另外三个"的联动机制，那既不是
-/// 用户要的控制粒度、也让界面上的数字不再是他填的数字。稿 §5.4 的权重表是
-/// **展示口径**（缺省四档恰好和为 1000），不是校验口径。
-pub const LEARN_WEIGHT_MAX: u16 = 1000;
-/// 全 0 是**合法档**而不是错误：四信号都不贡献分数 ⇒ 排序退化成 tie-break
-/// （= 现役 `updated_at DESC, key`）。这是"暂时不想要学习偏好、但不想把命中
-/// 计数一起关掉"的实验档，拒掉它等于把这个形状藏起来。
-pub fn check_learn_weight(label: &str, n: u16) -> Result<(), String> {
-    if n <= LEARN_WEIGHT_MAX {
-        return Ok(());
-    }
-    Err(format!("{label}权重 {n} 超出范围（0–{LEARN_WEIGHT_MAX}）"))
-}
-
-/// 学习档四信号权重缺省（千分比）。⚠ 数字**不在这里重抄**——逐档取自内核
-/// `LearnWeights::default`（唯一真源 = `LEARN_WEIGHT_DEFAULT` 那一个数组）：
-/// 设置面显示 400、打分面用 350 这种漂移是"两份文档各写一遍必漂"的代码版，
-/// 而这次连跨文件判据都不需要，因为字面量只存在一处。
-fn learn_default() -> kernel_agent::LearnWeights {
-    kernel_agent::LearnWeights::default()
-}
+// ⚠ 这一节曾经装着 `LEARN_WEIGHT_MAX`（千分比刻度上限）、`check_learn_weight`（四档
+// 各自的区间校验）、`learn_default()`（四档缺省逐档取自内核）三件，与
+// `MemorySettings` 里的 `learnEnabled` + 四枚权重。它们服务的排序发生在
+// `memory_learn/`（按影子库 `hit_count` 现算四信号加权），而真源 = md 之后那条通路
+// 是残留的第二真源、且在注入面改了形状之后根本没有调用点 ⇒ 按
+// `specs/10-context-injection-s3` 开工三问② 的裁定同刀退役。
+//
+// **为什么把这段注释留在原地而不是删干净**：settings.json 里的这五个键现在是
+// **幻影键**（serde 未知字段忽略 ⇒ 老配置文件读得动，下次保存自然消失），与本区
+// v2.136/v2.137 退役掉的 `autoExtract` / `handoffUpdate` / `experiences` /
+// `defaultOrganizer` 同一形状。界面文案（`locales/*/settings.ts`）与前端类型
+// （`types/memory.ts`）同刀删除，中英成对由 `check-i18n` 盯着。
+// （写成 `//` 而不是 `///`：它是**本节**的记号，不该变成下面那个枚举的文档——
+// `///` + 空行会撞上 clippy `empty_line_after_doc_comments`，本仓 `-D warnings` 拦红。）
 
 /// 尾巴策略枚举（settings 字符串 → 组装判定）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,19 +203,6 @@ pub struct MemorySettings {
     pub fact_cards: bool,
     /// 单次整理的卡片上限（开关开启时生效，1–10 缺省 3）。
     pub fact_card_max: u32,
-    /// 学习档总开关（队列 Q9 · 稿 §5.4，缺省**开**）：关 = 注入排序逐字节回到
-    /// 现役（`ORDER BY updated_at DESC, key`）**且命中写回一起停**——稿只要求
-    /// 排序回退，本批把写回纳进同一档：对照组若仍在累积 `hit_count`，A/B 比的
-    /// 就不是同一份库。
-    pub learn_enabled: bool,
-    /// 相关性权重（千分比，0–1000）：本次用户消息切出的词命中 key/value/tags。
-    pub relevance_weight: u16,
-    /// 强度权重：`hit_count/(1+hit_count)` 饱和曲线（本稿的主角，唯一"学出来的"信号）。
-    pub strength_weight: u16,
-    /// 热度权重：距上次被召回多久（半衰期 14 天）。
-    pub freshness_weight: u16,
-    /// 新鲜度权重：距上次被编辑多久（半衰期 30 天，= 现役排序的平滑版）。
-    pub recency_weight: u16,
 }
 
 impl Default for MemorySettings {
@@ -247,15 +227,6 @@ impl Default for MemorySettings {
             instruction_project_kib: INSTRUCTION_PROJECT_KIB_DEFAULT,
             fact_cards: FACT_CARDS_DEFAULT,
             fact_card_max: FACT_CARD_MAX_DEFAULT,
-            // ⚠ 这里的 `true` 与内核 `LearnWeights::default()` 的 `enabled = false`
-            // **不是同一属性的两处出处**：前者是产品缺省（用户没设过就该学到），
-            // 后者是契约载荷的保守缺省（未覆写 recall_relevant 的装配必须拿到现役
-            // 行为）。两个缺省语义相反是设计，合并它们才会出错。
-            learn_enabled: true,
-            relevance_weight: learn_default().relevance,
-            strength_weight: learn_default().strength,
-            freshness_weight: learn_default().freshness,
-            recency_weight: learn_default().recency,
         }
     }
 }
@@ -285,11 +256,6 @@ pub struct MemorySettingsView {
     pub instruction_project_kib: u32,
     pub fact_cards: bool,
     pub fact_card_max: u32,
-    pub learn_enabled: bool,
-    pub relevance_weight: u16,
-    pub strength_weight: u16,
-    pub freshness_weight: u16,
-    pub recency_weight: u16,
 }
 
 /// 记忆注入区部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -327,11 +293,4 @@ pub struct MemoryUpdate {
     pub fact_cards: Option<bool>,
     /// 单次整理卡片上限（出界 = `settings_set` 拒绝，1–10 缺省 3）。
     pub fact_card_max: Option<u32>,
-    /// 学习档开关（`Some(false)` = 排序与写回一起关，逐字节回到现役）。
-    pub learn_enabled: Option<bool>,
-    /// 四信号权重（千分比；出界 = `settings_set` 拒绝，0–1000 各自独立）。
-    pub relevance_weight: Option<u16>,
-    pub strength_weight: Option<u16>,
-    pub freshness_weight: Option<u16>,
-    pub recency_weight: Option<u16>,
 }

@@ -35,7 +35,6 @@ fn yield_counts_distinct_injected_keys_that_came_back() {
         3,
         &["a".to_string(), "b".to_string(), "c".to_string()],
         std::time::Duration::from_micros(3),
-        None,
     )
     .unwrap();
     // 注入档再出一行（另一个键位），keys 与上面重叠 ⇒ 分母仍是 3，不是 4+。
@@ -46,7 +45,6 @@ fn yield_counts_distinct_injected_keys_that_came_back() {
         2,
         &["a".to_string(), "b".to_string()],
         std::time::Duration::from_micros(3),
-        None,
     )
     .unwrap();
 
@@ -91,7 +89,6 @@ fn keyless_receipts_do_not_move_the_yield_numerator() {
         1,
         &["a".to_string()],
         std::time::Duration::from_micros(1),
-        None,
     )
     .unwrap();
     log.note_receipt(
@@ -130,7 +127,6 @@ fn receipts_do_not_enter_the_injection_side_ratios() {
         2,
         &["a".to_string(), "b".to_string()],
         std::time::Duration::from_micros(1),
-        None,
     )
     .unwrap();
     for i in 0..3 {

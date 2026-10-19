@@ -239,7 +239,7 @@
   `recall_log` 那条等价判据换 `write_fact` 造数据、`initial_export_skips…` 用 `reconcile_upsert`
   造"库有文件无"的存量形状）；新增 10 条。**断言的语义一条没放宽**。
   具体 passed 读数不落在本篇（每批都会漂的数只写提交正文，唯一出处 = 闸自己的输出行）。
-- **刀②c-2（反向通路退役 ✅ 2026-10-18 已落地 / 学习档仍待拍板 ⏳）**。
+- **刀②c-2（反向通路退役 ✅ 2026-10-18 已落地 / 学习档 ✅ 2026-10-20 由 S3 刀③b 收口）**。
   1. **"库 → 文件"那两条反向写入通路已全部停止**（这条不是可选优化，是遗忘验证的前置）：
      `run_initial_export` 的"行在文件缺 ⇒ 补文件"与 `memory_reconcile` 的 `healed` 支
      "文件未动而索引先行 ⇒ 从索引愈合文件"，在真源 = md 之后的含义是**把已删除的记忆复活**。
@@ -283,6 +283,15 @@
      属产品决策而不是机械迁移 ⇒ 要决策人点头（要么关掉学习档、要么给学习量另找一个不进人读面的家）。
      在这一格收口之前，"`<persistent_memory>` 停读 sqlite"这句话只在 `learnEnabled=false`（缺省）时成立，
      代码头注与本节都按这个口径写，不许说满。
+     > ✅ **本格的裁定结果（2026-10-20 · S3 刀③b）**：决策人选的是**第三条**——整族退役
+     > （`specs/10-context-injection-s3` 开工三问②「照推荐案」）。`recall_relevant`、
+     > `memory_learn/` 一族、`learnEnabled` 与四枚权重、`breakdown` 回执与解释面板全部删除，
+     > 宿主读面至此**一条 SELECT 都不发**；上面 ① 那条"机器写文件会摧毁 mtime 信号"的顾虑
+     > 随强化回路一起消失，②那句"排序口径变更要点头"也到此为止。
+     > **两件遗物留着**：`memories` 的 `hit_count` / `last_hit_at` 两列与
+     > `memory_inject_log.breakdown` 一列——在场、无人读写，去处随 S4 的 sqlite 面一起裁。
+     > 复活由判据 `SS29`/`SS29b`/`SS29c` 三档机械挡住。本节上面那些当年的理由**不改写**
+     > （那是刀②c-2 当时的事实），订正记号只加在这一条末尾。
 - **刀③a（四类型打通 + 工具参数面）✅ 2026-10-18 已落地**，六件事：
   1. `FactEntry` 末尾追加 `ty`（`plugin-api` 的规矩：只往结构体尾部加字段）；`render()` 写
      `metadata.type`，值由 `normalize_type` 收档 ⇒ **没给类型与写 `fact` 同形**，
@@ -815,7 +824,8 @@ mtime，不伪造时间）、`MEMORY.md` 3 → 4 行、`obsolete/` 归零、层�
       `memory.sqlite3` 写成非数据库字节之后读写两面一个字节都不变）。整条仍不勾，两个缺口：
       ① 插件那六枚工具（`memory_write` / `read` / `list` / `search` / `delete` / `undo`）仍按库寻址
       ⇒ 归刀③b；
-      ② `learnEnabled=true` 时语义召回档（`recall_relevant`）仍读库 ⇒ 见刀②c-2 第 2 件，等点头
+      ② `learnEnabled=true` 时语义召回档（`recall_relevant`）仍读库 ⇒ 见刀②c-2 第 2 件，
+      ✅ 已于 2026-10-20 由 S3 刀③b 整族退役收口
 - [x] AC-S1-3 四类型落位：`type=feedback` 缺省落 `global/`、`type=project` 缺省落
       `projects/<可读名>-<hash>/facts/`；显式给 `scope` 时按覆盖落，frontmatter 回读一致。
       **刀③a 落地**：落位与覆盖由 `plugins-src/memory-sqlite/src/tests/type_layer.rs` 六条钉

@@ -130,30 +130,9 @@ impl MemorySettings {
             }
             self.fact_card_max = n;
         }
-        // 学习档（v2.200 · 队列 Q9）：开关直通，四档各走一次区间校验。
-        // 校验体抽在 `settings/memory.rs::check_learn_weight`（同 Q4 那两档的
-        // 理由：区间端点只许一个出处）；这里**四遍各写各的中文档名**——出界
-        // 文案必须点名是哪一档，且不接受用字符串当字段路由那种"看起来省行数"
-        // 的形状（省下的行数由排障时多读的三层 match 还回去）。
-        if let Some(e) = u.learn_enabled {
-            self.learn_enabled = e;
-        }
-        if let Some(n) = u.relevance_weight {
-            super::check_learn_weight("相关性", n)?;
-            self.relevance_weight = n;
-        }
-        if let Some(n) = u.strength_weight {
-            super::check_learn_weight("强度", n)?;
-            self.strength_weight = n;
-        }
-        if let Some(n) = u.freshness_weight {
-            super::check_learn_weight("热度", n)?;
-            self.freshness_weight = n;
-        }
-        if let Some(n) = u.recency_weight {
-            super::check_learn_weight("新鲜度", n)?;
-            self.recency_weight = n;
-        }
+        // 学习档五项（`learnEnabled` + 四枚千分比权重）原先落在这里：开关直通、
+        // 四档各走一次 `check_learn_weight`。S3 刀③b 随 `memory_learn/` 整族退役
+        // ⇒ 字段与校验一起消失，为什么整块摘而不是留着不接，见 `mod.rs` 那一节的注释。
         Ok(())
     }
 }

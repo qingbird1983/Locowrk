@@ -135,9 +135,10 @@ function memlayoutFace() {
  * 宿主记忆面（S1 刀②c-1 加，SS11 的扫描面）：`memory.rs` + `memory/` 整棵树（排 tests）
  * + `memory_index.rs` + `memory_files.rs`（这两处是目录式，各自只取主文件，tests 不进面）。
  *
- * 口径**刻意不含** `memory_learn/` 与 `recall_log/`：学习档仍按库算 `hit_count`
- * （specs/05 刀②c-2 待拍板），把它们的 SELECT 数进来这条判据就立不住，而把
- * "读源已换"这件事说成"全簇无库访问"是谎报。面为什么按名字列而不是整棵
+ * 口径**刻意不含** `recall_log/`：它有自己的库访问，而 SS11 判的是"sqlite 兜底档"这套
+ * 概念，把观测表数进来这条判据就立不住。（原先这里还点名 `memory_learn/` —— 那一族
+ * 在 S3 刀③b 整族退役，目录已不存在；这句留作记号，别再把它当"待拍板"读。）
+ * 面为什么按名字列而不是整棵
  * `desktop/src-tauri/src` 扫：那棵树里 `organize/`、`state/`、`commands/` 各自有
  * 与兜底档无关的同名字段（`files_on` 在 `state/` 里 legitimately 仍存在），
  * 判据一宽就变成"这个名字全仓不许出现"——那不是这条判据要说的话。
@@ -164,6 +165,19 @@ function hostMemoryFace() {
  * 沿革注释里必然提到被搬走的那个名字，按字面数就是一片假红。
  */
 const stripComments = (s) => s.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+/** 前端面的剥注释：TS 的 `//` 行注释、块注释的起始行与 ` * ` 续行、Vue 模板注释同一档。
+ * Rust 侧只需要 `stripComments`（它没有块注释这种写法）。
+ * ⚠ 这一档**必须**存在：`desktop/src/types/memory.ts` 里解释"解释档为什么没了"的那段
+ * JSDoc 合法提到 `InjectExplain` 与 `explain`——不剥块注释的话墓碑判据一上手就假红
+ * （SS6/SS11/SS13 为同一件事各踩过一次，这是第四次）。 */
+const stripFrontComments = (s) =>
+  s
+    .split('\n')
+    .filter((l) => !/^\s*(\/\/|\/\*|\*|<!--|-->)/.test(l))
+    .join('\n');
+/** 学习族墓碑要点名的七个名字（SS29 的靶面）。整族退役 = 这七处形状一处都不许在生产面复活。 */
+const LEARN_GHOST =
+  /\blearn_enabled\b|\blearnEnabled\b|\brecall_relevant\b|\bLearnWeights\b|\bRecallQuery\b|\bmemory_learn\b|\bbreakdown_json\b/;
 /**
  * 测试面的形状口径（S2 刀④c 的口径订正，`hostDesktopFace()` 与 `moduleFace()` 共用）：
  * `tests.rs` / `tests/` 目录 / `tests_*.rs` / `*_tests.rs` 四种都是测试，一个都不许进
@@ -250,8 +264,9 @@ function hostDesktopFace() {
 }
 
 /** `memories` 内容列的三种写形状（SS14 的三个靶子）。第二档**按列名收窄**是有意的：
- *  `memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1` 合法在场，
- *  它学的是使用量、不是记忆内容——不收窄的话这条判据一上手就假红。 */
+ *  原先它为了不撞 `memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1`
+ *  ——那条学的是使用量、不是记忆内容，不收窄 SS14b 一上手就假红。S3 刀③b 那一族整族退役
+ *  ⇒ 收窄**照旧保留**（形状是墓碑：将来再有人写按列 UPDATE，无论改哪一列都得显式来动这里）。 */
 const MEM_INSERT = /INSERT INTO memories\s*\(/;
 const MEM_CONTENT_UPDATE = /UPDATE memories\s+SET\s+(?:value|tags|source|updated_at)\b/;
 const MEM_DELETE = /DELETE FROM memories/;
@@ -433,6 +448,14 @@ function snapshot() {
     compact: moduleFace('desktop/src-tauri/src/compact.rs', 'desktop/src-tauri/src/compact'),
     slide: moduleFace('desktop/src-tauri/src/slide.rs', 'desktop/src-tauri/src/slide'),
   };
+  // S3 刀③b 墓碑三档（SS29 / SS29b / SS29c）的扫描面：三档都从**已有面**派生，
+  // 不另开一次读盘（同一棵树读两遍 = 两遍之间可以漂）。
+  snap.learnGhostRust = snap.rust.map(stripComments).join('\n');
+  snap.learnGhostFront = snap.frontSrc.map(stripFrontComments).join('\n');
+  snap.relRust = snap.files.map((f, i) => ({
+    rel: path.relative(ROOT, f).replace(/\\/g, '/'),
+    code: stripComments(snap.rust[i]),
+  }));
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
 }
@@ -656,8 +679,9 @@ const CHECKS = [
       '为什么用结构判据而不是行为测试："未接线的 store"在新形状里**根本无法构造**' +
       '（句柄由数据根算出），那条旧用例 `files_switch_off_keeps_pure_sqlite` 一删就没有任何' +
       '测试还挡得住有人把那一档塞回来 ⇒ 这三档 0 就是那块墓碑。' +
-      '口径不含 `memory_learn/` 与 `recall_log/`：学习档仍按库算 `hit_count`，' +
-      '那是**另一个功能**不是兜底档（specs/05 刀②c-2 待拍板），把它们数进来这条判据就立不住。' +
+      '口径不含 `recall_log/`：它有库访问但那是**另一件事**（观测表），不是兜底档，' +
+      '把它数进来这条判据就立不住。原先还点名 `memory_learn/`——那一族在 S3 刀③b 退役，' +
+      'specs/05 刀②c-2 那格"待拍板"至此有了答案，这句留在描述里作记号。' +
       '第三档数的是**字段被读**（`self.files_on`）而不是任何同名参数：' +
       '`memory_files.rs` 里 `spawn_initial_export` 的 `files_on` 是对账/首启导出的空转开关，' +
       '它决定"要不要跑后台那一轮"，不决定"数据存哪儿"⇒ 合法在场（判据第一版把它数进去过，' +
@@ -733,8 +757,9 @@ const CHECKS = [
     'SS14b',
     '同一面上**没有任何**按列 UPDATE 记忆内容的形状（`UPDATE memories SET value|tags|source|' +
       'updated_at`）——这是 `shadow_update_value` 的墓碑。口径按列名收窄是有意的：' +
-      '`memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1` 合法在场，' +
-      '它学的是使用量不是内容；不收窄的话这条判据一上手就假红。' +
+      '它原先为了不撞 `memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1`' +
+      '（学的是使用量不是内容，不收窄一上手就假红）；那一族在 S3 刀③b 退役后收窄**照旧保留**，' +
+      '它现在是墓碑而不是豁免。' +
       '期望 `none` 的两档（本档与 SS14c 的反面）都由 FLOORS 的面下限兜着，面瞎了不会读成绿',
     (m) => memWriters(m, MEM_CONTENT_UPDATE),
     'none',
@@ -1189,6 +1214,42 @@ const CHECKS = [
     },
     '0|2',
   ],
+  [
+    'SS29',
+    'S3 刀③b「学习档整族退役」墓碑·第一档（Rust 侧形状）：七个名字（`learn_enabled` / ' +
+      '`learnEnabled` / `recall_relevant` / `LearnWeights` / `RecallQuery` / `memory_learn` / ' +
+      '`breakdown_json`）在**全生产 .rs**（已排 tests、剥行注释）里命中恒 0。' +
+      '为什么这一刀非要留一条结构判据而不是删完就走：学习档在 S1 之后就是**残留的第二真源**' +
+      '（真源 = md，它按影子库 `hit_count` 现算加权排序），而它离"被谁顺手接回去"只差一个 ' +
+      'trait 方法 + 一格设置开关 ⇒ 那种改法在行为面上测不出来（内核那批用例全拿假件源跑，' +
+      '宿主那批只会断言自己构造的 query）。数的是**形状**：`memory_learn` 这类名字在退役' +
+      '注释里合法在场（六处头注都在解释它为什么没了），连注释一起数会得到一片假红' +
+      '——SS6/SS11/SS13 立过三次的那条口径。',
+    (m) => String(countOf(m.learnGhostRust, LEARN_GHOST)),
+    '0',
+  ],
+  [
+    'SS29b',
+    '同一墓碑·第二档（前端形状）：`learnEnabled` 属性 / `relevanceWeight` / `.explain` ' +
+      '属性访问在 `desktop/src` 的 .ts/.vue（剥 `//`、JSDoc 与 `<!-- -->`）里命中恒 0。' +
+      '不与第一档合并是因为**两种漂法不同**：Rust 侧漂了是"通路被捡回来"，前端侧漂了是' +
+      '"界面长回一格拨了没反应的开关"或"读一个后端已经不发的字段"（后者静默读成 ' +
+      '`undefined`，界面上就是一个空格）。关键词只取代码形状：`InjectExplain` 这类**类型名**' +
+      '在 `types/memory.ts` 的退役注释里合法在场，把它数进来当场假红（SS6 那条口径）。',
+    (m) => String(countOf(m.learnGhostFront, /\blearnEnabled\b|\brelevanceWeight\b|\.explain\b/)),
+    '0',
+  ],
+  [
+    'SS29c',
+    '同一墓碑·第三档（正对照）：`fn recall(` 的定义**恰在两个文件里**——内核契约一处 + ' +
+      '宿主实现一处。这一档是前两档的反面承重：**只数 0 的判据可以为"把整条通路删光"而绿**，' +
+      '而 `recall` 本体这次是**有意留下**的（它身后挂着 `recall_quiet → memory_inject_log` ' +
+      '那条注入埋点；"索引注入时代这笔账怎么记"= specs/10 登记的欠账 ⓠ，不在本刀偷做）。' +
+      '用文件集合而不是计数：计数挡不住"定义搬去第三个文件"，集合一变就红得能看见是谁' +
+      '（SS14a 同一条理由）。',
+    (m) => filesWith(m.relRust, /\bfn recall\s*\(/),
+    'crates/kernel-agent/src/middleware/memory_inject/contract.rs|desktop/src-tauri/src/memory/source.rs',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -1520,6 +1581,25 @@ if (SELFTEST) {
           : s,
       );
     },
+    // 窄变异（刀③b 墓碑三档，各证自己那一格）：
+    // SS29 = 把 trait 方法与契约载荷**塞回宿主生产 Rust**（"通路被捡回来"那种改法：
+    //        它不改一行测试、行为面完全看不出，只有形状档看得见）。
+    SS29: (m) =>
+      (m.learnGhostRust +=
+        '\nfn recall_relevant(&self, q: &RecallQuery) -> Vec<MemoryEntry> { Vec::new() }\n'),
+    // SS29b = 同一件事在前端那一侧的形状：设置面长回一格开关 + 组件读一个后端已经不发的
+    //         字段（后者静默读成 undefined，界面上就是少一个数——本刀正是被这种缺陷撞出来的）。
+    SS29b: (m) =>
+      (m.learnGhostFront +=
+        '\nexport const learnEnabled = true\nconst shown = view.explain.present\n'),
+    // SS29c = 把宿主那处 `fn recall` 改名（**摘掉有意留下的东西** ⇒ 正对照档必须红，
+    //         否则前两档的 0 分不清是"没复活"还是"整条通路被删空"）。
+    SS29c: (m) =>
+      (m.relRust = m.relRust.map((f) =>
+        f.rel === 'desktop/src-tauri/src/memory/source.rs'
+          ? { ...f, code: f.code.replace('fn recall(', 'fn recall_renamed(') }
+          : f,
+      )),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

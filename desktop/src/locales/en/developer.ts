@@ -173,21 +173,14 @@ export default {
     viewProject: "Project",
     projectEmpty: "No chapters across sessions in this project yet.",
     projectOpenHint: "View original & edit → open its session",
-    // Queue Q10 (ML draft §3.1 principle 4 / §5.1 L4): read-only injection explainer
-    injectTitle: "Why these were injected",
-    injectHint: "Shares are permille; the four add up to 1000",
+    // Queue Q10 (L4): the injection observability block. After S3 knife ③b only the
+    // cumulative line is left — the ten "why this was injected" keys retired together
+    // with the learning tier (deleted in the same batch on both sides; `check-i18n`
+    // catches a leftover on one side).
+    injectTitle: "Injection observability",
+    injectHint: "Read from the injection ledger; one row per session and project",
     injectLoading: "Loading…",
-    injectEmpty: "Nothing to explain yet: the learning tier is off, or no turn has run in this data root.",
-    injectUnreadable: "The latest injection receipt cannot be read — the stored bytes are not a shape this panel knows.",
-    injectNoDelivery: "That pass delivered nothing (empty block).",
-    injectAt: "Latest: {when} · session {session}",
-    injectOverview: "{n} injections · empty block {empty} · injected keys used {yield} ({used}/{keys})",
-    injectWeights: "Weights then: relevance {a} · strength {b} · freshness {c} · recency {d}",
-    injectRelevance: "Relev",
-    injectStrength: "Str",
-    injectFreshness: "Fresh",
-    injectRecency: "Time",
-    injectTotal: "total {total}",
+    injectOverview: "{n} injections · empty block {empty} · injected keys used {rate} ({used}/{keys})",
     injectUnknown: "—",
     treeEditFailed: "Save failed: {reason}",
     originalLoading: "Loading original…",

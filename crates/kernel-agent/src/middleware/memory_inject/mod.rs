@@ -58,21 +58,7 @@ use crate::waterfall::{append_block, points, take_request};
 
 mod contract;
 
-pub use contract::{LearnWeights, MemoryEntry, MemoryInjectConfig, MemorySource, RecallQuery};
-
-/// 单条 value 注入上限（字符）：记忆库单条可达 256KiB，原样注入一轮就
-/// 顶爆窗口；超长截断并标注（全文在记忆管理页可看）。
-///
-/// ⚠ **S3 刀① 之后它已经不在注入面上**：`<persistent_memory>` 那块正文被索引段取代，
-/// 本仓今天唯一还在用它的是宿主侧的 `relevance` 匹配面（见下一段那条纪律）。它的去留
-/// 随刀③（`memory_learn` 一族按裁定同刀退役 ⇒ 那时这颗常量彻底无使用者）。
-///
-/// **`pub` 的理由不是"方便"而是"匹配面必须等于注入面"**（队列 Q9）：宿主侧的
-/// `relevance` 信号要对 value 做关键词匹配，如果它扫全文，一条记忆会**因为模型
-/// 根本看不到的第 8000 字命中而排到前面**——那是在给"注入块里没有的东西"打分。
-/// 所以宿主复用这同一个常量截断匹配面；本仓判据要求宿主侧不得再出现 `500`
-/// 字面量（同一属性两个出处 = 历批立的纪律在这里正适用）。
-pub const VALUE_INJECT_MAX_CHARS: usize = 500;
+pub use contract::{MemoryEntry, MemoryInjectConfig, MemorySource};
 
 /// 预取缓存上限（FIFO 驱逐最旧会话）：与 ToolExposure 钉死表同款保险丝。
 const PREFETCH_CAP: usize = 128;

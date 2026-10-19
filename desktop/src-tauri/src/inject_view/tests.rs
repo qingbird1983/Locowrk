@@ -1,161 +1,86 @@
-//! `inject_view::view` 的读端判据：全部打**生产本体**，不手搓一个等价的解析函数。
+//! `inject_view::view` 的读端判据：全部打**生产本体**，不手搓一个等价的折算函数。
 //!
-//! 三条口径各一条：①跳过没有回执的行（关档注入照常埋点但 `breakdown` 是 NULL）；
-//! ②坏字节降级为 `unreadable` 而不是把整条通路报错；③读端不假设库里那一串与自己
-//! 同版本——缺字段按 0 读，不 panic 也不整行丢弃。
+//! ⚠ 这一簇原先有五条，判的全是"最近一次加权排序的回执怎么读"（跳过没算过的行 /
+//! 坏字节降级 / 缺档补 0 / 空交付是正解不是损坏）。它们的数据源 = `memory_learn/` 写的
+//! `breakdown` 那一列，随学习档整族退役（S3 刀③b · 裁定 = specs/10 开工三问②）⇒
+//! **五条一起离场，而不是留着断言一个恒假的常量**。"坏字节要降级不许报错"那条纪律
+//! 仍然成立，但它现在没有对象：读端已经不再解析库里任何自由文本，剩下的两个比率由
+//! `RecallLog::stats()` 现算（那边有它自己的判据 = `recall_log/tests/metrics.rs`）。
+//!
+//! 活下来的两条判的是这块剩下的两件事：① L0 那三个派生读数如实透出去（含"零注入 =
+//! `None` 而不是 0.0"那条口径）；② **IPC 载荷的顶层形状**——前端
+//! `types/memory.ts` 的 `InjectView` 与这里必须同一份，后端漏一个恒空的 `explain`
+//! 出去在 Rust 侧看不见，只有这一档看得见。
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use super::*;
 use crate::recall_log::RecallLog;
 
-fn log(tag: &str) -> std::sync::Arc<RecallLog> {
+fn log(tag: &str) -> Arc<RecallLog> {
     let d = crate::testutil::unique_dir(&format!("injectview-{tag}"));
     std::fs::create_dir_all(&d).expect("create inject_view temp dir");
     RecallLog::at(d.join("usage.sqlite3"))
-}
-
-/// ③开档那一次的回执：`{"weights":[…],"rows":[{"key","share","total"},…]}` 的最小形。
-fn receipt(keys: &[&str]) -> String {
-    serde_json::json!({
-        "weights": [400, 250, 200, 150],
-        "rows": keys
-            .iter()
-            .map(|k| serde_json::json!({"key": k, "share": [700, 100, 100, 100], "total": 123}))
-            .collect::<Vec<_>>(),
-    })
-    .to_string()
 }
 
 fn dur() -> std::time::Duration {
     std::time::Duration::from_micros(5)
 }
 
-/// ①**最近一次"真算过分"的注入**，不是"最近一次注入"：会话 B 关档在后（NULL），
-/// 会话 A 开档在前，面板必须报 A——报"没什么可说"就是把用户想看的那条挡掉了。
+/// 汇总如实：两行注入（一行交付两条、一行空交付）⇒ 次数 2、空块率 0.5、
+/// 注入过的 key 集合 2；没有一次检索回执 ⇒ 产出率是 **`Some(0.0)`** 而不是 `None`
+/// （`None` 只留给"一个 key 都没注入过"那一种，见 `metrics.rs` 的口径判据）。
 #[test]
-fn view_skips_injections_that_were_never_scored() {
-    let log = log("skip");
-    log.note_inject(
-        "sess-a",
-        "",
-        3,
-        2,
-        &["k1".into(), "k2".into()],
-        dur(),
-        Some(&receipt(&["k1", "k2"])),
-    )
-    .unwrap();
-    log.note_inject("sess-b", "", 3, 1, &["k1".into()], dur(), None)
+fn the_view_reports_the_l0_counts() {
+    let log = log("counts");
+    log.note_inject("sess-a", "", 3, 2, &["k1".into(), "k2".into()], dur())
         .unwrap();
+    log.note_inject("sess-b", "", 2, 0, &[], dur()).unwrap();
     let v = view(&log).unwrap();
-    assert!(v.explain.present);
-    assert_eq!(
-        v.explain.session_key, "sess-a",
-        "面板报的不是那一次真算过分的注入"
-    );
-    assert_eq!(v.explain.weights, [400, 250, 200, 150]);
-    assert_eq!(v.explain.rows.len(), 2, "回执里几条交付就显示几条");
-    assert_eq!(v.explain.rows[0].share, [700, 100, 100, 100]);
-    assert!(v.explain.ts > 0, "面板要能说这是哪一次的注入");
-    // 汇总走的是整张表，不是被选中的那一行
     assert_eq!(v.overview.injections, 2);
-}
-
-/// ②一次都没算过 ⇒ `present = false`（面板走空态）。同时**汇总仍要如实**：
-/// "没有解释"与"没有注入"是两件事，靠 `overview.injections` 分开。
-#[test]
-fn view_says_absent_without_inventing_an_explanation() {
-    let log = log("absent");
-    log.note_inject("sess-off", "", 1, 1, &["k".into()], dur(), None)
-        .unwrap();
-    let v = view(&log).unwrap();
-    assert!(!v.explain.present);
-    assert!(!v.explain.unreadable, "没有回执不是坏回执");
-    assert!(v.explain.rows.is_empty());
-    assert_eq!(v.overview.injections, 1, "空态不许顺手把行数报成 0");
-    assert_eq!(v.overview.store_empty_ratio, Some(0.0));
-}
-
-/// ③坏字节：**降级而不是报错**。库里那一串读不成 JSON（手改表 / 更早版本的字节）
-/// 时面板要说"这一条读不出来"，而汇总照给——整条通路报错 = 观测面判死自己的数据源。
-#[test]
-fn a_corrupt_receipt_degrades_rather_than_failing_the_whole_view() {
-    let log = log("corrupt");
-    log.note_inject(
-        "sess-x",
-        "",
-        2,
-        2,
-        &["k1".into(), "k2".into()],
-        dur(),
-        Some("{ not json ],"),
-    )
-    .unwrap();
-    let v = view(&log).unwrap();
-    assert!(v.explain.present, "有回执这件事本身要如实");
-    assert!(v.explain.unreadable);
-    assert_eq!(v.overview.injections, 1, "坏回执不许把汇总带崩");
-}
-
-/// 读端不假设库里那一串与自己同版本：缺 `share` / 缺 `total` 按 0 读，多余的档位
-/// 截掉；键名不是字符串的那条整条跳过而不是把一半的行丢掉。
-#[test]
-fn a_partial_receipt_reads_as_far_as_it_can() {
-    let log = log("partial");
-    log.note_inject(
-        "sess-p",
-        "",
-        3,
-        3,
-        &["a".into(), "b".into(), "c".into()],
-        dur(),
-        Some(r#"{"weights":[1,2],"rows":[{"key":"a","share":[5,6]},{"total":9},{"key":"c","share":[1,2,3,4,5],"total":7}]}"#),
-    )
-    .unwrap();
-    let v = view(&log).unwrap();
-    assert!(!v.explain.unreadable);
-    assert_eq!(v.explain.weights, [1, 2, 0, 0], "缺的档位补 0，不报错");
-    let keys: Vec<&str> = v.explain.rows.iter().map(|r| r.key.as_str()).collect();
-    assert_eq!(keys, ["a", "c"], "没有键名的一行无法解释，跳过它");
-    assert_eq!(v.explain.rows[0].share, [5, 6, 0, 0]);
-    assert_eq!(v.explain.rows[1].share, [1, 2, 3, 4], "多余的档位按 4 档截");
-    assert_eq!(v.explain.rows[1].total, 7);
-}
-
-/// **空交付不是坏数据**：`{"rows":[]}` 是"那一次什么都没交付"的正解（Q1 的空块率
-/// 判的就是这种行）。把它读成 `unreadable` = 把空注入演成数据损坏，面板会说错话。
-#[test]
-fn an_empty_delivery_is_a_valid_receipt_not_a_corrupt_one() {
-    let log = log("empty-delivery");
-    log.note_inject(
-        "sess-e",
-        "",
-        0,
-        0,
-        &[],
-        dur(),
-        Some(r#"{"weights":[400,250,200,150],"rows":[]}"#),
-    )
-    .unwrap();
-    let v = view(&log).unwrap();
-    assert!(v.explain.present);
-    assert!(
-        !v.explain.unreadable,
-        "空交付被读成坏字节 = 空块率那一档演成数据损坏"
+    assert_eq!(
+        v.overview.injected_keys, 2,
+        "按 key 去重的集合，不是注入次数"
     );
-    assert!(v.explain.rows.is_empty());
-    assert_eq!(v.overview.store_empty_ratio, Some(1.0));
+    assert_eq!(v.overview.yielded_keys, 0, "一次检索回执都没有");
+    assert_eq!(v.overview.store_empty_ratio, Some(0.5));
+    assert_eq!(
+        v.overview.injection_yield,
+        Some(0.0),
+        "注入了两个 key 而模型一个都没查回来 = 0.0；报 None 会把这说成「没注入过」"
+    );
 }
 
-/// 空表：`view` 不建库也不报错（`recent`/`stats` 各自 open 时幂等建表）。
+/// 顶层形状 = 只有 `overview`。学习档那套解释字段（`explain` 与其下的 `rows` /
+/// `share` / `weights`）已经从契约里摘掉，前端类型同刀瘦身；这条钉住"后端不再往外送"。
+#[test]
+fn the_payload_has_no_explain_section_anymore() {
+    let log = log("shape");
+    log.note_inject("s", "", 1, 1, &["k".into()], dur())
+        .unwrap();
+    let json = serde_json::to_value(view(&log).unwrap()).unwrap();
+    let mut keys: Vec<&str> = json
+        .as_object()
+        .expect("载荷是对象")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        ["overview"],
+        "解释档若还在载荷里，面板就在演一份没有来源的东西"
+    );
+}
+
+/// 空表：`view` 不建库也不报错（`stats` 在 open 时幂等建表）。
 #[test]
 fn an_empty_log_reads_as_zero_not_as_an_error() {
     let d = crate::testutil::unique_dir("injectview-empty");
     std::fs::create_dir_all(&d).unwrap();
     let path: PathBuf = d.join("usage.sqlite3");
     let v = view(&RecallLog::at(&path)).unwrap();
-    assert!(!v.explain.present);
     assert_eq!(v.overview.injections, 0);
     assert_eq!(
         v.overview.store_empty_ratio, None,

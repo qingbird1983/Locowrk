@@ -5,7 +5,8 @@
 //!
 //! ⚠ **S3 刀① 删掉的两个文件簇**（不是"顺手清"，是被测对象在本刀消失）：
 //! `learn.rs` 整簇（它测的是"内核把相关性词表递下去 + 学习档字节回退"，那条通路随
-//! `<persistent_memory>` 正文一起下线；`memory_learn/` 一族按裁定到刀③ 同刀退役）与
+//! `<persistent_memory>` 正文一起下线；`memory_learn/` 一族随之在刀③b 整族退役，
+//! 契约侧的 `recall_relevant` / `LearnWeights` / `RecallQuery` 同批摘除）与
 //! `render.rs` 里那四条**正文渲染**用例（top_k 截条目 / 超长截断标记 / tags 渲染 /
 //! 层标前缀——注入面不再有正文，这四件事没有对象了）。
 //! 「同会话只取数一次」这条 M1 承重从 learn.rs 移到 `prefetch.rs`（道具换成索引内文）。

@@ -113,9 +113,13 @@ pub async fn memory_reveal_project(
     super::sessions::open_in_explorer(&dir.to_string_lossy())
 }
 
-/// 队列 Q10（L4）：记忆注入的**只读解释面板**数据源——最近一次"真算过四信号"的
-/// 注入回执 + 观测表的三个派生读数。薄适配层：读盘、筛行、解析、降级全在
-/// `crate::inject_view`（那里有两条口径：只找有回执的行、坏字节不上抛）。
+/// 队列 Q10（L4）：记忆注入的**只读观测区块**数据源 = 观测表那三个派生读数
+/// （注入次数 / 空块率 / 注入产出率）。薄适配层：取数与拼载荷全在
+/// `crate::inject_view`。
+/// ⚠ 命令名里的 "view" 原本还管"最近一次真算过四信号的那次回执行证"，
+/// 那半（`explain`）随 S3 刀③b 的学习档整族退役 ⇒ **名字留着**（改它要动 IPC 契约、
+/// 前端 `lib/api` 与 `check-commands` 三向闭合，收益只有一句更贴切的名字），
+/// 但读这段的人要知道：现在这份载荷里没有分数字段了。
 #[tauri::command]
 pub async fn memory_inject_view(
     state: State<'_, AppState>,

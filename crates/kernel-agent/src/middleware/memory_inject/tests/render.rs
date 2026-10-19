@@ -147,7 +147,6 @@ async fn zero_top_k_no_longer_switches_the_block_off() {
         cfg_lock(MemoryInjectConfig {
             enabled: true,
             top_k: 0,
-            ..MemoryInjectConfig::default()
         }),
     );
     let system = run(&inject, points::REQUEST)

@@ -30,9 +30,7 @@ export type { AppearanceUpdate, BatchResult, ChatUpdate, ContextUpdate, Develope
 
 export type {
   EmbeddingUpdate,
-  InjectExplain,
   InjectOverview,
-  InjectRow,
   InjectView,
   LayerRow,
   LayersView,

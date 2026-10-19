@@ -51,13 +51,6 @@ export interface MemorySettingsView {
   factCards: boolean;
   /** 每次整理最多几张卡（1–10 缺省 3，factCards 开启时生效）。 */
   factCardMax: number;
-  /** Q9 学习档总开关（缺省开）：关 = 注入排序逐字节回到现役，且命中写回一起停。 */
-  learnEnabled: boolean;
-  /** 四信号权重（千分比 0–1000，各自独立——四档之和不要求等于 1000）。 */
-  relevanceWeight: number;
-  strengthWeight: number;
-  freshnessWeight: number;
-  recencyWeight: number;
 }
 
 /** 记忆注入区部分更新：字段缺省 = 保持不变。 */
@@ -88,13 +81,6 @@ export interface MemoryUpdate {
   factCards?: boolean;
   /** 单次整理最多产几张卡（1–10 缺省 3，仅在 factCards 开时生效）。 */
   factCardMax?: number;
-  /** Q9 学习档开关（`false` = 排序与写回一起回到现役）。 */
-  learnEnabled?: boolean;
-  /** 四信号权重（千分比 0–1000；出界 = 后端拒绝并点名是哪一档）。 */
-  relevanceWeight?: number;
-  strengthWeight?: number;
-  freshnessWeight?: number;
-  recencyWeight?: number;
 }
 
 /** 记忆条目（memory_list 返回行；snake_case 与既有 IPC 投影一致）。
@@ -151,28 +137,6 @@ export interface ObsoleteView {
   unreadable: number;
 }
 
-/** 队列 Q10（L4 / ML 稿 §3.1 原则 4）：一次注入里**一条交付**的四信号回执。
- * `share` 是千分比四档，**按位** = [相关性, 强度, 新鲜度, 时间]（与内核
- * `LearnWeights` 字段序同源，Rust 侧 `inject_view::ExplainRow`）。 */
-export interface InjectRow {
-  key: string;
-  share: number[];
-  total: number;
-}
-
-/** 最近一次"真算过四信号"的注入回执。`present=false` = 库里没有带回执的行
- * （学习档关着或一次注入都没发生）；`unreadable=true` = 有回执但那串读不成
- * 面板认得的形状（两种状态在界面上必须分开说，见 `inject_view.rs` 头注）。 */
-export interface InjectExplain {
-  present: boolean;
-  unreadable: boolean;
-  ts: number;
-  session_key: string;
-  scope_id: string;
-  weights: number[];
-  rows: InjectRow[];
-}
-
 /** 观测表的派生读数（L0 那两个比率 + 三个计数）。两个比率 **null 与 0 不是一回事**：
  * null = "没注入过 / 没键可算"，0 = "注入了但结果为空 / 一个没用上"。 */
 export interface InjectOverview {
@@ -183,9 +147,14 @@ export interface InjectOverview {
   injection_yield: number | null;
 }
 
-/** memory_inject_view 命令载荷（管理页只读解释区块）。snake_case 与既有 IPC 投影一致。 */
+/** memory_inject_view 命令载荷（管理页只读区块）。snake_case 与既有 IPC 投影一致。
+ * ⚠ 这里原先还有一档 `explain`（`InjectExplain` + `InjectRow`：最近一次"真算过四信号"
+ * 的回执、四档千分比占比、present/unreadable 两态）——它的生产者与 Rust 侧
+ * `inject_view::InjectExplain` 同刀退役（S3 刀③b，裁定 = specs/10 开工三问②）。
+ * 为什么整块删而不是留一个恒假的字段：面板拿到 `present: false` 只能演成"没得说"，
+ * 而那件事现在**每个会话都成立**，界面就变成一格永远空着的框。
+ * 将来若要恢复"这一轮注入了哪几条"，正解是给索引段埋点（specs/10 欠账 ⓠ）。 */
 export interface InjectView {
-  explain: InjectExplain;
   overview: InjectOverview;
 }
 

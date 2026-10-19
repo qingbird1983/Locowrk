@@ -17,7 +17,8 @@ use super::shapes::CREATE_TABLE;
 /// 旧库迁移：无 workspace 列 = key 单主键时代，整表重建进未归属键位。
 /// `BEGIN IMMEDIATE` + 等锁后的二次探针这两件**照旧承重**，但承重对象变了：
 /// 原来防的是"宿主与插件两个进程族同时首访问"，插件退场之后防的是**宿主自己**的
-/// 多线程（记忆命令线程与 `memory_learn` 后台线程开的是同一个库文件）；
+/// 多线程（记忆命令线程与对账后台线程开的是同一个库文件；S3 刀③b 之后第三个
+/// 并发方 `memory_learn` 已退役，它当初就是走 `recall_relevant` 同步开库的）；
 /// 旧表 source 列可有可无（headless 时代建的库没有）——探针决定 SELECT 中的 source 表达式。
 pub(super) fn ensure_workspace_schema(conn: &Connection) -> Result<(), String> {
     let has_col = |name: &str| -> Result<i64, String> {
@@ -65,8 +66,14 @@ pub(super) fn ensure_workspace_schema(conn: &Connection) -> Result<(), String> {
 /// L1 学习面迁移（ML §3.2 · 后审计队列 Q5）：旧库补 `hit_count` / `last_hit_at` 两列。
 /// 形状照上面的 `ensure_workspace_schema`（探针 + `BEGIN IMMEDIATE` + 等锁后二次探针），
 /// 理由自 S1 刀③b 起变了对象但没变分量：插件不再开这张表，可**宿主自己**就是多线的
-/// ——记忆命令线程与 `memory_learn` 后台线程开的是同一个 `memory.sqlite3`，
+/// ——记忆命令线程与对账后台线程开的是同一个 `memory.sqlite3`，
 /// 并发首访问时仍然只有一方真正执行 ALTER，另一方必须靠二次探针认出"已经迁完了"。
+///
+/// ⚠ **S3 刀③b 之后这两列没人读写**（唯一的读写者 `memory_learn::reinforce` /
+/// `candidates` 整族退役）。迁移件与 `check-schema-parity.mjs` 的 H1–H7 **一律留着**，
+/// 理由不是"还等着有人用"而是：存量库的形状是既成事实，删迁移 = 让旧库停在缺列状态，
+/// 那时 H2 那档"两条 ALTER 原文在场"就没人管了。列的去处 = S4 与 sqlite 面一起裁
+/// （specs/10 刀③b 施工记录登记的"列还在、没人读写"那一格）。
 /// ⚠ **逐列**决定补哪一条，而不是「缺一就两条都跑」：两条 ALTER 在同一批次里顺序执行，
 /// 中间被杀（进程崩 / 掉电）会留下「有 `hit_count`、无 `last_hit_at`」的半迁状态，那时
 /// 重跑第一条会撞 `duplicate column name` ⇒ Err → ROLLBACK ⇒ 这个库**永远打不开**（缺陷

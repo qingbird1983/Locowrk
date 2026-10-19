@@ -16,7 +16,6 @@
 
 use super::*;
 use crate::recall_log::RecallLog;
-use kernel_agent::{LearnWeights, RecallQuery};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// 一枚**可现场扳动**的开关闭包。为什么用 `AtomicBool` 而不是各建一个 store：
@@ -29,18 +28,6 @@ fn flag() -> (Arc<AtomicBool>, Arc<dyn Fn() -> bool + Send + Sync>) {
         Arc::new(move || f.load(Ordering::Relaxed)) as Arc<dyn Fn() -> bool + Send + Sync>
     };
     (f, read)
-}
-
-/// 学习档的入参：只关心 `weights.enabled = true` 这一维（其余权重取内核缺省，
-/// 排序对不对由 `recall_learn.rs` 判）。
-fn learn_query() -> RecallQuery {
-    RecallQuery {
-        terms: vec!["docker".into()],
-        weights: LearnWeights {
-            enabled: true,
-            ..Default::default()
-        },
-    }
 }
 
 /// 未接线 = 恒开。这一条测的是 `MemoryStore::new` 里那两枚 `Arc::new(|| true)`：
@@ -72,8 +59,11 @@ fn both_switches_default_to_open_on_an_unwired_store() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 关掉全局层 ⇒ 两条召回通路都空、**一次埋点都不记**，而管理页照旧全量、写路径照旧
-/// 落盘、项目层不受牵连。
+/// 关掉全局层 ⇒ **两档出口都空**（`recall` 那条正文读路 + S3 之后的 `global_index`
+/// 索引段）、**一次埋点都不记**，而管理页照旧全量、写路径照旧落盘、项目层不受牵连。
+///
+/// ⚠ "两档各断一次"是这条的承重形状（原先第三档 = 学习档 `recall_relevant`，随整族
+/// 退役，见本簇末尾的指路）：门只装在一档上时，另一档照常进上下文而没人喊。
 ///
 /// "不记埋点"是这条用例的名字所在：门如果装在 `recall_once` 的 filter 里（而不是
 /// `recall_quiet` 顶部早退），交付同样是空表，但账本上会留下一行"候选 0 条、注入 0 条"
@@ -109,6 +99,10 @@ fn closing_the_global_layer_stops_injection_without_touching_the_layer() {
         "前提：埋点通路确实接上了（一轮一行）"
     );
     assert!(store.project_index(Some("ws-session")).is_some());
+    assert!(
+        store.global_index(Some("s-open")).is_some(),
+        "前提：S3 刀① 之后全局层的注入出口 = 索引段，它得先在场"
+    );
     assert_eq!(store.list("", 200).unwrap().len(), 2, "两层都在列表里");
 
     // 扳到关（同一个 store，不重建 ⇒ 证的是"每轮现读"而不是"构造时读一次"）
@@ -118,10 +112,8 @@ fn closing_the_global_layer_stops_injection_without_touching_the_layer() {
         "关 = 全局层不出内容（S3 刀① 之后它的注入出口是 `global_index`，见下面那条）"
     );
     assert!(
-        store
-            .recall_relevant(Some("s-closed-rel"), 10, &learn_query())
-            .is_empty(),
-        "关掉全局层不等于换一条通路继续注入"
+        store.global_index(Some("s-closed")).is_none(),
+        "关掉全局层不等于换一条通路继续注入：索引段整段缺席"
     );
     assert_eq!(
         log.stats().unwrap().injections,
@@ -249,33 +241,10 @@ fn the_global_layer_injects_its_index_section_under_the_same_switch() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 学习档（`recall_relevant` 那条还按影子库寻址的支路）吃**同一枚**门。
-///
-/// 单列一条而不是并进上面那条：它的早退在 `source.rs` 里位于权重判断**之前**，把门挪到
-/// 判断之后（"先决定走哪条通路、再在各自通路里早退"）会让这条红而上面那条绿——两档共用
-/// 一枚门这件事必须有两条独立红证。关档连库都不开是这半档的附带读法：`memory_learn`
-/// 那条路是宿主最后一处按库寻址的读路（specs/05 刀②c-2 的挂账）。
-#[test]
-fn the_global_switch_covers_the_relevance_branch() {
-    let dir = temp_dir("switch-learn-branch");
-    let (global, global_on) = flag();
-    let (_keep, project_on) = flag();
-    let store = wired(&dir).with_layer_switches(global_on, project_on);
-    // 学习档读的是影子库 ⇒ 用生产里唯一还写内容列的入口造行（`md_read.rs` 同款手法）
-    store
-        .reconcile_upsert("", "pref.db", "docker compose", "ops", "explicit", 1)
-        .unwrap();
-
-    global.store(false, Ordering::Relaxed);
-    assert!(
-        store.recall_relevant(None, 10, &learn_query()).is_empty(),
-        "关掉全局层 ⇒ 学习档同样一条不给"
-    );
-    global.store(true, Ordering::Relaxed);
-    assert_eq!(
-        store.recall_relevant(None, 10, &learn_query()).len(),
-        1,
-        "正对照：开回来就有货（否则上面那个空是空集里的真话）"
-    );
-    let _ = std::fs::remove_dir_all(&dir);
-}
+// 这一簇原先还有一条 `the_global_switch_covers_the_relevance_branch`：单列一条证
+// `recall_relevant`（那条按影子库寻址的支路）吃**同一枚**门，理由是"它的早退在权重判断
+// 之前，把门挪到判断之后会让这条红而上面那条绿——两档共用一枚门这件事必须有两条独立红证"。
+// S3 刀③b 学习档整族退役（裁定 = specs/10 开工三问②），那条支路不存在了 ⇒ 用例随实现离场，
+// 但**"两条独立红证"这条纪律没有作废**：现在两档 = `recall`（正文读路 + 埋点）与
+// `global_index`（S3 之后的注入出口），`closing_the_global_layer_stops_injection_without_touching_the_layer`
+// 那条里两个各断一次，少一个就是一档门只管半张出口。

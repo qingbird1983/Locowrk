@@ -185,7 +185,6 @@ async fn receipts_are_not_deduplicated_unlike_injections() {
             1,
             &["a".to_string()],
             std::time::Duration::from_micros(1),
-            None,
         )
         .unwrap();
     }

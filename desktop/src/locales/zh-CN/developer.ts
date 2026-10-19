@@ -168,21 +168,14 @@ export default {
     viewProject: "项目",
     projectEmpty: "本项目还没有跨会话的整理记录。",
     projectOpenHint: "查看原文与编辑 → 进入所在会话",
-    // 队列 Q10（ML 稿 §3.1 原则 4 / §5.1 L4）：注入解释只读区块
-    injectTitle: "注入解释（最近一次）",
-    injectHint: "四档占比按千分比，相加 = 1000",
+    // 队列 Q10（L4）立的注入侧观测区块。S3 刀③b 之后只剩累计读数那一行：
+    // "最近一次为什么这样排"的十个键（injectEmpty / Unreadable / NoDelivery / At / Weights /
+    // Relevance / Strength / Freshness / Recency / Total）随学习档整族退役一起删除，
+    // 中英同批删（`check-i18n` 盯成对，留一边就是假文案）。
+    injectTitle: "注入观测（累计）",
+    injectHint: "读自注入侧观测表；同一会话同一项目只记一次",
     injectLoading: "读取中…",
-    injectEmpty: "还没有可解释的注入：学习档关着，或这个数据根还没跑过一轮对话。",
-    injectUnreadable: "最近一次注入的回执读不出来（库里那一串不是本面板认得的形状）。",
-    injectNoDelivery: "那一次什么都没交付（空块）。",
-    injectAt: "最近一次：{when} · 会话 {session}",
-    injectOverview: "注入 {n} 次 · 空块 {empty} · 注入过的键被用上 {yield}（{used}/{keys}）",
-    injectWeights: "那一次的权重：相关 {a} · 强度 {b} · 新鲜 {c} · 时间 {d}",
-    injectRelevance: "相关",
-    injectStrength: "强度",
-    injectFreshness: "新鲜",
-    injectRecency: "时间",
-    injectTotal: "总分 {total}",
+    injectOverview: "注入 {n} 次 · 空块 {empty} · 注入过的键被用上 {rate}（{used}/{keys}）",
     injectUnknown: "—",
     treeEditFailed: "保存失败：{reason}",
     originalLoading: "加载原文…",

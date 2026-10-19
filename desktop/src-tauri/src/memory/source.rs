@@ -1,5 +1,5 @@
 //! **Memory-Inject 的检索源**（台账 T33）：`impl MemorySource for MemoryStore` 的
-//! 全部方法（现役 `recall` / 学习档 `recall_relevant` / 缓存键 `scope_id` / 归属告知
+//! 全部方法（现役 `recall` / 缓存键 `scope_id` / 新鲜度指纹 `index_stamp` / 归属告知
 //! `context_line` / 交接提醒段 `repo_context` / **两层索引** `global_index` 与
 //! `project_index`）、组装点便利函数 `memory_source`，以及只被 `context_line` 用的
 //! `today_local`——它的唯一调用点就在本片，所以跟着搬，不留第二个出处。
@@ -8,16 +8,18 @@
 //! 别片已抬到 `pub(super)` 的入口（`open_conn` / `recall_quiet` / `log_inject_keys` 与
 //! 那四个字段），加上原本就 `pub(crate)` 的 `md_index_body`；没有一处为"方便"而抬宽。
 //!
-//! ⚠ **S3 刀① 之后 `recall_relevant` 在生产面已经没有调用点了**：注入环改吃两层索引，
-//! 那块 `<persistent_memory>` 正文（连同"内核把相关性词表递下去"这条通路）一起下线。
-//! 本方法**暂时保留**（trait 方法、宿主实现、`memory_learn/` 一族都在，只是没人调），
-//! 去留按 `specs/10-context-injection-s3` 的裁定 = **刀③
-//! 同刀退役删除**——留着它跨三刀就是审计报告 H2 判过的那个形状（"存在但从未接线"）。
-//! `recall` 本体（现役参照系）与 `project_index` 都只读 md。
+//! ⚠ **S3 刀③b：学习档整族离场**。`recall_relevant`（trait 方法 + 这份宿主实现）、
+//! `memory_learn/` 一族、设置页那格 `learnEnabled` 与四枚权重，按
+//! `specs/10-context-injection-s3` 开工三问② 的裁定**同刀退役删除**——真源 = md 之后
+//! "按影子库 `hit_count` 加权排序"是残留的第二真源，而它唯一的调用点（旧
+//! `<persistent_memory>` 正文块）已在刀① 摘掉，留着跨三刀就是审计报告 H2 判过的
+//! "存在但从未接线"那一格。**留下的东西**：`recall` 本体与它身后的 `recall_quiet`
+//! 注入埋点——生产注入面（改吃两层索引）同样不再调它，这条口径欠账登记为 ⓠ，
+//! 本刀不动它的形状（见 contract 侧那条同名注释）。
 
 use std::sync::Arc;
 
-use kernel_agent::{MemoryEntry, MemorySource, RecallQuery};
+use kernel_agent::{MemoryEntry, MemorySource};
 
 use crate::timeutil::now_secs;
 
@@ -33,14 +35,14 @@ fn today_local() -> String {
         .to_string()
 }
 
-/// Memory-Inject 的检索源（注册进 agent/request 决策环）。v2.136 裁定：
-/// 注入只取全局层（用户层面的喜好/全局要求；项目层事实不自动注入，模型
-/// memory_read / memory_search 按需查）。㉘·A·fix 另供两件：`scope_id`
+/// Memory-Inject 的检索源（注册进 agent/request 决策环）。㉘·A·fix 另供两件：`scope_id`
 /// （预取缓存键成分——归属变更自动重算）与 `context_line`（归属会话告知
 /// 模型当前项目根，"看下这个项目"不再靠旧记忆猜路径）。
-/// 队列 Q9 起**覆写 `recall_relevant`**：排序真源从"SQL 的 `updated_at DESC`"
-/// 变成"候选集内存四信号加权"（`memory_learn/`，Q10 起目录化），`recall` 本体保留不动
-/// = 学习档关掉时的现役参照。
+/// ⚠ v2.136 那句「注入只取全局层」管的是**正文通路**（`recall` 那条 top-K 全文注入）：
+/// S3 刀① 之后进上下文的是**两层索引的指针行**（[`MemorySource::global_index`] +
+/// [`MemorySource::project_index`]），正文一个字都不进 ⇒ 那句话描述的东西已经不存在，
+/// 别照它推"项目层不进上下文"。队列 Q9 那条 `recall_relevant` 覆写（四信号加权 +
+/// 命中写回）随刀③b 整族退役。
 impl MemorySource for MemoryStore {
     fn recall(&self, session_id: Option<&str>, limit: usize) -> Vec<MemoryEntry> {
         // Q1（L0）：session_id 现在透传给 recall_quiet，但**只作观测字段**——
@@ -57,92 +59,6 @@ impl MemorySource for MemoryStore {
                 scope: "global".into(),
             })
             .collect()
-    }
-
-    /// 队列 Q9（ML 稿 §3.3 排序 + §3.4 强化 = 稿内 L2/L3 合一批）：四信号现算
-    /// 加权排序 + 交付即写回。打分与写回的**全部逻辑在 `memory_learn/` 模块**，
-    /// 这里只做装配、连接与观测（同一进程内一次连接读完就排，不重开库）。
-    ///
-    /// ⚠ **关掉学习档走的是 `Self::recall` 本体**，不是"另写一份等价的老 SQL"：
-    /// 稿 §5.4 要求 `learnEnabled=false` 逐字节回到现役，这条由**调用图**给出而不是
-    /// 由测试近似——现役路径只有一个实现，新路径无法在它身上偷偷改点什么还声称等价。
-    ///
-    /// ⚠ **订正：写回粒度是"每会话一次"而不是稿 §3.4 说的"每次 `recall()` 调用"**。
-    /// 桌面链的 `MemoryInject` 带会话预取缓存（M1 纪律：逐轮动态检索会改写
-    /// system 前缀、命中归零），一个会话只有**首查**那一次真走到这里 ⇒ `hit_count`
-    /// 的增长单位是**会话**不是轮次，同一会话追问十轮记忆只 +1。方向上是好事
-    /// （稿 §6.1 担心的"检索即自我强化"被从 ×轮 压到 ×会话），但必须说破：
-    /// A/B 时看到的 `hit_count` 不能按轮次解释，`memory_inject_log` 里一个会话
-    /// 也只有一行注入记录（Q1 的既有形状）。
-    fn recall_relevant(
-        &self,
-        session_id: Option<&str>,
-        limit: usize,
-        query: &RecallQuery,
-    ) -> Vec<MemoryEntry> {
-        // 全局记忆层开关（S1 刀④b）：两档吃**同一枚门**——"关掉全局层"不等于"换一条
-        // 通路继续注入"，那样这枚开关就成了排序器的装饰。早退放在权重判断之前，
-        // 于是关档连库都不开（学习档那条路是唯一还按库寻址的读路，见 specs/05 刀②c-2）。
-        if !(self.global_on)() {
-            return Vec::new();
-        }
-        if !query.weights.enabled {
-            return self.recall(session_id, limit);
-        }
-        let started = std::time::Instant::now();
-        let now = now_secs();
-        let learned: Result<
-            (Vec<crate::memory_learn::Scored>, Vec<String>, usize, String),
-            String,
-        > = (|| {
-            let conn = self.open_conn()?;
-            // n_candidates 恒取**全量** COUNT（与 recall_quiet 同口径），不是候选
-            // 上限：Q1 那条指标的分子分母不能随本刀换定义。
-            let n_candidates = crate::memory_learn::count_global(&conn)?;
-            let delivered = crate::memory_learn::rank(
-                crate::memory_learn::candidates(&conn)?,
-                query,
-                limit,
-                now,
-            );
-            // 写回与埋点吃**同一个 keys 变量**：交付集合、`hit_count` 增量、
-            // `memory_inject_log.keys` 三者不可能分叉（分叉过一次就是"日志说注入了
-            // 三条、库里只加了两条"这种查不出的账）。
-            let keys: Vec<String> = delivered.iter().map(|s| s.cand.key.clone()).collect();
-            crate::memory_learn::reinforce(&conn, &keys, now);
-            // ⚠ Q10（L4）：四信号回执**只走观测旁路**——它进 `memory_inject_log.breakdown`
-            // 由管理页回放，**不进** `MemoryEntry`（那等于把机器状态摆进 system，还花
-            // token；上批判据 S10 钉的那条原样在场）。回执与 keys 同样取自 `delivered`
-            // 这同一个变量 ⇒ "日志里的分数"与"真正交付的那几条"不可能各说一套。
-            let breakdown = crate::memory_learn::breakdown_json(&delivered, query);
-            Ok((delivered, keys, n_candidates, breakdown))
-        })();
-        match learned {
-            Ok((rows, keys, n_candidates, breakdown)) => {
-                self.log_inject_keys(session_id, n_candidates, &keys, started, Some(&breakdown));
-                rows.into_iter()
-                    .map(|s| MemoryEntry {
-                        key: s.cand.key,
-                        value: s.cand.value,
-                        tags: s.cand.tags,
-                        updated_at: s.cand.updated_at,
-                        // 与现役 recall 同一个层标口径：注入只取全局层。
-                        scope: "global".into(),
-                    })
-                    .collect()
-            }
-            Err(e) => {
-                // 与 `recall_quiet` 共用 `warned`：两处失效原因是**同一个** open_conn
-                // （库打不开/查询失败），各开一位会让其中一边在真故障时静默两次
-                // 告警；project_index 那位独立 ONCE 的理由（失效原因不同）在这里不成立。
-                // 同样**不记埋点**：连 n_candidates 都取不到，记 0 会把"库不可用"
-                // 冒充成"库是空的"（指标造假）。
-                if !self.warned.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                    tracing::warn!("memory recall unavailable（记忆注入降级为空）: {e}");
-                }
-                Vec::new()
-            }
-        }
     }
 
     fn scope_id(&self, session_id: Option<&str>) -> String {
