@@ -864,6 +864,59 @@ const CHECKS = [
       `${filesWith(m.hostDesktop, /MicroCompact::new\s*\(/)}|${filesWith(m.hostDesktop, /strategy:\s*"micro"/)}`,
     'state/waterfall.rs|microcompact.rs',
   ],
+  [
+    'SS19a',
+    '辅助补全的直呼客户端**只有一个定义处，而且不在 organize 里**（S2 刀④a 搬家）：' +
+      '`struct AppLlmMemoryManager` 与那条 `impl memory_tree::MemoryManagerClient for …` ' +
+      '都只住在 `llm/aux_client.rs`。为什么这一档要紧——它是"一次模型补全该走设置里哪一档"' +
+      '这件事的唯一实现（服务档整档切换 / 只换模型名 / 都没配就走主模型，三档路由 + 未配置就 ' +
+      'Err），整理章节总结与 S2 主层压缩共用这一条；而 organize 按 specs/01 D 节在 S4 整面退役，' +
+      '共用件长在那里，退役那天要么把压缩一起拔断，要么被逼着复制一份路由（= 第二个出处）。' +
+      '读数用**文件集合**：搬家搬对了红不到，搬回 organize 或再拆一份都当场红且能看见是谁（SS14a 同一条理由）',
+    (m) =>
+      `${filesWith(m.hostDesktop, /\bpub(\(crate\))? struct AppLlmMemoryManager/)}|${filesWith(
+        m.hostDesktop,
+        /impl memory_tree::MemoryManagerClient for AppLlmMemoryManager/,
+      )}`,
+    'llm/aux_client.rs|llm/aux_client.rs',
+  ],
+  [
+    'SS19b',
+    'organize 面上**只剩调用方、没有所有权**（刀④a 的墓碑，与 SS16b 同族）：' +
+      '`struct AppLlmMemoryManager` 恒 0（定义不许回来）、`pub use client::` 恒 0（再导出' +
+      '也不许留一条——它就是"organize 也拥有这个类型"的假象），而限定路径的构造 ' +
+      '`crate::llm::AppLlmMemoryManager::new(` 恒 1（`build_organizer` 那一处，它确实是' +
+      '整理编排要用的件，只是不再 owned 它）。为什么不数裸名字：SS19a 已经盯住定义与实现块，' +
+      '而裸名出现在注释里是必要留痕——数它会一片假红。⚠ 三档都数代码行（organize 头注正在' +
+      '解释这次搬家）；前两档期望 0 ⇒ 由 FLOORS 的 organize 面下限兜"面瞎了"（面为空与' +
+      '真的没有在这一档读数上长得一模一样）',
+    (m) =>
+      `${countOf(m.organize, /struct AppLlmMemoryManager/)}|${countOf(m.organize, /\bpub use client::/)}|${countOf(m.organize, /crate::llm::AppLlmMemoryManager::new\s*\(/)}`,
+    '0|0|1',
+  ],
+  [
+    'SS19b2',
+    '补 SS19b 的另一半：它第三档**期望 1**，而 1 是"限定构造恰好在组织点上"，所以' +
+      '"构造点被改名 / 整块删掉 / 换成裸名 import"这三种漂法里，前两种会让 SS19b 从 1 掉到 0 而报红，' +
+      '第三种（organize 里出现**非限定**的 `AppLlmMemoryManager::new(`）SS19b 看不见。' +
+      '本档把左=限定构造数、右=宿主面构造总数放在一起比：两者恒等 ⇒ organize 只能通过' +
+      '限定路径拿这一件，共享它不会悄悄变回"organize 的私有件"（同 SS16a 左右两档一起报的那条理由）',
+    (m) => {
+      const host = m.hostDesktop.map((f) => f.code).join('\n');
+      return `${countOf(m.organize, /crate::llm::AppLlmMemoryManager::new\s*\(/)}|${countOf(host, /AppLlmMemoryManager::new\s*\(/)}`;
+    },
+    '1|1',
+  ],
+  [
+    'SS19c',
+    '路由那一步（`fn cfg_for`：按设置算出本次调用生效的 `LlmSettings`）只有一处实现 = ' +
+      '`llm/aux_client.rs`。为什么单独盯它而不是盯 `flat_profile(` 的调用数：后者在发送侧' +
+      '（`AppLlm::prepare`）本来就有合法在场，数它=假红；而 `cfg_for` 这个名字一旦在别处' +
+      '再出现，就是有人为新调用方又写了一遍档位选择——表现是"整理走 A 档、压缩走 B 档"，' +
+      '而设置页上只有一枚记忆管理器模型，没人能从界面上看出两份路由',
+    (m) => filesWith(m.hostDesktop, /\bfn cfg_for\s*\(/),
+    'llm/aux_client.rs',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -1080,6 +1133,27 @@ if (SELFTEST) {
       m.hostDesktop.push({
         rel: 'state/llm_stack.rs',
         code: 'let micro_ring = Arc::new(MicroCompact::new(s, d, f));\n',
+      }),
+    // 刀④a 三档各一条窄变异。SS19a：把定义抄回 organize（退役那天就会拔断压缩）。
+    SS19a: (m) =>
+      m.hostDesktop.push({
+        rel: 'organize/client.rs',
+        code:
+          'pub(crate) struct AppLlmMemoryManager2 {}\nimpl memory_tree::MemoryManagerClient for AppLlmMemoryManager2 {}\n',
+      }),
+    // SS19b：organize 面上复活"所有权"痕迹（再导出 + 自己的定义）。数的是 m.organize 那份
+    // 独立读盘 ⇒ 不会与 SS19a（hostDesktop 面）互相遮挡。
+    SS19b: (m) =>
+      (m.organize +=
+        '\npub use client::AppLlmMemoryManager;\npub struct AppLlmMemoryManager {}\n'),
+    // SS19b2：宿主面多一个构造方（不走限定路径、也不进 organize 面）⇒ 只有右档会动。
+    SS19b2: (m) =>
+      m.hostDesktop.push({ rel: 'compact.rs', code: 'AppLlmMemoryManager::new(s)\n' }),
+    // SS19c：为新调用方又写一遍档位路由。
+    SS19c: (m) =>
+      m.hostDesktop.push({
+        rel: 'compact.rs',
+        code: 'fn cfg_for(&self, m: Option<&str>) -> LlmSettings { todo!() }\n',
       }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),

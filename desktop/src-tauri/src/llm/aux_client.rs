@@ -1,8 +1,17 @@
-//! 记忆管理器客户端的桌面实现（organize 编排的 LLM 出口）：按设置路由——
+//! 辅助补全的直呼出口（一次 system+user → 一段文本）：按设置路由——
 //! 记忆管理器模型配了服务档（memory_manager_provider）→ 整档切换（kind/base/key，
-//! v2.58 档位语义）；只配了模型名 → 主模型端点 + 模型名覆盖；都没配 →
-//! 主模型。**模型未配置 = 直接 Err**（记忆管理器不落演示替身——脚本回显只会
-//! 产出垃圾再走校验失败，如实报错让管道降级规则切分）。
+//! v2.58 档位语义）；只配了模型名 → 主模型端点 + 模型名覆盖；都没配 → 主模型。
+//! **模型未配置 = 直接 Err**（不落演示替身——脚本回显只会产出垃圾再走校验失败，
+//! 如实报错让调用方降级）。
+//!
+//! 为什么这块地不住在 `organize/` 里（S2 刀④a 搬家，与刀① 同一条理由）：organize
+//! 整面在 S4 退役（specs/01 D 节），而"让一次模型补全从设置里找到该用的那一档"是
+//! **模型接入面**的能力，不是整理编排的私有物。搬前它已经是两个调用方的共用件——
+//! 整理章节总结（`organize/task.rs:177` 整理任务、`organize/backfill.rs:125` 历史回填）
+//! 与 S2 主层压缩（`compact.rs`）共用这一条直呼通路；把共用件
+//! 押在要删的模块上 = 依赖方向错，退役那天要么拔不掉、要么被逼着复制一份。
+//! 判据 = `check-single-source.mjs` 的 SS19（定义只住在 `llm/aux_client.rs`，
+//! organize 面上零定义零构造）。
 
 use std::sync::Arc;
 
@@ -13,13 +22,13 @@ use session_store::Message;
 use crate::llm::CompatLlm;
 use crate::settings::{LlmSettings, SettingsStore};
 
-pub struct AppLlmMemoryManager {
+pub(crate) struct AppLlmMemoryManager {
     settings: Arc<SettingsStore>,
     real: CompatLlm,
 }
 
 impl AppLlmMemoryManager {
-    pub fn new(settings: Arc<SettingsStore>) -> Self {
+    pub(crate) fn new(settings: Arc<SettingsStore>) -> Self {
         Self {
             settings,
             real: CompatLlm::new(),

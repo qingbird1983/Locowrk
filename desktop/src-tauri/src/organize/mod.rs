@@ -23,6 +23,18 @@
 //! `pressure` / `trigger` / `debug`）现在都调那一份、本模块**不再自己拿尺**
 //! （机器面 = 判据 SS16b：organize 面上 `reported_input_tokens` 出现 0 次）。
 //! 数值与回落口径逐字未动，等价性证据 = 本模块既有测试一字未改仍绿。
+//!
+//! **S2 刀④a（2026-10-19）又改过本模块的一格地**：辅助补全的直呼客户端
+//! `AppLlmMemoryManager` 原来住在本模块的 `client.rs`，现搬进模型接入面
+//! [`crate::llm`]（文件 = `llm/aux_client.rs`）。同一条依赖方向的理由，而且是**反向**的
+//! 那条：不是"S2 要吃 organize 里的东西"，而是"organize 与 S2 主层压缩**共用**一条
+//! 直呼通路，共用件不该长在要退役的模块里"——留在原处，S4 拔 organize 时要么把压缩
+//! 一起拔断，要么被逼着复制一份路由逻辑（那就是"两个出处"）。本模块只剩两处**调用方**
+//! （`task.rs:177` 整理任务、`backfill.rs:125` 历史回填），构造点改吃 `crate::llm::…`；
+//! 机器面 = 判据 SS19（定义与客户端实现只住在 `llm/aux_client.rs` 一个文件里，
+//! organize 面上两个形状各 0 次）。搬动只有两行字面差异（`pub` → `pub(crate)`，
+//! 按 AGENTS「内部类型一律 `pub(crate)`」），其余逐字节相同；
+//! 等价性证据同样是本模块既有测试一字未改仍绿。
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -40,7 +52,6 @@ use crate::timeutil::now_ms;
 
 mod assemble;
 mod backfill;
-mod client;
 mod collapse;
 mod debug;
 mod edit;
@@ -58,7 +69,6 @@ mod tree_tools;
 mod trigger;
 mod view;
 pub use assemble::TreeAssembler;
-pub use client::AppLlmMemoryManager;
 pub use debug::TreeDebug;
 pub use events::OrganizeNotifier;
 pub use project_history::ProjectHistoryTool;
@@ -350,7 +360,7 @@ pub fn build_organizer(
     Arc::new(Organizer::new(
         Arc::clone(&settings),
         sessions_dir,
-        Arc::new(AppLlmMemoryManager::new(settings)),
+        Arc::new(crate::llm::AppLlmMemoryManager::new(settings)),
         workspace_of,
         data_root,
         model_overrides,
