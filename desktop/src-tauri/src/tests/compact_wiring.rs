@@ -9,9 +9,9 @@
 
 use super::*;
 
+use crate::llm::{SummaryClient, SummaryUsage};
 use crate::runner::{run_turn, UsagePolicy};
 use async_trait::async_trait;
-use memory_tree::{MemoryManagerClient, MemoryManagerUsage};
 use session_store::{self, Message, Session, SessionEvent};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -31,13 +31,13 @@ impl Counting {
 }
 
 #[async_trait]
-impl MemoryManagerClient for Counting {
+impl SummaryClient for Counting {
     async fn complete(
         &self,
         system: &str,
         user: &str,
         _model: Option<&str>,
-    ) -> Result<(String, MemoryManagerUsage), String> {
+    ) -> Result<(String, SummaryUsage), String> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.seen
             .lock()
@@ -51,7 +51,7 @@ impl MemoryManagerClient for Counting {
         assert!(!user.is_empty(), "摘要请求不许喂空");
         Ok((
             crate::compact::sample_summary(),
-            MemoryManagerUsage {
+            SummaryUsage {
                 input: 10,
                 output: 5,
             },
@@ -104,7 +104,7 @@ fn compactor_with(root: &std::path::Path) -> (Arc<crate::compact::deep::Compacto
     (
         Arc::new(crate::compact::deep::Compactor::new(
             settings,
-            Arc::clone(&cli) as Arc<dyn MemoryManagerClient>,
+            Arc::clone(&cli) as Arc<dyn SummaryClient>,
             Arc::new(crate::compact::Failures::default()),
             Arc::new(crate::compact::Overflow::default()),
         )),

@@ -859,47 +859,49 @@ const CHECKS = [
   ],
   [
     'SS19a',
-    '辅助补全的直呼客户端**只有一个定义处，而且不在 organize 里**（S2 刀④a 搬家）：' +
-      '`struct AppLlmMemoryManager` 与那条 `impl memory_tree::MemoryManagerClient for …` ' +
+    '辅助补全的直呼客户端**只有一个定义处，而且不在 organize 里**（S2 刀④a 搬家，' +
+      'S4 刀③a 改名）：`struct AppLlmSummarizer` 与那条 `impl SummaryClient for …` ' +
       '都只住在 `llm/aux_client.rs`。为什么这一档要紧——它是"一次模型补全该走设置里哪一档"' +
       '这件事的唯一实现（服务档整档切换 / 只换模型名 / 都没配就走主模型，三档路由 + 未配置就 ' +
       'Err），整理章节总结与 S2 主层压缩共用这一条；而 organize 按 specs/01 D 节在 S4 整面退役，' +
       '共用件长在那里，退役那天要么把压缩一起拔断，要么被逼着复制一份路由（= 第二个出处）。' +
-      '读数用**文件集合**：搬家搬对了红不到，搬回 organize 或再拆一份都当场红且能看见是谁（SS14a 同一条理由）',
+      'S4 刀③a 起压缩线的契约换成 `SummaryClient`（从 `memory-tree` 迁入），organize 的那条' +
+      '过渡实现也仍住同一文件。读数用**文件集合**：搬家搬对了红不到，搬回 organize 或再拆一份' +
+      '都当场红且能看见是谁（SS14a 同一条理由）',
     (m) =>
-      `${filesWith(m.hostDesktop, /\bpub(\(crate\))? struct AppLlmMemoryManager/)}|${filesWith(
+      `${filesWith(m.hostDesktop, /\bpub(\(crate\))? struct AppLlmSummarizer/)}|${filesWith(
         m.hostDesktop,
-        /impl memory_tree::MemoryManagerClient for AppLlmMemoryManager/,
+        /impl SummaryClient for AppLlmSummarizer/,
       )}`,
     'llm/aux_client.rs|llm/aux_client.rs',
   ],
   [
     'SS19b',
     'organize 面上**只剩调用方、连所有权都没有**（刀④a 立、刀④c 收到底的那块墓碑）：' +
-      '`struct AppLlmMemoryManager` 恒 0（定义不许回来）、`pub use client::` 恒 0（再导出' +
-      '也不许留一条——它就是"organize 也拥有这个类型"的假象），而 `AppLlmMemoryManager::new(` ' +
+      '`struct AppLlmSummarizer` 恒 0（定义不许回来）、`pub use client::` 恒 0（再导出' +
+      '也不许留一条——它就是"organize 也拥有这个类型"的假象），而 `AppLlmSummarizer::new(` ' +
       '**也恒 0**：刀④c 起 organize 连"造"都不做，客户端由组装点注入，整理章节总结与主层' +
       '压缩摘要共用同一个实例（两张实例 = 两份路由状态，而"连败三次"这件事会各自数各自的）。' +
-      '第三档故意不收窄成限定路径：非限定的 `AppLlmMemoryManager::new(` 出现在 organize ' +
+      '第三档故意不收窄成限定路径：非限定的 `AppLlmSummarizer::new(` 出现在 organize ' +
       '面里同样是自己拿了一条通路。为什么不数裸类型名：SS19a 已经盯住定义与实现块，' +
       '而裸名出现在注释里是必要留痕——数它会一片假红。⚠ 三档都数代码行（organize 头注正在' +
       '解释这次搬家）；三档期望 0 ⇒ 由 FLOORS 的 organize 面下限兜"面瞎了"（面为空与' +
       '真的没有在这一档读数上长得一模一样）',
     (m) =>
-      `${countOf(m.organize, /struct AppLlmMemoryManager/)}|${countOf(m.organize, /\bpub use client::/)}|${countOf(m.organize, /AppLlmMemoryManager::new\s*\(/)}`,
+      `${countOf(m.organize, /struct AppLlmSummarizer/)}|${countOf(m.organize, /\bpub use client::/)}|${countOf(m.organize, /AppLlmSummarizer::new\s*\(/)}`,
     '0|0|0',
   ],
   [
     'SS19b2',
     '补 SS19b 的另一半：它三档全期望 0，于是"构造点被改名 / 整块搬走 / 组装点漏接"这类' +
       '漂法一条也报不出来（0|0|0 照样绿）。这一档改数**落点文件集合**：宿主生产面上 ' +
-      '`AppLlmMemoryManager::new(` 必须恰好住在 `state/background.rs` 一个文件里。刀④c ' +
+      '`AppLlmSummarizer::new(` 必须恰好住在 `state/background.rs` 一个文件里。刀④c ' +
       '把它从 `organize::build_organizer` 提到组装点，为的是让共用件不归属任何一个使用方' +
       '（organize 在 S4 整面退役，压缩不留在那里）。用集合而不是计数：计数只挡得住"多一处"，' +
       '挡不住"搬去别处"与"消失"，集合一变当场看得见是谁（SS14a 同一条理由）。' +
       '⚠ 这一档不许与 SS21c 的 `Compactor::new(` 合并成一条：两个字符串住在同一个文件、' +
       '同一段代码里，合并之后删掉其中一次构造，另一条读数照样绿。',
-    (m) => filesWith(m.hostDesktop, /AppLlmMemoryManager::new\s*\(/),
+    (m) => filesWith(m.hostDesktop, /AppLlmSummarizer::new\s*\(/),
     'state/background.rs',
   ],
   [
@@ -1428,16 +1430,16 @@ if (SELFTEST) {
       m.hostDesktop.push({
         rel: 'organize/client.rs',
         code:
-          'pub(crate) struct AppLlmMemoryManager2 {}\nimpl memory_tree::MemoryManagerClient for AppLlmMemoryManager2 {}\n',
+          'pub(crate) struct AppLlmSummarizer2 {}\nimpl SummaryClient for AppLlmSummarizer2 {}\n',
       }),
     // SS19b：organize 面上复活"所有权"的三种痕迹（再导出 + 自己的定义 + 自己造一个）。
     // 数的是 m.organize 那份独立读盘 ⇒ 不会与 SS19a（hostDesktop 面）互相遮挡。
     SS19b: (m) =>
       (m.organize +=
-        '\npub use client::AppLlmMemoryManager;\npub struct AppLlmMemoryManager {}\nlet own = AppLlmMemoryManager::new(s);\n'),
+        '\npub use client::AppLlmSummarizer;\npub struct AppLlmSummarizer {}\nlet own = AppLlmSummarizer::new(s);\n'),
     // SS19b2：宿主面多一个构造方（不进 organize 面）⇒ 只有落点集合会动。
     SS19b2: (m) =>
-      m.hostDesktop.push({ rel: 'commands/organize.rs', code: 'AppLlmMemoryManager::new(s)\n' }),
+      m.hostDesktop.push({ rel: 'commands/organize.rs', code: 'AppLlmSummarizer::new(s)\n' }),
     // SS19c：为新调用方又写一遍档位路由。
     SS19c: (m) =>
       m.hostDesktop.push({

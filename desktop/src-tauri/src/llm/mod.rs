@@ -2,10 +2,10 @@
 //! （一条线格式 + 传输韧性重试）+ 设置面板驱动的服务分发。模型适配器
 //! 不特殊，也只是 LlmService 服务（§7.2）。
 //! ⑬ 起并列 embedding 客户端（`embed`，OpenAI 兼容 /v1/embeddings）——
-//! 工具语义检索 / 经历记忆 / 隐式提取的共享基建。
-//! S2 刀④a 起还含**辅助补全的直呼出口**（`aux_client`：一次 system+user → 一段文本，
-//! 按设置选档）——整理章节总结与上下文压缩的摘要调用共用这一条；它原来长在
-//! `organize/client.rs`，搬来的理由写在那个文件的头注与 organize 头注里。
+//! S4 起只剩工具语义检索一个消费者（记忆面经历/提取已退役）。
+//! S2 刀④a 起还含**辅助补全的直呼出口**（`aux_client`：一次 system+user → 一段文本）。
+//! S4 刀③a 起它只服务上下文压缩（摘要走主模型）；`SummaryClient` 契约从
+//! `memory-tree` 迁入，树整面退役后压缩线不再反向依赖要删的 crate。
 
 mod app_llm;
 mod aux_client;
@@ -28,7 +28,10 @@ mod tests;
 mod wire;
 
 pub use app_llm::{AppLlm, RetryNotify};
-pub(crate) use aux_client::AppLlmMemoryManager;
+/// 摘要调用的用量读数：生产侧解构后丢弃，只有测试面组装假客户端时读它。
+#[cfg(test)]
+pub(crate) use aux_client::SummaryUsage;
+pub(crate) use aux_client::{AppLlmSummarizer, SummaryClient};
 pub use client::{test_model, CompatLlm};
 pub use dialect::dialect_of;
 pub use embed::{CooledEmbed, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};

@@ -8,7 +8,9 @@
 use serde::Serialize;
 use session_store::Session;
 
-use memory_tree::{build_items, AnchorSource, OrganizeRecord, Pacing};
+use memory_tree::{build_items, OrganizeRecord, Pacing};
+
+use crate::context_budget::AnchorSource;
 
 use super::Organizer;
 

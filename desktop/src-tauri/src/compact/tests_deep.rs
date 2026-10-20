@@ -9,12 +9,12 @@
 use super::deep::{Compactor, Outcome, STRATEGY};
 use super::prompt::{build_prompt, missing_sections};
 use super::*;
+use crate::llm::{SummaryClient, SummaryUsage};
 use crate::runner::UsagePolicy;
 use crate::settings::SettingsStore;
 use crate::testutil::work_dir;
 use async_trait::async_trait;
 use kernel_agent::estimate_tokens;
-use memory_tree::{MemoryManagerClient, MemoryManagerUsage};
 use session_store::{Message, Session, SessionEvent};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex as StdMutex};
@@ -49,19 +49,19 @@ impl Scripted {
 }
 
 #[async_trait]
-impl MemoryManagerClient for Scripted {
+impl SummaryClient for Scripted {
     async fn complete(
         &self,
         system: &str,
         user: &str,
         model: Option<&str>,
-    ) -> Result<(String, MemoryManagerUsage), String> {
+    ) -> Result<(String, SummaryUsage), String> {
         self.calls.lock().unwrap().push((
             system.to_string(),
             user.to_string(),
             model.map(str::to_string),
         ));
-        let usage = MemoryManagerUsage {
+        let usage = SummaryUsage {
             input: 100,
             output: 40,
         };
@@ -128,7 +128,7 @@ fn compactor_with(
     (
         Compactor::new(
             settings,
-            Arc::clone(&cli) as Arc<dyn MemoryManagerClient>,
+            Arc::clone(&cli) as Arc<dyn SummaryClient>,
             // 熔断表由组装点注入（刀⑤a）：测试里每条用例一枚新的，语义与原来
             // "Compactor 自带一张"完全相同——只是构造点换了地方。
             Arc::new(crate::compact::Failures::default()),

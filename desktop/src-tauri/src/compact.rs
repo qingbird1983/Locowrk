@@ -262,7 +262,7 @@ fn advance_to_user(messages: &[Message], from: usize) -> usize {
 /// 写它的是主层自己（失败 +1、压成清零），而刀⑤ 的滑窗保护网要在**另一条通路上**读
 /// "此刻熔断了没"来决定开不开。计数留在 `Compactor` 里，保护网就得持有 `Compactor`，
 /// 而后者是 runner 的 step 边界依赖（带摘要客户端、带设置）——为一个只读布尔拖来一整套。
-/// 与刀④a/④c 把 `AppLlmMemoryManager` 提到组装点同一条理由：**共用件不归属任何一方**。
+/// 与刀④a/④c 把 `AppLlmSummarizer` 提到组装点同一条理由：**共用件不归属任何一方**。
 /// 构造点因此在 `state/mod.rs`，两个使用方各收一枚 `Arc`。
 ///
 /// 进程内、不落盘（沿用 `Compactor` 原来那段理由）：它管的是"这条通路此刻是不是坏了"，

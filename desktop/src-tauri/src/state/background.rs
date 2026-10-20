@@ -106,18 +106,18 @@ pub(crate) fn build(init: Init) -> Stack {
             }
         })
     };
-    // 一条直呼通路 = 一个客户端实例（S2 刀④c）：整理章节总结（`organize/task.rs`、
-    // `organize/backfill.rs`）与主层压缩摘要（`compact/deep.rs`）共用
-    // `AppLlmMemoryManager`。构造点从 `build_organizer` 提到组装点，为的是让**共用件
-    // 不归属于任何一个使用方**——organize 在 S4 整面退役而压缩留下（刀④a 搬文件的
-    // 同一条理由，这一步搬的是实例）。判据 = SS19b/b2 的期望随之改判（organize 面
-    // 构造 0 次、组装点 1 次）。
-    let aux: Arc<dyn memory_tree::MemoryManagerClient> =
-        Arc::new(crate::llm::AppLlmMemoryManager::new(Arc::clone(&settings)));
+    // 一条直呼通路 = 一个客户端实例（S2 刀④c）：过渡期整理章节总结（`organize/`）
+    // 与主层压缩摘要（`compact/deep.rs`）共用同一个 `AppLlmSummarizer`。构造点在
+    // 组装点，为的是让**共用件不归属于任何一个使用方**——organize 在 S4 刀③b 整面
+    // 退役而压缩留下。两条通路取配置的口径不同：整理线仍认记忆管理器服务档
+    // （`cfg_for`，随 organize 一起删），压缩线只认主模型（`cfg_main`）。
+    let aux = Arc::new(crate::llm::AppLlmSummarizer::new(Arc::clone(&settings)));
+    let organizer_aux: Arc<dyn memory_tree::MemoryManagerClient> = aux.clone();
+    let summary_aux: Arc<dyn crate::llm::SummaryClient> = aux.clone();
     let organizer = crate::organize::build_organizer(
         Arc::clone(&settings),
         sessions_dir.clone(),
-        Arc::clone(&aux),
+        organizer_aux,
         Arc::clone(&workspace_of),
         root.clone(),
         Arc::clone(&model_overrides),
@@ -130,7 +130,7 @@ pub(crate) fn build(init: Init) -> Stack {
     );
     let compactor = Arc::new(crate::compact::deep::Compactor::new(
         Arc::clone(&settings),
-        Arc::clone(&aux),
+        summary_aux,
         // 熔断表与直呼通路同一条纪律（刀⑤a）：它是**两个使用方共用的状态**，
         // 所以构造点在组装点，不在任何一个使用方体内。
         compact_failures,

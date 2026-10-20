@@ -12,11 +12,21 @@
 //!   ⇒ **S3 刀④ 收口**：分子统一成 [`occupancy`] 一个函数，两侧同吃全量估算，
 //!   进度条那条树分支连同 `run_turn` 的 `tree` 参数一起摘掉。v2.138 那句
 //!   「进度条 = 触发 = 自动收起一把尺」至此**三档都成立**（原先只管"有上报那一档"）。
-//! * [`memory_tree::AnchorSource`] 仍住在 memory-tree：**这一条照旧**。S4 退役树时
-//!   这个枚举的落点就是本模块，届时一起收。
+//! * [`AnchorSource`] 的落点本来就是本模块：S4 刀③a 已从 `memory-tree` 迁入
+//!   （树整面退役，压缩线不再反向依赖要删的 crate）。
 
-use memory_tree::AnchorSource;
 use session_store::{Session, SessionEvent};
+
+/// 占用锚点来源（观测面如实标注）：S4 刀③a 从 `memory-tree` 的 `trigger`
+/// 迁来——树整面退役，而这枚枚举是压缩触发与进度条共用的观测标签，留下。
+/// 只用 Debug/比较，序列化归界面投影（`organize/debug.rs` 自己转字符串）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AnchorSource {
+    /// provider 上报的真实 input tokens（会话日志最后一条 LlmUsage）。
+    LlmUsage,
+    /// 字符估算兜底（无 LLM 用量上报时的回落）。
+    Estimate,
+}
 
 /// 输出侧预留的**缺省值**：供应商目录与档位都没告诉我们输出上限时按这颗算
 /// （ZCode `compact/policy.ts:9` `DEFAULT_AUTOCOMPACT_OUTPUT_RESERVE_TOKENS`

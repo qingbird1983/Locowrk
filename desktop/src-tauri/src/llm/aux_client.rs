@@ -1,17 +1,15 @@
-//! 辅助补全的直呼出口（一次 system+user → 一段文本）：按设置路由——
-//! 记忆管理器模型配了服务档（memory_manager_provider）→ 整档切换（kind/base/key，
-//! v2.58 档位语义）；只配了模型名 → 主模型端点 + 模型名覆盖；都没配 → 主模型。
-//! **模型未配置 = 直接 Err**（不落演示替身——脚本回显只会产出垃圾再走校验失败，
-//! 如实报错让调用方降级）。
+//! 摘要补全的直呼出口（一次 system+user → 一段文本）：默认走**主模型**端点
+//! 与主模型档位；模型未配置 = 直接 Err（不落演示替身——脚本回显只会产出垃圾
+//! 再走校验失败，如实报错让调用方降级）。
 //!
-//! 为什么这块地不住在 `organize/` 里（S2 刀④a 搬家，与刀① 同一条理由）：organize
-//! 整面在 S4 退役（specs/01 D 节），而"让一次模型补全从设置里找到该用的那一档"是
-//! **模型接入面**的能力，不是整理编排的私有物。搬前它已经是两个调用方的共用件——
-//! 整理章节总结（`organize/task.rs:177` 整理任务、`organize/backfill.rs:125` 历史回填）
-//! 与 S2 主层压缩（`compact.rs`）共用这一条直呼通路；把共用件
-//! 押在要删的模块上 = 依赖方向错，退役那天要么拔不掉、要么被逼着复制一份。
-//! 判据 = `check-single-source.mjs` 的 SS19（定义只住在 `llm/aux_client.rs`，
-//! organize 面上零定义零构造）。
+//! 为什么这块地住在模型接入面而不是 `organize/`（S2 刀④a 搬家）：organize 整面
+//! 在 S4 退役，而"让一次模型补全从设置里找到该用的那一档"是**模型接入面**的
+//! 能力。S4 刀③a 起它的消费者只剩主层压缩（`compact/deep.rs`）——记忆管理器
+//! 的模型档位不再参与（设置里的那两格随记忆面在刀③c 删除），压缩改用主模型。
+//!
+//! `SummaryClient` / `SummaryUsage` 两个类型在 S4 刀③a 从 `memory-tree` 迁来：
+//! 树整面退役，压缩线不能再依赖一个要删的 crate。过渡期下面仍保留一份
+//! `memory_tree::MemoryManagerClient` 实现给 `organize/` 用（刀③b 随整面删除）。
 
 use std::sync::Arc;
 
@@ -22,12 +20,33 @@ use session_store::Message;
 use crate::llm::CompatLlm;
 use crate::settings::{LlmSettings, SettingsStore};
 
-pub(crate) struct AppLlmMemoryManager {
+/// 摘要补全的最小契约：system = 角色提示词，user = 待压缩转录；
+/// `model` = 只覆盖模型名（None = 主模型）。走主端点与主档位——
+/// 记忆管理器的服务档位不参与（S4：压缩不再有第二个模型出处）。
+/// 与宿主的模型路由解耦（测试用脚本化假实现，不碰网络）。
+#[async_trait]
+pub(crate) trait SummaryClient: Send + Sync {
+    async fn complete(
+        &self,
+        system: &str,
+        user: &str,
+        model: Option<&str>,
+    ) -> Result<(String, SummaryUsage), String>;
+}
+
+/// 一次摘要调用的 token 读数（供应商没报 = 0，如实透出）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct SummaryUsage {
+    pub input: u64,
+    pub output: u64,
+}
+
+pub(crate) struct AppLlmSummarizer {
     settings: Arc<SettingsStore>,
     real: CompatLlm,
 }
 
-impl AppLlmMemoryManager {
+impl AppLlmSummarizer {
     pub(crate) fn new(settings: Arc<SettingsStore>) -> Self {
         Self {
             settings,
@@ -36,7 +55,10 @@ impl AppLlmMemoryManager {
     }
 
     /// 本调用的生效配置（设置现读——保存即生效）。
-    fn cfg_for(&self, model: Option<&str>) -> LlmSettings {
+    ///
+    /// `model` 只服务过渡期的整理线（`organize/` 的记忆管理器模型覆盖）；
+    /// 压缩摘要传 None = 主模型。S4 刀③b 删 organize 后这个参数随之消失。
+    pub(super) fn cfg_for(&self, model: Option<&str>) -> LlmSettings {
         // `mem` 必须在闭包外取：它是同一个 Store 的另一档区读面，闭包内再取 = 自死锁。
         let mem = self.settings.memory();
         let memory_manager_model = model.filter(|m| !m.trim().is_empty());
@@ -64,19 +86,28 @@ impl AppLlmMemoryManager {
             cfg
         })
     }
-}
 
-#[async_trait]
-impl memory_tree::MemoryManagerClient for AppLlmMemoryManager {
-    async fn complete(
+    /// 压缩摘要的生效配置：**主模型端点 + 主档位**，`model` 只覆盖模型名。
+    /// 与 [`Self::cfg_for`] 的差别就是"不认记忆管理器服务档"——那是组织线的
+    /// 过渡面，压缩线不该被它路由。
+    pub(super) fn cfg_main(&self, model: Option<&str>) -> LlmSettings {
+        self.settings.with_llm_config(|llm| {
+            let mut cfg = llm.flat();
+            if let Some(m) = model.filter(|m| !m.trim().is_empty()) {
+                cfg.model = m.to_string();
+            }
+            cfg
+        })
+    }
+
+    async fn complete_inner(
         &self,
+        cfg: LlmSettings,
         system: &str,
         user: &str,
-        model: Option<&str>,
-    ) -> Result<(String, memory_tree::MemoryManagerUsage), String> {
-        let cfg = self.cfg_for(model);
+    ) -> Result<(String, SummaryUsage), String> {
         if cfg.model.trim().is_empty() {
-            return Err("记忆管理器模型未配置".into());
+            return Err("摘要模型未配置".into());
         }
         let req = LlmRequest {
             messages: vec![Message::user(user.to_string())],
@@ -85,11 +116,11 @@ impl memory_tree::MemoryManagerClient for AppLlmMemoryManager {
             // 辅助调用标记（批 B §5.4）：推理档降到方言最低档、不发 max_tokens
             params: serde_json::json!({ "aux": true }),
             system: Some(system.to_string()),
-            // 记忆管理器调用不属于任何会话轮：会话级模型覆盖 / 调度绑定都
+            // 摘要调用不属于任何会话轮：会话级模型覆盖 / 调度绑定都
             // 不该波及它（ctx-compact 摘要调用同款约定）
             session_id: None,
         };
-        // 记录员直呼 CompatLlm（绕过 AppLlm.prepare）：辅助降档在此就地解析
+        // 直呼 CompatLlm（绕过 AppLlm.prepare）：辅助降档在此就地解析
         //（方言最低档；无方言 = 不发档位字段）
         let mut req = req;
         if let Some(lvl) = crate::llm::dialect_of(cfg.base_url.as_deref()).aux_level() {
@@ -102,11 +133,48 @@ impl memory_tree::MemoryManagerClient for AppLlmMemoryManager {
             .map_err(|e| e.to_string())?;
         let usage = resp
             .usage
-            .map(|u| memory_tree::MemoryManagerUsage {
+            .map(|u| SummaryUsage {
                 input: u.input,
                 output: u.output,
             })
             .unwrap_or_default();
         Ok((resp.content, usage))
+    }
+}
+
+#[async_trait]
+impl SummaryClient for AppLlmSummarizer {
+    async fn complete(
+        &self,
+        system: &str,
+        user: &str,
+        model: Option<&str>,
+    ) -> Result<(String, SummaryUsage), String> {
+        self.complete_inner(self.cfg_main(model), system, user)
+            .await
+    }
+}
+
+// S4 刀③a 过渡：`organize/` 仍按记忆管理器契约调用（刀③b 随整面删除）。
+// 两条通路共用 `complete_inner`，不复制传输逻辑；差别只在取哪一档配置：
+// 整理线认记忆管理器的服务档，压缩线只认主模型。
+#[async_trait]
+impl memory_tree::MemoryManagerClient for AppLlmSummarizer {
+    async fn complete(
+        &self,
+        system: &str,
+        user: &str,
+        model: Option<&str>,
+    ) -> Result<(String, memory_tree::MemoryManagerUsage), String> {
+        let (text, usage) = self
+            .complete_inner(self.cfg_for(model), system, user)
+            .await?;
+        Ok((
+            text,
+            memory_tree::MemoryManagerUsage {
+                input: usage.input,
+                output: usage.output,
+            },
+        ))
     }
 }

@@ -1,10 +1,9 @@
 //! 刀① 判据：锚点搬家同值 + 有效阈值只扣一次（specs/09 AC-S2-1 / AC-S2-2）。
 //! 刀④a（S3 · ⓟ）加判据：占用分子三档取最大，且**进度条与压缩同吃这一个函数**。
 
-use memory_tree::AnchorSource;
 use session_store::{Session, SessionEvent};
 
-use super::{anchor, effective_threshold, occupancy, output_reserve};
+use super::{anchor, effective_threshold, occupancy, output_reserve, AnchorSource};
 
 /// 六轮历史；`usage` = Some 时追加一条供应商上报（input 9,500）。
 fn seeded(usage: Option<u64>) -> Session {

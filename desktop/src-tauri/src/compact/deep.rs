@@ -22,7 +22,6 @@
 use std::sync::Arc;
 
 use kernel_agent::estimate_tokens;
-use memory_tree::MemoryManagerClient;
 use session_store::{summarized_message, Session, SessionEvent};
 
 use super::{
@@ -30,6 +29,7 @@ use super::{
     prompt::{build_prompt, format_summary, missing_sections, render_history, shrink_history},
     Failures, Overflow, PlanInput, SHRINK_STEPS,
 };
+use crate::llm::SummaryClient;
 use crate::runner::UsagePolicy;
 use crate::settings::SettingsStore;
 
@@ -74,9 +74,10 @@ pub(crate) enum Outcome {
 /// 主层压缩的执行体（runner 在 step 边界调它，组装点构造它）。
 pub(crate) struct Compactor {
     settings: Arc<SettingsStore>,
-    /// 摘要走**辅助补全的直呼通路**（`llm/aux_client.rs`，与整理章节总结同一条）：
-    /// 压缩不是本轮对话的一部分，不该带工具目录、也不该吃会话级模型覆盖。
-    aux: Arc<dyn MemoryManagerClient>,
+    /// 摘要走**辅助补全的直呼通路**（`llm/aux_client.rs`）：压缩不是本轮对话的
+    /// 一部分，不该带工具目录、也不该吃会话级模型覆盖。S4 刀③a 起取的是主模型
+    /// 端点与档位（记忆管理器模型档不再参与）。
+    aux: Arc<dyn SummaryClient>,
     /// 连续失败表（熔断的输入）。**由组装点注入**而不是自己 new 一枚：
     /// 观测与测试面要读同一张表；两张表 = 两套熔断状态。
     /// 为什么这张表长什么样、为什么它不待在结构体里 = [`super::Failures`] 头注。
@@ -89,7 +90,7 @@ pub(crate) struct Compactor {
 impl Compactor {
     pub(crate) fn new(
         settings: Arc<SettingsStore>,
-        aux: Arc<dyn MemoryManagerClient>,
+        aux: Arc<dyn SummaryClient>,
         failures: Arc<Failures>,
         refusals: Arc<Overflow>,
     ) -> Self {
