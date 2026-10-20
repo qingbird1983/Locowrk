@@ -74,7 +74,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         memory,
         permission_modes,
         tree_store,
-        tree_assembler,
         receipt_sink,
         recall_log,
     } = memory_stack::build(memory_stack::Init {
@@ -187,7 +186,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         usage: Arc::clone(&usage),
         sessions: Arc::clone(&sessions),
         last_chat: Arc::clone(&last_chat),
-        tree_assembler: Arc::clone(&tree_assembler),
         stop_flags: Arc::clone(&stop_flags),
         schedules: schedules.clone(),
         memory: Arc::clone(&memory),
@@ -210,7 +208,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         permission_modes,
         permission_rules,
         model_overrides,
-        tree_assembler,
         fragments,
         sink,
         sessions,

@@ -37,9 +37,12 @@ pub struct AppState {
     /// 会话级模型覆盖存储（v2.58 §3.30）：旁车持久 + 缓存；AppLlm 每
     /// 请求按会话解析，session_set_model 命令写穿。
     pub model_overrides: Arc<crate::model_override::ModelOverrideStore>,
-    /// 树会话组装器（M4 §3.38②）：TreeContextSource 实现（同时注册进
-    /// 内核服务表）；run_turn 用量口径按组装后估算消费。
-    pub tree_assembler: Arc<crate::organize::TreeAssembler>,
+    // ⚠ 这里原来放的是 `Arc<crate::organize::TreeAssembler>`（M4 §3.38②）。S3 刀④a
+    // 摘掉：它在本层的唯一消费者是 `run_turn` 的 `tree` 参数（进度条的第二把分子），
+    // ⓟ 把分子收成 `context_budget::occupancy` 一把之后那条参数连字段一起没了。
+    // 内核侧仍经 `Context` 服务表拿 `TreeContextSource`（同一个实例，那才是它的正职）。
+    // 拒收读数没有加成字段：组装点经 `state.compactor.refusal(..)` 读，表只有
+    // `Compactor` 一个宿主侧读口（`UsagePolicy::assemble` 的 `refused_tokens` 由它填）。
     /// 会话态碎片 pending 表（提示词分层设计 §4.4）：organize 收束 /
     /// 权限切 Plan / 轮次到顶三处置位，FragmentInject 轮开场取件拼接。
     pub fragments: Arc<crate::fragments::FragmentPending>,

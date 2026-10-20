@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use kernel_agent::{estimate_tokens, Kernel};
+use kernel_agent::Kernel;
 
 use session_store::{Session, SessionEvent, TurnId, TurnOutcome};
 
@@ -41,20 +41,57 @@ pub const DEFAULT_MAX_STEPS: u32 = 8;
 /// window_tokens 未知传 0（前端按"未设置"处理）。`tools_est_tokens`
 /// （v2.58 §3.12）= 本轮实际携带的暴露目录估算（agent_chat 每轮一次
 /// `Kernel::catalog_snapshot` 快照；0 = 目录缺席，前端不渲染估算段）。
+/// `refused_tokens`（**S3 刀④a · ⓟ**）= 超窗拒收读数（`compact::Overflow`
+/// 表里这一会话最近一次被拒的输入量，没有传 0）。为什么必须由组装点填进来
+/// 而不是进度条自己去查：那张表的主人是压缩层，runner 层去抓它就等于给同一个
+/// 数开第二个通路；组装点本来就在读同一个 `Arc`（`Compactor` 吃的就是它），
+/// 顺手取一次即可。**分子算式不在本结构里** —— 三档取最大住在
+/// [`crate::context_budget::occupancy`]，判据 SS30 钉它只许有一处定义。
 #[derive(Debug, Clone, Copy)]
 pub struct UsagePolicy {
     pub threshold_tokens: u64,
     pub window_tokens: u64,
     pub tools_est_tokens: u64,
+    pub refused_tokens: u64,
+}
+
+impl UsagePolicy {
+    /// **两个组装点共用的构造器**（S3 刀④a · 收 `specs/09` 挂账 ⓛ）：聊天
+    /// （`commands/chat.rs::usage_policy`）与定时任务（`scheduler/engine.rs`）
+    /// 原先各写一遍同样的"四枚原料 → 一把尺"。ⓟ 把分子收成 `occupancy` 一个函数
+    /// 之后，这份重复的性质变了：改前漂的是**分母**（阈值算式），现在还会漂**分子**
+    /// （`refused_tokens` 那一格），而定时任务会话同样会撞超窗 ⇒ 漂了就是那条链的
+    /// 进度永久低估。算式本体仍只住 [`crate::context_budget`]，本函数只是装配口。
+    ///
+    /// 参数按"原料"给而不吃容器（`AppState` / `EngineDeps`）：调度引擎在 state
+    /// 之外构造，吃容器就得让 runner 反向依赖组装点。
+    pub(crate) fn assemble(
+        slider: u64,
+        window: Option<u64>,
+        max_output: Option<u64>,
+        tools_est_tokens: u64,
+        refused_tokens: u64,
+    ) -> Self {
+        Self {
+            threshold_tokens: crate::context_budget::effective_threshold(
+                slider, window, max_output,
+            ),
+            window_tokens: window.unwrap_or(0),
+            tools_est_tokens,
+            refused_tokens,
+        }
+    }
 }
 
 /// 跑完一轮对话，返回实际 step 数。`max_steps` 是单轮兜底上限（㉕·微调③
 /// settings `tools.maxTurnSteps`，每轮取值）。`stats` 是 ⑩③ 使用统计写入端
 /// （usage.sqlite3，None = 内置替身测试）。`log` 是 ⑲ 会话落盘目录
 /// （`<数据根>/sessions`，None = 不落盘，测试路径）——磁盘是日志的镜像，
-/// 用户消息与每个 step 的新增段与投影共用同一游标同步追加。`tree`（M4
-/// §3.38②）= 树组装器在场时用量环按组装后口径（目录 + 尾巴）估算，None =
-/// 全量历史估算（kernel-bin / 测试路径）。`stop`（v4.11 §3.39④）= 停止
+/// 用户消息与每个 step 的新增段与投影共用同一游标同步追加。（这一串参数里
+/// 原来还有一枚 `tree`（M4 §3.38②）：树组装器在场时用量环按**组装后口径**
+/// （目录 + 尾巴）估算。S3 刀④a 连定义带参数摘掉——它唯一的消费者就是进度条，
+/// 而 ⓟ 要的是「进度条与压缩触发同一个分子」；留着它就得让分子有两个算法。
+/// 读数语义变化见 [`crate::context_budget`] 头注。）`stop`（v4.11 §3.39④）= 停止
 /// 标记注册表（None = 无停止面，headless/测试）：进场登记 RAII 守卫、
 /// 所有收束路径自动注销；step 边界查到置位即按 TurnDone 收束（流式内的
 /// 截断在 LLM 适配器 delta 回调点，更早）。`organizer`（队列 Q8b）= 轮内水位
@@ -78,7 +115,6 @@ pub async fn run_turn(
     stats: Option<&UsageRecorder>,
     log: Option<&Path>,
     max_steps: u32,
-    tree: Option<&crate::organize::TreeAssembler>,
     stop: Option<&Arc<crate::stop::StopFlags>>,
     fragments: Option<&crate::fragments::FragmentPending>,
     organizer: Option<&Arc<crate::organize::Organizer>>,
@@ -124,7 +160,7 @@ pub async fn run_turn(
         session_log::append_slice(dir, session_id, session, log_start);
     }
     if let Some(u) = usage {
-        record_usage(session, session_id, u, sink, log, tree);
+        record_usage(session, session_id, u, sink, log);
     }
 
     for steps in 1..=max_steps.max(1) {
@@ -221,7 +257,7 @@ pub async fn run_turn(
         if let Some(u) = usage {
             // v2.62：快照落日志 + 实时投影（自带 append_slice 与单发，
             // 下一轮投影窗口 before 已越过本事件，不会重发）
-            record_usage(session, session_id, u, sink, log, tree);
+            record_usage(session, session_id, u, sink, log);
         }
         if done {
             finish_turn(
@@ -350,9 +386,9 @@ fn record_stats(session: &Session, from: usize, stats: Option<&UsageRecorder>) {
 
 /// 供应商真实 input（日志最后一条 LlmUsage 的 prompt_tokens，含缓存命中
 /// ——模型实际收到的上下文；无上报 = None）。v2.138 起这是用量面的唯一
-/// 真尺：进度条/用量环（record_usage）与整理触发（Organizer::anchor）、
-/// 自动收起同吃一把尺——「看到的 = 触发用的」，压力实测抓的口径分裂
-/// （环显估算 110K、触发判真实 95K < 100K 阈值不整理）就此关闭。
+/// 真尺；S3 刀④a 之后它是**锚点的第 1 档**（[`crate::context_budget::anchor`]
+/// 的取数通道），进度条不再绕过锚点直接吃它——原来"进度条也吃这把尺"的说法
+/// 仍然成立，只是通路改经 `occupancy`。
 pub(crate) fn reported_input_tokens(session: &Session) -> Option<u64> {
     session.events().iter().rev().find_map(|e| match e {
         SessionEvent::LlmUsage { input, .. } => Some(*input),
@@ -360,30 +396,31 @@ pub(crate) fn reported_input_tokens(session: &Session) -> Option<u64> {
     })
 }
 
-/// 进度条快照：**优先供应商真实 input**（reported_input_tokens，v2.138
-/// 用户裁定统一锚点）；无上报（一步未跑 / 供应商不报用量）才回落估算
-/// ——树会话 = 组装后口径（目录 + 尾巴，M4 §3.38②），否则全量历史
-/// 字符估算。v2.62：快照**落会话日志**（SessionEvent::ContextUsage）+
-/// 实时单发投影——重放经 project_events 同形恢复用量环（此前只推实时
-/// 通道，切会话回来统计即消失）。下一轮投影窗口 `before` 已越过本事件，
-/// 不会重发。
+/// 进度条快照（**S3 刀④a · ⓟ：分子与压缩触发同吃一把尺**）。
+///
+/// `used` 一律取自 [`crate::context_budget::occupancy`] —— 改前这里是**第二把尺**：
+/// 优先供应商真实 input，无上报时对树会话回落「目录 + 尾巴」（组装后口径）、
+/// 非树会话回落全量历史估算，而压缩层的分子另有其式（压后投影 + 拒收读数）。
+/// 两把尺的后果是「进度条离触发线还差一截却已经压缩」和反过来的「看着满线不动
+/// 却一直在压」，而且同一个会话换个模型就换一种曲线。现在两个消费点只剩一次
+/// 取数：本函数与 `Compactor::used` 都调 `occupancy`（判据 SS30 钉死）。
+///
+/// ⚠ **这是读数语义变更，不是修 bug**：无供应商上报的树会话从此按全量历史估算，
+/// 曲线**只会变高不会变低**（目录段已被 S3 刀③a 从上下文里摘掉，「目录 + 尾巴」
+/// 本来就是它的下界）。让曲线变高的同时让它更早触发的方向是安全的（提前压缩 ≠
+/// 超限拒收），所以在真机读数拿到之前不视为回归——登记在 specs/10 的 ⓟ 那条。
+///
+/// v2.62：快照**落会话日志**（SessionEvent::ContextUsage）+ 实时单发投影——重放
+/// 经 project_events 同形恢复用量环（此前只推实时通道，切会话回来统计即消失）。
+/// 下一轮投影窗口 `before` 已越过本事件，不会重发。
 fn record_usage(
     session: &mut Session,
     session_id: &str,
     u: UsagePolicy,
     sink: &dyn EventSink,
     log: Option<&Path>,
-    tree: Option<&crate::organize::TreeAssembler>,
 ) {
-    let used = match reported_input_tokens(session) {
-        Some(real) => real,
-        None => match tree {
-            Some(t) => t
-                .context_tokens(session, session_id)
-                .unwrap_or_else(|| estimate_tokens(&session.derive_messages())),
-            None => estimate_tokens(&session.derive_messages()),
-        },
-    };
+    let used = crate::context_budget::occupancy(session, u.refused_tokens);
     session.append(SessionEvent::ContextUsage {
         used,
         threshold: u.threshold_tokens,

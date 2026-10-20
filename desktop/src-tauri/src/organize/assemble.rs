@@ -11,16 +11,19 @@
 //! B 固定窗口 = `max(chaptered_until, 最近 N 轮起点)`——窗口滑出的孤儿轮由
 //! organize 侧溢出整理（reason=window_overflow）及时归章节，绝不静默丢失。
 //!
-//! `context_tokens`（§3.38② 用量口径）：树会话的用量环按组装后估算
-//! （目录 + 尾巴），不再用全量历史——runner `record_usage` 消费。
+//! ⚠ 这里原来还写着 `context_tokens`（§3.38② 用量口径：树会话的用量环按组装后
+//! 估算 = 目录 + 尾巴，runner `record_usage` 消费）。**S3 刀④a 连方法带消费点一起
+//! 摘除**：ⓟ 要的正是"进度条与压缩判定同一个分子"，而"目录 + 尾巴"是进度条独有的
+//! 第二把尺——S3 刀③a 之后树目录不再进上下文，它量的已经不是模型收到的那份东西。
+//! 分子算式现在只有一处 = [`crate::context_budget::occupancy`]（判据 SS30）。
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use session_store::{Session, SessionEvent};
+use session_store::SessionEvent;
 
-use kernel_agent::{estimate_tokens, TreeContextSource, TreePlan};
+use kernel_agent::{TreeContextSource, TreePlan};
 
 use memory_tree::{MemoryTree, TreeStore};
 
@@ -145,20 +148,6 @@ impl TreeAssembler {
                 (from, dir)
             }
         }
-    }
-
-    /// 组装后上下文估算（§3.38② 用量口径）= 目录 + 尾巴（v2.137 起
-    /// 一切会话皆树，无 legacy 分支）。`session` 是调用方在册
-    /// 的内存会话（与磁盘镜像一致，模式 B 边界直接用，免盘读）。
-    pub fn context_tokens(&self, session: &Session, session_id: &str) -> Option<u64> {
-        let workspace = (self.workspace_of)(session_id).unwrap_or_default();
-        let tree = self.load_tree(&workspace, session_id);
-        let (from, directory) = self.boundary_and_directory(&tree, Some(session.events()));
-        // 用量口径**把进展行一起算**：它确实进 system，漏算等于少报一截
-        let directory = self.with_progress(session_id, &workspace, directory);
-        let tail = session.derive_messages_from(from);
-        let dir_tokens = (directory.len() as u64) / 4;
-        Some(dir_tokens + estimate_tokens(&tail))
     }
 
     /// 项目级进展行（Q2 · MR §4.2），**会话内钉死**：首请求扫一遍投影目录，

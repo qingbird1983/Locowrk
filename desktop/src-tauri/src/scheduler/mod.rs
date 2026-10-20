@@ -57,7 +57,6 @@ pub(crate) fn spawn_engine(
     app: tauri::AppHandle,
     organizer: Arc<crate::organize::Organizer>,
     compactor: Arc<crate::compact::deep::Compactor>,
-    tree_assembler: Arc<crate::organize::TreeAssembler>,
     stop_flags: Arc<crate::stop::StopFlags>,
     fragments: Arc<crate::fragments::FragmentPending>,
 ) {
@@ -75,7 +74,6 @@ pub(crate) fn spawn_engine(
         app,
         organizer,
         compactor,
-        tree_assembler,
         stop_flags,
         fragments,
     });

@@ -35,7 +35,11 @@ pub(crate) struct Stack {
     pub memory: Arc<MemoryStore>,
     pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
     pub tree_store: memory_tree::TreeStore,
-    pub tree_assembler: Arc<crate::organize::TreeAssembler>,
+    // ⚠ 这里原来外露一份 `Arc<crate::organize::TreeAssembler>`（M4 §3.38②）。
+    // S3 刀④a 摘掉：它出这一体的唯一消费者是 `run_turn` 的 `tree` 参数（进度条的
+    // 第二把尺），ⓟ 收成 `context_budget::occupancy` 一把之后那条参数没了 ⇒
+    // 字段就变成"存在但从未接线"。内核仍经上面 `provide_dyn` 的
+    // `TreeContextSource` 服务表拿到同一个实例（那才是它的正职），宿主侧不需要句柄。
     /// Q1b：检索回执的采集件（观测表 + 键位解析器，由 `state/tools.rs` 接给执行面的
     /// 工具树）。与上面 `MemoryStore` 里那个注入档句柄是同一个 `Arc<RecallLog>`——
     /// 两个档的账才落在同一张表上。
@@ -129,7 +133,6 @@ pub(crate) fn build(init: Init) -> Stack {
         memory,
         permission_modes,
         tree_store,
-        tree_assembler,
         receipt_sink,
         recall_log,
     }

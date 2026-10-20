@@ -34,12 +34,12 @@ async fn context_usage_persists_and_replays() {
             threshold_tokens: 8000,
             window_tokens: 32000,
             tools_est_tokens: 512,
+            refused_tokens: 0,
         }),
         &sink,
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,
@@ -122,12 +122,12 @@ async fn context_usage_prefers_reported_input() {
             threshold_tokens: 8000,
             window_tokens: 32000,
             tools_est_tokens: 512,
+            refused_tokens: 0,
         }),
         &sink,
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,
@@ -153,5 +153,72 @@ async fn context_usage_prefers_reported_input() {
         useds.iter().all(|&u| u == 95483),
         "used 应全为真实 input 95483（估算回落不得发生），实际 {useds:?}"
     );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// **S3 刀④a · ⓟ 第 3 档**：被超窗拒收那颗数必须也顶得起进度条。
+///
+/// 为什么单独一条而不是靠 `context_budget` 的纯函数测：那一层证的是算式，这一层
+/// 证的是**接线**——改前 `record_usage` 根本不看 `refused`（它只有"上报 / 树口径 /
+/// 全量估算"三档），所以算式再对，进度条仍然读不到被拒现场。真机症状就是台账 ⓜ
+/// 那句"每一轮都失败，而压缩开关明明开着"：压缩层已经起步，界面还停在被拒之前。
+///
+/// 夹具取"上报 95,483 + 拒收 240,000"：分子必须是 240,000，而**分母照旧 8,000**
+/// （分子顶过线不改分母——进度条溢出与阈值语义是两件事，见 `plan` 那一侧的裁剪）。
+#[tokio::test]
+async fn context_usage_takes_the_refusal_reading() {
+    let dir = tmp_dir("ctx-usage-refused");
+    let kernel = kernel_with_tools();
+    let mut session = Session::new();
+    session.append(SessionEvent::LlmUsage {
+        input: 95_483,
+        output: 546,
+        cache_read: 93_312,
+        cache_write: 0,
+        reasoning: 47,
+        total: 96_029,
+        duration_ms: 8_487,
+    });
+    let sink = Collector::default();
+
+    run_turn(
+        &kernel,
+        &mut session,
+        "s-ctx-refused",
+        "echo 你好".into(),
+        Vec::new(),
+        Some(crate::runner::UsagePolicy {
+            threshold_tokens: 8000,
+            window_tokens: 320_000,
+            tools_est_tokens: 512,
+            refused_tokens: 240_000,
+        }),
+        &sink,
+        None,
+        Some(&dir),
+        crate::runner::DEFAULT_MAX_STEPS,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("turn ok");
+
+    let rows: Vec<(u64, u64)> = session
+        .events()
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::ContextUsage {
+                used, threshold, ..
+            } => Some((*used, *threshold)),
+            _ => None,
+        })
+        .collect();
+    assert!(!rows.is_empty(), "轮次前至少落一条快照");
+    for (used, threshold) in rows {
+        assert_eq!(used, 240_000, "第 3 档必须顶过那颗新鲜上报（旧形状读不到）");
+        assert_eq!(threshold, 8000, "分子顶过线不改分母");
+    }
     std::fs::remove_dir_all(&dir).ok();
 }

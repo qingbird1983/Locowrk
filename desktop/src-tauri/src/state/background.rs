@@ -15,7 +15,7 @@
 //! 4. GC 循环每轮**重读设置**（`gc_threshold_days`/`auto_gc`）= 热调随下一次
 //!    tick 生效，快照成启动值就是「设置页骗人」。
 //!
-//! 调度引擎本身是 `crate::scheduler::spawn_engine`（14 参现成 API，本批不动它）。
+//! 调度引擎本身是 `crate::scheduler::spawn_engine`（一长串依赖直给的现成 API）。
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -42,7 +42,8 @@ pub(crate) struct Init {
     pub usage: Arc<crate::usage::UsageRecorder>,
     pub sessions: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>>,
     pub last_chat: Arc<std::sync::RwLock<Option<String>>>,
-    pub tree_assembler: Arc<crate::organize::TreeAssembler>,
+    // S3 刀④a：这里的 `tree_assembler` 已删——它只为喂 `spawn_engine` 的
+    // `tree_assembler` 参数，而那个参数喂的是 `run_turn` 的 `tree`（第二把分子）。
     pub stop_flags: Arc<crate::stop::StopFlags>,
     pub schedules: Option<Arc<crate::scheduler::ScheduleDb>>,
     pub memory: Arc<crate::memory::MemoryStore>,
@@ -79,7 +80,6 @@ pub(crate) fn build(init: Init) -> Stack {
         usage,
         sessions,
         last_chat,
-        tree_assembler,
         stop_flags,
         schedules,
         memory,
@@ -156,7 +156,6 @@ pub(crate) fn build(init: Init) -> Stack {
             app.clone(),
             Arc::clone(&organizer),
             Arc::clone(&compactor),
-            Arc::clone(&tree_assembler),
             Arc::clone(&stop_flags),
             Arc::clone(&fragments),
         );

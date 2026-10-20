@@ -24,22 +24,24 @@ use crate::state::AppState;
 /// 批 F-24b / M-18c：不为算几个数而全量克隆档位区（含各档明文 Key）——一次取锁 +
 /// 借用进闭包；闭包内不碰 Store 的其它读面（非重入锁）。
 ///
-/// ⚠ 定时任务那条链（`scheduler/engine.rs`）今天仍自己写一遍同样的三枚——那是刀①
-/// 当时的既有双份，本刀没动它（specs/09 挂账 ⓛ）。
+/// **S3 刀④a · 收挂账 ⓛ**：四枚原料的装配口从本函数体内搬到
+/// [`UsagePolicy::assemble`]，定时任务那条链（`scheduler/engine.rs`）现在调**同一个**
+/// assemble —— 原先"两处各写一遍同样的三枚"是刀① 当时的既有双份，ⓟ 加第四枚
+/// （拒收读数）之后不收了就会变成"分子的出处也双份"。本函数只剩取原料：窗口/输出
+/// 上限走四层链，滑杆走设置，目录估算走 kernel，拒收读数走 `state.compactor`
+/// （它是那张表唯一的宿主侧读口，理由见 [`crate::compact::deep::Compactor::refusal`]）。
 pub(crate) async fn usage_policy(state: &AppState, session_id: &str) -> UsagePolicy {
     let ov = state.model_overrides.get(session_id);
     let (window, max_output) = state.settings.with_llm_config(|llm| {
         crate::settings::session_capacity(llm, ov.as_ref(), Some(&state.catalog))
     });
-    UsagePolicy {
-        threshold_tokens: crate::context_budget::effective_threshold(
-            state.settings.organize_threshold_tokens(),
-            window,
-            max_output,
-        ),
-        window_tokens: window.unwrap_or(0),
-        tools_est_tokens: runner::catalog_estimate(&state.kernel, session_id).await,
-    }
+    UsagePolicy::assemble(
+        state.settings.organize_threshold_tokens(),
+        window,
+        max_output,
+        runner::catalog_estimate(&state.kernel, session_id).await,
+        state.compactor.refusal(session_id),
+    )
 }
 
 /// 聊天命令。轮次内容全部经 `agent://` 事件推送（§12.2），返回值只表达
@@ -93,7 +95,6 @@ pub async fn agent_chat(
         Some(state.usage.as_ref()),
         Some(&state.sessions_dir),
         state.settings.max_turn_steps(),
-        Some(&state.tree_assembler),
         Some(&state.stop_flags),
         Some(state.fragments.as_ref()),
         Some(&state.organizer),

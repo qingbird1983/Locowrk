@@ -335,6 +335,14 @@ impl Overflow {
         map.get(session_id).copied()
     }
 
+    /// **喂给占用分子的取数口**（S3 刀④a）：没有记录 = 0 = "这一档不参与取最大"。
+    /// 这一格裁定只做一次：改前压缩面与（新接入的）组装点各写一遍
+    /// `of(..).unwrap_or(0)`，多一个消费者就多一个出处——而"缺席当 0"写错的形态
+    /// 是"缺席当无穷"，那一档会把触发线永久顶在线上，正是 ⓜ 要治的病。
+    pub(crate) fn reading(&self, session_id: &str) -> u64 {
+        self.of(session_id).unwrap_or(0)
+    }
+
     /// 压成了 ⇒ 窗口已经变小，那颗"上次发出去被拒"的数不再描述当前窗口（不清就等于
     /// 让一次旧的拒收把这一层永久顶在线上方 = 刀④ 那条"每个 step 重压一次"的坑）。
     pub(crate) fn clear(&self, session_id: &str) {

@@ -41,7 +41,6 @@ async fn turn_mirrors_to_disk_and_restores_identically() {
         None,
         None,
         None,
-        None,
     )
     .await
     .expect("turn ok");
@@ -82,7 +81,6 @@ async fn history_projection_includes_user_messages() {
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,

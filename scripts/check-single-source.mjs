@@ -1250,6 +1250,56 @@ const CHECKS = [
     (m) => filesWith(m.relRust, /\bfn recall\s*\(/),
     'crates/kernel-agent/src/middleware/memory_inject/contract.rs|desktop/src-tauri/src/memory/source.rs',
   ],
+  [
+    'SS30',
+    'S3 刀④a · 台账 ⓟ「占用读数一个出处」的在场档（三段读数）。① `fn occupancy(` 的定义' +
+      '只住在 `context_budget.rs`；② `budget::occupancy(` 的调用在生产面恰 **2** 处 = ' +
+      '进度条（`runner::record_usage`）与压缩判定（`Compactor::used`）那两个消费点；' +
+      '③ `UsagePolicy::assemble(` 的调用集合恰在 `commands/chat.rs` 与 `scheduler/engine.rs`' +
+      '（挂账 ⓛ 的机械面：两个组装点的装配口必须是一个）。' +
+      '为什么行为簇不够：三档取最大的算式在 `context_budget/tests.rs` 有五条用例钉着，' +
+      '它们证"函数自己算得对"；把 `record_usage` 那一次调用换成 `anchor(session).0`，' +
+      '五条一条不红、进度条当场回到"第二把尺"——那正是 ⓟ 登记时写的症状（环与触发不同数，' +
+      '界面上是"离满还差一截就压"或"看着满线不动却一直在压"）。所以这一档数**调用点**，' +
+      '而且用文件集合而不是只数总数（SS14a 同一条理由：计数挡不住"搬去第三个文件"）。',
+    (m) =>
+      [
+        filesWith(m.hostDesktop, /\bfn occupancy\s*\(/),
+        String(
+          m.hostDesktop.reduce(
+            (a, f) => a + ((f.code.match(/budget::occupancy\s*\(/g) || []).length),
+            0,
+          ),
+        ),
+        filesWith(m.hostDesktop, /UsagePolicy::assemble\s*\(/),
+      ].join('|'),
+    'context_budget.rs|2|commands/chat.rs|scheduler/engine.rs',
+  ],
+  [
+    'SS30b',
+    '同一件事的缺席档（两把旧尺都不许回来，恒 `none`）。① `UsagePolicy {` 字面量在生产面' +
+      '零处——两个组装点一律经 `assemble`；数之前先把三处**合法在场**剔掉（`pub struct ' +
+      'UsagePolicy {` 定义、`impl UsagePolicy {` 装配口、`-> UsagePolicy {` 返回类型），不剔' +
+      '就红在正确代码上（SS23b 那条"正则要收窄"的同款教训）。② `.context_tokens(` 零处 = ' +
+      '`TreeAssembler::context_tokens`（目录 + 尾巴那把第二尺）连方法带 `run_turn` 的 `tree` ' +
+      '参数一起摘掉了，不许复活：它一旦回来，"进度条与压缩同一个分子"就只剩注释在承诺。' +
+      '两档都数代码行（`hostDesktop` 面已剥行注释）：`occupancy` / `context_tokens` 这两个' +
+      '名字在本刀的退役注释里有好几处合法在场，连注释数会当场假红（SS11/SS13 立过三次的那条口径）。' +
+      '期望含两个 `none` ⇒ "面瞎了"与"真的没有"读数相同，由 FLOORS 的宿主文件数下限兜住。',
+    (m) => {
+      // 三处**合法在场**先剔掉再数构造字面量：结构体定义、它的 impl 块、返回类型箭头。
+      // 不剔就会红在正确代码上（SS23b 那条"带前导点"的同款教训）。
+      const face = m.hostDesktop.map((f) => ({
+        ...f,
+        code: f.code
+          .replace(/pub struct UsagePolicy \{/, '')
+          .replace(/impl UsagePolicy \{/, '')
+          .replace(/-> UsagePolicy \{/, ''),
+      }));
+      return `${filesWith(face, /\bUsagePolicy\s*\{/)}|${filesWith(face, /\.context_tokens\s*\(/)}`;
+    },
+    'none|none',
+  ],
 ];
 
 /** 闸自己不能瞎：扫描面下限，读数不够就判红而不是"零偏差"。下限取现值的七成 ——
@@ -1600,6 +1650,31 @@ if (SELFTEST) {
           ? { ...f, code: f.code.replace('fn recall(', 'fn recall_renamed(') }
           : f,
       )),
+    // SS30 窄变异（S3 刀④a · ⓟ）：把**进度条那一次**调用换成锚点直取。改后 `fn occupancy(`
+    // 的定义仍在（①不红）、两个组装点仍走 assemble（③不红），只有②从 2 掉到 1 ——这一档
+    // 独有的形状就是"消费点少了一个"。为什么这一格非要窄变异：`context_budget/tests.rs`
+    // 那五条 occupancy 用例证的是函数自己算得对，把调用方换掉它们一条都不红。
+    SS30: (m) =>
+      (m.hostDesktop = m.hostDesktop.map((f) =>
+        f.rel === 'runner/mod.rs'
+          ? {
+              ...f,
+              code: f.code.replace(
+                'context_budget::occupancy(session, u.refused_tokens)',
+                'context_budget::anchor(session).0',
+              ),
+            }
+          : f,
+      )),
+    // SS30b 宽变异（同一刀的缺席档）：把两把旧尺各塞一条回生产面——装配口漂成手写字面量
+    // （ⓛ 那个形状）+ 组装后口径复活（ⓟ 那个形状）。两档各红各的，push 一次同时打中。
+    SS30b: (m) =>
+      m.hostDesktop.push({
+        rel: 'organize/ghost.rs',
+        code:
+          'let p = UsagePolicy { threshold_tokens: 1, window_tokens: 2, tools_est_tokens: 3, refused_tokens: 0 };\n' +
+          'let again = asm.context_tokens(&s, sid);',
+      }),
     SS2: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px', '--lw-ui-font-size: 15px')),
     SS2b: (m) => (m.css = m.css.replace('--lw-ui-font-size: 14px;', '--lw-ui-font-size: 14px;\n  --lw-ui-font-size: 16px;')),
     // 窄变异：把 T5 刚去掉的那次"为读三个字段而全量克隆档位区"塞回去。

@@ -240,11 +240,16 @@ pub(crate) struct Rig {
 }
 
 impl Rig {
-    pub(crate) fn policy(&self) -> UsagePolicy {
+    /// 与真组装点同形（S3 刀④a）：拒收读数那一格也从**同一张表**取，
+    /// 这样长跑里进度条落的 `ContextUsage` 与压缩判定吃的是同一个分子。
+    /// 腿 4 的靶就是"被拒之后这一档顶不顶得起步"，夹具若恒填 0 就等于把
+    /// 被测形状绕过去。
+    pub(crate) fn policy(&self, session_id: &str) -> UsagePolicy {
         UsagePolicy {
             threshold_tokens: self.threshold,
             window_tokens: self.window,
             tools_est_tokens: 0,
+            refused_tokens: self.refusals.reading(session_id),
         }
     }
 }

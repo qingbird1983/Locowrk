@@ -1,9 +1,10 @@
 //! 刀① 判据：锚点搬家同值 + 有效阈值只扣一次（specs/09 AC-S2-1 / AC-S2-2）。
+//! 刀④a（S3 · ⓟ）加判据：占用分子三档取最大，且**进度条与压缩同吃这一个函数**。
 
 use memory_tree::AnchorSource;
 use session_store::{Session, SessionEvent};
 
-use super::{anchor, effective_threshold, output_reserve};
+use super::{anchor, effective_threshold, occupancy, output_reserve};
 
 /// 六轮历史；`usage` = Some 时追加一条供应商上报（input 9,500）。
 fn seeded(usage: Option<u64>) -> Session {
@@ -102,4 +103,88 @@ fn unknown_window_keeps_the_slider() {
 #[test]
 fn a_window_smaller_than_the_reserve_floors_at_zero() {
     assert_eq!(effective_threshold(100_000, Some(10_000), None), 0);
+}
+
+// ---- 刀④a（S3 · ⓟ）：占用分子三档 ----
+
+/// 第 2 档的夹具：在上报**之后**补一条压缩事件 ⇒ 最后一次 `LlmUsage` 过期。
+/// `kept_messages = 2` = 只留最近两条 + 一条摘要标记，投影后的历史显著短于上报那颗数。
+fn compacted_after_report() -> Session {
+    let mut s = seeded(Some(9_500));
+    s.append(SessionEvent::ContextCompacted {
+        kept_messages: 2,
+        summary: "前面几轮已折叠".into(),
+        from_tokens: 9_500,
+        to_tokens: 400,
+        strategy: "compact".into(),
+        ts: 1,
+    });
+    s
+}
+
+/// 夹具自证：压后投影确实**小于**那颗过期上报。这条红了说明夹具没造出场景，
+/// 后面那两条的"取小者"断言就是空转（假绿）。
+#[test]
+fn compaction_really_shrinks_the_projection() {
+    let s = compacted_after_report();
+    let est = kernel_agent::estimate_tokens(&s.derive_messages());
+    assert!(
+        est < 9_500,
+        "夹具没造出「过期上报比压后投影大」：实测 {est}"
+    );
+}
+
+/// 第 1 档 = 锚点同值。这一条就是 ⓟ 的本体：进度条与压缩判定**不许**各有分子。
+/// 断言取 `anchor(&s).0` 而不是手抄 9,500——抄数字的话，把 `occupancy` 写成
+/// 另一把尺也照样绿（它只要恰好给出同一个数）。
+#[test]
+fn occupancy_with_a_fresh_report_is_the_anchor_itself() {
+    let s = seeded(Some(9_500));
+    assert_eq!(
+        occupancy(&s, 0),
+        anchor(&s).0,
+        "有新鲜上报时分子必须逐字等于锚点，不是另算一遍"
+    );
+}
+
+/// 第 2 档：上报过期 ⇒ 分子改吃全量估算。旧形状里这一档只有压缩面有，进度条没有
+/// （它那时看的是"目录 + 尾巴"）⇒ 同一轮两处不同数。
+#[test]
+fn occupancy_drops_a_report_that_compaction_made_stale() {
+    let s = compacted_after_report();
+    let est = kernel_agent::estimate_tokens(&s.derive_messages());
+    assert_eq!(
+        occupancy(&s, 0),
+        est,
+        "最后一次上报落在压缩事件之前 ⇒ 那颗数描述的是压缩前的窗口"
+    );
+    assert_ne!(
+        occupancy(&s, 0),
+        9_500,
+        "照过期上报判定 = 每个 step 再压一次的形状"
+    );
+}
+
+/// 第 3 档：被超窗拒收那颗数顶上来（它既没有上报也没有压缩事件，前两档追不到）。
+#[test]
+fn occupancy_takes_the_refusal_when_it_is_the_largest() {
+    let s = seeded(Some(9_500));
+    assert_eq!(
+        occupancy(&s, 240_000),
+        240_000,
+        "被拒现场只能由第 3 档表达，否则触发线永远停在被拒之前（台账 ⓜ）"
+    );
+}
+
+/// 三档取**最大**而不是"换尺"的两条边界：缺席当 0（不动读数）、比读数小也不动。
+/// 少了这一条，把 `.max()` 写成"有拒收就用拒收"（无条件覆盖）也照样绿。
+#[test]
+fn a_smaller_or_absent_refusal_does_not_move_the_reading() {
+    let s = seeded(Some(9_500));
+    assert_eq!(
+        occupancy(&s, 0),
+        9_500,
+        "缺席 = 0 = 不参与，不许当无穷也不许当跳过"
+    );
+    assert_eq!(occupancy(&s, 100), 9_500, "更小的旧拒收不许把读数压回去");
 }

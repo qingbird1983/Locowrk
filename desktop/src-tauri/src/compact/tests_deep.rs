@@ -109,6 +109,8 @@ fn policy_at(session: &Session) -> UsagePolicy {
         threshold_tokens: used,
         window_tokens: 1_000_000,
         tools_est_tokens: 0,
+        // 压缩通路不读这一格（它经 `Compactor::used` 自己取表），夹具给 0 即可。
+        refused_tokens: 0,
     }
 }
 
@@ -196,6 +198,7 @@ async fn an_unknown_window_never_reaches_the_model() {
         threshold_tokens: used,
         window_tokens: 0,
         tools_est_tokens: 0,
+        refused_tokens: 0,
     };
     let out = cp.run(&mut s, "s-window", &p).await;
     assert_eq!(out, Outcome::Skipped("unknown-window"), "实测 {out:?}");
@@ -347,6 +350,7 @@ async fn a_refused_request_makes_the_next_pass_compact() {
         threshold_tokens: window,
         window_tokens: 1_000_000,
         tools_est_tokens: 0,
+        refused_tokens: 0,
     };
     // 参考实现同场对比：旧形状在这一格里分子只有那颗偏低的上报数 ⇒ 永远不动手。
     assert_eq!(used_old_shape(&s), window / 2);

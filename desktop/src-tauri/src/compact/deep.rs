@@ -101,33 +101,29 @@ impl Compactor {
         }
     }
 
-    /// 占用读数（"到线了没"的分子）。三档，取最大：
+    /// 占用读数（"到线了没"的分子）。**S3 刀④a 起算式不在这里**——三档取最大的
+    /// 完整推导（供应商上报 / 上报过期时的全量估算 / 被超窗拒收那颗数，以及
+    /// "为什么取最大而不是换尺"）住在 [`crate::context_budget::occupancy`]，
+    /// 进度条（`runner::record_usage`）吃的是**同一个函数**。
     ///
-    /// 1. **供应商上报**（新鲜时）——与进度条、整理触发线同一把尺
-    ///    = [`crate::context_budget::anchor`]（优先最后一次 `LlmUsage`）。
-    /// 2. **压后投影估算**——若最后一次 `LlmUsage` 落在最后一次 `ContextCompacted`
-    ///    **之前**，那个数量的是压缩之前的窗口，照它判定会得出"仍然超线"⇒ 本轮每个
-    ///    step 再压一次、每次一条模型往返。这一档用的仍是 anchor 自己"无上报"那一档
-    ///    的同一把估算尺，不是为压缩另造尺。
-    /// 3. **超窗拒收的读数**（刀⑧ · [`super::Overflow`]）——被拒的那一次**既没有上报
-    ///    也没有压缩事件**，上面两式都追不到它，于是触发线永远停在"被拒之前"那颗数，
-    ///    这一层当场自锁（实测形状：连续 41 个失败轮、两层各 0 条落账）。
-    ///
-    /// 三档取**最大**而不是"换尺"：窗口在被压小之前只会变大，任何一档读数都是下界。
+    /// 本方法只剩两格取数：拒收读数经 [`Self::refusal`]，算式交出去。
+    /// 为什么这个薄封装不许摊平成"两处各自调 occupancy"——压缩面对"到线了没"
+    /// 这句问话有自己的口径（它要的是**判定用的那一次**读数），把它摘掉就等于
+    /// 让 `plan` 直接吃组装点算好的数，而组装点不知道熔断/新鲜度这些层内事。
+    /// S2 刀④ 起本方法**只在这一侧承重**，进度条那一侧调的是同一个 `occupancy`。
     pub(crate) fn used(&self, session: &Session, session_id: &str) -> u64 {
-        let stale = match (
-            session.events().iter().rposition(is_usage),
-            session.events().iter().rposition(is_compacted),
-        ) {
-            (Some(u), Some(c)) => u < c,
-            _ => false,
-        };
-        let window = if stale {
-            estimate_tokens(&session.derive_messages())
-        } else {
-            crate::context_budget::anchor(session).0
-        };
-        window.max(self.refusals.of(session_id).unwrap_or(0))
+        crate::context_budget::occupancy(session, self.refusal(session_id))
+    }
+
+    /// 这一会话最近一次被供应商按超窗拒收时的占用读数（没有记录 = 0）。
+    ///
+    /// S3 刀④a 加这一格的原因就是 ⓟ：进度条的分子也要吃第 3 档，而那张表是
+    /// `Compactor` 的私有件、两个组装点（聊天与定时）**本来就各持一份
+    /// `Arc<Compactor>`** ⇒ 读口留在这一个 struct 上，宿主不必再多一个"谁都能碰
+    /// 那张表"的字段。为什么定时那条链同样必须有它：它跑的会话一样会撞超窗，
+    /// 缺这一档就是那条链的进度永久低估（同一轮里压缩已经起步、进度条还空着）。
+    pub(crate) fn refusal(&self, session_id: &str) -> u64 {
+        self.refusals.reading(session_id)
     }
 
     /// step 边界那一句 = **自动**通路（runner 到线时调）。`policy` 带的是**组装点
@@ -306,12 +302,4 @@ impl Compactor {
             to_tokens,
         }
     }
-}
-
-fn is_usage(e: &SessionEvent) -> bool {
-    matches!(e, SessionEvent::LlmUsage { .. })
-}
-
-fn is_compacted(e: &SessionEvent) -> bool {
-    matches!(e, SessionEvent::ContextCompacted { .. })
 }

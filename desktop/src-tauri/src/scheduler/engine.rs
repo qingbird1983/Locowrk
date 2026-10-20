@@ -96,8 +96,10 @@ pub(crate) struct EngineDeps {
     /// M2 记忆树影子运行：调度触发的轮次与手聊同一整理钩子。
     pub organizer: Arc<crate::organize::Organizer>,
     pub compactor: Arc<crate::compact::deep::Compactor>,
-    /// M4 树组装器：触发的轮次与手聊同一用量口径（组装后估算）。
-    pub tree_assembler: Arc<crate::organize::TreeAssembler>,
+    // ⚠ 这里原来放的是 `Arc<crate::organize::TreeAssembler>`（M4 §3.38②："触发的
+    // 轮次与手聊同一用量口径 = 组装后估算"）。S3 刀④a 摘掉：那把第二尺连同
+    // `run_turn` 的 `tree` 参数一起没了，进度条与压缩现在同吃
+    // `context_budget::occupancy`（拒收读数经上面那枚 `compactor` 拿）。
     /// v4.11 停止生成：调度触发的轮次与手聊同一停止面（发送键停止对
     /// 调度轮同样生效）。
     pub stop_flags: Arc<crate::stop::StopFlags>,
@@ -181,17 +183,17 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         deps.model_overrides.get(&session_id).as_ref(),
         Some(&deps.catalog),
     );
-    // S2 刀①：与 `agent_chat` 同形——分母吃有效阈值（算式只住 `context_budget`，
-    // 两个组装点不许各写一遍加减）。
-    let policy = UsagePolicy {
-        threshold_tokens: crate::context_budget::effective_threshold(
-            deps.settings.organize_threshold_tokens(),
-            window,
-            max_output,
-        ),
-        window_tokens: window.unwrap_or(0),
-        tools_est_tokens: runner::catalog_estimate(&deps.kernel, &session_id).await,
-    };
+    // S2 刀① → S3 刀④a：与 `agent_chat` 共用**同一个装配口**
+    // （[`UsagePolicy::assemble`]，挂账 ⓛ 在此收口）。四枚原料各取各的（这条链
+    // 没有 `state.settings.with_llm_config` 那一层锁借用，直接 `llm_config()`），
+    // 算式与拒收读数都不许在这儿重写一遍。
+    let policy = UsagePolicy::assemble(
+        deps.settings.organize_threshold_tokens(),
+        window,
+        max_output,
+        runner::catalog_estimate(&deps.kernel, &session_id).await,
+        deps.compactor.refusal(&session_id),
+    );
     // 失败也照常收尾：一次性删行（重试多半还是错），周期滚到下槽；
     // 错误经系统通知兜底告知（轮内 LLM 报错用户未必在看）。
     if let Err(e) = runner::run_turn(
@@ -205,7 +207,6 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         Some(deps.usage.as_ref()),
         Some(&deps.sessions_dir),
         deps.settings.max_turn_steps(),
-        Some(&deps.tree_assembler),
         Some(&deps.stop_flags),
         Some(deps.fragments.as_ref()),
         Some(&deps.organizer),

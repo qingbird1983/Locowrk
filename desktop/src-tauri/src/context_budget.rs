@@ -5,18 +5,18 @@
 //! 锚点，锚点吃 organize ⇒ 不搬家就是"把 S2 的形状押在一个要删的模块上"。搬完之后
 //! organize 继续吃**这同一份**（它不许留第二把尺，机器面 = 判据 SS16b）。
 //!
-//! 两处**故意保持的不一致**（刀① 只做搬家，而搬家不许改读数，所以登记不修）：
+//! **刀① 当时故意保持的两处不一致，现在只剩一处**（搬家不许改读数，所以那时登记不修）：
 //!
-//! * 回落口径分两种：本模块 [`anchor`] 在无供应商上报时回落**全量历史字符估算**；
-//!   进度条（`runner::record_usage`）回落**树组装后口径**（目录 + 尾巴）。v2.138
-//!   那句「进度条 = 触发 = 自动收起一把尺」证的是**有上报那一档**（`LlmUsage`
-//!   同一个数），无上报那一档两侧本来就不同数。统一它会改整理的触发读数 =
-//!   改行为，那是刀④ 主层触发线接入时的决定，不在搬家这一刀偷偷做。
-//! * [`memory_tree::AnchorSource`] 仍住在 memory-tree：搬家只动位置不动形状。
-//!   S4 退役树时这个枚举的落点就是本模块，届时一起收。
+//! * **回落口径原先分两种**：本模块 [`anchor`] 在无供应商上报时回落**全量历史字符估算**，
+//!   而进度条（`runner::record_usage`）对树会话回落**组装后口径**（目录 + 尾巴）。
+//!   ⇒ **S3 刀④ 收口**：分子统一成 [`occupancy`] 一个函数，两侧同吃全量估算，
+//!   进度条那条树分支连同 `run_turn` 的 `tree` 参数一起摘掉。v2.138 那句
+//!   「进度条 = 触发 = 自动收起一把尺」至此**三档都成立**（原先只管"有上报那一档"）。
+//! * [`memory_tree::AnchorSource`] 仍住在 memory-tree：**这一条照旧**。S4 退役树时
+//!   这个枚举的落点就是本模块，届时一起收。
 
 use memory_tree::AnchorSource;
-use session_store::Session;
+use session_store::{Session, SessionEvent};
 
 /// 输出侧预留的**缺省值**：供应商目录与档位都没告诉我们输出上限时按这颗算
 /// （ZCode `compact/policy.ts:9` `DEFAULT_AUTOCOMPACT_OUTPUT_RESERVE_TOKENS`
@@ -45,6 +45,54 @@ pub(crate) fn anchor(session: &Session) -> (u64, AnchorSource) {
             AnchorSource::Estimate,
         ),
     }
+}
+
+fn is_usage(e: &SessionEvent) -> bool {
+    matches!(e, SessionEvent::LlmUsage { .. })
+}
+
+fn is_compacted(e: &SessionEvent) -> bool {
+    matches!(e, SessionEvent::ContextCompacted { .. })
+}
+
+/// 占用分子（**唯一算法** = S3 刀④ 要的那"一个出处"，账 ⓟ）：三档取最大。
+///
+/// 1. **供应商上报**（新鲜时）—— 走 [`anchor`]，与整理触发线、自动收起同尺
+///    （v2.138 那句「看到的 = 触发用的」）。
+/// 2. **上报过期时的全量字符估算** —— 最后一次 `LlmUsage` 落在最后一次
+///    `ContextCompacted` **之前** ⇒ 那个数量的是压缩**之前**的窗口，照它判定会得出
+///    "仍然超线"，于是本轮每个 step 再压一次、每次多一条模型往返。
+/// 3. **被超窗拒收那颗数**（S2 刀⑧ · [`crate::compact::Overflow]）—— 被拒的那一次
+///    既没有上报也没有压缩事件，上面两式都追不到它 ⇒ 触发线永远停在"被拒之前"
+///    （实测形状：连续 41 个失败轮、两层各 0 条落账）。
+///
+/// 三档取**最大**而不是"换尺"：窗口在被压小之前只会变大，任何一档读数都是下界。
+///
+/// ⚠ `refused` 由**调用方**从同一张 `Overflow` 表取（组装点与压缩面持的是同一个
+/// `Arc`，为什么必须是同一个 = [`crate::compact::Failures`] 头注那条同款纪律）。
+/// 本函数故意不吃表：给定（日志, refused）读数唯一 ⇒ 它能被纯函数判据钉住，
+/// 两个调用点若各自再补一次 `max`，判据就抓不到了。
+///
+/// **本刀统一掉的第二把尺**（S2 刀① 登记在头注、当时明写"留给刀④"）：进度条原先在
+/// 无上报那一档对**树会话**用"组装后口径"（目录 + 尾巴，M4 §3.38②），压缩面用全量
+/// 历史估算 ⇒ 同一轮两处不同数。这里把进度条那侧的树分支摘掉、两侧同吃全量估算。
+/// **这是读数口径的变更，不是修 bug**：树会话在无上报那一档进度条会**变大**（更保守）。
+/// 方向为什么对：S3 刀③a 之后树目录不再进上下文，"目录 + 尾巴"量的已经不是模型收到的
+/// 那份东西，而全量历史是它的上界。
+pub(crate) fn occupancy(session: &Session, refused: u64) -> u64 {
+    let stale = match (
+        session.events().iter().rposition(is_usage),
+        session.events().iter().rposition(is_compacted),
+    ) {
+        (Some(u), Some(c)) => u < c,
+        _ => false,
+    };
+    let base = if stale {
+        kernel_agent::estimate_tokens(&session.derive_messages())
+    } else {
+        anchor(session).0
+    };
+    base.max(refused)
 }
 
 /// 输出侧预留量（token）：`min(输出上限 ?? 32K, 21K)`。

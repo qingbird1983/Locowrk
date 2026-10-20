@@ -50,7 +50,6 @@ async fn streamed_step_suppresses_full_chunk() {
         None,
         None,
         None,
-        None,
     )
     .await
     .expect("turn ok");
@@ -87,7 +86,6 @@ async fn no_sink_keeps_full_chunk_projection() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,
@@ -279,7 +277,6 @@ async fn run_turn_writes_turn_boundaries_to_log() {
         None,
         None,
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,

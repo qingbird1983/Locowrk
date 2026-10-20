@@ -1,6 +1,6 @@
 # 10-上下文注入面 S3（索引常驻、正文按需 + 占用读数一嘴到底）
 
-- 状态：**进行中 · 刀①②③a③b ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
+- 状态：**进行中 · 刀①②③a③b④a ✅**（开工三问由决策人 **2026-10-20「三问照推荐案，开跑」** 一并
   采纳，裁定结果记在下面「开工三问与裁定」那节；本文件是
   [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
   **S3 注入面** 那一行的施工 spec；方案稿对应 = **§C**（+ §A④ 索引制、§F 交接层），
@@ -12,8 +12,9 @@
   的 AC-4 / AC-5 / AC-7（本线吃这三条）+ S1 留给本线的两格（
   [`specs/05`](../05-memory-data-plane-s1/spec.md) 非目标第 1 条「注入面形状 = S3」与风险③
   「mtime 进预取缓存键 = S3 的接线」）+ S2 长跑落下的账 ⓟ（
-  [`specs/09`](../09-context-compaction-s2/spec.md) 挂账区「ⓟ 剩下那一半」那条，原文在
-  该文件 514–519 行），**ⓟ 按决策人 2026-10-20 指令
+  [`specs/09`](../09-context-compaction-s2/spec.md) 挂账区 ⓟ 那一条；**不钉行号**——
+  那份文件每补一段记录行号就漂，2026-10-20 本线就在它里面写了四条关闭说明），
+  **ⓟ 按决策人 2026-10-20 指令
   归进本线刀④**，不再单立一刀。
 
 ## 目标
@@ -125,17 +126,29 @@
       两列按清点不动**（S4 的 sqlite 退役面），连同 `memory_inject_log.breakdown` 那列一起
       登记为「在场、无人读写」。审计报告那条「存在但从未接线」现在由判据 `SS29`/`SS29b`/
       `SS29c` 三档机械挡住（含 ③ 那档正对照，防"删光也算通过"）。
-- [ ] AC-S3-7 占用只有一个出处（ⓟ 本体）：界面分子与 `Compactor::used` **同一个函数**
-      （新判据钉等值 + 双向变异：任一侧单独改尺即红）；构造"上一轮被超窗拒收"的会话态
-      ⇒ 事件里的 `used` ≥ 拒收那颗数（这条就是 ⓟ 说的"失败期间停在旧数"的反证）。
-- [ ] AC-S3-8 扣减链显形（ⓟ 的另一半）：式子的真源 = `context_budget.rs:73-82`
-      `effective_threshold = min(滑杆值, 窗口 − output_reserve)`（`output_reserve` =
-      `min(输出上限 ?? 32K, 21K)`，:55-59；**只扣一次**，AC-S2-2 的靶就是扣两遍）。
+- [x] AC-S3-7 占用只有一个出处（ⓟ 本体）**✅ 刀④a 2026-10-20**：界面分子与 `Compactor::used`
+      **同一个函数** = `context_budget::occupancy(session, refused)`（三档取最大：新鲜上报 /
+      上报过期时的全量估算 / 被超窗拒收那颗数）。判据两档 = `SS30`（① 定义只住一个文件
+      ② 调用恰 2 处 ③ 装配口 `assemble` 只住两个组装点）+ `SS30b`（`UsagePolicy {` 字面量与
+      `.context_tokens(` 在生产面各恒 `none`）；**"任一侧单独改尺即红"落在 ② 这一档的读数上**：
+      它数的是两处的总调用数，进度条或压缩面任何一侧换成别的尺 ⇒ 从 2 掉到 1，多开第三个
+      消费点 ⇒ 从 2 涨到 3，两个方向共用同一格读数（变异自证 `make selftest` 两条都报红）。
+      构造"上一轮被超窗拒收"的会话态 ⇒ 事件里的 `used` ≥ 拒收那颗数：这条由
+      `context_usage_takes_the_refusal_reading` 落地（上报 95 483 + 拒收 240 000 ⇒ 每条
+      `ContextUsage.used` = 240 000 而 `threshold` 照旧 8 000——分子顶过线不改分母）。
+      ⚠ 本条改的是**读数口径**不是修 bug：无上报的树会话进度条从此按全量历史估算（只会变高），
+      方向与代价写在 `context_budget.rs` 头注与下面刀④a 施工记录第 3 条。
+- [ ] AC-S3-8 扣减链显形（ⓟ 的另一半）：式子的真源 = `context_budget::effective_threshold`
+      （`= min(滑杆值, 窗口 − output_reserve)`，`output_reserve` = `min(输出上限 ?? 32K, 21K)`，
+      **只扣一次**——AC-S2-2 的靶就是扣两遍；
+      **引用符号名而不是行号**——刀④a 在本文件里加了 `occupancy`，行号当场漂了，而这一条
+      是刀④b 要照着动码的，钉行号等于给下一刀留假证据。取证 9③ 那处行号**保留**，
+      它是 2026-10-20 当时的读实证据，改了就失真）。
       界面要能一眼读出这条链：`窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值 → 已用 / 有效阈值`，
       外加一格「窗口 − 有效阈值 = 留给输出与下一轮净增的空位」——**这颗空位就是 ⓟ 说的那条
       关系**（净增超过它 ⇒ 撞窗）；输出预留那颗数必须是**带出处的读数**（写出"21K 封顶"或
-      "按你钉的输出上限 8K"）而不是隐藏的常量。逐态写清各看到什么：窗口取不到（阈值原样吃
-      滑杆，:79 那一支）/ 窗口取到且滑杆更小 / 窗口取到且被预留封顶（滑杆说了不算）。
+      "按你钉的输出上限 8K"）而不是隐藏的常量。逐态写清各看到什么：窗口取不到（`None` 那一支，
+      阈值原样吃滑杆）/ 窗口取到且滑杆更小 / 窗口取到且被预留封顶（滑杆说了不算）。
       用户把输出上限钉大钉小 ⇒ 这一格当场跟着变（`min` 的两侧都要有用例反证，
       沿 `reserve_follows_a_small_ceiling` 那条既有纪律）。
 - [ ] AC-S3-9 `make check` 全绿；涉界面两刀（刀①④）各自在真实窗口自截图核对后再给你看。
@@ -146,7 +159,11 @@
 - 不动 organize 管线、不退役 memory-sqlite 插件与树工具族本体、不动 `MemoryPage`
   两个 tab、不建 §E 那三枚行为开关（全归 S4）
 - 不动 ⓖ/ⓗ 两枚控件形态（仍等你批形态，本线不借道塞进去）
-- 不合并"生效窗口"两条链（specs/09 取证 6 登记的既成事实）；不动账 ⓛ（定时那条链）
+- 不合并"生效窗口"两条链（specs/09 取证 6 登记的既成事实）
+- ⚠ 这一条原来还写着"**不动账 ⓛ（定时那条链）**"，**刀④a 之后订正**：ⓛ 被顺带关掉了，而
+  这不是主动扩大——`UsagePolicy` 多了第四枚原料（`refused_tokens`）之后，两个组装点各手写一遍
+  字面量就从"分母可能漂"变成"分子也可能漂"（定时链的会话同样撞超窗）。收成
+  `UsagePolicy::assemble` 的净代价是 −12 行，比"两处各补一枚字段"更少。写在刀④a 施工记录第 5 条。
 - 不做跨设备同步、不做应用内记忆列表视图
 - ⓝ（某类会话里深度压缩长期零起步）与 ⓞ（判据口径）**不归本线**：一条是走查读数说明、
   一条已写进 spec
@@ -166,9 +183,17 @@
    + 墓碑判据三档 `SS29`/`SS29b`/`SS29c`；AC-S3-5 ✅ / AC-S3-6 ✅。
    **刀① 留下的一格连带后果在本刀登记为新欠账 ⓠ**（注入侧埋点失去生产调用点），见下面
    刀③b 施工记录第 5 条。
-4. **刀④ 占用一嘴到底（ⓟ 归这一刀）**：`record_usage` 的分子改吃 `Compactor::used`
-   （或两者共同下沉成一个函数）+ 拒收读数进 `ContextUsage` 载荷 + 扣减链上界面；
-   AC-S3-7/8。
+4. **刀④ 占用一嘴到底（ⓟ 归这一刀）**：按"后端一个出处"与"界面上看得见"拆两步——
+   **4a ✅ 2026-10-20** = `record_usage` 与 `Compactor::used` 同吃下沉出来的
+   `context_budget::occupancy`（不是"进度条改吃 `Compactor::used`"：那样压缩层就拥有了一把
+   尺，两个消费点还得互相引用）+ 拒收读数经 `UsagePolicy.refused_tokens` 进进度条 +
+   `tree` 参数整链摘除 + 装配口 `assemble`（顺带关闭 specs/09 挂账 ⓛ）+ 判据 `SS30`/`SS30b`；
+   AC-S3-7 ✅。
+   **4b（待做）** = 扣减链上界面（`窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值 → 已用/阈值`）
+   + 输出预留那颗数做成可调项（三问裁定 ③）；AC-S3-8。
+   ⚠ 原计划里"拒收读数进 `ContextUsage` 载荷"这一格 **4a 没做，且决定不做**：分子已经是
+   `occupancy` 的结果，事件里那个 `used` 就含拒收那一档；再单独传一颗数是"把同一个数的两个
+   来源都摆上界面"，而 4b 要显示的扣减链是**分母**那条式子，不是分子的第 3 档。
 
 ## 刀① 施工形状（本线第一刀；与三问无关，点头即照此动码）
 
@@ -441,12 +466,82 @@ vitest 193 条 / `SELFTEST_ALL_CAUGHT` × 三处 / `DOCS_SELFTEST_ALL_CAUGHT` /
 `needless_update`（配置只剩两个字段，测试里的 `..MemoryInjectConfig::default()` 失去作用）、
 一处 `empty_line_after_doc_comments`（退役记号写成 `///` 会变成下面那个枚举的文档 ⇒ 改 `//`）。
 
+## 刀④a 施工记录（✅ 2026-10-20 · ⓟ 的前半关闭：占用分子一个出处）
+
+**1. 形状：一个函数、两个消费点、一个装配口。**
+`context_budget::occupancy(session, refused)` 是占用分子的唯一算式（三档取最大：① 新鲜供应商
+上报，经 `anchor`；② 最后一次上报落在最后一次 `ContextCompacted` **之前** ⇒ 改吃全量字符估算；
+③ 被超窗拒收那颗数）。两个消费点各剩一行：`runner::record_usage`（进度条 + 落日志）与
+`Compactor::used`（压缩判定）。为什么不是原计划那句"`record_usage` 改吃 `Compactor::used`"——
+那样这把尺就归压缩层所有，进度条要反向引用压缩面，而 runner 与 compact 的依赖方向在 specs/01
+里是平级宿主模块；下沉到中立模块才是搬家而不是换主人（刀① 把 `anchor` 从 organize 搬来是同一条理由）。
+`refused` 由调用方喂进来而不是让 `occupancy` 自己去查表：给定（日志, refused）读数唯一，
+它才能被纯函数判据钉住；两个调用点若各自再补一次 `max`，SS30 ② 就抓不到了。
+
+**2. 摘掉的整链（`tree` 那把第二尺）。** `TreeAssembler::context_tokens` 是"目录 + 尾巴"
+口径的本体，它的**唯一生产调用点**就是 `record_usage` 的树分支，而那条分支的入口是
+`run_turn` 的第 11 枚参数 `tree`。所以摘的顺序是反着来的：29 个 `run_turn(` 调用点先各删一枚
+实参（用一次性脚本做平衡扫描切参，逐点校验那枚文本形如 `None` / `Some(&…tree_assembler)` 才动，
+15 文件），再删签名与 `record_usage` 的参数，再删方法本体，最后删**为它而存在的那串宿主字段**：
+`AppState.tree_assembler`、`EngineDeps.tree_assembler`、`spawn_engine` 参数、
+`background::Init.tree_assembler`、`memory_stack::Stack.tree_assembler`（内核侧仍经 `Context`
+服务表拿 `TreeContextSource`，那是这个类型的正职，不受影响）。判据 `SS30b` ② 从此盯住
+`.context_tokens(` 恒 `none`。`organize/assemble/tests.rs` 里那条"组装后 < 全量"的断言同批删除
+（它测的就是这个 API），留墓碑注释说明去哪了。
+
+**3. 这是读数口径变更，不是修 bug——方向与代价都要说破。** 无供应商上报的树会话从此按
+**全量历史**估算，进度条读数**只会变高不会变低**（"目录 + 尾巴"是它的下界）。变高的后果是
+**更早触发**压缩与泄压，而提前压缩 ≠ 超限拒收，方向安全；不变的是有上报那一档（v2.138 那条
+"看到的 = 触发用的"从此三档都成立，原先只管"有上报"那一档）。⚠ 待补的读数：真机长会话里
+同一轮"进度条百分比"改前改后各是多少——这条要等他开一次真窗口才能取，登记在下面第 7 条与
+AC-S3-9 那一格，不用夹具数字冒充。
+
+**4. 新增用例。** `context_budget/tests.rs` 加五档 occupancy 用例：第 1 档**断的是与 `anchor`
+等值**而不是手抄 9 500（抄数字的话，把函数换成另一把尺只要给出同一个数就照样绿）；第 2 档
+前面还压了一条**夹具自证**（`compaction_really_shrinks_the_projection`——投影没真的变小，
+后面那两条"取小者"就是空转）；第 3 档与两条边界（缺席 = 0 不参与、更小的旧拒收不许把读数
+压回去）盯的就是"取最大"而不是"有拒收就用拒收"。跨面接线的反证另立一条
+`context_usage_takes_the_refusal_reading`：跑真 `run_turn`，断每条落进日志的 `ContextUsage.used`
+= 拒收那颗数、`threshold` 不改。为什么纯函数用例不够——改前 `record_usage` 根本没读 `refused`，
+算式再对也是零接线（SS26 那条"存在但从未接线"的同款）。
+
+**5. 顺带关闭 specs/09 挂账 ⓛ（原列本线非目标，已订正）。** `UsagePolicy` 多了第四枚原料之后，
+两个组装点各手写一遍字面量的性质从"分母可能漂"变成"分子也可能漂"，于是装配口提成
+`UsagePolicy::assemble`：算式仍只住 `context_budget`（`effective_threshold` 那一步），装配口
+只做"四枚原料 → 一把尺"。两个组装点各剩取数四行；`SS30` ③ 盯住 `assemble` 的调用集合恰在
+`commands/chat.rs` 与 `scheduler/engine.rs`。定时链的拒收读数经 `deps.compactor.refusal(..)` 拿
+——**没有给 `AppState` / `EngineDeps` 新加一张表的字段**：`Overflow` 表的宿主侧读口从此只有
+`Compactor` 一个（新增 `refusal()` + `Overflow::reading()`，把"没有记录当 0"这一裁定收成一处）。
+
+**6. 要说破的遗留：整理那一层仍是两档。** `Organizer::release_pressure` 吃的还是
+`context_budget::anchor`（没有 stale 档也没有拒收档），所以"三个消费点一个出处"这一刀只做到
+**两个**。不补的的理由写在 specs/09 那条 ⓟ 的关闭说明里：organize 按 specs/01 D 节在 S4 整面
+退役，给它加档 = 给要删的模块加深依赖。这一格留着，别把它读成"ⓟ 全关"。
+
+**7. 门禁（本刀实测）**：`make check` 末行 `▶ check 全绿`（宿主 682 条通过 / 0 失败，比改前
+多 6 条 = 本刀新增的 5 档 occupancy 用例 + 1 条接线反证；vitest 193 条 / 26 文件全绿；两处
+clippy 无告警）。`make selftest` 退出码 0、三处 `SELFTEST_ALL_CAUGHT`，新立两条都在里面
+（`SS30 变异可见`、`SS30b 变异可见`）：前者的窄变异 = 把进度条那次调用换成
+`anchor(session).0`，只让 ② 从 2 掉到 1，① ③ 不跟着红 ⇒ 证明这一档独有；后者的宽变异 = 一次
+push 同时塞回手写字面量与 `.context_tokens(`。`make gates` 退出码 0、12 项全 ✓，
+`check-middleware-wiring` 仍是「监听器实现=9 · 已接线=9 · 未接线=0 · 白名单=0」（本刀没动环）。
+不可见字符扫描（假名 / 零宽 / NBSP）0 命中。
+判据首跑**红在判据自己的扫描面**过一次：`UsagePolicy {` 那一档实测
+`commands/chat.rs|runner/mod.rs`，原因是返回类型 `-> UsagePolicy {` 与 `impl UsagePolicy {`
+都被数成了"字面量构造" ⇒ 读数前先把三处合法在场剔掉（SS23b"正则要收窄"的同一条教训），
+而不是把期望改成那两个文件。
+
+**8. 本刀没碰的**：`events.rs` / `runner/projection.rs` / 前端全部（`ContextUsage` 载荷字段
+一字未改，前端读到的 `used` 就是换源后的同一个数）；界面读数等刀④b 上扣减链时一起自截图核对
+（AC-S3-9 那一格仍欠，见任务 ⓠ/真窗口那笔）。
+
+
 ## 开工三问与裁定（2026-10-20 决策人「三问照推荐案，开跑」⇒ 三处全按推荐案落地）
 
 ① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）
    —— **裁定 = 案 A**：
    - **✅ 采纳**：进度条浮层加一行只读扣减链（`窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值`，
-     式子照 `context_budget.rs:73-82` 不另造），
+     式子照 `context_budget::effective_threshold` 不另造），
      设置页「压缩阈值」那行的说明文案跟着引用它——**复用既有的"只读读数 + 文案"形态**，
      不加新控件、不做保存拒绝（拒绝会让用户改不动，且 §4 要求限制可关）。
      代价：关系仍然是"看得见但不拦"，撞窗还得等真撞。
@@ -481,8 +576,8 @@ vitest 193 条 / `SELFTEST_ALL_CAUGHT` × 三处 / `DOCS_SELFTEST_ALL_CAUGHT` /
 | `desktop/src-tauri/src/repo_context.rs` | 刀② ✅：`build()` 从静态串改成读 `.Locowrk/MEMORY.md` 正文 + 提醒行 + §F 双钳；`ensure_layout` 多写一份骨架；`HANDOFF`/`HANDOFF_MAX_*` 成常量；该簇 3 条用例（含反转掉的那条静态断言） |
 | `desktop/src-tauri/src/memory_learn/` | 刀③b ✅ **整目录已删除**（8 文件 · 933 行）；契约侧 `recall_relevant`/`LearnWeights`/`RecallQuery`/`VALUE_INJECT_MAX_CHARS`、设置面 `learnEnabled`+四枚权重、前端那一格与中英文案、`breakdown` 观测通路与解释面板同批离场；`inject_view.rs` 缩到 60 行只管 `overview` |
 | `desktop/src-tauri/src/state/waterfall.rs` | 刀③：摘 `TreeDirectoryInject` 一环（头注那"注册序就是执行序"的段要订正） |
-| `desktop/src-tauri/src/runner/mod.rs` `compact/deep.rs` `events.rs` `runner/projection.rs` | 刀④：占用收成一处 + `ContextUsage` 载荷补拒收档 |
-| `desktop/src/{components/ContextProgressBar.vue,components/chat/UsageRing.vue,components/chat/ContextUsagePopover.vue,stores/chat/{projection,state}.ts,types/events-agent.ts,lib/api/channels.ts}` | 刀④：分子换源 + 扣减链一行（文案中英成对） |
+| `desktop/src-tauri/src/runner/mod.rs` `compact/deep.rs` `context_budget.rs` `commands/chat.rs` `scheduler/engine.rs` `compact.rs` `state/{memory_stack,mod,app_state,background}.rs` `scheduler/mod.rs` `organize/assemble.rs` | 刀④a：占用收成 `occupancy` 一个出处 + `tree` 参数整链摘除 + 装配口 `assemble`（**`events.rs` / `runner/projection.rs` 不动**：载荷没加字段，理由见上面计划第 4 条那条 ⚠） |
+| `desktop/src/{components/ContextProgressBar.vue,components/chat/UsageRing.vue,components/chat/ContextUsagePopover.vue,stores/chat/{projection,state}.ts,types/events-agent.ts,lib/api/channels.ts}` | 刀④b：分子不动（后端已换源，字段形状一字未改）+ 扣减链一行（文案中英成对） |
 | `desktop/src-tauri/src/settings/context.rs` + `components/settings/ContextSection.vue` + `locales/{zh-CN,en}/settings.ts` | 刀④（若裁定 ③ 选可调项则多一格字段）：说明文案引用扣减链 |
 | `crates/kernel-agent/tests/prompt_layering.rs` `memory_inject/tests/*` `desktop/tests/*` `scripts/check-single-source.mjs` | 全程：形状用例订正 + 新判据（标签等值 / 占用等值 / 退役名清单）+ 各配变异 |
 

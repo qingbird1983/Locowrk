@@ -108,21 +108,11 @@ async fn tree_mode_a_slices_at_chaptered_until_and_lists_directory() {
     assert!(plan.directory.contains("- b1: 章节一"), "章节清单行");
     assert!(!plan.directory.contains("</"), "无闭合标签（追加不破前缀）");
     assert!(plan.collapsed_chapters.is_empty());
-
-    // 组装后口径 = 目录 + 尾巴四条消息，显著小于全量二十四条
-    let s = long_session();
-    let tokens = asm.context_tokens(&s, sid).expect("树会话给用量口径");
-    let full = kernel_agent::estimate_tokens(&s.derive_messages());
-    // 阈值从「< 全量的一半」改成「< 全量的三分之二」是**本批的机器结论**：
-    // Q2 的进展行确实进 system，用量口径必须把它算进去（漏算 = 少报一截），
-    // 于是组装后读数抬到压着 1/2 边界（本轮实测 187 对全量 374 = 恰好一半）。
-    // "显著小于全量"这个原意图由 2/3 继续钉着——尾巴只有四条消息，真值约一半。
-    assert!(
-        tokens * 3 < full * 2,
-        "组装后 {tokens} 应显著低于全量 {full}"
-    );
-    assert!(tokens < full, "组装后必须低于全量");
-    assert!(tokens > 0);
+    // ⚠ 这里原来还有一段"`context_tokens` 组装后口径 = 目录 + 尾巴 < 全量"的断言
+    // （判进度条读数显著低于全量历史）。S3 刀④a 连方法带断言一起摘：进度条不再
+    // 有第二把尺（分子统一 `context_budget::occupancy`），留着就是给一个没有生产
+    // 调用点的 API 供读数——"存在但从未接线"正是本仓取证点名的形状。方法摘除的
+    // 理由写在 `assemble.rs` 头注那条墓碑。
 }
 
 #[tokio::test]
