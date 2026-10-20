@@ -27,29 +27,27 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 ├── .githooks/pre-commit             # [LOCK]   提交档：按暂存面挑要跑哪几条闸（克隆后要手动启用 hooksPath）
 ├── .github/workflows/ci.yml         # [LOCK]   CI：只有一行 `sh scripts/tasks.sh gates`
 │
-├── crates/                          # ★        内核 8 个 crate。依赖只能单向往下流（完整图在 AGENTS.md §3，违反 = 设计错误）
-│   ├── plugin-api/                  # [LOCK]   冻结 ABI（只许往结构体末尾加字段，改已有签名就是破坏兼容）· 工具与调用上下文的共用定义 · 记忆目录名的唯一算式
+├── crates/                          # ★        内核 7 个 crate。依赖只能单向往下流（完整图在 AGENTS.md §3，违反 = 设计错误）
+│   ├── plugin-api/                  # [LOCK]   冻结 ABI（只许往结构体末尾加字段，改已有签名就是破坏兼容）· 工具与调用上下文的共用定义 · memlayout（记忆线退役后无消费者，冻结 ABI 原样保留）
 │   ├── cordis-core/                 #          事件总线底座：事件只往后追加 · 一个事件按注册顺序交给多个监听者 · 调度骨架
 │   ├── plugin-host/                 #          把插件装进来再调出去：装了就不卸载 · 耗时调用不卡主循环
 │   ├── plugin-service/              #          服务组合点：两条工具通路都经它进同一个工具池
 │   ├── session-store/               #          会话持久化与重放：事件流 + 每步批量落盘
 │   ├── kernel-agent/                #          Agent 循环（最大的一块）：审批 · 子代理 · 中间件 · 上下文注入 · 工具暴露
-│   ├── memory-tree/                 #          记忆树：分层章节 · 整理 · 跨会话取回
 │   └── kernel-bin/                  #          验收叙事入口：`demo`（热插拔与回退）· `demo4`（审批改写与工具视图隔离）
 │
 ├── plugins-src/                     # ★        插件源码，与内核同一个 Cargo workspace；清单与版本真源 = scripts/build_plugins.sh 的 PLAN
 │   ├── tool-fs/ tool-edit/ tool-shell/ tool-git/        # 文件与命令类（命令执行只此 shell 一个入口）
 │   ├── tool-fetch/ tool-mcp/                                # 外部地址取回 · 外部工具协议
 │   ├── tool-notify/ tool-echo/                              # 系统通知 · 双版本夹具（热插拔与回退的证据）
-│   ├── memory-sqlite/                                       # memories 表的插件实现（与宿主 memory.rs 同源，check-schema-parity 盯着）
 │   └── tool-shout/                                          # 市场验收夹具：只进 market/，不在开发态 PLAN 里
 ├── plugins/  market/                 # ⊘       开发态安装目录与本地市场：产物不入库，只有各自 README.md 入库
 │
 ├── desktop/                          # ★       Tauri 2 + Vue 3 桌面端
 │   ├── src/                          #         前端（界面永远不直接碰 PluginRegistry，只经 PluginService）
 │   │   ├── App.vue  main.ts  i18n.ts  style.css          # 外壳 · 语言切换 · 字号基座 --lw-ui-font-size
-│   │   ├── components/shell/ chat/ memory/ plugins/ settings/ schedule/ patterns/
-│   │   │                                                 # 界面分区：外壳 · 对话流 · 记忆页 · 插件页 · 设置 · 定时 · 通用模式
+│   │   ├── components/shell/ chat/ plugins/ settings/ schedule/ patterns/
+│   │   │                                                 # 界面分区：外壳 · 对话流 · 插件页 · 设置 · 定时 · 通用模式
 │   │   ├── stores/                   #         pinia：状态与 IPC 编排的唯一去处（组件不许自己 apply）；
 │   │   │                             #         chat/ 是目录式（台账 T22 拆刀 2026-10-18）：types · state · ids ·
 │   │   │                             #         getters · projection · notices · session · config · attachments ·
@@ -66,23 +64,20 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   │   │                             #         执行循环 · 模型接入与线格式（client.rs · wire.rs）· 提示词分层 · 事件通道常量 · 工具接线
 │   │   ├── approval/ permission_mode/ permission_rules/ privacy/ autodisable.rs
 │   │   │                             #         审批与决策表（approval/decide.rs：固定七步的裁决序；approval/mod.rs：问人、挂起等待、豁免、守夜超时）· 四档权限 · 粘性授权规则 · 底线 · 自动禁用
-│   │   ├── memory/ memory.rs memory_files/ memory_index/ memory_reconcile/ memory_tree_reconcile/
-│   │   │                             #         宿主侧记忆族 · 学习列 · 文件化 · 索引 · 两条对账（memory.rs 只留 mod + pub use，七个面在 memory/ · 与插件那侧同源）
-│   │   │                             #         `memory_learn/`（四信号加权排序 + 命中写回）随 S3 刀③b 整族退役 ⇒ 学习两列在场而没人读写，去处随 S4
 │   │   ├── settings/ state/ workspace.rs data_root.rs plugins_root.rs timeutil.rs
 │   │   │                             #         设置页分区 · 全局状态 · 工作区解析 · 数据根 %USERPROFILE%\.Locowrk · 插件根 · 时间口径
 │   │   ├── scheduler/ subagent_verify/ sub_transcript/ idle/ ask.rs stop.rs
 │   │   │                             #         定时任务 · 子代理校验与转录 · 空闲态 · 追问卡 · 叫停
-│   │   ├── instruction_files/ fragments/ inject_view/ repo_context/ search_tools/ text/ title/
-│   │   │                             #         指令文件 · 片段 · 注入观测读数 · 工作区上下文 · 工具检索 · 正文与标题
-│   │   ├── organize/ recall_log/ recall_receipt/ usage/ export/ session_log.rs thinking_language.rs model_override.rs
-│   │   │                             #         记忆整理 · 取回日志与回执 · 用量 · 导出 · 会话日志 · 思考语言 · 逐轮改模型
+│   │   ├── instruction_files/ fragments/ search_tools/ text/ title/
+│   │   │                             #         指令文件 · 片段 · 工具检索 · 正文与标题
+│   │   ├── usage/ export/ session_log.rs thinking_language.rs model_override.rs
+│   │   │                             #         用量 · 导出 · 会话日志 · 思考语言 · 逐轮改模型
 │   │   ├── browser/ media/ assets/ notifications.rs desktop_notify.rs tray.rs
 │   │   │                             #         工作面板内嵌浏览器 · 多模态 · 图标资源 · 托盘与系统通知
 │   │   ├── lib.rs main.rs demo_llm.rs demo_tools.rs testutil/
 │   │   │                             #         包入口（只放模块声明）· 界面内演示夹具 · 测试助手
 │   │   └── tests/ tests_approval/ tests_session_log/ tests_hotpath.rs tests_permission.rs
-│   │                                 #         tests_plugins_root.rs tests_stream.rs tests_tree_gate.rs —— 行为用例簇（#[cfg(test)] 一律独立文件）
+│   │                                 #         tests_plugins_root.rs tests_stream.rs —— 行为用例簇（#[cfg(test)] 一律独立文件）
 │   └── tests/                        #         vitest 用例（happy-dom 环境；跑法见 AGENTS.md §2）
 │
 ├── scripts/                          # ★       工程脚本与门禁实现：任务定义只在这里，Makefile 只转发
@@ -104,12 +99,9 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │
 ├── specs/                            # ★       阶段计划：一阶段一目录，必须有可测验收与非目标
 │   ├── _template/spec.md             #         模板（复制它才许开新阶段）
-│   ├── 00-doc-governance/            #         文档规范治理：立规矩、历史归位、门禁重写、四个去处（进行中，剩检查脚本合并）
-│   ├── 01-memory-context-redesign/   #         记忆与上下文重构：◐ 方案已定稿（正文 = `docs/design/` 根的方案稿 ⊘），本层只放计划与 AC
-│   ├── 02-tool-cards/                #         工具卡做全：27 类工具样式 · 折叠分层 · 状态词 · 停止与重试表现
-│   ├── 03-structural-debt/           #         结构性欠账台账 T1–T41：分「可直接做」与「卡在人的一侧」两节（拆分层 2026-10-18 由你下令暂停，原地留档）
-│   ├── 04-tool-cancel-deadline/      #         工具级取消与 deadline：C1 已落地，C2/C3 各要单独点头
-│   └── 05-memory-data-plane-s1/      #         记忆数据面 S1：把「sqlite 真源 + md 镜像」扳成 md 唯一真源（待你过）
+│   └── 00-doc-governance/ … 11-simple-compaction-memory-retirement/
+│                                     #         各阶段施工 spec（实例逐条增减 ⇒ 地图不逐个点名；
+│                                     #         状态与进度只看 roadmap；现行线 = 11 = S4 记忆与压缩退役）
 │
 ├── docs/
 │   ├── roadmap/README.md             # ★       唯一进度表：只列未完成阶段，一行一阶段 + 勾选 + 一句人话状态
@@ -124,14 +116,16 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   │   │   ├── UI Design System.md   # ★       UI 层最高权威：令牌映射 · 字号相对制 · 圆角嵌套 · 冲突裁决表
 │   │   │   ├── Front-end Design Guidelines.md
 │   │   │   │                         # ★       前端唯一形态标准：同类只许一种形态 + 特例申请制 + 两道机械闸
+│   │   │   ├── KV Prefix Cache Design v2.md
+│   │   │   │                         #         前缀缓存（现行）
 │   │   │   ├── Context and Memory.md · Memory Tree Design v2.md · Memory File-ization Design.md ·
-│   │   │   │   Cross-Session Recall Design v1.md · KV Prefix Cache Design v2.md
-│   │   │   │                         #         上下文与记忆族正身（装配 · 树 · 文件化 · 跨会话取回 · 前缀缓存）
+│   │   │   │   Cross-Session Recall Design v1.md
+│   │   │   │                         #         记忆族旧形状：S4 已整线退役（specs/11 刀②/③），待 S5 重写；别当现行规范
 │   │   │   ├── LLM.md · plugins.md · Plug-in packaging.md
 │   │   │   │                         #         模型接入 · 「哪些是插件 / 宿主内置 / 已退役」的唯一真源 · 打包与暂存
 │   │   │   ├── Tool exposure strategy and usage statistics.md · Setting and Constrained Optimization.md ·
-│   │   │   │   edit_replace.md · Organize Summary Design v1.md
-│   │   │   │                         #         工具暴露与用量 · 设置与约束 · 编辑替换 · 整理摘要
+│   │   │   │   edit_replace.md · Organize Summary Design v1.md（S4 随记忆线退役，待 S5 归档）
+│   │   │   │                         #         工具暴露与用量 · 设置与约束 · 编辑替换 · 整理摘要（旧）
 │   │   │   └── README.md             #         这一层的清单与"冲突时谁说了算"
 │   │   └── archive/                  # 只读 ⊘  全名 docs/design/archive/ —— 已兑现 / 已退役 / 被取代的稿子；索引 = archive/README.md
 │   ├── 根上的方案稿                   # ⊘       **接下来要开发或需要重构的设计**：稿上的事全部做完、或换了做法重开 ⇒ 整份搬 archive/
@@ -162,7 +156,7 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 
 - **产物类一律不入库**：`target/` `desktop/src-tauri/target/` `desktop/dist/` `plugins/` 与 `market/` 的二进制 `tmp/`。
 - **例外**：`Cargo.lock` 由 cargo 生成但要入库 —— 它是复现同一组依赖版本的凭据；只禁止手工编辑（AGENTS.md §5）。
-- **运行期数据永不入库**：`%USERPROFILE%\.Locowrk` 下的会话、记忆库、配置与日志，路径真源 =
+- **运行期数据永不入库**：`%USERPROFILE%\.Locowrk` 下的会话、旧记忆库残留、配置与日志，路径真源 =
   `desktop/src-tauri/src/data_root.rs`（测试与便携场景用环境变量隔离）。这一层动它要点头，删它更要点头。
 - **`⊘` 那几层的两件实话**（2026-10-17 裁定：authority 留在库里，其余排除）：
   ① 光加 `.gitignore` 不会让**已跟踪**的文件停止跟踪，必须 `git rm -r --cached`（本批已做，本地文件一个没删）；
@@ -179,12 +173,12 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 | --- | --- |
 | 已建（别当待办再建一遍） | 结构闸与闸的自证都在 `scripts/`，两份清单唯一出处 = `tasks.sh` 的 `t_gates` 与 `t_selftest`（条数别抄进文档，加一档改一次就又漂） · 进度只在 `docs/roadmap/README.md` 一张表 · 决策在 `docs/adr/`（编号只增，篇数别抄进文档） · 阶段计划在 `specs/`（一阶段一目录，实例逐条增减 ⇒ 地图点 `specs/` 这一层，不逐个点名） · 规范正身在 `docs/design/authority/` 一层 |
 | 阶段 02 开工（对话流工具卡做全） | `desktop/src/components/chat/` 里各工具卡组件 + `lib/tool-detail.ts` 的对应投影；形态先过 `Front-end Design Guidelines.md` 的类目，新形态要走特例申请 |
-| 阶段「产出物与文件页签」开工 | 先建 `specs/04-…/spec.md`（模板复制），再动界面；页签的数据源若后端没有，欠账先登记进 specs/03 |
+| 阶段「产出物与文件页签」开工 | 先建 `specs/<新编号>-…/spec.md`（模板复制），再动界面；页签的数据源若后端没有，欠账先登记进 specs/03 |
 | 阶段「常用命令与技能包」「子任务与后台任务」开工 | 各自一个 spec；新命令要同时过 `check-commands.mjs` 的三向对账（定义 / 注册 / 前端引用） |
-| 记忆与上下文重构（方向 2026-10-17 已拿到 ⇒ 方案稿已进 `docs/design/` 根 ⊘） | 剩两件：被取代的旧形状稿搬 `archive/` 并在索引点名（2026-10-18 定"先不搬"，挂账在 `specs/01` 风险段）；S5 把 `authority/` 里那几篇回来同步 |
+| 记忆与上下文重构（S1–S4 已收口；S4 施工 = `specs/11`，记忆整线退役 + 压缩收成单层） | 剩两件：S5 把 `authority/` 里记忆族那四篇重写合一（先改标准再写码）；被取代的旧形状稿搬 `archive/` 并在索引点名（2026-10-18 定"先不搬"，挂账在 `specs/01` 风险段） |
 | 有第一个"为什么这么定"的决策 | `docs/adr/NNNN-<主题>.md`（`make adr` 复制模板并算编号；**只增不改**，「被否决的方案」必填） |
 | 加了第一个新工具 / 新插件 | `plugins-src/<id>/`，并在 `scripts/build_plugins.sh` 的 PLAN 登记版本（版本真源只在这里） |
-| 同一事实出现第二个出处 | **不新建文档、不新建闸**：往 `scripts/check-single-source.mjs` 的 CHECKS 加一项；跨实现的代码块同源才走 `check-schema-parity.mjs` |
+| 同一事实出现第二个出处 | **不新建文档、不新建闸**：往 `scripts/check-single-source.mjs` 的 CHECKS 加一项；跨实现的对账先查同源闸是否已有档，没有才新立（宿主/插件双侧 schema 对账闸已随记忆线退役） |
 | 术语开始被混用 | **不建 `docs/glossary.md`**（副本必然漂移）：术语定义住在 `docs/design/authority/` 对应规范的首节，发现混用就回写那一节并在提交正文登记 |
 | 有发布物 | `CHANGELOG.md`（本项目至今不用：版本号只在 git 与桌面端设置页，批次叙事进提交正文） |
 

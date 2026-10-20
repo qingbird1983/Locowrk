@@ -1,6 +1,6 @@
 # 11-单阈值压缩与记忆线整体退役
 
-- 状态：进行中（2026-10-20 决策人指令）
+- 状态：已完成（2026-10-20 决策人指令；刀①–⑤ 全 ✅，AC-1…9 全绿）
 - 负责人：agent
 - 日期：2026-10-20
 - 出处 / 上游：`specs/01-memory-context-redesign` 的 S4（本 spec **取代并扩展**它的退役面）+
@@ -21,28 +21,44 @@
 
 ## 验收标准（必须可测）
 
-- [ ] AC-1 单阈值自动压缩：滑条 100K、构造占用 ≥ 100K 的会话跑一轮 ⇒ 日志出现一条
+- [x] AC-1 单阈值自动压缩：滑条 100K、构造占用 ≥ 100K 的会话跑一轮 ⇒ 日志出现一条
       `ContextCompacted`（`from_tokens ≥ threshold`），时间戳晚于触发轮的 `LlmUsage`、
       早于下一步的 `LlmUsage`；压缩调用期间没有并发 step（同步等待）。
       用例名：`auto_compaction_runs_once_at_the_line_and_the_turn_continues`。
-- [ ] AC-2 回填：压缩后的 `derive_messages()` 首条是 `summarized_message`（七节摘要），
+      **✅ 刀⑤ 已达成**（2026-10-20）：接线用例由 S2 的
+      `run_turn_compacts_at_the_step_boundary_and_mirrors_it_to_disk` 更名并补顺序断言——
+      一轮只压一次；`ContextCompacted` 排在触发轮 `LlmUsage` 之后、本步任何
+      `AssistantMessage` 之前（日志只追加 ⇒ 位置即先后；`DemoLlm` 不报用量，"下一步的
+      `LlmUsage`"由"本步产出"等价承重）。单跑 1 passed。
+- [x] AC-2 回填：压缩后的 `derive_messages()` 首条是 `summarized_message`（七节摘要），
       其后是未压的近期原文；下一 step 发给模型的消息以这条摘要开头。撤销 = 删掉那条
       `ContextCompacted` 后逐字节回到全量历史（既有 `compaction_rewind_restores_full_history`
       仍绿）。
-- [ ] AC-3 只有一层：`microcompact`、`slide`、`organize::release_pressure` 在代码面不存在
+      **✅ 刀⑤ 已达成**（2026-10-20）：接线用例断言重放投影首条以
+      `SUMMARIZED_MARKER` 开头、近期原文仍在；`compaction_rewind_restores_full_history`
+      在 `make check` 全绿。
+- [x] AC-3 只有一层：`microcompact`、`slide`、`organize::release_pressure` 在代码面不存在
       （判据点名零命中）；`Compactor::run` 是唯一的自动压缩入口；`compactEnabled` 关掉后
       不再自动压，手动 `/压缩` 仍可用。**✅ 刀① 已达成**（2026-10-20：生产面三名词零命中，
-      刀① 提交正文带命令与读数）。
+      刀① 提交正文带命令与读数）。**刀⑤ 复核**：`cargo` 面
+      `microcompact|slide|release_pressure` 零命中；`runner/mod.rs` 只有一处 `cp.run(`；
+      `the_switch_off_never_reaches_the_model` 与 `a_manual_run_goes_ahead_even_with_the_switch_off`
+      覆盖开关两态。
 - [x] AC-4 设置面：普通用户页「上下文」只剩三行——阈值滑条 / 自动压缩开关 / 用量条开关；
       全设置页不再有 `type="number"`（开发者分区除外）；「记忆」分区不存在；
       开发者分区不再有记忆树整理、reconcile、章节、重绑、超时重试等记忆项。
       用例：`settings_surface_has_no_user_facing_number_inputs`（扫描非开发者分区模板）。
       **✅ 刀④ 已达成**（2026-10-20）：普通分区扫描零命中；开发者主文件 + `developer/` 三子块
       仍承载九枚数字输入，正对照两向变异均报红；真窗口逐页截图核对无记忆/插件分区。
-- [ ] AC-5 记忆 UI 清空：左栏页脚只有设置/定时/通知；路由里没有 `memory` destination；
+- [x] AC-5 记忆 UI 清空：左栏页脚只有设置/定时/通知；路由里没有 `memory` destination；
       命令面板无记忆项；聊天转录无"查看记忆"跳转；用量浮层无记忆树行、无 `memory_expand`
       计数行、无 S3 扣减链三行；中英文案键无残留（`check-i18n` 两语言相等）。
       真窗口：打开应用 → 左栏底部四个图标里没有数据库图标；设置页左侧没有「记忆」。
+      **✅ 刀② 达成 + 刀⑤ 复核**（2026-10-20）：`Sidebar.vue` 页脚 = 设置/定时/通知 + 版本号；
+      `grep -n destination stores/shell.ts` 只剩 chat/settings 两个去向；命令面板零记忆项；
+      `grep -rn "记忆" desktop/src/locales` 的 4 处命中全是退役注释、无键；
+      `check-i18n` zh=778 en=778。真窗口：左栏底部三图标、设置左侧无「记忆」、命令面板无
+      记忆项（刀② 收尾截图；刀⑤ 新实例复核左栏页脚仍是三图标 + 版本号）。
 - [x] AC-6 后端/插件删除：`memory*` 模块、`organize/`、`recall_log`、`recall_receipt`、
       `inject_view`、`commands/memory.rs`、`commands/organize.rs`、`crates/memory-tree`、
       `plugins-src/memory-sqlite`、kernel 的 `memory_inject`/`tree_context` 全部不存在；
@@ -54,12 +70,29 @@
 - [x] AC-7 指令文件保留：`AGENTS.md` / `CLAUDE.md` 等指令文件仍注入系统提示（用例既有），
       预算写死为 100 KiB；它们不依赖已删除的记忆库模块。
       **✅ 刀③c 已达成**（`INSTRUCTION_CHAIN_KIB = 100` 写死，既有指令文件用例全绿）。
-- [ ] AC-8 数值归类表全部落地：见「数值项归类」；`make check` 全绿（宿主与前端条数以实际
+- [x] AC-8 数值归类表全部落地：见「数值项归类」；`make check` 全绿（宿主与前端条数以实际
       为准，删掉的用例同步删，不保留空转）；`make selftest` 每个新/改判据都有变异报红；
       `make gates` 接线数如实（删除后应无"未接线"）。
-- [ ] AC-9 真窗口一轮：把阈值调到 100K 起，发一段长会话到线 ⇒ 界面出现压缩反馈
+      **✅ 刀④ + 刀⑤ 达成**（2026-10-20）：`make gates` 全绿（EXIT=0）——`check_length`
+      超限 16 / 名单 16 / 零新增；`check-commands` 73=73=73、预留 0；`check-middleware-wiring`
+      8/8、未接线 0；`check-i18n` zh=778 en=778；`check-channels` FAILED=0；`check-docs`
+      DOC_FAILED=0；`SINGLE_SOURCE_OK` IDENTITIES=28 UNREGISTERED=0。变异：刀④
+      `settings_surface_has_no_user_facing_number_inputs` 两向报红；刀⑤ `compact_wiring`
+      新增的投影断言做窄变异（把投影包进 `if false &&`）⇒ 用例转红并打出缺该事件的实测序列，
+      还原后两条复绿。`make check` 总读数见下方任务栏。
+- [x] AC-9 真窗口一轮：把阈值调到 100K 起，发一段长会话到线 ⇒ 界面出现压缩反馈
       （压缩中/已压缩之一），之后模型继续回答同一个问题；上下文浮层读数在压缩后回落。
       这条由我截图核对后交决策人复看。
+      **✅ 刀⑤ 达成**（2026-10-20），两段取证：
+      ① 修复前（100K 阈值，旧会话 `desktop-1792495357508`）：171,385 字长会话到线，
+      `context_compacted from_tokens=150114 → to_tokens=2287`、`used 131507 → 2299`；
+      但界面**没有**「已压缩」条 = 自动路径不投影 `ContextCompacted` 的缺口实证。
+      ② 修复后（`runner/mod.rs` 在 `Outcome::Compacted` 后经 `project_new_events` 投影，
+      与手动 `/压缩` 同一构造）：新会话 `desktop-1792496458631`，191,067 字到线
+      （`input=121653`、压缩时占用 138,539），界面出现「已压缩早期对话，节省 ≈134.7K token」
+      系统条（[查看详情][撤销]），随后模型继续调工具、turn 2 `completed`；顶部进度条
+      118.8K → 7K → 9.8K，日志 `used` 从 6,169 起（压后窗口）。截图两枚（压缩后 7K 与
+      滚动到系统条的 9.8K）已交决策人复看。
 
 ## 非目标
 
@@ -150,17 +183,21 @@
       插件停用天数 / 模型窗口与输出迁入开发者（`settings/developer/` 三子块），设置「插件」
       分区退役；AC-4 判据 `settings_surface_has_no_user_facing_number_inputs` 落地并两向变异
       报红；真窗口逐页核对；`make check` 全绿）
-- [ ] 刀⑤ 判据/文档/真窗口收口
-- [x] `make check` 全绿（刀④ 收尾读数：Rust 427 条、前端 21 文件 138 条；`check-i18n`
-      zh=778 en=778、`check-commands` 73=73=73、`check_length` 超限 16 名单 16 零新增；
-      两处 clippy 绿；日志末行「▶ check 全绿」）
+- [x] 刀⑤ 判据/文档/真窗口收口（2026-10-20：AC-1/2/3 复核；自动压缩补上
+      `ContextCompacted` 的实时投影——`runner/mod.rs` 压成后与手动 `/压缩` 同构造发事件，
+      `compact_wiring` 补两条断言（事件入 sink、压后 `context_usage` 回落）并做窄变异；
+      真窗口两轮取证见 AC-9；AC-5/8/9 勾选与读数落入本稿；specs/01 S4、specs/09/10
+      被取代处、STRUCTURE、roadmap 同步）
+- [x] `make check` 全绿（刀⑤ 收尾读数：桌面端 Rust 427 条、前端 21 文件全绿，工作区其余
+      crate 全绿；两处 clippy 绿；`check-i18n` zh=778 en=778、`check-commands` 73=73=73、
+      `check_length` 超限 16 名单 16 零新增；日志末行「▶ check 全绿」）
 
 ## 影响范围
 
 | 文件 / 目录 | 改动 |
 | --- | --- |
 | `desktop/src-tauri/src/microcompact.rs` `slide.rs` | 整文件删除（含测试与判据消费） |
-| `runner/mod.rs` `state/waterfall.rs` `state/mod.rs` `state/background.rs` | 摘 organizer/泄压/micro/slide 接线；重排注入链 |
+| `runner/mod.rs` `state/waterfall.rs` `state/mod.rs` `state/background.rs` | 摘 organizer/泄压/micro/slide 接线；重排注入链；刀⑤ 补自动压缩的实时投影 |
 | `desktop/src-tauri/src/settings/{context,memory,developer,view}.rs` `settings.rs` | 删记忆整区与上下文数值；保留阈值/开关 |
 | `desktop/src/components/shell/Sidebar.vue` `App.vue` `ChatTranscript.vue` `stores/shell.ts` | 删记忆入口/路由/跳转 |
 | `desktop/src/components/MemoryPage.vue` `components/memory/**` `MemoryTreePanel.vue` `MemorySection.vue` | 整目录/整文件删除 |
@@ -184,4 +221,10 @@
 - 风险④：旧测试/判据按新形状失效。删测试必须同刀删判据并在提交正文写明，不允许放宽。
 - 挂账：磁盘记忆数据清理、`usage.sqlite3` 残留表、`plugin-api` memlayout 无消费者，
   登记在 specs/03。
+- 挂账（刀⑤ 真窗口发现）：①超长消息恰为**末条 user** 时 `choose_cut` 得
+  `nothing-to-summarize`，本轮不压、补发一条 user 才压——符合"保留近期原文"的取舍，
+  但界面上没有一句话说明为何没压；②自动压缩在途（摘要调用数十秒）界面没有「压缩中」
+  反馈，AC-9 由「已压缩」一侧满足；若要「压缩中」，需要在 `cp.run` 之前补一条事件，另刀。
+- 挂账（刀⑤ 观测面）：自动路径的压缩失败与 `Skipped` 判据仍只落 `tracing`，界面读不到；
+  手动 `/压缩` 会回话。AC-9 只要求压成那一侧，失败面留待需要时另开。
 - 回滚：逐刀 revert；数据侧无需回滚（未动）。

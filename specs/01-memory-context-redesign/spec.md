@@ -1,12 +1,14 @@
 # 01-记忆与上下文重构
 
 - 状态：**进行中 · S1 已做到刀④d 且两轮真窗口实测过（刀①②a②b-1/-2/-3②c-1/-2③a③b-1/-2
-  ④a④b④c④d 全 ✅，只剩三件：真删与"删后下一会话看不见"那两发读数、AC-S1-2 库改名那一次、
-  ②c-2 学习档那一格等点头）；**S2 压缩面全线收口** =
+  ④a④b④c④d 全 ✅；S4 记忆整线退役后，原先欠的三件（真删读数 / 库改名 / 学习档）
+  随数据面整体退场而失效）；**S2 压缩面全线收口** =
   [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)（刀①…⑦b 十二条验收全绿
-  + 收口后追加的刀⑧）；**S3 注入面已开工** =
-  [`specs/10-context-injection-s3`](../10-context-injection-s3/spec.md)（2026-10-20 现状取证成稿，
-  四刀计划 + 三处待定项**等你点头才动代码**；S2 账 ⓟ 由决策人同日指令并进去、不单立一刀）**
+  + 收口后追加的刀⑧）；**S3 注入面** =
+  [`specs/10-context-injection-s3`](../10-context-injection-s3/spec.md)（占用一嘴到底那半已交；
+  记忆注入面那半由 S4 整线退役取代）；**S4 退役面已收口** =
+  [`specs/11-simple-compaction-memory-retirement`](../11-simple-compaction-memory-retirement/spec.md)
+  （刀①–⑤ 全 ✅，九条验收勾齐；记忆整线删除 + 压缩收成单阈值一层）
   （方案定稿 2026-10-17 · 压缩侧层序 2026-10-18 核对后重定 ·
   ADR-0007 已成文并提交）。开工闸原写"`specs/03-structural-debt` 线完成后再启动"，
   由用户 2026-10-18 指令改为**先转本线、拆分层暂停**
@@ -88,7 +90,7 @@
 | S1 数据面 | **施工 spec 已开 = [`specs/05-memory-data-plane-s1`](../05-memory-data-plane-s1/spec.md)**（2026-10-18 现状取证后重写范围：文件库与索引已在，S1 做的是把"sqlite 真源 + md 镜像"扳成 md 唯一真源，四类型与排除清单补进 frontmatter 与提示词，`obsolete/` 软删，存量导出改道） | 无 | A / E |
 | S2 压缩面 | **施工 spec 已开 = [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)**（2026-10-19 现状取证：压缩本体已随审计批 C 删除、只剩 `CompactionOutcome` 与 `ContextCompacted` 重放链两件活物，而占用锚点与自动收起现在长在 S4 要退役的 `organize/` 里 ⇒ 第一刀是搬家不是新建）；主层深度压缩（模板 / 续接框架 / 熔断）+ 落盘 + 微压缩 + 滑窗保护网 + 阈值接线 + `ContextCompacted` 复用 + 设置项；**刀① ✅ 2026-10-19**（锚点与有效阈值搬进 `context_budget`，判据 `SS16a/b/c`） | 无（可与 S1 并行） | B |
 | S3 注入面 | **施工 spec 已开 = [`specs/10-context-injection-s3`](../10-context-injection-s3/spec.md)**（2026-10-20 取证六条实况写在那份 spec 里：五个段的现组装点、`learnEnabled` 那档是**残留的第二真源**、全局 `MEMORY.md` 从未进过注入面、预取键不含 mtime、`<repo_context>` 至今是静态串、占用读数两制并存）；内容 = 索引注入替换 + guidance 改写 + 预取键适配（+ S2 账 ⓟ 并进来那一刀） | S1 | C |
-| S4 退役面 | organize 管线 / 树工具族 / sqlite 读路径下线（数据冻结），`/整理` 去向落地 | S1+S2+S3 稳定一轮 | D |
+| S4 退役面 | **施工 spec = [`specs/11-simple-compaction-memory-retirement`](../11-simple-compaction-memory-retirement/spec.md)（刀①–⑤ 全 ✅，九条验收勾齐）**：organize 管线 / 树工具族 / sqlite 读路径 / 全部记忆 UI 与命令整线删除（数据按非目标冻结在原地），压缩收成单阈值一层，`/压缩` 保持手动可用 | S1+S2+S3 | D |
 | S5 收尾 | `docs/design/authority/` 五篇重写合一 + ADR 定稿 + roadmap 勾选 | S4 | — |
 
 ## 任务
@@ -106,24 +108,25 @@
       `specs/09` 的取证节与刀①–⑧，**S2 十二条验收全绿、这条线已收口**（刀⑧ 补掉 ⓜ 的
       自锁那一半）；"窗口取不到时走哪边"那处待点头已由裁定 A 落进
       `context_budget::effective_threshold` 的 `None` 分支
-- [ ] S3 落地：交施工 spec 等确认 = [`specs/10-context-injection-s3`](../10-context-injection-s3/spec.md)
-      （2026-10-20 取证成稿：四刀计划 + 三处待定项，其中 ⓟ 归刀④）；**过完才动代码**
+- [x] S3 落地：**由 S4 取代收口**（[`specs/11`](../11-simple-compaction-memory-retirement/spec.md)
+      刀②/③c 把记忆注入面整线退役，原"两段索引指针行"计划不再执行；占用一嘴到底那半 =
+      [`specs/10`](../10-context-injection-s3/spec.md) 刀④a/④b 已交）
 - [ ] 补测试 → `make check` 全绿
-- [ ] 数据侧改动前把相关目录复制进备份目录
+- [ ] 数据侧改动前把相关目录复制进备份目录（**S4 不适用**：specs/11 非目标明确"不删磁盘数据"）
 
 ## 影响范围
 
 | 文件 / 目录 | 改动 |
 | --- | --- |
-| `crates/memory-tree/` | S4 大面积冻结退役；S1 起不再新增写入点 |
-| `crates/kernel-agent/src/middleware/memory_inject/` `tree_context.rs` | S3 重写注入面 / S3 移除 |
-| `crates/kernel-agent/src/middleware/compact.rs` | S2 复用契约面，压缩本体新增（可能新中间件目录） |
-| `desktop/src-tauri/src/organize/`（约 25 文件） | S4 冻结退役 |
-| `desktop/src-tauri/src/memory*.rs` `memory_*.rs` `memory_index.rs` | S1 改道文件库；S4 删 sqlite 读路径 |
-| `plugins-src/memory-sqlite`（现役 9 插件之一） | S4 退役（plugin-service 注册面同步摘除） |
-| 前端记忆页 / 记忆树看板（TreeBoard 族）/ 设置页 / 用量环文案 | **订正（2026-10-19 决策人口径）**：`MemoryPage` 那两个 tab（记忆树看板 + 事实库）**整体退役删除**，不在上面改道重建；§E①② 那两件事（三枚行为开关 + 每层一行）在**设置应用**重建，归 S4 一并做。S1/S3 只动数据与注入面。文案中英成对 |
+| `crates/memory-tree/` | 已随 S4 整 crate 删除（specs/11 刀③c） |
+| `crates/kernel-agent/src/middleware/memory_inject/` `tree_context.rs` | 已随 S4 整目录/整文件删除（specs/11 刀③c） |
+| `crates/kernel-agent/src/middleware/compact.rs` | S2 主层压缩已落；S4 刀① 起它是唯一的自动压缩层 |
+| `desktop/src-tauri/src/organize/`（约 25 文件） | 已随 S4 整目录删除（specs/11 刀③b/③c） |
+| `desktop/src-tauri/src/memory*.rs` `memory_*.rs` `memory_index.rs` | 已随 S4 整族删除（specs/11 刀③c） |
+| `plugins-src/memory-sqlite`（原现役 9 插件之一） | 已随 S4 删除（插件数 9 → 8） |
+| 前端记忆页 / 记忆树看板（TreeBoard 族）/ 设置页 / 用量环文案 | 已随 S4 刀② 整线退役删除（`MemoryPage` 两个 tab 均在删列，未重建） |
 | `<repo>/.Locowrk/`（handoff.md → `MEMORY.md` + `journal/`） | 布局迁移 + `<repo_context>` 注入源切换 + 收束更新提示词改写；存量 handoff 一次性按主题归并 |
-| `docs/design/authority/`（Context and Memory / Memory Tree v2 / Organize Summary v1 / Cross-Session Recall v1 / Memory File-ization 五篇） | S5 重写合一（先改标准再写码）；S1 开工前的"标准"= 方案稿 + ADR-0007 |
+| `docs/design/authority/`（Context and Memory / Memory Tree v2 / Organize Summary v1 / Cross-Session Recall v1 / Memory File-ization 五篇） | **待 S5 重写合一**（先改标准再写码）；S4 已把记忆线整线退役，现行形状以 [`specs/11`](../11-simple-compaction-memory-retirement/spec.md) 与代码为准，这五篇别再当现行规范 |
 
 ## 风险与回滚
 

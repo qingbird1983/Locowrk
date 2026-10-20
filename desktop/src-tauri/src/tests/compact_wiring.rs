@@ -1,5 +1,6 @@
-//! **接线面**压缩用例（S2 刀④）：驱动 `run_turn` 本体，证「runner 的 step 边界那句
-//! 压缩调用真的在跑、而且落到了磁盘上」。
+//! **接线面**压缩用例（S2 刀④；S4 specs/11 AC-1 起补齐顺序断言）：驱动 `run_turn`
+//! 本体，证「runner 的 step 边界那句压缩调用真的在跑、一轮只跑一次、而且落到了磁盘上；
+//! 压缩事件排在本步产出之前 = 模型确实停着等它」。
 //!
 //! 为什么这一簇必须存在：`compact/tests_deep.rs` 那十一条直接调 `Compactor::run`，
 //! 全绿也只证明那个函数自己对——把 `runner/mod.rs` 里那三行删掉，它们一条都不会红。
@@ -9,6 +10,7 @@
 
 use super::*;
 
+use crate::events::AgentEvent;
 use crate::llm::{SummaryClient, SummaryUsage};
 use crate::runner::{run_turn, UsagePolicy};
 use async_trait::async_trait;
@@ -132,8 +134,12 @@ fn seed_log(log: &std::path::Path, id: &str, session: &Session) {
 
 /// 正半边：跑到终态，内存与磁盘都要有那条 `ContextCompacted`，而且压后重放的投影
 /// 头一条就是那条共享构造函数造的摘要消息（= 下一个 step 发给模型的那一份）。
+/// 顺序断言（specs/11 AC-1）：压缩事件排在触发轮的 `LlmUsage` 之后、本步任何
+/// `AssistantMessage` 之前——`run_turn` 是 `await cp.run` 后才进 `kernel.step_as`，
+/// 模型没有并发开工；`DemoLlm` 不报用量，所以"下一步的 LlmUsage"在这条夹具里
+/// 由"本步产出"等价承重（日志只追加，先落的事件就是先发生的）。
 #[tokio::test]
-async fn run_turn_compacts_at_the_step_boundary_and_mirrors_it_to_disk() {
+async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
     let root = crate::testutil::work_dir("s2-compact-wiring");
     let (cp, cli) = compactor_with(&root);
     let log = root.join("sessions");
@@ -165,13 +171,57 @@ async fn run_turn_compacts_at_the_step_boundary_and_mirrors_it_to_disk() {
     .expect("turn ok");
     assert!(steps >= 1, "本轮照常跑完：{steps}");
     assert!(cli.count() >= 1, "step 边界那句调用必须真的跑过");
+    // AC-9 接线面：压成的那条要**实时**推到 sink，且随后那条 context_usage 的
+    // 读数要回落。只落内存/磁盘不够——界面「已压缩」系统条与浮层读数都由这两条
+    // 事件长出来；自动路径漏投影时，用户得切会话重放才看得见（真窗口抓到过）。
+    let pushed = collector.events();
+    let names: Vec<&str> = pushed.iter().map(kind).collect();
+    assert!(
+        names.contains(&"context_compacted"),
+        "自动压缩成功后要立刻推 context_compacted 给界面，实测事件序 {names:?}"
+    );
+    let last_used = pushed
+        .iter()
+        .rev()
+        .find_map(|e| match e {
+            AgentEvent::ContextUsage { used, .. } => Some(*used),
+            _ => None,
+        })
+        .expect("每步后都有一条 context_usage");
+    assert!(
+        last_used < 900_000,
+        "触发读数 900000 压缩后必须回落（浮层看到的 used），实测 {last_used}"
+    );
     assert_eq!(
         cli.count(),
         1,
         "一轮只该花一条摘要往返：压完后占用读数换吃压后投影，不许每个 step 再压一次"
     );
     let in_memory = compacted_count(&session);
-    assert!(in_memory >= 1, "内存会话里要有一条压缩事件");
+    assert_eq!(in_memory, 1, "一轮只许压一次（AC-1 的 once）");
+    // 顺序（AC-1）：触发轮那份 LlmUsage 在压缩事件之前；本步的答复在它之后。
+    // 日志只追加 ⇒ 位置就是先后；两条一起才说明"模型停着等压缩、压完才继续"。
+    let events = session.events();
+    let compact_at = events
+        .iter()
+        .position(|e| matches!(e, SessionEvent::ContextCompacted { .. }))
+        .expect("内存会话里要有一条压缩事件");
+    let trigger_at = events[..compact_at]
+        .iter()
+        .rposition(|e| matches!(e, SessionEvent::LlmUsage { .. }))
+        .expect("触发轮的 LlmUsage 应在压缩事件之前");
+    assert!(trigger_at < compact_at, "压缩必须晚于触发读数");
+    let step_output_at = events
+        .iter()
+        .enumerate()
+        .skip(compact_at + 1)
+        .find(|(_, e)| matches!(e, SessionEvent::AssistantMessage { .. }))
+        .map(|(i, _)| i)
+        .expect("压缩后本步要产出一条答复");
+    assert!(
+        compact_at < step_output_at,
+        "压缩事件必须早于本步产出 = 模型停着等它（compact_at {compact_at} / output_at {step_output_at}）"
+    );
     // 磁盘镜像同数——不然是"只在内存里压了"，切会话/重启后重放看不见这一笔
     let path = session_store::session_file(&log, "s-cp").expect("会话日志路径可算");
     let (restored, _) = session_store::load_session(&path).expect("磁盘上有这份日志");

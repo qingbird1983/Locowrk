@@ -198,6 +198,13 @@ pub async fn run_turn(
             if let Some(dir) = log {
                 session_log::append_slice(dir, session_id, session, compact_start);
             }
+            // S4 刀⑤ · AC-9：自动压缩的界面反馈。压成的那条 `ContextCompacted` 必须
+            // 在**本步开工前**就到 sink——与手动 `/压缩`（`commands/compact.rs`）吃同一份
+            // `project_events` 构造。缺这一句时压缩只在内存与磁盘上发生，界面要等切
+            // 会话重放才看见，「到线 ⇒ 界面出现压缩反馈」在自动线上就恒不成立。
+            if matches!(&out, crate::compact::deep::Outcome::Compacted { .. }) {
+                project_new_events(session, compact_start, session_id, sink, false, false);
+            }
             tracing::debug!(session = session_id, ?out, "步间主层压缩读数");
         }
         let before = session.len();
