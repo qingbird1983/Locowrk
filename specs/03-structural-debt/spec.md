@@ -80,6 +80,11 @@
         hang_guard 的外层保护网**故意不用 `bounded`** 而用 `tokio::time::timeout`——自测的兜底不能和被测机制同源，
         否则 `bounded` 自己失去上界时那条自测会和它一起挂住（同义反复 = 零证明力，这是 M3 第一版踩到的）。
       · 耗时读数：`tests_approval` 面 25 条 1.25 秒、`tests_permission` 面 8 条 0.02 秒 ⇒ 上界只兜退化，不拖正常路径
+      · **已知脆弱（2026-10-20 S3 刀④b 门禁实测登记，未修）**：
+        `decider_fails_within_budget_when_no_card_is_ever_emitted` 在整库并行满载的首跑里红过——
+        轮询 75 × 2ms 累加 + 外层保护网 1.5 秒，Windows 计时器粒度下单跑已耗 1.17 秒，调度一挤就击穿
+        （panic = `Elapsed(())`）；单跑与宿主全量重跑均绿，与刀④b 改动无关。修法候选 = 外层保护网
+        放宽或改 `tokio::time::pause()` 虚拟时钟（需 `test-util`）——涉及判据语义，单独一刀再动。
 - [x] **T8** 把散在 `tmp/` 的历史判据**收口**：该常驻的升进 `scripts/`，其余明确作废
       · 升格一条：`tmp/q5-parity.mjs` → `scripts/check-schema-parity.mjs`（`memories` 表在宿主与插件
         **各有一份实现**、开同一个库文件，只改一侧时 cargo 与 vitest 全绿、运行时才炸）；十档每档

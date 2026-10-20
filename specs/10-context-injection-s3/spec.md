@@ -138,20 +138,29 @@
       `ContextUsage.used` = 240 000 而 `threshold` 照旧 8 000——分子顶过线不改分母）。
       ⚠ 本条改的是**读数口径**不是修 bug：无上报的树会话进度条从此按全量历史估算（只会变高），
       方向与代价写在 `context_budget.rs` 头注与下面刀④a 施工记录第 3 条。
-- [ ] AC-S3-8 扣减链显形（ⓟ 的另一半）：式子的真源 = `context_budget::effective_threshold`
-      （`= min(滑杆值, 窗口 − output_reserve)`，`output_reserve` = `min(输出上限 ?? 32K, 21K)`，
+- [x] AC-S3-8 扣减链显形（ⓟ 的另一半）**✅ 刀④b 2026-10-20**：式子的真源 =
+      `context_budget::effective_threshold`（`= min(滑杆值, 窗口 − output_reserve)`，
+      `output_reserve` = `min(输出上限 ?? 32K, 输出预留上限)`；上限自本刀起是设置项
+      `context.outputReserveCapTokens`，缺省 21 000、区间 0–64 000，
       **只扣一次**——AC-S2-2 的靶就是扣两遍；
       **引用符号名而不是行号**——刀④a 在本文件里加了 `occupancy`，行号当场漂了，而这一条
       是刀④b 要照着动码的，钉行号等于给下一刀留假证据。取证 9③ 那处行号**保留**，
       它是 2026-10-20 当时的读实证据，改了就失真）。
       界面要能一眼读出这条链：`窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值 → 已用 / 有效阈值`，
       外加一格「窗口 − 有效阈值 = 留给输出与下一轮净增的空位」——**这颗空位就是 ⓟ 说的那条
-      关系**（净增超过它 ⇒ 撞窗）；输出预留那颗数必须是**带出处的读数**（写出"21K 封顶"或
-      "按你钉的输出上限 8K"）而不是隐藏的常量。逐态写清各看到什么：窗口取不到（`None` 那一支，
-      阈值原样吃滑杆）/ 窗口取到且滑杆更小 / 窗口取到且被预留封顶（滑杆说了不算）。
-      用户把输出上限钉大钉小 ⇒ 这一格当场跟着变（`min` 的两侧都要有用例反证，
-      沿 `reserve_follows_a_small_ceiling` 那条既有纪律）。
-- [ ] AC-S3-9 `make check` 全绿；涉界面两刀（刀①④）各自在真实窗口自截图核对后再给你看。
+      关系**（净增超过它 ⇒ 撞窗）；输出预留那颗数必须是**带出处的读数**（写出"模型上限说话" /
+      "用户上限封顶" / "缺省档"）而不是隐藏的常量——来源由算式与数一起产出（`ReserveSource`），
+      不是前端拿数字反推。逐态写清各看到什么：窗口取不到（`None` 那一支，阈值原样吃滑杆，
+      链只显示有效阈值一行）/ 窗口取到且滑杆更小 / 窗口取到且被预留封顶（滑杆说了不算）。
+      用户把输出上限钉大钉小 ⇒ 这一格当场跟着变（`min` 的两侧各有用例反证：
+      模型侧 = `reserve_takes_the_smaller_of_ceiling_and_cap`，用户侧 =
+      `reserve_follows_the_tunable_cap`；来源四档 = `reserve_readings_carry_their_source`）。
+      实测与逐态文案见下面刀④b 施工记录第 3 条。
+- [x] AC-S3-9 **✅ 2026-10-20 刀④b**：`make check` 末行 `▶ check 全绿`（宿主 685 / 0 失败、
+      vitest 198 / 27 文件；首跑有一条**既存**审批用例负载敏感红，单跑与全量重跑均绿，
+      已登记 specs/03）。刀① 是注入面、没有界面面；刀④ 已在真实窗口逐屏核对：
+      设置页「输出预留上限」行、旧会话无链、新轮次三行链、上限 21000/8000 两档对比
+      （读数与"打开哪、点哪、看到什么"见刀④b 施工记录第 3 条）。
 
 ## 非目标
 
@@ -189,8 +198,12 @@
    尺，两个消费点还得互相引用）+ 拒收读数经 `UsagePolicy.refused_tokens` 进进度条 +
    `tree` 参数整链摘除 + 装配口 `assemble`（顺带关闭 specs/09 挂账 ⓛ）+ 判据 `SS30`/`SS30b`；
    AC-S3-7 ✅。
-   **4b（待做）** = 扣减链上界面（`窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值 → 已用/阈值`）
-   + 输出预留那颗数做成可调项（三问裁定 ③）；AC-S3-8。
+   **4b ✅ 2026-10-20** = 扣减链上界面（`窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值 →
+   已用/阈值` + 空位行）+ 输出预留上限做成可调项 `context.outputReserveCapTokens`（缺省
+   21 000、区间 0–64 000、越界整笔拒）+ `ContextUsage` 载荷加三枚（`slider_tokens` /
+   `output_reserve` / `output_reserve_source`，全 `serde(default)` 追加末尾，旧日志可读）；
+   判据 `SS16c` 改四档 + 新增 `SS16d`；AC-S3-8 ✅、AC-S3-9 的 `make check` 半 ✅。
+   **施工记录见下面那节**。
    ⚠ 原计划里"拒收读数进 `ContextUsage` 载荷"这一格 **4a 没做，且决定不做**：分子已经是
    `occupancy` 的结果，事件里那个 `used` 就含拒收那一档；再单独传一颗数是"把同一个数的两个
    来源都摆上界面"，而 4b 要显示的扣减链是**分母**那条式子，不是分子的第 3 档。
@@ -542,6 +555,70 @@ push 同时塞回手写字面量与 `.context_tokens(`。`make gates` 退出码 
 （AC-S3-9 那一格仍欠，见任务 ⓠ/真窗口那笔）。
 
 
+## 刀④b 施工记录（✅ 2026-10-20 · ⓟ 的后半：扣减链显形 + 预留上限可调）
+
+**1. 一个纯函数同时给"数"与"出处"。** `context_budget::reserve_reading(max_output, cap)
+-> (u64, ReserveSource)` 是预留量的唯一算式（`min(输出上限 ?? 32K, 用户上限)`），来源
+`Default / Model / Capped` 与数一起产出；`output_reserve` 退成它的薄壳，`effective_threshold`
+多吃一枚 `cap` 并把同一组入参交给它。为什么来源不能由前端拿数字反推：同一个数 8 192
+可能来自"模型钉死"也可能来自"用户上限削平"，前端只拿到数就只能猜；数一次、说明另算一次
+正是双出处。来源串写进载荷（`"default"|"model"|"capped"`，空串 = 旧快照）。
+
+**2. 设置项：`context.outputReserveCapTokens`。** 缺省 `OUTPUT_RESERVE_CAP_DEFAULT = 21_000`
+= 改前那颗常量；区间 0..=64_000（0 = 不为输出让位，设置页文案明说更容易撞窗）；越界整笔拒、
+不钳。等价性怎么证：`context_budget/tests.rs` 既有用例**期望值一字未动**，只给每个调用点
+补了一枚 `21_000` 实参——除签名外行为零变化，不是"我说它等价"。
+⚠ 三问原话是"既有测试一字未改仍然绿"，字面上不成立（签名多了第四参），这里按实际形状记：
+**期望与判据一字未动，实参逐个补 `21_000`**。新增 `reserve_follows_the_tunable_cap` 证用户侧
+那一半（cap 调小 / 调大各一次 + 模型值更小时仍按模型）。设置读口
+`ContextSettings::output_reserve_cap_tokens()` 的消费点恰四个（`SS16d`）：聊天组装点 /
+定时引擎 / 整理批量 / 微压缩链，与 `effective_threshold` 的既有四个消费点同形。
+
+**3. 界面逐态（AC-S3-8 的"看到什么"）。** `ContextUsagePopover.vue` 在「上下文窗口」行后
+插入三行，只在 `sliderTokens > 0`（= 新载荷）时渲染：
+- **窗口未知**（`windowTokens = 0`）：只出「有效阈值」一行，文案"窗口未知：阈值原样取滑杆 X，
+  不扣输出侧预留"；预留行与空位行不渲染——没有窗口就不摆一个除数为 0 的减法。
+- **滑杆更小**：三行全出，文案"滑杆 X 小于窗口空位 Y，阈值取滑杆"。
+- **窗口封顶**（`threshold < slider`）：文案"滑杆 X 超过窗口空位 Y，阈值被窗口空位封顶"；
+  空位行 = `窗口 − 有效阈值`（不是 `窗口 − 预留`——留给输出与下一轮净增的就是这一段）。
+旧快照（字段缺席 ⇒ `sliderTokens = 0`）：整块不渲染；前端不按当前设置替历史轮次现算链。
+来源文案三档取实际实现：`按模型输出上限 N` / `已按你的上限 N 封顶` / `模型未报输出上限，
+按缺省 N`。
+
+**真窗口读数（2026-10-20，当前模型窗口 1M / 滑杆 100K）**：上限 21000 时链 =
+`−≈20.5K · 已按你的上限 ≈20.5K 封顶` / `≈10.1K / ≈97.7K · 滑杆 ≈97.7K 小于窗口空位
+≈1003.5K` / `空位 ≈926.3K`；把上限改成 8000 保存后再发一轮，预留行变 `−≈7.8K ·
+已按你的上限 ≈7.8K 封顶`，其余两行不动（滑杆仍说话）——设置真接线，不是只读摆设；
+测完已改回 21000 并保存。旧会话（无该字段）浮层只有"已用 / 上下文窗口 / 本回合…"
+那几行，链整块缺席。窗口未知与窗口封顶两态真窗口撞不到（滑杆上限 800K < 1M 窗口
+空位），由新增 `desktop/tests/context-usage-popover.spec.ts` 五行覆盖。
+
+**4. 判据与变异。** `SS16c` 从三档改四档：② 从"点名 `OUTPUT_RESERVE_CAP_TOKENS`"改成**任意**
+`const \w+: u64 = 21_000;` 恒 1——改名搬去 `settings/context.rs` 不算漂，复制第二颗才是；
+④ 新增 `fn reserve_reading(` 恒 1。新增 `SS16d` = 上限读口恰四个消费点（文件集合，防"某条
+链绕过设置"）。`make selftest` 里两条都报红：SS16c 宽变异（塞回一颗 `= 21_000` 常量 +
+第二个 `reserve_reading` 定义），SS16d 窄变异（push 第五个消费点）。⚠ 本刀判据自己红过一次
+（SS16d 正则不带前导点会把 getter 定义数成调用）——与 SS23b 同一条教训，写进判据注释。
+
+**5. 门禁（本刀实测）**：`make check` 末行 `▶ check 全绿`（宿主 685 条 / 0 失败，比刀④a 的
+682 多 3 = 本刀新增 3 条 reserve 用例；vitest 198 条 / 27 文件，其中新增
+`context-usage-popover.spec.ts` 5 条 = 扣减链四态 + 来源三档，两发变异分别打中"空位算成
+窗口 − 预留"与"capped 落进 default"各一条；两处 clippy 无告警）。
+`make selftest` 退出码 0、89 个 ✓，`SS16c` / `SS16d` 各有一条"变异可见"。
+⚠ 本刀门禁首跑红过一条**与本刀无关**的既存用例
+`tests_approval::hang_guard::decider_fails_within_budget_when_no_card_is_ever_emitted`
+（并行满载时 75 次 2ms 轮询 + 1.5s 外层保护网被调度延迟击穿；单跑与宿主全量重跑均绿，
+实测单跑 1.17s 已贴 1.5s 的线）。已按"发现问题登记"写进 specs/03，不在本刀顺手修。
+
+**6. 改动面（两个读数分开写）。** 代码面 = 31 文件 +733 / −59（含判据与前端测试，其中
+`context-usage-popover.spec.ts` 新增 152 行）；落地提交（含本 spec、specs/03 与 roadmap）
+的读数在提交正文里写。前端没动 `UsageRing.vue` / `ContextProgressBar.vue`——分子与圆环
+读数一字未改，链只加在浮层；`channels.ts` 也无需动（载荷走既有事件推送）。
+
+**7. 本刀没碰的**：AC-S3-9 的"真窗口自截图"那半在提交后补读数；ⓠ（注入埋点）仍等决策人
+挑出路；ⓝ/ⓞ、ⓖ/ⓗ 按原挂账不动。
+
+
 ## 开工三问与裁定（2026-10-20 决策人「三问照推荐案，开跑」⇒ 三处全按推荐案落地）
 
 ① **刀④ 的可见性用哪种既有形态**（本仓没有跨字段校验先例，取证 9④ 已列三种可借）
@@ -583,8 +660,10 @@ push 同时塞回手写字面量与 `.context_tokens(`。`make gates` 退出码 
 | `desktop/src-tauri/src/memory_learn/` | 刀③b ✅ **整目录已删除**（8 文件 · 933 行）；契约侧 `recall_relevant`/`LearnWeights`/`RecallQuery`/`VALUE_INJECT_MAX_CHARS`、设置面 `learnEnabled`+四枚权重、前端那一格与中英文案、`breakdown` 观测通路与解释面板同批离场；`inject_view.rs` 缩到 60 行只管 `overview` |
 | `desktop/src-tauri/src/state/waterfall.rs` | 刀③：摘 `TreeDirectoryInject` 一环（头注那"注册序就是执行序"的段要订正） |
 | `desktop/src-tauri/src/runner/mod.rs` `compact/deep.rs` `context_budget.rs` `commands/chat.rs` `scheduler/engine.rs` `compact.rs` `state/{memory_stack,mod,app_state,background}.rs` `scheduler/mod.rs` `organize/assemble.rs` | 刀④a：占用收成 `occupancy` 一个出处 + `tree` 参数整链摘除 + 装配口 `assemble`（**`events.rs` / `runner/projection.rs` 不动**：载荷没加字段，理由见上面计划第 4 条那条 ⚠） |
-| `desktop/src/{components/ContextProgressBar.vue,components/chat/UsageRing.vue,components/chat/ContextUsagePopover.vue,stores/chat/{projection,state}.ts,types/events-agent.ts,lib/api/channels.ts}` | 刀④b：分子不动（后端已换源，字段形状一字未改）+ 扣减链一行（文案中英成对） |
-| `desktop/src-tauri/src/settings/context.rs` + `components/settings/ContextSection.vue` + `locales/{zh-CN,en}/settings.ts` | 刀④（若裁定 ③ 选可调项则多一格字段）：说明文案引用扣减链 |
+| `desktop/src/{components/chat/ContextUsagePopover.vue,stores/chat/{projection,state}.ts,types/events-agent.ts,locales/{zh-CN,en}/commerce.ts}` | 刀④b ✅：分子与圆环不动；浮层扣减链三行（预留 / 有效阈值 / 空位）+ 三档来源文案与逐态说明（中英成对）；`UsageRing.vue` / `ContextProgressBar.vue` / `channels.ts` **未动** |
+| `desktop/src-tauri/src/{context_budget.rs,settings/context.rs,settings/view.rs,runner/mod.rs,events.rs,runner/projection.rs,commands/chat.rs,scheduler/engine.rs,organize/mod.rs,state/waterfall.rs}` + `crates/session-store/src/event.rs` | 刀④b ✅：`reserve_reading`（数 + 来源）一处；预留上限设置项（缺省 21 000 / 0–64 000 / 越界整笔拒）；`UsagePolicy` 加三枚并透传；`ContextUsage` 载荷追加三枚 `serde(default)` |
+| `desktop/src/components/settings/ContextSection.vue` + `types/settings.ts` + `locales/{zh-CN,en}/settings.ts` | 刀④b ✅：第五根数值旋钮「输出预留上限」+ 阈值说明文案引用扣减链 |
+| `desktop/src-tauri/src/context_budget/tests.rs` `tests_session_log/context_usage.rs` `tests/{polaris_rig,pressure_wiring,compact_wiring}.rs` `compact/tests_deep.rs` `desktop/tests/{context-section,chat-projection,context-usage-popover}.spec.ts` `scripts/check-single-source.mjs` | 刀④b ✅：3 条新 reserve 用例 + 既有调用补第四参 + 投影三字段 + 浮层逐态 5 条（两发变异各打中本档）+ `SS16c` 四档与 `SS16d` 新增（各配变异） |
 | `crates/kernel-agent/tests/prompt_layering.rs` `memory_inject/tests/*` `desktop/tests/*` `scripts/check-single-source.mjs` | 全程：形状用例订正 + 新判据（标签等值 / 占用等值 / 退役名清单）+ 各配变异 |
 
 ## 风险与回滚
