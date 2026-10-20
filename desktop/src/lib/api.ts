@@ -25,8 +25,10 @@ export * from "./api/subagent";
 export * from "./api/schedule";
 export * from "./api/session-title";
 export * from "./api/probe";
-export * from "./api/memory";
 export * from "./api/developer";
-export * from "./api/tree";
 export * from "./api/pushes";
+// S4 刀②：这两族的 UI 入口已删；包装层与命令留到刀③与后端记忆面同删
+// （先删包装会让 check-commands 的「后端有、前端无入口」判红）。
+export * from "./api/memory";
+export * from "./api/tree";
 

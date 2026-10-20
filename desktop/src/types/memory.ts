@@ -290,17 +290,6 @@ export interface StreamView {
   totalRows: number;
 }
 
-/** embedding 模型区投影（⑬ 智能层共享基建）：无秘钥字段。 */
-export interface EmbeddingView {
-  /** 设置原值；null = 未填（后端按 provider 兜底：ollama → 本机 11434）。 */
-  baseUrl: string | null;
-  model: string | null;
-  apiKeySet: boolean;
-}
+// S4 刀②：`EmbeddingView` / `EmbeddingUpdate` 已迁往 `types/llm.ts`——记忆面
+// 退役后 embedding 只剩工具语义检索一个消费者，不再属于本簇。
 
-/** embedding 区部分更新：字段缺省 = 保持不变；传空串 = 清除。 */
-export interface EmbeddingUpdate {
-  baseUrl?: string;
-  model?: string;
-  apiKey?: string;
-}

@@ -24,7 +24,6 @@ import type {
   PluginsUpdate,
   ProviderInput,
   SettingsView,
-  
   ToolsUpdate,
 } from "../types";
 
@@ -186,8 +185,8 @@ export const useSettingsStore = defineStore("settings", {
     async saveContext(context: ContextUpdate) {
       await this.patchSettings({ context });
     },
-    /** 保存记忆注入区（⑪）：后端校验 + 换入 Memory-Inject 活配置，
-     * 保存即生效（下一轮请求就按新条数注入）。 */
+    /** 保存记忆注入区（⑪）：S4 刀② 设置分区已删，这个写入口留到刀③与
+     * 后端 `memory` 区同删（保持 settings API 面完整，不留半截形状）。 */
     async saveMemory(memory: MemoryUpdate) {
       await this.patchSettings({ memory });
     },

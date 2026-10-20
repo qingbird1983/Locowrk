@@ -1,5 +1,5 @@
 /**
- * 会话与运行态的读模型：会话元信息 / 检索命中 / 定时任务 / 整理与回收的载荷 / 通知。
+ * 会话与运行态的读模型：会话元信息 / 检索命中 / 定时任务 / 压缩返回值 / 通知。
  *
  * 由批 F-22（v2.175）从 `desktop/src/types.ts` 目录化拆出：**每个类型声明块逐字节原样搬移**，
  * 只改两处——①按引用面决定 `export` 与否（外部 import 过的与兄弟簇要用的留 `export`，
@@ -48,7 +48,8 @@ export interface SessionSchedule {
 }
 
 /** 轮级总结（Organize Summary Design v1）：一次整理区间的浓缩叙事，
- * 该批章节的父节点。 */
+ * 该批章节的父节点。S4 刀②：记忆树 UI 已删，而 `types/memory.ts` 的树视图
+ * 仍引用它（命令包装层留到刀③与后端同删，见 `lib/api/tree.ts` 头注）。 */
 export interface RunSummaryView {
   text: string;
   eventFrom: number;
@@ -57,9 +58,7 @@ export interface RunSummaryView {
   /** 项目视图带会话标注；会话视图内为空串。 */
   sessionId: string;
   sessionTitle: string;
-  /** 本轮区间内已定稿章节 id（数值序，队列 Q14）。归组权威源是后端投影的
-   * event_range ⇒ 前端**不要**再按区间反查章节（反查 = 第二个出处）；
-   * 汇聚流的组键就是这一条的 `eventFrom:eventTo`，成员就是这一串 id。 */
+  /** 本轮区间内已定稿章节 id（数值序，队列 Q14）。 */
   chapterIds: string[];
 }
 
@@ -67,30 +66,11 @@ export interface RunSummaryView {
  * 负载（省了多少 / 摘要预览）走 `agent://context-compacted` 推送——AGENTS §3 那条
  * "流式输出不塞进 command 返回值"，而且这样手动与自动共用前端那一条断层条构造，
  * 界面上不可能长出两种"压缩完成"。
- * `reason` = 后端**判据名**（不是人话）：文案住语言包，前端按名取（同
- * `OrganizeDonePayload.reason` 那处分支的先例）。取值域与 Rust 侧同源，
- * 由 `check-single-source` 的 SS24 钉住。 */
+ * `reason` = 后端**判据名**（不是人话）：文案住语言包，前端按名取。
+ * 取值域与 Rust 侧同源，由 `check-single-source` 的 SS24 钉住。 */
 export interface CompactNowView {
   compacted: boolean;
   reason: string | null;
-}
-
-/** 整理收束推送（lw://organize-done；手动/自动/恢复三路同源）。 */
-export interface OrganizeDonePayload {
-  sessionId: string;
-  users: number;
-  chapters: number;
-  mode: "recorder" | "rule";
-  status: "ok" | "degraded";
-  reason: string;
-}
-
-/** 熔断翻转推送（lw://organize-paused；仅翻转瞬间发）。 */
-export interface OrganizePausedPayload {
-  sessionId: string;
-  rebounds: number;
-  k: number;
-  m: number;
 }
 
 /** 浏览器页签开签推送（lw://browser-open；browser_open 工具 → 工作面板）。 */
@@ -114,7 +94,7 @@ export interface CacheBreakReport {
 }
 
 /** F2 reconcile 结果（memory_reconcile 命令返回；计数如实透出）。
- *  「影子 → 文件」方向的写动作随 S1 刀②c-2 退役，`healed`（愈合文件数）计数就此消失。 */
+ *  S4 刀②：记忆页已删，类型与命令包装层留到刀③与后端同删。 */
 export interface ReconcileSummary {
   scanned: number;
   created: number;

@@ -264,12 +264,11 @@ export function applyEvent(st: ChatState, e: AgentEvent) {
       if (e.summary_preview) st.noticeDetails[id] = e.summary_preview;
       break;
     }
-    case "context_summary": {
-      // 整理段落总结（v2.141）：断层缝合处的浓缩叙事块——实时与重放
-      // 同一分支（历史消息面，切会话回来照常在）。
-      st.items.push({ id: nextId(), kind: "summary", text: e.text });
+    // S4 刀②：整理轮级总结不再进转录（渲染块已删）。生产端仍在，刀③随
+    // organize 线删除；这里显式静默跳过——保留 case 是为了事件通道闸 R5
+    // （被订阅且会 emit 的 kind 必须有消费分支），旧日志重放也不长块。
+    case "context_summary":
       break;
-    }
   }
 }
 

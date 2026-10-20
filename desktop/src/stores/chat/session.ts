@@ -10,11 +10,8 @@ import {
   sessionList,
   sessionRename,
   subscribeAgentEvents,
-  subscribeOrganizeDone,
-  subscribeOrganizePaused,
   subscribeSessionTitle,
 } from "../../lib/api";
-import { pushOrganizeNotice } from "./notices";
 import { applyEvent } from "./projection";
 import type { ChatState } from "./state";
 import type { AgentEvent } from "../../types";
@@ -23,26 +20,6 @@ export async function init(st: ChatState) {
   await subscribeAgentEvents((e) => applyEvent(st, e));
   // v2.57 自动标题：旁车落盘后推送（侧栏 + 顶栏即时换名）
   void subscribeSessionTitle((p) => applySessionTitle(st, p.sessionId, p.title));
-  // M3 §3.37③：整理收束 / 熔断翻转 → SystemNotice（非当前会话忽略，
-  // 树文件本身是持久记录；「查看」动作跳记忆页，接线在 ChatTranscript）
-  void subscribeOrganizeDone((p) => {
-    if (p.sessionId !== st.sessionId) return;
-    pushOrganizeNotice(
-      st,
-      p.status === "degraded"
-        ? "notice.organizeDoneDegraded"
-        : "notice.organizeDone",
-      { users: p.users, chapters: p.chapters },
-      p.status === "degraded" ? undefined : ["view"],
-    );
-  });
-  void subscribeOrganizePaused((p) => {
-    if (p.sessionId !== st.sessionId) return;
-    pushOrganizeNotice(st, "notice.organizePaused", {
-      rebounds: p.rebounds,
-      m: p.m,
-    });
-  });
   // ㉕·对话区①（用户裁定）：启动落首页空态——不再自动接最近会话，
   // 继续哪条由用户从侧栏点开；列表照常拉（侧栏要有内容）。
   await refreshSessions(st);

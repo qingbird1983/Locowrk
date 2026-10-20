@@ -18,7 +18,8 @@ import { BREAKPOINT_LG, BREAKPOINT_MD, BREAKPOINT_SM } from "../lib/breakpoints"
 import { useWorkPanelStore } from "./work-panel";
 import type { SettingsSectionId } from "../lib/settings-index";
 
-export type Destination = "chat" | "plugins" | "memory" | "schedule" | "settings";
+// S4 刀②：`memory` 目的地随记忆面整线退役（导航 / 命令面板 / 页面三处同删）。
+export type Destination = "chat" | "plugins" | "schedule" | "settings";
 
 const prefs = loadSidebarPrefs();
 

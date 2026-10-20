@@ -5,9 +5,9 @@
  * `from "../types"` 的引用点一行都不用改（`moduleResolution: bundler` 会把
  * `../types` 解析到本文件）。
  *
- * 名单 = 实测 import 具名集合 56 条，不多不少：多一条 = 又把"谁在用"糊回去，
- * 少一条 = vue-tsc 当场报找不到名字。另有 4 条只在簇与簇之间流转（例如
- * `MemorySettingsView` 被 settings.ts 引、外面没人引）⇒ 它们在簇文件里是 `export`
+ * 名单 = 实测 import 具名集合，不多不少：多一条 = 又把"谁在用"糊回去，
+ * 少一条 = vue-tsc 当场报找不到名字。另有只在簇与簇之间流转、外面没人引的类型
+ * （例如 `ToolsSettingsView` 只被 settings.ts 引）⇒ 它们在簇文件里是 `export`
  * 但**故意不进 barrel**：barrel 的职责是"对外表面"，不是"内部布线表"。
  *
  * `settings.ts ⇄ llm.ts` 有一对簇级互相引用：type-only import 在编译期擦除，
@@ -24,12 +24,13 @@ export type {
   TurnState,
 } from "./events-agent";
 
-export type { BrowserOpenPayload, CacheBreakReport, CompactNowView, NotificationItem, OrganizeDonePayload, OrganizePausedPayload, ReconcileSummary, RunSummaryView, SessionMeta, SessionSchedule, SessionSearchHit } from "./session";
+export type { BrowserOpenPayload, CacheBreakReport, CompactNowView, NotificationItem, ReconcileSummary, RunSummaryView, SessionMeta, SessionSchedule, SessionSearchHit } from "./session";
 
 export type { AppearanceUpdate, BatchResult, ChatUpdate, ContextUpdate, DeveloperUpdate, ExposureDebug, SettingsView, ToolsUpdate } from "./settings";
 
+// S4 刀②：记忆树 / 记忆管理面的类型与命令包装层留到刀③与后端同删（UI 已无
+// 入口）；embedding 两型已迁 llm.ts，这里不再从 memory 转出。
 export type {
-  EmbeddingUpdate,
   InjectOverview,
   InjectView,
   LayerRow,
@@ -48,6 +49,6 @@ export type {
   TreeSummaryView,
 } from "./memory";
 
-export type { CatalogModelInfo, CatalogStatus, ImportApplyReport, ImportCandidate, ImportScanOutcome, LlmSettingsView, LlmUpdate, ModelTestResult, ProbeOutcome, ProviderInput, ProviderModelPricing, ProviderModelSources, ProviderModelView, ProviderModels, ProviderView, SubagentPin } from "./llm";
+export type { CatalogModelInfo, CatalogStatus, EmbeddingUpdate, ImportApplyReport, ImportCandidate, ImportScanOutcome, LlmSettingsView, LlmUpdate, ModelTestResult, ProbeOutcome, ProviderInput, ProviderModelPricing, ProviderModelSources, ProviderModelView, ProviderModels, ProviderView, SubagentPin } from "./llm";
 
 export type { AssetRefDto, ContentPartDto, FileTextDto, IdleInfo, InstalledPlugin, MarketplaceItem, PluginStateChange, PluginUsageView, PluginsUpdate } from "./plugins";

@@ -139,12 +139,6 @@ describe("分发表：每个事件动谁", () => {
     // （1953 不是整千）——本条只证差值没算反，格式化归它自己的用例。
     expect((sys.params as { saved: string }).saved).toBe("≈2K");
   });
-
-  it("context_summary 落独立的 summary 行（实时与重放同一分支）", () => {
-    const chat = useChatStore();
-    chat.onEvent({ kind: "context_summary", session_id: S, text: "上一轮的浓缩" });
-    expect(rowOf(chat, "summary")?.text).toBe("上一轮的浓缩");
-  });
 });
 
 describe("守卫：缺数据时不许虚构", () => {

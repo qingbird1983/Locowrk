@@ -25,7 +25,6 @@ import ToolsSection from "./ToolsSection.vue";
 import EmbeddingSection from "./EmbeddingSection.vue";
 import LanguageSection from "./LanguageSection.vue";
 import LlmSection from "./LlmSection.vue";
-import MemorySection from "./MemorySection.vue";
 import PluginsSection from "./PluginsSection.vue";
 import SessionsSection from "./SessionsSection.vue";
 import ShortcutSection from "./ShortcutSection.vue";
@@ -37,7 +36,6 @@ const SECTION_COMPONENTS: Record<SettingsSectionId, Component> = {
   chat: ChatSection,
   llm: LlmSection,
   context: ContextSection,
-  memory: MemorySection,
   embedding: EmbeddingSection,
   plugins: PluginsSection,
   tools: ToolsSection,

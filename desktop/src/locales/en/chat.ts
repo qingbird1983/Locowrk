@@ -93,14 +93,8 @@ export default {
     editResendFailed: "Edit & resend failed: {reason}",
     // ⑨ Compaction notice ([View details][Undo], Context doc §3.8.3)
     contextCompacted: "Compacted earlier messages, saved {saved} tokens",
-    // v2.143 organize hairline: done/paused land one line in place. The in-flight
-    // "Organizing…" line is gone with S2 knife ⑦ — manual organize moved into the
-    // developer panel, so nothing pushes a running state here anymore.
-    organizeDone: "Organized {users} turns into {chapters} chapters",
-    organizeDoneDegraded:
-      "Organized {users} turns into {chapters} chapters (memory manager unavailable, fell back to rule split)",
-    organizePaused:
-      "Auto organize paused for this session ({rebounds} consecutive rebounds hit the breaker m={m}); to resume, run \"Organize and reset\" in Settings → Developer → Memory tree.",
+    // S4 blade ② retired the organize done/paused keys with the memory face
+    // (the frontend no longer subscribes to lw://organize-done / -paused).
     // S2 knife ⑦ `/compact`: the backend only returns the *name* of the criterion
     // that stopped it; the human sentence lives here. Names stay in sync with the
     // Rust side via check SS24, and an unrecognized name falls through to

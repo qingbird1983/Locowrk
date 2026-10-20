@@ -26,7 +26,7 @@ const settings = useSettingsStore();
       </code>
     </div>
     <p class="px-1 text-[length:var(--lw-fs-12)] leading-relaxed text-ink-4">
-      {{ t("settings.sessionsMemory") }}
+      {{ t("settings.sessionsStorage") }}
     </p>
   </div>
 </template>

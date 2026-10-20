@@ -10,8 +10,13 @@
 //! `probe`（就地探测与诊断读数，全部不落盘）、
 //! `dialog`（OS 原生目录 / 存储 / 多选文件对话框）、
 //! `notifications`（应用内通知读与置读）。
-//! 原有十片（ask / assets / browser / llm / llm_import / memory / organize /
-//! plugins / schedule / sessions）与 `#[cfg(test)]` 那条点名再导出不受本刀影响。
+//! 原有各片（ask / assets / browser / llm / llm_import / plugins / schedule /
+//! sessions）与 `#[cfg(test)]` 那条点名再导出不受本刀影响。S4 刀②：
+//! `memory` / `organize` 两片只从前端 UI 撤入口；命令本体与注册**留到刀③**
+//! 与 `memory` / `organize` 宿主模块、`memory-tree` crate 同刀删除——先删一半
+//! 会让这 23 条命令变成无消费者的死代码（clippy `-D warnings` 当场红）。
+//! 前端 `lib/api/memory.ts` / `tree.ts` 的包装层同样留到刀③（否则
+//! check-commands 的「后端有、前端无入口」直接判红）。
 
 mod approvals;
 mod ask;

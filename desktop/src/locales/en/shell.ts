@@ -1,4 +1,4 @@
-// locales/en/shell.ts —— 12 个命名域：app / nav / status / common / confirm / sidebar / window / topbar / panel / workspace / model / palette
+// locales/en/shell.ts —— 13 个命名域：app / nav / status / common / confirm / sidebar / window / topbar / panel / workspace / model / palette / time
 // 由批 F-22b 从 locales/en.ts 逐字节搬来；命名域必须**只在本文件**定义一次
 // （index.ts 用对象展开合并，重复定义 = 后一份静默覆盖前一份，scripts/check-i18n.mjs 判红）。
 export default {
@@ -9,7 +9,6 @@ export default {
   nav: {
     chat: "Chat",
     plugins: "Plugin Market",
-    memory: "Memory",
     schedule: "Scheduled",
     settings: "Settings",
     notifications: "Notifications",
@@ -150,4 +149,14 @@ export default {
       settings: "Settings",
       commands: "Commands",
     },
-  },} as const;
+  },
+  // Relative time (sole consumer: lib/format.ts relativeTimeLabel).
+  time: {
+    just_now: "just now",
+    minutes: "{n} min ago",
+    hours: "{n} h ago",
+    days: "{n} d ago",
+    weeks: "{n} wk ago",
+    months: "{n} mo ago",
+  },
+} as const;

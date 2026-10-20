@@ -69,11 +69,6 @@ export default {
     toolsKindsCalls: "{kinds} tools · {calls} calls",
     toolsEst: "catalog ~{n} tokens",
     sessionCumulative: "Session total",
-    treeRow: "Memory tree",
-    treeChaptersShort: "{n} chapters",
-    expandRow: "Memory expands",
-    expandCalls: "{n} this session",
-    treeTail: "unorganized tail {n} tokens",
     cacheAlert:
       "Cache hit rate fell below {pct}% — a prefix break may have occurred (tool-set/system-prompt change or compaction)",
   },

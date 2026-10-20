@@ -206,3 +206,20 @@ export interface SubagentPin {
   model: string;
   thinkingLevel: string | null;
 }
+
+/** embedding 模型区投影（⑬ 智能层共享基建）：无秘钥字段。
+ * S4 刀② 从 `types/memory.ts` 迁来——记忆面退役后它只剩工具语义检索
+ * （`search_tools`）一个消费者，属本簇。 */
+export interface EmbeddingView {
+  /** 设置原值；null = 未填（后端按 provider 兜底：ollama → 本机 11434）。 */
+  baseUrl: string | null;
+  model: string | null;
+  apiKeySet: boolean;
+}
+
+/** embedding 区部分更新：字段缺省 = 保持不变；传空串 = 清除。 */
+export interface EmbeddingUpdate {
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+}

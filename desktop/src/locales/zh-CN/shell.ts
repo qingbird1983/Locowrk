@@ -1,4 +1,4 @@
-// locales/zh-CN/shell.ts —— 12 个命名域：app / nav / status / common / confirm / sidebar / window / topbar / panel / workspace / model / palette
+// locales/zh-CN/shell.ts —— 13 个命名域：app / nav / status / common / confirm / sidebar / window / topbar / panel / workspace / model / palette / time
 // 由批 F-22b 从 locales/zh-CN.ts 逐字节搬来；命名域必须**只在本文件**定义一次
 // （index.ts 用对象展开合并，重复定义 = 后一份静默覆盖前一份，scripts/check-i18n.mjs 判红）。
 export default {
@@ -9,7 +9,6 @@ export default {
   nav: {
     chat: "对话",
     plugins: "插件市场",
-    memory: "记忆",
     schedule: "定时",
     settings: "设置",
     notifications: "通知",
@@ -150,4 +149,15 @@ export default {
       settings: "设置",
       commands: "命令",
     },
-  },} as const;
+  },
+  // 相对时间（lib/format.ts relativeTimeLabel 的唯一消费面；S4 刀② 从
+  // 退役的记忆文案域迁来——会话列表、目录快照等处共用）。
+  time: {
+    just_now: "刚刚",
+    minutes: "{n} 分钟前",
+    hours: "{n} 小时前",
+    days: "{n} 天前",
+    weeks: "{n} 周前",
+    months: "{n} 个月前",
+  },
+} as const;

@@ -77,7 +77,6 @@ const allGroups = computed<PaletteGroup[]>(() => {
     [
       ["chat", "nav.chat"],
       ["plugins", "nav.plugins"],
-      ["memory", "nav.memory"],
       ["schedule", "nav.schedule"],
       ["settings", "nav.settings"],
     ] as const

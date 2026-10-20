@@ -3,8 +3,8 @@
  * 侧栏（UI shell doc §2.1 ①② / §2.3 v3.9 项目接管）：顶部动作区三行 =
  * 新建任务（Ctrl+N）/ 搜索（Ctrl+K 开 §3.15 命令面板——搜全部可操作项）/
  * 插件市场（原「扩展」上移改名，issue #5⑪）；会话树在 SessionGroups
- * （项目段接管对话管理，issue #4）；页脚 = 设置/记忆/定时/通知 + 版本号
- * （issue #12，设置图标 = 齿轮）；版本号 7 连点解锁开发者选项（§7-16②）；
+ * （项目段接管对话管理，issue #4）；页脚 = 设置/定时/通知 + 版本号
+ * （issue #12，设置图标 = 齿轮；S4 刀② 记忆入口退役）；版本号 7 连点解锁开发者选项（§7-16②）；
  * 折叠/拖宽在 use-sidebar-resize（§2.3，v3.9 拖拽不触发折叠）。
  */
 import { computed, onMounted, ref } from "vue";
@@ -136,13 +136,13 @@ const isMarket = computed(() => shell.destination === "plugins");
         <SessionGroups :sessions="chat.sessions" :fs-roots="settings.view?.tools.fsRoots ?? []" />
       </div>
 
-      <!-- 侧栏底（issue #12 序：设置/记忆/定时/通知）+ 版本号（连点解锁
-           开发者选项）；间距对原型（gap 2px / padding 0 8px） -->
+      <!-- 侧栏底（issue #12 序：设置/定时/通知；S4 刀② 记忆入口退役）+ 版本号
+           （连点解锁开发者选项）；间距对原型（gap 2px / padding 0 8px） -->
       <footer
         class="flex h-[var(--lw-toolbar-h)] shrink-0 items-center gap-[var(--lw-gap-2)] px-2"
       >
         <HoverTip
-          v-for="dest in (['settings', 'memory', 'schedule'] as const)"
+          v-for="dest in (['settings', 'schedule'] as const)"
           :key="dest"
           :text="t(`nav.${dest}`)"
         >
@@ -154,7 +154,7 @@ const isMarket = computed(() => shell.destination === "plugins");
             @click="shell.setDestination(dest)"
           >
             <Icon
-              :name="dest === 'memory' ? 'database' : dest === 'schedule' ? 'clock' : 'settings'"
+              :name="dest === 'schedule' ? 'clock' : 'settings'"
               :size="14"
               aria-hidden="true"
             />

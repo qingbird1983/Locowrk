@@ -6,20 +6,19 @@
 /** 相对时间的结构化结果：i18n key + 数参（前端 t() 渲染，§8.1 后端/工具
  * 只给结构化数据、文案归 locales 的同款纪律）。 */
 export interface RelativeTime {
-  /** memory.time.* 下的键。 */
+  /** time.* 下的键（S4 刀② 从 `memory.time.*` 迁出——相对时间是公共展示面，
+   * 不该寄居在已退役的记忆文案域）。 */
   key: string;
   n?: number;
 }
 
 /**
  * **单位契约自此进函数名**（v2.168 批 F-18，C10 顺带抓到一条真缺陷）：旧
- * `relativeTime` 只接 Unix 秒，而调用点的数据源其实分两族——记忆行
- * （`memory.rs` 的 `now_secs`）、通知（`notifications.rs` 的 `now_secs`）、会话
- * mtime（`persist.rs` 注释明写 Unix 秒）是秒；记忆树章节（`memory-tree` 的
- * `created_at: now_ms`）是毫秒。把毫秒当秒算 ⇒ `diffMs` 变**负** ⇒ 恒命中
- * `minutes < 1` ⇒ 那个时间**永远显示「刚刚」**（`ProjectTree.vue` / `TreeSection.vue`
- * 正是这个形状）。现在两个入口按单位命名，单位写错在调用点根本编译不出来，
- * 而不是等人去对七个数据源。
+ * `relativeTime` 只接 Unix 秒，而调用点的数据源其实分两族——通知
+ * （`notifications.rs` 的 `now_secs`）、会话 mtime（`persist.rs` 注释明写
+ * Unix 秒）是秒；`…Ms` 这类数据源（目录快照 updatedMs 等）是毫秒。把毫秒当
+ * 秒算 ⇒ `diffMs` 变**负** ⇒ 恒命中 `minutes < 1` ⇒ 永远显示「刚刚」。
+ * 现在两个入口按单位命名，单位写错在调用点根本编译不出来。
  */
 
 /** Unix 秒 → 相对时间档位（刚刚 / n 分钟前 / … / n 个月前）。 */
@@ -37,7 +36,7 @@ export function relativeTimeSec(tsSec: number, nowMs = Date.now()): RelativeTime
   return { key: "months", n: Math.floor(days / 30) };
 }
 
-/** 毫秒时间戳 → 同一套档位（记忆树章节 `created_at`、`…Ms` 这类数据源走这里）。 */
+/** 毫秒时间戳 → 同一套档位（`…Ms` 这类数据源走这里）。 */
 export function relativeTimeMs(tsMs: number, nowMs = Date.now()): RelativeTime {
   return relativeTimeSec(tsMs / 1000, nowMs);
 }
@@ -46,7 +45,7 @@ export function relativeTimeMs(tsMs: number, nowMs = Date.now()): RelativeTime {
  * 档位 → 人类文案的**唯一渲染处**（§8.1「只给结构化数据、文案归 locales」）。
  * 此前五个调用点各写一遍「`n` 有没有就分两个 `t()`」的同形逻辑（其中
  * `LlmSection.vue` 少写分支、直接 `t(key, { n: undefined })`——等价，因为
- * `memory.time.just_now` 文案里不含 `{n}` 占位，本批判据按两份语言的实文案核过）。
+ * `time.just_now` 文案里不含 `{n}` 占位，本批判据按两份语言的实文案核过）。
  * `tr` 注入而不是 import i18n：本文件保持可被纯逻辑判据直接驱动。
  */
 export function relativeTimeLabel(
@@ -57,8 +56,8 @@ export function relativeTimeLabel(
   // **必填** `Record<string, unknown>`（传 undefined = TS2769，本批 vue-tsc 实测），
   // 而该档文案两份语言包都不含 `{n}` 占位 ⇒ 空对象对输出零影响（判据逐例核过）。
   return rt.n === undefined
-    ? tr(`memory.time.${rt.key}`, {})
-    : tr(`memory.time.${rt.key}`, { n: rt.n });
+    ? tr(`time.${rt.key}`, {})
+    : tr(`time.${rt.key}`, { n: rt.n });
 }
 
 /**

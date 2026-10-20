@@ -13,7 +13,6 @@ import ChatTranscript from "./components/ChatTranscript.vue";
 import WelcomeHome from "./components/chat/WelcomeHome.vue";
 import Composer from "./components/chat/Composer.vue";
 import ContextProgressBar from "./components/ContextProgressBar.vue";
-import MemoryPage from "./components/MemoryPage.vue";
 import SchedulePage from "./components/schedule/SchedulePage.vue";
 import PluginMarket from "./components/PluginMarket.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
@@ -84,7 +83,7 @@ onMounted(() => {
   void settings.init();
   void notifications.init();
   // 浏览器页签开签（v2.144）：browser_open 工具 → 工作面板（App 生存期
-  // 订阅，organize-done 同款不反注册）
+  // 订阅，不反注册）
   void subscribeBrowserOpen((p) => workPanel.openBrowserTab(p));
 });
 </script>
@@ -162,12 +161,6 @@ onMounted(() => {
         :title="t('nav.plugins')"
       >
         <PluginMarket />
-      </DestinationShell>
-      <DestinationShell
-        v-else-if="shell.destination === 'memory'"
-        :title="t('nav.memory')"
-      >
-        <MemoryPage />
       </DestinationShell>
       <DestinationShell
         v-else-if="shell.destination === 'schedule'"

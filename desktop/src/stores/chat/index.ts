@@ -31,16 +31,13 @@ import { initialChatState } from "./state";
 import { defineStore } from "pinia";
 import type { AgentEvent } from "../../types";
 
-// 类型面在 ./types.ts；这里把它按**原 chat.ts 的公开面**原样转发（7 条，一条没减）。
-// 外部真 import 过的只有四条（实测 grep）：ChatItem / SystemItem / ToolItem / AttachmentItem，
-// 其余三条（SummaryItem / TurnUsage / SessionUsage）外面暂时没人用 —— 收窄导出面是**删除类**
-// 动作（批 F-22 那次是用户点名的），本刀不动它。`ChatState` 只在片与片之间流转，
-// 故意不进对外名单（对外名单的职责是"谁在用"，不是"内部布线表"）。
+// 类型面在 ./types.ts；这里把它按**原 chat.ts 的公开面**原样转发。
+// 外部真 import 过的只有四条（实测 grep）：ChatItem / SystemItem / ToolItem / AttachmentItem。
+// S4 刀②：`SummaryItem` 随 `context_summary` 退役（整理轮级总结不再进转录）。
 export type {
   AttachmentItem,
   ChatItem,
   SessionUsage,
-  SummaryItem,
   SystemItem,
   ToolItem,
   TurnUsage,

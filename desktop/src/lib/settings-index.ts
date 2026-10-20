@@ -19,7 +19,6 @@ export type SettingsSectionId =
   | "chat"
   | "llm"
   | "context"
-  | "memory"
   | "embedding"
   | "plugins"
   | "tools"
@@ -114,13 +113,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     labelKey: "settings.nav.context",
     icon: "panel",
     searchKeys: ["settings.contextTitle"],
-  },
-  {
-    id: "memory",
-    group: "agent",
-    labelKey: "settings.nav.memory",
-    icon: "database",
-    searchKeys: ["settings.memoryTitle"],
   },
   {
     id: "embedding",

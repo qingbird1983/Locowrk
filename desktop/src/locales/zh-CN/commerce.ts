@@ -70,12 +70,7 @@ export default {
     toolsKindsCalls: "{kinds} 种工具 · {calls} 次调用",
     toolsEst: "目录约 {n} tokens",
     sessionCumulative: "会话累计",
-    // M3 §3.37② 未整理尾巴行（有树才渲染）
-    treeRow: "记忆树",
-    treeChaptersShort: "{n} 个章节",
-    expandRow: "记忆展开",
-    expandCalls: "本会话 {n} 次",
-    treeTail: "未整理尾巴 {n} tokens",
+    // S4 刀②：记忆树 / 记忆展开行随记忆面退役（浮层不再有这两行）。
     cacheAlert:
       "缓存命中率跌破 {pct}%——可能发生了前缀断裂（工具集/系统提示变化或压缩）",
   },

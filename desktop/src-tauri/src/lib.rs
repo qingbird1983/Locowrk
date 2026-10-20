@@ -261,10 +261,9 @@ pub fn run() {
             commands::notification_read,
             commands::notification_clear,
             commands::compact_now,
-            // 手动整理（`/整理` 改语义之前的那条链）。刀⑦ 把主对话流的元操作换成了
-            // `/压缩`，但这条**不能删**：它是自动整理熔断（`paused_auto`）之后唯一的
-            // 复位口（`memory-tree/tree.rs::mark_manual` 只被这条链吃）。入口现在住在
-            // 设置 → 开发者 → 记忆树 那颗「手动整理并复位」按钮上。
+            // S4 刀②：UI 入口（记忆树面板 / 手动整理按钮）已删，但这两组命令
+            // **留到刀③**与 `organize` / `memory` 宿主模块、`memory-tree` crate
+            // 同刀删除——先删命令只会留下无消费者的宿主读口，clippy 红一片。
             commands::organize_now,
             commands::memory_tree_view,
             commands::memory_tree_sessions,

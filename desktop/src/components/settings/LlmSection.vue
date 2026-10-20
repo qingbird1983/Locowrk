@@ -51,27 +51,6 @@ async function onSelectDefault(providerId: string, model: string) {
   }
 }
 
-// ---- M2 记忆管理器（树 v2 §5.2）：与主模型同款更改浮层（模型选择器
-// 全站唯一实现——原 SettingsSelect 第二套形态，用户目检判同类多套）。
-// 空选 = 跟随主模型：两键都传空串清除（后端约定，见 MemoryUpdate）。
-const managerMenuOpen = ref(false);
-const managerAnchorEl = ref<HTMLElement | null>(null);
-const recorderProvider = computed(() => settings.view?.memory?.recorderProvider ?? "");
-const recorderModel = computed(() => settings.view?.memory?.recorderModel ?? "");
-const managerLabel = computed(() => {
-  if (!recorderProvider.value || !recorderModel.value) return t("settings.modelDefaultSame");
-  const p = providers.value.find((x) => x.id === recorderProvider.value);
-  return `${p?.label ?? "—"} · ${recorderModel.value}`;
-});
-
-function onSelectRecorder(providerId: string, model: string) {
-  void settings.saveMemory(
-    providerId && model
-      ? { recorderModel: model, recorderProvider: providerId }
-      : { recorderModel: "", recorderProvider: "" },
-  );
-}
-
 // ---- 思考语言（docs/design/archive/language of thought.md）：reasoning 用的
 // 语言。会话首请求锁死（前缀缓存红线），中途修改保存后提示「下个会话
 // 生效」；同值重选不保存不提示。
@@ -113,7 +92,7 @@ const catalogDetail = computed(() => {
   );
   // updatedMs 是毫秒：旧代码手写 `/ 1000` 再喂按秒算的函数（能对上，但单位靠人记），
   // 现在单位进函数名；旧版还少了 `n === undefined` 分支，just_now 档传 { n: undefined }
-  // ——两份语言包的 memory.time.just_now 都不含 {n} 占位，所以输出等价（判据按实文案核）。
+  // ——两份语言包的 time.just_now 都不含 {n} 占位，所以输出等价（判据按实文案核）。
   const rel = relativeTimeLabel(relativeTimeMs(catalogStatus.value.updatedMs), (k, p) => t(k, p));
   return `${src} · ${t("settings.catalogModelsCount", { n: catalogStatus.value.models })} · ${rel}`;
 });
@@ -359,34 +338,6 @@ function closeSetup() {
         </button>
       </SettingsRow>
 
-      <!-- M2 记忆管理器（§5.2）：与主模型行同款「当前值 + 更改」结构，
-           清单 = 同一个 DefaultModelMenu（+「跟随主模型」常驻档） -->
-      <SettingsRow
-        :title="t('settings.memoryManagerModel')"
-        :hint="t('settings.memoryManagerModelHint')"
-      >
-        <template #detail>
-          <span
-            class="mt-1 block text-[length:var(--lw-fs-12)]"
-            :class="recorderProvider && recorderModel ? 'text-ink-3' : 'text-ink-4'"
-          >
-            {{ managerLabel }}
-          </span>
-        </template>
-        <button
-          ref="managerAnchorEl"
-          type="button"
-          class="lw-btn flex items-center gap-1 px-3 py-1.5 text-xs text-ink-1"
-          :disabled="enabledProviders.length === 0"
-          :aria-haspopup="'listbox'"
-          :aria-expanded="managerMenuOpen"
-          @click="managerMenuOpen = !managerMenuOpen"
-        >
-          {{ t("settings.modelDefaultChange") }}
-          <Icon name="chevronDown" :size="14" />
-        </button>
-      </SettingsRow>
-
       <!-- 思考语言：模型 reasoning 的语言；会话内锁死（前缀缓存红线），
            修改保存即提示下个会话生效 -->
       <SettingsRow
@@ -532,18 +483,6 @@ function closeSetup() {
       :anchor="anchorEl"
       @select="onSelectDefault"
       @close="defaultMenuOpen = false"
-    />
-
-    <!-- 记忆管理器更改浮层：与主模型同一实现；空 active = 「跟随主模型」档选中 -->
-    <DefaultModelMenu
-      v-if="managerMenuOpen"
-      :providers="providers"
-      :active-id="recorderProvider"
-      :active-model="recorderModel"
-      :anchor="managerAnchorEl"
-      :none-label="t('settings.modelDefaultSame')"
-      @select="onSelectRecorder"
-      @close="managerMenuOpen = false"
     />
 
     <!-- 子代理模型更改浮层（批 F）：清单 = 只列「可用于子代理」标记的模型；

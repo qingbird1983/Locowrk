@@ -6,8 +6,8 @@
  * 其余降为模块内部）；②跨簇引用走 `import type`。等价判据见 scripts/../tmp/v180-equiv.mjs。
  */
 
-import type { LlmSettingsView } from "./llm";
-import type { EmbeddingView, MemorySettingsView } from "./memory";
+import type { EmbeddingView, LlmSettingsView } from "./llm";
+import type { MemorySettingsView } from "./memory";
 import type { PluginsView } from "./plugins";
 
 /** 设置投影（settings_get / settings_set 返回值；camelCase）。API Key
@@ -144,22 +144,6 @@ interface DeveloperView {
   cacheDiagnostics: boolean;
   /** 告警阈值（%）。 */
   cacheHitAlertPercent: number;
-  /** 记忆树反弹熔断 k（M2，§5.5：整理后 k 个用户轮内再触发 = 反弹）。 */
-  organizeReboundK: number;
-  /** 反弹熔断 m（连续 m 次 → 暂停本会话自动整理）。 */
-  organizeReboundM: number;
-  /** 记忆管理器单次调用超时（秒）。 */
-  recorderTimeoutSecs: number;
-  /** 记忆管理器重试次数（仍失败 → 规则切分降级）。 */
-  recorderMaxRetries: number;
-  /** 规则切分块（token，5K–50K 缺省 20K）。 */
-  ruleChunkTokens: number;
-  /** 在途收束后允许连续补跑几次（队列 Q6，0–10 缺省 3；0 = 关掉补跑）。 */
-  organizeMaxRerun: number;
-  /** 一次摘要补写至多处理几章（队列 Q8c，0–20 缺省 6；0 = 关掉补写）。 */
-  organizeSummaryChapters: number;
-  /** 同一章至多补写尝试几次（队列 Q8c，0–5 缺省 2；跨轮计数落投影）。 */
-  organizeSummaryAttempts: number;
 }
 
 /** 开发者选项区部分更新：字段缺省 = 保持不变。 */
@@ -170,14 +154,6 @@ export interface DeveloperUpdate {
   cacheHitAlert?: boolean;
   cacheDiagnostics?: boolean;
   cacheHitAlertPercent?: number;
-  organizeReboundK?: number;
-  organizeReboundM?: number;
-  recorderTimeoutSecs?: number;
-  recorderMaxRetries?: number;
-  ruleChunkTokens?: number;
-  organizeMaxRerun?: number;
-  organizeSummaryChapters?: number;
-  organizeSummaryAttempts?: number;
 }
 
 /** 网络代理档（§8.5）：system / direct / custom（custom 必带 url）。 */

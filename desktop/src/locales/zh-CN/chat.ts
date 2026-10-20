@@ -89,14 +89,8 @@ export default {
     editResendFailed: "编辑重发失败：{reason}",
     // ⑨ 压缩通知（[查看详情][撤销]，Context 文档 §3.8.3）
     contextCompacted: "已压缩早期对话，节省 {saved} token",
-    // v2.143 整理发丝线：收束/熔断就地落一条线（手动整理入口已随 S2 刀⑦ 搬进
-    // 开发者面板，所以这一族不再有「正在整理…」那条在途线）
-    // M3 §3.37③：整理收束 / 熔断翻转（lw://organize-done / -paused）
-    organizeDone: "已整理 {users} 轮为 {chapters} 个章节",
-    organizeDoneDegraded:
-      "已整理 {users} 轮为 {chapters} 个章节（记忆管理器不可用，已转规则切分）",
-    organizePaused:
-      "本会话自动整理已暂停（连续 {rebounds} 次反弹达到熔断阈值 m={m}）；要重开请到 设置 → 开发者 → 记忆树 点「手动整理并复位」。",
+    // S4 刀②：整理收束 / 熔断翻转三键随记忆面整线退役（前端不再订阅
+    // lw://organize-done / -paused）。
     // S2 刀⑦ `/压缩`：后端只回「这一趟没动，因为」的**判据名**，人话一律在这儿。
     // 名字与 Rust 侧取值域同源（判据 SS24）；认不出的名字走 compactUnknown 兜底，
     // 原样带出判据名——绝不悄悄说成「已压缩」。

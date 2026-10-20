@@ -29,9 +29,9 @@ export function setSettings(patch: {
   llm?: LlmUpdate;
   embedding?: EmbeddingUpdate;
   context?: ContextUpdate;
-  memory?: MemoryUpdate;
   tools?: ToolsUpdate;
   plugins?: PluginsUpdate;
+  memory?: MemoryUpdate;
   chat?: ChatUpdate;
   developer?: DeveloperUpdate;
   thinking?: { language: string };

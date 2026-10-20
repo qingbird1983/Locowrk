@@ -20,7 +20,6 @@ export default {
       chat: "Chat",
       llm: "Model",
       context: "Context",
-      memory: "Memory",
       embedding: "Embedding",
       plugins: "Plugins",
       tools: "Tools & exposure",
@@ -199,7 +198,7 @@ export default {
     dataDir: "Data root directory",
     dataDirHint:
       "Plugins, the lockfile and settings.json live here. Override with the LOCOWRK_DATA_DIR environment variable (restart required).",
-    sessionsMemory: "Sessions live in the data directory; the latest resumes on startup.",
+    sessionsStorage: "Sessions live in the data directory; the latest resumes on startup.",
     langTitle: "Interface language",
     langSystem: "Follow system",
     langZh: "中文",
@@ -222,61 +221,6 @@ export default {
     shortcutRowHint: "Click the key button, then press the new combo; Esc cancels. Needs a modifier (or F1–F24).",
     shortcutRecording: "Press a new key combo…",
     shortcutRestore: "Restore default",
-    // ⑪ Memory section (real section, replaces shell placeholder)
-    memoryTitle: "Memory",
-    memoryHint: "Relevant memories are auto-injected; the per-turn count is adjustable.",
-    memoryEnabled: "Inject memories automatically",
-    memoryTopK: "Entries per turn",
-    memoryTopKHint: "1–20, default 5; injected content is viewable and deletable on the Memory page.",
-    memoryRepoContext: "Handoff reminder",
-    memoryInstructionFiles: "Instruction files",
-    memoryInstructionFilesHint: "Inject instruction files from the data root plus the project layer at the start of a session. The project layer knows three families—AGENTS.md / CLAUDE.md / AGENTS.override.md—pick-one-per-family, chained across families, with override last (append, never replace). Snapshotted on the first turn of each session: editing a file leaves the current session untouched and applies to new sessions; project files outrank defaults but never safety rules.",
-    instructionGlobalKib: "Global chain budget (KiB)",
-    instructionGlobalKibHint: "Total byte budget for the global chain, 8–512, default 100 (100 is the hard-coded value from before this became configurable). Once the budget is spent, later files are not injected and the injection names which file was squeezed out.",
-    instructionProjectKib: "Project chain budget (KiB)",
-    instructionProjectKibHint: "Total budget for the three project families chained together, 8–512, default 100. Shrinking it drops the families at the tail first (override sits last), and both truncation and skipping are labelled in the injection—never silently omitted.",
-    memoryRepoContextHint:
-      "Project sessions inject a reminder for the handoff directory (content is not injected; the model reads and maintains it on demand).",
-    memoryFiles: "Memory files",
-    memoryFilesHint:
-      "Only decides whether the startup reconcile and first-run export round run. It does not change where memories live—they are Markdown files.",
-    memoryLayers: "Memory layers",
-    memoryLayersHint:
-      "Each layer switches on its own. Off = that layer stops being injected automatically. Nothing is deleted, this page still lists everything, and the model can still read it on demand (memory_read / memory_search)—these switches gate injection, not data.",
-    memoryGlobalLayer: "Global memory layer",
-    memoryGlobalLayerHint:
-      "User-level preferences and global requirements (memory/global/ in the data root). Off = those preferences stop arriving automatically in the conversation.",
-    memoryProjectLayer: "Project memory layer",
-    memoryProjectLayerHint:
-      "This project's memory index (memory/projects/<project>/). Off = the pointer lines for this section are no longer injected each turn. <environment> stays untouched—it carries the project root and date, not memory content.",
-    organizePacing: "Memory tree pacing",
-    organizePacingHint: "Batch organizes at a threshold; incremental per filled chunk.",
-    organizePacingBatch: "Batch",
-    organizePacingIncremental: "Incremental",
-    organizeChunk: "Incremental chunk X",
-    organizeChunkHint: "10K–200K tokens, default 50K; incremental pacing only.",
-    tailStrategy: "Tail strategy",
-    tailStrategyHint: "Boundary (default) preserves cache; window keeps the last N turns.",
-    tailStrategyBoundary: "Boundary",
-    tailStrategyWindow: "Fixed window",
-    tailWindow: "Window turns",
-    tailWindowHint: "Keeps the last N turns (1–20, default 5); older ones get organized.",
-    collapseEnabled: "Expose memory_collapse tool",
-    collapseEnabledHint: "Off by default; collapsing frees space but causes one cache miss.",
-    collapseThreshold: "Auto-collapse threshold",
-    collapseThresholdHint: "When occupancy reaches this after a turn, collapse the oldest expanded chapter (50–95%, default 80).",
-    factCards: "Save fact cards while organizing",
-    factCardsHint:
-      "At each organize pass the recorder also records up to N standalone facts (source shows as recorder-made; review and delete on the Memory page). Turning this off stops new cards; existing ones are untouched.",
-    factCardMax: "Fact cards per organize",
-    factCardMaxHint: "1–10, default 3. Runs at organize frequency, not every turn.",
-    // "Rank memories by usefulness" plus the four weight keys retired with the learning
-    // tier in S3 knife ③b (specs/10 question ②: md is the single source of truth, so a
-    // sqlite hit-count ranking was a leftover second source — and it had no call site,
-    // which leaves a switch on the page that does nothing). Same batch on the zh-CN side.
-    memoryManagerModel: "Memory manager",
-    memoryManagerModelHint:
-      "The background role that organizes conversations into chapters; defaults to the main model. Pick a cheaper one to save cost.",
     thinkingLanguage: "Thinking language",
     thinkingHint:
       "Language the model uses for its reasoning; locked per session — changes apply from the next session",
@@ -319,7 +263,7 @@ export default {
     rulesCounts: "allow {allow} · deny {deny}",
     rulesClear: "Clear",
     embeddingTitle: "Embedding model (semantic search)",
-    embeddingHint: "Shared by semantic search and extraction; empty does not affect chat.",
+    embeddingHint: "Used by tool semantic search. Empty does not affect chat.",
     embeddingModel: "Model name",
     embeddingBaseUrl: "API endpoint",
     embeddingBaseUrlHint: "OpenAI-compatible /v1/embeddings; empty falls back to localhost:11434 for Ollama, otherwise the main model endpoint.",

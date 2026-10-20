@@ -20,7 +20,6 @@ import type { ChatItem, SystemItem, ToolItem } from "../../stores/chat";
 import type { TurnState } from "../../types";
 import { useSettingsStore } from "../../stores/settings";
 import { Icon } from "../../lib/icons";
-import ContextSummaryBlock from "./ContextSummaryBlock.vue";
 import MessageRow from "./MessageRow.vue";
 import SystemNotice from "./SystemNotice.vue";
 import ThinkingRow from "./ThinkingRow.vue";
@@ -366,11 +365,6 @@ function noticeText(item: SystemItem): string {
           <div v-else-if="block.item.kind === 'uncertain'" class="unc-row">
             <UncertainCard :item="block.item" />
           </div>
-          <!-- 整理段落总结（v2.141）：断层缝合处的浓缩叙事块，组外兄弟 -->
-          <ContextSummaryBlock
-            v-else-if="block.item.kind === 'summary'"
-            :text="block.item.text"
-          />
         </template>
       </template>
     </div>
@@ -401,11 +395,6 @@ function noticeText(item: SystemItem): string {
       <div v-else-if="block.item.kind === 'uncertain'" class="unc-row">
         <UncertainCard :item="block.item" />
       </div>
-      <!-- 整理段落总结（v2.141）：尾段同组外语义 -->
-      <ContextSummaryBlock
-        v-else-if="block.item.kind === 'summary'"
-        :text="block.item.text"
-      />
     </template>
   </template>
 </template>

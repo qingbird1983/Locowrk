@@ -1,4 +1,5 @@
-// stores/chat/notices.ts —— 系统通知条的四个生产口 + M0 观测告警（T22 刀二搬出）。
+// stores/chat/notices.ts —— 系统通知条的生产口 + M0 观测告警（T22 刀二搬出）。
+// S4 刀② 记忆面退役后「整理发丝线」这个生产口删除，只剩通用条 / 压缩发丝线 / 原文条。
 // 这一族只做一件事：**往 items 里落「UI 陈述」**（SystemNotice 模式），不发请求、不碰后端。
 // 参数名一律 `st`（不是 `s`）：原实现内部的 `.find((s) => …)` 用的是 `s`，
 // 把 store 状态参数也叫 `s` 会形成遮蔽 ⇒ 等价比对时看不清哪层是谁。
@@ -78,20 +79,8 @@ function rewriteOrPushLine(
   pushLine(st, tag, key, params, actions);
 }
 
-/** 整理发丝线（tag="organize"）。刀⑦ 之后这一族**只剩"落一条收束线"**：
- * 整理是后台跑的，从来没有"人按下去等它"那一种在途态（旧的那条「正在整理…」由
- * `/整理` 发，而这条命令已经改成 `/压缩` 了）。改写那半仍留在共用实现里给压缩用——
- * 它才有在途态（一次摘要往返要几秒，人得知道按钮生效了）。 */
-export function pushOrganizeNotice(
-  st: ChatState,
-  key: string,
-  params?: Record<string, unknown>,
-  actions?: string[],
-) {
-  pushLine(st, "organize", key, params, actions);
-}
-
-/** 压缩发丝线（tag="compact"，S2 刀⑦ `/压缩`）：与整理那根同一份实现，只差两枚常数。 */
+/** 压缩发丝线（tag="compact"，S2 刀⑦ `/压缩`）：发起落「正在压缩」，收束就地改写
+ * 成结果线（一次摘要往返要几秒，人得知道按钮生效了）。 */
 export function pushCompactNotice(
   st: ChatState,
   key: string,
