@@ -1,5 +1,6 @@
-//! 组装点·后台任务簇（M2/M3 §3.37 + ⑭ 调度引擎 + F1 §6 + 批 D §6.3）：
-//! 压缩器构造 → 调度引擎 spawn → 记忆文件化首启导出 → 孤儿资产 GC 巡检。
+//! 组装点·后台任务簇（M2/M3 §3.37 + ⑭ 调度引擎 + 批 D §6.3）：
+//! 压缩器构造 → 调度引擎 spawn → 孤儿资产 GC 巡检。
+//! S4 刀③c：记忆文件化首启导出（F1 §6）随记忆整线退役，本簇不再持有记忆句柄。
 //!
 //! 语句自 `state/mod.rs` 的 `init_state` **原样搬出**（批 F-3b·F5 结构性拆分），
 //! 一条未重排。三条不能动的规矩：
@@ -42,10 +43,6 @@ pub(crate) struct Init {
     // `tree_assembler` 参数，而那个参数喂的是 `run_turn` 的 `tree`（第二把分子）。
     pub stop_flags: Arc<crate::stop::StopFlags>,
     pub schedules: Option<Arc<crate::scheduler::ScheduleDb>>,
-    pub memory: Arc<crate::memory::MemoryStore>,
-    pub tree_store: memory_tree::TreeStore,
-    pub memory_files: Arc<crate::memory_files::MemoryFiles>,
-    pub files_on: Arc<dyn Fn() -> bool + Send + Sync>,
     pub assets: Arc<crate::assets::AssetStore>,
     /// S2 刀⑤：熔断表由组装点注入，与滑窗保护网（`state/waterfall.rs` 那一环）**同一份**。
     /// 它不在这里 new：两张表 = 主层已熔断而保护网没醒（或反过来），而两档在界面上是
@@ -76,10 +73,6 @@ pub(crate) fn build(init: Init) -> Stack {
         last_chat,
         stop_flags,
         schedules,
-        memory,
-        tree_store,
-        memory_files,
-        files_on,
         assets,
         compact_failures,
         compact_refusals,
@@ -122,20 +115,8 @@ pub(crate) fn build(init: Init) -> Stack {
         );
     }
 
-    // F1 首启导出（文件化设计 §6）+ F2 启动 reconcile（先对账再补缺）：
-    // 后台线程幂等，总开关关 = 什么都不做。
-    let roots_on = {
-        let s = Arc::clone(&settings);
-        Arc::new(move || s.fs_roots()) as Arc<dyn Fn() -> Vec<String> + Send + Sync>
-    };
-    crate::memory_files::spawn_initial_export(
-        Arc::clone(&memory),
-        tree_store.clone(),
-        (*memory_files).clone(),
-        sessions_dir.clone(),
-        Arc::clone(&files_on),
-        roots_on,
-    );
+    // S4 刀③c：F1 首启导出 / F2 启动 reconcile 随记忆整线退役（`memory_files`
+    // 模块已删）。这里不再有幂等对账线程。
 
     // 批 D 孤儿资产 GC（§6.3）：autoGc 开时启动跑一遍 + 每 24h 后台巡检
     //（手动命令 asset_gc 不受开关限制）。fire-and-forget；gcDays 每轮重读

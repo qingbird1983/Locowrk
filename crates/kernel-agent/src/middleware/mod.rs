@@ -13,17 +13,16 @@
 //!
 //! 其余件都不是洋葱件，而是 `agent/request` waterfall 监听器，与本套件同住
 //! 只因同属「中间件类」：`tool_exposure`（工具暴露截断，exposure 文档
-//! §5/§6）、`base_system`（静态身份层 = system 字节前缀）、`memory_inject`
-//! （记忆原料，Context 文档 §4/§5）、`thinking_language`（宿主注册）、
-//! `instruction_files`（指令文件层）、`fragments`（尾部碎片）。注册次序 =
-//! ToolExposure → BaseSystemInject → MemoryInject → 思考语言 →
-//! InstructionFilesInject → FragmentInject
+//! §5/§6）、`base_system`（静态身份层 = system 字节前缀）、
+//! `thinking_language`（宿主注册）、`instruction_files`（指令文件层）、
+//! `fragments`（尾部碎片）。注册次序 = ToolExposure → BaseSystemInject →
+//! 思考语言 → InstructionFilesInject → FragmentInject
 //! （静态段在前、只增目录殿后 = 前缀缓存友好，提示词分层设计 §6）。
 //! `compact` 已降级为历史契约面（载荷类型 + token 尺子，见该模块注释），
-//! 不再是监听器。`tree_context`（树目录注入）随 **S3 刀③a 移除**：方案稿 §C 把
-//! 树目录段列为"随树整体退役"，而 `RequestPayload::tree_directory` 字段与
-//! `TreeContextSource::plan()` **仍在**（它还管消息切片与树会话标记，生产者住在
-//! `organize/` = S4 的退役面）——本线只摘注入这一档，不提前动 organize。
+//! 不再是监听器。`memory_inject`（记忆原料）与 `tree_context`（树目录注入）
+//! 随 **S4 刀③c** 整面退役：记忆线在 UI、宿主与内核三层同时删除，树目录的
+//! 消息切片/树会话标记也一并摘掉（`TreeContextSource` / `TreePlan` 不再存在，
+//! 请求只发全量投影）。
 
 mod audit;
 mod base_system;
@@ -31,7 +30,6 @@ mod circuit_breaker;
 mod compact;
 mod fragments;
 mod instruction_files;
-mod memory_inject;
 mod timeout;
 mod tool_exposure;
 mod tool_retrieval;
@@ -46,7 +44,6 @@ pub use circuit_breaker::CircuitBreaker;
 pub use compact::{CompactionOutcome, estimate_tokens};
 pub use fragments::{FragmentInject, FragmentSource, wrap_system_reminder};
 pub use instruction_files::{InstructionFilesInject, InstructionSource};
-pub use memory_inject::{MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource};
 pub use timeout::Timeout;
 pub use tool_exposure::{ExposureSnapshot, GlobalEwma, ToolExposure, ToolExposureConfig};
 pub use tool_retrieval::{EmbedPort, RETRIEVAL_WEIGHT, Retriever, cosine};

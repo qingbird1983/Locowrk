@@ -66,7 +66,7 @@ defineEmits<{ (e: "action", id: string): void }>();
 </template>
 
 <style scoped>
-/* 整理发丝线（v2.143）：发丝线两端不到头由转录列 padding 承载；文字组
+/* 系统条发丝线（v2.143）：发丝线两端不到头由转录列 padding 承载；文字组
  * 盖在线中断处，长文案（熔断）可折行不撑破。 */
 .sys-hairline {
   display: flex;

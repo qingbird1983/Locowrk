@@ -41,13 +41,17 @@
       命令面板无记忆项；聊天转录无"查看记忆"跳转；用量浮层无记忆树行、无 `memory_expand`
       计数行、无 S3 扣减链三行；中英文案键无残留（`check-i18n` 两语言相等）。
       真窗口：打开应用 → 左栏底部四个图标里没有数据库图标；设置页左侧没有「记忆」。
-- [ ] AC-6 后端/插件删除：`memory*` 模块、`organize/`、`recall_log`、`recall_receipt`、
+- [x] AC-6 后端/插件删除：`memory*` 模块、`organize/`、`recall_log`、`recall_receipt`、
       `inject_view`、`commands/memory.rs`、`commands/organize.rs`、`crates/memory-tree`、
       `plugins-src/memory-sqlite`、kernel 的 `memory_inject`/`tree_context` 全部不存在；
       插件注册数 = 8；Tauri 命令三向闭合（定义=注册=前端引用）；事件通道对账
       `check-channels` 绿（`lw://organize-done/paused` 已摘）。
-- [ ] AC-7 指令文件保留：`AGENTS.md` / `CLAUDE.md` 等指令文件仍注入系统提示（用例既有），
+      **✅ 刀③c 已达成**（2026-10-20：命令三向 73=73=73、MIDDLEWARE 实现 8 = 接线 8、
+      CHANNEL `FAILED=0`；`check-schema-parity` 因"宿主与插件同开一张 memories 表"的
+      前提消失而整闸退役，调用点同删）。
+- [x] AC-7 指令文件保留：`AGENTS.md` / `CLAUDE.md` 等指令文件仍注入系统提示（用例既有），
       预算写死为 100 KiB；它们不依赖已删除的记忆库模块。
+      **✅ 刀③c 已达成**（`INSTRUCTION_CHAIN_KIB = 100` 写死，既有指令文件用例全绿）。
 - [ ] AC-8 数值归类表全部落地：见「数值项归类」；`make check` 全绿（宿主与前端条数以实际
       为准，删掉的用例同步删，不保留空转）；`make selftest` 每个新/改判据都有变异报红；
       `make gates` 接线数如实（删除后应无"未接线"）。
@@ -133,8 +137,13 @@
 
 - [x] 刀① 压缩收口（2026-10-20：微压缩 / 滑窗 / 轮内泄压三层连同测试删除，上下文页三格，
       四值写死；`make check` 全绿）
-- [ ] 刀② 记忆前端与设置 + 命令注销
-- [ ] 刀③ 记忆后端、crate、插件、注入链
+- [x] 刀② 记忆前端与设置 + 命令注销（2026-10-20：左栏入口、`MemoryPage` 与 `memory/`
+      全部组件、store/API/types、浮层记忆行、设置记忆分区、开发者记忆项、中英文案全删；
+      `commands/memory.rs` / `commands/organize.rs` 及注册同刀注销，命令三向保持绿）
+- [x] 刀③ 记忆后端、crate、插件、注入链（2026-10-20：宿主 `memory*` / `recall_*` /
+      `inject_view` / `organize/` / `memory_index.rs`、kernel `memory_inject` 与
+      `tree_context`、`crates/memory-tree`、`plugins-src/memory-sqlite` 全删；插件数 9 → 8；
+      `AnchorSource` 与摘要客户端改用主模型；事件/通道与接线闸同步；`make check` 全绿）
 - [ ] 刀④ 全设置面数值归类
 - [ ] 刀⑤ 判据/文档/真窗口收口
 - [ ] `make check` 全绿

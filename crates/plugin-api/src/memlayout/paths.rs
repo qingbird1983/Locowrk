@@ -156,7 +156,8 @@ pub fn unaffiliated_dir(root: &Path) -> PathBuf {
 }
 
 /// stem 的**字符**上限。为什么布局层要管这件事：工具的参数面允许 key 长到 512 字节
-/// （`plugins-src/memory-sqlite/src/store/limits.rs` 的 `KEY_MAX`，写死给模型看的），
+/// （原型 memory-sqlite 插件的 `KEY_MAX`，写死给模型看的；插件已随 S4 刀③c 删除，
+/// 此值作为布局常量保留），
 /// 而 Windows 的路径上限是 260 字符——S1 刀③b 把六枚工具扳成"直接写文件"之后当场撞到：
 /// 512 个 `k` 的 key 得到 `os error 123`（文件名、目录名或卷标语法不正确）⇒
 /// **一条合法的记忆写不进去**。

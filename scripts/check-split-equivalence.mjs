@@ -302,8 +302,8 @@ function shapeGate() {
       // （`parent.rs` + `parent/`）—— `desktop/src-tauri/src/settings.rs` 配
       // `desktop/src-tauri/src/settings/tests/` 正是后者，它的父模块文件在 tests 的
       // **上一级**目录里。第一版只找前者 ⇒ `parentFile` 取不到 ⇒ **S4 整段静默跳过**
-      // （修好后 `settings/tests` 的 llm/chat/memory/tools/appearance/developer/window
-      //  七个簇名全部撞 `settings.rs` 的 mod 名单 ⇒ 集体进观察项 = 漏检被暴露成读数暴增；
+      // （修好后 `settings/tests` 的 llm/chat/tools/appearance/developer/window
+      //  等簇名全部撞 `settings.rs` 的 mod 名单 ⇒ 集体进观察项 = 漏检被暴露成读数暴增；
       //  这条自纠本身就是"闸入库了也照样会写漏一种形态"的现场证据）。
       const parentCandidates = [
         path.join(parentDir, `${parentName}.rs`),

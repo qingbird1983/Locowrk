@@ -28,8 +28,7 @@ export type AgentEvent =
   | UncertainResolvedEvent
   | ToolStatusEvent
   | FileChangesEvent
-  | TurnHeaderEvent
-  | ContextSummaryEvent;
+  | TurnHeaderEvent;
 
 interface ChunkEvent {
   kind: "chunk";
@@ -96,16 +95,6 @@ interface ContextCompactedEvent {
   to_tokens: number;
   strategy: string;
   summary_preview: string;
-}
-
-/** 整理段落总结（v2.141，agent://context-summary）：上一轮收束的整理产出
- * 的轮级总结。S4 刀②：转录已无渲染口（ContextSummaryBlock 删除），但**生产端
- * 仍活着**（`commands/chat.rs` / `scheduler/engine.rs` / 重放投影三处发这条），
- * 事件通道闸 R5 要求消费面保留 case ⇒ 前端显式静默跳过，刀③随 organize 线同删。 */
-interface ContextSummaryEvent {
-  kind: "context_summary";
-  session_id: string;
-  text: string;
 }
 
 /** 推理内容（v2.57 §3.9，agent://thinking / 重放同形）：实时 = 增量

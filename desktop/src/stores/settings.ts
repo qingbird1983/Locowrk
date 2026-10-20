@@ -1,7 +1,8 @@
 // 设置面板状态（§13.1 / §13.5）：投影 + 部分更新动作。
 // 语言切换立即生效（applyLocalePref）并持久化到数据根 settings.json。
 //
-// 保存类动作的形状（v2.169 批 F-19，审计 C13）：10 个 `saveXxx` 里此前各写一遍
+// 保存类动作的形状（v2.169 批 F-19，审计 C13；S4 刀③c 删掉 `saveMemory` 后是
+// 9 个委托）：10 个 `saveXxx` 里此前各写一遍
 // 「防连点门 → 清 error → `setSettings` → 投影回写 → 短暂『已保存』→ 失败进 error」
 // 的同构体（262 行里约 110 行是这十份副本）。现在唯一实现 = `patchSettings`，
 // `saveXxx` 退化成"带自己那个 patch 键的委托"。**两个真实例外按参数保留**，
@@ -20,14 +21,13 @@ import type {
   DeveloperUpdate,
   EmbeddingUpdate,
   LlmUpdate,
-  MemoryUpdate,
   PluginsUpdate,
   ProviderInput,
   SettingsView,
   ToolsUpdate,
 } from "../types";
 
-/** `setSettings` 的入参形状从这里取，不在第二处重列那十二个键（键清单的真源 = `lib/api.ts`）。 */
+/** `setSettings` 的入参形状从这里取，不在第二处重列那十一个键（键清单的真源 = `lib/api.ts`）。 */
 type SettingsPatch = Parameters<typeof setSettings>[0];
 
 /** 「已保存」提示的驻留时长（§13.5 观感定档，十个动作共用一把尺）。 */
@@ -184,11 +184,6 @@ export const useSettingsStore = defineStore("settings", {
      * 保存即生效。校验失败（阈值出界等）在 error 条显示。 */
     async saveContext(context: ContextUpdate) {
       await this.patchSettings({ context });
-    },
-    /** 保存记忆注入区（⑪）：S4 刀② 设置分区已删，这个写入口留到刀③与
-     * 后端 `memory` 区同删（保持 settings API 面完整，不留半截形状）。 */
-    async saveMemory(memory: MemoryUpdate) {
-      await this.patchSettings({ memory });
     },
     /** 保存工具暴露区（⑫）：后端校验 + 换入 ToolExposure 活配置，
      * 保存即生效（下一轮请求按新上限截断）。 */

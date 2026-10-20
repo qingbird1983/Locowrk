@@ -43,7 +43,6 @@ fn appearance_defaults_legacy_compat_and_update() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     let v = SettingsStore::open(&root).unwrap().view().appearance;
@@ -62,7 +61,6 @@ fn rejects_unknown_theme() {
                 theme: Some("sepia".into()),
                 ui_font_size: None,
             }),
-            None,
             None,
             None,
             None,
@@ -149,7 +147,6 @@ fn ui_font_size_round_trips_and_theme_only_update_keeps_it() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     assert_eq!(store.view().appearance.ui_font_size, 16);
@@ -169,7 +166,6 @@ fn ui_font_size_round_trips_and_theme_only_update_keeps_it() {
                 theme: Some("dark".into()),
                 ui_font_size: None,
             }),
-            None,
             None,
             None,
             None,
@@ -212,7 +208,6 @@ fn ui_font_size_range_is_inclusive_and_rejects_outside() {
                 None,
                 None,
                 None,
-                None,
             )
             .expect("端点内必须收");
         assert_eq!(v.appearance.ui_font_size, px);
@@ -226,7 +221,6 @@ fn ui_font_size_range_is_inclusive_and_rejects_outside() {
                         theme: None,
                         ui_font_size: Some(px),
                     }),
-                    None,
                     None,
                     None,
                     None,

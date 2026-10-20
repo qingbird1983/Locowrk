@@ -4,10 +4,13 @@
 //! v2.50 落地）。desktop 消费同一份解析：
 //! ① `plugin_host::set_session_context_resolver`——FFI 调用期上下文
 //!    （workspace + `fs_roots` 调用期围栏根；㉘·C 起围栏 = 全局声明根、
-//!    让路给权限档），memory-sqlite / tool-fs / tool-shell(路径类) /
-//!    tool-git / tool-edit 等插件经 vtable `session_context` 反向查询；
-//! ② `workspace_view`（workspace-only 投影）——`MemoryStore` /
-//!    `ApprovalHub` 环境行数据源。
+//!    让路给权限档），tool-fs / tool-shell(路径类) / tool-git / tool-edit 等
+//!    插件经 vtable `session_context` 反向查询；
+//! ② `ApprovalHub` 的环境行数据源（同一个解析器）。
+//!
+//! S4 刀③c：原 ② 里的 `workspace_view`（workspace-only 投影）随记忆整线
+//! 退役——它的两个消费者（MemoryStore 检索键位 / 召回回执键位）都不在了。
+//! 键位归一 [`scope_key`] 仍活着：审批规则与测试在用它。
 //!
 //! 未归属 / 旁车缺失 / id 非法 → workspace `None`、fs_roots 空表（消费方
 //! 统一映射为未归属键位 `""` / env 全局围栏回落，绝不 panic、绝不把别的
@@ -23,8 +26,16 @@ use session_store::read_meta;
 /// session_id → 调用期上下文（workspace + 围栏根；㉘·B 形态）。
 pub type SessionContextResolver = Arc<dyn Fn(&str) -> CallContext + Send + Sync>;
 
-/// workspace-only 视图（memory 注入键位 / 审批环境行消费）。
+/// workspace-only 视图（指令文件层的项目链解析消费）。
 pub type WorkspaceResolver = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
+
+/// 从解析器取出 workspace-only 投影（**原样串**，不做键位归一）。
+///
+/// 指令文件层要的是仓库路径本身（读 `AGENTS.md` 等文件），而归一键位只用于
+/// 缓存键——两件事在 `InstructionFiles` 内各取所需，不在这一层预先合并。
+pub fn workspace_only(resolver: SessionContextResolver) -> WorkspaceResolver {
+    Arc::new(move |session_id: &str| resolver(session_id).workspace)
+}
 
 /// 路径规范化：canonicalize 优先（解析符号链接与 `..`，含 Windows verbatim
 /// 前缀），失败（不存在/被删）回落原样——插件侧会再 canonicalize 并对失败
@@ -64,30 +75,6 @@ pub fn session_context_resolver(
             workspace,
             fs_roots,
         }
-    })
-}
-
-/// workspace-only 投影：同一份旁车真源的窄视图（不给围栏根）。
-///
-/// ⚠ **Q7c（v2.197）起这里就是记忆键位的唯一收口点**：视图产出的串既进 sqlite 主键
-/// （`memories.workspace`），也进**磁盘目录名**（`memory-tree/<scope_dir(ws)>` 与
-/// `memory/projects/<project_dir_name(ws)>`），而旁车里存的是用户与模型写下的**原样串**。
-/// 原先只有部分消费方各自过 `scope_key`（`memory.rs` 的注入键位、`organize/facts.rs`
-/// 的事实卡落库），树投影与 tree.md 那两条通路漏在外面 ⇒ 同一个项目在磁盘上落成**两个
-/// 目录**、各自被一条通路读写（2026-10-14 本机实测，见《Key Unification and Legacy
-/// Scope Merge v1》§1）。在源头归一 ⇒ 下游所有 `workspace_of` 调用点一次同形，
-/// 不需要各补一遍（历批「每一处调用点补一个参数」那种改动面，这里刻意不复现）。
-///
-/// **语义保持**：未归属仍是 `None`（消费方 `?` 与 `unwrap_or_default` 两种写法都不变），
-/// `Some("")` 归一成 `""`，与 `scope_key` 的既有契约同形；`fs_roots` 那半在
-/// `session_context_resolver` 里下发**原样 canonicalize 串**，本函数不碰（围栏面见
-/// `wskey` 头注「不动文件围栏的根」）。
-pub fn workspace_view(resolver: SessionContextResolver) -> WorkspaceResolver {
-    Arc::new(move |session_id: &str| {
-        resolver(session_id)
-            .workspace
-            .as_deref()
-            .map(|ws| scope_key(Some(ws)))
     })
 }
 

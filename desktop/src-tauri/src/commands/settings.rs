@@ -9,7 +9,7 @@ use tauri::{AppHandle, State};
 use super::llm::enrich_with_catalog;
 use crate::settings::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
-    MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsView, ThinkingUpdate, ToolsUpdate,
+    MultimodalUpdate, PluginsUpdate, SettingsView, ThinkingUpdate, ToolsUpdate,
 };
 use crate::state::AppState;
 
@@ -28,11 +28,10 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsView, St
 /// 部分更新设置：locale、外观区（⑰ 明暗主题）、快捷键、LLM 字段（S2 起
 /// 含 windowTokens——窗口归属模型配置；传 null = 清除，回落保守保护）、
 /// ⑬ embedding 区（端点/模型/Key）、上下文管理区（⑨，仅阈值+策略）、
-/// 记忆注入区（⑪，⑬ 起含 autoExtract）、工具暴露区（⑫，S2 起含单次调用
-/// 超时）、shell 治理区（S1）与 ⑬ 插件管理区（自动停用天数）独立可选，
-/// 缺省字段保持不变；base_url / api_key 传空串 = 清除。改键成功后即时
-/// 重注册全局快捷键；注册失败返回 Err（新键已落盘，换键重试即可）。上下文
-/// / 记忆 / 工具暴露 / 超时 / embedding 改动成功后换入活配置随即生效；
+/// 工具暴露区（⑫，S2 起含单次调用超时）、shell 治理区（S1）与 ⑬ 插件管理区
+/// （自动停用天数）独立可选，缺省字段保持不变；base_url / api_key 传空串 =
+/// 清除。改键成功后即时重注册全局快捷键；注册失败返回 Err（新键已落盘，换键
+/// 重试即可）。上下文 / 工具暴露 / 超时 / embedding 改动成功后换入活配置随即生效；
 /// shell 解锁开关经插件加载前的 env 注入，重启后生效；插件自动停用天数
 /// > 0 时保存即巡检一遍（0 = 关闭，不自动恢复任何已停用插件）。
 // 参数 = settings.json 各分区一一对应（§3.2）；Tauri command 的扁平
@@ -46,7 +45,6 @@ pub async fn settings_set(
     llm: Option<LlmUpdate>,
     embedding: Option<EmbeddingUpdate>,
     context: Option<ContextUpdate>,
-    memory: Option<MemoryUpdate>,
     tools: Option<ToolsUpdate>,
     plugins: Option<PluginsUpdate>,
     chat: Option<ChatUpdate>,
@@ -65,7 +63,6 @@ pub async fn settings_set(
         llm,
         embedding,
         context,
-        memory,
         tools,
         plugins,
         chat,
@@ -79,11 +76,6 @@ pub async fn settings_set(
     // 语言改动 → 托盘菜单即时换文案（失败仅日志，不影响保存结果）
     if locale.is_some() {
         crate::tray::refresh_menu(&app);
-    }
-    // ⑪：记忆注入配置热更新（开关/topK 换入共享锁）
-    let mcfg = state.settings.memory_inject_config();
-    if let Ok(mut guard) = state.memory_cfg.write() {
-        *guard = mcfg;
     }
     // ⑫：工具暴露配置热更新（开关/每请求最大工具数换入共享锁）
     let ecfg = state.settings.exposure_config();
@@ -110,10 +102,8 @@ pub async fn settings_set(
     if tools_section_touched {
         crate::data_root::apply_fs_roots_env(&state.settings);
     }
-    // F1 记忆文件化总开关的热更新随 S1 刀③b 摘掉：env `LOCOWRK_MEMORY_FILES` 的最后
-    // 一个读者是插件侧那层"sqlite 成功后同步 md"，六枚工具直接写真源之后它无人可读
-    // （boot.rs 同款说明）。settings `memory.files` 这一项的去处（改义 / 退役 + 界面文案
-    // 订正）归刀④，见 specs/05 挂账——在那之前它是"存着但没有任何副作用"的一项。
+    // S4 刀③c：记忆整线退役——`memory` 区参数、`memory.files` 设置项与其 env 注入
+    // 已全部删除，本命令不再有记忆相关的热更新步骤。
     // ⑬：embedding 客户端热重建（检索信号/search_tools/经历/提取共用）
     state.reload_embed();
     // ⑬：插件自动停用巡检（缺省关；仅在天数 > 0 时跑，0 不复活已停用项）

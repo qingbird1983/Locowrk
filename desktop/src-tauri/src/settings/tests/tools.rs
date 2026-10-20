@@ -32,7 +32,6 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-            None,
             Some(ToolsUpdate {
                 enabled: Some(false),
                 max_per_request: Some(15),
@@ -68,7 +67,6 @@ fn tools_defaults_legacy_compat_and_validation() {
             None,
             None,
             None,
-            None,
             Some(ToolsUpdate {
                 max_per_request: Some(30),
                 ..Default::default()
@@ -93,7 +91,6 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
-                None,
                 Some(ToolsUpdate {
                     max_per_request: Some(bad),
                     ..Default::default()
@@ -110,7 +107,6 @@ fn tools_defaults_legacy_compat_and_validation() {
     for bad in [4, 3601] {
         assert!(store
             .update(
-                None,
                 None,
                 None,
                 None,
@@ -140,7 +136,6 @@ fn tools_defaults_legacy_compat_and_validation() {
                 None,
                 None,
                 None,
-                None,
                 Some(ToolsUpdate {
                     max_turn_steps: Some(bad),
                     ..Default::default()
@@ -158,7 +153,6 @@ fn tools_defaults_legacy_compat_and_validation() {
     let dir = root.display().to_string();
     store
         .update(
-            None,
             None,
             None,
             None,
@@ -231,7 +225,6 @@ fn fs_roots_normalize_reject_and_env_injection() {
             None,
             None,
             None,
-            None,
             Some(ToolsUpdate {
                 fs_roots: Some(vec![dir.clone()]),
                 ..Default::default()
@@ -247,7 +240,6 @@ fn fs_roots_normalize_reject_and_env_injection() {
     assert_eq!(std::env::var("LOCOWRK_FS_ROOTS").unwrap(), dir);
     store
         .update(
-            None,
             None,
             None,
             None,
@@ -298,7 +290,6 @@ fn approval_timeout_configurable() {
                 None,
                 None,
                 None,
-                None,
                 Some(ToolsUpdate {
                     approval_timeout_secs: Some(secs),
                     ..Default::default()
@@ -316,7 +307,6 @@ fn approval_timeout_configurable() {
     // 出界拒绝且不污染内存态（86401 > 上限）
     assert!(store
         .update(
-            None,
             None,
             None,
             None,
@@ -363,7 +353,6 @@ fn pin_session_roundtrip_and_legacy_compat() {
     // 关闭 + 磁盘往返
     store
         .update(
-            None,
             None,
             None,
             None,

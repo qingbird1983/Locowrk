@@ -4,13 +4,11 @@
 //! 已够诊断（「system 变了 / 工具集变了 / 第 k 条消息变了」），无需
 //! token 级精度。
 //!
-//! 分块两级：**粗块** = system / tools / 逐消息；**system 子块**按稳定
-//! 协议标记切片（environment / repo_context / memory_index /
-//! memory_guidance / [memory tree] 目录段；v2.139
-//! workspace_context 升级为 environment——提示词分层设计 §4.2；S3 刀① 把
-//! persistent_memory 与 project_memory_index 两块合成一个 memory_index）——
-//! 记忆块与树目录的变化可以
-//! 定位到段，不混在「system 变了」里。开关缺省关（开发者分区
+//! 分块两级：**粗块** = system / tools / 逐消息。system 子块原先按稳定
+//! 协议标记切片（environment / repo_context / memory_index / memory_guidance /
+//! [memory tree] 目录段）；S4 刀③c 记忆整线退役后，system 只剩静态身份层 +
+//! 思考语言两句、没有带标记的段，子块退化为整块 "base"——结构保留，将来再加
+//! 带标记的 system 段时把标记表加回即可。开关缺省关（开发者分区
 //! `developer.cacheDiagnostics`），开启后
 //! 每轮仅多几次 hash 计算，无额外请求。无会话身份的请求（记录员/摘要
 //! 等一次性调用，纪律 6 本就不写缓存）不记录。
@@ -24,26 +22,6 @@ use kernel_agent::LlmRequest;
 use plugin_api::ToolSpec;
 use serde::Serialize;
 use session_store::Message;
-
-/// system 内稳定标记（按出现序切片；前一个标记起 = 后一个标记止）。
-///
-/// Q2（MR §4.1）加 `<project_memory_index>`：项目记忆索引是**会话内钉死**的段，
-/// 但它中途变化（M2 落库后 reconcile / 管理页编辑触发重算）就是前缀断裂，
-/// 必须能定位到段而不是混进"system 变了"。
-///
-/// ⚠ **S3 刀① 换表**：`<persistent_memory>` 与 `<project_memory_index>` 两块合并成
-/// 一个 `<memory_index>`（两层索引段），所以这张表从 6 枚变 5 枚、顺序跟着组装序走
-/// （environment → repo_context → memory_index → memory_guidance → 目录段）。
-/// 这一处是**观测通道**不是装饰：漏改它，索引段中途变化会被报成"system 变了"，
-/// 缓存诊断从此看不见这一段的断裂——而它正是刀② 要把 mtime 接进缓存键之前
-/// 最需要盯住的那一格。
-const SYSTEM_MARKERS: [&str; 5] = [
-    "<environment>",
-    "<repo_context>",
-    "<memory_index>",
-    "<memory_guidance>",
-    "[memory tree]",
-];
 
 fn hash_str(s: &str) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -76,22 +54,11 @@ pub struct StepChain {
     pub messages: Vec<u64>,
 }
 
-/// system 按稳定标记切片（不要求闭合标签配对——guidance/树目录本就
-/// 无闭合；块 = 标记起到下一标记止，头部剩余 = "base"）。
+/// system 子块（S4 刀③c 退化形态）：记忆线退役后 system 只剩静态身份层与思考
+/// 语言两句，都没有协议标记 ⇒ 整块一个 "base"。保留 `system_sub` 的多块结构
+/// 与 `record` 的按名配对比：将来再加带标记的段，这里只需换回切表实现。
 fn slice_system(system: &str) -> Vec<(String, u64)> {
-    let mut marks: Vec<(usize, &str)> = SYSTEM_MARKERS
-        .iter()
-        .filter_map(|m| system.find(m).map(|i| (i, *m)))
-        .collect();
-    marks.sort_by_key(|(i, _)| *i);
-    let mut out = Vec::new();
-    let base_end = marks.first().map(|(i, _)| *i).unwrap_or(system.len());
-    out.push(("base".to_string(), hash_str(&system[..base_end])));
-    for (idx, (start, name)) in marks.iter().enumerate() {
-        let end = marks.get(idx + 1).map(|(i, _)| *i).unwrap_or(system.len());
-        out.push((name.to_string(), hash_str(&system[*start..end])));
-    }
-    out
+    vec![("base".to_string(), hash_str(system))]
 }
 
 impl StepChain {

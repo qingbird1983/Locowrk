@@ -67,7 +67,6 @@ export function toolDescribe(tool: string, args: unknown): string {
   if (tool === "subagent_run") return clip(str(a, "prompt"), SUMMARY_CLIP);
   if (tool === "fs_grep") return clip(str(a, "query", "pattern"), SUMMARY_CLIP);
   if (tool === "fetch") return clip(str(a, "url"), SUMMARY_CLIP);
-  if (tool.startsWith("memory_")) return clip(str(a, "key", "query"), SUMMARY_CLIP);
   if (tool.startsWith("fs_") || tool.startsWith("edit_")) {
     const p = str(a, "path", "file", "key");
     // 中段省略保扩展名（旧 `clip` 会把 `.ts` 切掉，折叠行就看不出文件类型了）

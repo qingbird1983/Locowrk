@@ -93,7 +93,6 @@ async fn run_session(
         compacted: None,
         system: None,
         session_id: session_id.map(str::to_string),
-        tree_directory: None,
     })
     .expect("payload");
     let decision = listener.handle(points::REQUEST, &mut payload).await;

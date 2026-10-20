@@ -1,7 +1,8 @@
 /** 折叠行身份矩阵（《Conversation Flow Rendering Spec v1.md》§3.2 身份枚举 + §5.3 完整表）。
  *
- * 38 个身份 = 33 个 L1 精确名 + 4 个 L2 前缀族 + 1 个 L3 兜底（`fallback`）。一个身份决定
+ * 28 个身份 = 24 个 L1 精确名 + 3 个 L2 前缀族 + 1 个 L3 兜底（`fallback`）。一个身份决定
  * 八件事：图标 / 类型词 / 摘要来源 / 展开形态 / 右栏入口 / 是否可折 / 语言徽章 / diff。
+ * （S4 刀③c 随记忆整线退役删掉记忆族 10 个身份，从 38 降到 28；读数由 `check-render-matrix.mjs` 把守。）
  *
  * 本文件是**唯一登记面**：加一个工具 = 在这里加一行，别处不改。
  * `lib/tool-detail/kinds.ts` 的 `KIND_TABLE` 与 `toolKind()` 已并入此处并删除（设计稿 §3.3）。
@@ -45,7 +46,8 @@ export interface ToolView {
   diff: "show" | "none";
 }
 
-/** 38 个身份键（设计稿 §3.2；L1 精确名 33 + L2 前缀族 4 + L3 兜底 1）。 */
+/** 28 个身份键（设计稿 §3.2；S4 刀③c 删掉记忆族 10 个身份；
+ *  L1 精确名 24 + L2 前缀族 3 + L3 兜底 1）。 */
 export type ToolIdentity =
   | "fs_read"
   | "fs_list"
@@ -59,15 +61,6 @@ export type ToolIdentity =
   | "shell"
   | "shell_read"
   | "fetch"
-  | "memory_write"
-  | "memory_delete"
-  | "memory_undo"
-  | "memory_read"
-  | "memory_list"
-  | "memory_search"
-  | "memory_expand"
-  | "memory_search_titles"
-  | "memory_project_history"
   | "search_tools"
   | "subagent_run"
   | "subagent_verify"
@@ -83,7 +76,6 @@ export type ToolIdentity =
   | "git"
   | "schedule"
   | "mcp"
-  | "memory_tree"
   | "fallback";
 
 /** 身份 → 渲染描述。表序与设计稿 §5.3 一致，便于逐行对表。
@@ -138,42 +130,6 @@ export const IDENTITY_TABLE: Record<ToolIdentity, ToolView> = {
   fetch: {
     icon: "globe", verb: "web", summary: "url", body: "text",
     rail: "browser", fold: "always", badge: "none", diff: "none",
-  },
-  memory_write: {
-    icon: "database", verb: "memory", summary: "key", body: "props",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
-  memory_delete: {
-    icon: "database", verb: "memory", summary: "key", body: "props",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
-  memory_undo: {
-    icon: "database", verb: "memory", summary: "key", body: "props",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
-  memory_read: {
-    icon: "database", verb: "memory", summary: "key", body: "props",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
-  memory_list: {
-    icon: "database", verb: "memory", summary: "count", body: "list",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
-  memory_search: {
-    icon: "database", verb: "memory", summary: "query", body: "list",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
-  memory_expand: {
-    icon: "database", verb: "memory", summary: "key", body: "text",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
-  memory_search_titles: {
-    icon: "database", verb: "memory", summary: "query", body: "list",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
-  memory_project_history: {
-    icon: "database", verb: "memory", summary: "title", body: "list",
-    rail: "none", fold: "always", badge: "none", diff: "none",
   },
   search_tools: {
     icon: "search", verb: "search", summary: "query", body: "list",
@@ -235,10 +191,6 @@ export const IDENTITY_TABLE: Record<ToolIdentity, ToolView> = {
     icon: "plug", verb: "plugin", summary: "field", body: "props",
     rail: "none", fold: "always", badge: "none", diff: "none",
   },
-  memory_tree: {
-    icon: "database", verb: "memory", summary: "count", body: "list",
-    rail: "none", fold: "always", badge: "none", diff: "none",
-  },
   fallback: {
     icon: "plug", verb: "tool", summary: "field", body: "props",
     rail: "none", fold: "always", badge: "none", diff: "none",
@@ -261,15 +213,6 @@ const BY_NAME: Record<string, ToolIdentity> = {
   // tool-sandbox 已于 v2.145 退役，此条只服务历史会话日志重放（用户裁定保留）。
   sandbox_run: "shell",
   fetch: "fetch",
-  memory_write: "memory_write",
-  memory_delete: "memory_delete",
-  memory_undo: "memory_undo",
-  memory_read: "memory_read",
-  memory_list: "memory_list",
-  memory_search: "memory_search",
-  memory_expand: "memory_expand",
-  memory_search_titles: "memory_search_titles",
-  memory_project_history: "memory_project_history",
   search_tools: "search_tools",
   subagent_run: "subagent_run",
   subagent_verify: "subagent_verify",
@@ -292,7 +235,6 @@ const BY_NAME: Record<string, ToolIdentity> = {
 const BY_PREFIX: readonly (readonly [string, ToolIdentity])[] = [
   ["git_", "git"],
   ["schedule_", "schedule"],
-  ["memory_", "memory_tree"],
   ["mcp_", "mcp"],
 ];
 
@@ -305,9 +247,6 @@ export const GATE_EXEMPT_TOOLS: Record<string, string> = {
   send_email: "阶段六内置演示工具（desktop/src-tauri/src/demo_tools.rs:17），落 fallback 属预期",
   subagent_run: "注册名取自 SELF_TOOL 常量（crates/kernel-agent/src/subagent/filter.rs:16），非字面量 .into()",
   sandbox_run: "tool-sandbox 于 v2.145 退役，此名只服务历史会话日志重放",
-  memory_expand: "S4 刀③b 随 organize 面退役，此名只服务历史会话日志重放；刀③c 记忆身份整族删除时一并摘掉",
-  memory_search_titles: "同上（S4 刀③b 退役，只服务历史会话日志重放）",
-  memory_project_history: "同上（S4 刀③b 退役，只服务历史会话日志重放）",
 };
 
 /** 工具名 → 身份。L1 精确名 → L2 前缀族 → L3 `fallback`，逐级匹配，不读插件名。 */

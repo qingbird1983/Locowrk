@@ -1,5 +1,5 @@
 //! 组装点·工具目录簇（DESIGN §7.2 + §3.38③④ + plugins.md「宿主内置」通路）：
-//! 宿主内置工具实例的构造 → `with_builtin` 挂进目录 → 树工具与门控/权限围栏
+//! 宿主内置工具实例的构造 → `with_builtin` 挂进目录 → 门控/权限围栏
 //! 组装 → `ToolSource` 注册进内核服务表。
 //!
 //! 本簇语句自 `state/mod.rs` 的 `init_state` **原样搬出**（批 F-3a·F5 结构性
@@ -14,10 +14,7 @@
 //! 1. `browser_console` / `browser_emit` 必须先于 `with_host_tools` 闭包就位
 //!    ——闭包按名捕获工具变量（v2.144 原注）；
 //! 2. `search_catalog` 先于 `main_source`：`search_tools` 吃的是**不含自身**的
-//!    全目录视图（否则检索结果里出现检索工具自己）；
-//! 3. Q1b 的检索回执采集壳（`with_receipt_sink`）只挂 `main_source`——它是
-//!    执行面的观测，`search_catalog` 从不 `resolve`，挂上去既无读数又把"这棵树是什么"
-//!    讲错（v2.184 本批）。
+//!    全目录视图（否则检索结果里出现检索工具自己）。
 //!
 //! `pdf_to_images` 缺席 = 随包 pdfium 不在位时不注册（宁缺勿假，注册必然失败
 //! 的工具是谎报能力）。
@@ -57,9 +54,6 @@ pub(crate) struct Init {
     pub ask_hub: Arc<crate::ask::AskHub>,
     pub schedules: Option<Arc<crate::scheduler::ScheduleDb>>,
     pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
-    /// Q1b 检索回执采集件（观测表 + 键位解析器；与注入侧同一个 `Arc<RecallLog>`，
-    /// 见 `state/memory_stack.rs`）。
-    pub receipt_sink: Arc<crate::recall_receipt::ReceiptSink>,
 }
 
 /// 组装两棵工具目录（检索视图 + 主目录）并把主目录注册进 `Context`，
@@ -82,7 +76,6 @@ pub(crate) fn build_and_provide(init: Init) -> Arc<crate::browser::ConsoleStore>
         ask_hub,
         schedules,
         permission_modes,
-        receipt_sink,
     } = init;
 
     // 工具目录：始终提供（registry 空 → resolve 报 NotAvailable，错误以失败 ToolResult 闭合，§7.2）。
@@ -204,11 +197,7 @@ pub(crate) fn build_and_provide(init: Init) -> Arc<crate::browser::ConsoleStore>
         Some(embed_tool_port),
     ))
     // ㉘·B 计划模式目录围栏（非 Pure 不出目录、resolve 即拒）
-    .with_modes(Arc::clone(&permission_modes))
-    // Q1b（L0·(b)）：检索回执采集壳挂在**执行面**这一棵树上（`search_catalog` 只做
-    // `list_all()` 索引，从不 resolve，因此不接）。第 3 条契约同款推理：观测面也只
-    // 该覆盖真正会被模型调用的那条通路。
-    .with_receipt_sink(receipt_sink);
+    .with_modes(Arc::clone(&permission_modes));
     ctx.provide_dyn::<dyn ToolSource>(Arc::new(main_source));
 
     browser_console

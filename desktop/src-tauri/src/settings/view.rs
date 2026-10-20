@@ -6,8 +6,8 @@ use std::path::Path;
 
 use super::{
     synthesize_view, AppSettings, AppearanceView, ChatView, ContextSettingsView, DeveloperView,
-    EmbeddingView, LlmSettingsView, MemorySettingsView, MultimodalView, PluginsView, ProviderView,
-    SettingsView, ToolsSettingsView,
+    EmbeddingView, LlmSettingsView, MultimodalView, PluginsView, ProviderView, SettingsView,
+    ToolsSettingsView,
 };
 
 pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
@@ -60,27 +60,6 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             threshold_tokens: s.context.threshold_tokens,
             usage_bar: s.context.usage_bar,
             compact_enabled: s.context.compact_enabled,
-        },
-        memory: MemorySettingsView {
-            enabled: s.memory.enabled,
-            top_k: s.memory.top_k,
-            organize_pacing: s.memory.organize_pacing.clone(),
-            organize_chunk_tokens: s.memory.organize_chunk_tokens,
-            memory_manager_model: s.memory.memory_manager_model.clone(),
-            memory_manager_provider: s.memory.memory_manager_provider.clone(),
-            tail_strategy: s.memory.tail_strategy.clone(),
-            tail_window_turns: s.memory.tail_window_turns,
-            collapse_enabled: s.memory.collapse_enabled,
-            collapse_threshold_pct: s.memory.collapse_threshold_pct,
-            files: s.memory.files,
-            repo_context: s.memory.repo_context,
-            global_layer: s.memory.global_layer,
-            project_layer: s.memory.project_layer,
-            instruction_files: s.memory.instruction_files,
-            instruction_global_kib: s.memory.instruction_global_kib,
-            instruction_project_kib: s.memory.instruction_project_kib,
-            fact_cards: s.memory.fact_cards,
-            fact_card_max: s.memory.fact_card_max,
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,

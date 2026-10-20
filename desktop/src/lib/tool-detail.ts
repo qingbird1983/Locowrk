@@ -11,7 +11,7 @@
 // from "../../lib/tool-detail"`：两个函数与六个类型都由上面那段 import/export 接面
 // （TS 没有 `mod` + `pub use`，对账里这一刀的"接上面"判的是"每个片名都被主文件引用一次"）。
 // 片里导出而主文件**不再导出**的 15 个 helper 不算公开面——组件取它们要写全路径，现状无人取。
-import { clip, relativeTimeMs, relativeTimeSec } from "./format";
+import { clip, relativeTimeMs } from "./format";
 import { relativizeDetail } from "./tool-args";
 
 import {
@@ -188,43 +188,6 @@ export function toolDetail(
     ]);
     const body = typeof o.body === "string" ? o.body.trim() : "";
     if (body) blocks.push({ kind: "text", content: clip(body, 800) });
-    return { blocks };
-  }
-
-  if (tool === "memory_write" || tool === "memory_read") {
-    const scope = fmtEnum("scope", o.scope, tr);
-    const updated =
-      typeof o.updated_at === "number"
-        ? fmtTime(relativeTimeSec(o.updated_at), tr)
-        : "";
-    const value = str(o, "value") || str(a, "value");
-    pushProps(blocks, [
-      prop(tr("tool.label.key"), str(o, "key") || str(a, "key"), "mono"),
-      value ? prop(tr("tool.label.value"), clip(value, 200)) : null,
-      prop(tr("tool.label.tags"), str(o, "tags") || str(a, "tags")),
-      updated ? prop(tr("tool.label.updatedAt"), updated) : null,
-      scope ? prop(tr("tool.label.scope"), scope) : null,
-      typeof o.found === "boolean" ? prop(tr("tool.label.found"), tr(o.found ? "tool.value.yes" : "tool.value.no")) : null,
-    ]);
-    return { blocks };
-  }
-
-  if (tool === "memory_search" || tool === "memory_list") {
-    pushProps(blocks, [prop(tr("tool.label.query"), str(a, "query"))]);
-    const matches = Array.isArray(o.matches) ? o.matches : [];
-    if (matches.length > 0) {
-      blocks.push({
-        kind: "list",
-        items: matches.slice(0, 30).map((m) => {
-          const rec = asRecord(m);
-          return {
-            icon: "tool" as const,
-            title: typeof rec.key === "string" ? rec.key : "",
-            meta: typeof rec.value === "string" ? clip(rec.value.trim(), 100) : "",
-          };
-        }),
-      });
-    }
     return { blocks };
   }
 

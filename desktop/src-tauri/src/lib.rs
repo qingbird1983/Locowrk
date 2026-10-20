@@ -10,9 +10,6 @@
 //! - `data_root`：安装态数据根与市场目录解析（§11.3）
 //! - `settings`：设置存储——settings.json 于数据根；API Key 只落盘不出
 //!   IPC，投影仅 api_key_set（§13.1 / §13.5）
-//! - `memory`：记忆库宿主访问（⑪）——Memory-Inject 检索源（kernel-agent
-//!   MemorySource trait 的桌面实现）+ 记忆管理页存储支撑（读源 = 真源 md；
-//!   那张 `memory.sqlite3` 影子表现在只由宿主自己维护：学习量两列 + reconcile）
 //! - `llm`：真实模型接入（阶段八②，LLM.md v3.0）——自建 OpenAI 兼容统一客户端
 //!   适配器（openai / anthropic / ollama），由设置面板驱动分发
 //! - `demo_llm`：阶段五脚本模型（现为 llm 模块的未配置回落替身）
@@ -46,24 +43,15 @@ mod export;
 mod file_view;
 mod fragments;
 mod idle;
-mod inject_view;
 mod instruction_files;
 mod llm;
 mod media;
-mod memory;
-mod memory_files;
-mod memory_index;
-mod memory_reconcile;
-mod memory_tree_reconcile;
 mod model_override;
 mod notifications;
 mod permission_mode;
 mod permission_rules;
 mod plugins_root;
 mod privacy;
-mod recall_log;
-mod recall_receipt;
-mod repo_context;
 mod runner;
 mod scheduler;
 mod search_tools;
@@ -206,20 +194,6 @@ pub fn run() {
             commands::llm_probe_window,
             commands::llm_probe_embedding,
             commands::llm_cache_diagnose,
-            commands::memory_list,
-            commands::memory_update,
-            commands::memory_delete,
-            commands::memory_clear_all,
-            commands::memory_reconcile,
-            commands::memory_reveal_folder,
-            commands::memory_reveal_project,
-            commands::memory_inject_view,
-            commands::memory_layers,
-            commands::memory_clear_layer,
-            commands::memory_obsolete_list,
-            commands::memory_obsolete_restore,
-            commands::memory_obsolete_purge,
-            commands::memory_reveal_layer,
             commands::tool_exposure_debug,
             commands::pick_directory,
             commands::pick_files,

@@ -11,9 +11,9 @@
 //! `dialog`（OS 原生目录 / 存储 / 多选文件对话框）、
 //! `notifications`（应用内通知读与置读）。
 //! 原有各片（ask / assets / browser / llm / llm_import / plugins / schedule /
-//! sessions）与 `#[cfg(test)]` 那条点名再导出不受本刀影响。S4 刀③b：
-//! `organize` 片随宿主模块整面删除（八条树命令 + `/整理`）；`memory` 片本体
-//! 留到刀③c，与记忆存储/注入同刀收口——先删一半会让读口变成无消费者的死代码。
+//! sessions）与 `#[cfg(test)]` 那条点名再导出不受本刀影响。S4：`organize` 片随
+//! 宿主模块整面删除（八条树命令 + `/整理`，刀③b）；`memory` 片随记忆存储/注入
+//! 同刀收口（十四条记忆命令，刀③c）。
 
 mod approvals;
 mod ask;
@@ -25,7 +25,6 @@ mod dialog;
 mod files;
 mod llm;
 mod llm_import;
-mod memory;
 mod notifications;
 mod plugins;
 mod probe;
@@ -43,7 +42,6 @@ pub use dialog::*;
 pub use files::*;
 pub use llm::*;
 pub use llm_import::*;
-pub use memory::*;
 pub use notifications::*;
 pub use plugins::*;
 pub use probe::*;

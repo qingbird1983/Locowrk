@@ -30,11 +30,10 @@ fn req(system: &str, msgs: &[&str], session: &str) -> LlmRequest {
     }
 }
 
-/// S3 刀① 换标签：旧夹具用的是 `<persistent_memory>`（那块已并入 `<memory_index>`）。
-/// 夹具形状照**生产实际写出的那一行**抄（段头 `[global]` + 指针行），不照想象编。
-const SYS_V1: &str = "base prefix\n<memory_index>\n[global]\n- [a](a.md) — 1\n</memory_index>";
-const SYS_V2_MEMORY_CHANGED: &str =
-    "base prefix\n<memory_index>\n[global]\n- [a](a.md) — 2\n</memory_index>";
+/// S4 刀③c：system 不再有记忆索引段（记忆线整体退役），夹具回到生产实际形态
+/// ——静态身份层 + 思考语言两句，无协议标记。
+const SYS_V1: &str = "base prefix\nthink in the user's language";
+const SYS_V2_CHANGED: &str = "base prefix\nthink in the user's language (v2)";
 
 #[test]
 fn pure_append_is_healthy() {
@@ -48,14 +47,15 @@ fn pure_append_is_healthy() {
 }
 
 #[test]
-fn memory_block_change_is_located_to_sub_block() {
+fn system_change_is_reported_as_base() {
     let d = Diagnoser::default();
     let _ = d.record(&req(SYS_V1, &["hi"], "s2"));
-    let r = d
-        .record(&req(SYS_V2_MEMORY_CHANGED, &["hi", "x"], "s2"))
+    let r = d.record(&req(SYS_V2_CHANGED, &["hi", "x"], "s2")).unwrap();
+    assert_eq!(r.breaks, vec!["base"], "无标记段 = 整块 base 变化");
+    let unchanged = d
+        .record(&req(SYS_V2_CHANGED, &["hi", "x", "y"], "s2"))
         .unwrap();
-    assert_eq!(r.breaks, vec!["<memory_index>"], "定位到记忆子块");
-    assert!(!r.breaks.iter().any(|b| b == "base"), "base 未动不误报");
+    assert!(unchanged.healthy(), "system 没动不误报");
 }
 
 #[test]

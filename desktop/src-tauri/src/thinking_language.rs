@@ -4,19 +4,20 @@
 //! 设计对齐文档：
 //! - **不是插件、不是内核中间件**：宿主内置监听器（TreeDirectoryInject
 //!   同款注册方式），配置是设置项 `thinking.language`（§1 不跨 ABI）。
-//! - **链位**（§6；v2.139 提示词分层设计 §6 重排）：注册在 Memory-Inject
-//!   之后、TreeDirectoryInject **之前**——静态 hint 不得排在只增目录之后
-//!   （旧序每整理一次断一次该段前缀缓存）；append-only 目录殿后。
+//! - **链位**（提示词分层设计 §6；S4 刀③c 链位订正）：注册在
+//!   `BaseSystemInject` 之后、`InstructionFilesInject` **之前**——静态身份层
+//!   之后紧跟思考语言 hint，会随文件 mtime 变的指令文件殿后；S4 之前那条
+//!   append-only 树目录（TreeDirectoryInject）已随记忆整线退役。
 //! - **会话内锁死**（§5 前缀缓存红线）：按 session_id 首请求解析一次并
 //!   缓存；中途改设置当前会话不变，新会话用新配置。None 身份（headless /
 //!   无身份请求）也缓存一条（M1 同款）。
 //! - 「跟随界面」（§3）：settings.locale（zh-CN / en），`system` 档经
 //!   sys-locale 解析 OS 语言（tray.rs 同源）。
 //! - 提示词模板在 `prompts/thinking_language/*.md`，编译期 include_str!
-//!   （memory-tree prompts 同款——单文件分发前提下的「不硬编码」）。
+//!   （单文件分发前提下的「不硬编码」）。
 //!
 //! 缓存驱逐边界（记档）：FIFO 128 槽，被驱逐的超长会话会重新解析、可能
-//! 吃到新配置（一次计划内前缀失效）——与 Memory-Inject 预取同口径。
+//! 吃到新配置（一次计划内前缀失效）——与指令文件快照缓存同口径。
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -33,8 +34,8 @@ const EN_HINT: &str = include_str!("prompts/thinking_language/en-US.md");
 // none.md 是空文件：none 档也从模板读，保持「内容全部来自 prompts/」
 const NONE_HINT: &str = include_str!("prompts/thinking_language/none.md");
 
-/// 预解析缓存上限（FIFO 驱逐最旧）：与 Memory-Inject 预取 / ToolExposure
-/// 钉死表同款保险丝。
+/// 预解析缓存上限（FIFO 驱逐最旧）：与 ToolExposure 钉死表 /
+/// InstructionFiles 快照缓存同款保险丝。
 const CACHE_CAP: usize = 128;
 
 /// 会话 → 已锁死的 hint（空串 = none 档，也缓存避免每轮重读设置）。

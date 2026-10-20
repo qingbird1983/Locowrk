@@ -27,7 +27,5 @@ export * from "./api/session-title";
 export * from "./api/probe";
 export * from "./api/developer";
 export * from "./api/pushes";
-// S4 刀②/③b：记忆树包装层已随 organize 宿主模块删除；记忆管理面包装层留到刀③c
-// 与后端记忆面同删（先删包装会让 check-commands 的「后端有、前端无入口」判红）。
-export * from "./api/memory";
-
+// S4 刀②/③b/③c：记忆树与记忆管理的包装层全部随宿主模块删除（organize 面与
+// `memory` 面同刀收口），这里不再有记忆命令的入口。

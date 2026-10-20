@@ -14,7 +14,7 @@ mod chain;
 mod legacy;
 
 use super::InstructionFiles;
-use crate::memory::MemoryStore;
+use crate::workspace::WorkspaceResolver;
 use kernel_agent::InstructionSource;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -24,38 +24,25 @@ fn temp_dir(tag: &str) -> PathBuf {
 }
 
 /// 解析器：`ws-` 前缀会话 → 真实临时仓库（repo_root 要求 is_dir）。
-fn fixture(tag: &str) -> (PathBuf, PathBuf, Arc<MemoryStore>) {
+fn fixture(tag: &str) -> (PathBuf, PathBuf, WorkspaceResolver) {
     let data = temp_dir(tag);
     let repo = data.join("repo");
     std::fs::create_dir_all(&repo).unwrap();
-    let store = MemoryStore::new(&data, {
+    let ws: WorkspaceResolver = {
         let repo = repo.clone();
         Arc::new(move |sid: &str| sid.starts_with("ws").then(|| repo.display().to_string()))
-            as crate::workspace::WorkspaceResolver
-    });
-    (data, repo, Arc::new(store))
+    };
+    (data, repo, ws)
 }
 
-fn source(data: &Path, store: &Arc<MemoryStore>, on: bool) -> InstructionFiles {
-    source_budgeted(data, store, on, 100, 100)
+/// 生产形态：恒定开启、单链 100 KiB（S4 刀③c 写死的 [`super::INSTRUCTION_CHAIN_KIB`]）。
+fn source(data: &Path, ws: &WorkspaceResolver) -> InstructionFiles {
+    InstructionFiles::new(Arc::clone(ws), data.join("AGENTS.md"))
 }
 
-/// 固定两档预算的构造体。缺省传 100/100 = 改前那颗写死的 `MAX_FILE_BYTES`，
-/// 所以「只有一份 AGENTS.md」的场景在改前改后逐字节相同（等价判据
-/// `default_budgets_equal_the_old_hardcoded_cap` 钉的就是这个对账）。
-fn source_budgeted(
-    data: &Path,
-    store: &Arc<MemoryStore>,
-    on: bool,
-    global_kib: u32,
-    project_kib: u32,
-) -> InstructionFiles {
-    InstructionFiles::new(
-        Arc::clone(store),
-        data.join("AGENTS.md"),
-        Arc::new(move || on) as Arc<dyn Fn() -> bool + Send + Sync>,
-        Arc::new(move || (global_kib, project_kib)) as Arc<dyn Fn() -> (u32, u32) + Send + Sync>,
-    )
+/// 小额度构造体：只服务链装配体的截断/跳过标记判据——生产没有第二个档位了。
+fn source_with_cap(data: &Path, ws: &WorkspaceResolver, cap_kib: usize) -> InstructionFiles {
+    InstructionFiles::with_cap(Arc::clone(ws), data.join("AGENTS.md"), cap_kib * super::KIB)
 }
 
 // ===== v2.188 · 队列 Q4：三族候选 + 两档链预算 =====

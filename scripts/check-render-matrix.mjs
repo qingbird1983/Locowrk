@@ -3,7 +3,8 @@
  * 对话流身份矩阵完备性闸（spec 06 AC-1；设计稿 §3.2 身份枚举 / §4 相位 / §5.3 矩阵表）。
  *
  * 四项判据，任一不合就失败（输出恒为一行 `KEY=值 ...`，便于肉眼与脚本两头读）：
- *   IDENTITIES   身份表条数，必须 = 38 —— 往表里加一行身份立刻报红
+ *   IDENTITIES   身份表条数，必须 = 28 —— 往表里加一行身份立刻报红
+ *                （S4 刀③c 删记忆族 10 个身份后从 38 降到 28；改这个数必须显式改判据）
  *   PHASES       相位表条数，必须 = 5
  *   UNREGISTERED 真实工具名与矩阵对不上的条数，必须 = 0。**双向**查：
  *                ① Rust 侧注册了、矩阵却落到 `fallback`（真话：新加了工具没登记）
@@ -27,7 +28,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MATRIX = join(root, "desktop/src/lib/chat/render-matrix.ts");
 const LOCALE = join(root, "desktop/src/locales/zh-CN/tools.ts");
 
-const EXPECT_IDENTITIES = 38;
+const EXPECT_IDENTITIES = 28;
 const EXPECT_PHASES = 5;
 
 /** 取一块源码：从锚点起到下一个块尾（默认顶格 `};`）。 */

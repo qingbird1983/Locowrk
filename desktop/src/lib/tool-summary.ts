@@ -29,10 +29,6 @@ export function toolAction(
     git_status: "tool.action.gitStatus",
     git_diff: "tool.action.gitDiff",
     git_commit: "tool.action.gitCommit",
-    memory_write: "tool.action.memoryWrite",
-    memory_read: "tool.action.memorySearch",
-    memory_search: "tool.action.memorySearch",
-    memory_list: "tool.action.memorySearch",
     search_tools: "tool.action.searchTools",
     subagent_run: "tool.action.subagent",
     subagent_verify: "tool.action.subagentVerify",
@@ -60,7 +56,7 @@ export function toolAction(
     }
     return { key: "tool.action.mcpStatus" };
   }
-  // 表外工具（memory_expand / ask_user / browser_* 等宿主内置）不再回落裸工具
+  // 表外工具（ask_user / browser_* 等宿主内置）不再回落裸工具
   // id——设计稿 §5.3 硬规矩「动词永不出现裸工具 id」：统一拿身份矩阵的类型词
   // 兜底（`tool.type.*`，表外的表外还是「工具」）；加工具时只改矩阵那一行。
   return { key: `tool.type.${toolView(tool).verb}` };

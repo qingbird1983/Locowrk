@@ -45,7 +45,6 @@ function prodRustFiles() {
 
 const F = {
   memlayout: 'crates/plugin-api/src/memlayout/mod.rs',
-  memIndex: 'desktop/src-tauri/src/memory_index.rs',
   rsFont: 'desktop/src-tauri/src/settings/appearance.rs',
   tsFont: 'desktop/src/lib/ui-font.ts',
   css: 'desktop/src/style.css',
@@ -132,30 +131,6 @@ function memlayoutFace() {
 }
 
 /**
- * 宿主记忆面（S1 刀②c-1 加，SS11 的扫描面）：`memory.rs` + `memory/` 整棵树（排 tests）
- * + `memory_index.rs` + `memory_files.rs`（这两处是目录式，各自只取主文件，tests 不进面）。
- *
- * 口径**刻意不含** `recall_log/`：它有自己的库访问，而 SS11 判的是"sqlite 兜底档"这套
- * 概念，把观测表数进来这条判据就立不住。（原先这里还点名 `memory_learn/` —— 那一族
- * 在 S3 刀③b 整族退役，目录已不存在；这句留作记号，别再把它当"待拍板"读。）
- * 面为什么按名字列而不是整棵
- * `desktop/src-tauri/src` 扫：那棵树里 `organize/`、`state/`、`commands/` 各自有
- * 与兜底档无关的同名字段（`files_on` 在 `state/` 里 legitimately 仍存在），
- * 判据一宽就变成"这个名字全仓不许出现"——那不是这条判据要说的话。
- */
-function hostMemoryFace() {
-  const tree = walkExt('desktop/src-tauri/src/memory', /\.rs$/).filter(
-    (rel) => !/(^|\/)tests(_?\.rs|\/)/.test(rel),
-  );
-  const heads = [
-    'desktop/src-tauri/src/memory.rs',
-    'desktop/src-tauri/src/memory_index.rs',
-    'desktop/src-tauri/src/memory_files.rs',
-  ].filter((rel) => fs.existsSync(path.join(ROOT, rel)));
-  return [...tree, ...heads].map((rel) => read(rel)).join('\n');
-}
-
-/**
  * 模块面通用取法（S2 刀① 加，SS16 的扫描面）：`主文件 + 同名目录子树`，排 tests、剥行注释。
  *
  * 为什么要"主文件 + 子树"两个入口一起给：`context_budget.rs` 现在只有一个文件，但本仓
@@ -202,54 +177,13 @@ function moduleFace(mainRel, dirRel) {
 }
 
 /**
- * 对账 / 启动导出面（S1 刀②c-2 加，SS12 的扫描面）：两份「读影子 + 写投影」编排模块的
- * 主文件（tests 不进面）。
- *
- * 口径**刻意不含** `memory/` 树：那里 `crud.rs` 走的是**正向**写路径（真源 md 先落、
- * 影子跟后），合法在场。把它数进来这条判据就变成"宿主不许写 md"，说的不是本刀的事；
- * 本刀要说的话只有一句：**副本不许反写文件**。
- */
-function reconcileFace() {
-  return [
-    'desktop/src-tauri/src/memory_reconcile.rs',
-    'desktop/src-tauri/src/memory_files.rs',
-  ]
-    .filter((rel) => fs.existsSync(path.join(ROOT, rel)))
-    .map(read)
-    .join('\n');
-}
-
-/**
- * 插件记忆面（S1 刀③b 加，SS13 的扫描面）：`plugins-src/memory-sqlite/src` 整棵树，
- * **排 tests** 且**剥掉行注释**后拼接。
- *
- * 剥注释是刻意的，而且是这条判据能不能立住的关键：本刀退役的东西在注释里留了大量痕
- * （`store.rs` 头注整段在写"退役掉了 schema.rs / rusqlite / mdsync"）。按字面数名字
- * 会得到一片假红——那是 SS11 第一版撞过的同一个洞（"数的是形状不是名字"）。
- * 而这条判据要说的是「**代码里**不再有打开那张表的通路」，形状本来就只存在于代码行。
- */
-function plugMemoryCode() {
-  return walkExt('plugins-src/memory-sqlite/src', /\.rs$/)
-    .filter((rel) => !/(^|\/)tests(_?\.rs|\/)/.test(rel))
-    .map((rel) =>
-      read(rel)
-        .split('\n')
-        .filter((l) => !/^\s*\/\//.test(l))
-        .join('\n'),
-    )
-    .join('\n');
-}
-
-/**
- * 宿主生产面（S1 刀③b-2 加，SS14 的扫描面）：`desktop/src-tauri/src` 整根、**排 tests**、
- * 剥行注释，返回 `[{rel, code}]`。`rel` 从 `desktop/src-tauri/src/` 起算——这条判据的读数
- * 是"**哪些文件**在写那张表的内容列"，所以文件名本身就是有信息量的形状，比计数强：
+ * 宿主生产面（S1 刀③b-2 加）：`desktop/src-tauri/src` 整根、**排 tests**、剥行注释，
+ * 返回 `[{rel, code}]`。`rel` 从 `desktop/src-tauri/src/` 起算——本闸多数读数是
+ * "**哪些文件**落了这个形状"，所以文件名本身就是有信息量的形状，比计数强：
  * 白名单里那个文件被改名 ⇒ 红，别处多出一个出处 ⇒ 也红，两者都不会被"总数没变"糊过去。
  *
- * 排 tests 是刻意的：测试夹具里手写 `INSERT INTO memories` 是"造一个损坏态的库"的唯一办法
- * （`memory/tests/learning.rs` 那批就是这么造的），数进来这条判据永远红。
- * 剥注释与 SS11/SS13 同一个洞：本刀退役的说明要在头注里写清"被摘掉的是哪三种形状"，
- * 按字面数名字会得到一片假红。
+ * 排 tests 是刻意的：测试夹具里造形状（例如手写建表串）数进来会让判据永远红。
+ * 剥注释是为了不让沿革说明里的旧名字变成假红（SS6 立的口径）。
  */
 function hostDesktopFace() {
   return walkExt('desktop/src-tauri/src', /\.rs$/)
@@ -263,46 +197,11 @@ function hostDesktopFace() {
     }));
 }
 
-/** `memories` 内容列的三种写形状（SS14 的三个靶子）。第二档**按列名收窄**是有意的：
- *  原先它为了不撞 `memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1`
- *  ——那条学的是使用量、不是记忆内容，不收窄 SS14b 一上手就假红。S3 刀③b 那一族整族退役
- *  ⇒ 收窄**照旧保留**（形状是墓碑：将来再有人写按列 UPDATE，无论改哪一列都得显式来动这里）。 */
-const MEM_INSERT = /INSERT INTO memories\s*\(/;
-const MEM_CONTENT_UPDATE = /UPDATE memories\s+SET\s+(?:value|tags|source|updated_at)\b/;
-const MEM_DELETE = /DELETE FROM memories/;
 /** 命中形状的文件集合（排序拼接；一个都没有 = `none`）。 */
 const filesWith = (list, re) => {
   const hit = list.filter((f) => re.test(f.code)).map((f) => f.rel);
   return hit.length ? [...new Set(hit)].sort().join('|') : 'none';
 };
-const memWriters = (m, re) => filesWith(m.hostDesktop, re);
-
-/**
- * 硬删调用面（S1 刀④a 加，SS15a / SS15b 的扫描面）：全生产 .rs（`prodRustFiles` 已经排掉
- * tests），再**排掉 `plugin-api/src/memlayout` 自己**——那一片是 `delete_fact` / `clear_facts`
- * 的定义处与内部实现，把它们算进来这两个集合永远非空、判据就成了自证空转。剥行注释同族口径。
- *
- * 为什么"排定义处"而不是像 SS14 那样把定义处列进白名单：memlayout 内部调用硬删是**它自己的
- * 职责**（`obsolete.rs` 的 `purge_obsolete` 就在删文件），那片的路径一旦进集合，"回收区里
- * 谁能删文件"这条纪律就得靠一串会漂的路径来表达。
- */
-function hardDeleteFace() {
-  return prodRustFiles()
-    .map((abs) => path.relative(ROOT, abs).replace(/\\/g, '/'))
-    .filter((rel) => !rel.includes('plugin-api/src/memlayout'))
-    .map((rel) => ({
-      rel,
-      code: read(rel)
-        .split('\n')
-        .filter((l) => !/^\s*\/\//.test(l))
-        .join('\n'),
-    }));
-}
-
-/** 硬删形状。`(?<!soft_)` 这段 lookbehind 是**判据的承重件**：`soft_delete_fact(` 里含着
- * `delete_fact(`，不剥前缀的话每一条合法软删都会被打红——第一版就是这么错的。 */
-const HARD_DELETE_CALL = /(?<!soft_)delete_fact\s*\(/;
-const HARD_CLEAR_CALL = /(?<!soft_)clear_facts\s*\(/;
 
 /** 外点收口形状 = 挂到 document/window 上的 `pointerdown`（口径见上方注释）。 */
 const DISMISS_SHAPE = /(?:document|window)\.addEventListener\(\s*"pointerdown"/;
@@ -389,15 +288,13 @@ const RING_SHAPE = /impl\s+WaterfallListener\s+for\s+\w+/;
 /**
  * 链位名单（提示词分层设计 §6）：注册序 = system 拼装序，SS8c 按此点名。
  *
- * ⚠ **S3 刀③a 显式改过这张名单**（摘掉 `TreeDirectoryInject` 那一环）。这条判据本来
- * 就是为"改链位必须换人来改判据"而写死的，所以这次改动的账记在这里：树目录注入随
- * 方案稿 §C 退役，`RequestPayload::tree_directory` 字段与 `TreeContextSource::plan()`
- * 仍在（它还管消息切片与树会话标记，生产者在 organize/ = S4 退役面）。
+ * ⚠ 改名即改判据，每一次改动都记在这里：S3 刀③a 摘掉 `TreeDirectoryInject`；S4 刀③
+ * 摘掉 `MemoryInject`（内核 `middleware/memory_inject` 整目录随记忆整线退役——
+ * 提示词层不再有索引注入块，指令文件层仍由 `InstructionFilesInject` 承担）。
  */
 const RINGS = [
   'ToolExposure',
   'BaseSystemInject',
-  'MemoryInject',
   'ThinkingLanguageInject',
   'InstructionFilesInject',
   'FragmentInject',
@@ -427,11 +324,7 @@ function snapshot() {
     comps: pf.comps,
     frontSrc: pf.frontSrc,
     memlayoutTree: memlayoutFace(),
-    hostMemoryTree: hostMemoryFace(),
-    reconcileTree: reconcileFace(),
-    plugMemory: plugMemoryCode(),
     hostDesktop: hostDesktopFace(),
-    hardDelete: hardDeleteFace(),
     budget: moduleFace(
       'desktop/src-tauri/src/context_budget.rs',
       'desktop/src-tauri/src/context_budget',
@@ -439,14 +332,10 @@ function snapshot() {
     spill: moduleFace('desktop/src-tauri/src/spill.rs', 'desktop/src-tauri/src/spill'),
     compact: moduleFace('desktop/src-tauri/src/compact.rs', 'desktop/src-tauri/src/compact'),
   };
-  // S3 刀③b 墓碑三档（SS29 / SS29b / SS29c）的扫描面：三档都从**已有面**派生，
+  // S3 刀③b 墓碑两档（SS29 / SS29b）的扫描面：两档都从**已有面**派生，
   // 不另开一次读盘（同一棵树读两遍 = 两遍之间可以漂）。
   snap.learnGhostRust = snap.rust.map(stripComments).join('\n');
   snap.learnGhostFront = snap.frontSrc.map(stripFrontComments).join('\n');
-  snap.relRust = snap.files.map((f, i) => ({
-    rel: path.relative(ROOT, f).replace(/\\/g, '/'),
-    code: stripComments(snap.rust[i]),
-  }));
   for (const [k, rel] of Object.entries(F)) snap[k] = read(rel);
   return snap;
 }
@@ -517,19 +406,20 @@ const CHECKS = [
   [
     'SS5',
     '设置分区的"校验 + 落值"只有一个写法：编排层 `settings/update.rs` 里 `return Err(` = 3' +
-      '（只剩 locale 与 shortcut 两个根字段各自的拒绝语句）、`.apply_update(` 转发 = 11' +
+      '（只剩 locale 与 shortcut 两个根字段各自的拒绝语句）、`.apply_update(` 转发 = 10' +
       '（T15：改前 310 行就地铺开在编排层，而批 Q6 早就把 developer 收进分区自己——同一件事两种写法，' +
-      '且丑的那种正在长新字段；写回第三处就地校验 = 让下一个改设置的人再猜一次该放哪）',
+      '且丑的那种正在长新字段；写回第三处就地校验 = 让下一个改设置的人再猜一次该放哪。' +
+      '⚠ S4 刀③c 删 memory 区：转发从 11 降到 10，这一行按本档"改判据 = 显式改"的规矩跟着改）',
     (m) =>
       [countOf(m.settingsUpdate, /return Err\(/), countOf(m.settingsUpdate, /\.apply_update\(/)].join('|'),
-    '3|11',
+    '3|10',
   ],
   [
     'SS5b',
-    '且那 11 次转发背后真有 11 个自持的 `fn apply_update` 定义（少一个 = 编排层在替某个分区做事，' +
+    '且那 10 次转发背后真有 10 个自持的 `fn apply_update` 定义（少一个 = 编排层在替某个分区做事，' +
       '多一个 = 有分区自己留着但已不在链上）',
     (m) => String(m.settingsParts.reduce((a, s) => a + countOf(s, /fn apply_update\(/), 0)),
-    '11',
+    '10',
   ],
   [
     'SS6',
@@ -650,137 +540,6 @@ const CHECKS = [
       '真源住在"谁产出这份文件"那一侧，宿主与插件都从它吃数字）',
     (m) => String(countOf(m.memlayoutTree, /pub const MAX_INDEX_(?:LINES|CHARS): usize =/)),
     '2',
-  ],
-  [
-    'SS10c',
-    '且宿主注入侧取的是**再导出**而不是自己 `const` 一份（`memory_index.rs` 里那条 ' +
-      '`pub(crate) use plugin_api::memlayout::{…}`）——退回自定义时 SS10 也会红，' +
-      '但那条红说的是"全仓多了一份数字"，说的是另一件事',
-    (m) =>
-      String(countOf(m.memIndex, /pub\(crate\) use plugin_api::memlayout::\{[^}]*MAX_INDEX_LINES[^}]*\};/)),
-    '1',
-  ],
-  [
-    'SS11',
-    '「sqlite 兜底档」这套概念在宿主记忆面里**调用/定义/字段三档形状**出现次数恒 0' +
-      '（S1 刀②c-1 拆掉的五个名字：`files_face` / `with_files` / `files_on` 是真源可不可选的旧判据，' +
-      '`index_rows` / `from_rows` 是"没接线就去库里现合成"那条通路本体）。' +
-      '⚠ 数的是**形状**不是名字：注释里提旧名字是必要留痕（那五处头注都在解释为什么它没了），' +
-      '按名字数会得到 8 条假红——SS6 早就为同一件事立过这条口径。' +
-      '为什么用结构判据而不是行为测试："未接线的 store"在新形状里**根本无法构造**' +
-      '（句柄由数据根算出），那条旧用例 `files_switch_off_keeps_pure_sqlite` 一删就没有任何' +
-      '测试还挡得住有人把那一档塞回来 ⇒ 这三档 0 就是那块墓碑。' +
-      '口径不含 `recall_log/`：它有库访问但那是**另一件事**（观测表），不是兜底档，' +
-      '把它数进来这条判据就立不住。原先还点名 `memory_learn/`——那一族在 S3 刀③b 退役，' +
-      'specs/05 刀②c-2 那格"待拍板"至此有了答案，这句留在描述里作记号。' +
-      '第三档数的是**字段被读**（`self.files_on`）而不是任何同名参数：' +
-      '`memory_files.rs` 里 `spawn_initial_export` 的 `files_on` 是对账/首启导出的空转开关，' +
-      '它决定"要不要跑后台那一轮"，不决定"数据存哪儿"⇒ 合法在场（判据第一版把它数进去过，' +
-      '得到 1 条假红）',
-    (m) =>
-      [
-        countOf(m.hostMemoryTree, /\.\s*(?:files_face|with_files|index_rows|from_rows)\s*\(/),
-        countOf(m.hostMemoryTree, /\bfn\s+(?:files_face|with_files|index_rows|from_rows)\b/),
-        // 第三档数的是**字段读取**形状而不是声明：`memory_files.rs` 里
-        // `spawn_initial_export(… files_on: Arc<dyn Fn() -> bool …)` 那个参数是
-        // **对账/首启导出的空转开关**（它决定要不要跑后台那一轮，不决定数据存哪儿），
-        // 合法在场。兜底档的特征形状是"store 自己存了这个闭包并在读写路径上问它"。
-        countOf(m.hostMemoryTree, /\bself\.files_on\b/),
-      ].join('|'),
-    '0|0|0',
-  ],
-  [
-    'SS12',
-    '「影子 → 文件」这个方向的反写在**对账 / 启动导出面**里：调用档恒 0、转发档恒 2' +
-      '（两档一起报——`0|0` 那种"两边一起消失"的读法兜不住面瞎）。刀②c-2 停掉的旧通路正是' +
-      '两条 `files.write_fact(...)`：①`memory_reconcile::process_file` 的 `healed` 支（文件没动' +
-      '而索引先行 ⇒ 从索引愈合文件）、②`memory_files::run_initial_export` 的补洞段（库里有一行' +
-      '而文件没有 ⇒ 按索引把文件写出来）。真源 = md 之后它们的含义反过来：**把人已经删掉的记忆' +
-      '在下次启动写回来** ⇒ AC-S1-6 那三条遗忘验证不成立。转发档 2 = `MemoryFiles` 自己的' +
-      '`memlayout::write_fact` / `memlayout::soft_delete_fact` 两条出口（第二条是刀④a 把' +
-      '`delete_fact` 换成软删之后的形态，**条数不变**——这两档报的就是"对真源落笔的出口有几个"），' +
-      '数字变了就是长出第二个' +
-      '对真源落笔的出口，那是有意事件、要显式改这里。' +
-      '与行为测试的分工：那两格各有用例钉着（`a_shadow_ahead_of_the_file_is_reported_but_never_written`' +
-      '/ `initial_export_rebuilds_tree_md_and_writes_no_fact_files`），这条判据**独有**的是' +
-      '"没人调用的一条新反写分支"——它不经过任何测试，只有秒级档看得见（`make quick` 不跑 cargo）',
-    (m) =>
-      [
-        countOf(m.reconcileTree, /\b(?:files|self)\s*\.\s*(?:write_fact|(?:soft_)?delete_fact)\s*\(/),
-        countOf(m.reconcileTree, /\bmemlayout::(?:write_fact|(?:soft_)?delete_fact)\s*\(/),
-      ].join('|'),
-    '0|2',
-  ],
-  [
-    'SS13',
-    '记忆插件（`plugins-src/memory-sqlite/src`，排 tests、**剥掉行注释**）里"打开那张表"的' +
-      '三个形状恒 0：`rusqlite` 引用 / `… memories` 表名 SQL / `Connection::open`' +
-      '（S1 刀③b 的墓碑 = AC-S1-9 要的那条"记忆写路径只许一个出处"）。' +
-      '为什么这条必须是结构判据而不是行为测试：把某枚工具退回"先写库再同步文件"这种形状，' +
-      '既有那 31 条接口用例**一条都不会红**——它们判的是工具契约（返回字段、双层纪律、' +
-      'undo 还原），存储换成什么都照样绿；换句话说"换了存储"这件事在行为面上是不可见的，' +
-      '那就只能由形状判据来守。剥注释的原因写在 `plugMemoryCode()` 上：本刀退役的东西' +
-      '在注释里留痕极多（`store.rs` 头注整段在解释它删了什么），按名字数会得到一片假红' +
-      '——与 SS11 第一版撞的是同一个洞。' +
-      '口径不含宿主：宿主那一侧仍合法地开着这张表（影子 + 学习量两列，' +
-      'specs/05 刀②c-2 第 2 件等拍板），要盯的是"插件不许把库捡回来"',
-    (m) =>
-      [
-        countOf(m.plugMemory, /\brushqlite\b/),
-        countOf(m.plugMemory, /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|FROM)\s+memories\b/),
-        countOf(m.plugMemory, /\bConnection::open\b/),
-      ].join('|'),
-    '0|0|0',
-  ],
-  [
-    'SS14a',
-    '宿主生产面（`desktop/src-tauri/src` 整根，排 tests、剥行注释）里 `INSERT INTO memories (` ' +
-      '这一形状**只许出现在白名单文件里**（S1 刀③b-2：四条 `shadow_*` 退役之后，影子内容列' +
-      '的唯一维护者 = `memory/reconcile.rs`，另一处是 `memory/schema.rs` 那份旧库整表重建迁移）。' +
-      '读数用**文件集合**而不是计数：计数只挡得住"多一处"，挡不住"白名单里那两处搬到了别的文件"' +
-      '与"某处消失了"——集合形状一变就红，红得能直接看见是谁。' +
-      '与行为测试的分工同 SS12/SS13：往写路径塞一条**没被调用**的影子 upsert，cargo 全绿' +
-      '（磁盘变异 CASE 40 就是这么证的），只有这一档看得见',
-    (m) => memWriters(m, MEM_INSERT),
-    'memory/reconcile.rs|memory/schema.rs',
-  ],
-  [
-    'SS14b',
-    '同一面上**没有任何**按列 UPDATE 记忆内容的形状（`UPDATE memories SET value|tags|source|' +
-      'updated_at`）——这是 `shadow_update_value` 的墓碑。口径按列名收窄是有意的：' +
-      '它原先为了不撞 `memory_learn/mod.rs` 那条 `UPDATE memories SET hit_count = hit_count + 1`' +
-      '（学的是使用量不是内容，不收窄一上手就假红）；那一族在 S3 刀③b 退役后收窄**照旧保留**，' +
-      '它现在是墓碑而不是豁免。' +
-      '期望 `none` 的两档（本档与 SS14c 的反面）都由 FLOORS 的面下限兜着，面瞎了不会读成绿',
-    (m) => memWriters(m, MEM_CONTENT_UPDATE),
-    'none',
-  ],
-  [
-    'SS14c',
-    '同一面上 `DELETE FROM memories` 只许 `memory/reconcile.rs` 一处（对账删幽灵行）。' +
-      '`shadow_delete` 与 `shadow_clear` 随刀③b-2 消失 ⇒ 这一档现在也挡住"清空走 SQL"的回头路：' +
-      '真源是文件，清空 = 删文件（`memlayout::clear_facts`），走 DELETE 就是拿副本当契约',
-    (m) => memWriters(m, MEM_DELETE),
-    'memory/reconcile.rs',
-  ],
-  [
-    'SS15a',
-    '硬删一条记忆的调用点在全生产面上**只许一个白名单文件**（S1 刀④a · AC-S1-7：删除改成' +
-      '软删进 `obsolete/` 之后，"把文件真删掉"只剩一处合法身份 = `memory_undo` 撤销一次' +
-      '**新建**（那条用户从来没见过，留在回收区会让那个目录变成补偿日志））。管理页删除、' +
-      '工具删除、清空全部走 `soft_*`。形状是 `delete_fact(` 且**前面不是 `soft_`**（那段 ' +
-      'lookbehind 是承重件：不剥前缀每条合法软删都会被打红）；面排掉 `memlayout` 自己' +
-      '（那是定义处，`purge_obsolete` 在里面删回收区的文件是它的职责）',
-    (m) => filesWith(m.hardDelete, HARD_DELETE_CALL),
-    'plugins-src/memory-sqlite/src/store/undo.rs',
-  ],
-  [
-    'SS15b',
-    '硬删整层的调用点恒 0（`clear_facts(`，同样剥 `soft_` 前缀）：管理页"清空"自刀④a 起是' +
-      '`soft_clear_facts`——一次动作影响整个记忆面，可逆与不可逆的差别必须落在实现里而不落在' +
-      '按钮文案里。这一档期望 `none` ⇒ 由 FLOORS 的面下限兜"扫不到东西"那种假绿',
-    (m) => filesWith(m.hardDelete, HARD_CLEAR_CALL),
-    'none',
   ],
   [
     'SS16a',
@@ -1030,64 +789,15 @@ const CHECKS = [
   ],
   [
     'SS27',
-    'S3 刀① 的注入面标签分工（三段读数）。① 旧两块 `<persistent_memory>` / ' +
-      '`<project_memory_index>` 在全生产 .rs（已排 tests、剥行注释）里必须**零命中**；' +
-      '② 包新块标签的 `format!("<memory_index>` 恰好 1 处 = 组装点唯一（内核那一行）；' +
-      '③ `<memory_index>` 这个字面量只许出现在两个文件里：内核（包标签）与 ' +
-      '`llm/diagnose.rs`（按出现序切 system 子块，那是观测通道不是第二出处）。' +
-      '为什么行为簇不够：内核那 20 条用例全拿假件源跑，它们证"装配对"，证不了' +
-      '"旧标签没被谁悄悄接回去"——把 `<persistent_memory>` 再包一处，测试面可以一条' +
-      '不改全绿，而注入面当场回到双出处（正是这一刀要消灭的那个形状）。' +
-      '③ 用**文件集合**而不是计数：计数只挡得住"多一处"，挡不住"把标签搬到第三个' +
-      '文件里再包一遍"（SS14a 同一条理由）。',
-    (m) => {
-      const code = m.rust.map(stripComments).join('\n');
-      const withRel = m.files.map((f, i) => ({
-        rel: path.relative(ROOT, f).replace(/\\/g, '/'),
-        code: stripComments(m.rust[i]),
-      }));
-      return (
-        `${countOf(code, /<persistent_memory>|<project_memory_index>/)}|` +
-        `${countOf(code, /format!\("<memory_index>/)}|` +
-        filesWith(withRel, /<memory_index>/)
-      );
-    },
-    '0|1|crates/kernel-agent/src/middleware/memory_inject/mod.rs|desktop/src-tauri/src/llm/diagnose.rs',
-  ],
-  [
-    'SS28',
-    'S3 刀③a 的注入文案面（两段读数）。扫描面 = 交给模型读的那三份文案本体' +
-      '（`memory_inject/mod.rs` 的指引块 + `memory_index.rs` 两枚导语 + `repo_context.rs` ' +
-      '的交接段文本），**剥行注释**（注释里提退役物是正常叙述，SS6 那条"数反面会假红"的' +
-      '教训在这里同样适用）。① §D 点名的四枚退役树工具名与 "memory tree" 这一句承诺必须' +
-      '**零命中**——刀③a 改写指引与导语就是为了不再向模型承诺 S4 要拔的东西；' +
-      '② 新写进去的两个要点（排除清单那句"everything belongs in memory" + 空结果的' +
-      '新指向 `.Locowrk/journal/`）必须**恰为 2 处**：只挡退役名的判据可以为"把整段文案' +
-      '删光"而绿，那一段在场但被掏空同样是事故。⚠ 关键词一律取**不被 Rust 续行符拆开**的' +
-      '片段：第一版拿整句 "Not everything belongs in memory" 去比，实测恒 1——源码里那句' +
-      '被 ` \\` + 换行折断了，红的是判据自己，不是文案没落。',
-    (m) => {
-      const face = [
-        'crates/kernel-agent/src/middleware/memory_inject/mod.rs',
-        'desktop/src-tauri/src/memory_index.rs',
-        'desktop/src-tauri/src/repo_context.rs',
-      ];
-      const code = m.files
-        .map((f, i) => ({
-          rel: path.relative(ROOT, f).replace(/\\/g, '/'),
-          code: m.rust[i],
-        }))
-        .filter((f) => face.includes(f.rel))
-        .map((f) => stripComments(f.code))
-        .join('\n');
-      const retired = countOf(
-        code,
-        /memory_project_history|memory_search_titles|memory_expand|memory_collapse|memory tree/,
-      );
-      const kept = countOf(code, /everything belongs in memory|\.Locowrk\/journal\//);
-      return `${retired}|${kept}`;
-    },
-    '0|2',
+    'S4 刀③ 的注入面墓碑：三枚记忆注入块标签（`<persistent_memory>` / ' +
+      '`<project_memory_index>` / `<memory_index>`）在**全生产 .rs**（已排 tests、剥行注释）' +
+      '里命中恒 0。记忆注入整线退役之后，写入方（内核 `memory_inject`）、读取方' +
+      '（`memory_index.rs`）与观测切块（`diagnose.rs` 的 SYSTEM_MARKERS）一起删除——' +
+      '这三个标签从此没有任何合法出处。判据守的是"有人把其中一段接回去"：只要出现一处' +
+      '字面量，说明注入面又长回来了，而行为测试与编译都不会为此变红。' +
+      'SS6 立过的那条口径同样适用：数的是**代码行**不是注释，退役说明里提旧标签是正常叙述。',
+    (m) => String(countOf(m.rust.map(stripComments).join('\n'), /<persistent_memory>|<project_memory_index>|<memory_index>/)),
+    '0',
   ],
   [
     'SS29',
@@ -1113,17 +823,6 @@ const CHECKS = [
       '在 `types/memory.ts` 的退役注释里合法在场，把它数进来当场假红（SS6 那条口径）。',
     (m) => String(countOf(m.learnGhostFront, /\blearnEnabled\b|\brelevanceWeight\b|\.explain\b/)),
     '0',
-  ],
-  [
-    'SS29c',
-    '同一墓碑·第三档（正对照）：`fn recall(` 的定义**恰在两个文件里**——内核契约一处 + ' +
-      '宿主实现一处。这一档是前两档的反面承重：**只数 0 的判据可以为"把整条通路删光"而绿**，' +
-      '而 `recall` 本体这次是**有意留下**的（它身后挂着 `recall_quiet → memory_inject_log` ' +
-      '那条注入埋点；"索引注入时代这笔账怎么记"= specs/10 登记的欠账 ⓠ，不在本刀偷做）。' +
-      '用文件集合而不是计数：计数挡不住"定义搬去第三个文件"，集合一变就红得能看见是谁' +
-      '（SS14a 同一条理由）。',
-    (m) => filesWith(m.relRust, /\bfn recall\s*\(/),
-    'crates/kernel-agent/src/middleware/memory_inject/contract.rs|desktop/src-tauri/src/memory/source.rs',
   ],
   [
     'SS30',
@@ -1185,54 +884,39 @@ const FLOORS = [
   // 刀②a 起 memlayout 是目录式模块：子树面为空 = 目录改名或 walkExt 路径写错，
   // 那时 SS10b 的"读不到定义"会被读成"定义丢了"——先让下限把面本身的问题报出来。
   ['memlayout 子树面非空', (m) => (m.memlayoutTree.length > 2000 ? 1 : 0), 1],
-  // SS11 的期望是"0 次"——面瞎了（目录改名 / walkExt 路径写错 / 忘了 .map(read)）
-  // 会把"什么都没扫到"读成"一个都没出现"= 恒绿。两条下限各挡一种瞎法：
-  // 第一条挡面为空，第二条挡"面里连被换掉的那个函数本体都没有"（= 扫错了树）。
-  ['宿主记忆面非空', (m) => (m.hostMemoryTree.length > 4000 ? 1 : 0), 1],
-  ['宿主记忆面含列举实现', (m) => countOf(m.hostMemoryTree, /fn md_rows/), 1],
-  // SS12 的扫描面是**两份**文件，而它的两档读数恰好都住在其中一份（`memory_files.rs`）：
-  // 另一份改名/删掉时 0|2 照样绿。所以按文件各点一个本体函数，缺哪个红哪个。
-  ['对账面含 process_file 本体', (m) => countOf(m.reconcileTree, /fn process_file/), 1],
-  ['对账面含启动导出本体', (m) => countOf(m.reconcileTree, /fn run_initial_export/), 1],
-  // SS13 期望的是三个 0——面如果因为路径写错而变空，"什么都没扫到"会被读成"一个都没有"。
-  // 两条下限各挡一种瞎法：面为空、以及"扫错了树（连工具入口本体都不在）"。
-  ['插件记忆面非空', (m) => (m.plugMemory.length > 2000 ? 1 : 0), 1],
-  ['插件记忆面含工具入口本体', (m) => countOf(m.plugMemory, /fn memory_write/), 1],
-  // SS14 的三档读数全是**文件名集合**：面瞎了（扫描根改名 / walkExt 写错 / tests 过滤器
-  // 过宽）会得到 `none`，其中 SS14b 恰好期望 `none` ⇒ 那一档会"绿着瞎掉"。两条下限把面
-  // 自己钉住：文件数（现值 200，取七成）+ 白名单那两处 INSERT 本体必须真在面上。
-  ['宿主生产文件数（排 tests）', (m) => m.hostDesktop.length, 140],
-  ['宿主生产面含影子维护本体', (m) => m.hostDesktop.filter((f) => MEM_INSERT.test(f.code)).length, 2],
-  // SS15 两档同样是文件集合，SS15b 期望 `none` ⇒ "面瞎了"与"真的没有"在读数上一模一样。
-  // 第一条下限挡"整个面塌掉"，第二条挡"把 plugins-src 一并排掉"那种改法（白名单点正在那儿）。
-  ['硬删面文件数（全生产排 memlayout）', (m) => m.hardDelete.length, 150],
-  ['硬删面含工具删除本体', (m) => m.hardDelete.filter((f) => /fn memory_delete/.test(f.code)).length, 1],
+  // SS17/19/21c/22/26/30 的读数都吃 `hostDesktop`：面瞎了（扫描根改名 / tests 过滤器
+  // 过宽）会得到 `none` 或空集，其中 SS17b/SS22c 恰好期望 `none` ⇒ "绿着瞎掉"。
+  // 文件数下限取现值 144 的七成。
+  ['宿主生产文件数（排 tests）', (m) => m.hostDesktop.length, 100],
   // SS17 三档同样是文件集合，其中 SS17b 的右档期望 `none` ⇒ 靠下限把面钉住：
   // spill 面（现值 1 个主文件 + 将来的子树）剥注释后不会短，落盘本体必须在面里。
   ['spill 面含落盘本体', (m) => countOf(m.spill, /fn put\s*\(/), 1],
   ['style.css 含基座定义', (m) => countOf(m.css, /--lw-ui-font-size:\s*\d+px/), 1],
   // 现值 11（tests_permission + tests_approval 目录 10 个 .rs），下限取八成
   ['审批测试面文件数', (m) => m.apprTests.length, 8],
-  // 现值 12（settings/ 树里的 .rs，含 memory/ 与 llm/ 子目录），下限取八成
-  ['设置分区面文件数', (m) => m.settingsParts.length, 9],
+  // 现值 17（settings/ 树里的 .rs，S4 刀③c 已删 memory/ 子目录），下限取七成
+  ['设置分区面文件数', (m) => m.settingsParts.length, 12],
   ['前端设置 store 含 applyInstant 定义', (m) => countOf(m.settingsStore, /async applyInstant\(/), 1],
-  // 现值 10（内置插件目录数），下限取八成：plugins-src 整个改名或删掉时，SS7 的
-  // "用例数 = 目录数"会变成 0 = 0 而照样绿——这种"两边一起消失"只能由下限兜。
+  // 现值 9（plugins-src 目录数，含市场夹具 tool-shout；S4 刀③c 删 memory-sqlite 后
+  // 构建清单是 8 个内置插件 + 1 个市场夹具）。下限取八成：plugins-src 整个改名或删掉时，
+  // SS7 的"用例数 = 目录数"会变成 0 = 0 而照样绿——这种"两边一起消失"只能由下限兜。
   ['内置插件数', (m) => m.plugins, 8],
-  // 对账用例的扫描面本身也要有下限：十份用例散在 10 个 src/ 树里，文件数掉一半 = 面瞎了
-  ['插件 src 面文件数', (m) => m.pluginTests.length, 12],
-  // 现值 7（六个内核环 + 宿主思考语言环）。SS8 的期望分母是"实现块数"，环整体被搬出
-  // 扫描面时分子分母一起掉 ⇒ 只能由这条下限兜。下限取 6：留一点重构余量（把一个环
-  // 拆成两个文件只会更多，不会更少）。
-  ['注入环 impl 块数', (m) => ringImpls(m), 6],
-  // 现值 99（components 树的 .vue）。SS9 的期望是"左=右"，扫描面整个塌掉时 0|0 照样绿
-  // ——那种"一起消失"只能由下限兜（与 SS7 那条同一条理由）。
-  ['前端组件 .vue 数', (m) => m.comps.length, 70],
+  // 对账用例的扫描面本身也要有下限：全是散在各 id 的 src/ 树里，文件数掉一半 = 面瞎了
+  // （现值 44，下限取七成）。
+  ['插件 src 面文件数', (m) => m.pluginTests.length, 30],
+  // 现值 5（S4 刀③ 删掉 MemoryInject 后的五个内核环）。SS8 的期望分母是"实现块数"，
+  // 环整体被搬出扫描面时分子分母一起掉 ⇒ 只能由这条下限兜。下限取 4：留一点重构余量
+  // （把一个环拆成两个文件只会更多，不会更少）。
+  ['注入环 impl 块数', (m) => ringImpls(m), 4],
+  // 现值 85（components 树的 .vue，已删记忆面板）。SS9 的期望是"左=右"，扫描面整个塌掉时
+  // 0|0 照样绿——那种"一起消失"只能由下限兜（与 SS7 那条同一条理由）。
+  ['前端组件 .vue 数', (m) => m.comps.length, 60],
   // 现值 6（挂了 document/window 级外点的浮层组件）。下限取一半多一档：少于这个数就说明
   // 扫描面或形状口径漂了，此时 SS9 的"左=右"没有意义。
   ['浮层外点站点数', (m) => dismissCount(m), 4],
-  // 现值 178（desktop/src 的 .ts+.vue）：SS9b/SS9c 的分子分母都从这份面里数
-  ['前端 src 扫描面文件数', (m) => m.frontSrc.length, 120],
+  // 现值 197（desktop/src 的 .ts+.vue，已删记忆包装层与面板）：SS9b/SS9c 的分子分母
+  // 都从这份面里数，下限取七成。
+  ['前端 src 扫描面文件数', (m) => m.frontSrc.length, 140],
   // S2 刀① 的扫描面（SS16 系列）。S4 刀③b 删掉 organize 面那条下限：那个面随
   // organize 整面退役而不存在了（SS16b 同刀退场）。留下的中立尺面在"面瞎了"
   // （目录改名 / walkExt 写错）与"真的没有"之间读数完全相同，所以仍要一条下限兜。
@@ -1276,73 +960,15 @@ if (SELFTEST) {
         'const PROJECTS_DIR: &str = "projects";',
         'const PROJECTS_DIR: &str = "proj";',
       )),
-    // 索引预算三档各一条窄变异（S1 刀①②a）：SS10 数"全仓是不是只有一份数字"，
-    // SS10b 数"那一份在不在 memlayout 子树"，SS10c 数"宿主是不是真的再导出"。
-    // 三条互不遮挡靠的是同一机制：m.rust / m.memlayoutTree / m.memIndex 是三次独立读盘，
-    // 改一份不动另一份——所以每条变异只该红自己那一项（刀②a 前 SS10b/SS10c 还是同一项，
-    // 那时"宿主退回自定义"会同时打掉左右两档，分工证不成立，故拆）。
+    // 索引预算两档各一条窄变异（S1 刀①②a）：SS10 数"全仓是不是只有一份数字"，
+    // SS10b 数"那一份在不在 memlayout 子树"。两条互不遮挡靠的是同一机制：
+    // m.rust / m.memlayoutTree 是两次独立读盘，改一份不动另一份。
+    // （SS10c「宿主再导出」随 `memory_index.rs` 在 S4 刀③c 删除而退场。）
     SS10: (m) =>
       m.rust.push(
         'pub(crate) const MAX_INDEX_LINES: usize = 200;\npub(crate) const MAX_INDEX_CHARS: usize = 25_000;',
       ),
     SS10b: (m) => (m.memlayoutTree = m.memlayoutTree.replace('pub const MAX_INDEX_LINES: usize = 200;', '')),
-    SS10c: (m) =>
-      (m.memIndex = m.memIndex.replace(
-        'pub(crate) use plugin_api::memlayout::{MAX_INDEX_CHARS, MAX_INDEX_LINES};',
-        'pub(crate) const MAX_INDEX_LINES: usize = 200;',
-      )),
-    // 刀②c-1 的墓碑变异：把"没接线就回库里查"那一档塞回宿主记忆面。
-    // 这条变异**必须存在**的理由写在 SS11 的说明里：旧用例 `files_switch_off_keeps_pure_sqlite`
-    // 测的正是被本刀取消的行为，删掉它之后没有任何行为测试还能构造"未接线的 store"
-    // （句柄由数据根算出 ⇒ 那个状态在类型上就不存在）⇒ 挡复活只剩结构判据这一层，
-    // 而结构判据不配变异就等于"抄了一个当前恰好为 0 的数字"。
-    SS11: (m) =>
-      (m.hostMemoryTree +=
-        '\nif self.files_face().is_none() { return self.index_rows(&ws, 200); }\n'),
-    // 刀②c-2 的墓碑变异。它**故意长成一条没人调用的分支**：SS12 与那两条行为测试的分工
-    // 就靠这个形状证明——行为测试对"新增一条未接线的反写函数"是全绿的（它不在任何调用
-    // 路径上），只有结构档看得见。若把这条变异写成"把 healed 支塞回 process_file"，
-    // 它同时会打掉行为测试，证不出 SS12 独有哪一档。
-    SS12: (m) =>
-      (m.reconcileTree +=
-        '\nfn resurrect_from_shadow(r: &MemoryRow, files: &MemoryFiles) {\n    let _ = files.write_fact(&r.workspace, &r.key, &r.value, &r.tags, &r.source, r.updated_at);\n}\n'),
-    // 刀③b 的墓碑变异：把"先写库、库才是真源"那一步塞回插件。它长成一段没人调用的函数
-    // 是有意的（同 SS12 那一档的分工）——真正的红证是"既有 31 条接口用例对它全绿"，
-    // 那句话只有结构档说得出。三档里命中两档就够报红，读数 1|1|0 ≠ 0|0|0。
-    SS13: (m) =>
-      (m.plugMemory +=
-        '\nfn legacy_upsert(conn: &rusqlite::Connection, ws: &str, key: &str) {\n    let _ = conn.execute("INSERT INTO memories (workspace, key) VALUES (?1, ?2)", []);\n}\n'),
-    // 刀③b-2 的三块墓碑（同一族形状，各自要能为自己的变异报红）。这里的 push 是
-    // **自证**（判据不为空转），真正的红证是磁盘变异 CASE 40（真往 crud.rs 塞一条
-    // 没人调用的影子写）——内存 push 与磁盘变异证的是不同的东西，前者证"读数会动"，
-    // 后者证"读数盯的是真实代码形状，且行为面看不见它"。
-    SS14a: (m) =>
-      m.hostDesktop.push({
-        rel: 'memory/crud.rs',
-        code: 'let _ = conn.execute("INSERT INTO memories (workspace, key) VALUES (?1, ?2)", []);',
-      }),
-    SS14b: (m) =>
-      m.hostDesktop.push({
-        rel: 'memory/crud.rs',
-        code: 'let _ = conn.execute("UPDATE memories SET value = ?3 WHERE key = ?2", []);',
-      }),
-    SS14c: (m) =>
-      m.hostDesktop.push({
-        rel: 'memory/crud.rs',
-        code: 'let _ = conn.execute("DELETE FROM memories WHERE key = ?1", []);',
-      }),
-    // 刀④a 的两块墓碑。**故意用 `soft_` 反例形状**（一条没人调用的硬删）自证那个
-    // lookbehind 在承重：写成 `soft_delete_fact(` 的话这两档必须不红，红了就是判据错。
-    SS15a: (m) =>
-      m.hardDelete.push({
-        rel: 'desktop/src-tauri/src/memory/crud.rs',
-        code: 'fn wipe_now(root: &std::path::Path, ws: &str, key: &str) {\n    let _ = memlayout::delete_fact(root, ws, key);\n}',
-      }),
-    SS15b: (m) =>
-      m.hardDelete.push({
-        rel: 'desktop/src-tauri/src/memory/crud.rs',
-        code: 'fn wipe_all(root: &std::path::Path) {\n    let _ = memlayout::clear_facts(root);\n}',
-      }),
     // S2 刀① 的变异（SS16a/SS16c）。SS16a 只加定义 ⇒ 右档（中立面）不动，
     // SS16c 只再写预留常量。两条都长成"没人调用的分支"是有意的（同
     // SS12/SS13 的分工）：cargo 对它们全绿，只有形状档看得见——而这正是刀① 之后
@@ -1451,18 +1077,7 @@ if (SELFTEST) {
       m.rust.push(
         'pub fn _revive(s: &str) -> String {\n    format!("<persistent_memory>\\n{s}\\n</persistent_memory>")\n}\n',
       ),
-    // 窄变异（刀③a）：把"过往去查 memory_project_history"这句承诺塞回**交给模型读**的
-    // 文案里（注释里写它不算——那条口径由 stripComments 守）。它证的正是这一档独有的
-    // 那一格：指引与导语重新向模型承诺 S4 要拔的工具，行为测试一条都不会红。
-    SS28: (m) => {
-      const rel = 'desktop/src-tauri/src/memory_index.rs';
-      m.rust = m.rust.map((s, i) =>
-        path.relative(ROOT, m.files[i]).replace(/\\/g, '/') === rel
-          ? s + '\nconst _LEAD_OLD: &str = "for past work use memory_project_history";\n'
-          : s,
-      );
-    },
-    // 窄变异（刀③b 墓碑三档，各证自己那一格）：
+    // 窄变异（刀③b 墓碑两档，各证自己那一格）：
     // SS29 = 把 trait 方法与契约载荷**塞回宿主生产 Rust**（"通路被捡回来"那种改法：
     //        它不改一行测试、行为面完全看不出，只有形状档看得见）。
     SS29: (m) =>
@@ -1473,14 +1088,8 @@ if (SELFTEST) {
     SS29b: (m) =>
       (m.learnGhostFront +=
         '\nexport const learnEnabled = true\nconst shown = view.explain.present\n'),
-    // SS29c = 把宿主那处 `fn recall` 改名（**摘掉有意留下的东西** ⇒ 正对照档必须红，
-    //         否则前两档的 0 分不清是"没复活"还是"整条通路被删空"）。
-    SS29c: (m) =>
-      (m.relRust = m.relRust.map((f) =>
-        f.rel === 'desktop/src-tauri/src/memory/source.rs'
-          ? { ...f, code: f.code.replace('fn recall(', 'fn recall_renamed(') }
-          : f,
-      )),
+    // （SS29c 的正对照随 `recall` 通路在 S4 刀③c 整条删除而退场：那档原本守的是
+    //  "前两档的 0 不能是删光换来的"，现在通路就是被有意删光——0 = 真删净。）
     // SS30 窄变异（S3 刀④a · ⓟ）：把**进度条那一次**调用换成锚点直取。改后 `fn occupancy(`
     // 的定义仍在（①不红）、两个组装点仍走 assemble（③不红），只有②从 2 掉到 1 ——这一档
     // 独有的形状就是"消费点少了一个"。为什么这一格非要窄变异：`context_budget/tests.rs`
@@ -1608,9 +1217,8 @@ if (SELFTEST) {
       // SS9 与 SS9c 会往这两份面里 push：不各拷一份的话，第一档变异会污染后面每一档
       comps: [...snap.comps],
       frontSrc: [...snap.frontSrc],
-      // SS14a/b/c 同样 push 面元素 ⇒ 同一份拷贝纪律
+      // SS17/SS19/SS21/SS22/SS26/SS30 同样 push 面元素 ⇒ 同一份拷贝纪律
       hostDesktop: [...snap.hostDesktop],
-      hardDelete: [...snap.hardDelete],
     };
     mut(copy);
     const after = runChecks(copy);

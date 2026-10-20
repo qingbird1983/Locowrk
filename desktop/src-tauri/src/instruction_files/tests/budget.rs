@@ -1,6 +1,7 @@
 use super::*;
 
-// 链预算判据（v2.188 · Q4）：两档独立、剩余额度标注、挤掉点名、快照锁字节覆盖预算。
+// 链预算判据（v2.188 · Q4；S4 刀③c 改为写死单档）：截断标注、挤掉点名、
+// 两条链各自满额。
 // ⚠ 内容字符只用 z / q（与截断、跳过两条标记句和 # agentsMd 头部都不撞名），
 // 所以「按字符计数」能当精确读数用；既有那条用 x 的判据口径不同，别混用。
 
@@ -8,11 +9,11 @@ use super::*;
 /// 标记句报的是"还剩多少"（报整条链的档位就是在说谎）。
 #[test]
 fn project_budget_clamps_the_second_family_and_marks_the_leftover_room() {
-    let (data, repo, store) = fixture("chain-clamp");
+    let (data, repo, ws) = fixture("chain-clamp");
     std::fs::write(repo.join("AGENTS.md"), "z".repeat(3_000)).unwrap();
     std::fs::write(repo.join("CLAUDE.md"), "q".repeat(9_000)).unwrap();
     // 8 KiB = 8192 字节：AGENTS 吃掉 3000，CLAUDE 只剩 5192 ⇒ 5192/1024 = 5 KB
-    let body = source_budgeted(&data, &store, true, 100, 8)
+    let body = source_with_cap(&data, &ws, 8)
         .load(Some("ws-session"))
         .unwrap();
     assert_eq!(body.matches('z').count(), 3_000, "第一个族不被压");
@@ -26,16 +27,15 @@ fn project_budget_clamps_the_second_family_and_marks_the_leftover_room() {
 
 /// 额度**收缩但没归零**时的截断标注：这一档和上一条的区别是 `room != cap`
 /// （上一条里第二个族恰好从链首开始用，room 就等于 cap）。
-/// ⚠ 这条不是重复覆盖——「标记报整条链额度」那个变异（M4）在 room == cap 时
-/// 报出来的数字**恰好也对**，只有 room 与 cap 分开的夹具能把它区分开；缺了这条，
-/// M4 就只能咬到整链读数那半边，标记语义这半边是空转判据。
+/// ⚠ 这条不是重复覆盖——「标记报整条链额度」那个变异在 room == cap 时
+/// 报出来的数字**恰好也对**，只有 room 与 cap 分开的夹具能把它区分开。
 #[test]
 fn a_budget_shrinking_still_clamps_the_project_chain() {
-    let (data, repo, store) = fixture("chain-shrink");
+    let (data, repo, ws) = fixture("chain-shrink");
     std::fs::write(repo.join("AGENTS.md"), "z".repeat(2_048)).unwrap();
     std::fs::write(repo.join("CLAUDE.md"), "q".repeat(4_000)).unwrap();
     // 4 KiB = 4096：AGENTS 吃掉 2048 ⇒ CLAUDE 只剩 2048 = **2 KB**，而链档位是 4 KB
-    let body = source_budgeted(&data, &store, true, 100, 4)
+    let body = source_with_cap(&data, &ws, 4)
         .load(Some("ws-session"))
         .unwrap();
     assert_eq!(body.matches('z').count(), 2_048, "第一个族不被压");
@@ -55,10 +55,10 @@ fn a_budget_shrinking_still_clamps_the_project_chain() {
 /// 模型会以为自己拿到了全部项目规则）。
 #[test]
 fn exhausted_budget_skips_later_families_but_names_them() {
-    let (data, repo, store) = fixture("chain-skip");
+    let (data, repo, ws) = fixture("chain-skip");
     std::fs::write(repo.join("AGENTS.md"), "z".repeat(4_096)).unwrap();
     std::fs::write(repo.join("CLAUDE.md"), "q".repeat(10)).unwrap();
-    let body = source_budgeted(&data, &store, true, 100, 4)
+    let body = source_with_cap(&data, &ws, 4)
         .load(Some("ws-session"))
         .unwrap();
     assert_eq!(body.matches('z').count(), 4_096, "刚好装满，不截断");
@@ -77,95 +77,55 @@ fn exhausted_budget_skips_later_families_but_names_them() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// 两档是**两个独立旋钮**，双向都验：全局被压不许挤掉项目，项目被压也不许挤掉全局。
-/// 只验一个方向的夹具抓不住"两条链合用一个额度"的实现——那恰好只在另一个方向露馅。
+/// 两条链**各自吃满同一额度**，不共享计数器：全局 9000 字节与项目 9000 字节
+/// 在同一档 4 KiB 下都被截到 4096，说明第二条链没有从第一条链的已用额度里扣。
+/// （改前这是"两档独立旋钮"的用例；S4 刀③c 只剩一个档位后，它证的是
+/// "一个档位作用两次、互不侵占"，共用计数器会把项目链压成 0。）
 #[test]
-fn global_and_project_budgets_do_not_press_each_other() {
-    let (data, repo, store) = fixture("two-dials");
+fn global_and_project_chains_each_get_the_full_cap() {
+    let (data, repo, ws) = fixture("two-chains");
     std::fs::write(data.join("AGENTS.md"), "z".repeat(9_000)).unwrap();
     std::fs::write(repo.join("AGENTS.md"), "q".repeat(9_000)).unwrap();
 
-    // 全局压到 4 KiB，项目留 100 KiB
-    let body = source_budgeted(&data, &store, true, 4, 100)
-        .load(Some("ws-a"))
+    let body = source_with_cap(&data, &ws, 4)
+        .load(Some("ws-session"))
         .unwrap();
     assert_eq!(body.matches('z').count(), 4_096, "全局链钳在 4 KiB");
-    assert_eq!(body.matches('q').count(), 9_000, "项目链不受全局档位挤压");
-
-    // 反向：项目压到 4 KiB，全局留 100 KiB
-    let body = source_budgeted(&data, &store, true, 100, 4)
-        .load(Some("ws-b"))
-        .unwrap();
-    assert_eq!(body.matches('z').count(), 9_000, "全局链不受项目档位挤压");
-    assert_eq!(body.matches('q').count(), 4_096, "项目链钳在 4 KiB");
+    assert_eq!(
+        body.matches('q').count(),
+        4_096,
+        "项目链另有 4 KiB，不被全局挤压"
+    );
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// 缺省档位的对账：两档都必须是 **100**——那颗写死的 `MAX_FILE_BYTES` 换成可调项时，
-/// 缺省值一动，「只有一份 AGENTS.md」这个存量主形态的注入字节就跟着动。
-/// ⚠ 这里走 `MemorySettings::default()` 而不是直接引 `INSTRUCTION_*_DEFAULT` 常量：
-/// 后者在私有 `settings::memory` 里，为了一条测试去抬生产可见性 = 谎报 API 面。
-/// 合法区间 8–512 的端点由设置面自己的出界判据钉（`settings/tests/instruction_budget.rs`）。
+/// 生产档位的对账：写死值必须是 **100 KiB**——旧设置项缺省是 100，动一个数，
+/// 「只有一份 AGENTS.md」这个存量主形态的注入字节就跟着动（AC-7）。
 #[test]
-fn default_budgets_equal_the_old_hardcoded_cap() {
-    let d = crate::settings::MemorySettings::default();
-    assert_eq!(d.instruction_global_kib, 100, "全局链缺省 = 改前那颗写死值");
+fn production_cap_is_the_old_hardcoded_100_kib() {
     assert_eq!(
-        d.instruction_project_kib, 100,
-        "项目链缺省 = 改前那颗写死值"
+        crate::instruction_files::INSTRUCTION_CHAIN_KIB,
+        100,
+        "写死预算 = 改前那颗写死/缺省值"
     );
 }
 
-/// 预算档位**同样吃快照锁字节**：中途改设置不许改写已定格的会话（消息字节 = 前缀）。
-/// 双向都有独有点——摘掉缓存 ⇒ 同会话第二次跟着变小；预算没接进读盘路径 ⇒ 新会话
-/// 仍按旧额度。
-#[test]
-fn a_relocked_budget_does_not_move_an_ongoing_session() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    let (data, repo, store) = fixture("budget-snapshot");
-    std::fs::write(repo.join("AGENTS.md"), "z".repeat(9_216)).unwrap();
-    let budget = Arc::new(AtomicU32::new(100));
-    let probe = Arc::clone(&budget);
-    let src = InstructionFiles::new(
-        Arc::clone(&store),
-        data.join("AGENTS.md"),
-        Arc::new(|| true) as Arc<dyn Fn() -> bool + Send + Sync>,
-        Arc::new(move || {
-            let v = probe.load(Ordering::SeqCst);
-            (v, v)
-        }) as Arc<dyn Fn() -> (u32, u32) + Send + Sync>,
-    );
-    let first = src.load(Some("ws-session")).unwrap();
-    assert_eq!(
-        first.matches('z').count(),
-        9_216,
-        "首查按当时的 100 KiB 全量读"
-    );
-
-    budget.store(8, Ordering::SeqCst);
-    assert_eq!(
-        src.load(Some("ws-session")).unwrap(),
-        first,
-        "已定格的会话不吃新预算（改了额度也不重锁消息前缀）"
-    );
-    let fresh = src.load(Some("ws-fresh")).unwrap();
-    assert_eq!(fresh.matches('z').count(), 8 * 1024, "新会话按新额度");
-    assert!(fresh.contains("[File truncated: only 8 KB"), "{fresh}");
-    let _ = std::fs::remove_dir_all(&data);
-}
-
-/// 阳性对照：**没有任何候选文件**时两档预算都不得造出内容（否则链装配体的
+/// 阳性对照：**没有任何候选文件**时预算不得造出内容（否则链装配体的
 /// 「空 = None」早退被破，零负担档变成注入空段）。
 #[test]
 fn budgets_never_invent_a_section_when_no_file_exists() {
-    let (data, _repo, store) = fixture("budget-empty");
-    for (g, p) in [(8, 8), (512, 512), (100, 8)] {
+    let (data, _repo, ws) = fixture("budget-empty");
+    for cap in [8usize, 100] {
         assert!(
-            source_budgeted(&data, &store, true, g, p)
+            source_with_cap(&data, &ws, cap)
                 .load(Some("ws-session"))
                 .is_none(),
-            "缺省零负担：档位 {g}/{p} 不该造出段"
+            "缺省零负担：档位 {cap} KiB 不该造出段"
         );
     }
     let _ = std::fs::remove_dir_all(&data);
 }
+
+// S4 刀③c：`a_relocked_budget_does_not_move_an_ongoing_session` 随"两档预算"删除。
+// 预算不再可热调，就没有"中途改预算"这件事可测；快照锁字节的纪律本身仍由
+// `legacy::snapshot_locks_per_session`（同会话不重读文件）钉住。

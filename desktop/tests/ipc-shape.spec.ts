@@ -14,35 +14,32 @@ vi.mock("@tauri-apps/api/core", async () => {
   return { invoke: stub.invoke };
 });
 
-import { askRespond, memoryInjectView, memoryList, setSettings } from "../src/lib/api";
+import { askRespond, getSettings, sessionSearch, setSettings } from "../src/lib/api";
 import { invokeCalls, onCommand, resetIpc } from "./tauri-stub";
 
 beforeEach(() => {
   resetIpc();
   // 本组用例只判「发出去的形状」，返回值不参与 ⇒ 预置成 resolve(undefined)。
   // ⚠ 这里**不给假 payload**：编一个后端不会返回的对象，等于让夹具冒充契约。
-  for (const cmd of [
-    "memory_inject_view",
-    "memory_list",
-    "ask_respond",
-    "settings_set",
-  ]) {
+  // S4 刀③c：原 `memory_inject_view` / `memory_list` 两条随记忆命令注销，形状
+  // 判据换到现役的 `settings_get` / `session_search` 上（同两种形状，不降覆盖）。
+  for (const cmd of ["settings_get", "session_search", "ask_respond", "settings_set"]) {
     onCommand(cmd, undefined);
   }
 });
 
 describe("api 包装层的命令名与参数形状", () => {
-  it("无参命令不发第二参（memory_inject_view 的调用形状 = 命令名 + undefined）", async () => {
-    await memoryInjectView();
-    expect(invokeCalls()).toEqual([{ cmd: "memory_inject_view", args: undefined }]);
+  it("无参命令不发第二参（settings_get 的调用形状 = 命令名 + undefined）", async () => {
+    await getSettings();
+    expect(invokeCalls()).toEqual([{ cmd: "settings_get", args: undefined }]);
   });
 
-  it("缺省参数归一成 null 而不是省略键（memory_list 的 query/limit 两支）", async () => {
-    await memoryList();
-    await memoryList("docker", 3);
+  it("缺省参数归一成 null 而不是省略键（session_search 的 limit 两支）", async () => {
+    await sessionSearch("docker");
+    await sessionSearch("docker", 3);
     const calls = invokeCalls();
-    expect(calls[0]).toEqual({ cmd: "memory_list", args: { query: null, limit: null } });
-    expect(calls[1]).toEqual({ cmd: "memory_list", args: { query: "docker", limit: 3 } });
+    expect(calls[0]).toEqual({ cmd: "session_search", args: { query: "docker", limit: null } });
+    expect(calls[1]).toEqual({ cmd: "session_search", args: { query: "docker", limit: 3 } });
   });
 
   it("ask_respond 的两支各是一种后端形状：answer 的 note 缺省归一为空串，skip 带 reason:null", async () => {
@@ -65,7 +62,7 @@ describe("api 包装层的命令名与参数形状", () => {
     });
   });
 
-  it("settings_set 是「全键 + null 占位」的固定形状：只传 locale 时其余十一键仍在场", async () => {
+  it("settings_set 是「全键 + null 占位」的固定形状：只传 locale 时其余十键仍在场", async () => {
     await setSettings({ locale: "en" });
     const [call] = invokeCalls();
     expect(call?.cmd).toBe("settings_set");
@@ -76,7 +73,6 @@ describe("api 包装层的命令名与参数形状", () => {
       llm: null,
       embedding: null,
       context: null,
-      memory: null,
       tools: null,
       plugins: null,
       chat: null,
@@ -84,6 +80,6 @@ describe("api 包装层的命令名与参数形状", () => {
       thinking: null,
     });
     // 键数也是口径：少一键 = 包装忘了转（Q12 加区时这条会红，正是想要的）
-    expect(Object.keys(call?.args ?? {})).toHaveLength(12);
+    expect(Object.keys(call?.args ?? {})).toHaveLength(11);
   });
 });

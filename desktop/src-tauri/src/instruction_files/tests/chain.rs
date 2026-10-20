@@ -10,12 +10,12 @@ use super::*;
 /// `missing_files_is_none` 分开：那条管"两站都缺 = 整族缺席"，本条管"缺的是哪一站"。
 #[test]
 fn empty_file_does_not_claim_its_family_slot() {
-    let (data, repo, store) = fixture("empty-slot");
-    let locowrk = repo.join(crate::repo_context::DIR);
+    let (data, repo, ws) = fixture("empty-slot");
+    let locowrk = repo.join(crate::instruction_files::LOCAL_DIR);
     std::fs::create_dir_all(&locowrk).unwrap();
     std::fs::write(repo.join("AGENTS.md"), "").unwrap();
     std::fs::write(locowrk.join("AGENTS.md"), "real content").unwrap();
-    let body = source(&data, &store, true)
+    let body = source(&data, &ws)
         .load(Some("ws-session"))
         .expect("空文件不算命中，继续试同族下一站");
     assert!(body.contains("real content"), "{body}");
@@ -29,10 +29,10 @@ fn empty_file_does_not_claim_its_family_slot() {
 /// 族间串联：`CLAUDE.md` 不抢 `AGENTS.md` 的位置，排在它后面。
 #[test]
 fn claude_family_is_appended_after_agents_instead_of_replacing_it() {
-    let (data, repo, store) = fixture("claude-append");
+    let (data, repo, ws) = fixture("claude-append");
     std::fs::write(repo.join("AGENTS.md"), "agents body").unwrap();
     std::fs::write(repo.join("CLAUDE.md"), "claude body").unwrap();
-    let body = source(&data, &store, true)
+    let body = source(&data, &ws)
         .load(Some("ws-session"))
         .expect("两段都在");
     assert!(
@@ -50,15 +50,15 @@ fn claude_family_is_appended_after_agents_instead_of_replacing_it() {
 /// （同一约定的两个家，双读会把同一份规则注两遍）。
 #[test]
 fn claude_family_takes_the_root_file_before_the_dot_claude_one() {
-    let (data, repo, store) = fixture("claude-fallback");
+    let (data, repo, ws) = fixture("claude-fallback");
     std::fs::create_dir_all(repo.join(".claude")).unwrap();
     std::fs::write(repo.join(".claude").join("CLAUDE.md"), "dot claude").unwrap();
-    let src = source(&data, &store, true);
+    let src = source(&data, &ws);
     let body = src.load(Some("ws-session")).expect("回落站命中");
     assert!(body.contains("dot claude"), "根上没有时认 .claude/");
 
     std::fs::write(repo.join("CLAUDE.md"), "root claude").unwrap();
-    let body = source(&data, &store, true)
+    let body = source(&data, &ws)
         .load(Some("ws-session"))
         .expect("根站命中");
     assert!(body.contains("root claude"));
@@ -70,11 +70,11 @@ fn claude_family_takes_the_root_file_before_the_dot_claude_one() {
 /// override 只是排在链尾（读到顺序在后 = 权重高）。
 #[test]
 fn override_lands_last_and_masks_nothing() {
-    let (data, repo, store) = fixture("override-last");
+    let (data, repo, ws) = fixture("override-last");
     std::fs::write(repo.join("AGENTS.md"), "project rules").unwrap();
     std::fs::write(repo.join("CLAUDE.md"), "vendor rules").unwrap();
     std::fs::write(repo.join("AGENTS.override.md"), "my overrides").unwrap();
-    let body = source(&data, &store, true)
+    let body = source(&data, &ws)
         .load(Some("ws-session"))
         .expect("三族都在");
     assert!(

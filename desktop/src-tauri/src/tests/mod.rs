@@ -94,7 +94,6 @@ pub(crate) fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::ApprovalRequest(_) => "approval_request",
         AgentEvent::ContextUsage { .. } => "context_usage",
         AgentEvent::ContextCompacted { .. } => "context_compacted",
-        AgentEvent::ContextSummary { .. } => "context_summary",
         AgentEvent::ScheduleFired { .. } => "schedule_fired",
         AgentEvent::UserMessage { .. } => "user_message",
         AgentEvent::ApprovalResolved { .. } => "approval_resolved",

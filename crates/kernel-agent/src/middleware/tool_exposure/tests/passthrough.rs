@@ -33,7 +33,6 @@ async fn non_request_key_is_noop() {
         compacted: None,
         system: None,
         session_id: None,
-        tree_directory: None,
     })
     .expect("payload");
     let mut v = payload.clone();

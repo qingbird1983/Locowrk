@@ -1,5 +1,6 @@
 /** **设置读写**（DESIGN.md §13.1 / §13.5）：读投影（永不含密钥原值）与部分更新。
- * 更新参数那十二个区就是类型面里的十二个 Update 形状，本片是它们**进前端**的唯一入口。 */
+ * 更新参数那十一个区就是类型面里的十一个 Update 形状（S4 刀③c 起 `memory` 区已删），
+ * 本片是它们**进前端**的唯一入口。 */
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
@@ -9,7 +10,6 @@ import type {
   DeveloperUpdate,
   EmbeddingUpdate,
   LlmUpdate,
-  MemoryUpdate,
   PluginsUpdate,
   SettingsView,
   ToolsUpdate,
@@ -31,7 +31,6 @@ export function setSettings(patch: {
   context?: ContextUpdate;
   tools?: ToolsUpdate;
   plugins?: PluginsUpdate;
-  memory?: MemoryUpdate;
   chat?: ChatUpdate;
   developer?: DeveloperUpdate;
   thinking?: { language: string };
@@ -43,7 +42,6 @@ export function setSettings(patch: {
     llm: patch.llm ?? null,
     embedding: patch.embedding ?? null,
     context: patch.context ?? null,
-    memory: patch.memory ?? null,
     tools: patch.tools ?? null,
     plugins: patch.plugins ?? null,
     chat: patch.chat ?? null,

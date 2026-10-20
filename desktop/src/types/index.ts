@@ -24,22 +24,12 @@ export type {
   TurnState,
 } from "./events-agent";
 
-export type { BrowserOpenPayload, CacheBreakReport, CompactNowView, NotificationItem, ReconcileSummary, RunSummaryView, SessionMeta, SessionSchedule, SessionSearchHit } from "./session";
+export type { BrowserOpenPayload, CacheBreakReport, CompactNowView, NotificationItem, SessionMeta, SessionSchedule, SessionSearchHit } from "./session";
 
 export type { AppearanceUpdate, BatchResult, ChatUpdate, ContextUpdate, DeveloperUpdate, ExposureDebug, SettingsView, ToolsUpdate } from "./settings";
 
-// S4 刀②/③b：记忆树类型随 organize 面删除（UI 无入口、命令已注销）；
-// 记忆管理面其余类型留到刀③c 与后端同删；embedding 两型已迁 llm.ts。
-export type {
-  InjectOverview,
-  InjectView,
-  LayerRow,
-  LayersView,
-  MemoryRow,
-  MemoryUpdate,
-  ObsoleteRow,
-  ObsoleteView,
-} from "./memory";
+// S4 刀②/③b/③c：记忆树与记忆管理类型全部删除（UI 无入口、命令已注销、
+// 后端模块同刀退役）；embedding 两型已迁 llm.ts。
 
 export type { CatalogModelInfo, CatalogStatus, EmbeddingUpdate, ImportApplyReport, ImportCandidate, ImportScanOutcome, LlmSettingsView, LlmUpdate, ModelTestResult, ProbeOutcome, ProviderInput, ProviderModelPricing, ProviderModelSources, ProviderModelView, ProviderModels, ProviderView, SubagentPin } from "./llm";
 

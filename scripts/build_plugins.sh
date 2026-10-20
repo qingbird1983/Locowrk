@@ -51,9 +51,7 @@ PLAN=(
   # 0.2.2（2026-10-11）：同上随批理由（diff/lines/replace 三处都调 resolve_existing）；
   # 0.2.0 是大改版（edit_replace 容错匹配 + 原子写 + exposure 翻 always，经用户确认）
   "tool-edit 0.2.2"
-  # 0.1.5（2026-10-09）：提示词分层批（设计稿 §5.4）——memory_read / memory_search
-  # 描述尾补「Use on demand … not as an opening step」双保险句
-  "memory-sqlite 0.1.5"
+  # S4 刀③c：memory-sqlite 随记忆整线退役（插件数 9 → 8）。
   "tool-mcp 0.1.0"
   "tool-notify 0.1.0"
 )

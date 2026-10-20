@@ -35,8 +35,8 @@ fn old_u128_shape(now: SystemTime) -> u128 {
         .unwrap_or(0)
 }
 
-/// memory.rs:515、memory_reconcile.rs:242、autodisable.rs:20、
-/// commands/plugins.rs:99、usage.rs:275 原文（秒，直接取 `as_secs()`）
+/// autodisable.rs:20、commands/plugins.rs:99、usage.rs:275 原文（秒，直接取
+/// `as_secs()`；`memory.rs` / `memory_reconcile.rs` 两处已随 S4 刀③c 删除）
 fn old_secs_shape(now: SystemTime) -> i64 {
     now.duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)

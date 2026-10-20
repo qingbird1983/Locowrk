@@ -49,9 +49,9 @@ export function fmtEnum(_key: string, v: unknown, tr: Tr): string | null {
  *    键面清单里就没有）⇒ 工具明细里的时间一直直显裸键名「time.hours」，与审计
  *    H3b 同族；它躲过了 `check-i18n` 是因为该闸对"动态拼的前缀"整族豁免——那条
  *    豁免本批补成断言（前缀必须在语言包里真实存在），见 §5 批 F-18 段。
- * ② 旧代码按 `v > 1e12` **猜**单位 ⇒ 改成调用点按数据源声明：memory.updated_at
- *    是秒（`memory.rs` 的 now_secs），schedule.run_at 是毫秒（`timeutil.rs:12`
- *    权威注释「sqlite run_at」+ `ScheduleView.run_at_ms`）。
+ * ② 旧代码按 `v > 1e12` **猜**单位 ⇒ 改成调用点按数据源声明：schedule.run_at
+ *    是毫秒（`timeutil.rs` 权威注释「sqlite run_at」+ `ScheduleView.run_at_ms`；
+ *    记忆线退役前还有 `memory.updated_at` 是秒的例子，现已不存在）。
  * ③ 渲染段与另外六处同形，收进 `relativeTimeLabel` 唯一落点。
  */
 export function fmtTime(rt: RelativeTime, tr: Tr): string {

@@ -56,8 +56,6 @@ desktop/src-tauri/src/llm/client.rs
 desktop/src-tauri/src/llm/app_llm.rs
 desktop/src/components/chat/TranscriptFlow.vue
 desktop/src-tauri/src/events.rs
-desktop/src/components/settings/DeveloperSection.vue
-desktop/src/components/memory/TreeSection.vue
 desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue
 desktop/tests/chat-projection.spec.ts

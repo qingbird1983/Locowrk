@@ -1,6 +1,6 @@
 //! 工具暴露区类型（⑫，exposure 文档 §5.3/§6：N=20 可配 + 约束清单 §3
 //! "每次请求最大工具数可配"——同一个旋钮）：设置原值 / IPC 投影 / 部分
-//! 更新，附 [`kernel_agent::ToolExposureConfig`] 的换算（与 memory 区
+//! 更新，附 [`kernel_agent::ToolExposureConfig`] 的换算（与其它分区
 //! 不同，这里连"生效配置"构造一起同居本文件——settings.rs 的 400 行
 //! 纪律；校验与应用逻辑仍在 settings.rs 的 `update`）。
 

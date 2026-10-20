@@ -9,11 +9,11 @@
 //! 背景 > 一切主动机制**；「背景不是议程」。
 //!
 //! **字节前缀纪律（M1 加强）**：六节全部 `include_str!` 编译期内嵌
-//! （memory-tree prompts 同款），拼接结果跨进程、跨会话逐字节一致；
-//! 注册在 waterfall 最前（ToolExposure 之后、Memory-Inject 之前）=
+//! （思考语言模板同款），拼接结果跨进程、跨会话逐字节一致；
+//! 注册在 waterfall 最前（ToolExposure 之后、ThinkingLanguageInject 之前）=
 //! system 的字节前缀，**跨会话也吃供应商前缀缓存**——比旧行为更强：
 //! 此前每会话 system 开头就是动态记忆块。其后注册的监听器
-//! （Memory-Inject → 思考语言 → 树目录殿后）只做追加不改前缀。
+//! （思考语言 → 指令文件 → 碎片注入）只做追加不改前缀。
 //!
 //! kernel 每 step 重建 payload，`system` 恒从 None 起算，无重复注入。
 
@@ -88,7 +88,6 @@ mod tests {
             compacted: None,
             system: None,
             session_id: None,
-            tree_directory: None,
         })
         .unwrap()
     }

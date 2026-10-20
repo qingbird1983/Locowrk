@@ -7,7 +7,6 @@ members = [
     "crates/plugin-host",
     "crates/plugin-service",
     "crates/session-store",
-    "crates/memory-tree",
     "crates/kernel-bin",
     "plugins-src/tool-echo",
     "plugins-src/tool-shout",
@@ -16,7 +15,6 @@ members = [
     "plugins-src/tool-shell",
     "plugins-src/tool-edit",
     "plugins-src/tool-git",
-    "plugins-src/memory-sqlite",
     "plugins-src/tool-mcp",
     "plugins-src/tool-notify",
 ]

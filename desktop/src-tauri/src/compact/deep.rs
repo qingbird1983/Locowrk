@@ -48,7 +48,7 @@ pub(crate) const WHY_OVERFLOW: &str = "overflow";
 pub(crate) const WHY_REJECTED: &str = "rejected";
 
 /// 一次尝试的读数。四个变体各对应"界面上该说什么"——判据不许靠"返回 0"
-/// 反推是哪一步拦的（`organize::Release::Skip` 同一条纪律）。
+/// 反推是哪一步拦的（S2 整理线 `Release::Skip` 同一条纪律，那个模块已随 S4 删除）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Outcome {
     /// 开关关掉 = 这一层整格不动（唯一一条不看读数的退出）

@@ -30,7 +30,6 @@ fn payload(session: Option<&str>, last: Message) -> serde_json::Value {
         compacted: None,
         system: None,
         session_id: session.map(String::from),
-        tree_directory: None,
     })
     .unwrap()
 }

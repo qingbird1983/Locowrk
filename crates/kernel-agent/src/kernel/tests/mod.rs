@@ -4,17 +4,17 @@
 //! 读凭据），headless 的 Pure 照旧静默放行。目录/审批全用进程内假件，不走 FFI。
 
 //! 拆分说明（v2.160 批 F-10）：本模块只留**跨簇共享件**——顶层 `use`、以及被两个以上
-//! 簇的用例引用的假件（`spec` / `specs` / `call` / `ProbeTool` / `ProbeSource` /
-//! `DriftingMemory` / `Spy` 七件，连各自的 `impl` 块一起）；
-//! 12 条用例按被测面分派到 3 个子文件——`approval`（审批门 consult 范围）· `prefix`
-//! （M1 相邻轮前缀一致）· `tree`（M4 记忆树切流）。形状照 `settings/tests/` 与
-//! `organize/tests/`、`llm/tests/` 先例：共享件是 tests 的私有项，子簇经 `use super::*;`
-//! 取用 ⇒ **可见性零改动**；正文里 `super::` / `self::` 出现 0 次 ⇒ 无相对路径漂移面。
-//! 用例本体逐字搬运，断言一条未增删。
+//! 簇的用例引用的假件（`spec` / `specs` / `call` / `ProbeTool` / `ProbeSource` / `Spy`
+//! 六件，连各自的 `impl` 块一起）；
+//! 用例按被测面分派到 2 个子文件——`approval`（审批门 consult 范围）· `prefix`
+//! （M1 相邻轮前缀一致）。形状照 `settings/tests/`、`llm/tests/` 先例：共享件是
+//! tests 的私有项，子簇经 `use super::*;` 取用 ⇒ **可见性零改动**；正文里
+//! `super::` / `self::` 出现 0 次 ⇒ 无相对路径漂移面。
+//! S4 刀③c：原第三个子文件 `tree`（M4 记忆树切流）随记忆整线退役删除，
+//! `DriftingMemory` 假件同时摘掉——它只服务那条被删的注入链。
 
 mod approval;
 mod prefix;
-mod tree;
 
 use std::sync::{Arc, Mutex};
 
@@ -36,14 +36,9 @@ use crate::kernel::{
     Kernel, LlmError, LlmRequest, LlmResponse, LlmService, ToolCallReq, ToolSource,
 };
 
-use crate::kernel::{TreeContextSource, TreePlan, collapse_expanded, tail_user_start};
-
 use crate::waterfall::points;
 
-use crate::{
-    GlobalEwma, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource, ToolExposure,
-    ToolExposureConfig,
-};
+use crate::{GlobalEwma, ToolExposure, ToolExposureConfig};
 
 fn spec(name: &str, side: SideEffect) -> ToolSpec {
     ToolSpec {
@@ -115,24 +110,6 @@ fn specs() -> Vec<ToolSpec> {
         spec("shell", SideEffect::Irreversible),
         spec("fs_read", SideEffect::Pure),
     ]
-}
-
-/// 逐次漂移的记忆源：每次取数交一行"指针行 = 调用序号"——预取生效 = 只查一次。
-///
-/// ⚠ **S3 刀① 换了取数通道**：原来漂移的是 `recall` 交的**正文条目**，那条通路随
-/// `<persistent_memory>` 一起下线 ⇒ 现在漂移的是 `global_index` 的指针行。断言语义
-/// 一个字没动（证的还是"跨轮逐字节冻结 + 每会话至多取数一次"），只换取数的地方。
-struct DriftingMemory(std::sync::atomic::AtomicUsize);
-
-impl MemorySource for DriftingMemory {
-    fn recall(&self, _session_id: Option<&str>, _limit: usize) -> Vec<MemoryEntry> {
-        Vec::new()
-    }
-
-    fn global_index(&self, _session_id: Option<&str>) -> Option<String> {
-        let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Some(format!("- [drift](drift.md) — {n}"))
-    }
 }
 
 /// 末位监听器：记录决策环出口 payload（LLM 实际收到的请求形状）。

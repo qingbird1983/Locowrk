@@ -1,7 +1,7 @@
 //! 子代理模型面（批 F）：子内核作用域的 LlmService 注入契约。组装点
 //! （desktop）每子 run 调一次工厂造出「带回退链的服务 + 运行报告」对；
 //! 内核只认这两个类型，不知道回退/钉档语义（§7.2 内核定契约、组装点实
-//! 现，与 TreeContextSource 同模式）。
+//! 现，与 ToolSource 同模式）。
 
 use std::sync::{Arc, Mutex};
 

@@ -34,9 +34,10 @@ const SCAN = ['crates', 'desktop/src-tauri/src', 'plugins-src'];
 const TOKEN = '定性 = 预留待接，不是死码也不是缺陷';
 const LEDGER = '**预留件清单**：';
 // 防"空转而绿"：扫描面或 token 漂了的话本闸会数到 0 处标注然后 exit 0 = 一台不再检查的门禁
-// （历批 H1 抓的正是恒 exit 0 的脚本）。本仓已知有 3 处（snapshot / manager::main_prompt /
-// memory-tree::index），低于这个数就说明**闸自己坏了**。确实要摘掉标注时：改这个常数并给理由。
-const MIN_ANNOTATIONS = 3;
+// （历批 H1 抓的正是恒 exit 0 的脚本）。本仓现存 1 处（snapshot.rs）——S4 刀③c 删掉
+// memory-tree 与 manager::main_prompt 两处之后从 3 降到 1，低于这个数就说明**闸自己坏了**。
+// 确实要摘掉标注时：改这个常数并给理由。
+const MIN_ANNOTATIONS = 1;
 const MIN_SCANNED = 200;
 
 const files = [];

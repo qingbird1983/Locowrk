@@ -33,7 +33,7 @@ import type { AgentEvent } from "../../types";
 
 // 类型面在 ./types.ts；这里把它按**原 chat.ts 的公开面**原样转发。
 // 外部真 import 过的只有四条（实测 grep）：ChatItem / SystemItem / ToolItem / AttachmentItem。
-// S4 刀②：`SummaryItem` 随 `context_summary` 退役（整理轮级总结不再进转录）。
+// S4 刀②/③c：`SummaryItem` 与 `context_summary` 通道整链退役（整理线不再存在）。
 export type {
   AttachmentItem,
   ChatItem,

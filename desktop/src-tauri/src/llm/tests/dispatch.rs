@@ -85,7 +85,6 @@ async fn configured_model_without_key_fails_fast() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     let llm = AppLlm::new(Arc::clone(&store));

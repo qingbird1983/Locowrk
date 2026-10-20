@@ -3,7 +3,8 @@
 //! 为什么存在 = **依赖方向**，不是顺手重构。这两块地原来长在 `organize/`（记忆树
 //! 整理）里，而 organize 按 specs/01 阶段表 D 节 **S4 整面退役**。压缩触发线要吃
 //! 锚点，锚点吃 organize ⇒ 不搬家就是"把 S2 的形状押在一个要删的模块上"。搬完之后
-//! organize 继续吃**这同一份**（它不许留第二把尺，机器面 = 判据 SS16b）。
+//! 两边同吃**这一份**（机器面 = 判据 SS16a）；S4 刀③c 起 organize 已删，现在唯一
+//! 的读数方是压缩触发线与进度条。
 //!
 //! **刀① 当时故意保持的两处不一致，现在只剩一处**（搬家不许改读数，所以那时登记不修）：
 //!
@@ -19,7 +20,8 @@ use session_store::{Session, SessionEvent};
 
 /// 占用锚点来源（观测面如实标注）：S4 刀③a 从 `memory-tree` 的 `trigger`
 /// 迁来——树整面退役，而这枚枚举是压缩触发与进度条共用的观测标签，留下。
-/// 只用 Debug/比较，序列化归界面投影（`organize/debug.rs` 自己转字符串）。
+/// 只用 Debug/比较，序列化归界面投影（S4 前由 `organize/debug.rs` 自己转字符串，
+/// 那个模块已删；现在由进度条投影消费）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AnchorSource {
     /// provider 上报的真实 input tokens（会话日志最后一条 LlmUsage）。

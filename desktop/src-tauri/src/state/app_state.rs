@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
-use kernel_agent::{Kernel, MemoryInjectConfig, ToolExposure, ToolExposureConfig};
+use kernel_agent::{Kernel, ToolExposure, ToolExposureConfig};
 use plugin_service::PluginService;
 use session_store::Session;
 use tauri::AppHandle;
@@ -15,7 +15,6 @@ use tauri::AppHandle;
 use crate::approval::ApprovalHub;
 use crate::events::EventSink;
 use crate::llm::{EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
-use crate::memory::MemoryStore;
 use crate::settings::SettingsStore;
 use crate::usage::UsageRecorder;
 
@@ -40,11 +39,11 @@ pub struct AppState {
     // ⚠ 这里原来放的是 `Arc<crate::organize::TreeAssembler>`（M4 §3.38②）。S3 刀④a
     // 摘掉：它在本层的唯一消费者是 `run_turn` 的 `tree` 参数（进度条的第二把分子），
     // ⓟ 把分子收成 `context_budget::occupancy` 一把之后那条参数连字段一起没了。
-    // 内核侧仍经 `Context` 服务表拿 `TreeContextSource`（同一个实例，那才是它的正职）。
+    // S4 刀③c：内核侧那个 `TreeContextSource` 也随记忆整线退役，本条注释只剩历史读数。
     // 拒收读数没有加成字段：组装点经 `state.compactor.refusal(..)` 读，表只有
     // `Compactor` 一个宿主侧读口（`UsagePolicy::assemble` 的 `refused_tokens` 由它填）。
-    /// 会话态碎片 pending 表（提示词分层设计 §4.4）：organize 收束 /
-    /// 权限切 Plan / 轮次到顶三处置位，FragmentInject 轮开场取件拼接。
+    /// 会话态碎片 pending 表（提示词分层设计 §4.4）：压缩完成 /
+    /// 权限切 Plan / 轮次到顶几处置位，FragmentInject 轮开场取件拼接。
     pub fragments: Arc<crate::fragments::FragmentPending>,
     /// UI 事件出口（§12.2）：runner 与审批请求共用一个 sink。
     pub sink: Arc<dyn EventSink>,
@@ -63,18 +62,6 @@ pub struct AppState {
     pub last_chat: Arc<RwLock<Option<String>>>,
     /// 设置存储（§13.1）。Arc 共享给 AppLlm（每请求重读，改动即生效）。
     pub settings: Arc<SettingsStore>,
-    /// Memory-Inject 的活配置（⑪，settings_set 换入模式）。
-    pub memory_cfg: Arc<RwLock<MemoryInjectConfig>>,
-    /// 记忆库宿主访问（⑪）：Memory-Inject 检索源 + 记忆管理页存储支撑。
-    pub memory: Arc<MemoryStore>,
-    /// 召回观测表句柄（Q1a/Q1b 写侧的同一个 `Arc`）：读侧 = `memory_inject_view` 经
-    /// `inject_view` 取那三个派生读数。S3 刀③b 之后"最近一次四信号解释"那半随学习档退役，
-    /// 逐行读口（`RecallLog::recent`）因此只服务测试。
-    pub recall_log: Arc<crate::recall_log::RecallLog>,
-    /// 记忆人类层句柄（F1/F2）：reconcile 与「打开文件夹」命令的数据源。
-    pub memory_files: Arc<crate::memory_files::MemoryFiles>,
-    /// 文件化总开关闭包（同 state 组装的 files_on；命令层判定空转）。
-    pub memory_files_on: Arc<dyn Fn() -> bool + Send + Sync>,
     /// 使用统计写入端（⑩③，usage.sqlite3 宿主自有）。降级模式 = 丢弃。
     pub usage: Arc<UsageRecorder>,
     /// 应用内通知记录（§3.13，v2.51）：notifications.json 自持，命令层
@@ -97,12 +84,9 @@ pub struct AppState {
     /// 命令与引擎/工具共用同一连接。打不开 = None（调度缺席已降级）。
     pub schedules: Option<Arc<crate::scheduler::ScheduleDb>>,
     /// 主层深度压缩执行体（S2 刀④c）：runner 在每个 step 边界问它一次「到线了没」，
-    /// 到线就把较旧的一段交给摘要模型并落一条 `ContextCompacted`。与 `organizer`
-    /// 共用同一条直呼通路（实例在 `state/background.rs` 构造，理由写在那儿）。
+    /// 到线就把较旧的一段交给摘要模型并落一条 `ContextCompacted`。摘要客户端走主模型
+    /// 直呼通路（实例在 `state/background.rs` 构造，理由写在那儿）。
     pub compactor: Arc<crate::compact::deep::Compactor>,
-    /// 树投影存储句柄（M5 收敛：组装点原来四处各建一份，这里单例共享
-    /// ——便宜克隆句柄，命令层 tree.md 对账也用它）。
-    pub tree_store: memory_tree::TreeStore,
     /// 停止标记注册表（v4.11 §3.39④）：run_turn 进场登记 RAII 守卫、
     /// 收束自动注销；agent_stop 命令置位（流式 delta 点 + 步间边界消费）。
     pub stop_flags: Arc<crate::stop::StopFlags>,

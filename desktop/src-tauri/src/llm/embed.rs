@@ -1,7 +1,7 @@
 //! embedding 客户端（⑬ 智能层共享基建）：OpenAI 兼容 `/v1/embeddings`
 //! 端点（Ollama / OpenAI / 多数聚合网关同形），批量嵌入。实现内核的
 //! [`EmbedPort`] 契约——组装点构建 [`SharedEmbed`] 供 ToolExposure 检索
-//! 信号 / search_tools / 经历记忆三处共用；配置保存即热换入（ RwLock）。
+//! 信号 / search_tools 两处共用；配置保存即热换入（ RwLock）。
 //!
 //! 故障冷却：embedding 是补充信号，端点宕机时不能每个请求都白等超时
 //! ——失败后冷却 [`COOLDOWN`]，期间 `embed` 直接返回 Err（调用方按

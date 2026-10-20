@@ -6,11 +6,11 @@ use super::*;
 
 #[test]
 fn loads_global_and_project_sections() {
-    let (data, repo, store) = fixture("both");
+    let (data, repo, ws) = fixture("both");
     std::fs::write(data.join("AGENTS.md"), "always answer in English").unwrap();
     std::fs::write(repo.join("AGENTS.md"), "use pnpm").unwrap();
 
-    let body = source(&data, &store, true)
+    let body = source(&data, &ws)
         .load(Some("ws-session"))
         .expect("两段都在");
     assert!(body.starts_with("# agentsMd\n"), "{body}");
@@ -28,18 +28,18 @@ fn loads_global_and_project_sections() {
 /// 两者并存 = 前者赢。
 #[test]
 fn project_fallback_chain() {
-    let (data, repo, store) = fixture("fallback");
-    let locowrk = repo.join(crate::repo_context::DIR);
+    let (data, repo, ws) = fixture("fallback");
+    let locowrk = repo.join(crate::instruction_files::LOCAL_DIR);
     std::fs::create_dir_all(&locowrk).unwrap();
     std::fs::write(locowrk.join("AGENTS.md"), "from .Locowrk").unwrap();
 
-    let src = source(&data, &store, true);
+    let src = source(&data, &ws);
     let body = src.load(Some("ws-session")).expect("回落段在场");
     assert!(body.contains("from .Locowrk"), "{body}");
 
     // AGENTS.md 出现即优先（回落链第一站）
     std::fs::write(repo.join("AGENTS.md"), "from root").unwrap();
-    let src2 = source(&data, &store, true);
+    let src2 = source(&data, &ws);
     let body = src2.load(Some("ws-session")).expect("首选项在场");
     assert!(body.contains("from root"), "{body}");
     assert!(!body.contains("from .Locowrk"), "回落不再读");
@@ -48,11 +48,9 @@ fn project_fallback_chain() {
 
 #[test]
 fn missing_files_is_none() {
-    let (data, _repo, store) = fixture("missing");
-    assert!(source(&data, &store, true)
-        .load(Some("ws-session"))
-        .is_none());
-    assert!(source(&data, &store, true).load(None).is_none());
+    let (data, _repo, ws) = fixture("missing");
+    assert!(source(&data, &ws).load(Some("ws-session")).is_none());
+    assert!(source(&data, &ws).load(None).is_none());
     let _ = std::fs::remove_dir_all(&data);
 }
 
@@ -60,10 +58,10 @@ fn missing_files_is_none() {
 /// 新会话 = 新快照。
 #[test]
 fn snapshot_locks_per_session() {
-    let (data, repo, store) = fixture("snapshot");
+    let (data, repo, ws) = fixture("snapshot");
     let path = repo.join("AGENTS.md");
     std::fs::write(&path, "v1 rules").unwrap();
-    let src = source(&data, &store, true);
+    let src = source(&data, &ws);
     let first = src.load(Some("ws-session")).unwrap();
     std::fs::write(&path, "v2 rules").unwrap();
     assert_eq!(
@@ -80,12 +78,10 @@ fn snapshot_locks_per_session() {
 
 #[test]
 fn oversize_file_truncated_with_marker() {
-    let (data, repo, store) = fixture("cap");
+    let (data, repo, ws) = fixture("cap");
     let big = "x".repeat(101 * 1024);
     std::fs::write(repo.join("AGENTS.md"), &big).unwrap();
-    let body = source(&data, &store, true)
-        .load(Some("ws-session"))
-        .unwrap();
+    let body = source(&data, &ws).load(Some("ws-session")).unwrap();
     assert!(body.contains("[File truncated"), "{body}");
     // 精确口径：x 恰 = 截断值 + 头部句 "exactly" 的 1 个（路径与标记句
     // 均不含 x）——多一个都说明钳制失守。
@@ -97,12 +93,5 @@ fn oversize_file_truncated_with_marker() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
-#[test]
-fn disabled_switch_is_none() {
-    let (data, repo, store) = fixture("disabled");
-    std::fs::write(repo.join("AGENTS.md"), "rules").unwrap();
-    assert!(source(&data, &store, false)
-        .load(Some("ws-session"))
-        .is_none());
-    let _ = std::fs::remove_dir_all(&data);
-}
+// S4 刀③c：`disabled_switch_is_none` 随设置项 `memory.instructionFiles` 删除。
+// 指令文件层自此恒定开启（AC-7）——开关不存在了，"关掉就不注入"没有可测对象。

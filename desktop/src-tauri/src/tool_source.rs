@@ -8,10 +8,8 @@
 //! Pure 工具对模型不可见、解析即拒），由 [`PermissionModeStore`] 按会话
 //! 裁决；未接模式存储时不过滤（与 kernel-bin 桥同形）。
 //!
-//! Q1b（召回可观测性·检索回执）：`resolve` 是**执行面唯一的收敛出口**（内置工具与
-//! 插件工具在此之后是同一个 `Arc<dyn Tool>`），所以采集壳挂在这里而不是任何工具本体
-//! 或 `run_turn` 的参数上——理由与排除的两条路写在 `recall_log/mod.rs` 头注。未接观测句柄
-//! 时一行都不记（kernel-bin 桥与测试路径同形）。
+//! S4 刀③c：Q1b 的检索回执采集壳随记忆整线退役（`recall_receipt` / `recall_log`
+//! 模块已删），`resolve` 现在只做内置优先 + 计划围栏两件事。
 
 use std::sync::Arc;
 
@@ -28,9 +26,6 @@ pub struct KernelToolSource {
     inner: RegistryToolSource,
     /// ㉘·B 会话级权限模式（计划模式目录围栏）；None = 不过滤。
     modes: Option<Arc<PermissionModeStore>>,
-    /// Q1b 检索回执的采集件（观测表 + 键位解析器，两者必须同批给）；
-    /// None = 不采集（`resolve` 原样返回工具）。
-    receipts: Option<Arc<crate::recall_receipt::ReceiptSink>>,
 }
 
 impl KernelToolSource {
@@ -39,7 +34,6 @@ impl KernelToolSource {
             builtins: Vec::new(),
             inner,
             modes: None,
-            receipts: None,
         }
     }
 
@@ -52,16 +46,6 @@ impl KernelToolSource {
     /// ㉘·B：接会话级权限模式存储（计划模式目录围栏的数据源）。
     pub fn with_modes(mut self, modes: Arc<PermissionModeStore>) -> Self {
         self.modes = Some(modes);
-        self
-    }
-
-    /// Q1b：接检索回执的采集件（`memory_read` / `memory_search` /
-    /// `memory_project_history` 的成功结果落一行，见 [`crate::recall_receipt`]）。
-    /// 只接**执行面**那一棵树：`state/tools.rs` 里的 `search_catalog` 不接——它只被
-    /// `search_tools` 拿去 `list_all()` 建索引，从不调 `resolve`，接了也不会有读数，
-    /// 但会把"这棵树是干什么的"讲成一个错误的故事。
-    pub fn with_receipt_sink(mut self, sink: Arc<crate::recall_receipt::ReceiptSink>) -> Self {
-        self.receipts = Some(sink);
         self
     }
 
@@ -91,12 +75,7 @@ impl ToolSource for KernelToolSource {
                 "{name} 在计划模式下不可用：计划模式只读，写类工具已被目录收起"
             )));
         }
-        // Q1b：围栏全部放行之后才套采集壳——被拒的调用没有结果可观测，记了就是把
-        // 「模型没查到」冒充「查到了零条」。
-        Ok(match &self.receipts {
-            Some(sink) => crate::recall_receipt::observe(tool, Arc::clone(sink)),
-            None => tool,
-        })
+        Ok(tool)
     }
 
     async fn list(&self, session_id: Option<&str>) -> Vec<ToolSpec> {

@@ -12,10 +12,10 @@ mod background;
 mod boot;
 mod kernel_stack;
 mod llm_stack;
-mod memory_stack;
 mod plugins;
 mod tools;
 mod waterfall;
+mod workspace_stack;
 
 pub use app_state::AppState;
 
@@ -26,7 +26,7 @@ use tauri::AppHandle;
 pub fn init_state(app: AppHandle) -> AppState {
     // 启动基座簇（§12.3）：Context / 注册表 / 事件出口 / 桌面通知 vtable 钩子 /
     // 数据根 / 调度库 / 统计库 / embedding / 会话表与启动回放 / SettingsStore（含
-    // 降级）/ fsRoots 与记忆文件化 env 注入。四条顺序契约写在 state/boot.rs 头注。
+    // 降级）/ fsRoots env 注入。四条顺序契约写在 state/boot.rs 头注。
     let boot::Stack {
         ctx,
         registry,
@@ -63,27 +63,22 @@ pub fn init_state(app: AppHandle) -> AppState {
         root: root.clone(),
     });
 
-    // 记忆与工作区簇（⑪ + ㉘ + F1 + M4）：fsRoots/开关供给闭包（保存即生效，不是
-    // 启动快照）→ 会话上下文解析器（含 plugin-host 全局注入）→ MemoryStore →
-    // 权限模式存储 → 树存储与组装器（TreeContextSource 注册）。
-    let memory_stack::Stack {
+    // 工作区簇（㉘）：fsRoots 供给闭包（保存即生效，不是启动快照）→ 会话上下文
+    // 解析器（含 plugin-host 全局注入）→ 权限模式存储 → 指令文件层要的
+    // workspace-only 投影。S4 刀③c：记忆相关句柄随记忆整线退役。
+    let workspace_stack::Stack {
         session_ctx,
-        memory_files,
-        files_on,
-        memory,
+        workspace_of,
         permission_modes,
-        tree_store,
-        receipt_sink,
-        recall_log,
-    } = memory_stack::build(memory_stack::Init {
+    } = workspace_stack::build(workspace_stack::Init {
         settings: Arc::clone(&settings),
         sessions_dir: sessions_dir.clone(),
         root: root.clone(),
     });
 
-    // 主层压缩的熔断表（S2 刀⑤a）：两个使用方——step 边界的 `Compactor`（写它）与
-    // REQUEST 环上的滑窗保护网（读它）——必须看同一张表，所以它在两者之前构造、各注
-    // 一份 `Arc`。为什么不许各 new 一张 = `compact::Failures` 头注。
+    // 主层压缩的熔断表（S2 刀⑤a）：唯一的写读方是 step 边界的 `Compactor`
+    // （滑窗保护网已随 S4 刀①退役）；仍由组装点注入，测试面要能塞假表。
+    // 为什么不许在 `Compactor` 内部 new = `compact::Failures` 头注。
     let compact_failures = Arc::new(crate::compact::Failures::default());
 
     // waterfall 监听器簇（提示词分层设计 §6）：**注册序 = 执行序 = 前缀缓存红线**，
@@ -92,14 +87,13 @@ pub fn init_state(app: AppHandle) -> AppState {
     let waterfall::Stack {
         exposure_cfg,
         exposure,
-        memory_cfg,
         fragments,
     } = waterfall::build(waterfall::Init {
         ctx: Arc::clone(&ctx),
         settings: Arc::clone(&settings),
         usage: Arc::clone(&usage),
         embed_port: embed_port.clone(),
-        memory: Arc::clone(&memory),
+        workspace_of: Arc::clone(&workspace_of),
         root: root.clone(),
     });
 
@@ -142,7 +136,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         ask_hub: Arc::clone(&ask_hub),
         schedules: schedules.clone(),
         permission_modes: Arc::clone(&permission_modes),
-        receipt_sink,
     });
 
     // 插件编排簇（§11.2 + §12.3）：服务开启（含数据根降级）→ 启动对账 → 开发态装载 →
@@ -157,7 +150,7 @@ pub fn init_state(app: AppHandle) -> AppState {
         root: root.clone(),
     });
 
-    // 压缩器与后台任务簇（⑭ 调度引擎 + F1 §6 首启导出 + 批 D §6.3 GC）：
+    // 压缩器与后台任务簇（⑭ 调度引擎 + 批 D §6.3 GC）：
     // Compactor / spawn_engine / 资产巡检。「emit 只落本模块」的原因
     // （tao 不能进桌面测试二进制）写在 state/background.rs 头注。
     let background::Stack { compactor } = background::build(background::Init {
@@ -175,15 +168,11 @@ pub fn init_state(app: AppHandle) -> AppState {
         last_chat: Arc::clone(&last_chat),
         stop_flags: Arc::clone(&stop_flags),
         schedules: schedules.clone(),
-        memory: Arc::clone(&memory),
-        tree_store: tree_store.clone(),
-        memory_files: Arc::clone(&memory_files),
-        files_on: Arc::clone(&files_on),
         assets: Arc::clone(&assets),
         // S2 刀⑧：拒收读数表——发送侧（llm_stack 里那台 AppLlm）写，压缩侧读，
         // 两边都在组装点拿到同一份 `Arc` ⇒ 与下面那枚熔断表同一条共用件纪律。
         compact_refusals: Arc::clone(&refusals),
-        // 最后一枚用 move：waterfall 那一头已经拿走一份，这张表从此由两个使用方共有。
+        // 最后一枚用 move：所有权交给 `Compactor` 一个使用方（滑窗保护网已退场）。
         compact_failures,
     });
 
@@ -203,11 +192,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         last_chat,
         settings,
         llm_diagnoser,
-        memory_cfg,
-        memory,
-        recall_log,
-        memory_files,
-        memory_files_on: files_on,
         usage,
         exposure_cfg,
         exposure,
@@ -216,7 +200,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         notifications,
         schedules,
         compactor,
-        tree_store,
         stop_flags,
         ask: ask_hub,
         catalog,

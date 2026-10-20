@@ -2,12 +2,12 @@
 import SearchInput from "./SearchInput.vue";
 /**
  * 列表页模式（壳批次，docs/design/UI shell and patterns.md §3.1）：
- * 一切"条目集合"页面（插件已安装页 / 记忆页 / 后续 ⑩ 闲置筛选页）共用
+ * 一切"条目集合"页面（插件已安装页 / 市场发现页 / 后续 ⑩ 闲置筛选页）共用
  * 的骨架。只锁结构——搜索框、筛选 chips、批量操作栏插槽、空态；行内容
  * 与动作由使用方以默认插槽提供，本组件不认识任何具体业务类型。
  *
  * 约定：
- * - v-model:search 未绑定时搜索框整个隐藏（如记忆页只有搜索没有 chips）。
+ * - v-model:search 未绑定时搜索框整个隐藏（如市场发现页只有搜索没有 chips）。
  * - filters 是完整的 chip 列表（含"全部"项），选中值经 v-model:filter 回传。
  * - subFilters / v-model:subFilter 是第二排 chips（⑩ 闲置筛选：状态档
  *   与时长档分离，§9.2）；不传则不渲染第二排。

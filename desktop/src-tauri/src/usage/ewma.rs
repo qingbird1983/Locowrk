@@ -1,6 +1,6 @@
 //! ⑫ EWMA 积累与打分桥（exposure 文档 §5.1/§5.3）：衰减公式 +
 //! kernel-agent `GlobalEwma` 契约的宿主实现（"内核定契约、组装点实现"，
-//! 与 ApprovalResolver / MemorySource 同模式）。
+//! 与 ApprovalResolver 同模式）。
 
 use std::collections::HashMap;
 use std::sync::Arc;

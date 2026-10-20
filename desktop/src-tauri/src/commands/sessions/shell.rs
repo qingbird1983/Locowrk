@@ -1,5 +1,5 @@
 //! OS 外壳三件事：跨平台"打开目录"的共用壳 `open_in_explorer`（`commands/assets.rs`
-//! 与 `commands/memory.rs` 都调它 ⇒ 保持 `pub`）、受 fsRoots 白名单约束的
+//! 调它 ⇒ 保持 `pub`）、受 fsRoots 白名单约束的
 //! `reveal_in_explorer`，与只放行 https / 无空白控制字符 / 限长的 `open_external_url`。
 //! ⚠ 判定表登记的「shell 三分支两份」就在本片：`open_in_explorer` 与 `open_external_url`
 //! 各抄一遍同一套 `#[cfg]` 三分法。本刀是纯搬行，**不夹带**合并——并成一处另开一刀。
@@ -8,7 +8,7 @@ use tauri::State;
 
 use crate::state::AppState;
 
-/// 跨平台打开目录（reveal_in_explorer / memory_reveal_folder 共用壳）。
+/// 跨平台打开目录（reveal_in_explorer / assets.rs 共用壳）。
 pub fn open_in_explorer(p: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {

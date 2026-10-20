@@ -95,7 +95,6 @@ t_gates() {
   run "文档规则"     node scripts/check-docs.mjs
   run "事件通道"     node scripts/check-channels.mjs
   run "同源对账"     node scripts/check-single-source.mjs
-  run "库表两侧对账" node scripts/check-schema-parity.mjs
   run "渲染矩阵"     node scripts/check-render-matrix.mjs
   run "样式落点"     node scripts/check-css-ownership.mjs
 }
@@ -103,7 +102,6 @@ t_gates() {
 t_selftest() {
   say "闸的自证（判据必须能为变异报红；打空 = 该项零证明力）"
   run "同源对账自测" node scripts/check-single-source.mjs --selftest
-  run "库表对账自测" node scripts/check-schema-parity.mjs --selftest
   run "文档规则自测" node scripts/check-docs.mjs --selftest
   run "渲染矩阵自测" node scripts/check-render-matrix.mjs --selftest
   run "样式落点自测" node scripts/check-css-ownership.mjs --selftest

@@ -35,13 +35,6 @@ fn user(content: impl Into<String>) -> SessionEvent {
     }
 }
 
-fn assistant(content: impl Into<String>) -> SessionEvent {
-    SessionEvent::AssistantMessage {
-        content: content.into(),
-        tool_calls: vec![],
-    }
-}
-
 fn tool_call(seq: u32) -> SessionEvent {
     SessionEvent::ToolCall {
         call_id: CallId(format!("call-{seq}")),

@@ -4,8 +4,8 @@
 //! 校验与落值——而批 Q6 早就把 `developer` 那一段收进了分区自己。同一件事两种
 //! 写法，且写法更丑的那个正在长新字段。现在每个分区自己持有
 //! `apply_update(消费型值) -> Result<(), String>`，本文件按 settings.json 的字段
-//! 顺序转发一遍：`appearance` / `embedding` / `context` / `memory` / `tools` /
-//! `plugins` / `chat` / `developer` / `thinking` / `multimodal`（`llm` 自 v2.58
+//! 顺序转发一遍：`appearance` / `embedding` / `context` / `tools` / `plugins` /
+//! `chat` / `developer` / `thinking` / `multimodal`（`llm` 自 v2.58
 //! 就是这个形状）。两个根字段 `locale` / `shortcut` 不属于任何分区结构、各自只有
 //! 3–6 行校验，为它们再造一层是凭空加机制 ⇒ 留在这里。
 //!
@@ -18,8 +18,8 @@
 
 use super::{
     AppearanceUpdate, ChatUpdate, ContextUpdate, DeveloperUpdate, EmbeddingUpdate, LlmUpdate,
-    MemoryUpdate, MultimodalUpdate, PluginsUpdate, SettingsStore, SettingsView, ThinkingUpdate,
-    ToolsUpdate, FILE_NAME, LOCALES,
+    MultimodalUpdate, PluginsUpdate, SettingsStore, SettingsView, ThinkingUpdate, ToolsUpdate,
+    FILE_NAME, LOCALES,
 };
 use tauri_plugin_global_shortcut::Shortcut;
 
@@ -35,7 +35,6 @@ impl SettingsStore {
         llm: Option<LlmUpdate>,
         embedding: Option<EmbeddingUpdate>,
         context: Option<ContextUpdate>,
-        memory: Option<MemoryUpdate>,
         tools: Option<ToolsUpdate>,
         plugins: Option<PluginsUpdate>,
         chat: Option<ChatUpdate>,
@@ -77,9 +76,6 @@ impl SettingsStore {
         }
         if let Some(u) = context {
             next.context.apply_update(u)?;
-        }
-        if let Some(u) = memory {
-            next.memory.apply_update(u)?;
         }
         if let Some(u) = tools {
             next.tools.apply_update(u)?;

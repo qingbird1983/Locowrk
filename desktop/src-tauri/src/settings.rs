@@ -1,12 +1,11 @@
 //! 设置存储（DESIGN.md §13.1 / §13.5）。分区：LLM 配置、⑬ embedding 模型、
-//! 语言、快捷键、⑨ 上下文管理、⑪ 记忆注入、⑫ 工具暴露、
-//! ⑬ 插件管理（自动停用）。持久化在数据根 `settings.json`；
+//! 语言、快捷键、⑨ 上下文管理、⑫ 工具暴露、⑬ 插件管理（自动停用）。
+//! 持久化在数据根 `settings.json`；
 //! API Key 只落盘不出 IPC（投影只有 `api_key_set` 布尔），真适配器在后端侧读原值。
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use kernel_agent::MemoryInjectConfig;
 use serde::{Deserialize, Serialize};
 
 mod appearance;
@@ -19,7 +18,6 @@ pub(crate) mod context;
 mod developer;
 mod embedding;
 mod llm;
-mod memory;
 mod multimodal;
 mod plugins;
 mod thinking;
@@ -42,7 +40,6 @@ pub use llm::{
     LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, NetworkProxy, ProviderInput, ProviderModel,
     ProviderModelView, ProviderProfile, ProviderView, SubagentPin, PROVIDERS,
 };
-pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate};
 pub use multimodal::{MultimodalSettings, MultimodalUpdate, MultimodalView};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
 pub use thinking::{ThinkingSettings, ThinkingUpdate, ThinkingView, THINKING_NONE};
@@ -75,8 +72,6 @@ pub struct AppSettings {
     /// 上下文管理区（⑨）。字段级缺省：旧 settings.json 无此区时取默认
     /// （窗口未设置 / 整理阈值 100K / 进度条开；v2.137 前的旧键幻影）。
     pub context: ContextSettings,
-    /// 记忆注入区（⑪，类型见 `memory` 子模块）。
-    pub memory: MemorySettings,
     /// 工具暴露区（⑫，类型见 `tools` 子模块）。
     pub tools: ToolsSettings,
     /// 插件管理区（⑬ 自动停用；类型见 `plugins` 子模块）。
@@ -108,7 +103,6 @@ impl Default for AppSettings {
             llm: LlmConfig::default(),
             embedding: EmbeddingSettings::default(),
             context: ContextSettings::default(),
-            memory: MemorySettings::default(),
             tools: ToolsSettings::default(),
             plugins: PluginsSettings::default(),
             chat: ChatSettings::default(),
@@ -132,7 +126,6 @@ pub struct SettingsView {
     pub llm: LlmSettingsView,
     pub embedding: EmbeddingView,
     pub context: ContextSettingsView,
-    pub memory: MemorySettingsView,
     pub tools: ToolsSettingsView,
     pub plugins: PluginsView,
     /// 对话行为区（§3.2 ChatSection）。
@@ -273,37 +266,6 @@ impl SettingsStore {
     // 那个区的**类型、缺省、校验、投影、读面**从此同住一个文件，加一枚设置项不再
     // 牵动本文件（搬之前 `settings.rs` 因两枚新 getter 撞上 419 > 400 长度闸，
     // 而"为凑行数搬别人的代码"是要禁止的——搬的正是本区自己那一族，见提交正文）。
-
-    /// 后端专用：记忆注入活配置（MemoryInject 共享锁的内容物，⑪）。
-    ///
-    /// ⚠ **改 `top_k` 的生效时机 = 下一个会话，当前会话不动**（不是疏漏，是形状）：
-    /// 内核的会话预取缓存键 = `(session_id, scope_id, index_stamp)`，`top_k` 另参与
-    /// 失效判据（S3 刀② 订正：原先这句写的是 `(session_id, scope_id)` 两段，
-    /// 新鲜度档是那一带才加上的），块字节在会话内钉死是 M1 纪律（KV v2：逐轮换字节 =
-    /// 前缀命中归零）。会话中途把 top_k 从 5 拖到 8 若立刻重算，代价是打断这一轮对话的
-    /// 缓存前缀，而它买不到任何正确性——记忆块的**归属**变了必须重算（那是另一份库的
-    /// 内容），**偏好**变了不必。这个形状**已有承重**：`PrefetchEntry` 的字段集只有
-    /// `block`/`top_k`，而内核用例
-    /// `memory_inject/tests/prefetch.rs::top_k_change_recomputes_prefetch` 断言同会话跑
-    /// 两轮只取数一次、top_k 一变就重算 —— 将来有人"顺手"把别的配置塞进失效判据，
-    /// 第二轮就会重查，那条用例当场见红。真机走查要按这个口径判读，否则会误判成 bug。
-    /// （S3 刀① 订正：这条用例原先住在 `tests/learn.rs`，那一簇随正文注入通路一起
-    /// 离场，M1 承重迁到了 `prefetch.rs`；`top_k` 字段与它进失效判据的形状本刀没动。）
-    /// （S3 刀③b 订正：这里原先还换算着学习档——`learn: LearnWeights { enabled:
-    /// m.learn_enabled, 四枚权重 }`。那一族按 `specs/10-context-injection-s3` 三问②
-    /// 的裁定整族退役，`MemoryInjectConfig` 现在只剩 `enabled` + `top_k` 两枚字段。）
-    pub fn memory_inject_config(&self) -> MemoryInjectConfig {
-        let m = self.inner.lock().expect("settings poisoned").memory.clone();
-        MemoryInjectConfig {
-            enabled: m.enabled,
-            top_k: m.top_k as usize,
-        }
-    }
-
-    /// 后端专用：记忆区全量（树工具门控 / 文件化开关等读这里）。
-    pub fn memory(&self) -> MemorySettings {
-        self.inner.lock().expect("settings poisoned").memory.clone()
-    }
 
     /// 后端专用：对话行为区全量（v2.57 自动标题钩子读 auto_title 用）。
     pub fn chat(&self) -> ChatSettings {

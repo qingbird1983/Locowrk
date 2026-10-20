@@ -130,7 +130,6 @@ fn guard_writes_back_identical_bytes_when_nothing_changed() {
         compacted: None,
         system: None,
         session_id: Some("s1".into()),
-        tree_directory: Some(String::new()),
     })
     .unwrap();
     let mut payload = input.clone();
@@ -178,7 +177,6 @@ async fn a_ring_that_forgets_to_give_back_is_caught_by_the_next_ring() {
         compacted: None,
         system: None,
         session_id: None,
-        tree_directory: None,
     })
     .unwrap();
 

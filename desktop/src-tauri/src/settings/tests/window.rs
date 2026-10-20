@@ -1,5 +1,5 @@
 //! 上下文管理区（⑨）与模型窗口（S2 迁 llm 区）设置测试：缺省值 /
-//! 旧字段迁移幂等 / 整理阈值（v2.137 绝对 token）校验 / 幻影键 /
+//! 旧字段迁移幂等 / 压缩阈值（v2.137 绝对 token）校验 / 幻影键 /
 //! session_window 四层窗口链 / session_capacity（S2 刀①：窗口与输出上限一次解析）。
 
 use super::*;
@@ -11,7 +11,7 @@ fn context_defaults_and_legacy_json_compat() {
     let root = temp_root("context-defaults");
     let store = SettingsStore::open(&root).unwrap();
     let v = store.view().context;
-    // 缺省：整理阈值 100K（绝对 token）+ 进度条开
+    // 缺省：压缩阈值 100K（绝对 token）+ 进度条开
     assert_eq!(v.threshold_tokens, 100_000);
     assert!(v.usage_bar);
     // 旧 settings.json 无 context 字段 → 字段级缺省，不解析失败
@@ -85,7 +85,6 @@ fn organize_threshold_update_validation_and_roundtrip() {
             None,
             None,
             None,
-            None,
         )
         .unwrap();
     assert_eq!(store.view().context.threshold_tokens, 300_000);
@@ -112,7 +111,6 @@ fn organize_threshold_update_validation_and_roundtrip() {
                 None,
                 None,
                 None,
-                None,
             )
             .is_err());
     }
@@ -131,7 +129,6 @@ fn organize_threshold_update_validation_and_roundtrip() {
                     usage_bar: None,
                     ..Default::default()
                 }),
-                None,
                 None,
                 None,
                 None,
@@ -164,7 +161,6 @@ fn context_usage_bar_default_and_roundtrip() {
                 usage_bar: Some(false),
                 ..Default::default()
             }),
-            None,
             None,
             None,
             None,

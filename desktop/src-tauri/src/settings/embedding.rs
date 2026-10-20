@@ -1,9 +1,9 @@
-//! embedding 模型区（⑬ 智能层共享基建）：工具语义检索 / 经历记忆 /
-//! 隐式提取都靠它把文本变向量。与主模型（llm 区）解耦——DeepSeek 等主
+//! embedding 模型区（⑬ 智能层共享基建）：工具语义检索靠它把文本变向量。
+//! 与主模型（llm 区）解耦——DeepSeek 等主
 //! 模型没有 embedding 端点，embedding 换模型不影响聊天配置。
 //!
-//! 三项全空 = 智能层整体缺席（§1"可降级"：search_tools 退关键词、经历
-//! 不注入不写入）。base_url 未填时按主 provider 兜底：ollama → 本机
+//! 三项全空 = 智能层整体缺席（§1"可降级"：search_tools 退关键词）。base_url
+//! 未填时按主 provider 兜底：ollama → 本机
 //! 11434（OpenAI 兼容 /v1/embeddings），其余回落 llm.base_url。
 //! API Key 只落盘不出 IPC（投影只有 `api_key_set` 布尔，同主 Key 纪律）。
 

@@ -47,21 +47,6 @@ export interface SessionSchedule {
   createdAtMs: number;
 }
 
-/** 轮级总结（Organize Summary Design v1）：一次整理区间的浓缩叙事，
- * 该批章节的父节点。S4 刀②：记忆树 UI 已删，而 `types/memory.ts` 的树视图
- * 仍引用它（命令包装层留到刀③与后端同删，见 `lib/api/tree.ts` 头注）。 */
-export interface RunSummaryView {
-  text: string;
-  eventFrom: number;
-  eventTo: number;
-  createdAt: number;
-  /** 项目视图带会话标注；会话视图内为空串。 */
-  sessionId: string;
-  sessionTitle: string;
-  /** 本轮区间内已定稿章节 id（数值序，队列 Q14）。 */
-  chapterIds: string[];
-}
-
 /** `/压缩` 的返回值（S2 刀⑦ · AC-S2-11）。它**只说"这一趟没动，因为"**：压成的那份
  * 负载（省了多少 / 摘要预览）走 `agent://context-compacted` 推送——AGENTS §3 那条
  * "流式输出不塞进 command 返回值"，而且这样手动与自动共用前端那一条断层条构造，
@@ -91,16 +76,6 @@ export interface CacheBreakReport {
   prevMessages: number;
   messages: number;
   tsMs: number;
-}
-
-/** F2 reconcile 结果（memory_reconcile 命令返回；计数如实透出）。
- *  S4 刀②：记忆页已删，类型与命令包装层留到刀③与后端同删。 */
-export interface ReconcileSummary {
-  scanned: number;
-  created: number;
-  updated: number;
-  deleted: number;
-  warnings: number;
 }
 
 /** 应用内通知类别（§3.13，v2.51）：五类「用户可能错过的事」。 */

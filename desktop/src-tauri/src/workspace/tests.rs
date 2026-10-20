@@ -1,14 +1,13 @@
 //! workspace.rs 单测：上下文解析器走旁车真源（workspace + 围栏根）、
-//! workspace 视图投影 + scope_key 归一。㉘·C：围栏 = 全局声明根（数据根
-//! ∪ settings fsRoots），所有档位一致、不再按归属收窄。
+//! scope_key 归一。㉘·C：围栏 = 全局声明根（数据根 ∪ settings fsRoots），
+//! 所有档位一致、不再按归属收窄。
+//!
+//! S4 刀③c：`workspace_view` 的两条用例随记忆线删除——那个投影的两个消费者
+//! （MemoryStore 检索键位 / 召回回执键位）已不存在，投影函数本身也删了。
 
 use std::sync::Arc;
 
-use super::{scope_key, session_context_resolver, workspace_view};
-
-fn no_roots() -> Arc<dyn Fn() -> Vec<String> + Send + Sync> {
-    Arc::new(Vec::new)
-}
+use super::{scope_key, session_context_resolver};
 
 #[test]
 fn resolver_reads_sidecar_and_fails_closed() {
@@ -57,83 +56,6 @@ fn fence_reflects_current_settings_on_each_call() {
     assert_eq!(resolver("s1").fs_roots.len(), 2);
     *roots.lock().unwrap() = vec!["F:/ws/a".into(), "F:/ws/b".into(), "F:/ws/c".into()];
     assert_eq!(resolver("s1").fs_roots.len(), 4, "保存即生效，无需重建");
-}
-
-#[test]
-fn workspace_view_projects_workspace_only() {
-    let dir = crate::testutil::work_dir("ws-view");
-    session_store::write_workspace(&dir, "session-1", Some("F:/ws/a")).unwrap();
-    let view = workspace_view(session_context_resolver(
-        dir.clone(),
-        dir.join("data"),
-        no_roots(),
-    ));
-    // Q7c（v2.197）起视图产出的就是**键位**（源头归一），期望按 `scope_key` 现算而不是
-    // 钉字面串——串形本身由 `plugin-api/src/wskey/tests.rs` 各档钉，这里钉的是"委托发生了"
-    // （历批 Q3 同族处置：正当改写既有判据，因为它钉的正是被本刀改掉的那个行为）。
-    let want = scope_key(Some("F:/ws/a"));
-    assert_eq!(view("session-1").as_deref(), Some(want.as_str()));
-    assert_eq!(view("ghost"), None);
-}
-
-/// Q7c 的承重面：视图是**磁盘目录名的唯一真源**。`memory-tree/<scope_dir(ws)>` 与
-/// `memory/projects/<project_dir_name(ws)>` 都吃它产出的串，所以"归一发生在哪一层"
-/// 不是风格问题——漏在视图之外的通路会长出第二个目录（2026-10-14 本机实测同项目
-/// 两份并存，见《Key Unification and Legacy Scope Merge v1》§1）。
-#[test]
-fn view_collides_sidecar_variants_into_one_keyside() {
-    let dir = crate::testutil::work_dir("ws-view-variants");
-    // 三种写法：正斜杠／反斜杠／带尾分隔符。用 `/ws/proj` 形态是刻意的——大小写折叠
-    // 是 Windows 专属语义，把折叠写进这条用例会得到一条 Linux 红、Windows 绿的假判据。
-    for (id, raw) in [
-        ("s1", "F:/ws/proj"),
-        ("s2", r"F:\ws\proj"),
-        ("s3", "F:/ws/proj/"),
-    ] {
-        session_store::write_workspace(&dir, id, Some(raw)).unwrap();
-    }
-    let view = workspace_view(session_context_resolver(
-        dir.clone(),
-        dir.join("data"),
-        no_roots(),
-    ));
-
-    // 视图输出恒等于 `scope_key(旁车原样串)`：委托发生在这一层，不在下游各调用点
-    for id in ["s1", "s2", "s3"] {
-        let raw = session_store::read_meta(&dir, id)
-            .unwrap()
-            .workspace
-            .unwrap();
-        assert_eq!(
-            view(id).as_deref(),
-            Some(scope_key(Some(&raw)).as_str()),
-            "{id}：视图必须产出键位而不是原样串"
-        );
-    }
-    #[cfg(windows)]
-    {
-        let base = view("s1").expect("归属会话不该是 None");
-        assert_eq!(
-            view("s2").as_deref(),
-            Some(base.as_str()),
-            "斜杠漂移不许造出第二个键位"
-        );
-        assert_eq!(
-            view("s3").as_deref(),
-            Some(base.as_str()),
-            "尾分隔符漂移不许造出第二个键位"
-        );
-    }
-    #[cfg(not(windows))]
-    {
-        // POSIX 上 `F:\ws\proj` 是一个含反斜杠的合法目录名，与 `F:/ws/proj` 本就是两个项目
-        assert_ne!(view("s2"), view("s1"), "POSIX 上那里合并才是错");
-        assert_eq!(view("s3"), view("s1"), "尾分隔符在 POSIX 也是同一目录");
-    }
-
-    // 缺旁车 = None（不是空键位）：消费方靠 `?` 短路的语义保持不变。未归属空串的归一
-    // 已由上面 `scope_key_is_the_normalized_keyside_and_empty_for_unattributed` 钉住，这里不重复钉。
-    assert_eq!(view("ghost"), None, "缺旁车 = None，不是空键位");
 }
 
 #[test]

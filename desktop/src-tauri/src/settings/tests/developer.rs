@@ -30,7 +30,6 @@ fn dev_update_full(
         None,
         None,
         None,
-        None,
         Some(DeveloperUpdate {
             unlocked,
             allow_delete_running_session: del,

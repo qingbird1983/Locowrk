@@ -7,7 +7,6 @@
  */
 
 import type { EmbeddingView, LlmSettingsView } from "./llm";
-import type { MemorySettingsView } from "./memory";
 import type { PluginsView } from "./plugins";
 
 /** 设置投影（settings_get / settings_set 返回值；camelCase）。API Key
@@ -23,7 +22,6 @@ export interface SettingsView {
   llm: LlmSettingsView;
   embedding: EmbeddingView;
   context: ContextSettingsView;
-  memory: MemorySettingsView;
   tools: ToolsSettingsView;
   plugins: PluginsView;
   /** 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽偏好）。 */

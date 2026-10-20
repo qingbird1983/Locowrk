@@ -29,7 +29,6 @@ fn settings_with_roots(roots: Vec<String>) -> Arc<SettingsStore> {
             None,
             None,
             None,
-            None,
             Some(crate::settings::ToolsUpdate {
                 fs_roots: Some(roots),
                 ..Default::default()

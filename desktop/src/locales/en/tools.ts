@@ -29,7 +29,6 @@ export default {
       terminal: "Terminal",
       web: "Web",
       git: "Git",
-      memory: "Memory",
       subagent: "Agent",
       schedule: "Timer",
       notify: "Notify",
@@ -63,6 +62,8 @@ export default {
       byteRange: "Byte range",
       backup: "Backup",
       existed: "Existed",
+      // Generic arg-name labels consumed by `labelFor` fallback rendering
+      // (S4 刀③c: memory tools are gone, but these are shared field names).
       key: "Key",
       value: "Value",
       tags: "Tags",
@@ -119,8 +120,6 @@ export default {
       gitDiff: "Show diff",
       gitCommit: "Commit",
       git: "Git operation",
-      memoryWrite: "Remember",
-      memorySearch: "Search memory",
       searchTools: "Search tools",
       subagent: "Spawn",
       scheduleCreate: "Create schedule",

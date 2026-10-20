@@ -5,7 +5,7 @@
 //! `asset_output` / `tool_msg`）与顶层 `use`，18 条用例按被测面分派到 4 个子文件——
 //! `wire`（线上协议装配）· `transport`（SSE 分帧 + 错误分类与退避）·
 //! `dispatch`（端点与设置分发）· `assets`（工具结果图片投影）。
-//! 形状照 `settings/tests/` 与 `organize/tests/` 先例：夹具是 tests 的私有项，
+//! 形状照 `settings/tests/` 先例：夹具是 tests 的私有项，
 //! 子簇经 `use super::*;` 取用 ⇒ **可见性零改动**；用例本体逐字搬运，断言一条未增删。
 
 mod assets;

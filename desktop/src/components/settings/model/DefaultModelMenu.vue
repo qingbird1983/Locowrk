@@ -22,7 +22,7 @@ const props = defineProps<{
   activeModel: string;
   anchor: HTMLElement | null;
   /** 提供时列表顶部常驻一档「跟随缺省」行（activeId="" 选中；选中回传
-   * select("", "")）——记忆管理器档复用本菜单用（模型选择器全站唯一实现）。 */
+   * select("", "")）——模型选择器全站唯一实现。 */
   noneLabel?: string;
 }>();
 const emit = defineEmits<{

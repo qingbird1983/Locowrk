@@ -26,14 +26,14 @@ pub use chain::{ToolChain, build_chain};
 pub use compensation::CompensationReport;
 pub use kernel::{
     Kernel, KernelError, LlmError, LlmRequest, LlmResponse, LlmService, LlmUsage, StepOutcome,
-    ToolCallReq, ToolSource, TreeContextSource, TreePlan, collapse_expanded, tail_user_start,
+    ToolCallReq, ToolSource,
 };
 pub use middleware::{
     Audit, AuditEntry, AuditSink, BaseSystemInject, CircuitBreaker, CompactionOutcome, EmbedPort,
     ExposureSnapshot, FragmentInject, FragmentSource, GlobalEwma, InstructionFilesInject,
-    InstructionSource, JsonlAuditSink, MemoryEntry, MemoryInject, MemoryInjectConfig, MemorySource,
-    Middleware, Next, RETRIEVAL_WEIGHT, Retriever, Timeout, ToolExposure, ToolExposureConfig,
-    Tracing, base_system, cosine, estimate_tokens, wrap_system_reminder,
+    InstructionSource, JsonlAuditSink, Middleware, Next, RETRIEVAL_WEIGHT, Retriever, Timeout,
+    ToolExposure, ToolExposureConfig, Tracing, base_system, cosine, estimate_tokens,
+    wrap_system_reminder,
 };
 pub use stream::{LlmStreamSink, NoLlmStreamSink};
 pub use subagent::{
