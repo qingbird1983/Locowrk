@@ -93,8 +93,6 @@ pub(crate) struct EngineDeps {
     pub sessions_dir: std::path::PathBuf,
     pub last_chat: Arc<RwLock<Option<String>>>,
     pub app: AppHandle,
-    /// M2 记忆树影子运行：调度触发的轮次与手聊同一整理钩子。
-    pub organizer: Arc<crate::organize::Organizer>,
     pub compactor: Arc<crate::compact::deep::Compactor>,
     // ⚠ 这里原来放的是 `Arc<crate::organize::TreeAssembler>`（M4 §3.38②："触发的
     // 轮次与手聊同一用量口径 = 组装后估算"）。S3 刀④a 摘掉：那把第二尺连同
@@ -154,15 +152,6 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         defer(deps, &sched, now);
         return;
     };
-
-    // 整理段落总结交付（Organize Summary Design v1 §3.3）：与 agent_chat
-    // 同一排空点——上一轮整理的总结在轮开场落日志（断层缝合处）并实时推送。
-    for text in deps.organizer.deliver_summaries(&mut session, &session_id) {
-        deps.sink.emit(&AgentEvent::ContextSummary {
-            session_id: session_id.clone(),
-            text,
-        });
-    }
 
     // 告知先行：会话内 SystemNotice（UI 投影）+ 窗口不在位补系统通知。
     // 之后才跑轮（与"先事件后执行"同精神——用户先知道发生了什么）。
@@ -230,8 +219,6 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
             session_id.clone(),
             session.derive_messages(),
         );
-        // M2 记忆树影子运行：轮次收束后旁路触发判定（同 agent_chat）
-        deps.organizer.after_turn(&session, &session_id);
     }
     finish(deps, &sched, now);
 }

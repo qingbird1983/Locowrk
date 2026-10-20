@@ -436,10 +436,6 @@ function snapshot() {
       'desktop/src-tauri/src/context_budget.rs',
       'desktop/src-tauri/src/context_budget',
     ),
-    organize: moduleFace(
-      'desktop/src-tauri/src/organize/mod.rs',
-      'desktop/src-tauri/src/organize',
-    ),
     spill: moduleFace('desktop/src-tauri/src/spill.rs', 'desktop/src-tauri/src/spill'),
     compact: moduleFace('desktop/src-tauri/src/compact.rs', 'desktop/src-tauri/src/compact'),
   };
@@ -797,17 +793,6 @@ const CHECKS = [
     '1|1',
   ],
   [
-    'SS16b',
-    'organize 面上**自己不再拿尺**：`reported_input_tokens` 与 `fn anchor(` 两档各恒 0' +
-      '（刀① 的墓碑。搬完不许 organize 一边调中立锚点、一边留一条自己的取数通路——' +
-      '那正是 S1 各批点过名的"两个出处"形状）。⚠ 数的是代码行：organize 的沿革注释里' +
-      '必然提到这两个名字（`mod.rs` 头注就在解释搬家），按字面连注释数会得到一片假红——' +
-      'SS11/SS13 立过的同一口径。期望 0 ⇒ 由 FLOORS 的点名下限兜"面瞎了"' +
-      '（面为空与真的没有，在这一档读数上长得一模一样）',
-    (m) => `${countOf(m.organize, /reported_input_tokens/)}|${countOf(m.organize, /\bfn anchor\s*\(/)}`,
-    '0|0',
-  ],
-  [
     'SS16c',
     '有效阈值那三颗零件各只有一个定义：输出侧缺省预留 `32_000`、**唯一** `= 21_000` 的' +
       '预留上限常量、`fn effective_threshold(`（specs/09 AC-S2-2 的机械面）。为什么盯常量' +
@@ -859,15 +844,12 @@ const CHECKS = [
   ],
   [
     'SS19a',
-    '辅助补全的直呼客户端**只有一个定义处，而且不在 organize 里**（S2 刀④a 搬家，' +
-      'S4 刀③a 改名）：`struct AppLlmSummarizer` 与那条 `impl SummaryClient for …` ' +
-      '都只住在 `llm/aux_client.rs`。为什么这一档要紧——它是"一次模型补全该走设置里哪一档"' +
-      '这件事的唯一实现（服务档整档切换 / 只换模型名 / 都没配就走主模型，三档路由 + 未配置就 ' +
-      'Err），整理章节总结与 S2 主层压缩共用这一条；而 organize 按 specs/01 D 节在 S4 整面退役，' +
-      '共用件长在那里，退役那天要么把压缩一起拔断，要么被逼着复制一份路由（= 第二个出处）。' +
-      'S4 刀③a 起压缩线的契约换成 `SummaryClient`（从 `memory-tree` 迁入），organize 的那条' +
-      '过渡实现也仍住同一文件。读数用**文件集合**：搬家搬对了红不到，搬回 organize 或再拆一份' +
-      '都当场红且能看见是谁（SS14a 同一条理由）',
+    '辅助补全的直呼客户端**只有一个定义处**（S2 刀④a 搬家，S4 刀③a 改名、刀③b 只剩压缩一个' +
+      '消费者）：`struct AppLlmSummarizer` 与那条 `impl SummaryClient for …` 都只住在 ' +
+      '`llm/aux_client.rs`。为什么这一档要紧——它是"一次模型补全该走设置里哪一档"这件事的' +
+      '唯一实现（未配置就 Err、只换模型名、走主档），S2 主层压缩的摘要全走这一条；organize ' +
+      '整面在 S4 刀③b 退役后它不再有第二个使用方，但仍不许被复制一份取档逻辑（= 第二个出处）。' +
+      '读数用**文件集合**：搬家搬对了红不到，再拆一份都当场红且能看见是谁（SS14a 同一条理由）',
     (m) =>
       `${filesWith(m.hostDesktop, /\bpub(\(crate\))? struct AppLlmSummarizer/)}|${filesWith(
         m.hostDesktop,
@@ -876,43 +858,16 @@ const CHECKS = [
     'llm/aux_client.rs|llm/aux_client.rs',
   ],
   [
-    'SS19b',
-    'organize 面上**只剩调用方、连所有权都没有**（刀④a 立、刀④c 收到底的那块墓碑）：' +
-      '`struct AppLlmSummarizer` 恒 0（定义不许回来）、`pub use client::` 恒 0（再导出' +
-      '也不许留一条——它就是"organize 也拥有这个类型"的假象），而 `AppLlmSummarizer::new(` ' +
-      '**也恒 0**：刀④c 起 organize 连"造"都不做，客户端由组装点注入，整理章节总结与主层' +
-      '压缩摘要共用同一个实例（两张实例 = 两份路由状态，而"连败三次"这件事会各自数各自的）。' +
-      '第三档故意不收窄成限定路径：非限定的 `AppLlmSummarizer::new(` 出现在 organize ' +
-      '面里同样是自己拿了一条通路。为什么不数裸类型名：SS19a 已经盯住定义与实现块，' +
-      '而裸名出现在注释里是必要留痕——数它会一片假红。⚠ 三档都数代码行（organize 头注正在' +
-      '解释这次搬家）；三档期望 0 ⇒ 由 FLOORS 的 organize 面下限兜"面瞎了"（面为空与' +
-      '真的没有在这一档读数上长得一模一样）',
-    (m) =>
-      `${countOf(m.organize, /struct AppLlmSummarizer/)}|${countOf(m.organize, /\bpub use client::/)}|${countOf(m.organize, /AppLlmSummarizer::new\s*\(/)}`,
-    '0|0|0',
-  ],
-  [
     'SS19b2',
-    '补 SS19b 的另一半：它三档全期望 0，于是"构造点被改名 / 整块搬走 / 组装点漏接"这类' +
-      '漂法一条也报不出来（0|0|0 照样绿）。这一档改数**落点文件集合**：宿主生产面上 ' +
-      '`AppLlmSummarizer::new(` 必须恰好住在 `state/background.rs` 一个文件里。刀④c ' +
-      '把它从 `organize::build_organizer` 提到组装点，为的是让共用件不归属任何一个使用方' +
-      '（organize 在 S4 整面退役，压缩不留在那里）。用集合而不是计数：计数只挡得住"多一处"，' +
-      '挡不住"搬去别处"与"消失"，集合一变当场看得见是谁（SS14a 同一条理由）。' +
-      '⚠ 这一档不许与 SS21c 的 `Compactor::new(` 合并成一条：两个字符串住在同一个文件、' +
-      '同一段代码里，合并之后删掉其中一次构造，另一条读数照样绿。',
+    '补 SS19a 的另一半：它只盯定义与实现块，于是"构造点被改名 / 整块搬走 / 组装点漏接"这类' +
+      '漂法一条也报不出来。这一档改数**落点文件集合**：宿主生产面上 ' +
+      '`AppLlmSummarizer::new(` 必须恰好住在 `state/background.rs` 一个文件里。构造点留在' +
+      '组装点，是为了让共享客户端不归属任何一个使用方（行为测试要能注入假件）。用集合而不是' +
+      '计数：计数只挡得住"多一处"，挡不住"搬去别处"与"消失"，集合一变当场看得见是谁' +
+      '（SS14a 同一条理由）。⚠ 这一档不许与 SS21c 的 `Compactor::new(` 合并成一条：两个' +
+      '字符串住在同一个文件、同一段代码里，合并之后删掉其中一次构造，另一条读数照样绿。',
     (m) => filesWith(m.hostDesktop, /AppLlmSummarizer::new\s*\(/),
     'state/background.rs',
-  ],
-  [
-    'SS19c',
-    '路由那一步（`fn cfg_for`：按设置算出本次调用生效的 `LlmSettings`）只有一处实现 = ' +
-      '`llm/aux_client.rs`。为什么单独盯它而不是盯 `flat_profile(` 的调用数：后者在发送侧' +
-      '（`AppLlm::prepare`）本来就有合法在场，数它=假红；而 `cfg_for` 这个名字一旦在别处' +
-      '再出现，就是有人为新调用方又写了一遍档位选择——表现是"整理走 A 档、压缩走 B 档"，' +
-      '而设置页上只有一枚记忆管理器模型，没人能从界面上看出两份路由',
-    (m) => filesWith(m.hostDesktop, /\bfn cfg_for\s*\(/),
-    'llm/aux_client.rs',
   ],
   // ---------- S2 刀④：主层深度压缩 ----------
   [
@@ -1278,15 +1233,14 @@ const FLOORS = [
   ['浮层外点站点数', (m) => dismissCount(m), 4],
   // 现值 178（desktop/src 的 .ts+.vue）：SS9b/SS9c 的分子分母都从这份面里数
   ['前端 src 扫描面文件数', (m) => m.frontSrc.length, 120],
-  // S2 刀① 的两块地（SS16 的扫描面）。中立尺面期望的是"1 处定义"，organize 面期望的是
-  // 两个 0——后者在"面瞎了"（目录改名 / walkExt 写错）与"真的没有"之间读数完全相同，
-  // 所以两条下限各挡一种瞎法：面塌掉、以及"扫错了树（连本体都不在面里）"。
+  // S2 刀① 的扫描面（SS16 系列）。S4 刀③b 删掉 organize 面那条下限：那个面随
+  // organize 整面退役而不存在了（SS16b 同刀退场）。留下的中立尺面在"面瞎了"
+  // （目录改名 / walkExt 写错）与"真的没有"之间读数完全相同，所以仍要一条下限兜。
   // ⚠ 中立尺这条下限取的是**字节数现值 919 的四成**而不是点名定义本体：本模块的注释比
   // 代码长（整条理由就是"为什么要封顶、为什么预留是这两颗数"），剥掉注释只剩 919 字节，
   // 阈值取 1200 会天天假红；而拿 `fn anchor(` 当下限又与 SS16a 的右档同分子分母
   // （定义改名时报的是"闸瞎了"，说的却是假话）。拆树只会让面变大，所以字节数够用。
   ['中立尺面字节数（剥注释）', (m) => m.budget.length, 400],
-  ['organize 面含轮次收束本体', (m) => countOf(m.organize, /fn after_turn/), 1],
   // S2 刀④（SS20/SS21）同一条瞎法：SS21b 期望两个 0、SS21a 期望 1，面塌掉时
   // "0|0"与"没扫到"读数相同。下限取现值 16288 的三成；再加一条点名判定本体
   // `fn plan(`——它不是这一簇任何一档读数的分子（SS20b 数 include、SS21a 数
@@ -1389,20 +1343,17 @@ if (SELFTEST) {
         rel: 'desktop/src-tauri/src/memory/crud.rs',
         code: 'fn wipe_all(root: &std::path::Path) {\n    let _ = memlayout::clear_facts(root);\n}',
       }),
-    // S2 刀① 的三档变异。**互不遮挡是这组对照的全部要点**：SS16a 只加定义（organize 面
-    // 不动 ⇒ SS16b 不红）、SS16b 只让 organize 自己再拿一次尺（不含 `fn anchor(` ⇒ SS16a
-    // 不红）、SS16c 只再写预留常量。三条都长成"没人调用的分支"是有意的（同
+    // S2 刀① 的变异（SS16a/SS16c）。SS16a 只加定义 ⇒ 右档（中立面）不动，
+    // SS16c 只再写预留常量。两条都长成"没人调用的分支"是有意的（同
     // SS12/SS13 的分工）：cargo 对它们全绿，只有形状档看得见——而这正是刀① 之后
     // 唯一还剩的证明面（搬家本身没有新行为，行为测试无靶子）。
     // ⚠ S4 刀① 改判后 SS16c 只剩三档，变异只打"再写一颗 `= 21_000` 的常量"——
     // 其余两档（定义处数 32_000 / 有效阈值函数）不动，分工仍然成立。
+    // S4 刀③b：SS16b（organize 面自己不许拿尺）随那个面一起退场，变异同删。
     SS16a: (m) =>
       m.rust.push(
         'impl OrganizerTwin {\n    fn anchor(session: &Session) -> (u64, u64) { (0, 0) }\n}\n',
       ),
-    SS16b: (m) =>
-      (m.organize +=
-        '\nlet real = crate::runner::reported_input_tokens(session).unwrap_or(0);\n'),
     SS16c: (m) =>
       m.rust.push('\npub const OUTPUT_RESERVE_CAP_TWIN: u64 = 21_000;\n'),
     // S2 刀② 的三档变异，同样各打中自己那一项：
@@ -1425,27 +1376,17 @@ if (SELFTEST) {
         rel: 'llm/wire/messages.rs',
         code: 'const ALT_TEMPLATE: &str = "<persisted-output path=…>";\nfn clipped_alt() {}\n',
       }),
-    // 刀④a 三档各一条窄变异。SS19a：把定义抄回 organize（退役那天就会拔断压缩）。
+    // 刀④a 两档窄变异（S4 刀③b 起 SS19b/SS19c 随 organize 面退场，只剩这两条）。
+    // SS19a：把定义抄到第二处文件（退役面已经不在，模拟"再拆一份取档逻辑"）。
     SS19a: (m) =>
       m.hostDesktop.push({
-        rel: 'organize/client.rs',
+        rel: 'llm/sneaky_client.rs',
         code:
           'pub(crate) struct AppLlmSummarizer2 {}\nimpl SummaryClient for AppLlmSummarizer2 {}\n',
       }),
-    // SS19b：organize 面上复活"所有权"的三种痕迹（再导出 + 自己的定义 + 自己造一个）。
-    // 数的是 m.organize 那份独立读盘 ⇒ 不会与 SS19a（hostDesktop 面）互相遮挡。
-    SS19b: (m) =>
-      (m.organize +=
-        '\npub use client::AppLlmSummarizer;\npub struct AppLlmSummarizer {}\nlet own = AppLlmSummarizer::new(s);\n'),
-    // SS19b2：宿主面多一个构造方（不进 organize 面）⇒ 只有落点集合会动。
+    // SS19b2：宿主面多一个构造方 ⇒ 只有落点集合会动。
     SS19b2: (m) =>
-      m.hostDesktop.push({ rel: 'commands/organize.rs', code: 'AppLlmSummarizer::new(s)\n' }),
-    // SS19c：为新调用方又写一遍档位路由。
-    SS19c: (m) =>
-      m.hostDesktop.push({
-        rel: 'compact.rs',
-        code: 'fn cfg_for(&self, m: Option<&str>) -> LlmSettings { todo!() }\n',
-      }),
+      m.hostDesktop.push({ rel: 'commands/ghost.rs', code: 'AppLlmSummarizer::new(s)\n' }),
     // ---------- S2 刀④ 五档各一条窄变异（每条只该红自己那一项）----------
     // SS20a：宿主侧再敲一遍摘要消息的标记文本（编译器与行为测试都看不出）。
     SS20a: (m) =>
@@ -1463,7 +1404,7 @@ if (SELFTEST) {
     // SS21c：多一个构造点 + 多一个调用点（两张熔断表 / 一轮压两遍）。
     SS21c: (m) =>
       m.hostDesktop.push({
-        rel: 'commands/organize.rs',
+        rel: 'commands/ghost.rs',
         code: 'let extra = Compactor::new(settings, client);\n    let out = cp.run(&mut session, &id, &policy).await;\n',
       }),
     // S2 刀⑤（SS22a/b/c）三条窄变异，各打红一档且**不许连带**：熔断线在第二处再比
@@ -1560,7 +1501,7 @@ if (SELFTEST) {
     // （ⓛ 那个形状）+ 组装后口径复活（ⓟ 那个形状）。两档各红各的，push 一次同时打中。
     SS30b: (m) =>
       m.hostDesktop.push({
-        rel: 'organize/ghost.rs',
+        rel: 'state/ghost.rs',
         code:
           'let p = UsagePolicy { threshold_tokens: 1, window_tokens: 2, tools_est_tokens: 3, refused_tokens: 0 };\n' +
           'let again = asm.context_tokens(&s, sid);',

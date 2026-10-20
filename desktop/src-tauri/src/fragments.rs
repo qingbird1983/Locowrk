@@ -1,5 +1,5 @@
-//! 会话态碎片（提示词分层设计 §4.4）：桌面宿主的 pending 表 + 三碎片
-//! 文本。事件处置位（整理收束 / 权限切 Plan / 轮次到顶）→ 下一次轮开场
+//! 会话态碎片（提示词分层设计 §4.4）：桌面宿主的 pending 表 + 两碎片
+//! 文本。事件处置位（权限切 Plan / 轮次到顶）→ 下一次轮开场
 //! 请求由内核 [`kernel_agent::FragmentInject`] 取件拼接（`<system-reminder>`
 //! 包裹最后一条 user 消息）→ 取走即清（出现一次）。
 //!
@@ -7,19 +7,14 @@
 //! 会变成常驻议程，进会话日志会污染转录与重放——pending 表在内存，进程
 //! 崩溃即失（碎片本就是「下一轮知道一下」的 ephemeral 通知，丢了无害）。
 //!
-//! 本模块不触 emit / 不进会话日志（影子纪律同 organize）：拼接发生在
-//! 请求组装层（waterfall Replace），会话日志与转录零痕迹。
+//! 本模块不触 emit / 不进会话日志：拼接发生在请求组装层（waterfall
+//! Replace），会话日志与转录零痕迹。（S4 刀③b 起"整理完成"碎片随 organize
+//! 整面退役，只剩 Plan 与轮次到顶两枚。）
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use kernel_agent::FragmentSource;
-
-/// 整理完成（organize 三路收束同源置位）：告知历史去哪了、怎么找回。
-pub const ORGANIZED: &str = "Earlier turns were just organized into the session \
-     directory (the [memory tree] section in the system prompt). Their full text \
-     has left your message list; call memory_expand with the chapter id when you \
-     need the original content.";
 
 /// Plan 模式（权限档切入置位、切出移除）：只读围栏不再靠模型猜。
 pub const PLAN_MODE: &str = "Plan mode is active: read-only. Non-read-only tools \

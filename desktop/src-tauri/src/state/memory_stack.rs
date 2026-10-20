@@ -1,7 +1,10 @@
-//! 组装点·记忆与工作区簇（DESIGN ⑪ + ㉘ 会话→项目解析 + F1 文件化 §3 + M4 §3.38②）：
+//! 组装点·记忆与工作区簇（DESIGN ⑪ + ㉘ 会话→项目解析 + F1 文件化 §3）：
 //! fsRoots 供给闭包 → 会话上下文解析器（含插件侧全局注入）→ 工作区视图 →
-//! 记忆人类层与总开关 → `MemoryStore` → 会话级权限模式 → 树存储与组装器
-//! （`TreeContextSource` 注册进内核服务表）。
+//! 记忆人类层与总开关 → `MemoryStore` → 会话级权限模式 → 召回观测句柄。
+//!
+//! ⚠ S4 刀③b 起本簇只剩刀③c 要删的记忆面（运行面已切走）：
+//! `TreeContextSource` 不再注册进内核服务表（organize 整面退役），`TreeStore`
+//! 仅因记忆文件化导出与记忆命令还读它而暂留。
 //!
 //! 语句自 `state/mod.rs` 的 `init_state` **原样搬出**（批 F-3b·F5 结构性拆分），
 //! 一条未重排。两条必须留住的因果：
@@ -14,13 +17,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use cordis_core::Context;
-
 use crate::memory::MemoryStore;
 use crate::settings::SettingsStore;
 
 pub(crate) struct Init {
-    pub ctx: Arc<Context>,
     pub settings: Arc<SettingsStore>,
     pub sessions_dir: PathBuf,
     pub root: PathBuf,
@@ -29,17 +29,13 @@ pub(crate) struct Init {
 /// 下游簇与 `AppState` 要接的句柄（字段名 = 原变量名）。
 pub(crate) struct Stack {
     pub session_ctx: crate::workspace::SessionContextResolver,
-    pub workspace_of: crate::workspace::WorkspaceResolver,
     pub memory_files: Arc<crate::memory_files::MemoryFiles>,
     pub files_on: Arc<dyn Fn() -> bool + Send + Sync>,
     pub memory: Arc<MemoryStore>,
     pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
     pub tree_store: memory_tree::TreeStore,
-    // ⚠ 这里原来外露一份 `Arc<crate::organize::TreeAssembler>`（M4 §3.38②）。
-    // S3 刀④a 摘掉：它出这一体的唯一消费者是 `run_turn` 的 `tree` 参数（进度条的
-    // 第二把尺），ⓟ 收成 `context_budget::occupancy` 一把之后那条参数没了 ⇒
-    // 字段就变成"存在但从未接线"。内核仍经上面 `provide_dyn` 的
-    // `TreeContextSource` 服务表拿到同一个实例（那才是它的正职），宿主侧不需要句柄。
+    // ⚠ 这里原来外露一份 `Arc<crate::organize::TreeAssembler>`（M4 §3.38②），
+    // S4 刀③b 随 organize 整面删除；内核服务表里也不再注册 `TreeContextSource`。
     /// Q1b：检索回执的采集件（观测表 + 键位解析器，由 `state/tools.rs` 接给执行面的
     /// 工具树）。与上面 `MemoryStore` 里那个注入档句柄是同一个 `Arc<RecallLog>`——
     /// 两个档的账才落在同一张表上。
@@ -52,7 +48,6 @@ pub(crate) struct Stack {
 
 pub(crate) fn build(init: Init) -> Stack {
     let Init {
-        ctx,
         settings,
         sessions_dir,
         root,
@@ -113,21 +108,13 @@ pub(crate) fn build(init: Init) -> Stack {
         sessions_dir.clone(),
         settings.default_permission_mode(),
     )); // ㉘·B 会话级权限模式（旁车持久 + 缓存；决策表/目录围栏数据源）
-        // M4 树会话组装器（§3.38②）：TreeContextSource 注册进内核服务表——
-        // v2.137 起一切会话皆树（legacy 整理面退役）= L0 目录 + 未整理尾巴。
-        // M5 起存储句柄收敛为 AppState 单例（便宜克隆），组装点共用。
+        // M4 树会话组装器（§3.38②）随 organize 整面在 S4 刀③b 退役：内核服务表里
+        // 不再注册 `TreeContextSource` ⇒ 请求不再带树目录、消息不再按树计划切片。
+        // `TreeStore` 本身暂留（记忆文件化导出与记忆命令仍读它，刀③c 随记忆面一起删）。
     let tree_store = memory_tree::TreeStore::new(&root);
-    let tree_assembler = Arc::new(crate::organize::TreeAssembler::new(
-        Arc::clone(&settings),
-        Arc::clone(&workspace_of),
-        tree_store.clone(),
-        sessions_dir.clone(),
-    ));
-    ctx.provide_dyn::<dyn kernel_agent::TreeContextSource>(Arc::clone(&tree_assembler) as Arc<_>);
 
     Stack {
         session_ctx,
-        workspace_of,
         memory_files,
         files_on,
         memory,

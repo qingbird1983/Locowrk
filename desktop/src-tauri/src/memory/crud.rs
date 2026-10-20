@@ -103,10 +103,12 @@ impl MemoryStore {
         Ok(true)
     }
 
-    /// 写入/覆盖一条记忆（store 基础 upsert）。生产写路径现有三处：
-    /// memory-sqlite 插件的 `memory_write` 工具（模型主动写，键位已在
-    /// `WsCtx::from_parts` 归一）、管理页 `update_value`，以及 **v2.186 起的
-    /// 整理事实卡落库**（`organize/facts.rs`）。键位 = (workspace, key)。
+    /// 写入/覆盖一条记忆（store 基础 upsert）。
+    ///
+    /// ⚠ S4 刀③b 起**生产面无调用点**：原三处写路径（memory-sqlite 插件、管理页、
+    /// 整理事实卡）随记忆面退役的退役、待删的待删；此方法现在只给本 crate 的测试
+    /// 夹具造数（`memory/tests`、`recall_log/tests`、`memory_reconcile/tests`），
+    /// 随 `memory/` 整面在刀③c 一起删。
     ///
     /// `source` 三档 = `"explicit"`（用户或模型亲手写）| `"extracted"`
     /// （v2.136 退役的旧自动提取遗留）| `"organized"`（v2.186 = 整理副产物，
@@ -117,6 +119,7 @@ impl MemoryStore {
     /// 「同项目双键位」。归一走 `workspace::scope_key`（与注入键位、观测
     /// `scope_id`、`md_index_body` 的目录名同一个函数）；`write_md` 拿的是同一个
     /// 归一串 ⇒ sqlite 键位与人类层目录名同形。空串 = 全局层，照原样传下去。
+    #[cfg(test)]
     pub fn write(
         &self,
         workspace: &str,

@@ -305,6 +305,9 @@ export const GATE_EXEMPT_TOOLS: Record<string, string> = {
   send_email: "阶段六内置演示工具（desktop/src-tauri/src/demo_tools.rs:17），落 fallback 属预期",
   subagent_run: "注册名取自 SELF_TOOL 常量（crates/kernel-agent/src/subagent/filter.rs:16），非字面量 .into()",
   sandbox_run: "tool-sandbox 于 v2.145 退役，此名只服务历史会话日志重放",
+  memory_expand: "S4 刀③b 随 organize 面退役，此名只服务历史会话日志重放；刀③c 记忆身份整族删除时一并摘掉",
+  memory_search_titles: "同上（S4 刀③b 退役，只服务历史会话日志重放）",
+  memory_project_history: "同上（S4 刀③b 退役，只服务历史会话日志重放）",
 };
 
 /** 工具名 → 身份。L1 精确名 → L2 前缀族 → L3 `fallback`，逐级匹配，不读插件名。 */

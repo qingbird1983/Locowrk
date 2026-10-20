@@ -125,9 +125,11 @@ impl MemoryStore {
         &self.files
     }
 
-    /// 真源根（`<数据根>/memory`）。给 `memory` 子树**外**的读点用（目前唯一消费者是
-    /// `organize/facts.rs` 的事实卡查重清单）；子树内一律走 [`Self::files`]，两处
-    /// 各拿一次根路径 = 同一句话两个出处。
+    /// 真源根（`<数据根>/memory`）。
+    ///
+    /// ⚠ S4 刀③b 起**生产面无调用点**：原来唯一的子树外读点 `organize/facts.rs`
+    /// 随整理面删除；现在只给测试夹具用，随 `memory/` 整面在刀③c 一起删。
+    #[cfg(test)]
     pub fn md_root(&self) -> &std::path::Path {
         self.files.root()
     }

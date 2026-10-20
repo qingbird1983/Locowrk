@@ -57,7 +57,6 @@ mod memory_reconcile;
 mod memory_tree_reconcile;
 mod model_override;
 mod notifications;
-mod organize;
 mod permission_mode;
 mod permission_rules;
 mod plugins_root;
@@ -98,8 +97,6 @@ mod tests_plugins_root;
 mod tests_session_log;
 #[cfg(test)]
 mod tests_stream;
-#[cfg(test)]
-mod tests_tree_gate;
 #[cfg(test)]
 mod testutil;
 
@@ -261,18 +258,6 @@ pub fn run() {
             commands::notification_read,
             commands::notification_clear,
             commands::compact_now,
-            // S4 刀②：UI 入口（记忆树面板 / 手动整理按钮）已删，但这两组命令
-            // **留到刀③**与 `organize` / `memory` 宿主模块、`memory-tree` crate
-            // 同刀删除——先删命令只会留下无消费者的宿主读口，clippy 红一片。
-            commands::organize_now,
-            commands::memory_tree_view,
-            commands::memory_tree_sessions,
-            commands::memory_tree_chapters,
-            commands::memory_tree_original,
-            commands::memory_tree_stream,
-            commands::memory_tree_project,
-            commands::memory_tree_edit_chapter,
-            commands::memory_tree_delete_chapter,
             commands::subagent_transcript
         ])
         .run(tauri::generate_context!())

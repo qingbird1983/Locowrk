@@ -4,9 +4,6 @@
 //! 为什么不测"发出去的请求长什么样"：那一段与改前逐字相同（`complete_inner` 一行未动），
 //! 本刀改的只有"从设置里取哪一档"。取档错了在行为面上是**另一台服务器**收到请求——
 //! 假客户端数不出这件事，而下面两条读的是真设置算出来的 `LlmSettings`。
-//! 过渡期 `cfg_for` 仍认记忆管理器档（organize 用），第二用例把它作为对照保留：
-//! 同一个实例、同一份设置，两条通路必须各自取到各自那一档，否则"压缩走主模型"
-//! 只是注释在承诺。
 
 use super::*;
 
@@ -70,14 +67,6 @@ fn summary_takes_the_main_route_and_ignores_the_memory_manager_profile() {
         cfg.base_url.as_deref().unwrap_or("<None>")
     );
     assert_eq!(cfg.model, "main-model", "摘要必须用主模型");
-    // 对照：过渡期整理线的那条路由仍指到记忆档——两条通路不是同一个取法，
-    // 否则第一段断言可以被"删掉 cfg_main、两边都调 cfg_for"悄悄蒙混。
-    let organize = summarizer.cfg_for(Some("mem-model"));
-    assert_eq!(
-        organize.base_url.as_deref(),
-        Some("https://mem.example/v1"),
-        "过渡期整理线仍认记忆管理器服务档（刀③b 随 organize 删除）"
-    );
 }
 
 /// `model` 参数只换模型名：端点与档位仍是主档的（压缩设置里的模型覆盖

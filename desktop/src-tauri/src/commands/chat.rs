@@ -1,5 +1,5 @@
 //! 会话与轮次命令（DESIGN §12.1 / §12.2）：跑一轮、停一轮、回退一次压缩、读会话
-//! 列表与全量投影。业务全在 runner / organizer / session_log，本文件只做参数转换与状态
+//! 列表与全量投影。业务全在 runner / session_log，本文件只做参数转换与状态
 //! 存取（AGENTS §3「command 是薄适配层」）。
 
 use std::sync::Arc;
@@ -74,15 +74,6 @@ pub async fn agent_chat(
     state.note_chat(&session_id);
     let session = state.session_lock(&session_id);
     let mut session = session.lock().await;
-    // 整理段落总结交付（Organize Summary Design v1 §3.3）：上一轮收束的
-    // 整理若产出了轮级总结，在本轮开场排空进会话日志（断层缝合处），实时
-    // 经 sink 推送、重放走 project_events——同一投影两路同形。
-    for text in state.organizer.deliver_summaries(&mut session, &session_id) {
-        state.sink.emit(&AgentEvent::ContextSummary {
-            session_id: session_id.clone(),
-            text,
-        });
-    }
     let usage = usage_policy(&state, &session_id).await;
     let steps = runner::run_turn(
         &state.kernel,
@@ -109,9 +100,6 @@ pub async fn agent_chat(
         session_id.clone(),
         session.derive_messages(),
     );
-    // M2 记忆树影子运行：轮次收束后旁路触发判定（阈值/增量档；只写
-    // memory-tree/ 投影，不改请求组装）
-    state.organizer.after_turn(&session, &session_id);
     Ok(steps)
 }
 

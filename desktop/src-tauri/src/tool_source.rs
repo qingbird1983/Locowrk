@@ -22,37 +22,12 @@ use plugin_host::RegistryToolSource;
 
 use crate::permission_mode::{PermissionMode, PermissionModeStore};
 
-/// M4 树工具（memory_expand / memory_collapse）的暴露门控数据源。
-/// v2.137 起一切会话皆树（legacy 整理面退役），本门控只剩 collapse
-/// 暴露开关；expand 常驻。
-pub struct TreeToolGate {
-    /// memory_collapse 暴露开关（settings `memory.collapseEnabled`，保存即
-    /// 读当前值；缺省关——§8.3 宁缺勿假）。
-    collapse_enabled: Arc<dyn Fn() -> bool + Send + Sync>,
-}
-
-impl TreeToolGate {
-    pub fn new(collapse_enabled: Arc<dyn Fn() -> bool + Send + Sync>) -> Self {
-        Self { collapse_enabled }
-    }
-
-    /// 工具对该会话是否可见/可解析：expand 常驻；collapse 看开关。
-    fn allows(&self, _session_id: Option<&str>, name: &str) -> bool {
-        match name {
-            "memory_collapse" => (self.collapse_enabled)(),
-            _ => true,
-        }
-    }
-}
-
 /// 注册表 → 工具目录服务。`resolve` 先查内置表，再委托注册表实现。
 pub struct KernelToolSource {
     builtins: Vec<(String, Arc<dyn Tool>)>,
     inner: RegistryToolSource,
     /// ㉘·B 会话级权限模式（计划模式目录围栏）；None = 不过滤。
     modes: Option<Arc<PermissionModeStore>>,
-    /// M4 树工具会话门控；None = 无树工具（kernel-bin 桥同形）。
-    tree_gate: Option<Arc<TreeToolGate>>,
     /// Q1b 检索回执的采集件（观测表 + 键位解析器，两者必须同批给）；
     /// None = 不采集（`resolve` 原样返回工具）。
     receipts: Option<Arc<crate::recall_receipt::ReceiptSink>>,
@@ -64,7 +39,6 @@ impl KernelToolSource {
             builtins: Vec::new(),
             inner,
             modes: None,
-            tree_gate: None,
             receipts: None,
         }
     }
@@ -78,13 +52,6 @@ impl KernelToolSource {
     /// ㉘·B：接会话级权限模式存储（计划模式目录围栏的数据源）。
     pub fn with_modes(mut self, modes: Arc<PermissionModeStore>) -> Self {
         self.modes = Some(modes);
-        self
-    }
-
-    /// M4：接树工具门控（memory_expand / memory_collapse 按会话整理模式
-    /// 过滤；legacy 会话目录不含、解析即拒——双保险）。
-    pub fn with_tree_gate(mut self, gate: Arc<TreeToolGate>) -> Self {
-        self.tree_gate = Some(gate);
         self
     }
 
@@ -124,13 +91,6 @@ impl ToolSource for KernelToolSource {
                 "{name} 在计划模式下不可用：计划模式只读，写类工具已被目录收起"
             )));
         }
-        if let Some(gate) = &self.tree_gate {
-            if !gate.allows(session_id, name) {
-                return Err(ToolError::NotAvailable(format!(
-                    "{name} 不可用：未在设置中开启该工具（设置 → 记忆 → 暴露 memory-collapse 工具）"
-                )));
-            }
-        }
         // Q1b：围栏全部放行之后才套采集壳——被拒的调用没有结果可观测，记了就是把
         // 「模型没查到」冒充「查到了零条」。
         Ok(match &self.receipts {
@@ -145,11 +105,6 @@ impl ToolSource for KernelToolSource {
             .builtins
             .iter()
             .map(|(_, t)| t.spec().clone())
-            .filter(|s| {
-                self.tree_gate
-                    .as_ref()
-                    .is_none_or(|g| g.allows(session_id, &s.name))
-            })
             .collect();
         for spec in self.inner.list_tools() {
             if !specs.iter().any(|s| s.name == spec.name) {

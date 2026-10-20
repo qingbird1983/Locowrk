@@ -28,8 +28,8 @@ export type { BrowserOpenPayload, CacheBreakReport, CompactNowView, Notification
 
 export type { AppearanceUpdate, BatchResult, ChatUpdate, ContextUpdate, DeveloperUpdate, ExposureDebug, SettingsView, ToolsUpdate } from "./settings";
 
-// S4 刀②：记忆树 / 记忆管理面的类型与命令包装层留到刀③与后端同删（UI 已无
-// 入口）；embedding 两型已迁 llm.ts，这里不再从 memory 转出。
+// S4 刀②/③b：记忆树类型随 organize 面删除（UI 无入口、命令已注销）；
+// 记忆管理面其余类型留到刀③c 与后端同删；embedding 两型已迁 llm.ts。
 export type {
   InjectOverview,
   InjectView,
@@ -39,14 +39,6 @@ export type {
   MemoryUpdate,
   ObsoleteRow,
   ObsoleteView,
-  ProjectChapterView,
-  ProjectTreeView,
-  StreamView,
-  TreeChapterView,
-  TreeChaptersView,
-  TreeDebug,
-  TreeOriginalItem,
-  TreeSummaryView,
 } from "./memory";
 
 export type { CatalogModelInfo, CatalogStatus, EmbeddingUpdate, ImportApplyReport, ImportCandidate, ImportScanOutcome, LlmSettingsView, LlmUpdate, ModelTestResult, ProbeOutcome, ProviderInput, ProviderModelPricing, ProviderModelSources, ProviderModelView, ProviderModels, ProviderView, SubagentPin } from "./llm";

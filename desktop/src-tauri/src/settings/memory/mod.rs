@@ -117,26 +117,10 @@ pub const FACT_CARDS_DEFAULT: bool = true;
 // v2.136/v2.137 退役掉的 `autoExtract` / `handoffUpdate` / `experiences` /
 // `defaultOrganizer` 同一形状。界面文案（`locales/*/settings.ts`）与前端类型
 // （`types/memory.ts`）同刀删除，中英成对由 `check-i18n` 盯着。
-// （写成 `//` 而不是 `///`：它是**本节**的记号，不该变成下面那个枚举的文档——
+// （写成 `//` 而不是 `///`：它是**本节**的记号，不该变成下面那张设置表的文档——
 // `///` + 空行会撞上 clippy `empty_line_after_doc_comments`，本仓 `-D warnings` 拦红。）
-
-/// 尾巴策略枚举（settings 字符串 → 组装判定）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TailStrategy {
-    /// A 边界结算：尾巴 = 自上次整理以来全部原文（缺省）。
-    Boundary,
-    /// B 固定窗口：尾巴 = 最近 N 轮（实验档）。
-    Window,
-}
-
-impl TailStrategy {
-    pub fn parse(s: &str) -> TailStrategy {
-        match s {
-            "window" => TailStrategy::Window,
-            _ => TailStrategy::Boundary,
-        }
-    }
-}
+// S4 刀③b：`TailStrategy` 枚举随树组装器删除（`tail_config` 的最后一个消费者
+// 是 organize 的 TreeAssembler）；设置字段 `tailStrategy` 本身留到刀③c 随记忆区一起删。
 
 /// 记忆注入设置。top_k 缺省 5（约束清单 §3"注入条数可配"）。
 /// v2.136 裁定退役三键：`autoExtract`（自动提取，⑬）/ `handoffUpdate`

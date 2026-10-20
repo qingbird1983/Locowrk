@@ -15,9 +15,7 @@
 //!    ——闭包按名捕获工具变量（v2.144 原注）；
 //! 2. `search_catalog` 先于 `main_source`：`search_tools` 吃的是**不含自身**的
 //!    全目录视图（否则检索结果里出现检索工具自己）；
-//! 3. 树工具四件与 `tree_gate`/`permission_modes` 只挂 `main_source`，**不进
-//!    `search_catalog` 索引**（会话级工具，人的检索面不含）。
-//! 4. Q1b 的检索回执采集壳（`with_receipt_sink`）同样**只挂 `main_source`**——它是
+//! 3. Q1b 的检索回执采集壳（`with_receipt_sink`）只挂 `main_source`——它是
 //!    执行面的观测，`search_catalog` 从不 `resolve`，挂上去既无读数又把"这棵树是什么"
 //!    讲错（v2.184 本批）。
 //!
@@ -37,7 +35,6 @@ use crate::search_tools::SearchToolsTool;
 use crate::settings::SettingsStore;
 use crate::tool_source::KernelToolSource;
 use crate::usage::UsageRecorder;
-use crate::workspace::WorkspaceResolver;
 
 /// `build_and_provide` 的入参：本簇要消费的启动期句柄（逐字段显名传）。
 pub(crate) struct Init {
@@ -45,7 +42,6 @@ pub(crate) struct Init {
     pub ctx: Arc<Context>,
     pub registry: Arc<PluginRegistry>,
     pub settings: Arc<SettingsStore>,
-    pub sessions_dir: PathBuf,
     pub root: PathBuf,
     pub usage: Arc<UsageRecorder>,
     /// embedding 冷却柄（`SharedEmbed::port()`）：⑫ 检索的语义信号源。
@@ -61,8 +57,6 @@ pub(crate) struct Init {
     pub ask_hub: Arc<crate::ask::AskHub>,
     pub schedules: Option<Arc<crate::scheduler::ScheduleDb>>,
     pub permission_modes: Arc<crate::permission_mode::PermissionModeStore>,
-    pub tree_store: memory_tree::TreeStore,
-    pub workspace_of: WorkspaceResolver,
     /// Q1b 检索回执采集件（观测表 + 键位解析器；与注入侧同一个 `Arc<RecallLog>`，
     /// 见 `state/memory_stack.rs`）。
     pub receipt_sink: Arc<crate::recall_receipt::ReceiptSink>,
@@ -76,7 +70,6 @@ pub(crate) fn build_and_provide(init: Init) -> Arc<crate::browser::ConsoleStore>
         ctx,
         registry,
         settings,
-        sessions_dir,
         root,
         usage,
         embed_port,
@@ -89,8 +82,6 @@ pub(crate) fn build_and_provide(init: Init) -> Arc<crate::browser::ConsoleStore>
         ask_hub,
         schedules,
         permission_modes,
-        tree_store,
-        workspace_of,
         receipt_sink,
     } = init;
 
@@ -204,14 +195,6 @@ pub(crate) fn build_and_provide(init: Init) -> Arc<crate::browser::ConsoleStore>
         RegistryToolSource::new(Arc::clone(&registry)),
     )));
     let embed_tool_port: Arc<dyn kernel_agent::EmbedPort> = embed_port.clone();
-    // M4 树工具（§3.38③④）：expand 常驻（exposure=always）、collapse
-    // 开关开启才进目录（§8.3 缺省关）——门控在 KernelToolSource 列表/解析
-    // 双侧（v2.137 起门控只剩开关，一切会话皆树）。不进 search_catalog
-    // 索引（会话级工具，人的检索面不含）。
-    let tree_gate = Arc::new(crate::tool_source::TreeToolGate::new({
-        let s = Arc::clone(&settings);
-        Arc::new(move || s.memory().collapse_enabled)
-    }));
     let main_source = with_host_tools(KernelToolSource::new(RegistryToolSource::new(Arc::clone(
         &registry,
     ))))
@@ -220,27 +203,6 @@ pub(crate) fn build_and_provide(init: Init) -> Arc<crate::browser::ConsoleStore>
         Arc::clone(&usage),
         Some(embed_tool_port),
     ))
-    .with_builtin(crate::organize::MemoryExpandTool::new(
-        tree_store.clone(),
-        Arc::clone(&workspace_of),
-        sessions_dir.clone(),
-    ))
-    .with_builtin(crate::organize::MemoryCollapseTool::new(
-        tree_store.clone(),
-        Arc::clone(&workspace_of),
-    ))
-    .with_builtin(crate::organize::SearchTitlesTool::new(
-        tree_store.clone(),
-        Arc::clone(&workspace_of),
-        Some(embed_port.clone() as Arc<dyn kernel_agent::EmbedPort>),
-        sessions_dir.clone(),
-    ))
-    .with_builtin(crate::organize::ProjectHistoryTool::new(
-        tree_store.clone(),
-        Arc::clone(&workspace_of),
-        sessions_dir.clone(),
-    ))
-    .with_tree_gate(tree_gate)
     // ㉘·B 计划模式目录围栏（非 Pure 不出目录、resolve 即拒）
     .with_modes(Arc::clone(&permission_modes))
     // Q1b（L0·(b)）：检索回执采集壳挂在**执行面**这一棵树上（`search_catalog` 只做

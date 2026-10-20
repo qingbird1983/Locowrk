@@ -96,9 +96,6 @@ pub struct AppState {
     /// 调度库（⑭，schedule.sqlite3）：目的地页 schedule_list / schedule_delete
     /// 命令与引擎/工具共用同一连接。打不开 = None（调度缺席已降级）。
     pub schedules: Option<Arc<crate::scheduler::ScheduleDb>>,
-    /// 记忆树影子运行编排器（M2）：轮次收束钩子 / `/整理` / 启动重投 /
-    /// 开发者观测的数据源；只写 memory-tree/ 投影，不改请求组装。
-    pub organizer: Arc<crate::organize::Organizer>,
     /// 主层深度压缩执行体（S2 刀④c）：runner 在每个 step 边界问它一次「到线了没」，
     /// 到线就把较旧的一段交给摘要模型并落一条 `ContextCompacted`。与 `organizer`
     /// 共用同一条直呼通路（实例在 `state/background.rs` 构造，理由写在那儿）。

@@ -1,12 +1,13 @@
 /**
- * 记忆面：记忆设置、记忆行、记忆树（章节捆 / 整理记录 / 项目树）与嵌入视图。
+ * 记忆面：记忆设置、记忆行与嵌入视图。
  *
  * 由批 F-22（v2.175）从 `desktop/src/types.ts` 目录化拆出：**每个类型声明块逐字节原样搬移**，
  * 只改两处——①按引用面决定 `export` 与否（外部 import 过的与兄弟簇要用的留 `export`，
  * 其余降为模块内部）；②跨簇引用走 `import type`。等价判据见 scripts/../tmp/v180-equiv.mjs。
+ *
+ * S4 刀③b：记忆树（`TreeDebug` / `TreeSummaryView` / 章节 / 项目视图 / 会话流）随
+ * organize 宿主模块整面删除；其余记忆管理面类型留到刀③c 与后端同删。
  */
-
-import type { RunSummaryView } from "./session";
 
 /** 记忆注入区投影（⑪）：结构即设置原值，无生效换算。v2.136 起注入面
  * = 全局记忆 + 提醒段；autoExtract/handoffUpdate/experiences 三键退役。 */
@@ -157,139 +158,4 @@ export interface InjectOverview {
 export interface InjectView {
   overview: InjectOverview;
 }
-
-/** 记忆树影子运行观测（M2 §3.36③；memory_tree_view 命令载荷）。 */
-export interface TreeDebug {
-  exists: boolean;
-  workspace: string;
-  sessionId: string;
-  chapteredUntil: number;
-  chapterCount: number;
-  tailEvents: number;
-  tailTokensEst: number;
-  anchorTokens: number;
-  anchorSource: "llm_usage" | "estimate";
-  /** 整理阈值（绝对 token，v2.137）。 */
-  thresholdTokens: number;
-  pacing: "batch" | "incremental";
-  chunkTokens: number;
-  pausedAuto: boolean;
-  reboundCount: number;
-  pending: { from: number; to: number; attempts: number } | null;
-  history: TreeOrganizeRecord[];
-}
-
-interface TreeOrganizeRecord {
-  ts: number;
-  reason: string;
-  mode: string;
-  status: string;
-  from: number;
-  to: number;
-  chapters: number;
-  /** wire = snake_case（OrganizeRecord 无 camelCase 改名，历史兼容）。 */
-  manager_input: number;
-  manager_output: number;
-  durationMs: number;
-}
-
-// ---- 记忆树只读呈现（M3 §3.37，Memory-KV Roadmap） ----
-
-/** 树投影清单行（memory_tree_sessions；会话切换器数据源）。 */
-export interface TreeSummaryView {
-  workspace: string;
-  sessionId: string;
-  chapterCount: number;
-  /** 轮级总结条数（Q14 第三刀）：左栏会话行「N 总结 · N 章节」的数在清单侧一次给出。 */
-  summaryCount: number;
-  chapteredUntil: number;
-  pending: boolean;
-  pausedAuto: boolean;
-  updatedMs: number;
-}
-
-/** 一章节（L0 标题 / L1 摘要 / L2 事件区间；source 如实 recorder|rule）。
- * M5 起可编辑：*EditedByUser = 用户改过（自动层永不覆盖，UI 挂「手动」徽章）。 */
-export interface TreeChapterView {
-  chapterId: string;
-  title: string;
-  summary: string;
-  source: string;
-  pending: boolean;
-  createdAt: number;
-  eventFrom: number;
-  eventTo: number;
-  titleEditedByUser: boolean;
-  summaryEditedByUser: boolean;
-}
-
-/** 选中会话的章节清单（memory_tree_chapters；投影缺/坏 = exists=false）。 */
-export interface TreeChaptersView {
-  exists: boolean;
-  workspace: string;
-  sessionId: string;
-  chapteredUntil: number;
-  pausedAuto: boolean;
-  chapters: TreeChapterView[];
-  /** 轮级总结链（v2.141）：按整理收束序，渲染在对应章节组上方。 */
-  summaries: RunSummaryView[];
-}
-
-/** 项目联合视图（v2.141 扩展）：跨会话捆平铺 + 跨会话总结链（时间正序
- * = 项目进展叙事锚点）。 */
-export interface ProjectTreeView {
-  chapters: ProjectChapterView[];
-  summaries: RunSummaryView[];
-}
-
-/** 项目联合视图行（M6.4，memory_tree_project；跨会话捆平铺 + 会话标注）。 */
-export interface ProjectChapterView {
-  sessionId: string;
-  sessionTitle: string;
-  chapterId: string;
-  title: string;
-  summary: string;
-  source: string;
-  titleEditedByUser: boolean;
-  summaryEditedByUser: boolean;
-  createdAt: number;
-  eventFrom: number;
-  eventTo: number;
-}
-
-/** 原文切片行（与记忆管理器材料同形；index = 会话日志事件位）。 */
-type TreeOriginalKind = "user" | "assistant" | "tool_call" | "tool_result" | "summary";
-
-export interface TreeOriginalItem {
-  index: number;
-  kind: TreeOriginalKind;
-  text: string;
-}
-
-/** 会话流小节（队列 Q14 · MB §2.3）：一个已定稿章节的原文切片。
- * rows 的 index 是会话日志**绝对**事件位，跨节连续 ⇒ 定位语义成立。
- * error 非空 = 本节切片读不出（区间越出日志），此时 rows 为空、其余小节照常。 */
-export interface StreamSection {
-  chapterId: string;
-  title: string;
-  source: string;
-  /** 该章有人改过（标题或摘要任一手动标记；逐字段区分看 TreeChapterView）。 */
-  edited: boolean;
-  from: number;
-  to: number;
-  rows: TreeOriginalItem[];
-  error: string | null;
-}
-
-/** 整组会话流（看板第 4 列一块面板；sections 按事件区间升序 = 事件序）。
- * sections 为空时 from/to 是 0 ⇒ 判空态看 sections.length，别看区间。 */
-export interface StreamView {
-  sections: StreamSection[];
-  from: number;
-  to: number;
-  totalRows: number;
-}
-
-// S4 刀②：`EmbeddingView` / `EmbeddingUpdate` 已迁往 `types/llm.ts`——记忆面
-// 退役后 embedding 只剩工具语义检索一个消费者，不再属于本簇。
 

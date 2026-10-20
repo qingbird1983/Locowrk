@@ -1,18 +1,15 @@
-//! 组装点·编排器与后台任务簇（M2/M3 §3.37 + ⑭ 调度引擎 + F1 §6 + 批 D §6.3）：
-//! 整理事件推送闭包 → `Organizer` 构造 → 调度引擎 spawn → 在途整理重投 →
-//! 记忆文件化首启导出 → 孤儿资产 GC 巡检。返回 `AppState` 要接的 `organizer`。
+//! 组装点·后台任务簇（M2/M3 §3.37 + ⑭ 调度引擎 + F1 §6 + 批 D §6.3）：
+//! 压缩器构造 → 调度引擎 spawn → 记忆文件化首启导出 → 孤儿资产 GC 巡检。
 //!
 //! 语句自 `state/mod.rs` 的 `init_state` **原样搬出**（批 F-3b·F5 结构性拆分），
-//! 一条未重排。四条不能动的规矩：
+//! 一条未重排。三条不能动的规矩：
 //! 1. **emit 调用只落在本模块**：桌面单测不引用 state，tauri 运行时符号（连它的
 //!    窗口栈 tao）就不会进测试二进制——无 v6 清单的进程链接 tao 后 comctl32 缺
 //!    `SetWindowSubclass`/`TaskDialogIndirect`，加载即 `ENTRYPOINT_NOT_FOUND`
 //!    （这条是历史上真崩过的形状，不是理论洁癖）；
 //! 2. 后台化一律走 `tauri::async_runtime::spawn`，不用 `tokio::spawn`：setup
 //!    上下文里没有 tokio reactor，直接 spawn 会 panic（v2.130 走查实抓）；
-//! 3. `recover_pending` 必须在 `Organizer` 构造之后、且在调度引擎起来之后跑，
-//!    重投的整理任务要与引擎的补跑不冲突；
-//! 4. GC 循环每轮**重读设置**（`gc_threshold_days`/`auto_gc`）= 热调随下一次
+//! 3. GC 循环每轮**重读设置**（`gc_threshold_days`/`auto_gc`）= 热调随下一次
 //!    tick 生效，快照成启动值就是「设置页骗人」。
 //!
 //! 调度引擎本身是 `crate::scheduler::spawn_engine`（一长串依赖直给的现成 API）。
@@ -33,7 +30,6 @@ pub(crate) struct Init {
     pub settings: Arc<SettingsStore>,
     pub sessions_dir: PathBuf,
     pub root: PathBuf,
-    pub workspace_of: crate::workspace::WorkspaceResolver,
     pub model_overrides: Arc<crate::model_override::ModelOverrideStore>,
     pub catalog: Arc<crate::llm::catalog::CatalogStore>,
     pub fragments: Arc<crate::fragments::FragmentPending>,
@@ -61,7 +57,6 @@ pub(crate) struct Init {
 }
 
 pub(crate) struct Stack {
-    pub organizer: Arc<crate::organize::Organizer>,
     pub compactor: Arc<crate::compact::deep::Compactor>,
 }
 
@@ -71,7 +66,6 @@ pub(crate) fn build(init: Init) -> Stack {
         settings,
         sessions_dir,
         root,
-        workspace_of,
         model_overrides,
         catalog,
         fragments,
@@ -91,43 +85,12 @@ pub(crate) fn build(init: Init) -> Stack {
         compact_refusals,
     } = init;
 
-    // M2 记忆树影子运行编排器：记忆管理器客户端 = 设置路由的兼容客户端直呼；
-    // ㉘ 会话→项目解析器同源复用（(workspace, session) 键位对齐 28·A）。
-    // 整理事件推送闭包在此组装（M3 §3.37③）：emit 调用只落在本模块——
-    // 桌面单测不引用 state，tauri 运行时符号（及其窗口栈 tao）就不会进
-    // 测试二进制；无 v6 清单的进程链接 tao 后 comctl32 缺
-    // SetWindowSubclass/TaskDialogIndirect，加载即 ENTRYPOINT_NOT_FOUND。
-    let organizer_notifier: crate::organize::OrganizeNotifier = {
-        let app = app.clone();
-        std::sync::Arc::new(move |event, payload| {
-            use tauri::Emitter;
-            if let Err(e) = app.emit(event, payload) {
-                tracing::warn!("{event} 推送失败: {e}");
-            }
-        })
-    };
-    // 一条直呼通路 = 一个客户端实例（S2 刀④c）：过渡期整理章节总结（`organize/`）
-    // 与主层压缩摘要（`compact/deep.rs`）共用同一个 `AppLlmSummarizer`。构造点在
-    // 组装点，为的是让**共用件不归属于任何一个使用方**——organize 在 S4 刀③b 整面
-    // 退役而压缩留下。两条通路取配置的口径不同：整理线仍认记忆管理器服务档
-    // （`cfg_for`，随 organize 一起删），压缩线只认主模型（`cfg_main`）。
-    let aux = Arc::new(crate::llm::AppLlmSummarizer::new(Arc::clone(&settings)));
-    let organizer_aux: Arc<dyn memory_tree::MemoryManagerClient> = aux.clone();
-    let summary_aux: Arc<dyn crate::llm::SummaryClient> = aux.clone();
-    let organizer = crate::organize::build_organizer(
-        Arc::clone(&settings),
-        sessions_dir.clone(),
-        organizer_aux,
-        Arc::clone(&workspace_of),
-        root.clone(),
-        Arc::clone(&model_overrides),
-        Arc::clone(&catalog),
-        organizer_notifier,
-        Some(Arc::clone(&fragments)),
-        // 事实卡落库句柄（MR §5 提案 A · 队列 Q3）：与注入面/管理页同一个
-        // `MemoryStore` ⇒ 卡片写完，索引注入与记忆页立刻读得到同一行（不分两套库）
-        Arc::clone(&memory),
-    );
+    // 一条直呼通路 = 一个客户端实例：S4 刀③b 起整理线已整面退役，这个实例
+    // 只服务主层压缩摘要（`compact/deep.rs`），取主模型端点与档位（`cfg_main`）。
+    // 构造点仍留在组装点：压缩器是 runner 的 step 边界依赖，客户端不该由 runner
+    // 自己 new（测试面要能注入假件）。
+    let summary_aux: Arc<dyn crate::llm::SummaryClient> =
+        Arc::new(crate::llm::AppLlmSummarizer::new(Arc::clone(&settings)));
     let compactor = Arc::new(crate::compact::deep::Compactor::new(
         Arc::clone(&settings),
         summary_aux,
@@ -138,7 +101,6 @@ pub(crate) fn build(init: Init) -> Stack {
         // 只靠锚点这一层就永远追不上已经涨过的窗口。
         compact_refusals,
     ));
-    // §5.3 崩溃恢复：扫描投影里的在途整理任务重投（会话已删 = 终局放弃）
 
     // 6. ⑭ 调度引擎（库可用时）：1s tick；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑
     if let Some(db) = &schedules {
@@ -154,14 +116,11 @@ pub(crate) fn build(init: Init) -> Stack {
             sessions_dir.clone(),
             Arc::clone(&last_chat),
             app.clone(),
-            Arc::clone(&organizer),
             Arc::clone(&compactor),
             Arc::clone(&stop_flags),
             Arc::clone(&fragments),
         );
     }
-    // 在途整理任务重投（后台，不阻塞窗口出现）
-    organizer.recover_pending();
 
     // F1 首启导出（文件化设计 §6）+ F2 启动 reconcile（先对账再补缺）：
     // 后台线程幂等，总开关关 = 什么都不做。
@@ -208,8 +167,5 @@ pub(crate) fn build(init: Init) -> Stack {
         });
     }
 
-    Stack {
-        organizer,
-        compactor,
-    }
+    Stack { compactor }
 }

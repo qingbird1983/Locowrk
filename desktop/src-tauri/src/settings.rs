@@ -32,13 +32,17 @@ pub use chat::{ChatSettings, ChatUpdate, ChatView};
 pub use context::{ContextSettings, ContextSettingsView, ContextUpdate};
 pub use developer::{DeveloperSettings, DeveloperUpdate, DeveloperView};
 pub use embedding::{EmbeddingSettings, EmbeddingUpdate, EmbeddingView};
+/// 四层窗口链的 `session_window` 现在只有测试面消费（生产面统一走
+/// `session_capacity` 一次取窗口与输出上限）；测试面比"底层窗口取法"与
+/// "capacity 第一半"的一致时要用它本身，不能让判据自己造一份。
+#[cfg(test)]
+pub(crate) use llm::session_window;
 pub use llm::{
-    new_profile_id, session_capacity, session_window, synthesize_view, synthesize_view_raw,
-    validate_headers, LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, NetworkProxy,
-    ProviderInput, ProviderModel, ProviderModelView, ProviderProfile, ProviderView, SubagentPin,
-    PROVIDERS,
+    new_profile_id, session_capacity, synthesize_view, synthesize_view_raw, validate_headers,
+    LlmConfig, LlmSettings, LlmSettingsView, LlmUpdate, NetworkProxy, ProviderInput, ProviderModel,
+    ProviderModelView, ProviderProfile, ProviderView, SubagentPin, PROVIDERS,
 };
-pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate, TailStrategy};
+pub use memory::{MemorySettings, MemorySettingsView, MemoryUpdate};
 pub use multimodal::{MultimodalSettings, MultimodalUpdate, MultimodalView};
 pub use plugins::{PluginsSettings, PluginsUpdate, PluginsView};
 pub use thinking::{ThinkingSettings, ThinkingUpdate, ThinkingView, THINKING_NONE};
@@ -332,23 +336,6 @@ impl SettingsStore {
             .expect("settings poisoned")
             .developer
             .clone()
-    }
-
-    /// 后端专用：尾巴组装配置（M4 树会话组装源 + 溢出整理触发用）——
-    /// 策略（A 边界结算缺省 / B 固定窗口）+ 窗口轮数。
-    pub fn tail_config(&self) -> (crate::settings::memory::TailStrategy, u32) {
-        let m = self.memory();
-        (
-            crate::settings::memory::TailStrategy::parse(&m.tail_strategy),
-            m.tail_window_turns,
-        )
-    }
-
-    /// 后端专用：collapse 配置（M4 §8.3 空间急救）——开关 + 自动收起
-    /// 占用阈值（%）。
-    pub fn collapse_config(&self) -> (bool, u8) {
-        let m = self.memory();
-        (m.collapse_enabled, m.collapse_threshold_pct)
     }
 }
 

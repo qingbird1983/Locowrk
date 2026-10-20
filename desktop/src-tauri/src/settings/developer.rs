@@ -10,54 +10,6 @@ use serde::{Deserialize, Serialize};
 /// KV v2 §7.4）。
 pub const CACHE_HIT_ALERT_PERCENT_DEFAULT: u8 = 80;
 
-// ---- M2 记忆树整理（树 v2 §15 开发者层级可调项；Memory-KV Roadmap）----
-
-/// 反弹熔断 k 缺省（§5.5：整理后 k 个用户轮内再触发 = 反弹）。
-pub const ORGANIZE_REBOUND_K_DEFAULT: u32 = 3;
-/// 反弹熔断 m 缺省（连续 m 次反弹 → 暂停本会话自动整理）。
-pub const ORGANIZE_REBOUND_M_DEFAULT: u32 = 3;
-/// 熔断 k/m 合法区间（1–10）。
-pub const ORGANIZE_REBOUND_RANGE: std::ops::RangeInclusive<u32> = 1..=10;
-/// 记忆管理器单次调用超时缺省（秒）。
-/// ⚠ **队列 Q6（CB §7.2）同调改的缺省**：60 → 30。这条与下面那条**必须一起改**——
-/// 稿 §11 点名的坑就是「只调超时不调重试」：60s×(1+3)=240s 的在途盲区若只把超时
-/// 砍半，仍留着 4 次尝试 = 120s，盲区没变小一半。终值 = 30×(1+2)=**最坏 90s**
-/// （不变量判据 `defaults_keep_the_in_flight_window_at_90_secs`）。
-/// 这不是"顺手改了存量用户的东西"：本项早已是可调项，改的是**缺省**，且方向是
-/// 队列 Q6 排定并经理批准的（用户设过的值不受影响，字段级缺省只作用在未设过的键上）。
-pub const MANAGER_TIMEOUT_SECS_DEFAULT: u64 = 30;
-pub const MANAGER_TIMEOUT_SECS_RANGE: std::ops::RangeInclusive<u64> = 10..=600;
-/// 记忆管理器重试次数缺省（仍失败 → 规则切分降级，§5.4）。
-/// Q6 同调：3 → 2。**为什么不是 1**（稿 §7.2 原话）：慢网络 + 限流下少一次重试会把
-/// 本来能成功的整理打成降级规则切分，而降级目录的标题质量明显不如模型产出
-/// （降级支标题取自「首条用户消息前 20 字」）。
-pub const MANAGER_MAX_RETRIES_DEFAULT: u32 = 2;
-pub const MANAGER_MAX_RETRIES_RANGE: std::ops::RangeInclusive<u32> = 0..=10;
-/// 在途收束后的连续补跑上限缺省（CB §12.2 要求的那本账 · 队列 Q6）。
-/// 0 = 关掉补跑（只记标记、等下一轮自然触发）——按可配置原则②，这条限制有开关。
-pub const ORGANIZE_MAX_RERUN_DEFAULT: u32 = 3;
-pub const ORGANIZE_MAX_RERUN_RANGE: std::ops::RangeInclusive<u32> = 0..=10;
-/// 规则切分块缺省与合法区间（§15：5K–50K 缺省 20K）。
-pub const RULE_CHUNK_TOKENS_DEFAULT: u64 = 20_000;
-pub const RULE_CHUNK_TOKENS_RANGE: std::ops::RangeInclusive<u64> = 5_000..=50_000;
-
-// ---- 摘要补写（队列 Q8c：记录员降级章节欠的那次 L1 补写）----
-
-/// 一次补写至多处理几章（0–20 缺省 6）。
-/// **0 = 关掉补写**（可配置原则②）。关掉后的行为与本批之前逐字节相同，且
-/// 判定发生在任何 IO 之前——`backfill_summaries` 第一句就返回，连会话日志都
-/// 不重读。
-/// 上限取 20 的理由：一次请求要把这 20 章的原文转录全带上，再大就是在拿
-/// 补写通路自己造一次超限。
-pub const ORGANIZE_SUMMARY_CHAPTERS_DEFAULT: u32 = 6;
-pub const ORGANIZE_SUMMARY_CHAPTERS_RANGE: std::ops::RangeInclusive<u32> = 0..=20;
-/// 同一章至多补写尝试几次（0–5 缺省 2）。计数落进投影（`summary_attempts`），
-/// 所以这是**跨轮**的上限而不是单轮内的重试：模型全挂时「挑出来→烧一次→
-/// 没成→下轮再挑」不能变成无界重烧（与 `organize_max_rerun` 同族语义）。
-/// 0 = 也关掉补写（候选池直接空，两个 0 档任一生效即关）。
-pub const ORGANIZE_SUMMARY_ATTEMPTS_DEFAULT: u32 = 2;
-pub const ORGANIZE_SUMMARY_ATTEMPTS_RANGE: std::ops::RangeInclusive<u32> = 0..=5;
-
 /// 开发者选项设置（settings.json `developer` 区，字段级缺省零迁移）。
 /// Default = 全关是语义要求：分区隐藏 + 禁止项保持写死语义（阈值是唯一
 /// 带非零缺省的字段，只在告警开启后有意义）。
@@ -83,32 +35,6 @@ pub struct DeveloperSettings {
     pub cache_diagnostics: bool,
     /// 告警阈值（%）。
     pub cache_hit_alert_percent: u8,
-    /// 记忆树反弹熔断 k（§5.5，1–10 缺省 3）。
-    pub organize_rebound_k: u32,
-    /// 记忆树反弹熔断 m（连续 m 次 → 暂停自动整理，1–10 缺省 3）。
-    pub organize_rebound_m: u32,
-    /// 记忆管理器单次调用超时（秒，10–600 缺省 60）；重试次数（0–10 缺省
-    /// 3，仍失败 → 规则切分）。**持久化键沿用历史名 recorderTimeoutSecs/
-    /// recorderMaxRetries**（设置文件兼容；术语注见《Memory Tree Design v2》）。
-    #[serde(rename = "recorderTimeoutSecs")]
-    pub memory_manager_timeout_secs: u64,
-    #[serde(rename = "recorderMaxRetries")]
-    pub memory_manager_max_retries: u32,
-    /// 规则切分块（token，5K–50K 缺省 20K）。
-    pub rule_chunk_tokens: u64,
-    /// 在途收束后允许**连续补跑**几次（CB §12.2 · 队列 Q6，0–10 缺省 3）。
-    /// 语义是"整理追不上对话节奏时最多再自己追三步"，不是"一共跑几次"：
-    /// 任何一次新的自然触发（`after_turn` 真发起了一轮整理）都把这本账清零
-    /// （`Organizer::clear_rerun_streak`）。0 = 关掉补跑，标记照记、等下一轮。
-    pub organize_max_rerun: u32,
-    /// 一次摘要补写至多处理几章（队列 Q8c，0–20 缺省 6）；0 = 关掉补写通路。
-    /// 它管的是记录员降级留下的那笔「摘要债」——章节已经归档、标题有、
-    /// 摘要还是机械说明。轮末之后替那些章补写，慢、调模型。
-    pub organize_summary_chapters: u32,
-    /// 同一章至多补写尝试几次（0–5 缺省 2）；跨轮计数落在投影的
-    /// `summary_attempts` 上，所以它挡的是「每轮都重挑同一章重烧模型」这种无界
-    /// 重烧。0 = 候选池为空 = 与上面那条 0 档同效（两个开关任一生效通路即停）。
-    pub organize_summary_attempts: u32,
 }
 
 impl Default for DeveloperSettings {
@@ -120,14 +46,6 @@ impl Default for DeveloperSettings {
             cache_hit_alert: false,
             cache_diagnostics: false,
             cache_hit_alert_percent: CACHE_HIT_ALERT_PERCENT_DEFAULT,
-            organize_rebound_k: ORGANIZE_REBOUND_K_DEFAULT,
-            organize_rebound_m: ORGANIZE_REBOUND_M_DEFAULT,
-            memory_manager_timeout_secs: MANAGER_TIMEOUT_SECS_DEFAULT,
-            memory_manager_max_retries: MANAGER_MAX_RETRIES_DEFAULT,
-            rule_chunk_tokens: RULE_CHUNK_TOKENS_DEFAULT,
-            organize_max_rerun: ORGANIZE_MAX_RERUN_DEFAULT,
-            organize_summary_chapters: ORGANIZE_SUMMARY_CHAPTERS_DEFAULT,
-            organize_summary_attempts: ORGANIZE_SUMMARY_ATTEMPTS_DEFAULT,
         }
     }
 }
@@ -142,16 +60,6 @@ pub struct DeveloperView {
     pub cache_hit_alert: bool,
     pub cache_diagnostics: bool,
     pub cache_hit_alert_percent: u8,
-    pub organize_rebound_k: u32,
-    pub organize_rebound_m: u32,
-    #[serde(rename = "recorderTimeoutSecs")]
-    pub memory_manager_timeout_secs: u64,
-    #[serde(rename = "recorderMaxRetries")]
-    pub memory_manager_max_retries: u32,
-    pub rule_chunk_tokens: u64,
-    pub organize_max_rerun: u32,
-    pub organize_summary_chapters: u32,
-    pub organize_summary_attempts: u32,
 }
 
 /// 部分更新（settings_set 入参）：字段 None = 保持不变。
@@ -164,16 +72,6 @@ pub struct DeveloperUpdate {
     pub cache_hit_alert: Option<bool>,
     pub cache_diagnostics: Option<bool>,
     pub cache_hit_alert_percent: Option<u8>,
-    pub organize_rebound_k: Option<u32>,
-    pub organize_rebound_m: Option<u32>,
-    #[serde(rename = "recorderTimeoutSecs")]
-    pub memory_manager_timeout_secs: Option<u64>,
-    #[serde(rename = "recorderMaxRetries")]
-    pub memory_manager_max_retries: Option<u32>,
-    pub rule_chunk_tokens: Option<u64>,
-    pub organize_max_rerun: Option<u32>,
-    pub organize_summary_chapters: Option<u32>,
-    pub organize_summary_attempts: Option<u32>,
 }
 
 /// 合法性检查（update.rs 校验用）：阈值 1–100。
@@ -215,105 +113,6 @@ impl DeveloperSettings {
             }
             self.cache_hit_alert_percent = p;
         }
-        // M2 记忆树整理（树 v2 §15 开发者层级）：熔断 k/m / 超时 /
-        // 重试 / 规则切分块
-        if let Some(k) = u.organize_rebound_k {
-            if !super::developer::ORGANIZE_REBOUND_RANGE.contains(&k) {
-                return Err(format!("反弹熔断 k {k} 超出范围（1–10）"));
-            }
-            self.organize_rebound_k = k;
-        }
-        if let Some(m) = u.organize_rebound_m {
-            if !super::developer::ORGANIZE_REBOUND_RANGE.contains(&m) {
-                return Err(format!("反弹熔断 m {m} 超出范围（1–10）"));
-            }
-            self.organize_rebound_m = m;
-        }
-        if let Some(secs) = u.memory_manager_timeout_secs {
-            if !super::developer::MANAGER_TIMEOUT_SECS_RANGE.contains(&secs) {
-                return Err(format!(
-                    "记忆管理器超时 {secs}s 超出范围（{}–{} 秒）",
-                    super::developer::MANAGER_TIMEOUT_SECS_RANGE.start(),
-                    super::developer::MANAGER_TIMEOUT_SECS_RANGE.end()
-                ));
-            }
-            self.memory_manager_timeout_secs = secs;
-        }
-        if let Some(n) = u.memory_manager_max_retries {
-            if !super::developer::MANAGER_MAX_RETRIES_RANGE.contains(&n) {
-                return Err(format!(
-                    "记忆管理器重试次数 {n} 超出范围（{}–{}）",
-                    super::developer::MANAGER_MAX_RETRIES_RANGE.start(),
-                    super::developer::MANAGER_MAX_RETRIES_RANGE.end()
-                ));
-            }
-            self.memory_manager_max_retries = n;
-        }
-        if let Some(n) = u.rule_chunk_tokens {
-            if !super::developer::RULE_CHUNK_TOKENS_RANGE.contains(&n) {
-                return Err(format!(
-                    "规则切分块 {n} 超出范围（{}–{} token）",
-                    super::developer::RULE_CHUNK_TOKENS_RANGE.start(),
-                    super::developer::RULE_CHUNK_TOKENS_RANGE.end()
-                ));
-            }
-            self.rule_chunk_tokens = n;
-        }
-        if let Some(n) = u.organize_max_rerun {
-            // 出界文案的数字由 `check_max_rerun` 现算（区间只有一个出处，批 Q4 立的
-            // 抽函数同族：本文件已经 399 行，就地再写一遍完整文案就是新增超限件）。
-            super::developer::check_max_rerun(n)?;
-            self.organize_max_rerun = n;
-        }
-        // 摘要补写（队列 Q8c）：两条都是"上限 + 次数"，出界文案同样由抽出的校验
-        // 函数现算数字（区间端点只有一个出处）。
-        if let Some(n) = u.organize_summary_chapters {
-            super::developer::check_summary_chapters(n)?;
-            self.organize_summary_chapters = n;
-        }
-        if let Some(n) = u.organize_summary_attempts {
-            super::developer::check_summary_attempts(n)?;
-            self.organize_summary_attempts = n;
-        }
         Ok(())
     }
-}
-
-/// 连续补跑上限的出界文案（队列 Q6）。**抽在这里而不是在 `update.rs` 里就地写**：
-/// 那个文件已经 399/400 行，把八行校验再塞进去 = 新增超限件（批 Q4 同一条闸抓到同
-/// 一种形状，处置也一样——调用点只给数字，区间端点由 `RANGE` 现算，不留第二个出处）。
-pub fn check_max_rerun(n: u32) -> Result<(), String> {
-    if ORGANIZE_MAX_RERUN_RANGE.contains(&n) {
-        return Ok(());
-    }
-    Err(format!(
-        "连续补跑上限 {n} 超出范围（{}–{}）",
-        ORGANIZE_MAX_RERUN_RANGE.start(),
-        ORGANIZE_MAX_RERUN_RANGE.end()
-    ))
-}
-
-/// 一次补写章数的出界文案（队列 Q8c，形状照 `check_max_rerun`：数字由
-/// `RANGE` 现算，不在文案里再手写一遍端点）。
-pub fn check_summary_chapters(n: u32) -> Result<(), String> {
-    if ORGANIZE_SUMMARY_CHAPTERS_RANGE.contains(&n) {
-        return Ok(());
-    }
-    Err(format!(
-        "摘要补写每次章数 {n} 超出范围（{}–{}，0 = 关掉补写）",
-        ORGANIZE_SUMMARY_CHAPTERS_RANGE.start(),
-        ORGANIZE_SUMMARY_CHAPTERS_RANGE.end()
-    ))
-}
-
-/// 单章补写尝试上限的出界文案（队列 Q8c，同上）。
-pub fn check_summary_attempts(n: u32) -> Result<(), String> {
-    if ORGANIZE_SUMMARY_ATTEMPTS_RANGE.contains(&n) {
-        return Ok(());
-    }
-    Err(format!(
-        "摘要补写尝试上限 {n} 超出范围（{}–{}，0 = 关掉补写）",
-        ORGANIZE_SUMMARY_ATTEMPTS_RANGE.start(),
-        ORGANIZE_SUMMARY_ATTEMPTS_RANGE.end()
-    ))
 }

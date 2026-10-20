@@ -68,7 +68,6 @@ pub fn init_state(app: AppHandle) -> AppState {
     // 权限模式存储 → 树存储与组装器（TreeContextSource 注册）。
     let memory_stack::Stack {
         session_ctx,
-        workspace_of,
         memory_files,
         files_on,
         memory,
@@ -77,7 +76,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         receipt_sink,
         recall_log,
     } = memory_stack::build(memory_stack::Init {
-        ctx: Arc::clone(&ctx),
         settings: Arc::clone(&settings),
         sessions_dir: sessions_dir.clone(),
         root: root.clone(),
@@ -132,7 +130,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         ctx: Arc::clone(&ctx),
         registry: Arc::clone(&registry),
         settings: Arc::clone(&settings),
-        sessions_dir: sessions_dir.clone(),
         root: root.clone(),
         usage: Arc::clone(&usage),
         embed_port: embed_port.clone(),
@@ -145,8 +142,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         ask_hub: Arc::clone(&ask_hub),
         schedules: schedules.clone(),
         permission_modes: Arc::clone(&permission_modes),
-        tree_store: tree_store.clone(),
-        workspace_of: Arc::clone(&workspace_of),
         receipt_sink,
     });
 
@@ -162,18 +157,14 @@ pub fn init_state(app: AppHandle) -> AppState {
         root: root.clone(),
     });
 
-    // 编排器与后台任务簇（M2/M3 §3.37 + ⑭ 调度引擎 + F1 §6 首启导出 + 批 D §6.3 GC）：
-    // 整理事件闭包 / Organizer / spawn_engine / 在途重投 / 资产巡检。
-    // 「emit 只落本模块」的原因（tao 不能进桌面测试二进制）写在 state/background.rs 头注。
-    let background::Stack {
-        organizer,
-        compactor,
-    } = background::build(background::Init {
+    // 压缩器与后台任务簇（⑭ 调度引擎 + F1 §6 首启导出 + 批 D §6.3 GC）：
+    // Compactor / spawn_engine / 资产巡检。「emit 只落本模块」的原因
+    // （tao 不能进桌面测试二进制）写在 state/background.rs 头注。
+    let background::Stack { compactor } = background::build(background::Init {
         app: app.clone(),
         settings: Arc::clone(&settings),
         sessions_dir: sessions_dir.clone(),
         root: root.clone(),
-        workspace_of: Arc::clone(&workspace_of),
         model_overrides: Arc::clone(&model_overrides),
         catalog: Arc::clone(&catalog),
         fragments: Arc::clone(&fragments),
@@ -224,7 +215,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         embed,
         notifications,
         schedules,
-        organizer,
         compactor,
         tree_store,
         stop_flags,

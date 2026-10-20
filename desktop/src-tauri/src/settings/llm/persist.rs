@@ -181,7 +181,12 @@ pub fn session_capacity(
 }
 
 /// 会话生效上下文窗口（[`session_capacity`] 的窗口那一半；签名与语义与
-/// v2.137 起一直是的那份逐字相同，四个调用方无需改动）。
+/// v2.137 起一直是的那份逐字相同）。
+///
+/// S4 刀③b 起生产面只剩 [`session_capacity`]（唯一调用方 `agent_chat` /
+/// 调度引擎都一次取两半），本函数因此只服务测试面的等价性判据——
+/// `settings/tests/window.rs` 拿它比对"capacity 的第一半没有第二套算术"。
+#[cfg(test)]
 pub fn session_window(
     cfg: &LlmConfig,
     session_override: Option<&(String, String)>,
