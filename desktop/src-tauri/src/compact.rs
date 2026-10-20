@@ -10,9 +10,8 @@
 //! 理由都是读实 `kernel/request.rs` 之后才成立的，已同步写进那份 spec 的刀④条目）：
 //!
 //! 1. **重试会把摘要烧成 N 份**。`request_with_retry` 是一个 `loop`，每趟重试都重新
-//!    跑一遍 REQUEST 环（`kernel/request.rs:149-157`）。微压缩在环上无所谓——它纯 CPU、
-//!    且靠"正文与占位全等"天然幂等；主层一次就是一条模型往返，重试三次 = 三份摘要
-//!    三份钱，而后两份永远用不上。
+//!    跑一遍 REQUEST 环（`kernel/request.rs:149-157`）。主层一次就是一条模型往返，
+//!    重试三次 = 三份摘要三份钱，而后两份永远用不上。
 //! 2. **请求失败时这份账会丢**。同一段里 `compacted` 只在 `Ok` 分支带回（`:188-199`），
 //!    失败走 `?` 直接返回——挂在环上时，"摘要已经生成"与"日志里有一条
 //!    `ContextCompacted`"间断了一节：超限失败那一轮恰恰最需要这份摘要，结果它被丢掉、
@@ -22,9 +21,8 @@
 //!    环上的监听器只拿得到载荷（`RequestPayload`），只能吃字符估算 ⇒ 与裁定 C
 //!    「机械层压完后主层到线照跑」所依赖的那把尺不同源。
 //!
-//! 挂在 step 边界三条都顺：与泄压同一位置、同一个数（先例 = `organize/pressure.rs`
-//! 就在 `kernel.step_as` 之前被 runner 调），`session.append(ContextCompacted)` 当场落
-//! 日志，内核下一步自己 `derive_messages` 就是压后的窗口。
+//! 挂在 step 边界三条都顺：`session.append(ContextCompacted)` 当场落日志，内核下一步
+//! 自己 `derive_messages` 就是压后的窗口。
 //!
 //! 参照值逐字来源（2026-10-19 按本地源码读实）：保留近期原文的额度 15_000 token 与
 //! 单条工具输出上限 1_250 字符、应急递减带 `[0.7, 0.5, 0.35]` 都取自 OpenCode
@@ -48,10 +46,9 @@ pub(crate) const MAX_COMPACT_FAILURES: u32 = 3;
 
 /// 熔断线：失败计数到这颗数就断（[`MAX_COMPACT_FAILURES`] 的**唯一比较点**）。
 ///
-/// 为什么是一枚函数而不是一处 `>=`：两个调用方要吃同一个判断——[`plan`] 决定"主层还压不压"，
-/// [`slide`](crate::slide) 决定"保护网开不开"。两边各写一遍 `failures >= 3`，将来调那颗数
-/// 就会出现"主层已经熔断、保护网还没醒"或反过来的空档，而这两档在界面上是同一个症状
-/// （请求发不出去）。判据 SS22a 拦的就是第二个比较点。
+/// 抽成函数而不是在 [`plan`] 里就地写 `>=`：比较点只有一个，将来调那颗数时
+/// 不会漏掉第二处。S4 刀① 退役滑窗保护网后它只剩一个调用方，但仍然不从调用点
+/// 展开——数字与比较的出处各只有一个。
 pub(crate) fn is_fused(failures: u32) -> bool {
     failures >= MAX_COMPACT_FAILURES
 }
@@ -60,6 +57,15 @@ pub(crate) fn is_fused(failures: u32) -> bool {
 pub(crate) const TOOL_OUTPUT_MAX_CHARS: usize = 1_250;
 /// overflow 应急递减带（OpenCode `compaction.ts:95`，刀④d 用）。
 pub(crate) const SHRINK_STEPS: [f64; 3] = [0.7, 0.5, 0.35];
+
+/// 压到有效阈值的这一成（**我们的裁定**，S4 · specs/11 刀① 起写死）。
+/// 两家参照都没有这颗数；它不是一个用户能负责地填的量——填 100% 等于没压，
+/// 填 10% 等于每轮重压一次。50% 是"压一次能撑一段"的经验值。
+pub(crate) const TARGET_PCT: u64 = 50;
+
+/// 摘要之外保留多少 token 的近期原文（OpenCode `compaction.ts:197` `keep: 15_000`
+/// 逐字）。S2 期间曾是设置项，现在写死。
+pub(crate) const KEEP_TOKENS: u64 = 15_000;
 
 /// 七节节名（`prompts/compact/template.md` 里写的那七个，顺序一致）。
 /// 唯一出处：模板与验收都读它（判据 SS20c），漂一个字 = 摘要永远"缺节"。
@@ -291,11 +297,6 @@ impl Failures {
             .lock()
             .expect("compact failures poisoned")
             .remove(session_id);
-    }
-
-    /// 这条会话熔断了没（= [`is_fused`] 作用在它的计数上）。
-    pub(crate) fn fused(&self, session_id: &str) -> bool {
-        is_fused(self.of(session_id))
     }
 }
 

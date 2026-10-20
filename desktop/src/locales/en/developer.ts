@@ -72,15 +72,9 @@ export default {
     organizeMaxRerun: "Consecutive reruns",
     organizeMaxRerunHint:
       "How many times a finished organize may immediately rerun triggers queued while it was in flight (0–10, default 3; 0 = no rerun, wait for the next turn).",
-    organizeMaxRelease: "In-turn pressure releases",
-    organizeMaxReleaseHint:
-      "When usage nears the window before a turn finishes, fold the pre-turn history once by rule split (0–5, default 2; 0 = off, only the end-of-turn organizer runs).",
-    organizeReleaseWatermark: "Pressure release watermark",
-    organizeReleaseWatermarkHint:
-      "Usage share of the session window that triggers an in-turn release (50–99, default 90). It folds history, never the current turn; the mechanical summaries it leaves are replaced by the backfill path below.",
     organizeSummaryChapters: "Summaries backfilled per pass",
     organizeSummaryChaptersHint:
-      "Chapters from pressure release or the degraded split start with a mechanical summary; after the turn the memory manager fills them in batches (0–20, default 6; 0 = keep the mechanical text). Backfill rewrites the summary only — directory lines and the cursor stay put, so prefix caching is not broken.",
+      "Chapters from the degraded split start with a mechanical summary; after the turn the memory manager fills them in batches (0–20, default 6; 0 = keep the mechanical text). Backfill rewrites the summary only — directory lines and the cursor stay put, so prefix caching is not broken.",
     organizeSummaryAttempts: "Backfill attempts per chapter",
     organizeSummaryAttemptsHint:
       "How many times one chapter may be retried (0–5, default 2). The counter lives in the projection and spans turns: a chapter that keeps failing stops being picked, instead of burning a request every turn.",

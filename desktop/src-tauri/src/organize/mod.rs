@@ -5,9 +5,8 @@
 //! 结构（v2.157 批 F-7 目录化拆分后）：`trigger`（同步决策：plan_auto /
 //! plan_manual，含触发判定、溢出整理与反弹裁决）→ `task`（异步管道：记忆管理器
 //! 调用 × 超时重试 → 输出校验 → 不合规转规则切分 → 落树）；`collapse` 管空间
-//! 急救（M4 自动收起），`pressure` 管**轮内水位泄压**（队列 Q8b：step 边界同步
-//! 一次规则切分，不等模型），`backfill` 管**摘要补写**（队列 Q8c：泄压与记录员
-//! 降级留下的机械摘要，轮末之后换成模型摘要，只换正文不动目录），`events` 管对模型与界面的告知。本文件留编排器本体：
+//! 急救（M4 自动收起），`backfill` 管**摘要补写**（队列 Q8c：记录员降级
+//! 留下的机械摘要，轮末之后换成模型摘要，只换正文不动目录），`events` 管对模型与界面的告知。本文件留编排器本体：
 //! 状态与构造、投影与台账小工具、三个门面入口、组装点构造。调用方持有会话锁
 //! 时传 `&Session`（命令层 / agent_chat / 调度引擎三入口同形）。
 //!
@@ -19,8 +18,8 @@
 //! **S2 刀①（2026-10-19）改过本模块的一格地**：占用锚点 `anchor()` 原来住在这里，
 //! 现搬进中立模块 [`crate::context_budget`]。搬的理由不是"顺手重构"而是依赖方向——
 //! organize 按 specs/01 阶段表 D 节在 **S4 整面退役**，而压缩触发线必须吃这把尺；
-//! 留在树里等于把 S2 的形状押在一个要删的模块上。四个调用方（`collapse` /
-//! `pressure` / `trigger` / `debug`）现在都调那一份、本模块**不再自己拿尺**
+//! 留在树里等于把 S2 的形状押在一个要删的模块上。三个调用方（`collapse` /
+//! `trigger` / `debug`）现在都调那一份、本模块**不再自己拿尺**
 //! （机器面 = 判据 SS16b：organize 面上 `reported_input_tokens` 出现 0 次）。
 //! 数值与回落口径逐字未动，等价性证据 = 本模块既有测试一字未改仍绿。
 //!
@@ -57,7 +56,6 @@ mod debug;
 mod edit;
 mod events;
 mod facts;
-mod pressure;
 mod progress;
 mod project_history;
 mod recovery;
@@ -163,8 +161,8 @@ impl Organizer {
             self.settings.organize_threshold_tokens(),
             window,
             max_output,
-            // S3 刀④b：预留上限与聊天/定时/微压缩三条链读同一枚设置。
-            self.settings.output_reserve_cap_tokens(),
+            // S4（specs/11 刀①）：预留上限写死，不再读设置。
+            crate::context_budget::OUTPUT_RESERVE_CAP_TOKENS,
         )
     }
 

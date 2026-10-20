@@ -88,7 +88,7 @@ pub(crate) fn clipped(content: &str, cut: usize) -> String {
     format!(
         "{}\n\n【工具结果已按「工具结果预算」截断：原输出 {total} 字节，此处只有前 {cut} 字节。\
          完整内容仍在本会话日志里；需要后面的部分请用同一工具的 offset / max_bytes 参数续取\
-         （该预算在 设置 → 上下文 可调，0 = 不限制）。】",
+         （发送侧上限固定 24 KiB，不随设置变化）。】",
         &content[..cut]
     )
 }
@@ -116,7 +116,7 @@ pub(crate) fn persisted(path: &str, preview: &str, cut: usize, total: usize) -> 
          （会话日志仍保原文，本文件只由发送侧投影产生）。上面只是前 {cut} 字节；\
          要看后面的部分用 fs_read 读该路径——它默认返回前 32 KiB、可传 max_bytes 提到 1 MiB，\
          但没有 offset，比它更靠后的部分读不回来。\
-         （该预算在 设置 → 上下文 可调，0 = 不限制）。】\n\
+         （发送侧上限固定 24 KiB，不随设置变化）。】\n\
          </persisted-output>"
     )
 }

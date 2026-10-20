@@ -250,8 +250,9 @@ impl AppLlm {
     /// 第二次取锁就没有存在的理由。
     ///
     /// 返回 `(LlmSettings, RowFacts)` 而不是直接返回 `WireCaps`：`caps` 里还有一格
-    /// `tool_result_budget_bytes` 来自**别的分区**（context），而 `with_llm_config`
-    /// 持着非重入的 `inner` 锁，闭包内不许再读别的区（自死锁，见下方既有警告注释）。
+    /// `tool_result_budget_bytes` 来自 `settings::context` 的固定常量，不属于档位快照，
+    /// 而 `with_llm_config` 持着非重入的 `inner` 锁，闭包内不许再读别的区（自死锁，
+    /// 见下方既有警告注释）。
     fn effective_cfg_facts(&self, req: &LlmRequest) -> (LlmSettings, RowFacts) {
         // 批 F-24b / M-18c：一次取锁、零 `LlmConfig` 副本。改前实测本函数最多 **5 次取锁**
         // （167 的 `llm()` + 170/171 与 179/180 两对 `llm_config()`）——其中每一对里的第二
@@ -332,7 +333,7 @@ impl AppLlm {
         // clippy 的 field_reassign_with_default 在 `-D warnings` 下是硬错（本批首跑红过）。
         // 这里只取"是否限制"，KiB→字节的换算不在本文件做第二次。
         let mut caps = WireCaps {
-            tool_result_budget_bytes: self.settings.tool_result_budget_bytes(),
+            tool_result_budget_bytes: Some(crate::settings::context::TOOL_RESULT_BUDGET_BYTES),
             max_output: facts.max_output,
             ctx_window: facts.ctx_window,
             // 刀②：句柄是 Arc，clone 一次进 caps（WireCaps 从 Copy 改成 Clone 的

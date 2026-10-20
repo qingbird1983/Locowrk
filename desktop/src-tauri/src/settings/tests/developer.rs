@@ -44,8 +44,6 @@ fn dev_update_full(
             memory_manager_max_retries: None,
             rule_chunk_tokens: None,
             organize_max_rerun: None,
-            organize_max_release: None,
-            organize_release_watermark_pct: None,
             organize_summary_chapters: None,
             organize_summary_attempts: None,
         }),
@@ -176,10 +174,6 @@ fn organize_developer_keys_roundtrip_and_validation() {
                 // Q6 新字段走同一条"写入—重开—复读"通路（缺省 3 之外给一个非缺省值，
                 // 才证明它真的被应用而不是每次都退回 Default）
                 organize_max_rerun: Some(5),
-                // Q8b 同一条通路：给两个非缺省值（缺省 2 / 90），证明它们进的是
-                // 同一次持久化而不是各自另开一条读写路径
-                organize_max_release: Some(4),
-                organize_release_watermark_pct: Some(75),
                 // Q8c 同一条通路：章数给 3（缺省 6）、尝试上限给 4（缺省 2），
                 // 两个都偏离缺省才证明它们被应用而不是每次退回 Default
                 organize_summary_chapters: Some(3),
@@ -198,18 +192,13 @@ fn organize_developer_keys_roundtrip_and_validation() {
     assert_eq!(v.memory_manager_max_retries, 1);
     assert_eq!(v.rule_chunk_tokens, 30_000);
     assert_eq!(v.organize_max_rerun, 5);
-    assert_eq!(v.organize_max_release, 4, "Q8b 泄压上限写入—重开—复读");
-    assert_eq!(
-        v.organize_release_watermark_pct, 75,
-        "Q8b 泄压水位写入—重开—复读"
-    );
     assert_eq!(v.organize_summary_chapters, 3, "Q8c 补写章数写入—重开—复读");
     assert_eq!(
         v.organize_summary_attempts, 4,
         "Q8c 补写尝试上限写入—重开—复读"
     );
     // 校验：k/m 1–10、超时 10–600、重试 0–10、规则切分块 5K–50K、补跑上限 0–10、
-    // 泄压上限 0–5、泄压水位 50–99、补写章数 0–20、补写尝试 0–5
+    // 补写章数 0–20、补写尝试 0–5
     for (field, val, keyword) in [
         ("organize_rebound_k", 11, "反弹熔断 k"),
         ("organize_rebound_m", 0, "反弹熔断 m"),
@@ -217,8 +206,6 @@ fn organize_developer_keys_roundtrip_and_validation() {
         ("memory_manager_max_retries", 11, "记忆管理器重试"),
         ("rule_chunk_tokens", 1_000, "规则切分块"),
         ("organize_max_rerun", 11, "连续补跑上限"),
-        ("organize_max_release", 6, "轮内泄压上限"),
-        ("organize_release_watermark_pct", 100, "泄压水位"),
         ("organize_summary_chapters", 21, "摘要补写每次章数"),
         ("organize_summary_attempts", 6, "摘要补写尝试上限"),
     ] {
@@ -230,9 +217,6 @@ fn organize_developer_keys_roundtrip_and_validation() {
             memory_manager_max_retries: (field == "memory_manager_max_retries").then_some(val),
             rule_chunk_tokens: (field == "rule_chunk_tokens").then_some(val as u64),
             organize_max_rerun: (field == "organize_max_rerun").then_some(val),
-            organize_max_release: (field == "organize_max_release").then_some(val),
-            organize_release_watermark_pct: (field == "organize_release_watermark_pct")
-                .then_some(val as u8),
             organize_summary_chapters: (field == "organize_summary_chapters").then_some(val),
             organize_summary_attempts: (field == "organize_summary_attempts").then_some(val),
             ..Default::default()
@@ -281,31 +265,4 @@ fn defaults_keep_the_in_flight_window_at_90_secs() {
     assert!(dev::ORGANIZE_MAX_RERUN_RANGE.contains(&3));
     assert!(dev::check_max_rerun(0).is_ok());
     assert!(dev::check_max_rerun(11).is_err());
-}
-
-/// 轮内泄压这一对的**缺省与开关语义**（队列 Q8b · 可配置原则①②）。
-///
-/// 为什么单独一条而不是并进上面那条：上面钉的是"在途窗口的乘积不变量"，
-/// 这条钉的是"新增的一层限制自带关掉的路"——`organize_max_release` 的 0 必须
-/// 落在合法区间内且文案点名 0 的语义，否则"限制没有开关"就写死在缺省里了。
-/// 水位的上界取 99 而不是 100 也是判据对象（100 = 等到装不下才切，那一刀已经晚了）。
-#[test]
-fn release_defaults_carry_their_own_off_switch() {
-    use crate::settings::developer as dev;
-    assert_eq!(dev::ORGANIZE_MAX_RELEASE_DEFAULT, 2);
-    assert_eq!(dev::ORGANIZE_RELEASE_WATERMARK_PCT_DEFAULT, 90);
-    // 0 = 关掉轮内泄压（合法值，不是出界）
-    assert!(dev::ORGANIZE_MAX_RELEASE_RANGE.contains(&0));
-    assert!(dev::check_max_release(0).is_ok());
-    assert!(dev::check_max_release(5).is_ok());
-    assert!(dev::check_max_release(6).is_err());
-    // 出界文案必须把"0 = 关掉"这层语义说出来（只报数字用户不知道该填什么）
-    let err = dev::check_max_release(6).unwrap_err();
-    assert!(err.contains("0 = 关掉泄压"), "{err}");
-    // 水位区间的上界是 99：100 不许合法
-    assert!(dev::ORGANIZE_RELEASE_WATERMARK_PCT_RANGE.contains(&50));
-    assert!(dev::ORGANIZE_RELEASE_WATERMARK_PCT_RANGE.contains(&99));
-    assert!(dev::check_release_watermark(100).is_err());
-    assert!(dev::check_release_watermark(49).is_err());
-    assert!(dev::check_release_watermark(90).is_ok());
 }

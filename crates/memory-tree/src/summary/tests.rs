@@ -13,7 +13,7 @@ use super::ChapterSummary;
 fn record(from: EventId, to: EventId, chapters: usize) -> OrganizeRecord {
     OrganizeRecord {
         ts: 1,
-        reason: "pressure_release".into(),
+        reason: "manual".into(),
         mode: "rule".into(),
         status: "ok".into(),
         from,

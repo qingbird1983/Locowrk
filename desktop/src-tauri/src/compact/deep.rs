@@ -77,8 +77,8 @@ pub(crate) struct Compactor {
     /// 摘要走**辅助补全的直呼通路**（`llm/aux_client.rs`，与整理章节总结同一条）：
     /// 压缩不是本轮对话的一部分，不该带工具目录、也不该吃会话级模型覆盖。
     aux: Arc<dyn MemoryManagerClient>,
-    /// 连续失败表（熔断的输入）。**由组装点注入**而不是自己 new 一枚：滑窗保护网
-    /// （`slide.rs`）要读同一个熔断态，两张表 = "主层已熔断但保护网没醒"。
+    /// 连续失败表（熔断的输入）。**由组装点注入**而不是自己 new 一枚：
+    /// 观测与测试面要读同一张表；两张表 = 两套熔断状态。
     /// 为什么这张表长什么样、为什么它不待在结构体里 = [`super::Failures`] 头注。
     failures: Arc<Failures>,
     /// 超窗拒收的读数（刀⑧ · [`super::Overflow`]）：**写它的是发送侧**，本层只读 +
@@ -176,8 +176,8 @@ impl Compactor {
             messages: &messages,
             threshold,
             used,
-            target_pct: cfg.target_pct,
-            keep_tokens: cfg.keep_tokens,
+            target_pct: super::TARGET_PCT,
+            keep_tokens: super::KEEP_TOKENS,
             failures: self.failures.of(session_id),
             manual,
         });

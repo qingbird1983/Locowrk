@@ -152,9 +152,8 @@ pub enum AgentEvent {
     /// （`context_budget::occupancy` 一个分子）。
     /// `tools_est_tokens`（v2.58 §3.12）：本轮请求实际携带的暴露目录估算
     /// （0 = 目录缺席），工具上下文行的"约 N tokens"。
-    /// S3 刀④b 追加三枚（扣减链）：`slider_tokens` = 滑杆原值（未与窗口取小）、
-    /// `output_reserve` = 本次扣掉的输出侧预留、`output_reserve_source` =
-    /// `default|model|capped`（空串 = 旧快照，前端不渲染链）。
+    /// S3 刀④b 曾追加三枚扣减链读数（滑杆/预留/来源），S4（specs/11 刀①）
+    /// 随浮层那条链一起删掉——事件只保留前端真渲染的数。
     ContextUsage {
         session_id: String,
         used: u64,
@@ -163,12 +162,6 @@ pub enum AgentEvent {
         window_tokens: u64,
         #[serde(default)]
         tools_est_tokens: u64,
-        #[serde(default)]
-        slider_tokens: u64,
-        #[serde(default)]
-        output_reserve: u64,
-        #[serde(default)]
-        output_reserve_source: String,
     },
     /// 单步 LLM 用量（v2.58 §3.12）：`SessionEvent::LlmUsage` 的投影，
     /// 实时与重放同形——前端按轮聚合出「本轮合计 / 生成速度 / 模型用量」。
@@ -188,7 +181,8 @@ pub enum AgentEvent {
         session_id: String,
         from_tokens: u64,
         to_tokens: u64,
-        /// sliding_window / layered / summary_only（文案前端渲染）。
+        /// S4 后只剩 `compact` 一档（旧日志里的 sliding_window / layered /
+        /// summary_only 原样透传，仅作文案渲染）。
         strategy: String,
         summary_preview: String,
     },

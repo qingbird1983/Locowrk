@@ -338,63 +338,18 @@ export default {
     // ⑨ Context management section (real section, replaces shell placeholder)
     contextTitle: "Context management",
     contextHint:
-      "Compression starts at this line: the mechanical layers slow growth first, the main layer replaces an older stretch with a summary. The full history stays in the session log — nothing there is ever rewritten.",
-    // Ruling B (2026-10-19): this slider was re-scoped from "organize threshold" to the
-    // **global threshold for the whole compaction face** — it is the denominator of the
-    // usage bar, the base of the micro-compact line and the trigger of deep compaction,
-    // all three from one number. The label no longer says only "organize", or users would
-    // read it as governing the memory tree alone (which retires wholesale in S4).
+      "Compaction starts automatically at the threshold: the model pauses for the summary, the summary plus recent originals are filled back into the context, then work continues. The full history stays in the session log — nothing there is ever rewritten.",
     threshold: "Compaction threshold",
     thresholdValue: "Currently: {n} tokens",
     thresholdHint:
-      "Once the conversation context reaches this token count, compaction starts: micro-compact slows growth first at 90% of the line, and at the line itself deep compaction turns the older stretch into a summary (manual /compact is not bound by it). The real trigger is the smaller of this value and \"model window minus the output reserve\" (the reserve cap is the field below), so do not set this above the model window.",
-    // S3 knife ④b · AC-S3-8: the output reserve cap becomes tunable (default = the
-    // former constant, 21K). The copy must mention both sides of the min: smaller
-    // means later compaction but a likelier window hit; larger means earlier
-    // compaction and more headroom for output. The model's declared output limit
-    // still trims the actual reserve.
-    outputReserveCap: "Output reserve cap",
-    outputReserveCapHint:
-      "How many tokens the window may reserve for model output (0–64000, default 21000; 0 = reserve nothing for output). The effective threshold is the smaller of the slider and \"window minus the actual reserve\", and the actual reserve is the smaller of the model output limit and this field. Smaller = later compaction but a likelier window hit; larger = earlier compaction and more headroom for output. The usage popover's deduction chain shows what was actually deducted and which side decided.",
+      "Once the conversation context reaches this token count it compacts automatically (manual /compact is not bound by it). The real trigger is the smaller of this value and \"model window minus the 21K output reserve\", so do not set it above the model window.",
+    // S4 (specs/11 knife ①): the only automatic compaction switch. Off = no automatic
+    // compaction; the manual /compact command still works.
+    autoCompact: "Automatic compaction",
+    autoCompactHint:
+      "At the line, the older stretch is written as a summary, recent originals are kept, and the current task continues. Turning it off disables automatic compaction; manual /compact still works.",
     // v4.18 (§3.4): usage bar visibility (denominator = the slider above)
     usageBar: "Threshold usage bar",
     usageBarHint:
       "The thin bar above the conversation area, showing usage as a percentage of the compaction threshold; the full readout lives in the composer's usage ring.",
-    // Q8 (CB §7.4): per-tool-output budget. Key shape matches Q4's instruction*Kib
-    // (both are KiB quotas; the frontend never converts to bytes).
-    toolBudgetKib: "Tool result budget",
-    // Ledger ⓓ fixed (the fact changed under knife ②): overflow is not "truncate and add
-    // a resume hint" — the whole output is spilled to disk and only a preview is sent; and
-    // fs_read has no offset today, so what is past the preview genuinely cannot be read
-    // back. The UI must not promise what the tool face cannot do, so this says so.
-    toolBudgetKibHint:
-      "Cap for a single tool output entering the model context (0–512 KiB, default 24; 0 = unlimited). On overflow the whole output is written to disk and only a leading preview plus its file path are sent to the model; file reading has no seek today, so anything past the preview cannot be retrieved — re-run that tool step instead. The session log still keeps the full output. Raising it means each turn carries more history and compaction comes sooner.",
-    // S2 knife ③: micro-compact. The term is the kernel's own name; the label keeps it and
-    // the hint says plainly what gets cleared, when, and what turning it off costs.
-    // ⚠ No hard-coded "5 groups" in the copy: since knife ⑥ that number is the tunable
-    // field below, and repeating it here is the same property living in two places.
-    microCompact: "Micro-compact",
-    microCompactHint:
-      "Replaces very old tool outputs with a one-line placeholder, touching only results a re-run can restore: the last few groups stay (the count below decides), errors and screenshots are never cleared. Runs when usage reaches 90% of the compaction threshold, or after an hour of silence (the second one ignores usage). Turning it off removes this deceleration layer; the session log is never rewritten.",
-    microKeepGroups: "Micro-compact keep groups",
-    microKeepGroupsHint:
-      "How many recent tool-result groups are never touched (1–50, default 5); only older ones that a re-run can restore get cleared. Larger keeps more raw output and saves less; smaller saves more but may force the model to re-read something it just saw.",
-    // S2 knife ④c: deep compaction. The split from the switch above has to be sayable out
-    // loud: micro-compact only clears tool bodies, this layer is the one that trades a
-    // stretch of original text for a summary.
-    deepCompact: "Deep compaction",
-    deepCompactHint:
-      "When usage reaches the compaction threshold (the smaller of the slider above and the model window minus the output reserve), an older stretch of history is handed to the model and rewritten as a seven-section summary while the recent turns stay verbatim. The summary costs one extra model call, using the memory-manager model; the session log is untouched and the notice in the UI can be undone. Turning this off leaves only the mechanical deceleration and the \"near the window, reopen the session\" reminder.",
-    compactTargetPct: "Compaction target",
-    compactTargetPctHint:
-      "Compact down to this percentage of the threshold (1–100, default 50). This number is our own call, not copied from anyone: lower frees more room at once but leaves less original text; 100 only makes room for the summary itself and barely shrinks anything.",
-    compactKeepTokens: "Recent-text allowance",
-    compactKeepTokensHint:
-      "How many tokens of the most recent original text survive alongside the summary (0–400000, default 15000). 0 keeps no original wording at all — extreme but allowed. Together with the percentage above, these two decide what the window holds after a compaction.",
-    // S2 knife ⑥ (closing knife ⑤'s ledger note ⓕ): slide window keep-runs. This layer has
-    // **no switch** — it wakes only after three consecutive summary failures — so the only
-    // tunable here is "how many runs survive", and the copy must say when it ever applies.
-    slideKeepRuns: "Slide window keep runs",
-    slideKeepRunsHint:
-      "Once the protection net wakes (= three consecutive failures to write a summary), the most recent runs are still sent to the model (1–20, default 1); older runs are dropped whole while every user question is kept. Larger means the model remembers more of what it just did, but the request is likelier to still overflow.",
   },} as const;

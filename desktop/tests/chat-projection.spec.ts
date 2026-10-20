@@ -436,7 +436,7 @@ describe("聚合读数：一份输入两处产出", () => {
     expect([su.input, su.output, su.cacheRead, su.steps]).toEqual([200, 150, 16, 2]);
   });
 
-  it("context_usage 原样带七档（旧字段 0 = 目录缺席，新字段空 = 旧快照）", () => {
+  it("context_usage 原样带四档（S4 起不再有扣减链三字段）", () => {
     const chat = useChatStore();
     chat.onEvent({
       kind: "context_usage",
@@ -445,18 +445,12 @@ describe("聚合读数：一份输入两处产出", () => {
       threshold: 2000,
       window_tokens: 8000,
       tools_est_tokens: 0,
-      slider_tokens: 2000,
-      output_reserve: 6000,
-      output_reserve_source: "capped",
     });
     expect(chat.contextUsage).toEqual({
       used: 1200,
       threshold: 2000,
       windowTokens: 8000,
       toolsEstTokens: 0,
-      sliderTokens: 2000,
-      outputReserveTokens: 6000,
-      outputReserveSource: "capped",
     });
   });
 });

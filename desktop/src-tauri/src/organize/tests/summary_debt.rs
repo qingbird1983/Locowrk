@@ -1,70 +1,17 @@
 //! 摘要债的归属用例（队列 Q8c · v2.194 自 `summary_backfill.rs` 拆出，断言一字未改）。
 //!
 //! 这一簇只回答一个问题：**谁欠这条债**。规则 = `chapter.rs` 的 `from_draft` 里那一处
-//! `summary_pending: source == "rule"`，它同时覆盖泄压支与记录员降级支两个来源，所以
-//! 三条用例分别钉：泄压产物确实欠债且会被补上（`pressure_released_…`）、记录员产物根本
-//! 不欠债（`recorder_chapters_carry_no_debt`）、降级支与泄压支**共用同一条置位通路**
-//! （`the_degraded_recorder_path_…`）。「通路自己怎么收手」（0 档、失败记账、日志缺席、
-//! 注入目录字节不变）在 `summary_backfill.rs`——两拨修改动机不同，故按三问自检第③问拆簇。
+//! `summary_pending: source == "rule"`，它覆盖规则切分这一个来源，所以两条用例分别钉：
+//! 记录员产物根本不欠债（`recorder_chapters_carry_no_debt`）、记录员降级支走
+//! `build_chapters(…, "rule")` 时欠债且会被补上（`the_degraded_recorder_path_…`）。
 //!
-//! 共享夹具（`persisted_turn` / `release_once` / `GOOD_SUMMARY_REPLY`）已上收 `tests/mod.rs`：
-//! 兄弟簇互相看不见私有项（形状闸 S3），两簇都要用的东西只能住宿主。
+//! S4 刀① 退役轮内泄压后，原来第三条（泄压产物欠债）与其造债夹具一并删除——泄压
+//! 已不是生产通路，「谁欠债」不再有它的份。
+//!
+//! 共享夹具（`persisted_turn` / `GOOD_SUMMARY_REPLY`）已上收 `tests/mod.rs`：
+//! 兄弟簇互相看不见私有项（形状闸 S3），共用东西只能住宿主。
 
 use super::*;
-
-#[tokio::test]
-async fn pressure_released_chapters_get_a_model_summary_afterwards() {
-    let root = temp_root("backfill-e2e");
-    let settings = settings_with(
-        serde_json::json!({
-            "context": {"thresholdTokens": 1_000},
-            "developer": {"organizeSummaryChapters": 6, "organizeSummaryAttempts": 2}
-        }),
-        &root,
-    );
-    let org = organizer(
-        &root,
-        Arc::clone(&settings),
-        FakeClient::new(vec![Ok(GOOD_SUMMARY_REPLY.into())]),
-    );
-    let (session, turn_start) = persisted_turn(&root, "s-bf");
-
-    assert_eq!(release_once(&org, &session, "s-bf", turn_start), 1);
-    let after_release = tree_at(&root, org.settings.as_ref(), "s-bf");
-    let mechanical = after_release.chapters["b1"].summary.clone();
-    assert!(
-        mechanical.starts_with("（规则切分）"),
-        "泄压产物先是一句机械说明"
-    );
-    assert!(
-        after_release.chapters["b1"].summary_pending,
-        "泄压支自动把债记上"
-    );
-    let history_before = after_release.history.len();
-
-    org.backfill_summaries(r"F:\ws\demo", "s-bf").await;
-
-    let tree = tree_at(&root, org.settings.as_ref(), "s-bf");
-    let b = &tree.chapters["b1"];
-    assert!(
-        b.summary.contains("共享 runtime"),
-        "摘要换成模型产出：{}",
-        b.summary
-    );
-    assert!(!b.summary_pending, "落笔即清债");
-    assert_eq!(
-        b.title, after_release.chapters["b1"].title,
-        "标题一个字没动"
-    );
-    assert_eq!(b.event_range, after_release.chapters["b1"].event_range);
-    assert_eq!(
-        tree.chaptered_until, after_release.chaptered_until,
-        "补写不动游标：它不是又一次整理"
-    );
-    assert_eq!(tree.history.len(), history_before, "补写不进整理台账");
-    assert_eq!(tree.chapter_count(), 1, "补写不增不减章节");
-    std::fs::remove_dir_all(&root).ok();
-}
 
 /// 记录员通路产出的章节**不欠债**（`source = "recorder"`）⇒ 补写通路一次调用
 /// 都不发起、投影零改写。

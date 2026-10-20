@@ -95,10 +95,6 @@ export default {
     organizeDone: "已整理 {users} 轮为 {chapters} 个章节",
     organizeDoneDegraded:
       "已整理 {users} 轮为 {chapters} 个章节（记忆管理器不可用，已转规则切分）",
-    // 队列 Q8b：轮内水位泄压（机械切分，摘要未补）——文案不许与「已整理」混用，
-    // 那一刀是救援不是整理
-    organizeReleased:
-      "上下文已逼近窗口上限，先把本轮之前的历史收起 {chapters} 个章节（机械切分，摘要从简；本轮内容未动）",
     organizePaused:
       "本会话自动整理已暂停（连续 {rebounds} 次反弹达到熔断阈值 m={m}）；要重开请到 设置 → 开发者 → 记忆树 点「手动整理并复位」。",
     // S2 刀⑦ `/压缩`：后端只回「这一趟没动，因为」的**判据名**，人话一律在这儿。

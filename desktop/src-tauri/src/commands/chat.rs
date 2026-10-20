@@ -39,8 +39,6 @@ pub(crate) async fn usage_policy(state: &AppState, session_id: &str) -> UsagePol
         state.settings.organize_threshold_tokens(),
         window,
         max_output,
-        // S3 刀④b：预留上限也是原料（设置里那一枚），四处阈值消费点同读这一份。
-        state.settings.output_reserve_cap_tokens(),
         runner::catalog_estimate(&state.kernel, session_id).await,
         state.compactor.refusal(session_id),
     )
@@ -99,7 +97,6 @@ pub async fn agent_chat(
         state.settings.max_turn_steps(),
         Some(&state.stop_flags),
         Some(state.fragments.as_ref()),
-        Some(&state.organizer),
         Some(&state.compactor),
     )
     .await?;

@@ -55,19 +55,6 @@ export default {
     headlineRemaining: "{n} tokens remaining",
     window: "Context window",
     noWindow: "Window not set",
-    // S3 knife ④b · AC-S3-8 deduction chain: window → −output reserve → min with the
-    // slider = effective threshold. The reserve figure must carry its provenance
-    // (model limit / capped by your limit / default), never a bare number.
-    outputReserve: "Output reserve",
-    reserveFromModel: "Model output limit: {n}",
-    reserveCapped: "Capped by your limit: {n}",
-    reserveDefault: "Model reports no output limit; default {n}",
-    effectiveThreshold: "Effective threshold",
-    chainNoWindow: "Window unknown: the threshold uses the slider {slider} as-is, no output reserve deducted",
-    chainSliderWins: "Slider {slider} is below the window headroom {room}; the threshold follows the slider",
-    chainRoomWins: "Slider {slider} exceeds the window headroom {room}; the window headroom caps the threshold",
-    headroom: "Room for output and next turn",
-    headroomHint: "If the next turn's growth exceeds this, the request hits the window limit",
     turnTotal: "This turn",
     speed: "Speed",
     speedValue: "{n} tokens/s",

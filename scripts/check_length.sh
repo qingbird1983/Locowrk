@@ -27,13 +27,6 @@ SUGGEST=400
 # caps，这正是它的职责而不是无关部分）。刀② 只加了 17 行（一枚注入句柄 + 一个
 # builder + caps 那一格），为凑 400 把 builder 面拆出去 = 在本刀里做无关重构，
 # 且拆完仍是同一个 struct 的两半。若后续刀再加格，届时按三问重判并真拆。
-# `microcompact/tests.rs` 于 S2 刀③ 入名单（新建即 529 行）：三问皆是——①只管一件事
-# （微压缩那一层的判据集）；②名字概括得住（就是 `microcompact` 的 tests 子模块）；
-# ③改它牵动的全是同一件事（动白名单/触发线必然要动这些用例，不存在"牵动无关部分"）。
-# 本仓的测试按 AGENTS「#[cfg(test)] 放独立文件」本来就集中在一个文件里，把它按
-# "纯函数 vs 接线面"再切两半只是把行数搬开、判据读者要看的东西一处都没少 ⇒ 不拆。
-# ⚠ 这条不是"永远不拆"：若它同时开始装两件不相关的事（例如又把别的模块的用例放进来），
-# 届时按三问重判。
 # `compact/tests.rs`（422）与 `compact/tests_deep.rs`（434）于 S2 刀④b/④c 入名单，
 # 两条各按三问判过：①各自只管一件事（前者 = 主层的**纯判据**：切点、目标位、提示词
 # 装配与摘要验收；后者 = **接线半**：占用读数、摘要请求、落账、熔断与递减重试）；
@@ -48,19 +41,10 @@ SUGGEST=400
 # 那 16 行（参数一枚 + 头注一段 + 步间那三行调用）动的正是它本职的那件事。
 # ⚠ 躲得过这一格的两条路都被否掉：把 `record_usage` / `finish_turn` 搬去子文件 = 为了
 # 凑行数在文件间转字段（AGENTS 那条"不许为过闸搬代码"），把步间注释挪进 `compact.rs`
-# = 让 runner 的读者看不见"为什么这一句在泄压之后"。真拆的时机是它开始装第二件事
+# = 让 runner 的读者看不见"为什么这一句必须同步等在 step 之前"。真拆的时机是它开始装第二件事
 # （例如把工具执行也搬进来），届时按三问重判并真拆。
-# S2 刀⑥ 同时入两名（两条的三问判定都写在提交正文里）：
-# `settings/context.rs`（433 行）——它是**搬家的结果而不是膨胀**：`settings.rs` 因新增的
-# 上下文 getter 顶过建议线，而该搬的正是"上下文区"自己那一族（类型 / 缺省 / 校验 / 投影 /
-# 更新 / 读面从此同住一处，加一枚设置项只动一个文件）。⚠ 搬家没有伪造总量下降，两端都取
-# 实测（`git show HEAD:<路径> | wc -l` 对 `wc -l`）：`settings.rs` 400→360、
-# `settings/context.rs` 281→433，**两文件之和 681→793、涨 112 行**——涨的是四枚新设置项的
-# 真实代价（常量 + 校验 + 投影 + 更新 + 读面各一份 × 四枚）。
-# `microcompact.rs`（408 行，改前实测 399 ⇒ 净加 9 行）——其中 6 行是"这颗数为什么不住在
-# 这里"的指路注释。两条为通过的路都已被否掉：删掉那六行 = 抹掉判据 SS23a 在代码里唯一的
-# 解释（读者会以为常量被搬走是失误）；把"环上那半"拆成 `microcompact/ring.rs` = 刀⑥ 没碰
-# 执行逻辑，纯为凑行数做文件间转字段。真拆的时机与上面 runner 那条同文。
+# S4 刀① 退役微压缩与泄压后，`microcompact*`、`settings/context.rs` 已回到建议线内，名单
+# 随之删去——留在名单里等于给已经不超限的文件发豁免（本闸的"不超限请删名单"那行所防的）。
 OVERLIST="
 desktop/src/components/chat/Composer.vue
 desktop/src/components/chat/ToolDetailView.vue
@@ -77,12 +61,9 @@ desktop/src/components/memory/TreeSection.vue
 desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue
 desktop/tests/chat-projection.spec.ts
-desktop/src-tauri/src/microcompact/tests.rs
 desktop/src-tauri/src/compact/tests.rs
 desktop/src-tauri/src/compact/tests_deep.rs
 desktop/src-tauri/src/runner/mod.rs
-desktop/src-tauri/src/settings/context.rs
-desktop/src-tauri/src/microcompact.rs
 "
 
 # **扫描面只有一个出处**：下面这一条 find 的产物既用来数超限、也用来验下限。

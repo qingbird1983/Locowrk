@@ -48,7 +48,6 @@ async fn denied_email_closes_result_without_executing() {
         None,
         None,
         None,
-        None,
     )
     .await
     .expect("turn ok");
@@ -106,7 +105,6 @@ async fn allowed_email_executes_and_logs_decision() {
         None,
         None,
         None,
-        None,
     )
     .await
     .expect("turn ok");
@@ -157,7 +155,6 @@ async fn approval_hub_roundtrip_through_pending_map() {
             None,
             None,
             crate::runner::DEFAULT_MAX_STEPS,
-            None,
             None,
             None,
             None,

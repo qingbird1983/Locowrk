@@ -38,31 +38,6 @@ fn set_memory(store: &SettingsStore, u: MemoryUpdate) -> Result<(), String> {
         .map(|_| ())
 }
 
-/// 只更新上下文区的一次设置（其余分区传 None）。
-///
-/// 与 [`set_memory`] 同一条理由上收到本文件：`SettingsStore::update` 是 13 个位置
-/// 参数、第 6 个才是 context，各簇各抄一遍那串 None 迟早抄错位（刀⑥ 新簇要用的
-/// 就是这一枚，而 `tool_budget.rs` 里原本已经有一份）。
-fn set_context(store: &SettingsStore, u: ContextUpdate) -> Result<(), String> {
-    store
-        .update(
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(u),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .map(|_| ())
-}
-
 #[test]
 fn missing_file_yields_defaults() {
     let root = temp_root("defaults");
@@ -301,7 +276,6 @@ fn shortcut_default_update_and_validation() {
 
 mod appearance;
 mod chat;
-mod context_numbers;
 mod fact_cards;
 mod instruction_budget;
 mod llm;
@@ -313,5 +287,4 @@ mod network_proxy;
 mod window;
 
 mod developer;
-mod tool_budget;
 mod tools;

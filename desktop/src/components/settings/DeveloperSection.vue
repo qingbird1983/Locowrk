@@ -44,9 +44,6 @@ const form = reactive({
   // 但既然写了数字就必须跟后端一致，否则改缺省改一处就会让首帧说谎（批 Q4 立的
   // 「同一读数多处出现必须一起改」在这里的落点）。
   organizeMaxRerun: 3,
-  // Q8b 同一条纪律：初值必须跟后端缺省常量一致（2 / 90），否则首帧说谎
-  organizeMaxRelease: 2,
-  organizeReleaseWatermarkPct: 90,
   organizeSummaryChapters: 6,
   organizeSummaryAttempts: 2,
 });
@@ -70,8 +67,6 @@ watch(
     form.recorderMaxRetries = v.developer.recorderMaxRetries;
     form.ruleChunkTokens = v.developer.ruleChunkTokens;
     form.organizeMaxRerun = v.developer.organizeMaxRerun;
-    form.organizeMaxRelease = v.developer.organizeMaxRelease;
-    form.organizeReleaseWatermarkPct = v.developer.organizeReleaseWatermarkPct;
     form.organizeSummaryChapters = v.developer.organizeSummaryChapters;
     form.organizeSummaryAttempts = v.developer.organizeSummaryAttempts;
   },
@@ -102,8 +97,6 @@ function saveOrganize() {
     recorderMaxRetries: Math.round(form.recorderMaxRetries),
     ruleChunkTokens: Math.round(form.ruleChunkTokens),
     organizeMaxRerun: Math.round(form.organizeMaxRerun),
-    organizeMaxRelease: Math.round(form.organizeMaxRelease),
-    organizeReleaseWatermarkPct: Math.round(form.organizeReleaseWatermarkPct),
     organizeSummaryChapters: Math.round(form.organizeSummaryChapters),
     organizeSummaryAttempts: Math.round(form.organizeSummaryAttempts),
   });
@@ -447,42 +440,8 @@ onMounted(() => void refresh());
           @change="saveOrganize"
         />
       </SettingsRow>
-      <!-- 队列 Q8b（真机「整理跟不上 ⇒ 一步卡死」）：轮内水位泄压。上限 0 = 关掉
-           这条通路（关掉后与改前逐字节同形，判据 = release_cap_zero_writes_nothing_at_all） -->
-      <SettingsRow
-        :title="t('developer.organizeMaxRelease')"
-        :hint="t('developer.organizeMaxReleaseHint')"
-        control-id="dev-organize-release"
-      >
-        <input
-          id="dev-organize-release"
-          v-model.number="form.organizeMaxRelease"
-          type="number"
-          min="0"
-          max="5"
-          class="lw-field lw-field-num px-2 text-xs"
-          @change="saveOrganize"
-        />
-      </SettingsRow>
-      <SettingsRow
-        :title="t('developer.organizeReleaseWatermark')"
-        :hint="t('developer.organizeReleaseWatermarkHint')"
-        control-id="dev-organize-release-pct"
-      >
-        <input
-          id="dev-organize-release-pct"
-          v-model.number="form.organizeReleaseWatermarkPct"
-          type="number"
-          min="50"
-          max="99"
-          class="lw-field lw-field-num px-2 text-xs"
-          @change="saveOrganize"
-        />
-      </SettingsRow>
-      <!-- 队列 Q8c（泄压留下的机械摘要谁来还）：轮末之后由补写通路换成模型摘要。
-           章数 0 = 关掉补写（关掉后连一次读盘都不发生，判据 =
-           backfill_off_writes_nothing_at_all）；补写只改摘要正文，目录与游标不动，
-           所以它不打断前缀缓存（判据 = backfill_keeps_the_injected_directory_byte_identical） -->
+      <!-- 队列 Q8c（记录员降级留下的机械摘要谁来还）：轮末之后由补写通路换成模型摘要。
+           章数 0 = 关掉补写；补写只改摘要正文，目录与游标不动，所以它不打断前缀缓存 -->
       <SettingsRow
         :title="t('developer.organizeSummaryChapters')"
         :hint="t('developer.organizeSummaryChaptersHint')"

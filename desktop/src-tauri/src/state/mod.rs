@@ -103,10 +103,6 @@ pub fn init_state(app: AppHandle) -> AppState {
         embed_port: embed_port.clone(),
         memory: Arc::clone(&memory),
         root: root.clone(),
-        catalog: Arc::clone(&catalog),
-        model_overrides: Arc::clone(&model_overrides),
-        sessions_dir: sessions_dir.clone(),
-        compact_failures: Arc::clone(&compact_failures),
     });
 
     // 中间件链 + 审批 + 内核簇（§7.1 / 纪律 6 / ⑮）：洋葱序与「sink 先于 approval」

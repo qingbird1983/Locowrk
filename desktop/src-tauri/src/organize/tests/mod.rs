@@ -10,23 +10,17 @@
 //! 夹具是 tests 的私有项，子簇经 `use super::*;` 取用（形状照 `settings/tests/` 先例，
 //! **可见性零改动**）；用例本体逐字搬运，一条断言未增删。
 //! 队列 Q6（CB §7.1/§8）加 `rerun`（在途期记标记、收束即补跑、连续补跑上限与复位）。
-//! 队列 Q8b（真机「整理跟不上 ⇒ 一步卡死」）加 `pressure`（轮内水位泄压：
-//! 到线才切、只切本轮之前、0 档逐字节不写盘、在途与熔断让位）。
-//! 队列 Q8c（泄压留下的机械摘要谁来还）加 `summary_backfill`（补写端到端、
-//! 队列 Q8c 的第二刀（v2.194）：`summary_backfill` 顶到 416 行 = 本批净增第二件超限，
-//! 按三问自检第③问切成两簇——债的归属在 `summary_debt`，通路行为留在 `summary_backfill`；
-//! 三件共享夹具上收本文件末尾（兄弟簇互相看不见私有项 = 形状闸 S3 的处置口径）。
-//! 注入目录字节前后相同、0 档零改写、失败落尝试次数、日志缺席诚实放弃）。
+//! 队列 Q8c 的 `summary_debt`（「谁欠债」三条）：S4 刀① 退役轮内泄压后，泄压那条
+//! 用例与其造债夹具一并删除，只剩记录员成功 / 降级支两条；共享夹具 `persisted_turn` /
+//! `GOOD_SUMMARY_REPLY` 住宿主（兄弟簇互相看不见私有项 = 形状闸 S3 的处置口径）。
 
 mod fact_cards;
 mod overflow;
 mod pipeline;
-mod pressure;
 mod recovery;
 mod rerun;
 mod stream;
 mod summary;
-mod summary_backfill;
 mod summary_debt;
 mod tail;
 mod tools;
@@ -197,11 +191,6 @@ fn good_reply_with_summary() -> String {
 }
 
 // ---- 队列 Q8c（v2.194）上收的共享夹具 ----
-//
-// `summary_backfill`（通路行为）与 `summary_debt`（债的归属）两簇都要用这三件，而
-// 兄弟簇之间看不见彼此的私有项（形状闸 S3 的处置口径就是「上收 mod.rs」）⇒ 搬到这里，
-// 用例本体与断言逐字节未动。`Release` 随 `release_once` 一起进来。
-use crate::organize::pressure::Release;
 
 /// 六轮历史 + 一次 provider 用量上报（anchor = 9,500）+ 本轮两事件；会话**落盘**
 /// （补写从磁盘重读，与补跑、崩溃恢复同一把钥匙）。
@@ -239,14 +228,3 @@ fn persisted_turn(root: &std::path::Path, sid: &str) -> (Session, usize) {
     crate::session_log::append_slice(&root.join("sessions"), sid, &s, 0);
     (s, turn_start)
 }
-
-/// 泄压切一刀，返回切出的章节数。
-fn release_once(org: &Arc<Organizer>, session: &Session, sid: &str, turn_start: usize) -> usize {
-    match org.release_pressure(session, sid, 10_000, 0, turn_start) {
-        Release::Cut { chapters, .. } => chapters,
-        Release::Skip(why) => panic!("泄压本该切一刀，实际跳过：{why}"),
-    }
-}
-
-const GOOD_SUMMARY_REPLY: &str =
-    r#"[{"id":"b1","summary":"排查插件加载慢：每个插件静态链接了公共依赖，改共享 runtime。"}]"#;

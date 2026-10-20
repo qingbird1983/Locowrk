@@ -76,10 +76,7 @@ interface TurnCappedEvent {
 
 /** 上下文用量（agent://context-usage，⑨）：与压缩判定同一估算口径。
  * toolsEstTokens（v2.58 §3.12）= 本轮实际携带的暴露目录估算（0 = 目录
- * 缺席），工具上下文行的"约 N tokens"。
- * S3 刀④b 三枚（扣减链）：slider_tokens = 滑杆原值；output_reserve = 本次
- * 扣掉的输出侧预留；output_reserve_source = default|model|capped
- * （空串 = 旧快照，浮层不渲染扣减链）。 */
+ * 缺席），工具上下文行的"约 N tokens"。 */
 interface ContextUsageEvent {
   kind: "context_usage";
   session_id: string;
@@ -88,9 +85,6 @@ interface ContextUsageEvent {
   /** 模型窗口；0 = 未设置。 */
   window_tokens: number;
   tools_est_tokens: number;
-  slider_tokens?: number;
-  output_reserve?: number;
-  output_reserve_source?: string;
 }
 
 /** 压缩完成（agent://context-compacted，⑨）：summary 只有 200 字符预览

@@ -53,14 +53,6 @@ pub struct UsagePolicy {
     pub window_tokens: u64,
     pub tools_est_tokens: u64,
     pub refused_tokens: u64,
-    /// 滑杆原值（未与窗口取小的那一半）——扣减链要显示"与滑杆取小"的左边
-    /// （S3 刀④b · AC-S3-8）。
-    pub slider_tokens: u64,
-    /// 本次实际扣掉的输出侧预留（token）与来源标记（`default|model|capped`）。
-    /// 算式住在 [`crate::context_budget::reserve_reading`]，这里只是把它摆给
-    /// 界面看；**不重算**（同一轮里阈值与这条链必须出自同一次判定）。
-    pub output_reserve_tokens: u64,
-    pub output_reserve_source: &'static str,
 }
 
 impl UsagePolicy {
@@ -77,16 +69,17 @@ impl UsagePolicy {
     /// S3 刀④b：多一枚 `reserve_cap`（设置里的输出预留上限）。预留量与来源在这里
     /// 取一次、阈值算式在 `effective_threshold` 里再算一次——两次都是**同一个纯
     /// 函数**对同一组入参，不是两次读设置；调用方负责让这几枚原料同属一次判定。
+    /// S4（specs/11 刀①）：上限不再是设置项，`reserve_cap` 参数随之摘掉——
+    /// 唯一出处 = [`crate::context_budget::OUTPUT_RESERVE_CAP_TOKENS`]，两个组装点
+    /// 不再各写一枚实参。
     pub(crate) fn assemble(
         slider: u64,
         window: Option<u64>,
         max_output: Option<u64>,
-        reserve_cap: u64,
         tools_est_tokens: u64,
         refused_tokens: u64,
     ) -> Self {
-        let (output_reserve_tokens, output_reserve_source) =
-            crate::context_budget::reserve_reading(max_output, reserve_cap);
+        let reserve_cap = crate::context_budget::OUTPUT_RESERVE_CAP_TOKENS;
         Self {
             threshold_tokens: crate::context_budget::effective_threshold(
                 slider,
@@ -97,9 +90,6 @@ impl UsagePolicy {
             window_tokens: window.unwrap_or(0),
             tools_est_tokens,
             refused_tokens,
-            slider_tokens: slider,
-            output_reserve_tokens,
-            output_reserve_source: output_reserve_source.as_str(),
         }
     }
 }
@@ -115,15 +105,11 @@ impl UsagePolicy {
 /// 读数语义变化见 [`crate::context_budget`] 头注。）`stop`（v4.11 §3.39④）= 停止
 /// 标记注册表（None = 无停止面，headless/测试）：进场登记 RAII 守卫、
 /// 所有收束路径自动注销；step 边界查到置位即按 TurnDone 收束（流式内的
-/// 截断在 LLM 适配器 delta 回调点，更早）。`organizer`（队列 Q8b）= 轮内水位
-/// 泄压的写侧通路（None = headless/测试，与改前逐字节同形）：**每个 step 的
-/// 边界**问一次「占用到水位了没、这批历史该不该归档」，命中就同步做一次规则
-/// 切分（不调模型）后接着跑——轮末的 `after_turn` 追不上本轮的第 N 个 step，
-/// 真机那 63 万 token 就是这么攒出来的。`compactor`（S2 刀④）= 主层深度压缩（None =
-/// headless/测试，与改前逐字节同形）：紧接在泄压**之后**、`kernel.step_as` **之前**问
-/// 一次「占用到有效阈值了没、机械层压完还超吗」，到线就调一次摘要模型、把较旧的一段
-/// 折成一条 `ContextCompacted` 落进日志（为什么挂这儿而不是挂 `agent/request` 环上 =
-/// `compact.rs` 头注那三条；为什么排在泄压之后 = 上面那句裁定 C）。
+/// 截断在 LLM 适配器 delta 回调点，更早）。`compactor`（S2 刀④；S4 specs/11
+/// 刀① 起是**唯一**的自动压缩层） = 深度压缩（None = headless/测试）：紧接在
+/// `kernel.step_as` **之前**问一次「占用到有效阈值了没」，到线就同步调一次摘要
+/// 模型、把较旧的一段折成一条 `ContextCompacted` 落进日志，模型下一步照常继续
+/// （为什么挂这儿而不是挂 `agent/request` 环上 = `compact.rs` 头注那三条）。
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn(
     kernel: &Kernel,
@@ -138,15 +124,10 @@ pub async fn run_turn(
     max_steps: u32,
     stop: Option<&Arc<crate::stop::StopFlags>>,
     fragments: Option<&crate::fragments::FragmentPending>,
-    organizer: Option<&Arc<crate::organize::Organizer>>,
     compactor: Option<&Arc<crate::compact::deep::Compactor>>,
 ) -> Result<u32, String> {
     let _stop_guard = stop.map(|f| f.guard(session_id));
     let log_start = session.len();
-    // 本轮已泄压次数（上限 `developer.organizeMaxRelease` 在 pressure 侧比对）。
-    // **故意是局部变量而不是投影字段**：它的生命周期就是这一轮，落盘只会多出
-    // 一份跨轮脏账（轮被停止/失败掐断时那份账没人清）。
-    let mut released: u32 = 0;
     // 轮界事件（§4.1 设计，v2.101 起真正写入）：TurnStart 供重放复原计时
     // 起点（配给紧随的 UserMessage），TurnEnd（各收束路径）供冻结读数——
     // 此前日志里没有任何时刻，切会话/重启后计时行只剩发丝线（目检①）。
@@ -203,24 +184,11 @@ pub async fn run_turn(
             );
             return Ok(steps);
         }
-        // 轮内水位泄压（队列 Q8b）：**必须在 `kernel.step_as` 之前**——这一步
-        // 就要发出去的请求才是被泄压救下的那一个（挪到 step 之后 = 本轮第一个
-        // 请求照旧超限，只有第二个开始才受益，等于把救援推迟了一整步）。
-        // `log_start` 是本轮进场时的日志长度 = 切口的上界，本轮的用户消息与
-        // 后续 step 的产物一条都不会被归进章节。
-        if let (Some(org), Some(u)) = (organizer, usage) {
-            if org
-                .release_pressure(session, session_id, u.window_tokens, released, log_start)
-                .chapters()
-                > 0
-            {
-                released += 1;
-            }
-        }
-        // 主层深度压缩（S2 刀④）：**同样在 `kernel.step_as` 之前，但在泄压之后**。
-        // 这一条序是裁定 C 的另一半：机械层（泄压 = 纯 CPU 的规则切分，不调模型）
-        // 能省下一条模型往返就该先省，主层只在"机械层压完仍到线"时才起步——反过来
-        // 排的话，每个 step 边界都会先烧一条摘要，再发现泄压本来就够了。
+        // 主层深度压缩（S2 刀④）：**在 `kernel.step_as` 之前**，是 step 前唯一的
+        // 压缩动作（specs/11 刀① 摘掉了组织泄压与微压缩两层）。到线就调一次摘要、
+        // 把较旧的一段折成一条 `ContextCompacted` 落进日志；模型在这一步停着等它，
+        // 压完投影回填后继续。为什么挂这儿而不是挂 `agent/request` 环上 =
+        // `compact.rs` 头注那三条（重试烧 N 份 / 失败丢账 / 环上拿不到锚点）。
         // 落盘单独一趟：`ContextCompacted` 必须在本步之前就已在磁盘上（内核下一步的
         // 投影与崩溃重放都要看得见它），而下面那个 `before` 是"本步新增段"的起点，
         // 两个游标不能混用。
@@ -447,9 +415,6 @@ fn record_usage(
         threshold: u.threshold_tokens,
         window_tokens: u.window_tokens,
         tools_est_tokens: u.tools_est_tokens,
-        slider_tokens: u.slider_tokens,
-        output_reserve: u.output_reserve_tokens,
-        output_reserve_source: u.output_reserve_source.to_string(),
     });
     if let Some(dir) = log {
         session_log::append_slice(dir, session_id, session, session.len() - 1);
@@ -460,9 +425,6 @@ fn record_usage(
         threshold: u.threshold_tokens,
         window_tokens: u.window_tokens,
         tools_est_tokens: u.tools_est_tokens,
-        slider_tokens: u.slider_tokens,
-        output_reserve: u.output_reserve_tokens,
-        output_reserve_source: u.output_reserve_source.into(),
     });
 }
 

@@ -191,7 +191,6 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         deps.settings.organize_threshold_tokens(),
         window,
         max_output,
-        deps.settings.output_reserve_cap_tokens(),
         runner::catalog_estimate(&deps.kernel, &session_id).await,
         deps.compactor.refusal(&session_id),
     );
@@ -210,7 +209,6 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
         deps.settings.max_turn_steps(),
         Some(&deps.stop_flags),
         Some(deps.fragments.as_ref()),
-        Some(&deps.organizer),
         Some(&deps.compactor),
     )
     .await

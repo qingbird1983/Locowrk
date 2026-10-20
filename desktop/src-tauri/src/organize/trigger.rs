@@ -119,11 +119,8 @@ impl super::Organizer {
     /// 百分比，改一处要两处对齐」，同一把尺子写两遍就是它的反面。常规支拿 items 进
     /// `TaskPayload`，在途支只取判定结果（items 传出去也没人用）。
     ///
-    /// ⚠ 队列 Q8b 起可见面由私有抬到 `pub(super)`：**第三个调用方是 `pressure.rs`
-    /// 的轮内泄压**，它必须吃同一个 `TriggerInput` 才能保证「轮末该整」与「轮内该切」
-    /// 是同一个判定（另写一套 = 批 Q6 变异 M7 打的那种第二把尺）。抬一级不是放宽到
-    /// 全 crate：`pub(super)` = `organize` 及其后代，跨出 organize 仍然不可见。
-    pub(super) fn trigger_input(
+    /// S4 刀① 退役轮内泄压后，第三个调用方没了，可见面回到私有。
+    fn trigger_input(
         &self,
         session: &Session,
         tree: &MemoryTree,

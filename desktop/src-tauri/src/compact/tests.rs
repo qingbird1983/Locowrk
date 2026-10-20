@@ -16,7 +16,7 @@ use super::prompt::{
 use super::*;
 // 缺省数值从设置面取（不是测试自己钉一颗）：AC-S2-10 要的"缺省 = 刀④之前的硬编码
 // 常量"这件事，只有让用例吃设置面那一颗才测得到。
-use crate::settings::context::COMPACT_KEEP_TOKENS_DEFAULT;
+use super::KEEP_TOKENS;
 
 /// 一轮 = user + assistant（带一次调用）+ 工具结果。`size` 控制工具输出体量，
 /// 让"消息条数"与"token 体量"这两件事能被分别调到某个档位上。
@@ -100,7 +100,7 @@ fn plan_of_manual(
 #[test]
 fn unknown_window_never_compacts() {
     let msgs = rounds(6, 4_000);
-    let p = plan_of(&msgs, None, u64::MAX, 50, COMPACT_KEEP_TOKENS_DEFAULT, 0);
+    let p = plan_of(&msgs, None, u64::MAX, 50, KEEP_TOKENS, 0);
     assert_eq!(p.reason, "unknown-window");
     assert_eq!(p.cut, 0, "没拿到线就不许有切点");
 }
@@ -110,14 +110,7 @@ fn unknown_window_never_compacts() {
 fn below_the_line_does_not_compact_even_when_huge() {
     let msgs = rounds(6, 4_000);
     let used = estimate_tokens(&msgs) - 1;
-    let p = plan_of(
-        &msgs,
-        at_line(&msgs),
-        used,
-        50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
-        0,
-    );
+    let p = plan_of(&msgs, at_line(&msgs), used, 50, KEEP_TOKENS, 0);
     assert_eq!(p.reason, "below-line");
     // 刚好等于线 ⇒ 就压（边界是 `>=`，两侧各测一次才算钉住）
     let at = plan_of(
@@ -125,7 +118,7 @@ fn below_the_line_does_not_compact_even_when_huge() {
         at_line(&msgs),
         estimate_tokens(&msgs),
         50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
+        KEEP_TOKENS,
         0,
     );
     assert_eq!(at.reason, "planned", "恰好到线就该动手，实测 {}", at.reason);
@@ -142,7 +135,7 @@ fn one_round_is_not_enough_to_compact() {
             at_line(&one),
             estimate_tokens(&one),
             50,
-            COMPACT_KEEP_TOKENS_DEFAULT,
+            KEEP_TOKENS,
             0
         )
         .reason,
@@ -155,7 +148,7 @@ fn one_round_is_not_enough_to_compact() {
         at_line(&only_users),
         estimate_tokens(&only_users),
         50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
+        KEEP_TOKENS,
         0,
     );
     assert_eq!(p.reason, "too-few-rounds", "没有 assistant 就不许压");
@@ -170,14 +163,7 @@ fn three_consecutive_failures_fuse_the_layer() {
         (MAX_COMPACT_FAILURES - 1, "planned"),
         (MAX_COMPACT_FAILURES, "fused"),
     ] {
-        let p = plan_of(
-            &msgs,
-            at_line(&msgs),
-            used,
-            50,
-            COMPACT_KEEP_TOKENS_DEFAULT,
-            failures,
-        );
+        let p = plan_of(&msgs, at_line(&msgs), used, 50, KEEP_TOKENS, failures);
         assert_eq!(p.reason, want, "失败 {failures} 次时应当 {}", want);
     }
 }
@@ -192,23 +178,9 @@ fn three_consecutive_failures_fuse_the_layer() {
 fn a_manual_run_ignores_the_trigger_line() {
     let msgs = rounds(6, 4_000);
     let used = estimate_tokens(&msgs) - 1;
-    let auto = plan_of(
-        &msgs,
-        at_line(&msgs),
-        used,
-        50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
-        0,
-    );
+    let auto = plan_of(&msgs, at_line(&msgs), used, 50, KEEP_TOKENS, 0);
     assert_eq!(auto.reason, "below-line", "先证自动那一路照旧不动");
-    let manual = plan_of_manual(
-        &msgs,
-        at_line(&msgs),
-        used,
-        50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
-        0,
-    );
+    let manual = plan_of_manual(&msgs, at_line(&msgs), used, 50, KEEP_TOKENS, 0);
     assert_eq!(manual.reason, "planned", "人主动要的那一下不该先撞线");
     assert!(manual.cut > 0, "让开线之后还得真给出切点");
 }
@@ -225,7 +197,7 @@ fn a_manual_run_ignores_the_fuse() {
         at_line(&msgs),
         used,
         50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
+        KEEP_TOKENS,
         MAX_COMPACT_FAILURES,
     );
     assert_eq!(auto.reason, "fused", "先证熔断确实合上了");
@@ -234,7 +206,7 @@ fn a_manual_run_ignores_the_fuse() {
         at_line(&msgs),
         used,
         50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
+        KEEP_TOKENS,
         MAX_COMPACT_FAILURES,
     );
     assert_eq!(manual.reason, "planned", "熔断不许把人手上那一下也挡掉");
@@ -246,7 +218,7 @@ fn a_manual_run_ignores_the_fuse() {
 #[test]
 fn a_manual_run_still_refuses_an_unknown_window() {
     let msgs = rounds(6, 4_000);
-    let p = plan_of_manual(&msgs, None, u64::MAX, 50, COMPACT_KEEP_TOKENS_DEFAULT, 0);
+    let p = plan_of_manual(&msgs, None, u64::MAX, 50, KEEP_TOKENS, 0);
     assert_eq!(p.reason, "unknown-window");
     assert_eq!(p.cut, 0, "拒就得真拒，不许给个半截切点");
 }
@@ -262,7 +234,7 @@ fn a_manual_run_still_refuses_the_thin_shapes() {
         at_line(&one),
         estimate_tokens(&one),
         50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
+        KEEP_TOKENS,
         0,
     );
     assert_eq!(p.reason, "too-few-rounds", "一轮都凑不齐时手动也不许压");
@@ -288,14 +260,7 @@ fn a_manual_run_still_refuses_the_thin_shapes() {
 fn the_cut_lands_on_a_user_boundary_and_keeps_the_newest_question() {
     let msgs = rounds(8, 4_000);
     let used = estimate_tokens(&msgs);
-    let p = plan_of(
-        &msgs,
-        at_line(&msgs),
-        used,
-        50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
-        0,
-    );
+    let p = plan_of(&msgs, at_line(&msgs), used, 50, KEEP_TOKENS, 0);
     assert_eq!(p.reason, "planned");
     assert!(p.cut > 0 && p.cut < msgs.len());
     assert!(
@@ -371,22 +336,8 @@ fn a_tight_budget_drops_oldest_kept_messages_instead_of_doing_nothing() {
 fn the_plan_is_deterministic_for_the_same_input() {
     let msgs = rounds(9, 3_000);
     let used = estimate_tokens(&msgs);
-    let a = plan_of(
-        &msgs,
-        at_line(&msgs),
-        used,
-        50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
-        0,
-    );
-    let b = plan_of(
-        &msgs,
-        at_line(&msgs),
-        used,
-        50,
-        COMPACT_KEEP_TOKENS_DEFAULT,
-        0,
-    );
+    let a = plan_of(&msgs, at_line(&msgs), used, 50, KEEP_TOKENS, 0);
+    let b = plan_of(&msgs, at_line(&msgs), used, 50, KEEP_TOKENS, 0);
     assert_eq!(a.cut, b.cut);
 }
 

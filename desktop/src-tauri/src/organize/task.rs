@@ -50,8 +50,8 @@ impl super::Organizer {
         // 理由与上一句同族——锁还在手里，补写与「下一轮 `after_turn` 又排一条
         // `schedule_summary_backfill`」天然互斥，不新增并发面（用户 2026-10-13 对
         // 补跑给的口径继续兑现）。刚收束的若是记录员通路，它产出的章节
-        // `source="recorder"` 不欠债（候选池为空，一句早退）；欠债的是本轮的泄压
-        // 章节与这条降级支自己。
+        // `source="recorder"` 不欠债（候选池为空，一句早退）；欠债的是这条
+        // 降级支自己。
         self.backfill_summaries(&task.workspace, &task.session_id)
             .await;
         self.inflight

@@ -41,31 +41,12 @@ pub const ORGANIZE_MAX_RERUN_RANGE: std::ops::RangeInclusive<u32> = 0..=10;
 pub const RULE_CHUNK_TOKENS_DEFAULT: u64 = 20_000;
 pub const RULE_CHUNK_TOKENS_RANGE: std::ops::RangeInclusive<u64> = 5_000..=50_000;
 
-// ---- 轮内水位泄压（真机痛点 · 队列 Q8b）----
-
-/// 一轮之内至多泄压几次（0–5 缺省 2）。
-/// **0 = 关掉轮内泄压**（可配置原则②：这条限制自带开关；关掉后的行为与
-/// 本批之前逐字节相同——由测试 `release_cap_zero_writes_nothing_at_all`
-/// 钉，判据形状 = 连投影目录都不被创建，而不是"没报错"）。
-/// ⚠ 批 Q7 立的那条纪律在这里兑现到自己头上：这句原来写的是
-/// `release_count_zero_keeps_the_pre_batch_shape`，仓库里**从来没有**这个用例
-/// （真名如上）。指向不存在的测试的注释比没有注释更坏——它让下一个人以为
-/// 判据在位，于是不再补它。
-pub const ORGANIZE_MAX_RELEASE_DEFAULT: u32 = 2;
-pub const ORGANIZE_MAX_RELEASE_RANGE: std::ops::RangeInclusive<u32> = 0..=5;
-/// 泄压水位：占用达到会话生效窗口的这个百分比才在轮内动手（50–99 缺省 90）。
-/// 上限取 99 而不是 100 的理由：100% 这一刀等的是"已经装不下"，而超限报错
-/// 发生在请求侧——到那时切已经晚了。缺省 90 与自动收起的百分比口径同族，
-/// 但**量的是不同的东西**（收起量的是已展开章节，泄压切的是未整理尾巴）。
-pub const ORGANIZE_RELEASE_WATERMARK_PCT_DEFAULT: u8 = 90;
-pub const ORGANIZE_RELEASE_WATERMARK_PCT_RANGE: std::ops::RangeInclusive<u8> = 50..=99;
-
-// ---- 摘要补写（队列 Q8c：泄压/降级章节欠的那次 L1 补写）----
+// ---- 摘要补写（队列 Q8c：记录员降级章节欠的那次 L1 补写）----
 
 /// 一次补写至多处理几章（0–20 缺省 6）。
 /// **0 = 关掉补写**（可配置原则②）。关掉后的行为与本批之前逐字节相同，且
 /// 判定发生在任何 IO 之前——`backfill_summaries` 第一句就返回，连会话日志都
-/// 不重读（判据 `backfill_off_writes_nothing_at_all`，形状照泄压的 0 档）。
+/// 不重读。
 /// 上限取 20 的理由：一次请求要把这 20 章的原文转录全带上，再大就是在拿
 /// 补写通路自己造一次超限。
 pub const ORGANIZE_SUMMARY_CHAPTERS_DEFAULT: u32 = 6;
@@ -120,18 +101,9 @@ pub struct DeveloperSettings {
     /// 任何一次新的自然触发（`after_turn` 真发起了一轮整理）都把这本账清零
     /// （`Organizer::clear_rerun_streak`）。0 = 关掉补跑，标记照记、等下一轮。
     pub organize_max_rerun: u32,
-    /// 一轮之内至多泄压几次（队列 Q8b，0–5 缺省 2）。与上面那条是一对：
-    /// `organize_max_rerun` 管「轮末整理追不上时再补几步」，这条管「轮内窗口
-    /// 快装不下时先切几刀」；0 = 关掉轮内泄压（可配置原则②的开关位）。
-    pub organize_max_release: u32,
-    /// 轮内泄压的水位（占会话生效窗口的百分比，50–99 缺省 90）。锚点与自动
-    /// 整理/进度条**同吃** `Organizer::anchor`（v2.138 一把尺纪律），本项只
-    /// 给「到几成才动手」。
-    pub organize_release_watermark_pct: u8,
     /// 一次摘要补写至多处理几章（队列 Q8c，0–20 缺省 6）；0 = 关掉补写通路。
-    /// 它管的是泄压与记录员降级留下的那笔「摘要债」——章节已经归档、标题有、
-    /// 摘要还是机械说明。与上面两条的分工：`organize_max_release` 决定轮内切
-    /// 几刀（快、不调模型），本项决定轮末之后替那些刀口补写几章（慢、调模型）。
+    /// 它管的是记录员降级留下的那笔「摘要债」——章节已经归档、标题有、
+    /// 摘要还是机械说明。轮末之后替那些章补写，慢、调模型。
     pub organize_summary_chapters: u32,
     /// 同一章至多补写尝试几次（0–5 缺省 2）；跨轮计数落在投影的
     /// `summary_attempts` 上，所以它挡的是「每轮都重挑同一章重烧模型」这种无界
@@ -154,8 +126,6 @@ impl Default for DeveloperSettings {
             memory_manager_max_retries: MANAGER_MAX_RETRIES_DEFAULT,
             rule_chunk_tokens: RULE_CHUNK_TOKENS_DEFAULT,
             organize_max_rerun: ORGANIZE_MAX_RERUN_DEFAULT,
-            organize_max_release: ORGANIZE_MAX_RELEASE_DEFAULT,
-            organize_release_watermark_pct: ORGANIZE_RELEASE_WATERMARK_PCT_DEFAULT,
             organize_summary_chapters: ORGANIZE_SUMMARY_CHAPTERS_DEFAULT,
             organize_summary_attempts: ORGANIZE_SUMMARY_ATTEMPTS_DEFAULT,
         }
@@ -180,8 +150,6 @@ pub struct DeveloperView {
     pub memory_manager_max_retries: u32,
     pub rule_chunk_tokens: u64,
     pub organize_max_rerun: u32,
-    pub organize_max_release: u32,
-    pub organize_release_watermark_pct: u8,
     pub organize_summary_chapters: u32,
     pub organize_summary_attempts: u32,
 }
@@ -204,8 +172,6 @@ pub struct DeveloperUpdate {
     pub memory_manager_max_retries: Option<u32>,
     pub rule_chunk_tokens: Option<u64>,
     pub organize_max_rerun: Option<u32>,
-    pub organize_max_release: Option<u32>,
-    pub organize_release_watermark_pct: Option<u8>,
     pub organize_summary_chapters: Option<u32>,
     pub organize_summary_attempts: Option<u32>,
 }
@@ -299,16 +265,6 @@ impl DeveloperSettings {
             super::developer::check_max_rerun(n)?;
             self.organize_max_rerun = n;
         }
-        // 轮内水位泄压（队列 Q8b）：两条都是"限制 + 水位"，出界文案同样由抽出的
-        // 校验函数现算数字（同一批里把三个文案各写一遍 = 数字有两个出处）。
-        if let Some(n) = u.organize_max_release {
-            super::developer::check_max_release(n)?;
-            self.organize_max_release = n;
-        }
-        if let Some(n) = u.organize_release_watermark_pct {
-            super::developer::check_release_watermark(n)?;
-            self.organize_release_watermark_pct = n;
-        }
         // 摘要补写（队列 Q8c）：两条都是"上限 + 次数"，出界文案同样由抽出的校验
         // 函数现算数字（区间端点只有一个出处）。
         if let Some(n) = u.organize_summary_chapters {
@@ -337,31 +293,7 @@ pub fn check_max_rerun(n: u32) -> Result<(), String> {
     ))
 }
 
-/// 轮内泄压次数的出界文案（队列 Q8b，形状照 `check_max_rerun`）。
-pub fn check_max_release(n: u32) -> Result<(), String> {
-    if ORGANIZE_MAX_RELEASE_RANGE.contains(&n) {
-        return Ok(());
-    }
-    Err(format!(
-        "轮内泄压上限 {n} 超出范围（{}–{}，0 = 关掉泄压）",
-        ORGANIZE_MAX_RELEASE_RANGE.start(),
-        ORGANIZE_MAX_RELEASE_RANGE.end()
-    ))
-}
-
-/// 泄压水位的出界文案（队列 Q8b，同上）。
-pub fn check_release_watermark(n: u8) -> Result<(), String> {
-    if ORGANIZE_RELEASE_WATERMARK_PCT_RANGE.contains(&n) {
-        return Ok(());
-    }
-    Err(format!(
-        "泄压水位 {n}% 超出范围（{}–{}）",
-        ORGANIZE_RELEASE_WATERMARK_PCT_RANGE.start(),
-        ORGANIZE_RELEASE_WATERMARK_PCT_RANGE.end()
-    ))
-}
-
-/// 一次补写章数的出界文案（队列 Q8c，形状照 `check_max_release`：数字由
+/// 一次补写章数的出界文案（队列 Q8c，形状照 `check_max_rerun`：数字由
 /// `RANGE` 现算，不在文案里再手写一遍端点）。
 pub fn check_summary_chapters(n: u32) -> Result<(), String> {
     if ORGANIZE_SUMMARY_CHAPTERS_RANGE.contains(&n) {

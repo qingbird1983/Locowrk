@@ -62,8 +62,7 @@ export async function send(st: ChatState, text: string, parts?: ContentPartDto[]
 // ---- §3.39 停止与排队（v4.11）----
 
 /** 后端判据名 → 语言包那条 key（S2 刀⑦ `/压缩`）。取值域与 Rust 侧同源，由
- * `check-single-source` 的 SS24 钉住：那边新增一条 stop 而这边没补文案，闸就红
- * （同 `session.ts` 里 `reason === "pressure_release"` 那处分支的处境）。
+ * `check-single-source` 的 SS24 钉住：那边新增一条 stop 而这边没补文案，闸就红。
  *
  * ⚠ 兜底那条不许省：认不出的 reason 也要如实说"没压成"并把判据名原样带出来，
  * 绝不许悄悄显示成"已压缩"——那正是本项目一路在反的假告。 */

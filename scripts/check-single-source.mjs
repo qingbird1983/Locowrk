@@ -441,12 +441,7 @@ function snapshot() {
       'desktop/src-tauri/src/organize',
     ),
     spill: moduleFace('desktop/src-tauri/src/spill.rs', 'desktop/src-tauri/src/spill'),
-    micro: moduleFace(
-      'desktop/src-tauri/src/microcompact.rs',
-      'desktop/src-tauri/src/microcompact',
-    ),
     compact: moduleFace('desktop/src-tauri/src/compact.rs', 'desktop/src-tauri/src/compact'),
-    slide: moduleFace('desktop/src-tauri/src/slide.rs', 'desktop/src-tauri/src/slide'),
   };
   // S3 刀③b 墓碑三档（SS29 / SS29b / SS29c）的扫描面：三档都从**已有面**派生，
   // 不另开一次读盘（同一棵树读两遍 = 两遍之间可以漂）。
@@ -814,34 +809,20 @@ const CHECKS = [
   ],
   [
     'SS16c',
-    '有效阈值那四颗零件各只有一个定义：输出侧缺省预留 `32_000` / **任一颗** `= 21_000` 的' +
-      '常量 / `fn effective_threshold(` / `fn reserve_reading(`（specs/09 AC-S2-2 与 S3 ' +
-      'AC-S3-8 的机械面）。为什么盯常量而不盯数值：ZCode `policy.ts:9-10` 那两颗数是要逐字' +
-      '对齐的参照，别处再写一份 `21_000` 就是第二条加减通路——表现是"进度条离满还差一截' +
-      '就压"或反过来"撞窗了才压"，两种都靠人肉才发现。**S3 刀④b 的一次搬家按本档自己的' +
-      '规矩改判**：预留上限从 `context_budget.rs` 的 `OUTPUT_RESERVE_CAP_TOKENS` 抬成设置项，' +
-      '声明搬到 `settings/context.rs::OUTPUT_RESERVE_CAP_DEFAULT`；第二档从此**不点名**、' +
-      '只数"有没有第二颗 `= 21_000` 的常量"——改名不是漂，复制才是。第四档钉"量 + 来源"的' +
-      '算式只有一个出处（界面上的出处说明与这颗数同生同灭）。改动这里 = 显式改判据',
+    '有效阈值那三颗零件各只有一个定义：输出侧缺省预留 `32_000`、**唯一** `= 21_000` 的' +
+      '预留上限常量、`fn effective_threshold(`（specs/09 AC-S2-2 的机械面）。为什么盯常量' +
+      '而不盯数值：ZCode `policy.ts:9-10` 那两颗数是要逐字对齐的参照，别处再写一份 ' +
+      '`21_000` 就是第二条加减通路——表现是"进度条离满还差一截就压"或反过来"撞窗了才压"，' +
+      '两种都靠人肉才发现。**S4 刀① 按本档自己的规矩改判**：预留上限不再是设置项，' +
+      '`OUTPUT_RESERVE_CAP_TOKENS = 21_000` 回到 `context_budget.rs` 写死；`reserve_reading`' +
+      '（量 + 来源）随浮层读数链一起删除 ⇒ 第四档从判据表里退场。改动这里 = 显式改判据',
     (m) =>
       [
         countOf(m.rust.join('\n'), /const DEFAULT_OUTPUT_RESERVE_TOKENS: u64 = 32_000;/),
         countOf(m.rust.join('\n'), /const \w+: u64 = 21_000;/),
         countOf(m.rust.join('\n'), /\bfn effective_threshold\s*\(/),
-        countOf(m.rust.join('\n'), /\bfn reserve_reading\s*\(/),
       ].join('|'),
-    '1|1|1|1',
-  ],
-  [
-    'SS16d',
-    '输出预留上限（S3 刀④b 抬成设置项）的读面**只有那四个阈值消费点**：聊天组装点 / ' +
-      '定时引擎 / 整理批量 / 微压缩那条链。少一处 = 那条链的阈值还在吃旧常量或自己写一颗数，' +
-      '表现是"设置里改了预留上限，某条链的触发线不动"；多一处 = 新消费点没走同一份设置。' +
-      '为什么用文件集合：计数挡不住"搬去第五个文件"（SS14a 同一条理由）。' +
-      '⚠ 正则带前导点（同 SS23b）：不带点会把 `settings/context.rs` 里 getter 自己的**定义**' +
-      '也数成调用点——本档要数的是"谁读了它"，不是"谁定义了它"。',
-    (m) => filesWith(m.hostDesktop, /\.output_reserve_cap_tokens\s*\(/),
-    'commands/chat.rs|organize/mod.rs|scheduler/engine.rs|state/waterfall.rs',
+    '1|1|1',
   ],
   [
     'SS17a',
@@ -875,57 +856,6 @@ const CHECKS = [
     (m) =>
       `${filesWith(m.hostDesktop, /<persisted-output/)}|${filesWith(m.hostDesktop, /\bfn clipped\s*\(/)}`,
     'spill.rs|spill.rs',
-  ],
-  [
-    'SS18a',
-    '微压缩那七颗参数**各只有一个定义处，而且钉的是值**（S2 刀③）：占位文本 + ' +
-      '保留 5 组 + idle 60 分钟 + 最小节省 256 + 比例 0.9 + 定值缓冲 2000 + 九工具名单。' +
-      '为什么连值一起钉（同 SS16c 的口径）：这七枚是逐字照 ZCode `microcompact.ts:12-31` ' +
-      '读实来的（2026-10-19 按本地源码逐行核对），它们决定的是"清得太狠还是太松"——' +
-      '漂一枚的表现是历史莫名缺一截工具输出、或者减速层从不工作，两种都得靠人肉跑长会话才发现。' +
-      '别处再写一份同样的 `= 5` / `= 256` 就是第二条参数通路 ⇒ 改动这里 = 显式改判据。' +
-      '**刀⑥ 的一次搬家已按本档自己的规矩改判**：「保留 5 组」抬成设置项，声明从 ' +
-      '`microcompact.rs` 搬到 `settings/context.rs::MICRO_KEEP_GROUPS_DEFAULT`，' +
-      '第二档钉的仍是那颗 5（值没漂，漂的只有住处）。' +
-      '⚠ 数的是**全生产 .rs 原文**（含注释）：头注里若出现 `const MICRO_KEEP_GROUPS_DEFAULT: u64 = 5;` ' +
-      '这种完整声明句式会被算进来，所以注释一律写成中文散文而不是复刻声明',
-    (m) => {
-      const all = m.rust.join('\n');
-      return [
-        countOf(all, /pub\(crate\) const CLEARED: &str = "\[旧工具结果已清理\]";/),
-        countOf(all, /const MICRO_KEEP_GROUPS_DEFAULT: u64 = 5;/),
-        countOf(all, /const IDLE_THRESHOLD_MINUTES: u64 = 60;/),
-        countOf(all, /const MIN_TOKEN_SAVINGS: u64 = 256;/),
-        countOf(all, /const THRESHOLD_RATIO: f64 = 0\.9;/),
-        countOf(all, /const THRESHOLD_BUFFER_TOKENS: u64 = 2_000;/),
-        countOf(all, /const COMPACTABLE_TOOLS: &\[&str\] = &\[/),
-      ].join('|');
-    },
-    '1|1|1|1|1|1|1',
-  ],
-  [
-    'SS18b',
-    '微压缩这一层**自己也不拿尺**（SS16b 的同族墓碑）：`effective_threshold(` / ' +
-      '`session_capacity(` / `window_tokens` 三档在 `microcompact` 模块面里各恒 0——' +
-      '它吃的主层阈值必须由组装点经闭包供给。为什么这一档要紧：微压缩线是"主层阈值 × 0.9"，' +
-      '一旦它自己去读窗口，就有了第二条窗口换算通路，表现是减速层与整理触发线**不再同尺**' +
-      '（要么提前清得不像话，要么永远轮不到它清）。三档读数在同一个面 ⇒ 由 FLOORS 的 micro 面字节' +
-      '下限兜"面瞎了"（面为空与真的没有在这一档读数上长得一模一样）',
-    (m) =>
-      `${countOf(m.micro, /effective_threshold\s*\(/)}|${countOf(m.micro, /session_capacity\s*\(/)}|${countOf(m.micro, /window_tokens/)}`,
-    '0|0|0',
-  ],
-  [
-    'SS18c',
-    '接线与记账各只有一个落点：`MicroCompact::new(` 只住在 `state/waterfall.rs`（注册一次），' +
-      '策略名 `strategy: "micro"` 只住在 `microcompact.rs`。前者防"接了两遍"——这一环每请求' +
-      '都要重算并改写消息，注册两次就是同一批结果被清两遍、`ContextCompacted` 落两条事件；' +
-      '后者防别处（前端或 organize）再发明一个 "micro" 字符串：`ContextCompacted{strategy}` ' +
-      '是按名字渲染的，名字有了第二个出处，界面就会把同一件事显示成两件事。' +
-      '数的是 `hostDesktop` 面（已剥行注释 ⇒ 沿革注释里提这两个名字不算在场，SS11/SS13 同一口径）',
-    (m) =>
-      `${filesWith(m.hostDesktop, /MicroCompact::new\s*\(/)}|${filesWith(m.hostDesktop, /strategy:\s*"micro"/)}`,
-    'state/waterfall.rs|microcompact.rs',
   ],
   [
     'SS19a',
@@ -1012,19 +942,18 @@ const CHECKS = [
   ],
   [
     'SS21a',
-    '压缩层写进日志的 `strategy` 字面量各只有一处：`"micro"` 在微压缩那一层，`"compact"` ' +
-      '在主层（唯一出处 = `compact/deep.rs` 的 `STRATEGY` 常量）。前端按这个串分流文案 ' +
+    '压缩层写进日志的 `strategy` 字面量**只有一个出处** = `compact/deep.rs` 的 `STRATEGY` ' +
+      '常量（S4 后只剩 `"compact"` 一档；微压缩那一层已退役）。前端按这个串分流文案' +
       '（`projection.ts` 把它原样放进 `notice.contextCompacted` 的参数），同一层出现两个名字 ' +
       '= 界面上"同一层压缩说两种说法"，而开发者面板按 strategy 计数会直接算错。',
-    (m) =>
-      `${countOf(m.micro, /strategy:\s*"micro"/)}|${countOf(m.compact, /STRATEGY:\s*&str\s*=\s*"compact"/)}`,
-    '1|1',
+    (m) => String(countOf(m.compact, /STRATEGY:\s*&str\s*=\s*"compact"/)),
+    '1',
   ],
   [
     'SS21b',
     '主层压缩面上**不许自己拿尺**：`effective_threshold(` 与 `session_capacity(` 各恒 0' +
-      '（对微压缩的 SS18b 同族要求，也是刀①"organize 不许自己拿尺"的第三次落地）。触发线' +
-      '由组装点算好经 `UsagePolicy` 交进来；这里再算一遍就是两个出处，改了滑杆压缩照旧阈值走。' +
+      '（刀①"organize 不许自己拿尺"的同族要求）。触发线由组装点算好经 `UsagePolicy` 交进来；' +
+      '这里再算一遍就是两个出处，改了滑杆压缩照旧阈值走。' +
       '⚠ 读 `policy.window_tokens` 是合法的（那是接组装点的数，不是自己算窗口），所以本档' +
       '故意不数 `window_tokens`——数了会红在正确的代码上。',
     (m) => `${countOf(m.compact, /effective_threshold\s*\(/)}|${countOf(m.compact, /session_capacity\s*\(/)}`,
@@ -1044,10 +973,8 @@ const CHECKS = [
   [
     'SS22a',
     '熔断线只许**一处比较**：`>= MAX_COMPACT_FAILURES` 在整个压缩簇里恒 1（唯一出处 = ' +
-      '`compact.rs::is_fused`）。刀⑤ 起有两个读者要吃同一个判断——主层用它决定"还压不压"、' +
-      '滑窗保护网用它决定"醒不醒"。两处各写一遍 `>= 3`，将来调那颗数就会出现"主层已熔断' +
-      '而保护网还没醒"或反过来的空档，而这两档在界面上是同一个症状（请求发不出去），' +
-      '没有一行日志会说清是谁没跟上。',
+      '`compact.rs::is_fused`）。主层用它决定"还压不压"；两处各写一遍 `>= 3`，将来调那颗数' +
+      '就会出现空档，而界面上是同一个症状（请求发不出去），没有一行日志会说清是谁没跟上。',
     (m) => `${countOf(m.compact, />=\s*MAX_COMPACT_FAILURES/)}`,
     '1',
   ],
@@ -1063,37 +990,12 @@ const CHECKS = [
   [
     'SS22c',
     '同一张表的写侧与读侧分工各只一处：`failures.of|record|clear` 只在 `compact/deep.rs`' +
-      '（失败 +1、压成清零），`failures.fused(` 只在 `slide.rs`（保护网读它决定开不开）。' +
-      '主层若开始读 `fused` = 在 [`SS21c`] 那一步之外又多一处"要不要压"的判断；保护网若' +
-      '开始 record = 它自己把自己锁死，而这一层根本没有解锁通路（它不调模型，永远不' +
-      '"压成"）。两种都在编译器与行为测试的眼皮底下。',
+      '（失败 +1、压成清零），而 `failures.fused(` **零处**——熔断判断只由 `plan` 吃计数做，' +
+      '不许再有第二个读者（S4 刀① 退役滑窗保护网后那一格也随之删除）。' +
+      '主层若多一条 `fused` 读取 = 同一件事有两个判断点，两种都在编译器与行为测试的眼皮底下。',
     (m) =>
       `${filesWith(m.hostDesktop, /self\.failures\.(?:of|record|clear)\s*\(/)}|${filesWith(m.hostDesktop, /failures\.fused\s*\(/)}`,
-    'compact/deep.rs|slide.rs',
-  ],
-  [
-    'SS23a',
-    '刀⑥ 把两颗硬编码常量抬成设置项之后，**旧常量名不许留在原地**：`KEEP_RECENT_GROUPS` ' +
-      '在微压缩面恒 0、`KEEP_RECENT_RUNS` 在保护网面恒 0（缺省那两份现在只住在 ' +
-      '`settings/context.rs` 的 `MICRO_KEEP_GROUPS_DEFAULT` / `SLIDE_KEEP_RUNS_DEFAULT`）。' +
-      '留着它的后果不是编译错而是**双出处**：有人拿界面值传进来、又有一处继续读常量，' +
-      '表现是"改了保留组数，某一层的边界还是老样子"，而编译器与行为测试都说不出是谁。',
-    (m) =>
-      `${countOf(m.micro, /KEEP_RECENT_GROUPS/)}|${countOf(m.slide, /KEEP_RECENT_RUNS/)}`,
-    '0|0',
-  ],
-  [
-    'SS23b',
-    '两枚新读面各只有一个调用点：`context_micro_keep_groups(` 只住 `microcompact.rs`、' +
-      '`context_slide_keep_runs(` 只住 `slide.rs`。这条盯的不是"有没有接上"（接不上会编译错），' +
-      '而是**同一轮里读了几次设置**：微压缩那一环刻意"取一次存局部"，因为判定与它下面那句' +
-      '记账文本要用同一个数——读第二次就可能在中途被用户保存插队，账上写的组数与实际清掉的' +
-      '组数不是同一个。多一个调用点就是把这个窗口重新打开。' +
-      '⚠ 两条正则都**带前导点**：不带点会把 `settings.rs` 里那两枚 getter 自己的**定义**' +
-      '也数成调用点（第一版就是这么红的）——本档要数的是"谁读了它"，不是"谁定义了它"。',
-    (m) =>
-      `${filesWith(m.hostDesktop, /\.context_micro_keep_groups\s*\(/)}|${filesWith(m.hostDesktop, /\.context_slide_keep_runs\s*\(/)}`,
-    'microcompact.rs|slide.rs',
+    'compact/deep.rs|none',
   ],
   [
     'SS24',
@@ -1296,7 +1198,7 @@ const CHECKS = [
     '同一件事的缺席档（两把旧尺都不许回来，恒 `none`）。① `UsagePolicy {` 字面量在生产面' +
       '零处——两个组装点一律经 `assemble`；数之前先把三处**合法在场**剔掉（`pub struct ' +
       'UsagePolicy {` 定义、`impl UsagePolicy {` 装配口、`-> UsagePolicy {` 返回类型），不剔' +
-      '就红在正确代码上（SS23b 那条"正则要收窄"的同款教训）。② `.context_tokens(` 零处 = ' +
+      '就红在正确代码上（本表里"正则要收窄"的同款教训）。② `.context_tokens(` 零处 = ' +
       '`TreeAssembler::context_tokens`（目录 + 尾巴那把第二尺）连方法带 `run_turn` 的 `tree` ' +
       '参数一起摘掉了，不许复活：它一旦回来，"进度条与压缩同一个分子"就只剩注释在承诺。' +
       '两档都数代码行（`hostDesktop` 面已剥行注释）：`occupancy` / `context_tokens` 这两个' +
@@ -1304,7 +1206,7 @@ const CHECKS = [
       '期望含两个 `none` ⇒ "面瞎了"与"真的没有"读数相同，由 FLOORS 的宿主文件数下限兜住。',
     (m) => {
       // 三处**合法在场**先剔掉再数构造字面量：结构体定义、它的 impl 块、返回类型箭头。
-      // 不剔就会红在正确代码上（SS23b 那条"带前导点"的同款教训）。
+      // 不剔就会红在正确代码上（本表里"带前导点"的同款教训）。
       const face = m.hostDesktop.map((f) => ({
         ...f,
         code: f.code
@@ -1383,23 +1285,12 @@ const FLOORS = [
   // （定义改名时报的是"闸瞎了"，说的却是假话）。拆树只会让面变大，所以字节数够用。
   ['中立尺面字节数（剥注释）', (m) => m.budget.length, 400],
   ['organize 面含轮次收束本体', (m) => countOf(m.organize, /fn after_turn/), 1],
-  // S2 刀③（SS18b）期望三个 0 ⇒ 面塌掉（模块改名 / moduleFace 路径写错）与"真的没有"
-  // 读数相同。两条下限各挡一种瞎法：面字节数现值 9326 取三成半；再加一条点名分组本体
-  // ——它不是任何一档读数的分子，所以不会与 SS18b 同生同灭（"扫错了树"那种瞎法兜得住）。
-  ['微压缩面字节数（剥注释）', (m) => m.micro.length, 3500],
-  ['微压缩面含分组本体', (m) => countOf(m.micro, /fn candidate_groups/), 1],
-  // S2 刀④（SS20/SS21）同一条瞎法：SS21b 期望两个 0、SS21a 期望 1|1，面塌掉时
+  // S2 刀④（SS20/SS21）同一条瞎法：SS21b 期望两个 0、SS21a 期望 1，面塌掉时
   // "0|0"与"没扫到"读数相同。下限取现值 16288 的三成；再加一条点名判定本体
   // `fn plan(`——它不是这一簇任何一档读数的分子（SS20b 数 include、SS21a 数
   // STRATEGY、SS21c 数构造点与调用点），所以"扫错了树"这种瞎法兜得住。
   ['主层压缩面字节数（剥注释）', (m) => m.compact.length, 4800],
   ['主层压缩面含判定本体', (m) => countOf(m.compact, /fn plan\s*\(/), 1],
-  // S2 刀⑤（SS22b/c）的期望是**文件名**与 1 ⇒ 面塌掉时 `none` 与"只有一个文件"、
-  // 0 与"没有第二处"读数相同。同一条瞎法两条下限：字节数现值 5429 取三成；
-  // 再加一条点名 `fn process_runs`——分段本体不被 SS22 任何一档当分子，
-  // 所以"扫错了树 / 模块改名"这种瞎法只有它能报出来。
-  ['滑窗保护网面字节数（剥注释）', (m) => m.slide.length, 1600],
-  ['滑窗保护网面含分段本体', (m) => countOf(m.slide, /fn process_runs/), 1],
 ];
 
 function runChecks(m) {
@@ -1501,9 +1392,8 @@ if (SELFTEST) {
     // 不红）、SS16c 只再写预留常量。三条都长成"没人调用的分支"是有意的（同
     // SS12/SS13 的分工）：cargo 对它们全绿，只有形状档看得见——而这正是刀① 之后
     // 唯一还剩的证明面（搬家本身没有新行为，行为测试无靶子）。
-    // ⚠ S3 刀④b 改判后 SS16c 变四档，变异相应改成**宽变异**：第二档（再写一颗
-    // `= 21_000` 的常量）与第四档（再写一个 `fn reserve_reading(`）各塞一条，其余
-    // 两档不动——只打一条的话新加的那一档没有证明力。
+    // ⚠ S4 刀① 改判后 SS16c 只剩三档，变异只打"再写一颗 `= 21_000` 的常量"——
+    // 其余两档（定义处数 32_000 / 有效阈值函数）不动，分工仍然成立。
     SS16a: (m) =>
       m.rust.push(
         'impl OrganizerTwin {\n    fn anchor(session: &Session) -> (u64, u64) { (0, 0) }\n}\n',
@@ -1512,17 +1402,7 @@ if (SELFTEST) {
       (m.organize +=
         '\nlet real = crate::runner::reported_input_tokens(session).unwrap_or(0);\n'),
     SS16c: (m) =>
-      m.rust.push(
-        '\npub const OUTPUT_RESERVE_CAP_TWIN: u64 = 21_000;\n',
-        '\nfn reserve_reading(max_output: Option<u64>, cap: u64) -> (u64, ReserveSource) { (0, ReserveSource::Default) }\n',
-      ),
-    // SS16d 窄变异（S3 刀④b）：把"读预留上限"多接一处到压缩层——那一层本该只吃
-    // 组装点递下来的阈值。文件集合多一个 `compact/deep.rs`，其余四处不动。
-    SS16d: (m) =>
-      m.hostDesktop.push({
-        rel: 'compact/deep.rs',
-        code: '\nlet cap = settings.output_reserve_cap_tokens();\n',
-      }),
+      m.rust.push('\npub const OUTPUT_RESERVE_CAP_TWIN: u64 = 21_000;\n'),
     // S2 刀② 的三档变异，同样各打中自己那一项：
     //  SS17a 长出第二个"超预算怎么办"的解释者（并把改前那枚名字从墓碑里扶起来）；
     //  SS17b 组装点自己手拼目录名——这一档**只碰右档**，左档（那枚 const）不动，
@@ -1542,22 +1422,6 @@ if (SELFTEST) {
       m.hostDesktop.push({
         rel: 'llm/wire/messages.rs',
         code: 'const ALT_TEMPLATE: &str = "<persisted-output path=…>";\nfn clipped_alt() {}\n',
-      }),
-    // 刀③ 三档各一条窄变异（每条只该红自己那一档，分工才证得出来）。
-    // SS18a：别处再抄一颗参数值。挑 `MIN_TOKEN_SAVINGS` 是因为它的**数值**在场时
-    // 只有这一档在数——推一份进全生产面就把左档从 1 顶成 2。
-    SS18a: (m) => m.rust.push('\npub(crate) const MIN_TOKEN_SAVINGS: u64 = 256;\n'),
-    // SS18b：微压缩那一环自己去拿尺（多一条窗口换算通路）。这一档只数 micro 面里的
-    // `effective_threshold(` 等三个形状，SS16a/SS16c 数的是定义处 ⇒ 互不遮挡。
-    SS18b: (m) =>
-      (m.micro +=
-        '\nfn ruler(slider: u64, w: Option<u64>) -> u64 { effective_threshold(slider, w, None) }\n'),
-    // SS18c：环被接第二遍（同一批结果清两次、`ContextCompacted` 落两条）。
-    // 左档数的是**哪些文件**在构造它，多一个文件就红，与"总数没变"无关。
-    SS18c: (m) =>
-      m.hostDesktop.push({
-        rel: 'state/llm_stack.rs',
-        code: 'let micro_ring = Arc::new(MicroCompact::new(s, d, f));\n',
       }),
     // 刀④a 三档各一条窄变异。SS19a：把定义抄回 organize（退役那天就会拔断压缩）。
     SS19a: (m) =>
@@ -1601,8 +1465,9 @@ if (SELFTEST) {
         code: 'let extra = Compactor::new(settings, client);\n    let out = cp.run(&mut session, &id, &policy).await;\n',
       }),
     // S2 刀⑤（SS22a/b/c）三条窄变异，各打红一档且**不许连带**：熔断线在第二处再比
-    // 一遍 / 组装点之外多 new 一枚表 / 保护网开始自己记失败（它没有解锁通路，记一次
-    // 就永久锁死自己）。三条都长在编译器与行为测试看不见的位置上。
+    // 一遍 / 组装点之外多 new 一枚表 / 多一个 `fused` 读者。三条都长在编译器与
+    // 行为测试看不见的位置上；S4 刀① 退役保护网后，第三条从"保护网开始记账"改判为
+    // "再长出一个熔断判断读者"。
     SS22a: (m) =>
       (m.compact +=
         '\nfn sneaky_fused(n: u32) -> bool {\n    n >= MAX_COMPACT_FAILURES\n}\n'),
@@ -1613,15 +1478,8 @@ if (SELFTEST) {
       }),
     SS22c: (m) =>
       m.hostDesktop.push({
-        rel: 'slide.rs',
-        code: 'self.failures.record(sid);\n',
-      }),
-    // S2 刀⑥（SS23a/b）两条窄变异：旧常量名回到微压缩面 / 保护网多读一次设置。
-    SS23a: (m) => (m.micro += '\npub(crate) const KEEP_RECENT_GROUPS: usize = 5;\n'),
-    SS23b: (m) =>
-      m.hostDesktop.push({
         rel: 'commands/chat.rs',
-        code: 'let again = settings.context_slide_keep_runs();\n',
+        code: 'let fused = self.failures.fused(sid);\n',
       }),
     // S2 刀⑦（SS24 / SS25）两条窄变异：后端多一条没人配文案的判据 / 前端多一句显示不出来的文案。
     // 分两档各埋一侧，是因为相等型读数一旦两侧同时漂就看不出是谁动的（SS25 说明里那条）。

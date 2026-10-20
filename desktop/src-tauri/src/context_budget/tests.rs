@@ -4,9 +4,7 @@
 use memory_tree::AnchorSource;
 use session_store::{Session, SessionEvent};
 
-use super::{
-    anchor, effective_threshold, occupancy, output_reserve, reserve_reading, ReserveSource,
-};
+use super::{anchor, effective_threshold, occupancy, output_reserve};
 
 /// 六轮历史；`usage` = Some 时追加一条供应商上报（input 9,500）。
 fn seeded(usage: Option<u64>) -> Session {
@@ -36,8 +34,8 @@ fn seeded(usage: Option<u64>) -> Session {
 }
 
 /// AC-S2-1 第一档：有供应商上报 ⇒ 锚点就是那个真实 input，来源标 `LlmUsage`。
-/// 数值 9,500 与 `organize/tests/pressure.rs` 那批既有夹具同数——搬家后那些用例
-/// 一字未改仍绿，就是"读数没动"的证据。
+/// 数值 9,500 取自历史夹具的同一档读数；搬家前后断言一字未改，就是"读数没动"
+/// 的证据。
 #[test]
 fn anchor_prefers_the_reported_input() {
     let (tokens, source) = anchor(&seeded(Some(9_500)));
@@ -78,51 +76,6 @@ fn reserve_takes_the_smaller_of_ceiling_and_cap() {
     assert_eq!(output_reserve(Some(8_192), 21_000), 8_192, "小上限原样扣");
 }
 
-/// S3 刀④b 的新另一半：**上限自己也可调**，用户把上限调小 ⇒ 预留当场跟着变小。
-/// 没有这一条，把 `cap` 实参忽略、永远吃 21K 也全绿——AC-S3-8 说的"用户把输出
-/// 上限钉大钉小 ⇒ 这一格当场跟着变"就只剩模型那一侧被证。
-#[test]
-fn reserve_follows_the_tunable_cap() {
-    assert_eq!(output_reserve(None, 8_000), 8_000, "缺省 32K 被新上限削平");
-    assert_eq!(
-        output_reserve(Some(64_000), 8_000),
-        8_000,
-        "模型大上限也被新上限削平"
-    );
-    assert_eq!(
-        output_reserve(Some(4_000), 8_000),
-        4_000,
-        "模型值更小时仍按它"
-    );
-}
-
-/// AC-S3-8 的"带出处的读数"：同一个数（8K）可能来自模型钉死，也可能来自用户上限
-/// ——界面要写出是哪一边说话，所以来源必须由算式一起产出。四档各断一次；只断数值
-/// 不断来源的话，把 `Capped`/`Model` 的标记写反也全绿。
-#[test]
-fn reserve_readings_carry_their_source() {
-    assert_eq!(
-        reserve_reading(Some(8_192), 21_000),
-        (8_192, ReserveSource::Model),
-        "模型声明更小 ⇒ 按模型，不是封顶"
-    );
-    assert_eq!(
-        reserve_reading(None, 21_000),
-        (21_000, ReserveSource::Capped),
-        "缺省 32K 被 21K 削平 ⇒ 封顶"
-    );
-    assert_eq!(
-        reserve_reading(None, 32_000),
-        (32_000, ReserveSource::Default),
-        "上限大到不削缺省 ⇒ 缺省档原样"
-    );
-    assert_eq!(
-        reserve_reading(Some(64_000), 32_000),
-        (32_000, ReserveSource::Capped),
-        "模型上限被用户上限削平 ⇒ 封顶"
-    );
-}
-
 /// AC-S2-2 主判据：`min(滑杆, 窗口 − 预留)`，输出侧**只扣一次**。
 /// 夹具照 spec 那两组：窗口 200K / 输出上限 64K / 滑杆 150K ⇒ 150K（滑杆说话）；
 /// 滑杆 400K ⇒ 179K（窗口封顶说话）。两个负对照钉"扣两遍"（158K）与
@@ -140,11 +93,11 @@ fn effective_threshold_is_capped_by_the_window_once() {
     assert_ne!(capped, 136_000, "136K = 把整颗输出上限扣掉的 legacy 形状");
 }
 
-/// S3 刀④b：上限可调之后，同一条式子的窗口空位跟着变——这是"用户在设置里把上限
-/// 钉小 ⇒ 有效阈值当场抬高"的那一半（预留越小、窗口空位越大）。它同时反证
-/// `effective_threshold` 真的把第四枚实参传下去了，而不是另有一份 21K。
+/// S4（specs/11 刀①）之后上限恒为 [`super::OUTPUT_RESERVE_CAP_TOKENS`]，但算式仍
+/// 保留第四枚 `cap` 参数：这一条钉的是"预留取 min，而不是永远吃常量"这一半的算术。
+/// 生产调用方传固定常量，测试传别的值只为证明算式没被写死。
 #[test]
-fn effective_threshold_follows_the_tunable_cap() {
+fn effective_threshold_follows_the_cap_argument() {
     // 窗口 200K / 滑杆 400K / 模型输出上限 64K。
     assert_eq!(
         effective_threshold(400_000, Some(200_000), Some(64_000), 21_000),

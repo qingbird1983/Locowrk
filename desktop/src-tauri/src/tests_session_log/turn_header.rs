@@ -189,7 +189,6 @@ async fn realtime_and_replay_emit_the_identical_header() {
         None,
         None,
         None,
-        None,
     )
     .await
     .expect("turn ok");

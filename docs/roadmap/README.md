@@ -33,7 +33,10 @@ mtime，人改 `MEMORY.md` 下一轮生效），`<repo_context>` 从静态串改
 装配口，拒收读数经 `Compactor::refusal` 单点取）；**刀④b ✅**——ⓟ 的**界面那一半销账**
 （浮层扣减链三行：预留 / 有效阈值 / 空位，逐态文案；输出预留上限抬成设置项
 `context.outputReserveCapTokens`，缺省 21 000、区间 0–64 000；判据 `SS16c` 四档 +
-`SS16d` 新增），ⓟ **两半全销**。文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
+`SS16d` 新增），ⓟ **两半全销**；**S4 刀① ✅**（2026-10-20，specs/11）——微压缩 / 滑窗 /
+轮内泄压三层连同测试删除、上下文页收成阈值滑条 + 自动压缩 + 用量条三格，输出预留上限
+改回写死 21K（`outputReserveCapTokens` 与 `SS16d` 随设置项退役删除，`SS16c` 改三档 +
+窄变异），浮层扣减链三行整链摘除。文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
 | 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |
 | 工具级取消与 deadline | ◐ 在做 | C1 已落地（内核活动调用登记表 + 停止按会话逐个置位，4 条行为用例 + 4 发变异各打中一条）；三问 2026-10-18 由 Qoder 代裁定（答案与代价都写在该稿里，可翻案）。剩下 C2（`deadline` 生产者，前置是先测现网两个超时的实际关系）与 C3/C4/C5（要过 ABI 的那半，每一刀单独等你点头） | [specs/04-tool-cancel-deadline](../../specs/04-tool-cancel-deadline/spec.md) |

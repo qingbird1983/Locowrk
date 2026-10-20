@@ -35,15 +35,11 @@ async fn context_usage_persists_and_replays() {
             window_tokens: 32000,
             tools_est_tokens: 512,
             refused_tokens: 0,
-            slider_tokens: 8000,
-            output_reserve_tokens: 21_000,
-            output_reserve_source: "capped",
         }),
         &sink,
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,
@@ -79,19 +75,11 @@ async fn context_usage_persists_and_replays() {
             threshold,
             window_tokens,
             tools_est_tokens,
-            slider_tokens,
-            output_reserve,
-            output_reserve_source,
             ..
         }) => {
             assert_eq!(*threshold, 8000);
             assert_eq!(*window_tokens, 32000);
             assert_eq!(*tools_est_tokens, 512);
-            // S3 刀④b：扣减链的三枚原料随快照重放（浮层切走再切回来要
-            // 看到同一份链，不按当前设置现算）。
-            assert_eq!(*slider_tokens, 8000);
-            assert_eq!(*output_reserve, 21_000);
-            assert_eq!(output_reserve_source, "capped");
             assert!(*used > 0, "估认真发生");
         }
         other => panic!("末条投影应为 ContextUsage：{:?}", other.is_none()),
@@ -134,15 +122,11 @@ async fn context_usage_prefers_reported_input() {
             window_tokens: 32000,
             tools_est_tokens: 512,
             refused_tokens: 0,
-            slider_tokens: 8000,
-            output_reserve_tokens: 21_000,
-            output_reserve_source: "capped",
         }),
         &sink,
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,
@@ -206,15 +190,11 @@ async fn context_usage_takes_the_refusal_reading() {
             window_tokens: 320_000,
             tools_est_tokens: 512,
             refused_tokens: 240_000,
-            slider_tokens: 8000,
-            output_reserve_tokens: 21_000,
-            output_reserve_source: "capped",
         }),
         &sink,
         None,
         Some(&dir),
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,

@@ -3,9 +3,9 @@
 //!
 //! 为什么这一簇必须存在：`compact/tests_deep.rs` 那十一条直接调 `Compactor::run`，
 //! 全绿也只证明那个函数自己对——把 `runner/mod.rs` 里那三行删掉，它们一条都不会红。
-//! 这正是队列 §6 第 10 条点名的形状（跨文件的关系必须有跨文件判据），模板 =
-//! `tests/pressure_wiring.rs`。另半边（不给 compactor 就一行都不写）也在这簇里，
-//! 因为"默认什么都不做"是这一层能不能被关掉的那条证据。
+//! 这正是队列 §6 第 10 条点名的形状（跨文件的关系必须有跨文件判据）。另半边
+//! （不给 compactor 就一行都不写）也在这簇里，因为"默认什么都不做"是这一层能不能
+//! 被关掉的那条证据。
 
 use super::*;
 
@@ -152,15 +152,11 @@ async fn run_turn_compacts_at_the_step_boundary_and_mirrors_it_to_disk() {
             window_tokens: 1_000_000,
             tools_est_tokens: 0,
             refused_tokens: 0,
-            slider_tokens: 0,
-            output_reserve_tokens: 0,
-            output_reserve_source: "",
         }),
         &collector,
         None,
         Some(&log),
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         Some(&cp),
@@ -223,15 +219,11 @@ async fn nothing_compacts_without_the_compactor() {
             window_tokens: 1_000_000,
             tools_est_tokens: 0,
             refused_tokens: 0,
-            slider_tokens: 0,
-            output_reserve_tokens: 0,
-            output_reserve_source: "",
         }),
         &collector,
         None,
         Some(&log),
         crate::runner::DEFAULT_MAX_STEPS,
-        None,
         None,
         None,
         None,

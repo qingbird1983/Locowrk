@@ -35,10 +35,10 @@ fn tool_result_budget_none_is_byte_identical() {
         body,
         explicit_none["messages"][0]["content"].as_str().unwrap()
     );
-    // 预算在场但未超（小输出 + **缺省档**额度）：见下方断言的口径说明。
-    // 额度由换算处算出而不是这里手算 24 * 1024——手算会把"算式漂了"这件事
+    // 预算在场但未超（小输出 + **生产那颗固定额度**）：见下方断言的口径说明。
+    // 额度由生产常量给而不是这里手算 24 * 1024——手算会把"常量漂了"这件事
     // 伪装成"测试通过"（夹具必须照生产构造代码抄，同一口径批 F-24 立过）
-    use crate::settings::context::{tool_result_budget_bytes, TOOL_RESULT_BUDGET_DEFAULT_KIB};
+    use crate::settings::context::TOOL_RESULT_BUDGET_BYTES;
     let within = build_payload(
         "m",
         &LlmRequest {
@@ -48,7 +48,7 @@ fn tool_result_budget_none_is_byte_identical() {
         false,
         Dialect::None,
         &WireCaps {
-            tool_result_budget_bytes: tool_result_budget_bytes(TOOL_RESULT_BUDGET_DEFAULT_KIB),
+            tool_result_budget_bytes: Some(TOOL_RESULT_BUDGET_BYTES),
             ..Default::default()
         },
         None,
@@ -84,13 +84,13 @@ fn tool_result_over_budget_is_clipped_with_a_live_recovery_path() {
     // 只留前 1000 字节（全 ASCII，边界正好），加一句提示
     assert_eq!(&content[..1_000], "\"".to_owned() + &"y".repeat(999));
     assert!(content.len() < 10_002, "截断必须真的减小体积");
-    // 提示必须给出「原输出多大」+「怎么拿回后面那段」+「这闸门在哪调」——
+    // 提示必须给出「原输出多大」+「怎么拿回后面那段」+「上限是固定的」——
     // 少了任何一条，用户与模型都只能干看着一段被啃掉的输出。
     let note = &content[1_000..];
     assert!(note.contains("原输出 10002 字节"));
     assert!(note.contains("offset") && note.contains("max_bytes"));
     assert!(note.contains("本会话日志"));
-    assert!(note.contains("设置 → 上下文"));
+    assert!(note.contains("发送侧上限固定"));
     // 发送侧动了字节，请求面一个字节没动 = 会话日志/回放/导出看到的仍是全量
     let Message::ToolResult { output, .. } = &req.messages[0] else {
         panic!("夹具被改写");
@@ -161,17 +161,17 @@ fn tool_result_error_branch_is_not_a_side_door() {
 
 /// CB §7.4 自带的验收判据原文 = 「构造 500 KB 工具结果，断言进上下文的 ≤ 预算，
 /// 且截断标注格式统一」——稿里的判据是**下限不是参考**（队列 §5 第 5 条），所以
-/// 这条按原话打：512_000 字节 + **缺省档**（额度由 settings 那一份常量算出，不是
-/// 测试里另写一个数）。标注格式统一由"只出现一次"承担：两处贴同一句话等于把预算
-/// 又顶高一份，且模型会以为是两段独立截断。
+/// 这条按原话打：512_000 字节 + **生产固定档**（额度由 `TOOL_RESULT_BUDGET_BYTES`
+/// 给，不是测试里另写一个数）。标注格式统一由"只出现一次"承担：两处贴同一句话
+/// 等于把预算又顶高一份，且模型会以为是两段独立截断。
 #[test]
 fn tool_result_500kb_input_is_capped_at_the_default_budget() {
-    use crate::settings::context::{tool_result_budget_bytes, TOOL_RESULT_BUDGET_DEFAULT_KIB};
-    let limit = tool_result_budget_bytes(TOOL_RESULT_BUDGET_DEFAULT_KIB).unwrap();
+    use crate::settings::context::TOOL_RESULT_BUDGET_BYTES;
+    let limit = TOOL_RESULT_BUDGET_BYTES;
     // ⚠ 这一处是**刻意的手算对照哨兵**（与"夹具不许手算"相反的一侧）：额度本身由
-    // 换算处算出，这里独立对一次数——若有人把换算处的进率改成 1000，全链路其它
+    // 生产常量给，这里独立对一次数——若有人把常量改了，全链路其它
     // 断言会跟着一起漂，只有这一条会红。
-    assert_eq!(limit, 24 * 1024, "缺省档 = 24 KiB");
+    assert_eq!(limit, 24 * 1024, "固定档 = 24 KiB");
     let req = LlmRequest {
         messages: vec![tool_msg(json!("z".repeat(512_000)))],
         ..Default::default()

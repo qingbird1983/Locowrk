@@ -213,10 +213,6 @@ export function applyEvent(st: ChatState, e: AgentEvent) {
         threshold: e.threshold,
         windowTokens: e.window_tokens ?? 0,
         toolsEstTokens: e.tools_est_tokens ?? 0,
-        // S3 刀④b：旧快照没有这三枚（0/空 = 浮层不渲染扣减链）。
-        sliderTokens: e.slider_tokens ?? 0,
-        outputReserveTokens: e.output_reserve ?? 0,
-        outputReserveSource: e.output_reserve_source ?? "",
       };
       break;
     case "llm_usage": {

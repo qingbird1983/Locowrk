@@ -118,10 +118,8 @@ pub enum SessionEvent {
     /// 通道，切会话回来统计即消失）。字段全 `serde(default)`（向后兼容旧
     /// 日志，ContextCompacted 同款）。旧日志无此变体。
     ///
-    /// S3 刀④b 追加三枚（**只许追加到末尾**）：`slider_tokens` / `output_reserve`
-    /// / `output_reserve_source` —— 用量浮层的扣减链（窗口 → −输出预留 → 与滑杆
-    /// 取小 = 有效阈值）要能重放，不靠前端按当前设置现算（现算 = 旧轮次显示新
-    /// 设置下的链，那是假读数）。0 / 空串 = 该快照早于这三个字段，前端不渲染链。
+    /// S3 刀④b 曾追加三枚扣减链读数（滑杆/预留/来源），S4（specs/11 刀①）
+    /// 随浮层那条链一起删掉；旧日志里多出的键由 serde 忽略，读取不破。
     ContextUsage {
         #[serde(default)]
         used: u64,
@@ -131,12 +129,6 @@ pub enum SessionEvent {
         window_tokens: u64,
         #[serde(default)]
         tools_est_tokens: u64,
-        #[serde(default)]
-        slider_tokens: u64,
-        #[serde(default)]
-        output_reserve: u64,
-        #[serde(default)]
-        output_reserve_source: String,
     },
     /// 先写日志再执行（纪律 5）：崩溃后 replay 能识别悬空调用。
     /// `plugin_id` 是 ⑩ 使用统计的归属键；内置替身 / 旧日志缺省 None
@@ -229,10 +221,11 @@ pub enum SessionEvent {
         from_tokens: u64,
         #[serde(default)]
         to_tokens: u64,
-        /// 是哪个压缩层写的这一条。现役两个值：`micro`（S2 刀③）与 `compact`
-        /// （S2 刀④）；`slide`（刀⑤ 滑窗）是预留。旧 ctx-compact 桌面链退役前留下
-        /// 的 `sliding_window / layered / summary_only` 仍可能在历史日志里读到 ⇒
-        /// 前端**按字符串原样显示**，不许按枚举分支（枚举一分支，老日志就渲染成空白）。
+        /// 是哪个压缩层写的这一条。**S4 起现役只有 `compact`**（S2 刀④）；
+        /// `micro`（刀③）与 `slide`（刀⑤）是已退役层留下的历史值，仍可能在旧日志里
+        /// 读到。旧 ctx-compact 桌面链退役前留下的 `sliding_window / layered /
+        /// summary_only` 同理 ⇒ 前端**按字符串原样显示**，不许按枚举分支（枚举一分支，
+        /// 老日志就渲染成空白）。
         #[serde(default)]
         strategy: String,
         #[serde(default)]

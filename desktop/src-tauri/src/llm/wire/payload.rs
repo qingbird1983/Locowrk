@@ -1,6 +1,6 @@
 //! 请求装配与它带的两份上限：`WireCaps` = 模型能力上限（用户钉死 max_output /
-//! 生效 ctx 窗口 / Q8 工具结果预算 + 刀② 的落盘句柄，预算的 KiB→字节算式只有
-//! 一份，在本层不重乘），`build_payload` = 中立投影直转成线上 body
+//! 生效 ctx 窗口 / 工具结果预算 + 刀② 的落盘句柄，预算 = 一个固定常量、本层不重算），
+//! `build_payload` = 中立投影直转成线上 body
 //! （`stream_options` 只在流式带、max_tokens 只在钉死值在场时发并按
 //! `min(钉死, ctx − 估用 − 1000)` 预检钳制、推理档位按方言写字段），
 //! `project_tool_output` = 超预算工具输出的**一处判定、两种后果**
@@ -30,10 +30,9 @@ pub struct WireCaps {
     pub max_output: Option<u64>,
     /// 生效上下文窗口（模型行 context_window ?? 档位 window_tokens）。
     pub ctx_window: Option<u64>,
-    /// Q8 工具结果预算（**字节**，None = 不限制）。由组装点从
-    /// `settings.context.tool_result_budget_kib` 换算带下来——KiB→字节的算式在
-    /// `settings/context.rs::tool_result_budget_bytes` 里只有一份，wire 不再
-    /// 自己乘 1024（同一读数多个出处必漂，§11）。
+    /// 工具结果预算（**字节**，None = 不限制）。生产固定档 = `settings::context::
+    /// TOOL_RESULT_BUDGET_BYTES`（24 KiB，S4 后写死、不可调）；测试可传任意值探边界，
+    /// 但尺寸判定只在 `project_tool_output` 一处（同一读数多个出处必漂，§11）。
     pub tool_result_budget_bytes: Option<usize>,
     /// S2 刀②：超预算工具输出的落盘处。None = 不落盘 ⇒ 行为退回改前的纯截断
     /// （headless / 测试装配 / 设置里把预算关掉都走这一档）。
