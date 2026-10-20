@@ -236,6 +236,10 @@ pub(crate) struct Rig {
     pub(crate) refusals: Arc<crate::compact::Overflow>,
     pub(crate) threshold: u64,
     pub(crate) window: u64,
+    /// 扣减链的原料（S3 刀④b）：滑杆、模型输出上限、设置里的预留上限。
+    pub(crate) slider: u64,
+    pub(crate) max_output: u64,
+    pub(crate) reserve_cap: u64,
     pub(crate) root: std::path::PathBuf,
 }
 
@@ -245,11 +249,18 @@ impl Rig {
     /// 腿 4 的靶就是"被拒之后这一档顶不顶得起步"，夹具若恒填 0 就等于把
     /// 被测形状绕过去。
     pub(crate) fn policy(&self, session_id: &str) -> UsagePolicy {
+        // 预留量与来源和阈值同用 `context_budget` 的纯函数（S3 刀④b）：
+        // 夹具替真组装点填链上那几枚，也不许自己写第二份 min。
+        let (output_reserve_tokens, source) =
+            crate::context_budget::reserve_reading(Some(self.max_output), self.reserve_cap);
         UsagePolicy {
             threshold_tokens: self.threshold,
             window_tokens: self.window,
             tools_est_tokens: 0,
             refused_tokens: self.refusals.reading(session_id),
+            slider_tokens: self.slider,
+            output_reserve_tokens,
+            output_reserve_source: source.as_str(),
         }
     }
 }
@@ -280,13 +291,23 @@ pub(crate) fn rig(tag: &str, micro_on: bool, deep_on: bool, reserve: u64) -> Rig
         "窗口必须从 llm 档位真读进来（读不到 = 夹具坏了，不是压缩面坏了）"
     );
     assert_eq!(max_output, Some(reserve));
-    // 阈值走生产那把尺，不在这里手填（取数纪律：一个出处）。
-    let threshold = effective_threshold(settings.organize_threshold_tokens(), window, max_output);
+    // 阈值走生产那把尺，不在这里手填（取数纪律：一个出处）。S3 刀④b：预留上限
+    // 也从设置读——夹具不替生产决定这颗数。
+    let slider = settings.organize_threshold_tokens();
+    let reserve_cap = settings.output_reserve_cap_tokens();
+    let threshold = effective_threshold(slider, window, max_output, reserve_cap);
     let main: MainThreshold = {
         let settings = Arc::clone(&settings);
         Arc::new(move |_sid: Option<&str>| {
             let (w, mo) = settings.with_llm_config(|llm| session_capacity(llm, None, None));
-            w.map(|w| effective_threshold(settings.organize_threshold_tokens(), Some(w), mo))
+            w.map(|w| {
+                effective_threshold(
+                    settings.organize_threshold_tokens(),
+                    Some(w),
+                    mo,
+                    settings.output_reserve_cap_tokens(),
+                )
+            })
         })
     };
     let failures = Arc::new(Failures::default());
@@ -326,6 +347,9 @@ pub(crate) fn rig(tag: &str, micro_on: bool, deep_on: bool, reserve: u64) -> Rig
         refusals,
         threshold,
         window: window.unwrap(),
+        slider,
+        max_output: reserve,
+        reserve_cap,
         root,
     }
 }

@@ -23,6 +23,9 @@
  * 两枚后端字段（摘要模型 / 自定义压缩指令）没在这一节出现：前者与「记忆管理器」是
  * 同一类东西（后台角色用哪个模型），按"同类只许一种形态"跟着它住进模型分区；后者要
  * 设置页多行输入框这一**新形态**，按 §4 得先改标准再写码，已登记为待批。
+ * S3 刀④b 加第五根数值旋钮 = 输出预留上限（context.outputReserveCapTokens，缺省 21K，
+ * 0 = 不为输出让位）：有效阈值里窗口那侧先扣掉它（实际预留还会与模型输出上限取小），
+ * 调它就是调"压缩点离窗口多近"。界面上那颗数的出处由用量浮层的扣减链写明。
  */
 import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -44,6 +47,9 @@ const form = reactive({
   usageBar: true,
   // Q8：工具结果预算（KiB，0 = 不限制）。原样传后端，前端不换算成字节
   toolResultBudgetKib: 24,
+  // S3 刀④b：输出预留上限（token，缺省 = 改前常量 21K，0 = 不为输出让位）。
+  // 镜像后端 `OUTPUT_RESERVE_CAP_DEFAULT`，不在这里另算有效阈值。
+  outputReserveCapTokens: 21_000,
   // S2 刀③：微压缩开关（缺省开）。前端只传布尔，判据全在后端
   microEnabled: true,
   // S2 刀④c：深度压缩开关（缺省开）。同上——这一层的判据在 compact 侧
@@ -64,6 +70,7 @@ watch(
     form.thresholdTokens = v.context.thresholdTokens;
     form.usageBar = v.context.usageBar;
     form.toolResultBudgetKib = v.context.toolResultBudgetKib;
+    form.outputReserveCapTokens = v.context.outputReserveCapTokens;
     form.microEnabled = v.context.microEnabled;
     form.compactEnabled = v.context.compactEnabled;
     form.compactTargetPct = v.context.compactTargetPct;
@@ -92,6 +99,8 @@ function save() {
     // 输入框被清空时 v-model.number 给 NaN → JSON 序列化成 null → 后端按
     // None 处理（保持不变，不是存 0）。0 只能来自用户明确填 0 = 不限制。
     toolResultBudgetKib: Math.round(form.toolResultBudgetKib),
+    // S3 刀④b：与上面那枚同一条纪律——原样发后端的 token 数，前端不折算。
+    outputReserveCapTokens: Math.round(form.outputReserveCapTokens),
     microEnabled: form.microEnabled,
     compactEnabled: form.compactEnabled,
     // 刀⑥ 四枚数值档，仍然守同一条纪律：**只发界面上真渲染过的键**。摘要模型与自定义
@@ -140,6 +149,27 @@ function save() {
           @blur="dragging = false"
         />
       </div>
+    </SettingsRow>
+
+    <!-- 输出预留上限（S3 刀④b · AC-S3-8）：有效阈值 = min(滑杆, 窗口 − 预留)，
+         这一枚是预留的上限；实际预留还会被模型声明的输出上限削平（取小）。
+         数值档与工具结果预算同形（`.lw-field-num`，不换算、不重算阈值）。
+         min/max 是后端 `OUTPUT_RESERVE_CAP_RANGE` 的手抄镜像（与下面几枚同一
+         条既有处境）：不同步的后果是界面让人填一个后端会拒的值，拒得如实。 -->
+    <SettingsRow
+      :title="t('settings.outputReserveCap')"
+      :hint="t('settings.outputReserveCapHint')"
+      control-id="context-output-reserve-cap"
+    >
+      <input
+        id="context-output-reserve-cap"
+        v-model.number="form.outputReserveCapTokens"
+        type="number"
+        min="0"
+        max="64000"
+        step="1000"
+        class="lw-field lw-field-num px-2 text-xs"
+      />
     </SettingsRow>
 
     <!-- Q8 工具结果预算（CB §7.4）：一条工具输出进上下文的上限，0 = 不限制。

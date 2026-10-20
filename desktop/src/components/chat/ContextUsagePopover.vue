@@ -23,6 +23,9 @@ const props = defineProps<{
     threshold: number;
     windowTokens: number;
     toolsEstTokens: number;
+    sliderTokens: number;
+    outputReserveTokens: number;
+    outputReserveSource: string;
   };
   readout: string;
 }>();
@@ -57,6 +60,65 @@ const windowText = computed(() => {
     return `${compactNumber(props.usage.used)} tokens · ${t("usage.noWindow")}`;
   }
   return `${compactNumber(props.usage.used)} / ${compactNumber(props.usage.windowTokens)} tokens`;
+});
+
+/** 预留来源文案（S3 刀④b）：后端标记 → 中英说明。空串 = 旧快照，不渲染。 */
+function reserveSourceText(source: string, n: number): string {
+  switch (source) {
+    case "model":
+      return t("usage.reserveFromModel", { n: compactNumber(n) });
+    case "capped":
+      return t("usage.reserveCapped", { n: compactNumber(n) });
+    case "default":
+      return t("usage.reserveDefault", { n: compactNumber(n) });
+    default:
+      return "";
+  }
+}
+
+/** 扣减链的档位说明：窗口未知 / 滑杆说话 / 窗口空位封顶（AC-S3-8 逐态）。 */
+function chainModeText(
+  mode: "noWindow" | "sliderWins" | "roomWins",
+  slider: number,
+  room: number,
+): string {
+  if (mode === "noWindow") {
+    return t("usage.chainNoWindow", { slider: compactNumber(slider) });
+  }
+  if (mode === "roomWins") {
+    return t("usage.chainRoomWins", {
+      slider: compactNumber(slider),
+      room: compactNumber(room),
+    });
+  }
+  return t("usage.chainSliderWins", {
+    slider: compactNumber(slider),
+    room: compactNumber(room),
+  });
+}
+
+/** S3 刀④b · AC-S3-8 扣减链：窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值。
+ * `sliderTokens <= 0` = 快照早于该字段（旧日志）⇒ 整块不渲染——前端不按
+ * 当前设置替历史轮次现算一条链（那是假读数）。阈值本身必须用事件里那颗
+ * （后端算好的结果），这里只判"哪一边说话"，不重算 min。 */
+const chain = computed(() => {
+  const u = props.usage;
+  if (u.sliderTokens <= 0) return null;
+  const hasWindow = u.windowTokens > 0;
+  const mode = !hasWindow
+    ? "noWindow"
+    : u.threshold < u.sliderTokens
+      ? "roomWins"
+      : "sliderWins";
+  const room = hasWindow ? Math.max(0, u.windowTokens - u.outputReserveTokens) : 0;
+  return {
+    hasWindow,
+    reserve: u.outputReserveTokens,
+    threshold: u.threshold,
+    headroom: hasWindow ? Math.max(0, u.windowTokens - u.threshold) : 0,
+    sourceText: reserveSourceText(u.outputReserveSource, u.outputReserveTokens),
+    modeText: chainModeText(mode, u.sliderTokens, room),
+  };
 });
 
 // M3 §3.37②「未整理尾巴」行：浮层打开时拉一次树投影（打开拉取不轮询，
@@ -151,6 +213,30 @@ const expandCalls = computed(() =>
       <span class="kv__v">{{ windowText }}</span>
       <span v-if="pct !== null" class="kv__v">{{ pct }}%</span>
     </div>
+
+    <!-- 扣减链（S3 刀④b · AC-S3-8）：窗口 → −输出侧预留 → 与滑杆取小 =
+         有效阈值 → 已用 / 有效阈值；外加"窗口 − 阈值"那颗空位（净增超过它
+         就撞窗 = ⓟ 说的那条关系）。chain = null（旧快照）⇒ 整块不渲染，
+         绝不按当前设置替历史轮次现算。 -->
+    <template v-if="chain">
+      <div v-if="chain.hasWindow" class="kv kv--stack">
+        <span>{{ t("usage.outputReserve") }}</span>
+        <span class="kv__v">−{{ compactNumber(chain.reserve) }} tokens</span>
+        <span v-if="chain.sourceText" class="chain__note">{{ chain.sourceText }}</span>
+      </div>
+      <div class="kv kv--stack">
+        <span>{{ t("usage.effectiveThreshold") }}</span>
+        <span class="kv__v">
+          {{ compactNumber(usage.used) }} / {{ compactNumber(chain.threshold) }} tokens
+        </span>
+        <span class="chain__note">{{ chain.modeText }}</span>
+      </div>
+      <div v-if="chain.hasWindow" class="kv kv--stack">
+        <span>{{ t("usage.headroom") }}</span>
+        <span class="kv__v">{{ compactNumber(chain.headroom) }} tokens</span>
+        <span class="chain__note">{{ t("usage.headroomHint") }}</span>
+      </div>
+    </template>
 
     <!-- 本轮合计 / 生成速度（§3.12；供应商报告了用量才渲染） -->
     <template v-if="chat.turnUsage">
@@ -264,5 +350,11 @@ const expandCalls = computed(() =>
 .kv__v {
   color: var(--lw-ink-1);
   font-variant-numeric: tabular-nums;
+}
+/* 扣减链的档位 / 来源说明（S3 刀④b）：贴在它所解释的那一行下面，
+   不另造行形态（§3.32 同类一种形态）。 */
+.chain__note {
+  color: var(--lw-ink-4);
+  font-size: var(--lw-fs-11);
 }
 </style>

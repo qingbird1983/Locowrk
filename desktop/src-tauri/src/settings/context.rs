@@ -43,6 +43,25 @@ pub fn valid_tool_result_budget(v: u64) -> bool {
     TOOL_RESULT_BUDGET_RANGE.contains(&v)
 }
 
+/// 输出侧预留的**上限**缺省（21 000）。S3 刀④b 从 `context_budget.rs` 抬成可调项
+/// （三问裁定③：硬编码数值做成设置项时缺省必须等于改前那颗常量）。这里的 21 000
+/// 是 ZCode `compact/policy.ts:10` `PREFLIGHT_AUTOCOMPACT_OUTPUT_RESERVE_TOKENS`
+/// 逐字，理由见 `context_budget::reserve_reading` 的文档：自动压缩只能让出输入侧，
+/// 为整颗模型输出上限让窗口会把压缩点推得过早，所以预留取
+/// `min(输出上限 ?? 32K, 这一颗)`。**这颗数只许有一个出处**（判据 SS16c 第二档），
+/// `context_budget.rs` 不许留第二份。
+pub const OUTPUT_RESERVE_CAP_DEFAULT: u64 = 21_000;
+/// 输出预留上限的合法区间（0–64 000）。上界取 64K = 常见模型输出上限的高端一档：
+/// 再高就等于关掉"取小"这层封顶（预留会开始按整颗 64K+ 吃掉窗口）；**0 = 不为
+/// 输出让位**（窗口全给输入），允许——可配置原则②要求界面上写死的限制有开关可关，
+/// 代价是更容易撞窗口上限，界面文案负责说破。
+pub const OUTPUT_RESERVE_CAP_RANGE: std::ops::RangeInclusive<u64> = 0..=64_000;
+
+/// 输出预留上限合法性。
+pub fn valid_output_reserve_cap(v: u64) -> bool {
+    OUTPUT_RESERVE_CAP_RANGE.contains(&v)
+}
+
 /// 深度压缩开关缺省（**开**）。它与微压缩那枚同一条理由（刀③）：这一层是**会改写
 /// 发给模型的内容**的压缩，而且是三层里唯一不可逆地"把一段原文换成一份摘要"的，
 /// 没有可关的那一格就不能默认开（AGENTS §4 可配置原则②）。
@@ -134,6 +153,10 @@ pub struct ContextSettings {
     /// 的上限，截断只发生在**发送侧**——会话日志仍存全量（它是唯一真相源，
     /// 回捞 / 导出 / 崩溃重放都读它）。
     pub tool_result_budget_kib: u64,
+    /// 输出侧预留上限（token，缺省 21 000，0 = 不为输出让位）：有效阈值 =
+    /// `min(滑杆, 窗口 − min(模型输出上限 ?? 32K, 这一颗))`。S3 刀④b 从
+    /// `context_budget.rs` 抬上来（三问裁定③），缺省 = 改前那颗常量。
+    pub output_reserve_cap_tokens: u64,
     /// 微压缩开关（S2 刀③，缺省**开**）：把很旧的可再生工具结果清成一行占位，
     /// 先于主层压缩触发。开关系放在这一刀是因为它是**第一个会改变发给模型内容**
     /// 的压缩层——没有可关的那一格就不能默认开（AGENTS §4 可配置原则②）。
@@ -170,6 +193,7 @@ impl Default for ContextSettings {
             threshold_tokens: ORGANIZE_THRESHOLD_DEFAULT,
             usage_bar: true,
             tool_result_budget_kib: TOOL_RESULT_BUDGET_DEFAULT_KIB,
+            output_reserve_cap_tokens: OUTPUT_RESERVE_CAP_DEFAULT,
             micro_enabled: true,
             compact_enabled: COMPACT_ENABLED_DEFAULT,
             compact_target_pct: COMPACT_TARGET_PCT_DEFAULT,
@@ -193,6 +217,8 @@ pub struct ContextSettingsView {
     pub usage_bar: bool,
     /// 工具结果预算（KiB，0 = 不限制）。
     pub tool_result_budget_kib: u64,
+    /// 输出侧预留上限（token，0 = 不为输出让位）。S3 刀④b。
+    pub output_reserve_cap_tokens: u64,
     /// 微压缩开关（缺省开）。
     pub micro_enabled: bool,
     /// 深度压缩开关（缺省开）。
@@ -218,6 +244,7 @@ pub struct ContextUpdate {
     pub threshold_tokens: Option<u64>,
     pub usage_bar: Option<bool>,
     pub tool_result_budget_kib: Option<u64>,
+    pub output_reserve_cap_tokens: Option<u64>,
     pub micro_enabled: Option<bool>,
     pub compact_enabled: Option<bool>,
     pub compact_target_pct: Option<u64>,
@@ -349,6 +376,18 @@ impl ContextSettings {
             }
             self.tool_result_budget_kib = v;
         }
+        // S3 刀④b 输出预留上限（0–64K，**0 = 不为输出让位**）：越界一律拒绝，
+        // 与上面那枚同一条——设置面写的是用户意图，悄悄钳等于骗人。
+        if let Some(v) = u.output_reserve_cap_tokens {
+            if !super::context::valid_output_reserve_cap(v) {
+                return Err(format!(
+                    "输出预留上限 {v} 超出范围（{}–{} token，0 = 不为输出让位）",
+                    super::context::OUTPUT_RESERVE_CAP_RANGE.start(),
+                    super::context::OUTPUT_RESERVE_CAP_RANGE.end()
+                ));
+            }
+            self.output_reserve_cap_tokens = v;
+        }
         Ok(())
     }
 }
@@ -373,6 +412,18 @@ impl SettingsStore {
             .expect("settings poisoned")
             .context
             .threshold_tokens
+    }
+
+    /// 后端专用：输出侧预留上限（S3 刀④b，token，缺省 21K）。四个**阈值消费点**
+    /// （聊天 / 定时 / 整理批量 / 微压缩那条链）各读一次、同一份值——判据 SS16d
+    /// 钉的就是这四处都真读了设置，没有哪处自己写一颗常量。保存即生效，与上面
+    /// 那枚滑杆同一条节奏（下一轮判定读新值）。
+    pub fn output_reserve_cap_tokens(&self) -> u64 {
+        self.inner
+            .lock()
+            .expect("settings poisoned")
+            .context
+            .output_reserve_cap_tokens
     }
 
     /// 后端专用：微压缩开关（S2 刀③，缺省开）。监听器每请求读一次，

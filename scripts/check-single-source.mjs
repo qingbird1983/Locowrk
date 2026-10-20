@@ -814,18 +814,34 @@ const CHECKS = [
   ],
   [
     'SS16c',
-    '有效阈值那三颗零件各只有一个定义：输出侧缺省预留 `32_000` / 预留上限 `21_000` /' +
-      ' `fn effective_threshold(`（specs/09 AC-S2-2「这一式只有一个出处」的机械面）。' +
-      '为什么盯常量而不盯数值：ZCode `policy.ts:9-10` 那两颗数是要逐字对齐的参照，' +
-      '别处再写一份 `21_000` 就是第二条加减通路——表现是"进度条离满还差一截就压"或' +
-      '反过来"撞窗了才压"，两种都靠人肉才发现。改动这里 = 显式改判据',
+    '有效阈值那四颗零件各只有一个定义：输出侧缺省预留 `32_000` / **任一颗** `= 21_000` 的' +
+      '常量 / `fn effective_threshold(` / `fn reserve_reading(`（specs/09 AC-S2-2 与 S3 ' +
+      'AC-S3-8 的机械面）。为什么盯常量而不盯数值：ZCode `policy.ts:9-10` 那两颗数是要逐字' +
+      '对齐的参照，别处再写一份 `21_000` 就是第二条加减通路——表现是"进度条离满还差一截' +
+      '就压"或反过来"撞窗了才压"，两种都靠人肉才发现。**S3 刀④b 的一次搬家按本档自己的' +
+      '规矩改判**：预留上限从 `context_budget.rs` 的 `OUTPUT_RESERVE_CAP_TOKENS` 抬成设置项，' +
+      '声明搬到 `settings/context.rs::OUTPUT_RESERVE_CAP_DEFAULT`；第二档从此**不点名**、' +
+      '只数"有没有第二颗 `= 21_000` 的常量"——改名不是漂，复制才是。第四档钉"量 + 来源"的' +
+      '算式只有一个出处（界面上的出处说明与这颗数同生同灭）。改动这里 = 显式改判据',
     (m) =>
       [
         countOf(m.rust.join('\n'), /const DEFAULT_OUTPUT_RESERVE_TOKENS: u64 = 32_000;/),
-        countOf(m.rust.join('\n'), /const OUTPUT_RESERVE_CAP_TOKENS: u64 = 21_000;/),
+        countOf(m.rust.join('\n'), /const \w+: u64 = 21_000;/),
         countOf(m.rust.join('\n'), /\bfn effective_threshold\s*\(/),
+        countOf(m.rust.join('\n'), /\bfn reserve_reading\s*\(/),
       ].join('|'),
-    '1|1|1',
+    '1|1|1|1',
+  ],
+  [
+    'SS16d',
+    '输出预留上限（S3 刀④b 抬成设置项）的读面**只有那四个阈值消费点**：聊天组装点 / ' +
+      '定时引擎 / 整理批量 / 微压缩那条链。少一处 = 那条链的阈值还在吃旧常量或自己写一颗数，' +
+      '表现是"设置里改了预留上限，某条链的触发线不动"；多一处 = 新消费点没走同一份设置。' +
+      '为什么用文件集合：计数挡不住"搬去第五个文件"（SS14a 同一条理由）。' +
+      '⚠ 正则带前导点（同 SS23b）：不带点会把 `settings/context.rs` 里 getter 自己的**定义**' +
+      '也数成调用点——本档要数的是"谁读了它"，不是"谁定义了它"。',
+    (m) => filesWith(m.hostDesktop, /\.output_reserve_cap_tokens\s*\(/),
+    'commands/chat.rs|organize/mod.rs|scheduler/engine.rs|state/waterfall.rs',
   ],
   [
     'SS17a',
@@ -1482,9 +1498,12 @@ if (SELFTEST) {
       }),
     // S2 刀① 的三档变异。**互不遮挡是这组对照的全部要点**：SS16a 只加定义（organize 面
     // 不动 ⇒ SS16b 不红）、SS16b 只让 organize 自己再拿一次尺（不含 `fn anchor(` ⇒ SS16a
-    // 不红）、SS16c 只再写一颗预留常量。三条都长成"没人调用的分支"是有意的（同
+    // 不红）、SS16c 只再写预留常量。三条都长成"没人调用的分支"是有意的（同
     // SS12/SS13 的分工）：cargo 对它们全绿，只有形状档看得见——而这正是刀① 之后
     // 唯一还剩的证明面（搬家本身没有新行为，行为测试无靶子）。
+    // ⚠ S3 刀④b 改判后 SS16c 变四档，变异相应改成**宽变异**：第二档（再写一颗
+    // `= 21_000` 的常量）与第四档（再写一个 `fn reserve_reading(`）各塞一条，其余
+    // 两档不动——只打一条的话新加的那一档没有证明力。
     SS16a: (m) =>
       m.rust.push(
         'impl OrganizerTwin {\n    fn anchor(session: &Session) -> (u64, u64) { (0, 0) }\n}\n',
@@ -1492,7 +1511,18 @@ if (SELFTEST) {
     SS16b: (m) =>
       (m.organize +=
         '\nlet real = crate::runner::reported_input_tokens(session).unwrap_or(0);\n'),
-    SS16c: (m) => m.rust.push('\npub const OUTPUT_RESERVE_CAP_TOKENS: u64 = 21_000;\n'),
+    SS16c: (m) =>
+      m.rust.push(
+        '\npub const OUTPUT_RESERVE_CAP_TWIN: u64 = 21_000;\n',
+        '\nfn reserve_reading(max_output: Option<u64>, cap: u64) -> (u64, ReserveSource) { (0, ReserveSource::Default) }\n',
+      ),
+    // SS16d 窄变异（S3 刀④b）：把"读预留上限"多接一处到压缩层——那一层本该只吃
+    // 组装点递下来的阈值。文件集合多一个 `compact/deep.rs`，其余四处不动。
+    SS16d: (m) =>
+      m.hostDesktop.push({
+        rel: 'compact/deep.rs',
+        code: '\nlet cap = settings.output_reserve_cap_tokens();\n',
+      }),
     // S2 刀② 的三档变异，同样各打中自己那一项：
     //  SS17a 长出第二个"超预算怎么办"的解释者（并把改前那枚名字从墓碑里扶起来）；
     //  SS17b 组装点自己手拼目录名——这一档**只碰右档**，左档（那枚 const）不动，

@@ -163,6 +163,8 @@ impl Organizer {
             self.settings.organize_threshold_tokens(),
             window,
             max_output,
+            // S3 刀④b：预留上限与聊天/定时/微压缩三条链读同一枚设置。
+            self.settings.output_reserve_cap_tokens(),
         )
     }
 

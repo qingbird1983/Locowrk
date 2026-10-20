@@ -19,13 +19,19 @@ export interface ChatState {
   /** 会话列表（⑲，session_list mtime 降序）：切换器数据源。 */
   sessions: SessionMeta[];
   /** 上下文用量（阈值用量进度条投影；agent://context-usage 驱动）。
-   * threshold = 整理阈值（绝对 token，分母）；windowTokens = 会话生效
-   * 窗口（v2.137 四层链自动识别，0 = 未识别，比例段隐藏）。 */
+   * threshold = 有效阈值（滑杆与"窗口 − 输出预留"取小，绝对 token，分母）；
+   * windowTokens = 会话生效窗口（v2.137 四层链自动识别，0 = 未识别，比例段隐藏）。
+   * S3 刀④b 三枚给用量浮层的扣减链：sliderTokens = 滑杆原值（0 = 旧快照，
+   * 不渲染链）；outputReserveTokens = 本次扣掉的预留；outputReserveSource =
+   * default|model|capped（空串 = 旧快照）。 */
   contextUsage: {
     used: number;
     threshold: number;
     windowTokens: number;
     toolsEstTokens: number;
+    sliderTokens: number;
+    outputReserveTokens: number;
+    outputReserveSource: string;
   } | null;
   /** 系统消息"查看详情"的内容（id → 文本，如压缩摘要预览）。 */
   noticeDetails: Record<number, string>;

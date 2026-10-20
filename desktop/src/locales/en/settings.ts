@@ -347,7 +347,15 @@ export default {
     threshold: "Compaction threshold",
     thresholdValue: "Currently: {n} tokens",
     thresholdHint:
-      "Once the conversation context reaches this token count, compaction starts: micro-compact slows growth first at 90% of the line, and at the line itself deep compaction turns the older stretch into a summary (manual /compact is not bound by it). Keep it below the model's context window, or the request hits the overflow error first.",
+      "Once the conversation context reaches this token count, compaction starts: micro-compact slows growth first at 90% of the line, and at the line itself deep compaction turns the older stretch into a summary (manual /compact is not bound by it). The real trigger is the smaller of this value and \"model window minus the output reserve\" (the reserve cap is the field below), so do not set this above the model window.",
+    // S3 knife ④b · AC-S3-8: the output reserve cap becomes tunable (default = the
+    // former constant, 21K). The copy must mention both sides of the min: smaller
+    // means later compaction but a likelier window hit; larger means earlier
+    // compaction and more headroom for output. The model's declared output limit
+    // still trims the actual reserve.
+    outputReserveCap: "Output reserve cap",
+    outputReserveCapHint:
+      "How many tokens the window may reserve for model output (0–64000, default 21000; 0 = reserve nothing for output). The effective threshold is the smaller of the slider and \"window minus the actual reserve\", and the actual reserve is the smaller of the model output limit and this field. Smaller = later compaction but a likelier window hit; larger = earlier compaction and more headroom for output. The usage popover's deduction chain shows what was actually deducted and which side decided.",
     // v4.18 (§3.4): usage bar visibility (denominator = the slider above)
     usageBar: "Threshold usage bar",
     usageBarHint:

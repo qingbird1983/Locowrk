@@ -110,14 +110,18 @@ pub enum SessionEvent {
         duration_ms: u64,
     },
     /// 上下文用量快照（v2.62，§3.12 进度条数据源持久化）：轮次前与每个
-    /// step 后各一条。`used` 口径（v2.138 用户裁定统一锚点）：优先供应商
-    /// 真实 input（日志最后一条 LlmUsage，与整理触发/自动收起同一把尺
-    /// ——「看到的 = 触发用的」）；无上报回落估算（树组装口径优先，
-    /// 字符估算兜底）。derive_messages 跳过（用量是过程计量不是上下文，
-    /// 不回传供应商）；投影层映成 `agent://context-usage`——重放恢复用量
-    /// 环（此前只推实时通道，切会话回来统计即消失）。字段全
-    /// `serde(default)`（向后兼容旧日志，ContextCompacted 同款）。
-    /// 旧日志无此变体。
+    /// step 后各一条。`used` 口径（S3 刀④a 起）：与压缩判定同吃
+    /// `context_budget::occupancy` 一个分子（三档取最大：新鲜上报 / 上报被
+    /// 压缩事件判过期时的全量估算 / 超窗拒收读数）——「看到的 = 触发用的」。
+    /// derive_messages 跳过（用量是过程计量不是上下文，不回传供应商）；
+    /// 投影层映成 `agent://context-usage`——重放恢复用量环（此前只推实时
+    /// 通道，切会话回来统计即消失）。字段全 `serde(default)`（向后兼容旧
+    /// 日志，ContextCompacted 同款）。旧日志无此变体。
+    ///
+    /// S3 刀④b 追加三枚（**只许追加到末尾**）：`slider_tokens` / `output_reserve`
+    /// / `output_reserve_source` —— 用量浮层的扣减链（窗口 → −输出预留 → 与滑杆
+    /// 取小 = 有效阈值）要能重放，不靠前端按当前设置现算（现算 = 旧轮次显示新
+    /// 设置下的链，那是假读数）。0 / 空串 = 该快照早于这三个字段，前端不渲染链。
     ContextUsage {
         #[serde(default)]
         used: u64,
@@ -127,6 +131,12 @@ pub enum SessionEvent {
         window_tokens: u64,
         #[serde(default)]
         tools_est_tokens: u64,
+        #[serde(default)]
+        slider_tokens: u64,
+        #[serde(default)]
+        output_reserve: u64,
+        #[serde(default)]
+        output_reserve_source: String,
     },
     /// 先写日志再执行（纪律 5）：崩溃后 replay 能识别悬空调用。
     /// `plugin_id` 是 ⑩ 使用统计的归属键；内置替身 / 旧日志缺省 None

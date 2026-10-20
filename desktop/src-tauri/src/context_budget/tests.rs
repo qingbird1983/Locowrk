@@ -4,7 +4,9 @@
 use memory_tree::AnchorSource;
 use session_store::{Session, SessionEvent};
 
-use super::{anchor, effective_threshold, occupancy, output_reserve};
+use super::{
+    anchor, effective_threshold, occupancy, output_reserve, reserve_reading, ReserveSource,
+};
 
 /// 六轮历史；`usage` = Some 时追加一条供应商上报（input 9,500）。
 fn seeded(usage: Option<u64>) -> Session {
@@ -63,9 +65,62 @@ fn anchor_falls_back_to_the_full_estimate() {
 /// 削平"的话，把 `output_reserve` 写成常量 21_000 也照样绿。
 #[test]
 fn reserve_takes_the_smaller_of_ceiling_and_cap() {
-    assert_eq!(output_reserve(None), 21_000, "缺省 32K 与上限 21K 取小");
-    assert_eq!(output_reserve(Some(64_000)), 21_000, "大上限被 21K 削平");
-    assert_eq!(output_reserve(Some(8_192)), 8_192, "小上限原样扣");
+    assert_eq!(
+        output_reserve(None, 21_000),
+        21_000,
+        "缺省 32K 与上限 21K 取小"
+    );
+    assert_eq!(
+        output_reserve(Some(64_000), 21_000),
+        21_000,
+        "大上限被 21K 削平"
+    );
+    assert_eq!(output_reserve(Some(8_192), 21_000), 8_192, "小上限原样扣");
+}
+
+/// S3 刀④b 的新另一半：**上限自己也可调**，用户把上限调小 ⇒ 预留当场跟着变小。
+/// 没有这一条，把 `cap` 实参忽略、永远吃 21K 也全绿——AC-S3-8 说的"用户把输出
+/// 上限钉大钉小 ⇒ 这一格当场跟着变"就只剩模型那一侧被证。
+#[test]
+fn reserve_follows_the_tunable_cap() {
+    assert_eq!(output_reserve(None, 8_000), 8_000, "缺省 32K 被新上限削平");
+    assert_eq!(
+        output_reserve(Some(64_000), 8_000),
+        8_000,
+        "模型大上限也被新上限削平"
+    );
+    assert_eq!(
+        output_reserve(Some(4_000), 8_000),
+        4_000,
+        "模型值更小时仍按它"
+    );
+}
+
+/// AC-S3-8 的"带出处的读数"：同一个数（8K）可能来自模型钉死，也可能来自用户上限
+/// ——界面要写出是哪一边说话，所以来源必须由算式一起产出。四档各断一次；只断数值
+/// 不断来源的话，把 `Capped`/`Model` 的标记写反也全绿。
+#[test]
+fn reserve_readings_carry_their_source() {
+    assert_eq!(
+        reserve_reading(Some(8_192), 21_000),
+        (8_192, ReserveSource::Model),
+        "模型声明更小 ⇒ 按模型，不是封顶"
+    );
+    assert_eq!(
+        reserve_reading(None, 21_000),
+        (21_000, ReserveSource::Capped),
+        "缺省 32K 被 21K 削平 ⇒ 封顶"
+    );
+    assert_eq!(
+        reserve_reading(None, 32_000),
+        (32_000, ReserveSource::Default),
+        "上限大到不削缺省 ⇒ 缺省档原样"
+    );
+    assert_eq!(
+        reserve_reading(Some(64_000), 32_000),
+        (32_000, ReserveSource::Capped),
+        "模型上限被用户上限削平 ⇒ 封顶"
+    );
 }
 
 /// AC-S2-2 主判据：`min(滑杆, 窗口 − 预留)`，输出侧**只扣一次**。
@@ -75,14 +130,37 @@ fn reserve_takes_the_smaller_of_ceiling_and_cap() {
 #[test]
 fn effective_threshold_is_capped_by_the_window_once() {
     assert_eq!(
-        effective_threshold(150_000, Some(200_000), Some(64_000)),
+        effective_threshold(150_000, Some(200_000), Some(64_000), 21_000),
         150_000,
         "滑杆低于封顶 ⇒ 用户意图说话"
     );
-    let capped = effective_threshold(400_000, Some(200_000), Some(64_000));
+    let capped = effective_threshold(400_000, Some(200_000), Some(64_000), 21_000);
     assert_eq!(capped, 179_000, "滑杆高于封顶 ⇒ 窗口减一次预留说话");
     assert_ne!(capped, 158_000, "158K = 预留扣了两遍的形状");
     assert_ne!(capped, 136_000, "136K = 把整颗输出上限扣掉的 legacy 形状");
+}
+
+/// S3 刀④b：上限可调之后，同一条式子的窗口空位跟着变——这是"用户在设置里把上限
+/// 钉小 ⇒ 有效阈值当场抬高"的那一半（预留越小、窗口空位越大）。它同时反证
+/// `effective_threshold` 真的把第四枚实参传下去了，而不是另有一份 21K。
+#[test]
+fn effective_threshold_follows_the_tunable_cap() {
+    // 窗口 200K / 滑杆 400K / 模型输出上限 64K。
+    assert_eq!(
+        effective_threshold(400_000, Some(200_000), Some(64_000), 21_000),
+        179_000,
+        "缺省上限 21K ⇒ 空位 179K"
+    );
+    assert_eq!(
+        effective_threshold(400_000, Some(200_000), Some(64_000), 8_000),
+        192_000,
+        "上限调到 8K ⇒ 空位 192K（阈值跟着变）"
+    );
+    assert_eq!(
+        effective_threshold(400_000, Some(200_000), Some(64_000), 0),
+        200_000,
+        "上限调到 0 ⇒ 不为输出让位，阈值 = 窗口"
+    );
 }
 
 /// 2026-10-19 裁定 A 的**这一半**：窗口取不到 ⇒ 不假定窗口，阈值原样吃滑杆
@@ -91,7 +169,7 @@ fn effective_threshold_is_capped_by_the_window_once() {
 #[test]
 fn unknown_window_keeps_the_slider() {
     assert_eq!(
-        effective_threshold(100_000, None, None),
+        effective_threshold(100_000, None, None, 21_000),
         100_000,
         "窗口未知不许拿假定的 200K 去封顶"
     );
@@ -102,7 +180,7 @@ fn unknown_window_keeps_the_slider() {
 /// 兜住空转，写死数会造出"第二把尺"（specs/09 AC-S2-2 的"只有一个出处"）。
 #[test]
 fn a_window_smaller_than_the_reserve_floors_at_zero() {
-    assert_eq!(effective_threshold(100_000, Some(10_000), None), 0);
+    assert_eq!(effective_threshold(100_000, Some(10_000), None, 21_000), 0);
 }
 
 // ---- 刀④a（S3 · ⓟ）：占用分子三档 ----

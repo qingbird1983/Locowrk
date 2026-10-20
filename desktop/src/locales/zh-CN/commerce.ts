@@ -56,6 +56,18 @@ export default {
     headlineRemaining: "剩余 {n} tokens",
     window: "上下文窗口",
     noWindow: "窗口未设置",
+    // S3 刀④b · AC-S3-8 扣减链：窗口 → −输出侧预留 → 与滑杆取小 = 有效阈值。
+    // 预留那颗数必须带出处（模型上限 / 用户上限封顶 / 缺省），不许只摆一个数。
+    outputReserve: "输出侧预留",
+    reserveFromModel: "按模型输出上限 {n}",
+    reserveCapped: "已按你的上限 {n} 封顶",
+    reserveDefault: "模型未报输出上限，按缺省 {n}",
+    effectiveThreshold: "有效阈值",
+    chainNoWindow: "窗口未知：阈值原样取滑杆 {slider}，不扣输出侧预留",
+    chainSliderWins: "滑杆 {slider} 小于窗口空位 {room}，阈值取滑杆",
+    chainRoomWins: "滑杆 {slider} 超过窗口空位 {room}，阈值被窗口空位封顶",
+    headroom: "输出与下一轮空位",
+    headroomHint: "下一轮净增超过它就会撞窗口上限",
     turnTotal: "本轮合计",
     speed: "生成速度",
     speedValue: "{n} tokens/s",

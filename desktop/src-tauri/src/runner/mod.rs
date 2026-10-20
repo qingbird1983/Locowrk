@@ -53,6 +53,14 @@ pub struct UsagePolicy {
     pub window_tokens: u64,
     pub tools_est_tokens: u64,
     pub refused_tokens: u64,
+    /// 滑杆原值（未与窗口取小的那一半）——扣减链要显示"与滑杆取小"的左边
+    /// （S3 刀④b · AC-S3-8）。
+    pub slider_tokens: u64,
+    /// 本次实际扣掉的输出侧预留（token）与来源标记（`default|model|capped`）。
+    /// 算式住在 [`crate::context_budget::reserve_reading`]，这里只是把它摆给
+    /// 界面看；**不重算**（同一轮里阈值与这条链必须出自同一次判定）。
+    pub output_reserve_tokens: u64,
+    pub output_reserve_source: &'static str,
 }
 
 impl UsagePolicy {
@@ -65,20 +73,33 @@ impl UsagePolicy {
     ///
     /// 参数按"原料"给而不吃容器（`AppState` / `EngineDeps`）：调度引擎在 state
     /// 之外构造，吃容器就得让 runner 反向依赖组装点。
+    ///
+    /// S3 刀④b：多一枚 `reserve_cap`（设置里的输出预留上限）。预留量与来源在这里
+    /// 取一次、阈值算式在 `effective_threshold` 里再算一次——两次都是**同一个纯
+    /// 函数**对同一组入参，不是两次读设置；调用方负责让这几枚原料同属一次判定。
     pub(crate) fn assemble(
         slider: u64,
         window: Option<u64>,
         max_output: Option<u64>,
+        reserve_cap: u64,
         tools_est_tokens: u64,
         refused_tokens: u64,
     ) -> Self {
+        let (output_reserve_tokens, output_reserve_source) =
+            crate::context_budget::reserve_reading(max_output, reserve_cap);
         Self {
             threshold_tokens: crate::context_budget::effective_threshold(
-                slider, window, max_output,
+                slider,
+                window,
+                max_output,
+                reserve_cap,
             ),
             window_tokens: window.unwrap_or(0),
             tools_est_tokens,
             refused_tokens,
+            slider_tokens: slider,
+            output_reserve_tokens,
+            output_reserve_source: output_reserve_source.as_str(),
         }
     }
 }
@@ -426,6 +447,9 @@ fn record_usage(
         threshold: u.threshold_tokens,
         window_tokens: u.window_tokens,
         tools_est_tokens: u.tools_est_tokens,
+        slider_tokens: u.slider_tokens,
+        output_reserve: u.output_reserve_tokens,
+        output_reserve_source: u.output_reserve_source.to_string(),
     });
     if let Some(dir) = log {
         session_log::append_slice(dir, session_id, session, session.len() - 1);
@@ -436,6 +460,9 @@ fn record_usage(
         threshold: u.threshold_tokens,
         window_tokens: u.window_tokens,
         tools_est_tokens: u.tools_est_tokens,
+        slider_tokens: u.slider_tokens,
+        output_reserve: u.output_reserve_tokens,
+        output_reserve_source: u.output_reserve_source.into(),
     });
 }
 

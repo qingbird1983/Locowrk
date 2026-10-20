@@ -108,6 +108,9 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                 threshold,
                 window_tokens,
                 tools_est_tokens,
+                slider_tokens,
+                output_reserve,
+                output_reserve_source,
             } => {
                 // v2.62：用量快照重放同形——切会话回来用量环恢复
                 out.push(AgentEvent::ContextUsage {
@@ -116,6 +119,9 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                     threshold: *threshold,
                     window_tokens: *window_tokens,
                     tools_est_tokens: *tools_est_tokens,
+                    slider_tokens: *slider_tokens,
+                    output_reserve: *output_reserve,
+                    output_reserve_source: output_reserve_source.clone(),
                 });
             }
             SessionEvent::AssistantMessage {

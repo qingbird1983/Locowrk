@@ -149,9 +149,12 @@ pub enum AgentEvent {
     },
     ApprovalRequest(ApprovalRequestPayload),
     /// 上下文用量（⑨）：每个 step 后推送；used 与压缩判定同一估算口径
-    /// （序列化字节 / 4，kernel_agent::estimate_tokens）。
+    /// （`context_budget::occupancy` 一个分子）。
     /// `tools_est_tokens`（v2.58 §3.12）：本轮请求实际携带的暴露目录估算
     /// （0 = 目录缺席），工具上下文行的"约 N tokens"。
+    /// S3 刀④b 追加三枚（扣减链）：`slider_tokens` = 滑杆原值（未与窗口取小）、
+    /// `output_reserve` = 本次扣掉的输出侧预留、`output_reserve_source` =
+    /// `default|model|capped`（空串 = 旧快照，前端不渲染链）。
     ContextUsage {
         session_id: String,
         used: u64,
@@ -160,6 +163,12 @@ pub enum AgentEvent {
         window_tokens: u64,
         #[serde(default)]
         tools_est_tokens: u64,
+        #[serde(default)]
+        slider_tokens: u64,
+        #[serde(default)]
+        output_reserve: u64,
+        #[serde(default)]
+        output_reserve_source: String,
     },
     /// 单步 LLM 用量（v2.58 §3.12）：`SessionEvent::LlmUsage` 的投影，
     /// 实时与重放同形——前端按轮聚合出「本轮合计 / 生成速度 / 模型用量」。

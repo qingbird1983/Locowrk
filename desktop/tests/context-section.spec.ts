@@ -39,9 +39,10 @@ const withGlobal = () => ({ global: { plugins: [i18n] } });
 
 const viewWith = (context: Context) => ({ locale: "zh-CN", context }) as SettingsView;
 
-/** 上下文分区投影的十一键。缺省值**照后端 `ContextSettings::default` 抄，不照想象编**：
- *  滑杆 100_000 / 进度条开 / 预算 24 KiB / 微压缩开 / 深度压缩开 / 目标比 50 /
- *  近期原文额度 15_000 / 摘要模型空 / 自定义指令空 / 微压缩保留 5 组 / 滑窗保留 1 段。
+/** 上下文分区投影的十二键。缺省值**照后端 `ContextSettings::default` 抄，不照想象编**：
+ *  滑杆 100_000 / 进度条开 / 预算 24 KiB / 输出预留上限 21_000 / 微压缩开 / 深度压缩开 /
+ *  目标比 50 / 近期原文额度 15_000 / 摘要模型空 / 自定义指令空 / 微压缩保留 5 组 /
+ *  滑窗保留 1 段。
  *  ⚠ 真源是后端 `settings/context.rs` 那几颗 `*_DEFAULT`；这里与 `ContextSection.vue`
  *  的 form 初值都是它的镜像，改了后端要同步这两处（同步漏掉的后果由下面那条"初值来自
  *  投影"用例挡一半——投影在场时镜像不参与判定）。 */
@@ -49,6 +50,7 @@ const ctx = (over: Partial<Context> = {}): Context => ({
   thresholdTokens: 100_000,
   usageBar: true,
   toolResultBudgetKib: 24,
+  outputReserveCapTokens: 21_000,
   microEnabled: true,
   compactEnabled: true,
   compactTargetPct: 50,
@@ -131,6 +133,7 @@ describe("上下文分区的压缩开关", () => {
       thresholdTokens: 100_000,
       usageBar: true,
       toolResultBudgetKib: 24,
+      outputReserveCapTokens: 21_000,
       microEnabled: true,
       compactEnabled: true,
       compactTargetPct: 50,
@@ -168,24 +171,26 @@ describe("上下文分区的压缩开关", () => {
     expect(sent.microEnabled, "两枚开关不许串在一起（三层减速各有关的那一格）").toBe(true);
   });
 
-  // 刀⑥：四枚数值档。这一条抓的是"新字段漏在后端边界上"的另一半——**初值方向**：
+  // 刀⑥ / S3 刀④b：五枚数值档。这一条抓的是"新字段漏在后端边界上"的另一半——**初值方向**：
   // 把投影灌成 7 而界面显示 form 里那份镜像缺省 5，用户看到的就是一个后端不认的数，
   // 与他刚保存的值差一格（v2.138「看到的 = 触发用的」在数值档上的同一条纪律）。
-  it("四枚数值档的初值来自投影，改完照原值发回", async () => {
+  it("五枚数值档的初值来自投影，改完照原值发回", async () => {
     seed({
       microKeepGroups: 7,
       slideKeepRuns: 3,
       compactTargetPct: 40,
       compactKeepTokens: 8_000,
+      outputReserveCapTokens: 12_000,
     });
     const wrapper = mount(ContextSection, withGlobal());
     // `element` 的静态类型是 Element，取 value 要落到 HTMLInputElement 上（断言一次，
-    // 下面四处就不必各写一遍 cast）
+    // 下面几处就不必各写一遍 cast）
     const num = (id: string) => wrapper.get(`#${id}`).element as HTMLInputElement;
     expect(num("context-micro-keep-groups").value).toBe("7");
     expect(num("context-slide-keep-runs").value).toBe("3");
     expect(num("context-compact-target-pct").value).toBe("40");
     expect(num("context-compact-keep-tokens").value).toBe("8000");
+    expect(num("context-output-reserve-cap").value).toBe("12000");
 
     await wrapper.get("#context-slide-keep-runs").setValue("5");
     await clickSave(wrapper);
@@ -195,5 +200,6 @@ describe("上下文分区的压缩开关", () => {
     expect(sent.microKeepGroups, "同一趟里没动的那枚要照投影原值发回，不许丢").toBe(7);
     expect(sent.compactTargetPct).toBe(40);
     expect(sent.compactKeepTokens).toBe(8_000);
+    expect(sent.outputReserveCapTokens, "输出预留上限也要照原值发回").toBe(12_000);
   });
 });

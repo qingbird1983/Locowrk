@@ -24,12 +24,30 @@ use session_store::{Session, SessionEvent};
 /// 若按另一颗常量预留，请求预算与压缩阈值就永远是两套数）。
 pub const DEFAULT_OUTPUT_RESERVE_TOKENS: u64 = 32_000;
 
-/// 输出侧预留的**上限**（ZCode `policy.ts:10`
-/// `PREFLIGHT_AUTOCOMPACT_OUTPUT_RESERVE_TOKENS` 逐字 = 21_000）。为什么要有上限：
-/// 模型的 `max_output` 可以大到 64K 甚至更高，而自动压缩只能让出**输入侧**——
-/// 为整颗输出上限让窗口，会把压缩点推得过早（`policy.ts:77` 原话：legacy 分支
-/// "为完整模型输出预留窗口，既过早压缩又要求远端选择"）。所以预留 = 二者取小。
-pub const OUTPUT_RESERVE_CAP_TOKENS: u64 = 21_000;
+/// 输出侧预留的**来源**（S3 刀④b · AC-S3-8）：界面要把这颗数写成"21K 封顶"
+/// 还是"按模型输出上限 8K"，所以算式与来源在同一个函数里一起产出——分开算就
+/// 会出现"数是从这儿来的、说明是从那儿来的"这种半真读数。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReserveSource {
+    /// 模型没报输出上限 ⇒ 按缺省 32K 预留（此时设置里的上限 ≥ 32K，没削它）。
+    Default,
+    /// 按模型声明的输出上限预留（模型行钉死或目录命中），设置里的上限没削它。
+    Model,
+    /// 缺省值或模型上限被设置里的**输出预留上限**削平。
+    Capped,
+}
+
+impl ReserveSource {
+    /// 写进 `ContextUsage` 载荷的标记（日志与事件用字符串，跨 crate 不共享枚举；
+    /// 前端按这三档映射文案，空串 = S3 刀④b 之前的旧快照、不渲染来源说明）。
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            ReserveSource::Default => "default",
+            ReserveSource::Model => "model",
+            ReserveSource::Capped => "capped",
+        }
+    }
+}
 
 /// 占用锚点（v2.138 统一锚点）：优先供应商真实 input（日志最后一条 `LlmUsage`
 /// 的 prompt_tokens，含缓存命中 = 模型实际收到的上下文），无上报回落字符估算，
@@ -95,15 +113,34 @@ pub(crate) fn occupancy(session: &Session, refused: u64) -> u64 {
     base.max(refused)
 }
 
-/// 输出侧预留量（token）：`min(输出上限 ?? 32K, 21K)`。
+/// 输出侧预留量（token）与它的来源（S3 刀④b 起上限可调，来源随算式一起给）。
 ///
-/// 输出上限未知 ⇒ `min(32K, 21K)` = 21K；钉死值小于 21K ⇒ 就按它扣（那一档是
-/// `min` 的另一半，测试 `reserve_follows_a_small_ceiling` 专门钉它——只测"大值被
-/// 削平"的话，把 `min` 写成常量 21K 也测不出来）。
-pub(crate) fn output_reserve(max_output: Option<u64>) -> u64 {
-    max_output
-        .unwrap_or(DEFAULT_OUTPUT_RESERVE_TOKENS)
-        .min(OUTPUT_RESERVE_CAP_TOKENS)
+/// `min(输出上限 ?? 32K, 设置里的预留上限)`。上限的缺省值 = 21K（ZCode
+/// `policy.ts:10` `PREFLIGHT_AUTOCOMPACT_OUTPUT_RESERVE_TOKENS` 逐字；为什么要有
+/// 上限：模型的 `max_output` 可以大到 64K 甚至更高，而自动压缩只能让出**输入侧**
+/// ——为整颗输出上限让窗口，会把压缩点推得过早，`policy.ts:77` 原话）。S3 刀④b
+/// 按三问裁定③把它抬成设置项 `context.outputReserveCapTokens`，本函数多吃一枚
+/// `cap`；**缺省值住在 `settings/context.rs::OUTPUT_RESERVE_CAP_DEFAULT`**，这里
+/// 不再有第二颗 21K（判据 SS16c 第二档盯的就是这个）。
+///
+/// 上限已知且小于 cap ⇒ 就按它扣（那一档是 `min` 的另一半，测试
+/// `reserve_takes_the_smaller_of_ceiling_and_cap` 专门钉它——只测"大值被削平"的话，
+/// 把 `min` 写成常量也测不出来）。`cap` 那一半由 `reserve_follows_the_tunable_cap`
+/// 钉住，它同时验证来源标记：模型上限与用户上限哪边说话要能被界面读出来。
+pub(crate) fn reserve_reading(max_output: Option<u64>, cap: u64) -> (u64, ReserveSource) {
+    match max_output {
+        Some(m) if m <= cap => (m, ReserveSource::Model),
+        Some(_) => (cap, ReserveSource::Capped),
+        None if DEFAULT_OUTPUT_RESERVE_TOKENS <= cap => {
+            (DEFAULT_OUTPUT_RESERVE_TOKENS, ReserveSource::Default)
+        }
+        None => (cap, ReserveSource::Capped),
+    }
+}
+
+/// [`reserve_reading`] 的量那一半（薄壳：算式只有上面那一份，别处不许再写一遍）。
+pub(crate) fn output_reserve(max_output: Option<u64>, cap: u64) -> u64 {
+    reserve_reading(max_output, cap).0
 }
 
 /// 有效压缩阈值 = `min(滑杆值, 窗口 − 输出侧预留)`，**输出侧只扣一次**。
@@ -118,14 +155,19 @@ pub(crate) fn output_reserve(max_output: Option<u64>) -> u64 {
 /// 吃滑杆。另一半裁定——"因此不触发自动压缩"——**不在本刀落地**，因为现网还没有
 /// 自动压缩的执行者；它归刀④ 的主层触发线（`specs/09` 刀④ 那条），在这里预造一个
 /// `armed()` 判据就是取证①点名的"存在但从未接线"那个形状。
+///
+/// S3 刀④b：第四枚 `cap` 一路传给 [`output_reserve`]（预留上限已可调）。**这一式
+/// 仍是唯一真源**（判据 SS16c 第三档）；界面上那条扣减链只是把这同一式的原料与
+/// 结果摆出来，不另算一遍。
 pub(crate) fn effective_threshold(
     slider: u64,
     window: Option<u64>,
     max_output: Option<u64>,
+    cap: u64,
 ) -> u64 {
     match window {
         None => slider,
-        Some(w) => slider.min(w.saturating_sub(output_reserve(max_output))),
+        Some(w) => slider.min(w.saturating_sub(output_reserve(max_output, cap))),
     }
 }
 

@@ -118,7 +118,8 @@ export interface AppearanceUpdate {
  * Q8 加第三键工具结果预算：KiB 原样传，**前端不做 KiB→字节的第二套算术**，
  * 0 = 不限制由文案承担显示。S2 刀③ 加第四键 microEnabled = 微压缩开关；
  * 刀④c 加深度压缩五键（本节面上先只渲染 compactEnabled 那一枚开关，其余四枚
- * 后端已可读可写、界面行归刀⑥——投影里有而界面上没有，不等于设置项不存在）。 */
+ * 后端已可读可写、界面行归刀⑥——投影里有而界面上没有，不等于设置项不存在）。
+ * S3 刀④b 加 outputReserveCapTokens：输出预留上限抬成可调项（AC-S3-8）。 */
 interface ContextSettingsView {
   /** 整理阈值（绝对 token，100K–800K 缺省 100K）。 */
   thresholdTokens: number;
@@ -126,6 +127,8 @@ interface ContextSettingsView {
   usageBar: boolean;
   /** 工具结果预算（KiB，0–512 缺省 24；0 = 不限制）。 */
   toolResultBudgetKib: number;
+  /** 输出预留上限（token，0–64000 缺省 21000；0 = 不为输出让位 · S3 刀④b）。 */
+  outputReserveCapTokens: number;
   /** 微压缩开关（S2 刀③，缺省开）：很旧的可再生工具结果清成一行占位。 */
   microEnabled: boolean;
   /** 深度压缩开关（S2 刀④c，缺省开）：到线时把较旧的一段换成一份七节摘要。 */
@@ -149,6 +152,7 @@ export interface ContextUpdate {
   thresholdTokens?: number;
   usageBar?: boolean;
   toolResultBudgetKib?: number;
+  outputReserveCapTokens?: number;
   microEnabled?: boolean;
   compactEnabled?: boolean;
   compactTargetPct?: number;

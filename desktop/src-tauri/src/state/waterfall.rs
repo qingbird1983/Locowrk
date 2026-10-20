@@ -187,6 +187,8 @@ pub(crate) fn build(init: Init) -> Stack {
                     settings.organize_threshold_tokens(),
                     Some(w),
                     max_output,
+                    // S3 刀④b：预留上限从设置读；与其它三个阈值消费点同源。
+                    settings.output_reserve_cap_tokens(),
                 )
             })
         })
