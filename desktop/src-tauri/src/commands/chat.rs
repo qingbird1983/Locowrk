@@ -37,7 +37,7 @@ pub(crate) async fn usage_policy(state: &AppState, session_id: &str) -> UsagePol
         crate::settings::session_capacity(llm, ov.as_ref(), Some(&state.catalog))
     });
     UsagePolicy::assemble(
-        state.settings.organize_threshold_tokens(),
+        state.settings.compact_threshold_tokens(),
         window,
         max_output,
         runner::catalog_estimate(&state.kernel, session_id).await,

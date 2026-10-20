@@ -19,6 +19,30 @@ export const UI_FONT_DEFAULT = 14;
 export const UI_FONT_MIN = 12;
 export const UI_FONT_MAX = 18;
 
+/** 设置页三档（S4 刀④ 数值归类）：小 / 标准 / 大，普通用户不填数值。
+ *  取值为值域两端 + 缺省（12 / 14 / 18）——缺省必须落在档上，否则打开
+ *  设置页时「标准」不高亮（可调项缺省 = 改前写死值）。 */
+export const UI_FONT_PRESETS: ReadonlyArray<number> = [
+  UI_FONT_MIN,
+  UI_FONT_DEFAULT,
+  UI_FONT_MAX,
+];
+
+/** 投影值 → 分段控件落点：旧 settings.json 手填过的非档值（如 13/15）
+ *  就近显示、**不改存量**；用户点选某档才落档。平局取后一档（13 → 标准）。 */
+export function nearestUiFontPreset(px: number): number {
+  let best = UI_FONT_DEFAULT;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const preset of UI_FONT_PRESETS) {
+    const dist = Math.abs(preset - px);
+    if (dist <= bestDist) {
+      best = preset;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
 /** 写入点唯一：CSS 变量名只在这里出现一次。 */
 const CSS_VAR = "--lw-ui-font-size";
 

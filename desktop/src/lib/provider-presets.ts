@@ -125,16 +125,6 @@ export function filterOptions<T extends { haystack: string }>(options: readonly 
   return options.filter((o) => o.haystack.includes(needle));
 }
 
-/** 上下文窗口预设档（§3.30 高级展开；点击写 token 原值）。 */
-export const WINDOW_PRESETS: ReadonlyArray<{ label: string; tokens: number }> = [
-  { label: "32K", tokens: 32_768 },
-  { label: "128K", tokens: 131_072 },
-  { label: "256K", tokens: 262_144 },
-  { label: "512K", tokens: 524_288 },
-  { label: "1M", tokens: 1_048_576 },
-  { label: "2M", tokens: 2_097_152 },
-];
-
 /** 限额徽章短格式（§3.30「1M · 384K」形态）；null/0 = 空串不渲染。
  * 去尾零：1048576 → "1M"（不是 "1.0M"），1536 → "2K"。 */
 export function formatLimitShort(n: number | null | undefined): string {

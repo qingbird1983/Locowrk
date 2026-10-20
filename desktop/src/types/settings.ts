@@ -45,10 +45,8 @@ interface ChatSettingsView {
   autoTitle: boolean;
   /** 缓存命中率显示（M0 观测，缺省开；v2.137 单价两键退役）。 */
   cacheStats: boolean;
-  /** 长消息折叠（缺省开）：超过 foldLines 行收起 + 遮罩 + 展开钮。 */
+  /** 长消息折叠（缺省开）：超过 5 行收起 + 遮罩 + 展开钮（S4 刀④ 行数写死）。 */
   foldLongMessages: boolean;
-  /** 长消息折叠行数（3–20，缺省 5）。 */
-  foldLines: number;
 }
 
 /** 对话行为区部分更新：字段缺省 = 保持不变。 */
@@ -60,7 +58,6 @@ export interface ChatUpdate {
   autoTitle?: boolean;
   cacheStats?: boolean;
   foldLongMessages?: boolean;
-  foldLines?: number;
 }
 
 /** 工具暴露区投影（⑫）：结构即设置原值。S2 起含宿主单次调用超时；

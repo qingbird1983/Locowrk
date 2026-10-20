@@ -15,13 +15,13 @@ use super::SettingsStore;
 
 /// 压缩阈值缺省（100K）：主流大窗口模型安全（需低于模型窗口，否则上下文
 /// 超限会先于压缩发生——设置行提示同文）。
-pub const ORGANIZE_THRESHOLD_DEFAULT: u64 = 100_000;
+pub const COMPACT_THRESHOLD_DEFAULT: u64 = 100_000;
 /// 压缩阈值合法区间（100K–800K，100K 一档；UI 滑块同档位）。
-pub const ORGANIZE_THRESHOLD_RANGE: std::ops::RangeInclusive<u64> = 100_000..=800_000;
+pub const COMPACT_THRESHOLD_RANGE: std::ops::RangeInclusive<u64> = 100_000..=800_000;
 
 /// 压缩阈值合法性（update.rs 校验用）。
-pub fn valid_organize_threshold(v: u64) -> bool {
-    ORGANIZE_THRESHOLD_RANGE.contains(&v)
+pub fn valid_compact_threshold(v: u64) -> bool {
+    COMPACT_THRESHOLD_RANGE.contains(&v)
 }
 
 /// 单条工具输出进入模型上下文的硬上限（24 KiB，写死）。
@@ -63,7 +63,7 @@ impl Default for ContextSettings {
     fn default() -> Self {
         Self {
             window_tokens: None,
-            threshold_tokens: ORGANIZE_THRESHOLD_DEFAULT,
+            threshold_tokens: COMPACT_THRESHOLD_DEFAULT,
             usage_bar: true,
             compact_enabled: COMPACT_ENABLED_DEFAULT,
             compact_model: String::new(),
@@ -121,11 +121,11 @@ impl ContextSettings {
     /// 悄悄改掉等于骗人。
     pub(crate) fn apply_update(&mut self, u: ContextUpdate) -> Result<(), String> {
         if let Some(n) = u.threshold_tokens {
-            if !valid_organize_threshold(n) {
+            if !valid_compact_threshold(n) {
                 return Err(format!(
                     "压缩阈值 {n} 超出范围（{}–{} token）",
-                    ORGANIZE_THRESHOLD_RANGE.start(),
-                    ORGANIZE_THRESHOLD_RANGE.end()
+                    COMPACT_THRESHOLD_RANGE.start(),
+                    COMPACT_THRESHOLD_RANGE.end()
                 ));
             }
             self.threshold_tokens = n;
@@ -143,8 +143,7 @@ impl ContextSettings {
 /// 上下文区的**后端读面**。
 impl SettingsStore {
     /// 后端专用：压缩阈值（绝对 token）。UsagePolicy / 进度条分母 / 压缩触发线同源。
-    /// 名字里的 `organize` 是历史命名，见 [`ContextSettings::threshold_tokens`]。
-    pub fn organize_threshold_tokens(&self) -> u64 {
+    pub fn compact_threshold_tokens(&self) -> u64 {
         self.inner
             .lock()
             .expect("settings poisoned")

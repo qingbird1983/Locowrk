@@ -33,10 +33,12 @@
       （判据点名零命中）；`Compactor::run` 是唯一的自动压缩入口；`compactEnabled` 关掉后
       不再自动压，手动 `/压缩` 仍可用。**✅ 刀① 已达成**（2026-10-20：生产面三名词零命中，
       刀① 提交正文带命令与读数）。
-- [ ] AC-4 设置面：普通用户页「上下文」只剩三行——阈值滑条 / 自动压缩开关 / 用量条开关；
+- [x] AC-4 设置面：普通用户页「上下文」只剩三行——阈值滑条 / 自动压缩开关 / 用量条开关；
       全设置页不再有 `type="number"`（开发者分区除外）；「记忆」分区不存在；
       开发者分区不再有记忆树整理、reconcile、章节、重绑、超时重试等记忆项。
       用例：`settings_surface_has_no_user_facing_number_inputs`（扫描非开发者分区模板）。
+      **✅ 刀④ 已达成**（2026-10-20）：普通分区扫描零命中；开发者主文件 + `developer/` 三子块
+      仍承载九枚数字输入，正对照两向变异均报红；真窗口逐页截图核对无记忆/插件分区。
 - [ ] AC-5 记忆 UI 清空：左栏页脚只有设置/定时/通知；路由里没有 `memory` destination；
       命令面板无记忆项；聊天转录无"查看记忆"跳转；用量浮层无记忆树行、无 `memory_expand`
       计数行、无 S3 扣减链三行；中英文案键无残留（`check-i18n` 两语言相等）。
@@ -144,9 +146,14 @@
       `inject_view` / `organize/` / `memory_index.rs`、kernel `memory_inject` 与
       `tree_context`、`crates/memory-tree`、`plugins-src/memory-sqlite` 全删；插件数 9 → 8；
       `AnchorSource` 与摘要客户端改用主模型；事件/通道与接线闸同步；`make check` 全绿）
-- [ ] 刀④ 全设置面数值归类
+- [x] 刀④ 全设置面数值归类（2026-10-20：字号/列宽改三档分段、折叠行数写死 5、工具五值 /
+      插件停用天数 / 模型窗口与输出迁入开发者（`settings/developer/` 三子块），设置「插件」
+      分区退役；AC-4 判据 `settings_surface_has_no_user_facing_number_inputs` 落地并两向变异
+      报红；真窗口逐页核对；`make check` 全绿）
 - [ ] 刀⑤ 判据/文档/真窗口收口
-- [ ] `make check` 全绿
+- [x] `make check` 全绿（刀④ 收尾读数：Rust 427 条、前端 21 文件 138 条；`check-i18n`
+      zh=778 en=778、`check-commands` 73=73=73、`check_length` 超限 16 名单 16 零新增；
+      两处 clippy 绿；日志末行「▶ check 全绿」）
 
 ## 影响范围
 

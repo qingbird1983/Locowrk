@@ -95,3 +95,20 @@ export function hasImageInput(row: {
   if (row.supportsImage != null) return row.supportsImage;
   return row.inputModalities.includes("image");
 }
+
+/** 保存前剥除目录派生值（批 A 口径）：sources = catalog 的字段不落
+ *  settings——后端只存用户钉死面；sources = null（客户端行未命中目录）
+ * 原样发。两处共用：服务商弹窗保存 + 开发者分区模型参数覆盖。 */
+export function persistableRows(models: ProviderModelView[]): ProviderModelView[] {
+  return models.map((m) => ({
+    ...m,
+    contextWindow: m.sources?.window === "catalog" ? null : m.contextWindow,
+    maxOutput: m.sources?.maxOutput === "catalog" ? null : m.maxOutput,
+    maxOutputSource: null,
+    supportsImage: m.sources?.modalities === "catalog" ? null : m.supportsImage,
+    inputModalities: [],
+    reasoningLadder: [],
+    toolCall: null,
+    pricing: null,
+  }));
+}

@@ -21,7 +21,6 @@ export default {
       llm: "Model",
       context: "Context",
       embedding: "Embedding",
-      plugins: "Plugins",
       tools: "Tools & exposure",
       sessions: "Sessions & data",
       developer: "Developer",
@@ -29,7 +28,10 @@ export default {
     // Chat behavior section (UI shell doc §3.2 ChatSection / §2.7 width, ㉕)
     chatWidthTitle: "Conversation width",
     chatWidthHint:
-      "Transcript and composer share one width (default 760, minimum 560); dragging either conversation edge also works.",
+      "Transcript and composer share one width; three presets, or drag either conversation edge to fine-tune.",
+    chatWidthNarrow: "Narrow",
+    chatWidthStandard: "Standard",
+    chatWidthWide: "Wide",
     autoTitleTitle: "Auto session titles",
     autoTitleHint:
       "Generate a ≤25-char title after the first reply; manually renamed sessions are never overwritten",
@@ -40,8 +42,6 @@ export default {
     foldMessagesTitle: "Fold long messages",
     foldMessagesHint:
       "Long user messages collapse; click to expand (model replies stay full)",
-    foldLinesTitle: "Folded lines",
-    foldLinesHint: "Collapse beyond this many lines (3–20, default 5)",
     usageReadoutTitle: "Usage readout",
     usageReadout_used: "Used",
     usageReadout_remaining: "Remaining",
@@ -211,10 +211,13 @@ export default {
     themeLight: "Light",
     themeDark: "Dark",
     themeHint: "Applies immediately and is remembered. \"System\" tracks your OS light/dark setting.",
-    // 队列 Q14 第四刀：字号基座。值域数字走 {min}/{max} 插值（同 zh-CN 那份的理由）。
-    fontSizeTitle: "Base text size",
+    // S4 刀④: font size collapsed into three presets (no numeric input for normal users).
+    fontSizeTitle: "Text size",
     fontSizeHint:
-      "The six UI text steps are all derived from this base, so changing it scales that whole group together. Note: the legacy absolute steps do not follow it (migration unfinished), so older pages stay put. Range {min}–{max}px; applies on blur and is remembered.",
+      "Three UI text sizes; applies immediately and is remembered. Some older screens do not follow yet.",
+    fontSizeSmall: "Small",
+    fontSizeMedium: "Standard",
+    fontSizeLarge: "Large",
     shortcutTitle: "Global shortcut",
     shortcut: "Toggle main window",
     shortcutHint: "Re-registers immediately on save; press it in any app to show/hide the main window.",
@@ -229,26 +232,11 @@ export default {
     thinkingEn: "English",
     thinkingNone: "Unspecified",
     thinkingSavedToast: "Saved. Applies from the next session.",
-    // ⑫ Tool exposure section (real section, replaces shell placeholder)
-    developerTitle: "Developer options",
-    developerHint: "Tool exposure truncation (Top-N) settings + last-request exposure breakdown.",
+    // ⑫ Tool exposure section (S4 刀④: numeric fields moved to Developer)
+    toolsGroupHint: "Tool catalog truncation and permission mode; workspace folders below.",
     toolsEnabled: "Truncate tool catalog by heat (Top-N)",
-    toolsMax: "Max tools per request",
-    toolsMaxHint:
-      "1–200, default 20; always-exposure tools and the search_tools meta-tool are never cut.",
-    callTimeout: "Per-call tool timeout (seconds)",
-    callTimeoutHint: "Host-enforced cap, applies immediately (5-3600 s).",
-    // ㉕·微调③ Max steps per turn
-    maxTurnSteps: "Max steps per turn",
-    maxTurnStepsHint:
-      "Force-closes the turn after this many tool-call steps (1-100, default 8).",
-    approvalTimeout: "Approval wait timeout (seconds)",
-    approvalTimeoutHint: "Timed-out approvals are denied (fail-closed); 0 = wait forever.",
     defaultPermissionMode: "Default permission mode",
     defaultPermissionModeHint: "Default mode for new chats; switch anytime next to the input box",
-    // v4.11 §3.39① ask_user watchdog
-    askTimeout: "Choice wait timeout (seconds)",
-    askTimeoutHint: "Timed-out choice cards are skipped (the turn keeps going); 0 = wait forever.",
     // ⑱ Workspace folders (fs roots picker)
     fsRootsTitle: "Workspace folders",
     fsRootsHint: "Folders tools may access, applied instantly; empty = data directory only.",
@@ -275,10 +263,6 @@ export default {
     embeddingDim: "Reachable, vector dim {n}",
     embeddingDetectFail: "Detect failed:",
     embeddingProbeTitle: "Connection test",
-    pluginsTitle: "Plugins",
-    pluginsHint: "Off by default; enabled means idle plugins get disabled automatically.",
-    autoDisableDays: "Auto-disable after (days)",
-    autoDisableDaysHint: "0 = off; 7–365 days, third-party plugins only.",
     // ⑨ Context management section (real section, replaces shell placeholder)
     contextTitle: "Context management",
     contextHint:

@@ -4,12 +4,14 @@
  * ModelSelectionPanes）：左「该服务的模型」= 全选框（半态）+ 获取列表 +
  * 搜索 + 复选行（ID mono 可选中复制 + 显示名 + 右缘窗口徽章，取自静态
  * 档案，缺省空白不发明）；右「模型设置 N」= 搜索 + 拖拽行（把手 + ID +
- * 别名 + ctx·max 徽章 + 视觉徽章 + 高级折叠 + ×）+ 高级展开（别名 + 上
- * 下文窗口 + 最大输出 + 图像输入钉死 + 只读推理梯子 + 价格行，均带
- * 「跟随 models.dev，编辑即钉死」提示）+ 自定义模型添加行（重 ID 报已
- * 添加；添加即查目录就地升级——批 A）。目录合并：sources 为 null 的行
- * （客户端新建）自动查目录补齐，未命中落定全未知形态防回环。
- * 探测/防抖在父组件（ProviderSetupDialog），这里只摆清单与选中态。
+ * 别名 + ctx·max 徽章 + 视觉徽章 + 高级折叠 + ×）+ 高级展开（别名 + 图像
+ * 输入钉死 + 只读推理梯子 + 价格行，均带「跟随 models.dev，编辑即钉死」
+ * 提示）+ 自定义模型添加行（重 ID 报已添加；添加即查目录就地升级——批 A）。
+ * 目录合并：sources 为 null 的行（客户端新建）自动查目录补齐，未命中落定
+ * 全未知形态防回环。
+ * S4 刀④：上下文窗口 / 最大输出的编辑入口移入设置 → 开发者（普通用户
+ * 不填数值）；本弹窗只保留只读徽章。探测/防抖在父组件
+ * （ProviderSetupDialog），这里只摆清单与选中态。
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -22,7 +24,7 @@ import {
   hasImageInput,
   markRowUnknown,
 } from "../../../lib/model-catalog";
-import { formatLimitShort, WINDOW_PRESETS } from "../../../lib/provider-presets";
+import { formatLimitShort } from "../../../lib/provider-presets";
 import { profileWindow } from "../../../lib/model-profiles";
 import type { ModelTestResult, ProviderModelView } from "../../../types";
 import HoverTip from "../HoverTip.vue";
@@ -441,77 +443,9 @@ watch(() => props.available, () => (expandedId.value = null));
                   @input="updateChosen(m.id, { alias: ($event.target as HTMLInputElement).value || null })"
                 />
               </label>
-              <div class="flex items-start gap-2">
-                <span class="flex w-16 shrink-0 items-center gap-0.5 pt-1 text-[length:var(--lw-fs-11)] text-ink-4">
-                  {{ t("settings.modelWindow") }}
-                  <HoverTip
-                    v-if="m.sources?.window === 'catalog'"
-                    class="text-ink-5"
-                    :text="t('settings.modelFollowCatalog')"
-                    :label="t('settings.modelFollowCatalog')"
-                  >
-                    <Icon name="info" :size="12" />
-                  </HoverTip>
-                </span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap gap-1">
-                    <button
-                      v-for="p in WINDOW_PRESETS"
-                      :key="p.tokens"
-                      type="button"
-                      class="rounded-full px-2 py-0.5 text-[length:var(--lw-fs-11)] transition"
-                      :class="
-                        m.contextWindow === p.tokens
-                          ? 'bg-accent text-accent-ink'
-                          : 'bg-wash-3 text-ink-3 hover:text-ink-1'
-                      "
-                      :aria-pressed="m.contextWindow === p.tokens"
-                      @click="pinEdit(m.id, { contextWindow: p.tokens })"
-                    >
-                      {{ p.label }}
-                    </button>
-                  </div>
-                  <input
-                    type="number"
-                    min="1"
-                    inputmode="numeric"
-                    :value="m.contextWindow ?? ''"
-                    class="lw-field lw-field-num mt-1.5"
-                    :placeholder="t('settings.modelWindowPlaceholder')"
-                    @change="
-                      pinEdit(m.id, {
-                        contextWindow: Number(($event.target as HTMLInputElement).value) || null,
-                      })
-                    "
-                  />
-                </div>
-              </div>
-              <!-- 最大输出（批 A 钉死值；批 B 起钉死值才随请求发送+预检钳制） -->
-              <div class="flex items-center gap-2">
-                <span class="flex w-16 shrink-0 items-center gap-0.5 text-[length:var(--lw-fs-11)] text-ink-4">
-                  {{ t("settings.modelMaxOutput") }}
-                  <HoverTip
-                    class="text-ink-5"
-                    :text="t('settings.modelFollowCatalog')"
-                    :label="t('settings.modelFollowCatalog')"
-                  >
-                    <Icon name="info" :size="12" />
-                  </HoverTip>
-                </span>
-                <input
-                  type="number"
-                  min="1"
-                  inputmode="numeric"
-                  :value="m.maxOutput ?? ''"
-                  class="lw-field lw-field-num"
-                  :placeholder="m.sources?.maxOutput === 'catalog' ? t('settings.modelFromCatalog') : t('settings.modelMaxOutputPlaceholder')"
-                  @change="
-                    pinEdit(m.id, {
-                      maxOutput: Number(($event.target as HTMLInputElement).value) || null,
-                    })
-                  "
-                />
-              </div>
+              <!-- 上下文窗口 / 最大输出：S4 刀④ 数值归类后不在这里编辑
+                   （普通用户不填数值）；覆盖入口在设置 → 开发者 → 模型参数。
+                   行头 ctx·max 徽章仍只读展示有效值。 -->
               <!-- 图像输入（tri-state 钉死：None 随目录 / 纯文本缺省） -->
               <label class="flex items-center gap-2">
                 <span class="flex w-16 shrink-0 items-center gap-0.5 text-[length:var(--lw-fs-11)] text-ink-4">

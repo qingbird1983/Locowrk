@@ -16,7 +16,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { llmProviderSave, llmTestCustom, openExternalUrl } from "../../../lib/api";
-import { emptyModelRow } from "../../../lib/model-catalog";
+import { emptyModelRow, persistableRows } from "../../../lib/model-catalog";
 import { Icon } from "../../../lib/icons";
 import {
   CUSTOM_SERVICE,
@@ -235,19 +235,9 @@ async function save() {
   saving.value = true;
   try {
     // models 首项 = 该档默认模型（后端同规则兜底）；窗口随默认模型走。
-    // 批 A：目录派生值（sources = catalog）不落 settings——剥除后端只存
-    // 钉死面；sources = null（客户端行未命中目录）原样发。
-    const persistable = models.value.map((m) => ({
-      ...m,
-      contextWindow: m.sources?.window === "catalog" ? null : m.contextWindow,
-      maxOutput: m.sources?.maxOutput === "catalog" ? null : m.maxOutput,
-      maxOutputSource: null,
-      supportsImage: m.sources?.modalities === "catalog" ? null : m.supportsImage,
-      inputModalities: [],
-      reasoningLadder: [],
-      toolCall: null,
-      pricing: null,
-    }));
+    // 批 A：目录派生值不落 settings——剥除逻辑在 lib/model-catalog.ts
+    // （开发者分区的模型参数覆盖同吃这一份）。
+    const persistable = persistableRows(models.value);
     const first = persistable[0];
     const input: ProviderInput = {
       id: props.provider?.id,

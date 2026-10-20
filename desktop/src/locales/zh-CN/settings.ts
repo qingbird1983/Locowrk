@@ -21,22 +21,19 @@ export default {
       llm: "模型",
       context: "上下文",
       embedding: "嵌入",
-      plugins: "插件",
       tools: "工具与分发",
       sessions: "会话与数据",
       developer: "开发者",
     },
-    approvalTimeout: "审批等待时长",
     defaultPermissionMode: "新会话权限档",
     defaultPermissionModeHint: "新会话默认的权限档，会话内可在输入框旁随时切换。",
-    approvalTimeoutHint: "超时按拒绝收束（fail-closed）；0 = 一直等待",
-    // v4.11 §3.39① ask_user 选择卡守夜
-    askTimeout: "选择等待时长",
-    askTimeoutHint: "「任务选择」卡超时按跳过收束（轮次不挂死）；0 = 一直等待",
     // 对话行为区（UI shell 文档 §3.2 ChatSection / §2.7 列宽，㉕）
     chatWidthTitle: "对话宽度",
     chatWidthHint:
-      "转录列与输入框同宽（缺省 760，下限 560）；拖拽对话区两侧边缘也可调。",
+      "转录列与输入框同宽，三档预置；拖拽对话区两侧边缘也可自由微调。",
+    chatWidthNarrow: "窄",
+    chatWidthStandard: "标准",
+    chatWidthWide: "宽",
     autoTitleTitle: "自动会话标题",
     autoTitleHint: "首轮回复后自动生成不超过 25 字的标题；手动重命名过的不覆盖",
     collapseToolTitle: "折叠工具执行过程",
@@ -45,8 +42,6 @@ export default {
     enterToSendTitle: "回车发送",
     foldMessagesTitle: "长消息折叠",
     foldMessagesHint: "用户消息超长自动收起，点按钮展开（模型回复不折叠）",
-    foldLinesTitle: "折叠行数",
-    foldLinesHint: "超过该行数自动收起（3–20 行，缺省 5）",
     usageReadoutTitle: "上下文用量读数",
     usageReadout_used: "已用",
     usageReadout_remaining: "剩余",
@@ -214,12 +209,13 @@ export default {
     themeLight: "浅色",
     themeDark: "深色",
     themeHint: "立即生效并记住选择；「系统」随系统明暗自动切换。",
-    // 队列 Q14 第四刀：字号基座可调项。值域数字走 {min}/{max} 插值由组件从
-    // lib/ui-font.ts 的常量传入——文案里裸写「12–18」就成了这条声明的第四个出处
-    // （后端常量 / CSS 首帧值 / 前端常量之外），漂了没人喊。
-    fontSizeTitle: "字号基座",
+    // S4 刀④：字号收成三档预置（普通用户不填数值）
+    fontSizeTitle: "字号",
     fontSizeHint:
-      "六档界面字号全挂在这颗基座上换算，调它 = 这批界面同尺移动。⚠ 存量绝对档不在其中（迁移未完），所以旧页面不会跟着变。可调 {min}–{max}px，改完失焦即生效并记住。",
+      "整界面字号三档，点选即生效并记住；部分旧页面暂不跟随。",
+    fontSizeSmall: "小",
+    fontSizeMedium: "标准",
+    fontSizeLarge: "大",
     shortcutTitle: "全局快捷键",
     shortcut: "切换主窗口",
     shortcutHint: "保存后立即重注册生效；在任意应用中按下即可显示/隐藏主窗口。",
@@ -233,12 +229,9 @@ export default {
     thinkingEn: "English",
     thinkingNone: "不指定",
     thinkingSavedToast: "已保存。新设置将在下个会话生效。",
-    // ⑫ 工具暴露区（开发者选项真分区，替换壳批次占位）
-    developerTitle: "开发者选项",
-    developerHint: "工具分发截断（Top-N）设置 + 最近一次请求的分发分布。",
+    // ⑫ 工具与分发分区（S4 刀④：数值已迁开发者，本区只剩开关与权限档）
+    toolsGroupHint: "工具目录截断与权限档；工作区目录见下方。",
     toolsEnabled: "按热度截断工具目录（Top-N）",
-    toolsMax: "每请求最大工具数",
-    toolsMaxHint: "1–200，缺省 20；always 工具与 search_tools 元工具不受截断影响。",
     embeddingTitle: "Embedding 模型（语义检索基建）",
     embeddingHint: "供工具语义检索使用的模型，留空不影响聊天。",
     embeddingModel: "模型名",
@@ -252,15 +245,6 @@ export default {
     embeddingDim: "连通，向量维度 {n}",
     embeddingDetectFail: "检测失败：",
     embeddingProbeTitle: "连通检测",
-    pluginsTitle: "插件管理",
-    pluginsHint: "默认只提醒不停用，开启后闲置插件会被自动停用。",
-    autoDisableDays: "自动停用天数",
-    autoDisableDaysHint: "0 为关闭，7–365 天，只作用于第三方插件。",
-    callTimeout: "单次工具调用超时（秒）",
-    callTimeoutHint: "宿主强制上限，保存即生效（5–3600 秒）",
-    // ㉕·微调③ 单轮步数上限
-    maxTurnSteps: "单轮步数上限",
-    maxTurnStepsHint: "单轮工具调用步数兜底，超过即强制收束本轮（1–100，缺省 8）",
     // ⑱ 工作区目录（fs roots 选择器）
     fsRootsTitle: "工作区目录",
     fsRootsHint: "工具可访问的目录范围，增删立即生效；未添加时只能访问数据目录。",

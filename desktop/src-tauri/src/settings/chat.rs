@@ -15,10 +15,6 @@ pub const USAGE_READOUT_USED: &str = "used";
 /// 上下文用量读数口径：剩余。
 pub const USAGE_READOUT_REMAINING: &str = "remaining";
 const USAGE_READOUTS: [&str; 2] = [USAGE_READOUT_USED, USAGE_READOUT_REMAINING];
-/// 长消息折叠行数下限（组件规格 §六：3 行）。
-pub const FOLD_LINES_MIN: u32 = 3;
-/// 长消息折叠行数上限（组件规格 §六：20 行）。
-pub const FOLD_LINES_MAX: u32 = 20;
 
 /// `chat` 区（settings.json）。字段级缺省：旧文件无此区 → 全部缺省
 /// （宽度未设置 / 过程组展开仅明细收起 / 回车发送 / 已用口径 / 自动标题开），零迁移。
@@ -44,10 +40,9 @@ pub struct ChatSettings {
     /// = 无用负担；真实价格模型各异，不发明全局估算）。
     pub cache_stats: bool,
     /// 长消息折叠（组件规格「Line Clamp with Fade Mask」，缺省开）：用户
-    /// 消息与助手长文超过 `fold_lines` 行自动收起（渐变遮罩 + 圆形展开钮）。
+    /// 消息与助手长文超过 5 行自动收起（渐变遮罩 + 圆形展开钮；行数 S4 刀④
+    /// 起写死在前端 `use-message-fold.ts`，不进设置面）。
     pub fold_long_messages: bool,
-    /// 长消息折叠行数（3–20，缺省 5）。
-    pub fold_lines: u32,
 }
 
 impl Default for ChatSettings {
@@ -60,7 +55,6 @@ impl Default for ChatSettings {
             auto_title: true,
             cache_stats: true,
             fold_long_messages: true,
-            fold_lines: 5,
         }
     }
 }
@@ -76,7 +70,6 @@ pub struct ChatView {
     pub auto_title: bool,
     pub cache_stats: bool,
     pub fold_long_messages: bool,
-    pub fold_lines: u32,
 }
 
 /// 部分更新（settings_set 入参）。字段 None = 保持不变。
@@ -90,17 +83,11 @@ pub struct ChatUpdate {
     pub auto_title: Option<bool>,
     pub cache_stats: Option<bool>,
     pub fold_long_messages: Option<bool>,
-    pub fold_lines: Option<u32>,
 }
 
 /// 合法性检查（update.rs 校验用）。
 pub fn valid_usage_readout(v: &str) -> bool {
     USAGE_READOUTS.contains(&v)
-}
-
-/// 折叠行数合法性（组件规格 §六：3–20 行）。
-pub fn valid_fold_lines(v: u32) -> bool {
-    (FOLD_LINES_MIN..=FOLD_LINES_MAX).contains(&v)
 }
 
 impl ChatSettings {
@@ -139,17 +126,9 @@ impl ChatSettings {
         if let Some(e) = u.cache_stats {
             self.cache_stats = e;
         }
-        // 长消息折叠（组件规格）：开关 + 行数（3–20）
+        // 长消息折叠（组件规格）：只有开关；行数写死在前端（S4 刀④）
         if let Some(e) = u.fold_long_messages {
             self.fold_long_messages = e;
-        }
-        if let Some(n) = u.fold_lines {
-            if !valid_fold_lines(n) {
-                return Err(format!(
-                    "折叠行数 {n} 超出范围（{FOLD_LINES_MIN}–{FOLD_LINES_MAX}）"
-                ));
-            }
-            self.fold_lines = n;
         }
         Ok(())
     }

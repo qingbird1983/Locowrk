@@ -27,7 +27,7 @@ fn context_defaults_and_legacy_json_compat() {
     let v = SettingsStore::open(&root).unwrap().view().context;
     assert_eq!(v.threshold_tokens, 100_000, "退役键幻影化：阈值走缺省");
     assert_eq!(
-        store.organize_threshold_tokens(),
+        store.compact_threshold_tokens(),
         100_000,
         "触发面同源（不再折算窗口百分比）"
     );
@@ -63,7 +63,7 @@ fn llm_window_migrates_from_legacy_context_section() {
 }
 
 #[test]
-fn organize_threshold_update_validation_and_roundtrip() {
+fn compact_threshold_update_validation_and_roundtrip() {
     let root = temp_root("threshold-update");
     let store = SettingsStore::open(&root).unwrap();
     // 合法档位 + 磁盘往返（重开读回 = 永久保存的硬证明）
@@ -88,7 +88,7 @@ fn organize_threshold_update_validation_and_roundtrip() {
         )
         .unwrap();
     assert_eq!(store.view().context.threshold_tokens, 300_000);
-    assert_eq!(store.organize_threshold_tokens(), 300_000);
+    assert_eq!(store.compact_threshold_tokens(), 300_000);
     let v = SettingsStore::open(&root).unwrap().view().context;
     assert_eq!(v.threshold_tokens, 300_000);
     // 校验：出界拒绝（下限下方 / 上限上方）且不污染内存态

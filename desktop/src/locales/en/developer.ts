@@ -45,6 +45,30 @@ export default {
     prefixHint: "A stable request prefix keeps the cache; changes rebuild it once.",
     pinSession: "Pin tool set per session",
     pinSessionHint: "Tool list fixed per session; search_tools finds new ones; off lowers hit rate.",
+    // S4 刀④: tunables moved here by the numeric classification
+    toolsTitle: "Tool execution",
+    toolsHint: "Host-enforced caps and watchdogs; applies to the next request or approval.",
+    toolsMax: "Max tools per request",
+    toolsMaxHint:
+      "1–200, default 20; always-exposure tools and the search_tools meta-tool are never cut.",
+    callTimeout: "Per-call tool timeout (seconds)",
+    callTimeoutHint: "Host-enforced cap (5–3600 s).",
+    maxTurnSteps: "Max steps per turn",
+    maxTurnStepsHint:
+      "Force-closes the turn after this many tool-call steps (1–100, default 8).",
+    approvalTimeout: "Approval wait timeout (seconds)",
+    approvalTimeoutHint: "Timed-out approvals are denied (fail-closed); 0 = wait forever.",
+    askTimeout: "Choice wait timeout (seconds)",
+    askTimeoutHint: "Timed-out choice cards are skipped (the turn keeps going); 0 = wait forever.",
+    pluginsTitle: "Plugin auto-disable",
+    pluginsHint: "Applies to installed third-party plugins only; built-ins are never idle-evaluated.",
+    autoDisableDays: "Auto-disable after (days)",
+    autoDisableDaysHint: "0 = off; 7–365 days.",
+    modelOverridesTitle: "Model parameter overrides",
+    modelOverridesHint: "Override when the catalog lacks values or must be pinned; empty = follow models.dev.",
+    modelOverridesEmpty: "No model service configured yet.",
+    modelWindowShort: "Context",
+    modelMaxOutputShort: "Output",
   },
   approval: {
     // §3.17 inline permission card (ApprovalModal retired; approval is

@@ -1,8 +1,8 @@
 /**
  * 长消息折叠状态机（组件规格「Line Clamp with Fade Mask」，MessageRow
- * 专用）：超过 N 行（设置 chat.foldLines，3–20 缺省 5）收起——max-height
- * 钉行高 × N + 渐变遮罩（底部不透明往上渐透明）+ 气泡内右下角圆形展开
- * 钮。要点：
+ * 专用）：超过 FOLD_LINES 行（S4 刀④ 起写死 5；设置里只留开关）收起——
+ * max-height 钉行高 × N + 渐变遮罩（底部不透明往上渐透明）+ 气泡内右下角
+ * 圆形展开钮。要点：
  * - **覆盖面（v2.101 用户裁定）**：只折用户消息（主聊天的与派给子代理
  *   的任务提示都算）——模型输出（主聊天正文与子代理工作显示）恒完整
  *   展示，不接本状态机；设置开关关闭同样整体旁路；
@@ -28,6 +28,8 @@ import { useSettingsStore } from "../../stores/settings";
 /** = --dur-base（style.css 动效三档）；超时兜底在 reduced-motion 下接住
  * 不触发的过渡收尾。 */
 const ANIM_MS = 200;
+/** 折叠行数（组件规格 §六 缺省 5）：S4 刀④ 起写死，不进设置面。 */
+const FOLD_LINES = 5;
 
 export function useMessageFold(
   contentEl: Ref<HTMLElement | null>,
@@ -42,7 +44,6 @@ export function useMessageFold(
   let animTimer: number | null = null;
 
   const foldOn = computed(() => settings.view?.chat.foldLongMessages ?? true);
-  const foldLines = computed(() => settings.view?.chat.foldLines ?? 5);
   /** 展开判定：用户点开 / 编辑中 / 折叠开关关闭。 */
   const isOpen = computed(
     () => !foldOn.value || expanded.value || editing.value,
@@ -62,7 +63,7 @@ export function useMessageFold(
       overflowing.value = false;
       return;
     }
-    const px = Math.ceil(lineHeightOf(el) * foldLines.value);
+    const px = Math.ceil(lineHeightOf(el) * FOLD_LINES);
     if (px !== clampPx.value) {
       clampPx.value = px;
       void nextTick(remeasure);
@@ -135,7 +136,7 @@ export function useMessageFold(
     ro?.disconnect();
   });
 
-  watch([foldLines, foldOn], () => remeasure());
+  watch(foldOn, () => remeasure());
 
   return { isOpen, overflowing, showFold, foldStyle, animating, onToggleFold };
 }

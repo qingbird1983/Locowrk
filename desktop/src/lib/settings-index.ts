@@ -20,7 +20,6 @@ export type SettingsSectionId =
   | "llm"
   | "context"
   | "embedding"
-  | "plugins"
   | "tools"
   | "sessions"
   | "developer";
@@ -122,18 +121,16 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     searchKeys: ["settings.embeddingTitle"],
   },
   {
-    id: "plugins",
-    group: "capability",
-    labelKey: "settings.nav.plugins",
-    icon: "plug",
-    searchKeys: ["settings.pluginsTitle", "settings.fsRootsTitle"],
-  },
-  {
     id: "tools",
     group: "capability",
     labelKey: "settings.nav.tools",
     icon: "checklist",
-    searchKeys: ["settings.developerTitle", "developer.panelTitle", "settings.maxTurnSteps"],
+    searchKeys: [
+      "settings.toolsEnabled",
+      "settings.defaultPermissionMode",
+      "settings.fsRootsTitle",
+      "settings.rulesTitle",
+    ],
   },
   {
     id: "sessions",
@@ -151,6 +148,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       "developer.allowDeleteRunning",
       "developer.allowSwitchRunning",
       "developer.hide",
+      "developer.toolsMax",
+      "developer.callTimeout",
+      "developer.maxTurnSteps",
+      "developer.approvalTimeout",
+      "developer.askTimeout",
+      "developer.autoDisableDays",
+      "developer.modelOverridesTitle",
     ],
     devOnly: true,
   },

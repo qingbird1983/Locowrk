@@ -2,13 +2,13 @@
 /**
  * 设置分区：工具与分发（⑫，settings.json `tools` 区；exposure 文档
  * §6.3/§9.6；v2.49 更名自 DeveloperSection——分区 id 本就是 tools，组件
- * 名对齐 1:1）。上半是截断设置（开关 + 每请求最大工具数 + 调用超时 +
- * 单轮步数上限 + 审批等待时长，保存即热生效）；中段是工作区目录（⑱，
- * 增删即存即生效）；尾段是项目粘性授权规则管理（v2.145：审批卡「本项目
- * 始终允许」的持久化面，逐工作区清除 + 打开文件夹）。暴露调试面板同批
- * 迁入「开发者」分区（开发者信息不占普通面板）。可配置原则 §七-16①：
- * 不确定数值一律可调项。
- * 行版式（§3.32·七 v3.5）：三块组（行组 / 工作区目录 / 项目权限规则）。
+ * 名对齐 1:1）。普通用户可见面只剩三块：目录截断开关、新会话权限档、
+ * 工作区目录；项目粘性授权规则管理（v2.145）也在本区。
+ *
+ * S4 刀④ 数值归类：每次调用数 / 调用超时 / 单轮步数 / 审批等待 / 问询
+ * 等待五枚数值移入「开发者」分区（值不变）；本区不再有数字输入。
+ * 可配置原则 §七-16①：不确定数值一律进设置页，但落在开发者档。
+ * 行版式（§3.32·七 v3.5）：行组 / 工作区目录 / 项目权限规则。
  */
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -33,11 +33,6 @@ const settings = useSettingsStore();
 
 const form = reactive({
   enabled: true,
-  maxPerRequest: 20,
-  callTimeoutSecs: 30,
-  maxTurnSteps: 8,
-  approvalTimeoutSecs: 100,
-  askTimeoutSecs: 300,
   defaultPermissionMode: "ask" as "plan" | "ask" | "acceptEdits" | "auto",
 });
 
@@ -56,11 +51,6 @@ watch(
   (v) => {
     if (!v) return;
     form.enabled = v.tools.enabled;
-    form.maxPerRequest = v.tools.maxPerRequest;
-    form.callTimeoutSecs = v.tools.callTimeoutSecs;
-    form.maxTurnSteps = v.tools.maxTurnSteps;
-    form.approvalTimeoutSecs = v.tools.approvalTimeoutSecs;
-    form.askTimeoutSecs = v.tools.askTimeoutSecs;
     form.defaultPermissionMode = v.tools.defaultPermissionMode ?? "ask";
   },
   { immediate: true },
@@ -69,11 +59,6 @@ watch(
 function save() {
   void settings.saveTools({
     enabled: form.enabled,
-    maxPerRequest: form.maxPerRequest,
-    callTimeoutSecs: form.callTimeoutSecs,
-    maxTurnSteps: form.maxTurnSteps,
-    approvalTimeoutSecs: form.approvalTimeoutSecs,
-    askTimeoutSecs: form.askTimeoutSecs,
     defaultPermissionMode: form.defaultPermissionMode,
   });
 }
@@ -121,88 +106,9 @@ onMounted(reloadRules);
 <template>
   <div class="space-y-6">
     <div class="space-y-3">
-      <SettingsGroup :hint="t('settings.developerHint')">
+      <SettingsGroup :hint="t('settings.toolsGroupHint')">
         <SettingsRow :title="t('settings.toolsEnabled')">
           <SettingsToggle v-model="form.enabled" :label="t('settings.toolsEnabled')" />
-        </SettingsRow>
-
-        <SettingsRow
-          :title="t('settings.toolsMax')"
-          :hint="t('settings.toolsMaxHint')"
-          control-id="tools-max"
-        >
-          <input
-            id="tools-max"
-            v-model.number="form.maxPerRequest"
-            type="number"
-            min="1"
-            max="200"
-            class="lw-field lw-field-num px-2 text-xs"
-          />
-        </SettingsRow>
-
-        <!-- S2（清单 §3 约束最小化）：宿主单次工具调用超时可配 -->
-        <SettingsRow
-          :title="t('settings.callTimeout')"
-          :hint="t('settings.callTimeoutHint')"
-          control-id="tools-call-timeout"
-        >
-          <input
-            id="tools-call-timeout"
-            v-model.number="form.callTimeoutSecs"
-            type="number"
-            min="5"
-            max="3600"
-            class="lw-field lw-field-num px-2 text-xs"
-          />
-        </SettingsRow>
-
-        <!-- ㉕·微调③：单轮步数上限（runner 兜底，超过强制收束本轮） -->
-        <SettingsRow
-          :title="t('settings.maxTurnSteps')"
-          :hint="t('settings.maxTurnStepsHint')"
-          control-id="tools-max-turn-steps"
-        >
-          <input
-            id="tools-max-turn-steps"
-            v-model.number="form.maxTurnSteps"
-            type="number"
-            min="1"
-            max="100"
-            class="lw-field lw-field-num px-2 text-xs"
-          />
-        </SettingsRow>
-
-        <!-- v2.49 可配置原则：审批守夜阈值（0 = 不限，卡片不渲染倒计时） -->
-        <SettingsRow
-          :title="t('settings.approvalTimeout')"
-          :hint="t('settings.approvalTimeoutHint')"
-          control-id="tools-approval-timeout"
-        >
-          <input
-            id="tools-approval-timeout"
-            v-model.number="form.approvalTimeoutSecs"
-            type="number"
-            min="0"
-            max="86400"
-            class="lw-field lw-field-num px-2 text-xs"
-          />
-        </SettingsRow>
-
-        <!-- v4.11 §3.39① 可配置原则：ask_user 选择守夜（0 = 不限） -->
-        <SettingsRow
-          :title="t('settings.askTimeout')"
-          :hint="t('settings.askTimeoutHint')"
-          control-id="tools-ask-timeout"
-        >
-          <input
-            id="tools-ask-timeout"
-            v-model.number="form.askTimeoutSecs"
-            type="number"
-            min="0"
-            max="86400"
-            class="lw-field lw-field-num px-2 text-xs"
-          />
         </SettingsRow>
 
         <!-- ㉘·B 新会话权限档缺省（会话级覆盖存会话旁车，切换器即时生效） -->

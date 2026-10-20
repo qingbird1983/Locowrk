@@ -5,20 +5,27 @@
  * 解锁（安卓式），这里提供锁回按钮；其余是危险开关（界面上写死的禁止项
  * 的解锁面），缺省全关。⑫ 的暴露调试面板同属开发者信息，自工具与分发
  * 面板迁入。行版式（§3.32·七 v3.5）。
+ *
+ * S4 刀④ 数值归类（specs/11）：不确定的数值集中在本分区——工具执行五枚、
+ * 模型上下文窗口/输出上限（逐模型覆盖，缺省跟随目录）、插件自动停用天数；
+ * 普通分区不再有数字输入。三块各自成子组件（settings/developer/），本文件
+ * 只留危险开关与只读读数。
  */
 import { onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { llmCacheDiagnose, toolExposureDebug } from "../../lib/api";
-import type { CacheBreakReport } from "../../types";
+import type { CacheBreakReport, ExposureDebug } from "../../types";
 import { compactNumber } from "../../lib/format";
 import { useChatStore } from "../../stores/chat";
 import { useSettingsStore } from "../../stores/settings";
 import { useShellStore } from "../../stores/shell";
 import { useToastStore } from "../../stores/toast";
-import type { ExposureDebug } from "../../types";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsRow from "./SettingsRow.vue";
 import SettingsToggle from "./SettingsToggle.vue";
+import ModelOverridesGroup from "./developer/ModelOverridesGroup.vue";
+import PluginAutoDisableGroup from "./developer/PluginAutoDisableGroup.vue";
+import ToolParamsGroup from "./developer/ToolParamsGroup.vue";
 
 const { t } = useI18n();
 const settings = useSettingsStore();
@@ -34,6 +41,8 @@ const form = reactive({
   cacheHitAlertPercent: 80,
   pinSession: true,
 });
+
+// ---- S4 刀④：工具/插件/模型数值各自成子组件（见 settings/developer/） ----
 
 watch(
   () => settings.view,
@@ -161,6 +170,9 @@ onMounted(() => void refresh());
         </button>
       </SettingsRow>
     </SettingsGroup>
+
+    <!-- S4 刀④：工具执行参数（自「工具与分发」迁入，值不变）。 -->
+    <ToolParamsGroup />
 
     <!-- ⑫ 暴露调试面板：最近一次请求的暴露分布（只读，手动刷新） -->
     <SettingsGroup :title="t('developer.panelTitle')">
@@ -290,6 +302,12 @@ onMounted(() => void refresh());
         />
       </SettingsRow>
     </SettingsGroup>
+
+    <!-- S4 刀④：插件自动停用（自「插件」设置分区迁入；原分区因此清空并退役）。 -->
+    <PluginAutoDisableGroup />
+
+    <!-- S4 刀④：模型参数覆盖（自服务商弹窗高级区迁入）。 -->
+    <ModelOverridesGroup />
 
   </div>
 </template>

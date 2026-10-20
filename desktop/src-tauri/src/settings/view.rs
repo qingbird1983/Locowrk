@@ -83,7 +83,6 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             auto_title: s.chat.auto_title,
             cache_stats: s.chat.cache_stats,
             fold_long_messages: s.chat.fold_long_messages,
-            fold_lines: s.chat.fold_lines,
         },
         developer: DeveloperView {
             unlocked: s.developer.unlocked,
