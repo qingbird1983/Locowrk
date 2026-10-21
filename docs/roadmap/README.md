@@ -83,7 +83,14 @@ mtime，人改 `MEMORY.md` 下一轮生效），`<repo_context>` 从静态串改
 证据：空会话里敲 `/压缩` ⇒ 转录里出那根发丝线「没压缩：对话还太短…」，**压缩状态线在真实窗口
 渲染正确**；**自动压缩三相的真机触发仍欠**（触发线是占用 ≥ 有效阈值 100K token ⇒ 要攒够十万
 token 才看得见，未擅自烧额度；证据边界与读数见 specs/12 的「真机验收」节）。
-**仍欠**：两笔挂账缺陷另开一刀（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts` `resetAssistant` 不清 thinking 行）。
+**S5 刀① ⏸**（2026-10-21，[`specs/13`](../../specs/13-opencode-compaction/spec.md)）——用户报
+「压缩上下文老是失败而且速度慢得吓人，好长时间后显示没压缩」⇒ 裁定**整块换掉**：上下文压缩按
+OpenCode V2 重写（触发口径 / 请求形态 / 提示词 / 输出格式 / 失败与恢复**逐项复刻**，参照仓库
+`F:/Warehouse/Github/opencode`，只读不入库），**只保留一处我们自己的**：自动触发阈值由用户可调
+（占模型窗口的百分比，三档）。同时删掉那条**独立 aux 摘要通路**（它才是「摘要模型没登上」的来源）
+与那根**绝对阈值滑杆**（绝对数不跟窗口走 = 黑盒的根因）。方案稿 = specs/13，**等你点头后**
+按四刀施工（核心算法 / 折叠与 checkpoint / 三种触发与失败处置 / 设置面与界面）。
+**仍欠**：specs/13 四刀（⏸ 等你拍板）；specs/12 那两笔挂账缺陷另开一刀（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts` `resetAssistant` 不清 thinking 行）。
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
 | 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |
