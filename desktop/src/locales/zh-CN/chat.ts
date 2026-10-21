@@ -111,6 +111,11 @@ export default {
       "没压缩：摘要调用超出了总时长预算（可在 设置 → 上下文 调「摘要调用预算」）。",
     // specs/12 刀①：用户在压缩期间按了「停止生成」——不是失败，是被叫停。
     compactStopped: "压缩已停止（你按了「停止生成」）。",
+    // specs/12 刀②：熔断停手（连续压缩失败到线 ⇒ 自动压缩暂停，主轮继续）。
+    // 这一条走**相位**（`agent://compact-status` 的 `paused`），不走判据名那张表
+    // ——判据名 `fused` 属于手动 `/压缩` 让开的一族（SS24 的 YIELDED 集合）。
+    compactPaused:
+      "自动压缩已暂停：连续几次压缩都没成功，这一轮先不再自动压。手动 `/压缩` 仍可用。",
     compactUnknown: "没压缩：{reason}",
     compactUndone: "已撤销压缩：恢复压缩前的完整上下文（其后的轮次已一并回退）。",
     compactUndoFailed: "撤销压缩失败：{reason}",

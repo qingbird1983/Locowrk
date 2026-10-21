@@ -63,6 +63,17 @@ pub(crate) enum Outcome {
     Off,
     /// 判据说不动：`reason` = [`super::plan`] 那六条之一
     Skipped(&'static str),
+    /// **熔断停手**（specs/12 刀②）：连续失败到线，这一趟压根没发请求。
+    ///
+    /// 为什么它单独一档而不是并进 [`Outcome::Skipped`]：界面要把"自动压缩已暂停"
+    /// 这件事**说给用户听**（用户 2026-10-21 拍板：「3 次后自动压缩停手并如实说
+    /// 没压成」），而 `Skipped` 那一族是常态（不到线、组数不够、无可压）——混在
+    /// 一处的话，调用方只能靠猜判据名的含义来分辨该不该打扰用户。
+    ///
+    /// 载荷 = 判据名（`fused`）；它**不在**前端那张「判据名 → 文案」表里（那张表
+    /// 属于手动 `/压缩` 的取值域，SS24 的 YIELDED 集合），熔断改走相位
+    /// `paused`（`events::compact_phase`）。
+    Fused(&'static str),
     /// 调了模型但没成：`why` = `summary-call`（普通失败）/ `overflow`（缩到最小一档
     /// 还是超窗）/ `rejected`（摘要不合格），`failures` = 计入后的累计数，
     /// `attempts` = 这一次共发了几条往返（递减重试要能在观测面上看见花了几趟）。
@@ -149,13 +160,21 @@ impl Compactor {
     /// step 边界那一句 = **自动**通路（runner 到线时调）。`policy` 带的是**组装点
     /// 已经算好的有效阈值**（刀① 把两个组装点的 `UsagePolicy.threshold_tokens`
     /// 都改吃 `effective_threshold`，主层不许在这儿再算第二遍）与窗口读数。
+    ///
+    /// `on_start`（specs/12 刀②）=「这一趟真的开始压了」的回调：它在**判定通过、
+    /// 摘要请求发出之前**敲一次门。压缩层不认 UI（不引 Tauri、不知道 `AgentEvent`），
+    /// 所以它只管敲门，翻译成事件由 runner 那一层做（`llm` 模块零 UI 依赖同款
+    /// 纪律）。⚠ 位置很要紧：判据说"不用压"（不到线 / 组数不够 / 熔断）时**不许**
+    /// 敲——否则界面每一步都冒一句「正在压缩」，而压根没有压缩发生。
     pub(crate) async fn run(
         &self,
         session: &mut Session,
         session_id: &str,
         policy: &UsagePolicy,
+        on_start: &(dyn Fn() + Send + Sync),
     ) -> Outcome {
-        self.try_compact(session, session_id, policy, false).await
+        self.try_compact(session, session_id, policy, false, Some(on_start))
+            .await
     }
 
     /// `/压缩` 那一句 = **手动**通路（S2 刀⑦ · AC-S2-11）。与自动通路共用同一段判定
@@ -164,22 +183,29 @@ impl Compactor {
     /// 按的这一下不该被它挡（同设置页那句「手动 `/压缩` 不受此限」在压缩层的同一条姿态，
     /// 也是可配置原则②的反面：开关不许长成禁止）；② [`super::plan`] 带 `manual`，
     /// 让开到线与熔断两格（为什么只让这两格、三条"形状"一条不让，见那里）。
+    ///
+    /// **不发「开始了」回调**：手动那一下界面自己就落了「正在压缩」那条线
+    /// （前端在发命令**之前**落的，命令返回后改写）——后端再发一次就是两根同义的线。
     pub(crate) async fn run_manual(
         &self,
         session: &mut Session,
         session_id: &str,
         policy: &UsagePolicy,
     ) -> Outcome {
-        self.try_compact(session, session_id, policy, true).await
+        self.try_compact(session, session_id, policy, true, None)
+            .await
     }
 
     /// 两条通路的共用主体。`manual` 一路带到 [`super::plan`]，中间不改变量。
+    /// `on_start` = 「开始了」回调（见 [`Self::run`]）；`None` = 这一趟不发通知
+    /// （手动通路）。
     async fn try_compact(
         &self,
         session: &mut Session,
         session_id: &str,
         policy: &UsagePolicy,
         manual: bool,
+        on_start: Option<&(dyn Fn() + Send + Sync)>,
     ) -> Outcome {
         let cfg = self.settings.compact_config();
         if !manual && !cfg.enabled {
@@ -211,7 +237,20 @@ impl Compactor {
                 window = policy.window_tokens,
                 "深度压缩这一趟没动"
             );
+            // 熔断单独一档（specs/12 刀②）：它与"不到线 / 组数不够 / 无可压"那几种
+            // 常态不同——**这一趟是被人叫停的**（连续失败到线），界面要把这件事
+            // 说给用户听，不能混进 `Skipped` 那一族里当常态。
+            if plan.fused {
+                return Outcome::Fused(plan.reason);
+            }
             return Outcome::Skipped(plan.reason);
+        }
+        // 「这一趟真的开始压了」（specs/12 刀②）：判定通过、**发请求之前**敲一次门。
+        // 位置要紧——放在判定之后，请求之前：判据说"不用压"时压根不敲（界面不会
+        // 冒出没发生过的「正在压缩」），而摘要请求要等好几秒（预算上限 90s），
+        // 这段时间里用户看得见"正在压"，按「停止生成」也才有意义。
+        if let Some(f) = on_start {
+            f();
         }
         let system = build_prompt(cfg.instructions.as_deref());
         // overflow 递减带（刀④d）：第一趟喂全量，失败且**确实判成超窗**时按

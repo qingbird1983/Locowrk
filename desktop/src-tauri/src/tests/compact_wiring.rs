@@ -56,39 +56,9 @@ impl SummaryClient for Counting {
     }
 }
 
-/// 六轮历史 + 一次远超阈值的用量上报（占用顶到线上，压缩才有理由起步）。
-///
-/// 每轮的分量要够大：目标位 = 阈值 × 50% 再减掉摘要自己要腾的 1400 token
-/// （`compact::summary_reserve`），夹具小过这个数就会塌成"只剩最后一条"，
-/// 那时候"近期原文要留着"这一档根本无从观察。
-fn loaded_session() -> Session {
-    let mut s = Session::new();
-    for i in 0..6 {
-        s.append(SessionEvent::UserMessage {
-            content: format!("第{i}轮问题：") + &"细节".repeat(600),
-            parts: Vec::new(),
-        });
-        s.append(SessionEvent::AssistantMessage {
-            content: format!("第{i}轮答复"),
-            tool_calls: vec![],
-        });
-    }
-    s.append(SessionEvent::LlmUsage {
-        input: 900_000,
-        output: 10,
-        cache_read: 0,
-        cache_write: 0,
-        reasoning: 0,
-        total: 900_010,
-        duration_ms: 1,
-    });
-    s
-}
-
-/// 阈值取"前史自身的估算量" ⇒ 占用恰好站在线上当场到线（取数纪律：不钉魔法数）。
-fn threshold_at(session: &Session) -> u64 {
-    kernel_agent::estimate_tokens(&session.derive_messages())
-}
+// 六轮历史 + 一次远超阈值的用量上报（占用顶到线上，压缩才有理由起步）、
+// 阈值取数、磁盘前史——这三个夹具已上移 `tests/mod.rs`（压缩两簇接线面共用，
+// specs/12 刀②）：本文件的 `use super::*;` 直接把它们带进来。
 
 fn compactor_with(root: &std::path::Path) -> (Arc<crate::compact::deep::Compactor>, Arc<Counting>) {
     std::fs::write(
@@ -117,16 +87,6 @@ fn compacted_count(session: &Session) -> usize {
         .iter()
         .filter(|e| matches!(e, SessionEvent::ContextCompacted { .. }))
         .count()
-}
-
-/// 先把内存会话的**前史**写进磁盘。
-///
-/// `run_turn` 只追加本轮新增段（磁盘是日志的镜像、与投影共用游标），而夹具里的会话
-/// 是内存里造的 ⇒ 不落这一次，磁盘上就没有前史。而折叠是**按投影里有多少条消息**算
-/// 的（`kept_messages` 与投影条数取小），缺前史的重放会得出另一个窗口——那是夹具的
-/// 缺陷，不是压缩层的性质，所以先把地基铺好再谈取证。
-fn seed_log(log: &std::path::Path, id: &str, session: &Session) {
-    crate::session_log::append_slice(log, id, session, 0);
 }
 
 /// 正半边：跑到终态，内存与磁盘都要有那条 `ContextCompacted`，而且压后重放的投影

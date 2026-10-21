@@ -8,7 +8,13 @@
 import { compactNumber } from "../../lib/format";
 import { useAsksStore } from "../asks";
 import { nextId } from "./ids";
-import { checkCacheAlert, pushNotice } from "./notices";
+import {
+  checkCacheAlert,
+  compactSkip,
+  dropCompactAutoLine,
+  pushNotice,
+  setCompactAutoLine,
+} from "./notices";
 import { dispatchQueue } from "./send";
 import type { ChatState } from "./state";
 import type { ChatItem, ToolItem } from "./types";
@@ -262,6 +268,29 @@ export function applyEvent(st: ChatState, e: AgentEvent) {
         actions: ["details", "undo"],
       });
       if (e.summary_preview) st.noticeDetails[id] = e.summary_preview;
+      break;
+    }
+    case "compact_status": {
+      // 自动压缩的界面反馈（specs/12 刀②）：四相共用**一根**发丝线——
+      // 「正在压缩」被「没压成」/「已暂停」**就地改写**，不攒出一串同义的线
+      // （自动压缩在每个 step 边界都会再问一次 ⇒ 一轮里可能连着失败几次）。
+      //
+      // 为什么熔断走 `paused` 相位、而不走判据名那张表：判据名 `fused` 在那张
+      // 表里属于"手动让开"的一族（手动 `/压缩` 压根不会熔断），SS24 盯着两侧
+      // 相等——熔断改走相位，它就有了自己独立的一句话。
+      if (e.phase === "running") {
+        setCompactAutoLine(st, "notice.compactRunning");
+      } else if (e.phase === "paused") {
+        setCompactAutoLine(st, "notice.compactPaused");
+      } else if (e.phase === "done") {
+        // 压成了 ⇒ 这根线收走（"省了多少"由 `context_compacted` 那条断层条说）。
+        dropCompactAutoLine(st);
+      } else {
+        // 其余相位 = 这一趟没成（`failed`）：按**判据名**取文案，与手动
+        // `/压缩` 那张表同源；认不出的名字走兜底那条并把名字原样带出。
+        const skip = compactSkip(e.reason ?? null);
+        setCompactAutoLine(st, skip.key, skip.params);
+      }
       break;
     }
   }

@@ -19,6 +19,15 @@ use session_store::{Message, Session, SessionEvent};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex as StdMutex};
 
+/// 「这一趟真的开始压了」回调的**空实现**（specs/12 刀②）。
+///
+/// 这一簇只验判定与落账，界面通知面在 `tests/compact_wiring.rs` 的接线面用例里
+/// （那里看得见事件序）。压缩层不认 UI ⇒ 这个回调是它唯一的"往界面说一声"的
+/// 出口，测试面给它一个什么都不做的替身。
+fn no_notify() -> impl Fn() + Send + Sync {
+    || {}
+}
+
 /// 记下一切、并被脚本牵着走的摘要客户端（`calls` = 每次调用的 system / user / model）。
 struct Scripted {
     calls: StdMutex<Vec<(String, String, Option<String>)>>,
@@ -178,7 +187,10 @@ async fn the_switch_off_never_reaches_the_model() {
     let mut s = session_with(6);
     let p = policy_at(&s);
     let len = s.len();
-    assert_eq!(cp.run(&mut s, "s-off", &p).await, Outcome::Off);
+    assert_eq!(
+        cp.run(&mut s, "s-off", &p, &no_notify()).await,
+        Outcome::Off
+    );
     assert_eq!(s.len(), len, "关掉那一格就该一行都不写");
     assert_eq!(cli.count(), 0, "关掉那一格就不该花钱");
 }
@@ -198,7 +210,7 @@ async fn an_unknown_window_never_reaches_the_model() {
         tools_est_tokens: 0,
         refused_tokens: 0,
     };
-    let out = cp.run(&mut s, "s-window", &p).await;
+    let out = cp.run(&mut s, "s-window", &p, &no_notify()).await;
     assert_eq!(out, Outcome::Skipped("unknown-window"), "实测 {out:?}");
     assert_eq!(cli.count(), 0);
     assert!(!s
@@ -216,7 +228,7 @@ async fn a_passing_summary_folds_into_one_event_with_measured_tokens() {
     let mut s = session_with(6);
     let p = policy_at(&s);
     let before = s.derive_messages().len();
-    let out = cp.run(&mut s, "s-pass", &p).await;
+    let out = cp.run(&mut s, "s-pass", &p, &no_notify()).await;
     let Outcome::Compacted {
         kept_messages,
         from_tokens,
@@ -299,7 +311,7 @@ async fn a_stale_usage_report_does_not_make_us_compact_twice() {
     // 90 万，预算宽到装得下整个窗口 ⇒ 切点一步不动（`nothing-to-summarize`），
     // 这一档要测的"陈旧之后换尺"根本没机会发生。
     let p = policy_at(&s);
-    let out = cp.run(&mut s, "s-stale", &p).await;
+    let out = cp.run(&mut s, "s-stale", &p, &no_notify()).await;
     assert!(
         matches!(out, Outcome::Compacted { .. }),
         "到线就该压，实测 {out:?}"
@@ -311,7 +323,7 @@ async fn a_stale_usage_report_does_not_make_us_compact_twice() {
         "上报陈旧就必须换尺，否则每一步都重压一次"
     );
     assert_eq!(
-        cp.run(&mut s, "s-stale", &p).await,
+        cp.run(&mut s, "s-stale", &p, &no_notify()).await,
         Outcome::Skipped("below-line"),
         "压后已经在线下 ⇒ 第二次不许再花钱"
     );
@@ -365,7 +377,7 @@ async fn a_refused_request_makes_the_next_pass_compact() {
         window,
         "拒收读数要顶到分子上（三档取最大）"
     );
-    let out = cp.run(&mut s, "s-refuse", &p).await;
+    let out = cp.run(&mut s, "s-refuse", &p, &no_notify()).await;
     assert!(
         matches!(out, Outcome::Compacted { .. }),
         "被拒之后下一趟必须起步，实测 {out:?}"
@@ -376,7 +388,7 @@ async fn a_refused_request_makes_the_next_pass_compact() {
         "压成之后旧读数要清掉，否则每一步都重压一次"
     );
     assert_eq!(
-        cp.run(&mut s, "s-refuse", &p).await,
+        cp.run(&mut s, "s-refuse", &p, &no_notify()).await,
         Outcome::Skipped("below-line"),
         "窗口已经小了 ⇒ 第二次不该再花钱"
     );
@@ -402,7 +414,7 @@ async fn three_rejected_summaries_fuse_the_layer() {
     for (i, want) in want_whys.iter().enumerate() {
         let mut s = session_with(6);
         let p = policy_at(&s);
-        let out = cp.run(&mut s, "s-fuse", &p).await;
+        let out = cp.run(&mut s, "s-fuse", &p, &no_notify()).await;
         match out {
             Outcome::Failed {
                 why,
@@ -427,8 +439,8 @@ async fn three_rejected_summaries_fuse_the_layer() {
     let mut s = session_with(6);
     let p = policy_at(&s);
     assert_eq!(
-        cp.run(&mut s, "s-fuse", &p).await,
-        Outcome::Skipped("fused"),
+        cp.run(&mut s, "s-fuse", &p, &no_notify()).await,
+        Outcome::Fused("fused"),
         "熔断后再发一条往返 = 上限没生效"
     );
     assert_eq!(cli.count(), 3, "熔断那一格必须一次都不花钱");
@@ -483,7 +495,7 @@ async fn a_manual_run_goes_ahead_even_when_fused() {
     for i in 0..fuse {
         let mut s = session_with(6);
         let p = policy_at(&s);
-        let out = cp.run(&mut s, "s-manual-fuse", &p).await;
+        let out = cp.run(&mut s, "s-manual-fuse", &p, &no_notify()).await;
         assert!(
             matches!(out, Outcome::Failed { .. }),
             "第 {} 次应当 Failed，实测 {out:?}",
@@ -493,8 +505,8 @@ async fn a_manual_run_goes_ahead_even_when_fused() {
     let mut s = session_with(6);
     let p = policy_at(&s);
     assert_eq!(
-        cp.run(&mut s, "s-manual-fuse", &p).await,
-        Outcome::Skipped("fused"),
+        cp.run(&mut s, "s-manual-fuse", &p, &no_notify()).await,
+        Outcome::Fused("fused"),
         "先证表已经合上（否则下面那一步什么也没证）"
     );
     let spent = cli.count();
@@ -511,7 +523,7 @@ async fn a_manual_run_goes_ahead_even_when_fused() {
     let p3 = policy_at(&s3);
     assert!(
         matches!(
-            cp.run(&mut s3, "s-manual-fuse", &p3).await,
+            cp.run(&mut s3, "s-manual-fuse", &p3, &no_notify()).await,
             Outcome::Compacted { .. }
         ),
         "这次成功要把表清零——手动只是绕过、表还合着 = 自动那一路永远醒不过来"
@@ -532,7 +544,7 @@ async fn the_summary_request_carries_the_template_and_only_the_older_half() {
     let (cp, cli) = compactor(settings, Scripted::new(vec![Ok(good_summary())]));
     let mut s = session_with(6);
     let p = policy_at(&s);
-    let out = cp.run(&mut s, "s-payload", &p).await;
+    let out = cp.run(&mut s, "s-payload", &p, &no_notify()).await;
     assert!(
         matches!(out, Outcome::Compacted { .. }),
         "这次应当压成，实测 {out:?}"
@@ -576,7 +588,7 @@ async fn an_overflow_failure_retries_with_a_shrunk_history() {
     );
     let mut s = session_with(6);
     let p = policy_at(&s);
-    let out = cp.run(&mut s, "s-ov", &p).await;
+    let out = cp.run(&mut s, "s-ov", &p, &no_notify()).await;
     assert!(
         matches!(out, Outcome::Compacted { .. }),
         "缩一档就该压成，实测 {out:?}"
@@ -619,7 +631,7 @@ async fn the_whole_shrink_band_costs_exactly_one_failure() {
     let (cp, cli) = compactor(settings, Scripted::new(replies));
     let mut s = session_with(6);
     let p = policy_at(&s);
-    let out = cp.run(&mut s, "s-band", &p).await;
+    let out = cp.run(&mut s, "s-band", &p, &no_notify()).await;
     let want_trips = 1 + SHRINK_STEPS.len() as u32;
     match out {
         Outcome::Failed {
@@ -690,7 +702,7 @@ async fn three_failures_fuse_the_auto_compaction_and_stop_further_requests() {
     let mut s = session_with(6);
     let p = policy_at(&s);
     for i in 1..=3u32 {
-        let out = cp.run(&mut s, "s-fuse", &p).await;
+        let out = cp.run(&mut s, "s-fuse", &p, &no_notify()).await;
         match &out {
             Outcome::Failed { why, failures, .. } => {
                 assert_eq!(*why, super::deep::WHY_CALL, "第{i}次失败的理由要说得准");
@@ -700,10 +712,10 @@ async fn three_failures_fuse_the_auto_compaction_and_stop_further_requests() {
         }
     }
     let before = cli.count();
-    let out = cp.run(&mut s, "s-fuse", &p).await;
+    let out = cp.run(&mut s, "s-fuse", &p, &no_notify()).await;
     assert_eq!(
         out,
-        Outcome::Skipped("fused"),
+        Outcome::Fused("fused"),
         "第4次该熔断（不再发请求），实测 {out:?}"
     );
     assert_eq!(cli.count(), before, "熔断后不再发起摘要请求（不多花一次）");
@@ -738,7 +750,7 @@ async fn stopping_during_a_summary_call_does_not_count_as_a_failure() {
         async move {
             // 会话在任务里现造（`Session` 不许 clone；同款夹具 `session_with`）
             let mut s = session_with(6);
-            cp.run(&mut s, "s-stop", &p).await
+            cp.run(&mut s, "s-stop", &p, &no_notify()).await
         }
     });
     tokio::time::sleep(std::time::Duration::from_millis(80)).await;

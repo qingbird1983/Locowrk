@@ -448,3 +448,76 @@ describe("聚合读数：一份输入两处产出", () => {
     });
   });
 });
+
+// specs/12 刀②：自动压缩的界面反馈（`agent://compact-status` 的四个相位）。
+//
+// 形状与这一份里其它用例同款（store 级直调 `onEvent`），但这一族抓的是**一根
+// 线**的形状：自动压缩在每个 step 边界都会再问一次要不要压 ⇒ 一轮里可能连着
+// 失败几次。按"改写最后一根同 tag 的线"实现，才能保证界面上一轮只留一根
+// （按 key 改写会攒出一串同义的线：正在压缩 / 没压成 / 正在压缩 / 没压成）。
+describe("自动压缩的过程反馈：四相共用一根发丝线", () => {
+  /** 系统条那几行的 key（顺序 = 落列顺序）。 */
+  const sysKeys = (chat: ReturnType<typeof useChatStore>) =>
+    chat.items.filter((i) => i.kind === "system").map((i) => (i as { key?: string }).key);
+
+  it("开始 ⇒ 没成：同一根线就地改写，不攒出第二根", () => {
+    const chat = useChatStore();
+    chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
+    expect(sysKeys(chat)).toEqual(["notice.compactRunning"]);
+
+    chat.onEvent({
+      kind: "compact_status",
+      session_id: S,
+      phase: "failed",
+      reason: "summary-call",
+    });
+    // 一根线（不是两根）：「没压成」把「正在压缩」**就地改写**掉了。
+    expect(sysKeys(chat)).toEqual(["notice.compactCallFailed"]);
+    const line = chat.items.find((i) => i.kind === "system") as {
+      tone?: string;
+      tag?: string;
+    };
+    expect(line.tone, "仍是发丝线（v2.143 那一根形态）").toBe("hairline");
+    expect(line.tag).toBe("compact-auto");
+  });
+
+  it("连着失败两次也只留一根线（末态就是真相）", () => {
+    const chat = useChatStore();
+    for (const reason of ["summary-call", "budget"]) {
+      chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
+      chat.onEvent({ kind: "compact_status", session_id: S, phase: "failed", reason });
+    }
+    expect(sysKeys(chat)).toEqual(["notice.compactBudget"]);
+    expect(chat.items.filter((i) => i.kind === "system")).toHaveLength(1);
+  });
+
+  it("熔断 ⇒ 「已暂停」那句（走相位，不走判据名那张表）", () => {
+    const chat = useChatStore();
+    chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
+    chat.onEvent({ kind: "compact_status", session_id: S, phase: "paused" });
+    expect(sysKeys(chat)).toEqual(["notice.compactPaused"]);
+  });
+
+  it("压成了 ⇒ 这根线收走（断层条接手说省了多少）", () => {
+    const chat = useChatStore();
+    chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
+    chat.onEvent({ kind: "compact_status", session_id: S, phase: "done" });
+    expect(sysKeys(chat)).toEqual([]);
+  });
+
+  it("认不出的判据名走兜底那条，并把名字原样带出（绝不悄悄说成已压缩）", () => {
+    const chat = useChatStore();
+    chat.onEvent({
+      kind: "compact_status",
+      session_id: S,
+      phase: "failed",
+      reason: "brand-new-reason",
+    });
+    const line = chat.items.find((i) => i.kind === "system") as {
+      key?: string;
+      params?: Record<string, unknown>;
+    };
+    expect(line.key).toBe("notice.compactUnknown");
+    expect(line.params?.reason).toBe("brand-new-reason");
+  });
+});

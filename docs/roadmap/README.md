@@ -65,8 +65,20 @@ mtime，人改 `MEMORY.md` 下一轮生效），`<repo_context>` 从静态串改
 熔断账**——用户主动停不是失败）+ 新增两枚判据名 `budget` / `stopped`（SS24/SS25 期望值
 随 9→11 / 7→9 同步改，前端两条文案同刀补齐）。熔断因此**第一次真的能触发**。判据七条
 （`llm::tests::budget` 五 + `compact::tests_deep` 一 + `tests::compact_wiring` 一），
-变异五条逐条报红。**仍欠**（specs/12 刀②）：自动压缩的**开始/失败**在界面推系统条
-（新通道 `agent://compact-status`）+ 预算档位的设置面接线。
+变异五条逐条报红。
+**S4 刀⑦ ✅**（2026-10-21，specs/12 刀②）——自动压缩的**过程**在界面看得见了：新通道
+`agent://compact-status`（不进会话日志，重放不产生），四相 = 正在压 / 这一趟没成（带判据名）
+/ 熔断停手 / 压成了；压缩层不认 UI，只收一个「开始了」回调，翻译成事件在 runner 那一层。
+界面复用**既有压缩发丝线**（`notices.ts` 的改写-或-新落），自动路径**一根线**贯穿
+（tag `compact-auto` 与手动那根分开——人按 `/压缩` 时那一轮还在跑，两根会互相改写掉）。
+熔断那一相**走相位不走判据名**（判据名 `fused` 属手动让开的一族，SS24 两侧取值域
+**一字未动**：11 / 9）。设置面：上下文分区加第四格「摘要调用预算」**三档预置**
+（30s / 90s / 300s，`SettingsSegmented` 现役形态，无数字输入框；存量非档值就近显示、
+不改磁盘值）。判据新增八条（后端三 + 前端五），变异六条逐条报红。顺带按 400 行纪律
+**拆了两处**（`compact.rs` 的两张共用表 → `compact/tables.rs`；压缩接线面新判据 →
+`tests/compact_status_wiring.rs`，共享夹具上移 `tests/mod.rs`）。
+**仍欠**（specs/12 刀③）：roadmap 收口 + 挂账登记；另有两笔挂账缺陷另开一刀
+（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts` `resetAssistant` 不清 thinking 行）。
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
 | 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |

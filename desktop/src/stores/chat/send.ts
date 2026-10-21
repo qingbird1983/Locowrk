@@ -6,6 +6,7 @@ import { agentStop, chat, compactNow, sessionTruncateAfter } from "../../lib/api
 import { isSlashCommand } from "../../lib/slash-commands";
 import { removeAttachment } from "./attachments";
 import {
+  compactSkip,
   dropCompactRunning,
   pushCompactNotice,
   pushRawSystem,
@@ -60,37 +61,6 @@ export async function send(st: ChatState, text: string, parts?: ContentPartDto[]
 }
 
 // ---- §3.39 停止与排队（v4.11）----
-
-/** 后端判据名 → 语言包那条 key（S2 刀⑦ `/压缩`）。取值域与 Rust 侧同源，由
- * `check-single-source` 的 SS24 钉住：那边新增一条 stop 而这边没补文案，闸就红。
- *
- * ⚠ 兜底那条不许省：认不出的 reason 也要如实说"没压成"并把判据名原样带出来，
- * 绝不许悄悄显示成"已压缩"——那正是本项目一路在反的假告。 */
-const COMPACT_SKIP_KEYS: Record<string, string> = {
-  "unknown-window": "notice.compactUnknownWindow",
-  "too-few-rounds": "notice.compactTooFewRounds",
-  "nothing-to-summarize": "notice.compactNothingToSummarize",
-  "summary-call": "notice.compactCallFailed",
-  overflow: "notice.compactOverflow",
-  rejected: "notice.compactRejected",
-  // 手动通路理论上到不了这一格（后端 run_manual 不看那枚开关）；留着是为了
-  // "真到了也如实说"，而不是让它掉进兜底那条。
-  off: "notice.compactSwitchOff",
-  // specs/12 刀①：摘要调用超出了总时长预算（辅助路径的硬上限）。与
-  // `summary-call` 分开：那是"没答上"，这一条是"没等到"。
-  budget: "notice.compactBudget",
-  // specs/12 刀①：用户在压缩期间按了「停止生成」——不是失败，是被叫停。
-  stopped: "notice.compactStopped",
-};
-
-function compactSkip(reason: string | null): {
-  key: string;
-  params?: Record<string, unknown>;
-} {
-  const known = reason ? COMPACT_SKIP_KEYS[reason] : undefined;
-  if (known) return { key: known };
-  return { key: "notice.compactUnknown", params: { reason: reason ?? "unknown" } };
-}
 
 /** 统一提交口（composer Enter/发送键）：斜杠命令拦截 → 空闲直发，
  * 运行中入队（§3.39②）。 */

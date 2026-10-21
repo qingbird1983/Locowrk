@@ -1,4 +1,5 @@
 // S4（specs/11 刀①）：上下文分区收敛成**三格**（`components/settings/ContextSection.vue`）。
+// specs/12 刀② 加了第四格：**摘要调用预算**（三档预置）。
 //
 // 形状照 `appearance-section.spec.ts`（同一种"挂一个分区、灌一份投影、点保存"的
 // 取证载体），断言一律走 **i18n key 的当前档解析值**而不是中文串。
@@ -7,10 +8,11 @@
 //  ① 三行都渲染，切到 en 后同一 key 换成英文（中英成对的实跑面）；
 //  ② 两枚开关的初值来自**投影** ⇒ 抓"设置页显示开、后端其实关着"；
 //  ③ 翻开关**不自动**发 IPC，点保存才发一趟 ⇒ 抓"每点一下发一趟往返"；
-//  ④ 保存载荷**恰好三键** ⇒ 抓"新字段漏在后端边界上"与"没渲染的键替用户写回"
+//  ④ 保存载荷**恰好四键** ⇒ 抓"新字段漏在后端边界上"与"没渲染的键替用户写回"
 //     两种骗法（多一个键也算红）；
 //  ⑤ 自动压缩单独关得掉：不许把用量条一起带走；
 //  ⑥ 滑条初值来自投影、改档后照原值发回 ⇒ 抓"界面显示一个后端不认的数"。
+//  ⑦ 预算三档：初值来自投影、点档改值、载荷带上它（specs/12 AC-7）。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => {
@@ -29,22 +31,29 @@ import { invokeCalls, onCommand, resetIpc } from "./tauri-stub";
 
 type Context = SettingsView["context"];
 
-const t = (key: string) => String(i18n.global.t(key) as string);
+const t = (key: string, params?: Record<string, unknown>) =>
+  String(i18n.global.t(key, params ?? {}) as string);
 const withGlobal = () => ({ global: { plugins: [i18n] } });
 
 const viewWith = (context: Context) => ({ locale: "zh-CN", context }) as SettingsView;
 
-/** 上下文分区投影的**三键**（真源 = 后端 `settings/context.rs`）。 */
+/** 上下文分区投影的**四键**（真源 = 后端 `settings/context.rs`）。 */
 const ctx = (over: Partial<Context> = {}): Context => ({
   thresholdTokens: 100_000,
   usageBar: true,
   compactEnabled: true,
+  summaryBudgetMs: 90_000,
   ...over,
 });
 
 function switchByLabel(wrapper: ReturnType<typeof mount>, label: string) {
   // 标签用 JSON.stringify 包成选择器里的字符串字面量（值里有中文/空格也不用手工转义）
   return wrapper.get(`button[role="switch"][aria-label=${JSON.stringify(label)}]`);
+}
+
+/** 分段控件那一枚（radiorgroup 里的按钮）。 */
+function segmentByLabel(wrapper: ReturnType<typeof mount>, label: string) {
+  return wrapper.get(`div[role="radiogroup"][aria-label=${JSON.stringify(label)}]`);
 }
 
 function seed(over: Partial<Context> = {}) {
@@ -66,19 +75,21 @@ beforeEach(() => {
   resetIpc();
 });
 
-describe("上下文分区的三格", () => {
-  it("三行都渲染；切到 en 后同一 key 换成英文", () => {
+describe("上下文分区的四格", () => {
+  it("四行都渲染；切到 en 后同一 key 换成英文", () => {
     seed();
     const wrapper = mount(ContextSection, withGlobal());
     const zhLabel = t("settings.autoCompact");
     expect(wrapper.text()).toContain(t("settings.threshold"));
     expect(wrapper.text()).toContain(zhLabel);
     expect(wrapper.text()).toContain(t("settings.usageBar"));
+    expect(wrapper.text()).toContain(t("settings.summaryBudget"));
 
     applyLocalePref("en");
     const en = mount(ContextSection, withGlobal());
     expect(en.text()).toContain(t("settings.autoCompact"));
     expect(en.text()).toContain(t("settings.usageBar"));
+    expect(en.text()).toContain(t("settings.summaryBudget"));
     expect(en.text()).not.toContain(zhLabel);
     applyLocalePref("zh-CN");
   });
@@ -94,7 +105,7 @@ describe("上下文分区的三格", () => {
     );
   });
 
-  it("翻开关不发 IPC，点保存才发一趟，且载荷恰为三键", async () => {
+  it("翻开关不发 IPC，点保存才发一趟，且载荷恰为四键", async () => {
     seed({ compactEnabled: false });
     onCommand("settings_set", viewWith(ctx({ compactEnabled: true })));
     const wrapper = mount(ContextSection, withGlobal());
@@ -113,6 +124,7 @@ describe("上下文分区的三格", () => {
       thresholdTokens: 100_000,
       usageBar: true,
       compactEnabled: true,
+      summaryBudgetMs: 90_000,
     });
   });
 
@@ -160,5 +172,51 @@ describe("上下文分区的三格", () => {
     const wrapper = mount(ContextSection, withGlobal());
     expect(wrapper.findAll('input[type="number"]')).toHaveLength(0);
     expect(wrapper.findAll('input[type="range"]')).toHaveLength(1);
+  });
+});
+
+// specs/12 AC-7：摘要调用预算 = **三档预置**（不是数字输入框），且改动下一轮生效。
+describe("摘要调用预算：三档预置", () => {
+  it("三档都在，缺省那档（90s）高亮", () => {
+    seed({ summaryBudgetMs: 90_000 });
+    const wrapper = mount(ContextSection, withGlobal());
+    const group = segmentByLabel(wrapper, t("settings.summaryBudget"));
+    const radios = group.findAll('button[role="radio"]');
+    expect(radios).toHaveLength(3);
+    expect(radios.map((r) => r.text())).toEqual([
+      t("settings.summaryBudgetOption", { n: 30 }),
+      t("settings.summaryBudgetOption", { n: 90 }),
+      t("settings.summaryBudgetOption", { n: 300 }),
+    ]);
+    expect(radios[1]!.attributes("aria-checked"), "缺省那档要高亮").toBe("true");
+    expect(radios[0]!.attributes("aria-checked")).toBe("false");
+  });
+
+  it("点档改值，保存时带上那一档（不重启、下一轮生效）", async () => {
+    seed({ summaryBudgetMs: 90_000 });
+    onCommand("settings_set", viewWith(ctx({ summaryBudgetMs: 300_000 })));
+    const wrapper = mount(ContextSection, withGlobal());
+    const group = segmentByLabel(wrapper, t("settings.summaryBudget"));
+
+    await group.findAll('button[role="radio"]')[2]!.trigger("click");
+    expect(invokeCalls(), "分段控件是草稿，不该一点就发往返").toHaveLength(0);
+    await clickSave(wrapper);
+    const calls = invokeCalls();
+    const sent = calls[calls.length - 1]?.args?.context as Record<string, unknown>;
+    expect(sent.summaryBudgetMs).toBe(300_000);
+  });
+
+  it("存量非档值就近显示，但**不改磁盘值**（点选才落档）", async () => {
+    seed({ summaryBudgetMs: 45_000 });
+    const wrapper = mount(ContextSection, withGlobal());
+    const group = segmentByLabel(wrapper, t("settings.summaryBudget"));
+    const radios = group.findAll('button[role="radio"]');
+    // 45s 离 30s 更近 ⇒ 就近显示 30s
+    expect(radios[0]!.attributes("aria-checked")).toBe("true");
+
+    await clickSave(wrapper);
+    const calls = invokeCalls();
+    const sent = calls[calls.length - 1]?.args?.context as Record<string, unknown>;
+    expect(sent.summaryBudgetMs, "没点选就不许把存量改掉").toBe(45_000);
   });
 });

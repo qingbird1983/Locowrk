@@ -86,6 +86,10 @@ pub async fn compact_now(
         }
         Outcome::Off => not_compacted(REASON_OFF),
         Outcome::Skipped(reason) => not_compacted(reason),
+        // 熔断（specs/12 刀②）：手动通路让开熔断（`plan` 的 `manual` 那一格），
+        // 所以这一臂在手动侧**理论不可达**——但映射表必须穷尽，编译器会盯着。
+        // 判据名原样透传（不另敲一个字面量：那边是 `Plan::stop("fused")` 那一行）。
+        Outcome::Fused(reason) => not_compacted(reason),
         Outcome::Failed { why, .. } => not_compacted(why),
     })
 }

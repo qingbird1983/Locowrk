@@ -194,9 +194,50 @@ pub async fn run_turn(
         // 两个游标不能混用。
         let compact_start = session.len();
         if let (Some(cp), Some(u)) = (compactor, usage) {
-            let out = cp.run(session, session_id, &u).await;
+            // 「这一趟真的开始压了」（specs/12 刀②）：压缩层不认 UI，只管敲门；
+            // 翻译成事件在这一层（`llm`/`compact` 模块零 UI 依赖）。闭包先绑成
+            // 一个值再传——判据 SS21c 盯的是"step 边界那一句 `cp.run(`"这个形状，
+            // 写成 `cp` 与 `.run(` 分两行会让那档读成"没有这一步"（闸不认形状了）。
+            let on_start = || {
+                sink.emit(&AgentEvent::CompactStatus {
+                    session_id: session_id.into(),
+                    phase: crate::events::compact_phase::RUNNING.to_string(),
+                    reason: None,
+                });
+            };
+            let out = cp.run(session, session_id, &u, &on_start).await;
             if let Some(dir) = log {
                 session_log::append_slice(dir, session_id, session, compact_start);
+            }
+            // 这一趟的收束相位（specs/12 刀②）：失败 / 熔断 / 压成各推一条。
+            //
+            // 为什么"压成了"也推一条（`done`）：那半的**事实**由
+            // `agent://context-compacted` 说（省了多少、能撤销），本事件只负责
+            // **这根发丝线的生命周期**——「正在压缩」那根线到此为止，不留一根
+            // 悬着的"正在压"。前端不必知道"压成事件"与"压缩发丝线"的关系。
+            match &out {
+                crate::compact::deep::Outcome::Failed { why, .. } => {
+                    sink.emit(&AgentEvent::CompactStatus {
+                        session_id: session_id.into(),
+                        phase: crate::events::compact_phase::FAILED.to_string(),
+                        reason: Some((*why).to_string()),
+                    });
+                }
+                crate::compact::deep::Outcome::Fused(_) => {
+                    sink.emit(&AgentEvent::CompactStatus {
+                        session_id: session_id.into(),
+                        phase: crate::events::compact_phase::PAUSED.to_string(),
+                        reason: None,
+                    });
+                }
+                crate::compact::deep::Outcome::Compacted { .. } => {
+                    sink.emit(&AgentEvent::CompactStatus {
+                        session_id: session_id.into(),
+                        phase: crate::events::compact_phase::DONE.to_string(),
+                        reason: None,
+                    });
+                }
+                _ => {}
             }
             // S4 刀⑤ · AC-9：自动压缩的界面反馈。压成的那条 `ContextCompacted` 必须
             // 在**本步开工前**就到 sink——与手动 `/压缩`（`commands/compact.rs`）吃同一份
@@ -209,10 +250,18 @@ pub async fn run_turn(
             // 而这一轮正卡在压缩（step 前唯一的动作）⇒ 整轮按「已停止」收束，
             // 不再开下一步。收束状态是 `Interrupted` 而不是 `Completed`
             // ——与 step 边界那处停止同一个口径。
+            //
+            // 这一档也要推一条相位（specs/12 刀②）：「正在压缩」那根线不能悬着
+            // ——它得被换成"压缩已停止"那句话（判据名 `stopped`，前端那张表里有）。
             if matches!(
                 &out,
                 crate::compact::deep::Outcome::Skipped(crate::compact::deep::WHY_STOPPED)
             ) {
+                sink.emit(&AgentEvent::CompactStatus {
+                    session_id: session_id.into(),
+                    phase: crate::events::compact_phase::FAILED.to_string(),
+                    reason: Some(crate::compact::deep::WHY_STOPPED.to_string()),
+                });
                 finish_turn(
                     session,
                     log,

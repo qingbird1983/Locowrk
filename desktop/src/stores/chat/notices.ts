@@ -94,6 +94,90 @@ export function dropCompactRunning(st: ChatState) {
   dropRunningLine(st, "compact", "notice.compactRunning");
 }
 
+/** 后端判据名 → 语言包那条 key（S2 刀⑦ `/压缩`）。取值域与 Rust 侧同源，由
+ * `check-single-source` 的 SS24 钉住：那边新增一条 stop 而这边没补文案，闸就红。
+ *
+ * ⚠ 兜底那条不许省：认不出的 reason 也要如实说"没压成"并把判据名原样带出来，
+ * 绝不许悄悄显示成"已压缩"——那正是本项目一路在反的假告。
+ *
+ * **这一份住在 notices.ts 而不是 send.ts**（specs/12 刀②）：自动压缩那条路
+ * （`agent://compact-status` 的 `failed` 相位）也要按判据名取文案，两条路共用
+ * 同一张表 ⇒ 一份事实一个出处。搬过来之前它在 send.ts 里，而 send.ts 是"发东西
+ * 的那一族"——判据名表放那儿等于让"读面"去读"写面"的私有物。 */
+const COMPACT_SKIP_KEYS: Record<string, string> = {
+  "unknown-window": "notice.compactUnknownWindow",
+  "too-few-rounds": "notice.compactTooFewRounds",
+  "nothing-to-summarize": "notice.compactNothingToSummarize",
+  "summary-call": "notice.compactCallFailed",
+  overflow: "notice.compactOverflow",
+  rejected: "notice.compactRejected",
+  // 手动通路理论上到不了这一格（后端 run_manual 不看那枚开关）；留着是为了
+  // "真到了也如实说"，而不是让它掉进兜底那条。
+  off: "notice.compactSwitchOff",
+  // specs/12 刀①：摘要调用超出了总时长预算（辅助路径的硬上限）。与
+  // `summary-call` 分开：那是"没答上"，这一条是"没等到"。
+  budget: "notice.compactBudget",
+  // specs/12 刀①：用户在压缩期间按了「停止生成」——不是失败，是被叫停。
+  stopped: "notice.compactStopped",
+};
+
+/** 判据名 → 该说哪句话（认不出的走兜底那条，并把名字原样带出）。 */
+export function compactSkip(reason: string | null): {
+  key: string;
+  params?: Record<string, unknown>;
+} {
+  const known = reason ? COMPACT_SKIP_KEYS[reason] : undefined;
+  if (known) return { key: known };
+  return { key: "notice.compactUnknown", params: { reason: reason ?? "unknown" } };
+}
+
+/** 自动压缩发丝线的 tag（specs/12 刀②）。
+ *
+ * 为什么与手动 `/压缩` 那根（tag="compact"）分两根：**它们可能同时在场**——
+ * 人按 `/压缩` 的那一刻，这一轮还在跑（手动命令要等会话锁），于是手动那根
+ * "正在压缩"与自动那根"正在压缩"会同时存在。共用一个 tag 时，自动路径的
+ * 收束会把手动那根改写掉 ⇒ 手动那一下的失败提示凭空消失。
+ *
+ * 两根线的**形态**相同（都是 hairline 发丝线，v2.143 那一根）——同类只许一种
+ * 形态说的是形态，不是"一根还是两根"。 */
+const COMPACT_AUTO_TAG = "compact-auto";
+
+/** 自动压缩那根线：**改写最后一根同 tag 的线**（没有就落一根新的）。
+ *
+ * 为什么按 tag 改写、而不是按 key（`notice.compactRunning`）改写：自动压缩在
+ * **每个 step 边界**都会再问一次要不要压 ⇒ 一轮里可能连着失败几次。按 key 改写
+ * 的话，第二趟的「正在压缩」会另起一根线 ⇒ 一轮攒下 N 根同义的线（用户看到
+ * 的是一串"正在压缩 / 没压成 / 正在压缩 / 没压成"）。按 tag 改写则全程只有
+ * 一根，最后那一态就是真相。
+ */
+export function setCompactAutoLine(
+  st: ChatState,
+  key: string,
+  params?: Record<string, unknown>,
+) {
+  for (let i = st.items.length - 1; i >= 0; i--) {
+    const it = st.items[i]!;
+    if (it.kind === "system" && it.tag === COMPACT_AUTO_TAG) {
+      it.key = key;
+      it.params = params;
+      it.actions = undefined;
+      return;
+    }
+  }
+  pushLine(st, COMPACT_AUTO_TAG, key, params);
+}
+
+/** 收走自动压缩那根线（压成了 ⇒ 断层条接手说"省了多少"，这根线不留着）。 */
+export function dropCompactAutoLine(st: ChatState) {
+  for (let i = st.items.length - 1; i >= 0; i--) {
+    const it = st.items[i]!;
+    if (it.kind === "system" && it.tag === COMPACT_AUTO_TAG) {
+      st.items.splice(i, 1);
+      return;
+    }
+  }
+}
+
 /** 原文系统条（key = "__raw__"，ChatMessages 按 params.text 渲染）：
  * 用于"查看详情"展开压缩摘要等内容型陈述。 */
 export function pushRawSystem(st: ChatState, text: string) {

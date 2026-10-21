@@ -110,7 +110,8 @@ export interface AppearanceUpdate {
 
 /** 上下文管理区投影（S4 退役面 · specs/11 刀①）：用户只负责三格——
  * 压缩阈值（档位滑条）、自动压缩开关、用量条显隐。输出预留/目标比/近段额度/
- * 工具预算等一律写死，不再出现在设置面。 */
+ * 工具预算等一律写死，不再出现在设置面。specs/12 刀② 加了第四格：**摘要调用
+ * 预算**（三档预置，见 `lib/summary-budget.ts`）。 */
 interface ContextSettingsView {
   /** 压缩阈值（绝对 token，100K–800K 缺省 100K）。 */
   thresholdTokens: number;
@@ -118,6 +119,9 @@ interface ContextSettingsView {
   usageBar: boolean;
   /** 自动压缩开关（缺省开）：到线时把较旧的一段换成一份七节摘要。 */
   compactEnabled: boolean;
+  /** 摘要调用预算（毫秒；界面渲染成三档预置，不暴露毫秒数）。只作用于
+   * **辅助路径**（压缩摘要）——主对话轮的「重试不设上限」不受它影响。 */
+  summaryBudgetMs: number;
 }
 
 /** 上下文管理区部分更新（窗口走 LlmUpdate）。 */
@@ -125,6 +129,7 @@ export interface ContextUpdate {
   thresholdTokens?: number;
   usageBar?: boolean;
   compactEnabled?: boolean;
+  summaryBudgetMs?: number;
 }
 
 /** 开发者选项区投影（v2.49）：unlocked = 分区可见（安卓式连点版本号

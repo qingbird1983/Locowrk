@@ -1,6 +1,6 @@
 # 12-辅助调用预算与压缩可见性
 
-- 状态：进行中（刀① ✅ 2026-10-21；刀②/刀③ 待做）
+- 状态：进行中（刀① ✅ 2026-10-21；刀② ✅ 2026-10-21；刀③ 待做）
 - 负责人：agent
 - 日期：2026-10-21
 - 出处 / 上游：用户报告「**项目会话**在模型推理思考中经常卡死」（2026-10-21 对话）·
@@ -60,8 +60,12 @@
       （请求数不增长），且界面出现「自动压缩已暂停」系统条。
       用例名：`three_failures_fuse_the_auto_compaction_and_stop_further_requests`。
       **✅ 刀① 已达成**（2026-10-21，后端半）：三次失败各记一格、第 4 次 `Skipped("fused")`
-      且请求数不增长。**界面那半（系统条）属刀②**。
+      且请求数不增长。**界面那半（系统条）✅ 刀② 已达成**（见 AC-5）。
       ⚠ 这条在改之前**测不出来**：旧口径下失败不返回 ⇒ 计数永远到不了 3。
+      ⚠ 刀② 起第 4 次那一趟的返回形状由 `Outcome::Skipped("fused")` 改成
+      `Outcome::Fused("fused")`（熔断单独一档——它与"不到线/组数不够/无可压"那几种
+      常态不同，是**该说给用户听**的一件事；混在一处时调用方只能靠猜判据名的含义
+      来分辨该不该打扰用户）。既有三条判据同步改断言。
 - [x] AC-4 **停止按钮能停掉摘要**：摘要请求进行中点「停止生成」⇒ 摘要在 1s 内返回，
       整轮以 `Interrupted` 收束（不是 `Completed`、不是失败），且**不计入熔断失败数**
       （用户主动停不是失败）。
@@ -69,12 +73,21 @@
       `a_stop_during_compaction_ends_the_turn_as_interrupted`。
       **✅ 刀① 已达成**（2026-10-21）：压缩层报 `Skipped("stopped")` 且熔断计数仍为 0；
       接线面整轮以 `TurnEnd{outcome: Interrupted}` 收束。
-- [ ] AC-5 **界面看得见**：自动压缩到线 ⇒ 界面先出「正在压缩对话上下文…」系统条；
+- [x] AC-5 **界面看得见**：自动压缩到线 ⇒ 界面先出「正在压缩对话上下文…」系统条；
       摘要失败 ⇒ 该条被收走并换成「没压缩：…」系统条（文案随失败原因不同）；
       熔断 ⇒ 出「自动压缩已暂停…」系统条。三种文案中英成对（`check-i18n` 绿）。
       用例名：`the_auto_compaction_reports_its_start_and_its_failure_in_the_transcript`。
-      ⏳ **刀②**（后端两枚判据名 `budget` / `stopped` 的文案已在刀① 补齐——
-      SS24 强制的前后端同源义务；自动路径的事件投影属刀②）。
+      **✅ 刀② 已达成**（2026-10-21）：
+      - 后端接线面（`tests/compact_status_wiring.rs`）：
+        `the_auto_compaction_reports_its_start_and_its_failure_to_the_ui` 钉住相位事件序
+        `[running, failed(summary-call)]`；`the_breaker_pauses_the_auto_compaction_in_the_ui`
+        钉住四轮之后 `[running, failed] ×3 + paused` 且**摘要请求数 = 3**（第 4 次没发）。
+      - 界面投影面（`desktop/tests/chat-projection.spec.ts`）：四相各一条用例，钉住
+        **同一根线**（`tag=compact-auto`）被就地改写、压成了那根收走、认不出的判据名
+        走兜底那条并把名字原样带出。
+      - 文案：`notice.compactPaused`（熔断）新补；`compactBudget` / `compactStopped`
+        沿用刀①。
+      ⚠ 熔断那一相**走相位 `paused`、不走判据名机制**（订正见「设计要点 ⑤」）。
 - [ ] AC-6 **主对话轮行为不变**：给主对话轮（不传预算）注入一个恒 5xx 的端点 ⇒ 仍然
       **无限重试**（现行裁定不变），且重试仍然推 `agent://llm-retry`、仍然可被「停止生成」中止。
       用例名：`the_main_turn_keeps_its_unbounded_retry_and_its_stop_hook`。
@@ -83,12 +96,20 @@
       时仍无限重试 + 停止钩子有效）+ `the_main_turn_call_site_passes_no_budget`（主对话轮
       的实际调用点真的传 `None`——少这一半，谁在 `app_llm.rs` 里手滑填一个
       `Some(...)`，前一条照样绿）。
-- [ ] AC-7 **设置面**：设置 → 上下文管理多一行「摘要调用预算」三档预置（30s / 90s / 300s，
+- [x] AC-7 **设置面**：设置 → 上下文管理多一行「摘要调用预算」三档预置（30s / 90s / 300s，
       默认 90s），**不是数字输入框**（S4 刀④ 的普通分区约束不变）；
       改动即时生效（下一轮压缩读新值，不重启）。
       用例名：`the_summary_budget_is_a_three_preset_picker_and_takes_effect_next_round`。
-      ⏳ **刀②**（后端读口与三档校验已在刀① 落 `ContextSettings.summary_budget_ms`；
-      前端控件与文案属刀②）。
+      **✅ 刀② 已达成**（2026-10-21）：
+      - 界面面（`desktop/tests/context-section.spec.ts`）：三档都在、缺省那档高亮；
+        点档改值、载荷带上那一档；存量非档值（45s）**就近显示但不改磁盘值**；
+        本区**零个数字输入框**（既有那条用例继续绿）。
+      - 后端面（`tests/compact_status_wiring.rs`）：
+        `the_summary_budget_takes_effect_on_the_next_round` 钉住摘要请求**真的带上**
+        设置里那一档，且改完设置**下一轮**就换（新值 30s → 300s），不重启。
+      - 形态：复用 `SettingsSegmented`（现役形态：主题/字号/列宽都在用）⇒ **不需要
+        新形态申请**。档位清单在 `desktop/src/lib/summary-budget.ts`（真源 = 后端
+        `settings/context.rs` 的 `SUMMARY_BUDGET_PRESETS_MS`，后端那份是校验权威）。
 - [ ] AC-8 **门禁**：`make check` 全绿；本刀新增/改动的每条判据做**变异**必须报红
       （`make selftest` 读数逐条列出）；`check-channels` 认得新通道；
       `check-single-source` 的 SS24 两侧取值域仍相等。
@@ -134,9 +155,24 @@
 
 **⑤ 可见性走新通道，不复用压成那条。**
 `agent://context-compacted` 是「压成了」，语义已占；失败/开始是另一件事 ⇒ 新通道
-`agent://compact-status`，载荷 `{ session_id, phase: "running" | "failed", reason }`。
-`reason` 取值域与手动 `/压缩` 那张 `COMPACT_SKIP_KEYS` **同源**（SS24 钉住），
-新增 `budget` 与 `fused` 两键，两侧同步。
+`agent://compact-status`，载荷 `{ session_id, phase, reason }`。
+`phase` 四相 = `running`（正在压）/ `failed`（这一趟没成，`reason` = 判据名）/
+`paused`（熔断停手）/ `done`（压成了）。
+
+**⑤-补 熔断走相位、不走判据名机制（2026-10-21 刀② 落地时订正）。**
+原写「新增 `budget` 与 `fused` 两键」——`budget` 属实，`fused` **不成立**：
+判据名 `fused` 在 SS24 的 **YIELDED** 集合里（手动 `/压缩` 让开熔断 ⇒ 手动通路永远
+不会产生它），而那张「判据名 → 文案」表是**手动通路的取值域**。把 `fused` 塞进去
+要么让 SS24 的两侧相等读数破（要么把名单写死在闸里——那正是该闸明令禁止的
+「从代码里推、不写死」），要么让界面把"熔断"当成"没压成的一种原因"来渲染。
+
+⇒ 裁法：**相位与判据名分两样东西**。相位说"这一趟处于什么状态"（running / failed /
+paused / done），判据名说"为什么没成"（`summary-call` / `overflow` / `rejected` /
+`budget` / `stopped`）。失败那几枚照旧走判据名（前端复用手动那张表，SS24 两侧
+**一字未动**：11 / 9），熔断改走相位 `paused`，于是"被熔断停手"有了自己独立的一句话
+（`notice.compactPaused`）。后端那侧对应地多一枚 `Outcome::Fused(&'static str)`
+（它与 `Skipped` 那一族常态分开），而字面量 `"fused"` 仍**只有**
+`compact.rs` 的 `Plan::stop("fused")` 一个出处。
 
 **⑥ 依赖方向不新增反向边。**
 压缩层不引 Tauri：`Compactor::run` 收一个 `&(dyn Fn() + Send + Sync)` 的「开始了」回调，
@@ -159,11 +195,11 @@
 ## 计划
 
 - **刀① 摘要调用可中止 + 有预算**（后端主线）：`CompatLlm` 预算参数 ⇒ `SummaryRequest` 重构
-  ⇒ `Compactor` 拿停止标记 ⇒ runner 收束。产出 AC-1/2/3/4/6。
+  ⇒ `Compactor` 拿停止标记 ⇒ runner 收束。产出 AC-1/2/3/4/6。**✅ 2026-10-21**
 - **刀② 压缩可见性 + 设置面**（界面主线）：新通道 `agent://compact-status` ⇒ 前端投影与文案
-  ⇒ 设置页三档预算。产出 AC-5/7 与 `check-channels` / `check-i18n` 对账。
+  ⇒ 设置页三档预算。产出 AC-5/7 与 `check-channels` / `check-i18n` 对账。**✅ 2026-10-21**
 - **刀③ 收口**：ADR-0008 落纸、挂账登记、`make check` + `make selftest` 全绿、
-  roadmap 勾选、按 `CONTRIBUTING.md` 落提交。
+  roadmap 勾选、按 `CONTRIBUTING.md` 落提交。**⏳ 待做**
 
 ## 任务
 
@@ -173,15 +209,30 @@
 - [x] 刀①：`compact/deep.rs` 拿 `StopFlags`；`stopped` 不记失败；`budget` 单独一档 why
 - [x] 刀①：`runner/mod.rs` 收 `stopped` ⇒ 轮以 `Interrupted` 收束
 - [x] 刀①：SS24/SS25 的期望值随两枚新判据名同步（9→11 / 7→9）+ 前端两条文案补齐
-- [ ] 刀②：`events.rs` 加 `CompactStatus` 事件与通道
-- [ ] 刀②：前端 `projection.ts` 投影 + `notices.ts` 收拢 `COMPACT_SKIP_KEYS`（单一出处）
-- [ ] 刀②：中英文案成对（`compactFused` 待补；`compactBudget` / `compactStopped` 已在刀① 补）
-- [ ] 刀②：设置页三档预算 + 即时生效
+- [x] 刀②：`events.rs` 加 `CompactStatus` 事件与通道（四相常量同处一文件）
+- [x] 刀②：前端 `projection.ts` 投影 + `notices.ts` 收拢 `COMPACT_SKIP_KEYS`（单一出处）
+- [x] 刀②：中英文案成对（`compactPaused` 新补；`compactBudget` / `compactStopped` 刀① 已补）
+- [x] 刀②：设置页三档预算 + 即时生效（`SettingsSegmented` 复用，无数字输入框）
 - [ ] 刀③：ADR-0008 + 挂账登记 + roadmap 勾选
-- [x] 补测试（AC-1/2/3/4/6 七条：`llm::tests::budget` 五条 + `compact::tests_deep` 一条
-      + `tests::compact_wiring` 一条）
-- [x] 变异自证五条（逐条报红，见提交正文）
+- [x] 补测试（刀①七条：AC-1/2/3/4/6；刀②八条：AC-5 接线面二 + 界面投影五 + AC-7 界面面三
+      / 后端面一 ⇒ 后端三 + 前端五）
+- [x] 变异自证（刀①五条 + 刀②六条，逐条报红，见提交正文）
 - [ ] `make check` 全绿 + `make selftest` 变异逐条报红
+
+### 刀② 的变异自证（六条，逐条报红；读数见提交正文）
+
+| # | 注入 | 报红的判据 |
+| --- | --- | --- |
+| ① | 压缩层不调「开始了」回调 | AC-5 接线面 + 熔断那一条（读数缺 `running` 相位） |
+| ② | runner 不推 `failed` 相位 | 同上两条（读数缺 `failed` 相位） |
+| ③ | runner 不推 `paused` 相位 | 只有熔断那一条（读数缺 `paused` 相位） |
+| ④ | 摘要请求不带预算（`budget: None`） | 只有 AC-7 后端面那一条（读数 `None` vs `Some(30s)`） |
+| ⑤ | 前端不就地改写（每相各落一根线） | 界面投影三条（读数多出 `notice.compactRunning`） |
+| ⑥ | 设置面保存时不带预算那一键 | 设置面三条（载荷少一键 / 值 `undefined`） |
+
+⚠ 六条都是**红断言**而不是挂死：变异①那一档原先会把测试进程挂住（正是"判据
+对'永不返回'零证明力"那个形状），所以那几条的断言读数全是"事件序对不上"这种
+一眼能读出差在哪的形态。
 
 ## 影响范围
 
@@ -190,15 +241,20 @@
 | `desktop/src-tauri/src/llm/client.rs` | 重试环加预算参数 + 单次尝试超时包裹 |
 | `desktop/src-tauri/src/llm/retry.rs` | 预算耗尽判据 |
 | `desktop/src-tauri/src/llm/aux_client.rs` | `SummaryRequest` 重构；接停止标记 |
-| `desktop/src-tauri/src/compact/deep.rs` | 预算透传；`stopped` / `budget` 两档 |
-| `desktop/src-tauri/src/compact.rs` | `Failures` 语义注释（熔断现在真的能触发） |
-| `desktop/src-tauri/src/runner/mod.rs` | `stopped` ⇒ `Interrupted` 收束；失败投影 |
-| `desktop/src-tauri/src/events.rs` | `CompactStatus` 事件 + 通道 |
+| `desktop/src-tauri/src/compact/deep.rs` | 预算透传；`stopped` / `budget` 两档；`Outcome::Fused` 变体；`run` 收「开始了」回调 |
+| `desktop/src-tauri/src/compact.rs` | `Plan` 带 `fused` 标记（熔断单独一档）；两张共用表拆到 `compact/tables.rs`（400 行纪律） |
+| `desktop/src-tauri/src/compact/tables.rs` | **新**：两张共用状态表（`Failures` / `Overflow`），路径不变（`compact.rs` 重新导出） |
+| `desktop/src-tauri/src/runner/mod.rs` | `stopped` ⇒ `Interrupted` 收束；四相事件投影 |
+| `desktop/src-tauri/src/events.rs` | `CompactStatus` 事件 + 通道 + 四相常量 |
+| `desktop/src-tauri/src/tests/compact_status_wiring.rs` | **新**：压缩的界面反馈与预算接线面判据（AC-5 / AC-3 界面半 / AC-7 后端面） |
 | `desktop/src-tauri/src/settings/context.rs` | 预算一枚（三档） |
 | `desktop/src-tauri/src/state/background.rs` | 组装点注入停止标记 |
-| `desktop/src/stores/chat/{projection,notices,send}.ts` | 投影分支 + `COMPACT_SKIP_KEYS` 收拢 |
+| `desktop/src/stores/chat/{projection,notices,send}.ts` | 投影分支 + `COMPACT_SKIP_KEYS` 收拢 + 自动压缩那根线（tag `compact-auto`） |
+| `desktop/src/types/events-agent.ts` | `CompactStatusEvent` 镜像 + `CompactPhase` 取值域 |
+| `desktop/src/lib/api/channels.ts` | 订阅 `agent://compact-status` |
+| `desktop/src/lib/summary-budget.ts` | **新**：预算三档清单 + 就近显示 |
 | `desktop/src/components/settings/` | 三档预算控件 |
-| `desktop/src/locales/{zh-CN,en}/` | 新文案成对 |
+| `desktop/src/locales/{zh-CN,en}/` | 新文案成对（`notice.compactPaused` + 设置面三键） |
 | `docs/adr/0008-*.md` | 长期取舍落纸 |
 
 ## 风险与回滚

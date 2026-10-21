@@ -34,12 +34,17 @@
 
 pub(crate) mod deep;
 pub(crate) mod prompt;
-
-use std::collections::HashMap;
-use std::sync::Mutex;
+pub(crate) mod tables;
 
 use kernel_agent::estimate_tokens;
 use session_store::Message;
+
+/// 两张共用表的**重新导出**（真身 = [`tables`]）。
+///
+/// 为什么重新导出而不是让调用方改路径：调用方（组装点 / 观测面 / 测试）认的是
+/// `crate::compact::Failures` 这条路径，拆文件不该逼它们改 import——那会让一次
+/// "为了行数"的拆分变成一次**跨文件的调用面改动**（改一处就要改十几处）。
+pub(crate) use tables::{Failures, Overflow};
 
 /// 连续失败几次就熔断不再压（ZCode `manual.ts:55`）。
 pub(crate) const MAX_COMPACT_FAILURES: u32 = 3;
@@ -112,11 +117,27 @@ pub(crate) struct Plan {
     pub reason: &'static str,
     /// 切点：`messages[..cut]` 交给摘要器，`messages[cut..]` 原文保留。
     pub cut: usize,
+    /// 这一趟是不是**熔断停手**（连续失败到线）。
+    ///
+    /// 为什么判据名与"是不是熔断"要分成两样东西（specs/12 刀②）：名字是给界面看的
+    /// （语言包按名取文案），而"这一趟该不该打扰用户"是**语义**问题——只有熔断值得
+    /// 推系统条（"自动压缩已暂停"），其余"没压成"都是常态（不到线、组数不够、
+    /// 无可压），每一步都推一句就是把界面吵醒。
+    ///
+    /// 把两件事塞进一个字符串，调用方就得去猜字符串的含义 ⇒ 判据名当协议。
+    ///
+    /// ⚠ 字面量 `"fused"` 仍**只有 [`Plan::stop`] 那一个出处**（SS24 的判据名集合
+    /// 从那一行取），这一枚布尔只是把**同一个事实**多带一格语义，不新增出处。
+    pub fused: bool,
 }
 
 impl Plan {
     fn stop(reason: &'static str) -> Plan {
-        Plan { reason, cut: 0 }
+        Plan {
+            reason,
+            cut: 0,
+            fused: false,
+        }
     }
 }
 
@@ -148,7 +169,11 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
     // 手动那一下正是"人在看着、要它再试"。计数器本身照旧走（失败仍 record、
     // 成功仍 clear）——让开的只是这一格的判定，不是它的账。
     if !input.manual && is_fused(input.failures) {
-        return Plan::stop("fused");
+        // 判据名与"是熔断"这枚语义标记**在同一处**落地（字面量的出处仍只有
+        // `Plan::stop("fused")` 这一行，SS24 的判据名集合照旧从那里取）。
+        let mut p = Plan::stop("fused");
+        p.fused = true;
+        return p;
     }
     // 组数与"有没有 assistant"（ZCode `hasEnoughMessagesToCompact`：`rounds >= 2 &&
     // 有 assistant`）——一轮都凑不齐就压，等于把唯一的上下文换成一份空洞摘要。
@@ -166,6 +191,7 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
     Plan {
         reason: "planned",
         cut,
+        fused: false,
     }
 }
 
@@ -256,113 +282,9 @@ fn advance_to_user(messages: &[Message], from: usize) -> usize {
         .unwrap_or(messages.len())
 }
 
-/// 主层的连续失败表（熔断的输入）。
-///
-/// 为什么它不待在 [`Compactor`](crate::compact::deep::Compactor) 里：这张表有两个读者——
-/// 写它的是主层自己（失败 +1、压成清零），而刀⑤ 的滑窗保护网要在**另一条通路上**读
-/// "此刻熔断了没"来决定开不开。计数留在 `Compactor` 里，保护网就得持有 `Compactor`，
-/// 而后者是 runner 的 step 边界依赖（带摘要客户端、带设置）——为一个只读布尔拖来一整套。
-/// 与刀④a/④c 把 `AppLlmSummarizer` 提到组装点同一条理由：**共用件不归属任何一方**。
-/// 构造点因此在 `state/mod.rs`，两个使用方各收一枚 `Arc`。
-///
-/// 进程内、不落盘（沿用 `Compactor` 原来那段理由）：它管的是"这条通路此刻是不是坏了"，
-/// 跨重启没有意义——重启后设置可能都换了，该重新给它一次机会。
-#[derive(Default)]
-pub(crate) struct Failures {
-    map: Mutex<HashMap<String, u32>>,
-}
-
-impl Failures {
-    /// 该会话当前累计的连续失败次数（没有记录 = 0）。
-    pub(crate) fn of(&self, session_id: &str) -> u32 {
-        *self
-            .map
-            .lock()
-            .expect("compact failures poisoned")
-            .get(session_id)
-            .unwrap_or(&0)
-    }
-
-    /// 记一次失败并返回累计数（观测面要报"这是第几次"）。
-    pub(crate) fn record(&self, session_id: &str) -> u32 {
-        let mut map = self.map.lock().expect("compact failures poisoned");
-        let n = map.entry(session_id.to_string()).or_insert(0);
-        *n += 1;
-        *n
-    }
-
-    /// 压成了 ⇒ 整格清零（熔断随之解除，保护网下一轮自动退场）。
-    pub(crate) fn clear(&self, session_id: &str) {
-        self.map
-            .lock()
-            .expect("compact failures poisoned")
-            .remove(session_id);
-    }
-}
-
-/// 最近一次**被供应商按超窗拒收**的占用读数（S2 刀⑧ · 台账 ⓜ）。
-///
-/// 为什么必须有这张表：触发线的分子是锚点 = 会话日志里最后一条 `LlmUsage`
-/// （`context_budget::anchor`），而**被拒的那一次请求不会产生用量上报**——供应商
-/// 是在处理它之前就把门摔上的。于是那一轮之后：历史照长、请求照被拒、日志里那颗
-/// 读数永远停在"被拒之前"的那个数 ⇒ 到线判定永远读不到已经超了 ⇒ **整条压缩面
-/// 自锁**（界面上的样子是"每一轮都失败，而压缩开关明明开着"）。100 轮长跑实测到
-/// 这一版的形状：41 个轮全部失败、微压缩与主层各 0 条落账。
-///
-/// 写它的是发送侧（只有它知道自己这一次被拒了、以及那一次发了多少），读它的是
-/// 压缩侧（判要不要起步）——**两个使用方，所以它不归任何一方**，构造点在组装点，
-/// 与 [`Failures`] 同族同一条纪律。
-///
-/// 进程内、不落盘（沿用 [`Failures`] 那段理由）。⚠ 要说破这一档的代价：崩溃重放
-/// 之后这张表是空的，但那只退化成"再被拒一次、再记上"，自愈路径仍然成立——
-/// 而**永远不会**再自锁，因为被拒现场每次都重新记账。
-#[derive(Default)]
-pub(crate) struct Overflow {
-    map: Mutex<HashMap<String, u64>>,
-}
-
-impl Overflow {
-    /// 记一次被拒的占用（同会话多次被拒留最坏那个：窗口在被压小之前只会更大，
-    /// 取小而丢掉更早那次更大的证据 = 又把自锁请回来）。
-    pub(crate) fn note(&self, session_id: &str, tokens: u64) {
-        let mut map = self.map.lock().expect("compact overflow table poisoned");
-        let cell = map.entry(session_id.to_string()).or_insert(0);
-        *cell = (*cell).max(tokens);
-    }
-
-    /// 该会话最近一次被拒时的占用读数（没有记录 = `None`）。
-    pub(crate) fn of(&self, session_id: &str) -> Option<u64> {
-        let map = self.map.lock().expect("compact overflow table poisoned");
-        map.get(session_id).copied()
-    }
-
-    /// **喂给占用分子的取数口**（S3 刀④a）：没有记录 = 0 = "这一档不参与取最大"。
-    /// 这一格裁定只做一次：改前压缩面与（新接入的）组装点各写一遍
-    /// `of(..).unwrap_or(0)`，多一个消费者就多一个出处——而"缺席当 0"写错的形态
-    /// 是"缺席当无穷"，那一档会把触发线永久顶在线上，正是 ⓜ 要治的病。
-    pub(crate) fn reading(&self, session_id: &str) -> u64 {
-        self.of(session_id).unwrap_or(0)
-    }
-
-    /// 压成了 ⇒ 窗口已经变小，那颗"上次发出去被拒"的数不再描述当前窗口（不清就等于
-    /// 让一次旧的拒收把这一层永久顶在线上方 = 刀④ 那条"每个 step 重压一次"的坑）。
-    pub(crate) fn clear(&self, session_id: &str) {
-        self.map
-            .lock()
-            .expect("compact overflow table poisoned")
-            .remove(session_id);
-    }
-
-    /// 表里现有几格（只给测试用：判"没有会话身份那一次有没有多建一格"——光看某个键
-    /// 读回 `None` 判不出这件事，那个键本来就恒为 `None`）。
-    #[cfg(test)]
-    pub(crate) fn entries(&self) -> usize {
-        self.map
-            .lock()
-            .expect("compact overflow table poisoned")
-            .len()
-    }
-}
+// 主层的连续失败表（熔断的输入）与"被超窗拒收"的读数表已拆到
+// [`tables`]（specs/12 刀②）：它们是**状态**不是判据，混在本文件里会让头注
+// 那句「本文件只放纯判据」变成假话。路径不变（上面那行 `pub(crate) use`）。
 
 #[cfg(test)]
 mod tests;

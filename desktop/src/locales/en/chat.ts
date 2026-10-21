@@ -122,6 +122,13 @@ export default {
     // specs/12 knife ①: the user pressed stop during compaction — that is not
     // a failure, it was called off.
     compactStopped: "Compaction stopped (you pressed stop generating).",
+    // specs/12 knife ②: the breaker tripped (compaction kept failing, so
+    // automatic compaction pauses while the turn carries on). This one rides
+    // the *phase* (`paused` on agent://compact-status), not the criterion-name
+    // table — the name `fused` is one the manual `/compact` path lets go
+    // (the YIELDED set of SS24).
+    compactPaused:
+      "Automatic compaction is paused: it failed several times in a row, so this turn will not compact on its own. The manual `/压缩` command still works.",
     compactUnknown: "Not compacted: {reason}",
     compactUndone:
       "Compaction undone: full pre-compaction context restored (later turns were rewound too).",

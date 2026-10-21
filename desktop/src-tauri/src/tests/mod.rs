@@ -4,7 +4,11 @@
 //! 批 F-17 目录化：共享假件（进程内 echo 工具 / 事件收集器 / 内核装配）留本文件，
 //! 用例按面分簇见 `turn_rounds` / `demo_routing` / `convergence`。
 //! S2 刀④ 加 `compact_wiring`：同一形状的**主层压缩**接线判据（含落盘同数那一半）。
+//! specs/12 刀② 加 `compact_status_wiring`：压缩的**界面反馈与预算**接线判据；
+//! 两簇共用的会话夹具（`loaded_session` / `threshold_at` / `seed_log`）因此上移本文件
+//! ——共用夹具住共用夹具模块（400 行纪律的正解是「拆」，不是「把行数摊到别处」）。
 
+mod compact_status_wiring;
 mod compact_wiring;
 mod convergence;
 mod demo_routing;
@@ -18,6 +22,8 @@ use kernel_agent::{Kernel, LlmService, ToolSource};
 use plugin_api::{CallCtx, SideEffect, Tool, ToolError, ToolSpec};
 use semver::Version;
 use serde_json::{json, Value};
+use session_store::{Session, SessionEvent};
+use std::path::Path;
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 
 /// 进程内 echo 工具（不依赖插件产物）。
@@ -108,6 +114,7 @@ pub(crate) fn kind(e: &AgentEvent) -> &'static str {
         AgentEvent::ToolStatus { .. } => "tool_status",
         AgentEvent::FileChanges { .. } => "file_changes",
         AgentEvent::TurnHeader { .. } => "turn_header",
+        AgentEvent::CompactStatus { .. } => "compact_status",
     }
 }
 
@@ -126,4 +133,56 @@ pub(crate) fn kernel_with_tools_streaming(
         ctx.provide_dyn::<dyn kernel_agent::LlmStreamSink>(sink);
     }
     Kernel::new(ctx, vec![])
+}
+
+// ---------- specs/12 刀②：压缩两簇接线面共用的会话夹具 ----------
+//
+// 为什么上移本文件：压缩的**落账接线面**（`compact_wiring`）与压缩的**界面反馈与
+// 预算接线面**（`compact_status_wiring`）要同一份"到线了"的会话。夹具住在其中
+// 一个文件里，另一个就得 `use super::compact_wiring::…`——那是"为让另一个文件用上
+// 而把夹具钉死在它旁边"。共用夹具住共用夹具模块（本文件已经是这个角色：
+// 收集器 / 事件种类 / 内核装配都在这儿）。
+
+/// 六轮历史 + 一次远超阈值的用量上报（占用顶到线上，压缩才有理由起步）。
+///
+/// 每轮的分量要够大：目标位 = 阈值 × 50% 再减掉摘要自己要腾的 1400 token
+/// （`compact::summary_reserve`），夹具小过这个数就会塌成"只剩最后一条"，
+/// 那时候"近期原文要留着"这一档根本无从观察。
+pub(crate) fn loaded_session() -> Session {
+    let mut s = Session::new();
+    for i in 0..6 {
+        s.append(SessionEvent::UserMessage {
+            content: format!("第{i}轮问题：") + &"细节".repeat(600),
+            parts: Vec::new(),
+        });
+        s.append(SessionEvent::AssistantMessage {
+            content: format!("第{i}轮答复"),
+            tool_calls: vec![],
+        });
+    }
+    s.append(SessionEvent::LlmUsage {
+        input: 900_000,
+        output: 10,
+        cache_read: 0,
+        cache_write: 0,
+        reasoning: 0,
+        total: 900_010,
+        duration_ms: 1,
+    });
+    s
+}
+
+/// 阈值取"前史自身的估算量" ⇒ 占用恰好站在线上当场到线（取数纪律：不钉魔法数）。
+pub(crate) fn threshold_at(session: &Session) -> u64 {
+    kernel_agent::estimate_tokens(&session.derive_messages())
+}
+
+/// 先把内存会话的**前史**写进磁盘。
+///
+/// `run_turn` 只追加本轮新增段（磁盘是日志的镜像、与投影共用游标），而夹具里的会话
+/// 是内存里造的 ⇒ 不落这一次，磁盘上就没有前史。而折叠是**按投影里有多少条消息**算
+/// 的（`kept_messages` 与投影条数取小），缺前史的重放会得出另一个窗口——那是夹具的
+/// 缺陷，不是压缩层的性质，所以先把地基铺好再谈取证。
+pub(crate) fn seed_log(log: &Path, id: &str, session: &Session) {
+    crate::session_log::append_slice(log, id, session, 0);
 }

@@ -73,6 +73,34 @@ pub mod channels {
     /// 刻意**不带 `steps` 也不带 `ts`**：那两个读数已由 `agent://turn-done` 提供，
     /// 同一属性只许一个出处（取证批 G6 那句「先例已在场，别另发明」）。
     pub const TURN_HEADER: &str = "agent://turn-header";
+    /// 自动压缩的**过程状态**（specs/12 刀②）：「正在压 / 这一趟没成 / 熔断停手 /
+    /// 压成了」四相。**不进会话日志**（同 `TOOL_STATUS` 纪律）：它是瞬时状态，
+    /// 重放不产生——重放时那次压缩要么落成了 `ContextCompacted`（那条会重放）、
+    /// 要么压根没发生，事后补一句「当时正在压」是虚构。
+    pub const COMPACT_STATUS: &str = "agent://compact-status";
+}
+
+/// `agent://compact-status` 的 `phase` 取值域（**唯一出处**）。
+///
+/// 为什么相位与判据名分两样东西：相位说的是"**这一趟处于什么状态**"，判据名
+/// 说的是"**为什么没成**"。熔断（判据名 `fused`）在判据名那张表里属于**手动
+/// 让开**的那两条（SS24 的 YIELDED 集合）⇒ 前端那张「判据名 → 文案」表不许有它；
+/// 它改走相位 `paused`，于是"被熔断停手"这件事有了自己独立的一句话。
+///
+/// 反过来，失败那几枚（`summary-call` / `overflow` / `rejected` / `budget`）
+/// 走相位 `failed` + `reason`（判据名）⇒ 前端复用手动 `/压缩` 那张表取文案，
+/// 两侧同源由 SS24 钉住。
+pub mod compact_phase {
+    /// 摘要请求已发出（这一趟正在压）。
+    pub const RUNNING: &str = "running";
+    /// 这一趟**没成**：`reason` = 判据名（`compact::deep::WHY_*` 那一族）。
+    /// ⚠ 含"被用户叫停"那一档（`stopped`）——它不是失败，但这一趟同样没成，
+    /// 文案由判据名决定（说清是"被叫停"而不是"没答上"）。
+    pub const FAILED: &str = "failed";
+    /// 熔断停手（连续失败到线 ⇒ 自动压缩暂停；**主轮继续**）。
+    pub const PAUSED: &str = "paused";
+    /// 压成了（这根发丝线到此收束；"省了多少"由 `agent://context-compacted` 说）。
+    pub const DONE: &str = "done";
 }
 
 /// 审批请求载荷（§13.2）：`agent://approval-request` 的事件体，
@@ -315,6 +343,20 @@ pub enum AgentEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         active_ms: Option<i64>,
     },
+    /// 自动压缩的**过程状态**（specs/12 刀②）：`phase` = 四相之一（见
+    /// [`compact_phase`]），`reason` = 这一趟没成时的**判据名**（取值域 =
+    /// `compact::deep::WHY_*`，与手动 `/压缩` 那张表同源）。
+    ///
+    /// **不进会话日志**（同 `TOOL_STATUS` 纪律）：瞬时状态，重放不产生。
+    /// 「压成了」那一半仍走 `agent://context-compacted`（语义已占、且要进日志），
+    /// 本事件只补"这根发丝线开了又该收了"这一段生命周期。
+    CompactStatus {
+        session_id: String,
+        phase: String,
+        /// 判据名（仅 `failed` 相位带；其余相位为 `None`）。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
 }
 
 /// 轮收束状态（宿主侧三态）。
@@ -392,6 +434,7 @@ impl AgentEvent {
             AgentEvent::ToolStatus { .. } => channels::TOOL_STATUS,
             AgentEvent::FileChanges { .. } => channels::FILE_CHANGES,
             AgentEvent::TurnHeader { .. } => channels::TURN_HEADER,
+            AgentEvent::CompactStatus { .. } => channels::COMPACT_STATUS,
         }
     }
 }

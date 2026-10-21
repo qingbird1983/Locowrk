@@ -38,6 +38,9 @@ const CHANNELS = [
   "agent://file-changes",
   // 队列 Q12·第二刀：轮头（收束状态 + 扣过等待的工作时长，轮末投影同形）。
   "agent://turn-header",
+  // specs/12 刀②：自动压缩的过程状态（正在压 / 没压成 / 熔断停手 / 压成了）。
+  // 实时专属（不进会话日志 ⇒ 重放不产生）。
+  "agent://compact-status",
 ] as const;
 
 export function subscribeAgentEvents(
