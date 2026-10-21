@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useAsksStore } from "../src/stores/asks";
 import { useChatStore } from "../src/stores/chat";
-import type { ChatItem } from "../src/stores/chat";
+import type { ChatItem, SystemItem } from "../src/stores/chat";
 
 const S = "s1";
 
@@ -122,7 +122,7 @@ describe("分发表：每个事件动谁", () => {
     expect([d.tool, d.allowed]).toEqual(["fs_delete", false]);
   });
 
-  it("context_compacted 落系统行并把摘要挂在该行的 id 上（[查看详情] 数据源）", () => {
+  it("context_compacted 落一根发丝线（不是卡片），正文挂在这一行自己身上", () => {
     const chat = useChatStore();
     chat.onEvent({
       kind: "context_compacted",
@@ -130,11 +130,17 @@ describe("分发表：每个事件动谁", () => {
       from_tokens: 3000,
       to_tokens: 1000,
       strategy: "layered",
-      summary_preview: "摘要预览",
+      summary: "## Objective\n- 做完那件事",
     });
     const sys = rowOf(chat, "system")!;
     expect(sys.actions).toEqual(["details", "undo"]);
-    expect(chat.noticeDetails[sys.id]).toBe("摘要预览");
+    expect(sys.body, "正文住在这一行自己身上（旧的 noticeDetails 映射已退役）").toBe(
+      "## Objective\n- 做完那件事",
+    );
+    expect(sys.tone, "压缩这一族只有一根发丝线（v2.143 形态），不再是居中窄卡片").toBe(
+      "hairline",
+    );
+    expect(sys.tag).toBe("compact-result");
     // 差值 3000-1000=2000 是投影算的；`≈2K` 那个 ≈ 是 format.ts 的档位口径
     // （1953 不是整千）——本条只证差值没算反，格式化归它自己的用例。
     expect((sys.params as { saved: string }).saved).toBe("≈2K");
@@ -491,7 +497,7 @@ describe("自动压缩的过程反馈：四相共用一根发丝线", () => {
     expect(chat.items.filter((i) => i.kind === "system")).toHaveLength(1);
   });
 
-  it("摘要正文流式到达 ⇒ 累加到那根线的「查看详情」上（转录里不另起一块）", () => {
+  it("摘要正文流式到达 ⇒ 累加到那根线的展开体上（转录里不另起一块）", () => {
     const chat = useChatStore();
     chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
     chat.onEvent({
@@ -511,9 +517,10 @@ describe("自动压缩的过程反馈：四相共用一根发丝线", () => {
     const line = chat.items.find((i) => i.kind === "system") as {
       id: number;
       actions?: string[];
+      body?: string;
     };
     expect(line.actions, "在途那根线带一个「查看详情」").toEqual(["details"]);
-    expect(chat.noticeDetails[line.id]).toBe("## Objective\n- 做完那件事\n");
+    expect(line.body, "流回来的正文挂在在途那根线上").toBe("## Objective\n- 做完那件事\n");
   });
 
   it("熔断 ⇒ 「已暂停」那句（走相位，不走判据名那张表）", () => {
@@ -523,11 +530,34 @@ describe("自动压缩的过程反馈：四相共用一根发丝线", () => {
     expect(sysKeys(chat)).toEqual(["notice.compactPaused"]);
   });
 
-  it("压成了 ⇒ 这根线收走（断层条接手说省了多少）", () => {
+  it("压成了 ⇒ 这根线不收走，就地改成「已压缩」（等事件来把它收成结果线）", () => {
     const chat = useChatStore();
     chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
     chat.onEvent({ kind: "compact_status", session_id: S, phase: "done" });
-    expect(sysKeys(chat)).toEqual([]);
+    // 收走 = 把人可能正看着的摘要抽走；改成「已压缩」是那句中间态。
+    expect(sysKeys(chat)).toEqual(["notice.compactDone"]);
+  });
+
+  it("压成事件 ⇒ 就地改写在途那根线（同一趟压缩界面上只有一根线，展开态跟着留）", () => {
+    const chat = useChatStore();
+    chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
+    const line = chat.items.find((i) => i.kind === "system") as SystemItem;
+    // 人点开了（展开态住在那根线上）
+    chat.toggleCompactBody(line);
+    expect(line.expanded).toBe(true);
+
+    chat.onEvent({
+      kind: "context_compacted",
+      session_id: S,
+      from_tokens: 3000,
+      to_tokens: 1000,
+      strategy: "compact",
+      summary: "## Objective\n- 做完那件事",
+    });
+    expect(sysKeys(chat)).toEqual(["notice.contextCompacted"]);
+    expect(chat.items.filter((i) => i.kind === "system"), "一根线，不多不少").toHaveLength(1);
+    expect(line.expanded, "展开态跟着留下来（人正看着的摘要不该凭空消失）").toBe(true);
+    expect(line.body).toBe("## Objective\n- 做完那件事");
   });
 
   it("认不出的判据名走兜底那条，并把名字原样带出（绝不悄悄说成已压缩）", () => {

@@ -196,13 +196,15 @@ pub fn project_events(events: &[SessionEvent], session_id: &str) -> Vec<AgentEve
                 summary,
                 ..
             } => {
-                // 摘要全文在会话日志；UI 只拿 200 字符预览
+                // 摘要**全文**随事件走（界面上的展开体要渲染完整的一段 md，
+                // 实时与重放同一个出处；截断留给各自要短的那一处：导出那侧
+                // 自己 clip）。
                 out.push(AgentEvent::ContextCompacted {
                     session_id: session_id.into(),
                     from_tokens: *from_tokens,
                     to_tokens: *to_tokens,
                     strategy: strategy.clone(),
-                    summary_preview: summary.chars().take(200).collect(),
+                    summary: summary.clone(),
                 });
             }
             SessionEvent::ApprovalDecided {

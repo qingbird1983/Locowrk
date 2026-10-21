@@ -8,6 +8,7 @@ import { removeAttachment } from "./attachments";
 import {
   compactSkip,
   dropCompactRunning,
+  markCompactDone,
   pushCompactNotice,
   pushRawSystem,
 } from "./notices";
@@ -82,8 +83,13 @@ export async function submit(st: ChatState, text: string) {
     pushCompactNotice(st, "notice.compactRunning", undefined, ["details"]);
     try {
       const out = await compactNow(st.sessionId);
-      if (out.compacted) dropCompactRunning(st);
-      else {
+      if (out.compacted) {
+        // 压成了 ⇒ **不收走这根线**：`context_compacted` 事件（带着"省了多少"
+        // 与摘要全文）随后就到，由它把这根线**就地改写**成结果线（展开态跟着
+        // 留下来）。这里只兜一个底：万一事件还没到，先把"正在压缩"改掉，
+        // 免得线一直挂着"正在压缩"（命令已经说了压成）。
+        markCompactDone(st);
+      } else {
         const skip = compactSkip(out.reason);
         pushCompactNotice(st, skip.key, skip.params);
       }

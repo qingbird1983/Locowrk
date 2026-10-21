@@ -87,15 +87,15 @@ interface ContextUsageEvent {
   tools_est_tokens: number;
 }
 
-/** 压缩完成（agent://context-compacted，⑨）：summary 只有 200 字符预览
- * （全文在会话日志），strategy = sliding_window | layered | summary_only。 */
+/** 压缩完成（agent://context-compacted，⑨）：summary = 摘要**全文**
+ * （会话日志里那一份，实时与重放同源）；strategy = sliding_window | layered | summary_only。 */
 interface ContextCompactedEvent {
   kind: "context_compacted";
   session_id: string;
   from_tokens: number;
   to_tokens: number;
   strategy: string;
-  summary_preview: string;
+  summary: string;
 }
 
 /** 推理内容（v2.57 §3.9，agent://thinking / 重放同形）：实时 = 增量

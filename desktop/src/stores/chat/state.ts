@@ -27,11 +27,10 @@ export interface ChatState {
     windowTokens: number;
     toolsEstTokens: number;
   } | null;
-  /** 系统消息"查看详情"的内容（id → 文本，如压缩摘要预览）。 */
-  noticeDetails: Record<number, string>;
   /** 压缩摘要正文（`agent://compact-status` 的 `delta` 相流式累积）。
-   *  压成后作为「查看详情」的**全文**（后端事件只带 200 字预览，那截断版是
-   *  给「没点开详情」时兜底的）。切会话即清（会话级 UI 态）。 */
+   *  压成后作为压缩线展开体的**全文**（`context_compacted` 事件带的那份是
+   *  日志里的真身，事件到达前先用流式累积的那份顶着）。切会话即清
+   *  （会话级 UI 态）。 */
   compactSummary: string;
   /** 历史重放中（switchSession / init 恢复）：不记时间戳、工具行不吃
    * 「默认展开」设置（§3.8 历史重放默认折叠）。 */
@@ -73,7 +72,6 @@ export const initialChatState = (): ChatState => ({
   steps: null,
   sessions: [],
   contextUsage: null,
-  noticeDetails: {},
   compactSummary: "",
   replaying: false,
   permissionMode: null,

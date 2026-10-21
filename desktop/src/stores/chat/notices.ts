@@ -4,6 +4,11 @@
 // 参数名一律 `st`（不是 `s`）：原实现内部的 `.find((s) => …)` 用的是 `s`，
 // 把 store 状态参数也叫 `s` 会形成遮蔽 ⇒ 等价比对时看不清哪层是谁。
 import { i18n } from "../../i18n";
+import {
+  COMPACT_TAG_AUTO,
+  COMPACT_TAG_MANUAL,
+  COMPACT_TAG_RESULT,
+} from "../../lib/chat/compact-line";
 import { useSettingsStore } from "../settings";
 import { useToastStore } from "../toast";
 import type { SessionUsage } from "./types";
@@ -47,6 +52,7 @@ function pushLine(
   key: string,
   params?: Record<string, unknown>,
   actions?: string[],
+  body?: string,
 ) {
   st.items.push({
     id: nextId(),
@@ -56,6 +62,7 @@ function pushLine(
     actions,
     tone: "hairline",
     tag,
+    body,
   });
 }
 
@@ -66,6 +73,7 @@ function rewriteOrPushLine(
   key: string,
   params?: Record<string, unknown>,
   actions?: string[],
+  body?: string,
 ) {
   const items = st.items;
   for (let i = items.length - 1; i >= 0; i--) {
@@ -74,10 +82,11 @@ function rewriteOrPushLine(
       it.key = key;
       it.params = params;
       it.actions = actions;
+      it.body = body;
       return;
     }
   }
-  pushLine(st, tag, key, params, actions);
+  pushLine(st, tag, key, params, actions, body);
 }
 
 /** 压缩发丝线（tag="compact"，S2 刀⑦ `/压缩`）：发起落「正在压缩」，收束就地改写
@@ -87,12 +96,13 @@ export function pushCompactNotice(
   key: string,
   params?: Record<string, unknown>,
   actions?: string[],
+  body?: string,
 ) {
-  rewriteOrPushLine(st, "compact", "notice.compactRunning", key, params, actions);
+  rewriteOrPushLine(st, COMPACT_TAG_MANUAL, "notice.compactRunning", key, params, actions, body);
 }
 
 export function dropCompactRunning(st: ChatState) {
-  dropRunningLine(st, "compact", "notice.compactRunning");
+  dropRunningLine(st, COMPACT_TAG_MANUAL, "notice.compactRunning");
 }
 
 /** 后端判据名 → 语言包那条 key（specs/13 契约 C3）。取值域与 Rust 侧
@@ -141,7 +151,7 @@ export function compactSkip(reason: string | null): {
  *
  * 两根线的**形态**相同（都是 hairline 发丝线，v2.143 那一根）——同类只许一种
  * 形态说的是形态，不是"一根还是两根"。 */
-const COMPACT_AUTO_TAG = "compact-auto";
+const COMPACT_AUTO_TAG = COMPACT_TAG_AUTO;
 
 /** 自动压缩那根线：**改写最后一根同 tag 的线**（没有就落一根新的）。
  *
@@ -156,6 +166,7 @@ export function setCompactAutoLine(
   key: string,
   params?: Record<string, unknown>,
   actions?: string[],
+  body?: string,
 ) {
   for (let i = st.items.length - 1; i >= 0; i--) {
     const it = st.items[i]!;
@@ -163,51 +174,82 @@ export function setCompactAutoLine(
       it.key = key;
       it.params = params;
       it.actions = actions;
+      it.body = body;
       return;
     }
   }
-  pushLine(st, COMPACT_AUTO_TAG, key, params, actions);
+  pushLine(st, COMPACT_AUTO_TAG, key, params, actions, body);
 }
 
-/** 最后一根**在途**的压缩发丝线（= 正在流式写摘要的那一根）。
+/** 在途那根线的两种 key：「正在压缩」与「已压缩（等落账）」。
  *
- * 用来把**流式摘要正文**挂到那根线的「查看详情」上：摘要正文不在转录里另起
- * 一块（那会变成第二种形态），而是走既有的"详情"动作——压缩这件事在界面上的
- * 形态仍然只有那根发丝线 + 一个详情入口（opencode 那边是整块消息，我们这边
- * 沿用本仓既有形态，不新造形态）。
+ * 判"在途"按 **tag + key 两格**一起认：收束之后那根线的 tag 换成了
+ * `compact-result` ⇒ 只看 tag 会把**已收束**的旧线也算进来（那是上一趟的
+ * 正文），只看 key 又认不出手动那根与自动那根（它们 key 相同、tag 不同）。 */
+const COMPACT_INFLIGHT_KEYS = new Set(["notice.compactRunning", "notice.compactDone"]);
+
+/** 最后一根**在途**的压缩发丝线（= 正在流式写摘要 / 已压成待落账的那一根）。
+ *
+ * 用来把**流式摘要正文**挂到那根线的展开体上：摘要正文不在转录里另起一块
+ * （那会变成第二种形态），而是挂在这根线自己身上——压缩这件事在界面上的形态
+ * 仍然只有那根发丝线 + 一个展开入口（口径见《Front-end Design Guidelines》
+ * §二⑲）。
  *
  * **两根线都算**（手动 tag=`compact` / 自动 tag=`compact-auto`）：后端那条
  * `delta` 相位不分手动自动（上游 `Compaction.Delta` 同款），只认自动那一根
  * 的话，手动 `/压缩` 流回来的摘要就没人接——事件发了、界面不动。
- *
- * 为什么按 key 挑「在途」那根：收束事件会**就地改写**那根线（key 从
- * `notice.compactRunning` 变成结果那一条），按 tag 找会把**已经收束**的旧线
- * 也算进来（那是上一趟的正文）。`compact` 与 `compact-auto` 两条线不会同时在途
- * ——手动那一趟持着会话锁，自动那一趟在 step 边界，也持同一把锁。
  */
-export function lastCompactRunningLine(st: ChatState): SystemItem | undefined {
+export function lastCompactInflightLine(st: ChatState): SystemItem | undefined {
   for (let i = st.items.length - 1; i >= 0; i--) {
     const it = st.items[i]!;
-    if (
-      it.kind === "system" &&
-      (it.tag === "compact" || it.tag === COMPACT_AUTO_TAG) &&
-      it.key === "notice.compactRunning"
-    ) {
-      return it;
-    }
+    if (it.kind !== "system") continue;
+    if (it.tag !== COMPACT_TAG_MANUAL && it.tag !== COMPACT_AUTO_TAG) continue;
+    if (!COMPACT_INFLIGHT_KEYS.has(it.key)) continue;
+    return it;
   }
   return undefined;
 }
 
-/** 收走自动压缩那根线（压成了 ⇒ 断层条接手说"省了多少"，这根线不留着）。 */
-export function dropCompactAutoLine(st: ChatState) {
-  for (let i = st.items.length - 1; i >= 0; i--) {
-    const it = st.items[i]!;
-    if (it.kind === "system" && it.tag === COMPACT_AUTO_TAG) {
-      st.items.splice(i, 1);
-      return;
-    }
-  }
+/** 这一趟压完了（`done` 相）：线**不收走**，就地改写成"已压缩"那一句。
+ *
+ * 为什么不直接收走：`context_compacted` 事件（带着"省了多少"与摘要全文）
+ * 随后就到，在那之前这根线若被摘掉，界面上会闪一下"什么都没有"；而人此刻
+ * 可能正展开着它看摘要流——收走 = 把人正在读的东西抽走。 */
+export function markCompactDone(st: ChatState) {
+  const line = lastCompactInflightLine(st);
+  if (!line) return;
+  line.key = "notice.compactDone";
+  line.actions = ["details"];
+}
+
+/** 压成了 ⇒ 把在途那根线**就地改写**成结果线（省了多少 + 摘要全文 + 可撤销）。
+ *
+ * 为什么就地改写而不另起一条：同一趟压缩在界面上**只有一根线**（发起 → 收束
+ * 是同一条线换说法），展开态也跟着留下来（人正看着的摘要不会凭空消失）。
+ * 旧形态是"收走在途线 + 另起一张卡" ⇒ 点一次「查看详情」多一张、点几次
+ * 堆几张（用户 2026-10-22 点名的 bug）。
+ *
+ * 返回 false = 没找到在途那根（重放 / 竞态）⇒ 调用方另起一条结果线。 */
+export function settleCompactLine(
+  st: ChatState,
+  params: Record<string, unknown>,
+  body: string,
+): boolean {
+  const line = lastCompactInflightLine(st);
+  if (!line) return false;
+  line.key = "notice.contextCompacted";
+  line.params = params;
+  line.actions = ["details", "undo"];
+  line.body = body;
+  line.tag = COMPACT_TAG_RESULT;
+  return true;
+}
+
+/** 展开 / 收起压缩线的正文：**切换那根线自己的状态**。
+ *
+ * 不往转录里追加条目（追加 = 点一次多一张卡，见上）。 */
+export function toggleCompactBody(item: SystemItem) {
+  item.expanded = !item.expanded;
 }
 
 /** 原文系统条（key = "__raw__"，ChatMessages 按 params.text 渲染）：

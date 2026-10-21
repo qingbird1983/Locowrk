@@ -6,15 +6,17 @@
 // 台账 T3 实测过这张表的覆盖度（21 个事件变体 ↔ 22 条 case，`check-channels` 盯着），
 // 分片之后那张闸照样吃得到——它递归扫 `desktop/src/stores/`，本文件在面内。
 import { compactNumber } from "../../lib/format";
+import { COMPACT_TAG_RESULT } from "../../lib/chat/compact-line";
 import { useAsksStore } from "../asks";
 import { nextId } from "./ids";
 import {
   checkCacheAlert,
   compactSkip,
-  dropCompactAutoLine,
-  lastCompactRunningLine,
+  lastCompactInflightLine,
+  markCompactDone,
   pushNotice,
   setCompactAutoLine,
+  settleCompactLine,
 } from "./notices";
 import { dispatchQueue } from "./send";
 import type { ChatState } from "./state";
@@ -257,18 +259,29 @@ export function applyEvent(st: ChatState, e: AgentEvent) {
       break;
     }
     case "context_compacted": {
-      // 压缩系统消息（Context 文档 §3.8.3）：[查看详情][撤销]，
-      // 撤销经 context_undo_compact（rewind_to，ChatMessages 接线）
-      const id = nextId();
+      // 压缩结果（⑨）：**一根发丝线**（v2.143 形态）+ [查看详情][撤销]，
+      // 撤销经 context_undo_compact（rewind_to，ChatMessages 接线）。
+      //
+      // 压成了 ⇒ 把**在途那根线就地改写**成这一条（同一趟压缩在界面上只有
+      // 一根线，展开态也跟着留下来）；没有在途线（重放 / 竞态）才另起一条。
+      // 旧形态是"居中窄卡片 + 点一次查看详情多一张" ⇒ 用户 2026-10-22 点名
+      // 要改掉的就是那个。
       const saved = Math.max(0, e.from_tokens - e.to_tokens);
-      st.items.push({
-        id,
-        kind: "system",
-        key: "notice.contextCompacted",
-        params: { saved: compactNumber(saved), strategy: e.strategy },
-        actions: ["details", "undo"],
-      });
-      if (e.summary_preview) st.noticeDetails[id] = st.compactSummary || e.summary_preview;
+      const params = { saved: compactNumber(saved), strategy: e.strategy };
+      // 正文 = 事件带来的**全文**（会话日志里那一份；重放与实时同一个出处）。
+      const body = e.summary ?? "";
+      if (!settleCompactLine(st, params, body)) {
+        st.items.push({
+          id: nextId(),
+          kind: "system",
+          key: "notice.contextCompacted",
+          params,
+          actions: ["details", "undo"],
+          tone: "hairline",
+          tag: COMPACT_TAG_RESULT,
+          body,
+        });
+      }
       break;
     }
     case "compact_status": {
@@ -281,24 +294,26 @@ export function applyEvent(st: ChatState, e: AgentEvent) {
       // specs/13 起**整个退役**（上游那张表里它属于"手动让开"的一族，两端口径
       // 不一致 ⇒ 两边都不留这个名字），熔断改走相位，它就有了自己独立的一句话。
       if (e.phase === "running") {
-        // 「正在压缩」这根线带一个「查看详情」：摘要正文流式到达时挂在它上面，
-        // 用户点开就能看正在写的摘要（上游那边是整块消息流式渲染；本仓沿用既有
-        // 形态——发丝线 + 详情入口，不新造第二种形态）。
+        // 「正在压缩」这根线带一个「查看详情」：摘要正文流式到达时挂在它身上，
+        // 人点开就能看正在写的摘要（口径见《Front-end Design Guidelines》§二⑲：
+        // 压缩这一族只有一根线，展开体是模型正文形态）。
         st.compactSummary = "";
         setCompactAutoLine(st, "notice.compactRunning", undefined, ["details"]);
       } else if (e.phase === "delta") {
-        // 摘要正文的流式增量 ⇒ 累加（转录里不另起一块，只喂详情）。
+        // 摘要正文的流式增量 ⇒ 累加（转录里不另起一块，只喂那根线的展开体）。
         // 后端那条 `delta` 相位**不分手动自动**（上游 `Compaction.Delta` 同款），
         // 所以挂的是「在途的那根线」——手动那根（tag=compact）与自动那根
         // （tag=compact-auto）都算，只认一根的话另一半的正文就没人接。
         st.compactSummary += e.text ?? "";
-        const line = lastCompactRunningLine(st);
-        if (line) st.noticeDetails[line.id] = st.compactSummary;
+        const line = lastCompactInflightLine(st);
+        if (line) line.body = st.compactSummary;
       } else if (e.phase === "paused") {
         setCompactAutoLine(st, "notice.compactPaused");
       } else if (e.phase === "done") {
-        // 压成了 ⇒ 这根线收走（"省了多少"由 `context_compacted` 那条断层条说）。
-        dropCompactAutoLine(st);
+        // 压成了 ⇒ 这根线**不收走**，就地改写成「已压缩」那一句，等
+        // `context_compacted` 事件带着"省了多少"来把它收成结果线（收走 =
+        // 把人可能正看着的摘要抽走）。
+        markCompactDone(st);
       } else {
         // 其余相位 = 这一趟没成（`failed`）：按**判据名**取文案，与手动
         // `/压缩` 那张表同源；认不出的名字走兜底那条并把名字原样带出。

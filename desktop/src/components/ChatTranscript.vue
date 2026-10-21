@@ -119,11 +119,13 @@ watch(
   },
 );
 
-/** 系统消息动作（⑨ 接线）：details = 展开详情；undo = 撤销最近一次压缩。 */
+/** 系统消息动作（⑨ 接线）：details = 展开/收起压缩摘要；undo = 撤销最近一次压缩。 */
 async function onNoticeAction(item: SystemItem, action: string) {
   if (action === "details") {
-    const detail = chat.noticeDetails[item.id];
-    if (detail) chat.pushRawSystem(detail);
+    // 展开 / 收起摘要：**切换那根线自己的状态**（`expanded`），**不往转录里
+    // 追加条目**。旧实现是往转录里 push 一张新卡 ⇒ 点一次「查看详情」下面
+    // 多跟着一个小卡片、再点又展开一轮（用户 2026-10-22 点名的 bug）。
+    chat.toggleCompactBody(item);
   } else if (action === "undo") {
     try {
       await contextUndoCompact(chat.sessionId);

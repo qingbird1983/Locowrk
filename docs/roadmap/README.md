@@ -83,6 +83,28 @@ mtime，人改 `MEMORY.md` 下一轮生效），`<repo_context>` 从静态串改
 证据：空会话里敲 `/压缩` ⇒ 转录里出那根发丝线「没压缩：对话还太短…」，**压缩状态线在真实窗口
 渲染正确**；**自动压缩三相的真机触发仍欠**（触发线是占用 ≥ 有效阈值 100K token ⇒ 要攒够十万
 token 才看得见，未擅自烧额度；证据边界与读数见 specs/12 的「真机验收」节）。
+**S5 刀② ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——用户 2026-10-22 指出
+**压缩详情那套机制有真 bug**（点「查看详情」下面又跟一张小卡片、再点又展开一轮）⇒ 裁定**换掉压缩这一族的
+界面形态**：取消卡片 ⇒ 压缩**只有一根发丝线**，在线上**就地展开 / 收起**，展开体**按模型消息那样渲染成 md**，
+且压缩线与展开体**落在最顶层**（不受轮容器「L0」折叠层管理、永不折叠、与最终报告同级）。**标准先行**：
+`Front-end Design Guidelines` 新增 **§二⑲「压缩线与摘要展开体」** + 版本行 v2.5（§零.5「先改标准再写码」）。
+落地：`lib/chat/compact-line.ts` 收拢压缩线族三个 tag（`manual`/`auto`/`result` + `isCompactItem`，**唯一出处**）；
+新 `components/chat/SystemRow.vue` 收拢「线 + md 展开体」的**唯一渲染落点**；`SystemItem` 增 `body`/`expanded`
+两格并**退役 `noticeDetails`**（同一份正文两个出处）；压成事件**就地改写**在途那根线（不再「收走 + 另起一条」，
+展开态跟着留下来；中间态 = `notice.compactDone`）；`context_compacted` 事件带**摘要全文**（`summary_preview` →
+`summary`）⇒ 重放不再是 200 字截断的半截 md。判据：新增 `desktop/tests/compact-summary-body.spec.ts` 四条
+（发丝线形态 / 就地展开 md 正文 / 收起回发丝线状态 / 顶层不受 L0 管）+ 改写投影与命令两条 + 后端
+`the_compaction_event_carries_the_whole_summary`（AC-18）。**变异自证六条逐条报红**：①展开改回「往转录里塞一条」
+（红 3 条）②压缩线不摘出轮容器（红 1 条）③结果线退回居中窄卡片（红 2 条）④不就地改写而另起一条（红 1 条）
+⑤展开态不改说「收起」（红 1 条）⑥后端事件退回 200 字截断（红 1 条）。门禁：`make check` 退出码 0
+（Rust desktop **416** passed + 根 workspace 全 ok · vitest **22 files / 155 tests** · clippy 两处零警 ·
+check-channels FAILED=0 · SINGLE_SOURCE_OK · check_length 零新增 · check-docs DOC_FAILED=0）；
+`make selftest` 全绿。**真机核对**（`pnpm tauri dev`，2026-10-22，会话「询问项目协助」，**零设置改动、
+零新 LLM 调用**）：底态压成那条是**发丝线**（居中窄卡片那一档不再出现）⇒ 点「查看详情」**就地展开**、
+正文按模型消息那样渲染成 md（h2 标题 + 行内码 + 列表）、是**全文**（不是 200 字预览）、**下面没有多出
+任何卡片**（用户报的那个「点一次多一张、再点又展开一轮」不复现）⇒ 那枚钮改说「收起」，点它回到发丝线态
+⇒ 收起 L0 轮容器（点计时行）后压缩线**仍在**（顶层、与最终报告同级）。读数表见 specs/13 刀⑤ 的
+「真机核对」节。
 **S5 刀① ✅**（2026-10-21，[`specs/13`](../../specs/13-opencode-compaction/spec.md)）——用户报
 「压缩上下文老是失败而且速度慢得吓人，好长时间后显示没压缩」⇒ 裁定**整块换掉**：上下文压缩按
 OpenCode V2 重写（触发口径 / 请求形态 / 提示词 / 输出格式 / 失败与恢复**逐项复刻**，参照仓库
@@ -107,6 +129,7 @@ check-docs OK）；`make selftest` 全绿（`SELFTEST_ALL_CAUGHT` / `DOCS_SELFTE
 摘要正文**逐字用上游 SUMMARY_TEMPLATE 的标题**（## Objective / ## Requirements / ## Decisions /
 ## Work State / ## Next Move / ## Relevant Files）；点「查看详情」⇒ 断层条**下方**展开一张卡片显示摘要
 正文（重放态是 200 字预览，实时态是流式全文）——这一条先前被判成「点了没反应」，实为**量错了区域**。
+（**此处记的是刀①当时的形态**；刀⑤ 已把「展开一张卡片」换成「线上就地展开 md 正文」，见上面 S5 刀②。）
 **真机还抓出一处静默的数据丢失**：手动 `/压缩` 追加的 `context_compacted` **没进会话日志**（自动那条在
 runner 里落了）⇒ 压完看着一切正常，**重开应用压缩连同摘要一起消失**（那轮 LLM 的钱花了、窗口又回到
 压前大小）。已修：落盘口收成 `compact/deep.rs::run_manual_and_persist`（「跑一趟」与「把它追加的事件写
@@ -114,12 +137,14 @@ runner 里落了）⇒ 压完看着一切正常，**重开应用压缩连同摘�
 （AC-13；变异：删掉落盘那一句 ⇒ 报红）。真机复验：磁盘日志尾部已是
 `{"type":"llm_usage",…}` + `{"type":"context_compacted","kept_messages":2,"keep_from":7,"summary":"## Objective…"}`，
 **重启后断层条与 checkpoint 仍在**（修复前那屏是没有断层的）。
-**仍欠**：specs/12 那两笔挂账缺陷另开一刀（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts`
-`resetAssistant` 不清 thinking 行）；`output-limit` / `content-filter` 两枚判据靠错误文本启发式
-匹配（传输层不暴露 `finish_reason`）；权威层 `docs/design/authority/` 的现役机制描述欠一次专项
-对齐（[LOCK]，要向人确认）；**落盘口仍有两处**（自动在 runner、手动在压缩层）＋**失败轮次的步内
-事件不进日志**（`finish_turn` 只落 `TurnEnd`）—— 要彻底收成一处得重构 runner 的落盘游标，
-登记在 specs/13 的「遗留 / 挂账 ⑦」。
+**仍欠**（2026-10-22 用户已授权「按建议规划然后开始」，排期见 specs/13 的「计划」）：
+specs/12 那两笔挂账缺陷另开一刀（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts`
+`resetAssistant` 不清 thinking 行 = 刀⑦）；`output-limit` / `content-filter` 两枚判据靠错误文本启发式
+匹配（传输层不暴露 `finish_reason` = 刀⑦）；权威层 `docs/design/authority/` 的现役机制描述欠一次专项
+对齐（[LOCK]，要向人确认 = 刀⑧；刀⑤ 已按 §零.5 的规矩先改了 `Front-end Design Guidelines`）；
+**落盘口仍有两处**（自动在 runner、手动在压缩层）＋**失败轮次的步内事件不进日志**
+（`finish_turn` 只落 `TurnEnd`）—— 要彻底收成一处得重构 runner 的落盘游标，
+登记在 specs/13 的「遗留 / 挂账 ⑦」（= 刀⑥）。
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
 | 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |

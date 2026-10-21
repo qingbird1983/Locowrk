@@ -7,9 +7,9 @@
 // 各条抓一层，彼此不重叠：
 //  ① 命令被拦 ⇒ 只发 `compact_now`、**不发 `agent_chat`**，也不建用户气泡——元操作
 //     不进对话流这条是从旧 `/整理` 继承来的，改语义不许把它改丢；
-//  ② 压成时把「正在压缩」那条线**整条收走**而不是改写成人话：压掉了多少由
-//     `agent://context-compacted` 那条断层条说（后端只推事件、返回值不带负载），
-//     这里再留一句「压缩完成」就是两句同义；
+//  ② 压成时那根线**不收走**、也不改写成人话：改成「已压缩」那句中间态，等
+//     `agent://context-compacted` 那条事件来把它收成结果线（省了多少由那条
+//     说；这里再留一句「压缩完成」就是两句同义）；
 //  ③ 没压成 ⇒ 在途线**就地改写**成对应判据那一条（一根线从头到尾，不是两根）；
 //  ④ 后端给了认不出的判据名 ⇒ 兜底那条并把名字**原样带出**（绝不悄悄说成已压缩）；
 //  ⑤ `/整理` 不再被拦 = 改名的负对照：它现在就是一条普通消息；
@@ -58,14 +58,14 @@ describe("`/压缩` 这条元操作", () => {
     }
   });
 
-  it("压成时把在途线整条收走：会话区只留断层条那一句，不留第二句同义", async () => {
+  it("压成时那根线不收走也不多说一句：改成「已压缩」那句中间态", async () => {
     onCommand("compact_now", { compacted: true, reason: null });
     const chat = fresh();
     await chat.submit("/压缩");
-    expect(sysKeys(chat)).toEqual([]);
-    // 整场一条都不多：断层条由 `agent://context-compacted` 事件负责（另有用例钉那条
-    // 投影），这里若顺手落一句「压缩完成」就是两句同义，而且这一条会立刻红。
-    expect(chat.items).toHaveLength(0);
+    expect(sysKeys(chat)).toEqual(["notice.compactDone"]);
+    // 整场一条都不多：省了多少由 `agent://context-compacted` 那条事件负责（另有
+    // 用例钉那条投影），这里若顺手落一句「压缩完成」就是两句同义。
+    expect(chat.items).toHaveLength(1);
   });
 
   it("没压成 ⇒ 同一根线就地改写成那条判据的文案（一条线，不是两根）", async () => {
@@ -126,6 +126,7 @@ describe("`/压缩` 这条元操作", () => {
       id: number;
       key?: string;
       actions?: string[];
+      body?: string;
     };
     expect(line.key, "命令还没回来 ⇒ 在途线在").toBe("notice.compactRunning");
     expect(line.actions, "在途那根线带一个「查看详情」").toEqual(["details"]);
@@ -136,9 +137,7 @@ describe("`/压缩` 这条元操作", () => {
       phase: "delta",
       text: "## Objective\n- 做完那件事\n",
     });
-    expect(chat.noticeDetails[line.id], "流回来的正文挂在在途那根线上").toBe(
-      "## Objective\n- 做完那件事\n",
-    );
+    expect(line.body, "流回来的正文挂在在途那根线上").toBe("## Objective\n- 做完那件事\n");
     // delta 不另起线：转录里仍是同一根（形态只有一种）。
     expect(chat.items.filter((i) => i.kind === SYS)).toHaveLength(1);
 

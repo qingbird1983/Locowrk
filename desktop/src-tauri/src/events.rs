@@ -198,7 +198,10 @@ pub enum AgentEvent {
         total: u64,
         duration_ms: u64,
     },
-    /// 压缩完成（⑨）：summary 只推 200 字符预览（全文在会话日志）。
+    /// 压缩完成（⑨）：`summary` = 摘要**全文**（会话日志里那一份，实时与
+    /// 重放同源）。全文而不是 200 字预览：压缩线那一族的展开体按**模型正文**
+    /// 那样渲染成 md（设计标准 §二⑲），截断的 md 是一段断掉的半截标题 ——
+    /// 界面上的"可展开可折叠"必须是完整的一段。
     ContextCompacted {
         session_id: String,
         from_tokens: u64,
@@ -206,7 +209,7 @@ pub enum AgentEvent {
         /// S4 后只剩 `compact` 一档（旧日志里的 sliding_window / layered /
         /// summary_only 原样透传，仅作文案渲染）。
         strategy: String,
-        summary_preview: String,
+        summary: String,
     },
     /// 定时触发（⑭）：调度引擎注入轮之前告知——SystemNotice 无动作按钮，
     /// 后续助手回复以 chunk 跟进；窗口不在位时后端另有系统通知兜底。

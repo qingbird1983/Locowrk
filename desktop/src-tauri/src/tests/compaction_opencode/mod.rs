@@ -6,11 +6,13 @@
 //! · `checkpoint`—— checkpoint 逐字节（AC-5）
 //! · `failure`  —— 失败处置（AC-8）、收缩矩阵（AC-9）、失败也记账（AC-10）
 //! · `persist`  —— 手动那一趟落盘（AC-13）
+//! · `event`    —— 压成事件带摘要**全文**（AC-18，刀⑤）
 //!
 //! 共享夹具住本文件：**假发送口**（脚本化，可回话也可报错）、**会话夹具**
 //! （占用读数已知）、**策略装配**（窗口 + 用户百分比）。
 
 mod checkpoint;
+mod event;
 mod failure;
 mod persist;
 mod prompt;

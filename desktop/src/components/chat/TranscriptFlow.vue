@@ -19,9 +19,10 @@ import { useI18n } from "vue-i18n";
 import type { ChatItem, SystemItem, ToolItem } from "../../stores/chat";
 import type { TurnState } from "../../types";
 import { useSettingsStore } from "../../stores/settings";
+import { isCompactItem } from "../../lib/chat/compact-line";
 import { Icon } from "../../lib/icons";
 import MessageRow from "./MessageRow.vue";
-import SystemNotice from "./SystemNotice.vue";
+import SystemRow from "./SystemRow.vue";
 import ThinkingRow from "./ThinkingRow.vue";
 import ToolRow from "./ToolRow.vue";
 import TurnProcess from "./TurnProcess.vue";
@@ -166,6 +167,16 @@ type TurnView = {
   activeMs?: number;
   running: boolean;
   inner: Block[];
+  /** 压缩线（发丝线族）：**摘到轮容器外**渲染 —— 顶层、永不折叠。
+   *
+   * 用户 2026-10-22 裁定：「这个压缩内容需要在最顶层。不受那个L0折叠层管理。
+   * 属于永不折叠状态。跟模型最后汇报总结消息在一个层级的。」 ⇒ 轮容器（第 0
+   * 层，v2.99）收起时它仍在，展开体也跟着在。
+   *
+   * 为什么只摘**内层**那几根：尾段（`tail`）本来就在容器外（与最终报告
+   * 同级），按原位留着即可；内层那几根（自动压缩发生在轮中途时）原本在
+   * 容器里，会被 L0 折叠管住 ⇒ 摘出来。 */
+  compaction: Extract<Block, { kind: "single" }>[];
   /** 容器外尾块（构造保证只剩 single——最终报告 + 其后系统条目）。 */
   tail: Extract<Block, { kind: "single" }>[];
 };
@@ -181,6 +192,17 @@ const turnViews = computed<TurnView[]>(() => {
     // 尾块 = 末尾连续的非过程块；过程块一旦再现（调度轮续作）即归还容器
     let i = cur.blocks.length;
     while (i > 0 && cur.blocks[i - 1]!.kind === "single") i--;
+    // 内层里的压缩线摘出来（顶层渲染）：判据 = 那一条是不是压缩线
+    // （`lib/chat/compact-line.ts` 的唯一判据，不在这里另写一份）。
+    const inner: Block[] = [];
+    const compaction: Extract<Block, { kind: "single" }>[] = [];
+    for (const b of cur.blocks.slice(0, i)) {
+      if (b.kind === "single" && b.item.kind === "system" && isCompactItem(b.item)) {
+        compaction.push(b);
+      } else {
+        inner.push(b);
+      }
+    }
     views.push({
       key: cur.key,
       userItem: cur.userItem,
@@ -189,7 +211,8 @@ const turnViews = computed<TurnView[]>(() => {
       turnState: cur.userItem?.turnState,
       activeMs: cur.userItem?.activeMs,
       running: false, // 最后一轮在收尾处统一回填
-      inner: cur.blocks.slice(0, i),
+      inner,
+      compaction,
       tail: cur.blocks.slice(i) as Extract<Block, { kind: "single" }>[],
     });
     cur = null;
@@ -266,6 +289,31 @@ const finalAssistantIds = computed(() => {
 function noticeText(item: SystemItem): string {
   if (item.key === "__raw__") return String(item.params?.text ?? "");
   return t(item.key, item.params ?? {});
+}
+
+/** 系统条的动作钮（文案 = i18n key `notice.action.<id>`）。
+ *
+ * 「查看详情」那一枚在**展开态**改说「收起」——同一个钮切换两态（口径见
+ * §二⑲：入口唯一 = 线上那一个动作钮，不另加一枚「收起」钮）。 */
+function systemActions(item: SystemItem) {
+  return (item.actions ?? []).map((a) => ({
+    id: a,
+    label:
+      a === "details" && isCompactItem(item) && item.expanded
+        ? t("notice.action.collapse")
+        : t(`notice.action.${a}`),
+  }));
+}
+
+/** 系统条那一行的全部渲染参数（三个落点共用这一份 ⇒ 改一处即改三处）。 */
+function systemProps(item: SystemItem) {
+  return {
+    text: noticeText(item),
+    hairline: item.tone === "hairline",
+    actions: systemActions(item),
+    body: item.body,
+    expanded: item.expanded,
+  };
 }
 </script>
 
@@ -347,19 +395,11 @@ function noticeText(item: SystemItem): string {
             :copyable="finalAssistantIds.has(block.item.id)"
           />
           <!-- 会话内系统消息（SystemNotice 模式）：组外兄弟节点 -->
-          <div v-else-if="block.item.kind === 'system'" class="sys-row flex justify-center">
-            <SystemNotice
-              :text="noticeText(block.item as SystemItem)"
-              :hairline="(block.item as SystemItem).tone === 'hairline'"
-              :actions="
-                (block.item.actions ?? []).map((a) => ({
-                  id: a,
-                  label: t(`notice.action.${a}`),
-                }))
-              "
-              @action="(a: string) => emit('noticeAction', block.item as SystemItem, a)"
-            />
-          </div>
+          <SystemRow
+            v-else-if="block.item.kind === 'system'"
+            v-bind="systemProps(block.item as SystemItem)"
+            @action="(a: string) => emit('noticeAction', block.item as SystemItem, a)"
+          />
           <!-- G2 崩溃恢复 uncertain 决策卡：组外兄弟（折进组会被默认折叠
                藏住，决策面必须可见）；resolved 后收为记录行 -->
           <div v-else-if="block.item.kind === 'uncertain'" class="unc-row">
@@ -368,6 +408,15 @@ function noticeText(item: SystemItem): string {
         </template>
       </template>
     </div>
+
+    <!-- 压缩线（发丝线族）：**轮容器外**渲染 —— 顶层、永不折叠，与最终报告
+         同级（用户 2026-10-22 裁定：不受 L0 折叠层管理）。 -->
+    <SystemRow
+      v-for="block in turn.compaction"
+      :key="block.key"
+      v-bind="systemProps(block.item as SystemItem)"
+      @action="(a: string) => emit('noticeAction', block.item as SystemItem, a)"
+    />
 
     <!-- 容器外尾块：最终报告（复制钮只在此）与其后系统条目 -->
     <template v-for="block in turn.tail" :key="block.key">
@@ -378,19 +427,11 @@ function noticeText(item: SystemItem): string {
         :ts="block.item.ts"
         :copyable="finalAssistantIds.has(block.item.id)"
       />
-      <div v-else-if="block.item.kind === 'system'" class="sys-row flex justify-center">
-        <SystemNotice
-          :text="noticeText(block.item as SystemItem)"
-          :hairline="(block.item as SystemItem).tone === 'hairline'"
-          :actions="
-            (block.item.actions ?? []).map((a) => ({
-              id: a,
-              label: t(`notice.action.${a}`),
-            }))
-          "
-          @action="(a: string) => emit('noticeAction', block.item as SystemItem, a)"
-        />
-      </div>
+      <SystemRow
+        v-else-if="block.item.kind === 'system'"
+        v-bind="systemProps(block.item as SystemItem)"
+        @action="(a: string) => emit('noticeAction', block.item as SystemItem, a)"
+      />
       <!-- G2：崩溃会话没有最终报告，uncertain 卡常落尾段（同组外语义） -->
       <div v-else-if="block.item.kind === 'uncertain'" class="unc-row">
         <UncertainCard :item="block.item" />

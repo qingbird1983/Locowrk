@@ -30,6 +30,7 @@ import { chatGetters } from "./getters";
 import { initialChatState } from "./state";
 import { defineStore } from "pinia";
 import type { AgentEvent } from "../../types";
+import type { SystemItem } from "./types";
 
 // 类型面在 ./types.ts；这里把它按**原 chat.ts 的公开面**原样转发。
 // 外部真 import 过的只有四条（实测 grep）：ChatItem / SystemItem / ToolItem / AttachmentItem。
@@ -127,6 +128,11 @@ export const useChatStore = defineStore("chat", {
     },
     pushRawSystem(text: string) {
       chatNotices.pushRawSystem(this, text);
+    },
+    /** 压缩线：展开 / 收起摘要（**切换那根线自己的状态**，不往转录里追加
+     *  条目 —— 旧实现是 push 一张新卡，点一次多一张）。 */
+    toggleCompactBody(item: SystemItem) {
+      chatNotices.toggleCompactBody(item);
     },
     // ---- 附件预览条（./attachments.ts）----
     addAttachmentFile(file: File) {

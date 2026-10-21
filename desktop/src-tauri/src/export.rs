@@ -78,14 +78,12 @@ pub fn render_markdown(title: &str, session_id: &str, events: &[AgentEvent]) -> 
                 let word = if *allowed { "已允许" } else { "已拒绝" };
                 out.push_str(&format!("> 审批记录：{word} · {tool}\n\n"));
             }
-            AgentEvent::ContextCompacted {
-                summary_preview, ..
-            } => {
+            AgentEvent::ContextCompacted { summary, .. } => {
                 section(&mut out, "## 助手\n\n", &assistant);
                 assistant.clear();
                 out.push_str(&format!(
                     "> 上下文已压缩：{}\n\n",
-                    clip_markdown(summary_preview, CLIP)
+                    clip_markdown(summary, CLIP)
                 ));
             }
             _ => {}

@@ -42,7 +42,6 @@ export async function switchSession(st: ChatState, id: string) {
   st.items = [];
   st.steps = null;
   st.contextUsage = null;
-  st.noticeDetails = {};
   st.compactSummary = "";
   // §3.39②：队列是会话级 UI 态，切会话即清（诚实——预览不跨会话漂移）
   st.queue = [];
@@ -131,7 +130,6 @@ export function newSession(st: ChatState, workspace?: string | null) {
   st.items = [];
   st.steps = null;
   st.contextUsage = null;
-  st.noticeDetails = {};
   st.compactSummary = "";
   st.queue = [];
   st.preempt = null;

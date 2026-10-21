@@ -89,6 +89,9 @@ export default {
       details: "View details",
       undo: "Undo",
       view: "View",
+      // specs/13 knife ⑤: while the compaction line is expanded, the same
+      // single button says "Collapse" (one entry point, two states).
+      collapse: "Collapse",
     },
     editResendFailed: "Edit & resend failed: {reason}",
     // ⑨ Compaction notice ([View details][Undo], Context doc §3.8.3)
@@ -100,6 +103,10 @@ export default {
     // Rust side via check SS24, and an unrecognized name falls through to
     // compactUnknown with the name shown verbatim — never silently "compacted".
     compactRunning: "Compacting conversation context…",
+    // specs/13 knife ⑤: the trip finished but the "how much was saved" event
+    // has not arrived yet — the line stays (dropping it would yank away a
+    // summary the reader may be watching).
+    compactDone: "Compacted",
     // specs/13: the failure taxonomy now mirrors upstream (criterion name ↔
     // sentence, same-source gate SS24 on both sides = 9 entries). "Not compacted"
     // has to say *why*: template not filled / no summary / output limit / cannot

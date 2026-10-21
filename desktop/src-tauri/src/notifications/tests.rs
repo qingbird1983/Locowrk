@@ -135,7 +135,7 @@ fn draft_extracts_five_kinds_and_pairing() {
             from_tokens: 10_000,
             to_tokens: 4_000,
             strategy: "sliding_window".into(),
-            summary_preview: String::new(),
+            summary: String::new(),
         },
         &mut pending,
     )
