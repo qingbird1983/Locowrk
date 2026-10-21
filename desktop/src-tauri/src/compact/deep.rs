@@ -27,8 +27,7 @@ pub(crate) mod settle;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use async_trait::async_trait;
-use kernel_agent::{Kernel, LlmError, LlmRequest, LlmResponse, LlmUsage};
+use kernel_agent::{Kernel, LlmUsage};
 use session_store::Session;
 
 use super::deliver::{self, Shrink};
@@ -42,35 +41,15 @@ use super::{is_fused, Failures, Outcome, Overflow, KEEP_TOKENS, SHRINK_STEPS, UN
 use send::Failure;
 use settle::{append_usage, just_compacted, without_tail};
 
-/// `ContextCompacted.strategy` 在这一层的取值（唯一出处：写侧与判据都读它）。
-pub(crate) const STRATEGY: &str = "compact";
-
 /// 压缩请求的发送口（**可注入**：测试面塞假件，组装点接 [`crate::llm::AppLlm`]）。
 ///
-/// 为什么要一层 trait 而不是直接拿 `AppLlm`：主对话轮的 `LlmService` 契约里
-/// 没有"带预算 + 不推重试事件 + delta 走自己回调"这三样（那是压缩独有的），
-/// 而没有这一层就没法在测试里换掉网络。
-#[async_trait]
-pub(crate) trait CompactionLlm: Send + Sync {
-    async fn complete(
-        &self,
-        req: LlmRequest,
-        budget: Duration,
-        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
-    ) -> Result<LlmResponse, LlmError>;
-}
+/// 为什么住在 [`send`] 那一半（400 行纪律 · 刀⑦b）：发送面 = 「口 + 发 + 验货」
+/// 是同一件事；本体（这个文件）管的是「要不要发、瞄多大、失败之后怎么办」。
+/// 本体只留**名字**（`compact::deep::CompactionLlm` 那个路径不变）。
+pub(crate) use send::CompactionLlm;
 
-#[async_trait]
-impl CompactionLlm for crate::llm::AppLlm {
-    async fn complete(
-        &self,
-        req: LlmRequest,
-        budget: Duration,
-        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
-    ) -> Result<LlmResponse, LlmError> {
-        self.complete_compaction(req, budget, on_delta).await
-    }
-}
+/// `ContextCompacted.strategy` 在这一层的取值（唯一出处：写侧与判据都读它）。
+pub(crate) const STRATEGY: &str = "compact";
 
 /// 这一趟的界面钩子（压缩层不认 UI，只管敲门；翻译成事件由 runner 那一层做）。
 pub(crate) struct Hooks<'a> {

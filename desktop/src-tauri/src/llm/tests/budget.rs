@@ -1,7 +1,7 @@
 //! specs/12 刀①：辅助调用的**总时长预算**与**可中止**。
 //!
 //! 被测面 = `llm::client` 的重试环（预算怎么掐）+ `llm::retry` 的预算判据
-//! （压缩层靠它把「预算耗尽」与「别的失败」分开）。
+//! （压缩层靠**档位**把「预算耗尽」与「别的失败」分开，specs/13 刀⑦b）。
 //!
 //! 为什么起一个**本地 TCP 假服务器**而不是纯函数：预算的承重点恰恰是
 //! 「**单次尝试也受约束**」——只查「重试前累计耗时」不够，一次失败尝试自己
@@ -11,6 +11,9 @@
 //! 两个假端点形态（判据要能分开它们）：
 //! - `Fail`：恒 500 ⇒ 瞬时故障 ⇒ 客户端会重试；
 //! - `Hang`：接受连接后**一个字节都不写** ⇒ 客户端挂在读上。
+//!
+//! 假端点本体是**共享夹具**（`tests/mod.rs` 的 `fake_endpoint`）：两处各写一遍
+//! = 两个形状。
 
 use super::*;
 
@@ -18,78 +21,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
-
-use crate::settings::{LlmSettings, NetworkProxy};
-
-/// 假端点的应答形态。
-#[derive(Clone, Copy)]
-enum Mode {
-    /// 恒 500：瞬时故障 ⇒ 客户端会重试。
-    Fail,
-    /// 接受连接后一个字节都不写：连接挂在读上（空连接挂死）。
-    Hang,
-}
-
-/// 起一个本地假端点，返回它的 base url（端点路径照客户端的归一走 `/v1/...`，
-/// 假服务器不关心路径）。
-async fn fake_endpoint(mode: Mode) -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-    let addr = listener.local_addr().expect("addr");
-    tokio::spawn(async move {
-        while let Ok((mut sock, _)) = listener.accept().await {
-            tokio::spawn(async move {
-                // 读掉请求（客户端在等响应；读不完也不影响它收到响应）
-                let mut buf = vec![0u8; 16 * 1024];
-                let _ = sock.read(&mut buf).await;
-                match mode {
-                    Mode::Fail => {
-                        let _ = sock
-                            .write_all(
-                                b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n",
-                            )
-                            .await;
-                    }
-                    Mode::Hang => {
-                        // 不写、不关：客户端挂在读上，直到它自己的看门狗或预算接管
-                        std::future::pending::<()>().await;
-                    }
-                }
-            });
-        }
-    });
-    format!("http://{addr}")
-}
-
-/// 指向本地假端点的配置。
-///
-/// ⚠ `network_proxy = direct` 是**必须**的：缺省是 system 档（吃环境变量），
-/// 开发机上有 `HTTP_PROXY` 时请求会被代理接管 ⇒ 测的根本不是本地端点。
-fn cfg_to(base: &str) -> LlmSettings {
-    LlmSettings {
-        provider: "openai".into(),
-        model: "m".into(),
-        base_url: Some(base.into()),
-        api_key: Some("sk-test".into()),
-        window_tokens: None,
-        headers: Default::default(),
-        network_proxy: Some(NetworkProxy {
-            mode: "direct".into(),
-            url: None,
-        }),
-    }
-}
-
-fn one_user_req() -> LlmRequest {
-    LlmRequest {
-        messages: vec![Message::User {
-            content: "hi".into(),
-            parts: Vec::new(),
-        }],
-        ..Default::default()
-    }
-}
+/// 恒 500 的应答（瞬时故障 ⇒ 客户端会重试）。
+const FAIL_500: &str = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
 
 /// AC-1：预算耗尽 = **一次失败**（Err），不是无限重试。
 ///
@@ -101,7 +34,7 @@ fn one_user_req() -> LlmRequest {
 /// 超时把它变成一条红色的断言（"预算内就该回来"），变异才真的报红。
 #[tokio::test]
 async fn a_summary_call_over_budget_fails_instead_of_retrying_forever() {
-    let base = fake_endpoint(Mode::Fail).await;
+    let base = fake_endpoint(Some((FAIL_500.to_string(), String::new()))).await;
     let cfg = cfg_to(&base);
     let llm = CompatLlm::new();
     let started = std::time::Instant::now();
@@ -122,7 +55,12 @@ async fn a_summary_call_over_budget_fails_instead_of_retrying_forever() {
     let msg = err.to_string();
     assert!(
         msg.contains(retry::BUDGET_PREFIX),
-        "错误必须带预算前缀（压缩层靠它认这一档）：{msg}"
+        "错误必须带预算前缀（**日志标记**，判据已改走档位）：{msg}"
+    );
+    assert_eq!(
+        err.kind,
+        FailureKind::Budget,
+        "预算耗尽 ⇒ 档位 Budget（压缩层按**档**认这一档，不看文案）：{msg}"
     );
     assert!(
         started.elapsed() < Duration::from_secs(5),
@@ -138,7 +76,7 @@ async fn a_summary_call_over_budget_fails_instead_of_retrying_forever() {
 /// ⇒ 90s 的预算形同虚设 ⇒ 卡死原样还在。
 #[tokio::test]
 async fn an_idle_summary_stream_is_aborted_by_the_budget_not_by_the_idle_watchdog() {
-    let base = fake_endpoint(Mode::Hang).await;
+    let base = fake_endpoint(None).await;
     let cfg = cfg_to(&base);
     let llm = CompatLlm::new();
     let started = std::time::Instant::now();
@@ -172,7 +110,7 @@ async fn an_idle_summary_stream_is_aborted_by_the_budget_not_by_the_idle_watchdo
 /// 它能收束。少任何一半，这条用例都证明不了"主路径没被这一刀动到"。
 #[tokio::test]
 async fn the_main_turn_keeps_its_unbounded_retry_and_its_stop_hook() {
-    let base = fake_endpoint(Mode::Fail).await;
+    let base = fake_endpoint(Some((FAIL_500.to_string(), String::new()))).await;
     let cfg = cfg_to(&base);
     let llm = CompatLlm::new();
     let stop = Arc::new(AtomicBool::new(false));
@@ -218,21 +156,26 @@ async fn the_main_turn_keeps_its_unbounded_retry_and_its_stop_hook() {
     assert!(resp.content.is_empty(), "停止后不虚构正文");
 }
 
-/// 预算判据只认自己那枚前缀——压缩层靠它把「预算耗尽」与「别的失败」分开，
-/// 认错档的表现是界面说错话（把"超预算"说成"网络或额度"）。
+/// 预算这一档的判据**住在接入面**（specs/13 刀⑦b）：压缩层按**档位**认它，
+/// 不再看文案前缀——`is_budget_exhausted` 那枚前缀判据随本刀退役（连同压缩层
+/// 那三枚同款文本判据一起删）。
+///
+/// 正向那一半由上面那条端到端用例钉住（预算耗尽 ⇒ 档位 `Budget`）；这里钉
+/// **反向**：别的档不许被认成预算耗尽——认错档的表现是界面说错话（把"超预算"
+/// 说成"网络或额度"）。
 #[test]
-fn the_budget_predicate_only_matches_its_own_prefix() {
-    assert!(retry::is_budget_exhausted(
-        "[budget] 调用超出总时长预算（90000ms）"
-    ));
-    assert!(
-        !retry::is_budget_exhausted("网络断了"),
-        "普通失败不许被认成预算耗尽"
-    );
-    assert!(
-        !retry::is_budget_exhausted("上下文超出模型窗口"),
-        "超窗是另一档（它有自己的递减带），不许被预算判据吃掉"
-    );
+fn no_other_failure_claims_the_budget_kind() {
+    // 反向：普通失败（400 请求错误）不许被认成预算耗尽。
+    let Failure::Fatal { kind, .. } = retry::classify_status(400, "invalid field 'foo'") else {
+        panic!("普通 400 是致命错误");
+    };
+    assert_ne!(kind, FailureKind::Budget, "普通失败不许被认成预算耗尽");
+    // 反向：超窗是另一档（它有自己的收缩带），不许被预算档吃掉。
+    let Failure::Fatal { kind, .. } = retry::classify_status(400, "context length exceeded") else {
+        panic!("超窗是致命错误");
+    };
+    assert_eq!(kind, FailureKind::ContextOverflow, "超窗归超窗那一档");
+    assert_ne!(kind, FailureKind::Budget, "超窗不许被预算档吃掉");
 }
 
 /// AC-6 的**接线半**：主对话轮的实际调用点**真的**没有传预算。
@@ -243,7 +186,7 @@ fn the_budget_predicate_only_matches_its_own_prefix() {
 /// 「用户 2026-08 的裁定被悄悄推翻」的地方。
 #[tokio::test]
 async fn the_main_turn_call_site_passes_no_budget() {
-    let base = fake_endpoint(Mode::Fail).await;
+    let base = fake_endpoint(Some((FAIL_500.to_string(), String::new()))).await;
     let root = temp_root("main-turn-budget");
     std::fs::write(
         root.join("settings.json"),

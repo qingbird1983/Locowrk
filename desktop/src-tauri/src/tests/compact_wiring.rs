@@ -11,8 +11,9 @@
 use super::*;
 
 use crate::compact::deep::{CompactionLlm, Compactor};
+use crate::llm::failure::{FailureKind, LlmCallError};
 use crate::runner::{run_turn, UsagePolicy};
-use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmUsage};
+use kernel_agent::{LlmRequest, LlmResponse, LlmUsage};
 use session_store::Message;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -48,7 +49,7 @@ impl CompactionLlm for FakeLlm {
         _req: LlmRequest,
         _budget: Duration,
         _on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
-    ) -> Result<LlmResponse, LlmError> {
+    ) -> Result<LlmResponse, LlmCallError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(LlmResponse {
             content: SUMMARY.to_string(),
@@ -303,9 +304,9 @@ impl CompactionLlm for Stoppable {
         _req: LlmRequest,
         _budget: Duration,
         _on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
-    ) -> Result<LlmResponse, LlmError> {
+    ) -> Result<LlmResponse, LlmCallError> {
         self.stop.request("s-stop");
-        Err(LlmError::Backend("已停止".into()))
+        Err(LlmCallError::new(FailureKind::Other, "已停止"))
     }
 }
 

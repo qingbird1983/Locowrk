@@ -3,6 +3,12 @@
 //! 30s / 瞬时 1-8s 翻倍封顶 / 服务器 `Retry-After` 优先 / 180s 空闲看门
 //! 狗）；**重试不设次数上限**（用户裁定"半次失败都不可接受"）——瞬时故障
 //! 一直重试到成功或用户点停止，单次等待始终封顶。
+//!
+//! **specs/13 刀⑦b**：致命错误这一档现在带**结构化档位**
+//! （[`FailureKind`]）——事实住在知道它的地方（状态码 + 报文），
+//! 消费方按档认，不再从文案里猜关键词。
+
+use super::failure::FailureKind;
 
 /// 限流退避：2s 起步 ×2 指数 + 25% 抖动，单次封顶 30s。
 pub const RATE_LIMIT_INITIAL_MS: u64 = 2_000;
@@ -23,17 +29,20 @@ pub enum Failure {
     /// 瞬时故障（408 / 5xx / 网络错误 / 超时 / 断流）。
     Transient { retry_after_ms: Option<u64> },
     /// 重试无意义的真错误——原样报给用户（鉴权失败 / 上下文超限 / 请求
-    /// 错误）。
-    Fatal(String),
+    /// 错误）。**带档位**（specs/13 刀⑦b）：`msg` 只给人看，判据看 `kind`。
+    Fatal { msg: String, kind: FailureKind },
 }
 
 /// HTTP 状态 + 响应体 → 分类。`Retry-After` 头由调用方解析后并入
 /// （`Failure::retry_after_ms`），本函数只看状态与报文语义。
 pub fn classify_status(status: u16, body: &str) -> Failure {
     match status {
-        401 | 403 => Failure::Fatal(format!(
-            "鉴权失败（HTTP {status}）：API Key 无效或无权限，请在 设置 → 模型配置 里检查"
-        )),
+        401 | 403 => Failure::Fatal {
+            msg: format!(
+                "鉴权失败（HTTP {status}）：API Key 无效或无权限，请在 设置 → 模型配置 里检查"
+            ),
+            kind: FailureKind::Other,
+        },
         429 => Failure::RateLimit {
             retry_after_ms: None,
         },
@@ -43,7 +52,7 @@ pub fn classify_status(status: u16, body: &str) -> Failure {
         500..=599 => Failure::Transient {
             retry_after_ms: None,
         },
-        400 | 413 if is_context_overflow(body) => Failure::Fatal(
+        400 | 413 if is_context_overflow(body) => Failure::Fatal {
             // ⚠ 这句文案原先指「设置 → 上下文 的**压缩阈值**」（队列 Q7 · CB §7.3）。那个设置项
             // 已随 v2.137 退役（`CtxCompact` 桌面链整条删掉，`settings/context.rs` 只剩
             // `threshold_tokens`），文案等于把用户指向一个空设置项。S2 那一批之后它又漂过一次：
@@ -52,13 +61,48 @@ pub fn classify_status(status: u16, body: &str) -> Failure {
             // 的手段：压缩阈值（调低 ⇒ 更早触发压缩）、新开会话、减少单次工具输出。
             // 判据 = `llm::tests::transport` 里那条"文案只指现役控件"（正向钉三个现存
             // 手段、反向钉退役字样），缺任何一侧都能被改回去而测试不红。
-            "上下文超出模型窗口：请新开会话继续，或把 设置 → 上下文 的压缩阈值调低（更早触发压缩），并减少单次工具输出（如 shell / fs_read 的返回量）。".into(),
-        ),
-        _ => {
-            let snippet: String = body.chars().take(300).collect();
-            Failure::Fatal(format!("HTTP {status}: {snippet}"))
-        }
+            msg: "上下文超出模型窗口：请新开会话继续，或把 设置 → 上下文 的压缩阈值调低（更早触发压缩），并减少单次工具输出（如 shell / fs_read 的返回量）。".into(),
+            kind: FailureKind::ContextOverflow,
+        },
+        // 413 那一族（字节太大）：与"太长"是两件事——多半是内联媒体，
+        // 压成纯文本再发就能过（上游 `compaction.ts:450`）。**结构化**判据：
+        // 状态码就是事实，不必在报文里找"payload too large"那几个词。
+        413 => Failure::Fatal {
+            msg: format!("HTTP {status}: {}", snippet(body)),
+            kind: FailureKind::PayloadTooLarge,
+        },
+        // 报文点名内容策略（别家供应商那一族）：档位单独记，文案照旧透传。
+        // 关键词表**全仓只剩这一份**（压缩层那份随 specs/13 刀⑦b 删除）。
+        400..=499 if mentions_content_policy(body) => Failure::Fatal {
+            msg: format!("HTTP {status}: {}", snippet(body)),
+            kind: FailureKind::ContentFilter,
+        },
+        _ => Failure::Fatal {
+            msg: format!("HTTP {status}: {}", snippet(body)),
+            kind: FailureKind::Other,
+        },
     }
+}
+
+/// 报文片段（界面与日志看的那一段）。
+fn snippet(body: &str) -> String {
+    body.chars().take(300).collect()
+}
+
+/// 报文点名内容策略的关键词族（**全仓唯一一份**这份表）。
+///
+/// 为什么留在接入面：这里能看见**原文**；下游只拿到文案，看不见原文 ⇒
+/// 下游自己再抄一份表 = 两处各写一份、改一边另一边漂（压缩层那份已经删了）。
+fn mentions_content_policy(body: &str) -> bool {
+    const PATTERNS: [&str; 5] = [
+        "content_filter",
+        "content policy",
+        "content_policy",
+        "safety filter",
+        "moderation",
+    ];
+    let lower = body.to_lowercase();
+    PATTERNS.iter().any(|p| lower.contains(p))
 }
 
 /// 上下文超限语义识别（各家措辞不一，取并集小写匹配；400/413 且命中才
@@ -77,23 +121,18 @@ fn is_context_overflow(body: &str) -> bool {
     PATTERNS.iter().any(|p| lower.contains(p))
 }
 
-/// 预算耗尽错误的前缀（specs/12 刀①）：`llm/client.rs` 的预算环打这一枚。
+/// 预算耗尽错误的**日志标记**（specs/12 刀①）：`llm/client.rs` 的预算环把它
+/// 打进文案前缀。
 ///
-/// 为什么要有这一枚而不是让调用方自己判断：压缩层要把「预算耗尽」与「别的失败」
-/// 分开——界面上要说的是两句不同的真话（"摘要模型没答上" vs "摘要调用超出了预算"）。
-/// 判据只有这一个出处：前缀串与判据函数同处一文件，改一边必须改另一边。
+/// ⚠ **它不再是判据**（specs/13 刀⑦b）：压缩层改按**档位**
+/// （[`FailureKind::Budget`]）认这一档 ⇒ 前缀只作日志/肉眼可读的标记留着。
+/// 以前有个 `is_budget_exhausted` 判前缀，**随本刀退役**（判据住在接入面，
+/// 消费方按档认，不猜文案）。
 pub(crate) const BUDGET_PREFIX: &str = "[budget]";
 
-/// 判一条**错误文本**是不是"预算耗尽"（specs/12 刀①：压缩层用它决定要给哪一档 why）。
-///
-/// 形态与 [`is_overflow_message`] 同款（同款先例）：判据住在模型接入面，压缩层
-/// 不自备关键词表——两处各写一份，改一边另一边会漂。
-pub(crate) fn is_budget_exhausted(msg: &str) -> bool {
-    msg.starts_with(BUDGET_PREFIX)
-}
-
 /// 判一条**错误文本**是不是"上下文超限"（S2 刀④d 的压缩层用它决定要不要递减
-/// 重试）。
+/// 重试；刀⑦b 之后压缩那条路改走**档位**，这一枚留给**跨内核边界**的那一处
+/// ——主对话轮的「超窗 ⇒ 触发压缩」，它拿到的是内核那枚字符串错误）。
 ///
 /// 为什么不许压缩层自己写一份关键词表：那是同一件事的第二个出处——上面那张
 /// `PATTERNS` 改一字（新接一家供应商），压缩层不会跟着改，表现是"摘要请求超窗时

@@ -15,17 +15,19 @@ use super::*;
 
 use crate::compact::deep::{CompactionLlm, Compactor};
 use crate::events::AgentEvent;
+use crate::llm::failure::{FailureKind, LlmCallError};
 use crate::runner::{run_turn, UsagePolicy};
-use kernel_agent::{LlmError, LlmRequest, LlmResponse};
+use kernel_agent::{LlmRequest, LlmResponse};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 /// 一个"摘要模型没答上"的发送口：如实报错 ⇒ 压缩层把它归到 `provider-error`
 /// （界面那半要说的"没压成"就是从这枚判据名来的）。
 ///
-/// 为什么报错文本**不**带任何关键词：判别"超窗 / 预算耗尽"靠的是模型接入面那
-/// 两份判据（`llm::is_overflow_message` / `llm::is_budget_exhausted`），压缩层
-/// 不自备关键词表。这条错误串刻意普通 ⇒ 落进 `provider-error` 那一档。
+/// 为什么报错**文案**刻意普通、**档位**取 `Other`：压缩层按**档**认失败
+/// （specs/13 刀⑦b），档位 `Other` = 没有更具体的归类 ⇒ 落进 `provider-error`
+/// 那一档。（改前这里靠"文案里没有关键词"来落到同一档——那是启发式，供应商
+/// 换个措辞就会落到别处去。）
 struct Failing {
     calls: AtomicUsize,
 }
@@ -45,9 +47,9 @@ impl CompactionLlm for Failing {
         _req: LlmRequest,
         _budget: Duration,
         _on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
-    ) -> Result<LlmResponse, LlmError> {
+    ) -> Result<LlmResponse, LlmCallError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Err(LlmError::Backend("摘要模型没答上".into()))
+        Err(LlmCallError::new(FailureKind::Other, "摘要模型没答上"))
     }
 }
 
@@ -63,11 +65,11 @@ impl CompactionLlm for BudgetProbe {
         _req: LlmRequest,
         budget: Duration,
         _on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
-    ) -> Result<LlmResponse, LlmError> {
+    ) -> Result<LlmResponse, LlmCallError> {
         self.budgets.lock().unwrap().push(budget);
         // 如实失败：压缩不落账 ⇒ 占用读数不回落 ⇒ 下一轮照样到线、照样再压一次
         // （压成的话第二轮就不压了，测不到"下一轮生效"）。
-        Err(LlmError::Backend("摘要模型没答上".into()))
+        Err(LlmCallError::new(FailureKind::Other, "摘要模型没答上"))
     }
 }
 

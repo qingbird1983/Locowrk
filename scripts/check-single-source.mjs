@@ -850,14 +850,18 @@ const CHECKS = [
       '于是"主轮能用 ≠ 摘要能用"（同一时刻两套配置解析、两套 system、两套工具目录）。' +
       '各只许一个调用点：多一个 = 有人另开了一条摘要通路（症状是"压缩总是不成"或' +
       '"摘要比主对话慢一大截"，而编译与行为测试都对它无感）；少一个 = 压缩面没接上主管线。' +
-      '⚠ 用**文件集合**而不是计数：集合一变当场看得见是谁（SS14a 同一条理由）。',
+      '⚠ 用**文件集合**而不是计数：集合一变当场看得见是谁（SS14a 同一条理由）。' +
+      '⚠ 2026-10-22（刀⑦b · 400 行纪律）：压缩面那一侧的**落点文件名**从 `compact/deep.rs` ' +
+      '变成 `compact/deep/send.rs`（发送口那个 trait 与它的生产面绑定挪进了"发送面"那一半）——' +
+      '**个数与语义不变**（`complete_compaction(` 仍只有"定义 + 唯一调用方"两个文件），' +
+      '变的只是调用方住在哪个文件。',
     (m) =>
       [
         filesWith(m.kernel, /prepare_request\s*\(/),
         filesWith(m.hostDesktop, /prepare_request\s*\(/),
         filesWith(m.hostDesktop, /complete_compaction\s*\(/),
       ].join('|'),
-    'kernel/request.rs|compact/deep.rs|compact/deep.rs|llm/app_llm.rs',
+    'kernel/request.rs|compact/deep.rs|compact/deep/send.rs|llm/app_llm.rs',
   ],
   [
     'SS32',
@@ -991,6 +995,34 @@ const CHECKS = [
       return `${filesWith(face, /\bUsagePolicy\s*\{/)}|${filesWith(face, /\.context_tokens\s*\(/)}`;
     },
     'none|none',
+  ],
+  [
+    'SS33',
+    '失败**档位**只有一个出处 + 压缩面那三枚文本判据**不许回来**（specs/13 刀⑦b · 挂账 ①）。' +
+      '四段读数：① `enum FailureKind` 的定义只住在 `llm/failure.rs`（档位是**一份声明**，' +
+      '不是两处各写一遍）；② `is_output_limit` / `is_content_filter` / ' +
+      '`is_payload_too_large` / `is_budget_exhausted` 四个名字在宿主生产面命中恒 `none`' +
+      '（压缩层按**档**认失败，不再从文案里猜关键词——这四个函数随刀⑦b 退役）；' +
+      '③ `fn mentions_content_policy(` 的定义只住在 `llm/retry.rs`（内容策略的关键词表' +
+      '**全仓只剩那一份**，住接入面 = 看得见原文的地方）；④ 那几个关键词串（"content policy" / ' +
+      '"content_policy" / "safety filter" / "moderation"）在宿主生产面也只出现在 ' +
+      '`llm/retry.rs`。' +
+      '为什么要有：判据从"文案"改成"档位"这件事**本身**没有行为可测——把某一枚退回文本' +
+      '匹配，界面那句"为什么没压成"会**说错原因**，而压缩面照跑不误（行为测试全绿）；' +
+      '这一档盯的是**形状**（还有没有人在猜文案），编译器与行为测试都看不见。' +
+      '⚠ ②的期望是 `none` ⇒ "面瞎了"与"真的没有"读数相同，由 FLOORS 的宿主文件数下限兜住；' +
+      '①③④ 各自点名一个文件，面塌掉时它们读成 `none` ⇒ 同样当场红。',
+    (m) =>
+      [
+        filesWith(m.hostDesktop, /enum\s+FailureKind/),
+        filesWith(
+          m.hostDesktop,
+          /is_output_limit|is_content_filter|is_payload_too_large|is_budget_exhausted/,
+        ),
+        filesWith(m.hostDesktop, /fn mentions_content_policy\s*\(/),
+        filesWith(m.hostDesktop, /"content policy"|"content_policy"|"safety filter"|"moderation"/),
+      ].join('|'),
+    'llm/failure.rs|none|llm/retry.rs|llm/retry.rs',
   ],
 ];
 
@@ -1354,6 +1386,14 @@ if (SELFTEST) {
     // 另一侧：别处再写一份计数器 = 两本账，漏还不报错。SS9c 要单独能为它红。
     SS9c: (m) =>
       m.frontSrc.push('let openLayers = 0\nexport function anyLayerOpen() { return openLayers > 0 }\n'),
+    // 刀⑦b（specs/13 挂账 ①）：把**退役的文本判据**放回压缩面 = 那种改法
+    // （不改一行行为测试、界面照样跑，只是"为什么没压成"会说错原因）。
+    // ⚠ 落在**宿主生产面**（这一档的扫描面就是它），变异得落在同一面才打得到。
+    SS33: (m) =>
+      m.hostDesktop.push({
+        rel: 'compact/deep/send.rs',
+        code: 'fn is_output_limit(msg: &str) -> bool {\n    msg.contains("finish_reason=length")\n}\n',
+      }),
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {

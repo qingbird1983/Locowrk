@@ -1,6 +1,6 @@
 //! specs/13 的验收判据（AC-1 … AC-13）：上下文压缩按 OpenCode V2 重写。
 //!
-//! 分六个子文件（400 行纪律）：
+//! 分八个子文件（400 行纪律）：
 //! · `prompt`   —— 提示词逐字（AC-3）与输出校验（AC-4）
 //! · `window`   —— 门槛（AC-1）、请求形态（AC-2）、保留区（AC-6）、三种触发（AC-7）
 //! · `checkpoint`—— checkpoint 逐字节（AC-5）
@@ -8,6 +8,7 @@
 //! · `persist`  —— 手动那一趟落盘（AC-13）
 //! · `persist_uniqueness` —— 唯一落盘口 / 游标单调 / 失败轮次也落盘（AC-20…AC-22，刀⑥）
 //! · `event`    —— 压成事件带摘要**全文**（AC-18，刀⑤）
+//! · `failure_kind` —— 失败**按档位**归类，不看文案（AC-28/AC-29，刀⑦b）
 //!
 //! 共享夹具住本文件：**假发送口**（脚本化，可回话也可报错）、**会话夹具**
 //! （占用读数已知）、**策略装配**（窗口 + 用户百分比）。
@@ -15,6 +16,7 @@
 mod checkpoint;
 mod event;
 mod failure;
+mod failure_kind;
 mod persist;
 mod persist_uniqueness;
 mod prompt;
@@ -29,6 +31,7 @@ use kernel_agent::{Kernel, LlmError, LlmRequest, LlmResponse, LlmService, LlmUsa
 use session_store::{Message, Session, SessionEvent};
 
 use crate::compact::deep::{CompactionLlm, Compactor, Hooks};
+use crate::llm::failure::{FailureKind, LlmCallError};
 use crate::runner::UsagePolicy;
 
 /// 一句回话的结局。
@@ -36,8 +39,10 @@ use crate::runner::UsagePolicy;
 pub(crate) enum Reply {
     /// 回这一段正文（当作模型的摘要）。
     Text(String),
-    /// 报这一句错。
+    /// 报这一句错（**普通**失败 ⇒ 档位 `Other`）。
     Fail(String),
+    /// 报这一句错，**带上档位**（specs/13 刀⑦b：压缩层按**档**认，不看文案）。
+    FailKind(FailureKind, String),
 }
 
 /// 脚本化的压缩发送口：**数趟数**、**把每一次请求原样留下来**。
@@ -78,7 +83,7 @@ impl CompactionLlm for Script {
         req: LlmRequest,
         _budget: Duration,
         _on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
-    ) -> Result<LlmResponse, LlmError> {
+    ) -> Result<LlmResponse, LlmCallError> {
         let n = self.calls.fetch_add(1, Ordering::SeqCst);
         self.seen.lock().expect("script seen poisoned").push(req);
         let reply = self
@@ -100,7 +105,8 @@ impl CompactionLlm for Script {
                     total: 333,
                 }),
             }),
-            Reply::Fail(e) => Err(LlmError::Backend(e)),
+            Reply::Fail(e) => Err(LlmCallError::new(FailureKind::Other, e)),
+            Reply::FailKind(kind, e) => Err(LlmCallError::new(kind, e)),
         }
     }
 }

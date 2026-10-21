@@ -114,6 +114,19 @@ check-channels FAILED=0 · SINGLE_SOURCE_OK · check_length 零新增 · check-d
 增一档 `Both { reasoning, content }`（同块两样都收、两样都外推）；`resetAssistant` 连末尾思考行
 一起清。判据：`llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条；**变异两条逐条
 报红**（①退回推理优先 return ⇒ 红 1 ②退回只清气泡 ⇒ 红 2）。
+**S5 刀⑤ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
+**挂账 ①**（三枚判据的启发式归类收敛）。改前：`output-limit` / `content-filter` / `payload-too-large`
+三枚判据靠**错误文本**匹配（压缩层从供应商报文里找关键词）⇒ 供应商换个措辞就归错档，界面那句
+「为什么没压成」直接说错；而且 `finish_reason=content_filter` 传输层**根本不当错误**（把任何
+`finish_reason` 都当正常收束）⇒ 主对话轮落一个**空气泡**、压缩层看到空回复（归 `no-summary`，
+还白跑一趟提醒重发）。改后：传输层在**知道事实的地方**分好档（HTTP 状态码 / `finish_reason` /
+预算环）⇒ 档位随错误往上走（宿主本地 `LlmCallError`；**不动**内核那枚 `LlmError`）⇒ 压缩层
+**按档认**，那三枚文本匹配函数与预算前缀判据**全删**；`content_filter` 改成与 `length` 闸**同款
+对称**的如实报错。判据：`llm/tests/failure_kind.rs` 六条（**真发一次**本地假端点）+ 
+`tests/compaction_opencode/failure_kind.rs` 七条（含「**文案不许改判**」那条反向）+ 同源闸
+**SS33**（档位只有一个出处 / 文本判据恒 `none` / 关键词表全仓只剩接入面那一份）。**变异三条逐条
+报红**：①传输层不挂档位（红 1）②压缩层退回文本匹配（红 3，含反向那条）③传输层去掉
+`content_filter` 闸（红 1）。
 **S5 刀③ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
 **挂账 ⑦**（落盘口收成一处 + 失败轮次的步内事件落盘）。改前：落盘游标**每个调用点自己算**
 （runner 的 `log_start`/`before`/`len-1`、压缩层的 `from`、heal 的 `seq`）⇒ 「磁盘上到哪儿了」有**好几个
@@ -159,8 +172,8 @@ runner 里落了）⇒ 压完看着一切正常，**重开应用压缩连同摘�
 `{"type":"llm_usage",…}` + `{"type":"context_compacted","kept_messages":2,"keep_from":7,"summary":"## Objective…"}`，
 **重启后断层条与 checkpoint 仍在**（修复前那屏是没有断层的）。
 **仍欠**（2026-10-22 用户已授权「按建议规划然后开始」，排期见 specs/13 的「计划」）：
-~~specs/12 那两笔挂账缺陷~~（= **刀⑦a 已结清**，见上面 S5 刀④）；`output-limit` / `content-filter` 两枚判据靠错误文本启发式
-匹配（传输层不暴露 `finish_reason` = 刀⑦b）；权威层 `docs/design/authority/` 的现役机制描述欠一次专项
+~~specs/12 那两笔挂账缺陷~~（= **刀⑦a 已结清**，见上面 S5 刀④）；~~`output-limit` / `content-filter` 两枚判据靠错误文本启发式
+匹配~~（= **刀⑦b 已结清**，见上面 S5 刀⑤）；权威层 `docs/design/authority/` 的现役机制描述欠一次专项
 对齐（[LOCK]，要向人确认 = 刀⑧；刀⑤ 已按 §零.5 的规矩先改了 `Front-end Design Guidelines`）。
 （~~**落盘口仍有两处**＋**失败轮次的步内事件不进日志**~~ = **刀⑥ 已结清**，见上面 S5 刀③。）
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |

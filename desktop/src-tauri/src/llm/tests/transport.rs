@@ -27,8 +27,14 @@ fn sse_parser_buffers_lines_across_chunks() {
 /// 普通 4xx fatal（带报文片段）。
 #[test]
 fn classify_follows_status_and_body() {
-    assert!(matches!(retry::classify_status(401, ""), Failure::Fatal(_)));
-    assert!(matches!(retry::classify_status(403, ""), Failure::Fatal(_)));
+    assert!(matches!(
+        retry::classify_status(401, ""),
+        Failure::Fatal { .. }
+    ));
+    assert!(matches!(
+        retry::classify_status(403, ""),
+        Failure::Fatal { .. }
+    ));
     assert!(matches!(
         retry::classify_status(429, "rate limited"),
         Failure::RateLimit {
@@ -46,15 +52,15 @@ fn classify_follows_status_and_body() {
     // 400 + 上下文超限语义 → fatal（重试不会变小）
     assert!(matches!(
         retry::classify_status(400, "maximum context length exceeded"),
-        Failure::Fatal(_)
+        Failure::Fatal { .. }
     ));
     assert!(matches!(
         retry::classify_status(413, "too many tokens"),
-        Failure::Fatal(_)
+        Failure::Fatal { .. }
     ));
     // 普通 400 = 请求错误，如实透传
     let f = retry::classify_status(400, "invalid field 'foo'");
-    assert!(matches!(f, Failure::Fatal(_)));
+    assert!(matches!(f, Failure::Fatal { .. }));
 }
 
 /// 超限文案只许点名**现役**控件（队列 Q7 · CB §7.3）。反向半边同样承重，而且它在
@@ -66,7 +72,7 @@ fn classify_follows_status_and_body() {
 #[test]
 fn context_overflow_message_points_at_live_controls_only() {
     let msg = match retry::classify_status(400, "maximum context length exceeded") {
-        Failure::Fatal(m) => m,
+        Failure::Fatal { msg: m, .. } => m,
         other => panic!("上下文超限必须判 Fatal（重试不会变小），实得 {other:?}"),
     };
     for live in ["新开会话", "压缩阈值", "shell"] {
@@ -87,14 +93,17 @@ fn context_overflow_message_points_at_live_controls_only() {
     );
 }
 
-/// 压缩层（S2 刀④d 的 overflow 递减带）判"是不是超窗"吃的是**错误文本**：直呼通路
-/// 把上面的分类结果 `to_string()` 之后交回来（`llm/aux_client.rs`），交回来的是这句
-/// **中文**而不是原始报文。所以中文文案与英文并集必须由同一个谓词认出——改了文案而
-/// 谓词没跟上，表现是"摘要请求超窗时不递减、直接放弃"，也就是把唯一能自愈的那一档
-/// 悄悄删掉，而且没有任何一条其它用例会红。
+/// 上下文超限语义识别：中文 Fatal 文案与英文并集必须由**同一个谓词**认出。
+///
+/// ⚠ **它现在只服务跨内核边界的那一处**（specs/13 刀⑦b）：压缩那条路改走
+/// **档位**（`FailureKind::ContextOverflow`，传输层分好档随错误上来），主对话轮
+/// 的「超窗 ⇒ 触发压缩」拿到的是内核那枚**字符串**错误 ⇒ 仍按文本认。
+/// 中文文案与英文并集必须同源可判：改了文案而谓词没跟上，表现是"超窗时不递减、
+/// 直接放弃"，也就是把唯一能自愈的那一档悄悄删掉，而且没有任何一条其它用例会红。
 #[test]
 fn the_overflow_message_is_recognised_by_the_same_predicate() {
-    let Failure::Fatal(text) = retry::classify_status(413, "This prompt is too long") else {
+    let Failure::Fatal { msg: text, .. } = retry::classify_status(413, "This prompt is too long")
+    else {
         panic!("413 + 超限措辞该判 Fatal");
     };
     assert!(

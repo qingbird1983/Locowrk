@@ -115,8 +115,14 @@ async fn the_compaction_shrinks_in_opencode_steps() {
     );
     assert_eq!(crate::compact::recent::omitted_note(0), "");
     // ③ 端到端：被拒一次 ⇒ 缩一次再发（第二趟更小），压成
+    //
+    // ⚠ 那一拒的**档位**是 `ContextOverflow`（specs/13 刀⑦b）：压缩层按档
+    // 认"太长"（不看文案）——所以这里给的是**档位**，文案随便写。
     let script = Script::new(vec![
-        Reply::Fail("context length exceeded".into()),
+        Reply::FailKind(
+            FailureKind::ContextOverflow,
+            "任意串（文案不参与判别）".into(),
+        ),
         Reply::Text(valid_summary()),
     ]);
     let (cp, _root) = compactor("ac9", Arc::clone(&script), true, 50);

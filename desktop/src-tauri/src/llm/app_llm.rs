@@ -24,6 +24,7 @@ use serde_json::Value;
 
 use super::client::{CompatLlm, RetryHooks};
 use super::dialect;
+use super::failure::{FailureKind, LlmCallError};
 use super::wire::WireCaps;
 use crate::demo_llm::DemoLlm;
 use crate::model_override::ModelOverrideStore;
@@ -222,19 +223,28 @@ impl AppLlm {
     ///
     /// ⚠ **不记拒收读数**：压缩请求自己被拒是收缩矩阵内部的事（它自己会缩），
     /// 记进会话的占用读数会把"这次压缩有多大"错当成"会话占了多少"。
+    ///
+    /// 错误类型是 [`LlmCallError`]（**带档位**，specs/13 刀⑦b）：压缩层按**档**
+    /// 认失败（不猜文案）——这是它与主对话轮那条路（内核契约，字符串）最大的
+    /// 区别，也是本刀能收敛那三枚启发式判据的前提。
     pub async fn complete_compaction(
         &self,
         req: LlmRequest,
         budget: Duration,
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
-    ) -> Result<LlmResponse, LlmError> {
+    ) -> Result<LlmResponse, LlmCallError> {
         self.diagnose(&req);
         let (req, cfg, caps, image_allowed) = self.prepare(req);
         if cfg.model.trim().is_empty() {
             tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
-            return self.demo.complete_streaming(req, on_delta).await;
+            return self
+                .demo
+                .complete_streaming(req, on_delta)
+                .await
+                .map_err(|e| LlmCallError::new(FailureKind::Other, e.to_string()));
         }
-        super::wire::check_modalities(&req, image_allowed).map_err(LlmError::Backend)?;
+        super::wire::check_modalities(&req, image_allowed)
+            .map_err(|e| LlmCallError::new(FailureKind::Other, e))?;
         let hooks = self.hooks_quiet(req.session_id.as_deref());
         let assets = self.assets.as_deref();
         self.real
@@ -254,23 +264,24 @@ impl AppLlm {
     /// 拒收现场记账（S2 刀⑧）。三条发送收口各调一次（与 [`Self::diagnose`] 同一条
     /// 惯例），算式因此只有一份。
     ///
-    /// 只认**超窗**：判别复用 `llm::retry` 那一份 `is_overflow_message`（不许有第二种
-    /// "这算超窗"的说法——限流、鉴权、模态拒发都各有自己的收口，把它们也记进来就等于
-    /// 让压缩层去追一堆跟窗口无关的失败）。占用尺用发送侧同一把
-    /// `estimate_tokens(&req.messages)`（与 `wire::payload` 那处预检钳制、与机械层的
-    /// `from_tokens` 同尺 ⇒ 不是第四把尺）。
+    /// 只认**超窗**：判据是**档位** [`FailureKind::ContextOverflow`]（specs/13 刀⑦b
+    /// ——传输层知道事实的地方分好的档；不许有第二种"这算超窗"的说法——限流、
+    /// 鉴权、模态拒发都各有自己的收口，把它们也记进来就等于让压缩层去追一堆跟
+    /// 窗口无关的失败）。占用尺用发送侧同一把 `estimate_tokens(&req.messages)`
+    /// （与 `wire::payload` 那处预检钳制、与机械层的 `from_tokens` 同尺 ⇒ 不是
+    /// 第四把尺）。
     pub(crate) fn refusal_note(
         &self,
         sid: Option<&str>,
         est: u64,
-        out: &Result<LlmResponse, LlmError>,
+        out: &Result<LlmResponse, LlmCallError>,
     ) {
         let (Some(table), Some(sid), Some(err)) =
             (self.refusals.as_deref(), sid, out.as_ref().err())
         else {
             return;
         };
-        if super::is_overflow_message(&err.to_string()) {
+        if err.kind == FailureKind::ContextOverflow {
             tracing::info!(
                 session = sid,
                 tokens = est,
@@ -466,7 +477,7 @@ impl LlmService for AppLlm {
             .complete_with(&cfg, caps, req, assets, None, None)
             .await;
         self.refusal_note(sid.as_deref(), est, &out);
-        out
+        out.map_err(|e| e.into_backend())
     }
 
     /// ⑳ 流式分发：同 complete 的设置驱动——未配置走演示替身（缺省实现
@@ -503,7 +514,7 @@ impl LlmService for AppLlm {
             )
             .await;
         self.refusal_note(sid.as_deref(), est, &out);
-        out
+        out.map_err(|e| e.into_backend())
     }
 
     /// v2.57 推理通道分发：演示替身走缺省回落（无推理），真实模型把
@@ -541,6 +552,6 @@ impl LlmService for AppLlm {
             )
             .await;
         self.refusal_note(sid.as_deref(), est, &out);
-        out
+        out.map_err(|e| e.into_backend())
     }
 }

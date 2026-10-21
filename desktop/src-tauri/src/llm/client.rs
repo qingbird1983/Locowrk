@@ -21,6 +21,7 @@ use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmService};
 use crate::settings::LlmSettings;
 
 use super::dialect::{self, Dialect};
+use super::failure::{FailureKind, LlmCallError};
 use super::models::{
     apply_proxy, join_version, DEFAULT_ANTHROPIC_BASE, DEFAULT_OLLAMA_BASE, DEFAULT_OPENAI_BASE,
 };
@@ -49,10 +50,14 @@ pub struct RetryHooks {
     pub on_retry: Box<dyn Fn(u32, u64) + Send + Sync>,
 }
 
-/// 单次尝试的失败：Fatal 原样上抛；Retryable 带分类、是否已向外推过 delta
-///（重置判定）、以及 stream_options 修复提示（网关点名拒绝时去掉重发）。
+/// 单次尝试的失败：Fatal 原样上抛（**带档位**：specs/13 刀⑦b——事实住在
+/// 知道它的地方，档位随错误往上走）；Retryable 带分类、是否已向外推过 delta
+/// （重置判定）、以及 stream_options 修复提示（网关点名拒绝时去掉重发）。
 enum AttemptError {
-    Fatal(String),
+    Fatal {
+        msg: String,
+        kind: FailureKind,
+    },
     Retryable {
         failure: Failure,
         emitted: bool,
@@ -123,7 +128,7 @@ impl CompatLlm {
     }
 
     /// 缺 Key 先行报错（对桌面用户友好）；ollama 无需 Key。
-    fn key_check(cfg: &LlmSettings) -> Result<(), LlmError> {
+    fn key_check(cfg: &LlmSettings) -> Result<(), LlmCallError> {
         let env_name = match cfg.provider.as_str() {
             "openai" => Some("OPENAI_API_KEY"),
             "anthropic" => Some("ANTHROPIC_API_KEY"),
@@ -137,11 +142,14 @@ impl CompatLlm {
                 .filter(|k| !k.is_empty())
                 .is_some();
             if !has_key && std::env::var(env_name).is_err() {
-                return Err(LlmError::Backend(format!(
-                    "provider `{}` 缺少 API Key：请在 设置 → 模型配置 里填写，\
+                return Err(LlmCallError::new(
+                    FailureKind::Other,
+                    format!(
+                        "provider `{}` 缺少 API Key：请在 设置 → 模型配置 里填写，\
                      或设置环境变量 {env_name}",
-                    cfg.provider
-                )));
+                        cfg.provider
+                    ),
+                ));
             }
         }
         Ok(())
@@ -153,6 +161,9 @@ impl CompatLlm {
     /// 没有——主对话轮的既有调用点就靠这一档保持**逐字不变**。
     /// `budget`（specs/12 刀①）= **总时长预算**（含全部重试）；`None` = 不设限。
     /// 「重试不设上限」那条裁定就靠这一档保持不变，辅助路径才设限。
+    ///
+    /// 错误类型是 [`LlmCallError`]（**带档位**，specs/13 刀⑦b）：内核契约那条
+    /// 路在边界上把它换成 `LlmError::Backend(文案)`，压缩那条路拿得到档位。
     pub async fn complete_with(
         &self,
         cfg: &LlmSettings,
@@ -161,7 +172,7 @@ impl CompatLlm {
         assets: Option<&crate::assets::AssetStore>,
         hooks: Option<&RetryHooks>,
         budget: Option<Duration>,
-    ) -> Result<LlmResponse, LlmError> {
+    ) -> Result<LlmResponse, LlmCallError> {
         self.complete_streaming_with(
             cfg,
             caps,
@@ -184,6 +195,9 @@ impl CompatLlm {
     /// 设了它，这条调用就有硬性上限：超预算 = **这一次调用失败**（Err），
     /// 不是继续转下去——辅助路径（摘要）就靠这条兜底，见
     /// [`specs/12-aux-call-budget`](../../../../specs/12-aux-call-budget/spec.md)。
+    ///
+    /// 错误类型是 [`LlmCallError`]（**带档位**，specs/13 刀⑦b）：压缩那条路
+    /// 按档认（不猜文案），内核契约那条路在边界上换成 `LlmError::Backend`。
     #[allow(clippy::too_many_arguments)]
     pub async fn complete_streaming_with(
         &self,
@@ -195,7 +209,7 @@ impl CompatLlm {
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         hooks: Option<&RetryHooks>,
         budget: Option<Duration>,
-    ) -> Result<LlmResponse, LlmError> {
+    ) -> Result<LlmResponse, LlmCallError> {
         Self::key_check(cfg)?;
         let dialect = dialect::dialect_of(cfg.base_url.as_deref());
         let mut attempt: u32 = 0;
@@ -232,7 +246,7 @@ impl CompatLlm {
             };
             match outcome {
                 Ok(resp) => return Ok(resp),
-                Err(AttemptError::Fatal(msg)) => return Err(LlmError::Backend(msg)),
+                Err(AttemptError::Fatal { msg, kind }) => return Err(LlmCallError::new(kind, msg)),
                 Err(AttemptError::Retryable {
                     failure,
                     emitted,
@@ -314,9 +328,17 @@ impl CompatLlm {
             cfg.network_proxy.as_ref(),
         )
         .build()
-        .map_err(|e| AttemptError::Fatal(format!("HTTP 客户端构建失败: {e}")))?;
-        let mut payload = build_payload(&cfg.model, req, true, dialect, caps, assets)
-            .map_err(AttemptError::Fatal)?;
+        .map_err(|e| AttemptError::Fatal {
+            msg: format!("HTTP 客户端构建失败: {e}"),
+            kind: FailureKind::Other,
+        })?;
+        let mut payload =
+            build_payload(&cfg.model, req, true, dialect, caps, assets).map_err(|e| {
+                AttemptError::Fatal {
+                    msg: e,
+                    kind: FailureKind::OutputLimit,
+                }
+            })?;
         if drop_stream_options {
             payload
                 .as_object_mut()
@@ -348,7 +370,7 @@ impl CompatLlm {
             let retry_after = parse_retry_after_ms(resp.headers());
             let body = resp.text().await.unwrap_or_default();
             return match retry::classify_status(status.as_u16(), &body) {
-                Failure::Fatal(msg) => Err(AttemptError::Fatal(msg)),
+                Failure::Fatal { msg, kind } => Err(AttemptError::Fatal { msg, kind }),
                 f => Err(AttemptError::Retryable {
                     repair_stream_options: status.as_u16() == 400
                         && !drop_stream_options
@@ -459,8 +481,27 @@ impl CompatLlm {
         // = length = 输出在 max_tokens 处被截断——截断不收束（按 Fatal 如实
         // 报错而非当完整轮次）、工具不执行（部分 tool_calls 一律丢弃）、
         // 截断消息不入史（错误路径不落 AssistantMessage）。
+        //
+        // 档位 `OutputLimit`（specs/13 刀⑦b）：`finish_reason` 就在手里 ⇒
+        // 档位随错误走，压缩层不再从中文文案里认"最大输出上限"那几个字。
         if acc.finish_reason() == Some("length") {
-            return Err(AttemptError::Fatal("模型输出在最大输出上限处被截断（finish_reason=length），本轮按未完成收束：部分结果与未完成的工具调用不执行不保存。可在 设置 → 模型 调大该模型的「最大输出」后重试".into()));
+            return Err(AttemptError::Fatal {
+                msg: "模型输出在最大输出上限处被截断（finish_reason=length），本轮按未完成收束：部分结果与未完成的工具调用不执行不保存。可在 设置 → 模型 调大该模型的「最大输出」后重试".into(),
+                kind: FailureKind::OutputLimit,
+            });
+        }
+        // 内容过滤闸（specs/13 刀⑦b）：`finish_reason = content_filter` = 供应商
+        // 拦了这次输出。改前它**不算错误**——传输层把任何 `finish_reason` 都当
+        // 正常收束 ⇒ 主对话轮落一个**空气泡**，压缩层看到空回复 ⇒ 归到
+        // `no-summary`（还白跑一趟 nudge 重发）。改后如实报错，档位
+        // `ContentFilter` ⇒ 压缩层归 `content-filter` 那一档。
+        //
+        // 与上面那道 length 闸**同款对称**（供应商说了什么，就照着说）。
+        if acc.finish_reason() == Some("content_filter") {
+            return Err(AttemptError::Fatal {
+                msg: "模型回复被内容过滤拦截（finish_reason=content_filter）：这次输出没被供应商放行，可改写被拦的那段后重试".into(),
+                kind: FailureKind::ContentFilter,
+            });
         }
         // 收束判据：[DONE] 或 finish_reason 到场才算完整；供应商中途断流
         // （半截正文 / 空收束）按可重试断流处理，不当成功
@@ -516,7 +557,7 @@ fn merge_retry_after(f: Failure, retry_after_ms: Option<u64>) -> Failure {
     match f {
         Failure::RateLimit { .. } => Failure::RateLimit { retry_after_ms },
         Failure::Transient { .. } => Failure::Transient { retry_after_ms },
-        Failure::Fatal(msg) => Failure::Fatal(msg),
+        Failure::Fatal { msg, kind } => Failure::Fatal { msg, kind },
     }
 }
 
@@ -525,22 +566,23 @@ fn failure_retry_after(f: &Failure) -> Option<u64> {
         Failure::RateLimit { retry_after_ms } | Failure::Transient { retry_after_ms } => {
             *retry_after_ms
         }
-        Failure::Fatal(_) => None,
+        Failure::Fatal { .. } => None,
     }
 }
 
-/// 预算耗尽的错误（specs/12 刀①）：`[budget]` 前缀 + 毫秒数。
+/// 预算耗尽的错误（specs/12 刀①）：`[budget]` 前缀 + 毫秒数，**档位 `Budget`**。
 ///
-/// 前缀是给压缩层认的（`llm::retry::is_budget_exhausted`），毫秒数是给人看的。
+/// 档位是给压缩层认的（specs/13 刀⑦b：判据改走**档位**，不再猜前缀）；
+/// 前缀与毫秒数是给人看的（日志里一眼看出"这条是超预算"）。
 /// 为什么必须是 **Err** 而不是"空收束"：空收束（`Ok(LlmResponse::default())`）
 /// 会被压缩层当成"摘要写完了"⇒ 验货七节不齐 ⇒ 记一次**摘要不合格**的失败，
 /// reason 也会错；预算耗尽得能被单独认出来。
-fn budget_exhausted(budget: Option<Duration>) -> LlmError {
+fn budget_exhausted(budget: Option<Duration>) -> LlmCallError {
     let ms = budget.map(|b| b.as_millis() as u64).unwrap_or_default();
-    LlmError::Backend(format!(
-        "{}调用超出总时长预算（{ms}ms）",
-        retry::BUDGET_PREFIX
-    ))
+    LlmCallError::new(
+        FailureKind::Budget,
+        format!("{}调用超出总时长预算（{ms}ms）", retry::BUDGET_PREFIX),
+    )
 }
 
 /// `retry-after-ms`（毫秒，浮点容许）→ `retry-after`（秒）。HTTP-date 解析

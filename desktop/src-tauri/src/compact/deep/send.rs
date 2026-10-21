@@ -1,16 +1,25 @@
-//! 压缩请求的**发送与验货**那一半（specs/13 刀③）。
+//! 压缩请求的**发送面**（specs/13 刀③）：**口 + 发 + 验货**。
 //!
-//! 这一半是"发出去之后发生的事"：发一趟 → 校验输出（不合格追加一次提醒重发）→
-//! 把供应商错误归到判据上。它有自己的失败分类表（[`Failure`]）与三枚文本判据，
-//! 而本体（`deep.rs`）管的是"要不要发、瞄多大"——两者动一处常常要连着动
-//! （改判据要改分类表，改分类表要改本体的分支）⇒ 放一处那个文件撑不住 400 行。
+//! 这一半是"发出去之后发生的事"：**口**（[`CompactionLlm`] 那个可注入的发送口
+//! ——主对话轮的 `LlmService` 契约里没有"带预算 + 不推重试事件 + delta 走自己
+//! 回调"这三样，没有这一层就没法在测试里换掉网络）→ **发**一趟 → **验货**
+//! （不合格追加一次提醒重发）→ 把供应商错误归到判据上。它有自己的失败分类表
+//! （[`Failure`]），而本体（`deep.rs`）管的是"要不要发、瞄多大"——两者动一处常常
+//! 要连着动（改判据要改分类表，改分类表要改本体的分支）⇒ 放一处那个文件撑不住
+//! 400 行。
+//!
+//! **失败怎么归档（specs/13 刀⑦b）**：按**档位**（[`FailureKind`]），**不猜文案**
+//! ——传输层在知道事实的地方（HTTP 状态码 / `finish_reason`）分好档，档位随错误
+//! 一起上来。原来这里有三份文本判据（`is_output_limit` / `is_content_filter` /
+//! `is_payload_too_large`），供应商换个措辞就归错档 ⇒ 随本刀删除。
 //!
 //! 逐字来源 = 上游 `packages/core/src/session/compaction.ts:293-316`（提醒一次）
 //! 与 `:544-580`（失败分类）。
 
 use std::time::{Duration, Instant};
 
-use kernel_agent::{LlmError, LlmRequest, LlmUsage};
+use async_trait::async_trait;
+use kernel_agent::{LlmRequest, LlmResponse, LlmUsage};
 use session_store::Message;
 
 use crate::compact::outcome::{
@@ -19,8 +28,40 @@ use crate::compact::outcome::{
     TEMPLATE_MISMATCH,
 };
 use crate::compact::prompt;
+use crate::llm::failure::{FailureKind, LlmCallError};
 
 use super::{Compactor, Hooks};
+
+/// 压缩请求的发送口（**可注入**：测试面塞假件，组装点接 [`crate::llm::AppLlm`]）。
+///
+/// 为什么要一层 trait 而不是直接拿 `AppLlm`：主对话轮的 `LlmService` 契约里
+/// 没有"带预算 + 不推重试事件 + delta 走自己回调"这三样（那是压缩独有的），
+/// 而没有这一层就没法在测试里换掉网络。
+///
+/// 错误类型是 [`LlmCallError`]（**带档位**，specs/13 刀⑦b）：压缩层按**档**认
+/// 失败（撞输出上限 / 被内容过滤 / 字节太大 / 超窗 / 预算耗尽），**不看文案**
+/// ——所以这个 trait 的错误类型是宿主本地的那一枚，不是内核的 `LlmError`。
+#[async_trait]
+pub(crate) trait CompactionLlm: Send + Sync {
+    async fn complete(
+        &self,
+        req: LlmRequest,
+        budget: Duration,
+        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
+    ) -> Result<LlmResponse, LlmCallError>;
+}
+
+#[async_trait]
+impl CompactionLlm for crate::llm::AppLlm {
+    async fn complete(
+        &self,
+        req: LlmRequest,
+        budget: Duration,
+        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
+    ) -> Result<LlmResponse, LlmCallError> {
+        self.complete_compaction(req, budget, on_delta).await
+    }
+}
 
 /// 失败的几档（判据名之外的形状）。
 pub(super) enum Failure {
@@ -115,27 +156,25 @@ impl Compactor {
     }
 
     /// 把一条模型错误归到判据上（上游 `compaction.ts:544-580` 的分类）。
-    fn classify(&self, err: LlmError, session_id: &str) -> Failure {
-        let msg = err.to_string();
+    ///
+    /// **按档位归类，不看文案**（specs/13 刀⑦b）：档位是传输层在**知道事实的
+    /// 地方**分好的（HTTP 状态码 / `finish_reason` / 预算环），随错误一起上来。
+    /// 文案只当"细节"往界面/日志带（`Failure::TooLong` / `PayloadTooLarge` /
+    /// `Provider` 那几档带它），**不参与归类**——所以把文案换成任意串也不该
+    /// 改变这一趟归到哪一档。
+    fn classify(&self, err: LlmCallError, session_id: &str) -> Failure {
         if self.is_stopped(session_id) {
             return Failure::Interrupted;
         }
-        if crate::llm::is_budget_exhausted(&msg) {
-            return Failure::Budget;
+        match err.kind {
+            FailureKind::Budget => Failure::Budget,
+            FailureKind::PayloadTooLarge => Failure::PayloadTooLarge(err.message),
+            FailureKind::ContextOverflow => Failure::TooLong(err.message),
+            FailureKind::OutputLimit => Failure::OutputLimit,
+            FailureKind::ContentFilter => Failure::ContentFilter,
+            // 其余（限流 / 瞬时 / 其它致命）：如实当供应商错误。
+            _ => Failure::Provider(err.message),
         }
-        if is_payload_too_large(&msg) {
-            return Failure::PayloadTooLarge(msg);
-        }
-        if crate::llm::is_overflow_message(&msg) {
-            return Failure::TooLong(msg);
-        }
-        if is_output_limit(&msg) {
-            return Failure::OutputLimit;
-        }
-        if is_content_filter(&msg) {
-            return Failure::ContentFilter;
-        }
-        Failure::Provider(msg)
     }
 }
 
@@ -144,41 +183,4 @@ fn remaining(deadline: Instant) -> Duration {
     deadline
         .saturating_duration_since(Instant::now())
         .max(Duration::from_millis(1))
-}
-
-/// 撞输出上限的判据（本仓的传输层把 `finish_reason=length` 翻成那句中文报错，
-/// 这里认它的稳定片段）。
-fn is_output_limit(msg: &str) -> bool {
-    msg.contains("finish_reason=length") || msg.contains("最大输出上限")
-}
-
-/// 内容过滤的判据（传输层不暴露 finish_reason ⇒ 只能按供应商原文认）。
-fn is_content_filter(msg: &str) -> bool {
-    let lower = msg.to_lowercase();
-    [
-        "content_filter",
-        "content policy",
-        "content_policy",
-        "safety filter",
-        "moderation",
-    ]
-    .iter()
-    .any(|m| lower.contains(m))
-}
-
-/// 「字节太大」的判据（与"太长"是两件事：前者多半是内联媒体，改纯文本就能发）。
-///
-/// 为什么住在压缩层而不是模型接入面：模型接入面的 `retry.rs` 判的是"上下文超限"
-/// （token 那一档），而这一档是 HTTP 413 那一族；这一刀的文件所有权不含
-/// `llm/retry.rs`，故就地落在这里并写清出处。
-fn is_payload_too_large(msg: &str) -> bool {
-    let lower = msg.to_lowercase();
-    [
-        "payload too large",
-        "request entity too large",
-        "body too large",
-        "request too large",
-    ]
-    .iter()
-    .any(|m| lower.contains(m))
 }

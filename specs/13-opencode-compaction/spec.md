@@ -359,7 +359,7 @@
   系统消息插在中间）：这是既有形状，两条一起改 = 改版面语义 ⇒ 另议。
 - **三枚判据的启发式归类收敛**（挂账 ①）= 刀⑦b。
 
-## 刀⑦b 三枚判据的启发式归类收敛（挂账 ①，待做）
+## 刀⑦b 三枚判据的启发式归类收敛（挂账 ①）
 
 **问题**：`output-limit` / `content-filter` / `payload-too-large` 三枚判据现在靠**错误文本**
 匹配（`compact/deep/send.rs` 的 `is_output_limit` / `is_content_filter` / `is_payload_too_large`）
@@ -370,24 +370,77 @@
   只是把它**翻成一句中文报错**，压缩层再从那句话里认字符串。
 - `payload-too-large`：传输层**本来就知道** HTTP 状态码（413 那一族在 `llm/retry.rs` 的
   `classify_status` 里），同样被翻成字符串。
-- `content-filter`：`finish_reason == "content_filter"`（OpenAI 形）传输层知道；供应商用
-  **报文里的结构化字段**（如 `promptFeedback.blockReason`）也能解析——不必全文找关键词。
+- `content-filter`：`finish_reason == "content_filter"`（OpenAI 形）传输层知道，但它今天
+  **根本不算错误**——传输层把任何 `finish_reason` 都当正常收束 ⇒ 压缩层拿到的是**空回复**
+  ⇒ 归到 `no-summary` / `template-mismatch`（还白跑一趟 nudge 重发）。
 
-**改法（推荐）**：**判据住在接入面、消费方按档认**（与 `is_context_overflow` / `is_overflow_message`
-同款先例——那两枚已经是"传输层判、压缩层认"）：
-1. 传输层在**知道事实的地方**分好档（状态码 / `finish_reason` / 报文里的结构化字段），
-   把档位随错误**结构化**带给上层（不留给下游去猜文本）。
-2. 压缩层按**档位**匹配，删掉三个文本匹配函数。
-3. 判据名表（9 条）一字不动（上游对齐不打折）——变的只是**归类依据**。
+### 裁定一：档位用什么形状 —— 宿主本地 `LlmCallError { kind: FailureKind, message: String }`
 
-**待定的两点**（下一刀开工前要定）：
-- 结构化档位用什么形状：错误类型加一枚变体（desktop 本地即可 —— `CompactionLlm` 这个 trait
-  就在宿主侧，**不必动 `kernel-agent` 的 `LlmError`**），还是另起一个 `LlmFailureKind` 枚举。
-- `content-filter` 的**报文族**要不要也认（非 OpenAI 形供应商的原文关键词）——认 = 覆盖全但仍是
-  启发式（只是搬到了接入面）；不认 = 干净但可能漏判。
+- **不动 `kernel-agent` 的 `LlmError`**（它只有 `Backend(String)` 一枚变体，且是内核对外契约）：
+  压缩那条路的发送口 `CompactionLlm` 是**宿主本地 trait** ⇒ 错误类型可以在宿主侧换成结构化
+  载体；主对话轮那条路（内核契约）原样不动。
+- `FailureKind` 的档位：`ContextOverflow` / `PayloadTooLarge` / `OutputLimit` / `ContentFilter` /
+  `Budget` / `RateLimit` / `Transient` / `Other`。
+- **文案只给人看，判据只看档位**：`message` 不参与任何归类判定（判据要钉住"把文案换成
+  任意串也不影响归类"）。
 
-**验收标准（草案）**：①三枚判据各一条用例：传输层给出结构化档位 ⇒ 压缩层归到对应判据名，
-   **不靠文本**（把错误文本改成任意串也不影响归类）；②变异：把某一枚退回文本匹配 ⇒ 那条红。
+### 裁定二：`content-filter` 的**报文族要认**，但只住在接入面
+
+- 认的理由：不认 ⇒ 非 OpenAI 形供应商（报文里点名内容策略的那些）永远归 `provider-error`，
+  界面那句"为什么没压成"就少说一条**用户能行动**的原因（换个说法 / 改写被拦的那段）。
+- 认的代价：仍是启发式（关键词匹配）——但它从**压缩层**搬到了**接入面**，且全仓只剩**一份**
+  关键词表（压缩层那份随本刀删除）。
+- **不解析供应商私有结构化字段**（如 `promptFeedback.blockReason`）：私有结构随版本变，
+  解析它等于把关键词启发式升级成"更脆的启发式"（字段改名即失效且无人报错）⇒ 登记在「没做的」。
+
+### 改法（清单）
+
+1. **接入面分档**（事实住在知道它的地方）：
+   - HTTP 家族在 `llm/retry.rs::classify_status`（状态码 + 报文）⇒ `ContextOverflow` /
+     `PayloadTooLarge`（413 那一族）/ `ContentFilter`（报文点名）/ `Other`；
+   - `finish_reason` 家族在 `llm/client.rs`（流式累积器已经收着它）⇒ `OutputLimit`（`length`）/
+     `ContentFilter`（`content_filter`）；
+   - 预算环在 `llm/client.rs`（它自己知道预算用完）⇒ `Budget`。
+   - 枚举**只有一个定义**（`llm/failure.rs`），上面两处只是**各自事实的判法**。
+2. **档位随错误往上走**：传输层对外的错误类型改成宿主本地的 `LlmCallError`；内核契约那条路
+   （`LlmService`）在边界上把**文案**交回去（`LlmError::Backend(message)`）⇒ 主对话轮的
+   **行为不变**。
+3. **压缩层按档认**：`compact/deep/send.rs` 的 `classify` 改成按 `FailureKind` 匹配，
+   **删掉三个文本匹配函数**；`is_budget_exhausted`（预算前缀判据）一并退役（判据改走档位）。
+4. **判据名表（9 条）一字不动**（上游对齐不打折）——变的只是**归类依据**。
+
+### 这一刀唯一的行为变化：`finish_reason=content_filter` 从「空收束」变「错误」
+
+- 改前：传输层把它当正常收束（空正文）⇒ 主对话轮落一个**空气泡**；压缩层看到空回复 ⇒
+  归 `no-summary`（还白跑一趟 nudge 重发）。
+- 改后：传输层报 `ContentFilter` 档 ⇒ 主对话轮如实报错（与 `finish_reason=length` 那道
+  G1 闸**同款对称**）；压缩层归 `content-filter` 判据名。
+- 顺带统一：别家供应商用 HTTP 400 报内容策略时**本来就是错误** ⇒ 改前是"有的供应商报错、
+  有的报空气泡"两种形态，改后一律报错。
+
+### 验收标准
+
+- [x] AC-28 **接入面分档**：`finish_reason=length` ⇒ 档位 `OutputLimit`；`finish_reason=content_filter`
+      ⇒ 档位 `ContentFilter`；HTTP 413 ⇒ 档位 `PayloadTooLarge`；400 + 超窗措辞 ⇒ 档位
+      `ContextOverflow`。用例名见 `llm/tests/failure_kind.rs`（真发一次本地假端点，不是纯函数）。
+- [x] AC-29 **压缩层按档认，文案不参与**：档位是 `OutputLimit` / `ContentFilter` /
+      `PayloadTooLarge` / `ContextOverflow` / `Budget` 时，压缩层分别归到**同名判据**
+      （`output-limit` / `content-filter` / `payload-too-large` 归 `provider-error` 那一档的
+      细分，见用例）/ `provider-error` 那一档——**把 `message` 换成任意串也不影响归类**。
+      用例名见 `tests/compaction_opencode/failure_kind.rs`。
+- [x] AC-30 **文本匹配退役**：压缩面**不再有**那三个文本判据（`is_output_limit` /
+      `is_content_filter` / `is_payload_too_large`）与 `is_budget_exhausted`；关键词表全仓
+      只剩接入面那一份。
+- [x] AC-31 **门禁**：`make check` 全绿；本刀每条新判据做**变异**必须报红（逐条记在提交正文）。
+
+### 这一刀**没**做的
+
+- **不解析供应商私有结构化字段**（`promptFeedback.blockReason` 那一族）：私有结构随版本变，
+  解析它比关键词更脆（字段改名即失效且无人报错）⇒ 只认 `finish_reason` 与报文关键词。
+- **不动主对话轮那条路**（内核契约 `LlmError` 只有字符串）：它那条"超窗 ⇒ 触发压缩"的判别
+  仍按文本认（`llm::is_overflow_message`）——内核契约没有结构化通道，改它要动 `kernel-agent`，
+  超出本刀范围。**边界写在明处**：压缩那条路走档位，主对话轮那条路走文本。
+- **不改判据名表**（9 条一字不动）。
 
 ## 非目标
 
@@ -413,8 +466,9 @@
 | SS24 / SS25 | 判据名两侧对账（11 / 9） | **改判据**：后端取值域改成扫 `compact/outcome.rs` 的 `REASONS: [&str; 9]` 那一行（字面量只许出现在表里），前端仍是 `COMPACT_SKIP_KEYS` 9 条 ⇒ 两侧逐条相等 |
 | **SS31（新增）** | —— | 压缩请求的装配**只有一个出处**：`prepare_request(` 与 `complete_compaction(` 的落点集合 = 压缩面是唯一调用方（第二份拼装的机械面） |
 | **SS32（新增）** | —— | 自动压缩阈值的**缺省与三档预置两侧对账**（后端校验权威 ↔ 界面候选清单） |
+| **SS33（新增 · 刀⑦b）** | —— | 失败**档位**只有一个出处（`enum FailureKind` 住在 `llm/failure.rs`）+ 压缩面那四枚文本判据恒 `none` + 内容策略关键词表**全仓只剩接入面那一份**（判据从"文案"改成"档位"这件事**本身**没有行为可测 ⇒ 只能盯形状） |
 
-## 计划（五刀）
+## 计划（刀序列：① … ⑧）
 
 - **刀① 核心算法与请求形态**（后端）：删 `llm/aux_client.rs` + `prompts/compact/*.md` + `compact/prompt.rs` 的自研部分；
   新 `compact/`（按上游切分：`prompt` / `plan` / `deliver` / `recent_text` / `outcome`）；
@@ -433,9 +487,10 @@
   产出 AC-20…AC-23。
 - **刀⑦a（✅ 已做）specs/12 两笔欠账**（挂账 ④）：传输层「推理优先丢正文」+
   前端 `resetAssistant` 不清思考行。产出 AC-25/AC-26。
-- **刀⑦b（待做）三枚判据的启发式归类收敛**（挂账 ①）：`output-limit` / `content-filter` /
-  `payload-too-large` 三枚靠错误文本匹配 ⇒ 要动 `llm/retry.rs` 的接入面（传输层分好档 ⇒
-  压缩层按档认，不再猜文本）。
+- **刀⑦b（✅ 已做）三枚判据的启发式归类收敛**（挂账 ①）：传输层在**知道事实的地方**
+  分好档（HTTP 状态码 / `finish_reason` / 预算环）⇒ 档位随错误往上走（宿主本地
+  `LlmCallError`）⇒ 压缩层**按档认**，删掉那三枚文本匹配函数与预算前缀判据；
+  `finish_reason=content_filter` 从"空收束"改成"如实报错"。产出 AC-28…AC-30。
 - **刀⑧（待做）权威层文档专项对齐**（挂账 ③）：`docs/design/authority/` 的规范语义在 [LOCK] 里，
   改前要向人说明并等确认。
 
@@ -470,6 +525,12 @@
 - [x] 刀⑦a：前端 `resetAssistant` 连**末尾思考行**一起清（失败那趟的推理不许留在行里）
 - [x] 刀⑦a：判据（`llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条）
       + 变异两条逐条报红
+- [x] 刀⑦b：新 `llm/failure.rs`（`FailureKind` 档位枚举 + `LlmCallError` 载体）
+- [x] 刀⑦b：传输层分档（HTTP 家族在 `llm/retry.rs::classify_status`、`finish_reason` 家族
+      在 `llm/client.rs`、预算环 → `Budget`）+ `finish_reason=content_filter` 改成如实报错
+- [x] 刀⑦b：压缩层**按档认**（`compact/deep/send.rs` 删掉三枚文本判据 + 预算前缀判据）
+- [x] 刀⑦b：判据（`llm/tests/failure_kind.rs` 六条 + `tests/compaction_opencode/failure_kind.rs`
+      七条 + 同源闸 **SS33**）+ 变异三条逐条报红
 
 ## 影响范围
 
@@ -512,10 +573,10 @@
 
 | # | 事项 | 为什么不在这一刀修 |
 | --- | --- | --- |
-| ① | `output-limit` / `content-filter` / `payload-too-large` 三枚判据**靠错误文本匹配**（本仓传输层不暴露 `finish_reason`，内容过滤只能按供应商原文关键词认，payload 太大只能按 HTTP 413 那一族认） | 判据名表本身是上游那 9 条（对齐没打折），但**归类依据是启发式** ⇒ 会随供应商措辞漂。要收敛得动 `llm/retry.rs` 的接入面，那不是这一刀的文件 |
+| ① | ~~`output-limit` / `content-filter` / `payload-too-large` 三枚判据**靠错误文本匹配**~~ | **刀⑦b 已结清（2026-10-22）**：传输层在知道事实的地方分好档（HTTP 状态码 / `finish_reason` / 预算环）⇒ 档位随错误往上走（宿主本地 `LlmCallError`）⇒ 压缩层**按档认**，那三枚文本匹配函数与预算前缀判据全删；`finish_reason=content_filter` 改成如实报错。判据 = `llm/tests/failure_kind.rs` 六条 + `tests/compaction_opencode/failure_kind.rs` 七条 + 同源闸 SS33，变异三条逐条报红。**边界留白**：主对话轮那条路跨内核边界（`LlmError` 只有字符串）⇒ 它的「超窗 ⇒ 触发压缩」仍按文本认 |
 | ② | 摘要预算那对预置清单（`SUMMARY_BUDGET_PRESETS_MS` ↔ `lib/summary-budget.ts`）**没有对账闸** | 这一刀新加的 SS32 只盯自动压缩阈值那一对。给旧的那对补闸 = 修无关代码（AGENTS §5「发现问题就登记，别在同一刀里顺手修」） |
 | ③ | `docs/design/authority/` 里**现役机制描述已过期**（`DESIGN.md` §⑨ 与 `Context and Memory.md` §3.2.2 仍写 v2.137 的「整理阈值 = 绝对 token」与「桌面压缩链整面退役」；§4.2 的 `Session` 结构示意里也没有刀⑥ 新增的那格落盘游标） | `DESIGN.md` 的规范语义在 AGENTS §5 的 [LOCK] 里，改它要**先向人说明并等确认**；且 specs/09/11/12 三批压缩改造同样没动它 ⇒ 权威层的这一段欠一次专项对齐。**刀⑤ 只动了 `Front-end Design Guidelines`（新增 §二⑲）** —— 那是用户 2026-10-22 明确裁定的新形态，按该标准 §零.5「先改标准再写码」的规矩必须同刀落地；**刀⑥ 也没动它**（§4.2 那段是**示意**不是字段清单，代码多一格游标不与它的规范语义冲突）；`DESIGN.md` 那两处仍在 [LOCK] 下待专项对齐（刀⑧） |
-| ④ | ~~`specs/12` 那两笔挂账缺陷（`llm/wire/stream.rs` 推理优先 return 丢正文 / `stores/chat/projection.ts` `resetAssistant` 不清 thinking 行）~~ | **刀⑦a 已结清（2026-10-22）**：传输层 `Delta` 增 `Both` 档（同块推理 + 正文两样都收、两样都外推）；前端 `resetAssistant` 连末尾思考行一起清。判据 = `llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条，变异两条逐条报红。**余下的**：三枚判据的启发式归类收敛（挂账 ①）= 刀⑦b |
+| ④ | ~~`specs/12` 那两笔挂账缺陷（`llm/wire/stream.rs` 推理优先 return 丢正文 / `stores/chat/projection.ts` `resetAssistant` 不清 thinking 行）~~ | **刀⑦a 已结清（2026-10-22）**：传输层 `Delta` 增 `Both` 档（同块推理 + 正文两样都收、两样都外推）；前端 `resetAssistant` 连末尾思考行一起清。判据 = `llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条，变异两条逐条报红。**余下的**：~~三枚判据的启发式归类收敛（挂账 ①）= 刀⑦b~~（**已结清**，见上面遗留表 ①） |
 | ⑤ | 压缩用的 `AppLlm` 是**第二个实例**（同一批 settings / overrides / catalog / assets / spill / stop 句柄；差别：不推重试通知、不记拒收读数、独立 diagnoser） | `state/mod.rs` 的 `Init` 不在本刀的文件面内；这一刀先保行为对齐，实例化那一层以后再收 |
 | ⑥ | 旧会话重放（旧日志的 `ContextCompacted` 没有 `keep_from` ⇒ 按 `kept_messages` 从尾部回退） | 只在 `session-store` 的单测里证过，**未做真机旧会话回归** |
 | ⑦ | ~~**落盘口仍是两处**（自动那条在 `runner/mod.rs` 的 step 边界、手动那条在 `compact/deep.rs::run_manual_and_persist`）~~ + ~~**失败轮次的步内事件不进日志**（`finish_turn` 只落 `TurnEnd`）~~ | **刀⑥ 已结清（2026-10-22）**：落盘游标住进会话（`Session::persisted`）⇒ **唯一落盘口** `session_log::persist_pending`（调用方不再传 `from`）；压缩三条通路（自动 / 手动 / 溢出）**自己落盘**（压缩器认日志目录，`run_manual_and_persist` 退役）；轮收束落**整段 pending** ⇒ 失败轮次的步内事件（溢出压完仍失败那一轮）也在盘上。判据 = `tests/compaction_opencode/persist_uniqueness.rs` 三条（AC-20…AC-22），变异四条逐条报红。**余下的**：写盘失败仍是「告警不阻断聊天」（只是不推进游标、下一趟补齐）—— 不是缺陷，是刻意的取舍 |
