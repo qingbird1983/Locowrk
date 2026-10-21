@@ -77,8 +77,13 @@ mtime，人改 `MEMORY.md` 下一轮生效），`<repo_context>` 从静态串改
 不改磁盘值）。判据新增八条（后端三 + 前端五），变异六条逐条报红。顺带按 400 行纪律
 **拆了两处**（`compact.rs` 的两张共用表 → `compact/tables.rs`；压缩接线面新判据 →
 `tests/compact_status_wiring.rs`，共享夹具上移 `tests/mod.rs`）。
-**仍欠**（specs/12 刀③）：roadmap 收口 + 挂账登记；另有两笔挂账缺陷另开一刀
-（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts` `resetAssistant` 不清 thinking 行）。
+**S4 刀⑧ ✅**（2026-10-21，specs/12 刀③，收口）——三刀收口：ADR-0008 落纸（随刀①）、
+两笔挂账缺陷登记（登记在 specs/12 的「非目标」与「风险与回滚 → 挂账 / 遗留」两处，**另开一刀**，
+不在那一刀里顺手修）、roadmap 勾选、`make check` 退出码 0 + `make selftest` 全绿。真机补一条
+证据：空会话里敲 `/压缩` ⇒ 转录里出那根发丝线「没压缩：对话还太短…」，**压缩状态线在真实窗口
+渲染正确**；**自动压缩三相的真机触发仍欠**（触发线是占用 ≥ 有效阈值 100K token ⇒ 要攒够十万
+token 才看得见，未擅自烧额度；证据边界与读数见 specs/12 的「真机验收」节）。
+**仍欠**：两笔挂账缺陷另开一刀（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts` `resetAssistant` 不清 thinking 行）。
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
 | 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |

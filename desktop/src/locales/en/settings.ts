@@ -280,7 +280,7 @@ export default {
     // path, three presets).
     summaryBudget: "Summary call budget",
     summaryBudgetHint:
-      "How long the summary call of an automatic compaction may take (total, retries included). Past that it counts as a failed compaction; after 3 in a row automatic compaction pauses — the turn itself carries on unaffected.",
+      "How long the summary call of an automatic compaction may take (total, retries included). Past that it counts as a failed compaction; after 3 in a row, automatic compaction pauses.",
     summaryBudgetOption: "{n}s",
     // v4.18 (§3.4): usage bar visibility (denominator = the slider above)
     usageBar: "Threshold usage bar",
