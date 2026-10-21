@@ -31,9 +31,9 @@ pub use app_llm::{AppLlm, RetryNotify};
 /// 摘要调用的用量读数：生产侧解构后丢弃，只有测试面组装假客户端时读它。
 #[cfg(test)]
 pub(crate) use aux_client::SummaryUsage;
-pub(crate) use aux_client::{AppLlmSummarizer, SummaryClient};
+pub(crate) use aux_client::{AppLlmSummarizer, SummaryClient, SummaryRequest};
 pub use client::{test_model, CompatLlm};
 pub use dialect::dialect_of;
 pub use embed::{CooledEmbed, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
-pub(crate) use retry::is_overflow_message;
+pub(crate) use retry::{is_budget_exhausted, is_overflow_message};
 pub use subagent_llm::SubagentLlm;

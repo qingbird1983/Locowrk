@@ -9,7 +9,7 @@
 use super::deep::{Compactor, Outcome, STRATEGY};
 use super::prompt::{build_prompt, missing_sections};
 use super::*;
-use crate::llm::{SummaryClient, SummaryUsage};
+use crate::llm::{SummaryClient, SummaryRequest, SummaryUsage};
 use crate::runner::UsagePolicy;
 use crate::settings::SettingsStore;
 use crate::testutil::work_dir;
@@ -50,16 +50,11 @@ impl Scripted {
 
 #[async_trait]
 impl SummaryClient for Scripted {
-    async fn complete(
-        &self,
-        system: &str,
-        user: &str,
-        model: Option<&str>,
-    ) -> Result<(String, SummaryUsage), String> {
+    async fn complete(&self, req: &SummaryRequest<'_>) -> Result<(String, SummaryUsage), String> {
         self.calls.lock().unwrap().push((
-            system.to_string(),
-            user.to_string(),
-            model.map(str::to_string),
+            req.system.to_string(),
+            req.user.to_string(),
+            req.model.map(str::to_string),
         ));
         let usage = SummaryUsage {
             input: 100,
@@ -133,6 +128,8 @@ fn compactor_with(
             // "Compactor 自带一张"完全相同——只是构造点换了地方。
             Arc::new(crate::compact::Failures::default()),
             refusals,
+            // 停止标记（specs/12 刀①）：None = 没有停止面（这些用例不测停止）。
+            None,
         ),
         cli,
     )
@@ -650,4 +647,110 @@ async fn the_whole_shrink_band_costs_exactly_one_failure() {
             .any(|e| matches!(e, SessionEvent::ContextCompacted { .. })),
         "压不成就一行都不许落账"
     );
+}
+
+// ---------- specs/12 刀①：辅助调用的预算与可中止 ----------
+
+/// 一个"会一直挂着"的摘要客户端：每 10ms 查一次停止标记，命中就如实报错。
+///
+/// 形态照真实实现（`llm/aux_client.rs` 的停止探针在吐字回调点查标记）——
+/// 夹具自己造一个"不会停"的假件，就测不出"用户按了停止能不能停掉摘要"。
+struct Hanging {
+    stop: Arc<crate::stop::StopFlags>,
+}
+
+#[async_trait]
+impl SummaryClient for Hanging {
+    async fn complete(&self, req: &SummaryRequest<'_>) -> Result<(String, SummaryUsage), String> {
+        let sid = req.session_id.unwrap_or_default();
+        loop {
+            if self.stop.is_stopped(sid) {
+                return Err("已停止".into());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }
+}
+
+/// AC-3（specs/12 刀①）：连续 3 次摘要失败 ⇒ 熔断 ⇒ 之后到线**不再发起摘要请求**。
+///
+/// 这一条在改之前**测不出来**：旧口径下失败压根不会返回（底层无限重试），
+/// 失败计数永远推进不到 3 ⇒ 熔断形同虚设。改之后失败能回来了，熔断才第一次
+/// 真的能触发——所以它同时是"卡死修好了"的旁证。
+#[tokio::test]
+async fn three_failures_fuse_the_auto_compaction_and_stop_further_requests() {
+    let (settings, _) = settings_with(serde_json::json!({}), "compact-fuse");
+    let cli = Scripted::new(vec![
+        Err("摘要模型没答上".into()),
+        Err("摘要模型没答上".into()),
+        Err("摘要模型没答上".into()),
+        Err("这次绝不该被用上".into()),
+    ]);
+    let (cp, cli) = compactor(settings, Arc::clone(&cli));
+    let mut s = session_with(6);
+    let p = policy_at(&s);
+    for i in 1..=3u32 {
+        let out = cp.run(&mut s, "s-fuse", &p).await;
+        match &out {
+            Outcome::Failed { why, failures, .. } => {
+                assert_eq!(*why, super::deep::WHY_CALL, "第{i}次失败的理由要说得准");
+                assert_eq!(*failures, i, "第{i}次失败该记第{i}次失败");
+            }
+            other => panic!("第{i}次该如实 Failed，实测 {other:?}"),
+        }
+    }
+    let before = cli.count();
+    let out = cp.run(&mut s, "s-fuse", &p).await;
+    assert_eq!(
+        out,
+        Outcome::Skipped("fused"),
+        "第4次该熔断（不再发请求），实测 {out:?}"
+    );
+    assert_eq!(cli.count(), before, "熔断后不再发起摘要请求（不多花一次）");
+}
+
+/// AC-4（specs/12 刀①）：停止标记在摘要调用期间命中 ⇒ 压缩**不记失败**
+/// （熔断账不动）并如实报「已停止」。
+///
+/// 为什么"不记失败"是承重点：用户主动停不是失败。记进熔断账的话，停过三次
+/// 之后自动压缩永久停手——那比卡死更隐蔽（用户不知道自己把压缩关掉了）。
+#[tokio::test]
+async fn stopping_during_a_summary_call_does_not_count_as_a_failure() {
+    let (settings, _) = settings_with(serde_json::json!({}), "compact-stop");
+    let stop = Arc::new(crate::stop::StopFlags::default());
+    let _guard = stop.guard("s-stop");
+    let cli = Arc::new(Hanging {
+        stop: Arc::clone(&stop),
+    });
+    let failures = Arc::new(crate::compact::Failures::default());
+    let cp = Compactor::new(
+        settings,
+        Arc::clone(&cli) as Arc<dyn SummaryClient>,
+        Arc::clone(&failures),
+        Arc::new(crate::compact::Overflow::default()),
+        Some(Arc::clone(&stop)),
+    );
+    let s = session_with(6);
+    let p = policy_at(&s);
+    // 起压缩：它会挂在摘要调用上，直到停止标记被置位
+    let handle = tokio::spawn({
+        let (cp, p) = (cp, p);
+        async move {
+            // 会话在任务里现造（`Session` 不许 clone；同款夹具 `session_with`）
+            let mut s = session_with(6);
+            cp.run(&mut s, "s-stop", &p).await
+        }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+    stop.request("s-stop");
+    let out = tokio::time::timeout(std::time::Duration::from_secs(10), handle)
+        .await
+        .expect("停止后压缩必须收束")
+        .expect("任务不崩");
+    assert_eq!(
+        out,
+        Outcome::Skipped(super::deep::WHY_STOPPED),
+        "停止命中的那一趟该如实报「已停止」，实测 {out:?}"
+    );
+    assert_eq!(failures.of("s-stop"), 0, "用户主动停不是失败：熔断账不许动");
 }

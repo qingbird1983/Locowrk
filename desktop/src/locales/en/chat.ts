@@ -114,6 +114,14 @@ export default {
       "Not compacted: the summary the model wrote was missing sections, so nothing was recorded (this counts toward the breaker).",
     compactSwitchOff:
       "Not compacted: deep compaction is currently switched off (Settings → Context → Deep compaction).",
+    // specs/12 knife ①: the summary call ran past its total time budget (the
+    // hard ceiling on the auxiliary path). Kept apart from compactCallFailed:
+    // that one is "it did not answer", this one is "it did not get there".
+    compactBudget:
+      "Not compacted: the summary call exceeded its time budget (adjust \"Summary call budget\" in Settings → Context).",
+    // specs/12 knife ①: the user pressed stop during compaction — that is not
+    // a failure, it was called off.
+    compactStopped: "Compaction stopped (you pressed stop generating).",
     compactUnknown: "Not compacted: {reason}",
     compactUndone:
       "Compaction undone: full pre-compaction context restored (later turns were rewound too).",

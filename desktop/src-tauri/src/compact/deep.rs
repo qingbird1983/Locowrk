@@ -20,6 +20,7 @@
 //! 试了几档都只算一个失败计数——把 4 趟算成 4 次失败，等于一轮就把这一层锁死。
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use kernel_agent::estimate_tokens;
 use session_store::{summarized_message, Session, SessionEvent};
@@ -46,6 +47,13 @@ pub(crate) const STRATEGY: &str = "compact";
 pub(crate) const WHY_CALL: &str = "summary-call";
 pub(crate) const WHY_OVERFLOW: &str = "overflow";
 pub(crate) const WHY_REJECTED: &str = "rejected";
+/// 预算耗尽（specs/12 刀①）：第四枚名字——「摘要调用超出了总时长预算」与
+/// 「摘要模型没答上」是两句不同的真话，界面必须能分开说（判据 =
+/// `llm::retry::is_budget_exhausted`，唯一出处）。
+pub(crate) const WHY_BUDGET: &str = "budget";
+/// 用户主动停（specs/12 刀①）：**不是失败**——它走 [`Outcome::Skipped`] 而不
+/// 走 [`Outcome::Failed`]，因此**不推进熔断计数**（停过三次不该让压缩永久停手）。
+pub(crate) const WHY_STOPPED: &str = "stopped";
 
 /// 一次尝试的读数。四个变体各对应"界面上该说什么"——判据不许靠"返回 0"
 /// 反推是哪一步拦的（S2 整理线 `Release::Skip` 同一条纪律，那个模块已随 S4 删除）。
@@ -85,6 +93,10 @@ pub(crate) struct Compactor {
     /// 超窗拒收的读数（刀⑧ · [`super::Overflow`]）：**写它的是发送侧**，本层只读 +
     /// 压成之后清。同一条"两个使用方不各建一张"的纪律 ⇒ 由组装点注入。
     refusals: Arc<Overflow>,
+    /// 停止标记（specs/12 刀①）：摘要请求在等重试与吐字两处都查它 ⇒ 用户点
+    /// 「停止生成」能停掉这条用户看不见的辅助请求。None = 没有停止面
+    /// （headless / 测试装配）。
+    stop: Option<Arc<crate::stop::StopFlags>>,
 }
 
 impl Compactor {
@@ -93,13 +105,20 @@ impl Compactor {
         aux: Arc<dyn SummaryClient>,
         failures: Arc<Failures>,
         refusals: Arc<Overflow>,
+        stop: Option<Arc<crate::stop::StopFlags>>,
     ) -> Self {
         Self {
             settings,
             aux,
             failures,
             refusals,
+            stop,
         }
+    }
+
+    /// 该会话是否已被请求停止（specs/12 刀①）。
+    fn is_stopped(&self, session_id: &str) -> bool {
+        self.stop.as_ref().is_some_and(|f| f.is_stopped(session_id))
     }
 
     /// 占用读数（"到线了没"的分子）。**S3 刀④a 起算式不在这里**——三档取最大的
@@ -207,15 +226,32 @@ impl Compactor {
             attempts += 1;
             match self
                 .aux
-                .complete(&system, &history, cfg.model.as_deref())
+                .complete(&crate::llm::SummaryRequest {
+                    system: &system,
+                    user: &history,
+                    model: cfg.model.as_deref(),
+                    // 归属会话只为停止标记与日志归属（specs/12 刀①）：摘要不吃
+                    // 会话级模型覆盖，`LlmRequest.session_id` 那一侧仍留空。
+                    session_id: Some(session_id),
+                    // 总时长预算（specs/12 刀①）：超了就是一次失败，推进熔断。
+                    budget: Some(Duration::from_millis(cfg.budget_ms)),
+                })
                 .await
             {
                 Ok((text, _)) => break text,
                 Err(e) => {
+                    // 用户主动停 ⇒ **不是失败**：记进熔断账会让"停过三次"之后
+                    // 自动压缩永久停手（specs/12 刀①）。
+                    if self.is_stopped(session_id) {
+                        return Outcome::Skipped(WHY_STOPPED);
+                    }
                     // 判别只许用 `llm::retry` 那一份（不许压缩层自备关键词表）：
                     // 认错了档，普通失败会被反复缩减重试白花几条往返，
                     // 而超窗被认成普通失败 = 唯一能自愈的那一档形同不存在。
                     let overflow = crate::llm::is_overflow_message(&e);
+                    // 预算耗尽是第三档：它不是"模型没答上"，也不是"超窗"——
+                    // 界面要说的话与那两句都不同（specs/12 刀①）。
+                    let budget = crate::llm::is_budget_exhausted(&e);
                     let ratio = overflow
                         .then(|| SHRINK_STEPS.get(attempts as usize - 1).copied())
                         .flatten();
@@ -226,11 +262,18 @@ impl Compactor {
                             failures,
                             attempts,
                             overflow,
+                            budget,
                             error = %e,
                             "深度压缩：摘要调用失败，不落账"
                         );
                         return Outcome::Failed {
-                            why: if overflow { WHY_OVERFLOW } else { WHY_CALL },
+                            why: if budget {
+                                WHY_BUDGET
+                            } else if overflow {
+                                WHY_OVERFLOW
+                            } else {
+                                WHY_CALL
+                            },
                             failures,
                             attempts,
                         };
@@ -246,6 +289,12 @@ impl Compactor {
                 }
             }
         };
+        // 停止可能发生在**吐字途中**（流式回调点截断）：那时摘要回来的是半截
+        // 文本 ⇒ 验货必然不过 ⇒ 不能记成「摘要不合格」。用户主动停不是失败
+        // （specs/12 刀①）。
+        if self.is_stopped(session_id) {
+            return Outcome::Skipped(WHY_STOPPED);
+        }
         // 验货在落账之前，而且验的是**要落进日志的那份文本**：先归一化（剥整段围栏、
         // 收空行）再逐节点名。顺序反过来会漏一档真形状——模型常把整份摘要包进代码块，
         // 原始串里带 `##` 而剥完什么也不剩，先验原始串就"合格"了，落账的却是一份空的。

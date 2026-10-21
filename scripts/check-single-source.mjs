@@ -716,15 +716,18 @@ const CHECKS = [
   [
     'SS24',
     '刀⑦ `/压缩` 的**判据名两侧对账**：后端交给界面的那批名字（`compact.rs` 里 `Plan::stop("…")` ' +
-      '∪ `deep.rs` 的三枚 `WHY_*` ∪ `commands/compact.rs` 的 `REASON_OFF`）与前端 ' +
+      '∪ `deep.rs` 的五枚 `WHY_*` ∪ `commands/compact.rs` 的 `REASON_OFF`）与前端 ' +
       '`COMPACT_SKIP_KEYS` 的键集合必须相等——但**手动通路让开的那两条除外**，而那两条也是从代码里 ' +
       '推出来的（`if !input.manual … Plan::stop("x")` 那两格），不写死在闸里。' +
       '为什么这条必须有：后端只回名字、人话住语言包（AGENTS「文案住语言包」+ 同类只许一种形态），' +
       '所以 Rust 侧新增一条 stop 而前端没补文案时，**编译与行为测试都说不出**——界面只会掉进兜底那条，' +
       '把一句本来有准确说法的判据显示成 `没压缩：brand-new-name`。反方向同样要红：前端多一条键 ' +
       '= 一句永远显示不出来的文案留在语言包里。' +
-      '⚠ why 那三枚原来是就地敲的字符串，本档把它们收成 `WHY_*` 常量（与 `STRATEGY` 同一条纪律）——' +
-      '不收的话，闸只能去匹配 `if overflow { "overflow" }` 这种句子，那式子一改措辞就假绿。',
+      '⚠ why 那几枚原来是就地敲的字符串，本档把它们收成 `WHY_*` 常量（与 `STRATEGY` 同一条纪律）——' +
+      '不收的话，闸只能去匹配 `if overflow { "overflow" }` 这种句子，那式子一改措辞就假绿。' +
+      '⚠ specs/12 刀① 加了两枚（`budget` 预算耗尽 / `stopped` 用户叫停）⇒ 取值域 9 → 11、' +
+      '前端 7 → 9：两枚都**不是**手动让开的那两条（手动通路同样会撞预算、同样会被叫停），' +
+      '所以前端两条文案必须补上，否则界面会把它们显示成兜底那条「没压缩：{reason}」。',
     (m) => {
       const rust = new Set([
         ...[...m.compact.matchAll(/Plan::stop\("([a-z-]+)"\)/g)].map((x) => x[1]),
@@ -746,21 +749,21 @@ const CHECKS = [
       );
       const want = new Set([...rust].filter((r) => !yielded.has(r)));
       const same =
-        want.size === front.size && [...want].every((r) => front.has(r)) && rust.size === 9;
+        want.size === front.size && [...want].every((r) => front.has(r)) && rust.size === 11;
       return same
         ? `same(${want.size})`
         : `RUST=[${[...rust].sort()}] YIELDED=[${[...yielded].sort()}] FRONT=[${[...front].sort()}]`;
     },
-    'same(7)',
+    'same(9)',
   ],
   [
     'SS25',
-    '前端 `COMPACT_SKIP_KEYS` 恰好 7 条（= 后端取值域 9 枚减去手动让开的那两条）。' +
+    '前端 `COMPACT_SKIP_KEYS` 恰好 9 条（= 后端取值域 11 枚减去手动让开的那两条）。' +
       '与 [`SS24`] 分两档不是为了凑数：SS24 比的是**两侧相等**，它能为"后端多一条而前端没配"红，' +
       '但前端自己多敲一条键时它同样红，红出来的读数长得一样，看不出是谁漂的。这一档只数前端，' +
       '所以"语言包里躺着一句永远显示不出来的文案"这种漂移有它自己的红。' +
-      '（两档都得活着：只留 SS24 的话，两侧同时各少一条会读成 `same(6)` 而它红不了——那正是 ' +
-      '`rust.size === 9` 那一格在盯的形状。）',
+      '（两档都得活着：只留 SS24 的话，两侧同时各少一条会读成 `same(8)` 而它红不了——那正是 ' +
+      '`rust.size === 11` 那一格在盯的形状。）',
     (m) =>
       String(
         new Set(
@@ -769,7 +772,7 @@ const CHECKS = [
             .map((x) => x[1]),
         ).size,
       ),
-    '7',
+    '9',
   ],
   [
     'SS26',

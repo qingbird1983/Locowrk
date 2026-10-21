@@ -76,6 +76,11 @@ const COMPACT_SKIP_KEYS: Record<string, string> = {
   // 手动通路理论上到不了这一格（后端 run_manual 不看那枚开关）；留着是为了
   // "真到了也如实说"，而不是让它掉进兜底那条。
   off: "notice.compactSwitchOff",
+  // specs/12 刀①：摘要调用超出了总时长预算（辅助路径的硬上限）。与
+  // `summary-call` 分开：那是"没答上"，这一条是"没等到"。
+  budget: "notice.compactBudget",
+  // specs/12 刀①：用户在压缩期间按了「停止生成」——不是失败，是被叫停。
+  stopped: "notice.compactStopped",
 };
 
 function compactSkip(reason: string | null): {

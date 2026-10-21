@@ -53,6 +53,20 @@ mtime，人改 `MEMORY.md` 下一轮生效），`<repo_context>` 从静态串改
 `runner/mod.rs` 压成后按手动 `/压缩` 同一构造补发，接线用例补两条断言并窄变异报红；100K
 阈值新会话实测到线 ⇒ 界面出现「已压缩早期对话」条、读数回落、模型继续跑完（截图交决策人
 复看）。两条真窗口挂账（末条超长 user 本轮不压 / 在途无「压缩中」）记进 specs/11。
+**S4 刀⑥ ✅**（2026-10-21，specs/12 刀①）——用户报「**项目会话**在模型推理思考中经常
+卡死」，走查 = 卡在**自动压缩的摘要调用**这条辅助路径上：它继承了主对话轮「重试不设上限」
+那条裁定，却**没有继承停止能力**（hooks 写死 `None`）⇒ 摘要请求一失败就永远转，且按
+「停止生成」也停不下来；熔断（连败 3 次停手）因"失败永远不返回"而形同虚设。裁定 =
+**按「用户看得见与否」分两档**（[`ADR-0008`](../adr/0008-aux-call-budget-vs-main-retry.md)）：
+主对话轮**逐字不变**（判据两半钉：能力面「传 `None` 时仍无限重试 + 停止钩子有效」·
+接线面「`app_llm.rs` 的调用点真的传 `None`」），辅助路径（压缩摘要）加**总时长预算**
+（默认 90s，三档预置；**包住单次尝试**——只查「重试前累计耗时」的话一次失败尝试自己
+就能等满 180s 空闲看门狗）+ **接上停止标记**（停止命中断言 `Interrupted` 收束且**不计入
+熔断账**——用户主动停不是失败）+ 新增两枚判据名 `budget` / `stopped`（SS24/SS25 期望值
+随 9→11 / 7→9 同步改，前端两条文案同刀补齐）。熔断因此**第一次真的能触发**。判据七条
+（`llm::tests::budget` 五 + `compact::tests_deep` 一 + `tests::compact_wiring` 一），
+变异五条逐条报红。**仍欠**（specs/12 刀②）：自动压缩的**开始/失败**在界面推系统条
+（新通道 `agent://compact-status`）+ 预算档位的设置面接线。
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
 | 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |

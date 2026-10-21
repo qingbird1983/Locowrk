@@ -149,20 +149,41 @@ impl CompatLlm {
 
     /// 非流式完成 = 同一条流式管道聚合（无回调、无钩子——重试对调用方
     /// 不可见，只是等待变长）。`assets`（批 D）：附件字节读取器。
+    /// `hooks`（specs/12 刀①）= 重试面（停止标记 + 重试通知）；`None` = 两者都
+    /// 没有——主对话轮的既有调用点就靠这一档保持**逐字不变**。
+    /// `budget`（specs/12 刀①）= **总时长预算**（含全部重试）；`None` = 不设限。
+    /// 「重试不设上限」那条裁定就靠这一档保持不变，辅助路径才设限。
     pub async fn complete_with(
         &self,
         cfg: &LlmSettings,
         caps: WireCaps,
         req: LlmRequest,
         assets: Option<&crate::assets::AssetStore>,
+        hooks: Option<&RetryHooks>,
+        budget: Option<Duration>,
     ) -> Result<LlmResponse, LlmError> {
-        self.complete_streaming_with(cfg, caps, req, assets, &|_| false, &|_| false, None)
-            .await
+        self.complete_streaming_with(
+            cfg,
+            caps,
+            req,
+            assets,
+            &|_| false,
+            &|_| false,
+            hooks,
+            budget,
+        )
+        .await
     }
 
     /// 流式完成（⑳/v2.57/v4.11 语义同旧后端）：正文/推理 delta 逐段回调，
     /// 回调返回 true = 用户停止（部分正文原样收束）；传输失败自动重试
     /// （不设上限），已推过 delta 的重试先经 `hooks.on_retry` 让前端重置。
+    ///
+    /// `budget`（specs/12 刀①）：**总时长预算**（含全部重试与等待）。`None`
+    /// = 不设限 ⇒ 「重试不设上限」那条裁定逐字不变（主对话轮走这一档）。
+    /// 设了它，这条调用就有硬性上限：超预算 = **这一次调用失败**（Err），
+    /// 不是继续转下去——辅助路径（摘要）就靠这条兜底，见
+    /// [`specs/12-aux-call-budget`](../../../../specs/12-aux-call-budget/spec.md)。
     #[allow(clippy::too_many_arguments)]
     pub async fn complete_streaming_with(
         &self,
@@ -173,28 +194,43 @@ impl CompatLlm {
         on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         on_reasoning: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
         hooks: Option<&RetryHooks>,
+        budget: Option<Duration>,
     ) -> Result<LlmResponse, LlmError> {
         Self::key_check(cfg)?;
         let dialect = dialect::dialect_of(cfg.base_url.as_deref());
         let mut attempt: u32 = 0;
         let mut drop_stream_options = false;
         let mut drop_max_tokens = false;
+        // 预算的截止时刻（specs/12 刀①）：`None` = 不设限 ⇒ 主对话轮那条
+        // 「重试不设上限」的裁定逐字不变；设了它，这条调用就有硬性上限。
+        let deadline = budget.map(|b| tokio::time::Instant::now() + b);
         loop {
             attempt += 1;
-            match self
-                .attempt_stream(
-                    cfg,
-                    dialect,
-                    &caps,
-                    &req,
-                    assets,
-                    on_delta,
-                    on_reasoning,
-                    drop_stream_options,
-                    drop_max_tokens,
-                )
-                .await
-            {
+            // 预算耗尽：这一趟不再发请求，如实报错（调用方据此记一次失败）。
+            if deadline.is_some_and(|d| tokio::time::Instant::now() >= d) {
+                return Err(budget_exhausted(budget));
+            }
+            let attempt_fut = self.attempt_stream(
+                cfg,
+                dialect,
+                &caps,
+                &req,
+                assets,
+                on_delta,
+                on_reasoning,
+                drop_stream_options,
+                drop_max_tokens,
+            );
+            // 单次尝试**也**受预算约束：只查"重试前累计耗时"不够——一次失败
+            // 尝试自己就能等满空闲看门狗（180s），90s 的预算会形同虚设。
+            let outcome = match deadline {
+                Some(d) => match tokio::time::timeout_at(d, attempt_fut).await {
+                    Ok(r) => r,
+                    Err(_) => return Err(budget_exhausted(budget)),
+                },
+                None => attempt_fut.await,
+            };
+            match outcome {
                 Ok(resp) => return Ok(resp),
                 Err(AttemptError::Fatal(msg)) => return Err(LlmError::Backend(msg)),
                 Err(AttemptError::Retryable {
@@ -226,6 +262,12 @@ impl CompatLlm {
                         if let Some(h) = hooks {
                             (h.on_retry)(attempt, delay);
                         }
+                    }
+                    // 重试等待也受预算约束：等完才发现预算没了 = 白等一轮。
+                    if deadline.is_some_and(|d| {
+                        tokio::time::Instant::now() + Duration::from_millis(delay) >= d
+                    }) {
+                        return Err(budget_exhausted(budget));
                     }
                     if self.sleep_stoppable(delay, hooks).await {
                         // 等待期间用户停止：重试轮尚无产出，空收束（前端
@@ -474,6 +516,20 @@ fn failure_retry_after(f: &Failure) -> Option<u64> {
         }
         Failure::Fatal(_) => None,
     }
+}
+
+/// 预算耗尽的错误（specs/12 刀①）：`[budget]` 前缀 + 毫秒数。
+///
+/// 前缀是给压缩层认的（`llm::retry::is_budget_exhausted`），毫秒数是给人看的。
+/// 为什么必须是 **Err** 而不是"空收束"：空收束（`Ok(LlmResponse::default())`）
+/// 会被压缩层当成"摘要写完了"⇒ 验货七节不齐 ⇒ 记一次**摘要不合格**的失败，
+/// reason 也会错；预算耗尽得能被单独认出来。
+fn budget_exhausted(budget: Option<Duration>) -> LlmError {
+    let ms = budget.map(|b| b.as_millis() as u64).unwrap_or_default();
+    LlmError::Backend(format!(
+        "{}调用超出总时长预算（{ms}ms）",
+        retry::BUDGET_PREFIX
+    ))
 }
 
 /// `retry-after-ms`（毫秒，浮点容许）→ `retry-after`（秒）。HTTP-date 解析

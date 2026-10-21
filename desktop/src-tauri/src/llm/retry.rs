@@ -77,6 +77,21 @@ fn is_context_overflow(body: &str) -> bool {
     PATTERNS.iter().any(|p| lower.contains(p))
 }
 
+/// 预算耗尽错误的前缀（specs/12 刀①）：`llm/client.rs` 的预算环打这一枚。
+///
+/// 为什么要有这一枚而不是让调用方自己判断：压缩层要把「预算耗尽」与「别的失败」
+/// 分开——界面上要说的是两句不同的真话（"摘要模型没答上" vs "摘要调用超出了预算"）。
+/// 判据只有这一个出处：前缀串与判据函数同处一文件，改一边必须改另一边。
+pub(crate) const BUDGET_PREFIX: &str = "[budget]";
+
+/// 判一条**错误文本**是不是"预算耗尽"（specs/12 刀①：压缩层用它决定要给哪一档 why）。
+///
+/// 形态与 [`is_overflow_message`] 同款（同款先例）：判据住在模型接入面，压缩层
+/// 不自备关键词表——两处各写一份，改一边另一边会漂。
+pub(crate) fn is_budget_exhausted(msg: &str) -> bool {
+    msg.starts_with(BUDGET_PREFIX)
+}
+
 /// 判一条**错误文本**是不是"上下文超限"（S2 刀④d 的压缩层用它决定要不要递减
 /// 重试）。
 ///

@@ -393,7 +393,10 @@ impl LlmService for AppLlm {
         let assets = self.assets.as_deref();
         let sid = req.session_id.clone();
         let est = estimate_tokens(&req.messages);
-        let out = self.real.complete_with(&cfg, caps, req, assets).await;
+        let out = self
+            .real
+            .complete_with(&cfg, caps, req, assets, None, None)
+            .await;
         self.refusal_note(sid.as_deref(), est, &out);
         out
     }
@@ -426,6 +429,9 @@ impl LlmService for AppLlm {
                 on_delta,
                 &|_| false,
                 hooks.as_ref(),
+                // 主对话轮**不设预算**：「重试不设上限」那条裁定就靠这一档
+                // 保持不变（specs/12 刀①：预算只给辅助路径）。
+                None,
             )
             .await;
         self.refusal_note(sid.as_deref(), est, &out);
@@ -461,6 +467,9 @@ impl LlmService for AppLlm {
                 on_delta,
                 on_reasoning,
                 hooks.as_ref(),
+                // 主对话轮**不设预算**：「重试不设上限」那条裁定就靠这一档
+                // 保持不变（specs/12 刀①：预算只给辅助路径）。
+                None,
             )
             .await;
         self.refusal_note(sid.as_deref(), est, &out);

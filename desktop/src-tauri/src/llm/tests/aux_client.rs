@@ -58,7 +58,10 @@ fn store_with_two_routes(tag: &str) -> Arc<SettingsStore> {
 #[test]
 fn summary_takes_the_main_route_and_ignores_the_memory_manager_profile() {
     let store = store_with_two_routes("aux-main-route");
-    let summarizer = AppLlmSummarizer::new(Arc::clone(&store));
+    let summarizer = AppLlmSummarizer::new(
+        Arc::clone(&store),
+        Arc::new(crate::stop::StopFlags::default()),
+    );
     let cfg = summarizer.cfg_main(None);
     assert_eq!(
         cfg.base_url.as_deref(),
@@ -74,7 +77,7 @@ fn summary_takes_the_main_route_and_ignores_the_memory_manager_profile() {
 #[test]
 fn summary_model_override_keeps_the_main_endpoint() {
     let store = store_with_two_routes("aux-model-override");
-    let summarizer = AppLlmSummarizer::new(store);
+    let summarizer = AppLlmSummarizer::new(store, Arc::new(crate::stop::StopFlags::default()));
     let cfg = summarizer.cfg_main(Some("override-model"));
     assert_eq!(cfg.model, "override-model");
     assert_eq!(

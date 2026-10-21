@@ -82,8 +82,9 @@ pub(crate) fn build(init: Init) -> Stack {
     // 只服务主层压缩摘要（`compact/deep.rs`），取主模型端点与档位（`cfg_main`）。
     // 构造点仍留在组装点：压缩器是 runner 的 step 边界依赖，客户端不该由 runner
     // 自己 new（测试面要能注入假件）。
-    let summary_aux: Arc<dyn crate::llm::SummaryClient> =
-        Arc::new(crate::llm::AppLlmSummarizer::new(Arc::clone(&settings)));
+    let summary_aux: Arc<dyn crate::llm::SummaryClient> = Arc::new(
+        crate::llm::AppLlmSummarizer::new(Arc::clone(&settings), Arc::clone(&stop_flags)),
+    );
     let compactor = Arc::new(crate::compact::deep::Compactor::new(
         Arc::clone(&settings),
         summary_aux,
@@ -93,6 +94,10 @@ pub(crate) fn build(init: Init) -> Stack {
         // 拒收读数（刀⑧）：同一张表的读侧——被超窗拒掉的那一次没有用量上报，
         // 只靠锚点这一层就永远追不上已经涨过的窗口。
         compact_refusals,
+        // 停止标记（specs/12 刀①）：摘要调用在等重试与吐字两处都查它 ⇒ 用户点
+        // 「停止生成」能停掉这条用户看不见的辅助请求。同一柄（组装点已建），
+        // 不另建一张。
+        Some(Arc::clone(&stop_flags)),
     ));
 
     // 6. ⑭ 调度引擎（库可用时）：1s tick；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑

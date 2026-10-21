@@ -60,6 +60,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             threshold_tokens: s.context.threshold_tokens,
             usage_bar: s.context.usage_bar,
             compact_enabled: s.context.compact_enabled,
+            summary_budget_ms: s.context.summary_budget_ms,
         },
         tools: ToolsSettingsView {
             enabled: s.tools.enabled,

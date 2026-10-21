@@ -36,6 +36,26 @@ pub(crate) const TOOL_RESULT_BUDGET_BYTES: usize = 24 * 1024;
 /// 的自动压缩层，关掉 = 完全不自动压（接近窗口只剩提醒），手动 `/压缩` 仍可用。
 pub const COMPACT_ENABLED_DEFAULT: bool = true;
 
+/// 摘要调用预算的三档（毫秒）：30s / 90s（缺省）/ 300s。
+///
+/// 形态是**三档预置**而不是数字输入框（S4 刀④ 的普通分区约束：用户页不出现
+/// `type="number"`）——这三档是"摘要能等多久"的三种量级，不是让人填数值试验的
+/// 自由量。30s 适合小上下文快速摘要，300s 留给大上下文慢模型。
+pub const SUMMARY_BUDGET_PRESETS_MS: [u64; 3] = [30_000, 90_000, 300_000];
+
+/// 摘要调用预算缺省（90s）。
+///
+/// 为什么要有这枚预算（specs/12 刀①）：摘要这条辅助路径曾继承主对话轮
+/// 「重试不设上限」那条裁定，却**没有继承停止能力**——摘要请求一失败就永远
+/// 在那儿转，界面表现是卡在「思考中」，且按「停止生成」也没用。预算给它一条
+/// 硬性上限：超了就是一次失败，推进熔断计数，主轮继续。
+pub const SUMMARY_BUDGET_DEFAULT_MS: u64 = 90_000;
+
+/// 摘要调用预算合法性（update.rs 校验用）：只许三档之一。
+pub fn valid_summary_budget(v: u64) -> bool {
+    SUMMARY_BUDGET_PRESETS_MS.contains(&v)
+}
+
 /// `context` 区（settings.json）。字段级缺省：旧文件无此区 / 带旧键 →
 /// 新键走缺省（旧键幻影），零迁移。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -57,6 +77,9 @@ pub struct ContextSettings {
     pub compact_model: String,
     /// 自定义压缩指令（空 = 不用）。不进界面：多行输入是未批准的新形态。
     pub compact_instructions: String,
+    /// 摘要调用预算（毫秒，缺省 90s，三档预置）。只作用于**辅助路径**（压缩
+    /// 摘要）——主对话轮的「重试不设上限」不受它影响（specs/12 刀①）。
+    pub summary_budget_ms: u64,
 }
 
 impl Default for ContextSettings {
@@ -68,6 +91,7 @@ impl Default for ContextSettings {
             compact_enabled: COMPACT_ENABLED_DEFAULT,
             compact_model: String::new(),
             compact_instructions: String::new(),
+            summary_budget_ms: SUMMARY_BUDGET_DEFAULT_MS,
         }
     }
 }
@@ -82,6 +106,8 @@ pub struct ContextSettingsView {
     pub usage_bar: bool,
     /// 自动压缩开关（缺省开）。
     pub compact_enabled: bool,
+    /// 摘要调用预算（毫秒；界面渲染成三档预置，不暴露毫秒数）。
+    pub summary_budget_ms: u64,
 }
 
 /// 上下文管理区部分更新（settings_set 入参）。
@@ -91,6 +117,7 @@ pub struct ContextUpdate {
     pub threshold_tokens: Option<u64>,
     pub usage_bar: Option<bool>,
     pub compact_enabled: Option<bool>,
+    pub summary_budget_ms: Option<u64>,
 }
 
 impl ContextSettings {
@@ -104,6 +131,7 @@ impl ContextSettings {
             enabled: self.compact_enabled,
             model: opt(&self.compact_model),
             instructions: opt(&self.compact_instructions),
+            budget_ms: self.summary_budget_ms,
         }
     }
 }
@@ -114,6 +142,8 @@ pub struct CompactConfig {
     pub enabled: bool,
     pub model: Option<String>,
     pub instructions: Option<String>,
+    /// 摘要调用预算（毫秒）——**总时长**（含全部重试），不是单次尝试。
+    pub budget_ms: u64,
 }
 
 impl ContextSettings {
@@ -135,6 +165,17 @@ impl ContextSettings {
         }
         if let Some(v) = u.compact_enabled {
             self.compact_enabled = v;
+        }
+        if let Some(v) = u.summary_budget_ms {
+            if !valid_summary_budget(v) {
+                let presets = SUMMARY_BUDGET_PRESETS_MS
+                    .iter()
+                    .map(|p| format!("{}s", p / 1000))
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                return Err(format!("摘要调用预算 {} 不在可选档位内（{}）", v, presets));
+            }
+            self.summary_budget_ms = v;
         }
         Ok(())
     }

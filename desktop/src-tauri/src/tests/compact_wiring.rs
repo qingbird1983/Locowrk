@@ -11,7 +11,7 @@
 use super::*;
 
 use crate::events::AgentEvent;
-use crate::llm::{SummaryClient, SummaryUsage};
+use crate::llm::{SummaryClient, SummaryRequest, SummaryUsage};
 use crate::runner::{run_turn, UsagePolicy};
 use async_trait::async_trait;
 use session_store::{self, Message, Session, SessionEvent};
@@ -34,23 +34,18 @@ impl Counting {
 
 #[async_trait]
 impl SummaryClient for Counting {
-    async fn complete(
-        &self,
-        system: &str,
-        user: &str,
-        _model: Option<&str>,
-    ) -> Result<(String, SummaryUsage), String> {
+    async fn complete(&self, req: &SummaryRequest<'_>) -> Result<(String, SummaryUsage), String> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.seen
             .lock()
             .unwrap()
-            .push((system.to_string(), user.to_string()));
+            .push((req.system.to_string(), req.user.to_string()));
         // 当场挑刺：接线面上也要证"送出去的就是装配好的那份骨架"，而不是一个空串
         assert!(
-            system.contains("只用文本回答"),
+            req.system.contains("只用文本回答"),
             "摘要请求的 system 要带上不许调工具那一节"
         );
-        assert!(!user.is_empty(), "摘要请求不许喂空");
+        assert!(!req.user.is_empty(), "摘要请求不许喂空");
         Ok((
             crate::compact::sample_summary(),
             SummaryUsage {
@@ -109,6 +104,8 @@ fn compactor_with(root: &std::path::Path) -> (Arc<crate::compact::deep::Compacto
             Arc::clone(&cli) as Arc<dyn SummaryClient>,
             Arc::new(crate::compact::Failures::default()),
             Arc::new(crate::compact::Overflow::default()),
+            // 停止标记（specs/12 刀①）：None = 没有停止面（这一簇不测停止）。
+            None,
         )),
         cli,
     )
@@ -294,4 +291,91 @@ async fn nothing_compacts_without_the_compactor() {
         session.derive_messages().len(),
         "反证的另一半：投影长度与改前同形"
     );
+}
+
+// ---------- specs/12 刀①：停止命中压缩 ⇒ 整轮以 Interrupted 收束 ----------
+
+/// 一个"被用户叫停"的摘要客户端：在**被调用时**把停止标记置位（= 用户在
+/// 压缩进行时点了「停止生成」），然后如实报错。
+///
+/// 不起线程、不等真实时钟：要验的是 `run_turn` 收到「已停止」之后**怎么收束**，
+/// 不是时序。停止标记由 `run_turn` 自己登记（`stop.guard`），所以这里置位
+/// 一定命中。
+struct Stoppable {
+    stop: Arc<crate::stop::StopFlags>,
+}
+
+#[async_trait]
+impl SummaryClient for Stoppable {
+    async fn complete(&self, req: &SummaryRequest<'_>) -> Result<(String, SummaryUsage), String> {
+        self.stop.request(req.session_id.unwrap_or_default());
+        Err("已停止".into())
+    }
+}
+
+/// AC-4 接线面（specs/12 刀①）：停止信号在压缩里命中 ⇒ 整轮以 **Interrupted**
+/// 收束（不是 Completed、不是失败），且**不计入熔断失败数**。
+///
+/// 这一条是"用户按了停止也没用"的正面反面：改之前压缩里的摘要调用压根查不到
+/// 停止标记（hooks 写死 None），用户按一万次停止也没用，界面永远转。
+#[tokio::test]
+async fn a_stop_during_compaction_ends_the_turn_as_interrupted() {
+    let root = crate::testutil::work_dir("s12-stop-wiring");
+    std::fs::write(
+        root.join("settings.json"),
+        serde_json::json!({"context": {"thresholdTokens": 100_000}}).to_string(),
+    )
+    .unwrap();
+    let settings = Arc::new(crate::settings::SettingsStore::open(&root).unwrap());
+    let stop_flags = Arc::new(crate::stop::StopFlags::default());
+    let failures = Arc::new(crate::compact::Failures::default());
+    let cli = Arc::new(Stoppable {
+        stop: Arc::clone(&stop_flags),
+    });
+    let cp = Arc::new(crate::compact::deep::Compactor::new(
+        settings,
+        Arc::clone(&cli) as Arc<dyn SummaryClient>,
+        Arc::clone(&failures),
+        Arc::new(crate::compact::Overflow::default()),
+        Some(Arc::clone(&stop_flags)),
+    ));
+    let log = root.join("sessions");
+    let mut session = loaded_session();
+    seed_log(&log, "s-stop", &session);
+    let line = threshold_at(&session);
+    let collector = Collector::default();
+    let steps = run_turn(
+        &kernel_with_tools(),
+        &mut session,
+        "s-stop",
+        "继续".into(),
+        Vec::new(),
+        Some(UsagePolicy {
+            threshold_tokens: line,
+            window_tokens: 1_000_000,
+            tools_est_tokens: 0,
+            refused_tokens: 0,
+        }),
+        &collector,
+        None,
+        Some(&log),
+        crate::runner::DEFAULT_MAX_STEPS,
+        Some(&stop_flags),
+        None,
+        Some(&cp),
+    )
+    .await
+    .expect("turn ok");
+    assert!(steps >= 1, "轮次照常收束");
+    assert!(
+        session.events().iter().any(|e| matches!(
+            e,
+            SessionEvent::TurnEnd {
+                outcome: session_store::TurnOutcome::Interrupted,
+                ..
+            }
+        )),
+        "停止命中的那一轮必须以 Interrupted 收束（不是 Completed）"
+    );
+    assert_eq!(failures.of("s-stop"), 0, "用户主动停不是失败：熔断账不许动");
 }

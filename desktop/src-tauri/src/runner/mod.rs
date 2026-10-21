@@ -205,6 +205,25 @@ pub async fn run_turn(
             if matches!(&out, crate::compact::deep::Outcome::Compacted { .. }) {
                 project_new_events(session, compact_start, session_id, sink, false, false);
             }
+            // 停止信号在压缩里命中（specs/12 刀①）：用户点了「停止生成」，
+            // 而这一轮正卡在压缩（step 前唯一的动作）⇒ 整轮按「已停止」收束，
+            // 不再开下一步。收束状态是 `Interrupted` 而不是 `Completed`
+            // ——与 step 边界那处停止同一个口径。
+            if matches!(
+                &out,
+                crate::compact::deep::Outcome::Skipped(crate::compact::deep::WHY_STOPPED)
+            ) {
+                finish_turn(
+                    session,
+                    log,
+                    session_id,
+                    turn_id,
+                    TurnOutcome::Interrupted,
+                    Some(sink),
+                    steps,
+                );
+                return Ok(steps);
+            }
             tracing::debug!(session = session_id, ?out, "步间主层压缩读数");
         }
         let before = session.len();

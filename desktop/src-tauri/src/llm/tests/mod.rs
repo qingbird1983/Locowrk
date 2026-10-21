@@ -10,6 +10,7 @@
 
 mod assets;
 mod aux_client;
+mod budget;
 mod dispatch;
 mod payload;
 mod refusals;
@@ -29,7 +30,7 @@ use session_store::{Message, ToolCallMsg};
 
 use super::app_llm::AppLlm;
 
-use super::client::CompatLlm;
+use super::client::{CompatLlm, RetryHooks};
 
 use super::dialect::Dialect;
 
