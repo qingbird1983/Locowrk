@@ -66,6 +66,9 @@ impl CompactionLlm for FakeLlm {
 }
 
 /// 装一台压缩器（设置 + 内核 + 发送口替身）。
+///
+/// **认日志目录**（specs/13 刀⑥）：压缩这一族自己落盘 ⇒ 压缩器要拿到那份目录
+/// （生产面组装点注入的就是它）。
 fn compactor_with(root: &Path, llm: Arc<dyn CompactionLlm>) -> Arc<Compactor> {
     std::fs::write(
         root.join("settings.json"),
@@ -80,6 +83,7 @@ fn compactor_with(root: &Path, llm: Arc<dyn CompactionLlm>) -> Arc<Compactor> {
         Arc::new(crate::compact::Failures::default()),
         Arc::new(crate::compact::Overflow::default()),
         None,
+        Some(root.join("sessions")),
     ))
 }
 
@@ -139,7 +143,7 @@ async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
     let cp = compactor_with(&root, Arc::clone(&llm) as Arc<dyn CompactionLlm>);
     let log = root.join("sessions");
     let mut session = busy_session();
-    seed_log(&log, "s-cp", &session);
+    seed_log(&log, "s-cp", &mut session);
     let collector = Collector::default();
     let steps = run_turn(
         &kernel_with_tools(),
@@ -245,7 +249,7 @@ async fn nothing_compacts_without_the_compactor() {
     let root = crate::testutil::work_dir("s13-compact-absent");
     let log = root.join("sessions");
     let mut session = busy_session();
-    seed_log(&log, "s-none", &session);
+    seed_log(&log, "s-none", &mut session);
     let collector = Collector::default();
     let steps = run_turn(
         &kernel_with_tools(),
@@ -333,10 +337,12 @@ async fn a_stop_during_compaction_ends_the_turn_as_interrupted() {
         Arc::clone(&failures),
         Arc::new(crate::compact::Overflow::default()),
         Some(Arc::clone(&stop_flags)),
+        // 认日志目录（specs/13 刀⑥）：压缩这一族自己落盘。
+        Some(root.join("sessions")),
     ));
     let log = root.join("sessions");
     let mut session = busy_session();
-    seed_log(&log, "s-stop", &session);
+    seed_log(&log, "s-stop", &mut session);
     let collector = Collector::default();
     let steps = run_turn(
         &kernel_with_tools(),

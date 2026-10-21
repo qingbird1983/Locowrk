@@ -181,6 +181,13 @@ pub struct Session {
     pub(crate) cursor: usize,
     pub(crate) snapshots: BTreeMap<usize, SessionState>,
     pub(crate) schema_version: u32,
+    /// **已落盘到第几条事件**（磁盘镜像的前缀长度）。
+    ///
+    /// 与 `cursor` 是两件事：`cursor` = **回放位置**（回退会往前挪），`persisted` =
+    /// **磁盘镜像到哪儿了**（只增不减，除非 undo 重写整个文件）。写盘的那一处按它
+    /// 接着写（`[persisted..]`），于是"磁盘上有哪些行"是会话自己的一个事实，
+    /// 而不是每个调用点各自算的 `from`——两个各算各的游标 = 重影或缺口。
+    pub(crate) persisted: usize,
 }
 
 impl Session {
@@ -190,6 +197,7 @@ impl Session {
             cursor: 0,
             snapshots: BTreeMap::new(),
             schema_version: SNAPSHOT_SCHEMA_VERSION,
+            persisted: 0,
         }
     }
 
@@ -210,6 +218,17 @@ impl Session {
 
     pub fn cursor(&self) -> usize {
         self.cursor
+    }
+
+    /// **已落盘到第几条事件**（磁盘镜像的前缀长度）。写盘的那一处从这儿接着写。
+    pub fn persisted(&self) -> usize {
+        self.persisted
+    }
+
+    /// 记下"已落盘到第几条"。**只在真的写成功之后调**——写失败不推进 ⇒ 下一趟
+    /// 重写这一段（至多一次、绝不缺口）。越界按 `log` 长度夹住。
+    pub fn mark_persisted(&mut self, n: usize) {
+        self.persisted = n.min(self.log.len());
     }
 
     pub fn len(&self) -> usize {
@@ -287,6 +306,8 @@ impl Session {
                 .map(|(s, v)| (*s, v.clone()))
                 .collect(),
             schema_version: self.schema_version,
+            // 分叉出来的是**另一个会话**（另一个日志文件）：盘上还没有它的任何一行 ⇒ 从 0 起。
+            persisted: 0,
         }
     }
 }

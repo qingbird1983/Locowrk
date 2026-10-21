@@ -90,6 +90,8 @@ fn failing_compactor(
         failures,
         Arc::new(crate::compact::Overflow::default()),
         None,
+        // 认日志目录（specs/13 刀⑥）：压缩这一族自己落盘。
+        Some(root.join("sessions")),
     ))
 }
 
@@ -153,7 +155,7 @@ async fn the_auto_compaction_reports_its_start_and_its_failure_to_the_ui() {
     let cp = failing_compactor(&root, Arc::clone(&llm), Arc::clone(&failures));
     let log = root.join("sessions");
     let mut session = busy_session();
-    seed_log(&log, "s-status", &session);
+    seed_log(&log, "s-status", &mut session);
     let collector = Collector::default();
     let err = run_turn(
         &kernel_with_tools(),
@@ -212,7 +214,7 @@ async fn the_breaker_pauses_the_auto_compaction_in_the_ui() {
     let cp = failing_compactor(&root, Arc::clone(&llm), Arc::clone(&failures));
     let log = root.join("sessions");
     let mut session = busy_session();
-    seed_log(&log, "s-paused", &session);
+    seed_log(&log, "s-paused", &mut session);
     let collector = Collector::default();
     // 连跑四轮（每轮一步 ⇒ 每轮一次压缩尝试；压缩失败即整步失败 ⇒ 轮次收束）
     for _ in 0..4 {
@@ -298,6 +300,8 @@ fn budget_case(root: &Path) -> BudgetCase {
         Arc::new(crate::compact::Failures::default()),
         Arc::new(crate::compact::Overflow::default()),
         None,
+        // 认日志目录（specs/13 刀⑥）：压缩这一族自己落盘。
+        Some(root.join("sessions")),
     ));
     BudgetCase {
         settings,
@@ -321,7 +325,7 @@ async fn the_summary_budget_takes_effect_on_the_next_round() {
     let case = budget_case(&root);
     let log = root.join("sessions");
     let mut session = busy_session();
-    seed_log(&log, "s-budget", &session);
+    seed_log(&log, "s-budget", &mut session);
     let collector = Collector::default();
     // 压缩失败 ⇒ 整步失败 ⇒ 轮以 Err 收束；但那一趟的请求已经发出去了（预算读数
     // 就在里面），这一轮照样算数。

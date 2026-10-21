@@ -34,7 +34,7 @@ pub async fn session_truncate_after(
     }
     let mut session = held.lock().await;
     crate::session_log::truncate_after(&mut session, pos)?;
-    crate::session_log::rewrite_after_undo(&state.sessions_dir, &session_id, &session);
+    crate::session_log::rewrite_after_undo(&state.sessions_dir, &session_id, &mut session);
     Ok(())
 }
 
@@ -77,13 +77,13 @@ pub async fn session_resolve_uncertain(
         return Err("该调用已经裁决过了".into());
     }
     let ts = now_ms();
-    let seq = session.append(SessionEvent::ToolExecutionUncertain {
+    session.append(SessionEvent::ToolExecutionUncertain {
         call_id: plugin_api::CallId(call_id.clone()),
         decision: dec,
         note: note.trim().to_string(),
         ts,
     });
-    crate::session_log::append_slice(&state.sessions_dir, &session_id, &session, seq);
+    crate::session_log::persist_pending(&state.sessions_dir, &session_id, &mut session);
     // 实时回推（与重放同形）：卡收束 + 行闭合。tool 从 ToolCall 事件
     // 找回；声明位缺失回落 call_id（ApprovalResolved 同款）。
     let tool = session

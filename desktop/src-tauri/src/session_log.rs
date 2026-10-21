@@ -57,10 +57,21 @@ pub fn restore_all(dir: &Path, sessions: &SessionsMap) -> usize {
     restored
 }
 
-/// 把日志新增段 `[from..]` 追加进磁盘镜像。失败只告警不阻断聊天——
-/// 落盘是持久性保障，不该反过来卡死会话（下次追加按同一 from 语义补齐：
-/// 调用方传"投影起点"，与投影共用同一游标）。
-pub fn append_slice(dir: &Path, session_id: &str, session: &Session, from: usize) {
+/// **唯一落盘口**：把会话里「还没落盘的那一段」追加进磁盘镜像。
+///
+/// 起点**不由调用方给**——它住会话里（`Session::persisted` = 已落盘到第几条）。
+/// 改前每个调用点自己算 `from`（runner 的 `log_start` / `before` / `len-1`、压缩层的
+/// `from`、heal 的 `seq`），于是"磁盘上到哪儿了"有**好几个出处**：一处漏算就是
+/// 缺口（那段永远不落盘），两处算重就是重影（同一条事件落两遍）。游标只有一个、
+/// 住会话 ⇒ 谁落盘都从同一处接着写。
+///
+/// 写失败**不推进游标** ⇒ 下一趟重写这一段 ⇒ 至多一次、**绝不缺口**
+/// （失败语义仍是「只告警不阻断聊天」：落盘是持久性保障，不该反过来卡死会话）。
+pub fn persist_pending(dir: &Path, session_id: &str, session: &mut Session) {
+    let from = session.persisted();
+    if from >= session.len() {
+        return; // 没有新东西（幂等：连着落两次不会重影）
+    }
     let Ok(path) = session_file(dir, session_id) else {
         tracing::warn!(session_id, "session log 文件名非法，本段不落盘");
         return;
@@ -71,11 +82,16 @@ pub fn append_slice(dir: &Path, session_id: &str, session: &Session, from: usize
     // `append_events` 文档注释与本批 ROADMAP 边界。
     if let Err(err) = append_events(&path, &session.events()[from..]) {
         tracing::warn!(session_id, "session log 追加失败: {err}");
+        return; // **不推进游标**：下一趟把这一段补上
     }
+    session.mark_persisted(session.len());
 }
 
 /// undo fork 截断后同步磁盘（重写 + 滚动备份）。会话尚无文件 = 无需重写。
-pub fn rewrite_after_undo(dir: &Path, session_id: &str, session: &Session) {
+///
+/// 游标也跟着重写：重写之后**盘上就是整个 `session`** ⇒ `persisted` = 事件数
+/// （不落定的话，下一次追加会把这整段再写一遍 = 重影）。
+pub fn rewrite_after_undo(dir: &Path, session_id: &str, session: &mut Session) {
     let Ok(path) = session_file(dir, session_id) else {
         return;
     };
@@ -84,7 +100,9 @@ pub fn rewrite_after_undo(dir: &Path, session_id: &str, session: &Session) {
     }
     if let Err(e) = rewrite_log(&path, session) {
         tracing::warn!(session_id, "session log undo 重写失败: {e}");
+        return;
     }
+    session.mark_persisted(session.len());
 }
 
 /// 消息编辑重发的截断核心（v2.57 §3.34，纯内存）：`pos = Some(p)` 要求

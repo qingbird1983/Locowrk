@@ -144,7 +144,7 @@ pub async fn context_undo_compact(
         .ok_or_else(|| "没有可撤销的压缩记录".to_string())?;
     session.rewind_to(seq);
     *session = session.fork(seq);
-    crate::session_log::rewrite_after_undo(&state.sessions_dir, &session_id, &session);
+    crate::session_log::rewrite_after_undo(&state.sessions_dir, &session_id, &mut session);
     Ok(seq)
 }
 

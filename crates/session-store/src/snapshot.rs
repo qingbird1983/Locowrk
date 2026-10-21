@@ -123,6 +123,9 @@ impl Session {
             cursor: 0,
             snapshots,
             schema_version: SNAPSHOT_SCHEMA_VERSION,
+            // 快照恢复出来的会话**盘上还没有它的任何一行**（快照只加速 replay，
+            // 完整日志另存）⇒ 落盘游标从 0 起。
+            persisted: 0,
         })
     }
 }

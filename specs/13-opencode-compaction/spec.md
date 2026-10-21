@@ -284,6 +284,49 @@
 - **权威层文档对齐**（挂账 ③）：`docs/design/authority/DESIGN.md` §⑨ 与 `Context and Memory.md`
   §3.2.2 的过期描述 —— 改它们要先向人说明并等确认（[LOCK]）。
 
+## 刀⑥ 落盘口收成一处 + 失败轮次的步内事件落盘（挂账 ⑦）
+
+**为什么单独一刀**：改错就是**日志重影或缺口**——两种都不报错、不变红、界面照常，
+只有重开应用才看得见（那一轮 LLM 的钱花了、内容没了）。这类改动不能与形态刀混做。
+
+### 要改的到底是什么（改前 → 改后）
+
+| # | 改前 | 改后 |
+| --- | --- | --- |
+| 1 | 落盘游标**每个调用点自己算**（runner 的 `log_start` / `before` / `compact_start` / `len-1`，压缩层的 `from`，heal 的 `seq`） | 游标**住进会话**：`Session::persisted` = 已落盘到第几条事件，**单调前进**、调用方不传 `from` |
+| 2 | 写盘有**多个实现**，各自算各自的起点 | **唯一落盘口** `session_log::persist_pending(dir, id, &mut session)`：写 `[persisted..]`，**写成功才推进游标** |
+| 3 | 压缩这一族**两处各落各的**（自动那条在 runner 的 step 边界、手动那条在压缩层的 `run_manual_and_persist`） | 压缩三条通路（自动 / 手动 / 溢出）**都在压缩层自己落盘**，走同一个口（压缩器**认识日志目录**） |
+| 4 | **失败的轮次**里那一步追加的事件不进日志（`finish_turn` 只落 `TurnEnd`） | 轮以失败收束时 **pending 段整体落盘**（含压缩那两条：`LlmUsage` + `ContextCompacted`） |
+
+**游标为什么住进会话**：两个游标各写各的 ⇒ 谁也不知道磁盘上到哪儿了 ⇒ 重影或缺口。
+住进会话之后，"已落盘到第几条"是**会话自己的一个事实**，谁落盘都从那儿接着写。
+
+**失败语义**：写失败**不推进游标** ⇒ 下一趟重写这一段 ⇒ **至多一次、绝不缺口**
+（改前是「各算各的 from」⇒ 失败那一段直接被跳过 = 静默缺口）。
+
+**重影为什么从结构上消失**：压缩层落完盘，runner 步末再落一次 ⇒ 第二次是**空段**
+（游标已到末尾）⇒ 同一段永远不会被写两遍。（改前两处各带各的 `from`，才会重影。）
+
+### 验收标准
+
+- [x] AC-20 **唯一落盘口 + 游标单调**：写盘只有一个实现（`persist_pending`），调用方**不传起点**；
+      同一段连落两次 ⇒ 磁盘上**不出现重复行**（幂等）。
+      用例名：`the_persist_path_is_the_only_one_and_twice_is_not_a_double_write`。
+- [x] AC-22 **失败轮次的步内事件进日志**：溢出压完仍失败的那一轮，磁盘上要同时看得到
+      **压缩那两条**（`LlmUsage` + `ContextCompacted`）与**失败收束**（`TurnEnd{Failed}`），
+      且与内存逐条相等。
+      用例名：`a_failed_turn_keeps_the_step_events_in_the_log`。
+- [x] AC-23 **重开应用不重写老历史**：恢复路径（`load_session`）把游标落定在事件数上 ⇒
+      重开一次再落新的一条，盘上是「原来那几条 + 新的一条」，老历史**不被重写一遍**。
+      用例名：`a_restored_session_does_not_rewrite_its_history`。
+- [x] AC-24 **门禁**：`make check` 全绿；本刀每条新判据做**变异**必须报红（逐条记在提交正文）。
+
+### 这一刀**没**做的
+
+- **不动 `Session` 的投影游标**（`cursor` = 可见前缀）：那是**回放位置**，与「已落盘到第几条」是两件事，
+  两者同名会混（本次新增的那格叫 `persisted`，注释里写死区别）。
+- **不把落盘做成事务**：写失败仍是「告警不阻断聊天」，只是**不推进游标**（下一趟补齐）。
+
 ## 非目标
 
 - **不实现 provider 原生压缩（native）**：需要供应商侧的 compact 端点/触发器，本仓没有对等能力（上游依赖见 `packages/ai/src/route/client.ts:196-248`）。
@@ -322,8 +365,10 @@
 - **刀⑤ 压缩详情的形态改造**（用户 2026-10-22 裁定）：取消卡片 ⇒ 发丝线上就地展开/折叠、
   展开体按模型正文那样渲染成 md、压缩线与展开体**摘到轮容器外**（顶层 · 永不折叠）、
   压成时**就地改写**同一根线、事件带摘要**全文**。产出 AC-14…AC-19。
-- **刀⑥（待做）落盘口收成一处 + 失败轮次步内事件落盘**（挂账 ⑦）：改 runner 的落盘游标 ——
-  改错就是日志重影或缺口 ⇒ 独立一刀，不与形态刀混做。
+- **刀⑥ 落盘口收成一处 + 失败轮次步内事件落盘**（挂账 ⑦，✅ 已做）：落盘游标住进会话
+  （`Session::persisted`）⇒ **唯一落盘口** `session_log::persist_pending`；压缩三条通路
+  **自己落盘**（压缩器认日志目录）；轮收束落**整段 pending**（失败轮次也落）。
+  产出 AC-20…AC-23。
 - **刀⑦（待做）三枚判据的启发式归类收敛**（挂账 ①）与 **specs/12 两笔欠账**（挂账 ④）。
 - **刀⑧（待做）权威层文档专项对齐**（挂账 ③）：`docs/design/authority/` 的规范语义在 [LOCK] 里，
   改前要向人说明并等确认。
@@ -350,6 +395,11 @@
 - [x] 刀⑤：新 `SystemRow.vue`（线 + md 展开体）+ 压缩线**摘到轮容器外** + 「查看详情 ⇄ 收起」同一枚钮
 - [x] 刀⑤：`context_compacted` 事件带摘要**全文**（重放不再是 200 字截断）
 - [x] 刀⑤：判据（`tests/compact-summary-body.spec.ts` 四条 + 投影/命令两条改写）+ 变异自证报红
+- [x] 刀⑥：落盘游标住进会话（`Session::persisted` + `mark_persisted`）+ 唯一落盘口
+      `session_log::persist_pending`（调用方不再传 `from`）
+- [x] 刀⑥：压缩三条通路**自己落盘**（压缩器认日志目录）+ `run_manual_and_persist` 退役
+- [x] 刀⑥：轮收束落**整段 pending**（失败轮次的步内事件不再丢）
+- [x] 刀⑥：判据（`tests/compaction_opencode/persist_uniqueness.rs` 四条）+ 变异五条逐条报红
 
 ## 影响范围
 
@@ -394,9 +444,9 @@
 | --- | --- | --- |
 | ① | `output-limit` / `content-filter` / `payload-too-large` 三枚判据**靠错误文本匹配**（本仓传输层不暴露 `finish_reason`，内容过滤只能按供应商原文关键词认，payload 太大只能按 HTTP 413 那一族认） | 判据名表本身是上游那 9 条（对齐没打折），但**归类依据是启发式** ⇒ 会随供应商措辞漂。要收敛得动 `llm/retry.rs` 的接入面，那不是这一刀的文件 |
 | ② | 摘要预算那对预置清单（`SUMMARY_BUDGET_PRESETS_MS` ↔ `lib/summary-budget.ts`）**没有对账闸** | 这一刀新加的 SS32 只盯自动压缩阈值那一对。给旧的那对补闸 = 修无关代码（AGENTS §5「发现问题就登记，别在同一刀里顺手修」） |
-| ③ | `docs/design/authority/` 里**现役机制描述已过期**（`DESIGN.md` §⑨ 与 `Context and Memory.md` §3.2.2 仍写 v2.137 的「整理阈值 = 绝对 token」与「桌面压缩链整面退役」） | `DESIGN.md` 的规范语义在 AGENTS §5 的 [LOCK] 里，改它要**先向人说明并等确认**；且 specs/09/11/12 三批压缩改造同样没动它 ⇒ 权威层的这一段欠一次专项对齐。**刀⑤ 只动了 `Front-end Design Guidelines`（新增 §二⑲）** —— 那是用户 2026-10-22 明确裁定的新形态，按该标准 §零.5「先改标准再写码」的规矩必须同刀落地；`DESIGN.md` 那两处仍在 [LOCK] 下待专项对齐（刀⑧） |
+| ③ | `docs/design/authority/` 里**现役机制描述已过期**（`DESIGN.md` §⑨ 与 `Context and Memory.md` §3.2.2 仍写 v2.137 的「整理阈值 = 绝对 token」与「桌面压缩链整面退役」；§4.2 的 `Session` 结构示意里也没有刀⑥ 新增的那格落盘游标） | `DESIGN.md` 的规范语义在 AGENTS §5 的 [LOCK] 里，改它要**先向人说明并等确认**；且 specs/09/11/12 三批压缩改造同样没动它 ⇒ 权威层的这一段欠一次专项对齐。**刀⑤ 只动了 `Front-end Design Guidelines`（新增 §二⑲）** —— 那是用户 2026-10-22 明确裁定的新形态，按该标准 §零.5「先改标准再写码」的规矩必须同刀落地；**刀⑥ 也没动它**（§4.2 那段是**示意**不是字段清单，代码多一格游标不与它的规范语义冲突）；`DESIGN.md` 那两处仍在 [LOCK] 下待专项对齐（刀⑧） |
 | ④ | `specs/12` 那两笔挂账缺陷（`llm/wire/stream.rs` 推理优先 return 丢正文 / `stores/chat/projection.ts` `resetAssistant` 不清 thinking 行） | 已在 specs/12 登记，**另开一刀** |
 | ⑤ | 压缩用的 `AppLlm` 是**第二个实例**（同一批 settings / overrides / catalog / assets / spill / stop 句柄；差别：不推重试通知、不记拒收读数、独立 diagnoser） | `state/mod.rs` 的 `Init` 不在本刀的文件面内；这一刀先保行为对齐，实例化那一层以后再收 |
 | ⑥ | 旧会话重放（旧日志的 `ContextCompacted` 没有 `keep_from` ⇒ 按 `kept_messages` 从尾部回退） | 只在 `session-store` 的单测里证过，**未做真机旧会话回归** |
-| ⑦ | **落盘口仍是两处**（自动那条在 `runner/mod.rs` 的 step 边界、手动那条在 `compact/deep.rs::run_manual_and_persist`），加上**溢出那一趟的落盘**靠步末那个口捎带 | 本刀已经把手动那条从「没有落盘」修成「有落盘」（AC-13），但要彻底收成**一处**，得让压缩层自己认日志目录、并把 runner 的落盘游标改成「已落盘到第几条」——那是 runner 落盘纪律的重构（改错了就是日志重影或缺口），不是这一刀顺手能改的。另记一笔：**失败的轮次**（溢出压完仍失败、或普通步失败）里，那一步追加的事件**不进日志**（`finish_turn` 只落 `TurnEnd`）——这是 runner 的既有行为，不是压缩层的性质。**排期 = 刀⑥**（用户 2026-10-22 已授权「按建议规划然后开始」） |
+| ⑦ | ~~**落盘口仍是两处**（自动那条在 `runner/mod.rs` 的 step 边界、手动那条在 `compact/deep.rs::run_manual_and_persist`）~~ + ~~**失败轮次的步内事件不进日志**（`finish_turn` 只落 `TurnEnd`）~~ | **刀⑥ 已结清（2026-10-22）**：落盘游标住进会话（`Session::persisted`）⇒ **唯一落盘口** `session_log::persist_pending`（调用方不再传 `from`）；压缩三条通路（自动 / 手动 / 溢出）**自己落盘**（压缩器认日志目录，`run_manual_and_persist` 退役）；轮收束落**整段 pending** ⇒ 失败轮次的步内事件（溢出压完仍失败那一轮）也在盘上。判据 = `tests/compaction_opencode/persist_uniqueness.rs` 三条（AC-20…AC-22），变异四条逐条报红。**余下的**：写盘失败仍是「告警不阻断聊天」（只是不推进游标、下一趟补齐）—— 不是缺陷，是刻意的取舍 |
 | ⑧ | **判据环境差异**：本仓前端测试环境是 `happy-dom`，它的 `document.createNodeIterator` 首个 `nextNode()` 返回**根节点**（违反 DOM 规范）⇒ DOMPurify 把 body 当待消毒节点 ⇒ **输入里的第一个元素连标签一起被吃掉**（浏览器 / WebView2 按规范走，没这回事） | 不是本仓代码的缺陷，是**写判据时的坑**：断言押在"第一个元素"上，红的是环境不是代码。已写进 `desktop/tests/compact-summary-body.spec.ts` 的文件头注记（摘要以一段话开头，标题与列表项都不是第一个元素 ⇒ 断言照常成立）。**不另开一刀**；将来别的 md 渲染判据撞上同一条，先读那条注记 |

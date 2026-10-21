@@ -6,9 +6,12 @@
 //! 钱花了、窗口又回到压前大小。
 //!
 //! 自动路径那条（`runner` 的 step 边界）另有判据（`tests/compact_wiring.rs`）——
-//! 两个触发路径各落各的，漏一个就是一个静默的数据丢失。**变异**：把
-//! `run_manual_and_persist` 里那句落盘删掉 ⇒ 内存里那条压缩事件还在、日志里没有
+//! 两个触发路径各落各的，漏一个就是一个静默的数据丢失。**变异**：把压缩层
+//! `try_compact` 末尾那句落盘删掉 ⇒ 内存里那条压缩事件还在、日志里没有
 //! ⇒ 本条立刻红。
+//!
+//! 落盘口收成一处之后（specs/13 刀⑥）：压缩**自己**落盘（压缩器认日志目录），
+//! 三条触发共用这一处 ⇒ 本条钉的是"手动那一趟也在盘上"。
 
 use super::*;
 
@@ -17,20 +20,13 @@ use super::*;
 #[tokio::test]
 async fn the_manual_compaction_is_written_to_the_session_log() {
     let script = Script::new(vec![Reply::Text(valid_summary())]);
-    let (cp, root) = compactor("s13-manual-log", Arc::clone(&script), true, 50);
-    let log = root.join("sessions");
+    let (cp, _root, log) = compactor_logging("s13-manual-log", Arc::clone(&script), true, 50);
     // 六轮够大的对话 ⇒ 保留区切得进中段（与 `compact_wiring` 那份同形）。
     let mut session = session_with_usage(900_000, 6, 2500);
-    crate::tests::seed_log(&log, "s-manual", &session);
-    let outcome = crate::compact::deep::run_manual_and_persist(
-        &cp,
-        &mut session,
-        "s-manual",
-        Some(&log),
-        &policy(1_000_000, 50),
-        &hooks(),
-    )
-    .await;
+    crate::tests::seed_log(&log, "s-manual", &mut session);
+    let outcome = cp
+        .run_manual(&mut session, "s-manual", &policy(1_000_000, 50), &hooks())
+        .await;
     assert!(
         matches!(outcome, crate::compact::Outcome::Compacted { .. }),
         "手动这一趟该压成（它不受门槛与开关限制），实测 {outcome:?}"

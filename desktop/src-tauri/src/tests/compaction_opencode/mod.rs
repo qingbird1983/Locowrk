@@ -6,6 +6,7 @@
 //! · `checkpoint`—— checkpoint 逐字节（AC-5）
 //! · `failure`  —— 失败处置（AC-8）、收缩矩阵（AC-9）、失败也记账（AC-10）
 //! · `persist`  —— 手动那一趟落盘（AC-13）
+//! · `persist_uniqueness` —— 唯一落盘口 / 游标单调 / 失败轮次也落盘（AC-20…AC-22，刀⑥）
 //! · `event`    —— 压成事件带摘要**全文**（AC-18，刀⑤）
 //!
 //! 共享夹具住本文件：**假发送口**（脚本化，可回话也可报错）、**会话夹具**
@@ -15,6 +16,7 @@ mod checkpoint;
 mod event;
 mod failure;
 mod persist;
+mod persist_uniqueness;
 mod prompt;
 mod window;
 
@@ -121,6 +123,29 @@ pub(crate) fn compactor(
     )
 }
 
+/// 造一台**认日志目录**的压缩器（specs/13 刀⑥：压缩这一族**自己落盘**）。
+///
+/// 返回（压缩器，数据根，日志目录）。日志目录 = `<数据根>/sessions`，与生产面
+/// 同一处（组装点把 `sessions_dir` 注入压缩器）⇒ 判据跑的就是生产那套落盘路径。
+pub(crate) fn compactor_logging(
+    tag: &str,
+    script: Arc<Script>,
+    enabled: bool,
+    pct: u64,
+) -> (Arc<Compactor>, std::path::PathBuf, std::path::PathBuf) {
+    let root = crate::testutil::work_dir(tag);
+    let log = root.join("sessions");
+    let (cp, _root) = compactor_logging_with(
+        tag,
+        script,
+        enabled,
+        pct,
+        Arc::new(crate::tests::kernel_with_tools()),
+        Some(log.clone()),
+    );
+    (cp, root, log)
+}
+
 /// 造一台压缩器（内核由调用方给——AC-2 要一台**带请求决策环捕获**的）。
 pub(crate) fn compactor_with(
     tag: &str,
@@ -128,6 +153,18 @@ pub(crate) fn compactor_with(
     enabled: bool,
     pct: u64,
     kernel: Arc<Kernel>,
+) -> (Arc<Compactor>, std::path::PathBuf) {
+    compactor_logging_with(tag, script, enabled, pct, kernel, None)
+}
+
+/// 造一台压缩器（**可选**认日志目录）。
+pub(crate) fn compactor_logging_with(
+    tag: &str,
+    script: Arc<Script>,
+    enabled: bool,
+    pct: u64,
+    kernel: Arc<Kernel>,
+    log: Option<std::path::PathBuf>,
 ) -> (Arc<Compactor>, std::path::PathBuf) {
     let root = crate::testutil::work_dir(tag);
     std::fs::write(
@@ -146,6 +183,7 @@ pub(crate) fn compactor_with(
         Arc::new(crate::compact::Failures::default()),
         Arc::new(crate::compact::Overflow::default()),
         None,
+        log,
     ));
     (cp, root)
 }

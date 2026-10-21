@@ -109,6 +109,9 @@ pub(crate) fn build(init: Init) -> Stack {
         // 停止标记（specs/12 刀①）：压缩在等重试与吐字两处都查它 ⇒ 用户点
         // 「停止生成」能停掉这一条用户看不见的请求。同一柄（组装点已建）。
         Some(Arc::clone(&stop_flags)),
+        // 会话日志目录（specs/13 刀⑥）：压缩这一族**自己落盘** ⇒ 手动那条不再
+        // 需要命令层替它补一次落盘（漏一次就是丢一次数据）。
+        Some(sessions_dir.clone()),
     ));
 
     // 6. ⑭ 调度引擎（库可用时）：1s tick；错过的 run_at 落在过去，首次 tick 的 due() 天然覆盖启动补跑

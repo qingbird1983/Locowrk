@@ -215,7 +215,7 @@ fn undo_rewrite_truncates_and_keeps_backup() {
         content: "二".into(),
         parts: Vec::new(),
     });
-    session_log::append_slice(&dir, "s", &session, 0);
+    session_log::persist_pending(&dir, "s", &mut session);
 
     // undo 语义：fork 截断 → rewrite_after_undo
     session.rewind_to(0);
@@ -224,7 +224,7 @@ fn undo_rewrite_truncates_and_keeps_backup() {
         content: "新轮".into(),
         parts: Vec::new(),
     });
-    session_log::rewrite_after_undo(&dir, "s", &forked);
+    session_log::rewrite_after_undo(&dir, "s", &mut forked);
 
     // 恢复面：主文件 = fork 后日志；备份 = 撤销前全文
     let map: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<Session>>>>> =
@@ -323,7 +323,7 @@ fn truncate_after_resolves_pos_and_rewrites_disk() {
     // 磁盘同步：截断后重写镜像，恢复一致；.undo.bak 留有截断前全文
     let mut s5 = four_events();
     session_log::truncate_after(&mut s5, None).unwrap();
-    session_log::rewrite_after_undo(&dir, sid, &s5);
+    session_log::rewrite_after_undo(&dir, sid, &mut s5);
     let (restored, _) = session_store::load_session(&path).unwrap();
     assert_eq!(restored.len(), 2);
     let bak = path.with_file_name(format!("{sid}.jsonl.undo.bak"));

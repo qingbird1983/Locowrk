@@ -148,20 +148,22 @@ pub(crate) fn kernel_with_tools_streaming(
 
 /// 先把内存会话的**前史**写进磁盘。
 ///
-/// `run_turn` 只追加本轮新增段（磁盘是日志的镜像、与投影共用游标），而夹具里的会话
-/// 是内存里造的 ⇒ 不落这一次，磁盘上就没有前史。而折叠是**按投影里有多少条消息**算
-/// 的（`kept_messages` 与投影条数取小），缺前史的重放会得出另一个窗口——那是夹具的
+/// `run_turn` 只追加本轮新增段（磁盘是日志的镜像），而夹具里的会话是内存里造的
+/// ⇒ 不落这一次，磁盘上就没有前史。而折叠是**按投影里有多少条消息**算的
+/// （`kept_messages` 与投影条数取小），缺前史的重放会得出另一个窗口——那是夹具的
 /// 缺陷，不是压缩层的性质，所以先把地基铺好再谈取证。
-pub(crate) fn seed_log(log: &Path, id: &str, session: &Session) {
-    crate::session_log::append_slice(log, id, session, 0);
+///
+/// 走**唯一那个落盘口**（specs/13 刀⑥）：起点是会话自己的游标（`persisted`），
+/// 新建的会话游标是 0 ⇒ 这一句把整段前史写进去。
+pub(crate) fn seed_log(log: &Path, id: &str, session: &mut Session) {
+    crate::session_log::persist_pending(log, id, session);
 }
 
 /// 会话里落了几次压缩（**内存会话**与**磁盘镜像**两处都要数 ⇒ 共用这一颗）。
 ///
-/// 为什么上移本文件：压缩落盘是**两个触发路径各做各的**（自动那条在 `runner`
-/// 的 step 边界、手动那条在压缩层的 `run_manual_and_persist`），两处都要用同一
-/// 把尺数「磁盘镜像里那条压缩事件在不在」——尺住在其中一个文件里，另一个就得
-/// `use super::compact_wiring::…` ⇒ 那是"为让另一个文件用上而把夹具钉死在它旁边"。
+/// 为什么上移本文件：压缩落盘**三个触发路径**都要用同一把尺数「磁盘镜像里那条
+/// 压缩事件在不在」——尺住在其中一个文件里，另一个就得 `use super::compact_wiring::…`
+/// ⇒ 那是"为让另一个文件用上而把夹具钉死在它旁边"。
 pub(crate) fn compacted_count(session: &Session) -> usize {
     session
         .events()

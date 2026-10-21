@@ -105,6 +105,18 @@ check-channels FAILED=0 · SINGLE_SOURCE_OK · check_length 零新增 · check-d
 任何卡片**（用户报的那个「点一次多一张、再点又展开一轮」不复现）⇒ 那枚钮改说「收起」，点它回到发丝线态
 ⇒ 收起 L0 轮容器（点计时行）后压缩线**仍在**（顶层、与最终报告同级）。读数表见 specs/13 刀⑤ 的
 「真机核对」节。
+**S5 刀③ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
+**挂账 ⑦**（落盘口收成一处 + 失败轮次的步内事件落盘）。改前：落盘游标**每个调用点自己算**
+（runner 的 `log_start`/`before`/`len-1`、压缩层的 `from`、heal 的 `seq`）⇒ 「磁盘上到哪儿了」有**好几个
+出处**，漏一处 = **缺口**、算重一处 = **重影**；**失败的轮次**里那一步追加的事件干脆不落盘
+（`finish_turn` 只落 `TurnEnd`）⇒ 溢出压完仍失败那一轮，压过了、钱花了，**重开应用却看不见发生过**。
+改后：游标**住进会话**（`Session::persisted` = 已落盘到第几条）⇒ **唯一落盘口**
+`session_log::persist_pending`（调用方**不再传起点**；写失败不推进游标 ⇒ 下一趟补齐 = 至多一次、
+绝不缺口）；压缩三条通路（自动 / 手动 / 溢出）**自己落盘**（压缩器认日志目录 ⇒ 「跑」与「落盘」仍是
+一个调用，`run_manual_and_persist` 退役）；轮收束落**整段 pending**。判据：新增
+`tests/compaction_opencode/persist_uniqueness.rs` 三条（AC-20 幂等不重影 / AC-21 磁盘镜像与内存**逐条
+相等** / AC-22 失败轮次的压缩事件与失败收束都在盘上）。**变异自证四条逐条报红**：①游标少推进一条（红 2）
+②落盘无视游标每次写整段（红 2）③压缩层不落盘（红 2，含 AC-13）④轮收束不落盘（红 2）。
 **S5 刀① ✅**（2026-10-21，[`specs/13`](../../specs/13-opencode-compaction/spec.md)）——用户报
 「压缩上下文老是失败而且速度慢得吓人，好长时间后显示没压缩」⇒ 裁定**整块换掉**：上下文压缩按
 OpenCode V2 重写（触发口径 / 请求形态 / 提示词 / 输出格式 / 失败与恢复**逐项复刻**，参照仓库
@@ -141,10 +153,8 @@ runner 里落了）⇒ 压完看着一切正常，**重开应用压缩连同摘�
 specs/12 那两笔挂账缺陷另开一刀（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts`
 `resetAssistant` 不清 thinking 行 = 刀⑦）；`output-limit` / `content-filter` 两枚判据靠错误文本启发式
 匹配（传输层不暴露 `finish_reason` = 刀⑦）；权威层 `docs/design/authority/` 的现役机制描述欠一次专项
-对齐（[LOCK]，要向人确认 = 刀⑧；刀⑤ 已按 §零.5 的规矩先改了 `Front-end Design Guidelines`）；
-**落盘口仍有两处**（自动在 runner、手动在压缩层）＋**失败轮次的步内事件不进日志**
-（`finish_turn` 只落 `TurnEnd`）—— 要彻底收成一处得重构 runner 的落盘游标，
-登记在 specs/13 的「遗留 / 挂账 ⑦」（= 刀⑥）。
+对齐（[LOCK]，要向人确认 = 刀⑧；刀⑤ 已按 §零.5 的规矩先改了 `Front-end Design Guidelines`）。
+（~~**落盘口仍有两处**＋**失败轮次的步内事件不进日志**~~ = **刀⑥ 已结清**，见上面 S5 刀③。）
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
 | 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |

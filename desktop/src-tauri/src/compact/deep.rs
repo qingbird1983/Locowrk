@@ -24,7 +24,6 @@
 pub(crate) mod send;
 pub(crate) mod settle;
 
-use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -105,6 +104,24 @@ pub(crate) struct Compactor {
     refusals: Arc<Overflow>,
     /// 停止标记：用户能停掉这一条看不见的辅助请求。
     stop: Option<Arc<crate::stop::StopFlags>>,
+    /// 会话日志目录（`<数据根>/sessions`）：压缩这一族**自己落盘**用。
+    ///
+    /// 为什么压缩层要认这个目录（specs/13 刀⑥）：落盘口收成一处之后，"这一趟
+    /// 追加的事件写进日志"这件事**由做事的那一层负责**——压缩层知道自己追加了
+    /// 什么（用量 + 压缩落账），让它自己落，"跑"与"落盘"就是**一个调用**，
+    /// 漏不了（改前手动那条漏过一次：压完看着一切正常，重开应用压缩连同摘要一起
+    /// 消失）。三条触发（自动 / 手动 / 溢出）共用这一处 ⇒ 压缩不再"两处各落各的"。
+    ///
+    /// 落盘的起点是**会话自己的游标**（`Session::persisted`），不是谁临时算的
+    /// `from` ⇒ 压缩层落完、runner 步末再落一次时是**空段**（游标已到末尾）
+    /// ⇒ 不会重影。
+    ///
+    /// 改前这里有个 `run_manual_and_persist`（手动那条的"跑 + 落盘"合成一个调用）：
+    /// 它的两个职责已分别在 `Compactor::run_manual` 与 `try_compact` 末尾落进同一个
+    /// 调用里 ⇒ **退役**（留着就多一个"落盘口在两处"的错觉）。它漏过一次（手动压完
+    /// 磁盘上还是压前那一份历史 ⇒ 重开应用压缩凭空消失），那次教训由
+    /// `tests/compaction_opencode/persist.rs` 那条判据继续钉着。
+    log: Option<std::path::PathBuf>,
 }
 
 impl Compactor {
@@ -115,6 +132,7 @@ impl Compactor {
         failures: Arc<Failures>,
         refusals: Arc<Overflow>,
         stop: Option<Arc<crate::stop::StopFlags>>,
+        log: Option<std::path::PathBuf>,
     ) -> Self {
         Self {
             settings,
@@ -123,6 +141,7 @@ impl Compactor {
             failures,
             refusals,
             stop,
+            log,
         }
     }
 
@@ -181,7 +200,31 @@ impl Compactor {
     }
 
     /// 三条通路的共用主体。
+    ///
+    /// **末尾那一趟落盘**（specs/13 刀⑥）：这一趟追加的事件（压缩的用量 + 落账
+    /// 那条 `ContextCompacted`；失败那几档也有用量）走**唯一那个落盘口**写进会话
+    /// 日志——起点是会话自己的游标（`Session::persisted`），不是谁临时算的
+    /// `from`。压缩层自己落 ⇒ 手动那条"跑 + 落盘"是一个调用（漏不了），
+    /// 自动与溢出两条也走同一处 ⇒ 压缩不再"两处各落各的"。
     async fn try_compact(
+        &self,
+        session: &mut Session,
+        session_id: &str,
+        policy: &crate::runner::UsagePolicy,
+        trigger: Trigger,
+        hooks: &Hooks<'_>,
+    ) -> Outcome {
+        let out = self
+            .try_compact_inner(session, session_id, policy, trigger, hooks)
+            .await;
+        if let Some(dir) = self.log.as_deref() {
+            crate::session_log::persist_pending(dir, session_id, session);
+        }
+        out
+    }
+
+    /// 判定 → 发一趟 → 验货 → 落账（`try_compact` 的本体）。
+    async fn try_compact_inner(
         &self,
         session: &mut Session,
         session_id: &str,
@@ -351,39 +394,4 @@ impl Compactor {
             }
         }
     }
-}
-
-/// 手动那一趟（`/压缩`）：**跑压缩 + 把这一趟追加的事件落进会话日志**。
-///
-/// **为什么"跑"和"落盘"必须合成一个调用**：落盘这步以前是各触发路径自己记得
-/// 做的——自动那条在 `runner` 里做了（`runner/mod.rs` 的 step 边界那一段），
-/// **手动这条忘了** ⇒ 手动压完重启，磁盘上还是压前那一份历史：压缩凭空消失
-/// （那轮 LLM 的钱花了、摘要没了；界面上那根「已压缩」的线在重开后也不见了，
-/// 下一轮又按全量历史走）。漏一次就是丢一次数据，所以合成一处。
-///
-/// **自动那条为什么不走这里**：它跑在 `run_turn` 的 step 边界里，那一段的落盘
-/// 游标是 runner 自己维护的（`log_start` / `before` / `finish_turn` 那一串），
-/// 压缩那段的追加由 runner 顺手写下；手动这条**不在任何一轮里**，没有那份游标
-/// 可借 ⇒ 落盘口放在压缩层这一侧，命令层只管调用。
-///
-/// **溢出那条为什么不走这里**：它跑在 step **内部**（供应商拒收之后），那一步
-/// 追加的事件由步末的落盘口一起写进日志；压缩自己再落一次就是重影（同一条
-/// 事件在日志里出现两遍）。
-pub(crate) async fn run_manual_and_persist(
-    compactor: &Compactor,
-    session: &mut Session,
-    session_id: &str,
-    log: Option<&Path>,
-    policy: &crate::runner::UsagePolicy,
-    hooks: &Hooks<'_>,
-) -> Outcome {
-    // 游标 = 这一趟**开始前**会话已有多少条事件 ⇒ 落盘只写这一趟追加的那几条。
-    let from = session.len();
-    let out = compactor
-        .run_manual(session, session_id, policy, hooks)
-        .await;
-    if let Some(dir) = log {
-        crate::session_log::append_slice(dir, session_id, session, from);
-    }
-    out
 }

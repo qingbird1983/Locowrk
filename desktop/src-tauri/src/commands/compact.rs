@@ -62,21 +62,18 @@ pub async fn compact_now(
         on_start: &on_start,
         on_delta: &on_delta,
     };
-    // 跑 + 落盘（**一个调用**）：手动这一趟不在任何一轮里，没有 runner 那份
-    // 落盘游标可借 ⇒ 落盘口在压缩层这一侧（`run_manual_and_persist`）。
+    // 跑 + 落盘（**一个调用**）：手动这一趟不在任何一轮里，但它落的那几条事件
+    // 一样要进会话日志 —— 压缩器**自己认日志目录**、自己走**唯一那个落盘口**
+    // （specs/13 刀⑥），所以命令层只管调用。
     //
     // 漏了落盘是什么样：压完看着一切正常（断层条、摘要、界面全对），但磁盘上
     // 还是压前那一份历史 ⇒ 重开应用，压缩连同摘要一起消失，那轮 LLM 白花。
-    // 自动那条在 `runner` 里落（step 边界那一段），手动这条以前谁也没替它落。
-    let outcome = crate::compact::deep::run_manual_and_persist(
-        &state.compactor,
-        &mut session,
-        &session_id,
-        Some(state.sessions_dir.as_path()),
-        &policy,
-        &hooks,
-    )
-    .await;
+    // （改前手动那条的落盘口在压缩层的 `run_manual_and_persist`；现在那个函数
+    // 退役了，职责并进 `Compactor::run_manual` —— 自动 / 手动 / 溢出三条走同一处。）
+    let outcome = state
+        .compactor
+        .run_manual(&mut session, &session_id, &policy, &hooks)
+        .await;
     // 判据名**原样透传**（不另敲一个字面量）：`Outcome::reason` 是那一族的唯一取数口。
     let reason = outcome.reason();
     Ok(match outcome {

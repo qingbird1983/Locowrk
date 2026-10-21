@@ -102,6 +102,9 @@ pub fn rewrite_log(path: &Path, session: &Session) -> std::io::Result<()> {
 /// 恢复：逐行 parse → append（游标随之走到末尾 = 停机时状态）。坏行
 /// （崩溃留下的半行 / 手改）跳过计数不致命——前缀事件仍然完整可用。
 /// 返回（会话, 跳过行数）。
+///
+/// **落盘游标也在这儿落定**：读回来的这些事件**盘上已经有了** ⇒ `persisted` = 事件数。
+/// 不落定的话，下一次追加会把整段历史再写一遍（重影）。
 pub fn load_session(path: &Path) -> std::io::Result<(Session, usize)> {
     use std::io::BufRead;
     let file = std::fs::File::open(path)?;
@@ -119,6 +122,7 @@ pub fn load_session(path: &Path) -> std::io::Result<(Session, usize)> {
             Err(_) => skipped += 1,
         }
     }
+    session.mark_persisted(session.len());
     Ok((session, skipped))
 }
 

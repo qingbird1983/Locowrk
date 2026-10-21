@@ -129,7 +129,6 @@ pub async fn run_turn(
     compactor: Option<&Arc<crate::compact::deep::Compactor>>,
 ) -> Result<u32, String> {
     let _stop_guard = stop.map(|f| f.guard(session_id));
-    let log_start = session.len();
     // 轮界事件（§4.1 设计，v2.101 起真正写入）：TurnStart 供重放复原计时
     // 起点（配给紧随的 UserMessage），TurnEnd（各收束路径）供冻结读数——
     // 此前日志里没有任何时刻，切会话/重启后计时行只剩发丝线（目检①）。
@@ -161,7 +160,7 @@ pub async fn run_turn(
         parts,
     });
     if let Some(dir) = log {
-        session_log::append_slice(dir, session_id, session, log_start);
+        session_log::persist_pending(dir, session_id, session);
     }
     if let Some(u) = usage {
         record_usage(session, session_id, u, sink, log);
@@ -191,9 +190,10 @@ pub async fn run_turn(
         // 把较旧的一段折成一条 `ContextCompacted` 落进日志；模型在这一步停着等它，
         // 压完投影回填后继续。为什么挂这儿而不是挂 `agent/request` 环上 =
         // `compact.rs` 头注那三条（重试烧 N 份 / 失败丢账 / 环上拿不到锚点）。
-        // 落盘单独一趟：`ContextCompacted` 必须在本步之前就已在磁盘上（内核下一步的
-        // 投影与崩溃重放都要看得见它），而下面那个 `before` 是"本步新增段"的起点，
-        // 两个游标不能混用。
+        // 落盘由压缩层自己走那一趟：`ContextCompacted` 必须在本步之前就已在磁盘上
+        // （内核下一步的投影与崩溃重放都要看得见它）。下面那个 `before` 是"本步新增段"
+        // 在**投影**上的起点（与落盘游标不是一回事——落盘游标住会话，见
+        // `session_log::persist_pending`）。
         let compact_start = session.len();
         if let (Some(cp), Some(u)) = (compactor, usage) {
             // 「这一趟真的开始压了」（specs/12 刀②）：压缩层不认 UI，只管敲门；
@@ -223,9 +223,8 @@ pub async fn run_turn(
                 on_delta: &on_delta,
             };
             let out = cp.run(session, session_id, &u, &hooks).await;
-            if let Some(dir) = log {
-                session_log::append_slice(dir, session_id, session, compact_start);
-            }
+            // 这一趟压缩自己落盘（压缩层认日志目录）⇒ 这里**不用**再落一段：
+            // 落盘口是唯一的，游标已经走过压缩那几条 ⇒ 再落一次是空段（不重影）。
             // 这一趟的收束相位（specs/12 刀②）：失败 / 熔断 / 压成各推一条。
             //
             // 为什么"压成了"也推一条（`done`）：那半的**事实**由
@@ -403,7 +402,7 @@ pub async fn run_turn(
         };
         project_new_events(session, before, session_id, sink, streamed, reasoned);
         if let Some(dir) = log {
-            session_log::append_slice(dir, session_id, session, before);
+            session_log::persist_pending(dir, session_id, session);
         }
         record_stats(session, before, stats);
 
@@ -467,6 +466,10 @@ pub async fn run_turn(
 /// 同步 + TurnDone 投影（`sink = None` = 内核失败路径按约定不发）。重放
 /// 由 [`project_events`] 把 TurnEnd 映成带时刻的 TurnDone——切会话/重启
 /// 后计时行读数（「已工作 N 分 N 秒」）可复原。
+///
+/// **落盘这一句落的是"整段还没落盘的"**（不是只落 `TurnEnd` 那一条）：轮以
+/// **失败**收束时，那一步已经发生的事（用量、压缩那两条、部分正文）也得在盘上
+/// ——改前只落 `TurnEnd`，那些事件永远不落盘（重开应用看不见这一轮发生过什么）。
 fn finish_turn(
     session: &mut Session,
     log: Option<&Path>,
@@ -483,7 +486,7 @@ fn finish_turn(
         ts,
     });
     if let Some(dir) = log {
-        session_log::append_slice(dir, session_id, session, session.len() - 1);
+        session_log::persist_pending(dir, session_id, session);
     }
     if let Some(sink) = sink {
         // 轮末汇总（`TurnHeader` → `FileChanges`）整体交给 [`emit_turn_summary`]：
@@ -594,7 +597,7 @@ fn record_usage(
         tools_est_tokens: u.tools_est_tokens,
     });
     if let Some(dir) = log {
-        session_log::append_slice(dir, session_id, session, session.len() - 1);
+        session_log::persist_pending(dir, session_id, session);
     }
     sink.emit(&AgentEvent::ContextUsage {
         session_id: session_id.into(),
