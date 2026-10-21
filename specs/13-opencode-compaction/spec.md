@@ -327,6 +327,68 @@
   两者同名会混（本次新增的那格叫 `persisted`，注释里写死区别）。
 - **不把落盘做成事务**：写失败仍是「告警不阻断聊天」，只是**不推进游标**（下一趟补齐）。
 
+## 刀⑦a specs/12 那两笔欠账（挂账 ④）
+
+**两笔都是真缺陷，不是"记错了"**：
+
+| # | 缺陷 | 表现 |
+| --- | --- | --- |
+| ① | `llm/wire/stream.rs`：**推理优先 return** —— 一个 chunk 里既有 `reasoning_content` 又有 `content` 时，代码先看见推理就 `return` | 同块的正文**既没进累积器、也没外推** ⇒ 模型那一段话**凭空消失**（用户看到的是"模型少说了一句"） |
+| ② | `stores/chat/projection.ts`：`resetAssistant` 只清末尾的 **assistant 气泡** | 可推理的模型在正文之前先吐推理 ⇒ 断流时末尾那行是**思考行** ⇒ 一个字都不清 ⇒ 失败那趟的推理留在行里，而重试轮的推理是**追加**到同一行的 ⇒ 用户看到一段**没发生过的推理**与新一趟叠在一起 |
+
+### 改法
+
+- ①：`Delta` 增一档 `Both { reasoning, content }`（同块两样都外推）；累积器**两样都收**
+  （正文照常进 `self.content`），客户端两样都推。
+- ②：`resetAssistant` 末尾是思考行时**一并清空**（与 assistant 气泡同款语义：
+  "重试轮的 delta 从零重建同一行"）。
+
+### 验收标准
+
+- [x] AC-25 **同块的推理与正文都收**：一个 chunk 里既有推理又有正文 ⇒ 外推的那块**两样都在**，
+      且正文**进了累积器**（收束后的回复里有它）。
+      用例名：`a_chunk_with_both_reasoning_and_content_keeps_both`（`llm/tests/payload.rs`）。
+- [x] AC-26 **重试时思考行也清**：末尾是思考行时 `resetAssistant` 把它清空 ⇒ 失败那趟的推理
+      不留在行里，重试轮的推理也不与它叠在一起。
+      用例名：`desktop/tests/retry-reset.spec.ts` 三条（思考行清空 / 不叠在一起 / assistant 气泡同款语义不许被改坏）。
+- [x] AC-27 **门禁**：`make check` 全绿；本刀每条新判据做**变异**必须报红。
+
+### 这一刀**没**做的
+
+- **"重试轮的 delta 重建哪一个行"**（assistant 气泡也是清空后**另起**一行，因为重试提示那条
+  系统消息插在中间）：这是既有形状，两条一起改 = 改版面语义 ⇒ 另议。
+- **三枚判据的启发式归类收敛**（挂账 ①）= 刀⑦b。
+
+## 刀⑦b 三枚判据的启发式归类收敛（挂账 ①，待做）
+
+**问题**：`output-limit` / `content-filter` / `payload-too-large` 三枚判据现在靠**错误文本**
+匹配（`compact/deep/send.rs` 的 `is_output_limit` / `is_content_filter` / `is_payload_too_large`）
+⇒ 供应商换个措辞就归错档（界面那句"为什么没压成"就说错了）。
+
+**为什么它们本可以结构化**（走查结论，2026-10-22）：
+- `output-limit`：传输层**本来就知道** `finish_reason == "length"`（`llm/client.rs` 的 G1 length 闸），
+  只是把它**翻成一句中文报错**，压缩层再从那句话里认字符串。
+- `payload-too-large`：传输层**本来就知道** HTTP 状态码（413 那一族在 `llm/retry.rs` 的
+  `classify_status` 里），同样被翻成字符串。
+- `content-filter`：`finish_reason == "content_filter"`（OpenAI 形）传输层知道；供应商用
+  **报文里的结构化字段**（如 `promptFeedback.blockReason`）也能解析——不必全文找关键词。
+
+**改法（推荐）**：**判据住在接入面、消费方按档认**（与 `is_context_overflow` / `is_overflow_message`
+同款先例——那两枚已经是"传输层判、压缩层认"）：
+1. 传输层在**知道事实的地方**分好档（状态码 / `finish_reason` / 报文里的结构化字段），
+   把档位随错误**结构化**带给上层（不留给下游去猜文本）。
+2. 压缩层按**档位**匹配，删掉三个文本匹配函数。
+3. 判据名表（9 条）一字不动（上游对齐不打折）——变的只是**归类依据**。
+
+**待定的两点**（下一刀开工前要定）：
+- 结构化档位用什么形状：错误类型加一枚变体（desktop 本地即可 —— `CompactionLlm` 这个 trait
+  就在宿主侧，**不必动 `kernel-agent` 的 `LlmError`**），还是另起一个 `LlmFailureKind` 枚举。
+- `content-filter` 的**报文族**要不要也认（非 OpenAI 形供应商的原文关键词）——认 = 覆盖全但仍是
+  启发式（只是搬到了接入面）；不认 = 干净但可能漏判。
+
+**验收标准（草案）**：①三枚判据各一条用例：传输层给出结构化档位 ⇒ 压缩层归到对应判据名，
+   **不靠文本**（把错误文本改成任意串也不影响归类）；②变异：把某一枚退回文本匹配 ⇒ 那条红。
+
 ## 非目标
 
 - **不实现 provider 原生压缩（native）**：需要供应商侧的 compact 端点/触发器，本仓没有对等能力（上游依赖见 `packages/ai/src/route/client.ts:196-248`）。
@@ -369,7 +431,11 @@
   （`Session::persisted`）⇒ **唯一落盘口** `session_log::persist_pending`；压缩三条通路
   **自己落盘**（压缩器认日志目录）；轮收束落**整段 pending**（失败轮次也落）。
   产出 AC-20…AC-23。
-- **刀⑦（待做）三枚判据的启发式归类收敛**（挂账 ①）与 **specs/12 两笔欠账**（挂账 ④）。
+- **刀⑦a（✅ 已做）specs/12 两笔欠账**（挂账 ④）：传输层「推理优先丢正文」+
+  前端 `resetAssistant` 不清思考行。产出 AC-25/AC-26。
+- **刀⑦b（待做）三枚判据的启发式归类收敛**（挂账 ①）：`output-limit` / `content-filter` /
+  `payload-too-large` 三枚靠错误文本匹配 ⇒ 要动 `llm/retry.rs` 的接入面（传输层分好档 ⇒
+  压缩层按档认，不再猜文本）。
 - **刀⑧（待做）权威层文档专项对齐**（挂账 ③）：`docs/design/authority/` 的规范语义在 [LOCK] 里，
   改前要向人说明并等确认。
 
@@ -400,6 +466,10 @@
 - [x] 刀⑥：压缩三条通路**自己落盘**（压缩器认日志目录）+ `run_manual_and_persist` 退役
 - [x] 刀⑥：轮收束落**整段 pending**（失败轮次的步内事件不再丢）
 - [x] 刀⑥：判据（`tests/compaction_opencode/persist_uniqueness.rs` 四条）+ 变异五条逐条报红
+- [x] 刀⑦a：传输层「同块推理 + 正文」两样都收（`Delta::Both`）+ 客户端两样都外推
+- [x] 刀⑦a：前端 `resetAssistant` 连**末尾思考行**一起清（失败那趟的推理不许留在行里）
+- [x] 刀⑦a：判据（`llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条）
+      + 变异两条逐条报红
 
 ## 影响范围
 
@@ -445,7 +515,7 @@
 | ① | `output-limit` / `content-filter` / `payload-too-large` 三枚判据**靠错误文本匹配**（本仓传输层不暴露 `finish_reason`，内容过滤只能按供应商原文关键词认，payload 太大只能按 HTTP 413 那一族认） | 判据名表本身是上游那 9 条（对齐没打折），但**归类依据是启发式** ⇒ 会随供应商措辞漂。要收敛得动 `llm/retry.rs` 的接入面，那不是这一刀的文件 |
 | ② | 摘要预算那对预置清单（`SUMMARY_BUDGET_PRESETS_MS` ↔ `lib/summary-budget.ts`）**没有对账闸** | 这一刀新加的 SS32 只盯自动压缩阈值那一对。给旧的那对补闸 = 修无关代码（AGENTS §5「发现问题就登记，别在同一刀里顺手修」） |
 | ③ | `docs/design/authority/` 里**现役机制描述已过期**（`DESIGN.md` §⑨ 与 `Context and Memory.md` §3.2.2 仍写 v2.137 的「整理阈值 = 绝对 token」与「桌面压缩链整面退役」；§4.2 的 `Session` 结构示意里也没有刀⑥ 新增的那格落盘游标） | `DESIGN.md` 的规范语义在 AGENTS §5 的 [LOCK] 里，改它要**先向人说明并等确认**；且 specs/09/11/12 三批压缩改造同样没动它 ⇒ 权威层的这一段欠一次专项对齐。**刀⑤ 只动了 `Front-end Design Guidelines`（新增 §二⑲）** —— 那是用户 2026-10-22 明确裁定的新形态，按该标准 §零.5「先改标准再写码」的规矩必须同刀落地；**刀⑥ 也没动它**（§4.2 那段是**示意**不是字段清单，代码多一格游标不与它的规范语义冲突）；`DESIGN.md` 那两处仍在 [LOCK] 下待专项对齐（刀⑧） |
-| ④ | `specs/12` 那两笔挂账缺陷（`llm/wire/stream.rs` 推理优先 return 丢正文 / `stores/chat/projection.ts` `resetAssistant` 不清 thinking 行） | 已在 specs/12 登记，**另开一刀** |
+| ④ | ~~`specs/12` 那两笔挂账缺陷（`llm/wire/stream.rs` 推理优先 return 丢正文 / `stores/chat/projection.ts` `resetAssistant` 不清 thinking 行）~~ | **刀⑦a 已结清（2026-10-22）**：传输层 `Delta` 增 `Both` 档（同块推理 + 正文两样都收、两样都外推）；前端 `resetAssistant` 连末尾思考行一起清。判据 = `llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条，变异两条逐条报红。**余下的**：三枚判据的启发式归类收敛（挂账 ①）= 刀⑦b |
 | ⑤ | 压缩用的 `AppLlm` 是**第二个实例**（同一批 settings / overrides / catalog / assets / spill / stop 句柄；差别：不推重试通知、不记拒收读数、独立 diagnoser） | `state/mod.rs` 的 `Init` 不在本刀的文件面内；这一刀先保行为对齐，实例化那一层以后再收 |
 | ⑥ | 旧会话重放（旧日志的 `ContextCompacted` 没有 `keep_from` ⇒ 按 `kept_messages` 从尾部回退） | 只在 `session-store` 的单测里证过，**未做真机旧会话回归** |
 | ⑦ | ~~**落盘口仍是两处**（自动那条在 `runner/mod.rs` 的 step 边界、手动那条在 `compact/deep.rs::run_manual_and_persist`）~~ + ~~**失败轮次的步内事件不进日志**（`finish_turn` 只落 `TurnEnd`）~~ | **刀⑥ 已结清（2026-10-22）**：落盘游标住进会话（`Session::persisted`）⇒ **唯一落盘口** `session_log::persist_pending`（调用方不再传 `from`）；压缩三条通路（自动 / 手动 / 溢出）**自己落盘**（压缩器认日志目录，`run_manual_and_persist` 退役）；轮收束落**整段 pending** ⇒ 失败轮次的步内事件（溢出压完仍失败那一轮）也在盘上。判据 = `tests/compaction_opencode/persist_uniqueness.rs` 三条（AC-20…AC-22），变异四条逐条报红。**余下的**：写盘失败仍是「告警不阻断聊天」（只是不推进游标、下一趟补齐）—— 不是缺陷，是刻意的取舍 |

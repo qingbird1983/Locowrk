@@ -147,6 +147,34 @@ fn reasoning_deltas_route_to_reasoning() {
     assert_eq!(acc.finish(&counter).content, "", "推理不占正文");
 }
 
+/// **同一块里既有推理又有正文**（部分供应商这么发）：两样都要收——
+/// 改前是"先看见推理就 return"⇒ **同块的正文凭空消失**（specs/12 挂账）。
+///
+/// 判据盯三样：①外推的那块**两样都在** ②正文**进了累积器**（收束后的回复里有它）
+/// ③推理**不进正文**（两条线各归各）。
+#[test]
+fn a_chunk_with_both_reasoning_and_content_keeps_both() {
+    let mut acc = StreamAcc::new();
+    let chunk = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
+    let d = acc.apply(&chunk(
+        r#"{"choices":[{"delta":{"reasoning_content":"想","content":"说"}}]}"#,
+    ));
+    assert_eq!(
+        d,
+        super::wire::Delta::Both {
+            reasoning: "想".into(),
+            content: "说".into()
+        },
+        "同块的推理与正文都要外推（改前推理优先 return ⇒ 正文被丢）"
+    );
+    let counter = std::sync::atomic::AtomicU64::new(1);
+    assert_eq!(
+        acc.finish(&counter).content,
+        "说",
+        "同块的正文必须进累积器（改前它凭空消失）"
+    );
+}
+
 /// 用量映射：OpenAI cached_tokens / DeepSeek prompt_cache_hit_tokens /
 /// Anthropic 形 cache_creation_tokens；全 0 = None（宁缺勿假）。
 #[test]

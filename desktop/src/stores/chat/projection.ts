@@ -341,10 +341,20 @@ export function appendAssistant(st: ChatState, delta: string) {
 }
 
 /** 流式重置（LLM.md v3.0）：传输重试前清空末尾未完成的流式正文——
- * 重试轮的 delta 从零重建同一气泡。末项不是流式正文时无事可做。 */
+ * 重试轮的 delta 从零重建同一气泡。末项不是流式正文时无事可做。
+ *
+ * **末尾是思考行时也要清**（specs/12 挂账）：推理先到、正文还没来就断了流 ⇒
+ * 末尾那行是思考行。改前只清 assistant 气泡 ⇒ 上一趟失败时那段推理留在行里，
+ * 而重试轮的推理是**追加**到同一行的（`appendThinking`）⇒ 用户看到一段
+ * **没发生过的推理**与新一趟叠在一起。 */
 export function resetAssistant(st: ChatState) {
   const last = st.items[st.items.length - 1];
-  if (last && last.kind === "assistant") {
+  if (!last) return;
+  if (last.kind === "assistant") {
+    last.text = "";
+    return;
+  }
+  if (last.kind === "thinking") {
     last.text = "";
   }
 }

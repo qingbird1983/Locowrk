@@ -437,6 +437,17 @@ impl CompatLlm {
                                     return Ok(acc.finish(&self.next_call));
                                 }
                             }
+                            // 同一块里既有推理又有正文：两样都要外推（改前推理优先
+                            // return ⇒ 同块的正文被丢掉，specs/12 挂账）。
+                            Delta::Both { reasoning, content } => {
+                                emitted = true;
+                                if on_reasoning(&reasoning) {
+                                    return Ok(acc.finish(&self.next_call));
+                                }
+                                if on_delta(&content) {
+                                    return Ok(acc.finish(&self.next_call));
+                                }
+                            }
                             Delta::None => {}
                         }
                     }

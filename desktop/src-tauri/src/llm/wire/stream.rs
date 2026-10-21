@@ -17,6 +17,14 @@ use plugin_api::CallId;
 pub enum Delta {
     Content(String),
     Reasoning(String),
+    /// **同一块里既有推理又有正文**（部分供应商这么发）——两样都要外推。
+    ///
+    /// 为什么要有这一档：改前是先看见推理就 `return`（推理优先），于是**同块的正文
+    /// 既没进累积器、也没外推** ⇒ 模型那一段话凭空消失（specs/12 挂账）。
+    Both {
+        reasoning: String,
+        content: String,
+    },
     None,
 }
 
@@ -61,12 +69,17 @@ impl StreamAcc {
         let Some(delta) = choice.get("delta") else {
             return Delta::None;
         };
-        // 推理先行（reasoning_content 是 DeepSeek/Qwen/GLM 等的事实标准；
-        // 个别网关用 reasoning）——推理不进正文
+        // 推理与正文可能**同块**到达（部分供应商这么发）——两样都要收。
+        //
+        // 改前是"先看见推理就 return"（推理优先）⇒ 同块里的正文**既没进累积器、
+        // 也没外推** ⇒ 模型那一段话凭空消失（specs/12 挂账：推理优先丢正文）。
+        // 现在：推理收成一份、正文照常进累积器，块里有什么就外推什么。
+        let mut reasoning: Option<String> = None;
         for key in ["reasoning_content", "reasoning"] {
             if let Some(r) = delta.get(key).and_then(Value::as_str) {
                 if !r.is_empty() {
-                    return Delta::Reasoning(r.to_string());
+                    reasoning = Some(r.to_string());
+                    break;
                 }
             }
         }
@@ -75,12 +88,21 @@ impl StreamAcc {
                 self.apply_tool_call(tc);
             }
         }
-        match delta.get("content").and_then(Value::as_str) {
-            Some(c) if !c.is_empty() => {
-                self.content.push_str(c);
-                Delta::Content(c.to_string())
-            }
-            _ => Delta::None,
+        let content = delta
+            .get("content")
+            .and_then(Value::as_str)
+            .filter(|c| !c.is_empty());
+        if let Some(c) = content {
+            self.content.push_str(c);
+        }
+        match (reasoning, content) {
+            (Some(r), Some(c)) => Delta::Both {
+                reasoning: r,
+                content: c.to_string(),
+            },
+            (Some(r), None) => Delta::Reasoning(r),
+            (None, Some(c)) => Delta::Content(c.to_string()),
+            (None, None) => Delta::None,
         }
     }
 

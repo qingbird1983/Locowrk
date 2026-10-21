@@ -105,6 +105,15 @@ check-channels FAILED=0 · SINGLE_SOURCE_OK · check_length 零新增 · check-d
 任何卡片**（用户报的那个「点一次多一张、再点又展开一轮」不复现）⇒ 那枚钮改说「收起」，点它回到发丝线态
 ⇒ 收起 L0 轮容器（点计时行）后压缩线**仍在**（顶层、与最终报告同级）。读数表见 specs/13 刀⑤ 的
 「真机核对」节。
+**S5 刀④ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
+**挂账 ④**（`specs/12` 那两笔挂账缺陷），两笔都是**真缺陷**：①传输层**推理优先 return**——一个 chunk
+里既有 `reasoning_content` 又有 `content` 时先看见推理就返回 ⇒ 同块的正文**既没进累积器也没外推**
+⇒ 模型那一段话**凭空消失**；②前端 `resetAssistant` 只清末尾的 **assistant 气泡**——可推理的模型
+在正文之前先吐推理 ⇒ 断流时末尾那行是**思考行** ⇒ 一个字都不清 ⇒ 失败那趟的推理留在行里，而
+重试轮的推理是**追加**到同一行的 ⇒ 用户看到一段**没发生过的推理**与新一趟叠在一起。改法：`Delta`
+增一档 `Both { reasoning, content }`（同块两样都收、两样都外推）；`resetAssistant` 连末尾思考行
+一起清。判据：`llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条；**变异两条逐条
+报红**（①退回推理优先 return ⇒ 红 1 ②退回只清气泡 ⇒ 红 2）。
 **S5 刀③ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
 **挂账 ⑦**（落盘口收成一处 + 失败轮次的步内事件落盘）。改前：落盘游标**每个调用点自己算**
 （runner 的 `log_start`/`before`/`len-1`、压缩层的 `from`、heal 的 `seq`）⇒ 「磁盘上到哪儿了」有**好几个
@@ -150,9 +159,8 @@ runner 里落了）⇒ 压完看着一切正常，**重开应用压缩连同摘�
 `{"type":"llm_usage",…}` + `{"type":"context_compacted","kept_messages":2,"keep_from":7,"summary":"## Objective…"}`，
 **重启后断层条与 checkpoint 仍在**（修复前那屏是没有断层的）。
 **仍欠**（2026-10-22 用户已授权「按建议规划然后开始」，排期见 specs/13 的「计划」）：
-specs/12 那两笔挂账缺陷另开一刀（`llm/wire/stream.rs` 推理优先丢正文 / `projection.ts`
-`resetAssistant` 不清 thinking 行 = 刀⑦）；`output-limit` / `content-filter` 两枚判据靠错误文本启发式
-匹配（传输层不暴露 `finish_reason` = 刀⑦）；权威层 `docs/design/authority/` 的现役机制描述欠一次专项
+~~specs/12 那两笔挂账缺陷~~（= **刀⑦a 已结清**，见上面 S5 刀④）；`output-limit` / `content-filter` 两枚判据靠错误文本启发式
+匹配（传输层不暴露 `finish_reason` = 刀⑦b）；权威层 `docs/design/authority/` 的现役机制描述欠一次专项
 对齐（[LOCK]，要向人确认 = 刀⑧；刀⑤ 已按 §零.5 的规矩先改了 `Front-end Design Guidelines`）。
 （~~**落盘口仍有两处**＋**失败轮次的步内事件不进日志**~~ = **刀⑥ 已结清**，见上面 S5 刀③。）
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
