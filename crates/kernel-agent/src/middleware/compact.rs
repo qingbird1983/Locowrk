@@ -33,6 +33,10 @@ pub struct CompactionOutcome {
     pub strategy: String,
     pub summary: String,
     pub kept_messages: usize,
+    /// 保留区指针（specs/13 刀② · C5）：保留区在消息列里的起点。0 = 旧日志
+    /// 形状（没有指针）⇒ 折叠路径按 `kept_messages` 从尾部回退。
+    #[serde(default)]
+    pub keep_from: usize,
 }
 
 /// 粗估 token：全消息序列化字节 / 4（转义带来的高估当安全余量；CJK 偏

@@ -74,7 +74,12 @@ export async function submit(st: ChatState, text: string) {
   // 断层条（省了多少 / [查看详情] / [撤销]）与自动压缩共用同一个构造——所以这里
   // 压成时只把在途线收走，不留两句同义的话。
   if (isSlashCommand(t, "压缩")) {
-    pushCompactNotice(st, "notice.compactRunning");
+    // 摘要正文会流式回来（后端那条 `delta` 相位），手动这一趟**没有** `running`
+    // 相位可借 ⇒ 摘要累加器在这儿清一次（自动那一趟在 `projection.ts` 的
+    // `running` 相位清）。不清的话这一趟的正文会接在上一趟的尾巴上。
+    st.compactSummary = "";
+    // 这根线带一个「查看详情」：摘要流式到达时挂在它上面（同自动那一根的形态）。
+    pushCompactNotice(st, "notice.compactRunning", undefined, ["details"]);
     try {
       const out = await compactNow(st.sessionId);
       if (out.compacted) dropCompactRunning(st);

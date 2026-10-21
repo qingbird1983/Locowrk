@@ -53,6 +53,11 @@ pub struct UsagePolicy {
     pub window_tokens: u64,
     pub tools_est_tokens: u64,
     pub refused_tokens: u64,
+    /// 生效模型的输出上限（`None` = 目录与档位都没钉）。
+    ///
+    /// 为什么多这一枚：压缩面的门槛算式要扣**输出预留**（`窗口 − 输出预留`），
+    /// 而预留量的上限取自模型行 ⇒ 压缩面得知道那 model's 输出上限。
+    pub max_output: Option<u64>,
 }
 
 impl UsagePolicy {
@@ -66,30 +71,27 @@ impl UsagePolicy {
     /// 参数按"原料"给而不吃容器（`AppState` / `EngineDeps`）：调度引擎在 state
     /// 之外构造，吃容器就得让 runner 反向依赖组装点。
     ///
-    /// S3 刀④b：多一枚 `reserve_cap`（设置里的输出预留上限）。预留量与来源在这里
-    /// 取一次、阈值算式在 `effective_threshold` 里再算一次——两次都是**同一个纯
-    /// 函数**对同一组入参，不是两次读设置；调用方负责让这几枚原料同属一次判定。
-    /// S4（specs/11 刀①）：上限不再是设置项，`reserve_cap` 参数随之摘掉——
-    /// 唯一出处 = [`crate::context_budget::OUTPUT_RESERVE_CAP_TOKENS`]，两个组装点
-    /// 不再各写一枚实参。
+    /// ⚠ **第一个参数是"占模型窗口的百分比"**（specs/13 · C1），不是绝对 token：
+    /// 分母 = `min(窗口 × 百分比, 窗口 − 输出预留)`——绝对数不跟窗口走 = 黑盒
+    /// （窗口 976K 的模型被按 100K 压、窗口 128K 的模型几乎贴边）。
+    ///
+    /// 算式的**唯一出处** = [`crate::compact::plan::ceiling`]（压缩面那一份）：
+    /// 进度条的分母与压缩的触发线吃**同一个函数**，改一处两处一起动 ⇒
+    /// v2.138「看到的 = 触发用的」这条不靠自觉维持。
     pub(crate) fn assemble(
-        slider: u64,
+        pct: u64,
         window: Option<u64>,
         max_output: Option<u64>,
         tools_est_tokens: u64,
         refused_tokens: u64,
     ) -> Self {
-        let reserve_cap = crate::context_budget::OUTPUT_RESERVE_CAP_TOKENS;
+        let window_tokens = window.unwrap_or(0);
         Self {
-            threshold_tokens: crate::context_budget::effective_threshold(
-                slider,
-                window,
-                max_output,
-                reserve_cap,
-            ),
-            window_tokens: window.unwrap_or(0),
+            threshold_tokens: crate::compact::plan::ceiling(window_tokens, pct, max_output),
+            window_tokens,
             tools_est_tokens,
             refused_tokens,
+            max_output,
         }
     }
 }
@@ -203,9 +205,24 @@ pub async fn run_turn(
                     session_id: session_id.into(),
                     phase: crate::events::compact_phase::RUNNING.to_string(),
                     reason: None,
+                    text: None,
                 });
             };
-            let out = cp.run(session, session_id, &u, &on_start).await;
+            // 摘要正文的流式增量（上游 `Compaction.Delta`）：走自己的相位，
+            // 不混进主对话的 chunk 通道。
+            let on_delta = |delta: &str| {
+                sink.emit(&AgentEvent::CompactStatus {
+                    session_id: session_id.into(),
+                    phase: crate::events::compact_phase::DELTA.to_string(),
+                    reason: None,
+                    text: Some(delta.to_string()),
+                });
+            };
+            let hooks = crate::compact::deep::Hooks {
+                on_start: &on_start,
+                on_delta: &on_delta,
+            };
+            let out = cp.run(session, session_id, &u, &hooks).await;
             if let Some(dir) = log {
                 session_log::append_slice(dir, session_id, session, compact_start);
             }
@@ -216,25 +233,28 @@ pub async fn run_turn(
             // **这根发丝线的生命周期**——「正在压缩」那根线到此为止，不留一根
             // 悬着的"正在压"。前端不必知道"压成事件"与"压缩发丝线"的关系。
             match &out {
-                crate::compact::deep::Outcome::Failed { why, .. } => {
+                crate::compact::Outcome::Failed { reason, detail } => {
                     sink.emit(&AgentEvent::CompactStatus {
                         session_id: session_id.into(),
                         phase: crate::events::compact_phase::FAILED.to_string(),
-                        reason: Some((*why).to_string()),
+                        reason: Some((*reason).to_string()),
+                        text: detail.clone(),
                     });
                 }
-                crate::compact::deep::Outcome::Fused(_) => {
+                crate::compact::Outcome::Paused => {
                     sink.emit(&AgentEvent::CompactStatus {
                         session_id: session_id.into(),
                         phase: crate::events::compact_phase::PAUSED.to_string(),
                         reason: None,
+                        text: None,
                     });
                 }
-                crate::compact::deep::Outcome::Compacted { .. } => {
+                crate::compact::Outcome::Compacted { .. } => {
                     sink.emit(&AgentEvent::CompactStatus {
                         session_id: session_id.into(),
                         phase: crate::events::compact_phase::DONE.to_string(),
                         reason: None,
+                        text: None,
                     });
                 }
                 _ => {}
@@ -243,35 +263,41 @@ pub async fn run_turn(
             // 在**本步开工前**就到 sink——与手动 `/压缩`（`commands/compact.rs`）吃同一份
             // `project_events` 构造。缺这一句时压缩只在内存与磁盘上发生，界面要等切
             // 会话重放才看见，「到线 ⇒ 界面出现压缩反馈」在自动线上就恒不成立。
-            if matches!(&out, crate::compact::deep::Outcome::Compacted { .. }) {
+            if matches!(&out, crate::compact::Outcome::Compacted { .. }) {
                 project_new_events(session, compact_start, session_id, sink, false, false);
             }
-            // 停止信号在压缩里命中（specs/12 刀①）：用户点了「停止生成」，
-            // 而这一轮正卡在压缩（step 前唯一的动作）⇒ 整轮按「已停止」收束，
-            // 不再开下一步。收束状态是 `Interrupted` 而不是 `Completed`
-            // ——与 step 边界那处停止同一个口径。
-            //
-            // 这一档也要推一条相位（specs/12 刀②）：「正在压缩」那根线不能悬着
-            // ——它得被换成"压缩已停止"那句话（判据名 `stopped`，前端那张表里有）。
-            if matches!(
-                &out,
-                crate::compact::deep::Outcome::Skipped(crate::compact::deep::WHY_STOPPED)
-            ) {
-                sink.emit(&AgentEvent::CompactStatus {
-                    session_id: session_id.into(),
-                    phase: crate::events::compact_phase::FAILED.to_string(),
-                    reason: Some(crate::compact::deep::WHY_STOPPED.to_string()),
-                });
+            // **auto 失败 ⇒ 整步失败**（specs/13 · AC-8）：压不动还继续把整段历史
+            // 发给模型 = 再被拒一次，用户看到的是"模型报错"而不是"压不动" ⇒
+            // 判据名与真实原因对不上。这一趟已发生的 token 也照样记进了会话
+            // （压缩层先落 `LlmUsage`，`ContextCompacted` 那条没落）。
+            if let crate::compact::Outcome::Failed { reason, .. } = &out {
+                // **被叫停 ≠ 压不动**：用户按了「停止生成」，这一轮以 `Interrupted`
+                // 收束（上游同款：压缩被中断时执行层收束是 interrupted，不是 failed
+                // ——失败那一族才落到 `StepFailedError`）。判据名照样是 `interrupted`
+                // 推给界面（那条文案仍要说"被叫停"），但**不推进熔断计数**
+                // （停过三次不该让压缩永久停手，压缩层那一侧已经这么记了）。
+                if *reason == crate::compact::outcome::INTERRUPTED {
+                    finish_turn(
+                        session,
+                        log,
+                        session_id,
+                        turn_id,
+                        TurnOutcome::Interrupted,
+                        Some(sink),
+                        steps,
+                    );
+                    return Ok(steps);
+                }
                 finish_turn(
                     session,
                     log,
                     session_id,
                     turn_id,
-                    TurnOutcome::Interrupted,
+                    TurnOutcome::Failed,
                     Some(sink),
                     steps,
                 );
-                return Ok(steps);
+                return Err(format!("context compaction failed: {reason}"));
             }
             tracing::debug!(session = session_id, ?out, "步间主层压缩读数");
         }
@@ -284,19 +310,95 @@ pub async fn run_turn(
             // 防重复
             Ok(kernel_agent::StepOutcome::Continue { streamed, reasoned }) => (streamed, reasoned),
             Err(e) => {
-                // 轮以失败收束也要落日志（TurnOutcome::Failed）——重放才
-                // 知道轮停在哪儿；TurnDone 照失败约定不发（前端以 invoke
-                // 的 reject 收尾，避免与成功路径的事件重复）
-                finish_turn(
-                    session,
-                    log,
-                    session_id,
-                    turn_id,
-                    TurnOutcome::Failed,
-                    None,
-                    steps,
-                );
-                return Err(format!("kernel step: {e}"));
+                // **overflow 通路**（specs/13 · AC-7）：供应商按"太长"拒收之后压
+                // 一次、重试一次（上游 `session/runner/llm.ts:259-265`）。压不成就
+                // **不恢复**——原始错误照常冒泡（上游同款）。
+                let mut retried = None;
+                if crate::llm::is_overflow_message(&e.to_string()) {
+                    if let (Some(cp), Some(u)) = (compactor, usage) {
+                        let on_start = || {
+                            sink.emit(&AgentEvent::CompactStatus {
+                                session_id: session_id.into(),
+                                phase: crate::events::compact_phase::RUNNING.to_string(),
+                                reason: None,
+                                text: None,
+                            });
+                        };
+                        let on_delta = |delta: &str| {
+                            sink.emit(&AgentEvent::CompactStatus {
+                                session_id: session_id.into(),
+                                phase: crate::events::compact_phase::DELTA.to_string(),
+                                reason: None,
+                                text: Some(delta.to_string()),
+                            });
+                        };
+                        let hooks = crate::compact::deep::Hooks {
+                            on_start: &on_start,
+                            on_delta: &on_delta,
+                        };
+                        let out = cp.run_overflow(session, session_id, &u, &hooks).await;
+                        match &out {
+                            crate::compact::Outcome::Failed { reason, detail } => {
+                                sink.emit(&AgentEvent::CompactStatus {
+                                    session_id: session_id.into(),
+                                    phase: crate::events::compact_phase::FAILED.to_string(),
+                                    reason: Some((*reason).to_string()),
+                                    text: detail.clone(),
+                                });
+                            }
+                            crate::compact::Outcome::Paused => {
+                                sink.emit(&AgentEvent::CompactStatus {
+                                    session_id: session_id.into(),
+                                    phase: crate::events::compact_phase::PAUSED.to_string(),
+                                    reason: None,
+                                    text: None,
+                                });
+                            }
+                            crate::compact::Outcome::Compacted { .. } => {
+                                sink.emit(&AgentEvent::CompactStatus {
+                                    session_id: session_id.into(),
+                                    phase: crate::events::compact_phase::DONE.to_string(),
+                                    reason: None,
+                                    text: None,
+                                });
+                                retried = Some(kernel.step_as(session, session_id).await);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                match retried {
+                    Some(Ok(kernel_agent::StepOutcome::Continue { streamed, reasoned })) => {
+                        (streamed, reasoned)
+                    }
+                    Some(Err(e2)) => {
+                        finish_turn(
+                            session,
+                            log,
+                            session_id,
+                            turn_id,
+                            TurnOutcome::Failed,
+                            None,
+                            steps,
+                        );
+                        return Err(format!("kernel step: {e2}"));
+                    }
+                    None => {
+                        // 轮以失败收束也要落日志（TurnOutcome::Failed）——重放才
+                        // 知道轮停在哪儿；TurnDone 照失败约定不发（前端以 invoke
+                        // 的 reject 收尾，避免与成功路径的事件重复）
+                        finish_turn(
+                            session,
+                            log,
+                            session_id,
+                            turn_id,
+                            TurnOutcome::Failed,
+                            None,
+                            steps,
+                        );
+                        return Err(format!("kernel step: {e}"));
+                    }
+                }
             }
         };
         project_new_events(session, before, session_id, sink, streamed, reasoned);

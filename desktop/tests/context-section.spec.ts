@@ -39,7 +39,7 @@ const viewWith = (context: Context) => ({ locale: "zh-CN", context }) as Setting
 
 /** 上下文分区投影的**四键**（真源 = 后端 `settings/context.rs`）。 */
 const ctx = (over: Partial<Context> = {}): Context => ({
-  thresholdTokens: 100_000,
+  autoCompactPct: 50,
   usageBar: true,
   compactEnabled: true,
   summaryBudgetMs: 90_000,
@@ -80,7 +80,7 @@ describe("上下文分区的四格", () => {
     seed();
     const wrapper = mount(ContextSection, withGlobal());
     const zhLabel = t("settings.autoCompact");
-    expect(wrapper.text()).toContain(t("settings.threshold"));
+    expect(wrapper.text()).toContain(t("settings.autoCompactPct"));
     expect(wrapper.text()).toContain(zhLabel);
     expect(wrapper.text()).toContain(t("settings.usageBar"));
     expect(wrapper.text()).toContain(t("settings.summaryBudget"));
@@ -121,7 +121,7 @@ describe("上下文分区的四格", () => {
     expect(calls[0].cmd).toBe("settings_set");
     // toEqual（不是 objectContaining）：多一个键也算红。
     expect(calls[0]?.args?.context).toEqual({
-      thresholdTokens: 100_000,
+      autoCompactPct: 50,
       usageBar: true,
       compactEnabled: true,
       summaryBudgetMs: 90_000,
@@ -153,25 +153,58 @@ describe("上下文分区的四格", () => {
     expect(sent.usageBar, "两枚开关不许串在一起").toBe(true);
   });
 
-  it("滑条初值来自投影，改档后照原值发回", async () => {
-    seed({ thresholdTokens: 300_000 });
-    const wrapper = mount(ContextSection, withGlobal());
-    const slider = wrapper.get('input[type="range"]').element as HTMLInputElement;
-    expect(slider.value).toBe("300000");
-
-    await wrapper.get('input[type="range"]').setValue("400000");
-    await clickSave(wrapper);
-    const calls = invokeCalls();
-    const sent = calls[calls.length - 1]?.args?.context as Record<string, unknown>;
-    expect(sent.thresholdTokens).toBe(400_000);
-    expect(sent.compactEnabled, "同一趟里没动的那枚要照投影原值发回").toBe(true);
-  });
-
-  it("本区没有数值输入框（普通用户只做选择，不填数）", () => {
+  it("本区没有数值输入框，也没有滑条（阈值改三档预置后滑条退役）", () => {
     seed();
     const wrapper = mount(ContextSection, withGlobal());
     expect(wrapper.findAll('input[type="number"]')).toHaveLength(0);
-    expect(wrapper.findAll('input[type="range"]')).toHaveLength(1);
+    expect(wrapper.findAll('input[type="range"]')).toHaveLength(0);
+  });
+});
+
+// specs/13 刀①：自动压缩阈值 = **占模型窗口的百分比**，三档预置（25 / 50 / 85）。
+// 绝对 token 滑杆退役（绝对数不跟窗口走 ⇒ 跨模型不可预期，那正是「黑盒」的根因）。
+describe("自动压缩阈值：占窗口百分比的三档预置", () => {
+  it("三档都在，缺省那档（50%）高亮", () => {
+    seed({ autoCompactPct: 50 });
+    const wrapper = mount(ContextSection, withGlobal());
+    const group = segmentByLabel(wrapper, t("settings.autoCompactPct"));
+    const radios = group.findAll('button[role="radio"]');
+    expect(radios).toHaveLength(3);
+    expect(radios.map((r) => r.text())).toEqual([
+      t("settings.autoCompactPctOption", { n: 25 }),
+      t("settings.autoCompactPctOption", { n: 50 }),
+      t("settings.autoCompactPctOption", { n: 85 }),
+    ]);
+    expect(radios[1]!.attributes("aria-checked"), "缺省那档要高亮").toBe("true");
+    expect(radios[0]!.attributes("aria-checked")).toBe("false");
+  });
+
+  it("点档改值，保存时带上那一档（不重启、下一轮生效）", async () => {
+    seed({ autoCompactPct: 50 });
+    onCommand("settings_set", viewWith(ctx({ autoCompactPct: 85 })));
+    const wrapper = mount(ContextSection, withGlobal());
+    const group = segmentByLabel(wrapper, t("settings.autoCompactPct"));
+
+    await group.findAll('button[role="radio"]')[2]!.trigger("click");
+    expect(invokeCalls(), "分段控件是草稿，不该一点就发往返").toHaveLength(0);
+    await clickSave(wrapper);
+    const calls = invokeCalls();
+    const sent = calls[calls.length - 1]?.args?.context as Record<string, unknown>;
+    expect(sent.autoCompactPct).toBe(85);
+  });
+
+  it("存量非档值就近显示，但**不改磁盘值**（点选才落档）", async () => {
+    seed({ autoCompactPct: 70 });
+    const wrapper = mount(ContextSection, withGlobal());
+    const group = segmentByLabel(wrapper, t("settings.autoCompactPct"));
+    const radios = group.findAll('button[role="radio"]');
+    // 70 离 85 更近 ⇒ 就近显示 85
+    expect(radios[2]!.attributes("aria-checked")).toBe("true");
+
+    await clickSave(wrapper);
+    const calls = invokeCalls();
+    const sent = calls[calls.length - 1]?.args?.context as Record<string, unknown>;
+    expect(sent.autoCompactPct, "没点选就不许把存量改掉").toBe(70);
   });
 });
 

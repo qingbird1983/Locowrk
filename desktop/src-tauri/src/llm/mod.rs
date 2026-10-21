@@ -3,12 +3,11 @@
 //! 不特殊，也只是 LlmService 服务（§7.2）。
 //! ⑬ 起并列 embedding 客户端（`embed`，OpenAI 兼容 /v1/embeddings）——
 //! S4 起只剩工具语义检索一个消费者（记忆面经历/提取已退役）。
-//! S2 刀④a 起还含**辅助补全的直呼出口**（`aux_client`：一次 system+user → 一段文本）。
-//! S4 刀③a 起它只服务上下文压缩（摘要走主模型）；`SummaryClient` 契约从
-//! `memory-tree` 迁入，树整面退役后压缩线不再反向依赖要删的 crate。
+//! **specs/13**：摘要的独立直呼通路（`aux_client`）整条删除——上下文压缩改走
+//! 主对话那条管线（`AppLlm::complete_compaction`），提示词与请求形态都照
+//! OpenCode V2 复刻。
 
 mod app_llm;
-mod aux_client;
 pub mod catalog;
 mod catalog_match;
 mod client;
@@ -28,11 +27,7 @@ mod tests;
 mod wire;
 
 pub use app_llm::{AppLlm, RetryNotify};
-/// 摘要调用的用量读数：生产侧解构后丢弃，只有测试面组装假客户端时读它。
-#[cfg(test)]
-pub(crate) use aux_client::SummaryUsage;
-pub(crate) use aux_client::{AppLlmSummarizer, SummaryClient, SummaryRequest};
-pub use client::{test_model, CompatLlm};
+pub use client::test_model;
 pub use dialect::dialect_of;
 pub use embed::{CooledEmbed, EmbedClient, EmbeddingSettingsLlmView, SharedEmbed};
 pub(crate) use retry::{is_budget_exhausted, is_overflow_message};

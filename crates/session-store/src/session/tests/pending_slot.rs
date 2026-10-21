@@ -103,8 +103,8 @@ fn pending_slot_stops_at_nearest_assistant() {
         result_of("c3", None),
         assistant_with("", &[]), // 纯文本答复：占位表为空的 assistant
         user("撤销刚才那步"),
-        result_of("c3-undo", None), // 补偿：无占位 ⇒ 两种写法都 None
-        compacted(4, "早期摘要"),   // step 之间的压缩
+        result_of("c3-undo", None),  // 补偿：无占位 ⇒ 两种写法都 None
+        compacted(4, 5, "早期摘要"), // step 之间的压缩（保留区 = 最后 4 条 ⇒ 起点 5）
         assistant_with("压缩后继续", &["c4"]),
         call_of("c4", "echo"),
         result_of("c4", None),

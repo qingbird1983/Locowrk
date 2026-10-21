@@ -57,7 +57,7 @@ pub(crate) fn project(s: &AppSettings, data_dir: &Path) -> SettingsView {
             api_key_set: s.embedding.api_key.is_some(),
         },
         context: ContextSettingsView {
-            threshold_tokens: s.context.threshold_tokens,
+            auto_compact_pct: s.context.auto_compact_pct,
             usage_bar: s.context.usage_bar,
             compact_enabled: s.context.compact_enabled,
             summary_budget_ms: s.context.summary_budget_ms,

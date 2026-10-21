@@ -1,45 +1,32 @@
-# 任务
+You MUST use this format for your response (you may omit sections that aren't applicable). Do not include the <template> tags in your response.
+<template>
+## Objective
+- [one or two brief sentences describing what the user is trying to accomplish]
 
-把上面这段对话压成一份**给下一个自己看的**摘要。下一个自己只有这份摘要和最近几轮
-原文，它要接着把这件事做完。所以判断标准只有一条：读完这份摘要，能不能不回头翻
-聊天记录就继续干活。
+## Requirements
+- [constraints, preferences, requirements, and scope boundaries stated by the user, or "(none)"]
 
-每一节都要写。确实没有内容就写「（无）」——留空、或者写"暂无相关内容"这类套话，
-都算没完成这一节。
+## Decisions
+- [decisions already made and why, or "(none)"]
 
-# 输出格式（必须用这七节：节名一字不改、顺序不变、不增不减）
+## Work State
+Break the objective into smaller goals and report which are completed, which are being worked on, and which are blocked.
+### Completed
+- [goals that have been completed; otherwise "(none)"]
 
-## 目标
-一两句说清用户要做成什么（含他中途改过的目标，以最后一次为准）。
+### Active
+- [goals currently being worked on; otherwise "(none)"]
 
-## 约束与要求
-用户说过的限制、偏好、范围边界，以及他明确给出过的指令（例如"永远用 pnpm 不要用 npm"）。
-没有就写（无）。
+### Blocked
+- [anything blocking progress, and why; otherwise "(none)"]
 
-## 已定决策
-已经定下来的方案与为什么这样定，尤其是那些"看起来还能换个做法"的选择。
-没有就写（无）。
+## Next Move
+1. [ordered list of next actions, or "(none)"]
 
-## 工作状态
-把目标拆成小步，逐条报告进度。三个子节都要写。
+## Relevant Files
+List the files and directories, other than the current working directory, that another agent would need to open to continue this work. Include at most 15, most important first. Do not list every file that was read or changed. Include paths outside the current working directory when relevant. If none, write "(none)".
+- `[file or directory path]`: [brief reason it matters]
 
-### 已完成
-已经做完的小步。没有就写（无）。
-
-### 进行中
-正在做的小步，写到"具体改到哪一处"。没有就写（无）。
-
-### 受阻
-卡住的事与卡住的原因（含等谁点头、缺什么条件）。没有就写（无）。
-
-## 下一步
-按顺序列出接下来要做的事，只列**用户明确要求过**或刚刚正在做的事，不要另起新任务。
-没有就写（无）。
-
-## 相关文件
-列出下一个自己要打开的文件与目录（最多 15 个，最重要的在前，并各写一句为什么相关）。
-不要把读过又改过的每个文件都列上。没有就写（无）。
-
-## 重要上下文
-下一个自己不查就不知道、又必须知道的事实：实测读数、失败原因、被排除的方案与原因、
-版本号与提交号这类状态。没有就写（无）。
+## Important Context
+- [facts the next agent cannot continue without and cannot easily find on its own; or "(none)"]
+</template>

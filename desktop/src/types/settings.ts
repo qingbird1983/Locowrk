@@ -108,13 +108,13 @@ export interface AppearanceUpdate {
   uiFontSize?: number;
 }
 
-/** 上下文管理区投影（S4 退役面 · specs/11 刀①）：用户只负责三格——
- * 压缩阈值（档位滑条）、自动压缩开关、用量条显隐。输出预留/目标比/近段额度/
- * 工具预算等一律写死，不再出现在设置面。specs/12 刀② 加了第四格：**摘要调用
- * 预算**（三档预置，见 `lib/summary-budget.ts`）。 */
+/** 上下文管理区投影（S4 退役面 · specs/11 刀①；specs/13 刀① 换口径）：用户只负责四格——
+ * 自动压缩阈值（**占模型窗口的百分比**，specs/13 刀①）、自动压缩开关、用量条显隐、
+ * 摘要调用预算（三档预置，见 `lib/summary-budget.ts`）。其余数值一律写死进代码，
+ * 不再出现在设置面。 */
 interface ContextSettingsView {
-  /** 压缩阈值（绝对 token，100K–800K 缺省 100K）。 */
-  thresholdTokens: number;
+  /** 自动压缩阈值（占模型窗口的百分比，1–100 缺省 50）。 */
+  autoCompactPct: number;
   /** 阈值用量进度条显隐（v4.18，缺省开）。 */
   usageBar: boolean;
   /** 自动压缩开关（缺省开）：到线时把较旧的一段换成一份七节摘要。 */
@@ -126,7 +126,7 @@ interface ContextSettingsView {
 
 /** 上下文管理区部分更新（窗口走 LlmUpdate）。 */
 export interface ContextUpdate {
-  thresholdTokens?: number;
+  autoCompactPct?: number;
   usageBar?: boolean;
   compactEnabled?: boolean;
   summaryBudgetMs?: number;

@@ -16,6 +16,7 @@
 //! 重置流式缓冲。未注入（测试/记录员）= 无钩子，重试静默进行。
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use kernel_agent::{estimate_tokens, LlmError, LlmRequest, LlmResponse, LlmService};
@@ -153,6 +154,16 @@ impl AppLlm {
         self
     }
 
+    /// 组装点注入**只有停止标记**的重试面（压缩那一台用）。
+    ///
+    /// 为什么不走 [`Self::with_retry_surface`]：那个带着"重试通知出口"，而压缩
+    /// 请求重试**不许**推 `agent://llm-retry`（前端 `resetAssistant` 会清掉主对话
+    /// 的 assistant 气泡）。这里只给停止标记——用户照样能停掉这一条请求。
+    pub fn with_stop(mut self, stop: Arc<crate::stop::StopFlags>) -> Self {
+        self.stop = Some(stop);
+        self
+    }
+
     /// M6.1 断裂诊断：开关开且带会话身份才记（一次性请求纪律 6 不写
     /// 缓存，记了也无意义）；失败静默不拦请求。
     fn diagnose(&self, req: &LlmRequest) {
@@ -181,6 +192,63 @@ impl AppLlm {
             should_stop: Box::new(move || stop.is_stopped(&sid_stop)),
             on_retry: Box::new(move |attempt, delay| notify(&sid_notify, attempt, delay)),
         })
+    }
+
+    /// **压缩请求**的重试钩子：只接停止标记，**不推 `agent://llm-retry`**。
+    ///
+    /// 为什么不许推：那个事件会让前端 `resetAssistant` **清掉主对话的 assistant
+    /// 气泡**——压缩请求重试一次就把用户正在看的那段回答抹了（specs/13 · C4）。
+    fn hooks_quiet(&self, session_id: Option<&str>) -> Option<RetryHooks> {
+        let sid = session_id?;
+        let stop = Arc::clone(self.stop.as_ref()?);
+        let sid = sid.to_string();
+        Some(RetryHooks {
+            should_stop: Box::new(move || stop.is_stopped(&sid)),
+            on_retry: Box::new(|_attempt, _delay_ms| {}),
+        })
+    }
+
+    /// 压缩请求的发送口（specs/13 · C4）。
+    ///
+    /// 走 [`Self::prepare`] **同一条解析**（会话级模型覆盖 / 路由 / 决策环改写 /
+    /// 输出上限口径全同），只有三处与主对话轮不同：
+    ///
+    /// 1. **总时长预算**（`Some(budget)`）——主对话轮仍传 `None`（「重试不设上限」
+    ///    那条裁定逐字不变）；
+    /// 2. **不推 `agent://llm-retry`**（见 [`Self::hooks_quiet`]）；
+    /// 3. delta 走**自己的**回调，不混进主对话的 chunk 通道。
+    ///
+    /// 停止标记仍接（用户能停掉这一条看不见的请求）。
+    ///
+    /// ⚠ **不记拒收读数**：压缩请求自己被拒是收缩矩阵内部的事（它自己会缩），
+    /// 记进会话的占用读数会把"这次压缩有多大"错当成"会话占了多少"。
+    pub async fn complete_compaction(
+        &self,
+        req: LlmRequest,
+        budget: Duration,
+        on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
+    ) -> Result<LlmResponse, LlmError> {
+        self.diagnose(&req);
+        let (req, cfg, caps, image_allowed) = self.prepare(req);
+        if cfg.model.trim().is_empty() {
+            tracing::debug!("LLM model 未配置，走演示替身（设置 → 模型配置后走真实模型）");
+            return self.demo.complete_streaming(req, on_delta).await;
+        }
+        super::wire::check_modalities(&req, image_allowed).map_err(LlmError::Backend)?;
+        let hooks = self.hooks_quiet(req.session_id.as_deref());
+        let assets = self.assets.as_deref();
+        self.real
+            .complete_streaming_with(
+                &cfg,
+                caps,
+                req,
+                assets,
+                on_delta,
+                &|_| false,
+                hooks.as_ref(),
+                Some(budget),
+            )
+            .await
     }
 
     /// 拒收现场记账（S2 刀⑧）。三条发送收口各调一次（与 [`Self::diagnose`] 同一条

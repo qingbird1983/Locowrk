@@ -262,10 +262,11 @@ export default {
     contextTitle: "上下文管理",
     contextHint:
       "到达阈值就自动压缩：模型停在这一步等摘要写完，摘要与最近原文回填进上下文，然后继续。完整历史留在会话日志里，一行也不改写。",
-    threshold: "压缩阈值",
-    thresholdValue: "当前：{n} tokens",
-    thresholdHint:
-      "对话上下文达到该 token 数就自动压缩（手动 `/压缩` 不受此限）。实际触发线会与「模型窗口 − 21K 输出预留」取小，所以不要把这一枚设得超过模型窗口。",
+    // specs/13 刀①：阈值改成**占模型窗口的百分比**（绝对 token 滑杆退役）。
+    autoCompactPct: "自动压缩阈值",
+    autoCompactPctHint:
+      "上下文占用达到模型窗口的百分之多少时自动压缩一次。压得越早，这次要发出去的上下文越少、越快。",
+    autoCompactPctOption: "{n}%",
     // S4（specs/11 刀①）：唯一的自动压缩开关。关掉后不自动压，手动 `/压缩` 仍可用。
     autoCompact: "自动压缩",
     autoCompactHint:

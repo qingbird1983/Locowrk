@@ -13,9 +13,12 @@ use crate::snapshot::SNAPSHOT_SCHEMA_VERSION;
 
 mod project;
 use project::{compact_messages, project_messages};
-// S2 刀④b：摘要消息的形状搬成**共享出口**——折叠路径自己用，宿主的压缩层
-// （当轮就要发截断窗口）也用它，两边不许各写一份字面量（判据 SS20）。
-pub use project::{SUMMARIZED_MARKER, summarized_message};
+// 压缩折叠的产物形状（上游 checkpoint 逐字标签）：折叠路径自己用，宿主的压缩层
+// （当轮就要发截断窗口）也用它，两边不许各写一份字面量。
+pub use project::{
+    CHECKPOINT_NOTICE, CHECKPOINT_TAG, checkpoint_message, message_to_text, recent_text,
+    truncate_tool_output,
+};
 
 /// 每 N 个事件落一个内部快照，`state_at` 从快照起步折算（§6.2）。
 pub const SNAPSHOT_EVERY: usize = 64;
@@ -136,9 +139,10 @@ impl SessionState {
             }
             SessionEvent::ContextCompacted {
                 kept_messages,
+                keep_from,
                 summary,
                 ..
-            } => compact_messages(&mut self.messages, *kept_messages, summary),
+            } => compact_messages(&mut self.messages, *kept_messages, *keep_from, summary),
             _ => {}
         }
     }

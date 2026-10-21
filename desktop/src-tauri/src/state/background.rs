@@ -78,25 +78,36 @@ pub(crate) fn build(init: Init) -> Stack {
         compact_refusals,
     } = init;
 
-    // 一条直呼通路 = 一个客户端实例：S4 刀③b 起整理线已整面退役，这个实例
-    // 只服务主层压缩摘要（`compact/deep.rs`），取主模型端点与档位（`cfg_main`）。
-    // 构造点仍留在组装点：压缩器是 runner 的 step 边界依赖，客户端不该由 runner
-    // 自己 new（测试面要能注入假件）。
-    let summary_aux: Arc<dyn crate::llm::SummaryClient> = Arc::new(
-        crate::llm::AppLlmSummarizer::new(Arc::clone(&settings), Arc::clone(&stop_flags)),
+    // 压缩用的那一台 `AppLlm`（**与主对话那台分开的两个实例**）。
+    //
+    // 为什么不用同一台：主对话那台是以 `Arc<dyn LlmService>` 注册进内核 Context
+    // 的，没有 downcast 回具体类型的路（`LlmService` 不是 `Any`）⇒ 拿不到
+    // `Arc<AppLlm>`；而 `Compactor` 要的 `complete_compaction`（总时长预算 +
+    // 不推重试事件 + delta 走自己回调）是 `AppLlm` 的固有方法。
+    //
+    // 两台的差别只有两处，且**都是故意的**：① 这一台不接重试通知（压缩重试不许推
+    // `agent://llm-retry`——那会让前端 `resetAssistant` 清掉主对话的 assistant
+    // 气泡）；② 这一台不记拒收读数（压缩请求自己被拒是收缩矩阵内部的事，记进
+    // 会话占用读数会把"这次压缩有多大"错当成"会话占了多少"）。其余（设置、
+    // 会话级模型覆盖、能力目录、资产、落盘句柄、停止标记）都是**同一批句柄**
+    // ⇒ 解析结果逐字相同。
+    let compaction_llm = Arc::new(
+        crate::llm::AppLlm::with_overrides(Arc::clone(&settings), Arc::clone(&model_overrides))
+            .with_multimodal(Arc::clone(&assets), Arc::clone(&catalog))
+            .with_spill(Arc::new(crate::spill::SpillStore::new(&root)))
+            .with_stop(Arc::clone(&stop_flags)),
     );
     let compactor = Arc::new(crate::compact::deep::Compactor::new(
         Arc::clone(&settings),
-        summary_aux,
-        // 熔断表与直呼通路同一条纪律（刀⑤a）：它是**两个使用方共用的状态**，
-        // 所以构造点在组装点，不在任何一个使用方体内。
+        // 请求装配：**与主对话轮同一条链**（内核 `prepare_request`）。
+        Arc::clone(&kernel),
+        Arc::clone(&compaction_llm) as Arc<dyn crate::compact::deep::CompactionLlm>,
+        // 熔断表与拒收读数是**两个使用方共用的状态**（组装点构造，两边各收一枚
+        // `Arc`；同 `compact::Failures` 头注那条纪律）。
         compact_failures,
-        // 拒收读数（刀⑧）：同一张表的读侧——被超窗拒掉的那一次没有用量上报，
-        // 只靠锚点这一层就永远追不上已经涨过的窗口。
         compact_refusals,
-        // 停止标记（specs/12 刀①）：摘要调用在等重试与吐字两处都查它 ⇒ 用户点
-        // 「停止生成」能停掉这条用户看不见的辅助请求。同一柄（组装点已建），
-        // 不另建一张。
+        // 停止标记（specs/12 刀①）：压缩在等重试与吐字两处都查它 ⇒ 用户点
+        // 「停止生成」能停掉这一条用户看不见的请求。同一柄（组装点已建）。
         Some(Arc::clone(&stop_flags)),
     ));
 

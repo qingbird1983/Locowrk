@@ -25,7 +25,7 @@ import { createPinia, setActivePinia } from "pinia";
 
 import { useChatStore } from "../src/stores/chat";
 import { applyLocalePref } from "../src/i18n";
-import { invokeCalls, onCommand, resetIpc } from "./tauri-stub";
+import { invoke, invokeCalls, onCommand, resetIpc } from "./tauri-stub";
 
 const SYS = "system";
 
@@ -69,10 +69,12 @@ describe("`/压缩` 这条元操作", () => {
   });
 
   it("没压成 ⇒ 同一根线就地改写成那条判据的文案（一条线，不是两根）", async () => {
-    onCommand("compact_now", { compacted: false, reason: "too-few-rounds" });
+    // 判据名跟着上游换了一整套（specs/13 契约 C3）：旧的 `too-few-rounds` 退役，
+    // "没有可剪的一段" 在上游叫 `nothing-to-compact`。
+    onCommand("compact_now", { compacted: false, reason: "nothing-to-compact" });
     const chat = fresh();
     await chat.submit("/压缩");
-    expect(sysKeys(chat)).toEqual(["notice.compactTooFewRounds"]);
+    expect(sysKeys(chat)).toEqual(["notice.compactNothingToCompact"]);
     const line = chat.items.find((i) => i.kind === SYS) as { tone?: string; tag?: string };
     expect(line.tone, "收束后仍是那根发丝线（v2.143 的形态）").toBe("hairline");
     expect(line.tag).toBe("compact");
@@ -105,5 +107,42 @@ describe("`/压缩` 这条元操作", () => {
     const chat = fresh();
     await chat.submit("/压缩");
     expect(sysKeys(chat)).toEqual(["__raw__"]);
+  });
+
+  it("手动这一趟途中流回来的摘要正文 ⇒ 挂到在途那根线上（事件发了界面要动）", async () => {
+    // 后端那条 `delta` 相位**不分手动自动**（上游 `Compaction.Delta` 同款）。
+    // 这一条盯的是"手动那根线也接得到"：只认自动那根的话，事件发了、界面不动，
+    // 而事件照发——失败是静默的。
+    let resolveCmd: (v: unknown) => void = () => {};
+    invoke.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          resolveCmd = res as (v: unknown) => void;
+        }),
+    );
+    const chat = fresh();
+    const pending = chat.submit("/压缩");
+    const line = chat.items.find((i) => i.kind === SYS) as {
+      id: number;
+      key?: string;
+      actions?: string[];
+    };
+    expect(line.key, "命令还没回来 ⇒ 在途线在").toBe("notice.compactRunning");
+    expect(line.actions, "在途那根线带一个「查看详情」").toEqual(["details"]);
+
+    chat.onEvent({
+      kind: "compact_status",
+      session_id: "s-1",
+      phase: "delta",
+      text: "## Objective\n- 做完那件事\n",
+    });
+    expect(chat.noticeDetails[line.id], "流回来的正文挂在在途那根线上").toBe(
+      "## Objective\n- 做完那件事\n",
+    );
+    // delta 不另起线：转录里仍是同一根（形态只有一种）。
+    expect(chat.items.filter((i) => i.kind === SYS)).toHaveLength(1);
+
+    resolveCmd({ compacted: true, reason: null });
+    await pending;
   });
 });

@@ -469,10 +469,10 @@ describe("自动压缩的过程反馈：四相共用一根发丝线", () => {
       kind: "compact_status",
       session_id: S,
       phase: "failed",
-      reason: "summary-call",
+      reason: "provider-error",
     });
     // 一根线（不是两根）：「没压成」把「正在压缩」**就地改写**掉了。
-    expect(sysKeys(chat)).toEqual(["notice.compactCallFailed"]);
+    expect(sysKeys(chat)).toEqual(["notice.compactProviderError"]);
     const line = chat.items.find((i) => i.kind === "system") as {
       tone?: string;
       tag?: string;
@@ -483,12 +483,37 @@ describe("自动压缩的过程反馈：四相共用一根发丝线", () => {
 
   it("连着失败两次也只留一根线（末态就是真相）", () => {
     const chat = useChatStore();
-    for (const reason of ["summary-call", "budget"]) {
+    for (const reason of ["provider-error", "budget"]) {
       chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
       chat.onEvent({ kind: "compact_status", session_id: S, phase: "failed", reason });
     }
     expect(sysKeys(chat)).toEqual(["notice.compactBudget"]);
     expect(chat.items.filter((i) => i.kind === "system")).toHaveLength(1);
+  });
+
+  it("摘要正文流式到达 ⇒ 累加到那根线的「查看详情」上（转录里不另起一块）", () => {
+    const chat = useChatStore();
+    chat.onEvent({ kind: "compact_status", session_id: S, phase: "running" });
+    chat.onEvent({
+      kind: "compact_status",
+      session_id: S,
+      phase: "delta",
+      text: "## Objective\n- ",
+    });
+    chat.onEvent({
+      kind: "compact_status",
+      session_id: S,
+      phase: "delta",
+      text: "做完那件事\n",
+    });
+    // delta 不另起线：那根发丝线仍是同一根（形态只有一种）。
+    expect(sysKeys(chat)).toEqual(["notice.compactRunning"]);
+    const line = chat.items.find((i) => i.kind === "system") as {
+      id: number;
+      actions?: string[];
+    };
+    expect(line.actions, "在途那根线带一个「查看详情」").toEqual(["details"]);
+    expect(chat.noticeDetails[line.id]).toBe("## Objective\n- 做完那件事\n");
   });
 
   it("熔断 ⇒ 「已暂停」那句（走相位，不走判据名那张表）", () => {

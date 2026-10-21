@@ -1,5 +1,5 @@
 //! 上下文管理区（⑨）与模型窗口（S2 迁 llm 区）设置测试：缺省值 /
-//! 旧字段迁移幂等 / 压缩阈值（v2.137 绝对 token）校验 / 幻影键 /
+//! 旧字段迁移幂等 / 自动压缩阈值（specs/13：**占模型窗口的百分比**）校验 / 幻影键 /
 //! session_window 四层窗口链 / session_capacity（S2 刀①：窗口与输出上限一次解析）。
 
 use super::*;
@@ -11,13 +11,13 @@ fn context_defaults_and_legacy_json_compat() {
     let root = temp_root("context-defaults");
     let store = SettingsStore::open(&root).unwrap();
     let v = store.view().context;
-    // 缺省：压缩阈值 100K（绝对 token）+ 进度条开
-    assert_eq!(v.threshold_tokens, 100_000);
+    // 缺省：自动压缩阈值 50%（占模型窗口）+ 进度条开
+    assert_eq!(v.auto_compact_pct, 50);
     assert!(v.usage_bar);
     // 旧 settings.json 无 context 字段 → 字段级缺省，不解析失败
     std::fs::write(root.join(FILE_NAME), r#"{"locale":"zh-CN"}"#).unwrap();
     let v = SettingsStore::open(&root).unwrap().view().context;
-    assert_eq!(v.threshold_tokens, 100_000);
+    assert_eq!(v.auto_compact_pct, 50);
     // v2.137 前旧键（百分比/策略/稳定期）= 幻影键：读得进、新键走缺省
     std::fs::write(
         root.join(FILE_NAME),
@@ -25,17 +25,17 @@ fn context_defaults_and_legacy_json_compat() {
     )
     .unwrap();
     let v = SettingsStore::open(&root).unwrap().view().context;
-    assert_eq!(v.threshold_tokens, 100_000, "退役键幻影化：阈值走缺省");
+    assert_eq!(v.auto_compact_pct, 50, "退役键幻影化：阈值走缺省");
     assert_eq!(
-        store.compact_threshold_tokens(),
-        100_000,
-        "触发面同源（不再折算窗口百分比）"
+        store.auto_compact_pct(),
+        50,
+        "触发面同源（读的是同一格百分比）"
     );
     std::fs::remove_dir_all(&root).ok();
 }
 
 /// S2 迁移：旧 `context.windowTokens` 一次搬到 llm 区（信息归属——窗口是
-/// 模型属性）；v2.137 起阈值不再吃窗口，迁移只搬窗口。
+/// 模型属性）；specs/13 起阈值是**占窗口的百分比**，不随旧百分比换算。
 #[test]
 fn llm_window_migrates_from_legacy_context_section() {
     let root = temp_root("window-migrate");
@@ -52,9 +52,9 @@ fn llm_window_migrates_from_legacy_context_section() {
         "旧 context 窗口迁移到 llm 区"
     );
     assert_eq!(
-        store.view().context.threshold_tokens,
-        100_000,
-        "阈值是独立旋钮，不随旧百分比换算"
+        store.view().context.auto_compact_pct,
+        50,
+        "阈值是独立旋钮（占窗口百分比），不随旧百分比换算"
     );
     // 迁移幂等：源字段已被置 None，再开一次不变
     let again = SettingsStore::open(&root).unwrap();
@@ -62,8 +62,12 @@ fn llm_window_migrates_from_legacy_context_section() {
     std::fs::remove_dir_all(&root).ok();
 }
 
+/// specs/13：自动压缩阈值 = **占模型窗口的百分比**（1–100 的整数，缺省 50）。
+///
+/// 校验规矩与上一档一样：越界**拒绝**而不是钳到边界（设置面写的是用户意图，
+/// 悄悄改掉等于骗人），且拒绝不得污染内存态。
 #[test]
-fn compact_threshold_update_validation_and_roundtrip() {
+fn auto_compact_pct_update_validation_and_roundtrip() {
     let root = temp_root("threshold-update");
     let store = SettingsStore::open(&root).unwrap();
     // 合法档位 + 磁盘往返（重开读回 = 永久保存的硬证明）
@@ -75,7 +79,7 @@ fn compact_threshold_update_validation_and_roundtrip() {
             None,
             None,
             Some(ContextUpdate {
-                threshold_tokens: Some(300_000),
+                auto_compact_pct: Some(85),
                 usage_bar: None,
                 ..Default::default()
             }),
@@ -87,12 +91,14 @@ fn compact_threshold_update_validation_and_roundtrip() {
             None,
         )
         .unwrap();
-    assert_eq!(store.view().context.threshold_tokens, 300_000);
-    assert_eq!(store.compact_threshold_tokens(), 300_000);
+    assert_eq!(store.view().context.auto_compact_pct, 85);
+    assert_eq!(store.auto_compact_pct(), 85);
     let v = SettingsStore::open(&root).unwrap().view().context;
-    assert_eq!(v.threshold_tokens, 300_000);
-    // 校验：出界拒绝（下限下方 / 上限上方）且不污染内存态
-    for bad in [999u64, 99_999, 800_001, 10_000_000] {
+    assert_eq!(v.auto_compact_pct, 85);
+    // 校验：档外值拒绝（0 / 30 / 100 / 101 —— 范围里的 30 与 100 同样拒绝，
+    // 因为后端是**校验权威**：只收三档。界面上非档值只可能来自手改过的
+    // settings.json，档外值在界面上"就近显示但不改存量"，而存档时会被拒收。
+    for bad in [0u64, 30, 100, 101, 1_000] {
         assert!(store
             .update(
                 None,
@@ -101,7 +107,7 @@ fn compact_threshold_update_validation_and_roundtrip() {
                 None,
                 None,
                 Some(ContextUpdate {
-                    threshold_tokens: Some(bad),
+                    auto_compact_pct: Some(bad),
                     usage_bar: None,
                     ..Default::default()
                 }),
@@ -114,9 +120,9 @@ fn compact_threshold_update_validation_and_roundtrip() {
             )
             .is_err());
     }
-    assert_eq!(store.view().context.threshold_tokens, 300_000);
-    // 边界值合法
-    for ok in [100_000u64, 800_000] {
+    assert_eq!(store.view().context.auto_compact_pct, 85);
+    // 另一档也合法（25 / 50 / 85 三档都收）
+    for ok in [25u64, 50] {
         store
             .update(
                 None,
@@ -125,7 +131,7 @@ fn compact_threshold_update_validation_and_roundtrip() {
                 None,
                 None,
                 Some(ContextUpdate {
-                    threshold_tokens: Some(ok),
+                    auto_compact_pct: Some(ok),
                     usage_bar: None,
                     ..Default::default()
                 }),
@@ -157,7 +163,7 @@ fn context_usage_bar_default_and_roundtrip() {
             None,
             None,
             Some(ContextUpdate {
-                threshold_tokens: None,
+                auto_compact_pct: None,
                 usage_bar: Some(false),
                 ..Default::default()
             }),

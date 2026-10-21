@@ -100,33 +100,34 @@ export default {
     // Rust side via check SS24, and an unrecognized name falls through to
     // compactUnknown with the name shown verbatim — never silently "compacted".
     compactRunning: "Compacting conversation context…",
-    compactUnknownWindow:
-      "Not compacted: the model window is unknown, so there is no target to compact to. Set the window size for this model in Settings → Model.",
-    compactTooFewRounds:
-      "Not compacted: the conversation is too short to summarize (needs at least two rounds).",
-    compactNothingToSummarize:
-      "Not compacted: the recent-text allowance already covers the whole history. Lower \"Recent-text allowance\" or \"Compaction target\" in Settings → Context to actually shrink it.",
-    compactCallFailed:
-      "Not compacted: the summary model did not answer (network or quota). See which profile it uses in Settings → Context.",
-    compactOverflow:
-      "Not compacted: the summary request itself exceeded the model window, even at the smallest shrink step. Pick a summary profile with a larger window, or lower the compaction target.",
-    compactRejected:
-      "Not compacted: the summary the model wrote was missing sections, so nothing was recorded (this counts toward the breaker).",
-    compactSwitchOff:
-      "Not compacted: deep compaction is currently switched off (Settings → Context → Deep compaction).",
+    // specs/13: the failure taxonomy now mirrors upstream (criterion name ↔
+    // sentence, same-source gate SS24 on both sides = 9 entries). "Not compacted"
+    // has to say *why*: template not filled / no summary / output limit / cannot
+    // shrink further / provider refused / content filter — six causes, six
+    // sentences, never merged.
+    compactNothingToCompact:
+      "Not compacted: there was nothing to summarize (the conversation is too short, or the recent-text allowance already covers the whole history).",
+    compactTemplateMismatch:
+      "Not compacted: the summary did not follow the required format (it was reminded once and still did not match), so nothing was recorded.",
+    compactNoSummary: "Not compacted: the model produced no summary.",
+    compactOutputLimit: "Not compacted: the summary hit the output token limit.",
+    compactCannotShrink:
+      "Not compacted: shrinking further would drop the latest exchange, so it gave up.",
+    compactProviderError:
+      "Not compacted: the provider refused the summary request (network or quota).",
+    compactContentFilter:
+      "Not compacted: the provider's content filter blocked the summary.",
+    compactInterrupted: "Compaction stopped.",
     // specs/12 knife ①: the summary call ran past its total time budget (the
-    // hard ceiling on the auxiliary path). Kept apart from compactCallFailed:
+    // hard ceiling on the auxiliary path). Kept apart from provider-error:
     // that one is "it did not answer", this one is "it did not get there".
     compactBudget:
       "Not compacted: the summary call exceeded its time budget (adjust \"Summary call budget\" in Settings → Context).",
-    // specs/12 knife ①: the user pressed stop during compaction — that is not
-    // a failure, it was called off.
-    compactStopped: "Compaction stopped (you pressed stop generating).",
     // specs/12 knife ②: the breaker tripped (compaction kept failing, so
     // automatic compaction pauses while the turn carries on). This one rides
     // the *phase* (`paused` on agent://compact-status), not the criterion-name
-    // table — the name `fused` is one the manual `/compact` path lets go
-    // (the YIELDED set of SS24).
+    // table — the name `fused` is retired as of specs/13 (the two sides had
+    // different scopes for it, so neither keeps it).
     compactPaused:
       "Automatic compaction is paused: it failed several times in a row, so this turn will not compact on its own. The manual `/压缩` command still works.",
     compactUnknown: "Not compacted: {reason}",

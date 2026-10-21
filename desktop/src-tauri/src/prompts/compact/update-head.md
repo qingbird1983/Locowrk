@@ -1,0 +1,1 @@
+Update the existing checkpoint in the conversation above into one consolidated summary.

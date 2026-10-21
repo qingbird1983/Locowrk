@@ -9,6 +9,7 @@ import { useToastStore } from "../toast";
 import type { SessionUsage } from "./types";
 import { nextId } from "./ids";
 import type { ChatState } from "./state";
+import type { SystemItem } from "./types";
 
 /** 系统消息入列（SystemNotice 模式的唯一生产入口；首个生产者 ⑨
  * 压缩通知，随后 ⑪ "已记住"）。 */
@@ -94,8 +95,9 @@ export function dropCompactRunning(st: ChatState) {
   dropRunningLine(st, "compact", "notice.compactRunning");
 }
 
-/** 后端判据名 → 语言包那条 key（S2 刀⑦ `/压缩`）。取值域与 Rust 侧同源，由
- * `check-single-source` 的 SS24 钉住：那边新增一条 stop 而这边没补文案，闸就红。
+/** 后端判据名 → 语言包那条 key（specs/13 契约 C3）。取值域与 Rust 侧
+ * `compact::REASONS` 同源，由 `check-single-source` 的 SS24 钉住：那边新增一条
+ * 而这边没补文案，闸就红。
  *
  * ⚠ 兜底那条不许省：认不出的 reason 也要如实说"没压成"并把判据名原样带出来，
  * 绝不许悄悄显示成"已压缩"——那正是本项目一路在反的假告。
@@ -103,22 +105,21 @@ export function dropCompactRunning(st: ChatState) {
  * **这一份住在 notices.ts 而不是 send.ts**（specs/12 刀②）：自动压缩那条路
  * （`agent://compact-status` 的 `failed` 相位）也要按判据名取文案，两条路共用
  * 同一张表 ⇒ 一份事实一个出处。搬过来之前它在 send.ts 里，而 send.ts 是"发东西
- * 的那一族"——判据名表放那儿等于让"读面"去读"写面"的私有物。 */
+ * 的那一族"——判据名表放那儿等于让"读面"去读"写面"的私有物。
+ *
+ * ⚠ specs/13 起这张表**换了一整套**（跟着上游的失败分类走）：旧的
+ * `unknown-window` / `too-few-rounds` / `summary-call` / `overflow` / `rejected`
+ * 等判据名退役；熔断（`fused`）**整个不叫这个名字**——它走 `paused` 相位。 */
 const COMPACT_SKIP_KEYS: Record<string, string> = {
-  "unknown-window": "notice.compactUnknownWindow",
-  "too-few-rounds": "notice.compactTooFewRounds",
-  "nothing-to-summarize": "notice.compactNothingToSummarize",
-  "summary-call": "notice.compactCallFailed",
-  overflow: "notice.compactOverflow",
-  rejected: "notice.compactRejected",
-  // 手动通路理论上到不了这一格（后端 run_manual 不看那枚开关）；留着是为了
-  // "真到了也如实说"，而不是让它掉进兜底那条。
-  off: "notice.compactSwitchOff",
-  // specs/12 刀①：摘要调用超出了总时长预算（辅助路径的硬上限）。与
-  // `summary-call` 分开：那是"没答上"，这一条是"没等到"。
+  "nothing-to-compact": "notice.compactNothingToCompact",
+  "template-mismatch": "notice.compactTemplateMismatch",
+  "no-summary": "notice.compactNoSummary",
+  "output-limit": "notice.compactOutputLimit",
+  "cannot-shrink": "notice.compactCannotShrink",
+  "provider-error": "notice.compactProviderError",
+  "content-filter": "notice.compactContentFilter",
+  interrupted: "notice.compactInterrupted",
   budget: "notice.compactBudget",
-  // specs/12 刀①：用户在压缩期间按了「停止生成」——不是失败，是被叫停。
-  stopped: "notice.compactStopped",
 };
 
 /** 判据名 → 该说哪句话（认不出的走兜底那条，并把名字原样带出）。 */
@@ -154,17 +155,48 @@ export function setCompactAutoLine(
   st: ChatState,
   key: string,
   params?: Record<string, unknown>,
+  actions?: string[],
 ) {
   for (let i = st.items.length - 1; i >= 0; i--) {
     const it = st.items[i]!;
     if (it.kind === "system" && it.tag === COMPACT_AUTO_TAG) {
       it.key = key;
       it.params = params;
-      it.actions = undefined;
+      it.actions = actions;
       return;
     }
   }
-  pushLine(st, COMPACT_AUTO_TAG, key, params);
+  pushLine(st, COMPACT_AUTO_TAG, key, params, actions);
+}
+
+/** 最后一根**在途**的压缩发丝线（= 正在流式写摘要的那一根）。
+ *
+ * 用来把**流式摘要正文**挂到那根线的「查看详情」上：摘要正文不在转录里另起
+ * 一块（那会变成第二种形态），而是走既有的"详情"动作——压缩这件事在界面上的
+ * 形态仍然只有那根发丝线 + 一个详情入口（opencode 那边是整块消息，我们这边
+ * 沿用本仓既有形态，不新造形态）。
+ *
+ * **两根线都算**（手动 tag=`compact` / 自动 tag=`compact-auto`）：后端那条
+ * `delta` 相位不分手动自动（上游 `Compaction.Delta` 同款），只认自动那一根
+ * 的话，手动 `/压缩` 流回来的摘要就没人接——事件发了、界面不动。
+ *
+ * 为什么按 key 挑「在途」那根：收束事件会**就地改写**那根线（key 从
+ * `notice.compactRunning` 变成结果那一条），按 tag 找会把**已经收束**的旧线
+ * 也算进来（那是上一趟的正文）。`compact` 与 `compact-auto` 两条线不会同时在途
+ * ——手动那一趟持着会话锁，自动那一趟在 step 边界，也持同一把锁。
+ */
+export function lastCompactRunningLine(st: ChatState): SystemItem | undefined {
+  for (let i = st.items.length - 1; i >= 0; i--) {
+    const it = st.items[i]!;
+    if (
+      it.kind === "system" &&
+      (it.tag === "compact" || it.tag === COMPACT_AUTO_TAG) &&
+      it.key === "notice.compactRunning"
+    ) {
+      return it;
+    }
+  }
+  return undefined;
 }
 
 /** 收走自动压缩那根线（压成了 ⇒ 断层条接手说"省了多少"，这根线不留着）。 */

@@ -232,6 +232,7 @@ impl Kernel {
         if let Some(c) = compacted {
             session.append(SessionEvent::ContextCompacted {
                 kept_messages: c.kept_messages,
+                keep_from: c.keep_from,
                 summary: c.summary,
                 from_tokens: c.from_tokens,
                 to_tokens: c.to_tokens,

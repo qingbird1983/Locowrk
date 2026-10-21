@@ -12,6 +12,7 @@ import {
   checkCacheAlert,
   compactSkip,
   dropCompactAutoLine,
+  lastCompactRunningLine,
   pushNotice,
   setCompactAutoLine,
 } from "./notices";
@@ -267,19 +268,32 @@ export function applyEvent(st: ChatState, e: AgentEvent) {
         params: { saved: compactNumber(saved), strategy: e.strategy },
         actions: ["details", "undo"],
       });
-      if (e.summary_preview) st.noticeDetails[id] = e.summary_preview;
+      if (e.summary_preview) st.noticeDetails[id] = st.compactSummary || e.summary_preview;
       break;
     }
     case "compact_status": {
-      // 自动压缩的界面反馈（specs/12 刀②）：四相共用**一根**发丝线——
-      // 「正在压缩」被「没压成」/「已暂停」**就地改写**，不攒出一串同义的线
-      // （自动压缩在每个 step 边界都会再问一次 ⇒ 一轮里可能连着失败几次）。
+      // 自动压缩的界面反馈（specs/12 刀② 建线，specs/13 刀① 补流式相位）：
+      // 五相共用**一根**发丝线——「正在压缩」被「没压成」/「已暂停」**就地改写**，
+      // 不攒出一串同义的线（自动压缩在每个 step 边界都会再问一次 ⇒ 一轮里可能
+      // 连着失败几次）。
       //
-      // 为什么熔断走 `paused` 相位、而不走判据名那张表：判据名 `fused` 在那张
-      // 表里属于"手动让开"的一族（手动 `/压缩` 压根不会熔断），SS24 盯着两侧
-      // 相等——熔断改走相位，它就有了自己独立的一句话。
+      // 为什么熔断走 `paused` 相位、而不走判据名那张表：`fused` 这个判据名在
+      // specs/13 起**整个退役**（上游那张表里它属于"手动让开"的一族，两端口径
+      // 不一致 ⇒ 两边都不留这个名字），熔断改走相位，它就有了自己独立的一句话。
       if (e.phase === "running") {
-        setCompactAutoLine(st, "notice.compactRunning");
+        // 「正在压缩」这根线带一个「查看详情」：摘要正文流式到达时挂在它上面，
+        // 用户点开就能看正在写的摘要（上游那边是整块消息流式渲染；本仓沿用既有
+        // 形态——发丝线 + 详情入口，不新造第二种形态）。
+        st.compactSummary = "";
+        setCompactAutoLine(st, "notice.compactRunning", undefined, ["details"]);
+      } else if (e.phase === "delta") {
+        // 摘要正文的流式增量 ⇒ 累加（转录里不另起一块，只喂详情）。
+        // 后端那条 `delta` 相位**不分手动自动**（上游 `Compaction.Delta` 同款），
+        // 所以挂的是「在途的那根线」——手动那根（tag=compact）与自动那根
+        // （tag=compact-auto）都算，只认一根的话另一半的正文就没人接。
+        st.compactSummary += e.text ?? "";
+        const line = lastCompactRunningLine(st);
+        if (line) st.noticeDetails[line.id] = st.compactSummary;
       } else if (e.phase === "paused") {
         setCompactAutoLine(st, "notice.compactPaused");
       } else if (e.phase === "done") {

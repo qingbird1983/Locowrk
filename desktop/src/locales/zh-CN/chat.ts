@@ -95,25 +95,25 @@ export default {
     // 名字与 Rust 侧取值域同源（判据 SS24）；认不出的名字走 compactUnknown 兜底，
     // 原样带出判据名——绝不悄悄说成「已压缩」。
     compactRunning: "正在压缩对话上下文…",
-    compactUnknownWindow:
-      "没压缩：模型窗口未知，压缩算不出该压到哪儿。请在 设置 → 模型 里补上该档的窗口大小。",
-    compactTooFewRounds: "没压缩：对话还太短，没有可摘的一段（至少两轮往返）。",
-    compactNothingToSummarize:
-      "没压缩：近期原文额度宽到装得下整段历史，没有可摘的内容。要真压一次，把 设置 → 上下文 的「近期原文额度」或「压缩目标比」调小。",
-    compactCallFailed: "没压缩：摘要模型没答上（网络或额度）。可在 设置 → 上下文 看用的是哪一档。",
-    compactOverflow:
-      "没压缩：摘要请求本身超出模型窗口，递减到最小一档仍放不下。换一档窗口更大的摘要模型，或把「压缩目标比」调小。",
-    compactRejected: "没压缩：模型写的摘要七节不齐，这次没落账（连续失败会计入熔断）。",
-    compactSwitchOff: "没压缩：深度压缩这一层当前是关的（设置 → 上下文 → 深度压缩）。",
+    // specs/13：失败分类整套换成上游那套（判据名 ↔ 文案，同源闸 SS24 两侧对账 = 9 条）。
+    // 「没压成」要说清**为什么**：模板没按要求写 / 模型没吐摘要 / 撞输出上限 /
+    // 再压就得丢最新一轮 / 供应商拒了 / 被内容过滤 —— 六种病因六句话，不合并。
+    compactNothingToCompact:
+      "没压缩：没有可摘的内容（对话太短，或近期原文额度宽到装得下整段历史）。",
+    compactTemplateMismatch: "没压缩：摘要没按要求的格式写（提醒一次仍不合格），这次没落账。",
+    compactNoSummary: "没压缩：模型没吐出摘要。",
+    compactOutputLimit: "没压缩：摘要撞到了输出上限。",
+    compactCannotShrink: "没压缩：再压就得丢掉最新一轮对话，算了。",
+    compactProviderError: "没压缩：摘要请求被供应商拒了（网络或额度）。",
+    compactContentFilter: "没压缩：摘要被供应商的内容过滤拦下了。",
+    compactInterrupted: "压缩已停止。",
     // specs/12 刀①：摘要调用超出了总时长预算（辅助路径的硬上限）。
-    // 与 compactCallFailed 分开说：那是"没答上"，这一条是"没等到"。
+    // 与 provider-error 分开说：那是"没答上"，这一条是"没等到"。
     compactBudget:
-      "没压缩：摘要调用超出了总时长预算（可在 设置 → 上下文 调「摘要调用预算」）。",
-    // specs/12 刀①：用户在压缩期间按了「停止生成」——不是失败，是被叫停。
-    compactStopped: "压缩已停止（你按了「停止生成」）。",
+      "没压缩：摘要调用超出了总时长预算（可在 设置 → 上下文管理 调「摘要调用预算」）。",
     // specs/12 刀②：熔断停手（连续压缩失败到线 ⇒ 自动压缩暂停，主轮继续）。
     // 这一条走**相位**（`agent://compact-status` 的 `paused`），不走判据名那张表
-    // ——判据名 `fused` 属于手动 `/压缩` 让开的一族（SS24 的 YIELDED 集合）。
+    // ——判据名 `fused` 在 specs/13 起整个退役（两边口径不一致 ⇒ 两边都不留）。
     compactPaused:
       "自动压缩已暂停：连续几次压缩都没成功，这一轮先不再自动压。手动 `/压缩` 仍可用。",
     compactUnknown: "没压缩：{reason}",

@@ -51,6 +51,9 @@ const F = {
   appLlm: 'desktop/src-tauri/src/llm/app_llm.rs',
   settingsUpdate: 'desktop/src-tauri/src/settings/update.rs',
   settingsStore: 'desktop/src/stores/settings.ts',
+  // specs/13 刀①：自动压缩阈值的缺省与三档预置，两侧各一份（同一条声明的两个投影）。
+  contextSettings: 'desktop/src-tauri/src/settings/context.rs',
+  autoCompactPct: 'desktop/src/lib/auto-compact-pct.ts',
 };
 
 /**
@@ -197,6 +200,22 @@ function hostDesktopFace() {
     }));
 }
 
+/**
+ * 内核生产面（specs/13 刀① 加）：`crates/kernel-agent/src` 整棵树的 .rs，排 tests、剥行注释。
+ *
+ * 为什么单独开一个面而不是复用 `m.rust`：`m.rust` 是一摞文件内容、没有文件名，
+ * 而本闸读数大多是"**哪些文件**落了这个形状"（`filesWith`）——内核侧那条
+ * 「`prepare_request(` 只许一个调用方」的判据要的就是文件名。
+ */
+function kernelAgentFace() {
+  return walkExt('crates/kernel-agent/src', /\.rs$/)
+    .filter((rel) => !TEST_SHAPED.test(rel))
+    .map((rel) => ({
+      rel: rel.replace(/^crates\/kernel-agent\/src\//, ''),
+      code: stripComments(read(rel)),
+    }));
+}
+
 /** 命中形状的文件集合（排序拼接；一个都没有 = `none`）。 */
 const filesWith = (list, re) => {
   const hit = list.filter((f) => re.test(f.code)).map((f) => f.rel);
@@ -325,6 +344,7 @@ function snapshot() {
     frontSrc: pf.frontSrc,
     memlayoutTree: memlayoutFace(),
     hostDesktop: hostDesktopFace(),
+    kernel: kernelAgentFace(),
     budget: moduleFace(
       'desktop/src-tauri/src/context_budget.rs',
       'desktop/src-tauri/src/context_budget',
@@ -603,58 +623,84 @@ const CHECKS = [
   ],
   [
     'SS19a',
-    '辅助补全的直呼客户端**只有一个定义处**（S2 刀④a 搬家，S4 刀③a 改名、刀③b 只剩压缩一个' +
-      '消费者）：`struct AppLlmSummarizer` 与那条 `impl SummaryClient for …` 都只住在 ' +
-      '`llm/aux_client.rs`。为什么这一档要紧——它是"一次模型补全该走设置里哪一档"这件事的' +
-      '唯一实现（未配置就 Err、只换模型名、走主档），S2 主层压缩的摘要全走这一条；organize ' +
-      '整面在 S4 刀③b 退役后它不再有第二个使用方，但仍不许被复制一份取档逻辑（= 第二个出处）。' +
-      '读数用**文件集合**：搬家搬对了红不到，再拆一份都当场红且能看见是谁（SS14a 同一条理由）',
-    (m) =>
-      `${filesWith(m.hostDesktop, /\bpub(\(crate\))? struct AppLlmSummarizer/)}|${filesWith(
-        m.hostDesktop,
-        /impl SummaryClient for AppLlmSummarizer/,
-      )}`,
-    'llm/aux_client.rs|llm/aux_client.rs',
+    '辅助补全的**直呼通路整条退役**（specs/13 刀①）：`llm/aux_client.rs` 那个 ' +
+      '`AppLlmSummarizer` 客户端不许再出现——摘要改走主对话那条管线之后' +
+      '（`Kernel::prepare_request` 装配 + `AppLlm::complete_compaction` 发送），' +
+      '"摘要该走哪一档模型"的答案就是**会话的那一档**，没有第二个取档逻辑可抄。' +
+      '为什么留一道墓碑而不是把这一档删掉：删掉之后"有人把第二份取档逻辑抄回来"就' +
+      '没有任何读数会红，而那一版的症状极难查——主轮好好地在跑，只有摘要报' +
+      '「摘要模型没登上」（specs/13 根因第①条）。' +
+      '墓碑数的是**代码行**（剥行注释）：沿革注释里提到旧名字是正常叙述（SS6 立过的口径）。',
+    (m) => String(countOf(m.rust.map(stripComments).join('\n'), /\bAppLlmSummarizer\b/)),
+    '0',
   ],
   [
     'SS19b2',
-    '补 SS19a 的另一半：它只盯定义与实现块，于是"构造点被改名 / 整块搬走 / 组装点漏接"这类' +
-      '漂法一条也报不出来。这一档改数**落点文件集合**：宿主生产面上 ' +
-      '`AppLlmSummarizer::new(` 必须恰好住在 `state/background.rs` 一个文件里。构造点留在' +
-      '组装点，是为了让共享客户端不归属任何一个使用方（行为测试要能注入假件）。用集合而不是' +
-      '计数：计数只挡得住"多一处"，挡不住"搬去别处"与"消失"，集合一变当场看得见是谁' +
-      '（SS14a 同一条理由）。⚠ 这一档不许与 SS21c 的 `Compactor::new(` 合并成一条：两个' +
-      '字符串住在同一个文件、同一段代码里，合并之后删掉其中一次构造，另一条读数照样绿。',
-    (m) => filesWith(m.hostDesktop, /AppLlmSummarizer::new\s*\(/),
-    'state/background.rs',
+    '补 SS19a 的另一半：那一档盯的是**类型名**，这一档盯的是**模块路径**——' +
+      '`mod aux_client;` / `crate::llm::aux_client` / `aux_client.rs` 都不许复活。' +
+      '为什么必须分两档：有人把第二份直呼客户端住在**别的文件名下**、类型另起一个名字，' +
+      '那种改法只动得了这一档（两档合并成一条的话，那种改法一条读数都打不中——' +
+      '这正是 SS21c 说明里记过的「两条读数住在同一段代码里，合并之后删掉其中一次构造，' +
+      '另一条照样绿」）。',
+    (m) => String(countOf(m.rust.map(stripComments).join('\n'), /\baux_client\b/)),
+    '0',
   ],
   // ---------- S2 刀④：主层深度压缩 ----------
   [
     'SS20a',
-    '折叠摘要消息开头那串标记 `[earlier conversation summarized]`：全生产 Rust 面只许 1 处' +
-      '（真源 = `session-store` 的 `SUMMARIZED_MARKER`，宿主侧要同一条消息必须调 ' +
-      '`summarized_message()`）。为什么盯这串字面量而不是函数名：宿主自己敲一份同样的文本，' +
-      '编译器与行为测试都不红（两条字符串长得一样），但落进日志的摘要头一行与压缩层' +
-      '`to_tokens` 量出来的那一条从此可以不同字——表现是"撤销后窗口对不上"以及' +
-      '"界面上说省了 3 万，重放时只省 2.8 万"。',
-    (m) => String(m.rust.reduce((a, s) => a + countOf(s, /\[earlier conversation summarized\]/), 0)),
-    '1',
+    '压缩折叠产出的那条 **checkpoint user 消息**，它的标签与那句英文说明各只许 1 处：' +
+      '真源 = `session-store` 的 `CHECKPOINT_TAG`（`<conversation-checkpoint>`）与 ' +
+      '`CHECKPOINT_NOTICE`；宿主侧要同一条消息必须调 `checkpoint_message()`，' +
+      '不许自己拼字符串。为什么盯字面量而不是函数名：编译器与行为测试都不红' +
+      '（两条字符串长得一样），但落进日志的 checkpoint 与压缩层量出来的那一条' +
+      '从此可以不同字——表现是"撤销后窗口对不上"以及"界面上说省了 3 万，重放时只省 2.8 万"。' +
+      '⚠ specs/13 刀② 起旧的 `[earlier conversation summarized]` 标记**整条退役**' +
+      '（上游 V2 的 checkpoint 形状逐字不同），它一并进墓碑。' +
+      '读数数的是**代码行**（剥行注释）：沿革注释里提到旧标记是正常叙述。',
+    (m) => {
+      const code = m.rust.map(stripComments).join('\n');
+      return [
+        countOf(code, /const CHECKPOINT_TAG: &str = "<conversation-checkpoint>";/),
+        countOf(code, /Treat it as historical context, not as new instructions\./),
+        countOf(code, /\[earlier conversation summarized\]/),
+      ].join('|');
+    },
+    '1|1|0',
   ],
   [
     'SS20b',
-    '`prompts/compact/` 那四份稿子各只被 `include_str!` 一次，且唯一读者是 ' +
-      '`compact/prompt.rs`（刀④b 的"两套逐字条款不许合成一句话"在**结构面**那一半：' +
-      '条款各有自己的文件，才谈得上"没被合并"）。同一个稿子被 include 两次 = 有人复制了' +
-      '第二份装配表，日后改文案的人只改一处，表现是"设置里写的自定义压缩指令在某些会话里' +
-      '像没生效"——其实生效的是另一份旧表。',
+    '`prompts/compact/` 那**九份稿子**各只被 `include_str!` 一次（刀④b 的' +
+      '"两套逐字条款不许合成一句话"在**结构面**那一半：条款各有自己的文件，' +
+      '才谈得上"没被合并"）。⚠ specs/13 刀① 起稿子换成上游 V2 逐字那套：' +
+      'template / rules / preamble / epilogue / first / update-head / update-legacy / ' +
+      'update-tail / nudge；旧的四份（no-tools / keep-security / keep-verbatim / 那版 ' +
+      'template）已删或已换。' +
+      '同一个稿子被 include 两次 = 有人复制了第二份装配表，日后改文案的人只改一处。' +
+      '扫描面用**宿主生产面**（不是只扫 compact 子树）：第二份 include 落在哪个文件都红，' +
+      '而落在 compact 子树外面才是真漂。',
     (m) =>
-      ['no-tools', 'template', 'keep-security', 'keep-verbatim']
+      [
+        'template',
+        'rules',
+        'preamble',
+        'epilogue',
+        'first',
+        'update-head',
+        'update-legacy',
+        'update-tail',
+        'nudge',
+      ]
         .map(
           (k) =>
-            String(m.compact.match(new RegExp(`include_str!\\("[^"]*${k}\\.md"\\)`, 'g'))?.length ?? 0),
+            String(
+              m.hostDesktop.reduce(
+                (a, f) => a + countOf(f.code, new RegExp(`include_str!\\("[^"]*${k}\\.md"\\)`, 'g')),
+                0,
+              ),
+            ),
         )
         .join('|'),
-    '1|1|1|1',
+    '1|1|1|1|1|1|1|1|1',
   ],
   [
     'SS21a',
@@ -667,13 +713,27 @@ const CHECKS = [
   ],
   [
     'SS21b',
-    '主层压缩面上**不许自己拿尺**：`effective_threshold(` 与 `session_capacity(` 各恒 0' +
-      '（刀①"organize 不许自己拿尺"的同族要求）。触发线由组装点算好经 `UsagePolicy` 交进来；' +
-      '这里再算一遍就是两个出处，改了滑杆压缩照旧阈值走。' +
-      '⚠ 读 `policy.window_tokens` 是合法的（那是接组装点的数，不是自己算窗口），所以本档' +
-      '故意不数 `window_tokens`——数了会红在正确的代码上。',
-    (m) => `${countOf(m.compact, /effective_threshold\s*\(/)}|${countOf(m.compact, /session_capacity\s*\(/)}`,
-    '0|0',
+    '门槛算式**只有一个出处**（specs/13 刀① · C1 · 上游 `compaction.ts:849-856` ' +
+      '`calculateCeiling` 住在压缩层那一侧）。四格：' +
+      '① `fn ceiling(` 在压缩面恰好 1 处 = 算式的定义处；' +
+      '② 「窗口 × 百分比」那一行恰好 1 处 = 用户那枚百分比**只乘一次**；' +
+      '③ `effective_threshold(` 的落点集合 = `context_budget.rs`（定义）∪ `compact/plan.rs`（唯一调用方）' +
+      '⇒ **进度条那一侧不许自己再算一遍**（它经 `UsagePolicy::assemble` 调 `plan::ceiling`）；' +
+      '④ 压缩面里 `session_capacity(` 恒 0 = 压缩层不许自己去查窗口（窗口由组装点查好交进来）。' +
+      '⚠ 这一档从 specs/09 刀① 那条「压缩面不许自己拿尺」**反过来了**：上游的门槛算式' +
+      '本来就在压缩层里，而本仓多一个**进度条分母**要吃同一颗数 ⇒ 危险从"压缩面自己算"变成了' +
+      '"两个地方各算一遍"（症状是"看到的 ≠ 触发用的"，v2.138 那条）。' +
+      '⚠ 第②格盯的是**写法**（`窗口 × 百分比` 那一行）：它现在长在 `plan.rs::ceiling` 里，' +
+      '若将来换写法须显式改判据——这是本闸一贯的"改判据 = 显式改判据"。',
+    (m) => {
+      return [
+        countOf(m.compact, /fn ceiling\s*\(/),
+        countOf(m.compact, /saturating_mul\(pct/),
+        filesWith(m.hostDesktop, /effective_threshold\s*\(/),
+        countOf(m.compact, /session_capacity\s*\(/),
+      ].join('|');
+    },
+    '1|1|compact/plan.rs|context_budget.rs|0',
   ],
   [
     'SS21c',
@@ -705,65 +765,69 @@ const CHECKS = [
   ],
   [
     'SS22c',
-    '同一张表的写侧与读侧分工各只一处：`failures.of|record|clear` 只在 `compact/deep.rs`' +
-      '（失败 +1、压成清零），而 `failures.fused(` **零处**——熔断判断只由 `plan` 吃计数做，' +
-      '不许再有第二个读者（S4 刀① 退役滑窗保护网后那一格也随之删除）。' +
-      '主层若多一条 `fused` 读取 = 同一件事有两个判断点，两种都在编译器与行为测试的眼皮底下。',
+    '同一张表的写侧与读侧分工各只一处：`failures.of|record` 只在 `compact/deep.rs`（读计数 + 失败 +1），' +
+      '`failures.clear` 只在 `compact/deep/settle.rs`（压成清零），而 `failures.fused(` **零处**——' +
+      '熔断判断只由 `plan` 吃计数做，不许再有第二个读者（S4 刀① 退役滑窗保护网后那一格也随之删除）。' +
+      '主层若多一条 `fused` 读取 = 同一件事有两个判断点，两种都在编译器与行为测试的眼皮底下。' +
+      '⚠ specs/13 刀① 起 `compact/deep.rs` 按 400 行纪律拆成「主文件 + `compact/deep/` 子树」' +
+      '（`send.rs` = 发一趟并验货、`settle.rs` = 落账与清零），⇒ 写侧的两半**分住两个文件**：' +
+      '读侧与失败记账在主文件、清零在落账那一爿。这一档跟着拆开盯，别让它退回「都在主文件」的旧形状。',
     (m) =>
-      `${filesWith(m.hostDesktop, /self\.failures\.(?:of|record|clear)\s*\(/)}|${filesWith(m.hostDesktop, /failures\.fused\s*\(/)}`,
-    'compact/deep.rs|none',
+      `${filesWith(m.hostDesktop, /self\.failures\.(?:of|record)\s*\(/)}|${filesWith(
+        m.hostDesktop,
+        /self\.failures\.clear\s*\(/,
+      )}|${filesWith(m.hostDesktop, /failures\.fused\s*\(/)}`,
+    'compact/deep.rs|compact/deep/settle.rs|none',
   ],
   [
     'SS24',
-    '刀⑦ `/压缩` 的**判据名两侧对账**：后端交给界面的那批名字（`compact.rs` 里 `Plan::stop("…")` ' +
-      '∪ `deep.rs` 的五枚 `WHY_*` ∪ `commands/compact.rs` 的 `REASON_OFF`）与前端 ' +
-      '`COMPACT_SKIP_KEYS` 的键集合必须相等——但**手动通路让开的那两条除外**，而那两条也是从代码里 ' +
-      '推出来的（`if !input.manual … Plan::stop("x")` 那两格），不写死在闸里。' +
-      '为什么这条必须有：后端只回名字、人话住语言包（AGENTS「文案住语言包」+ 同类只许一种形态），' +
-      '所以 Rust 侧新增一条 stop 而前端没补文案时，**编译与行为测试都说不出**——界面只会掉进兜底那条，' +
-      '把一句本来有准确说法的判据显示成 `没压缩：brand-new-name`。反方向同样要红：前端多一条键 ' +
-      '= 一句永远显示不出来的文案留在语言包里。' +
-      '⚠ why 那几枚原来是就地敲的字符串，本档把它们收成 `WHY_*` 常量（与 `STRATEGY` 同一条纪律）——' +
-      '不收的话，闸只能去匹配 `if overflow { "overflow" }` 这种句子，那式子一改措辞就假绿。' +
-      '⚠ specs/12 刀① 加了两枚（`budget` 预算耗尽 / `stopped` 用户叫停）⇒ 取值域 9 → 11、' +
-      '前端 7 → 9：两枚都**不是**手动让开的那两条（手动通路同样会撞预算、同样会被叫停），' +
-      '所以前端两条文案必须补上，否则界面会把它们显示成兜底那条「没压缩：{reason}」。',
+    '失败判据名**两侧对账**（specs/13 契约 C3）：后端那张表（`compact/outcome.rs` 的 ' +
+      '`REASONS` 常量，九条）与前端 `COMPACT_SKIP_KEYS` 的键集合必须**逐条相等**。' +
+      '为什么这条必须有：后端只回名字、人话住语言包（AGENTS「文案住语言包」），' +
+      '所以 Rust 侧新增一条而前端没补文案时，**编译与行为测试都说不出**——界面只会掉进' +
+      '兜底那条，把一句本来有准确说法的判据显示成「没压缩：brand-new-name」。' +
+      '反方向同样要红：前端多一条键 = 一句永远显示不出来的文案留在语言包里。' +
+      '⚠ 后端取值域**只认 `REASONS` 那一行**（字面量只许出现那一次，别处走 ' +
+      '`REASONS[i]` 索引）：不认的话，闸只能去匹配 `Plan::stop("x")` 这种句子，' +
+      '而那式子一改措辞就假绿。' +
+      '⚠ 这一档同时盯"字面量只在表里出现那一次"：有人在别处再敲一遍 ' +
+      '`"nothing-to-compact"` ⇒ 那处迟早与表里那枚漂开，而两枚长得一模一样、' +
+      '编译器与行为测试都无感（SS20a 同一条理由）。' +
+      '⚠ 声明长度（`[&str; 9]`）也核：两侧同时各少一条时读数会是 `same(8)`，' +
+      '靠声明长度与表里条数互校才红得出来（SS25 说明里那条老教训）。',
     (m) => {
-      const rust = new Set([
-        ...[...m.compact.matchAll(/Plan::stop\("([a-z-]+)"\)/g)].map((x) => x[1]),
-        ...[...m.compact.matchAll(/const WHY_[A-Z]+: &str = "([a-z-]+)"/g)].map((x) => x[1]),
-        ...m.hostDesktop
-          .flatMap((f) => [...f.code.matchAll(/const REASON_OFF: &str = "([a-z-]+)"/g)])
-          .map((x) => x[1]),
-      ]);
-      // 手动让开的那两条：从 `!input.manual` 那两格的**结构**里推，不在这里抄名单
-      const yielded = new Set(
-        [...m.compact.matchAll(/!input\.manual[\s\S]{0,120}?Plan::stop\("([a-z-]+)"\)/g)].map(
-          (x) => x[1],
-        ),
-      );
+      const arr = m.compact.match(/const REASONS: \[&str; (\d+)\] = \[([\s\S]*?)\];/);
+      if (!arr) return 'NO_REASONS_TABLE';
+      const declared = Number(arr[1]);
+      const names = [...arr[2].matchAll(/"([a-z-]+)"/g)].map((x) => x[1]);
+      // 表以外不许再出现这九枚字面量。
+      const outside = m.compact.replace(arr[0], '');
+      const dup = names.filter((n) => countOf(outside, new RegExp(`"${n}"`, 'g')) > 0);
       const front = new Set(
         m.frontSrc
           .flatMap((s) => [...s.matchAll(/^ {2}"?([a-z-]+)"?: "notice\.compact/gm)])
           .map((x) => x[1]),
       );
-      const want = new Set([...rust].filter((r) => !yielded.has(r)));
       const same =
-        want.size === front.size && [...want].every((r) => front.has(r)) && rust.size === 11;
+        names.length === 9 &&
+        declared === 9 &&
+        dup.length === 0 &&
+        front.size === names.length &&
+        names.every((n) => front.has(n));
       return same
-        ? `same(${want.size})`
-        : `RUST=[${[...rust].sort()}] YIELDED=[${[...yielded].sort()}] FRONT=[${[...front].sort()}]`;
+        ? `same(${names.length})`
+        : `DECL=${declared} RUST=[${names.sort()}] DUP=[${dup.sort()}] FRONT=[${[...front].sort()}]`;
     },
     'same(9)',
   ],
   [
     'SS25',
-    '前端 `COMPACT_SKIP_KEYS` 恰好 9 条（= 后端取值域 11 枚减去手动让开的那两条）。' +
+    '前端 `COMPACT_SKIP_KEYS` 恰好 9 条（= 后端 `REASONS` 那张表的九条）。' +
       '与 [`SS24`] 分两档不是为了凑数：SS24 比的是**两侧相等**，它能为"后端多一条而前端没配"红，' +
       '但前端自己多敲一条键时它同样红，红出来的读数长得一样，看不出是谁漂的。这一档只数前端，' +
       '所以"语言包里躺着一句永远显示不出来的文案"这种漂移有它自己的红。' +
-      '（两档都得活着：只留 SS24 的话，两侧同时各少一条会读成 `same(8)` 而它红不了——那正是 ' +
-      '`rust.size === 11` 那一格在盯的形状。）',
+      '（两档都得活着：只留 SS24 的话，两侧同时各少一条会读成 `same(8)` 而它红不了——' +
+      'SS24 那一格里声明长度与表里条数互校盯的正是那个形状。）',
     (m) =>
       String(
         new Set(
@@ -773,6 +837,57 @@ const CHECKS = [
         ).size,
       ),
     '9',
+  ],
+  [
+    'SS31',
+    '压缩请求的装配**只有一个出处**（specs/13 刀① · C4）：内核那个 `prepare_request(` ' +
+      '（**装配但不发送**：跑 `derive_messages → waterfall_pre → tool_catalog → ' +
+      'waterfall_request` 那条与主对话轮完全相同的链）只住在 `kernel/request.rs`，' +
+      '而全仓**唯一的调用方**是宿主压缩面 `compact/deep.rs`；桌面端那个 ' +
+      '`complete_compaction(`（带总时长预算 / 不推 `agent://llm-retry` / delta 走自己的回调）' +
+      '只住在 `llm/app_llm.rs`，唯一调用方同样是 `compact/deep.rs`。' +
+      '为什么这条要有：**第二份拼装**正是这一刀要治的病根——摘要绕过主对话请求装配，' +
+      '于是"主轮能用 ≠ 摘要能用"（同一时刻两套配置解析、两套 system、两套工具目录）。' +
+      '各只许一个调用点：多一个 = 有人另开了一条摘要通路（症状是"压缩总是不成"或' +
+      '"摘要比主对话慢一大截"，而编译与行为测试都对它无感）；少一个 = 压缩面没接上主管线。' +
+      '⚠ 用**文件集合**而不是计数：集合一变当场看得见是谁（SS14a 同一条理由）。',
+    (m) =>
+      [
+        filesWith(m.kernel, /prepare_request\s*\(/),
+        filesWith(m.hostDesktop, /prepare_request\s*\(/),
+        filesWith(m.hostDesktop, /complete_compaction\s*\(/),
+      ].join('|'),
+    'kernel/request.rs|compact/deep.rs|compact/deep.rs|llm/app_llm.rs',
+  ],
+  [
+    'SS32',
+    '自动压缩阈值的**缺省与三档预置两侧对账**（specs/13 契约 C1）：后端 ' +
+      '`settings/context.rs` 的 `AUTO_COMPACT_PCT_DEFAULT` / `AUTO_COMPACT_PCT_PRESETS` ' +
+      '（**校验权威**：写不进这三档的更新会被后端拒收）与前端 ' +
+      '`lib/auto-compact-pct.ts` 的同名两份必须**逐个相等**。' +
+      '为什么要有：它们是同一条声明的**两个投影**（不是两个出处），漂了的表现是' +
+      '"选了却存不进去"（后端拒收）或"当前值不在候选里"（分段控件没有选中片）——' +
+      '两者都不会让任何一条行为测试变红。' +
+      '⚠ 这一对与摘要预算那对（`SUMMARY_BUDGET_PRESETS_MS`）同形，但**那边没有对账闸**' +
+      '（登记在 specs/13 的遗留项里；不在这一刀顺手修无关代码）。',
+    (m) => {
+      const rustDefault =
+        /AUTO_COMPACT_PCT_DEFAULT:\s*u64\s*=\s*(\d+)/.exec(m.contextSettings)?.[1] ?? 'MISS';
+      const rustPresets =
+        /AUTO_COMPACT_PCT_PRESETS:\s*\[u64;\s*3\]\s*=\s*\[([^\]]*)\]/.exec(m.contextSettings)?.[1] ??
+        'MISS';
+      const rustList = [...rustPresets.matchAll(/\d+/g)].map((x) => x[0]);
+      const frontDefault =
+        /AUTO_COMPACT_PCT_DEFAULT\s*=\s*(\d+)/.exec(m.autoCompactPct)?.[1] ?? 'MISS';
+      const frontPresets =
+        /AUTO_COMPACT_PCT_PRESETS:[^=]*=\s*\[([^\]]*)\]/.exec(m.autoCompactPct)?.[1] ?? 'MISS';
+      const frontList = [...frontPresets.matchAll(/\d+/g)].map((x) => x[0]);
+      const same = rustDefault === frontDefault && rustList.join(',') === frontList.join(',');
+      return same
+        ? `same(${rustList.length})`
+        : `RUST=${rustDefault}|${rustList.join(',')} FRONT=${frontDefault}|${frontList.join(',')}`;
+    },
+    'same(3)',
   ],
   [
     'SS26',
@@ -933,7 +1048,10 @@ const FLOORS = [
   // `fn plan(`——它不是这一簇任何一档读数的分子（SS20b 数 include、SS21a 数
   // STRATEGY、SS21c 数构造点与调用点），所以"扫错了树"这种瞎法兜得住。
   ['主层压缩面字节数（剥注释）', (m) => m.compact.length, 4800],
-  ['主层压缩面含判定本体', (m) => countOf(m.compact, /fn plan\s*\(/), 1],
+  ['主层压缩面含判定本体', (m) => countOf(m.compact, /fn ceiling\s*\(/), 1],
+  // 内核生产面（SS31 的扫描面）：文件数下限 —— 面塌掉时 `filesWith` 读成 'none'，
+  // 与"真的没有调用方"读数相同，那正是 SS30b 说明里记过的老坑。
+  ['内核生产面文件数', (m) => m.kernel.length, 25],
 ];
 
 function runChecks(m) {
@@ -1005,31 +1123,45 @@ if (SELFTEST) {
         rel: 'llm/wire/messages.rs',
         code: 'const ALT_TEMPLATE: &str = "<persisted-output path=…>";\nfn clipped_alt() {}\n',
       }),
-    // 刀④a 两档窄变异（S4 刀③b 起 SS19b/SS19c 随 organize 面退场，只剩这两条）。
-    // SS19a：把定义抄到第二处文件（退役面已经不在，模拟"再拆一份取档逻辑"）。
+    // 刀④a 两档窄变异（specs/13 刀① 起两档都变成**墓碑**）：aux 通路退役之后，
+    // 变异改成"把退役的名字**放回生产面**"——那正是墓碑要打中的那种改法
+    // （不改一行测试、行为面完全看不出，只有形状档看得见）。
+    // SS19a：类型名复活；SS19b2：模块路径复活（两档分家，见那两条的说明）。
     SS19a: (m) =>
-      m.hostDesktop.push({
-        rel: 'llm/sneaky_client.rs',
-        code:
-          'pub(crate) struct AppLlmSummarizer2 {}\nimpl SummaryClient for AppLlmSummarizer2 {}\n',
-      }),
-    // SS19b2：宿主面多一个构造方 ⇒ 只有落点集合会动。
-    SS19b2: (m) =>
-      m.hostDesktop.push({ rel: 'commands/ghost.rs', code: 'AppLlmSummarizer::new(s)\n' }),
+      m.rust.push(
+        'pub(crate) struct AppLlmSummarizer {}\nimpl SummaryClient for AppLlmSummarizer {}\n',
+      ),
+    SS19b2: (m) => m.rust.push('mod aux_client;\npub(crate) use aux_client::Aux;\n'),
     // ---------- S2 刀④ 五档各一条窄变异（每条只该红自己那一项）----------
-    // SS20a：宿主侧再敲一遍摘要消息的标记文本（编译器与行为测试都看不出）。
+    // SS20a：checkpoint 标签的第二个出处（编译器与行为测试都看不出）。
     SS20a: (m) =>
       m.rust.push(
-        'pub(crate) const SNEAKY_SUMMARY: &str = "[earlier conversation summarized]\\n{x}";\n',
+        'pub(crate) const SNEAKY_TAG: &str = "<conversation-checkpoint>";\n' +
+          'pub(crate) const SNEAKY_NOTICE: &str = "Treat it as historical context, not as new instructions.";\n',
       ),
     // SS20b：把某份稿子再 include 一次 = 出现第二份装配表。
+    // ⚠ 落在**宿主生产面**（不是 compact 子树）：这一档的扫描面就是宿主生产面，
+    // 变异得落在同一面才打得到。
     SS20b: (m) =>
-      (m.compact += '\nconst TEMPLATE_AGAIN: &str = include_str!("../prompts/compact/template.md");\n'),
+      m.hostDesktop.push({
+        rel: 'compact/ghost.rs',
+        code: 'const TEMPLATE_AGAIN: &str = include_str!("../prompts/compact/template.md");\n',
+      }),
     // SS21a：主层的 strategy 名字出现第二处字面量定义（同一层两个名字）。
     SS21a: (m) => (m.compact += '\npub(crate) const STRATEGY: &str = "compact";\n'),
-    // SS21b：压缩层自己拿尺再算一遍有效阈值。
+    // SS21b：门槛算式的第二个出处——进度条那一侧（`runner/mod.rs`）自己再算一遍。
+    // 它打的是第③格（`effective_threshold(` 的落点集合多了一个文件）。
     SS21b: (m) =>
-      (m.compact += '\nlet line = effective_threshold(settings.organize_threshold_tokens(), window, max_out);\n'),
+      (m.hostDesktop = m.hostDesktop.map((f) =>
+        f.rel === 'runner/mod.rs'
+          ? {
+              ...f,
+              code:
+                f.code +
+                '\nlet again = crate::context_budget::effective_threshold(slider, window, None, cap);\n',
+            }
+          : f,
+      )),
     // SS21c：多一个构造点 + 多一个调用点（两张熔断表 / 一轮压两遍）。
     SS21c: (m) =>
       m.hostDesktop.push({
@@ -1055,10 +1187,27 @@ if (SELFTEST) {
       }),
     // S2 刀⑦（SS24 / SS25）两条窄变异：后端多一条没人配文案的判据 / 前端多一句显示不出来的文案。
     // 分两档各埋一侧，是因为相等型读数一旦两侧同时漂就看不出是谁动的（SS25 说明里那条）。
+    // SS24：后端那张 `REASONS` 表多一枚（前端没配 ⇒ 界面会掉进兜底那条）。
     SS24: (m) =>
-      (m.compact += '\nfn _drift() { Plan::stop("brand-new-reason"); }\n'),
+      (m.compact = m.compact.replace(
+        /const REASONS: \[&str; \d+\] = \[[\s\S]*?\];/,
+        'const REASONS: [&str; 10] = ["nothing-to-compact","template-mismatch","no-summary",' +
+          '"output-limit","cannot-shrink","provider-error","content-filter","interrupted","budget",' +
+          '"brand-new-reason"];',
+      )),
     SS25: (m) =>
       m.frontSrc.push('const keys = {\n  "brand-new-reason": "notice.compactBrandNew",\n};\n'),
+    // SS31（specs/13 刀①）：压缩面之外多一个 `prepare_request(` 调用点 = 有人另开了
+    // 一条摘要装配通路（第二份拼装）。它打的是"调用点集合多了一个文件"那一格。
+    SS31: (m) =>
+      m.hostDesktop.push({
+        rel: 'commands/ghost.rs',
+        code: 'let req = kernel.prepare_request(session, Some(sid)).await;\n',
+      }),
+    // SS32（specs/13 刀①）：界面那份候选清单与后端那份校验权威漂了一档。
+    // 它打的是"两侧逐个相等"那一格（缺省那颗另算，同样会红）。
+    SS32: (m) =>
+      (m.autoCompactPct = m.autoCompactPct.replace('= [25, 50, 85]', '= [25, 50, 80]')),
     // 窄变异（刀⑧）：把三条发送收口里的**第一条** `refusal_note` 调用删掉 ⇒ 次数 3→2 而
     // 文件集合不变，证的正是这一档独有的那一格：漏一条收口 = 那一路请求被拒之后不记账，
     // 自锁照旧存在。用 map 换新对象而不是原地改 `f.code`：selftest 的快照只做了浅拷贝，
@@ -1222,6 +1371,7 @@ if (SELFTEST) {
       frontSrc: [...snap.frontSrc],
       // SS17/SS19/SS21/SS22/SS26/SS30 同样 push 面元素 ⇒ 同一份拷贝纪律
       hostDesktop: [...snap.hostDesktop],
+      kernel: [...snap.kernel],
     };
     mut(copy);
     const after = runChecks(copy);

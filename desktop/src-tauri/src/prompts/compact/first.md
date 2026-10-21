@@ -1,0 +1,1 @@
+You MUST summarize the conversation above into a structured summary that will be given to another agent to resume the work.

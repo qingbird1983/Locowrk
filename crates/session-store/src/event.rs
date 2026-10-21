@@ -215,6 +215,19 @@ pub enum SessionEvent {
     ContextCompacted {
         #[serde(default)]
         kept_messages: usize,
+        /// **保留区指针**（specs/13 刀② · C5）：保留区在消息列里的起点 =
+        /// 第一条被原样保留的消息下标。折叠时**只存这一枚指针**，保留区的
+        /// 文本在**读时重建**（照上游 `session/history.ts:143-183`：按指针把
+        /// 那几段消息重新渲染成文本，嵌进 checkpoint 的 `<recent-context>`）。
+        ///
+        /// 为什么不是把文本一起存下来：事件日志只追加，存文本 = 同一段历史
+        /// 在日志里留两份（日志膨胀 + 撤销后重放要对齐两份）。
+        ///
+        /// ⚠ **旧日志没有这一枚**（`serde(default)` = 0）：0 与"保留区从第 0 条
+        /// 开始"撞义，折叠路径因此按 `kept_messages` 从尾部回退（见
+        /// `session/project.rs::compact_messages`）——老会话重放不炸。
+        #[serde(default)]
+        keep_from: usize,
         #[serde(default)]
         summary: String,
         #[serde(default)]

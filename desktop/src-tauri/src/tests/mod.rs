@@ -5,11 +5,14 @@
 //! 用例按面分簇见 `turn_rounds` / `demo_routing` / `convergence`。
 //! S2 刀④ 加 `compact_wiring`：同一形状的**主层压缩**接线判据（含落盘同数那一半）。
 //! specs/12 刀② 加 `compact_status_wiring`：压缩的**界面反馈与预算**接线判据；
-//! 两簇共用的会话夹具（`loaded_session` / `threshold_at` / `seed_log`）因此上移本文件
-//! ——共用夹具住共用夹具模块（400 行纪律的正解是「拆」，不是「把行数摊到别处」）。
+//! specs/13 加 `compaction_opencode`：AC-1…AC-10 的验收判据族（提示词逐字 / 门槛 /
+//! 请求形态 / 保留区 / 三种触发 / 失败处置 / 收缩矩阵 / 记账）。
+//! 两簇接线面共用**落盘夹具**（`seed_log`：把内存会话的前史先写进磁盘）⇒ 因此上移
+//! 本文件——共用夹具住共用夹具模块（400 行纪律的正解是「拆」，不是「把行数摊到别处」）。
 
 mod compact_status_wiring;
 mod compact_wiring;
+mod compaction_opencode;
 mod convergence;
 mod demo_routing;
 mod turn_rounds;
@@ -143,40 +146,6 @@ pub(crate) fn kernel_with_tools_streaming(
 // 而把夹具钉死在它旁边"。共用夹具住共用夹具模块（本文件已经是这个角色：
 // 收集器 / 事件种类 / 内核装配都在这儿）。
 
-/// 六轮历史 + 一次远超阈值的用量上报（占用顶到线上，压缩才有理由起步）。
-///
-/// 每轮的分量要够大：目标位 = 阈值 × 50% 再减掉摘要自己要腾的 1400 token
-/// （`compact::summary_reserve`），夹具小过这个数就会塌成"只剩最后一条"，
-/// 那时候"近期原文要留着"这一档根本无从观察。
-pub(crate) fn loaded_session() -> Session {
-    let mut s = Session::new();
-    for i in 0..6 {
-        s.append(SessionEvent::UserMessage {
-            content: format!("第{i}轮问题：") + &"细节".repeat(600),
-            parts: Vec::new(),
-        });
-        s.append(SessionEvent::AssistantMessage {
-            content: format!("第{i}轮答复"),
-            tool_calls: vec![],
-        });
-    }
-    s.append(SessionEvent::LlmUsage {
-        input: 900_000,
-        output: 10,
-        cache_read: 0,
-        cache_write: 0,
-        reasoning: 0,
-        total: 900_010,
-        duration_ms: 1,
-    });
-    s
-}
-
-/// 阈值取"前史自身的估算量" ⇒ 占用恰好站在线上当场到线（取数纪律：不钉魔法数）。
-pub(crate) fn threshold_at(session: &Session) -> u64 {
-    kernel_agent::estimate_tokens(&session.derive_messages())
-}
-
 /// 先把内存会话的**前史**写进磁盘。
 ///
 /// `run_turn` 只追加本轮新增段（磁盘是日志的镜像、与投影共用游标），而夹具里的会话
@@ -185,4 +154,18 @@ pub(crate) fn threshold_at(session: &Session) -> u64 {
 /// 缺陷，不是压缩层的性质，所以先把地基铺好再谈取证。
 pub(crate) fn seed_log(log: &Path, id: &str, session: &Session) {
     crate::session_log::append_slice(log, id, session, 0);
+}
+
+/// 会话里落了几次压缩（**内存会话**与**磁盘镜像**两处都要数 ⇒ 共用这一颗）。
+///
+/// 为什么上移本文件：压缩落盘是**两个触发路径各做各的**（自动那条在 `runner`
+/// 的 step 边界、手动那条在压缩层的 `run_manual_and_persist`），两处都要用同一
+/// 把尺数「磁盘镜像里那条压缩事件在不在」——尺住在其中一个文件里，另一个就得
+/// `use super::compact_wiring::…` ⇒ 那是"为让另一个文件用上而把夹具钉死在它旁边"。
+pub(crate) fn compacted_count(session: &Session) -> usize {
+    session
+        .events()
+        .iter()
+        .filter(|e| matches!(e, session_store::SessionEvent::ContextCompacted { .. }))
+        .count()
 }

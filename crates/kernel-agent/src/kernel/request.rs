@@ -10,7 +10,7 @@ use std::time::Duration;
 use cordis_core::WaterfallDecision;
 use plugin_api::ToolSpec;
 use serde_json::Value;
-use session_store::Message;
+use session_store::{Message, Session};
 
 use super::{
     CompactionOutcome, Kernel, KernelError, LlmRequest, LlmResponse, LlmService, ToolSource,
@@ -29,6 +29,28 @@ pub(super) struct StreamTrace {
 }
 
 impl Kernel {
+    /// **装配但不发送**（specs/13 · C4）：跑 `derive_messages → waterfall_pre →
+    /// tool_catalog → waterfall_request` 那条**与主对话轮完全相同**的链，
+    /// 交出装配好的请求。
+    ///
+    /// 为什么要有这个出口：上下文压缩的请求必须**就是**主对话那条管线的真实
+    /// 窗口（真实 system、真实工具定义、同一套 hooks 与模型解析）。另拼一份
+    /// = 第二份拼装 = "摘要模型没登上 / 压缩比主对话慢一大截"那类症状的根。
+    ///
+    /// hooks 看到的是**加摘要提示词之前**的请求（提示词由调用方在拿到这份
+    /// 请求之后追加）——同上游 `session/compaction.ts:291-292`。
+    pub async fn prepare_request(
+        &self,
+        session: &Session,
+        session_id: Option<&str>,
+    ) -> Result<LlmRequest, KernelError> {
+        let messages = session.derive_messages();
+        let messages = self.waterfall_pre(messages).await?;
+        let tools = self.tool_catalog(session_id).await;
+        let (req, _compacted) = self.waterfall_request(messages, tools, session_id).await?;
+        Ok(req)
+    }
+
     /// `agent/pre-step` 决策环：放行 → 取改写后的消息；拒绝/重试 → 报错
     /// （重试只对请求失败点有意义，§7.2）。
     pub(super) async fn waterfall_pre(

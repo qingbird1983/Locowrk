@@ -177,7 +177,7 @@ async fn fire(deps: &EngineDeps, sched: Schedule, now: i64) {
     // 没有 `state.settings.with_llm_config` 那一层锁借用，直接 `llm_config()`），
     // 算式与拒收读数都不许在这儿重写一遍。
     let policy = UsagePolicy::assemble(
-        deps.settings.compact_threshold_tokens(),
+        deps.settings.auto_compact_pct(),
         window,
         max_output,
         runner::catalog_estimate(&deps.kernel, &session_id).await,

@@ -267,10 +267,12 @@ export default {
     contextTitle: "Context management",
     contextHint:
       "Compaction starts automatically at the threshold: the model pauses for the summary, the summary plus recent originals are filled back into the context, then work continues. The full history stays in the session log — nothing there is ever rewritten.",
-    threshold: "Compaction threshold",
-    thresholdValue: "Currently: {n} tokens",
-    thresholdHint:
-      "Once the conversation context reaches this token count it compacts automatically (manual /compact is not bound by it). The real trigger is the smaller of this value and \"model window minus the 21K output reserve\", so do not set it above the model window.",
+    // specs/13 knife ①: the threshold is now a *share of the model's context
+    // window* (the absolute-token slider is retired).
+    autoCompactPct: "Auto-compaction threshold",
+    autoCompactPctHint:
+      "Compact automatically once the context reaches this share of the model's context window. The earlier you compact, the less context that summary call has to send.",
+    autoCompactPctOption: "{n}%",
     // S4 (specs/11 knife ①): the only automatic compaction switch. Off = no automatic
     // compaction; the manual /compact command still works.
     autoCompact: "Automatic compaction",

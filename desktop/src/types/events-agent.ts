@@ -297,23 +297,28 @@ interface TurnHeaderEvent {
  * `events::compact_phase` 一一对应。
  *
  * ⚠ 相位与**判据名**是两回事：相位说"这一趟处于什么状态"，判据名说"为什么
- * 没成"。熔断（判据名 `fused`）走 `paused` 相位，不走判据名那张表——那张表
- * 属于手动 `/压缩` 的取值域（`fused` 在其中被"手动让开"，SS24 的 YIELDED 集合）。 */
-export type CompactPhase = "running" | "failed" | "paused" | "done";
+ * 没成"。熔断走 `paused` 相位，不走判据名那张表——`fused` 这个名字在 specs/13
+ * 起**整个退役**（上游那张表里它属于"手动让开"的一族，两边口径不一致 ⇒ 两边
+ * 都不留这个名字；SS24 的两侧取值域同步收窄）。 */
+export type CompactPhase = "running" | "delta" | "failed" | "paused" | "done";
 
 /** 自动压缩的界面反馈（agent://compact-status，specs/12 刀②）。
  *
  * **实时专属**：不进会话日志（同 `tool_status` 纪律）⇒ 重放不产生。
  * `reason` = 判据名（仅 `failed` 相位带；取值域与手动 `/压缩` 那张表同源）。
  *
- * 四相各说一件事：`running` = 这一趟开始压了；`failed` = 这一趟没成（`reason`
- * 说明为什么，含"被叫停"那一档）；`paused` = 熔断停手（自动压缩暂停，主轮继续）；
- * `done` = 压成了（"省了多少"由 `context_compacted` 那条说）。 */
+ * 五相各说一件事：`running` = 这一趟开始压了；`delta` = 摘要正文流式到达
+ * （`text` 带增量）；`failed` = 这一趟没成（`reason` 说明为什么，含"被叫停"
+ * 那一档）；`paused` = 熔断停手（自动压缩暂停，主轮继续）；`done` = 压成了
+ * （"省了多少"由 `context_compacted` 那条说）。 */
 interface CompactStatusEvent {
   kind: "compact_status";
   session_id: string;
   phase: CompactPhase;
   reason?: string | null;
+  /** `delta` 相带摘要正文的**流式增量**（上游同款：`session.compaction.delta`）。
+   *  其余相位不带。 */
+  text?: string | null;
 }
 
 /** 自动会话标题推送（lw://session-title，v2.57）：旁车落盘后通知前端

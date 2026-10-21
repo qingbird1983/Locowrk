@@ -9,7 +9,6 @@
 //! 子簇经 `use super::*;` 取用 ⇒ **可见性零改动**；用例本体逐字搬运，断言一条未增删。
 
 mod assets;
-mod aux_client;
 mod budget;
 mod dispatch;
 mod payload;

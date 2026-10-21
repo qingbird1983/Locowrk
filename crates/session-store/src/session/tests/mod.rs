@@ -56,11 +56,13 @@ fn img(name: &str) -> ContentPart {
     }
 }
 
-// ---- ContextCompacted 折叠（Context and Memory.md §3.7，⑨）----
+// ---- ContextCompacted 折叠（specs/13 刀② · C5）----
 
-fn compacted(kept: usize, summary: &str) -> SessionEvent {
+/// 造一条压缩事件。`keep_from` = 保留区在消息列里的起点（**指针**）。
+fn compacted(kept: usize, keep_from: usize, summary: &str) -> SessionEvent {
     SessionEvent::ContextCompacted {
         kept_messages: kept,
+        keep_from,
         summary: summary.into(),
         from_tokens: 1000,
         to_tokens: 400,

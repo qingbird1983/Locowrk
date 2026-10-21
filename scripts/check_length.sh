@@ -33,9 +33,10 @@ SUGGEST=400
 # ②名字概括得住（就是 `compact` 那两爿的 tests 子模块，文件名直接点名被测的那一爿）；
 # ③改它牵动的全是同一件事（动节名表必动前者、动落账形状必动后者，两者互不牵连——
 # 这正是把它们分成两个文件的原因，而不是为了凑行数）。
-# 再往下切就是按用例数拆文件：`plan()` 那六条 reason 与 `choose_cut()` 的四种边界本来
-# 是同一件事的两侧（判据读者要一起看才知道"不动"的每一档都有人盯），拆开只会让人
-# 在两个文件之间找一条红的那条。
+# ⚠ specs/13 刀①（压缩按 OpenCode V2 重写）起这两份**退役**：压缩面按上游切成
+# `compact/{prompt,plan,deliver,recent,outcome,deep}.rs` + 测试面
+# `tests/compaction_opencode/`，那两个 tests 子模块随之删掉 ⇒ 名单两行随之删去
+# （留在名单里等于给已经不存在的文件发豁免）。
 # `runner/mod.rs`（414 行）于 S2 刀④c 入名单：三问皆是——①只管一件事（一轮对话的编排：
 # 轮界事件、step 循环、步间两个检查、落盘游标、收束路径）；②名字概括得住；③刀④ 加的
 # 那 16 行（参数一枚 + 头注一段 + 步间那三行调用）动的正是它本职的那件事。
@@ -59,8 +60,6 @@ desktop/src-tauri/src/events.rs
 desktop/src/components/chat/MessageRow.vue
 desktop/src/components/chat/PermissionCard.vue
 desktop/tests/chat-projection.spec.ts
-desktop/src-tauri/src/compact/tests.rs
-desktop/src-tauri/src/compact/tests_deep.rs
 desktop/src-tauri/src/runner/mod.rs
 "
 

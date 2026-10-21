@@ -143,6 +143,7 @@ fn compacted_after_report() -> Session {
     let mut s = seeded(Some(9_500));
     s.append(SessionEvent::ContextCompacted {
         kept_messages: 2,
+        keep_from: 0,
         summary: "前面几轮已折叠".into(),
         from_tokens: 9_500,
         to_tokens: 400,

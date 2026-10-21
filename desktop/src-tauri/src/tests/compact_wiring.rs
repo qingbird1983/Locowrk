@@ -1,108 +1,145 @@
-//! **接线面**压缩用例（S2 刀④；S4 specs/11 AC-1 起补齐顺序断言）：驱动 `run_turn`
-//! 本体，证「runner 的 step 边界那句压缩调用真的在跑、一轮只跑一次、而且落到了磁盘上；
-//! 压缩事件排在本步产出之前 = 模型确实停着等它」。
+//! **接线面**压缩用例（specs/13 刀③）：驱动 `run_turn` 本体，证「runner 的 step
+//! 边界那句压缩调用真的在跑、一轮只跑一次、而且落到了磁盘上；压成的那条
+//! checkpoint 重放得出来」。
 //!
-//! 为什么这一簇必须存在：`compact/tests_deep.rs` 那十一条直接调 `Compactor::run`，
-//! 全绿也只证明那个函数自己对——把 `runner/mod.rs` 里那三行删掉，它们一条都不会红。
-//! 这正是队列 §6 第 10 条点名的形状（跨文件的关系必须有跨文件判据）。另半边
-//! （不给 compactor 就一行都不写）也在这簇里，因为"默认什么都不做"是这一层能不能
-//! 被关掉的那条证据。
+//! 为什么这一簇必须存在：`compact/**` 那几簇直接调 `Compactor::run`，全绿也只
+//! 证明那个函数自己对——把 `runner/mod.rs` 里那一句 `cp.run(` 删掉，它们一条都
+//! 不会红。这正是队列 §6 第 10 条点名的形状（跨文件的关系必须有跨文件判据）。
+//! 另半边（不给 compactor 就一行都不写）也在这簇里，因为"默认什么都不做"是
+//! 这一层能不能被关掉的那条证据。
 
 use super::*;
 
-use crate::events::AgentEvent;
-use crate::llm::{SummaryClient, SummaryRequest, SummaryUsage};
+use crate::compact::deep::{CompactionLlm, Compactor};
 use crate::runner::{run_turn, UsagePolicy};
-use async_trait::async_trait;
-use session_store::{self, Message, Session, SessionEvent};
+use kernel_agent::{LlmError, LlmRequest, LlmResponse, LlmUsage};
+use session_store::Message;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration;
 
-/// 数得出趟数、并对送出去的请求当场挑刺的摘要客户端。
-#[derive(Default)]
-struct Counting {
+/// 一份**合格**的摘要（带模板标题行 ⇒ 输出校验通过；上游同款：任一标题行即过）。
+const SUMMARY: &str =
+    "## Objective\n- 把上下文压缩按 OpenCode V2 重写\n\n## Work State\n### Completed\n- 压缩面已重写";
+
+/// 压缩发送口的替身：**数趟数**，并回一份合格摘要。
+///
+/// 为什么要有它：压缩请求的真实出口是网络，而这一簇要钉的是"接线面真的跑了"。
+/// 替身只管回话，不碰判定——判定在 `compact/**` 那几簇里各自钉死。
+struct FakeLlm {
     calls: AtomicUsize,
-    /// 每次调用的 `(system, user)` 都留下来，供用例断言"只有被压掉那半段进摘要请求"
-    seen: StdMutex<Vec<(String, String)>>,
 }
 
-impl Counting {
-    fn count(&self) -> usize {
+impl FakeLlm {
+    fn answering() -> Arc<Self> {
+        Arc::new(Self {
+            calls: AtomicUsize::new(0),
+        })
+    }
+
+    fn calls(&self) -> usize {
         self.calls.load(Ordering::SeqCst)
     }
 }
 
 #[async_trait]
-impl SummaryClient for Counting {
-    async fn complete(&self, req: &SummaryRequest<'_>) -> Result<(String, SummaryUsage), String> {
+impl CompactionLlm for FakeLlm {
+    async fn complete(
+        &self,
+        _req: LlmRequest,
+        _budget: Duration,
+        _on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
+    ) -> Result<LlmResponse, LlmError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        self.seen
-            .lock()
-            .unwrap()
-            .push((req.system.to_string(), req.user.to_string()));
-        // 当场挑刺：接线面上也要证"送出去的就是装配好的那份骨架"，而不是一个空串
-        assert!(
-            req.system.contains("只用文本回答"),
-            "摘要请求的 system 要带上不许调工具那一节"
-        );
-        assert!(!req.user.is_empty(), "摘要请求不许喂空");
-        Ok((
-            crate::compact::sample_summary(),
-            SummaryUsage {
-                input: 10,
-                output: 5,
-            },
-        ))
+        Ok(LlmResponse {
+            content: SUMMARY.to_string(),
+            tool_calls: Vec::new(),
+            usage: Some(LlmUsage {
+                input: 111,
+                output: 222,
+                cache_read: 0,
+                cache_write: 0,
+                reasoning: 0,
+                total: 333,
+            }),
+        })
     }
 }
 
-// 六轮历史 + 一次远超阈值的用量上报（占用顶到线上，压缩才有理由起步）、
-// 阈值取数、磁盘前史——这三个夹具已上移 `tests/mod.rs`（压缩两簇接线面共用，
-// specs/12 刀②）：本文件的 `use super::*;` 直接把它们带进来。
-
-fn compactor_with(root: &std::path::Path) -> (Arc<crate::compact::deep::Compactor>, Arc<Counting>) {
+/// 装一台压缩器（设置 + 内核 + 发送口替身）。
+fn compactor_with(root: &Path, llm: Arc<dyn CompactionLlm>) -> Arc<Compactor> {
     std::fs::write(
         root.join("settings.json"),
-        serde_json::json!({"context": {"thresholdTokens": 100_000}}).to_string(),
+        serde_json::json!({"context": {"compactEnabled": true, "autoCompactPct": 50}}).to_string(),
     )
     .unwrap();
     let settings = Arc::new(crate::settings::SettingsStore::open(root).unwrap());
-    let cli = Arc::new(Counting::default());
-    (
-        Arc::new(crate::compact::deep::Compactor::new(
-            settings,
-            Arc::clone(&cli) as Arc<dyn SummaryClient>,
-            Arc::new(crate::compact::Failures::default()),
-            Arc::new(crate::compact::Overflow::default()),
-            // 停止标记（specs/12 刀①）：None = 没有停止面（这一簇不测停止）。
-            None,
-        )),
-        cli,
-    )
+    Arc::new(Compactor::new(
+        settings,
+        Arc::new(kernel_with_tools()),
+        llm,
+        Arc::new(crate::compact::Failures::default()),
+        Arc::new(crate::compact::Overflow::default()),
+        None,
+    ))
 }
 
-fn compacted_count(session: &Session) -> usize {
-    session
-        .events()
-        .iter()
-        .filter(|e| matches!(e, SessionEvent::ContextCompacted { .. }))
-        .count()
+/// 一份"到线了"的会话：六轮对话（每轮够大 ⇒ 保留区切得进中段）+ 一条用量上报。
+///
+/// 为什么每轮要够大：保留区按 **15000 token** 切（上游写死），整段历史装得下时
+/// 上游只留**最新一次往返**——那样"保留区"里永远只有一句话，钉不住"指针 + 读时
+/// 重建"这条语义。每轮 ~3000 token ⇒ 切点落在中段 ⇒ 保留区横跨好几轮。
+fn busy_session() -> Session {
+    let mut s = Session::new();
+    for i in 0..6 {
+        s.append(SessionEvent::UserMessage {
+            content: format!("第{i}轮问题：") + &"细节".repeat(2500),
+            parts: Vec::new(),
+        });
+        s.append(SessionEvent::AssistantMessage {
+            content: format!("第{i}轮答复"),
+            tool_calls: vec![],
+        });
+    }
+    s.append(SessionEvent::LlmUsage {
+        input: 900_000,
+        output: 10,
+        cache_read: 0,
+        cache_write: 0,
+        reasoning: 0,
+        total: 900_010,
+        duration_ms: 1,
+    });
+    s
 }
 
-/// 正半边：跑到终态，内存与磁盘都要有那条 `ContextCompacted`，而且压后重放的投影
-/// 头一条就是那条共享构造函数造的摘要消息（= 下一个 step 发给模型的那一份）。
-/// 顺序断言（specs/11 AC-1）：压缩事件排在触发轮的 `LlmUsage` 之后、本步任何
-/// `AssistantMessage` 之前——`run_turn` 是 `await cp.run` 后才进 `kernel.step_as`，
-/// 模型没有并发开工；`DemoLlm` 不报用量，所以"下一步的 LlmUsage"在这条夹具里
-/// 由"本步产出"等价承重（日志只追加，先落的事件就是先发生的）。
+/// 门槛策略：窗口 1000K + 用户 50% ⇒ 门槛 500K；那 900K 的上报稳在线上。
+fn usage_policy() -> UsagePolicy {
+    UsagePolicy::assemble(50, Some(1_000_000), None, 0, 0)
+}
+
+/// checkpoint 里 `<recent-context>` 那一段的文本（读时重建出来的那份）。
+fn recent_of(text: &str) -> &str {
+    text.split("<recent-context>\n")
+        .nth(1)
+        .expect("checkpoint 里有保留区")
+        .split("\n</recent-context>")
+        .next()
+        .expect("保留区有收尾")
+}
+
+/// 正半边：跑到终态，内存与磁盘都要有那条 `ContextCompacted`，而且压后重放的
+/// 窗口头一条就是那条 checkpoint（= 下一个 step 发给模型的那一份）。
+///
+/// 顺序断言：压缩事件排在**本步产出之前**——`run_turn` 是 `await cp.run` 后才进
+/// `kernel.step_as`，模型没有并发开工；日志只追加 ⇒ 位置就是先后。
 #[tokio::test]
 async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
-    let root = crate::testutil::work_dir("s2-compact-wiring");
-    let (cp, cli) = compactor_with(&root);
+    let root = crate::testutil::work_dir("s13-compact-wiring");
+    let llm = FakeLlm::answering();
+    let cp = compactor_with(&root, Arc::clone(&llm) as Arc<dyn CompactionLlm>);
     let log = root.join("sessions");
-    let mut session = loaded_session();
+    let mut session = busy_session();
     seed_log(&log, "s-cp", &session);
-    let line = threshold_at(&session);
     let collector = Collector::default();
     let steps = run_turn(
         &kernel_with_tools(),
@@ -110,12 +147,7 @@ async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
         "s-cp",
         "继续".into(),
         Vec::new(),
-        Some(UsagePolicy {
-            threshold_tokens: line,
-            window_tokens: 1_000_000,
-            tools_est_tokens: 0,
-            refused_tokens: 0,
-        }),
+        Some(usage_policy()),
         &collector,
         None,
         Some(&log),
@@ -127,16 +159,17 @@ async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
     .await
     .expect("turn ok");
     assert!(steps >= 1, "本轮照常跑完：{steps}");
-    assert!(cli.count() >= 1, "step 边界那句调用必须真的跑过");
-    // AC-9 接线面：压成的那条要**实时**推到 sink，且随后那条 context_usage 的
-    // 读数要回落。只落内存/磁盘不够——界面「已压缩」系统条与浮层读数都由这两条
-    // 事件长出来；自动路径漏投影时，用户得切会话重放才看得见（真窗口抓到过）。
+    assert_eq!(llm.calls(), 1, "一轮只该花一条摘要往返");
+    // 压成的那条要**实时**推到 sink：界面「已压缩」系统条与浮层读数都由这条
+    // 事件长出来；只落内存/磁盘不够——自动路径漏投影时，用户得切会话重放才看得见。
     let pushed = collector.events();
     let names: Vec<&str> = pushed.iter().map(kind).collect();
     assert!(
         names.contains(&"context_compacted"),
         "自动压缩成功后要立刻推 context_compacted 给界面，实测事件序 {names:?}"
     );
+    // 压后读数回落（浮层看到的 used）：压缩那一趟的用量排在 `ContextCompacted`
+    // **之前** ⇒ 占用分子认成 stale ⇒ 重新走全量估算（锚点不被压缩请求顶住）。
     let last_used = pushed
         .iter()
         .rev()
@@ -149,25 +182,14 @@ async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
         last_used < 900_000,
         "触发读数 900000 压缩后必须回落（浮层看到的 used），实测 {last_used}"
     );
-    assert_eq!(
-        cli.count(),
-        1,
-        "一轮只该花一条摘要往返：压完后占用读数换吃压后投影，不许每个 step 再压一次"
-    );
     let in_memory = compacted_count(&session);
     assert_eq!(in_memory, 1, "一轮只许压一次（AC-1 的 once）");
-    // 顺序（AC-1）：触发轮那份 LlmUsage 在压缩事件之前；本步的答复在它之后。
-    // 日志只追加 ⇒ 位置就是先后；两条一起才说明"模型停着等压缩、压完才继续"。
+    // 顺序：压缩事件必须早于本步产出 = 模型停着等它。
     let events = session.events();
     let compact_at = events
         .iter()
         .position(|e| matches!(e, SessionEvent::ContextCompacted { .. }))
         .expect("内存会话里要有一条压缩事件");
-    let trigger_at = events[..compact_at]
-        .iter()
-        .rposition(|e| matches!(e, SessionEvent::LlmUsage { .. }))
-        .expect("触发轮的 LlmUsage 应在压缩事件之前");
-    assert!(trigger_at < compact_at, "压缩必须晚于触发读数");
     let step_output_at = events
         .iter()
         .enumerate()
@@ -179,7 +201,7 @@ async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
         compact_at < step_output_at,
         "压缩事件必须早于本步产出 = 模型停着等它（compact_at {compact_at} / output_at {step_output_at}）"
     );
-    // 磁盘镜像同数——不然是"只在内存里压了"，切会话/重启后重放看不见这一笔
+    // 磁盘镜像同数——不然是"只在内存里压了"，切会话/重启后重放看不见这一笔。
     let path = session_store::session_file(&log, "s-cp").expect("会话日志路径可算");
     let (restored, _) = session_store::load_session(&path).expect("磁盘上有这份日志");
     assert_eq!(
@@ -187,20 +209,31 @@ async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
         in_memory,
         "落盘的压缩事件必须与内存同数"
     );
+    // 重放出来的窗口头一条 = 那条 checkpoint（上游逐字形状，AC-5 另有专测）。
     let msgs = restored.derive_messages();
+    let Message::User { content, .. } = &msgs[0] else {
+        panic!(
+            "重放出来的窗口头一条该是那条 checkpoint user 消息，实测 {:?}",
+            msgs[0]
+        )
+    };
     assert!(
-        matches!(&msgs[0], Message::User { content, .. }
-            if content.starts_with(session_store::SUMMARIZED_MARKER)),
-        "重放出来的窗口头一条该是那条摘要消息，实测 {:?}",
-        msgs.first()
+        content.starts_with(session_store::CHECKPOINT_TAG),
+        "重放出来的窗口头一条该是那条 checkpoint，实测 {content:?}"
     );
-    // 最新那句用户问题仍在窗口里（压的是较旧那一段，不是整段历史）
     assert!(
-        restored
-            .derive_messages()
-            .iter()
-            .any(|m| matches!(m, Message::User { content, .. } if content.contains("第5轮问题"))),
-        "近期原文要留在窗口里"
+        content.contains(SUMMARY),
+        "摘要正文逐字进 checkpoint：{content}"
+    );
+    // 保留区**读时重建**：指针切出来的中段横跨好几轮，最老的那几轮不在里面。
+    let recent = recent_of(content);
+    assert!(
+        recent.contains("第5轮问题"),
+        "近期原文要留在窗口里：{recent}"
+    );
+    assert!(
+        !recent.contains("第0轮问题"),
+        "最老的那几轮进了摘要、不在保留区：{recent}"
     );
 }
 
@@ -209,11 +242,10 @@ async fn auto_compaction_runs_once_at_the_line_and_the_turn_continues() {
 /// 把默认值改成"永远压"也不会红。
 #[tokio::test]
 async fn nothing_compacts_without_the_compactor() {
-    let root = crate::testutil::work_dir("s2-compact-absent");
+    let root = crate::testutil::work_dir("s13-compact-absent");
     let log = root.join("sessions");
-    let mut session = loaded_session();
+    let mut session = busy_session();
     seed_log(&log, "s-none", &session);
-    let line = threshold_at(&session);
     let collector = Collector::default();
     let steps = run_turn(
         &kernel_with_tools(),
@@ -221,12 +253,7 @@ async fn nothing_compacts_without_the_compactor() {
         "s-none",
         "继续".into(),
         Vec::new(),
-        Some(UsagePolicy {
-            threshold_tokens: line,
-            window_tokens: 1_000_000,
-            tools_est_tokens: 0,
-            refused_tokens: 0,
-        }),
+        Some(usage_policy()),
         &collector,
         None,
         Some(&log),
@@ -253,10 +280,10 @@ async fn nothing_compacts_without_the_compactor() {
     );
 }
 
-// ---------- specs/12 刀①：停止命中压缩 ⇒ 整轮以 Interrupted 收束 ----------
+// ---------- specs/13 · 判据 `interrupted`：被叫停 ≠ 压不动 ----------
 
-/// 一个"被用户叫停"的摘要客户端：在**被调用时**把停止标记置位（= 用户在
-/// 压缩进行时点了「停止生成」），然后如实报错。
+/// 一个"被用户叫停"的发送口：在**被调用时**把停止标记置位（= 用户在压缩进行时
+/// 点了「停止生成」），然后如实报错。
 ///
 /// 不起线程、不等真实时钟：要验的是 `run_turn` 收到「已停止」之后**怎么收束**，
 /// 不是时序。停止标记由 `run_turn` 自己登记（`stop.guard`），所以这里置位
@@ -266,43 +293,50 @@ struct Stoppable {
 }
 
 #[async_trait]
-impl SummaryClient for Stoppable {
-    async fn complete(&self, req: &SummaryRequest<'_>) -> Result<(String, SummaryUsage), String> {
-        self.stop.request(req.session_id.unwrap_or_default());
-        Err("已停止".into())
+impl CompactionLlm for Stoppable {
+    async fn complete(
+        &self,
+        _req: LlmRequest,
+        _budget: Duration,
+        _on_delta: &(dyn for<'a> Fn(&'a str) -> bool + Send + Sync),
+    ) -> Result<LlmResponse, LlmError> {
+        self.stop.request("s-stop");
+        Err(LlmError::Backend("已停止".into()))
     }
 }
 
-/// AC-4 接线面（specs/12 刀①）：停止信号在压缩里命中 ⇒ 整轮以 **Interrupted**
-/// 收束（不是 Completed、不是失败），且**不计入熔断失败数**。
+/// 压缩被叫停 ⇒ 轮以 **Interrupted** 收束（不是 Failed、也不是成功），且
+/// **不计入熔断失败数**。
 ///
-/// 这一条是"用户按了停止也没用"的正面反面：改之前压缩里的摘要调用压根查不到
-/// 停止标记（hooks 写死 None），用户按一万次停止也没用，界面永远转。
+/// 这一条是"用户按了停止也没用"的正面反面：改之前压缩里的请求压根查不到停止
+/// 标记，用户按一万次停止也没用，界面永远转。现在压动的请求查得到 ⇒ 这一趟
+/// 如实收束。判据名照样是 `interrupted`（界面那句话仍要说"被叫停"），但熔断
+/// 账不动——停过三次不该让压缩永久停手。
 #[tokio::test]
 async fn a_stop_during_compaction_ends_the_turn_as_interrupted() {
-    let root = crate::testutil::work_dir("s12-stop-wiring");
+    let root = crate::testutil::work_dir("s13-stop-wiring");
     std::fs::write(
         root.join("settings.json"),
-        serde_json::json!({"context": {"thresholdTokens": 100_000}}).to_string(),
+        serde_json::json!({"context": {"compactEnabled": true, "autoCompactPct": 50}}).to_string(),
     )
     .unwrap();
     let settings = Arc::new(crate::settings::SettingsStore::open(&root).unwrap());
     let stop_flags = Arc::new(crate::stop::StopFlags::default());
     let failures = Arc::new(crate::compact::Failures::default());
-    let cli = Arc::new(Stoppable {
+    let llm = Arc::new(Stoppable {
         stop: Arc::clone(&stop_flags),
     });
-    let cp = Arc::new(crate::compact::deep::Compactor::new(
+    let cp = Arc::new(Compactor::new(
         settings,
-        Arc::clone(&cli) as Arc<dyn SummaryClient>,
+        Arc::new(kernel_with_tools()),
+        llm as Arc<dyn CompactionLlm>,
         Arc::clone(&failures),
         Arc::new(crate::compact::Overflow::default()),
         Some(Arc::clone(&stop_flags)),
     ));
     let log = root.join("sessions");
-    let mut session = loaded_session();
+    let mut session = busy_session();
     seed_log(&log, "s-stop", &session);
-    let line = threshold_at(&session);
     let collector = Collector::default();
     let steps = run_turn(
         &kernel_with_tools(),
@@ -310,12 +344,7 @@ async fn a_stop_during_compaction_ends_the_turn_as_interrupted() {
         "s-stop",
         "继续".into(),
         Vec::new(),
-        Some(UsagePolicy {
-            threshold_tokens: line,
-            window_tokens: 1_000_000,
-            tools_est_tokens: 0,
-            refused_tokens: 0,
-        }),
+        Some(usage_policy()),
         &collector,
         None,
         Some(&log),
@@ -325,7 +354,7 @@ async fn a_stop_during_compaction_ends_the_turn_as_interrupted() {
         Some(&cp),
     )
     .await
-    .expect("turn ok");
+    .expect("被叫停不是失败：轮照常收束");
     assert!(steps >= 1, "轮次照常收束");
     assert!(
         session.events().iter().any(|e| matches!(
@@ -335,7 +364,24 @@ async fn a_stop_during_compaction_ends_the_turn_as_interrupted() {
                 ..
             }
         )),
-        "停止命中的那一轮必须以 Interrupted 收束（不是 Completed）"
+        "停止命中的那一轮必须以 Interrupted 收束（不是 Failed）"
     );
     assert_eq!(failures.of("s-stop"), 0, "用户主动停不是失败：熔断账不许动");
+    let reasons: Vec<Option<String>> = collector
+        .events()
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::CompactStatus { phase, reason, .. }
+                if phase == crate::events::compact_phase::FAILED =>
+            {
+                Some(reason.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        reasons,
+        vec![Some("interrupted".to_string())],
+        "判据名照旧是 interrupted（界面那句话仍要说被叫停）"
+    );
 }

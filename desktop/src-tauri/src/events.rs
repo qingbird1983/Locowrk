@@ -83,19 +83,17 @@ pub mod channels {
 /// `agent://compact-status` 的 `phase` 取值域（**唯一出处**）。
 ///
 /// 为什么相位与判据名分两样东西：相位说的是"**这一趟处于什么状态**"，判据名
-/// 说的是"**为什么没成**"。熔断（判据名 `fused`）在判据名那张表里属于**手动
-/// 让开**的那两条（SS24 的 YIELDED 集合）⇒ 前端那张「判据名 → 文案」表不许有它；
-/// 它改走相位 `paused`，于是"被熔断停手"这件事有了自己独立的一句话。
+/// 说的是"**为什么没成**"。熔断（连败到线）不是判据名 ⇒ 它改走相位 `paused`，
+/// 于是"被熔断停手"这件事有了自己独立的一句话。
 ///
-/// 反过来，失败那几枚（`summary-call` / `overflow` / `rejected` / `budget`）
-/// 走相位 `failed` + `reason`（判据名）⇒ 前端复用手动 `/压缩` 那张表取文案，
-/// 两侧同源由 SS24 钉住。
+/// 反过来，失败那几枚（`compact::outcome::REASONS` 那一族）走相位 `failed` +
+/// `reason`（判据名）⇒ 前端按名查语言包，两侧同源由 SS24 钉住。
 pub mod compact_phase {
     /// 摘要请求已发出（这一趟正在压）。
     pub const RUNNING: &str = "running";
-    /// 这一趟**没成**：`reason` = 判据名（`compact::deep::WHY_*` 那一族）。
-    /// ⚠ 含"被用户叫停"那一档（`stopped`）——它不是失败，但这一趟同样没成，
-    /// 文案由判据名决定（说清是"被叫停"而不是"没答上"）。
+    /// 摘要正文的流式增量（上游 `Compaction.Delta`）：`text` 带这一段增量。
+    pub const DELTA: &str = "delta";
+    /// 这一趟**没成**：`reason` = 判据名（`compact::outcome::REASONS` 那一族）。
     pub const FAILED: &str = "failed";
     /// 熔断停手（连续失败到线 ⇒ 自动压缩暂停；**主轮继续**）。
     pub const PAUSED: &str = "paused";
@@ -356,6 +354,9 @@ pub enum AgentEvent {
         /// 判据名（仅 `failed` 相位带；其余相位为 `None`）。
         #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
+        /// 相位自带的文本（仅 `delta` 相位带：摘要正文的流式增量）。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        text: Option<String>,
     },
 }
 
