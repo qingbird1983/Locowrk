@@ -127,6 +127,17 @@ check-channels FAILED=0 · SINGLE_SOURCE_OK · check_length 零新增 · check-d
 **SS33**（档位只有一个出处 / 文本判据恒 `none` / 关键词表全仓只剩接入面那一份）。**变异三条逐条
 报红**：①传输层不挂档位（红 1）②压缩层退回文本匹配（红 3，含反向那条）③传输层去掉
 `content_filter` 闸（红 1）。
+**S5 刀⑥ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
+**挂账 ③**（权威层 `docs/design/authority/` 的现役机制描述已过期）。改前两处说反了：阈值写成
+「绝对 token 滑块 100K–800K」、上下文节奏写成「由记忆树整理边界承担」——**两半都已不是现网**：
+阈值已改**模型窗口 × 用户百分比三档 25/50/85**（缺省 50%），压缩链已按 OpenCode V2 整块回来
+（宿主侧 `compact/`），而**记忆树（organize）那一族也整族退役**了（S3 刀④a / S4 刀③b）⇒
+断层改由**压缩自己**承担。改法（**人 2026-10-22 点头按提案改三处**，[LOCK] 下的动作）：
+①《Context and Memory.md》§3.2.2 加现役注记（阈值 / 机制 / 记忆树退役 / 失败按档位归类）；
+②`DESIGN.md` 里 ctx-compact 插件那枚修订注加现役注记，并把原注记里那个**过期指针**指准
+（"见 §3.2" 指的是本文档的「Effect」一节，不是上下文节奏）；③`DESIGN.md` §4.2 的 `Session`
+结构示意补一格刀⑥ 的落盘游标（`persisted`）。三处都**只加注记 / 补示意**，**历史原文一字未改**，
+**规范语义未动**。
 **S5 刀③ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
 **挂账 ⑦**（落盘口收成一处 + 失败轮次的步内事件落盘）。改前：落盘游标**每个调用点自己算**
 （runner 的 `log_start`/`before`/`len-1`、压缩层的 `from`、heal 的 `seq`）⇒ 「磁盘上到哪儿了」有**好几个
@@ -173,8 +184,8 @@ runner 里落了）⇒ 压完看着一切正常，**重开应用压缩连同摘�
 **重启后断层条与 checkpoint 仍在**（修复前那屏是没有断层的）。
 **仍欠**（2026-10-22 用户已授权「按建议规划然后开始」，排期见 specs/13 的「计划」）：
 ~~specs/12 那两笔挂账缺陷~~（= **刀⑦a 已结清**，见上面 S5 刀④）；~~`output-limit` / `content-filter` 两枚判据靠错误文本启发式
-匹配~~（= **刀⑦b 已结清**，见上面 S5 刀⑤）；权威层 `docs/design/authority/` 的现役机制描述欠一次专项
-对齐（[LOCK]，要向人确认 = 刀⑧；刀⑤ 已按 §零.5 的规矩先改了 `Front-end Design Guidelines`）。
+匹配~~（= **刀⑦b 已结清**，见上面 S5 刀⑤）；~~权威层 `docs/design/authority/` 的现役机制描述欠一次专项
+对齐~~（= **刀⑧ 已结清**，见上面 S5 刀⑥；[LOCK] 下已向人说明并按点头的三处提案改完）。
 （~~**落盘口仍有两处**＋**失败轮次的步内事件不进日志**~~ = **刀⑥ 已结清**，见上面 S5 刀③。）
 文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |

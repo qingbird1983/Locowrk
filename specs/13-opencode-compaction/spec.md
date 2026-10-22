@@ -442,6 +442,38 @@
   超出本刀范围。**边界写在明处**：压缩那条路走档位，主对话轮那条路走文本。
 - **不改判据名表**（9 条一字不动）。
 
+## 刀⑧ 权威层文档专项对齐（挂账 ③，[LOCK]）
+
+**为什么单独一刀**：`docs/design/authority/` 的**规范语义**在 AGENTS §5 的 [LOCK] 里
+⇒ 改前必须**向人说明并等确认**。这一刀只动「**现役机制描述**」，不动「规范语义」。
+
+**授权记录**：2026-10-22 向人提出三处提案（①《Context and Memory.md》§3.2.2 加现役
+注记 ②`DESIGN.md` 里 ctx-compact 插件那枚修订注加现役注记 ③`DESIGN.md` §4.2 的
+`Session` 结构示意补一格落盘游标），**人点了头按提案改三处**（2026-10-22）。
+
+### 改了什么（三处，**历史原文照存**）
+
+| # | 位置 | 改法 |
+| --- | --- | --- |
+| ① | 《Context and Memory.md》§3.2.2（标题「阈值语义（v2.137 修订：绝对 token…）」+ 正文） | 加一条**现役注记**（照该文件 "v2.141 注记" 的写法）：阈值 = **模型窗口 × 用户百分比三档 25/50/85**（缺省 50%，`context.autoCompactPct`）、绝对 token 滑杆**已退役**（键还在但不再被读）、压缩整块按 OpenCode V2 重写、**记忆树整族退役** ⇒ 本节「整理」那一族表述属历史口径、失败按档位归类 |
+| ② | `DESIGN.md` 里 ctx-compact 插件那枚修订注 | 加**现役注记**：桌面压缩链**已回来**（宿主侧 `compact/`，按 OpenCode V2 复刻；阈值 = 窗口 × 百分比）、**记忆树（organize）那一族也已整族退役** ⇒ "现网上下文节奏由记忆树整理边界承担"**已成历史**；顺带把原注记里那个**过期指针**（"见 §3.2"——本文档 §3.2 现在是「Effect」一节）指准 |
+| ③ | `DESIGN.md` §4.2 的 `Session` 结构示意 | 补一行 `persisted: usize,  // 已落盘到第几条（磁盘镜像的前缀长度；只增不减）`（刀⑥ 新增的那格；字段顺序照代码 `crates/session-store/src/session.rs`） |
+
+### 验收标准
+
+- [x] AC-32 **三处现役描述与代码一致**：阈值口径（百分比三档）、压缩机制（宿主侧
+      `compact/`）、记忆树退役、失败按档位归类 —— 逐条对得上现网代码。
+- [x] AC-33 **历史原文一字未改**：三处都只**加注记 / 补示意**，被它们描述的旧段落
+      （v2.137 修订、⑨ 时期原文）逐字保留。
+- [x] AC-34 **门禁**：`make check` 全绿（文档规则闸 + 断链闸）。
+
+### 这一刀**没**做的
+
+- **不重写那两节的正文**（v2.137 修订段、⑨ 时期记录）：它们是**历史**，本仓的规矩是
+  历史原文照存；只加现役注记。
+- **不碰其它权威文档**（`Front-end Design Guidelines.md` 刀⑤ 已按 §零.5 改过；
+  `Tool exposure strategy and usage statistics.md` / `UI Design System.md` 与压缩无关）。
+
 ## 非目标
 
 - **不实现 provider 原生压缩（native）**：需要供应商侧的 compact 端点/触发器，本仓没有对等能力（上游依赖见 `packages/ai/src/route/client.ts:196-248`）。
@@ -491,8 +523,10 @@
   分好档（HTTP 状态码 / `finish_reason` / 预算环）⇒ 档位随错误往上走（宿主本地
   `LlmCallError`）⇒ 压缩层**按档认**，删掉那三枚文本匹配函数与预算前缀判据；
   `finish_reason=content_filter` 从"空收束"改成"如实报错"。产出 AC-28…AC-30。
-- **刀⑧（待做）权威层文档专项对齐**（挂账 ③）：`docs/design/authority/` 的规范语义在 [LOCK] 里，
-  改前要向人说明并等确认。
+- **刀⑧（✅ 已做）权威层文档专项对齐**（挂账 ③）：`docs/design/authority/` 的**现役机制
+  描述**三处对齐（人 2026-10-22 点头按提案改三处）：①《Context and Memory.md》§3.2.2
+  现役注记 ②`DESIGN.md` ctx-compact 插件那枚修订注的现役注记（+ 过期指针指准）
+  ③`DESIGN.md` §4.2 `Session` 示意补那格落盘游标。产出 AC-32…AC-34。
 
 ## 任务
 
@@ -531,6 +565,10 @@
 - [x] 刀⑦b：压缩层**按档认**（`compact/deep/send.rs` 删掉三枚文本判据 + 预算前缀判据）
 - [x] 刀⑦b：判据（`llm/tests/failure_kind.rs` 六条 + `tests/compaction_opencode/failure_kind.rs`
       七条 + 同源闸 **SS33**）+ 变异三条逐条报红
+- [x] 刀⑧：**向人说明并等确认**（三处提案，2026-10-22 人点头按提案改三处）
+- [x] 刀⑧：①《Context and Memory.md》§3.2.2 现役注记 ②`DESIGN.md` ctx-compact 修订注
+      现役注记（+ 过期指针指准）③`DESIGN.md` §4.2 `Session` 示意补落盘游标
+- [x] 刀⑧：门禁（`make check` 全绿；历史原文一字未改）
 
 ## 影响范围
 
@@ -575,7 +613,7 @@
 | --- | --- | --- |
 | ① | ~~`output-limit` / `content-filter` / `payload-too-large` 三枚判据**靠错误文本匹配**~~ | **刀⑦b 已结清（2026-10-22）**：传输层在知道事实的地方分好档（HTTP 状态码 / `finish_reason` / 预算环）⇒ 档位随错误往上走（宿主本地 `LlmCallError`）⇒ 压缩层**按档认**，那三枚文本匹配函数与预算前缀判据全删；`finish_reason=content_filter` 改成如实报错。判据 = `llm/tests/failure_kind.rs` 六条 + `tests/compaction_opencode/failure_kind.rs` 七条 + 同源闸 SS33，变异三条逐条报红。**边界留白**：主对话轮那条路跨内核边界（`LlmError` 只有字符串）⇒ 它的「超窗 ⇒ 触发压缩」仍按文本认 |
 | ② | 摘要预算那对预置清单（`SUMMARY_BUDGET_PRESETS_MS` ↔ `lib/summary-budget.ts`）**没有对账闸** | 这一刀新加的 SS32 只盯自动压缩阈值那一对。给旧的那对补闸 = 修无关代码（AGENTS §5「发现问题就登记，别在同一刀里顺手修」） |
-| ③ | `docs/design/authority/` 里**现役机制描述已过期**（`DESIGN.md` §⑨ 与 `Context and Memory.md` §3.2.2 仍写 v2.137 的「整理阈值 = 绝对 token」与「桌面压缩链整面退役」；§4.2 的 `Session` 结构示意里也没有刀⑥ 新增的那格落盘游标） | `DESIGN.md` 的规范语义在 AGENTS §5 的 [LOCK] 里，改它要**先向人说明并等确认**；且 specs/09/11/12 三批压缩改造同样没动它 ⇒ 权威层的这一段欠一次专项对齐。**刀⑤ 只动了 `Front-end Design Guidelines`（新增 §二⑲）** —— 那是用户 2026-10-22 明确裁定的新形态，按该标准 §零.5「先改标准再写码」的规矩必须同刀落地；**刀⑥ 也没动它**（§4.2 那段是**示意**不是字段清单，代码多一格游标不与它的规范语义冲突）；`DESIGN.md` 那两处仍在 [LOCK] 下待专项对齐（刀⑧） |
+| ③ | ~~`docs/design/authority/` 里**现役机制描述已过期**（`DESIGN.md` §⑨ 与 `Context and Memory.md` §3.2.2 仍写 v2.137 的「整理阈值 = 绝对 token」与「桌面压缩链整面退役」；§4.2 的 `Session` 结构示意里也没有刀⑥ 新增的那格落盘游标）~~ | **刀⑧ 已结清（2026-10-22）**：改前**向人说明并等确认**（人点头按提案改三处）；改后三处都只**加现役注记 / 补示意**、**历史原文照存**——①《Context and Memory.md》§3.2.2 加现役注记（阈值 = 窗口 × 百分比三档、绝对 token 滑杆已退役、压缩整块按 OpenCode V2 重写、记忆树整族退役、失败按档位归类）②`DESIGN.md` ctx-compact 插件那枚修订注加现役注记（压缩链已回来 + 记忆树已退役 ⇒ 那句已成历史；顺带把过期指针"见 §3.2"指准）③`DESIGN.md` §4.2 `Session` 示意补刀⑥ 那格落盘游标。**规范语义未动** |
 | ④ | ~~`specs/12` 那两笔挂账缺陷（`llm/wire/stream.rs` 推理优先 return 丢正文 / `stores/chat/projection.ts` `resetAssistant` 不清 thinking 行）~~ | **刀⑦a 已结清（2026-10-22）**：传输层 `Delta` 增 `Both` 档（同块推理 + 正文两样都收、两样都外推）；前端 `resetAssistant` 连末尾思考行一起清。判据 = `llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条，变异两条逐条报红。**余下的**：~~三枚判据的启发式归类收敛（挂账 ①）= 刀⑦b~~（**已结清**，见上面遗留表 ①） |
 | ⑤ | 压缩用的 `AppLlm` 是**第二个实例**（同一批 settings / overrides / catalog / assets / spill / stop 句柄；差别：不推重试通知、不记拒收读数、独立 diagnoser） | `state/mod.rs` 的 `Init` 不在本刀的文件面内；这一刀先保行为对齐，实例化那一层以后再收 |
 | ⑥ | 旧会话重放（旧日志的 `ContextCompacted` 没有 `keep_from` ⇒ 按 `kept_messages` 从尾部回退） | 只在 `session-store` 的单测里证过，**未做真机旧会话回归** |

@@ -495,6 +495,7 @@ pub struct Session {
     cursor: usize,                       // 当前回放位置
     snapshots: BTreeMap<usize, SessionState>,  // 每 N 个事件一个快照
     schema_version: u32,
+    persisted: usize,                    // 已落盘到第几条（磁盘镜像的前缀长度；只增不减）
 }
 
 impl Session {
@@ -2438,9 +2439,15 @@ export const usePluginStore = defineStore('plugins', {
 > fuzz——试算全过才备份落盘，失配整体拒绝文件不动；全部
 > `Compensable{undo_tool:"fs.restore"}` 跨插件 undo——官方捆绑保证同装，
 > 备份经 fsutil 同布局）；**ctx-compact**（⚠ v2.137 桌面压缩链整面退役、
-> v2.147 批 C 摘除本体——本条为 ⑨ 时期记录，现网上下文节奏由记忆树整理
-> 边界承担；留在文档里的现役机制描述见 §3.2 与《Context and Memory.md》§3.2.2
-> 修订注。以下原文照存不改）：（kernel-agent
+> v2.147 批 C 摘除本体——本条为 ⑨ 时期记录；**⚠ 现役注记（2026-10-22，
+> specs/13 上下文压缩整块重写）**：桌面压缩链**已回来**（= 宿主侧
+> `desktop/src-tauri/src/compact/`，按 OpenCode V2 复刻；触发阈值 = 模型窗口
+> × 用户百分比三档 25/50/85，缺省 50%），而**记忆树（organize）那一族也已
+> 整族退役**（S3 刀④a / S4 刀③b）⇒"现网上下文节奏由记忆树整理边界承担"
+> 这句**已成历史**；留在文档里的现役机制描述见《Context and
+> Memory.md》§3.2.2 修订注（⚠ 原注记里那个"见 §3.2"指的是**本文档** §3.2
+> ——那一节现在是「Effect：每次修改携带逆操作」，不再承担上下文节奏的描述，
+> 指针一并指准）。以下原文照存不改）：（kernel-agent
 > `middleware/compact.rs`，宿主侧——C ABI 插件够不到 LlmService；挂在
 > `agent/request` waterfall：估算 token（序列化字节/4）超 32k 就把早期
 > 消息压成单条 User 摘要（keep_recent=8），**切点对齐 User 消息起点**
