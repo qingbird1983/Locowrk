@@ -138,6 +138,24 @@ check-channels FAILED=0 · SINGLE_SOURCE_OK · check_length 零新增 · check-d
 （"见 §3.2" 指的是本文档的「Effect」一节，不是上下文节奏）；③`DESIGN.md` §4.2 的 `Session`
 结构示意补一格刀⑥ 的落盘游标（`persisted`）。三处都**只加注记 / 补示意**，**历史原文一字未改**，
 **规范语义未动**。
+**S5 刀⑦ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——压缩摘要
+展开体的**有界滚动**（人 2026-10-22 11:23 提出：「展开后显示出10行……可在压缩自己的容器里滚动。
+压缩那根发丝线不会被摘要挤到上面看不见了。现在的展开摘要，想要折叠起来还有向上滚动找到那根
+发丝才能再点到收起。」）。改前：摘要整段铺开 ⇒ 发丝线与「收起」钮被顶到屏外 ⇒ **收起这个动作
+够不着**（得先向上滚回那根线）。改法（**标准先行**，§零.5）：《Front-end Design Guidelines》
+§二⑲ 增「**有界滚动**」一条 + 版本行 v2.6（封顶 10 行 / `overflow-y: auto` /
+`overscroll-behavior: contain`；并写死「**有界滚动 ≠ 折叠**」「行数 10 写死不进设置页」）⇒ 实现
+只改 `desktop/src/components/chat/SystemRow.vue` 一处（`.sys-body .md`）。判据基建顺带补一条：
+`desktop/vitest.config.ts` 开 `css: true`（SFC 样式真进文档）＋ 挂载 `attachTo: document.body`
+（happy-dom 对**未连接**元素返回空计算样式）⇒ 新判据 `desktop/tests/compact-summary-scroll.spec.ts`
+四条读的是**计算样式**（不是源码字符串）；**变异四条逐条报红**（去 `max-height` / 去 `overflow-y` /
+去 `overscroll-behavior` / 把 10 改成 20）。门禁 `make check` 退出码 0（Rust desktop **434**
+passed · vitest **24 files / 162 tests** · clippy 两处零警 · check-channels OK · SINGLE_SOURCE_OK ·
+check_length 零新增 · DOC_FAILED=0）。**真机核对**（`pnpm tauri dev`，2026-10-22，会话
+「友好问候与助手服务」**回放**磁盘上已有的那条 `context_compacted`，**零新 LLM 调用**）：点
+「查看详情」⇒ 摘要就地展开、**可视窗口封顶约 10 行**（≈227px）、右侧出现**自己的滚动条**；
+滚轮悬在摘要上滚 ⇒ **摘要内部滚**、**转录整页不动**、发丝线与「收起」钮**原地不动**；点「收起」
+⇒ 退回发丝线态、转录不多条目。
 **S5 刀③ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
 **挂账 ⑦**（落盘口收成一处 + 失败轮次的步内事件落盘）。改前：落盘游标**每个调用点自己算**
 （runner 的 `log_start`/`before`/`len-1`、压缩层的 `from`、heal 的 `seq`）⇒ 「磁盘上到哪儿了」有**好几个

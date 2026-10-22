@@ -10,7 +10,8 @@
  *
  * 形态：线仍是 `SystemNotice` 的两档（hairline 发丝线 / 居中窄卡片）；展开体
  * 是**模型正文形态**（`.md` + `renderMarkdown`）：整列宽、无底、无圆角、
- * 无边框、**永不折叠**（不受轮容器折叠管理）。
+ * 无边框、**永不折叠**（不受轮容器折叠管理），且**封顶 10 行 + 在自己容器里
+ * 滚**（§二⑲ v2.6）——线与那枚「收起」钮因此始终在屏内。
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
@@ -64,5 +65,19 @@ const { copyDelegatedCode } = useCopyFeedback();
  * 纵向间距归自己（父级那条 8px 兄弟节奏管不到它：它在 `.sys-row` 内部）。 */
 .sys-body {
   padding: var(--lw-gap-8) 0 0;
+}
+
+/* 有界滚动（§二⑲ v2.6）：展开体**封顶 10 行 + 在自己容器里滚** ⇒ 发丝线与
+ * 那枚「收起」钮始终在屏内（不必向上滚回那根线才点得到收起）。
+ * - `10lh` = 10 × `.md` 自己的行高（`14px × 1.625` ≈ 22.75px ⇒ ≈ 227px）；
+ *   段落间距算在里头 ⇒ 实际视觉行数可能少几行（标准口径「约 10 行」）。
+ * - `overscroll-behavior: contain` = 滚到头**不连带转录**（滚动孤岛）。
+ * - 有界滚动 ≠ 折叠：展开体恒展开，滚到底看全文，不点任何钮；收起仍只由
+ *   线上那枚钮管（§二⑲「入口唯一」不变）。
+ * 高度口径与「10 行写死」的裁定住标准那一节，**这里只留一处实现**。 */
+.sys-body .md {
+  max-height: 10lh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 </style>

@@ -20,6 +20,12 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     include: ["tests/**/*.spec.ts"],
+    // `css: true` = SFC 的 <style> 块**真被编译并注入文档** ⇒ 用例可以读
+    // `getComputedStyle` 的**计算样式**（如压缩摘要展开体的 `max-height` /
+    // `overflow-y`），而不是去读源码字符串。默认 false 时样式整块被丢弃 ⇒
+    // 任何"样式口径"都只能靠源码文本断言（改了实现写法就假红）。v2.6 起
+    // 开启（压缩摘要有界滚动那一刀需要）。
+    css: true,
     // 不引 `globals: true`：`tsconfig.json` 的 `types` 只有 `vite/client`，开了全局
     // 就得再改 tsconfig（一处测试配置牵动构建侧类型面）。用例一律显式
     // `import { describe, it, expect } from "vitest"`。

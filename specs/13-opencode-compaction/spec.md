@@ -474,6 +474,76 @@
 - **不碰其它权威文档**（`Front-end Design Guidelines.md` 刀⑤ 已按 §零.5 改过；
   `Tool exposure strategy and usage statistics.md` / `UI Design System.md` 与压缩无关）。
 
+## 刀⑨ 压缩摘要展开体的有界滚动（封顶 10 行 + 自己滚）
+
+**为什么单独一刀**：人 2026-10-22 11:23 指出展开体那枚老毛病——「现在的展开摘要，想要
+折叠起来还有向上滚动找到那根发丝才能再点到收起」。摘要一长，发丝线与那枚「收起」钮
+就被顶到屏外 ⇒ **收起这个动作变得够不着**。这一刀只改**展开体的高度口径**，压缩机制
+本身（触发 / 摘要正文 / 落盘）一个字不动。
+
+**授权记录**：人 2026-10-22 原话：「那个压缩摘要展开 可以做成展开后显示出10行，向下滚动
+上面的以压缩那根发丝线为界切掉。意思就是压缩展开显示10行，可在压缩自己的容器里滚动。
+压缩那根发丝线不会被摘要挤到上面看不见了。现在的展开摘要，想要折叠起来还有向上滚动
+找到那根发丝才能再点到收起。」
+
+**标准先行**（§零.5 文档先行）：《Front-end Design Guidelines》§二⑲ 增「**有界滚动**」
+一条 + 版本行 v2.5 → **v2.6**。改的是这一族展开体的高度口径，**既有类目形态规则一条未改**。
+
+### 改了什么
+
+| # | 位置 | 改法 |
+| --- | --- | --- |
+| ① | `docs/design/authority/Front-end Design Guidelines.md` §二⑲ | 增「**有界滚动**」一条：封顶 **10 行**（按 `.md` 自己的行高算）+ `overflow-y: auto` + `overscroll-behavior: contain`；连同四款边界写死：「**有界滚动 ≠ 折叠**」「行数 10 写死不进设置页」「封顶按 `.md` 行高算」「本条不许改成（整段截断另开浮层 / 去掉上限 / 套独立滚动条外壳 / 交给转录整页滚）」。版本行 v2.6 |
+| ② | `desktop/src/components/chat/SystemRow.vue` | 展开体那枚正文元素（`.sys-body .md`）加三条样式：`max-height: 10lh` / `overflow-y: auto` / `overscroll-behavior: contain`（**唯一落点**，§二⑲「落点唯一」不变） |
+| ③ | `desktop/vitest.config.ts` | 开 `css: true`（SFC 的 `<style>` 块真被编译并注入文档）⇒ 判据能读**计算样式** |
+| ④ | `desktop/tests/compact-summary-scroll.spec.ts` | 新判据四条（新文件） |
+
+### 判据怎么钉的（为什么不是「读源码字符串」）
+
+`getComputedStyle` 那条路要**两个前提**，缺一个就只剩字符串比对（实现改了写法就假红）：
+
+- `vitest.config.ts` 的 `css: true` —— 默认 `false` 时样式整块被丢弃；
+- 挂载要 `attachTo: document.body` —— happy-dom 对**未连接**元素直接返回空计算样式
+  （`CSSComputedStyle.getComputedStyle` 里 `isConnected` 为假就 return 空壳），VTU 默认不挂文档。
+
+两条都写进判据文件头（下一个改这条判据的人不用重新踩一遍）。
+
+### 验收标准
+
+- [x] AC-35 **展开体自己滚**：`overflow-y: auto` + `overscroll-behavior: contain`
+      （滚到头**不连带转录**）。
+- [x] AC-36 **封顶 10 行**：`max-height` = `10lh`（按 `.md` 自己的行高算）⇒ 发丝线与
+      那枚「收起」钮不会被摘要顶出屏；线**排在展开体之前**（DOM 顺序）。
+- [x] AC-37 **有界滚动 ≠ 折叠**：展开体恒展开（体内**没有第二套动作钮**），收起仍只由
+      线上那枚钮管（转录里**不追加条目**）。
+- [x] AC-38 **门禁与变异**：`make check` 全绿；本刀四条判据做**变异**逐条报红——
+      ①去 `max-height` ②去 `overflow-y` ③去 `overscroll-behavior` ④把 10 改成 20。
+- [x] AC-39 **真机**：真实窗口里展开 ⇒ 摘要**只显示约 10 行**、**在自己容器里滚**、
+      发丝线与「收起」钮**不被挤走**（截图核对，见下面「真机核对」）。
+
+### 真机核对（`pnpm tauri dev`，2026-10-22，**零设置改动、零新 LLM 调用**）
+
+会话「友好问候与助手服务」（`desktop-1792638912556.jsonl`，磁盘上**已有**一条带全文摘要的
+`context_compacted` ⇒ **回放**即可验，不用烧额度）：
+
+| 看什么 | 读数 |
+| --- | --- |
+| 收起态 | 发丝线「已压缩早期对话，节省 ≈1.8K token　查看详情　撤销」，**居中窄卡片那一档不再出现** |
+| 点「查看详情」 | 摘要**就地展开**（md 渲染：`## Objective` / `## Requirements` / `## Decisions`…），**可视窗口封顶约 10 行**（`.md` 行高 14px × 1.625 ⇒ 10 行 ≈ 227px），右侧出现**自己的滚动条** |
+| 滚轮悬在摘要上滚 4 格 | **摘要内部滚动**（`## Objective` → `### Completed` 那一段），**转录整页不动**（`overscroll-behavior: contain` 生效），发丝线与「收起」钮**原地不动**（仍在屏内） |
+| 点「收起」 | 展开体退场 ⇒ 回到发丝线态（钮改说「查看详情」），转录里**不多出任何条目** |
+
+**改前那枚老毛病不复现**：改前摘要整段铺开，发丝线与「收起」钮被顶到屏外 ⇒ 收起这个
+动作够不着（得先向上滚回那根线）。
+
+### 这一刀**没**做的
+
+- **不设设置项**：行数 10 是人**直接给的已定值**（不是待定值）⇒ 不进设置页
+  （同行 = 长消息折叠 `FOLD_LINES = 5` 写死、设置里只留开关）。
+- **不动压缩机制**：触发口径 / 摘要正文 / 落盘 / 事件字段一个字没改。
+- **不加分段懒渲染**：摘要全文照旧整段渲染（只是**可视窗口**封顶 10 行）。
+- **不做自定义滚动条**：用宿主默认滚动条（Windows 经典样式）。
+
 ## 非目标
 
 - **不实现 provider 原生压缩（native）**：需要供应商侧的 compact 端点/触发器，本仓没有对等能力（上游依赖见 `packages/ai/src/route/client.ts:196-248`）。
@@ -527,6 +597,10 @@
   描述**三处对齐（人 2026-10-22 点头按提案改三处）：①《Context and Memory.md》§3.2.2
   现役注记 ②`DESIGN.md` ctx-compact 插件那枚修订注的现役注记（+ 过期指针指准）
   ③`DESIGN.md` §4.2 `Session` 示意补那格落盘游标。产出 AC-32…AC-34。
+- **刀⑨（✅ 已做）压缩摘要展开体的有界滚动**（人 2026-10-22 11:23 提出）：展开体
+  **封顶 10 行 + 在自己容器里滚** ⇒ 发丝线与那枚「收起」钮**始终在屏内**（不必向上
+  滚回那根线才点得到收起）。标准先行（§二⑲ 增「有界滚动」+ 版本行 v2.6）⇒ 实现
+  只改 `SystemRow.vue` 一处。产出 AC-35…AC-39。
 
 ## 任务
 
@@ -569,6 +643,14 @@
 - [x] 刀⑧：①《Context and Memory.md》§3.2.2 现役注记 ②`DESIGN.md` ctx-compact 修订注
       现役注记（+ 过期指针指准）③`DESIGN.md` §4.2 `Session` 示意补落盘游标
 - [x] 刀⑧：门禁（`make check` 全绿；历史原文一字未改）
+- [x] 刀⑨：标准先行（Front-end Design Guidelines §二⑲ 增「有界滚动」+ 版本行 v2.6）
+- [x] 刀⑨：`SystemRow.vue` 的展开体（`.sys-body .md`）加 `max-height: 10lh` +
+      `overflow-y: auto` + `overscroll-behavior: contain`
+- [x] 刀⑨：判据基建（`vitest.config.ts` 开 `css: true`；挂载 `attachTo: document.body`
+      —— happy-dom 对未连接元素返回空计算样式）
+- [x] 刀⑨：判据（`desktop/tests/compact-summary-scroll.spec.ts` 四条）+ 变异四条逐条报红
+- [x] 刀⑨：门禁（`make check` 全绿）
+- [x] 刀⑨：真机截图核对（10 行 + 容器内滚 + 线与钮不被挤走 + 收起正常）
 
 ## 影响范围
 
@@ -596,6 +678,11 @@
 | **刀⑤**：`desktop/src/stores/chat/{types,state,session,notices,projection,send,index}.ts` | `body`/`expanded` 两格 + 退役 `noticeDetails` + 就地改写收束线 |
 | **刀⑤**：`desktop/src-tauri/src/{events.rs,runner/projection.rs,export.rs}` | `context_compacted` 事件带摘要**全文**（`summary_preview` → `summary`） |
 | **刀⑤**：`desktop/tests/compact-summary-body.spec.ts` | 形态判据四条（新文件） |
+| **刀⑨**：`docs/design/authority/Front-end Design Guidelines.md` | **§二⑲ 增「有界滚动」一条 + 版本行 v2.6**（先改标准再写码） |
+| **刀⑨**：`desktop/src/components/chat/SystemRow.vue` | 展开体正文元素加**有界滚动三条**（`max-height: 10lh` / `overflow-y: auto` / `overscroll-behavior: contain`） |
+| **刀⑨**：`desktop/vitest.config.ts` | 开 `css: true`（SFC 样式真进文档 ⇒ 判据能读计算样式） |
+| **刀⑨**：`desktop/tests/compact-summary-scroll.spec.ts` | 有界滚动判据四条（新文件） |
+
 
 ## 风险与回滚
 
@@ -619,3 +706,6 @@
 | ⑥ | 旧会话重放（旧日志的 `ContextCompacted` 没有 `keep_from` ⇒ 按 `kept_messages` 从尾部回退） | 只在 `session-store` 的单测里证过，**未做真机旧会话回归** |
 | ⑦ | ~~**落盘口仍是两处**（自动那条在 `runner/mod.rs` 的 step 边界、手动那条在 `compact/deep.rs::run_manual_and_persist`）~~ + ~~**失败轮次的步内事件不进日志**（`finish_turn` 只落 `TurnEnd`）~~ | **刀⑥ 已结清（2026-10-22）**：落盘游标住进会话（`Session::persisted`）⇒ **唯一落盘口** `session_log::persist_pending`（调用方不再传 `from`）；压缩三条通路（自动 / 手动 / 溢出）**自己落盘**（压缩器认日志目录，`run_manual_and_persist` 退役）；轮收束落**整段 pending** ⇒ 失败轮次的步内事件（溢出压完仍失败那一轮）也在盘上。判据 = `tests/compaction_opencode/persist_uniqueness.rs` 三条（AC-20…AC-22），变异四条逐条报红。**余下的**：写盘失败仍是「告警不阻断聊天」（只是不推进游标、下一趟补齐）—— 不是缺陷，是刻意的取舍 |
 | ⑧ | **判据环境差异**：本仓前端测试环境是 `happy-dom`，它的 `document.createNodeIterator` 首个 `nextNode()` 返回**根节点**（违反 DOM 规范）⇒ DOMPurify 把 body 当待消毒节点 ⇒ **输入里的第一个元素连标签一起被吃掉**（浏览器 / WebView2 按规范走，没这回事） | 不是本仓代码的缺陷，是**写判据时的坑**：断言押在"第一个元素"上，红的是环境不是代码。已写进 `desktop/tests/compact-summary-body.spec.ts` 的文件头注记（摘要以一段话开头，标题与列表项都不是第一个元素 ⇒ 断言照常成立）。**不另开一刀**；将来别的 md 渲染判据撞上同一条，先读那条注记 |
+| ⑨ | 摘要展开体的**行数（10）不进设置页** | 人 2026-10-22 **直接给的已定值**（不是待定值）⇒ AGENTS §4「凡是有不确定性的数值做成设置页可调项」这条**不适用**；同行 = 长消息折叠 `FOLD_LINES = 5` 也是写死、设置里只留开关。将来若要调 = 改**两处**（标准 §二⑲ 那一条 + `SystemRow.vue` 一处 `max-height`），不是一处 |
+| ⑩ | 前端判据要读**计算样式**时的两个前提：`vitest.config.ts` 的 `css: true` + 挂载 `attachTo: document.body`（happy-dom 对**未连接**元素直接返回空计算样式） | 缺任一条，判据会**静默退化成"读不到样式"**（断言空串，看起来像红，其实是环境坑）。已写进 `desktop/tests/compact-summary-scroll.spec.ts` 文件头。**其它判据若哪天要读样式**，照这两条来，别自己猜 |
+
