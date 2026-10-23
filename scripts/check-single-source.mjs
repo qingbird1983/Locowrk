@@ -54,6 +54,8 @@ const F = {
   // specs/13 刀①：自动压缩阈值的缺省与三档预置，两侧各一份（同一条声明的两个投影）。
   contextSettings: 'desktop/src-tauri/src/settings/context.rs',
   autoCompactPct: 'desktop/src/lib/auto-compact-pct.ts',
+  // specs/13 挂账 ② 收账：摘要调用预算的缺省与三档预置，与上面那对同形。
+  summaryBudget: 'desktop/src/lib/summary-budget.ts',
 };
 
 /**
@@ -872,8 +874,7 @@ const CHECKS = [
       '为什么要有：它们是同一条声明的**两个投影**（不是两个出处），漂了的表现是' +
       '"选了却存不进去"（后端拒收）或"当前值不在候选里"（分段控件没有选中片）——' +
       '两者都不会让任何一条行为测试变红。' +
-      '⚠ 这一对与摘要预算那对（`SUMMARY_BUDGET_PRESETS_MS`）同形，但**那边没有对账闸**' +
-      '（登记在 specs/13 的遗留项里；不在这一刀顺手修无关代码）。',
+      '⚠ 这一对与摘要预算那对（`SUMMARY_BUDGET_PRESETS_MS`）同形，那边现在也有了对账闸（SS34）。',
     (m) => {
       const rustDefault =
         /AUTO_COMPACT_PCT_DEFAULT:\s*u64\s*=\s*(\d+)/.exec(m.contextSettings)?.[1] ?? 'MISS';
@@ -1023,6 +1024,36 @@ const CHECKS = [
         filesWith(m.hostDesktop, /"content policy"|"content_policy"|"safety filter"|"moderation"/),
       ].join('|'),
     'llm/failure.rs|none|llm/retry.rs|llm/retry.rs',
+  ],
+  [
+    'SS34',
+    '摘要调用预算的**缺省与三档预置两侧对账**（specs/13 挂账 ② 收账）：后端 ' +
+      '`settings/context.rs` 的 `SUMMARY_BUDGET_DEFAULT_MS` / `SUMMARY_BUDGET_PRESETS_MS` ' +
+      '（**校验权威**：写不进这三档的更新会被后端拒收，`valid_summary_budget`）与前端 ' +
+      '`lib/summary-budget.ts` 的同名两份必须**逐个相等**。与 SS32 同形——它们是同一条' +
+      '声明的**两个投影**（不是两个出处），漂了的表现是"选了却存不进去"（后端拒收）或' +
+      '"当前值不在候选里"（分段控件没有选中片），两者都不会让任何一条行为测试变红。' +
+      '判读口径：两侧数字都带下划线分隔（`30_000`），对账前剥掉再比。',
+    (m) => {
+      const norm = (s) => s.replace(/_/g, '');
+      const rustDefault =
+        /SUMMARY_BUDGET_DEFAULT_MS:\s*u64\s*=\s*([\d_]+)/.exec(m.contextSettings)?.[1] ?? 'MISS';
+      const rustPresets =
+        /SUMMARY_BUDGET_PRESETS_MS:\s*\[u64;\s*3\]\s*=\s*\[([^\]]*)\]/.exec(m.contextSettings)?.[1] ??
+        'MISS';
+      const rustList = [...rustPresets.matchAll(/[\d_]+/g)].map((x) => norm(x[0]));
+      const frontDefault =
+        /SUMMARY_BUDGET_DEFAULT_MS\s*=\s*([\d_]+)/.exec(m.summaryBudget)?.[1] ?? 'MISS';
+      const frontPresets =
+        /SUMMARY_BUDGET_PRESETS_MS:[^=]*=\s*\[([^\]]*)\]/.exec(m.summaryBudget)?.[1] ?? 'MISS';
+      const frontList = [...frontPresets.matchAll(/[\d_]+/g)].map((x) => norm(x[0]));
+      const same =
+        norm(rustDefault) === norm(frontDefault) && rustList.join(',') === frontList.join(',');
+      return same
+        ? `same(${rustList.length})`
+        : `RUST=${rustDefault}|${rustList.join(',')} FRONT=${frontDefault}|${frontList.join(',')}`;
+    },
+    'same(3)',
   ],
 ];
 
@@ -1394,6 +1425,10 @@ if (SELFTEST) {
         rel: 'compact/deep/send.rs',
         code: 'fn is_output_limit(msg: &str) -> bool {\n    msg.contains("finish_reason=length")\n}\n',
       }),
+    // SS34（specs/13 挂账 ② 收账）：界面那份候选清单的**缺省那颗**漂一档 ⇒
+    // "打开设置页时高亮的档"与"后端真认的缺省"分家。它打的是"缺省两侧相等"
+    // 那一格（预置清单漂了同样会红，SS32 同款，不重复变异）。
+    SS34: (m) => (m.summaryBudget = m.summaryBudget.replace('= 90_000;', '= 80_000;')),
   };
   let miss = 0;
   for (const { id, desc } of runChecks(snap)) {
