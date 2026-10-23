@@ -1,9 +1,9 @@
 # 13-上下文压缩按 OpenCode V2 重写
 
-- 状态：**已完成 · 刀①–⑨ 全收**（2026-10-22；原「方案待确认」头随 2026-10-21 用户
-  「按建议规划然后开始」授权与刀① 落地失效，2026-10-24 文档治理刀对齐状态头。仍开着的
-  挂账见文末「遗留 / 挂账」表：② 预置清单对账闸、⑤ `AppLlm` 第二实例、⑥ 旧会话重放
-  真机回归；真机长会话一轮与 spill 清理通路挂在 roadmap）
+- 状态：**已完成 · 刀①–⑨ 全收 + 挂账 ②⑤⑥ 已收账**（2026-10-22；原「方案待确认」头随 2026-10-21 用户
+  「按建议规划然后开始」授权与刀① 落地失效，2026-10-24 文档治理刀对齐状态头。遗留表的 ②⑤⑥ 三笔
+  已于 2026-10-24 收账刀结清：② = 对账闸 SS34、⑤ = `AppLlm::compaction_view` 派生、⑥ = raw-JSON
+  serde 判据 + 本机无旧会话的证据链；真机长会话一轮与 spill 清理通路挂在 roadmap「停下等你的事」）
 - 负责人：agent
 - 日期：2026-10-21
 - 出处 / 上游：用户 2026-10-21 指令——「压缩上下文老是失败而且速度慢的吓人……你现在完全抛弃现在的上下文压缩机制，
@@ -705,8 +705,8 @@
 | ② | ~~摘要预算那对预置清单（`SUMMARY_BUDGET_PRESETS_MS` ↔ `lib/summary-budget.ts`）**没有对账闸**~~ | **✴ 已结清（2026-10-24 收账刀）**：新闸 **SS34** 与 SS32 同形——后端 `SUMMARY_BUDGET_DEFAULT_MS` / `SUMMARY_BUDGET_PRESETS_MS`（校验权威）与 `lib/summary-budget.ts` 同名两份逐个相等（下划线剥掉再比）；变异 SS34 打中自己那格，`SELFTEST_ALL_CAUGHT`。原文照存：这一刀新加的 SS32 只盯自动压缩阈值那一对。给旧的那对补闸 = 修无关代码（AGENTS §5「发现问题就登记，别在同一刀里顺手修」） |
 | ③ | ~~`docs/design/authority/` 里**现役机制描述已过期**（`DESIGN.md` §⑨ 与 `Context and Memory.md` §3.2.2 仍写 v2.137 的「整理阈值 = 绝对 token」与「桌面压缩链整面退役」；§4.2 的 `Session` 结构示意里也没有刀⑥ 新增的那格落盘游标）~~ | **刀⑧ 已结清（2026-10-22）**：改前**向人说明并等确认**（人点头按提案改三处）；改后三处都只**加现役注记 / 补示意**、**历史原文照存**——①《Context and Memory.md》§3.2.2 加现役注记（阈值 = 窗口 × 百分比三档、绝对 token 滑杆已退役、压缩整块按 OpenCode V2 重写、记忆树整族退役、失败按档位归类）②`DESIGN.md` ctx-compact 插件那枚修订注加现役注记（压缩链已回来 + 记忆树已退役 ⇒ 那句已成历史；顺带把过期指针"见 §3.2"指准）③`DESIGN.md` §4.2 `Session` 示意补刀⑥ 那格落盘游标。**规范语义未动** |
 | ④ | ~~`specs/12` 那两笔挂账缺陷（`llm/wire/stream.rs` 推理优先 return 丢正文 / `stores/chat/projection.ts` `resetAssistant` 不清 thinking 行）~~ | **刀⑦a 已结清（2026-10-22）**：传输层 `Delta` 增 `Both` 档（同块推理 + 正文两样都收、两样都外推）；前端 `resetAssistant` 连末尾思考行一起清。判据 = `llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条，变异两条逐条报红。**余下的**：~~三枚判据的启发式归类收敛（挂账 ①）= 刀⑦b~~（**已结清**，见上面遗留表 ①） |
-| ⑤ | 压缩用的 `AppLlm` 是**第二个实例**（同一批 settings / overrides / catalog / assets / spill / stop 句柄；差别：不推重试通知、不记拒收读数、独立 diagnoser） | `state/mod.rs` 的 `Init` 不在本刀的文件面内；这一刀先保行为对齐，实例化那一层以后再收 |
-| ⑥ | 旧会话重放（旧日志的 `ContextCompacted` 没有 `keep_from` ⇒ 按 `kept_messages` 从尾部回退） | 只在 `session-store` 的单测里证过，**未做真机旧会话回归** |
+| ⑤ | ~~压缩用的 `AppLlm` 是**第二个实例**（同一批 settings / overrides / catalog / assets / spill / stop 句柄；差别：不推重试通知、不记拒收读数、独立 diagnoser）~~ | **✴ 已结清（2026-10-24 收账刀）**：新增 `AppLlm::compaction_view`——压缩台从主对话台**派生**（`state/background.rs` 不再照抄构造链）；同柄五枚 + settings（`SpillStore` 由两份 `new` 收成一柄，无状态 ⇒ 行为等价），三枚主对话专属装饰在派生处摘掉；「只有停止标记」的 `with_stop` 失去唯一调用方随之退役。字段逐一枚举 = 将来新增句柄在这里**编译报错**，漏柄从"静默 bug"变"编译错"。判据 = `llm/app_llm/compaction_view.rs`（`Arc::ptr_eq` 逐柄断言 + 装饰摘除三档 + 派生纯读一档）。原文照存：`state/mod.rs` 的 `Init` 不在本刀的文件面内；这一刀先保行为对齐，实例化那一层以后再收 |
+| ⑥ | ~~旧会话重放（旧日志的 `ContextCompacted` 没有 `keep_from` ⇒ 按 `kept_messages` 从尾部回退）~~ | **✴ 已结清（2026-10-24 收账刀，按证据链）**：① 单测两档在位 = 直构回退档（`legacy_compaction_without_pointer_falls_back_to_kept_count`）+ 新增 **raw-JSON 解析档**（`old_log_json_without_keep_from_parses_and_folds_by_kept_count`，喂真旧日志字节形状——没有 `keep_from` 键——钉住 `serde(default)` 解析面本身，直构那条绕过了它）；② 本机数据根查无改写前旧会话（`sessions/` 仅两条 2026-10-22 之后的日志）⇒ 真机目视那半**没有回归对象**，若有旧数据导入，解析与折叠两面已被上面两档钉死；③ 新格式真机重放已在刀① 真机核对证过（重启后断层条与 checkpoint 仍在）。原文照存：只在 `session-store` 的单测里证过，**未做真机旧会话回归** |
 | ⑦ | ~~**落盘口仍是两处**（自动那条在 `runner/mod.rs` 的 step 边界、手动那条在 `compact/deep.rs::run_manual_and_persist`）~~ + ~~**失败轮次的步内事件不进日志**（`finish_turn` 只落 `TurnEnd`）~~ | **刀⑥ 已结清（2026-10-22）**：落盘游标住进会话（`Session::persisted`）⇒ **唯一落盘口** `session_log::persist_pending`（调用方不再传 `from`）；压缩三条通路（自动 / 手动 / 溢出）**自己落盘**（压缩器认日志目录，`run_manual_and_persist` 退役）；轮收束落**整段 pending** ⇒ 失败轮次的步内事件（溢出压完仍失败那一轮）也在盘上。判据 = `tests/compaction_opencode/persist_uniqueness.rs` 三条（AC-20…AC-22），变异四条逐条报红。**余下的**：写盘失败仍是「告警不阻断聊天」（只是不推进游标、下一趟补齐）—— 不是缺陷，是刻意的取舍 |
 | ⑧ | **判据环境差异**：本仓前端测试环境是 `happy-dom`，它的 `document.createNodeIterator` 首个 `nextNode()` 返回**根节点**（违反 DOM 规范）⇒ DOMPurify 把 body 当待消毒节点 ⇒ **输入里的第一个元素连标签一起被吃掉**（浏览器 / WebView2 按规范走，没这回事） | 不是本仓代码的缺陷，是**写判据时的坑**：断言押在"第一个元素"上，红的是环境不是代码。已写进 `desktop/tests/compact-summary-body.spec.ts` 的文件头注记（摘要以一段话开头，标题与列表项都不是第一个元素 ⇒ 断言照常成立）。**不另开一刀**；将来别的 md 渲染判据撞上同一条，先读那条注记 |
 | ⑨ | 摘要展开体的**行数（10）不进设置页** | 人 2026-10-22 **直接给的已定值**（不是待定值）⇒ AGENTS §4「凡是有不确定性的数值做成设置页可调项」这条**不适用**；同行 = 长消息折叠 `FOLD_LINES = 5` 也是写死、设置里只留开关。将来若要调 = 改**两处**（标准 §二⑲ 那一条 + `SystemRow.vue` 一处 `max-height`），不是一处 |

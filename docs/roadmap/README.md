@@ -24,7 +24,7 @@
 | --- | --- | --- | --- |
 | A1 | 结构债 5 条：T25（`llm_provider_save` 业务下沉出命令层）/ T28（sessions 三组双出处并一处）/ T29（T6 注释机制更正）/ T37（`check-i18n` 间接键口径收紧）/ T39（api 两条错域条目归位） | [specs/03](../../specs/03-structural-debt/spec.md) | 各一小刀，纯结构或闸口径；T24/T34/T40/T41 已于 2026-10-24 注销（锚点消失） |
 | A2 | 工具级取消 C2–C5 | [specs/04](../../specs/04-tool-cancel-deadline/spec.md) | C2 前置 = 先测现网两个超时的实际关系；C3 起动 ABI 面，每刀单独点头 |
-| A3 | 压缩线剩三笔：摘要预算预置清单对账闸（②）/ `AppLlm` 第二实例收敛（⑤）/ 旧会话重放真机回归（⑥） | [specs/13](../../specs/13-opencode-compaction/spec.md) 挂账表 | 各一小刀 |
+| ~~A3~~ | ~~压缩线剩三笔：摘要预算预置清单对账闸（②）/ `AppLlm` 第二实例收敛（⑤）/ 旧会话重放真机回归（⑥）~~ | [specs/13](../../specs/13-opencode-compaction/spec.md) 挂账表 | **✅ 2026-10-24 收账结清**：② = 对账闸 SS34（与 SS32 同形，变异打中）；⑤ = `AppLlm::compaction_view` 派生（同柄一个出处，`with_stop` 随之退役，逐柄判据）；⑥ = raw-JSON serde 判据 + 本机无旧会话的证据链 |
 | A4 | S3 真窗口四格：AC-S3-1…4（索引指针行上界面 / 正文不注入 / mtime 即生效 / `<repo_context>` 读真实交接层） | [specs/10](../../specs/10-context-injection-s3/spec.md) | 起真窗口发一轮；与对话流收口那趟可合并 |
 | A5 | 交接层三件：`MEMORY.md` 写侧钳（ⓢ）/ `journal/` 按天封卷 / 轮收束模型主动更新提示词（ⓡ） | [specs/10](../../specs/10-context-injection-s3/spec.md) 挂账区 | 一到两刀，动收束面 |
 | A6 | 退役键 `compact_model` / `compact_instructions` 从结构体物理删除（现按退役键保留只为老配置可读；serde 忽略未知键 ⇒ 删了安全） | `settings/context.rs` 头注 | 一行级小清理 |

@@ -52,7 +52,7 @@ use super::wire;
 
 use crate::settings::{LlmSettings, NetworkProxy, SettingsStore};
 
-fn temp_root(tag: &str) -> std::path::PathBuf {
+pub(crate) fn temp_root(tag: &str) -> std::path::PathBuf {
     let dir = crate::testutil::work_dir(&format!("llm-{}", tag));
     dir
 }

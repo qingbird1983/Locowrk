@@ -1154,6 +1154,27 @@
   —— `store.rs` 从判留改成判拆就是现例子（判留的外力一消失，三问自己的答案浮出来了）。
   认哪几件就拆哪几件；判留那几件如果不服，说一声我重判
 
+### 四、2026-10-24 新登记（收账刀 A3 施工途中撞见，按 AGENTS §5 登记不修）
+
+- [x] **T42** 插件测试的**跨进程工件竞态**：两个测试二进制（不同进程，进程内 `build_lock`
+      互不可见）并发对**同一工件路径**跑不同版本的 `cargo build` 时，`stage()` 的快照拷贝
+      能读到对方刚写完的 dll
+      · 实证 = 2026-10-24 全量门禁**连红两轮**：`wasm_plugins.rs:85` 以 env=1.0.0 构建
+        tool-echo，`echo_plugin.rs` 以 env=0.1.0 构建——后者 `fs::copy(target/debug/tool_echo.dll)`
+        快照进 1.0.0 的 dll ⇒ `registry.load` 报 `VersionMismatch { expected: "0.1.0",
+        manifest: "1.0.0" }`；隔离复跑双双全绿 = 竞态而非代码缺陷。**触发条件 = 新版 cargo
+        并行跑测试二进制**（原头注记的「8 轮全量 + 4 轮定向并行未复现」的时代与之擦肩）
+      · 这就是 F-2b 那笔「偶发红（`fs_fetch_plugins` 4 failed / 1 passed，0.8s 内失败）
+        但没能再复现，机制未确证」的机制——现在确证了
+      · 根因 = `stage()` 的安全论证只覆盖了**进程内**并发（F11c：快照防 `load` 在锁外的
+        脏读），没覆盖**跨进程**：build_lock 是 std Mutex，管不到另一个测试二进制的 cargo
+      · **✴ 同日收账**（已堵住 A3 门禁，且模块头注当年就预留了「机制确证后按自研锁目录 +
+        陈旧回收定口径」）：`build_lock()` 升级为**跨进程锁** `build_lock_acquire()`——独占
+        目录 `target/locowrk-test/build.lock`（std `create_dir` 两大平台原子判失败，零新依赖），
+        RAII 释放；持锁者崩溃留死目录 = 300s mtime 陈旧后由后来者回收重试（300s ≫ 单次
+        插件构建实测 ≤60s）。`wasm_plugins::stage_ping_guest` 同锁。判据 = 全量门禁
+        `cargo test --workspace` 连跑不再复现 VersionMismatch
+
 ## 验收标准
 
 - [x] 第一节七条全部做完或明确转入第二节（附理由），没有第三条状态

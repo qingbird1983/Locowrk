@@ -155,14 +155,36 @@ impl AppLlm {
         self
     }
 
-    /// 组装点注入**只有停止标记**的重试面（压缩那一台用）。
+    /// 压缩视角（specs/13 挂账 ⑤ 收账）：主对话这台的**去装饰副本**——组装点从
+    /// 主对话那台**派生**出压缩台（`state/background.rs`），不再照抄一遍构造链。
+    /// 同柄的：settings / 会话级覆盖 / 资产 / 能力目录 / spill / 停止标记
+    /// （spill 原先是压缩侧自己 `SpillStore::new` 的第二份——它无状态，共享同一柄
+    /// 行为等价，还少一个出处）。摘掉的装饰，三枚都是主对话专属：① 重试通知
+    /// （压缩重试不许推 `agent://llm-retry`，前端会清掉主对话的气泡）；② 拒收
+    /// 读数（压缩请求自己被拒是收缩矩阵内部的事，记进会话占用读数会把"这次压缩
+    /// 有多大"错当成"会话占了多少"）；③ 诊断账本换独立实例（M6.1 那台与命令层
+    /// 共享，记的是主对话 step 边界的分块 hash 链）。
+    /// （原「只有停止标记」的 `with_stop` 随本刀退役：它的唯一调用方就是旧的那条
+    /// 手工构造链，停止标记现在由派生自动同柄。）
     ///
-    /// 为什么不走 [`Self::with_retry_surface`]：那个带着"重试通知出口"，而压缩
-    /// 请求重试**不许**推 `agent://llm-retry`（前端 `resetAssistant` 会清掉主对话
-    /// 的 assistant 气泡）。这里只给停止标记——用户照样能停掉这一条请求。
-    pub fn with_stop(mut self, stop: Arc<crate::stop::StopFlags>) -> Self {
-        self.stop = Some(stop);
-        self
+    /// 字段**逐一枚举**而不是 `..self.clone()`：将来给这台新增字段时这里**编译报错**，
+    /// 逼着当场决定压缩侧要不要同柄——漏抄一柄的代价就是"主轮能用 ≠ 摘要能用"
+    /// 那类 bug（spec 刀① 之前真实存在过的形状）。demo / real / diagnoser 保持
+    /// 全新实例：与派生之前那台手工构造的第二实例逐字段同形（行为零变化）。
+    pub fn compaction_view(&self) -> Self {
+        Self {
+            settings: Arc::clone(&self.settings),
+            overrides: self.overrides.clone(),
+            demo: DemoLlm::new(),
+            real: CompatLlm::new(),
+            stop: self.stop.clone(),
+            notify_retry: None,
+            diagnoser: Arc::new(super::diagnose::Diagnoser::default()),
+            assets: self.assets.clone(),
+            catalog: self.catalog.clone(),
+            spill: self.spill.clone(),
+            refusals: None,
+        }
     }
 
     /// M6.1 断裂诊断：开关开且带会话身份才记（一次性请求纪律 6 不写
@@ -555,3 +577,8 @@ impl LlmService for AppLlm {
         out.map_err(|e| e.into_backend())
     }
 }
+
+/// 派生面判据（specs/13 挂账 ⑤ 收账）挂本模块：断言要读私有字段（柄同一性只有
+/// 字段能证），`llm/tests` 是兄弟模块够不着——照 `session.rs::tests` 先例挂子模块。
+#[cfg(test)]
+mod compaction_view;

@@ -31,16 +31,13 @@
 //! tool-fs 被 `fs_fetch` 用 1.2.1、被 `tools_batch2` 用 0.1.5……逐条查过），所以跨进程
 //! 那层至今仍是**结构性隔离（防今后新增重叠组合）**；本批真正修掉的是**同进程**那一半。
 //!
-//! ⚠ **仍开放的一条（不同类变量，本批不动）**：`cargo build` 的输出固定在共享的
-//! `target/debug/`，而 `LOCOWRK_PLUGIN_VERSION` 是编译期注入——两个二进制并发构建同一
-//! 插件的**不同版本**时（现存的组合：`fs_fetch` 要 tool-fs 1.2.1 与 `tools_batch2` 要
-//! tool-fs 0.1.5；`echo_plugin` 的 tool-echo 0.1.0/0.2.0 与 `wasm_plugins` 的 1.0.0），
-//! 理论上后构建的一方会覆盖 `target/debug` 里的产物，前一方「构建返回 → 复制」之间的
-//! 窗口里可能复制到对方的字节。**本批的探针治不到它**（探针只并发走 `stage()`，不并发
-//! 跑 cargo），批 F-2b 的 8 轮全量 + 4 轮定向并行也未复现 ⇒ 机制仍未确证。不凭猜测造
-//! 跨进程锁（那要单独定口径：新依赖 fs-lock 类，或自研锁文件 + 陈旧回收），只保留
-//! `(plugin_id, version, 暂存路径)` 三要素报文——见 [`load_activate`]。本层
-//! `build_lock()` 仍只串行化**同一二进制内**的构建。
+//! ⚠ **上一条已于 2026-10-24（T42）确证并关账**：全量门禁连红两轮——`echo_plugin`
+//! 的 0.1.0 快照读到了 `wasm_plugins`（env=1.0.0）刚写进 `target/debug` 的字节，
+//! `VersionMismatch { expected: "0.1.0", manifest: "1.0.0" }`，隔离复跑双双全绿。
+//! 修法走了当年预留的「自研锁目录 + 陈旧回收」口径（不引 fs-lock 类依赖）：独占
+//! 目录 `target/locowrk-test/build.lock` 的 `create_dir` 在两大平台都是原子判失败，
+//! 持锁者留 pid 文件；持有者崩溃留死目录 = 300s 陈旧后由后来者回收重试。
+//! [`build_lock`] 现在串行化的是**全部进程**的插件构建，不再只管同一二进制。
 //!
 //! ⚠ **代价（如实记账）**：`stage-{n}` 让每次调用都留一份完整副本，同一 `(id, version)`
 //! 在一轮内不再互相覆盖 ⇒ `target/locowrk-test/` 的增长比改前快（本机 dll 0.6–1.0 MB、
@@ -57,11 +54,64 @@ use plugin_host::{PluginRegistry, RegistryToolSource};
 use semver::Version;
 use serde_json::Value;
 
-/// 串行化**同一测试二进制内**的构建（`LOCOWRK_PLUGIN_VERSION` 变更会重编同一产物路径）。
-/// 跨二进制的互斥不在本层，见模块头注 ⚠。
-pub fn build_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
+/// 跨进程构建锁的 RAII 守卫：丢弃 = 释放（删独占目录）。
+pub struct BuildLockGuard;
+
+impl Drop for BuildLockGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(build_lock_dir());
+    }
+}
+
+fn build_lock_dir() -> PathBuf {
+    workspace_dir().join("target/locowrk-test/build.lock")
+}
+
+/// 跨进程构建锁（T42，2026-10-24 落地）：独占目录 = std 里的跨平台互斥原语——
+/// `create_dir` 在 NTFS 与 ext4 上对已存在路径都原子判失败。为什么不用文件锁：
+/// std 没有文件锁，引 fs-lock 类依赖只为测试基建不值得；为什么不用 `Mutex`：
+/// 它只串行化**同一二进制**，而 cargo 并行跑测试二进制（2026-10-24 门禁连红两轮
+/// 的根因，机制与实证见 specs/03 **T42** 与本模块头注）。
+///
+/// 陈旧回收：持锁进程崩溃（含 panic 越过守卫之前被强杀）会留下死目录 ⇒ 后来者
+/// 按目录 mtime 判 300s 陈旧即整个删掉重试——300s 远大于一次插件构建（实测 ≤60s），
+/// 误回收活锁的代价 = 退回一次旧竞态窗口，比死锁等一整轮好。拿锁本身等 300s，
+/// 超时 panic 并指路手删。
+pub fn build_lock_acquire() -> BuildLockGuard {
+    use std::time::{Duration, Instant};
+    const STALE: Duration = Duration::from_secs(300);
+    const WAIT: Duration = Duration::from_secs(300);
+    let dir = build_lock_dir();
+    let deadline = Instant::now() + WAIT;
+    loop {
+        match std::fs::create_dir(&dir) {
+            Ok(()) => {
+                let _ = std::fs::write(dir.join("pid"), std::process::id().to_string());
+                return BuildLockGuard;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                let stale = std::fs::metadata(&dir)
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.elapsed().ok())
+                    .is_some_and(|age| age > STALE);
+                if stale {
+                    // 另一个回收者可能已删：NotFound 静默，下一圈重试。
+                    let _ = std::fs::remove_dir_all(&dir);
+                    continue;
+                }
+                if Instant::now() > deadline {
+                    panic!(
+                        "build lock {} 分钟未拿到（{} 在场且非陈旧）——上一轮测试进程崩了？手删该目录重试",
+                        WAIT.as_secs() / 60,
+                        dir.display()
+                    );
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => panic!("build lock: {e}"),
+        }
+    }
 }
 
 /// 进程级 env 串行锁：动 `std::env::set_var` 的用例必须互斥（同一二进制内）。
@@ -149,7 +199,7 @@ pub fn stage(src: &Path, plugin_id: &str, version: &str, file_name: &str) -> Pat
 
 /// 以指定版本构建插件（env `LOCOWRK_PLUGIN_VERSION` 注入）并把产物复制进本轮暂存目录。
 pub fn build_and_stage(plugin_id: &str, version: &str) -> PathBuf {
-    let _guard = build_lock().lock().unwrap();
+    let _guard = build_lock_acquire();
     let status = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
         .args(["build", "-p", plugin_id, "--quiet"])
         .env("LOCOWRK_PLUGIN_VERSION", version)

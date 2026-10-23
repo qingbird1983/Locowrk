@@ -39,10 +39,10 @@ const PING_GUEST: &str = r#"
 "#;
 
 /// 把 ping 客户机落成版本目录（wasm_ping.wasm + manifest.json 同目录，
-/// packaging.md §3.1 布局），返回 wasm 工件路径。持 build 锁：并发
-/// 测试写同一 tmp 文件在 Windows 上会报"文件正在使用"。
+/// packaging.md §3.1 布局），返回 wasm 工件路径。持 build 锁（跨进程，T42）：
+/// 并发测试写同一 tmp 文件在 Windows 上会报"文件正在使用"。
 fn stage_ping_guest() -> PathBuf {
-    let _guard = common::build_lock().lock().unwrap();
+    let _guard = common::build_lock_acquire();
     let bytes = wat::parse_str(PING_GUEST).expect("ping wat parses");
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

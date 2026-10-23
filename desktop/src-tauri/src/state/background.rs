@@ -42,6 +42,10 @@ pub(crate) struct Init {
     // S3 刀④a：这里的 `tree_assembler` 已删——它只为喂 `spawn_engine` 的
     // `tree_assembler` 参数，而那个参数喂的是 `run_turn` 的 `tree`（第二把分子）。
     pub stop_flags: Arc<crate::stop::StopFlags>,
+    /// 主对话那台 `AppLlm`（`state/llm_stack.rs` 构造）。压缩台从它**派生**
+    /// （`AppLlm::compaction_view`，specs/13 挂账 ⑤ 收账）——同批句柄一个出处，
+    /// 三枚主对话专属装饰在派生处摘掉。
+    pub app_llm: Arc<crate::llm::AppLlm>,
     pub schedules: Option<Arc<crate::scheduler::ScheduleDb>>,
     pub assets: Arc<crate::assets::AssetStore>,
     /// S2 刀⑤：熔断表由组装点注入，与滑窗保护网（`state/waterfall.rs` 那一环）**同一份**。
@@ -72,31 +76,28 @@ pub(crate) fn build(init: Init) -> Stack {
         sessions,
         last_chat,
         stop_flags,
+        app_llm,
         schedules,
         assets,
         compact_failures,
         compact_refusals,
     } = init;
 
-    // 压缩用的那一台 `AppLlm`（**与主对话那台分开的两个实例**）。
+    // 压缩用的那一台 `AppLlm`（**从主对话那台派生**，specs/13 挂账 ⑤ 收账）。
     //
-    // 为什么不用同一台：主对话那台是以 `Arc<dyn LlmService>` 注册进内核 Context
+    // 为什么不是同一台直接用：主对话那台以 `Arc<dyn LlmService>` 注册进内核 Context
     // 的，没有 downcast 回具体类型的路（`LlmService` 不是 `Any`）⇒ 拿不到
     // `Arc<AppLlm>`；而 `Compactor` 要的 `complete_compaction`（总时长预算 +
     // 不推重试事件 + delta 走自己回调）是 `AppLlm` 的固有方法。
     //
-    // 两台的差别只有两处，且**都是故意的**：① 这一台不接重试通知（压缩重试不许推
+    // 派生（`compaction_view`）而不是照抄构造链的理由：主链将来新增一枚句柄，
+    // 编译器在 `compaction_view` 那里当场点名，漏柄 = "主轮能用 ≠ 摘要能用"
+    // 那类 bug 的根。改前这里的差别是手工保证的（同一批句柄逐个 `Arc::clone` 两遍，
+    // spill 甚至各 new 了一份）；差别本身保留：① 不接重试通知（压缩重试不许推
     // `agent://llm-retry`——那会让前端 `resetAssistant` 清掉主对话的 assistant
-    // 气泡）；② 这一台不记拒收读数（压缩请求自己被拒是收缩矩阵内部的事，记进
-    // 会话占用读数会把"这次压缩有多大"错当成"会话占了多少"）。其余（设置、
-    // 会话级模型覆盖、能力目录、资产、落盘句柄、停止标记）都是**同一批句柄**
-    // ⇒ 解析结果逐字相同。
-    let compaction_llm = Arc::new(
-        crate::llm::AppLlm::with_overrides(Arc::clone(&settings), Arc::clone(&model_overrides))
-            .with_multimodal(Arc::clone(&assets), Arc::clone(&catalog))
-            .with_spill(Arc::new(crate::spill::SpillStore::new(&root)))
-            .with_stop(Arc::clone(&stop_flags)),
-    );
+    // 气泡）；② 不记拒收读数（压缩请求自己被拒是收缩矩阵内部的事，记进
+    // 会话占用读数会把"这次压缩有多大"错当成"会话占了多少"）；③ diagnoser 独立。
+    let compaction_llm = Arc::new(app_llm.compaction_view());
     let compactor = Arc::new(crate::compact::deep::Compactor::new(
         Arc::clone(&settings),
         // 请求装配：**与主对话轮同一条链**（内核 `prepare_request`）。

@@ -125,6 +125,39 @@ fn legacy_compaction_without_pointer_falls_back_to_kept_count() {
 }
 
 #[test]
+fn old_log_json_without_keep_from_parses_and_folds_by_kept_count() {
+    // 上面那条是**直构枚举**（绕过 serde）；这一条喂**真旧日志的字节形状**——
+    // 事件对象里没有 `keep_from` 键（specs/09 时代的写入方不产它）。钉的是
+    // serde 解析面本身：`#[serde(default)]` 缺键补 0、`tag = "type"` 照常认出
+    // 变体 ⇒ 改字段名 / 挪走 default 都在这一条当场红。
+    let raw = r#"{"type":"context_compacted","kept_messages":2,"summary":"earlier notes","from_tokens":1000,"to_tokens":400,"strategy":"layered","ts":0}"#;
+    let ev: SessionEvent = serde_json::from_str(raw).expect("旧格式事件照常解析");
+    let SessionEvent::ContextCompacted {
+        keep_from,
+        kept_messages,
+        ..
+    } = &ev
+    else {
+        panic!("tag 认出 ContextCompacted");
+    };
+    assert_eq!(
+        *keep_from, 0,
+        "缺键 = serde(default) 0（不是第 0 条起保留）"
+    );
+    assert_eq!(*kept_messages, 2);
+    let mut s = Session::new();
+    for i in 0..4 {
+        s.append(user(format!("q{i}")));
+    }
+    s.append(ev);
+    assert_eq!(
+        folded_text(&s),
+        expected_checkpoint("earlier notes", "[User]: q2\n\n[User]: q3"),
+        "解析产物直接折叠 = 与直构那条同一回退语义"
+    );
+}
+
+#[test]
 fn compaction_rewind_restores_full_history() {
     let mut s = Session::new();
     for i in 0..4 {

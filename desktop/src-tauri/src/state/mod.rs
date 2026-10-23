@@ -167,6 +167,9 @@ pub fn init_state(app: AppHandle) -> AppState {
         sessions: Arc::clone(&sessions),
         last_chat: Arc::clone(&last_chat),
         stop_flags: Arc::clone(&stop_flags),
+        // 主对话那台 AppLlm：压缩台从它派生（`AppLlm::compaction_view`，
+        // specs/13 挂账 ⑤ 收账）——同批句柄一个出处，不再照抄一遍构造链。
+        app_llm: Arc::clone(&app_llm),
         schedules: schedules.clone(),
         assets: Arc::clone(&assets),
         // S2 刀⑧：拒收读数表——发送侧（llm_stack 里那台 AppLlm）写，压缩侧读，
