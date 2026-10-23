@@ -3,7 +3,7 @@
 - 状态：在做（行壳/矩阵/展开体已交，状态位与接线未做）
 - 负责人：青鸟（定取舍） / Qoder（实现）
 - 日期：2026-10-18（同日晚上按用户裁定改写：本文不再只管「渲染矩阵」，**扩为对话流整块重做**）
-- 出处 / 上游：设计稿 `docs/design/Conversation Flow Rendering Spec v1.md`（⊘ 不入库），**§5 渲染矩阵为准**，
+- 出处 / 上游：设计稿 `docs/design/archive/Conversation Flow Rendering Spec v1.md`（⊘ 不入库），**§5 渲染矩阵为准**，
   §6 组件契约、§7 展开体形态库、§8 折叠、§9 滚动分述。
   本稿取代 [`specs/02-tool-cards`](../02-tool-cards/spec.md)：那份指向已退役的 ZCode Alignment v1，
   范围只到「工具卡」，且把 7 件互不相关的事捆成一刀（设计稿 §10 后注已记这一条）。

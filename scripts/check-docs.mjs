@@ -128,7 +128,6 @@ for (const f of specFiles) {
 // 名单 = 已知含 >2048B 长行的存量文件（多半是旧规范稿里没分段的整块）。
 // 名单外任何在役文档写出一行 2KB 以上 = 判红；把某文件分行干净了就从名单里删一行。
 const LONG_FILES = [
-  'docs/design/Memory-KV Roadmap.md',
   'docs/design/UI shell and patterns.md',
   'docs/design/authority/Context and Memory.md',
 ];

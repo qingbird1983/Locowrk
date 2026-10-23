@@ -1,12 +1,15 @@
 # 02-对话流：工具卡做全
 
-- 状态：待确认（可以现在开工，不依赖别的阶段）
+- 状态：**已退役**（2026-10-18 被 [`specs/06-chat-flow-rendering`](../06-chat-flow-rendering/spec.md)
+  取代——那份指向的 ZCode Alignment v1 已退役、范围只到「工具卡」且把七件不相关的事捆成一刀；
+  本稿不再施工，原文照存。对话流的实际交付见 specs/06 与
+  [`specs/08-artifacts-and-file-tabs`](../08-artifacts-and-file-tabs/spec.md)）
 - 负责人：青鸟（看效果定取舍） / Qoder（实现）
 - 日期：2026-10-17
-- 出处 / 上游：设计稿 [`docs/design/Conversation Flow Redesign (ZCode Alignment) v1.md`](../../docs/design/Conversation%20Flow%20Redesign%20(ZCode%20Alignment)%20v1.md)（⊘ 不入库）
+- 出处 / 上游：设计稿 [`docs/design/archive/Conversation Flow Redesign (ZCode Alignment) v1.md`](../../docs/design/archive/Conversation%20Flow%20Redesign%20(ZCode%20Alignment)%20v1.md)（⊘ 不入库）
   §4 工具类型总表 + §3 折叠规则 + §10 的 C2 一节；旧施工队列里编号 Q17（现归档在
   [`docs/history/post-audit-roadmap-v1.md`](../../docs/history/post-audit-roadmap-v1.md)（⊘ 不入库））。
-  ⊘ 这两份都在不入库的层（`docs/design/` 根上的方案稿与 `docs/history/`），只在作者的机器上。
+  ⊘ 这两份都在不入库的层（`docs/design/archive/` 与 `docs/history/`），只在作者的机器上。
   它的前置（对话流数据链路：工具行数、轮头状态、事件通道）已交付。
 
 ## 目标

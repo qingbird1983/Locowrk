@@ -104,6 +104,9 @@
 > 向量基建 = 宿主共享件 `llm/embed.rs`）· ❌ **`ctx-compact` 已退役**（桌面压缩链
 > v2.137 整面退役、本体 v2.147 批 C 摘除；压缩语义由**记忆树整理**承担 = 章节捆 +
 > 段落总结 + 尾巴切片，见《Memory Tree Design v2》与《Organize Summary Design v1》）。
+> **⚠ 2026-10-24 现役注记**：上面那句「压缩语义由记忆树整理承担」亦已过期——记忆树与
+> `memory-sqlite` 双双整线退役（specs/11 刀③b/③c），压缩改走主模型 OpenCode V2 单链
+> （ADR-0009，宿主侧 `compact/`），插件总数 9 → 8；两稿归 `archive/`（⊘ 不入库）。
 > 表内 `tool-git` 的 SideEffect 列也非终态：现役含 `git_undo_commit`（Irreversible）与
 > 根提交显式拒绝，`git_status/diff/log` 另有无 shell 审批面 `shell_read` 同族工具。
 

@@ -13,25 +13,26 @@
 3. **前端形态**（同类只许一种形态、特例申请制、豁免凭证）→ `Front-end Design Guidelines.md`。它管"长什么样、怎么写"，与 2 那条管"数值与令牌"并不重复。
 4. 其余主题各有一份正身（下表），**同主题不许出现第二份**：想新写一份先并进现有的，并不了就写进 `docs/adr/` 说明为什么必须两份。
 
-## 清单（15 份）
+## 清单（12 份）
+
+> 2026-10-24 文档治理刀：`Memory Tree Design v2.md`、`Organize Summary Design v1.md`、
+> `Cross-Session Recall Design v1.md` 三份随记忆树 / 整理线整线退役（specs/11 刀②/③、S4 刀③b/③c），
+> 原稿归 [`../archive/`](../archive/)（⊘ 不入库）；文中别处引用它们的历史注记照存，只看落款日期。
 
 | 文件 | 管什么 | 什么时候必须回来改它 |
 | --- | --- | --- |
 | `DESIGN.md` | 内核权威设计（唯一需求来源，`[LOCK]` 的规范语义） | 改任何核心模块、动依赖边界、加 crate 之前 |
 | `UI Design System.md` | UI 层最高权威：令牌映射 / 字号相对制 / 圆角嵌套 / 冲突裁决表 | 加或改任何设计令牌、改视觉档位 |
 | `Front-end Design Guidelines.md` | 前端唯一形态标准：类别唯一形态 + 特例申请制 | 动 `desktop/src/` 任何界面代码之前 |
-| `Context and Memory.md` | 上下文与记忆总纲：注入顺序、双层项目隔离 | 改注入带形状、记忆分层、项目隔离 |
-| `Memory Tree Design v2.md` | 记忆树规范正身（章节 / 整理 / 记录员 / 投影） | 改记忆树任何一面 |
+| `Context and Memory.md` | 上下文与记忆总纲：注入顺序、双层项目隔离（记忆树族旧章节的历史原文照存，现役形状看 §3.2.2 的现役注记） | 改注入带形状、记忆分层、项目隔离 |
 | `KV Prefix Cache Design v2.md` | 前缀缓存规范正身（块字节按会话钉死那套纪律） | 改缓存键、块装配、失效条件 |
-| `Memory File-ization Design.md` | 记忆文件化（v1.1 生效：md = **唯一真源**，四类型 frontmatter、写侧索引硬钳） | 改 `~/.Locowrk` 下目录与文件布局 |
-| `Cross-Session Recall Design v1.md` | 跨会话取回 | 改检索通路、召回排序的对外语义 |
+| `Memory File-ization Design.md` | 记忆文件化（v1.1 生效：md = **唯一真源**，四类型 frontmatter、写侧索引硬钳；管理面已随 S4 退役，现存的是注入与文件布局那半） | 改 `~/.Locowrk` 下目录与文件布局 |
 | `LLM.md` | 模型接入轨：单线 OpenAI 兼容协议 + 传输韧性 + 推理档位 + 多模态 + 子代理档 | 加协议分支、改重试与预算、动多模态 |
 | `plugins.md` | 必备能力清单（§一「现役状态」列是"哪些是插件 / 宿主内置 / 已退役"的唯一真源） | 新增或退役任何能力 |
 | `Plug-in packaging.md` | 插件元数据与打包 v2（多语言 / 图标 / manifest / 版本策略） | 改插件目录布局、manifest 字段、版本规则 |
 | `Tool exposure strategy and usage statistics.md` | 工具暴露三层与使用统计（EWMA / 闲置分级） | 改工具进池规则、曝光分级 |
 | `Setting and Constrained Optimization.md` | 设置项与约束优化（可配置原则的落点） | 加设置项、动缺省值 |
 | `edit_replace.md` | 编辑类工具的精确替换语义 | 改 `edit_replace` 或写新的写类工具 |
-| `Organize Summary Design v1.md` | 整理副产物的摘要设计 | 改整理管道产出的内容与触发条件 |
 
 ## 这一层不放什么
 

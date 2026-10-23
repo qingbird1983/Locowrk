@@ -9,7 +9,7 @@
   `MemoryPage` 那两个 tab（记忆树看板 + 事实库）**整体退役删除**，归 S4 退役面，
   本轮起这一页只读不改，见「界面落点订正」）**——本文件是
   [`specs/01`](../01-memory-context-redesign/spec.md) 阶段表里
-  S1 那一行的施工 spec（01 方案稿 = `docs/design/Memory and Context Redesign v1.md` ⊘ 不入库，
+  S1 那一行的施工 spec（01 方案稿 = `docs/design/archive/Memory and Context Redesign v1.md` ⊘ 不入库，
   决策依据 = [`ADR-0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)）
 - 负责人：Qoder（施工） / 青鸟（四处待定项点头）
 - 日期：2026-10-18（现状取证同日）
@@ -990,6 +990,6 @@ mtime，不伪造时间）、`MEMORY.md` 3 → 4 行、`obsolete/` 归零、层�
 
 ## 参考
 
-- [`docs/design/Memory and Context Redesign v1.md`](../../docs/design/Memory%20and%20Context%20Redesign%20v1.md)（方案稿 ⊘ 不入库）
+- [`docs/design/archive/Memory and Context Redesign v1.md`](../../docs/design/Memory%20and%20Context%20Redesign%20v1.md)（方案稿 ⊘ 不入库）
 - [`docs/adr/0007-…llm-compaction-primary.md`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)
 - [`specs/01-memory-context-redesign/spec.md`](../01-memory-context-redesign/spec.md)（阶段表与 AC-4/5/6/7/9）

@@ -7,233 +7,58 @@
 > 每个阶段"具体做什么、怎么算做完"在 [`../../specs/`](../../specs/) 里，一个阶段一个目录。
 > 标记含义：⬜ 没开始 · ◐ 在做 · ✅ 做完 · ⏸ 停下等你定
 
+## 阶段
+
 | 阶段 | 状态 | 现在到哪了 | 详细计划 |
 | --- | --- | --- | --- |
-| 记忆与上下文重构 | ◐ 在做 | 方向 2026-10-17 定稿，决策记录 = [`ADR-0007`](../adr/0007-memory-flat-files-context-llm-compaction-primary.md)：记忆 = 扁平事实文件一处落盘，上下文 = **LLM 深度压缩主位 + 机械层前置减速与保护网**（层序 2026-10-18 由你重定）。**S1 数据面刀①…④d 全 ✅**（[`specs/05`](../../specs/05-memory-data-plane-s1/spec.md)，真实窗口两轮实测补 AC-S1-1/5/6/7），学习档那一格**已由 S3 刀③b 收口**（2026-10-20 裁定 = 整族退役，两枚影子库遗列留待 S4），存量 tags 回填按 2026-10-18 裁定取消。**S2 压缩面刀①…⑦b 全 ✅ ⇒ 十二条验收项全绿，这条线到此收口**（[`specs/09`](../../specs/09-context-compaction-s2/spec.md)，三处待定项 2026-10-19 全定；逐刀理由与全部实测读数都在那份任务区，这里不重抄数）：刀①–⑤ = 锚点与有效阈值搬进中立尺 / spill 超预算落盘 / 微压缩 / 主层七节摘要 + 连败熔断 + 超窗递减 / 滑窗保护网；刀⑥ = 四枚数值档上界面（缺省 = 改前那颗常量）+ 阈值改名「压缩阈值」；刀⑦a = `/整理` 改名 `/压缩`、当场跑主层、旧手动整理入口搬进开发者面板那颗「手动整理并复位」；刀⑦b = 北极星长会话实测（四腿各 100 轮，含一条「开关全关就该红」的对照腿），销 ⓔ 与「日志只追加」两笔旧账，留下 ⓜ/ⓝ/ⓞ/ⓟ 四条账；刀⑧ ✅ = 补掉 ⓜ 的**自锁**那一半（被超窗拒收那一次没有用量上报 ⇒ 那一回的占用读数交给压缩面当第三档分子），腿 4 常驻盯着。**仍欠**：ⓖ/ⓗ 两枚控件形态等你批、主层与 spill 的**真机**长会话一轮（要烧额度）、spill 目录清理通路（动删除要点头）、ⓝ/ⓞ 两条账的处置。**S3 注入面进行中**（ⓟ 由决策人
-2026-10-20 指令并进去、不单立一刀）= [`specs/10-context-injection-s3`](../../specs/10-context-injection-s3/spec.md)：
-开工三问同日「照推荐案」全裁（扣减链只显不拦 / `memory_learn` 族刀③ 同刀退役 /
-输出预留那颗常量做成可调项）；**刀① ✅**——`<persistent_memory>` 正文块与
-`<project_memory_index>` 两块合并成一个 `<memory_index>`（全局段 + 项目段，钳 200 行），
-标签判据 `SS27` 带窄变异；**刀② ✅**——预取缓存键加第三档 `index_stamp`（三份输入的
-mtime，人改 `MEMORY.md` 下一轮生效），`<repo_context>` 从静态串改成真读
-`.Locowrk/MEMORY.md` 正文（+ §F 骨架与双钳）；**刀③a ✅**——指引块按 §A③ 重写（补排除
-清单四条、空结果改指 `.Locowrk/MEMORY.md` 与 `journal/`）、两枚导语里指向退役树工具那句
-收进指引只说一次、`TreeDirectoryInject` 连定义带注册摘除（判据 `SS28` 新增、链位名单
-`SS8c` 显式改）；**刀③b ✅**——学习档族整族删除（`memory_learn/` **933 行 · 8 文件** +
-20 处触点：契约侧 `recall_relevant`/`LearnWeights`/`RecallQuery`/`VALUE_INJECT_MAX_CHARS`、
-设置面 `learnEnabled` + 四枚权重、前端那一格与中英两条文案、`breakdown` 观测通路与
-管理页解释区块；净减 **2143 行**，墓碑判据 `SS29`/`SS29b`/`SS29c` 三档各配窄变异），
-影子库两列与 `memory_inject_log.breakdown` 按清点**留 S4**、登记为"在场而无人读写"，
-并由新用例 `legacy_table.rs` 证旧库照常可开可读可写；**本刀查实一处刀① 留下的洞 = 新账 ⓠ**
-（`MemorySource::recall` 生产面无调用点，而它是注入埋点唯一挂点 ⇒ L0 三个指标自刀① 起停止
-增长，三条出路等你挑一条）；**刀④a ✅**——占用分子收成 `context_budget::occupancy` **一个出处**
-（进度条 `record_usage` 与压缩判定 `Compactor::used` 同吃它，"目录 + 尾巴"那把第二尺连
-`run_turn` 的 `tree` 参数、`TreeAssembler::context_tokens` 方法、三处宿主字段与组装点传参整链
-摘除；判据 `SS30`/`SS30b` 各配变异），顺带关闭 S2 挂账 **ⓛ**（`UsagePolicy::assemble` 一个
-装配口，拒收读数经 `Compactor::refusal` 单点取）；**刀④b ✅**——ⓟ 的**界面那一半销账**
-（浮层扣减链三行：预留 / 有效阈值 / 空位，逐态文案；输出预留上限抬成设置项
-`context.outputReserveCapTokens`，缺省 21 000、区间 0–64 000；判据 `SS16c` 四档 +
-`SS16d` 新增），ⓟ **两半全销**；**S4 刀① ✅**（2026-10-20，specs/11）——微压缩 / 滑窗 /
-轮内泄压三层连同测试删除、上下文页收成阈值滑条 + 自动压缩 + 用量条三格，输出预留上限
-改回写死 21K（`outputReserveCapTokens` 与 `SS16d` 随设置项退役删除，`SS16c` 改三档 +
-窄变异），浮层扣减链三行整链摘除。**S4 刀② ✅**——记忆 UI 整线撤除（左栏入口 / `MemoryPage` 与
-`memory/` 组件 / store·API·types / 浮层记忆行 / 设置记忆分区 / 开发者记忆项 / 中英文案全删，
-宿主记忆与整理命令同刀注销）；**刀③a ✅** 摘要契约迁出 `memory-tree`、压缩改走主模型，
-**刀③b ✅** `organize` 宿主面整面退役；**刀③c ✅**（2026-10-20）——宿主 `memory*` / `recall_*` /
-`inject_view` / `memory_index.rs`、kernel `memory_inject` 与 `tree_context`、`crates/memory-tree`、
-`plugins-src/memory-sqlite` 全删（插件数 9 → 8），`check-schema-parity` 与指向记忆面的 SS 判据/变异
-同刀退场，墓碑判据改为三标签零命中，`make check` 全绿。**S4 刀④ ✅**（2026-10-20）——全设置面
-数值归类：字号 / 对话列宽改三档分段（`uiFontPreset` / `chatWidthPreset`），折叠行数写死 5，
-工具五值 / 插件停用天数 / 模型窗口与输出移入开发者（`settings/developer/` 三子块，值不变），
-设置「插件」分区退役；AC-4 判据 `settings_surface_has_no_user_facing_number_inputs` 落地
-（普通分区零数字输入 + 开发者子树正对照，两向变异各报红一次），真窗口逐页核对（并修掉模型
-覆盖行标签竖排），`make check` 全绿（Rust 427 / 前端 138，31 文件 +710/−558）。**S4 刀⑤ ✅**
-（2026-10-20，收口）——AC-1/2/3 复核，AC-5/8/9 勾选；真窗口抓到「自动压缩不投影
-`ContextCompacted`」的缺口（压缩只在链路与磁盘上发生、界面要切会话重放才看见），在
-`runner/mod.rs` 压成后按手动 `/压缩` 同一构造补发，接线用例补两条断言并窄变异报红；100K
-阈值新会话实测到线 ⇒ 界面出现「已压缩早期对话」条、读数回落、模型继续跑完（截图交决策人
-复看）。两条真窗口挂账（末条超长 user 本轮不压 / 在途无「压缩中」）记进 specs/11。
-**S4 刀⑥ ✅**（2026-10-21，specs/12 刀①）——用户报「**项目会话**在模型推理思考中经常
-卡死」，走查 = 卡在**自动压缩的摘要调用**这条辅助路径上：它继承了主对话轮「重试不设上限」
-那条裁定，却**没有继承停止能力**（hooks 写死 `None`）⇒ 摘要请求一失败就永远转，且按
-「停止生成」也停不下来；熔断（连败 3 次停手）因"失败永远不返回"而形同虚设。裁定 =
-**按「用户看得见与否」分两档**（[`ADR-0008`](../adr/0008-aux-call-budget-vs-main-retry.md)）：
-主对话轮**逐字不变**（判据两半钉：能力面「传 `None` 时仍无限重试 + 停止钩子有效」·
-接线面「`app_llm.rs` 的调用点真的传 `None`」），辅助路径（压缩摘要）加**总时长预算**
-（默认 90s，三档预置；**包住单次尝试**——只查「重试前累计耗时」的话一次失败尝试自己
-就能等满 180s 空闲看门狗）+ **接上停止标记**（停止命中断言 `Interrupted` 收束且**不计入
-熔断账**——用户主动停不是失败）+ 新增两枚判据名 `budget` / `stopped`（SS24/SS25 期望值
-随 9→11 / 7→9 同步改，前端两条文案同刀补齐）。熔断因此**第一次真的能触发**。判据七条
-（`llm::tests::budget` 五 + `compact::tests_deep` 一 + `tests::compact_wiring` 一），
-变异五条逐条报红。
-**S4 刀⑦ ✅**（2026-10-21，specs/12 刀②）——自动压缩的**过程**在界面看得见了：新通道
-`agent://compact-status`（不进会话日志，重放不产生），四相 = 正在压 / 这一趟没成（带判据名）
-/ 熔断停手 / 压成了；压缩层不认 UI，只收一个「开始了」回调，翻译成事件在 runner 那一层。
-界面复用**既有压缩发丝线**（`notices.ts` 的改写-或-新落），自动路径**一根线**贯穿
-（tag `compact-auto` 与手动那根分开——人按 `/压缩` 时那一轮还在跑，两根会互相改写掉）。
-熔断那一相**走相位不走判据名**（判据名 `fused` 属手动让开的一族，SS24 两侧取值域
-**一字未动**：11 / 9）。设置面：上下文分区加第四格「摘要调用预算」**三档预置**
-（30s / 90s / 300s，`SettingsSegmented` 现役形态，无数字输入框；存量非档值就近显示、
-不改磁盘值）。判据新增八条（后端三 + 前端五），变异六条逐条报红。顺带按 400 行纪律
-**拆了两处**（`compact.rs` 的两张共用表 → `compact/tables.rs`；压缩接线面新判据 →
-`tests/compact_status_wiring.rs`，共享夹具上移 `tests/mod.rs`）。
-**S4 刀⑧ ✅**（2026-10-21，specs/12 刀③，收口）——三刀收口：ADR-0008 落纸（随刀①）、
-两笔挂账缺陷登记（登记在 specs/12 的「非目标」与「风险与回滚 → 挂账 / 遗留」两处，**另开一刀**，
-不在那一刀里顺手修）、roadmap 勾选、`make check` 退出码 0 + `make selftest` 全绿。真机补一条
-证据：空会话里敲 `/压缩` ⇒ 转录里出那根发丝线「没压缩：对话还太短…」，**压缩状态线在真实窗口
-渲染正确**；**自动压缩三相的真机触发仍欠**（触发线是占用 ≥ 有效阈值 100K token ⇒ 要攒够十万
-token 才看得见，未擅自烧额度；证据边界与读数见 specs/12 的「真机验收」节）。
-**S5 刀② ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——用户 2026-10-22 指出
-**压缩详情那套机制有真 bug**（点「查看详情」下面又跟一张小卡片、再点又展开一轮）⇒ 裁定**换掉压缩这一族的
-界面形态**：取消卡片 ⇒ 压缩**只有一根发丝线**，在线上**就地展开 / 收起**，展开体**按模型消息那样渲染成 md**，
-且压缩线与展开体**落在最顶层**（不受轮容器「L0」折叠层管理、永不折叠、与最终报告同级）。**标准先行**：
-`Front-end Design Guidelines` 新增 **§二⑲「压缩线与摘要展开体」** + 版本行 v2.5（§零.5「先改标准再写码」）。
-落地：`lib/chat/compact-line.ts` 收拢压缩线族三个 tag（`manual`/`auto`/`result` + `isCompactItem`，**唯一出处**）；
-新 `components/chat/SystemRow.vue` 收拢「线 + md 展开体」的**唯一渲染落点**；`SystemItem` 增 `body`/`expanded`
-两格并**退役 `noticeDetails`**（同一份正文两个出处）；压成事件**就地改写**在途那根线（不再「收走 + 另起一条」，
-展开态跟着留下来；中间态 = `notice.compactDone`）；`context_compacted` 事件带**摘要全文**（`summary_preview` →
-`summary`）⇒ 重放不再是 200 字截断的半截 md。判据：新增 `desktop/tests/compact-summary-body.spec.ts` 四条
-（发丝线形态 / 就地展开 md 正文 / 收起回发丝线状态 / 顶层不受 L0 管）+ 改写投影与命令两条 + 后端
-`the_compaction_event_carries_the_whole_summary`（AC-18）。**变异自证六条逐条报红**：①展开改回「往转录里塞一条」
-（红 3 条）②压缩线不摘出轮容器（红 1 条）③结果线退回居中窄卡片（红 2 条）④不就地改写而另起一条（红 1 条）
-⑤展开态不改说「收起」（红 1 条）⑥后端事件退回 200 字截断（红 1 条）。门禁：`make check` 退出码 0
-（Rust desktop **416** passed + 根 workspace 全 ok · vitest **22 files / 155 tests** · clippy 两处零警 ·
-check-channels FAILED=0 · SINGLE_SOURCE_OK · check_length 零新增 · check-docs DOC_FAILED=0）；
-`make selftest` 全绿。**真机核对**（`pnpm tauri dev`，2026-10-22，会话「询问项目协助」，**零设置改动、
-零新 LLM 调用**）：底态压成那条是**发丝线**（居中窄卡片那一档不再出现）⇒ 点「查看详情」**就地展开**、
-正文按模型消息那样渲染成 md（h2 标题 + 行内码 + 列表）、是**全文**（不是 200 字预览）、**下面没有多出
-任何卡片**（用户报的那个「点一次多一张、再点又展开一轮」不复现）⇒ 那枚钮改说「收起」，点它回到发丝线态
-⇒ 收起 L0 轮容器（点计时行）后压缩线**仍在**（顶层、与最终报告同级）。读数表见 specs/13 刀⑤ 的
-「真机核对」节。
-**S5 刀④ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
-**挂账 ④**（`specs/12` 那两笔挂账缺陷），两笔都是**真缺陷**：①传输层**推理优先 return**——一个 chunk
-里既有 `reasoning_content` 又有 `content` 时先看见推理就返回 ⇒ 同块的正文**既没进累积器也没外推**
-⇒ 模型那一段话**凭空消失**；②前端 `resetAssistant` 只清末尾的 **assistant 气泡**——可推理的模型
-在正文之前先吐推理 ⇒ 断流时末尾那行是**思考行** ⇒ 一个字都不清 ⇒ 失败那趟的推理留在行里，而
-重试轮的推理是**追加**到同一行的 ⇒ 用户看到一段**没发生过的推理**与新一趟叠在一起。改法：`Delta`
-增一档 `Both { reasoning, content }`（同块两样都收、两样都外推）；`resetAssistant` 连末尾思考行
-一起清。判据：`llm/tests/payload.rs` 一条 + `desktop/tests/retry-reset.spec.ts` 三条；**变异两条逐条
-报红**（①退回推理优先 return ⇒ 红 1 ②退回只清气泡 ⇒ 红 2）。
-**S5 刀⑤ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
-**挂账 ①**（三枚判据的启发式归类收敛）。改前：`output-limit` / `content-filter` / `payload-too-large`
-三枚判据靠**错误文本**匹配（压缩层从供应商报文里找关键词）⇒ 供应商换个措辞就归错档，界面那句
-「为什么没压成」直接说错；而且 `finish_reason=content_filter` 传输层**根本不当错误**（把任何
-`finish_reason` 都当正常收束）⇒ 主对话轮落一个**空气泡**、压缩层看到空回复（归 `no-summary`，
-还白跑一趟提醒重发）。改后：传输层在**知道事实的地方**分好档（HTTP 状态码 / `finish_reason` /
-预算环）⇒ 档位随错误往上走（宿主本地 `LlmCallError`；**不动**内核那枚 `LlmError`）⇒ 压缩层
-**按档认**，那三枚文本匹配函数与预算前缀判据**全删**；`content_filter` 改成与 `length` 闸**同款
-对称**的如实报错。判据：`llm/tests/failure_kind.rs` 六条（**真发一次**本地假端点）+ 
-`tests/compaction_opencode/failure_kind.rs` 七条（含「**文案不许改判**」那条反向）+ 同源闸
-**SS33**（档位只有一个出处 / 文本判据恒 `none` / 关键词表全仓只剩接入面那一份）。**变异三条逐条
-报红**：①传输层不挂档位（红 1）②压缩层退回文本匹配（红 3，含反向那条）③传输层去掉
-`content_filter` 闸（红 1）。
-**S5 刀⑥ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
-**挂账 ③**（权威层 `docs/design/authority/` 的现役机制描述已过期）。改前两处说反了：阈值写成
-「绝对 token 滑块 100K–800K」、上下文节奏写成「由记忆树整理边界承担」——**两半都已不是现网**：
-阈值已改**模型窗口 × 用户百分比三档 25/50/85**（缺省 50%），压缩链已按 OpenCode V2 整块回来
-（宿主侧 `compact/`），而**记忆树（organize）那一族也整族退役**了（S3 刀④a / S4 刀③b）⇒
-断层改由**压缩自己**承担。改法（**人 2026-10-22 点头按提案改三处**，[LOCK] 下的动作）：
-①《Context and Memory.md》§3.2.2 加现役注记（阈值 / 机制 / 记忆树退役 / 失败按档位归类）；
-②`DESIGN.md` 里 ctx-compact 插件那枚修订注加现役注记，并把原注记里那个**过期指针**指准
-（"见 §3.2" 指的是本文档的「Effect」一节，不是上下文节奏）；③`DESIGN.md` §4.2 的 `Session`
-结构示意补一格刀⑥ 的落盘游标（`persisted`）。三处都**只加注记 / 补示意**，**历史原文一字未改**，
-**规范语义未动**。
-**S5 刀⑦ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——压缩摘要
-展开体的**有界滚动**（人 2026-10-22 11:23 提出：「展开后显示出10行……可在压缩自己的容器里滚动。
-压缩那根发丝线不会被摘要挤到上面看不见了。现在的展开摘要，想要折叠起来还有向上滚动找到那根
-发丝才能再点到收起。」）。改前：摘要整段铺开 ⇒ 发丝线与「收起」钮被顶到屏外 ⇒ **收起这个动作
-够不着**（得先向上滚回那根线）。改法（**标准先行**，§零.5）：《Front-end Design Guidelines》
-§二⑲ 增「**有界滚动**」一条 + 版本行 v2.6（封顶 10 行 / `overflow-y: auto` /
-`overscroll-behavior: contain`；并写死「**有界滚动 ≠ 折叠**」「行数 10 写死不进设置页」）⇒ 实现
-只改 `desktop/src/components/chat/SystemRow.vue` 一处（`.sys-body .md`）。判据基建顺带补一条：
-`desktop/vitest.config.ts` 开 `css: true`（SFC 样式真进文档）＋ 挂载 `attachTo: document.body`
-（happy-dom 对**未连接**元素返回空计算样式）⇒ 新判据 `desktop/tests/compact-summary-scroll.spec.ts`
-四条读的是**计算样式**（不是源码字符串）；**变异四条逐条报红**（去 `max-height` / 去 `overflow-y` /
-去 `overscroll-behavior` / 把 10 改成 20）。门禁 `make check` 退出码 0（Rust desktop **434**
-passed · vitest **24 files / 162 tests** · clippy 两处零警 · check-channels OK · SINGLE_SOURCE_OK ·
-check_length 零新增 · DOC_FAILED=0）。**真机核对**（`pnpm tauri dev`，2026-10-22，会话
-「友好问候与助手服务」**回放**磁盘上已有的那条 `context_compacted`，**零新 LLM 调用**）：点
-「查看详情」⇒ 摘要就地展开、**可视窗口封顶约 10 行**（≈227px）、右侧出现**自己的滚动条**；
-滚轮悬在摘要上滚 ⇒ **摘要内部滚**、**转录整页不动**、发丝线与「收起」钮**原地不动**；点「收起」
-⇒ 退回发丝线态、转录不多条目。
-**S5 刀③ ✅**（2026-10-22，同一份 [`specs/13`](../../specs/13-opencode-compaction/spec.md)）——结清
-**挂账 ⑦**（落盘口收成一处 + 失败轮次的步内事件落盘）。改前：落盘游标**每个调用点自己算**
-（runner 的 `log_start`/`before`/`len-1`、压缩层的 `from`、heal 的 `seq`）⇒ 「磁盘上到哪儿了」有**好几个
-出处**，漏一处 = **缺口**、算重一处 = **重影**；**失败的轮次**里那一步追加的事件干脆不落盘
-（`finish_turn` 只落 `TurnEnd`）⇒ 溢出压完仍失败那一轮，压过了、钱花了，**重开应用却看不见发生过**。
-改后：游标**住进会话**（`Session::persisted` = 已落盘到第几条）⇒ **唯一落盘口**
-`session_log::persist_pending`（调用方**不再传起点**；写失败不推进游标 ⇒ 下一趟补齐 = 至多一次、
-绝不缺口）；压缩三条通路（自动 / 手动 / 溢出）**自己落盘**（压缩器认日志目录 ⇒ 「跑」与「落盘」仍是
-一个调用，`run_manual_and_persist` 退役）；轮收束落**整段 pending**。判据：新增
-`tests/compaction_opencode/persist_uniqueness.rs` 三条（AC-20 幂等不重影 / AC-21 磁盘镜像与内存**逐条
-相等** / AC-22 失败轮次的压缩事件与失败收束都在盘上）。**变异自证四条逐条报红**：①游标少推进一条（红 2）
-②落盘无视游标每次写整段（红 2）③压缩层不落盘（红 2，含 AC-13）④轮收束不落盘（红 2）。
-**S5 刀① ✅**（2026-10-21，[`specs/13`](../../specs/13-opencode-compaction/spec.md)）——用户报
-「压缩上下文老是失败而且速度慢得吓人，好长时间后显示没压缩」⇒ 裁定**整块换掉**：上下文压缩按
-OpenCode V2 重写（触发口径 / 请求形态 / 提示词 / 输出格式 / 失败与恢复**逐项复刻**，参照仓库
-`F:/Warehouse/Github/opencode`，只读不入库），**只保留一处我们自己的**：自动触发阈值由用户可调
-（占模型窗口的百分比，三档 25/50/85，缺省 50%）。同时删掉那条**独立 aux 摘要通路**（它才是
-「摘要模型没登上」的来源）与那根**绝对阈值滑杆**（绝对数不跟窗口走 = 黑盒的根因）。
-**四刀一次收口**：① 压缩请求改走**主对话那条装配链**（内核新增 `Kernel::prepare_request` =
-装配但不发送；摘要提示词作为末条 user 消息追加 ⇒ hooks 看到的是加它之前那份）
-⇒ 第二份拼装没了，「主轮能用 ≠ 摘要能用」从根上消失；② 提示词 / 输出校验 / 收缩矩阵 /
-checkpoint 折叠 / 保留区读时重建 / 失败分类**逐字照上游**（九份资产住 `prompts/compact/`）；
-③ 三种触发（auto / manual / overflow）；④ 设置面阈值三档 + 转录里的压缩线与**流式摘要**
-（`delta` 相位）。**判据迁移**：SS19a / SS19b2 退役成墓碑，SS20a / SS20b / SS21b / SS22c /
-SS24 / SS25 改判据，**新增 SS31**（压缩装配只有一个出处）与 **SS32**（阈值预置两侧对账）。
-门禁：`make check` 退出码 0（Rust desktop 414 passed + 根 workspace 全 ok · vitest 21 files /
-150 tests · clippy 两处零警 · check-channels FAILED=0 · SINGLE_SOURCE_OK · check_length 零新增 ·
-check-docs OK）；`make selftest` 全绿（`SELFTEST_ALL_CAUGHT` / `DOCS_SELFTEST_ALL_CAUGHT`）。
-决策落纸 = `docs/adr/0009-compaction-follows-opencode-v2.md`（为什么整块换掉 + 我们保留的两处偏离）。
-**真机核对**（`pnpm tauri dev`，2026-10-21）：设置面「自动压缩阈值」三档 25/50/85 渲染正确、50% 选中，
-绝对滑杆已退役（切 25% → 存盘 → 切回 50% → 存盘，磁盘 `autoCompactPct` 逐次对上，**已还原**）；空会话
-`/压缩` ⇒ 发丝线出「没压缩：没有可摘的内容…」（判据名 `nothing-to-compact`）；小会话 `/压缩` ⇒ **压成**：
-在途线「正在压缩对话上下文… 查看详情」→ 断层条「已压缩早期对话，节省 ≈1.5K token」+ 查看详情/撤销，
-摘要正文**逐字用上游 SUMMARY_TEMPLATE 的标题**（## Objective / ## Requirements / ## Decisions /
-## Work State / ## Next Move / ## Relevant Files）；点「查看详情」⇒ 断层条**下方**展开一张卡片显示摘要
-正文（重放态是 200 字预览，实时态是流式全文）——这一条先前被判成「点了没反应」，实为**量错了区域**。
-（**此处记的是刀①当时的形态**；刀⑤ 已把「展开一张卡片」换成「线上就地展开 md 正文」，见上面 S5 刀②。）
-**真机还抓出一处静默的数据丢失**：手动 `/压缩` 追加的 `context_compacted` **没进会话日志**（自动那条在
-runner 里落了）⇒ 压完看着一切正常，**重开应用压缩连同摘要一起消失**（那轮 LLM 的钱花了、窗口又回到
-压前大小）。已修：落盘口收成 `compact/deep.rs::run_manual_and_persist`（「跑一趟」与「把它追加的事件写
-进日志」合成一个调用，漏不了）+ 接线判据 `the_manual_compaction_is_written_to_the_session_log`
-（AC-13；变异：删掉落盘那一句 ⇒ 报红）。真机复验：磁盘日志尾部已是
-`{"type":"llm_usage",…}` + `{"type":"context_compacted","kept_messages":2,"keep_from":7,"summary":"## Objective…"}`，
-**重启后断层条与 checkpoint 仍在**（修复前那屏是没有断层的）。
-**仍欠**（2026-10-22 用户已授权「按建议规划然后开始」，排期见 specs/13 的「计划」）：
-~~specs/12 那两笔挂账缺陷~~（= **刀⑦a 已结清**，见上面 S5 刀④）；~~`output-limit` / `content-filter` 两枚判据靠错误文本启发式
-匹配~~（= **刀⑦b 已结清**，见上面 S5 刀⑤）；~~权威层 `docs/design/authority/` 的现役机制描述欠一次专项
-对齐~~（= **刀⑧ 已结清**，见上面 S5 刀⑥；[LOCK] 下已向人说明并按点头的三处提案改完）。
-（~~**落盘口仍有两处**＋**失败轮次的步内事件不进日志**~~ = **刀⑥ 已结清**，见上面 S5 刀③。）
-文档三处分工：方案稿住 `docs/design/` 根（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
-| 对话流：工具卡做全 | ◐ 在做 | 计划已由 `specs/06-chat-flow-rendering` 承接（原 `specs/02-tool-cards` 指向的 ZCode Alignment v1 已退役）：C1–C4 与批 A–F 已交付（38 身份矩阵、flex 行壳、语言徽章、展开体形态库与统一外壳 `.lw-expand`、状态词收进 `tool.state.*`、样式落点唯一闸 + `check_length`/`check-docs` 补齐）。AF-14 / AF-18 已结案（2026-10-19 终裁：**删掉过程组头那一层**，`TurnTimerLine` 是一轮唯一头行；三个身份各自归词，「工具」这个类型词不存在了），接线那半归下一行的 08 | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
-| 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |
-| 工具级取消与 deadline | ◐ 在做 | C1 已落地（内核活动调用登记表 + 停止按会话逐个置位，4 条行为用例 + 4 发变异各打中一条）；三问 2026-10-18 由 Qoder 代裁定（答案与代价都写在该稿里，可翻案）。剩下 C2（`deadline` 生产者，前置是先测现网两个超时的实际关系）与 C3/C4/C5（要过 ABI 的那半，每一刀单独等你点头） | [specs/04-tool-cancel-deadline](../../specs/04-tool-cancel-deadline/spec.md) |
-| 对话流：产出物与文件页签 | ◐ 在做 | 批 1–4 已交付（`e271442` 后端只读 `file_read_text` + 三条单测；`d60ffd6` 右栏文件/图片页签 + 四条点击入口：文件名开文件签 / 代码块头带行号定位 / 图片开图片签 / `.html` 走 `lwpreview` 浏览器签；子代理整行开子代理签）。批 5 收口已完（标准 §二⑱ 登记、i18n 成对、闸全绿、真实窗口目视）。上游欠账 = specs/06 的 WF-01…WF-05，已全接 | [specs/08-artifacts-and-file-tabs](../../specs/08-artifacts-and-file-tabs/spec.md) |
-| 常用命令与技能包 | ⬜ 没开始 | 斜杠命令、自定义命令、技能包、子代理预设、MCP 增强、钩子 | 开工时建 spec |
-| 子任务与后台任务 | ⬜ 没开始 | 后台子代理、运行队列、中途插话、终端与后台命令 | 开工时建 spec |
-| 看板收尾（你亲自看一遍） | ◐ 在做 | 画布与四列已交付，但**从没在真实窗口里看过**；另欠你四条判断 | 开工时建 spec |
-| 度量基线 | ⬜ 没开始 | 十二条性能优化只有"消除了什么"，没有"快了多少"；要先把基准数立起来 | 开工时建 spec（= 台账 T9） |
-| 旧文档并档 | ◐ 在做 | 审计报告与修复台账已抄完欠账并归档；design 层也按新形状理好了；剩「记忆 × KV」那张旧专项进度表要并进本表，未完成项抄完它才能退役 | 做完即删本行 |
+| 记忆与上下文重构 | ◐ 在做 | 方向 2026-10-17 定稿（决策记录 = [`ADR-0007`](../adr/0007-memory-flat-files-context-llm-compaction-primary.md)），**S1–S5 全部落地**：S1 数据面 = [`specs/05`](../../specs/05-memory-data-plane-s1/spec.md) 刀①–④d ✅；S2 压缩面 = [`specs/09`](../../specs/09-context-compaction-s2/spec.md) 刀①–⑧ 十二条验收全绿（挂账 ⓖ/ⓗ/ⓝ/ⓞ 已于 2026-10-24 注销）；S3 注入面 = [`specs/10`](../../specs/10-context-injection-s3/spec.md) 占用分子单出处 `occupancy` + 扣减链浮层 + 索引合并与 `<repo_context>` 真读交接层 ✅；S4 退役面 = [`specs/11`](../../specs/11-simple-compaction-memory-retirement/spec.md) 刀①–⑤ ✅（机械层与记忆整线删除、设置面数值归类、插件 9→8）；S5 压缩按 OpenCode V2 整块重写 = [`specs/13`](../../specs/13-opencode-compaction/spec.md) 刀①–⑨ ✅（决策 = [`ADR-0009`](../adr/0009-compaction-follows-opencode-v2.md)：主模型单链、阈值 = 窗口×百分比三档 25/50/85、压缩一发丝线就地展开 md、落盘口唯一 `persist_pending`、失败按档位归类）。**仍欠**：真窗口四格 AC-S3-1…4、ⓠ 注入埋点三选一、交接层两件（写侧钳 ⓢ / journal 封卷与收束提示词 ⓡ）——收法见下面收账清单；真机长会话与 spill 清理在「停下等你的事」 | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
+| 对话流：渲染收口 | ◐ 在做 | [`specs/06`](../../specs/06-chat-flow-rendering/spec.md) 已交行壳统一 / 身份矩阵 38 / 展开体形态库与统一外壳 / 语言徽章 / 状态词收 `tool.state.*`；[`specs/08`](../../specs/08-artifacts-and-file-tabs/spec.md) 产出物与文件页签批 1–5 全收、WF-01…05 全接。**剩**：AC-3 五类目视、AC-9 一行一属性逐个量、AC-10 接线在册（WF 已全接，可直接勾）、AC-11 最终门禁 + WF-03 一枚小裁（要不要与 WF-01 并同一页签族） | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
+| 工具级取消与 deadline | ◐ 在做 | C1 已落地（内核活动调用登记表 + 停止按会话逐个置位，4 条行为用例 + 4 发变异各打中一条）；三问 2026-10-18 由 Qoder 代裁定（可翻案）。**剩**：C2（`deadline` 生产者，前置 = 先测现网两个超时的实际关系）与 C3/C4/C5（要过 ABI，每一刀单独等你点头）；`crates/plugin-api/src/tool.rs` 头注至今按本稿五刀形状写着 | [specs/04-tool-cancel-deadline](../../specs/04-tool-cancel-deadline/spec.md) |
+| 常用命令与技能包 | ⬜ 没开始 | 斜杠命令面板已随 v2.143 落地（`lib/slash-commands.ts` 注册表）；剩自定义命令、技能包、子代理预设、MCP 增强、钩子。开工时建 spec——先对齐现在「一切皆插件」与权限模型（v2.145）的形状再排 | 开工时建 spec |
+| 子任务与后台任务 | ⬜ 没开始 | 后台子代理、运行队列、中途插话、终端与后台命令。开工时建 spec；子代理的超时与预算已由 v2.144 的 self-managed 预算先垫了一角 | 开工时建 spec |
+| 度量基线 | ⬜ 没开始 | 性能优化要"快了多少"的基准数；原审计口径的"十二条优化"已随几轮重构漂移，开工时按现网重列要量的清单 | 开工时建 spec（= 台账 T9） |
+
+## 遗留债收账清单（已实施、真留了债——你挑哪笔先收）
+
+| # | 债 | 出处 | 规模与收法 |
+| --- | --- | --- | --- |
+| A1 | 结构债 5 条：T25（`llm_provider_save` 业务下沉出命令层）/ T28（sessions 三组双出处并一处）/ T29（T6 注释机制更正）/ T37（`check-i18n` 间接键口径收紧）/ T39（api 两条错域条目归位） | [specs/03](../../specs/03-structural-debt/spec.md) | 各一小刀，纯结构或闸口径；T24/T34/T40/T41 已于 2026-10-24 注销（锚点消失） |
+| A2 | 工具级取消 C2–C5 | [specs/04](../../specs/04-tool-cancel-deadline/spec.md) | C2 前置 = 先测现网两个超时的实际关系；C3 起动 ABI 面，每刀单独点头 |
+| A3 | 压缩线剩三笔：摘要预算预置清单对账闸（②）/ `AppLlm` 第二实例收敛（⑤）/ 旧会话重放真机回归（⑥） | [specs/13](../../specs/13-opencode-compaction/spec.md) 挂账表 | 各一小刀 |
+| A4 | S3 真窗口四格：AC-S3-1…4（索引指针行上界面 / 正文不注入 / mtime 即生效 / `<repo_context>` 读真实交接层） | [specs/10](../../specs/10-context-injection-s3/spec.md) | 起真窗口发一轮；与对话流收口那趟可合并 |
+| A5 | 交接层三件：`MEMORY.md` 写侧钳（ⓢ）/ `journal/` 按天封卷 / 轮收束模型主动更新提示词（ⓡ） | [specs/10](../../specs/10-context-injection-s3/spec.md) 挂账区 | 一到两刀，动收束面 |
+| A6 | 退役键 `compact_model` / `compact_instructions` 从结构体物理删除（现按退役键保留只为老配置可读；serde 忽略未知键 ⇒ 删了安全） | `settings/context.rs` 头注 | 一行级小清理 |
+| A7 | 对话流收口四格 + WF-03 小裁（同上「对话流：渲染收口」行） | [specs/06](../../specs/06-chat-flow-rendering/spec.md) | 真窗口目视一轮 |
 
 ## 停下等你的事（不是技术选择，是要你点头或给方向）
 
 | 事 | 为什么卡在这 |
 | --- | --- |
-| 攒下的提交要不要 push | ahead 条数只认 `git log origin/main..HEAD`，本篇不抄数；push 属"一步一停"，不自动做——但攒得越久，回退与对照越难对齐 |
-| worktree 并发的三条自守规矩要不要写进 CONTRIBUTING | 「公共文件谁改谁当场提 / 只 `git add <路径>` 不用 `-A` / authority 件按文件认领」——本刀一直在照做，落成规矩要你点头 |
-| 要不要清磁盘上的旧记忆数据 | 你说过那些是测试残留无所谓，但删除动作按规矩要你点头 |
-| 章节编号差一位怎么修（两条路）+ 旧数据要不要重编号 | 改旧数据 = 动你的东西；且这条在看板上已经看得见 |
+| ⓠ 注入埋点三选一 | `MemorySource::recall` 生产面无调用点 ⇒ L0 三指标自 S3 刀① 起停止增长；出路 = ⓠa 给索引段埋点并重定口径 / ⓠb 观测面板整块退役 / ⓠc 保持现状并在文案上如实写"本版起停止累计"（specs/10 刀③b 末） |
+| 工具级取消 C2 / C3 先后 | C2 要先测现网两个超时的实际关系；C3 动 ABI——先后与开不开都要你点头（三问已代裁定，可翻案，见 specs/04） |
+| 真机长会话一轮（烧额度） | 主层 + spill 的真机长会话、自动压缩三相真机触发（specs/12 证据边界）、specs/13 流式摘要真机全欠这一趟；触发线 = 占用 ≥ 有效阈值，要攒 token，什么时候跑由你定 |
+| spill 目录清理通路 | 按"删会话 ⇒ 清 spill 子目录"建通路 = 动删除，要点头（specs/09 挂账） |
+| 清磁盘上的旧记忆数据 | 旧记忆库残留 / `usage.sqlite3` 计数器 / `plugin-api` memlayout 无消费者——删除动作按规矩要点头（specs/11 挂账） |
+| worktree 并发的三条自守规矩要不要写进 CONTRIBUTING | 「公共文件谁改谁当场提 / 只 `git add <路径>` 不用 `-A` / authority 件按文件认领」——一直在照做，落成规矩要你点头 |
 | 界面英文档的一处显示选择 | 需要你实际看一眼再定 |
-| 市场页的副作用徽章要不要改成运行期来源 | 两份声明谁为准已经定死（[`ADR-0006`](../adr/0006-plugin-metadata-authority.md)：能力看代码、展示看清单、重叠区由判据钉等值）；剩下的这一问是"未装载的卡片要不要显示工具清单与徽章"，属界面信息多寡，要你定 |
-| 压缩面另两枚设置要哪种控件形态（摘要模型 / 自定义压缩指令） | 后端字段已可读可写，界面上进不去：摘要模型与本仓"后台角色用哪个模型"这一类的既有形态（provider + model **成对**）不一致，硬塞一个单行字符串框 = 同类两种形态；自定义压缩指令是自由文本，而设置页**没有多行输入框**这一种控件。按 §4「新形态先申请 → 批准 → 先改标准再写码」，两件都要你点头我才动，详情与代价见 [`specs/09`](../../specs/09-context-compaction-s2/spec.md) 的挂账 ⓖ/ⓗ |
-| 工具级取消接下来两刀的先后：C2（`deadline` 生产者，前置 = 先测现网两个超时的实际关系）还是 C3（往 `HostVtable` 末尾追加取消槽，动 ABI 面） | 三问已由 Qoder 2026-10-18 代答（可翻案）且 C1 已落地；再往下每一刀都要单独点头，C3 那种尤其不许我自作主张（[`specs/04`](../../specs/04-tool-cancel-deadline/spec.md)） |
-| S3 剩下三刀里，哪几刀要你亲自走查（三问已于 2026-10-20 全裁，裁定与理由记在 [`specs/10`](../../specs/10-context-injection-s3/spec.md)） | **刀②** 改的是注入内容本身（`<repo_context>` 从静态串改成真读 `.Locowrk/MEMORY.md` + mtime 进缓存键）⇒ 要起真窗口发一轮才看得见，刀① 欠的那一发"system 里带索引块"也在那趟一起取；**刀④** 动界面（进度条浮层加一行扣减链 + 输出预留那枚新设置）⇒ 按 §5 我先自截图、再请你亲自看；刀③ 全是删码与提示词改写，不需要走查 |
-| S2 剩下的两条账 | ⓝ 是「某类会话里深度压缩长期零起步」的读数说明（按层序裁定是正确行为，留给走查看）；ⓞ 是判据口径，已写进 [`specs/09`](../../specs/09-context-compaction-s2/spec.md) 挂账区。另：「主层与 spill 的**真机**长会话一轮」仍欠，它要烧你的模型额度，什么时候跑由你定 |
+| 市场页的副作用徽章要不要改成运行期来源 | 能力看代码、展示看清单已定死（[`ADR-0006`](../adr/0006-plugin-metadata-authority.md)）；剩"未装载的卡片要不要显示工具清单与徽章"属界面信息多寡，要你定 |
+
+## 2026-10-24 治理刀：失效账注销记录（防回潮，别照旧账开工）
+
+- **ⓖ/ⓗ**（摘要模型 / 自定义压缩指令控件形态）→ specs/13 刀① 主模型单链后**无对应物**，`compactModel` / `compactInstructions` 已按退役键处理；specs/09 划销，roadmap 旧行摘除。
+- **ⓝ/ⓞ**（微压缩稳态读数 / polaris 轮数口径）→ 机械层与 polaris 装置随 specs/11 刀① 退役；北极星「成本平坦」的现行证据通路 = specs/13 的真机长会话；specs/09 划销。
+- **specs/11 刀⑤ 两笔观测挂账、specs/12 两笔缺陷挂账** → 已由 specs/12 刀②（`agent://compact-status` 四相）与 specs/13 刀⑦a/刀⑤ 兑现，两处划销。
+- **specs/03 T24 / T34 / T40 / T41** → 锚点消失（LlmSection 直调 IPC 已为 0、memory 后端整线已删、DeveloperSection 已 S4 重建、第四批组件刀不开），全部划销；剩 T25/T28/T29/T37/T39 五条（= 收账清单 A1）。
+- **roadmap 行摘除**：看板收尾（TreeBoard 已随 S4 刀② 整删，待走查的东西不存在了）、攒提交要不要 push（与远端已同步）、旧文档并档（本轮做完：Memory-KV 表按自身条款归 `docs/history/`，未完成项已处置）、「产出物与文件页签」重复行与已收口行（specs/08 全勾）、S3 走查行（刀①–④ 已落地且真窗口复核过）、S2 两条账行（ⓝ/ⓞ 注销，真机长会话并入上表）、章节编号差一行（树投影与看板已退役，取证面不存在；若另有所指你再点名）。
+- **状态头对齐**：specs/02 → 已退役（被 specs/06 取代）；specs/13 → 已完成 · 刀①–⑨ 全收；specs/01 → S1–S5 现状 + 剩账。
+- **文档归档**：authority 三份正身（Memory Tree v2 / Organize Summary v1 / Cross-Session Recall v1）随记忆树 / 整理线退役 + design 根七份已兑现或被取代的方案稿 → `docs/design/archive/`；Memory-KV Roadmap 与 Feature Parity Roadmap 两张旧表 → `docs/history/`；两处历史索引与 authority 清单（15→12）同步，`check-docs` 长行名单同步除名。
+- **撞号修复**：specs/10 刀② 登记的「交接层写侧钳」由 ⓠ 改号 **ⓢ**（原号与刀③b 的注入埋点 ⓠ 相撞）。
+
+文档三处分工：方案稿住 `docs/design/archive/`（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR。
 
 ## 三条使用约定
 
 1. 想看某个阶段的完整来龙去脉：先翻这份清单那一行给的 spec，再翻 [`../history/README.md`](../history/README.md)（流水 · ⊘ 不入库）
    或 [`../design/archive/README.md`](../design/archive/README.md)（设计稿 · ⊘ 不入库）——这两层只在作者的机器上。
-2. 想知道当初为什么这么定、否掉了什么：看 [`../../adr/`](../adr)，一篇一个决策，只增不改。
+2. 想知道当初为什么这么定、否掉了什么：看 [`../adr/`](../adr)，一篇一个决策，只增不改。
 3. 这里**不写**版本号、提交哈希、测试计数、门禁读数 —— 那些只写在提交记录里，需要时我给你查。

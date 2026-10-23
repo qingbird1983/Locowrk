@@ -298,8 +298,11 @@ paused / done），判据名说"为什么没成"（`summary-call` / `overflow` /
   ——那是好事（替身能造出「预算耗尽」这个形状），但要同步改。
 - **风险 ③**：新通道漏登记 ⇒ `check-channels` 报红（这正是它存在的意义）。
 - **挂账 / 遗留**：
-  - `llm/wire/stream.rs:66-72` 推理优先丢正文 —— 单独一刀。
-  - `desktop/src/stores/chat/projection.ts:287` `resetAssistant` 不清 thinking 行 —— 单独一刀。
+  - ~~`llm/wire/stream.rs:66-72` 推理优先丢正文 —— 单独一刀。~~
+    **✴ 已结清（specs/13 刀⑦a，2026-10-22）**：传输层 `Delta` 增 `Both` 档，同块的推理与
+    正文两样都收、两样都外推；判据 `llm/tests/payload.rs` + `desktop/tests/retry-reset.spec.ts`，变异两条逐条报红。
+  - ~~`desktop/src/stores/chat/projection.ts:287` `resetAssistant` 不清 thinking 行 —— 单独一刀。~~
+    **✴ 已结清（同上 specs/13 刀⑦a）**：重试时连末尾思考行一起清。
   - `specs/11` 刀⑤ 说的「失败不静默」只兑现了日志那一半，本 spec 补上界面那一半，
     该条从「已达成」改注「界面半由 specs/12 刀②兑现」。
 - **回滚**：三个刀各自独立成提交 ⇒ 任一刀出问题可单独回滚；设置项的预算档位可调回长档

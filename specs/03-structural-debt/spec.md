@@ -694,13 +694,19 @@
       · ★ 下面那段"三道锁"是判定当时的事实，**自本刀起作废**（原文留着标日期，不抹）：
         `store.rs` 重判为**可拆**、`events.rs` 仍判留但理由只剩"那张契约表本就是一件事"；
         `memory.rs` 与 `api.ts` 的切法不再有"某段必须留主文件"这种约束
-- [ ] **T24** `LlmSection.vue` 里 5 处组件直调 IPC + 4 处 `settings.refresh()` 收进 `stores/`
+- [x] **T24** `LlmSection.vue` 里 5 处组件直调 IPC + 4 处 `settings.refresh()` 收进 `stores/`
       · 违 AGENTS §3「状态与 IPC 编排的唯一去处是 stores（组件不许自己 apply）」；实测出处 =
         该文件 103/123/249/297/314 行直调、298/315/323/566 行 refresh
       · 这条是 T22 判定顺带数出来的（不是"感觉违反"）；把它列成独立一条就是**不**在拆刀里顺手改
+      · **✴ 2026-10-24 核查销账**：现网该文件 `invoke(` 直调 = **0 处**（IPC 编排已收进 stores，
+        组件里的 `settings` 是 `stores/settings` 的 store 实例，4 处 `settings.refresh()` 是
+        store 方法调用不是直调 IPC）——条目的事实基础已消失。哪一刀收的没单独追（S4 设置面
+        重建期间自然消化），按"现状为准"销账不补考据
 - [ ] **T25** `commands/llm.rs` 的 `llm_provider_save` 就地做档位装配 / keyring 写 / 清单去重，业务进了命令层
       · 违 §3「Tauri command 薄适配层：只做参数转换，不写业务」；实测 = 该闭包 327–407 行 ≈ 80 行
       · 下沉目标 = `src-tauri/src/settings/llm.rs`；与 commands/llm.rs 的切面分开两刀，别混
+      · **2026-10-24 锚点订正**：T30 拆刀后该函数现住 `commands/llm/providers.rs`（下沉目标
+        `settings/llm/` 也已成目录）——行号按现状重查，事项本身仍成立
 - [x] **T26** 拆 `src-tauri/src/commands.rs`（519 → 56 行只留声明）⇒ 同名目录加六片（2026-10-18 第一批第一刀）
       · 六片按**簇**分：`chat`(179) = 跑轮次 / 停止 / 回退压缩 / 会话列表 / 全量投影 ·
         `settings`(142) = 读写 + 保存后的热更新广播 · `approvals`(56) = 审批决策 + 粘性规则 ·
@@ -908,7 +914,10 @@
       · 判定表点的两组重复（`KEY_MAX`/`VALUE_MAX` 校验三份 · memories upsert 两份）本刀**一组都没并**
         ⇒ 登记 **T34**
       · 跨平台：纯 Rust 结构面，不取 WSL 证据（ADR-0005 口径）
-- [ ] **T34** `memory*` 里两组「同一事实多个出处」并成一处（T33 判定表点的，那把刀刻意不夹带）
+- [x] ~~**T34** `memory*` 里两组「同一事实多个出处」并成一处~~（T33 判定表点的，那把刀刻意不夹带）
+      · **✴ 2026-10-24 注销（随载体退役，无账可收）**：宿主 `memory*` 模块（`memory/crud.rs` /
+        `memory/reconcile.rs`）与插件 `plugins-src/memory-sqlite` 已在 S4 刀③b/③c **整线删除**
+        （specs/11；`check-schema-parity.mjs` 同刀退场），两组重复随载体一起消失——原条目正文照存：
       · 实测出处：`key`/`value` 上限校验这一句三份（`memory/crud.rs::update_value`、`memory/crud.rs::write`、
         `memory/reconcile.rs::reconcile_upsert`）；memories 的 upsert SQL 两份（`crud.rs::write` 与
         `reconcile.rs::reconcile_upsert`）—— SET 列表**不许含学习列**这条由 `check-schema-parity.mjs`
@@ -1056,14 +1065,21 @@
         `channels` 片的说明书因此明写"故意不复述"，把这个坑留在原地给人看
       · 跨平台：纯前端 TS 结构面，不涉及路径语义与插件生命周期 ⇒ 不取 WSL 侧证据（ADR-0005 口径）
 - [ ] **T39** `api.ts` 里三条条目与所在域不符，拆片时只能靠保序留在原族（T38 通读时数出来的）
+      · **2026-10-24 锚点订正**：三条剩两条——`organizeNow` 已随 organize 宿主面整面退役删除
+        （S4 刀③b，`api/developer.ts` 头注明载）；现网 = `revealInExplorer` 住 `api/sessions.ts`、
+        `openExternalUrl` 住 `api/llm.ts`，仍是错域寄居
       · 实测：`revealInExplorer`（原 398 行）夹在会话关联与权限模式之间、`openExternalUrl`（原 463）
         夹在模型查询与模型探测之间、`organizeNow`（原 702）夹在开发者面板的三条读数之间
       · 后果不是 bug 而是**下一次拆刀还要在说明书里解释一次寄居**：按域归位 = 重排条目 = 语义改动
         （纯搬行的保序判据 T6 判的就是不许重排），所以单独一刀：改完 `vue-tsc` 与 vitest 必须仍全绿，
         且每一处移动都要能说出"它本来属于哪一族"
       · 价值不高，可以直接砍；留着是因为它让第四批组件刀不必再重复这套解释
-- [ ] **T40** `DeveloperSection.vue` 三个观测/触出面互相拴死，按搬行规格**拆不动**（T38 之后实测，不是推断）
-      · 实证 = 拿 `tmp/split-cut.mjs` 试切一次，C1 当场报：
+- [x] ~~**T40** `DeveloperSection.vue` 三个观测/触出面互相拴死，按搬行规格**拆不动**~~（T38 之后实测，不是推断）
+      · **✴ 2026-10-24 注销（前提消失）**：为它铺垫的那把 DeveloperSection 拆刀再也不会照原样发生——
+        S4 刀④ 已把该文件重建成「只留危险开关与只读读数」（313 行，不在 `check_length` 超限名单），
+        数值面拆成了 `settings/developer/` 三个子组件；点名的三个观测/触出面按现状已不是
+        「拆不动」的拴死形状。将来若它再长回超限，届时按当时的形状重新三问，不从本条续
+      · 原实证照存：拿 `tmp/split-cut.mjs` 试切一次，C1 当场报：
         `✗ 原文第 123 行非空却没进任何片段：/** M6.1 断裂诊断：面板打开拉一次…`
         `✗ 原文第 124 行非空却没进任何片段：const diag = ref<CacheBreakReport | null…`
         —— reconcile 面（120–122 + 126–146）被夹在中间的 `diag` 声明切断，想连 `diag` 一起搬走就
@@ -1074,7 +1090,12 @@
         `form.cacheDiagnostics` 这道门改由面板自己从 `settings.view` 读（同一真源，不是新数据）
       · 与 **T24** 同族（那条管"组件直调 IPC 与编排没收进 stores"，这条是它在一个分区里的具体形状）⇒
         顺序上 T40 / T24 都排在 DeveloperSection 的拆刀之前；判定表那行的"拆"要等这三件面解开之后
-- [ ] **T41** 第四批组件刀**缺一把等价判据**：Vue 的兄弟文件之间只能靠 props / emits 传数据
+- [x] ~~**T41** 第四批组件刀**缺一把等价判据**~~：Vue 的兄弟文件之间只能靠 props / emits 传数据
+      · **✴ 2026-10-24 注销（刀不开了，判据研究整体归档留参考）**：所谓「第四批组件刀」再也不会
+        照原样发生——点名的三枚面（`ExposureDebugPanel.vue` / `FlowSingle.vue` / `HeaderEditor.vue`）
+        已随界面几轮重构全部退役。条目里做出来并自证的两块（行尾机制、`TranscriptFlow` 探针实证）
+        是**已完成**的成果，留在下面照存；将来真要再拆 Vue 组件，判据口径照 ①② 两条重新登记，
+        不从本条续。末行那颗「等用户拍一下再开第四批」的待决随之作废
       · 事实：把 `ExposureDebugPanel.vue` / `FlowSingle.vue` / `HeaderEditor.vue` 这类面搬出宿主组件，
         宿主与该片之间必然新增 `defineProps` / `defineEmits` / 传参语句 —— 它是拆分的**机械后果**
         （与 Rust 刀抬 `pub(super)` 同一类），但它是**产物独有的新行**，T4 行守恒只会把它判成红，
@@ -1100,7 +1121,8 @@
         （`DeveloperSection.vue` 就是），切割器必须按源写回；而"要不要全仓统一行尾"这个问题**不存在**，
         库里本来就统一。教训：读数必须来自**逐字符重数**，`grep -c` 只能证明"匹配到了东西"，
         不能证明匹配的是什么
-      · 未定：这两档判据的成本（每刀先写测试）与是否值得，等用户拍一下再开第四批
+      · ~~未定：这两档判据的成本（每刀先写测试）与是否值得，等用户拍一下再开第四批~~
+        （**✴ 2026-10-24 作废**：第四批不开了，见条目头注）
       · ★ **两把实测，不是推断**：① `DeveloperSection.vue` 见 T40 的 C1 输出；② `TranscriptFlow.vue`
         把那段零 DOM 投影算法（原 54–132 行）**原样**抄进一个隔离探针文件让编译器说话 ⇒
         `vue-tsc` 点名 5 条缺绑定：`Cannot find name 'props'`（116 行 `for (const item of props.items)`）

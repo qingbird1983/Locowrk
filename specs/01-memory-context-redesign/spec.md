@@ -1,21 +1,27 @@
 # 01-记忆与上下文重构
 
-- 状态：**进行中 · S1 已做到刀④d 且两轮真窗口实测过（刀①②a②b-1/-2/-3②c-1/-2③a③b-1/-2
-  ④a④b④c④d 全 ✅；S4 记忆整线退役后，原先欠的三件（真删读数 / 库改名 / 学习档）
-  随数据面整体退场而失效）；**S2 压缩面全线收口** =
+- 状态：**基本收口 · S1–S5 全部落地，剩账集中在 S3 真窗口四格与几笔挂账**（2026-10-24 文档治理刀对齐）。
+  S1 数据面 =
+  [`specs/05-memory-data-plane-s1`](../05-memory-data-plane-s1/spec.md)（刀①–④d 全 ✅；
+  S4 记忆整线退役后，原先欠的三件（真删读数 / 库改名 / 学习档）随数据面整体退场而失效）；
+  **S2 压缩面全线收口** =
   [`specs/09-context-compaction-s2`](../09-context-compaction-s2/spec.md)（刀①…⑦b 十二条验收全绿
-  + 收口后追加的刀⑧）；**S3 注入面** =
+  + 收口后追加的刀⑧；挂账 ⓖ/ⓗ/ⓝ/ⓞ 已于 2026-10-24 注销）；**S3 注入面** =
   [`specs/10-context-injection-s3`](../10-context-injection-s3/spec.md)（占用一嘴到底那半已交；
-  记忆注入面那半由 S4 整线退役取代）；**S4 退役面已收口** =
+  记忆注入面那半由 S4 整线退役取代；**仍欠**：真窗口四格 AC-S3-1…4、ⓠ 注入埋点三选一、
+  交接层写侧钳 ⓠ 与 ⓡ journal 封卷/收束提示词）；**S4 退役面已收口** =
   [`specs/11-simple-compaction-memory-retirement`](../11-simple-compaction-memory-retirement/spec.md)
-  （刀①–⑤ 全 ✅，九条验收勾齐；记忆整线删除 + 压缩收成单阈值一层）
+  （刀①–⑤ 全 ✅，九条验收勾齐；记忆整线删除 + 压缩收成单阈值一层）；**S5 = 压缩按 OpenCode V2
+  整块重写** =
+  [`specs/13-opencode-compaction`](../13-opencode-compaction/spec.md)（刀①–⑨ 全 ✅，
+  ADR-0009；终局形状 = LLM 主模型深压缩主位，成稿时的「机械层 P1–P4 零LLM」被 S4/S5 推翻）
   （方案定稿 2026-10-17 · 压缩侧层序 2026-10-18 核对后重定 ·
   ADR-0007 已成文并提交）。开工闸原写"`specs/03-structural-debt` 线完成后再启动"，
   由用户 2026-10-18 指令改为**先转本线、拆分层暂停**
 - 负责人：青鸟（定目标形态） / Qoder（取证 + 实现）
 - 日期：2026-10-17（方向口述同日成稿）· 2026-10-18 按文档规范拆分
 - 出处 / 上游（三处分工，本文件不复述方案正文）：
-  - **方案稿**（⊘ 不入库，只在作者本机）= [`docs/design/Memory and Context Redesign v1.md`](../../docs/design/Memory%20and%20Context%20Redesign%20v1.md)
+  - **方案稿**（⊘ 不入库，只在作者本机；2026-10-24 已随线收口归档）= [`docs/design/archive/Memory and Context Redesign v1.md`](../../docs/design/archive/Memory%20and%20Context%20Redesign%20v1.md)
     ——U1–U5 根因表、目标形态 A–F、北极星两条硬要求、
     四家对标取证与逐行核对附录、形状侧风险、开放决策五项裁定
   - **决策记录** = [`docs/adr/0007`](../../docs/adr/0007-memory-flat-files-context-llm-compaction-primary.md)

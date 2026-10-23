@@ -118,19 +118,19 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 │   │   │   │                         # ★       前端唯一形态标准：同类只许一种形态 + 特例申请制 + 两道机械闸
 │   │   │   ├── KV Prefix Cache Design v2.md
 │   │   │   │                         #         前缀缓存（现行）
-│   │   │   ├── Context and Memory.md · Memory Tree Design v2.md · Memory File-ization Design.md ·
-│   │   │   │   Cross-Session Recall Design v1.md
-│   │   │   │                         #         记忆族旧形状：S4 已整线退役（specs/11 刀②/③），待 S5 重写；别当现行规范
+│   │   │   ├── Context and Memory.md · Memory File-ization Design.md
+│   │   │   │                         #         上下文与记忆总纲（记忆树族旧章节历史原文照存，现役形状看 §3.2.2 现役注记）· 文件化布局（注入与布局半现役，管理面已退役）
 │   │   │   ├── LLM.md · plugins.md · Plug-in packaging.md
 │   │   │   │                         #         模型接入 · 「哪些是插件 / 宿主内置 / 已退役」的唯一真源 · 打包与暂存
 │   │   │   ├── Tool exposure strategy and usage statistics.md · Setting and Constrained Optimization.md ·
-│   │   │   │   edit_replace.md · Organize Summary Design v1.md（S4 随记忆线退役，待 S5 归档）
-│   │   │   │                         #         工具暴露与用量 · 设置与约束 · 编辑替换 · 整理摘要（旧）
+│   │   │   │   edit_replace.md
+│   │   │   │                         #         工具暴露与用量 · 设置与约束 · 编辑替换
 │   │   │   └── README.md             #         这一层的清单与"冲突时谁说了算"
 │   │   └── archive/                  # 只读 ⊘  全名 docs/design/archive/ —— 已兑现 / 已退役 / 被取代的稿子；索引 = archive/README.md
+│   │                                 #         2026-10-24 治理刀：Memory Tree v2 / Organize Summary v1 / Cross-Session Recall v1
+│   │                                 #         三份正身随记忆树整线退役归档，根上七份已兑现/被取代方案稿同批归档
 │   ├── 根上的方案稿                   # ⊘       **接下来要开发或需要重构的设计**：稿上的事全部做完、或换了做法重开 ⇒ 整份搬 archive/
-│   │                                 #         含下位细则 UI shell and patterns.md（与 UI Design System 冲突时以上位为准）
-│   │                                 #         与 ⚠ 待并档的 Memory-KV Roadmap.md（第二张进度表，并进 roadmap 后退役）
+│   │                                 #         现存 = 下位细则 UI shell and patterns.md（与 UI Design System 冲突时以上位为准）
 │   ├── prototype/                    #         静态原型（css/ js/）= 方向参考，**不是像素合同**，演示件禁搬进生产码
 │   ├── issue/                        # ⊘       全名 docs/issue/ —— 工单与缺陷清单；状态行须与自身处理记录一致
 │   ├── references/                   # ⊘       全名 docs/references/ —— 外部参考笔记（cordis-rs · rutis）
@@ -141,13 +141,13 @@ Locowrk/                    可热插拔、可回退的 Rust Agent 内核 + Taur
 └── tmp/                              # ⊘       一次性实验与判据脚本（2026-10-17 台账 T8 已清空）
 ```
 
-**已经长出来的**：内核 8 个 crate 与 9 个在册插件（`plugins-src/`）· 桌面端组装点与前端八个界面分区 ·
-十道常驻结构闸 + 两道前端形态闸 + 两支闸自证 · 三份决策记录（另有模板）与四份阶段计划 ·
-`docs/design/authority/` 十五份规范正身加一份清单。
+**已经长出来的**：内核 8 个 crate 与 8 个在册插件（`plugins-src/`）· 桌面端组装点与前端八个界面分区 ·
+十道常驻结构闸 + 两道前端形态闸 + 两支闸自证 · 九份决策记录（另有模板）与阶段计划（做完结一行）·
+`docs/design/authority/` 十二份规范正身加一份清单。
 
-**当前还不存在、按阶段才会长出来的**（不预留空目录，缺什么才建什么）：`specs/02` 的 27 类工具卡与六种状态词 ·
-产出物与文件页签 · 斜杠命令与技能包子代理预设 · 后台子代理与运行队列 · 看板在真实窗口里的验收 ·
-度量基线夹具 · 台账里那十七条欠账该结的部分 —— 具体到哪一步做什么，全在 [`docs/roadmap/`](docs/roadmap/) 那张表与它指向的 spec 里。
+**当前还不存在、按阶段才会长出来的**（不预留空目录，缺什么才建什么）：自定义命令与技能包 · 子代理预设 ·
+MCP 增强 · 钩子 · 后台子代理与运行队列 · 中途插话 · 度量基线夹具 —— 具体到哪一步做什么，全在
+[`docs/roadmap/`](docs/roadmap/) 那张表与它指向的 spec 里。
 
 ## 什么该入库
 
