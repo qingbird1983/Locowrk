@@ -1,7 +1,8 @@
 //! 会话元数据的写侧（旁车字段与内存缓存两处一起写）：重命名 / 归属 / 权限档 /
 //! 模型覆盖 / 推理档位。共同形状 = 校验参数 → 写旁车（重启保持）→ 换入缓存
-//! （下一轮请求即生效，运行中可切）。归属校验 `ensure_associatable` 被
-//! `agent_chat` 的归属先行（㉘·A·fix）共用，所以本片带一个 `pub(crate)` 出口。
+//! （下一轮请求即生效，运行中可切）。fsRoots 白名单校验 `ensure_in_fs_roots`
+//! 被 `agent_chat` 的归属先行（㉘·A·fix）与 `reveal_in_explorer`（T28 并处）共用，
+//! 所以本片带一个 `pub(crate)` 出口。
 
 use tauri::State;
 
@@ -19,14 +20,17 @@ pub async fn session_rename(
         .map_err(|e| format!("重命名失败: {e}"))
 }
 
-/// 归属目标校验（后端直读设置，不信前端转述）：必须在当前 fsRoots 里。
-/// `session_associate` 与 `agent_chat` 的归属先行（㉘·A·fix）共用一条防线。
-pub(crate) fn ensure_associatable(roots: &[String], ws: &str) -> Result<(), String> {
-    if roots.iter().any(|r| r == ws) {
+/// fsRoots 白名单校验（后端直读设置，不信前端转述）：目标必须在当前 fsRoots
+/// 里。`session_associate` / `agent_chat` 的归属先行（㉘·A·fix）/
+/// `reveal_in_explorer` 三处共用一条防线（T28 并处）；拒答尾巴**刻意**随动作
+/// 走（「不能关联」/「拒绝打开」），由 `tests_session_log::sessions_texts`
+/// 夹具逐字钉住。
+pub(crate) fn ensure_in_fs_roots(roots: &[String], target: &str, deny: &str) -> Result<(), String> {
+    if roots.iter().any(|r| r == target) {
         Ok(())
     } else {
         Err(format!(
-            "「{ws}」不在 设置 → 工具 → 工作区目录 里，不能关联"
+            "「{target}」不在 设置 → 工具 → 工作区目录 里，{deny}"
         ))
     }
 }
@@ -46,7 +50,7 @@ pub async fn session_associate(
         .map(str::trim)
         .filter(|s| !s.is_empty());
     if let Some(ws) = ws {
-        ensure_associatable(&state.settings.fs_roots(), ws)?;
+        ensure_in_fs_roots(&state.settings.fs_roots(), ws, "不能关联")?;
     }
     crate::session_log::associate(&state.sessions_dir, &session_id, ws)
         .map_err(|e| format!("关联失败: {e}"))

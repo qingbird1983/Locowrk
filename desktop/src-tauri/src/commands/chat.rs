@@ -67,7 +67,7 @@ pub async fn agent_chat(
         .map(str::trim)
         .filter(|s| !s.is_empty())
     {
-        crate::commands::sessions::ensure_associatable(&state.settings.fs_roots(), ws)?;
+        crate::commands::sessions::ensure_in_fs_roots(&state.settings.fs_roots(), ws, "不能关联")?;
         crate::session_log::associate(&state.sessions_dir, &session_id, Some(ws))
             .map_err(|e| format!("关联失败: {e}"))?;
     }

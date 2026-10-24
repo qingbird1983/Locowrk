@@ -1,7 +1,8 @@
 //! 会话回退与崩溃后裁决（两条"改写下一轮请求形状"的收束路径）：编辑重发的截断步
 //! （v2.57 §3.34，rewind + fork + 镜像重写）与悬空调用的事实认定（G2 §5，只写一次
 //! 并实时回推投影）。两者都要会话锁，所以都先用 try_lock 忙守卫拒绝运行中的轮；
-//! 忙守卫文案两处各说各的事（拒的是不同动作），不并成一条。
+//! 拒答骨架统一从 `lifecycle::busy_guard_msg` 出（T28 并处，夹具钉文案），
+//! 动作词各说各的事。
 
 use tauri::State;
 
@@ -30,7 +31,10 @@ pub async fn session_truncate_after(
         .cloned()
         .ok_or_else(|| "会话不存在（还没有任何消息）".to_string())?;
     if held.try_lock().is_err() {
-        return Err("会话正在运行，暂不能编辑重发（等这轮结束再试）".into());
+        return Err(super::lifecycle::busy_guard_msg(
+            "编辑重发",
+            super::lifecycle::BUSY_TAIL_WAIT_TURN,
+        ));
     }
     let mut session = held.lock().await;
     crate::session_log::truncate_after(&mut session, pos)?;
@@ -60,7 +64,10 @@ pub async fn session_resolve_uncertain(
         .cloned()
         .ok_or_else(|| "会话不存在（还没有任何消息）".to_string())?;
     if held.try_lock().is_err() {
-        return Err("会话正在运行，暂不能裁决（等这轮结束再试）".into());
+        return Err(super::lifecycle::busy_guard_msg(
+            "裁决",
+            super::lifecycle::BUSY_TAIL_WAIT_TURN,
+        ));
     }
     let dec =
         UncertainDecision::parse(&decision).ok_or_else(|| format!("未知裁决类型: {decision}"))?;

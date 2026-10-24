@@ -338,4 +338,6 @@ mod context_usage;
 /// "扫全目录再找自己"的实现里、从来没有用例，改动它必须先把判据立起来。
 mod export_title;
 mod file_changes;
+/// T28 夹具：忙守卫三句 + fsRoots 拒答两句逐字钉住（并处之后文案不许漂）。
+mod sessions_texts;
 mod turn_header;

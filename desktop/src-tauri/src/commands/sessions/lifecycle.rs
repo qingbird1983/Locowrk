@@ -8,6 +8,17 @@ use session_store::SessionSearchHit;
 
 use crate::state::AppState;
 
+/// 忙守卫拒答文案的**唯一出处**（T28）：三处拒答（删 / 编辑重发 / 裁决）共用
+/// 「会话正在运行，暂不能 X」骨架。尾巴常量是各动作自己的逃生路，**刻意不同**——
+/// 删除有开发者开关可强删，另两个只能等这轮结束；三句全文由
+/// `tests_session_log::sessions_texts` 夹具逐字钉住，改文案 = 先改夹具。
+pub(crate) const BUSY_TAIL_DELETE: &str = "稍后再试，或在 设置 → 开发者 允许强制删除";
+pub(crate) const BUSY_TAIL_WAIT_TURN: &str = "等这轮结束再试";
+
+pub(crate) fn busy_guard_msg(action: &str, tail: &str) -> String {
+    format!("会话正在运行，暂不能{action}（{tail}）")
+}
+
 /// 会话删除：忙锁守卫——运行中的会话锁被整轮持有，默认拒绝；开发者开关
 /// `developer.allowDeleteRunningSession`（后端直读设置，不信前端转述）
 /// 放行时强制删（运行轮余段会重建日志文件）。删除后同步剔除内存条目与
@@ -22,9 +33,7 @@ pub async fn session_delete(session_id: String, state: State<'_, AppState>) -> R
         .cloned();
     if let Some(l) = lock {
         if l.try_lock().is_err() && !state.settings.developer().allow_delete_running_session {
-            return Err(
-                "会话正在运行，暂不能删除（稍后再试，或在 设置 → 开发者 允许强制删除）".into(),
-            );
+            return Err(busy_guard_msg("删除", BUSY_TAIL_DELETE));
         }
         state
             .sessions

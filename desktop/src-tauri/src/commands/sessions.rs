@@ -26,9 +26,9 @@ pub use lifecycle::*;
 pub use meta::*;
 pub use shell::*;
 pub use transcript::*;
-// 本片三个 `pub(crate)` 项（`export_title` / `first_user_headline` / `ensure_associatable`）
-// 由上面的 glob 按**收窄后的可见性**带出，不再点名再导出（点名 = 同一事实第二处出处）。
-// 机制是本刀实测的：把点名行注释掉后 `cargo clippy --all-targets -- -D warnings` 仍 rc=0，
-// 消费点 `crate::commands::sessions::ensure_associatable` 照旧解析。读数和坑记在
-// `specs/03-structural-debt/spec.md` 的 T27 条目（同批登记的 T28 = `commands.rs` 里那条
-// 旧注释把机制说反了，待单独一刀更正）。
+// 本片 `pub(crate)` 项（`export_title` / `first_user_headline` / `ensure_in_fs_roots`
+// 与 T28 并处后的忙守卫三件）由上面的 glob 按**收窄后的可见性**带出，不点名再导出
+// （点名 = 同一事实第二处出处）。机制是本刀实测的：把点名行注释掉后
+// `cargo clippy --all-targets -- -D warnings` 仍 rc=0，消费点
+// `crate::commands::sessions::ensure_in_fs_roots` 照旧解析。读数和坑记在
+// `specs/03-structural-debt/spec.md` 的 T27 / T29 条目。
