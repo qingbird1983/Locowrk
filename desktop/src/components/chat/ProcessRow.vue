@@ -28,7 +28,19 @@
  * 三角恒占位，行 hover / 键盘聚焦淡入（悬停不位移）。明细体不在本组件——展开只是
  * 追加缩进子行，各消费方自己 v-show。
  */
+import { Comment, computed, useSlots } from "vue";
 import { Icon, type IconName } from "../../lib/icons";
+
+const slots = useSlots();
+
+/** 状态段只在槽里**真有内容**时才占位：ToolRow 对成功行也提供 `#status`
+ * （内容为空 = 成功不喧哗），只判 `$slots.status` 会留一个 0 宽空段——
+ * flex gap 在「摘要→空段→三角」之间各收一次，三角视觉距就从 6px 变 12px
+ * （AC-9 逐行量出来的同属性两种位置；AF-03 当年只治了摘要段）。注释节点
+ * （v-if 全假的落点）不算内容。 */
+const statusHasContent = computed(() =>
+  (slots.status?.() ?? []).some((n) => n.type !== Comment),
+);
 
 const props = defineProps<{
   icon: IconName;
@@ -81,7 +93,7 @@ function onChevron(e: MouseEvent) {
     <span v-if="$slots.meta" class="prow__meta"
       ><span class="prow__sep" aria-hidden="true">·</span><slot name="meta"
     /></span>
-    <span v-if="$slots.status" class="prow__status"><slot name="status" /></span>
+    <span v-if="statusHasContent" class="prow__status"><slot name="status" /></span>
     <span
       class="prow__chev"
       :aria-disabled="foldable === false || undefined"

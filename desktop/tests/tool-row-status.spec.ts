@@ -198,4 +198,38 @@ describe("ToolRow 的 ±N 只在结果收束后出数（相位极性）", () => 
       wrapper.unmount();
     }
   });
+
+  // AC-9 真窗口逐行量出的回归（2026-10-24）：成功行也**提供** #status 槽（内容为空 =
+  // 成功不喧哗），行壳只判「槽有提供」会留一个 0 宽空段——flex gap 在「摘要→空段→三角」
+  // 之间各收一次，三角视觉距从恒 6px 变 12px（10 行里 6 行 12 / 4 行 6，同一属性两种
+  // 位置）。修法在 ProcessRow：状态段只在槽里真有内容（非注释节点）时才占位。
+  it("settled+ok：±N 在屏而状态段整段缺席（空 #status 槽不留 0 宽占位）", async () => {
+    const wrapper = await mounted("settled");
+    expect(wrapper.find(".tool__diff").exists()).toBe(true);
+    expect(wrapper.find(".prow__status").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("settled 失败：状态词照常上屏（danger 语义不跟着空槽修复丢）", async () => {
+    const wrapper = mount(ToolRow, {
+      props: {
+        item: {
+          id: 2,
+          kind: "tool",
+          callId: "c9",
+          tool: "edit_replace",
+          args: { path: "F:/w/a.rs" },
+          sideEffect: "compensable",
+          pluginVersion: "0.1.0",
+          status: "settled",
+          ok: false,
+        } satisfies ToolItem,
+      },
+      global: { plugins: [i18n] },
+    });
+    await flushPromises();
+    expect(wrapper.find(".prow__status").exists()).toBe(true);
+    expect(wrapper.find(".prow__status").text().length).toBeGreaterThan(0);
+    wrapper.unmount();
+  });
 });

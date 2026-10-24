@@ -1,6 +1,8 @@
 # 06-对话流重做：行壳统一 + 身份矩阵 + 接线做全
 
-- 状态：在做（行壳/矩阵/展开体已交，状态位与接线未做）
+- 状态：**收口完成 · 差 WF-03 一枚小裁等决策人**（2026-10-24：AC-3/9/10/11 四格真窗口收口 +
+  AF-19 当场修；行壳/矩阵/展开体/状态位/滚动已交；接线由
+  [`specs/08`](../08-artifacts-and-file-tabs/spec.md) 兑现）
 - 负责人：青鸟（定取舍） / Qoder（实现）
 - 日期：2026-10-18（同日晚上按用户裁定改写：本文不再只管「渲染矩阵」，**扩为对话流整块重做**）
 - 出处 / 上游：设计稿 `docs/design/archive/Conversation Flow Rendering Spec v1.md`（⊘ 不入库），**§5 渲染矩阵为准**，
@@ -80,6 +82,7 @@
 | AF-16 | 语言徽章：按扩展名逐级回退到素材图标，彩色 + 专属字形 | `desktop/src/lib/file-icons.ts`；用户 2026-10-18 裁定，推翻设计稿 §2.2 的「不画各语言 logo」 | 身份数据 | ✅ |
 | AF-17 | **同一个「展开体」并存多套外壳与底色**：思考行 = 一个 `--lw-bg-inset` 灰底圆角框包住全文；工具行的属性行 = 无底裸排；终端块 = 又一层 `--lw-bg-inset`；代码块 = 自带深底。两条路径的内容起点 x 也差约 6px（同窗口实测：思考框 x≈622、工具属性行 x≈628） | `ThinkingRow.vue:103-109`（`.thinking__body` 自己带底/圆角/内边距）vs `ToolRow.vue` 的 `.tool__sub`（只有 `border-left` 发丝线、无底）＋ `ToolDetailView.vue:331-334`（`.tdetail__term` 再一层 `background: var(--lw-bg-inset)`）与 `.tdetail__code`。用户 2026-10-18 目检：「思考 和 读取 同时展开…属于同一属性 同一状态 但你却做出了 2 种展示样式」 | 展开体外壳 | ✅ 已立唯一落点 `style.css` 的 `.lw-expand`（`margin-left: calc(14px/2)` + `padding-left: calc(14px/2 + gap-6 - 1px)` + `border-left: 1px var(--lw-line-subtle)`，**无底无圆角**），思考行与工具行都挂它；真实窗口实测两条路径的 `getBoundingClientRect().left` 同为 `557.5`、`padding-left` 同为 `12px`、`background` 同为透明。底层 `--lw-bg-inset` 只留给「井」（代码/终端/diff） |
 | AF-18 | 身份矩阵里三个身份共用类型词「工具」：兜底 `fallback`、`ask_user`、`dev_echo`——「工具」说不清是哪个动作，且与 `.tool__*` 这类**代码标识**同名 | `desktop/src/lib/chat/render-matrix.ts:191/223/243` 都是 `verb: "tool"` → `tool.type.tool`；真实窗口 session 3 实测该行读作「工具」 | 身份数据 | ✅ 三个身份各自归词（用户 2026-10-18 裁定）：`ask_user` → `ask`「询问」、`dev_echo` → `echo`「回声」、兜底 `fallback` 保留 `tool` 但 `tool.type.tool` 的值由「工具」改「调用」（en `Tool` → `Call`），**「工具」这个类型词自此不存在**。为什么改兜底而不是给 `ask_user` 单开键：`tool.type.tool` 本来就只服务兜底，改值即可、不留死键。**真实窗口实测**：session 3/6 的类型词序列里出现「询问」（原先那行是「工具」），七个会话再无一处「工具」 |
+| AF-19 | 成功行的 `#status` 槽**空内容仍渲染 0 宽占位段**：flex gap 在「摘要→空段→三角」之间各收一次，三角距成功行 12px、其余行 6px——同一属性两种位置（AF-03「空段不渲染」的同款残留，当年只治了摘要段） | 2026-10-24 真窗口 CDP 逐行量：10 行里 6 行 12 / 4 行 6；根因 = `ProcessRow.vue` 的 `v-if="$slots.status"` 只判「槽有提供」，而 ToolRow 对 settled+ok 也提供空 `#status`（成功不喧哗） | 行壳几何 | ✅ 修于状态段**内容判空**（注释节点不算内容），修后 10 行恒 6px（同窗复测）；回归 = `desktop/tests/tool-row-status.spec.ts` 末两条（settled+ok 状态段缺席 / settled 失败照常上屏） |
 
 ## 接线欠账（不许留空）
 
@@ -92,7 +95,7 @@
 | --- | --- | --- | --- | --- |
 | WF-01 | 点工具行里的**文件名** | 右栏新开「文件」页签：`.md` 按渲染后正文打开（不是源码），其它按语法高亮打开 | **无接面**：文件名是纯文本 | 右栏新增 file 页签 + 读文件能力 |
 | WF-02 | 点展开体里的**代码块** | 右栏同一「文件/代码查看器」页签打开，带行号、高亮、复制 | `ToolDetailView.vue:20` 只 emit `openTranscript` | 同 WF-01 |
-| WF-03 | 点工具行的**变更统计（±N）** | 右栏「审阅」页签打开该 diff | 已通：`openDiff` → `rev:<callId>` | 待裁：与 WF-01 合并成同一页签族？ |
+| WF-03 | 点工具行的**变更统计（±N）** | 右栏「审阅」页签打开该 diff | 通路已通：`openReviewTab` → `rev:<callId>`（同 callId 重开快照覆盖）；入口 = 右栏 launcher 列表 + edit_diff 展开体的「查看 diff」钮，**行内 ±N 徽章纯展示**（2026-10-24 真窗口核） | 待裁（小裁）：① ±N 徽章要不要补成审阅页签的直接入口；② 与 WF-01 合并成同一页签族？——倾向**不合并**（specs/08 取证：review = 「一次 diff 快照」契约，塞进 file 签会逼出「diff 为空」假态，收益只是省一个页签）；①是小刀可做。等决策人 |
 | WF-04 | 点子代理行 | 右栏子会话转录 | 已通：`openTranscript` | — |
 | WF-05 | 点 diff 卡里的行号 / 文件头 | 右栏打开该文件对应行 | 无 | 同 WF-01 |
 
@@ -108,8 +111,16 @@
       `IDENTITIES=38 PHASES=5 UNREGISTERED=0 MISSING_VERB=0`。往工具表里加一个不存在的新工具名再跑，必须报红。
 - [x] AC-2 **形态唯一**：`node scripts/check-style.mjs` 0 报；`grep -rn "38px" desktop/src/components/chat` 无命中
       （五列栅格不留残迹）。
-- [ ] AC-3 **五类真实调用逐类目视**：`fs_read` / `edit_replace` / `shell` / `memory_expand` / 一个未知工具兜底，
-      每行显示 `图标 + 动词 + 对象 + 一条元信息`；`memory_expand` 不再是「工具」空行。
+- [x] AC-3 **五类真实调用逐类目视**（✅ 2026-10-24 真窗口两轮实跑，deepseek-v4-pro）：
+      每行显示 `图标 + 动词 + 对象 + 一条元信息`。逐类读数：`fs_read`（读取 · 文件名 · 35 B；
+      失败态 = danger「执行失败」，越界路径如实报「不在允许根目录内」）/ `edit_replace`（写入 ·
+      文件名 · +1−1 34 B）/ `shell`（终端 · node --version · 退出码 0）/ `echo`（回声 · a7-ok，
+      非空行 ✓）。两处标的物变形（如实记）：`memory_expand` 已随
+      [`specs/11`](../11-simple-compaction-memory-retirement/spec.md) 记忆整线退役——其
+      「不再是『工具』空行」的诉求由 `dev_echo` 同格承验（AF-18 三个身份归词后类型词各归
+      各位）；未知工具兜底在真窗口**不可达**——内核在 ToolCall 事件**之前**拒绝未知名
+      （模型实测收到「工具目录中无此名称」），兜底身份留给历史重放里未登记的名字，
+      登记面由 AC-1 的 UNREGISTERED=0 兜住。
 - [x] AC-4 **成功不喧哗**：连跑 ≥20 个工具，成功行**不出现**对勾或状态词；失败行是整屏唯一带 danger 色的行。
 - [x] AC-5 **语言徽章**：`.ts` `.rs` `.md` `.json` `.vue` 五种文件显示五种可区分的 logo 字形；
       `pnpm run lint:style` 0 报；标准 §七 已登记彩色豁免。
@@ -117,11 +128,25 @@
       `shell` 展开 = 深底终端块；`fs_read` 展开 = 代码块带语言标记。元数据收进「原始数据」。
 - [x] AC-7 **思考行**：默认收起为单行 + 时长；展开是灰底块；流式进行中不给折叠权。
 - [x] AC-8 **滚动**：流式追加时视口不被拽回；用户主动上滚后不再自动跟随，距底 >120px 出现「回到底部」。
-- [ ] AC-9 **一行一属性**（**新增，本次重做的纲的判据**）：`AF-01`/`AF-02`/`AF-10` 清账后，
-      真实窗口里任取 5 种状态的工具行 + 思考行 + 组头，**三角位置逐个量**都在最后一段之后；
-      记忆行/读取行/写入行的属性行「标签与值」间距逐个量相同（±1px）。
-- [ ] AC-10 **接线在册**：WF-01…WF-05 每条在 roadmap 那个阶段的 spec 里有对应勾选项，或在本稿里划掉。
-- [ ] AC-11 `make check` 全绿（含中英成对与形态两道闸）。
+- [x] AC-9 **一行一属性**（✅ 2026-10-24 真窗口 CDP 逐行量：10 行工具/思考行 + 9 个属性行）：
+      ① 三角位置——10 行（思考 3 处 + fs_read 成败两态 + shell/echo/搜索/编辑）逐个量，
+      三角全在最后一段之后；**首量抓出真偏差**：成功行的 `#status` 槽空内容仍渲染 0 宽
+      占位段，flex gap 收两次 ⇒ 6 行三角距 12px、4 行 6px（同一属性两种位置）——当场修
+      （ProcessRow 状态段只在槽里真有内容时占位，登记 **AF-19**），修后 10 行恒 6px；
+      ② 属性行标签↔值间距 9 行逐个量恒 8px（AF-02 口径，±0px）；
+      ③ 展开体外壳 thinking/tool 同壳：`.lw-expand` left 404.5 / padding 12px / 透明底
+      四点全同（AF-17）。组头那半句的标的物已随 AF-14 终版删除（`TurnProcess.vue` 只剩
+      37 行壳，无组头），该半句作废；「记忆行」随 specs/11 退役，由读取/写入行承验。
+- [x] AC-10 **接线在册**（✅ 2026-10-24 核对）：五条全部落在
+      [`specs/08`](../08-artifacts-and-file-tabs/spec.md) 批 3（已勾）：WF-01/02/05 点
+      文件名/代码块 → file 签；WF-04 子代理行 → subagent 签；WF-03 的审阅通路 =
+      `openReviewTab`（`rev:<callId>`，同 callId 重开快照覆盖），入口在右栏 launcher 列表
+      与 edit_diff 展开体的「查看 diff」钮；**行内 ±N 徽章仍为纯展示**（真窗口核）——
+      要不要补成第三个入口 + 要不要并入 file 签族 = WF-03 小裁，等决策人（见接线欠账表）。
+- [x] AC-11 `make check` 全绿（✅ 2026-10-24，`sh scripts/tasks.sh check` 退出码 0：宿主 435 /
+  vitest 24 文件 / 两处 clippy / 中英成对与形态两道闸在内）。首跑在 desktop 段红过
+  `tests_approval::hang_guard` 两条——specs/03 已登记的既存负载敏感对（当时 walk 窗口与门禁
+  抢构建锁，150ms 有界等待等出 2.88s），单跑 1.17s 绿、停掉 walk 窗口全量重跑即绿，未放宽任何判据。
 
 ## 非目标
 
@@ -151,7 +176,9 @@
    ——读数只有一份（新件 `desktop/src/components/chat/TurnTimerReadout.vue`），归**容器计时行**；本轮出现
    组头时容器行**整条让位**（`TranscriptFlow.vue` 的 `timerLineHidden`），组头**不叠时长**（见下表 AF-14 行）。
 4. AF-01 组头半边：过程组头（`TurnProcess.vue`）的三角是否也改成紧跟标签（现在是整行右对齐）。
-5. WF-03 与 WF-01/02 是否合并成同一右栏页签族。
+5. WF-03：① 行内 ±N 徽章要不要补成审阅页签的直接入口（现役入口 = 右栏 launcher 列表 +
+   edit_diff 展开体的「查看 diff」钮，徽章纯展示）；② 审阅签要不要并入 file 签族——
+   倾向不合并（specs/08 取证：review = 「一次 diff 快照」契约，并入会逼出「diff 为空」假态）。
 
 有长期影响的取舍（身份表位置、折叠状态存哪、台账口径）写进 `docs/adr/`，本文只给指针。
 
@@ -204,9 +231,10 @@ AF-15 残留复核（截断收成 `SUMMARY_CLIP` + 宽度交给 `text-overflow: 
 - [x] 批 B 行壳几何清账（提交 `463bc0d`）
 - [x] 批 C 展开体清账（`98d000b` + 本刀：AF-17/02/15/12/13 已清，AF-07 裁定为列在号空）
 - [x] 批 D 状态与相位（提交 `b1c76a1`：`tool.state.*` 唯一落点 + 标准 §二⑰ 词表；已拒绝/已停止 两态记明卡在数据面）
-- [ ] 批 E 接线做全（依赖 roadmap 第 15 行那个阶段）
+- [x] 批 E 接线做全（✅ 2026-10-24 注记：由 [`specs/08`](../08-artifacts-and-file-tabs/spec.md)
+      批 1–5 兑现，WF-01…05 全接——依赖的那个阶段已收口）
 - [x] 批 F 滚动与收口 + 机器判据（本刀：`scripts/check-css-ownership.mjs` + AF-09 锚定修复）
-- [ ] `make check` 全绿（批 E 做完后跑最终一次；本刀已跑 `sh scripts/tasks.sh gates` + 前端四闸全绿）
+- [x] `make check` 全绿（✅ 2026-10-24 最终一次，随 A7 收口跑定；批 E 由 specs/08 兑现后本任务闭合）
 
 ## 影响范围
 
