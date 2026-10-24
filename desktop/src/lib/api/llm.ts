@@ -50,11 +50,6 @@ export function llmLookupModel(
   return invoke("llm_lookup_model", { kind, baseUrl, model });
 }
 
-/** 打开外部网页链接（批 A「如何获取 API Key ↗」）；后端只放行 https。 */
-export function openExternalUrl(url: string): Promise<void> {
-  return invoke("open_external_url", { url });
-}
-
 /** 单档模型探测（设置表单未保存值；apiKey 空缺回退档位已存 Key——
  * 凭据库双读）。失败时端点扫描（§8.2），胜出候选随行回报。 */
 export function llmProbeModels(

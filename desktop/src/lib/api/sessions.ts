@@ -1,8 +1,8 @@
 /** **会话的投影与档位**（⑲ / v2.49 §3.6 / v2.50 §2.3 / ㉘·B §3.33 / v2.58 §3.30 / 批 B §5.2）：
  * 列表、全量历史投影、崩溃恢复裁决、重命名、与工作区关联、权限模式、模型覆盖、推理档位。
  *
- * 中间那条"在文件管理器里打开项目目录"寄居在本片：它校验的是与关联会话同一份根清单，
- * 原文也把它排在关联与档位之间 ⇒ 保序搬运不许重排（要挪它是语义改动，另刀另证）。
+ * 「在文件管理器里打开项目目录」原寄居本片（它校验与关联会话同一份根清单）——
+ * 2026-10-24 随 T39 按命令族归位进 `shell.ts`（后端同族 = `commands/sessions/shell.rs`）。
  * 会话的删除/搜索/导出/截断在 session-io 片（模型面隔在两段中间，合不成一片）。 */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -47,11 +47,6 @@ export function sessionAssociate(
   workspace: string | null,
 ): Promise<void> {
   return invoke("session_associate", { sessionId, workspace });
-}
-
-/** 在文件管理器中打开项目目录（§2.3 v3.9 项目菜单）：后端校验 fsRoots。 */
-export function revealInExplorer(path: string): Promise<void> {
-  return invoke("reveal_in_explorer", { path });
 }
 
 /** 会话级权限模式（㉘·B §3.33）：写旁车 + 模式存储缓存，即时生效；

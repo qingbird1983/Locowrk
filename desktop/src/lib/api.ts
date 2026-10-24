@@ -18,6 +18,9 @@ export * from "./api/plugins";
 export * from "./api/settings";
 export * from "./api/sessions";
 export * from "./api/llm";
+// T39 归位（2026-10-24）：reveal_in_explorer / open_external_url 同属「交给系统 shell 打开」
+// 一族（后端同片 `commands/sessions/shell.rs`），从 sessions / llm 两片搬出单独成片。
+export * from "./api/shell";
 export * from "./api/session-io";
 export * from "./api/picker";
 export * from "./api/notifications";
