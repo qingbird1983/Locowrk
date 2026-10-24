@@ -49,9 +49,10 @@ pub use schedule::*;
 pub use sessions::*;
 pub use settings::*;
 // 台账 T6：导出标题的两块纯逻辑要被用例钉住——命令本体要 Tauri `State`，测试打不进去。
-// `pub use sessions::*` 只带得出 `pub` 项，这两个是 `pub(crate)`，所以在这里点名再导出，
-// 不把命令层内部件顺手抬成公开 API。⚠ 必须收在 `#[cfg(test)]` 里：生产面没有人用它们，
-// 不带 cfg 的话非测试编译报 `unused_imports`，`-D warnings` 当场红（`fence` 那两个再导出
-// 分档是同一课，见 `approval/mod.rs` 的注释）。
-#[cfg(test)]
-pub(crate) use sessions::{export_title, first_user_headline};
+// 上面那个 `pub use sessions::*` glob **本来就会**把 `export_title` / `first_user_headline`
+// 一起再导出：glob 按「再导出声明」与「项自身可见性」的较小者带项，`pub(crate)` 项照样
+// 出来（收窄成 `pub(crate)`，crate 内的测试消费点照旧解析），且 glob 再导出不触发
+// `unused_imports`（T27 两次注释实验实测：在 `sessions.rs` 与本文件各注释掉一次点名行，
+// 都 rc=0）。曾在此放过的 `#[cfg(test)] pub(crate) use sessions::{…};` 点名行因此是
+// 冗余而非必需，2026-10-24 随 T29 删除（判据 = `cargo clippy --all-targets` rc=0 且
+// `tests_session_log/export_title.rs` 仍绿，specs/03 T29 条目）。
