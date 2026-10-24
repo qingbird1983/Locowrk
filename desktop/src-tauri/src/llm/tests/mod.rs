@@ -16,6 +16,8 @@ mod budget;
 mod dispatch;
 mod failure_kind;
 mod payload;
+/// T25 下沉后的档位装配行为钉子（纯 `&mut LlmConfig` 面，不碰凭据库）。
+mod profiles;
 mod refusals;
 mod spill;
 mod tool_budget;

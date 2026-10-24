@@ -19,6 +19,7 @@ pub(crate) mod import;
 pub(crate) mod keyring;
 pub mod models;
 pub mod probe;
+pub(crate) mod profiles;
 pub mod recommend;
 mod retry;
 mod sse;
