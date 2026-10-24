@@ -11,7 +11,7 @@
 
 | 阶段 | 状态 | 现在到哪了 | 详细计划 |
 | --- | --- | --- | --- |
-| 记忆与上下文重构 | ◐ 在做 | 方向 2026-10-17 定稿（决策记录 = [`ADR-0007`](../adr/0007-memory-flat-files-context-llm-compaction-primary.md)），**S1–S5 全部落地**：S1 数据面 = [`specs/05`](../../specs/05-memory-data-plane-s1/spec.md) 刀①–④d ✅；S2 压缩面 = [`specs/09`](../../specs/09-context-compaction-s2/spec.md) 刀①–⑧ 十二条验收全绿（挂账 ⓖ/ⓗ/ⓝ/ⓞ 已于 2026-10-24 注销）；S3 注入面 = [`specs/10`](../../specs/10-context-injection-s3/spec.md) 占用分子单出处 `occupancy` + 扣减链浮层 + 索引合并与 `<repo_context>` 真读交接层 ✅；S4 退役面 = [`specs/11`](../../specs/11-simple-compaction-memory-retirement/spec.md) 刀①–⑤ ✅（机械层与记忆整线删除、设置面数值归类、插件 9→8）；S5 压缩按 OpenCode V2 整块重写 = [`specs/13`](../../specs/13-opencode-compaction/spec.md) 刀①–⑨ ✅（决策 = [`ADR-0009`](../adr/0009-compaction-follows-opencode-v2.md)：主模型单链、阈值 = 窗口×百分比三档 25/50/85、压缩一发丝线就地展开 md、落盘口唯一 `persist_pending`、失败按档位归类）。**仍欠**：真窗口四格 AC-S3-1…4、ⓠ 注入埋点三选一、交接层两件（写侧钳 ⓢ / journal 封卷与收束提示词 ⓡ）——收法见下面收账清单；真机长会话与 spill 清理在「停下等你的事」 | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
+| 记忆与上下文重构 | ◐ 在做 | 方向 2026-10-17 定稿（决策记录 = [`ADR-0007`](../adr/0007-memory-flat-files-context-llm-compaction-primary.md)），**S1–S5 全部落地**：S1 数据面 = [`specs/05`](../../specs/05-memory-data-plane-s1/spec.md) 刀①–④d ✅；S2 压缩面 = [`specs/09`](../../specs/09-context-compaction-s2/spec.md) 刀①–⑧ 十二条验收全绿（挂账 ⓖ/ⓗ/ⓝ/ⓞ 已于 2026-10-24 注销）；S3 注入面 = [`specs/10`](../../specs/10-context-injection-s3/spec.md) 占用分子单出处 `occupancy` + 扣减链浮层 + 索引合并与 `<repo_context>` 真读交接层 ✅；S4 退役面 = [`specs/11`](../../specs/11-simple-compaction-memory-retirement/spec.md) 刀①–⑤ ✅（机械层与记忆整线删除、设置面数值归类、插件 9→8）；S5 压缩按 OpenCode V2 整块重写 = [`specs/13`](../../specs/13-opencode-compaction/spec.md) 刀①–⑨ ✅（决策 = [`ADR-0009`](../adr/0009-compaction-follows-opencode-v2.md)：主模型单链、阈值 = 窗口×百分比三档 25/50/85、压缩一发丝线就地展开 md、落盘口唯一 `persist_pending`、失败按档位归类）。**仍欠**：真机长会话一轮（主层 + spill、压缩三相真机触发，specs/12/13 的证据边界）与 spill 目录清理通路——两件都在「停下等你的事」 | [specs/01-memory-context-redesign](../../specs/01-memory-context-redesign/spec.md) |
 | 对话流：渲染收口 | ◐ 在做 | [`specs/06`](../../specs/06-chat-flow-rendering/spec.md) 已交行壳统一 / 身份矩阵 38 / 展开体形态库与统一外壳 / 语言徽章 / 状态词收 `tool.state.*`；[`specs/08`](../../specs/08-artifacts-and-file-tabs/spec.md) 产出物与文件页签批 1–5 全收、WF-01…05 全接。**剩**：AC-3 五类目视、AC-9 一行一属性逐个量、AC-10 接线在册（WF 已全接，可直接勾）、AC-11 最终门禁 + WF-03 一枚小裁（要不要与 WF-01 并同一页签族） | [specs/06-chat-flow-rendering](../../specs/06-chat-flow-rendering/spec.md) |
 | 工具级取消与 deadline | ◐ 在做 | C1 已落地（内核活动调用登记表 + 停止按会话逐个置位，4 条行为用例 + 4 发变异各打中一条）；三问 2026-10-18 由 Qoder 代裁定（可翻案）。**剩**：C2（`deadline` 生产者，前置 = 先测现网两个超时的实际关系）与 C3/C4/C5（要过 ABI，每一刀单独等你点头）；`crates/plugin-api/src/tool.rs` 头注至今按本稿五刀形状写着 | [specs/04-tool-cancel-deadline](../../specs/04-tool-cancel-deadline/spec.md) |
 | 常用命令与技能包 | ⬜ 没开始 | 斜杠命令面板已随 v2.143 落地（`lib/slash-commands.ts` 注册表）；剩自定义命令、技能包、子代理预设、MCP 增强、钩子。开工时建 spec——先对齐现在「一切皆插件」与权限模型（v2.145）的形状再排 | 开工时建 spec |
@@ -25,8 +25,8 @@
 | A1 | 结构债 5 条：T25（`llm_provider_save` 业务下沉出命令层）/ T28（sessions 三组双出处并一处）/ T29（T6 注释机制更正）/ T37（`check-i18n` 间接键口径收紧）/ T39（api 两条错域条目归位） | [specs/03](../../specs/03-structural-debt/spec.md) | 各一小刀，纯结构或闸口径；T24/T34/T40/T41 已于 2026-10-24 注销（锚点消失） |
 | A2 | 工具级取消 C2–C5 | [specs/04](../../specs/04-tool-cancel-deadline/spec.md) | C2 前置 = 先测现网两个超时的实际关系；C3 起动 ABI 面，每刀单独点头 |
 | ~~A3~~ | ~~压缩线剩三笔：摘要预算预置清单对账闸（②）/ `AppLlm` 第二实例收敛（⑤）/ 旧会话重放真机回归（⑥）~~ | [specs/13](../../specs/13-opencode-compaction/spec.md) 挂账表 | **✅ 2026-10-24 收账结清**：② = 对账闸 SS34（与 SS32 同形，变异打中）；⑤ = `AppLlm::compaction_view` 派生（同柄一个出处，`with_stop` 随之退役，逐柄判据）；⑥ = raw-JSON serde 判据 + 本机无旧会话的证据链 |
-| A4 | S3 真窗口四格：AC-S3-1…4（索引指针行上界面 / 正文不注入 / mtime 即生效 / `<repo_context>` 读真实交接层） | [specs/10](../../specs/10-context-injection-s3/spec.md) | 起真窗口发一轮；与对话流收口那趟可合并 |
-| A5 | 交接层三件：`MEMORY.md` 写侧钳（ⓢ）/ `journal/` 按天封卷 / 轮收束模型主动更新提示词（ⓡ） | [specs/10](../../specs/10-context-injection-s3/spec.md) 挂账区 | 一到两刀，动收束面 |
+| ~~A4~~ | ~~S3 真窗口四格：AC-S3-1…4（索引指针行上界面 / 正文不注入 / mtime 即生效 / `<repo_context>` 读真实交接层）~~ | [specs/10](../../specs/10-context-injection-s3/spec.md) 验收区 S4 取代说明 | **✴ 2026-10-24 划销**：四格的标的物（索引注入块 / `<repo_context>` 交接层）已随 specs/11 刀③ 整线删除，specs/10 头部早已注明「不再执行」——本行是漏改的旧账 |
+| ~~A5~~ | ~~交接层三件：`MEMORY.md` 写侧钳（ⓢ）/ `journal/` 按天封卷 / 轮收束模型主动更新提示词（ⓡ）~~ | [specs/10](../../specs/10-context-injection-s3/spec.md) 刀② 施工记录 | **✴ 2026-10-24 划销**：交接层本体已随 specs/11 刀③ 删除（`repo_context.rs` 不在、journal 全仓零命中），ⓢ/ⓡ 无标的物 |
 | A6 | 退役键 `compact_model` / `compact_instructions` 从结构体物理删除（现按退役键保留只为老配置可读；serde 忽略未知键 ⇒ 删了安全） | `settings/context.rs` 头注 | 一行级小清理 |
 | A7 | 对话流收口四格 + WF-03 小裁（同上「对话流：渲染收口」行） | [specs/06](../../specs/06-chat-flow-rendering/spec.md) | 真窗口目视一轮 |
 
@@ -34,7 +34,7 @@
 
 | 事 | 为什么卡在这 |
 | --- | --- |
-| ⓠ 注入埋点三选一 | `MemorySource::recall` 生产面无调用点 ⇒ L0 三指标自 S3 刀① 起停止增长；出路 = ⓠa 给索引段埋点并重定口径 / ⓠb 观测面板整块退役 / ⓠc 保持现状并在文案上如实写"本版起停止累计"（specs/10 刀③b 末） |
+| ~~ⓠ 注入埋点三选一~~ | **✴ 2026-10-24 划销**：观测面（`recall_log` / `inject_view`）已随 specs/11 刀③ 整线删除 = ⓠb 的彻底版，三选一出局（specs/10 头部补记） |
 | 工具级取消 C2 / C3 先后 | C2 要先测现网两个超时的实际关系；C3 动 ABI——先后与开不开都要你点头（三问已代裁定，可翻案，见 specs/04） |
 | 真机长会话一轮（烧额度） | 主层 + spill 的真机长会话、自动压缩三相真机触发（specs/12 证据边界）、specs/13 流式摘要真机全欠这一趟；触发线 = 占用 ≥ 有效阈值，要攒 token，什么时候跑由你定 |
 | spill 目录清理通路 | 按"删会话 ⇒ 清 spill 子目录"建通路 = 动删除，要点头（specs/09 挂账） |
@@ -53,6 +53,10 @@
 - **状态头对齐**：specs/02 → 已退役（被 specs/06 取代）；specs/13 → 已完成 · 刀①–⑨ 全收；specs/01 → S1–S5 现状 + 剩账。
 - **文档归档**：authority 三份正身（Memory Tree v2 / Organize Summary v1 / Cross-Session Recall v1）随记忆树 / 整理线退役 + design 根七份已兑现或被取代的方案稿 → `docs/design/archive/`；Memory-KV Roadmap 与 Feature Parity Roadmap 两张旧表 → `docs/history/`；两处历史索引与 authority 清单（15→12）同步，`check-docs` 长行名单同步除名。
 - **撞号修复**：specs/10 刀② 登记的「交接层写侧钳」由 ⓠ 改号 **ⓢ**（原号与刀③b 的注入埋点 ⓠ 相撞）。
+- **收账清单对账补查（2026-10-24 第二批，A7 开工前查实）**：A4（真窗口四格）/ A5（交接层 ⓢ/ⓡ）/
+  ⓠ（注入埋点三选一）三笔的标的物均已随 specs/11 刀③ 记忆整线退役而消失——specs/10 头部的
+  S4 取代说明早已写明四格「不再执行」，roadmap 侧漏改；同日划销，并补 AGENTS.md 内置能力清单
+  （去「记忆树工具」）。stage 行的「仍欠」随之收成真机长会话 + spill 清理两件（都在停下等你）。
 
 文档三处分工：方案稿住 `docs/design/archive/`（⊘ 不入库）、计划与验收住 spec、决策与理由住 ADR。
 
