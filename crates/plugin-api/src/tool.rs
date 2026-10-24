@@ -177,9 +177,12 @@ pub enum ToolError {
 /// 现役的是 `session_id`（㉘ 记忆隔离、⑭ 调度归属真在读）与 `call_id`
 /// （幂等去重键，纪律 7）：
 ///
-/// * `deadline` = **有消费者、无生产者**。kernel-agent 的 `Timeout`
-///   中间件每次调用都会读它做「剩余预算 vs 全局超时」取小，但两个组装点都
-///   没写过 → 现网恒走 `None` 分支（= 只吃全局 `callTimeoutSecs`）。
+/// * `deadline` = **两端已接上（2026-10-24，specs/04 · C2）**。生产者 =
+///   kernel-agent 的 `Timeout` 中间件：受管工具进链时写入 `now + 全局预算`
+///   （自管名单早退**不写**——自管工具的预算纪律在工具内部，外层没有预算
+///   可写，deadline 留 None 是诚实）；消费者 = 同一件的「剩余预算 vs 全局
+///   超时」取小 + 工具本体（C4 长任务轮询的买主）。审批卡守夜**不进**
+///   deadline：审批等待在进链之前已结束（specs/04 C2 读数订正了设计稿草案）。
 /// * `cancelled`（[`CallCtx::cancel`] / [`CallCtx::is_cancelled`]）=
 ///   **内核侧两端已接上（2026-10-18，specs/04 · C1）**：登记表在
 ///   `kernel-agent::active_calls`（键 = 会话 + call_id + 登记序号），停止命令

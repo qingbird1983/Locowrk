@@ -1,6 +1,8 @@
 //! Timeout 中间件（§7.1）：给下游调用加时间上限。
 //!
 //! 取配置时长与 `CallCtx::deadline` 的较小者；deadline 已过 = 立即超时。
+//! 本件也是 deadline 的**生产者**（C2，specs/04）：受管工具进链时写入
+//! `now + 配置时长`，自管名单早退不写（纪律在工具内部）。
 //! 时长两态来源（S2，约束最小化清单 §3"单插件执行时间可配"）：固定值
 //! （[`Timeout::new`]，测试与 CLI）或共享锁（[`Timeout::hot`]，组装点
 //! 持有 `Arc<RwLock<Duration>>`，设置保存即换入——与 ToolExposureConfig
@@ -87,6 +89,17 @@ impl Middleware for Timeout {
         }
 
         let duration = self.current();
+        // C2（specs/04）：deadline 的生产者。此前全仓没有生产者、`ctx.deadline`
+        // 恒 None，下面取小的 `Some` 分支从未被走过。写入的是这次调用**真被
+        // 强制执行**的预算（`now + duration`）——下游工具从 ctx 看到的与中间件
+        // 要 enforce 的是同一个数（C4 长任务轮询的买主）；自管名单已在上面的
+        // 早退里，deadline 留 None = 诚实（外层没有预算，纪律在工具内部）。
+        // 审批卡守夜**刻意不掺**：审批等待在进链之前已结束（kernel.rs consult
+        // 先于 CallCtx::new），把人的犹豫算进工具预算会在 approval < call 的
+        // 配置下掐死所有调用（设计稿草案此处被 C2 读数订正，specs/04）。
+        if ctx.deadline.is_none() {
+            ctx.deadline = Some(Instant::now() + duration);
+        }
         let budget = match ctx.deadline {
             Some(deadline) => deadline
                 .checked_duration_since(Instant::now())
