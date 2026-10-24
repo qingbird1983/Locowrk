@@ -702,11 +702,18 @@
         组件里的 `settings` 是 `stores/settings` 的 store 实例，4 处 `settings.refresh()` 是
         store 方法调用不是直调 IPC）——条目的事实基础已消失。哪一刀收的没单独追（S4 设置面
         重建期间自然消化），按"现状为准"销账不补考据
-- [ ] **T25** `commands/llm.rs` 的 `llm_provider_save` 就地做档位装配 / keyring 写 / 清单去重，业务进了命令层
+- [x] **T25** `commands/llm.rs` 的 `llm_provider_save` 就地做档位装配 / keyring 写 / 清单去重，业务进了命令层
       · 违 §3「Tauri command 薄适配层：只做参数转换，不写业务」；实测 = 该闭包 327–407 行 ≈ 80 行
       · 下沉目标 = `src-tauri/src/settings/llm.rs`；与 commands/llm.rs 的切面分开两刀，别混
       · **2026-10-24 锚点订正**：T30 拆刀后该函数现住 `commands/llm/providers.rs`（下沉目标
         `settings/llm/` 也已成目录）——行号按现状重查，事项本身仍成立
+      · ✅ 2026-10-24 收账：闭包整段下沉 **`llm/profiles.rs::save_profile(cfg: &mut LlmConfig, input: &ProviderInput)`**
+        （档位装配 / keyring 写 / 清单去重 / active 指针回落一处）；命令层只剩参数转换 + `update_llm_config`
+        单写口 + 投影。**目标偏差如实记**：沿用登记里的 settings/llm/ 会添第二条 settings→llm 回边
+        （save 要调 keyring **写侧**，keyring 自身吃 settings 类型 ⇒ 落 settings 成 settings→llm→settings 环）；
+        落 llm/ 保持 llm→settings 单向。新增行为钉子 `llm/tests/profiles.rs` 五条（新建指针 / 更新保持 /
+        校验拒绝三型 / models 去重回落 / 原位替换）——api_key 非空路径不测（真写系统凭据库），
+        None/拒绝路径全覆盖；用户可见文案逐字未动
 - [x] **T26** 拆 `src-tauri/src/commands.rs`（519 → 56 行只留声明）⇒ 同名目录加六片（2026-10-18 第一批第一刀）
       · 六片按**簇**分：`chat`(179) = 跑轮次 / 停止 / 回退压缩 / 会话列表 / 全量投影 ·
         `settings`(142) = 读写 + 保存后的热更新广播 · `approvals`(56) = 审批决策 + 粘性规则 ·
@@ -767,7 +774,7 @@
       · 判定表点的三组「同一事实两个出处」（忙守卫文案 / `fsRoots` 校验 / `#[cfg]` 三分法）本刀
         **一组都没并** —— 并 = 语义改动，不许夹带在搬行刀里 ⇒ 登记 **T28**
       · 跨平台：同 T26，纯结构面不取 WSL 证据
-- [ ] **T28** `commands/sessions*` 里三组「同一事实两个出处」并成一处（T27 判定表点的，本刀刻意不夹带）
+- [x] **T28** `commands/sessions*` 里三组「同一事实两个出处」并成一处（T27 判定表点的，本刀刻意不夹带）
       · 实测出处：忙守卫拒删/拒编辑重发/拒裁决的文案三份（`lifecycle.rs` 内 1 份 + `heal.rs` 内 2 份）、
         `fsRoots` 白名单校验两份（`meta.rs::ensure_associatable` 与 `shell.rs::reveal_in_explorer`，
         错误文案的**后半句**不同是刻意的，前半句同一句话）、`#[cfg]` 三分法两份
@@ -775,13 +782,23 @@
       · 这一刀要答的问题：并成一处之后**用户看到的文案不许漂** ⇒ 需要先把三份文案的差异登记成夹具用例
         （同 T22 的做法：先有用例再动形状），不许"顺手统一文案"
       · 与拆刀分家：T27 已经把形状摆好，本片改的是**内容**，风险方向不同，红了好回退
-- [ ] **T29** `commands.rs` 里台账 T6 那条注释把 glob 机制说反了（T27 实测推翻）
+      · ✅ 2026-10-24 收账：先立夹具（`tests_session_log/sessions_texts.rs`：忙守卫三句 + fsRoots 两句
+        **逐字**钉住）再动形状——忙守卫 = `lifecycle.rs` 收 `busy_guard_msg` + 尾巴常量
+        `BUSY_TAIL_DELETE` / `BUSY_TAIL_WAIT_TURN`（heal 两处共吃后者）；fsRoots = `ensure_associatable`
+        改参 **`ensure_in_fs_roots(roots, target, deny)`**（尾巴入参，「不能关联」/「拒绝打开」各自保留，
+        消费点 = session_associate / agent_chat / reveal_in_explorer）；`#[cfg]` 三分法 = `shell.rs`
+        私有 `shell_open(target, fail_label)` 一处，两条命令各带失败标签（「打开文件管理器失败」/
+        「打开链接失败」字面量原地不动，spawn 面测不进靠调用点不动 + 真窗口目检兜底）。三组用户
+        可见文案零漂移（夹具为证）
+- [x] **T29** `commands.rs` 里台账 T6 那条注释把 glob 机制说反了（T27 实测推翻）
       · 现文字说"`pub use sessions::*` 只带得出 `pub` 项，这两个是 `pub(crate)`，所以在这里点名再导出"；
         实测（T27 条目 ① 的两次注释实验）glob 会按收窄后的可见性把 `pub(crate)` 项一起带出来，
         所以那条点名是**冗余**而非必需
       · 该注释的其余部分仍然成立（`#[cfg(test)]` 是必需的：非测试编译没人用这两条 ⇒ `unused_imports`
         ⇒ `-D warnings` 红），本条只更正机制断言；要不要顺手删冗余点名行由那一刀判，
         判据 = 删了之后 `cargo clippy --all-targets` 仍 rc=0 且 `tests_session_log/export_title.rs` 仍绿
+      · ✅ 2026-10-24 收账：注释按实测改写（glob 带项 = 取较小可见性 + glob 不触发 unused），冗余点名行
+        **一并删除**（判据走通：`cargo test export_title` 2 passed；clippy 归全量门禁收口）
 
 - [x] **T30** 拆 `commands/llm.rs`（523 → 30 行只留声明）⇒ 同名子目录加六片（2026-10-18 第一批第三刀）
       · 六片 = `providers`(228) 代理与档位 CRUD · `test`(100) 连通测试两路 · `probe`(92) 表单探测与推荐 ·
@@ -1004,13 +1021,19 @@
         （名单删一行走与 HEAD 的行集差：只少一行、多出为空）· `SPLIT_SHAPE_OK` 与
         `check-commands` 88/88/88 不受影响
       · 跨平台：纯前端结构面，不取 WSL 证据（ADR-0005 口径）
-- [ ] **T37** `check-i18n` 的"间接引用键"正则会把模块路径计入豁免，读数被污染（T36 实测撞到）
+- [x] **T37** `check-i18n` 的"间接引用键"正则会把模块路径计入豁免，读数被污染（T36 实测撞到）
       · 现正则把源码里任何"带引号的点分字面量"都收进 `credited`，于是 `` `labels.ts` `` 这种**文件名**
         也算一条豁免，读数 +5（假键名对不上真实键，遮不住真孤儿，但数字不再是"引用了几处键"）
       · 这一刀要答的问题：怎么把"像 i18n 键"与"像模块路径"分开——候选口径 = 排除含 `/` 或以 `.ts` /
         `.vue` / `.json` 结尾的串，并要求首段命中语言包命名空间；判据 = 收紧后 `credited` 与"逐条能
         对上真实键"的集合相等，且既有用例一条不红（防"为过闸放宽"）
       · 与本刀分家：这是**闸的口径**，不在搬行刀里顺手改（红了好回退，且改闸必须重跑 `make selftest`）
+      · ✅ 2026-10-24 收账：按 237 行注释**本来就写明**的契约收口——credited 在语言包解析后按
+        「zh/en 都有此键」过滤成 `creditedReal`，孤儿表改用后者；候选口径里的扩展名排除与命名空间
+        要求都被真键成员判定覆盖（真键不含 `/`、不以 `.ts` 结尾、首段必是命名域），不再各写一遍。
+        实测：豁免读数 883 → **691/883**（挤出的 192 条 = 模块路径这类非键字面量，读数恢复诚实）；
+        无静态引用键 = 7 与基线**逐字相同**（孤儿判定逐值等价 = 收紧未放宽）；check-i18n 不在
+        selftest 变异靶内（四靶 = single-source/docs/render-matrix/css-ownership），全量门禁的自证段照跑
 - [x] **T38** 拆 `desktop/src/lib/api.ts`（814 → 31 行只剩接面）⇒ 同名子目录加 22 片（2026-10-18 第三批第二刀）
       · 22 片按**命令族**分，片序 = 原文序：`chat`(26) `assets`(50) `context`(10) `approvals`(48)
         `agent-stop`(10) `asks`(30) `channels`(70) `plugins`(76) `settings`(54) `sessions`(84)
@@ -1064,7 +1087,7 @@
         块注释的 ` *` 续行**不剥** ⇒ 通道表那行声明式写法一旦抄进片头说明书，定义处立刻判成 2 个文件。
         `channels` 片的说明书因此明写"故意不复述"，把这个坑留在原地给人看
       · 跨平台：纯前端 TS 结构面，不涉及路径语义与插件生命周期 ⇒ 不取 WSL 侧证据（ADR-0005 口径）
-- [ ] **T39** `api.ts` 里三条条目与所在域不符，拆片时只能靠保序留在原族（T38 通读时数出来的）
+- [x] **T39** `api.ts` 里三条条目与所在域不符，拆片时只能靠保序留在原族（T38 通读时数出来的）
       · **2026-10-24 锚点订正**：三条剩两条——`organizeNow` 已随 organize 宿主面整面退役删除
         （S4 刀③b，`api/developer.ts` 头注明载）；现网 = `revealInExplorer` 住 `api/sessions.ts`、
         `openExternalUrl` 住 `api/llm.ts`，仍是错域寄居
@@ -1074,6 +1097,10 @@
         （纯搬行的保序判据 T6 判的就是不许重排），所以单独一刀：改完 `vue-tsc` 与 vitest 必须仍全绿，
         且每一处移动都要能说出"它本来属于哪一族"
       · 价值不高，可以直接砍；留着是因为它让第四批组件刀不必再重复这套解释
+      · ✅ 2026-10-24 收账：归位 = **新开 `api/shell.ts` 片**装这一族（「交给系统 shell 打开」两条，
+        后端同片 `commands/sessions/shell.rs`；T38 口径一片装一族，塞回 sessions 族 = 片名撒谎），
+        从 `sessions.ts` / `llm.ts` 搬出，barrel 加一行星号再导出（消费点全走 `lib/api`，import 路径
+        一字不改）；每处移动的族归属都在片头说明说破。判据：`vue-tsc --noEmit` rc=0（vitest 归全量门禁）
 - [x] ~~**T40** `DeveloperSection.vue` 三个观测/触出面互相拴死，按搬行规格**拆不动**~~（T38 之后实测，不是推断）
       · **✴ 2026-10-24 注销（前提消失）**：为它铺垫的那把 DeveloperSection 拆刀再也不会照原样发生——
         S4 刀④ 已把该文件重建成「只留危险开关与只读读数」（313 行，不在 `check_length` 超限名单），
