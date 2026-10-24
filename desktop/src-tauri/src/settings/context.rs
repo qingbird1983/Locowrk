@@ -14,7 +14,9 @@
 //!   百分比。
 //! * `compactModel` / `compactInstructions`：摘要走**主对话那条管线**之后，
 //!   "摘要用哪个模型 / 自定义压缩指令"两件事都没有对应物了（上游同款：压缩用
-//!   会话的模型，提示词逐字固定）。留着键是为了老配置读得进来。
+//!   会话的模型，提示词逐字固定）。~~留着键是为了老配置读得进来~~ →
+//!   **2026-10-24 已从结构体物理删除**（收账 A6）：serde 对未知键一律忽略 ⇒
+//!   老配置带着这两枚键读进来不报错、不迁移、不落盘回写。
 
 use serde::{Deserialize, Serialize};
 
@@ -94,11 +96,6 @@ pub struct ContextSettings {
     pub compact_enabled: bool,
     /// 自动压缩阈值 = **占模型窗口的百分比**（缺省 50，1–100 的整数）。
     pub auto_compact_pct: u64,
-    /// **退役**：摘要调用用哪个模型。摘要改走主对话管线 ⇒ 用会话的模型
-    /// （吃会话级模型覆盖，同上游）。
-    pub compact_model: String,
-    /// **退役**：自定义压缩指令。提示词逐字固定（同上游），没有插进去的地方。
-    pub compact_instructions: String,
     /// 摘要调用预算（毫秒，缺省 90s，三档预置）。**总时长**（整趟共享，含全部
     /// 重试与那一次提醒重发）——主对话轮的「重试不设上限」不受它影响。
     pub summary_budget_ms: u64,
@@ -112,8 +109,6 @@ impl Default for ContextSettings {
             usage_bar: true,
             compact_enabled: COMPACT_ENABLED_DEFAULT,
             auto_compact_pct: AUTO_COMPACT_PCT_DEFAULT,
-            compact_model: String::new(),
-            compact_instructions: String::new(),
             summary_budget_ms: SUMMARY_BUDGET_DEFAULT_MS,
         }
     }
