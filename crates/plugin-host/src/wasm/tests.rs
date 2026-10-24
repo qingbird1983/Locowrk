@@ -218,3 +218,95 @@ fn registry_dispatches_wasm_and_serves_tools() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ---- C3：调用期取消查询（specs/04）------------------------------------------
+
+/// 客户机在轮询点读到宿主**中途**翻起的取消标志。必须经 SabiToolAdapter
+/// 全链（thread-local 预置 → 导入投影）：直连 `inst.call_blocking` 走不到
+/// adapter 的预置段。
+#[test]
+fn wasm_poll_guest_reads_mid_call_cancel() {
+    let _env = ENV_LOCK.lock().unwrap();
+    let dir = temp_dir("cancel");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = write_guest(&dir, "wasm-cancel", guests::CANCEL_GUEST);
+
+    let registry = std::sync::Arc::new(PluginRegistry::new());
+    let ver: semver::Version = "0.1.0".parse().unwrap();
+    registry.load("wasm-cancel", &ver, &path).expect("load");
+    registry.activate("wasm-cancel", &ver).expect("activate");
+    let source = RegistryToolSource::new(std::sync::Arc::clone(&registry));
+    let tool = source.resolve("poll_cancel").expect("resolve poll_cancel");
+
+    let ctx = plugin_api::CallCtx::new();
+    let ctx2 = ctx.clone();
+    let killer = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        ctx2.cancel();
+    });
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let out = rt
+        .block_on(tool.call(&ctx, json!({})))
+        .expect("guest 应在轮询点看到取消并收束");
+    assert_eq!(out, json!({ "cancelled": true }), "{out}");
+    killer.join().unwrap();
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 非调用期读数：loader 的 init 握手在 adapter 预置段之外——guest 的
+/// `init` 调导入得 `ERR_UNSUPPORTED` 存进全局，`init_probe` 把它报出来。
+/// 导入不得失败（-6 是数据不是错误）。
+#[test]
+fn wasm_import_reports_unsupported_off_call_period() {
+    let _env = ENV_LOCK.lock().unwrap();
+    let dir = temp_dir("cancel-init");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = write_guest(&dir, "wasm-cancel", guests::CANCEL_GUEST);
+    let inst = WasmLoader::load(&path).expect("load");
+
+    let out = inst
+        .call_blocking("init_probe", &json!({}))
+        .expect("init_probe 不得失败");
+    assert_eq!(
+        out,
+        json!({ "init_code": plugin_api::ffi::code::ERR_UNSUPPORTED }),
+        "{out}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 风险④裁定（specs/04）：取消标志置位**不改写**死亡原因——epoch 到期
+/// 一律如实报"超预算"，宿主不写"被取消"。预置取消标志 + 自旋 guest：
+/// 死于预算，报文保持预算语义。
+#[test]
+fn epoch_death_is_not_rewritten_as_cancelled() {
+    let _env = ENV_LOCK.lock().unwrap();
+    unsafe { std::env::set_var("LOCOWRK_WASM_TIMEOUT_MS", "100") };
+    let dir = temp_dir("cancel-epoch");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = write_guest(&dir, "wasm-echo", guests::MAIN_GUEST);
+
+    let registry = std::sync::Arc::new(PluginRegistry::new());
+    let ver: semver::Version = "0.1.0".parse().unwrap();
+    registry.load("wasm-echo", &ver, &path).expect("load");
+    registry.activate("wasm-echo", &ver).expect("activate");
+    let source = RegistryToolSource::new(std::sync::Arc::clone(&registry));
+    let tool = source.resolve("loop").expect("resolve loop");
+
+    let ctx = plugin_api::CallCtx::new();
+    ctx.cancel();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let msg = err_msg(rt.block_on(tool.call(&ctx, json!({}))).unwrap_err());
+    assert!(msg.contains("time budget"), "epoch 死亡保持预算语义: {msg}");
+
+    unsafe { std::env::remove_var("LOCOWRK_WASM_TIMEOUT_MS") };
+    let _ = std::fs::remove_dir_all(&dir);
+}

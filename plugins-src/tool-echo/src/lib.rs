@@ -6,6 +6,13 @@
 //! - `mode = "reverse"` —— 反转（**0.2.0 起新增**；旧版本报错，
 //!   供"加载 0.1.0 → 激活 0.2.0 → 回退 0.1.0"验收观察行为差异）
 //! - `mode = "panic"` —— 故意 panic，验证插件侧 catch_unwind（纪律 3）
+//! - `mode = "wait_cancel"` —— 自旋轮询宿主 `call_cancelled` 槽（specs/04
+//!   C3 的验收载体）：读到 1 提前收束 `{"cancelled":true}`；到 `max_ms`
+//!   （缺省 5000）仍无人取消则 `{"cancelled":false}`；读到负码（非调用期）
+//!   如实报 `{"cancelled":null,"code":N}` 不失败
+//! - `mode = "probe_bg"` —— 自起一个后台线程查 `call_cancelled`，连同
+//!   调用期主线程读数一起报出（`main_code`/`bg_code`）：后台线程应为
+//!   `ERR_UNSUPPORTED`（-6）、主线程应为 0——"线程即调用身份"的插件侧实证
 //!
 //! 本插件是**机制夹具**：两个版本目录由同一份源码构建（`build.rs` 只注入版本串），
 //! 行为差异全部来自下面 `reverse_supported()` 的**运行时**版本比较。所以"回退后
@@ -42,16 +49,18 @@ fn describe_manifest() -> CString {
         kind: PluginKind::Tool,
         tools: vec![ToolSpec {
             name: "echo".into(),
-            // 描述取清单里那份完整句（它列全了 schema enum 的四个模式）：台账 T11 之后
+            // 描述取清单里那份完整句（它列全了 schema enum 的六个模式）：台账 T11 之后
             // 两份必须同源，所以补到代码侧，而不是把清单削短。
             description:
-                "echoes text back, optionally transformed (modes: plain/upper/reverse/panic)".into(),
+                "echoes text back, optionally transformed (modes: plain/upper/reverse/panic/wait_cancel/probe_bg)"
+                    .into(),
             schema: json!({
                 "type": "object",
                 "properties": {
                     "text": { "type": "string" },
                     "mode": { "type": "string",
-                              "enum": ["plain", "upper", "reverse", "panic"] }
+                              "enum": ["plain", "upper", "reverse", "panic",
+                                       "wait_cancel", "probe_bg"] }
                 },
                 "required": ["text"]
             }),
@@ -92,6 +101,22 @@ impl EchoState {
             }
         }
     }
+
+    /// 本线程对宿主取消槽的一次读取，三态折成 i32（1/0/负码）供 JSON 直报。
+    fn raw_cancel_code(&self) -> i32 {
+        Self::probe_code(self.host)
+    }
+
+    /// 裸指针形态的同一读取（后台线程手里只有地址）。
+    fn probe_code(host: *const HostVtable) -> i32 {
+        // SAFETY: host 是 init 时宿主交付的 'static vtable 指针
+        let vt = unsafe { host.as_ref() }.expect("vtable delivered at init");
+        match unsafe { vt.call_cancelled() } {
+            Ok(true) => 1,
+            Ok(false) => 0,
+            Err(c) => c,
+        }
+    }
 }
 
 impl PluginState for EchoState {
@@ -111,6 +136,44 @@ impl PluginState for EchoState {
             "upper" => text.to_uppercase(),
             "reverse" if reverse_supported(version) => text.chars().rev().collect(),
             "panic" => panic!("tool-echo: demo panic requested via mode=panic"),
+            "wait_cancel" => {
+                // specs/04 C3 验收载体：轮询宿主取消槽 = 自愿早停的原型。
+                let max_ms = args.get("max_ms").and_then(Value::as_u64).unwrap_or(5000);
+                let start = std::time::Instant::now();
+                loop {
+                    match self.raw_cancel_code() {
+                        1 => {
+                            return Ok(json!({
+                                "cancelled": true,
+                                "waited_ms": start.elapsed().as_millis() as u64,
+                            }));
+                        }
+                        0 => {}
+                        code => return Ok(json!({ "cancelled": Value::Null, "code": code })),
+                    }
+                    if start.elapsed().as_millis() as u64 >= max_ms {
+                        return Ok(json!({ "cancelled": false, "waited_ms": max_ms }));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+            }
+            "probe_bg" => {
+                // 非调用期对照：自起后台线程查询得 ERR_UNSUPPORTED（-6），
+                // 调用期主线程查询得 0——差异即"线程即调用身份"。
+                let main_code = self.raw_cancel_code();
+                let host_addr = self.host as usize;
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    // SAFETY: vtable 是宿主 init 交付的 'static 静态实例
+                    // （host_vtable.rs HOST_VTABLE），跨线程传地址只借不放
+                    let host = host_addr as *const HostVtable;
+                    let _ = tx.send(Self::probe_code(host));
+                });
+                let bg_code = rx
+                    .recv_timeout(std::time::Duration::from_secs(2))
+                    .expect("probe_bg: 后台线程 2s 内应答");
+                return Ok(json!({ "main_code": main_code, "bg_code": bg_code }));
+            }
             other => {
                 return Err(format!(
                     "tool-echo {version} does not support mode=`{other}`"

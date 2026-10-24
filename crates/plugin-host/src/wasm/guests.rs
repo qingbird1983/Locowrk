@@ -6,6 +6,8 @@
 //! - [`MINIMAL_GUEST`]：缺 alloc 等导出（ABI 清单报错）
 //! - [`WASI_GUEST`]：声明 wasi 导入（宿主 Linker 未提供 → 实例化失败）
 //! - [`BIGMEM_GUEST`]：声明 2.5 GiB 内存（超 limiter → 实例化失败）
+//! - [`CANCEL_GUEST`]：导入 `locowrk.call_cancelled`（C3，specs/04）——
+//!   `poll_cancel` 轮询到 1 才收束、`init_probe` 报 init 期（非调用期）读数
 //!
 //! 内存布局（MAIN_GUEST 页 0/1 静态区）：1024 manifest · 2048 "ping"
 //! 日志载荷 · 2064/2080 错误信封 · 4096 echo 前缀 · 4104 echo scratch；
@@ -123,5 +125,83 @@ pub(crate) const WASI_GUEST: &str = r#"
 pub(crate) const BIGMEM_GUEST: &str = r#"
 (module
   (memory (export "memory") 40000)
+)
+"#;
+
+/// C3 取消查询客户机（specs/04）：`locowrk.call_cancelled` 导入的两个消费
+/// 形态。`poll_cancel`（工具名首字节 'p'）自旋轮询到读到 1 才收束——自愿
+/// 早停的原型；读到负码 = 调用期身份缺失，错误信封（-3）如实报出。
+/// `init_probe`（'i'）把 init 期间（loader 握手、adapter 预置段之外 = 非调用
+/// 期）读到的码报出来——三选一静态字符串，wat 免 itoa。
+///
+/// 内存布局：1024 manifest · 2048 `{"cancelled":true}` · 2176 错误信封 ·
+/// 3072/3096/3120 init_code 三选一；heap 自 32768 起，alloc 8 字节对齐。
+pub(crate) const CANCEL_GUEST: &str = r#"
+(module
+  (import "locowrk" "call_cancelled" (func $cancelled (result i32)))
+  (memory (export "memory") 1)
+  (global $heap (mut i32) (i32.const 32768))
+  (global $init_code (mut i32) (i32.const 0))
+  (data (i32.const 1024) "{\"id\":\"wasm-cancel\",\"version\":\"0.1.0\",\"abi_version\":1,\"kind\":\"tool\",\"tools\":[{\"name\":\"poll_cancel\",\"description\":\"polls call_cancelled until it reads 1\"},{\"name\":\"init_probe\",\"description\":\"reports the code seen at init\"}]}")
+  (data (i32.const 2048) "{\"cancelled\":true}")
+  (data (i32.const 2176) "{\"error\":\"call_cancelled unavailable\"}")
+  (data (i32.const 3072) "{\"init_code\":-6}")
+  (data (i32.const 3096) "{\"init_code\":0}")
+  (data (i32.const 3120) "{\"init_code\":1}")
+
+  (func $alloc (export "alloc") (param $len i32) (result i32)
+    (local $ptr i32)
+    (local.set $len (i32.and (i32.add (local.get $len) (i32.const 7)) (i32.const -8)))
+    (local.set $ptr (global.get $heap))
+    (global.set $heap (i32.add (global.get $heap) (local.get $len)))
+    (local.get $ptr))
+
+  (func $free (export "free") (param i32 i32))
+
+  (func $describe (export "describe") (result i32) (i32.const 1024))
+
+  (func $init (export "init") (result i32)
+    (global.set $init_code (call $cancelled))
+    (i32.const 42))
+
+  (func $shutdown (export "shutdown") (param i32))
+
+  (func $call (export "call") (param $h i32) (param $tp i32) (param $tl i32)
+                              (param $ap i32) (param $al i32)
+                              (param $opt i32) (param $olt i32) (result i32)
+    (local $c i32)
+    (local $r i32)
+    (local.set $c (i32.load8_u (local.get $tp)))
+    (if (i32.eq (local.get $c) (i32.const 112))
+      (then
+        (loop $poll
+          (local.set $r (call $cancelled))
+          (if (i32.eq (local.get $r) (i32.const 1))
+            (then
+              (i32.store (local.get $opt) (i32.const 2048))
+              (i32.store (local.get $olt) (i32.const 18))
+              (return (i32.const 0))))
+          (if (i32.lt_s (local.get $r) (i32.const 0))
+            (then
+              (i32.store (local.get $opt) (i32.const 2176))
+              (i32.store (local.get $olt) (i32.const 38))
+              (return (i32.const -3))))
+          (br $poll))))
+    (if (i32.eq (local.get $c) (i32.const 105))
+      (then
+        (if (i32.eq (global.get $init_code) (i32.const -6))
+          (then
+            (i32.store (local.get $opt) (i32.const 3072))
+            (i32.store (local.get $olt) (i32.const 16))
+            (return (i32.const 0))))
+        (if (i32.eq (global.get $init_code) (i32.const 0))
+          (then
+            (i32.store (local.get $opt) (i32.const 3096))
+            (i32.store (local.get $olt) (i32.const 15))
+            (return (i32.const 0))))
+        (i32.store (local.get $opt) (i32.const 3120))
+        (i32.store (local.get $olt) (i32.const 15))
+        (return (i32.const 0))))
+    (i32.const -2))
 )
 "#;

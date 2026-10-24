@@ -14,6 +14,7 @@
 //! 给模型。
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 
 use plugin_api::ffi::{HostVtable, code, log_level};
@@ -37,6 +38,7 @@ static HOST_VTABLE: HostVtable = HostVtable {
     kv_put: host_kv_put,
     notify: host_notify,
     session_context: host_session_context,
+    call_cancelled: host_call_cancelled,
 };
 
 /// init 交付给插件的宿主能力表（'static，插件侧可长期持有）。
@@ -196,6 +198,47 @@ extern "C" fn host_session_context(buf: *mut u8, buf_len: usize) -> i32 {
         bytes.len() as i32
     })
     .unwrap_or(code::ERR_PANIC)
+}
+
+// ---- 调用期取消查询（specs/04 · C3）----------------------------------------
+// 与 ㉘ 的调用期上下文同一身份模型：适配器在执行本次 FFI call 的 blocking
+// 线程上预置取消标志（从 `CallCtx::cancelled_handle` 取的**同一个** Arc），
+// 插件经 vtable 槽（native）或 `locowrk.call_cancelled` 导入（wasm 沙箱
+// 投影）查询；非调用期（插件自起的后台线程）= `ERR_UNSUPPORTED`，按不可用
+// 回落，不得失败。取消只能是自愿早停：宿主不能强杀在途调用（纪律 3/4），
+// 工具在自己的轮询点收束——wasm 的 epoch 预算因此仍只表达"到点"、不表达
+// "被取消"（backend 的 call_error 不读标志，死亡原因不被改写）。
+
+thread_local! {
+    /// 当前线程正在执行的 FFI 调用的取消标志（adapter 预置、结束即清）。
+    static CALL_CANCELLED: std::cell::RefCell<Option<Arc<AtomicBool>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// 预置 / 清除当前线程的取消标志（RAII guard，panic 安全）。
+pub(crate) fn call_cancel_guard(flag: Arc<AtomicBool>) -> impl Drop {
+    struct Guard;
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CALL_CANCELLED.with(|c| *c.borrow_mut() = None);
+        }
+    }
+    CALL_CANCELLED.with(|c| *c.borrow_mut() = Some(flag));
+    Guard
+}
+
+/// 调用期取消查询的唯一真源：native 槽回调与 wasm 导入共用（都在执行
+/// 调用的线程上跑，thread-local 即调用身份）。
+pub(crate) fn call_cancelled_now() -> i32 {
+    match CALL_CANCELLED.with(|c| c.borrow().as_ref().map(|f| f.load(Ordering::Relaxed))) {
+        Some(true) => 1,
+        Some(false) => 0,
+        None => code::ERR_UNSUPPORTED,
+    }
+}
+
+extern "C" fn host_call_cancelled() -> i32 {
+    std::panic::catch_unwind(call_cancelled_now).unwrap_or(code::ERR_PANIC)
 }
 
 #[cfg(test)]

@@ -187,17 +187,18 @@ pub enum ToolError {
 ///   **内核侧两端已接上（2026-10-18，specs/04 · C1）**：登记表在
 ///   `kernel-agent::active_calls`（键 = 会话 + call_id + 登记序号），停止命令
 ///   `agent_stop` 按会话逐个 `cancel()`，调用收束由 RAII 守卫注销。
-///   仍**过不去 C ABI 边界**：插件的 `call` 是同步 `extern "C"`（[`ffi::CallFn`]），
-///   [`ffi::HostVtable`] 五个槽里没有取消/轮询入口，调用还跑在
-///   `spawn_blocking` 里 ⇒ 这个标志现在只有**宿主内建的 Rust 工具**读得到，
-///   第三方与 wasm 插件读不到（那要 `HostVtable` 末尾追加 `call_cancelled` 槽 =
-///   specs/04 的 C3，动 ABI 面、需单独点头）。
+///   **跨 ABI 边界的一侧也已接上（2026-10-24，specs/04 · C3）**：
+///   [`ffi::HostVtable`] 末尾追加 `call_cancelled` 槽，宿主适配层经
+///   [`Self::cancelled_handle`] 把**同一个**标志位挂到调用期 thread-local
+///   ——第三方插件轮询便捷封装（native）/ `locowrk.call_cancelled` 导入
+///   （wasm 沙箱投影）读到的就是它。长任务工具真去轮询是 C4；
+///   "被取消"在日志与界面上长什么样是 C5。
 ///
-/// 真接线的最小完整形态（另立批做，不在清理批里造半接线）：内核加活动调用
-/// 登记表（按 `(session_id, call_id)`）→ 停止请求逐个 `cancel()` → 调用前把
-/// 审批/预算剩余时间写进 `deadline` → `HostVtable` **末尾**追加
-/// `call_cancelled: extern "C" fn() -> u32` 槽（append-only，ABI 版本不动，
-/// ㉘·A/⑭ 先例）→ 长任务工具（`subagent_run` / `ask`）真去轮询它。
+/// 真接线的最小完整形态（specs/04 五刀）：内核加活动调用登记表（C1 ✅
+/// 2026-10-18）→ 停止请求逐个 `cancel()`（C1 同刀）→ deadline 生产者
+/// （C2 ✅ 2026-10-24，落点在 Timeout 中间件）→ `HostVtable` 末尾追加
+/// `call_cancelled` 槽（C3 ✅ 2026-10-24，append-only，ABI 版本不动，
+/// ⑭/㉘ 先例）→ 长任务工具真去轮询它（C4）→ 取消进日志与界面（C5）。
 #[derive(Clone)]
 pub struct CallCtx {
     pub session_id: Option<String>,
@@ -222,6 +223,15 @@ impl CallCtx {
 
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Relaxed);
+    }
+
+    /// 取出取消标志的共享句柄（specs/04 · C3）：宿主适配层在把 FFI 调用
+    /// 丢进 blocking 池前取走它、挂到调用期 thread-local 上——插件经
+    /// `HostVtable` 的 `call_cancelled` 槽读到的就是这个标志位（与
+    /// [`Self::is_cancelled`] 同源同位）。只读句柄：取消的写面仍只有
+    /// [`Self::cancel`]，外界经句柄不能复位标志。
+    pub fn cancelled_handle(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.cancelled)
     }
 }
 

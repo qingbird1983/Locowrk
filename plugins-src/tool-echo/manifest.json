@@ -19,7 +19,7 @@
   "license": "MIT",
   "tools": [
     {
-      "description": "echoes text back, optionally transformed (modes: plain/upper/reverse/panic)",
+      "description": "echoes text back, optionally transformed (modes: plain/upper/reverse/panic/wait_cancel/probe_bg)",
       "exposure": "on_demand",
       "name": "echo",
       "schema": {
@@ -29,7 +29,9 @@
               "plain",
               "upper",
               "reverse",
-              "panic"
+              "panic",
+              "wait_cancel",
+              "probe_bg"
             ],
             "type": "string"
           },

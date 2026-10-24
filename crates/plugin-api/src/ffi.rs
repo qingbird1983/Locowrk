@@ -96,6 +96,13 @@ pub type FreeBufFn = extern "C" fn(ptr: *mut u8, len: usize);
 /// 执行期间查询有效；插件自起的后台线程 / 非调用期查询得
 /// `ERR_UNSUPPORTED`（宿主未注入解析器的 headless 宿主同码——插件
 /// 应回落全局语义，不得失败）。
+/// **C3**（specs/04，2026-10-24）末尾追加 `call_cancelled` 调用期取消查询
+/// 槽——append-only 不破 `PLUGIN_ABI_VERSION`。返回 1 = 本次调用已被请求
+/// 停止（自愿早停的信号），0 = 调用期内无人取消，非调用期（插件自起的
+/// 后台线程）返回 `code::ERR_UNSUPPORTED`（与 ㉘ 同一"线程即调用身份"
+/// 模型，查询不得失败）。取消只能是**自愿早停**：纪律 3（永不 dlclose）+
+/// 纪律 4（FFI 进 blocking）下宿主不能强杀在途调用，只能等插件在轮询点
+/// 看到信号后自己收束。
 #[repr(C)]
 pub struct HostVtable {
     pub log: extern "C" fn(level: u32, ptr: *const u8, len: usize),
@@ -114,6 +121,11 @@ pub struct HostVtable {
     /// 非调用期 / 宿主无解析器返回 `code::ERR_UNSUPPORTED`。**不分配、
     /// 不需要 free**——缓冲归插件，规避 kv_get 卡住的跨分配器所有权问题。
     pub session_context: extern "C" fn(buf: *mut u8, buf_len: usize) -> i32,
+    /// 调用期取消查询（C3，specs/04）：返回 1 = 本次调用已被请求停止
+    /// （工具应在下一个安全点收束）；0 = 调用期内无人取消；非调用期
+    /// （插件自起的后台线程）= `code::ERR_UNSUPPORTED`——与 ㉘ 的
+    /// "调用期 thread-local" 完全同界，查询不得失败。
+    pub call_cancelled: extern "C" fn() -> i32,
 }
 
 impl HostVtable {
@@ -142,6 +154,21 @@ impl HostVtable {
     pub unsafe fn session_context(&self, buf: &mut [u8]) -> Result<usize, i32> {
         let n = (self.session_context)(buf.as_mut_ptr(), buf.len());
         if n >= 0 { Ok(n as usize) } else { Err(n) }
+    }
+
+    /// 插件侧便捷封装：查询本次调用是否已被请求取消（C3）。
+    /// `Ok(true)` = 应在下一个安全点收束（自愿早停）；`Ok(false)` =
+    /// 调用期内无人取消；`Err(code)` = 非调用期 `ERR_UNSUPPORTED`
+    /// （自起后台线程——按"不可用"回落，不得失败）或极端情况 `ERR_PANIC`。
+    ///
+    /// # Safety
+    /// `self` 必须是 init 时宿主交付的合法指针。
+    pub unsafe fn call_cancelled(&self) -> Result<bool, i32> {
+        match (self.call_cancelled)() {
+            0 => Ok(false),
+            1 => Ok(true),
+            other => Err(other),
+        }
     }
 }
 

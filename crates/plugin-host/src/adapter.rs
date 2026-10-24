@@ -67,12 +67,17 @@ impl Tool for SabiToolAdapter {
         let name = self.spec.name.clone();
         let name_for_task = name.clone();
         let session_id = ctx.session_id.clone();
+        // C3（specs/04）：取消标志取**同一个 Arc** 挂到调用期 thread-local
+        // ——插件的 `call_cancelled` 查询与 Rust 工具的 `is_cancelled()`
+        // 同源同位；RAII 清理与下面的上下文 guard 同界。
+        let cancelled = ctx.cancelled_handle();
         // 同步 FFI 丢到 blocking 池，不阻塞 reactor（§5.6 纪律三）。
         // ㉘：blocking 线程上预置调用期会话上下文（session_id + 解析出的
         // 项目根），插件经 vtable `session_context` 反向查询；RAII guard
         // 保证 panic / 提前返回也清干净。解析器缺席（headless）= 全缺省。
         // ㉘·B：解析器一并返回 fs_roots（围栏跟会话）。
         tokio::task::spawn_blocking(move || {
+            let _cancel = crate::host_vtable::call_cancel_guard(cancelled);
             let ctx = session_id
                 .as_deref()
                 .map(crate::host_vtable::session_context_of)

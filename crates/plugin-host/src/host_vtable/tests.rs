@@ -74,3 +74,39 @@ fn notify_dispatches_via_hook_and_unsupported_without() {
     // 还原：不给其他测试留下全局副作用
     *NOTIFY_HOOK.lock().unwrap() = None;
 }
+
+// ---- 调用期取消查询（C3，specs/04）------------------------------------------
+
+/// 调用期内读的是挂进去的那个标志位（0 → 翻成 1 仍读同一份）；非调用期 =
+/// `ERR_UNSUPPORTED`。thread-local 按线程隔离，并行用例互不可见。
+#[test]
+fn call_cancelled_reads_flag_only_in_call_period() {
+    // 非调用期（未预置）：插件自起后台线程的同款读数
+    assert_eq!(host_call_cancelled(), code::ERR_UNSUPPORTED);
+
+    let flag = Arc::new(AtomicBool::new(false));
+    let guard = call_cancel_guard(Arc::clone(&flag));
+    assert_eq!(host_call_cancelled(), 0);
+    flag.store(true, Ordering::Relaxed);
+    assert_eq!(host_call_cancelled(), 1);
+
+    // 便捷封装走同一个静态表：1 → Ok(true)
+    // SAFETY: HOST_VTABLE 是本 crate 的静态实例
+    let vt: &HostVtable = &HOST_VTABLE;
+    assert_eq!(unsafe { vt.call_cancelled() }, Ok(true));
+
+    drop(guard);
+    assert_eq!(host_call_cancelled(), code::ERR_UNSUPPORTED);
+}
+
+/// RAII：guard 丢弃（含提前返回与 panic 展开）后线程回到非调用期，
+/// 不残留给下一次调用。
+#[test]
+fn call_cancel_guard_clears_on_drop() {
+    let flag = Arc::new(AtomicBool::new(false));
+    {
+        let _guard = call_cancel_guard(Arc::clone(&flag));
+        assert_eq!(host_call_cancelled(), 0);
+    }
+    assert_eq!(host_call_cancelled(), code::ERR_UNSUPPORTED);
+}

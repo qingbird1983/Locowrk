@@ -16,7 +16,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use plugin_api::PLUGIN_ABI_VERSION;
-use plugin_api::ffi::log_level;
+use plugin_api::ffi::{code, log_level};
 use plugin_api::manifest::PluginManifest;
 use wasmtime::{
     Caller, Config, Engine, Extern, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder,
@@ -134,8 +134,8 @@ fn engine() -> &'static Engine {
     })
 }
 
-/// 只注入 `locowrk.log` 的 Linker：客户机声明任何其他导入（含 WASI）
-/// 都会实例化失败——能力面由宿主枚举（§5.8 沙箱纪律）。
+/// 只注入 `locowrk.log` + `locowrk.call_cancelled` 的 Linker：客户机声明
+/// 任何其他导入（含 WASI）都会实例化失败——能力面由宿主枚举（§5.8 沙箱纪律）。
 fn build_linker(engine: &Engine) -> Result<Linker<StoreLimits>, wasmtime::Error> {
     let mut linker: Linker<StoreLimits> = Linker::new(engine);
     linker.func_wrap(
@@ -159,6 +159,17 @@ fn build_linker(engine: &Engine) -> Result<Linker<StoreLimits>, wasmtime::Error>
             }
         },
     )?;
+    // C3（specs/04）：调用期取消查询——vtable `call_cancelled` 槽的沙箱
+    // 投影，导入追加先例 = 上面的 log（abi.rs 头注）。轮询是 wasm 客户机
+    // 唯一的自愿早停通路；epoch 预算仍只表达"到点"、不表达"被取消"
+    // （backend 的 call_error 不读标志，死亡原因不被改写）。
+    linker.func_wrap(abi::HOST_IMPORT_MODULE, "call_cancelled", || -> i32 {
+        // 宿主侧防线：catch_unwind 兜底，与 log 同形
+        match catch_unwind(crate::host_vtable::call_cancelled_now) {
+            Ok(rc) => rc,
+            Err(_) => code::ERR_PANIC,
+        }
+    })?;
     Ok(linker)
 }
 

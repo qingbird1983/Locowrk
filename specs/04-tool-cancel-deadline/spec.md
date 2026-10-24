@@ -17,11 +17,13 @@
 **C1 已落地**（2026-10-18，台账 T13 收账时一并做掉的第一刀：内核侧登记表 + 停止按会话逐个置位 +
 RAII 注销，四条行为用例 + 四发变异各打中一条）。**C2 已落地**（2026-10-24：deadline 生产者接线，
 落法与前置读数都被实测订正过，见 C2 条目内的两处订正记录与 ask_user 缺陷登记）。
+**C3 已落地**（2026-10-24：`HostVtable` 末尾追加 `call_cancelled` 槽，native 回调与 wasm 导入
+投影两条通路都接上，见 C3 条目的实测与 wasm 闭合裁定）。
 下面「要你定的三件事」由 Qoder 代裁定，**答案与理由都写在那里，你要翻案直接说哪一条**。
-C3–C5 仍未开工，进度只看下面的勾选框；C3 起要过 ABI 面，**每一刀单独等你点头**。
+C4–C5 仍未开工，进度只看下面的勾选框；**每一刀单独等你点头**。
 
-C1 之后信号能到达的是**宿主内建的 Rust 工具**；第三方插件与 wasm 仍看不见（那要 C3 的
-追加槽位 = 动 ABI 面，本稿明文"每一刀单独等你点头"，我不会自决）。
+C3 之后第三方 native 插件与 wasm 客户机都**读得到**取消信号了（轮询入口在）；长任务工具真去
+轮询是 C4。
 
 ## 现状的六条事实（逐条给出处，设计建立在这上面）
 
@@ -145,7 +147,7 @@ C1 之后信号能到达的是**宿主内建的 Rust 工具**；第三方插件�
 
 ### 二、要过 ABI 的那半（每一刀单独等你点头）
 
-- [ ] **C3** `HostVtable` **末尾**追加 `call_cancelled: extern "C" fn() -> u32`
+- [x] **C3** `HostVtable` **末尾**追加 `call_cancelled: extern "C" fn() -> u32`
       （返回 0/1，非调用期返回 `code::ERR_UNSUPPORTED`，语义与 `session_context` 的
       "调用期 thread-local"完全对齐：插件自起的后台线程查询得 `ERR_UNSUPPORTED`，不得失败）。
       插件侧配一个便捷 `fn`（与 `log_str` / `notify` 同栏，源码级、不进 C 签名）。
@@ -153,6 +155,49 @@ C1 之后信号能到达的是**宿主内建的 Rust 工具**；第三方插件�
       · 验收 = 一条 native 后端的调用期用例（宿主翻标志 → 插件读到 1）+ 一条"非调用期读到
         `ERR_UNSUPPORTED`"的对照；wasm 侧另有一条（引擎 epoch 能掐死调用但不表达"被取消"，
         见 `crates/plugin-host/src/wasm/backend.rs:120`，得单独定它怎么闭合）。
+      · **实测（2026-10-24 落地）**：三处与设计稿草案不同，都是取证后改的：
+        ① **签名 u32 → i32**：草案写 `-> u32`，但码表是 i32 槽位约定
+        （`ERR_UNSUPPORTED = -6`），⑭/㉘ 两个追加先例也都是 `-> i32`——落地为
+        `extern "C" fn() -> i32`。
+        ② **句柄通路（草案没写宿主回调从哪知道"本次调用取消没有"）**：C1 头注预告过
+        「真要把句柄交出去，是 C3 的刀」⇒ `CallCtx` 新增只读 accessor
+        `cancelled_handle()`（追加式方法，不动既有签名，写面仍只有 `cancel()`）；
+        适配器把它挂进 blocking 线程的 thread-local，native 回调与 wasm 导入共用同一
+        真源 `call_cancelled_now()`（`host_vtable.rs`）。没走 `set_session_context_resolver`
+        那条组装点注入先例的理由：句柄零锁（一次 AtomicBool load）、不依赖登记表、
+        headless 天然同语义（标志在、只是没人置位 = 0）；按会话粒度的探针反而会把
+        "同会话另一条调用被取消"连坐给本调用——句柄按调用精确。
+        ③ **wasm 闭合裁定（风险④）**：wasm 取消 = `locowrk.call_cancelled` **导入追加**
+        （abi.rs 头注的既定放开路径，先例 = `locowrk.log`）——客户机自愿轮询、读到 1
+        早停；epoch 预算**保持只表达"到点"**：`backend.rs::call_error` 不读取消标志，
+        死亡原因不被改写（专测钉住：预置取消标志 + 自旋 guest ⇒ 报文仍是
+        "time budget"）。store 的 Mutex 在调用期间被占死 ⇒ 宿主本就无法抢占 wasm，
+        "自愿轮询"是唯一诚实形态；给 wasm 客户机做 SDK 级轮询助手等有真实 wasm
+        插件再议。
+      · 验收物 = 单测 2 条（`host_vtable/tests.rs`：调用期内读同一标志位
+        0→翻 1→便捷封装 `Ok(true)`→drop 后回 UNSUPPORTED；RAII 清理）+
+        native 集成 4 条（`plugin-host/tests/cancel_plugin.rs`，真编真载
+        tool-echo 0.3.0：中途翻位 / 后台线程 -6 且主线程 0 / max_ms=60 的
+        0 流对照 / 未知模式错误通路对照）+ wasm 3 条（`wasm/tests.rs`：
+        CANCEL_GUEST 的 poll_cancel 经 SabiToolAdapter 全链读中途翻位 /
+        init_probe 报 init 期（非调用期）-6 / epoch 死亡不改写）。
+        载体：tool-echo 加 `wait_cancel` / `probe_bg` 两模式（机制夹具职责内，
+        schema enum 与磁盘 manifest.json 同步、T11 对账闸绿）。
+      · 变异三发各打中自己那条：M1 宿主回调吞翻起位（`Some(true)=>0`）⇒ 独红两条
+        翻起位用例（native + wasm），0 流/后台探针绿；M2 非调用期改回 0 ⇒ 独红
+        非调用期一族（native bg / wasm init_probe / 单测两条），翻起位与 notify 绿
+        ——第一版 sed 缩进过命中把 `host_notify` 的分支也改了，notify 测试当场红、
+        判为误伤后重做，这本身验证了 notify 判据的证明力；M3 adapter 不预置 guard
+        ⇒ native 三条全红（整线断），错误通路对照绿。还原 sha256 逐字节一致
+        （host_vtable.rs `313b2e29…` / adapter.rs `0ed0b88d…`）。
+      · `PLUGIN_ABI_VERSION` 与两处硬断言（`lib.rs:92` / `tool/tests.rs:41`）未动、
+        照旧通过；旧插件前缀读取成立（repr(C) 布局前缀兼容，⑭/㉘ 同款追加）。
+      · 两侧读数：Windows `make check` 末行 `check 全绿`（三面合计 802 通过）、
+        `demo`/`demo4` rc=0 且 demo4 三条自判读数不变；Linux（本机 WSL）
+        `cargo test --workspace --no-fail-fast` rc=0，定向复核 cancel_plugin
+        4 / plugin-host lib 26 / tool-echo 对账闸 1 逐条 ok
+        （取证前置两条见 AGENTS §7；7 份往轮残留的陈旧未跟踪测试副本 stash 在
+        `c3-verify: stale untracked leftovers`，可恢复）。
 - [ ] **C4** 长任务工具真去轮询：`tool-shell` 的 25ms 轮询点里加一次 `call_cancelled` 查询
       （命中即 `kill_tree` + 以取消语义返回），`tool-fetch` 在 `.timeout()` 之外给连接分段点加检查；
       `subagent_run` 与 `ask` 这两个宿主内置长任务把取消**传播给子代理**（子会话也要停止）。
@@ -190,7 +235,7 @@ C1 之后信号能到达的是**宿主内建的 Rust 工具**；第三方插件�
 ## 验收标准
 
 - [x] C1/C2 各自有**一条能红的行为用例**（不是"字段终于不是 None 了"这种结构断言）。
-- [ ] C3 的 ABI 追加后：`PLUGIN_ABI_VERSION` 与两处硬断言不变、旧插件前缀读取仍成立，
+- [x] C3 的 ABI 追加后：`PLUGIN_ABI_VERSION` 与两处硬断言不变、旧插件前缀读取仍成立，
       且新增两侧（Windows / WSL）各一条 native 调用期用例。
 - [ ] C4 完成后，改内核必跑的两条验收叙事（`demo` / `demo4`）仍 rc=0，且新增一条
       "在途调用被停止"的叙事读数进提交正文。
