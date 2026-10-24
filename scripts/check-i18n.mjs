@@ -234,7 +234,7 @@ const CALL_RE = /(?:^|[^\w$.])(?:\$t|t|te|tm|tr)\(\s*(['"`])([^'"`]*)\1/g;
 const DOTTED_KEY_RE = /^[a-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$/;
 
 const refs = new Set(); // t() 字面量键（缺键判红的依据）
-const credited = new Set(); // 「任何形式的带引号点分字面量，且能解析到真实键」——只用于孤儿豁免
+const credited = new Set(); // 源码里的带引号点分字面量（**原始**收集；收紧为「真键」在语言包解析后做，T37）
 const dynPrefixes = []; // 动态键前缀（'effect.' 这种）
 const dynWhere = new Map(); // 前缀 → 出处文件（'死前缀'断言要点名，v2.168 批 F-18）
 const dataKeys = new Set(); // settings-index.ts 的 labelKey / searchKeys
@@ -335,12 +335,18 @@ if (deadDyn.length) {
 }
 
 const covered = (k) => dynPrefixes.some((p) => k.startsWith(p));
+// 间接豁免收紧（specs/03 T37）：旧口径把源码里**任何**带引号点分字面量都算进 credited，
+// 模块路径（`` `labels.ts` `` 这类文件名）也混进来——读数被污染（T36 实测多出的集合全是
+// 文件名；假键名对不上真实键，遮不住真孤儿，但数字不再是「引用了几处键」）。现在兑现
+// 237 行注释本来写明的契约：只认**真能对上语言包键**的串。孤儿判定逐值等价——
+// 豁免集只在「不是真键的串」上变小，而这类串从来豁免不到任何键（孤儿表只遍历真键）。
+const creditedReal = new Set([...credited].filter((k) => zh.has(k) && en.has(k)));
 const orphans = [...zh.keys()]
-  .filter((k) => en.has(k) && !refs.has(k) && !dataKeys.has(k) && !credited.has(k) && !covered(k))
+  .filter((k) => en.has(k) && !refs.has(k) && !dataKeys.has(k) && !creditedReal.has(k) && !covered(k))
   .sort();
 console.log(
   `check-i18n: zh=${zh.size} en=${en.size} · 引用字面量键=${refs.size} + 索引键=${dataKeys.size}` +
-    ` · 间接字面量豁免=${credited.size} · 动态前缀=${dynPrefixes.length}` +
+    ` · 间接字面量豁免=${creditedReal.size}/${credited.size} · 动态前缀=${dynPrefixes.length}` +
     ` · 无静态引用键=${orphans.length}（报告项，删除与否按三问）`,
 );
 if (flags.has("--verbose-orphans")) for (const k of orphans) console.log(`  无引用：${k}`);
