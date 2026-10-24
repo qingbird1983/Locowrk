@@ -232,4 +232,37 @@ describe("ToolRow 的 ±N 只在结果收束后出数（相位极性）", () => 
     expect(wrapper.find(".prow__status").text().length).toBeGreaterThan(0);
     wrapper.unmount();
   });
+
+  it("edit_diff 的 ±N 徽章 = 审阅页签直接入口（WF-03 小裁①）：role + 点击 emit openDiff", async () => {
+    const wrapper = mount(ToolRow, {
+      props: {
+        item: {
+          id: 3,
+          kind: "tool",
+          callId: "c10",
+          tool: "edit_diff",
+          args: { path: "F:/w/a.rs", patch: "--- a\n+++ b\n" },
+          sideEffect: "compensable",
+          pluginVersion: "0.1.0",
+          status: "settled",
+          ok: true,
+          output: { additions: 2, deletions: 1 },
+        } satisfies ToolItem,
+      },
+      global: { plugins: [i18n] },
+    });
+    await flushPromises();
+    const badge = wrapper.find(".tool__diff");
+    expect(badge.attributes("role")).toBe("button");
+    await badge.trigger("click");
+    expect(wrapper.emitted("openDiff")![0]).toEqual(["c10", "F:/w/a.rs", "--- a\n+++ b\n"]);
+    wrapper.unmount();
+  });
+
+  it("非 edit_diff 的 ±N 徽章保持纯展示（没有 reviewItem 就不虚构入口）", async () => {
+    const wrapper = await mounted("settled");
+    expect(wrapper.find(".tool__diff").exists()).toBe(true);
+    expect(wrapper.find(".tool__diff").attributes("role")).toBeUndefined();
+    wrapper.unmount();
+  });
 });

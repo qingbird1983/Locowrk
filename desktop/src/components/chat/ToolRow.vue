@@ -164,6 +164,15 @@ const reviewItem = computed(() => {
   return { callId: props.item.callId, path: args.path, diff: args.patch };
 });
 
+/** 行内 ±N 徽章 = 审阅页签的直接入口（WF-03 小裁①，2026-10-24 决策人拍板）：
+ *  判据与展开体「查看 diff」钮同源（`reviewItem`）——只有 edit_diff 且明细拿得到
+ *  path/patch 才可点，其余身份的徽章保持纯展示（不虚构）。`.tool__file` 同款
+ *  role + 键盘处理；`.stop` 防止点徽章连带整行展开。 */
+function openReview() {
+  const r = reviewItem.value;
+  if (r) emit("openDiff", r.callId, r.path, r.diff);
+}
+
 function onToggle() {
   toggleRow(props.item.id);
 }
@@ -217,7 +226,18 @@ function onActivate() {
           </span>
           <template v-else>{{ desc }}</template>
         </span>
-        <span v-if="hasDiff" class="tool__diff">
+        <span
+          v-if="hasDiff"
+          class="tool__diff"
+          :class="{ 'tool__diff--entry': !!reviewItem }"
+          :role="reviewItem ? 'button' : undefined"
+          :tabindex="reviewItem ? 0 : undefined"
+          :title="reviewItem ? t('panel.viewDiff') : undefined"
+          :aria-label="reviewItem ? t('panel.viewDiff') : undefined"
+          @click.stop="openReview"
+          @keydown.enter.stop="openReview"
+          @keydown.space.stop.prevent="openReview"
+        >
           <template v-if="diff.added !== undefined || diff.removed !== undefined">
             <span class="tool__add">+{{ diff.added ?? 0 }}</span>
             <span class="tool__del">−{{ diff.removed ?? 0 }}</span>
@@ -327,6 +347,16 @@ function onActivate() {
   margin-left: var(--lw-gap-6);
   font-family: var(--font-mono);
   font-size: var(--lw-fs-11);
+}
+/* 徽章入口态（WF-03 小裁①）：数字段各自带色，容器抬色看不见——
+   用下划线给「可点」反馈（数字下划线仍随各自色），不做底色不换字色。 */
+.tool__diff--entry {
+  cursor: pointer;
+}
+.tool__diff--entry:hover,
+.tool__diff--entry:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .tool__add {
   color: var(--lw-diff-add);

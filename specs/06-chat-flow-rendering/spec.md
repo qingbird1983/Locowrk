@@ -1,8 +1,9 @@
 # 06-对话流重做：行壳统一 + 身份矩阵 + 接线做全
 
-- 状态：**收口完成 · 差 WF-03 一枚小裁等决策人**（2026-10-24：AC-3/9/10/11 四格真窗口收口 +
+- 状态：**收口完成**（2026-10-24：AC-3/9/10/11 四格真窗口收口 +
   AF-19 当场修；行壳/矩阵/展开体/状态位/滚动已交；接线由
-  [`specs/08`](../08-artifacts-and-file-tabs/spec.md) 兑现）
+  [`specs/08`](../08-artifacts-and-file-tabs/spec.md) 兑现；同日 WF-03 小裁拍板——
+  ① 徽章入口已补、② 不并入 file 签族，见接线欠账表）
 - 负责人：青鸟（定取舍） / Qoder（实现）
 - 日期：2026-10-18（同日晚上按用户裁定改写：本文不再只管「渲染矩阵」，**扩为对话流整块重做**）
 - 出处 / 上游：设计稿 `docs/design/archive/Conversation Flow Rendering Spec v1.md`（⊘ 不入库），**§5 渲染矩阵为准**，
@@ -95,7 +96,7 @@
 | --- | --- | --- | --- | --- |
 | WF-01 | 点工具行里的**文件名** | 右栏新开「文件」页签：`.md` 按渲染后正文打开（不是源码），其它按语法高亮打开 | **无接面**：文件名是纯文本 | 右栏新增 file 页签 + 读文件能力 |
 | WF-02 | 点展开体里的**代码块** | 右栏同一「文件/代码查看器」页签打开，带行号、高亮、复制 | `ToolDetailView.vue:20` 只 emit `openTranscript` | 同 WF-01 |
-| WF-03 | 点工具行的**变更统计（±N）** | 右栏「审阅」页签打开该 diff | 通路已通：`openReviewTab` → `rev:<callId>`（同 callId 重开快照覆盖）；入口 = 右栏 launcher 列表 + edit_diff 展开体的「查看 diff」钮，**行内 ±N 徽章纯展示**（2026-10-24 真窗口核） | 待裁（小裁）：① ±N 徽章要不要补成审阅页签的直接入口；② 与 WF-01 合并成同一页签族？——倾向**不合并**（specs/08 取证：review = 「一次 diff 快照」契约，塞进 file 签会逼出「diff 为空」假态，收益只是省一个页签）；①是小刀可做。等决策人 |
+| WF-03 | 点工具行的**变更统计（±N）** | 右栏「审阅」页签打开该 diff | **已裁已做（2026-10-24 决策人拍板）**：① 行内 ±N 徽章已补成审阅页签直接入口（判据与「查看 diff」钮同源 `reviewItem`，只有 edit_diff 拿得到 path/patch 才可点，其余身份纯展示不虚构；`.tool__file` 同款 role+键盘；回归 = `tool-row-status.spec.ts` 两条）；② **不并入** file 签族（specs/08 取证：review = 「一次 diff 快照」契约，塞进 file 签会逼出「diff 为空」假态） | ✅ 收口 |
 | WF-04 | 点子代理行 | 右栏子会话转录 | 已通：`openTranscript` | — |
 | WF-05 | 点 diff 卡里的行号 / 文件头 | 右栏打开该文件对应行 | 无 | 同 WF-01 |
 
@@ -141,8 +142,8 @@
       [`specs/08`](../08-artifacts-and-file-tabs/spec.md) 批 3（已勾）：WF-01/02/05 点
       文件名/代码块 → file 签；WF-04 子代理行 → subagent 签；WF-03 的审阅通路 =
       `openReviewTab`（`rev:<callId>`，同 callId 重开快照覆盖），入口在右栏 launcher 列表
-      与 edit_diff 展开体的「查看 diff」钮；**行内 ±N 徽章仍为纯展示**（真窗口核）——
-      要不要补成第三个入口 + 要不要并入 file 签族 = WF-03 小裁，等决策人（见接线欠账表）。
+      与 edit_diff 展开体的「查看 diff」钮；**行内 ±N 徽章收口后已是第三入口**
+      （同日小裁①拍板并落地，见接线欠账表 WF-03 行；小裁② = 不并入 file 签族）。
 - [x] AC-11 `make check` 全绿（✅ 2026-10-24，`sh scripts/tasks.sh check` 退出码 0：宿主 435 /
   vitest 24 文件 / 两处 clippy / 中英成对与形态两道闸在内）。首跑在 desktop 段红过
   `tests_approval::hang_guard` 两条——specs/03 已登记的既存负载敏感对（当时 walk 窗口与门禁
@@ -176,9 +177,9 @@
    ——读数只有一份（新件 `desktop/src/components/chat/TurnTimerReadout.vue`），归**容器计时行**；本轮出现
    组头时容器行**整条让位**（`TranscriptFlow.vue` 的 `timerLineHidden`），组头**不叠时长**（见下表 AF-14 行）。
 4. AF-01 组头半边：过程组头（`TurnProcess.vue`）的三角是否也改成紧跟标签（现在是整行右对齐）。
-5. WF-03：① 行内 ±N 徽章要不要补成审阅页签的直接入口（现役入口 = 右栏 launcher 列表 +
-   edit_diff 展开体的「查看 diff」钮，徽章纯展示）；② 审阅签要不要并入 file 签族——
-   倾向不合并（specs/08 取证：review = 「一次 diff 快照」契约，并入会逼出「diff 为空」假态）。
+5. ~~WF-03：① 行内 ±N 徽章要不要补成审阅页签的直接入口；② 审阅签要不要并入 file 签族~~ ——
+   **已定**（2026-10-24 决策人拍板）：① 补（已落地，判据同源 `reviewItem`）；② 不并入
+   （specs/08 取证：review = 「一次 diff 快照」契约，并入会逼出「diff 为空」假态）。
 
 有长期影响的取舍（身份表位置、折叠状态存哪、台账口径）写进 `docs/adr/`，本文只给指针。
 
