@@ -47,6 +47,7 @@ docs/
 | adr/ADR-0007-license-and-identity.md | 定稿 | MIT 许可证、项目名 Locowrk（`wrk`，不加 `-pi`）与 Windows 优先 |
 | adr/ADR-0008-a-track-runtime-spike.md | 定稿 | A 轨运行时在 Phase 2 用限时 spike 定稿，Phase 6 只接入 |
 | adr/ADR-0009-a-track-node-runtime.md | 定稿 | A 轨运行时定为 Node 兼容子进程 + 显式子集 shim（spike 结论） |
+| adr/ADR-0010-solo-main-commits.md | 定稿 | 单人开发期允许直接提交 main，门禁前置；条件变化即恢复分支 |
 | research/01-sky-valley-pi.md | 定稿 | 内核依赖的事实清单：包、能力、缺口、版本钉 |
 | research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（已按固定上游提交复核事件与 API） |
 | research/03-mygo-stack.md | 草稿 | MyGo 能力、线程模型、风险与需要 spike 的问题 |
