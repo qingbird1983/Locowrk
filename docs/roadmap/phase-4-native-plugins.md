@@ -1,8 +1,8 @@
 # Phase 4：PluginHost 与首批原生插件
 
-- 状态：定稿
+- 状态：定稿（2026-10-28 实现并收尾，tag `phase-4.end`）
 - 日期：2026-10-28
-- 关联：ADR-0002、ADR-0003、ADR-0013；architecture/03、04；[设计稿](../design/phase-4/host.md)
+- 关联：ADR-0002、ADR-0003、ADR-0013；architecture/03、04；[设计稿](../design/phase-4/host.md)、[报告](../design/phase-4/report.md)
 
 ## 1. 目标
 

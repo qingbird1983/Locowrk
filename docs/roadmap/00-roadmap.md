@@ -26,7 +26,7 @@ graph LR
 | [Phase 1](phase-1-kernel-events.md) | 跑通 `sky-valley/pi` 内核与统一事件流，会话可恢复 | 1~2 周 | ✅ 完成（2026-10-28，tag `phase-1.end`） |
 | [Phase 2](phase-2-plugin-adapter.md) | 编排适配器骨架与 A 轨运行时选型：三分类、诊断、进程隔离 | 3~4 周 | ✅ 完成（2026-10-28，tag `phase-2.end`） |
 | [Phase 3](phase-3-desktop-host.md) | MyGo 最小宿主：实时会话流、输入、取消、设置 | 2~3 周 | ✅ 完成（2026-10-28，tag `phase-3.end`；[验收报告](../design/phase-3/report.md)） |
-| [Phase 4](phase-4-native-plugins.md) | PluginHost 与首批原生 `ui.View` 插件 | 3~4 周 | 实现完成，待人工验收（2026-10-28；[报告](../design/phase-4/report.md)） |
+| [Phase 4](phase-4-native-plugins.md) | PluginHost 与首批原生 `ui.View` 插件 | 3~4 周 | ✅ 完成（2026-10-28，tag `phase-4.end`；[报告](../design/phase-4/report.md)） |
 | [Phase 5](phase-5-webview-plugins.md) | WebView 混合渲染与 Diff 审阅插件 | 2~3 周 | 未开始 |
 | [Phase 6](phase-6-real-orchestration.md) | 真实 Pi 编排插件接入、三分类矩阵、技能复用、steering 回传 | 3~4 周 | 未开始 |
 | [Phase 7](phase-7-dynamic-plugins.md) | 第三方子进程桌面插件（UI 描述模式） | 2~3 周 | 未开始（探索性） |
@@ -47,6 +47,7 @@ graph LR
 - **Prompt templates**：上游 pi 有、仓库内内核尚未移植；先补内核能力再开放。
 - **MCP**：上游 Go 移植尚未落地 MCP；等待上游或由适配层承接。
 - **主题系统**：桌面视觉统一后再做用户主题；不做终端主题兼容。
+- **界面 UI 重设计（功能完成后单独进行）**：当前原生外框与网页都是功能粗稿；布局密度、组件样式、配色、图标、高 DPI 观感与输入法体验统一在全部功能完成后设计，不逐阶段返工。
 - **插件市场与签名分发**：manifest、签名、更新、回滚；Phase 7 之后。
 - **插件自有窗口模式**：比 UI 描述灵活，但隔离边界弱。
 - **发布工程（Phase 4~7 期间并行）**：Windows 安装包与代码签名（签名需所有者提供证书，无证书只能产出未签名包）、系统钥匙串/凭据存储（Windows Credential Manager 等）。macOS/Linux 按 ADR-0007 只需保证可构建（已用交叉编译验证），运行验证待真机。
