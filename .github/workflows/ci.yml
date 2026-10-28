@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Documentation gate
+        run: bash scripts/check-docs.sh
+
+  go:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Go module
+        id: detect
+        shell: bash
+        run: |
+          if [ -f go.mod ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-go@v5
+        if: steps.detect.outputs.present == 'true'
+        with:
+          go-version-file: go.mod
+      - name: Format
+        if: steps.detect.outputs.present == 'true'
+        shell: bash
+        run: test -z "$(gofmt -l .)"
+      - name: Vet
+        if: steps.detect.outputs.present == 'true'
+        run: go vet ./...
+      - name: Test
+        if: steps.detect.outputs.present == 'true'
+        run: go test -race ./...

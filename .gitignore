@@ -1,0 +1,47 @@
+# Build output
+/bin/
+/dist/
+/build/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.*
+*.prof
+
+# Go
+/vendor/
+go.work
+go.work.sum
+
+# Frontend (WebView assets)
+node_modules/
+.pnpm-store/
+bun.lockb
+*.tsbuildinfo
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets.*
+
+# Local data and logs
+/tmp/
+/logs/
+*.log
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# MyGo local state
+.mygo/
