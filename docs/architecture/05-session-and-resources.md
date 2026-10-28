@@ -66,12 +66,13 @@ stateDiagram-v2
 | 内容 | 位置 | 写入方 |
 |---|---|---|
 | 会话 | `~/.pi/agent/sessions/` | `coding` |
-| 用户技能 | `~/.pi/agent/skills/` | 用户/插件安装器 |
-| 桌面设置 | `~/.pi/desktop/settings.json`（计划） | 桌面壳 |
+| 用户技能 | `~/.pi/agent/skills/`、`~/.agents/skills/` | 用户/技能安装器 |
+| 桌面设置 | `os.UserConfigDir()/Locowrk/settings.json`（Windows 为 `%AppData%\Locowrk\settings.json`） | 桌面壳 |
 | 凭证引用 | 设置文件中的 `keyRef` | 桌面壳 |
 | 凭证本体 | 系统钥匙串（MyGo Secrets） | 桌面壳 |
-| 插件 | `~/.pi/desktop/plugins/<name>/`（计划） | 插件管理器 |
-| 日志 | `~/.pi/desktop/logs/`（计划） | 桌面壳，滚动上限 |
+| 用户扩展 | `%AppData%\Locowrk\extensions/<name>/`（Phase 6） | 用户手动安装/扩展管理器 |
+| 项目扩展 | `<cwd>/.pi/extensions/<name>/`（Phase 6） | 项目作者；需信任 |
+| 日志 | `%AppData%\Locowrk\logs/`（计划） | 桌面壳，滚动上限 |
 
 - 目录由上游 `coding.AgentDir()` 决定：固定为用户主目录下的 `.pi/agent`（`ConfigDirName = ".pi"`），**不提供环境变量覆盖**。测试/开发通过临时主目录隔离（设置 `HOME`/`USERPROFILE`），不得写用户真实数据。
 - 便携模式（数据放程序目录）留 backlog。

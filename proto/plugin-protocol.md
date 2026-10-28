@@ -1,6 +1,6 @@
 # 子进程插件协议（A 轨）
 
-- 状态：定稿（Phase 2 设计；2026-10-28 增补 `invoke_tool`、`ui_notify`、`ui_set_widget`、`fs_write` 四个方法，属新增可选方法，不改 `protocol`）
+- 状态：定稿（Phase 2 设计；2026-10-28 增补 `invoke_tool`、`ui_notify`、`ui_set_widget`、`fs_write` 四个方法；Phase 6 增补 `tool_update`、`event_result`、`ui_select/confirm/input/editor`，均为可选方法，不改 `protocol`）
 - 日期：2026-10-28
 - 关联：ADR-0003、ADR-0004、ADR-0008；architecture/04；phase-2-plugin-adapter.md
 
@@ -85,11 +85,17 @@ spawn → initialize → initialized → register* → ready → (running) → s
 | `register_tool` | `{name,description,parameters,timeoutMs?}` | `parameters` 是 JSON Schema；`name` 需匹配 `^[a-z][a-z0-9_]{0,62}$` |
 | `register_command` | `{name,description,args?}` | 命令面板条目 |
 | `emit_event` | `{kind,payload}` | 编排事件，`kind` 限 `subagent_spawned`、`subagent_settled`、`workflow_step`、`plugin_diagnostic` |
+| `event_result` | `{id,result}` | Phase 6：宿主以请求发送事件（`wantsEventAck`）时的回执；`tool_call` 的 `{block}` 在此返回 |
 | `spawn_subagent` | `{prompt,model?,tools?}` | 请求宿主起子代理；结果为子会话 id |
 | `workflow_step` | `{name,status,detail?}` | `status` ∈ `pending`/`running`/`done`/`failed`/`skipped` |
 | `diagnostic` | `{member,category,code,message}` | 兼容性诊断，见 §7 |
 | `tool_result` | `{sessionId,toolCallId,text?,isError}` | 插件自行执行工具后的回填（`invoke_tool` 的异步完成） |
+| `tool_update` | `{toolCallId,text}` | Phase 6：长工具进度，映射为 `tool_execution_update` |
 | `ui_notify` | `{message,type}` | 映射为宿主通知；`type` ∈ `info`/`warning`/`error` |
+| `ui_select` | `{title,options}` | Phase 6：宿主选择框，返回选中的字符串或 `null` |
+| `ui_confirm` | `{title,message}` | Phase 6：宿主确认框，返回布尔 |
+| `ui_input` | `{title,placeholder?}` | Phase 6：宿主输入框，返回字符串或 `null` |
+| `ui_editor` | `{title,prefill?}` | Phase 6：宿主多行编辑框，返回字符串或 `null` |
 | `ui_set_widget` | `{key,content?}` | TUI 成员：返回 `null` + `unsupported` 诊断，永不报错 |
 | `fs_write` | `{path,data}` | 宿主代写文件；须 `fs.write` 声明且路径在范围内，失败为 `permission_denied` |
 
@@ -160,6 +166,6 @@ spawn → initialize → initialized → register* → ready → (running) → s
 ## 11. 变更流程
 
 - 新增可选字段：兼容，本文与 schema 同步，不改 `protocol`。
-- 新增方法（只增不改语义）：视同兼容；宿主与插件可各自按 `method not found` 降级，本文与 `CHANGELOG.md` 同步。`invoke_tool`/`ui_notify`/`ui_set_widget`/`fs_write` 于 2026-10-28 以此方式加入。
+- 新增方法（只增不改语义）：视同兼容；宿主与插件可各自按 `method not found` 降级，本文与 `CHANGELOG.md` 同步。`invoke_tool`/`ui_notify`/`ui_set_widget`/`fs_write` 于 2026-10-28 以此方式加入；Phase 6 再加 `tool_update`、`event_result`、`ui_select/confirm/input/editor`。
 - 改字段语义、删字段、改错误码：`protocol` +1，写 ADR 或 Phase 文档说明，旧版本直接拒绝启动。
 - 本文与 `docs/architecture/04-plugin-system.md` 冲突时：以本文的线上形状为准，语义以架构文档为准，并当轮修正其中一处。

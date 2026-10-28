@@ -11,23 +11,26 @@
 - **Phase 5（WebView 混合渲染与 Diff 审阅）**：✅ 完成（2026-10-28，tag `phase-5.end`；[报告](../docs/design/phase-5/report.md)）。
   - 标签页宿主 + Diff 页面；10k 行 0.43 s；工具卡片链路、切标签状态保持、关闭释放均验收。
   - ADR-0014；设计 `docs/design/phase-5/webview.md`、`diff.md`；报告定稿。
-- **Phase 6（真实 Pi 编排插件与技能复用）**：🟡 设计进行中，未实现、未开工；tag 未打。
+- **Phase 6（真实 Pi 编排插件与技能复用）**：🟡 设计定稿（2026-10-28），未实现、未开工；tag 未打。
+  - `docs/roadmap/phase-6-real-orchestration.md` 定稿；设计 `design/phase-6/runtime.md`、`extensions.md`、`skills.md`；ADR-0015（Node 运行时目录）。
+  - 开工前置：`runtime/node/` 下载校验、1~2 个真实样本构建、扩展信任设置 v2。
+  - 关键边界：扩展是受信任代码；宿主不代管子代理；链式上下文改写缓做；steering 走内核。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. Phase 5 功能：`TabHost`、Diff 服务/解析、Diff 页面、工具卡片接线；10k 行 0.43 s、切标签状态保持、关闭释放。
-2. 自动门禁：`go test -race`、`npm run check`、`npm test`、跨平台构建、`check-docs` 全绿；`diff`/`diff-tool` 与 Phase 3/4 场景回归。
-3. 所有者确认可见窗口验收；Phase 5 报告定稿，看板/CHANGELOG 0.10.0，tag `phase-5.end`。
-4. 进入 Phase 6 设计：先读 A 轨适配器、ADR-0009、research/02 与 Phase 2 契约。
+1. Phase 5 收尾：报告定稿、看板 ✅、CHANGELOG 0.10.0、tag `phase-5.end`。
+2. Phase 6 设计：`runtime.md`（Node 目录/打包/shim 矩阵）、`extensions.md`（发现/信任/生命周期/steering/UI）、`skills.md`（工作区信任与注入）；ADR-0015。
+3. 明确 Phase 6 开工前置：Node 运行时下载校验、真实样本（`todo`/`rpc-demo`）构建、设置 v2 迁移。
+4. 更新 Phase 6 路线图、docs 地图、看板、CHANGELOG 0.10.1、CONTEXT 与 H-019。
 
 ## 下一步（按优先级）
 
-1. **Phase 6 设计定稿**：真实扩展接入/信任、三分类矩阵落地、子代理/workflow/steering、技能信任与诊断；先写 `docs/design/phase-6/`，再实现。
-2. **Phase 6 开工前置**：选定 1~2 个真实扩展样本（记录版本/来源），确认打包与 Node 分发方式。
-3. **UI 重设计**：等功能完成后单独立项；当前标签栏与 Diff 页仍是功能粗稿。
-4. **发布工程**：仍暂缓；`standards/08 §6` 与前端 embed 的冲突留到该阶段。
+1. **Phase 6 前置**：准备 `runtime/node/`（版本/校验/许可证）；构建 `todo`/`rpc-demo` 样本；写 `orchestrator-sample`；确认 shim/协议新增方法。
+2. **Phase 6 实现**：`internal/extensions` → bridge/kernel 接口 → 状态面板/信任/对话框 → steering → 技能 → 冒烟。
+3. **UI 重设计**：功能完成后单独立项；当前标签栏、Diff 页、扩展面板仍是功能粗稿。
+4. **发布工程**：仍暂缓；Node 运行时与签名纳入发布阶段。
 
 ## 未决问题
 

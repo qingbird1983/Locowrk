@@ -52,6 +52,7 @@ docs/
 | adr/ADR-0012-fork-kernel-into-repo.md | 定稿 | 内核源码 fork 进 `pi/`，与上游分离、由本仓库维护 |
 | adr/ADR-0013-native-frame-hosts-webview.md | 定稿 | Phase 4 主窗口改为“原生外框 + 内嵌 WebView” |
 | adr/ADR-0014-host-owned-session-tabs.md | 定稿 | `session.tab` 是宿主托管的 WebView 标签页，每页一张、关闭即销毁 |
+| adr/ADR-0015-node-runtime-directory.md | 定稿 | Phase 6 随包分发 Node 运行时目录，不使用 SEA |
 | research/01-sky-valley-pi.md | 定稿 | 内核事实清单：fork 基线、包、能力、缺口与本地维护方式 |
 | research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（已按固定上游提交复核事件与 API） |
 | research/03-mygo-stack.md | 定稿 | MyGo 能力、线程模型、风险与 spike 结论（Phase 3/4 两轮 + Phase 5 多 WebView 预读与验证） |
@@ -64,7 +65,7 @@ docs/
 | roadmap/phase-3-desktop-host.md | 定稿 | Phase 3：MyGo 最小宿主与实时事件可视化 |
 | roadmap/phase-4-native-plugins.md | 定稿 | Phase 4：PluginHost 与首批原生 `ui.View` 插件 |
 | roadmap/phase-5-webview-plugins.md | 定稿 | Phase 5：WebView 混合渲染与 Diff 审阅 |
-| roadmap/phase-6-real-orchestration.md | 草稿 | Phase 6：真实 Pi 编排插件接入与技能复用 |
+| roadmap/phase-6-real-orchestration.md | 定稿 | Phase 6：真实 Pi 编排插件接入与技能复用 |
 | roadmap/phase-7-dynamic-plugins.md | 草稿 | Phase 7（探索）：第三方子进程桌面插件 |
 | standards/01-repo-structure.md | 定稿 | 目录布局、命名与根目录纪律 |
 | standards/02-git-workflow.md | 定稿 | 分支、提交、里程碑 tag、CHANGELOG 义务 |
@@ -87,6 +88,9 @@ docs/
 | design/phase-5/webview.md | 定稿 | Phase 5 标签页宿主：TabHost 契约、WebView 生命周期、覆盖层、安全与测试 |
 | design/phase-5/diff.md | 定稿 | Phase 5 Diff 审阅：git 读取、解析与 DTO、虚拟列表渲染、性能与验收 |
 | design/phase-5/report.md | 定稿 | Phase 5 进度报告：验收结果、性能读数、规范复查与体量核对 |
+| design/phase-6/runtime.md | 定稿 | Phase 6 A 轨运行时：Node 目录、扩展包、shim 矩阵与构建 |
+| design/phase-6/extensions.md | 定稿 | Phase 6 扩展发现/信任/生命周期、工具/命令/事件、steering 与桌面接线 |
+| design/phase-6/skills.md | 定稿 | Phase 6 技能发现、工作区信任、注入与诊断 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。

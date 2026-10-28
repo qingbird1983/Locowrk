@@ -25,7 +25,7 @@
 - **桥接模式（已选定）**：适配器启动一个 Node 子进程，加载安装期打包好的扩展产物（esbuild 单文件），注入显式子集 shim（`locowrk-shim/0`），把注册/事件/工具调用翻译成 JSON-RPC。选型与读数见 ADR-0009 与 [`design/phase-2/runtime-spike.md`](../design/phase-2/runtime-spike.md)。
 - **重写模式（不采用）**：按扩展语义用 Go 重写；spike 证明它只能逐个扩展重写，兼容面退化为“编排语义”。仅作为 B 不可行时的兜底。
 
-spike 实测（Windows 11）：冷启动 55~63ms、常驻约 49MiB、上游 rpc-demo/todo 可运行、subagent 可加载；QuickJS 路线更快更省，但编排样本依赖 Node 内置模块，执行失败。Node 运行时随产品分发并锁版本，运行期不执行 `npm install`、不远程加载代码。
+spike 实测（Windows 11）：冷启动 55~63ms、常驻约 49MiB、上游 rpc-demo/todo 可运行、subagent 可加载；QuickJS 路线更快更省，但编排样本依赖 Node 内置模块，执行失败。Node 运行时随产品分发并锁版本（Phase 6 定为随包目录，ADR-0015），运行期不执行 `npm install`、不远程加载代码；扩展包由开发期构建为单文件 `bundle.mjs`，运行期不编译。
 
 ### 2.2 接口
 
@@ -77,9 +77,10 @@ type Manifest struct {
 ### 2.5 命令与事件
 
 - 宿主 → 插件：`prompt`、`steer`、`follow_up`、`abort`、`tool_result`、`invoke_tool`、`event`、`shutdown_plugin`。
-- 插件 → 宿主：`register_tool`、`register_command`、`emit_event`、`spawn_subagent`、`workflow_step`、`diagnostic`、`ui_notify`、`ui_set_widget`、`fs_write`。
+- 插件 → 宿主：`register_tool`、`register_command`、`emit_event`、`spawn_subagent`、`workflow_step`、`diagnostic`、`ui_notify`、`ui_set_widget`、`fs_write`；Phase 6 增加可选 `tool_update`（工具进度）与 `event_result`（`tool_call` 闸门回执），`spawn_subagent` 仍为缓做。
 - 所有消息带 `id`、`method`、`params`；错误用 JSON-RPC error 对象，`code` 区分 `unsupported`、`invalid_params`、`timeout`、`crashed`。
 - `shutdown_plugin` 是宿主生命周期命令；扩展 API 的 `ctx.shutdown` 属 TUI 面，按矩阵 no-op，两者不要混用。
+- 用户 steering 由内核 `Steer` 处理并发布 `steering_applied`；Phase 6 不启用“插件驱动 prompt/steer”模式，协议里的 `prompt`/`steer` 保留给后续编排器模式。
 
 ## 3. B 轨：桌面插件宿主
 
