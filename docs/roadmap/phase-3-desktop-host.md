@@ -1,6 +1,6 @@
 # Phase 3：MyGo 最小宿主
 
-- 状态：定稿（2026-10-28；主壳路径见 ADR-0011；`internal/bridge`、`cmd/locowrk` 与验收脚手架已落地；设计稿：[shell.md](../design/phase-3/shell.md)、[frontend.md](../design/phase-3/frontend.md)；验收结果见 [report.md](../design/phase-3/report.md)）
+- 状态：定稿（2026-10-28 验收通过并收尾；主壳路径见 ADR-0011；`internal/bridge`、`cmd/locowrk` 与验收脚手架已落地；设计稿：[shell.md](../design/phase-3/shell.md)、[frontend.md](../design/phase-3/frontend.md)；验收结果见 [report.md](../design/phase-3/report.md)）
 - 日期：2026-10-28
 - 关联：ADR-0002、ADR-0011；architecture/01、02、03；research/03；design/phase-3
 
@@ -13,7 +13,8 @@
 ## 2. 开工前置条件
 
 - Phase 1 完成；Phase 2 可并行，但主壳不依赖它。
-- MyGo 技术 spike 通过（research/03 §6）：最小闭环已验证（隐藏窗口、WebView2、Typed IPC 双向、纯 Go 构建）；长列表、中文输入、钥匙串、打包在 Phase 3 内逐项验证。
+- MyGo 技术 spike 通过（research/03 §6）：最小闭环已验证（隐藏窗口、WebView2、Typed IPC 双向、纯 Go 构建）；长列表与中文输入在 Phase 3 内验证。
+- **钥匙串、安装包/签名、macOS/Linux 运行验证不属于 Phase 3 验收**：它们是发布前任务，登记在路线图 backlog；Phase 3 不以它们为收尾条件（2026-10-28 所有者确认）。
 - **主壳渲染路径已定稿**：WebView（ADR-0011）。
 
 ## 3. 做什么
@@ -46,6 +47,8 @@
 - 不做主题编辑器、多窗口、会话搜索。
 
 ## 5. 验收场景
+
+> 2026-10-28 全部通过；窗口与中文输入由所有者人工确认。证据与读数见 [report.md](../design/phase-3/report.md)。
 
 1. **真实会话**：配置一个真实 provider（key 走环境变量或钥匙串），发一条消息，窗口逐字显示回答。
 2. **工具过程**：模型调用 `read`/`bash`，工具卡片显示开始、参数、结果/错误与耗时。

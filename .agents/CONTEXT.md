@@ -6,14 +6,14 @@
 
 - **项目名：Locowrk**（拼写 `wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀）。远端 `github.com/qingbird1983/Locowrk`（**私有**）；旧 Rust 历史在 `archive/pre-go-locowrk`。
 - **本地目录**：`E:\Warehouse\AIwork\Locowrk`；Go module `github.com/qingbird1983/locowrk`。
-- **Phase 0 / 1 / 2**：✅ 完成，tag 已打（`phase-2.end`）。
+- **Phase 0 / 1 / 2 / 3**：✅ 完成，tag 已打（`phase-3.end`）。
 - **内核形态**：✅ 仓库内 fork（ADR-0012），源码 `pi/`，基线 `sky-valley/pi@6f6131ba`（MIT），维护规则见 `pi/FORK.md`。
-- **Phase 3（MyGo 最小宿主）**：🚧 验收 8/8 通过（[报告](docs/design/phase-3/report.md)），**尚未打 tag**：
+- **Phase 3（MyGo 最小宿主）**：✅ 验收 8/8 通过，窗口与中文输入已人工确认（[报告](docs/design/phase-3/report.md)）：
   - ✅ 主壳 `cmd/locowrk` + `desktop/` + `web/`；真实 key、工具卡片、取消、重启恢复、空闲 CPU、5k 消息、边界与安全均有脚本化证据。
   - ✅ 消息 ID 唯一化（角色+时间戳+transcript 位置），跨轮/重启稳定。
   - ✅ 窗口化消息列表 + 按帧合批；5,000 条真实会话 208 ms 打开，挂载 18 行。
-  - ⏳ 待人工：中文 IME、可见窗口滚动/高 DPI、安装包/签名、macOS/Linux。
 - **Phase 4**：未开始（开工前先写设计文档）。
+- **发布工程（与 Phase 4 并行，backlog）**：钥匙串、Windows 打包/签名（需证书）、macOS/Linux 真机与 CI。
 - **看板唯一来源**：`docs/roadmap/00-roadmap.md`；流水唯一来源：`CHANGELOG.md`。
 
 ## 上一轮完成了什么
@@ -23,13 +23,13 @@
 3. `web/src/smoke.ts` + `-smoke-scenario`（faux/real/tool/cancel/long/restore）、`-smoke-expect`、`-hidden`；`scripts/seed-long-session.mjs` 造 5,000 条真实会话。
 4. `Info.credentials` 只返回布尔值；状态行显示“凭证：已配置/未配置”；生成客户端已重跑。
 5. 文档：`design/phase-3/report.md`；shell/frontend 设计稿、看板、CHANGELOG 0.8.0、docs 地图同步。
+6. Phase 3 收尾：所有者确认窗口与中文输入；安装包/签名、钥匙串、macOS/Linux 归入发布工程 backlog，不再作为阶段验收项；打 tag `phase-3.end`。
 
 ## 下一步（按优先级）
 
-1. **人工验收**：中文 IME（Enter/Shift+Enter/候选窗）、可见窗口滚动观感、125%/150% DPI；把结果补进 Phase 3 报告。
-2. **发布前清单**：安装包体积/签名、钥匙串、macOS/Linux 冒烟；完成后再把看板改为 ✅ 并打 `phase-3.end`。
-3. **Phase 4 设计稿**：PluginHost + 首批原生 `ui.View`；插件视图复用 `transcript` 的窗口化模型。
-4. **性能复核**：10k+ 消息内存；启用压缩/回放前复核位置型消息 ID。
+1. **Phase 4 设计稿**：PluginHost + 首批原生 `ui.View`；插件视图复用 `transcript` 的窗口化模型。
+2. **发布工程（并行、backlog）**：钥匙串（Windows Credential Manager）、Windows 打包（签名需所有者证书）、跨平台 CI 构建；macOS/Linux 运行验证需真机。
+3. **性能复核**：10k+ 消息内存；启用压缩/回放前复核位置型消息 ID。
 
 ## 未决问题
 
