@@ -40,11 +40,12 @@ docs/
 | architecture/05-session-and-resources.md | 定稿 | 会话、压缩、技能、项目上下文与凭证边界 |
 | adr/ADR-0001-reuse-sky-valley-pi-kernel.md | 定稿 | 内核直接复用 `sky-valley/pi`，不自研、不嵌 Node |
 | adr/ADR-0002-mygo-desktop-host.md | 定稿 | 桌面宿主采用 MyGo，原生视图与 WebView 双路径 |
-| adr/ADR-0003-orchestration-only-compat.md | 定稿 | 只兼容编排型扩展，TUI 调用在适配层拒绝 |
+| adr/ADR-0003-orchestration-only-compat.md | 定稿 | 三分类兼容矩阵：支持 / 缓做 / TUI no-op + 诊断 |
 | adr/ADR-0004-subprocess-plugin-isolation.md | 定稿 | 第三方插件走子进程 + IPC，不用 Go `plugin` 包 |
 | adr/ADR-0005-follow-upstream-session-format.md | 定稿 | 沿用上游 JSONL 会话格式，不自立格式 |
 | adr/ADR-0006-adopt-timo-pi-doc-governance.md | 定稿 | 采用 Timo-pi 式文档与规范治理，并记录差异 |
 | adr/ADR-0007-license-and-identity.md | 定稿 | MIT 许可证、项目名与 Windows 优先 |
+| adr/ADR-0008-a-track-runtime-spike.md | 定稿 | A 轨运行时在 Phase 2 用限时 spike 定稿，Phase 6 只接入 |
 | research/01-sky-valley-pi.md | 定稿 | 内核依赖的事实清单：包、能力、缺口、版本钉 |
 | research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（待 Phase 2 用 TS 源码复核） |
 | research/03-mygo-stack.md | 草稿 | MyGo 能力、线程模型、风险与需要 spike 的问题 |
@@ -52,7 +53,7 @@ docs/
 | roadmap/00-roadmap.md | 定稿 | 总路线图、唯一进度看板、backlog、风险登记簿 |
 | roadmap/phase-0-foundation.md | 定稿 | Phase 0：仓库、规范、文档基线 |
 | roadmap/phase-1-kernel-events.md | 评审中 | Phase 1：内核接入、统一事件流、会话冒烟 |
-| roadmap/phase-2-plugin-adapter.md | 草稿 | Phase 2：编排插件适配器骨架（mock 子进程） |
+| roadmap/phase-2-plugin-adapter.md | 草稿 | Phase 2：编排适配器骨架与 A 轨运行时选型（三分类、spike） |
 | roadmap/phase-3-desktop-host.md | 草稿 | Phase 3：MyGo 最小宿主与实时事件可视化 |
 | roadmap/phase-4-native-plugins.md | 草稿 | Phase 4：PluginHost 与首批原生 `ui.View` 插件 |
 | roadmap/phase-5-webview-plugins.md | 草稿 | Phase 5：WebView 混合渲染与 Diff 审阅 |

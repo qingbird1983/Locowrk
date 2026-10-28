@@ -22,7 +22,7 @@ graph TB
         bridge["HarnessService<br/>Typed IPC 门面（DTO，无 UI 类型）"]
         bus["EventBus<br/>订阅、背压、编排事件"]
         kernel["Kernel 封装<br/>agent / ai / coding"]
-        adapter["Plugin Adapter<br/>编排兼容 + UI 能力过滤"]
+        adapter["Plugin Adapter<br/>编排兼容 + 三分类诊断"]
     end
 
     subgraph child["插件子进程（进程隔离）"]
@@ -87,7 +87,7 @@ graph TB
 ## 7. 里程碑形态
 
 - **Phase 1 末**：命令行能跑通一次完整工具调用，事件序列正确，会话可恢复。
-- **Phase 2 末**：mock 编排插件能被子进程拉起，编排事件可见，UI 调用被拒绝且不中断主流程。
+- **Phase 2 末**：mock 编排插件能被子进程拉起，编排事件可见；TUI 调用 no-op + 诊断，主流程不中断。
 - **Phase 3 末**：MyGo 窗口实时显示 Agent 输出，输入框可发消息，空闲 CPU 接近 0。
 - **Phase 4 末**：原生 `ui.View` 插件挂进插槽，可独立启停，元素生命周期断言通过。
 - **Phase 5 末**：WebView Diff 面板与原生控件并列，切换 tab 不丢页面状态。

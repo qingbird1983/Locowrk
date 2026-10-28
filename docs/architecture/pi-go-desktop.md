@@ -5,6 +5,8 @@
 - 关联：ADR-0001 ~ 0007；architecture/01 ~ 05；research/01 ~ 04
 
 > 阅读提示：本文是立项方案与设计来源。系统分层、接缝、插件与会话的规范化描述分别在 `01-overview.md`、`03-critical-seams.md`、`04-plugin-system.md`、`05-session-and-resources.md`；若本文与后续 ADR 冲突，以 ADR 为准。
+>
+> **2026-10-28 注**：插件 UI 调用策略已由 ADR-0003 修订为“三分类 + no-op + 诊断”。本文 §三、§五、§八中“拒绝 / `ErrUIUnsupported`”是 v1.1 的原始表述，实现以 ADR-0003 与 architecture/04 为准。
 
 **版本**：v1.1 · **目标**：以 Pi（earendil-works/pi）为行为契约，用纯 Go 内核 + MyGo 桌面宿主，构建一套“编排型插件选择性兼容、桌面端插件原生重建、插件具备完整界面渲染能力”的可落地架构。
 

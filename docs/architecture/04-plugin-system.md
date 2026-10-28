@@ -2,7 +2,7 @@
 
 - 状态：定稿
 - 日期：2026-10-28
-- 关联：ADR-0003、ADR-0004；architecture/01、03；research/02
+- 关联：ADR-0003、ADR-0004、ADR-0008；architecture/01、03；research/02
 
 ## 1. 两条轨道
 
@@ -11,8 +11,8 @@
 | 来源 | pi 的 TypeScript 扩展（或按同一语义重写的 Go 实现） | 本项目定义的 Go 插件 / 第三方子进程插件 |
 | 关心什么 | 工具、命令、事件钩子、子代理、workflow、异步编排 | 界面、面板、插槽、交互 |
 | 运行位置 | 子进程（进程隔离） | 宿主内（静态注册）或子进程（动态） |
-| 界面 | **不提供**；`ctx.ui.*` 与快捷键调用被拒绝 | 原生 `ui.View` 或系统 WebView |
-| 状态 | 事件与能力错误可诊断 | 插件只持有数据状态 |
+| 界面 | **不提供终端渲染**；TUI 成员 no-op + 诊断，基础对话框映射宿主 | 原生 `ui.View` 或系统 WebView |
+| 状态 | 兼容降级与安全拒绝分开诊断 | 插件只持有数据状态 |
 
 **不做的事**：不翻译终端 UI、不模拟 TUI 组件、不运行任意 Node 包、不用 Go `plugin` 包。
 
@@ -25,7 +25,7 @@
 - **桥接模式**：适配器启动一个宿主进程，加载 pi 的扩展 JS/TS（需要 JS 运行时与 pi 扩展 API shim），把注册/事件翻译成 JSON-RPC。
 - **重写模式**：按扩展语义用 Go 重写选定插件（适合子代理、workflow 这类核心能力）。
 
-Phase 2 先用 mock 把协议与过滤跑通；Phase 6 再决定真实插件的接入形态。形态选择写 ADR。
+Phase 2 先做**运行时 spike（ADR-0008）**，用 mock 跑通协议与三分类矩阵；Phase 6 只做真实扩展接入，不再承担选型。运行时可选项与选择标准见 ADR-0008。
 
 ### 2.2 接口
 
@@ -43,28 +43,37 @@ type Manifest struct {
     Name         string
     Version      string
     Protocol     int      // 子进程协议版本
-    Capabilities []string // "orchestration" | "tool" | "ui" | "shortcut"
+    Capabilities []string // 安全能力："fs.read" | "fs.write" | "exec" | "net"
     Entrypoint   string
 }
 ```
 
-### 2.3 能力过滤
+### 2.3 兼容矩阵（A 轨契约）
 
-| 能力 | 处理 |
-|---|---|
-| `orchestration` | 放行：子代理、workflow、steering、异步任务 |
-| `tool` | 放行：工具定义进内核工具表，输入输出必须是 JSON Schema 可校验结构 |
-| `ui` | 拒绝：返回 `ErrUIUnsupported`，附诊断事件；桌面用原生插件展示等价信息 |
-| `shortcut` | 拒绝：注册快捷键是宿主职责，插件不得占用 |
-| 未声明 | 拒绝（默认无能力） |
+| 分类 | 成员 | 行为 |
+|---|---|---|
+| **支持** | `registerTool`、`registerCommand`、事件钩子（agent/turn/message/tool/context/system prompt）、工具开关、模型/思考档、子代理/workflow/异步、`ctx.ui.notify/select/confirm/input` | 真实实现；基础对话框映射到宿主 UI |
+| **缓做** | provider/虚拟模型/MCP 注册、session 读写/切换/新建/分叉、`registerFlag`、autocomplete、markdown transformer、模型目录写操作 | 成员存在，返回“未实现”诊断，**不抛错** |
+| **不支持** | widget/footer/header/title、编辑器操控、自定义 renderer、工具 `renderCall`/`renderResult`、`navigateTree`、快捷键、`shutdown` | 成员存在但 no-op，**永不 throw**；每扩展每成员一条诊断 |
 
-拒绝是**结构化、一次性、不致命**的：插件继续工作，日志记录一次，UI 显示“该插件请求了桌面不支持的能力”。
+- 安全能力（文件写删、执行、网络）独立走能力闸：未声明 = 拒绝。兼容降级不得绕开安全拒绝。
+- 清单是契约；上游没有 semver，增减走 ADR/文档修订。
+- 支持项里的事件名与签名在 Phase 2 用上游 TS 源码复核；复核前不扩表。
 
-### 2.4 命令与事件
+### 2.4 诊断语义
 
-- 宿主 → 插件：`prompt`、`steer`、`follow_up`、`abort`、`tool_result`、`shutdown`。
+- 结构：`{plugin, member, category, code, message, firstAt, count}`。
+- 去重：同一插件同一成员只记一条，`count` 累加；UI 提供“兼容性诊断”面板。
+- 禁止：静默 no-op（必须留诊断）；用异常表达“不支持”（会中断扩展）。
+- 缓做成员返回零值 + `not_implemented` 诊断；不支持成员返回零值 + `unsupported` 诊断。
+- 安全拒绝单独记录，不能混进“兼容性诊断”，否则用户分不清“功能缺失”与“被安全策略拦住”。
+
+### 2.5 命令与事件
+
+- 宿主 → 插件：`prompt`、`steer`、`follow_up`、`abort`、`tool_result`、`shutdown_plugin`。
 - 插件 → 宿主：`register_tool`、`register_command`、`emit_event`、`spawn_subagent`、`workflow_step`、`diagnostic`。
 - 所有消息带 `id`、`method`、`params`；错误用 JSON-RPC error 对象，`code` 区分 `unsupported`、`invalid_params`、`timeout`、`crashed`。
+- `shutdown_plugin` 是宿主生命周期命令；扩展 API 的 `ctx.shutdown` 属 TUI 面，按矩阵 no-op，两者不要混用。
 
 ## 3. B 轨：桌面插件宿主
 

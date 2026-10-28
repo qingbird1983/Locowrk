@@ -24,11 +24,11 @@ graph LR
 |---|---|---|---|
 | [Phase 0](phase-0-foundation.md) | 仓库初始化、规范与设计定稿、文档先行落盘 | — | 🔄 文档已落盘，待所有者确认 |
 | [Phase 1](phase-1-kernel-events.md) | 跑通 `sky-valley/pi` 内核与统一事件流，会话可恢复 | 1~2 周 | 未开始（文档评审中） |
-| [Phase 2](phase-2-plugin-adapter.md) | 编排插件适配器骨架：子进程、事件转发、UI 调用拒绝 | 2~3 周 | 未开始 |
+| [Phase 2](phase-2-plugin-adapter.md) | 编排适配器骨架与 A 轨运行时选型：三分类、诊断、进程隔离 | 3~4 周 | 未开始 |
 | [Phase 3](phase-3-desktop-host.md) | MyGo 最小宿主：实时会话流、输入、取消、设置 | 2~3 周 | 未开始 |
 | [Phase 4](phase-4-native-plugins.md) | PluginHost 与首批原生 `ui.View` 插件 | 3~4 周 | 未开始 |
 | [Phase 5](phase-5-webview-plugins.md) | WebView 混合渲染与 Diff 审阅插件 | 2~3 周 | 未开始 |
-| [Phase 6](phase-6-real-orchestration.md) | 真实 Pi 编排插件接入、技能复用、steering 回传 | 3~4 周 | 未开始 |
+| [Phase 6](phase-6-real-orchestration.md) | 真实 Pi 编排插件接入、三分类矩阵、技能复用、steering 回传 | 3~4 周 | 未开始 |
 | [Phase 7](phase-7-dynamic-plugins.md) | 第三方子进程桌面插件（UI 描述模式） | 2~3 周 | 未开始（探索性） |
 
 \* 单人全职参考值，仅量级感知；AI 辅助开发节奏波动大，以验收为准，不赶工期。
@@ -61,7 +61,7 @@ graph LR
 |---|---|---|
 | `sky-valley/pi` API 漂移 / 破坏性变更 | 高 | 固定提交；上游类型隔离在 `internal/kernel`；升级独立分支 + 全量测试 |
 | MyGo v0.x API 漂移与原生 UI 成熟度 | 高 | 锁版本；用法收敛；Phase 3 spike；必要时主壳改 WebView |
-| A 轨适配器复杂度（无现成 extensions runtime） | 高 | Phase 2 先 mock；Phase 6 再选桥接/重写；范围只到编排能力 |
+| A 轨适配器复杂度（无现成 extensions runtime，需自建 shim 与打包） | 高 | Phase 2 限时 spike 选型（ADR-0008）；只承诺三分类矩阵，不承诺全量兼容 |
 | 子进程生命周期与崩溃（含孙进程） | 中 | 进程树清理、心跳、超时、重启上限、故障注入测试 |
 | 长会话性能（10k+ 消息、高频 delta） | 中 | 虚拟化列表；delta 合并；UI 背压；性能基准 |
 | WebView 三平台差异（焦点/层级/DPI） | 中 | 平台冒烟清单；覆盖层由宿主统一管理 |
@@ -77,5 +77,5 @@ graph LR
 | 正式产品名 | `pi-go-desktop` | 仓库、可执行文件、安装包 |
 | Go 模块路径 | 待定（发布前确认） | import 路径与依赖引用 |
 | 主壳渲染路径 | Phase 3 先 WebView，spike 后复核 | 开发成本与体验 |
-| A 轨接入形态 | Phase 6 决定（桥接 vs 重写） | 兼容范围与维护成本 |
+| A 轨运行时 | Phase 2 限时 spike 后由 ADR-0009 定稿 | 兼容矩阵、打包与分发成本 |
 | Windows 之外的首发平台 | 仅保证可构建 | 测试与打包投入 |
