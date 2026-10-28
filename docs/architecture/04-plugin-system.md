@@ -84,6 +84,8 @@ type Manifest struct {
 ## 3. B 轨：桌面插件宿主
 
 > 2026-10-28 修订（Phase 4 实现）：接口改为构建式 `Build(c, host)`（`ui.Element` 只在帧内有效，不能作为返回值持有）；`Dispatch` 带宿主，用于记录负载诊断；主窗口按 ADR-0013 改为“原生外框 + 内嵌 WebView”，`session.tool.detail` 落在原生右栏。
+>
+> 2026-10-28 修订（Phase 5 设计）：`session.tab` 改为**宿主托管的主区域标签页**（ADR-0014），每个标签页一张 WebView，不再由 `DesktopPlugin.Build` 填充；`DesktopPlugin` 接口不变。
 
 ### 3.1 接口
 
@@ -111,17 +113,19 @@ type PluginHost interface {
 
 ### 3.2 插槽
 
-首批插槽（Phase 4）：
+插槽清单（Phase 4 定义；`session.tab` 于 Phase 5 修订）：
 
 | 插槽 | 位置 | 典型插件 |
 |---|---|---|
 | `session.sidebar` | 原生右栏上半 | 编排树、子代理状态 |
 | `session.timeline.above` | 原生顶条（页面之上） | workflow 阶段条 |
 | `session.tool.detail` | 原生右栏下半；网页工具卡片点击选中 | 工具检查器 |
-| `session.tab` | 主区域标签页（Phase 5 启用） | Diff 审阅、文件预览 |
+| `session.tab` | 宿主托管的主区域标签页（Phase 5；ADR-0014） | Diff 审阅、文件预览；每页一张 WebView，不由 `Build` 绘制 |
 | `settings.section` | 原生设置面板（预留） | 插件设置 |
 
 插槽是布局契约，不是权限；插件能否出现由 manifest/注册表与用户启停决定。
+
+`session.tab` 是唯一例外：它的内容是宿主 `TabHost` 创建并摆放的 WebView 页面，标签栏也由宿主原生绘制。标签页不进入 `DesktopPlugin` 注册表；插件若需要标签页，经宿主 API 申请（Phase 5 只有 Diff 使用）。上限、会话切换清理与生命周期见 design/phase-5/webview.md。
 
 ### 3.3 原生 `ui.View` 规则
 
@@ -133,10 +137,12 @@ type PluginHost interface {
 
 ### 3.4 WebView 规则
 
-- WebView 在视图外创建一次（窗口初始化或插件启用时），视图只负责摆放与显隐。
-- 前端通过 MyGo 生成的 TypeScript 客户端调用 Go；事件用 Typed IPC channel，不用轮询。
+- WebView 在视图外创建一次（窗口初始化或标签页首次打开时），视图只负责摆放与显隐；一个原生窗口可以有多张，每张有自己的页面与绑定。
+- 不构建 `ui.WebView` 时页面保留（只是不显示），因此切换标签页不丢滚动与视图状态；关闭时显式 `Destroy`，释放页面与原生资源。
+- 前端通过 MyGo 生成的 TypeScript 客户端调用 Go；事件用 Typed IPC channel，不用轮询。大块数据用页面拉取，不向隐藏页推送。
 - 弹层（菜单、对话框、tooltip、toast）由宿主覆盖层统一管理；WebView 内不实现会与原生层冲突的模态。
-- 页面导航白名单：只允许本地资源与显式声明的 origin；外部链接交系统浏览器。
+- 页面导航白名单：只允许本地资源与显式声明的 origin；外部链接交系统浏览器，`window.open` 拒绝。
+- 创建/销毁不得发生在 `Build` 中，也不得在持有宿主主锁时进行：两者都可能切回主线程，造成死锁。
 
 ## 4. 子进程插件（动态加载）
 

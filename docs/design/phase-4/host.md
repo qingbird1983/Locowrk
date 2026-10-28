@@ -39,7 +39,7 @@
 | `session.sidebar` | 原生右栏上半 | `orchestration-tree` |
 | `session.timeline.above` | 原生顶条 | `workflow-timeline` |
 | `session.tool.detail` | 原生右栏下半 | `tool-inspector` |
-| `session.tab` | 预留（主区域切换） | 无 |
+| `session.tab` | 预留（主区域切换；Phase 5 起为宿主托管 WebView 标签页，ADR-0014） | 无 |
 | `settings.section` | 预留（原生设置面板） | 无 |
 
 **与 architecture/04 §3.2 的修订说明（2026-10-28）**：`session.tool.detail` 原写“工具卡片展开区”，位于页面内部，原生层无法在滚动网页里就位。Phase 4 改为“右栏工具详情面板”：页面里的工具卡片只负责选中（`Desktop.SelectToolCall`），详情在原生栏显示。Phase 5 若需要页面内展开，由 WebView 插件承担。
@@ -271,5 +271,5 @@ type PluginDiagnostic struct {
 - **panic 恢复的残余影响**：丢一帧、当帧计数偏移，已记录；若实测出现输入丢事件，改为“先探针构建、再正式构建”的双帧策略（见待决 1）。
 - **`ui.WebView` 是 v0.7.1 新面**：行为以源码与上游测试为准；升级独立提交。
 - **待决 1**：插件是否需要在 `Build` 前预检（无窗口 tester 构建一次）以把 panic 挡在帧外；Phase 4 先用插槽级 recover，够用则不引入双帧。
-- **待决 2**：`session.tab` 与 `settings.section` 何时启用；Phase 5 的 Diff 插件会先用到 `session.tab`。
+- **待决 2**：`session.tab` 与 `settings.section` 何时启用；Phase 5 的 Diff 插件会先用到 `session.tab`。已由 ADR-0014 定案：`session.tab` 是宿主托管的 WebView 标签页，不是 `DesktopPlugin.Build` 插槽；`settings.section` 仍待决。
 - **待决 3**：插件设置是否跟随会话或全局；Phase 4 定为全局（按插件名），与启停一致。

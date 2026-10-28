@@ -1,6 +1,6 @@
 # 调研 03：MyGo 桌面栈
 
-- 状态：定稿（2026-10-28；Phase 3 spike 最小闭环通过，见 §8；Phase 4 混合渲染 spike 通过，见 §9）
+- 状态：定稿（2026-10-28；Phase 3 spike 最小闭环通过，见 §8；Phase 4 混合渲染 spike 通过，见 §9；Phase 5 多 WebView 源码预读见 §10）
 - 日期：2026-10-28
 - 关联：ADR-0002、ADR-0011；architecture/01、04
 
@@ -109,4 +109,19 @@ MyGo 是目前最贴合“Go 内核 + 双渲染路径 + 单二进制”的选项
 - 覆盖/焦点/Tab 的边界行为由上游 `ui/webview_test.go` 覆盖；中文输入法、真实滚动手感仍需人工确认。
 - **隐藏窗口的限制**（Phase 4 实现时实测）：Windows 不构建隐藏窗口的原生内容（`Host.View` 不被调用）；内嵌页面的 `requestAnimationFrame` 在窗口隐藏/遮挡时暂停。验收因此拆成“隐藏冒烟验数据 + 无窗口 tester 验渲染 + `-show` 验崩溃隔离”（P-008）。
 - 本机（Windows 11）已装 WebView2；macOS/Linux 的 WebView 未在本轮验证，按 ADR-0007 只保证可构建。
+
+## 10. Phase 5 预读：多 WebView 与标签页（源码，2026-10-28）
+
+Phase 5 设计前按 v0.7.1 源码核对（未实测，实测在开工前置 spike）：
+
+| 事实 | 源码位置 | 对 Phase 5 的意义 |
+|---|---|---|
+| 一个原生窗口可创建多张 WebView；每张有自己的 `Page` 与绑定/事件 | `webview.go` `Window.NewWebView`、`pageWindows` | 会话页与 Diff 页可以并存 |
+| 每张 WebView 是“一张页面”，不构建 `ui.WebView` 时隐藏但保留页面 | `webview.go` 类型注释；`ui/webview.go` `coreWebView` | 切标签页不销毁页面，滚动与模式可保持（ADR-0014） |
+| WebView 元素在页面之上绘制原生内容；后绘制的弹层/菜单进入 `covers` 并接收点击 | `ui/webview.go` `webViewPlacements`、`covers` | 宿主 `ui.Popover` 可覆盖 Diff 页面 |
+| 关闭 `WebView.Destroy` 会关闭原生视图并从窗口的 `webViews` 移除 | `webview.go` `destroyWebView` | 关闭标签页即释放资源 |
+| 页面导航可被 `Page.OnWillNavigate` 阻止；`window.open` 可被 `SetWindowOpenHandler` 接管 | `window.go` | 外部链接交系统浏览器 |
+| 绑定与事件对所有受信任页面可见；`CallerPage` 可区分调用页 | `ipc.go`、`bridge.go` | Diff 页可复用生成客户端；不新增协议 |
+
+**未实测**：同窗两张 WebView 的焦点切换、中文输入法、高 DPI、隐藏/显示后的绘制、`Destroy` 后进程回收。开工前置用 `fixtures/spike-mygo-tabs` 验证，结果补 §11；不通过则按 ADR-0014 的备选方案先改设计。
 
