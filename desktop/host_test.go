@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 
@@ -275,6 +277,102 @@ func TestFrameBudget(t *testing.T) {
 }
 
 // itoa formats a small int without pulling strconv into the test's hot path.
+// fakeHost records what a plugin reports, without a window.
+type fakeHost struct {
+	diag     string
+	selected string
+}
+
+func (f *fakeHost) SessionID() string           { return "" }
+func (f *fakeHost) SelectedToolCall() string    { return f.selected }
+func (f *fakeHost) SelectToolCall(id string)    { f.selected = id }
+func (f *fakeHost) Invalidate()                 {}
+func (f *fakeHost) Diagnostic() string          { return f.diag }
+func (f *fakeHost) Report(code, message string) { f.diag = code + ": " + message }
+
+func pluginEvent(kind eventbus.Kind, payload string) eventbus.Event {
+	return eventbus.Event{Kind: kind, Payload: json.RawMessage(payload)}
+}
+
+func TestTreeCapsAndDepth(t *testing.T) {
+	p := newTreePlugin()
+	host := &fakeHost{}
+	for i := 0; i < maxTreeNodes+5; i++ {
+		p.Dispatch(pluginEvent(eventbus.KindSubagentSpawned, `{"id":"n`+itoa(i)+`"}`), host)
+	}
+	if len(p.order) != maxTreeNodes {
+		t.Fatalf("tree kept %d nodes, want %d", len(p.order), maxTreeNodes)
+	}
+
+	p = newTreePlugin()
+	p.Dispatch(pluginEvent(eventbus.KindSubagentSpawned, `{"id":"root"}`), host)
+	p.Dispatch(pluginEvent(eventbus.KindSubagentSpawned, `{"id":"child","parentId":"root"}`), host)
+	p.Dispatch(pluginEvent(eventbus.KindSubagentSpawned, `{"id":"grand","parentId":"child"}`), host)
+	p.Dispatch(pluginEvent(eventbus.KindSubagentSpawned, `{"id":"great","parentId":"grand"}`), host)
+	if p.nodes["great"].parent != "" {
+		t.Fatalf("node beyond depth cap attached to %q", p.nodes["great"].parent)
+	}
+	if p.nodes["grand"].parent != "child" {
+		t.Fatalf("grandchild lost its parent: %q", p.nodes["grand"].parent)
+	}
+}
+
+func TestSettledWithoutSpawnIsDone(t *testing.T) {
+	p := newTreePlugin()
+	p.Dispatch(pluginEvent(eventbus.KindSubagentSettled, `{"id":"late"}`), &fakeHost{})
+	if p.nodes["late"] == nil || p.nodes["late"].state != "done" {
+		t.Fatalf("settled event without spawn: %+v", p.nodes["late"])
+	}
+}
+
+func TestTimelineTerminalWins(t *testing.T) {
+	p := newTimelinePlugin()
+	host := &fakeHost{}
+	p.Dispatch(pluginEvent(eventbus.KindWorkflowStep, `{"name":"review","status":"done"}`), host)
+	p.Dispatch(pluginEvent(eventbus.KindWorkflowStep, `{"name":"review","status":"running"}`), host)
+	if got := p.steps["review"].status; got != "done" {
+		t.Fatalf("terminal step moved back to %q", got)
+	}
+	p.Dispatch(pluginEvent(eventbus.KindWorkflowStep, `{"name":"bad","status":"nope"}`), host)
+	if host.diag == "" {
+		t.Fatal("invalid status produced no diagnostic")
+	}
+	for i := 0; i < maxTimelineSteps+5; i++ {
+		p.Dispatch(pluginEvent(eventbus.KindWorkflowStep, `{"name":"s`+itoa(i)+`","status":"pending"}`), host)
+	}
+	if len(p.order) > maxTimelineSteps {
+		t.Fatalf("timeline kept %d steps, want at most %d", len(p.order), maxTimelineSteps)
+	}
+}
+
+func TestToolRingKeepsNewest(t *testing.T) {
+	p := newToolsPlugin()
+	host := &fakeHost{}
+	for i := 0; i < maxToolCalls+5; i++ {
+		p.Dispatch(pluginEvent(eventbus.KindToolExecutionStart, `{"toolCallId":"t`+itoa(i)+`","toolName":"read"}`), host)
+	}
+	if len(p.order) != maxToolCalls {
+		t.Fatalf("inspector kept %d calls, want %d", len(p.order), maxToolCalls)
+	}
+	if p.calls[p.order[0]] == nil || p.calls[p.order[0]].id != "t5" {
+		t.Fatalf("oldest kept %q", p.order[0])
+	}
+	if p.calls[p.order[len(p.order)-1]].id != "t"+itoa(maxToolCalls+4) {
+		t.Fatalf("newest kept %q", p.order[len(p.order)-1])
+	}
+}
+
+func TestClipTextKeepsUTF8(t *testing.T) {
+	in := strings.Repeat("中文参数", maxToolText/4)
+	out := clipText(in)
+	if !utf8.ValidString(out) {
+		t.Fatal("clipped text is not valid UTF-8")
+	}
+	if !strings.HasSuffix(out, "（截断）") {
+		t.Fatalf("clipped text lost its marker: %q", out[max(0, len(out)-20):])
+	}
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
