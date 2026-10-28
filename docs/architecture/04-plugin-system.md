@@ -83,27 +83,31 @@ type Manifest struct {
 
 ## 3. B 轨：桌面插件宿主
 
+> 2026-10-28 修订（Phase 4 实现）：接口改为构建式 `Build(c, host)`（`ui.Element` 只在帧内有效，不能作为返回值持有）；`Dispatch` 带宿主，用于记录负载诊断；主窗口按 ADR-0013 改为“原生外框 + 内嵌 WebView”，`session.tool.detail` 落在原生右栏。
+
 ### 3.1 接口
 
 ```go
 type DesktopPlugin interface {
     Name() string
+    Title() string
+    Slot() Slot
     InterestedEvents() []eventbus.Kind
-    // 原生路径：返回视图；WebView 路径返回 nil
-    View(ctx *ui.Context, host PluginHost) ui.View
-    WebViewFactory() (WebViewSpec, bool)
-    OnEvent(eventbus.Event)
+    Dispatch(eventbus.Event, PluginHost) // 只改数据；可能在 bridge goroutine 上调用
+    Build(c *ui.Context, h PluginHost)   // 主线程、每帧；不得保存 Element
 }
 
 type PluginHost interface {
-    Subscribe(kinds []eventbus.Kind) <-chan eventbus.Event
-    Dispatch(ctx context.Context, cmd Command) error
-    RegisterSlot(name string, pv PluginView)
-    Slots() map[string][]PluginView
+    SessionID() string
+    SelectedToolCall() string
+    SelectToolCall(id string)
+    Invalidate()
+    Diagnostic() string
+    Report(code, message string)
 }
 ```
 
-`PluginHost` 是宿主层自己实现的抽象；MyGo 没有“插件插槽”原语。宿主维护 `map[slot][]PluginView`，布局时按 slot 名称嵌入。
+`PluginHost` 是宿主层自己实现的抽象；MyGo 没有“插件插槽”原语。宿主维护 `map[slot][]pluginEntry`，布局时按 slot 名称嵌入，并在每个插件的构建外层 `recover`，把故障收敛为“停用 + 诊断”，不拖垮主壳。
 
 ### 3.2 插槽
 
@@ -111,11 +115,11 @@ type PluginHost interface {
 
 | 插槽 | 位置 | 典型插件 |
 |---|---|---|
-| `session.sidebar` | 会话页右侧栏 | 编排树、子代理状态 |
-| `session.timeline.above` | 消息流上方 | workflow 阶段条 |
-| `session.tool.detail` | 工具卡片展开区 | 工具检查器 |
-| `session.tab` | 主区域标签页 | Diff 审阅、文件预览 |
-| `settings.section` | 设置页 | 插件设置 |
+| `session.sidebar` | 原生右栏上半 | 编排树、子代理状态 |
+| `session.timeline.above` | 原生顶条（页面之上） | workflow 阶段条 |
+| `session.tool.detail` | 原生右栏下半；网页工具卡片点击选中 | 工具检查器 |
+| `session.tab` | 主区域标签页（Phase 5 启用） | Diff 审阅、文件预览 |
+| `settings.section` | 原生设置面板（预留） | 插件设置 |
 
 插槽是布局契约，不是权限；插件能否出现由 manifest/注册表与用户启停决定。
 

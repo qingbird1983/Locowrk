@@ -82,6 +82,7 @@ docs/
 | design/phase-3/frontend.md | 定稿 | Phase 3 WebView 前端：TypeScript/esbuild、生成式 IPC、安全与体量 |
 | design/phase-3/report.md | 定稿 | Phase 3 进度报告：8 条验收结果、性能读数、未完成项与下一步 |
 | design/phase-4/host.md | 定稿 | Phase 4 插件宿主：原生外框、插槽契约、三个插件、故障隔离与验收 |
+| design/phase-4/report.md | 草稿 | Phase 4 进度报告：自动验收结果、问题修复、接缝与体量核对（待人工确认） |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。

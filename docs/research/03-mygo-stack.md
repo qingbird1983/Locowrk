@@ -107,5 +107,6 @@ MyGo 是目前最贴合“Go 内核 + 双渲染路径 + 单二进制”的选项
 - `Event.Emit(win, …)` 在原生窗口上会发给其所有 WebView；页面内的绑定、事件、`SetFrontend` 资源与普通页面窗口一致。
 - `ui.NewTester` 可无窗口跑多帧视图测试，适合插件生命周期断言。
 - 覆盖/焦点/Tab 的边界行为由上游 `ui/webview_test.go` 覆盖；中文输入法、真实滚动手感仍需人工确认。
+- **隐藏窗口的限制**（Phase 4 实现时实测）：Windows 不构建隐藏窗口的原生内容（`Host.View` 不被调用）；内嵌页面的 `requestAnimationFrame` 在窗口隐藏/遮挡时暂停。验收因此拆成“隐藏冒烟验数据 + 无窗口 tester 验渲染 + `-show` 验崩溃隔离”（P-008）。
 - 本机（Windows 11）已装 WebView2；macOS/Linux 的 WebView 未在本轮验证，按 ADR-0007 只保证可构建。
 
