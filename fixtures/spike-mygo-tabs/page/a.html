@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tab A</title>
+  <style>
+    html, body { margin: 0; height: 100%; font: 14px system-ui; background: #f6f6f4; color: #222; }
+    #scroller { height: 120px; overflow: auto; border: 1px solid #ccc; }
+    #filler { height: 2000px; background: linear-gradient(#ddd, #f6f6f4); }
+    #box { margin-top: 8px; width: 240px; }
+  </style>
+</head>
+<body>
+  <h3>tab A</h3>
+  <div id="scroller"><div id="filler"></div></div>
+  <input id="box" value="">
+  <script>
+    const scroller = document.getElementById("scroller");
+    const box = document.getElementById("box");
+    // The page's own state: scroll offset and an edited input value. It must
+    // survive hiding the web view and showing it again.
+    window.__check = () => scroller.scrollTop + "|" + box.value;
+    window.addEventListener("DOMContentLoaded", () => {
+      scroller.scrollTop = 320;
+      box.value = "hello";
+      mygo.call("Probe.Ready", { page: "a", detail: location.pathname })
+        .catch((err) => { document.title = "call failed: " + err; });
+    });
+  </script>
+</body>
+</html>

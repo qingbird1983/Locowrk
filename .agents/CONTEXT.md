@@ -8,25 +8,26 @@
 - **本地目录**：`E:\Warehouse\AIwork\Locowrk`；Go module `github.com/qingbird1983/locowrk`。
 - **Phase 0 / 1 / 2 / 3 / 4**：✅ 完成，tag 已打（`phase-4.end`）。
 - **内核形态**：✅ 仓库内 fork（ADR-0012），源码 `pi/`，基线 `sky-valley/pi@6f6131ba`（MIT），规则见 `pi/FORK.md`。
-- **Phase 5（WebView 混合渲染与 Diff 审阅）**：🟡 设计已定稿，未实现、未开工；tag 未打。
+- **Phase 5（WebView 混合渲染与 Diff 审阅）**：🟡 设计定稿 + 双 WebView 前置 spike 通过（2026-10-28）；功能实现未开始，tag 未打。
   - `docs/roadmap/phase-5-webview-plugins.md` 定稿；设计 `docs/design/phase-5/webview.md` + `diff.md`。
   - 关键决策 ADR-0014：`session.tab` 是宿主托管的 WebView 标签页，每页一张，关闭即销毁；`DesktopPlugin` 接口不变。
   - 上限：最多 4 个 Diff 标签；diff 2 万行 / 8 MiB / 200 文件；git 5 秒超时、只读、无 shell。
-  - **开工第一步**：`fixtures/spike-mygo-tabs` 双 WebView 验证（显隐、状态、覆盖、销毁）；不通过先改 ADR/设计。
+  - 前置 spike 通过：同窗两张 WebView、切换显隐、A 页滚动/输入保持、原生 Popover 覆盖页面、`Destroy` 成功；证据 research/03 §11 与 `design/phase-5/spike-tabs.png`。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. 重读 MyGo v0.7.1 源码，确认同窗多 WebView、隐藏保留页面、弹层覆盖与 `Destroy` 行为，写入 research/03 §10（标明未实测）。
-2. 定 Phase 5 方案并落三份文档：标签页宿主、Diff 服务/解析/DTO、Diff 页面渲染与虚拟列表；写 ADR-0014。
-3. 同步架构 04（`session.tab` 语义、WebView 规则）、Phase 4 设计待决 2、docs 地图与 CHANGELOG 0.9.3。
-4. 明确验收、性能预算、安全边界（敏感路径隐藏、导航护栏、只读 git）与开工前置 spike。
+1. Phase 5 设计定稿：标签页宿主、Diff 服务/解析/DTO、Diff 页面与虚拟列表；ADR-0014 记录 `session.tab` 语义。
+2. 新建 `fixtures/spike-mygo-tabs/`：headless 标签/弹层几何、隐藏窗口页面与销毁、可见窗口切换与原生捕获三档验证。
+3. Spike 全部通过：切换只摆放活动页；A 页 `scrollTop=320` 与输入 `hello` 切回仍保持；B `IsDestroyed=true`；OS 截屏确认弹层压在网页上。
+4. 记录测试边界 P-009：`ui.NativeWebView` 含 internal 类型，仓库外无法实现假接口；改用零值 `*mygo.WebView` 句柄 + 注入工厂。
+5. 同步 research/03 §11、Phase 5 设计/路线图、CHANGELOG 0.9.4、CONTEXT 与 H-016。
 
 ## 下一步（按优先级）
 
-1. **Phase 5 前置 spike**：`fixtures/spike-mygo-tabs` 双 WebView（切换/隐藏/焦点/覆盖/销毁），结果补 research/03 §11；不通过先改 ADR-0014。
-2. **Phase 5 实现**：`desktop/tabs.go` → `diff*.go` → `web/diff.html` + `web/src/diff/*` → 工具卡片接线 → `diff` 冒烟 + 7 场景回归。
+1. **Phase 5 实现**：`desktop/tabs.go`（TabHost/标签栏/工厂）→ `diff*.go`（git/解析/DTO/绑定）→ `web/diff.html` + `web/src/diff/*` → 工具卡片接线 → `diff` 冒烟 + 7 场景回归。
+2. **可见窗口人工项**：两页焦点往返、中文输入法、高 DPI、标签栏尺寸观感（后者留 UI 重设计）。
 3. **Phase 6 预备**：真实 Pi 编排插件接入、三分类矩阵、steering 回传；与插件数据源一起评估（未开始）。
 4. **UI 重设计**：等功能完成后单独立项；当前只改功能，不改视觉。
 5. **发布工程**：仍暂缓；`standards/08 §6`“禁止提交 dist/”与前端 embed 入库的冲突留到该阶段一并修订。
@@ -46,6 +47,7 @@
 - **窗口类型**（P-007）：原生窗口没有 `win.Page()`；用 `web.Page()` + `Event.EmitPage`。
 - **隐藏窗口**（P-008）：不画原生内容、页面 rAF 暂停；不要用隐藏冒烟断言渲染。
 - **WebView 生命周期**：只在绑定 goroutine/按钮回调/冒烟里创建销毁；**绝不在 `Build` 中**，也不得持宿主主锁创建/销毁（主线程死锁）。
+- **WebView 测试**（P-009）：`ui.NativeWebView` 含 internal 类型，仓库外不能实现假接口；用零值 `*mygo.WebView` 句柄 + 注入工厂，`CapturePage` 不含子 WebView。
 - **插件纪律**：状态只存数据，`Build` 每帧重建，`ui.Element` 不落状态，不 import `internal/kernel`；事件回调只改数据 + `Invalidate()`。
 - **设置文件**：`%AppData%\Locowrk\settings.json`；`-config` 覆盖，冒烟/测试必须指到临时目录。
 - **前端构建顺序**：改 `web/src` 后先 `npm run build`，再 `go build`（`dist/` 被 embed 且入库）；契约变更后 `go run ./cmd/locowrk -generate-bindings web/src/mygo.ts`，`git diff` 只应有预期字段。
@@ -56,4 +58,4 @@
 - **ADR 不可改**：`docs/adr/` 只增不改；状态类事实写 CONTEXT/看板/CHANGELOG。
 - **导入边界**：正式代码只有 `internal/kernel` 引用 `pi/...`；MyGo 只在 `desktop/`、`cmd/locowrk`。
 - **体量**：docs 单篇 ≤300 行、ADR ≤100、代码单文件 ≤500、CONTEXT ≤150、handoff 留 5 份。
-- 踩坑索引：`P-001`~`P-008`；方法：`skills/S-001-runtime-comparison-spike.md`。
+- 踩坑索引：`P-001`~`P-009`；方法：`skills/S-001-runtime-comparison-spike.md`。

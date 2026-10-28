@@ -54,7 +54,7 @@ docs/
 | adr/ADR-0014-host-owned-session-tabs.md | 定稿 | `session.tab` 是宿主托管的 WebView 标签页，每页一张、关闭即销毁 |
 | research/01-sky-valley-pi.md | 定稿 | 内核事实清单：fork 基线、包、能力、缺口与本地维护方式 |
 | research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（已按固定上游提交复核事件与 API） |
-| research/03-mygo-stack.md | 定稿 | MyGo 能力、线程模型、风险与 spike 结论（Phase 3/4 两轮 + Phase 5 多 WebView 预读） |
+| research/03-mygo-stack.md | 定稿 | MyGo 能力、线程模型、风险与 spike 结论（Phase 3/4 两轮 + Phase 5 多 WebView 预读与验证） |
 | research/04-governance-reference.md | 定稿 | 参考仓库 Timo-pi 的治理做法与取舍 |
 | research/05-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的插件系统、权限与隔离教训（LGPL，只读思路） |
 | roadmap/00-roadmap.md | 定稿 | 总路线图、唯一进度看板、backlog、风险登记簿 |

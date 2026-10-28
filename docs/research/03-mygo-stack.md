@@ -1,6 +1,6 @@
 # 调研 03：MyGo 桌面栈
 
-- 状态：定稿（2026-10-28；Phase 3 spike 最小闭环通过，见 §8；Phase 4 混合渲染 spike 通过，见 §9；Phase 5 多 WebView 源码预读见 §10）
+- 状态：定稿（2026-10-28；Phase 3 spike 最小闭环通过，见 §8；Phase 4 混合渲染 spike 通过，见 §9；Phase 5 多 WebView 预读与双 WebView 验证见 §10、§11）
 - 日期：2026-10-28
 - 关联：ADR-0002、ADR-0011；architecture/01、04
 
@@ -124,4 +124,21 @@ Phase 5 设计前按 v0.7.1 源码核对（未实测，实测在开工前置 spi
 | 绑定与事件对所有受信任页面可见；`CallerPage` 可区分调用页 | `ipc.go`、`bridge.go` | Diff 页可复用生成客户端；不新增协议 |
 
 **未实测**：同窗两张 WebView 的焦点切换、中文输入法、高 DPI、隐藏/显示后的绘制、`Destroy` 后进程回收。开工前置用 `fixtures/spike-mygo-tabs` 验证，结果补 §11；不通过则按 ADR-0014 的备选方案先改设计。
+
+## 11. Phase 5 双 WebView spike 结果（2026-10-28）
+
+夹具：`fixtures/spike-mygo-tabs/`（独立 module，MyGo v0.7.1；Windows 11）。窗口 900×600，A/B 两张页，视图只摆放活动页，弹层用 `ui.Popover`。
+
+| 检查 | 结果 |
+|---|---|
+| 同窗创建两张 WebView、两页各自调用 Go 绑定 | 通过；隐藏窗口约 0.6 s ready，可见窗口约 1.1 s |
+| 切换标签只摆放活动页 | 通过；无窗口 tester 中切到 B 后 `WebViewAt` 只返回 B |
+| 隐藏页保留页面状态 | 通过；切到 B 再回 A，A 的 `scrollTop=320` 与输入值 `hello` 保持；B 的检查值 `b` |
+| 原生 `ui.Popover` 覆盖页面 | 通过；tester 断言弹层区域不返回 WebView；OS 截屏确认菜单画在页面上（[图](../design/phase-5/spike-tabs.png)） |
+| `Destroy` 后资源关闭 | 通过；`IsDestroyed=true`，之后视图继续绘制 A 不 panic |
+| 原生 `CapturePage` | 只含原生内容，不含子 WebView（页面区域为空白）；不能作为“弹层压住页面”的证据，改用 OS 截屏 |
+
+**测试边界（重要）**：`ui.NativeWebView` 的方法签名含 MyGo internal 包类型 `*surface.Conn`，仓库外无法实现假 WebView。无窗口测试改用**零值 `*mygo.WebView` 句柄 + 注入工厂**：`ui.Tester` 只比较句柄身份与摆放，不调用其方法；关闭/刷新等副作用由工厂回调计数。主项目 `desktop` 测试按此做法，不尝试实现 `ui.NativeWebView`。
+
+**未覆盖**：焦点在两张页面间往返、中文输入法、高 DPI、`Destroy` 后进程/内存归零（只断言 `IsDestroyed`）；退出时 WebView2 打印 `Failed to unregister class Chrome_WidgetWin_0`，不影响运行结果，后续升级 MyGo 时观察是否消失。
 

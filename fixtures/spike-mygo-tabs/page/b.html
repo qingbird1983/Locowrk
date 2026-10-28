@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tab B</title>
+  <style>
+    html, body { margin: 0; height: 100%; font: 14px system-ui; background: #eef4ff; color: #123; }
+    body { display: grid; place-items: center; }
+    p { font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <p>tab B · diff placeholder</p>
+  <script>
+    window.__check = () => "b";
+    window.addEventListener("DOMContentLoaded", () => {
+      mygo.call("Probe.Ready", { page: "b", detail: location.pathname })
+        .catch((err) => { document.title = "call failed: " + err; });
+    });
+  </script>
+</body>
+</html>

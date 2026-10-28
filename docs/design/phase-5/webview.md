@@ -1,8 +1,8 @@
 # 设计：Phase 5 WebView 混合渲染与标签页宿主
 
-- 状态：定稿
+- 状态：定稿（2026-10-28 修订：双 WebView 前置 spike 已通过，见 §9）
 - 日期：2026-10-28
-- 关联：ADR-0014、ADR-0013、ADR-0002；architecture/04 §3.2、§3.4；roadmap/phase-5；research/03 §10
+- 关联：ADR-0014、ADR-0013、ADR-0002；architecture/04 §3.2、§3.4；roadmap/phase-5；research/03 §10、§11
 
 ## 1. 目标与非目标
 
@@ -123,8 +123,8 @@ type TabHost interface {
 
 | 检查 | 手段 | 断言 |
 |---|---|---|
-| 标签状态 | `desktop/tabs_test.go`（假 WebView 工厂） | 打开/激活/关闭/去重/上限/会话重置 |
-| 标签栏 | `ui.NewTester` + 假 `ui.NativeWebView` | 标题、活动态、关闭按钮；非活动标签不摆放，活动标签摆放 |
+| 标签状态 | `desktop/tabs_test.go`（注入 WebView 工厂） | 打开/激活/关闭/去重/上限/会话重置 |
+| 标签栏 | `ui.NewTester` + 零值 `*mygo.WebView` 句柄 | 标题、活动态、关闭按钮；非活动标签不摆放，活动标签摆放 |
 | 生命周期 | 同上，工厂计数 | 每标签只创建一次；切换不重建；关闭即销毁；重开新建 |
 | 覆盖层 | `ui.NewTester` | `⋯` 菜单文本出现；菜单区域落在 WebView 洞之上；关闭后焦点回锚点 |
 | 导航 | 单元 | 非 `/` URL 被拒；外链被 `PreventDefault` |
@@ -133,11 +133,13 @@ type TabHost interface {
 | 回归 | Phase 4 的 7 个场景 | 全部重跑通过，断言不放宽 |
 | 人工 | 可见窗口 | 两标签切换、滚动保持、弹层覆盖、焦点回页面、高 DPI |
 
-**开工前置（第一步实现）**：`fixtures/spike-mygo-tabs` 双 WebView 小验证——同窗创建两张、切换显隐、页面状态保留、`ui.Popover` 覆盖、`Destroy` 后无残留。结果写入 research/03 §11。若隐显或覆盖不成立，退回“单 WebView + 路由”方案，先改 ADR-0014 与本文再写代码。
+**开工前置（2026-10-28 已通过）**：`fixtures/spike-mygo-tabs` 验证了同窗两张 WebView、切换显隐、页面状态保留、`ui.Popover` 覆盖与 `Destroy`；结果与读数见 research/03 §11，弹层截图见 `design/phase-5/spike-tabs.png`。未覆盖焦点往返、中文输入法、高 DPI 与销毁后的进程回收，留给可见窗口人工验收。
+
+**测试边界**：`ui.NativeWebView` 的方法参数含 MyGo internal 类型，仓库外不能实现假接口。无窗口测试使用零值 `*mygo.WebView` 句柄（`ui.Tester` 只比较身份与摆放），关闭/刷新由注入工厂计数；不要尝试实现 `ui.NativeWebView`。原生 `CapturePage` 不含子 WebView，不能用来证明弹层压住页面。
 
 ## 10. 风险与待决
 
-- **双 WebView 未实测**：源码表明支持，但同窗焦点、DPI、销毁回收需 spike；这是本阶段唯一可能推翻设计的前提。
+- **双 WebView 行为已通过**：切换、页面状态、弹层覆盖、`Destroy` 均有证据（research/03 §11）；剩余未知是同窗焦点往返、中文输入法与高 DPI，作为可见窗口人工验收项，不再是设计前提。
 - **每标签一个 WebView 的内存**：上限 4 个；关闭即销毁。若实测单个标签常驻过高，改为按需销毁非活动标签（会丢页面状态，需重新评估验收 3）。
 - **标签栏是功能粗稿**：宽度、按钮尺寸、配色留到 UI 重设计，不在本阶段打磨。
 - **焦点与输入法**：切换标签后键盘进入页面、中文输入需人工确认；若失败，记录为平台问题并评估 `Focus()` 调用时机。
