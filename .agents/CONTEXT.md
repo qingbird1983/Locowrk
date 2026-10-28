@@ -8,29 +8,26 @@
 - **本地目录**：`E:\Warehouse\AIwork\Locowrk`；Go module `github.com/qingbird1983/locowrk`。
 - **Phase 0 / 1 / 2 / 3 / 4**：✅ 完成，tag 已打（`phase-4.end`）。
 - **内核形态**：✅ 仓库内 fork（ADR-0012），源码 `pi/`，基线 `sky-valley/pi@6f6131ba`（MIT），规则见 `pi/FORK.md`。
-- **Phase 5（WebView 混合渲染与 Diff 审阅）**：🟡 功能实现完成（2026-10-28），待人工验收与报告定稿；tag 未打。
-  - 设计 `docs/design/phase-5/webview.md` + `diff.md`；ADR-0014（`session.tab` 宿主托管）。
-  - 标签页：`desktop/tabs.go`；Diff：`desktop/diff.go` + `diff_parse.go`；页面：`web/diff.html` + `web/src/diff/*`。
-  - 冒烟：`diff`（直接打开）与 `diff-tool`（工具卡片链路）；10k 行 `diffMs≈425`；切标签滚动/模式保持；关闭后 `tabs=0`。
-  - 待人工：真实窗口焦点回网页、中文输入法、高 DPI；macOS/Linux 仅构建。
+- **Phase 5（WebView 混合渲染与 Diff 审阅）**：✅ 完成（2026-10-28，tag `phase-5.end`；[报告](../docs/design/phase-5/report.md)）。
+  - 标签页宿主 + Diff 页面；10k 行 0.43 s；工具卡片链路、切标签状态保持、关闭释放均验收。
+  - ADR-0014；设计 `docs/design/phase-5/webview.md`、`diff.md`；报告定稿。
+- **Phase 6（真实 Pi 编排插件与技能复用）**：🟡 设计进行中，未实现、未开工；tag 未打。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. 实现 `TabHost`：会话 + 最多 4 个 Diff 标签，宿主创建/摆放/销毁 WebView；`⋯` 菜单、刷新事件、会话切换清理；无窗口测试用零值句柄 + 工厂（P-009）。
-2. 实现 Diff：固定只读 git 命令、15k 行解析与 DTO、敏感路径/截断/行号；`Desktop.OpenDiff` 从工具卡片打开并按工具路径定位。
-3. 实现 Diff 页面：并排/统一、虚拟列表、折叠、轻量着色、复制路径、刷新、截断/错误提示；`diff-reload` 保持模式与滚动。
-4. 冒烟 `diff`/`diff-tool` 通过；10k 行约 425 ms；切标签滚动与模式保持；关闭后 `tabs=0`；Phase 3/4 场景回归通过（`restore` 未种子）。
-5. 文档：Phase 5 报告草案、CHANGELOG 0.9.5、看板/路线图状态、CONTEXT/H-017。
+1. Phase 5 功能：`TabHost`、Diff 服务/解析、Diff 页面、工具卡片接线；10k 行 0.43 s、切标签状态保持、关闭释放。
+2. 自动门禁：`go test -race`、`npm run check`、`npm test`、跨平台构建、`check-docs` 全绿；`diff`/`diff-tool` 与 Phase 3/4 场景回归。
+3. 所有者确认可见窗口验收；Phase 5 报告定稿，看板/CHANGELOG 0.10.0，tag `phase-5.end`。
+4. 进入 Phase 6 设计：先读 A 轨适配器、ADR-0009、research/02 与 Phase 2 契约。
 
 ## 下一步（按优先级）
 
-1. **人工验收 Phase 5**：可见窗口里切标签后键盘焦点、菜单关闭后焦点回网页、中文输入法、高 DPI；确认后把报告转定稿并打 `phase-5.end`。
-2. **收尾**：补 `real`/`restore` 冒烟（有 key / 种子会话），更新报告与看板，tag。
-3. **Phase 6 预备**：真实 Pi 编排插件接入、三分类矩阵、steering 回传。
-4. **UI 重设计**：功能完成后单独立项；当前标签栏与 Diff 页仍是功能粗稿。
-5. **发布工程**：仍暂缓；`standards/08 §6` 与前端 embed 的冲突留到该阶段。
+1. **Phase 6 设计定稿**：真实扩展接入/信任、三分类矩阵落地、子代理/workflow/steering、技能信任与诊断；先写 `docs/design/phase-6/`，再实现。
+2. **Phase 6 开工前置**：选定 1~2 个真实扩展样本（记录版本/来源），确认打包与 Node 分发方式。
+3. **UI 重设计**：等功能完成后单独立项；当前标签栏与 Diff 页仍是功能粗稿。
+4. **发布工程**：仍暂缓；`standards/08 §6` 与前端 embed 的冲突留到该阶段。
 
 ## 未决问题
 
