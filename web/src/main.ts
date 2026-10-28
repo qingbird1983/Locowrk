@@ -36,6 +36,10 @@ const view = new TranscriptView(
       console.warn("select tool call:", err);
     });
   },
+  (toolCallId) => {
+    void Desktop.openDiff(currentSession, toolCallId)
+      .catch((err) => setStatus("打开变更失败：" + errorText(err), true));
+  },
 );
 
 function setBusy(next: boolean) {
@@ -239,6 +243,9 @@ async function init(): Promise<void> {
       await openSession(first.path);
       if (!currentSession) throw new Error("会话未能打开");
       return currentSession;
+    },
+    openDiff: async () => {
+      await Desktop.openDiff("", "");
     },
     send: sendText,
     stop: async () => {

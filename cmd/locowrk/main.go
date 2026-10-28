@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -33,17 +36,19 @@ func main() {
 
 func run() error {
 	var (
-		cwd      = flag.String("cwd", "", "workspace directory (default: current; temp for -smoke)")
-		config   = flag.String("config", "", "settings file (default: per-user; temp for -smoke)")
-		model    = flag.String("model", defaultModel(), "model as provider/id")
-		thinking = flag.String("thinking", "off", "thinking level: off|low|medium|high")
-		faux     = flag.Bool("faux", false, "use the scripted faux provider (no API key)")
-		smoke    = flag.Bool("smoke", false, "hidden-window acceptance run driven by the page")
-		scenario = flag.String("smoke-scenario", "faux", "smoke scenario: faux|real|tool|cancel|long|restore|plugin|plugin-crash")
-		expect   = flag.String("smoke-expect", "", "text the restore scenario must find")
-		hidden   = flag.Bool("hidden", false, "run without showing the window")
-		show     = flag.Bool("show", false, "show the window during a smoke run")
-		gen      = flag.String("generate-bindings", "", "write the TypeScript client to this path and exit")
+		cwd       = flag.String("cwd", "", "workspace directory (default: current; temp for -smoke)")
+		config    = flag.String("config", "", "settings file (default: per-user; temp for -smoke)")
+		model     = flag.String("model", defaultModel(), "model as provider/id")
+		thinking  = flag.String("thinking", "off", "thinking level: off|low|medium|high")
+		faux      = flag.Bool("faux", false, "use the scripted faux provider (no API key)")
+		smoke     = flag.Bool("smoke", false, "hidden-window acceptance run driven by the page")
+		scenario  = flag.String("smoke-scenario", "faux", "smoke scenario: faux|real|tool|cancel|long|restore|plugin|plugin-crash|diff")
+		expect    = flag.String("smoke-expect", "", "text the restore scenario must find")
+		hidden    = flag.Bool("hidden", false, "run without showing the window")
+		show      = flag.Bool("show", false, "show the window during a smoke run")
+		smokeHold = flag.Duration("smoke-hold", 0, "keep a passing smoke window open this long")
+		diffLines = flag.Int("smoke-diff-lines", 0, "diff scenario: baseline lines to rewrite (0 for the small fixture)")
+		gen       = flag.String("generate-bindings", "", "write the TypeScript client to this path and exit")
 	)
 	flag.Parse()
 
@@ -55,6 +60,7 @@ func run() error {
 	if *smoke && *scenario == "plugin-crash" {
 		*show = true
 	}
+	autoCwd := false
 	if *cwd == "" {
 		if *smoke {
 			dir, err := os.MkdirTemp("", "locowrk-smoke-*")
@@ -63,6 +69,7 @@ func run() error {
 			}
 			defer func() { _ = os.RemoveAll(dir) }()
 			*cwd = dir
+			autoCwd = true
 		} else {
 			dir, err := os.Getwd()
 			if err != nil {
@@ -82,6 +89,11 @@ func run() error {
 	if *smoke && (*scenario == "tool" || *scenario == "plugin") {
 		note := filepath.Join(*cwd, "smoke-note.txt")
 		if err := os.WriteFile(note, []byte("locowrk smoke note\n"), 0o644); err != nil {
+			return err
+		}
+	}
+	if *smoke && *scenario == "diff" && autoCwd {
+		if err := prepareDiffSmoke(*cwd, *diffLines); err != nil {
 			return err
 		}
 	}
@@ -108,6 +120,7 @@ func run() error {
 		extras = append(extras, smokeCrashPlugin{})
 	}
 	host := desktop.NewPluginHost(desktop.HostOptions{SettingsPath: *config, Plugins: extras})
+	diffService := desktop.NewDiffService(host, *cwd)
 
 	var app *desktop.App
 	b, err := bridge.New(k, bridge.Options{OnEvent: func(ev eventbus.Event) {
@@ -127,6 +140,7 @@ func run() error {
 		Host:     host,
 	})
 	mygo.BindAs("Desktop", desktop.NewBindings(app))
+	mygo.BindAs("Diff", desktop.NewDiffBindings(diffService))
 	mygo.SetFrontend(web.FS())
 
 	if *gen != "" {
@@ -168,10 +182,11 @@ func run() error {
 		app.SetWindow(win)
 		app.SetPage(page.Page())
 		win.OnClose(func(*mygo.CloseEvent) {
+			host.CloseTabs()
 			app.Shutdown()
 		})
 		if *smoke {
-			go runSmoke(page, host, app, *scenario, *expect)
+			go runSmoke(page, host, app, *scenario, *expect, *smokeHold)
 		}
 	})
 
@@ -191,20 +206,25 @@ func defaultModel() string {
 
 // smokeResult is the JSON line the smoke run prints.
 type smokeResult struct {
-	OK      bool              `json:"ok"`
-	Text    string            `json:"text,omitempty"`
-	Session string            `json:"session,omitempty"`
-	Error   string            `json:"error,omitempty"`
-	MS      int               `json:"ms,omitempty"`
-	Rows    int               `json:"rows,omitempty"`
-	Mounted int               `json:"mounted,omitempty"`
-	Tools   int               `json:"tools,omitempty"`
-	Plugins *desktop.Snapshot `json:"plugins,omitempty"`
+	OK        bool              `json:"ok"`
+	Text      string            `json:"text,omitempty"`
+	Session   string            `json:"session,omitempty"`
+	Error     string            `json:"error,omitempty"`
+	MS        int               `json:"ms,omitempty"`
+	Rows      int               `json:"rows,omitempty"`
+	Mounted   int               `json:"mounted,omitempty"`
+	Tools     int               `json:"tools,omitempty"`
+	Plugins   *desktop.Snapshot `json:"plugins,omitempty"`
+	Tabs      int               `json:"tabs,omitempty"`
+	DiffState string            `json:"diffState,omitempty"`
+	DiffFiles int               `json:"diffFiles,omitempty"`
+	DiffLines int               `json:"diffLines,omitempty"`
+	DiffMS    int               `json:"diffMs,omitempty"`
 }
 
 // runSmoke drives the page through the requested acceptance scenario and exits
 // the process with 0 or 1.
-func runSmoke(page *mygo.WebView, host *desktop.Host, app *desktop.App, scenario, expect string) {
+func runSmoke(page *mygo.WebView, host *desktop.Host, app *desktop.App, scenario, expect string, hold time.Duration) {
 	deadline := time.Now().Add(120 * time.Second)
 	for time.Now().Before(deadline) {
 		kind, err := mygo.EvalAs[string](page.Page(), "return typeof window.__locowrkSmoke")
@@ -230,6 +250,15 @@ func runSmoke(page *mygo.WebView, host *desktop.Host, app *desktop.App, scenario
 				smokeFail(err.Error())
 				return
 			}
+			if scenario == "diff" {
+				if err := checkDiff(host, &result); err != nil {
+					smokeFail(err.Error())
+					return
+				}
+			}
+			if hold > 0 {
+				time.Sleep(hold)
+			}
 			encoded, _ := json.Marshal(result)
 			fmt.Println(string(encoded))
 			mygo.App.Exit(0)
@@ -238,6 +267,39 @@ func runSmoke(page *mygo.WebView, host *desktop.Host, app *desktop.App, scenario
 		time.Sleep(200 * time.Millisecond)
 	}
 	smokeFail("smoke: frontend never became ready")
+}
+
+// checkDiff waits for the diff page opened by the smoke scenario and reads its
+// state markers. The page renders synchronously after Diff.Load, so a hidden
+// window still has usable data.
+func checkDiff(host *desktop.Host, result *smokeResult) error {
+	deadline := time.Now().Add(15 * time.Second)
+	last := "tab not opened"
+	for time.Now().Before(deadline) {
+		result.Tabs = len(host.Tabs())
+		id := host.ActiveTab()
+		page := host.TabPage(id)
+		if page != nil {
+			state, err := mygo.EvalAs[string](page, "return document.documentElement.dataset.diffState || ''")
+			if err != nil {
+				last = "diff page eval: " + err.Error()
+			} else {
+				files, _ := mygo.EvalAs[string](page, "return document.documentElement.dataset.diffFiles || '0'")
+				lines, _ := mygo.EvalAs[string](page, "return document.documentElement.dataset.diffLines || '0'")
+				ms, _ := mygo.EvalAs[string](page, "return document.documentElement.dataset.diffMs || '0'")
+				result.DiffState = state
+				result.DiffFiles, _ = strconv.Atoi(files)
+				result.DiffLines, _ = strconv.Atoi(lines)
+				result.DiffMS, _ = strconv.Atoi(ms)
+				if state == "ok" && result.DiffFiles > 0 && result.DiffLines > 0 {
+					return nil
+				}
+				last = fmt.Sprintf("diff state=%q files=%d lines=%d", state, result.DiffFiles, result.DiffLines)
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return fmt.Errorf("diff smoke: %s", last)
 }
 
 // checkPlugins injects orchestration events and asserts the host state.
@@ -312,4 +374,50 @@ func smokeFail(message string) {
 	fmt.Println(string(encoded))
 	fmt.Fprintln(os.Stderr, "smoke:", message)
 	mygo.App.Exit(1)
+}
+
+// prepareDiffSmoke makes the temporary workspace a repository with one
+// unstaged modification, so the diff scenario is deterministic. With lines>0
+// it rewrites that many lines, producing about 2×lines of diff.
+func prepareDiffSmoke(dir string, lines int) error {
+	file := filepath.Join(dir, "smoke-diff.txt")
+	base := "one\ntwo\nthree\n"
+	if lines > 0 {
+		var b strings.Builder
+		for i := 0; i < lines; i++ {
+			fmt.Fprintf(&b, "base line %d\n", i)
+		}
+		base = b.String()
+	}
+	if err := os.WriteFile(file, []byte(base), 0o644); err != nil {
+		return err
+	}
+	run := func(args ...string) error {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("git %v: %w: %s", args, err, out)
+		}
+		return nil
+	}
+	if err := run("init"); err != nil {
+		return err
+	}
+	if err := run("config", "core.autocrlf", "false"); err != nil {
+		return err
+	}
+	if err := run("add", "smoke-diff.txt"); err != nil {
+		return err
+	}
+	if err := run("-c", "user.name=Locowrk", "-c", "user.email=smoke@example.com", "commit", "-m", "base"); err != nil {
+		return err
+	}
+	if lines > 0 {
+		var b strings.Builder
+		for i := 0; i < lines; i++ {
+			fmt.Fprintf(&b, "changed line %d\n", i)
+		}
+		return os.WriteFile(file, []byte(b.String()), 0o644)
+	}
+	return os.WriteFile(file, []byte("one\n2\nthree\nfour\n"), 0o644)
 }

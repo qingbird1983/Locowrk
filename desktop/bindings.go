@@ -53,3 +53,8 @@ func (b *Bindings) SetThinking(sessionID, level string) error {
 func (b *Bindings) SelectToolCall(sessionID, toolCallID string) error {
 	return b.app.SelectToolCall(sessionID, toolCallID)
 }
+
+// OpenDiff opens the workspace diff for a tool card in a review tab.
+func (b *Bindings) OpenDiff(sessionID, toolCallID string) error {
+	return b.app.OpenDiff(sessionID, toolCallID)
+}

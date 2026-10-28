@@ -9,6 +9,7 @@ export interface SmokeHost {
   view: TranscriptView;
   newSession(): Promise<string>;
   openFirst(): Promise<string>;
+  openDiff(): Promise<void>;
   send(text: string): Promise<void>;
   stop(): Promise<void>;
   text(): string;
@@ -26,7 +27,7 @@ interface SmokeResult {
   tools?: number;
 }
 
-const SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash"] as const;
+const SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff"] as const;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -153,6 +154,16 @@ async function scenarioPlugin(host: SmokeHost): Promise<SmokeResult> {
   };
 }
 
+async function scenarioDiff(host: SmokeHost): Promise<SmokeResult> {
+  const started = performance.now();
+  await host.openDiff();
+  return {
+    ok: true,
+    scenario: "diff",
+    ms: Math.round(performance.now() - started),
+  };
+}
+
 async function scenarioCancel(host: SmokeHost): Promise<SmokeResult> {
   const id = await host.newSession();
   const first = host.send("写一段很长的说明");
@@ -231,6 +242,8 @@ async function run(host: SmokeHost): Promise<SmokeResult> {
       return scenarioTool(host);
     case "plugin":
       return scenarioPlugin(host);
+    case "diff":
+      return scenarioDiff(host);
     case "cancel":
       return scenarioCancel(host);
     case "long":

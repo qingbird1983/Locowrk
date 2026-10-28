@@ -44,6 +44,10 @@ var Desktop = {
   newSession(cwd, model, thinking) {
     return call("Desktop.NewSession", cwd, model, thinking);
   },
+  /** OpenDiff opens the workspace diff for a tool card in a review tab. */
+  openDiff(sessionID, toolCallID) {
+    return call("Desktop.OpenDiff", sessionID, toolCallID);
+  },
   /** OpenSession resumes a stored session and selects it. */
   openSession(path, model, thinking) {
     return call("Desktop.OpenSession", path, model, thinking);
@@ -75,11 +79,16 @@ var Desktop = {
 };
 var events = {
   /** Event carries one project event to the page. */
-  harnessEvent: event("harness-event")
+  harnessEvent: event("harness-event"),
+  /**
+   * DiffReload asks a diff page to reload its document without losing the
+   * current view mode or scroll anchor.
+   */
+  diffReload: event("diff-reload")
 };
 
 // src/smoke.ts
-var SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash"];
+var SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff"];
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -194,6 +203,15 @@ async function scenarioPlugin(host) {
     mounted: host.view.stats().mounted
   };
 }
+async function scenarioDiff(host) {
+  const started = performance.now();
+  await host.openDiff();
+  return {
+    ok: true,
+    scenario: "diff",
+    ms: Math.round(performance.now() - started)
+  };
+}
 async function scenarioCancel(host) {
   const id = await host.newSession();
   const first = host.send("\u5199\u4E00\u6BB5\u5F88\u957F\u7684\u8BF4\u660E");
@@ -269,6 +287,8 @@ async function run(host) {
       return scenarioTool(host);
     case "plugin":
       return scenarioPlugin(host);
+    case "diff":
+      return scenarioDiff(host);
     case "cancel":
       return scenarioCancel(host);
     case "long":
@@ -309,7 +329,7 @@ function element(tag, className) {
   return node;
 }
 var TranscriptView = class {
-  constructor(scroller, onFollowChange, onSelectTool) {
+  constructor(scroller, onFollowChange, onSelectTool, onOpenDiff) {
     this.items = [];
     this.positions = /* @__PURE__ */ new Map();
     this.heights = [];
@@ -323,6 +343,7 @@ var TranscriptView = class {
     this.scroller = scroller;
     this.onFollowChange = onFollowChange;
     this.onSelectTool = onSelectTool;
+    this.onOpenDiff = onOpenDiff;
     this.topSpacer = element("div", "vspace");
     this.list = element("div", "vlist");
     this.bottomSpacer = element("div", "vspace");
@@ -643,7 +664,16 @@ var TranscriptView = class {
       const summary = element("summary");
       const name = element("span", "tool-name");
       const state = element("span", "tool-state");
-      summary.append(name, state);
+      const diff = element("button", "diff-open");
+      diff.type = "button";
+      diff.textContent = "\u67E5\u770B\u53D8\u66F4";
+      diff.title = "\u5728\u5DE5\u4F5C\u533A\u53D8\u66F4\u4E2D\u67E5\u770B\u6B64\u6587\u4EF6";
+      diff.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.onOpenDiff?.(item.id);
+      });
+      summary.append(name, state, diff);
       const args = element("pre", "args");
       const result = element("pre", "result");
       details.append(summary, args, result);
@@ -710,6 +740,9 @@ var view = new TranscriptView(
     void Desktop.selectToolCall(currentSession, toolCallId).catch((err) => {
       console.warn("select tool call:", err);
     });
+  },
+  (toolCallId) => {
+    void Desktop.openDiff(currentSession, toolCallId).catch((err) => setStatus("\u6253\u5F00\u53D8\u66F4\u5931\u8D25\uFF1A" + errorText(err), true));
   }
 );
 function setBusy(next) {
@@ -896,6 +929,9 @@ async function init() {
       await openSession(first2.path);
       if (!currentSession) throw new Error("\u4F1A\u8BDD\u672A\u80FD\u6253\u5F00");
       return currentSession;
+    },
+    openDiff: async () => {
+      await Desktop.openDiff("", "");
     },
     send: sendText,
     stop: async () => {

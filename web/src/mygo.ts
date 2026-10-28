@@ -4,6 +4,59 @@ import { call, event } from "mygo-runtime";
 
 // ---- Types ----
 
+/** DiffDoc is one workspace diff as the review page renders it. */
+export interface DiffDoc {
+  /** ok|clean|notRepo|noGit|timeout|error */
+  state: string;
+  message?: string;
+  workspace: string;
+  revision?: string;
+  focus?: string;
+  hidden: number;
+  skipped: number;
+  truncated: boolean;
+  reason?: string;
+  stats: DiffStats;
+  files: DiffFile[];
+}
+
+/** DiffFile is one changed file. */
+export interface DiffFile {
+  path: string;
+  oldPath?: string;
+  /** modified|added|deleted|renamed|binary|mode */
+  status: string;
+  binary?: boolean;
+  hunks: DiffHunk[];
+}
+
+/** DiffHunk is one @@ section. */
+export interface DiffHunk {
+  header: string;
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  lines: DiffLine[];
+}
+
+/** DiffLine is one context, added or removed line. */
+export interface DiffLine {
+  /** context|add|del|meta */
+  kind: string;
+  oldNo?: number;
+  newNo?: number;
+  text: string;
+}
+
+/** DiffStats summarizes a DiffDoc. */
+export interface DiffStats {
+  files: number;
+  additions: number;
+  deletions: number;
+  lines: number;
+}
+
 /** Envelope is the payload of Event. */
 export interface Envelope {
   kind: string;
@@ -69,6 +122,10 @@ export const Desktop = {
   newSession(cwd: string, model: string, thinking: string): Promise<string> {
     return call("Desktop.NewSession", cwd, model, thinking);
   },
+  /** OpenDiff opens the workspace diff for a tool card in a review tab. */
+  openDiff(sessionID: string, toolCallID: string): Promise<void> {
+    return call("Desktop.OpenDiff", sessionID, toolCallID);
+  },
   /** OpenSession resumes a stored session and selects it. */
   openSession(path: string, model: string, thinking: string): Promise<string> {
     return call("Desktop.OpenSession", path, model, thinking);
@@ -99,10 +156,30 @@ export const Desktop = {
   },
 } as const;
 
+/** DiffBindings is the page-facing surface of DiffService. */
+export const Diff = {
+  /** CopyPath copies one file path to the host clipboard. */
+  copyPath(tabID: string, path: string): Promise<void> {
+    return call("Diff.CopyPath", tabID, path);
+  },
+  /**
+   * Load returns the diff of a tab's workspace. It is called by the diff page
+   * after it loads; expected git failures are states in DiffDoc, not errors.
+   */
+  load(tabID: string): Promise<DiffDoc> {
+    return call("Diff.Load", tabID);
+  },
+} as const;
+
 // ---- Events ----
 
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
   /** Event carries one project event to the page. */
   harnessEvent: event<Envelope>("harness-event"),
+  /**
+   * DiffReload asks a diff page to reload its document without losing the
+   * current view mode or scroll anchor.
+   */
+  diffReload: event<{}>("diff-reload"),
 } as const;

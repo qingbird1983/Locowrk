@@ -7,8 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --format=esm --target=es2020 --outfile=dist/app.js && node scripts/copy.mjs",
-    "check": "tsc --noEmit"
+    "build": "esbuild src/main.ts --bundle --format=esm --target=es2020 --outfile=dist/app.js && esbuild src/diff/main.ts --bundle --format=esm --target=es2020 --outfile=dist/diff.js && node scripts/copy.mjs",
+    "check": "tsc --noEmit",
+    "test": "node scripts/test-diff.mjs"
   },
   "dependencies": {
     "mygo-runtime": "0.7.1"

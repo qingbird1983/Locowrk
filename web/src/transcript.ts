@@ -80,15 +80,18 @@ export class TranscriptView {
   private pendingTimer = 0;
   private onFollowChange?: (follow: boolean) => void;
   private onSelectTool?: (id: string) => void;
+  private onOpenDiff?: (id: string) => void;
 
   constructor(
     scroller: HTMLElement,
     onFollowChange?: (follow: boolean) => void,
     onSelectTool?: (id: string) => void,
+    onOpenDiff?: (id: string) => void,
   ) {
     this.scroller = scroller;
     this.onFollowChange = onFollowChange;
     this.onSelectTool = onSelectTool;
+    this.onOpenDiff = onOpenDiff;
     this.topSpacer = element("div", "vspace");
     this.list = element("div", "vlist");
     this.bottomSpacer = element("div", "vspace");
@@ -444,7 +447,16 @@ export class TranscriptView {
       const summary = element("summary");
       const name = element("span", "tool-name");
       const state = element("span", "tool-state");
-      summary.append(name, state);
+      const diff = element("button", "diff-open");
+      diff.type = "button";
+      diff.textContent = "查看变更";
+      diff.title = "在工作区变更中查看此文件";
+      diff.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.onOpenDiff?.(item.id);
+      });
+      summary.append(name, state, diff);
       const args = element("pre", "args");
       const result = element("pre", "result");
       details.append(summary, args, result);

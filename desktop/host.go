@@ -33,6 +33,13 @@ type Host struct {
 	web      *mygo.WebView
 	diags    map[string]*PluginDiagnostic
 
+	tabs    []*tabEntry
+	active  TabID
+	tabSeq  int
+	tabMu   sync.Mutex
+	newTab  newTabFunc
+	tabMenu bool // view-only, main thread
+
 	// menuOpen belongs to the view, which runs on the main thread only.
 	menuOpen bool
 	// frames counts View calls, for smoke evidence that the shell builds.
@@ -56,6 +63,7 @@ func NewPluginHost(opts HostOptions) *Host {
 		byKind: map[eventbus.Kind][]*pluginEntry{},
 		diags:  map[string]*PluginDiagnostic{},
 		path:   opts.SettingsPath,
+		active: TabSession,
 	}
 	loaded, err := loadSettings(opts.SettingsPath, names)
 	h.settings = loaded
@@ -127,6 +135,7 @@ func (h *Host) SetSession(id string) {
 	h.selected = ""
 	entries := append([]*pluginEntry(nil), h.entries...)
 	h.mu.Unlock()
+	h.closeTabs()
 	for _, e := range entries {
 		if r, ok := e.plugin.(sessionResetter); ok {
 			h.guardReset(e, r)
@@ -147,6 +156,23 @@ func (h *Host) SelectedToolCall() string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.selected
+}
+
+// ToolPath returns a tool call's file argument, for opening a diff at it.
+func (h *Host) ToolPath(toolCallID string) string {
+	h.mu.Lock()
+	var p *toolsPlugin
+	for _, e := range h.entries {
+		if tp, ok := e.plugin.(*toolsPlugin); ok {
+			p = tp
+			break
+		}
+	}
+	h.mu.Unlock()
+	if p == nil {
+		return ""
+	}
+	return p.Path(toolCallID)
 }
 
 // SelectToolCall records a selection and repaints.
@@ -284,6 +310,8 @@ type Snapshot struct {
 	Tools       int      `json:"tools"`
 	Selected    string   `json:"selected,omitempty"`
 	Frames      int      `json:"frames"`
+	Tabs        int      `json:"tabs"`
+	ActiveTab   string   `json:"activeTab,omitempty"`
 }
 
 // Snapshot returns counters for acceptance assertions. It is not exposed to
@@ -304,6 +332,8 @@ func (h *Host) Snapshot() Snapshot {
 	}
 	out.Diagnostics = len(h.diags)
 	out.Frames = h.frames
+	out.Tabs = len(h.tabs)
+	out.ActiveTab = string(h.active)
 	h.mu.Unlock()
 	for _, e := range entries {
 		if c, ok := e.plugin.(counter); ok {

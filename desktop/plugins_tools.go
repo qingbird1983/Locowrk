@@ -3,6 +3,7 @@ package desktop
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -19,6 +20,7 @@ const (
 type toolCall struct {
 	id       string
 	name     string
+	path     string
 	args     string
 	text     string
 	isError  bool
@@ -69,7 +71,7 @@ func (p *toolsPlugin) Dispatch(ev eventbus.Event, h PluginHost) {
 	defer p.mu.Unlock()
 	call := p.calls[d.ToolCallID]
 	if call == nil {
-		call = &toolCall{id: d.ToolCallID, name: d.ToolName, args: prettyArgs(d.Arguments)}
+		call = &toolCall{id: d.ToolCallID, name: d.ToolName, path: toolPathArg(d.Arguments), args: prettyArgs(d.Arguments)}
 		if call.name == "" {
 			call.name = "tool"
 		}
@@ -182,6 +184,42 @@ func findCall(calls []toolCall, id string) *toolCall {
 		}
 	}
 	return nil
+}
+
+// Path returns a tool call's file argument, empty when it has none.
+func (p *toolsPlugin) Path(id string) string {
+	if id == "" {
+		return ""
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if call := p.calls[id]; call != nil {
+		return call.path
+	}
+	return ""
+}
+
+// toolPathArg reads the common path argument names without trusting more of
+// the payload than needed.
+func toolPathArg(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var args struct {
+		Path     string `json:"path"`
+		FilePath string `json:"file_path"`
+		File     string `json:"file"`
+		Target   string `json:"target"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return ""
+	}
+	for _, s := range []string{args.Path, args.FilePath, args.File, args.Target} {
+		if s = strings.TrimSpace(s); s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // prettyArgs formats arguments for reading, clipped to the inspector budget.

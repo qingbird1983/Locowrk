@@ -20,12 +20,14 @@ type frameState struct {
 	railOpen bool
 	plugins  []pluginView
 	diag     string
+	tabs     []frameTab
+	active   TabID
 }
 
 func (h *Host) frameState() frameState {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := frameState{web: h.web, railOpen: h.settings.Rail != "closed"}
+	st := frameState{web: h.web, railOpen: h.settings.Rail != "closed", active: TabSession}
 	for _, e := range h.entries {
 		pv := pluginView{
 			name:    e.plugin.Name(),
@@ -40,6 +42,12 @@ func (h *Host) frameState() frameState {
 	}
 	if d := h.diags[""]; d != nil {
 		st.diag = d.Message
+	}
+	for _, e := range h.tabs {
+		st.tabs = append(st.tabs, frameTab{info: e.info, web: e.web})
+		if e.info.ID == h.active {
+			st.active = h.active
+		}
 	}
 	return st
 }
@@ -60,13 +68,84 @@ func (h *Host) View(c *ui.Context) {
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				h.buildStrip(c)
 				ui.Divider(c)
-				ui.WebView(c, st.web).Grow(1)
+				if len(st.tabs) > 0 {
+					h.buildTabBar(c, st)
+					ui.Divider(c)
+				}
+				active := st.web
+				if st.active != TabSession {
+					for _, tab := range st.tabs {
+						if tab.info.ID == st.active {
+							active = tab.web
+							break
+						}
+					}
+				}
+				if active != nil {
+					ui.WebView(c, active).Grow(1)
+				}
 			})
 			if st.railOpen {
 				ui.Divider(c)
 				h.buildRail(c)
 			}
 		})
+	})
+}
+
+// buildTabBar draws the transcript tab and the open web tabs. Its popover is
+// built before the page and still paints over it: MyGo places popovers above
+// web views (see research/03 §11).
+func (h *Host) buildTabBar(c *ui.Context, st frameState) {
+	ui.Row(c).Height(30).Padding(2, 6).Gap(4).AlignItems(ui.Center).Children(func() {
+		label := "会话"
+		if st.active == TabSession {
+			label = "● " + label
+		}
+		if ui.Button(c, label).FontSize(12).Clicked() {
+			h.ActivateTab(TabSession)
+		}
+		for _, tab := range st.tabs {
+			title := tab.info.Title
+			if st.active == tab.info.ID {
+				title = "● " + title
+			}
+			if ui.Button(c, title).FontSize(12).Clicked() {
+				h.ActivateTab(tab.info.ID)
+			}
+			if ui.Button(c, "×").FontSize(11).Tooltip("关闭标签页").Clicked() {
+				h.CloseTab(tab.info.ID)
+			}
+		}
+		ui.Box(c).Grow(1)
+		if st.active == TabSession {
+			return
+		}
+		more := ui.Button(c, "⋯")
+		if more.Clicked() {
+			h.tabMenu = !h.tabMenu
+		}
+		ui.Popover(c, more, &h.tabMenu, func() {
+			h.buildTabMenu(c, st.active)
+		})
+	})
+}
+
+// buildTabMenu offers actions for the active web tab.
+func (h *Host) buildTabMenu(c *ui.Context, active TabID) {
+	ui.Column(c).Width(200).Padding(6).Gap(4).Children(func() {
+		if ui.Button(c, "刷新").Clicked() {
+			h.reloadTab(active)
+			h.tabMenu = false
+		}
+		if ui.Button(c, "复制路径").Clicked() {
+			h.copyTabPath(active)
+			h.tabMenu = false
+		}
+		if ui.Button(c, "关闭标签页").Clicked() {
+			h.CloseTab(active)
+			h.tabMenu = false
+		}
 	})
 }
 

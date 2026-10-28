@@ -126,6 +126,15 @@ button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2p
 .tool summary { cursor: pointer; color: var(--muted); }
 .tool .tool-name { color: var(--text); font-weight: 600; margin-right: 6px; }
 .tool .tool-state { float: right; font-size: 12px; }
+.tool .diff-open {
+  float: right;
+  margin-right: 10px;
+  padding: 1px 7px;
+  font-size: 11px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+.tool .diff-open:hover { color: var(--text); }
 .tool .args, .tool .result { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
 .tool .result { color: var(--muted); }
 .tool.failed { border-color: var(--danger); }

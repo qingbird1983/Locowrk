@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -305,6 +306,28 @@ func (a *App) SelectToolCall(sessionID, toolCallID string) error {
 	}
 	a.host.SelectToolCall(toolCallID)
 	return nil
+}
+
+// OpenDiff opens a review tab for the workspace, focused on the file the tool
+// call touched when it has one. An empty session means the workspace only.
+func (a *App) OpenDiff(sessionID, toolCallID string) error {
+	if a.host == nil {
+		return errors.New("desktop: no plugin host")
+	}
+	a.mu.Lock()
+	current := a.current
+	a.mu.Unlock()
+	if sessionID != "" && current != "" && sessionID != current {
+		return fmt.Errorf("desktop: session %q is not selected", sessionID)
+	}
+	rel := relativeWorkspacePath(a.opts.Cwd, a.host.ToolPath(toolCallID))
+	key, title := "diff:*", "工作区变更"
+	if rel != "" {
+		key = "diff:" + rel
+		title = "变更：" + filepath.Base(rel)
+	}
+	_, err := a.host.OpenTab(TabRequest{Key: key, Title: title, URL: "/diff.html", Data: rel})
+	return err
 }
 
 // Shutdown cancels the active turn and stops event forwarding. The kernel is
