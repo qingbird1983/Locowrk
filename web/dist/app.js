@@ -48,6 +48,10 @@ var Desktop = {
   openSession(path, model, thinking) {
     return call("Desktop.OpenSession", path, model, thinking);
   },
+  /** SelectToolCall shows a tool card's details in the native inspector. */
+  selectToolCall(sessionID, toolCallID) {
+    return call("Desktop.SelectToolCall", sessionID, toolCallID);
+  },
   /** Send runs one turn and blocks until it finishes. */
   send(sessionID, text) {
     return call("Desktop.Send", sessionID, text);
@@ -75,12 +79,21 @@ var events = {
 };
 
 // src/smoke.ts
-var SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore"];
+var SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash"];
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 function nextFrame() {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    requestAnimationFrame(finish);
+    setTimeout(finish, 120);
+  });
 }
 async function waitFor(check, timeoutMs, label) {
   const deadline = performance.now() + timeoutMs;
@@ -142,6 +155,7 @@ async function scenarioTool(host) {
   const id = await host.newSession();
   await host.send("\u8BFB\u53D6 smoke-note.txt \u5E76\u603B\u7ED3");
   await waitFor(() => host.view.lastAssistantText().length > 0, 2e4, "\u5DE5\u5177\u540E\u7684\u56DE\u7B54");
+  await waitFor(() => document.querySelectorAll(".tool").length > 0, 5e3, "\u5DE5\u5177\u5361\u7247");
   const cards = Array.from(document.querySelectorAll(".tool"));
   if (cards.length === 0) throw new Error("\u6CA1\u6709\u5DE5\u5177\u5361\u7247");
   const states = cards.map((card) => card.querySelector(".tool-state")?.textContent ?? "");
@@ -160,6 +174,24 @@ async function scenarioTool(host) {
     tools: cards.length,
     rows: stats.rows,
     mounted: stats.mounted
+  };
+}
+async function scenarioPlugin(host) {
+  const id = await host.newSession();
+  await host.send("\u8BFB\u53D6 smoke-note.txt \u5E76\u603B\u7ED3");
+  await waitFor(() => host.view.lastAssistantText().length > 0, 2e4, "\u5DE5\u5177\u540E\u7684\u56DE\u7B54");
+  await waitFor(() => document.querySelectorAll(".tool").length > 0, 5e3, "\u5DE5\u5177\u5361\u7247");
+  const card = document.querySelector(".tool");
+  if (!card) throw new Error("\u6CA1\u6709\u5DE5\u5177\u5361\u7247");
+  card.click();
+  return {
+    ok: true,
+    scenario: "plugin",
+    session: id,
+    text: host.text().slice(-160),
+    tools: document.querySelectorAll(".tool").length,
+    rows: host.view.stats().rows,
+    mounted: host.view.stats().mounted
   };
 }
 async function scenarioCancel(host) {
@@ -189,7 +221,7 @@ async function scenarioLong(host) {
   const messages = longMessages(5e3);
   const started = performance.now();
   host.view.setMessages(messages);
-  await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  await nextFrame();
   const renderMs = Math.round(performance.now() - started);
   const loaded = host.view.stats();
   host.view.scrollToTop();
@@ -235,6 +267,8 @@ async function run(host) {
       return scenarioReal(host);
     case "tool":
       return scenarioTool(host);
+    case "plugin":
+      return scenarioPlugin(host);
     case "cancel":
       return scenarioCancel(host);
     case "long":
@@ -275,7 +309,7 @@ function element(tag, className) {
   return node;
 }
 var TranscriptView = class {
-  constructor(scroller, onFollowChange) {
+  constructor(scroller, onFollowChange, onSelectTool) {
     this.items = [];
     this.positions = /* @__PURE__ */ new Map();
     this.heights = [];
@@ -285,8 +319,10 @@ var TranscriptView = class {
     this.end = 0;
     this.follow = true;
     this.frame = 0;
+    this.pendingTimer = 0;
     this.scroller = scroller;
     this.onFollowChange = onFollowChange;
+    this.onSelectTool = onSelectTool;
     this.topSpacer = element("div", "vspace");
     this.list = element("div", "vlist");
     this.bottomSpacer = element("div", "vspace");
@@ -482,11 +518,22 @@ var TranscriptView = class {
     return this.scroller.scrollHeight - this.scroller.scrollTop - this.scroller.clientHeight;
   }
   schedule() {
-    if (this.frame) return;
+    if (this.frame || this.pendingTimer) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
+      if (this.pendingTimer) {
+        clearTimeout(this.pendingTimer);
+        this.pendingTimer = 0;
+      }
       this.flush();
     });
+    this.pendingTimer = window.setTimeout(() => {
+      this.pendingTimer = 0;
+      if (!this.frame) return;
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
+      this.flush();
+    }, 120);
   }
   flush() {
     const total = this.totalHeight();
@@ -600,6 +647,7 @@ var TranscriptView = class {
       const args = element("pre", "args");
       const result = element("pre", "result");
       details.append(summary, args, result);
+      details.addEventListener("click", () => this.onSelectTool?.(item.id));
       el.append(details);
       return { el, result, state };
     }
@@ -652,9 +700,18 @@ var info = null;
 var currentSession = "";
 var busy = false;
 var rows = [];
-var view = new TranscriptView(transcript, (follow) => {
-  scrollBottom.hidden = follow;
-});
+var view = new TranscriptView(
+  transcript,
+  (follow) => {
+    scrollBottom.hidden = follow;
+  },
+  (toolCallId) => {
+    if (!currentSession) return;
+    void Desktop.selectToolCall(currentSession, toolCallId).catch((err) => {
+      console.warn("select tool call:", err);
+    });
+  }
+);
 function setBusy(next) {
   busy = next;
   sendButton.disabled = next;

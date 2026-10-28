@@ -68,15 +68,19 @@ type Options struct {
 	Model    string
 	Thinking string
 	Version  string
+	// Host draws the native plugin rail; nil leaves the window page-only.
+	Host *Host
 }
 
 // App is the service bound to the page as "Desktop".
 type App struct {
 	bridge *bridge.Service
 	opts   Options
+	host   *Host
 
 	mu      sync.Mutex
 	win     *mygo.Window
+	page    *mygo.Page
 	current string
 	closed  bool
 }
@@ -86,7 +90,7 @@ func New(b *bridge.Service, opts Options) *App {
 	if opts.Thinking == "" {
 		opts.Thinking = "off"
 	}
-	return &App{bridge: b, opts: opts}
+	return &App{bridge: b, opts: opts, host: opts.Host}
 }
 
 // SetWindow lets the app emit events to the window.
@@ -96,12 +100,21 @@ func (a *App) SetWindow(w *mygo.Window) {
 	a.mu.Unlock()
 }
 
+// SetPage names the embedded page the app emits to. A native window has no
+// page of its own; the shell's WebView does (ADR-0013).
+func (a *App) SetPage(p *mygo.Page) {
+	a.mu.Lock()
+	a.page = p
+	a.mu.Unlock()
+}
+
 // Emit forwards one bridge event to the page.
 func (a *App) Emit(ev eventbus.Event) {
 	a.mu.Lock()
 	w := a.win
+	p := a.page
 	a.mu.Unlock()
-	if w == nil {
+	if w == nil && p == nil {
 		return
 	}
 	var payload any
@@ -111,7 +124,11 @@ func (a *App) Emit(ev eventbus.Event) {
 		}
 	}
 	env := Envelope{Kind: string(ev.Kind), SessionID: ev.SessionID, Payload: payload}
-	_ = Event.Emit(w, env)
+	if p != nil {
+		_ = Event.EmitPage(p, env)
+	} else {
+		_ = Event.Emit(w, env)
+	}
 }
 
 // Info returns the defaults shown at startup.
@@ -207,6 +224,9 @@ func (a *App) selectSession(id string) error {
 	if old != "" && old != id {
 		a.bridge.Unwatch(old)
 	}
+	if a.host != nil {
+		a.host.SetSession(id)
+	}
 	return nil
 }
 
@@ -271,6 +291,22 @@ func (a *App) SetThinking(sessionID, level string) error {
 	return a.bridge.SetThinking(sessionID, level)
 }
 
+// SelectToolCall shows a tool call's details in the native inspector. The page
+// passes the ID of a clicked tool card; the host only records the selection.
+func (a *App) SelectToolCall(sessionID, toolCallID string) error {
+	if a.host == nil {
+		return nil
+	}
+	a.mu.Lock()
+	current := a.current
+	a.mu.Unlock()
+	if sessionID != "" && current != "" && sessionID != current {
+		return fmt.Errorf("desktop: session %q is not selected", sessionID)
+	}
+	a.host.SelectToolCall(toolCallID)
+	return nil
+}
+
 // Shutdown cancels the active turn and stops event forwarding. The kernel is
 // closed by the caller after App.Run returns.
 func (a *App) Shutdown() {
@@ -280,6 +316,9 @@ func (a *App) Shutdown() {
 	a.mu.Unlock()
 	if id != "" {
 		_ = a.bridge.Cancel(id)
+	}
+	if a.host != nil {
+		a.host.SetSession("")
 	}
 	a.bridge.Close()
 }

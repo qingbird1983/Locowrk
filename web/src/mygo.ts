@@ -73,6 +73,10 @@ export const Desktop = {
   openSession(path: string, model: string, thinking: string): Promise<string> {
     return call("Desktop.OpenSession", path, model, thinking);
   },
+  /** SelectToolCall shows a tool card's details in the native inspector. */
+  selectToolCall(sessionID: string, toolCallID: string): Promise<void> {
+    return call("Desktop.SelectToolCall", sessionID, toolCallID);
+  },
   /** Send runs one turn and blocks until it finishes. */
   send(sessionID: string, text: string): Promise<void> {
     return call("Desktop.Send", sessionID, text);

@@ -48,3 +48,8 @@ func (b *Bindings) SetModel(sessionID, model string) error {
 func (b *Bindings) SetThinking(sessionID, level string) error {
 	return b.app.SetThinking(sessionID, level)
 }
+
+// SelectToolCall shows a tool card's details in the native inspector.
+func (b *Bindings) SelectToolCall(sessionID, toolCallID string) error {
+	return b.app.SelectToolCall(sessionID, toolCallID)
+}

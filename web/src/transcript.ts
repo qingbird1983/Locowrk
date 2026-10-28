@@ -77,11 +77,18 @@ export class TranscriptView {
   private end = 0;
   private follow = true;
   private frame = 0;
+  private pendingTimer = 0;
   private onFollowChange?: (follow: boolean) => void;
+  private onSelectTool?: (id: string) => void;
 
-  constructor(scroller: HTMLElement, onFollowChange?: (follow: boolean) => void) {
+  constructor(
+    scroller: HTMLElement,
+    onFollowChange?: (follow: boolean) => void,
+    onSelectTool?: (id: string) => void,
+  ) {
     this.scroller = scroller;
     this.onFollowChange = onFollowChange;
+    this.onSelectTool = onSelectTool;
     this.topSpacer = element("div", "vspace");
     this.list = element("div", "vlist");
     this.bottomSpacer = element("div", "vspace");
@@ -299,11 +306,25 @@ export class TranscriptView {
   }
 
   private schedule(): void {
-    if (this.frame) return;
+    if (this.frame || this.pendingTimer) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
+      if (this.pendingTimer) {
+        clearTimeout(this.pendingTimer);
+        this.pendingTimer = 0;
+      }
       this.flush();
     });
+    // A hidden or occluded web view pauses animation frames, as the window's
+    // embedded page does; a timer keeps the transcript current for smoke runs
+    // and while the window is minimized.
+    this.pendingTimer = window.setTimeout(() => {
+      this.pendingTimer = 0;
+      if (!this.frame) return;
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
+      this.flush();
+    }, 120);
   }
 
   private flush(): void {
@@ -427,6 +448,9 @@ export class TranscriptView {
       const args = element("pre", "args");
       const result = element("pre", "result");
       details.append(summary, args, result);
+      // The native inspector shows the full call; the page only reports the
+      // selection. Clicking the card still expands it.
+      details.addEventListener("click", () => this.onSelectTool?.(item.id));
       el.append(details);
       return { el, result, state };
     }

@@ -29,7 +29,7 @@ func WithFauxScenario(opts Options, scenario, notePath string) (Options, ModelRe
 	regOpts := providers.RegisterFauxProviderOptions{}
 	var steps []providers.FauxResponseStep
 	switch scenario {
-	case "tool":
+	case "tool", "plugin":
 		steps = []providers.FauxResponseStep{
 			providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
 				providers.FauxToolCall("read", map[string]any{"path": notePath}),

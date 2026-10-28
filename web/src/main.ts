@@ -25,9 +25,18 @@ let currentSession = "";
 let busy = false;
 let rows: SessionRow[] = [];
 
-const view = new TranscriptView(transcript, (follow) => {
-  scrollBottom.hidden = follow;
-});
+const view = new TranscriptView(
+  transcript,
+  (follow) => {
+    scrollBottom.hidden = follow;
+  },
+  (toolCallId) => {
+    if (!currentSession) return;
+    void Desktop.selectToolCall(currentSession, toolCallId).catch((err) => {
+      console.warn("select tool call:", err);
+    });
+  },
+);
 
 function setBusy(next: boolean) {
   busy = next;

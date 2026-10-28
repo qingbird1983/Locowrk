@@ -26,14 +26,24 @@ interface SmokeResult {
   tools?: number;
 }
 
-const SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore"] as const;
+const SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash"] as const;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function nextFrame(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  // Hidden web views pause animation frames, so a timer stands in for them.
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    requestAnimationFrame(finish);
+    setTimeout(finish, 120);
+  });
 }
 
 async function waitFor(check: () => boolean, timeoutMs: number, label: string): Promise<void> {
@@ -102,6 +112,7 @@ async function scenarioTool(host: SmokeHost): Promise<SmokeResult> {
   const id = await host.newSession();
   await host.send("读取 smoke-note.txt 并总结");
   await waitFor(() => host.view.lastAssistantText().length > 0, 20000, "工具后的回答");
+  await waitFor(() => document.querySelectorAll(".tool").length > 0, 5000, "工具卡片");
   const cards = Array.from(document.querySelectorAll<HTMLElement>(".tool"));
   if (cards.length === 0) throw new Error("没有工具卡片");
   const states = cards.map((card) => card.querySelector(".tool-state")?.textContent ?? "");
@@ -120,6 +131,25 @@ async function scenarioTool(host: SmokeHost): Promise<SmokeResult> {
     tools: cards.length,
     rows: stats.rows,
     mounted: stats.mounted,
+  };
+}
+
+async function scenarioPlugin(host: SmokeHost): Promise<SmokeResult> {
+  const id = await host.newSession();
+  await host.send("读取 smoke-note.txt 并总结");
+  await waitFor(() => host.view.lastAssistantText().length > 0, 20000, "工具后的回答");
+  await waitFor(() => document.querySelectorAll(".tool").length > 0, 5000, "工具卡片");
+  const card = document.querySelector<HTMLElement>(".tool");
+  if (!card) throw new Error("没有工具卡片");
+  card.click();
+  return {
+    ok: true,
+    scenario: "plugin",
+    session: id,
+    text: host.text().slice(-160),
+    tools: document.querySelectorAll(".tool").length,
+    rows: host.view.stats().rows,
+    mounted: host.view.stats().mounted,
   };
 }
 
@@ -151,7 +181,7 @@ async function scenarioLong(host: SmokeHost): Promise<SmokeResult> {
   const messages = longMessages(5000);
   const started = performance.now();
   host.view.setMessages(messages);
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await nextFrame();
   const renderMs = Math.round(performance.now() - started);
   const loaded = host.view.stats();
   host.view.scrollToTop();
@@ -199,6 +229,8 @@ async function run(host: SmokeHost): Promise<SmokeResult> {
       return scenarioReal(host);
     case "tool":
       return scenarioTool(host);
+    case "plugin":
+      return scenarioPlugin(host);
     case "cancel":
       return scenarioCancel(host);
     case "long":
