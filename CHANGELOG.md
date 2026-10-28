@@ -6,6 +6,17 @@
 
 ---
 
+## [0.1.4] - 2026-10-28
+
+### 仓库：Locowrk 私有远端已替换
+
+- 本地文档基线已推送到 `github.com/qingbird1983/Locowrk` 的 `main`，替换此前停掉的 Rust/Tauri 项目内容。
+- 旧内容没有直接删除：原 `main` 归档在 `archive/pre-go-locowrk` 分支（指向 `ab91865`）；确认不需要后可删除该分支。
+- 仓库仍是 **私有**，没有改为公开。
+- 本地目录仍叫 `pi-go-desktop`；Go module 计划使用 `github.com/qingbird1983/locowrk`。
+
+---
+
 ## [0.1.3] - 2026-10-28
 
 ### 更名：项目名定为 Locowrk
