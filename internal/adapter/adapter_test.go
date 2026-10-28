@@ -55,6 +55,17 @@ type fixture struct {
 // newFixture installs the mock plugin in a temp dir and starts it.
 func newFixture(t *testing.T, mode string, tweak func(*Options), env ...string) *fixture {
 	t.Helper()
+	f := installMock(t, mode, tweak, env...)
+	if err := f.adapter.Start(context.Background(), f.manifest); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	return f
+}
+
+// installMock prepares the adapter and manifest without starting the plugin, so
+// tests can exercise startup failures.
+func installMock(t *testing.T, mode string, tweak func(*Options), env ...string) *fixture {
+	t.Helper()
 	dir := t.TempDir()
 	name := "mock-orchestrator"
 	if runtime.GOOS == "windows" {
@@ -109,9 +120,6 @@ func newFixture(t *testing.T, mode string, tweak func(*Options), env ...string) 
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := adapter.Start(context.Background(), m); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
 	f.adapter = adapter
 	f.manifest = m
 	t.Cleanup(func() { _ = adapter.Close() })
@@ -125,7 +133,13 @@ func (f *fixture) notifications() []Notification {
 }
 
 func TestStartRegistersToolsAndCommands(t *testing.T) {
+	start := time.Now()
 	f := newFixture(t, "supported", nil)
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("handshake to ready took %s", elapsed)
+	} else {
+		t.Logf("handshake to ready: %s", elapsed)
+	}
 	if got := f.adapter.State(); got != StateReady {
 		t.Fatalf("state = %s, want ready", got)
 	}
@@ -344,6 +358,43 @@ func processAlive(pid int) bool {
 		return false
 	}
 	return proc.Signal(syscall.Signal(0)) == nil
+}
+
+func TestHandshakeTimeout(t *testing.T) {
+	f := installMock(t, "silent", func(o *Options) {
+		o.HandshakeTimeout = 300 * time.Millisecond
+		o.ShutdownTimeout = 200 * time.Millisecond
+	})
+	start := time.Now()
+	err := f.adapter.Start(context.Background(), f.manifest)
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("Start err = %v, want timeout", err)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("handshake timeout took %s", elapsed)
+	}
+	if got := f.adapter.State(); got != StateFailed {
+		t.Fatalf("state = %s, want failed", got)
+	}
+}
+
+func TestOversizedFrameIsProtocolError(t *testing.T) {
+	f := newFixture(t, "flood", func(o *Options) {
+		o.ShutdownTimeout = 500 * time.Millisecond
+	})
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if f.adapter.State() == StateFailed {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := f.adapter.State(); got != StateFailed {
+		t.Fatalf("state = %s, want failed", got)
+	}
+	if err := f.adapter.Err(); !errors.Is(err, ErrProtocol) {
+		t.Fatalf("err = %v, want protocol error", err)
+	}
 }
 
 func TestRPCTimeout(t *testing.T) {

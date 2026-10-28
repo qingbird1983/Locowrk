@@ -73,6 +73,7 @@ docs/
 | design/phase-0/report.md | 定稿 | Phase 0 进度报告与基线核对 |
 | design/phase-1/report.md | 定稿 | Phase 1 进度报告：内核、事件流、会话恢复的验收结果与首次规范复查 |
 | design/phase-2/runtime-spike.md | 定稿 | Phase 2 A 轨运行时比试：三条路线读数、样本结果与结论 |
+| design/phase-2/report.md | 定稿 | Phase 2 进度报告：11 条验收结果、真实 provider 冒烟与风险 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。

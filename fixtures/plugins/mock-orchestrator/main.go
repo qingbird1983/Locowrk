@@ -98,6 +98,11 @@ func (p *plugin) readLoop(r *bufio.Reader) {
 func (p *plugin) handleHost(msg message) {
 	switch msg.Method {
 	case "initialize":
+		if p.mode == "silent" {
+			// Deliberately never answer the handshake.
+			p.hung.Store(true)
+			return
+		}
 		p.register()
 		p.respond(msg.ID, map[string]any{
 			"protocol": 1,
@@ -117,6 +122,9 @@ func (p *plugin) handleHost(msg message) {
 			p.hung.Store(true)
 		case "grandchild":
 			p.spawnGrandchild()
+		case "flood":
+			// One frame over the 1 MiB limit must be a protocol error.
+			p.writeRaw(strings.Repeat("x", 1<<20+128))
 		}
 	case "ping":
 		p.respond(msg.ID, map[string]any{})
@@ -304,4 +312,11 @@ func (p *plugin) spawnGrandchild() {
 	if path := os.Getenv("LOCOWRK_MOCK_PID_FILE"); path != "" {
 		_ = os.WriteFile(path, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0o644)
 	}
+}
+
+func (p *plugin) writeRaw(line string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, _ = p.out.WriteString(line + "\n")
+	_ = p.out.Flush()
 }

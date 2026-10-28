@@ -97,6 +97,7 @@ func (p *peer) readLoop() {
 		if err != nil {
 			if !errors.Is(err, io.EOF) && !errors.Is(err, os.ErrClosed) {
 				p.setReadErr(err)
+				p.kill()
 			}
 			return
 		}

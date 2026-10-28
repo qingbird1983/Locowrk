@@ -1,7 +1,7 @@
 # Phase 2：编排插件适配器骨架与 A 轨运行时选型
 
-- 状态：定稿（2026-10-28；协议与 manifest schema 见 [`proto/`](../../proto/README.md)）
-- 实现：运行时已定稿（ADR-0009）；`internal/adapter`、mock 插件与故障注入已落地（2026-10-28），Phase 2 验收与报告待完成
+- 状态：完成（2026-10-28，tag `phase-2.end`；验收见 [`design/phase-2/report.md`](../design/phase-2/report.md)）
+- 实现：运行时已定稿（ADR-0009）；`internal/adapter`、mock 插件、故障注入与内核外部工具桥均已落地
 - 日期：2026-10-28
 - 关联：ADR-0003、ADR-0004、ADR-0008、ADR-0009；architecture/03、04；research/02
 

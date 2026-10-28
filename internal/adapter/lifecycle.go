@@ -63,7 +63,12 @@ func (a *Adapter) watchExit(p *peer) {
 	exit := &ExitInfo{At: time.Now().UTC(), Err: errorString(err), Code: exitCode(err), Stderr: p.stderrText()}
 	a.exit = exit
 	a.state = StateFailed
-	a.lastErr = fmt.Errorf("%w: exit code %d", ErrCrashed, exit.Code)
+	if readErr := p.readError(); readErr != nil {
+		// A protocol violation caused the kill; keep that as the cause.
+		a.lastErr = readErr
+	} else {
+		a.lastErr = fmt.Errorf("%w: exit code %d", ErrCrashed, exit.Code)
+	}
 	restarts := a.restarts
 	a.restarts++
 	maxRestarts := a.opts.MaxRestarts
