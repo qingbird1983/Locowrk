@@ -28,10 +28,11 @@ web/               前端源码与构建产物（见 frontend.md）
 
 启动顺序：
 
-1. 解析参数：`-cwd`、`-model`、`-thinking`、`-faux`、`-smoke`。
-2. `kernel.New`（`-faux` 时用 `kernel.WithFauxModel`）；`bridge.New`，`OnEvent` 指向 `desktop.App` 的事件泵。
-3. `mygo.BindAs("Desktop", app)`；`mygo.SetFrontend(webDist)`；`App.WhenReady` 里建窗口并加载 `/`。
-4. 页面加载后调用 `Desktop.info()` 拿 cwd/模型/思考档，再 `Desktop.sessions(cwd)`。
+1. 解析参数：`-cwd`、`-model`、`-thinking`、`-faux`、`-hidden`、`-smoke`、`-smoke-scenario`、`-smoke-expect`。
+   - `-smoke` 默认用临时工作目录并启用 faux；`-smoke-scenario real` 不启用 faux；`-smoke-scenario restore` 配 `-smoke-expect` 校验恢复文本。
+2. `kernel.New`（`-faux` 时用 `kernel.WithFauxScenario`）；`bridge.New`，`OnEvent` 指向 `desktop.App` 的事件泵。
+3. `mygo.BindAs("Desktop", app)`；`mygo.SetFrontend(webDist)`；`App.WhenReady` 里建窗口并加载 `/`（冒烟时加载 `/?smoke=<场景>`）。
+4. 页面加载后调用 `Desktop.info()` 拿 cwd/模型/思考档/凭证状态，再 `Desktop.sessions(cwd)`。
 
 关闭：窗口关闭 → 取消进行中的 turn（`bridge.Cancel`）→ `bridge.Close`（退订）→ `kernel.Close`（落盘）。不弹“确定退出”。
 
@@ -41,7 +42,7 @@ web/               前端源码与构建产物（见 frontend.md）
 
 | 方法 | 入参 | 返回 | 说明 |
 |---|---|---|---|
-| `Info` | — | `{cwd, model, thinking, version}` | 启动时的默认值；模型来自 `-model` 或环境 |
+| `Info` | — | `{cwd, model, thinking, version, credentials}` | 启动时的默认值；`credentials` 只表示环境变量是否已配置，不含明文 |
 | `Sessions` | `cwd` | `[]{id, path, timestamp, messages}` | 重启后可见；按上游排序 |
 | `NewSession` | `cwd, model, thinking` | `sessionId` | 成功后自动 `Watch` |
 | `OpenSession` | `path, model, thinking` | `sessionId` | 失败返回错误文本 |
@@ -94,6 +95,8 @@ web/               前端源码与构建产物（见 frontend.md）
 ## 7. 状态与恢复
 
 - 会话文件仍是唯一事实源（ADR-0005）；前端不缓存可恢复状态。
+- 消息身份：`MessageDTO.id` = 角色 + 时间戳 + **transcript 位置**。上游消息没有 ID 且多轮助手消息可能共享时间戳，位置保证跨轮唯一；`History` 用同一顺序重放，重启后 ID 稳定。
+- 用户消息只由事件回显：页面不再本地插一条再等 `message_end`，避免重复气泡。
 - 打开会话：`OpenSession` → `History` → 渲染；进行中会话的事件只影响当前选择。
 - 切换会话：先 `Stop` 当前 turn（若在跑），再取消订阅旧会话。
 - 重启：`Sessions(cwd)` 列出磁盘会话；`phase-3` 验收要求消息与工具结果与关闭前一致。
@@ -107,8 +110,15 @@ web/               前端源码与构建产物（见 frontend.md）
 
 ## 9. 测试与验收
 
-- 自动：`bridge` 契约测试（已落地）；`desktop` 冒烟模式 `-smoke`：隐藏窗口 + faux provider，走“新建 → 发送 → 收到助手文本 → 停止/退出”，断言 DOM 中出现回答，退出码 0。
-- 手动：Phase 3 §5 的 1~8 条（真实 key、工具、取消、恢复、空闲、5k、边界、安全）；中文 IME 与三平台在高 DPI/输入法下的表现。
+- 自动：`bridge` 契约测试（已落地）；`desktop` 冒烟模式 `-smoke`：隐藏窗口 + 场景脚本，页面驱动真实 DOM，结果以 JSON 打到 stdout。
+  - `-smoke-scenario faux`（默认）：新建 → 发送 → 页面出现 faux 回答。
+  - `real`：真实 provider（key 走环境变量），断言最后一条助手消息非空。
+  - `tool`：脚本化 `read` 工具，断言工具卡片有参数、结果、非“运行中”状态。
+  - `cancel`：慢速流式输出中途停止，断言已产生内容保留且下一条能完成。
+  - `restore`：打开最近会话，断言 `-smoke-expect` 文本仍在（工具结果也在卡片里）。
+  - `long`：合成 5,000 条消息，断言总行数与挂载节点数（窗口化）。
+- 简单场景用 `scripts/seed-long-session.mjs` 造 5,000 条真实会话文件，再用 `restore` 场景走一遍 `History`。
+- 手动：Phase 3 §5 的 1~8 条中需要人眼/输入法的部分（中文 IME、滚动观感）；三平台与安装包签名在发布前复查。
 - 边界检查：`go list -deps ./internal/bridge` 不含 MyGo；`desktop` 之外无 MyGo import。
 
 ## 10. 风险与未决

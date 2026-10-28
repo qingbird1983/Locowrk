@@ -22,7 +22,9 @@
 web/
   package.json          esbuild + mygo-runtime（锁文件入库）
   tsconfig.json
-  src/main.ts           界面逻辑
+  src/main.ts           界面装配：会话、输入、状态行、事件分发
+  src/transcript.ts     消息模型 + 窗口化列表（只挂载视口附近）
+  src/smoke.ts          验收场景脚本（仅 ?smoke= 时被调用）
   src/style.css
   src/mygo.ts           生成物，不手改（提交入库，便于离线构建）
   index.html
@@ -68,12 +70,13 @@ events.harnessEvent.on((e: Envelope) => void)
 
 ## 5. 渲染与状态
 
-- 消息列表按 `messageId` 建节点；`message_update` 追加到对应文本块，按 `requestAnimationFrame` 合批。
-- 5,000 条消息：只挂载视口附近节点（简单窗口化），滚动时复用；保持滚动位置，用户上滚后暂停自动跟随。
-- 工具卡片：`tool_execution_start` 建卡，`update` 追加进度，`end` 写结果摘要与耗时/错误。
+- 消息列表按 `messageId` 建行，但 DOM 只挂载视口附近（上下 spacer + 实测行高，窗口外约 ±800 px）；`message_update` 只改模型，按 `requestAnimationFrame` 合批刷新一次。
+- 5,000 条消息：内存保留全部行数据，挂载约 20 行；滚动时重排窗口并保持滚动锚点；用户上滚后暂停自动跟随，出现“回到底部”。
+- 工具卡片：`tool_execution_start` 建卡，`update` 追加进度，`end` 写结果与耗时/错误；`toolResult` 消息并入对应卡片，不再单独冒泡，重启后历史卡片与实时一致。
+- 系统消息不渲染；用户消息只由 `message_start/end` 回显（不做本地乐观插入）。
 - 忙碌态：`send` 进行中禁用发送、显示停止；`agent_end` 恢复。
 - 会话切换：先停止当前 turn，再重新拉取 `history`；旧会话事件丢弃。
-- 空状态：无会话时显示“新建会话”；无 key 时提示去设置环境变量（不显示明文）。
+- 空状态：无会话时显示“新建会话”；无 key 时状态行提示“凭证：未配置”（不显示明文）。
 
 ## 6. 安全
 
@@ -86,7 +89,9 @@ events.harnessEvent.on((e: Envelope) => void)
 ## 7. 开发与调试
 
 - 快速循环：`npm run build` → `go run ./cmd/locowrk -cwd <workspace>`；可选 `mygo dev`（需要 `mygo.config.ts`，Phase 3 不作为必需）。
-- 隐藏窗口冒烟：`go run ./cmd/locowrk -smoke`（faux provider，无网络），断言页面出现助手回答并退出 0。
+- 隐藏窗口冒烟：`go run ./cmd/locowrk -smoke [-smoke-scenario faux|real|tool|cancel|long|restore]`。场景脚本在 `src/smoke.ts`，通过 `?smoke=<场景>` 触发，断言真实 DOM 并以 JSON 输出；退出码 0/1。
+- 真实 provider：`-smoke -smoke-scenario real`，key 只从环境变量读取；`-smoke` 默认临时 cwd，不写仓库。
+- 长会话：`node scripts/seed-long-session.mjs <home> <cwd> 5000` 造会话文件，再用 `restore` 场景加载并计时。
 - 调试：页面 `console` 由 WebView 开发者工具查看（开发构建）；生产构建不启用远程调试。
 
 ## 8. 体量与验收

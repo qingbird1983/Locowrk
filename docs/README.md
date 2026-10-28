@@ -59,7 +59,7 @@ docs/
 | roadmap/phase-0-foundation.md | 定稿 | Phase 0：仓库、规范、文档基线 |
 | roadmap/phase-1-kernel-events.md | 定稿 | Phase 1：内核接入、统一事件流、会话冒烟 |
 | roadmap/phase-2-plugin-adapter.md | 定稿 | Phase 2：编排适配器骨架与 A 轨运行时选型（三分类、spike） |
-| roadmap/phase-3-desktop-host.md | 草稿 | Phase 3：MyGo 最小宿主与实时事件可视化 |
+| roadmap/phase-3-desktop-host.md | 定稿 | Phase 3：MyGo 最小宿主与实时事件可视化 |
 | roadmap/phase-4-native-plugins.md | 草稿 | Phase 4：PluginHost 与首批原生 `ui.View` 插件 |
 | roadmap/phase-5-webview-plugins.md | 草稿 | Phase 5：WebView 混合渲染与 Diff 审阅 |
 | roadmap/phase-6-real-orchestration.md | 草稿 | Phase 6：真实 Pi 编排插件接入与技能复用 |
@@ -79,6 +79,7 @@ docs/
 | design/phase-2/report.md | 定稿 | Phase 2 进度报告：11 条验收结果、真实 provider 冒烟与风险 |
 | design/phase-3/shell.md | 定稿 | Phase 3 最小主壳：进程装配、绑定契约、布局、事件映射、测试 |
 | design/phase-3/frontend.md | 定稿 | Phase 3 WebView 前端：TypeScript/esbuild、生成式 IPC、安全与体量 |
+| design/phase-3/report.md | 定稿 | Phase 3 进度报告：8 条验收结果、性能读数、未完成项与下一步 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。
