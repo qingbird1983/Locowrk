@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'">
+  <title>Locowrk</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Locowrk</div>
+    <label class="field">模型
+      <select id="model"></select>
+    </label>
+    <label class="field">思考档
+      <select id="thinking">
+        <option value="off">off</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+      </select>
+    </label>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <span>会话</span>
+        <button id="new-session" type="button">新建</button>
+      </div>
+      <ul id="sessions" class="sessions"></ul>
+    </aside>
+    <main class="main">
+      <div id="transcript" class="transcript" aria-live="polite"></div>
+      <button id="scroll-bottom" class="scroll-bottom" type="button" hidden>回到底部</button>
+      <form id="composer" class="composer">
+        <textarea id="prompt" placeholder="输入消息；Enter 发送，Shift+Enter 换行" rows="3"></textarea>
+        <div class="composer-actions">
+          <button id="send" type="submit">发送</button>
+          <button id="stop" type="button" disabled>停止</button>
+        </div>
+      </form>
+      <div id="status" class="status" role="status"></div>
+    </main>
+  </div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

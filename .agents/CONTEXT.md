@@ -12,7 +12,8 @@
   - ✅ 主壳路径定稿：MyGo WebView（ADR-0011）；spike 双向 IPC 约 0.55 s。
   - ✅ Phase 3 设计定稿：[`design/phase-3/shell.md`](docs/design/phase-3/shell.md)、[`frontend.md`](docs/design/phase-3/frontend.md)。
   - ✅ `internal/bridge`：DTO-only 门面 + 契约测试；`kernel.ListSessions`；Abort 归类为“已取消”。
-  - ⏳ 待做：按设计实现 `cmd/locowrk` 主壳与前端（会话列表、消息流、输入、停止、设置）。
+  - ✅ 主壳 `cmd/locowrk` + `desktop/` + `web/`：会话列表、流式消息、工具卡片、输入/停止、模型与思考档；隐藏窗口 faux 冒烟通过。
+  - ⏳ 待做：Phase 3 验收（真实 key、IME、5k 消息、钥匙串、打包/签名）与报告。
 - **远端**：`origin` 为 SSH；`main` 与 tag 已推送。看板唯一来源：`docs/roadmap/00-roadmap.md`。
 
 ## 上一轮完成了什么
@@ -23,11 +24,12 @@
 4. Phase 3 继续推进：`internal/bridge` 落地（列表/新建/恢复/发消息/停止/历史/模型/思考档/订阅），`kernel.ListSessions`，Abort 统一为 `ErrCanceled`；CHANGELOG 0.4.1。
 5. `kernel.WithFauxModel` 收口 faux 冒烟，`cmd/locowrk-smoke` 不再直接 import 内核包。
 6. 流程修正：发现 Phase 3 未先写设计文档，撤回未提交的 MyGo 依赖改动，补齐 `design/phase-3/shell.md` 与 `frontend.md` 后才继续（CHANGELOG 0.6.0）。
+7. 主壳落地：`cmd/locowrk` + `desktop/` 绑定 + `web/`（TypeScript/esbuild + 生成式客户端）；`-smoke` 隐藏窗口跑通“新建 → 发送 → 页面出现回答”（CHANGELOG 0.7.0）。
 
 ## 下一步（按优先级）
 
-1. **按设计实现 `cmd/locowrk` 主壳**：Windows 窗口 + `desktop/` 绑定 + `web/` 前端（TypeScript/esbuild + 生成式客户端）；先跑通 faux 的隐藏窗口冒烟，再接真实 key。
-2. **Phase 3 内验证**：中文 IME、5,000+ 消息滚动、钥匙串、安装包体积/签名、三平台差异。
+1. **Phase 3 验收**：真实 key 冒烟、工具卡片、取消、重启恢复、空闲 CPU、5,000 条消息、安全（无 key 泄漏）；写 `design/phase-3/report.md`。
+2. **Phase 3 内验证**：中文 IME、钥匙串、安装包体积/签名、三平台差异。
 3. **内核本地调整流程**：第一次需求驱动改动时，走 ADR/Phase 文档 + `pi/FORK.md` 差异表 + CHANGELOG。
 4. **Node 分发形态**（Phase 6 前）；长会话/多插件基准。
 

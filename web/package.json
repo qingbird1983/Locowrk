@@ -1,0 +1,20 @@
+{
+  "name": "locowrk-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --format=esm --target=es2020 --outfile=dist/app.js && node scripts/copy.mjs",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mygo-runtime": "0.7.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "5.7.3"
+  }
+}

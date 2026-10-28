@@ -58,10 +58,10 @@
 | 依赖 | 版本 | 用途 | 为何必须 | 许可证 | 备选与否决理由 |
 |---|---|---|---|---|---|
 | `pi/`（内核 fork） | 仓库内，基线 `6f6131ba` | Agent 内核（`agent`/`ai`/`coding`） | 由本项目维护与二次调整（ADR-0012） | MIT（上游） | 外部 module 依赖：无法在仓库内改内核，已否决 |
-| `github.com/egoist/mygo` | v0.7.x（锁定） | 桌面宿主 | ADR-0002 既定 | MIT | Fyne/Wails/Gio：匹配度不足 |
+| `github.com/egoist/mygo` | v0.7.1（锁定） | 桌面宿主 | ADR-0002 既定 | MIT | Fyne/Wails/Gio：匹配度不足 |
 | `golang.org/x/sync` | 最新稳定 | errgroup/并发工具 | 仅在标准库不足时引入 | BSD-3 | 手写 WaitGroup：易错；优先标准库 |
-| `golang.org/x/text` | v0.37.0 | Unicode 规范化/排序（内核 `coding` 需要） | 内核直接依赖 | BSD-3 | 自研 Unicode 处理：不值 |
-| `golang.org/x/image` | v0.41.0 | bmp/webp 解码（内核工具结果图片） | 内核直接依赖 | BSD-3 | 裁剪内核：会分叉维护面 |
+| `golang.org/x/text` | v0.43.0 | Unicode 规范化/排序（内核 `coding` 需要） | 内核直接依赖；MyGo 也要求 | BSD-3 | 自研 Unicode 处理：不值 |
+| `golang.org/x/image` | v0.46.0 | bmp/webp 解码（内核工具结果图片） | 内核直接依赖；MyGo 也要求 | BSD-3 | 裁剪内核：会分叉维护面 |
 | `google.golang.org/grpc` | 暂不引入 | 插件 IPC（备选） | 首版用 JSON-RPC | Apache-2.0 | JSON-RPC：更轻；需要双向流再评估 |
 
 - 升级依赖：独立提交，跑全量门禁，更新本表与 CHANGELOG。

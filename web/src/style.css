@@ -1,0 +1,148 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f7f7f8;
+  --panel: #ffffff;
+  --text: #1c1c1e;
+  --muted: #6b6b70;
+  --border: #e2e2e6;
+  --accent: #2563eb;
+  --danger: #b91c1c;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --sans: system-ui, "Segoe UI", "Microsoft YaHei UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17171a;
+    --panel: #202024;
+    --text: #ececf1;
+    --muted: #a1a1aa;
+    --border: #2e2e34;
+    --accent: #7aa2ff;
+    --danger: #f87171;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+}
+
+body { display: flex; flex-direction: column; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand { font-weight: 650; letter-spacing: .2px; }
+
+.field { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.field select { max-width: 230px; }
+
+button, select, textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+
+button { cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.layout { flex: 1; display: flex; min-height: 0; }
+
+.sidebar {
+  width: 240px;
+  min-width: 180px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sidebar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sessions { list-style: none; margin: 0; padding: 0 8px 12px; overflow: auto; }
+.sessions li { margin-bottom: 4px; }
+.sessions button {
+  width: 100%;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+}
+.sessions button:hover { background: var(--bg); }
+.sessions button.active { background: var(--bg); border-color: var(--border); }
+.sessions .meta { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+.transcript { flex: 1; overflow: auto; padding: 20px 24px 8px; }
+.transcript > * { content-visibility: auto; contain-intrinsic-size: auto 80px; }
+
+.msg { max-width: 820px; margin: 0 auto 18px; }
+.msg .role { color: var(--muted); font-size: 11px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+.msg .body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.msg.user .body { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.msg.assistant .body { padding: 2px 0; }
+.msg.error .body { color: var(--danger); }
+.msg .thinking { color: var(--muted); font-size: 12px; margin-top: 6px; white-space: pre-wrap; }
+
+.tool {
+  max-width: 820px;
+  margin: 0 auto 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 8px 10px;
+}
+.tool summary { cursor: pointer; color: var(--muted); }
+.tool .tool-name { color: var(--text); font-weight: 600; margin-right: 6px; }
+.tool .args, .tool .result { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+.tool .result { color: var(--muted); }
+.tool.failed { border-color: var(--danger); }
+
+.composer {
+  padding: 10px 24px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.composer textarea { flex: 1; resize: vertical; min-height: 44px; max-height: 200px; }
+.composer-actions { display: flex; flex-direction: column; gap: 6px; }
+
+.scroll-bottom {
+  position: absolute;
+  right: 28px;
+  bottom: 140px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / .18);
+}
+
+.status { padding: 0 24px 10px; color: var(--muted); font-size: 12px; min-height: 22px; }
+.status.error { color: var(--danger); }

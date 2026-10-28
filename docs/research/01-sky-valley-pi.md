@@ -18,7 +18,7 @@
 | 描述 | `env/v1.4.28-14-g6f6131b`（根模块曾发 `v1.4.28`；`env` 子模块独立打 tag） |
 | 导入范围 | `agent`、`ai`（含 `providers`、`models_catalog.json`）、`coding`、`internal/jstext`、`internal/nodepath`、`telemetry` 的非测试源码 |
 | 本地维护 | 由本仓库维护；差异登记在 `pi/FORK.md`，行为改动先写 ADR/Phase 文档 |
-| 依赖 | `golang.org/x/text`、`golang.org/x/image`（BSD-3，直接 require） |
+| 依赖 | `golang.org/x/text v0.43.0`、`golang.org/x/image v0.46.0`（BSD-3，直接 require；因 MyGo 升版） |
 | 上游对应 | pi TS 源码 pin `38ff99177`；npm `@earendil-works/pi-ai` 1.4.0 |
 | CI | **无**（其 UPSTREAM.md 明说仓库不跑 CI，只有本地 `go test`） |
 
