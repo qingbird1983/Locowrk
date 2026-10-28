@@ -50,6 +50,7 @@ docs/
 | research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（待 Phase 2 用 TS 源码复核） |
 | research/03-mygo-stack.md | 草稿 | MyGo 能力、线程模型、风险与需要 spike 的问题 |
 | research/04-governance-reference.md | 定稿 | 参考仓库 Timo-pi 的治理做法与取舍 |
+| research/05-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的插件系统、权限与隔离教训（LGPL，只读思路） |
 | roadmap/00-roadmap.md | 定稿 | 总路线图、唯一进度看板、backlog、风险登记簿 |
 | roadmap/phase-0-foundation.md | 定稿 | Phase 0：仓库、规范、文档基线 |
 | roadmap/phase-1-kernel-events.md | 评审中 | Phase 1：内核接入、统一事件流、会话冒烟 |

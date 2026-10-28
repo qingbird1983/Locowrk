@@ -39,11 +39,16 @@ type OrchestrationAdapter interface {
     Stop(ctx context.Context) error
 }
 
+type Capability struct {
+    Name  string   // "fs.read" | "fs.write" | "fs.delete" | "exec" | "net"
+    Scope []string // 路径 glob 或域名；空表示无范围（fail-closed）
+}
+
 type Manifest struct {
     Name         string
     Version      string
     Protocol     int      // 子进程协议版本
-    Capabilities []string // 安全能力："fs.read" | "fs.write" | "exec" | "net"
+    Capabilities []Capability
     Entrypoint   string
 }
 ```
@@ -156,8 +161,9 @@ discovered → validated → started → ready → stopped
 
 ## 6. 安全与信任
 
-- **默认无能力**：文件、网络、执行、环境变量都要 manifest 声明 + 用户逐项批准。
-- **硬拒绝**：`.env*`、SSH 凭证、`.git/**` 的读写；全树写删；未声明的网络域。
+- **默认无能力**：文件、网络、执行、环境变量都要 manifest 声明 + 用户逐项批准；权限采用“权限 + 范围”（如 `fs.read` + 路径 glob、`net` + 域名白名单），缺失范围 = 无权限；全树写/删直接判非法。
+- **硬拒绝**：`.env*`、SSH 凭证、`.git/**` 的读写；全树写删；未声明的网络域。删除只走系统回收站、非递归，并做速率限制。
+- **信任级别**：A 轨编排扩展与 Agent 同权（能注册工具/钩子），按“受信任代码”处理；进程隔离不是安全沙箱。Node/JS 运行时若保留原生 fs/net，宿主白名单拦不住，必须额外限制或明确声明“仅受信任插件”。
 - **审计**：每次授权、拒绝、崩溃、重启都留可查记录；记录脱敏。
 - **签名**：动态插件分发包后续加签名校验；首版只支持本地开发目录 + 显式信任。
 - **项目资源**：项目内技能/插件默认不加载，需用户信任该工作区（接缝 #11）。

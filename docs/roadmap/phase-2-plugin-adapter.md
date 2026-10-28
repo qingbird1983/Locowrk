@@ -27,12 +27,15 @@
 
 必须跑通：启动 → 注册工具 → 事件钩子 → `notify` 映射 → `setWidget` no-op + 诊断。记录启动时间、内存、Windows 可用性、shim 覆盖面与维护成本，产出 `docs/design/phase-2/runtime-spike.md` 与 ADR-0009。
 
+参考 PI-Desktop 的 trusted extension 做法（research/05）：B 路线（Node 子进程 + 显式子集 shim）已被验证可行，但它明确承认“进程隔离 + API 白名单 ≠ 沙箱”；spike 必须把这点写进结论。
+
 ### 3.1 协议
 
 - JSON-RPC 2.0 over stdio；逐行 JSON 或长度前缀帧（二选一，写入协议文档）。
 - 方法：`initialize`、`register_tool`、`register_command`、`emit_event`、`spawn_subagent`、`workflow_step`、`shutdown_plugin`。
 - 错误码：`unsupported`、`invalid_params`、`timeout`、`crashed`、`protocol_error`。
 - 协议版本与 manifest 版本校验；不兼容直接拒绝启动。
+- manifest 采用“权限 + 范围”：`fs.read/write/delete` 带路径 glob，`net` 带域名白名单；缺失 = 无权限（fail-closed）；全树写/删直接判非法；删除走系统回收站、非递归、限速。
 
 ### 3.2 适配器
 
