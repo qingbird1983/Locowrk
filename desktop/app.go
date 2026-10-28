@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/egoist/mygo"
@@ -27,10 +29,11 @@ type Envelope struct {
 
 // Info describes the shell's defaults.
 type Info struct {
-	Cwd      string `json:"cwd"`
-	Model    string `json:"model"`
-	Thinking string `json:"thinking"`
-	Version  string `json:"version"`
+	Cwd         string `json:"cwd"`
+	Model       string `json:"model"`
+	Thinking    string `json:"thinking"`
+	Version     string `json:"version"`
+	Credentials bool   `json:"credentials"`
 }
 
 // SessionRow is one item in the session list.
@@ -113,7 +116,33 @@ func (a *App) Emit(ev eventbus.Event) {
 
 // Info returns the defaults shown at startup.
 func (a *App) Info() Info {
-	return Info{Cwd: a.opts.Cwd, Model: a.opts.Model, Thinking: a.opts.Thinking, Version: a.opts.Version}
+	return Info{
+		Cwd:         a.opts.Cwd,
+		Model:       a.opts.Model,
+		Thinking:    a.opts.Thinking,
+		Version:     a.opts.Version,
+		Credentials: credentialsConfigured(a.opts.Model),
+	}
+}
+
+// credentialsConfigured reports whether a known provider has its environment
+// variable set. Unknown providers keep the indicator neutral (configured) so
+// the page never claims a working setup is broken.
+func credentialsConfigured(model string) bool {
+	provider := model
+	if i := strings.IndexByte(model, '/'); i > 0 {
+		provider = model[:i]
+	}
+	vars := map[string]string{
+		"deepseek":  "DEEPSEEK_API_KEY",
+		"anthropic": "ANTHROPIC_API_KEY",
+		"openai":    "OPENAI_API_KEY",
+	}
+	name, ok := vars[provider]
+	if !ok {
+		return true
+	}
+	return os.Getenv(name) != ""
 }
 
 // Models lists the models offered in the picker.

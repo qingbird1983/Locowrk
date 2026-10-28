@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -19,7 +21,7 @@ import (
 	"github.com/qingbird1983/locowrk/web"
 )
 
-const version = "0.6.0"
+const version = "0.8.0"
 
 func main() {
 	if err := run(); err != nil {
@@ -30,24 +32,42 @@ func main() {
 
 func run() error {
 	var (
-		cwd      = flag.String("cwd", "", "workspace directory (default: current)")
+		cwd      = flag.String("cwd", "", "workspace directory (default: current; temp for -smoke)")
 		model    = flag.String("model", defaultModel(), "model as provider/id")
 		thinking = flag.String("thinking", "off", "thinking level: off|low|medium|high")
 		faux     = flag.Bool("faux", false, "use the scripted faux provider (no API key)")
-		smoke    = flag.Bool("smoke", false, "hidden-window smoke run with the faux provider")
+		smoke    = flag.Bool("smoke", false, "hidden-window acceptance run driven by the page")
+		scenario = flag.String("smoke-scenario", "faux", "smoke scenario: faux|real|tool|cancel|long|restore")
+		expect   = flag.String("smoke-expect", "", "text the restore scenario must find")
+		hidden   = flag.Bool("hidden", false, "run without showing the window")
 		gen      = flag.String("generate-bindings", "", "write the TypeScript client to this path and exit")
 	)
 	flag.Parse()
 
+	if *smoke && *scenario != "real" {
+		*faux = true
+	}
 	if *cwd == "" {
-		dir, err := os.Getwd()
-		if err != nil {
+		if *smoke {
+			dir, err := os.MkdirTemp("", "locowrk-smoke-*")
+			if err != nil {
+				return err
+			}
+			defer func() { _ = os.RemoveAll(dir) }()
+			*cwd = dir
+		} else {
+			dir, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			*cwd = dir
+		}
+	}
+	if *smoke && *scenario == "tool" {
+		note := filepath.Join(*cwd, "smoke-note.txt")
+		if err := os.WriteFile(note, []byte("locowrk smoke note\n"), 0o644); err != nil {
 			return err
 		}
-		*cwd = dir
-	}
-	if *smoke {
-		*faux = true
 	}
 
 	kernelOpts := kernel.Options{}
@@ -57,7 +77,7 @@ func run() error {
 	}
 	var cleanup func()
 	if *faux {
-		kernelOpts, ref, cleanup = kernel.WithFauxModel(kernelOpts, "faux assistant reply")
+		kernelOpts, ref, cleanup = kernel.WithFauxScenario(kernelOpts, *scenario, "smoke-note.txt")
 		defer cleanup()
 	}
 
@@ -95,13 +115,22 @@ func run() error {
 
 	mygo.App.SetName("Locowrk")
 	mygo.App.SetVersion(version)
+	pageURL := "/"
+	if *smoke {
+		query := url.Values{}
+		query.Set("smoke", *scenario)
+		if *expect != "" {
+			query.Set("expect", *expect)
+		}
+		pageURL = "/?" + query.Encode()
+	}
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:  "Locowrk",
-			URL:    "/",
+			URL:    pageURL,
 			Width:  1100,
 			Height: 760,
-			Hidden: *smoke,
+			Hidden: *smoke || *hidden,
 		})
 		app.SetWindow(win)
 		win.OnClose(func(*mygo.CloseEvent) {
@@ -126,10 +155,10 @@ func defaultModel() string {
 	return "deepseek/deepseek-flash"
 }
 
-// runSmoke drives the page through create → send → read DOM, using the faux
-// provider, and exits the process with 0 or 1.
+// runSmoke drives the page through the requested acceptance scenario and exits
+// the process with 0 or 1.
 func runSmoke(win *mygo.Window) {
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(120 * time.Second)
 	for time.Now().Before(deadline) {
 		kind, err := mygo.EvalAs[string](win.Page(), "return typeof window.__locowrkSmoke")
 		if err == nil && kind == "function" {
@@ -144,6 +173,10 @@ func runSmoke(win *mygo.Window) {
 				Text    string `json:"text"`
 				Session string `json:"session"`
 				Error   string `json:"error"`
+				MS      int    `json:"ms"`
+				Rows    int    `json:"rows"`
+				Mounted int    `json:"mounted"`
+				Tools   int    `json:"tools"`
 			}
 			if err := json.Unmarshal([]byte(out), &result); err != nil {
 				fmt.Fprintln(os.Stderr, "smoke output:", err, out)

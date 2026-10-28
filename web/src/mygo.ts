@@ -17,6 +17,7 @@ export interface Info {
   model: string;
   thinking: string;
   version: string;
+  credentials: boolean;
 }
 
 /** Message is the transcript view used by the page. */
