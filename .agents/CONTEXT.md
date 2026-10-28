@@ -8,8 +8,8 @@
 - **本地目录**：`E:\Warehouse\AIwork\Locowrk`；Go module `github.com/qingbird1983/locowrk`。
 - **Phase 0**：✅ 完成，tag `phase-0.end`。
 - **Phase 1（内核接入与事件流）**：✅ **完成**，tag `phase-1.end`。`internal/eventbus`、`internal/kernel`、`cmd/locowrk-smoke` 已落地，7 条验收全过。
-- **Phase 2（编排适配器与 A 轨运行时选型）**：🚧 进行中。协议与 manifest schema 已定稿（`proto/`），Phase 2 文档已定稿；**spike 待网络**（真实扩展样本需从 GitHub 拉取）。
-- **待推送**：`main` 领先 `origin/main`，push 因本机到 GitHub 连接被重置而失败，网络恢复后重试（含 tag `phase-0.end`、`phase-1.start`、`phase-1.end`）。
+- **Phase 2（编排适配器与 A 轨运行时选型）**：🚧 进行中。协议与 manifest schema 已定稿（`proto/`），Phase 2 文档已定稿；下一步是 spike（样本取上游 `earendil-works/pi` 的扩展示例，pin `38ff99177`）。
+- **远端可写**：`origin` 已改为 SSH（`git@github.com:qingbird1983/Locowrk.git`）；HTTPS 在本机被重置，不要再改回。`main` 与 tag 已推送（`4831d85`，tag `phase-0.end`/`phase-1.start`/`phase-1.end`/`phase-2.start`）。
 - 看板唯一来源：`docs/roadmap/00-roadmap.md`。
 
 ## 上一轮完成了什么
@@ -22,11 +22,10 @@
 
 ## 下一步（按优先级）
 
-1. **推送**：`git push origin main && git push origin phase-0.end phase-1.start phase-1.end`（网络恢复后）。
-2. **A 轨 spike**：拉固定提交的真实扩展样本，按 Phase 2 §3.0 的比尺跑 A/B/C 三条路线，产出 `docs/design/phase-2/runtime-spike.md` 与 ADR-0009。
-3. **Phase 2 实现**：`internal/adapter` + mock 插件 + 故障注入；三分类、`not_implemented`、no-op + 诊断、安全拒绝分开。
-4. **真实 provider 冒烟**：找有 key 的环境跑一次（非阻塞项）。
-5. Phase 3 开工前定“主界面渲染路径”（原生 `ui.View` vs WebView + TS），必要时新增 ADR。
+1. **A 轨 spike**：以 `earendil-works/pi`（pin `38ff99177`）的扩展示例为样本，按 Phase 2 §3.0 的比尺跑 A/B/C 三条路线，产出 `docs/design/phase-2/runtime-spike.md` 与 ADR-0009。
+2. **Phase 2 实现**：`internal/adapter` + mock 插件 + 故障注入；三分类、`not_implemented`、no-op + 诊断、安全拒绝分开。
+3. **真实 provider 冒烟**：找有 key 的环境跑一次（非阻塞项）。
+4. Phase 3 开工前定“主界面渲染路径”（原生 `ui.View` vs WebView + TS），必要时新增 ADR。
 
 ## 未决问题
 
