@@ -16,6 +16,8 @@
 | `go.mod` | `go 1.26` |
 | 本机快照 | 提交 `6f6131ba`，2026-10-25，分支 `main` |
 | 描述 | `env/v1.4.28-14-g6f6131b`（根模块曾发 `v1.4.28`；`env` 子模块独立打 tag） |
+| 依赖解析版本 | `v1.4.29-0.20261024235732-6f6131bae0dc`（Phase 1 `go get @6f6131ba` 的实际结果；伪版本时间 2026-10-24T23:57:32Z） |
+| 传递依赖 | `golang.org/x/text v0.37.0`、`golang.org/x/image v0.41.0`（BSD-3，随 `coding` 引入） |
 | 上游对应 | pi TS 源码 pin `38ff99177`；npm `@earendil-works/pi-ai` 1.4.0 |
 | CI | **无**（其 UPSTREAM.md 明说仓库不跑 CI，只有本地 `go test`） |
 

@@ -60,6 +60,8 @@
 | `github.com/sky-valley/pi` | 固定提交 `6f6131ba` | Agent 内核 | ADR-0001 既定 | MIT | 自研/Node：成本高，弃 |
 | `github.com/egoist/mygo` | v0.7.x（锁定） | 桌面宿主 | ADR-0002 既定 | MIT | Fyne/Wails/Gio：匹配度不足 |
 | `golang.org/x/sync` | 最新稳定 | errgroup/并发工具 | 仅在标准库不足时引入 | BSD-3 | 手写 WaitGroup：易错；优先标准库 |
+| `golang.org/x/text` | v0.37.0（传递） | Unicode 规范化/排序（上游 `coding` 需要） | 随 `sky-valley/pi` 传递引入，不直接使用 | BSD-3 | 自研 Unicode 处理：不值 |
+| `golang.org/x/image` | v0.41.0（传递） | bmp/webp 解码（上游工具结果图片） | 随 `sky-valley/pi` 传递引入，不直接使用 | BSD-3 | 裁剪上游：会分叉内核 |
 | `google.golang.org/grpc` | 暂不引入 | 插件 IPC（备选） | 首版用 JSON-RPC | Apache-2.0 | JSON-RPC：更轻；需要双向流再评估 |
 
 - 升级依赖：独立提交，跑全量门禁，更新本表与 CHANGELOG。
