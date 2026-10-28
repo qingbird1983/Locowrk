@@ -1,6 +1,6 @@
 # 调研 03：MyGo 桌面栈
 
-- 状态：定稿（2026-10-28；Phase 3 spike 最小闭环通过，见 §8）
+- 状态：定稿（2026-10-28；Phase 3 spike 最小闭环通过，见 §8；Phase 4 混合渲染 spike 通过，见 §9）
 - 日期：2026-10-28
 - 关联：ADR-0002、ADR-0011；architecture/01、04
 
@@ -88,3 +88,24 @@ MyGo 是目前最贴合“Go 内核 + 双渲染路径 + 单二进制”的选项
 - 本机（Windows 11）已装 WebView2 运行时；Linux 的 WebKitGTK 依赖与 macOS WKWebView 未在本轮验证。
 - 未覆盖：中文 IME、5,000+ 条消息滚动、钥匙串、安装包体积/签名、三平台高 DPI 与焦点。这些进 Phase 3 冒烟清单，不阻塞主壳路径定稿。
 - 决策：主壳走 WebView（ADR-0011）；原生路径 Phase 4 起用于插件插槽，主壳是否迁移以后再评估。
+
+## 9. Phase 4 spike 结果（2026-10-28）
+
+夹具：`fixtures/spike-mygo-ui/`（独立 module，MyGo v0.7.1，隐藏窗口）。目标是把“原生外框 + 内嵌页面”这条路走通，而不是做产品界面。
+
+| 检查 | 结果 |
+|---|---|
+| 原生 `WindowOptions.Content` + `win.NewWebView("/")` | 通过；窗口 74.6 ms、WebView 93.3 ms（进程启动起算） |
+| 页面 → Go 绑定调用（WebView 内） | 通过；679.5 ms |
+| Go → 页面事件 → Go 回调 | 通过；684.4 ms（事件段约 5 ms） |
+| 原生栏 / 顶条 / 右栏与页面同帧布局 | 通过；弹层锚定在原生控件上 |
+| 无窗口多帧（100 行 + 500 事件计数） | 通过；120 帧平均 0.18 ms、最慢 0.65 ms |
+
+结论与依据（源码可查）：
+
+- **两种窗口互斥**：页面窗口的 `NewWebView` 返回 `errNoContent`；原生窗口用 `ui.WebView` 放置页面。因此 Phase 4 必须把主窗口改成原生窗口，页面内嵌（ADR-0013）。
+- `Event.Emit(win, …)` 在原生窗口上会发给其所有 WebView；页面内的绑定、事件、`SetFrontend` 资源与普通页面窗口一致。
+- `ui.NewTester` 可无窗口跑多帧视图测试，适合插件生命周期断言。
+- 覆盖/焦点/Tab 的边界行为由上游 `ui/webview_test.go` 覆盖；中文输入法、真实滚动手感仍需人工确认。
+- 本机（Windows 11）已装 WebView2；macOS/Linux 的 WebView 未在本轮验证，按 ADR-0007 只保证可构建。
+

@@ -1,27 +1,30 @@
 # Phase 4：PluginHost 与首批原生插件
 
-- 状态：草稿
+- 状态：定稿
 - 日期：2026-10-28
-- 关联：ADR-0002、ADR-0003；architecture/03、04
+- 关联：ADR-0002、ADR-0003、ADR-0013；architecture/03、04；[设计稿](../design/phase-4/host.md)
 
 ## 1. 目标
 
 定义 `DesktopPlugin` / `PluginHost`，用原生 `ui.View` 实现三个结构化插件：编排树、workflow 时间线、工具检查器；验证元素生命周期与插槽机制。
 
+主窗口按 ADR-0013 改为“原生外框 + 内嵌 WebView”：Phase 3 前端原样放进页面区，原生外框承载插件插槽。
+
 ## 2. 开工前置条件
 
-- Phase 3 完成，主壳稳定。
-- MyGo 原生 `ui` 的长列表、文本、焦点、无窗口测试能力经 spike 验证。
-- 插槽布局与插件启停交互定稿。
+- Phase 3 完成，主壳稳定（tag `phase-3.end`）。
+- MyGo 原生 `ui` 与内嵌 WebView 的能力已由 `fixtures/spike-mygo-ui` 验证（2026-10-28）：原生窗口 + 页面、页面→Go、Go→页面事件、无窗口多帧均通过；读数见 [research/03 §9](../research/03-mygo-stack.md#9-phase-4-spike-结果2026-10-28)。
+- 插槽布局与插件启停交互已定稿：见[设计稿 §2、§5](../design/phase-4/host.md)。
 
 ## 3. 做什么
 
 ### 3.1 宿主
 
-- `desktop/plugin.go`：`DesktopPlugin`、`PluginView`、`Command` 接口。
-- `desktop/host.go`：插槽注册表、按事件分发、构建调度、启停、诊断。
+- `desktop/plugin.go`：`DesktopPlugin`、`PluginHost`、插槽常量与诊断 DTO。
+- `desktop/host.go`：插槽注册表、按事件分发、构建调度、启停、设置持久化、诊断。
+- `desktop/shell.go`：原生外框（顶条 + 右栏 + 内嵌 `ui.WebView`）与插件菜单。
 - 插槽：`session.sidebar`、`session.timeline.above`、`session.tool.detail`、`session.tab`、`settings.section`。
-- 插件注册表：内置插件静态注册；启停状态持久化到设置。
+- 插件注册表：内置插件静态注册；启停状态持久化到用户设置文件。
 
 ### 3.2 插件
 
@@ -30,6 +33,8 @@
 | `orchestration-tree` | `session.sidebar` | `subagent_spawned/settled` + 工具事件 |
 | `workflow-timeline` | `session.timeline.above` | `workflow_step` |
 | `tool-inspector` | `session.tool.detail` | `tool_execution_*` 的参数/结果/耗时 |
+
+> `session.tool.detail` 在 Phase 4 落在原生右栏，而非网页内的卡片展开区；原因与替代交互见[设计稿 §2](../design/phase-4/host.md)。
 
 ### 3.3 生命周期纪律
 
@@ -52,12 +57,14 @@
 5. **隔离**：一个插件 panic 不影响其他插件与主壳；诊断可见。
 6. **空状态**：没有编排事件时显示“暂无”，不占位、不报错。
 7. **边界**：插件只依赖 `desktop` 的公开接口，不 import 内核内部包。
+8. **迁移回归**：Phase 3 的 `faux|real|tool|cancel|long|restore` 六个冒烟场景在原生外框下全部重跑，断言不放宽；失败按迁移引入处理。
 
 ## 6. 交付物
 
-- `desktop/` 宿主与三个插件。
-- 插槽契约文档（补进 architecture/04）。
-- 多帧/生命周期测试与性能读数。
+- `desktop/` 宿主、原生外框与三个插件。
+- 插槽契约文档（补进 architecture/04，并注明 `session.tool.detail` 的位置修订）。
+- 多帧/生命周期测试、故障隔离测试与性能读数。
+- 冒烟场景 `plugin`、`plugin-crash`；Phase 3 六场景回归结果。
 - Phase 4 报告。
 
 ## 7. 风险

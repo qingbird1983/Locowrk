@@ -50,9 +50,10 @@ docs/
 | adr/ADR-0010-solo-main-commits.md | 定稿 | 单人开发期允许直接提交 main，门禁前置；条件变化即恢复分支 |
 | adr/ADR-0011-phase-3-webview-shell.md | 定稿 | Phase 3 主壳走 MyGo WebView；原生路径从 Phase 4 插件插槽落地 |
 | adr/ADR-0012-fork-kernel-into-repo.md | 定稿 | 内核源码 fork 进 `pi/`，与上游分离、由本仓库维护 |
+| adr/ADR-0013-native-frame-hosts-webview.md | 定稿 | Phase 4 主窗口改为“原生外框 + 内嵌 WebView” |
 | research/01-sky-valley-pi.md | 定稿 | 内核事实清单：fork 基线、包、能力、缺口与本地维护方式 |
 | research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（已按固定上游提交复核事件与 API） |
-| research/03-mygo-stack.md | 草稿 | MyGo 能力、线程模型、风险与需要 spike 的问题 |
+| research/03-mygo-stack.md | 定稿 | MyGo 能力、线程模型、风险与 spike 结论（Phase 3/4 两轮） |
 | research/04-governance-reference.md | 定稿 | 参考仓库 Timo-pi 的治理做法与取舍 |
 | research/05-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的插件系统、权限与隔离教训（LGPL，只读思路） |
 | roadmap/00-roadmap.md | 定稿 | 总路线图、唯一进度看板、backlog、风险登记簿 |
@@ -60,7 +61,7 @@ docs/
 | roadmap/phase-1-kernel-events.md | 定稿 | Phase 1：内核接入、统一事件流、会话冒烟 |
 | roadmap/phase-2-plugin-adapter.md | 定稿 | Phase 2：编排适配器骨架与 A 轨运行时选型（三分类、spike） |
 | roadmap/phase-3-desktop-host.md | 定稿 | Phase 3：MyGo 最小宿主与实时事件可视化 |
-| roadmap/phase-4-native-plugins.md | 草稿 | Phase 4：PluginHost 与首批原生 `ui.View` 插件 |
+| roadmap/phase-4-native-plugins.md | 定稿 | Phase 4：PluginHost 与首批原生 `ui.View` 插件 |
 | roadmap/phase-5-webview-plugins.md | 草稿 | Phase 5：WebView 混合渲染与 Diff 审阅 |
 | roadmap/phase-6-real-orchestration.md | 草稿 | Phase 6：真实 Pi 编排插件接入与技能复用 |
 | roadmap/phase-7-dynamic-plugins.md | 草稿 | Phase 7（探索）：第三方子进程桌面插件 |
@@ -80,6 +81,7 @@ docs/
 | design/phase-3/shell.md | 定稿 | Phase 3 最小主壳：进程装配、绑定契约、布局、事件映射、测试 |
 | design/phase-3/frontend.md | 定稿 | Phase 3 WebView 前端：TypeScript/esbuild、生成式 IPC、安全与体量 |
 | design/phase-3/report.md | 定稿 | Phase 3 进度报告：8 条验收结果、性能读数、未完成项与下一步 |
+| design/phase-4/host.md | 定稿 | Phase 4 插件宿主：原生外框、插槽契约、三个插件、故障隔离与验收 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。
