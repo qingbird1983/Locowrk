@@ -91,6 +91,7 @@ docs/
 | design/phase-6/runtime.md | 定稿 | Phase 6 A 轨运行时：Node 目录、扩展包、shim 矩阵与构建 |
 | design/phase-6/extensions.md | 定稿 | Phase 6 扩展发现/信任/生命周期、工具/命令/事件、steering 与桌面接线 |
 | design/phase-6/skills.md | 定稿 | Phase 6 技能发现、工作区信任、注入与诊断 |
+| design/phase-6/report.md | 草案 | Phase 6 进度报告：基础设施、shim 样本、验收状态与剩余项 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。

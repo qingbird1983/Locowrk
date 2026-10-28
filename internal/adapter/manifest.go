@@ -23,6 +23,9 @@ const ManifestFile = "plugin.json"
 // ProtocolVersion is the only subprocess protocol this adapter speaks.
 const ProtocolVersion = 1
 
+// ShimVersion is the shim bundled into A-track extension packages.
+const ShimVersion = "locowrk-shim/1"
+
 // CapabilityName is a capability declared by a manifest.
 type CapabilityName string
 

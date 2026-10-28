@@ -11,25 +11,26 @@
 - **Phase 5（WebView 混合渲染与 Diff 审阅）**：✅ 完成（2026-10-28，tag `phase-5.end`；[报告](../docs/design/phase-5/report.md)）。
   - 标签页宿主 + Diff 页面；10k 行 0.43 s；工具卡片链路、切标签状态保持、关闭释放均验收。
   - ADR-0014；设计 `docs/design/phase-5/webview.md`、`diff.md`；报告定稿。
-- **Phase 6（真实 Pi 编排插件与技能复用）**：🟡 设计定稿（2026-10-28），未实现、未开工；tag 未打。
-  - `docs/roadmap/phase-6-real-orchestration.md` 定稿；设计 `design/phase-6/runtime.md`、`extensions.md`、`skills.md`；ADR-0015（Node 运行时目录）。
-  - 开工前置：`runtime/node/` 下载校验、1~2 个真实样本构建、扩展信任设置 v2。
-  - 关键边界：扩展是受信任代码；宿主不代管子代理；链式上下文改写缓做；steering 走内核。
+- **Phase 6（真实 Pi 编排插件与技能复用）**：🟡 基础设施落地（2026-10-29），未完成验收、未打 tag。
+  - 已落地：`internal/extensions`（发现/信任/启停/工具/命令/事件/通知）、设置 v2、adapter NodePath/SetSession/UI/tool_update、`kernel.Skills`、bridge steer/tools/trust、原生“扩展与技能”面板、页面补充指令。
+  - shim `extensions/shim/host.mjs` + `fixtures/extensions/orchestrator-sample` 端到端通过（工具/命令/事件）。
+  - **未完成**：真实 `todo`/`rpc-demo` 构建验证、原生对话框 HostUI、技能信任冒烟、真实 Node 故障、`runtime/node/`、Phase 6 报告定稿。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. Phase 5 收尾：报告定稿、看板 ✅、CHANGELOG 0.10.0、tag `phase-5.end`。
-2. Phase 6 设计：`runtime.md`（Node 目录/打包/shim 矩阵）、`extensions.md`（发现/信任/生命周期/steering/UI）、`skills.md`（工作区信任与注入）；ADR-0015。
-3. 明确 Phase 6 开工前置：Node 运行时下载校验、真实样本（`todo`/`rpc-demo`）构建、设置 v2 迁移。
-4. 更新 Phase 6 路线图、docs 地图、看板、CHANGELOG 0.10.1、CONTEXT 与 H-019。
+1. Phase 6 设计定稿（runtime/extensions/skills + ADR-0015），Phase 5 报告定稿与 tag。
+2. 实现 `internal/extensions`（发现/信任/启停/工具/命令/事件/通知/会话切换）与设置 v2；adapter 支持 NodePath/SetSession/UI/tool_update。
+3. 补齐 kernel.Skills、bridge ExtraTools/Steer/技能/扩展/命令接口；页面 busy 可补充指令。
+4. 原生“扩展与技能”面板；shim `locowrk-shim/1` 与 `orchestrator-sample` 端到端测试通过。
+5. 文档：Phase 6 报告草案、CHANGELOG 0.10.2、看板/路线图、CONTEXT/H-020。
 
 ## 下一步（按优先级）
 
-1. **Phase 6 前置**：准备 `runtime/node/`（版本/校验/许可证）；构建 `todo`/`rpc-demo` 样本；写 `orchestrator-sample`；确认 shim/协议新增方法。
-2. **Phase 6 实现**：`internal/extensions` → bridge/kernel 接口 → 状态面板/信任/对话框 → steering → 技能 → 冒烟。
-3. **UI 重设计**：功能完成后单独立项；当前标签栏、Diff 页、扩展面板仍是功能粗稿。
+1. **Phase 6 续作**：构建真实 `todo`/`rpc-demo` 并跑通；实现 `desktop.HostUI` 原生对话框；技能信任/撤销冒烟；steering 冒烟；真实 Node 崩溃/超时/进程树。
+2. **运行时准备**：下载/校验 `runtime/node/`；发布缺运行时 fail-closed；记录版本/许可证。
+3. **UI 重设计**：功能完成后单独立项；当前扩展面板/标签栏/Diff 页仍是功能粗稿。
 4. **发布工程**：仍暂缓；Node 运行时与签名纳入发布阶段。
 
 ## 未决问题

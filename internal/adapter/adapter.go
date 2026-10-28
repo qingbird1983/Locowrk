@@ -56,8 +56,16 @@ type Options struct {
 
 	// Env is appended to the child environment.
 	Env []string
+	// NodePath runs the entrypoint with this Node runtime. Empty executes the
+	// entrypoint directly (mock plugins built as executables).
+	NodePath string
 	// Notify maps plugin ui_notify calls into the host UI.
 	Notify func(Notification)
+	// UI answers ctx.ui select/confirm/input/editor. Nil degrades them to an
+	// unsupported diagnostic instead of throwing.
+	UI HostUI
+	// UITimeout bounds one user dialog (default 60s).
+	UITimeout time.Duration
 }
 
 func (o *Options) applyDefaults() error {
@@ -104,6 +112,9 @@ func (o *Options) applyDefaults() error {
 	if len(o.RestartBackoff) == 0 {
 		o.RestartBackoff = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
 	}
+	if o.UITimeout <= 0 {
+		o.UITimeout = 60 * time.Second
+	}
 	return nil
 }
 
@@ -116,6 +127,7 @@ type Adapter struct {
 	state      State
 	peer       *peer
 	pluginName string
+	session    string
 	accepted   map[CapabilityName]bool
 	tools      map[string]Tool
 	toolNames  []string
@@ -144,6 +156,7 @@ func New(opts Options) (*Adapter, error) {
 	return &Adapter{
 		opts:        opts,
 		state:       StateNew,
+		session:     opts.SessionID,
 		accepted:    map[CapabilityName]bool{},
 		tools:       map[string]Tool{},
 		commands:    map[string]Command{},
@@ -178,7 +191,12 @@ func (a *Adapter) Start(ctx context.Context, m *Manifest) error {
 	a.lastErr = nil
 	a.mu.Unlock()
 
-	p, err := startPeer(entry, nil, m.Dir, a.opts.Env)
+	var p *peer
+	if a.opts.NodePath != "" {
+		p, err = startPeer(a.opts.NodePath, []string{entry}, m.Dir, a.opts.Env)
+	} else {
+		p, err = startPeer(entry, nil, m.Dir, a.opts.Env)
+	}
 	if err != nil {
 		a.setFailed(err)
 		return err
@@ -210,6 +228,11 @@ func (a *Adapter) Start(ctx context.Context, m *Manifest) error {
 	if result.Protocol != ProtocolVersion {
 		p.kill()
 		a.setFailed(fmt.Errorf("%w: plugin speaks %d", ErrIncompatibleVersion, result.Protocol))
+		return a.lastError()
+	}
+	if result.Shim != "" && result.Shim != ShimVersion {
+		p.kill()
+		a.setFailed(fmt.Errorf("%w: shim %q", ErrIncompatibleVersion, result.Shim))
 		return a.lastError()
 	}
 	accepted := map[CapabilityName]bool{}

@@ -44,9 +44,11 @@ const view = new TranscriptView(
 
 function setBusy(next: boolean) {
   busy = next;
-  sendButton.disabled = next;
+  sendButton.disabled = false;
+  sendButton.textContent = next ? "补充" : "发送";
   stopButton.disabled = !next;
-  promptBox.disabled = next;
+  promptBox.disabled = false;
+  promptBox.placeholder = next ? "补充指令；Enter 插入当前运行" : "输入消息；Enter 发送，Shift+Enter 换行";
   setStatus(next ? "正在生成…" : "");
 }
 
@@ -176,7 +178,18 @@ async function sendText(text: string): Promise<void> {
 
 async function send(): Promise<void> {
   const text = promptBox.value.trim();
-  if (!text || !currentSession || busy) return;
+  if (!text || !currentSession) return;
+  if (busy) {
+    promptBox.value = "";
+    try {
+      await Desktop.steer(currentSession, text);
+      setStatus("已补充指令");
+    } catch (err) {
+      setStatus(`补充失败：${errorText(err)}`, true);
+      if (!promptBox.value) promptBox.value = text;
+    }
+    return;
+  }
   promptBox.value = "";
   try {
     await sendText(text);

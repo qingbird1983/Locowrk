@@ -4,6 +4,13 @@ import { call, event } from "mygo-runtime";
 
 // ---- Types ----
 
+/** CommandRow is one extension command. */
+export interface CommandRow {
+  name: string;
+  description?: string;
+  plugin: string;
+}
+
 /** DiffDoc is one workspace diff as the review page renders it. */
 export interface DiffDoc {
   /** ok|clean|notRepo|noGit|timeout|error */
@@ -64,6 +71,21 @@ export interface Envelope {
   payload: unknown;
 }
 
+/** ExtensionRow is one A-track extension for the native status panel. */
+export interface ExtensionRow {
+  name: string;
+  version?: string;
+  source: string;
+  state: string;
+  reason?: string;
+  sha?: string;
+  enabled: boolean;
+  trusted: boolean;
+  tools: number;
+  commands: number;
+  diagnostics?: string[];
+}
+
 /** Info describes the shell's defaults. */
 export interface Info {
   cwd: string;
@@ -92,6 +114,23 @@ export interface SessionRow {
   messages: number;
 }
 
+/** SkillRow is one discovered skill. */
+export interface SkillRow {
+  name: string;
+  description: string;
+  path: string;
+  source: string;
+  disabled?: boolean;
+}
+
+/** SkillsView is the skill panel DTO. */
+export interface SkillsView {
+  trusted: boolean;
+  user: SkillRow[];
+  project: SkillRow[];
+  diagnostics?: string[];
+}
+
 /** ToolCall is a model-requested tool call, decoded for the page. */
 export interface ToolCall {
   id: string;
@@ -106,6 +145,14 @@ export interface ToolCall {
  * (event pump, window, shutdown) out of the generated TypeScript client.
  */
 export const Desktop = {
+  /** Commands lists extension commands. */
+  commands(): Promise<CommandRow[]> {
+    return call("Desktop.Commands");
+  },
+  /** Extensions returns A-track extension status rows. */
+  extensions(): Promise<ExtensionRow[]> {
+    return call("Desktop.Extensions");
+  },
   /** History returns the transcript as page DTOs. */
   history(sessionID: string): Promise<Message[]> {
     return call("Desktop.History", sessionID);
@@ -130,6 +177,10 @@ export const Desktop = {
   openSession(path: string, model: string, thinking: string): Promise<string> {
     return call("Desktop.OpenSession", path, model, thinking);
   },
+  /** RunCommand executes one extension command. */
+  runCommand(name: string, args: string): Promise<void> {
+    return call("Desktop.RunCommand", name, args);
+  },
   /** SelectToolCall shows a tool card's details in the native inspector. */
   selectToolCall(sessionID: string, toolCallID: string): Promise<void> {
     return call("Desktop.SelectToolCall", sessionID, toolCallID);
@@ -142,17 +193,37 @@ export const Desktop = {
   sessions(cwd: string): Promise<SessionRow[]> {
     return call("Desktop.Sessions", cwd);
   },
+  /** SetExtensionEnabled toggles one extension. */
+  setExtensionEnabled(name: string, enabled: boolean): Promise<void> {
+    return call("Desktop.SetExtensionEnabled", name, enabled);
+  },
   /** SetModel switches the session's model. */
   setModel(sessionID: string, model: string): Promise<void> {
     return call("Desktop.SetModel", sessionID, model);
+  },
+  /** SetProjectTrust trusts or untrusts the current workspace. */
+  setProjectTrust(trusted: boolean): Promise<void> {
+    return call("Desktop.SetProjectTrust", trusted);
   },
   /** SetThinking switches the session's thinking level. */
   setThinking(sessionID: string, level: string): Promise<void> {
     return call("Desktop.SetThinking", sessionID, level);
   },
+  /** Skills returns skills and project trust for the workspace. */
+  skills(): Promise<SkillsView> {
+    return call("Desktop.Skills");
+  },
+  /** Steer appends a user instruction to the running turn. */
+  steer(sessionID: string, text: string): Promise<void> {
+    return call("Desktop.Steer", sessionID, text);
+  },
   /** Stop cancels the session's active turn. */
   stop(sessionID: string): Promise<void> {
     return call("Desktop.Stop", sessionID);
+  },
+  /** TrustExtension records an extension trust decision. */
+  trustExtension(name: string, trusted: boolean): Promise<void> {
+    return call("Desktop.TrustExtension", name, trusted);
   },
 } as const;
 

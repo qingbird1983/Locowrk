@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/qingbird1983/locowrk/desktop"
 	"github.com/qingbird1983/locowrk/internal/bridge"
 	"github.com/qingbird1983/locowrk/internal/eventbus"
+	"github.com/qingbird1983/locowrk/internal/extensions"
 	"github.com/qingbird1983/locowrk/internal/kernel"
 	"github.com/qingbird1983/locowrk/web"
 )
@@ -49,6 +51,8 @@ func run() error {
 		smokeHold = flag.Duration("smoke-hold", 0, "keep a passing smoke window open this long")
 		smokeShot = flag.String("smoke-shot", "", "write a PNG of the smoke window's active tab page")
 		diffLines = flag.Int("smoke-diff-lines", 0, "diff scenario: baseline lines to rewrite (0 for the small fixture)")
+		extDir    = flag.String("extensions", "", "extra A-track extension directory (development/smoke)")
+		nodePath  = flag.String("node", "", "Node runtime for A-track extensions (default: env, bundled runtime, PATH)")
 		gen       = flag.String("generate-bindings", "", "write the TypeScript client to this path and exit")
 	)
 	flag.Parse()
@@ -122,26 +126,73 @@ func run() error {
 	}
 	host := desktop.NewPluginHost(desktop.HostOptions{SettingsPath: *config, Plugins: extras})
 	diffService := desktop.NewDiffService(host, *cwd)
+	var extraDirs []string
+	if *extDir != "" {
+		extraDirs = append(extraDirs, *extDir)
+	}
+	node := ""
+	if *gen == "" {
+		node = resolveNodePath(*nodePath)
+	}
+	extMgr := extensions.New(extensions.Options{
+		Bus:         k.Events(),
+		Cwd:         *cwd,
+		NodePath:    node,
+		Store:       host,
+		ExtraDirs:   extraDirs,
+		HostName:    "Locowrk",
+		HostVersion: version,
+	})
+	if *gen == "" {
+		if err := extMgr.Prepare(context.Background()); err != nil {
+			fmt.Fprintln(os.Stderr, "locowrk: extensions:", err)
+		}
+	}
+	defer extMgr.Stop()
 
 	var app *desktop.App
-	b, err := bridge.New(k, bridge.Options{OnEvent: func(ev eventbus.Event) {
-		if app != nil {
-			app.Emit(ev)
-		}
-		host.Dispatch(ev)
-	}})
+	b, err := bridge.New(k, bridge.Options{
+		Cwd:             *cwd,
+		Tools:           extMgr.Tools,
+		ProjectTrusted:  extMgr.ProjectTrusted,
+		SetProjectTrust: extMgr.SetProjectTrust,
+		Extensions:      func() []bridge.ExtensionRow { return extensionRows(extMgr) },
+		TrustExtension: func(name string, trusted bool) error {
+			return extMgr.SetTrusted(name, trusted)
+		},
+		SetExtensionEnabled: extMgr.SetEnabled,
+		Commands:            func() []bridge.CommandRow { return extensionCommands(extMgr) },
+		RunCommand:          extMgr.RunCommand,
+		OnEvent: func(ev eventbus.Event) {
+			if app != nil {
+				app.Emit(ev)
+			}
+			host.Dispatch(ev)
+			extMgr.Dispatch(ev)
+		},
+	})
 	if err != nil {
 		return err
 	}
 	app = desktop.New(b, desktop.Options{
-		Cwd:      *cwd,
-		Model:    ref.String(),
-		Thinking: *thinking,
-		Version:  version,
-		Host:     host,
+		Cwd:            *cwd,
+		Model:          ref.String(),
+		Thinking:       *thinking,
+		Version:        version,
+		Host:           host,
+		SessionChanged: extMgr.SetSession,
 	})
 	mygo.BindAs("Desktop", desktop.NewBindings(app))
 	mygo.BindAs("Diff", desktop.NewDiffBindings(diffService))
+	host.SetStatusSource(desktop.StatusSource{
+		Extensions:     func() []bridge.ExtensionRow { return extensionRows(extMgr) },
+		Skills:         app.Skills,
+		Commands:       func() []bridge.CommandRow { return extensionCommands(extMgr) },
+		TrustExtension: extMgr.SetTrusted,
+		Enable:         extMgr.SetEnabled,
+		TrustProject:   app.SetProjectTrust,
+		RunCommand:     func(name, args string) error { return extMgr.RunCommand(context.Background(), name, args) },
+	})
 	mygo.SetFrontend(web.FS())
 
 	if *gen != "" {
@@ -407,6 +458,60 @@ func seedPluginEvents(host *desktop.Host, session string) {
 	send(eventbus.KindWorkflowStep, `{"name":"实现","status":"running"}`)
 	send(eventbus.KindToolExecutionStart, `{"toolCallId":"smoke-t1","toolName":"read","arguments":{"path":"smoke-note.txt"}}`)
 	send(eventbus.KindToolExecutionEnd, `{"toolCallId":"smoke-t1","toolName":"read","text":"locowrk smoke note","durationMs":12}`)
+}
+
+// resolveNodePath picks the Node runtime for A-track extensions: flag, env,
+// bundled runtime, then PATH (development). A missing runtime surfaces as an
+// extension start diagnostic; the desktop itself stays usable.
+func resolveNodePath(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	if v := os.Getenv("LOCOWRK_NODE"); v != "" {
+		return v
+	}
+	if exe, err := os.Executable(); err == nil {
+		name := "node"
+		if runtime.GOOS == "windows" {
+			name = "node.exe"
+		}
+		p := filepath.Join(filepath.Dir(exe), "runtime", "node", name)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	if _, err := exec.LookPath("node"); err == nil {
+		fmt.Fprintln(os.Stderr, "locowrk: no bundled Node runtime; using PATH node")
+		return "node"
+	}
+	return "node"
+}
+
+func extensionRows(m *extensions.Manager) []bridge.ExtensionRow {
+	infos := m.Extensions()
+	out := make([]bridge.ExtensionRow, 0, len(infos))
+	for _, e := range infos {
+		row := bridge.ExtensionRow{
+			Name: e.Name, Version: e.Version, Source: string(e.Source),
+			State: e.State, Reason: e.Reason, SHA: e.SHA,
+			Enabled: e.Enabled, Trusted: e.Trusted,
+			Tools: e.Tools, Commands: e.Commands,
+		}
+		for _, d := range e.Diagnostics {
+			row.Diagnostics = append(row.Diagnostics, d.Member+": "+d.Category+"/"+d.Code)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func extensionCommands(m *extensions.Manager) []bridge.CommandRow {
+	cmds := m.Commands()
+	out := make([]bridge.CommandRow, 0, len(cmds))
+	for _, c := range cmds {
+		out = append(out, bridge.CommandRow{Name: c.Name, Description: c.Description, Plugin: c.Plugin})
+	}
+	return out
 }
 
 func smokeFail(message string) {

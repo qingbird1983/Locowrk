@@ -71,6 +71,9 @@ type Options struct {
 	Version  string
 	// Host draws the native plugin rail; nil leaves the window page-only.
 	Host *Host
+	// SessionChanged tells A-track extensions which session is active; nil is
+	// a no-op for page-only tests.
+	SessionChanged func(sessionID string)
 }
 
 // App is the service bound to the page as "Desktop".
@@ -228,6 +231,9 @@ func (a *App) selectSession(id string) error {
 	if a.host != nil {
 		a.host.SetSession(id)
 	}
+	if a.opts.SessionChanged != nil {
+		a.opts.SessionChanged(id)
+	}
 	return nil
 }
 
@@ -280,6 +286,49 @@ func (a *App) Stop(sessionID string) error {
 		return nil
 	}
 	return a.bridge.Cancel(sessionID)
+}
+
+// Steer appends an instruction to the running turn.
+func (a *App) Steer(sessionID, text string) error {
+	if sessionID == "" {
+		return errors.New("desktop: no session selected")
+	}
+	return a.bridge.Steer(sessionID, text)
+}
+
+// Skills returns the workspace's skills and trust state.
+func (a *App) Skills() bridge.SkillsView {
+	return a.bridge.Skills(a.opts.Cwd)
+}
+
+// Extensions returns the A-track status rows.
+func (a *App) Extensions() []bridge.ExtensionRow {
+	return a.bridge.Extensions()
+}
+
+// TrustExtension records a trust decision for one extension.
+func (a *App) TrustExtension(name string, trusted bool) error {
+	return a.bridge.TrustExtension(name, trusted)
+}
+
+// SetExtensionEnabled turns one extension on or off.
+func (a *App) SetExtensionEnabled(name string, enabled bool) error {
+	return a.bridge.SetExtensionEnabled(name, enabled)
+}
+
+// Commands lists extension commands.
+func (a *App) Commands() []bridge.CommandRow {
+	return a.bridge.Commands()
+}
+
+// RunCommand executes one extension command.
+func (a *App) RunCommand(name, args string) error {
+	return a.bridge.RunCommand(name, args)
+}
+
+// SetProjectTrust records workspace trust for project skills and extensions.
+func (a *App) SetProjectTrust(trusted bool) error {
+	return a.bridge.SetProjectTrust(a.opts.Cwd, trusted)
 }
 
 // SetModel switches the session's model.
@@ -342,6 +391,9 @@ func (a *App) Shutdown() {
 	}
 	if a.host != nil {
 		a.host.SetSession("")
+	}
+	if a.opts.SessionChanged != nil {
+		a.opts.SessionChanged("")
 	}
 	a.bridge.Close()
 }

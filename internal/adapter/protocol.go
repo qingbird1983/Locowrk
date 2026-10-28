@@ -122,6 +122,8 @@ type initializeResult struct {
 	Capabilities []Capability `json:"capabilities"`
 	// WantsEventAck asks the host to send lifecycle events as requests.
 	WantsEventAck bool `json:"wantsEventAck,omitempty"`
+	// Shim is the bundled shim version, empty for non-shim mock plugins.
+	Shim string `json:"shim,omitempty"`
 }
 
 // Tool is a tool registered by a plugin. Parameters is a JSON Schema document

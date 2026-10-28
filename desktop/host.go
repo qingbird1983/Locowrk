@@ -39,6 +39,7 @@ type Host struct {
 	tabMu   sync.Mutex
 	newTab  newTabFunc
 	tabMenu bool // view-only, main thread
+	status  *StatusSource
 
 	// menuOpen belongs to the view, which runs on the main thread only.
 	menuOpen bool
@@ -89,7 +90,16 @@ func defaultPlugins() []DesktopPlugin {
 		newTreePlugin(),
 		newTimelinePlugin(),
 		newToolsPlugin(),
+		newStatusPlugin(),
 	}
+}
+
+// SetStatusSource connects the native extensions/skills panel.
+func (h *Host) SetStatusSource(src StatusSource) {
+	h.mu.Lock()
+	h.status = &src
+	h.mu.Unlock()
+	h.Invalidate()
 }
 
 // Attach gives the host its window and embedded page, then repaints.

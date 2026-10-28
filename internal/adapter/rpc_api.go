@@ -10,6 +10,24 @@ import (
 	"github.com/qingbird1983/locowrk/internal/eventbus"
 )
 
+// SetSession changes the session id used by later calls and published events.
+// It does not restart the plugin.
+func (a *Adapter) SetSession(id string) {
+	a.mu.Lock()
+	a.session = id
+	a.mu.Unlock()
+}
+
+// sessionID returns the current session (falling back to the start option).
+func (a *Adapter) sessionID() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.session != "" {
+		return a.session
+	}
+	return a.opts.SessionID
+}
+
 // InvokeTool asks the plugin to execute one of its tools.
 func (a *Adapter) InvokeTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error) {
 	a.mu.Lock()
@@ -33,7 +51,7 @@ func (a *Adapter) InvokeTool(ctx context.Context, name string, args json.RawMess
 		timeout = time.Duration(ms) * time.Millisecond
 	}
 	raw, err := p.call(ctx, timeout, "invoke_tool", map[string]any{
-		"sessionId":  a.opts.SessionID,
+		"sessionId":  a.sessionID(),
 		"toolCallId": "call-" + name,
 		"name":       name,
 		"arguments":  args,
@@ -65,7 +83,7 @@ func (a *Adapter) SendCommand(ctx context.Context, name, args string) error {
 		return fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
 	}
 	_, err := p.call(ctx, a.opts.RPCTimeout, "invoke_command", map[string]any{
-		"sessionId": a.opts.SessionID,
+		"sessionId": a.sessionID(),
 		"commandId": name,
 		"args":      args,
 	})
@@ -82,11 +100,48 @@ func (a *Adapter) SendEvent(_ context.Context, ev eventbus.Event) error {
 		return fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
 	}
 	return p.notify("event", map[string]any{
-		"sessionId": ev.SessionID,
+		"sessionId": firstNonEmpty(ev.SessionID, a.sessionID()),
 		"kind":      string(ev.Kind),
 		"payload":   ev.Payload,
 		"seq":       ev.Seq,
 	})
+}
+
+// SendHostEvent delivers a host-only lifecycle event (session_start, etc.)
+// that has no eventbus kind.
+func (a *Adapter) SendHostEvent(kind string, payload any) error {
+	a.mu.Lock()
+	p := a.peer
+	state := a.state
+	a.mu.Unlock()
+	if state != StateReady || p == nil {
+		return fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
+	}
+	return p.notify("event", map[string]any{
+		"sessionId": a.sessionID(),
+		"kind":      kind,
+		"payload":   payload,
+	})
+}
+
+// Abort tells the plugin to stop its current orchestration.
+func (a *Adapter) Abort(ctx context.Context) error {
+	a.mu.Lock()
+	p := a.peer
+	state := a.state
+	a.mu.Unlock()
+	if state != StateReady || p == nil {
+		return fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
+	}
+	_, err := p.call(ctx, a.opts.RPCTimeout, "abort", map[string]any{"sessionId": a.sessionID()})
+	return err
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // Ping performs one heartbeat round trip.
@@ -105,9 +160,10 @@ func (a *Adapter) Ping(ctx context.Context) error {
 // publish sends an orchestration event to the bus (Seq assigned there) and to
 // the convenience channel.
 func (a *Adapter) publish(kind eventbus.Kind, payload any) {
-	ev := eventbus.Event{Kind: kind, SessionID: a.opts.SessionID}
+	session := a.sessionID()
+	ev := eventbus.Event{Kind: kind, SessionID: session}
 	if a.opts.Bus != nil {
-		published, err := a.opts.Bus.Publish(kind, a.opts.SessionID, payload)
+		published, err := a.opts.Bus.Publish(kind, session, payload)
 		if err != nil {
 			return
 		}

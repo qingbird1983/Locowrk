@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/qingbird1983/locowrk/internal/bridge"
 	"github.com/qingbird1983/locowrk/internal/eventbus"
 )
 
@@ -76,6 +77,29 @@ const (
 	DiagSettings = "settings"
 )
 
+// StatusHost is what the extensions/skills panel asks of the shell.
+type StatusHost interface {
+	PluginHost
+	StatusExtensions() []bridge.ExtensionRow
+	StatusSkills() bridge.SkillsView
+	StatusCommands() []bridge.CommandRow
+	TrustExtension(name string, trusted bool) error
+	EnableExtension(name string, enabled bool) error
+	TrustProject(trusted bool) error
+	RunExtensionCommand(name, args string) error
+}
+
+// StatusSource wires the native panel to the bridge/app.
+type StatusSource struct {
+	Extensions     func() []bridge.ExtensionRow
+	Skills         func() bridge.SkillsView
+	Commands       func() []bridge.CommandRow
+	TrustExtension func(name string, trusted bool) error
+	Enable         func(name string, enabled bool) error
+	TrustProject   func(trusted bool) error
+	RunCommand     func(name, args string) error
+}
+
 // sessionResetter is optional: a plugin that keeps per-session data clears it
 // when the shell switches sessions.
 type sessionResetter interface {
@@ -99,3 +123,52 @@ func (s scopedHost) SelectToolCall(id string)    { s.h.SelectToolCall(id) }
 func (s scopedHost) Invalidate()                 { s.h.Invalidate() }
 func (s scopedHost) Diagnostic() string          { return s.h.Diagnostic(s.name) }
 func (s scopedHost) Report(code, message string) { s.h.record(s.name, code, message) }
+
+func (s scopedHost) StatusExtensions() []bridge.ExtensionRow {
+	if s.h.status == nil || s.h.status.Extensions == nil {
+		return nil
+	}
+	return s.h.status.Extensions()
+}
+
+func (s scopedHost) StatusSkills() bridge.SkillsView {
+	if s.h.status == nil || s.h.status.Skills == nil {
+		return bridge.SkillsView{}
+	}
+	return s.h.status.Skills()
+}
+
+func (s scopedHost) StatusCommands() []bridge.CommandRow {
+	if s.h.status == nil || s.h.status.Commands == nil {
+		return nil
+	}
+	return s.h.status.Commands()
+}
+
+func (s scopedHost) TrustExtension(name string, trusted bool) error {
+	if s.h.status == nil || s.h.status.TrustExtension == nil {
+		return nil
+	}
+	return s.h.status.TrustExtension(name, trusted)
+}
+
+func (s scopedHost) EnableExtension(name string, enabled bool) error {
+	if s.h.status == nil || s.h.status.Enable == nil {
+		return nil
+	}
+	return s.h.status.Enable(name, enabled)
+}
+
+func (s scopedHost) TrustProject(trusted bool) error {
+	if s.h.status == nil || s.h.status.TrustProject == nil {
+		return nil
+	}
+	return s.h.status.TrustProject(trusted)
+}
+
+func (s scopedHost) RunExtensionCommand(name, args string) error {
+	if s.h.status == nil || s.h.status.RunCommand == nil {
+		return nil
+	}
+	return s.h.status.RunCommand(name, args)
+}

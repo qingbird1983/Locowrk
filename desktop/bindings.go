@@ -1,5 +1,7 @@
 package desktop
 
+import "github.com/qingbird1983/locowrk/internal/bridge"
+
 // Bindings is the surface exposed to the page. App keeps its Go-side methods
 // (event pump, window, shutdown) out of the generated TypeScript client.
 type Bindings struct {
@@ -38,6 +40,34 @@ func (b *Bindings) Send(sessionID, text string) error { return b.app.Send(sessio
 
 // Stop cancels the session's active turn.
 func (b *Bindings) Stop(sessionID string) error { return b.app.Stop(sessionID) }
+
+// Steer appends a user instruction to the running turn.
+func (b *Bindings) Steer(sessionID, text string) error { return b.app.Steer(sessionID, text) }
+
+// Skills returns skills and project trust for the workspace.
+func (b *Bindings) Skills() bridge.SkillsView { return b.app.Skills() }
+
+// Extensions returns A-track extension status rows.
+func (b *Bindings) Extensions() []bridge.ExtensionRow { return b.app.Extensions() }
+
+// TrustExtension records an extension trust decision.
+func (b *Bindings) TrustExtension(name string, trusted bool) error {
+	return b.app.TrustExtension(name, trusted)
+}
+
+// SetExtensionEnabled toggles one extension.
+func (b *Bindings) SetExtensionEnabled(name string, enabled bool) error {
+	return b.app.SetExtensionEnabled(name, enabled)
+}
+
+// Commands lists extension commands.
+func (b *Bindings) Commands() []bridge.CommandRow { return b.app.Commands() }
+
+// RunCommand executes one extension command.
+func (b *Bindings) RunCommand(name, args string) error { return b.app.RunCommand(name, args) }
+
+// SetProjectTrust trusts or untrusts the current workspace.
+func (b *Bindings) SetProjectTrust(trusted bool) error { return b.app.SetProjectTrust(trusted) }
 
 // SetModel switches the session's model.
 func (b *Bindings) SetModel(sessionID, model string) error {

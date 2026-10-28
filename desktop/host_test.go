@@ -34,6 +34,8 @@ func TestSettingsRoundTrip(t *testing.T) {
 	s := defaultSettings([]string{"a", "b"})
 	s.Plugins["b"] = false
 	s.Rail = "closed"
+	s.Extensions["todo"] = extensionRecord{Path: dir, SHA256: "abc", Enabled: true, TrustedAt: "2026-10-28T00:00:00Z"}
+	s.ProjectTrust[dir] = "2026-10-28T00:00:00Z"
 	if err := saveSettings(path, s); err != nil {
 		t.Fatal(err)
 	}
@@ -43,6 +45,29 @@ func TestSettingsRoundTrip(t *testing.T) {
 	}
 	if !got.Plugins["a"] || got.Plugins["b"] || got.Rail != "closed" {
 		t.Fatalf("loaded %+v", got)
+	}
+	if rec := got.Extensions["todo"]; !rec.Enabled || rec.SHA256 != "abc" {
+		t.Fatalf("extension %+v", rec)
+	}
+	if _, ok := got.ProjectTrust[dir]; !ok {
+		t.Fatal("project trust lost")
+	}
+}
+
+func TestSettingsV1Migrates(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"plugins":{"a":false},"rail":"closed"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadSettings(path, []string{"a", "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Version != settingsVersion || got.Plugins["a"] || !got.Plugins["b"] {
+		t.Fatalf("migrated %+v", got)
+	}
+	if got.Extensions == nil || got.ProjectTrust == nil {
+		t.Fatalf("maps not initialized: %+v", got)
 	}
 }
 
@@ -84,7 +109,7 @@ func TestDispatchCountsAndSessionReset(t *testing.T) {
 	if snap.Nodes != 2 || snap.Steps != 2 || snap.Tools != 1 {
 		t.Fatalf("counts %+v", snap)
 	}
-	if snap.Enabled == nil || len(snap.Enabled) != 3 {
+	if snap.Enabled == nil || len(snap.Enabled) != 4 {
 		t.Fatalf("enabled %v", snap.Enabled)
 	}
 

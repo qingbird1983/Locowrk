@@ -28,6 +28,14 @@ function event(name) {
 
 // src/mygo.ts
 var Desktop = {
+  /** Commands lists extension commands. */
+  commands() {
+    return call("Desktop.Commands");
+  },
+  /** Extensions returns A-track extension status rows. */
+  extensions() {
+    return call("Desktop.Extensions");
+  },
   /** History returns the transcript as page DTOs. */
   history(sessionID) {
     return call("Desktop.History", sessionID);
@@ -52,6 +60,10 @@ var Desktop = {
   openSession(path, model, thinking) {
     return call("Desktop.OpenSession", path, model, thinking);
   },
+  /** RunCommand executes one extension command. */
+  runCommand(name, args) {
+    return call("Desktop.RunCommand", name, args);
+  },
   /** SelectToolCall shows a tool card's details in the native inspector. */
   selectToolCall(sessionID, toolCallID) {
     return call("Desktop.SelectToolCall", sessionID, toolCallID);
@@ -64,17 +76,37 @@ var Desktop = {
   sessions(cwd) {
     return call("Desktop.Sessions", cwd);
   },
+  /** SetExtensionEnabled toggles one extension. */
+  setExtensionEnabled(name, enabled) {
+    return call("Desktop.SetExtensionEnabled", name, enabled);
+  },
   /** SetModel switches the session's model. */
   setModel(sessionID, model) {
     return call("Desktop.SetModel", sessionID, model);
+  },
+  /** SetProjectTrust trusts or untrusts the current workspace. */
+  setProjectTrust(trusted) {
+    return call("Desktop.SetProjectTrust", trusted);
   },
   /** SetThinking switches the session's thinking level. */
   setThinking(sessionID, level) {
     return call("Desktop.SetThinking", sessionID, level);
   },
+  /** Skills returns skills and project trust for the workspace. */
+  skills() {
+    return call("Desktop.Skills");
+  },
+  /** Steer appends a user instruction to the running turn. */
+  steer(sessionID, text) {
+    return call("Desktop.Steer", sessionID, text);
+  },
   /** Stop cancels the session's active turn. */
   stop(sessionID) {
     return call("Desktop.Stop", sessionID);
+  },
+  /** TrustExtension records an extension trust decision. */
+  trustExtension(name, trusted) {
+    return call("Desktop.TrustExtension", name, trusted);
   }
 };
 var events = {
@@ -764,9 +796,11 @@ var view = new TranscriptView(
 );
 function setBusy(next) {
   busy = next;
-  sendButton.disabled = next;
+  sendButton.disabled = false;
+  sendButton.textContent = next ? "\u8865\u5145" : "\u53D1\u9001";
   stopButton.disabled = !next;
-  promptBox.disabled = next;
+  promptBox.disabled = false;
+  promptBox.placeholder = next ? "\u8865\u5145\u6307\u4EE4\uFF1BEnter \u63D2\u5165\u5F53\u524D\u8FD0\u884C" : "\u8F93\u5165\u6D88\u606F\uFF1BEnter \u53D1\u9001\uFF0CShift+Enter \u6362\u884C";
   setStatus(next ? "\u6B63\u5728\u751F\u6210\u2026" : "");
 }
 function setStatus(text, isError = false) {
@@ -887,7 +921,18 @@ async function sendText(text) {
 }
 async function send() {
   const text = promptBox.value.trim();
-  if (!text || !currentSession || busy) return;
+  if (!text || !currentSession) return;
+  if (busy) {
+    promptBox.value = "";
+    try {
+      await Desktop.steer(currentSession, text);
+      setStatus("\u5DF2\u8865\u5145\u6307\u4EE4");
+    } catch (err) {
+      setStatus(`\u8865\u5145\u5931\u8D25\uFF1A${errorText(err)}`, true);
+      if (!promptBox.value) promptBox.value = text;
+    }
+    return;
+  }
   promptBox.value = "";
   try {
     await sendText(text);
