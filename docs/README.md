@@ -53,7 +53,7 @@ docs/
 | research/05-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的插件系统、权限与隔离教训（LGPL，只读思路） |
 | roadmap/00-roadmap.md | 定稿 | 总路线图、唯一进度看板、backlog、风险登记簿 |
 | roadmap/phase-0-foundation.md | 定稿 | Phase 0：仓库、规范、文档基线 |
-| roadmap/phase-1-kernel-events.md | 评审中 | Phase 1：内核接入、统一事件流、会话冒烟 |
+| roadmap/phase-1-kernel-events.md | 定稿 | Phase 1：内核接入、统一事件流、会话冒烟 |
 | roadmap/phase-2-plugin-adapter.md | 草稿 | Phase 2：编排适配器骨架与 A 轨运行时选型（三分类、spike） |
 | roadmap/phase-3-desktop-host.md | 草稿 | Phase 3：MyGo 最小宿主与实时事件可视化 |
 | roadmap/phase-4-native-plugins.md | 草稿 | Phase 4：PluginHost 与首批原生 `ui.View` 插件 |
@@ -69,7 +69,8 @@ docs/
 | standards/07-ai-collaboration.md | 定稿 | 冷启动、阶段职责、外部代码与范围纪律 |
 | standards/08-size-control.md | 定稿 | 文档、知识库、代码、依赖与构建产物的预算 |
 | standards/09-standards-review.md | 定稿 | 规范自身的复查、触发信号与修正分级 |
-| design/phase-0/report.md | 评审中 | Phase 0 进度报告与基线核对 |
+| design/phase-0/report.md | 定稿 | Phase 0 进度报告与基线核对 |
+| design/phase-1/report.md | 定稿 | Phase 1 进度报告：内核、事件流、会话恢复的验收结果与首次规范复查 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。

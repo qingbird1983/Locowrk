@@ -23,7 +23,7 @@ graph LR
 | 阶段 | 一句话目标 | 参考估时* | 状态 |
 |---|---|---|---|
 | [Phase 0](phase-0-foundation.md) | 仓库初始化、规范与设计定稿、文档先行落盘 | — | ✅ 完成（2026-10-28，tag `phase-0.end`） |
-| [Phase 1](phase-1-kernel-events.md) | 跑通 `sky-valley/pi` 内核与统一事件流，会话可恢复 | 1~2 周 | 未开始（文档评审中） |
+| [Phase 1](phase-1-kernel-events.md) | 跑通 `sky-valley/pi` 内核与统一事件流，会话可恢复 | 1~2 周 | ✅ 完成（2026-10-28，tag `phase-1.end`） |
 | [Phase 2](phase-2-plugin-adapter.md) | 编排适配器骨架与 A 轨运行时选型：三分类、诊断、进程隔离 | 3~4 周 | 未开始 |
 | [Phase 3](phase-3-desktop-host.md) | MyGo 最小宿主：实时会话流、输入、取消、设置 | 2~3 周 | 未开始 |
 | [Phase 4](phase-4-native-plugins.md) | PluginHost 与首批原生 `ui.View` 插件 | 3~4 周 | 未开始 |

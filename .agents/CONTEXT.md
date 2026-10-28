@@ -1,55 +1,56 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-28（会话主题：**本地目录改名为 Locowrk，新路径开工检查**）
+- 更新：2026-10-28（会话主题：**Phase 1 内核接入与事件流落地并验收**）
 
 ## 当前阶段与状态
 
 - **项目名：Locowrk**（拼写是 `wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀）。远端：`github.com/qingbird1983/Locowrk`（**私有**）；旧 Rust 历史在 `archive/pre-go-locowrk`。
-- **本地目录已改名完成**：仓库根目录即 `E:\Warehouse\AIwork\Locowrk`（旧名 `pi-go-desktop` 已不存在；旧路径只在 git 历史与 ADR-0007/CHANGELOG 的历史记录里）。
-- **Go module**：`github.com/qingbird1983/locowrk`（module 小写，仓库显示名保留 `Locowrk`）。
-- **Phase 0（仓库与文档基线）**：✅ **完成**，tag `phase-0.end`（2026-10-28 所有者确认 MIT 与报告）。
-- **Phase 1（内核接入与事件流）**：文档已**定稿**，本轮开工。目标：内核 + 事件流 + JSONL 会话恢复，不做界面。
-- **Phase 2（适配器与 A 轨运行时选型）**：文档新增限时 spike（ADR-0008），待 Phase 1 后开工。
+- **本地目录**：`E:\Warehouse\AIwork\Locowrk`；Go module `github.com/qingbird1983/locowrk`。
+- **Phase 0**：✅ 完成，tag `phase-0.end`。
+- **Phase 1（内核接入与事件流）**：✅ **完成**，tag `phase-1.end`。`internal/eventbus`、`internal/kernel`、`cmd/locowrk-smoke` 已落地，7 条验收全过。
+- **Phase 2（编排适配器与 A 轨运行时选型）**：下一步。文档仍是草稿，需先定稿再开工；含 5 天限时 spike（ADR-0008）。
 - 看板唯一来源：`docs/roadmap/00-roadmap.md`。
 
 ## 上一轮完成了什么
 
-1. 所有者执行目录改名：`pi-go-desktop` → `Locowrk`；本会话在新路径接续，未重新 `git init`、未动 remote。
-2. 开工检查全部通过：路径、remote、工作区干净、`check-docs: OK`。
-3. 清掉“目录待迁移”的过期表述（CONTEXT、Phase 0 报告、看板、Phase 1 备注）。
-4. Phase 0 收尾：所有者确认 MIT，看板置完成，打 tag `phase-0.end`，Phase 1 文档转定稿。
-5. 沉淀：`pitfalls/P-001`（状态类事实不写进不可改的 ADR）、`handoff/H-001`（迁移轮交接）。
+1. 建模块并锁定上游：`sky-valley/pi` → 解析版本 `v1.4.29-0.20261024235732-6f6131bae0dc`（提交 `6f6131bae0dc`）。
+2. `internal/eventbus`：项目事件 + 每会话 `Seq`；每订阅者有界队列与投递协程，文本增量合并、溢出丢弃计数、控制事件溢出/超时断开订阅者。
+3. `internal/kernel`：唯一 import 上游的包；建会话/续接/Prompt/Steer/Abort/History/换模型与思考档/Close，事件翻译成项目 DTO。
+4. `cmd/locowrk-smoke`：事件 JSONL 到 stdout，支持 `--resume`、`--faux`（无 key 也能跑）。
+5. 验收与文档：7 条场景全过（faux 驱动），首次规范复查完成，Phase 1 报告落盘，看板与 CHANGELOG 更新。
 
 ## 下一步（按优先级）
 
-1. **Phase 1 实现**（feature 分支 `phase-1/kernel-events`）：`go mod init` → 依赖 `github.com/sky-valley/pi`（锁定提交）→ `internal/eventbus` + `internal/kernel` → `cmd/locowrk-smoke` 事件验证 → JSONL 会话读写验证。
-2. **验收**：逐条跑 `docs/roadmap/phase-1-kernel-events.md` §5 的 7 个场景，结果写 `docs/design/phase-1/report.md`。
-3. **首次规范复查**：Phase 1 收尾按 standards/09 做。
-4. **Phase 2 设计定稿**：把 runtime spike 的样本、指标、淘汰线写细；spike 后补 ADR-0009。
+1. **Phase 2 设计定稿**：`docs/roadmap/phase-2-plugin-adapter.md` 从草稿转定稿；把 spike 样本、指标、淘汰线写细。
+2. **A 轨 spike**：5 天限时；结论写 ADR-0009；spike 前不对外承诺“支持 pi 扩展”。
+3. **Phase 2 实现**：三分类 + `not_implemented` + TUI no-op + `plugin_diagnostic`；manifest 权限带范围。
+4. **真实 provider 冒烟**：找有 key 的环境跑一次（非阻塞项）。
+5. Phase 3 开工前定“主界面渲染路径”（原生 `ui.View` vs WebView + TS），必要时新增 ADR。
 
 ## 未决问题
 
-- **A 轨运行时**：Phase 2 spike 后在 ADR-0009 定；此前不得对外说“支持 pi 扩展”。
-- **主界面渲染路径**：会话流走 MyGo 原生 `ui.View` 还是 WebView + TS？Phase 3 开工前用一次 spike 定稿，必要时新增 ADR。
-- **`sky-valley/pi` 版本策略**：固定提交还是跟随 release tag？当前固定提交；升级规则见 ADR-0001。
-- **许可证**：MIT（ADR-0007，所有者已于 2026-10-28 确认）；正式发布前再做一次名称/商标可用性检查，不另写 ADR。
-- **MyGo v0.x API 漂移**：MyGo 用法限制在 `desktop/` 与 `internal/bridge`，内核与适配层不依赖 GUI。
+- **A 轨运行时**：Phase 2 spike 后由 ADR-0009 定；这是 Phase 2 唯一能改变整体架构的变量。
+- **主界面渲染路径**：Phase 3 前用一次 spike 定稿。
+- **`kernel.Prompt` 是阻塞调用**：Phase 3 需要在它之外加 `Start`/`Wait` 异步门面，不改本阶段语义。
+- **事件 DTO v0**：`tool_execution_*` 的图片结果暂只传文本；Phase 3 展示图片时新增字段（向后兼容）。
+- **`sky-valley/pi` 版本策略**：固定提交；升级规则见 ADR-0001，升级独立成提交并全量 `-race`。
+- **MyGo v0.x API 漂移**：MyGo 用法限制在 `desktop/` 与 `internal/bridge`，内核不依赖 GUI。
 
 ## 关键提醒
 
-- **项目名是 `Locowrk`**：`wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀。远端是私有仓库，未经所有者允许不得转公开或外发。
-- **ADR 不可改**：`docs/adr/` 只增不改；ADR-0007 里“目录仍是 `pi-go-desktop`”是当时的记录，不是现状。状态类事实写 CONTEXT/看板/CHANGELOG（见 `pitfalls/P-001`）。
-- **内核零 GUI**：`internal/kernel`、`internal/adapter`、`internal/eventbus` 不得 import MyGo；测试用纯 Go。
-- **不写自己的会话格式**：读写统一走 `coding.SessionRecorder` / `LoadSessionTree`（ADR-0005）。
-- **项目技能默认不加载**：`<cwd>/.pi/skills` 需要显式 `TrustProject`；桌面端必须用户可见授权。
-- **插件兼容**：支持项真做、缓做项 `not_implemented`、TUI 项 no-op + `unsupported`；**永不 throw**；每插件每成员诊断一次。
+- **项目名是 `Locowrk`**：`wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀。远端私有，未经所有者允许不得转公开或外发。
+- **ADR 不可改**：`docs/adr/` 只增不改；状态类事实写 CONTEXT/看板/CHANGELOG（见 `pitfalls/P-001`）。
+- **上游只能出现在 `internal/kernel`**：其他包只认 `eventbus` 的 DTO；`internal/eventbus` 也不得 import 上游。
+- **事件契约**：生命周期事件与 `agent.Ev*` 一一对应，不自造；只新增编排级事件；`Seq` 由 bus 按会话分配，消费端靠它补洞。
+- **Agent 循环不可阻塞**：`Bus.Publish` 不得阻塞；慢订阅者只影响自己（见 bus 测试）。
+- **测试必须换主目录**：上游把会话/技能写死在 `~/.pi`，测试统一用 `testHome(t)`（`t.Setenv` 改 `HOME`/`USERPROFILE`），见 `pitfalls/P-002`。
+- **faux 优先**：无 key 路径用 `providers.RegisterFauxProvider` 脚本化响应；不要在测试里依赖真实模型。
+- **不写自己的会话格式**：读写走 `coding.SessionRecorder` / `LoadSessionTree` + `LoadBranch`（ADR-0005）。
+- **项目技能默认不加载**：`<cwd>/.pi/skills` 需显式 `TrustProject`；桌面端必须用户可见授权。
+- **插件兼容**：支持项真做、缓做项 `not_implemented`、TUI 项 no-op + `unsupported`；永不 throw；每插件每成员诊断一次。
 - **A 轨是受信任代码**：能注册工具/钩子就等同 Agent 权限；进程隔离只防崩溃，不是沙箱（research/05）。
-- **权限 + 范围**：manifest 的 `fs.*` 必须带路径范围、`net` 必须带域名白名单；缺失 = 拒绝；全树写删非法。
-- **安全拒绝单独记录**：文件写删/执行/网络未声明仍 fail-closed，不能混进“兼容性诊断”。
-- **事件类型不要自造**：生命周期以 `agent.Ev*` 为准；只新增编排级事件（subagent / workflow / steering）。
-- **Agent 事件不可阻塞**：控制事件可靠排队，delta 允许合并/丢弃并计数。
-- **MyGo 线程模型**：`App.Run` 从 main 调用；监听器在主线程；绑定服务方法在各自 goroutine；插件视图只在主线程构建。
-- **本地没有 CI**：`sky-valley/pi` 自身无 CI，本仓库门禁是唯一防线；升级跑全量 `go test -race ./...`。
-- **文档门禁**：新增文档必须登记 `docs/README.md`，否则 `scripts/check-docs.sh` 失败。
-- **体量**：docs 单篇 ≤300 行、ADR ≤100 行、CONTEXT ≤150 行；收尾核对。
-- 踩坑索引：`pitfalls/P-001-status-facts-in-adr.md`。
+- **MyGo 线程模型**：`App.Run` 从 main 调用；监听器在主线程；插件视图只在主线程构建。
+- **本地没有 CI**：`sky-valley/pi` 自身无 CI，本仓库门禁是唯一防线；提交前跑 `gofmt -l . && go vet ./... && go test -race ./...` 与 `bash scripts/check-docs.sh`。
+- **文档门禁**：新增文档必须登记 `docs/README.md`，否则 `check-docs.sh` 失败。
+- **体量**：docs 单篇 ≤300 行、ADR ≤100 行、代码单文件 ≤500 行、CONTEXT ≤150 行。
+- 踩坑索引：`pitfalls/P-001-status-facts-in-adr.md`、`pitfalls/P-002-pi-writes-to-home.md`。
