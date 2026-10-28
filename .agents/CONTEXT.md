@@ -6,33 +6,33 @@
 
 - **项目名：Locowrk**（拼写是 `wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀）。远端：`github.com/qingbird1983/Locowrk`（**私有**）；旧 Rust 历史在 `archive/pre-go-locowrk`。
 - **本地目录已改名完成**：仓库根目录即 `E:\Warehouse\AIwork\Locowrk`（旧名 `pi-go-desktop` 已不存在；旧路径只在 git 历史与 ADR-0007/CHANGELOG 的历史记录里）。
-- **Go module**：`github.com/qingbird1983/locowrk`（module 小写，仓库显示名保留 `Locowrk`）。尚未 `go mod init`。
-- **Phase 0（仓库与文档基线）**：文档已落盘、目录已迁移；**待所有者确认许可证与报告**，确认后打 `phase-0.end`。
-- **Phase 1（内核接入与事件流）**：文档状态「评审中」，未开工，无代码。
+- **Go module**：`github.com/qingbird1983/locowrk`（module 小写，仓库显示名保留 `Locowrk`）。
+- **Phase 0（仓库与文档基线）**：✅ **完成**，tag `phase-0.end`（2026-10-28 所有者确认 MIT 与报告）。
+- **Phase 1（内核接入与事件流）**：文档已**定稿**，本轮开工。目标：内核 + 事件流 + JSONL 会话恢复，不做界面。
 - **Phase 2（适配器与 A 轨运行时选型）**：文档新增限时 spike（ADR-0008），待 Phase 1 后开工。
-- 看板唯一来源：`docs/roadmap/00-roadmap.md`。仓库根目录只有文档、脚本与 CI 占位。
+- 看板唯一来源：`docs/roadmap/00-roadmap.md`。
 
 ## 上一轮完成了什么
 
 1. 所有者执行目录改名：`pi-go-desktop` → `Locowrk`；本会话在新路径接续，未重新 `git init`、未动 remote。
-2. 开工检查全部通过：`git rev-parse --show-toplevel` 为 `E:/Warehouse/AIwork/Locowrk`；`git remote -v` 指向 `Locowrk.git`；`git status` 干净；`bash scripts/check-docs.sh` 输出 `check-docs: OK`。
-3. 清除“目录待迁移”的历史残留：CONTEXT、Phase 0 报告、看板状态、Phase 1 的“模块路径待定”备注都已改为已完成/已定。
-4. 沉淀两条经验：`pitfalls/P-001`（状态类事实不要写进不可改的 ADR）、`handoff/H-001`（迁移轮交接）。
+2. 开工检查全部通过：路径、remote、工作区干净、`check-docs: OK`。
+3. 清掉“目录待迁移”的过期表述（CONTEXT、Phase 0 报告、看板、Phase 1 备注）。
+4. Phase 0 收尾：所有者确认 MIT，看板置完成，打 tag `phase-0.end`，Phase 1 文档转定稿。
+5. 沉淀：`pitfalls/P-001`（状态类事实不写进不可改的 ADR）、`handoff/H-001`（迁移轮交接）。
 
 ## 下一步（按优先级）
 
-1. **所有者确认**：许可证（ADR-0007 默认 MIT）、Phase 0 报告、Phase 1 文档；确认后打 tag `phase-0.end`。
-2. **Phase 1 设计定稿**：`docs/roadmap/phase-1-kernel-events.md` 从「评审中」转「定稿」。
-3. **Phase 1 实现**：`go mod init github.com/qingbird1983/locowrk` → 依赖 `github.com/sky-valley/pi`（锁定提交）→ `internal/kernel` + `internal/eventbus` → CLI/stdout 事件验证 → JSONL 会话读写验证。
+1. **Phase 1 实现**（feature 分支 `phase-1/kernel-events`）：`go mod init` → 依赖 `github.com/sky-valley/pi`（锁定提交）→ `internal/eventbus` + `internal/kernel` → `cmd/locowrk-smoke` 事件验证 → JSONL 会话读写验证。
+2. **验收**：逐条跑 `docs/roadmap/phase-1-kernel-events.md` §5 的 7 个场景，结果写 `docs/design/phase-1/report.md`。
+3. **首次规范复查**：Phase 1 收尾按 standards/09 做。
 4. **Phase 2 设计定稿**：把 runtime spike 的样本、指标、淘汰线写细；spike 后补 ADR-0009。
-5. Phase 1 收尾时做首次例行规范复查（standards/09）。
 
 ## 未决问题
 
 - **A 轨运行时**：Phase 2 spike 后在 ADR-0009 定；此前不得对外说“支持 pi 扩展”。
 - **主界面渲染路径**：会话流走 MyGo 原生 `ui.View` 还是 WebView + TS？Phase 3 开工前用一次 spike 定稿，必要时新增 ADR。
 - **`sky-valley/pi` 版本策略**：固定提交还是跟随 release tag？当前固定提交；升级规则见 ADR-0001。
-- **许可证**：ADR-0007 已定 MIT，但 Phase 0 报告仍标“待所有者确认”；确认前不发布、不对外承诺。
+- **许可证**：MIT（ADR-0007，所有者已于 2026-10-28 确认）；正式发布前再做一次名称/商标可用性检查，不另写 ADR。
 - **MyGo v0.x API 漂移**：MyGo 用法限制在 `desktop/` 与 `internal/bridge`，内核与适配层不依赖 GUI。
 
 ## 关键提醒
