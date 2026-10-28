@@ -225,6 +225,9 @@ func TestTabMenuCoversPage(t *testing.T) {
 	if !tester.HasText("变更 A") {
 		t.Fatal("tab bar disappeared after refresh")
 	}
+	if !tester.Focused("⋯") {
+		t.Fatal("focus did not return to the tab menu button")
+	}
 }
 
 func TestAllowedPageURL(t *testing.T) {

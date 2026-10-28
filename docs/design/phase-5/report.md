@@ -59,7 +59,7 @@
 - **文本选择**：虚拟列表只挂载视口附近，跨屏选择/复制整段 diff 不承诺。
 - **未跟踪/已暂存**：不显示；界面有脚注。
 - **真实模型**：`real` 场景无 key 未跑；不影响 Diff 功能，但阶段回归清单保留。
-- **restore 场景**：需要 `scripts/seed-long-session.mjs` 预置会话；本轮未种子，未重跑（Phase 4 已通过）。
+- **restore 场景**：已用 `scripts/seed-long-session.mjs` 种子 250 条消息重跑，`restore` 通过（1090 ms，250 行，`long marker` 命中）。种子写入了本机用户目录一次，已清理；后续种子应显式指定临时 HOME。
 - **层级证据**：原生 `CapturePage` 不含子 WebView；层级用 tester + OS 截屏，不用原生捕获。
 
 ## 7. 对下阶段的影响
