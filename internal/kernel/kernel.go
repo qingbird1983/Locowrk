@@ -111,6 +111,9 @@ type session struct {
 	path   string
 	cwd    string
 	closed bool
+	// cancel stops the active run's context; nil while idle. Abort cancels it
+	// so a stopped turn is classified as canceled, not as a provider failure.
+	cancel context.CancelFunc
 }
 
 // New validates options and returns a Service.
@@ -285,11 +288,22 @@ func (s *Service) Prompt(ctx context.Context, id SessionID, text string, images 
 	for _, img := range images {
 		aiImages = append(aiImages, ai.ImageContent{Data: img.Data, MimeType: img.MimeType})
 	}
-	_, runErr := entry.sess.Run(ctx, text, aiImages...)
+	runCtx, cancel := context.WithCancel(ctx)
+	entry.mu.Lock()
+	entry.cancel = cancel
+	entry.mu.Unlock()
+	defer func() {
+		cancel()
+		entry.mu.Lock()
+		entry.cancel = nil
+		entry.mu.Unlock()
+	}()
+
+	_, runErr := entry.sess.Run(runCtx, text, aiImages...)
 	if runErr == nil {
 		return nil
 	}
-	if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) || ctx.Err() != nil {
+	if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) || runCtx.Err() != nil {
 		return fmt.Errorf("%w: %w", ErrCanceled, runErr)
 	}
 	return fmt.Errorf("prompt: %w", runErr)
@@ -315,6 +329,12 @@ func (s *Service) Abort(ctx context.Context, id SessionID) error {
 		return err
 	}
 	entry.sess.Abort()
+	entry.mu.Lock()
+	cancel := entry.cancel
+	entry.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 	return nil
 }
 

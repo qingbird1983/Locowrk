@@ -16,11 +16,12 @@
 4. ADR-0011 定稿：Phase 3 主壳 WebView；原生 UI 从 Phase 4 插件插槽开始。
 5. research/03 转定稿并补 spike 读数；Phase 3 文档定稿；看板、CHANGELOG 0.4.0、CONTEXT 同步。
 
+6. `internal/bridge` 落地：DTO-only 门面（列表/新建/恢复/发消息/停止/历史/模型/思考档/订阅）；`kernel.ListSessions`；`kernel.Abort` 归类为 `ErrCanceled`（含内核与 bridge 契约测试）。
+7. 验证接缝 #2：`go list -deps ./internal/bridge` 与 `internal/kernel` 均不含 MyGo。
+
 ## 遗留与下一步
 
-- `internal/bridge`：DTO-only 门面 + 契约测试（无 MyGo 类型）。
-- 会话列表来源（目录扫描/索引）与 `Prompt` 异步门面。
-- `cmd/locowrk` 最小主壳与前端页面。
+- `cmd/locowrk` 最小主壳与前端页面（会话列表、消息流、输入、停止）。
 - Phase 3 内验证：IME、长列表、钥匙串、打包/签名、三平台。
 
 ## 已提取的沉淀
