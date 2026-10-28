@@ -34,11 +34,11 @@ docs/
 |---|---|---|
 | architecture/locowrk.md | 定稿 | 立项方案 v1.1：Locowrk 的插件层完整设计与渲染路径（架构 01~05 的来源） |
 | architecture/01-overview.md | 定稿 | 总体分层、依赖方向与里程碑形态 |
-| architecture/02-kernel.md | 定稿 | `sky-valley/pi` 的封装、事件模型、工具与会话接入 |
+| architecture/02-kernel.md | 定稿 | 仓库内 `pi/` 内核的封装、事件模型、工具与会话接入 |
 | architecture/03-critical-seams.md | 定稿 | 防返工的接缝清单与可执行检查点 |
 | architecture/04-plugin-system.md | 定稿 | 双轨插件系统：编排兼容、桌面原生、子进程隔离 |
 | architecture/05-session-and-resources.md | 定稿 | 会话、压缩、技能、项目上下文与凭证边界 |
-| adr/ADR-0001-reuse-sky-valley-pi-kernel.md | 定稿 | 内核直接复用 `sky-valley/pi`，不自研、不嵌 Node |
+| adr/ADR-0001-reuse-sky-valley-pi-kernel.md | 已取代 | 原决策：内核以 module 依赖复用 `sky-valley/pi`（被 ADR-0012 取代） |
 | adr/ADR-0002-mygo-desktop-host.md | 定稿 | 桌面宿主采用 MyGo，原生视图与 WebView 双路径 |
 | adr/ADR-0003-orchestration-only-compat.md | 定稿 | 三分类兼容矩阵：支持 / 缓做 / TUI no-op + 诊断 |
 | adr/ADR-0004-subprocess-plugin-isolation.md | 定稿 | 第三方插件走子进程 + IPC，不用 Go `plugin` 包 |
@@ -49,7 +49,8 @@ docs/
 | adr/ADR-0009-a-track-node-runtime.md | 定稿 | A 轨运行时定为 Node 兼容子进程 + 显式子集 shim（spike 结论） |
 | adr/ADR-0010-solo-main-commits.md | 定稿 | 单人开发期允许直接提交 main，门禁前置；条件变化即恢复分支 |
 | adr/ADR-0011-phase-3-webview-shell.md | 定稿 | Phase 3 主壳走 MyGo WebView；原生路径从 Phase 4 插件插槽落地 |
-| research/01-sky-valley-pi.md | 定稿 | 内核依赖的事实清单：包、能力、缺口、版本钉 |
+| adr/ADR-0012-fork-kernel-into-repo.md | 定稿 | 内核源码 fork 进 `pi/`，与上游分离、由本仓库维护 |
+| research/01-sky-valley-pi.md | 定稿 | 内核事实清单：fork 基线、包、能力、缺口与本地维护方式 |
 | research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（已按固定上游提交复核事件与 API） |
 | research/03-mygo-stack.md | 草稿 | MyGo 能力、线程模型、风险与需要 spike 的问题 |
 | research/04-governance-reference.md | 定稿 | 参考仓库 Timo-pi 的治理做法与取舍 |

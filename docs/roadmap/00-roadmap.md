@@ -44,7 +44,7 @@ graph LR
 
 ## 3. Backlog（Phase 8+ 候选，立项须先写 ADR）
 
-- **Prompt templates**：上游 pi 有、`sky-valley/pi` 未移植；先补内核能力再开放。
+- **Prompt templates**：上游 pi 有、仓库内内核尚未移植；先补内核能力再开放。
 - **MCP**：上游 Go 移植尚未落地 MCP；等待上游或由适配层承接。
 - **主题系统**：桌面视觉统一后再做用户主题；不做终端主题兼容。
 - **插件市场与签名分发**：manifest、签名、更新、回滚；Phase 7 之后。
@@ -59,7 +59,7 @@ graph LR
 
 | 风险 | 等级 | 对策 |
 |---|---|---|
-| `sky-valley/pi` API 漂移 / 破坏性变更 | 高 | 固定提交；上游类型隔离在 `internal/kernel`；升级独立分支 + 全量测试 |
+| `pi/` 内核漂移 / 上游跟进滞后 | 高 | 基线提交 + `pi/FORK.md` 差异表；安全修复按上游 diff 手工移植；本地改动有测试 |
 | MyGo v0.x API 漂移与原生 UI 成熟度 | 高 | 锁版本；用法收敛；Phase 3 spike；必要时主壳改 WebView |
 | A 轨适配器复杂度（无现成 extensions runtime，需自建 shim 与打包） | 高 | 已定运行时（ADR-0009，Node 子进程）；只承诺三分类矩阵，不承诺全量兼容；剩余风险是 shim 维护与随包 Node 分发 |
 | A 轨能力闸边界（Node 原生 fs/net/exec 绕过 shim） | 高 | 只按受信任插件处理并在安装/运行界面明示；OS 级隔离进 backlog，不宣传为沙箱 |

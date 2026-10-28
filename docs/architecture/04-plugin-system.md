@@ -20,7 +20,7 @@
 
 ### 2.1 现状与缺口
 
-`sky-valley/pi` **没有移植** pi 的 extensions runtime（上游 `core/extensions/**` 被其范围测试判为宿主面）。因此 A 轨不是“打开开关”，而是本项目要补的一层：
+仓库内内核（fork 自 `sky-valley/pi`）**没有移植** pi 的 extensions runtime（上游 `core/extensions/**` 被其范围测试判为宿主面）。因此 A 轨不是“打开开关”，而是本项目要补的一层：
 
 - **桥接模式（已选定）**：适配器启动一个 Node 子进程，加载安装期打包好的扩展产物（esbuild 单文件），注入显式子集 shim（`locowrk-shim/0`），把注册/事件/工具调用翻译成 JSON-RPC。选型与读数见 ADR-0009 与 [`design/phase-2/runtime-spike.md`](../design/phase-2/runtime-spike.md)。
 - **重写模式（不采用）**：按扩展语义用 Go 重写；spike 证明它只能逐个扩展重写，兼容面退化为“编排语义”。仅作为 B 不可行时的兜底。

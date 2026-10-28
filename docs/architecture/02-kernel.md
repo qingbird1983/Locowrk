@@ -2,11 +2,11 @@
 
 - 状态：定稿
 - 日期：2026-10-28
-- 关联：ADR-0001、ADR-0005；architecture/03、05；research/01
+- 关联：ADR-0012、ADR-0005；architecture/03、05；research/01
 
 ## 1. 依赖边界
 
-`internal/kernel` 是**唯一** import `github.com/sky-valley/pi` 的包。它向上暴露项目自己的类型，不让上游类型泄漏到 UI 与插件协议。
+`internal/kernel` 是**唯一**在非测试代码中 import `github.com/qingbird1983/locowrk/pi/...` 的包。内核源码 fork 在本仓库 `pi/`（ADR-0012），但下游仍只认项目类型，不让内核类型泄漏到 UI 与插件协议。测试文件可以为了构造 faux、断言事件而直接 import `pi/...`；其他包的非测试代码不得引用。
 
 ```go
 package kernel
@@ -119,13 +119,14 @@ type Event struct {
 
 - 模型：`ai.BuiltinModels` 从环境或注入的 `ai.CredentialStore` 取凭证；桌面端用 MyGo 的系统钥匙串能力实现 `CredentialStore`。
 - 运行期换模型：`Session.SetModel`；思考档：`SetThinkingLevel`。换模型不重建会话。
-- 遥测：`sky-valley/pi` 有 telemetry 包，但本项目**默认关闭**；开启须先改 standards/06（零遥测默认）。
+- 遥测：`pi/telemetry` 存在，但本项目**默认关闭**；开启须先改 standards/06（零遥测默认）。
 
 ## 6. 版本钉与升级
 
-- 当前钉：`github.com/sky-valley/pi` 本地快照 `6f6131ba`（2026-10-25，分支 `main`，描述 `env/v1.4.28-14-g6f6131b`）。
-- 升级流程：单独分支 → 跑全量 `go test -race ./...` → 核对 `agent` 事件常量、`coding.SessionOptions`、`ai` 流事件、会话迁移 → 更新 research/01 与 CHANGELOG → 合并。
-- 禁止在功能分支里顺手升级内核；禁止用 `replace` 指向本地路径入库。
+- **基线**：`pi/` fork 自 `sky-valley/pi` 提交 `6f6131ba`（2026-10-25，分支 `main`，描述 `env/v1.4.28-14-g6f6131b`）。
+- **本地演进**：内核由本仓库维护，可直接修改；行为改动先写 ADR/Phase 文档，并在 `pi/FORK.md` 差异表登记。
+- **跟进上游**：以基线与新提交做 diff，挑选安全/相关改动手工移植；独立提交 → 全量 `go test -race ./...` → 核对 `agent` 事件常量、`coding.SessionOptions`、`ai` 流事件、会话迁移 → 更新 research/01 与 CHANGELOG。
+- 禁止在功能分支里顺手批量合并上游；禁止把上游测试/docs 整批搬入。
 
 ## 7. 错误处理
 

@@ -2,9 +2,9 @@
 
 **A native desktop workbench for [pi](https://github.com/earendil-works/pi), built on a pure-Go kernel.**
 
-Locowrk reuses the pure-Go port [`sky-valley/pi`](https://github.com/sky-valley/pi) as its agent kernel and adds a desktop host built with [MyGo](https://github.com/egoist/mygo). It keeps pi's behaviour as the contract, keeps TUI-only extension calls out of the desktop, and gives plugin interfaces two first-class rendering paths: native `ui.View` and the system WebView.
+Locowrk keeps the pure-Go agent kernel [`sky-valley/pi`](https://github.com/sky-valley/pi) **in this repository** as the `pi/` fork (MIT), so the kernel can evolve with the product instead of waiting on an external module. The desktop host is built with [MyGo](https://github.com/egoist/mygo). pi's behaviour remains the blueprint for unmodified kernel code; TUI-only extension calls are kept out of the desktop; plugin interfaces have two first-class rendering paths: native `ui.View` and the system WebView.
 
-- **Kernel, not a re-port**: agent loop, LLM providers, tools, sessions, skills and compaction come from `sky-valley/pi`.
+- **Kernel in-repo**: agent loop, LLM providers, tools, sessions, skills and compaction live in `pi/`, forked from `sky-valley/pi` (MIT) at a recorded upstream commit and maintained here; `internal/kernel` is the only package that talks to it.
 - **Orchestration compatibility**: pi extensions that only register tools, commands and event hooks are adapted; terminal UI calls degrade to no-ops with diagnostics.
 - **Desktop plugins**: native Go views for structured visualisation, WebView panels for rich interaction, and subprocess isolation for third-party plugins.
 - **Documentation first**: architecture, decisions (ADRs), standards and phase acceptance criteria are written before implementation.
@@ -36,4 +36,4 @@ This repository currently contains the documentation baseline. Implementation st
 
 ## License
 
-[MIT](LICENSE). pi and `sky-valley/pi` are MIT; MyGo is MIT.
+[MIT](LICENSE). The `pi/` kernel is forked from `sky-valley/pi` (MIT); MyGo is MIT.

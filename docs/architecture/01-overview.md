@@ -8,7 +8,7 @@
 
 **Go 内核负责“做事”，MyGo 宿主负责“看得见”，适配层负责“把 pi 的编排语义接进来”，插件在明确的边界里长界面。**
 
-pi 的行为是契约；`sky-valley/pi` 是内核实现；我们只写内核与界面之间的那一层，以及界面本身。
+pi 的行为是契约；`pi/` 是本仓库维护的内核实现（fork 自 `sky-valley/pi`）；我们只写内核与界面之间的那一层，以及界面本身。
 
 ## 2. 分层总览
 
@@ -47,7 +47,7 @@ graph TB
 1. `cmd/locowrk` 只装配，不含业务逻辑。
 2. `desktop/` 可以 import `internal/bridge` 暴露的 DTO 与接口，**不得**直接 import `internal/kernel`。
 3. `internal/bridge` 依赖 `internal/kernel`、`internal/eventbus`、`internal/adapter`，并向 `desktop/` 暴露与 UI 框架无关的接口。
-4. `internal/kernel` 封装 `github.com/sky-valley/pi` 的 `agent`、`ai`、`coding`；它是唯一知道上游 API 形状的地方。
+4. `internal/kernel` 封装仓库内 `pi/` 的 `agent`、`ai`、`coding`；它是唯一知道内核 API 形状的地方。
 5. `internal/adapter` 依赖事件契约与子进程协议，不依赖 MyGo。
 6. 任何 `internal/` 包都不得 import `github.com/egoist/mygo` 或 `.../mygo/ui`。
 
@@ -64,8 +64,8 @@ graph TB
 
 | 用途 | 选型 | 说明 |
 |---|---|---|
-| 语言 | Go 1.27+ | 与 `sky-valley/pi`（go 1.26）和 MyGo（1.27.3+）取交集 |
-| Agent 内核 | `github.com/sky-valley/pi` | 固定提交；见 research/01 |
+| 语言 | Go 1.27+ | 仓库内内核基线声明 go 1.26；与 MyGo（1.27.3+）取交集 |
+| Agent 内核 | 仓库内 `pi/`（fork 自 `sky-valley/pi`，MIT） | 上游基线提交见 research/01；本地改动留痕 |
 | 桌面宿主 | `github.com/egoist/mygo` v0.7.x | 原生 `ui` + 系统 WebView + Typed IPC |
 | 进程协议 | JSON-RPC 2.0 over stdio（首选） | gRPC 仅在需要双向流/多语言时引入 |
 | 会话 | 上游 JSONL | 复用 `coding` 的写入/恢复 |

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
+	"github.com/qingbird1983/locowrk/pi/agent"
+	"github.com/qingbird1983/locowrk/pi/ai"
 
 	"github.com/qingbird1983/locowrk/internal/eventbus"
 )

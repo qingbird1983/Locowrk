@@ -74,6 +74,6 @@
 
 ## 接缝 #12：内核版本与 API 形状
 
-**约束**：上游类型只在 `internal/kernel` 出现；升级内核不得要求 UI/插件改协议。事件 DTO 与插件协议各自有版本号。
+**约束**：内核类型只在 `internal/kernel` 的非测试公开 API 内出现；`pi/` 只被 `internal/kernel` 引用（测试文件可为构造 fixture 直接引用）。升级/修改内核不得要求 UI/插件改协议。事件 DTO 与插件协议各自有版本号。
 
 **检查点**：升级演练：只改 `internal/kernel` 与 go.mod，`desktop/`、`proto/` 编译不变；协议 fixture 仍通过。

@@ -1,7 +1,7 @@
 package kernel
 
 import (
-	"github.com/sky-valley/pi/coding"
+	"github.com/qingbird1983/locowrk/pi/coding"
 )
 
 // SessionSummary is one stored session, as shown in a session list.

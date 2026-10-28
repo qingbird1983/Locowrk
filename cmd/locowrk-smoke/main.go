@@ -16,9 +16,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
-
 	"github.com/qingbird1983/locowrk/internal/eventbus"
 	"github.com/qingbird1983/locowrk/internal/kernel"
 )
@@ -60,33 +57,19 @@ func run() error {
 		}
 	}
 
-	lookup := func(ref kernel.ModelRef) (*ai.Model, error) {
-		if m := ai.GetModel(ref.Provider, ref.ID); m != nil {
-			return m, nil
-		}
-		return nil, fmt.Errorf("unknown model %s", ref)
-	}
+	opts := kernel.Options{}
 	ref, err := kernel.ParseModelRef(*model)
 	if err != nil {
 		return err
 	}
 
 	if *faux {
-		reg := providers.RegisterFauxProvider(providers.RegisterFauxProviderOptions{
-			Models: []providers.FauxModelDefinition{{ID: "faux-1", ContextWindow: 200000, MaxTokens: 8192}},
-		})
-		defer reg.Unregister()
-		fauxModel := reg.GetModel()
-		reg.SetResponses([]providers.FauxResponseStep{
-			providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
-				providers.FauxText("faux provider: received " + *prompt),
-			}, ai.StopStop)),
-		})
-		ref = kernel.ModelRef{Provider: string(fauxModel.Provider), ID: fauxModel.ID}
-		lookup = func(kernel.ModelRef) (*ai.Model, error) { return fauxModel, nil }
+		var cleanup func()
+		opts, ref, cleanup = kernel.WithFauxModel(opts, "faux provider: received "+*prompt)
+		defer cleanup()
 	}
 
-	svc, err := kernel.New(kernel.Options{LookupModel: lookup})
+	svc, err := kernel.New(opts)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,7 @@
 // translates the wire protocol in proto/plugin-protocol.md into project events,
 // tools and diagnostics.
 //
-// It deliberately does not import github.com/sky-valley/pi: tools are described
+// It deliberately does not import github.com/qingbird1983/locowrk/pi: tools are described
 // with project DTOs and converted to upstream tools by internal/kernel
 // (architecture/03 seam #12).
 package adapter

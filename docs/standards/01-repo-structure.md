@@ -10,8 +10,9 @@
 .agents/              AI 开发知识库与交接中枢（规范见其 README；预算受 standards/08 约束）
 docs/                 全部文档（唯一事实来源；结构见 docs/README.md）
 cmd/                  可执行入口（Phase 1: locowrk-smoke 临时壳；Phase 3: locowrk）
+pi/                   仓库内内核（fork 自 sky-valley/pi，MIT；维护规则见 pi/FORK.md）
 internal/             私有实现（不可被外部 import）
-  kernel/             sky-valley/pi 的唯一封装点
+  kernel/             仓库内 pi/ 的唯一封装点
   eventbus/           项目事件与订阅
   adapter/            编排插件适配器
   skills/             技能/上下文资源的项目侧封装（如需）

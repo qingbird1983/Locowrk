@@ -1,6 +1,6 @@
 # ADR-0001：内核直接复用 `sky-valley/pi`，不自研、不嵌 Node
 
-- 状态：定稿
+- 状态：已取代（2026-10-28，见 [ADR-0012](ADR-0012-fork-kernel-into-repo.md)；内核已 fork 进仓库 `pi/`）
 - 日期：2026-10-28
 - 关联：architecture/01、02；research/01
 

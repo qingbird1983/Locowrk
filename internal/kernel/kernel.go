@@ -1,4 +1,4 @@
-// Package kernel is the only package that imports github.com/sky-valley/pi.
+// Package kernel is the only package that imports github.com/qingbird1983/locowrk/pi.
 // It owns sessions, turns their lifecycle events into project events and keeps
 // upstream types out of every other package's signatures (architecture/02).
 package kernel
@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/coding"
+	"github.com/qingbird1983/locowrk/pi/agent"
+	"github.com/qingbird1983/locowrk/pi/ai"
+	"github.com/qingbird1983/locowrk/pi/coding"
 
 	"github.com/qingbird1983/locowrk/internal/eventbus"
 )

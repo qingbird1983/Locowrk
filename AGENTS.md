@@ -24,9 +24,9 @@
 3. **收尾四件事**：重写 CONTEXT 交接卡、归档 handoff、沉淀 pitfalls/skills、体量核对；教训当轮提取 —— [.agents/README.md](.agents/README.md)、[standards/07 §7](docs/standards/07-ai-collaboration.md)。
 4. **安全红线**：密钥、个人路径不入仓库；插件默认无能力、显式授权 —— [standards/06](docs/standards/06-security.md)。
 5. **范围纪律**：只做当前阶段“做”清单内的事，超范围先 backlog 或 ADR —— [standards/07](docs/standards/07-ai-collaboration.md)。
-6. **方向纪律**：内核行为以 pi / `sky-valley/pi` 为唯一蓝本，忠实复刻；偏离必须先写 ADR，不得“顺手改得更好” —— [ADR-0001](docs/adr/ADR-0001-reuse-sky-valley-pi-kernel.md)。
-7. **外部代码**：GPL/LGPL 项目（PI-Desktop、pi-flash）源码严禁复制或翻译，只读思路；上游 pi（MIT）只用于理解行为，不整文件搬运；`sky-valley/pi`（MIT）以模块依赖方式使用，不复制进本仓库 —— [standards/07 §5](docs/standards/07-ai-collaboration.md)。
+6. **方向纪律**：内核以 pi / `sky-valley/pi` 的行为为蓝本；内核源码已 fork 进本仓库 `pi/`，可按需求修改，但行为偏离必须先写 ADR，并在 `pi/FORK.md` 登记，不得“顺手改得更好” —— [ADR-0012](docs/adr/ADR-0012-fork-kernel-into-repo.md)、[pi/FORK.md](pi/FORK.md)。
+7. **外部代码**：GPL/LGPL 项目（PI-Desktop、pi-flash）源码严禁复制或翻译，只读思路；上游 pi（MIT）只用于理解行为，不整文件搬运；本仓库 `pi/` 是经 ADR-0012 批准的 MIT fork，保留许可证与版权头，改动留痕 —— [standards/07 §5](docs/standards/07-ai-collaboration.md)。
 8. **体量红线**：docs / .agents / 代码 / 依赖的预算见 [standards/08](docs/standards/08-size-control.md)，超标当期处置或登记豁免。
-9. **版本钉死**：`sky-valley/pi` 与 MyGo 均锁版本/提交；升级独立成提交并更新 `docs/research/01-sky-valley-pi.md`、`03-mygo-stack.md` 与 CHANGELOG。
+9. **版本钉死**：`pi/` 记录上游基线提交，升级独立成提交并更新 `docs/research/01-sky-valley-pi.md` 与 CHANGELOG；MyGo 仍锁版本，升级独立提交并更新 `docs/research/03-mygo-stack.md`。
 
 > 语言约定：文档与对用户的沟通用中文；代码、标识符、commit message 用英文。

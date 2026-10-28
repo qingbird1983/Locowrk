@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/sky-valley/pi/agent"
-	"github.com/sky-valley/pi/ai"
+	"github.com/qingbird1983/locowrk/pi/agent"
+	"github.com/qingbird1983/locowrk/pi/ai"
 )
 
 // ToolResult is what an externally registered tool returns to the agent.

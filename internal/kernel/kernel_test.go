@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
-	"github.com/sky-valley/pi/coding"
+	"github.com/qingbird1983/locowrk/pi/ai"
+	"github.com/qingbird1983/locowrk/pi/ai/providers"
+	"github.com/qingbird1983/locowrk/pi/coding"
 
 	"github.com/qingbird1983/locowrk/internal/eventbus"
 )

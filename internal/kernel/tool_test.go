@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sky-valley/pi/ai"
-	"github.com/sky-valley/pi/ai/providers"
+	"github.com/qingbird1983/locowrk/pi/ai"
+	"github.com/qingbird1983/locowrk/pi/ai/providers"
 )
 
 func TestExtraToolRunsFromFauxTurn(t *testing.T) {

@@ -5,10 +5,10 @@
 
 ## 1. 工具链与硬门槛
 
-- Go 1.27+（与 MyGo 的 1.27.3+ 取交集；`sky-valley/pi` 声明 go 1.26）。
+- Go 1.27+（与 MyGo 的 1.27.3+ 取交集；仓库内内核基线声明 go 1.26）。
 - `gofmt`（CI 检查）+ `go vet`（CI 硬门槛）+ `go test -race ./...`。
 - 可选 `staticcheck`；启用后作为 CI 门槛，不启用不假装有。
-- **禁止 cgo**：依赖链（`sky-valley/pi`、MyGo）均为纯 Go；引入 cgo 依赖须 ADR。
+- **禁止 cgo**：依赖链（仓库内内核 `pi/`、MyGo）均为纯 Go；引入 cgo 依赖须 ADR。
 - 依赖版本锁定：`go.mod` + `go.sum` 入库；内核固定提交（见 ADR-0001）。
 
 ## 2. 错误处理
@@ -32,7 +32,7 @@
 - 公开项 100% doc comment（首行一句话，中文或英文均可，全仓统一用英文）。
 - 默认 `internal/`；公开须有理由（供 `cmd/`/`desktop/` 或未来 SDK）。
 - 公共 API 变更 = 语义级变更：先文档后代码；breaking change 在 CHANGELOG 标注。
-- 上游类型（`sky-valley/pi`）不得出现在 `internal/kernel` 之外的公开签名里。
+- 内核类型（`pi/...`）不得出现在 `internal/kernel` 之外的公开签名里。
 
 ## 5. 依赖准入
 
@@ -57,11 +57,11 @@
 
 | 依赖 | 版本 | 用途 | 为何必须 | 许可证 | 备选与否决理由 |
 |---|---|---|---|---|---|
-| `github.com/sky-valley/pi` | 固定提交 `6f6131ba` | Agent 内核 | ADR-0001 既定 | MIT | 自研/Node：成本高，弃 |
+| `pi/`（内核 fork） | 仓库内，基线 `6f6131ba` | Agent 内核（`agent`/`ai`/`coding`） | 由本项目维护与二次调整（ADR-0012） | MIT（上游） | 外部 module 依赖：无法在仓库内改内核，已否决 |
 | `github.com/egoist/mygo` | v0.7.x（锁定） | 桌面宿主 | ADR-0002 既定 | MIT | Fyne/Wails/Gio：匹配度不足 |
 | `golang.org/x/sync` | 最新稳定 | errgroup/并发工具 | 仅在标准库不足时引入 | BSD-3 | 手写 WaitGroup：易错；优先标准库 |
-| `golang.org/x/text` | v0.37.0（传递） | Unicode 规范化/排序（上游 `coding` 需要） | 随 `sky-valley/pi` 传递引入，不直接使用 | BSD-3 | 自研 Unicode 处理：不值 |
-| `golang.org/x/image` | v0.41.0（传递） | bmp/webp 解码（上游工具结果图片） | 随 `sky-valley/pi` 传递引入，不直接使用 | BSD-3 | 裁剪上游：会分叉内核 |
+| `golang.org/x/text` | v0.37.0 | Unicode 规范化/排序（内核 `coding` 需要） | 内核直接依赖 | BSD-3 | 自研 Unicode 处理：不值 |
+| `golang.org/x/image` | v0.41.0 | bmp/webp 解码（内核工具结果图片） | 内核直接依赖 | BSD-3 | 裁剪内核：会分叉维护面 |
 | `google.golang.org/grpc` | 暂不引入 | 插件 IPC（备选） | 首版用 JSON-RPC | Apache-2.0 | JSON-RPC：更轻；需要双向流再评估 |
 
 - 升级依赖：独立提交，跑全量门禁，更新本表与 CHANGELOG。

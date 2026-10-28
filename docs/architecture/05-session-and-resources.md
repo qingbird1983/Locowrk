@@ -6,7 +6,7 @@
 
 ## 1. 会话格式：沿用上游，不另立
 
-`sky-valley/pi` 的 `coding` 包已经实现与 pi 兼容的**追加式 JSONL**：
+`pi/coding` 包已经实现与 pi 兼容的**追加式 JSONL**：
 
 - 目录：`~/.pi/agent/sessions/--<编码后的 cwd>--/`（`coding.DefaultSessionDir`）。
 - 文件：首行是会话头（id、时间、cwd、模型等），其后每行一个 entry；只追加，不改写历史。
@@ -55,7 +55,7 @@ stateDiagram-v2
 
 ### 3.3 提示词模板（缺口）
 
-上游 pi 有 prompt templates，`sky-valley/pi` **尚未移植**。本项目：
+上游 pi 有 prompt templates，仓库内内核（`pi/coding`）**尚未移植**。本项目：
 
 - Phase 1~6 不承诺模板功能；
 - 若需要，先在 `internal/kernel` 实现发现与 `$@` 展开，再写 ADR 与测试；

@@ -1,23 +1,24 @@
 # 调研 01：`sky-valley/pi` 内核事实清单
 
-- 状态：定稿
+- 状态：定稿（2026-10-28 改为仓库内 fork，见 ADR-0012）
 - 日期：2026-10-28
-- 关联：ADR-0001、ADR-0005；architecture/02、05
+- 关联：ADR-0012、ADR-0005；architecture/02、05；`pi/FORK.md`
 
-> 本文是依赖决策的事实底稿。数据来自本机抓取的源码快照与仓库自带文档；升级内核时必须同步更新本文。
+> 本文是内核的事实底稿。数据来自基线源码快照与上游自带文档；跟进上游或本地改动内核时必须同步更新本文。
 
 ## 1. 身份与版本
 
 | 项 | 值 |
 |---|---|
-| 模块 | `github.com/sky-valley/pi` |
+| 模块 | 本仓库 `github.com/qingbird1983/locowrk/pi`（fork 自 `github.com/sky-valley/pi`） |
 | 定位 | pi 的纯 Go 移植：`pi-ai` + `pi-agent-core` + `pi-coding-agent` 的 SDK 半边 |
-| 许可证 | MIT（含上游 Mario Zechner 版权行） |
-| `go.mod` | `go 1.26` |
-| 本机快照 | 提交 `6f6131ba`，2026-10-25，分支 `main` |
+| 许可证 | MIT（含上游 Mario Zechner 版权行，见 `pi/LICENSE`） |
+| `go.mod` | 上游 `go 1.26`；本仓库模块 `go 1.27.3` |
+| 上游基线 | 提交 `6f6131ba`，2026-10-25，分支 `main` |
 | 描述 | `env/v1.4.28-14-g6f6131b`（根模块曾发 `v1.4.28`；`env` 子模块独立打 tag） |
-| 依赖解析版本 | `v1.4.29-0.20261024235732-6f6131bae0dc`（Phase 1 `go get @6f6131ba` 的实际结果；伪版本时间 2026-10-24T23:57:32Z） |
-| 传递依赖 | `golang.org/x/text v0.37.0`、`golang.org/x/image v0.41.0`（BSD-3，随 `coding` 引入） |
+| 导入范围 | `agent`、`ai`（含 `providers`、`models_catalog.json`）、`coding`、`internal/jstext`、`internal/nodepath`、`telemetry` 的非测试源码 |
+| 本地维护 | 由本仓库维护；差异登记在 `pi/FORK.md`，行为改动先写 ADR/Phase 文档 |
+| 依赖 | `golang.org/x/text`、`golang.org/x/image`（BSD-3，直接 require） |
 | 上游对应 | pi TS 源码 pin `38ff99177`；npm `@earendil-works/pi-ai` 1.4.0 |
 | CI | **无**（其 UPSTREAM.md 明说仓库不跑 CI，只有本地 `go test`） |
 
@@ -69,7 +70,7 @@
 | 未移植 Bedrock、Codex（WebSocket）、OAuth 获取、部分云厂商适配 | 少数 provider 不可用 | 按需立项；不要假装全支持 |
 | **默认不信任项目**：`<cwd>/.pi/skills` 需 `TrustProject` | 否则项目技能静默不加载 | 桌面端做显式授权 UI（接缝 #11） |
 | **无 CI** | 上游自身回归无自动防线 | 本仓库门禁；升级跑全量 |
-| 会破坏公共 API（其 mirror 策略允许） | 升级可能需改封装 | 上游类型隔离在 `internal/kernel`（接缝 #12） |
+| 会破坏公共 API（其 mirror 策略允许） | 跟进上游时可能需手工移植 | 内核已在仓库内 `pi/`；`internal/kernel` 仍是唯一消费者（接缝 #12） |
 
 ## 6. 接入建议
 
@@ -77,10 +78,10 @@
 2. 会话目录由 `coding.DefaultSessionDir` 决定（`~/.pi/agent/sessions/--<cwd>--/`）；`AgentDir` 不读环境变量。测试通过临时主目录（`HOME`/`USERPROFILE`）隔离，不写用户真实目录。
 3. 事件直接消费 `agent.AgentEvent`；不要解析 `cmd/pi` 的文本输出。
 4. 模型凭证用 `ai.CredentialStore` 注入；不要改 `models.json` 的明文。
-5. 固定提交；升级独立分支，先跑 `go test -race ./...`，再核对 `agent.Ev*`、`coding.SessionOptions`、`ai.EventType`、会话迁移。
+5. 内核已在仓库内：本地改动先写 ADR/Phase 文档并登记 `pi/FORK.md`；跟进上游用基线 `6f6131ba` 与新提交做 diff，手工移植后跑 `go test -race ./...`，再核对 `agent.Ev*`、`coding.SessionOptions`、`ai.EventType`、会话迁移。
 
 ## 7. 待核实
 
 - 上游 `env` 子模块是否会被引入（当前不需要；若未来做远程执行，单独立项）。
-- 模型目录数字随上游发布变化；本项目不复制该表，只记录依赖版本。
+- 模型目录已随 `ai/models_catalog.json` 导入；上游发布更新时手工替换并跑模型相关测试。
 - `telemetry` 的默认行为（README 提到安装遥测与 `PI_TELEMETRY=0`）；本项目明确关闭，需在 Phase 1 验证不会意外上报。

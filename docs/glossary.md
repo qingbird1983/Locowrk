@@ -6,7 +6,7 @@
 
 - **Locowrk**：本项目名（`Loco` + `wrk`，不是 `work`；不加 `-pi`）。一个给 pi 做的原生桌面工作台。
 - **pi**：一个开源的命令行 AI 编码代理（TypeScript 编写，GitHub: earendil-works/pi）。本项目以它的行为作为功能与兼容性的参照系。
-- **sky-valley/pi（简称 pi-go）**：pi 的纯 Go 移植版，本项目的内核依赖。它提供 Agent 循环、模型接入、工具、会话与技能，但没有终端界面，也没有 pi 的扩展运行时。
+- **sky-valley/pi（简称 pi-go）**：pi 的纯 Go 移植版。其运行所需源码已以 MIT fork 进本仓库 `pi/`，由本项目维护；它提供 Agent 循环、模型接入、工具、会话与技能，但没有终端界面，也没有 pi 的扩展运行时。
 - **MyGo**：一个纯 Go 的桌面应用框架（GitHub: egoist/mygo）。窗口可以用 Go 画原生界面，也可以显示系统网页；它是本项目的桌面宿主。
 - **TUI / GUI**：TUI = 终端里的字符界面；GUI = 图形窗口界面（本项目的桌面端）。
 

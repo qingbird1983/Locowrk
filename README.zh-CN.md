@@ -2,9 +2,9 @@
 
 **以纯 Go 内核为底座、给 [pi](https://github.com/earendil-works/pi) 做的原生桌面工作台。**
 
-Locowrk 把纯 Go 移植版 [`sky-valley/pi`](https://github.com/sky-valley/pi) 当作 Agent 内核，并用 [MyGo](https://github.com/egoist/mygo) 构建桌面宿主。行为契约以 pi 为准；终端专用扩展调用在桌面边界被挡掉；插件界面有两条一等公民路径：原生 `ui.View` 与系统 WebView。
+Locowrk 把纯 Go 内核 [`sky-valley/pi`](https://github.com/sky-valley/pi) **放进本仓库**（`pi/`，MIT），内核随产品一起演进，不再等外部模块。桌面宿主用 [MyGo](https://github.com/egoist/mygo) 构建。未改动的内核行为仍以 pi 为准；终端专用扩展调用在桌面边界被挡掉；插件界面有两条一等公民路径：原生 `ui.View` 与系统 WebView。
 
-- **内核复用，不重写**：Agent 循环、模型接入、工具、会话、技能与压缩全部来自 `sky-valley/pi`。
+- **内核在仓库里**：Agent 循环、模型接入、工具、会话、技能与压缩都在 `pi/`，fork 自 `sky-valley/pi`（MIT），记录上游基线提交并由本仓库维护；只有 `internal/kernel` 直接依赖它。
 - **编排型插件兼容**：只注册工具、命令与事件钩子的 pi 扩展可被适配；终端界面调用降级为空操作并给出诊断。
 - **桌面插件**：结构化可视化用原生 Go 视图，富交互面板用 WebView，第三方插件走子进程隔离。
 - **文档先行**：架构、决策记录（ADR）、规范与阶段验收标准先于实现落盘。
@@ -36,4 +36,4 @@ Locowrk 把纯 Go 移植版 [`sky-valley/pi`](https://github.com/sky-valley/pi) 
 
 ## 许可证
 
-[MIT](LICENSE)。pi 与 `sky-valley/pi` 为 MIT；MyGo 为 MIT。
+[MIT](LICENSE)。`pi/` 内核 fork 自 `sky-valley/pi`（MIT）；MyGo 为 MIT。
