@@ -124,12 +124,44 @@ func (h *Host) OpenTab(req TabRequest) (TabID, error) {
 	return id, nil
 }
 
+// GuardPage keeps a web view on app resources: links to the web open in the
+// system browser and window.open is denied. Dev loopback pages are allowed
+// while running under `mygo dev`.
+func GuardPage(page *mygo.Page) {
+	if page == nil {
+		return
+	}
+	page.OnWillNavigate(func(e *mygo.NavigateEvent) {
+		if allowedPageURL(e.URL) {
+			return
+		}
+		e.PreventDefault()
+		if u, err := url.Parse(e.URL); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+			_ = mygo.Shell.OpenExternal(e.URL)
+		}
+	})
+	page.SetWindowOpenHandler(func(mygo.WindowOpenRequest) *mygo.WindowOptions { return nil })
+}
+
+// allowedPageURL reports whether a navigation stays on app resources.
+func allowedPageURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	if u.Scheme == "mygo" {
+		return u.Host == "" || u.Host == "localhost"
+	}
+	return mygo.IsDev() && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1")
+}
+
 // newWindowTab creates a tab's web view in the host's window.
 func newWindowTab(win *mygo.Window, id TabID, req TabRequest) (*tabEntry, error) {
 	web, err := win.NewWebView(mygo.WebViewOptions{URL: req.URL})
 	if err != nil {
 		return nil, fmt.Errorf("creating tab %s: %w", id, err)
 	}
+	GuardPage(web.Page())
 	return &tabEntry{
 		web:  web,
 		page: web.Page(),
@@ -291,6 +323,18 @@ func (h *Host) TabPage(id TabID) *mygo.Page {
 	for _, e := range h.tabs {
 		if e.info.ID == id {
 			return e.page
+		}
+	}
+	return nil
+}
+
+// TabWebView returns a tab's web view, for smoke capture only.
+func (h *Host) TabWebView(id TabID) *mygo.WebView {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, e := range h.tabs {
+		if e.info.ID == id {
+			return e.web
 		}
 	}
 	return nil

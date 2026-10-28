@@ -42,11 +42,12 @@ func run() error {
 		thinking  = flag.String("thinking", "off", "thinking level: off|low|medium|high")
 		faux      = flag.Bool("faux", false, "use the scripted faux provider (no API key)")
 		smoke     = flag.Bool("smoke", false, "hidden-window acceptance run driven by the page")
-		scenario  = flag.String("smoke-scenario", "faux", "smoke scenario: faux|real|tool|cancel|long|restore|plugin|plugin-crash|diff")
+		scenario  = flag.String("smoke-scenario", "faux", "smoke scenario: faux|real|tool|cancel|long|restore|plugin|plugin-crash|diff|diff-tool")
 		expect    = flag.String("smoke-expect", "", "text the restore scenario must find")
 		hidden    = flag.Bool("hidden", false, "run without showing the window")
 		show      = flag.Bool("show", false, "show the window during a smoke run")
 		smokeHold = flag.Duration("smoke-hold", 0, "keep a passing smoke window open this long")
+		smokeShot = flag.String("smoke-shot", "", "write a PNG of the smoke window's active tab page")
 		diffLines = flag.Int("smoke-diff-lines", 0, "diff scenario: baseline lines to rewrite (0 for the small fixture)")
 		gen       = flag.String("generate-bindings", "", "write the TypeScript client to this path and exit")
 	)
@@ -92,8 +93,8 @@ func run() error {
 			return err
 		}
 	}
-	if *smoke && *scenario == "diff" && autoCwd {
-		if err := prepareDiffSmoke(*cwd, *diffLines); err != nil {
+	if *smoke && (*scenario == "diff" || *scenario == "diff-tool") && autoCwd {
+		if err := prepareDiffSmoke(*cwd, *diffLines, *scenario == "diff"); err != nil {
 			return err
 		}
 	}
@@ -178,6 +179,7 @@ func run() error {
 			mygo.App.Exit(1)
 			return
 		}
+		desktop.GuardPage(page.Page())
 		host.Attach(win, page)
 		app.SetWindow(win)
 		app.SetPage(page.Page())
@@ -186,7 +188,7 @@ func run() error {
 			app.Shutdown()
 		})
 		if *smoke {
-			go runSmoke(page, host, app, *scenario, *expect, *smokeHold)
+			go runSmoke(page, host, app, *scenario, *expect, *smokeHold, *smokeShot)
 		}
 	})
 
@@ -224,7 +226,7 @@ type smokeResult struct {
 
 // runSmoke drives the page through the requested acceptance scenario and exits
 // the process with 0 or 1.
-func runSmoke(page *mygo.WebView, host *desktop.Host, app *desktop.App, scenario, expect string, hold time.Duration) {
+func runSmoke(page *mygo.WebView, host *desktop.Host, app *desktop.App, scenario, expect string, hold time.Duration, shot string) {
 	deadline := time.Now().Add(120 * time.Second)
 	for time.Now().Before(deadline) {
 		kind, err := mygo.EvalAs[string](page.Page(), "return typeof window.__locowrkSmoke")
@@ -250,9 +252,23 @@ func runSmoke(page *mygo.WebView, host *desktop.Host, app *desktop.App, scenario
 				smokeFail(err.Error())
 				return
 			}
-			if scenario == "diff" {
+			if scenario == "diff" || scenario == "diff-tool" {
 				if err := checkDiff(host, &result); err != nil {
 					smokeFail(err.Error())
+					return
+				}
+				if shot != "" {
+					if web := host.TabWebView(host.ActiveTab()); web != nil {
+						if data, err := web.CapturePage(); err != nil {
+							fmt.Fprintln(os.Stderr, "smoke shot:", err)
+						} else if err := os.WriteFile(shot, data, 0o644); err != nil {
+							fmt.Fprintln(os.Stderr, "smoke shot:", err)
+						}
+					}
+				}
+				host.CloseTabs()
+				if len(host.Tabs()) != 0 {
+					smokeFail("diff tabs were not closed")
 					return
 				}
 			}
@@ -292,6 +308,30 @@ func checkDiff(host *desktop.Host, result *smokeResult) error {
 				result.DiffLines, _ = strconv.Atoi(lines)
 				result.DiffMS, _ = strconv.Atoi(ms)
 				if state == "ok" && result.DiffFiles > 0 && result.DiffLines > 0 {
+					if result.DiffLines >= 1000 {
+						id := host.ActiveTab()
+						if _, err := mygo.EvalAs[string](page, "const b=document.querySelectorAll('.segmented button')[1]; if (b) b.click(); return 'ok'"); err != nil {
+							return fmt.Errorf("diff mode: %w", err)
+						}
+						if _, err := mygo.EvalAs[string](page, "const s=document.querySelector('.diff-scroll'); if (!s) return 'missing'; s.scrollTop=1000; return String(s.scrollTop)"); err != nil {
+							return fmt.Errorf("diff scroll: %w", err)
+						}
+						host.ActivateTab(desktop.TabSession)
+						time.Sleep(100 * time.Millisecond)
+						host.ActivateTab(id)
+						time.Sleep(150 * time.Millisecond)
+						top, err := mygo.EvalAs[string](page, "return String(document.querySelector('.diff-scroll').scrollTop)")
+						if err != nil {
+							return fmt.Errorf("diff scroll after tab switch: %w", err)
+						}
+						if top == "0" {
+							return fmt.Errorf("diff scroll position was lost after switching tabs")
+						}
+						pressed, err := mygo.EvalAs[string](page, "return document.querySelectorAll('.segmented button')[1]?.getAttribute('aria-pressed') || ''")
+						if err != nil || pressed != "true" {
+							return fmt.Errorf("diff view mode was lost after switching tabs (%q, %v)", pressed, err)
+						}
+					}
 					return nil
 				}
 				last = fmt.Sprintf("diff state=%q files=%d lines=%d", state, result.DiffFiles, result.DiffLines)
@@ -379,7 +419,7 @@ func smokeFail(message string) {
 // prepareDiffSmoke makes the temporary workspace a repository with one
 // unstaged modification, so the diff scenario is deterministic. With lines>0
 // it rewrites that many lines, producing about 2×lines of diff.
-func prepareDiffSmoke(dir string, lines int) error {
+func prepareDiffSmoke(dir string, lines int, modify bool) error {
 	file := filepath.Join(dir, "smoke-diff.txt")
 	base := "one\ntwo\nthree\n"
 	if lines > 0 {
@@ -418,6 +458,9 @@ func prepareDiffSmoke(dir string, lines int) error {
 			fmt.Fprintf(&b, "changed line %d\n", i)
 		}
 		return os.WriteFile(file, []byte(b.String()), 0o644)
+	}
+	if !modify {
+		return nil
 	}
 	return os.WriteFile(file, []byte("one\n2\nthree\nfour\n"), 0o644)
 }

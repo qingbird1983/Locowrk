@@ -44,6 +44,8 @@ sequenceDiagram
 git -c core.quotepath=false -C <cwd> diff --no-color --no-ext-diff --no-textconv --unified=3 -- .
 ```
 
+实现用 `cmd.Dir = <cwd>` 代替 `-C`（语义等价，避免把路径再拼进参数）；命令与参数固定，不经 shell。
+
 - 环境：`GIT_PAGER=cat`、`GIT_TERMINAL_PROMPT=0`、`GIT_OPTIONAL_LOCKS=0`（避免读操作写 index.lock）；不继承会改变输出的 `GIT_EXTERNAL_DIFF`/`GIT_DIFF_OPTS`，在 `cmd.Env` 中过滤。
 - 只读：不 stage、不写文件、不跑 textconv/ext-diff；`--no-ext-diff` 与 `--no-textconv` 同时挡住仓库配置里的外部程序。
 - 超时 5 秒；stdout 上限 **8 MiB**、stderr 上限 4 KiB；超限标记截断，不再读取。
@@ -186,7 +188,9 @@ type DiffLine struct {
 
 **冒烟**
 
-- `-smoke-scenario diff`：在临时目录建 git 仓库，提交基线后修改一个文件（10,000 行场景另设 `-smoke-large` 或参数）；页面调用 `Desktop.OpenDiff("", "")`；宿主导航到 Diff 页并断言页面文本含文件路径与新增行；关闭后 `tabs=0`。
+- `-smoke-scenario diff`：在临时目录建 git 仓库，提交基线后修改一个文件（10,000 行场景用 `-smoke-diff-lines 5000`，约 2×行数）；页面调用 `Desktop.OpenDiff("", "")`；宿主导航到 Diff 页并断言页面文本含文件路径与新增行；关闭后 `tabs=0`。
+- `-smoke-scenario diff-tool`：faux 会话让 `write` 工具改写已跟踪文件，页面点击工具卡片“查看变更”，走真实的 `Desktop.OpenDiff` 链路。
+- 大 Diff 场景还会切到“会话”标签再切回，断言滚动位置与并排/统一模式保持。
 - 回归：Phase 3/4 的 `faux|tool|cancel|long|restore|plugin|plugin-crash` 全部重跑。
 
 **人工**

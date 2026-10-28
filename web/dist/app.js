@@ -88,7 +88,7 @@ var events = {
 };
 
 // src/smoke.ts
-var SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff"];
+var SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff", "diff-tool"];
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -212,6 +212,21 @@ async function scenarioDiff(host) {
     ms: Math.round(performance.now() - started)
   };
 }
+async function scenarioDiffTool(host) {
+  const id = await host.newSession();
+  await host.send("\u4FEE\u6539 smoke-diff.txt");
+  await waitFor(() => host.view.lastAssistantText().length > 0, 2e4, "\u5DE5\u5177\u540E\u7684\u56DE\u7B54");
+  await waitFor(() => document.querySelectorAll(".tool").length > 0, 5e3, "\u5DE5\u5177\u5361\u7247");
+  const button = document.querySelector(".diff-open");
+  if (!button) throw new Error("\u5DE5\u5177\u5361\u7247\u6CA1\u6709\u201C\u67E5\u770B\u53D8\u66F4\u201D");
+  button.click();
+  return {
+    ok: true,
+    scenario: "diff-tool",
+    session: id,
+    text: host.text().slice(-120)
+  };
+}
 async function scenarioCancel(host) {
   const id = await host.newSession();
   const first = host.send("\u5199\u4E00\u6BB5\u5F88\u957F\u7684\u8BF4\u660E");
@@ -289,6 +304,8 @@ async function run(host) {
       return scenarioPlugin(host);
     case "diff":
       return scenarioDiff(host);
+    case "diff-tool":
+      return scenarioDiffTool(host);
     case "cancel":
       return scenarioCancel(host);
     case "long":

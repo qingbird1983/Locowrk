@@ -8,29 +8,29 @@
 - **本地目录**：`E:\Warehouse\AIwork\Locowrk`；Go module `github.com/qingbird1983/locowrk`。
 - **Phase 0 / 1 / 2 / 3 / 4**：✅ 完成，tag 已打（`phase-4.end`）。
 - **内核形态**：✅ 仓库内 fork（ADR-0012），源码 `pi/`，基线 `sky-valley/pi@6f6131ba`（MIT），规则见 `pi/FORK.md`。
-- **Phase 5（WebView 混合渲染与 Diff 审阅）**：🟡 设计定稿 + 双 WebView 前置 spike 通过（2026-10-28）；功能实现未开始，tag 未打。
-  - `docs/roadmap/phase-5-webview-plugins.md` 定稿；设计 `docs/design/phase-5/webview.md` + `diff.md`。
-  - 关键决策 ADR-0014：`session.tab` 是宿主托管的 WebView 标签页，每页一张，关闭即销毁；`DesktopPlugin` 接口不变。
-  - 上限：最多 4 个 Diff 标签；diff 2 万行 / 8 MiB / 200 文件；git 5 秒超时、只读、无 shell。
-  - 前置 spike 通过：同窗两张 WebView、切换显隐、A 页滚动/输入保持、原生 Popover 覆盖页面、`Destroy` 成功；证据 research/03 §11 与 `design/phase-5/spike-tabs.png`。
+- **Phase 5（WebView 混合渲染与 Diff 审阅）**：🟡 功能实现完成（2026-10-28），待人工验收与报告定稿；tag 未打。
+  - 设计 `docs/design/phase-5/webview.md` + `diff.md`；ADR-0014（`session.tab` 宿主托管）。
+  - 标签页：`desktop/tabs.go`；Diff：`desktop/diff.go` + `diff_parse.go`；页面：`web/diff.html` + `web/src/diff/*`。
+  - 冒烟：`diff`（直接打开）与 `diff-tool`（工具卡片链路）；10k 行 `diffMs≈425`；切标签滚动/模式保持；关闭后 `tabs=0`。
+  - 待人工：真实窗口焦点回网页、中文输入法、高 DPI；macOS/Linux 仅构建。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. Phase 5 设计定稿：标签页宿主、Diff 服务/解析/DTO、Diff 页面与虚拟列表；ADR-0014 记录 `session.tab` 语义。
-2. 新建 `fixtures/spike-mygo-tabs/`：headless 标签/弹层几何、隐藏窗口页面与销毁、可见窗口切换与原生捕获三档验证。
-3. Spike 全部通过：切换只摆放活动页；A 页 `scrollTop=320` 与输入 `hello` 切回仍保持；B `IsDestroyed=true`；OS 截屏确认弹层压在网页上。
-4. 记录测试边界 P-009：`ui.NativeWebView` 含 internal 类型，仓库外无法实现假接口；改用零值 `*mygo.WebView` 句柄 + 注入工厂。
-5. 同步 research/03 §11、Phase 5 设计/路线图、CHANGELOG 0.9.4、CONTEXT 与 H-016。
+1. 实现 `TabHost`：会话 + 最多 4 个 Diff 标签，宿主创建/摆放/销毁 WebView；`⋯` 菜单、刷新事件、会话切换清理；无窗口测试用零值句柄 + 工厂（P-009）。
+2. 实现 Diff：固定只读 git 命令、15k 行解析与 DTO、敏感路径/截断/行号；`Desktop.OpenDiff` 从工具卡片打开并按工具路径定位。
+3. 实现 Diff 页面：并排/统一、虚拟列表、折叠、轻量着色、复制路径、刷新、截断/错误提示；`diff-reload` 保持模式与滚动。
+4. 冒烟 `diff`/`diff-tool` 通过；10k 行约 425 ms；切标签滚动与模式保持；关闭后 `tabs=0`；Phase 3/4 场景回归通过（`restore` 未种子）。
+5. 文档：Phase 5 报告草案、CHANGELOG 0.9.5、看板/路线图状态、CONTEXT/H-017。
 
 ## 下一步（按优先级）
 
-1. **Phase 5 实现**：`desktop/tabs.go`（TabHost/标签栏/工厂）→ `diff*.go`（git/解析/DTO/绑定）→ `web/diff.html` + `web/src/diff/*` → 工具卡片接线 → `diff` 冒烟 + 7 场景回归。
-2. **可见窗口人工项**：两页焦点往返、中文输入法、高 DPI、标签栏尺寸观感（后者留 UI 重设计）。
-3. **Phase 6 预备**：真实 Pi 编排插件接入、三分类矩阵、steering 回传；与插件数据源一起评估（未开始）。
-4. **UI 重设计**：等功能完成后单独立项；当前只改功能，不改视觉。
-5. **发布工程**：仍暂缓；`standards/08 §6`“禁止提交 dist/”与前端 embed 入库的冲突留到该阶段一并修订。
+1. **人工验收 Phase 5**：可见窗口里切标签后键盘焦点、菜单关闭后焦点回网页、中文输入法、高 DPI；确认后把报告转定稿并打 `phase-5.end`。
+2. **收尾**：补 `real`/`restore` 冒烟（有 key / 种子会话），更新报告与看板，tag。
+3. **Phase 6 预备**：真实 Pi 编排插件接入、三分类矩阵、steering 回传。
+4. **UI 重设计**：功能完成后单独立项；当前标签栏与 Diff 页仍是功能粗稿。
+5. **发布工程**：仍暂缓；`standards/08 §6` 与前端 embed 的冲突留到该阶段。
 
 ## 未决问题
 

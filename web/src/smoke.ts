@@ -27,7 +27,7 @@ interface SmokeResult {
   tools?: number;
 }
 
-const SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff"] as const;
+const SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff", "diff-tool"] as const;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -164,6 +164,22 @@ async function scenarioDiff(host: SmokeHost): Promise<SmokeResult> {
   };
 }
 
+async function scenarioDiffTool(host: SmokeHost): Promise<SmokeResult> {
+  const id = await host.newSession();
+  await host.send("修改 smoke-diff.txt");
+  await waitFor(() => host.view.lastAssistantText().length > 0, 20000, "工具后的回答");
+  await waitFor(() => document.querySelectorAll(".tool").length > 0, 5000, "工具卡片");
+  const button = document.querySelector<HTMLElement>(".diff-open");
+  if (!button) throw new Error("工具卡片没有“查看变更”");
+  button.click();
+  return {
+    ok: true,
+    scenario: "diff-tool",
+    session: id,
+    text: host.text().slice(-120),
+  };
+}
+
 async function scenarioCancel(host: SmokeHost): Promise<SmokeResult> {
   const id = await host.newSession();
   const first = host.send("写一段很长的说明");
@@ -244,6 +260,8 @@ async function run(host: SmokeHost): Promise<SmokeResult> {
       return scenarioPlugin(host);
     case "diff":
       return scenarioDiff(host);
+    case "diff-tool":
+      return scenarioDiffTool(host);
     case "cancel":
       return scenarioCancel(host);
     case "long":

@@ -127,9 +127,9 @@ type TabHost interface {
 | 标签栏 | `ui.NewTester` + 零值 `*mygo.WebView` 句柄 | 标题、活动态、关闭按钮；非活动标签不摆放，活动标签摆放 |
 | 生命周期 | 同上，工厂计数 | 每标签只创建一次；切换不重建；关闭即销毁；重开新建 |
 | 覆盖层 | `ui.NewTester` | `⋯` 菜单文本出现；菜单区域落在 WebView 洞之上；关闭后焦点回锚点 |
-| 导航 | 单元 | 非 `/` URL 被拒；外链被 `PreventDefault` |
 | IPC | 生成器 | 只多出预期方法/DTO；`mygo.ts` 可复现 |
-| 冒烟 | `-smoke-scenario diff` | 打开标签、页面含文件与增删行、关闭后 `tabs=0` |
+| 冒烟 | `-smoke-scenario diff` / `diff-tool` | 打开标签、页面含文件与增删行、关闭后 `tabs=0`；`diff-tool` 走工具卡片 |
+| 导航 | 单元 | `allowedPageURL` 只放行 `mygo://localhost`；外链被 `PreventDefault` |
 | 回归 | Phase 4 的 7 个场景 | 全部重跑通过，断言不放宽 |
 | 人工 | 可见窗口 | 两标签切换、滚动保持、弹层覆盖、焦点回页面、高 DPI |
 

@@ -38,6 +38,18 @@ func WithFauxScenario(opts Options, scenario, notePath string) (Options, ModelRe
 				providers.FauxText("工具读取完成：locowrk smoke note"),
 			}, ai.StopStop)),
 		}
+	case "diff-tool":
+		steps = []providers.FauxResponseStep{
+			providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
+				providers.FauxToolCall("write", map[string]any{
+					"path":    "smoke-diff.txt",
+					"content": "one\n2\nthree\nfour\n",
+				}),
+			}, ai.StopToolUse)),
+			providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
+				providers.FauxText("变更已写入：smoke-diff.txt"),
+			}, ai.StopStop)),
+		}
 	case "cancel":
 		regOpts.TokensPerSecond = 40
 		steps = []providers.FauxResponseStep{

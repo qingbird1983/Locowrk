@@ -227,6 +227,22 @@ func TestTabMenuCoversPage(t *testing.T) {
 	}
 }
 
+func TestAllowedPageURL(t *testing.T) {
+	for _, raw := range []string{"mygo://localhost/diff.html", "mygo://localhost/"} {
+		if !allowedPageURL(raw) {
+			t.Fatalf("%q rejected", raw)
+		}
+	}
+	for _, raw := range []string{"https://example.com/", "file:///tmp/x", "javascript:alert(1)"} {
+		if allowedPageURL(raw) {
+			t.Fatalf("%q allowed", raw)
+		}
+	}
+	if !mygo.IsDev() && allowedPageURL("http://localhost:5173/") {
+		t.Fatal("loopback allowed outside dev")
+	}
+}
+
 func TestTabsSnapshot(t *testing.T) {
 	h, _ := newTabHost(t)
 	if _, err := h.OpenTab(TabRequest{Key: "a", URL: "/a.html"}); err != nil {

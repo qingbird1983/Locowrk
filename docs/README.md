@@ -86,6 +86,7 @@ docs/
 | design/phase-4/report.md | 定稿 | Phase 4 进度报告：验收结果、问题修复、接缝与体量核对 |
 | design/phase-5/webview.md | 定稿 | Phase 5 标签页宿主：TabHost 契约、WebView 生命周期、覆盖层、安全与测试 |
 | design/phase-5/diff.md | 定稿 | Phase 5 Diff 审阅：git 读取、解析与 DTO、虚拟列表渲染、性能与验收 |
+| design/phase-5/report.md | 草案 | Phase 5 进度报告：功能实现读数、验收结果、待人工项与体量核对 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。
