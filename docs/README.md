@@ -77,6 +77,8 @@ docs/
 | design/phase-1/report.md | 定稿 | Phase 1 进度报告：内核、事件流、会话恢复的验收结果与首次规范复查 |
 | design/phase-2/runtime-spike.md | 定稿 | Phase 2 A 轨运行时比试：三条路线读数、样本结果与结论 |
 | design/phase-2/report.md | 定稿 | Phase 2 进度报告：11 条验收结果、真实 provider 冒烟与风险 |
+| design/phase-3/shell.md | 定稿 | Phase 3 最小主壳：进程装配、绑定契约、布局、事件映射、测试 |
+| design/phase-3/frontend.md | 定稿 | Phase 3 WebView 前端：TypeScript/esbuild、生成式 IPC、安全与体量 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。

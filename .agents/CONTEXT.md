@@ -10,8 +10,9 @@
 - **内核形态**：✅ 已改为仓库内 fork（ADR-0012）。源码在 `pi/`，基线 `sky-valley/pi@6f6131ba`，MIT；维护规则见 `pi/FORK.md`。不再 require 外部内核 module。
 - **Phase 3（MyGo 最小宿主）**：🚧 进行中：
   - ✅ 主壳路径定稿：MyGo WebView（ADR-0011）；spike 双向 IPC 约 0.55 s。
+  - ✅ Phase 3 设计定稿：[`design/phase-3/shell.md`](docs/design/phase-3/shell.md)、[`frontend.md`](docs/design/phase-3/frontend.md)。
   - ✅ `internal/bridge`：DTO-only 门面 + 契约测试；`kernel.ListSessions`；Abort 归类为“已取消”。
-  - ⏳ 待做：`cmd/locowrk` 主壳与最小界面（会话列表、消息流、输入、停止、设置）。
+  - ⏳ 待做：按设计实现 `cmd/locowrk` 主壳与前端（会话列表、消息流、输入、停止、设置）。
 - **远端**：`origin` 为 SSH；`main` 与 tag 已推送。看板唯一来源：`docs/roadmap/00-roadmap.md`。
 
 ## 上一轮完成了什么
@@ -21,10 +22,11 @@
 3. 新增 ADR-0012 取代 ADR-0001；AGENTS 铁律 6/7/9、standards 01/04/06/07、architecture 01/02/03/04/05、research/01、README 两份、看板与 CHANGELOG 全部同步。
 4. Phase 3 继续推进：`internal/bridge` 落地（列表/新建/恢复/发消息/停止/历史/模型/思考档/订阅），`kernel.ListSessions`，Abort 统一为 `ErrCanceled`；CHANGELOG 0.4.1。
 5. `kernel.WithFauxModel` 收口 faux 冒烟，`cmd/locowrk-smoke` 不再直接 import 内核包。
+6. 流程修正：发现 Phase 3 未先写设计文档，撤回未提交的 MyGo 依赖改动，补齐 `design/phase-3/shell.md` 与 `frontend.md` 后才继续（CHANGELOG 0.6.0）。
 
 ## 下一步（按优先级）
 
-1. **`cmd/locowrk` 主壳**：MyGo 窗口 + 生成 TS 客户端 + 最小界面（会话列表、消息流、输入、停止）；窗口关闭先取消进行中的请求。
+1. **按设计实现 `cmd/locowrk` 主壳**：Windows 窗口 + `desktop/` 绑定 + `web/` 前端（TypeScript/esbuild + 生成式客户端）；先跑通 faux 的隐藏窗口冒烟，再接真实 key。
 2. **Phase 3 内验证**：中文 IME、5,000+ 消息滚动、钥匙串、安装包体积/签名、三平台差异。
 3. **内核本地调整流程**：第一次需求驱动改动时，走 ADR/Phase 文档 + `pi/FORK.md` 差异表 + CHANGELOG。
 4. **Node 分发形态**（Phase 6 前）；长会话/多插件基准。
@@ -51,4 +53,4 @@
 - **真实 key 只走环境变量**：`DEEPSEEK_API_KEY`；冒烟把 `HOME`/`USERPROFILE` 指到临时目录，日志不得出现 key。
 - **提交前门禁**：`gofmt -l . && go vet ./... && go test -race ./...` 与 `bash scripts/check-docs.sh`；spike 模块（`fixtures/spike-*`）单独 `go vet`。
 - **体量**：docs 单篇 ≤300 行、ADR ≤100 行、代码单文件 ≤500 行、CONTEXT ≤150 行。
-- 踩坑索引：`P-001`~`P-004`；方法：`skills/S-001-runtime-comparison-spike.md`。
+- 踩坑索引：`P-001`~`P-005`；方法：`skills/S-001-runtime-comparison-spike.md`。

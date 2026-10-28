@@ -1,8 +1,8 @@
 # Phase 3：MyGo 最小宿主
 
-- 状态：定稿（2026-10-28；主壳路径见 ADR-0011；`internal/bridge` 已落地）
+- 状态：定稿（2026-10-28；主壳路径见 ADR-0011；`internal/bridge` 已落地；设计稿：[shell.md](../design/phase-3/shell.md)、[frontend.md](../design/phase-3/frontend.md)）
 - 日期：2026-10-28
-- 关联：ADR-0002、ADR-0011；architecture/01、02、03；research/03
+- 关联：ADR-0002、ADR-0011；architecture/01、02、03；research/03；design/phase-3
 
 ## 1. 目标
 
