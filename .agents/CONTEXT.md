@@ -4,7 +4,7 @@
 
 ## 当前阶段与状态
 
-- **项目名：Locowrk**（拼写是 `wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀）。远端：`github.com/qingbird1983/Locowrk`（**私有**，`main` 已替换为文档基线；旧 Rust 历史在 `archive/pre-go-locowrk`）；本地目录目前仍叫 `pi-go-desktop`。
+- **项目名：Locowrk**（拼写是 `wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀）。远端：`github.com/qingbird1983/Locowrk`（**私有**，`main` 已替换为文档基线；旧 Rust 历史在 `archive/pre-go-locowrk`）；本地目录当前仍叫 `pi-go-desktop`，所有者将改名后重开会话。
 - **Go module**：`github.com/qingbird1983/locowrk`（module 小写，仓库显示名保留 `Locowrk`）。
 - **Phase 0（仓库与文档基线）**：文档已落盘，**待所有者确认**；确认后打 `phase-0.end`。
 - **Phase 1（内核接入与事件流）**：文档状态「评审中」，未开工，无代码。
@@ -23,11 +23,19 @@
 ## 下一步（按优先级）
 
 1. **所有者确认**：许可证、仓库本地目录是否迁移、Phase 0 报告与 Phase 1 文档；确认后打 tag `phase-0.end`。
-2. **本地目录迁移（可选）**：是否把本地目录从 `pi-go-desktop` 改为 `locowrk`；远端已是 Locowrk，改名会改变本会话工作目录，需单独执行。
+2. **本地目录迁移（所有者执行）**：把仓库根目录改名为 `Locowrk`，在新路径重开会话；远端已是 Locowrk，无需重新 `git init` 或改 remote。
 3. **Phase 1 设计定稿**：`docs/roadmap/phase-1-kernel-events.md` 从「评审中」转「定稿」。
 4. **Phase 1 实现**：`go mod init` → 依赖 `github.com/sky-valley/pi`（锁定提交）→ `internal/kernel` + `internal/eventbus` → CLI/stdout 事件验证 → JSONL 会话读写验证。
 5. **Phase 2 设计定稿**：把 runtime spike 的样本、指标、淘汰线写细；spike 后补 ADR-0009。
 6. Phase 1 收尾时做首次例行规范复查（standards/09）。
+
+## 目录改名后（新会话开工检查）
+
+1. 确认当前目录是改名后的 `Locowrk`；`git remote -v` 应指向 `github.com/qingbird1983/Locowrk`。
+2. `git status` 干净；`bash scripts/check-docs.sh` 通过。
+3. 先读本卡与 `docs/roadmap/phase-1-kernel-events.md`；Phase 0 仍待所有者确认。
+4. Phase 1 开工时执行 `go mod init github.com/qingbird1983/locowrk`，再引入 `sky-valley/pi`。
+5. 不要把旧目录 `pi-go-desktop` 当作工作区；旧路径只用于对照历史。
 
 ## 未决问题
 
