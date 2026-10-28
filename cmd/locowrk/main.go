@@ -139,6 +139,7 @@ func run() error {
 		Cwd:         *cwd,
 		NodePath:    node,
 		Store:       host,
+		UI:          desktop.NewDialogUI(host),
 		ExtraDirs:   extraDirs,
 		HostName:    "Locowrk",
 		HostVersion: version,
@@ -480,11 +481,11 @@ func resolveNodePath(flagValue string) string {
 			return p
 		}
 	}
-	if _, err := exec.LookPath("node"); err == nil {
-		fmt.Fprintln(os.Stderr, "locowrk: no bundled Node runtime; using PATH node")
+	if _, err := exec.LookPath("node"); err == nil && mygo.IsDev() {
+		fmt.Fprintln(os.Stderr, "locowrk: no bundled Node runtime; using PATH node (development)")
 		return "node"
 	}
-	return "node"
+	return ""
 }
 
 func extensionRows(m *extensions.Manager) []bridge.ExtensionRow {
