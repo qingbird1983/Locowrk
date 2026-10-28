@@ -6,6 +6,17 @@
 
 ---
 
+## [0.1.3] - 2026-10-28
+
+### 更名：项目名定为 Locowrk
+
+- 按所有者决定，项目名用 **Locowrk**。注意拼写是 `wrk`，不是 `work`/`wrok`；不再加 `-pi` 后缀。
+- 文档、两份 README、LICENSE、ADR-0007 与架构方案文件名已同步（`docs/architecture/locowrk.md`）。
+- 暂未迁移：仓库目录、Go module、远端仓库仍是 `pi-go-desktop`；确认后再单独做，避免破坏当前会话路径。
+- 旧名 `pi-go-desktop` 只保留在历史提交与迁移前的目录中，不再作为产品名。
+
+---
+
 ## [0.1.2] - 2026-10-28
 
 ### 研究：参考项目 PI-Desktop 的插件经验

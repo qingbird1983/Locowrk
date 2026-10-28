@@ -32,7 +32,7 @@ docs/
 
 | 文档 | 状态 | 一句话说明 |
 |---|---|---|
-| architecture/pi-go-desktop.md | 定稿 | 立项方案 v1.1：插件层完整设计与渲染路径（本文是架构 01~05 的来源） |
+| architecture/locowrk.md | 定稿 | 立项方案 v1.1：Locowrk 的插件层完整设计与渲染路径（架构 01~05 的来源） |
 | architecture/01-overview.md | 定稿 | 总体分层、依赖方向与里程碑形态 |
 | architecture/02-kernel.md | 定稿 | `sky-valley/pi` 的封装、事件模型、工具与会话接入 |
 | architecture/03-critical-seams.md | 定稿 | 防返工的接缝清单与可执行检查点 |
@@ -44,7 +44,7 @@ docs/
 | adr/ADR-0004-subprocess-plugin-isolation.md | 定稿 | 第三方插件走子进程 + IPC，不用 Go `plugin` 包 |
 | adr/ADR-0005-follow-upstream-session-format.md | 定稿 | 沿用上游 JSONL 会话格式，不自立格式 |
 | adr/ADR-0006-adopt-timo-pi-doc-governance.md | 定稿 | 采用 Timo-pi 式文档与规范治理，并记录差异 |
-| adr/ADR-0007-license-and-identity.md | 定稿 | MIT 许可证、项目名与 Windows 优先 |
+| adr/ADR-0007-license-and-identity.md | 定稿 | MIT 许可证、项目名 Locowrk（`wrk`，不加 `-pi`）与 Windows 优先 |
 | adr/ADR-0008-a-track-runtime-spike.md | 定稿 | A 轨运行时在 Phase 2 用限时 spike 定稿，Phase 6 只接入 |
 | research/01-sky-valley-pi.md | 定稿 | 内核依赖的事实清单：包、能力、缺口、版本钉 |
 | research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（待 Phase 2 用 TS 源码复核） |

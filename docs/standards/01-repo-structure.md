@@ -9,7 +9,7 @@
 /                     仓库根：README.md（英）+ README.zh-CN.md（中）/ AGENTS.md / CHANGELOG.md / LICENSE / .gitignore / .gitattributes / .editorconfig
 .agents/              AI 开发知识库与交接中枢（规范见其 README；预算受 standards/08 约束）
 docs/                 全部文档（唯一事实来源；结构见 docs/README.md）
-cmd/                  可执行入口（Phase 1: pi-smoke 临时壳；Phase 3: pi-desktop）
+cmd/                  可执行入口（Phase 1: locowrk-smoke 临时壳；Phase 3: locowrk）
 internal/             私有实现（不可被外部 import）
   kernel/             sky-valley/pi 的唯一封装点
   eventbus/           项目事件与订阅
@@ -34,7 +34,7 @@ scripts/              门禁与构建脚本（跨平台优先）
 
 | 对象 | 规则 | 示例 |
 |---|---|---|
-| Go module | 小写域名路径（待所有者确认） | `github.com/<owner>/pi-go-desktop` |
+| Go module | 小写域名路径（发布前确认） | `github.com/<owner>/locowrk` |
 | Go 包 | 小写单词，不用下划线/驼峰 | `eventbus`、`kernel` |
 | Go 文件 | snake_case | `plugin_host.go` |
 | 类型 | UpperCamelCase；接口用 -er 或角色名 | `DesktopPlugin`、`HarnessService` |

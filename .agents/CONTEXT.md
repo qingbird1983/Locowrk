@@ -1,9 +1,10 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-28（会话主题：**插件兼容对齐、A 轨运行时选型、PI-Desktop 参考**）
+- 更新：2026-10-28（会话主题：**项目更名 Locowrk、插件兼容对齐、A 轨运行时选型**）
 
 ## 当前阶段与状态
 
+- **项目名：Locowrk**（拼写是 `wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀）。仓库目录目前仍叫 `pi-go-desktop`，待所有者决定是否迁移。
 - **Phase 0（仓库与文档基线）**：文档已落盘，**待所有者确认**；确认后打 `phase-0.end`。
 - **Phase 1（内核接入与事件流）**：文档状态「评审中」，未开工，无代码。
 - **Phase 2（适配器与 A 轨运行时选型）**：文档新增限时 spike（ADR-0008），待 Phase 1 后开工。
@@ -20,22 +21,24 @@
 
 ## 下一步（按优先级）
 
-1. **所有者确认**：许可证（暂定 MIT）、项目名、Go 模块路径、Phase 0 报告与 Phase 1 文档；确认后打 tag `phase-0.end`。
-2. **Phase 1 设计定稿**：`docs/roadmap/phase-1-kernel-events.md` 从「评审中」转「定稿」。
-3. **Phase 1 实现**：`go mod init` → 依赖 `github.com/sky-valley/pi`（锁定提交）→ `internal/kernel` + `internal/eventbus` → CLI/stdout 事件验证 → JSONL 会话读写验证。
-4. **Phase 2 设计定稿**：把 runtime spike 的样本、指标、淘汰线写细；spike 后补 ADR-0009。
-5. Phase 1 收尾时做首次例行规范复查（standards/09）。
+1. **所有者确认**：许可证（暂定 MIT）、Go 模块路径、Phase 0 报告与 Phase 1 文档；确认后打 tag `phase-0.end`。
+2. **命名迁移（可选）**：是否把仓库目录、Go module、远端仓库从 `pi-go-desktop` 改为 `locowrk`；改名会改变本会话工作目录，需单独执行。
+3. **Phase 1 设计定稿**：`docs/roadmap/phase-1-kernel-events.md` 从「评审中」转「定稿」。
+4. **Phase 1 实现**：`go mod init` → 依赖 `github.com/sky-valley/pi`（锁定提交）→ `internal/kernel` + `internal/eventbus` → CLI/stdout 事件验证 → JSONL 会话读写验证。
+5. **Phase 2 设计定稿**：把 runtime spike 的样本、指标、淘汰线写细；spike 后补 ADR-0009。
+6. Phase 1 收尾时做首次例行规范复查（standards/09）。
 
 ## 未决问题
 
 - **A 轨运行时**：Phase 2 spike 后在 ADR-0009 定；此前不得对外说“支持 pi 扩展”。
 - **主界面渲染路径**：会话流走 MyGo 原生 `ui.View` 还是 WebView + TS？Phase 3 开工前用一次 spike 定稿，必要时新增 ADR。
 - **`sky-valley/pi` 版本策略**：固定提交还是跟随 release tag？当前固定提交；升级规则见 ADR-0001。
-- **许可证、名称、模块路径**：均待所有者确认。
+- **许可证、模块路径、仓库目录**：许可证与模块路径待确认；目录是否改名见“下一步”第 2 条。
 - **MyGo v0.x API 漂移**：MyGo 用法限制在 `desktop/` 与 `internal/bridge`，内核与适配层不依赖 GUI。
 
 ## 关键提醒
 
+- **项目名是 `Locowrk`**：`wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀。目录/模块迁移完成前，历史名 `pi-go-desktop` 只出现在旧路径与 git 历史里。
 - **内核零 GUI**：`internal/kernel`、`internal/adapter`、`internal/eventbus` 不得 import MyGo；测试用纯 Go。
 - **不写自己的会话格式**：读写统一走 `coding.SessionRecorder` / `LoadSessionTree`（ADR-0005）。
 - **项目技能默认不加载**：`<cwd>/.pi/skills` 需要显式 `TrustProject`；桌面端必须用户可见授权。

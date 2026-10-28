@@ -20,7 +20,7 @@
 ### 3.1 模块与目录
 
 - `go mod init`（模块路径待所有者确认；未定前用本地模块名，发布前一次改完）。
-- 目录：`cmd/pi-smoke/`（临时冒烟壳，Phase 3 移除）、`internal/eventbus/`、`internal/kernel/`。
+- 目录：`cmd/locowrk-smoke/`（临时冒烟壳，Phase 3 移除）、`internal/eventbus/`、`internal/kernel/`。
 - 固定依赖：`github.com/sky-valley/pi@6f6131ba`（或当时最新的已复核提交；写入 research/01）。
 
 ### 3.2 EventBus
@@ -38,7 +38,7 @@
 
 ### 3.4 冒烟验证
 
-- `cmd/pi-smoke`：读一个提示词，把事件打到 stdout；支持 `--resume`。
+- `cmd/locowrk-smoke`：读一个提示词，把事件打到 stdout；支持 `--resume`。
 - 用临时主目录（`t.Setenv` 设置 `HOME`/`USERPROFILE`）隔离测试数据；不写用户真实目录。
 - 录制事件序列 fixture，作为后续回归基线。
 
@@ -60,7 +60,7 @@
 
 ## 6. 交付物
 
-- 可运行的 `pi-smoke` 与一段真实/回放事件记录（脱敏）。
+- 可运行的 `locowrk-smoke` 与一段真实/回放事件记录（脱敏）。
 - 事件 fixture 与契约测试。
 - `docs/design/phase-1/report.md`（含体量核对与首次规范复查）。
 - 更新 research/01 的实际依赖版本；必要时新增 ADR。

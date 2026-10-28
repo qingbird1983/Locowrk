@@ -1,8 +1,8 @@
-# Go + MyGo 复刻 Pi 桌面端：插件层完整设计方案
+# Locowrk：Go + MyGo 复刻 Pi 桌面端（插件层完整设计方案）
 
 - 状态：定稿（方案基线 v1.1）
 - 日期：2026-10-28（立项方案；正文为 v1.1 原始内容）
-- 关联：ADR-0001 ~ 0007；architecture/01 ~ 05；research/01 ~ 04
+- 关联：ADR-0001 ~ 0008；architecture/01 ~ 05；research/01 ~ 05
 
 > 阅读提示：本文是立项方案与设计来源。系统分层、接缝、插件与会话的规范化描述分别在 `01-overview.md`、`03-critical-seams.md`、`04-plugin-system.md`、`05-session-and-resources.md`；若本文与后续 ADR 冲突，以 ADR 为准。
 >
@@ -191,12 +191,12 @@ type PluginHost interface {
 ## 七、目录结构与依赖
 
 ```
-pi-desktop/
-├── cmd/pi-desktop/
+locowrk/
+├── cmd/locowrk/
 ├── internal/
 │   ├── kernel/              # sky-valley/pi 封装
 │   ├── eventbus/            # Event 定义与 Bus
-│   ├── adapter/             # OrchestrationAdapter + UIFilter
+│   ├── adapter/             # OrchestrationAdapter + 兼容矩阵
 │   ├── skills/
 │   └── bridge/              # HarnessService（MyGo Bind）
 ├── desktop/

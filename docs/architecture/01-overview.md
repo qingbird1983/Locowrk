@@ -44,7 +44,7 @@ graph TB
 
 ## 3. 依赖方向（只允许向下）
 
-1. `cmd/pi-desktop` 只装配，不含业务逻辑。
+1. `cmd/locowrk` 只装配，不含业务逻辑。
 2. `desktop/` 可以 import `internal/bridge` 暴露的 DTO 与接口，**不得**直接 import `internal/kernel`。
 3. `internal/bridge` 依赖 `internal/kernel`、`internal/eventbus`、`internal/adapter`，并向 `desktop/` 暴露与 UI 框架无关的接口。
 4. `internal/kernel` 封装 `github.com/sky-valley/pi` 的 `agent`、`ai`、`coding`；它是唯一知道上游 API 形状的地方。

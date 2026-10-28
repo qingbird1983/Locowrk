@@ -87,7 +87,7 @@ stateDiagram-v2
 
 - 会话导出为 Markdown/JSON 由 `coding` 的投影数据生成，不直接拷贝 JSONL（避免把内部 entry 当公开格式）。
 - 导入：只支持上游 JSONL 会话；导入前校验头部与 entry 类型，未知类型降级为诊断，不崩溃。
-- 与 pi CLI 互操作：同一会话目录、同一格式，pi 与 pi-go-desktop 可以互相恢复（这是选择上游格式的直接收益）。
+- 与 pi CLI 互操作：同一会话目录、同一格式，pi 与 Locowrk 可以互相恢复（这是选择上游格式的直接收益）。
 
 ## 7. 隐私
 

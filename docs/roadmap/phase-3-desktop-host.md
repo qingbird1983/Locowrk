@@ -20,7 +20,7 @@
 
 ### 3.1 进程与门面
 
-- `cmd/pi-desktop`：装配 kernel + bridge + MyGo。
+- `cmd/locowrk`：装配 kernel + bridge + MyGo。
 - `internal/bridge`：`HarnessService`，只收发 DTO：
   - `ListSessions`、`CreateSession`、`Prompt`、`Cancel`、`History`、`SubscribeEvents`、`SetModel`、`SetThinkingLevel`
 - Typed IPC：Go 服务绑定；事件用 channel 推送；生成 TypeScript 客户端（WebView 路径）或直接在原生视图中消费（原生路径）。

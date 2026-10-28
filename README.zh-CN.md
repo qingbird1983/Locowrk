@@ -1,8 +1,8 @@
-# pi-go-desktop
+# Locowrk
 
 **以纯 Go 内核为底座、给 [pi](https://github.com/earendil-works/pi) 做的原生桌面工作台。**
 
-pi-go-desktop 把纯 Go 移植版 [`sky-valley/pi`](https://github.com/sky-valley/pi) 当作 Agent 内核，并用 [MyGo](https://github.com/egoist/mygo) 构建桌面宿主。行为契约以 pi 为准；终端专用扩展调用在桌面边界被挡掉；插件界面有两条一等公民路径：原生 `ui.View` 与系统 WebView。
+Locowrk 把纯 Go 移植版 [`sky-valley/pi`](https://github.com/sky-valley/pi) 当作 Agent 内核，并用 [MyGo](https://github.com/egoist/mygo) 构建桌面宿主。行为契约以 pi 为准；终端专用扩展调用在桌面边界被挡掉；插件界面有两条一等公民路径：原生 `ui.View` 与系统 WebView。
 
 - **内核复用，不重写**：Agent 循环、模型接入、工具、会话、技能与压缩全部来自 `sky-valley/pi`。
 - **编排型插件兼容**：只注册工具、命令与事件钩子的 pi 扩展可被适配；终端界面调用降级为空操作并给出诊断。
