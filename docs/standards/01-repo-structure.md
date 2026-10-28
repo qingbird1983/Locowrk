@@ -34,7 +34,7 @@ scripts/              门禁与构建脚本（跨平台优先）
 
 | 对象 | 规则 | 示例 |
 |---|---|---|
-| Go module | 小写域名路径（发布前确认） | `github.com/<owner>/locowrk` |
+| Go module | 小写域名路径（发布前确认） | `github.com/qingbird1983/locowrk` |
 | Go 包 | 小写单词，不用下划线/驼峰 | `eventbus`、`kernel` |
 | Go 文件 | snake_case | `plugin_host.go` |
 | 类型 | UpperCamelCase；接口用 -er 或角色名 | `DesktopPlugin`、`HarnessService` |

@@ -75,7 +75,7 @@ graph LR
 |---|---|---|
 | 许可证 | MIT（ADR-0007） | 分发与插件生态 |
 | 正式产品名 | `Locowrk`（`wrk`，不是 `work`；不加 `-pi`） | 仓库、可执行文件、安装包 |
-| Go 模块路径 | 待定（发布前确认） | import 路径与依赖引用 |
+| Go 模块路径 | `github.com/qingbird1983/locowrk`（module 小写；仓库显示名 `Locowrk`） | import 路径与依赖引用 |
 | 主壳渲染路径 | Phase 3 先 WebView，spike 后复核 | 开发成本与体验 |
 | A 轨运行时 | Phase 2 限时 spike 后由 ADR-0009 定稿 | 兼容矩阵、打包与分发成本 |
 | Windows 之外的首发平台 | 仅保证可构建 | 测试与打包投入 |
