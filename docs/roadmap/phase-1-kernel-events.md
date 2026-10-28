@@ -19,7 +19,7 @@
 
 ### 3.1 模块与目录
 
-- `go mod init`（模块路径待所有者确认；未定前用本地模块名，发布前一次改完）。
+- `go mod init github.com/qingbird1983/locowrk`（模块路径已定，见 ADR-0007）。
 - 目录：`cmd/locowrk-smoke/`（临时冒烟壳，Phase 3 移除）、`internal/eventbus/`、`internal/kernel/`。
 - 固定依赖：`github.com/sky-valley/pi@6f6131ba`（或当时最新的已复核提交；写入 research/01）。
 

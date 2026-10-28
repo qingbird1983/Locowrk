@@ -50,7 +50,8 @@
 
 ## 已知问题与风险
 
-- **待所有者确认**：许可证、仓库本地目录是否从 `pi-go-desktop` 迁移为 `locowrk`；Go module 已定 `github.com/qingbird1983/locowrk`。未确认前不发布、不对外承诺。
+- **已解决**：本地目录已于 2026-10-28 迁移为 `Locowrk`（`E:\Warehouse\AIwork\Locowrk`），开工检查通过；远程未变。
+- **待所有者确认**：许可证（ADR-0007 默认 MIT）。未确认前不发布、不对外承诺。
 - **主壳渲染路径未定**：Phase 3 先用 WebView 降风险，spike 后复核；若改原生需更新 research/03 与看板。
 - **A 轨运行时未定**：Phase 2 限时 spike 后由 ADR-0009 定；Phase 6 只接入。当前只承诺“编排语义兼容”，不承诺“所有 pi 插件可用”。
 - **上游事实会变化**：`sky-valley/pi` 与 MyGo 均在快速演进；research 已标日期与版本，升级时同步。
@@ -66,4 +67,4 @@
 
 - 新建：根入口 8 个、docs 40 篇、`.agents` 2 篇、门禁脚本 1 个、CI 1 个。
 - 更新：`docs/architecture/locowrk.md`（加状态/关联/阅读提示，正文未改）。
-- 待办：所有者确认后更新看板为“Phase 0 完成”，打 tag `phase-0.end`。
+- 待办：所有者确认后更新看板为“Phase 0 完成”，打 tag `phase-0.end`。（目录迁移已完成，仅剩许可证确认。）
