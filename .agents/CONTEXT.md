@@ -13,7 +13,7 @@
   - ✅ 消息 ID 唯一化（角色+时间戳+transcript 位置），跨轮/重启稳定。
   - ✅ 窗口化消息列表 + 按帧合批；5,000 条真实会话 208 ms 打开，挂载 18 行。
 - **Phase 4**：未开始（开工前先写设计文档）。
-- **发布工程（与 Phase 4 并行，backlog）**：钥匙串、Windows 打包/签名（需证书）、macOS/Linux 真机与 CI。
+- **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只需保证可构建，已完成交叉编译验证，运行验证待真机。
 - **看板唯一来源**：`docs/roadmap/00-roadmap.md`；流水唯一来源：`CHANGELOG.md`。
 
 ## 上一轮完成了什么
@@ -23,12 +23,12 @@
 3. `web/src/smoke.ts` + `-smoke-scenario`（faux/real/tool/cancel/long/restore）、`-smoke-expect`、`-hidden`；`scripts/seed-long-session.mjs` 造 5,000 条真实会话。
 4. `Info.credentials` 只返回布尔值；状态行显示“凭证：已配置/未配置”；生成客户端已重跑。
 5. 文档：`design/phase-3/report.md`；shell/frontend 设计稿、看板、CHANGELOG 0.8.0、docs 地图同步。
-6. Phase 3 收尾：所有者确认窗口与中文输入；安装包/签名、钥匙串、macOS/Linux 归入发布工程 backlog，不再作为阶段验收项；打 tag `phase-3.end`。
+6. Phase 3 收尾：所有者确认窗口与中文输入；安装包/签名、钥匙串按所有者决定暂缓（不进主线）；macOS/Linux 按 ADR-0007 以交叉编译复核（4 个目标通过）；打 tag `phase-3.end`。
 
 ## 下一步（按优先级）
 
 1. **Phase 4 设计稿**：PluginHost + 首批原生 `ui.View`；插件视图复用 `transcript` 的窗口化模型。
-2. **发布工程（并行、backlog）**：钥匙串（Windows Credential Manager）、Windows 打包（签名需所有者证书）、跨平台 CI 构建；macOS/Linux 运行验证需真机。
+2. **发布工程（暂缓）**：所有者明确暂不发布；打包/签名/钥匙串留在 backlog，macOS/Linux 运行验证待需要时补真机。
 3. **性能复核**：10k+ 消息内存；启用压缩/回放前复核位置型消息 ID。
 
 ## 未决问题

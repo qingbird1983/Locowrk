@@ -37,6 +37,8 @@ Phase 3 的 8 条验收场景全部通过；窗口运行与中文输入已由所
 
 补充读数：`locowrk.exe` 22.3 MB；前端产物 `app.js` 26.5 KB、`style.css` 4.3 KB、`index.html` 1.7 KB；生成客户端重跑 `git diff` 为空。
 
+**跨平台构建（ADR-0007）**：按“Windows 优先；macOS/Linux 保证可构建”复核，`CGO_ENABLED=0` 下 `windows/amd64`、`darwin/arm64`、`darwin/amd64`、`linux/amd64` 四个目标 `go build ./cmd/locowrk` 全部通过。运行验证不属于 Phase 3，发布前再按需补真机。
+
 ## 4. 发现问题与修复
 
 1. **多轮消息 ID 冲突**（阻断级）：第二轮助手消息与第一轮共享 `role+timestamp`，页面互相覆盖，工具轮尤其明显。改为位置后缀后修复，新增 `TestMessageIDsAreUniqueAcrossTurns` 防回归。
@@ -68,7 +70,8 @@ go run ./cmd/locowrk -smoke -smoke-scenario restore -smoke-expect "long marker" 
 ## 6. 范围外与风险
 
 - **已人工确认**：窗口可正常打开、中文输入与显示正常（2026-10-28，所有者）。
-- **范围外（backlog：发布工程）**：安装包/代码签名（签名需证书）、钥匙串/凭据存储（当前 key 只走环境变量）、macOS/Linux 真机验证与跨平台 CI。这三项不作 Phase 3 收尾条件。
+- **平台约定（ADR-0007）**：Windows 优先；macOS/Linux 只要求“保证可构建”，已用交叉编译验证。运行验证与跨平台 CI 不属 Phase 3，发布前再补。
+- **范围外（backlog：发布工程）**：安装包/代码签名（签名需证书）、钥匙串/凭据存储（当前 key 只走环境变量）。这两项按所有者决定暂缓，不进当前主线。
 - **高 DPI**：125%/150% 缩放的观感未单独记录；窗口化已保证节点数，必要时补一轮人工检查。
 - **消息 ID 的边界**：位置基于“消息追加顺序”；若内核压缩/回放插入未发 `message_start` 的消息，实时与历史 ID 可能错位。Phase 3 未启用压缩；启用前需要复核。
 - **长会话内存**：5000 行全量模型约数 MB，未测 10k+；按设计留给后续基准。
@@ -76,5 +79,5 @@ go run ./cmd/locowrk -smoke -smoke-scenario restore -smoke-expect "long marker" 
 ## 7. 下一步建议
 
 1. 开始 Phase 4（先写 PluginHost 与原生 `ui.View` 设计稿）；插件视图复用 `transcript` 的窗口化模型。
-2. 发布工程与 Phase 4 并行：钥匙串、Windows 打包（签名待证书）、跨平台 CI。
+2. 发布工程暂缓（所有者 2026-10-28 决定不发布）：打包/签名/钥匙串留在 backlog；macOS/Linux 运行验证需要时再补真机。
 3. 10k+ 长会话与压缩/回放场景下复核消息 ID。
