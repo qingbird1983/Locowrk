@@ -386,3 +386,60 @@ func TestEventsDoNotLeakAPIKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestMessageIDsAreUniqueAcrossTurns(t *testing.T) {
+	testHome(t)
+	reg, ref := newFaux(t, providers.RegisterFauxProviderOptions{})
+	reg.SetResponses([]providers.FauxResponseStep{
+		providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{providers.FauxText("first answer")}, ai.StopStop)),
+		providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{providers.FauxText("second answer")}, ai.StopStop)),
+	})
+	svc := serviceFor(t, reg.GetModel())
+	sub := svc.Subscribe(eventbus.SubscribeOptions{})
+	defer sub.Close()
+
+	id, err := svc.CreateSession(context.Background(), SessionOptions{Cwd: t.TempDir(), Model: ref, NoTools: true})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	started := map[string]bool{}
+	for _, prompt := range []string{"one", "two"} {
+		if err := svc.Prompt(context.Background(), id, prompt); err != nil {
+			t.Fatalf("Prompt(%s): %v", prompt, err)
+		}
+		for _, ev := range collect(t, sub, eventbus.KindAgentEnd, 10*time.Second) {
+			if ev.Kind != eventbus.KindMessageStart && ev.Kind != eventbus.KindMessageEnd {
+				continue
+			}
+			var dto eventbus.MessageDTO
+			if err := json.Unmarshal(ev.Payload, &dto); err != nil {
+				t.Fatalf("message payload: %v", err)
+			}
+			if started[dto.ID] && ev.Kind == eventbus.KindMessageStart {
+				t.Fatalf("duplicate message_start id %q (role %s)", dto.ID, dto.Role)
+			}
+			started[dto.ID] = true
+		}
+	}
+
+	history, err := svc.History(context.Background(), id)
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, m := range history {
+		if seen[m.ID] {
+			t.Fatalf("history repeats id %q", m.ID)
+		}
+		seen[m.ID] = true
+		if !started[m.ID] {
+			t.Fatalf("history id %q (role %s) never appeared in live events; live=%v", m.ID, m.Role, started)
+		}
+	}
+	for id := range started {
+		if !seen[id] {
+			t.Fatalf("live id %q missing from history", id)
+		}
+	}
+}

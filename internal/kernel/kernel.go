@@ -106,6 +106,10 @@ type session struct {
 	sess *coding.Session
 	rec  *coding.SessionRecorder
 
+	// ids assigns transcript positions to live message events; it must start
+	// at the number of messages already stored when a session is resumed.
+	ids idSource
+
 	mu     sync.Mutex
 	model  ModelRef
 	path   string
@@ -170,6 +174,7 @@ func (s *Service) CreateSession(ctx context.Context, opts SessionOptions) (Sessi
 		path:  rec.Path(),
 		cwd:   cwd,
 	}
+	entry.ids.reset(0)
 	s.attach(entry)
 
 	s.mu.Lock()
@@ -227,6 +232,7 @@ func (s *Service) OpenSession(ctx context.Context, opts OpenOptions) (SessionID,
 		path:  opts.Path,
 		cwd:   cwd,
 	}
+	entry.ids.reset(len(sess.History()))
 	s.attach(entry)
 
 	s.mu.Lock()
@@ -270,9 +276,10 @@ func (s *Service) attach(entry *session) {
 		if !ok {
 			return nil
 		}
+		index, turnResults := entry.ids.observe(e)
 		// Publish never blocks the loop and a marshal failure must not abort
 		// the run, so the error is intentionally dropped here.
-		_, _ = s.bus.Publish(kind, string(entry.id), payloadFor(e))
+		_, _ = s.bus.Publish(kind, string(entry.id), payloadFor(e, index, turnResults))
 		return nil
 	})
 }
@@ -346,8 +353,8 @@ func (s *Service) History(ctx context.Context, id SessionID) ([]eventbus.Message
 	}
 	msgs := entry.sess.History()
 	out := make([]eventbus.MessageDTO, 0, len(msgs))
-	for _, m := range msgs {
-		out = append(out, messageDTO(m))
+	for i, m := range msgs {
+		out = append(out, messageDTO(m, i))
 	}
 	return out, nil
 }

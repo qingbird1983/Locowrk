@@ -2,7 +2,8 @@ package kernel
 
 import (
 	"encoding/json"
-	"strconv"
+	"fmt"
+	"sync"
 
 	"github.com/qingbird1983/locowrk/pi/agent"
 	"github.com/qingbird1983/locowrk/pi/ai"
@@ -11,9 +12,12 @@ import (
 )
 
 // messageDTO flattens a transcript message into the project's stable shape.
-func messageDTO(m agent.AgentMessage) eventbus.MessageDTO {
+// index is the message's position in the session transcript; upstream
+// messages carry no ID and their timestamps repeat across turns, so the
+// position is what keeps DTO IDs unique.
+func messageDTO(m agent.AgentMessage, index int) eventbus.MessageDTO {
 	dto := eventbus.MessageDTO{
-		ID:        messageKey(m),
+		ID:        messageKey(m, index),
 		Role:      string(m.MessageRole()),
 		Timestamp: messageTimestamp(m),
 	}
@@ -80,10 +84,82 @@ func toolCallDTO(tc ai.ToolCall) eventbus.ToolCallDTO {
 }
 
 // messageKey builds a stable identifier for a message. Upstream messages carry
-// no ID, so the transcript timestamp plus role is the best available key; it is
-// stable for the lifetime of a message and unique enough for ordering.
-func messageKey(m agent.AgentMessage) string {
-	return string(m.MessageRole()) + "-" + strconv.FormatInt(messageTimestamp(m), 10)
+// no ID, so the transcript position plus role and timestamp is the best
+// available key: it is stable for the session and unique within it, including
+// when a turn produces several assistant messages with the same timestamp.
+func messageKey(m agent.AgentMessage, index int) string {
+	return fmt.Sprintf("%s-%d-%d", m.MessageRole(), messageTimestamp(m), index)
+}
+
+// idSource assigns transcript positions to the live events of one session.
+// History replays the same positions, so a reopened session keeps its IDs.
+type idSource struct {
+	mu   sync.Mutex
+	next int
+	last int
+	turn []turnMessage
+}
+
+type turnMessage struct {
+	index int
+	role  string
+}
+
+func (s *idSource) reset(next int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.next = next
+	s.last = -1
+	s.turn = nil
+}
+
+// observe updates the position bookkeeping for one event and returns the
+// message index plus, for turn_end, the indices of this turn's tool results.
+func (s *idSource) observe(e agent.AgentEvent) (int, []int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch e.Type {
+	case agent.EvTurnStart:
+		s.turn = nil
+		return s.last, nil
+	case agent.EvMessageStart:
+		idx := s.next
+		s.next++
+		s.last = idx
+		s.turn = append(s.turn, turnMessage{index: idx, role: string(e.Message.MessageRole())})
+		return idx, nil
+	case agent.EvTurnEnd:
+		return s.last, s.turnToolResults(len(e.ToolResults))
+	case agent.EvMessageUpdate, agent.EvMessageEnd:
+		// These belong to the message that started last.
+		if s.last < 0 {
+			s.last = s.next
+			s.next++
+		}
+		return s.last, nil
+	}
+	return s.last, nil
+}
+
+// turnToolResults maps the turn's tool results onto the message_start events
+// seen since turn_start. The frontend does not need these IDs today, but they
+// must stay unique and consistent with History.
+func (s *idSource) turnToolResults(n int) []int {
+	if n == 0 {
+		return nil
+	}
+	out := make([]int, 0, n)
+	for _, m := range s.turn {
+		if m.role == string(ai.ToolResultMessage{}.MessageRole()) {
+			out = append(out, m.index)
+		}
+	}
+	// Missing starts (compaction, replay) fall back to the last position with
+	// a negative offset so the IDs stay unique.
+	for len(out) < n {
+		out = append(out, -1-len(out))
+	}
+	return out[:n]
 }
 
 func messageTimestamp(m agent.AgentMessage) int64 {
@@ -136,27 +212,33 @@ func eventKind(t agent.EventType) (eventbus.Kind, bool) {
 }
 
 // payloadFor converts an upstream event into the project's DTO for its kind.
-func payloadFor(e agent.AgentEvent) any {
+// index is the message position from idSource; turnResults holds this turn's
+// tool result positions when the event is turn_end.
+func payloadFor(e agent.AgentEvent, index int, turnResults []int) any {
 	switch e.Type {
 	case agent.EvMessageStart, agent.EvMessageEnd:
-		dto := messageDTO(e.Message)
+		dto := messageDTO(e.Message, index)
 		return &dto
 	case agent.EvMessageUpdate:
-		return updateDTO(e)
+		return updateDTO(e, index)
 	case agent.EvTurnEnd:
 		out := eventbus.TurnEndDTO{}
 		if e.Message != nil {
-			msg := messageDTO(e.Message)
+			msg := messageDTO(e.Message, index)
 			out.Message = &msg
 		}
-		for _, tr := range e.ToolResults {
-			out.ToolResults = append(out.ToolResults, messageDTO(tr))
+		for i, tr := range e.ToolResults {
+			resultIndex := -1 - i
+			if i < len(turnResults) {
+				resultIndex = turnResults[i]
+			}
+			out.ToolResults = append(out.ToolResults, messageDTO(tr, resultIndex))
 		}
 		return out
 	case agent.EvAgentEnd:
 		out := eventbus.AgentEndDTO{Messages: make([]eventbus.MessageDTO, 0, len(e.Messages))}
-		for _, m := range e.Messages {
-			out.Messages = append(out.Messages, messageDTO(m))
+		for i, m := range e.Messages {
+			out.Messages = append(out.Messages, messageDTO(m, i))
 		}
 		return out
 	case agent.EvToolExecutionStart:
@@ -185,8 +267,8 @@ func payloadFor(e agent.AgentEvent) any {
 }
 
 // updateDTO turns a streaming assistant event into the delta DTO.
-func updateDTO(e agent.AgentEvent) eventbus.MessageUpdateDTO {
-	dto := eventbus.MessageUpdateDTO{MessageID: messageKey(e.Message)}
+func updateDTO(e agent.AgentEvent, index int) eventbus.MessageUpdateDTO {
+	dto := eventbus.MessageUpdateDTO{MessageID: messageKey(e.Message, index)}
 	ev := e.AssistantMessageEvent
 	if ev == nil {
 		return dto
