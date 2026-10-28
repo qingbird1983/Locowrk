@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 )
@@ -113,11 +114,46 @@ func TestConsecutiveDeltasMerge(t *testing.T) {
 			if collected != "abc" {
 				t.Fatalf("deltas = %q; want abc", collected)
 			}
-			if stats := sub.Stats(); stats.Merged == 0 {
-				t.Fatalf("expected at least one merged delta, stats = %+v", stats)
-			}
 			return
 		}
+	}
+}
+
+// TestMergeableDeltasCoalesce checks the merge itself without racing the
+// delivery goroutine: enqueue is called directly on a subscription whose loop
+// is not running.
+func TestMergeableDeltasCoalesce(t *testing.T) {
+	s := &Subscription{maxQueue: 8}
+	s.cond = sync.NewCond(&s.mu)
+	delta := func(text string) Event {
+		raw, err := json.Marshal(MessageUpdateDTO{
+			MessageID: "assistant-1", BlockIndex: 0, BlockType: "text",
+			Event: "text_delta", Delta: text, Text: text,
+		})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		return Event{Kind: KindMessageUpdate, SessionID: "s1", Payload: raw}
+	}
+	for _, text := range []string{"a", "b", "c"} {
+		s.enqueue(delta(text))
+	}
+
+	s.mu.Lock()
+	queue := append([]Event(nil), s.queue...)
+	s.mu.Unlock()
+	if len(queue) != 1 {
+		t.Fatalf("queue length = %d, want 1 merged event", len(queue))
+	}
+	var merged MessageUpdateDTO
+	if err := json.Unmarshal(queue[0].Payload, &merged); err != nil {
+		t.Fatalf("merged payload: %v", err)
+	}
+	if merged.Delta != "abc" {
+		t.Fatalf("merged delta = %q, want abc", merged.Delta)
+	}
+	if stats := s.Stats(); stats.Merged != 2 {
+		t.Fatalf("merged count = %d, want 2", stats.Merged)
 	}
 }
 

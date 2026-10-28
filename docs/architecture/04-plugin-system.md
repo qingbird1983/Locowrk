@@ -76,8 +76,8 @@ type Manifest struct {
 
 ### 2.5 命令与事件
 
-- 宿主 → 插件：`prompt`、`steer`、`follow_up`、`abort`、`tool_result`、`shutdown_plugin`。
-- 插件 → 宿主：`register_tool`、`register_command`、`emit_event`、`spawn_subagent`、`workflow_step`、`diagnostic`。
+- 宿主 → 插件：`prompt`、`steer`、`follow_up`、`abort`、`tool_result`、`invoke_tool`、`event`、`shutdown_plugin`。
+- 插件 → 宿主：`register_tool`、`register_command`、`emit_event`、`spawn_subagent`、`workflow_step`、`diagnostic`、`ui_notify`、`ui_set_widget`、`fs_write`。
 - 所有消息带 `id`、`method`、`params`；错误用 JSON-RPC error 对象，`code` 区分 `unsupported`、`invalid_params`、`timeout`、`crashed`。
 - `shutdown_plugin` 是宿主生命周期命令；扩展 API 的 `ctx.shutdown` 属 TUI 面，按矩阵 no-op，两者不要混用。
 

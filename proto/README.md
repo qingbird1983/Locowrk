@@ -6,7 +6,8 @@
 |---|---|---|
 | [plugin-protocol.md](plugin-protocol.md) | JSON-RPC 2.0 over stdio：帧格式、方法、错误码、生命周期、超时与能力 | 定稿 |
 | [plugin-manifest.schema.json](plugin-manifest.schema.json) | manifest（名称、入口、协议版本、权限 + 范围、资源上限） | 定稿 |
-| `fixtures/` | 协议回放样本与 mock 插件的期望输出 | Phase 2 实现时加入 |
+| `fixtures/` | 协议回放样本与 mock 插件的期望输出 | Phase 2 实现时加入；mock 在 `fixtures/plugins/mock-orchestrator` |
+| manifest 文件名 | 插件目录下的 `plugin.json`，按 schema 校验；入口路径相对插件目录 | 定稿 |
 
 ## 规则
 

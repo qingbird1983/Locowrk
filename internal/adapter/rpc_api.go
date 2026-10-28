@@ -1,0 +1,144 @@
+package adapter
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sync/atomic"
+	"time"
+
+	"github.com/qingbird1983/locowrk/internal/eventbus"
+)
+
+// InvokeTool asks the plugin to execute one of its tools.
+func (a *Adapter) InvokeTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error) {
+	a.mu.Lock()
+	tool, ok := a.tools[name]
+	p := a.peer
+	state := a.state
+	a.mu.Unlock()
+	if !ok {
+		return ToolResult{}, fmt.Errorf("adapter: unknown tool %q", name)
+	}
+	if state != StateReady || p == nil {
+		return ToolResult{}, fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
+	}
+	if len(args) == 0 {
+		args = json.RawMessage("{}")
+	}
+	timeout := a.opts.RPCTimeout
+	if tool.TimeoutMS > 0 {
+		timeout = time.Duration(tool.TimeoutMS) * time.Millisecond
+	} else if ms, ok := a.manifest.LongTaskTimeout("invoke_tool"); ok {
+		timeout = time.Duration(ms) * time.Millisecond
+	}
+	raw, err := p.call(ctx, timeout, "invoke_tool", map[string]any{
+		"sessionId":  a.opts.SessionID,
+		"toolCallId": "call-" + name,
+		"name":       name,
+		"arguments":  args,
+	})
+	if err != nil {
+		return ToolResult{}, err
+	}
+	var result ToolResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return ToolResult{}, fmt.Errorf("%w: invoke_tool result: %v", ErrProtocol, err)
+	}
+	if len(result.Content) == 0 {
+		return ToolResult{}, fmt.Errorf("%w: invoke_tool returned no content", ErrProtocol)
+	}
+	return result, nil
+}
+
+// SendCommand invokes a command registered by the plugin.
+func (a *Adapter) SendCommand(ctx context.Context, name, args string) error {
+	a.mu.Lock()
+	_, ok := a.commands[name]
+	p := a.peer
+	state := a.state
+	a.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("adapter: unknown command %q", name)
+	}
+	if state != StateReady || p == nil {
+		return fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
+	}
+	_, err := p.call(ctx, a.opts.RPCTimeout, "invoke_command", map[string]any{
+		"sessionId": a.opts.SessionID,
+		"commandId": name,
+		"args":      args,
+	})
+	return err
+}
+
+// SendEvent delivers one lifecycle event to the plugin as a notification.
+func (a *Adapter) SendEvent(_ context.Context, ev eventbus.Event) error {
+	a.mu.Lock()
+	p := a.peer
+	state := a.state
+	a.mu.Unlock()
+	if state != StateReady || p == nil {
+		return fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
+	}
+	return p.notify("event", map[string]any{
+		"sessionId": ev.SessionID,
+		"kind":      string(ev.Kind),
+		"payload":   ev.Payload,
+		"seq":       ev.Seq,
+	})
+}
+
+// Ping performs one heartbeat round trip.
+func (a *Adapter) Ping(ctx context.Context) error {
+	a.mu.Lock()
+	p := a.peer
+	state := a.state
+	a.mu.Unlock()
+	if state != StateReady || p == nil {
+		return fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
+	}
+	_, err := p.call(ctx, a.opts.HeartbeatTimeout, "ping", map[string]any{})
+	return err
+}
+
+// publish sends an orchestration event to the bus (Seq assigned there) and to
+// the convenience channel.
+func (a *Adapter) publish(kind eventbus.Kind, payload any) {
+	ev := eventbus.Event{Kind: kind, SessionID: a.opts.SessionID}
+	if a.opts.Bus != nil {
+		published, err := a.opts.Bus.Publish(kind, a.opts.SessionID, payload)
+		if err != nil {
+			return
+		}
+		ev = published
+	} else {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return
+		}
+		ev.Seq = atomic.AddUint64(&a.localSeq, 1)
+		ev.At = time.Now().UTC()
+		ev.Payload = raw
+	}
+	select {
+	case a.events <- ev:
+	default:
+		a.dropped.Add(1)
+	}
+}
+
+// eventKind maps an orchestration event name from the plugin.
+func eventKind(name string) (eventbus.Kind, bool) {
+	switch name {
+	case string(eventbus.KindSubagentSpawned):
+		return eventbus.KindSubagentSpawned, true
+	case string(eventbus.KindSubagentSettled):
+		return eventbus.KindSubagentSettled, true
+	case string(eventbus.KindWorkflowStep):
+		return eventbus.KindWorkflowStep, true
+	case string(eventbus.KindPluginDiagnostic):
+		return eventbus.KindPluginDiagnostic, true
+	}
+	return "", false
+}

@@ -70,6 +70,8 @@ type SessionOptions struct {
 	NoTools      bool
 	SystemPrompt string
 	TrustProject bool
+	// ExtraTools are tools owned outside the kernel (orchestration plugins).
+	ExtraTools []ToolSpec
 }
 
 // OpenOptions configures resuming a stored session.
@@ -84,6 +86,9 @@ type OpenOptions struct {
 	NoTools      bool
 	SystemPrompt string
 	TrustProject bool
+	// ExtraTools are tools owned outside the kernel; pass the same set again
+	// when resuming so the model keeps seeing them.
+	ExtraTools []ToolSpec
 }
 
 // Service owns the sessions of one host (the desktop shell, the smoke CLI).
@@ -201,6 +206,7 @@ func (s *Service) OpenSession(ctx context.Context, opts OpenOptions) (SessionID,
 		NoTools:      opts.NoTools,
 		SystemPrompt: opts.SystemPrompt,
 		TrustProject: opts.TrustProject,
+		ExtraTools:   opts.ExtraTools,
 	}
 	sess, err := s.newCodingSession(cwd, model, base, rec.ID())
 	if err != nil {
@@ -227,6 +233,10 @@ func (s *Service) OpenSession(ctx context.Context, opts OpenOptions) (SessionID,
 }
 
 func (s *Service) newCodingSession(cwd string, model *ai.Model, opts SessionOptions, sessionID string) (*coding.Session, error) {
+	customTools, err := agentTools(opts.ExtraTools)
+	if err != nil {
+		return nil, err
+	}
 	co := coding.SessionOptions{
 		Model:         model,
 		Cwd:           cwd,
@@ -236,6 +246,7 @@ func (s *Service) newCodingSession(cwd string, model *ai.Model, opts SessionOpti
 		TrustProject:  opts.TrustProject,
 		ToolNames:     opts.Tools,
 		ExcludeTools:  opts.ExcludeTools,
+		CustomTools:   customTools,
 		Models:        s.opts.Models,
 	}
 	if opts.NoTools {

@@ -1,6 +1,6 @@
 # 子进程插件协议（A 轨）
 
-- 状态：定稿（Phase 2 设计）
+- 状态：定稿（Phase 2 设计；2026-10-28 增补 `invoke_tool`、`ui_notify`、`ui_set_widget`、`fs_write` 四个方法，属新增可选方法，不改 `protocol`）
 - 日期：2026-10-28
 - 关联：ADR-0003、ADR-0004、ADR-0008；architecture/04；phase-2-plugin-adapter.md
 
@@ -71,6 +71,7 @@ spawn → initialize → initialized → register* → ready → (running) → s
 | `follow_up` | `{sessionId,text}` | 本轮结束后的追加消息 |
 | `abort` | `{sessionId}` | 取消当前运行 |
 | `tool_result` | `{sessionId,toolCallId,text?,isError}` | 宿主执行完工具后的回填 |
+| `invoke_tool` | `{sessionId,toolCallId,name,arguments}` | 宿主调用插件注册的工具；结果见 §6.1 |
 | `event` | `{sessionId,kind,payload,seq}` | 上游生命周期事件（只读通知，不需要回复结果） |
 | `invoke_command` | `{sessionId,commandId,args?}` | 用户触发插件注册的命令 |
 | `shutdown_plugin` | `{reason}` | 宿主关闭插件；插件须在 5s 内退出 0 |
@@ -88,9 +89,21 @@ spawn → initialize → initialized → register* → ready → (running) → s
 | `workflow_step` | `{name,status,detail?}` | `status` ∈ `pending`/`running`/`done`/`failed`/`skipped` |
 | `diagnostic` | `{member,category,code,message}` | 兼容性诊断，见 §7 |
 | `tool_result` | `{sessionId,toolCallId,text?,isError}` | 插件自行执行工具后的回填（`invoke_tool` 的异步完成） |
+| `ui_notify` | `{message,type}` | 映射为宿主通知；`type` ∈ `info`/`warning`/`error` |
+| `ui_set_widget` | `{key,content?}` | TUI 成员：返回 `null` + `unsupported` 诊断，永不报错 |
+| `fs_write` | `{path,data}` | 宿主代写文件；须 `fs.write` 声明且路径在范围内，失败为 `permission_denied` |
+
+### 6.1 `invoke_tool` 结果
+
+```json
+{"content":[{"type":"text","text":"..."}],"details":{},"isError":false}
+```
+
+- `content` 至少一项；`details` 可为空对象；`isError` 表示工具自身的失败，不是协议错误。
+- 超时返回 `4403`，插件进程继续运行；插件崩溃返回 `4404`。
 
 - 所有响应必须带与请求相同的 `id`；未知 `id` 的响应被丢弃并计数。
-- 插件不得发送 `initialize` 之外的请求给宿主自身（无重入）。
+- 插件不得发送 `initialize` 之外的请求给宿主自身（无重入）。注册类请求（`register_tool`/`register_command`）必须在 `initialize` 响应之前或紧随其后发出；宿主在 `ready` 之后不再接受新注册，只记诊断。
 
 ## 7. 三分类与诊断
 
@@ -147,5 +160,6 @@ spawn → initialize → initialized → register* → ready → (running) → s
 ## 11. 变更流程
 
 - 新增可选字段：兼容，本文与 schema 同步，不改 `protocol`。
+- 新增方法（只增不改语义）：视同兼容；宿主与插件可各自按 `method not found` 降级，本文与 `CHANGELOG.md` 同步。`invoke_tool`/`ui_notify`/`ui_set_widget`/`fs_write` 于 2026-10-28 以此方式加入。
 - 改字段语义、删字段、改错误码：`protocol` +1，写 ADR 或 Phase 文档说明，旧版本直接拒绝启动。
 - 本文与 `docs/architecture/04-plugin-system.md` 冲突时：以本文的线上形状为准，语义以架构文档为准，并当轮修正其中一处。
