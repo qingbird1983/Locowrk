@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -113,6 +115,8 @@ func (p *plugin) handleHost(msg message) {
 		case "hang":
 			// Stop answering anything, including heartbeats and RPCs.
 			p.hung.Store(true)
+		case "grandchild":
+			p.spawnGrandchild()
 		}
 	case "ping":
 		p.respond(msg.ID, map[string]any{})
@@ -281,4 +285,23 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// spawnGrandchild starts a long-lived process that inherits this plugin's
+// stdout, so a host that only kills the plugin leaves the pipe open.
+func (p *plugin) spawnGrandchild() {
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", "ping", "-n", "60", "127.0.0.1")
+	} else {
+		cmd = exec.Command("sleep", "60")
+	}
+	cmd.Stdout = os.Stdout
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintln(os.Stderr, "mock: grandchild:", err)
+		return
+	}
+	if path := os.Getenv("LOCOWRK_MOCK_PID_FILE"); path != "" {
+		_ = os.WriteFile(path, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0o644)
+	}
 }

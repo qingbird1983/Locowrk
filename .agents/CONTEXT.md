@@ -12,7 +12,8 @@
   - ✅ `internal/adapter`：启动/握手/注册/心跳/超时/崩溃重启与禁用、三分类、审计、事件转发。
   - ✅ `fixtures/plugins/mock-orchestrator`：支持项、缓做项、TUI no-op、越权写、崩溃、挂起。
   - ✅ `internal/kernel` 外部工具桥：JSON Schema → 上游 `agent.AgentTool`，faux 端到端测试。
-  - ⏳ 待做：Phase 2 验收逐条复核、孙进程管道清理测试、Phase 2 报告与 tag。
+  - ✅ 孙进程占管道的进程树清理测试（mock 起常驻子进程，Stop 后确认已杀）。
+  - ⏳ 待做：Phase 2 验收逐条复核、Phase 2 报告与 tag。
 - **远端**：`origin` 为 SSH；`main` 与 tag 已推送。看板唯一来源：`docs/roadmap/00-roadmap.md`。
 
 ## 上一轮完成了什么
@@ -21,14 +22,13 @@
 2. `internal/adapter` 按 500 行/文件拆分为 manifest / protocol / peer / handlers / lifecycle / registry / rpc_api / security。
 3. 三分类与诊断：支持项真执行；`spawn_subagent` 返回 `not_implemented`；`ui.setWidget` 零值 + `unsupported`，同成员只累加 `count`。
 4. 安全与兼容分账：未声明/越界的写请求返回 `permission_denied` 并进独立审计；插件 stderr 做密钥脱敏。
-5. 故障注入：启动即崩溃、运行中崩溃（含一次重启）、RPC 超时、心跳丢失、停止后可重启；宿主始终存活。
+5. 故障注入：启动即崩溃、运行中崩溃（含一次重启）、RPC 超时、心跳丢失、停止后可重启、孙进程占管道；宿主始终存活。
 6. 内核桥：`kernel.ToolSpec` 转 `agent.AgentTool`，参数 schema 交给上游校验；faux 回合证明模型能调用插件工具并落历史。
 7. 顺手修了 `eventbus` 的 flaky 测试：合并断言改为直接测 `enqueue`，观察性测试只校验顺序与内容。
 
 ## 下一步（按优先级）
 
-1. **孙进程占管道测试**：mock 起一个继承 stdout 的子进程，Stop 必须杀进程树、读取有界。
-2. **Phase 2 验收复核**：逐条对照 §5，产出 `docs/design/phase-2/report.md`；通过后打 `phase-2.end`。
+1. **Phase 2 验收复核**：逐条对照 §5，产出 `docs/design/phase-2/report.md`；通过后打 `phase-2.end`。
 3. **Node SEA / 随包运行时**（Phase 6 前）。
 4. **真实 provider 冒烟**（有 key 环境，非阻塞）。
 5. **Phase 3 开工前**：定主界面渲染路径（原生 `ui.View` vs WebView），必要时新增 ADR。
