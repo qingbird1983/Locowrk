@@ -54,7 +54,7 @@ docs/
 | roadmap/00-roadmap.md | 定稿 | 总路线图、唯一进度看板、backlog、风险登记簿 |
 | roadmap/phase-0-foundation.md | 定稿 | Phase 0：仓库、规范、文档基线 |
 | roadmap/phase-1-kernel-events.md | 定稿 | Phase 1：内核接入、统一事件流、会话冒烟 |
-| roadmap/phase-2-plugin-adapter.md | 草稿 | Phase 2：编排适配器骨架与 A 轨运行时选型（三分类、spike） |
+| roadmap/phase-2-plugin-adapter.md | 定稿 | Phase 2：编排适配器骨架与 A 轨运行时选型（三分类、spike） |
 | roadmap/phase-3-desktop-host.md | 草稿 | Phase 3：MyGo 最小宿主与实时事件可视化 |
 | roadmap/phase-4-native-plugins.md | 草稿 | Phase 4：PluginHost 与首批原生 `ui.View` 插件 |
 | roadmap/phase-5-webview-plugins.md | 草稿 | Phase 5：WebView 混合渲染与 Diff 审阅 |

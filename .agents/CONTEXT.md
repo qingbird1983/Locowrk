@@ -8,7 +8,8 @@
 - **本地目录**：`E:\Warehouse\AIwork\Locowrk`；Go module `github.com/qingbird1983/locowrk`。
 - **Phase 0**：✅ 完成，tag `phase-0.end`。
 - **Phase 1（内核接入与事件流）**：✅ **完成**，tag `phase-1.end`。`internal/eventbus`、`internal/kernel`、`cmd/locowrk-smoke` 已落地，7 条验收全过。
-- **Phase 2（编排适配器与 A 轨运行时选型）**：下一步。文档仍是草稿，需先定稿再开工；含 5 天限时 spike（ADR-0008）。
+- **Phase 2（编排适配器与 A 轨运行时选型）**：🚧 进行中。协议与 manifest schema 已定稿（`proto/`），Phase 2 文档已定稿；**spike 待网络**（真实扩展样本需从 GitHub 拉取）。
+- **待推送**：`main` 领先 `origin/main`，push 因本机到 GitHub 连接被重置而失败，网络恢复后重试（含 tag `phase-0.end`、`phase-1.start`、`phase-1.end`）。
 - 看板唯一来源：`docs/roadmap/00-roadmap.md`。
 
 ## 上一轮完成了什么
@@ -21,9 +22,9 @@
 
 ## 下一步（按优先级）
 
-1. **Phase 2 设计定稿**：`docs/roadmap/phase-2-plugin-adapter.md` 从草稿转定稿；把 spike 样本、指标、淘汰线写细。
-2. **A 轨 spike**：5 天限时；结论写 ADR-0009；spike 前不对外承诺“支持 pi 扩展”。
-3. **Phase 2 实现**：三分类 + `not_implemented` + TUI no-op + `plugin_diagnostic`；manifest 权限带范围。
+1. **推送**：`git push origin main && git push origin phase-0.end phase-1.start phase-1.end`（网络恢复后）。
+2. **A 轨 spike**：拉固定提交的真实扩展样本，按 Phase 2 §3.0 的比尺跑 A/B/C 三条路线，产出 `docs/design/phase-2/runtime-spike.md` 与 ADR-0009。
+3. **Phase 2 实现**：`internal/adapter` + mock 插件 + 故障注入；三分类、`not_implemented`、no-op + 诊断、安全拒绝分开。
 4. **真实 provider 冒烟**：找有 key 的环境跑一次（非阻塞项）。
 5. Phase 3 开工前定“主界面渲染路径”（原生 `ui.View` vs WebView + TS），必要时新增 ADR。
 
@@ -47,7 +48,7 @@
 - **faux 优先**：无 key 路径用 `providers.RegisterFauxProvider` 脚本化响应；不要在测试里依赖真实模型。
 - **不写自己的会话格式**：读写走 `coding.SessionRecorder` / `LoadSessionTree` + `LoadBranch`（ADR-0005）。
 - **项目技能默认不加载**：`<cwd>/.pi/skills` 需显式 `TrustProject`；桌面端必须用户可见授权。
-- **插件兼容**：支持项真做、缓做项 `not_implemented`、TUI 项 no-op + `unsupported`；永不 throw；每插件每成员诊断一次。
+- **插件兼容**：支持项真做、缓做项 `not_implemented`、TUI 项 no-op + `unsupported`；永不 throw；每插件每成员诊断一次。线上形状以 `proto/plugin-protocol.md` 为准。
 - **A 轨是受信任代码**：能注册工具/钩子就等同 Agent 权限；进程隔离只防崩溃，不是沙箱（research/05）。
 - **MyGo 线程模型**：`App.Run` 从 main 调用；监听器在主线程；插件视图只在主线程构建。
 - **本地没有 CI**：`sky-valley/pi` 自身无 CI，本仓库门禁是唯一防线；提交前跑 `gofmt -l . && go vet ./... && go test -race ./...` 与 `bash scripts/check-docs.sh`。

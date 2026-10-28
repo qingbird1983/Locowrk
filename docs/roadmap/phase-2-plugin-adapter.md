@@ -1,6 +1,6 @@
 # Phase 2：编排插件适配器骨架与 A 轨运行时选型
 
-- 状态：草稿
+- 状态：定稿（2026-10-28；协议与 manifest schema 见 [`proto/`](../../proto/README.md)）
 - 日期：2026-10-28
 - 关联：ADR-0003、ADR-0004、ADR-0008；architecture/03、04；research/02
 
@@ -10,10 +10,10 @@
 
 ## 2. 开工前置条件
 
-- Phase 1 完成并打 tag。
-- JSON-RPC 协议草案与 manifest schema 定稿（写入 `proto/` 与本文）。
-- 进程隔离方案（stdin/stdout 帧格式、超时、心跳）确认。
-- 一个真实 pi 扩展样本（脱敏、固定版本）可用于 spike；不把它接进生产路径。
+- Phase 1 完成并打 tag。✅
+- JSON-RPC 协议草案与 manifest schema 定稿（写入 `proto/` 与本文）。✅ 见 `proto/plugin-protocol.md`、`proto/plugin-manifest.schema.json`
+- 进程隔离方案（stdin/stdout 帧格式、超时、心跳）确认。✅ 见协议 §2、§4
+- 一个真实 pi 扩展样本（脱敏、固定版本）可用于 spike；不把它接进生产路径。⏳ **待网络**：需要从 GitHub 取固定提交的扩展源码。
 
 ## 3. 做什么
 
@@ -27,15 +27,32 @@
 
 必须跑通：启动 → 注册工具 → 事件钩子 → `notify` 映射 → `setWidget` no-op + 诊断。记录启动时间、内存、Windows 可用性、shim 覆盖面与维护成本，产出 `docs/design/phase-2/runtime-spike.md` 与 ADR-0009。
 
+**指标与淘汰线**（三条路线同一把尺子，事中记录、事后不补数）：
+
+| 指标 | 测法 | 及格线 | 淘汰线 |
+|---|---|---|---|
+| 冷启动到 ready | 握手完成时间，10 次取中位数 | ≤ 500ms | > 2s |
+| 常驻内存（空载） | 注册后 RSS | ≤ 100 MiB | > 300 MiB |
+| Windows 可用性 | 干净 Windows 10/11 跑通 §5 场景 2~6 | 全部通过 | 任一硬失败 |
+| shim 覆盖面 | 样本用到的成员中已实现的占比 | ≥ 80%（支持 + 明确诊断） | < 50% |
+| 打包复杂度 | 单文件产物数、是否需要额外运行时安装 | 无需用户另装 | 需要用户装 Node/工具链 |
+| 维护成本 | 预估每季度跟进上游 API 变更的人日 | ≤ 2 人日 | > 5 人日 |
+
+- 决策顺序：A（QuickJS）优先，B（Node 子进程）在 A 的 Windows/打包不达标时作为替代，C（Go 重写）只在两者都不可行时兜底；选 C 必须把对外口径从“兼容 pi 扩展”改成“兼容编排语义”。
+- 5 个工作日到期即定稿：数据不足的部分按“淘汰线未触发但未验证”记录，不无限延期；结论写 ADR-0009。
+
 参考 PI-Desktop 的 trusted extension 做法（research/05）：B 路线（Node 子进程 + 显式子集 shim）已被验证可行，但它明确承认“进程隔离 + API 白名单 ≠ 沙箱”；spike 必须把这点写进结论。
 
 ### 3.1 协议
 
-- JSON-RPC 2.0 over stdio；逐行 JSON 或长度前缀帧（二选一，写入协议文档）。
-- 方法：`initialize`、`register_tool`、`register_command`、`emit_event`、`spawn_subagent`、`workflow_step`、`shutdown_plugin`。
-- 错误码：`unsupported`、`invalid_params`、`timeout`、`crashed`、`protocol_error`。
-- 协议版本与 manifest 版本校验；不兼容直接拒绝启动。
-- manifest 采用“权限 + 范围”：`fs.read/write/delete` 带路径 glob，`net` 带域名白名单；缺失 = 无权限（fail-closed）；全树写/删直接判非法；删除走系统回收站、非递归、限速。
+线上形状以 `proto/plugin-protocol.md` 为准，本节只记决定：
+
+- **帧**：JSON-RPC 2.0 over stdio，逐行 JSON（JSONL，`\n`），单行 ≤ 1 MiB；`stderr` 只放日志。
+- **方法**：宿主 → 插件 `initialize`、`ping`、`prompt`、`steer`、`follow_up`、`abort`、`tool_result`、`event`、`invoke_command`、`shutdown_plugin`；插件 → 宿主 `register_tool`、`register_command`、`emit_event`、`spawn_subagent`、`workflow_step`、`diagnostic`、`tool_result`。
+- **错误码**：JSON-RPC 标准码 + `4400 unsupported`、`4401 not_implemented`、`4402 permission_denied`、`4403 timeout`、`4404 crashed`、`4405 protocol_error`、`4406 incompatible_version`。
+- **时限**：握手 10s；RPC 默认 30s（manifest 的 `longTasks` 可声明到 10min）；心跳 5s / 3 次失联；关闭 5s + 2s 强杀。
+- **协议版本**：整数，当前 `1`；不兼容直接拒绝启动。
+- manifest 采用“权限 + 范围”：`fs.read/write/delete` 带路径 glob，`net` 带域名白名单，`exec` 带命令白名单；缺失 = 无权限（fail-closed）；全树写/删直接判非法；删除走系统回收站、非递归、限速。schema 见 `proto/plugin-manifest.schema.json`。
 
 ### 3.2 适配器
 
@@ -73,7 +90,7 @@
 
 ## 6. 交付物
 
-- `proto/` 协议文档与 schema。
+- `proto/` 协议文档与 manifest schema（已定稿：`plugin-protocol.md`、`plugin-manifest.schema.json`）。
 - `internal/adapter` 与测试。
 - mock 插件与故障注入用例。
 - `docs/design/phase-2/runtime-spike.md` 与 ADR-0009（运行时选择）。

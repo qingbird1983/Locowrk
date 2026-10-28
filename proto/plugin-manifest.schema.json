@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://locowrk.dev/schemas/plugin-manifest.schema.json",
+  "title": "Locowrk plugin manifest",
+  "description": "Manifest of an A-track orchestration plugin (subprocess). Permissions are fail-closed: a capability that is absent is not granted, and a capability without a scope grants nothing. See proto/plugin-protocol.md §8.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "protocol", "entrypoint", "capabilities"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,62}$",
+      "description": "Plugin id, kebab-case. Used for data directories, diagnostics and logs."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Plugin's own version. Semver, no prerelease suffix."
+    },
+    "protocol": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Subprocess protocol version. Must equal initialize.params.protocol; a mismatch is rejected with incompatible_version."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 280
+    },
+    "entrypoint": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![\\\\/])(?!.*\\.\\.)(?!.*:).+$",
+      "description": "Executable path relative to the plugin directory. Absolute paths, drive letters and '..' are rejected."
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "scope"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["fs.read", "fs.write", "fs.delete", "exec", "net"]
+          },
+          "scope": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 260
+            },
+            "description": "Path globs for fs.*, command patterns for exec, domain names for net. Empty means no permission (never 'everything')."
+          }
+        }
+      },
+      "description": "At most one entry per capability name. Duplicates are rejected by the loader."
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxMemoryMiB": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 4096,
+          "default": 512
+        },
+        "maxCpuSeconds": {
+          "type": "integer",
+          "minimum": 10,
+          "default": 300
+        },
+        "maxOutputBytesPerSecond": {
+          "type": "integer",
+          "minimum": 65536,
+          "default": 262144
+        }
+      }
+    },
+    "longTasks": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["method", "timeoutMs"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,62}$"
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 600000
+          }
+        }
+      },
+      "description": "Methods allowed to exceed the default 30s RPC timeout."
+    }
+  }
+}
