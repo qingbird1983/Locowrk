@@ -1,5 +1,7 @@
 # Locowrk
 
+English | [简体中文](README.zh-CN.md)
+
 **A native desktop workbench for [pi](https://github.com/earendil-works/pi), built on a pure-Go kernel.**
 
 Locowrk keeps the pure-Go agent kernel [`sky-valley/pi`](https://github.com/sky-valley/pi) **in this repository** as the `pi/` fork (MIT), so the kernel can evolve with the product instead of waiting on an external module. The desktop host is built with [MyGo](https://github.com/egoist/mygo). pi's behaviour remains the blueprint for unmodified kernel code; TUI-only extension calls are kept out of the desktop; plugin interfaces have two first-class rendering paths: native `ui.View` and the system WebView.
@@ -9,7 +11,7 @@ Locowrk keeps the pure-Go agent kernel [`sky-valley/pi`](https://github.com/sky-
 - **Desktop plugins**: native Go views for structured visualisation, WebView panels for rich interaction, and subprocess isolation for third-party plugins.
 - **Documentation first**: architecture, decisions (ADRs), standards and phase acceptance criteria are written before implementation.
 
-This repository currently contains the documentation baseline. Implementation starts at Phase 1; see the [roadmap](docs/roadmap/00-roadmap.md).
+Progress and current state live in the [roadmap](docs/roadmap/00-roadmap.md) and the [changelog](CHANGELOG.md); this page only describes the project.
 
 ## Start here
 

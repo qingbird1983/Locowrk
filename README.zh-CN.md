@@ -1,5 +1,7 @@
 # Locowrk
 
+[English](README.md) | 简体中文
+
 **以纯 Go 内核为底座、给 [pi](https://github.com/earendil-works/pi) 做的原生桌面工作台。**
 
 Locowrk 把纯 Go 内核 [`sky-valley/pi`](https://github.com/sky-valley/pi) **放进本仓库**（`pi/`，MIT），内核随产品一起演进，不再等外部模块。桌面宿主用 [MyGo](https://github.com/egoist/mygo) 构建。未改动的内核行为仍以 pi 为准；终端专用扩展调用在桌面边界被挡掉；插件界面有两条一等公民路径：原生 `ui.View` 与系统 WebView。
@@ -9,7 +11,7 @@ Locowrk 把纯 Go 内核 [`sky-valley/pi`](https://github.com/sky-valley/pi) **�
 - **桌面插件**：结构化可视化用原生 Go 视图，富交互面板用 WebView，第三方插件走子进程隔离。
 - **文档先行**：架构、决策记录（ADR）、规范与阶段验收标准先于实现落盘。
 
-仓库目前是文档基线，实现从 Phase 1 开始；进度看 [路线图](docs/roadmap/00-roadmap.md)。
+进度与当前状态看 [路线图](docs/roadmap/00-roadmap.md) 与 [更新日志](CHANGELOG.md)；本页只做项目说明与导航。
 
 ## 从这里开始
 
