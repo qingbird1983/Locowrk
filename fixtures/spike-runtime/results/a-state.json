@@ -1,0 +1,178 @@
+{
+  "route": "a",
+  "sample": "state",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 14.047,
+    "min": 12.979,
+    "max": 15.211,
+    "all": [
+      14.642,
+      12.979,
+      14.047,
+      13.348,
+      13.568,
+      14.643,
+      14.686,
+      13.904,
+      15.211,
+      13.73
+    ]
+  },
+  "detail": {
+    "readyMs": 15.005,
+    "rssMiB": 9.1328125,
+    "rssSamples": [
+      9.1328125,
+      9.1328125,
+      9.1328125,
+      9.1328125,
+      9.1328125
+    ],
+    "bundleBytes": 17429,
+    "tools": [
+      "probe_state"
+    ],
+    "commands": [
+      "probe-list"
+    ],
+    "events": [
+      "session_start",
+      "session_tree"
+    ],
+    "coverage": {
+      "used": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "session.getBranch",
+        "ui.custom",
+        "ui.notify"
+      ],
+      "implemented": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool",
+        "ui.notify"
+      ],
+      "handled": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "session.getBranch",
+        "ui.custom",
+        "ui.notify"
+      ],
+      "missing": [],
+      "diagnostics": [
+        {
+          "member": "session.getBranch",
+          "code": "not_implemented",
+          "message": "session.getBranch",
+          "count": 1
+        },
+        {
+          "member": "ui.custom",
+          "code": "unsupported",
+          "message": "ui.custom",
+          "count": 1
+        }
+      ]
+    },
+    "notifications": [
+      {
+        "method": "notify",
+        "params": {
+          "message": "items=0",
+          "type": "info"
+        }
+      }
+    ],
+    "diagnostics": [
+      {
+        "method": "diagnostic",
+        "params": {
+          "code": "not_implemented",
+          "count": 1,
+          "member": "session.getBranch",
+          "message": "session.getBranch"
+        }
+      },
+      {
+        "method": "diagnostic",
+        "params": {
+          "code": "unsupported",
+          "count": 1,
+          "member": "ui.custom",
+          "message": "ui.custom"
+        }
+      }
+    ],
+    "toolResult": {
+      "content": [
+        {
+          "type": "text",
+          "text": "#1 first"
+        }
+      ],
+      "details": {
+        "items": [
+          {
+            "id": 1,
+            "text": "first",
+            "done": false
+          }
+        ],
+        "nextId": 2
+      }
+    },
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "tool registered",
+        "ok": true,
+        "detail": "probe_state"
+      },
+      {
+        "name": "noop diagnostic",
+        "ok": true,
+        "detail": "session.getBranch code=not_implemented count=1"
+      },
+      {
+        "name": "tool result",
+        "ok": true,
+        "detail": "{\"content\":[{\"type\":\"text\",\"text\":\"#1 first\"}],\"details\":{\"items\":[{\"id\":1,\"text\":\"first\",\"done\":false}],\"nextId\":2}}"
+      },
+      {
+        "name": "TUI view ignored",
+        "ok": true,
+        "detail": "ui.custom diagnostics=1"
+      }
+    ],
+    "ok": true
+  },
+  "measuredAt": "2026-10-28T07:03:30.5586088Z",
+  "commandLine": "build\\host-a.exe --bundle build\\state.a.js",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}

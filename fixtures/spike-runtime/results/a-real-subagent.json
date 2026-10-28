@@ -1,0 +1,88 @@
+{
+  "route": "a",
+  "sample": "real-subagent",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 18.137,
+    "min": 16.437,
+    "max": 19.68,
+    "all": [
+      19.68,
+      19.039,
+      16.958,
+      16.966,
+      16.718,
+      17.622,
+      16.437,
+      18.712,
+      18.279,
+      18.137
+    ]
+  },
+  "detail": {
+    "readyMs": 17.193,
+    "rssMiB": 9.76171875,
+    "rssSamples": [
+      9.76171875,
+      9.76171875,
+      9.76171875,
+      9.76171875,
+      9.76171875
+    ],
+    "bundleBytes": 57850,
+    "tools": [
+      "subagent"
+    ],
+    "commands": [],
+    "events": [],
+    "coverage": {
+      "used": [
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui"
+      ],
+      "implemented": [
+        "api.registerTool"
+      ],
+      "handled": [
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui"
+      ],
+      "missing": [],
+      "diagnostics": []
+    },
+    "notifications": null,
+    "diagnostics": null,
+    "toolResult": null,
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "tool registered",
+        "ok": true,
+        "detail": "subagent"
+      }
+    ],
+    "ok": true
+  },
+  "measuredAt": "2026-10-28T07:03:54.2107641Z",
+  "commandLine": "build\\host-a.exe --bundle build\\real-subagent.a.js",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}

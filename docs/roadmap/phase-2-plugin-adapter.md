@@ -13,19 +13,22 @@
 - Phase 1 完成并打 tag。✅
 - JSON-RPC 协议草案与 manifest schema 定稿（写入 `proto/` 与本文）。✅ 见 `proto/plugin-protocol.md`、`proto/plugin-manifest.schema.json`
 - 进程隔离方案（stdin/stdout 帧格式、超时、心跳）确认。✅ 见协议 §2、§4
-- 一个真实 pi 扩展样本（脱敏、固定版本）可用于 spike；不把它接进生产路径。⏳ **待网络**：需要从 GitHub 取固定提交的扩展源码。
+- 一个真实 pi 扩展样本（脱敏、固定版本）可用于 spike；不把它接进生产路径。✅ 已用上游提交 `38ff9917` 的 rpc-demo / todo / subagent 复核（不入库）
 
 ## 3. 做什么
 
-### 3.0 A 轨运行时 spike（ADR-0008）
+### 3.0 A 轨运行时 spike（ADR-0008）✅ 已完成
 
-限时 5 个工作日，并行验证：
+2026-10-28 完成，结论 **B：Node 兼容子进程 + 显式子集 shim**（ADR-0009）。完整读数、对比与未验证项见 [`design/phase-2/runtime-spike.md`](../design/phase-2/runtime-spike.md)，夹具与复现命令见 `fixtures/spike-runtime/`。
 
-- **A. QuickJS + 打包**：bundler 把样本扩展打成单文件，注入 pi shim，执行并回收结果。
-- **B. Node 兼容子进程**：独立进程运行样本，宿主经 JSON-RPC 提供 shim API。
-- **C. Go 重写**：按样本语义重写，作为兜底。
+| 路线 | 冷启动（中位） | 常驻 RSS | 编排样本 | 结论 |
+|---|---|---|---|---|
+| A. QuickJS + 打包 | 14ms | 9.2 MiB | **执行失败**（需 Node fs/spawn 语义） | 淘汰：维护 >5 人日/季度 |
+| B. Node 子进程 | 55~63ms | 约 49 MiB | 通过 | **选定** |
+| C. Go 重写 | 7ms | 6.8 MiB | 只对重写项成立 | 兜底，不采用 |
 
-必须跑通：启动 → 注册工具 → 事件钩子 → `notify` 映射 → `setWidget` no-op + 诊断。记录启动时间、内存、Windows 可用性、shim 覆盖面与维护成本，产出 `docs/design/phase-2/runtime-spike.md` 与 ADR-0009。
+- 三条路线都能通过“启动 → 注册工具 → 事件钩子 → notify → setWidget no-op + 诊断”；区分路线的是上游 subagent 样本依赖的 Node 内置模块。
+- 比尺保持不变（下表保留作复核依据）；后续若要重启 A（QuickJS），须新 ADR 并重跑同一批样本。
 
 **指标与淘汰线**（三条路线同一把尺子，事中记录、事后不补数）：
 
@@ -41,7 +44,7 @@
 - 决策顺序：A（QuickJS）优先，B（Node 子进程）在 A 的 Windows/打包不达标时作为替代，C（Go 重写）只在两者都不可行时兜底；选 C 必须把对外口径从“兼容 pi 扩展”改成“兼容编排语义”。
 - 5 个工作日到期即定稿：数据不足的部分按“淘汰线未触发但未验证”记录，不无限延期；结论写 ADR-0009。
 
-参考 PI-Desktop 的 trusted extension 做法（research/05）：B 路线（Node 子进程 + 显式子集 shim）已被验证可行，但它明确承认“进程隔离 + API 白名单 ≠ 沙箱”；spike 必须把这点写进结论。
+- **必须写进结论的实话**（已写入 ADR-0009）：进程隔离 + API 白名单 ≠ 沙箱；B 路线下扩展可绕过 shim 调用 Node 原生 fs/net/exec，只能按受信任代码处理。
 
 ### 3.1 协议
 
@@ -93,7 +96,7 @@
 - `proto/` 协议文档与 manifest schema（已定稿：`plugin-protocol.md`、`plugin-manifest.schema.json`）。
 - `internal/adapter` 与测试。
 - mock 插件与故障注入用例。
-- `docs/design/phase-2/runtime-spike.md` 与 ADR-0009（运行时选择）。
+- `docs/design/phase-2/runtime-spike.md` 与 ADR-0009（运行时选择）。✅ 已定稿（B 路线）
 - Phase 2 报告（含三分类验证、风险、Phase 6 接入建议）。
 
 ## 7. 风险

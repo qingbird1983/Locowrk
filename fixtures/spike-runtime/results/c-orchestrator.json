@@ -1,0 +1,114 @@
+{
+  "route": "c",
+  "sample": "orchestrator",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 6.82,
+    "min": 5.793,
+    "max": 64.494,
+    "all": [
+      64.494,
+      6.82,
+      5.793,
+      5.873,
+      7.375,
+      6.264,
+      7.099,
+      7.471,
+      6.502,
+      6.313
+    ]
+  },
+  "detail": {
+    "readyMs": 7.764,
+    "rssMiB": 6.57421875,
+    "rssSamples": [
+      6.57421875,
+      6.57421875,
+      6.57421875,
+      6.57421875,
+      6.57421875
+    ],
+    "bundleBytes": 0,
+    "tools": [
+      "probe_echo",
+      "probe_delegate"
+    ],
+    "commands": [
+      "probe-ui"
+    ],
+    "events": [
+      "session_start",
+      "tool_call"
+    ],
+    "coverage": {
+      "implemented": [],
+      "missing": [],
+      "note": "route C has no shim",
+      "used": []
+    },
+    "notifications": [
+      {
+        "method": "notify",
+        "params": {
+          "message": "orchestrator-probe started",
+          "type": "info"
+        }
+      }
+    ],
+    "diagnostics": [
+      {
+        "method": "diagnostic",
+        "params": {
+          "code": "unsupported",
+          "count": 1,
+          "member": "ui.setWidget",
+          "message": "ui.setWidget"
+        }
+      }
+    ],
+    "toolResult": {
+      "content": [
+        {
+          "text": "worker:spike",
+          "type": "text"
+        }
+      ],
+      "details": {
+        "mode": "single",
+        "ms": 109,
+        "task": "spike"
+      }
+    },
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "tool registered",
+        "ok": true,
+        "detail": "probe_echo,probe_delegate"
+      },
+      {
+        "name": "notify mapped",
+        "ok": true,
+        "detail": "orchestrator-probe started"
+      },
+      {
+        "name": "tool result",
+        "ok": true,
+        "detail": "{\"content\":[{\"text\":\"worker:spike\",\"type\":\"text\"}],\"details\":{\"mode\":\"single\",\"ms\":109,\"task\":\"spike\"}}"
+      },
+      {
+        "name": "worker output",
+        "ok": true,
+        "detail": "{\"content\":[{\"text\":\"worker:spike\",\"type\":\"text\"}],\"details\":{\"mode\":\"single\",\"ms\":109,\"task\":\"spike\"}}"
+      }
+    ],
+    "ok": true
+  },
+  "measuredAt": "2026-10-28T07:09:14.118475Z",
+  "commandLine": "build\\host-c.exe --sample orchestrator",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}

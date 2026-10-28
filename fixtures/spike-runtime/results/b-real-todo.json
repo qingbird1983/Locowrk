@@ -1,0 +1,140 @@
+{
+  "route": "b",
+  "sample": "real-todo",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 54.013,
+    "min": 46.109,
+    "max": 65.114,
+    "all": [
+      50.22,
+      53.78,
+      63.075,
+      59.661,
+      49.257,
+      48.071,
+      65.114,
+      46.109,
+      54.013,
+      60.798
+    ]
+  },
+  "detail": {
+    "readyMs": 62.836,
+    "rssMiB": 48.921875,
+    "rssSamples": [
+      48.921875,
+      48.921875,
+      48.921875,
+      48.921875,
+      48.921875
+    ],
+    "bundleBytes": 24074,
+    "tools": [
+      "todo"
+    ],
+    "commands": [
+      "todos"
+    ],
+    "events": [
+      "session_start",
+      "session_tree"
+    ],
+    "coverage": {
+      "used": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "session.getBranch"
+      ],
+      "implemented": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool"
+      ],
+      "handled": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "session.getBranch"
+      ],
+      "missing": [],
+      "diagnostics": [
+        {
+          "member": "session.getBranch",
+          "code": "not_implemented",
+          "message": "session.getBranch",
+          "count": 1
+        }
+      ]
+    },
+    "notifications": null,
+    "diagnostics": [
+      {
+        "method": "diagnostic",
+        "params": {
+          "member": "session.getBranch",
+          "code": "not_implemented",
+          "message": "session.getBranch",
+          "count": 1
+        }
+      }
+    ],
+    "toolResult": {
+      "content": [
+        {
+          "type": "text",
+          "text": "No todos"
+        }
+      ],
+      "details": {
+        "action": "list",
+        "todos": [],
+        "nextId": 1
+      }
+    },
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "tool registered",
+        "ok": true,
+        "detail": "todo"
+      },
+      {
+        "name": "noop diagnostic",
+        "ok": true,
+        "detail": "session.getBranch code=not_implemented count=1"
+      },
+      {
+        "name": "tool result",
+        "ok": true,
+        "detail": "{\"content\":[{\"type\":\"text\",\"text\":\"No todos\"}],\"details\":{\"action\":\"list\",\"todos\":[],\"nextId\":1}}"
+      }
+    ],
+    "ok": true
+  },
+  "measuredAt": "2026-10-28T07:03:50.7584048Z",
+  "commandLine": "node runner\\host-b.mjs --bundle build\\real-todo.b.js",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}

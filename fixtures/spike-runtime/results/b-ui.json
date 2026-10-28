@@ -1,0 +1,202 @@
+{
+  "route": "b",
+  "sample": "ui",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 57.01,
+    "min": 50.713,
+    "max": 58.041,
+    "all": [
+      57.246,
+      50.87,
+      57.461,
+      54.556,
+      58.041,
+      53.177,
+      57.278,
+      55.987,
+      57.01,
+      50.713
+    ]
+  },
+  "detail": {
+    "readyMs": 63.418,
+    "rssMiB": 48.8828125,
+    "rssSamples": [
+      48.8828125,
+      48.8828125,
+      48.8828125,
+      48.8828125,
+      48.8828125
+    ],
+    "bundleBytes": 16274,
+    "tools": [
+      "probe_echo"
+    ],
+    "commands": [
+      "probe-ui"
+    ],
+    "events": [
+      "session_start",
+      "tool_call"
+    ],
+    "coverage": {
+      "used": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "ui.notify",
+        "ui.setStatus",
+        "ui.setTitle",
+        "ui.setWidget"
+      ],
+      "implemented": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool",
+        "ui.notify"
+      ],
+      "handled": [
+        "api.on",
+        "api.registerCommand",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "ui.notify",
+        "ui.setStatus",
+        "ui.setTitle",
+        "ui.setWidget"
+      ],
+      "missing": [],
+      "diagnostics": [
+        {
+          "member": "ui.setTitle",
+          "code": "unsupported",
+          "message": "ui.setTitle",
+          "count": 1
+        },
+        {
+          "member": "ui.setWidget",
+          "code": "unsupported",
+          "message": "ui.setWidget",
+          "count": 2
+        },
+        {
+          "member": "ui.setStatus",
+          "code": "unsupported",
+          "message": "ui.setStatus",
+          "count": 1
+        }
+      ]
+    },
+    "notifications": [
+      {
+        "method": "notify",
+        "params": {
+          "message": "ui-probe started",
+          "type": "info"
+        }
+      }
+    ],
+    "diagnostics": [
+      {
+        "method": "diagnostic",
+        "params": {
+          "member": "ui.setTitle",
+          "code": "unsupported",
+          "message": "ui.setTitle",
+          "count": 1
+        }
+      },
+      {
+        "method": "diagnostic",
+        "params": {
+          "member": "ui.setWidget",
+          "code": "unsupported",
+          "message": "ui.setWidget",
+          "count": 1
+        }
+      },
+      {
+        "method": "diagnostic",
+        "params": {
+          "member": "ui.setStatus",
+          "code": "unsupported",
+          "message": "ui.setStatus",
+          "count": 1
+        }
+      },
+      {
+        "method": "diagnostic",
+        "params": {
+          "member": "ui.setWidget",
+          "code": "unsupported",
+          "message": "ui.setWidget",
+          "count": 2
+        }
+      }
+    ],
+    "toolResult": {
+      "content": [
+        {
+          "type": "text",
+          "text": "echo:spike"
+        }
+      ],
+      "details": {
+        "text": "spike"
+      }
+    },
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "tool registered",
+        "ok": true,
+        "detail": "probe_echo"
+      },
+      {
+        "name": "notify mapped",
+        "ok": true,
+        "detail": "ui-probe started"
+      },
+      {
+        "name": "noop diagnostic",
+        "ok": true,
+        "detail": "ui.setWidget code=unsupported count=3"
+      },
+      {
+        "name": "tool result",
+        "ok": true,
+        "detail": "{\"content\":[{\"type\":\"text\",\"text\":\"echo:spike\"}],\"details\":{\"text\":\"spike\"}}"
+      },
+      {
+        "name": "extension continued after no-op",
+        "ok": true,
+        "detail": "setWidget diagnostics=3"
+      }
+    ],
+    "ok": true
+  },
+  "measuredAt": "2026-10-28T07:03:27.2857733Z",
+  "commandLine": "node runner\\host-b.mjs --bundle build\\ui.b.js",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}

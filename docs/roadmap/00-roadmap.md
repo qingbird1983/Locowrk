@@ -24,7 +24,7 @@ graph LR
 |---|---|---|---|
 | [Phase 0](phase-0-foundation.md) | 仓库初始化、规范与设计定稿、文档先行落盘 | — | ✅ 完成（2026-10-28，tag `phase-0.end`） |
 | [Phase 1](phase-1-kernel-events.md) | 跑通 `sky-valley/pi` 内核与统一事件流，会话可恢复 | 1~2 周 | ✅ 完成（2026-10-28，tag `phase-1.end`） |
-| [Phase 2](phase-2-plugin-adapter.md) | 编排适配器骨架与 A 轨运行时选型：三分类、诊断、进程隔离 | 3~4 周 | 🚧 进行中：协议定稿，spike 待网络 |
+| [Phase 2](phase-2-plugin-adapter.md) | 编排适配器骨架与 A 轨运行时选型：三分类、诊断、进程隔离 | 3~4 周 | 🚧 进行中：运行时定稿（Node 子进程，ADR-0009），适配器与 mock 待做 |
 | [Phase 3](phase-3-desktop-host.md) | MyGo 最小宿主：实时会话流、输入、取消、设置 | 2~3 周 | 未开始 |
 | [Phase 4](phase-4-native-plugins.md) | PluginHost 与首批原生 `ui.View` 插件 | 3~4 周 | 未开始 |
 | [Phase 5](phase-5-webview-plugins.md) | WebView 混合渲染与 Diff 审阅插件 | 2~3 周 | 未开始 |
@@ -61,7 +61,8 @@ graph LR
 |---|---|---|
 | `sky-valley/pi` API 漂移 / 破坏性变更 | 高 | 固定提交；上游类型隔离在 `internal/kernel`；升级独立分支 + 全量测试 |
 | MyGo v0.x API 漂移与原生 UI 成熟度 | 高 | 锁版本；用法收敛；Phase 3 spike；必要时主壳改 WebView |
-| A 轨适配器复杂度（无现成 extensions runtime，需自建 shim 与打包） | 高 | Phase 2 限时 spike 选型（ADR-0008）；只承诺三分类矩阵，不承诺全量兼容 |
+| A 轨适配器复杂度（无现成 extensions runtime，需自建 shim 与打包） | 高 | 已定运行时（ADR-0009，Node 子进程）；只承诺三分类矩阵，不承诺全量兼容；剩余风险是 shim 维护与随包 Node 分发 |
+| A 轨能力闸边界（Node 原生 fs/net/exec 绕过 shim） | 高 | 只按受信任插件处理并在安装/运行界面明示；OS 级隔离进 backlog，不宣传为沙箱 |
 | 子进程生命周期与崩溃（含孙进程） | 中 | 进程树清理、心跳、超时、重启上限、故障注入测试 |
 | 长会话性能（10k+ 消息、高频 delta） | 中 | 虚拟化列表；delta 合并；UI 背压；性能基准 |
 | WebView 三平台差异（焦点/层级/DPI） | 中 | 平台冒烟清单；覆盖层由宿主统一管理 |

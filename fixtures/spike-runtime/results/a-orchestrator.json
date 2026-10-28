@@ -1,0 +1,119 @@
+{
+  "route": "a",
+  "sample": "orchestrator",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 12.338,
+    "min": 11.93,
+    "max": 15.958,
+    "all": [
+      15.958,
+      12.249,
+      12.011,
+      12.315,
+      12.562,
+      11.93,
+      13.117,
+      12.194,
+      12.546,
+      12.338
+    ]
+  },
+  "detail": {
+    "readyMs": 11.795,
+    "rssMiB": 9.24609375,
+    "rssSamples": [
+      9.24609375,
+      9.24609375,
+      9.24609375,
+      9.24609375,
+      9.24609375
+    ],
+    "bundleBytes": 18894,
+    "tools": [
+      "probe_delegate"
+    ],
+    "commands": [],
+    "events": [
+      "session_start"
+    ],
+    "coverage": {
+      "used": [
+        "api.on",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "ui.notify"
+      ],
+      "implemented": [
+        "api.on",
+        "api.registerTool",
+        "ui.notify"
+      ],
+      "handled": [
+        "api.on",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "ui.notify"
+      ],
+      "missing": [],
+      "diagnostics": []
+    },
+    "notifications": [
+      {
+        "method": "notify",
+        "params": {
+          "message": "orchestrator-probe started",
+          "type": "info"
+        }
+      }
+    ],
+    "diagnostics": null,
+    "toolResult": null,
+    "toolError": "invoke_tool: 4404 not_implemented: node:fs.promises.mkdtemp\n    at \u003canonymous\u003e (\u003ceval\u003e:468:50)\n    at execute (\u003ceval\u003e:548:43)\n    at dispatch (\u003ceval\u003e:351:31)\n    at dispatchPromise (\u003ceval\u003e:410:22)\n    at start (\u003ceval\u003e:415:27)\n    at \u003canonymous\u003e (\u003ceval\u003e:435:86)\n",
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "tool registered",
+        "ok": true,
+        "detail": "probe_delegate"
+      },
+      {
+        "name": "notify mapped",
+        "ok": true,
+        "detail": "orchestrator-probe started"
+      },
+      {
+        "name": "tool result",
+        "ok": false,
+        "detail": "invoke_tool: 4404 not_implemented: node:fs.promises.mkdtemp\n    at \u003canonymous\u003e (\u003ceval\u003e:468:50)\n    at execute (\u003ceval\u003e:548:43)\n    at dispatch (\u003ceval\u003e:351:31)\n    at dispatchPromise (\u003ceval\u003e:410:22)\n    at start (\u003ceval\u003e:415:27)\n    at \u003canonymous\u003e (\u003ceval\u003e:435:86)\n"
+      },
+      {
+        "name": "worker output",
+        "ok": false
+      }
+    ],
+    "ok": false
+  },
+  "measuredAt": "2026-10-28T07:09:11.4550345Z",
+  "commandLine": "build\\host-a.exe --bundle build\\orchestrator.a.js",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}

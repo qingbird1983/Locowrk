@@ -1,0 +1,112 @@
+{
+  "route": "c",
+  "sample": "ui",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 7.475,
+    "min": 5.746,
+    "max": 10.094,
+    "all": [
+      10.094,
+      7.544,
+      6.724,
+      5.746,
+      7.295,
+      7.475,
+      8.217,
+      7.292,
+      7.585,
+      6.099
+    ]
+  },
+  "detail": {
+    "readyMs": 6.837,
+    "rssMiB": 6.578125,
+    "rssSamples": [
+      6.578125,
+      6.578125,
+      6.578125,
+      6.578125,
+      6.578125
+    ],
+    "bundleBytes": 0,
+    "tools": [
+      "probe_echo",
+      "probe_delegate"
+    ],
+    "commands": [
+      "probe-ui"
+    ],
+    "events": [
+      "session_start",
+      "tool_call"
+    ],
+    "coverage": {
+      "implemented": [],
+      "missing": [],
+      "note": "route C has no shim",
+      "used": []
+    },
+    "notifications": [
+      {
+        "method": "notify",
+        "params": {
+          "message": "ui-probe started",
+          "type": "info"
+        }
+      }
+    ],
+    "diagnostics": [
+      {
+        "method": "diagnostic",
+        "params": {
+          "code": "unsupported",
+          "count": 1,
+          "member": "ui.setWidget",
+          "message": "ui.setWidget"
+        }
+      }
+    ],
+    "toolResult": {
+      "content": [
+        {
+          "text": "echo:spike",
+          "type": "text"
+        }
+      ],
+      "details": {
+        "text": "spike"
+      }
+    },
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "tool registered",
+        "ok": true,
+        "detail": "probe_echo,probe_delegate"
+      },
+      {
+        "name": "notify mapped",
+        "ok": true,
+        "detail": "ui-probe started"
+      },
+      {
+        "name": "noop diagnostic",
+        "ok": true,
+        "detail": "ui.setWidget code=unsupported count=1"
+      },
+      {
+        "name": "tool result",
+        "ok": true,
+        "detail": "{\"content\":[{\"text\":\"echo:spike\",\"type\":\"text\"}],\"details\":{\"text\":\"spike\"}}"
+      }
+    ],
+    "ok": true
+  },
+  "measuredAt": "2026-10-28T07:04:00.5882295Z",
+  "commandLine": "build\\host-c.exe --sample ui",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}

@@ -46,8 +46,9 @@ docs/
 | adr/ADR-0006-adopt-timo-pi-doc-governance.md | 定稿 | 采用 Timo-pi 式文档与规范治理，并记录差异 |
 | adr/ADR-0007-license-and-identity.md | 定稿 | MIT 许可证、项目名 Locowrk（`wrk`，不加 `-pi`）与 Windows 优先 |
 | adr/ADR-0008-a-track-runtime-spike.md | 定稿 | A 轨运行时在 Phase 2 用限时 spike 定稿，Phase 6 只接入 |
+| adr/ADR-0009-a-track-node-runtime.md | 定稿 | A 轨运行时定为 Node 兼容子进程 + 显式子集 shim（spike 结论） |
 | research/01-sky-valley-pi.md | 定稿 | 内核依赖的事实清单：包、能力、缺口、版本钉 |
-| research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（待 Phase 2 用 TS 源码复核） |
+| research/02-pi-extension-surface.md | 定稿 | pi 四层扩展面与本项目的兼容边界（已按固定上游提交复核事件与 API） |
 | research/03-mygo-stack.md | 草稿 | MyGo 能力、线程模型、风险与需要 spike 的问题 |
 | research/04-governance-reference.md | 定稿 | 参考仓库 Timo-pi 的治理做法与取舍 |
 | research/05-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的插件系统、权限与隔离教训（LGPL，只读思路） |
@@ -71,6 +72,7 @@ docs/
 | standards/09-standards-review.md | 定稿 | 规范自身的复查、触发信号与修正分级 |
 | design/phase-0/report.md | 定稿 | Phase 0 进度报告与基线核对 |
 | design/phase-1/report.md | 定稿 | Phase 1 进度报告：内核、事件流、会话恢复的验收结果与首次规范复查 |
+| design/phase-2/runtime-spike.md | 定稿 | Phase 2 A 轨运行时比试：三条路线读数、样本结果与结论 |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。

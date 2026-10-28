@@ -2,7 +2,7 @@
 
 - 状态：定稿
 - 日期：2026-10-28
-- 关联：ADR-0003、ADR-0004、ADR-0008；architecture/01、03；research/02
+- 关联：ADR-0003、ADR-0004、ADR-0008、ADR-0009；architecture/01、03；research/02
 
 ## 1. 两条轨道
 
@@ -22,10 +22,10 @@
 
 `sky-valley/pi` **没有移植** pi 的 extensions runtime（上游 `core/extensions/**` 被其范围测试判为宿主面）。因此 A 轨不是“打开开关”，而是本项目要补的一层：
 
-- **桥接模式**：适配器启动一个宿主进程，加载 pi 的扩展 JS/TS（需要 JS 运行时与 pi 扩展 API shim），把注册/事件翻译成 JSON-RPC。
-- **重写模式**：按扩展语义用 Go 重写选定插件（适合子代理、workflow 这类核心能力）。
+- **桥接模式（已选定）**：适配器启动一个 Node 子进程，加载安装期打包好的扩展产物（esbuild 单文件），注入显式子集 shim（`locowrk-shim/0`），把注册/事件/工具调用翻译成 JSON-RPC。选型与读数见 ADR-0009 与 [`design/phase-2/runtime-spike.md`](../design/phase-2/runtime-spike.md)。
+- **重写模式（不采用）**：按扩展语义用 Go 重写；spike 证明它只能逐个扩展重写，兼容面退化为“编排语义”。仅作为 B 不可行时的兜底。
 
-Phase 2 先做**运行时 spike（ADR-0008）**，用 mock 跑通协议与三分类矩阵；Phase 6 只做真实扩展接入，不再承担选型。运行时可选项与选择标准见 ADR-0008。
+spike 实测（Windows 11）：冷启动 55~63ms、常驻约 49MiB、上游 rpc-demo/todo 可运行、subagent 可加载；QuickJS 路线更快更省，但编排样本依赖 Node 内置模块，执行失败。Node 运行时随产品分发并锁版本，运行期不执行 `npm install`、不远程加载代码。
 
 ### 2.2 接口
 
@@ -59,11 +59,12 @@ type Manifest struct {
 |---|---|---|
 | **支持** | `registerTool`、`registerCommand`、事件钩子（agent/turn/message/tool/context/system prompt）、工具开关、模型/思考档、子代理/workflow/异步、`ctx.ui.notify/select/confirm/input` | 真实实现；基础对话框映射到宿主 UI |
 | **缓做** | provider/虚拟模型/MCP 注册、session 读写/切换/新建/分叉、`registerFlag`、autocomplete、markdown transformer、模型目录写操作 | 成员存在，返回“未实现”诊断，**不抛错** |
-| **不支持** | widget/footer/header/title、编辑器操控、自定义 renderer、工具 `renderCall`/`renderResult`、`navigateTree`、快捷键、`shutdown` | 成员存在但 no-op，**永不 throw**；每扩展每成员一条诊断 |
+| **不支持** | widget/footer/header/title、`ctx.ui.custom`、编辑器操控、自定义 renderer、工具 `renderCall`/`renderResult`、`navigateTree`、快捷键、`shutdown` | 成员存在但 no-op，**永不 throw**；每扩展每成员一条诊断 |
 
 - 安全能力（文件写删、执行、网络）独立走能力闸：未声明 = 拒绝。兼容降级不得绕开安全拒绝。
+- **Node 原生能力的边界**：B 路线下扩展可直接 `require("node:fs")` 等，shim 拦不住；manifest 能力声明是契约与审计依据，未加 OS 级隔离前，A 轨扩展只能按“受信任代码”处理（ADR-0009、standards/06）。
 - 清单是契约；上游没有 semver，增减走 ADR/文档修订。
-- 支持项里的事件名与签名在 Phase 2 用上游 TS 源码复核；复核前不扩表。
+- 事件名与签名已按固定上游提交 `38ff9917` 复核（research/02 §4）；扩表前先改该文与本节。
 
 ### 2.4 诊断语义
 
@@ -163,7 +164,7 @@ discovered → validated → started → ready → stopped
 
 - **默认无能力**：文件、网络、执行、环境变量都要 manifest 声明 + 用户逐项批准；权限采用“权限 + 范围”（如 `fs.read` + 路径 glob、`net` + 域名白名单），缺失范围 = 无权限；全树写/删直接判非法。
 - **硬拒绝**：`.env*`、SSH 凭证、`.git/**` 的读写；全树写删；未声明的网络域。删除只走系统回收站、非递归，并做速率限制。
-- **信任级别**：A 轨编排扩展与 Agent 同权（能注册工具/钩子），按“受信任代码”处理；进程隔离不是安全沙箱。Node/JS 运行时若保留原生 fs/net，宿主白名单拦不住，必须额外限制或明确声明“仅受信任插件”。
+- **信任级别**：A 轨编排扩展与 Agent 同权（能注册工具/钩子），按“受信任代码”处理；进程隔离不是安全沙箱。B 路线保留 Node 原生 fs/net/exec，能力闸无法拦截绕过 shim 的原生调用，必须在安装与运行界面明示“仅受信任插件”。
 - **审计**：每次授权、拒绝、崩溃、重启都留可查记录；记录脱敏。
 - **签名**：动态插件分发包后续加签名校验；首版只支持本地开发目录 + 显式信任。
 - **项目资源**：项目内技能/插件默认不加载，需用户信任该工作区（接缝 #11）。

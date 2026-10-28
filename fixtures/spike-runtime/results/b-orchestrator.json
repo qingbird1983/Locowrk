@@ -1,0 +1,131 @@
+{
+  "route": "b",
+  "sample": "orchestrator",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 62.619,
+    "min": 47.422,
+    "max": 69.201,
+    "all": [
+      69.201,
+      57.905,
+      62.619,
+      60.619,
+      61.787,
+      63.431,
+      47.422,
+      63.478,
+      62.333,
+      64.392
+    ]
+  },
+  "detail": {
+    "readyMs": 63.061,
+    "rssMiB": 49.625,
+    "rssSamples": [
+      49.625,
+      49.625,
+      49.625,
+      49.625,
+      49.625
+    ],
+    "bundleBytes": 17952,
+    "tools": [
+      "probe_delegate"
+    ],
+    "commands": [],
+    "events": [
+      "session_start"
+    ],
+    "coverage": {
+      "used": [
+        "api.on",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "ui.notify"
+      ],
+      "implemented": [
+        "api.on",
+        "api.registerTool",
+        "ui.notify"
+      ],
+      "handled": [
+        "api.on",
+        "api.registerTool",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "ui.notify"
+      ],
+      "missing": [],
+      "diagnostics": []
+    },
+    "notifications": [
+      {
+        "method": "notify",
+        "params": {
+          "message": "orchestrator-probe started",
+          "type": "info"
+        }
+      }
+    ],
+    "diagnostics": null,
+    "toolResult": {
+      "content": [
+        {
+          "type": "text",
+          "text": "worker:spike"
+        }
+      ],
+      "details": {
+        "task": "spike",
+        "mode": "single",
+        "tempFile": true
+      }
+    },
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "tool registered",
+        "ok": true,
+        "detail": "probe_delegate"
+      },
+      {
+        "name": "notify mapped",
+        "ok": true,
+        "detail": "orchestrator-probe started"
+      },
+      {
+        "name": "tool result",
+        "ok": true,
+        "detail": "{\"content\":[{\"type\":\"text\",\"text\":\"worker:spike\"}],\"details\":{\"task\":\"spike\",\"mode\":\"single\",\"tempFile\":true}}"
+      },
+      {
+        "name": "worker output",
+        "ok": true,
+        "detail": "{\"content\":[{\"type\":\"text\",\"text\":\"worker:spike\"}],\"details\":{\"task\":\"spike\",\"mode\":\"single\",\"tempFile\":true}}"
+      }
+    ],
+    "ok": true
+  },
+  "measuredAt": "2026-10-28T07:09:08.1322423Z",
+  "commandLine": "node runner\\host-b.mjs --bundle build\\orchestrator.b.js",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}

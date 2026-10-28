@@ -1,0 +1,152 @@
+{
+  "route": "b",
+  "sample": "real-rpc-demo",
+  "runs": 10,
+  "coldStartMs": {
+    "median": 54.875,
+    "min": 49.179,
+    "max": 57.304,
+    "all": [
+      49.179,
+      56.104,
+      55.086,
+      54.875,
+      50.857,
+      53.457,
+      57.15,
+      53.632,
+      57.304,
+      53.939
+    ]
+  },
+  "detail": {
+    "readyMs": 56.758,
+    "rssMiB": 48.8515625,
+    "rssSamples": [
+      48.8515625,
+      48.8515625,
+      48.8515625,
+      48.8515625,
+      48.8515625
+    ],
+    "bundleBytes": 17248,
+    "tools": [],
+    "commands": [
+      "rpc-input",
+      "rpc-editor",
+      "rpc-prefill"
+    ],
+    "events": [
+      "session_start",
+      "turn_start",
+      "turn_end",
+      "tool_call",
+      "session_before_switch"
+    ],
+    "coverage": {
+      "used": [
+        "api.on",
+        "api.registerCommand",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "ui.setStatus",
+        "ui.setTitle",
+        "ui.setWidget"
+      ],
+      "implemented": [
+        "api.on",
+        "api.registerCommand"
+      ],
+      "handled": [
+        "api.on",
+        "api.registerCommand",
+        "ctx.cwd",
+        "ctx.hasUI",
+        "ctx.mode",
+        "ctx.model",
+        "ctx.modelRegistry",
+        "ctx.sessionManager",
+        "ctx.signal",
+        "ctx.thinkingLevel",
+        "ctx.ui",
+        "ui.setStatus",
+        "ui.setTitle",
+        "ui.setWidget"
+      ],
+      "missing": [],
+      "diagnostics": [
+        {
+          "member": "ui.setTitle",
+          "code": "unsupported",
+          "message": "ui.setTitle",
+          "count": 1
+        },
+        {
+          "member": "ui.setWidget",
+          "code": "unsupported",
+          "message": "ui.setWidget",
+          "count": 1
+        },
+        {
+          "member": "ui.setStatus",
+          "code": "unsupported",
+          "message": "ui.setStatus",
+          "count": 1
+        }
+      ]
+    },
+    "notifications": null,
+    "diagnostics": [
+      {
+        "method": "diagnostic",
+        "params": {
+          "member": "ui.setTitle",
+          "code": "unsupported",
+          "message": "ui.setTitle",
+          "count": 1
+        }
+      },
+      {
+        "method": "diagnostic",
+        "params": {
+          "member": "ui.setWidget",
+          "code": "unsupported",
+          "message": "ui.setWidget",
+          "count": 1
+        }
+      },
+      {
+        "method": "diagnostic",
+        "params": {
+          "member": "ui.setStatus",
+          "code": "unsupported",
+          "message": "ui.setStatus",
+          "count": 1
+        }
+      }
+    ],
+    "toolResult": null,
+    "checks": [
+      {
+        "name": "boot",
+        "ok": true
+      },
+      {
+        "name": "noop diagnostic",
+        "ok": true,
+        "detail": "ui.setWidget code=unsupported count=1"
+      }
+    ],
+    "ok": true
+  },
+  "measuredAt": "2026-10-28T07:03:44.7905659Z",
+  "commandLine": "node runner\\host-b.mjs --bundle build\\real-rpc-demo.b.js",
+  "platformNote": "Windows 11, Go 1.27.3, Node v24.14.0"
+}
