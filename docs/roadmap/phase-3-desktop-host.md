@@ -1,8 +1,8 @@
 # Phase 3：MyGo 最小宿主
 
-- 状态：草稿
+- 状态：定稿（2026-10-28；主壳路径见 ADR-0011）
 - 日期：2026-10-28
-- 关联：ADR-0002；architecture/01、02、03；research/03
+- 关联：ADR-0002、ADR-0011；architecture/01、02、03；research/03
 
 ## 1. 目标
 
@@ -13,8 +13,8 @@
 ## 2. 开工前置条件
 
 - Phase 1 完成；Phase 2 可并行，但主壳不依赖它。
-- MyGo 技术 spike 通过（research/03 §6）：长列表、中文输入、WebView 混合、钥匙串、打包。
-- **主壳渲染路径已定稿**（WebView 或原生），必要时新增 ADR。
+- MyGo 技术 spike 通过（research/03 §6）：最小闭环已验证（隐藏窗口、WebView2、Typed IPC 双向、纯 Go 构建）；长列表、中文输入、钥匙串、打包在 Phase 3 内逐项验证。
+- **主壳渲染路径已定稿**：WebView（ADR-0011）。
 
 ## 3. 做什么
 

@@ -1,8 +1,8 @@
 # 调研 03：MyGo 桌面栈
 
-- 状态：草稿（待 Phase 3 spike 验证）
+- 状态：定稿（2026-10-28；Phase 3 spike 最小闭环通过，见 §8）
 - 日期：2026-10-28
-- 关联：ADR-0002；architecture/01、04
+- 关联：ADR-0002、ADR-0011；architecture/01、04
 
 > 依据：MyGo 官方 README 与 pkg.go.dev（v0.7.1，2026-10-27）。API 仍在演进；本文记录“已知事实 + 待验证问题”，不把宣传语当合同。
 
@@ -72,3 +72,19 @@
 ## 7. 结论（暂定）
 
 MyGo 是目前最贴合“Go 内核 + 双渲染路径 + 单二进制”的选项。**先用 WebView 做主壳（Phase 3）以降低风险，原生 `ui.View` 从插件插槽（Phase 4）开始落地**；spike 结果若支持，再评估主壳迁移到原生。
+
+## 8. Phase 3 spike 结果（2026-10-28）
+
+夹具：`fixtures/spike-mygo/`（独立 module，MyGo v0.7.1，窗口隐藏，不干扰桌面）。
+
+| 检查 | 结果 |
+|---|---|
+| 纯 Go 构建（无 cgo） | 通过；单 exe |
+| WebView2 隐藏窗口 | 通过；UA Edge 155（Chrome 155 内核） |
+| 页面 → Go 绑定调用 | 通过；进程启动到回调 **545.7 ms** |
+| Go → 页面类型化事件（`mygo.NewEvent`） | 通过；事件往返 **550.2 ms** |
+| 双向完成后退出 | 通过；`App.Exit(0)`，无残留窗口 |
+
+- 本机（Windows 11）已装 WebView2 运行时；Linux 的 WebKitGTK 依赖与 macOS WKWebView 未在本轮验证。
+- 未覆盖：中文 IME、5,000+ 条消息滚动、钥匙串、安装包体积/签名、三平台高 DPI 与焦点。这些进 Phase 3 冒烟清单，不阻塞主壳路径定稿。
+- 决策：主壳走 WebView（ADR-0011）；原生路径 Phase 4 起用于插件插槽，主壳是否迁移以后再评估。

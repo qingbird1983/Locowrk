@@ -1,56 +1,55 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-28（会话主题：**Phase 2 验收通过并收尾**）
+- 更新：2026-10-28（会话主题：**Phase 3 开工：WebView 主壳定稿**）
 
 ## 当前阶段与状态
 
 - **项目名：Locowrk**（拼写是 `wrk`，不是 `work`/`wrok`；不加 `-pi` 后缀）。远端：`github.com/qingbird1983/Locowrk`（**私有**）；旧 Rust 历史在 `archive/pre-go-locowrk`。
 - **本地目录**：`E:\Warehouse\AIwork\Locowrk`；Go module `github.com/qingbird1983/locowrk`。
-- **Phase 0 / Phase 1 / Phase 2**：✅ 完成，tag `phase-0.end` / `phase-1.end` / `phase-2.end`。
-  - Phase 2 交付：运行时 Node 子进程（ADR-0009）、`internal/adapter`、mock 插件、故障注入、内核外部工具桥；11 条验收全过（`docs/design/phase-2/report.md`）。
-  - 真实 provider 冒烟已完成：DeepSeek `deepseek-flash`，读文件工具调用成功。
-- **Phase 3（MyGo 最小宿主）**：未开始；开工前要定主界面渲染路径（原生 `ui.View` vs WebView）。
+- **Phase 0 / 1 / 2**：✅ 完成，tag 已打（`phase-2.end`）。
+- **Phase 3（MyGo 最小宿主）**：🚧 进行中：
+  - ✅ 主壳路径定稿：MyGo WebView（ADR-0011）。
+  - ✅ MyGo spike：隐藏窗口 + WebView2 + Typed IPC 双向，启动到页面回调约 0.55 s（`fixtures/spike-mygo/`）。
+  - ⏳ 待做：`internal/bridge` 门面、`cmd/locowrk` 主壳、会话列表/消息流/输入/取消/设置。
 - **远端**：`origin` 为 SSH；`main` 与 tag 已推送。看板唯一来源：`docs/roadmap/00-roadmap.md`。
 
 ## 上一轮完成了什么
 
-1. Phase 2 验收：11 条场景逐条执行并记录，报告落 `docs/design/phase-2/report.md`；打 tag `phase-2.end`。
-2. 补齐缺口测试：握手不答超时、超长帧（>1 MiB）判 `protocol_error`、孙进程占管道的进程树清理。
-3. 真实 provider 冒烟：DeepSeek 官方文档确认 `base_url=https://api.deepseek.com`、模型 `deepseek-flash` / `deepseek-v4-pro`；用库里 `deepseek/deepseek-flash` 跑通读文件工具，56 个事件，回答正确。
-4. 同步看板、Phase 2 状态、CHANGELOG 0.3.0、docs/README、CONTEXT 与 H-006。
+1. 规范：按所有者决定新增“单人开发例外”（ADR-0010 + standards/02），允许直接提交 main，门禁前置。
+2. Phase 2 收尾后继续开工 Phase 3：读 MyGo v0.7.1 API（`Bind`/`NewEvent`/`SetFrontend`/`LoadHTML`），建独立 spike module。
+3. spike 实测：纯 Go 无 cgo 构建；隐藏窗口 WebView2（Edge 155）；页面→Go 调用 545.7 ms；Go→页面事件往返 550.2 ms；双向完成后正常退出。
+4. ADR-0011 定稿：Phase 3 主壳走 WebView；原生 `ui.View` 从 Phase 4 插件插槽开始；research/03 转定稿并补 §8 读数。
+5. Phase 3 文档定稿、看板改“进行中”、CHANGELOG 0.4.0。
 
 ## 下一步（按优先级）
 
-1. **Phase 3 设计**：`docs/roadmap/phase-3-desktop-host.md` 从草稿转定稿；先定渲染路径（必要时 ADR）。
-2. **`kernel` 异步门面**：`Start`/`Wait` 包住阻塞的 `Prompt`，供 UI 不卡主线程。
-3. **`internal/bridge`（HarnessService）**：只出项目 DTO 的门面，桌面壳只消费它。
-4. **Node 分发形态**（Phase 6 前）：Node SEA 或随包运行时目录；定体积、签名、升级。
-5. **长会话与多插件并发基准**（Phase 6）。
+1. **`internal/bridge`**：`HarnessService` 只收发项目 DTO（`ListSessions`、`CreateSession`、`Prompt`、`Cancel`、`History`、`SubscribeEvents`、`SetModel`、`SetThinking`）；补契约测试，确保无 MyGo 类型。
+2. **`cmd/locowrk` 主壳**：MyGo 窗口 + 生成 TS 客户端 + 最小界面（会话列表、消息流、输入、停止）。
+3. **会话列表来源**：kernel 目前无 `ListSessions`；需要扫会话目录或补上游 API（先查 `coding` 是否已有 helper）。
+4. **Phase 3 内验证**：中文 IME、5,000+ 消息滚动、钥匙串、安装包体积/签名、三平台差异。
+5. **Node 分发形态**（Phase 6 前）；长会话/多插件基准。
 
 ## 未决问题
 
-- **主界面渲染路径**：Phase 3 前用一次 spike 定稿（原生 vs WebView）。
-- **Node 分发形态**：SEA 未验证；随包运行时体积与签名未定。
-- **能力闸真实边界**：B 路线插件可绕过 shim 调 Node 原生 fs/net/exec；OS 级隔离是否做。
-- **迟到注册**：`ready` 后注册被拒绝；真实扩展若异步注册会丢工具，Phase 6 复核。
-- **`Stop(ctx)` 忽略调用方 ctx**：统一用 `ShutdownTimeout`；Phase 3 门面统一时处理。
-- **`kernel.Prompt` 阻塞**：Phase 3 外加异步门面，不改本阶段语义。
-- **事件 DTO v0**：工具结果图片暂只传文本；Phase 3 展示图片时加字段。
-- **流程偏差**：standards/02 要求 feature 分支，实际一直直接提交 `main`；留所有者决定是否改规范或改习惯。
+- **会话列表**：`kernel.Service` 只持有本进程打开的会话；重启后的“最近会话”需要目录扫描或索引，需在设计里定来源与排序。
+- **异步门面**：`kernel.Prompt` 阻塞；bridge 需要 `Start`/`Wait` 或在绑定方法里阻塞（MyGo 每次调用独立 goroutine，可接受，但要能取消）。
+- **前端产物入库策略**：WebView 前端构建产物是否入库、如何复现；Phase 3 先最小内联页面，后续再定。
+- **能力闸边界**（Phase 6）：Node 原生 fs/net/exec 绕过 shim，按受信任插件处理。
+- **迟到注册**：`ready` 后拒绝；真实扩展异步注册待 Phase 6 复核。
+- **事件 DTO v0**：工具结果图片只传文本；展示图片时新增字段。
+- **流程**：单人开发例外已生效（ADR-0010）。
 
 ## 关键提醒
 
 - **项目名是 `Locowrk`**：`wrk`，不是 `work`/`wrok`；远端私有，未经所有者允许不得转公开或外发。
 - **ADR 不可改**：`docs/adr/` 只增不改；状态类事实写 CONTEXT/看板/CHANGELOG（`pitfalls/P-001`）。
-- **上游只出现在 `internal/kernel`**：适配器工具用项目 DTO，转换在 `kernel.ToolSpec`（接缝 #12）。
-- **A 轨 = 受信任代码**：进程隔离只防崩溃；B 路线拦不住 Node 原生 fs/net/exec，安装与运行界面必须明示。
-- **协议新增方法是兼容变更**：不改 `protocol`；改语义/删字段才 +1，并同步 `proto/`、CHANGELOG、Phase 文档。
-- **请求处理不得重入**：`peer` 读循环同步处理插件请求；处理器里再 `call` 会死锁。
-- **JSON-RPC id 规范化**：数字与字符串 id 统一去引号比较（`pitfalls/P-004`）。
-- **真实 key 只走环境变量**：`DEEPSEEK_API_KEY` 已在用户环境；冒烟时把 `HOME`/`USERPROFILE` 指到临时目录，不写用户 `~/.pi`，日志里不得出现 key。
-- **测试必须换主目录**：`testHome(t)`（`pitfalls/P-002`）；faux 优先，真实 provider 只做手动冒烟。
-- **不写自己的会话格式**：走 `coding.SessionRecorder` / `LoadSessionTree` + `LoadBranch`（ADR-0005）。
-- **项目技能默认不加载**：`<cwd>/.pi/skills` 需显式 `TrustProject`。
+- **Upstream 只在 `internal/kernel`**：bridge/UI 只认项目 DTO；MyGo 只在 `cmd/`、`desktop/`、`internal/bridge`（接缝 #2）。
+- **主壳是 WebView**：页面只加载自带资源与白名单 origin；不手写第二套 IPC，用 `mygo generate`。
+- **A 轨 = 受信任代码**：进程隔离只防崩溃；安装与运行界面必须明示。
+- **协议新增方法是兼容变更**：不改 `protocol`；改语义/删字段才 +1。
+- **JSON-RPC id 归一化**、**请求处理不得重入**（`pitfalls/P-004`）。
+- **真实 key 只走环境变量**：`DEEPSEEK_API_KEY`；冒烟把 `HOME`/`USERPROFILE` 指到临时目录，日志不得出现 key。
+- **测试**：`testHome(t)`（`P-002`）；faux 优先；真实 provider 只做手动冒烟。
 - **提交前门禁**：`gofmt -l . && go vet ./... && go test -race ./...` 与 `bash scripts/check-docs.sh`；spike 模块单独 `go vet`。
 - **体量**：docs 单篇 ≤300 行、ADR ≤100 行、代码单文件 ≤500 行、CONTEXT ≤150 行。
-- 踩坑索引：`P-001`、`P-002`、`P-003-short-sha-fetch.md`、`P-004-jsonrpc-id-normalization.md`；方法：`skills/S-001-runtime-comparison-spike.md`。
+- 踩坑索引：`P-001`~`P-004`；方法：`skills/S-001-runtime-comparison-spike.md`。
