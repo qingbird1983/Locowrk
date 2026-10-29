@@ -293,7 +293,11 @@ func (a *App) Steer(sessionID, text string) error {
 	if sessionID == "" {
 		return errors.New("desktop: no session selected")
 	}
-	return a.bridge.Steer(sessionID, text)
+	err := a.bridge.Steer(sessionID, text)
+	if errors.Is(err, kernel.ErrNotRunning) {
+		return errors.New("当前没有正在运行的回合，无法补充指令")
+	}
+	return err
 }
 
 // Skills returns the workspace's skills and trust state.

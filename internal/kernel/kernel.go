@@ -30,6 +30,9 @@ var (
 	ErrSessionNotFound = errors.New("kernel: session not found")
 	// ErrModelNotFound reports a model reference no runtime knows.
 	ErrModelNotFound = errors.New("kernel: model not found")
+	// ErrNotRunning reports work that needs a running turn, such as steering
+	// while the session is idle.
+	ErrNotRunning = errors.New("kernel: session is not running")
 )
 
 // ModelRef names a model without exposing the upstream type.
@@ -316,11 +319,15 @@ func (s *Service) Prompt(ctx context.Context, id SessionID, text string, images 
 	return fmt.Errorf("prompt: %w", runErr)
 }
 
-// Steer queues a message for the running turn.
+// Steer queues a message for the running turn. Steering an idle session is an
+// error: the caller must send a normal prompt instead (phase-6 搂5.4).
 func (s *Service) Steer(ctx context.Context, id SessionID, text string) error {
 	entry, err := s.lookup(id)
 	if err != nil {
 		return err
+	}
+	if !entry.sess.Agent.State().IsStreaming {
+		return ErrNotRunning
 	}
 	entry.sess.Steer(ai.UserMessage{Content: ai.ContentList{ai.TextContent{Text: text}}})
 	if _, err := s.bus.Publish(eventbus.KindSteeringApplied, string(id), map[string]string{"text": text}); err != nil {

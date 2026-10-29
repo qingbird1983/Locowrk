@@ -13,6 +13,14 @@ export interface SmokeHost {
   send(text: string): Promise<void>;
   stop(): Promise<void>;
   text(): string;
+  /** busy reports whether a turn is running. */
+  busy(): boolean;
+  /** steer appends an instruction to the running turn. */
+  steer(text: string): Promise<void>;
+  /** events lists the harness event kinds the page has received. */
+  events(): string[];
+  /** historyText joins the stored transcript of the current session. */
+  historyText(): Promise<string>;
 }
 
 interface SmokeResult {
@@ -27,7 +35,7 @@ interface SmokeResult {
   tools?: number;
 }
 
-const SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff", "diff-tool"] as const;
+const SCENARIOS = ["faux", "real", "steer", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff", "diff-tool"] as const;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -109,6 +117,52 @@ async function scenarioReal(host: SmokeHost): Promise<SmokeResult> {
   };
 }
 
+async function scenarioSteer(host: SmokeHost): Promise<SmokeResult> {
+  const id = await host.newSession();
+  const started = performance.now();
+  // A prompt long enough that the turn is still running when the page steers.
+  const running = host.send("请用大约两百字说明文件级版本控制的好处，最后单独一行写 DONE。");
+  await waitFor(() => host.busy(), 10000, "运行开始");
+  const marker = "STEER-OK：请用一句话收尾";
+  let attempts = 0;
+  for (;;) {
+    try {
+      attempts += 1;
+      await host.steer(marker);
+      break;
+    } catch (err) {
+      // The page may be busy a moment before the kernel marks the run as
+      // streaming; retry briefly, then surface the error.
+      if (attempts >= 100) throw err;
+      await sleep(50);
+    }
+  }
+  await waitFor(() => host.events().includes("steering_applied"), 5000, "steering_applied 事件");
+  await running;
+  await waitFor(() => !host.busy(), 60000, "回合结束");
+  const history = await host.historyText();
+  if (!history.includes("STEER-OK")) throw new Error("下一轮请求没有带上补充指令");
+  let idleError = "";
+  try {
+    await host.steer("空闲补充");
+  } catch (err) {
+    idleError = err instanceof Error ? err.message : String(err);
+  }
+  if (!idleError) throw new Error("空闲时补充指令没有报错");
+  if (!idleError.includes("没有正在运行")) throw new Error(`空闲补充错误不明确：${idleError}`);
+  const stats = host.view.stats();
+  return {
+    ok: true,
+    scenario: "steer",
+    session: id,
+    text: `attempts=${attempts} idle=${idleError}`,
+    ms: Math.round(performance.now() - started),
+    rows: stats.rows,
+    mounted: stats.mounted,
+  };
+}
+
+// scenarioTool exercises the tool-card path.
 async function scenarioTool(host: SmokeHost): Promise<SmokeResult> {
   const id = await host.newSession();
   await host.send("读取 smoke-note.txt 并总结");
@@ -254,6 +308,8 @@ async function run(host: SmokeHost): Promise<SmokeResult> {
   switch (scenario) {
     case "real":
       return scenarioReal(host);
+    case "steer":
+      return scenarioSteer(host);
     case "tool":
       return scenarioTool(host);
     case "plugin":

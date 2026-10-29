@@ -60,6 +60,18 @@ func WithFauxScenario(opts Options, scenario, notePath string) (Options, ModelRe
 				providers.FauxText("second answer"),
 			}, ai.StopStop)),
 		}
+	case "steer":
+		// A slow first answer leaves time to append an instruction; the second
+		// step answers the steering turn.
+		regOpts.TokensPerSecond = 40
+		steps = []providers.FauxResponseStep{
+			providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
+				providers.FauxText(strings.Repeat("streaming output for the steering scenario ", 30)),
+			}, ai.StopStop)),
+			providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
+				providers.FauxText("steering answer"),
+			}, ai.StopStop)),
+		}
 	default:
 		steps = []providers.FauxResponseStep{
 			providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{

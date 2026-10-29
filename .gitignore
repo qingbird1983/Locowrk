@@ -45,3 +45,6 @@ Thumbs.db
 
 # MyGo local state
 .mygo/
+
+# Pinned Node runtime (ADR-0015; fetch with scripts/fetch-node-runtime.mjs)
+/runtime/node/

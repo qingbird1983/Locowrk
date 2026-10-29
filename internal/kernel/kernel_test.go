@@ -293,6 +293,100 @@ cancelling:
 	}
 }
 
+func TestSteeringRequiresRunningTurnAndReachesNextRequest(t *testing.T) {
+	testHome(t)
+	cwd := t.TempDir()
+	ctx := context.Background()
+
+	reg, ref := newFaux(t, providers.RegisterFauxProviderOptions{TokensPerSecond: 40})
+	reg.SetResponses([]providers.FauxResponseStep{
+		providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
+			providers.FauxText(strings.Repeat("streaming text ", 20)),
+		}, ai.StopStop)),
+		providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
+			providers.FauxText("closed with the steering note"),
+		}, ai.StopStop)),
+	})
+	svc := serviceFor(t, reg.GetModel())
+
+	id, err := svc.CreateSession(ctx, SessionOptions{Cwd: cwd, Model: ref, NoTools: true})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	// An idle session cannot be steered; the caller must send a prompt.
+	if err := svc.Steer(ctx, id, "idle note"); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("idle Steer error = %v; want ErrNotRunning", err)
+	}
+
+	sub := svc.Subscribe(eventbus.SubscribeOptions{})
+	defer sub.Close()
+	done := make(chan error, 1)
+	go func() { done <- svc.Prompt(ctx, id, "写一段说明") }()
+
+	// Steer once the turn is running.
+	deadline := time.Now().Add(10 * time.Second)
+	steerErr := ErrNotRunning
+	for time.Now().Before(deadline) {
+		if steerErr = svc.Steer(ctx, id, "STEER-OK"); steerErr == nil {
+			break
+		}
+		if !errors.Is(steerErr, ErrNotRunning) {
+			t.Fatalf("Steer error = %v", steerErr)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if steerErr != nil {
+		t.Fatalf("steering was never accepted: %v", steerErr)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Prompt: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("run with steering did not finish")
+	}
+
+	var kinds []eventbus.Kind
+	applied := false
+	settle := time.Now().Add(2 * time.Second)
+	for !applied && time.Now().Before(settle) {
+		select {
+		case ev, ok := <-sub.C():
+			if !ok {
+				settle = time.Time{}
+				break
+			}
+			kinds = append(kinds, ev.Kind)
+			if ev.Kind == eventbus.KindSteeringApplied {
+				applied = true
+			}
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if !applied {
+		t.Fatalf("steering_applied missing from %v", kinds)
+	}
+
+	msgs, err := svc.History(ctx, id)
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	foundSteer, foundReply := false, false
+	for _, m := range msgs {
+		if strings.Contains(m.Text, "STEER-OK") {
+			foundSteer = true
+		}
+		if strings.Contains(m.Text, "closed with the steering note") {
+			foundReply = true
+		}
+	}
+	if !foundSteer || !foundReply {
+		t.Fatalf("transcript missing steering turn (steer=%v reply=%v): %+v", foundSteer, foundReply, msgs)
+	}
+}
+
 func TestSessionsAreIsolated(t *testing.T) {
 	testHome(t)
 	ctx := context.Background()

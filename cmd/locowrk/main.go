@@ -44,7 +44,7 @@ func run() error {
 		thinking  = flag.String("thinking", "off", "thinking level: off|low|medium|high")
 		faux      = flag.Bool("faux", false, "use the scripted faux provider (no API key)")
 		smoke     = flag.Bool("smoke", false, "hidden-window acceptance run driven by the page")
-		scenario  = flag.String("smoke-scenario", "faux", "smoke scenario: faux|real|tool|cancel|long|restore|plugin|plugin-crash|diff|diff-tool")
+		scenario  = flag.String("smoke-scenario", "faux", "smoke scenario: faux|real|steer|steer-real|tool|cancel|long|restore|plugin|plugin-crash|diff|diff-tool")
 		expect    = flag.String("smoke-expect", "", "text the restore scenario must find")
 		hidden    = flag.Bool("hidden", false, "run without showing the window")
 		show      = flag.Bool("show", false, "show the window during a smoke run")
@@ -57,7 +57,7 @@ func run() error {
 	)
 	flag.Parse()
 
-	if *smoke && *scenario != "real" {
+	if *smoke && *scenario != "real" && *scenario != "steer-real" {
 		*faux = true
 	}
 	// Windows does not build native content for a hidden window, so the crash
@@ -131,13 +131,15 @@ func run() error {
 		extraDirs = append(extraDirs, *extDir)
 	}
 	node := ""
+	nodeVersion := ""
 	if *gen == "" {
-		node = resolveNodePath(*nodePath)
+		node, nodeVersion = resolveNodePath(*nodePath)
 	}
 	extMgr := extensions.New(extensions.Options{
 		Bus:         k.Events(),
 		Cwd:         *cwd,
 		NodePath:    node,
+		NodeVersion: nodeVersion,
 		Store:       host,
 		UI:          desktop.NewDialogUI(host),
 		ExtraDirs:   extraDirs,
@@ -208,8 +210,12 @@ func run() error {
 	mygo.App.SetVersion(version)
 	pageURL := "/"
 	if *smoke {
+		pageScenario := *scenario
+		if pageScenario == "steer-real" {
+			pageScenario = "steer"
+		}
 		query := url.Values{}
-		query.Set("smoke", *scenario)
+		query.Set("smoke", pageScenario)
 		if *expect != "" {
 			query.Set("expect", *expect)
 		}
@@ -462,14 +468,16 @@ func seedPluginEvents(host *desktop.Host, session string) {
 }
 
 // resolveNodePath picks the Node runtime for A-track extensions: flag, env,
-// bundled runtime, then PATH (development). A missing runtime surfaces as an
-// extension start diagnostic; the desktop itself stays usable.
-func resolveNodePath(flagValue string) string {
+// bundled runtime, then PATH (development). It also returns the version to
+// enforce: only the bundled runtime is pinned, because flag/env and PATH are
+// development overrides. A missing runtime surfaces as an extension start
+// diagnostic; the desktop itself stays usable.
+func resolveNodePath(flagValue string) (path, version string) {
 	if flagValue != "" {
-		return flagValue
+		return flagValue, ""
 	}
 	if v := os.Getenv("LOCOWRK_NODE"); v != "" {
-		return v
+		return v, ""
 	}
 	if exe, err := os.Executable(); err == nil {
 		name := "node"
@@ -478,14 +486,14 @@ func resolveNodePath(flagValue string) string {
 		}
 		p := filepath.Join(filepath.Dir(exe), "runtime", "node", name)
 		if _, err := os.Stat(p); err == nil {
-			return p
+			return p, extensions.PinnedNodeVersion
 		}
 	}
 	if _, err := exec.LookPath("node"); err == nil && mygo.IsDev() {
 		fmt.Fprintln(os.Stderr, "locowrk: no bundled Node runtime; using PATH node (development)")
-		return "node"
+		return "node", ""
 	}
-	return ""
+	return "", ""
 }
 
 func extensionRows(m *extensions.Manager) []bridge.ExtensionRow {

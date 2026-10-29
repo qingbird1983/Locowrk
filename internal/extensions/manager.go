@@ -19,8 +19,12 @@ type Options struct {
 	Bus      *eventbus.Bus
 	Cwd      string
 	NodePath string
-	Store    Store
-	UI       adapter.HostUI
+	// NodeVersion is the pinned runtime version to verify (for example
+	// "v26.13.0"). Empty skips the check, which tests and development
+	// overrides do.
+	NodeVersion string
+	Store       Store
+	UI          adapter.HostUI
 	// ExtraDirs are development/冒烟 extension roots; normally empty.
 	ExtraDirs   []string
 	HostName    string
@@ -71,6 +75,13 @@ func (m *Manager) Prepare(ctx context.Context) error {
 		m.infos[c.Name] = info
 	}
 	m.mu.Unlock()
+
+	// A runtime that does not match the pin disables the A track; the desktop
+	// itself stays usable (ADR-0015 §3).
+	if err := m.checkRuntime(ctx); err != nil {
+		m.failAll(err)
+		return nil
+	}
 
 	for _, c := range candidates {
 		if c.State != "ready" {
@@ -188,6 +199,29 @@ func (m *Manager) fail(c *Candidate, err error) {
 		info.Reason = err.Error()
 	}
 	m.mu.Unlock()
+}
+
+// checkRuntime verifies the pinned Node runtime before any extension starts.
+func (m *Manager) checkRuntime(ctx context.Context) error {
+	if m.opts.NodePath == "" || m.opts.NodeVersion == "" {
+		return nil
+	}
+	return CheckNodeVersion(ctx, m.opts.NodePath, m.opts.NodeVersion)
+}
+
+// failAll marks every extension failed with the same reason, so the status
+// panel explains why the A track is off instead of showing a silent empty list.
+func (m *Manager) failAll(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, c := range m.candidates {
+		c.State = "failed"
+		c.Reason = err.Error()
+		if info := m.infos[c.Name]; info != nil {
+			info.State = "failed"
+			info.Reason = err.Error()
+		}
+	}
 }
 
 // Extensions returns the UI snapshot in name order.
@@ -430,6 +464,10 @@ func (m *Manager) SetEnabled(name string, on bool) error {
 }
 
 func (m *Manager) startIfNeeded(ctx context.Context, c *Candidate) error {
+	if err := m.checkRuntime(ctx); err != nil {
+		m.fail(c, err)
+		return err
+	}
 	m.mu.Lock()
 	_, running := m.adapters[c.Name]
 	m.mu.Unlock()

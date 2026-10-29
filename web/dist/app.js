@@ -120,7 +120,7 @@ var events = {
 };
 
 // src/smoke.ts
-var SCENARIOS = ["faux", "real", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff", "diff-tool"];
+var SCENARIOS = ["faux", "real", "steer", "tool", "cancel", "long", "restore", "plugin", "plugin-crash", "diff", "diff-tool"];
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -190,6 +190,47 @@ async function scenarioReal(host) {
     ms: Math.round(performance.now() - started),
     rows: host.view.stats().rows,
     mounted: host.view.stats().mounted
+  };
+}
+async function scenarioSteer(host) {
+  const id = await host.newSession();
+  const started = performance.now();
+  const running = host.send("\u8BF7\u7528\u5927\u7EA6\u4E24\u767E\u5B57\u8BF4\u660E\u6587\u4EF6\u7EA7\u7248\u672C\u63A7\u5236\u7684\u597D\u5904\uFF0C\u6700\u540E\u5355\u72EC\u4E00\u884C\u5199 DONE\u3002");
+  await waitFor(() => host.busy(), 1e4, "\u8FD0\u884C\u5F00\u59CB");
+  const marker = "STEER-OK\uFF1A\u8BF7\u7528\u4E00\u53E5\u8BDD\u6536\u5C3E";
+  let attempts = 0;
+  for (; ; ) {
+    try {
+      attempts += 1;
+      await host.steer(marker);
+      break;
+    } catch (err) {
+      if (attempts >= 100) throw err;
+      await sleep(50);
+    }
+  }
+  await waitFor(() => host.events().includes("steering_applied"), 5e3, "steering_applied \u4E8B\u4EF6");
+  await running;
+  await waitFor(() => !host.busy(), 6e4, "\u56DE\u5408\u7ED3\u675F");
+  const history = await host.historyText();
+  if (!history.includes("STEER-OK")) throw new Error("\u4E0B\u4E00\u8F6E\u8BF7\u6C42\u6CA1\u6709\u5E26\u4E0A\u8865\u5145\u6307\u4EE4");
+  let idleError = "";
+  try {
+    await host.steer("\u7A7A\u95F2\u8865\u5145");
+  } catch (err) {
+    idleError = err instanceof Error ? err.message : String(err);
+  }
+  if (!idleError) throw new Error("\u7A7A\u95F2\u65F6\u8865\u5145\u6307\u4EE4\u6CA1\u6709\u62A5\u9519");
+  if (!idleError.includes("\u6CA1\u6709\u6B63\u5728\u8FD0\u884C")) throw new Error(`\u7A7A\u95F2\u8865\u5145\u9519\u8BEF\u4E0D\u660E\u786E\uFF1A${idleError}`);
+  const stats = host.view.stats();
+  return {
+    ok: true,
+    scenario: "steer",
+    session: id,
+    text: `attempts=${attempts} idle=${idleError}`,
+    ms: Math.round(performance.now() - started),
+    rows: stats.rows,
+    mounted: stats.mounted
   };
 }
 async function scenarioTool(host) {
@@ -330,6 +371,8 @@ async function run(host) {
   switch (scenario) {
     case "real":
       return scenarioReal(host);
+    case "steer":
+      return scenarioSteer(host);
     case "tool":
       return scenarioTool(host);
     case "plugin":
@@ -779,6 +822,7 @@ var info = null;
 var currentSession = "";
 var busy = false;
 var rows = [];
+var eventKinds = [];
 var view = new TranscriptView(
   transcript,
   (follow) => {
@@ -813,6 +857,7 @@ function errorText(err) {
 }
 function handleEvent(env) {
   if (env.sessionId && currentSession && env.sessionId !== currentSession) return;
+  eventKinds.push(env.kind);
   const payload = env.payload ?? {};
   switch (env.kind) {
     case "agent_start":
@@ -999,7 +1044,18 @@ async function init() {
     stop: async () => {
       if (currentSession) await Desktop.stop(currentSession);
     },
-    text: () => transcript.textContent ?? ""
+    text: () => transcript.textContent ?? "",
+    busy: () => busy,
+    steer: async (text) => {
+      if (!currentSession) throw new Error("\u6CA1\u6709\u9009\u4E2D\u7684\u4F1A\u8BDD");
+      await Desktop.steer(currentSession, text);
+    },
+    events: () => eventKinds,
+    historyText: async () => {
+      if (!currentSession) return "";
+      const messages = await Desktop.history(currentSession);
+      return messages.map((message) => message.text ?? "").join("\n");
+    }
   };
   await refreshSessions();
   const first = rows[0];

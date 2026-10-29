@@ -24,6 +24,9 @@ let info: Info | null = null;
 let currentSession = "";
 let busy = false;
 let rows: SessionRow[] = [];
+// eventKinds records the harness event kinds this page received, for the smoke
+// hook (see smoke.ts scenarioSteer).
+const eventKinds: string[] = [];
 
 const view = new TranscriptView(
   transcript,
@@ -64,6 +67,7 @@ function errorText(err: unknown): string {
 
 function handleEvent(env: Envelope): void {
   if (env.sessionId && currentSession && env.sessionId !== currentSession) return;
+  eventKinds.push(env.kind);
   const payload = (env.payload ?? {}) as Record<string, unknown>;
   switch (env.kind) {
     case "agent_start":
@@ -265,6 +269,17 @@ async function init(): Promise<void> {
       if (currentSession) await Desktop.stop(currentSession);
     },
     text: () => transcript.textContent ?? "",
+    busy: () => busy,
+    steer: async (text: string) => {
+      if (!currentSession) throw new Error("没有选中的会话");
+      await Desktop.steer(currentSession, text);
+    },
+    events: () => eventKinds,
+    historyText: async () => {
+      if (!currentSession) return "";
+      const messages = await Desktop.history(currentSession);
+      return messages.map((message) => message.text ?? "").join("\n");
+    },
   };
 
   await refreshSessions();
