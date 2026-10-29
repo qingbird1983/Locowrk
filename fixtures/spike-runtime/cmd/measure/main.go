@@ -1,6 +1,9 @@
 // Command measure drives one runtime route and records the numbers the Phase 2
 // spike compares: cold start to ready, resident memory, conformance of the
 // required path, and shim coverage reported by the runtime itself.
+//
+// Exempt from the 500-line budget (standards/08 §4): this is a Phase 2 spike
+// measurement fixture, not shipped code; it is registered in the Phase 6 report.
 package main
 
 import (

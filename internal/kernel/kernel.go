@@ -5,7 +5,6 @@ package kernel
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -50,11 +49,6 @@ type Image struct {
 	Data     string
 	MimeType string
 }
-
-// BeforeToolFunc runs after a tool call's arguments are validated and before
-// the tool executes. A non-empty reason blocks the call; the model sees an
-// error tool result carrying it. Hosts use it for extension permission gates.
-type BeforeToolFunc func(ctx context.Context, name string, args json.RawMessage) (reason string, err error)
 
 // Options configures a Service.
 type Options struct {
@@ -276,23 +270,7 @@ func (s *Service) newCodingSession(cwd string, model *ai.Model, opts SessionOpti
 		co.NoTools = coding.NoToolsAll
 		co.ToolNames = nil
 	}
-	if opts.BeforeTool != nil {
-		gate := opts.BeforeTool
-		co.BeforeToolCall = func(ctx context.Context, call agent.BeforeToolCallContext) *agent.BeforeToolCallResult {
-			raw, err := json.Marshal(call.Args)
-			if err != nil {
-				return &agent.BeforeToolCallResult{Block: true, Reason: "tool arguments: " + err.Error()}
-			}
-			reason, err := gate(ctx, call.ToolCall.Name, raw)
-			if err != nil {
-				return &agent.BeforeToolCallResult{Block: true, Reason: err.Error()}
-			}
-			if reason == "" {
-				return nil
-			}
-			return &agent.BeforeToolCallResult{Block: true, Reason: reason}
-		}
-	}
+	co.BeforeToolCall = beforeToolHook(opts.BeforeTool)
 	sess, err := coding.NewSession(co)
 	if err != nil {
 		return nil, fmt.Errorf("creating session: %w", err)

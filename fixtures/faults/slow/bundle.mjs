@@ -279,6 +279,7 @@ function run(factory2, meta = {}) {
         break;
       }
       case "abort":
+        await dispatch("abort", msg.params?.payload ?? {});
         respond({ jsonrpc: "2.0", id: msg.id, result: null });
         break;
       case "shutdown_plugin":

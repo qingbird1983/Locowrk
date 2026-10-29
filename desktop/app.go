@@ -77,6 +77,9 @@ type Options struct {
 	// BeforeSessionSwitch lets extensions confirm or cancel a switch; nil
 	// always allows it.
 	BeforeSessionSwitch func(reason string) error
+	// AbortExtensions tells A-track extensions to stop their own work when the
+	// user stops the turn; nil is a no-op.
+	AbortExtensions func()
 }
 
 // App is the service bound to the page as "Desktop".
@@ -297,6 +300,9 @@ func (a *App) Send(sessionID, text string) error {
 func (a *App) Stop(sessionID string) error {
 	if sessionID == "" {
 		return nil
+	}
+	if a.opts.AbortExtensions != nil {
+		a.opts.AbortExtensions()
 	}
 	return a.bridge.Cancel(sessionID)
 }

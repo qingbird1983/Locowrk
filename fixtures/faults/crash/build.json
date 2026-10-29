@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "esbuild": "0.28.2",
   "entrypoint": "bundle.mjs",
-  "sha256": "afd83999b04fbc0a6db57b9d17bd5c332b4d32df577c9f4d0fbb3a20599e1481",
+  "sha256": "950fc9ba7fb4c75e30d46cdd514944edfc74222aa23ec8cba04c32c99141952f",
   "source": {
     "file": "index.mjs",
     "sha256": "52ad7aecfa6e560d0f8b9f82101ea47ffd63e2f6cd341232d04b581e4d7d7f24",

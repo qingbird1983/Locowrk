@@ -279,6 +279,9 @@ export function run(factory, meta = {}) {
         break;
       }
       case "abort":
+        // Extensions with long-running work stop timers here; the reply is sent
+        // after handlers run so the host does not race the cleanup.
+        await dispatch("abort", msg.params?.payload ?? {});
         respond({ jsonrpc: "2.0", id: msg.id, result: null });
         break;
       case "shutdown_plugin":

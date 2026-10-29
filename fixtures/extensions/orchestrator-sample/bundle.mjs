@@ -22,10 +22,64 @@ function factory(pi) {
       pi.workflowStep("实现", "running");
       pi.ui.notify("sample: two subagents started", "info");
       setTimeout(() => {
-        pi.emitEvent("subagent_settled", { id: "sample-a" });
         pi.emitEvent("subagent_settled", { id: "sample-b" });
+      }, 30);
+      setTimeout(() => {
+        pi.emitEvent("subagent_settled", { id: "sample-a" });
         pi.workflowStep("实现", "done");
-      }, 20);
+      }, 80);
+    }
+  });
+  let timers = [];
+  pi.registerCommand({
+    name: "sample_chain",
+    description: "Advance three workflow steps in order, then notify.",
+    handler: async () => {
+      const steps = ["收集", "实现", "验证"];
+      let delay = 0;
+      for (const step of steps) {
+        setTimeout(() => pi.workflowStep(step, "running"), delay);
+        delay += 30;
+        setTimeout(() => pi.workflowStep(step, "done"), delay);
+        delay += 30;
+      }
+      timers.push(
+        setTimeout(() => pi.ui.notify("sample: chain finished", "info"), delay + 20)
+      );
+    }
+  });
+  pi.registerCommand({
+    name: "sample_chain_long",
+    description: "Start a chain that keeps running until aborted.",
+    handler: async () => {
+      pi.workflowStep("长任务", "running");
+      for (let i = 0; i < 40; i++) {
+        timers.push(setTimeout(() => pi.workflowStep("长任务", "running", "tick " + i), i * 50));
+      }
+    }
+  });
+  pi.on("abort", async () => {
+    for (const timer of timers) clearTimeout(timer);
+    timers = [];
+    pi.workflowStep("长任务", "skipped", "cancelled");
+    pi.ui.notify("sample: cancelled", "warning");
+  });
+  pi.registerCommand({
+    name: "sample_deferred",
+    description: "Call every deferred member and report diagnostics.",
+    handler: async (_args, ctx) => {
+      await ctx.executeTool("read", { path: "note.txt" });
+      pi.sendMessage({ text: "hello" });
+      pi.sendUserMessage("hello");
+      pi.appendEntry({ kind: "note" });
+      await ctx.compact();
+      ctx.ui.setWidget("sample", ["x"]);
+      ctx.ui.setEditorText("text");
+      ctx.ui.pasteToEditor("text");
+      ctx.ui.custom(() => ({}));
+      pi.registerShortcut("ctrl+x", { handler: async () => {
+      } });
+      pi.ui.notify("sample: deferred members exercised", "info");
     }
   });
   pi.on("tool_execution_start", async (event) => {
@@ -305,6 +359,7 @@ function run(factory2, meta = {}) {
         break;
       }
       case "abort":
+        await dispatch("abort", msg.params?.payload ?? {});
         respond({ jsonrpc: "2.0", id: msg.id, result: null });
         break;
       case "shutdown_plugin":
