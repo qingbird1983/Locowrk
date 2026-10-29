@@ -1,0 +1,6 @@
+{
+  "name": "grandchild",
+  "version": "0.1.0",
+  "description": "fault fixture: spawns a child that must die with the extension",
+  "source": "index.mjs"
+}

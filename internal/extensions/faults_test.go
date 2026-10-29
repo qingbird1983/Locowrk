@@ -3,6 +3,7 @@ package extensions
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -99,7 +100,12 @@ func TestCrashedExtensionIsDisabledAndIsolated(t *testing.T) {
 		t.Fatalf("crash diagnostic missing: %+v", info.Diagnostics)
 	}
 
-	// The sibling keeps working.
+	// The sibling keeps working, and the crashed extension exposes no tools.
+	for _, spec := range m.Tools() {
+		if spec.Name == "fault_echo" {
+			t.Fatalf("crashed extension still exposes tools: %+v", m.Tools())
+		}
+	}
 	for _, spec := range m.Tools() {
 		if spec.Name != "sample_echo" {
 			continue
@@ -169,6 +175,122 @@ func TestToolTimeoutRecordsDiagnostic(t *testing.T) {
 		return
 	}
 	t.Fatalf("healthy tool missing: %+v", m.Tools())
+}
+
+// TestCrashKillsGrandchildren checks that a child spawned by the extension does
+// not survive the extension's crash.
+func TestCrashKillsGrandchildren(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	faults, _ := faultRoots(t)
+	heartbeat := filepath.Join(t.TempDir(), "heartbeat.txt")
+	t.Setenv("LOCOWRK_FAULT_HEARTBEAT", heartbeat)
+	store, _ := trustAll(t, []string{"grandchild"}, faults)
+	m := New(Options{
+		Bus: eventbus.New(), Cwd: t.TempDir(), NodePath: node, Store: store,
+		ExtraDirs: []string{faults},
+	})
+	if err := m.Prepare(context.Background()); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	defer m.Stop()
+
+	size := func() int64 {
+		st, err := os.Stat(heartbeat)
+		if err != nil {
+			return 0
+		}
+		return st.Size()
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for size() == 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if size() == 0 {
+		t.Fatal("grandchild never started ticking")
+	}
+
+	if err := m.RunCommand(context.Background(), "crash", ""); err == nil {
+		t.Fatal("crash command reported success")
+	}
+	waitState(t, m, "grandchild", "failed")
+
+	// Give the job a moment, then require the heartbeat to stop growing.
+	time.Sleep(300 * time.Millisecond)
+	before := size()
+	time.Sleep(700 * time.Millisecond)
+	if after := size(); after != before {
+		t.Fatalf("grandchild survived the crash: %d -> %d bytes", before, after)
+	}
+}
+
+// TestFactoryErrorDisablesExtension checks that a factory that throws during
+// initialize disables the extension: failed state, a visible diagnostic and no
+// tools exposed to the kernel.
+func TestFactoryErrorDisablesExtension(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed")
+	}
+	faults, _ := faultRoots(t)
+	store, _ := trustAll(t, []string{"throw"}, faults)
+	m := New(Options{
+		Bus: eventbus.New(), Cwd: t.TempDir(), NodePath: node, Store: store,
+		ExtraDirs: []string{faults},
+	})
+	if err := m.Prepare(context.Background()); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	defer m.Stop()
+
+	info := waitState(t, m, "throw", "failed")
+	if !strings.Contains(info.Reason, "failed to initialize") {
+		t.Fatalf("reason does not explain the factory error: %q", info.Reason)
+	}
+	found := false
+	for _, d := range info.Diagnostics {
+		if d.Code == "factory_error" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("factory_error diagnostic missing: %+v", info.Diagnostics)
+	}
+	if tools := m.Tools(); len(tools) != 0 {
+		t.Fatalf("disabled extension still exposes tools: %+v", tools)
+	}
+}
+
+// TestMissingRuntimeFailsClosed checks the release rule: without a bundled
+// runtime the A track is disabled with a visible reason (ADR-0015).
+func TestMissingRuntimeFailsClosed(t *testing.T) {
+	faults, _ := faultRoots(t)
+	store, _ := trustAll(t, []string{"crash"}, faults)
+	m := New(Options{
+		Bus: eventbus.New(), Cwd: t.TempDir(), Store: store,
+		RuntimeRequired: true, ExtraDirs: []string{faults},
+	})
+	if err := m.Prepare(context.Background()); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	defer m.Stop()
+	infos := m.Extensions()
+	if len(infos) == 0 {
+		t.Fatal("no extensions discovered")
+	}
+	for _, info := range infos {
+		if info.State != "failed" {
+			t.Fatalf("missing runtime did not disable the A track: %+v", info)
+		}
+		if !strings.Contains(info.Reason, "runtime") {
+			t.Fatalf("reason does not name the runtime: %q", info.Reason)
+		}
+	}
+	if tools := m.Tools(); len(tools) != 0 {
+		t.Fatalf("disabled A track still exposes tools: %+v", tools)
+	}
 }
 
 // TestToolConflictDisablesOnlyTheSecond checks that a duplicate tool name

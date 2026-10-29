@@ -1,0 +1,8 @@
+{
+  "name": "grandchild",
+  "version": "0.1.0",
+  "protocol": 1,
+  "description": "fault fixture: spawns a child that must die with the extension",
+  "entrypoint": "bundle.mjs",
+  "capabilities": []
+}

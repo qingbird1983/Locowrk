@@ -55,6 +55,8 @@ func (a *Adapter) lastError() error {
 
 func (a *Adapter) watchExit(p *peer) {
 	err := <-p.waitCh
+	// The plugin is gone; take any process it spawned with it.
+	p.kill()
 	a.mu.Lock()
 	if a.stopping || a.peer != p || a.state == StateStopped {
 		a.mu.Unlock()

@@ -295,8 +295,10 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// spawnGrandchild starts a long-lived process that inherits this plugin's
-// stdout, so a host that only kills the plugin leaves the pipe open.
+// spawnGrandchild starts a long-lived process so a test can prove the host
+// takes descendants down with the plugin. Its output must not reach stdout:
+// that stream is the JSONL channel, and a chatty child would look like a
+// protocol violation.
 func (p *plugin) spawnGrandchild() {
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
@@ -304,7 +306,6 @@ func (p *plugin) spawnGrandchild() {
 	} else {
 		cmd = exec.Command("sleep", "60")
 	}
-	cmd.Stdout = os.Stdout
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, "mock: grandchild:", err)
 		return

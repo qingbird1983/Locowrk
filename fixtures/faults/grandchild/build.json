@@ -1,0 +1,13 @@
+{
+  "name": "grandchild",
+  "version": "0.1.0",
+  "esbuild": "0.28.2",
+  "entrypoint": "bundle.mjs",
+  "sha256": "90bf4982b29fff8b4575e23a8780398466b2bcc72a2216f4fd47e616a8096908",
+  "source": {
+    "file": "index.mjs",
+    "sha256": "99fbe7750f670947b1a125d6c500e6a6a01dafcf8477945b9151d457fa35a5db",
+    "descriptor": "extension.json"
+  },
+  "node": ">=20"
+}

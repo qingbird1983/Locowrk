@@ -135,16 +135,20 @@ func run() error {
 	if *gen == "" {
 		node, nodeVersion = resolveNodePath(*nodePath)
 	}
+	if node == "" && !mygo.IsDev() {
+		fmt.Fprintln(os.Stderr, "locowrk: bundled Node runtime missing; A-track extensions are disabled")
+	}
 	extMgr := extensions.New(extensions.Options{
-		Bus:         k.Events(),
-		Cwd:         *cwd,
-		NodePath:    node,
-		NodeVersion: nodeVersion,
-		Store:       host,
-		UI:          desktop.NewDialogUI(host),
-		ExtraDirs:   extraDirs,
-		HostName:    "Locowrk",
-		HostVersion: version,
+		Bus:             k.Events(),
+		Cwd:             *cwd,
+		NodePath:        node,
+		NodeVersion:     nodeVersion,
+		RuntimeRequired: !mygo.IsDev(),
+		Store:           host,
+		UI:              desktop.NewDialogUI(host),
+		ExtraDirs:       extraDirs,
+		HostName:        "Locowrk",
+		HostVersion:     version,
 	})
 	if *gen == "" {
 		if err := extMgr.Prepare(context.Background()); err != nil {

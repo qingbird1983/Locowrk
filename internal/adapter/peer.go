@@ -46,6 +46,7 @@ type peer struct {
 	waitCh   chan error    // receives the process wait error once
 	readErr  error
 	stderr   *tailBuffer
+	tree     *processTree
 	stopOnce sync.Once
 }
 
@@ -77,6 +78,7 @@ func startPeer(path string, args []string, dir string, env []string) (*peer, err
 		done:    make(chan struct{}),
 		waitCh:  make(chan error, 1),
 		stderr:  tail,
+		tree:    attachProcessTree(cmd),
 	}
 	go p.readLoop()
 	go func() { p.waitCh <- cmd.Wait() }()
@@ -259,6 +261,11 @@ func (p *peer) closeStdin() {
 // kill terminates the process tree.
 func (p *peer) kill() {
 	p.stopOnce.Do(func() {
+		if p.tree != nil {
+			p.tree.kill()
+			p.tree.close()
+			return
+		}
 		if p.cmd.Process != nil {
 			killTree(p.cmd.Process.Pid)
 		}

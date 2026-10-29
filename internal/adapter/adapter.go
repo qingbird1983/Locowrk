@@ -256,8 +256,16 @@ func (a *Adapter) Start(ctx context.Context, m *Manifest) error {
 	a.waitForRegistrations(ctx)
 
 	a.mu.Lock()
-	a.state = StateReady
+	// A plugin that reported a factory error must not be flipped back to ready.
+	if a.state != StateFailed {
+		a.state = StateReady
+	}
+	failed := a.state == StateFailed
 	a.mu.Unlock()
+	if failed {
+		p.kill()
+		return a.lastError()
+	}
 
 	go a.watchExit(p)
 	a.startHeartbeat(p)

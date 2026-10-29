@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/qingbird1983/locowrk/internal/eventbus"
 )
@@ -237,6 +238,17 @@ func (a *Adapter) recordDiagnostic(params json.RawMessage) (any, *RPCError) {
 		Code:     req.Code,
 		Message:  req.Message,
 	})
+	// A factory that threw means the extension cannot work at all: disable it
+	// instead of leaving a live process with no tools (phase-6 §5.8).
+	if req.Code == "factory_error" {
+		a.setFailed(fmt.Errorf("extension failed to initialize: %s", req.Message))
+		a.mu.Lock()
+		p := a.peer
+		a.mu.Unlock()
+		if p != nil {
+			go p.kill()
+		}
+	}
 	return nil, nil
 }
 

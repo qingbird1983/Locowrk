@@ -23,8 +23,11 @@ type Options struct {
 	// "v26.13.0"). Empty skips the check, which tests and development
 	// overrides do.
 	NodeVersion string
-	Store       Store
-	UI          adapter.HostUI
+	// RuntimeRequired fails the A track when NodePath is empty (release
+	// builds ship runtime/node and must not fall back silently).
+	RuntimeRequired bool
+	Store           Store
+	UI              adapter.HostUI
 	// ExtraDirs are development/冒烟 extension roots; normally empty.
 	ExtraDirs   []string
 	HostName    string
@@ -160,7 +163,15 @@ func (m *Manager) start(ctx context.Context, c *Candidate) error {
 		return err
 	}
 	if err := a.Start(ctx, c.Manifest); err != nil {
-		_ = a.Close()
+		// Keep a failed adapter so the panel can show its diagnostics; a
+		// healthy-but-unusable one is closed and dropped.
+		if a.State() == adapter.StateFailed {
+			m.mu.Lock()
+			m.adapters[c.Name] = a
+			m.mu.Unlock()
+		} else {
+			_ = a.Close()
+		}
 		return err
 	}
 	// Stop this extension if it registers a tool another extension owns.
@@ -203,7 +214,13 @@ func (m *Manager) fail(c *Candidate, err error) {
 
 // checkRuntime verifies the pinned Node runtime before any extension starts.
 func (m *Manager) checkRuntime(ctx context.Context) error {
-	if m.opts.NodePath == "" || m.opts.NodeVersion == "" {
+	if m.opts.NodePath == "" {
+		if m.opts.RuntimeRequired {
+			return errors.New("没有可用的 Node 运行时：发布构建必须随包 runtime/node，A 轨扩展已禁用")
+		}
+		return nil
+	}
+	if m.opts.NodeVersion == "" {
 		return nil
 	}
 	return CheckNodeVersion(ctx, m.opts.NodePath, m.opts.NodeVersion)
@@ -260,6 +277,9 @@ func (m *Manager) Tools() []kernel.ToolSpec {
 	m.mu.Lock()
 	adapters := make(map[string]*adapter.Adapter, len(m.adapters))
 	for name, a := range m.adapters {
+		if a.State() != adapter.StateReady {
+			continue
+		}
 		adapters[name] = a
 	}
 	m.mu.Unlock()
@@ -335,6 +355,9 @@ func (m *Manager) ConfirmSessionSwitch(ctx context.Context, reason string) error
 	}
 	adapters := make([]entry, 0, len(m.adapters))
 	for n, a := range m.adapters {
+		if a.State() != adapter.StateReady {
+			continue
+		}
 		adapters = append(adapters, entry{name: n, a: a})
 	}
 	m.mu.Unlock()
@@ -370,6 +393,9 @@ func (m *Manager) GateToolCall(ctx context.Context, name string, args json.RawMe
 	}
 	adapters := make([]entry, 0, len(m.adapters))
 	for n, a := range m.adapters {
+		if a.State() != adapter.StateReady {
+			continue
+		}
 		adapters = append(adapters, entry{name: n, a: a})
 	}
 	m.mu.Unlock()

@@ -1,0 +1,6 @@
+{
+  "name": "throw",
+  "version": "0.1.0",
+  "description": "fault fixture: the extension factory throws during initialize",
+  "source": "index.mjs"
+}

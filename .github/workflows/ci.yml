@@ -54,6 +54,6 @@ jobs:
       - name: Fixtures match their sources
         shell: bash
         run: |
-          for dir in fixtures/extensions/orchestrator-sample fixtures/faults/crash fixtures/faults/slow fixtures/faults/tool-conflict; do
+          for dir in fixtures/extensions/orchestrator-sample fixtures/faults/crash fixtures/faults/slow fixtures/faults/tool-conflict fixtures/faults/grandchild fixtures/faults/throw; do
             node tools/extension-build/build.mjs --src "$dir" --out "$dir" --check
           done
