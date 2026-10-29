@@ -19,6 +19,7 @@
 - **真实样本（2026-10-30 补）**：经本机代理取回上游 `earendil-works/pi@38ff99177fba21e9c57a670f4e95adcf407c99c7` 的 `todo.ts`（SHA-256 `b6e4d370…db57166`）与 `rpc-demo.ts`（`3d54a396…29ae640d`），用打包工具构建后由 `TestRealPiSamples`（`LOCOWRK_REAL_SAMPLE_DIR` 触发，默认跳过）跑通：工具/命令、UI no-op 诊断、输入/编辑对话框与通知。
 - **为真实样本补齐的兼容面**：`extensions/shim/compat/`（`@earendil-works/pi-ai`、`@earendil-works/pi-tui`、`typebox` 的最小实现，随包内联）；`registerCommand(name, options)` 双签名；事件处理器第二参数 `ctx`；`ctx.sessionManager.getBranch/getEntries` 返回空（见已知限制）；命令名允许连字符；被拒绝的插件通知记为诊断（此前静默丢弃）。
 - **事件闸门（2026-10-30 补）**：shim 在 `initialize` 声明 `wantsEventAck`，宿主把 `tool_call` 与 `session_before_switch` 作为请求发送并等待回执（`block/reason`、`cancel`）。内核新增 `BeforeToolFunc`（映射 pi 的 `BeforeToolCall`），bridge 透传，`cmd/locowrk` 接 `Manager.GateToolCall`；新建/打开会话前走 `Manager.ConfirmSessionSwitch`。插件无响应时 fail-open 并记通知。
+- **故障与技能（2026-10-30 补）**：新增 `fixtures/faults/`（崩溃、超时、工具重名）与三条测试；管理器状态行跟随进程状态（崩溃后显示 failed 与原因），工具超时记 `timeout` 诊断；技能信任链路由 `TestSkillsTrustRoundTrip` 覆盖，撤销后新会话不再注入项目技能。
 
 ## 2. 验收对照（roadmap/phase-6 §5）
 
@@ -30,8 +31,8 @@
 | 4 | steering | ✅ 通过 | 冒烟 `steer`（脚本模型）与 `steer-real`（真实 DeepSeek）通过：`steering_applied` 出现、下一轮历史含补充文本、空闲补充返回明确错误；内核新增 `ErrNotRunning` |
 | 5 | UI 降级 | ✅ 通过 | `rpc-demo` 实测：`setTitle`/`setWidget`/`setStatus` 各一条诊断且扩展继续；`rpc-input`/`rpc-editor` 弹宿主对话框并回写通知；`select` 由危险 `bash` 调用触发并阻断该调用；`confirm` 由新建/切换会话触发，取消即中止切换 |
 | 6 | 缓做项 | 🟡 部分 | `ctx.executeTool`/sendMessage 等在 shim 返回 not_implemented；未逐一验收 |
-| 7 | 技能 | 🟡 部分 | `kernel.Skills` + `TestSkillsTrustGate` 通过；信任/撤销 UI 冒烟未做 |
-| 8 | 故障 | 🟡 部分 | 管理器停止/重启路径、哈希失效测试通过；真实 Node 崩溃/超时未跑 |
+| 7 | 技能 | ✅ 通过 | 用户技能自动可用；项目技能未信任不加载、信任后出现在列表、撤销后不再注入新会话；`TestSkillsTrustRoundTrip` 覆盖面板同一条调用链（`Skills`/`SetProjectTrust`），`TestSkillsTrustGate` 覆盖内核信任闸 |
+| 8 | 故障 | 🟡 部分 | 崩溃：进程退出后状态转 failed、记 `crashed` 诊断、兄弟扩展不受影响（`TestCrashedExtensionIsDisabledAndIsolated`）；超时：工具按 `timeoutMs` 超时并记 `timeout` 诊断、进程仍可用（`TestToolTimeoutRecordsDiagnostic`）；工具冲突只禁用后注册方（`TestToolConflictDisablesOnlyTheSecond`）；哈希不符见既有测试；**崩溃时的孙进程清理与“抛异常禁用”尚未单独注入** |
 | 9 | 回归 | ✅ 通过 | `go test -race ./...`、`npm run check`、`npm test`、`check-docs` 全绿；diff/plugin 冒烟通过 |
 
 ## 3. 读数
@@ -46,6 +47,8 @@
 | `TestBuiltSampleEndToEnd` | 通过（约 0.3 s）：构建产物被管理器启动并执行 `sample_echo` |
 | `TestRealPiSamples`（真实上游样本） | 通过（约 0.5 s）：`todo` 工具 list→add→list 与 `/todos` 命令；`rpc-demo` 3 命令、`ui.setTitle`/`ui.setWidget`/`ui.setStatus` 诊断、input/editor 对话框与 3 条通知；危险 `bash` 调用被 select 对话框阻断；`session_before_switch` 取消可中止切换 |
 | `TestToolCallGate` / `TestBeforeToolGateBlocksExecution` | 通过：事件请求回执合并为 `block/reason`；内核 `BeforeTool` 阻断后模型收到错误工具结果并继续回合 |
+| 故障夹具（`fixtures/faults/`） | 崩溃：状态转 failed + `crashed` 诊断，兄弟工具仍可用（约 0.4 s）；超时：`timeoutMs=1000` 生效并记 `timeout`，超时后进程仍可用（约 1.2 s）；工具重名：后注册方 failed，原因 `already provided by orchestrator-sample`（约 0.4 s） |
+| `TestSkillsTrustRoundTrip` | 通过：未信任只列用户技能；信任后出现项目技能；撤销后隐藏（同一 `Skills`/`SetProjectTrust` 调用链） |
 | 真实样本包体积 | `todo` bundle 19,327 B；`rpc-demo` 11,333 B（均自包含 shim） |
 | `internal/extensions` 测试 | 发现/信任/哈希失效/项目管理/运行时版本闸通过 |
 | 适配器/内核回归 | 全绿 |
@@ -58,7 +61,7 @@
 3. **UI/技能**：面板的撤销信任、通知列表、命令参数输入；技能信任/撤销冒烟；页面“本会话已注入”提示。
 4. **shim 限制**：`ctx.sessionManager` 没有真实会话条目（`getBranch` 返回空），依赖历史重建的扩展状态会丢；`session_before_switch` 已接新建/打开会话，但页面内切换标签等尚无触发点。
 5. **运行时**：`runtime/node/` 已就绪并做版本闸；仍需把“缺运行时”接进发布构建的 fail-closed 检查（当前开发回退仅在开发模式生效）。
-6. **真实故障**：Node 扩展崩溃、超时、进程树、工具冲突注入。
+6. **故障**：仍有崩溃时的孙进程清理（现有测试只覆盖主动停止）与“扩展抛异常即禁用”未单独注入。
 
 ## 5. 体量与规范
 

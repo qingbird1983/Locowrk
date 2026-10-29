@@ -17,21 +17,21 @@
   - **2026-10-30 补**：`tools/extension-build/` 打包工具（单文件 bundle + `plugin.json`/`build.json`、可复现、`--check`、拒绝原生/远程导入），夹具改为打包产物。
   - **2026-10-30 再补**：真实上游样本 `todo`/`rpc-demo`（`earendil-works/pi@38ff9917`，不入库）打包后跑通；补 `extensions/shim/compat/`、命令双签名、事件 `ctx`、命令名连字符、通知被拒诊断。
   - **2026-10-30 三补**：事件闸门（`wantsEventAck`、`tool_call` 阻断、`session_before_switch` 取消）与内核 `BeforeTool` 钩子；真实 `rpc-demo` 验证 select/confirm。
+  - **2026-10-30 四补**：故障隔离（崩溃/超时/工具重名夹具与测试，状态行跟随进程状态）与技能信任链路（未信任/信任/撤销）。
   - shim `extensions/shim/host.mjs` + `fixtures/extensions/orchestrator-sample` 端到端通过（工具/命令/事件）。
-  - **未完成**：技能信任冒烟、真实 Node 故障/进程树、发布缺运行时 fail-closed、会话条目回放、Phase 6 报告定稿。
+  - **未完成**：崩溃时的孙进程清理、扩展抛异常即禁用、发布缺运行时 fail-closed、会话条目回放、Phase 6 报告定稿。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. 事件闸门落地：shim 声明 `wantsEventAck`，宿主把 `tool_call`/`session_before_switch` 作为请求等待回执；内核新增 `BeforeTool` 钩子，bridge 与启动器接通；插件无响应 fail-open 并记通知。
-2. 真实 `rpc-demo` 验证：危险 `bash` 触发 select 并被阻断、取消会话切换生效、input/editor 对话框与通知；fixture 增加 `tool_call` 阻断样本。
-3. steering 测试时序修正（P-011）：补充指令要在流式输出中发出，才会落到下一轮。
-4. 文档：CHANGELOG 0.10.6、Phase 6 报告（验收 5 全绿、读数、已知限制）、CONTEXT、H-024、P-011。
+1. 故障隔离：`fixtures/faults/`（崩溃/超时/工具重名）与三条测试；崩溃后状态转 failed 并带原因与 `crashed` 诊断，兄弟扩展不受影响；工具超时记 `timeout`；重名只禁用后注册方。
+2. 技能信任：`TestSkillsTrustRoundTrip` 覆盖面板同一条调用链（未信任/信任/撤销），撤销后新会话不再注入项目技能。
+3. 文档：CHANGELOG 0.10.7、Phase 6 报告（验收 7 全绿、故障项细化）、CONTEXT、H-025、P-012（插件注册被拒要落诊断）。
 
 ## 下一步（按优先级）
 
-1. **Phase 6 续作**：技能信任/撤销冒烟；真实 Node 崩溃/超时/进程树/工具冲突；发布缺运行时 fail-closed；会话条目回放（`sessionManager.getBranch`）。
+1. **Phase 6 收尾候选**：崩溃时孙进程清理、扩展抛异常即禁用、发布缺运行时 fail-closed、会话条目回放（`sessionManager.getBranch`）。
 2. **UI 重设计**：功能完成后单独立项；当前扩展面板/标签栏/Diff 页仍是功能粗稿。
 3. **发布工程**：仍暂缓；Node 运行时与签名纳入发布阶段。
 
@@ -63,9 +63,10 @@
 - **运行时**：`node scripts/fetch-node-runtime.mjs` 拉取钉死版本到 `runtime/node/`（不入库）；`node ... --check` 只校验。GitHub 与 nodejs.org 直连不可靠，脚本按镜像顺序尝试并用发布方校验值核对（P-010）。开发覆盖用 `LOCOWRK_NODE`/`-node`，此时不校验版本。
 - **扩展打包**：`cd tools/extension-build && npm install` 后 `node build.mjs --src <源码目录> --out <包目录>`；`--check` 校验产物与源码一致；`node_modules` 不入库，运行期不构建。
 - **真实样本**：源码不入库；本机已取在 `%TEMP%\locowrk-samples\`（`todo.ts`/`rpc-demo.ts` + `src/` + `packages/`）。重跑：`$env:LOCOWRK_REAL_SAMPLE_DIR='<packages 目录>'; go test ./internal/extensions -run TestRealPiSamples -v`。
+- **故障夹具**：`fixtures/faults/{crash,slow,tool-conflict}`；`timeoutMs` 合法范围 1000~600000，越界会被拒（现在会落诊断，P-012）。
 - **代理**：本机 `127.0.0.1:7897`（HTTP）；curl 加 `-x http://127.0.0.1:7897` 可访问 GitHub（P-010）。
 - **steering 冒烟**：`go run ./cmd/locowrk -smoke -smoke-scenario steer`（脚本模型）或 `-smoke-scenario steer-real`（需 `DEEPSEEK_API_KEY`）。
 - **ADR 不可改**：`docs/adr/` 只增不改；状态类事实写 CONTEXT/看板/CHANGELOG。
 - **导入边界**：正式代码只有 `internal/kernel` 引用 `pi/...`；MyGo 只在 `desktop/`、`cmd/locowrk`。
 - **体量**：docs 单篇 ≤300 行、ADR ≤100、代码单文件 ≤500、CONTEXT ≤150、handoff 留 5 份。
-- 踩坑索引：`P-001`~`P-011`；方法：`skills/S-001-runtime-comparison-spike.md`。
+- 踩坑索引：`P-001`~`P-012`；方法：`skills/S-001-runtime-comparison-spike.md`。
