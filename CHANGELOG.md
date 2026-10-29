@@ -6,6 +6,18 @@
 
 ---
 
+## [0.10.3] - 2026-10-29
+
+### Phase 6 续作：steering 验收与随包 Node 运行时
+
+- 补充指令（steering）通过验收：运行中从输入区补充的指令会进入下一轮请求，事件流出现 `steering_applied`；空闲时补充会得到明确提示，不再静默入队。
+- 新增冒烟场景 `steer` 与 `steer-real`：脚本模型与真实 DeepSeek 各跑一遍，均通过（真实模型约 4 秒、4 条消息）。
+- 随包 Node 运行时落地：`scripts/fetch-node-runtime.mjs` 按钉死版本下载、用发布方校验值核对后只保留 `node.exe` 与许可证；`runtime/node/` 不入库，版本与校验值记在 `runtime/README.md`。
+- 启动时核对运行时版本：随包运行时与钉死版本不一致时整条 A 轨禁用并在状态面板说明原因，不尝试升级，也不回退系统 Node。
+- 说明：真实上游样本 `todo`/`rpc-demo` 的检出仍受网络限制（GitHub 不可达），留待可访问时补做；本机重装后补齐了 ripgrep 与 C 工具链，`go test -race ./...` 恢复可跑。
+
+---
+
 ## [0.10.2] - 2026-10-29
 
 ### Phase 6 基础设施：扩展管理、信任与 shim 样本

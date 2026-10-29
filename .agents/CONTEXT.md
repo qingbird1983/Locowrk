@@ -1,6 +1,6 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-28（会话主题：**Phase 5 设计定稿**）
+- 更新：2026-10-29（会话主题：**Phase 6 续作：steering 验收与 Node 运行时**）
 
 ## 当前阶段与状态
 
@@ -13,25 +13,25 @@
   - ADR-0014；设计 `docs/design/phase-5/webview.md`、`diff.md`；报告定稿。
 - **Phase 6（真实 Pi 编排插件与技能复用）**：🟡 基础设施落地（2026-10-29），未完成验收、未打 tag。
   - 已落地：`internal/extensions`（发现/信任/启停/工具/命令/事件/通知）、设置 v2、adapter NodePath/SetSession/UI/tool_update、`kernel.Skills`、bridge steer/tools/trust、原生“扩展与技能”面板、页面补充指令。
+  - **2026-10-29 补**：steering 验收通过（内核 `ErrNotRunning`、冒烟 `steer`/`steer-real`，真实 DeepSeek 通过）；`runtime/node/` v26.13.0 就位 + 启动版本闸（不一致整条 A 轨禁用）。
   - shim `extensions/shim/host.mjs` + `fixtures/extensions/orchestrator-sample` 端到端通过（工具/命令/事件）。
-  - **未完成**：真实 `todo`/`rpc-demo` 构建验证、原生对话框 HostUI、技能信任冒烟、真实 Node 故障、`runtime/node/`、Phase 6 报告定稿。
+  - **未完成**：真实 `todo`/`rpc-demo`（本机 GitHub 不可达）、`tools/extension-build/`、原生对话框 input/editor、技能信任冒烟、真实 Node 故障/进程树、发布缺运行时 fail-closed、Phase 6 报告定稿。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. Phase 6 设计定稿（runtime/extensions/skills + ADR-0015），Phase 5 报告定稿与 tag。
-2. 实现 `internal/extensions`（发现/信任/启停/工具/命令/事件/通知/会话切换）与设置 v2；adapter 支持 NodePath/SetSession/UI/tool_update。
-3. 补齐 kernel.Skills、bridge ExtraTools/Steer/技能/扩展/命令接口；页面 busy 可补充指令。
-4. 原生“扩展与技能”面板；shim `locowrk-shim/1` 与 `orchestrator-sample` 端到端测试通过。
-5. 文档：Phase 6 报告草案、CHANGELOG 0.10.2、看板/路线图、CONTEXT/H-020。
+1. steering 验收补齐：内核空闲补充返回 `ErrNotRunning`、桌面中文提示；页面新增 `steer` 冒烟（含 `steer-real` 真实模型路径），脚本模型与 DeepSeek 均通过。
+2. 随包 Node 运行时：`scripts/fetch-node-runtime.mjs`（镜像候选 + 官方校验值 + 只保留 node.exe/LICENSE）、`runtime/node/` v26.13.0、`runtime/README.md` 记录版本与 SHA-256、`.gitignore` 忽略运行时目录。
+3. 运行时版本闸：`extensions.CheckNodeVersion` + `Manager.Prepare` 失败即整条 A 轨禁用并给原因；`PinnedNodeVersion` 单点定义。
+4. 环境恢复（重装系统后）：补 ripgrep（grep/glob 工具需重启应用后生效）、MSYS2 gcc（`go test -race` 恢复）、DeepSeek key 写入用户环境变量。
+5. 文档：CHANGELOG 0.10.3、Phase 6 报告（steering ✅、运行时读数、下一步）、CONTEXT。
 
 ## 下一步（按优先级）
 
-1. **Phase 6 续作**：构建真实 `todo`/`rpc-demo` 并跑通；实现 `desktop.HostUI` 原生对话框；技能信任/撤销冒烟；steering 冒烟；真实 Node 崩溃/超时/进程树。
-2. **运行时准备**：下载/校验 `runtime/node/`；发布缺运行时 fail-closed；记录版本/许可证。
-3. **UI 重设计**：功能完成后单独立项；当前扩展面板/标签栏/Diff 页仍是功能粗稿。
-4. **发布工程**：仍暂缓；Node 运行时与签名纳入发布阶段。
+1. **Phase 6 续作**：`tools/extension-build/`（esbuild 打包 + `build.json`）；真实 `todo`/`rpc-demo`（需可访问 GitHub 或离线包）；原生 input/editor 对话框；技能信任/撤销冒烟；真实 Node 崩溃/超时/进程树；发布缺运行时 fail-closed。
+2. **UI 重设计**：功能完成后单独立项；当前扩展面板/标签栏/Diff 页仍是功能粗稿。
+3. **发布工程**：仍暂缓；Node 运行时与签名纳入发布阶段。
 
 ## 未决问题
 
@@ -56,7 +56,9 @@
 - **冒烟隔离**：真实 key 只走环境变量；`HOME`/`USERPROFILE` 指到临时目录；`-smoke` 默认临时 cwd。
 - **提交前门禁**：`gofmt -l . && go vet ./... && go test -race ./...`、`cd web && npm run check && npm run build`、`bash scripts/check-docs.sh`。
 - **PowerShell 改文件会毁中文**：用编辑工具（P-006）。
+- **运行时**：`node scripts/fetch-node-runtime.mjs` 拉取钉死版本到 `runtime/node/`（不入库）；`node ... --check` 只校验。GitHub 与 nodejs.org 直连不可靠，脚本按镜像顺序尝试并用发布方校验值核对（P-010）。开发覆盖用 `LOCOWRK_NODE`/`-node`，此时不校验版本。
+- **steering 冒烟**：`go run ./cmd/locowrk -smoke -smoke-scenario steer`（脚本模型）或 `-smoke-scenario steer-real`（需 `DEEPSEEK_API_KEY`）。
 - **ADR 不可改**：`docs/adr/` 只增不改；状态类事实写 CONTEXT/看板/CHANGELOG。
 - **导入边界**：正式代码只有 `internal/kernel` 引用 `pi/...`；MyGo 只在 `desktop/`、`cmd/locowrk`。
 - **体量**：docs 单篇 ≤300 行、ADR ≤100、代码单文件 ≤500、CONTEXT ≤150、handoff 留 5 份。
-- 踩坑索引：`P-001`~`P-009`；方法：`skills/S-001-runtime-comparison-spike.md`。
+- 踩坑索引：`P-001`~`P-010`；方法：`skills/S-001-runtime-comparison-spike.md`。
