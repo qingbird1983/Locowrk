@@ -1,0 +1,13 @@
+{
+  "name": "tool-conflict",
+  "version": "0.1.0",
+  "esbuild": "0.28.2",
+  "entrypoint": "bundle.mjs",
+  "sha256": "821c90e923deb8c84695acd24fd2b4fb578414f8e7f8738586cda696c6ecfe73",
+  "source": {
+    "file": "index.mjs",
+    "sha256": "7b016d967cf01d2037e29801e9d599e05a6a30057727b7084313d6a37b4b5094",
+    "descriptor": "extension.json"
+  },
+  "node": ">=20"
+}

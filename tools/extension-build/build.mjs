@@ -65,7 +65,7 @@ function sha256(data) {
 function readDescriptor(src) {
   const path = join(src, "extension.json");
   if (!existsSync(path)) fail(`missing ${path}`);
-  const descriptor = JSON.parse(readFileSync(path, "utf8"));
+  const descriptor = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
   if (!/^[a-z0-9][a-z0-9-]*$/.test(descriptor.name ?? "")) {
     fail(`extension.json name must be lower-kebab-case: ${descriptor.name}`);
   }

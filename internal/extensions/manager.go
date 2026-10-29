@@ -235,6 +235,16 @@ func (m *Manager) Extensions() []ExtensionInfo {
 			cp.Diagnostics = a.Diagnostics()
 			cp.Tools = len(a.Tools())
 			cp.Commands = len(a.Commands())
+			// A crashed or stopped process must not keep showing "running".
+			switch a.State() {
+			case adapter.StateFailed:
+				cp.State = "failed"
+				if err := a.Err(); err != nil {
+					cp.Reason = err.Error()
+				}
+			case adapter.StateReady:
+				cp.State, cp.Reason = "running", ""
+			}
 		} else {
 			cp.Tools = 0
 			cp.Commands = 0

@@ -51,5 +51,9 @@ jobs:
       - name: Build tool tests
         working-directory: tools/extension-build
         run: npm test
-      - name: Fixture matches its source
-        run: node tools/extension-build/build.mjs --src fixtures/extensions/orchestrator-sample --out fixtures/extensions/orchestrator-sample --check
+      - name: Fixtures match their sources
+        shell: bash
+        run: |
+          for dir in fixtures/extensions/orchestrator-sample fixtures/faults/crash fixtures/faults/slow fixtures/faults/tool-conflict; do
+            node tools/extension-build/build.mjs --src "$dir" --out "$dir" --check
+          done

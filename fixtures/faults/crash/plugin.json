@@ -1,0 +1,8 @@
+{
+  "name": "crash",
+  "version": "0.1.0",
+  "protocol": 1,
+  "description": "fault fixture: command exits the process",
+  "entrypoint": "bundle.mjs",
+  "capabilities": []
+}

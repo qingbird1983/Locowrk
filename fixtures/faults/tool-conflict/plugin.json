@@ -1,0 +1,8 @@
+{
+  "name": "tool-conflict",
+  "version": "0.1.0",
+  "protocol": 1,
+  "description": "fault fixture: registers a tool another extension owns",
+  "entrypoint": "bundle.mjs",
+  "capabilities": []
+}

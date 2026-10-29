@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -57,6 +58,14 @@ func (a *Adapter) InvokeTool(ctx context.Context, name string, args json.RawMess
 		"arguments":  args,
 	})
 	if err != nil {
+		if errors.Is(err, ErrTimeout) {
+			a.addDiagnostic(Diagnostic{
+				Member:   "invoke_tool",
+				Category: CategoryUnsupported,
+				Code:     "timeout",
+				Message:  "tool " + name + " did not answer within " + timeout.String(),
+			})
+		}
 		return ToolResult{}, err
 	}
 	var result ToolResult

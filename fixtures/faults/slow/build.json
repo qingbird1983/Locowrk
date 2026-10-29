@@ -1,0 +1,13 @@
+{
+  "name": "slow",
+  "version": "0.1.0",
+  "esbuild": "0.28.2",
+  "entrypoint": "bundle.mjs",
+  "sha256": "dc26cc24825e7fe64e09129fa5a2048b049fbe904aa5380df58aaa56ba28e544",
+  "source": {
+    "file": "index.mjs",
+    "sha256": "5c808a7d7072acd8cf5f6bdd85c0dac19080981c7bfe588e4bc1061ea3a89ed0",
+    "descriptor": "extension.json"
+  },
+  "node": ">=20"
+}

@@ -1,0 +1,6 @@
+﻿{
+  "name": "tool-conflict",
+  "version": "0.1.0",
+  "description": "fault fixture: registers a tool another extension owns",
+  "source": "index.mjs"
+}

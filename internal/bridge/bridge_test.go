@@ -3,6 +3,8 @@ package bridge
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +48,69 @@ func newService(t *testing.T, emit func(eventbus.Event), providerOpts providers.
 func modelRef(reg *providers.FauxProviderRegistration) string {
 	m := reg.GetModel()
 	return string(m.Provider) + "/" + m.ID
+}
+
+func TestSkillsTrustRoundTrip(t *testing.T) {
+	testHome(t)
+	cwd := t.TempDir()
+	writeSkillFile := func(dir, name, desc string) {
+		t.Helper()
+		path := filepath.Join(dir, "SKILL.md")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := "---\nname: " + name + "\ndescription: " + desc + "\n---\n\nbody\n"
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	home := os.Getenv("USERPROFILE")
+	writeSkillFile(filepath.Join(home, ".pi", "agent", "skills", "user-skill"), "user-skill", "user skill")
+	writeSkillFile(filepath.Join(cwd, ".pi", "skills", "project-skill"), "project-skill", "project skill")
+
+	k, err := kernel.New(kernel.Options{})
+	if err != nil {
+		t.Fatalf("kernel.New: %v", err)
+	}
+	t.Cleanup(func() { _ = k.Close(context.Background()) })
+	trusted := false
+	svc, err := New(k, Options{
+		Cwd:            cwd,
+		ProjectTrusted: func(string) bool { return trusted },
+		SetProjectTrust: func(_ string, value bool) error {
+			trusted = value
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("bridge.New: %v", err)
+	}
+	t.Cleanup(svc.Close)
+
+	view := svc.Skills(cwd)
+	if view.Trusted || len(view.Project) != 0 {
+		t.Fatalf("untrusted workspace exposes project skills: %+v", view)
+	}
+	if len(view.User) != 1 || view.User[0].Name != "user-skill" {
+		t.Fatalf("user skills missing: %+v", view.User)
+	}
+
+	if err := svc.SetProjectTrust(cwd, true); err != nil {
+		t.Fatalf("trust: %v", err)
+	}
+	view = svc.Skills(cwd)
+	if !view.Trusted || len(view.Project) != 1 || view.Project[0].Name != "project-skill" {
+		t.Fatalf("trusted workspace does not expose the project skill: %+v", view)
+	}
+
+	// Revoking hides the project skill again for later sessions.
+	if err := svc.SetProjectTrust(cwd, false); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	view = svc.Skills(cwd)
+	if view.Trusted || len(view.Project) != 0 || len(view.User) != 1 {
+		t.Fatalf("revoke did not take effect: %+v", view)
+	}
 }
 
 func TestSessionLifecycleThroughBridge(t *testing.T) {

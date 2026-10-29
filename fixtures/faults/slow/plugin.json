@@ -1,0 +1,8 @@
+{
+  "name": "slow",
+  "version": "0.1.0",
+  "protocol": 1,
+  "description": "fault fixture: tool never answers",
+  "entrypoint": "bundle.mjs",
+  "capabilities": []
+}

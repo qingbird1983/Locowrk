@@ -1,0 +1,13 @@
+{
+  "name": "crash",
+  "version": "0.1.0",
+  "esbuild": "0.28.2",
+  "entrypoint": "bundle.mjs",
+  "sha256": "afd83999b04fbc0a6db57b9d17bd5c332b4d32df577c9f4d0fbb3a20599e1481",
+  "source": {
+    "file": "index.mjs",
+    "sha256": "52ad7aecfa6e560d0f8b9f82101ea47ffd63e2f6cd341232d04b581e4d7d7f24",
+    "descriptor": "extension.json"
+  },
+  "node": ">=20"
+}

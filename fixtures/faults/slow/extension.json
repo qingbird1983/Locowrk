@@ -1,0 +1,6 @@
+﻿{
+  "name": "slow",
+  "version": "0.1.0",
+  "description": "fault fixture: tool never answers",
+  "source": "index.mjs"
+}
