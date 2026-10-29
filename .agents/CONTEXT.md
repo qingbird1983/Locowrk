@@ -1,6 +1,6 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-30（会话主题：**Phase 6 真实样本接入**）
+- 更新：2026-10-30（会话主题：**Phase 6 进程树与发布 fail-closed**）
 
 ## 当前阶段与状态
 
@@ -17,21 +17,24 @@
   - **2026-10-30 补**：`tools/extension-build/` 打包工具（单文件 bundle + `plugin.json`/`build.json`、可复现、`--check`、拒绝原生/远程导入），夹具改为打包产物。
   - **2026-10-30 再补**：真实上游样本 `todo`/`rpc-demo`（`earendil-works/pi@38ff9917`，不入库）打包后跑通；补 `extensions/shim/compat/`、命令双签名、事件 `ctx`、命令名连字符、通知被拒诊断。
   - **2026-10-30 三补**：事件闸门（`wantsEventAck`、`tool_call` 阻断、`session_before_switch` 取消）与内核 `BeforeTool` 钩子；真实 `rpc-demo` 验证 select/confirm。
-  - **2026-10-30 四补**：故障隔离（崩溃/超时/工具重名夹具与测试，状态行跟随进程状态）与技能信任链路（未信任/信任/撤销）。
+  - **2026-10-30 四补**：故障隔离（崩溃/超时/工具重名/孙进程/工厂异常夹具与测试，状态行跟随进程状态）与技能信任链路（未信任/信任/撤销）；Windows 作业对象托管进程树，崩溃时孙进程一起结束。
+  - **2026-10-30 五补**：发布模式缺 `runtime/node` 时 A 轨 fail-closed 并打印提示；工厂抛异常即禁用；`--check` 覆盖 6 个夹具。
   - shim `extensions/shim/host.mjs` + `fixtures/extensions/orchestrator-sample` 端到端通过（工具/命令/事件）。
-  - **未完成**：崩溃时的孙进程清理、扩展抛异常即禁用、发布缺运行时 fail-closed、会话条目回放、Phase 6 报告定稿。
+  - **未完成**：面板按钮级冒烟、会话条目回放、阻断后的批终止、Phase 6 报告定稿与 tag。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. 故障隔离：`fixtures/faults/`（崩溃/超时/工具重名）与三条测试；崩溃后状态转 failed 并带原因与 `crashed` 诊断，兄弟扩展不受影响；工具超时记 `timeout`；重名只禁用后注册方。
-2. 技能信任：`TestSkillsTrustRoundTrip` 覆盖面板同一条调用链（未信任/信任/撤销），撤销后新会话不再注入项目技能。
-3. 文档：CHANGELOG 0.10.7、Phase 6 报告（验收 7 全绿、故障项细化）、CONTEXT、H-025、P-012（插件注册被拒要落诊断）。
+1. 进程树：Windows 作业对象（Kill-on-close）托管扩展及其子进程，崩溃/停止时整棵树结束；`TestCrashKillsGrandchildren` 用心跳文件验证。
+2. 工厂异常：`factory_error` 诊断即禁用扩展（状态 failed、工具/命令下线、诊断保留）。
+3. 发布 fail-closed：`MYGO_ENV=production` 且缺 `runtime/node` 时打印提示并禁用 A 轨，桌面照常可用（临时目录二进制实测）。
+4. 修复两个回归：夹具孙进程曾污染协议 stdout（P-013）；`TestHashChangeLosesTrust` 因进程未及时退出而锁文件（作业终止后等待进程退出）。
+5. 文档：CHANGELOG 0.10.8、报告验收 8/9 全绿、CONTEXT、H-026、P-013，P-006 补记两次 PowerShell 事故。
 
 ## 下一步（按优先级）
 
-1. **Phase 6 收尾候选**：崩溃时孙进程清理、扩展抛异常即禁用、发布缺运行时 fail-closed、会话条目回放（`sessionManager.getBranch`）。
+1. **Phase 6 收尾**：面板按钮级冒烟、会话条目回放（`sessionManager.getBranch`）、阻断后的批终止（`Terminate`）——完成后写定稿报告并打 `phase-6.end`。
 2. **UI 重设计**：功能完成后单独立项；当前扩展面板/标签栏/Diff 页仍是功能粗稿。
 3. **发布工程**：仍暂缓；Node 运行时与签名纳入发布阶段。
 
@@ -63,10 +66,12 @@
 - **运行时**：`node scripts/fetch-node-runtime.mjs` 拉取钉死版本到 `runtime/node/`（不入库）；`node ... --check` 只校验。GitHub 与 nodejs.org 直连不可靠，脚本按镜像顺序尝试并用发布方校验值核对（P-010）。开发覆盖用 `LOCOWRK_NODE`/`-node`，此时不校验版本。
 - **扩展打包**：`cd tools/extension-build && npm install` 后 `node build.mjs --src <源码目录> --out <包目录>`；`--check` 校验产物与源码一致；`node_modules` 不入库，运行期不构建。
 - **真实样本**：源码不入库；本机已取在 `%TEMP%\locowrk-samples\`（`todo.ts`/`rpc-demo.ts` + `src/` + `packages/`）。重跑：`$env:LOCOWRK_REAL_SAMPLE_DIR='<packages 目录>'; go test ./internal/extensions -run TestRealPiSamples -v`。
-- **故障夹具**：`fixtures/faults/{crash,slow,tool-conflict}`；`timeoutMs` 合法范围 1000~600000，越界会被拒（现在会落诊断，P-012）。
+- **故障夹具**：`fixtures/faults/{crash,slow,tool-conflict,grandchild,throw}`；`timeoutMs` 合法范围 1000~600000，越界会被拒（现在会落诊断，P-012）。
+- **进程树**：Windows 用作业对象（Kill-on-close）托管，崩溃即清孙进程；扩展子进程**不得写 stdout**（协议通道，P-013）。
+- **发布判定**：`mygo.IsDev()` 为假（`MYGO_ENV=production` 或 `-ldflags`）即发布模式；缺 `runtime/node` 时 A 轨禁用并打印提示。
 - **代理**：本机 `127.0.0.1:7897`（HTTP）；curl 加 `-x http://127.0.0.1:7897` 可访问 GitHub（P-010）。
 - **steering 冒烟**：`go run ./cmd/locowrk -smoke -smoke-scenario steer`（脚本模型）或 `-smoke-scenario steer-real`（需 `DEEPSEEK_API_KEY`）。
 - **ADR 不可改**：`docs/adr/` 只增不改；状态类事实写 CONTEXT/看板/CHANGELOG。
 - **导入边界**：正式代码只有 `internal/kernel` 引用 `pi/...`；MyGo 只在 `desktop/`、`cmd/locowrk`。
 - **体量**：docs 单篇 ≤300 行、ADR ≤100、代码单文件 ≤500、CONTEXT ≤150、handoff 留 5 份。
-- 踩坑索引：`P-001`~`P-012`；方法：`skills/S-001-runtime-comparison-spike.md`。
+- 踩坑索引：`P-001`~`P-013`；方法：`skills/S-001-runtime-comparison-spike.md`。

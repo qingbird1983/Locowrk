@@ -28,7 +28,7 @@ graph LR
 | [Phase 3](phase-3-desktop-host.md) | MyGo 最小宿主：实时会话流、输入、取消、设置 | 2~3 周 | ✅ 完成（2026-10-28，tag `phase-3.end`；[验收报告](../design/phase-3/report.md)） |
 | [Phase 4](phase-4-native-plugins.md) | PluginHost 与首批原生 `ui.View` 插件 | 3~4 周 | ✅ 完成（2026-10-28，tag `phase-4.end`；[报告](../design/phase-4/report.md)） |
 | [Phase 5](phase-5-webview-plugins.md) | WebView 混合渲染与 Diff 审阅插件 | 2~3 周 | ✅ 完成（2026-10-28，tag `phase-5.end`；[报告](../design/phase-5/report.md)） |
-| [Phase 6](phase-6-real-orchestration.md) | 真实 Pi 编排插件接入、三分类矩阵、技能复用、steering 回传 | 3~4 周 | 进行中（管理/信任、steering、运行时、打包工具、真实样本、事件闸门、故障隔离与技能信任已落地 2026-10-30；孙进程清理与发布 fail-closed 待补） |
+| [Phase 6](phase-6-real-orchestration.md) | 真实 Pi 编排插件接入、三分类矩阵、技能复用、steering 回传 | 3~4 周 | 进行中（管理/信任、steering、运行时、打包工具、真实样本、事件闸门、故障隔离、技能信任、进程树与发布 fail-closed 已落地 2026-10-30；面板按钮级冒烟与会话回放待补） |
 | [Phase 7](phase-7-dynamic-plugins.md) | 第三方子进程桌面插件（UI 描述模式） | 2~3 周 | 未开始（探索性） |
 
 \* 单人全职参考值，仅量级感知；AI 辅助开发节奏波动大，以验收为准，不赶工期。
