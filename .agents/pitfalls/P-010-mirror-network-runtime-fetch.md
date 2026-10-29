@@ -11,6 +11,7 @@
 ## 修复
 
 - 运行时下载脚本 `scripts/fetch-node-runtime.mjs`：优先用 `curl` 子进程（带 `--max-time`），按 `--mirror` → `LOCOWRK_NODE_MIRROR` → `https://mirrors.ustc.edu.cn/node` → `https://nodejs.org/dist` 顺序尝试；每个来源都读取该来源的 `SHASUMS256.txt` 并校验后，才复制 `node.exe`/`LICENSE`。USTC 镜像实测约 2.7 MB/s。
+- **本机有代理时先挂代理**：`curl -x http://127.0.0.1:7897 ...` 可直连 GitHub（2026-10-30 用它取回上游 `todo.ts`/`rpc-demo.ts`）。代理地址因机器而异，先用 `Get-NetTCPConnection -State Listen` 找本地监听端口，再 `curl -x` 试 `https://github.com`。
 - 真实上游扩展样本（`sky-valley/pi` 的 `todo.ts`、`rpc-demo.ts`）在 GitHub 不可达时**不要**从 Phase 2 spike 的旧 bundle 里抠源码：那份是 spike 自带 shim 与旧协议，和 `locowrk-shim/1` 不是一回事。等网络可访问（或拿到离线包）再按固定提交构建，并在报告中如实记为未完成。
 - 工具链缺失的恢复：`grep`/`glob` 工具依赖 `rg.exe`，可从应用资源目录复制到已在 PATH 的目录；`go test -race` 需要 C 工具链，用 MSYS2 的 `mingw-w64-x86_64-gcc`（UCRT/POSIX 任一）并把 `C:\msys64\mingw64\bin` 加入 PATH。
 

@@ -16,16 +16,18 @@
 - **steering（2026-10-29 补）**：内核 `Steer` 在空闲回合返回 `ErrNotRunning`，桌面转成中文提示；页面冒烟 `steer`/`steer-real` 覆盖“运行中补充 → `steering_applied` → 下一轮请求带上补充文本 → 空闲调用报错”。
 - **随包运行时（2026-10-29 补）**：`scripts/fetch-node-runtime.mjs` 下载钉死版本、校验 SHA-256 后只保留 `node.exe` 与许可证；管理启动前核对版本，不一致整条 A 轨禁用并写明原因。
 - **打包工具（2026-10-30 补）**：`tools/extension-build/` 用 esbuild 把源码 + shim 打成单文件 `bundle.mjs`，生成 `plugin.json`/`build.json`；拒绝 `.node` 原生模块、远程 import 与无 scope 能力；同输入同字节；`--check` 供 CI 使用。`TestBuiltSampleEndToEnd` 用构建产物跑通管理器链路。
+- **真实样本（2026-10-30 补）**：经本机代理取回上游 `earendil-works/pi@38ff99177fba21e9c57a670f4e95adcf407c99c7` 的 `todo.ts`（SHA-256 `b6e4d370…db57166`）与 `rpc-demo.ts`（`3d54a396…29ae640d`），用打包工具构建后由 `TestRealPiSamples`（`LOCOWRK_REAL_SAMPLE_DIR` 触发，默认跳过）跑通：工具/命令、UI no-op 诊断、输入/编辑对话框与通知。
+- **为真实样本补齐的兼容面**：`extensions/shim/compat/`（`@earendil-works/pi-ai`、`@earendil-works/pi-tui`、`typebox` 的最小实现，随包内联）；`registerCommand(name, options)` 双签名；事件处理器第二参数 `ctx`；`ctx.sessionManager.getBranch/getEntries` 返回空（见已知限制）；命令名允许连字符；被拒绝的插件通知记为诊断（此前静默丢弃）。
 
 ## 2. 验收对照（roadmap/phase-6 §5）
 
 | # | 场景 | 状态 | 说明 |
 |---|---|---|---|
-| 1 | 真实扩展加载 | 🟡 部分 | 管理器/信任/工具链路已通；随包运行时与版本闸已落地；真实 `todo`/`rpc-demo` 仍未构建（GitHub 不可达） |
+| 1 | 真实扩展加载 | ✅ 通过 | 上游 `todo` 与 `rpc-demo` 经 `tools/extension-build` 打包后由管理器加载：`todo` 注册 1 工具 + 1 命令并执行 list/add/list，`/todos` 命令按 no-op 提示；`rpc-demo` 注册 3 命令；未信任不启动由既有测试覆盖 |
 | 2 | parallel 委派 | 🟡 部分 | `orchestrator-sample` 发出两个 spawn + settle 事件；UI 节点由现有编排树消费，未做真实子进程 |
 | 3 | chain/async | 🟡 部分 | 命令与事件链路通；链式/异步取消未做样本 |
 | 4 | steering | ✅ 通过 | 冒烟 `steer`（脚本模型）与 `steer-real`（真实 DeepSeek）通过：`steering_applied` 出现、下一轮历史含补充文本、空闲补充返回明确错误；内核新增 `ErrNotRunning` |
-| 5 | UI 降级 | 🟡 部分 | shim 对 setWidget/setTitle/setStatus 发诊断、不抛错；confirm/select 已接原生消息框，input/editor 仍按取消处理 |
+| 5 | UI 降级 | ✅ 通过（输入/编辑对话框） | `rpc-demo` 实测：`setTitle`/`setWidget`/`setStatus` 各一条诊断且扩展继续；`rpc-input`/`rpc-editor` 弹宿主对话框并回写通知；`select`/`confirm` 的原生消息框此前已接，本轮未跑其触发事件（tool_call / session_before_switch） |
 | 6 | 缓做项 | 🟡 部分 | `ctx.executeTool`/sendMessage 等在 shim 返回 not_implemented；未逐一验收 |
 | 7 | 技能 | 🟡 部分 | `kernel.Skills` + `TestSkillsTrustGate` 通过；信任/撤销 UI 冒烟未做 |
 | 8 | 故障 | 🟡 部分 | 管理器停止/重启路径、哈希失效测试通过；真实 Node 崩溃/超时未跑 |
@@ -41,20 +43,23 @@
 | `TestSteeringRequiresRunningTurnAndReachesNextRequest` | 通过；空闲返回 `ErrNotRunning`、运行中入队并产生 `steering_applied`、历史含补充文本 |
 | `tools/extension-build` 自测（`npm test`） | 4 项通过：打包产物、可复现（同字节）、`--check` 检出篡改、拒绝原生模块/远程 import/无 scope 能力 |
 | `TestBuiltSampleEndToEnd` | 通过（约 0.3 s）：构建产物被管理器启动并执行 `sample_echo` |
+| `TestRealPiSamples`（真实上游样本） | 通过（约 0.5 s）：`todo` 工具 list→add→list 与 `/todos` 命令；`rpc-demo` 3 命令、`ui.setTitle`/`ui.setWidget`/`ui.setStatus` 诊断、input/editor 对话框与 3 条通知 |
+| 真实样本包体积 | `todo` bundle 19,327 B；`rpc-demo` 11,333 B（均自包含 shim） |
 | `internal/extensions` 测试 | 发现/信任/哈希失效/项目管理/运行时版本闸通过 |
 | 适配器/内核回归 | 全绿 |
 | Node 运行时 | 已落到 `runtime/node/`（v26.13.0，Windows x64，SHA-256 `dcc60d59…b59150a`）；开发可用 `LOCOWRK_NODE` 或 PATH 覆盖（不校验版本） |
 
 ## 4. 已知问题与下一步
 
-1. **真实扩展样本**：下载/构建上游 `todo`、`rpc-demo`（固定提交，不入库），验证真实 `ExtensionAPI` 面；当前 shim 只覆盖样本使用的成员。本机网络无法访问 GitHub/jsdelivr（连接重置或超时），本轮未完成，需可访问网络或离线包。
-2. **原生输入框**：confirm/select 已接；input/editor 仍需原生单行/多行输入框，当前按取消处理。
+1. **真实扩展样本**：✅ 本轮完成（经代理取回并打包，`TestRealPiSamples` 通过）；样本源码不入库，复现步骤见本报告 §3 与 `tools/extension-build/README.md`。
+2. **原生输入框**：input/editor 已能弹宿主对话框（`rpc-demo` 验证）；原生控件仍是功能粗稿，视觉效果留 UI 重设计。
 3. **UI/技能**：面板的撤销信任、通知列表、命令参数输入；技能信任/撤销冒烟；页面“本会话已注入”提示。
-4. **运行时**：`runtime/node/` 已就绪并做版本闸；仍需把“缺运行时”接进发布构建的 fail-closed 检查（当前开发回退仅在开发模式生效）。
-5. **真实故障**：Node 扩展崩溃、超时、进程树、工具冲突注入。
+4. **shim 限制**：`ctx.sessionManager` 没有真实会话条目（`getBranch` 返回空），依赖历史重建的扩展状态会丢；`tool_call` 闸门回执（`wantsEventAck`）尚未接线；`pi.on("session_before_switch")` 无宿主触发点。
+5. **运行时**：`runtime/node/` 已就绪并做版本闸；仍需把“缺运行时”接进发布构建的 fail-closed 检查（当前开发回退仅在开发模式生效）。
+6. **真实故障**：Node 扩展崩溃、超时、进程树、工具冲突注入。
 
 ## 5. 体量与规范
 
-- 新增 `internal/extensions` 约 850 行（含测试）；`extensions/shim` 约 300 行 JS；`scripts/fetch-node-runtime.mjs` 约 200 行；`tools/extension-build` 约 300 行 JS（含测试），新增 esbuild 0.28.2 开发依赖（仅打包工具，不在运行期）；Node 运行时未入库（`runtime/node/` 已忽略）。
+- 新增 `internal/extensions` 约 950 行（含测试）；`extensions/shim` 约 350 行 JS（含 `compat/` 三个模块）；`scripts/fetch-node-runtime.mjs` 约 200 行；`tools/extension-build` 约 300 行 JS（含测试），新增 esbuild 0.28.2 开发依赖（仅打包工具，不在运行期）；Node 运行时未入库（`runtime/node/` 已忽略），真实样本源码未入库。
 - 设置 v2 已写入 `desktop/settings.go`；旧 v1 迁移测试通过。
 - 本报告为草案，Phase 6 未打 tag。

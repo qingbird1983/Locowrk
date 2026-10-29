@@ -1,6 +1,6 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-30（会话主题：**Phase 6 打包工具**）
+- 更新：2026-10-30（会话主题：**Phase 6 真实样本接入**）
 
 ## 当前阶段与状态
 
@@ -15,20 +15,21 @@
   - 已落地：`internal/extensions`（发现/信任/启停/工具/命令/事件/通知）、设置 v2、adapter NodePath/SetSession/UI/tool_update、`kernel.Skills`、bridge steer/tools/trust、原生“扩展与技能”面板、页面补充指令。
   - **2026-10-29 补**：steering 验收通过（内核 `ErrNotRunning`、冒烟 `steer`/`steer-real`，真实 DeepSeek 通过）；`runtime/node/` v26.13.0 就位 + 启动版本闸（不一致整条 A 轨禁用）。
   - **2026-10-30 补**：`tools/extension-build/` 打包工具（单文件 bundle + `plugin.json`/`build.json`、可复现、`--check`、拒绝原生/远程导入），夹具改为打包产物。
+  - **2026-10-30 再补**：真实上游样本 `todo`/`rpc-demo`（`earendil-works/pi@38ff9917`，不入库）打包后跑通；补 `extensions/shim/compat/`、命令双签名、事件 `ctx`、命令名连字符、通知被拒诊断。
   - shim `extensions/shim/host.mjs` + `fixtures/extensions/orchestrator-sample` 端到端通过（工具/命令/事件）。
-  - **未完成**：真实 `todo`/`rpc-demo`（本机 GitHub 不可达）、原生对话框 input/editor、技能信任冒烟、真实 Node 故障/进程树、发布缺运行时 fail-closed、Phase 6 报告定稿。
+  - **未完成**：`select`/`confirm` 触发事件、`tool_call` 闸门回执、`session_before_switch` 触发点、技能信任冒烟、真实 Node 故障/进程树、发布缺运行时 fail-closed、Phase 6 报告定稿。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. 打包工具 `tools/extension-build/`：esbuild 把源码 + shim 打成单文件 `bundle.mjs`，生成 `plugin.json`/`build.json`；拒绝 `.node`、远程 import、无 scope 能力；同输入同字节；`--check` 供门禁；`npm test` 4 项通过。
-2. 夹具 `orchestrator-sample` 改为打包产物（自包含），新增 `TestBuiltSampleEndToEnd`（构建 → 管理器启动 → 工具调用）。
-3. 文档：CHANGELOG 0.10.4、Phase 6 报告读数与下一步、CONTEXT、H-022。
+1. 真实上游样本接入：经本机代理取回 `earendil-works/pi@38ff9917` 的 `todo.ts`/`rpc-demo.ts`，用打包工具构建后由 `TestRealPiSamples`（`LOCOWRK_REAL_SAMPLE_DIR` 触发）跑通工具、命令、UI 诊断与对话框。
+2. 兼容面补齐：`extensions/shim/compat/`（pi-ai/pi-tui/typebox 最小实现）、`registerCommand(name, options)`、事件处理器 `ctx` 参数、`sessionManager.getBranch` 返回空、命令名允许连字符、被拒通知记诊断。
+3. 文档：CHANGELOG 0.10.5、Phase 6 报告（验收 1/5 转 ✅、读数、已知限制）、CONTEXT、H-023、P-010 追加代理用法。
 
 ## 下一步（按优先级）
 
-1. **Phase 6 续作**：真实 `todo`/`rpc-demo`（需可访问 GitHub 或离线包）；原生 input/editor 对话框；技能信任/撤销冒烟；真实 Node 崩溃/超时/进程树；发布缺运行时 fail-closed。
+1. **Phase 6 续作**：`select`/`confirm` 触发事件与 `tool_call` 闸门回执；技能信任/撤销冒烟；真实 Node 崩溃/超时/进程树/工具冲突；发布缺运行时 fail-closed。
 2. **UI 重设计**：功能完成后单独立项；当前扩展面板/标签栏/Diff 页仍是功能粗稿。
 3. **发布工程**：仍暂缓；Node 运行时与签名纳入发布阶段。
 
@@ -41,6 +42,8 @@
 - **隐藏验收边界**：Windows 隐藏窗口不构建原生内容、页面 rAF 暂停；数据用隐藏冒烟，渲染用 `ui.NewTester`，crash 用 `-show`（P-008）。
 - **panic 恢复**：丢一帧、当帧构建计数偏移；测试未出现输入丢失，暂不做双帧预检。
 - **能力闸边界**：Node 原生 fs/net/exec 绕过 shim，按受信任插件处理。
+- **会话条目**：shim 的 `ctx.sessionManager` 没有真实条目（`getBranch` 返回空）；依赖历史重建状态的扩展（如 todo 重建）在重启后从头开始。
+- **事件闸门**：`tool_call` 的 `wantsEventAck` 回执未接线；扩展只能观察、不能阻断工具；`session_before_switch` 无宿主触发点。
 
 ## 关键提醒
 
@@ -57,6 +60,8 @@
 - **PowerShell 改文件会毁中文**：用编辑工具（P-006）。
 - **运行时**：`node scripts/fetch-node-runtime.mjs` 拉取钉死版本到 `runtime/node/`（不入库）；`node ... --check` 只校验。GitHub 与 nodejs.org 直连不可靠，脚本按镜像顺序尝试并用发布方校验值核对（P-010）。开发覆盖用 `LOCOWRK_NODE`/`-node`，此时不校验版本。
 - **扩展打包**：`cd tools/extension-build && npm install` 后 `node build.mjs --src <源码目录> --out <包目录>`；`--check` 校验产物与源码一致；`node_modules` 不入库，运行期不构建。
+- **真实样本**：源码不入库；本机已取在 `%TEMP%\locowrk-samples\`（`todo.ts`/`rpc-demo.ts` + `src/` + `packages/`）。重跑：`$env:LOCOWRK_REAL_SAMPLE_DIR='<packages 目录>'; go test ./internal/extensions -run TestRealPiSamples -v`。
+- **代理**：本机 `127.0.0.1:7897`（HTTP）；curl 加 `-x http://127.0.0.1:7897` 可访问 GitHub（P-010）。
 - **steering 冒烟**：`go run ./cmd/locowrk -smoke -smoke-scenario steer`（脚本模型）或 `-smoke-scenario steer-real`（需 `DEEPSEEK_API_KEY`）。
 - **ADR 不可改**：`docs/adr/` 只增不改；状态类事实写 CONTEXT/看板/CHANGELOG。
 - **导入边界**：正式代码只有 `internal/kernel` 引用 `pi/...`；MyGo 只在 `desktop/`、`cmd/locowrk`。
