@@ -16,20 +16,22 @@
   - **2026-10-29 补**：steering 验收通过（内核 `ErrNotRunning`、冒烟 `steer`/`steer-real`，真实 DeepSeek 通过）；`runtime/node/` v26.13.0 就位 + 启动版本闸（不一致整条 A 轨禁用）。
   - **2026-10-30 补**：`tools/extension-build/` 打包工具（单文件 bundle + `plugin.json`/`build.json`、可复现、`--check`、拒绝原生/远程导入），夹具改为打包产物。
   - **2026-10-30 再补**：真实上游样本 `todo`/`rpc-demo`（`earendil-works/pi@38ff9917`，不入库）打包后跑通；补 `extensions/shim/compat/`、命令双签名、事件 `ctx`、命令名连字符、通知被拒诊断。
+  - **2026-10-30 三补**：事件闸门（`wantsEventAck`、`tool_call` 阻断、`session_before_switch` 取消）与内核 `BeforeTool` 钩子；真实 `rpc-demo` 验证 select/confirm。
   - shim `extensions/shim/host.mjs` + `fixtures/extensions/orchestrator-sample` 端到端通过（工具/命令/事件）。
-  - **未完成**：`select`/`confirm` 触发事件、`tool_call` 闸门回执、`session_before_switch` 触发点、技能信任冒烟、真实 Node 故障/进程树、发布缺运行时 fail-closed、Phase 6 报告定稿。
+  - **未完成**：技能信任冒烟、真实 Node 故障/进程树、发布缺运行时 fail-closed、会话条目回放、Phase 6 报告定稿。
 - **界面范围（所有者 2026-10-28 决定）**：当前窗口是**功能粗稿**；布局密度、配色、按钮尺寸、图标、高 DPI、输入法观感在全部功能完成后统一做“界面 UI 重设计”，**不要在各阶段打磨界面**。
 - **发布工程（暂缓，backlog）**：钥匙串、Windows 打包/签名（需证书）；macOS/Linux 按 ADR-0007 只保证可构建。
 
 ## 上一轮完成了什么
 
-1. 真实上游样本接入：经本机代理取回 `earendil-works/pi@38ff9917` 的 `todo.ts`/`rpc-demo.ts`，用打包工具构建后由 `TestRealPiSamples`（`LOCOWRK_REAL_SAMPLE_DIR` 触发）跑通工具、命令、UI 诊断与对话框。
-2. 兼容面补齐：`extensions/shim/compat/`（pi-ai/pi-tui/typebox 最小实现）、`registerCommand(name, options)`、事件处理器 `ctx` 参数、`sessionManager.getBranch` 返回空、命令名允许连字符、被拒通知记诊断。
-3. 文档：CHANGELOG 0.10.5、Phase 6 报告（验收 1/5 转 ✅、读数、已知限制）、CONTEXT、H-023、P-010 追加代理用法。
+1. 事件闸门落地：shim 声明 `wantsEventAck`，宿主把 `tool_call`/`session_before_switch` 作为请求等待回执；内核新增 `BeforeTool` 钩子，bridge 与启动器接通；插件无响应 fail-open 并记通知。
+2. 真实 `rpc-demo` 验证：危险 `bash` 触发 select 并被阻断、取消会话切换生效、input/editor 对话框与通知；fixture 增加 `tool_call` 阻断样本。
+3. steering 测试时序修正（P-011）：补充指令要在流式输出中发出，才会落到下一轮。
+4. 文档：CHANGELOG 0.10.6、Phase 6 报告（验收 5 全绿、读数、已知限制）、CONTEXT、H-024、P-011。
 
 ## 下一步（按优先级）
 
-1. **Phase 6 续作**：`select`/`confirm` 触发事件与 `tool_call` 闸门回执；技能信任/撤销冒烟；真实 Node 崩溃/超时/进程树/工具冲突；发布缺运行时 fail-closed。
+1. **Phase 6 续作**：技能信任/撤销冒烟；真实 Node 崩溃/超时/进程树/工具冲突；发布缺运行时 fail-closed；会话条目回放（`sessionManager.getBranch`）。
 2. **UI 重设计**：功能完成后单独立项；当前扩展面板/标签栏/Diff 页仍是功能粗稿。
 3. **发布工程**：仍暂缓；Node 运行时与签名纳入发布阶段。
 
@@ -43,7 +45,7 @@
 - **panic 恢复**：丢一帧、当帧构建计数偏移；测试未出现输入丢失，暂不做双帧预检。
 - **能力闸边界**：Node 原生 fs/net/exec 绕过 shim，按受信任插件处理。
 - **会话条目**：shim 的 `ctx.sessionManager` 没有真实条目（`getBranch` 返回空）；依赖历史重建状态的扩展（如 todo 重建）在重启后从头开始。
-- **事件闸门**：`tool_call` 的 `wantsEventAck` 回执未接线；扩展只能观察、不能阻断工具；`session_before_switch` 无宿主触发点。
+- **事件闸门**：插件在 `initialize` 声明 `wantsEventAck` 后，宿主把 `tool_call`/`session_before_switch` 当请求发出；无响应 fail-open 并记通知。`tool_call` 失败不得中断回合。
 
 ## 关键提醒
 
@@ -66,4 +68,4 @@
 - **ADR 不可改**：`docs/adr/` 只增不改；状态类事实写 CONTEXT/看板/CHANGELOG。
 - **导入边界**：正式代码只有 `internal/kernel` 引用 `pi/...`；MyGo 只在 `desktop/`、`cmd/locowrk`。
 - **体量**：docs 单篇 ≤300 行、ADR ≤100、代码单文件 ≤500、CONTEXT ≤150、handoff 留 5 份。
-- 踩坑索引：`P-001`~`P-010`；方法：`skills/S-001-runtime-comparison-spike.md`。
+- 踩坑索引：`P-001`~`P-011`；方法：`skills/S-001-runtime-comparison-spike.md`。
