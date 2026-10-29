@@ -6,6 +6,18 @@
 
 ---
 
+## [0.10.4] - 2026-10-30
+
+### Phase 6 续作：扩展打包工具
+
+- 新增 `tools/extension-build/`：把扩展源码 + shim 打成单文件 `bundle.mjs`，同时生成 `plugin.json` 与 `build.json`（记录 esbuild 版本、入口与 SHA-256）。
+- 打包只允许纯 JS：`.node` 原生模块、`http(s)://` 远程导入、远程动态导入一律拒绝；能力必须带非空 scope，与适配器的默认拒绝一致。
+- 构建可复现：同一源码两次构建字节一致；`--check` 校验已有产物与源码是否一致，供门禁使用。
+- 仓库内 `orchestrator-sample` 夹具改用打包产物（自包含），并新增 `TestBuiltSampleEndToEnd`：构建产物被管理器启动、工具调用通过。
+- 仍待：真实 `todo`/`rpc-demo`（网络不可达）、原生输入框、技能信任冒烟、真实 Node 故障。
+
+---
+
 ## [0.10.3] - 2026-10-29
 
 ### Phase 6 续作：steering 验收与随包 Node 运行时
