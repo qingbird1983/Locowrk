@@ -37,3 +37,19 @@ jobs:
       - name: Test
         if: steps.detect.outputs.present == 'true'
         run: go test -race ./...
+
+  extensions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install build tool
+        working-directory: tools/extension-build
+        run: npm ci
+      - name: Build tool tests
+        working-directory: tools/extension-build
+        run: npm test
+      - name: Fixture matches its source
+        run: node tools/extension-build/build.mjs --src fixtures/extensions/orchestrator-sample --out fixtures/extensions/orchestrator-sample --check

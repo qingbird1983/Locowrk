@@ -1,0 +1,7 @@
+{
+  "name": "orchestrator-sample",
+  "version": "0.1.0",
+  "description": "Phase 6 fixture: tools, commands and orchestration events through locowrk-shim/1",
+  "source": "index.mjs",
+  "capabilities": []
+}

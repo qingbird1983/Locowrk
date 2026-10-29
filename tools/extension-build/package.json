@@ -1,0 +1,16 @@
+{
+  "name": "@locowrk/extension-build",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Bundles an A-track extension source directory into plugin.json + bundle.mjs (design/phase-6/runtime.md §4)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
