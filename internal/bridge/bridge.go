@@ -22,6 +22,8 @@ type Options struct {
 	Cwd string
 	// Tools supplies external A-track tools when a session is created/opened.
 	Tools func() []kernel.ToolSpec
+	// BeforeTool gates every tool call (Phase 6 extension permission hook).
+	BeforeTool kernel.BeforeToolFunc
 	// ProjectTrusted is the workspace skill/extension trust decision.
 	ProjectTrusted  func(cwd string) bool
 	SetProjectTrust func(cwd string, trusted bool) error
@@ -119,6 +121,7 @@ func (s *Service) CreateSession(opts CreateOptions) (string, error) {
 		Thinking:     opts.Thinking,
 		TrustProject: s.projectTrusted(opts.Cwd),
 		ExtraTools:   s.extraTools(),
+		BeforeTool:   s.opts.BeforeTool,
 	})
 	return string(id), err
 }
@@ -138,6 +141,7 @@ func (s *Service) OpenSession(path, model, thinking string) (string, error) {
 		Thinking:     thinking,
 		TrustProject: s.projectTrusted(s.opts.Cwd),
 		ExtraTools:   s.extraTools(),
+		BeforeTool:   s.opts.BeforeTool,
 	})
 	return string(id), err
 }

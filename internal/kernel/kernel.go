@@ -5,6 +5,7 @@ package kernel
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -50,6 +51,11 @@ type Image struct {
 	MimeType string
 }
 
+// BeforeToolFunc runs after a tool call's arguments are validated and before
+// the tool executes. A non-empty reason blocks the call; the model sees an
+// error tool result carrying it. Hosts use it for extension permission gates.
+type BeforeToolFunc func(ctx context.Context, name string, args json.RawMessage) (reason string, err error)
+
 // Options configures a Service.
 type Options struct {
 	// Bus receives every event. Nil creates a private bus owned by the Service.
@@ -75,6 +81,8 @@ type SessionOptions struct {
 	TrustProject bool
 	// ExtraTools are tools owned outside the kernel (orchestration plugins).
 	ExtraTools []ToolSpec
+	// BeforeTool gates tool execution (Phase 6 extension permission hook).
+	BeforeTool BeforeToolFunc
 }
 
 // OpenOptions configures resuming a stored session.
@@ -92,6 +100,8 @@ type OpenOptions struct {
 	// ExtraTools are tools owned outside the kernel; pass the same set again
 	// when resuming so the model keeps seeing them.
 	ExtraTools []ToolSpec
+	// BeforeTool gates tool execution; pass the same hook when resuming.
+	BeforeTool BeforeToolFunc
 }
 
 // Service owns the sessions of one host (the desktop shell, the smoke CLI).
@@ -218,6 +228,7 @@ func (s *Service) OpenSession(ctx context.Context, opts OpenOptions) (SessionID,
 		SystemPrompt: opts.SystemPrompt,
 		TrustProject: opts.TrustProject,
 		ExtraTools:   opts.ExtraTools,
+		BeforeTool:   opts.BeforeTool,
 	}
 	sess, err := s.newCodingSession(cwd, model, base, rec.ID())
 	if err != nil {
@@ -264,6 +275,23 @@ func (s *Service) newCodingSession(cwd string, model *ai.Model, opts SessionOpti
 	if opts.NoTools {
 		co.NoTools = coding.NoToolsAll
 		co.ToolNames = nil
+	}
+	if opts.BeforeTool != nil {
+		gate := opts.BeforeTool
+		co.BeforeToolCall = func(ctx context.Context, call agent.BeforeToolCallContext) *agent.BeforeToolCallResult {
+			raw, err := json.Marshal(call.Args)
+			if err != nil {
+				return &agent.BeforeToolCallResult{Block: true, Reason: "tool arguments: " + err.Error()}
+			}
+			reason, err := gate(ctx, call.ToolCall.Name, raw)
+			if err != nil {
+				return &agent.BeforeToolCallResult{Block: true, Reason: err.Error()}
+			}
+			if reason == "" {
+				return nil
+			}
+			return &agent.BeforeToolCallResult{Block: true, Reason: reason}
+		}
 	}
 	sess, err := coding.NewSession(co)
 	if err != nil {

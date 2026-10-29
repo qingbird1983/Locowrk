@@ -124,6 +124,43 @@ func (a *Adapter) SendHostEvent(kind string, payload any) error {
 	})
 }
 
+// WantsEventAck reports whether the plugin asked for lifecycle events as
+// requests, so the host can wait for a decision (phase-6 runtime §5).
+func (a *Adapter) WantsEventAck() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.eventAck
+}
+
+// RequestEvent sends one lifecycle event as a request and returns the plugin's
+// merged answer ({block, reason, cancel}). The budget covers a dialog the
+// handler may open, so a permission gate is not cut short by the RPC timeout.
+func (a *Adapter) RequestEvent(ctx context.Context, kind string, payload any) (map[string]any, error) {
+	a.mu.Lock()
+	p := a.peer
+	state := a.state
+	budget := a.opts.RPCTimeout + a.opts.UITimeout
+	a.mu.Unlock()
+	if state != StateReady || p == nil {
+		return nil, fmt.Errorf("%w: adapter is %s", ErrCrashed, state)
+	}
+	raw, err := p.call(ctx, budget, "event", map[string]any{
+		"sessionId": a.sessionID(),
+		"kind":      kind,
+		"payload":   payload,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return nil, fmt.Errorf("%w: event result: %v", ErrProtocol, err)
+		}
+	}
+	return out, nil
+}
+
 // Abort tells the plugin to stop its current orchestration.
 func (a *Adapter) Abort(ctx context.Context) error {
 	a.mu.Lock()

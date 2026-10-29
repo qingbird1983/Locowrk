@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "esbuild": "0.28.2",
   "entrypoint": "bundle.mjs",
-  "sha256": "646733a5a2cb780b0690273ebee0a4d24cb03191fecbc68f5a806440749b2e50",
+  "sha256": "763521b604242e78a4b55cc2da649aaa8353119227f919b37df8d53e432b41d7",
   "source": {
     "file": "index.mjs",
-    "sha256": "2088b496a0ed92e75d9d23d3113c79b00a8e3b483e24e48f49a1389afac384ce",
+    "sha256": "59bd30af30668537c78a1614be6dd9659344fcf93f49e0addb0933562de0b810",
     "descriptor": "extension.json"
   },
   "node": ">=20"

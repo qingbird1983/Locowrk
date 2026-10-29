@@ -34,6 +34,12 @@ function factory(pi) {
   pi.on("tool_execution_end", async () => {
     pi.workflowStep("观察工具", "done");
   });
+  pi.on("tool_call", async (event) => {
+    if (event?.toolName === "danger" || String(event?.input?.command ?? "").includes("rm -rf")) {
+      return { block: true, reason: "fixture blocks destructive commands" };
+    }
+    return void 0;
+  });
 }
 
 // extensions/shim/host.mjs
@@ -164,9 +170,10 @@ function run(factory2, meta = {}) {
     }
   };
   const dispatch = async (event, payload) => {
+    const results = [];
     for (const handler of handlers.get(event) ?? []) {
       try {
-        await handler({ ...payload, event }, ctx);
+        results.push(await handler({ ...payload, event }, ctx));
       } catch (err) {
         notify("diagnostic", {
           member: "on(" + event + ")",
@@ -176,6 +183,32 @@ function run(factory2, meta = {}) {
         });
       }
     }
+    return results;
+  };
+  const mergeEventResults = (results) => {
+    let block = false;
+    let cancel = false;
+    let reason = "";
+    let last;
+    for (const result of results) {
+      if (result === void 0 || result === null) continue;
+      last = result;
+      if (typeof result === "object") {
+        if (result.block) {
+          block = true;
+          if (!reason && result.reason) reason = String(result.reason);
+        }
+        if (result.cancel) cancel = true;
+      }
+    }
+    if (!block && !cancel) return last ?? null;
+    const out = {};
+    if (block) {
+      out.block = true;
+      out.reason = reason || "blocked by extension";
+    }
+    if (cancel) out.cancel = true;
+    return out;
   };
   const invokeTool = async (params, respond) => {
     const tool = tools.get(params?.name);
@@ -242,7 +275,10 @@ function run(factory2, meta = {}) {
             protocol: 1,
             plugin: { name: meta.name ?? "extension", version: meta.version ?? "0.0.0" },
             capabilities: meta.capabilities ?? [],
-            shim: SHIM
+            shim: SHIM,
+            // The host may send gateable events (tool_call) as requests and
+            // wait for the answer.
+            wantsEventAck: true
           }
         });
         try {
@@ -261,9 +297,13 @@ function run(factory2, meta = {}) {
       case "ping":
         respond({ jsonrpc: "2.0", id: msg.id, result: "pong" });
         break;
-      case "event":
-        await dispatch(msg.params?.kind, msg.params?.payload ?? {});
+      case "event": {
+        const results = await dispatch(msg.params?.kind, msg.params?.payload ?? {});
+        if (msg.id !== void 0) {
+          respond({ jsonrpc: "2.0", id: msg.id, result: mergeEventResults(results) });
+        }
         break;
+      }
       case "abort":
         respond({ jsonrpc: "2.0", id: msg.id, result: null });
         break;

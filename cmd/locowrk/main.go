@@ -157,6 +157,7 @@ func run() error {
 	b, err := bridge.New(k, bridge.Options{
 		Cwd:             *cwd,
 		Tools:           extMgr.Tools,
+		BeforeTool:      extMgr.GateToolCall,
 		ProjectTrusted:  extMgr.ProjectTrusted,
 		SetProjectTrust: extMgr.SetProjectTrust,
 		Extensions:      func() []bridge.ExtensionRow { return extensionRows(extMgr) },
@@ -184,6 +185,9 @@ func run() error {
 		Version:        version,
 		Host:           host,
 		SessionChanged: extMgr.SetSession,
+		BeforeSessionSwitch: func(reason string) error {
+			return extMgr.ConfirmSessionSwitch(context.Background(), reason)
+		},
 	})
 	mygo.BindAs("Desktop", desktop.NewBindings(app))
 	mygo.BindAs("Diff", desktop.NewDiffBindings(diffService))

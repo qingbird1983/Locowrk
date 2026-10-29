@@ -129,6 +129,7 @@ type Adapter struct {
 	pluginName string
 	session    string
 	accepted   map[CapabilityName]bool
+	eventAck   bool
 	tools      map[string]Tool
 	toolNames  []string
 	commands   map[string]Command
@@ -249,6 +250,7 @@ func (a *Adapter) Start(ctx context.Context, m *Manifest) error {
 	}
 	a.mu.Lock()
 	a.accepted = accepted
+	a.eventAck = result.WantsEventAck
 	a.mu.Unlock()
 
 	a.waitForRegistrations(ctx)

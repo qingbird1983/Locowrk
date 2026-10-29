@@ -37,4 +37,13 @@ export default function factory(pi) {
   pi.on("tool_execution_end", async () => {
     pi.workflowStep("观察工具", "done");
   });
+
+  // Permission gate: the host sends tool_call as a request because the shim
+  // declares wantsEventAck, and blocks the call when a handler says so.
+  pi.on("tool_call", async (event) => {
+    if (event?.toolName === "danger" || String(event?.input?.command ?? "").includes("rm -rf")) {
+      return { block: true, reason: "fixture blocks destructive commands" };
+    }
+    return undefined;
+  });
 }

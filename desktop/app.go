@@ -74,6 +74,9 @@ type Options struct {
 	// SessionChanged tells A-track extensions which session is active; nil is
 	// a no-op for page-only tests.
 	SessionChanged func(sessionID string)
+	// BeforeSessionSwitch lets extensions confirm or cancel a switch; nil
+	// always allows it.
+	BeforeSessionSwitch func(reason string) error
 }
 
 // App is the service bound to the page as "Desktop".
@@ -195,6 +198,11 @@ func (a *App) Sessions(cwd string) []SessionRow {
 
 // NewSession creates a session and selects it.
 func (a *App) NewSession(cwd, model, thinking string) (string, error) {
+	if a.opts.BeforeSessionSwitch != nil {
+		if err := a.opts.BeforeSessionSwitch("new"); err != nil {
+			return "", err
+		}
+	}
 	id, err := a.bridge.CreateSession(bridge.CreateOptions{Cwd: cwd, Model: model, Thinking: thinking})
 	if err != nil {
 		return "", err
@@ -207,6 +215,11 @@ func (a *App) NewSession(cwd, model, thinking string) (string, error) {
 
 // OpenSession resumes a stored session and selects it.
 func (a *App) OpenSession(path, model, thinking string) (string, error) {
+	if a.opts.BeforeSessionSwitch != nil {
+		if err := a.opts.BeforeSessionSwitch("switch"); err != nil {
+			return "", err
+		}
+	}
 	id, err := a.bridge.OpenSession(path, model, thinking)
 	if err != nil {
 		return "", err

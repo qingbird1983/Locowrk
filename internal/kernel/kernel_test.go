@@ -323,20 +323,26 @@ func TestSteeringRequiresRunningTurnAndReachesNextRequest(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- svc.Prompt(ctx, id, "写一段说明") }()
 
-	// Steer once the turn is running.
+	// Steer while the answer is streaming, so the instruction lands on the next
+	// request (steering before the first request is folded into it instead).
+	var kinds []eventbus.Kind
+	streaming := false
 	deadline := time.Now().Add(10 * time.Second)
-	steerErr := ErrNotRunning
-	for time.Now().Before(deadline) {
-		if steerErr = svc.Steer(ctx, id, "STEER-OK"); steerErr == nil {
-			break
+	for !streaming && time.Now().Before(deadline) {
+		select {
+		case ev := <-sub.C():
+			kinds = append(kinds, ev.Kind)
+			if ev.Kind == eventbus.KindMessageUpdate {
+				streaming = true
+			}
+		case <-time.After(20 * time.Millisecond):
 		}
-		if !errors.Is(steerErr, ErrNotRunning) {
-			t.Fatalf("Steer error = %v", steerErr)
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
-	if steerErr != nil {
-		t.Fatalf("steering was never accepted: %v", steerErr)
+	if !streaming {
+		t.Fatalf("no streaming update before steering: %v", kinds)
+	}
+	if err := svc.Steer(ctx, id, "STEER-OK"); err != nil {
+		t.Fatalf("Steer while streaming: %v", err)
 	}
 
 	select {
@@ -348,7 +354,6 @@ func TestSteeringRequiresRunningTurnAndReachesNextRequest(t *testing.T) {
 		t.Fatal("run with steering did not finish")
 	}
 
-	var kinds []eventbus.Kind
 	applied := false
 	settle := time.Now().Add(2 * time.Second)
 	for !applied && time.Now().Before(settle) {
@@ -384,6 +389,76 @@ func TestSteeringRequiresRunningTurnAndReachesNextRequest(t *testing.T) {
 	}
 	if !foundSteer || !foundReply {
 		t.Fatalf("transcript missing steering turn (steer=%v reply=%v): %+v", foundSteer, foundReply, msgs)
+	}
+}
+
+func TestBeforeToolGateBlocksExecution(t *testing.T) {
+	testHome(t)
+	ctx := context.Background()
+	cwd := t.TempDir()
+
+	reg, ref := newFaux(t, providers.RegisterFauxProviderOptions{})
+	reg.SetResponses([]providers.FauxResponseStep{
+		providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
+			providers.FauxToolCall("bash", map[string]any{"command": "echo hi"}),
+		}, ai.StopToolUse)),
+		providers.FauxStatic(providers.FauxAssistantMessage(ai.ContentList{
+			providers.FauxText("the command was blocked"),
+		}, ai.StopStop)),
+	})
+	svc := serviceFor(t, reg.GetModel())
+
+	var gated []string
+	id, err := svc.CreateSession(ctx, SessionOptions{
+		Cwd: cwd, Model: ref, Tools: []string{"bash"},
+		BeforeTool: func(_ context.Context, name string, args json.RawMessage) (string, error) {
+			gated = append(gated, name+" "+string(args))
+			return "blocked by policy", nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	sub := svc.Subscribe(eventbus.SubscribeOptions{})
+	defer sub.Close()
+	if err := svc.Prompt(ctx, id, "run echo hi"); err != nil {
+		t.Fatalf("Prompt: %v", err)
+	}
+	if len(gated) != 1 || !strings.HasPrefix(gated[0], "bash ") {
+		t.Fatalf("gate did not see the bash call: %v", gated)
+	}
+
+	var blocked bool
+	settle := time.Now().Add(2 * time.Second)
+	for !blocked && time.Now().Before(settle) {
+		select {
+		case ev, ok := <-sub.C():
+			if !ok {
+				settle = time.Time{}
+				break
+			}
+			if ev.Kind == eventbus.KindToolExecutionEnd {
+				var payload struct {
+					Text    string `json:"text"`
+					IsError bool   `json:"isError"`
+				}
+				if err := json.Unmarshal(ev.Payload, &payload); err == nil &&
+					payload.IsError && strings.Contains(payload.Text, "blocked by policy") {
+					blocked = true
+				}
+			}
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if !blocked {
+		t.Fatal("blocked tool did not surface an error tool result")
+	}
+	msgs, err := svc.History(ctx, id)
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(msgs) == 0 || !strings.Contains(msgs[len(msgs)-1].Text, "the command was blocked") {
+		t.Fatalf("run did not continue after the block: %+v", msgs)
 	}
 }
 

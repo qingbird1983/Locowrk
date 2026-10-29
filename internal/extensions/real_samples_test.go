@@ -19,6 +19,7 @@ type realSampleUI struct {
 	editors  []string
 	input    string
 	editor   string
+	confirm  bool
 }
 
 func (u *realSampleUI) Select(_ context.Context, title string, _ []string) (string, bool) {
@@ -28,7 +29,7 @@ func (u *realSampleUI) Select(_ context.Context, title string, _ []string) (stri
 
 func (u *realSampleUI) Confirm(_ context.Context, title, _ string) (bool, bool) {
 	u.confirms = append(u.confirms, title)
-	return false, true
+	return u.confirm, true
 }
 
 func (u *realSampleUI) Input(_ context.Context, title, _ string) (string, bool) {
@@ -122,6 +123,34 @@ func TestRealPiSamples(t *testing.T) {
 	// reaches the notice list.
 	m.SetSession("sess-real")
 	time.Sleep(100 * time.Millisecond)
+
+	// A dangerous bash call is gated through the extension: the host asks
+	// tool_call, rpc-demo opens a select dialog, and refusing blocks the call.
+	reason, err := m.GateToolCall(context.Background(), "bash", json.RawMessage(`{"command":"sudo rm -rf /"}`))
+	if err != nil {
+		t.Fatalf("GateToolCall: %v", err)
+	}
+	if reason != "Blocked by user" {
+		t.Fatalf("dangerous command not blocked: %q", reason)
+	}
+	if len(ui.selects) != 1 {
+		t.Fatalf("select dialog not opened: %v", ui.selects)
+	}
+	waitNotice(t, m, "Command blocked by user")
+
+	// A new session asks first (session_before_switch); refusing cancels it.
+	ui.confirm = false
+	if err := m.ConfirmSessionSwitch(context.Background(), "new"); err == nil {
+		t.Fatal("cancelled session switch was allowed")
+	}
+	if len(ui.confirms) != 1 {
+		t.Fatalf("confirm dialog not opened: %v", ui.confirms)
+	}
+	ui.confirm = true
+	if err := m.ConfirmSessionSwitch(context.Background(), "new"); err != nil {
+		t.Fatalf("confirmed switch rejected: %v", err)
+	}
+
 	if err := m.RunCommand(context.Background(), "rpc-input", ""); err != nil {
 		t.Fatalf("rpc-input: %v", err)
 	}

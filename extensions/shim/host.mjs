@@ -138,9 +138,10 @@ export function run(factory, meta = {}) {
   };
 
   const dispatch = async (event, payload) => {
+    const results = [];
     for (const handler of handlers.get(event) ?? []) {
       try {
-        await handler({ ...payload, event }, ctx);
+        results.push(await handler({ ...payload, event }, ctx));
       } catch (err) {
         notify("diagnostic", {
           member: "on(" + event + ")",
@@ -150,6 +151,35 @@ export function run(factory, meta = {}) {
         });
       }
     }
+    return results;
+  };
+
+  // mergeEventResults folds handler answers into one event_result: a block
+  // wins (first reason kept), then a cancel, then any plain value.
+  const mergeEventResults = (results) => {
+    let block = false;
+    let cancel = false;
+    let reason = "";
+    let last;
+    for (const result of results) {
+      if (result === undefined || result === null) continue;
+      last = result;
+      if (typeof result === "object") {
+        if (result.block) {
+          block = true;
+          if (!reason && result.reason) reason = String(result.reason);
+        }
+        if (result.cancel) cancel = true;
+      }
+    }
+    if (!block && !cancel) return last ?? null;
+    const out = {};
+    if (block) {
+      out.block = true;
+      out.reason = reason || "blocked by extension";
+    }
+    if (cancel) out.cancel = true;
+    return out;
   };
 
   const invokeTool = async (params, respond) => {
@@ -220,6 +250,9 @@ export function run(factory, meta = {}) {
             plugin: { name: meta.name ?? "extension", version: meta.version ?? "0.0.0" },
             capabilities: meta.capabilities ?? [],
             shim: SHIM,
+            // The host may send gateable events (tool_call) as requests and
+            // wait for the answer.
+            wantsEventAck: true,
           },
         });
         try {
@@ -238,9 +271,13 @@ export function run(factory, meta = {}) {
       case "ping":
         respond({ jsonrpc: "2.0", id: msg.id, result: "pong" });
         break;
-      case "event":
-        await dispatch(msg.params?.kind, msg.params?.payload ?? {});
+      case "event": {
+        const results = await dispatch(msg.params?.kind, msg.params?.payload ?? {});
+        if (msg.id !== undefined) {
+          respond({ jsonrpc: "2.0", id: msg.id, result: mergeEventResults(results) });
+        }
         break;
+      }
       case "abort":
         respond({ jsonrpc: "2.0", id: msg.id, result: null });
         break;
