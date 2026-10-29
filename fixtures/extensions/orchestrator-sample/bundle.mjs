@@ -85,7 +85,14 @@ function run(factory2, meta = {}) {
     isProjectTrusted: false,
     model: void 0,
     thinkingLevel: void 0,
-    sessionManager: {},
+    sessionManager: {
+      // The shim has no session entries on the wire yet; read-only callers get
+      // an empty branch instead of throwing, and the loss is visible in the
+      // report rather than as a handler error.
+      getBranch: () => [],
+      getEntries: () => [],
+      getLeafId: () => void 0
+    },
     ui: {
       notify: (message, type = "info") => notify("ui_notify", { message, type }),
       select: (title, options) => request("ui_select", { title, options }),
@@ -112,7 +119,8 @@ function run(factory2, meta = {}) {
     shutdown: () => silent("ctx.shutdown", void 0)
   };
   const pi = {
-    registerTool(tool) {
+    registerTool(nameOrTool, maybeTool) {
+      const tool = typeof nameOrTool === "string" ? { name: nameOrTool, ...maybeTool } : nameOrTool;
       tools.set(tool.name, tool);
       notify("register_tool", {
         name: tool.name,
@@ -121,7 +129,8 @@ function run(factory2, meta = {}) {
         timeoutMs: tool.timeoutMs
       });
     },
-    registerCommand(command) {
+    registerCommand(nameOrCommand, maybeCommand) {
+      const command = typeof nameOrCommand === "string" ? { name: nameOrCommand, ...maybeCommand } : nameOrCommand;
       commands.set(command.name, command);
       notify("register_command", {
         name: command.name,

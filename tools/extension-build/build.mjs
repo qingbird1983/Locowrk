@@ -23,10 +23,18 @@ import { build } from "esbuild";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const shimPath = join(repoRoot, "extensions", "shim", "host.mjs");
+const compatDir = join(repoRoot, "extensions", "shim", "compat");
 
 const CAPABILITIES = new Set(["fs.read", "fs.write", "fs.delete", "exec", "net"]);
 const ENTRY_CANDIDATES = ["index.ts", "index.tsx", "index.mjs", "index.js"];
 const SHIM_SPECIFIER = "@locowrk/shim";
+// Upstream packages an extension imports; the desktop provides them as bundled
+// compatibility modules (no network, no npm at run time).
+const COMPAT = {
+  "@earendil-works/pi-ai": join(compatDir, "pi-ai.mjs"),
+  "@earendil-works/pi-tui": join(compatDir, "pi-tui.mjs"),
+  typebox: join(compatDir, "typebox.mjs"),
+};
 
 function fail(message) {
   console.error("extension-build:", message);
@@ -106,6 +114,9 @@ function resolveShim() {
     setup(pluginBuild) {
       pluginBuild.onResolve({ filter: new RegExp(`^${SHIM_SPECIFIER.replace(/[/@]/g, "\\$&")}$`) }, () => ({
         path: shimPath,
+      }));
+      pluginBuild.onResolve({ filter: new RegExp(`^(${Object.keys(COMPAT).map((name) => name.replace(/[/@.-]/g, "\\$&")).join("|")})$`) }, (args) => ({
+        path: COMPAT[args.path],
       }));
     },
   };

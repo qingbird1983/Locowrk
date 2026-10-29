@@ -84,7 +84,7 @@ var ErrInvalidManifest = errors.New("adapter: invalid manifest")
 var (
 	namePattern   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 	verPattern    = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
-	toolPattern   = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+	toolPattern   = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,62}$`)
 	methodPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 )
 

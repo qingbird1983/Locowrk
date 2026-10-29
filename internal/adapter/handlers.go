@@ -15,7 +15,16 @@ func (a *Adapter) handleRequest(_ json.RawMessage, method string, params json.Ra
 
 // handleNotify serves one plugin notification; its result is discarded.
 func (a *Adapter) handleNotify(method string, params json.RawMessage) {
-	_, _ = a.handlePluginMessage(method, params)
+	// A rejected notification would otherwise vanish: the plugin gets no id to
+	// match a response to, so record the reason as a diagnostic instead.
+	if _, rerr := a.handlePluginMessage(method, params); rerr != nil {
+		a.addDiagnostic(Diagnostic{
+			Member:   method,
+			Category: CategoryUnsupported,
+			Code:     "rejected",
+			Message:  rerr.Message,
+		})
+	}
 }
 
 func (a *Adapter) handlePluginMessage(method string, params json.RawMessage) (any, *RPCError) {

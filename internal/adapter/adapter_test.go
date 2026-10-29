@@ -163,6 +163,33 @@ func TestStartRegistersToolsAndCommands(t *testing.T) {
 	}
 }
 
+func TestHyphenatedCommandNamesAndRejectedNotifications(t *testing.T) {
+	a, err := New(Options{NodePath: "node"})
+	if err != nil {
+		t.Fatalf("new adapter: %v", err)
+	}
+	// Upstream examples name commands with hyphens (rpc-demo: rpc-input).
+	if _, rerr := a.handlePluginMessage("register_command", json.RawMessage(`{"name":"rpc-input","description":"prompt"}`)); rerr != nil {
+		t.Fatalf("hyphenated command rejected: %+v", rerr)
+	}
+	if _, ok := a.commands["rpc-input"]; !ok {
+		t.Fatalf("command not registered: %+v", a.Commands())
+	}
+
+	// A rejected notification has no request id, so the reason must show up as
+	// a diagnostic instead of disappearing.
+	a.handleNotify("register_command", json.RawMessage(`{"name":"Bad Name","description":"invalid"}`))
+	found := false
+	for _, d := range a.Diagnostics() {
+		if d.Member == "register_command" && d.Code == "rejected" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("rejected notification produced no diagnostic: %+v", a.Diagnostics())
+	}
+}
+
 func TestSupportedToolAndTUIDiagnostics(t *testing.T) {
 	f := newFixture(t, "supported", nil)
 	ctx := context.Background()
